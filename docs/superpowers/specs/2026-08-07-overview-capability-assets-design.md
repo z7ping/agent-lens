@@ -1,40 +1,40 @@
-# Overview Capability Assets Design
+# 概览能力资产 设计
 
-## Goal
+## 目标
 
-Add an independent "概览" page that helps users understand each AI coding tool's capability assets and whether frequently used, valuable assets are also available in other tools.
+新增一个独立的"概览"页面，帮助用户理解每个 AI 编码工具的能力资产，以及某个被高频使用的、有价值的能力是否在其他工具中同样可用。
 
-## Product Decisions
+## 产品决策
 
-- The page name is "概览".
-- The page uses one card per AI tool as the primary structure.
-- Global aggregate counts are not a primary feature because they do not help the user compare tool capability assets.
-- Each tool card shows the tool identity and capability assets grouped by type.
-- The first version treats frequently called assets as "优质资产".
-- The page should help answer: "This asset is useful in one tool. Do other tools also have it?"
+- 页面名称为"概览"。
+- 页面以每个 AI 工具一张卡片作为主要结构。
+- 全局聚合计数不是核心功能，因为它无法帮助用户对比各工具的能力资产。
+- 每张工具卡片展示工具身份以及按类型分组的能力资产。
+- 第一版将高频调用的能力视为"优质资产"。
+- 页面应能回答："这个能力在某个工具里很有用，其他工具也有吗？"
 
-## Page Structure
+## 页面结构
 
-The top navigation adds a first-level "概览" tab alongside the existing task replay and tool stack tabs.
+顶部导航在现有的任务回放和工具站 Tab 之外，新增一级"概览" Tab。
 
-Each tool card shows:
+每张工具卡片展示：
 
-- Tool name and short description.
-- Version when detectable.
-- Configuration directory when known.
-- Asset groups: Skills, MCP, Plugins, Extensions, Hooks, Adapters, and built-in capabilities.
-- Frequently used assets highlighted as "高频".
-- Cross-tool coverage for high-frequency assets: 已有, 等价, 缺失, or 未知.
+- 工具名称和简短描述。
+- 可检测时显示版本号。
+- 已知时显示配置目录。
+- 资产分组：Skills、MCP、Plugins、Extensions、Hooks、Adapters 以及内置能力。
+- 高频使用的能力标记为"高频"。
+- 高频资产的跨工具覆盖情况：已有、等价、缺失或未知。
 
-## Data Model
+## 数据模型
 
-The backend exposes an overview payload:
+后端暴露一个概览数据负载：
 
-- `tools`: tool cards.
-- `priority_assets`: frequently used assets across tools.
-- `capability_matrix`: high-frequency capability names mapped to per-tool coverage status.
+- `tools`：工具卡片。
+- `priority_assets`：跨工具高频使用的能力。
+- `capability_matrix`：高频能力名称映射到各工具的覆盖状态。
 
-Each asset contains:
+每个资产包含：
 
 - `name`
 - `type`
@@ -46,17 +46,17 @@ Each asset contains:
 - `is_priority`
 - `coverage`
 
-## First Version Scope
+## 第一版范围
 
-The first implementation is read-only. It scans known local configuration locations and combines that inventory with existing timeline call counts. It does not install, uninstall, enable, disable, or mutate external tools.
+第一版实现为只读。它扫描已知的本地配置位置，并将该清单与既有 timeline 调用次数合并。它不会安装、卸载、启用、禁用或修改外部工具。
 
-## Non-Goals
+## 非目标
 
-- No one-click plugin installation.
-- No destructive configuration edits.
-- No authoritative online catalog lookup.
-- No complete parity detection for every tool ecosystem.
+- 不做一键插件安装。
+- 不做破坏性配置修改。
+- 不做权威的在线目录查询。
+- 不做每个工具生态的完整对等检测。
 
-## Validation
+## 验证
 
-Backend tests should verify that assets are grouped by tool, high-frequency assets are marked, and the capability matrix shows whether other tools have the same capability name.
+后端测试应验证：资产按工具分组、高频资产被标记、能力矩阵显示其他工具是否具备同一能力名称。

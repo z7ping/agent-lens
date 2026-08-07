@@ -1,56 +1,56 @@
-# Overview Capability Assets Implementation Plan
+# 概览能力资产 实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **给 agent 工作者：** 必选子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 按任务逐项实施本计划。步骤用复选框（`- [ ]`）语法跟踪。
 
-**Goal:** Build a read-only "概览" page that shows each AI coding tool's capability assets and highlights frequently used assets across tools.
+**目标：** 构建一个只读的"概览"页面，展示每个 AI 编码工具的能力资产，并高亮跨工具高频使用的能力。
 
-**Architecture:** Add a focused backend module that builds overview data from static tool metadata, local filesystem discovery, and timeline call counts. Add a route and frontend tab that renders one card per tool plus a compact high-frequency cross-tool matrix.
+**架构：** 新增一个聚焦的后端模块，基于静态工具元数据、本地文件系统扫描和 timeline 调用次数构建概览数据。新增一个路由和前端 Tab，每个工具渲染一张卡片，外加一个紧凑的跨工具高频矩阵。
 
-**Tech Stack:** Node.js CommonJS backend, better-sqlite3 timeline data, native browser JavaScript, existing CSS/Tailwind utility style.
+**技术栈：** Node.js CommonJS 后端、better-sqlite3 timeline 数据、原生浏览器 JavaScript、沿用现有 CSS/Tailwind 工具类样式。
 
 ---
 
-### Task 1: Backend Overview Data
+### 任务 1：后端概览数据
 
-**Files:**
-- Create: `server/overview.js`
-- Test: `test/overview.test.js`
+**文件：**
+- 新建：`server/overview.js`
+- 测试：`test/overview.test.js`
 
-- [ ] Write failing tests for tool grouping, high-frequency asset marking, and matrix coverage.
-- [ ] Run `node --test test/overview.test.js` and verify the tests fail because `server/overview.js` does not exist.
-- [ ] Implement `buildOverview()` and `queryOverview()`.
-- [ ] Run `node --test test/overview.test.js` and verify it passes.
+- [ ] 编写工具分组、高频资产标记、矩阵覆盖的失败测试。
+- [ ] 运行 `node --test test/overview.test.js`，验证测试因 `server/overview.js` 不存在而失败。
+- [ ] 实现 `buildOverview()` 和 `queryOverview()`。
+- [ ] 运行 `node --test test/overview.test.js`，验证通过。
 
-### Task 2: API Route
+### 任务 2：API 路由
 
-**Files:**
-- Modify: `server/routes.js`
-- Modify: `server/server.js`
-- Modify: `src/utils.js`
+**文件：**
+- 修改：`server/routes.js`
+- 修改：`server/server.js`
+- 修改：`src/utils.js`
 
-- [ ] Add `handleApiOverview`.
-- [ ] Wire `/api/overview`.
-- [ ] Add `fetchOverview()`.
-- [ ] Run overview and route-related tests.
+- [ ] 新增 `handleApiOverview`。
+- [ ] 挂载 `/api/overview`。
+- [ ] 新增 `fetchOverview()`。
+- [ ] 运行概览和相关路由测试。
 
-### Task 3: Frontend Page
+### 任务 3：前端页面
 
-**Files:**
-- Create: `src/overview/index.js`
-- Modify: `src/app.js`
-- Modify: `index.html`
-- Modify: `src/style.css`
+**文件：**
+- 新建：`src/overview/index.js`
+- 修改：`src/app.js`
+- 修改：`index.html`
+- 修改：`src/style.css`
 
-- [ ] Add a top-level "概览" tab.
-- [ ] Render tool cards and high-frequency cross-tool coverage.
-- [ ] Load data when the tab is opened.
-- [ ] Keep the existing source/project filter bar useful for replay and tool-stack pages without blocking overview.
+- [ ] 新增一级"概览" Tab。
+- [ ] 渲染工具卡片和高频跨工具覆盖。
+- [ ] 打开 Tab 时加载数据。
+- [ ] 保留现有的来源/项目过滤栏，供回放和工具站页面使用，不阻塞概览。
 
-### Task 4: Verification
+### 任务 4：验证
 
-**Files:**
-- Existing test suite and production build.
+**文件：**
+- 既有测试套件与生产构建。
 
-- [ ] Run `node --test`.
-- [ ] Run `npm run build`.
-- [ ] Start a local dev server if needed and inspect the page.
+- [ ] 运行 `node --test`。
+- [ ] 运行 `npm run build`。
+- [ ] 按需启动本地开发服务器并检查页面。
