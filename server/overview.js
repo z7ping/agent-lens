@@ -1,6 +1,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { spawnSync } = require('child_process');
 
 const ASSET_TYPES = ['skill', 'mcp', 'plugin', 'extension', 'hook', 'adapter', 'builtin'];
 
@@ -8,37 +9,37 @@ const TOOL_DEFINITIONS = [
     {
         tool: 'codex',
         display_name: 'Codex',
-        description: 'OpenAI Codex coding agent and local desktop environment.',
+        description: 'OpenAI Codex 命令行编码智能体与本地桌面环境。',
         config_dir: path.join(os.homedir(), '.codex'),
     },
     {
         tool: 'claude-code',
         display_name: 'Claude Code',
-        description: 'Anthropic Claude Code command-line coding assistant.',
+        description: 'Anthropic Claude Code 命令行编码助手。',
         config_dir: path.join(os.homedir(), '.claude'),
     },
     {
         tool: 'cursor',
         display_name: 'Cursor',
-        description: 'AI code editor based on VS Code.',
+        description: '基于 VS Code 的 AI 代码编辑器。',
         config_dir: path.join(os.homedir(), 'AppData', 'Roaming', 'Cursor', 'User'),
     },
     {
         tool: 'opencode',
         display_name: 'OpenCode',
-        description: 'OpenCode terminal coding agent.',
+        description: 'OpenCode 终端编码智能体。',
         config_dir: path.join(os.homedir(), '.local', 'share', 'opencode'),
     },
     {
         tool: 'hermes',
         display_name: 'Hermes',
-        description: 'Hermes coding agent history source.',
+        description: 'Hermes 编码智能体历史数据源。',
         config_dir: path.join(os.homedir(), '.hermes'),
     },
     {
         tool: 'pi',
         display_name: 'Pi',
-        description: 'Pi coding agent history source.',
+        description: 'Pi 编码智能体历史数据源。',
         config_dir: path.join(os.homedir(), '.pi'),
     },
 ];
@@ -65,6 +66,99 @@ function firstExisting(paths) {
     return paths.find(item => {
         try { return item && fs.existsSync(item); } catch (_) { return false; }
     }) || '';
+}
+
+function isWin() { return process.platform === 'win32'; }
+
+function extractVersion(text) {
+    const match = String(text || '').match(/\bv?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?/);
+    return match ? match[0] : '';
+}
+
+function runVersionCommand(binary) {
+    try {
+        const res = spawnSync(binary, ['--version'], { encoding: 'utf-8', timeout: 4000, shell: isWin() });
+        if (res.error || res.status !== 0) return '';
+        const firstLine = String(res.stdout || '').trim().split(/\r?\n/)[0];
+        return extractVersion(firstLine);
+    } catch (_) {
+        return '';
+    }
+}
+
+function readJsonVersion(file) {
+    try {
+        if (!fs.existsSync(file)) return '';
+        const data = JSON.parse(fs.readFileSync(file, 'utf-8'));
+        return extractVersion(data.version || data.productVersion || '');
+    } catch (_) {
+        return '';
+    }
+}
+
+function readExeVersion(exePath) {
+    try {
+        if (!exePath || !fs.existsSync(exePath) || !isWin()) return '';
+        const { execFileSync } = require('child_process');
+        const out = execFileSync('powershell', ['-NoProfile', '-Command', `(Get-Item -LiteralPath '${exePath}').VersionInfo.FileVersion`], { encoding: 'utf-8', timeout: 4000 }).trim();
+        return extractVersion(out);
+    } catch (_) {
+        return '';
+    }
+}
+
+function findExeDir(name) {
+    // 通过注册表卸载信息查找自定义安装目录（如非默认路径安装的 Cursor）
+    if (!isWin()) return [];
+    const hives = [
+        'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall',
+        'HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall',
+        'HKLM\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall',
+    ];
+    const dirs = [];
+    for (const hive of hives) {
+        try {
+            const { execFileSync } = require('child_process');
+            const out = execFileSync('reg', ['query', hive, '/s', '/f', name, '/d'], { encoding: 'utf-8', timeout: 5000, windowsHide: true });
+            for (const m of out.matchAll(/InstallLocation\s+REG_\w+\s+([^\r\n]+)/g)) {
+                const dir = m[1].trim();
+                if (dir) dirs.push(dir);
+            }
+        } catch (_) {}
+    }
+    return [...new Set(dirs)];
+}
+
+function detectCursorVersion() {
+    const cli = runVersionCommand('cursor');
+    if (cli) return cli;
+    for (const dir of findExeDir('Cursor')) {
+        const v = readExeVersion(path.join(dir, 'Cursor.exe'));
+        if (v) return v;
+    }
+    return readJsonVersion(path.join(os.homedir(), 'AppData', 'Local', 'Programs', 'Cursor', 'resources', 'app', 'package.json'))
+        || readExeVersion(path.join(os.homedir(), 'AppData', 'Local', 'Programs', 'Cursor', 'Cursor.exe'));
+}
+
+function detectVersion(tool, configDir) {
+    if (!fs.existsSync(configDir)) return '';
+    switch (tool) {
+        case 'codex':
+            return runVersionCommand('codex');
+        case 'claude-code':
+            return runVersionCommand('claude');
+        case 'hermes':
+            return runVersionCommand('hermes');
+        case 'pi':
+            return runVersionCommand('pi');
+        case 'cursor':
+            return detectCursorVersion();
+        case 'opencode':
+            return runVersionCommand('opencode')
+                || readExeVersion(path.join(os.homedir(), 'AppData', 'Local', 'Programs', '@opencode-aidesktop', 'OpenCode.exe'));
+        default:
+            return '';
+    }
 }
 
 function scanNamedDirectories(baseDir, type, status = 'installed') {
@@ -97,7 +191,7 @@ function scanJsonKeys(file, type, tool) {
             type,
             status: 'configured',
             path: file,
-            description: `${tool} configuration entry`,
+            description: `${tool} 配置条目`,
         }));
     } catch (_) {
         return [];
@@ -150,7 +244,7 @@ function discoverInventory() {
 
         return {
             ...definition,
-            version: '',
+            version: detectVersion(definition.tool, definition.config_dir),
             status: fs.existsSync(definition.config_dir) ? 'detected' : 'not_found',
             assets: dedupeAssets(assets),
         };
