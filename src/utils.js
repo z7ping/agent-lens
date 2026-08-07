@@ -249,6 +249,7 @@ export function extractSessions(logs) {
       sessionMap.set(sid, {
         id: sid,
         project: log.project || log.cwd || '',
+        projectCwd: log.project_cwd || log.cwd || '',
         startTime: log.timestamp,
         endTime: log.timestamp,
         calls: [],

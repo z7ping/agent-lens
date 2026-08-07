@@ -249,12 +249,6 @@
 .round-conversation {
   @apply flex flex-col gap-2 px-4 py-3 border-b border-neutral-100 dark:border-neutral-800 bg-white dark:bg-neutral-900;
 }
-.round-workdir {
-  @apply inline-flex items-center gap-2 self-center max-w-full rounded-md bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-200 dark:border-neutral-700 px-2 py-1 text-[11px] text-neutral-500 dark:text-neutral-400;
-}
-.round-workdir code {
-  @apply min-w-0 truncate text-[11px] text-neutral-700 dark:text-neutral-200;
-}
 .chat-message {
   @apply flex flex-col gap-1 max-w-[76%];
 }

@@ -59,6 +59,7 @@ export function renderCallChain(data) {
       id: s.session_id,
       project: s.project_key || '',
       projectName: s.project_name || s.project_key || '',
+      projectCwd: s.project_cwd || '',
       source: s.source || '',
       startTime: s.start_time,
       endTime: s.end_time,
@@ -262,9 +263,12 @@ function renderSession(session) {
 
   // 项目名（优先使用 project_name，回退到 project_key）
   const projectName = session.projectName || session.project || '';
+  const projectCwd = session.projectCwd || session.cwd || '';
+  const projectCwdLabel = formatWorkdir(projectCwd);
   const sessionSubtitle = [
     timeRange,
     projectName ? `项目 ${projectName}` : '',
+    projectCwdLabel,
     avgDur ? `平均 ${formatDuration(avgDur)}` : '',
   ].filter(Boolean).join(' · ');
 
@@ -280,7 +284,7 @@ function renderSession(session) {
           ${source === 'hermes' ? '<span title="包含对话记录">💬</span>' : ''}
           <span class="session-status ${status.cls}">${status.label}</span>
         </div>
-        <div class="session-subtitle">${escapeHtml(sessionSubtitle || '等待调用详情')}</div>
+        <div class="session-subtitle" title="${escapeHtml(projectCwd || sessionSubtitle)}">${escapeHtml(sessionSubtitle || '等待调用详情')}</div>
       </div>
       <div class="session-metrics">
         ${renderMetric('调用', toolCount)}
@@ -550,19 +554,8 @@ function renderRound(round, index, sourceColor = '') {
     || '';
 
   const roundId = `round-tools-${index}-${Math.random().toString(36).slice(2, 8)}`;
-  const workdir = getRoundWorkdir(round);
-  const workdirLabel = workdir ? formatWorkdir(workdir) : '';
 
   parts.push(`<div class="round-conversation">`);
-
-  if (workdirLabel) {
-    parts.push(`
-      <div class="round-workdir" title="${escapeHtml(workdir)}">
-        <span>工作目录</span>
-        <code>${escapeHtml(workdirLabel)}</code>
-      </div>
-    `);
-  }
 
   // 用户气泡
   const userContent = round.userMessage
@@ -647,16 +640,6 @@ function extractUserText(call) {
 /** 从 assistant 消息中提取文本 */
 function extractAssistantText(call) {
   return extractUserText(call);
-}
-
-function getRoundWorkdir(round) {
-  const candidates = [
-    round.userMessage,
-    ...round.assistantMessages,
-    ...round.toolCalls,
-  ];
-  const match = candidates.find(call => call?.project_cwd || call?.cwd);
-  return match?.project_cwd || match?.cwd || '';
 }
 
 function formatWorkdir(cwd) {
