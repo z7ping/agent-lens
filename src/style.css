@@ -84,7 +84,7 @@
 
   /* ═══ 会话卡片 ═══ */
   .session-card {
-    @apply bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl overflow-hidden mb-3 shadow-sm transition-all border-l-[3px];
+    @apply bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl overflow-clip mb-3 shadow-sm transition-all border-l-[3px];
   }
   .call-item {
     @apply border-l-[3px] border-transparent ml-4 mb-1;
@@ -112,6 +112,9 @@
   }
   .session-subtitle {
     @apply text-xs text-neutral-400 mt-1 ml-5 truncate;
+  }
+  .session-subtitle-meta {
+    @apply text-[11px] text-neutral-400/70 dark:text-neutral-500/70 mt-0.5 ml-5 truncate;
   }
   .session-status {
     @apply text-xs px-1.5 py-0.5 rounded-md font-medium;
@@ -250,13 +253,13 @@
   @apply flex flex-col gap-2 px-4 py-3 border-b border-neutral-100 dark:border-neutral-800 bg-white dark:bg-neutral-900;
 }
 .chat-message {
-  @apply flex flex-col gap-1 max-w-[76%];
+  @apply flex flex-col gap-1;
 }
 .chat-message.user {
-  @apply self-end items-end;
+  @apply self-end items-end max-w-[72%];
 }
 .chat-message.assistant {
-  @apply self-start items-start;
+  @apply self-start items-start max-w-[86%];
 }
 .chat-meta {
   @apply text-[10px] font-medium text-neutral-400 dark:text-neutral-500 px-1;
@@ -270,8 +273,23 @@
 .chat-bubble.assistant {
   @apply rounded-2xl rounded-bl-md bg-neutral-50 dark:bg-neutral-800/70 border-neutral-200 dark:border-neutral-700 text-neutral-800 dark:text-neutral-100;
 }
-.chat-bubble .muted {
-  @apply text-white/70 dark:text-neutral-950/60;
+/* 无用户消息的轮次占位（小灰字，弱化） */
+.chat-placeholder {
+  @apply text-[11px] italic text-neutral-300 dark:text-neutral-600 px-1;
+}
+/* AI 长文本折叠 */
+.assistant-preview {
+  @apply block;
+}
+.assistant-more {
+  @apply block text-[11px] text-neutral-400 dark:text-neutral-500 mt-0.5;
+}
+.assistant-expand {
+  @apply mt-1 text-xs font-medium text-primary-600 dark:text-primary-400 hover:underline text-left;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
 }
 .round-tools {
   @apply border-b border-neutral-100 dark:border-neutral-800 bg-neutral-50/70 dark:bg-neutral-900/60;
@@ -342,6 +360,27 @@
 .round-calls {
   @apply ml-0;
 }
+
+/* ═══ 轮次导航（长会话快速定位） ═══ */
+.round-nav {
+  @apply flex items-center gap-1.5 px-4 py-2 border-b border-neutral-100 dark:border-neutral-800 bg-white/95 dark:bg-neutral-900/95 backdrop-blur;
+  position: sticky;
+  top: 8.5rem;
+  z-index: 20;
+}
+.round-nav-label {
+  @apply text-[10px] font-medium text-neutral-400 dark:text-neutral-500 mr-1 uppercase tracking-wider;
+}
+.round-nav-btn {
+  @apply px-2.5 py-1 text-xs font-medium text-neutral-500 dark:text-neutral-400 rounded-md border border-transparent hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-700 dark:hover:text-neutral-300 transition-colors whitespace-nowrap;
+}
+.round-nav-btn.active {
+  @apply bg-primary-50 dark:bg-primary-500/10 text-primary-600 dark:text-primary-400 border-primary-200 dark:border-primary-500/30;
+}
+/* 轮次过滤：按错误 / 慢调用 / 最近一轮 */
+.rounds-container[data-nav="error"] .round-block[data-has-error="false"] { display: none; }
+.rounds-container[data-nav="slow"] .round-block[data-has-slow="false"] { display: none; }
+.rounds-container[data-nav="last"] .round-block:not(:last-of-type) { display: none; }
 
 /* ═══ 执行概览 ═══ */
 .execution-overview {

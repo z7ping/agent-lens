@@ -44,38 +44,44 @@
         <button class="tool-tab" data-tool="openclaw" onclick="selectTool('openclaw')">OpenClaw</button>
       </div>
     </div>
-    <div class="max-w-screen-2xl mx-auto px-4 pb-1.5 flex items-center gap-3 text-sm flex-wrap">
-      <!-- 项目选择 -->
-      <select id="projectSelect" class="bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
-        <option value="">全部项目</option>
-      </select>
-      <div class="w-px h-5 bg-neutral-200 dark:bg-neutral-700"></div>
-      <!-- 工具类型筛选 -->
-      <div class="flex items-center bg-neutral-100 dark:bg-neutral-800 rounded-lg p-0.5" id="toolFilters">
-        <button class="filter-chip-sm active" data-filter="all" onclick="filterTool('all')">全部</button>
-        <button class="filter-chip-sm" data-filter="bash" onclick="filterTool('bash')">Bash</button>
-        <button class="filter-chip-sm" data-filter="read" onclick="filterTool('read')">Read</button>
-        <button class="filter-chip-sm" data-filter="write" onclick="filterTool('write')">Write</button>
-        <button class="filter-chip-sm" data-filter="mcp" onclick="filterTool('mcp')">MCP</button>
+    <div class="max-w-screen-2xl mx-auto px-4 pb-2 flex items-center gap-3 text-sm flex-wrap">
+      <!-- 筛选区 -->
+      <div class="flex items-center gap-3 flex-wrap">
+        <span class="text-[10px] font-medium uppercase tracking-wider text-neutral-400 dark:text-neutral-500">筛选</span>
+        <!-- 项目选择 -->
+        <select id="projectSelect" class="bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+          <option value="">全部项目</option>
+        </select>
+        <div class="w-px h-5 bg-neutral-200 dark:bg-neutral-700"></div>
+        <!-- 工具类型筛选 -->
+        <div class="flex items-center bg-neutral-100 dark:bg-neutral-800 rounded-lg p-0.5" id="toolFilters">
+          <button class="filter-chip-sm active" data-filter="all" onclick="filterTool('all')">全部</button>
+          <button class="filter-chip-sm" data-filter="bash" onclick="filterTool('bash')">Bash</button>
+          <button class="filter-chip-sm" data-filter="read" onclick="filterTool('read')">Read</button>
+          <button class="filter-chip-sm" data-filter="write" onclick="filterTool('write')">Write</button>
+          <button class="filter-chip-sm" data-filter="mcp" onclick="filterTool('mcp')">MCP</button>
+        </div>
+        <!-- 过滤状态摘要 -->
+        <span id="filterSummary" class="text-xs text-neutral-400"></span>
       </div>
-      <!-- 过滤状态摘要 -->
-      <span id="filterSummary" class="text-xs text-neutral-400"></span>
-      <div class="ml-auto flex items-center gap-4 text-xs text-neutral-500">
-        <!-- 状态 -->
-        <span id="liveToggle" class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-neutral-100 dark:bg-neutral-800 text-neutral-500 font-medium cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors" onclick="toggleAutoRefresh()" title="点击切换自动刷新">
+      <!-- 状态区（右对齐、弱化） -->
+      <div class="ml-auto flex items-center gap-3 text-[11px] text-neutral-400 dark:text-neutral-500">
+        <span class="text-[10px] font-medium uppercase tracking-wider text-neutral-300 dark:text-neutral-600">状态</span>
+        <span id="liveToggle" class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-neutral-50 dark:bg-neutral-800 text-neutral-400 font-medium cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors" onclick="toggleAutoRefresh()" title="点击切换自动刷新">
           <span id="liveDot" class="w-2 h-2 rounded-full bg-neutral-400"></span>
           <span id="liveText">PAUSED</span>
         </span>
-        <span class="text-neutral-300 dark:text-neutral-700">·</span>
+        <span class="text-neutral-300 dark:text-neutral-600">·</span>
         <span>Hook</span>
         <span id="hookStatusText">检测中...</span>
-        <span class="text-neutral-300 dark:text-neutral-700">·</span>
-        <span>错误: <span id="lastErrorCount" class="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-bold bg-danger-100 text-danger-700 dark:bg-danger-900/30 dark:text-danger-400">0</span></span>
-        <span class="text-neutral-300 dark:text-neutral-700">·</span>
+        <span class="text-neutral-300 dark:text-neutral-600">·</span>
+        <span>错误: <button id="lastErrorCount" class="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-bold bg-danger-100 text-danger-700 dark:bg-danger-900/30 dark:text-danger-400 hover:bg-danger-200 dark:hover:bg-danger-800/40 transition-colors cursor-pointer" onclick="jumpToErrors()" title="点击定位到第一个报错调用">0</button></span>
+        <span class="text-neutral-300 dark:text-neutral-600">·</span>
         <span>慢: <span id="slowCount" class="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-bold bg-warning-100 text-warning-700 dark:bg-warning-900/30 dark:text-warning-400">0</span></span>
+        <div class="w-px h-4 bg-neutral-200 dark:bg-neutral-700"></div>
         <!-- 排序 + 展开 -->
-        <button id="sortBtn" class="px-2.5 py-1 rounded-md border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors" onclick="toggleSort()">↓ 最新</button>
-        <button id="expandAllBtn" class="px-2.5 py-1 rounded-md border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors" onclick="toggleAllSessions()">展开全部</button>
+        <button id="sortBtn" class="px-2.5 py-1 rounded-md border border-neutral-200 dark:border-neutral-700 text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors" onclick="toggleSort()">↓ 最新</button>
+        <button id="expandAllBtn" class="px-2.5 py-1 rounded-md border border-neutral-200 dark:border-neutral-700 text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors" onclick="toggleAllSessions()">展开全部</button>
       </div>
     </div>
   </div>

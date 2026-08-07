@@ -8,6 +8,16 @@ import { extractSessions } from '../utils.js';
 /** 记录当前展开的 session ID */
 let expandedSessionIds = new Set();
 
+/** 轮次工具调用懒加载缓存（roundId → {nodes, sourceColor}），折叠时不在 DOM 中渲染详情 */
+const roundToolsCache = new Map();
+
+/** AI 长文本折叠缓存（bubbleId → 完整文本） */
+const assistantTextCache = new Map();
+
+/** AI 气泡折叠阈值 */
+const AI_MAX_LINES = 10;
+const AI_MAX_CHARS = 600;
+
 // ─── 来源标签 & 颜色映射（共享给会话卡片和轮次头） ───────────────
 
 const sourceLabels = {
@@ -40,6 +50,10 @@ export function renderCallChain(data) {
   const container = document.getElementById('sessionContainer');
   const emptyState = document.getElementById('emptyState');
   if (!container) return;
+
+  // 重新渲染时清空懒加载缓存（旧轮次 id 已随 DOM 失效）
+  roundToolsCache.clear();
+  assistantTextCache.clear();
 
   // 渲染前保存当前展开状态
   expandedSessionIds = new Set(
@@ -265,12 +279,9 @@ function renderSession(session) {
   const projectName = session.projectName || session.project || '';
   const projectCwd = session.projectCwd || session.cwd || '';
   const projectCwdLabel = formatWorkdir(projectCwd);
-  const sessionSubtitle = [
-    timeRange,
-    projectName ? `项目 ${projectName}` : '',
-    projectCwdLabel,
-    avgDur ? `平均 ${formatDuration(avgDur)}` : '',
-  ].filter(Boolean).join(' · ');
+  // 副标题分两层：第一层 时间 + 项目，第二层 路径 + 平均耗时
+  const subtitlePrimary = [timeRange, projectName ? `项目 ${projectName}` : ''].filter(Boolean).join(' · ');
+  const subtitleMeta = [projectCwdLabel, avgDur ? `平均 ${formatDuration(avgDur)}` : ''].filter(Boolean).join(' · ');
 
   const header = `
     <div class="session-header" onclick="toggleSession(event.currentTarget)">
@@ -284,7 +295,8 @@ function renderSession(session) {
           ${source === 'hermes' ? '<span title="包含对话记录">💬</span>' : ''}
           <span class="session-status ${status.cls}">${status.label}</span>
         </div>
-        <div class="session-subtitle" title="${escapeHtml(projectCwd || sessionSubtitle)}">${escapeHtml(sessionSubtitle || '等待调用详情')}</div>
+        <div class="session-subtitle" title="${escapeHtml(projectCwd || [subtitlePrimary, subtitleMeta].filter(Boolean).join(' · '))}">${escapeHtml(subtitlePrimary || '等待调用详情')}</div>
+        <div class="session-subtitle-meta">${escapeHtml(subtitleMeta)}</div>
       </div>
       <div class="session-metrics">
         ${renderMetric('调用', toolCount)}
@@ -308,7 +320,9 @@ function renderSession(session) {
     <div class="session-card ${borderClass}${isActive ? ' active-session' : ''}"
          id="session-${escapeHtml(session.id)}"
          data-session-id="${escapeHtml(session.id)}"
-         data-source="${escapeHtml(session.source)}">
+         data-source="${escapeHtml(session.source)}"
+         data-has-error="${hasError ? 'true' : 'false'}"
+         data-tool-count="${escapeHtml(String(toolCount || 0))}">
       ${header}
       <div class="session-body hidden">
         ${calls.length > 0 ? calls : '<div class="text-center py-4 text-neutral-400 text-sm">加载中...</div>'}
@@ -548,29 +562,26 @@ function groupByRounds(calls) {
 function renderRound(round, index, sourceColor = '') {
   const parts = [];
 
-  // 从轮次内的工具调用推断来源（取第一个有 source 的）
-  const roundSource = round.toolCalls.find(c => c.source)?.source
-    || round.assistantMessages.find(m => m.source)?.source
-    || '';
-
-  const roundId = `round-tools-${index}-${Math.random().toString(36).slice(2, 8)}`;
+  const rand = Math.random().toString(36).slice(2, 8);
+  const aiId = `round-ai-${index}-${rand}`;
+  const toolsId = `round-tools-${index}-${rand}`;
 
   parts.push(`<div class="round-conversation">`);
 
-  // 用户气泡
+  // 用户气泡（无用户消息时弱化为小灰字占位）
   const userContent = round.userMessage
     ? extractUserText(round.userMessage)
     : '';
   parts.push(`
     <div class="chat-message user">
       <div class="chat-meta">用户 · 第 ${index + 1} 轮</div>
-      <div class="chat-bubble user">
-        ${userContent ? escapeHtml(userContent) : '<span class="muted">无用户消息</span>'}
-      </div>
+      ${userContent
+        ? `<div class="chat-bubble user">${escapeHtml(userContent)}</div>`
+        : `<div class="chat-placeholder">（无用户消息）</div>`}
     </div>
   `);
 
-  // AI 气泡
+  // AI 气泡（长文本默认折叠，展开全文时再渲染完整内容）
   const assistantTexts = [];
   for (const msg of round.assistantMessages) {
     const text = extractAssistantText(msg);
@@ -580,46 +591,108 @@ function renderRound(round, index, sourceColor = '') {
     parts.push(`
       <div class="chat-message assistant">
         <div class="chat-meta">AI</div>
-        <div class="chat-bubble assistant">${escapeHtml(assistantTexts.join('\n\n'))}</div>
+        ${renderAssistantBubble(aiId, assistantTexts)}
       </div>
     `);
   }
 
   parts.push(`</div>`);
 
-  // 工具调用（默认折叠）
+  // 工具调用（默认折叠，折叠时 DOM 只保留摘要，展开时懒加载详情）
   if (round.toolCalls.length > 0) {
     const tree = buildTree(round.toolCalls);
-    const rendered = tree.map((call, i) => renderCall(call, i, '', sourceColor)).join('');
-    const errorCount = round.toolCalls.filter(call => (
-      call.error === true
-      || call.success === false
-      || call.success === 0
-      || call.error_message
-      || (call.exit_code != null && call.exit_code !== 0)
-    )).length;
+    roundToolsCache.set(toolsId, { nodes: tree, sourceColor });
+    const errorCount = round.toolCalls.filter(isErrorCall).length;
+    const breakdown = getToolBreakdown(round.toolCalls);
     parts.push(`
-      <div class="round-tools collapsed" id="${roundId}" data-errors-only="false">
-        <button class="round-tools-toggle" type="button" onclick="toggleRoundTools('${roundId}')">
+      <div class="round-tools collapsed" id="${toolsId}" data-errors-only="false">
+        <button class="round-tools-toggle" type="button" onclick="toggleRoundTools('${toolsId}')">
           <span class="round-tools-title">
             <span class="round-tools-chevron">›</span>
-            工具调用详情
+            工具调用 · ${round.toolCalls.length} 次
           </span>
-          <span class="round-tools-summary">${round.toolCalls.length} 次调用${errorCount ? ` · ${errorCount} 个报错` : ''}</span>
+          <span class="round-tools-summary">${breakdown}${errorCount ? ` · error ${errorCount}` : ''}</span>
         </button>
         <div class="round-tools-body">
           <label class="round-tools-filter" onclick="event.stopPropagation()">
-            <input type="checkbox" onchange="toggleRoundErrorFilter('${roundId}', this.checked)">
+            <input type="checkbox" onchange="toggleRoundErrorFilter('${toolsId}', this.checked)">
             只显示报错调用
           </label>
-          <div class="round-calls">${rendered}</div>
+          <div class="round-calls"></div>
         </div>
       </div>
     `);
   }
 
-  return parts.join('');
+  // 轮次级标记：供 session body 顶部导航筛选
+  const hasError = round.toolCalls.some(isErrorCall);
+  const hasSlow = round.toolCalls.some(c => (c.duration_ms || 0) > 5000);
+
+  return `<div class="round-block" data-has-error="${hasError ? 'true' : 'false'}" data-has-slow="${hasSlow ? 'true' : 'false'}">${parts.join('')}</div>`;
 }
+
+/** 判断调用是否为报错 */
+function isErrorCall(call) {
+  return call.error === true
+    || call.success === false
+    || call.success === 0
+    || call.error_message
+    || (call.exit_code != null && call.exit_code !== 0);
+}
+
+/** 工具调用类型分布摘要（bash 80 / read 20） */
+function getToolBreakdown(calls) {
+  const byType = {};
+  for (const c of calls) {
+    const t = getToolType(c.tool_name || '');
+    byType[t] = (byType[t] || 0) + 1;
+  }
+  const parts = Object.entries(byType)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([t, n]) => `${t} ${n}`);
+  return parts.join(' / ') || '—';
+}
+
+/** 渲染 AI 气泡（长文本默认折叠前 10 行） */
+function renderAssistantBubble(id, texts) {
+  const fullText = texts.join('\n\n');
+  const lines = fullText.split('\n');
+  const needsCollapse = lines.length > AI_MAX_LINES || fullText.length > AI_MAX_CHARS;
+  if (!needsCollapse) {
+    return `<div class="chat-bubble assistant">${escapeHtml(fullText)}</div>`;
+  }
+  assistantTextCache.set(id, fullText);
+  const preview = lines.length > AI_MAX_LINES
+    ? lines.slice(0, AI_MAX_LINES).join('\n')
+    : fullText.slice(0, AI_MAX_CHARS);
+  const hint = lines.length > AI_MAX_LINES ? `… 还有 ${lines.length - AI_MAX_LINES} 行` : '… 内容较长';
+  return `
+    <div class="chat-bubble assistant" id="${id}">
+      <span class="assistant-preview">${escapeHtml(preview)}</span>
+      <span class="assistant-more">${hint}</span>
+      <button type="button" class="assistant-expand" onclick="expandAssistant('${id}')">展开全文</button>
+    </div>
+  `;
+}
+
+window.expandAssistant = function (id) {
+  const bubble = document.getElementById(id);
+  if (!bubble || !assistantTextCache.has(id)) return;
+  bubble.innerHTML = escapeHtml(assistantTextCache.get(id));
+  bubble.classList.add('expanded');
+  assistantTextCache.delete(id);
+};
+
+/** 轮次导航：按错误 / 慢调用 / 最近一轮过滤 */
+window.setRoundNav = function (btn, mode) {
+  const container = btn.closest('.session-body')?.querySelector('.rounds-container');
+  if (!container) return;
+  container.dataset.nav = mode;
+  btn.closest('.round-nav')?.querySelectorAll('.round-nav-btn').forEach(b => {
+    b.classList.toggle('active', b === btn);
+  });
+};
 
 /** 从 user 消息中提取文本 */
 function extractUserText(call) {
@@ -830,7 +903,7 @@ function renderCallDetail(call, sourceColor = '') {
 }
 
 /** 渲染调用列表（供外部懒加载使用） */
-export function renderCallChainCalls(calls) {
+export function renderCallChainCalls(calls, toolCount = 0) {
   if (!calls || calls.length === 0) return '';
 
   // 从调用数据中提取来源颜色
@@ -839,6 +912,8 @@ export function renderCallChainCalls(calls) {
 
   const rounds = groupByRounds(calls);
   const summary = summarizeCalls(calls.filter(c => c.role === 'tool_result' || c.role === 'tool_error' || c.tool_name));
+  // 统一口径：工具调用次数与会话头部一致（DB tool_count），缺失时回退到时间线条目数
+  const total = toolCount > 0 ? toolCount : summary.total;
   const topTypes = Object.entries(summary.byType)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3)
@@ -851,7 +926,7 @@ export function renderCallChainCalls(calls) {
     <div class="execution-overview">
       <div>
         <div class="overview-label">执行概览</div>
-        <div class="overview-main">${summary.total} 次工具调用${topTypes ? ` · ${escapeHtml(topTypes)}` : ''}</div>
+        <div class="overview-main">${total} 次工具调用${topTypes ? ` · ${escapeHtml(topTypes)}` : ''}</div>
       </div>
       <div class="overview-pills">
         <span class="overview-pill ${summary.errors ? 'error' : 'success'}">错误 ${summary.errors}</span>
@@ -867,7 +942,20 @@ export function renderCallChainCalls(calls) {
     return overview + tree.map((call, i) => renderCall(call, i, '', sourceColor)).join('');
   }
 
-  return overview + rounds.map((round, i) => renderRound(round, i, sourceColor)).join('');
+  // 轮次导航（长会话快速定位：全部 / 有错误 / 慢调用 / 最近一轮）
+  const nav = rounds.length > 1 ? `
+    <div class="round-nav">
+      <span class="round-nav-label">轮次</span>
+      <button class="round-nav-btn active" data-roundnav="all" onclick="setRoundNav(this, 'all')">全部轮次</button>
+      <button class="round-nav-btn" data-roundnav="error" onclick="setRoundNav(this, 'error')">有错误</button>
+      <button class="round-nav-btn" data-roundnav="slow" onclick="setRoundNav(this, 'slow')">慢调用</button>
+      <button class="round-nav-btn" data-roundnav="last" onclick="setRoundNav(this, 'last')">最近一轮</button>
+    </div>
+  ` : '';
+
+  const roundsHtml = `<div class="rounds-container" data-nav="all">${rounds.map((round, i) => renderRound(round, i, sourceColor)).join('')}</div>`;
+
+  return nav + overview + roundsHtml;
 }
 
 /** 切换调用行的详情面板 */
@@ -880,7 +968,17 @@ window.toggleCallDetail = function (rowEl) {
 window.toggleRoundTools = function (roundId) {
   const panel = document.getElementById(roundId);
   if (!panel) return;
+  const wasCollapsed = panel.classList.contains('collapsed');
   panel.classList.toggle('collapsed');
+  if (wasCollapsed) {
+    // 首次展开时懒加载详情（折叠时 DOM 无详情文本）
+    const callsEl = panel.querySelector('.round-calls');
+    if (callsEl && !callsEl.dataset.loaded && roundToolsCache.has(roundId)) {
+      const { nodes, sourceColor } = roundToolsCache.get(roundId);
+      callsEl.innerHTML = nodes.map((call, i) => renderCall(call, i, '', sourceColor)).join('');
+      callsEl.dataset.loaded = '1';
+    }
+  }
 };
 
 window.toggleRoundErrorFilter = function (roundId, checked) {

@@ -321,7 +321,7 @@ async function loadSessionCalls(card) {
     } else {
       // 动态导入 renderCallChain 中的 renderCall 函数
       const { renderCallChainCalls } = await import('./callchain/index.js');
-      body.innerHTML = renderCallChainCalls(calls);
+      body.innerHTML = renderCallChainCalls(calls, parseInt(card.dataset.toolCount || '0', 10) || 0);
     }
     body.dataset.loaded = '1';
   } catch {
@@ -367,3 +367,38 @@ window.toggleAllSessions = function () {
 
 // 暴露 loadSessionCalls 到全局作用域，供 callchain 模块使用
 window.loadSessionCalls = loadSessionCalls;
+
+// ─── 错误定位：一键展开第一个报错调用并开启“只显示报错” ──
+window.setSessionErrorFilter = function (card, on) {
+  const container = card.querySelector('.rounds-container');
+  if (container) container.dataset.nav = on ? 'error' : 'all';
+  card.querySelectorAll('.round-nav-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.roundnav === (on ? 'error' : 'all'));
+  });
+  card.querySelectorAll('.round-tools').forEach(panel => {
+    if (on) {
+      if (panel.classList.contains('collapsed')) window.toggleRoundTools(panel.id);
+      panel.dataset.errorsOnly = 'true';
+    } else {
+      panel.dataset.errorsOnly = 'false';
+    }
+  });
+};
+
+window.jumpToErrors = async function () {
+  const card = document.querySelector('.session-card[data-has-error="true"]');
+  if (!card) return;
+  const body = card.querySelector('.session-body');
+  const arrow = card.querySelector('.session-arrow');
+  if (body) {
+    body.classList.remove('hidden');
+    if (arrow) arrow.style.transform = 'rotate(90deg)';
+    document.querySelectorAll('.session-card.selected').forEach(c => c.classList.remove('selected'));
+    card.classList.add('selected');
+    if (!body.dataset.loaded && window.loadSessionCalls) {
+      await window.loadSessionCalls(card);
+    }
+    window.setSessionErrorFilter(card, true);
+    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+};
