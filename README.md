@@ -12,6 +12,7 @@ Aggregates call counts for SKILLs, Tools, and MCPs, and reconstructs the complet
 - **多 Agent 追踪** — 统计 SKILL / Tool / MCP 调用次数，还原完整调用链
 - **调用链可视化** — 树形展示每次会话的 Agent→Tool 父子调用关系
 - **分析仪表盘** — 总调用数、错误率、工具使用排行、慢调用
+- **概览** — 每个 AI 工具一张卡片，展示版本、配置目录、Skills / MCP / Plugins / Extensions / Hooks 等能力资产
 - **多数据源** — Hermes（SQLite 轮询）、Claude Code / Codex / Cursor / Pi（实时钩子）、OpenCode（SQLite 轮询）
 - **Timeline 可观测** — 统一 timeline 表，支持跨数据源对比、role 语义分类、错误自动归类
 - **实时刷新** — 3 秒增量更新，无需手动刷新
@@ -44,6 +45,7 @@ agent-trace/
 │   ├── abeat-db.js            # SQLite 存储层
 │   ├── config.js              # 服务配置
 │   ├── schema.sql             # 表结构定义
+│   ├── overview.js            # 概览资产扫描与数据库快照
 │   ├── adapters/              # 多工具适配器（Hermes / Claude Code / Cursor / Pi ...）
 │   ├── hooks/                 # 实时钩子（prelog.js / log.js）
 │   └── scripts/               # 工具脚本
@@ -52,7 +54,8 @@ agent-trace/
 │   ├── config.js / utils.js   # 配置与工具函数
 │   ├── style.css              # 样式
 │   ├── callchain/             # 调用链 Tab
-│   └── dashboard/             # 仪表盘 Tab（含 Chart.js 图表）
+│   ├── dashboard/             # 仪表盘 Tab（含 Chart.js 图表）
+│   └── overview/              # 概览 Tab（工具能力资产）
 ├── dist/                      # 构建产物（npm run build 生成）
 ├── index.html                 # 入口页面
 ├── package.json
@@ -119,6 +122,25 @@ npx agent-trace service start    # 后台启动，开机自启
 | **Cursor** | 实时钩子 | 同 Claude Code |
 | **Pi** | 实时钩子 | 同 Claude Code |
 | **OpenCode** | 轮询 `~/.local/share/opencode/opencode.db` | 无需配置 |
+
+### 概览资产扫描
+
+“概览”页用于查看每个 AI 工具的稳定能力资产，包括工具版本、配置目录、Skills、MCP、Plugins、Extensions、Hooks、Adapters 和内置/历史调用中发现的能力。
+
+概览数据采用“数据库快照 + 后台刷新”：
+
+1. `/api/overview` 先读取 `a-beat.db` 中最近一次资产快照，快速返回页面。
+2. 每次访问 `/api/overview` 后，服务会在后台触发一次资产扫描并更新数据库。
+3. 服务启动后会按固定间隔定时扫描，避免配置变化长期不同步。
+4. 调用次数、高频资产和跨工具覆盖矩阵继续从 `timeline` 聚合，不重复存储调用事实。
+
+定时扫描间隔通过环境变量配置，单位为毫秒：
+
+```bash
+AGENT_TRACE_OVERVIEW_SCAN_INTERVAL_MS=600000 npx agent-trace start
+```
+
+默认值是 `600000`（10 分钟）。设为 `0` 可关闭服务端定时扫描；访问概览时仍会触发后台刷新。
 
 ### 配置 Claude Code / Codex / Cursor / Pi 钩子
 
@@ -222,6 +244,9 @@ npx agent-trace start 8080       # 指定其他端口
 | daily_stats | 按天+工具聚合统计 |
 | recent_errors | 最近错误（滚动保留 50 条） |
 | timeline | 原始调用记录（role 语义分类） |
+| overview_tools | 概览页工具身份与运行环境快照 |
+| overview_assets | 概览页能力资产快照 |
+| overview_scan_runs | 概览资产扫描记录、状态与错误信息 |
 
 ---
 

@@ -1,6 +1,6 @@
 # Agent Trace 架构文档
 
-> 最后更新：2026-07-09
+> 最后更新：2026-08-07
 > 目的：记录技术架构和关键决策，防止迭代中反复踩坑
 
 ---
@@ -15,8 +15,9 @@
 │  ┌─────────────────────┐         ┌─────────────────────┐       │
 │  │  调用链 Tab          │  ◄──►  │  HTTP Server :56789 │       │
 │  │  仪表盘 Tab          │        │  ┌───────────────┐  │       │
+│  │  概览 Tab            │        │  │  /api/overview│  │       │
 │  └─────────────────────┘        │  │  a-beat.db     │  │       │
-│                                 │  │  (timeline表)  │  │       │
+│                                 │  │ timeline/overview │ │       │
 │                                 │  └───────────────┘  │       │
 │                                 └─────────────────────┘       │
 └─────────────────────────────────────────────────────────────────┘
@@ -91,9 +92,71 @@ CREATE TABLE timeline (
 
 ---
 
-## 4. 关键设计决策
+## 4. 概览资产快照
 
-### 4.1 为什么用轮询而不是实时推送？
+“概览”页展示当前机器上各 AI 工具的稳定能力资产。它和工具栈地图不同：
+
+- 工具栈地图回答“哪些工具调用表现好、风险高、常形成链路”。
+- 概览回答“每个 AI 工具装了什么能力资产、这些能力在其他工具中是否也具备”。
+
+### 4.1 数据表
+
+概览稳定资产写入 `a-beat.db`：
+
+```sql
+overview_tools (
+  tool TEXT PRIMARY KEY,
+  display_name TEXT,
+  description TEXT,
+  version TEXT,
+  status TEXT,
+  config_dir TEXT,
+  theme_json TEXT,
+  last_scanned_at TEXT
+)
+
+overview_assets (
+  tool TEXT,
+  name TEXT,
+  capability TEXT,
+  type TEXT,
+  status TEXT,
+  path TEXT,
+  description TEXT,
+  last_scanned_at TEXT,
+  PRIMARY KEY (tool, capability, type, path)
+)
+
+overview_scan_runs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  started_at TEXT,
+  finished_at TEXT,
+  status TEXT,
+  tool_count INTEGER,
+  asset_count INTEGER,
+  error_message TEXT
+)
+```
+
+`overview_tools` 和 `overview_assets` 存低频变化的事实：版本、配置目录、资产清单、路径和状态。调用次数、高频资产、跨工具覆盖矩阵不作为稳定事实重复存储，而是在查询时从 `timeline` 聚合后合并。
+
+### 4.2 刷新策略
+
+概览采用“快照优先，后台刷新”：
+
+1. 前端请求 `/api/overview`。
+2. 后端优先读取 `overview_tools` / `overview_assets` 快照。
+3. 响应返回后排队一次后台扫描，扫描完成后更新快照表。
+4. 服务启动后启动定时扫描。
+5. 前端还会缓存上一次 `/api/overview` 结果，首屏可先渲染缓存或稳定工具骨架。
+
+服务端定时扫描间隔由 `AGENT_TRACE_OVERVIEW_SCAN_INTERVAL_MS` 控制，默认 10 分钟，设为 `0` 可关闭定时扫描。访问 `/api/overview` 仍会触发后台刷新。
+
+---
+
+## 5. 关键设计决策
+
+### 5.1 为什么用轮询而不是实时推送？
 
 **决策**：Hermes 和 OpenCode 使用轮询（30分钟间隔）+ fs.watch 补充。
 
@@ -104,7 +167,7 @@ CREATE TABLE timeline (
 
 **权衡**：牺牲实时性换取可靠性。hooks 适配器是实时的，但数据不完整。
 
-### 4.2 为什么 hooks 适配器没有用户消息？
+### 5.2 为什么 hooks 适配器没有用户消息？
 
 **决策**：hooks 只捕获 PreToolUse/PostToolUse 事件。
 
@@ -115,7 +178,7 @@ CREATE TABLE timeline (
 
 **影响**：这些适配器的 timeline 只有工具调用，没有对话上下文。
 
-### 4.3 为什么用 timeline 表而不是 sessions 表？
+### 5.3 为什么用 timeline 表而不是 sessions 表？
 
 **决策**：前端主要查询 timeline 表，sessions 表只用于统计。
 
@@ -124,7 +187,7 @@ CREATE TABLE timeline (
 - sessions 表是聚合数据，用于快速统计
 - 分离关注点：timeline 负责详情，sessions 负责概览
 
-### 4.4 为什么 call-item 用容器而不是分开的边框？
+### 5.4 为什么 call-item 用容器而不是分开的边框？
 
 **决策**：call-row 和 call-detail 共享一个 call-item 容器，容器画左边线。
 
@@ -135,9 +198,9 @@ CREATE TABLE timeline (
 
 ---
 
-## 5. 已知限制
+## 6. 已知限制
 
-### 5.1 数据完整性限制
+### 6.1 数据完整性限制
 
 | 限制 | 影响 | 临时解决方案 |
 |------|------|-------------|
@@ -145,15 +208,16 @@ CREATE TABLE timeline (
 | Hooks适配器无AI回复 | 看不到AI的最终回答 | 无（需工具本身支持） |
 | OpenCode可能无完整对话 | 需验证opencode.db结构 | 检查数据库表结构 |
 
-### 5.2 实时性限制
+### 6.2 实时性限制
 
 | 限制 | 影响 | 缓解措施 |
 |------|------|----------|
 | 轮询间隔30分钟 | 新数据最多延迟30分钟 | fs.watch检测到变更时立即触发 |
 | fs.watch可能漏事件 | 极端情况数据丢失 | 30分钟轮询兜底 |
 | 无WebSocket推送 | 需手动刷新才能看到新数据 | 3秒轮询前端（仅统计） |
+| 概览资产不是实时事实 | 新装插件/Skill 可能延迟出现 | 访问概览触发后台刷新 + 定时扫描 |
 
-### 5.3 性能限制
+### 6.3 性能限制
 
 | 限制 | 影响 | 当前处理 |
 |------|------|----------|
@@ -163,9 +227,9 @@ CREATE TABLE timeline (
 
 ---
 
-## 6. 数据流详解
+## 7. 数据流详解
 
-### 6.1 Hermes 数据流
+### 7.1 Hermes 数据流
 
 ```
 Hermes Agent
@@ -193,7 +257,7 @@ state.db (messages表)
          a-beat.db (timeline表)
 ```
 
-### 6.2 Hooks 适配器数据流
+### 7.2 Hooks 适配器数据流
 
 ```
 Claude Code / Codex / Pi / Cursor
@@ -218,9 +282,38 @@ Claude Code / Codex / Pi / Cursor
 
 ---
 
-## 7. 前端渲染逻辑
+### 7.3 概览数据流
 
-### 7.1 调用链 Tab 渲染流程
+```
+服务启动 / 访问概览 / 定时器
+    │
+    ▼
+overview.js 扫描本机 AI 工具环境
+    │
+    ├── 工具版本、配置目录、状态
+    ├── Skills / MCP / Plugins / Extensions / Hooks / Adapters
+    ▼
+a-beat.db
+    ├── overview_tools
+    ├── overview_assets
+    └── overview_scan_runs
+    │
+    ├── timeline 聚合调用次数
+    ▼
+/api/overview
+    │
+    ▼
+前端概览 Tab
+    ├── 每工具一张卡片
+    ├── 紧凑资产卡片
+    └── 高频资产跨工具覆盖矩阵
+```
+
+---
+
+## 8. 前端渲染逻辑
+
+### 8.1 调用链 Tab 渲染流程
 
 ```
 1. loadCallChain()
@@ -238,7 +331,7 @@ Claude Code / Codex / Pi / Cursor
                └─► 渲染用户消息、AI回复、工具调用
 ```
 
-### 7.2 轮次分组逻辑
+### 8.2 轮次分组逻辑
 
 ```javascript
 // groupByRounds 函数
@@ -256,7 +349,7 @@ for (const call of calls) {
 }
 ```
 
-### 7.3 视觉层级
+### 8.3 视觉层级
 
 ```
 Session Card (来源色左边线)
@@ -278,7 +371,7 @@ Session Card (来源色左边线)
 
 ---
 
-## 8. 颜色系统
+## 9. 颜色系统
 
 | 来源 | 颜色 | 用途 |
 |------|------|------|
@@ -299,21 +392,21 @@ Session Card (来源色左边线)
 
 ---
 
-## 9. 未来改进方向
+## 10. 未来改进方向
 
-### 9.1 数据完整性（高优先级）
+### 10.1 数据完整性（高优先级）
 
 - [ ] OpenCode适配器：验证opencode.db是否包含user/assistant消息
 - [ ] 考虑从JSONL文件提取user/assistant消息（如果存在）
 - [ ] 文档化各工具的hook事件能力
 
-### 9.2 实时性（中优先级）
+### 10.2 实时性（中优先级）
 
 - [ ] WebSocket推送新数据
 - [ ] 减少轮询间隔（30分钟→5分钟）
 - [ ] 前端自动刷新新会话
 
-### 9.3 性能（低优先级）
+### 10.3 性能（低优先级）
 
 - [ ] 虚拟滚动（大量会话）
 - [ ] 分批加载（大会话的工具调用）
@@ -321,9 +414,9 @@ Session Card (来源色左边线)
 
 ---
 
-## 10. 踩坑记录
+## 11. 踩坑记录
 
-### 10.1 Codex hooks 信任机制
+### 11.1 Codex hooks 信任机制
 
 **问题**：修改 hooks.json 后，codex 静默跳过所有 hooks。
 
@@ -336,7 +429,7 @@ Session Card (来源色左边线)
 
 **教训**：不要假设工具的行为，读源码确认。
 
-### 10.2 call-item 边框冲突
+### 11.2 call-item 边框冲突
 
 **问题**：call-row 和 round-header 的左边线在同一水平位置，视觉冲突。
 
@@ -347,7 +440,7 @@ Session Card (来源色左边线)
 
 **教训**：UI改动要截图验证，不能只看代码。
 
-### 10.3 Hermes timeline 数据缺失
+### 11.3 Hermes timeline 数据缺失
 
 **问题**：hermes session 展开后显示"暂无调用记录"。
 

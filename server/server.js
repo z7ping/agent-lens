@@ -489,7 +489,18 @@ async function main() {
         // a-beat.db 已自动初始化，无需额外 ready()
         try {
             const d = getDb();
-            if (d) log(`  ✅ 数据库就绪 (better-sqlite3)`, 'green');
+            if (d) {
+                log(`  ✅ 数据库就绪 (better-sqlite3)`, 'green');
+                try {
+                    const { startOverviewScanner } = require('./overview');
+                    const { DEFAULT_OVERVIEW_SCAN_INTERVAL_MS } = require('./config');
+                    const timer = startOverviewScanner(d);
+                    if (timer) log(`  ✅ 概览资产定时扫描已启动 (${Math.round(DEFAULT_OVERVIEW_SCAN_INTERVAL_MS / 1000)}s)`, 'green');
+                    else log(`  ℹ️ 概览资产定时扫描已关闭`, 'dim');
+                } catch (e) {
+                    log(`  ⚠️ 概览资产扫描启动失败: ${e.message}`, 'yellow');
+                }
+            }
         } catch (e) {
             log(`  ⚠️ 数据库初始化失败: ${e.message}`, 'yellow');
         }
@@ -582,6 +593,10 @@ async function main() {
             try {
                 const { stopAll: stopImporters } = require('./importers');
                 stopImporters();
+            } catch (_) {}
+            try {
+                const { stopOverviewScanner } = require('./overview');
+                stopOverviewScanner();
             } catch (_) {}
             try {
                 const abeatDb = require('./abeat-db');

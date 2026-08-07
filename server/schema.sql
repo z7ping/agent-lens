@@ -78,3 +78,41 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_timeline_dedup ON timeline(session_id, tim
 CREATE INDEX IF NOT EXISTS idx_timeline_tool ON timeline(source, tool_name, timestamp);
 CREATE INDEX IF NOT EXISTS idx_timeline_role ON timeline(role, timestamp);
 CREATE INDEX IF NOT EXISTS idx_timeline_error ON timeline(role, success, error_type);
+
+-- 概览：AI 工具稳定资产快照
+CREATE TABLE IF NOT EXISTS overview_tools (
+  tool TEXT PRIMARY KEY,
+  display_name TEXT,
+  description TEXT,
+  version TEXT,
+  status TEXT,
+  config_dir TEXT,
+  theme_json TEXT,
+  last_scanned_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS overview_assets (
+  tool TEXT NOT NULL,
+  name TEXT NOT NULL,
+  capability TEXT NOT NULL,
+  type TEXT,
+  status TEXT,
+  path TEXT,
+  description TEXT,
+  last_scanned_at TEXT,
+  PRIMARY KEY (tool, capability, type, path),
+  FOREIGN KEY (tool) REFERENCES overview_tools(tool) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS overview_scan_runs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  started_at TEXT,
+  finished_at TEXT,
+  status TEXT,
+  tool_count INTEGER DEFAULT 0,
+  asset_count INTEGER DEFAULT 0,
+  error_message TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_overview_assets_tool ON overview_assets(tool, type);
+CREATE INDEX IF NOT EXISTS idx_overview_scan_runs_started ON overview_scan_runs(started_at DESC);

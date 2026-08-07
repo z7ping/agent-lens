@@ -824,13 +824,28 @@
   @apply grid grid-cols-1 xl:grid-cols-2 gap-4;
 }
 .overview-card {
-  @apply bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg p-4;
+  @apply bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg p-4 relative overflow-hidden;
+  border-top: 3px solid var(--tool-accent, #64748b);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 12px 30px rgba(15, 23, 42, 0.04);
+}
+.overview-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 5.5rem;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--tool-accent, #64748b) 10%, transparent), transparent);
+  pointer-events: none;
 }
 .overview-card-head {
-  @apply flex items-start justify-between gap-3 mb-4;
+  @apply flex items-start justify-between gap-3 mb-4 relative;
 }
 .overview-tool-name {
-  @apply text-lg font-semibold text-neutral-900 dark:text-neutral-100;
+  @apply text-lg font-semibold text-neutral-900 dark:text-neutral-100 flex items-center gap-2;
+}
+.overview-tool-name span {
+  @apply inline-block w-2.5 h-2.5 rounded-full;
+  background: var(--tool-accent, #64748b);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--tool-accent, #64748b) 16%, transparent);
 }
 .overview-tool-desc {
   @apply text-sm text-neutral-500 dark:text-neutral-400 mt-1;
@@ -839,7 +854,11 @@
   @apply inline-flex items-center px-2 py-1 rounded-md text-xs font-medium whitespace-nowrap;
 }
 .overview-status.ok {
-  @apply bg-success-50 dark:bg-success-500/10 text-success-600 dark:text-success-400;
+  color: var(--tool-accent, #059669);
+  background: color-mix(in srgb, var(--tool-accent, #059669) 12%, white);
+}
+.dark .overview-status.ok {
+  background: color-mix(in srgb, var(--tool-accent, #059669) 18%, transparent);
 }
 .overview-status.muted {
   @apply bg-neutral-100 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400;
@@ -848,7 +867,11 @@
   @apply grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3;
 }
 .overview-meta-grid div {
-  @apply rounded-md bg-neutral-50 dark:bg-neutral-800 px-3 py-2 min-w-0;
+  @apply rounded-md px-3 py-2 min-w-0 border border-neutral-100 dark:border-neutral-800;
+  background: color-mix(in srgb, var(--tool-surface, #f8fafc) 62%, white);
+}
+.dark .overview-meta-grid div {
+  background: color-mix(in srgb, var(--tool-accent, #64748b) 8%, #171717);
 }
 .overview-meta-grid span {
   @apply block text-[11px] text-neutral-400 mb-1;
@@ -860,10 +883,17 @@
   @apply flex items-center gap-2 flex-wrap mb-4 text-xs text-neutral-500 dark:text-neutral-400;
 }
 .overview-asset-summary span {
-  @apply inline-flex items-center gap-1 px-2 py-1 rounded-md bg-neutral-100 dark:bg-neutral-800;
+  @apply inline-flex items-center gap-1 px-2 py-1 rounded-md border;
+  color: var(--asset-fg, #475569);
+  background: var(--asset-bg, #f1f5f9);
+  border-color: var(--asset-border, #e2e8f0);
+}
+.dark .overview-asset-summary span {
+  background: color-mix(in srgb, var(--asset-fg, #64748b) 16%, transparent);
+  border-color: color-mix(in srgb, var(--asset-fg, #64748b) 25%, #262626);
 }
 .overview-asset-summary b {
-  @apply text-neutral-900 dark:text-neutral-100;
+  color: currentColor;
 }
 .overview-section-title {
   @apply text-xs font-semibold text-neutral-500 dark:text-neutral-400 mb-2;
@@ -878,31 +908,98 @@
   @apply space-y-2;
 }
 .overview-group {
-  @apply border border-neutral-200 dark:border-neutral-800 rounded-md;
+  @apply border border-neutral-200 dark:border-neutral-800 rounded-md overflow-hidden;
 }
 .overview-group summary {
   @apply cursor-pointer px-3 py-2 text-sm font-medium text-neutral-700 dark:text-neutral-300;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--tool-accent, #64748b) 7%, transparent), transparent);
 }
 .overview-group summary span {
   @apply text-xs text-neutral-400 ml-1;
 }
 .overview-asset-list {
-  @apply border-t border-neutral-200 dark:border-neutral-800 p-2 space-y-1;
+  @apply border-t border-neutral-200 dark:border-neutral-800 p-2;
+}
+.overview-asset-card-grid,
+.overview-asset-list {
+  @apply grid grid-cols-2 md:grid-cols-3 gap-2;
+}
+.overview-asset-card-grid.priority {
+  @apply grid-cols-2 lg:grid-cols-3;
+}
+.overview-asset-card {
+  @apply min-w-0 rounded-md px-2.5 py-2 border text-sm;
+  color: var(--asset-fg, #475569);
+  background: linear-gradient(135deg, var(--asset-bg, #f1f5f9), rgba(255, 255, 255, 0.72));
+  border-color: var(--asset-border, #e2e8f0);
+}
+.dark .overview-asset-card {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--asset-fg, #64748b) 14%, #171717), #171717);
+}
+.overview-asset-card.is-priority {
+  border-color: color-mix(in srgb, var(--tool-accent, #64748b) 40%, var(--asset-border, #e2e8f0));
+  box-shadow: inset 3px 0 0 var(--tool-accent, #64748b);
+}
+.overview-asset-card-top {
+  @apply flex items-center justify-between gap-1 mb-1;
+}
+.overview-asset-card-top span {
+  @apply text-[10px] font-semibold uppercase;
+}
+.overview-asset-card-top em {
+  @apply not-italic text-[10px] font-semibold px-1 py-0.5 rounded;
+  color: #92400e;
+  background: #fef3c7;
+}
+.dark .overview-asset-card-top em {
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.16);
+}
+.overview-asset-card b {
+  @apply block truncate text-xs font-semibold text-neutral-800 dark:text-neutral-100;
+}
+.overview-asset-card-meta {
+  @apply flex items-center justify-between gap-2 mt-1;
+}
+.overview-asset-card-meta small {
+  @apply text-[11px] text-neutral-500 dark:text-neutral-400 truncate;
 }
 .overview-asset-line {
-  @apply flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-sm hover:bg-neutral-50 dark:hover:bg-neutral-800;
+  @apply flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-sm border border-transparent;
+  background: linear-gradient(90deg, var(--asset-bg, transparent), transparent 72%);
+}
+.overview-asset-line:hover {
+  @apply border-neutral-200 dark:border-neutral-700;
+}
+.overview-asset-line.is-priority {
+  border-color: color-mix(in srgb, var(--tool-accent, #64748b) 28%, #e5e7eb);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--tool-accent, #64748b) 13%, white), var(--asset-bg, transparent));
+}
+.dark .overview-asset-line.is-priority {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--tool-accent, #64748b) 18%, #171717), transparent);
 }
 .overview-asset-line b {
   @apply block font-medium text-neutral-800 dark:text-neutral-200 truncate;
 }
 .overview-asset-line small {
-  @apply text-xs text-neutral-400;
+  @apply text-xs text-neutral-400 flex items-center gap-1;
+}
+.overview-asset-line small i {
+  @apply not-italic px-1 py-0.5 rounded text-[10px] font-semibold;
+  color: var(--asset-fg, #64748b);
+  background: var(--asset-bg, #f1f5f9);
 }
 .overview-asset-side {
   @apply flex items-center gap-2 shrink-0;
 }
 .overview-asset-side em {
-  @apply not-italic text-[11px] font-semibold px-1.5 py-0.5 rounded bg-info-50 dark:bg-info-500/10 text-info-600 dark:text-info-400;
+  @apply not-italic text-[11px] font-semibold px-1.5 py-0.5 rounded;
+  color: #92400e;
+  background: #fef3c7;
+}
+.dark .overview-asset-side em {
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.16);
 }
 .overview-matrix-card {
   @apply mt-4 overflow-x-auto;
@@ -922,6 +1019,9 @@
 .overview-matrix-row {
   @apply px-3 py-2 text-sm border-b border-neutral-100 dark:border-neutral-800;
 }
+.overview-matrix-row:hover {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--source-accent, #64748b) 8%, transparent), transparent);
+}
 .overview-matrix-row b {
   @apply block text-neutral-800 dark:text-neutral-200;
 }
@@ -929,16 +1029,65 @@
   @apply text-xs text-neutral-400;
 }
 .overview-coverage {
-  @apply inline-flex items-center justify-center px-2 py-1 rounded-md text-xs font-medium;
+  @apply inline-flex items-center justify-center px-2 py-1 rounded-md text-xs font-medium border;
 }
 .overview-coverage.ok {
-  @apply bg-success-50 dark:bg-success-500/10 text-success-600 dark:text-success-400;
+  @apply bg-success-50 dark:bg-success-500/10 text-success-600 dark:text-success-400 border-success-100 dark:border-success-500/20;
 }
 .overview-coverage.missing {
-  @apply bg-neutral-100 dark:bg-neutral-800 text-neutral-400 dark:text-neutral-500;
+  @apply bg-danger-50/60 dark:bg-danger-500/5 text-danger-500 dark:text-danger-400 border-dashed border-danger-100 dark:border-danger-500/20;
 }
 .overview-coverage.muted {
-  @apply bg-warning-50 dark:bg-warning-500/10 text-warning-600 dark:text-warning-400;
+  @apply bg-warning-50 dark:bg-warning-500/10 text-warning-600 dark:text-warning-400 border-warning-100 dark:border-warning-500/20;
+}
+.overview-coverage.source {
+  box-shadow: inset 0 0 0 1px var(--source-accent, #64748b), 0 0 0 2px color-mix(in srgb, var(--source-accent, #64748b) 12%, transparent);
+}
+
+.type-skill {
+  --asset-fg: #2563eb;
+  --asset-bg: #eff6ff;
+  --asset-border: #bfdbfe;
+}
+.type-mcp {
+  --asset-fg: #7c3aed;
+  --asset-bg: #f5f3ff;
+  --asset-border: #ddd6fe;
+}
+.type-plugin {
+  --asset-fg: #059669;
+  --asset-bg: #ecfdf5;
+  --asset-border: #a7f3d0;
+}
+.type-extension {
+  --asset-fg: #ea580c;
+  --asset-bg: #fff7ed;
+  --asset-border: #fed7aa;
+}
+.type-hook {
+  --asset-fg: #dc2626;
+  --asset-bg: #fef2f2;
+  --asset-border: #fecaca;
+}
+.type-adapter {
+  --asset-fg: #0891b2;
+  --asset-bg: #ecfeff;
+  --asset-border: #a5f3fc;
+}
+.type-builtin {
+  --asset-fg: #64748b;
+  --asset-bg: #f1f5f9;
+  --asset-border: #cbd5e1;
+}
+.dark .type-skill,
+.dark .type-mcp,
+.dark .type-plugin,
+.dark .type-extension,
+.dark .type-hook,
+.dark .type-adapter,
+.dark .type-builtin {
+  --asset-bg: color-mix(in srgb, var(--asset-fg) 14%, transparent);
+  --asset-border: color-mix(in srgb, var(--asset-fg) 28%, #262626);
 }
 
 @media (max-width: 760px) {

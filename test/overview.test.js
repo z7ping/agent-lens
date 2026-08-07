@@ -1,7 +1,15 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
-const { buildOverview } = require('../server/overview');
+const Database = require('better-sqlite3');
+
+const {
+  buildOverview,
+  readOverviewInventory,
+  refreshOverviewInventory,
+} = require('../server/overview');
 
 test('builds one overview card per tool with grouped capability assets', () => {
   const overview = buildOverview({
@@ -36,6 +44,7 @@ test('builds one overview card per tool with grouped capability assets', () => {
 
   assert.equal(overview.tools.length, 2);
   assert.equal(overview.tools[0].tool, 'codex');
+  assert.equal(overview.tools[0].theme.accent, '#10b981');
   assert.equal(overview.tools[0].asset_groups.skill.count, 1);
   assert.equal(overview.tools[0].asset_groups.plugin.count, 1);
 
@@ -111,4 +120,78 @@ test('adds frequently used timeline-only assets to the owning tool card', () => 
   const row = overview.capability_matrix.find(item => item.name === 'Bash');
   assert.equal(row.coverage.codex.status, '已有');
   assert.equal(row.coverage.cursor.status, '已有');
+});
+
+test('persists stable overview inventory in the agent trace database', () => {
+  const db = new Database(':memory:');
+  db.exec(fs.readFileSync(path.join(__dirname, '..', 'server', 'schema.sql'), 'utf-8'));
+
+  refreshOverviewInventory(db, {
+    now: '2026-08-07T00:00:00.000Z',
+    inventory: [
+      {
+        tool: 'codex',
+        display_name: 'Codex',
+        description: 'OpenAI coding agent',
+        version: '1.2.3',
+        status: 'detected',
+        config_dir: 'C:/Users/test/.codex',
+        theme: { accent: '#10b981', surface: '#ecfdf5' },
+        assets: [
+          { name: 'browser', type: 'plugin', status: 'installed', path: 'C:/Users/test/.codex/plugins/browser', description: 'Browser control' },
+        ],
+      },
+    ],
+  });
+
+  const inventory = readOverviewInventory(db);
+
+  assert.equal(inventory.length, 1);
+  assert.equal(inventory[0].tool, 'codex');
+  assert.equal(inventory[0].version, '1.2.3');
+  assert.equal(inventory[0].theme.accent, '#10b981');
+  assert.equal(inventory[0].assets.length, 1);
+  assert.equal(inventory[0].assets[0].name, 'browser');
+
+  const run = db.prepare('SELECT status, tool_count, asset_count FROM overview_scan_runs ORDER BY id DESC LIMIT 1').get();
+  assert.deepEqual(run, { status: 'success', tool_count: 1, asset_count: 1 });
+});
+
+test('queryOverview reads cached inventory from database and merges timeline usage', () => {
+  const db = new Database(':memory:');
+  db.exec(fs.readFileSync(path.join(__dirname, '..', 'server', 'schema.sql'), 'utf-8'));
+
+  refreshOverviewInventory(db, {
+    now: '2026-08-07T00:00:00.000Z',
+    inventory: [
+      {
+        tool: 'codex',
+        display_name: 'Codex',
+        description: 'OpenAI coding agent',
+        version: '1.2.3',
+        status: 'detected',
+        config_dir: 'C:/Users/test/.codex',
+        assets: [
+          { name: 'browser', type: 'plugin', status: 'installed', path: 'C:/Users/test/.codex/plugins/browser' },
+        ],
+      },
+    ],
+  });
+  db.prepare(`
+    INSERT INTO timeline (source, session_id, timestamp, role, tool_name, success)
+    VALUES ('codex', 's1', '2026-08-07T00:00:01.000Z', 'tool_result', 'browser', 1)
+  `).run();
+  db.prepare(`
+    INSERT INTO timeline (source, session_id, timestamp, role, tool_name, success)
+    VALUES ('codex', 's2', '2026-08-07T00:00:02.000Z', 'tool_result', 'browser', 1)
+  `).run();
+
+  const { queryOverview } = require('../server/overview');
+  const overview = queryOverview(db, { priorityThreshold: 2 });
+  const browser = overview.tools[0].assets.find(asset => asset.name === 'browser');
+
+  assert.equal(overview.tools[0].version, '1.2.3');
+  assert.equal(browser.call_count, 2);
+  assert.equal(browser.is_priority, true);
+  assert.equal(overview.capability_matrix[0].name, 'browser');
 });

@@ -8,7 +8,7 @@ const path = require('path');
 const { getAdapter, getAllAdapters } = require('./adapters');
 const { getDb, queryStats, queryTimeline } = require('./abeat-db');
 const { queryToolMap } = require('./tool-map');
-const { queryOverview } = require('./overview');
+const { queryOverview, scheduleOverviewRefresh } = require('./overview');
 const { detectSourceStatus } = require('./sources-status');
 
 const ROOT = path.join(__dirname, '..');
@@ -400,6 +400,7 @@ function handleApiOverview(req, res, params) {
             priorityThreshold: parseInt(params.get('priorityThreshold') || '5', 10),
         });
         sendJson(res, result);
+        scheduleOverviewRefresh(db);
     } catch (e) {
         sendJson(res, { error: e.message, tools: [], priority_assets: [], capability_matrix: [] }, 500);
     }

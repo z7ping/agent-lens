@@ -2,6 +2,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
+const { DEFAULT_OVERVIEW_SCAN_INTERVAL_MS } = require('./config');
 
 const ASSET_TYPES = ['skill', 'mcp', 'plugin', 'extension', 'hook', 'adapter', 'builtin'];
 
@@ -11,36 +12,42 @@ const TOOL_DEFINITIONS = [
         display_name: 'Codex',
         description: 'OpenAI Codex 命令行编码智能体与本地桌面环境。',
         config_dir: path.join(os.homedir(), '.codex'),
+        theme: { accent: '#10b981', surface: '#ecfdf5' },
     },
     {
         tool: 'claude-code',
         display_name: 'Claude Code',
         description: 'Anthropic Claude Code 命令行编码助手。',
         config_dir: path.join(os.homedir(), '.claude'),
+        theme: { accent: '#f97316', surface: '#fff7ed' },
     },
     {
         tool: 'cursor',
         display_name: 'Cursor',
         description: '基于 VS Code 的 AI 代码编辑器。',
         config_dir: path.join(os.homedir(), 'AppData', 'Roaming', 'Cursor', 'User'),
+        theme: { accent: '#6366f1', surface: '#eef2ff' },
     },
     {
         tool: 'opencode',
         display_name: 'OpenCode',
         description: 'OpenCode 终端编码智能体。',
         config_dir: path.join(os.homedir(), '.local', 'share', 'opencode'),
+        theme: { accent: '#06b6d4', surface: '#ecfeff' },
     },
     {
         tool: 'hermes',
         display_name: 'Hermes',
         description: 'Hermes 编码智能体历史数据源。',
         config_dir: path.join(os.homedir(), '.hermes'),
+        theme: { accent: '#8b5cf6', surface: '#f5f3ff' },
     },
     {
         tool: 'pi',
         display_name: 'Pi',
         description: 'Pi 编码智能体历史数据源。',
         config_dir: path.join(os.homedir(), '.pi'),
+        theme: { accent: '#eab308', surface: '#fefce8' },
     },
 ];
 
@@ -251,6 +258,14 @@ function discoverInventory() {
     });
 }
 
+function parseJson(value, fallback = {}) {
+    try {
+        return value ? JSON.parse(value) : fallback;
+    } catch (_) {
+        return fallback;
+    }
+}
+
 function dedupeAssets(assets = []) {
     const seen = new Set();
     const result = [];
@@ -261,6 +276,118 @@ function dedupeAssets(assets = []) {
         result.push(asset);
     }
     return result;
+}
+
+function readOverviewInventory(db) {
+    if (!db) return [];
+    const tools = db.prepare(`
+        SELECT tool, display_name, description, version, status, config_dir, theme_json, last_scanned_at
+        FROM overview_tools
+        ORDER BY tool ASC
+    `).all();
+    if (!tools.length) return [];
+
+    const assets = db.prepare(`
+        SELECT tool, name, capability, type, status, path, description, last_scanned_at
+        FROM overview_assets
+        ORDER BY tool ASC, type ASC, name ASC
+    `).all();
+    const byTool = new Map();
+    for (const asset of assets) {
+        if (!byTool.has(asset.tool)) byTool.set(asset.tool, []);
+        byTool.get(asset.tool).push({
+            name: asset.name,
+            capability: asset.capability,
+            type: asset.type,
+            status: asset.status,
+            path: asset.path || '',
+            description: asset.description || '',
+            last_scanned_at: asset.last_scanned_at || '',
+        });
+    }
+
+    return tools.map(tool => ({
+        tool: tool.tool,
+        display_name: tool.display_name || tool.tool,
+        description: tool.description || '',
+        version: tool.version || '',
+        status: tool.status || 'unknown',
+        config_dir: tool.config_dir || '',
+        theme: parseJson(tool.theme_json, themeForTool(tool.tool)),
+        last_scanned_at: tool.last_scanned_at || '',
+        assets: byTool.get(tool.tool) || [],
+    }));
+}
+
+function writeOverviewInventory(db, inventory = [], now = new Date().toISOString()) {
+    if (!db) return { tool_count: 0, asset_count: 0 };
+    const write = db.transaction((items) => {
+        db.prepare('DELETE FROM overview_assets').run();
+        db.prepare('DELETE FROM overview_tools').run();
+
+        const insertTool = db.prepare(`
+            INSERT INTO overview_tools (tool, display_name, description, version, status, config_dir, theme_json, last_scanned_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        const insertAsset = db.prepare(`
+            INSERT INTO overview_assets (tool, name, capability, type, status, path, description, last_scanned_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+
+        let assetCount = 0;
+        for (const tool of items) {
+            insertTool.run(
+                tool.tool,
+                tool.display_name || tool.tool,
+                tool.description || '',
+                tool.version || '',
+                tool.status || 'unknown',
+                tool.config_dir || '',
+                JSON.stringify(themeForTool(tool.tool, tool.theme)),
+                now
+            );
+            for (const asset of dedupeAssets(tool.assets || [])) {
+                insertAsset.run(
+                    tool.tool,
+                    asset.name || 'unknown',
+                    normalizeCapabilityName(asset.name || 'unknown'),
+                    asset.type || 'builtin',
+                    asset.status || 'unknown',
+                    asset.path || '',
+                    asset.description || '',
+                    now
+                );
+                assetCount += 1;
+            }
+        }
+        return { tool_count: items.length, asset_count: assetCount };
+    });
+    return write(inventory);
+}
+
+function refreshOverviewInventory(db, options = {}) {
+    const startedAt = options.now || new Date().toISOString();
+    try {
+        const inventory = options.inventory || discoverInventory();
+        const counts = writeOverviewInventory(db, inventory, startedAt);
+        const finishedAt = options.finishedAt || new Date().toISOString();
+        if (db) {
+            db.prepare(`
+                INSERT INTO overview_scan_runs (started_at, finished_at, status, tool_count, asset_count, error_message)
+                VALUES (?, ?, ?, ?, ?, ?)
+            `).run(startedAt, finishedAt, 'success', counts.tool_count, counts.asset_count, null);
+        }
+        return { ok: true, ...counts };
+    } catch (e) {
+        const finishedAt = options.finishedAt || new Date().toISOString();
+        if (db) {
+            db.prepare(`
+                INSERT INTO overview_scan_runs (started_at, finished_at, status, tool_count, asset_count, error_message)
+                VALUES (?, ?, ?, ?, ?, ?)
+            `).run(startedAt, finishedAt, 'error', 0, 0, e.message);
+        }
+        return { ok: false, error: e.message, tool_count: 0, asset_count: 0 };
+    }
 }
 
 function buildUsageMap(rows = []) {
@@ -294,6 +421,21 @@ function buildObservedAssets(rows = []) {
         assets.set(capability, existing);
     }
     return byTool;
+}
+
+function themeForTool(toolName, explicitTheme) {
+    if (explicitTheme) return explicitTheme;
+    const definition = TOOL_DEFINITIONS.find(item => item.tool === toolName);
+    return definition?.theme || { accent: '#64748b', surface: '#f8fafc' };
+}
+
+function stableInventoryShell() {
+    return TOOL_DEFINITIONS.map(tool => ({
+        ...tool,
+        version: '',
+        status: fs.existsSync(tool.config_dir) ? 'detected' : 'unknown',
+        assets: [],
+    }));
 }
 
 function groupAssets(assets = []) {
@@ -347,6 +489,7 @@ function buildOverview(options = {}) {
             version: tool.version || '',
             status: tool.status || 'unknown',
             config_dir: tool.config_dir || '',
+            theme: themeForTool(tool.tool, tool.theme),
             assets,
             asset_groups: groupAssets(assets),
         };
@@ -385,6 +528,7 @@ function buildOverview(options = {}) {
 
 function queryOverview(db, options = {}) {
     let usageRows = [];
+    let inventory = [];
     if (db) {
         const sinceClause = options.since ? 'AND timestamp >= ?' : '';
         const params = options.since ? [options.since] : [];
@@ -394,12 +538,58 @@ function queryOverview(db, options = {}) {
             WHERE role IN ('tool_result', 'tool_error') AND tool_name IS NOT NULL ${sinceClause}
             GROUP BY source, tool_name
         `).all(...params);
+        inventory = readOverviewInventory(db);
     }
-    return buildOverview({ usageRows, priorityThreshold: options.priorityThreshold || 5 });
+    if (!inventory.length) inventory = db ? stableInventoryShell() : discoverInventory();
+    return buildOverview({ inventory, usageRows, priorityThreshold: options.priorityThreshold || 5 });
+}
+
+let overviewRefreshInFlight = false;
+let overviewRefreshTimer = null;
+
+function scheduleOverviewRefresh(db, options = {}) {
+    if (!db || overviewRefreshInFlight) return false;
+    const delayMs = Math.max(0, Number(options.delayMs || 0));
+    const timer = setTimeout(() => {
+        overviewRefreshInFlight = true;
+        try {
+            refreshOverviewInventory(db);
+        } finally {
+            overviewRefreshInFlight = false;
+        }
+    }, delayMs);
+    if (timer.unref) timer.unref();
+    return true;
+}
+
+function startOverviewScanner(db, options = {}) {
+    if (!db) return null;
+    const intervalMs = Number(options.intervalMs ?? DEFAULT_OVERVIEW_SCAN_INTERVAL_MS);
+    if (!Number.isFinite(intervalMs) || intervalMs <= 0) return null;
+    if (overviewRefreshTimer) clearInterval(overviewRefreshTimer);
+    scheduleOverviewRefresh(db, { delayMs: Number(options.initialDelayMs ?? 3000) });
+    overviewRefreshTimer = setInterval(() => {
+        scheduleOverviewRefresh(db);
+    }, intervalMs);
+    if (overviewRefreshTimer.unref) overviewRefreshTimer.unref();
+    return overviewRefreshTimer;
+}
+
+function stopOverviewScanner() {
+    if (overviewRefreshTimer) {
+        clearInterval(overviewRefreshTimer);
+        overviewRefreshTimer = null;
+    }
 }
 
 module.exports = {
     buildOverview,
     queryOverview,
+    readOverviewInventory,
+    refreshOverviewInventory,
+    scheduleOverviewRefresh,
+    startOverviewScanner,
+    stopOverviewScanner,
+    writeOverviewInventory,
     normalizeCapabilityName,
 };

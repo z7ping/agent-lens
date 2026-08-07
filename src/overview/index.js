@@ -2,6 +2,16 @@ import { escapeHtml } from '../config.js';
 import { fetchOverview } from '../utils.js';
 
 let overviewLoaded = false;
+const OVERVIEW_CACHE_KEY = 'agent-trace-overview-cache-v1';
+const OVERVIEW_REFRESH_MS = 60000;
+const STABLE_TOOLS = [
+  { tool: 'codex', display_name: 'Codex', description: 'OpenAI Codex 命令行编码智能体与本地桌面环境。', theme: { accent: '#10b981', surface: '#ecfdf5' } },
+  { tool: 'claude-code', display_name: 'Claude Code', description: 'Anthropic Claude Code 命令行编码助手。', theme: { accent: '#f97316', surface: '#fff7ed' } },
+  { tool: 'cursor', display_name: 'Cursor', description: '基于 VS Code 的 AI 代码编辑器。', theme: { accent: '#6366f1', surface: '#eef2ff' } },
+  { tool: 'opencode', display_name: 'OpenCode', description: 'OpenCode 终端编码智能体。', theme: { accent: '#06b6d4', surface: '#ecfeff' } },
+  { tool: 'hermes', display_name: 'Hermes', description: 'Hermes 编码智能体历史数据源。', theme: { accent: '#8b5cf6', surface: '#f5f3ff' } },
+  { tool: 'pi', display_name: 'Pi', description: 'Pi 编码智能体历史数据源。', theme: { accent: '#eab308', surface: '#fefce8' } },
+];
 
 const typeLabels = {
   skill: 'Skills',
@@ -11,6 +21,16 @@ const typeLabels = {
   hook: 'Hooks',
   adapter: 'Adapters',
   builtin: '内置能力',
+};
+
+const typeClasses = {
+  skill: 'type-skill',
+  mcp: 'type-mcp',
+  plugin: 'type-plugin',
+  extension: 'type-extension',
+  hook: 'type-hook',
+  adapter: 'type-adapter',
+  builtin: 'type-builtin',
 };
 
 const statusLabels = {
@@ -25,6 +45,11 @@ const statusLabels = {
 
 export function initOverview() {
   window.reloadOverview = () => loadOverview({ force: true });
+  setInterval(() => {
+    if (document.getElementById('tab-overview')?.classList.contains('active')) {
+      loadOverview({ force: true, silent: true });
+    }
+  }, OVERVIEW_REFRESH_MS);
 }
 
 export async function loadOverview(options = {}) {
@@ -32,20 +57,27 @@ export async function loadOverview(options = {}) {
   const loading = document.getElementById('overviewLoading');
   const empty = document.getElementById('overviewEmpty');
   const content = document.getElementById('overviewContent');
-  loading?.classList.remove('hidden');
-  empty?.classList.add('hidden');
-  content?.classList.add('hidden');
+  const cached = readCachedOverview();
+  const initial = cached || stableOverviewShell();
+  if (!options.silent) {
+    renderOverview(initial);
+    content?.classList.remove('hidden');
+    loading?.classList.add('hidden');
+    empty?.classList.add('hidden');
+  }
 
   const data = await fetchOverview();
   loading?.classList.add('hidden');
 
   if (!data || !Array.isArray(data.tools)) {
-    empty?.classList.remove('hidden');
+    if (!initial && !options.silent) empty?.classList.remove('hidden');
     return;
   }
 
   renderOverview(data);
+  writeCachedOverview(data);
   content?.classList.remove('hidden');
+  empty?.classList.add('hidden');
   overviewLoaded = true;
 }
 
@@ -60,11 +92,13 @@ function renderOverview(data) {
 function renderToolCard(tool) {
   const assets = tool.assets || [];
   const priorityAssets = assets.filter(asset => asset.is_priority);
+  const accent = tool.theme?.accent || '#64748b';
+  const surface = tool.theme?.surface || '#f8fafc';
   return `
-    <article class="overview-card">
+    <article class="overview-card" style="--tool-accent:${escapeHtml(accent)}; --tool-surface:${escapeHtml(surface)}">
       <header class="overview-card-head">
         <div>
-          <h3 class="overview-tool-name">${escapeHtml(tool.display_name || tool.tool || '未知工具')}</h3>
+          <h3 class="overview-tool-name"><span></span>${escapeHtml(tool.display_name || tool.tool || '未知工具')}</h3>
           <p class="overview-tool-desc">${escapeHtml(tool.description || '暂无介绍')}</p>
         </div>
         <span class="overview-status ${tool.status === 'detected' ? 'ok' : 'muted'}">${escapeHtml(statusLabels[tool.status] || tool.status || '未知')}</span>
@@ -77,13 +111,13 @@ function renderToolCard(tool) {
 
       <div class="overview-asset-summary">
         ${Object.entries(tool.asset_groups || {}).filter(([, group]) => group.count > 0).map(([type, group]) => `
-          <span>${escapeHtml(typeLabels[type] || type)} <b>${group.count}</b></span>
+          <span class="${escapeHtml(typeClasses[type] || 'type-builtin')}">${escapeHtml(typeLabels[type] || type)} <b>${group.count}</b></span>
         `).join('') || '<span>暂无可识别资产</span>'}
       </div>
 
       <section class="overview-priority">
         <div class="overview-section-title">高频资产</div>
-        ${priorityAssets.length ? priorityAssets.slice(0, 5).map(renderAssetLine).join('') : '<div class="overview-empty-line">暂无达到高频阈值的资产</div>'}
+        ${priorityAssets.length ? `<div class="overview-asset-card-grid priority">${priorityAssets.slice(0, 6).map(renderAssetCard).join('')}</div>` : '<div class="overview-empty-line">暂无达到高频阈值的资产</div>'}
       </section>
 
       <section class="overview-groups">
@@ -98,23 +132,24 @@ function renderAssetGroup(type, assets) {
     <details class="overview-group">
       <summary>${escapeHtml(typeLabels[type] || type)} <span>${assets.length}</span></summary>
       <div class="overview-asset-list">
-        ${assets.slice(0, 20).map(renderAssetLine).join('')}
+        ${assets.slice(0, 24).map(renderAssetCard).join('')}
       </div>
     </details>
   `;
 }
 
-function renderAssetLine(asset) {
+function renderAssetCard(asset) {
   return `
-    <div class="overview-asset-line">
-      <span>
-        <b>${escapeHtml(asset.name || 'unknown')}</b>
-        <small>${escapeHtml(statusLabels[asset.status] || asset.status || '未知')}</small>
-      </span>
-      <span class="overview-asset-side">
+    <div class="overview-asset-card ${escapeHtml(typeClasses[asset.type] || 'type-builtin')} ${asset.is_priority ? 'is-priority' : ''}" title="${escapeHtml(asset.path || asset.description || '')}">
+      <div class="overview-asset-card-top">
+        <span>${escapeHtml(typeLabels[asset.type] || asset.type || '能力')}</span>
         ${asset.is_priority ? '<em>高频</em>' : ''}
+      </div>
+      <b>${escapeHtml(asset.name || 'unknown')}</b>
+      <div class="overview-asset-card-meta">
+        <small>${escapeHtml(statusLabels[asset.status] || asset.status || '未知')}</small>
         <small>${asset.call_count || 0} 次</small>
-      </span>
+      </div>
     </div>
   `;
 }
@@ -131,26 +166,67 @@ function renderMatrix(rows, tools) {
         ${tools.map(tool => `<span>${escapeHtml(tool.display_name || tool.tool)}</span>`).join('')}
       </div>
       ${rows.slice(0, 12).map(row => `
-        <div class="overview-matrix-row">
+        <div class="overview-matrix-row" style="--source-accent:${escapeHtml(sourceAccent(row.source_tool, tools))}">
           <span>
             <b>${escapeHtml(row.name || row.capability)}</b>
             <small>${row.call_count || 0} 次</small>
           </span>
-          ${tools.map(tool => renderCoverage(row.coverage?.[tool.tool])).join('')}
+          ${tools.map(tool => renderCoverage(row.coverage?.[tool.tool], tool.tool === row.source_tool)).join('')}
         </div>
       `).join('')}
     </div>
   `;
 }
 
-function renderCoverage(cell = {}) {
+function renderCoverage(cell = {}, source = false) {
   const status = cell.status || '未知';
   const cls = status === '已有' ? 'ok' : status === '缺失' ? 'missing' : 'muted';
-  return `<span class="overview-coverage ${cls}" title="${escapeHtml(cell.asset_name || '')}">${escapeHtml(status)}</span>`;
+  return `<span class="overview-coverage ${cls} ${source ? 'source' : ''}" title="${escapeHtml(cell.asset_name || '')}">${escapeHtml(status)}</span>`;
 }
 
 function shortPath(value) {
   const text = String(value || '');
   if (text.length <= 42) return text;
   return `...${text.slice(-39)}`;
+}
+
+function sourceAccent(toolName, tools) {
+  return tools.find(tool => tool.tool === toolName)?.theme?.accent || '#64748b';
+}
+
+function readCachedOverview() {
+  try {
+    const raw = localStorage.getItem(OVERVIEW_CACHE_KEY);
+    if (!raw) return null;
+    const cached = JSON.parse(raw);
+    return Array.isArray(cached?.tools) ? cached : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedOverview(data) {
+  try {
+    localStorage.setItem(OVERVIEW_CACHE_KEY, JSON.stringify({
+      ...data,
+      cached_at: new Date().toISOString(),
+    }));
+  } catch {
+    // localStorage may be unavailable in private or restricted contexts.
+  }
+}
+
+function stableOverviewShell() {
+  return {
+    tools: STABLE_TOOLS.map(tool => ({
+      ...tool,
+      version: '查询后更新',
+      status: 'unknown',
+      config_dir: '查询后更新',
+      assets: [],
+      asset_groups: {},
+    })),
+    priority_assets: [],
+    capability_matrix: [],
+  };
 }

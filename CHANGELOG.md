@@ -1,5 +1,18 @@
 # 更新日志
 
+## 1.9.0 (2026-08-07)
+
+### Added
+- 新增“概览”页：按 AI 工具展示版本、配置目录和 Skills / MCP / Plugins / Extensions / Hooks / Adapters 等能力资产。
+- 新增概览资产数据库快照表：`overview_tools`、`overview_assets`、`overview_scan_runs`。
+- `/api/overview` 优先读取数据库快照，并在访问后后台刷新资产扫描。
+- 服务启动后定时扫描概览资产，支持通过 `AGENT_TRACE_OVERVIEW_SCAN_INTERVAL_MS` 配置间隔，设为 `0` 可关闭。
+- 概览页使用本地缓存和稳定工具骨架先渲染，再后台更新真实数据。
+
+### Changed
+- 概览页资产列表从长条改为紧凑资产卡片网格。
+- 高频资产按调用频率判定，并在跨工具覆盖矩阵中展示其他工具是否已有。
+
 ## 1.8.1 (2026-07-08)
 
 ### Fixed
