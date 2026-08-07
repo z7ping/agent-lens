@@ -16,11 +16,11 @@
       <div class="flex items-center gap-1" id="tabNav">
         <button class="tab-btn active" data-tab="callchain" onclick="switchTab('callchain')">
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-          调用链
+          任务复盘
         </button>
         <button class="tab-btn" data-tab="dashboard" onclick="switchTab('dashboard')">
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-          仪表盘
+          工具栈
         </button>
       </div>
       <button id="themeToggle" class="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors" title="切换主题">
@@ -30,18 +30,19 @@
     </div>
   </nav>
 
-  <!-- ═══ 第二层：来源 + 项目 + 工具类型 + 状态栏 ═══ -->
-  <div class="fixed top-12 left-0 right-0 z-40 bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-800">
+  <!-- ═══ 第二层：来源 + 项目 + 工具类型 + 状态栏（不固定，随页面滚动） ═══ -->
+  <div class="mt-12 bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-800">
     <div class="max-w-screen-2xl mx-auto px-4 pt-2 mb-1">
       <!-- 来源 Tab -->
       <div class="flex items-center gap-1 overflow-x-auto" id="toolTabs">
         <button class="tool-tab active" data-tool="all" onclick="selectTool('all')">全部</button>
-        <button class="tool-tab" data-tool="claude-code" onclick="selectTool('claude-code')">Claude Code</button>
-        <button class="tool-tab" data-tool="hermes" onclick="selectTool('hermes')">Hermes</button>
-        <button class="tool-tab" data-tool="codex" onclick="selectTool('codex')">Codex</button>
-        <button class="tool-tab" data-tool="opencode" onclick="selectTool('opencode')">OpenCode</button>
-        <button class="tool-tab" data-tool="pi" onclick="selectTool('pi')">Pi</button>
-        <button class="tool-tab" data-tool="openclaw" onclick="selectTool('openclaw')">OpenClaw</button>
+        <button class="tool-tab" data-tool="claude-code" onclick="selectTool('claude-code')">Claude Code <span class="source-status">实时 · 仅工具</span></button>
+        <button class="tool-tab" data-tool="hermes" onclick="selectTool('hermes')">Hermes <span class="source-status">轮询 · 含对话</span></button>
+        <button class="tool-tab" data-tool="codex" onclick="selectTool('codex')">Codex <span class="source-status">实时 · 仅工具</span></button>
+        <button class="tool-tab" data-tool="opencode" onclick="selectTool('opencode')">OpenCode <span class="source-status">轮询 · 仅工具</span></button>
+        <button class="tool-tab" data-tool="cursor" onclick="selectTool('cursor')">Cursor <span class="source-status">实时 · 仅工具</span></button>
+        <button class="tool-tab" data-tool="pi" onclick="selectTool('pi')">Pi <span class="source-status">轮询 · 部分对话</span></button>
+        <button class="tool-tab is-planned" data-tool="openclaw" onclick="selectTool('openclaw')">OpenClaw <span class="source-status">待开发</span></button>
       </div>
     </div>
     <div class="max-w-screen-2xl mx-auto px-4 pb-2 flex items-center gap-3 text-sm flex-wrap">
@@ -73,11 +74,11 @@
         </span>
         <span class="text-neutral-300 dark:text-neutral-600">·</span>
         <span>Hook</span>
-        <span id="hookStatusText">检测中...</span>
+        <span id="hookStatusText">检测中</span>
         <span class="text-neutral-300 dark:text-neutral-600">·</span>
-        <span>错误: <button id="lastErrorCount" class="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-bold bg-danger-100 text-danger-700 dark:bg-danger-900/30 dark:text-danger-400 hover:bg-danger-200 dark:hover:bg-danger-800/40 transition-colors cursor-pointer" onclick="jumpToErrors()" title="点击定位到第一个报错调用">0</button></span>
+        <button id="lastErrorCount" class="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-bold bg-danger-100 text-danger-600 dark:bg-danger-500/10 dark:text-danger-400 hover:bg-danger-100 dark:hover:bg-danger-500/20 transition-colors cursor-pointer" onclick="jumpToErrors()" title="点击定位到第一个报错调用">0</button>
         <span class="text-neutral-300 dark:text-neutral-600">·</span>
-        <span>慢: <span id="slowCount" class="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-bold bg-warning-100 text-warning-700 dark:bg-warning-900/30 dark:text-warning-400">0</span></span>
+        <span id="slowCount" class="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-bold bg-warning-100 text-warning-600 dark:bg-warning-500/10 dark:text-warning-400">0</span>
         <div class="w-px h-4 bg-neutral-200 dark:bg-neutral-700"></div>
         <!-- 排序 + 展开 -->
         <button id="sortBtn" class="px-2.5 py-1 rounded-md border border-neutral-200 dark:border-neutral-700 text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors" onclick="toggleSort()">↓ 最新</button>
@@ -86,8 +87,8 @@
     </div>
   </div>
 
-  <!-- ═══ 主内容区 ═══ -->
-  <main class="pt-[8rem] min-h-screen">
+  <!-- ═══ 主内容区（顶部仅留 48px 导航，筛选区随页面滚动） ═══ -->
+  <main class="min-h-screen">
 
     <!-- ── 调用链 Tab ── -->
     <section id="tab-callchain" class="tab-panel active">
@@ -109,8 +110,8 @@
         <div id="dashboardEmpty" class="hidden">
           <div class="flex flex-col items-center justify-center py-20">
             <div class="text-5xl mb-4">🧠</div>
-            <h3 class="text-lg font-semibold text-neutral-700 dark:text-neutral-300 mb-2">暂无监控数据</h3>
-            <p class="text-sm text-neutral-500 mb-4">安装 Hook 后，AI 工具的调用记录会自动捕获到这里</p>
+            <h3 class="text-lg font-semibold text-neutral-700 dark:text-neutral-300 mb-2">暂无工具栈数据</h3>
+            <p class="text-sm text-neutral-500 mb-4">安装 Hook 后，AI 工具的调用记录会自动沉淀为工具栈地图</p>
             <div class="bg-neutral-100 dark:bg-neutral-800 rounded-lg px-4 py-3 font-mono text-sm text-neutral-700 dark:text-neutral-300 select-all">
               npx agent-trace install
             </div>
@@ -118,65 +119,53 @@
         </div>
         <!-- 仪表盘内容 -->
         <div id="dashboardContent">
-        <!-- 时间范围选择 -->
-        <div class="flex items-center gap-3 mb-6">
+        <div class="tool-stack-header">
+          <div>
+            <h2 class="tool-stack-title">工具栈地图</h2>
+            <p class="tool-stack-subtitle">按使用频率、工作流潜力、省时信号和失败风险，为你的 AI 编码工具栈生成可解释评分。</p>
+          </div>
           <div class="flex items-center bg-neutral-100 dark:bg-neutral-800 rounded-lg p-1">
-            <button class="time-btn active" data-range="today" onclick="setTimeRange('today')">今天</button>
-            <button class="time-btn" data-range="week" onclick="setTimeRange('week')">本周</button>
+            <button class="time-btn" data-range="today" onclick="setTimeRange('today')">今天</button>
+            <button class="time-btn active" data-range="week" onclick="setTimeRange('week')">本周</button>
             <button class="time-btn" data-range="month" onclick="setTimeRange('month')">本月</button>
             <button class="time-btn" data-range="all" onclick="setTimeRange('all')">全部</button>
           </div>
         </div>
 
-        <!-- 核心指标卡片 -->
         <div class="grid grid-cols-4 gap-4 mb-6">
-          <div class="stat-card">
-            <div class="flex items-center justify-center w-10 h-10 mx-auto mb-2 rounded-lg bg-primary-50 dark:bg-primary-500/10">
-              <svg class="w-5 h-5 text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-            </div>
-            <div class="stat-value" id="totalCalls">0</div>
-            <div class="stat-label">总调用次数</div>
-          </div>
-          <div class="stat-card">
-            <div class="flex items-center justify-center w-10 h-10 mx-auto mb-2 rounded-lg bg-purple-50 dark:bg-purple-500/10">
-              <svg class="w-5 h-5 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
-            </div>
-            <div class="stat-value text-purple-500" id="totalSkills">0</div>
-            <div class="stat-label">技能数</div>
-          </div>
-          <div class="stat-card">
-            <div class="flex items-center justify-center w-10 h-10 mx-auto mb-2 rounded-lg bg-info-50 dark:bg-info-500/10">
-              <svg class="w-5 h-5 text-info-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg>
-            </div>
-            <div class="stat-value text-info-500" id="totalMcp">0</div>
-            <div class="stat-label">MCP 数</div>
-          </div>
-          <div class="stat-card">
-            <div class="flex items-center justify-center w-10 h-10 mx-auto mb-2 rounded-lg bg-danger-50 dark:bg-danger-500/10">
-              <svg class="w-5 h-5 text-danger-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-            </div>
-            <div class="stat-value text-danger-500" id="errorRate">0%</div>
-            <div class="stat-label">错误率</div>
-          </div>
+          <div class="stat-card"><div class="stat-value" id="totalTools">0</div><div class="stat-label">总工具数</div></div>
+          <div class="stat-card"><div class="stat-value text-success-500" id="highValueTools">0</div><div class="stat-label">高价值工具</div></div>
+          <div class="stat-card"><div class="stat-value text-danger-500" id="highRiskTools">0</div><div class="stat-label">高风险工具</div></div>
+          <div class="stat-card"><div class="stat-value text-info-500" id="workflowCandidates">0</div><div class="stat-label">可沉淀链路</div></div>
         </div>
 
-        <!-- 工具使用排行（全宽横向柱状图） -->
-        <div class="chart-card mb-6">
-          <h3 class="chart-title">工具使用排行</h3>
-          <div class="chart-container-tall">
-            <canvas id="toolRankChart"></canvas>
+        <div class="grid grid-cols-[minmax(0,1.5fr)_minmax(22rem,0.8fr)] gap-4 tool-stack-grid">
+          <div class="list-card">
+            <div class="tool-map-toolbar">
+              <h3 class="chart-title mb-0">工具价值评分</h3>
+              <span class="text-xs text-neutral-400">频率 40 · 工作流 35 · 省时 25 · 风险扣分</span>
+            </div>
+            <div id="toolMapTable" class="tool-map-table"></div>
           </div>
+          <aside class="list-card tool-detail-panel">
+            <h3 class="chart-title">评分解释</h3>
+            <div id="toolDetailPanel"></div>
+          </aside>
         </div>
 
-        <!-- 最近会话 + 错误列表 -->
-        <div class="grid grid-cols-2 gap-4">
+        <div class="grid grid-cols-2 gap-4 mt-4">
           <div class="list-card">
-            <h3 class="chart-title">最近会话</h3>
-            <div id="recentSessions" class="space-y-2"></div>
+            <h3 class="chart-title">可沉淀工作流</h3>
+            <div id="workflowPatterns" class="space-y-2"></div>
           </div>
           <div class="list-card">
-            <h3 class="chart-title">最近错误</h3>
-            <div id="recentErrors" class="space-y-2"></div>
+            <h3 class="chart-title">待开发能力</h3>
+            <div class="planned-list">
+              <span>自动 SOP <b>待开发</b></span>
+              <span>团队视角 <b>待开发</b></span>
+              <span>轨迹问答 <b>暂不做</b></span>
+              <span>浪费调用识别 <b>后续</b></span>
+            </div>
           </div>
         </div>
         </div><!-- /dashboardContent -->

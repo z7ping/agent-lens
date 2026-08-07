@@ -1,181 +1,222 @@
 /**
- * dashboard/index.js - 仪表盘模块
+ * dashboard/index.js - 工具栈地图模块
  */
 
-import { CONFIG, getToolType, getMcpServerName, escapeHtml, truncate, formatTime } from '../config.js';
-import { fetchStats, fetchTools, fetchSkills, fetchErrors } from '../utils.js';
-import { renderToolRankChart } from './charts.js';
+import { escapeHtml, formatDuration } from '../config.js';
+import { fetchToolMap } from '../utils.js';
 
 let currentTimeRange = 'week';
 let currentProject = '';
 let currentSource = '';
+let currentToolMap = null;
+let selectedToolKey = '';
 
-/**
- * 初始化仪表盘
- */
+const typeLabels = {
+  cli: 'CLI',
+  file: '文件',
+  mcp: 'MCP',
+  skill: 'Skill',
+  agent: 'Agent',
+  tool: 'Tool',
+};
+
+const recommendationClasses = {
+  '保留': 'keep',
+  '沉淀': 'keep',
+  '观察': 'watch',
+  '优化': 'risk',
+  '待观察': 'muted',
+};
+
 export function initDashboard() {
-  loadDashboardData().catch(e => console.error('[Dashboard] init error:', e));
+  loadDashboardData().catch(e => console.error('[ToolMap] init error:', e));
 }
 
-/**
- * 加载仪表盘数据
- * @param {string} project - 项目键
- * @param {string} timeRange - 时间范围
- * @param {string} source - 工具来源（如 'claude-code', 'hermes' 等）
- */
 export async function loadDashboardData(project, timeRange, source) {
   try {
     if (project !== undefined) currentProject = project;
     if (timeRange) currentTimeRange = timeRange;
     if (source !== undefined) currentSource = source;
 
-    const [stats, tools, skills, errors] = await Promise.all([
-      fetchStats(currentProject, currentTimeRange, currentSource),
-      fetchTools(currentProject, currentSource),
-      fetchSkills(),
-      fetchErrors(currentProject, currentSource, 20),
-    ]);
+    const data = await fetchToolMap(currentProject, currentSource, currentTimeRange);
+    currentToolMap = data;
+    selectedToolKey = '';
 
-    console.log('[Dashboard] stats:', !!stats, 'tools:', tools?.length, 'skills:', skills?.totalUniqueSkills);
-
-    // 判断是否有数据
-    const hasData = stats && (
-      (stats.totals?.total_calls || stats.totals?.total || stats.total_calls || 0) > 0
-      || (tools && tools.length > 0)
-    );
-
-    const dashboardEmpty = document.getElementById('dashboardEmpty');
-    const dashboardContent = document.getElementById('dashboardContent');
-    if (dashboardEmpty) dashboardEmpty.classList.toggle('hidden', hasData);
-    if (dashboardContent) dashboardContent.classList.toggle('hidden', !hasData);
-
+    const hasData = !!data && Array.isArray(data.items) && data.items.length > 0;
+    document.getElementById('dashboardEmpty')?.classList.toggle('hidden', hasData);
+    document.getElementById('dashboardContent')?.classList.toggle('hidden', !hasData);
     if (!hasData) return;
 
-    // ═══ 1. 核心指标卡片 ═══
-    if (stats) {
-      const totals = stats.totals || stats;
-      setTextIfExists('totalCalls', (totals?.total_calls || totals?.total || 0).toLocaleString());
-
-      // 技能数
-      setTextIfExists('totalSkills', (skills?.totalUniqueSkills || totals?.unique_tools || 0).toString());
-
-      // MCP 数：统计 byTool 中 mcp_ 开头的工具种类数
-      const byTool = stats?.byTool || tools || [];
-      const mcpToolCount = byTool.filter(t => (t.name || t.tool_name || '').startsWith('mcp_')).length;
-      setTextIfExists('totalMcp', mcpToolCount.toString());
-
-      // 错误率
-      const totalCalls = totals?.total_calls || 0;
-      const errRate = totalCalls > 0
-        ? ((totals?.total_errors || 0) / totalCalls * 100)
-        : (totals?.error_rate || 0);
-      setTextIfExists('errorRate', `${(errRate || 0).toFixed(1)}%`);
-    }
-
-    // ═══ 2. 工具使用排行（MCP 按服务器分组） ═══
-    let toolRankData = stats?.byTool || tools || [];
-    // MCP 分组：mcp_xxx_yyy → xxx，合并同一服务器的调用次数
-    const mcpMap = new Map();
-    const nonMcp = [];
-    for (const t of toolRankData) {
-      const name = t.name || t.tool_name || '';
-      if (name.startsWith('mcp_')) {
-        const server = getMcpServerName(name);
-        mcpMap.set(server, (mcpMap.get(server) || 0) + (t.count || 0));
-      } else {
-        nonMcp.push({ name, count: t.count || 0 });
-      }
-    }
-    for (const [server, count] of mcpMap) {
-      nonMcp.push({ name: server, count });
-    }
-    renderToolRankChart('toolRankChart', nonMcp);
-
-    // ═══ 3. 最近会话 ═══
-    renderRecentSessions(errors);
-
-    // ═══ 4. 错误列表 ═══
-    renderRecentErrors(errors);
+    renderSummary(data.summary || {});
+    renderToolTable(data.items || []);
+    renderWorkflowPatterns(data.workflow_patterns || []);
+    selectFirstTool(data.items || []);
   } catch (e) {
-    console.error('[Dashboard] loadDashboardData error:', e);
+    console.error('[ToolMap] loadDashboardData error:', e);
   }
 }
 
-function setTextIfExists(id, value) {
+function renderSummary(summary) {
+  setText('totalTools', summary.total_tools || 0);
+  setText('highValueTools', summary.high_value_tools || 0);
+  setText('highRiskTools', summary.high_risk_tools || 0);
+  setText('workflowCandidates', summary.workflow_candidates || 0);
+}
+
+function setText(id, value) {
   const el = document.getElementById(id);
-  if (el) el.textContent = value;
+  if (el) el.textContent = String(value);
 }
 
-/**
- * 渲染最近会话
- */
-function renderRecentSessions(errors) {
-  const container = document.getElementById('recentSessions');
-  if (!container) return;
-
-  // 会话数据通过 fetchSessions 获取
-  fetch(`${CONFIG.API_BASE}/api/sessions?limit=5${currentProject ? '&project=' + encodeURIComponent(currentProject) : ''}${currentSource ? '&source=' + encodeURIComponent(currentSource) : ''}`)
-    .then(r => r.ok ? r.json() : [])
-    .then(data => {
-      const sessions = data.items || data || [];
-      if (!sessions.length) {
-        container.innerHTML = '<div class="text-sm text-neutral-400 py-4 text-center">暂无会话</div>';
-        return;
-      }
-      container.innerHTML = sessions.map(s => {
-        const source = s.source || s.project_key || '—';
-        const toolCount = s.tool_count || s.tools_count || s.call_count || 0;
-        const ts = s.last_ts || s.last_timestamp || s.end_time || s.timestamp || '';
-        return `
-          <div class="flex items-center justify-between py-2 px-2 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors">
-            <div class="flex items-center gap-2 min-w-0">
-              <span class="w-2 h-2 rounded-full bg-primary-500 shrink-0"></span>
-              <span class="text-sm font-medium text-neutral-700 dark:text-neutral-300 truncate">${escapeHtml(source)}</span>
-            </div>
-            <div class="flex items-center gap-3 shrink-0">
-              <span class="text-xs text-neutral-400">${toolCount} 工具</span>
-              <span class="text-xs text-neutral-500">${formatTime(ts)}</span>
-            </div>
-          </div>
-        `;
-      }).join('');
-    })
-    .catch(() => {
-      container.innerHTML = '<div class="text-sm text-neutral-400 py-4 text-center">加载失败</div>';
-    });
+function toolKey(tool) {
+  return `${tool.source || ''}::${tool.tool_name || ''}`;
 }
 
-/**
- * 渲染最近错误列表
- */
-function renderRecentErrors(errors) {
-  const container = document.getElementById('recentErrors');
+function renderToolTable(items) {
+  const container = document.getElementById('toolMapTable');
   if (!container) return;
-
-  if (!errors || errors.length === 0) {
-    container.innerHTML = '<div class="text-sm text-success-500 py-4 text-center">🎉 暂无错误</div>';
+  if (!items.length) {
+    container.innerHTML = '<div class="text-sm text-neutral-400 py-6 text-center">暂无工具评分数据</div>';
     return;
   }
 
-  // 倒序（最新在前）
-  const sorted = [...errors].reverse().slice(0, 20);
-  container.innerHTML = sorted.map(err => {
-    const source = err.source || err.project_key || '—';
-    const toolName = err.tool_name || err.name || err.tool || '—';
-    const msg = err.error || err.message || err.error_message || err.error_detail || err.error_type || '';
-    const ts = err.timestamp || err.ts || err.time || '';
-    return `
-      <div class="flex flex-col gap-1 py-2 px-2 rounded-lg hover:bg-danger-50/30 dark:hover:bg-danger-500/5 transition-colors">
-        <div class="flex items-center justify-between gap-2">
-          <div class="flex items-center gap-2 min-w-0">
-            <span class="w-2 h-2 rounded-full bg-danger-500 shrink-0"></span>
-            <span class="text-xs font-medium text-neutral-500 dark:text-neutral-400 truncate">${escapeHtml(source)}</span>
-            <span class="text-xs text-danger-600 dark:text-danger-400 font-medium truncate">${escapeHtml(toolName)}</span>
-          </div>
-          <span class="text-xs text-neutral-500 shrink-0">${formatTime(ts)}</span>
-        </div>
-        <div class="text-xs text-neutral-500 dark:text-neutral-400 pl-4 leading-relaxed break-all">${escapeHtml(truncate(msg, 100))}</div>
+  container.innerHTML = `
+    <div class="tool-table-header">
+      <span>工具</span>
+      <span>价值分</span>
+      <span>调用</span>
+      <span>会话</span>
+      <span>成功率</span>
+      <span>平均耗时</span>
+      <span>建议</span>
+    </div>
+    ${items.map(renderToolRow).join('')}
+  `;
+}
+
+function renderToolRow(tool) {
+  const key = toolKey(tool);
+  const successRate = `${((tool.success_rate || 0) * 100).toFixed(0)}%`;
+  const recClass = recommendationClasses[tool.recommendation] || 'muted';
+  return `
+    <button class="tool-table-row" type="button" data-tool-key="${escapeHtml(key)}" onclick="selectToolMapItem('${escapeForJs(key)}')">
+      <span class="tool-name-cell">
+        <span class="tool-name">${escapeHtml(tool.tool_name || '未知')}</span>
+        <span class="tool-type">${escapeHtml(typeLabels[tool.tool_type] || tool.tool_type || 'Tool')} · ${escapeHtml(tool.source || 'unknown')}</span>
+      </span>
+      <span><span class="score-pill ${scoreTone(tool.value_score)}">${tool.value_score || 0}</span></span>
+      <span>${tool.call_count || 0}</span>
+      <span>${tool.session_count || 0}</span>
+      <span>${successRate}</span>
+      <span>${formatDuration(tool.avg_duration_ms || 0)}</span>
+      <span><span class="recommendation ${recClass}">${escapeHtml(tool.recommendation || '观察')}</span></span>
+    </button>
+  `;
+}
+
+function scoreTone(score = 0) {
+  if (score >= 70) return 'good';
+  if (score >= 45) return 'mid';
+  return 'low';
+}
+
+function escapeForJs(value) {
+  return String(value).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+function selectFirstTool(items) {
+  if (!items.length) {
+    renderToolDetail(null);
+    return;
+  }
+  window.selectToolMapItem(toolKey(items[0]));
+}
+
+window.selectToolMapItem = function (key) {
+  selectedToolKey = key;
+  document.querySelectorAll('.tool-table-row').forEach(row => {
+    row.classList.toggle('selected', row.dataset.toolKey === key);
+  });
+  const tool = (currentToolMap?.items || []).find(item => toolKey(item) === key);
+  renderToolDetail(tool || null);
+};
+
+function renderToolDetail(tool) {
+  const container = document.getElementById('toolDetailPanel');
+  if (!container) return;
+  if (!tool) {
+    container.innerHTML = '<div class="text-sm text-neutral-400 py-6 text-center">选择一个工具查看评分解释</div>';
+    return;
+  }
+
+  const riskLabels = (tool.risk_labels || []).length
+    ? tool.risk_labels.map(label => `<span class="risk-tag">${escapeHtml(label)}</span>`).join('')
+    : '<span class="risk-tag muted">暂无明显风险</span>';
+
+  container.innerHTML = `
+    <div class="tool-detail-head">
+      <div>
+        <div class="tool-detail-name">${escapeHtml(tool.tool_name || '未知')}</div>
+        <div class="tool-detail-meta">${escapeHtml(typeLabels[tool.tool_type] || tool.tool_type || 'Tool')} · ${escapeHtml(tool.source || 'unknown')}</div>
       </div>
-    `;
-  }).join('');
+      <span class="score-pill ${scoreTone(tool.value_score)} large">${tool.value_score || 0}</span>
+    </div>
+
+    <div class="score-breakdown">
+      ${renderScoreBar('频率', tool.frequency_score || 0, 40)}
+      ${renderScoreBar('工作流', tool.workflow_score || 0, 35)}
+      ${renderScoreBar('省时', tool.time_saving_score || 0, 25)}
+      ${renderScoreBar('风险扣分', tool.risk_penalty || 0, 30, true)}
+    </div>
+
+    <div class="detail-section-lite">
+      <div class="detail-section-title">解释</div>
+      <ul class="explanation-list">
+        ${(tool.explanations || []).map(text => `<li>${escapeHtml(text)}</li>`).join('')}
+      </ul>
+    </div>
+
+    <div class="detail-section-lite">
+      <div class="detail-section-title">失败风险</div>
+      <div class="risk-tags">${riskLabels}</div>
+    </div>
+
+    <div class="detail-section-lite">
+      <div class="detail-section-title">建议动作</div>
+      <p class="tool-advice">${escapeHtml(adviceFor(tool))}</p>
+    </div>
+  `;
+}
+
+function renderScoreBar(label, value, max, negative = false) {
+  const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
+  return `
+    <div class="score-row ${negative ? 'negative' : ''}">
+      <div class="score-row-top"><span>${label}</span><span>${value}/${max}</span></div>
+      <div class="score-track"><div class="score-fill" style="width:${pct}%"></div></div>
+    </div>
+  `;
+}
+
+function adviceFor(tool) {
+  if ((tool.error_rate || 0) >= 0.3) return '优先优化这个工具的失败原因，暂时不要沉淀进稳定工作流。';
+  if ((tool.value_score || 0) >= 70) return '这是高价值工具，适合保留，并观察它常出现在哪些成功链路里。';
+  if ((tool.workflow_score || 0) >= 20) return '这个工具有工作流潜力，可以从典型会话里抽取复用步骤。';
+  return '继续观察它在更多任务中的表现，暂时不急着沉淀。';
+}
+
+function renderWorkflowPatterns(patterns) {
+  const container = document.getElementById('workflowPatterns');
+  if (!container) return;
+  if (!patterns.length) {
+    container.innerHTML = '<div class="text-sm text-neutral-400 py-4 text-center">暂无重复出现的工作流候选</div>';
+    return;
+  }
+  container.innerHTML = patterns.slice(0, 6).map(pattern => `
+    <div class="workflow-pattern">
+      <div class="workflow-title">${escapeHtml(pattern.label || '可复用链路')}</div>
+      <div class="workflow-chain">${(pattern.pattern || []).map(name => `<span>${escapeHtml(name)}</span>`).join('<b>→</b>')}</div>
+      <div class="workflow-meta">${pattern.count || 0} 次 · 成功率 ${(((pattern.success_rate || 0) * 100).toFixed(0))}% · 平均 ${formatDuration(pattern.avg_duration_ms || 0)}</div>
+    </div>
+  `).join('');
 }

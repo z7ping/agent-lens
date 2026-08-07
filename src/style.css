@@ -5,6 +5,15 @@
 /* ═══ 自定义组件样式 ═══ */
 
 @layer components {
+  button:focus {
+    outline: none;
+  }
+  button:focus-visible,
+  select:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+  }
+
   /* 工具 Tab */
   .tool-tab {
     @apply px-3 py-1.5 text-sm font-medium text-neutral-500 rounded-lg transition-all whitespace-nowrap border-b-2 border-transparent;
@@ -14,6 +23,12 @@
   }
   .tool-tab.active {
     @apply text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-500/10 border-b-2 border-primary-500 dark:border-primary-400;
+  }
+  .tool-tab.is-planned {
+    @apply opacity-70;
+  }
+  .source-status {
+    @apply ml-1 text-[11px] font-normal text-neutral-500 dark:text-neutral-400;
   }
 
   /* 功能 Tab */
@@ -80,6 +95,157 @@
   }
   .list-card .chart-title {
     @apply pb-3 border-b border-neutral-100 dark:border-neutral-800 mb-3;
+  }
+
+  /* 工具栈地图 */
+  .tool-stack-header {
+    @apply flex items-start justify-between gap-4 mb-6;
+  }
+  .tool-stack-title {
+    @apply text-xl font-semibold text-neutral-900 dark:text-neutral-100;
+  }
+  .tool-stack-subtitle {
+    @apply text-sm text-neutral-500 dark:text-neutral-400 mt-1;
+  }
+  .tool-map-toolbar {
+    @apply flex items-center justify-between gap-3 pb-3 border-b border-neutral-100 dark:border-neutral-800 mb-2;
+  }
+  .tool-map-table {
+    @apply overflow-x-auto;
+  }
+  .tool-table-header,
+  .tool-table-row {
+    display: grid;
+    grid-template-columns: minmax(12rem, 1.35fr) 5.2rem 4.2rem 4.2rem 5rem 6rem 5rem;
+    gap: 0.75rem;
+    align-items: center;
+  }
+  .tool-table-header {
+    @apply px-3 py-2 text-[11px] font-semibold uppercase text-neutral-400 dark:text-neutral-500;
+  }
+  .tool-table-row {
+    @apply w-full px-3 py-2.5 text-left text-sm border-t border-neutral-100 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors rounded-none;
+  }
+  .tool-table-row.selected {
+    @apply bg-primary-50 dark:bg-primary-500/10;
+  }
+  .tool-name-cell {
+    @apply min-w-0;
+  }
+  .tool-name {
+    @apply block font-semibold text-neutral-800 dark:text-neutral-100 truncate;
+  }
+  .tool-type {
+    @apply block text-xs text-neutral-500 dark:text-neutral-400 mt-0.5 truncate;
+  }
+  .score-pill {
+    @apply inline-flex items-center justify-center min-w-10 px-2 py-1 rounded-md text-xs font-bold;
+  }
+  .score-pill.good {
+    @apply bg-success-50 text-success-600 dark:bg-success-500/10 dark:text-success-400;
+  }
+  .score-pill.mid {
+    @apply bg-warning-50 text-warning-600 dark:bg-warning-500/10 dark:text-warning-400;
+  }
+  .score-pill.low {
+    @apply bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400;
+  }
+  .score-pill.large {
+    @apply min-w-14 text-base px-3 py-1.5;
+  }
+  .recommendation {
+    @apply inline-flex items-center justify-center px-2 py-1 rounded-md text-xs font-medium;
+  }
+  .recommendation.keep {
+    @apply bg-success-50 text-success-600 dark:bg-success-500/10 dark:text-success-400;
+  }
+  .recommendation.watch {
+    @apply bg-warning-50 text-warning-600 dark:bg-warning-500/10 dark:text-warning-400;
+  }
+  .recommendation.risk {
+    @apply bg-danger-50 text-danger-600 dark:bg-danger-500/10 dark:text-danger-400;
+  }
+  .recommendation.muted {
+    @apply bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400;
+  }
+  .tool-detail-panel {
+    @apply self-start sticky;
+    top: 8.75rem;
+  }
+  .tool-detail-head {
+    @apply flex items-start justify-between gap-4 mb-4;
+  }
+  .tool-detail-name {
+    @apply text-lg font-semibold text-neutral-900 dark:text-neutral-100 break-all;
+  }
+  .tool-detail-meta {
+    @apply text-xs text-neutral-400 dark:text-neutral-500 mt-1;
+  }
+  .score-breakdown {
+    @apply space-y-3;
+  }
+  .score-row-top {
+    @apply flex items-center justify-between text-xs text-neutral-500 dark:text-neutral-400 mb-1;
+  }
+  .score-track {
+    @apply h-2 rounded-full bg-neutral-100 dark:bg-neutral-800 overflow-hidden;
+  }
+  .score-fill {
+    @apply h-full rounded-full bg-primary-500;
+  }
+  .score-row.negative .score-fill {
+    @apply bg-danger-500;
+  }
+  .detail-section-lite {
+    @apply mt-4 pt-4 border-t border-neutral-100 dark:border-neutral-800;
+  }
+  .detail-section-title {
+    @apply text-xs font-semibold text-neutral-500 dark:text-neutral-400 mb-2;
+  }
+  .explanation-list {
+    @apply space-y-1.5 text-sm text-neutral-600 dark:text-neutral-300 leading-relaxed;
+  }
+  .explanation-list li {
+    @apply list-disc ml-4;
+  }
+  .risk-tags {
+    @apply flex flex-wrap gap-2;
+  }
+  .risk-tag {
+    @apply inline-flex px-2 py-1 rounded-md text-xs font-medium bg-danger-50 text-danger-600 dark:bg-danger-500/10 dark:text-danger-400;
+  }
+  .risk-tag.muted {
+    @apply bg-success-50 text-success-600 dark:bg-success-500/10 dark:text-success-400;
+  }
+  .tool-advice {
+    @apply text-sm text-neutral-600 dark:text-neutral-300 leading-relaxed;
+  }
+  .workflow-pattern {
+    @apply rounded-lg border border-neutral-100 dark:border-neutral-800 px-3 py-2.5 bg-neutral-50/60 dark:bg-neutral-800/30;
+  }
+  .workflow-title {
+    @apply text-sm font-semibold text-neutral-800 dark:text-neutral-100;
+  }
+  .workflow-chain {
+    @apply flex items-center gap-1.5 flex-wrap mt-2 text-xs;
+  }
+  .workflow-chain span {
+    @apply px-2 py-1 rounded-md bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300 font-mono;
+  }
+  .workflow-chain b {
+    @apply text-neutral-300 dark:text-neutral-600;
+  }
+  .workflow-meta {
+    @apply text-xs text-neutral-500 dark:text-neutral-400 mt-2;
+  }
+  .planned-list {
+    @apply grid gap-2;
+  }
+  .planned-list span {
+    @apply flex items-center justify-between rounded-lg border border-neutral-100 dark:border-neutral-800 px-3 py-2 text-sm text-neutral-600 dark:text-neutral-300 bg-neutral-50/70 dark:bg-neutral-800/30;
+  }
+  .planned-list b {
+    @apply text-xs font-medium text-neutral-400 dark:text-neutral-500;
   }
 
   /* ═══ 会话卡片 ═══ */
@@ -273,7 +439,7 @@
 .chat-bubble.assistant {
   @apply rounded-2xl rounded-bl-md bg-neutral-50 dark:bg-neutral-800/70 border-neutral-200 dark:border-neutral-700 text-neutral-800 dark:text-neutral-100;
 }
-/* 无用户消息的轮次占位（小灰字，弱化） */
+/* 无用户消息的轮次：折叠头内极淡提示（不再渲染用户气泡） */
 .chat-placeholder {
   @apply text-[11px] italic text-neutral-300 dark:text-neutral-600 px-1;
 }
@@ -281,15 +447,72 @@
 .assistant-preview {
   @apply block;
 }
-.assistant-more {
-  @apply block text-[11px] text-neutral-400 dark:text-neutral-500 mt-0.5;
+/* 底部渐隐遮罩 */
+.assistant-fade {
+  @apply block pointer-events-none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3.5rem;
+  background: linear-gradient(to bottom, transparent, #fafafa 85%);
+}
+.dark .assistant-fade {
+  background: linear-gradient(to bottom, transparent, #262626 85%);
 }
 .assistant-expand {
-  @apply mt-1 text-xs font-medium text-primary-600 dark:text-primary-400 hover:underline text-left;
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
+  @apply px-2.5 py-1 rounded-md border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs font-medium text-primary-600 dark:text-primary-400 hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors cursor-pointer;
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.5rem;
+}
+.chat-bubble.assistant.collapsed {
+  position: relative;
+  overflow: hidden;
+}
+.chat-bubble.assistant.collapsed .assistant-preview {
+  max-height: 13rem;
+  overflow: hidden;
+}
+.chat-bubble.assistant.expanded {
+  position: relative;
+}
+/* ═══ 轮次默认折叠（仅展开最近一轮 / 有错误轮次） ═══ */
+.round-block.collapsed .round-content {
+  display: none;
+}
+.round-summary {
+  @apply flex items-center gap-2 px-4 py-2.5 border-b border-neutral-100 dark:border-neutral-800 bg-white dark:bg-neutral-900 cursor-pointer select-none hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors;
+}
+.round-summary-chevron {
+  @apply inline-block text-neutral-400 transition-transform text-sm;
+}
+.round-block:not(.collapsed) .round-summary-chevron {
+  transform: rotate(90deg);
+}
+.round-summary-title {
+  @apply text-sm font-semibold text-neutral-700 dark:text-neutral-200 flex-shrink-0;
+}
+.round-summary-user {
+  @apply text-xs text-neutral-500 dark:text-neutral-400 truncate min-w-0;
+}
+.round-summary-no-user {
+  @apply text-[11px] text-neutral-300 dark:text-neutral-600;
+}
+.round-summary-meta {
+  @apply flex items-center gap-1.5 ml-auto flex-shrink-0;
+}
+.round-summary-pill {
+  @apply text-[11px] font-medium px-1.5 py-0.5 rounded-md bg-neutral-100 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400;
+}
+.round-summary-pill.error {
+  @apply bg-danger-50 dark:bg-danger-500/10 text-danger-600 dark:text-danger-400;
+}
+.round-summary-pill.slow {
+  @apply bg-warning-50 dark:bg-warning-500/10 text-warning-600 dark:text-warning-400;
+}
+.round-content {
+  @apply bg-white dark:bg-neutral-900;
 }
 .round-tools {
   @apply border-b border-neutral-100 dark:border-neutral-800 bg-neutral-50/70 dark:bg-neutral-900/60;
@@ -306,8 +529,23 @@
 .round-tools:not(.collapsed) .round-tools-chevron {
   transform: rotate(90deg);
 }
+.round-tools-badges {
+  @apply inline-flex items-center gap-1 flex-shrink-0;
+}
 .round-tools-summary {
   @apply text-xs text-neutral-500 dark:text-neutral-400 flex-shrink-0;
+}
+/* 工具类型小 badge（P1-7） */
+.tool-type-badge {
+  @apply text-[11px] font-medium px-1.5 py-0.5 rounded-md bg-neutral-100 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400;
+}
+.tool-type-badge.bash { @apply bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400; }
+.tool-type-badge.read { @apply bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400; }
+.tool-type-badge.write { @apply bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400; }
+.tool-type-badge.mcp { @apply bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400; }
+/* 错误 badge：红色、靠右 */
+.tool-error-badge {
+  @apply text-[11px] font-bold px-1.5 py-0.5 rounded-md bg-danger-600 dark:bg-danger-500 text-white;
 }
 .round-tools-body {
   @apply px-4 pb-3;
@@ -326,6 +564,16 @@
 }
 .round-tools .call-item {
   @apply ml-0;
+}
+/* 错误调用定位：闪烁高亮 */
+.call-item.flash-error {
+  animation: flash-error 2.5s ease-in-out;
+  border-radius: 0.5rem;
+}
+@keyframes flash-error {
+  0%, 100% { background: transparent; box-shadow: none; }
+  20%, 50% { background: rgba(220, 38, 38, 0.12); box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.35); }
+  80% { background: transparent; box-shadow: none; }
 }
 .round-header {
   @apply flex items-start gap-3 px-4 py-3 border-b border-neutral-100 dark:border-neutral-800 bg-neutral-50/70 dark:bg-neutral-800/30 border-l-[3px] border-l-transparent ml-4;
@@ -365,7 +613,7 @@
 .round-nav {
   @apply flex items-center gap-1.5 px-4 py-2 border-b border-neutral-100 dark:border-neutral-800 bg-white/95 dark:bg-neutral-900/95 backdrop-blur;
   position: sticky;
-  top: 8.5rem;
+  top: 4.5rem;
   z-index: 20;
 }
 .round-nav-label {
@@ -478,6 +726,27 @@
 .dark .detail-raw-json .js { color: #34d399; }
 .dark .detail-raw-json .jn { color: #fbbf24; }
 .dark .detail-raw-json .jb { color: #f87171; }
+
+/* 工具栈地图在中等宽度下改为上下布局，避免评分表被挤成窄列 */
+@media (max-width: 1100px) {
+  .tool-stack-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .tool-detail-panel {
+    position: static;
+  }
+  .tool-stack-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+@media (max-width: 760px) {
+  .tool-table-header,
+  .tool-table-row {
+    min-width: 720px;
+  }
+}
 
 /* ═══ 调用行新样式 ═══ */
 .call-preview {

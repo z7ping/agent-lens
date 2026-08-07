@@ -136,7 +136,7 @@ window.toggleAutoRefresh = function () {
       ? 'w-2 h-2 rounded-full bg-success-500 animate-pulse'
       : 'w-2 h-2 rounded-full bg-neutral-400';
   }
-  if (liveText) liveText.textContent = autoRefresh ? 'LIVE' : 'PAUSED';
+  if (liveText) liveText.textContent = autoRefresh ? '自动刷新中' : '自动刷新已暂停';
   if (liveToggle) {
     liveToggle.className = autoRefresh
       ? 'flex items-center gap-1.5 px-2 py-1 rounded-md bg-success-50 dark:bg-success-500/10 text-success-600 dark:text-success-400 font-medium cursor-pointer hover:bg-success-100 dark:hover:bg-success-500/20 transition-colors'
@@ -218,7 +218,7 @@ async function checkStatus() {
     dot.className = `w-2 h-2 rounded-full ${ok ? 'bg-success-500' : 'bg-danger-500'}`;
   }
   if (text) {
-    text.textContent = ok ? '在线' : '离线';
+    text.textContent = ok ? 'Hook 在线' : 'Hook 离线';
   }
 }
 
@@ -231,10 +231,10 @@ function updateStatusFromSessions(sessions) {
   }
 
   const errCount = document.getElementById('lastErrorCount');
-  if (errCount) errCount.textContent = errorCount;
+  if (errCount) errCount.textContent = `${errorCount} 个错误`;
 
   const slowEl = document.getElementById('slowCount');
-  if (slowEl) slowEl.textContent = slowCount;
+  if (slowEl) slowEl.textContent = `${slowCount} 个慢调用`;
 }
 
 function updateStatusFromLogs(logs) {
@@ -244,7 +244,7 @@ function updateStatusFromLogs(logs) {
   // 错误计数 badge
   const errCount = document.getElementById('lastErrorCount');
   const errTooltip = document.getElementById('lastErrorTooltip');
-  if (errCount) errCount.textContent = errors.length;
+  if (errCount) errCount.textContent = `${errors.length} 个错误`;
   if (errTooltip && errors.length > 0) {
     const latest = errors[errors.length - 1];
     const msg = latest.error || latest.tool_name || '未知错误';
@@ -253,7 +253,7 @@ function updateStatusFromLogs(logs) {
   }
 
   const slowCount = document.getElementById('slowCount');
-  if (slowCount) slowCount.textContent = slow.length;
+  if (slowCount) slowCount.textContent = `${slow.length} 个慢调用`;
 }
 
 // ─── 全局函数（HTML onclick 用）─────────────────────
@@ -319,9 +319,20 @@ async function loadSessionCalls(card) {
     if (calls.length === 0) {
       body.innerHTML = '<div class="text-center py-4 text-neutral-400 text-sm">暂无调用记录</div>';
     } else {
+      // 统一口径：会话头"调用"数与执行概览一致（均以 timeline 工具记录为基准）
+      const toolRecords = calls.filter(c => c.role === 'tool_result' || c.role === 'tool_error' || c.tool_name);
+      const errRecords = toolRecords.filter(c => c.role === 'tool_error' || c.error === true || c.success === false || c.success === 0 || c.error_message || (c.exit_code != null && c.exit_code !== 0));
+      card.querySelectorAll('.session-metric').forEach(metric => {
+        const label = metric.querySelector('.session-metric-label')?.textContent;
+        const value = metric.querySelector('.session-metric-value');
+        if (!label || !value) return;
+        if (label === '调用') value.textContent = String(toolRecords.length);
+        if (label === '成功') value.textContent = String(Math.max(toolRecords.length - errRecords.length, 0));
+        if (label === '错误') value.textContent = String(errRecords.length);
+      });
       // 动态导入 renderCallChain 中的 renderCall 函数
       const { renderCallChainCalls } = await import('./callchain/index.js');
-      body.innerHTML = renderCallChainCalls(calls, parseInt(card.dataset.toolCount || '0', 10) || 0);
+      body.innerHTML = renderCallChainCalls(calls);
     }
     body.dataset.loaded = '1';
   } catch {
@@ -376,12 +387,13 @@ window.setSessionErrorFilter = function (card, on) {
     b.classList.toggle('active', b.dataset.roundnav === (on ? 'error' : 'all'));
   });
   card.querySelectorAll('.round-tools').forEach(panel => {
-    if (on) {
-      if (panel.classList.contains('collapsed')) window.toggleRoundTools(panel.id);
-      panel.dataset.errorsOnly = 'true';
-    } else {
-      panel.dataset.errorsOnly = 'false';
-    }
+    const inErrorRound = panel.closest('.round-block')?.dataset.hasError === 'true';
+    if (on && inErrorRound && panel.classList.contains('collapsed')) window.toggleRoundTools(panel.id);
+    panel.dataset.errorsOnly = on ? 'true' : 'false';
+    // 确保渲染过的调用行也能立即过滤（直接依据 data-call-error）
+    panel.querySelectorAll('.call-item').forEach(item => {
+      item.style.display = (on && item.dataset.callError !== 'true') ? 'none' : '';
+    });
   });
 };
 
@@ -399,6 +411,14 @@ window.jumpToErrors = async function () {
       await window.loadSessionCalls(card);
     }
     window.setSessionErrorFilter(card, true);
-    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // 滚动到第一个报错调用并闪烁高亮
+    const firstErr = card.querySelector('.rounds-container .call-item[data-call-error="true"]');
+    if (firstErr) {
+      firstErr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      firstErr.classList.add('flash-error');
+      setTimeout(() => firstErr.classList.remove('flash-error'), 2500);
+    } else {
+      card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   }
 };

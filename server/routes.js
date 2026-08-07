@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const { getAdapter, getAllAdapters } = require('./adapters');
 const { getDb, queryStats, queryTimeline } = require('./abeat-db');
+const { queryToolMap } = require('./tool-map');
 
 const ROOT = path.join(__dirname, '..');
 const PROJECT_REGISTRY_FILES = [
@@ -364,4 +365,22 @@ function handleApiErrors(req, res, params) {
     }
 }
 
-module.exports = { handleApiStats, handleApiTools, handleApiSessions, handleApiTimeline, handleApiSkills, handleApiCompare, handleApiErrors };
+function handleApiToolMap(req, res, params) {
+    try {
+        const db = getDb();
+        if (!db) {
+            sendJson(res, { error: 'SQLite 数据库不可用', summary: { total_tools: 0, high_value_tools: 0, high_risk_tools: 0, workflow_candidates: 0 }, items: [], workflow_patterns: [] }, 503);
+            return;
+        }
+        const result = queryToolMap(db, {
+            project: params.get('project') || '',
+            source: params.get('source') || '',
+            range: params.get('range') || 'week',
+        });
+        sendJson(res, result);
+    } catch (e) {
+        sendJson(res, { error: e.message }, 500);
+    }
+}
+
+module.exports = { handleApiStats, handleApiTools, handleApiSessions, handleApiTimeline, handleApiSkills, handleApiCompare, handleApiErrors, handleApiToolMap };

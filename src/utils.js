@@ -179,6 +179,26 @@ export async function fetchTools(project, source) {
 }
 
 /**
+ * 获取工具栈地图数据
+ * @param {string} project - 项目键
+ * @param {string} source - 工具来源
+ * @param {string} timeRange - 时间范围
+ */
+export async function fetchToolMap(project, source, timeRange) {
+  try {
+    const params = new URLSearchParams();
+    if (project) params.set('project', project);
+    if (source) params.set('source', source);
+    if (timeRange) params.set('range', timeRange);
+    const res = await fetch(`${CONFIG.API_BASE}/api/tool-map?${params}`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 获取技能列表
  */
 export async function fetchSkills() {

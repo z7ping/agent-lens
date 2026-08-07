@@ -275,8 +275,8 @@ function renderSession(session) {
     'openclaw': 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400',
   })[source] || 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400';
 
-  // 项目名（优先使用 project_name，回退到 project_key）
-  const projectName = session.projectName || session.project || '';
+  // 项目名（优先使用 project_name，回退到 project_key；hash 形态视为未知项目）
+  const projectName = formatProjectName(session.projectName || session.project || '');
   const projectCwd = session.projectCwd || session.cwd || '';
   const projectCwdLabel = formatWorkdir(projectCwd);
   // 副标题分两层：第一层 时间 + 项目，第二层 路径 + 平均耗时
@@ -321,8 +321,7 @@ function renderSession(session) {
          id="session-${escapeHtml(session.id)}"
          data-session-id="${escapeHtml(session.id)}"
          data-source="${escapeHtml(session.source)}"
-         data-has-error="${hasError ? 'true' : 'false'}"
-         data-tool-count="${escapeHtml(String(toolCount || 0))}">
+         data-has-error="${hasError ? 'true' : 'false'}">
       ${header}
       <div class="session-body hidden">
         ${calls.length > 0 ? calls : '<div class="text-center py-4 text-neutral-400 text-sm">加载中...</div>'}
@@ -403,7 +402,7 @@ function renderCall(call, index, projectPath, sourceColor = '') {
   const toolName = call.tool_name || call.name || '未知';
   const type = getToolType(toolName);
   const duration = formatDuration(call.duration_ms);
-  const isError = call.error === true || call.success === false || call.success === 0 || (call.exit_code != null && call.exit_code !== 0);
+  const isError = isErrorCall(call);
   const isSlow = call.duration_ms > 5000;
   const depth = call._depth || 0;
   const exitCode = call.exit_code != null ? call.exit_code : (call.success === 0 ? 1 : 0);
@@ -558,60 +557,85 @@ function groupByRounds(calls) {
   return rounds;
 }
 
-/** 渲染单个轮次 */
-function renderRound(round, index, sourceColor = '') {
+/** 渲染单个轮次（默认折叠，仅展开最近一轮 / 有错误轮次） */
+function renderRound(round, index, sourceColor = '', defaultExpanded = false) {
   const parts = [];
 
   const rand = Math.random().toString(36).slice(2, 8);
   const aiId = `round-ai-${index}-${rand}`;
   const toolsId = `round-tools-${index}-${rand}`;
 
-  parts.push(`<div class="round-conversation">`);
+  // 用户消息（无消息时折叠头显示极淡提示，正文不渲染用户气泡）
+  const userContent = round.userMessage ? extractUserText(round.userMessage) : '';
+  const userExcerpt = userContent ? truncate(userContent.replace(/\s+/g, ' ').trim(), 60) : '';
 
-  // 用户气泡（无用户消息时弱化为小灰字占位）
-  const userContent = round.userMessage
-    ? extractUserText(round.userMessage)
-    : '';
-  parts.push(`
-    <div class="chat-message user">
-      <div class="chat-meta">用户 · 第 ${index + 1} 轮</div>
-      ${userContent
-        ? `<div class="chat-bubble user">${escapeHtml(userContent)}</div>`
-        : `<div class="chat-placeholder">（无用户消息）</div>`}
-    </div>
-  `);
-
-  // AI 气泡（长文本默认折叠，展开全文时再渲染完整内容）
+  // AI 文本
   const assistantTexts = [];
   for (const msg of round.assistantMessages) {
     const text = extractAssistantText(msg);
     if (text) assistantTexts.push(text);
   }
+
+  // 工具统计
+  const errorCount = round.toolCalls.filter(isErrorCall).length;
+  const hasError = errorCount > 0;
+  const hasSlow = round.toolCalls.some(c => (c.duration_ms || 0) > 5000);
+  const typeCounts = getToolTypeCounts(round.toolCalls, 3);
+  const expandedDefault = defaultExpanded || hasError;
+
+  // ── 轮次折叠头（始终可见） ──
+  const summaryMeta = [];
+  if (round.toolCalls.length > 0) summaryMeta.push(`<span class="round-summary-pill">${round.toolCalls.length} 工具</span>`);
+  if (hasError) summaryMeta.push(`<span class="round-summary-pill error">${errorCount} 错误</span>`);
+  if (hasSlow) summaryMeta.push(`<span class="round-summary-pill slow">慢</span>`);
+  parts.push(`
+    <div class="round-summary" onclick="toggleRound(this)">
+      <span class="round-summary-chevron">›</span>
+      <span class="round-summary-title">第 ${index + 1} 轮</span>
+      <span class="round-summary-user">${userExcerpt ? escapeHtml(userExcerpt) : '<span class="round-summary-no-user">无用户消息</span>'}</span>
+      ${summaryMeta.length ? `<span class="round-summary-meta">${summaryMeta.join('')}</span>` : ''}
+    </div>
+  `);
+
+  // ── 轮次正文（折叠时隐藏） ──
+  const content = [];
+
+  // 对话区：无用户消息时不渲染用户气泡
+  const convo = [];
+  if (userContent) {
+    convo.push(`
+      <div class="chat-message user">
+        <div class="chat-meta">用户 · 第 ${index + 1} 轮</div>
+        <div class="chat-bubble user">${escapeHtml(userContent)}</div>
+      </div>
+    `);
+  }
   if (assistantTexts.length) {
-    parts.push(`
+    convo.push(`
       <div class="chat-message assistant">
-        <div class="chat-meta">AI</div>
+        <div class="chat-meta">AI · 第 ${index + 1} 轮</div>
         ${renderAssistantBubble(aiId, assistantTexts)}
       </div>
     `);
   }
-
-  parts.push(`</div>`);
+  if (convo.length) content.push(`<div class="round-conversation">${convo.join('')}</div>`);
 
   // 工具调用（默认折叠，折叠时 DOM 只保留摘要，展开时懒加载详情）
   if (round.toolCalls.length > 0) {
     const tree = buildTree(round.toolCalls);
     roundToolsCache.set(toolsId, { nodes: tree, sourceColor });
-    const errorCount = round.toolCalls.filter(isErrorCall).length;
-    const breakdown = getToolBreakdown(round.toolCalls);
-    parts.push(`
+    const typeBadges = typeCounts.map(t => `<span class="tool-type-badge ${t.type}">${t.type} ${t.count}</span>`).join('');
+    content.push(`
       <div class="round-tools collapsed" id="${toolsId}" data-errors-only="false">
         <button class="round-tools-toggle" type="button" onclick="toggleRoundTools('${toolsId}')">
           <span class="round-tools-title">
             <span class="round-tools-chevron">›</span>
             工具调用 · ${round.toolCalls.length} 次
           </span>
-          <span class="round-tools-summary">${breakdown}${errorCount ? ` · error ${errorCount}` : ''}</span>
+          <span class="round-tools-badges">
+            ${typeBadges}
+            ${errorCount ? `<span class="tool-error-badge">${errorCount} 错误</span>` : ''}
+          </span>
         </button>
         <div class="round-tools-body">
           <label class="round-tools-filter" onclick="event.stopPropagation()">
@@ -624,12 +648,15 @@ function renderRound(round, index, sourceColor = '') {
     `);
   }
 
-  // 轮次级标记：供 session body 顶部导航筛选
-  const hasError = round.toolCalls.some(isErrorCall);
-  const hasSlow = round.toolCalls.some(c => (c.duration_ms || 0) > 5000);
+  if (content.length) parts.push(`<div class="round-content">${content.join('')}</div>`);
 
-  return `<div class="round-block" data-has-error="${hasError ? 'true' : 'false'}" data-has-slow="${hasSlow ? 'true' : 'false'}">${parts.join('')}</div>`;
+  return `<div class="round-block${expandedDefault ? '' : ' collapsed'}" data-has-error="${hasError ? 'true' : 'false'}" data-has-slow="${hasSlow ? 'true' : 'false'}">${parts.join('')}</div>`;
 }
+
+window.toggleRound = function (summaryEl) {
+  const block = summaryEl.closest('.round-block');
+  if (block) block.classList.toggle('collapsed');
+};
 
 /** 判断调用是否为报错 */
 function isErrorCall(call) {
@@ -640,21 +667,20 @@ function isErrorCall(call) {
     || (call.exit_code != null && call.exit_code !== 0);
 }
 
-/** 工具调用类型分布摘要（bash 80 / read 20） */
-function getToolBreakdown(calls) {
+/** 工具调用类型分布（按次数排序，返回 [{type, count}]） */
+function getToolTypeCounts(calls, limit = 3) {
   const byType = {};
   for (const c of calls) {
     const t = getToolType(c.tool_name || '');
     byType[t] = (byType[t] || 0) + 1;
   }
-  const parts = Object.entries(byType)
+  return Object.entries(byType)
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 3)
-    .map(([t, n]) => `${t} ${n}`);
-  return parts.join(' / ') || '—';
+    .slice(0, limit)
+    .map(([type, count]) => ({ type, count }));
 }
 
-/** 渲染 AI 气泡（长文本默认折叠前 10 行） */
+/** 渲染 AI 气泡（长文本默认折叠，底部渐隐遮罩 + 展开全文按钮） */
 function renderAssistantBubble(id, texts) {
   const fullText = texts.join('\n\n');
   const lines = fullText.split('\n');
@@ -666,12 +692,12 @@ function renderAssistantBubble(id, texts) {
   const preview = lines.length > AI_MAX_LINES
     ? lines.slice(0, AI_MAX_LINES).join('\n')
     : fullText.slice(0, AI_MAX_CHARS);
-  const hint = lines.length > AI_MAX_LINES ? `… 还有 ${lines.length - AI_MAX_LINES} 行` : '… 内容较长';
+  const hint = lines.length > AI_MAX_LINES ? `还有 ${lines.length - AI_MAX_LINES} 行` : '内容较长';
   return `
-    <div class="chat-bubble assistant" id="${id}">
+    <div class="chat-bubble assistant collapsed" id="${id}">
       <span class="assistant-preview">${escapeHtml(preview)}</span>
-      <span class="assistant-more">${hint}</span>
-      <button type="button" class="assistant-expand" onclick="expandAssistant('${id}')">展开全文</button>
+      <span class="assistant-fade"></span>
+      <button type="button" class="assistant-expand" onclick="expandAssistant('${id}')" title="${hint}">展开全文 ↓</button>
     </div>
   `;
 }
@@ -680,7 +706,7 @@ window.expandAssistant = function (id) {
   const bubble = document.getElementById(id);
   if (!bubble || !assistantTextCache.has(id)) return;
   bubble.innerHTML = escapeHtml(assistantTextCache.get(id));
-  bubble.classList.add('expanded');
+  bubble.classList.remove('collapsed');
   assistantTextCache.delete(id);
 };
 
@@ -721,6 +747,14 @@ function formatWorkdir(cwd) {
   const parts = normalized.split('/').filter(Boolean);
   if (parts.length <= 2) return cwd;
   return `${parts.at(-2)}/${parts.at(-1)}`;
+}
+
+/** 项目名：MD5 hash 形态（如 hermes 历史项目）显示为 未知项目 · 短hash */
+function formatProjectName(name) {
+  if (!name) return '';
+  const s = String(name);
+  if (/^[0-9a-f]{8,32}$/i.test(s)) return `未知项目 · ${s.slice(0, 6)}`;
+  return s;
 }
 
 /** 解析 tool_input（兼容字符串、对象、双重 JSON） */
@@ -903,7 +937,7 @@ function renderCallDetail(call, sourceColor = '') {
 }
 
 /** 渲染调用列表（供外部懒加载使用） */
-export function renderCallChainCalls(calls, toolCount = 0) {
+export function renderCallChainCalls(calls) {
   if (!calls || calls.length === 0) return '';
 
   // 从调用数据中提取来源颜色
@@ -911,14 +945,15 @@ export function renderCallChainCalls(calls, toolCount = 0) {
   const sourceColor = (sourceColors[src] || {}).light || '';
 
   const rounds = groupByRounds(calls);
-  const summary = summarizeCalls(calls.filter(c => c.role === 'tool_result' || c.role === 'tool_error' || c.tool_name));
-  // 统一口径：工具调用次数与会话头部一致（DB tool_count），缺失时回退到时间线条目数
-  const total = toolCount > 0 ? toolCount : summary.total;
-  const topTypes = Object.entries(summary.byType)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3)
-    .map(([type, count]) => `${type} ${count}`)
-    .join(' · ');
+  const toolRecords = calls.filter(c => c.role === 'tool_result' || c.role === 'tool_error' || c.tool_name);
+  const summary = summarizeCalls(toolRecords);
+  // 统一口径：总数 = 分类之和（均以时间线条目为基准）
+  const total = summary.total;
+  const typeCounts = getToolTypeCounts(toolRecords, 3);
+  const shownSum = typeCounts.reduce((s, t) => s + t.count, 0);
+  const other = total - shownSum;
+  const topTypes = typeCounts.map(t => `${t.type} ${t.count}`).join(' / ');
+  const overviewMain = `${total} 次工具调用${topTypes ? ` · ${topTypes}` : ''}${other > 0 ? ` / 其他 ${other}` : ''}`;
   const slowest = summary.slowest
     ? `${summary.slowest.tool_name || '工具'} ${formatDuration(summary.slowest.duration_ms)}`
     : '—';
@@ -926,7 +961,7 @@ export function renderCallChainCalls(calls, toolCount = 0) {
     <div class="execution-overview">
       <div>
         <div class="overview-label">执行概览</div>
-        <div class="overview-main">${total} 次工具调用${topTypes ? ` · ${escapeHtml(topTypes)}` : ''}</div>
+        <div class="overview-main">${overviewMain}</div>
       </div>
       <div class="overview-pills">
         <span class="overview-pill ${summary.errors ? 'error' : 'success'}">错误 ${summary.errors}</span>
@@ -942,18 +977,20 @@ export function renderCallChainCalls(calls, toolCount = 0) {
     return overview + tree.map((call, i) => renderCall(call, i, '', sourceColor)).join('');
   }
 
-  // 轮次导航（长会话快速定位：全部 / 有错误 / 慢调用 / 最近一轮）
+  // 轮次导航（长会话快速定位：全部 / 有错误 / 慢调用 / 最近一轮），带数量反馈
+  const errorRounds = rounds.filter(r => r.toolCalls.some(isErrorCall)).length;
+  const slowRounds = rounds.filter(r => r.toolCalls.some(c => (c.duration_ms || 0) > 5000)).length;
   const nav = rounds.length > 1 ? `
     <div class="round-nav">
       <span class="round-nav-label">轮次</span>
-      <button class="round-nav-btn active" data-roundnav="all" onclick="setRoundNav(this, 'all')">全部轮次</button>
-      <button class="round-nav-btn" data-roundnav="error" onclick="setRoundNav(this, 'error')">有错误</button>
-      <button class="round-nav-btn" data-roundnav="slow" onclick="setRoundNav(this, 'slow')">慢调用</button>
+      <button class="round-nav-btn active" data-roundnav="all" onclick="setRoundNav(this, 'all')">全部轮次 ${rounds.length}</button>
+      <button class="round-nav-btn" data-roundnav="error" onclick="setRoundNav(this, 'error')">有错误 ${errorRounds}</button>
+      <button class="round-nav-btn" data-roundnav="slow" onclick="setRoundNav(this, 'slow')">慢调用 ${slowRounds}</button>
       <button class="round-nav-btn" data-roundnav="last" onclick="setRoundNav(this, 'last')">最近一轮</button>
     </div>
   ` : '';
 
-  const roundsHtml = `<div class="rounds-container" data-nav="all">${rounds.map((round, i) => renderRound(round, i, sourceColor)).join('')}</div>`;
+  const roundsHtml = `<div class="rounds-container" data-nav="all">${rounds.map((round, i) => renderRound(round, i, sourceColor, i === rounds.length - 1)).join('')}</div>`;
 
   return nav + overview + roundsHtml;
 }
