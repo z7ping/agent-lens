@@ -810,6 +810,10 @@
   -webkit-user-select: all;
 }
 
+.app-version {
+  @apply inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold text-neutral-500 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700;
+}
+
 /* ═══ 概览：工具能力资产卡片 ═══ */
 .overview-header {
   @apply flex items-center justify-between gap-4 mb-5;

@@ -212,6 +212,19 @@ export async function fetchOverview() {
 }
 
 /**
+ * 获取应用基础信息
+ */
+export async function fetchAppInfo() {
+  try {
+    const res = await fetch(`${CONFIG.API_BASE}/api/app-info`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 获取技能列表
  */
 export async function fetchSkills() {

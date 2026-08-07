@@ -235,7 +235,7 @@ async function main() {
 
     // ─── API 处理函数 ──────────────────────────────────────────
 
-    const { handleApiStats, handleApiTools, handleApiSessions, handleApiTimeline, handleApiSkills, handleApiCompare, handleApiErrors, handleApiToolMap, handleApiSourcesStatus, handleApiOverview } = require('./routes');
+    const { handleApiStats, handleApiTools, handleApiSessions, handleApiTimeline, handleApiSkills, handleApiCompare, handleApiErrors, handleApiToolMap, handleApiSourcesStatus, handleApiOverview, handleApiAppInfo } = require('./routes');
 
     function sendJson(res, data, statusCode = 200) {
         res.writeHead(statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -376,6 +376,11 @@ async function main() {
 
         if (urlPath === '/api/overview') {
             handleApiOverview(req, res, urlParams);
+            return;
+        }
+
+        if (urlPath === '/api/app-info') {
+            handleApiAppInfo(req, res);
             return;
         }
         

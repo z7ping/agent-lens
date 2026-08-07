@@ -3,7 +3,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { fetchProjects, fetchSessions, fetchSessionLogs, checkHookStatus, fetchSourceStatus } from './utils.js';
+import { fetchProjects, fetchSessions, fetchSessionLogs, checkHookStatus, fetchSourceStatus, fetchAppInfo } from './utils.js';
 import { renderCallChain } from './callchain/index.js';
 import { initDashboard, loadDashboardData } from './dashboard/index.js';
 import { initOverview, loadOverview } from './overview/index.js';
@@ -20,6 +20,7 @@ let isDark = false;
 // ─── 初始化 ─────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   initTheme();
+  initAppInfo();
   initProjects();
   initEventListeners();
   await loadCallChain();
@@ -29,6 +30,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   checkStatus();
   updateSourceStatus();
 });
+
+async function initAppInfo() {
+  const el = document.getElementById('appVersion');
+  if (!el) return;
+  const info = await fetchAppInfo();
+  el.textContent = info?.display_version || '';
+  el.title = info?.name ? `${info.name} ${info.display_version || ''}` : 'Agent Trace 版本';
+}
 
 // ─── 主题 ───────────────────────────────────────────
 function initTheme() {

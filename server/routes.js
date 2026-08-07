@@ -10,6 +10,7 @@ const { getDb, queryStats, queryTimeline } = require('./abeat-db');
 const { queryToolMap } = require('./tool-map');
 const { queryOverview, scheduleOverviewRefresh } = require('./overview');
 const { detectSourceStatus } = require('./sources-status');
+const { getAppInfo } = require('./app-info');
 
 const ROOT = path.join(__dirname, '..');
 const PROJECT_REGISTRY_FILES = [
@@ -406,4 +407,12 @@ function handleApiOverview(req, res, params) {
     }
 }
 
-module.exports = { handleApiStats, handleApiTools, handleApiSessions, handleApiTimeline, handleApiSkills, handleApiCompare, handleApiErrors, handleApiToolMap, handleApiSourcesStatus, handleApiOverview };
+function handleApiAppInfo(req, res) {
+    try {
+        sendJson(res, getAppInfo());
+    } catch (e) {
+        sendJson(res, { error: e.message }, 500);
+    }
+}
+
+module.exports = { handleApiStats, handleApiTools, handleApiSessions, handleApiTimeline, handleApiSkills, handleApiCompare, handleApiErrors, handleApiToolMap, handleApiSourcesStatus, handleApiOverview, handleApiAppInfo };
