@@ -101,11 +101,11 @@ npx agent-trace service start    # 后台启动，开机自启
 |------|---------|---------|
 | Linux | systemd user service | `~/.config/systemd/user/agent-trace.service` |
 | macOS | launchd agent | `~/Library/LaunchAgents/com.agent-trace.plist` |
-| Windows | 任务计划程序 | `schtasks /tn "AgentTrace"` |
+| Windows | daemon + hook 自动守护 | `~/.agent-trace/`（无需管理员权限） |
 
 > **Linux 注意**：需要 `sudo loginctl enable-linger <user>` 才能在未登录时保持服务运行。安装时会自动检测并提示。
 >
-> **Windows 注意**：任务计划程序需要管理员权限注册，安装时若失败会提示手动运行。
+> **Windows 注意**：不使用任务计划程序。服务以 daemon 模式运行，首次工具调用时由 hook 自动拉起，无需管理员权限。
 
 ---
 

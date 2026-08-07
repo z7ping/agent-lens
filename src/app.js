@@ -3,9 +3,10 @@
  */
 
 import { CONFIG } from './config.js';
-import { fetchProjects, fetchSessions, fetchSessionLogs, checkHookStatus } from './utils.js';
+import { fetchProjects, fetchSessions, fetchSessionLogs, checkHookStatus, fetchSourceStatus } from './utils.js';
 import { renderCallChain } from './callchain/index.js';
 import { initDashboard, loadDashboardData } from './dashboard/index.js';
+import { initOverview, loadOverview } from './overview/index.js';
 
 // ─── 全局状态 ───────────────────────────────────────
 let currentTab = 'callchain';
@@ -23,8 +24,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   initEventListeners();
   await loadCallChain();
   initDashboard();
+  initOverview();
   startAutoRefresh();
   checkStatus();
+  updateSourceStatus();
 });
 
 // ─── 主题 ───────────────────────────────────────────
@@ -87,12 +90,17 @@ window.switchTab = function (tab) {
   document.getElementById('tab-callchain')?.classList.toggle('active', tab === 'callchain');
   document.getElementById('tab-dashboard')?.classList.toggle('hidden', tab !== 'dashboard');
   document.getElementById('tab-dashboard')?.classList.toggle('active', tab === 'dashboard');
+  document.getElementById('tab-overview')?.classList.toggle('hidden', tab !== 'overview');
+  document.getElementById('tab-overview')?.classList.toggle('active', tab === 'overview');
   // 调用链操作区
   document.getElementById('callchainActions')?.classList.toggle('hidden', tab !== 'callchain');
 
   // 切换到仪表盘时加载数据（带上当前工具来源过滤）
   if (tab === 'dashboard') {
     loadDashboardData(currentProject, undefined, currentTool === 'all' ? '' : currentTool);
+  }
+  if (tab === 'overview') {
+    loadOverview();
   }
 };
 
@@ -220,6 +228,38 @@ async function checkStatus() {
   if (text) {
     text.textContent = ok ? 'Hook 在线' : 'Hook 离线';
   }
+}
+
+// ─── 来源采集状态（Claude/Codex 历史可导入 / Hook 是否安装） ───
+async function updateSourceStatus() {
+  const status = await fetchSourceStatus();
+  const spans = document.querySelectorAll('[data-status-source]');
+  spans.forEach(span => {
+    const source = span.dataset.statusSource;
+    const info = status[source];
+    if (!info) return;
+    const { historyAvailable, hookInstalled, sessionFiles } = info;
+    let label;
+    let tone = 'neutral';
+    if (hookInstalled && historyAvailable) {
+      label = '实时采集中';
+      tone = 'ok';
+    } else if (hookInstalled) {
+      label = '实时采集中';
+      tone = 'ok';
+    } else if (historyAvailable) {
+      label = `历史可导入 · Hook 未安装`;
+      tone = 'warn';
+    } else {
+      label = 'Hook 未安装';
+      tone = 'muted';
+    }
+    span.textContent = label;
+    span.dataset.tone = tone;
+    span.title = historyAvailable
+      ? `已有 ${sessionFiles} 个历史会话文件可导入\n数据目录: ${info.dataDir || ''}`
+      : '未发现历史数据，安装 Hook 后实时采集';
+  });
 }
 
 function updateStatusFromSessions(sessions) {

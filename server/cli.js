@@ -21,7 +21,10 @@ const { spawn, execSync } = require('child_process');
 
 // ─── 配置 ────────────────────────────────────────────────────────
 
-const PROJECT_DIR = path.join(__dirname, '..');
+// 兼容两种布局：
+//   开发/源码: <project>/server/cli.js   → PROJECT_DIR = <project>
+//   已安装:     ~/.agent-trace/cli.js    → PROJECT_DIR = ~/.agent-trace
+const PROJECT_DIR = path.basename(__dirname) === 'server' ? path.dirname(__dirname) : __dirname;
 const INSTALL_DIR = path.join(os.homedir(), '.agent-trace');
 const SETTINGS_FILE = path.join(os.homedir(), '.claude', 'settings.json');
 const { DEFAULT_PORT } = require('./config');
@@ -135,29 +138,21 @@ function isProcessAlive(pid) {
 //
 // Linux   → systemd user service (~/.config/systemd/user/)
 // macOS   → launchd agent     (~/Library/LaunchAgents/)
-// Windows → 任务计划程序       (schtasks)
+// Windows → 不使用系统服务；依赖 daemon 模式 + hook 自动守护（server-guard）
 //
 
 const SERVICE_LABEL = 'com.agent-trace';
 const LAUNCHD_DIR = path.join(os.homedir(), 'Library', 'LaunchAgents');
 const LAUNCHD_PLIST = path.join(LAUNCHD_DIR, `${SERVICE_LABEL}.plist`);
-const SCHTASKS_NAME = 'AgentTrace';
 
 function isMac() { return process.platform === 'darwin'; }
 
 /**
- * 返回当前平台可用的服务后端: 'systemd' | 'launchd' | 'schtasks' | null
+ * 返回当前平台可用的服务后端: 'systemd' | 'launchd' | null
+ * Windows 无系统服务后端（daemon + hook 自动守护，无需管理员权限）
  */
 function getServiceBackend() {
-    if (isWin()) {
-        // 检查 schtasks 是否可用
-        try {
-            execSync('schtasks /query /tn "nonexistent_test" 2>nul', { stdio: 'ignore', shell: true });
-        } catch {
-            // schtasks 存在但任务不存在会返回错误码 1，这是正常的
-        }
-        return 'schtasks';
-    }
+    if (isWin()) return null;
     if (isMac()) {
         try {
             execSync('launchctl version', { stdio: 'ignore' });
@@ -365,121 +360,24 @@ function launchdUninstall() {
     }
 }
 
-// ─── schtasks 实现（Windows）─────────────────────────────────────
-
-function schtasksInstall() {
-    const serverJs = path.join(INSTALL_DIR, 'server.js');
-    // 创建任务：用户登录时启动，开机时也启动
-    const cmd = `schtasks /create /tn "${SCHTASKS_NAME}" /tr "\\"${NODE_BIN}\\" \\"${serverJs}\\" ${DEFAULT_PORT}" /sc onlogon /rl highest /f`;
-    try {
-        execSync(cmd, { stdio: 'ignore', shell: true });
-        log('[OK] 任务计划已注册（登录时启动）', 'green');
-    } catch (e) {
-        log(`[ERROR] 注册失败: ${e.message}`, 'red');
-        log('  需要管理员权限，或手动运行:', 'yellow');
-        log(`  ${cmd}`, 'dim');
-        return false;
-    }
-    // 额外创建一个开机触发器
-    const bootCmd = `schtasks /create /tn "${SCHTASKS_NAME}_Boot" /tr "\\"${NODE_BIN}\\" \\"${serverJs}\\" ${DEFAULT_PORT}" /sc onstart /rl highest /f`;
-    try {
-        execSync(bootCmd, { stdio: 'ignore', shell: true });
-    } catch (_) {}
-    return true;
-}
-
-function schtasksStart() {
-    try {
-        execSync(`schtasks /run /tn "${SCHTASKS_NAME}"`, { stdio: 'ignore', shell: true });
-        log('[OK] 任务已启动', 'green');
-    } catch (e) {
-        log(`[ERROR] 启动失败: ${e.message}`, 'red');
-    }
-}
-
-function schtasksStop() {
-    // schtasks 没有直接 stop，需要 taskkill
-    try {
-        const out = execSync(`schtasks /query /tn "${SCHTASKS_NAME}" /fo csv /nh`, { encoding: 'utf-8', shell: true }).trim();
-        if (out) {
-            // 从 PID 文件读取进程 ID，只杀自身进程，避免误杀其他 node.exe
-            const pid = readPid(INSTALL_DIR);
-            if (pid) {
-                try {
-                    execSync(`taskkill /f /pid ${pid} 2>nul`, { stdio: 'ignore', shell: true });
-                    log('[OK] 任务已停止', 'green');
-                } catch (_) {
-                    // PID 对应进程已不存在，尝试清理残留
-                    log('[OK] 任务已停止', 'green');
-                }
-                // 清理 PID 文件
-                try { fs.unlinkSync(getPidFile(INSTALL_DIR)); } catch (_) {}
-            } else {
-                // 无 PID 文件，回退到按名称停止（最后手段）
-                execSync('taskkill /f /im node.exe 2>nul', { stdio: 'ignore', shell: true });
-                log('[OK] 任务已停止（无 PID 文件，使用全量停止）', 'yellow');
-            }
-        }
-    } catch {
-        log('未找到运行中的任务', 'yellow');
-    }
-}
-
-function schtasksEnable() {
-    // schtasks 创建时已启用，重新创建即可
-    schtasksInstall();
-}
-
-function schtasksDisable() {
-    try {
-        execSync(`schtasks /change /tn "${SCHTASKS_NAME}" /disable`, { stdio: 'ignore', shell: true });
-        execSync(`schtasks /change /tn "${SCHTASKS_NAME}_Boot" /disable 2>nul`, { stdio: 'ignore', shell: true });
-        log('[OK] 已关闭开机自启', 'green');
-    } catch (e) {
-        log(`[ERROR] 操作失败: ${e.message}`, 'red');
-    }
-}
-
-function schtasksStatus() {
-    try {
-        const out = execSync(`schtasks /query /tn "${SCHTASKS_NAME}" /fo list`, { encoding: 'utf-8', shell: true });
-        if (out.includes('Running')) {
-            log('✅ 服务运行中（任务计划）', 'green');
-        } else if (out.includes('Ready')) {
-            log('⚠️  任务已注册但未运行', 'yellow');
-        } else {
-            log('⚠️  任务状态未知', 'yellow');
-        }
-        if (out.includes('Disabled')) {
-            log('开机自启: ❌ 已禁用', 'yellow');
-        } else {
-            log('开机自启: ✅ 已启用', 'green');
-        }
-    } catch {
-        log('❌ 任务未注册', 'yellow');
-    }
-}
-
-function schtasksUninstall() {
-    try { execSync(`schtasks /delete /tn "${SCHTASKS_NAME}" /f`, { stdio: 'ignore', shell: true }); } catch (_) {}
-    try { execSync(`schtasks /delete /tn "${SCHTASKS_NAME}_Boot" /f 2>nul`, { stdio: 'ignore', shell: true }); } catch (_) {}
-    log('[OK] 任务计划已移除', 'green');
-}
-
 // ─── 统一 service 命令 ──────────────────────────────────────────
 
 function platformAction(action) {
     const backend = getServiceBackend();
     if (!backend) {
-        log('[WARN] 当前平台不支持自动服务管理', 'yellow');
-        log('  手动启动: agent-trace start --daemon', 'dim');
+        if (isWin()) {
+            log('Windows 使用 daemon 模式 + hook 自动守护，无需系统服务', 'dim');
+            log('  服务管理: agent-trace start / stop / status', 'dim');
+        } else {
+            log('[WARN] 当前平台不支持自动服务管理', 'yellow');
+            log('  手动启动: agent-trace start --daemon', 'dim');
+        }
         return false;
     }
 
     const map = {
         systemd: { install: systemdInstall, start: systemdStart, stop: systemdStop, enable: systemdEnable, disable: systemdDisable, status: systemdStatus, uninstall: systemdUninstall },
         launchd: { install: launchdInstall, start: launchdStart, stop: launchdStop, enable: launchdEnable, disable: launchdDisable, status: launchdStatus, uninstall: launchdUninstall },
-        schtasks: { install: schtasksInstall, start: schtasksStart, stop: schtasksStop, enable: schtasksEnable, disable: schtasksDisable, status: schtasksStatus, uninstall: schtasksUninstall },
     };
 
     const fn = map[backend]?.[action];
@@ -548,11 +446,17 @@ async function cmdInstall() {
         // server/ 根目录文件
         const rootFiles = [
             'server.js', 'cli.js', 'db.js', 'config.js', 'abeat-db.js', 'paths.js',
-            'install-hooks.js', 'schema.sql', 'routes.js'
+            'install-hooks.js', 'schema.sql', 'routes.js', 'tool-map.js', 'overview.js', 'sources-status.js'
         ];
         rootFiles.forEach(f => {
             copyFile(path.join(PROJECT_DIR, 'server', f), path.join(INSTALL_DIR, f));
         });
+
+        // importers/ (历史导入器，server.js 运行时需要)
+        const importersDir = path.join(PROJECT_DIR, 'server', 'importers');
+        if (fs.existsSync(importersDir)) {
+            copyDir(importersDir, path.join(INSTALL_DIR, 'importers'));
+        }
 
         // package.json（npm install 需要）
         copyFile(path.join(PROJECT_DIR, 'package.json'), path.join(INSTALL_DIR, 'package.json'));
@@ -679,8 +583,6 @@ async function cmdInstall() {
                 const out = execSync(`launchctl list | grep ${SERVICE_LABEL}`, { encoding: 'utf-8' }).trim();
                 running = out && !out.split(/\s+/)[0] === '-';
             } catch {}
-        } else {
-            running = true; // schtasks 无法可靠检测
         }
 
         if (running) {
@@ -782,14 +684,19 @@ function cmdStart(argv) {
     if (isDaemon) serverArgs.push('--daemon');
     if (shouldOpen) serverArgs.push('--open');
 
+    // server.js 路径同样兼容两种布局
+    const serverJs = path.join(PROJECT_DIR, 'server', 'server.js');
+    const serverJsPath = fs.existsSync(serverJs) ? serverJs : path.join(PROJECT_DIR, 'server.js');
+    const serverJsPosix = serverJsPath.replace(/\\/g, '/');
+
     if (isDaemon) {
         // 守护进程模式
         if (isWin()) {
             // Windows: 使用 VBScript 隐藏窗口
             const vbsContent = [
                 'Set objShell = CreateObject("WScript.Shell")',
-                `objShell.CurrentDirectory = "${PROJECT_DIR}"`,
-                `objShell.Run "cmd.exe /c start /b node server/server.js ${port} --daemon", 0, False`,
+                `objShell.CurrentDirectory = "${PROJECT_DIR.replace(/\\/g, '/')}"`,
+                `objShell.Run "cmd.exe /c start /b node ""${serverJsPosix}"" ${port} --daemon", 0, False`,
             ].join('\r\n');
             const vbsPath = path.join(os.tmpdir(), 'agent-trace-daemon.vbs');
             fs.writeFileSync(vbsPath, vbsContent, 'utf-8');
@@ -800,7 +707,7 @@ function cmdStart(argv) {
             }
         } else {
             // Unix: detached + unref
-            const child = spawn('node', ['server/server.js', ...serverArgs], {
+            const child = spawn('node', [serverJsPath, ...serverArgs], {
                 cwd: PROJECT_DIR,
                 detached: true,
                 stdio: ['ignore', 'ignore', 'ignore'],
@@ -822,7 +729,7 @@ function cmdStart(argv) {
         log('══════════════════════════════════════════', 'dim');
         console.log('');
 
-        const child = spawn('node', ['server/server.js', ...serverArgs], {
+        const child = spawn('node', [serverJsPath, ...serverArgs], {
             cwd: PROJECT_DIR,
             stdio: 'inherit',
         });

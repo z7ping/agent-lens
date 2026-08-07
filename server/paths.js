@@ -70,6 +70,16 @@ const piHome = resolvePath(
 // 所有平台: ~/.agent-trace
 const agentTraceHome = path.join(HOME, '.agent-trace');
 
+// ─── Claude Code ─────────────────────────────────────────
+// 所有平台: ~/.claude/projects/**/*.jsonl 保存完整会话历史
+// Override: CLAUDE_CODE_HOME
+const claudeCodeHome = resolvePath('CLAUDE_CODE_HOME', path.join(HOME, '.claude'));
+
+// ─── Codex ───────────────────────────────────────────────
+// 所有平台: ~/.codex/sessions/YYYY/MM/DD/*.jsonl 保存 rollout 记录
+// Override: CODEX_HOME
+const codexHome = resolvePath('CODEX_HOME', path.join(HOME, '.codex'));
+
 module.exports = {
     IS_WIN,
     HOME,
@@ -84,6 +94,16 @@ module.exports = {
     pi: {
         home: piHome,
         sessionsDir: path.join(piHome, 'agent', 'sessions'),
+    },
+    claudeCode: {
+        home: claudeCodeHome,
+        projectsDir: path.join(claudeCodeHome, 'projects'),
+        settingsFile: path.join(claudeCodeHome, 'settings.json'),
+    },
+    codex: {
+        home: codexHome,
+        sessionsDir: path.join(codexHome, 'sessions'),
+        hooksFile: path.join(codexHome, 'hooks.json'),
     },
     agentTrace: {
         home: agentTraceHome,

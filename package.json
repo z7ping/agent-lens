@@ -15,6 +15,7 @@
     "status": "node server/cli.js status",
     "install-hooks": "node server/cli.js install",
     "package": "node server/cli.js package",
+    "test": "node server/scripts/test-importers.js",
     "prepublishOnly": "vite build"
   },
   "files": [

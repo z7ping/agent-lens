@@ -8,6 +8,8 @@ const path = require('path');
 const { getAdapter, getAllAdapters } = require('./adapters');
 const { getDb, queryStats, queryTimeline } = require('./abeat-db');
 const { queryToolMap } = require('./tool-map');
+const { queryOverview } = require('./overview');
+const { detectSourceStatus } = require('./sources-status');
 
 const ROOT = path.join(__dirname, '..');
 const PROJECT_REGISTRY_FILES = [
@@ -365,6 +367,14 @@ function handleApiErrors(req, res, params) {
     }
 }
 
+function handleApiSourcesStatus(req, res, params) {
+    try {
+        sendJson(res, detectSourceStatus());
+    } catch (e) {
+        sendJson(res, { error: e.message }, 500);
+    }
+}
+
 function handleApiToolMap(req, res, params) {
     try {
         const db = getDb();
@@ -383,4 +393,16 @@ function handleApiToolMap(req, res, params) {
     }
 }
 
-module.exports = { handleApiStats, handleApiTools, handleApiSessions, handleApiTimeline, handleApiSkills, handleApiCompare, handleApiErrors, handleApiToolMap };
+function handleApiOverview(req, res, params) {
+    try {
+        const db = getDb();
+        const result = queryOverview(db, {
+            priorityThreshold: parseInt(params.get('priorityThreshold') || '5', 10),
+        });
+        sendJson(res, result);
+    } catch (e) {
+        sendJson(res, { error: e.message, tools: [], priority_assets: [], capability_matrix: [] }, 500);
+    }
+}
+
+module.exports = { handleApiStats, handleApiTools, handleApiSessions, handleApiTimeline, handleApiSkills, handleApiCompare, handleApiErrors, handleApiToolMap, handleApiSourcesStatus, handleApiOverview };

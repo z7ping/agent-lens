@@ -235,7 +235,7 @@ async function main() {
 
     // ─── API 处理函数 ──────────────────────────────────────────
 
-    const { handleApiStats, handleApiTools, handleApiSessions, handleApiTimeline, handleApiSkills, handleApiCompare, handleApiErrors, handleApiToolMap } = require('./routes');
+    const { handleApiStats, handleApiTools, handleApiSessions, handleApiTimeline, handleApiSkills, handleApiCompare, handleApiErrors, handleApiToolMap, handleApiSourcesStatus, handleApiOverview } = require('./routes');
 
     function sendJson(res, data, statusCode = 200) {
         res.writeHead(statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -373,6 +373,11 @@ async function main() {
             handleApiToolMap(req, res, urlParams);
             return;
         }
+
+        if (urlPath === '/api/overview') {
+            handleApiOverview(req, res, urlParams);
+            return;
+        }
         
         if (urlPath === '/api/sessions') {
             handleApiSessions(req, res, urlParams);
@@ -412,6 +417,11 @@ async function main() {
 
         if (urlPath === '/api/errors') {
             handleApiErrors(req, res, urlParams);
+            return;
+        }
+
+        if (urlPath === '/api/sources/status') {
+            handleApiSourcesStatus(req, res, urlParams);
             return;
         }
 
@@ -499,6 +509,15 @@ async function main() {
         } catch (e) {
             log(`  ⚠️ 轮询启动失败: ${e.message}`, 'yellow');
         }
+
+        // 启动 JSONL 历史导入器（Claude Code / Codex 历史记录回填）
+        try {
+            const { startAll } = require('./importers');
+            startAll();
+            log(`  ✅ JSONL 历史导入已启动 (claude-code/codex)`, 'green');
+        } catch (e) {
+            log(`  ⚠️ JSONL 历史导入启动失败: ${e.message}`, 'yellow');
+        }
     }
 
     // ─── 启动服务器 ────────────────────────────────────────────
@@ -559,6 +578,10 @@ async function main() {
             try {
                 const { stopAll } = require('./adapters');
                 stopAll();
+            } catch (_) {}
+            try {
+                const { stopAll: stopImporters } = require('./importers');
+                stopImporters();
             } catch (_) {}
             try {
                 const abeatDb = require('./abeat-db');

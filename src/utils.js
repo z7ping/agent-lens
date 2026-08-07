@@ -199,6 +199,19 @@ export async function fetchToolMap(project, source, timeRange) {
 }
 
 /**
+ * 获取 AI 工具概览数据
+ */
+export async function fetchOverview() {
+  try {
+    const res = await fetch(`${CONFIG.API_BASE}/api/overview`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 获取技能列表
  */
 export async function fetchSkills() {
@@ -255,6 +268,19 @@ export async function checkHookStatus() {
     return res.ok;
   } catch {
     return false;
+  }
+}
+
+/**
+ * 获取各来源采集状态（历史可导入 / hook 是否安装）
+ */
+export async function fetchSourceStatus() {
+  try {
+    const res = await fetch(`${CONFIG.API_BASE}/api/sources/status`);
+    if (!res.ok) return {};
+    return await res.json();
+  } catch {
+    return {};
   }
 }
 

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🧠 Agent Trace</title>
+  <title>Agent Trace</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
   <link rel="stylesheet" href="/src/style.css">
   <!-- ═══ 第一层：Logo + 功能Tab + 主题切换 ═══ -->
@@ -22,6 +22,10 @@
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
           工具栈
         </button>
+        <button class="tab-btn" data-tab="overview" onclick="switchTab('overview')">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16M4 12h10M4 19h16"/><circle cx="18" cy="12" r="2"/></svg>
+          概览
+        </button>
       </div>
       <button id="themeToggle" class="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors" title="切换主题">
         <svg class="w-5 h-5 hidden dark:block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
@@ -36,9 +40,9 @@
       <!-- 来源 Tab -->
       <div class="flex items-center gap-1 overflow-x-auto" id="toolTabs">
         <button class="tool-tab active" data-tool="all" onclick="selectTool('all')">全部</button>
-        <button class="tool-tab" data-tool="claude-code" onclick="selectTool('claude-code')">Claude Code <span class="source-status">实时 · 仅工具</span></button>
+        <button class="tool-tab" data-tool="claude-code" onclick="selectTool('claude-code')">Claude Code <span class="source-status" data-status-source="claude-code">检测中</span></button>
         <button class="tool-tab" data-tool="hermes" onclick="selectTool('hermes')">Hermes <span class="source-status">轮询 · 含对话</span></button>
-        <button class="tool-tab" data-tool="codex" onclick="selectTool('codex')">Codex <span class="source-status">实时 · 仅工具</span></button>
+        <button class="tool-tab" data-tool="codex" onclick="selectTool('codex')">Codex <span class="source-status" data-status-source="codex">检测中</span></button>
         <button class="tool-tab" data-tool="opencode" onclick="selectTool('opencode')">OpenCode <span class="source-status">轮询 · 含对话</span></button>
         <button class="tool-tab" data-tool="cursor" onclick="selectTool('cursor')">Cursor <span class="source-status">实时 · 仅工具</span></button>
         <button class="tool-tab" data-tool="pi" onclick="selectTool('pi')">Pi <span class="source-status">轮询 · 含对话</span></button>
@@ -169,6 +173,29 @@
           </div>
         </div>
         </div><!-- /dashboardContent -->
+      </div>
+    </section>
+
+    <!-- ── 概览 Tab ── -->
+    <section id="tab-overview" class="tab-panel hidden">
+      <div class="max-w-screen-2xl mx-auto px-4 py-6">
+        <div class="overview-header">
+          <div>
+            <h2 class="tool-stack-title">概览</h2>
+            <p class="tool-stack-subtitle">按 AI 工具查看能力资产，并对照高频资产在其他工具中的覆盖情况。</p>
+          </div>
+          <button class="overview-refresh" onclick="reloadOverview()">刷新</button>
+        </div>
+
+        <div id="overviewLoading" class="list-card overview-loading">正在扫描本地能力资产...</div>
+        <div id="overviewEmpty" class="list-card overview-loading hidden">概览数据加载失败</div>
+        <div id="overviewContent" class="hidden">
+          <div id="overviewToolCards" class="overview-grid"></div>
+          <section class="list-card overview-matrix-card">
+            <h3 class="chart-title">高频资产对照</h3>
+            <div id="overviewMatrix"></div>
+          </section>
+        </div>
       </div>
     </section>
   </main>

@@ -9,7 +9,12 @@ const fs = require('fs');
 const path = require('path');
 const { openDb } = require('./db');
 
-const DB_PATH = path.join(__dirname, '..', 'a-beat.db');
+// 兼容两种布局：
+//   开发/源码: <project>/server/abeat-db.js → DB 在 <project>/a-beat.db
+//   已安装:     ~/.agent-trace/abeat-db.js  → DB 在 ~/.agent-trace/a-beat.db
+const DB_PATH = path.basename(__dirname) === 'server'
+    ? path.join(__dirname, '..', 'a-beat.db')
+    : path.join(__dirname, 'a-beat.db');
 const SCHEMA_PATH = path.join(__dirname, 'schema.sql');
 
 let _db = null;
@@ -47,6 +52,16 @@ function getDb() {
 
   const schema = fs.readFileSync(SCHEMA_PATH, 'utf-8');
   _db.exec(schema);
+
+  // 迁移：timeline 增加 tool_use_id 列 + 部分唯一索引（用于 JSONL 导入幂等去重）
+  try {
+    const cols = _db.prepare("PRAGMA table_info(timeline)").all().map(c => c.name);
+    if (!cols.includes('tool_use_id')) {
+      _db.exec('ALTER TABLE timeline ADD COLUMN tool_use_id TEXT');
+    }
+    _db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_timeline_tool_use_id ON timeline(tool_use_id) WHERE tool_use_id IS NOT NULL');
+  } catch (_) {}
+
   return _db;
 }
 
@@ -125,8 +140,8 @@ function insertTimeline(record) {
   }
 
   db.prepare(`
-    INSERT OR IGNORE INTO timeline (source, session_id, timestamp, seq, role, tool_name, content, tool_input, success, exit_code, duration_ms, output_snippet, error_message, error_type, error_detail, project_key, parent_seq)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT OR IGNORE INTO timeline (source, session_id, timestamp, seq, role, tool_name, content, tool_input, success, exit_code, duration_ms, output_snippet, error_message, error_type, error_detail, project_key, parent_seq, tool_use_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     record.source || '',
     record.session_id || '',
@@ -144,7 +159,8 @@ function insertTimeline(record) {
     eType,
     eDetail,
     record.project_key || null,
-    record.parent_seq ?? null
+    record.parent_seq ?? null,
+    record.tool_use_id || null
   );
 }
 
