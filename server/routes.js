@@ -9,10 +9,36 @@ const { getAdapter, getAllAdapters } = require('./adapters');
 const { getDb, queryStats, queryTimeline } = require('./abeat-db');
 
 const ROOT = path.join(__dirname, '..');
+const PROJECT_REGISTRY_FILES = [
+    path.join(ROOT, 'projects.json'),
+    path.join(__dirname, 'projects.json'),
+];
 
 function sendJson(res, data, statusCode = 200) {
     res.writeHead(statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(data));
+}
+
+function loadProjects() {
+    const projects = {};
+    for (const file of PROJECT_REGISTRY_FILES) {
+        try {
+            if (!fs.existsSync(file)) continue;
+            const content = fs.readFileSync(file, 'utf-8').trim();
+            if (!content) continue;
+            Object.assign(projects, JSON.parse(content));
+        } catch (_) {}
+    }
+    return projects;
+}
+
+function enrichProjectFields(row, projects) {
+    const proj = projects[row.project_key] || null;
+    return {
+        ...row,
+        project_name: row.project_name || proj?.name || row.project_key || '',
+        project_cwd: row.project_cwd || row.cwd || proj?.cwd || '',
+    };
 }
 
 async function handleApiStats(req, res, params) {
@@ -126,16 +152,10 @@ async function handleApiSessions(req, res, params) {
         });
         unique.sort((a, b) => (b.start_time || '').localeCompare(a.start_time || ''));
 
-        try {
-            const projectsFile = path.join(ROOT, 'projects.json');
-            const projects = fs.existsSync(projectsFile)
-                ? JSON.parse(fs.readFileSync(projectsFile, 'utf-8'))
-                : {};
-            for (const s of unique) {
-                const proj = projects[s.project_key];
-                s.project_name = proj?.name || s.project_key;
-            }
-        } catch (_) {}
+        const projects = loadProjects();
+        for (const s of unique) {
+            Object.assign(s, enrichProjectFields(s, projects));
+        }
 
         sendJson(res, { items: unique.slice(0, limit) });
     } catch (e) {
@@ -157,9 +177,11 @@ async function handleApiTimeline(req, res, params) {
             limit,
         });
 
+        const projects = loadProjects();
+
         // 统一字段名：timeline 表用 timestamp，前端可能期望 ts
         const formatted = items.map(row => ({
-            ...row,
+            ...enrichProjectFields(row, projects),
             ts: row.timestamp,
         }));
 

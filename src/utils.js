@@ -52,19 +52,41 @@ export async function fetchSessionLogs(projectKey, sessionId) {
     const data = await res.json();
     return (data.items || []).map(item => ({
       ts: item.ts,
+      timestamp: item.timestamp || item.ts,
       session_id: item.session_id || '',
       project_key: item.project_key || '',
+      project_name: item.project_name || '',
+      project_cwd: item.project_cwd || item.cwd || '',
       tool_name: item.tool_name,
+      role: item.role || '',
+      content: item.content,
+      tool_input: item.tool_input,
       source: item.source || '',
       duration_ms: item.duration_ms,
-      success: item.success === 1,
+      success: item.success == null ? null : (item.success === 1 || item.success === true),
+      exit_code: item.exit_code,
       error: item.error,
+      error_message: item.error_message,
+      error_type: item.error_type,
+      error_detail: item.error_detail,
+      output_snippet: item.output_snippet,
       seq: item.seq,
       parent_seq: item.parent_seq,
-      input_summary: item.input_summary ? JSON.parse(item.input_summary) : {},
+      input_summary: parseMaybeJson(item.input_summary || item.tool_input),
     }));
   } catch {
     return fetchJsonlLogs(projectKey, sessionId);
+  }
+}
+
+function parseMaybeJson(value) {
+  if (!value) return {};
+  if (typeof value === 'object') return value;
+  try {
+    const parsed = JSON.parse(value);
+    return typeof parsed === 'string' ? JSON.parse(parsed) : parsed;
+  } catch {
+    return {};
   }
 }
 

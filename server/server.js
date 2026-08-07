@@ -46,6 +46,10 @@ const DIR = fs.existsSync(path.join(__dirname, 'dist'))
         ? path.join(ROOT, 'dist')
         : ROOT;
 const PID_FILE = path.join(__dirname, '.server.pid');
+const PROJECT_REGISTRY_FILES = [
+    path.join(ROOT, 'projects.json'),
+    path.join(__dirname, 'projects.json'),
+];
 
 // ─── 彩色输出 ────────────────────────────────────────────────
 
@@ -297,6 +301,47 @@ async function main() {
 
     // ─── 创建 HTTP 服务器 ──────────────────────────────────────
 
+    function readMergedProjects() {
+        const projects = {};
+        for (const file of PROJECT_REGISTRY_FILES) {
+            try {
+                if (!fs.existsSync(file)) continue;
+                const content = fs.readFileSync(file, 'utf-8').trim();
+                if (!content) continue;
+                Object.assign(projects, JSON.parse(content));
+            } catch (_) {}
+        }
+        return projects;
+    }
+
+    function readFallbackFile(urlPath, callback) {
+        const candidates = [
+            path.resolve(path.join(ROOT, urlPath)),
+            path.resolve(path.join(__dirname, urlPath)),
+        ];
+
+        const readNext = (index) => {
+            if (index >= candidates.length) {
+                callback(new Error('ENOENT'));
+                return;
+            }
+
+            const candidate = candidates[index];
+            const base = index === 0 ? ROOT : __dirname;
+            if (!candidate.startsWith(path.resolve(base))) {
+                readNext(index + 1);
+                return;
+            }
+
+            fs.readFile(candidate, (err, content) => {
+                if (err) readNext(index + 1);
+                else callback(null, content);
+            });
+        };
+
+        readNext(0);
+    }
+
     const server = http.createServer((req, res) => {
         let urlPath = req.url.split('?')[0];
         const urlParams = new URL(req.url, `http://localhost:${PORT}`).searchParams;
@@ -369,6 +414,17 @@ async function main() {
         
         if (urlPath === '/') urlPath = '/index.html';
 
+        if (urlPath === '/projects.json') {
+            res.writeHead(200, {
+                'Content-Type': 'application/json; charset=utf-8',
+                'Cache-Control': 'no-cache',
+                'Access-Control-Allow-Origin': '*',
+            });
+            res.end(JSON.stringify(readMergedProjects()));
+            log(`  200 ${req.method} ${urlPath}`, 'green');
+            return;
+        }
+
         const filePath = path.resolve(path.join(DIR, urlPath));
         const ext = path.extname(filePath).toLowerCase();
         const contentType = mimeTypes[ext] || 'application/octet-stream';
@@ -383,24 +439,18 @@ async function main() {
         fs.readFile(filePath, (err, content) => {
             if (err) {
                 if (err.code === 'ENOENT') {
-                    // 回退到项目根目录（logs/、states/、projects.json 等数据文件）
-                    const rootPath = path.resolve(path.join(ROOT, urlPath));
-                    if (rootPath.startsWith(path.resolve(ROOT))) {
-                        fs.readFile(rootPath, (err2, content2) => {
-                            if (err2) {
-                                res.writeHead(404, { 'Content-Type': 'text/plain' });
-                                res.end('404 Not Found');
-                                log(`  404 ${req.method} ${urlPath}`, 'red');
-                            } else {
-                                res.writeHead(200, { 'Content-Type': contentType });
-                                res.end(content2);
-                                log(`  200 ${req.method} ${urlPath}`, 'green');
-                            }
-                        });
-                    } else {
-                        res.writeHead(404, { 'Content-Type': 'text/plain' });
-                        res.end('404 Not Found');
-                    }
+                    // 回退到项目根目录和 server 目录（logs/、states/ 等数据文件）
+                    readFallbackFile(urlPath, (err2, content2) => {
+                        if (err2) {
+                            res.writeHead(404, { 'Content-Type': 'text/plain' });
+                            res.end('404 Not Found');
+                            log(`  404 ${req.method} ${urlPath}`, 'red');
+                        } else {
+                            res.writeHead(200, { 'Content-Type': contentType });
+                            res.end(content2);
+                            log(`  200 ${req.method} ${urlPath}`, 'green');
+                        }
+                    });
                 } else {
                     res.writeHead(500, { 'Content-Type': 'text/plain' });
                     res.end('500 Internal Server Error');

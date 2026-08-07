@@ -246,6 +246,75 @@
 }
 
 /* ═══ 轮次分组 ═══ */
+.round-conversation {
+  @apply flex flex-col gap-2 px-4 py-3 border-b border-neutral-100 dark:border-neutral-800 bg-white dark:bg-neutral-900;
+}
+.round-workdir {
+  @apply inline-flex items-center gap-2 self-center max-w-full rounded-md bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-200 dark:border-neutral-700 px-2 py-1 text-[11px] text-neutral-500 dark:text-neutral-400;
+}
+.round-workdir code {
+  @apply min-w-0 truncate text-[11px] text-neutral-700 dark:text-neutral-200;
+}
+.chat-message {
+  @apply flex flex-col gap-1 max-w-[76%];
+}
+.chat-message.user {
+  @apply self-end items-end;
+}
+.chat-message.assistant {
+  @apply self-start items-start;
+}
+.chat-meta {
+  @apply text-[10px] font-medium text-neutral-400 dark:text-neutral-500 px-1;
+}
+.chat-bubble {
+  @apply text-[13px] leading-snug whitespace-pre-wrap break-words px-3 py-2 border;
+}
+.chat-bubble.user {
+  @apply rounded-2xl rounded-br-md bg-primary-600 text-white border-primary-600 dark:bg-primary-500 dark:border-primary-500 dark:text-neutral-950;
+}
+.chat-bubble.assistant {
+  @apply rounded-2xl rounded-bl-md bg-neutral-50 dark:bg-neutral-800/70 border-neutral-200 dark:border-neutral-700 text-neutral-800 dark:text-neutral-100;
+}
+.chat-bubble .muted {
+  @apply text-white/70 dark:text-neutral-950/60;
+}
+.round-tools {
+  @apply border-b border-neutral-100 dark:border-neutral-800 bg-neutral-50/70 dark:bg-neutral-900/60;
+}
+.round-tools-toggle {
+  @apply w-full flex items-center justify-between gap-3 px-4 py-2 text-left hover:bg-neutral-100/70 dark:hover:bg-neutral-800/50 transition-colors;
+}
+.round-tools-title {
+  @apply inline-flex items-center gap-2 text-sm font-medium text-neutral-700 dark:text-neutral-200;
+}
+.round-tools-chevron {
+  @apply inline-block text-neutral-400 transition-transform;
+}
+.round-tools:not(.collapsed) .round-tools-chevron {
+  transform: rotate(90deg);
+}
+.round-tools-summary {
+  @apply text-xs text-neutral-500 dark:text-neutral-400 flex-shrink-0;
+}
+.round-tools-body {
+  @apply px-4 pb-3;
+}
+.round-tools.collapsed .round-tools-body {
+  @apply hidden;
+}
+.round-tools-filter {
+  @apply inline-flex items-center gap-2 mb-2 text-xs text-neutral-500 dark:text-neutral-400 select-none cursor-pointer;
+}
+.round-tools-filter input {
+  @apply w-3.5 h-3.5;
+}
+.round-tools[data-errors-only="true"] .call-item[data-call-error="false"] {
+  @apply hidden;
+}
+.round-tools .call-item {
+  @apply ml-0;
+}
 .round-header {
   @apply flex items-start gap-3 px-4 py-3 border-b border-neutral-100 dark:border-neutral-800 bg-neutral-50/70 dark:bg-neutral-800/30 border-l-[3px] border-l-transparent ml-4;
 }
@@ -277,7 +346,7 @@
   @apply text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed truncate;
 }
 .round-calls {
-  @apply ml-4;
+  @apply ml-0;
 }
 
 /* ═══ 执行概览 ═══ */

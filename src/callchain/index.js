@@ -385,7 +385,7 @@ function renderCall(call, index, projectPath, sourceColor = '') {
   const toolName = call.tool_name || call.name || '未知';
   const type = getToolType(toolName);
   const duration = formatDuration(call.duration_ms);
-  const isError = call.error === true || call.success === false || (call.exit_code != null && call.exit_code !== 0);
+  const isError = call.error === true || call.success === false || call.success === 0 || (call.exit_code != null && call.exit_code !== 0);
   const isSlow = call.duration_ms > 5000;
   const depth = call._depth || 0;
   const exitCode = call.exit_code != null ? call.exit_code : (call.success === 0 ? 1 : 0);
@@ -410,7 +410,7 @@ function renderCall(call, index, projectPath, sourceColor = '') {
   const detailContent = renderCallDetail(call, sourceColor);
 
   return `
-    <div class="${itemClass}">
+    <div class="${itemClass}" data-call-error="${isError ? 'true' : 'false'}">
     <div class="call-row" style="padding-left:${16 + depth * 20}px" onclick="toggleCallDetail(this)">
       <span class="tool-badge ${type}">${escapeHtml(toolName)}</span>
       <span class="call-main">
@@ -548,27 +548,36 @@ function renderRound(round, index, sourceColor = '') {
   const roundSource = round.toolCalls.find(c => c.source)?.source
     || round.assistantMessages.find(m => m.source)?.source
     || '';
-  const sc = sourceColors[roundSource] || {};
-  const borderStyle = sc.light
-    ? `border-left:3px solid ${sc.light}`
-    : '';
 
-  // 轮次头
+  const roundId = `round-tools-${index}-${Math.random().toString(36).slice(2, 8)}`;
+  const workdir = getRoundWorkdir(round);
+  const workdirLabel = workdir ? formatWorkdir(workdir) : '';
+
+  parts.push(`<div class="round-conversation">`);
+
+  if (workdirLabel) {
+    parts.push(`
+      <div class="round-workdir" title="${escapeHtml(workdir)}">
+        <span>工作目录</span>
+        <code>${escapeHtml(workdirLabel)}</code>
+      </div>
+    `);
+  }
+
+  // 用户气泡
   const userContent = round.userMessage
     ? extractUserText(round.userMessage)
     : '';
   parts.push(`
-    <div class="round-header" style="${borderStyle}">
-      <span class="round-badge">${index + 1}</span>
-      <div class="round-main">
-        <div class="round-label">用户问题</div>
-        ${userContent ? `<div class="round-user-msg">${escapeHtml(truncate(userContent, 160))}</div>` : '<div class="round-user-msg muted">无用户消息</div>'}
+    <div class="chat-message user">
+      <div class="chat-meta">用户 · 第 ${index + 1} 轮</div>
+      <div class="chat-bubble user">
+        ${userContent ? escapeHtml(userContent) : '<span class="muted">无用户消息</span>'}
       </div>
-      ${round.toolCalls.length > 0 ? `<span class="round-call-count">${round.toolCalls.length} 次调用</span>` : ''}
     </div>
   `);
 
-  // AI 回复
+  // AI 气泡
   const assistantTexts = [];
   for (const msg of round.assistantMessages) {
     const text = extractAssistantText(msg);
@@ -576,18 +585,44 @@ function renderRound(round, index, sourceColor = '') {
   }
   if (assistantTexts.length) {
     parts.push(`
-      <div class="round-assistant">
-        <div class="round-assistant-label">AI 回复</div>
-        <div class="round-assistant-text">${escapeHtml(truncate(assistantTexts.join(' '), 260))}</div>
+      <div class="chat-message assistant">
+        <div class="chat-meta">AI</div>
+        <div class="chat-bubble assistant">${escapeHtml(assistantTexts.join('\n\n'))}</div>
       </div>
     `);
   }
 
-  // 工具调用（树形）
+  parts.push(`</div>`);
+
+  // 工具调用（默认折叠）
   if (round.toolCalls.length > 0) {
     const tree = buildTree(round.toolCalls);
     const rendered = tree.map((call, i) => renderCall(call, i, '', sourceColor)).join('');
-    parts.push(`<div class="round-calls" style="border-left:3px solid ${sourceColor}">${rendered}</div>`);
+    const errorCount = round.toolCalls.filter(call => (
+      call.error === true
+      || call.success === false
+      || call.success === 0
+      || call.error_message
+      || (call.exit_code != null && call.exit_code !== 0)
+    )).length;
+    parts.push(`
+      <div class="round-tools collapsed" id="${roundId}" data-errors-only="false">
+        <button class="round-tools-toggle" type="button" onclick="toggleRoundTools('${roundId}')">
+          <span class="round-tools-title">
+            <span class="round-tools-chevron">›</span>
+            工具调用详情
+          </span>
+          <span class="round-tools-summary">${round.toolCalls.length} 次调用${errorCount ? ` · ${errorCount} 个报错` : ''}</span>
+        </button>
+        <div class="round-tools-body">
+          <label class="round-tools-filter" onclick="event.stopPropagation()">
+            <input type="checkbox" onchange="toggleRoundErrorFilter('${roundId}', this.checked)">
+            只显示报错调用
+          </label>
+          <div class="round-calls">${rendered}</div>
+        </div>
+      </div>
+    `);
   }
 
   return parts.join('');
@@ -612,6 +647,24 @@ function extractUserText(call) {
 /** 从 assistant 消息中提取文本 */
 function extractAssistantText(call) {
   return extractUserText(call);
+}
+
+function getRoundWorkdir(round) {
+  const candidates = [
+    round.userMessage,
+    ...round.assistantMessages,
+    ...round.toolCalls,
+  ];
+  const match = candidates.find(call => call?.project_cwd || call?.cwd);
+  return match?.project_cwd || match?.cwd || '';
+}
+
+function formatWorkdir(cwd) {
+  if (!cwd) return '';
+  const normalized = String(cwd).replace(/\\/g, '/');
+  const parts = normalized.split('/').filter(Boolean);
+  if (parts.length <= 2) return cwd;
+  return `${parts.at(-2)}/${parts.at(-1)}`;
 }
 
 /** 解析 tool_input（兼容字符串、对象、双重 JSON） */
@@ -839,4 +892,16 @@ window.toggleCallDetail = function (rowEl) {
   const detail = rowEl.parentElement.querySelector('.call-detail');
   if (!detail) return;
   detail.classList.toggle('hidden');
+};
+
+window.toggleRoundTools = function (roundId) {
+  const panel = document.getElementById(roundId);
+  if (!panel) return;
+  panel.classList.toggle('collapsed');
+};
+
+window.toggleRoundErrorFilter = function (roundId, checked) {
+  const panel = document.getElementById(roundId);
+  if (!panel) return;
+  panel.dataset.errorsOnly = checked ? 'true' : 'false';
 };

@@ -17,6 +17,13 @@ function resolvePath(envKey, platformDefault) {
     return platformDefault;
 }
 
+function firstExistingPath(paths, fallback) {
+    for (const p of paths) {
+        if (p && fs.existsSync(p)) return p;
+    }
+    return fallback;
+}
+
 // ─── Hermes ──────────────────────────────────────────────
 // Linux/macOS: ~/.hermes/state.db
 // Windows:     %LOCALAPPDATA%\hermes\state.db
@@ -35,11 +42,17 @@ const opencodeHome = IS_WIN
 
 // ─── Pi ──────────────────────────────────────────────────
 // Linux/macOS: ~/.pi/agent/sessions
-// Windows:     %APPDATA%\pi\agent\sessions
+// Windows:     prefers ~/.pi/agent/sessions, falls back to %APPDATA%\pi and %LOCALAPPDATA%\pi
 // Override:    PI_HOME
-const piHome = IS_WIN
-    ? resolvePath('PI_HOME', path.join(process.env.APPDATA || path.join(HOME, 'AppData', 'Roaming'), 'pi'))
-    : resolvePath('PI_HOME', path.join(HOME, '.pi'));
+const winPiCandidates = [
+    path.join(HOME, '.pi'),
+    path.join(process.env.APPDATA || path.join(HOME, 'AppData', 'Roaming'), 'pi'),
+    path.join(process.env.LOCALAPPDATA || path.join(HOME, 'AppData', 'Local'), 'pi'),
+];
+const piHome = resolvePath(
+    'PI_HOME',
+    IS_WIN ? firstExistingPath(winPiCandidates, winPiCandidates[0]) : path.join(HOME, '.pi')
+);
 
 // ─── agent-trace (self) ─────────────────────────────────
 // 所有平台: ~/.agent-trace

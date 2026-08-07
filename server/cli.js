@@ -104,7 +104,11 @@ function copyDir(src, dest) {
 // ─── PID 管理 ────────────────────────────────────────────────────
 
 function getPidFile(baseDir) {
-    return path.join(baseDir, '.server.pid');
+    const primary = path.join(baseDir, '.server.pid');
+    const devServerPid = path.join(baseDir, 'server', '.server.pid');
+    if (fs.existsSync(primary)) return primary;
+    if (fs.existsSync(devServerPid)) return devServerPid;
+    return primary;
 }
 
 function readPid(baseDir) {

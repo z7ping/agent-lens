@@ -48,42 +48,81 @@ class PiAdapter extends BaseAdapter {
             for (const filePath of jsonlFiles) {
                 try {
                     const lines = fs.readFileSync(filePath, 'utf-8').trim().split('\n').filter(Boolean);
+                    const entries = lines.map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
                     let sessionMeta = null;
 
-                    for (const line of lines) {
+                    for (const entry of entries) {
                         try {
-                            const entry = JSON.parse(line);
-
                             // 提取 session 元数据
                             if (entry.type === 'session') {
                                 sessionMeta = entry;
                                 continue;
                             }
 
+                            if (entry.type !== 'message' || !entry.message) continue;
+
+                            const role = entry.message.role;
+                            const content = Array.isArray(entry.message.content) ? entry.message.content : [];
+                            const cwd = sessionMeta?.cwd || process.cwd();
+                            const sid = sessionMeta?.id || entry.sessionId || '';
+                            const projectKeyForCwd = this.getProjectKey(cwd);
+                            const projectNameForCwd = this.getProjectName(cwd);
+
+                            if (sessionId && sid !== sessionId) continue;
+                            if (projectKey) {
+                                if (projectKeyForCwd !== projectKey) continue;
+                            }
+
+                            this.updateProjectsFile(projectKeyForCwd, cwd, projectNameForCwd);
+
+                            if (role === 'user') {
+                                records.push({
+                                    ts: entry.timestamp || '',
+                                    session_id: sid,
+                                    project_key: projectKeyForCwd,
+                                    project_name: projectNameForCwd,
+                                    cwd,
+                                    source: this.name,
+                                    role: 'user',
+                                    content: this._extractText(content),
+                                    success: null,
+                                });
+                                continue;
+                            }
+
+                            if (role === 'assistant') {
+                                const assistantText = this._extractText(content);
+                                if (assistantText) {
+                                    records.push({
+                                        ts: entry.timestamp || '',
+                                        session_id: sid,
+                                        project_key: projectKeyForCwd,
+                                        project_name: projectNameForCwd,
+                                        cwd,
+                                        source: this.name,
+                                        role: 'assistant',
+                                        content: assistantText,
+                                        success: null,
+                                    });
+                                }
+                            }
+
                             // 提取工具调用
-                            if (entry.type === 'message' && entry.message?.role === 'assistant') {
-                                const content = entry.message.content || [];
+                            if (role === 'assistant') {
                                 for (const block of content) {
                                     if (block.type !== 'toolCall') continue;
 
                                     const toolName = block.name || 'unknown';
                                     const args = block.arguments || {};
-                                    const cwd = sessionMeta?.cwd || process.cwd();
-                                    const sid = sessionMeta?.id || '';
-
-                                    // 过滤
-                                    if (sessionId && sid !== sessionId) continue;
-                                    if (projectKey) {
-                                        const pk = this.getProjectKey(cwd);
-                                        if (pk !== projectKey) continue;
-                                    }
 
                                     // 估算耗时：用 timestamp 差值
                                     let durationMs = null;
                                     // 查找对应的 toolResult
-                                    const toolResult = lines
-                                        .map(l => { try { return JSON.parse(l); } catch { return null; } })
-                                        .find(e => e.type === 'message' && e.message?.role === 'tool' && e.message?.toolCallId === block.id);
+                                    const toolResult = entries.find(e =>
+                                        e.type === 'message'
+                                        && (e.message?.role === 'tool' || e.message?.role === 'toolResult')
+                                        && e.message?.toolCallId === block.id
+                                    );
                                     if (toolResult && entry.timestamp && toolResult.timestamp) {
                                         durationMs = Math.round((new Date(toolResult.timestamp) - new Date(entry.timestamp)));
                                     }
@@ -91,12 +130,15 @@ class PiAdapter extends BaseAdapter {
                                     const record = {
                                         ts: entry.timestamp || '',
                                         session_id: sid,
-                                        project_key: this.getProjectKey(cwd),
-                                        project_name: this.getProjectName(cwd),
+                                        project_key: projectKeyForCwd,
+                                        project_name: projectNameForCwd,
+                                        cwd,
                                         tool_name: toolName,
                                         source: this.name,
+                                        role: toolResult?.message?.isError ? 'tool_error' : 'tool_result',
                                         input_summary: this._summarizeInput(toolName, args),
-                                        success: true, // Pi 不报告错误状态
+                                        success: !toolResult?.message?.isError,
+                                        output_snippet: toolResult ? this._extractText(toolResult.message?.content || []) : null,
                                     };
 
                                     if (durationMs !== null && durationMs >= 0) {
@@ -112,9 +154,23 @@ class PiAdapter extends BaseAdapter {
             }
         }
 
-        // 按时间倒序
+        // 按时间倒序，返回最新记录
         records.sort((a, b) => (b.ts || '').localeCompare(a.ts || ''));
-        return records.slice(-limit);
+        return records.slice(0, limit);
+    }
+
+    _extractText(content) {
+        const blocks = Array.isArray(content) ? content : [content];
+        return blocks
+            .map(block => {
+                if (!block) return '';
+                if (typeof block === 'string') return block;
+                if (block.type === 'text') return block.text || '';
+                if (block.type === 'thinking') return block.thinking || '';
+                return '';
+            })
+            .filter(Boolean)
+            .join('\n\n');
     }
 
     _summarizeInput(toolName, input) {
@@ -153,47 +209,72 @@ class PiAdapter extends BaseAdapter {
             for (const record of newRecords) {
                 this._aggregateToDb(record);
             }
+            this._upsertSessions(newRecords);
         }
+    }
+
+    _upsertSessions(records) {
+        try {
+            const abeatDb = require('../abeat-db');
+            const sessions = new Map();
+            for (const record of records) {
+                if (!record.session_id) continue;
+                const isTool = record.role === 'tool_result' || record.role === 'tool_error' || record.tool_name;
+                if (!sessions.has(record.session_id)) {
+                    sessions.set(record.session_id, {
+                        session_id: record.session_id,
+                        project_key: record.project_key || '',
+                        source: 'pi',
+                        start_time: record.ts || '',
+                        end_time: record.ts || '',
+                        tool_count: 0,
+                        error_count: 0,
+                        total_duration_ms: 0,
+                    });
+                }
+                const session = sessions.get(record.session_id);
+                if (record.ts && (!session.start_time || record.ts < session.start_time)) session.start_time = record.ts;
+                if (record.ts && (!session.end_time || record.ts > session.end_time)) session.end_time = record.ts;
+                if (isTool) {
+                    session.tool_count += 1;
+                    if (!record.success) session.error_count += 1;
+                    session.total_duration_ms += record.duration_ms || 0;
+                }
+            }
+            for (const session of sessions.values()) {
+                abeatDb.upsertSession(session);
+            }
+        } catch (_) {}
     }
 
     _aggregateToDb(record) {
         try {
             const abeatDb = require('../abeat-db');
             const date = (record.ts || '').slice(0, 10);
-            abeatDb.updateDailyStats(date, 'pi', record.tool_name, 1, 0, record.duration_ms || 0);
-            if (record.session_id) {
-                const existingDuration = abeatDb.getSessionDuration(record.session_id);
-                abeatDb.upsertSession({
-                    session_id: record.session_id,
-                    project_key: record.project_key || '',
-                    source: 'pi',
-                    start_time: record.ts,
-                    end_time: record.ts,
-                    tool_count: 1,
-                    error_count: 0,
-                    total_duration_ms: existingDuration + (record.duration_ms || 0),
-                });
-                // 写入 timeline 表，让前端能展开查看调用详情
-                abeatDb.insertTimeline({
-                    source: 'pi',
-                    session_id: record.session_id,
-                    timestamp: record.ts || '',
-                    seq: null,
-                    role: 'tool_result',
-                    tool_name: record.tool_name || null,
-                    content: null,
-                    tool_input: record.input_summary ? JSON.stringify(record.input_summary) : null,
-                    success: record.success != null ? (record.success ? 1 : 0) : 1,
-                    exit_code: null,
-                    duration_ms: record.duration_ms ?? null,
-                    output_snippet: null,
-                    error_message: null,
-                    error_type: null,
-                    error_detail: null,
-                    project_key: record.project_key || null,
-                    parent_seq: null,
-                });
+            const isTool = record.role === 'tool_result' || record.role === 'tool_error' || record.tool_name;
+            if (isTool) {
+                abeatDb.updateDailyStats(date, 'pi', record.tool_name, 1, record.success ? 0 : 1, record.duration_ms || 0);
             }
+            // 写入 timeline 表，让前端能展开查看调用详情
+            abeatDb.insertTimeline({
+                source: 'pi',
+                session_id: record.session_id,
+                timestamp: record.ts || '',
+                seq: null,
+                role: record.role || (record.success === false ? 'tool_error' : 'tool_result'),
+                tool_name: record.tool_name || null,
+                content: record.content || null,
+                tool_input: record.input_summary ? JSON.stringify(record.input_summary) : null,
+                success: record.success == null ? null : (record.success ? 1 : 0),
+                exit_code: null,
+                duration_ms: record.duration_ms ?? null,
+                output_snippet: record.output_snippet || null,
+                error_message: record.success === false ? (record.output_snippet || null) : null,
+                error_type: null,
+                error_detail: null,
+                project_key: record.project_key || null,
+                parent_seq: null,
+            });
         } catch (_) {}
     }
 
