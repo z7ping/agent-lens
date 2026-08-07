@@ -10,6 +10,7 @@ const BaseAdapter = require('./base');
 
 const { pi: { sessionsDir: PI_SESSIONS_DIR } } = require('../paths');
 const POLL_INTERVAL_MS = parseInt(process.env.PI_POLL_INTERVAL_MS, 10) || 30 * 60 * 1000;
+const POLL_RECORD_LIMIT = parseInt(process.env.PI_POLL_RECORD_LIMIT, 10) || 10000;
 
 class PiAdapter extends BaseAdapter {
     constructor() {
@@ -195,7 +196,7 @@ class PiAdapter extends BaseAdapter {
 
     async _pollOnce() {
         const now = Date.now();
-        const records = await this.getRecords({ limit: 200 });
+        const records = await this.getRecords({ limit: POLL_RECORD_LIMIT });
 
         // 只处理新记录（通过 timestamp 水位线）
         const newRecords = records.filter(r => {

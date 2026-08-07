@@ -24,6 +24,10 @@ function firstExistingPath(paths, fallback) {
     return fallback;
 }
 
+function pickFirstExistingPath(paths, fallback) {
+    return firstExistingPath(paths, fallback);
+}
+
 // ─── Hermes ──────────────────────────────────────────────
 // Linux/macOS: ~/.hermes/state.db
 // Windows:     %LOCALAPPDATA%\hermes\state.db
@@ -36,9 +40,17 @@ const hermesHome = IS_WIN
 // Linux/macOS: ~/.local/share/opencode/opencode.db  (XDG)
 // Windows:     %APPDATA%\opencode\opencode.db
 // Override:    OPENCODE_HOME
-const opencodeHome = IS_WIN
-    ? resolvePath('OPENCODE_HOME', path.join(process.env.APPDATA || path.join(HOME, 'AppData', 'Roaming'), 'opencode'))
-    : resolvePath('OPENCODE_HOME', path.join(HOME, '.local', 'share', 'opencode'));
+const winOpenCodeCandidates = [
+    path.join(process.env.APPDATA || path.join(HOME, 'AppData', 'Roaming'), 'opencode'),
+    path.join(process.env.LOCALAPPDATA || path.join(HOME, 'AppData', 'Local'), 'opencode'),
+    path.join(HOME, '.local', 'share', 'opencode'),
+    path.join(HOME, '.opencode'),
+];
+const winOpenCodeDbCandidates = winOpenCodeCandidates.map(p => path.join(p, 'opencode.db'));
+const opencodeHome = resolvePath(
+    'OPENCODE_HOME',
+    IS_WIN ? path.dirname(firstExistingPath(winOpenCodeDbCandidates, winOpenCodeDbCandidates[0])) : path.join(HOME, '.local', 'share', 'opencode')
+);
 
 // ─── Pi ──────────────────────────────────────────────────
 // Linux/macOS: ~/.pi/agent/sessions
@@ -76,4 +88,5 @@ module.exports = {
     agentTrace: {
         home: agentTraceHome,
     },
+    pickFirstExistingPath,
 };
