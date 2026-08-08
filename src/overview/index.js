@@ -1,7 +1,10 @@
 import { escapeHtml } from '../config.js';
 import { fetchOverview } from '../utils.js';
+import { filterOverviewTools } from '../ui-state.mjs';
 
 let overviewLoaded = false;
+let overviewData = null;
+let currentOverviewSource = '';
 const OVERVIEW_CACHE_KEY = 'agent-trace-overview-cache-v1';
 const OVERVIEW_REFRESH_MS = 60000;
 const STABLE_TOOLS = [
@@ -53,7 +56,14 @@ export function initOverview() {
 }
 
 export async function loadOverview(options = {}) {
-  if (overviewLoaded && !options.force) return;
+  const nextSource = options.source !== undefined ? options.source : currentOverviewSource;
+  const sourceChanged = nextSource !== currentOverviewSource;
+  currentOverviewSource = nextSource;
+  if (overviewLoaded && !options.force && !sourceChanged) return;
+  if (overviewLoaded && !options.force && sourceChanged && overviewData) {
+    renderOverview(overviewData);
+    return;
+  }
   const loading = document.getElementById('overviewLoading');
   const empty = document.getElementById('overviewEmpty');
   const content = document.getElementById('overviewContent');
@@ -75,6 +85,7 @@ export async function loadOverview(options = {}) {
   }
 
   renderOverview(data);
+  overviewData = data;
   writeCachedOverview(data);
   content?.classList.remove('hidden');
   empty?.classList.add('hidden');
@@ -83,9 +94,10 @@ export async function loadOverview(options = {}) {
 
 function renderOverview(data) {
   const tools = data.tools || [];
+  const focusedTools = filterOverviewTools(tools, currentOverviewSource);
   const cards = document.getElementById('overviewToolCards');
   const matrix = document.getElementById('overviewMatrix');
-  if (cards) cards.innerHTML = tools.map(renderToolCard).join('');
+  if (cards) cards.innerHTML = focusedTools.map(renderToolCard).join('');
   if (matrix) matrix.innerHTML = renderMatrix(data.capability_matrix || [], tools);
 }
 

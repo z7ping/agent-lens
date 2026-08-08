@@ -7,6 +7,7 @@ import { fetchProjects, fetchSessions, fetchSessionLogs, checkHookStatus, fetchS
 import { renderCallChain } from './callchain/index.js';
 import { initDashboard, loadDashboardData } from './dashboard/index.js';
 import { initOverview, loadOverview } from './overview/index.js';
+import { getExpandAllAction, shouldShowToolType } from './ui-state.mjs';
 
 // ─── 全局状态 ───────────────────────────────────────
 let currentTab = 'callchain';
@@ -66,18 +67,9 @@ async function initProjects() {
   });
   select.addEventListener('change', () => {
     currentProject = select.value;
-    // 重置来源过滤
-    currentTool = 'all';
-    document.querySelectorAll('.tool-tab').forEach(tab => {
-      tab.classList.toggle('active', tab.dataset.tool === 'all');
-    });
-    // 重置工具类型过滤
-    document.querySelectorAll('.filter-chip-sm').forEach(chip => {
-      chip.classList.toggle('active', chip.dataset.filter === 'all');
-    });
     updateFilterSummary();
     loadCallChain();
-    loadDashboardData(currentProject, undefined, '');
+    loadDashboardData(currentProject, undefined, currentTool === 'all' ? '' : currentTool);
   });
 }
 
@@ -103,13 +95,15 @@ window.switchTab = function (tab) {
   document.getElementById('tab-overview')?.classList.toggle('active', tab === 'overview');
   // 调用链操作区
   document.getElementById('callchainActions')?.classList.toggle('hidden', tab !== 'callchain');
+  document.getElementById('toolFilters')?.classList.toggle('hidden', tab !== 'callchain');
+  document.getElementById('filterSummary')?.classList.toggle('hidden', tab !== 'callchain');
 
   // 切换到仪表盘时加载数据（带上当前工具来源过滤）
   if (tab === 'dashboard') {
     loadDashboardData(currentProject, undefined, currentTool === 'all' ? '' : currentTool);
   }
   if (tab === 'overview') {
-    loadOverview();
+    loadOverview({ source: currentTool === 'all' ? '' : currentTool });
   }
 };
 
@@ -123,6 +117,9 @@ window.selectTool = function (tool) {
   updateFilterSummary();
   if (currentTab === 'dashboard') {
     loadDashboardData(currentProject, undefined, tool === 'all' ? '' : tool);
+  }
+  if (currentTab === 'overview') {
+    loadOverview({ force: true, source: tool === 'all' ? '' : tool });
   }
 };
 
@@ -189,6 +186,7 @@ async function loadCallChain() {
     const sessions = data.items || [];
 
     renderCallChain(sessions);
+    applyFilters();
     updateStatusFromSessions(sessions);
   } catch {
     renderCallChain([]);
@@ -205,16 +203,17 @@ window.filterTool = function (type) {
 };
 
 // ─── 组合过滤（仅工具类型）──────────────────────────
-function applyFilters() {
+function applyFilters(root = document) {
   const activeTool = document.querySelector('.filter-chip-sm.active')?.dataset.filter || 'all';
 
-  document.querySelectorAll('.call-row').forEach(row => {
+  root.querySelectorAll('.call-row').forEach(row => {
     const rowBadge = row.querySelector('.tool-badge');
-    const rowType = rowBadge ? [...rowBadge.classList].find(c => ['bash', 'read', 'write', 'mcp', 'agent'].includes(c)) || '' : '';
-    const matchTool = activeTool === 'all' || rowType === activeTool;
-    row.style.display = matchTool ? '' : 'none';
+    const rowType = rowBadge ? [...rowBadge.classList].find(c => ['bash', 'read', 'write', 'mcp', 'agent', 'other'].includes(c)) || '' : '';
+    row.style.display = shouldShowToolType(rowType, activeTool) ? '' : 'none';
   });
 }
+
+window.applyToolFilters = applyFilters;
 
 function updateFilterSummary() {
   const el = document.getElementById('filterSummary');
@@ -382,6 +381,7 @@ async function loadSessionCalls(card) {
       // 动态导入 renderCallChain 中的 renderCall 函数
       const { renderCallChainCalls } = await import('./callchain/index.js');
       body.innerHTML = renderCallChainCalls(calls);
+      applyFilters(body);
     }
     body.dataset.loaded = '1';
   } catch {
@@ -391,24 +391,26 @@ async function loadSessionCalls(card) {
 
 window.toggleAllSessions = function () {
   const cards = document.querySelectorAll('.session-card');
-  const allHidden = Array.from(cards).every(card => {
+  const action = getExpandAllAction(Array.from(cards).map(card => {
     const body = card.querySelector('.session-body');
-    return body && body.classList.contains('hidden');
-  });
+    return !!body && !body.classList.contains('hidden');
+  }));
+  const shouldExpand = action === 'expand';
   const toLoad = [];
   cards.forEach(card => {
     const body = card.querySelector('.session-body');
     const arrow = card.querySelector('.session-arrow');
     if (body) {
-      if (allHidden) {
+      if (shouldExpand) {
         body.classList.remove('hidden');
         if (!body.dataset.loaded) toLoad.push(card);
       } else {
         body.classList.add('hidden');
+        card.classList.remove('selected');
       }
     }
     if (arrow) {
-      arrow.style.transform = allHidden ? 'rotate(90deg)' : '';
+      arrow.style.transform = shouldExpand ? 'rotate(90deg)' : '';
     }
   });
   // ponytail: batch load, 5 per batch, 300ms delay. 原来是 100 个并发
@@ -422,7 +424,7 @@ window.toggleAllSessions = function () {
   }
   // 更新按钮文字
   const btn = document.getElementById('expandAllBtn');
-  if (btn) btn.textContent = allHidden ? '折叠全部' : '展开全部';
+  if (btn) btn.textContent = shouldExpand ? '折叠全部' : '展开全部';
 };
 
 // 暴露 loadSessionCalls 到全局作用域，供 callchain 模块使用

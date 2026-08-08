@@ -1014,6 +1014,7 @@ window.toggleRoundTools = function (roundId) {
       const { nodes, sourceColor } = roundToolsCache.get(roundId);
       callsEl.innerHTML = nodes.map((call, i) => renderCall(call, i, '', sourceColor)).join('');
       callsEl.dataset.loaded = '1';
+      if (window.applyToolFilters) window.applyToolFilters(callsEl);
     }
   }
 };

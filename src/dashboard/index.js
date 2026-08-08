@@ -4,12 +4,14 @@
 
 import { escapeHtml, formatDuration } from '../config.js';
 import { fetchToolMap } from '../utils.js';
+import { isLatestRequest } from '../ui-state.mjs';
 
 let currentTimeRange = 'week';
 let currentProject = '';
 let currentSource = '';
 let currentToolMap = null;
 let selectedToolKey = '';
+let dashboardRequestId = 0;
 
 const typeLabels = {
   cli: 'CLI',
@@ -34,18 +36,27 @@ export function initDashboard() {
 
 export async function loadDashboardData(project, timeRange, source) {
   try {
+    const requestId = ++dashboardRequestId;
     if (project !== undefined) currentProject = project;
     if (timeRange) currentTimeRange = timeRange;
     if (source !== undefined) currentSource = source;
+    renderLoadingState();
 
     const data = await fetchToolMap(currentProject, currentSource, currentTimeRange);
+    if (!isLatestRequest(requestId, dashboardRequestId)) return;
     currentToolMap = data;
     selectedToolKey = '';
 
     const hasData = !!data && Array.isArray(data.items) && data.items.length > 0;
     document.getElementById('dashboardEmpty')?.classList.toggle('hidden', hasData);
     document.getElementById('dashboardContent')?.classList.toggle('hidden', !hasData);
-    if (!hasData) return;
+    if (!hasData) {
+      renderSummary({ total_tools: 0, high_value_tools: 0, high_risk_tools: 0, workflow_candidates: 0 });
+      renderToolTable([]);
+      renderWorkflowPatterns([]);
+      renderToolDetail(null);
+      return;
+    }
 
     renderSummary(data.summary || {});
     renderToolTable(data.items || []);
@@ -54,6 +65,12 @@ export async function loadDashboardData(project, timeRange, source) {
   } catch (e) {
     console.error('[ToolMap] loadDashboardData error:', e);
   }
+}
+
+function renderLoadingState() {
+  const table = document.getElementById('toolMapTable');
+  if (table) table.innerHTML = '<div class="text-sm text-neutral-400 py-6 text-center">加载中...</div>';
+  renderToolDetail(null);
 }
 
 function renderSummary(summary) {
