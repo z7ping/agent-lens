@@ -9,6 +9,7 @@ const Database = require('better-sqlite3');
 const {
   buildOverview,
   discoverCodexAssets,
+  discoverHermesAssets,
   discoverPiAssets,
   readOverviewInventory,
   refreshOverviewInventory,
@@ -131,6 +132,41 @@ test('orders overview tools by product default order in API payload', () => {
   });
 
   assert.deepEqual(overview.tools.map(tool => tool.tool), ['pi', 'codex', 'cursor']);
+});
+
+test('discovers Hermes skills, plugins, MCP servers and toolsets across config roots', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-trace-hermes-'));
+  const homeDir = path.join(tmp, 'home');
+  const runtimeDir = path.join(homeDir, 'AppData', 'Local', 'hermes');
+  const userConfigDir = path.join(homeDir, '.hermes');
+  const skillDir = path.join(runtimeDir, 'skills', 'software-development', 'test-driven-development');
+  const pluginDir = path.join(runtimeDir, 'plugins', 'clawd-on-desk');
+  const mcpDir = path.join(userConfigDir, 'mcp-servers', 'toolbox');
+  fs.mkdirSync(skillDir, { recursive: true });
+  fs.mkdirSync(pluginDir, { recursive: true });
+  fs.mkdirSync(mcpDir, { recursive: true });
+  fs.writeFileSync(path.join(skillDir, 'SKILL.md'), '---\nname: test-driven-development\n---\n', 'utf-8');
+  fs.writeFileSync(path.join(pluginDir, 'plugin.yaml'), 'name: clawd-on-desk\n', 'utf-8');
+  fs.writeFileSync(path.join(runtimeDir, 'config.yaml'), `
+mcp_servers:
+  codegraph:
+    command: codegraph
+toolsets:
+  - hermes-cli
+platform_toolsets:
+  cli:
+    - mcp-codegraph
+`, 'utf-8');
+
+  const assets = discoverHermesAssets(runtimeDir, { homeDir });
+  const namesByType = new Map(assets.map(asset => [`${asset.type}:${asset.name}`, asset]));
+
+  assert.equal(namesByType.get('skill:software-development:test-driven-development').path, path.join(skillDir, 'SKILL.md'));
+  assert.equal(namesByType.get('plugin:clawd-on-desk').path, pluginDir);
+  assert.equal(namesByType.get('mcp:codegraph').path, path.join(runtimeDir, 'config.yaml'));
+  assert.equal(namesByType.get('mcp:toolbox').path, mcpDir);
+  assert.equal(namesByType.get('builtin:hermes-cli').path, path.join(runtimeDir, 'config.yaml'));
+  assert.equal(namesByType.get('builtin:mcp-codegraph').path, path.join(runtimeDir, 'config.yaml'));
 });
 
 test('builds a capability matrix for high-frequency assets across tools', () => {

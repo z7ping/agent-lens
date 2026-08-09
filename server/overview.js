@@ -3,6 +3,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { DEFAULT_OVERVIEW_SCAN_INTERVAL_MS } = require('./config');
+const { hermes: HERMES_PATHS } = require('./paths');
 
 const ASSET_TYPES = ['skill', 'mcp', 'plugin', 'extension', 'hook', 'adapter', 'builtin'];
 
@@ -76,7 +77,7 @@ const TOOL_DEFINITIONS = [
         tool: 'hermes',
         display_name: 'Hermes',
         description: 'Hermes 编码智能体历史数据源。',
-        config_dir: path.join(os.homedir(), '.hermes'),
+        config_dir: HERMES_PATHS.home,
         order: 50,
         links: {},
         theme: { accent: '#8b5cf6', surface: '#f5f3ff' },
@@ -359,6 +360,89 @@ function discoverGenericAssets(configDir) {
     return [
         ...scanJsonKeys(path.join(configDir, 'config.json'), 'mcp', 'AI tool'),
         ...scanNamedDirectories(path.join(configDir, 'plugins'), 'plugin', 'installed'),
+    ];
+}
+
+function readYamlSectionNames(file, sectionName) {
+    try {
+        if (!fs.existsSync(file)) return [];
+        const lines = fs.readFileSync(file, 'utf-8').split(/\r?\n/);
+        const names = [];
+        let inSection = false;
+        for (const line of lines) {
+            if (!line.trim() || line.trim().startsWith('#')) continue;
+            const top = line.match(/^([A-Za-z0-9_-]+):\s*$/);
+            if (top) {
+                inSection = top[1] === sectionName;
+                continue;
+            }
+            if (!inSection) continue;
+            const child = line.match(/^  ([A-Za-z0-9_.@/-]+):\s*$/);
+            if (child) names.push(child[1]);
+            if (/^\S/.test(line)) inSection = false;
+        }
+        return names;
+    } catch (_) {
+        return [];
+    }
+}
+
+function readYamlListValues(file, sectionNames = []) {
+    try {
+        if (!fs.existsSync(file)) return [];
+        const wanted = new Set(sectionNames);
+        const lines = fs.readFileSync(file, 'utf-8').split(/\r?\n/);
+        const values = [];
+        let inWanted = false;
+        for (const line of lines) {
+            if (!line.trim() || line.trim().startsWith('#')) continue;
+            const top = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
+            if (top && !line.startsWith(' ')) {
+                inWanted = wanted.has(top[1]);
+                continue;
+            }
+            if (!inWanted) continue;
+            const item = line.match(/^\s*-\s*["']?([^"'\s#]+)["']?/);
+            if (item) values.push(item[1]);
+            if (/^\S/.test(line)) inWanted = false;
+        }
+        return values;
+    } catch (_) {
+        return [];
+    }
+}
+
+function scanHermesMcpConfig(file) {
+    return readYamlSectionNames(file, 'mcp_servers').map(name => ({
+        name,
+        type: 'mcp',
+        status: 'configured',
+        path: file,
+        description: 'Hermes config.yaml MCP 配置',
+    }));
+}
+
+function scanHermesToolsets(file) {
+    return readYamlListValues(file, ['toolsets', 'platform_toolsets']).map(name => ({
+        name,
+        type: 'builtin',
+        status: 'configured',
+        path: file,
+        description: 'Hermes toolset 配置',
+    }));
+}
+
+function discoverHermesAssets(configDir, options = {}) {
+    const homeDir = options.homeDir || os.homedir();
+    const userConfigDir = path.join(homeDir, '.hermes');
+    const roots = uniqueDirs([configDir, userConfigDir]);
+    const configFiles = uniqueDirs(roots.map(dir => path.join(dir, 'config.yaml')).filter(file => fs.existsSync(file)));
+    return [
+        ...roots.flatMap(root => scanFilesByName(path.join(root, 'skills'), 'SKILL.md', 'skill', 'enabled', { maxDepth: 6 })),
+        ...roots.flatMap(root => scanNamedDirectories(path.join(root, 'plugins'), 'plugin', 'installed')),
+        ...roots.flatMap(root => scanNamedDirectories(path.join(root, 'mcp-servers'), 'mcp', 'configured')),
+        ...configFiles.flatMap(scanHermesMcpConfig),
+        ...configFiles.flatMap(scanHermesToolsets),
     ];
 }
 
@@ -684,6 +768,7 @@ function discoverInventory() {
         if (definition.tool === 'codex') assets = discoverCodexAssets(definition.config_dir);
         else if (definition.tool === 'claude-code') assets = discoverClaudeAssets(definition.config_dir);
         else if (definition.tool === 'cursor') assets = discoverCursorAssets(definition.config_dir);
+        else if (definition.tool === 'hermes') assets = discoverHermesAssets(definition.config_dir);
         else if (definition.tool === 'pi') {
             const piOptions = { includeDefaultCandidates: true };
             const agentDirs = getPiAgentDirs(definition.config_dir, piOptions);
@@ -1045,6 +1130,7 @@ module.exports = {
     stopOverviewScanner,
     writeOverviewInventory,
     discoverCodexAssets,
+    discoverHermesAssets,
     discoverPiAssets,
     normalizeCapabilityName,
 };
