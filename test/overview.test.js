@@ -1,12 +1,14 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 
 const Database = require('better-sqlite3');
 
 const {
   buildOverview,
+  discoverPiAssets,
   readOverviewInventory,
   refreshOverviewInventory,
 } = require('../server/overview');
@@ -120,6 +122,40 @@ test('adds frequently used timeline-only assets to the owning tool card', () => 
   const row = overview.capability_matrix.find(item => item.name === 'Bash');
   assert.equal(row.coverage.codex.status, '已有');
   assert.equal(row.coverage.cursor.status, '已有');
+});
+
+test('discovers Pi plugins from agent npm dependencies and extensions', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-trace-pi-'));
+  const piDir = path.join(tmp, '.pi');
+  const npmDir = path.join(piDir, 'agent', 'npm');
+  const modulesDir = path.join(npmDir, 'node_modules');
+  fs.mkdirSync(path.join(modulesDir, 'pi-add-dir'), { recursive: true });
+  fs.mkdirSync(path.join(modulesDir, '@vendor', 'pi-theme'), { recursive: true });
+  fs.mkdirSync(path.join(piDir, 'agent', 'extensions', 'clawd-on-desk'), { recursive: true });
+  fs.writeFileSync(path.join(npmDir, 'package.json'), JSON.stringify({
+    dependencies: {
+      'pi-add-dir': '^1.0.0',
+      '@vendor/pi-theme': '^2.0.0',
+      lodash: '^4.0.0',
+    },
+  }));
+  fs.writeFileSync(path.join(modulesDir, 'pi-add-dir', 'package.json'), JSON.stringify({
+    name: 'pi-add-dir',
+    version: '1.0.0',
+    description: 'Add directories to Pi',
+  }));
+  fs.writeFileSync(path.join(modulesDir, '@vendor', 'pi-theme', 'package.json'), JSON.stringify({
+    name: '@vendor/pi-theme',
+    version: '2.0.0',
+    keywords: ['pi-extension'],
+  }));
+
+  const assets = discoverPiAssets(piDir);
+  const plugins = assets.filter(asset => asset.type === 'plugin').map(asset => asset.name).sort();
+  const extensions = assets.filter(asset => asset.type === 'extension').map(asset => asset.name);
+
+  assert.deepEqual(plugins, ['@vendor/pi-theme', 'pi-add-dir']);
+  assert.deepEqual(extensions, ['clawd-on-desk']);
 });
 
 test('persists stable overview inventory in the agent trace database', () => {

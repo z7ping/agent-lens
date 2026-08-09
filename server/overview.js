@@ -103,6 +103,15 @@ function readJsonVersion(file) {
     }
 }
 
+function readJsonFile(file) {
+    try {
+        if (!fs.existsSync(file)) return null;
+        return JSON.parse(fs.readFileSync(file, 'utf-8'));
+    } catch (_) {
+        return null;
+    }
+}
+
 function readExeVersion(exePath) {
     try {
         if (!exePath || !fs.existsSync(exePath) || !isWin()) return '';
@@ -241,12 +250,60 @@ function discoverGenericAssets(configDir) {
     ];
 }
 
+function packagePathForDependency(modulesDir, name) {
+    return path.join(modulesDir, ...String(name).split('/'), 'package.json');
+}
+
+function isPiPackage(name, pkg = {}) {
+    const packageName = String(pkg.name || name || '');
+    const keywords = Array.isArray(pkg.keywords) ? pkg.keywords.map(item => String(item).toLowerCase()) : [];
+    return packageName.startsWith('pi-')
+        || packageName.includes('/pi-')
+        || !!pkg.pi
+        || keywords.some(item => item === 'pi-extension' || item === 'pi-package' || item.startsWith('pi-'));
+}
+
+function scanPiNpmPlugins(configDir) {
+    const npmDir = path.join(configDir, 'agent', 'npm');
+    const packageJson = readJsonFile(path.join(npmDir, 'package.json'));
+    const deps = {
+        ...(packageJson?.dependencies || {}),
+        ...(packageJson?.devDependencies || {}),
+        ...(packageJson?.optionalDependencies || {}),
+    };
+    const modulesDir = path.join(npmDir, 'node_modules');
+    return Object.keys(deps)
+        .map(name => {
+            const pkgPath = packagePathForDependency(modulesDir, name);
+            const pkg = readJsonFile(pkgPath) || { name };
+            if (!isPiPackage(name, pkg)) return null;
+            const version = pkg.version ? `v${pkg.version}` : '';
+            return {
+                name: pkg.name || name,
+                type: 'plugin',
+                status: 'installed',
+                path: path.dirname(pkgPath),
+                description: [pkg.description || 'Pi npm 插件', version].filter(Boolean).join(' · '),
+            };
+        })
+        .filter(Boolean);
+}
+
+function discoverPiAssets(configDir) {
+    return [
+        ...scanPiNpmPlugins(configDir),
+        ...scanNamedDirectories(path.join(configDir, 'agent', 'extensions'), 'extension', 'enabled'),
+        ...scanNamedDirectories(path.join(configDir, 'agent', 'pi-hermes-memory', 'skills'), 'skill', 'enabled'),
+    ];
+}
+
 function discoverInventory() {
     return TOOL_DEFINITIONS.map(definition => {
         let assets = [];
         if (definition.tool === 'codex') assets = discoverCodexAssets(definition.config_dir);
         else if (definition.tool === 'claude-code') assets = discoverClaudeAssets(definition.config_dir);
         else if (definition.tool === 'cursor') assets = discoverCursorAssets(definition.config_dir);
+        else if (definition.tool === 'pi') assets = discoverPiAssets(definition.config_dir);
         else assets = discoverGenericAssets(definition.config_dir);
 
         return {
@@ -591,5 +648,6 @@ module.exports = {
     startOverviewScanner,
     stopOverviewScanner,
     writeOverviewInventory,
+    discoverPiAssets,
     normalizeCapabilityName,
 };
