@@ -555,6 +555,7 @@ async function cmdInstall() {
 
         // package.json（npm install 需要）
         copyFile(path.join(PROJECT_DIR, 'package.json'), path.join(INSTALL_DIR, 'package.json'));
+        copyFile(path.join(PROJECT_DIR, 'CHANGELOG.md'), path.join(INSTALL_DIR, 'CHANGELOG.md'));
 
         // adapters/
         const adapters = fs.readdirSync(path.join(PROJECT_DIR, 'server', 'adapters')) || [];

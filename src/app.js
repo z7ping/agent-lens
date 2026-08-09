@@ -2,7 +2,7 @@
  * app.js - 主入口
  */
 
-import { CONFIG } from './config.js';
+import { CONFIG, escapeHtml } from './config.js';
 import { fetchProjects, fetchSessions, fetchSessionLogs, checkHookStatus, fetchSourceStatus, fetchAppInfo } from './utils.js';
 import { renderCallChain } from './callchain/index.js';
 import { initDashboard, loadDashboardData } from './dashboard/index.js';
@@ -17,6 +17,7 @@ let sortOrder = 'desc'; // 'desc' = 最新在前, 'asc' = 最早在前
 let autoRefresh = false;
 let refreshTimer = null;
 let isDark = false;
+let appInfo = null;
 
 // ─── 初始化 ─────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
@@ -34,11 +35,38 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function initAppInfo() {
   const el = document.getElementById('appVersion');
-  if (!el) return;
   const info = await fetchAppInfo();
-  el.textContent = info?.display_version || '';
-  el.title = info?.name ? `${info.name} ${info.display_version || ''}` : 'Agent Trace 版本';
+  appInfo = info || null;
+  if (el) {
+    el.textContent = info?.display_version || '';
+    el.title = info?.name ? `${info.name} ${info.display_version || ''}` : 'Agent Trace 版本';
+  }
+  const subtitle = document.getElementById('appSubtitle');
+  if (subtitle && info?.subtitle) subtitle.textContent = info.subtitle;
+  const githubLink = document.getElementById('githubLink');
+  if (githubLink && info?.repository_url) githubLink.href = info.repository_url;
+  renderChangelog(info?.changelog);
 }
+
+function renderChangelog(changelog) {
+  const version = document.getElementById('changelogVersion');
+  const list = document.getElementById('changelogList');
+  if (version) version.textContent = changelog?.current_version || appInfo?.display_version || '当前版本';
+  if (!list) return;
+  const items = Array.isArray(changelog?.items) ? changelog.items : [];
+  list.innerHTML = items.length
+    ? items.map(item => `<li>${escapeHtml(String(item))}</li>`).join('')
+    : '<li>暂无更新日志摘要</li>';
+}
+
+window.openChangelog = function () {
+  renderChangelog(appInfo?.changelog);
+  document.getElementById('changelogModal')?.classList.remove('hidden');
+};
+
+window.closeChangelog = function () {
+  document.getElementById('changelogModal')?.classList.add('hidden');
+};
 
 // ─── 主题 ───────────────────────────────────────────
 function initTheme() {

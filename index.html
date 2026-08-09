@@ -9,10 +9,11 @@
   <!-- ═══ 第一层：Logo + 功能Tab + 主题切换 ═══ -->
   <nav class="fixed top-0 left-0 right-0 z-50 bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-800">
     <div class="max-w-screen-2xl mx-auto px-4 h-12 flex items-center justify-between">
-      <a href="/" class="flex items-center gap-2 font-bold text-lg">
+      <a href="/" class="flex items-center gap-2 font-bold text-lg min-w-0">
         🧠
-        <span>Agent Trace</span>
+        <span class="shrink-0">Agent Trace</span>
         <span id="appVersion" class="app-version">v...</span>
+        <span id="appSubtitle" class="app-subtitle hidden sm:inline">多 Agent 调用链路观测与复盘工具</span>
       </a>
       <div class="flex items-center gap-1" id="tabNav">
         <button class="tab-btn active" data-tab="callchain" onclick="switchTab('callchain')">
@@ -28,12 +29,29 @@
           概览
         </button>
       </div>
-      <button id="themeToggle" class="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors" title="切换主题">
-        <svg class="w-5 h-5 hidden dark:block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-        <svg class="w-5 h-5 block dark:hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-      </button>
+      <div class="flex items-center gap-1">
+        <a id="githubLink" class="top-link hidden sm:inline-flex" href="https://github.com/z7ping/agent-trace" target="_blank" rel="noreferrer">GitHub</a>
+        <button id="changelogBtn" class="top-link" type="button" onclick="openChangelog()">更新日志</button>
+        <button id="themeToggle" class="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors" title="切换主题">
+          <svg class="w-5 h-5 hidden dark:block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+          <svg class="w-5 h-5 block dark:hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+      </div>
     </div>
   </nav>
+
+  <div id="changelogModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="changelogTitle">
+    <div class="modal-panel">
+      <div class="modal-head">
+        <div>
+          <h2 id="changelogTitle" class="modal-title">更新日志</h2>
+          <p id="changelogVersion" class="modal-subtitle">当前版本</p>
+        </div>
+        <button class="modal-close" type="button" onclick="closeChangelog()" aria-label="关闭">×</button>
+      </div>
+      <ul id="changelogList" class="changelog-list"></ul>
+    </div>
+  </div>
 
   <!-- ═══ 第二层：来源 + 项目 + 工具类型 + 状态栏（不固定，随页面滚动） ═══ -->
   <div class="mt-12 bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-800">
@@ -53,7 +71,7 @@
     <div class="max-w-screen-2xl mx-auto px-4 pb-2 flex items-center gap-3 text-sm flex-wrap">
       <!-- 筛选区 -->
       <div class="flex items-center gap-3 flex-wrap">
-        <span class="text-[10px] font-medium uppercase tracking-wider text-neutral-400 dark:text-neutral-500">筛选</span>
+        <span class="text-xs font-medium uppercase tracking-wider text-neutral-400 dark:text-neutral-500">筛选</span>
         <!-- 项目选择 -->
         <select id="projectSelect" class="bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
           <option value="">全部项目</option>
@@ -71,8 +89,8 @@
         <span id="filterSummary" class="text-xs text-neutral-400"></span>
       </div>
       <!-- 状态区（右对齐、弱化） -->
-      <div class="ml-auto flex items-center gap-3 text-[11px] text-neutral-400 dark:text-neutral-500">
-        <span class="text-[10px] font-medium uppercase tracking-wider text-neutral-300 dark:text-neutral-600">状态</span>
+      <div class="ml-auto flex items-center gap-3 text-xs text-neutral-400 dark:text-neutral-500">
+        <span class="text-xs font-medium uppercase tracking-wider text-neutral-300 dark:text-neutral-600">状态</span>
         <span id="liveToggle" class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-neutral-50 dark:bg-neutral-800 text-neutral-400 font-medium cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors" onclick="toggleAutoRefresh()" title="点击切换自动刷新">
           <span id="liveDot" class="w-2 h-2 rounded-full bg-neutral-400"></span>
           <span id="liveText">PAUSED</span>

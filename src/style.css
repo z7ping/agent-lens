@@ -35,7 +35,7 @@
     cursor: grabbing;
   }
   .source-status {
-    @apply ml-1 text-[11px] font-normal text-neutral-500 dark:text-neutral-400;
+    @apply ml-1 text-xs font-normal text-neutral-500 dark:text-neutral-400;
   }
   .source-status[data-tone="ok"] {
     @apply text-success-600 dark:text-success-400;
@@ -137,7 +137,7 @@
     align-items: center;
   }
   .tool-table-header {
-    @apply px-3 py-2 text-[11px] font-semibold uppercase text-neutral-400 dark:text-neutral-500;
+    @apply px-3 py-2 text-xs font-semibold uppercase text-neutral-400 dark:text-neutral-500;
   }
   .tool-table-row {
     @apply w-full px-3 py-2.5 text-left text-sm border-t border-neutral-100 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors rounded-none;
@@ -296,7 +296,7 @@
     @apply text-xs text-neutral-400 mt-1 ml-5 truncate;
   }
   .session-subtitle-meta {
-    @apply text-[11px] text-neutral-400/70 dark:text-neutral-500/70 mt-0.5 ml-5 truncate;
+    @apply text-xs text-neutral-400/70 dark:text-neutral-500/70 mt-0.5 ml-5 truncate;
   }
   .session-status {
     @apply text-xs px-1.5 py-0.5 rounded-md font-medium;
@@ -320,7 +320,7 @@
     @apply block text-sm font-semibold text-neutral-800 dark:text-neutral-100 leading-4;
   }
   .session-metric-label {
-    @apply block text-[11px] text-neutral-400 mt-0.5;
+    @apply block text-xs text-neutral-400 mt-0.5;
   }
   .session-metric.success .session-metric-value {
     @apply text-success-600 dark:text-success-400;
@@ -444,7 +444,7 @@
   @apply self-start items-start max-w-[86%];
 }
 .chat-meta {
-  @apply text-[10px] font-medium text-neutral-400 dark:text-neutral-500 px-1;
+  @apply text-xs font-medium text-neutral-400 dark:text-neutral-500 px-1;
 }
 .chat-bubble {
   @apply text-[13px] leading-snug break-words px-3 py-2 border;
@@ -457,7 +457,7 @@
 }
 /* 无用户消息的轮次：折叠头内极淡提示（不再渲染用户气泡） */
 .chat-placeholder {
-  @apply text-[11px] italic text-neutral-300 dark:text-neutral-600 px-1;
+  @apply text-xs italic text-neutral-300 dark:text-neutral-600 px-1;
 }
 /* AI 长文本折叠 */
 .assistant-preview {
@@ -500,7 +500,7 @@
   @apply flex justify-end mb-1;
 }
 .markdown-toggle {
-  @apply text-[10px] px-1.5 py-0.5 rounded border border-transparent text-neutral-400 hover:text-neutral-700 hover:border-neutral-200 dark:hover:text-neutral-100 dark:hover:border-neutral-700 transition-colors;
+  @apply text-xs px-1.5 py-0.5 rounded border border-transparent text-neutral-400 hover:text-neutral-700 hover:border-neutral-200 dark:hover:text-neutral-100 dark:hover:border-neutral-700 transition-colors;
 }
 .chat-bubble.user .markdown-toggle {
   @apply text-white/70 hover:text-white hover:border-white/40;
@@ -570,13 +570,13 @@
   @apply text-xs text-neutral-500 dark:text-neutral-400 truncate min-w-0;
 }
 .round-summary-no-user {
-  @apply text-[11px] text-neutral-300 dark:text-neutral-600;
+  @apply text-xs text-neutral-300 dark:text-neutral-600;
 }
 .round-summary-meta {
   @apply flex items-center gap-1.5 ml-auto flex-shrink-0;
 }
 .round-summary-pill {
-  @apply text-[11px] font-medium px-1.5 py-0.5 rounded-md bg-neutral-100 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400;
+  @apply text-xs font-medium px-1.5 py-0.5 rounded-md bg-neutral-100 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400;
 }
 .round-summary-pill.error {
   @apply bg-danger-50 dark:bg-danger-500/10 text-danger-600 dark:text-danger-400;
@@ -610,7 +610,7 @@
 }
 /* 工具类型小 badge（P1-7） */
 .tool-type-badge {
-  @apply text-[11px] font-medium px-1.5 py-0.5 rounded-md bg-neutral-100 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400;
+  @apply text-xs font-medium px-1.5 py-0.5 rounded-md bg-neutral-100 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400;
 }
 .tool-type-badge.bash { @apply bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400; }
 .tool-type-badge.read { @apply bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400; }
@@ -618,7 +618,7 @@
 .tool-type-badge.mcp { @apply bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400; }
 /* 错误 badge：红色、靠右 */
 .tool-error-badge {
-  @apply text-[11px] font-bold px-1.5 py-0.5 rounded-md bg-danger-600 dark:bg-danger-500 text-white;
+  @apply text-xs font-bold px-1.5 py-0.5 rounded-md bg-danger-600 dark:bg-danger-500 text-white;
 }
 .round-tools-body {
   @apply px-4 pb-3;
@@ -658,7 +658,7 @@
   @apply min-w-0 flex-1;
 }
 .round-label {
-  @apply text-[11px] font-medium text-neutral-400 mb-0.5;
+  @apply text-xs font-medium text-neutral-400 mb-0.5;
 }
 .round-user-msg {
   @apply text-sm text-neutral-800 dark:text-neutral-100 truncate font-medium;
@@ -690,7 +690,7 @@
   z-index: 20;
 }
 .round-nav-label {
-  @apply text-[10px] font-medium text-neutral-400 dark:text-neutral-500 mr-1 uppercase tracking-wider;
+  @apply text-xs font-medium text-neutral-400 dark:text-neutral-500 mr-1 uppercase tracking-wider;
 }
 .round-nav-btn {
   @apply px-2.5 py-1 text-xs font-medium text-neutral-500 dark:text-neutral-400 rounded-md border border-transparent hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-700 dark:hover:text-neutral-300 transition-colors whitespace-nowrap;
@@ -708,7 +708,7 @@
   @apply flex items-center justify-between gap-4 px-4 py-3 bg-neutral-50 dark:bg-neutral-800/40 border-b border-neutral-100 dark:border-neutral-800;
 }
 .overview-label {
-  @apply text-[11px] font-medium text-neutral-400;
+  @apply text-xs font-medium text-neutral-400;
 }
 .overview-main {
   @apply text-sm font-semibold text-neutral-800 dark:text-neutral-100 mt-0.5;
@@ -875,7 +875,34 @@
 }
 
 .app-version {
-  @apply inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold text-neutral-500 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700;
+  @apply inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold text-neutral-500 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700;
+}
+.app-subtitle {
+  @apply min-w-0 truncate text-xs font-medium text-neutral-400 dark:text-neutral-500;
+}
+.top-link {
+  @apply inline-flex items-center justify-center px-2.5 py-1.5 rounded-lg text-xs font-medium text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-700 dark:hover:text-neutral-200 transition-colors;
+}
+.modal-backdrop {
+  @apply fixed inset-0 z-[80] flex items-start justify-center bg-neutral-950/40 px-4 pt-20;
+}
+.modal-panel {
+  @apply w-full max-w-lg rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-xl;
+}
+.modal-head {
+  @apply flex items-start justify-between gap-4 border-b border-neutral-100 dark:border-neutral-800 px-5 py-4;
+}
+.modal-title {
+  @apply text-base font-semibold text-neutral-900 dark:text-neutral-100;
+}
+.modal-subtitle {
+  @apply mt-1 text-xs text-neutral-500 dark:text-neutral-400;
+}
+.modal-close {
+  @apply inline-flex h-8 w-8 items-center justify-center rounded-md text-xl leading-none text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200;
+}
+.changelog-list {
+  @apply list-disc space-y-2 px-8 py-5 text-sm leading-relaxed text-neutral-600 dark:text-neutral-300;
 }
 
 /* ═══ 概览：工具能力资产卡片 ═══ */
@@ -922,7 +949,7 @@
   @apply flex items-center gap-2 flex-wrap mt-2;
 }
 .overview-tool-links a {
-  @apply inline-flex items-center rounded-md border border-neutral-200 dark:border-neutral-700 px-2 py-1 text-[11px] font-medium text-neutral-600 dark:text-neutral-300 hover:bg-white dark:hover:bg-neutral-800;
+  @apply inline-flex items-center rounded-md border border-neutral-200 dark:border-neutral-700 px-2 py-1 text-xs font-medium text-neutral-600 dark:text-neutral-300 hover:bg-white dark:hover:bg-neutral-800;
 }
 .overview-status {
   @apply inline-flex items-center px-2 py-1 rounded-md text-xs font-medium whitespace-nowrap;
@@ -948,7 +975,7 @@
   background: color-mix(in srgb, var(--tool-accent, #64748b) 8%, #171717);
 }
 .overview-meta-grid span {
-  @apply block text-[11px] text-neutral-400 mb-1;
+  @apply block text-xs text-neutral-400 mb-1;
 }
 .overview-meta-grid b {
   @apply block text-xs font-mono text-neutral-700 dark:text-neutral-300 truncate;
@@ -1018,10 +1045,10 @@
   @apply flex items-center justify-between gap-1 mb-1;
 }
 .overview-asset-card-top span {
-  @apply text-[10px] font-semibold uppercase;
+  @apply text-xs font-semibold uppercase;
 }
 .overview-asset-card-top em {
-  @apply not-italic text-[10px] font-semibold px-1 py-0.5 rounded;
+  @apply not-italic text-xs font-semibold px-1 py-0.5 rounded;
   color: #92400e;
   background: #fef3c7;
 }
@@ -1036,16 +1063,16 @@
   @apply mt-1.5 flex items-center gap-1 min-w-0;
 }
 .overview-asset-path span {
-  @apply min-w-0 flex-1 truncate font-mono text-[10px] text-neutral-500 dark:text-neutral-400;
+  @apply min-w-0 flex-1 truncate font-mono text-xs text-neutral-500 dark:text-neutral-400;
 }
 .overview-asset-path button {
-  @apply shrink-0 rounded border border-neutral-200 dark:border-neutral-700 px-1.5 py-0.5 text-[10px] font-medium text-neutral-500 dark:text-neutral-400 hover:bg-white dark:hover:bg-neutral-800;
+  @apply shrink-0 rounded border border-neutral-200 dark:border-neutral-700 px-1.5 py-0.5 text-xs font-medium text-neutral-500 dark:text-neutral-400 hover:bg-white dark:hover:bg-neutral-800;
 }
 .overview-asset-card-meta {
   @apply flex items-center justify-between gap-2 mt-1;
 }
 .overview-asset-card-meta small {
-  @apply text-[11px] text-neutral-500 dark:text-neutral-400 truncate;
+  @apply text-xs text-neutral-500 dark:text-neutral-400 truncate;
 }
 .overview-asset-line {
   @apply flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-sm border border-transparent;
@@ -1068,7 +1095,7 @@
   @apply text-xs text-neutral-400 flex items-center gap-1;
 }
 .overview-asset-line small i {
-  @apply not-italic px-1 py-0.5 rounded text-[10px] font-semibold;
+  @apply not-italic px-1 py-0.5 rounded text-xs font-semibold;
   color: var(--asset-fg, #64748b);
   background: var(--asset-bg, #f1f5f9);
 }
@@ -1076,7 +1103,7 @@
   @apply flex items-center gap-2 shrink-0;
 }
 .overview-asset-side em {
-  @apply not-italic text-[11px] font-semibold px-1.5 py-0.5 rounded;
+  @apply not-italic text-xs font-semibold px-1.5 py-0.5 rounded;
   color: #92400e;
   background: #fef3c7;
 }
