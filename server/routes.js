@@ -174,12 +174,7 @@ async function handleApiTimeline(req, res, params) {
     const limit = Math.min(parseInt(params.get('limit') || '1000', 10), 10000);
 
     try {
-        const items = queryTimeline({
-            session_id: session,
-            source: source || undefined,
-            project_key: project,
-            limit,
-        });
+        const items = await loadTimelineItems({ project, session, source, limit });
 
         const projects = loadProjects();
 
@@ -394,6 +389,43 @@ function handleApiToolMap(req, res, params) {
     }
 }
 
+async function loadTimelineItems(options = {}) {
+    const {
+        project = '',
+        session = '',
+        source = '',
+        limit = 1000,
+        queryTimelineFn = queryTimeline,
+        getAdapterFn = getAdapter,
+    } = options;
+
+    const rows = queryTimelineFn({
+        session_id: session,
+        source: source || undefined,
+        project_key: project,
+        limit,
+    });
+    if (rows.length > 0 || !source) return rows;
+
+    const adapter = getAdapterFn(source);
+    if (!adapter || typeof adapter.getRecords !== 'function') return rows;
+
+    try {
+        const adapterRows = await adapter.getRecords({
+            session_id: session,
+            source,
+            project_key: project,
+            limit,
+        });
+        return adapterRows.map(row => ({
+            ...row,
+            role: row.role || (row.tool_name ? (row.success === false || row.success === 0 ? 'tool_error' : 'tool_result') : ''),
+        }));
+    } catch (_) {
+        return rows;
+    }
+}
+
 function handleApiOverview(req, res, params) {
     try {
         const db = getDb();
@@ -415,4 +447,4 @@ function handleApiAppInfo(req, res) {
     }
 }
 
-module.exports = { handleApiStats, handleApiTools, handleApiSessions, handleApiTimeline, handleApiSkills, handleApiCompare, handleApiErrors, handleApiToolMap, handleApiSourcesStatus, handleApiOverview, handleApiAppInfo };
+module.exports = { handleApiStats, handleApiTools, handleApiSessions, handleApiTimeline, handleApiSkills, handleApiCompare, handleApiErrors, handleApiToolMap, handleApiSourcesStatus, handleApiOverview, handleApiAppInfo, loadTimelineItems };
