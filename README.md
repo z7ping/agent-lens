@@ -142,6 +142,29 @@ AGENT_TRACE_OVERVIEW_SCAN_INTERVAL_MS=600000 npx agent-trace start
 
 默认值是 `600000`（10 分钟）。设为 `0` 可关闭服务端定时扫描；访问概览时仍会触发后台刷新。
 
+#### Pi 概览扫描规则
+
+Pi 的默认配置根目录来自 `PI_CODING_AGENT_DIR`，未设置时为 `~/.pi/agent`。Agent Trace 会优先识别真正的 Pi agent 根目录，再扫描该目录下的能力资产，而不是只按某一台机器的 `~/.pi` 布局处理。
+
+Pi agent 根目录候选包括：
+
+- 环境变量：`PI_CODING_AGENT_DIR`、`PI_HOME`、`PI_AGENT_HOME`、`PI_CONFIG_HOME`、`PI_DATA_HOME`
+- 通用默认：`~/.pi/agent`、`~/.pi`
+- Linux：`~/.config/pi`、`~/.local/share/pi`
+- Windows：`%APPDATA%\Pi`、`%APPDATA%\pi`、`%LOCALAPPDATA%\Pi`、`%LOCALAPPDATA%\pi`
+- macOS：`~/Library/Application Support/Pi`、`~/Library/Application Support/pi`
+
+识别到 Pi agent 根目录后，会扫描：
+
+| 路径 | 类型 | 说明 |
+|------|------|------|
+| `<agentDir>/skills` | Skill | Pi 用户级默认 Skill 目录 |
+| `<agentDir>/npm/package.json` + `<agentDir>/npm/node_modules/<package>` | Plugin | Pi npm 插件依赖，识别 `pi-*`、`*/pi-*`、`keywords` 或 `pkg.pi` 标记 |
+| `<agentDir>/npm/node_modules/<package>/skills` | Skill | Pi npm 插件随包提供的 Skill |
+| `<agentDir>/extensions` | Extension | Pi extension 目录 |
+| `<agentDir>/pi-hermes-memory/skills` | Skill | Pi Hermes Memory 的全局/过程记忆 Skill |
+| `<agentDir>/projects-memory/<project>/skills` | Skill | Pi 项目级记忆 Skill |
+
 ### 配置 Claude Code / Codex / Cursor / Pi 钩子
 
 运行 `npx agent-trace install` 会自动配置所有工具的 hooks。

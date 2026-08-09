@@ -168,6 +168,7 @@ test('discovers Pi assets when the agent directory is the configured root', () =
   const modulesDir = path.join(npmDir, 'node_modules');
   fs.mkdirSync(path.join(modulesDir, 'pi-cache-optimizer', 'skills', 'cache-skill'), { recursive: true });
   fs.mkdirSync(path.join(agentDir, 'extensions', 'desktop-shell'), { recursive: true });
+  fs.mkdirSync(path.join(agentDir, 'skills', 'user-skill'), { recursive: true });
   fs.mkdirSync(path.join(agentDir, 'pi-hermes-memory', 'skills', 'memory-skill'), { recursive: true });
   fs.mkdirSync(path.join(agentDir, 'projects-memory', 'demo', 'skills', 'demo-skill'), { recursive: true });
   fs.writeFileSync(path.join(npmDir, 'package.json'), JSON.stringify({
@@ -187,7 +188,7 @@ test('discovers Pi assets when the agent directory is the configured root', () =
 
   assert.deepEqual(plugins, ['pi-cache-optimizer']);
   assert.deepEqual(extensions, ['desktop-shell']);
-  assert.deepEqual(skills, ['cache-skill', 'demo-skill', 'memory-skill']);
+  assert.deepEqual(skills, ['cache-skill', 'demo-skill', 'memory-skill', 'user-skill']);
 });
 
 test('discovers Pi assets from default candidate environment paths', () => {

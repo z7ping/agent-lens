@@ -384,6 +384,7 @@ function discoverPiAssets(configDir, options = {}) {
     return getPiAgentDirs(configDir, options).flatMap(agentDir => [
         ...scanPiNpmPlugins(agentDir),
         ...scanNamedDirectories(path.join(agentDir, 'extensions'), 'extension', 'enabled'),
+        ...scanNamedDirectories(path.join(agentDir, 'skills'), 'skill', 'enabled'),
         ...scanNamedDirectories(path.join(agentDir, 'pi-hermes-memory', 'skills'), 'skill', 'enabled'),
         ...scanPiNpmSkills(agentDir),
         ...scanPiProjectMemorySkills(agentDir),

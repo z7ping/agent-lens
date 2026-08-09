@@ -152,6 +152,36 @@ overview_scan_runs (
 
 服务端定时扫描间隔由 `AGENT_TRACE_OVERVIEW_SCAN_INTERVAL_MS` 控制，默认 10 分钟，设为 `0` 可关闭定时扫描。访问 `/api/overview` 仍会触发后台刷新。
 
+### 4.3 Pi 资产发现规则
+
+Pi 的配置根由 `PI_CODING_AGENT_DIR` 控制，默认是 `~/.pi/agent`。概览扫描不会把 `~/.pi` 当成唯一固定布局，而是先归一化 Pi agent 根目录候选，再在 agent 根下扫描稳定资产。
+
+Pi agent 根目录候选：
+
+- `PI_CODING_AGENT_DIR`
+- `PI_HOME`
+- `PI_AGENT_HOME`
+- `PI_CONFIG_HOME`
+- `PI_DATA_HOME`
+- `~/.pi/agent`
+- `~/.pi`
+- `~/.config/pi`
+- `~/.local/share/pi`
+- `%APPDATA%\Pi` / `%APPDATA%\pi`
+- `%LOCALAPPDATA%\Pi` / `%LOCALAPPDATA%\pi`
+- `~/Library/Application Support/Pi` / `~/Library/Application Support/pi`
+
+候选目录只有在出现 Pi agent 标记时才会参与扫描：`npm/package.json`、`extensions`、`skills`、`pi-hermes-memory` 或 `projects-memory`。
+
+识别到 agent 根目录后扫描：
+
+- `<agentDir>/skills`：Pi 用户级默认 Skill 目录。
+- `<agentDir>/npm/package.json` 与 `<agentDir>/npm/node_modules/<package>`：Pi npm 插件。包名 `pi-*`、scope 内含 `/pi-*`、`package.json` 中有 `pi` 字段，或 `keywords` 含 `pi-extension` / `pi-package` / `pi-*` 时视为 Pi 插件。
+- `<agentDir>/npm/node_modules/<package>/skills`：插件随包提供的 Skill。
+- `<agentDir>/extensions`：Pi extension。
+- `<agentDir>/pi-hermes-memory/skills`：Pi Hermes Memory 提供的 Skill。
+- `<agentDir>/projects-memory/<project>/skills`：项目级记忆 Skill。
+
 ---
 
 ## 5. 关键设计决策

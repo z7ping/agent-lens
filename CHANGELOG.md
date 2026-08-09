@@ -10,7 +10,8 @@
 - Windows 重新安装时会重启已安装 daemon，避免界面版本号停留在旧进程缓存。
 - 修复安装目录漏复制 `app-info.js`、安装布局读取 `package.json` 错误，以及从源码目录安装时 daemon 启动目录错误。
 - Windows PATH 写入改用用户环境变量 API，避免 `setx` 在长 PATH 下失败或截断。
-- Pi 概览扫描改为读取 `~/.pi/agent/npm` 插件依赖和 `~/.pi/agent/extensions`，避免已安装插件不展示。
+- Pi 概览扫描改为按 `PI_CODING_AGENT_DIR` 默认根 `~/.pi/agent` 发现资产，并兼容环境变量、XDG、Windows AppData、macOS Application Support 等候选目录。
+- Pi 概览现在会扫描 `<agentDir>/skills`、npm 插件及插件内 `skills`、`extensions`、`pi-hermes-memory/skills`、`projects-memory/<project>/skills`。
 
 ## 1.9.0 (2026-08-07)
 
