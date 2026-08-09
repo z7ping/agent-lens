@@ -34,6 +34,15 @@ test('filters newly rendered call rows with the existing active filter', async (
   assert.deepEqual(getToolTypeDisplay(rows, 'all'), ['', '', '']);
 });
 
+test('matches collapsed task recap rounds against any contained tool type', async () => {
+  const { shouldShowToolTypeSet } = await loadUiState();
+
+  assert.equal(shouldShowToolTypeSet(['bash', 'read'], 'bash'), true);
+  assert.equal(shouldShowToolTypeSet(['read', 'write'], 'bash'), false);
+  assert.equal(shouldShowToolTypeSet(['mcp'], 'all'), true);
+  assert.equal(shouldShowToolTypeSet([], 'bash'), true);
+});
+
 test('focuses overview cards by selected source while keeping all cards for all-source view', async () => {
   const { filterOverviewTools } = await loadUiState();
   const tools = [

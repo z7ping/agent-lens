@@ -427,7 +427,7 @@ function renderCall(call, index, projectPath, sourceColor = '') {
   const detailContent = renderCallDetail(call, sourceColor);
 
   return `
-    <div class="${itemClass}" data-call-error="${isError ? 'true' : 'false'}">
+    <div class="${itemClass}" data-call-type="${type}" data-call-error="${isError ? 'true' : 'false'}">
     <div class="call-row" style="padding-left:${16 + depth * 20}px" onclick="toggleCallDetail(this)">
       <span class="tool-badge ${type}">${escapeHtml(toolName)}</span>
       <span class="call-main">
@@ -650,7 +650,9 @@ function renderRound(round, index, sourceColor = '', defaultExpanded = false) {
 
   if (content.length) parts.push(`<div class="round-content">${content.join('')}</div>`);
 
-  return `<div class="round-block${expandedDefault ? '' : ' collapsed'}" data-has-error="${hasError ? 'true' : 'false'}" data-has-slow="${hasSlow ? 'true' : 'false'}">${parts.join('')}</div>`;
+  const toolTypes = Array.from(new Set(round.toolCalls.map(c => getToolType(c.tool_name || '')).filter(Boolean)));
+
+  return `<div class="round-block${expandedDefault ? '' : ' collapsed'}" data-tool-types="${escapeHtml(toolTypes.join(' '))}" data-has-error="${hasError ? 'true' : 'false'}" data-has-slow="${hasSlow ? 'true' : 'false'}">${parts.join('')}</div>`;
 }
 
 window.toggleRound = function (summaryEl) {

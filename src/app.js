@@ -7,7 +7,7 @@ import { fetchProjects, fetchSessions, fetchSessionLogs, checkHookStatus, fetchS
 import { renderCallChain } from './callchain/index.js';
 import { initDashboard, loadDashboardData } from './dashboard/index.js';
 import { initOverview, loadOverview } from './overview/index.js';
-import { getExpandAllAction, shouldShowToolType } from './ui-state.mjs';
+import { getExpandAllAction, shouldShowToolType, shouldShowToolTypeSet } from './ui-state.mjs';
 
 // ─── 全局状态 ───────────────────────────────────────
 let currentTab = 'callchain';
@@ -206,7 +206,20 @@ window.filterTool = function (type) {
 function applyFilters(root = document) {
   const activeTool = document.querySelector('.filter-chip-sm.active')?.dataset.filter || 'all';
 
+  root.querySelectorAll('.round-block[data-tool-types]').forEach(round => {
+    const rowTypes = (round.dataset.toolTypes || '').split(/\s+/).filter(Boolean);
+    round.style.display = shouldShowToolTypeSet(rowTypes, activeTool) ? '' : 'none';
+  });
+
+  root.querySelectorAll('.call-item').forEach(item => {
+    const rowBadge = item.querySelector('.tool-badge');
+    const rowType = item.dataset.callType
+      || (rowBadge ? [...rowBadge.classList].find(c => ['bash', 'read', 'write', 'mcp', 'agent', 'other'].includes(c)) || '' : '');
+    item.style.display = shouldShowToolType(rowType, activeTool) ? '' : 'none';
+  });
+
   root.querySelectorAll('.call-row').forEach(row => {
+    if (row.closest('.call-item')) return;
     const rowBadge = row.querySelector('.tool-badge');
     const rowType = rowBadge ? [...rowBadge.classList].find(c => ['bash', 'read', 'write', 'mcp', 'agent', 'other'].includes(c)) || '' : '';
     row.style.display = shouldShowToolType(rowType, activeTool) ? '' : 'none';
