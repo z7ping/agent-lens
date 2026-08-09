@@ -329,12 +329,12 @@ class HermesAdapter extends BaseAdapter {
         const limit = Math.min(parseInt(filter.limit, 10) || 1000, 10000);
         const sessionId = filter.session_id;
 
-        // 查询所有 tool 消息（包含已处理和未处理的），按时间倒序
+        // 查询会话消息，包含对话和工具调用，按时间正序返回给前端复盘。
         let sql = `
             SELECT m.*, s.cwd
             FROM messages m
             LEFT JOIN sessions s ON m.session_id = s.id
-            WHERE m.role = 'tool'
+            WHERE m.role IN ('user', 'assistant', 'tool')
         `;
         const params = [];
 
@@ -343,12 +343,12 @@ class HermesAdapter extends BaseAdapter {
             params.push(sessionId);
         }
 
-        sql += ' ORDER BY m.timestamp DESC LIMIT ?';
+        sql += ' ORDER BY m.timestamp ASC LIMIT ?';
         params.push(limit);
 
-        let toolMessages;
+        let messages;
         try {
-            toolMessages = db.prepare(sql).all(...params);
+            messages = db.prepare(sql).all(...params);
         } catch (_) {
             return [];
         }
@@ -364,65 +364,104 @@ class HermesAdapter extends BaseAdapter {
         `);
 
         const items = [];
-        for (const msg of toolMessages) {
-            const cwd = msg.cwd || '';
-            const projectKey = this.getProjectKey(cwd);
-            const projectName = this.getProjectName(cwd);
-
-            // 过滤 project_key
-            if (filter.project_key && projectKey !== filter.project_key) continue;
-
-            // 过滤 source
+        for (const msg of messages) {
+            const record = this._buildRecordFromMessage(msg, findAssistant);
+            if (!record) continue;
+            if (filter.project_key && record.project_key !== filter.project_key) continue;
             if (filter.source && filter.source !== this.name) continue;
-
-            // 查找 assistant 消息获取 tool_name 和 input
-            let toolName = msg.tool_name || 'unknown';
-            let inputSummary = {};
-            let durationMs = null;
-            let assistantTs = null;
-
-            if (msg.tool_call_id) {
-                try {
-                    const assistant = findAssistant.get(msg.tool_call_id);
-                    if (assistant) {
-                        const extracted = this._extractToolCallInput(assistant.tool_calls, msg.tool_call_id);
-                        if (extracted) {
-                            toolName = extracted.toolName;
-                            inputSummary = this.summarizeInput(toolName, extracted.args);
-                        }
-                        assistantTs = assistant.timestamp;
-                    }
-                } catch (_) {}
-            }
-
-            // 计算耗时
-            if (assistantTs) {
-                durationMs = Math.round((msg.timestamp - assistantTs) * 1000) / 1000;
-            }
-
-            // 判断成功/失败
-            const { success, error } = this._judgeSuccess(msg.content);
-
-            // 转换时间戳
-            const ts = new Date(msg.timestamp * 1000).toISOString();
-
-            const record = {
-                ts,
-                session_id: msg.session_id,
-                project_key: projectKey,
-                project_name: projectName,
-                tool_name: toolName,
-                source: this.name,
-                input_summary: inputSummary,
-                success,
-            };
-            if (durationMs !== null) record.duration_ms = durationMs;
-            if (!success && error) record.error = error.substring(0, 500).trim();
-
             items.push(record);
         }
 
         return items;
+    }
+
+    _buildRecordFromMessage(msg, findAssistant = null) {
+        const cwd = msg.cwd || '';
+        const projectKey = this.getProjectKey(cwd);
+        const projectName = this.getProjectName(cwd);
+        const ts = new Date(msg.timestamp * 1000).toISOString();
+        const base = {
+            ts,
+            session_id: msg.session_id,
+            project_key: projectKey,
+            project_name: projectName,
+            cwd,
+            source: this.name,
+        };
+
+        if (msg.role === 'user' || msg.role === 'assistant') {
+            const content = this._extractMessageText(msg.content);
+            if (!content) return null;
+            return {
+                ...base,
+                role: msg.role,
+                content,
+                success: null,
+            };
+        }
+
+        if (msg.role !== 'tool') return null;
+
+        let toolName = msg.tool_name || 'unknown';
+        let inputSummary = {};
+        let durationMs = null;
+        let assistantTs = null;
+
+        if (msg.tool_call_id && findAssistant) {
+            try {
+                const assistant = findAssistant.get(msg.tool_call_id);
+                if (assistant) {
+                    const extracted = this._extractToolCallInput(assistant.tool_calls, msg.tool_call_id);
+                    if (extracted) {
+                        toolName = extracted.toolName;
+                        inputSummary = this.summarizeInput(toolName, extracted.args);
+                    }
+                    assistantTs = assistant.timestamp;
+                }
+            } catch (_) {}
+        }
+
+        if (assistantTs) {
+            durationMs = Math.round((msg.timestamp - assistantTs) * 1000) / 1000;
+        }
+
+        const { success, error } = this._judgeSuccess(msg.content);
+        const record = {
+            ...base,
+            role: success ? 'tool_result' : 'tool_error',
+            tool_name: toolName,
+            input_summary: inputSummary,
+            success,
+            output_snippet: this._extractToolOutput(msg.content),
+        };
+        if (durationMs !== null) record.duration_ms = durationMs;
+        if (!success && error) record.error = error.substring(0, 500).trim();
+        return record;
+    }
+
+    _extractMessageText(content) {
+        if (content == null) return '';
+        if (typeof content !== 'string') return String(content || '').trim();
+        const trimmed = content.trim();
+        if (!trimmed) return '';
+        try {
+            const parsed = JSON.parse(trimmed);
+            if (typeof parsed === 'string') return parsed.trim();
+            if (parsed && typeof parsed === 'object') {
+                return String(parsed.text || parsed.content || parsed.output || trimmed).trim();
+            }
+        } catch (_) {}
+        return trimmed;
+    }
+
+    _extractToolOutput(content) {
+        try {
+            const parsed = typeof content === 'string' ? JSON.parse(content) : content;
+            const text = parsed?.output || parsed?.text || parsed?.error || '';
+            return text ? String(text).substring(0, 500) : null;
+        } catch (_) {
+            return null;
+        }
     }
 
     // ─── 直接查询 state.db（供 API 使用）─────────────────────
