@@ -250,6 +250,58 @@ function discoverGenericAssets(configDir) {
     ];
 }
 
+function uniqueDirs(dirs) {
+    const seen = new Set();
+    const result = [];
+    for (const dir of dirs) {
+        if (!dir) continue;
+        const resolved = path.resolve(dir);
+        const key = isWin() ? resolved.toLowerCase() : resolved;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        result.push(resolved);
+    }
+    return result;
+}
+
+function getPiRootCandidates(configDir = '', options = {}) {
+    const includeDefaultCandidates = options.includeDefaultCandidates || !configDir;
+    const home = os.homedir();
+    const defaultCandidates = includeDefaultCandidates ? [
+        configDir,
+        process.env.PI_HOME,
+        process.env.PI_AGENT_HOME,
+        process.env.PI_CONFIG_HOME,
+        process.env.PI_DATA_HOME,
+        path.join(home, '.pi'),
+        path.join(home, '.pi', 'agent'),
+        path.join(home, '.config', 'pi'),
+        path.join(home, '.local', 'share', 'pi'),
+        process.env.APPDATA && path.join(process.env.APPDATA, 'Pi'),
+        process.env.APPDATA && path.join(process.env.APPDATA, 'pi'),
+        process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'Pi'),
+        process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'pi'),
+        path.join(home, 'Library', 'Application Support', 'Pi'),
+        path.join(home, 'Library', 'Application Support', 'pi'),
+    ] : [configDir];
+    return uniqueDirs(defaultCandidates);
+}
+
+function hasPiAgentMarkers(agentDir) {
+    return fs.existsSync(path.join(agentDir, 'npm', 'package.json'))
+        || fs.existsSync(path.join(agentDir, 'extensions'))
+        || fs.existsSync(path.join(agentDir, 'pi-hermes-memory'))
+        || fs.existsSync(path.join(agentDir, 'projects-memory'));
+}
+
+function getPiAgentDirs(configDir = '', options = {}) {
+    const candidates = getPiRootCandidates(configDir, options).flatMap(root => [
+        root,
+        path.join(root, 'agent'),
+    ]);
+    return uniqueDirs(candidates).filter(hasPiAgentMarkers);
+}
+
 function packagePathForDependency(modulesDir, name) {
     return path.join(modulesDir, ...String(name).split('/'), 'package.json');
 }
@@ -263,8 +315,8 @@ function isPiPackage(name, pkg = {}) {
         || keywords.some(item => item === 'pi-extension' || item === 'pi-package' || item.startsWith('pi-'));
 }
 
-function scanPiNpmPlugins(configDir) {
-    const npmDir = path.join(configDir, 'agent', 'npm');
+function scanPiNpmPlugins(agentDir) {
+    const npmDir = path.join(agentDir, 'npm');
     const packageJson = readJsonFile(path.join(npmDir, 'package.json'));
     const deps = {
         ...(packageJson?.dependencies || {}),
@@ -301,8 +353,8 @@ function scanChildSkillDirectories(baseDir, description) {
         }));
 }
 
-function scanPiNpmSkills(configDir) {
-    const npmDir = path.join(configDir, 'agent', 'npm');
+function scanPiNpmSkills(agentDir) {
+    const npmDir = path.join(agentDir, 'npm');
     const packageJson = readJsonFile(path.join(npmDir, 'package.json'));
     const deps = {
         ...(packageJson?.dependencies || {}),
@@ -318,8 +370,8 @@ function scanPiNpmSkills(configDir) {
     });
 }
 
-function scanPiProjectMemorySkills(configDir) {
-    const projectsDir = path.join(configDir, 'agent', 'projects-memory');
+function scanPiProjectMemorySkills(agentDir) {
+    const projectsDir = path.join(agentDir, 'projects-memory');
     return safeReadDir(projectsDir)
         .filter(entry => entry.isDirectory())
         .flatMap(entry => scanChildSkillDirectories(
@@ -328,29 +380,39 @@ function scanPiProjectMemorySkills(configDir) {
         ));
 }
 
-function discoverPiAssets(configDir) {
-    return [
-        ...scanPiNpmPlugins(configDir),
-        ...scanNamedDirectories(path.join(configDir, 'agent', 'extensions'), 'extension', 'enabled'),
-        ...scanNamedDirectories(path.join(configDir, 'agent', 'pi-hermes-memory', 'skills'), 'skill', 'enabled'),
-        ...scanPiNpmSkills(configDir),
-        ...scanPiProjectMemorySkills(configDir),
-    ];
+function discoverPiAssets(configDir, options = {}) {
+    return getPiAgentDirs(configDir, options).flatMap(agentDir => [
+        ...scanPiNpmPlugins(agentDir),
+        ...scanNamedDirectories(path.join(agentDir, 'extensions'), 'extension', 'enabled'),
+        ...scanNamedDirectories(path.join(agentDir, 'pi-hermes-memory', 'skills'), 'skill', 'enabled'),
+        ...scanPiNpmSkills(agentDir),
+        ...scanPiProjectMemorySkills(agentDir),
+    ]);
 }
 
 function discoverInventory() {
     return TOOL_DEFINITIONS.map(definition => {
         let assets = [];
+        let configDir = definition.config_dir;
+        let status = fs.existsSync(configDir) ? 'detected' : 'not_found';
         if (definition.tool === 'codex') assets = discoverCodexAssets(definition.config_dir);
         else if (definition.tool === 'claude-code') assets = discoverClaudeAssets(definition.config_dir);
         else if (definition.tool === 'cursor') assets = discoverCursorAssets(definition.config_dir);
-        else if (definition.tool === 'pi') assets = discoverPiAssets(definition.config_dir);
+        else if (definition.tool === 'pi') {
+            const piOptions = { includeDefaultCandidates: true };
+            const agentDirs = getPiAgentDirs(definition.config_dir, piOptions);
+            const detectedDir = agentDirs[0] || firstExisting(getPiRootCandidates(definition.config_dir, piOptions));
+            configDir = detectedDir || definition.config_dir;
+            status = detectedDir ? 'detected' : 'not_found';
+            assets = discoverPiAssets(definition.config_dir, piOptions);
+        }
         else assets = discoverGenericAssets(definition.config_dir);
 
         return {
             ...definition,
-            version: detectVersion(definition.tool, definition.config_dir),
-            status: fs.existsSync(definition.config_dir) ? 'detected' : 'not_found',
+            config_dir: configDir,
+            version: detectVersion(definition.tool, configDir),
+            status,
             assets: dedupeAssets(assets),
         };
     });

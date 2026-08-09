@@ -162,6 +162,60 @@ test('discovers Pi plugins from agent npm dependencies and extensions', () => {
   assert.deepEqual(skills, ['pi-add-dir-skill', 'project-memory-skill']);
 });
 
+test('discovers Pi assets when the agent directory is the configured root', () => {
+  const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-trace-pi-agent-'));
+  const npmDir = path.join(agentDir, 'npm');
+  const modulesDir = path.join(npmDir, 'node_modules');
+  fs.mkdirSync(path.join(modulesDir, 'pi-cache-optimizer', 'skills', 'cache-skill'), { recursive: true });
+  fs.mkdirSync(path.join(agentDir, 'extensions', 'desktop-shell'), { recursive: true });
+  fs.mkdirSync(path.join(agentDir, 'pi-hermes-memory', 'skills', 'memory-skill'), { recursive: true });
+  fs.mkdirSync(path.join(agentDir, 'projects-memory', 'demo', 'skills', 'demo-skill'), { recursive: true });
+  fs.writeFileSync(path.join(npmDir, 'package.json'), JSON.stringify({
+    dependencies: {
+      'pi-cache-optimizer': '^1.0.0',
+    },
+  }));
+  fs.writeFileSync(path.join(modulesDir, 'pi-cache-optimizer', 'package.json'), JSON.stringify({
+    name: 'pi-cache-optimizer',
+    version: '1.0.0',
+  }));
+
+  const assets = discoverPiAssets(agentDir);
+  const plugins = assets.filter(asset => asset.type === 'plugin').map(asset => asset.name);
+  const extensions = assets.filter(asset => asset.type === 'extension').map(asset => asset.name);
+  const skills = assets.filter(asset => asset.type === 'skill').map(asset => asset.name).sort();
+
+  assert.deepEqual(plugins, ['pi-cache-optimizer']);
+  assert.deepEqual(extensions, ['desktop-shell']);
+  assert.deepEqual(skills, ['cache-skill', 'demo-skill', 'memory-skill']);
+});
+
+test('discovers Pi assets from default candidate environment paths', () => {
+  const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-trace-pi-env-'));
+  const npmDir = path.join(agentDir, 'npm');
+  const modulesDir = path.join(npmDir, 'node_modules');
+  fs.mkdirSync(path.join(modulesDir, 'pi-env-plugin'), { recursive: true });
+  fs.writeFileSync(path.join(npmDir, 'package.json'), JSON.stringify({
+    dependencies: {
+      'pi-env-plugin': '^1.0.0',
+    },
+  }));
+  fs.writeFileSync(path.join(modulesDir, 'pi-env-plugin', 'package.json'), JSON.stringify({
+    name: 'pi-env-plugin',
+    version: '1.0.0',
+  }));
+
+  const original = process.env.PI_AGENT_HOME;
+  process.env.PI_AGENT_HOME = agentDir;
+  try {
+    const assets = discoverPiAssets('');
+    assert.ok(assets.some(asset => asset.type === 'plugin' && asset.name === 'pi-env-plugin'));
+  } finally {
+    if (original === undefined) delete process.env.PI_AGENT_HOME;
+    else process.env.PI_AGENT_HOME = original;
+  }
+});
+
 test('persists stable overview inventory in the agent trace database', () => {
   const db = new Database(':memory:');
   db.exec(fs.readFileSync(path.join(__dirname, '..', 'server', 'schema.sql'), 'utf-8'));
