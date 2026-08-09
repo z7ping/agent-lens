@@ -127,7 +127,7 @@ npx agent-trace service start    # 后台启动，开机自启
 
 “概览”页用于查看每个 AI 工具的稳定能力资产，包括工具版本、配置目录、Skills、MCP、Plugins、Extensions、Hooks、Adapters 和内置/历史调用中发现的能力。
 
-资产卡片会显示安装路径或配置路径，并提供路径复制入口，便于定位和管理本地 Skill、MCP、插件、扩展等资源。工具卡片会展示可用的官网、GitHub、官方文档链接。顶部工具来源 Tab 支持拖拽排序，排序保存在当前浏览器本地，并同步影响概览卡片和高频资产对照列顺序。
+资产卡片会显示安装路径或配置路径，并提供路径复制入口，便于定位和管理本地 Skill、MCP、插件、扩展等资源。工具卡片会展示可用的官网、GitHub、官方文档链接。顶部工具来源 Tab 默认顺序为 Pi、Codex、Claude Code CLI、OpenCode、Hermes、OpenClaw、Cursor；也支持拖拽排序，排序保存在当前浏览器本地，并同步影响概览卡片和高频资产对照列顺序。
 
 概览数据采用“数据库快照 + 后台刷新”：
 
@@ -143,6 +143,20 @@ AGENT_TRACE_OVERVIEW_SCAN_INTERVAL_MS=600000 npx agent-trace start
 ```
 
 默认值是 `600000`（10 分钟）。设为 `0` 可关闭服务端定时扫描；访问概览时仍会触发后台刷新。
+
+#### Codex 概览扫描规则
+
+Codex 默认配置根目录为 `CODEX_HOME`，未设置时为 `~/.codex`。Agent Trace 会扫描：
+
+| 路径 | 类型 | 说明 |
+|------|------|------|
+| `~/.codex/skills` | Skill | 用户级 Skill 目录，支持递归识别 `SKILL.md` |
+| `~/.codex/plugins/cache/**/.codex-plugin/plugin.json` | Plugin | 已安装插件清单，并展示插件安装路径 |
+| `~/.codex/plugins/cache/**/SKILL.md` | Skill | 插件随包提供的 Skill |
+| `~/.codex/plugins` | Plugin | 插件根目录中的已安装条目 |
+| `~/.codex/config.toml` 中的 `[mcp_servers.*]` | MCP | Codex MCP 配置 |
+| `~/.codex/config.toml` 中的 `[plugins.*]` | Plugin | Codex 插件启用配置 |
+| `~/.codex/config.json` | MCP | 兼容旧版 JSON 配置 |
 
 #### Pi 概览扫描规则
 

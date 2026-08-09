@@ -22,7 +22,7 @@ const AI_MAX_CHARS = 600;
 // ─── 来源标签 & 颜色映射（共享给会话卡片和轮次头） ───────────────
 
 const sourceLabels = {
-  'claude-code': 'Claude', 'hermes': 'Hermes', 'codex': 'Codex',
+  'claude-code': 'Claude CLI', 'hermes': 'Hermes', 'codex': 'Codex',
   'opencode': 'OpenCode', 'cursor': 'Cursor', 'pi': 'Pi', 'openclaw': 'OpenClaw',
 };
 

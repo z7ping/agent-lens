@@ -6,7 +6,8 @@
 - 任务复盘对话气泡默认使用 Markdown 渲染，并支持一键切换查看源码。
 - 概览页新增工具官网、GitHub、官方文档链接展示。
 - 概览资产卡片新增安装路径/配置路径展示和复制入口，便于管理 Skills、MCP、插件、扩展等资源。
-- 顶部工具来源 Tab 支持拖拽调整顺序，顺序保存在当前浏览器本地，并同步影响概览卡片与高频资产对照列。
+- 顶部工具来源 Tab 默认顺序调整为 Pi、Codex、Claude Code CLI、OpenCode、Hermes、OpenClaw、Cursor，并支持拖拽调整顺序，顺序保存在当前浏览器本地，并同步影响概览卡片与高频资产对照列。
+- Codex 概览扫描新增递归 Skill、插件清单、插件内 Skill、`config.toml` MCP 与插件配置路径展示。
 
 ### Fixed
 - Windows 安装流程改用 daemon 管理提示，并等待服务 HTTP 就绪后再报告启动成功。
@@ -16,6 +17,7 @@
 - Pi 概览扫描改为按 `PI_CODING_AGENT_DIR` 默认根 `~/.pi/agent` 发现资产，并兼容环境变量、XDG、Windows AppData、macOS Application Support 等候选目录。
 - Pi 概览现在会扫描 `<agentDir>/skills`、`~/.agents/skills`、`settings.json.skills`、npm package 声明/传统目录中的 `skills` 与 `extensions`、`pi-hermes-memory/skills`、`projects-memory/<project>/skills`。
 - Pi Skill 扫描改为识别根 `.md` 与递归 `SKILL.md`，Extension 扫描支持目录和 JS/TS 文件，贴近 Pi 官方资源发现规则。
+- Codex 历史对话导入不再截断用户/助手长文本，重新导入时会更新旧库中已被截断的同一条消息。
 
 ## 1.9.0 (2026-08-07)
 

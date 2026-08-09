@@ -139,7 +139,12 @@ function insertTimeline(record) {
     eDetail = classified.error_detail ? JSON.stringify(classified.error_detail) : null;
   }
 
-  db.prepare(`
+  const content = record.content ? String(record.content) : null;
+  const toolInput = record.tool_input ? (typeof record.tool_input === 'string' ? record.tool_input.substring(0, 2000) : JSON.stringify(record.tool_input).substring(0, 2000)) : null;
+  const outputSnippet = record.output_snippet ? String(record.output_snippet).substring(0, 500) : null;
+  const errorMessage = record.error_message ? String(record.error_message).substring(0, 500) : null;
+
+  const insertInfo = db.prepare(`
     INSERT OR IGNORE INTO timeline (source, session_id, timestamp, seq, role, tool_name, content, tool_input, success, exit_code, duration_ms, output_snippet, error_message, error_type, error_detail, project_key, parent_seq, tool_use_id)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
@@ -149,19 +154,80 @@ function insertTimeline(record) {
     record.seq ?? null,
     record.role || 'tool',
     record.tool_name || null,
-    record.content ? String(record.content).substring(0, 2000) : null,
-    record.tool_input ? (typeof record.tool_input === 'string' ? record.tool_input.substring(0, 2000) : JSON.stringify(record.tool_input).substring(0, 2000)) : null,
+    content,
+    toolInput,
     record.success != null ? (record.success ? 1 : 0) : null,
     record.exit_code ?? null,
     record.duration_ms ?? null,
-    record.output_snippet ? String(record.output_snippet).substring(0, 500) : null,
-    record.error_message ? String(record.error_message).substring(0, 500) : null,
+    outputSnippet,
+    errorMessage,
     eType,
     eDetail,
     record.project_key || null,
     record.parent_seq ?? null,
     record.tool_use_id || null
   );
+
+  if (insertInfo.changes === 0) {
+    const values = [
+      record.seq ?? null,
+      record.tool_name || null,
+      content,
+      toolInput,
+      record.success != null ? (record.success ? 1 : 0) : null,
+      record.exit_code ?? null,
+      record.duration_ms ?? null,
+      outputSnippet,
+      errorMessage,
+      eType,
+      eDetail,
+      record.project_key || null,
+      record.parent_seq ?? null,
+    ];
+    let updatedByToolUse = false;
+    if (record.tool_use_id) {
+      const updateInfo = db.prepare(`
+        UPDATE timeline SET
+          seq = COALESCE(?, seq),
+          tool_name = COALESCE(?, tool_name),
+          content = COALESCE(?, content),
+          tool_input = COALESCE(?, tool_input),
+          success = COALESCE(?, success),
+          exit_code = COALESCE(?, exit_code),
+          duration_ms = COALESCE(?, duration_ms),
+          output_snippet = COALESCE(?, output_snippet),
+          error_message = COALESCE(?, error_message),
+          error_type = COALESCE(?, error_type),
+          error_detail = COALESCE(?, error_detail),
+          project_key = COALESCE(?, project_key),
+          parent_seq = COALESCE(?, parent_seq)
+        WHERE tool_use_id = ?
+      `).run(...values, record.tool_use_id);
+      updatedByToolUse = updateInfo.changes > 0;
+    }
+    if (!updatedByToolUse && (record.role === 'user' || record.role === 'assistant')) {
+      db.prepare(`
+        UPDATE timeline SET
+          seq = COALESCE(?, seq),
+          tool_name = COALESCE(?, tool_name),
+          content = COALESCE(?, content),
+          tool_input = COALESCE(?, tool_input),
+          success = COALESCE(?, success),
+          exit_code = COALESCE(?, exit_code),
+          duration_ms = COALESCE(?, duration_ms),
+          output_snippet = COALESCE(?, output_snippet),
+          error_message = COALESCE(?, error_message),
+          error_type = COALESCE(?, error_type),
+          error_detail = COALESCE(?, error_detail),
+          project_key = COALESCE(?, project_key),
+          parent_seq = COALESCE(?, parent_seq),
+          tool_use_id = COALESCE(tool_use_id, ?)
+        WHERE source = ? AND session_id = ? AND timestamp = ? AND role = ?
+      `).run(...values, record.tool_use_id || null, record.source || '', record.session_id || '', record.timestamp || '', record.role || 'tool');
+    }
+  }
+
+  return insertInfo;
 }
 
 /** 查询 timeline 记录 */

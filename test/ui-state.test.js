@@ -59,13 +59,13 @@ test('focuses overview cards by selected source while keeping all cards for all-
 test('orders overview tools by saved preference before default order', async () => {
   const { orderOverviewTools } = await loadUiState();
   const tools = [
-    { tool: 'pi', order: 60 },
-    { tool: 'codex', order: 10 },
-    { tool: 'cursor', order: 50 },
+    { tool: 'pi', order: 10 },
+    { tool: 'codex', order: 20 },
+    { tool: 'cursor', order: 70 },
     { tool: 'unknown' },
   ];
 
-  assert.deepEqual(orderOverviewTools(tools, []).map(tool => tool.tool), ['codex', 'cursor', 'pi', 'unknown']);
+  assert.deepEqual(orderOverviewTools(tools, []).map(tool => tool.tool), ['pi', 'codex', 'cursor', 'unknown']);
   assert.deepEqual(orderOverviewTools(tools, ['pi', 'cursor']).map(tool => tool.tool), ['pi', 'cursor', 'codex', 'unknown']);
 });
 

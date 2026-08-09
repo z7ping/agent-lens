@@ -8,6 +8,7 @@ const Database = require('better-sqlite3');
 
 const {
   buildOverview,
+  discoverCodexAssets,
   discoverPiAssets,
   readOverviewInventory,
   refreshOverviewInventory,
@@ -50,7 +51,7 @@ test('builds one overview card per tool with grouped capability assets', () => {
   assert.equal(overview.tools[0].asset_groups.skill.count, 1);
   assert.equal(overview.tools[0].asset_groups.plugin.count, 1);
   assert.equal(overview.tools[0].links.github, 'https://github.com/openai/codex');
-  assert.equal(overview.tools[0].order, 10);
+  assert.equal(overview.tools[0].order, 20);
 
   const brainstorming = overview.tools[0].assets.find(asset => asset.name === 'superpowers:brainstorming');
   assert.equal(brainstorming.call_count, 8);
@@ -80,10 +81,56 @@ test('keeps tool links and order when reading overview from database snapshot', 
   const overview = buildOverview({ inventory: readOverviewInventory(db), usageRows: [] });
   const pi = overview.tools[0];
 
-  assert.equal(pi.order, 60);
+  assert.equal(pi.order, 10);
   assert.equal(pi.links.homepage, 'https://pi.dev');
   assert.equal(pi.links.docs, 'https://pi.dev/docs/latest');
   assert.equal(pi.links.github, 'https://github.com/earendil-works/pi');
+});
+
+test('discovers Codex recursive skills, plugins and configured MCP paths', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-trace-codex-'));
+  const codexDir = path.join(tmp, '.codex');
+  const skillDir = path.join(codexDir, 'skills', 'superpowers', 'skills', 'brainstorming');
+  const pluginDir = path.join(codexDir, 'plugins', 'cache', 'openai-bundled', 'browser', '1.0.0');
+  const pluginSkillDir = path.join(pluginDir, 'skills', 'control-browser');
+  fs.mkdirSync(skillDir, { recursive: true });
+  fs.mkdirSync(path.join(pluginDir, '.codex-plugin'), { recursive: true });
+  fs.mkdirSync(pluginSkillDir, { recursive: true });
+  fs.writeFileSync(path.join(skillDir, 'SKILL.md'), '---\nname: brainstorming\n---\n', 'utf-8');
+  fs.writeFileSync(path.join(pluginSkillDir, 'SKILL.md'), '---\nname: control-browser\n---\n', 'utf-8');
+  fs.writeFileSync(path.join(pluginDir, '.codex-plugin', 'plugin.json'), JSON.stringify({
+    name: 'browser',
+    description: 'Browser control',
+  }), 'utf-8');
+  fs.writeFileSync(path.join(codexDir, 'config.toml'), `
+[mcp_servers.node_repl]
+command = "node_repl"
+
+[plugins."browser@openai-bundled"]
+enabled = true
+`, 'utf-8');
+
+  const assets = discoverCodexAssets(codexDir);
+  const namesByType = new Map(assets.map(asset => [`${asset.type}:${asset.name}`, asset]));
+
+  assert.ok(namesByType.has('skill:superpowers:skills:brainstorming'));
+  assert.ok(namesByType.has('skill:openai-bundled:browser:1.0.0:skills:control-browser'));
+  assert.equal(namesByType.get('plugin:browser').path, path.join(pluginDir, '.codex-plugin', 'plugin.json'));
+  assert.equal(namesByType.get('mcp:node_repl').path, path.join(codexDir, 'config.toml'));
+  assert.equal(namesByType.get('plugin:browser@openai-bundled').path, path.join(codexDir, 'config.toml'));
+});
+
+test('orders overview tools by product default order in API payload', () => {
+  const overview = buildOverview({
+    inventory: [
+      { tool: 'cursor', display_name: 'Cursor', assets: [] },
+      { tool: 'codex', display_name: 'Codex', assets: [] },
+      { tool: 'pi', display_name: 'Pi', assets: [] },
+    ],
+    usageRows: [],
+  });
+
+  assert.deepEqual(overview.tools.map(tool => tool.tool), ['pi', 'codex', 'cursor']);
 });
 
 test('builds a capability matrix for high-frequency assets across tools', () => {

@@ -9,6 +9,7 @@
  */
 
 const path = require('path');
+const crypto = require('crypto');
 const { JsonlImporter } = require('./base');
 const BaseAdapter = require('../adapters/base');
 const CodexAdapter = require('../adapters/codex');
@@ -30,11 +31,31 @@ function sessionIdFromFilename(filePath) {
     }
 }
 
-/** 从 message.content 提取纯文本（input_text / output_text / refusal） */
+function stableMessageId(sessionId, payload, text) {
+    if (payload.id) return String(payload.id);
+    const basis = `${sessionId}|${payload.role || ''}|${payload.type || ''}|${text}`;
+    return `codex-msg-${crypto.createHash('sha1').update(basis).digest('hex')}`;
+}
+
+function textFromBlock(block) {
+    if (!block) return '';
+    if (typeof block === 'string') return block;
+    if (Array.isArray(block)) return messageText(block);
+    if (typeof block !== 'object') return '';
+    for (const key of ['text', 'input_text', 'output_text', 'content', 'refusal']) {
+        const value = block[key];
+        if (typeof value === 'string') return value;
+        if (Array.isArray(value)) return messageText(value);
+    }
+    return '';
+}
+
+/** 从 message.content 提取纯文本（text / input_text / output_text / content / refusal） */
 function messageText(blocks) {
-    if (!Array.isArray(blocks)) return '';
+    if (typeof blocks === 'string') return blocks;
+    if (!Array.isArray(blocks)) return textFromBlock(blocks);
     return blocks
-        .map(b => (b && typeof b === 'object' && b.text) ? b.text : '')
+        .map(textFromBlock)
         .filter(Boolean)
         .join('\n\n');
 }
@@ -91,9 +112,9 @@ function parseCodexLines(lines, ctx = {}) {
             if (p.role === 'developer') continue;
             if (text.startsWith('<environment_context') || text.startsWith('<permissions instructions')) continue;
             if (p.role === 'user') {
-                records.push({ session_id: sessionId, project_key: projectKey, cwd, ts, role: 'user', content: text.substring(0, 2000) });
+                records.push({ session_id: sessionId, project_key: projectKey, cwd, ts, role: 'user', content: text, tool_use_id: stableMessageId(sessionId, p, text) });
             } else if (p.role === 'assistant') {
-                records.push({ session_id: sessionId, project_key: projectKey, cwd, ts, role: 'assistant', content: text.substring(0, 2000) });
+                records.push({ session_id: sessionId, project_key: projectKey, cwd, ts, role: 'assistant', content: text, tool_use_id: stableMessageId(sessionId, p, text) });
             }
         } else if (p.type === 'function_call') {
             // 登记待配对的工具调用
@@ -159,9 +180,11 @@ module.exports = new JsonlImporter({
     rootDir: paths.sessionsDir,
     stateFile,
     parseLines: parseCodexLines,
+    parserVersion: 2,
 });
 
 // 导出纯函数便于测试
 module.exports.parseCodexLines = parseCodexLines;
 module.exports.parseFunctionOutput = parseFunctionOutput;
 module.exports.sessionIdFromFilename = sessionIdFromFilename;
+module.exports.messageText = messageText;

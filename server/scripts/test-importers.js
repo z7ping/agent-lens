@@ -102,6 +102,39 @@ await test('解析 session_meta/message/function_call', () => {
     assert.strictEqual(tool.project_key, require('../adapters/base').prototype.getProjectKey('F:\\proj'));
 });
 
+await test('Codex 长消息与新版 content block 不截断', () => {
+    const longText = `开头\n${'长内容'.repeat(1200)}\n结尾`;
+    const lines = [
+        JSON.stringify({ type: 'session_meta', payload: { id: '019e347c-6583-7852-8aa5-bbc490cd4986', cwd: 'F:\\proj' } }),
+        JSON.stringify({
+            type: 'response_item',
+            timestamp: '2026-08-09T10:00:00.000Z',
+            payload: {
+                type: 'message',
+                role: 'assistant',
+                content: [
+                    { type: 'output_text', output_text: longText },
+                    { type: 'text', text: '第二段' },
+                ],
+            },
+        }),
+        JSON.stringify({
+            type: 'response_item',
+            timestamp: '2026-08-09T10:00:01.000Z',
+            payload: { type: 'message', role: 'user', content: '字符串内容' },
+        }),
+    ];
+    const { records } = parseCodexLines(lines, {});
+    const assistant = records.find(r => r.role === 'assistant');
+    const user = records.find(r => r.role === 'user');
+
+    assert.ok(assistant.content.length > 2000, '助手长文本不应在导入器截断');
+    assert.ok(assistant.content.includes('结尾'));
+    assert.ok(assistant.content.includes('第二段'));
+    assert.strictEqual(user.content, '字符串内容');
+    assert.ok(assistant.tool_use_id.startsWith('codex-msg-'));
+});
+
 await test('parseFunctionOutput 解析 Exit code / 无 Exit code', () => {
     assert.deepStrictEqual(parseFunctionOutput('Exit code: 0\nOutput:\nok'), { exitCode: 0, snippet: 'ok', success: true });
     assert.deepStrictEqual(parseFunctionOutput('Exit code: 2\nOutput:\nboom'), { exitCode: 2, snippet: 'boom', success: false });
@@ -162,6 +195,39 @@ await test('首次全量 + 未变跳过 + 追加增量', async () => {
     const fourth = await importer.pollOnce();
     assert.strictEqual(fourth, 1, '截断重写后应从头重读');
     assert.strictEqual(importer.imported, 4);
+
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+await test('解析版本变化时重扫已处理文件', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'importer-version-'));
+    const stateFile = path.join(dir, 'state.json');
+    const dataFile = path.join(dir, 'a.jsonl');
+    fs.writeFileSync(dataFile, 'line1\nline2\n', 'utf-8');
+
+    class VersionedImporter extends JsonlImporter {
+        constructor(parserVersion) {
+            super({
+                source: 'test',
+                rootDir: dir,
+                stateFile,
+                parserVersion,
+                parseLines: (lines) => ({
+                    records: lines.map((_, idx) => ({ session_id: 's1', ts: `2026-07-01T00:00:0${idx}.000Z`, role: 'tool_result', tool_name: 'Bash' })),
+                    meta: null,
+                }),
+            });
+        }
+        _ingest(records) { this.imported = (this.imported || 0) + records.length; }
+        _recomputeSessions() {}
+    }
+
+    const firstImporter = new VersionedImporter(1);
+    assert.strictEqual(await firstImporter.pollOnce(), 2);
+    assert.strictEqual(await firstImporter.pollOnce(), 0);
+
+    const upgradedImporter = new VersionedImporter(2);
+    assert.strictEqual(await upgradedImporter.pollOnce(), 2, '解析版本变化后应重扫旧文件');
 
     fs.rmSync(dir, { recursive: true, force: true });
 });

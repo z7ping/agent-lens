@@ -9,12 +9,13 @@ const OVERVIEW_CACHE_KEY = 'agent-trace-overview-cache-v1';
 const TOOL_ORDER_KEY = 'agent-trace-tool-order-v1';
 const OVERVIEW_REFRESH_MS = 60000;
 const STABLE_TOOLS = [
-  { tool: 'codex', display_name: 'Codex', description: 'OpenAI Codex 命令行编码智能体与本地桌面环境。', order: 10, links: { homepage: 'https://openai.com/codex', docs: 'https://developers.openai.com/codex', github: 'https://github.com/openai/codex' }, theme: { accent: '#10b981', surface: '#ecfdf5' } },
-  { tool: 'claude-code', display_name: 'Claude Code', description: 'Anthropic Claude Code 命令行编码助手。', order: 20, links: { homepage: 'https://www.anthropic.com/claude-code', docs: 'https://docs.anthropic.com/en/docs/claude-code', github: 'https://github.com/anthropics/claude-code' }, theme: { accent: '#f97316', surface: '#fff7ed' } },
-  { tool: 'hermes', display_name: 'Hermes', description: 'Hermes 编码智能体历史数据源。', order: 30, links: {}, theme: { accent: '#8b5cf6', surface: '#f5f3ff' } },
+  { tool: 'pi', display_name: 'Pi', description: 'Pi 编码智能体历史数据源。', order: 10, links: { homepage: 'https://pi.dev', docs: 'https://pi.dev/docs/latest', github: 'https://github.com/earendil-works/pi' }, theme: { accent: '#eab308', surface: '#fefce8' } },
+  { tool: 'codex', display_name: 'Codex', description: 'OpenAI Codex 命令行编码智能体与本地桌面环境。', order: 20, links: { homepage: 'https://openai.com/codex', docs: 'https://developers.openai.com/codex', github: 'https://github.com/openai/codex' }, theme: { accent: '#10b981', surface: '#ecfdf5' } },
+  { tool: 'claude-code', display_name: 'Claude Code CLI', description: 'Anthropic Claude Code 命令行编码助手。', order: 30, links: { homepage: 'https://www.anthropic.com/claude-code', docs: 'https://docs.anthropic.com/en/docs/claude-code', github: 'https://github.com/anthropics/claude-code' }, theme: { accent: '#f97316', surface: '#fff7ed' } },
   { tool: 'opencode', display_name: 'OpenCode', description: 'OpenCode 终端编码智能体。', order: 40, links: { homepage: 'https://opencode.ai', docs: 'https://opencode.ai/docs', github: 'https://github.com/sst/opencode' }, theme: { accent: '#06b6d4', surface: '#ecfeff' } },
-  { tool: 'cursor', display_name: 'Cursor', description: '基于 VS Code 的 AI 代码编辑器。', order: 50, links: { homepage: 'https://cursor.com', docs: 'https://docs.cursor.com', github: 'https://github.com/getcursor/cursor' }, theme: { accent: '#6366f1', surface: '#eef2ff' } },
-  { tool: 'pi', display_name: 'Pi', description: 'Pi 编码智能体历史数据源。', order: 60, links: { homepage: 'https://pi.dev', docs: 'https://pi.dev/docs/latest', github: 'https://github.com/earendil-works/pi' }, theme: { accent: '#eab308', surface: '#fefce8' } },
+  { tool: 'hermes', display_name: 'Hermes', description: 'Hermes 编码智能体历史数据源。', order: 50, links: {}, theme: { accent: '#8b5cf6', surface: '#f5f3ff' } },
+  { tool: 'openclaw', display_name: 'OpenClaw', description: 'OpenClaw 编码智能体历史数据源。', order: 60, links: {}, theme: { accent: '#64748b', surface: '#f8fafc' } },
+  { tool: 'cursor', display_name: 'Cursor', description: '基于 VS Code 的 AI 代码编辑器。', order: 70, links: { homepage: 'https://cursor.com', docs: 'https://docs.cursor.com', github: 'https://github.com/getcursor/cursor' }, theme: { accent: '#6366f1', surface: '#eef2ff' } },
 ];
 
 const typeLabels = {

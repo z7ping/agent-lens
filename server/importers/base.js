@@ -23,6 +23,7 @@ class JsonlImporter {
      * @param {string} opts.rootDir         递归扫描根目录
      * @param {string} opts.stateFile       水位线状态文件路径
      * @param {Function} opts.parseLines    解析函数 (lines[], ctx) => { records, meta }
+     * @param {number|string} [opts.parserVersion] 解析格式版本，变化时会重扫历史文件
      */
     constructor(opts) {
         if (!opts || !opts.source || !opts.rootDir || !opts.stateFile || typeof opts.parseLines !== 'function') {
@@ -32,6 +33,7 @@ class JsonlImporter {
         this.rootDir = opts.rootDir;
         this.stateFile = opts.stateFile;
         this.parseLines = opts.parseLines;
+        this.parserVersion = opts.parserVersion || 1;
         this._timer = null;
     }
 
@@ -80,6 +82,7 @@ class JsonlImporter {
     async pollOnce() {
         if (!fs.existsSync(this.rootDir)) return 0;
         const state = this._readState();
+        const parserVersionChanged = state.parserVersion !== this.parserVersion;
         const files = this._collectFiles(this.rootDir);
         const filesState = state.files || {};
         const newStates = {};
@@ -90,7 +93,7 @@ class JsonlImporter {
             let stat;
             try { stat = fs.statSync(filePath); } catch { continue; }
             const mtime = stat.mtimeMs;
-            const prev = filesState[filePath] || { lines: 0, mtime: 0, meta: null };
+            const prev = parserVersionChanged ? { lines: 0, mtime: 0, meta: null } : (filesState[filePath] || { lines: 0, mtime: 0, meta: null });
 
             if (prev.lines > 0 && prev.mtime === mtime) {
                 // 文件未变化，跳过
@@ -134,6 +137,7 @@ class JsonlImporter {
         }
 
         state.files = newStates;
+        state.parserVersion = this.parserVersion;
         state.lastScan = new Date().toISOString();
         this._writeState(state);
         return imported;

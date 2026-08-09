@@ -8,11 +8,24 @@ const ASSET_TYPES = ['skill', 'mcp', 'plugin', 'extension', 'hook', 'adapter', '
 
 const TOOL_DEFINITIONS = [
     {
+        tool: 'pi',
+        display_name: 'Pi',
+        description: 'Pi 编码智能体历史数据源。',
+        config_dir: path.join(os.homedir(), '.pi'),
+        order: 10,
+        links: {
+            homepage: 'https://pi.dev',
+            docs: 'https://pi.dev/docs/latest',
+            github: 'https://github.com/earendil-works/pi',
+        },
+        theme: { accent: '#eab308', surface: '#fefce8' },
+    },
+    {
         tool: 'codex',
         display_name: 'Codex',
         description: 'OpenAI Codex 命令行编码智能体与本地桌面环境。',
         config_dir: path.join(os.homedir(), '.codex'),
-        order: 10,
+        order: 20,
         links: {
             homepage: 'https://openai.com/codex',
             docs: 'https://developers.openai.com/codex',
@@ -22,10 +35,10 @@ const TOOL_DEFINITIONS = [
     },
     {
         tool: 'claude-code',
-        display_name: 'Claude Code',
+        display_name: 'Claude Code CLI',
         description: 'Anthropic Claude Code 命令行编码助手。',
         config_dir: path.join(os.homedir(), '.claude'),
-        order: 20,
+        order: 30,
         links: {
             homepage: 'https://www.anthropic.com/claude-code',
             docs: 'https://docs.anthropic.com/en/docs/claude-code',
@@ -38,7 +51,7 @@ const TOOL_DEFINITIONS = [
         display_name: 'Cursor',
         description: '基于 VS Code 的 AI 代码编辑器。',
         config_dir: path.join(os.homedir(), 'AppData', 'Roaming', 'Cursor', 'User'),
-        order: 50,
+        order: 70,
         links: {
             homepage: 'https://cursor.com',
             docs: 'https://docs.cursor.com',
@@ -64,22 +77,18 @@ const TOOL_DEFINITIONS = [
         display_name: 'Hermes',
         description: 'Hermes 编码智能体历史数据源。',
         config_dir: path.join(os.homedir(), '.hermes'),
-        order: 30,
+        order: 50,
         links: {},
         theme: { accent: '#8b5cf6', surface: '#f5f3ff' },
     },
     {
-        tool: 'pi',
-        display_name: 'Pi',
-        description: 'Pi 编码智能体历史数据源。',
-        config_dir: path.join(os.homedir(), '.pi'),
+        tool: 'openclaw',
+        display_name: 'OpenClaw',
+        description: 'OpenClaw 编码智能体历史数据源。',
+        config_dir: path.join(os.homedir(), '.openclaw'),
         order: 60,
-        links: {
-            homepage: 'https://pi.dev',
-            docs: 'https://pi.dev/docs/latest',
-            github: 'https://github.com/earendil-works/pi',
-        },
-        theme: { accent: '#eab308', surface: '#fefce8' },
+        links: {},
+        theme: { accent: '#64748b', surface: '#f8fafc' },
     },
 ];
 
@@ -222,6 +231,71 @@ function scanNamedDirectories(baseDir, type, status = 'installed') {
         }));
 }
 
+function scanFilesByName(baseDir, fileName, type, status = 'enabled', options = {}) {
+    const results = [];
+    const maxDepth = options.maxDepth ?? 6;
+    const base = path.resolve(baseDir || '');
+    const visit = (dir, depth) => {
+        if (!dir || depth > maxDepth) return;
+        for (const entry of safeReadDir(dir)) {
+            const full = path.join(dir, entry.name);
+            if (entry.isDirectory()) {
+                visit(full, depth + 1);
+            } else if (entry.isFile() && entry.name.toLowerCase() === fileName.toLowerCase()) {
+                const assetDir = path.dirname(full);
+                const relative = path.relative(base, assetDir).split(path.sep).filter(Boolean);
+                const name = relative.length ? relative.join(':') : path.basename(assetDir);
+                results.push({
+                    name,
+                    type,
+                    status,
+                    path: full,
+                });
+            }
+        }
+    };
+    visit(base, 0);
+    return results;
+}
+
+function scanCodexPluginManifests(baseDir) {
+    return scanFilesByName(baseDir, 'plugin.json', 'plugin', 'installed', { maxDepth: 8 })
+        .map(asset => {
+            let name = path.basename(path.dirname(path.dirname(asset.path)));
+            let description = 'Codex 插件清单';
+            try {
+                const manifest = JSON.parse(fs.readFileSync(asset.path, 'utf-8'));
+                name = manifest.name || manifest.id || name;
+                description = manifest.description || description;
+            } catch (_) {}
+            return { ...asset, name, description };
+        });
+}
+
+function scanTomlSections(file, sectionPrefix, type, tool) {
+    try {
+        if (!fs.existsSync(file)) return [];
+        const content = fs.readFileSync(file, 'utf-8');
+        const escaped = sectionPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(`^\\[${escaped}\\.([^\\]]+)\\]`, 'gm');
+        const assets = [];
+        let match;
+        while ((match = regex.exec(content))) {
+            const name = match[1].replace(/^["']|["']$/g, '');
+            assets.push({
+                name,
+                type,
+                status: 'configured',
+                path: file,
+                description: `${tool} 配置条目`,
+            });
+        }
+        return assets;
+    } catch (_) {
+        return [];
+    }
+}
+
 function scanJsonKeys(file, type, tool) {
     try {
         if (!fs.existsSync(file)) return [];
@@ -251,9 +325,13 @@ function scanJsonKeys(file, type, tool) {
 function discoverCodexAssets(configDir) {
     return [
         ...scanNamedDirectories(path.join(configDir, 'skills'), 'skill', 'enabled'),
-        ...scanNamedDirectories(path.join(configDir, 'plugins', 'cache'), 'plugin', 'installed'),
+        ...scanFilesByName(path.join(configDir, 'skills'), 'SKILL.md', 'skill', 'enabled'),
+        ...scanFilesByName(path.join(configDir, 'plugins', 'cache'), 'SKILL.md', 'skill', 'enabled'),
+        ...scanCodexPluginManifests(path.join(configDir, 'plugins', 'cache')),
         ...scanNamedDirectories(path.join(configDir, 'plugins'), 'plugin', 'installed'),
         ...scanJsonKeys(path.join(configDir, 'config.json'), 'mcp', 'Codex'),
+        ...scanTomlSections(path.join(configDir, 'config.toml'), 'mcp_servers', 'mcp', 'Codex'),
+        ...scanTomlSections(path.join(configDir, 'config.toml'), 'plugins', 'plugin', 'Codex'),
     ];
 }
 
@@ -828,7 +906,6 @@ function buildOverview(options = {}) {
     const usageMap = buildUsageMap(options.usageRows || []);
     const observedAssets = buildObservedAssets(options.usageRows || []);
     const priorityThreshold = Number(options.priorityThreshold || 5);
-    const toolNames = inventory.map(tool => tool.tool);
     const assetIndex = new Map();
 
     const tools = inventory.map(tool => {
@@ -868,7 +945,8 @@ function buildOverview(options = {}) {
             assets,
             asset_groups: groupAssets(assets),
         };
-    });
+    }).sort((a, b) => (a.order ?? 999) - (b.order ?? 999) || a.display_name.localeCompare(b.display_name));
+    const toolNames = tools.map(tool => tool.tool);
 
     const priorityAssets = tools
         .flatMap(tool => tool.assets)
@@ -966,6 +1044,7 @@ module.exports = {
     startOverviewScanner,
     stopOverviewScanner,
     writeOverviewInventory,
+    discoverCodexAssets,
     discoverPiAssets,
     normalizeCapabilityName,
 };
