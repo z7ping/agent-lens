@@ -56,6 +56,27 @@ test('focuses overview cards by selected source while keeping all cards for all-
   assert.deepEqual(filterOverviewTools(tools, 'opencode').map(tool => tool.tool), ['opencode']);
 });
 
+test('orders overview tools by saved preference before default order', async () => {
+  const { orderOverviewTools } = await loadUiState();
+  const tools = [
+    { tool: 'pi', order: 60 },
+    { tool: 'codex', order: 10 },
+    { tool: 'cursor', order: 50 },
+    { tool: 'unknown' },
+  ];
+
+  assert.deepEqual(orderOverviewTools(tools, []).map(tool => tool.tool), ['codex', 'cursor', 'pi', 'unknown']);
+  assert.deepEqual(orderOverviewTools(tools, ['pi', 'cursor']).map(tool => tool.tool), ['pi', 'cursor', 'codex', 'unknown']);
+});
+
+test('moves tools inside a saved order without dropping unknown entries', async () => {
+  const { moveToolInOrder } = await loadUiState();
+
+  assert.deepEqual(moveToolInOrder(['codex', 'pi', 'cursor'], 'pi', 'codex'), ['pi', 'codex', 'cursor']);
+  assert.deepEqual(moveToolInOrder(['codex', 'pi', 'cursor'], 'codex', 'cursor'), ['pi', 'cursor', 'codex']);
+  assert.deepEqual(moveToolInOrder(['codex', 'pi'], 'missing', 'pi'), ['codex', 'pi']);
+});
+
 test('ignores stale async view requests when a newer request has started', async () => {
   const { isLatestRequest } = await loadUiState();
 

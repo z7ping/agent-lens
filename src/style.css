@@ -27,6 +27,13 @@
   .tool-tab.is-planned {
     @apply opacity-70;
   }
+  .tool-tab[draggable="true"] {
+    cursor: grab;
+  }
+  .tool-tab.is-dragging {
+    opacity: 0.55;
+    cursor: grabbing;
+  }
   .source-status {
     @apply ml-1 text-[11px] font-normal text-neutral-500 dark:text-neutral-400;
   }
@@ -911,6 +918,12 @@
 .overview-tool-desc {
   @apply text-sm text-neutral-500 dark:text-neutral-400 mt-1;
 }
+.overview-tool-links {
+  @apply flex items-center gap-2 flex-wrap mt-2;
+}
+.overview-tool-links a {
+  @apply inline-flex items-center rounded-md border border-neutral-200 dark:border-neutral-700 px-2 py-1 text-[11px] font-medium text-neutral-600 dark:text-neutral-300 hover:bg-white dark:hover:bg-neutral-800;
+}
 .overview-status {
   @apply inline-flex items-center px-2 py-1 rounded-md text-xs font-medium whitespace-nowrap;
 }
@@ -1018,6 +1031,15 @@
 }
 .overview-asset-card b {
   @apply block truncate text-xs font-semibold text-neutral-800 dark:text-neutral-100;
+}
+.overview-asset-path {
+  @apply mt-1.5 flex items-center gap-1 min-w-0;
+}
+.overview-asset-path span {
+  @apply min-w-0 flex-1 truncate font-mono text-[10px] text-neutral-500 dark:text-neutral-400;
+}
+.overview-asset-path button {
+  @apply shrink-0 rounded border border-neutral-200 dark:border-neutral-700 px-1.5 py-0.5 text-[10px] font-medium text-neutral-500 dark:text-neutral-400 hover:bg-white dark:hover:bg-neutral-800;
 }
 .overview-asset-card-meta {
   @apply flex items-center justify-between gap-2 mt-1;

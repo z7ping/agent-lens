@@ -12,7 +12,7 @@ Aggregates call counts for SKILLs, Tools, and MCPs, and reconstructs the complet
 - **多 Agent 追踪** — 统计 SKILL / Tool / MCP 调用次数，还原完整调用链
 - **调用链可视化** — 树形展示每次会话的 Agent→Tool 父子调用关系
 - **分析仪表盘** — 总调用数、错误率、工具使用排行、慢调用
-- **概览** — 每个 AI 工具一张卡片，展示版本、配置目录、Skills / MCP / Plugins / Extensions / Hooks 等能力资产
+- **概览** — 每个 AI 工具一张卡片，展示版本、配置目录、官网/文档/GitHub、Skills / MCP / Plugins / Extensions / Hooks 等能力资产和安装路径
 - **多数据源** — Hermes（SQLite 轮询）、Claude Code / Codex / Cursor / Pi（实时钩子）、OpenCode（SQLite 轮询）
 - **Timeline 可观测** — 统一 timeline 表，支持跨数据源对比、role 语义分类、错误自动归类
 - **实时刷新** — 3 秒增量更新，无需手动刷新
@@ -126,6 +126,8 @@ npx agent-trace service start    # 后台启动，开机自启
 ### 概览资产扫描
 
 “概览”页用于查看每个 AI 工具的稳定能力资产，包括工具版本、配置目录、Skills、MCP、Plugins、Extensions、Hooks、Adapters 和内置/历史调用中发现的能力。
+
+资产卡片会显示安装路径或配置路径，并提供路径复制入口，便于定位和管理本地 Skill、MCP、插件、扩展等资源。工具卡片会展示可用的官网、GitHub、官方文档链接。顶部工具来源 Tab 支持拖拽排序，排序保存在当前浏览器本地，并同步影响概览卡片和高频资产对照列顺序。
 
 概览数据采用“数据库快照 + 后台刷新”：
 

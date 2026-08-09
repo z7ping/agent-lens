@@ -49,10 +49,41 @@ test('builds one overview card per tool with grouped capability assets', () => {
   assert.equal(overview.tools[0].theme.accent, '#10b981');
   assert.equal(overview.tools[0].asset_groups.skill.count, 1);
   assert.equal(overview.tools[0].asset_groups.plugin.count, 1);
+  assert.equal(overview.tools[0].links.github, 'https://github.com/openai/codex');
+  assert.equal(overview.tools[0].order, 10);
 
   const brainstorming = overview.tools[0].assets.find(asset => asset.name === 'superpowers:brainstorming');
   assert.equal(brainstorming.call_count, 8);
   assert.equal(brainstorming.is_priority, true);
+});
+
+test('keeps tool links and order when reading overview from database snapshot', () => {
+  const db = new Database(':memory:');
+  db.exec(fs.readFileSync(path.join(__dirname, '..', 'server', 'schema.sql'), 'utf-8'));
+
+  refreshOverviewInventory(db, {
+    now: '2026-08-07T00:00:00.000Z',
+    inventory: [
+      {
+        tool: 'pi',
+        display_name: 'Pi',
+        description: 'Pi coding agent',
+        version: '1.2.3',
+        status: 'detected',
+        config_dir: 'C:/Users/test/.pi/agent',
+        theme: { accent: '#eab308', surface: '#fefce8' },
+        assets: [],
+      },
+    ],
+  });
+
+  const overview = buildOverview({ inventory: readOverviewInventory(db), usageRows: [] });
+  const pi = overview.tools[0];
+
+  assert.equal(pi.order, 60);
+  assert.equal(pi.links.homepage, 'https://pi.dev');
+  assert.equal(pi.links.docs, 'https://pi.dev/docs/latest');
+  assert.equal(pi.links.github, 'https://github.com/earendil-works/pi');
 });
 
 test('builds a capability matrix for high-frequency assets across tools', () => {

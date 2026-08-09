@@ -1,19 +1,20 @@
 import { escapeHtml } from '../config.js';
 import { fetchOverview } from '../utils.js';
-import { filterOverviewTools } from '../ui-state.mjs';
+import { filterOverviewTools, moveToolInOrder, orderOverviewTools } from '../ui-state.mjs';
 
 let overviewLoaded = false;
 let overviewData = null;
 let currentOverviewSource = '';
 const OVERVIEW_CACHE_KEY = 'agent-trace-overview-cache-v1';
+const TOOL_ORDER_KEY = 'agent-trace-tool-order-v1';
 const OVERVIEW_REFRESH_MS = 60000;
 const STABLE_TOOLS = [
-  { tool: 'codex', display_name: 'Codex', description: 'OpenAI Codex 命令行编码智能体与本地桌面环境。', theme: { accent: '#10b981', surface: '#ecfdf5' } },
-  { tool: 'claude-code', display_name: 'Claude Code', description: 'Anthropic Claude Code 命令行编码助手。', theme: { accent: '#f97316', surface: '#fff7ed' } },
-  { tool: 'cursor', display_name: 'Cursor', description: '基于 VS Code 的 AI 代码编辑器。', theme: { accent: '#6366f1', surface: '#eef2ff' } },
-  { tool: 'opencode', display_name: 'OpenCode', description: 'OpenCode 终端编码智能体。', theme: { accent: '#06b6d4', surface: '#ecfeff' } },
-  { tool: 'hermes', display_name: 'Hermes', description: 'Hermes 编码智能体历史数据源。', theme: { accent: '#8b5cf6', surface: '#f5f3ff' } },
-  { tool: 'pi', display_name: 'Pi', description: 'Pi 编码智能体历史数据源。', theme: { accent: '#eab308', surface: '#fefce8' } },
+  { tool: 'codex', display_name: 'Codex', description: 'OpenAI Codex 命令行编码智能体与本地桌面环境。', order: 10, links: { homepage: 'https://openai.com/codex', docs: 'https://developers.openai.com/codex', github: 'https://github.com/openai/codex' }, theme: { accent: '#10b981', surface: '#ecfdf5' } },
+  { tool: 'claude-code', display_name: 'Claude Code', description: 'Anthropic Claude Code 命令行编码助手。', order: 20, links: { homepage: 'https://www.anthropic.com/claude-code', docs: 'https://docs.anthropic.com/en/docs/claude-code', github: 'https://github.com/anthropics/claude-code' }, theme: { accent: '#f97316', surface: '#fff7ed' } },
+  { tool: 'hermes', display_name: 'Hermes', description: 'Hermes 编码智能体历史数据源。', order: 30, links: {}, theme: { accent: '#8b5cf6', surface: '#f5f3ff' } },
+  { tool: 'opencode', display_name: 'OpenCode', description: 'OpenCode 终端编码智能体。', order: 40, links: { homepage: 'https://opencode.ai', docs: 'https://opencode.ai/docs', github: 'https://github.com/sst/opencode' }, theme: { accent: '#06b6d4', surface: '#ecfeff' } },
+  { tool: 'cursor', display_name: 'Cursor', description: '基于 VS Code 的 AI 代码编辑器。', order: 50, links: { homepage: 'https://cursor.com', docs: 'https://docs.cursor.com', github: 'https://github.com/getcursor/cursor' }, theme: { accent: '#6366f1', surface: '#eef2ff' } },
+  { tool: 'pi', display_name: 'Pi', description: 'Pi 编码智能体历史数据源。', order: 60, links: { homepage: 'https://pi.dev', docs: 'https://pi.dev/docs/latest', github: 'https://github.com/earendil-works/pi' }, theme: { accent: '#eab308', surface: '#fefce8' } },
 ];
 
 const typeLabels = {
@@ -48,6 +49,8 @@ const statusLabels = {
 
 export function initOverview() {
   window.reloadOverview = () => loadOverview({ force: true });
+  initToolTabOrdering();
+  initOverviewActions();
   setInterval(() => {
     if (document.getElementById('tab-overview')?.classList.contains('active')) {
       loadOverview({ force: true, silent: true });
@@ -93,7 +96,7 @@ export async function loadOverview(options = {}) {
 }
 
 function renderOverview(data) {
-  const tools = data.tools || [];
+  const tools = orderOverviewTools(data.tools || [], readToolOrder());
   const focusedTools = filterOverviewTools(tools, currentOverviewSource);
   const cards = document.getElementById('overviewToolCards');
   const matrix = document.getElementById('overviewMatrix');
@@ -112,6 +115,7 @@ function renderToolCard(tool) {
         <div>
           <h3 class="overview-tool-name"><span></span>${escapeHtml(tool.display_name || tool.tool || '未知工具')}</h3>
           <p class="overview-tool-desc">${escapeHtml(tool.description || '暂无介绍')}</p>
+          ${renderToolLinks(tool.links || {})}
         </div>
         <span class="overview-status ${tool.status === 'detected' ? 'ok' : 'muted'}">${escapeHtml(statusLabels[tool.status] || tool.status || '未知')}</span>
       </header>
@@ -151,6 +155,7 @@ function renderAssetGroup(type, assets) {
 }
 
 function renderAssetCard(asset) {
+  const pathText = asset.path || '';
   return `
     <div class="overview-asset-card ${escapeHtml(typeClasses[asset.type] || 'type-builtin')} ${asset.is_priority ? 'is-priority' : ''}" title="${escapeHtml(asset.path || asset.description || '')}">
       <div class="overview-asset-card-top">
@@ -158,10 +163,30 @@ function renderAssetCard(asset) {
         ${asset.is_priority ? '<em>高频</em>' : ''}
       </div>
       <b>${escapeHtml(asset.name || 'unknown')}</b>
+      ${pathText ? `
+        <div class="overview-asset-path">
+          <span title="${escapeHtml(pathText)}">${escapeHtml(shortPath(pathText, 54))}</span>
+          <button type="button" data-overview-copy-path data-path="${escapeHtml(pathText)}" title="复制安装路径">复制</button>
+        </div>
+      ` : ''}
       <div class="overview-asset-card-meta">
         <small>${escapeHtml(statusLabels[asset.status] || asset.status || '未知')}</small>
         <small>${asset.call_count || 0} 次</small>
       </div>
+    </div>
+  `;
+}
+
+function renderToolLinks(links) {
+  const items = [
+    ['homepage', '官网'],
+    ['github', 'GitHub'],
+    ['docs', '文档'],
+  ].filter(([key]) => isSafeHttpUrl(links[key]));
+  if (!items.length) return '';
+  return `
+    <div class="overview-tool-links">
+      ${items.map(([key, label]) => `<a href="${escapeHtml(links[key])}" target="_blank" rel="noopener noreferrer">${label}</a>`).join('')}
     </div>
   `;
 }
@@ -196,10 +221,10 @@ function renderCoverage(cell = {}, source = false) {
   return `<span class="overview-coverage ${cls} ${source ? 'source' : ''}" title="${escapeHtml(cell.asset_name || '')}">${escapeHtml(status)}</span>`;
 }
 
-function shortPath(value) {
+function shortPath(value, maxLength = 42) {
   const text = String(value || '');
-  if (text.length <= 42) return text;
-  return `...${text.slice(-39)}`;
+  if (text.length <= maxLength) return text;
+  return `...${text.slice(-(maxLength - 3))}`;
 }
 
 function sourceAccent(toolName, tools) {
@@ -225,6 +250,108 @@ function writeCachedOverview(data) {
     }));
   } catch {
     // localStorage may be unavailable in private or restricted contexts.
+  }
+}
+
+function readToolOrder() {
+  try {
+    const raw = localStorage.getItem(TOOL_ORDER_KEY);
+    const parsed = JSON.parse(raw || '[]');
+    return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeToolOrder(order) {
+  try {
+    localStorage.setItem(TOOL_ORDER_KEY, JSON.stringify(order));
+  } catch {
+    // 本地排序只是偏好设置，无法写入时保持默认顺序。
+  }
+}
+
+function currentTabToolOrder() {
+  return Array.from(document.querySelectorAll('#toolTabs .tool-tab[data-tool]'))
+    .map(tab => tab.dataset.tool)
+    .filter(tool => tool && tool !== 'all');
+}
+
+function applyToolTabOrder(order = readToolOrder()) {
+  const tabs = document.getElementById('toolTabs');
+  if (!tabs) return;
+  const allTab = tabs.querySelector('.tool-tab[data-tool="all"]');
+  const toolTabs = Array.from(tabs.querySelectorAll('.tool-tab[data-tool]'))
+    .filter(tab => tab.dataset.tool !== 'all')
+    .map(tab => ({ tool: tab.dataset.tool, tab, order: STABLE_TOOLS.find(item => item.tool === tab.dataset.tool)?.order ?? 999 }));
+  const ordered = orderOverviewTools(toolTabs, order);
+  if (allTab) tabs.appendChild(allTab);
+  for (const item of ordered) tabs.appendChild(item.tab);
+}
+
+function initToolTabOrdering() {
+  const tabs = document.getElementById('toolTabs');
+  if (!tabs) return;
+  applyToolTabOrder();
+  tabs.querySelectorAll('.tool-tab[data-tool]').forEach(tab => {
+    if (tab.dataset.tool === 'all') return;
+    tab.draggable = true;
+    tab.title = [tab.title, '拖动可调整工具顺序'].filter(Boolean).join(' · ');
+  });
+  let draggedTool = '';
+  tabs.addEventListener('dragstart', event => {
+    const tab = event.target.closest?.('.tool-tab[data-tool]');
+    if (!tab || tab.dataset.tool === 'all') return;
+    draggedTool = tab.dataset.tool;
+    event.dataTransfer?.setData('text/plain', draggedTool);
+    event.dataTransfer.effectAllowed = 'move';
+    tab.classList.add('is-dragging');
+  });
+  tabs.addEventListener('dragend', () => {
+    tabs.querySelectorAll('.tool-tab.is-dragging').forEach(tab => tab.classList.remove('is-dragging'));
+    draggedTool = '';
+  });
+  tabs.addEventListener('dragover', event => {
+    const tab = event.target.closest?.('.tool-tab[data-tool]');
+    if (!tab || tab.dataset.tool === 'all') return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+  });
+  tabs.addEventListener('drop', event => {
+    const tab = event.target.closest?.('.tool-tab[data-tool]');
+    if (!tab || tab.dataset.tool === 'all') return;
+    event.preventDefault();
+    const source = draggedTool || event.dataTransfer?.getData('text/plain');
+    const current = readToolOrder().length ? readToolOrder() : currentTabToolOrder();
+    const next = moveToolInOrder(current, source, tab.dataset.tool);
+    writeToolOrder(next);
+    applyToolTabOrder(next);
+    if (overviewData) renderOverview(overviewData);
+  });
+}
+
+function initOverviewActions() {
+  document.addEventListener('click', event => {
+    const button = event.target.closest?.('[data-overview-copy-path]');
+    if (!button) return;
+    const value = button.dataset.path || '';
+    if (!value) return;
+    navigator.clipboard?.writeText(value).then(() => {
+      const previous = button.textContent;
+      button.textContent = '已复制';
+      setTimeout(() => { button.textContent = previous; }, 1200);
+    }).catch(() => {
+      window.prompt('复制路径', value);
+    });
+  });
+}
+
+function isSafeHttpUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
   }
 }
 

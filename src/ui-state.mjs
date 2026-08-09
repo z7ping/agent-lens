@@ -21,6 +21,32 @@ export function filterOverviewTools(tools, source) {
   return tools.filter(tool => tool.tool === source);
 }
 
+export function orderOverviewTools(tools, preferredOrder = []) {
+  const orderIndex = new Map((preferredOrder || []).map((tool, index) => [tool, index]));
+  return [...tools].sort((a, b) => {
+    const aSaved = orderIndex.has(a.tool);
+    const bSaved = orderIndex.has(b.tool);
+    if (aSaved || bSaved) {
+      if (aSaved && bSaved) return orderIndex.get(a.tool) - orderIndex.get(b.tool);
+      return aSaved ? -1 : 1;
+    }
+    const orderDiff = Number(a.order ?? 999) - Number(b.order ?? 999);
+    if (orderDiff !== 0) return orderDiff;
+    return String(a.display_name || a.tool || '').localeCompare(String(b.display_name || b.tool || ''));
+  });
+}
+
+export function moveToolInOrder(order, draggedTool, targetTool) {
+  if (!draggedTool || !targetTool || draggedTool === targetTool) return [...(order || [])];
+  const next = [...(order || [])];
+  const from = next.indexOf(draggedTool);
+  const to = next.indexOf(targetTool);
+  if (from === -1 || to === -1) return next;
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item);
+  return next;
+}
+
 export function isLatestRequest(requestId, latestRequestId) {
   return requestId === latestRequestId;
 }
