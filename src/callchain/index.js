@@ -4,6 +4,7 @@
 
 import { getToolType, getToolColor, formatDuration, formatTime, escapeHtml, truncate } from '../config.js';
 import { extractSessions } from '../utils.js';
+import { renderMarkdownInline, renderMarkdownMessage } from '../markdown.mjs';
 
 /** 记录当前展开的 session ID */
 let expandedSessionIds = new Set();
@@ -562,6 +563,7 @@ function renderRound(round, index, sourceColor = '', defaultExpanded = false) {
   const parts = [];
 
   const rand = Math.random().toString(36).slice(2, 8);
+  const userId = `round-user-${index}-${rand}`;
   const aiId = `round-ai-${index}-${rand}`;
   const toolsId = `round-tools-${index}-${rand}`;
 
@@ -592,7 +594,7 @@ function renderRound(round, index, sourceColor = '', defaultExpanded = false) {
     <div class="round-summary" onclick="toggleRound(this)">
       <span class="round-summary-chevron">›</span>
       <span class="round-summary-title">第 ${index + 1} 轮</span>
-      <span class="round-summary-user">${userExcerpt ? escapeHtml(userExcerpt) : '<span class="round-summary-no-user">无用户消息</span>'}</span>
+      <span class="round-summary-user">${userExcerpt ? renderMarkdownInline(userExcerpt) : '<span class="round-summary-no-user">无用户消息</span>'}</span>
       ${summaryMeta.length ? `<span class="round-summary-meta">${summaryMeta.join('')}</span>` : ''}
     </div>
   `);
@@ -606,7 +608,7 @@ function renderRound(round, index, sourceColor = '', defaultExpanded = false) {
     convo.push(`
       <div class="chat-message user">
         <div class="chat-meta">用户 · 第 ${index + 1} 轮</div>
-        <div class="chat-bubble user">${escapeHtml(userContent)}</div>
+        <div class="chat-bubble user">${renderMarkdownMessage(userId, userContent)}</div>
       </div>
     `);
   }
@@ -688,7 +690,7 @@ function renderAssistantBubble(id, texts) {
   const lines = fullText.split('\n');
   const needsCollapse = lines.length > AI_MAX_LINES || fullText.length > AI_MAX_CHARS;
   if (!needsCollapse) {
-    return `<div class="chat-bubble assistant">${escapeHtml(fullText)}</div>`;
+    return `<div class="chat-bubble assistant">${renderMarkdownMessage(id, fullText)}</div>`;
   }
   assistantTextCache.set(id, fullText);
   const preview = lines.length > AI_MAX_LINES
@@ -697,7 +699,7 @@ function renderAssistantBubble(id, texts) {
   const hint = lines.length > AI_MAX_LINES ? `还有 ${lines.length - AI_MAX_LINES} 行` : '内容较长';
   return `
     <div class="chat-bubble assistant collapsed" id="${id}">
-      <span class="assistant-preview">${escapeHtml(preview)}</span>
+      <div class="assistant-preview">${renderMarkdownMessage(`${id}-preview`, preview)}</div>
       <span class="assistant-fade"></span>
       <button type="button" class="assistant-expand" onclick="expandAssistant('${id}')" title="${hint}">展开全文 ↓</button>
     </div>
@@ -707,9 +709,22 @@ function renderAssistantBubble(id, texts) {
 window.expandAssistant = function (id) {
   const bubble = document.getElementById(id);
   if (!bubble || !assistantTextCache.has(id)) return;
-  bubble.innerHTML = escapeHtml(assistantTextCache.get(id));
+  bubble.innerHTML = renderMarkdownMessage(`${id}-full`, assistantTextCache.get(id));
   bubble.classList.remove('collapsed');
   assistantTextCache.delete(id);
+};
+
+window.toggleMarkdownSource = function (id) {
+  const message = document.getElementById(id);
+  if (!message) return;
+  const rendered = message.querySelector('.markdown-rendered');
+  const source = message.querySelector('.markdown-source');
+  const button = message.querySelector('.markdown-toggle');
+  const showingSource = message.dataset.view === 'source';
+  message.dataset.view = showingSource ? 'markdown' : 'source';
+  rendered?.classList.toggle('hidden', !showingSource);
+  source?.classList.toggle('hidden', showingSource);
+  if (button) button.textContent = showingSource ? '源码' : '渲染';
 };
 
 /** 轮次导航：按错误 / 慢调用 / 最近一轮过滤 */

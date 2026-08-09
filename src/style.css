@@ -440,7 +440,7 @@
   @apply text-[10px] font-medium text-neutral-400 dark:text-neutral-500 px-1;
 }
 .chat-bubble {
-  @apply text-[13px] leading-snug whitespace-pre-wrap break-words px-3 py-2 border;
+  @apply text-[13px] leading-snug break-words px-3 py-2 border;
 }
 .chat-bubble.user {
   @apply rounded-2xl rounded-br-md bg-primary-600 text-white border-primary-600 dark:bg-primary-500 dark:border-primary-500 dark:text-neutral-950;
@@ -485,6 +485,63 @@
 }
 .chat-bubble.assistant.expanded {
   position: relative;
+}
+.markdown-message {
+  @apply relative;
+}
+.markdown-toolbar {
+  @apply flex justify-end mb-1;
+}
+.markdown-toggle {
+  @apply text-[10px] px-1.5 py-0.5 rounded border border-transparent text-neutral-400 hover:text-neutral-700 hover:border-neutral-200 dark:hover:text-neutral-100 dark:hover:border-neutral-700 transition-colors;
+}
+.chat-bubble.user .markdown-toggle {
+  @apply text-white/70 hover:text-white hover:border-white/40;
+}
+.markdown-rendered {
+  @apply space-y-1.5;
+}
+.markdown-rendered h1 {
+  @apply text-base font-semibold leading-tight mt-1;
+}
+.markdown-rendered h2 {
+  @apply text-sm font-semibold leading-tight mt-1;
+}
+.markdown-rendered h3 {
+  @apply text-[13px] font-semibold leading-tight mt-1;
+}
+.markdown-rendered p {
+  @apply whitespace-pre-wrap;
+}
+.markdown-rendered ul {
+  @apply list-disc pl-5 space-y-1;
+}
+.markdown-rendered blockquote {
+  @apply border-l-2 border-neutral-300 dark:border-neutral-600 pl-3 text-neutral-500 dark:text-neutral-300;
+}
+.markdown-rendered code {
+  @apply px-1 py-0.5 rounded bg-neutral-200/70 dark:bg-neutral-700 text-[12px] font-mono;
+}
+.chat-bubble.user .markdown-rendered code {
+  @apply bg-white/20 text-white;
+}
+.markdown-rendered pre {
+  @apply overflow-x-auto rounded-md bg-neutral-900 text-neutral-100 p-2 text-[12px] leading-relaxed;
+}
+.markdown-rendered pre code {
+  @apply p-0 bg-transparent text-inherit;
+}
+.markdown-rendered a {
+  @apply text-primary-600 dark:text-primary-400 underline underline-offset-2;
+}
+.chat-bubble.user .markdown-rendered a {
+  @apply text-white underline;
+}
+.markdown-source {
+  @apply max-h-80 overflow-auto whitespace-pre-wrap font-mono text-[12px] leading-relaxed rounded-md bg-neutral-100 dark:bg-neutral-950/50 text-neutral-700 dark:text-neutral-200 p-2;
+}
+.chat-bubble.user .markdown-source {
+  @apply bg-white/15 text-white;
 }
 /* ═══ 轮次默认折叠（仅展开最近一轮 / 有错误轮次） ═══ */
 .round-block.collapsed .round-content {

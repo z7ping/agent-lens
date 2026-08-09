@@ -699,6 +699,7 @@ async function cmdInstall() {
         // 无可用服务后端，回退到 daemon 模式
         log('回退到 daemon 模式...', 'yellow');
         try {
+            cmdStop(INSTALL_DIR);
             startInstalledDaemon(DEFAULT_PORT);
             if (await waitForInstalledDaemon(DEFAULT_PORT)) {
                 log(`[OK] 服务已启动 → http://localhost:${DEFAULT_PORT}/`, 'green');

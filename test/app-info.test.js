@@ -9,8 +9,8 @@ test('reads the current app version for UI display', () => {
   const info = getAppInfo();
 
   assert.equal(info.name, 'agent-trace');
-  assert.equal(info.version, '1.9.0');
-  assert.equal(info.display_version, 'v1.9.0');
+  assert.equal(info.version, '1.9.1');
+  assert.equal(info.display_version, 'v1.9.1');
 });
 
 test('resolves package.json from installed flat layout', () => {

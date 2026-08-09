@@ -1,5 +1,16 @@
 # 更新日志
 
+## 1.9.1 (2026-08-09)
+
+### Added
+- 任务复盘对话气泡默认使用 Markdown 渲染，并支持一键切换查看源码。
+
+### Fixed
+- Windows 安装流程改用 daemon 管理提示，并等待服务 HTTP 就绪后再报告启动成功。
+- Windows 重新安装时会重启已安装 daemon，避免界面版本号停留在旧进程缓存。
+- 修复安装目录漏复制 `app-info.js`、安装布局读取 `package.json` 错误，以及从源码目录安装时 daemon 启动目录错误。
+- Windows PATH 写入改用用户环境变量 API，避免 `setx` 在长 PATH 下失败或截断。
+
 ## 1.9.0 (2026-08-07)
 
 ### Added
