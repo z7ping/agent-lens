@@ -17,7 +17,9 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { spawn, execSync } = require('child_process');
+const { spawn, execSync, execFileSync } = require('child_process');
+const net = require('net');
+const http = require('http');
 
 // ─── 配置 ────────────────────────────────────────────────────────
 
@@ -132,6 +134,77 @@ function isProcessAlive(pid) {
     } catch (_) {
         return false;
     }
+}
+
+function isPortListening(port) {
+    return new Promise((resolve) => {
+        const socket = new net.Socket();
+        let done = false;
+        const finish = (value) => {
+            if (done) return;
+            done = true;
+            socket.destroy();
+            resolve(value);
+        };
+        socket.setTimeout(500);
+        socket.on('connect', () => finish(true));
+        socket.on('timeout', () => finish(false));
+        socket.on('error', () => finish(false));
+        socket.connect(port, '127.0.0.1');
+    });
+}
+
+function startInstalledDaemon(port = DEFAULT_PORT) {
+    const installedCli = path.join(INSTALL_DIR, 'cli.js');
+    const installedServer = path.join(INSTALL_DIR, 'server.js');
+    if (fs.existsSync(installedCli)) {
+        const child = spawn(process.execPath, [installedCli, 'start', '--daemon', '--port', String(port)], {
+            cwd: INSTALL_DIR,
+            detached: true,
+            stdio: 'ignore',
+            windowsHide: true,
+        });
+        child.unref();
+        return;
+    }
+    const child = spawn(process.execPath, [installedServer, String(port), '--daemon'], {
+        cwd: INSTALL_DIR,
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true,
+    });
+    child.unref();
+}
+
+function isHttpReady(port) {
+    return new Promise((resolve) => {
+        const req = http.get({
+            hostname: '127.0.0.1',
+            port,
+            path: '/api/app-info',
+            timeout: 1000,
+        }, (res) => {
+            res.resume();
+            resolve(res.statusCode >= 200 && res.statusCode < 500);
+        });
+        req.on('timeout', () => {
+            req.destroy();
+            resolve(false);
+        });
+        req.on('error', () => resolve(false));
+    });
+}
+
+async function waitForInstalledDaemon(port, timeoutMs = 60000) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        const pid = readPid(INSTALL_DIR);
+        if (((pid && isProcessAlive(pid)) || await isPortListening(port)) && await isHttpReady(port)) {
+            return true;
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    return false;
 }
 
 // ─── 跨平台服务管理 ──────────────────────────────────────────────
@@ -367,7 +440,7 @@ function platformAction(action) {
     if (!backend) {
         if (isWin()) {
             log('Windows 使用 daemon 模式 + hook 自动守护，无需系统服务', 'dim');
-            log('  服务管理: agent-trace start / stop / status', 'dim');
+            log('  daemon 管理: agent-trace start --daemon / stop / status', 'dim');
         } else {
             log('[WARN] 当前平台不支持自动服务管理', 'yellow');
             log('  手动启动: agent-trace start --daemon', 'dim');
@@ -389,6 +462,27 @@ function platformAction(action) {
 }
 
 function cmdService(subcmd) {
+    if (isWin()) {
+        switch (subcmd) {
+            case 'start':
+                return cmdStart(['--daemon']);
+            case 'stop':
+                return cmdStop(PROJECT_DIR);
+            case 'status':
+                return cmdStatus(PROJECT_DIR);
+            case 'install':
+            case 'enable':
+            case 'disable':
+            case 'uninstall':
+                log('Windows 使用 daemon 模式 + hook 自动守护，无需系统服务', 'dim');
+                log('  可用命令: agent-trace start --daemon / stop / status', 'dim');
+                return false;
+            default:
+                log('用法: agent-trace service <start|stop|status>', 'cyan');
+                return undefined;
+        }
+    }
+
     switch (subcmd) {
         case 'install':   return platformAction('install');
         case 'uninstall': return platformAction('uninstall');
@@ -446,7 +540,8 @@ async function cmdInstall() {
         // server/ 根目录文件
         const rootFiles = [
             'server.js', 'cli.js', 'db.js', 'config.js', 'abeat-db.js', 'paths.js',
-            'install-hooks.js', 'schema.sql', 'routes.js', 'tool-map.js', 'overview.js', 'sources-status.js'
+            'install-hooks.js', 'schema.sql', 'routes.js', 'tool-map.js', 'overview.js', 'sources-status.js',
+            'app-info.js'
         ];
         rootFiles.forEach(f => {
             copyFile(path.join(PROJECT_DIR, 'server', f), path.join(INSTALL_DIR, f));
@@ -530,7 +625,16 @@ async function cmdInstall() {
             const currentPath = pathMatch ? pathMatch[1].trim() : '';
             if (!currentPath.split(';').some(p => p.toLowerCase() === INSTALL_DIR.toLowerCase())) {
                 const newPath = currentPath ? `${INSTALL_DIR};${currentPath}` : INSTALL_DIR;
-                execSync(`setx PATH "${newPath}"`, { stdio: 'ignore' });
+                execFileSync('powershell.exe', [
+                    '-NoProfile',
+                    '-ExecutionPolicy',
+                    'Bypass',
+                    '-Command',
+                    "[Environment]::SetEnvironmentVariable('Path', $env:AGENT_TRACE_NEW_PATH, 'User')",
+                ], {
+                    env: { ...process.env, AGENT_TRACE_NEW_PATH: newPath },
+                    stdio: 'ignore',
+                });
                 log(`[OK] 已创建: ${batPath}`, 'green');
                 log(`[OK] 已加入 PATH: ${INSTALL_DIR}`, 'green');
                 log('  请重启终端后使用 "agent-trace" 命令', 'dim');
@@ -595,18 +699,16 @@ async function cmdInstall() {
         // 无可用服务后端，回退到 daemon 模式
         log('回退到 daemon 模式...', 'yellow');
         try {
-            cmdStart(['--daemon']);
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            const pid = readPid(INSTALL_DIR);
-            if (pid && isProcessAlive(pid)) {
+            startInstalledDaemon(DEFAULT_PORT);
+            if (await waitForInstalledDaemon(DEFAULT_PORT)) {
                 log(`[OK] 服务已启动 → http://localhost:${DEFAULT_PORT}/`, 'green');
             } else {
                 log('[WARN] 服务未启动，请手动运行:', 'yellow');
-                log(`  agent-trace start`, 'dim');
+                log(`  agent-trace start --daemon`, 'dim');
             }
         } catch (_) {
             log('[WARN] 自动启动失败，请手动运行:', 'yellow');
-            log(`  agent-trace start`, 'dim');
+            log(`  agent-trace start --daemon`, 'dim');
         }
     }
 
@@ -623,10 +725,16 @@ async function cmdInstall() {
     }
     log(`  浏览器打开: http://localhost:${DEFAULT_PORT}/`, 'dim');
     log('  管理命令:', 'dim');
-    log('    agent-trace service start     启动服务', 'dim');
-    log('    agent-trace service stop      停止服务', 'dim');
-    log('    agent-trace service disable   关闭开机自启', 'dim');
-    log('    agent-trace service status    查看状态', 'dim');
+    if (isWin()) {
+        log('    agent-trace start --daemon    后台启动', 'dim');
+        log('    agent-trace stop              停止服务', 'dim');
+        log('    agent-trace status            查看状态', 'dim');
+    } else {
+        log('    agent-trace service start     启动服务', 'dim');
+        log('    agent-trace service stop      停止服务', 'dim');
+        log('    agent-trace service disable   关闭开机自启', 'dim');
+        log('    agent-trace service status    查看状态', 'dim');
+    }
     log('  向后兼容: node server.js 仍然可用', 'dim');
     console.log('');
     log(`文档: ${INSTALL_DIR}/README.md`, 'dim');
@@ -866,7 +974,7 @@ async function cmdUninstall() {
 
 // ─── status 命令 ─────────────────────────────────────────────────
 
-function cmdStatus(baseDir) {
+async function cmdStatus(baseDir) {
     baseDir = baseDir || INSTALL_DIR;
     const pid = readPid(baseDir);
     if (pid && isProcessAlive(pid)) {
@@ -875,7 +983,11 @@ function cmdStatus(baseDir) {
         if (pid) {
             try { fs.unlinkSync(getPidFile(baseDir)); } catch (_) {}
         }
-        log('未运行', 'yellow');
+        if (await isPortListening(DEFAULT_PORT)) {
+            log(`✅ 运行中  端口: ${DEFAULT_PORT}（PID 文件缺失或已过期）`, 'green');
+        } else {
+            log('未运行', 'yellow');
+        }
     }
 }
 

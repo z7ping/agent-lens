@@ -1,7 +1,12 @@
 const path = require('path');
 
-function getPackageJsonPath() {
-    return path.join(__dirname, '..', 'package.json');
+function getPackageJsonPath(baseDir = __dirname) {
+    const sourceLayoutPath = path.join(baseDir, '..', 'package.json');
+    const installLayoutPath = path.join(baseDir, 'package.json');
+    try {
+        if (require('fs').existsSync(sourceLayoutPath)) return sourceLayoutPath;
+    } catch (_) {}
+    return installLayoutPath;
 }
 
 function getAppInfo(options = {}) {
@@ -15,4 +20,4 @@ function getAppInfo(options = {}) {
     };
 }
 
-module.exports = { getAppInfo };
+module.exports = { getAppInfo, getPackageJsonPath };
