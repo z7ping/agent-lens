@@ -34,3 +34,9 @@ test('keeps explicit UI font sizes at 12px or larger', () => {
     assert.equal(/text-\[(?:10|11)px\]/.test(content), false, `${file} 不应使用小于 12px 的显式字号`);
   }
 });
+
+test('keeps changelog modal hidden state stronger than modal flex layout', () => {
+  const content = fs.readFileSync(path.join(__dirname, '..', 'src', 'style.css'), 'utf-8');
+
+  assert.match(content, /\.modal-backdrop\.hidden\s*\{[^}]*display:\s*none;[^}]*\}/s);
+});

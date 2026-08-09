@@ -886,6 +886,9 @@
 .modal-backdrop {
   @apply fixed inset-0 z-[80] flex items-start justify-center bg-neutral-950/40 px-4 pt-20;
 }
+.modal-backdrop.hidden {
+  display: none;
+}
 .modal-panel {
   @apply w-full max-w-lg rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-xl;
 }
