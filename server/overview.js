@@ -266,9 +266,10 @@ function uniqueDirs(dirs) {
 
 function getPiRootCandidates(configDir = '', options = {}) {
     const includeDefaultCandidates = options.includeDefaultCandidates || !configDir;
-    const home = os.homedir();
+    const home = options.homeDir || os.homedir();
     const defaultCandidates = includeDefaultCandidates ? [
         configDir,
+        process.env.PI_CODING_AGENT_DIR,
         process.env.PI_HOME,
         process.env.PI_AGENT_HOME,
         process.env.PI_CONFIG_HOME,
@@ -290,6 +291,8 @@ function getPiRootCandidates(configDir = '', options = {}) {
 function hasPiAgentMarkers(agentDir) {
     return fs.existsSync(path.join(agentDir, 'npm', 'package.json'))
         || fs.existsSync(path.join(agentDir, 'extensions'))
+        || fs.existsSync(path.join(agentDir, 'settings.json'))
+        || fs.existsSync(path.join(agentDir, 'skills'))
         || fs.existsSync(path.join(agentDir, 'pi-hermes-memory'))
         || fs.existsSync(path.join(agentDir, 'projects-memory'));
 }
@@ -306,6 +309,13 @@ function packagePathForDependency(modulesDir, name) {
     return path.join(modulesDir, ...String(name).split('/'), 'package.json');
 }
 
+function packageNameFromPiSource(source) {
+    const text = typeof source === 'string' ? source : String(source?.source || '');
+    const trimmed = text.trim();
+    if (!trimmed.startsWith('npm:')) return '';
+    return trimmed.slice(4).trim();
+}
+
 function isPiPackage(name, pkg = {}) {
     const packageName = String(pkg.name || name || '');
     const keywords = Array.isArray(pkg.keywords) ? pkg.keywords.map(item => String(item).toLowerCase()) : [];
@@ -318,11 +328,15 @@ function isPiPackage(name, pkg = {}) {
 function scanPiNpmPlugins(agentDir) {
     const npmDir = path.join(agentDir, 'npm');
     const packageJson = readJsonFile(path.join(npmDir, 'package.json'));
+    const settings = readJsonFile(path.join(agentDir, 'settings.json'));
     const deps = {
         ...(packageJson?.dependencies || {}),
         ...(packageJson?.devDependencies || {}),
         ...(packageJson?.optionalDependencies || {}),
     };
+    for (const name of normalizeArray(settings?.packages).map(packageNameFromPiSource).filter(Boolean)) {
+        deps[name] = deps[name] || '*';
+    }
     const modulesDir = path.join(npmDir, 'node_modules');
     return Object.keys(deps)
         .map(name => {
@@ -341,32 +355,187 @@ function scanPiNpmPlugins(agentDir) {
         .filter(Boolean);
 }
 
-function scanChildSkillDirectories(baseDir, description) {
-    return safeReadDir(baseDir)
-        .filter(entry => entry.isDirectory())
-        .map(entry => ({
-            name: entry.name,
-            type: 'skill',
+function scanChildSkillDirectories(baseDir, description, options = {}) {
+    const assets = [];
+    const maxDepth = Number(options.maxDepth ?? 4);
+    const includeRootMarkdown = options.includeRootMarkdown !== false;
+    const visit = (dir, depth) => {
+        const entries = safeReadDir(dir);
+        if (depth > 0 && entries.some(entry => entry.isFile() && entry.name === 'SKILL.md')) {
+            assets.push({
+                name: path.basename(dir),
+                type: 'skill',
+                status: 'enabled',
+                path: dir,
+                description,
+            });
+            return;
+        }
+        if (includeRootMarkdown && depth === 0) {
+            for (const entry of entries) {
+                if (entry.isFile() && entry.name.toLowerCase().endsWith('.md') && entry.name !== 'SKILL.md') {
+                    assets.push({
+                        name: path.basename(entry.name, path.extname(entry.name)),
+                        type: 'skill',
+                        status: 'enabled',
+                        path: path.join(dir, entry.name),
+                        description,
+                    });
+                }
+            }
+        }
+        if (depth >= maxDepth) return;
+        for (const entry of entries) {
+            if (!entry.isDirectory()) continue;
+            const childDir = path.join(dir, entry.name);
+            assets.push({
+                name: entry.name,
+                type: 'skill',
+                status: 'enabled',
+                path: childDir,
+                description,
+            });
+            visit(childDir, depth + 1);
+        }
+    };
+    visit(baseDir, 0);
+    return assets;
+}
+
+function normalizeArray(value) {
+    if (Array.isArray(value)) return value;
+    if (value === undefined || value === null || value === false) return [];
+    return [value];
+}
+
+function expandHomePath(input, homeDir = os.homedir()) {
+    const text = String(input || '').trim();
+    if (!text) return '';
+    if (text === '~') return homeDir;
+    if (text.startsWith('~/') || text.startsWith('~\\')) return path.join(homeDir, text.slice(2));
+    return text;
+}
+
+function resolvePiPath(input, baseDir, homeDir = os.homedir()) {
+    const expanded = expandHomePath(input, homeDir);
+    if (!expanded) return '';
+    return path.isAbsolute(expanded) ? path.normalize(expanded) : path.resolve(baseDir, expanded);
+}
+
+function packageResourceDirs(pkgDir, pkg, field) {
+    const piResources = normalizeArray(pkg?.pi?.[field]);
+    const topLevelResources = normalizeArray(pkg?.[field]);
+    return [...piResources, ...topLevelResources]
+        .filter(item => typeof item === 'string')
+        .map(item => resolvePiPath(item, pkgDir));
+}
+
+function scanConfiguredPiSkillPaths(agentDir, options = {}) {
+    const settings = readJsonFile(path.join(agentDir, 'settings.json'));
+    return normalizeArray(settings?.skills).flatMap(item => {
+        if (typeof item === 'string') {
+            return scanChildSkillDirectories(
+                resolvePiPath(item, agentDir, options.homeDir),
+                'Pi settings.json 配置的 Skill'
+            );
+        }
+        if (item && typeof item === 'object' && item.path) {
+            return scanChildSkillDirectories(
+                resolvePiPath(item.path, agentDir, options.homeDir),
+                'Pi settings.json 配置的 Skill'
+            );
+        }
+        return [];
+    });
+}
+
+function scanConfiguredPiExtensionPaths(agentDir, options = {}) {
+    const settings = readJsonFile(path.join(agentDir, 'settings.json'));
+    return normalizeArray(settings?.extensions).flatMap(item => {
+        const source = typeof item === 'string' ? item : String(item?.path || item?.source || '');
+        const cleanSource = source.startsWith('+') ? source.slice(1) : source;
+        const resolved = resolvePiPath(cleanSource, agentDir, options.homeDir);
+        if (!resolved || !fs.existsSync(resolved)) return [];
+        const stat = fs.statSync(resolved);
+        const assetPath = stat.isDirectory() ? resolved : path.dirname(resolved);
+        return [{
+            name: path.basename(assetPath),
+            type: 'extension',
             status: 'enabled',
-            path: path.join(baseDir, entry.name),
-            description,
-        }));
+            path: assetPath,
+            description: 'Pi settings.json 配置的 Extension',
+        }];
+    });
+}
+
+function scanPiExtensionDirectory(baseDir, description = 'Pi Extension') {
+    return safeReadDir(baseDir)
+        .filter(entry => entry.isDirectory() || (entry.isFile() && /\.(?:[cm]?[jt]s)$/i.test(entry.name)))
+        .map(entry => {
+            const assetPath = path.join(baseDir, entry.name);
+            return {
+                name: entry.isDirectory() ? entry.name : path.basename(entry.name, path.extname(entry.name)),
+                type: 'extension',
+                status: 'enabled',
+                path: assetPath,
+                description,
+            };
+        });
 }
 
 function scanPiNpmSkills(agentDir) {
     const npmDir = path.join(agentDir, 'npm');
     const packageJson = readJsonFile(path.join(npmDir, 'package.json'));
+    const settings = readJsonFile(path.join(agentDir, 'settings.json'));
     const deps = {
         ...(packageJson?.dependencies || {}),
         ...(packageJson?.devDependencies || {}),
         ...(packageJson?.optionalDependencies || {}),
     };
+    for (const name of normalizeArray(settings?.packages).map(packageNameFromPiSource).filter(Boolean)) {
+        deps[name] = deps[name] || '*';
+    }
     const modulesDir = path.join(npmDir, 'node_modules');
     return Object.keys(deps).flatMap(name => {
         const pkgPath = packagePathForDependency(modulesDir, name);
         const pkg = readJsonFile(pkgPath) || { name };
         if (!isPiPackage(name, pkg)) return [];
-        return scanChildSkillDirectories(path.join(path.dirname(pkgPath), 'skills'), `Pi 插件 ${pkg.name || name} 提供的 Skill`);
+        const pkgDir = path.dirname(pkgPath);
+        const skillDirs = [
+            path.join(pkgDir, 'skills'),
+            ...packageResourceDirs(pkgDir, pkg, 'skills'),
+        ];
+        return uniqueDirs(skillDirs).flatMap(dir =>
+            scanChildSkillDirectories(dir, `Pi 插件 ${pkg.name || name} 提供的 Skill`)
+        );
+    });
+}
+
+function scanPiNpmExtensions(agentDir) {
+    const npmDir = path.join(agentDir, 'npm');
+    const packageJson = readJsonFile(path.join(npmDir, 'package.json'));
+    const settings = readJsonFile(path.join(agentDir, 'settings.json'));
+    const deps = {
+        ...(packageJson?.dependencies || {}),
+        ...(packageJson?.devDependencies || {}),
+        ...(packageJson?.optionalDependencies || {}),
+    };
+    for (const name of normalizeArray(settings?.packages).map(packageNameFromPiSource).filter(Boolean)) {
+        deps[name] = deps[name] || '*';
+    }
+    const modulesDir = path.join(npmDir, 'node_modules');
+    return Object.keys(deps).flatMap(name => {
+        const pkgPath = packagePathForDependency(modulesDir, name);
+        const pkg = readJsonFile(pkgPath) || { name };
+        if (!isPiPackage(name, pkg)) return [];
+        const pkgDir = path.dirname(pkgPath);
+        const extensionDirs = [
+            path.join(pkgDir, 'extensions'),
+            ...packageResourceDirs(pkgDir, pkg, 'extensions'),
+        ];
+        return uniqueDirs(extensionDirs).flatMap(dir =>
+            scanPiExtensionDirectory(dir, `Pi 插件 ${pkg.name || name} 提供的 Extension`)
+        );
     });
 }
 
@@ -381,14 +550,18 @@ function scanPiProjectMemorySkills(agentDir) {
 }
 
 function discoverPiAssets(configDir, options = {}) {
-    return getPiAgentDirs(configDir, options).flatMap(agentDir => [
+    return dedupeAssets(getPiAgentDirs(configDir, options).flatMap(agentDir => [
         ...scanPiNpmPlugins(agentDir),
-        ...scanNamedDirectories(path.join(agentDir, 'extensions'), 'extension', 'enabled'),
-        ...scanNamedDirectories(path.join(agentDir, 'skills'), 'skill', 'enabled'),
-        ...scanNamedDirectories(path.join(agentDir, 'pi-hermes-memory', 'skills'), 'skill', 'enabled'),
+        ...scanPiExtensionDirectory(path.join(agentDir, 'extensions'), 'Pi settings.json/agent 目录启用的 Extension'),
+        ...scanConfiguredPiExtensionPaths(agentDir, options),
+        ...scanChildSkillDirectories(path.join(agentDir, 'skills'), 'Pi 用户级默认 Skill'),
+        ...scanChildSkillDirectories(path.join(options.homeDir || os.homedir(), '.agents', 'skills'), 'Pi / Agent Skills 共享用户级 Skill'),
+        ...scanConfiguredPiSkillPaths(agentDir, options),
+        ...scanChildSkillDirectories(path.join(agentDir, 'pi-hermes-memory', 'skills'), 'Pi Hermes Memory 提供的 Skill'),
         ...scanPiNpmSkills(agentDir),
+        ...scanPiNpmExtensions(agentDir),
         ...scanPiProjectMemorySkills(agentDir),
-    ]);
+    ]));
 }
 
 function discoverInventory() {

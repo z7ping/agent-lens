@@ -206,15 +206,68 @@ test('discovers Pi assets from default candidate environment paths', () => {
     version: '1.0.0',
   }));
 
-  const original = process.env.PI_AGENT_HOME;
-  process.env.PI_AGENT_HOME = agentDir;
+  const original = process.env.PI_CODING_AGENT_DIR;
+  process.env.PI_CODING_AGENT_DIR = agentDir;
   try {
     const assets = discoverPiAssets('');
     assert.ok(assets.some(asset => asset.type === 'plugin' && asset.name === 'pi-env-plugin'));
   } finally {
-    if (original === undefined) delete process.env.PI_AGENT_HOME;
-    else process.env.PI_AGENT_HOME = original;
+    if (original === undefined) delete process.env.PI_CODING_AGENT_DIR;
+    else process.env.PI_CODING_AGENT_DIR = original;
   }
+});
+
+test('discovers Pi configured skills and package-declared resources', () => {
+  const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-trace-pi-resources-'));
+  const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-trace-pi-home-'));
+  const externalSkillDir = path.join(homeDir, '.agents', 'skills', 'shared-skill');
+  const npmDir = path.join(agentDir, 'npm');
+  const modulesDir = path.join(npmDir, 'node_modules');
+  const packageDir = path.join(modulesDir, 'pi-resource-pack');
+  const settingsPackageDir = path.join(modulesDir, 'pi-settings-pack');
+  const explicitExtensionFile = path.join(agentDir, 'external-extensions', 'configured-extension', 'index.ts');
+
+  fs.mkdirSync(path.join(packageDir, 'custom-skills', 'pack-skill'), { recursive: true });
+  fs.mkdirSync(path.join(packageDir, 'extensions', 'pack-extension'), { recursive: true });
+  fs.mkdirSync(path.join(agentDir, 'skills'), { recursive: true });
+  fs.writeFileSync(path.join(packageDir, 'extensions', 'file-extension.ts'), 'export default function () {}');
+  fs.writeFileSync(path.join(packageDir, 'custom-skills', 'pack-skill', 'SKILL.md'), '---\nname: pack-skill\ndescription: pack skill\n---\n');
+  fs.writeFileSync(path.join(agentDir, 'skills', 'root-skill.md'), '---\nname: root-skill\ndescription: root skill\n---\n');
+  fs.mkdirSync(path.join(packageDir, 'custom-extensions', 'declared-extension'), { recursive: true });
+  fs.mkdirSync(path.join(settingsPackageDir, 'skills', 'settings-pack-skill'), { recursive: true });
+  fs.mkdirSync(path.dirname(explicitExtensionFile), { recursive: true });
+  fs.mkdirSync(path.join(agentDir, 'explicit-skills', 'configured-skill'), { recursive: true });
+  fs.mkdirSync(externalSkillDir, { recursive: true });
+  fs.writeFileSync(explicitExtensionFile, 'export default function () {}');
+  fs.writeFileSync(path.join(npmDir, 'package.json'), JSON.stringify({
+    dependencies: {
+      'pi-resource-pack': '^1.0.0',
+    },
+  }));
+  fs.writeFileSync(path.join(packageDir, 'package.json'), JSON.stringify({
+    name: 'pi-resource-pack',
+    version: '1.0.0',
+    pi: {
+      skills: ['./custom-skills'],
+      extensions: ['./custom-extensions'],
+    },
+  }));
+  fs.writeFileSync(path.join(settingsPackageDir, 'package.json'), JSON.stringify({
+    name: 'pi-settings-pack',
+    version: '1.0.0',
+  }));
+  fs.writeFileSync(path.join(agentDir, 'settings.json'), JSON.stringify({
+    skills: ['./explicit-skills'],
+    extensions: ['+external-extensions/configured-extension/index.ts'],
+    packages: ['npm:pi-settings-pack'],
+  }));
+
+  const assets = discoverPiAssets(agentDir, { homeDir });
+  const skills = assets.filter(asset => asset.type === 'skill').map(asset => asset.name).sort();
+  const extensions = assets.filter(asset => asset.type === 'extension').map(asset => asset.name).sort();
+
+  assert.deepEqual(skills, ['configured-skill', 'pack-skill', 'root-skill', 'settings-pack-skill', 'shared-skill']);
+  assert.deepEqual(extensions, ['configured-extension', 'declared-extension', 'file-extension', 'pack-extension']);
 });
 
 test('persists stable overview inventory in the agent trace database', () => {

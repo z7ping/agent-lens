@@ -11,7 +11,8 @@
 - 修复安装目录漏复制 `app-info.js`、安装布局读取 `package.json` 错误，以及从源码目录安装时 daemon 启动目录错误。
 - Windows PATH 写入改用用户环境变量 API，避免 `setx` 在长 PATH 下失败或截断。
 - Pi 概览扫描改为按 `PI_CODING_AGENT_DIR` 默认根 `~/.pi/agent` 发现资产，并兼容环境变量、XDG、Windows AppData、macOS Application Support 等候选目录。
-- Pi 概览现在会扫描 `<agentDir>/skills`、npm 插件及插件内 `skills`、`extensions`、`pi-hermes-memory/skills`、`projects-memory/<project>/skills`。
+- Pi 概览现在会扫描 `<agentDir>/skills`、`~/.agents/skills`、`settings.json.skills`、npm package 声明/传统目录中的 `skills` 与 `extensions`、`pi-hermes-memory/skills`、`projects-memory/<project>/skills`。
+- Pi Skill 扫描改为识别根 `.md` 与递归 `SKILL.md`，Extension 扫描支持目录和 JS/TS 文件，贴近 Pi 官方资源发现规则。
 
 ## 1.9.0 (2026-08-07)
 

@@ -148,7 +148,7 @@ Pi 的默认配置根目录来自 `PI_CODING_AGENT_DIR`，未设置时为 `~/.pi
 
 Pi agent 根目录候选包括：
 
-- 环境变量：`PI_CODING_AGENT_DIR`、`PI_HOME`、`PI_AGENT_HOME`、`PI_CONFIG_HOME`、`PI_DATA_HOME`
+- 环境变量：`PI_CODING_AGENT_DIR`（Pi 官方配置根）、`PI_HOME`、`PI_AGENT_HOME`、`PI_CONFIG_HOME`、`PI_DATA_HOME`
 - 通用默认：`~/.pi/agent`、`~/.pi`
 - Linux：`~/.config/pi`、`~/.local/share/pi`
 - Windows：`%APPDATA%\Pi`、`%APPDATA%\pi`、`%LOCALAPPDATA%\Pi`、`%LOCALAPPDATA%\pi`
@@ -156,12 +156,21 @@ Pi agent 根目录候选包括：
 
 识别到 Pi agent 根目录后，会扫描：
 
+Skill 目录会识别根目录下的 `.md` 文件，并递归识别包含 `SKILL.md` 的子目录；Extension 目录会识别子目录以及 `.js` / `.ts` / `.mjs` / `.cjs` 文件。
+
 | 路径 | 类型 | 说明 |
 |------|------|------|
 | `<agentDir>/skills` | Skill | Pi 用户级默认 Skill 目录 |
+| `~/.agents/skills` | Skill | Pi / Agent Skills 共享的用户级 Skill 目录 |
+| `<agentDir>/settings.json` 中的 `skills` | Skill | Pi 配置显式加载的 Skill 目录 |
+| `<agentDir>/settings.json` 中的 `extensions` | Extension | Pi 配置显式加载的 Extension 路径 |
+| `<agentDir>/settings.json` 中的 `packages` | Plugin / Skill / Extension | Pi 配置显式安装的 package，支持 `npm:<package>` |
 | `<agentDir>/npm/package.json` + `<agentDir>/npm/node_modules/<package>` | Plugin | Pi npm 插件依赖，识别 `pi-*`、`*/pi-*`、`keywords` 或 `pkg.pi` 标记 |
-| `<agentDir>/npm/node_modules/<package>/skills` | Skill | Pi npm 插件随包提供的 Skill |
+| `<agentDir>/npm/node_modules/<package>/skills` | Skill | Pi npm 插件随包提供的传统 Skill 目录 |
+| `<agentDir>/npm/node_modules/<package>/package.json` 中的 `pi.skills` / `skills` | Skill | Pi package 声明的 Skill 资源 |
 | `<agentDir>/extensions` | Extension | Pi extension 目录 |
+| `<agentDir>/npm/node_modules/<package>/extensions` | Extension | Pi npm 插件随包提供的传统 Extension 目录 |
+| `<agentDir>/npm/node_modules/<package>/package.json` 中的 `pi.extensions` / `extensions` | Extension | Pi package 声明的 Extension 资源 |
 | `<agentDir>/pi-hermes-memory/skills` | Skill | Pi Hermes Memory 的全局/过程记忆 Skill |
 | `<agentDir>/projects-memory/<project>/skills` | Skill | Pi 项目级记忆 Skill |
 

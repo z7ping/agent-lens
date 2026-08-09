@@ -175,10 +175,18 @@ Pi agent 根目录候选：
 
 识别到 agent 根目录后扫描：
 
+- Skill 资源扫描会识别根目录 `.md` 文件，并递归识别包含 `SKILL.md` 的子目录；Extension 资源扫描会识别子目录以及 `.js` / `.ts` / `.mjs` / `.cjs` 文件。
 - `<agentDir>/skills`：Pi 用户级默认 Skill 目录。
+- `~/.agents/skills`：Pi / Agent Skills 共享的用户级 Skill 目录。
+- `<agentDir>/settings.json` 中的 `skills`：Pi 配置显式加载的 Skill 目录。
+- `<agentDir>/settings.json` 中的 `extensions`：Pi 配置显式加载的 Extension 路径。
+- `<agentDir>/settings.json` 中的 `packages`：Pi 配置显式安装的 package，`npm:<package>` 会映射到 `<agentDir>/npm/node_modules/<package>`。
 - `<agentDir>/npm/package.json` 与 `<agentDir>/npm/node_modules/<package>`：Pi npm 插件。包名 `pi-*`、scope 内含 `/pi-*`、`package.json` 中有 `pi` 字段，或 `keywords` 含 `pi-extension` / `pi-package` / `pi-*` 时视为 Pi 插件。
-- `<agentDir>/npm/node_modules/<package>/skills`：插件随包提供的 Skill。
+- `<agentDir>/npm/node_modules/<package>/skills`：插件随包提供的传统 Skill 目录。
+- `<agentDir>/npm/node_modules/<package>/package.json` 中的 `pi.skills` / `skills`：Pi package 声明的 Skill 资源。
 - `<agentDir>/extensions`：Pi extension。
+- `<agentDir>/npm/node_modules/<package>/extensions`：插件随包提供的传统 Extension 目录。
+- `<agentDir>/npm/node_modules/<package>/package.json` 中的 `pi.extensions` / `extensions`：Pi package 声明的 Extension 资源。
 - `<agentDir>/pi-hermes-memory/skills`：Pi Hermes Memory 提供的 Skill。
 - `<agentDir>/projects-memory/<project>/skills`：项目级记忆 Skill。
 
