@@ -131,7 +131,9 @@ test('discovers Pi plugins from agent npm dependencies and extensions', () => {
   const modulesDir = path.join(npmDir, 'node_modules');
   fs.mkdirSync(path.join(modulesDir, 'pi-add-dir'), { recursive: true });
   fs.mkdirSync(path.join(modulesDir, '@vendor', 'pi-theme'), { recursive: true });
+  fs.mkdirSync(path.join(modulesDir, 'pi-add-dir', 'skills', 'pi-add-dir-skill'), { recursive: true });
   fs.mkdirSync(path.join(piDir, 'agent', 'extensions', 'clawd-on-desk'), { recursive: true });
+  fs.mkdirSync(path.join(piDir, 'agent', 'projects-memory', 'agent-trace', 'skills', 'project-memory-skill'), { recursive: true });
   fs.writeFileSync(path.join(npmDir, 'package.json'), JSON.stringify({
     dependencies: {
       'pi-add-dir': '^1.0.0',
@@ -153,9 +155,11 @@ test('discovers Pi plugins from agent npm dependencies and extensions', () => {
   const assets = discoverPiAssets(piDir);
   const plugins = assets.filter(asset => asset.type === 'plugin').map(asset => asset.name).sort();
   const extensions = assets.filter(asset => asset.type === 'extension').map(asset => asset.name);
+  const skills = assets.filter(asset => asset.type === 'skill').map(asset => asset.name).sort();
 
   assert.deepEqual(plugins, ['@vendor/pi-theme', 'pi-add-dir']);
   assert.deepEqual(extensions, ['clawd-on-desk']);
+  assert.deepEqual(skills, ['pi-add-dir-skill', 'project-memory-skill']);
 });
 
 test('persists stable overview inventory in the agent trace database', () => {

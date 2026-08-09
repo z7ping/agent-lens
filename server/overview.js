@@ -289,11 +289,52 @@ function scanPiNpmPlugins(configDir) {
         .filter(Boolean);
 }
 
+function scanChildSkillDirectories(baseDir, description) {
+    return safeReadDir(baseDir)
+        .filter(entry => entry.isDirectory())
+        .map(entry => ({
+            name: entry.name,
+            type: 'skill',
+            status: 'enabled',
+            path: path.join(baseDir, entry.name),
+            description,
+        }));
+}
+
+function scanPiNpmSkills(configDir) {
+    const npmDir = path.join(configDir, 'agent', 'npm');
+    const packageJson = readJsonFile(path.join(npmDir, 'package.json'));
+    const deps = {
+        ...(packageJson?.dependencies || {}),
+        ...(packageJson?.devDependencies || {}),
+        ...(packageJson?.optionalDependencies || {}),
+    };
+    const modulesDir = path.join(npmDir, 'node_modules');
+    return Object.keys(deps).flatMap(name => {
+        const pkgPath = packagePathForDependency(modulesDir, name);
+        const pkg = readJsonFile(pkgPath) || { name };
+        if (!isPiPackage(name, pkg)) return [];
+        return scanChildSkillDirectories(path.join(path.dirname(pkgPath), 'skills'), `Pi 插件 ${pkg.name || name} 提供的 Skill`);
+    });
+}
+
+function scanPiProjectMemorySkills(configDir) {
+    const projectsDir = path.join(configDir, 'agent', 'projects-memory');
+    return safeReadDir(projectsDir)
+        .filter(entry => entry.isDirectory())
+        .flatMap(entry => scanChildSkillDirectories(
+            path.join(projectsDir, entry.name, 'skills'),
+            `Pi 项目记忆 ${entry.name} 提供的 Skill`
+        ));
+}
+
 function discoverPiAssets(configDir) {
     return [
         ...scanPiNpmPlugins(configDir),
         ...scanNamedDirectories(path.join(configDir, 'agent', 'extensions'), 'extension', 'enabled'),
         ...scanNamedDirectories(path.join(configDir, 'agent', 'pi-hermes-memory', 'skills'), 'skill', 'enabled'),
+        ...scanPiNpmSkills(configDir),
+        ...scanPiProjectMemorySkills(configDir),
     ];
 }
 
