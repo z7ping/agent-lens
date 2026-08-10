@@ -19,8 +19,14 @@
     "prepublishOnly": "vite build"
   },
   "files": [
-    "dist/",
-    "server/",
+    "dist/index.html",
+    "dist/assets/",
+    "server/*.js",
+    "server/schema.sql",
+    "server/adapters/",
+    "server/hooks/",
+    "server/importers/",
+    "server/scripts/",
     "src/",
     "index.html",
     "vite.config.mjs",
@@ -33,8 +39,15 @@
     "type": "git",
     "url": "https://github.com/z7ping/agent-trace.git"
   },
+  "homepage": "https://github.com/z7ping/agent-trace#readme",
+  "bugs": {
+    "url": "https://github.com/z7ping/agent-trace/issues"
+  },
   "keywords": ["claude-code", "ai-tools", "monitoring", "visualization", "agent"],
-  "author": "",
+  "author": "7ping <z7ping@outlook.com>",
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=18.0.0"
   },

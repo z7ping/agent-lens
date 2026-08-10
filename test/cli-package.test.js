@@ -1,0 +1,46 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { execFileSync } = require('node:child_process');
+const fs = require('node:fs');
+const path = require('node:path');
+const os = require('node:os');
+
+test('cli package command creates an npm-compatible archive with current runtime files only', { timeout: 30000 }, () => {
+  const root = path.join(__dirname, '..');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-trace-package-test-'));
+  const cli = path.join(root, 'server', 'cli.js');
+
+  execFileSync(process.execPath, [cli, 'package', '--output', tmp], {
+    cwd: root,
+    encoding: 'utf-8',
+  });
+
+  const archives = fs.readdirSync(tmp).filter(name => /^agent-trace-.+\.tgz$/.test(name));
+  assert.equal(archives.length, 1);
+  const archivePath = path.join(tmp, archives[0]);
+  const listing = execFileSync('tar', ['-tzf', archivePath], { encoding: 'utf-8' });
+
+  for (const required of [
+    'server/server.js',
+    'server/cli.js',
+    'server/routes.js',
+    'server/overview.js',
+    'server/sources-status.js',
+    'server/app-info.js',
+    'server/importers/index.js',
+    'dist/index.html',
+    'package.json',
+    'README.md',
+    'CHANGELOG.md',
+  ]) {
+    assert.match(listing, new RegExp(`package/${required.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+  }
+
+  for (const forbidden of [
+    'projects.json',
+    'states/',
+    'a-beat.db',
+  ]) {
+    assert.doesNotMatch(listing, new RegExp(`package/(?:server/)?${forbidden.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+  }
+});

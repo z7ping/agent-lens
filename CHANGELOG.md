@@ -10,7 +10,12 @@
 
 ### Fixed
 - 修复 GitHub `npx github:z7ping/agent-trace install` 安装时包文件白名单缺少前端源码，导致无法临时构建 `dist/` 的问题。
+- 修复 npm/GitHub 分发包会包含 `server/projects.json`、`server/states/` 等本机运行状态文件的问题。
+- 修复 `agent-trace package` 使用过期手写打包清单导致 Release 包缺少当前运行必需文件的问题，现在改为复用 `npm pack` 生成 npm 兼容 `.tgz`。
 - 修复概览调用统计中 `call_count: 0` 被误计为 1 的问题，避免 SKILL “已使用”数量虚高。
+
+### Changed
+- README 和 AGENTS 文档区分源码安装、GitHub 分发和 npm 发布后的命令路径，避免未发布 npm 时误用 registry 旧包。
 
 ## 1.9.1 (2026-08-09)
 

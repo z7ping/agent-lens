@@ -995,78 +995,44 @@ async function cmdStatus(baseDir) {
 
 // ─── package 命令 ────────────────────────────────────────────────
 
-function cmdPackage() {
-    const pkgName = `agent-trace-v${getVersion()}`;
-    const distDir = path.join(PROJECT_DIR, 'dist');
+function cmdPackage(argv = []) {
+    const outputFlagIdx = argv.indexOf('--output');
+    const outputDir = outputFlagIdx >= 0 && argv[outputFlagIdx + 1]
+        ? path.resolve(argv[outputFlagIdx + 1])
+        : path.join(PROJECT_DIR, 'dist');
 
     log(`📦 打包 Agent Trace v${getVersion()}`, 'bright');
     log('═'.repeat(45), 'dim');
     console.log('');
 
-    // 创建 dist 目录
-    mkdirp(distDir);
+    mkdirp(outputDir);
 
-    // 创建临时目录
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-trace-'));
-    const pkgDir = path.join(tmpDir, pkgName);
-    mkdirp(path.join(pkgDir, 'hooks'));
-
-    // 复制文件
-    log('复制文件...', 'cyan');
-
-    const hookFiles = ['prelog.js', 'log.js', 'server-guard.js'];
-    hookFiles.forEach(f => copyFile(path.join(PROJECT_DIR, 'server', 'hooks', f), path.join(pkgDir, 'hooks', f)));
-
-    const rootFiles = [
-        'index.html', 'README.md', '.gitignore',
-        'server.js', 'cli.js', 'db.js', 'config.js', 'abeat-db.js',
-        'install-hooks.js', 'schema.sql'
-    ];
-    rootFiles.forEach(f => copyFile(path.join(PROJECT_DIR, 'server', f), path.join(pkgDir, f)));
-
-    log(`[OK] ${hookFiles.length + rootFiles.length} 个文件已复制`, 'green');
-
-    // 创建归档
-    console.log('');
-    log('创建归档...', 'cyan');
-
-    let archiveName;
-
-    try {
-        // 尝试 zip
-        archiveName = `${pkgName}.zip`;
-        execSync(`cd "${tmpDir}" && zip -r "${distDir}/${archiveName}" "${pkgName}"`, {
-            stdio: 'ignore',
-        });
-        log(`[OK] 已创建: ${path.join(distDir, archiveName)}`, 'green');
-    } catch {
-        try {
-            // 回退到 tar
-            archiveName = `${pkgName}.tar.gz`;
-            execSync(`cd "${tmpDir}" && tar -czf "${distDir}/${archiveName}" "${pkgName}"`, {
-                stdio: 'ignore',
-            });
-            log(`[OK] 已创建: ${path.join(distDir, archiveName)}`, 'green');
-        } catch {
-            log('[WARN] zip/tar 不可用，文件保留在临时目录', 'yellow');
-            log(`临时目录: ${pkgDir}`, 'dim');
-            return;
-        }
+    if (!fs.existsSync(path.join(PROJECT_DIR, 'dist', 'index.html'))) {
+        log('dist/ 不存在，正在构建前端...', 'yellow');
+        execSync('npm run build', { cwd: PROJECT_DIR, stdio: 'inherit' });
     }
 
-    // 清理临时目录
-    rimraf(tmpDir);
+    log('使用 npm pack 生成可复现分发包...', 'cyan');
+    const before = new Set(fs.readdirSync(outputDir));
+    execSync(`npm pack --pack-destination "${outputDir}"`, {
+        cwd: PROJECT_DIR,
+        stdio: 'inherit',
+    });
+    const created = fs.readdirSync(outputDir)
+        .filter(name => !before.has(name) && /^agent-trace-.+\.tgz$/.test(name))
+        .sort();
+    const archiveName = created[created.length - 1] || `agent-trace-${getVersion()}.tgz`;
 
     console.log('');
     log('═'.repeat(45), 'dim');
     log('打包完成！', 'bright');
     console.log('');
-    log(`输出: ${distDir}/`, 'cyan');
+    log(`输出: ${path.join(outputDir, archiveName)}`, 'cyan');
     console.log('');
     log('分发方式:', 'yellow');
-    log('  1. 上传到 GitHub Releases', 'dim');
-    log('  2. 直接分享归档文件', 'dim');
-    log('  3. 用户运行: agent-trace install', 'dim');
+    log('  1. 上传 .tgz 到 GitHub Releases', 'dim');
+    log('  2. 用户运行: npx ./agent-trace-x.y.z.tgz install', 'dim');
+    log('  3. 或发布到 npm 后运行: npx agent-trace install', 'dim');
     log('═'.repeat(45), 'dim');
 }
 
@@ -1142,7 +1108,7 @@ function main() {
             cmdStatus(PROJECT_DIR);
             break;
         case 'package':
-            cmdPackage();
+            cmdPackage(cmdArgs);
             break;
         case 'help':
         case '--help':

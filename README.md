@@ -5,7 +5,7 @@
 AgentTrace – End-to-end observability for multi‑agent invocations.
 Aggregates call counts for SKILLs, Tools, and MCPs, and reconstructs the complete execution path of every session in real time.
 
-> **一句话**：`npm install && npm start` → 打开浏览器看仪表盘。
+> **一句话**：`npm install && npm run build && node server/cli.js start` → 打开浏览器看仪表盘。
 
 ## 特性
 
@@ -25,7 +25,7 @@ git clone https://github.com/z7ping/agent-trace.git
 cd agent-trace
 npm install
 npm run build
-npm start              # 自动构建前端 + 启动后端，端口 56789
+node server/cli.js start              # 启动后端，端口 56789
 ```
 
 打开 **http://localhost:56789/** 即可看到仪表盘。
@@ -67,7 +67,7 @@ agent-trace/
 
 # 开发模式
 npm run dev           # vite dev server（端口 5173），代理 /api 到 56789
-npx agent-trace start      # 启动后端服务（端口 56789）
+node server/cli.js start   # 启动后端服务（端口 56789）
 
 ## 场景指南
 
@@ -93,14 +93,30 @@ npm run dev              # 后端（56789）+ Vite（5173）一起启动
 
 **Hermes（自动）**：服务启动后自动轮询 `~/.hermes/state.db`，无需额外配置。支持 state 持久化，重启不重复导入。
 
-安装时会自动构建前端 + 注册系统服务，一步到位：
+### 场景 C：我要从源码安装到本机工具链
+
+从 GitHub 源码安装时，使用当前目录里的 CLI：
 
 ```bash
-npx agent-trace install          # 自动 npm run build + 安装钩子 + 注册系统服务
-npx agent-trace service start    # 后台启动，开机自启
+npm install
+npm run build
+node server/cli.js install          # 复制到 ~/.agent-trace + 安装钩子 + 注册服务/daemon
+node server/cli.js service start    # Linux/macOS 可用；Windows 使用 daemon 自动守护
 ```
 
-安装后自动注册为**系统服务**，支持开机自启。自动检测平台：
+发布到 npm 后，才推荐使用短命令：
+
+```bash
+npx agent-trace install
+```
+
+如果只是想直接从 GitHub 分发包试用，可以使用：
+
+```bash
+npx github:z7ping/agent-trace install
+```
+
+安装后会自动注册为**系统服务**或 daemon，支持开机自启/自动拉起。自动检测平台：
 
 | 平台 | 服务机制 | 配置路径 |
 |------|---------|---------|
@@ -143,7 +159,7 @@ npx agent-trace service start    # 后台启动，开机自启
 定时扫描间隔通过环境变量配置，单位为毫秒：
 
 ```bash
-AGENT_TRACE_OVERVIEW_SCAN_INTERVAL_MS=600000 npx agent-trace start
+AGENT_TRACE_OVERVIEW_SCAN_INTERVAL_MS=600000 node server/cli.js start
 ```
 
 默认值是 `600000`（10 分钟）。设为 `0` 可关闭服务端定时扫描；访问概览时仍会触发后台刷新。
@@ -196,7 +212,7 @@ Skill 目录会识别根目录下的 `.md` 文件，并递归识别包含 `SKILL
 
 ### 配置 Claude Code / Codex / Cursor / Pi 钩子
 
-运行 `npx agent-trace install` 会自动配置所有工具的 hooks。
+运行 `node server/cli.js install` 会自动配置所有工具的 hooks。发布到 npm 后，也可以使用 `npx agent-trace install`。
 
 如果需要手动配置，在 `~/.claude/settings.json` 中添加（路径指向 `~/.agent-trace/hooks/`）：
 
@@ -228,10 +244,10 @@ Skill 目录会识别根目录下的 `.md` 文件，并递归识别包含 `SKILL
 ### 服务管理
 
 ```bash
-npx agent-trace start               # 自动构建 + 前台启动（Ctrl+C 停止）
-npx agent-trace start --daemon      # 自动构建 + 后台运行
-npx agent-trace stop                # 停止后台服务
-npx agent-trace status              # 查看运行状态
+node server/cli.js start               # 自动构建 + 前台启动（Ctrl+C 停止）
+node server/cli.js start --daemon      # 自动构建 + 后台运行
+node server/cli.js stop                # 停止后台服务
+node server/cli.js status              # 查看运行状态
 ```
 
 > `start` 命令会自动检测 `dist/` 是否存在，不存在则先执行 `npm run build`。
@@ -239,19 +255,19 @@ npx agent-trace status              # 查看运行状态
 安装为系统服务后（见场景 C），可用 `service` 子命令：
 
 ```bash
-npx agent-trace service start       # 启动系统服务
-npx agent-trace service stop        # 停止
-npx agent-trace service status      # 状态
-npx agent-trace service enable      # 开机自启
-npx agent-trace service disable     # 关闭自启
-npx agent-trace service uninstall   # 卸载服务
+node server/cli.js service start       # 启动系统服务
+node server/cli.js service stop        # 停止
+node server/cli.js service status      # 状态
+node server/cli.js service enable      # 开机自启
+node server/cli.js service disable     # 关闭自启
+node server/cli.js service uninstall   # 卸载服务
 ```
 
 ### 其他
 
 ```bash
-npx agent-trace install    # 安装钩子到 Claude Code + 注册系统服务
-npx agent-trace package    # 打包分发
+node server/cli.js install    # 安装钩子到 Claude Code / Codex / Cursor + 注册系统服务或 daemon
+node server/cli.js package    # 生成 npm 兼容的 .tgz 分发包
 ```
 
 ---
@@ -263,13 +279,13 @@ npx agent-trace package    # 打包分发
 缺少 `dist/` 目录。`src/` 里的源码需要 Vite 处理才能运行。
 
 **解决**：
-- 用 `npm start`（自动构建）或 `npx agent-trace start`（也会自动构建）
-- 如果安装了系统服务，重新运行 `npx agent-trace install` 会自动构建
+- 用 `npm start` 或 `node server/cli.js start`（会自动构建）
+- 如果安装了系统服务，重新运行 `node server/cli.js install` 会自动构建
 
 ### 端口 56789 被占了？
 
 ```bash
-npx agent-trace start 8080       # 指定其他端口
+node server/cli.js start 8080       # 指定其他端口
 ```
 
 ---
@@ -301,11 +317,6 @@ npx agent-trace start 8080       # 指定其他端口
 | overview_scan_runs | 概览资产扫描记录、状态与错误信息 |
 
 ---
-
-## TODO
-
-- [ ] 发布到 npm
-- [ ] 简化 install 流程：去掉文件复制，只做 hooks 配置 + 服务注册（用户直接从源码目录运行即可）
 
 ## 许可证
 

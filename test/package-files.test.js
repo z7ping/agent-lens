@@ -17,3 +17,19 @@ test('package file allowlist includes frontend source needed by github npx insta
     assert.ok(files.has(required), `${required} must be included so install can build dist from a GitHub package`);
   }
 });
+
+test('package file allowlist excludes runtime state and local project data', () => {
+  const files = new Set(pkg.files || []);
+
+  assert.equal(files.has('server/'), false, 'server/ is too broad and can include runtime states or local project data');
+  for (const forbidden of [
+    'server/projects.json',
+    'server/states/',
+    'logs/',
+    'states/',
+    'a-beat.db',
+    'dist/',
+  ]) {
+    assert.equal(files.has(forbidden), false, `${forbidden} must not be included in package files`);
+  }
+});

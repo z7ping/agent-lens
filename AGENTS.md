@@ -4,41 +4,41 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 ## 项目概述
 
-Agent Beat 是一个实时监控和可视化 AI 编码工具调用的工具。通过钩入 Codex/Cursor 等工具的 PreToolUse 和 PostToolUse 生命周期事件，记录每次工具调用，并在浏览器仪表盘中展示。支持多工具适配器架构（Codex、Hermes、Codex、OpenCode、Cursor、Pi）。
+Agent Trace 是一个实时监控和可视化 AI 编码工具调用的工具。通过钩入 Codex/Cursor 等工具的 PreToolUse 和 PostToolUse 生命周期事件，记录每次工具调用，并在浏览器仪表盘中展示。支持多工具适配器架构（Claude Code、Codex、Hermes、OpenCode、Cursor、Pi）。
 
-**唯一运行时依赖：better-sqlite3（原生 SQLite 模块）。**
+**主要运行时依赖：better-sqlite3（原生 SQLite 模块，可选依赖中安装）。**
 
 ## 常用命令
 
 ```bash
 # 快速开始（新机器克隆仓库后）
-npm install && npx agent-trace install
+npm install && npm run build && node server/cli.js install
 
 # 日常使用
-npx agent-trace start              # 前台启动（开发调试用）
-npx agent-trace start --daemon     # 后台守护进程
-npx agent-trace stop               # 停止服务
-npx agent-trace status             # 查看状态
-npx agent-trace uninstall          # 卸载并清理
+node server/cli.js start              # 前台启动（开发调试用）
+node server/cli.js start --daemon     # 后台守护进程
+node server/cli.js stop               # 停止服务
+node server/cli.js status             # 查看状态
+node server/cli.js uninstall          # 卸载并清理
 
 # 服务管理（systemd，生产用）
-npx agent-trace service install    # 注册系统服务（开机自启）
-npx agent-trace service start      # 启动服务
-npx agent-trace service stop       # 停止服务
-npx agent-trace service enable     # 启用开机自启
-npx agent-trace service disable    # 关闭开机自启
-npx agent-trace service status     # 查看状态
-npx agent-trace service uninstall  # 移除系统服务
+node server/cli.js service install    # 注册系统服务（开机自启）
+node server/cli.js service start      # 启动服务
+node server/cli.js service stop       # 停止服务
+node server/cli.js service enable     # 启用开机自启
+node server/cli.js service disable    # 关闭开机自启
+node server/cli.js service status     # 查看状态
+node server/cli.js service uninstall  # 移除系统服务
 ```
 
-**无构建步骤，无测试运行器。** 文件直接提供服务 — 编辑后刷新浏览器即可。
+前端需要 Vite 构建，测试使用 Node.js 内置 test runner。
 
 ### 开发模式
 
 ```bash
 # 前后端联调（推荐）
 npm run dev           # vite dev server（端口 5173），代理 /api 到 56789
-npx agent-trace start             # 后端服务（端口 56789）
+node server/cli.js start          # 后端服务（端口 56789）
 npm run dev:frontend  # 仅 vite dev server
 
 # 构建生产版本
@@ -51,7 +51,7 @@ Vite dev server 会代理 `/api`、`/logs`、`/states`、`/projects.json` 到后
 
 安装后，**无需手动启动服务器**：
 - `hooks/prelog.js` 在每次工具调用时检测服务是否运行
-- 如果服务未运行，自动通过 `npx agent-trace start --daemon` 在后台启动
+- 如果服务未运行，自动通过已安装的 `agent-trace start --daemon` 在后台启动
 - 服务写入 `.server.pid` 管理生命周期
 - 服务挂掉后，下次工具调用会自动拉起
 
