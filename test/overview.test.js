@@ -59,6 +59,45 @@ test('builds one overview card per tool with grouped capability assets', () => {
   assert.equal(brainstorming.is_priority, true);
 });
 
+test('builds assembly paths and skill loading flow for tool diagnostics', () => {
+  const overview = buildOverview({
+    inventory: [
+      {
+        tool: 'codex',
+        display_name: 'Codex',
+        config_dir: 'C:/Users/test/.codex',
+        paths: [
+          { role: '配置目录', path: 'C:/Users/test/.codex', status: 'exists' },
+          { role: '配置文件', path: 'C:/Users/test/.codex/config.toml', status: 'configured' },
+          { role: 'Hook 配置', path: 'C:/Users/test/.codex/hooks.json', status: 'missing' },
+          { role: '用户 Skills', path: 'C:/Users/test/.codex/skills', status: 'exists' },
+          { role: '插件缓存', path: 'C:/Users/test/.codex/plugins/cache', status: 'exists' },
+          { role: '会话目录', path: 'C:/Users/test/.codex/sessions', status: 'exists' },
+        ],
+        assets: [
+          { name: 'superpowers:brainstorming', type: 'skill', status: 'enabled', path: 'C:/Users/test/.codex/skills/superpowers/skills/brainstorming/SKILL.md' },
+          { name: 'browser:control-in-app-browser', type: 'skill', status: 'enabled', path: 'C:/Users/test/.codex/plugins/cache/openai-bundled/browser/1.0.0/skills/control-in-app-browser/SKILL.md' },
+          { name: 'node_repl', type: 'mcp', status: 'configured', path: 'C:/Users/test/.codex/config.toml' },
+        ],
+      },
+    ],
+    usageRows: [
+      { source: 'codex', tool_name: 'superpowers:brainstorming', call_count: 4 },
+      { source: 'codex', tool_name: 'browser:control-in-app-browser', call_count: 0 },
+    ],
+  });
+
+  const codex = overview.tools[0];
+  assert.deepEqual(codex.paths.map(item => item.role), ['配置目录', '配置文件', 'Hook 配置', '用户 Skills', '插件缓存', '会话目录']);
+  assert.equal(codex.paths.find(item => item.role === 'Hook 配置').status, 'missing');
+
+  const skillFlow = codex.load_flow.find(flow => flow.type === 'skill');
+  assert.equal(skillFlow.installed_count, 2);
+  assert.equal(skillFlow.used_count, 1);
+  assert.equal(skillFlow.sources.local.count, 1);
+  assert.equal(skillFlow.sources.plugin.count, 1);
+});
+
 test('keeps tool links and order when reading overview from database snapshot', () => {
   const db = new Database(':memory:');
   db.exec(fs.readFileSync(path.join(__dirname, '..', 'server', 'schema.sql'), 'utf-8'));

@@ -912,6 +912,18 @@
 .overview-header {
   @apply flex items-center justify-between gap-4 mb-5;
 }
+.overview-header-actions {
+  @apply flex items-center gap-2 flex-wrap justify-end;
+}
+.overview-view-tabs {
+  @apply inline-flex items-center rounded-lg bg-neutral-100 dark:bg-neutral-800 p-1;
+}
+.overview-view-tab {
+  @apply px-3 py-1.5 rounded-md text-sm font-medium text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200 transition-colors;
+}
+.overview-view-tab.active {
+  @apply bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 shadow-sm;
+}
 .overview-refresh {
   @apply px-3 py-1.5 rounded-md border border-neutral-200 dark:border-neutral-700 text-sm text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors;
 }
@@ -1155,6 +1167,106 @@
 }
 .overview-coverage.source {
   box-shadow: inset 0 0 0 1px var(--source-accent, #64748b), 0 0 0 2px color-mix(in srgb, var(--source-accent, #64748b) 12%, transparent);
+}
+
+/* ═══ 概览：装配路径诊断 ═══ */
+.overview-assembly-grid {
+  @apply grid grid-cols-1 xl:grid-cols-2 gap-4;
+}
+.overview-assembly-card {
+  @apply bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg p-4 relative overflow-hidden;
+  border-top: 3px solid var(--tool-accent, #64748b);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 12px 30px rgba(15, 23, 42, 0.04);
+}
+.overview-assembly-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(140deg, color-mix(in srgb, var(--tool-accent, #64748b) 7%, transparent), transparent 42%);
+  pointer-events: none;
+}
+.overview-assembly-head {
+  @apply flex items-start justify-between gap-3 mb-4 relative;
+}
+.overview-path-list {
+  @apply relative space-y-2 mb-4;
+}
+.overview-path-row {
+  @apply grid grid-cols-[0.75rem_minmax(0,1fr)_auto] items-center gap-3 rounded-md border px-3 py-2;
+  background: rgba(255, 255, 255, 0.72);
+}
+.dark .overview-path-row {
+  background: rgba(23, 23, 23, 0.72);
+}
+.overview-path-dot {
+  @apply h-2.5 w-2.5 rounded-full;
+}
+.overview-path-row.ok {
+  @apply border-success-100 dark:border-success-500/20;
+}
+.overview-path-row.ok .overview-path-dot {
+  @apply bg-success-500;
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.12);
+}
+.overview-path-row.missing {
+  @apply border-danger-100 dark:border-danger-500/20 border-dashed;
+}
+.overview-path-row.missing .overview-path-dot {
+  @apply bg-danger-500;
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.12);
+}
+.overview-path-row.muted {
+  @apply border-warning-100 dark:border-warning-500/20;
+}
+.overview-path-row.muted .overview-path-dot {
+  @apply bg-warning-500;
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.12);
+}
+.overview-path-row b {
+  @apply block text-sm font-semibold text-neutral-800 dark:text-neutral-100;
+}
+.overview-path-row small {
+  @apply block min-w-0 truncate font-mono text-xs text-neutral-500 dark:text-neutral-400;
+}
+.overview-path-row em {
+  @apply not-italic text-xs font-semibold text-neutral-500 dark:text-neutral-400;
+}
+.overview-skill-flow {
+  @apply relative border-t border-neutral-100 dark:border-neutral-800 pt-3;
+}
+.overview-flow-strip {
+  @apply grid grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-2 mb-3;
+}
+.overview-flow-strip span {
+  @apply rounded-md border border-neutral-100 dark:border-neutral-800 px-3 py-2 text-center;
+  background: color-mix(in srgb, var(--tool-surface, #f8fafc) 60%, white);
+}
+.dark .overview-flow-strip span {
+  background: color-mix(in srgb, var(--tool-accent, #64748b) 8%, #171717);
+}
+.overview-flow-strip b {
+  @apply block text-lg font-bold text-neutral-900 dark:text-neutral-100;
+}
+.overview-flow-strip small {
+  @apply block text-xs text-neutral-400;
+}
+.overview-flow-strip i {
+  @apply block h-px w-5 bg-neutral-200 dark:bg-neutral-700;
+}
+.overview-source-list {
+  @apply grid grid-cols-1 sm:grid-cols-3 gap-2;
+}
+.overview-source-list div {
+  @apply rounded-md border border-neutral-100 dark:border-neutral-800 px-3 py-2;
+}
+.overview-source-list span {
+  @apply block text-xs text-neutral-400 mb-1;
+}
+.overview-source-list b {
+  @apply text-base font-semibold text-neutral-800 dark:text-neutral-100;
+}
+.overview-source-list small {
+  @apply ml-2 text-xs text-neutral-400;
 }
 
 .type-skill {

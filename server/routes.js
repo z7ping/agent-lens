@@ -363,6 +363,89 @@ function handleApiErrors(req, res, params) {
     }
 }
 
+const SOURCE_LABELS = {
+    codex: 'Codex',
+    'claude-code': 'Claude Code CLI',
+    hermes: 'Hermes',
+    opencode: 'OpenCode',
+    cursor: 'Cursor',
+    pi: 'Pi',
+    openclaw: 'OpenClaw',
+};
+
+function sourceLabel(source) {
+    return SOURCE_LABELS[source] || source || '未知来源';
+}
+
+function buildProjectIndex(rows = [], projects = {}, options = {}) {
+    const sourceFilter = options.source || '';
+    const byProject = new Map();
+    for (const row of rows) {
+        const source = row.source || '';
+        const projectKey = row.project_key || '';
+        if (!projectKey || !source) continue;
+        if (sourceFilter && source !== sourceFilter) continue;
+        const registry = projects[projectKey] || {};
+        const project = byProject.get(projectKey) || {
+            project_key: projectKey,
+            name: registry.name || projectKey,
+            cwd: registry.cwd || '',
+            last_seen: '',
+            session_count: 0,
+            tool_count: 0,
+            sources: [],
+        };
+        const sessionCount = Number(row.session_count || 0);
+        const toolCount = Number(row.tool_count || 0);
+        const lastSeen = row.last_seen || '';
+        project.session_count += Number.isFinite(sessionCount) ? sessionCount : 0;
+        project.tool_count += Number.isFinite(toolCount) ? toolCount : 0;
+        if (!project.last_seen || lastSeen > project.last_seen) project.last_seen = lastSeen;
+        project.sources.push({
+            source,
+            label: sourceLabel(source),
+            session_count: sessionCount,
+            tool_count: toolCount,
+            last_seen: lastSeen,
+        });
+        byProject.set(projectKey, project);
+    }
+    const items = Array.from(byProject.values()).map(project => {
+        project.sources.sort((a, b) => (b.last_seen || '').localeCompare(a.last_seen || '') || a.label.localeCompare(b.label));
+        project.source_label = project.sources.map(item => item.label).join(' · ');
+        return project;
+    }).sort((a, b) => (b.last_seen || '').localeCompare(a.last_seen || '') || a.name.localeCompare(b.name));
+    return { items };
+}
+
+function queryProjectRows(db) {
+    if (!db) return [];
+    return db.prepare(`
+        SELECT project_key,
+               source,
+               COUNT(*) as session_count,
+               SUM(COALESCE(tool_count, 0)) as tool_count,
+               MAX(COALESCE(end_time, start_time, '')) as last_seen
+        FROM sessions
+        WHERE project_key IS NOT NULL AND project_key != '' AND source IS NOT NULL AND source != ''
+        GROUP BY project_key, source
+    `).all();
+}
+
+function handleApiProjects(req, res, params) {
+    try {
+        const db = getDb();
+        const projects = loadProjects();
+        const rows = queryProjectRows(db);
+        const result = buildProjectIndex(rows, projects, {
+            source: params.get('source') || '',
+        });
+        sendJson(res, result);
+    } catch (e) {
+        sendJson(res, { error: e.message, items: [] }, 500);
+    }
+}
+
 function handleApiSourcesStatus(req, res, params) {
     try {
         sendJson(res, detectSourceStatus());
@@ -447,4 +530,4 @@ function handleApiAppInfo(req, res) {
     }
 }
 
-module.exports = { handleApiStats, handleApiTools, handleApiSessions, handleApiTimeline, handleApiSkills, handleApiCompare, handleApiErrors, handleApiToolMap, handleApiSourcesStatus, handleApiOverview, handleApiAppInfo, loadTimelineItems };
+module.exports = { handleApiStats, handleApiTools, handleApiSessions, handleApiTimeline, handleApiSkills, handleApiCompare, handleApiErrors, handleApiToolMap, handleApiSourcesStatus, handleApiOverview, handleApiAppInfo, handleApiProjects, buildProjectIndex, loadTimelineItems };

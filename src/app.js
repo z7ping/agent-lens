@@ -84,21 +84,53 @@ function initTheme() {
 
 // ─── 项目选择 ───────────────────────────────────────
 async function initProjects() {
-  const projects = await fetchProjects();
   const select = document.getElementById('projectSelect');
   if (!select) return;
-  Object.entries(projects).forEach(([key, p]) => {
-    const opt = document.createElement('option');
-    opt.value = key;
-    opt.textContent = p.name || key;
-    select.appendChild(opt);
-  });
   select.addEventListener('change', () => {
     currentProject = select.value;
     updateFilterSummary();
     loadCallChain();
     loadDashboardData(currentProject, undefined, currentTool === 'all' ? '' : currentTool);
   });
+  await reloadProjectOptions();
+}
+
+async function reloadProjectOptions() {
+  const select = document.getElementById('projectSelect');
+  if (!select) return;
+  const data = await fetchProjects(currentTool === 'all' ? '' : currentTool);
+  const projects = normalizeProjectOptions(data);
+  const previous = currentProject;
+  select.innerHTML = '<option value="">全部项目</option>';
+  for (const project of projects) {
+    const opt = document.createElement('option');
+    opt.value = project.project_key;
+    opt.textContent = projectLabel(project);
+    opt.title = [project.cwd, project.source_label].filter(Boolean).join(' · ');
+    select.appendChild(opt);
+  }
+  const stillAvailable = !previous || projects.some(project => project.project_key === previous);
+  currentProject = stillAvailable ? previous : '';
+  select.value = currentProject;
+}
+
+function normalizeProjectOptions(data) {
+  if (Array.isArray(data?.items)) return data.items;
+  return Object.entries(data || {}).map(([key, value]) => ({
+    project_key: key,
+    name: value?.name || key,
+    cwd: value?.cwd || '',
+    source_label: '',
+    session_count: 0,
+    tool_count: 0,
+  }));
+}
+
+function projectLabel(project) {
+  const name = project.name || project.project_key || '未知项目';
+  const source = project.source_label || '';
+  const count = project.session_count ? `${project.session_count} 会话` : '';
+  return [name, source, count].filter(Boolean).join(' · ');
 }
 
 // ─── 事件监听 ───────────────────────────────────────
@@ -136,11 +168,12 @@ window.switchTab = function (tab) {
 };
 
 // ─── 来源 Tab 选择 ──────────────────────────────────
-window.selectTool = function (tool) {
+window.selectTool = async function (tool) {
   currentTool = tool;
   document.querySelectorAll('.tool-tab').forEach(tab => {
     tab.classList.toggle('active', tab.dataset.tool === tool);
   });
+  await reloadProjectOptions();
   loadCallChain();
   updateFilterSummary();
   if (currentTab === 'dashboard') {

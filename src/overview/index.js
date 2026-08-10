@@ -5,6 +5,7 @@ import { filterOverviewTools, moveToolInOrder, orderOverviewTools } from '../ui-
 let overviewLoaded = false;
 let overviewData = null;
 let currentOverviewSource = '';
+let currentOverviewView = 'assets';
 const OVERVIEW_CACHE_KEY = 'agent-trace-overview-cache-v1';
 const TOOL_ORDER_KEY = 'agent-trace-tool-order-v2';
 const OVERVIEW_REFRESH_MS = 60000;
@@ -50,6 +51,7 @@ const statusLabels = {
 
 export function initOverview() {
   window.reloadOverview = () => loadOverview({ force: true });
+  window.switchOverviewView = switchOverviewView;
   initToolTabOrdering();
   initOverviewActions();
   setInterval(() => {
@@ -101,8 +103,11 @@ function renderOverview(data) {
   const focusedTools = filterOverviewTools(tools, currentOverviewSource);
   const cards = document.getElementById('overviewToolCards');
   const matrix = document.getElementById('overviewMatrix');
+  const assembly = document.getElementById('overviewAssembly');
   if (cards) cards.innerHTML = focusedTools.map(renderToolCard).join('');
   if (matrix) matrix.innerHTML = renderMatrix(data.capability_matrix || [], tools);
+  if (assembly) assembly.innerHTML = renderAssemblyView(focusedTools);
+  applyOverviewView();
 }
 
 function renderToolCard(tool) {
@@ -220,6 +225,115 @@ function renderCoverage(cell = {}, source = false) {
   const status = cell.status || '未知';
   const cls = status === '已有' ? 'ok' : status === '缺失' ? 'missing' : 'muted';
   return `<span class="overview-coverage ${cls} ${source ? 'source' : ''}" title="${escapeHtml(cell.asset_name || '')}">${escapeHtml(status)}</span>`;
+}
+
+function renderAssemblyView(tools) {
+  if (!tools.length) {
+    return '<div class="list-card overview-loading">当前来源暂无装配路径数据</div>';
+  }
+  return `
+    <div class="overview-assembly-grid">
+      ${tools.map(renderAssemblyCard).join('')}
+    </div>
+  `;
+}
+
+function renderAssemblyCard(tool) {
+  const paths = Array.isArray(tool.paths) ? tool.paths : [];
+  const skillFlow = Array.isArray(tool.load_flow) ? tool.load_flow.find(flow => flow.type === 'skill') : null;
+  const accent = tool.theme?.accent || '#64748b';
+  const surface = tool.theme?.surface || '#f8fafc';
+  return `
+    <article class="overview-assembly-card" style="--tool-accent:${escapeHtml(accent)}; --tool-surface:${escapeHtml(surface)}">
+      <header class="overview-assembly-head">
+        <div>
+          <h3 class="overview-tool-name"><span></span>${escapeHtml(tool.display_name || tool.tool || '未知工具')}</h3>
+          <p class="overview-tool-desc">${escapeHtml(tool.config_dir || '未检测到配置目录')}</p>
+        </div>
+        <span class="overview-status ${tool.status === 'detected' ? 'ok' : 'muted'}">${escapeHtml(statusLabels[tool.status] || tool.status || '未知')}</span>
+      </header>
+      <div class="overview-path-list">
+        ${paths.length ? paths.map(renderAssemblyPath).join('') : '<div class="overview-empty-line">暂无路径诊断数据</div>'}
+      </div>
+      ${renderSkillFlow(skillFlow)}
+    </article>
+  `;
+}
+
+function renderAssemblyPath(item) {
+  const cls = statusClass(item.status);
+  const pathText = item.path || '';
+  return `
+    <div class="overview-path-row ${cls}">
+      <span class="overview-path-dot"></span>
+      <div>
+        <b>${escapeHtml(item.role || '路径')}</b>
+        <small title="${escapeHtml(pathText)}">${escapeHtml(shortPath(pathText, 72) || '未配置')}</small>
+      </div>
+      <em>${escapeHtml(statusLabels[item.status] || pathStatusLabel(item.status))}</em>
+    </div>
+  `;
+}
+
+function renderSkillFlow(flow) {
+  if (!flow) {
+    return `
+      <section class="overview-skill-flow">
+        <div class="overview-section-title">SKILL 加载</div>
+        <div class="overview-empty-line">暂无可识别的 SKILL 来源</div>
+      </section>
+    `;
+  }
+  const sources = Object.values(flow.sources || {}).filter(item => item.count > 0);
+  return `
+    <section class="overview-skill-flow">
+      <div class="overview-section-title">SKILL 加载</div>
+      <div class="overview-flow-strip">
+        <span><b>${flow.installed_count || 0}</b><small>已安装</small></span>
+        <i></i>
+        <span><b>${flow.discoverable_count || 0}</b><small>可发现</small></span>
+        <i></i>
+        <span><b>${flow.used_count || 0}</b><small>已使用</small></span>
+      </div>
+      <div class="overview-source-list">
+        ${sources.length ? sources.map(source => `
+          <div>
+            <span>${escapeHtml(source.label || '来源')}</span>
+            <b>${source.count || 0}</b>
+            <small>${source.used_count || 0} 个已使用</small>
+          </div>
+        `).join('') : '<div><span>暂无来源</span><b>0</b><small>0 个已使用</small></div>'}
+      </div>
+    </section>
+  `;
+}
+
+function statusClass(status) {
+  if (status === 'exists' || status === 'configured' || status === 'enabled' || status === 'detected') return 'ok';
+  if (status === 'missing' || status === 'not_found') return 'missing';
+  return 'muted';
+}
+
+function pathStatusLabel(status) {
+  const labels = {
+    exists: '存在',
+    missing: '缺失',
+    observed: '已观察',
+  };
+  return labels[status] || status || '未知';
+}
+
+function switchOverviewView(view) {
+  currentOverviewView = view === 'assembly' ? 'assembly' : 'assets';
+  applyOverviewView();
+}
+
+function applyOverviewView() {
+  document.querySelectorAll('.overview-view-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.overviewView === currentOverviewView);
+  });
+  document.getElementById('overviewAssetsView')?.classList.toggle('hidden', currentOverviewView !== 'assets');
+  document.getElementById('overviewAssemblyView')?.classList.toggle('hidden', currentOverviewView !== 'assembly');
 }
 
 function shortPath(value, maxLength = 42) {
@@ -363,6 +477,8 @@ function stableOverviewShell() {
       version: '查询后更新',
       status: 'unknown',
       config_dir: '查询后更新',
+      paths: [],
+      load_flow: [],
       assets: [],
       asset_groups: {},
     })),

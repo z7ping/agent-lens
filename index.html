@@ -203,17 +203,28 @@
             <h2 class="tool-stack-title">概览</h2>
             <p class="tool-stack-subtitle">按 AI 工具查看能力资产，并对照高频资产在其他工具中的覆盖情况。</p>
           </div>
-          <button class="overview-refresh" onclick="reloadOverview()">刷新</button>
+          <div class="overview-header-actions">
+            <div class="overview-view-tabs" aria-label="概览视图">
+              <button class="overview-view-tab active" data-overview-view="assets" onclick="switchOverviewView('assets')">能力资产</button>
+              <button class="overview-view-tab" data-overview-view="assembly" onclick="switchOverviewView('assembly')">装配路径</button>
+            </div>
+            <button class="overview-refresh" onclick="reloadOverview()">刷新</button>
+          </div>
         </div>
 
         <div id="overviewLoading" class="list-card overview-loading">正在扫描本地能力资产...</div>
         <div id="overviewEmpty" class="list-card overview-loading hidden">概览数据加载失败</div>
         <div id="overviewContent" class="hidden">
-          <div id="overviewToolCards" class="overview-grid"></div>
-          <section class="list-card overview-matrix-card">
-            <h3 class="chart-title">高频资产对照</h3>
-            <div id="overviewMatrix"></div>
-          </section>
+          <div id="overviewAssetsView">
+            <div id="overviewToolCards" class="overview-grid"></div>
+            <section class="list-card overview-matrix-card">
+              <h3 class="chart-title">高频资产对照</h3>
+              <div id="overviewMatrix"></div>
+            </section>
+          </div>
+          <div id="overviewAssemblyView" class="hidden">
+            <div id="overviewAssembly"></div>
+          </div>
         </div>
       </div>
     </section>

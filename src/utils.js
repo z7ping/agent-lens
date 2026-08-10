@@ -7,7 +7,20 @@ import { CONFIG } from './config.js';
 /**
  * 获取当前项目列表
  */
-export async function fetchProjects() {
+export async function fetchProjects(source = '') {
+  try {
+    const params = new URLSearchParams();
+    if (source && source !== 'all') params.set('source', source);
+    const url = `${CONFIG.API_BASE}/api/projects${params.toString() ? `?${params}` : ''}`;
+    const res = await fetch(url);
+    if (!res.ok) return fetchLegacyProjects();
+    return await res.json();
+  } catch {
+    return fetchLegacyProjects();
+  }
+}
+
+async function fetchLegacyProjects() {
   try {
     const res = await fetch(`${CONFIG.API_BASE}/projects.json`);
     if (!res.ok) return {};

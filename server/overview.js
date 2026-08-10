@@ -932,8 +932,11 @@ function buildUsageMap(rows = []) {
         const tool = row.source || row.tool || '';
         const name = row.tool_name || row.name || '';
         if (!tool || !name) continue;
+        const rawCount = row.call_count ?? row.count ?? 1;
+        const count = Number(rawCount);
+        if (!Number.isFinite(count) || count <= 0) continue;
         const key = `${tool}::${normalizeCapabilityName(name)}`;
-        usage.set(key, (usage.get(key) || 0) + Number(row.call_count || row.count || 1));
+        usage.set(key, (usage.get(key) || 0) + count);
     }
     return usage;
 }
@@ -986,6 +989,135 @@ function groupAssets(assets = []) {
     return groups;
 }
 
+function fileStatus(file, configuredStatus = 'configured') {
+    try {
+        return fs.existsSync(file) ? configuredStatus : 'missing';
+    } catch (_) {
+        return 'unknown';
+    }
+}
+
+function dirStatus(dir) {
+    try {
+        return fs.existsSync(dir) ? 'exists' : 'missing';
+    } catch (_) {
+        return 'unknown';
+    }
+}
+
+function assemblyPath(role, itemPath, status, description = '') {
+    return {
+        role,
+        path: itemPath || '',
+        status: status || 'unknown',
+        description,
+    };
+}
+
+function buildAssemblyPaths(tool = {}) {
+    if (Array.isArray(tool.paths) && tool.paths.length) {
+        return tool.paths.map(item => assemblyPath(item.role, item.path, item.status, item.description));
+    }
+
+    const configDir = tool.config_dir || '';
+    const paths = [assemblyPath('配置目录', configDir, configDir ? dirStatus(configDir) : 'unknown')];
+    switch (tool.tool) {
+        case 'codex':
+            paths.push(
+                assemblyPath('配置文件', path.join(configDir, 'config.toml'), fileStatus(path.join(configDir, 'config.toml'))),
+                assemblyPath('Hook 配置', path.join(configDir, 'hooks.json'), fileStatus(path.join(configDir, 'hooks.json'))),
+                assemblyPath('用户 Skills', path.join(configDir, 'skills'), dirStatus(path.join(configDir, 'skills'))),
+                assemblyPath('插件缓存', path.join(configDir, 'plugins', 'cache'), dirStatus(path.join(configDir, 'plugins', 'cache'))),
+                assemblyPath('会话目录', path.join(configDir, 'sessions'), dirStatus(path.join(configDir, 'sessions')))
+            );
+            break;
+        case 'claude-code':
+            paths.push(
+                assemblyPath('设置文件', path.join(configDir, 'settings.json'), fileStatus(path.join(configDir, 'settings.json'))),
+                assemblyPath('用户 Skills', path.join(configDir, 'skills'), dirStatus(path.join(configDir, 'skills'))),
+                assemblyPath('命令目录', path.join(configDir, 'commands'), dirStatus(path.join(configDir, 'commands'))),
+                assemblyPath('项目历史', path.join(configDir, 'projects'), dirStatus(path.join(configDir, 'projects')))
+            );
+            break;
+        case 'hermes':
+            paths.push(
+                assemblyPath('配置文件', path.join(configDir, 'config.yaml'), fileStatus(path.join(configDir, 'config.yaml'))),
+                assemblyPath('Skills', path.join(configDir, 'skills'), dirStatus(path.join(configDir, 'skills'))),
+                assemblyPath('Plugins', path.join(configDir, 'plugins'), dirStatus(path.join(configDir, 'plugins'))),
+                assemblyPath('MCP 目录', path.join(configDir, 'mcp-servers'), dirStatus(path.join(configDir, 'mcp-servers'))),
+                assemblyPath('状态数据库', path.join(configDir, 'state.db'), fileStatus(path.join(configDir, 'state.db'), 'exists'))
+            );
+            break;
+        case 'pi':
+            paths.push(
+                assemblyPath('设置文件', path.join(configDir, 'settings.json'), fileStatus(path.join(configDir, 'settings.json'))),
+                assemblyPath('用户 Skills', path.join(configDir, 'skills'), dirStatus(path.join(configDir, 'skills'))),
+                assemblyPath('Extensions', path.join(configDir, 'extensions'), dirStatus(path.join(configDir, 'extensions'))),
+                assemblyPath('NPM 插件', path.join(configDir, 'npm', 'node_modules'), dirStatus(path.join(configDir, 'npm', 'node_modules'))),
+                assemblyPath('会话目录', path.join(configDir, 'sessions'), dirStatus(path.join(configDir, 'sessions')))
+            );
+            break;
+        case 'cursor':
+            paths.push(
+                assemblyPath('设置文件', path.join(configDir, 'settings.json'), fileStatus(path.join(configDir, 'settings.json'))),
+                assemblyPath('扩展目录', firstExisting([
+                    path.join(os.homedir(), '.cursor', 'extensions'),
+                    path.join(os.homedir(), 'AppData', 'Local', 'Programs', 'Cursor', 'resources', 'app', 'extensions'),
+                ]), 'exists')
+            );
+            break;
+        case 'opencode':
+            paths.push(
+                assemblyPath('数据库', path.join(configDir, 'opencode.db'), fileStatus(path.join(configDir, 'opencode.db'), 'exists')),
+                assemblyPath('配置文件', path.join(configDir, 'config.json'), fileStatus(path.join(configDir, 'config.json')))
+            );
+            break;
+        default:
+            paths.push(
+                assemblyPath('配置文件', path.join(configDir, 'config.json'), fileStatus(path.join(configDir, 'config.json'))),
+                assemblyPath('Plugins', path.join(configDir, 'plugins'), dirStatus(path.join(configDir, 'plugins')))
+            );
+    }
+    return paths;
+}
+
+function skillSourceForPath(assetPath = '') {
+    const normalized = String(assetPath).replace(/\\/g, '/').toLowerCase();
+    if (normalized.includes('/plugins/cache/')) return 'plugin';
+    if (normalized.includes('/skills/')) return 'local';
+    return 'unknown';
+}
+
+function emptySourceSummary() {
+    return {
+        local: { label: '本地 Skills', count: 0, used_count: 0 },
+        plugin: { label: '插件 Skills', count: 0, used_count: 0 },
+        unknown: { label: '其他来源', count: 0, used_count: 0 },
+    };
+}
+
+function buildLoadFlow(assets = []) {
+    const skills = assets.filter(asset => asset.type === 'skill');
+    const sources = emptySourceSummary();
+    let usedCount = 0;
+    for (const skill of skills) {
+        const source = skillSourceForPath(skill.path);
+        sources[source].count += 1;
+        if ((skill.call_count || 0) > 0) {
+            sources[source].used_count += 1;
+            usedCount += 1;
+        }
+    }
+    return [{
+        type: 'skill',
+        label: 'SKILL 加载',
+        installed_count: skills.length,
+        discoverable_count: skills.length,
+        used_count: usedCount,
+        sources,
+    }];
+}
+
 function buildOverview(options = {}) {
     const inventory = options.inventory || discoverInventory();
     const usageMap = buildUsageMap(options.usageRows || []);
@@ -1027,6 +1159,8 @@ function buildOverview(options = {}) {
             order: tool.order ?? TOOL_DEFINITION_BY_NAME.get(tool.tool)?.order ?? 999,
             links: tool.links || TOOL_DEFINITION_BY_NAME.get(tool.tool)?.links || {},
             theme: themeForTool(tool.tool, tool.theme),
+            paths: buildAssemblyPaths(tool),
+            load_flow: buildLoadFlow(assets),
             assets,
             asset_groups: groupAssets(assets),
         };

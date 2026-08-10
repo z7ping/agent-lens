@@ -21,6 +21,12 @@
   "files": [
     "dist/",
     "server/",
+    "src/",
+    "index.html",
+    "vite.config.mjs",
+    "tailwind.config.mjs",
+    "postcss.config.mjs",
+    "CHANGELOG.md",
     "README.md"
   ],
   "repository": {
