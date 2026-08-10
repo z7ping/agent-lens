@@ -18,6 +18,32 @@ Aggregates call counts for SKILLs, Tools, and MCPs, and reconstructs the complet
 - **实时刷新** — 3 秒增量更新，无需手动刷新
 - **暗色主题** — 亮/暗一键切换
 
+## 界面预览
+
+### 概览：能力资产
+
+按 AI 工具集中查看 Skills、MCP、Plugins、Extensions 和内置能力，并结合实际调用次数识别高频资产。
+
+![AgentLens 概览能力资产](docs/static/1.webp)
+
+### 概览：装配路径
+
+检查各工具的配置目录、设置文件、Hooks、Skills、插件缓存和会话目录是否正确装配。
+
+![AgentLens 概览装配路径](docs/static/2.webp)
+
+### 工具栈地图
+
+按调用频率、工作流价值、耗时和失败风险为工具生成可解释评分。
+
+![AgentLens 工具栈地图](docs/static/3.webp)
+
+### 任务复盘
+
+按工具来源和项目筛选会话，展开查看每轮对话、工具调用、成功情况和耗时。
+
+![AgentLens 任务复盘](docs/static/4.webp)
+
 ## 快速上手
 
 ```bash
