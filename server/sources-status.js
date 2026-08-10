@@ -4,13 +4,13 @@
  *
  * 判断每个工具：
  *  - historyAvailable：历史 JSONL 是否可导入（不依赖 hook）
- *  - hookInstalled   ：Agent Trace 的实时 hook 是否已接入该工具
+ *  - hookInstalled   ：AgentLens 的实时 hook 是否已接入该工具
  *  - sessionFiles    ：历史会话文件数（仅统计用）
  */
 
 const fs = require('fs');
 const path = require('path');
-const { claudeCode, codex, agentTrace } = require('./paths');
+const { claudeCode, codex, agentLens } = require('./paths');
 
 function countJsonlRecursive(dir) {
     if (!fs.existsSync(dir)) return 0;
@@ -26,25 +26,23 @@ function countJsonlRecursive(dir) {
     return count;
 }
 
-/** 判断 hook 配置中是否引用了 agent-trace 自己的钩子脚本 */
-function hooksReferenceAgentTrace(hookConfigText) {
+/** 判断 hook 配置中是否引用了 agent-lens 自己的钩子脚本 */
+function hooksReferenceAgentLens(hookConfigText) {
     if (!hookConfigText) return false;
-    // 同时检查路径关键词：agent-trace / prelog / hooks/log / ~/.agent-trace
-    return /agent-trace|prelog\.js|hooks[\\/]log\.js|\.agent-trace/i.test(hookConfigText);
+    return /agent-lens|prelog\.js|hooks[\\/]log\.js|\.agent-lens/i.test(hookConfigText);
 }
 
 function detectSourceStatus() {
     // ─── Claude Code ───
     const claudeSettingsText = fs.existsSync(claudeCode.settingsFile) ? safeRead(claudeCode.settingsFile) : '';
-    const claudeHookInstalled = hooksReferenceAgentTrace(claudeSettingsText);
+    const claudeHookInstalled = hooksReferenceAgentLens(claudeSettingsText);
 
     // ─── Codex ───
     const codexHooksText = fs.existsSync(codex.hooksFile) ? safeRead(codex.hooksFile) : '';
-    const codexHookInstalled = hooksReferenceAgentTrace(codexHooksText);
+    const codexHookInstalled = hooksReferenceAgentLens(codexHooksText);
 
-    // agent-trace 自身是否安装（~/.agent-trace/hooks）
-    const agentTraceInstalled = fs.existsSync(path.join(agentTrace.home, 'hooks')) ||
-        fs.existsSync(path.join(agentTrace.home, 'install-hooks.js'));
+    const agentLensInstalled = fs.existsSync(path.join(agentLens.appDir || agentLens.home, 'hooks')) ||
+        fs.existsSync(path.join(agentLens.appDir || agentLens.home, 'install-hooks.js'));
 
     return {
         'claude-code': {
@@ -59,7 +57,7 @@ function detectSourceStatus() {
             sessionFiles: countJsonlRecursive(codex.sessionsDir),
             dataDir: codex.sessionsDir,
         },
-        agentTraceInstalled,
+        agentLensInstalled,
     };
 }
 
@@ -71,4 +69,4 @@ function safeRead(filePath) {
     }
 }
 
-module.exports = { detectSourceStatus, hooksReferenceAgentTrace };
+module.exports = { detectSourceStatus, hooksReferenceAgentLens };

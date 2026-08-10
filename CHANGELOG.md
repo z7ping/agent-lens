@@ -1,6 +1,6 @@
 # 更新日志
 
-## Unreleased
+## 0.2.0 (2026-08-10)
 
 ### Added
 - 概览页新增“装配路径”视图，按工具展示配置目录、配置文件、Hook 配置、Skills、插件缓存、会话目录/状态数据库等关键路径状态。
@@ -9,15 +9,18 @@
 - 项目下拉列表现在显示工具来源信息，并会跟随顶部工具来源 Tab 自动过滤项目。
 
 ### Fixed
-- 修复 GitHub `npx github:z7ping/agent-trace install` 安装时包文件白名单缺少前端源码，导致无法临时构建 `dist/` 的问题。
+- 修复 GitHub `npx github:z7ping/agent-lens install` 安装时包文件白名单缺少前端源码，导致无法临时构建 `dist/` 的问题。
 - 修复 npm/GitHub 分发包会包含 `server/projects.json`、`server/states/` 等本机运行状态文件的问题。
-- 修复 `agent-trace package` 使用过期手写打包清单导致 Release 包缺少当前运行必需文件的问题，现在改为复用 `npm pack` 生成 npm 兼容 `.tgz`。
+- 修复 `agent-lens package` 使用过期手写打包清单导致 Release 包缺少当前运行必需文件的问题，现在改为复用 `npm pack` 生成 npm 兼容 `.tgz`。
 - 修复概览调用统计中 `call_count: 0` 被误计为 1 的问题，避免 SKILL “已使用”数量虚高。
 
 ### Changed
+- 项目展示名、npm 包名和 CLI 命令使用 AgentLens / `@z7ping/agent-lens` / `agent-lens`。
+- SQLite 数据库文件名使用 `agent-lens.db`，与产品名保持一致。
+- 开发运行数据统一写入项目根目录 `.agent-lens/`，安装后按 app/data/logs/state/run 分目录保存。
 - README 和 AGENTS 文档区分源码安装、GitHub 分发和 npm 发布后的命令路径，避免未发布 npm 时误用 registry 旧包。
 
-## 1.9.1 (2026-08-09)
+## 0.1.7 (2026-08-09)
 
 ### Added
 - 任务复盘对话气泡默认使用 Markdown 渲染，并支持一键切换查看源码。
@@ -34,22 +37,22 @@
 - Pi 概览扫描改为按 `PI_CODING_AGENT_DIR` 默认根 `~/.pi/agent` 发现资产，并兼容环境变量、XDG、Windows AppData、macOS Application Support 等候选目录。
 - Pi 概览现在会扫描 `<agentDir>/skills`、`~/.agents/skills`、`settings.json.skills`、npm package 声明/传统目录中的 `skills` 与 `extensions`、`pi-hermes-memory/skills`、`projects-memory/<project>/skills`。
 - Pi Skill 扫描改为识别根 `.md` 与递归 `SKILL.md`，Extension 扫描支持目录和 JS/TS 文件，贴近 Pi 官方资源发现规则。
-- Codex 历史对话导入不再截断用户/助手长文本，重新导入时会更新旧库中已被截断的同一条消息。
+- Codex 历史对话导入保留用户/助手长文本，重新导入时会更新同一条消息。
 
-## 1.9.0 (2026-08-07)
+## 0.1.6 (2026-08-07)
 
 ### Added
 - 新增“概览”页：按 AI 工具展示版本、配置目录和 Skills / MCP / Plugins / Extensions / Hooks / Adapters 等能力资产。
 - 新增概览资产数据库快照表：`overview_tools`、`overview_assets`、`overview_scan_runs`。
 - `/api/overview` 优先读取数据库快照，并在访问后后台刷新资产扫描。
-- 服务启动后定时扫描概览资产，支持通过 `AGENT_TRACE_OVERVIEW_SCAN_INTERVAL_MS` 配置间隔，设为 `0` 可关闭。
+- 服务启动后定时扫描概览资产，支持通过 `AGENT_LENS_OVERVIEW_SCAN_INTERVAL_MS` 配置间隔，设为 `0` 可关闭。
 - 概览页使用本地缓存和稳定工具骨架先渲染，再后台更新真实数据。
 
 ### Changed
 - 概览页资产列表从长条改为紧凑资产卡片网格。
 - 高频资产按调用频率判定，并在跨工具覆盖矩阵中展示其他工具是否已有。
 
-## 1.8.1 (2026-07-08)
+## 0.1.5 (2026-07-08)
 
 ### Fixed
 - `cli.js` 前台模式路径错误（`server.js` → `server/server.js`）
@@ -60,12 +63,12 @@
 - hermes 适配器轮询无防并发 + 全表扫描导致 CPU 100%
 
 ### Changed
-- install 目录从 `~/.claude/agent-trace/` 改为 `~/.agent-trace/`
-- install 自动创建 `~/.local/bin/agent-trace` 符号链接
+- install 目录使用 `~/.agent-lens/`
+- install 自动创建 `~/.local/bin/agent-lens` 符号链接
 - hermes 轮询间隔从 5 分钟改为 30 分钟，查询加 LIMIT 5000
 - VERSION 改为按需读取，install 不再复制 package.json
 
-## 1.8.0 (2026-07-04)
+## 0.1.4 (2026-07-04)
 
 ### Added
 - 跨工具对比 API（`/api/compare`）
@@ -77,7 +80,7 @@
 - 后端文件统一移到 `server/` 目录
 - API 路由拆分到 `routes.js`
 
-## 1.7.0 (2026-07-02)
+## 0.1.3 (2026-07-02)
 
 ### Added
 - Pi 适配器（轮询 `~/.pi/agent/sessions/`）
@@ -88,21 +91,21 @@
 - MCP 工具合并 + 排行显示
 - 来源过滤 tab 交互逻辑
 
-## 1.6.0 (2026-06-30)
+## 0.1.2 (2026-06-30)
 
 ### Added
 - Cursor 适配器
 - Hermes timeline 收集（state.db 轮询 → timeline 表）
 - Hermes poll state 持久化，重启不重复导入
 
-## 1.5.0 (2026-06-28)
+## 0.1.1 (2026-06-28)
 
 ### Added
 - OpenCode 适配器（轮询 `opencode.db`）
 - Codex 适配器（钩子机制）
-- 项目更名为 Agent Trace
+- 项目命名为 AgentLens
 
-## 1.2.0 (2026-06-20)
+## 0.1.0 (2026-06-20)
 
 ### Added
 - 初始版本：Claude Code 工具追踪

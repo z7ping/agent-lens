@@ -25,9 +25,10 @@ test('package file allowlist excludes runtime state and local project data', () 
   for (const forbidden of [
     'server/projects.json',
     'server/states/',
+    '.agent-lens/',
     'logs/',
     'states/',
-    'a-beat.db',
+    'agent-lens.db',
     'dist/',
   ]) {
     assert.equal(files.has(forbidden), false, `${forbidden} must not be included in package files`);

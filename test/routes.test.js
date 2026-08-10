@@ -37,7 +37,7 @@ test('builds project index with source badges and filters by selected source', (
     { project_key: 'p2', source: 'hermes', session_count: 1, tool_count: 4, last_seen: '2026-08-09T09:00:00.000Z' },
   ];
   const projects = {
-    p1: { name: 'agent-trace', cwd: 'F:/agent-trace' },
+    p1: { name: 'agent-lens', cwd: 'F:/agent-lens' },
     p2: { name: 'demo-app', cwd: 'F:/demo-app' },
   };
 

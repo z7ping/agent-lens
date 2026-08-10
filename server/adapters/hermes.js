@@ -7,7 +7,8 @@
 const fs = require('fs');
 const path = require('path');
 const BaseAdapter = require('./base');
-const { insertTimeline } = require('../abeat-db');
+const { insertTimeline } = require('../agent-lens-db');
+const { ensureRuntimeDirs, getRuntimePaths } = require('../runtime-paths');
 
 const { hermes: { stateDb: STATE_DB } } = require('../paths');
 
@@ -19,7 +20,9 @@ class HermesAdapter extends BaseAdapter {
         this._collectTimer = null;
         this._collecting = false; // ponytail: 防并发 collect
         this._lastTsBySession = new Map(); // sessionId → lastImportedTimestamp (unix seconds)
-        this._collectStateFile = path.join(__dirname, '..', 'states', 'hermes-collect-state.json');
+        const runtimePaths = getRuntimePaths({ baseDir: path.join(__dirname, '..') });
+        ensureRuntimeDirs(runtimePaths);
+        this._collectStateFile = path.join(runtimePaths.stateDir, 'hermes-collect-state.json');
     }
 
     get name() {
@@ -693,11 +696,11 @@ class HermesAdapter extends BaseAdapter {
             let count = 0;
             let batch = [];
 
-            const { getDb: getAbeatDb } = require('../abeat-db');
+            const { getDb: getAgentLensDb } = require('../agent-lens-db');
             const flush = () => {
                 if (batch.length === 0) return;
-                const abeatDb = getAbeatDb();
-                const tx = abeatDb.transaction((rows) => {
+                const agentLensDb = getAgentLensDb();
+                const tx = agentLensDb.transaction((rows) => {
                     for (const msg of rows) {
                         insertTimeline(msg);
                     }
@@ -817,7 +820,7 @@ class HermesAdapter extends BaseAdapter {
         // 文件为空时从 timeline 表恢复（fallback）
         if (this._lastTsBySession.size === 0) {
             try {
-                const { getDb } = require('../abeat-db');
+                const { getDb } = require('../agent-lens-db');
                 const db = getDb();
                 if (db) {
                     const rows = db.prepare(`

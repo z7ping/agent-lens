@@ -6,16 +6,16 @@
 const fs = require('fs');
 const path = require('path');
 const { getAdapter, getAllAdapters } = require('./adapters');
-const { getDb, queryStats, queryTimeline } = require('./abeat-db');
+const { getDb, queryStats, queryTimeline } = require('./agent-lens-db');
 const { queryToolMap } = require('./tool-map');
 const { queryOverview, scheduleOverviewRefresh } = require('./overview');
 const { detectSourceStatus } = require('./sources-status');
 const { getAppInfo } = require('./app-info');
+const { getRuntimePaths } = require('./runtime-paths');
 
-const ROOT = path.join(__dirname, '..');
+const RUNTIME_PATHS = getRuntimePaths({ baseDir: __dirname });
 const PROJECT_REGISTRY_FILES = [
-    path.join(ROOT, 'projects.json'),
-    path.join(__dirname, 'projects.json'),
+    RUNTIME_PATHS.projectsFile,
 ];
 
 function sendJson(res, data, statusCode = 200) {

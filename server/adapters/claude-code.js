@@ -2,20 +2,23 @@
 /**
  * Claude Code 适配器
  * 复用现有 hooks/prelog.js + hooks/log.js 的核心逻辑
- * 支持 JSONL 轮询聚合到 a-beat.db
+ * 支持 JSONL 轮询聚合到 agent-lens.db
  */
 
 const fs = require('fs');
 const path = require('path');
 const BaseAdapter = require('./base');
-const { insertTimeline } = require('../abeat-db');
+const { insertTimeline } = require('../agent-lens-db');
+const { ensureRuntimeDirs, getRuntimePaths } = require('../runtime-paths');
 
 const BASE_DIR = path.join(__dirname, '..');
-const LOGS_DIR = path.join(BASE_DIR, 'logs');
+const RUNTIME_PATHS = getRuntimePaths({ baseDir: BASE_DIR });
+ensureRuntimeDirs(RUNTIME_PATHS);
+const LOGS_DIR = RUNTIME_PATHS.logsDir;
 // 可配置：轮询间隔（毫秒），默认 30 分钟
 const POLL_INTERVAL_MS = parseInt(process.env.CLAUDE_CODE_POLL_INTERVAL_MS, 10) || 30 * 60 * 1000;
 // 轮询状态文件：记录每个 JSONL 文件已处理的行数
-const POLL_STATE_FILE = path.join(BASE_DIR, 'states', 'claude-code-poll-state.json');
+const POLL_STATE_FILE = path.join(RUNTIME_PATHS.stateDir, 'claude-code-poll-state.json');
 
 class ClaudeCodeAdapter extends BaseAdapter {
     constructor() {
@@ -169,7 +172,7 @@ class ClaudeCodeAdapter extends BaseAdapter {
                 // 诊断：栈为空时记录警告
                 try {
                     const fs = require('fs');
-                    const logFile = require('path').join(BASE_DIR, 'trace_error.log');
+                    const logFile = require('path').join(LOGS_DIR, 'trace_error.log');
                     const msg = `[${new Date().toISOString()}] post: stack empty for tool=${toolName}, project=${projectKey}\n`;
                     fs.appendFileSync(logFile, msg, 'utf-8');
                 } catch (_) {}
@@ -273,13 +276,13 @@ class ClaudeCodeAdapter extends BaseAdapter {
     }
 
     /**
-     * 轮询一次：扫描 JSONL 文件，聚合新记录到 a-beat.db
+     * 轮询一次：扫描 JSONL 文件，聚合新记录到 agent-lens.db
      */
     async _pollOnce() {
         if (!fs.existsSync(LOGS_DIR)) return;
 
         try {
-            const abeatDb = require('../abeat-db');
+            const agentLensDb = require('../agent-lens-db');
             const pollState = this._readPollState();
             const files = fs.readdirSync(LOGS_DIR).filter(f => f.endsWith('.jsonl'));
 
@@ -327,15 +330,15 @@ class ClaudeCodeAdapter extends BaseAdapter {
 
                             // 按天统计
                             const date = ts.slice(0, 10);
-                            abeatDb.updateDailyStats(date, 'claude-code', record.tool_name, 1, record.success ? 0 : 1, record.duration_ms || 0);
+                            agentLensDb.updateDailyStats(date, 'claude-code', record.tool_name, 1, record.success ? 0 : 1, record.duration_ms || 0);
 
                             // 错误记录
                             if (!record.success && record.error) {
-                                abeatDb.saveError(ts, sessionId, 'claude-code', record.tool_name, record.error);
+                                agentLensDb.saveError(ts, sessionId, 'claude-code', record.tool_name, record.error);
                             }
 
                             // 写入 timeline（轮询兜底）
-                            abeatDb.insertTimeline({
+                            agentLensDb.insertTimeline({
                                 source: 'claude-code',
                                 session_id: sessionId,
                                 timestamp: ts,
@@ -359,8 +362,8 @@ class ClaudeCodeAdapter extends BaseAdapter {
 
                     // session 摘要（累加 total_duration_ms）
                     const projectKey = records[0].project_key || '';
-                    const existingDuration = abeatDb.getSessionDuration(sessionId);
-                    abeatDb.upsertSession({
+                    const existingDuration = agentLensDb.getSessionDuration(sessionId);
+                    agentLensDb.upsertSession({
                         session_id: sessionId,
                         project_key: projectKey,
                         source: 'claude-code',
@@ -401,7 +404,7 @@ class ClaudeCodeAdapter extends BaseAdapter {
      */
     async getSessions(filter = {}) {
         const limit = Math.min(parseInt(filter.limit, 10) || 50, 200);
-        const logsDir = path.join(BASE_DIR, 'logs');
+        const logsDir = LOGS_DIR;
 
         if (!fs.existsSync(logsDir)) return [];
 

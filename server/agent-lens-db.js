@@ -1,5 +1,5 @@
 /**
- * abeat-db.js - 统计摘要存储层
+ * agent-lens-db.js - 统计摘要存储层
  *
  * 只存聚合结果，不存原始数据。
  * 原始数据由适配器直接查各自的数据源 DB。
@@ -8,13 +8,11 @@
 const fs = require('fs');
 const path = require('path');
 const { openDb } = require('./db');
+const { ensureRuntimeDirs, getRuntimePaths } = require('./runtime-paths');
 
-// 兼容两种布局：
-//   开发/源码: <project>/server/abeat-db.js → DB 在 <project>/a-beat.db
-//   已安装:     ~/.agent-trace/abeat-db.js  → DB 在 ~/.agent-trace/a-beat.db
-const DB_PATH = path.basename(__dirname) === 'server'
-    ? path.join(__dirname, '..', 'a-beat.db')
-    : path.join(__dirname, 'a-beat.db');
+const RUNTIME_PATHS = getRuntimePaths({ baseDir: __dirname });
+ensureRuntimeDirs(RUNTIME_PATHS);
+const DB_PATH = RUNTIME_PATHS.dbFile;
 const SCHEMA_PATH = path.join(__dirname, 'schema.sql');
 
 let _db = null;
@@ -27,7 +25,7 @@ function getDb() {
   // better-sqlite3 同步可用；sql.js 需要 await ready()，此处同步初始化
   try { lazyDb.ready(); } catch (_) {}
   if (!lazyDb._db) {
-    console.error('[abeat-db] 无可用 SQLite 后端。a-beat.db 功能不可用。');
+    console.error('[agent-lens-db] 无可用 SQLite 后端。agent-lens.db 功能不可用。');
     console.error('  修复：npm install better-sqlite3');
     return null;
   }

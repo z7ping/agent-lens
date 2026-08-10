@@ -4,7 +4,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 ## 项目概述
 
-Agent Trace 是一个实时监控和可视化 AI 编码工具调用的工具。通过钩入 Codex/Cursor 等工具的 PreToolUse 和 PostToolUse 生命周期事件，记录每次工具调用，并在浏览器仪表盘中展示。支持多工具适配器架构（Claude Code、Codex、Hermes、OpenCode、Cursor、Pi）。
+AgentLens 是一个实时监控和可视化 AI 编码工具调用的工具。通过钩入 Codex/Cursor 等工具的 PreToolUse 和 PostToolUse 生命周期事件，记录每次工具调用，并在浏览器仪表盘中展示。支持多工具适配器架构（Claude Code、Codex、Hermes、OpenCode、Cursor、Pi）。
 
 **主要运行时依赖：better-sqlite3（原生 SQLite 模块，可选依赖中安装）。**
 
@@ -51,8 +51,8 @@ Vite dev server 会代理 `/api`、`/logs`、`/states`、`/projects.json` 到后
 
 安装后，**无需手动启动服务器**：
 - `hooks/prelog.js` 在每次工具调用时检测服务是否运行
-- 如果服务未运行，自动通过已安装的 `agent-trace start --daemon` 在后台启动
-- 服务写入 `.server.pid` 管理生命周期
+- 如果服务未运行，自动通过已安装的 `agent-lens start --daemon` 在后台启动
+- 服务写入运行时 `run/server.pid` 管理生命周期
 - 服务挂掉后，下次工具调用会自动拉起
 
 ## 多工具支持
@@ -76,7 +76,7 @@ Vite dev server 会代理 `/api`、`/logs`、`/states`、`/projects.json` 到后
 
 2. **PostToolUse 钩子** (`hooks/log.js`) — 在每次工具调用后触发。从调用栈弹出，构建包含耗时/成功/错误的日志记录，以 JSONL 格式追加到 `logs/<projectKey>.jsonl`，并更新 `projects.json`。
 
-3. **HTTP 服务器** (`server/server.js`) — 最小化静态文件服务器，端口 56789（定义在 `config.js`）。支持守护进程模式（`--daemon`），通过 `.server.pid` 管理生命周期。优先从 `dist/` 提供构建后的文件，否则从项目根目录提供。
+3. **HTTP 服务器** (`server/server.js`) — 最小化静态文件服务器，端口 56789（定义在 `config.js`）。支持守护进程模式（`--daemon`），通过运行时 `run/server.pid` 管理生命周期。优先从 `dist/` 提供构建后的文件，否则从应用目录提供。
 
 4. **浏览器可视化** (`index.html`) — 单页面 Tab 切换（调用链 / 仪表盘），通过 `fetch()` 在客户端解析 JSONL。
 
@@ -112,12 +112,12 @@ server/adapters/
 
 ## 运行时数据
 
-- `projects.json` — 项目注册表：映射 `projectKey` 到 `{cwd, name, last_seen}`
-- `logs/<projectKey>.jsonl` — 仅追加日志文件，每个工具调用一个 JSON 对象
-- `states/<projectKey>.json` — 临时调用栈状态（执行期间活跃读写）
+- `.agent-lens/data/projects.json` — 项目注册表：映射 `projectKey` 到 `{cwd, name, last_seen}`
+- `.agent-lens/logs/<projectKey>.jsonl` — 仅追加日志文件，每个工具调用一个 JSON 对象
+- `.agent-lens/state/<projectKey>.json` — 临时调用栈状态（执行期间活跃读写）
 - `dist/` — Vite 构建输出（生产环境使用）
-- `.server.pid` — 服务进程 PID 文件
-- `a-beat.db` — SQLite 数据库，存储 sessions、daily_stats、recent_errors、timeline 表
+- `.agent-lens/run/server.pid` — 服务进程 PID 文件
+- `.agent-lens/data/agent-lens.db` — SQLite 数据库，存储 sessions、daily_stats、recent_errors、timeline 表
 
 ## 约定
 

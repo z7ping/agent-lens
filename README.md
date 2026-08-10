@@ -1,8 +1,8 @@
-# Agent Trace
+# AgentLens
 
 多 Agent 调用的全链路可观测性工具。统计 SKILL / Tool / MCP 调用次数，实时还原每一次会话的完整执行路径。
 
-AgentTrace – End-to-end observability for multi‑agent invocations.
+AgentLens – End-to-end observability for multi‑agent invocations.
 Aggregates call counts for SKILLs, Tools, and MCPs, and reconstructs the complete execution path of every session in real time.
 
 > **一句话**：`npm install && npm run build && node server/cli.js start` → 打开浏览器看仪表盘。
@@ -21,8 +21,8 @@ Aggregates call counts for SKILLs, Tools, and MCPs, and reconstructs the complet
 ## 快速上手
 
 ```bash
-git clone https://github.com/z7ping/agent-trace.git
-cd agent-trace
+git clone https://github.com/z7ping/agent-lens.git
+cd agent-lens
 npm install
 npm run build
 node server/cli.js start              # 启动后端，端口 56789
@@ -31,7 +31,7 @@ node server/cli.js start              # 启动后端，端口 56789
 打开 **http://localhost:56789/** 即可看到仪表盘。
 
 > `npm start` 等价于 `node server/cli.js start`，前台运行，按 Ctrl+C 停止。
-> 从 GitHub 源码安装时请使用 `node server/cli.js install`；`npx agent-trace install` 会执行 npm registry 上已发布的包。
+> 从 GitHub 源码安装时请使用 `node server/cli.js install`；`npx @z7ping/agent-lens install` 会执行 npm registry 上已发布的包。
 > 后台运行加 `--daemon`：`node server/cli.js start --daemon`。
 
 ---
@@ -39,12 +39,12 @@ node server/cli.js start              # 启动后端，端口 56789
 ## 目录结构
 
 ```
-agent-trace/
+agent-lens/
 ├── server/                    # 后端（纯 Node.js，无构建步骤）
 │   ├── server.js              # HTTP 服务（端口 56789）
 │   ├── cli.js                 # CLI 入口
 │   ├── routes.js              # API 路由
-│   ├── abeat-db.js            # SQLite 存储层
+│   ├── agent-lens-db.js            # SQLite 存储层
 │   ├── config.js              # 服务配置
 │   ├── schema.sql             # 表结构定义
 │   ├── overview.js            # 概览资产扫描与数据库快照
@@ -100,29 +100,29 @@ npm run dev              # 后端（56789）+ Vite（5173）一起启动
 ```bash
 npm install
 npm run build
-node server/cli.js install          # 复制到 ~/.agent-trace + 安装钩子 + 注册服务/daemon
+node server/cli.js install          # 复制到 ~/.agent-lens + 安装钩子 + 注册服务/daemon
 node server/cli.js service start    # Linux/macOS 可用；Windows 使用 daemon 自动守护
 ```
 
 发布到 npm 后，才推荐使用短命令：
 
 ```bash
-npx agent-trace install
+npx @z7ping/agent-lens install
 ```
 
 如果只是想直接从 GitHub 分发包试用，可以使用：
 
 ```bash
-npx github:z7ping/agent-trace install
+npx github:z7ping/agent-lens install
 ```
 
 安装后会自动注册为**系统服务**或 daemon，支持开机自启/自动拉起。自动检测平台：
 
 | 平台 | 服务机制 | 配置路径 |
 |------|---------|---------|
-| Linux | systemd user service | `~/.config/systemd/user/agent-trace.service` |
-| macOS | launchd agent | `~/Library/LaunchAgents/com.agent-trace.plist` |
-| Windows | daemon + hook 自动守护 | `~/.agent-trace/`（无需管理员权限） |
+| Linux | systemd user service | `~/.config/systemd/user/agent-lens.service` |
+| macOS | launchd agent | `~/Library/LaunchAgents/com.agent-lens.plist` |
+| Windows | daemon + hook 自动守护 | `~/.agent-lens/`（无需管理员权限） |
 
 > **Linux 注意**：需要 `sudo loginctl enable-linger <user>` 才能在未登录时保持服务运行。安装时会自动检测并提示。
 >
@@ -151,7 +151,7 @@ npx github:z7ping/agent-trace install
 
 概览数据采用“数据库快照 + 后台刷新”：
 
-1. `/api/overview` 先读取 `a-beat.db` 中最近一次资产快照，快速返回页面。
+1. `/api/overview` 先读取运行时数据目录中的 `agent-lens.db` 最近一次资产快照，快速返回页面。
 2. 每次访问 `/api/overview` 后，服务会在后台触发一次资产扫描并更新数据库。
 3. 服务启动后会按固定间隔定时扫描，避免配置变化长期不同步。
 4. 调用次数、高频资产和跨工具覆盖矩阵继续从 `timeline` 聚合，不重复存储调用事实。
@@ -159,14 +159,14 @@ npx github:z7ping/agent-trace install
 定时扫描间隔通过环境变量配置，单位为毫秒：
 
 ```bash
-AGENT_TRACE_OVERVIEW_SCAN_INTERVAL_MS=600000 node server/cli.js start
+AGENT_LENS_OVERVIEW_SCAN_INTERVAL_MS=600000 node server/cli.js start
 ```
 
 默认值是 `600000`（10 分钟）。设为 `0` 可关闭服务端定时扫描；访问概览时仍会触发后台刷新。
 
 #### Codex 概览扫描规则
 
-Codex 默认配置根目录为 `CODEX_HOME`，未设置时为 `~/.codex`。Agent Trace 会扫描：
+Codex 默认配置根目录为 `CODEX_HOME`，未设置时为 `~/.codex`。AgentLens 会扫描：
 
 | 路径 | 类型 | 说明 |
 |------|------|------|
@@ -176,11 +176,11 @@ Codex 默认配置根目录为 `CODEX_HOME`，未设置时为 `~/.codex`。Agent
 | `~/.codex/plugins` | Plugin | 插件根目录中的已安装条目 |
 | `~/.codex/config.toml` 中的 `[mcp_servers.*]` | MCP | Codex MCP 配置 |
 | `~/.codex/config.toml` 中的 `[plugins.*]` | Plugin | Codex 插件启用配置 |
-| `~/.codex/config.json` | MCP | 兼容旧版 JSON 配置 |
+| `~/.codex/config.json` | MCP | JSON 配置格式 |
 
 #### Pi 概览扫描规则
 
-Pi 的默认配置根目录来自 `PI_CODING_AGENT_DIR`，未设置时为 `~/.pi/agent`。Agent Trace 会优先识别真正的 Pi agent 根目录，再扫描该目录下的能力资产，而不是只按某一台机器的 `~/.pi` 布局处理。
+Pi 的默认配置根目录来自 `PI_CODING_AGENT_DIR`，未设置时为 `~/.pi/agent`。AgentLens 会优先识别真正的 Pi agent 根目录，再扫描该目录下的能力资产，而不是只按某一台机器的 `~/.pi` 布局处理。
 
 Pi agent 根目录候选包括：
 
@@ -212,23 +212,23 @@ Skill 目录会识别根目录下的 `.md` 文件，并递归识别包含 `SKILL
 
 ### 配置 Claude Code / Codex / Cursor / Pi 钩子
 
-运行 `node server/cli.js install` 会自动配置所有工具的 hooks。发布到 npm 后，也可以使用 `npx agent-trace install`。
+运行 `node server/cli.js install` 会自动配置所有工具的 hooks。发布到 npm 后，也可以使用 `npx @z7ping/agent-lens install`。
 
-如果需要手动配置，在 `~/.claude/settings.json` 中添加（路径指向 `~/.agent-trace/hooks/`）：
+如果需要手动配置，在 `~/.claude/settings.json` 中添加（路径指向 `~/.agent-lens/hooks/`）：
 
 ```json
 {
   "hooks": {
     "PreToolUse": [{
       "hooks": [{
-        "command": "node ~/.agent-trace/hooks/prelog.js",
+        "command": "node ~/.agent-lens/hooks/prelog.js",
         "type": "command",
         "timeout": 5
       }]
     }],
     "PostToolUse": [{
       "hooks": [{
-        "command": "node ~/.agent-trace/hooks/log.js",
+        "command": "node ~/.agent-lens/hooks/log.js",
         "type": "command",
         "timeout": 10
       }]
@@ -304,7 +304,19 @@ node server/cli.js start 8080       # 指定其他端口
 | error_type | 错误分类：`windows_command` / `path_not_found` / `permission` / `timeout` / `syntax` / `unknown` |
 | error_detail | 错误详情 JSON |
 
-### SQLite 表（a-beat.db）
+### SQLite 表（agent-lens.db）
+
+开发模式运行数据统一保存在项目根目录 `.agent-lens/` 下：
+
+```text
+.agent-lens/
+├── data/      # agent-lens.db, projects.json
+├── logs/      # JSONL 调用日志与调试日志
+├── state/     # 调用栈和导入水位线
+└── run/       # server.pid
+```
+
+安装后，应用文件和运行数据会按平台分目录保存。Windows 使用 `%LOCALAPPDATA%\AgentLens\app|data|logs|state|run`；Linux/macOS 使用 XDG 风格的 `app`、`data`、`logs`、`state`、`run` 分区。
 
 | 表名 | 用途 |
 |------|------|

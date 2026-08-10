@@ -5,7 +5,7 @@
  * 数据源：~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl
  * 解析 Codex rollout 记录（session_meta / event_msg / response_item），
  * 抽取用户消息、助手回复、工具调用（function_call / function_call_output）配对，
- * 转换成统一 timeline 并补进 a-beat.db，让 Codex 历史任务无需 hook 也能展示。
+ * 转换成统一 timeline 并补进 agent-lens.db，让 Codex 历史任务无需 hook 也能展示。
  */
 
 const path = require('path');
@@ -14,8 +14,11 @@ const { JsonlImporter } = require('./base');
 const BaseAdapter = require('../adapters/base');
 const CodexAdapter = require('../adapters/codex');
 const { codex: paths } = require('../paths');
+const { ensureRuntimeDirs, getRuntimePaths } = require('../runtime-paths');
 
-const STATES_DIR = path.join(__dirname, '..', 'states');
+const RUNTIME_PATHS = getRuntimePaths({ baseDir: path.join(__dirname, '..') });
+ensureRuntimeDirs(RUNTIME_PATHS);
+const STATES_DIR = RUNTIME_PATHS.stateDir;
 
 const codexAdapter = new CodexAdapter();
 const baseAdapter = new BaseAdapter();

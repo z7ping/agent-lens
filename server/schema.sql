@@ -1,4 +1,4 @@
--- a-beat.db Schema
+-- agent-lens.db Schema
 -- Version: 2.0
 -- 仅存统计摘要，不存原始数据
 

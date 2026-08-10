@@ -7,7 +7,7 @@ const os = require('node:os');
 
 test('cli package command creates an npm-compatible archive with current runtime files only', { timeout: 30000 }, () => {
   const root = path.join(__dirname, '..');
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-trace-package-test-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-lens-package-test-'));
   const cli = path.join(root, 'server', 'cli.js');
 
   execFileSync(process.execPath, [cli, 'package', '--output', tmp], {
@@ -15,7 +15,7 @@ test('cli package command creates an npm-compatible archive with current runtime
     encoding: 'utf-8',
   });
 
-  const archives = fs.readdirSync(tmp).filter(name => /^agent-trace-.+\.tgz$/.test(name));
+  const archives = fs.readdirSync(tmp).filter(name => /^z7ping-agent-lens-.+\.tgz$/.test(name));
   assert.equal(archives.length, 1);
   const archivePath = path.join(tmp, archives[0]);
   const listing = execFileSync('tar', ['-tzf', archivePath], { encoding: 'utf-8' });
@@ -38,8 +38,9 @@ test('cli package command creates an npm-compatible archive with current runtime
 
   for (const forbidden of [
     'projects.json',
+    '.agent-lens/',
     'states/',
-    'a-beat.db',
+    'agent-lens.db',
   ]) {
     assert.doesNotMatch(listing, new RegExp(`package/(?:server/)?${forbidden.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
   }

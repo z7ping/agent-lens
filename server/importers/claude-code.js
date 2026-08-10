@@ -4,7 +4,7 @@
  *
  * 数据源：~/.claude/projects/ 下所有会话 jsonl
  * 解析 Claude Code 自己的会话记录（user / assistant / tool_use / tool_result），
- * 转换成统一 timeline 并补进 a-beat.db，让历史任务无需 hook 也能展示。
+ * 转换成统一 timeline 并补进 agent-lens.db，让历史任务无需 hook 也能展示。
  */
 
 const path = require('path');
@@ -12,8 +12,11 @@ const { JsonlImporter } = require('./base');
 const BaseAdapter = require('../adapters/base');
 const ClaudeCodeAdapter = require('../adapters/claude-code');
 const { claudeCode: paths } = require('../paths');
+const { ensureRuntimeDirs, getRuntimePaths } = require('../runtime-paths');
 
-const STATES_DIR = path.join(__dirname, '..', 'states');
+const RUNTIME_PATHS = getRuntimePaths({ baseDir: path.join(__dirname, '..') });
+ensureRuntimeDirs(RUNTIME_PATHS);
+const STATES_DIR = RUNTIME_PATHS.stateDir;
 
 const ccAdapter = new ClaudeCodeAdapter();
 const baseAdapter = new BaseAdapter();

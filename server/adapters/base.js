@@ -7,18 +7,14 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { ensureRuntimeDirs, getRuntimePaths } = require('../runtime-paths');
 
 const BASE_DIR = path.join(__dirname, '..');
-const STATES_DIR = path.join(BASE_DIR, 'states');
-const LOGS_DIR = path.join(BASE_DIR, 'logs');
-const PROJECTS_FILE = path.join(BASE_DIR, 'projects.json');
-
-// 确保目录存在
-for (const dir of [STATES_DIR, LOGS_DIR]) {
-    if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-    }
-}
+const RUNTIME_PATHS = getRuntimePaths({ baseDir: BASE_DIR });
+ensureRuntimeDirs(RUNTIME_PATHS);
+const STATES_DIR = RUNTIME_PATHS.stateDir;
+const LOGS_DIR = RUNTIME_PATHS.logsDir;
+const PROJECTS_FILE = RUNTIME_PATHS.projectsFile;
 
 class BaseAdapter {
     /**
@@ -305,7 +301,7 @@ class BaseAdapter {
         const { project_key, session_id, limit = 100, source } = filter;
         const filterSource = source || this.name;
         const records = [];
-        const logsDir = path.join(BASE_DIR, 'logs');
+        const logsDir = LOGS_DIR;
 
         const processLine = (line) => {
             try {
@@ -337,7 +333,7 @@ class BaseAdapter {
     }
 
     /**
-     * 双写 SQLite 统计摘要到 a-beat.db（共享实现）
+     * 双写 SQLite 统计摘要到 agent-lens.db（共享实现）
      * @param {Object} opts
      * @param {string} opts.sessionId
      * @param {string} opts.projectKey
@@ -349,21 +345,21 @@ class BaseAdapter {
      */
     _writeToSqlite({ sessionId, projectKey, toolName, ts, success, durationMs, error }) {
         try {
-            const abeatDb = require('../abeat-db');
+            const agentLensDb = require('../agent-lens-db');
             const date = ts ? ts.slice(0, 10) : '';
 
             // 按天统计
-            abeatDb.updateDailyStats(date, this.name, toolName, 1, success ? 0 : 1, durationMs || 0);
+            agentLensDb.updateDailyStats(date, this.name, toolName, 1, success ? 0 : 1, durationMs || 0);
 
             // 错误记录
             if (!success && error) {
-                abeatDb.saveError(ts, sessionId || '', this.name, toolName, error);
+                agentLensDb.saveError(ts, sessionId || '', this.name, toolName, error);
             }
 
             // session 摘要（累加 total_duration_ms）
             if (sessionId) {
-                const existingDuration = abeatDb.getSessionDuration(sessionId);
-                abeatDb.upsertSession({
+                const existingDuration = agentLensDb.getSessionDuration(sessionId);
+                agentLensDb.upsertSession({
                     session_id: sessionId,
                     project_key: projectKey,
                     source: this.name,
@@ -384,7 +380,7 @@ class BaseAdapter {
      */
     logError(e, source = 'adapter') {
         try {
-            const logFile = path.join(BASE_DIR, 'trace_error.log');
+            const logFile = path.join(LOGS_DIR, 'trace_error.log');
             const msg = `[${new Date().toISOString()}] ${source}: ${e.message || e}\n`;
             fs.appendFileSync(logFile, msg, 'utf-8');
         } catch (_) {

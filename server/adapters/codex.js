@@ -8,7 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 const BaseAdapter = require('./base');
-const { insertTimeline } = require('../abeat-db');
+const { insertTimeline } = require('../agent-lens-db');
 
 const HOME_DIR = require('os').homedir();
 const CODEX_DIR = path.join(HOME_DIR, '.codex');

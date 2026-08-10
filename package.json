@@ -1,10 +1,10 @@
 {
-  "name": "agent-trace",
-  "version": "1.9.1",
+  "name": "@z7ping/agent-lens",
+  "version": "0.2.0",
   "description": "多 Agent 调用的全链路可观测性工具。统计 SKILL / Tool / MCP 调用次数，实时还原每一次会话的完整执行路径。",
   "main": "server/cli.js",
   "bin": {
-    "agent-trace": "./server/cli.js"
+    "agent-lens": "./server/cli.js"
   },
   "scripts": {
     "dev": "concurrently -n backend,frontend -c blue,green \"node server/cli.js start\" \"vite --port 5173\"",
@@ -37,11 +37,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/z7ping/agent-trace.git"
+    "url": "https://github.com/z7ping/agent-lens.git"
   },
-  "homepage": "https://github.com/z7ping/agent-trace#readme",
+  "homepage": "https://github.com/z7ping/agent-lens#readme",
   "bugs": {
-    "url": "https://github.com/z7ping/agent-trace/issues"
+    "url": "https://github.com/z7ping/agent-lens/issues"
   },
   "keywords": ["claude-code", "ai-tools", "monitoring", "visualization", "agent"],
   "author": "7ping <z7ping@outlook.com>",

@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 /**
- * Agent Trace - 统一 CLI 入口
+ * AgentLens - 统一 CLI 入口
  *
  * 用法:
- *   agent-trace install              安装 hooks 到 Claude Code 配置
- *   agent-trace start [port]         前台启动服务器
- *   agent-trace start --daemon       后台守护进程模式
- *   agent-trace stop                 停止后台服务
- *   agent-trace status               查看服务状态
- *   agent-trace package              打包分发
- *   agent-trace uninstall            卸载并清理所有配置和数据
+ *   agent-lens install              安装 hooks 到 Claude Code 配置
+ *   agent-lens start [port]         前台启动服务器
+ *   agent-lens start --daemon       后台守护进程模式
+ *   agent-lens stop                 停止后台服务
+ *   agent-lens status               查看服务状态
+ *   agent-lens package              打包分发
+ *   agent-lens uninstall            卸载并清理所有配置和数据
  *
  * 替代: install.sh, install.bat, start.sh, start.bat, package.sh
  */
@@ -20,14 +20,16 @@ const os = require('os');
 const { spawn, execSync, execFileSync } = require('child_process');
 const net = require('net');
 const http = require('http');
+const { ensureRuntimeDirs, getRuntimePaths } = require('./runtime-paths');
 
 // ─── 配置 ────────────────────────────────────────────────────────
 
-// 兼容两种布局：
-//   开发/源码: <project>/server/cli.js   → PROJECT_DIR = <project>
-//   已安装:     ~/.agent-trace/cli.js    → PROJECT_DIR = ~/.agent-trace
-const PROJECT_DIR = path.basename(__dirname) === 'server' ? path.dirname(__dirname) : __dirname;
-const INSTALL_DIR = path.join(os.homedir(), '.agent-trace');
+const IS_SOURCE_LAYOUT = path.basename(__dirname) === 'server';
+const PROJECT_DIR = IS_SOURCE_LAYOUT ? path.dirname(__dirname) : __dirname;
+const CURRENT_RUNTIME_PATHS = getRuntimePaths({ baseDir: __dirname });
+const INSTALL_RUNTIME_PATHS = getRuntimePaths({ layout: 'installed' });
+const INSTALL_ROOT = INSTALL_RUNTIME_PATHS.rootDir;
+const INSTALL_DIR = INSTALL_RUNTIME_PATHS.appDir;
 const SETTINGS_FILE = path.join(os.homedir(), '.claude', 'settings.json');
 const { DEFAULT_PORT } = require('./config');
 // ponytail: 版本号仅打包时用，按需读取，不复制 package.json
@@ -36,7 +38,7 @@ function getVersion() {
 }
 
 // ─── systemd 配置 ──────────────────────────────────────────────────
-const SERVICE_NAME = 'agent-trace';
+const SERVICE_NAME = 'agent-lens';
 const SYSTEMD_DIR = path.join(os.homedir(), '.config', 'systemd', 'user');
 const SERVICE_FILE = path.join(SYSTEMD_DIR, `${SERVICE_NAME}.service`);
 const NODE_BIN = process.execPath; // 当前 node 路径
@@ -109,11 +111,10 @@ function copyDir(src, dest) {
 // ─── PID 管理 ────────────────────────────────────────────────────
 
 function getPidFile(baseDir) {
-    const primary = path.join(baseDir, '.server.pid');
-    const devServerPid = path.join(baseDir, 'server', '.server.pid');
-    if (fs.existsSync(primary)) return primary;
-    if (fs.existsSync(devServerPid)) return devServerPid;
-    return primary;
+    const resolved = path.resolve(baseDir || PROJECT_DIR);
+    if (resolved === path.resolve(INSTALL_DIR)) return INSTALL_RUNTIME_PATHS.pidFile;
+    if (resolved === path.resolve(PROJECT_DIR)) return CURRENT_RUNTIME_PATHS.pidFile;
+    return getRuntimePaths({ baseDir: resolved }).pidFile;
 }
 
 function readPid(baseDir) {
@@ -214,7 +215,7 @@ async function waitForInstalledDaemon(port, timeoutMs = 60000) {
 // Windows → 不使用系统服务；依赖 daemon 模式 + hook 自动守护（server-guard）
 //
 
-const SERVICE_LABEL = 'com.agent-trace';
+const SERVICE_LABEL = 'com.agent-lens';
 const LAUNCHD_DIR = path.join(os.homedir(), 'Library', 'LaunchAgents');
 const LAUNCHD_PLIST = path.join(LAUNCHD_DIR, `${SERVICE_LABEL}.plist`);
 
@@ -248,7 +249,7 @@ function getServiceBackend() {
 function systemdServiceFile() {
     const serverJs = path.join(INSTALL_DIR, 'server.js');
     return `[Unit]
-Description=Agent Trace - AI Agent Observability
+Description=AgentLens - AI Agent Observability
 After=network.target
 
 [Service]
@@ -358,9 +359,9 @@ function launchdPlistContent() {
         <false/>
     </dict>
     <key>StandardOutPath</key>
-    <string>${path.join(INSTALL_DIR, 'logs', 'launchd-stdout.log')}</string>
+    <string>${path.join(INSTALL_RUNTIME_PATHS.logsDir, 'launchd-stdout.log')}</string>
     <key>StandardErrorPath</key>
-    <string>${path.join(INSTALL_DIR, 'logs', 'launchd-stderr.log')}</string>
+    <string>${path.join(INSTALL_RUNTIME_PATHS.logsDir, 'launchd-stderr.log')}</string>
     <key>EnvironmentVariables</key>
     <dict>
         <key>NODE_ENV</key>
@@ -440,10 +441,10 @@ function platformAction(action) {
     if (!backend) {
         if (isWin()) {
             log('Windows 使用 daemon 模式 + hook 自动守护，无需系统服务', 'dim');
-            log('  daemon 管理: agent-trace start --daemon / stop / status', 'dim');
+            log('  daemon 管理: agent-lens start --daemon / stop / status', 'dim');
         } else {
             log('[WARN] 当前平台不支持自动服务管理', 'yellow');
-            log('  手动启动: agent-trace start --daemon', 'dim');
+            log('  手动启动: agent-lens start --daemon', 'dim');
         }
         return false;
     }
@@ -475,10 +476,10 @@ function cmdService(subcmd) {
             case 'disable':
             case 'uninstall':
                 log('Windows 使用 daemon 模式 + hook 自动守护，无需系统服务', 'dim');
-                log('  可用命令: agent-trace start --daemon / stop / status', 'dim');
+                log('  可用命令: agent-lens start --daemon / stop / status', 'dim');
                 return false;
             default:
-                log('用法: agent-trace service <start|stop|status>', 'cyan');
+                log('用法: agent-lens service <start|stop|status>', 'cyan');
                 return undefined;
         }
     }
@@ -492,7 +493,7 @@ function cmdService(subcmd) {
         case 'disable':   return platformAction('disable');
         case 'status':    return platformAction('status');
         default:
-            log('用法: agent-trace service <install|uninstall|start|stop|enable|disable|status>', 'cyan');
+            log('用法: agent-lens service <install|uninstall|start|stop|enable|disable|status>', 'cyan');
             return undefined;
     }
 }
@@ -500,7 +501,7 @@ function cmdService(subcmd) {
 // ─── install 命令 ────────────────────────────────────────────────
 
 async function cmdInstall() {
-    log('🧠 Agent Trace - 安装', 'bright');
+    log('🧠 AgentLens - 安装', 'bright');
     log('═'.repeat(45), 'dim');
     console.log('');
 
@@ -514,13 +515,11 @@ async function cmdInstall() {
 
     // 2. 创建目录
     console.log('');
-    log(`创建目录: ${INSTALL_DIR}`, 'cyan');
-    mkdirp(path.join(INSTALL_DIR, 'hooks'));
-    mkdirp(path.join(INSTALL_DIR, 'logs'));
-    mkdirp(path.join(INSTALL_DIR, 'states'));
+    log(`创建目录: ${INSTALL_ROOT}`, 'cyan');
+    ensureRuntimeDirs(INSTALL_RUNTIME_PATHS);
 
     // 初始化 projects.json
-    const projectsJson = path.join(INSTALL_DIR, 'projects.json');
+    const projectsJson = INSTALL_RUNTIME_PATHS.projectsFile;
     if (!fs.existsSync(projectsJson)) {
         fs.writeFileSync(projectsJson, '{}', 'utf-8');
     }
@@ -539,7 +538,7 @@ async function cmdInstall() {
 
         // server/ 根目录文件
         const rootFiles = [
-            'server.js', 'cli.js', 'db.js', 'config.js', 'abeat-db.js', 'paths.js',
+            'server.js', 'cli.js', 'db.js', 'config.js', 'runtime-paths.js', 'agent-lens-db.js', 'paths.js',
             'install-hooks.js', 'schema.sql', 'routes.js', 'tool-map.js', 'overview.js', 'sources-status.js',
             'app-info.js'
         ];
@@ -613,11 +612,11 @@ async function cmdInstall() {
     const cliPath = path.join(INSTALL_DIR, 'cli.js');
     if (isWin()) {
         // Windows: 创建 batch 脚本 + 自动加入 PATH
-        const batPath = path.join(INSTALL_DIR, 'agent-trace.cmd');
+        const batPath = path.join(INSTALL_DIR, 'agent-lens.cmd');
         const nodeExe = process.execPath;
         const batContent = `@echo off
 "${nodeExe}" "${cliPath}" %*
-`;
+        `;
         try {
             fs.writeFileSync(batPath, batContent, 'utf-8');
             // 自动加入用户 PATH
@@ -631,14 +630,14 @@ async function cmdInstall() {
                     '-ExecutionPolicy',
                     'Bypass',
                     '-Command',
-                    "[Environment]::SetEnvironmentVariable('Path', $env:AGENT_TRACE_NEW_PATH, 'User')",
+                    "[Environment]::SetEnvironmentVariable('Path', $env:AGENT_LENS_NEW_PATH, 'User')",
                 ], {
-                    env: { ...process.env, AGENT_TRACE_NEW_PATH: newPath },
+                    env: { ...process.env, AGENT_LENS_NEW_PATH: newPath },
                     stdio: 'ignore',
                 });
                 log(`[OK] 已创建: ${batPath}`, 'green');
                 log(`[OK] 已加入 PATH: ${INSTALL_DIR}`, 'green');
-                log('  请重启终端后使用 "agent-trace" 命令', 'dim');
+                log('  请重启终端后使用 "agent-lens" 命令', 'dim');
             } else {
                 log(`[OK] 已创建: ${batPath} (已在 PATH 中)`, 'green');
             }
@@ -652,7 +651,7 @@ async function cmdInstall() {
         // Unix: 创建符号链接到 ~/.local/bin（XDG 规范）
         const localBin = path.join(os.homedir(), '.local', 'bin');
         mkdirp(localBin);
-        const symlinkPath = path.join(localBin, 'agent-trace');
+        const symlinkPath = path.join(localBin, 'agent-lens');
         try {
             if (fs.existsSync(symlinkPath)) fs.unlinkSync(symlinkPath);
             fs.symlinkSync(cliPath, symlinkPath);
@@ -694,7 +693,7 @@ async function cmdInstall() {
             log(`[OK] 服务已启动 → http://localhost:${DEFAULT_PORT}/`, 'green');
         } else {
             log('[WARN] 服务未启动，请手动运行:', 'yellow');
-            log(`  agent-trace service start`, 'dim');
+            log(`  agent-lens service start`, 'dim');
         }
     } else {
         // 无可用服务后端，回退到 daemon 模式
@@ -706,11 +705,11 @@ async function cmdInstall() {
                 log(`[OK] 服务已启动 → http://localhost:${DEFAULT_PORT}/`, 'green');
             } else {
                 log('[WARN] 服务未启动，请手动运行:', 'yellow');
-                log(`  agent-trace start --daemon`, 'dim');
+                log(`  agent-lens start --daemon`, 'dim');
             }
         } catch (_) {
             log('[WARN] 自动启动失败，请手动运行:', 'yellow');
-            log(`  agent-trace start --daemon`, 'dim');
+            log(`  agent-lens start --daemon`, 'dim');
         }
     }
 
@@ -728,16 +727,15 @@ async function cmdInstall() {
     log(`  浏览器打开: http://localhost:${DEFAULT_PORT}/`, 'dim');
     log('  管理命令:', 'dim');
     if (isWin()) {
-        log('    agent-trace start --daemon    后台启动', 'dim');
-        log('    agent-trace stop              停止服务', 'dim');
-        log('    agent-trace status            查看状态', 'dim');
+        log('    agent-lens start --daemon    后台启动', 'dim');
+        log('    agent-lens stop              停止服务', 'dim');
+        log('    agent-lens status            查看状态', 'dim');
     } else {
-        log('    agent-trace service start     启动服务', 'dim');
-        log('    agent-trace service stop      停止服务', 'dim');
-        log('    agent-trace service disable   关闭开机自启', 'dim');
-        log('    agent-trace service status    查看状态', 'dim');
+        log('    agent-lens service start     启动服务', 'dim');
+        log('    agent-lens service stop      停止服务', 'dim');
+        log('    agent-lens service disable   关闭开机自启', 'dim');
+        log('    agent-lens service status    查看状态', 'dim');
     }
-    log('  向后兼容: node server.js 仍然可用', 'dim');
     console.log('');
     log(`文档: ${INSTALL_DIR}/README.md`, 'dim');
     log('═'.repeat(45), 'dim');
@@ -808,7 +806,7 @@ function cmdStart(argv) {
                 `objShell.CurrentDirectory = "${PROJECT_DIR.replace(/\\/g, '/')}"`,
                 `objShell.Run "cmd.exe /c start /b node ""${serverJsPosix}"" ${port} --daemon", 0, False`,
             ].join('\r\n');
-            const vbsPath = path.join(os.tmpdir(), 'agent-trace-daemon.vbs');
+            const vbsPath = path.join(os.tmpdir(), 'agent-lens-daemon.vbs');
             fs.writeFileSync(vbsPath, vbsContent, 'utf-8');
             try {
                 execSync(`wscript "${vbsPath}"`, { stdio: 'ignore' });
@@ -828,7 +826,7 @@ function cmdStart(argv) {
     } else {
         // 前台模式
         console.log('');
-        log('🧠 Agent Trace - HTTP 服务器', 'bright');
+        log('🧠 AgentLens - HTTP 服务器', 'bright');
         log('═'.repeat(40), 'dim');
         console.log('');
         log(`✅ 端口: ${port}`, 'green');
@@ -900,7 +898,7 @@ async function cmdUninstall() {
         return;
     }
 
-    log('🧠 Agent Trace - 卸载', 'bright');
+    log('🧠 AgentLens - 卸载', 'bright');
     log('═'.repeat(45), 'dim');
     console.log('');
 
@@ -923,23 +921,23 @@ async function cmdUninstall() {
         if (fs.existsSync(SETTINGS_FILE)) {
             const settings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf-8'));
             if (settings.hooks) {
-                const agentBeatMarker = 'agent-trace';
-                function removeAgentBeatHooks(hookArray) {
+                const agentLensMarker = 'agent-lens';
+                function removeAgentLensHooks(hookArray) {
                     if (!Array.isArray(hookArray)) return [];
                     return hookArray.filter(entry => {
                         if (!entry || !entry.hooks) return true;
-                        return !entry.hooks.some(h => h.command && h.command.includes(agentBeatMarker));
+                        return !entry.hooks.some(h => h.command && h.command.includes(agentLensMarker));
                     });
                 }
-                settings.hooks.PreToolUse = removeAgentBeatHooks(settings.hooks.PreToolUse);
-                settings.hooks.PostToolUse = removeAgentBeatHooks(settings.hooks.PostToolUse);
+                settings.hooks.PreToolUse = removeAgentLensHooks(settings.hooks.PreToolUse);
+                settings.hooks.PostToolUse = removeAgentLensHooks(settings.hooks.PostToolUse);
                 // Clean up empty hook arrays
                 if ((!settings.hooks.PreToolUse || settings.hooks.PreToolUse.length === 0) &&
                     (!settings.hooks.PostToolUse || settings.hooks.PostToolUse.length === 0)) {
                     delete settings.hooks;
                 }
                 fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2));
-                log('[OK] agent-trace hooks 配置已移除', 'green');
+                log('[OK] agent-lens hooks 配置已移除', 'green');
             } else {
                 log('[SKIP] 未找到 hooks 配置', 'dim');
             }
@@ -950,19 +948,20 @@ async function cmdUninstall() {
         log(`[WARN] 清理配置失败: ${e.message}`, 'yellow');
     }
 
-    // 3. 删除 ~/.agent-trace/ 目录
-    log(`删除目录: ${INSTALL_DIR}`, 'cyan');
-    if (fs.existsSync(INSTALL_DIR)) {
-        rimraf(INSTALL_DIR);
+    // 3. 删除安装根目录
+    log(`删除目录: ${INSTALL_ROOT}`, 'cyan');
+    if (fs.existsSync(INSTALL_ROOT)) {
+        rimraf(INSTALL_ROOT);
         log('[OK] 目录已删除', 'green');
     } else {
         log('[SKIP] 目录不存在', 'dim');
     }
 
     // 4. npm unlink -g
-    log('执行 npm unlink -g agent-trace ...', 'cyan');
+    log('执行 npm unlink -g agent-lens ...', 'cyan');
     try {
-        execSync('npm unlink -g agent-trace', { stdio: 'ignore' });
+        execSync('npm unlink -g @z7ping/agent-lens', { stdio: 'ignore' });
+        try { execSync('npm unlink -g agent-lens', { stdio: 'ignore' }); } catch (_) {}
         log('[OK] 全局链接已移除', 'green');
     } catch (_) {
         log('[SKIP] 未找到全局链接', 'dim');
@@ -1001,7 +1000,7 @@ function cmdPackage(argv = []) {
         ? path.resolve(argv[outputFlagIdx + 1])
         : path.join(PROJECT_DIR, 'dist');
 
-    log(`📦 打包 Agent Trace v${getVersion()}`, 'bright');
+    log(`📦 打包 AgentLens v${getVersion()}`, 'bright');
     log('═'.repeat(45), 'dim');
     console.log('');
 
@@ -1019,9 +1018,9 @@ function cmdPackage(argv = []) {
         stdio: 'inherit',
     });
     const created = fs.readdirSync(outputDir)
-        .filter(name => !before.has(name) && /^agent-trace-.+\.tgz$/.test(name))
+        .filter(name => !before.has(name) && /^z7ping-agent-lens-.+\.tgz$/.test(name))
         .sort();
-    const archiveName = created[created.length - 1] || `agent-trace-${getVersion()}.tgz`;
+    const archiveName = created[created.length - 1] || `z7ping-agent-lens-${getVersion()}.tgz`;
 
     console.log('');
     log('═'.repeat(45), 'dim');
@@ -1031,18 +1030,18 @@ function cmdPackage(argv = []) {
     console.log('');
     log('分发方式:', 'yellow');
     log('  1. 上传 .tgz 到 GitHub Releases', 'dim');
-    log('  2. 用户运行: npx ./agent-trace-x.y.z.tgz install', 'dim');
-    log('  3. 或发布到 npm 后运行: npx agent-trace install', 'dim');
+    log('  2. 用户运行: npx ./z7ping-agent-lens-x.y.z.tgz install', 'dim');
+    log('  3. 或发布到 npm 后运行: npx @z7ping/agent-lens install', 'dim');
     log('═'.repeat(45), 'dim');
 }
 
 // ─── help 命令 ───────────────────────────────────────────────────
 
 function showHelp() {
-    log('🧠 Agent Trace CLI', 'bright');
+    log('🧠 AgentLens CLI', 'bright');
     console.log('');
     log('用法:', 'yellow');
-    log('  agent-trace <command> [options]', 'cyan');
+    log('  agent-lens <command> [options]', 'cyan');
     console.log('');
     log('命令:', 'yellow');
     log('  install              安装 hooks + 注册 systemd 服务（自动启动+开机自启）', 'dim');
@@ -1068,13 +1067,10 @@ function showHelp() {
     log('  --open               自动打开浏览器（仅 start）', 'dim');
     console.log('');
     log('示例:', 'yellow');
-    log('  agent-trace install           # 首次安装（自动注册服务+启动）', 'dim');
-    log('  agent-trace service stop      # 停止服务', 'dim');
-    log('  agent-trace service disable   # 关闭开机自启', 'dim');
-    log('  agent-trace service status    # 查看状态', 'dim');
-    console.log('');
-    log('向后兼容:', 'yellow');
-    log('  node server.js [port]         # 仍然可用', 'dim');
+    log('  agent-lens install           # 首次安装（自动注册服务+启动）', 'dim');
+    log('  agent-lens service stop      # 停止服务', 'dim');
+    log('  agent-lens service disable   # 关闭开机自启', 'dim');
+    log('  agent-lens service status    # 查看状态', 'dim');
     log('  node server.js --daemon       # 仍然可用', 'dim');
     log('  node server.js --stop         # 仍然可用', 'dim');
     log('  node server.js --status       # 仍然可用', 'dim');

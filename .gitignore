@@ -2,10 +2,10 @@
 logs/
 states/
 projects.json
+.agent-lens/
 trace.jsonl
 trace_state.json
 trace_error.log
-.server.pid
 
 # 忽略分发目录
 dist/
@@ -43,9 +43,6 @@ Thumbs.db
 .ccb/
 tracker.db-shm
 tracker.db-wal
-a-beat.db
-a-beat.db-shm
-a-beat.db-wal
 .playwright-mcp/
 .superpowers/
 .superpowers/

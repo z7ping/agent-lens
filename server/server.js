@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Agent Trace - HTTP 服务器
+ * AgentLens - HTTP 服务器
  *
  * 用法:
  *   node server.js [port]              # 前台运行
@@ -24,6 +24,7 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 const net = require('net');
+const { ensureRuntimeDirs, getRuntimePaths } = require('./runtime-paths');
 
 // ─── 命令行参数解析 ──────────────────────────────────────────
 
@@ -38,17 +39,12 @@ const shouldStatus = flags.includes('--status');
 
 // 端口：第一个非 flag 参数，或环境变量，或默认 56789
 const PORT = parseInt(positional[0], 10) || parseInt(process.env.TRACKER_PORT, 10) || require('./config').DEFAULT_PORT;
-const ROOT = path.join(__dirname, '..');
-// ponytail: 安装模式下 server.js 和 dist/ 同级，开发模式下 dist 在父目录
-const DIR = fs.existsSync(path.join(__dirname, 'dist'))
-    ? path.join(__dirname, 'dist')
-    : fs.existsSync(path.join(ROOT, 'dist'))
-        ? path.join(ROOT, 'dist')
-        : ROOT;
-const PID_FILE = path.join(__dirname, '.server.pid');
+const RUNTIME_PATHS = getRuntimePaths({ baseDir: __dirname });
+ensureRuntimeDirs(RUNTIME_PATHS);
+const DIR = fs.existsSync(RUNTIME_PATHS.distDir) ? RUNTIME_PATHS.distDir : RUNTIME_PATHS.appDir;
+const PID_FILE = RUNTIME_PATHS.pidFile;
 const PROJECT_REGISTRY_FILES = [
-    path.join(ROOT, 'projects.json'),
-    path.join(__dirname, 'projects.json'),
+    RUNTIME_PATHS.projectsFile,
 ];
 
 // ─── 彩色输出 ────────────────────────────────────────────────
@@ -220,8 +216,8 @@ async function main() {
         '.woff2': 'font/woff2',
     };
 
-    // ─── a-beat.db 集成 ─────────────────────────────────────
-    const trackerDb = require('./abeat-db');
+    // ─── agent-lens.db 集成 ─────────────────────────────────────
+    const trackerDb = require('./agent-lens-db');
 
     function getDb() {
         try {
@@ -245,7 +241,7 @@ async function main() {
     // ─── 处理 Hermes 插件推送的 hook 数据 ──────────────────────
     function handleHookData(data) {
         const crypto = require('crypto');
-        const { insertTimeline, upsertSession, updateDailyStats, getSessionDuration } = require('./abeat-db');
+        const { insertTimeline, upsertSession, updateDailyStats, getSessionDuration } = require('./agent-lens-db');
 
         const source = data.source || 'hermes';
         const toolName = data.tool_name || '';
@@ -315,10 +311,13 @@ async function main() {
     }
 
     function readFallbackFile(urlPath, callback) {
-        const candidates = [
-            path.resolve(path.join(ROOT, urlPath)),
-            path.resolve(path.join(__dirname, urlPath)),
-        ];
+        const cleanPath = urlPath.replace(/^\/+/, '');
+        const candidates = [];
+        if (cleanPath.startsWith('logs/')) {
+            candidates.push({ base: RUNTIME_PATHS.logsDir, file: path.resolve(path.join(RUNTIME_PATHS.logsDir, cleanPath.slice('logs/'.length))) });
+        } else if (cleanPath.startsWith('states/')) {
+            candidates.push({ base: RUNTIME_PATHS.stateDir, file: path.resolve(path.join(RUNTIME_PATHS.stateDir, cleanPath.slice('states/'.length))) });
+        }
 
         const readNext = (index) => {
             if (index >= candidates.length) {
@@ -326,8 +325,7 @@ async function main() {
                 return;
             }
 
-            const candidate = candidates[index];
-            const base = index === 0 ? ROOT : __dirname;
+            const { base, file: candidate } = candidates[index];
             if (!candidate.startsWith(path.resolve(base))) {
                 readNext(index + 1);
                 return;
@@ -464,7 +462,7 @@ async function main() {
         fs.readFile(filePath, (err, content) => {
             if (err) {
                 if (err.code === 'ENOENT') {
-                    // 回退到项目根目录和 server 目录（logs/、states/ 等数据文件）
+                    // 回退到运行时目录（logs/、state/ 等数据文件）
                     readFallbackFile(urlPath, (err2, content2) => {
                         if (err2) {
                             res.writeHead(404, { 'Content-Type': 'text/plain' });
@@ -496,7 +494,7 @@ async function main() {
     // ─── 初始化数据库后端 ──────────────────────────────────────
 
     async function initDb() {
-        // a-beat.db 已自动初始化，无需额外 ready()
+        // agent-lens.db 已自动初始化，无需额外 ready()
         try {
             const d = getDb();
             if (d) {
@@ -550,7 +548,7 @@ async function main() {
 
             if (!isDaemon) {
                 console.log('');
-                log('🧠 Agent Trace - HTTP 服务器', 'bright');
+                log('🧠 AgentLens - HTTP 服务器', 'bright');
                 log('========================================', 'dim');
                 console.log('');
                 log(`✅ 服务器已启动`, 'green');
@@ -609,8 +607,8 @@ async function main() {
                 stopOverviewScanner();
             } catch (_) {}
             try {
-                const abeatDb = require('./abeat-db');
-                abeatDb.closeDb();
+                const agentLensDb = require('./agent-lens-db');
+                agentLensDb.closeDb();
             } catch (_) {}
             removePid();
             if (!isDaemon) {

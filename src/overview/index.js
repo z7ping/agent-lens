@@ -6,8 +6,8 @@ let overviewLoaded = false;
 let overviewData = null;
 let currentOverviewSource = '';
 let currentOverviewView = 'assets';
-const OVERVIEW_CACHE_KEY = 'agent-trace-overview-cache-v1';
-const TOOL_ORDER_KEY = 'agent-trace-tool-order-v2';
+const OVERVIEW_CACHE_KEY = 'agent-lens-overview-cache-v1';
+const TOOL_ORDER_KEY = 'agent-lens-tool-order-v2';
 const OVERVIEW_REFRESH_MS = 60000;
 const STABLE_TOOLS = [
   { tool: 'pi', display_name: 'Pi', description: 'Pi 编码智能体历史数据源。', order: 10, links: { homepage: 'https://pi.dev', docs: 'https://pi.dev/docs/latest', github: 'https://github.com/earendil-works/pi' }, theme: { accent: '#eab308', surface: '#fefce8' } },

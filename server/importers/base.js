@@ -6,13 +6,16 @@
  *  1. 递归扫描工具自己的 JSONL 数据目录（如 ~/.claude/projects、~/.codex/sessions）
  *  2. 按「文件路径 + 已处理行数 + mtime」水位线增量读取，避免每次全量重扫 / 重复导入
  *  3. 调用子类 parseLines() 把原始行解析为统一 timeline 记录
- *  4. 写入 a-beat.db（timeline + daily_stats + recent_errors），并按 timeline 重算 session 摘要
+ *  4. 写入 agent-lens.db（timeline + daily_stats + recent_errors），并按 timeline 重算 session 摘要
  */
 
 const fs = require('fs');
 const path = require('path');
+const { ensureRuntimeDirs, getRuntimePaths } = require('../runtime-paths');
 
-const STATES_DIR = path.join(__dirname, '..', 'states');
+const RUNTIME_PATHS = getRuntimePaths({ baseDir: path.join(__dirname, '..') });
+ensureRuntimeDirs(RUNTIME_PATHS);
+const STATES_DIR = RUNTIME_PATHS.stateDir;
 
 const DEFAULT_POLL_INTERVAL_MS = parseInt(process.env.JSONL_IMPORT_INTERVAL_MS, 10) || 30 * 60 * 1000;
 
@@ -146,12 +149,12 @@ class JsonlImporter {
     // ─── 写入 DB ────────────────────────────────────────
 
     _ingest(records, touchedSessions) {
-        const abeatDb = require('../abeat-db');
+        const agentLensDb = require('../agent-lens-db');
         for (const r of records) {
             if (!r || !r.ts || !r.session_id) continue;
             touchedSessions.add(r.session_id);
 
-            const info = abeatDb.insertTimeline({
+            const info = agentLensDb.insertTimeline({
                 source: this.source,
                 session_id: r.session_id,
                 timestamp: r.ts,
@@ -175,9 +178,9 @@ class JsonlImporter {
             const isTool = r.role === 'tool_result' || r.role === 'tool_error';
             if (isTool && info.changes > 0) {
                 const date = (r.ts || '').slice(0, 10);
-                if (date) abeatDb.updateDailyStats(date, this.source, r.tool_name || 'unknown', 1, r.success ? 0 : 1, r.duration_ms || 0);
+                if (date) agentLensDb.updateDailyStats(date, this.source, r.tool_name || 'unknown', 1, r.success ? 0 : 1, r.duration_ms || 0);
                 if (!r.success && r.error_message) {
-                    abeatDb.saveError(r.ts, r.session_id, this.source, r.tool_name || '', r.error_message);
+                    agentLensDb.saveError(r.ts, r.session_id, this.source, r.tool_name || '', r.error_message);
                 }
             }
         }
@@ -187,10 +190,10 @@ class JsonlImporter {
      * 重算受影响的 session 摘要（以 timeline 为唯一口径，与前端概览一致）
      */
     async _recomputeSessions(sessionIds) {
-        const abeatDb = require('../abeat-db');
+        const agentLensDb = require('../agent-lens-db');
         for (const sessionId of sessionIds) {
             try {
-                const rows = abeatDb.queryTimeline({ session_id: sessionId, source: this.source, limit: 100000 });
+                const rows = agentLensDb.queryTimeline({ session_id: sessionId, source: this.source, limit: 100000 });
                 if (rows.length === 0) continue;
 
                 let firstTs = null, lastTs = null;
@@ -208,7 +211,7 @@ class JsonlImporter {
                     }
                 }
 
-                abeatDb.upsertSession({
+                agentLensDb.upsertSession({
                     session_id: sessionId,
                     project_key: projectKey || '',
                     source: this.source,

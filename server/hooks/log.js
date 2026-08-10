@@ -11,8 +11,11 @@
 const path = require('path');
 const fs = require('fs');
 const { getDefaultAdapter, getAdapter } = require('../adapters');
+const { ensureRuntimeDirs, getRuntimePaths } = require('../runtime-paths');
 
 const BASE_DIR = path.join(__dirname, '..');
+const RUNTIME_PATHS = getRuntimePaths({ baseDir: BASE_DIR });
+ensureRuntimeDirs(RUNTIME_PATHS);
 
 // Codex 数据有 hook_event_name 字段，Claude Code 没有
 function pickAdapter(data) {
@@ -33,7 +36,7 @@ function main() {
 
                 const toolName = data.tool_name || data.name || '(empty)';
                 try {
-                    const logFile = path.join(BASE_DIR, 'trace_post.log');
+                    const logFile = path.join(RUNTIME_PATHS.logsDir, 'trace_post.log');
                     fs.appendFileSync(logFile, `[${new Date().toISOString()}] post: tool=${toolName}\n`, 'utf-8');
                 } catch (_) {}
 
@@ -46,14 +49,14 @@ function main() {
                 }
             } catch (e) {
                 try {
-                    const errorLog = path.join(BASE_DIR, 'trace_error.log');
+                    const errorLog = path.join(RUNTIME_PATHS.logsDir, 'trace_error.log');
                     fs.appendFileSync(errorLog, `[${new Date().toISOString()}] ${e.message}\n${e.stack}\n`, 'utf-8');
                 } catch (_) {}
             }
         });
         process.stdin.on('error', (e) => {
             try {
-                const errorLog = path.join(BASE_DIR, 'trace_error.log');
+                const errorLog = path.join(RUNTIME_PATHS.logsDir, 'trace_error.log');
                 fs.appendFileSync(errorLog, `[${new Date().toISOString()}] stdin error: ${e.message}\n`, 'utf-8');
             } catch (_) {}
         });

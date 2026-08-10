@@ -5,7 +5,7 @@
 
 const DEFAULT_PORT = 56789;
 const DEFAULT_OVERVIEW_SCAN_INTERVAL_MS = parseInt(
-    process.env.AGENT_TRACE_OVERVIEW_SCAN_INTERVAL_MS || String(10 * 60 * 1000),
+    process.env.AGENT_LENS_OVERVIEW_SCAN_INTERVAL_MS || String(10 * 60 * 1000),
     10
 );
 

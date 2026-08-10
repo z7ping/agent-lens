@@ -11,13 +11,16 @@
 
 const path = require('path');
 const { getDefaultAdapter, getAdapter } = require('../adapters');
+const { ensureRuntimeDirs, getRuntimePaths } = require('../runtime-paths');
 
 const BASE_DIR = path.join(__dirname, '..');
+const RUNTIME_PATHS = getRuntimePaths({ baseDir: BASE_DIR });
+ensureRuntimeDirs(RUNTIME_PATHS);
 
 function logError(e) {
     try {
         const fs = require('fs');
-        const logFile = path.join(BASE_DIR, 'trace_error.log');
+        const logFile = path.join(RUNTIME_PATHS.logsDir, 'trace_error.log');
         fs.appendFileSync(logFile, `[${new Date().toISOString()}] PreToolUse prelog.js: ${e.message || e}\n`, 'utf-8');
     } catch (_) {}
 }
@@ -47,7 +50,7 @@ function main() {
                 const toolName = data.tool_name || data.name || '(empty)';
                 try {
                     const fs = require('fs');
-                    const logFile = path.join(BASE_DIR, 'trace_pre.log');
+                    const logFile = path.join(RUNTIME_PATHS.logsDir, 'trace_pre.log');
                     fs.appendFileSync(logFile, `[${new Date().toISOString()}] pre: tool=${toolName}\n`, 'utf-8');
                 } catch (_) {}
 

@@ -5,6 +5,7 @@
  */
 const path = require('path');
 const os = require('os');
+const { getRuntimePaths } = require('./runtime-paths');
 const fs = require('fs');
 
 const HOME = os.homedir();
@@ -66,9 +67,8 @@ const piHome = resolvePath(
     IS_WIN ? firstExistingPath(winPiCandidates, winPiCandidates[0]) : path.join(HOME, '.pi')
 );
 
-// ─── agent-trace (self) ─────────────────────────────────
-// 所有平台: ~/.agent-trace
-const agentTraceHome = path.join(HOME, '.agent-trace');
+// ─── agent-lens (self) ─────────────────────────────────
+const agentLensRuntime = getRuntimePaths({ layout: 'installed' });
 
 // ─── Claude Code ─────────────────────────────────────────
 // 所有平台: ~/.claude/projects/**/*.jsonl 保存完整会话历史
@@ -105,8 +105,13 @@ module.exports = {
         sessionsDir: path.join(codexHome, 'sessions'),
         hooksFile: path.join(codexHome, 'hooks.json'),
     },
-    agentTrace: {
-        home: agentTraceHome,
+    agentLens: {
+        home: agentLensRuntime.rootDir,
+        appDir: agentLensRuntime.appDir,
+        dataDir: agentLensRuntime.dataDir,
+        logsDir: agentLensRuntime.logsDir,
+        stateDir: agentLensRuntime.stateDir,
+        runDir: agentLensRuntime.runDir,
     },
     pickFirstExistingPath,
 };

@@ -12,12 +12,15 @@ const net = require('net');
 const { spawn } = require('child_process');
 
 const { DEFAULT_PORT } = require('../config');
+const { ensureRuntimeDirs, getRuntimePaths } = require('../runtime-paths');
 
 /**
  * 获取 PID 文件路径
  */
 function getPidFile(baseDir) {
-    return path.join(baseDir, '.server.pid');
+    const runtimePaths = getRuntimePaths({ baseDir });
+    ensureRuntimeDirs(runtimePaths);
+    return runtimePaths.pidFile;
 }
 
 /**
@@ -153,7 +156,7 @@ function ensureServerRunning(baseDir, port) {
                     windowsHide: true,
                 }).unref();
             } else {
-                // 回退: 直接使用 server.js（向后兼容）
+                // 备用启动路径：直接使用 server.js
                 const child = spawn('node', [serverPath, String(port), '--daemon'], {
                     detached: true,
                     stdio: ['ignore', 'ignore', 'ignore'],

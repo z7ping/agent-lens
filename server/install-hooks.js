@@ -6,13 +6,16 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { ensureRuntimeDirs, getRuntimePaths } = require('./runtime-paths');
 
 const HOME = os.homedir();
-const TOOL_TRACKER_DIR = path.join(HOME, '.agent-trace');
-const PRELOG_PATH = path.join(TOOL_TRACKER_DIR, 'hooks', 'prelog.js').replace(/\\/g, '/');
-const LOG_PATH = path.join(TOOL_TRACKER_DIR, 'hooks', 'log.js').replace(/\\/g, '/');
+const RUNTIME_PATHS = getRuntimePaths({ baseDir: __dirname });
+ensureRuntimeDirs(RUNTIME_PATHS);
+const TOOL_TRACKER_DIR = RUNTIME_PATHS.appDir;
+const PRELOG_PATH = path.join(RUNTIME_PATHS.hooksDir, 'prelog.js').replace(/\\/g, '/');
+const LOG_PATH = path.join(RUNTIME_PATHS.hooksDir, 'log.js').replace(/\\/g, '/');
 
-const MARKER = 'agent-trace';
+const MARKER = 'agent-lens';
 
 // ─── 工具函数 ────────────────────────────────────────────
 
@@ -49,10 +52,7 @@ function installClaudeCode() {
     const settings = readJson(settingsFile);
     if (!settings.hooks) settings.hooks = {};
 
-    // 清理旧的 agent-beat hooks
-    settings.hooks.PreToolUse = removeOldHooks(settings.hooks.PreToolUse, 'agent-beat');
-    settings.hooks.PostToolUse = removeOldHooks(settings.hooks.PostToolUse, 'agent-beat');
-    // 清理旧的 agent-trace hooks
+    // 清理已有 AgentLens hooks，避免重复安装
     settings.hooks.PreToolUse = removeOldHooks(settings.hooks.PreToolUse, MARKER);
     settings.hooks.PostToolUse = removeOldHooks(settings.hooks.PostToolUse, MARKER);
 
@@ -70,9 +70,7 @@ function installCodex() {
     const hooks = readJson(hooksFile);
     if (!hooks.hooks) hooks.hooks = {};
 
-    // 清理旧的 agent-beat / agent-trace hooks
-    hooks.hooks.PreToolUse = removeOldHooks(hooks.hooks.PreToolUse, 'agent-beat');
-    hooks.hooks.PostToolUse = removeOldHooks(hooks.hooks.PostToolUse, 'agent-beat');
+    // 清理已有 AgentLens hooks，避免重复安装
     hooks.hooks.PreToolUse = removeOldHooks(hooks.hooks.PreToolUse, MARKER);
     hooks.hooks.PostToolUse = removeOldHooks(hooks.hooks.PostToolUse, MARKER);
 
@@ -90,9 +88,7 @@ function installCursor() {
     const hooks = readJson(hooksFile);
     if (!hooks.hooks) hooks.hooks = {};
 
-    // 清理旧的 agent-beat / agent-trace hooks
-    hooks.hooks.PreToolUse = removeOldHooks(hooks.hooks.PreToolUse, 'agent-beat');
-    hooks.hooks.PostToolUse = removeOldHooks(hooks.hooks.PostToolUse, 'agent-beat');
+    // 清理已有 AgentLens hooks，避免重复安装
     hooks.hooks.PreToolUse = removeOldHooks(hooks.hooks.PreToolUse, MARKER);
     hooks.hooks.PostToolUse = removeOldHooks(hooks.hooks.PostToolUse, MARKER);
 
@@ -189,13 +185,13 @@ function updateCodexTrustHash() {
     console.log(`   [OK] Codex 信任 hash 已更新 (${entries.length / 3} 个 hook)`);
 }
 
-// ─── 5. 同步 adapters + abeat-db 到 ~/.agent-trace/ ─────────
+// ─── 5. 同步 adapters + agent-lens-db 到 ~/.agent-lens/ ─────────
 
 function syncModules() {
     const srcDir = path.join(__dirname, 'adapters');
     const dstDir = path.join(TOOL_TRACKER_DIR, 'adapters');
-    const srcDb = path.join(__dirname, 'abeat-db.js');
-    const dstDb = path.join(TOOL_TRACKER_DIR, 'abeat-db.js');
+    const srcDb = path.join(__dirname, 'agent-lens-db.js');
+    const dstDb = path.join(TOOL_TRACKER_DIR, 'agent-lens-db.js');
     const srcPaths = path.join(__dirname, 'paths.js');
     const dstPaths = path.join(TOOL_TRACKER_DIR, 'paths.js');
 
@@ -205,7 +201,7 @@ function syncModules() {
     for (const f of fs.readdirSync(srcDir)) {
         fs.copyFileSync(path.join(srcDir, f), path.join(dstDir, f));
     }
-    // 复制 abeat-db.js
+    // 复制 agent-lens-db.js
     if (fs.existsSync(srcDb)) {
         fs.copyFileSync(srcDb, dstDb);
     }
@@ -213,7 +209,7 @@ function syncModules() {
     if (fs.existsSync(srcPaths)) {
         fs.copyFileSync(srcPaths, dstPaths);
     }
-    console.log('   [OK] adapters + abeat-db 已同步');
+    console.log('   [OK] adapters + agent-lens-db 已同步');
 }
 
 // ─── 执行 ────────────────────────────────────────────────

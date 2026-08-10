@@ -9,7 +9,7 @@ test('builds OpenCode user text parts as conversation records', () => {
   const record = adapter._buildRecord({
     session_id: 'ses_1',
     time_created: 1786085000000,
-    directory: 'F:/01-ai-gen-workspaces/agent-trace',
+    directory: 'F:/01-ai-gen-workspaces/agent-lens',
     data: JSON.stringify({ type: 'text', text: '请检查 OpenCode 数据为什么没有对话' }),
     message_data: JSON.stringify({ role: 'user' }),
   });
@@ -28,7 +28,7 @@ test('builds OpenCode assistant text parts as conversation records', () => {
   const record = adapter._buildRecord({
     session_id: 'ses_1',
     time_created: 1786085001000,
-    directory: 'F:/01-ai-gen-workspaces/agent-trace',
+    directory: 'F:/01-ai-gen-workspaces/agent-lens',
     data: JSON.stringify({ type: 'text', text: '我会先检查源数据库结构。' }),
     message_data: JSON.stringify({ role: 'assistant' }),
   });

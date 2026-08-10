@@ -1,4 +1,4 @@
-# Agent Trace 架构文档
+# AgentLens 架构文档
 
 > 最后更新：2026-08-07
 > 目的：记录技术架构和关键决策，防止迭代中反复踩坑
@@ -9,14 +9,14 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        Agent Trace                              │
+│                        AgentLens                                │
 ├─────────────────────────────────────────────────────────────────┤
 │  前端 (Vite + Tailwind)          后端 (Node.js + SQLite)        │
 │  ┌─────────────────────┐         ┌─────────────────────┐       │
 │  │  调用链 Tab          │  ◄──►  │  HTTP Server :56789 │       │
 │  │  仪表盘 Tab          │        │  ┌───────────────┐  │       │
 │  │  概览 Tab            │        │  │  /api/overview│  │       │
-│  └─────────────────────┘        │  │  a-beat.db     │  │       │
+│  └─────────────────────┘        │  │  agent-lens.db     │  │       │
 │                                 │  │ timeline/overview │ │       │
 │                                 │  └───────────────┘  │       │
 │                                 └─────────────────────┘       │
@@ -101,7 +101,7 @@ CREATE TABLE timeline (
 
 ### 4.1 数据表
 
-概览稳定资产写入 `a-beat.db`：
+概览稳定资产写入运行时数据目录中的 `agent-lens.db`：
 
 ```sql
 overview_tools (
@@ -150,7 +150,7 @@ overview_scan_runs (
 4. 服务启动后启动定时扫描。
 5. 前端还会缓存上一次 `/api/overview` 结果，首屏可先渲染缓存或稳定工具骨架。
 
-服务端定时扫描间隔由 `AGENT_TRACE_OVERVIEW_SCAN_INTERVAL_MS` 控制，默认 10 分钟，设为 `0` 可关闭定时扫描。访问 `/api/overview` 仍会触发后台刷新。
+服务端定时扫描间隔由 `AGENT_LENS_OVERVIEW_SCAN_INTERVAL_MS` 控制，默认 10 分钟，设为 `0` 可关闭定时扫描。访问 `/api/overview` 仍会触发后台刷新。
 
 ### 4.3 Pi 资产发现规则
 
@@ -212,7 +212,7 @@ Pi agent 根目录候选：
 **原因**：
 - Claude Code/Codex/Pi/Cursor 的 hook 机制只支持这两个事件
 - 没有 `PreUserMessage` 或 `PostAssistantMessage` 事件
-- 这是工具本身的限制，不是 Agent Trace 的设计选择
+- 这是工具本身的限制，不是 AgentLens 的设计选择
 
 **影响**：这些适配器的 timeline 只有工具调用，没有对话上下文。
 
@@ -278,7 +278,7 @@ state.db (messages表)
     ├──► hermes.js adapter (轮询)
     │       │
     │       ▼
-    │    a-beat.db (timeline表)
+    │    agent-lens.db (timeline表)
     │       │
     │       ▼
     │    HTTP API (/api/timeline)
@@ -292,7 +292,7 @@ state.db (messages表)
          POST /api/hook (实时推送)
             │
             ▼
-         a-beat.db (timeline表)
+         agent-lens.db (timeline表)
 ```
 
 ### 7.2 Hooks 适配器数据流
@@ -303,8 +303,8 @@ Claude Code / Codex / Pi / Cursor
     ├──► PreToolUse hook (prelog.js)
     │       │
     │       ▼
-    │    JSONL文件 (logs/<projectKey>.jsonl)
-    │    状态文件 (states/<projectKey>.json)
+    │    JSONL文件 (.agent-lens/logs/<projectKey>.jsonl)
+    │    状态文件 (.agent-lens/state/<projectKey>.json)
     │
     └──► PostToolUse hook (log.js)
             │
@@ -312,7 +312,7 @@ Claude Code / Codex / Pi / Cursor
          JSONL文件 + POST /api/hook
             │
             ▼
-         a-beat.db (timeline表)
+         agent-lens.db (timeline表)
             │
             ▼
          HTTP API → 前端
@@ -331,7 +331,7 @@ overview.js 扫描本机 AI 工具环境
     ├── 工具版本、配置目录、状态
     ├── Skills / MCP / Plugins / Extensions / Hooks / Adapters
     ▼
-a-beat.db
+agent-lens.db
     ├── overview_tools
     ├── overview_assets
     └── overview_scan_runs
@@ -506,7 +506,7 @@ server/
 ├── hooks/
 │   ├── prelog.js            # PreToolUse hook脚本
 │   └── log.js               # PostToolUse hook脚本
-├── abeat-db.js              # SQLite存储层（timeline表）
+├── agent-lens-db.js              # SQLite存储层（timeline表）
 ├── server.js                # HTTP服务
 ├── routes.js                # API路由
 └── install-hooks.js         # 安装hooks到各工具

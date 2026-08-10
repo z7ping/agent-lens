@@ -128,7 +128,7 @@ test('keeps tool links and order when reading overview from database snapshot', 
 });
 
 test('discovers Codex recursive skills, plugins and configured MCP paths', () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-trace-codex-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-lens-codex-'));
   const codexDir = path.join(tmp, '.codex');
   const skillDir = path.join(codexDir, 'skills', 'superpowers', 'skills', 'brainstorming');
   const pluginDir = path.join(codexDir, 'plugins', 'cache', 'openai-bundled', 'browser', '1.0.0');
@@ -174,7 +174,7 @@ test('orders overview tools by product default order in API payload', () => {
 });
 
 test('discovers Hermes skills, plugins, MCP servers and toolsets across config roots', () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-trace-hermes-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-lens-hermes-'));
   const homeDir = path.join(tmp, 'home');
   const runtimeDir = path.join(homeDir, 'AppData', 'Local', 'hermes');
   const userConfigDir = path.join(homeDir, '.hermes');
@@ -278,7 +278,7 @@ test('adds frequently used timeline-only assets to the owning tool card', () => 
 });
 
 test('discovers Pi plugins from agent npm dependencies and extensions', () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-trace-pi-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-lens-pi-'));
   const piDir = path.join(tmp, '.pi');
   const npmDir = path.join(piDir, 'agent', 'npm');
   const modulesDir = path.join(npmDir, 'node_modules');
@@ -286,7 +286,7 @@ test('discovers Pi plugins from agent npm dependencies and extensions', () => {
   fs.mkdirSync(path.join(modulesDir, '@vendor', 'pi-theme'), { recursive: true });
   fs.mkdirSync(path.join(modulesDir, 'pi-add-dir', 'skills', 'pi-add-dir-skill'), { recursive: true });
   fs.mkdirSync(path.join(piDir, 'agent', 'extensions', 'clawd-on-desk'), { recursive: true });
-  fs.mkdirSync(path.join(piDir, 'agent', 'projects-memory', 'agent-trace', 'skills', 'project-memory-skill'), { recursive: true });
+  fs.mkdirSync(path.join(piDir, 'agent', 'projects-memory', 'agent-lens', 'skills', 'project-memory-skill'), { recursive: true });
   fs.writeFileSync(path.join(npmDir, 'package.json'), JSON.stringify({
     dependencies: {
       'pi-add-dir': '^1.0.0',
@@ -316,7 +316,7 @@ test('discovers Pi plugins from agent npm dependencies and extensions', () => {
 });
 
 test('discovers Pi assets when the agent directory is the configured root', () => {
-  const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-trace-pi-agent-'));
+  const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-lens-pi-agent-'));
   const npmDir = path.join(agentDir, 'npm');
   const modulesDir = path.join(npmDir, 'node_modules');
   fs.mkdirSync(path.join(modulesDir, 'pi-cache-optimizer', 'skills', 'cache-skill'), { recursive: true });
@@ -345,7 +345,7 @@ test('discovers Pi assets when the agent directory is the configured root', () =
 });
 
 test('discovers Pi assets from default candidate environment paths', () => {
-  const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-trace-pi-env-'));
+  const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-lens-pi-env-'));
   const npmDir = path.join(agentDir, 'npm');
   const modulesDir = path.join(npmDir, 'node_modules');
   fs.mkdirSync(path.join(modulesDir, 'pi-env-plugin'), { recursive: true });
@@ -371,8 +371,8 @@ test('discovers Pi assets from default candidate environment paths', () => {
 });
 
 test('discovers Pi configured skills and package-declared resources', () => {
-  const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-trace-pi-resources-'));
-  const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-trace-pi-home-'));
+  const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-lens-pi-resources-'));
+  const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-lens-pi-home-'));
   const externalSkillDir = path.join(homeDir, '.agents', 'skills', 'shared-skill');
   const npmDir = path.join(agentDir, 'npm');
   const modulesDir = path.join(npmDir, 'node_modules');
@@ -423,7 +423,7 @@ test('discovers Pi configured skills and package-declared resources', () => {
   assert.deepEqual(extensions, ['configured-extension', 'declared-extension', 'file-extension', 'pack-extension']);
 });
 
-test('persists stable overview inventory in the agent trace database', () => {
+test('persists stable overview inventory in the AgentLens database', () => {
   const db = new Database(':memory:');
   db.exec(fs.readFileSync(path.join(__dirname, '..', 'server', 'schema.sql'), 'utf-8'));
 

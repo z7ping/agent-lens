@@ -58,8 +58,8 @@ class OpenCodeAdapter extends BaseAdapter {
         this._lastTsLoaded = true;
 
         try {
-            const abeatDb = require('../abeat-db').getDb();
-            const row = abeatDb.prepare(`
+            const agentLensDb = require('../agent-lens-db').getDb();
+            const row = agentLensDb.prepare(`
                 SELECT MAX(timestamp) AS max_ts
                 FROM timeline
                 WHERE source = 'opencode'
@@ -305,7 +305,7 @@ class OpenCodeAdapter extends BaseAdapter {
                     const record = this._buildRecord(part);
                     if (!record) continue;
 
-                    // 聚合写入 a-beat.db
+                    // 聚合写入 agent-lens.db
                     this._aggregateToDb(record, sessionId, projectKey);
 
                     if (record.ts && (!sessionStats.start_time || record.ts < sessionStats.start_time)) sessionStats.start_time = record.ts;
@@ -318,7 +318,7 @@ class OpenCodeAdapter extends BaseAdapter {
                 }
 
                 try {
-                    require('../abeat-db').upsertSession(sessionStats);
+                    require('../agent-lens-db').upsertSession(sessionStats);
                 } catch (_) {}
             }
 
@@ -338,8 +338,8 @@ class OpenCodeAdapter extends BaseAdapter {
 
     _getExistingSessionStats(sessionId) {
         try {
-            const abeatDb = require('../abeat-db').getDb();
-            return abeatDb.prepare(`
+            const agentLensDb = require('../agent-lens-db').getDb();
+            return agentLensDb.prepare(`
                 SELECT start_time, end_time, tool_count, error_count, total_duration_ms
                 FROM sessions
                 WHERE source = 'opencode' AND session_id = ?
@@ -370,7 +370,7 @@ class OpenCodeAdapter extends BaseAdapter {
 
     _aggregateToDb(record, sessionId, projectKey) {
         try {
-            const abeatDb = require('../abeat-db');
+            const agentLensDb = require('../agent-lens-db');
             const ts = record.ts || '';
             const date = ts.slice(0, 10);
             const isTool = this._isToolRecord(record);
@@ -380,16 +380,16 @@ class OpenCodeAdapter extends BaseAdapter {
 
             if (isTool) {
                 // 按天统计
-                abeatDb.updateDailyStats(date, 'opencode', record.tool_name, 1, record.success ? 0 : 1, record.duration_ms || 0);
+                agentLensDb.updateDailyStats(date, 'opencode', record.tool_name, 1, record.success ? 0 : 1, record.duration_ms || 0);
 
                 // 错误记录
                 if (!record.success && record.error) {
-                    abeatDb.saveError(ts, sessionId, 'opencode', record.tool_name, record.error);
+                    agentLensDb.saveError(ts, sessionId, 'opencode', record.tool_name, record.error);
                 }
             }
 
             // 写入 timeline（轮询兜底）
-            abeatDb.insertTimeline({
+            agentLensDb.insertTimeline({
                 source: 'opencode',
                 session_id: sessionId,
                 timestamp: ts,

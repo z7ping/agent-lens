@@ -39,7 +39,7 @@ async function initAppInfo() {
   appInfo = info || null;
   if (el) {
     el.textContent = info?.display_version || '';
-    el.title = info?.name ? `${info.name} ${info.display_version || ''}` : 'Agent Trace 版本';
+    el.title = info?.name ? `${info.name} ${info.display_version || ''}` : 'AgentLens 版本';
   }
   const subtitle = document.getElementById('appSubtitle');
   if (subtitle && info?.subtitle) subtitle.textContent = info.subtitle;
@@ -70,7 +70,7 @@ window.closeChangelog = function () {
 
 // ─── 主题 ───────────────────────────────────────────
 function initTheme() {
-  const saved = localStorage.getItem('agent-trace-theme');
+  const saved = localStorage.getItem('agent-lens-theme');
   if (saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
     document.documentElement.classList.add('dark');
     isDark = true;
@@ -78,7 +78,7 @@ function initTheme() {
   document.getElementById('themeToggle')?.addEventListener('click', () => {
     isDark = !isDark;
     document.documentElement.classList.toggle('dark', isDark);
-    localStorage.setItem('agent-trace-theme', isDark ? 'dark' : 'light');
+    localStorage.setItem('agent-lens-theme', isDark ? 'dark' : 'light');
   });
 }
 

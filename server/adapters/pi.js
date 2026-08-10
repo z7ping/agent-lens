@@ -206,7 +206,7 @@ class PiAdapter extends BaseAdapter {
 
         if (newRecords.length > 0) {
             this._lastPollTime = now;
-            // 聚合写入 a-beat.db
+            // 聚合写入 agent-lens.db
             for (const record of newRecords) {
                 this._aggregateToDb(record);
             }
@@ -216,7 +216,7 @@ class PiAdapter extends BaseAdapter {
 
     _upsertSessions(records) {
         try {
-            const abeatDb = require('../abeat-db');
+            const agentLensDb = require('../agent-lens-db');
             const sessions = new Map();
             for (const record of records) {
                 if (!record.session_id) continue;
@@ -243,21 +243,21 @@ class PiAdapter extends BaseAdapter {
                 }
             }
             for (const session of sessions.values()) {
-                abeatDb.upsertSession(session);
+                agentLensDb.upsertSession(session);
             }
         } catch (_) {}
     }
 
     _aggregateToDb(record) {
         try {
-            const abeatDb = require('../abeat-db');
+            const agentLensDb = require('../agent-lens-db');
             const date = (record.ts || '').slice(0, 10);
             const isTool = record.role === 'tool_result' || record.role === 'tool_error' || record.tool_name;
             if (isTool) {
-                abeatDb.updateDailyStats(date, 'pi', record.tool_name, 1, record.success ? 0 : 1, record.duration_ms || 0);
+                agentLensDb.updateDailyStats(date, 'pi', record.tool_name, 1, record.success ? 0 : 1, record.duration_ms || 0);
             }
             // 写入 timeline 表，让前端能展开查看调用详情
-            abeatDb.insertTimeline({
+            agentLensDb.insertTimeline({
                 source: 'pi',
                 session_id: record.session_id,
                 timestamp: record.ts || '',

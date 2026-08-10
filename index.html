@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Agent Trace</title>
+  <title>AgentLens</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
   <link rel="stylesheet" href="/src/style.css">
   <!-- ═══ 第一层：Logo + 功能Tab + 主题切换 ═══ -->
@@ -11,7 +11,7 @@
     <div class="max-w-screen-2xl mx-auto px-4 h-12 flex items-center justify-between">
       <a href="/" class="flex items-center gap-2 font-bold text-lg min-w-0">
         🧠
-        <span class="shrink-0">Agent Trace</span>
+        <span class="shrink-0">AgentLens</span>
         <span id="appVersion" class="app-version">v...</span>
         <span id="appSubtitle" class="app-subtitle hidden sm:inline">多 Agent 调用链路观测与复盘工具</span>
       </a>
@@ -30,7 +30,7 @@
         </button>
       </div>
       <div class="flex items-center gap-1">
-        <a id="githubLink" class="top-link hidden sm:inline-flex" href="https://github.com/z7ping/agent-trace" target="_blank" rel="noreferrer">GitHub</a>
+        <a id="githubLink" class="top-link hidden sm:inline-flex" href="https://github.com/z7ping/agent-lens" target="_blank" rel="noreferrer">GitHub</a>
         <button id="changelogBtn" class="top-link" type="button" onclick="openChangelog()">更新日志</button>
         <button id="themeToggle" class="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors" title="切换主题">
           <svg class="w-5 h-5 hidden dark:block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
@@ -136,7 +136,7 @@
             <h3 class="text-lg font-semibold text-neutral-700 dark:text-neutral-300 mb-2">暂无工具栈数据</h3>
             <p class="text-sm text-neutral-500 mb-4">安装 Hook 后，AI 工具的调用记录会自动沉淀为工具栈地图</p>
             <div class="bg-neutral-100 dark:bg-neutral-800 rounded-lg px-4 py-3 font-mono text-sm text-neutral-700 dark:text-neutral-300 select-all">
-              npx agent-trace install
+              npx @z7ping/agent-lens install
             </div>
           </div>
         </div>

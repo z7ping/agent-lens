@@ -55,7 +55,7 @@ function getAppInfo(options = {}) {
     const pkg = require(packageJsonPath);
     const version = pkg.version || '0.0.0';
     return {
-        name: pkg.name || 'agent-trace',
+        name: pkg.name || '@z7ping/agent-lens',
         version,
         display_version: `v${version}`,
         subtitle: '多 Agent 调用链路观测与复盘工具',
