@@ -24,7 +24,7 @@ test('source layout stores runtime files under project .agent-lens directory', (
   assert.equal(paths.pidFile, path.join(projectDir, '.agent-lens', 'run', 'server.pid'));
 });
 
-test('windows install layout separates app and runtime directories under LocalAppData', () => {
+test('installed layout keeps the app and runtime directories under home .agent-lens', () => {
   const paths = getRuntimePaths({
     layout: 'installed',
     platform: 'win32',
@@ -32,10 +32,13 @@ test('windows install layout separates app and runtime directories under LocalAp
     localAppData: 'C:\\Users\\tester\\AppData\\Local',
   });
 
-  assert.equal(paths.rootDir, path.join('C:\\Users\\tester\\AppData\\Local', 'AgentLens'));
-  assert.equal(paths.appDir, path.join('C:\\Users\\tester\\AppData\\Local', 'AgentLens', 'app'));
-  assert.equal(paths.dataDir, path.join('C:\\Users\\tester\\AppData\\Local', 'AgentLens', 'data'));
-  assert.equal(paths.logsDir, path.join('C:\\Users\\tester\\AppData\\Local', 'AgentLens', 'logs'));
-  assert.equal(paths.stateDir, path.join('C:\\Users\\tester\\AppData\\Local', 'AgentLens', 'state'));
-  assert.equal(paths.runDir, path.join('C:\\Users\\tester\\AppData\\Local', 'AgentLens', 'run'));
+  const rootDir = path.join('C:\\Users\\tester', '.agent-lens');
+  assert.equal(paths.rootDir, rootDir);
+  assert.equal(paths.appDir, rootDir);
+  assert.equal(paths.dataDir, path.join(rootDir, 'data'));
+  assert.equal(paths.logsDir, path.join(rootDir, 'logs'));
+  assert.equal(paths.stateDir, path.join(rootDir, 'state'));
+  assert.equal(paths.runDir, path.join(rootDir, 'run'));
+  assert.equal(paths.dbFile, path.join(rootDir, 'data', 'agent-lens.db'));
+  assert.equal(paths.pidFile, path.join(rootDir, 'run', 'server.pid'));
 });

@@ -25,14 +25,12 @@ git clone https://github.com/z7ping/agent-lens.git
 cd agent-lens
 npm install
 npm run build
-node server/cli.js start              # 启动后端，端口 56789
+node server/cli.js start              # 前台启动，默认端口 56789
 ```
 
 打开 **http://localhost:56789/** 即可看到仪表盘。
 
-> `npm start` 等价于 `node server/cli.js start`，前台运行，按 Ctrl+C 停止。
-> 从 GitHub 源码安装时请使用 `node server/cli.js install`；`npx @z7ping/agent-lens install` 会执行 npm registry 上已发布的包。
-> 后台运行加 `--daemon`：`node server/cli.js start --daemon`。
+> `npm start` 等价于 `node server/cli.js start`。前台运行时按 Ctrl+C 停止；后台运行使用 `node server/cli.js start --daemon`。
 
 ---
 
@@ -65,9 +63,17 @@ agent-lens/
 └── tailwind.config.mjs
 ```
 
-# 开发模式
-npm run dev           # vite dev server（端口 5173），代理 /api 到 56789
-node server/cli.js start   # 启动后端服务（端口 56789）
+## 开发模式
+
+```bash
+npm install               # 安装依赖
+npm run dev               # 同时启动后端 56789 和 Vite 5173
+npm run dev:frontend      # 仅启动 Vite 5173，需另行启动后端
+npm run build             # 构建生产前端到 dist/
+npm test                  # 运行导入器测试和 Node.js 测试
+```
+
+`npm run dev` 已同时启动前后端，不需要再单独执行 `node server/cli.js start`。访问 **http://localhost:5173/** 进行热更新开发；Vite 会把 `/api`、`/logs`、`/states` 和 `/projects.json` 代理到后端 56789。
 
 ## 场景指南
 
@@ -93,28 +99,40 @@ npm run dev              # 后端（56789）+ Vite（5173）一起启动
 
 **Hermes（自动）**：服务启动后自动轮询 `~/.hermes/state.db`，无需额外配置。支持 state 持久化，重启不重复导入。
 
-### 场景 C：我要从源码安装到本机工具链
+### 场景 C：我要从 npm 包安装到本机
+
+推荐使用 npm Registry 上已发布的包：
+
+```bash
+npx @z7ping/agent-lens install
+```
+
+安装命令会复制应用文件、安装运行时依赖、配置 Hooks，并按平台注册系统服务或启动 daemon。安装完成后使用短命令管理：
+
+```bash
+agent-lens status
+agent-lens stop
+agent-lens start --daemon
+agent-lens uninstall
+```
+
+### 场景 D：我要从 GitHub 源码安装到本机
 
 从 GitHub 源码安装时，使用当前目录里的 CLI：
 
 ```bash
 npm install
 npm run build
-node server/cli.js install          # 复制到 ~/.agent-lens + 安装钩子 + 注册服务/daemon
-node server/cli.js service start    # Linux/macOS 可用；Windows 使用 daemon 自动守护
+node server/cli.js install          # 复制应用 + 安装依赖和 Hooks + 注册服务/daemon
 ```
 
-发布到 npm 后，才推荐使用短命令：
-
-```bash
-npx @z7ping/agent-lens install
-```
-
-如果只是想直接从 GitHub 分发包试用，可以使用：
+也可以直接调用 GitHub 仓库：
 
 ```bash
 npx github:z7ping/agent-lens install
 ```
+
+> 仓库不跟踪 `dist/`，GitHub 直接调用需要当前环境能够安装开发依赖并完成 Vite 构建。若构建环境不确定，请使用“克隆源码 → `npm install` → `npm run build` → `node server/cli.js install`”，或使用 npm Registry 包。
 
 安装后会自动注册为**系统服务**或 daemon，支持开机自启/自动拉起。自动检测平台：
 
@@ -126,7 +144,7 @@ npx github:z7ping/agent-lens install
 
 > **Linux 注意**：需要 `sudo loginctl enable-linger <user>` 才能在未登录时保持服务运行。安装时会自动检测并提示。
 >
-> **Windows 注意**：不使用任务计划程序。服务以 daemon 模式运行，首次工具调用时由 hook 自动拉起，无需管理员权限。
+> **Windows 注意**：不使用任务计划程序，也不提供系统服务安装和开机自启开关。服务以 daemon 模式运行，首次工具调用时由 Hook 自动拉起，无需管理员权限。
 
 ---
 
@@ -241,34 +259,74 @@ Skill 目录会识别根目录下的 `.md` 文件，并递归识别包含 `SKILL
 
 ## CLI 参考
 
-### 服务管理
+源码仓库中使用 `node server/cli.js`；完成安装后可将它替换为 `agent-lens`。例如，`node server/cli.js status` 和 `agent-lens status` 的含义相同。
+
+### 完整命令
 
 ```bash
-node server/cli.js start               # 自动构建 + 前台启动（Ctrl+C 停止）
-node server/cli.js start --daemon      # 自动构建 + 后台运行
-node server/cli.js stop                # 停止后台服务
-node server/cli.js status              # 查看运行状态
+node server/cli.js install                       # 安装应用、依赖和 Hooks，并启动服务
+node server/cli.js start                         # 默认端口 56789，前台启动
+node server/cli.js start --daemon                # 后台启动
+node server/cli.js start -d                      # 后台启动的短参数
+node server/cli.js start 8080                    # 使用位置参数指定端口
+node server/cli.js start --port 8080             # 使用选项指定端口
+node server/cli.js start --port 8080 --open      # 启动后自动打开浏览器
+node server/cli.js stop                          # 停止后台服务
+node server/cli.js status                        # 查看默认服务状态
+node server/cli.js package                       # 构建并生成 npm 兼容的 .tgz
+node server/cli.js package --output ./release    # 指定分发包输出目录
+node server/cli.js uninstall                     # 卸载并删除配置及运行数据
+node server/cli.js help                          # 显示帮助
+node server/cli.js --help                        # 显示帮助
+node server/cli.js -h                            # 显示帮助
 ```
 
-> `start` 命令会自动检测 `dist/` 是否存在，不存在则先执行 `npm run build`。
+注意：
 
-安装为系统服务后（见场景 C），可用 `service` 子命令：
+- `start` 检测不到 `dist/` 时会先执行 `npm run build`。
+- `status` 当前固定检查并显示默认端口 56789。使用自定义端口启动时，应直接访问对应地址确认服务；PID 存在时仍可识别进程。
+- `uninstall` 会要求确认，并删除 AgentLens 安装目录、Hooks 配置和全部运行数据。
+
+### npm scripts
 
 ```bash
-node server/cli.js service start       # 启动系统服务
-node server/cli.js service stop        # 停止
-node server/cli.js service status      # 状态
-node server/cli.js service enable      # 开机自启
-node server/cli.js service disable     # 关闭自启
-node server/cli.js service uninstall   # 卸载服务
+npm run dev                                  # 后端 + Vite 联调
+npm run dev:frontend                         # 仅 Vite
+npm run build                                # 构建前端
+npm start                                    # 前台启动
+npm start -- --daemon                        # 后台启动并向 CLI 透传参数
+npm stop                                     # 停止服务
+npm run status                               # 查看状态
+npm run install-hooks                        # 执行完整 install 命令
+npm run package -- --output ./release        # 打包并透传输出目录
+npm test                                     # 运行全部测试
 ```
 
-### 其他
+> `install-hooks` 是历史脚本名，当前实际执行完整安装流程，不只是写入 Hooks。
+
+### 系统服务与后台守护
+
+Linux 使用 systemd user service，macOS 使用 launchd agent，两者支持完整的 `service` 子命令：
 
 ```bash
-node server/cli.js install    # 安装钩子到 Claude Code / Codex / Cursor + 注册系统服务或 daemon
-node server/cli.js package    # 生成 npm 兼容的 .tgz 分发包
+agent-lens service install       # 注册系统服务并启用自启
+agent-lens service start         # 启动系统服务
+agent-lens service stop          # 停止系统服务
+agent-lens service status        # 查看系统服务和自启状态
+agent-lens service enable        # 启用开机自启
+agent-lens service disable       # 关闭开机自启
+agent-lens service uninstall     # 停止并移除系统服务
 ```
+
+Windows 不注册系统服务，使用 daemon + Hook 自动守护：
+
+```bash
+agent-lens start --daemon      # 后台启动
+agent-lens stop                # 停止服务
+agent-lens status              # 查看状态
+```
+
+Windows 下 `service start`、`service stop`、`service status` 会映射到上述 daemon 命令；`service install`、`service uninstall`、`service enable`、`service disable` 不可用。
 
 ---
 
@@ -285,8 +343,11 @@ node server/cli.js package    # 生成 npm 兼容的 .tgz 分发包
 ### 端口 56789 被占了？
 
 ```bash
-node server/cli.js start 8080       # 指定其他端口
+node server/cli.js start 8080          # 位置参数
+node server/cli.js start --port 8080   # 等价写法
 ```
+
+当前 `status` 固定检查默认端口 56789；自定义端口启动后请访问 `http://localhost:8080/` 确认服务。
 
 ---
 
@@ -316,7 +377,22 @@ node server/cli.js start 8080       # 指定其他端口
 └── run/       # server.pid
 ```
 
-安装后，应用文件和运行数据会按平台分目录保存。Windows 使用 `%LOCALAPPDATA%\AgentLens\app|data|logs|state|run`；Linux/macOS 使用 XDG 风格的 `app`、`data`、`logs`、`state`、`run` 分区。
+安装后，所有平台都统一使用用户主目录下的 `~/.agent-lens/`，不使用 `%LOCALAPPDATA%`、XDG 或迁移兼容目录：
+
+```text
+~/.agent-lens/
+├── cli.js, server.js, package.json  # 程序文件直接放在根目录
+├── dist/                            # 前端构建产物
+├── hooks/                           # Hooks
+├── adapters/                        # 工具适配器
+├── importers/                       # 历史数据导入器
+├── data/                            # agent-lens.db, projects.json
+├── logs/                            # JSONL 和服务日志
+├── state/                           # 调用栈和导入水位线
+└── run/                             # server.pid
+```
+
+Windows 对应路径为 `C:\Users\<用户名>\.agent-lens\`。
 
 | 表名 | 用途 |
 |------|------|

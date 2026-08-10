@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Move AgentLens runtime files into predictable app/data/logs/state/run directories.
+**Goal:** Keep the installed application and all runtime files under `~/.agent-lens/`.
 
 **Architecture:** Add `server/runtime-paths.js` as the single source of truth for runtime paths. Update CLI install/start/stop, HTTP server, adapters, hooks, importers, scripts, and docs to consume these paths.
 
@@ -17,8 +17,8 @@
 - Create: `test/runtime-paths.test.js`
 
 - [ ] Write tests that assert source layout uses `<repo>/.agent-lens/{data,logs,state,run}`.
-- [ ] Write tests that assert Windows installed layout uses `%LOCALAPPDATA%\AgentLens\{app,data,logs,state,run}`.
-- [ ] Implement `getRuntimePaths()` with injectable `platform`, `homeDir`, `localAppData`, and `projectDir`.
+- [ ] Write tests that assert installed layout uses `~/.agent-lens/{data,logs,state,run}` with app files at the root.
+- [ ] Implement `getRuntimePaths()` with injectable `homeDir` and `projectDir`.
 
 ### Task 2: Runtime Consumers
 
@@ -49,10 +49,10 @@
 - Modify: `server/install-hooks.js`
 - Modify: `server/sources-status.js`
 
-- [ ] Install app files into the `app/` directory.
+- [ ] Install app files directly into `~/.agent-lens/`.
 - [ ] Install runtime data into `data/`, `logs/`, `state/`, and `run/`.
-- [ ] Create command shims from the app directory.
-- [ ] Point hook commands at `app/hooks/*.js`.
+- [ ] Create command shims from `~/.agent-lens/`.
+- [ ] Point hook commands at `~/.agent-lens/hooks/*.js`.
 - [ ] Use `run/server.pid` for start/stop/status.
 
 ### Task 4: Docs And Verification

@@ -11,11 +11,11 @@ test('reads the current app version for UI display', () => {
   const info = getAppInfo();
 
   assert.equal(info.name, '@z7ping/agent-lens');
-  assert.equal(info.version, '0.2.0');
-  assert.equal(info.display_version, 'v0.2.0');
+  assert.equal(info.version, '0.3.0');
+  assert.equal(info.display_version, 'v0.3.0');
   assert.equal(info.subtitle, '多 Agent 调用链路观测与复盘工具');
   assert.equal(info.repository_url, 'https://github.com/z7ping/agent-lens');
-  assert.ok(info.changelog.current_version.includes('0.2.0'));
+  assert.ok(info.changelog.current_version.includes('0.3.0'));
   assert.ok(info.changelog.items.length > 0);
 });
 

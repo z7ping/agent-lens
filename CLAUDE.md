@@ -11,23 +11,41 @@ AgentLens 是一个实时监控和可视化 AI 编码工具调用的工具。通
 ## 常用命令
 
 ```bash
-# 新机器快速开始
+# GitHub 源码安装（推荐的 GitHub 使用方式）
 npm install && npm run build && node server/cli.js install
 
-# 日常使用
+# npm Registry 安装
+npx @z7ping/agent-lens install
+
+# 源码运行与管理
 node server/cli.js start              # 前台启动（Ctrl+C 停止）
 node server/cli.js start --daemon     # 后台守护进程
+node server/cli.js start -d           # 后台守护进程（短参数）
+node server/cli.js start 8080         # 指定端口（位置参数）
+node server/cli.js start --port 8080  # 指定端口（选项）
+node server/cli.js start --open       # 启动后打开浏览器
 node server/cli.js stop               # 停止服务
-node server/cli.js status             # 查看状态
+node server/cli.js status             # 查看默认端口 56789 的状态
+node server/cli.js package --output ./release  # 生成 .tgz 分发包
+node server/cli.js help               # 完整帮助
 node server/cli.js uninstall          # 卸载并清理
 
-# 服务管理（systemd，生产用）
+# Linux（systemd user service）/ macOS（launchd agent）
 node server/cli.js service install    # 注册系统服务（开机自启）
 node server/cli.js service start      # 启动服务
 node server/cli.js service stop       # 停止服务
+node server/cli.js service enable     # 启用开机自启
+node server/cli.js service disable    # 关闭开机自启
 node server/cli.js service status     # 查看状态
 node server/cli.js service uninstall  # 移除系统服务
+
+# Windows 使用 daemon，不注册系统服务
+agent-lens start --daemon
+agent-lens stop
+agent-lens status
 ```
+
+安装完成后可把 `node server/cli.js` 替换为 `agent-lens`。Windows 的 `service start/stop/status` 会映射到 daemon 管理，其余 `service` 子命令不可用。自定义端口启动时，当前 `status` 仍固定检查默认端口 56789。
 
 前端需要 Vite 构建，测试使用 Node.js 内置 test runner。
 
@@ -35,12 +53,12 @@ node server/cli.js service uninstall  # 移除系统服务
 
 ```bash
 # 前后端联调（推荐）
-npm run dev           # vite dev server（端口 5173），代理 /api 到 56789
-node server/cli.js start             # 后端服务（端口 56789）
+npm run dev           # 同时启动后端 56789 和 Vite 5173
 npm run dev:frontend  # 仅 vite dev server
 
 # 构建生产版本
 npm run build         # vite build → dist/
+npm test              # 导入器测试 + Node.js test runner
 ```
 
 Vite dev server 会代理 `/api`、`/logs`、`/states`、`/projects.json` 到后端 server.js。
@@ -109,6 +127,8 @@ server/adapters/
 - **双钩子实现**：Node.js 钩子为主/推荐。
 
 ## 运行时数据
+
+源码运行时使用项目根目录 `.agent-lens/`；安装后程序和运行数据全部统一放在用户主目录 `~/.agent-lens/`，程序文件直接位于根目录，不使用 AppData 或 XDG 目录。
 
 - `.agent-lens/data/projects.json` — 项目注册表：映射 `projectKey` 到 `{cwd, name, last_seen}`
 - `.agent-lens/logs/<projectKey>.jsonl` — 仅追加日志文件，每个工具调用一个 JSON 对象

@@ -3,13 +3,15 @@
  * AgentLens - 统一 CLI 入口
  *
  * 用法:
- *   agent-lens install              安装 hooks 到 Claude Code 配置
- *   agent-lens start [port]         前台启动服务器
- *   agent-lens start --daemon       后台守护进程模式
- *   agent-lens stop                 停止后台服务
- *   agent-lens status               查看服务状态
- *   agent-lens package              打包分发
- *   agent-lens uninstall            卸载并清理所有配置和数据
+ *   agent-lens install                       安装应用、依赖和 hooks
+ *   agent-lens start [port]                  前台启动服务器
+ *   agent-lens start --port 8080 --open      指定端口并打开浏览器
+ *   agent-lens start --daemon                后台守护进程模式
+ *   agent-lens stop                          停止后台服务
+ *   agent-lens status                        查看服务状态
+ *   agent-lens service <subcommand>          管理系统服务
+ *   agent-lens package [--output <dir>]      打包分发
+ *   agent-lens uninstall                     卸载并清理所有配置和数据
  *
  * 替代: install.sh, install.bat, start.sh, start.bat, package.sh
  */
@@ -555,6 +557,7 @@ async function cmdInstall() {
         // package.json（npm install 需要）
         copyFile(path.join(PROJECT_DIR, 'package.json'), path.join(INSTALL_DIR, 'package.json'));
         copyFile(path.join(PROJECT_DIR, 'CHANGELOG.md'), path.join(INSTALL_DIR, 'CHANGELOG.md'));
+        copyFile(path.join(PROJECT_DIR, 'README.md'), path.join(INSTALL_DIR, 'README.md'));
 
         // adapters/
         const adapters = fs.readdirSync(path.join(PROJECT_DIR, 'server', 'adapters')) || [];
@@ -589,6 +592,24 @@ async function cmdInstall() {
         log('安装依赖...', 'cyan');
         try {
             execSync('npm install', { cwd: INSTALL_DIR, stdio: 'inherit' });
+            try {
+                execFileSync(process.execPath, ['-e', "const Database=require('better-sqlite3');const db=new Database(':memory:');db.close()"], {
+                    cwd: INSTALL_DIR,
+                    stdio: 'ignore',
+                });
+            } catch (_) {
+                log('检测到原生依赖安装脚本被阻止，正在批准并重建...', 'yellow');
+                try {
+                    execSync('npm install-scripts approve better-sqlite3 esbuild', { cwd: INSTALL_DIR, stdio: 'inherit' });
+                } catch (_) {
+                    // 旧版 npm 没有 install-scripts 子命令，直接尝试 rebuild。
+                }
+                execSync('npm rebuild better-sqlite3 esbuild --foreground-scripts', { cwd: INSTALL_DIR, stdio: 'inherit' });
+                execFileSync(process.execPath, ['-e', "const Database=require('better-sqlite3');const db=new Database(':memory:');db.close()"], {
+                    cwd: INSTALL_DIR,
+                    stdio: 'ignore',
+                });
+            }
             log('[OK] 依赖安装完成', 'green');
         } catch (e) {
             log('[WARN] 依赖安装失败，请手动运行: npm install', 'yellow');
@@ -1044,36 +1065,47 @@ function showHelp() {
     log('  agent-lens <command> [options]', 'cyan');
     console.log('');
     log('命令:', 'yellow');
-    log('  install              安装 hooks + 注册 systemd 服务（自动启动+开机自启）', 'dim');
-    log('  start [--daemon]     启动服务器', 'dim');
-    log('  stop                 停止后台服务', 'dim');
-    log('  status               查看服务状态', 'dim');
-    log('  service <sub>        管理 systemd 服务', 'dim');
-    log('  package              打包分发', 'dim');
-    log('  uninstall            卸载并清理所有配置和数据', 'dim');
-    log('  help                 显示此帮助', 'dim');
+    log('  install                       安装应用、依赖和 hooks，并启动服务', 'dim');
+    log('  start [port] [options]        启动服务器（默认端口 56789）', 'dim');
+    log('  stop                          停止后台服务', 'dim');
+    log('  status                        查看默认服务状态', 'dim');
+    log('  service <subcommand>          管理系统服务或 daemon', 'dim');
+    log('  package [--output <dir>]      构建并生成 npm 兼容分发包', 'dim');
+    log('  uninstall                     卸载并清理所有配置和数据', 'dim');
+    log('  help, --help, -h              显示此帮助', 'dim');
     console.log('');
     log('service 子命令:', 'yellow');
-    log('  service install      注册 systemd 服务', 'dim');
-    log('  service uninstall    移除 systemd 服务', 'dim');
-    log('  service start        启动服务', 'dim');
-    log('  service stop         停止服务', 'dim');
-    log('  service enable       启用开机自启', 'dim');
-    log('  service disable      关闭开机自启', 'dim');
-    log('  service status       查看服务状态', 'dim');
+    log('  service install               注册系统服务并启用自启', 'dim');
+    log('  service uninstall             停止并移除系统服务', 'dim');
+    log('  service start                 启动服务', 'dim');
+    log('  service stop                  停止服务', 'dim');
+    log('  service enable                启用开机自启', 'dim');
+    log('  service disable               关闭开机自启', 'dim');
+    log('  service status                查看服务和自启状态', 'dim');
     console.log('');
-    log('选项:', 'yellow');
-    log('  --daemon, -d         后台守护进程模式（仅 start）', 'dim');
-    log('  --open               自动打开浏览器（仅 start）', 'dim');
+    log('start 选项:', 'yellow');
+    log('  --daemon, -d                  后台守护进程模式', 'dim');
+    log('  --port <port>                 指定端口，也可直接使用位置参数', 'dim');
+    log('  --open                        启动后自动打开浏览器', 'dim');
+    console.log('');
+    log('package 选项:', 'yellow');
+    log('  --output <dir>                指定 .tgz 输出目录（默认 dist/）', 'dim');
+    console.log('');
+    log('平台说明:', 'yellow');
+    log('  Linux:  systemd user service，支持全部 service 子命令', 'dim');
+    log('  macOS:  launchd agent，支持全部 service 子命令', 'dim');
+    log('  Windows: daemon + hook 自动守护，不注册系统服务', 'dim');
+    log('           service start/stop/status 映射到 daemon 管理', 'dim');
+    log('           service install/uninstall/enable/disable 不可用', 'dim');
+    log('  status 当前固定检查默认端口 56789', 'dim');
     console.log('');
     log('示例:', 'yellow');
-    log('  agent-lens install           # 首次安装（自动注册服务+启动）', 'dim');
-    log('  agent-lens service stop      # 停止服务', 'dim');
-    log('  agent-lens service disable   # 关闭开机自启', 'dim');
-    log('  agent-lens service status    # 查看状态', 'dim');
-    log('  node server.js --daemon       # 仍然可用', 'dim');
-    log('  node server.js --stop         # 仍然可用', 'dim');
-    log('  node server.js --status       # 仍然可用', 'dim');
+    log('  agent-lens install', 'dim');
+    log('  agent-lens start --daemon', 'dim');
+    log('  agent-lens start --port 8080 --open', 'dim');
+    log('  agent-lens service status', 'dim');
+    log('  agent-lens package --output ./release', 'dim');
+    log('  agent-lens uninstall', 'dim');
 }
 
 // ─── 主入口 ──────────────────────────────────────────────────────

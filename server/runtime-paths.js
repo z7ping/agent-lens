@@ -11,25 +11,8 @@ function getProjectDir(baseDir = __dirname) {
 }
 
 function getInstalledRoot(options = {}) {
-  const platform = options.platform || process.platform;
   const homeDir = options.homeDir || os.homedir();
-  if (platform === 'win32') {
-    return path.join(options.localAppData || process.env.LOCALAPPDATA || path.join(homeDir, 'AppData', 'Local'), 'AgentLens');
-  }
-  if (platform === 'darwin') {
-    return path.join(homeDir, 'Library', 'Application Support', 'AgentLens');
-  }
-  const dataHome = options.xdgDataHome || process.env.XDG_DATA_HOME || path.join(homeDir, '.local', 'share');
-  return path.join(dataHome, 'agent-lens');
-}
-
-function getInstalledStateRoot(options = {}) {
-  const platform = options.platform || process.platform;
-  const homeDir = options.homeDir || os.homedir();
-  if (platform === 'win32') return getInstalledRoot(options);
-  if (platform === 'darwin') return path.join(homeDir, 'Library', 'Application Support', 'AgentLens');
-  const stateHome = options.xdgStateHome || process.env.XDG_STATE_HOME || path.join(homeDir, '.local', 'state');
-  return path.join(stateHome, 'agent-lens');
+  return path.join(homeDir, '.agent-lens');
 }
 
 function getRuntimePaths(options = {}) {
@@ -49,14 +32,13 @@ function getRuntimePaths(options = {}) {
   }
 
   const rootDir = options.rootDir || getInstalledRoot(options);
-  const stateRoot = options.stateRoot || getInstalledStateRoot(options);
   return buildPaths({
     rootDir,
-    appDir: path.join(rootDir, 'app'),
+    appDir: rootDir,
     dataDir: path.join(rootDir, 'data'),
-    logsDir: path.join(stateRoot, 'logs'),
-    stateDir: path.join(stateRoot, 'state'),
-    runDir: path.join(stateRoot, 'run'),
+    logsDir: path.join(rootDir, 'logs'),
+    stateDir: path.join(rootDir, 'state'),
+    runDir: path.join(rootDir, 'run'),
   });
 }
 

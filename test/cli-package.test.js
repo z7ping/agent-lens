@@ -5,6 +5,36 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 
+test('cli help documents every command, option, and platform mode', () => {
+  const root = path.join(__dirname, '..');
+  const cli = path.join(root, 'server', 'cli.js');
+  const help = execFileSync(process.execPath, [cli, '--help'], {
+    cwd: root,
+    encoding: 'utf-8',
+  });
+
+  for (const expected of [
+    'install',
+    'start [port] [options]',
+    'stop',
+    'status',
+    'service <subcommand>',
+    'package [--output <dir>]',
+    'uninstall',
+    'help, --help, -h',
+    '--daemon, -d',
+    '--port <port>',
+    '--open',
+    '--output <dir>',
+    'Linux:  systemd user service',
+    'macOS:  launchd agent',
+    'Windows: daemon + hook 自动守护',
+    'status 当前固定检查默认端口 56789',
+  ]) {
+    assert.match(help, new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  }
+});
+
 test('cli package command creates an npm-compatible archive with current runtime files only', { timeout: 30000 }, () => {
   const root = path.join(__dirname, '..');
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-lens-package-test-'));

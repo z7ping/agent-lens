@@ -1,6 +1,6 @@
 # 更新日志
 
-## 0.2.0 (2026-08-10)
+## 0.3.0 (2026-08-10)
 
 ### Added
 - 概览页新增“装配路径”视图，按工具展示配置目录、配置文件、Hook 配置、Skills、插件缓存、会话目录/状态数据库等关键路径状态。
@@ -9,6 +9,7 @@
 - 项目下拉列表现在显示工具来源信息，并会跟随顶部工具来源 Tab 自动过滤项目。
 
 ### Fixed
+- 修复部分新版 npm 阻止 `better-sqlite3` / `esbuild` 安装脚本后仍报告安装成功的问题；安装器现在会验证原生 SQLite 并自动批准、重建依赖。
 - 修复 GitHub `npx github:z7ping/agent-lens install` 安装时包文件白名单缺少前端源码，导致无法临时构建 `dist/` 的问题。
 - 修复 npm/GitHub 分发包会包含 `server/projects.json`、`server/states/` 等本机运行状态文件的问题。
 - 修复 `agent-lens package` 使用过期手写打包清单导致 Release 包缺少当前运行必需文件的问题，现在改为复用 `npm pack` 生成 npm 兼容 `.tgz`。
@@ -17,7 +18,7 @@
 ### Changed
 - 项目展示名、npm 包名和 CLI 命令使用 AgentLens / `@z7ping/agent-lens` / `agent-lens`。
 - SQLite 数据库文件名使用 `agent-lens.db`，与产品名保持一致。
-- 开发运行数据统一写入项目根目录 `.agent-lens/`，安装后按 app/data/logs/state/run 分目录保存。
+- 开发运行数据写入项目根目录 `.agent-lens/`；安装后所有程序和运行数据统一放在用户主目录 `~/.agent-lens/`，不使用 AppData 或 XDG 分散目录。
 - README 和 AGENTS 文档区分源码安装、GitHub 分发和 npm 发布后的命令路径，避免未发布 npm 时误用 registry 旧包。
 
 ## 0.1.7 (2026-08-09)
