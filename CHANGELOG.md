@@ -1,5 +1,16 @@
 # 更新日志
 
+## 0.3.3 (2026-08-11)
+
+### Added
+- README 新增概览能力资产、装配路径、工具栈地图和任务复盘的界面预览。
+
+### Changed
+- npm 发布工作流升级到支持 Node.js 24 运行时的 `actions/checkout@v7` 和 `actions/setup-node@v7`，并通过仓库密钥 `NPM_TOKEN` 发布公开包。
+
+### Fixed
+- 应用信息测试改为读取 `package.json` 的当前版本，避免提升 npm 包版本后因硬编码旧版本导致发布流程失败。
+
 ## 0.3.0 (2026-08-10)
 
 ### Added
