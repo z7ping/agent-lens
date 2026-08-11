@@ -1,6 +1,6 @@
 # AgentLens 架构文档
 
-> 最后更新：2026-08-07
+> 最后更新：2026-08-11
 > 目的：记录技术架构和关键决策，防止迭代中反复踩坑
 
 ---
@@ -35,24 +35,25 @@
 
 ## 2. 数据采集方式对比
 
-| 适配器 | 采集方式 | 触发时机 | 数据来源 | 有用户消息? | 有AI回复? | 有工具调用? |
-|--------|----------|----------|----------|:-----------:|:---------:|:-----------:|
-| **Hermes** | 轮询 state.db | 30分钟间隔 + fs.watch | `~/.hermes/state.db` | ✅ | ✅ | ✅ |
-| **Claude Code** | hooks (prelog/log) | 每次工具调用前后 | stdin JSON → JSONL | ❌ | ❌ | ✅ |
-| **Codex** | hooks (prelog/log) | 每次工具调用前后 | stdin JSON → JSONL | ❌ | ❌ | ✅ |
-| **OpenCode** | 轮询 opencode.db | 30分钟间隔 + fs.watch | `~/.local/share/opencode/opencode.db` | ❌ | ❌ | ✅ |
-| **Pi** | hooks (prelog/log) | 每次工具调用前后 | stdin JSON → JSONL | ❌ | ❌ | ✅ |
-| **Cursor** | hooks (prelog/log) | 每次工具调用前后 | stdin JSON → JSONL | ❌ | ❌ | ✅ |
+AgentLens 同时使用实时 Hook、历史 JSONL 导入和本地数据库轮询。Hook 负责低延迟工具观测，历史数据源负责补齐对话和未安装 Hook 时产生的任务。
 
-### 关键差异：为什么只有 Hermes 有完整对话？
+| 适配器 | 主要采集方式 | 数据来源 | 用户消息 | AI 可见回复 | 工具调用 |
+|--------|--------------|----------|:--------:|:----------:|:--------:|
+| **Hermes** | SQLite 轮询 | `state.db` 的 messages / sessions | ✅ | ✅ | ✅ |
+| **Claude Code** | 实时 Hook + JSONL 增量导入 | Hook stdin、`~/.claude/projects/**/*.jsonl` | ✅（历史） | ✅（历史） | ✅ |
+| **Codex** | 实时 Hook + JSONL 增量导入 | Hook stdin、`~/.codex/sessions/**/*.jsonl` | ✅（历史） | ✅（历史） | ✅ |
+| **OpenCode** | SQLite 轮询 | `opencode.db` 的 session / message / part | ✅ | ✅ | ✅ |
+| **Pi** | JSONL 轮询 | Pi session JSONL | ✅ | ✅ | ✅ |
+| **Cursor** | 实时 Hook | Hook stdin | ❌ | ❌ | ✅ |
+| **OpenClaw** | 骨架 | 尚未实现 | ❌ | ❌ | ❌ |
 
-**Hermes** 直接读取 `state.db` 的 `messages` 表，该表存储了完整的对话历史（包括 user、assistant、tool 三种角色的消息）。
+### 数据完整度边界
 
-**Hooks 适配器**（Claude Code/Codex/Pi/Cursor）只能捕获 `PreToolUse` 和 `PostToolUse` 事件，这两个事件只包含工具调用数据，无法获取：
-- 用户的原始输入（触发对话的消息）
-- AI 的文字回复（非工具调用的响应）
-
-**OpenCode** 读取 `opencode.db`，但该数据库的表结构可能不包含完整的 user/assistant 消息（需验证）。
+- Claude Code 与 Codex 的实时 Hook 当前只安装 `PreToolUse` 和 `PostToolUse`，实时链路主要包含工具调用；用户和助手消息来自历史 JSONL 导入。
+- 历史文件不存在、会话持久化被关闭或格式发生变化时，对话记录可能缺失。
+- 用户消息和助手可见回复不等于模型收到的完整提示输入；系统指令、Developer 指令、项目规则、Skills、工具描述和 Memory 可能未被当前导入器保留。
+- AgentLens 不承诺获得模型未公开的隐藏思维过程。Pi 等来源若在原生日志中公开 thinking，只能按该来源的可见数据展示。
+- 工具参数会按类型摘要，输出与错误会截断，当前 Timeline 不是完整原始事件归档。
 
 ---
 
@@ -85,8 +86,8 @@ CREATE TABLE timeline (
 
 | role | 含义 | 来源 |
 |------|------|------|
-| `user` | 用户输入的消息 | 仅Hermes（从state.db读取） |
-| `assistant` | AI的文字回复 | 仅Hermes（从state.db读取） |
+| `user` | 用户输入的消息 | Hermes、Claude Code/Codex 历史导入、OpenCode、Pi |
+| `assistant` | AI对用户可见的文字回复 | Hermes、Claude Code/Codex 历史导入、OpenCode、Pi |
 | `tool_result` | 工具调用成功 | 所有适配器 |
 | `tool_error` | 工具调用失败 | 所有适配器 |
 
@@ -205,16 +206,16 @@ Pi agent 根目录候选：
 
 **权衡**：牺牲实时性换取可靠性。hooks 适配器是实时的，但数据不完整。
 
-### 5.2 为什么 hooks 适配器没有用户消息？
+### 5.2 为什么同时保留 Hook 和历史导入？
 
-**决策**：hooks 只捕获 PreToolUse/PostToolUse 事件。
+**决策**：支持 Hook 的来源仍保留历史 JSONL 或数据库导入。
 
 **原因**：
-- Claude Code/Codex/Pi/Cursor 的 hook 机制只支持这两个事件
-- 没有 `PreUserMessage` 或 `PostAssistantMessage` 事件
-- 这是工具本身的限制，不是 AgentLens 的设计选择
+- Hook 适合低延迟捕获工具调用，但当前安装范围不能覆盖完整对话和全部生命周期。
+- 历史数据源可以补齐用户消息、助手可见回复和未安装 Hook 时产生的任务。
+- 两种来源互为补充，并通过幂等标识和导入水位线避免重复写入。
 
-**影响**：这些适配器的 timeline 只有工具调用，没有对话上下文。
+**影响**：同一来源需要同时维护实时适配器和历史解析器；界面必须说明记录来自运行时捕获还是历史导入，不能把二者混合描述为完整提示词。
 
 ### 5.3 为什么用 timeline 表而不是 sessions 表？
 
@@ -242,9 +243,11 @@ Pi agent 根目录候选：
 
 | 限制 | 影响 | 临时解决方案 |
 |------|------|-------------|
-| Hooks适配器无用户消息 | 展开会话只有工具调用，无上下文 | 无（需工具本身支持） |
-| Hooks适配器无AI回复 | 看不到AI的最终回答 | 无（需工具本身支持） |
-| OpenCode可能无完整对话 | 需验证opencode.db结构 | 检查数据库表结构 |
+| 实时 Hook 主要只有工具事件 | 新任务对话可能需要等待历史导入 | 使用 JSONL/数据库轮询补齐 |
+| Cursor 无对话历史导入 | 只能复盘工具调用 | 在来源能力矩阵中明确标记 |
+| 提示词组成不完整 | 不能还原全部模型可见输入 | 区分捕获、扫描、诊断、推断和不可观察 |
+| 工具输入输出被摘要 | 不能把 Timeline 当作完整审计日志 | 保留来源引用，敏感原文按需读取 |
+| OpenClaw 尚未实现 | 无可用任务数据 | 保持为规划状态 |
 
 ### 6.2 实时性限制
 

@@ -1,22 +1,47 @@
 # AgentLens
 
+[![npm version](https://img.shields.io/npm/v/@z7ping/agent-lens?logo=npm&color=cb3837)](https://www.npmjs.com/package/@z7ping/agent-lens)
+[![npm downloads](https://img.shields.io/npm/dm/@z7ping/agent-lens?logo=npm)](https://www.npmjs.com/package/@z7ping/agent-lens)
+[![Node.js](https://img.shields.io/node/v/@z7ping/agent-lens?logo=node.js&logoColor=white)](https://www.npmjs.com/package/@z7ping/agent-lens)
+[![License](https://img.shields.io/npm/l/@z7ping/agent-lens)](LICENSE)
+
 多 Agent 调用的全链路可观测性工具。统计 SKILL / Tool / MCP 调用次数，实时还原每一次会话的完整执行路径。
 
 AgentLens – End-to-end observability for multi‑agent invocations.
 Aggregates call counts for SKILLs, Tools, and MCPs, and reconstructs the complete execution path of every session in real time.
 
-> **一句话**：`npm install && npm run build && node server/cli.js start` → 打开浏览器看仪表盘。
+> **一句话**：`npx @z7ping/agent-lens install` → 打开浏览器查看仪表盘。
 
-## 特性
+## 安装与使用
 
-- **多 Agent 追踪** — 统计 SKILL / Tool / MCP 调用次数，还原完整调用链
-- **调用链可视化** — 树形展示每次会话的 Agent→Tool 父子调用关系
-- **分析仪表盘** — 总调用数、错误率、工具使用排行、慢调用
-- **概览** — 每个 AI 工具一张卡片，展示版本、配置目录、官网/文档/GitHub、Skills / MCP / Plugins / Extensions / Hooks 等能力资产、安装路径和装配路径诊断
-- **多数据源** — Hermes（SQLite 轮询）、Claude Code / Codex / Cursor / Pi（实时钩子）、OpenCode（SQLite 轮询）
-- **Timeline 可观测** — 统一 timeline 表，支持跨数据源对比、role 语义分类、错误自动归类
-- **实时刷新** — 3 秒增量更新，无需手动刷新
-- **暗色主题** — 亮/暗一键切换
+需要 Node.js 18 或更高版本。
+
+### 推荐：从 npm 安装
+
+[@z7ping/agent-lens（npm）](https://www.npmjs.com/package/@z7ping/agent-lens)
+
+```bash
+npx @z7ping/agent-lens install
+```
+
+安装命令会复制应用文件、安装运行时依赖、配置 Hooks，并按当前平台自动注册系统服务或启动 daemon。安装完成后访问 **http://localhost:56789/** 即可看到仪表盘。
+
+### 直接调用 GitHub 仓库安装
+
+```bash
+npx github:z7ping/agent-lens install
+```
+> 仓库不跟踪 `dist/`，直接调用 GitHub 仓库时，当前环境需要能够安装开发依赖并完成 Vite 构建。若构建环境不确定，推荐使用 npm 安装方式。
+
+也可以从 GitHub 源码安装：
+
+```bash
+git clone https://github.com/z7ping/agent-lens.git
+cd agent-lens
+npm install
+npm run build
+node server/cli.js install
+```
 
 ## 界面预览
 
@@ -44,123 +69,19 @@ Aggregates call counts for SKILLs, Tools, and MCPs, and reconstructs the complet
 
 ![AgentLens 任务复盘](docs/static/4.webp)
 
-## 快速上手
+
+### 常用命令
+
+完成安装后，可以使用 `agent-lens` 管理服务：
 
 ```bash
-git clone https://github.com/z7ping/agent-lens.git
-cd agent-lens
-npm install
-npm run build
-node server/cli.js start              # 前台启动，默认端口 56789
+agent-lens status          # 查看运行状态
+agent-lens start --daemon  # 后台启动
+agent-lens stop            # 停止服务
+agent-lens uninstall       # 卸载并清理
 ```
 
-打开 **http://localhost:56789/** 即可看到仪表盘。
-
-> `npm start` 等价于 `node server/cli.js start`。前台运行时按 Ctrl+C 停止；后台运行使用 `node server/cli.js start --daemon`。
-
----
-
-## 目录结构
-
-```
-agent-lens/
-├── server/                    # 后端（纯 Node.js，无构建步骤）
-│   ├── server.js              # HTTP 服务（端口 56789）
-│   ├── cli.js                 # CLI 入口
-│   ├── routes.js              # API 路由
-│   ├── agent-lens-db.js            # SQLite 存储层
-│   ├── config.js              # 服务配置
-│   ├── schema.sql             # 表结构定义
-│   ├── overview.js            # 概览资产扫描与数据库快照
-│   ├── adapters/              # 多工具适配器（Hermes / Claude Code / Cursor / Pi ...）
-│   ├── hooks/                 # 实时钩子（prelog.js / log.js）
-│   └── scripts/               # 工具脚本
-├── src/                       # 前端（Vite + Tailwind）
-│   ├── app.js                 # 主逻辑
-│   ├── config.js / utils.js   # 配置与工具函数
-│   ├── style.css              # 样式
-│   ├── callchain/             # 调用链 Tab
-│   ├── dashboard/             # 仪表盘 Tab（含 Chart.js 图表）
-│   └── overview/              # 概览 Tab（工具能力资产）
-├── dist/                      # 构建产物（npm run build 生成）
-├── index.html                 # 入口页面
-├── package.json
-├── vite.config.mjs
-└── tailwind.config.mjs
-```
-
-## 开发模式
-
-```bash
-npm install               # 安装依赖
-npm run dev               # 同时启动后端 56789 和 Vite 5173
-npm run dev:frontend      # 仅启动 Vite 5173，需另行启动后端
-npm run build             # 构建生产前端到 dist/
-npm test                  # 运行导入器测试和 Node.js 测试
-```
-
-`npm run dev` 已同时启动前后端，不需要再单独执行 `node server/cli.js start`。访问 **http://localhost:5173/** 进行热更新开发；Vite 会把 `/api`、`/logs`、`/states` 和 `/projects.json` 代理到后端 56789。
-
-## 场景指南
-
-### 场景 A：我就想看仪表盘（生产模式）
-
-```bash
-npm start            # 自动构建 + 启动，访问 http://localhost:56789/
-```
-
-### 场景 B：我要开发前端（热更新）
-
-一条命令同时启动后端 + Vite 热更新：
-
-```bash
-npm run dev              # 后端（56789）+ Vite（5173）一起启动
-```
-
-后端和前端用不同颜色区分输出，修改 `src/` 里的代码浏览器自动刷新。
-
-访问 **http://localhost:5173/**（Vite 代理 `/api` 到后端 56789）。
-
-> 如果想单独启动 Vite（不启动后端），用 `npm run dev:frontend`。
-
-**Hermes（自动）**：服务启动后自动轮询 `~/.hermes/state.db`，无需额外配置。支持 state 持久化，重启不重复导入。
-
-### 场景 C：我要从 npm 包安装到本机
-
-推荐使用 npm Registry 上已发布的包：
-
-```bash
-npx @z7ping/agent-lens install
-```
-
-安装命令会复制应用文件、安装运行时依赖、配置 Hooks，并按平台注册系统服务或启动 daemon。安装完成后使用短命令管理：
-
-```bash
-agent-lens status
-agent-lens stop
-agent-lens start --daemon
-agent-lens uninstall
-```
-
-### 场景 D：我要从 GitHub 源码安装到本机
-
-从 GitHub 源码安装时，使用当前目录里的 CLI：
-
-```bash
-npm install
-npm run build
-node server/cli.js install          # 复制应用 + 安装依赖和 Hooks + 注册服务/daemon
-```
-
-也可以直接调用 GitHub 仓库：
-
-```bash
-npx github:z7ping/agent-lens install
-```
-
-> 仓库不跟踪 `dist/`，GitHub 直接调用需要当前环境能够安装开发依赖并完成 Vite 构建。若构建环境不确定，请使用“克隆源码 → `npm install` → `npm run build` → `node server/cli.js install`”，或使用 npm Registry 包。
-
-安装后会自动注册为**系统服务**或 daemon，支持开机自启/自动拉起。自动检测平台：
+安装完成后服务会自动注册为系统服务或 daemon，支持开机自启和自动拉起。前台调试时可以运行 `agent-lens start`，按 Ctrl+C 停止。
 
 | 平台 | 服务机制 | 配置路径 |
 |------|---------|---------|
@@ -172,7 +93,17 @@ npx github:z7ping/agent-lens install
 >
 > **Windows 注意**：安装时会在当前用户的“启动”目录写入 `AgentLens.vbs`，用户登录后隐藏启动，无需管理员权限。Hook 自动拉起仍作为服务意外退出后的兜底。
 
----
+## 特性
+
+- **多 Agent 追踪** — 统计 SKILL / Tool / MCP 调用次数，还原完整调用链
+- **调用链可视化** — 树形展示每次会话的 Agent→Tool 父子调用关系
+- **分析仪表盘** — 总调用数、错误率、工具使用排行、慢调用
+- **概览** — 每个 AI 工具一张卡片，展示版本、配置目录、官网/文档/GitHub、Skills / MCP / Plugins / Extensions / Hooks 等能力资产、安装路径和装配路径诊断
+- **多数据源** — Hermes（SQLite 轮询）、Claude Code / Codex / Cursor / Pi（实时钩子）、OpenCode（SQLite 轮询）
+- **Timeline 可观测** — 统一 timeline 表，支持跨数据源对比、role 语义分类、错误自动归类
+- **实时刷新** — 3 秒增量更新，无需手动刷新
+- **暗色主题** — 亮/暗一键切换
+
 
 ## 数据源配置
 
@@ -313,23 +244,6 @@ node server/cli.js -h                            # 显示帮助
 - `status` 当前固定检查并显示默认端口 56789。使用自定义端口启动时，应直接访问对应地址确认服务；PID 存在时仍可识别进程。
 - `uninstall` 会要求确认，并删除 AgentLens 安装目录、Hooks 配置和全部运行数据。
 
-### npm scripts
-
-```bash
-npm run dev                                  # 后端 + Vite 联调
-npm run dev:frontend                         # 仅 Vite
-npm run build                                # 构建前端
-npm start                                    # 前台启动
-npm start -- --daemon                        # 后台启动并向 CLI 透传参数
-npm stop                                     # 停止服务
-npm run status                               # 查看状态
-npm run install-hooks                        # 执行完整 install 命令
-npm run package -- --output ./release        # 打包并透传输出目录
-npm test                                     # 运行全部测试
-```
-
-> `install-hooks` 是历史脚本名，当前实际执行完整安装流程，不只是写入 Hooks。
-
 ### 系统服务与后台守护
 
 Linux 使用 systemd user service，macOS 使用 launchd agent，两者支持完整的 `service` 子命令：
@@ -379,6 +293,73 @@ node server/cli.js start --port 8080   # 等价写法
 当前 `status` 固定检查默认端口 56789；自定义端口启动后请访问 `http://localhost:8080/` 确认服务。
 
 ---
+
+## 开发与贡献
+
+- [参与开发](CONTRIBUTING.md) — Issue、分支、提交、Pull Request 和验证要求。
+- [架构文档](ARCHITECTURE.md) — 当前数据源、存储、数据流和已知限制。
+- [安全策略](SECURITY.md) — 私密漏洞报告和敏感数据处理建议。
+- [更新日志](CHANGELOG.md) — 已经发布的变化。
+
+项目的公开协作以 [GitHub Issues](https://github.com/z7ping/agent-lens/issues)、Milestones、Projects 和 Pull Requests 为准。Gitea 公共代码仓库仅作为镜像或备份，不承载另一套可编辑的任务状态。
+
+### 开发模式
+
+```bash
+npm install               # 安装依赖
+npm run dev               # 同时启动后端 56789 和 Vite 5173
+npm run dev:frontend      # 仅启动 Vite 5173，需另行启动后端
+npm run build             # 构建生产前端到 dist/
+npm test                  # 运行导入器测试和 Node.js 测试
+```
+
+`npm run dev` 会同时启动前后端，不需要再单独执行 `node server/cli.js start`。访问 **http://localhost:5173/** 进行热更新开发；Vite 会把 `/api`、`/logs`、`/states` 和 `/projects.json` 代理到后端 56789。
+
+### npm scripts
+
+```bash
+npm run dev                                  # 后端 + Vite 联调
+npm run dev:frontend                         # 仅 Vite
+npm run build                                # 构建前端
+npm start                                    # 前台启动
+npm start -- --daemon                        # 后台启动并向 CLI 透传参数
+npm stop                                     # 停止服务
+npm run status                               # 查看状态
+npm run install-hooks                        # 执行完整 install 命令
+npm run package -- --output ./release        # 打包并透传输出目录
+npm test                                     # 运行全部测试
+```
+
+> `install-hooks` 是历史脚本名，当前实际执行完整安装流程，不只是写入 Hooks。
+
+### 目录结构
+
+```text
+agent-lens/
+├── server/                    # 后端（纯 Node.js，无构建步骤）
+│   ├── server.js              # HTTP 服务（端口 56789）
+│   ├── cli.js                 # CLI 入口
+│   ├── routes.js              # API 路由
+│   ├── agent-lens-db.js       # SQLite 存储层
+│   ├── config.js              # 服务配置
+│   ├── schema.sql             # 表结构定义
+│   ├── overview.js            # 概览资产扫描与数据库快照
+│   ├── adapters/              # 多工具适配器（Hermes / Claude Code / Cursor / Pi ...）
+│   ├── hooks/                 # 实时钩子（prelog.js / log.js）
+│   └── scripts/               # 工具脚本
+├── src/                       # 前端（Vite + Tailwind）
+│   ├── app.js                 # 主逻辑
+│   ├── config.js / utils.js   # 配置与工具函数
+│   ├── style.css              # 样式
+│   ├── callchain/             # 调用链 Tab
+│   ├── dashboard/             # 仪表盘 Tab（含 Chart.js 图表）
+│   └── overview/              # 概览 Tab（工具能力资产）
+├── dist/                      # 构建产物（npm run build 生成）
+├── index.html                 # 入口页面
+├── package.json
+├── vite.config.mjs
+└── tailwind.config.mjs
+```
 
 ## 数据模型
 

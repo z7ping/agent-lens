@@ -1,0 +1,46 @@
+name: 开发任务
+description: 创建目标和验收标准已经明确的实施任务
+title: "[任务] "
+body:
+  - type: input
+    id: parent
+    attributes:
+      label: 上级 Issue 或 RFC
+      placeholder: 例如 #123 或公开设计讨论链接
+  - type: textarea
+    id: background
+    attributes:
+      label: 背景
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: 目标
+      description: 描述完成后能够观察到的结果。
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 实施范围
+    validations:
+      required: true
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: 非目标
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收标准
+      placeholder: |
+        - [ ] 自动化测试通过
+        - [ ] 兼容旧数据
+        - [ ] 文档已更新
+    validations:
+      required: true
+  - type: textarea
+    id: risk
+    attributes:
+      label: 风险与依赖

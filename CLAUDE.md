@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-AgentLens 是一个实时监控和可视化 AI 编码工具调用的工具。通过钩入 Claude Code/Cursor 等工具的 PreToolUse 和 PostToolUse 生命周期事件，记录每次工具调用，并在浏览器仪表盘中展示。支持多工具适配器架构（Claude Code、Hermes、Codex、OpenCode、Cursor、Pi）。
+AgentLens 是一个实时监控和可视化 AI 编码工具调用的工具。通过实时 Hook、历史 JSONL 导入和本地数据库轮询记录对话与工具调用，并在浏览器仪表盘中展示。支持多工具适配器架构（Claude Code、Codex、Hermes、OpenCode、Cursor、Pi）。
 
 **唯一运行时依赖：better-sqlite3（原生 SQLite 模块）。**
 
@@ -74,17 +74,17 @@ Vite dev server 会代理 `/api`、`/logs`、`/states`、`/projects.json` 到后
 ## 多工具支持
 
 支持追踪以下 AI 编码工具：
-- Claude Code（实时钩子）
-- Hermes（定时轮询 state.db）
-- Codex（实时钩子）
-- OpenCode（定时轮询 opencode.db）
-- Cursor（实时钩子）
-- Pi（实时钩子）
+- Claude Code（实时钩子 + 历史 JSONL 导入）
+- Codex（实时钩子 + 历史 JSONL 导入）
+- Hermes（定时轮询 state.db，含对话）
+- OpenCode（定时轮询 opencode.db，含对话）
+- Pi（定时轮询 session JSONL，含对话）
+- Cursor（实时钩子，仅工具调用）
 - OpenClaw（骨架，待实现）
 
 ## 架构
 
-系统是**基于钩子的四阶段管道 + 多工具适配器**：
+系统是**实时 Hook + 历史导入/轮询 + 统一存储与展示**的多工具适配器管道：
 
 ### 管道阶段
 
@@ -92,9 +92,11 @@ Vite dev server 会代理 `/api`、`/logs`、`/states`、`/projects.json` 到后
 
 2. **PostToolUse 钩子** (`hooks/log.js`) — 在每次工具调用后触发。从调用栈弹出，构建包含耗时/成功/错误的日志记录，以 JSONL 格式追加到 `logs/<projectKey>.jsonl`，并更新 `projects.json`。
 
-3. **HTTP 服务器** (`server/server.js`) — 最小化静态文件服务器，端口 56789（定义在 `config.js`）。支持守护进程模式（`--daemon`），通过运行时 `run/server.pid` 管理生命周期。优先从 `dist/` 提供构建后的文件，否则从应用目录提供。
+3. **历史导入与轮询** (`server/importers/`、`server/adapters/`) — Codex/Claude Code 增量导入会话 JSONL；Hermes/OpenCode/Pi 轮询各自的本地数据库或会话文件，并统一写入 timeline。
 
-4. **浏览器可视化** (`index.html`) — 单页面 Tab 切换（调用链 / 仪表盘），通过 `fetch()` 在客户端解析 JSONL。
+4. **HTTP 服务器** (`server/server.js`) — 最小化静态文件服务器，端口 56789（定义在 `config.js`）。支持守护进程模式（`--daemon`），通过运行时 `run/server.pid` 管理生命周期。优先从 `dist/` 提供构建后的文件，否则从应用目录提供。
+
+5. **浏览器可视化** (`index.html`) — 单页面 Tab 切换（任务复盘 / 工具栈 / 概览），通过 `/api/*` 查询统一后的数据。
 
 ### 适配器架构
 
