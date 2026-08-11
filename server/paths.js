@@ -108,6 +108,7 @@ module.exports = {
     agentLens: {
         home: agentLensRuntime.rootDir,
         appDir: agentLensRuntime.appDir,
+        binDir: agentLensRuntime.binDir,
         dataDir: agentLensRuntime.dataDir,
         logsDir: agentLensRuntime.logsDir,
         stateDir: agentLensRuntime.stateDir,

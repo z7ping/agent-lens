@@ -31,6 +31,22 @@
             └───────────────┘ └───────────┘ └───────────────┘
 ```
 
+### 安装与运行目录边界
+
+所有平台使用 `~/.agent-lens` 作为稳定安装根目录，但程序和运行数据不再平铺：
+
+```text
+~/.agent-lens/
+├── app/          # 服务端、前端产物、Hooks、适配器和生产依赖
+├── bin/          # Windows agent-lens.cmd
+├── data/         # SQLite 数据库与项目注册表
+├── logs/         # JSONL 与诊断日志
+├── state/        # 调用栈与导入水位线
+└── run/          # PID
+```
+
+`server/runtime-paths.js` 是路径契约的唯一来源。安装器先把程序和生产依赖写入 `.update/app`，验证后切换到正式 `app/`；服务通过 PID 与 HTTP 就绪检查后，才清理当前平铺布局的旧程序文件。历史 AppData/XDG 布局只迁移目标中缺失的数据，同名数据库或状态文件不会被覆盖。
+
 ---
 
 ## 2. 数据采集方式对比
@@ -510,6 +526,8 @@ server/
 │   ├── prelog.js            # PreToolUse hook脚本
 │   └── log.js               # PostToolUse hook脚本
 ├── agent-lens-db.js              # SQLite存储层（timeline表）
+├── runtime-paths.js          # 开发、安装及历史布局路径契约
+├── install-layout.js         # 程序暂存、迁移、激活、失败回滚与旧布局清理
 ├── server.js                # HTTP服务
 ├── routes.js                # API路由
 └── install-hooks.js         # 安装hooks到各工具

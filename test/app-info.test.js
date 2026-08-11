@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const path = require('path');
 const fs = require('fs');
 
-const { getAppInfo, getPackageJsonPath } = require('../server/app-info');
+const { getAppInfo, getCurrentChangelog, getPackageJsonPath } = require('../server/app-info');
 const { DB_PATH } = require('../server/agent-lens-db');
 const packageJson = require('../package.json');
 
@@ -18,10 +18,17 @@ test('reads the current app version for UI display', () => {
   assert.equal(info.repository_url, 'https://github.com/z7ping/agent-lens');
 });
 
-test('resolves package.json from installed flat layout', () => {
+test('resolves package.json from the installed app directory', () => {
   const baseDir = path.join(__dirname, '..');
 
   assert.equal(getPackageJsonPath(baseDir), path.join(baseDir, 'package.json'));
+});
+
+test('shows critical installation fixes from the complete current release notes', () => {
+  const changelog = getCurrentChangelog(packageJson.version);
+
+  assert.ok(changelog.items.some(item => item.includes('自动恢复并重启上一版程序')));
+  assert.ok(changelog.items.some(item => item.includes('同步清理 Claude Code、Codex 和 Cursor Hooks')));
 });
 
 test('uses AgentLens named SQLite database file', () => {

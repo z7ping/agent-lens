@@ -14,6 +14,9 @@ ensureRuntimeDirs(RUNTIME_PATHS);
 const TOOL_TRACKER_DIR = RUNTIME_PATHS.appDir;
 const PRELOG_PATH = path.join(RUNTIME_PATHS.hooksDir, 'prelog.js').replace(/\\/g, '/');
 const LOG_PATH = path.join(RUNTIME_PATHS.hooksDir, 'log.js').replace(/\\/g, '/');
+const CLAUDE_SETTINGS_FILE = path.join(HOME, '.claude', 'settings.json');
+const CODEX_HOOKS_FILE = path.join(HOME, '.codex', 'hooks.json');
+const CURSOR_HOOKS_FILE = path.join(HOME, '.cursor', 'hooks.json');
 
 const MARKER = 'agent-lens';
 
@@ -39,6 +42,29 @@ function removeOldHooks(hookArray, marker = MARKER) {
     });
 }
 
+function removeAgentLensHooks(config, marker = MARKER) {
+    if (!config || typeof config !== 'object' || !config.hooks || typeof config.hooks !== 'object') {
+        return false;
+    }
+
+    let changed = false;
+    for (const [eventName, groups] of Object.entries(config.hooks)) {
+        if (!Array.isArray(groups)) continue;
+        const filtered = removeOldHooks(groups, marker);
+        if (filtered.length === groups.length) continue;
+        changed = true;
+        if (filtered.length > 0) config.hooks[eventName] = filtered;
+        else delete config.hooks[eventName];
+    }
+
+    if (Object.keys(config.hooks).length === 0) delete config.hooks;
+    return changed;
+}
+
+function formatNodeHookCommand(scriptPath) {
+    return `node ${JSON.stringify(scriptPath)}`;
+}
+
 function makeHookEntry(command, timeout = 5) {
     return {
         hooks: [{ command, type: 'command', timeout, statusMessage: '', async: false }]
@@ -48,54 +74,51 @@ function makeHookEntry(command, timeout = 5) {
 // ─── 1. Claude Code ──────────────────────────────────────
 
 function installClaudeCode() {
-    const settingsFile = path.join(HOME, '.claude', 'settings.json');
-    const settings = readJson(settingsFile);
+    const settings = readJson(CLAUDE_SETTINGS_FILE);
     if (!settings.hooks) settings.hooks = {};
 
     // 清理已有 AgentLens hooks，避免重复安装
     settings.hooks.PreToolUse = removeOldHooks(settings.hooks.PreToolUse, MARKER);
     settings.hooks.PostToolUse = removeOldHooks(settings.hooks.PostToolUse, MARKER);
 
-    settings.hooks.PreToolUse.push(makeHookEntry(`node ${PRELOG_PATH}`, 5));
-    settings.hooks.PostToolUse.push(makeHookEntry(`node ${LOG_PATH}`, 10));
+    settings.hooks.PreToolUse.push(makeHookEntry(formatNodeHookCommand(PRELOG_PATH), 5));
+    settings.hooks.PostToolUse.push(makeHookEntry(formatNodeHookCommand(LOG_PATH), 10));
 
-    writeJson(settingsFile, settings);
+    writeJson(CLAUDE_SETTINGS_FILE, settings);
     console.log('   [OK] Claude Code settings.json 已更新');
 }
 
 // ─── 2. Codex ────────────────────────────────────────────
 
 function installCodex() {
-    const hooksFile = path.join(HOME, '.codex', 'hooks.json');
-    const hooks = readJson(hooksFile);
+    const hooks = readJson(CODEX_HOOKS_FILE);
     if (!hooks.hooks) hooks.hooks = {};
 
     // 清理已有 AgentLens hooks，避免重复安装
     hooks.hooks.PreToolUse = removeOldHooks(hooks.hooks.PreToolUse, MARKER);
     hooks.hooks.PostToolUse = removeOldHooks(hooks.hooks.PostToolUse, MARKER);
 
-    hooks.hooks.PreToolUse.push(makeHookEntry(`node ${PRELOG_PATH}`, 5));
-    hooks.hooks.PostToolUse.push(makeHookEntry(`node ${LOG_PATH}`, 10));
+    hooks.hooks.PreToolUse.push(makeHookEntry(formatNodeHookCommand(PRELOG_PATH), 5));
+    hooks.hooks.PostToolUse.push(makeHookEntry(formatNodeHookCommand(LOG_PATH), 10));
 
-    writeJson(hooksFile, hooks);
+    writeJson(CODEX_HOOKS_FILE, hooks);
     console.log('   [OK] Codex hooks.json 已更新');
 }
 
 // ─── 3. Cursor ───────────────────────────────────────────
 
 function installCursor() {
-    const hooksFile = path.join(HOME, '.cursor', 'hooks.json');
-    const hooks = readJson(hooksFile);
+    const hooks = readJson(CURSOR_HOOKS_FILE);
     if (!hooks.hooks) hooks.hooks = {};
 
     // 清理已有 AgentLens hooks，避免重复安装
     hooks.hooks.PreToolUse = removeOldHooks(hooks.hooks.PreToolUse, MARKER);
     hooks.hooks.PostToolUse = removeOldHooks(hooks.hooks.PostToolUse, MARKER);
 
-    hooks.hooks.PreToolUse.push(makeHookEntry(`node ${PRELOG_PATH}`, 5));
-    hooks.hooks.PostToolUse.push(makeHookEntry(`node ${LOG_PATH}`, 10));
+    hooks.hooks.PreToolUse.push(makeHookEntry(formatNodeHookCommand(PRELOG_PATH), 5));
+    hooks.hooks.PostToolUse.push(makeHookEntry(formatNodeHookCommand(LOG_PATH), 10));
 
-    writeJson(hooksFile, hooks);
+    writeJson(CURSOR_HOOKS_FILE, hooks);
     console.log('   [OK] Cursor hooks.json 已更新');
 }
 
@@ -137,9 +160,9 @@ function computeHookHash(eventName, group, handler) {
     return `sha256:${hash}`;
 }
 
-function updateCodexTrustHash() {
-    const configPath = path.join(HOME, '.codex', 'config.toml');
-    const hooksPath = path.join(HOME, '.codex', 'hooks.json');
+function updateCodexTrustHash(options = {}) {
+    const configPath = options.configPath || path.join(HOME, '.codex', 'config.toml');
+    const hooksPath = options.hooksPath || CODEX_HOOKS_FILE;
     if (!fs.existsSync(hooksPath)) return;
 
     const hooks = readJson(hooksPath);
@@ -151,6 +174,7 @@ function updateCodexTrustHash() {
     // 生成 hooks.state 条目（每个 hook 独立哈希）
     const entries = [];
     for (const [eventName, groups] of Object.entries(hooks.hooks || {})) {
+        if (!Array.isArray(groups)) continue;
         const eventKey = CODEX_EVENT_LABELS[eventName] || eventName.toLowerCase();
         groups.forEach((group, groupIdx) => {
             (group.hooks || []).forEach((hook, hookIdx) => {
@@ -182,10 +206,36 @@ function updateCodexTrustHash() {
     newLines.splice(insertIdx, 0, '', '[hooks.state]', ...entries);
 
     fs.writeFileSync(configPath, newLines.join('\n'));
-    console.log(`   [OK] Codex 信任 hash 已更新 (${entries.length / 3} 个 hook)`);
+    if (!options.quiet) console.log(`   [OK] Codex 信任 hash 已更新 (${entries.length / 3} 个 hook)`);
 }
 
-// ─── 5. 同步 adapters + agent-lens-db 到 ~/.agent-lens/ ─────────
+function uninstallHooksFromFile(filePath, label) {
+    if (!fs.existsSync(filePath)) {
+        console.log(`   [SKIP] ${label} 配置不存在`);
+        return false;
+    }
+
+    const config = readJson(filePath);
+    if (!removeAgentLensHooks(config)) {
+        console.log(`   [SKIP] ${label} 未发现 AgentLens hooks`);
+        return false;
+    }
+
+    writeJson(filePath, config);
+    console.log(`   [OK] ${label} AgentLens hooks 已移除`);
+    return true;
+}
+
+function uninstallAllToolHooks() {
+    console.log('   从所有支持的工具移除 hooks...');
+    uninstallHooksFromFile(CLAUDE_SETTINGS_FILE, 'Claude Code');
+    const codexChanged = uninstallHooksFromFile(CODEX_HOOKS_FILE, 'Codex');
+    uninstallHooksFromFile(CURSOR_HOOKS_FILE, 'Cursor');
+    if (codexChanged) updateCodexTrustHash();
+    console.log('   [OK] Hooks 清理完成');
+}
+
+// ─── 5. 同步 adapters + agent-lens-db 到当前 app 目录 ────────────
 
 function syncModules() {
     const srcDir = path.join(__dirname, 'adapters');
@@ -214,10 +264,27 @@ function syncModules() {
 
 // ─── 执行 ────────────────────────────────────────────────
 
-console.log('   安装 hooks 到所有支持的工具...');
-syncModules();
-installClaudeCode();
-installCodex();
-installCursor();
-updateCodexTrustHash();
-console.log('   [OK] 全部完成');
+function main(argv = process.argv.slice(2)) {
+    if (argv.includes('--uninstall')) {
+        uninstallAllToolHooks();
+        return;
+    }
+
+    console.log('   安装 hooks 到所有支持的工具...');
+    syncModules();
+    installClaudeCode();
+    installCodex();
+    installCursor();
+    updateCodexTrustHash();
+    console.log('   [OK] 全部完成');
+}
+
+if (require.main === module) main();
+
+module.exports = {
+    formatNodeHookCommand,
+    removeAgentLensHooks,
+    removeOldHooks,
+    uninstallHooksFromFile,
+    updateCodexTrustHash,
+};

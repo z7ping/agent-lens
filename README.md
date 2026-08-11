@@ -24,7 +24,9 @@ Aggregates call counts for SKILLs, Tools, and MCPs, and reconstructs the complet
 npx @z7ping/agent-lens install
 ```
 
-安装命令会复制应用文件、安装运行时依赖、配置 Hooks，并按当前平台自动注册系统服务或启动 daemon。安装完成后访问 **http://localhost:56789/** 即可看到仪表盘。
+安装命令会把程序安装到 `~/.agent-lens/app/`，只安装生产运行依赖，并配置 Hooks、命令入口及当前平台的后台服务。数据库、日志和导入状态保留在 `~/.agent-lens/data|logs|state/`，升级程序不会覆盖这些运行数据。安装完成后访问 **http://localhost:56789/** 即可看到仪表盘。
+
+从旧版升级时，安装器会识别 `.agent-lens` 根目录平铺布局和更早的 AppData/XDG 布局，停止旧 daemon、迁移缺失的运行数据并更新路径。遇到同名数据库或状态文件时保留现有目标文件，不会静默覆盖。
 
 ### 直接调用 GitHub 仓库安装
 
@@ -49,25 +51,25 @@ node server/cli.js install
 
 按 AI 工具集中查看 Skills、MCP、Plugins、Extensions 和内置能力，并结合实际调用次数识别高频资产。
 
-![AgentLens 概览能力资产](docs/static/1.webp)
+![AgentLens 概览能力资产](https://raw.githubusercontent.com/z7ping/agent-lens/main/docs/static/1.webp)
 
 ### 概览：装配路径
 
 检查各工具的配置目录、设置文件、Hooks、Skills、插件缓存和会话目录是否正确装配。
 
-![AgentLens 概览装配路径](docs/static/2.webp)
+![AgentLens 概览装配路径](https://raw.githubusercontent.com/z7ping/agent-lens/main/docs/static/2.webp)
 
 ### 工具栈地图
 
 按调用频率、工作流价值、耗时和失败风险为工具生成可解释评分。
 
-![AgentLens 工具栈地图](docs/static/3.webp)
+![AgentLens 工具栈地图](https://raw.githubusercontent.com/z7ping/agent-lens/main/docs/static/3.webp)
 
 ### 任务复盘
 
 按工具来源和项目筛选会话，展开查看每轮对话、工具调用、成功情况和耗时。
 
-![AgentLens 任务复盘](docs/static/4.webp)
+![AgentLens 任务复盘](https://raw.githubusercontent.com/z7ping/agent-lens/main/docs/static/4.webp)
 
 
 ### 常用命令
@@ -189,21 +191,21 @@ Skill 目录会识别根目录下的 `.md` 文件，并递归识别包含 `SKILL
 
 运行 `node server/cli.js install` 会自动配置所有工具的 hooks。发布到 npm 后，也可以使用 `npx @z7ping/agent-lens install`。
 
-如果需要手动配置，在 `~/.claude/settings.json` 中添加（路径指向 `~/.agent-lens/hooks/`）：
+如果需要手动配置，在 `~/.claude/settings.json` 中添加（路径指向 `~/.agent-lens/app/hooks/`）：
 
 ```json
 {
   "hooks": {
     "PreToolUse": [{
       "hooks": [{
-        "command": "node ~/.agent-lens/hooks/prelog.js",
+        "command": "node ~/.agent-lens/app/hooks/prelog.js",
         "type": "command",
         "timeout": 5
       }]
     }],
     "PostToolUse": [{
       "hooks": [{
-        "command": "node ~/.agent-lens/hooks/log.js",
+        "command": "node ~/.agent-lens/app/hooks/log.js",
         "type": "command",
         "timeout": 10
       }]
@@ -296,9 +298,9 @@ node server/cli.js start --port 8080   # 等价写法
 
 ## 开发与贡献
 
-- [参与开发](CONTRIBUTING.md) — Issue、分支、提交、Pull Request 和验证要求。
-- [架构文档](ARCHITECTURE.md) — 当前数据源、存储、数据流和已知限制。
-- [安全策略](SECURITY.md) — 私密漏洞报告和敏感数据处理建议。
+- [参与开发](https://github.com/z7ping/agent-lens/blob/main/CONTRIBUTING.md) — Issue、分支、提交、Pull Request 和验证要求。
+- [架构文档](https://github.com/z7ping/agent-lens/blob/main/ARCHITECTURE.md) — 当前数据源、存储、数据流和已知限制。
+- [安全策略](https://github.com/z7ping/agent-lens/blob/main/SECURITY.md) — 私密漏洞报告和敏感数据处理建议。
 - [更新日志](CHANGELOG.md) — 已经发布的变化。
 
 项目的公开协作以 [GitHub Issues](https://github.com/z7ping/agent-lens/issues)、Milestones、Projects 和 Pull Requests 为准。Gitea 公共代码仓库仅作为镜像或备份，不承载另一套可编辑的任务状态。
@@ -387,22 +389,25 @@ agent-lens/
 └── run/       # server.pid
 ```
 
-安装后，所有平台都统一使用用户主目录下的 `~/.agent-lens/`，不使用 `%LOCALAPPDATA%`、XDG 或迁移兼容目录：
+安装后，所有平台都统一使用用户主目录下的 `~/.agent-lens/`。程序、命令入口和运行数据分层存放：
 
 ```text
 ~/.agent-lens/
-├── cli.js, server.js, package.json  # 程序文件直接放在根目录
-├── dist/                            # 前端构建产物
-├── hooks/                           # Hooks
-├── adapters/                        # 工具适配器
-├── importers/                       # 历史数据导入器
+├── app/                             # 可独立更新的程序与生产依赖
+│   ├── cli.js, server.js
+│   ├── dist/                        # 发布前构建的前端产物
+│   ├── hooks/                       # Hooks
+│   ├── adapters/                    # 工具适配器
+│   ├── importers/                   # 历史数据导入器
+│   └── node_modules/                # 仅生产运行依赖
+├── bin/                             # Windows 命令入口
 ├── data/                            # agent-lens.db, projects.json
 ├── logs/                            # JSONL 和服务日志
 ├── state/                           # 调用栈和导入水位线
 └── run/                             # server.pid
 ```
 
-Windows 对应路径为 `C:\Users\<用户名>\.agent-lens\`。
+Windows 对应路径为 `C:\Users\<用户名>\.agent-lens\`。当前平铺布局升级成功后，安装器会清理根目录中的旧程序文件和旧 `node_modules`，但保留运行数据；更早的平台专有目录若存在数据冲突则会保留，供人工确认。
 
 | 表名 | 用途 |
 |------|------|

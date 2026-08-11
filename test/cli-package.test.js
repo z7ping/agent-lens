@@ -58,6 +58,7 @@ test('cli package command creates an npm-compatible archive with current runtime
     'server/overview.js',
     'server/sources-status.js',
     'server/app-info.js',
+    'server/install-layout.js',
     'server/importers/index.js',
     'dist/index.html',
     'package.json',
@@ -75,4 +76,17 @@ test('cli package command creates an npm-compatible archive with current runtime
   ]) {
     assert.doesNotMatch(listing, new RegExp(`package/(?:server/)?${forbidden.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
   }
+});
+
+test('cli installs production dependencies into the separated app directory', () => {
+  const root = path.join(__dirname, '..');
+  const cliSource = fs.readFileSync(path.join(root, 'server', 'cli.js'), 'utf8');
+
+  assert.match(cliSource, /npm install --omit=dev/);
+  assert.match(cliSource, /--registry=https:\/\/registry\.npmjs\.org\//);
+  assert.match(cliSource, /--package-lock=false/);
+  assert.match(cliSource, /INSTALL_RUNTIME_PATHS\.binDir/);
+  assert.match(cliSource, /activateStagedApplication/);
+  assert.match(cliSource, /rollbackInstalledApplication/);
+  assert.match(cliSource, /cleanupFlatApplication/);
 });

@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const path = require('node:path');
 
 const pkg = require(path.join(__dirname, '..', 'package.json'));
@@ -33,4 +34,27 @@ test('package file allowlist excludes runtime state and local project data', () 
   ]) {
     assert.equal(files.has(forbidden), false, `${forbidden} must not be included in package files`);
   }
+});
+
+test('published README does not reference documentation assets missing from the npm package', () => {
+  const readme = fs.readFileSync(path.join(__dirname, '..', 'README.md'), 'utf8');
+
+  for (const missingTarget of [
+    'docs/static/',
+    'CONTRIBUTING.md)',
+    'ARCHITECTURE.md)',
+    'SECURITY.md)',
+  ]) {
+    assert.equal(readme.includes(`](${missingTarget}`), false, `${missingTarget} must use an absolute GitHub URL`);
+  }
+});
+
+test('repository and publish configuration use the official npm registry', () => {
+  const npmrc = fs.readFileSync(path.join(__dirname, '..', '.npmrc'), 'utf8');
+  const lockfile = fs.readFileSync(path.join(__dirname, '..', 'package-lock.json'), 'utf8');
+
+  assert.match(npmrc, /^registry=https:\/\/registry\.npmjs\.org\/$/m);
+  assert.match(npmrc, /^replace-registry-host=always$/m);
+  assert.equal(pkg.publishConfig?.registry, 'https://registry.npmjs.org/');
+  assert.doesNotMatch(lockfile, /registry\.npmmirror\.com/);
 });

@@ -22,7 +22,21 @@ const os = require('os');
 const { spawn, execSync, execFileSync } = require('child_process');
 const net = require('net');
 const http = require('http');
-const { ensureRuntimeDirs, getRuntimePaths } = require('./runtime-paths');
+const {
+    ensureRuntimeDirs,
+    getFlatInstalledRuntimePaths,
+    getLegacyInstalledRuntimePaths,
+    getRuntimePaths,
+} = require('./runtime-paths');
+const {
+    activateStagedApplication,
+    cleanupFlatApplication,
+    hasFlatApplication,
+    migrateLegacyRuntimeData,
+    removeTree,
+    restoreBackupApplication,
+    stageApplication,
+} = require('./install-layout');
 
 // ─── 配置 ────────────────────────────────────────────────────────
 
@@ -30,8 +44,11 @@ const IS_SOURCE_LAYOUT = path.basename(__dirname) === 'server';
 const PROJECT_DIR = IS_SOURCE_LAYOUT ? path.dirname(__dirname) : __dirname;
 const CURRENT_RUNTIME_PATHS = getRuntimePaths({ baseDir: __dirname });
 const INSTALL_RUNTIME_PATHS = getRuntimePaths({ layout: 'installed' });
+const FLAT_INSTALL_RUNTIME_PATHS = getFlatInstalledRuntimePaths();
+const LEGACY_INSTALL_RUNTIME_PATHS = getLegacyInstalledRuntimePaths();
 const INSTALL_ROOT = INSTALL_RUNTIME_PATHS.rootDir;
 const INSTALL_DIR = INSTALL_RUNTIME_PATHS.appDir;
+const INSTALL_BIN_DIR = INSTALL_RUNTIME_PATHS.binDir;
 const SETTINGS_FILE = path.join(os.homedir(), '.claude', 'settings.json');
 const { DEFAULT_PORT } = require('./config');
 // ponytail: 版本号仅打包时用，按需读取，不复制 package.json
@@ -83,30 +100,9 @@ function mkdirp(dir) {
     }
 }
 
-function copyFile(src, dest) {
-    if (fs.existsSync(src)) {
-        mkdirp(path.dirname(dest));
-        fs.copyFileSync(src, dest);
-    }
-}
-
 function rimraf(dir) {
     if (fs.existsSync(dir)) {
         fs.rmSync(dir, { recursive: true, force: true });
-    }
-}
-
-function copyDir(src, dest) {
-    if (!fs.existsSync(src)) return;
-    mkdirp(dest);
-    for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
-        const srcPath = path.join(src, entry.name);
-        const destPath = path.join(dest, entry.name);
-        if (entry.isDirectory()) {
-            copyDir(srcPath, destPath);
-        } else {
-            fs.copyFileSync(srcPath, destPath);
-        }
     }
 }
 
@@ -202,7 +198,7 @@ async function waitForInstalledDaemon(port, timeoutMs = 60000) {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
         const pid = readPid(INSTALL_DIR);
-        if (((pid && isProcessAlive(pid)) || await isPortListening(port)) && await isHttpReady(port)) {
+        if (pid && isProcessAlive(pid) && await isHttpReady(port)) {
             return true;
         }
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -553,245 +549,140 @@ async function cmdInstall() {
     log('═'.repeat(45), 'dim');
     console.log('');
 
-    // 1. 检查 Node.js
     if (!checkNodeAvailable()) {
         log('[ERROR] 未找到 Node.js', 'red');
         log('请安装 Node.js: https://nodejs.org/', 'yellow');
-        process.exit(1);
+        process.exitCode = 1;
+        return;
     }
     log('[OK] Node.js 可用', 'green');
 
-    // 2. 创建目录
-    console.log('');
-    log(`创建目录: ${INSTALL_ROOT}`, 'cyan');
-    ensureRuntimeDirs(INSTALL_RUNTIME_PATHS);
+    const updateRoot = path.join(INSTALL_ROOT, '.update');
+    const stagedAppDir = path.join(updateRoot, 'app');
+    const hadFlatLayout = hasFlatApplication(INSTALL_ROOT);
+    let backupDir = null;
+    let serviceReady = false;
+    let running = false;
+    let rolledBack = false;
+    let rollbackRunning = false;
 
-    // 初始化 projects.json
-    const projectsJson = INSTALL_RUNTIME_PATHS.projectsFile;
-    if (!fs.existsSync(projectsJson)) {
-        fs.writeFileSync(projectsJson, '{}', 'utf-8');
-    }
-
-    // 3. 复制文件
-    if (path.resolve(PROJECT_DIR) === path.resolve(INSTALL_DIR)) {
-        log('源目录 = 目标目录，跳过复制', 'yellow');
-    } else {
-        log('复制文件...', 'cyan');
-
-        // hooks/
-        const hooks = ['prelog.js', 'log.js', 'server-guard.js'];
-        hooks.forEach(f => {
-            copyFile(path.join(PROJECT_DIR, 'server', 'hooks', f), path.join(INSTALL_DIR, 'hooks', f));
-        });
-
-        // server/ 根目录文件
-        const rootFiles = [
-            'server.js', 'cli.js', 'db.js', 'config.js', 'runtime-paths.js', 'agent-lens-db.js', 'paths.js',
-            'install-hooks.js', 'schema.sql', 'routes.js', 'tool-map.js', 'overview.js', 'sources-status.js',
-            'app-info.js'
-        ];
-        rootFiles.forEach(f => {
-            copyFile(path.join(PROJECT_DIR, 'server', f), path.join(INSTALL_DIR, f));
-        });
-
-        // importers/ (历史导入器，server.js 运行时需要)
-        const importersDir = path.join(PROJECT_DIR, 'server', 'importers');
-        if (fs.existsSync(importersDir)) {
-            copyDir(importersDir, path.join(INSTALL_DIR, 'importers'));
-        }
-
-        // package.json（npm install 需要）
-        copyFile(path.join(PROJECT_DIR, 'package.json'), path.join(INSTALL_DIR, 'package.json'));
-        copyFile(path.join(PROJECT_DIR, 'CHANGELOG.md'), path.join(INSTALL_DIR, 'CHANGELOG.md'));
-        copyFile(path.join(PROJECT_DIR, 'README.md'), path.join(INSTALL_DIR, 'README.md'));
-
-        // adapters/
-        const adapters = fs.readdirSync(path.join(PROJECT_DIR, 'server', 'adapters')) || [];
-        adapters.forEach(f => {
-            copyFile(path.join(PROJECT_DIR, 'server', 'adapters', f), path.join(INSTALL_DIR, 'adapters', f));
-        });
-
-        // dist/ (Vite 构建产物)
-        if (fs.existsSync(path.join(PROJECT_DIR, 'dist'))) {
-            copyDir(path.join(PROJECT_DIR, 'dist'), path.join(INSTALL_DIR, 'dist'));
-            log(`  dist/ 已复制`, 'dim');
-        } else {
-            log('  dist/ 不存在，正在构建前端...', 'yellow');
-            try {
-                execSync('npm run build', { cwd: PROJECT_DIR, stdio: 'inherit' });
-                if (fs.existsSync(path.join(PROJECT_DIR, 'dist'))) {
-                    copyDir(path.join(PROJECT_DIR, 'dist'), path.join(INSTALL_DIR, 'dist'));
-                    log(`  dist/ 已构建并复制`, 'green');
-                }
-            } catch (e) {
-                log('[WARN] 前端构建失败，请手动运行: npm run build', 'yellow');
-                log('  然后重新安装或手动复制 dist/ 到目标目录', 'dim');
-            }
-        }
-
-        log(`[OK] 文件已复制`, 'green');
-    }
-
-    // 4. 安装依赖
-    if (path.resolve(PROJECT_DIR) !== path.resolve(INSTALL_DIR)) {
-        console.log('');
-        log('安装依赖...', 'cyan');
-        try {
-            execSync('npm install', { cwd: INSTALL_DIR, stdio: 'inherit' });
-            try {
-                execFileSync(process.execPath, ['-e', "const Database=require('better-sqlite3');const db=new Database(':memory:');db.close()"], {
-                    cwd: INSTALL_DIR,
-                    stdio: 'ignore',
-                });
-            } catch (_) {
-                log('检测到原生依赖安装脚本被阻止，正在批准并重建...', 'yellow');
-                try {
-                    execSync('npm install-scripts approve better-sqlite3 esbuild', { cwd: INSTALL_DIR, stdio: 'inherit' });
-                } catch (_) {
-                    // 旧版 npm 没有 install-scripts 子命令，直接尝试 rebuild。
-                }
-                execSync('npm rebuild better-sqlite3 esbuild --foreground-scripts', { cwd: INSTALL_DIR, stdio: 'inherit' });
-                execFileSync(process.execPath, ['-e', "const Database=require('better-sqlite3');const db=new Database(':memory:');db.close()"], {
-                    cwd: INSTALL_DIR,
-                    stdio: 'ignore',
-                });
-            }
-            log('[OK] 依赖安装完成', 'green');
-        } catch (e) {
-            log('[WARN] 依赖安装失败，请手动运行: npm install', 'yellow');
-            log('  Windows 可能需要: npm install -g node-gyp-windows', 'dim');
-            log('  或安装 Visual Studio Build Tools', 'dim');
-        }
-    }
-
-    // 5. 更新 settings.json
-    console.log('');
-    log(`更新配置: ${SETTINGS_FILE}`, 'cyan');
     try {
-        execSync(`node "${path.join(INSTALL_DIR, 'install-hooks.js')}"`, {
-            stdio: 'inherit',
-        });
-    } catch (e) {
-        log('[WARN] 更新 settings.json 失败', 'yellow');
-    }
+        console.log('');
+        log(`准备安装目录: ${INSTALL_ROOT}`, 'cyan');
+        ensureRuntimeDirs(INSTALL_RUNTIME_PATHS);
+        ensureFrontendBuild(PROJECT_DIR);
 
-    // 6. 创建可执行入口
-    const cliPath = path.join(INSTALL_DIR, 'cli.js');
-    if (isWin()) {
-        // Windows: 创建 batch 脚本 + 自动加入 PATH
-        const batPath = path.join(INSTALL_DIR, 'agent-lens.cmd');
-        const nodeExe = process.execPath;
-        const batContent = `@echo off
-"${nodeExe}" "${cliPath}" %*
-        `;
-        try {
-            fs.writeFileSync(batPath, batContent, 'utf-8');
-            // 自动加入用户 PATH
-            const userPath = execSync('reg query HKCU\\Environment /v PATH 2>nul', { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
-            const pathMatch = userPath.match(/PATH\s+REG_(?:EXPAND_)?SZ\s+(.+)/);
-            const currentPath = pathMatch ? pathMatch[1].trim() : '';
-            if (!currentPath.split(';').some(p => p.toLowerCase() === INSTALL_DIR.toLowerCase())) {
-                const newPath = currentPath ? `${INSTALL_DIR};${currentPath}` : INSTALL_DIR;
-                execFileSync('powershell.exe', [
-                    '-NoProfile',
-                    '-ExecutionPolicy',
-                    'Bypass',
-                    '-Command',
-                    "[Environment]::SetEnvironmentVariable('Path', $env:AGENT_LENS_NEW_PATH, 'User')",
-                ], {
-                    env: { ...process.env, AGENT_LENS_NEW_PATH: newPath },
-                    stdio: 'ignore',
-                });
-                log(`[OK] 已创建: ${batPath}`, 'green');
-                log(`[OK] 已加入 PATH: ${INSTALL_DIR}`, 'green');
-                log('  请重启终端后使用 "agent-lens" 命令', 'dim');
-            } else {
-                log(`[OK] 已创建: ${batPath} (已在 PATH 中)`, 'green');
+        removeTree(updateRoot);
+        stageApplication(PROJECT_DIR, stagedAppDir);
+        log(`[OK] 程序已暂存到 ${stagedAppDir}`, 'green');
+
+        console.log('');
+        log('安装生产运行依赖（省略开发依赖）...', 'cyan');
+        const runtimeDependency = installRuntimeDependencies(stagedAppDir);
+        log(`[OK] 运行依赖安装完成（SQLite: ${runtimeDependency.backend}）`, 'green');
+
+        console.log('');
+        log('停止旧版服务并迁移运行数据...', 'cyan');
+        await stopProcessesForUpgrade();
+
+        if (fs.existsSync(LEGACY_INSTALL_RUNTIME_PATHS.rootDir) &&
+            path.resolve(LEGACY_INSTALL_RUNTIME_PATHS.rootDir) !== path.resolve(INSTALL_ROOT)) {
+            const migration = migrateLegacyRuntimeData(LEGACY_INSTALL_RUNTIME_PATHS, INSTALL_RUNTIME_PATHS);
+            if (migration.copied.length > 0) {
+                log(`[OK] 已迁移 ${migration.copied.length} 个旧版运行数据文件`, 'green');
             }
-        } catch (e) {
-            log(`[OK] 已创建: ${batPath}`, 'green');
-            log(`[WARN] 自动加入 PATH 失败（可能需要管理员权限）`, 'yellow');
-            log(`  手动添加: 右键此电脑 → 属性 → 高级系统设置 → 环境变量 → Path → 新建`, 'dim');
-            log(`  路径: ${INSTALL_DIR}`, 'dim');
-        }
-    } else {
-        // Unix: 创建符号链接到 ~/.local/bin（XDG 规范）
-        const localBin = path.join(os.homedir(), '.local', 'bin');
-        mkdirp(localBin);
-        const symlinkPath = path.join(localBin, 'agent-lens');
-        try {
-            if (fs.existsSync(symlinkPath)) fs.unlinkSync(symlinkPath);
-            fs.symlinkSync(cliPath, symlinkPath);
-            fs.chmodSync(cliPath, 0o755);
-            log(`[OK] 已创建链接: ${symlinkPath}`, 'green');
-            if (!process.env.PATH.includes(localBin)) {
-                log(`[WARN] 请确保 ${localBin} 在 PATH 中`, 'yellow');
+            if (migration.conflicts.length > 0) {
+                log(`[WARN] ${migration.conflicts.length} 个旧版文件与现有数据冲突，已保留原目录且未覆盖`, 'yellow');
+                log(`  旧目录: ${LEGACY_INSTALL_RUNTIME_PATHS.rootDir}`, 'dim');
             }
-        } catch (e) {
-            log(`[WARN] 创建链接失败: ${e.message}`, 'yellow');
         }
-    }
 
-    // 7. 注册系统服务并启动
-    console.log('');
-    log('配置系统服务...', 'cyan');
-    const serviceReady = platformAction('install');
+        const projectsJson = INSTALL_RUNTIME_PATHS.projectsFile;
+        if (!fs.existsSync(projectsJson)) fs.writeFileSync(projectsJson, '{}', 'utf8');
 
-    if (serviceReady !== false) {
-        const backend = getServiceBackend();
-        // Windows 重新安装时必须重启旧 daemon，否则内存中仍是旧版本代码。
-        if (backend === 'windows-startup') {
-            cmdStop(INSTALL_DIR);
-            await waitForPortClosed(DEFAULT_PORT);
+        backupDir = activateStagedApplication(stagedAppDir, INSTALL_DIR, INSTALL_ROOT);
+        removeTree(updateRoot);
+        log(`[OK] 程序已安装到 ${INSTALL_DIR}`, 'green');
+
+        console.log('');
+        log(`更新 Hooks 配置: ${SETTINGS_FILE}`, 'cyan');
+        try {
+            execFileSync(process.execPath, [path.join(INSTALL_DIR, 'install-hooks.js')], { stdio: 'inherit' });
+        } catch (error) {
+            log(`[WARN] 更新 Hooks 配置失败: ${error.message}`, 'yellow');
         }
-        // 启动服务
-        platformAction('start');
-        await new Promise(resolve => setTimeout(resolve, 2000));
 
-        // 检查状态
-        let running = false;
-        if (backend === 'systemd') {
+        try {
+            createCommandEntry();
+        } catch (error) {
+            log(`[WARN] 创建命令入口失败: ${error.message}`, 'yellow');
+        }
+
+        console.log('');
+        log('配置系统服务...', 'cyan');
+        serviceReady = platformAction('install');
+
+        if (serviceReady !== false) {
+            platformAction('start');
+            running = await waitForInstalledDaemon(DEFAULT_PORT, 30000);
+        } else {
+            log('回退到 daemon 模式...', 'yellow');
             try {
-                running = execSync(`systemctl --user is-active ${SERVICE_NAME} 2>/dev/null`, { encoding: 'utf-8' }).trim() === 'active';
-            } catch {}
-        } else if (backend === 'launchd') {
-            try {
-                const out = execSync(`launchctl list | grep ${SERVICE_LABEL}`, { encoding: 'utf-8' }).trim();
-                running = out && !out.split(/\s+/)[0] === '-';
-            } catch {}
-        } else if (backend === 'windows-startup') {
-            // 首次加载 SQLite 和多数据源适配器可能超过 2 秒，等待完整 HTTP 就绪。
-            running = await waitForInstalledDaemon(DEFAULT_PORT, 15000);
+                startInstalledDaemon(DEFAULT_PORT);
+                running = await waitForInstalledDaemon(DEFAULT_PORT, 30000);
+            } catch (_) {
+                running = false;
+            }
         }
 
         if (running) {
             log(`[OK] 服务已启动 → http://localhost:${DEFAULT_PORT}/`, 'green');
-        } else {
-            log('[WARN] 服务未启动，请手动运行:', 'yellow');
-            log(`  agent-lens service start`, 'dim');
-        }
-    } else {
-        // 无可用服务后端，回退到 daemon 模式
-        log('回退到 daemon 模式...', 'yellow');
-        try {
-            cmdStop(INSTALL_DIR);
-            startInstalledDaemon(DEFAULT_PORT);
-            if (await waitForInstalledDaemon(DEFAULT_PORT)) {
-                log(`[OK] 服务已启动 → http://localhost:${DEFAULT_PORT}/`, 'green');
-            } else {
-                log('[WARN] 服务未启动，请手动运行:', 'yellow');
-                log(`  agent-lens start --daemon`, 'dim');
+            if (hadFlatLayout) {
+                try {
+                    const removed = cleanupFlatApplication(INSTALL_ROOT);
+                    log(`[OK] 已清理平铺布局中的 ${removed.length} 个旧程序条目`, 'green');
+                } catch (error) {
+                    log(`[WARN] 平铺旧程序清理未完成: ${error.message}`, 'yellow');
+                }
             }
-        } catch (_) {
-            log('[WARN] 自动启动失败，请手动运行:', 'yellow');
-            log(`  agent-lens start --daemon`, 'dim');
+            if (backupDir) {
+                try { removeTree(backupDir); }
+                catch (error) { log(`[WARN] 上一版程序备份清理失败: ${error.message}`, 'yellow'); }
+            }
+            const rollbackRoot = path.join(INSTALL_ROOT, '.rollback');
+            try {
+                removeTree(rollbackRoot);
+            } catch (error) {
+                log(`[WARN] 历史回滚目录清理失败: ${error.message}`, 'yellow');
+            }
+        } else {
+            log('[ERROR] 新服务未能通过 PID 与 HTTP 就绪检查', 'red');
+            if (backupDir) {
+                const rollback = await rollbackInstalledApplication(backupDir);
+                rolledBack = rollback.restored;
+                rollbackRunning = rollback.running;
+                if (rolledBack) backupDir = null;
+            }
+            if (backupDir) log(`  上一版程序保留在: ${backupDir}`, 'dim');
+            process.exitCode = 1;
         }
+    } catch (error) {
+        removeTree(updateRoot);
+        log(`[ERROR] 安装失败: ${error.message}`, 'red');
+        if (backupDir) {
+            const rollback = await rollbackInstalledApplication(backupDir);
+            if (rollback.restored) backupDir = null;
+        }
+        if (backupDir) log(`上一版程序保留在: ${backupDir}`, 'yellow');
+        process.exitCode = 1;
+        return;
     }
 
-    // 8. 完成提示
     console.log('');
     log('═'.repeat(45), 'dim');
-    log('安装完成！', 'bright');
+    if (running) log('安装完成！', 'bright');
+    else if (rolledBack) log(`新版本安装失败，已恢复上一版${rollbackRunning ? '并重新启动服务' : ''}`, 'yellow');
+    else log('程序文件已安装，但服务启动失败', 'yellow');
     console.log('');
     log('使用方式:', 'yellow');
     if (serviceReady !== false) {
@@ -807,6 +698,7 @@ async function cmdInstall() {
     log('    agent-lens service status    查看状态', 'dim');
     console.log('');
     log(`文档: ${INSTALL_DIR}/README.md`, 'dim');
+    log(`运行数据: ${INSTALL_ROOT}`, 'dim');
     log('═'.repeat(45), 'dim');
 }
 
@@ -984,40 +876,40 @@ async function cmdUninstall() {
         log('[SKIP] 无需停止（未运行）', 'dim');
     }
 
-    // 2. 从 settings.json 移除 hooks 配置
-    log(`清理配置: ${SETTINGS_FILE}`, 'cyan');
-    try {
-        if (fs.existsSync(SETTINGS_FILE)) {
-            const settings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf-8'));
-            if (settings.hooks) {
-                const agentLensMarker = 'agent-lens';
-                function removeAgentLensHooks(hookArray) {
-                    if (!Array.isArray(hookArray)) return [];
-                    return hookArray.filter(entry => {
-                        if (!entry || !entry.hooks) return true;
-                        return !entry.hooks.some(h => h.command && h.command.includes(agentLensMarker));
-                    });
-                }
-                settings.hooks.PreToolUse = removeAgentLensHooks(settings.hooks.PreToolUse);
-                settings.hooks.PostToolUse = removeAgentLensHooks(settings.hooks.PostToolUse);
-                // Clean up empty hook arrays
-                if ((!settings.hooks.PreToolUse || settings.hooks.PreToolUse.length === 0) &&
-                    (!settings.hooks.PostToolUse || settings.hooks.PostToolUse.length === 0)) {
-                    delete settings.hooks;
-                }
-                fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2));
-                log('[OK] agent-lens hooks 配置已移除', 'green');
-            } else {
-                log('[SKIP] 未找到 hooks 配置', 'dim');
-            }
-        } else {
-            log('[SKIP] settings.json 不存在', 'dim');
+    // 2. 清理命令入口和 PATH
+    log('清理命令入口...', 'cyan');
+    if (isWin()) {
+        try {
+            setWindowsUserPath(INSTALL_BIN_DIR, true);
+            log('[OK] 已从用户 PATH 移除 AgentLens 安装路径', 'green');
+        } catch (error) {
+            log(`[WARN] 清理用户 PATH 失败: ${error.message}`, 'yellow');
         }
+    } else {
+        const symlinkPath = path.join(os.homedir(), '.local', 'bin', 'agent-lens');
+        try {
+            if (fs.existsSync(symlinkPath) && fs.lstatSync(symlinkPath).isSymbolicLink()) {
+                fs.unlinkSync(symlinkPath);
+                log(`[OK] 已移除命令链接: ${symlinkPath}`, 'green');
+            }
+        } catch (error) {
+            log(`[WARN] 清理命令链接失败: ${error.message}`, 'yellow');
+        }
+    }
+
+    // 3. 从所有支持工具移除 hooks 配置与 Codex 信任状态
+    log('清理 Claude Code、Codex 和 Cursor Hooks 配置...', 'cyan');
+    try {
+        const installedHookManager = path.join(INSTALL_DIR, 'install-hooks.js');
+        const hookManager = fs.existsSync(installedHookManager)
+            ? installedHookManager
+            : path.join(__dirname, 'install-hooks.js');
+        execFileSync(process.execPath, [hookManager, '--uninstall'], { stdio: 'inherit' });
     } catch (e) {
         log(`[WARN] 清理配置失败: ${e.message}`, 'yellow');
     }
 
-    // 3. 删除安装根目录
+    // 4. 删除安装根目录
     log(`删除目录: ${INSTALL_ROOT}`, 'cyan');
     if (fs.existsSync(INSTALL_ROOT)) {
         rimraf(INSTALL_ROOT);
@@ -1026,7 +918,7 @@ async function cmdUninstall() {
         log('[SKIP] 目录不存在', 'dim');
     }
 
-    // 4. npm unlink -g
+    // 5. npm unlink -g
     log('执行 npm unlink -g agent-lens ...', 'cyan');
     try {
         execSync('npm unlink -g @z7ping/agent-lens', { stdio: 'ignore' });
@@ -1054,11 +946,236 @@ async function cmdStatus(baseDir) {
             try { fs.unlinkSync(getPidFile(baseDir)); } catch (_) {}
         }
         if (await isPortListening(DEFAULT_PORT)) {
-            log(`✅ 运行中  端口: ${DEFAULT_PORT}（PID 文件缺失或已过期）`, 'green');
+            log(`⚠️ 端口 ${DEFAULT_PORT} 已被占用，但 AgentLens PID 文件缺失或已过期`, 'yellow');
         } else {
             log('未运行', 'yellow');
         }
     }
+}
+
+// ─── 安装与迁移辅助函数 ──────────────────────────────────────────
+
+function ensureFrontendBuild(projectDir) {
+    const distIndex = path.join(projectDir, 'dist', 'index.html');
+    if (fs.existsSync(distIndex)) return;
+    log('dist/ 不存在，正在构建前端...', 'yellow');
+    execSync('npm run build', { cwd: projectDir, stdio: 'inherit' });
+    if (!fs.existsSync(distIndex)) throw new Error('前端构建完成后仍缺少 dist/index.html');
+}
+
+function installRuntimeDependencies(appDir) {
+    execSync('npm install --omit=dev --no-audit --no-fund --package-lock=false --registry=https://registry.npmjs.org/', {
+        cwd: appDir,
+        stdio: 'inherit',
+    });
+
+    const nativeProbe = "const Database=require('better-sqlite3');const db=new Database(':memory:');db.close()";
+    try {
+        execFileSync(process.execPath, ['-e', nativeProbe], { cwd: appDir, stdio: 'ignore' });
+        return { backend: 'better-sqlite3' };
+    } catch (_) {
+        log('检测到 better-sqlite3 不可用，正在尝试批准并重建...', 'yellow');
+    }
+
+    try {
+        try {
+            execSync('npm install-scripts approve better-sqlite3', { cwd: appDir, stdio: 'inherit' });
+        } catch (_) {
+            // 旧版 npm 没有 install-scripts 子命令，直接尝试 rebuild。
+        }
+        execSync('npm rebuild better-sqlite3 --foreground-scripts', { cwd: appDir, stdio: 'inherit' });
+        execFileSync(process.execPath, ['-e', nativeProbe], { cwd: appDir, stdio: 'ignore' });
+        return { backend: 'better-sqlite3' };
+    } catch (_) {
+        try {
+            execFileSync(process.execPath, ['-e', "require.resolve('sql.js')"], { cwd: appDir, stdio: 'ignore' });
+            log('[WARN] better-sqlite3 不可用，将使用 sql.js 回退', 'yellow');
+            return { backend: 'sql.js' };
+        } catch (error) {
+            throw new Error(`SQLite 运行依赖不可用: ${error.message}`);
+        }
+    }
+}
+
+function readPidFile(pidFile) {
+    try {
+        if (!fs.existsSync(pidFile)) return null;
+        const pid = parseInt(fs.readFileSync(pidFile, 'utf8').trim(), 10);
+        return Number.isInteger(pid) && pid > 0 ? pid : null;
+    } catch (_) {
+        return null;
+    }
+}
+
+function stopPidFile(pidFile, label) {
+    const pid = readPidFile(pidFile);
+    if (!pid) return false;
+    if (!isProcessAlive(pid)) {
+        try { fs.unlinkSync(pidFile); } catch (_) {}
+        return false;
+    }
+    try {
+        process.kill(pid, 'SIGTERM');
+        try { fs.unlinkSync(pidFile); } catch (_) {}
+        log(`[OK] 已停止${label}进程 (PID: ${pid})`, 'green');
+        return true;
+    } catch (error) {
+        log(`[WARN] 无法停止${label}进程 ${pid}: ${error.message}`, 'yellow');
+        return false;
+    }
+}
+
+function stopKnownWindowsServerProcesses() {
+    if (!isWin()) return [];
+    const knownRoots = [...new Set([
+        INSTALL_ROOT,
+        LEGACY_INSTALL_RUNTIME_PATHS.rootDir,
+    ].map(value => path.resolve(value).replace(/\\/g, '/').toLowerCase()))];
+    const script = [
+        '$roots = ConvertFrom-Json $env:AGENT_LENS_KNOWN_ROOTS_JSON',
+        '$currentPid = [int]$env:AGENT_LENS_CURRENT_PID',
+        'Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne $currentPid -and $_.CommandLine -and $_.CommandLine -match "server\\.js" } | ForEach-Object {',
+        '  $command = ($_.CommandLine -replace "\\\\", "/").ToLowerInvariant()',
+        '  $matched = $false',
+        '  foreach ($root in $roots) { if ($command.Contains([string]$root)) { $matched = $true; break } }',
+        '  if ($matched) { Stop-Process -Id $_.ProcessId -Force; Write-Output $_.ProcessId }',
+        '}',
+    ].join('\n');
+    try {
+        const output = execFileSync('powershell.exe', [
+            '-NoProfile',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-Command',
+            script,
+        ], {
+            env: {
+                ...process.env,
+                AGENT_LENS_KNOWN_ROOTS_JSON: JSON.stringify(knownRoots),
+                AGENT_LENS_CURRENT_PID: String(process.pid),
+            },
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'ignore'],
+        });
+        return output.split(/\r?\n/).map(value => parseInt(value.trim(), 10)).filter(Number.isInteger);
+    } catch (_) {
+        return [];
+    }
+}
+
+async function stopProcessesForUpgrade() {
+    const backend = getServiceBackend();
+    if (backend === 'systemd' || backend === 'launchd') {
+        try { platformAction('stop'); } catch (_) {}
+    }
+    stopPidFile(INSTALL_RUNTIME_PATHS.pidFile, '当前安装');
+    if (path.resolve(LEGACY_INSTALL_RUNTIME_PATHS.pidFile) !== path.resolve(INSTALL_RUNTIME_PATHS.pidFile)) {
+        stopPidFile(LEGACY_INSTALL_RUNTIME_PATHS.pidFile, '旧版安装');
+    }
+    const stoppedWindowsPids = stopKnownWindowsServerProcesses();
+    if (stoppedWindowsPids.length > 0) {
+        log(`[OK] 已清理旧版 Windows daemon: ${stoppedWindowsPids.join(', ')}`, 'green');
+    }
+    if (!await waitForPortClosed(DEFAULT_PORT, 10000)) {
+        throw new Error(`端口 ${DEFAULT_PORT} 仍被占用，请先停止占用该端口的进程`);
+    }
+}
+
+async function rollbackInstalledApplication(backupDir) {
+    if (!backupDir || !fs.existsSync(backupDir)) return { restored: false, running: false };
+
+    log('正在恢复上一版程序...', 'yellow');
+    try {
+        try {
+            await stopProcessesForUpgrade();
+        } catch (error) {
+            log(`[WARN] 回滚前停止失败服务时出现问题: ${error.message}`, 'yellow');
+        }
+
+        const restored = restoreBackupApplication(backupDir, INSTALL_DIR, INSTALL_ROOT);
+        if (!restored) return { restored: false, running: false };
+        removeTree(path.join(INSTALL_ROOT, '.rollback'));
+        log('[OK] 上一版程序已恢复', 'green');
+
+        let launchedByService = false;
+        try {
+            launchedByService = platformAction('start') !== false;
+        } catch (error) {
+            log(`[WARN] 上一版系统服务启动失败，将回退到 daemon: ${error.message}`, 'yellow');
+        }
+        if (!launchedByService) startInstalledDaemon(DEFAULT_PORT);
+
+        const running = await waitForInstalledDaemon(DEFAULT_PORT, 30000);
+        if (running) log(`[OK] 上一版服务已恢复 → http://localhost:${DEFAULT_PORT}/`, 'green');
+        else log('[WARN] 上一版程序已恢复，但服务需要手动启动', 'yellow');
+        return { restored: true, running };
+    } catch (error) {
+        log(`[ERROR] 自动回滚失败: ${error.message}`, 'red');
+        return { restored: false, running: false };
+    }
+}
+
+function setWindowsUserPath(binDir, removeOnly = false) {
+    const userPath = execSync('reg query HKCU\\Environment /v PATH 2>nul', {
+        encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'ignore'],
+    }).trim();
+    const pathMatch = userPath.match(/PATH\s+REG_(?:EXPAND_)?SZ\s+(.+)/);
+    const currentParts = pathMatch ? pathMatch[1].trim().split(';').filter(Boolean) : [];
+    const obsoletePaths = new Set([
+        INSTALL_ROOT,
+        INSTALL_DIR,
+        FLAT_INSTALL_RUNTIME_PATHS.appDir,
+        LEGACY_INSTALL_RUNTIME_PATHS.rootDir,
+        LEGACY_INSTALL_RUNTIME_PATHS.appDir,
+        INSTALL_BIN_DIR,
+    ].map(value => path.resolve(value).toLowerCase()));
+    const retained = currentParts.filter(value => {
+        try { return !obsoletePaths.has(path.resolve(value).toLowerCase()); }
+        catch (_) { return true; }
+    });
+    const newParts = removeOnly ? retained : [binDir, ...retained];
+    const newPath = newParts.join(';');
+    execFileSync('powershell.exe', [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-Command',
+        "[Environment]::SetEnvironmentVariable('Path', $env:AGENT_LENS_NEW_PATH, 'User')",
+    ], {
+        env: { ...process.env, AGENT_LENS_NEW_PATH: newPath },
+        stdio: 'ignore',
+    });
+    return currentParts.join(';').toLowerCase() !== newPath.toLowerCase();
+}
+
+function createCommandEntry() {
+    const cliPath = path.join(INSTALL_DIR, 'cli.js');
+    if (isWin()) {
+        mkdirp(INSTALL_BIN_DIR);
+        const batPath = path.join(INSTALL_BIN_DIR, 'agent-lens.cmd');
+        const batContent = `@echo off\r\n"${process.execPath}" "${cliPath}" %*\r\n`;
+        fs.writeFileSync(batPath, batContent, 'utf8');
+        log(`[OK] 已创建: ${batPath}`, 'green');
+        try {
+            const pathChanged = setWindowsUserPath(INSTALL_BIN_DIR);
+            if (pathChanged) log('  PATH 已更新，请重启终端后使用 agent-lens', 'dim');
+        } catch (error) {
+            log(`[WARN] 自动更新 PATH 失败: ${error.message}`, 'yellow');
+            log(`  请手动添加: ${INSTALL_BIN_DIR}`, 'dim');
+        }
+        return batPath;
+    }
+
+    const localBin = path.join(os.homedir(), '.local', 'bin');
+    mkdirp(localBin);
+    const symlinkPath = path.join(localBin, 'agent-lens');
+    if (fs.existsSync(symlinkPath)) fs.unlinkSync(symlinkPath);
+    fs.symlinkSync(cliPath, symlinkPath);
+    fs.chmodSync(cliPath, 0o755);
+    log(`[OK] 已创建链接: ${symlinkPath}`, 'green');
+    if (!process.env.PATH.includes(localBin)) log(`[WARN] 请确保 ${localBin} 在 PATH 中`, 'yellow');
+    return symlinkPath;
 }
 
 // ─── package 命令 ────────────────────────────────────────────────
@@ -1157,14 +1274,14 @@ function showHelp() {
 
 // ─── 主入口 ──────────────────────────────────────────────────────
 
-function main() {
+async function main() {
     const args = process.argv.slice(2);
     const command = args[0];
     const cmdArgs = args.slice(1);
 
     switch (command) {
         case 'install':
-            cmdInstall();
+            await cmdInstall();
             break;
         case 'start':
             // start 命令使用项目目录（cli.js 所在目录）
@@ -1174,13 +1291,13 @@ function main() {
             cmdStop(PROJECT_DIR);
             break;
         case 'uninstall':
-            cmdUninstall();
+            await cmdUninstall();
             break;
         case 'service':
-            cmdService(cmdArgs[0]);
+            await Promise.resolve(cmdService(cmdArgs[0]));
             break;
         case 'status':
-            cmdStatus(PROJECT_DIR);
+            await cmdStatus(PROJECT_DIR);
             break;
         case 'package':
             cmdPackage(cmdArgs);
@@ -1200,4 +1317,7 @@ function main() {
     }
 }
 
-main();
+main().catch((error) => {
+    log(`[ERROR] ${error.message}`, 'red');
+    process.exitCode = 1;
+});

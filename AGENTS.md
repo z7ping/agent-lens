@@ -130,12 +130,12 @@ server/adapters/
 
 ## 运行时数据
 
-源码运行时使用项目根目录 `.agent-lens/`；安装后程序和运行数据全部统一放在用户主目录 `~/.agent-lens/`，程序文件直接位于根目录，不使用 AppData 或 XDG 目录。
+源码运行时使用项目根目录 `.agent-lens/`；安装后统一使用用户主目录 `~/.agent-lens/`，程序和生产依赖放在 `app/`，Windows 命令入口放在 `bin/`，运行数据保留在根目录的 `data/`、`logs/`、`state/`、`run/`。安装器兼容当前平铺布局和更早的 AppData/XDG 布局。
 
 - `.agent-lens/data/projects.json` — 项目注册表：映射 `projectKey` 到 `{cwd, name, last_seen}`
 - `.agent-lens/logs/<projectKey>.jsonl` — 仅追加日志文件，每个工具调用一个 JSON 对象
 - `.agent-lens/state/<projectKey>.json` — 临时调用栈状态（执行期间活跃读写）
-- `dist/` — Vite 构建输出（生产环境使用）
+- `.agent-lens/app/dist/` — 安装后的 Vite 构建输出（生产环境使用）
 - `.agent-lens/run/server.pid` — 服务进程 PID 文件
 - `.agent-lens/data/agent-lens.db` — SQLite 数据库，存储 sessions、daily_stats、recent_errors、timeline 表
 

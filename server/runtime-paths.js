@@ -15,6 +15,56 @@ function getInstalledRoot(options = {}) {
   return path.join(homeDir, '.agent-lens');
 }
 
+function getFlatInstalledRuntimePaths(options = {}) {
+  const rootDir = options.rootDir || getInstalledRoot(options);
+  return buildPaths({
+    rootDir,
+    appDir: rootDir,
+    binDir: path.join(rootDir, 'bin'),
+    dataDir: path.join(rootDir, 'data'),
+    logsDir: path.join(rootDir, 'logs'),
+    stateDir: path.join(rootDir, 'state'),
+    runDir: path.join(rootDir, 'run'),
+  });
+}
+
+function getLegacyInstalledRuntimePaths(options = {}) {
+  const platform = options.platform || process.platform;
+  const homeDir = options.homeDir || os.homedir();
+  let rootDir;
+  let stateRoot;
+
+  if (platform === 'win32') {
+    rootDir = path.join(
+      options.localAppData || process.env.LOCALAPPDATA || path.join(homeDir, 'AppData', 'Local'),
+      'AgentLens',
+    );
+    stateRoot = rootDir;
+  } else if (platform === 'darwin') {
+    rootDir = path.join(homeDir, 'Library', 'Application Support', 'AgentLens');
+    stateRoot = rootDir;
+  } else {
+    rootDir = path.join(
+      options.xdgDataHome || process.env.XDG_DATA_HOME || path.join(homeDir, '.local', 'share'),
+      'agent-lens',
+    );
+    stateRoot = path.join(
+      options.xdgStateHome || process.env.XDG_STATE_HOME || path.join(homeDir, '.local', 'state'),
+      'agent-lens',
+    );
+  }
+
+  return buildPaths({
+    rootDir,
+    appDir: path.join(rootDir, 'app'),
+    binDir: path.join(rootDir, 'bin'),
+    dataDir: path.join(rootDir, 'data'),
+    logsDir: path.join(stateRoot, 'logs'),
+    stateDir: path.join(stateRoot, 'state'),
+    runDir: path.join(stateRoot, 'run'),
+  });
+}
+
 function getRuntimePaths(options = {}) {
   const layout = options.layout || (isSourceLayout(options.baseDir || __dirname) ? 'source' : 'installed');
   const projectDir = options.projectDir || getProjectDir(options.baseDir || __dirname);
@@ -24,6 +74,7 @@ function getRuntimePaths(options = {}) {
     return buildPaths({
       rootDir,
       appDir: projectDir,
+      binDir: null,
       dataDir: path.join(rootDir, 'data'),
       logsDir: path.join(rootDir, 'logs'),
       stateDir: path.join(rootDir, 'state'),
@@ -34,7 +85,8 @@ function getRuntimePaths(options = {}) {
   const rootDir = options.rootDir || getInstalledRoot(options);
   return buildPaths({
     rootDir,
-    appDir: rootDir,
+    appDir: path.join(rootDir, 'app'),
+    binDir: path.join(rootDir, 'bin'),
     dataDir: path.join(rootDir, 'data'),
     logsDir: path.join(rootDir, 'logs'),
     stateDir: path.join(rootDir, 'state'),
@@ -45,6 +97,7 @@ function getRuntimePaths(options = {}) {
 function buildPaths(dirs) {
   return {
     ...dirs,
+    binDir: Object.prototype.hasOwnProperty.call(dirs, 'binDir') ? dirs.binDir : path.join(dirs.rootDir, 'bin'),
     hooksDir: path.join(dirs.appDir, 'hooks'),
     adaptersDir: path.join(dirs.appDir, 'adapters'),
     importersDir: path.join(dirs.appDir, 'importers'),
@@ -56,7 +109,7 @@ function buildPaths(dirs) {
 }
 
 function ensureRuntimeDirs(paths = getRuntimePaths()) {
-  for (const dir of [paths.rootDir, paths.appDir, paths.dataDir, paths.logsDir, paths.stateDir, paths.runDir]) {
+  for (const dir of [paths.rootDir, paths.binDir, paths.dataDir, paths.logsDir, paths.stateDir, paths.runDir].filter(Boolean)) {
     fs.mkdirSync(dir, { recursive: true });
   }
 }
@@ -67,4 +120,6 @@ module.exports = {
   isSourceLayout,
   getProjectDir,
   getInstalledRoot,
+  getFlatInstalledRuntimePaths,
+  getLegacyInstalledRuntimePaths,
 };

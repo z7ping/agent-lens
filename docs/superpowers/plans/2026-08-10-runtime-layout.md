@@ -1,8 +1,10 @@
 # Runtime Layout Implementation Plan
 
+> 状态：已由 `docs/superpowers/specs/2026-08-10-runtime-layout-design.md` 中的分层安装布局取代。当前实现保留 `~/.agent-lens` 统一根目录，但程序位于 `app/`、Windows 命令入口位于 `bin/`，运行数据位于根目录的 `data/`、`logs/`、`state/`、`run/`，并包含历史布局迁移。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Keep the installed application and all runtime files under `~/.agent-lens/`.
+**Goal:** Keep the installed application and all runtime files under `~/.agent-lens/` while separating `app/`, `bin/`, and runtime data.
 
 **Architecture:** Add `server/runtime-paths.js` as the single source of truth for runtime paths. Update CLI install/start/stop, HTTP server, adapters, hooks, importers, scripts, and docs to consume these paths.
 
@@ -17,7 +19,7 @@
 - Create: `test/runtime-paths.test.js`
 
 - [ ] Write tests that assert source layout uses `<repo>/.agent-lens/{data,logs,state,run}`.
-- [ ] Write tests that assert installed layout uses `~/.agent-lens/{data,logs,state,run}` with app files at the root.
+- [ ] Write tests that assert installed layout uses `~/.agent-lens/app` for program files, `bin/` for Windows commands, and `~/.agent-lens/{data,logs,state,run}` for runtime data.
 - [ ] Implement `getRuntimePaths()` with injectable `homeDir` and `projectDir`.
 
 ### Task 2: Runtime Consumers
@@ -49,10 +51,10 @@
 - Modify: `server/install-hooks.js`
 - Modify: `server/sources-status.js`
 
-- [ ] Install app files directly into `~/.agent-lens/`.
+- [ ] Stage and install app files into `~/.agent-lens/app/`.
 - [ ] Install runtime data into `data/`, `logs/`, `state/`, and `run/`.
-- [ ] Create command shims from `~/.agent-lens/`.
-- [ ] Point hook commands at `~/.agent-lens/hooks/*.js`.
+- [ ] Create Windows command shims from `~/.agent-lens/bin/`.
+- [ ] Point hook commands at `~/.agent-lens/app/hooks/*.js`.
 - [ ] Use `run/server.pid` for start/stop/status.
 
 ### Task 4: Docs And Verification

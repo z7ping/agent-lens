@@ -43,7 +43,7 @@ function getCurrentChangelog(version, changelogPath = getChangelogPath()) {
             .filter(line => line.startsWith('- '))
             .map(line => line.slice(2).trim())
             .filter(Boolean)
-            .slice(0, 8);
+            .slice(0, 20);
         return { current_version: match[0].replace(/^##\s+/, '').trim(), items };
     } catch (_) {
         return { current_version: `v${version}`, items: [] };
