@@ -8,6 +8,8 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { ensureRuntimeDirs, getRuntimePaths } = require('../runtime-paths');
+const { sanitizeLogRecord } = require('../privacy');
+const { makeEventId } = require('../event-model');
 
 const BASE_DIR = path.join(__dirname, '..');
 const RUNTIME_PATHS = getRuntimePaths({ baseDir: BASE_DIR });
@@ -248,18 +250,63 @@ class BaseAdapter {
         state.seq += 1;
         const seq = state.seq;
 
-        const parentSeq = state.stack.length > 0 ? state.stack[state.stack.length - 1].seq : null;
+        const parentEntry = state.stack.length > 0 ? state.stack[state.stack.length - 1] : null;
+        const parentSeq = parentEntry ? parentEntry.seq : null;
+        const sessionId = data.session_id || data.conversation_id || '';
+        const callId = data.call_id || data.tool_use_id || `${sessionId || 'session'}:${seq}`;
+        const tsStart = new Date().toISOString();
 
         const entry = {
             seq: seq,
             tool_name: toolName,
-            ts_start: new Date().toISOString(),
+            ts_start: tsStart,
             parent_seq: parentSeq,
-            cwd: cwd
+            cwd: cwd,
+            call_id: callId,
+            parent_event_id: parentEntry?.event_id || null,
         };
+        entry.event_id = makeEventId({
+            source: this.name,
+            session_id: sessionId,
+            event_type: 'tool_use',
+            call_id: callId,
+            seq,
+            timestamp: tsStart,
+        });
         state.stack.push(entry);
 
         this.writeState(stateFile, state);
+
+        try {
+            const { insertTimeline } = require('../agent-lens-db');
+            const rawInput = data.tool_input || data.input || {};
+            const toolInput = typeof this.summarizeInput === 'function'
+                ? this.summarizeInput(toolName, rawInput)
+                : rawInput;
+            insertTimeline({
+                event_id: entry.event_id,
+                source: this.name,
+                session_id: sessionId,
+                timestamp: tsStart,
+                source_sequence: seq,
+                seq,
+                event_type: 'tool_use',
+                role: 'tool_use',
+                call_id: callId,
+                tool_use_id: callId,
+                tool_name: toolName,
+                tool_input: toolInput,
+                project_key: projectKey,
+                parent_seq: parentSeq,
+                parent_event_id: entry.parent_event_id,
+                agent_id: data.agent_id || data.subagent_id || null,
+                turn_id: data.turn_id || null,
+                capture_method: 'runtime_hook',
+                visibility: 'captured',
+                confidence: 'confirmed',
+                missing_reason: (!data.agent_id && !data.subagent_id && !data.turn_id) ? 'Hook 未提供 Agent 或 Turn 标识' : null,
+            });
+        } catch (_) {}
     }
 
     /**
@@ -343,9 +390,10 @@ class BaseAdapter {
      * @param {number} [opts.durationMs]
      * @param {string} [opts.error]
      */
-    _writeToSqlite({ sessionId, projectKey, toolName, ts, success, durationMs, error }) {
+    _writeToSqlite({ sessionId, projectKey, toolName, ts, success, durationMs, error, inserted = true }) {
         try {
             const agentLensDb = require('../agent-lens-db');
+            if (!inserted) return;
             const date = ts ? ts.slice(0, 10) : '';
 
             // 按天统计
@@ -358,19 +406,16 @@ class BaseAdapter {
 
             // session 摘要（累加 total_duration_ms）
             if (sessionId) {
-                const existingDuration = agentLensDb.getSessionDuration(sessionId);
-                agentLensDb.upsertSession({
-                    session_id: sessionId,
-                    project_key: projectKey,
-                    source: this.name,
-                    start_time: ts,
-                    end_time: ts,
-                    tool_count: 1,
-                    error_count: success ? 0 : 1,
-                    total_duration_ms: existingDuration + (durationMs || 0),
-                });
+                agentLensDb.recomputeSession(this.name, sessionId, projectKey);
             }
         } catch (_) {}
+    }
+
+    /** 写入经过统一脱敏策略处理的 JSONL 记录。 */
+    appendLogRecord(projectKey, record) {
+        const logFile = this.getLogFile(projectKey);
+        const safeRecord = sanitizeLogRecord(record);
+        fs.appendFileSync(logFile, JSON.stringify(safeRecord) + '\n', 'utf-8');
     }
 
     /**

@@ -3,7 +3,7 @@
  */
 
 import { CONFIG, escapeHtml } from './config.js';
-import { fetchProjects, fetchSessions, fetchSessionLogs, checkHookStatus, fetchSourceStatus, fetchAppInfo } from './utils.js';
+import { fetchProjects, fetchSessions, fetchSessionLogs, checkHookStatus, fetchSourceStatus, fetchCapabilities, fetchAppInfo } from './utils.js';
 import { renderCallChain } from './callchain/index.js';
 import { initDashboard, loadDashboardData } from './dashboard/index.js';
 import { initOverview, loadOverview } from './overview/index.js';
@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   startAutoRefresh();
   checkStatus();
   updateSourceStatus();
+  updateCapabilityMatrix();
 });
 
 async function initAppInfo() {
@@ -344,6 +345,44 @@ async function updateSourceStatus() {
   });
 }
 
+async function updateCapabilityMatrix() {
+  const root = document.getElementById('capabilityMatrix');
+  if (!root) return;
+  const result = await fetchCapabilities();
+  const sources = Array.isArray(result?.sources) ? result.sources : [];
+  if (!sources.length) {
+    root.innerHTML = '<div class="capability-empty">暂时无法读取数据完整度说明</div>';
+    return;
+  }
+  const statusLabel = { supported: '已捕获', partial: '部分可见', unavailable: '不可观察' };
+  const policy = result?.capture_policy || {};
+  const modeLabel = { off: '关闭', redacted: '脱敏采集', full: '完整采集' };
+  root.innerHTML = `
+    <div class="capture-policy-summary">
+      <strong>当前采集策略</strong>
+      <span>提示词：${modeLabel[policy.prompt] || '未知'}</span>
+      <span>工具数据：${modeLabel[policy.tool] || '未知'}</span>
+      <span>配置：${modeLabel[policy.config] || '未知'}</span>
+      <span>环境：${modeLabel[policy.environment] || '未知'}</span>
+    </div>
+  ` + sources.map(source => `
+    <section class="capability-source" data-source="${escapeHtml(source.source)}">
+      <div class="capability-source-head">
+        <strong>${escapeHtml(source.label)}</strong>
+        <span class="capability-level ${escapeHtml(source.completeness)}">${source.completeness === 'unavailable' ? '不可用' : source.completeness === 'limited' ? '有限' : '部分完整'}</span>
+      </div>
+      <p>${escapeHtml(source.summary || '')}</p>
+      <div class="capability-items">
+        ${(source.capabilities || []).map(item => `
+          <span class="capability-item ${escapeHtml(item.status)}" title="${escapeHtml(item.reason || '')}">
+            ${escapeHtml(item.label)} · ${statusLabel[item.status] || escapeHtml(item.status)}
+          </span>
+        `).join('')}
+      </div>
+    </section>
+  `).join('');
+}
+
 function updateStatusFromSessions(sessions) {
   let errorCount = 0;
   let slowCount = 0;
@@ -442,7 +481,7 @@ async function loadSessionCalls(card) {
       body.innerHTML = '<div class="text-center py-4 text-neutral-400 text-sm">暂无调用记录</div>';
     } else {
       // 统一口径：会话头"调用"数与执行概览一致（均以 timeline 工具记录为基准）
-      const toolRecords = calls.filter(c => c.role === 'tool_result' || c.role === 'tool_error' || c.tool_name);
+      const toolRecords = calls.filter(c => c.role === 'tool_result' || c.role === 'tool_error');
       const errRecords = toolRecords.filter(c => c.role === 'tool_error' || c.error === true || c.success === false || c.success === 0 || c.error_message || (c.exit_code != null && c.exit_code !== 0));
       card.querySelectorAll('.session-metric').forEach(metric => {
         const label = metric.querySelector('.session-metric-label')?.textContent;

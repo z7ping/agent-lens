@@ -12,6 +12,7 @@ const { queryOverview, scheduleOverviewRefresh } = require('./overview');
 const { detectSourceStatus } = require('./sources-status');
 const { getAppInfo } = require('./app-info');
 const { getRuntimePaths } = require('./runtime-paths');
+const { getCapabilityMatrix } = require('./capabilities');
 
 const RUNTIME_PATHS = getRuntimePaths({ baseDir: __dirname });
 const PROJECT_REGISTRY_FILES = [
@@ -150,8 +151,9 @@ async function handleApiSessions(req, res, params) {
 
         const seen = new Set();
         const unique = allSessions.filter(s => {
-            if (seen.has(s.session_id)) return false;
-            seen.add(s.session_id);
+            const key = s.session_key || `${s.source || 'unknown'}:${s.session_id || ''}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
             return true;
         });
         unique.sort((a, b) => (b.start_time || '').localeCompare(a.start_time || ''));
@@ -472,6 +474,14 @@ function handleApiToolMap(req, res, params) {
     }
 }
 
+function handleApiCapabilities(req, res) {
+    try {
+        sendJson(res, getCapabilityMatrix());
+    } catch (e) {
+        sendJson(res, { error: e.message, sources: [] }, 500);
+    }
+}
+
 async function loadTimelineItems(options = {}) {
     const {
         project = '',
@@ -530,4 +540,4 @@ function handleApiAppInfo(req, res) {
     }
 }
 
-module.exports = { handleApiStats, handleApiTools, handleApiSessions, handleApiTimeline, handleApiSkills, handleApiCompare, handleApiErrors, handleApiToolMap, handleApiSourcesStatus, handleApiOverview, handleApiAppInfo, handleApiProjects, buildProjectIndex, loadTimelineItems };
+module.exports = { handleApiStats, handleApiTools, handleApiSessions, handleApiTimeline, handleApiSkills, handleApiCompare, handleApiErrors, handleApiToolMap, handleApiSourcesStatus, handleApiCapabilities, handleApiOverview, handleApiAppInfo, handleApiProjects, buildProjectIndex, loadTimelineItems };

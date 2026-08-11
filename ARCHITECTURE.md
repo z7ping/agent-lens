@@ -69,7 +69,9 @@ AgentLens 同时使用实时 Hook、历史 JSONL 导入和本地数据库轮询�
 - 历史文件不存在、会话持久化被关闭或格式发生变化时，对话记录可能缺失。
 - 用户消息和助手可见回复不等于模型收到的完整提示输入；系统指令、Developer 指令、项目规则、Skills、工具描述和 Memory 可能未被当前导入器保留。
 - AgentLens 不承诺获得模型未公开的隐藏思维过程。Pi 等来源若在原生日志中公开 thinking，只能按该来源的可见数据展示。
-- 工具参数会按类型摘要，输出与错误会截断，当前 Timeline 不是完整原始事件归档。
+- 工具参数会按类型摘要，输出与错误会截断，Timeline 不是完整原始事件归档。
+- 每条事件使用 `capture_method`、`visibility`、`confidence` 和 `missing_reason` 说明运行时捕获、原生日志、原生数据库、静态发现、推断或不可观察状态。
+- Tool Use 与 Tool Result 是两条关联事件；来源只提供合并工具记录时，会明确标记拆分事件的证据强度与缺失原因。
 
 ---
 
@@ -78,23 +80,32 @@ AgentLens 同时使用实时 Hook、历史 JSONL 导入和本地数据库轮询�
 ```sql
 CREATE TABLE timeline (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  source TEXT NOT NULL,           -- 数据来源：hermes/claude-code/codex/opencode/pi/cursor
-  session_id TEXT NOT NULL,       -- 会话标识
-  timestamp TEXT NOT NULL,        -- ISO 8601 时间戳
-  seq INTEGER,                    -- 序号（hooks适配器使用）
-  role TEXT NOT NULL,             -- user/assistant/tool_result/tool_error
-  tool_name TEXT,                 -- 工具名称（仅tool角色有值）
-  content TEXT,                   -- 消息内容（user/assistant）或工具输出（tool）
-  tool_input TEXT,                -- 工具输入参数JSON
-  success INTEGER,                -- 0=失败 1=成功（仅tool角色）
-  exit_code INTEGER,              -- 退出码（仅bash类工具）
-  duration_ms REAL,               -- 耗时毫秒
-  output_snippet TEXT,            -- 输出摘要（前500字符）
-  error_message TEXT,             -- 错误消息
-  error_type TEXT,                -- 错误分类
-  error_detail TEXT,              -- 错误详情JSON
-  project_key TEXT,               -- 项目标识（工作目录MD5前12位）
-  parent_seq INTEGER              -- 父调用序号（用于重建调用树）
+  event_id TEXT NOT NULL,         -- AgentLens 稳定事件身份
+  source TEXT NOT NULL,           -- 数据来源
+  source_event_id TEXT,           -- 来源原生事件身份
+  session_key TEXT NOT NULL,      -- source + session_id 内部身份
+  session_id TEXT NOT NULL,       -- 来源原生 Session ID
+  agent_id TEXT,
+  turn_id TEXT,
+  parent_event_id TEXT,
+  timestamp TEXT NOT NULL,
+  source_sequence INTEGER,
+  seq INTEGER,                    -- 旧 Hook 序号兼容字段
+  event_type TEXT NOT NULL,
+  role TEXT NOT NULL,             -- 旧 API 兼容语义
+  call_id TEXT,                   -- 关联 Tool Use / Result
+  tool_name TEXT,
+  content TEXT,
+  tool_input TEXT,
+  success INTEGER,
+  duration_ms REAL,
+  project_key TEXT,
+  capture_method TEXT NOT NULL,
+  visibility TEXT NOT NULL,
+  confidence TEXT NOT NULL,
+  missing_reason TEXT,
+  redaction_applied INTEGER,
+  capture_policy TEXT
 );
 ```
 
@@ -104,8 +115,16 @@ CREATE TABLE timeline (
 |------|------|------|
 | `user` | 用户输入的消息 | Hermes、Claude Code/Codex 历史导入、OpenCode、Pi |
 | `assistant` | AI对用户可见的文字回复 | Hermes、Claude Code/Codex 历史导入、OpenCode、Pi |
+| `tool_use` | 工具调用开始及输入摘要 | Hook、原生日志，或由合并记录明确拆分 |
 | `tool_result` | 工具调用成功 | 所有适配器 |
 | `tool_error` | 工具调用失败 | 所有适配器 |
+
+### 身份、去重与迁移
+
+- `sessions` 使用 `session_key = source + session_id` 作为主键，不同来源的同名 Session 不会覆盖。
+- Timeline 以 `event_id` 去重；有原生事件 ID 时优先使用，没有时结合来源顺序、调用 ID 和规范化内容生成稳定摘要。
+- 时间戳只参与排序和展示，不再作为唯一键，因此同一毫秒发生的并行事件可以同时保存。
+- 数据库通过 `schema_meta` 记录 Schema 版本。旧库升级前创建本地备份，迁移在事务中复制、校验行数并替换旧表；失败时回滚。
 
 ---
 
@@ -251,6 +270,20 @@ Pi agent 根目录候选：
 - 统一缩进：call-item 有 ml-4 缩进，与 round-header 对齐
 - 简化样式管理：一条边线控制，不需要分别调整
 
+### 5.5 为什么只监听本机并保护 Hook 写入？
+
+**决策**：HTTP 服务固定绑定 `127.0.0.1`，读取 API 校验回环 Host 与同源 Origin，`/api/hook` 额外要求安装级本机令牌、JSON Content-Type 和请求体上限。
+
+**原因**：任务、提示词、配置路径和工具输出属于本机敏感数据。CORS 只能限制浏览器读取响应，不能替代监听范围和写入认证。
+
+**影响**：当前不支持局域网或公网访问；Vite 开发代理把请求改写为后端同源，额外本机开发来源必须通过 `AGENT_LENS_ALLOWED_ORIGINS` 显式允许。写入令牌保存在运行目录的 `run/hook-token`，不会写入日志或仓库。
+
+### 5.6 为什么默认脱敏而不是默认完整采集？
+
+**决策**：提示词、工具数据和配置默认 `redacted`，环境信息默认 `off`；`full` 只能由用户显式开启。
+
+**原因**：本机存储仍可能被备份、日志分享或其他本机进程读取。入库前脱敏比只在界面遮挡更接近真实的数据最小化。
+
 ---
 
 ## 6. 已知限制
@@ -262,7 +295,7 @@ Pi agent 根目录候选：
 | 实时 Hook 主要只有工具事件 | 新任务对话可能需要等待历史导入 | 使用 JSONL/数据库轮询补齐 |
 | Cursor 无对话历史导入 | 只能复盘工具调用 | 在来源能力矩阵中明确标记 |
 | 提示词组成不完整 | 不能还原全部模型可见输入 | 区分捕获、扫描、诊断、推断和不可观察 |
-| 工具输入输出被摘要 | 不能把 Timeline 当作完整审计日志 | 保留来源引用，敏感原文按需读取 |
+| 工具输入输出被摘要和脱敏 | 不能把 Timeline 当作完整审计日志 | 使用采集策略说明和来源证据，不默认保留敏感原文 |
 | OpenClaw 尚未实现 | 无可用任务数据 | 保持为规划状态 |
 
 ### 6.2 实时性限制
@@ -308,7 +341,7 @@ state.db (messages表)
     └──► hermes plugin (hooks)
             │
             ▼
-         POST /api/hook (实时推送)
+         POST /api/hook (本机令牌保护的实时推送)
             │
             ▼
          agent-lens.db (timeline表)
@@ -322,13 +355,13 @@ Claude Code / Codex / Pi / Cursor
     ├──► PreToolUse hook (prelog.js)
     │       │
     │       ▼
-    │    JSONL文件 (.agent-lens/logs/<projectKey>.jsonl)
+    │    Timeline Tool Use 事件
     │    状态文件 (.agent-lens/state/<projectKey>.json)
     │
     └──► PostToolUse hook (log.js)
             │
             ▼
-         JSONL文件 + POST /api/hook
+         脱敏 JSONL + Timeline Tool Result/Error
             │
             ▼
          agent-lens.db (timeline表)
@@ -519,13 +552,18 @@ server/
 │   ├── claude-code.js       # Claude Code（hooks）
 │   ├── codex.js             # Codex（hooks）
 │   ├── opencode.js          # OpenCode（轮询opencode.db）
-│   ├── pi.js                # Pi（hooks）
+│   ├── pi.js                # Pi（轮询 session JSONL）
 │   ├── cursor.js            # Cursor（hooks）
 │   └── index.js             # 适配器注册表
 ├── hooks/
 │   ├── prelog.js            # PreToolUse hook脚本
 │   └── log.js               # PostToolUse hook脚本
 ├── agent-lens-db.js              # SQLite存储层（timeline表）
+├── migrations.js                 # Schema 版本、备份和无损迁移
+├── event-model.js                # Session/Event 身份与证据规范
+├── privacy.js                    # 采集档位、允许名单和入库前脱敏
+├── security.js                   # 本机 HTTP 边界与 Hook 令牌
+├── capabilities.js               # 各来源采集能力矩阵
 ├── runtime-paths.js          # 开发、安装及历史布局路径契约
 ├── install-layout.js         # 程序暂存、迁移、激活、失败回滚与旧布局清理
 ├── server.js                # HTTP服务

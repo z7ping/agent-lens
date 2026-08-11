@@ -13,6 +13,7 @@ const BaseAdapter = require('../adapters/base');
 const ClaudeCodeAdapter = require('../adapters/claude-code');
 const { claudeCode: paths } = require('../paths');
 const { ensureRuntimeDirs, getRuntimePaths } = require('../runtime-paths');
+const { makeEventId } = require('../event-model');
 
 const RUNTIME_PATHS = getRuntimePaths({ baseDir: path.join(__dirname, '..') });
 ensureRuntimeDirs(RUNTIME_PATHS);
@@ -52,7 +53,9 @@ function parseClaudeLines(lines, ctx = {}) {
     if (!meta.pendingTools) meta.pendingTools = {};
     const pending = meta.pendingTools;
 
-    for (const line of lines) {
+    for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+        const line = lines[lineIndex];
+        const sourceSequence = (ctx.startLine || 0) + lineIndex + 1;
         let entry;
         try { entry = JSON.parse(line); } catch { continue; }
         if (!entry || typeof entry !== 'object' || !entry.type) continue;
@@ -71,7 +74,9 @@ function parseClaudeLines(lines, ctx = {}) {
             if (typeof content === 'string') {
                 const text = content.trim();
                 if (text) {
-                    records.push({ session_id: sessionId, project_key: projectKey, cwd, ts, role: 'user', content: text.substring(0, 2000) });
+                    records.push({ session_id: sessionId, project_key: projectKey, cwd, ts, role: 'user', event_type: 'user', content: text.substring(0, 2000),
+                        source_event_id: entry.uuid || entry.id || `line-${sourceSequence}-user`, source_sequence: sourceSequence,
+                        capture_method: 'native_log', visibility: 'captured', confidence: 'confirmed' });
                 }
             } else if (Array.isArray(content)) {
                 // user 消息中的 tool_result 块 → 配对成工具记录
@@ -91,6 +96,7 @@ function parseClaudeLines(lines, ctx = {}) {
                             cwd,
                             ts,
                             role: isError ? 'tool_error' : 'tool_result',
+                            event_type: isError ? 'tool_error' : 'tool_result',
                             tool_name: toolUse.name || 'unknown',
                             tool_input: ccAdapter.summarizeInput(toolUse.name || '', toolUse.input || {}),
                             success: !isError,
@@ -98,6 +104,12 @@ function parseClaudeLines(lines, ctx = {}) {
                             output_snippet: text ? text.substring(0, 500) : null,
                             error_message: isError && text ? text.substring(0, 500) : null,
                             tool_use_id: toolUseId,
+                            call_id: toolUseId,
+                            source_event_id: toolUseId,
+                            source_sequence: sourceSequence,
+                            parent_event_id: toolUse.useEventId,
+                            capture_method: 'native_log', visibility: 'captured', confidence: 'confirmed',
+                            missing_reason: '原生日志未提供 Agent 或 Turn 标识',
                         });
                         delete pending[toolUseId];
                     } else {
@@ -113,7 +125,18 @@ function parseClaudeLines(lines, ctx = {}) {
                     if (!block) continue;
                     if (block.type === 'tool_use') {
                         // 登记待配对的工具调用
-                        pending[block.id] = { name: block.name || '', input: block.input || {}, ts };
+                        const callId = block.id || `line-${sourceSequence}`;
+                        const useEventId = makeEventId({ source: 'claude-code', session_id: sessionId, event_type: 'tool_use', call_id: callId });
+                        pending[callId] = { name: block.name || '', input: block.input || {}, ts, useEventId, sourceSequence };
+                        records.push({
+                            session_id: sessionId, project_key: projectKey, cwd, ts,
+                            role: 'tool_use', event_type: 'tool_use', tool_name: block.name || 'unknown',
+                            tool_input: ccAdapter.summarizeInput(block.name || '', block.input || {}),
+                            call_id: callId, tool_use_id: callId, source_event_id: callId,
+                            source_sequence: sourceSequence, event_id: useEventId,
+                            capture_method: 'native_log', visibility: 'captured', confidence: 'confirmed',
+                            missing_reason: '原生日志未提供 Agent 或 Turn 标识',
+                        });
                         // 限制大小，淘汰最旧的
                         const keys = Object.keys(pending);
                         while (keys.length > MAX_PENDING_TOOLS) {
@@ -125,7 +148,9 @@ function parseClaudeLines(lines, ctx = {}) {
                     }
                 }
                 if (assistantText.trim()) {
-                    records.push({ session_id: sessionId, project_key: projectKey, cwd, ts, role: 'assistant', content: assistantText.trim().substring(0, 2000) });
+                    records.push({ session_id: sessionId, project_key: projectKey, cwd, ts, role: 'assistant', event_type: 'assistant', content: assistantText.trim().substring(0, 2000),
+                        source_event_id: entry.uuid || entry.id || `line-${sourceSequence}-assistant`, source_sequence: sourceSequence,
+                        capture_method: 'native_log', visibility: 'captured', confidence: 'confirmed' });
                 }
             }
         }
@@ -142,6 +167,7 @@ module.exports = new JsonlImporter({
     rootDir: paths.projectsDir,
     stateFile,
     parseLines: parseClaudeLines,
+    parserVersion: 2,
 });
 
 // 导出纯函数便于测试

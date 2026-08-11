@@ -310,6 +310,16 @@ export async function fetchSourceStatus() {
   }
 }
 
+export async function fetchCapabilities() {
+  try {
+    const res = await fetch(`${CONFIG.API_BASE}/api/capabilities`);
+    if (!res.ok) return { sources: [] };
+    return await res.json();
+  } catch {
+    return { sources: [] };
+  }
+}
+
 /**
  * 从日志数据中提取会话信息
  */

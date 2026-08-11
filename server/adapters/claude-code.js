@@ -36,37 +36,7 @@ class ClaudeCodeAdapter extends BaseAdapter {
      * 处理 PreToolUse 事件：记录 tool_use 到 timeline
      */
     async pre(data) {
-        await super.pre(data);
-
-        if (!data || typeof data !== 'object') return;
-        const toolName = data.tool_name || '';
-        if (!toolName) return;
-
-        const cwd = data.cwd || data.working_directory || process.cwd();
-        const projectKey = this.getProjectKey(cwd);
-        const stateFile = this.getStateFile(projectKey);
-        const state = this.readState(stateFile);
-        const topEntry = state.stack.length > 0 ? state.stack[state.stack.length - 1] : null;
-
-        try {
-            insertTimeline({
-                source: this.name,
-                session_id: data.session_id || '',
-                timestamp: new Date().toISOString(),
-                seq: topEntry ? topEntry.seq : null,
-                role: 'tool_use',
-                tool_name: toolName,
-                content: null,
-                tool_input: data.tool_input || null,
-                success: null,
-                exit_code: null,
-                duration_ms: null,
-                output_snippet: null,
-                error_message: null,
-                project_key: projectKey,
-                parent_seq: topEntry ? topEntry.parent_seq : null,
-            });
-        } catch (_) {}
+        return super.pre(data);
     }
 
     // ─── PostToolUse ───────────────────────────────────────
@@ -149,6 +119,8 @@ class ClaudeCodeAdapter extends BaseAdapter {
         let durationMs = data.duration_ms;
         let parentSeq = null;
         let callSeq = null;
+        let callId = data.call_id || data.tool_use_id || null;
+        let parentEventId = null;
 
         if (toolName) {
             const stateFile = this.getStateFile(projectKey);
@@ -158,6 +130,8 @@ class ClaudeCodeAdapter extends BaseAdapter {
             if (preEntry) {
                 callSeq = preEntry.seq;
                 parentSeq = preEntry.parent_seq;
+                callId = preEntry.call_id || callId;
+                parentEventId = preEntry.event_id || null;
 
                 if (durationMs === null || durationMs === undefined) {
                     try {
@@ -206,20 +180,7 @@ class ClaudeCodeAdapter extends BaseAdapter {
             record.error = errorMsg.substring(0, 500).trim();
         }
 
-        // 写入 JSONL 日志
-        const logFile = this.getLogFile(projectKey);
-        fs.appendFileSync(logFile, JSON.stringify(record) + '\n', 'utf-8');
-
-        // 双写 SQLite（如果数据库存在）
-        this._writeToSqlite({
-            sessionId: data.session_id || '',
-            projectKey,
-            toolName,
-            ts: record.ts,
-            success,
-            durationMs,
-            error: record.error,
-        });
+        this.appendLogRecord(projectKey, record);
 
         // 写入 timeline 表
         try {
@@ -228,12 +189,17 @@ class ClaudeCodeAdapter extends BaseAdapter {
                 const text = response.text || response.content || '';
                 if (typeof text === 'string') outputSnippet = text.substring(0, 500);
             }
-            insertTimeline({
+            const info = insertTimeline({
                 source: this.name,
                 session_id: data.session_id || '',
                 timestamp: record.ts,
+                source_sequence: callSeq,
                 seq: callSeq,
+                event_type: success ? 'tool_result' : 'tool_error',
                 role: success ? 'tool_result' : 'tool_error',
+                call_id: callId,
+                tool_use_id: callId,
+                parent_event_id: parentEventId,
                 tool_name: toolName || null,
                 content: outputSnippet,
                 tool_input: data.tool_input || null,
@@ -244,6 +210,15 @@ class ClaudeCodeAdapter extends BaseAdapter {
                 error_message: record.error || null,
                 project_key: projectKey,
                 parent_seq: parentSeq,
+                agent_id: data.agent_id || data.subagent_id || null,
+                turn_id: data.turn_id || null,
+                capture_method: 'runtime_hook',
+                visibility: 'captured',
+                confidence: 'confirmed',
+            });
+            this._writeToSqlite({
+                sessionId: data.session_id || '', projectKey, toolName, ts: record.ts,
+                success, durationMs, error: record.error, inserted: info.changes > 0,
             });
         } catch (_) {}
     }
@@ -362,7 +337,7 @@ class ClaudeCodeAdapter extends BaseAdapter {
 
                     // session 摘要（累加 total_duration_ms）
                     const projectKey = records[0].project_key || '';
-                    const existingDuration = agentLensDb.getSessionDuration(sessionId);
+                    const existingDuration = agentLensDb.getSessionDuration(this.name, sessionId);
                     agentLensDb.upsertSession({
                         session_id: sessionId,
                         project_key: projectKey,

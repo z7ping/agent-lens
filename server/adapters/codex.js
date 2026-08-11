@@ -96,6 +96,8 @@ class CodexAdapter extends BaseAdapter {
         let durationMs = data.duration_ms;
         let parentSeq = null;
         let callSeq = null;
+        let callId = data.call_id || data.tool_use_id || null;
+        let parentEventId = null;
 
         if (toolName) {
             const stateFile = this.getStateFile(projectKey);
@@ -105,6 +107,8 @@ class CodexAdapter extends BaseAdapter {
             if (preEntry) {
                 callSeq = preEntry.seq;
                 parentSeq = preEntry.parent_seq;
+                callId = preEntry.call_id || callId;
+                parentEventId = preEntry.event_id || null;
 
                 if (durationMs === null || durationMs === undefined) {
                     try {
@@ -145,28 +149,20 @@ class CodexAdapter extends BaseAdapter {
             record.error = errorMsg.substring(0, 500).trim();
         }
 
-        // 写入 JSONL 日志
-        const logFile = this.getLogFile(projectKey);
-        fs.appendFileSync(logFile, JSON.stringify(record) + '\n', 'utf-8');
-
-        // 双写 SQLite
-        this._writeToSqlite({
-            sessionId: data.session_id || '',
-            projectKey,
-            toolName,
-            ts: record.ts,
-            success,
-            durationMs,
-            error: record.error,
-        });
+        this.appendLogRecord(projectKey, record);
 
         // 写入 timeline
-        insertTimeline({
+        const info = insertTimeline({
             source: this.name,
             session_id: data.session_id || '',
             timestamp: record.ts || '',
+            source_sequence: callSeq,
             seq: callSeq || null,
-            role: 'tool_result',
+            event_type: success ? 'tool_result' : 'tool_error',
+            role: success ? 'tool_result' : 'tool_error',
+            call_id: callId,
+            tool_use_id: callId,
+            parent_event_id: parentEventId,
             tool_name: toolName || null,
             content: null,
             tool_input: record.input_summary ? JSON.stringify(record.input_summary) : null,
@@ -179,6 +175,15 @@ class CodexAdapter extends BaseAdapter {
             error_detail: null,
             project_key: projectKey || null,
             parent_seq: parentSeq || null,
+            agent_id: data.agent_id || data.subagent_id || null,
+            turn_id: data.turn_id || null,
+            capture_method: 'runtime_hook',
+            visibility: 'captured',
+            confidence: 'confirmed',
+        });
+        this._writeToSqlite({
+            sessionId: data.session_id || '', projectKey, toolName, ts: record.ts,
+            success, durationMs, error: record.error, inserted: info.changes > 0,
         });
     }
 }

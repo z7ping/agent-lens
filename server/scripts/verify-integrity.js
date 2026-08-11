@@ -1,10 +1,8 @@
 #!/usr/bin/env node
 /**
- * 数据完整性验证脚本
- * 对比 JSONL 行数和 SQLite 记录数，检查关键字段一致性
- * 
- * 用法：
- *   node scripts/verify-integrity.js
+ * 验证 v0.4 统一事件数据库的身份约束与 JSONL 可追溯性。
+ *
+ * 用法：node server/scripts/verify-integrity.js
  */
 
 const fs = require('fs');
@@ -12,126 +10,80 @@ const path = require('path');
 const Database = require('better-sqlite3');
 const { getRuntimePaths } = require('../runtime-paths');
 
-const BASE_DIR = path.join(__dirname, '..');
-const RUNTIME_PATHS = getRuntimePaths({ baseDir: BASE_DIR });
-const LOGS_DIR = RUNTIME_PATHS.logsDir;
-const DB_FILE = RUNTIME_PATHS.dbFile;
+const runtimePaths = getRuntimePaths({ baseDir: path.join(__dirname, '..') });
 
-function main() {
-    console.log('🔍 数据完整性验证\n');
-
-    // 检查文件
-    if (!fs.existsSync(DB_FILE)) {
-        console.log('❌ agent-lens.db 不存在');
-        process.exit(1);
+function readJsonlRecords() {
+  if (!fs.existsSync(runtimePaths.logsDir)) return { files: 0, records: [], invalid: 0 };
+  const names = fs.readdirSync(runtimePaths.logsDir).filter(name => name.endsWith('.jsonl'));
+  const records = [];
+  let invalid = 0;
+  for (const name of names) {
+    const lines = fs.readFileSync(path.join(runtimePaths.logsDir, name), 'utf8').split(/\r?\n/).filter(Boolean);
+    for (const line of lines) {
+      try { records.push(JSON.parse(line)); } catch (_) { invalid += 1; }
     }
-
-    if (!fs.existsSync(LOGS_DIR)) {
-        console.log('❌ logs 目录不存在');
-        process.exit(1);
-    }
-
-    // 读取 JSONL 数据
-    const jsonlFiles = fs.readdirSync(LOGS_DIR)
-        .filter(f => f.endsWith('.jsonl'))
-        .map(f => path.join(LOGS_DIR, f));
-
-    let jsonlTotal = 0;
-    let jsonlRecords = [];
-
-    for (const file of jsonlFiles) {
-        const content = fs.readFileSync(file, 'utf-8').trim();
-        if (!content) continue;
-        
-        const lines = content.split('\n');
-        jsonlTotal += lines.length;
-        
-        for (const line of lines) {
-            try {
-                jsonlRecords.push(JSON.parse(line));
-            } catch (e) {
-                console.log(`⚠️  JSONL 解析错误: ${file}`);
-            }
-        }
-    }
-
-    console.log(`📊 JSONL 统计：${jsonlFiles.length} 个文件，${jsonlTotal} 条记录`);
-
-    // 读取 SQLite 数据
-    const db = new Database(DB_FILE, { readonly: true });
-
-    const sqliteStats = {
-        projects: db.prepare('SELECT COUNT(*) as count FROM projects').get().count,
-        sessions: db.prepare('SELECT COUNT(*) as count FROM sessions').get().count,
-        tool_calls: db.prepare('SELECT COUNT(*) as count FROM tool_calls').get().count,
-    };
-
-    console.log(`📊 SQLite 统计：${sqliteStats.projects} 个项目，${sqliteStats.sessions} 个会话，${sqliteStats.tool_calls} 条调用记录`);
-
-    // 对比数量
-    console.log('\n📋 数量对比：');
-    const countMatch = jsonlTotal === sqliteStats.tool_calls;
-    console.log(`   JSONL 记录数 vs SQLite tool_calls: ${jsonlTotal} vs ${sqliteStats.tool_calls} ${countMatch ? '✅' : '❌'}`);
-
-    // 抽样检查关键字段
-    console.log('\n📋 关键字段一致性检查（抽样 10 条）：');
-    
-    const sampleSize = Math.min(10, jsonlRecords.length);
-    const sampleIndices = [];
-    for (let i = 0; i < sampleSize; i++) {
-        sampleIndices.push(Math.floor(Math.random() * jsonlRecords.length));
-    }
-
-    let fieldErrors = 0;
-
-    for (const idx of sampleIndices) {
-        const jsonlRecord = jsonlRecords[idx];
-        
-        // 在 SQLite 中查找对应记录
-        const sqliteRecord = db.prepare(`
-            SELECT * FROM tool_calls 
-            WHERE ts = ? AND project_key = ? AND tool_name = ?
-            LIMIT 1
-        `).get(jsonlRecord.ts, jsonlRecord.project_key, jsonlRecord.tool_name);
-
-        if (!sqliteRecord) {
-            console.log(`   ❌ 未找到: ${jsonlRecord.ts} ${jsonlRecord.tool_name}`);
-            fieldErrors++;
-            continue;
-        }
-
-        // 检查关键字段
-        const errors = [];
-        
-        if (sqliteRecord.session_id !== (jsonlRecord.session_id || '')) {
-            errors.push(`session_id: "${sqliteRecord.session_id}" vs "${jsonlRecord.session_id}"`);
-        }
-        
-        if (sqliteRecord.success !== (jsonlRecord.success ? 1 : 0)) {
-            errors.push(`success: ${sqliteRecord.success} vs ${jsonlRecord.success}`);
-        }
-
-        if (errors.length > 0) {
-            console.log(`   ❌ ${jsonlRecord.ts} ${jsonlRecord.tool_name}: ${errors.join(', ')}`);
-            fieldErrors++;
-        } else {
-            console.log(`   ✅ ${jsonlRecord.ts} ${jsonlRecord.tool_name}`);
-        }
-    }
-
-    db.close();
-
-    // 总结
-    console.log('\n📊 验证总结：');
-    console.log(`   数量一致: ${countMatch ? '✅' : '❌'}`);
-    console.log(`   字段一致: ${fieldErrors === 0 ? '✅' : `❌ ${fieldErrors} 个错误`}`);
-    
-    if (countMatch && fieldErrors === 0) {
-        console.log('\n✅ 数据完整性验证通过！');
-    } else {
-        console.log('\n❌ 数据完整性验证失败，请检查日志');
-        process.exit(1);
-    }
+  }
+  return { files: names.length, records, invalid };
 }
 
-main();
+function main() {
+  if (!fs.existsSync(runtimePaths.dbFile)) throw new Error('agent-lens.db 不存在。');
+  const db = new Database(runtimePaths.dbFile, { readonly: true });
+  const schemaVersion = db.prepare("SELECT value FROM schema_meta WHERE key='schema_version'").get()?.value;
+  const duplicateEvents = db.prepare('SELECT COUNT(*) AS count FROM (SELECT event_id FROM timeline GROUP BY event_id HAVING COUNT(*) > 1)').get().count;
+  const duplicateSessions = db.prepare('SELECT COUNT(*) AS count FROM (SELECT source, session_id FROM sessions GROUP BY source, session_id HAVING COUNT(*) > 1)').get().count;
+  const brokenParents = db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM timeline child
+    LEFT JOIN timeline parent ON parent.event_id = child.parent_event_id
+    WHERE child.parent_event_id IS NOT NULL AND parent.event_id IS NULL
+  `).get().count;
+  const missingEvidence = db.prepare(`
+    SELECT COUNT(*) AS count FROM timeline
+    WHERE capture_method IS NULL OR visibility IS NULL OR confidence IS NULL
+  `).get().count;
+
+  const jsonl = readJsonlRecords();
+  let matched = 0;
+  for (const record of jsonl.records) {
+    const role = record.role === 'tool_error' || record.success === false ? 'tool_error' : 'tool_result';
+    const found = db.prepare(`
+      SELECT 1 FROM timeline
+      WHERE source = ? AND session_id = ? AND event_type = ?
+        AND timestamp = ? AND COALESCE(tool_name, '') = ?
+      LIMIT 1
+    `).get(
+      String(record.source || 'unknown'),
+      String(record.session_id || ''),
+      role,
+      record.ts || record.timestamp || '',
+      String(record.tool_name || ''),
+    );
+    if (found) matched += 1;
+  }
+
+  db.close();
+  console.log(`Schema 版本：${schemaVersion || '未知'}`);
+  console.log(`JSONL：${jsonl.files} 个文件，${jsonl.records.length} 条可解析，${jsonl.invalid} 条无效，${matched} 条可追溯到 Timeline。`);
+  console.log(`约束检查：事件重复 ${duplicateEvents}，会话身份重复 ${duplicateSessions}，断链父事件 ${brokenParents}，缺失证据元数据 ${missingEvidence}。`);
+
+  const passed = schemaVersion === '4'
+    && duplicateEvents === 0
+    && duplicateSessions === 0
+    && brokenParents === 0
+    && missingEvidence === 0
+    && matched === jsonl.records.length;
+  if (!passed) {
+    console.error('数据完整性验证失败。');
+    process.exitCode = 1;
+    return;
+  }
+  console.log('数据完整性验证通过。');
+}
+
+try {
+  main();
+} catch (error) {
+  console.error(`验证失败：${error.message}`);
+  process.exitCode = 1;
+}

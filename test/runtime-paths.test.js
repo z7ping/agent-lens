@@ -27,6 +27,7 @@ test('source layout stores runtime files under project .agent-lens directory', (
   assert.equal(paths.dbFile, path.join(projectDir, '.agent-lens', 'data', 'agent-lens.db'));
   assert.equal(paths.projectsFile, path.join(projectDir, '.agent-lens', 'data', 'projects.json'));
   assert.equal(paths.pidFile, path.join(projectDir, '.agent-lens', 'run', 'server.pid'));
+  assert.equal(paths.hookTokenFile, path.join(projectDir, '.agent-lens', 'run', 'hook-token'));
 });
 
 test('installed layout separates the app and runtime directories under home .agent-lens', () => {
@@ -47,6 +48,7 @@ test('installed layout separates the app and runtime directories under home .age
   assert.equal(paths.runDir, path.join(rootDir, 'run'));
   assert.equal(paths.dbFile, path.join(rootDir, 'data', 'agent-lens.db'));
   assert.equal(paths.pidFile, path.join(rootDir, 'run', 'server.pid'));
+  assert.equal(paths.hookTokenFile, path.join(rootDir, 'run', 'hook-token'));
 });
 
 test('flat installed layout remains detectable for in-place upgrades', () => {

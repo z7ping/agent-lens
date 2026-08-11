@@ -9,7 +9,7 @@
   <!-- ═══ 第一层：Logo + 功能Tab + 主题切换 ═══ -->
   <nav class="fixed top-0 left-0 right-0 z-50 bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-800">
     <div class="max-w-screen-2xl mx-auto px-4 h-12 flex items-center justify-between">
-      <a href="/" class="flex items-center gap-2 font-bold text-lg min-w-0">
+      <a href="/" class="flex items-center gap-2 font-bold text-lg min-w-0 text-neutral-900 dark:text-neutral-100">
         🧠
         <span class="shrink-0">AgentLens</span>
         <span id="appVersion" class="app-version">v...</span>
@@ -117,6 +117,15 @@
     <section id="tab-callchain" class="tab-panel active">
       <!-- 会话列表 -->
       <div class="max-w-screen-2xl mx-auto px-4 py-4">
+        <details class="capability-panel">
+          <summary>
+            <span>数据完整度与可观测边界</span>
+            <span class="capability-panel-hint">区分已捕获、静态发现、推断与不可观察</span>
+          </summary>
+          <div id="capabilityMatrix" class="capability-matrix">
+            <div class="capability-empty">正在读取来源能力矩阵…</div>
+          </div>
+        </details>
         <div id="sessionContainer" class="space-y-4"></div>
         <div id="emptyState" class="hidden text-center py-20 text-neutral-400">
           <div class="text-4xl mb-3">📭</div>

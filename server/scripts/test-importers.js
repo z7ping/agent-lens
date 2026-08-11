@@ -37,12 +37,14 @@ await test('解析 user/assistant/tool 配对', () => {
     const users = records.filter(r => r.role === 'user');
     const assistants = records.filter(r => r.role === 'assistant');
     const tools = records.filter(r => r.role === 'tool_result' || r.role === 'tool_error');
+    const toolUses = records.filter(r => r.role === 'tool_use');
 
     assert.strictEqual(users.length, 1, '应有 1 条用户消息');
     assert.strictEqual(users[0].content, '帮我修复测试失败');
     assert.strictEqual(assistants.length, 1, '应有 1 条助手文本');
     assert.strictEqual(assistants[0].content, '好的，先看看测试结果');
     assert.strictEqual(tools.length, 2, '应有 2 条工具记录');
+    assert.strictEqual(toolUses.length, 2, '应有 2 条独立工具调用事件');
 
     const ok = tools.find(t => t.tool_use_id === 'call_1');
     const err = tools.find(t => t.tool_use_id === 'call_2');
@@ -64,7 +66,7 @@ await test('tool_use/tool_result 跨批次配对（meta 持久化）', () => {
     const lines = fs.readFileSync(path.join(fixturesDir, 'claude-sample.jsonl'), 'utf-8').split('\n').filter(Boolean);
     // 第一批：只有前 2 行（user + assistant/tool_use）
     const first = parseClaudeLines(lines.slice(0, 2), {});
-    assert.strictEqual(first.records.length, 2);
+    assert.strictEqual(first.records.length, 3, '用户、助手文本和 Tool Use 应分别保留');
     assert.ok(first.meta.pendingTools.call_1, 'call_1 应进入 pending');
     // 第二批：tool_result 通过 meta.pendingTools 配对
     const second = parseClaudeLines(lines.slice(2), { meta: first.meta });
@@ -86,19 +88,21 @@ await test('解析 session_meta/message/function_call', () => {
     const users = records.filter(r => r.role === 'user');
     const assistants = records.filter(r => r.role === 'assistant');
     const tools = records.filter(r => r.role === 'tool_result' || r.role === 'tool_error');
+    const toolUses = records.filter(r => r.role === 'tool_use');
 
     assert.strictEqual(users.length, 1, '应只有 1 条真实用户消息（环境上下文被跳过）');
     assert.strictEqual(users[0].content, '运行测试并修复');
     assert.strictEqual(assistants.length, 1, '应有 1 条助手回复');
     assert.strictEqual(assistants[0].content, '好的，先跑测试');
     assert.strictEqual(tools.length, 1, '应有 1 条工具记录');
+    assert.strictEqual(toolUses.length, 1, '应有 1 条独立 Tool Use');
     const tool = tools[0];
     assert.strictEqual(tool.role, 'tool_error', 'Exit code 1 应为 tool_error');
     assert.strictEqual(tool.tool_name, 'shell_command');
     assert.strictEqual(tool.exit_code, 1);
     assert.strictEqual(tool.success, false);
     assert.strictEqual(tool.output_snippet, 'failed 1 test');
-    assert.strictEqual(tool.duration_ms, 2, 'codex 耗时按秒取整为 2s');
+    assert.strictEqual(tool.duration_ms, 2000, 'codex 耗时应统一记录为毫秒');
     assert.strictEqual(tool.project_key, require('../adapters/base').prototype.getProjectKey('F:\\proj'));
 });
 
@@ -132,7 +136,7 @@ await test('Codex 长消息与新版 content block 不截断', () => {
     assert.ok(assistant.content.includes('结尾'));
     assert.ok(assistant.content.includes('第二段'));
     assert.strictEqual(user.content, '字符串内容');
-    assert.ok(assistant.tool_use_id.startsWith('codex-msg-'));
+    assert.ok(assistant.source_event_id.startsWith('codex-msg-'));
 });
 
 await test('parseFunctionOutput 解析 Exit code / 无 Exit code', () => {

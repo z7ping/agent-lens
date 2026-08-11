@@ -15,6 +15,7 @@ const BaseAdapter = require('../adapters/base');
 const CodexAdapter = require('../adapters/codex');
 const { codex: paths } = require('../paths');
 const { ensureRuntimeDirs, getRuntimePaths } = require('../runtime-paths');
+const { makeEventId } = require('../event-model');
 
 const RUNTIME_PATHS = getRuntimePaths({ baseDir: path.join(__dirname, '..') });
 ensureRuntimeDirs(RUNTIME_PATHS);
@@ -34,9 +35,9 @@ function sessionIdFromFilename(filePath) {
     }
 }
 
-function stableMessageId(sessionId, payload, text) {
+function stableMessageId(sessionId, payload, text, sourceSequence = null) {
     if (payload.id) return String(payload.id);
-    const basis = `${sessionId}|${payload.role || ''}|${payload.type || ''}|${text}`;
+    const basis = `${sessionId}|${sourceSequence ?? ''}|${payload.role || ''}|${payload.type || ''}|${text}`;
     return `codex-msg-${crypto.createHash('sha1').update(basis).digest('hex')}`;
 }
 
@@ -86,7 +87,9 @@ function parseCodexLines(lines, ctx = {}) {
     if (!meta.pendingTools) meta.pendingTools = {};
     const pending = meta.pendingTools;
 
-    for (const line of lines) {
+    for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+        const line = lines[lineIndex];
+        const sourceSequence = (ctx.startLine || 0) + lineIndex + 1;
         let entry;
         try { entry = JSON.parse(line); } catch { continue; }
         if (!entry || typeof entry !== 'object' || !entry.type) continue;
@@ -115,27 +118,42 @@ function parseCodexLines(lines, ctx = {}) {
             if (p.role === 'developer') continue;
             if (text.startsWith('<environment_context') || text.startsWith('<permissions instructions')) continue;
             if (p.role === 'user') {
-                records.push({ session_id: sessionId, project_key: projectKey, cwd, ts, role: 'user', content: text, tool_use_id: stableMessageId(sessionId, p, text) });
+                records.push({ session_id: sessionId, project_key: projectKey, cwd, ts, role: 'user', event_type: 'user', content: text,
+                    source_event_id: stableMessageId(sessionId, p, text, sourceSequence), source_sequence: sourceSequence,
+                    capture_method: 'native_log', visibility: 'captured', confidence: 'confirmed' });
             } else if (p.role === 'assistant') {
-                records.push({ session_id: sessionId, project_key: projectKey, cwd, ts, role: 'assistant', content: text, tool_use_id: stableMessageId(sessionId, p, text) });
+                records.push({ session_id: sessionId, project_key: projectKey, cwd, ts, role: 'assistant', event_type: 'assistant', content: text,
+                    source_event_id: stableMessageId(sessionId, p, text, sourceSequence), source_sequence: sourceSequence,
+                    capture_method: 'native_log', visibility: 'captured', confidence: 'confirmed' });
             }
         } else if (p.type === 'function_call') {
             // 登记待配对的工具调用
             let args = {};
             try { args = JSON.parse(p.arguments || '{}'); } catch { args = {}; }
-            pending[p.call_id] = { name: p.name || '', args, ts };
+            const callId = p.call_id || `line-${sourceSequence}`;
+            const useEventId = makeEventId({ source: 'codex', session_id: sessionId, event_type: 'tool_use', call_id: callId });
+            pending[callId] = { name: p.name || '', args, ts, sourceSequence, useEventId };
+            records.push({
+                session_id: sessionId, project_key: projectKey, cwd, ts,
+                role: 'tool_use', event_type: 'tool_use', tool_name: p.name || 'unknown',
+                tool_input: codexAdapter.summarizeInput(p.name || '', args), call_id: callId, tool_use_id: callId,
+                source_event_id: callId, source_sequence: sourceSequence, event_id: useEventId,
+                capture_method: 'native_log', visibility: 'captured', confidence: 'confirmed',
+                missing_reason: '原生日志未提供 Agent 或 Turn 标识',
+            });
             const keys = Object.keys(pending);
             while (keys.length > MAX_PENDING_TOOLS) {
                 delete pending[keys[0]];
                 keys.shift();
             }
         } else if (p.type === 'function_call_output') {
-            const toolUse = pending[p.call_id];
+            const callId = p.call_id || '';
+            const toolUse = pending[callId];
             const text = String(p.output || '');
             if (toolUse) {
                 const callTs = toolUse.ts ? new Date(toolUse.ts).getTime() : 0;
                 const resTs = ts ? new Date(ts).getTime() : 0;
-                const durationMs = callTs && resTs && resTs >= callTs ? Math.round((resTs - callTs) / 1000) : null;
+                const durationMs = callTs && resTs && resTs >= callTs ? Math.round(resTs - callTs) : null;
                 const { exitCode, snippet, success } = parseFunctionOutput(text);
                 records.push({
                     session_id: sessionId,
@@ -143,6 +161,7 @@ function parseCodexLines(lines, ctx = {}) {
                     cwd,
                     ts,
                     role: success ? 'tool_result' : 'tool_error',
+                    event_type: success ? 'tool_result' : 'tool_error',
                     tool_name: toolUse.name || 'unknown',
                     tool_input: codexAdapter.summarizeInput(toolUse.name || '', toolUse.args || {}),
                     success,
@@ -150,9 +169,15 @@ function parseCodexLines(lines, ctx = {}) {
                     duration_ms: durationMs,
                     output_snippet: snippet,
                     error_message: success ? null : (snippet || text.substring(0, 500)),
-                    tool_use_id: p.call_id,
+                    call_id: callId,
+                    tool_use_id: callId,
+                    source_event_id: callId,
+                    source_sequence: sourceSequence,
+                    parent_event_id: toolUse.useEventId,
+                    capture_method: 'native_log', visibility: 'captured', confidence: 'confirmed',
+                    missing_reason: '原生日志未提供 Agent 或 Turn 标识',
                 });
-                delete pending[p.call_id];
+                delete pending[callId];
             }
         } else if (p.type === 'web_search_call') {
             // 自包含搜索调用（无独立 output），按成功记录
@@ -163,11 +188,17 @@ function parseCodexLines(lines, ctx = {}) {
                 cwd,
                 ts,
                 role: 'tool_result',
+                event_type: 'tool_result',
                 tool_name: 'web_search',
                 tool_input: { query: query.substring(0, 200) },
                 success: true,
                 output_snippet: query ? query.substring(0, 200) : null,
                 tool_use_id: `websearch-${p.call_id || `${ts}-${query.length}`}`,
+                call_id: `websearch-${p.call_id || `${ts}-${query.length}`}`,
+                source_event_id: p.call_id || `websearch-line-${sourceSequence}`,
+                source_sequence: sourceSequence,
+                capture_method: 'native_log', visibility: 'captured', confidence: 'partial',
+                missing_reason: '原生日志未提供独立的 Web 搜索结果事件',
             });
         }
         // event_msg / reasoning 等跳过
@@ -183,7 +214,7 @@ module.exports = new JsonlImporter({
     rootDir: paths.sessionsDir,
     stateFile,
     parseLines: parseCodexLines,
-    parserVersion: 2,
+    parserVersion: 3,
 });
 
 // 导出纯函数便于测试

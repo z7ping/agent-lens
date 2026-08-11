@@ -423,6 +423,7 @@ function renderCall(call, index, projectPath, sourceColor = '') {
     : isSlow
       ? `<span class="call-status slow">偏慢</span>`
       : `<span class="call-status success">成功</span>`;
+  const evidenceBadge = renderEvidenceBadge(call);
 
   // 结构化详情面板
   const detailContent = renderCallDetail(call, sourceColor);
@@ -436,6 +437,7 @@ function renderCall(call, index, projectPath, sourceColor = '') {
         ${outputSnippet ? `<span class="call-output">${escapeHtml(outputSnippet)}</span>` : ''}
       </span>
       <span class="call-meta">
+        ${evidenceBadge}
         <span class="call-duration">${duration}</span>
         ${statusBadge}
       </span>
@@ -443,6 +445,27 @@ function renderCall(call, index, projectPath, sourceColor = '') {
     <div class="call-detail hidden">${detailContent}</div>
     </div>
   `;}
+
+const evidenceLabels = {
+  runtime_hook: '运行时捕获',
+  native_log: '原生日志',
+  local_database: '原生数据库',
+  cli_diagnostic: 'CLI 诊断',
+  static_scan: '静态发现',
+  inference: '推断',
+  legacy_import: '历史数据',
+};
+
+function renderEvidenceBadge(item) {
+  const method = item?.capture_method || 'legacy_import';
+  const visibility = item?.visibility || 'captured';
+  const label = visibility === 'unobservable' ? '不可观察'
+    : visibility === 'inferred' ? '推断'
+      : visibility === 'discovered' ? '静态发现'
+        : (evidenceLabels[method] || '已捕获');
+  const title = [label, item?.confidence ? `可信度：${item.confidence}` : '', item?.missing_reason || ''].filter(Boolean).join('；');
+  return `<span class="evidence-badge ${escapeHtml(visibility)}" title="${escapeHtml(title)}">${escapeHtml(label)}</span>`;
+}
 
 /** 类型特定行内预览 */
 function getTypePreview(toolName, input, call, projectPath) {
@@ -607,15 +630,16 @@ function renderRound(round, index, sourceColor = '', defaultExpanded = false) {
   if (userContent) {
     convo.push(`
       <div class="chat-message user">
-        <div class="chat-meta">用户 · 第 ${index + 1} 轮</div>
+        <div class="chat-meta">用户 · 第 ${index + 1} 轮 ${renderEvidenceBadge(round.userMessage)}</div>
         <div class="chat-bubble user">${renderMarkdownMessage(userId, userContent)}</div>
       </div>
     `);
   }
+  const assistantEvidence = round.assistantMessages[round.assistantMessages.length - 1] || {};
   if (assistantTexts.length) {
     convo.push(`
       <div class="chat-message assistant">
-        <div class="chat-meta">AI · 第 ${index + 1} 轮</div>
+        <div class="chat-meta">AI · 第 ${index + 1} 轮 ${renderEvidenceBadge(assistantEvidence)}</div>
         ${renderAssistantBubble(aiId, assistantTexts)}
       </div>
     `);
@@ -962,7 +986,7 @@ export function renderCallChainCalls(calls) {
   const sourceColor = (sourceColors[src] || {}).light || '';
 
   const rounds = groupByRounds(calls);
-  const toolRecords = calls.filter(c => c.role === 'tool_result' || c.role === 'tool_error' || c.tool_name);
+  const toolRecords = calls.filter(c => c.role === 'tool_result' || c.role === 'tool_error');
   const summary = summarizeCalls(toolRecords);
   // 统一口径：总数 = 分类之和（均以时间线条目为基准）
   const total = summary.total;

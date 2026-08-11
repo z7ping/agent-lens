@@ -116,7 +116,11 @@ class JsonlImporter {
 
             if (newLines.length > 0) {
                 try {
-                    const { records, meta } = this.parseLines(newLines, { filePath, meta: prev.meta || null }) || { records: [], meta: null };
+                    const { records, meta } = this.parseLines(newLines, {
+                        filePath,
+                        meta: prev.meta || null,
+                        startLine: start,
+                    }) || { records: [], meta: null };
                     this._ingest(records, touchedSessions);
                     imported += records.length;
                     newStates[filePath] = { lines: totalLines, mtime, meta: meta || prev.meta || null };
@@ -157,9 +161,14 @@ class JsonlImporter {
             const info = agentLensDb.insertTimeline({
                 source: this.source,
                 session_id: r.session_id,
+                session_key: r.session_key || null,
                 timestamp: r.ts,
-                seq: null,
+                source_event_id: r.source_event_id || null,
+                source_sequence: r.source_sequence ?? null,
+                seq: r.seq ?? null,
+                event_type: r.event_type || r.role || 'notification',
                 role: r.role || 'tool',
+                call_id: r.call_id || r.tool_use_id || null,
                 tool_name: r.tool_name || null,
                 content: r.content || null,
                 tool_input: r.tool_input ? (typeof r.tool_input === 'string' ? r.tool_input : JSON.stringify(r.tool_input)) : null,
@@ -171,8 +180,15 @@ class JsonlImporter {
                 error_type: null,
                 error_detail: null,
                 project_key: r.project_key || null,
-                parent_seq: null,
+                parent_seq: r.parent_seq ?? null,
+                parent_event_id: r.parent_event_id || null,
                 tool_use_id: r.tool_use_id || null,
+                agent_id: r.agent_id || null,
+                turn_id: r.turn_id || null,
+                capture_method: r.capture_method || 'native_log',
+                visibility: r.visibility || 'captured',
+                confidence: r.confidence || 'confirmed',
+                missing_reason: r.missing_reason || null,
             });
 
             const isTool = r.role === 'tool_result' || r.role === 'tool_error';
@@ -211,16 +227,9 @@ class JsonlImporter {
                     }
                 }
 
-                agentLensDb.upsertSession({
-                    session_id: sessionId,
-                    project_key: projectKey || '',
-                    source: this.source,
-                    start_time: firstTs || '',
-                    end_time: lastTs || '',
-                    tool_count: toolCount,
-                    error_count: errorCount,
-                    total_duration_ms: totalDuration,
-                });
+                agentLensDb.upsertSession({ session_id: sessionId, project_key: projectKey || '', source: this.source,
+                    start_time: firstTs || '', end_time: lastTs || '', tool_count: toolCount,
+                    error_count: errorCount, total_duration_ms: totalDuration });
             } catch (_) {}
         }
     }

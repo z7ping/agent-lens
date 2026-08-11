@@ -88,13 +88,13 @@ Vite dev server 会代理 `/api`、`/logs`、`/states`、`/projects.json` 到后
 
 ### 管道阶段
 
-1. **PreToolUse 钩子** (`hooks/prelog.js`) — 在每次工具调用前触发。从 stdin 读取 JSON，委托给默认适配器的 `pre()` 方法。将记录推入持久化调用栈 (`states/<projectKey>.json`)，附带顺序 `seq` 和 `parent_seq`（当前栈顶）。
+1. **PreToolUse 钩子** (`hooks/prelog.js`) — 在每次工具调用前触发。从 stdin 读取 JSON，委托给来源适配器的 `pre()` 方法。将记录推入持久化调用栈 (`state/<projectKey>.json`)，并写入独立 `tool_use` 事件，包含稳定 `event_id`、`call_id`、`seq` 和父事件关系。
 
-2. **PostToolUse 钩子** (`hooks/log.js`) — 在每次工具调用后触发。从调用栈弹出，构建包含耗时/成功/错误的日志记录，以 JSONL 格式追加到 `logs/<projectKey>.jsonl`，并更新 `projects.json`。
+2. **PostToolUse 钩子** (`hooks/log.js`) — 在每次工具调用后触发。从调用栈弹出，构建关联的 `tool_result`/`tool_error` 事件；持久化前执行采集策略与脱敏，再追加 JSONL、Timeline 并更新 `projects.json`。
 
 3. **历史导入与轮询** (`server/importers/`、`server/adapters/`) — Codex/Claude Code 增量导入会话 JSONL；Hermes/OpenCode/Pi 轮询各自的本地数据库或会话文件，并统一写入 timeline。
 
-4. **HTTP 服务器** (`server/server.js`) — 最小化静态文件服务器，端口 56789（定义在 `config.js`）。支持守护进程模式（`--daemon`），通过运行时 `run/server.pid` 管理生命周期。优先从 `dist/` 提供构建后的文件，否则从应用目录提供。
+4. **HTTP 服务器** (`server/server.js`) — 最小化静态文件服务器，默认在 `127.0.0.1:56789` 监听。校验本机 Host/Origin，Hook 写入需要 `run/hook-token`，并通过 `run/server.pid` 管理生命周期。
 
 5. **浏览器可视化** (`index.html`) — 单页面 Tab 切换（任务复盘 / 工具栈 / 概览），通过 `/api/*` 查询统一后的数据。
 
@@ -105,12 +105,12 @@ Vite dev server 会代理 `/api`、`/logs`、`/states`、`/projects.json` 到后
 ```
 server/adapters/
 ├── base.js          # 基类：getProjectKey()、日志写入、状态管理
-├── Codex.js   # 实时钩子（stdin JSON）
+├── claude-code.js   # 实时钩子（stdin JSON）
 ├── hermes.js        # 定时轮询 ~/.hermes/state.db
 ├── codex.js         # 实时钩子
 ├── opencode.js      # 定时轮询 ~/.local/share/opencode/opencode.db
 ├── cursor.js        # 实时钩子
-├── pi.js            # 实时钩子
+├── pi.js            # 定时轮询 session JSONL
 ├── openclaw.js      # 骨架
 └── index.js         # 注册表：getAdapter()、getAllAdapters()、stopAll()
 ```
@@ -123,7 +123,10 @@ server/adapters/
 ## 核心设计模式
 
 - **多项目隔离**：项目键 = 工作目录路径 MD5 的前 12 位。所有状态/日志文件按此键命名空间隔离。
-- **调用链重建**：基于栈 — `prelog` 推入 `seq`/`parent_seq`，`log` 弹出。构建将代理链接到其子工具的树形结构。
+- **调用链重建**：Tool Use 与 Result 使用 `call_id` 关联；`parent_event_id` 表示已确认父事件，`seq`/`parent_seq` 只作为旧 Hook 兼容字段。
+- **跨来源隔离**：Session 内部键 = `source + session_id`；事件使用稳定 `event_id`，禁止以时间戳和 role 作为唯一去重依据。
+- **证据边界**：事件必须区分运行时捕获、原生日志、本地数据库、静态发现、推断和旧版导入，并为缺失 Agent/Turn 等信息提供原因。
+- **敏感数据**：提示词、工具数据和配置默认脱敏，环境信息默认关闭；统一在持久化前处理。
 - **输入摘要**：钩子按工具类型摘要工具输入（Bash → 命令，文件工具 → 路径，MCP → 服务器名称）。保持日志文件小巧。
 - **增量渲染**：`index.html` 跟踪已渲染的 `seq` 值，自动刷新时仅追加新条目。
 - **双钩子实现**：Node.js 钩子为主/推荐。
@@ -137,6 +140,7 @@ server/adapters/
 - `.agent-lens/state/<projectKey>.json` — 临时调用栈状态（执行期间活跃读写）
 - `.agent-lens/app/dist/` — 安装后的 Vite 构建输出（生产环境使用）
 - `.agent-lens/run/server.pid` — 服务进程 PID 文件
+- `.agent-lens/run/hook-token` — 本机 `/api/hook` 写入令牌，不得输出或提交
 - `.agent-lens/data/agent-lens.db` — SQLite 数据库，存储 sessions、daily_stats、recent_errors、timeline 表
 
 ## 约定

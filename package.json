@@ -1,7 +1,7 @@
 {
   "name": "@z7ping/agent-lens",
-  "version": "0.3.4",
-  "description": "多 Agent 调用的全链路可观测性工具。统计 SKILL / Tool / MCP 调用次数，实时还原每一次会话的完整执行路径。",
+  "version": "0.4.0",
+  "description": "多 Agent 调用的全链路可观测性工具。统计 SKILL / Tool / MCP 调用次数，还原每次会话中可观察的执行路径。",
   "main": "server/cli.js",
   "bin": {
     "agent-lens": "server/cli.js"

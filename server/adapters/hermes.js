@@ -7,7 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 const BaseAdapter = require('./base');
-const { insertTimeline } = require('../agent-lens-db');
+const { insertTimeline, insertToolEventPair } = require('../agent-lens-db');
 const { ensureRuntimeDirs, getRuntimePaths } = require('../runtime-paths');
 
 const { hermes: { stateDb: STATE_DB } } = require('../paths');
@@ -287,7 +287,7 @@ class HermesAdapter extends BaseAdapter {
         // 计算耗时：tool 消息时间戳 - assistant 消息时间戳
         let durationMs = null;
         if (assistant) {
-            durationMs = Math.round((msg.timestamp - assistant.timestamp) * 1000) / 1000;
+            durationMs = Math.round((msg.timestamp - assistant.timestamp) * 1000);
         }
 
         // 转换时间戳（秒 -> ISO）
@@ -425,7 +425,7 @@ class HermesAdapter extends BaseAdapter {
         }
 
         if (assistantTs) {
-            durationMs = Math.round((msg.timestamp - assistantTs) * 1000) / 1000;
+            durationMs = Math.round((msg.timestamp - assistantTs) * 1000);
         }
 
         const { success, error } = this._judgeSuccess(msg.content);
@@ -702,7 +702,8 @@ class HermesAdapter extends BaseAdapter {
                 const agentLensDb = getAgentLensDb();
                 const tx = agentLensDb.transaction((rows) => {
                     for (const msg of rows) {
-                        insertTimeline(msg);
+                        if (msg.role === 'tool_result' || msg.role === 'tool_error') insertToolEventPair(msg);
+                        else insertTimeline(msg);
                     }
                 });
                 tx(batch);
@@ -728,6 +729,7 @@ class HermesAdapter extends BaseAdapter {
                 let success = null;
                 let outputSnippet = null;
                 let errorMessage = null;
+                let toolStartedAt = null;
 
                 if (msg.role === 'user') {
                     timelineRole = 'user';
@@ -757,6 +759,7 @@ class HermesAdapter extends BaseAdapter {
                         try {
                             const assistant = findAssistant.get(msg.tool_call_id);
                             if (assistant) {
+                                toolStartedAt = new Date(assistant.timestamp * 1000).toISOString();
                                 const extracted = this._extractToolCallInput(assistant.tool_calls, msg.tool_call_id);
                                 if (extracted) {
                                     toolName = extracted.toolName;
@@ -779,8 +782,13 @@ class HermesAdapter extends BaseAdapter {
                     source: this.name,
                     session_id: sessionId,
                     timestamp: ts,
+                    tool_started_at: toolStartedAt,
+                    source_event_id: msg.id != null ? String(msg.id) : null,
+                    source_sequence: msg.id ?? null,
                     seq: null,
+                    event_type: timelineRole,
                     role: timelineRole,
+                    call_id: msg.tool_call_id || null,
                     tool_name: toolName,
                     content,
                     tool_input: toolInput,
@@ -791,6 +799,10 @@ class HermesAdapter extends BaseAdapter {
                     error_message: errorMessage,
                     project_key: projectKey,
                     parent_seq: null,
+                    capture_method: 'local_database',
+                    visibility: 'captured',
+                    confidence: msg.role === 'tool' && msg.tool_call_id ? 'confirmed' : 'partial',
+                    missing_reason: msg.role === 'tool' && !msg.tool_call_id ? '来源未提供工具调用标识' : null,
                 });
 
                 this._lastTsBySession.set(sessionId, msg.timestamp);

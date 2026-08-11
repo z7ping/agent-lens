@@ -15,7 +15,7 @@
  * - 可选依赖 better-sqlite3（用于仪表盘 API）
  * - 守护进程模式：后台运行，PID 文件管理
  * - 自动打开浏览器
- * - 支持 CORS（跨域）
+ * - 默认仅监听本机回环地址并校验同源请求
  * - 彩色终端输出
  */
 
@@ -25,6 +25,15 @@ const path = require('path');
 const { execSync } = require('child_process');
 const net = require('net');
 const { ensureRuntimeDirs, getRuntimePaths } = require('./runtime-paths');
+const {
+    allowedOrigins,
+    isPathInside,
+    validateLocalRequest,
+    applySecurityHeaders,
+    getOrCreateHookToken,
+    validateHookToken,
+    readJsonBody,
+} = require('./security');
 
 // ─── 命令行参数解析 ──────────────────────────────────────────
 
@@ -39,6 +48,7 @@ const shouldStatus = flags.includes('--status');
 
 // 端口：第一个非 flag 参数，或环境变量，或默认 56789
 const PORT = parseInt(positional[0], 10) || parseInt(process.env.TRACKER_PORT, 10) || require('./config').DEFAULT_PORT;
+const HOST = require('./config').DEFAULT_HOST;
 const RUNTIME_PATHS = getRuntimePaths({ baseDir: __dirname });
 ensureRuntimeDirs(RUNTIME_PATHS);
 const DIR = fs.existsSync(RUNTIME_PATHS.distDir) ? RUNTIME_PATHS.distDir : RUNTIME_PATHS.appDir;
@@ -46,6 +56,8 @@ const PID_FILE = RUNTIME_PATHS.pidFile;
 const PROJECT_REGISTRY_FILES = [
     RUNTIME_PATHS.projectsFile,
 ];
+const HOOK_TOKEN = getOrCreateHookToken(RUNTIME_PATHS.hookTokenFile);
+const ALLOWED_ORIGINS = allowedOrigins(PORT);
 
 // ─── 彩色输出 ────────────────────────────────────────────────
 
@@ -231,7 +243,7 @@ async function main() {
 
     // ─── API 处理函数 ──────────────────────────────────────────
 
-    const { handleApiStats, handleApiTools, handleApiSessions, handleApiTimeline, handleApiSkills, handleApiCompare, handleApiErrors, handleApiToolMap, handleApiSourcesStatus, handleApiOverview, handleApiAppInfo, handleApiProjects } = require('./routes');
+    const { handleApiStats, handleApiTools, handleApiSessions, handleApiTimeline, handleApiSkills, handleApiCompare, handleApiErrors, handleApiToolMap, handleApiSourcesStatus, handleApiCapabilities, handleApiOverview, handleApiAppInfo, handleApiProjects } = require('./routes');
 
     function sendJson(res, data, statusCode = 200) {
         res.writeHead(statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -241,7 +253,8 @@ async function main() {
     // ─── 处理 Hermes 插件推送的 hook 数据 ──────────────────────
     function handleHookData(data) {
         const crypto = require('crypto');
-        const { insertTimeline, upsertSession, updateDailyStats, getSessionDuration } = require('./agent-lens-db');
+        const { insertTimeline, updateDailyStats, saveError, recomputeSession } = require('./agent-lens-db');
+        const { makeEventId } = require('./event-model');
 
         const source = data.source || 'hermes';
         const toolName = data.tool_name || '';
@@ -255,44 +268,75 @@ async function main() {
         // 计算 project_key (MD5 of cwd, first 12 chars)
         const projectKey = crypto.createHash('md5').update(cwd || process.cwd()).digest('hex').substring(0, 12);
         const ts = new Date().toISOString();
+        const callId = data.call_id || data.tool_use_id || data.source_event_id || crypto.randomUUID();
+        const useEventId = makeEventId({ source, session_id: sessionId, event_type: 'tool_use', call_id: callId });
 
-        // 写入 timeline
         insertTimeline({
+            event_id: useEventId,
             source,
             session_id: sessionId,
-            timestamp: ts,
-            seq: null,
-            role: 'tool',
+            timestamp: data.started_at || ts,
+            source_event_id: data.source_event_id || callId,
+            source_sequence: data.seq ?? null,
+            seq: data.seq ?? null,
+            event_type: 'tool_use',
+            role: 'tool_use',
+            call_id: callId,
+            tool_use_id: callId,
             tool_name: toolName,
             content: null,
             tool_input: JSON.stringify(inputSummary),
-            success: success ? 1 : 0,
+            success: null,
             exit_code: null,
-            duration_ms: durationMs,
+            duration_ms: null,
             output_snippet: null,
-            error_message: errorMsg,
+            error_message: null,
             error_type: null,
             error_detail: null,
             project_key: projectKey,
-            parent_seq: null,
+            parent_seq: data.parent_seq ?? null,
+            parent_event_id: data.parent_event_id || null,
+            agent_id: data.agent_id || null,
+            turn_id: data.turn_id || null,
+            capture_method: 'runtime_hook',
+            visibility: 'captured',
+            confidence: data.call_id || data.tool_use_id ? 'confirmed' : 'partial',
+            missing_reason: data.call_id || data.tool_use_id ? null : '推送数据未提供稳定调用标识',
         });
 
-        // 更新 session
-        const existingDuration = getSessionDuration(sessionId);
-        upsertSession({
-            session_id: sessionId,
-            project_key: projectKey,
+        const resultInfo = insertTimeline({
             source,
-            start_time: ts,
-            end_time: ts,
-            tool_count: 1,
-            error_count: success ? 0 : 1,
-            total_duration_ms: existingDuration + durationMs,
+            session_id: sessionId,
+            timestamp: ts,
+            source_event_id: data.source_event_id || callId,
+            source_sequence: data.seq ?? null,
+            seq: data.seq ?? null,
+            event_type: success ? 'tool_result' : 'tool_error',
+            role: success ? 'tool_result' : 'tool_error',
+            call_id: callId,
+            tool_use_id: callId,
+            parent_event_id: useEventId,
+            tool_name: toolName,
+            tool_input: JSON.stringify(inputSummary),
+            success: success ? 1 : 0,
+            duration_ms: durationMs,
+            error_message: errorMsg,
+            project_key: projectKey,
+            parent_seq: data.parent_seq ?? null,
+            agent_id: data.agent_id || null,
+            turn_id: data.turn_id || null,
+            capture_method: 'runtime_hook',
+            visibility: 'captured',
+            confidence: data.call_id || data.tool_use_id ? 'confirmed' : 'partial',
+            missing_reason: data.call_id || data.tool_use_id ? null : '推送数据未提供稳定调用标识',
         });
 
-        // 更新 daily_stats
-        const date = ts.slice(0, 10);
-        updateDailyStats(date, source, toolName, 1, success ? 0 : 1, durationMs);
+        if (resultInfo.changes > 0) {
+            const date = ts.slice(0, 10);
+            updateDailyStats(date, source, toolName, 1, success ? 0 : 1, durationMs);
+            if (!success && errorMsg) saveError(ts, sessionId, source, toolName, errorMsg);
+        }
+        recomputeSession(source, sessionId, projectKey);
     }
 
     // ─── 创建 HTTP 服务器 ──────────────────────────────────────
@@ -326,7 +370,7 @@ async function main() {
             }
 
             const { base, file: candidate } = candidates[index];
-            if (!candidate.startsWith(path.resolve(base))) {
+            if (!isPathInside(base, candidate)) {
                 readNext(index + 1);
                 return;
             }
@@ -343,15 +387,33 @@ async function main() {
     const server = http.createServer((req, res) => {
         let urlPath = req.url.split('?')[0];
         const urlParams = new URL(req.url, `http://localhost:${PORT}`).searchParams;
-        
-        // CORS 头
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+        const requestCheck = validateLocalRequest(req, { port: PORT, origins: ALLOWED_ORIGINS });
+        applySecurityHeaders(res, requestCheck.origin);
+        if (!requestCheck.ok) {
+            sendJson(res, { error: requestCheck.message }, requestCheck.status);
+            return;
+        }
 
         if (req.method === 'OPTIONS') {
+            res.setHeader('Access-Control-Allow-Methods', urlPath === '/api/hook' ? 'POST, OPTIONS' : 'GET, OPTIONS');
+            res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-AgentLens-Token, Authorization');
+            res.setHeader('Access-Control-Max-Age', '600');
             res.writeHead(204);
             res.end();
+            return;
+        }
+
+        if (urlPath.startsWith('/api/')) {
+            const allowedMethod = urlPath === '/api/hook' ? 'POST' : 'GET';
+            if (req.method !== allowedMethod) {
+                res.setHeader('Allow', allowedMethod);
+                sendJson(res, { error: `该接口只允许 ${allowedMethod}` }, 405);
+                return;
+            }
+        } else if (!['GET', 'HEAD'].includes(req.method)) {
+            res.setHeader('Allow', 'GET, HEAD');
+            sendJson(res, { error: '静态资源只允许读取' }, 405);
             return;
         }
 
@@ -408,18 +470,17 @@ async function main() {
         }
 
         // ─── POST /api/hook — 接收 Hermes 插件推送的工具调用数据 ───
-        if (urlPath === '/api/hook' && req.method === 'POST') {
-            let body = '';
-            req.on('data', chunk => { body += chunk; });
-            req.on('end', () => {
-                try {
-                    const data = JSON.parse(body);
+        if (urlPath === '/api/hook') {
+            if (!validateHookToken(req, HOOK_TOKEN)) {
+                sendJson(res, { error: 'Hook 写入令牌无效' }, 401);
+                return;
+            }
+            readJsonBody(req)
+                .then(data => {
                     handleHookData(data);
                     sendJson(res, { ok: true });
-                } catch (e) {
-                    sendJson(res, { error: e.message }, 400);
-                }
-            });
+                })
+                .catch(error => sendJson(res, { error: error.message }, error.statusCode || 400));
             return;
         }
 
@@ -433,6 +494,11 @@ async function main() {
             return;
         }
 
+        if (urlPath === '/api/capabilities') {
+            handleApiCapabilities(req, res);
+            return;
+        }
+
         // ─── 静态文件服务 ──────────────────────────────────────
         
         if (urlPath === '/') urlPath = '/index.html';
@@ -441,7 +507,6 @@ async function main() {
             res.writeHead(200, {
                 'Content-Type': 'application/json; charset=utf-8',
                 'Cache-Control': 'no-cache',
-                'Access-Control-Allow-Origin': '*',
             });
             res.end(JSON.stringify(readMergedProjects()));
             log(`  200 ${req.method} ${urlPath}`, 'green');
@@ -453,7 +518,7 @@ async function main() {
         const contentType = mimeTypes[ext] || 'application/octet-stream';
 
         // 安全检查：防止目录遍历（使用 path.resolve 解析后比对）
-        if (!filePath.startsWith(path.resolve(DIR))) {
+        if (!isPathInside(DIR, filePath)) {
             res.writeHead(403);
             res.end('Forbidden');
             return;
@@ -483,7 +548,6 @@ async function main() {
                 res.writeHead(200, {
                     'Content-Type': `${contentType}; charset=utf-8`,
                     'Cache-Control': 'no-cache',
-                    'Access-Control-Allow-Origin': '*',
                 });
                 res.end(content);
                 log(`  200 ${req.method} ${urlPath}`, 'green');
@@ -516,7 +580,8 @@ async function main() {
         // 启动需要轮询的适配器
         try {
             const { getAdapter } = require('./adapters');
-            const pollingAdapters = ['claude-code', 'opencode', 'pi'];
+            // Claude Code 统一由版本化 JSONL 导入器处理，避免双路径重复写入。
+            const pollingAdapters = ['opencode', 'pi'];
             for (const name of pollingAdapters) {
                 const adapter = getAdapter(name);
                 if (adapter && adapter.startPolling) {
@@ -542,7 +607,7 @@ async function main() {
     // ─── 启动服务器 ────────────────────────────────────────────
 
     initDb().then(() => {
-        server.listen(PORT, () => {
+        server.listen(PORT, HOST, () => {
             // 写入 PID 文件
             writePid();
 
@@ -553,7 +618,7 @@ async function main() {
                 console.log('');
                 log(`✅ 服务器已启动`, 'green');
                 log(`📂 服务目录: ${DIR}`, 'cyan');
-                log(`🌐 访问地址: http://localhost:${PORT}/`, 'cyan');
+                log(`🌐 访问地址: http://${HOST}:${PORT}/`, 'cyan');
                 log(`📋 PID: ${process.pid}`, 'dim');
                 console.log('');
                 log('📋 可用功能:', 'yellow');

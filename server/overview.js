@@ -4,6 +4,7 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const { DEFAULT_OVERVIEW_SCAN_INTERVAL_MS } = require('./config');
 const { hermes: HERMES_PATHS } = require('./paths');
+const { getCapturePolicy, captureConfigValue } = require('./privacy');
 
 const ASSET_TYPES = ['skill', 'mcp', 'plugin', 'extension', 'hook', 'adapter', 'builtin'];
 
@@ -760,7 +761,16 @@ function discoverPiAssets(configDir, options = {}) {
     ]));
 }
 
-function discoverInventory() {
+function discoverInventory(options = {}) {
+    if (getCapturePolicy(options.env).config === 'off') {
+        return TOOL_DEFINITIONS.map(definition => ({
+            ...definition,
+            config_dir: '',
+            version: '',
+            status: 'capture_off',
+            assets: [],
+        }));
+    }
     return TOOL_DEFINITIONS.map(definition => {
         let assets = [];
         let configDir = definition.config_dir;
@@ -855,8 +865,10 @@ function readOverviewInventory(db) {
     });
 }
 
-function writeOverviewInventory(db, inventory = [], now = new Date().toISOString()) {
+function writeOverviewInventory(db, inventory = [], now = new Date().toISOString(), env = process.env) {
     if (!db) return { tool_count: 0, asset_count: 0 };
+    const configMode = getCapturePolicy(env).config;
+    const safeConfigText = (value, maxText = 4000) => captureConfigValue(value, env, { maxText }).value || '';
     const write = db.transaction((items) => {
         db.prepare('DELETE FROM overview_assets').run();
         db.prepare('DELETE FROM overview_tools').run();
@@ -877,20 +889,22 @@ function writeOverviewInventory(db, inventory = [], now = new Date().toISOString
                 tool.display_name || tool.tool,
                 tool.description || '',
                 tool.version || '',
-                tool.status || 'unknown',
-                tool.config_dir || '',
+                configMode === 'off' ? 'capture_off' : (tool.status || 'unknown'),
+                safeConfigText(tool.config_dir || ''),
                 JSON.stringify(themeForTool(tool.tool, tool.theme)),
                 now
             );
-            for (const asset of dedupeAssets(tool.assets || [])) {
+            const persistedAssets = configMode === 'off' ? [] : dedupeAssets(tool.assets || []);
+            for (const asset of persistedAssets) {
+                const safeName = safeConfigText(asset.name || 'unknown', 1000) || 'unknown';
                 insertAsset.run(
                     tool.tool,
-                    asset.name || 'unknown',
-                    normalizeCapabilityName(asset.name || 'unknown'),
+                    safeName,
+                    normalizeCapabilityName(safeName),
                     asset.type || 'builtin',
                     asset.status || 'unknown',
-                    asset.path || '',
-                    asset.description || '',
+                    safeConfigText(asset.path || ''),
+                    safeConfigText(asset.description || ''),
                     now
                 );
                 assetCount += 1;
@@ -904,8 +918,8 @@ function writeOverviewInventory(db, inventory = [], now = new Date().toISOString
 function refreshOverviewInventory(db, options = {}) {
     const startedAt = options.now || new Date().toISOString();
     try {
-        const inventory = options.inventory || discoverInventory();
-        const counts = writeOverviewInventory(db, inventory, startedAt);
+        const inventory = options.inventory || discoverInventory({ env: options.env });
+        const counts = writeOverviewInventory(db, inventory, startedAt, options.env || process.env);
         const finishedAt = options.finishedAt || new Date().toISOString();
         if (db) {
             db.prepare(`
@@ -1201,6 +1215,7 @@ function buildOverview(options = {}) {
 function queryOverview(db, options = {}) {
     let usageRows = [];
     let inventory = [];
+    const configCaptureOff = getCapturePolicy(options.env).config === 'off';
     if (db) {
         const sinceClause = options.since ? 'AND timestamp >= ?' : '';
         const params = options.since ? [options.since] : [];
@@ -1210,9 +1225,10 @@ function queryOverview(db, options = {}) {
             WHERE role IN ('tool_result', 'tool_error') AND tool_name IS NOT NULL ${sinceClause}
             GROUP BY source, tool_name
         `).all(...params);
-        inventory = readOverviewInventory(db);
+        inventory = configCaptureOff ? [] : readOverviewInventory(db);
     }
-    if (!inventory.length) inventory = db ? stableInventoryShell() : discoverInventory();
+    if (configCaptureOff) inventory = discoverInventory({ env: options.env });
+    else if (!inventory.length) inventory = db ? stableInventoryShell() : discoverInventory({ env: options.env });
     return buildOverview({ inventory, usageRows, priorityThreshold: options.priorityThreshold || 5 });
 }
 

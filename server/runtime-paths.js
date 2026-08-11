@@ -105,6 +105,7 @@ function buildPaths(dirs) {
     dbFile: path.join(dirs.dataDir, 'agent-lens.db'),
     projectsFile: path.join(dirs.dataDir, 'projects.json'),
     pidFile: path.join(dirs.runDir, 'server.pid'),
+    hookTokenFile: path.join(dirs.runDir, 'hook-token'),
   };
 }
 

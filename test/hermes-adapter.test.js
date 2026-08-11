@@ -57,5 +57,5 @@ test('builds Hermes tool messages with assistant tool metadata', () => {
   assert.equal(record.tool_name, 'terminal');
   assert.deepEqual(record.input_summary, { command: 'echo ok' });
   assert.equal(record.success, true);
-  assert.ok(record.duration_ms > 0);
+  assert.equal(record.duration_ms, 2932);
 });

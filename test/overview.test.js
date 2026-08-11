@@ -5,6 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const Database = require('better-sqlite3');
+const { insertTimeline } = require('../server/agent-lens-db');
 
 const {
   buildOverview,
@@ -458,6 +459,25 @@ test('persists stable overview inventory in the AgentLens database', () => {
   assert.deepEqual(run, { status: 'success', tool_count: 1, asset_count: 1 });
 });
 
+test('配置采集关闭时不持久化配置路径和能力资产', () => {
+  const db = new Database(':memory:');
+  db.exec(fs.readFileSync(path.join(__dirname, '..', 'server', 'schema.sql'), 'utf-8'));
+  refreshOverviewInventory(db, {
+    env: { AGENT_LENS_CONFIG_CAPTURE: 'off' },
+    inventory: [{
+      tool: 'codex', display_name: 'Codex', status: 'detected',
+      config_dir: 'C:/Users/test/.codex',
+      assets: [{ name: 'private-mcp', type: 'mcp', path: 'C:/Users/test/.codex/config.toml' }],
+    }],
+  });
+
+  const inventory = readOverviewInventory(db);
+  assert.equal(inventory[0].status, 'capture_off');
+  assert.equal(inventory[0].config_dir, '');
+  assert.deepEqual(inventory[0].assets, []);
+  db.close();
+});
+
 test('queryOverview reads cached inventory from database and merges timeline usage', () => {
   const db = new Database(':memory:');
   db.exec(fs.readFileSync(path.join(__dirname, '..', 'server', 'schema.sql'), 'utf-8'));
@@ -478,14 +498,8 @@ test('queryOverview reads cached inventory from database and merges timeline usa
       },
     ],
   });
-  db.prepare(`
-    INSERT INTO timeline (source, session_id, timestamp, role, tool_name, success)
-    VALUES ('codex', 's1', '2026-08-07T00:00:01.000Z', 'tool_result', 'browser', 1)
-  `).run();
-  db.prepare(`
-    INSERT INTO timeline (source, session_id, timestamp, role, tool_name, success)
-    VALUES ('codex', 's2', '2026-08-07T00:00:02.000Z', 'tool_result', 'browser', 1)
-  `).run();
+  insertTimeline({ source: 'codex', session_id: 's1', timestamp: '2026-08-07T00:00:01.000Z', role: 'tool_result', tool_name: 'browser', success: 1, source_sequence: 1 }, db);
+  insertTimeline({ source: 'codex', session_id: 's2', timestamp: '2026-08-07T00:00:02.000Z', role: 'tool_result', tool_name: 'browser', success: 1, source_sequence: 1 }, db);
 
   const { queryOverview } = require('../server/overview');
   const overview = queryOverview(db, { priorityThreshold: 2 });
@@ -495,4 +509,9 @@ test('queryOverview reads cached inventory from database and merges timeline usa
   assert.equal(browser.call_count, 2);
   assert.equal(browser.is_priority, true);
   assert.equal(overview.capability_matrix[0].name, 'browser');
+
+  const configHidden = queryOverview(db, { env: { AGENT_LENS_CONFIG_CAPTURE: 'off' } });
+  const hiddenCodex = configHidden.tools.find(tool => tool.tool === 'codex');
+  assert.equal(hiddenCodex.config_dir, '');
+  assert.equal(hiddenCodex.assets.find(asset => asset.name === 'browser').path, '');
 });

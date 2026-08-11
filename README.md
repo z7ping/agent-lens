@@ -5,10 +5,10 @@
 [![Node.js](https://img.shields.io/node/v/@z7ping/agent-lens?logo=node.js&logoColor=white)](https://www.npmjs.com/package/@z7ping/agent-lens)
 [![License](https://img.shields.io/npm/l/@z7ping/agent-lens)](LICENSE)
 
-多 Agent 调用的全链路可观测性工具。统计 SKILL / Tool / MCP 调用次数，实时还原每一次会话的完整执行路径。
+多 Agent 调用的全链路可观测性工具。统计 SKILL / Tool / MCP 调用次数，还原每一次会话中可观察的执行路径，并明确标记静态发现、推断与不可观察的信息。
 
 AgentLens – End-to-end observability for multi‑agent invocations.
-Aggregates call counts for SKILLs, Tools, and MCPs, and reconstructs the complete execution path of every session in real time.
+Aggregates call counts for SKILLs, Tools, and MCPs, and reconstructs the observable execution path of each session.
 
 > **一句话**：`npx @z7ping/agent-lens install` → 打开浏览器查看仪表盘。
 
@@ -97,12 +97,13 @@ agent-lens uninstall       # 卸载并清理
 
 ## 特性
 
-- **多 Agent 追踪** — 统计 SKILL / Tool / MCP 调用次数，还原完整调用链
-- **调用链可视化** — 树形展示每次会话的 Agent→Tool 父子调用关系
+- **多 Agent 追踪** — 统计 SKILL / Tool / MCP 调用次数，还原有证据支持的可观察调用链
+- **调用链可视化** — 展示每次会话中已确认的 Agent、Turn、父事件和 Tool 生命周期关系
 - **分析仪表盘** — 总调用数、错误率、工具使用排行、慢调用
 - **概览** — 每个 AI 工具一张卡片，展示版本、配置目录、官网/文档/GitHub、Skills / MCP / Plugins / Extensions / Hooks 等能力资产、安装路径和装配路径诊断
-- **多数据源** — Hermes（SQLite 轮询）、Claude Code / Codex / Cursor / Pi（实时钩子）、OpenCode（SQLite 轮询）
-- **Timeline 可观测** — 统一 timeline 表，支持跨数据源对比、role 语义分类、错误自动归类
+- **多数据源** — Hermes / OpenCode（SQLite 轮询）、Claude Code / Codex（实时 Hook + 历史导入）、Pi（JSONL 轮询）、Cursor（实时 Hook）
+- **Timeline 可观测** — 稳定事件身份、跨来源 Session 隔离、Tool Use/Result 双事件、证据来源和错误自动归类
+- **本地安全** — 默认只监听 `127.0.0.1`，限制同源访问，对持久化内容执行可配置脱敏
 - **实时刷新** — 3 秒增量更新，无需手动刷新
 - **暗色主题** — 亮/暗一键切换
 
@@ -112,10 +113,10 @@ agent-lens uninstall       # 卸载并清理
 | 数据源 | 方式 | 配置 |
 |--------|------|------|
 | **Hermes** | 自动轮询 `~/.hermes/state.db` | 无需配置，启动即用 |
-| **Claude Code** | 实时钩子 | 见下方 |
-| **Codex** | 实时钩子 | 同 Claude Code |
+| **Claude Code** | 实时 Hook + `~/.claude/projects` 历史导入 | 见下方 |
+| **Codex** | 实时 Hook + `~/.codex/sessions` 历史导入 | 同 Claude Code |
 | **Cursor** | 实时钩子 | 同 Claude Code |
-| **Pi** | 实时钩子 | 同 Claude Code |
+| **Pi** | 轮询 Pi session JSONL | 无需配置 |
 | **OpenCode** | 轮询 `~/.local/share/opencode/opencode.db` | 无需配置 |
 
 ### 概览资产扫描
@@ -140,6 +141,30 @@ AGENT_LENS_OVERVIEW_SCAN_INTERVAL_MS=600000 node server/cli.js start
 ```
 
 默认值是 `600000`（10 分钟）。设为 `0` 可关闭服务端定时扫描；访问概览时仍会触发后台刷新。
+
+### 安全与敏感数据采集
+
+AgentLens v0.4 默认只在 `127.0.0.1` 上监听，API 拒绝非回环 Host、远程连接和未允许的浏览器 Origin。`/api/hook` 还要求请求携带安装级本机令牌：
+
+```text
+X-AgentLens-Token: <运行目录 run/hook-token 中的令牌>
+```
+
+令牌文件仅供本机集成读取，不应提交、复制到日志或公开分享。远程访问和局域网访问当前不受支持。
+
+提示词、工具数据、配置和环境信息分别使用以下采集开关，取值为 `off`、`redacted` 或 `full`：
+
+```bash
+AGENT_LENS_PROMPT_CAPTURE=redacted
+AGENT_LENS_TOOL_CAPTURE=redacted
+AGENT_LENS_CONFIG_CAPTURE=redacted
+AGENT_LENS_ENV_CAPTURE=off
+AGENT_LENS_ENV_ALLOWLIST=SAFE_CUSTOM_NAME,ANOTHER_SAFE_NAME
+```
+
+默认脱敏采集提示词、工具输入输出与配置，默认不采集环境变量。环境采集即使启用也只读取内置安全名单和 `AGENT_LENS_ENV_ALLOWLIST` 显式列出的名称。选择 `full` 会保存相应原文，应仅在确认本机数据库和日志访问边界后使用。v0.4 之前已存在的历史正文会保留，并标记为旧版采集策略未知，不会在升级时静默改写。
+
+将 `AGENT_LENS_CONFIG_CAPTURE` 设为 `off` 时，概览不会扫描或展示配置路径与静态能力资产，并会在下一次刷新时清除已有配置盘点缓存；运行时已观察到的最小工具事件元数据仍会保留，用于计数和数据完整度说明。
 
 #### Codex 概览扫描规则
 
@@ -187,7 +212,7 @@ Skill 目录会识别根目录下的 `.md` 文件，并递归识别包含 `SKILL
 | `<agentDir>/pi-hermes-memory/skills` | Skill | Pi Hermes Memory 的全局/过程记忆 Skill |
 | `<agentDir>/projects-memory/<project>/skills` | Skill | Pi 项目级记忆 Skill |
 
-### 配置 Claude Code / Codex / Cursor / Pi 钩子
+### 配置 Claude Code / Codex / Cursor 钩子
 
 运行 `node server/cli.js install` 会自动配置所有工具的 hooks。发布到 npm 后，也可以使用 `npx @z7ping/agent-lens install`。
 
@@ -343,6 +368,11 @@ agent-lens/
 │   ├── cli.js                 # CLI 入口
 │   ├── routes.js              # API 路由
 │   ├── agent-lens-db.js       # SQLite 存储层
+│   ├── migrations.js          # 版本化数据库迁移
+│   ├── event-model.js         # 统一事件身份与证据字段
+│   ├── privacy.js             # 采集策略与持久化前脱敏
+│   ├── security.js            # 本机 HTTP 边界与 Hook 令牌
+│   ├── capabilities.js        # 来源数据完整度矩阵
 │   ├── config.js              # 服务配置
 │   ├── schema.sql             # 表结构定义
 │   ├── overview.js            # 概览资产扫描与数据库快照
@@ -369,11 +399,18 @@ agent-lens/
 
 | 字段 | 说明 |
 |------|------|
-| source | 数据来源：`hermes` / `claude-code` |
-| session_id | 会话标识 |
-| timestamp | 事件时间戳 |
-| role | 事件角色：`user` / `assistant` / `tool_result` / `tool_error` |
+| event_id | AgentLens 稳定事件标识 |
+| source / source_event_id | 数据来源与来源原生事件标识 |
+| session_key / session_id | 来源命名空间 Session 主键与来源原生会话标识 |
+| agent_id / turn_id | 来源能够提供时保存的 Agent 与 Turn 标识 |
+| parent_event_id | 已确认的父事件标识 |
+| timestamp / source_sequence | 展示时间与来源内稳定顺序 |
+| event_type / role | `user` / `assistant` / `tool_use` / `tool_result` / `tool_error` 等事件语义 |
+| call_id | 关联 Tool Use 与 Tool Result |
 | tool_name | 工具名称 |
+| capture_method | `runtime_hook` / `native_log` / `local_database` / `static_scan` / `inference` / `legacy_import` |
+| visibility / confidence | 已捕获、静态发现、推断、不可观察及可信度 |
+| missing_reason | 数据不完整时的明确原因 |
 | error_type | 错误分类：`windows_command` / `path_not_found` / `permission` / `timeout` / `syntax` / `unknown` |
 | error_detail | 错误详情 JSON |
 
@@ -386,7 +423,7 @@ agent-lens/
 ├── data/      # agent-lens.db, projects.json
 ├── logs/      # JSONL 调用日志与调试日志
 ├── state/     # 调用栈和导入水位线
-└── run/       # server.pid
+└── run/       # server.pid, hook-token
 ```
 
 安装后，所有平台都统一使用用户主目录下的 `~/.agent-lens/`。程序、命令入口和运行数据分层存放：
@@ -404,17 +441,18 @@ agent-lens/
 ├── data/                            # agent-lens.db, projects.json
 ├── logs/                            # JSONL 和服务日志
 ├── state/                           # 调用栈和导入水位线
-└── run/                             # server.pid
+└── run/                             # server.pid, hook-token
 ```
 
 Windows 对应路径为 `C:\Users\<用户名>\.agent-lens\`。当前平铺布局升级成功后，安装器会清理根目录中的旧程序文件和旧 `node_modules`，但保留运行数据；更早的平台专有目录若存在数据冲突则会保留，供人工确认。
 
 | 表名 | 用途 |
 |------|------|
-| sessions | 会话摘要（按 source 聚合） |
+| schema_meta | 数据库 Schema 版本 |
+| sessions | 以 `source + session_id` 隔离的会话摘要 |
 | daily_stats | 按天+工具聚合统计 |
 | recent_errors | 最近错误（滚动保留 50 条） |
-| timeline | 原始调用记录（role 语义分类） |
+| timeline | 统一可观测事件、工具生命周期和证据元数据 |
 | overview_tools | 概览页工具身份与运行环境快照 |
 | overview_assets | 概览页能力资产快照 |
 | overview_scan_runs | 概览资产扫描记录、状态与错误信息 |

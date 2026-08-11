@@ -208,6 +208,10 @@ class OpenCodeAdapter extends BaseAdapter {
                 role,
                 content: content.substring(0, 2000),
                 success: null,
+                source_event_id: row.id || null,
+                capture_method: 'local_database',
+                visibility: 'captured',
+                confidence: 'confirmed',
             };
         }
 
@@ -246,6 +250,12 @@ class OpenCodeAdapter extends BaseAdapter {
             role: success ? 'tool_result' : 'tool_error',
             input_summary: this._summarizeInput(toolName, input),
             success,
+            call_id: data.id || row.id || null,
+            source_event_id: row.id || data.id || null,
+            tool_started_at: state.time?.start != null ? new Date(state.time.start).toISOString() : null,
+            capture_method: 'local_database',
+            visibility: 'captured',
+            confidence: 'confirmed',
         };
 
         if (durationMs !== null) {
@@ -378,23 +388,18 @@ class OpenCodeAdapter extends BaseAdapter {
                 ? null
                 : (typeof record.input_summary === 'string' ? record.input_summary : JSON.stringify(record.input_summary || {}));
 
-            if (isTool) {
-                // 按天统计
-                agentLensDb.updateDailyStats(date, 'opencode', record.tool_name, 1, record.success ? 0 : 1, record.duration_ms || 0);
-
-                // 错误记录
-                if (!record.success && record.error) {
-                    agentLensDb.saveError(ts, sessionId, 'opencode', record.tool_name, record.error);
-                }
-            }
-
             // 写入 timeline（轮询兜底）
-            agentLensDb.insertTimeline({
+            const timelineRecord = {
                 source: 'opencode',
                 session_id: sessionId,
                 timestamp: ts,
+                tool_started_at: record.tool_started_at || null,
+                source_event_id: record.source_event_id || null,
+                source_sequence: record.source_sequence ?? null,
                 seq: null,
                 role: record.role || (record.success ? 'tool_result' : 'tool_error'),
+                event_type: record.role || (record.success ? 'tool_result' : 'tool_error'),
+                call_id: record.call_id || null,
                 tool_name: record.tool_name || null,
                 content: record.content || null,
                 tool_input: toolInput,
@@ -407,7 +412,22 @@ class OpenCodeAdapter extends BaseAdapter {
                 error_detail: null,
                 project_key: projectKey,
                 parent_seq: null,
-            });
+                capture_method: record.capture_method || 'local_database',
+                visibility: record.visibility || 'captured',
+                confidence: record.confidence || 'confirmed',
+                missing_reason: record.missing_reason || null,
+            };
+            if (isTool) {
+                const { resultInfo } = agentLensDb.insertToolEventPair(timelineRecord);
+                if (resultInfo.changes > 0) {
+                    agentLensDb.updateDailyStats(date, 'opencode', record.tool_name, 1, record.success ? 0 : 1, record.duration_ms || 0);
+                    if (!record.success && record.error) {
+                        agentLensDb.saveError(ts, sessionId, 'opencode', record.tool_name, record.error);
+                    }
+                }
+            } else {
+                agentLensDb.insertTimeline(timelineRecord);
+            }
         } catch (_) {}
     }
 

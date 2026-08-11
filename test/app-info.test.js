@@ -24,11 +24,11 @@ test('resolves package.json from the installed app directory', () => {
   assert.equal(getPackageJsonPath(baseDir), path.join(baseDir, 'package.json'));
 });
 
-test('shows critical installation fixes from the complete current release notes', () => {
+test('shows critical data and security changes from the complete current release notes', () => {
   const changelog = getCurrentChangelog(packageJson.version);
 
-  assert.ok(changelog.items.some(item => item.includes('自动恢复并重启上一版程序')));
-  assert.ok(changelog.items.some(item => item.includes('同步清理 Claude Code、Codex 和 Cursor Hooks')));
+  assert.ok(changelog.items.some(item => item.includes('稳定事件标识')));
+  assert.ok(changelog.items.some(item => item.includes('127.0.0.1')));
 });
 
 test('uses AgentLens named SQLite database file', () => {

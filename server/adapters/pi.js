@@ -87,6 +87,10 @@ class PiAdapter extends BaseAdapter {
                                     role: 'user',
                                     content: this._extractText(content),
                                     success: null,
+                                    source_event_id: entry.id || entry.message?.id || null,
+                                    capture_method: 'native_log',
+                                    visibility: 'captured',
+                                    confidence: 'confirmed',
                                 });
                                 continue;
                             }
@@ -104,6 +108,10 @@ class PiAdapter extends BaseAdapter {
                                         role: 'assistant',
                                         content: assistantText,
                                         success: null,
+                                        source_event_id: entry.id || entry.message?.id || null,
+                                        capture_method: 'native_log',
+                                        visibility: 'captured',
+                                        confidence: 'confirmed',
                                     });
                                 }
                             }
@@ -129,7 +137,8 @@ class PiAdapter extends BaseAdapter {
                                     }
 
                                     const record = {
-                                        ts: entry.timestamp || '',
+                                        ts: toolResult?.timestamp || entry.timestamp || '',
+                                        tool_started_at: entry.timestamp || '',
                                         session_id: sid,
                                         project_key: projectKeyForCwd,
                                         project_name: projectNameForCwd,
@@ -140,6 +149,12 @@ class PiAdapter extends BaseAdapter {
                                         input_summary: this._summarizeInput(toolName, args),
                                         success: !toolResult?.message?.isError,
                                         output_snippet: toolResult ? this._extractText(toolResult.message?.content || []) : null,
+                                        call_id: block.id || null,
+                                        source_event_id: block.id || null,
+                                        capture_method: 'native_log',
+                                        visibility: 'captured',
+                                        confidence: toolResult ? 'confirmed' : 'partial',
+                                        missing_reason: toolResult ? null : '会话文件未找到对应 Tool Result',
                                     };
 
                                     if (durationMs !== null && durationMs >= 0) {
@@ -253,16 +268,18 @@ class PiAdapter extends BaseAdapter {
             const agentLensDb = require('../agent-lens-db');
             const date = (record.ts || '').slice(0, 10);
             const isTool = record.role === 'tool_result' || record.role === 'tool_error' || record.tool_name;
-            if (isTool) {
-                agentLensDb.updateDailyStats(date, 'pi', record.tool_name, 1, record.success ? 0 : 1, record.duration_ms || 0);
-            }
             // 写入 timeline 表，让前端能展开查看调用详情
-            agentLensDb.insertTimeline({
+            const timelineRecord = {
                 source: 'pi',
                 session_id: record.session_id,
                 timestamp: record.ts || '',
+                tool_started_at: record.tool_started_at || null,
+                source_event_id: record.source_event_id || null,
+                source_sequence: record.source_sequence ?? null,
                 seq: null,
                 role: record.role || (record.success === false ? 'tool_error' : 'tool_result'),
+                event_type: record.role || (record.success === false ? 'tool_error' : 'tool_result'),
+                call_id: record.call_id || null,
                 tool_name: record.tool_name || null,
                 content: record.content || null,
                 tool_input: record.input_summary ? JSON.stringify(record.input_summary) : null,
@@ -275,7 +292,19 @@ class PiAdapter extends BaseAdapter {
                 error_detail: null,
                 project_key: record.project_key || null,
                 parent_seq: null,
-            });
+                capture_method: record.capture_method || 'native_log',
+                visibility: record.visibility || 'captured',
+                confidence: record.confidence || 'confirmed',
+                missing_reason: record.missing_reason || null,
+            };
+            if (isTool) {
+                const { resultInfo } = agentLensDb.insertToolEventPair(timelineRecord);
+                if (resultInfo.changes > 0) {
+                    agentLensDb.updateDailyStats(date, 'pi', record.tool_name, 1, record.success ? 0 : 1, record.duration_ms || 0);
+                }
+            } else {
+                agentLensDb.insertTimeline(timelineRecord);
+            }
         } catch (_) {}
     }
 
