@@ -102,9 +102,17 @@ test('flat application cleanup preserves runtime data and the new app layout', (
 test('application staging copies runtime files without local state or dependencies', () => {
   const projectRoot = path.join(__dirname, '..');
   const tempRoot = makeTempRoot();
+  const fixtureProject = path.join(tempRoot, 'project');
   const stagedApp = path.join(tempRoot, 'app');
 
-  stageApplication(projectRoot, stagedApp);
+  fs.cpSync(path.join(projectRoot, 'server'), path.join(fixtureProject, 'server'), { recursive: true });
+  fs.mkdirSync(path.join(fixtureProject, 'dist'), { recursive: true });
+  fs.writeFileSync(path.join(fixtureProject, 'dist', 'index.html'), '<!doctype html>');
+  for (const file of ['package.json', 'README.md', 'CHANGELOG.md']) {
+    fs.copyFileSync(path.join(projectRoot, file), path.join(fixtureProject, file));
+  }
+
+  stageApplication(fixtureProject, stagedApp);
 
   for (const required of [
     'cli.js',
