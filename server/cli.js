@@ -210,25 +210,38 @@ async function waitForInstalledDaemon(port, timeoutMs = 60000) {
     return false;
 }
 
+async function waitForPortClosed(port, timeoutMs = 5000) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        if (!await isPortListening(port)) return true;
+        await new Promise(resolve => setTimeout(resolve, 200));
+    }
+    return false;
+}
+
 // ─── 跨平台服务管理 ──────────────────────────────────────────────
 //
 // Linux   → systemd user service (~/.config/systemd/user/)
 // macOS   → launchd agent     (~/Library/LaunchAgents/)
-// Windows → 不使用系统服务；依赖 daemon 模式 + hook 自动守护（server-guard）
+// Windows → 当前用户的“启动”目录（登录时启动，无需管理员权限）
 //
 
 const SERVICE_LABEL = 'com.agent-lens';
 const LAUNCHD_DIR = path.join(os.homedir(), 'Library', 'LaunchAgents');
 const LAUNCHD_PLIST = path.join(LAUNCHD_DIR, `${SERVICE_LABEL}.plist`);
+const WINDOWS_STARTUP_DIR = path.join(
+    process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'),
+    'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup'
+);
+const WINDOWS_STARTUP_FILE = path.join(WINDOWS_STARTUP_DIR, 'AgentLens.vbs');
 
 function isMac() { return process.platform === 'darwin'; }
 
 /**
- * 返回当前平台可用的服务后端: 'systemd' | 'launchd' | null
- * Windows 无系统服务后端（daemon + hook 自动守护，无需管理员权限）
+ * 返回当前平台可用的服务后端: 'windows-startup' | 'systemd' | 'launchd' | null
  */
 function getServiceBackend() {
-    if (isWin()) return null;
+    if (isWin()) return 'windows-startup';
     if (isMac()) {
         try {
             execSync('launchctl version', { stdio: 'ignore' });
@@ -248,6 +261,64 @@ function getServiceBackend() {
 
 // ─── systemd 实现（Linux）────────────────────────────────────────
 
+// Windows 当前用户启动目录实现
+function windowsStartupInstall() {
+    const serverJs = path.join(INSTALL_DIR, 'server.js');
+    if (!fs.existsSync(serverJs)) {
+        throw new Error(`未找到已安装的服务程序: ${serverJs}`);
+    }
+    const quoteVbs = value => `"${String(value).replace(/"/g, '""')}"`;
+    const command = `"${NODE_BIN}" "${serverJs}" ${DEFAULT_PORT} --daemon`;
+    const content = [
+        'Set objShell = CreateObject("WScript.Shell")',
+        `objShell.CurrentDirectory = ${quoteVbs(INSTALL_DIR)}`,
+        `objShell.Run ${quoteVbs(command)}, 0, False`,
+        '',
+    ].join('\r\n');
+    mkdirp(WINDOWS_STARTUP_DIR);
+    fs.writeFileSync(WINDOWS_STARTUP_FILE, content, 'utf-8');
+    log('[OK] Windows 开机自启已注册，将在当前用户登录后自动启动', 'green');
+}
+
+function windowsStartupStart() {
+    const pid = readPid(INSTALL_DIR);
+    if (pid && isProcessAlive(pid)) {
+        log(`服务已在运行 (PID: ${pid})`, 'yellow');
+        return;
+    }
+    startInstalledDaemon(DEFAULT_PORT);
+    log('[OK] 服务已在后台启动', 'green');
+}
+
+function windowsStartupStop() {
+    cmdStop(INSTALL_DIR);
+}
+
+function windowsStartupEnable() {
+    windowsStartupInstall();
+    log('[OK] 已启用登录后自启', 'green');
+}
+
+function windowsStartupDisable() {
+    if (fs.existsSync(WINDOWS_STARTUP_FILE)) fs.unlinkSync(WINDOWS_STARTUP_FILE);
+    log('[OK] 已关闭登录后自启', 'green');
+}
+
+async function windowsStartupStatus() {
+    const enabled = fs.existsSync(WINDOWS_STARTUP_FILE);
+    log(`开机自启: ${enabled ? '✅ 已启用（用户登录时）' : '❌ 未启用'}`, enabled ? 'green' : 'yellow');
+    await cmdStatus(INSTALL_DIR);
+}
+
+function windowsStartupUninstall() {
+    cmdStop(INSTALL_DIR);
+    if (fs.existsSync(WINDOWS_STARTUP_FILE)) {
+        fs.unlinkSync(WINDOWS_STARTUP_FILE);
+        log('[OK] Windows 开机自启已移除', 'green');
+    }
+}
+
+// systemd 实现（Linux）
 function systemdServiceFile() {
     const serverJs = path.join(INSTALL_DIR, 'server.js');
     return `[Unit]
@@ -441,17 +512,13 @@ function launchdUninstall() {
 function platformAction(action) {
     const backend = getServiceBackend();
     if (!backend) {
-        if (isWin()) {
-            log('Windows 使用 daemon 模式 + hook 自动守护，无需系统服务', 'dim');
-            log('  daemon 管理: agent-lens start --daemon / stop / status', 'dim');
-        } else {
-            log('[WARN] 当前平台不支持自动服务管理', 'yellow');
-            log('  手动启动: agent-lens start --daemon', 'dim');
-        }
+        log('[WARN] 当前平台不支持自动服务管理', 'yellow');
+        log('  手动启动: agent-lens start --daemon', 'dim');
         return false;
     }
 
     const map = {
+        'windows-startup': { install: windowsStartupInstall, start: windowsStartupStart, stop: windowsStartupStop, enable: windowsStartupEnable, disable: windowsStartupDisable, status: windowsStartupStatus, uninstall: windowsStartupUninstall },
         systemd: { install: systemdInstall, start: systemdStart, stop: systemdStop, enable: systemdEnable, disable: systemdDisable, status: systemdStatus, uninstall: systemdUninstall },
         launchd: { install: launchdInstall, start: launchdStart, stop: launchdStop, enable: launchdEnable, disable: launchdDisable, status: launchdStatus, uninstall: launchdUninstall },
     };
@@ -465,27 +532,6 @@ function platformAction(action) {
 }
 
 function cmdService(subcmd) {
-    if (isWin()) {
-        switch (subcmd) {
-            case 'start':
-                return cmdStart(['--daemon']);
-            case 'stop':
-                return cmdStop(PROJECT_DIR);
-            case 'status':
-                return cmdStatus(PROJECT_DIR);
-            case 'install':
-            case 'enable':
-            case 'disable':
-            case 'uninstall':
-                log('Windows 使用 daemon 模式 + hook 自动守护，无需系统服务', 'dim');
-                log('  可用命令: agent-lens start --daemon / stop / status', 'dim');
-                return false;
-            default:
-                log('用法: agent-lens service <start|stop|status>', 'cyan');
-                return undefined;
-        }
-    }
-
     switch (subcmd) {
         case 'install':   return platformAction('install');
         case 'uninstall': return platformAction('uninstall');
@@ -692,12 +738,17 @@ async function cmdInstall() {
     const serviceReady = platformAction('install');
 
     if (serviceReady !== false) {
+        const backend = getServiceBackend();
+        // Windows 重新安装时必须重启旧 daemon，否则内存中仍是旧版本代码。
+        if (backend === 'windows-startup') {
+            cmdStop(INSTALL_DIR);
+            await waitForPortClosed(DEFAULT_PORT);
+        }
         // 启动服务
         platformAction('start');
         await new Promise(resolve => setTimeout(resolve, 2000));
 
         // 检查状态
-        const backend = getServiceBackend();
         let running = false;
         if (backend === 'systemd') {
             try {
@@ -708,6 +759,9 @@ async function cmdInstall() {
                 const out = execSync(`launchctl list | grep ${SERVICE_LABEL}`, { encoding: 'utf-8' }).trim();
                 running = out && !out.split(/\s+/)[0] === '-';
             } catch {}
+        } else if (backend === 'windows-startup') {
+            // 首次加载 SQLite 和多数据源适配器可能超过 2 秒，等待完整 HTTP 就绪。
+            running = await waitForInstalledDaemon(DEFAULT_PORT, 15000);
         }
 
         if (running) {
@@ -741,22 +795,16 @@ async function cmdInstall() {
     console.log('');
     log('使用方式:', 'yellow');
     if (serviceReady !== false) {
-        log('  服务已注册为系统服务，开机自动启动', 'dim');
+        log('  后台服务已注册，开机自动启动', 'dim');
     } else {
         log('  服务会在首次使用 Claude Code 工具时自动拉起', 'dim');
     }
     log(`  浏览器打开: http://localhost:${DEFAULT_PORT}/`, 'dim');
     log('  管理命令:', 'dim');
-    if (isWin()) {
-        log('    agent-lens start --daemon    后台启动', 'dim');
-        log('    agent-lens stop              停止服务', 'dim');
-        log('    agent-lens status            查看状态', 'dim');
-    } else {
-        log('    agent-lens service start     启动服务', 'dim');
-        log('    agent-lens service stop      停止服务', 'dim');
-        log('    agent-lens service disable   关闭开机自启', 'dim');
-        log('    agent-lens service status    查看状态', 'dim');
-    }
+    log('    agent-lens service start     启动服务', 'dim');
+    log('    agent-lens service stop      停止服务', 'dim');
+    log('    agent-lens service disable   关闭开机自启', 'dim');
+    log('    agent-lens service status    查看状态', 'dim');
     console.log('');
     log(`文档: ${INSTALL_DIR}/README.md`, 'dim');
     log('═'.repeat(45), 'dim');
@@ -1075,8 +1123,8 @@ function showHelp() {
     log('  help, --help, -h              显示此帮助', 'dim');
     console.log('');
     log('service 子命令:', 'yellow');
-    log('  service install               注册系统服务并启用自启', 'dim');
-    log('  service uninstall             停止并移除系统服务', 'dim');
+    log('  service install               注册后台服务并启用自启', 'dim');
+    log('  service uninstall             停止并移除后台服务', 'dim');
     log('  service start                 启动服务', 'dim');
     log('  service stop                  停止服务', 'dim');
     log('  service enable                启用开机自启', 'dim');
@@ -1094,9 +1142,8 @@ function showHelp() {
     log('平台说明:', 'yellow');
     log('  Linux:  systemd user service，支持全部 service 子命令', 'dim');
     log('  macOS:  launchd agent，支持全部 service 子命令', 'dim');
-    log('  Windows: daemon + hook 自动守护，不注册系统服务', 'dim');
-    log('           service start/stop/status 映射到 daemon 管理', 'dim');
-    log('           service install/uninstall/enable/disable 不可用', 'dim');
+    log('  Windows: 当前用户启动目录，登录时自动启动，无需管理员权限', 'dim');
+    log('           支持全部 service 子命令', 'dim');
     log('  status 当前固定检查默认端口 56789', 'dim');
     console.log('');
     log('示例:', 'yellow');

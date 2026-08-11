@@ -166,11 +166,11 @@ npx github:z7ping/agent-lens install
 |------|---------|---------|
 | Linux | systemd user service | `~/.config/systemd/user/agent-lens.service` |
 | macOS | launchd agent | `~/Library/LaunchAgents/com.agent-lens.plist` |
-| Windows | daemon + hook 自动守护 | `~/.agent-lens/`（无需管理员权限） |
+| Windows | 当前用户启动目录 + daemon/hook 自动守护 | `~/.agent-lens/`（无需管理员权限） |
 
 > **Linux 注意**：需要 `sudo loginctl enable-linger <user>` 才能在未登录时保持服务运行。安装时会自动检测并提示。
 >
-> **Windows 注意**：不使用任务计划程序，也不提供系统服务安装和开机自启开关。服务以 daemon 模式运行，首次工具调用时由 Hook 自动拉起，无需管理员权限。
+> **Windows 注意**：安装时会在当前用户的“启动”目录写入 `AgentLens.vbs`，用户登录后隐藏启动，无需管理员权限。Hook 自动拉起仍作为服务意外退出后的兜底。
 
 ---
 
@@ -344,15 +344,18 @@ agent-lens service disable       # 关闭开机自启
 agent-lens service uninstall     # 停止并移除系统服务
 ```
 
-Windows 不注册系统服务，使用 daemon + Hook 自动守护：
+Windows 使用当前用户的“启动”目录，同样支持全部 `service` 子命令：
 
 ```bash
-agent-lens start --daemon      # 后台启动
-agent-lens stop                # 停止服务
-agent-lens status              # 查看状态
+agent-lens service install     # 注册并启用登录后自启
+agent-lens service start       # 立即启动
+agent-lens service disable     # 关闭登录后自启
+agent-lens service enable      # 重新启用登录后自启
+agent-lens service status      # 查看自启和进程状态
+agent-lens service uninstall   # 移除自启入口
 ```
 
-Windows 下 `service start`、`service stop`、`service status` 会映射到上述 daemon 命令；`service install`、`service uninstall`、`service enable`、`service disable` 不可用。
+`agent-lens install` 会自动完成自启入口的注册和首次启动；上述命令主要用于后续手动管理。
 
 ---
 

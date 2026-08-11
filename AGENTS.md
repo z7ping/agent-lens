@@ -39,13 +39,13 @@ node server/cli.js service disable    # 关闭开机自启
 node server/cli.js service status     # 查看状态
 node server/cli.js service uninstall  # 移除系统服务
 
-# Windows 使用 daemon，不注册系统服务
-agent-lens start --daemon
-agent-lens stop
-agent-lens status
+# Windows 使用当前用户启动目录 + daemon
+agent-lens service install
+agent-lens service start
+agent-lens service status
 ```
 
-安装完成后可把 `node server/cli.js` 替换为 `agent-lens`。Windows 的 `service start/stop/status` 会映射到 daemon 管理，其余 `service` 子命令不可用。自定义端口启动时，当前 `status` 仍固定检查默认端口 56789。
+安装完成后可把 `node server/cli.js` 替换为 `agent-lens`。Windows 支持全部 `service` 子命令，自启入口位于当前用户的“启动”目录，无需管理员权限。自定义端口启动时，当前 `status` 仍固定检查默认端口 56789。
 
 前端需要 Vite 构建，测试使用 Node.js 内置 test runner。
 

@@ -28,7 +28,8 @@ test('cli help documents every command, option, and platform mode', () => {
     '--output <dir>',
     'Linux:  systemd user service',
     'macOS:  launchd agent',
-    'Windows: daemon + hook 自动守护',
+    'Windows: 当前用户启动目录',
+    '支持全部 service 子命令',
     'status 当前固定检查默认端口 56789',
   ]) {
     assert.match(help, new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
