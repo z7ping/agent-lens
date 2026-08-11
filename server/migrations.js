@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { makeEventId, makeSessionKey } = require('./event-model');
 
-const CURRENT_SCHEMA_VERSION = 4;
+const CURRENT_SCHEMA_VERSION = 5;
 
 const SESSION_TABLE_SQL = `
   CREATE TABLE sessions_v4 (
@@ -76,6 +76,7 @@ function inferSchemaVersion(db) {
   if (!tableExists(db, 'timeline')) return 0;
   const timelineColumns = getColumns(db, 'timeline');
   const sessionColumns = getColumns(db, 'sessions');
+  if (timelineColumns.has('attributes_json') && timelineColumns.has('event_id') && sessionColumns.has('session_key')) return 5;
   if (timelineColumns.has('event_id') && timelineColumns.has('session_key') && sessionColumns.has('session_key')) return 4;
   return 2;
 }
@@ -228,6 +229,26 @@ function migrateToV4(db) {
   }
 }
 
+function migrateToV5(db) {
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const columns = getColumns(db, 'timeline');
+    if (!columns.has('attributes_json')) {
+      db.exec('ALTER TABLE timeline ADD COLUMN attributes_json TEXT');
+    }
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      INSERT INTO schema_meta (key, value) VALUES ('schema_version', '5')
+      ON CONFLICT(key) DO UPDATE SET value=excluded.value;
+    `);
+    createIndexes(db);
+    db.exec('COMMIT');
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch (_) {}
+    throw error;
+  }
+}
+
 function initializeDatabase(db, options = {}) {
   const schemaPath = options.schemaPath || path.join(__dirname, 'schema.sql');
   const inferredVersion = readSchemaVersion(db) ?? inferSchemaVersion(db);
@@ -244,7 +265,12 @@ function initializeDatabase(db, options = {}) {
   let backupPath = null;
   if (inferredVersion < CURRENT_SCHEMA_VERSION) {
     backupPath = createBackup(db, options.dbPath, inferredVersion);
-    migrateToV4(db);
+    let workingVersion = inferredVersion;
+    if (workingVersion < 4) {
+      migrateToV4(db);
+      workingVersion = 4;
+    }
+    if (workingVersion < 5) migrateToV5(db);
   }
   db.exec(fs.readFileSync(schemaPath, 'utf-8'));
   db.prepare("INSERT INTO schema_meta (key, value) VALUES ('schema_version', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value")
@@ -265,4 +291,5 @@ module.exports = {
   inferSchemaVersion,
   initializeDatabase,
   migrateToV4,
+  migrateToV5,
 };

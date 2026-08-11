@@ -321,10 +321,13 @@ async function updateSourceStatus() {
     const source = span.dataset.statusSource;
     const info = status[source];
     if (!info) return;
-    const { historyAvailable, hookInstalled, sessionFiles } = info;
+    const { historyAvailable, hookInstalled, sessionFiles, hookCoverage } = info;
     let label;
     let tone = 'neutral';
-    if (hookInstalled && historyAvailable) {
+    if (source === 'codex' && hookInstalled && hookCoverage && !hookCoverage.complete) {
+      label = `生命周期 ${hookCoverage.configured}/${hookCoverage.expected}`;
+      tone = 'warn';
+    } else if (hookInstalled && historyAvailable) {
       label = '实时采集中';
       tone = 'ok';
     } else if (hookInstalled) {
@@ -339,9 +342,14 @@ async function updateSourceStatus() {
     }
     span.textContent = label;
     span.dataset.tone = tone;
-    span.title = historyAvailable
-      ? `已有 ${sessionFiles} 个历史会话文件可导入\n数据目录: ${info.dataDir || ''}`
-      : '未发现历史数据，安装 Hook 后实时采集';
+    const details = [];
+    if (historyAvailable) details.push(`已有 ${sessionFiles} 个历史会话文件可导入`, `数据目录: ${info.dataDir || ''}`);
+    else details.push('未发现历史数据，安装 Hook 后实时采集');
+    if (hookCoverage) {
+      details.push(`AgentLens Codex Hook：${hookCoverage.configured}/${hookCoverage.expected}`);
+      if (hookCoverage.missingEvents?.length) details.push(`缺少：${hookCoverage.missingEvents.join('、')}`);
+    }
+    span.title = details.join('\n');
   });
 }
 

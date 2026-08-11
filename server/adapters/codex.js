@@ -8,7 +8,11 @@
 const fs = require('fs');
 const path = require('path');
 const BaseAdapter = require('./base');
-const { insertTimeline } = require('../agent-lens-db');
+const { getDb, insertTimeline, recomputeSession } = require('../agent-lens-db');
+const { buildCodexLifecycleRecord } = require('../codex-lifecycle');
+const { discoverCodexInstructionFiles } = require('../codex-context');
+const { makeEventId, stableHash } = require('../event-model');
+const { captureConfigValue } = require('../privacy');
 
 const HOME_DIR = require('os').homedir();
 const CODEX_DIR = path.join(HOME_DIR, '.codex');
@@ -20,7 +24,88 @@ class CodexAdapter extends BaseAdapter {
 
     // pre() 继承自 base.js，覆盖 tool_name 字段名
     async pre(data) {
-        return super.pre(data, { toolNameField: 'tool_name', cwdFields: ['cwd', 'working_directory', 'workdir'] });
+        const enriched = data && !data.agent_id && !data.subagent_id
+            ? { ...data, missing_reason: 'Codex Tool Hook 未提供当前 Agent 标识；不推断子 Agent 归属' }
+            : data;
+        return super.pre(enriched, {
+            toolNameField: 'tool_name',
+            cwdFields: ['cwd', 'working_directory', 'workdir'],
+            inferParentFromStack: false,
+        });
+    }
+
+    findLifecycleParent(record) {
+        const db = getDb();
+        if (!db) return null;
+        if (record.event_type === 'agent_stop' && record.agent_id) {
+            return db.prepare(`
+                SELECT event_id FROM timeline
+                WHERE source = 'codex' AND session_id = ? AND event_type = 'agent_start'
+                  AND agent_id = ? AND (? IS NULL OR turn_id = ?)
+                ORDER BY timestamp DESC, id DESC LIMIT 1
+            `).get(record.session_id, record.agent_id, record.turn_id, record.turn_id)?.event_id || null;
+        }
+        if (record.event_type === 'compact_end' && record.turn_id) {
+            return db.prepare(`
+                SELECT event_id FROM timeline
+                WHERE source = 'codex' AND session_id = ? AND turn_id = ?
+                  AND event_type = 'compact_start'
+                ORDER BY timestamp DESC, id DESC LIMIT 1
+            `).get(record.session_id, record.turn_id)?.event_id || null;
+        }
+        return null;
+    }
+
+    async lifecycle(data) {
+        if (!data || typeof data !== 'object') return null;
+        const cwd = data.cwd || data.working_directory || data.workdir || process.cwd();
+        const projectKey = this.getProjectKey(cwd);
+        const projectName = this.getProjectName(cwd);
+        this.updateProjectsFile(projectKey, cwd, projectName);
+
+        const record = buildCodexLifecycleRecord(data, {
+            projectKey,
+            summarizeToolInput: (toolName, input) => this.summarizeInput(toolName, input),
+        });
+        if (!record) return null;
+        record.event_id = makeEventId(record);
+        record.parent_event_id = this.findLifecycleParent(record);
+        const info = insertTimeline(record);
+        const contextEvents = [];
+        if (record.event_type === 'session_start') {
+            for (const entry of discoverCodexInstructionFiles(cwd)) {
+                const capturedContent = captureConfigValue(entry.content);
+                const capturedPath = captureConfigValue(entry.path, process.env, { maxText: 2000 });
+                const contextRecord = {
+                    source: 'codex',
+                    source_event_id: `context:${stableHash(`${record.event_id}|${entry.path}|${entry.modified_at}|${entry.bytes}`).slice(0, 32)}`,
+                    session_id: record.session_id,
+                    timestamp: record.timestamp,
+                    event_type: 'context_discovery',
+                    role: 'context_discovery',
+                    parent_event_id: record.event_id,
+                    content: capturedContent.value,
+                    project_key: projectKey,
+                    attributes_json: {
+                        scope: entry.scope,
+                        file_name: entry.file_name,
+                        path: capturedPath.value,
+                        bytes: entry.bytes,
+                        truncated: entry.truncated,
+                        precedence: entry.precedence,
+                    },
+                    capture_method: 'static_scan',
+                    visibility: 'discovered',
+                    confidence: 'partial',
+                    missing_reason: '当前环境静态发现，不能证明历史 Turn 实际加载了该内容',
+                    redaction_applied: capturedContent.redactionApplied || capturedPath.redactionApplied ? 1 : 0,
+                    capture_policy: `config:${capturedContent.capturePolicy}`,
+                };
+                contextEvents.push({ record: contextRecord, info: insertTimeline(contextRecord) });
+            }
+        }
+        recomputeSession('codex', record.session_id, projectKey);
+        return { record, info, contextEvents };
     }
 
     // ─── PostToolUse ───────────────────────────────────────
@@ -102,7 +187,7 @@ class CodexAdapter extends BaseAdapter {
         if (toolName) {
             const stateFile = this.getStateFile(projectKey);
             const state = this.readState(stateFile);
-            const preEntry = this.popFromStack(state);
+            const preEntry = this.popFromStack(state, callId);
 
             if (preEntry) {
                 callSeq = preEntry.seq;
@@ -180,6 +265,9 @@ class CodexAdapter extends BaseAdapter {
             capture_method: 'runtime_hook',
             visibility: 'captured',
             confidence: 'confirmed',
+            missing_reason: (!data.agent_id && !data.subagent_id)
+                ? 'Codex Tool Hook 未提供当前 Agent 标识；不推断子 Agent 归属'
+                : null,
         });
         this._writeToSqlite({
             sessionId: data.session_id || '', projectKey, toolName, ts: record.ts,

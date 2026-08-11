@@ -27,8 +27,8 @@ test('resolves package.json from the installed app directory', () => {
 test('shows critical data and security changes from the complete current release notes', () => {
   const changelog = getCurrentChangelog(packageJson.version);
 
-  assert.ok(changelog.items.some(item => item.includes('稳定事件标识')));
-  assert.ok(changelog.items.some(item => item.includes('127.0.0.1')));
+  assert.ok(changelog.items.some(item => item.includes('Codex 生命周期透镜')));
+  assert.ok(changelog.items.some(item => item.includes('transcript 路径')));
 });
 
 test('uses AgentLens named SQLite database file', () => {
