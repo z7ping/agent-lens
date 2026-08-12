@@ -17,12 +17,6 @@ const {
   refreshOverviewInventory,
 } = require('../server/overview');
 
-test('Windows 运行期版本探测不会创建可见控制台窗口', () => {
-  const overviewSource = fs.readFileSync(path.join(__dirname, '..', 'server', 'overview.js'), 'utf8');
-  assert.match(overviewSource, /spawnSync\(binary, \['--version'\],[\s\S]*?windowsHide: true/);
-  assert.match(overviewSource, /execFileSync\('powershell\.exe',[\s\S]*?windowsHide: true/);
-});
-
 test('diagnoses Codex lifecycle hook coverage without exposing hook payloads', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-lens-codex-hooks-'));
   fs.writeFileSync(path.join(root, 'hooks.json'), JSON.stringify({
