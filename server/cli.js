@@ -154,18 +154,7 @@ function isPortListening(port) {
 }
 
 function startInstalledDaemon(port = DEFAULT_PORT) {
-    const installedCli = path.join(INSTALL_DIR, 'cli.js');
     const installedServer = path.join(INSTALL_DIR, 'server.js');
-    if (fs.existsSync(installedCli)) {
-        const child = spawn(process.execPath, [installedCli, 'start', '--daemon', '--port', String(port)], {
-            cwd: INSTALL_DIR,
-            detached: true,
-            stdio: 'ignore',
-            windowsHide: true,
-        });
-        child.unref();
-        return;
-    }
     const child = spawn(process.execPath, [installedServer, String(port), '--daemon'], {
         cwd: INSTALL_DIR,
         detached: true,
@@ -173,6 +162,16 @@ function startInstalledDaemon(port = DEFAULT_PORT) {
         windowsHide: true,
     });
     child.unref();
+}
+
+function syncInstalledHooks(warningLabel = '更新 Hooks 配置失败') {
+    try {
+        execFileSync(process.execPath, [path.join(INSTALL_DIR, 'install-hooks.js')], { stdio: 'inherit' });
+        return true;
+    } catch (error) {
+        log(`[WARN] ${warningLabel}: ${error.message}`, 'yellow');
+        return false;
+    }
 }
 
 function isHttpReady(port) {
@@ -606,11 +605,7 @@ async function cmdInstall() {
 
         console.log('');
         log(`更新 Hooks 配置: ${SETTINGS_FILE}`, 'cyan');
-        try {
-            execFileSync(process.execPath, [path.join(INSTALL_DIR, 'install-hooks.js')], { stdio: 'inherit' });
-        } catch (error) {
-            log(`[WARN] 更新 Hooks 配置失败: ${error.message}`, 'yellow');
-        }
+        syncInstalledHooks();
 
         try {
             createCommandEntry();
@@ -1096,6 +1091,8 @@ async function rollbackInstalledApplication(backupDir) {
         if (!restored) return { restored: false, running: false };
         removeTree(path.join(INSTALL_ROOT, '.rollback'));
         log('[OK] 上一版程序已恢复', 'green');
+
+        syncInstalledHooks('上一版 Hooks 配置恢复失败');
 
         let launchedByService = false;
         try {

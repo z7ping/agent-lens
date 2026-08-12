@@ -99,6 +99,7 @@ agent-lens uninstall       # 卸载并清理
 
 - **多 Agent 追踪** — 统计 SKILL / Tool / MCP 调用次数，还原有证据支持的可观察调用链
 - **调用链可视化** — 展示每次会话中已确认的 Agent、Turn、父事件和 Tool 生命周期关系
+- **Codex 生命周期透镜** — 实时展示会话、提示词提交、权限请求、上下文压缩、子 Agent 和 Turn 停止事件
 - **分析仪表盘** — 总调用数、错误率、工具使用排行、慢调用
 - **概览** — 每个 AI 工具一张卡片，展示版本、配置目录、官网/文档/GitHub、Skills / MCP / Plugins / Extensions / Hooks 等能力资产、安装路径和装配路径诊断
 - **多数据源** — Hermes / OpenCode（SQLite 轮询）、Claude Code / Codex（实时 Hook + 历史导入）、Pi（JSONL 轮询）、Cursor（实时 Hook）
@@ -114,7 +115,7 @@ agent-lens uninstall       # 卸载并清理
 |--------|------|------|
 | **Hermes** | 自动轮询 `~/.hermes/state.db` | 无需配置，启动即用 |
 | **Claude Code** | 实时 Hook + `~/.claude/projects` 历史导入 | 见下方 |
-| **Codex** | 实时 Hook + `~/.codex/sessions` 历史导入 | 同 Claude Code |
+| **Codex** | 11 类实时 Hook + `~/.codex/sessions` 历史导入 | 安装器自动配置；升级后需重新运行 `install` |
 | **Cursor** | 实时钩子 | 同 Claude Code |
 | **Pi** | 轮询 Pi session JSONL | 无需配置 |
 | **OpenCode** | 轮询 `~/.local/share/opencode/opencode.db` | 无需配置 |
@@ -180,6 +181,16 @@ Codex 默认配置根目录为 `CODEX_HOME`，未设置时为 `~/.codex`。Agent
 | `~/.codex/config.toml` 中的 `[plugins.*]` | Plugin | Codex 插件启用配置 |
 | `~/.codex/config.json` | MCP | JSON 配置格式 |
 
+#### Codex 生命周期与数据边界
+
+v0.5 会安装 `SessionStart`、`SessionEnd`、`UserPromptSubmit`、`PreToolUse`、`PermissionRequest`、`PostToolUse`、`PreCompact`、`PostCompact`、`SubagentStart`、`SubagentStop` 和 `Stop` 共 11 类 Codex Hook。任务复盘会单独展示生命周期轨迹，并保留原生 `turn_id`、`agent_id`、工具调用标识、模型和权限模式等来源字段。
+
+这些 Hook 只做被动采集：不会批准或阻断工具，不会修改提示词，也不会向模型追加上下文。`Stop` 与 `SubagentStop` 只返回中性的空 JSON；transcript 路径不写入 Timeline。提示词和最终助手消息继续遵守 `AGENT_LENS_PROMPT_CAPTURE`，权限请求中的工具参数遵守 `AGENT_LENS_TOOL_CAPTURE`。
+
+会话开始时，AgentLens 会按 Codex 的 `AGENTS.override.md` / `AGENTS.md` / fallback 文件优先级静态发现当前指令链，并将它标记为“当前环境发现”，而不是声称它一定进入了历史 Turn。将 `AGENT_LENS_CONFIG_CAPTURE` 设为 `off` 会完全关闭这项发现。
+
+仍需注意以下边界：hosted tools（例如 WebSearch）不会触发工具 Hook，部分特殊工具路径也可能绕过默认 Hook；子 Agent transcript 并非总是提供；`SessionEnd` 可能在关闭、归档或闲置后才触发；AgentLens 不读取或推断隐藏思维过程。概览页和顶部来源状态会显示 AgentLens Codex Hook 的实际覆盖数，旧安装若显示低于 `11/11`，重新运行安装命令即可补齐。
+
 #### Pi 概览扫描规则
 
 Pi 的默认配置根目录来自 `PI_CODING_AGENT_DIR`，未设置时为 `~/.pi/agent`。AgentLens 会优先识别真正的 Pi agent 根目录，再扫描该目录下的能力资产，而不是只按某一台机器的 `~/.pi` 布局处理。
@@ -216,7 +227,7 @@ Skill 目录会识别根目录下的 `.md` 文件，并递归识别包含 `SKILL
 
 运行 `node server/cli.js install` 会自动配置所有工具的 hooks。发布到 npm 后，也可以使用 `npx @z7ping/agent-lens install`。
 
-如果需要手动配置，在 `~/.claude/settings.json` 中添加（路径指向 `~/.agent-lens/app/hooks/`）：
+Codex v0.5 需要同步安装 11 类 Hook 并更新 Codex 的信任状态，推荐始终通过安装命令配置。下面仅给出 Claude Code 的手动配置示例；路径指向 `~/.agent-lens/app/hooks/`：
 
 ```json
 {
@@ -452,7 +463,7 @@ Windows 对应路径为 `C:\Users\<用户名>\.agent-lens\`。当前平铺布局
 | sessions | 以 `source + session_id` 隔离的会话摘要 |
 | daily_stats | 按天+工具聚合统计 |
 | recent_errors | 最近错误（滚动保留 50 条） |
-| timeline | 统一可观测事件、工具生命周期和证据元数据 |
+| timeline | 统一可观测事件、生命周期属性、工具调用和证据元数据 |
 | overview_tools | 概览页工具身份与运行环境快照 |
 | overview_assets | 概览页能力资产快照 |
 | overview_scan_runs | 概览资产扫描记录、状态与错误信息 |

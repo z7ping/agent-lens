@@ -25,6 +25,27 @@ test('事件入库前按默认策略脱敏提示词和工具数据', () => {
   assert.equal(safe.redaction_applied, 1);
 });
 
+test('Codex 生命周期正文遵守提示词策略且属性始终递归脱敏', () => {
+  const record = {
+    event_type: 'user_prompt',
+    role: 'user_prompt',
+    content: 'token=prompt-secret',
+    attributes_json: { model: 'gpt-test', nested: { api_key: 'attribute-secret' } },
+  };
+  const disabled = sanitizeEventRecord(record, { AGENT_LENS_PROMPT_CAPTURE: 'off' });
+  const redacted = sanitizeEventRecord(record, { AGENT_LENS_PROMPT_CAPTURE: 'redacted' });
+  const full = sanitizeEventRecord(record, { AGENT_LENS_PROMPT_CAPTURE: 'full' });
+
+  assert.equal(disabled.content, null);
+  assert.doesNotMatch(redacted.content, /prompt-secret/);
+  assert.equal(full.content, 'token=prompt-secret');
+  assert.equal(disabled.attributes_json.nested.api_key, REDACTED);
+  assert.equal(redacted.attributes_json.nested.api_key, REDACTED);
+  assert.equal(full.attributes_json.nested.api_key, REDACTED);
+  assert.equal(disabled.capture_policy, 'off/redacted');
+  assert.equal(disabled.redaction_applied, 1);
+});
+
 test('环境信息默认关闭，启用后也只采集允许名单', () => {
   assert.equal(getCapturePolicy({}).environment, 'off');
   assert.equal(captureEnvironment({ LANG: 'zh_CN', SECRET_TOKEN: 'nope' }, {}).value, null);

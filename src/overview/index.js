@@ -47,6 +47,8 @@ const statusLabels = {
   configured: '已配置',
   available: '可用',
   unknown: '未知',
+  complete: '完整',
+  partial: '部分',
 };
 
 export function initOverview() {
@@ -264,7 +266,7 @@ function renderAssemblyPath(item) {
   const cls = statusClass(item.status);
   const pathText = item.path || '';
   return `
-    <div class="overview-path-row ${cls}">
+    <div class="overview-path-row ${cls}" title="${escapeHtml(item.description || '')}">
       <span class="overview-path-dot"></span>
       <div>
         <b>${escapeHtml(item.role || '路径')}</b>
@@ -309,7 +311,7 @@ function renderSkillFlow(flow) {
 }
 
 function statusClass(status) {
-  if (status === 'exists' || status === 'configured' || status === 'enabled' || status === 'detected') return 'ok';
+  if (status === 'exists' || status === 'configured' || status === 'enabled' || status === 'detected' || status === 'complete') return 'ok';
   if (status === 'missing' || status === 'not_found') return 'missing';
   return 'muted';
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 验证 v0.4 统一事件数据库的身份约束与 JSONL 可追溯性。
+ * 验证统一事件数据库的身份约束、生命周期属性与 JSONL 可追溯性。
  *
  * 用法：node server/scripts/verify-integrity.js
  */
@@ -67,7 +67,7 @@ function main() {
   console.log(`JSONL：${jsonl.files} 个文件，${jsonl.records.length} 条可解析，${jsonl.invalid} 条无效，${matched} 条可追溯到 Timeline。`);
   console.log(`约束检查：事件重复 ${duplicateEvents}，会话身份重复 ${duplicateSessions}，断链父事件 ${brokenParents}，缺失证据元数据 ${missingEvidence}。`);
 
-  const passed = schemaVersion === '4'
+  const passed = schemaVersion === '5'
     && duplicateEvents === 0
     && duplicateSessions === 0
     && brokenParents === 0

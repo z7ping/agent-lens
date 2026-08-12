@@ -1,5 +1,5 @@
 -- agent-lens.db Schema
--- Version: 4
+-- Version: 5
 
 CREATE TABLE IF NOT EXISTS schema_meta (
   key TEXT PRIMARY KEY,
@@ -76,7 +76,8 @@ CREATE TABLE IF NOT EXISTS timeline (
   confidence TEXT NOT NULL DEFAULT 'unknown',
   missing_reason TEXT,
   redaction_applied INTEGER,
-  capture_policy TEXT
+  capture_policy TEXT,
+  attributes_json TEXT
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_timeline_event_id ON timeline(event_id);
@@ -135,5 +136,5 @@ CREATE TABLE IF NOT EXISTS overview_scan_runs (
 CREATE INDEX IF NOT EXISTS idx_overview_assets_tool ON overview_assets(tool, type);
 CREATE INDEX IF NOT EXISTS idx_overview_scan_runs_started ON overview_scan_runs(started_at DESC);
 
-INSERT INTO schema_meta (key, value) VALUES ('schema_version', '4')
+INSERT INTO schema_meta (key, value) VALUES ('schema_version', '5')
 ON CONFLICT(key) DO NOTHING;

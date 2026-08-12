@@ -1,6 +1,6 @@
 # AgentLens 架构文档
 
-> 最后更新：2026-08-11
+> 最后更新：2026-08-12
 > 目的：记录技术架构和关键决策，防止迭代中反复踩坑
 
 ---
@@ -51,13 +51,13 @@
 
 ## 2. 数据采集方式对比
 
-AgentLens 同时使用实时 Hook、历史 JSONL 导入和本地数据库轮询。Hook 负责低延迟工具观测，历史数据源负责补齐对话和未安装 Hook 时产生的任务。
+AgentLens 同时使用实时 Hook、历史 JSONL 导入和本地数据库轮询。Hook 负责低延迟生命周期与工具观测，历史数据源负责补齐对话和未安装 Hook 时产生的任务。
 
 | 适配器 | 主要采集方式 | 数据来源 | 用户消息 | AI 可见回复 | 工具调用 |
 |--------|--------------|----------|:--------:|:----------:|:--------:|
 | **Hermes** | SQLite 轮询 | `state.db` 的 messages / sessions | ✅ | ✅ | ✅ |
 | **Claude Code** | 实时 Hook + JSONL 增量导入 | Hook stdin、`~/.claude/projects/**/*.jsonl` | ✅（历史） | ✅（历史） | ✅ |
-| **Codex** | 实时 Hook + JSONL 增量导入 | Hook stdin、`~/.codex/sessions/**/*.jsonl` | ✅（历史） | ✅（历史） | ✅ |
+| **Codex** | 11 类实时 Hook + JSONL 增量导入 | Hook stdin、`~/.codex/sessions/**/*.jsonl` | ✅（实时提交 + 历史） | ✅（Turn 停止 + 历史） | ✅ |
 | **OpenCode** | SQLite 轮询 | `opencode.db` 的 session / message / part | ✅ | ✅ | ✅ |
 | **Pi** | JSONL 轮询 | Pi session JSONL | ✅ | ✅ | ✅ |
 | **Cursor** | 实时 Hook | Hook stdin | ❌ | ❌ | ✅ |
@@ -65,11 +65,14 @@ AgentLens 同时使用实时 Hook、历史 JSONL 导入和本地数据库轮询�
 
 ### 数据完整度边界
 
-- Claude Code 与 Codex 的实时 Hook 当前只安装 `PreToolUse` 和 `PostToolUse`，实时链路主要包含工具调用；用户和助手消息来自历史 JSONL 导入。
+- Claude Code 的实时 Hook 当前只安装 `PreToolUse` 和 `PostToolUse`；用户和助手消息来自历史 JSONL 导入。
+- Codex 实时 Hook 覆盖 Session、提示词提交、权限请求、Tool、Compact、Subagent 和 Stop。生命周期事件与原生 JSONL 历史对话保持不同证据类型，不把两者合并成“完整模型输入”。
+- Codex 会话开始时按官方优先级静态发现当前 `AGENTS.md` 指令链；静态发现不能证明历史 Turn 实际加载过该内容。
 - 历史文件不存在、会话持久化被关闭或格式发生变化时，对话记录可能缺失。
 - 用户消息和助手可见回复不等于模型收到的完整提示输入；系统指令、Developer 指令、项目规则、Skills、工具描述和 Memory 可能未被当前导入器保留。
 - AgentLens 不承诺获得模型未公开的隐藏思维过程。Pi 等来源若在原生日志中公开 thinking，只能按该来源的可见数据展示。
 - 工具参数会按类型摘要，输出与错误会截断，Timeline 不是完整原始事件归档。
+- Codex hosted tools 不经过本地函数工具 Hook，部分特殊工具路径也可能选择绕过；子 Agent transcript 和工具归属并非总能观察到。
 - 每条事件使用 `capture_method`、`visibility`、`confidence` 和 `missing_reason` 说明运行时捕获、原生日志、原生数据库、静态发现、推断或不可观察状态。
 - Tool Use 与 Tool Result 是两条关联事件；来源只提供合并工具记录时，会明确标记拆分事件的证据强度与缺失原因。
 
@@ -105,7 +108,8 @@ CREATE TABLE timeline (
   confidence TEXT NOT NULL,
   missing_reason TEXT,
   redaction_applied INTEGER,
-  capture_policy TEXT
+  capture_policy TEXT,
+  attributes_json TEXT              -- 生命周期来源属性（JSON）
 );
 ```
 
@@ -246,11 +250,11 @@ Pi agent 根目录候选：
 **决策**：支持 Hook 的来源仍保留历史 JSONL 或数据库导入。
 
 **原因**：
-- Hook 适合低延迟捕获工具调用，但当前安装范围不能覆盖完整对话和全部生命周期。
+- Hook 适合低延迟捕获工具调用和来源明确提供的生命周期，但不能覆盖 hosted tools、隐藏思维过程或来源未公开的数据。
 - 历史数据源可以补齐用户消息、助手可见回复和未安装 Hook 时产生的任务。
 - 两种来源互为补充，并通过幂等标识和导入水位线避免重复写入。
 
-**影响**：同一来源需要同时维护实时适配器和历史解析器；界面必须说明记录来自运行时捕获还是历史导入，不能把二者混合描述为完整提示词。
+**影响**：同一来源需要同时维护实时适配器和历史解析器；界面必须说明记录来自运行时捕获、历史导入还是静态发现，不能把三者混合描述为完整提示词。
 
 ### 5.3 为什么用 timeline 表而不是 sessions 表？
 
@@ -557,7 +561,10 @@ server/
 │   └── index.js             # 适配器注册表
 ├── hooks/
 │   ├── prelog.js            # PreToolUse hook脚本
-│   └── log.js               # PostToolUse hook脚本
+│   ├── log.js               # PostToolUse hook脚本
+│   └── codex-lifecycle.js   # Codex 生命周期被动采集入口
+├── codex-lifecycle.js       # Codex Hook 事件归一化
+├── codex-context.js         # Codex 当前指令链静态发现
 ├── agent-lens-db.js              # SQLite存储层（timeline表）
 ├── migrations.js                 # Schema 版本、备份和无损迁移
 ├── event-model.js                # Session/Event 身份与证据规范

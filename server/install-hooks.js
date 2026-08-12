@@ -14,11 +14,23 @@ ensureRuntimeDirs(RUNTIME_PATHS);
 const TOOL_TRACKER_DIR = RUNTIME_PATHS.appDir;
 const PRELOG_PATH = path.join(RUNTIME_PATHS.hooksDir, 'prelog.js').replace(/\\/g, '/');
 const LOG_PATH = path.join(RUNTIME_PATHS.hooksDir, 'log.js').replace(/\\/g, '/');
+const CODEX_LIFECYCLE_PATH = path.join(RUNTIME_PATHS.hooksDir, 'codex-lifecycle.js').replace(/\\/g, '/');
 const CLAUDE_SETTINGS_FILE = path.join(HOME, '.claude', 'settings.json');
 const CODEX_HOOKS_FILE = path.join(HOME, '.codex', 'hooks.json');
 const CURSOR_HOOKS_FILE = path.join(HOME, '.cursor', 'hooks.json');
 
 const MARKER = 'agent-lens';
+const CODEX_LIFECYCLE_EVENTS = [
+    'SessionStart',
+    'SessionEnd',
+    'UserPromptSubmit',
+    'PermissionRequest',
+    'PreCompact',
+    'PostCompact',
+    'SubagentStart',
+    'SubagentStop',
+    'Stop',
+];
 
 // ─── 工具函数 ────────────────────────────────────────────
 
@@ -90,18 +102,32 @@ function installClaudeCode() {
 
 // ─── 2. Codex ────────────────────────────────────────────
 
-function installCodex() {
-    const hooks = readJson(CODEX_HOOKS_FILE);
+function configureCodexHooks(hooks, options = {}) {
     if (!hooks.hooks) hooks.hooks = {};
 
+    const prelogPath = options.prelogPath || PRELOG_PATH;
+    const logPath = options.logPath || LOG_PATH;
+    const lifecyclePath = options.lifecyclePath || CODEX_LIFECYCLE_PATH;
+
     // 清理已有 AgentLens hooks，避免重复安装
-    hooks.hooks.PreToolUse = removeOldHooks(hooks.hooks.PreToolUse, MARKER);
-    hooks.hooks.PostToolUse = removeOldHooks(hooks.hooks.PostToolUse, MARKER);
+    for (const eventName of ['PreToolUse', 'PostToolUse', ...CODEX_LIFECYCLE_EVENTS]) {
+        hooks.hooks[eventName] = removeOldHooks(hooks.hooks[eventName], MARKER);
+    }
 
-    hooks.hooks.PreToolUse.push(makeHookEntry(formatNodeHookCommand(PRELOG_PATH), 5));
-    hooks.hooks.PostToolUse.push(makeHookEntry(formatNodeHookCommand(LOG_PATH), 10));
+    hooks.hooks.PreToolUse.push(makeHookEntry(formatNodeHookCommand(prelogPath), 5));
+    hooks.hooks.PostToolUse.push(makeHookEntry(formatNodeHookCommand(logPath), 10));
+    for (const eventName of CODEX_LIFECYCLE_EVENTS) {
+        const timeout = eventName === 'SessionEnd' ? 3 : 5;
+        hooks.hooks[eventName].push(makeHookEntry(formatNodeHookCommand(lifecyclePath), timeout));
+    }
+    return hooks;
+}
 
-    writeJson(CODEX_HOOKS_FILE, hooks);
+function installCodex(options = {}) {
+    const hooksFile = options.hooksFile || CODEX_HOOKS_FILE;
+    const hooks = configureCodexHooks(readJson(hooksFile), options);
+
+    writeJson(hooksFile, hooks);
     console.log('   [OK] Codex hooks.json 已更新');
 }
 
@@ -127,6 +153,7 @@ function installCursor() {
 // Codex 事件名 → hook_event_key_label（snake_case）
 const CODEX_EVENT_LABELS = {
     SessionStart: 'session_start',
+    SessionEnd: 'session_end',
     UserPromptSubmit: 'user_prompt_submit',
     PreToolUse: 'pre_tool_use',
     PermissionRequest: 'permission_request',
@@ -282,6 +309,8 @@ function main(argv = process.argv.slice(2)) {
 if (require.main === module) main();
 
 module.exports = {
+    CODEX_LIFECYCLE_EVENTS,
+    configureCodexHooks,
     formatNodeHookCommand,
     removeAgentLensHooks,
     removeOldHooks,

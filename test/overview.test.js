@@ -12,9 +12,30 @@ const {
   discoverCodexAssets,
   discoverHermesAssets,
   discoverPiAssets,
+  inspectCodexHooks,
   readOverviewInventory,
   refreshOverviewInventory,
 } = require('../server/overview');
+
+test('diagnoses Codex lifecycle hook coverage without exposing hook payloads', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-lens-codex-hooks-'));
+  fs.writeFileSync(path.join(root, 'hooks.json'), JSON.stringify({
+    hooks: {
+      SessionStart: [{ hooks: [{ command: 'node C:/agent-lens/hooks/codex-lifecycle.js' }] }],
+      PreToolUse: [{ hooks: [{ command: 'node C:/agent-lens/hooks/prelog.js' }] }],
+      Stop: [{ hooks: [{ command: 'node C:/other/observer.js' }] }],
+    },
+  }));
+  fs.writeFileSync(path.join(root, 'config.toml'), '[hooks.state."one"]\ntrusted_hash = "sha256:test"\n');
+
+  const diagnostics = inspectCodexHooks(root);
+  assert.equal(diagnostics.status, 'partial');
+  assert.equal(diagnostics.configured_count, 2);
+  assert.equal(diagnostics.expected_count, 11);
+  assert.equal(diagnostics.trust_record_count, 1);
+  assert.ok(diagnostics.missing_events.includes('Stop'));
+  assert.equal(JSON.stringify(diagnostics).includes('sha256:test'), false);
+});
 
 test('builds one overview card per tool with grouped capability assets', () => {
   const overview = buildOverview({

@@ -181,10 +181,17 @@ async function handleApiTimeline(req, res, params) {
         const projects = loadProjects();
 
         // 统一字段名：timeline 表用 timestamp，前端可能期望 ts
-        const formatted = items.map(row => ({
-            ...enrichProjectFields(row, projects),
-            ts: row.timestamp,
-        }));
+        const formatted = items.map(row => {
+            let attributes = null;
+            if (row.attributes_json) {
+                try { attributes = JSON.parse(row.attributes_json); } catch (_) {}
+            }
+            return {
+                ...enrichProjectFields(row, projects),
+                ts: row.timestamp,
+                attributes,
+            };
+        });
 
         sendJson(res, { items: formatted });
     } catch (e) {

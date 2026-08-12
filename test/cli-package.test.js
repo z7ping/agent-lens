@@ -89,4 +89,7 @@ test('cli installs production dependencies into the separated app directory', ()
   assert.match(cliSource, /activateStagedApplication/);
   assert.match(cliSource, /rollbackInstalledApplication/);
   assert.match(cliSource, /cleanupFlatApplication/);
+  assert.match(cliSource, /spawn\(process\.execPath, \[installedServer, String\(port\), '--daemon'\]/);
+  assert.match(cliSource, /syncInstalledHooks\('上一版 Hooks 配置恢复失败'\)/);
+  assert.doesNotMatch(cliSource, /\[installedCli, 'start', '--daemon'/);
 });

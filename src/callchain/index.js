@@ -467,6 +467,126 @@ function renderEvidenceBadge(item) {
   return `<span class="evidence-badge ${escapeHtml(visibility)}" title="${escapeHtml(title)}">${escapeHtml(label)}</span>`;
 }
 
+const codexLifecycleLabels = {
+  session_start: ['会话开始', '◉'],
+  session_end: ['会话结束', '○'],
+  user_prompt: ['提交提示词', '↗'],
+  permission_request: ['权限请求', '◆'],
+  compact_start: ['开始压缩', '⇣'],
+  compact_end: ['压缩完成', '⇡'],
+  agent_start: ['子 Agent 启动', '◇'],
+  agent_stop: ['子 Agent 停止', '◈'],
+  turn_stop: ['Turn 完成', '✓'],
+  context_discovery: ['上下文发现', 'i'],
+  tool_result: ['工具完成', '·'],
+  tool_error: ['工具失败', '!'],
+};
+
+const codexPrimaryLifecycleTypes = new Set([
+  'session_start', 'session_end', 'user_prompt', 'permission_request',
+  'compact_start', 'compact_end', 'agent_start', 'agent_stop', 'turn_stop',
+  'context_discovery',
+]);
+
+function getLifecycleAttributes(item) {
+  if (item?.attributes && typeof item.attributes === 'object') return item.attributes;
+  if (!item?.attributes_json) return {};
+  try { return JSON.parse(item.attributes_json); } catch (_) { return {}; }
+}
+
+function shortNativeId(value) {
+  const text = String(value || '');
+  return text.length > 14 ? `${text.slice(0, 6)}…${text.slice(-5)}` : text;
+}
+
+function lifecycleSummary(item, attributes) {
+  const eventType = item.event_type || item.role;
+  if (eventType === 'user_prompt') {
+    if (!item.content && String(item.capture_policy || '').startsWith('off')) return '提示词正文采集已关闭';
+    return item.content ? truncate(String(item.content).replace(/\s+/g, ' '), 180) : '来源未提供提示词正文';
+  }
+  if (eventType === 'permission_request') {
+    return [item.tool_name || '未知工具', '等待用户或 Codex 正常审批流程'].join(' · ');
+  }
+  if (eventType === 'session_start') return `启动方式：${attributes.start_source || '未知'}`;
+  if (eventType === 'context_discovery') {
+    const scope = attributes.scope === 'global' ? '全局' : '项目';
+    return `${scope} · ${attributes.file_name || '指令文件'}${attributes.truncated ? ' · 已按上限截断' : ''}`;
+  }
+  if (eventType === 'session_end') return `结束原因：${attributes.lifecycle_reason || '来源未说明'}`;
+  if (eventType === 'compact_start' || eventType === 'compact_end') {
+    return `触发方式：${attributes.compact_trigger === 'auto' ? '自动' : attributes.compact_trigger === 'manual' ? '手动' : '未知'}`;
+  }
+  if (eventType === 'agent_start') return `类型：${attributes.agent_type || '未提供'}`;
+  if (eventType === 'agent_stop') {
+    const prefix = attributes.agent_type ? `${attributes.agent_type} · ` : '';
+    return `${prefix}${item.content ? truncate(String(item.content).replace(/\s+/g, ' '), 180) : '未提供最后回复'}`;
+  }
+  if (eventType === 'turn_stop') {
+    return item.content ? truncate(String(item.content).replace(/\s+/g, ' '), 180) : 'Turn 已停止，来源未提供最后回复';
+  }
+  if (eventType === 'tool_result' || eventType === 'tool_error') {
+    return `${item.tool_name || '未知工具'}${item.duration_ms != null ? ` · ${formatDuration(item.duration_ms)}` : ''}`;
+  }
+  return '';
+}
+
+function renderCodexLifecycleTrace(calls) {
+  if (!Array.isArray(calls) || !calls.some(item => item.source === 'codex' && codexPrimaryLifecycleTypes.has(item.event_type || item.role))) {
+    return '';
+  }
+
+  const events = calls.filter(item => {
+    if (item.source !== 'codex') return false;
+    const eventType = item.event_type || item.role;
+    if (codexPrimaryLifecycleTypes.has(eventType)) return true;
+    return (eventType === 'tool_result' || eventType === 'tool_error') && Boolean(item.turn_id);
+  });
+  const turns = new Set(events.map(item => item.turn_id).filter(Boolean));
+  const nodes = events.map(item => {
+    const eventType = item.event_type || item.role;
+    const [label, icon] = codexLifecycleLabels[eventType] || [eventType, '·'];
+    const attributes = getLifecycleAttributes(item);
+    const meta = [];
+    if (item.turn_id) meta.push(`<span title="${escapeHtml(item.turn_id)}">Turn ${escapeHtml(shortNativeId(item.turn_id))}</span>`);
+    if (item.agent_id) meta.push(`<span title="${escapeHtml(item.agent_id)}">Agent ${escapeHtml(shortNativeId(item.agent_id))}</span>`);
+    if (attributes.model) meta.push(`<span>${escapeHtml(attributes.model)}</span>`);
+    if (attributes.permission_mode) meta.push(`<span>权限 ${escapeHtml(attributes.permission_mode)}</span>`);
+    const summary = lifecycleSummary(item, attributes);
+    const missing = item.missing_reason
+      ? `<div class="lifecycle-missing">${escapeHtml(item.missing_reason)}</div>`
+      : '';
+    return `
+      <div class="lifecycle-node ${escapeHtml(eventType)}">
+        <div class="lifecycle-marker">${escapeHtml(icon)}</div>
+        <div class="lifecycle-card">
+          <div class="lifecycle-card-head">
+            <strong>${escapeHtml(label)}</strong>
+            <span class="lifecycle-time">${escapeHtml(formatTime(item.timestamp || item.ts))}</span>
+            ${renderEvidenceBadge(item)}
+          </div>
+          ${summary ? `<div class="lifecycle-summary">${renderMarkdownInline(summary)}</div>` : ''}
+          ${meta.length ? `<div class="lifecycle-meta">${meta.join('')}</div>` : ''}
+          ${missing}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <section class="codex-lifecycle-trace">
+      <div class="lifecycle-header">
+        <div>
+          <div class="lifecycle-title">Codex 生命周期</div>
+          <div class="lifecycle-subtitle">运行时 Hook 证据；原生日志与当前环境重建保持独立</div>
+        </div>
+        <div class="lifecycle-count">${turns.size} Turn · ${events.length} 事件</div>
+      </div>
+      <div class="lifecycle-list">${nodes}</div>
+    </section>
+  `;
+}
+
 /** 类型特定行内预览 */
 function getTypePreview(toolName, input, call, projectPath) {
   const type = getToolType(toolName);
@@ -984,6 +1104,7 @@ export function renderCallChainCalls(calls) {
   // 从调用数据中提取来源颜色
   const src = calls[0]?.source || '';
   const sourceColor = (sourceColors[src] || {}).light || '';
+  const lifecycleTrace = renderCodexLifecycleTrace(calls);
 
   const rounds = groupByRounds(calls);
   const toolRecords = calls.filter(c => c.role === 'tool_result' || c.role === 'tool_error');
@@ -1014,8 +1135,9 @@ export function renderCallChainCalls(calls) {
 
   // 无轮次数据（全是 tool 记录，无 user）,退化到平铺
   if (rounds.length === 0) {
-    const tree = buildTree(calls);
-    return overview + tree.map((call, i) => renderCall(call, i, '', sourceColor)).join('');
+    const flatCalls = calls.filter(call => ['tool_use', 'tool_result', 'tool_error'].includes(call.role));
+    const tree = buildTree(flatCalls);
+    return overview + lifecycleTrace + tree.map((call, i) => renderCall(call, i, '', sourceColor)).join('');
   }
 
   // 轮次导航（长会话快速定位：全部 / 有错误 / 慢调用 / 最近一轮），带数量反馈
@@ -1033,7 +1155,7 @@ export function renderCallChainCalls(calls) {
 
   const roundsHtml = `<div class="rounds-container" data-nav="all">${rounds.map((round, i) => renderRound(round, i, sourceColor, i === rounds.length - 1)).join('')}</div>`;
 
-  return nav + overview + roundsHtml;
+  return nav + overview + lifecycleTrace + roundsHtml;
 }
 
 /** 切换调用行的详情面板 */

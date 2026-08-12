@@ -37,6 +37,7 @@ test('v0.3 数据库无损迁移并保留并行事件', () => {
   assert.equal(db.prepare('SELECT COUNT(*) AS count FROM timeline').get().count, 2);
   assert.equal(db.prepare('SELECT session_key FROM sessions').get().session_key, 'codex:same-session');
   assert.equal(db.prepare('SELECT capture_method FROM timeline').get().capture_method, 'legacy_import');
+  assert.ok(db.prepare('PRAGMA table_info(timeline)').all().some(column => column.name === 'attributes_json'));
   assert.ok(result.backupPath && fs.existsSync(result.backupPath));
 
   const reimport = insertTimeline({
@@ -73,6 +74,43 @@ test('v0.3 数据库无损迁移并保留并行事件', () => {
 
   db.close();
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('v0.4 数据库增量迁移到 v0.5 并保留生命周期属性', () => {
+  const db = new Database(':memory:');
+  const schemaPath = path.join(__dirname, '..', 'server', 'schema.sql');
+  const v4Schema = fs.readFileSync(schemaPath, 'utf8')
+    .replace('-- Version: 5', '-- Version: 4')
+    .replace(',\n  attributes_json TEXT', '')
+    .replace("VALUES ('schema_version', '5')", "VALUES ('schema_version', '4')");
+  db.exec(v4Schema);
+  db.prepare(`
+    INSERT INTO timeline (
+      event_id, source, session_key, session_id, timestamp, event_type, role,
+      capture_method, visibility, confidence
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run('evt-v4', 'codex', 'codex:s1', 's1', '2026-08-12T00:00:00Z', 'user', 'user', 'native_log', 'captured', 'confirmed');
+
+  const result = initializeDatabase(db, { schemaPath });
+  assert.equal(result.migrated, true);
+  assert.equal(result.fromVersion, 4);
+  assert.equal(result.toVersion, 5);
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM timeline').get().count, 1);
+  assert.ok(db.prepare('PRAGMA table_info(timeline)').all().some(column => column.name === 'attributes_json'));
+
+  insertTimeline({
+    source: 'codex',
+    session_id: 's1',
+    timestamp: '2026-08-12T00:00:01Z',
+    source_event_id: 'hook-1',
+    event_type: 'session_start',
+    role: 'session_start',
+    attributes_json: { model: 'gpt-test', permission_mode: 'default' },
+    capture_method: 'runtime_hook',
+  }, db);
+  const attributes = JSON.parse(db.prepare("SELECT attributes_json FROM timeline WHERE event_type='session_start'").get().attributes_json);
+  assert.deepEqual(attributes, { model: 'gpt-test', permission_mode: 'default' });
+  db.close();
 });
 
 test('拒绝用旧程序打开未来版本数据库', () => {

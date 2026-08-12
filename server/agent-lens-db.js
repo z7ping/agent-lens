@@ -149,6 +149,9 @@ function insertTimeline(record, dbOverride = null) {
   const errorDetail = normalized.error_detail != null
     ? (typeof normalized.error_detail === 'string' ? normalized.error_detail : JSON.stringify(normalized.error_detail))
     : null;
+  const attributesJson = normalized.attributes_json != null
+    ? (typeof normalized.attributes_json === 'string' ? normalized.attributes_json : JSON.stringify(normalized.attributes_json))
+    : null;
 
   const insertInfo = db.prepare(`
     INSERT OR IGNORE INTO timeline (
@@ -156,8 +159,9 @@ function insertTimeline(record, dbOverride = null) {
       parent_event_id, timestamp, source_sequence, seq, event_type, role, call_id,
       tool_use_id, tool_name, content, tool_input, success, exit_code, duration_ms,
       output_snippet, error_message, error_type, error_detail, project_key, parent_seq,
-      capture_method, visibility, confidence, missing_reason, redaction_applied, capture_policy
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      capture_method, visibility, confidence, missing_reason, redaction_applied, capture_policy,
+      attributes_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     normalized.event_id,
     normalized.source,
@@ -192,6 +196,7 @@ function insertTimeline(record, dbOverride = null) {
     normalized.missing_reason || null,
     normalized.redaction_applied ?? null,
     normalized.capture_policy || null,
+    attributesJson,
   );
 
   if (insertInfo.changes === 0) {
@@ -222,7 +227,8 @@ function insertTimeline(record, dbOverride = null) {
         confidence = COALESCE(?, confidence),
         missing_reason = COALESCE(?, missing_reason),
         redaction_applied = COALESCE(?, redaction_applied),
-        capture_policy = COALESCE(?, capture_policy)
+        capture_policy = COALESCE(?, capture_policy),
+        attributes_json = COALESCE(?, attributes_json)
       WHERE event_id = ?
     `).run(
       normalized.source_event_id || null, normalized.agent_id || null, normalized.turn_id || null,
@@ -233,7 +239,7 @@ function insertTimeline(record, dbOverride = null) {
       normalized.error_type || null, errorDetail, normalized.project_key || null,
       normalized.parent_seq ?? null, normalized.capture_method, normalized.visibility,
       normalized.confidence, normalized.missing_reason || null, normalized.redaction_applied ?? null,
-      normalized.capture_policy || null, normalized.event_id,
+      normalized.capture_policy || null, attributesJson, normalized.event_id,
     );
   }
 
@@ -291,8 +297,8 @@ function insertToolEventPair(record, dbOverride = null) {
 }
 
 /** 查询 timeline 记录 */
-function queryTimeline(options = {}) {
-  const db = getDb();
+function queryTimeline(options = {}, dbOverride = null) {
+  const db = dbOverride || getDb();
   const { session_id, session_key, source, project_key, limit = 1000 } = options;
   let where = 'WHERE 1=1';
   const params = [];

@@ -11,6 +11,9 @@
 const fs = require('fs');
 const path = require('path');
 const { claudeCode, codex, agentLens } = require('./paths');
+const { CODEX_LIFECYCLE_EVENT_TYPES } = require('./codex-lifecycle');
+
+const CODEX_REQUIRED_HOOK_EVENTS = ['PreToolUse', 'PostToolUse', ...Object.keys(CODEX_LIFECYCLE_EVENT_TYPES)];
 
 function countJsonlRecursive(dir) {
     if (!fs.existsSync(dir)) return 0;
@@ -32,6 +35,25 @@ function hooksReferenceAgentLens(hookConfigText) {
     return /agent-lens|prelog\.js|hooks[\\/]log\.js|\.agent-lens/i.test(hookConfigText);
 }
 
+function inspectCodexHookCoverage(hookConfigText) {
+    let config;
+    try { config = JSON.parse(hookConfigText || '{}'); } catch (_) { config = {}; }
+    const configuredEvents = CODEX_REQUIRED_HOOK_EVENTS.filter(eventName => {
+        const groups = config?.hooks?.[eventName];
+        return Array.isArray(groups) && groups.some(group =>
+            Array.isArray(group?.hooks) && group.hooks.some(hook =>
+                /agent-lens|prelog\.js|hooks[\\/]log\.js|\.agent-lens/i.test(String(hook?.command || ''))
+            )
+        );
+    });
+    return {
+        configured: configuredEvents.length,
+        expected: CODEX_REQUIRED_HOOK_EVENTS.length,
+        complete: configuredEvents.length === CODEX_REQUIRED_HOOK_EVENTS.length,
+        missingEvents: CODEX_REQUIRED_HOOK_EVENTS.filter(eventName => !configuredEvents.includes(eventName)),
+    };
+}
+
 function detectSourceStatus() {
     // ─── Claude Code ───
     const claudeSettingsText = fs.existsSync(claudeCode.settingsFile) ? safeRead(claudeCode.settingsFile) : '';
@@ -40,6 +62,7 @@ function detectSourceStatus() {
     // ─── Codex ───
     const codexHooksText = fs.existsSync(codex.hooksFile) ? safeRead(codex.hooksFile) : '';
     const codexHookInstalled = hooksReferenceAgentLens(codexHooksText);
+    const codexHookCoverage = inspectCodexHookCoverage(codexHooksText);
 
     const agentLensInstalled = fs.existsSync(path.join(agentLens.appDir || agentLens.home, 'hooks')) ||
         fs.existsSync(path.join(agentLens.appDir || agentLens.home, 'install-hooks.js'));
@@ -54,6 +77,7 @@ function detectSourceStatus() {
         codex: {
             historyAvailable: countJsonlRecursive(codex.sessionsDir) > 0,
             hookInstalled: codexHookInstalled,
+            hookCoverage: codexHookCoverage,
             sessionFiles: countJsonlRecursive(codex.sessionsDir),
             dataDir: codex.sessionsDir,
         },
@@ -69,4 +93,4 @@ function safeRead(filePath) {
     }
 }
 
-module.exports = { detectSourceStatus, hooksReferenceAgentLens };
+module.exports = { detectSourceStatus, hooksReferenceAgentLens, inspectCodexHookCoverage };

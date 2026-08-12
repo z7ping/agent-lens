@@ -125,15 +125,21 @@ function restoreMaybeJson(result, serialized) {
 function sanitizeEventRecord(record, env = process.env) {
   const policy = getCapturePolicy(env);
   const role = record.role || record.event_type || '';
-  const promptMode = ['user', 'assistant', 'system'].includes(role) ? policy.prompt : policy.tool;
-  const content = captureValue(record.content, promptMode, { maxText: DEFAULT_MAX_TEXT });
+  const eventType = record.event_type || role;
+  const usesPromptPolicy = ['user', 'assistant', 'system'].includes(role)
+    || ['user_prompt', 'agent_stop', 'turn_stop'].includes(eventType);
+  const usesConfigPolicy = eventType === 'context_discovery';
+  const contentMode = usesConfigPolicy ? policy.config : (usesPromptPolicy ? policy.prompt : policy.tool);
+  const content = captureValue(record.content, contentMode, { maxText: DEFAULT_MAX_TEXT });
   const parsedToolInput = parseMaybeJson(record.tool_input);
   const toolInput = restoreMaybeJson(captureValue(parsedToolInput.value, policy.tool, { maxText: DEFAULT_MAX_TOOL_TEXT }), parsedToolInput.serialized);
   const output = captureValue(record.output_snippet, policy.tool, { maxText: DEFAULT_MAX_TOOL_TEXT });
   const error = captureValue(record.error_message, policy.tool, { maxText: DEFAULT_MAX_TOOL_TEXT });
   const parsedDetail = parseMaybeJson(record.error_detail);
   const errorDetail = restoreMaybeJson(captureValue(parsedDetail.value, policy.tool, { maxText: DEFAULT_MAX_TOOL_TEXT }), parsedDetail.serialized);
-  const redactionApplied = [content, toolInput, output, error, errorDetail].some(item => item.redactionApplied);
+  const parsedAttributes = parseMaybeJson(record.attributes_json ?? record.attributes);
+  const attributes = restoreMaybeJson(captureValue(parsedAttributes.value, 'redacted', { maxText: DEFAULT_MAX_TOOL_TEXT }), parsedAttributes.serialized);
+  const redactionApplied = [content, toolInput, output, error, errorDetail, attributes].some(item => item.redactionApplied);
 
   return {
     ...record,
@@ -142,8 +148,11 @@ function sanitizeEventRecord(record, env = process.env) {
     output_snippet: output.value,
     error_message: error.value,
     error_detail: errorDetail.value,
+    attributes_json: attributes.value,
     redaction_applied: record.redaction_applied != null ? record.redaction_applied : (redactionApplied ? 1 : 0),
-    capture_policy: record.capture_policy || (promptMode === policy.tool ? policy.tool : `${promptMode}/${policy.tool}`),
+    capture_policy: record.capture_policy || (usesConfigPolicy
+      ? `config:${policy.config}`
+      : (usesPromptPolicy ? `${policy.prompt}/${policy.tool}` : policy.tool)),
   };
 }
 

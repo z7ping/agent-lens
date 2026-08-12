@@ -196,12 +196,18 @@ class BaseAdapter {
     }
 
     /**
-     * 从调用栈中弹出栈顶条目（LIFO 严格后进先出）
+     * 优先按来源调用标识取出条目；旧来源没有调用标识时保持 LIFO 兼容。
      * @param {Object} state
+     * @param {string|null} callId
      * @returns {Object|null}
      */
-    popFromStack(state) {
+    popFromStack(state, callId = null) {
         if (state.stack.length === 0) return null;
+        if (callId) {
+            const index = state.stack.findLastIndex(entry => entry.call_id === callId);
+            if (index < 0) return null;
+            return state.stack.splice(index, 1)[0];
+        }
         return state.stack.pop();
     }
 
@@ -250,7 +256,9 @@ class BaseAdapter {
         state.seq += 1;
         const seq = state.seq;
 
-        const parentEntry = state.stack.length > 0 ? state.stack[state.stack.length - 1] : null;
+        const parentEntry = opts.inferParentFromStack === false
+            ? null
+            : (state.stack.length > 0 ? state.stack[state.stack.length - 1] : null);
         const parentSeq = parentEntry ? parentEntry.seq : null;
         const sessionId = data.session_id || data.conversation_id || '';
         const callId = data.call_id || data.tool_use_id || `${sessionId || 'session'}:${seq}`;
@@ -304,7 +312,8 @@ class BaseAdapter {
                 capture_method: 'runtime_hook',
                 visibility: 'captured',
                 confidence: 'confirmed',
-                missing_reason: (!data.agent_id && !data.subagent_id && !data.turn_id) ? 'Hook 未提供 Agent 或 Turn 标识' : null,
+                missing_reason: data.missing_reason
+                    || ((!data.agent_id && !data.subagent_id && !data.turn_id) ? 'Hook 未提供 Agent 或 Turn 标识' : null),
             });
         } catch (_) {}
     }

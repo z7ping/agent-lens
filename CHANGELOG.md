@@ -2,6 +2,27 @@
 
 ## 未发布
 
+## 0.5.0 (2026-08-12)
+
+### Added
+- 新增 Codex 生命周期透镜，实时采集 Session、提示词提交、权限请求、Compact、Subagent 和 Stop 事件，并在任务复盘中按 Turn / Agent 展示独立轨迹。
+- 新增 Codex 当前指令链静态发现，遵循 `AGENTS.override.md`、`AGENTS.md` 和 fallback 文件优先级，并明确标记为当前环境证据。
+- Timeline Schema v5 新增 `attributes_json`，保存模型、权限模式、启动来源、压缩触发方式和子 Agent 类型等结构化生命周期属性。
+- 概览装配路径与顶部来源状态新增 Codex Hook 覆盖诊断，可识别旧安装缺少的生命周期 Hook。
+
+### Changed
+- Codex 安装由 2 类工具 Hook 扩展为 11 类生命周期 Hook；`SessionEnd` 使用官方允许的 3 秒超时。
+- Codex 并行工具结果优先使用原生 `tool_use_id` 配对，不再依赖严格 LIFO；缺少 Agent 归属时明确标记缺失原因，不按时间猜测。
+- 生命周期 Hook 保持被动观察，`Stop` / `SubagentStop` 返回中性 JSON，不修改 Codex 控制流或上下文。
+
+### Security
+- 生命周期事件沿用提示词、工具与配置分级采集策略，结构化属性始终递归脱敏，默认不持久化 transcript 路径。
+
+### Fixed
+- 安装应用暂存清单补齐数据库迁移、隐私、安全、事件模型和 Codex 生命周期运行模块，避免源码安装后的运行时缺少依赖。
+- Windows 安装完成后直接启动已安装的服务程序，避免 CLI、VBScript 与 cmd 多层转发导致新服务无法通过就绪检查。
+- 升级失败回滚旧版程序时同步恢复旧版 Hooks 配置，避免旧程序继续引用新版本才提供的 Hook 脚本。
+
 ## 0.4.0 (2026-08-11)
 
 ### Added

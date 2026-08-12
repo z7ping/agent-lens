@@ -7,6 +7,10 @@ const { hermes: HERMES_PATHS } = require('./paths');
 const { getCapturePolicy, captureConfigValue } = require('./privacy');
 
 const ASSET_TYPES = ['skill', 'mcp', 'plugin', 'extension', 'hook', 'adapter', 'builtin'];
+const CODEX_EXPECTED_HOOK_EVENTS = [
+    'SessionStart', 'SessionEnd', 'UserPromptSubmit', 'PreToolUse', 'PermissionRequest',
+    'PostToolUse', 'PreCompact', 'PostCompact', 'SubagentStart', 'SubagentStop', 'Stop',
+];
 
 const TOOL_DEFINITIONS = [
     {
@@ -335,6 +339,38 @@ function discoverCodexAssets(configDir) {
         ...scanTomlSections(path.join(configDir, 'config.toml'), 'mcp_servers', 'mcp', 'Codex'),
         ...scanTomlSections(path.join(configDir, 'config.toml'), 'plugins', 'plugin', 'Codex'),
     ];
+}
+
+function inspectCodexHooks(configDir) {
+    const hooksPath = path.join(configDir || '', 'hooks.json');
+    const configPath = path.join(configDir || '', 'config.toml');
+    const hooks = readJsonFile(hooksPath);
+    const configuredEvents = [];
+    for (const eventName of CODEX_EXPECTED_HOOK_EVENTS) {
+        const groups = hooks?.hooks?.[eventName];
+        const installed = Array.isArray(groups) && groups.some(group =>
+            Array.isArray(group?.hooks) && group.hooks.some(hook => /agent-lens/i.test(String(hook?.command || '')))
+        );
+        if (installed) configuredEvents.push(eventName);
+    }
+    let trustRecords = 0;
+    try {
+        const config = fs.existsSync(configPath) ? fs.readFileSync(configPath, 'utf8') : '';
+        trustRecords = (config.match(/trusted_hash\s*=/g) || []).length;
+    } catch (_) {}
+    const total = CODEX_EXPECTED_HOOK_EVENTS.length;
+    const status = configuredEvents.length === total ? 'complete' : configuredEvents.length > 0 ? 'partial' : 'missing';
+    const missingEvents = CODEX_EXPECTED_HOOK_EVENTS.filter(eventName => !configuredEvents.includes(eventName));
+    return {
+        hooks_path: hooksPath,
+        status,
+        configured_count: configuredEvents.length,
+        expected_count: total,
+        configured_events: configuredEvents,
+        missing_events: missingEvents,
+        trust_record_count: trustRecords,
+        description: `AgentLens Hook ${configuredEvents.length}/${total}；Codex 信任记录 ${trustRecords}`,
+    };
 }
 
 function discoverClaudeAssets(configDir) {
@@ -1037,9 +1073,10 @@ function buildAssemblyPaths(tool = {}) {
     const paths = [assemblyPath('配置目录', configDir, configDir ? dirStatus(configDir) : 'unknown')];
     switch (tool.tool) {
         case 'codex':
+            const hookDiagnostics = inspectCodexHooks(configDir);
             paths.push(
                 assemblyPath('配置文件', path.join(configDir, 'config.toml'), fileStatus(path.join(configDir, 'config.toml'))),
-                assemblyPath('Hook 配置', path.join(configDir, 'hooks.json'), fileStatus(path.join(configDir, 'hooks.json'))),
+                assemblyPath('Hook 配置', hookDiagnostics.hooks_path, hookDiagnostics.status, hookDiagnostics.description),
                 assemblyPath('用户 Skills', path.join(configDir, 'skills'), dirStatus(path.join(configDir, 'skills'))),
                 assemblyPath('插件缓存', path.join(configDir, 'plugins', 'cache'), dirStatus(path.join(configDir, 'plugins', 'cache'))),
                 assemblyPath('会话目录', path.join(configDir, 'sessions'), dirStatus(path.join(configDir, 'sessions')))
@@ -1280,6 +1317,7 @@ module.exports = {
     stopOverviewScanner,
     writeOverviewInventory,
     discoverCodexAssets,
+    inspectCodexHooks,
     discoverHermesAssets,
     discoverPiAssets,
     normalizeCapabilityName,
