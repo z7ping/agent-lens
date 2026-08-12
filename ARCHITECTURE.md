@@ -45,7 +45,7 @@
 └── run/          # PID
 ```
 
-`server/runtime-paths.js` 是路径契约的唯一来源。安装器先把程序和生产依赖写入 `.update/app`，验证后切换到正式 `app/`；服务通过 PID 与 HTTP 就绪检查后，才清理当前平铺布局的旧程序文件。历史 AppData/XDG 布局只迁移目标中缺失的数据，同名数据库或状态文件不会被覆盖。
+`server/runtime-paths.js` 是路径契约的唯一来源。安装器先把程序和生产依赖写入 `.update/app`，验证后切换到正式 `app/`；服务完成核心数据库初始化后先监听 HTTP、写入 PID，再延迟启动历史导入、概览扫描和适配器轮询。安装器通过 PID、HTTP 与实际版本联合检查就绪，成功后才清理当前平铺布局的旧程序文件。历史 AppData/XDG 布局只迁移目标中缺失的数据，同名数据库或状态文件不会被覆盖。
 
 ---
 
@@ -187,7 +187,7 @@ overview_scan_runs (
 1. 前端请求 `/api/overview`。
 2. 后端优先读取 `overview_tools` / `overview_assets` 快照。
 3. 响应返回后排队一次后台扫描，扫描完成后更新快照表。
-4. 服务启动后启动定时扫描。
+4. 服务核心 HTTP 就绪后再延迟启动定时扫描；Windows 上的工具版本探测使用隐藏子进程。
 5. 前端还会缓存上一次 `/api/overview` 结果，首屏可先渲染缓存或稳定工具骨架。
 
 服务端定时扫描间隔由 `AGENT_LENS_OVERVIEW_SCAN_INTERVAL_MS` 控制，默认 10 分钟，设为 `0` 可关闭定时扫描。访问 `/api/overview` 仍会触发后台刷新。

@@ -133,7 +133,12 @@ function extractVersion(text) {
 
 function runVersionCommand(binary) {
     try {
-        const res = spawnSync(binary, ['--version'], { encoding: 'utf-8', timeout: 4000, shell: isWin() });
+        const res = spawnSync(binary, ['--version'], {
+            encoding: 'utf-8',
+            timeout: 4000,
+            shell: isWin(),
+            windowsHide: true,
+        });
         if (res.error || res.status !== 0) return '';
         const firstLine = String(res.stdout || '').trim().split(/\r?\n/)[0];
         return extractVersion(firstLine);
@@ -165,7 +170,11 @@ function readExeVersion(exePath) {
     try {
         if (!exePath || !fs.existsSync(exePath) || !isWin()) return '';
         const { execFileSync } = require('child_process');
-        const out = execFileSync('powershell', ['-NoProfile', '-Command', `(Get-Item -LiteralPath '${exePath}').VersionInfo.FileVersion`], { encoding: 'utf-8', timeout: 4000 }).trim();
+        const out = execFileSync('powershell.exe', ['-NoProfile', '-Command', `(Get-Item -LiteralPath '${exePath}').VersionInfo.FileVersion`], {
+            encoding: 'utf-8',
+            timeout: 4000,
+            windowsHide: true,
+        }).trim();
         return extractVersion(out);
     } catch (_) {
         return '';
