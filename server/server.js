@@ -165,7 +165,7 @@ function openBrowser(url) {
     try {
         const platform = process.platform;
         if (platform === 'win32') {
-            execSync(`start "" "${url}"`, { stdio: 'ignore' });
+            execSync(`start "" "${url}"`, { stdio: 'ignore', windowsHide: true });
         } else if (platform === 'darwin') {
             execSync(`open "${url}"`, { stdio: 'ignore' });
         } else {
@@ -558,23 +558,30 @@ async function main() {
     // ─── 初始化数据库后端 ──────────────────────────────────────
 
     async function initDb() {
-        // agent-lens.db 已自动初始化，无需额外 ready()
+        // 只执行核心数据库初始化；历史导入和轮询不得阻塞 HTTP 就绪。
         try {
             const d = getDb();
             if (d) {
                 log(`  ✅ 数据库就绪 (better-sqlite3)`, 'green');
-                try {
-                    const { startOverviewScanner } = require('./overview');
-                    const { DEFAULT_OVERVIEW_SCAN_INTERVAL_MS } = require('./config');
-                    const timer = startOverviewScanner(d);
-                    if (timer) log(`  ✅ 概览资产定时扫描已启动 (${Math.round(DEFAULT_OVERVIEW_SCAN_INTERVAL_MS / 1000)}s)`, 'green');
-                    else log(`  ℹ️ 概览资产定时扫描已关闭`, 'dim');
-                } catch (e) {
-                    log(`  ⚠️ 概览资产扫描启动失败: ${e.message}`, 'yellow');
-                }
             }
+            return d;
         } catch (e) {
             log(`  ⚠️ 数据库初始化失败: ${e.message}`, 'yellow');
+            return null;
+        }
+    }
+
+    function startBackgroundServices(d) {
+        if (d) {
+            try {
+                const { startOverviewScanner } = require('./overview');
+                const { DEFAULT_OVERVIEW_SCAN_INTERVAL_MS } = require('./config');
+                const timer = startOverviewScanner(d);
+                if (timer) log(`  ✅ 概览资产定时扫描已启动 (${Math.round(DEFAULT_OVERVIEW_SCAN_INTERVAL_MS / 1000)}s)`, 'green');
+                else log(`  ℹ️ 概览资产定时扫描已关闭`, 'dim');
+            } catch (e) {
+                log(`  ⚠️ 概览资产扫描启动失败: ${e.message}`, 'yellow');
+            }
         }
 
         // 启动需要轮询的适配器
@@ -602,11 +609,22 @@ async function main() {
         } catch (e) {
             log(`  ⚠️ JSONL 历史导入启动失败: ${e.message}`, 'yellow');
         }
+
+        try {
+            const { getAdapter: ga } = require('./adapters');
+            const hermesAdapter = ga('hermes');
+            if (hermesAdapter && hermesAdapter.startCollecting) {
+                hermesAdapter.startCollecting();
+                log(`  ✅ hermes timeline 收集已启动`, 'green');
+            }
+        } catch (e) {
+            log(`  ⚠️ hermes 收集启动失败: ${e.message}`, 'yellow');
+        }
     }
 
     // ─── 启动服务器 ────────────────────────────────────────────
 
-    initDb().then(() => {
+    initDb().then((database) => {
         server.listen(PORT, HOST, () => {
             // 写入 PID 文件
             writePid();
@@ -641,19 +659,9 @@ async function main() {
                 setTimeout(() => openBrowser(url), 500);
             }
 
-            // 启动 hermes timeline 收集（延迟执行避免阻塞）
-            setTimeout(() => {
-                try {
-                    const { getAdapter: ga } = require('./adapters');
-                    const hermesAdapter = ga('hermes');
-                    if (hermesAdapter && hermesAdapter.startCollecting) {
-                        hermesAdapter.startCollecting();
-                        log(`  ✅ hermes timeline 收集已启动`, 'green');
-                    }
-                } catch (e) {
-                    log(`  ⚠️ hermes 收集启动失败: ${e.message}`, 'yellow');
-                }
-            }, 1000);
+            // 先允许安装器和浏览器确认核心服务就绪，再启动可能耗时的本地扫描。
+            const backgroundTimer = setTimeout(() => startBackgroundServices(database), 5000);
+            if (backgroundTimer.unref) backgroundTimer.unref();
         });
 
         // ─── 优雅关闭 ──────────────────────────────────────────────

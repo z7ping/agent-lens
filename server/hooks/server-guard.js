@@ -161,6 +161,7 @@ function ensureServerRunning(baseDir, port) {
                     detached: true,
                     stdio: ['ignore', 'ignore', 'ignore'],
                     cwd: baseDir,
+                    windowsHide: true,
                 });
                 child.unref();
             }

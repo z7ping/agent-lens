@@ -51,6 +51,7 @@ const INSTALL_DIR = INSTALL_RUNTIME_PATHS.appDir;
 const INSTALL_BIN_DIR = INSTALL_RUNTIME_PATHS.binDir;
 const SETTINGS_FILE = path.join(os.homedir(), '.claude', 'settings.json');
 const { DEFAULT_PORT } = require('./config');
+const INSTALL_READY_TIMEOUT_MS = 120000;
 // ponytail: 版本号仅打包时用，按需读取，不复制 package.json
 function getVersion() {
     try { return require(path.join(PROJECT_DIR, 'package.json')).version; } catch { return '0.0.0'; }
@@ -87,7 +88,7 @@ function isWin() {
 
 function checkNodeAvailable() {
     try {
-        execSync('node --version', { stdio: 'ignore' });
+        execFileSync(process.execPath, ['--version'], { stdio: 'ignore', windowsHide: true });
         return true;
     } catch {
         return false;
@@ -166,7 +167,10 @@ function startInstalledDaemon(port = DEFAULT_PORT) {
 
 function syncInstalledHooks(warningLabel = '更新 Hooks 配置失败') {
     try {
-        execFileSync(process.execPath, [path.join(INSTALL_DIR, 'install-hooks.js')], { stdio: 'inherit' });
+        execFileSync(process.execPath, [path.join(INSTALL_DIR, 'install-hooks.js')], {
+            stdio: 'inherit',
+            windowsHide: true,
+        });
         return true;
     } catch (error) {
         log(`[WARN] ${warningLabel}: ${error.message}`, 'yellow');
@@ -174,7 +178,7 @@ function syncInstalledHooks(warningLabel = '更新 Hooks 配置失败') {
     }
 }
 
-function isHttpReady(port) {
+function isHttpReady(port, expectedVersion) {
     return new Promise((resolve) => {
         const req = http.get({
             hostname: '127.0.0.1',
@@ -182,8 +186,20 @@ function isHttpReady(port) {
             path: '/api/app-info',
             timeout: 1000,
         }, (res) => {
-            res.resume();
-            resolve(res.statusCode >= 200 && res.statusCode < 500);
+            let body = '';
+            res.setEncoding('utf8');
+            res.on('data', chunk => {
+                if (body.length < 16384) body += chunk;
+            });
+            res.on('end', () => {
+                if (res.statusCode < 200 || res.statusCode >= 300) return resolve(false);
+                try {
+                    const info = JSON.parse(body || '{}');
+                    resolve(!expectedVersion || info.version === expectedVersion);
+                } catch (_) {
+                    resolve(false);
+                }
+            });
         });
         req.on('timeout', () => {
             req.destroy();
@@ -193,16 +209,24 @@ function isHttpReady(port) {
     });
 }
 
-async function waitForInstalledDaemon(port, timeoutMs = 60000) {
+async function waitForInstalledDaemon(port, timeoutMs = INSTALL_READY_TIMEOUT_MS, expectedVersion = null) {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
         const pid = readPid(INSTALL_DIR);
-        if (pid && isProcessAlive(pid) && await isHttpReady(port)) {
+        if (pid && isProcessAlive(pid) && await isHttpReady(port, expectedVersion)) {
             return true;
         }
         await new Promise(resolve => setTimeout(resolve, 1000));
     }
     return false;
+}
+
+function readInstalledVersion() {
+    try {
+        return JSON.parse(fs.readFileSync(path.join(INSTALL_DIR, 'package.json'), 'utf8')).version || null;
+    } catch (_) {
+        return null;
+    }
 }
 
 async function waitForPortClosed(port, timeoutMs = 5000) {
@@ -619,12 +643,12 @@ async function cmdInstall() {
 
         if (serviceReady !== false) {
             platformAction('start');
-            running = await waitForInstalledDaemon(DEFAULT_PORT, 30000);
+            running = await waitForInstalledDaemon(DEFAULT_PORT, INSTALL_READY_TIMEOUT_MS, readInstalledVersion());
         } else {
             log('回退到 daemon 模式...', 'yellow');
             try {
                 startInstalledDaemon(DEFAULT_PORT);
-                running = await waitForInstalledDaemon(DEFAULT_PORT, 30000);
+                running = await waitForInstalledDaemon(DEFAULT_PORT, INSTALL_READY_TIMEOUT_MS, readInstalledVersion());
             } catch (_) {
                 running = false;
             }
@@ -719,7 +743,7 @@ function cmdStart(argv) {
         if (isDaemon) {
             log('dist/ 不存在，正在静默构建前端...', 'yellow');
             try {
-                execSync('npm run build', { cwd: PROJECT_DIR, stdio: 'ignore' });
+                execSync('npm run build', { cwd: PROJECT_DIR, stdio: 'ignore', windowsHide: true });
             } catch (_) {}
         } else {
             console.log('');
@@ -728,7 +752,7 @@ function cmdStart(argv) {
             console.log('');
             const startTime = Date.now();
             try {
-                execSync('npm run build', { cwd: PROJECT_DIR, stdio: 'inherit' });
+                execSync('npm run build', { cwd: PROJECT_DIR, stdio: 'inherit', windowsHide: true });
                 const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
                 console.log('');
                 log(`✅ 前端构建完成（${elapsed}s）`, 'green');
@@ -751,24 +775,16 @@ function cmdStart(argv) {
     // server.js 路径同样兼容两种布局
     const serverJs = path.join(PROJECT_DIR, 'server', 'server.js');
     const serverJsPath = fs.existsSync(serverJs) ? serverJs : path.join(PROJECT_DIR, 'server.js');
-    const serverJsPosix = serverJsPath.replace(/\\/g, '/');
-
     if (isDaemon) {
         // 守护进程模式
         if (isWin()) {
-            // Windows: 使用 VBScript 隐藏窗口
-            const vbsContent = [
-                'Set objShell = CreateObject("WScript.Shell")',
-                `objShell.CurrentDirectory = "${PROJECT_DIR.replace(/\\/g, '/')}"`,
-                `objShell.Run "cmd.exe /c start /b node ""${serverJsPosix}"" ${port} --daemon", 0, False`,
-            ].join('\r\n');
-            const vbsPath = path.join(os.tmpdir(), 'agent-lens-daemon.vbs');
-            fs.writeFileSync(vbsPath, vbsContent, 'utf-8');
-            try {
-                execSync(`wscript "${vbsPath}"`, { stdio: 'ignore' });
-            } finally {
-                try { fs.unlinkSync(vbsPath); } catch (_) {}
-            }
+            const child = spawn(process.execPath, [serverJsPath, ...serverArgs], {
+                cwd: PROJECT_DIR,
+                detached: true,
+                stdio: ['ignore', 'ignore', 'ignore'],
+                windowsHide: true,
+            });
+            child.unref();
         } else {
             // Unix: detached + unref
             const child = spawn('node', [serverJsPath, ...serverArgs], {
@@ -899,7 +915,7 @@ async function cmdUninstall() {
         const hookManager = fs.existsSync(installedHookManager)
             ? installedHookManager
             : path.join(__dirname, 'install-hooks.js');
-        execFileSync(process.execPath, [hookManager, '--uninstall'], { stdio: 'inherit' });
+        execFileSync(process.execPath, [hookManager, '--uninstall'], { stdio: 'inherit', windowsHide: true });
     } catch (e) {
         log(`[WARN] 清理配置失败: ${e.message}`, 'yellow');
     }
@@ -916,8 +932,8 @@ async function cmdUninstall() {
     // 5. npm unlink -g
     log('执行 npm unlink -g agent-lens ...', 'cyan');
     try {
-        execSync('npm unlink -g @z7ping/agent-lens', { stdio: 'ignore' });
-        try { execSync('npm unlink -g agent-lens', { stdio: 'ignore' }); } catch (_) {}
+        execSync('npm unlink -g @z7ping/agent-lens', { stdio: 'ignore', windowsHide: true });
+        try { execSync('npm unlink -g agent-lens', { stdio: 'ignore', windowsHide: true }); } catch (_) {}
         log('[OK] 全局链接已移除', 'green');
     } catch (_) {
         log('[SKIP] 未找到全局链接', 'dim');
@@ -954,7 +970,7 @@ function ensureFrontendBuild(projectDir) {
     const distIndex = path.join(projectDir, 'dist', 'index.html');
     if (fs.existsSync(distIndex)) return;
     log('dist/ 不存在，正在构建前端...', 'yellow');
-    execSync('npm run build', { cwd: projectDir, stdio: 'inherit' });
+    execSync('npm run build', { cwd: projectDir, stdio: 'inherit', windowsHide: true });
     if (!fs.existsSync(distIndex)) throw new Error('前端构建完成后仍缺少 dist/index.html');
 }
 
@@ -962,11 +978,12 @@ function installRuntimeDependencies(appDir) {
     execSync('npm install --omit=dev --no-audit --no-fund --package-lock=false --registry=https://registry.npmjs.org/', {
         cwd: appDir,
         stdio: 'inherit',
+        windowsHide: true,
     });
 
     const nativeProbe = "const Database=require('better-sqlite3');const db=new Database(':memory:');db.close()";
     try {
-        execFileSync(process.execPath, ['-e', nativeProbe], { cwd: appDir, stdio: 'ignore' });
+        execFileSync(process.execPath, ['-e', nativeProbe], { cwd: appDir, stdio: 'ignore', windowsHide: true });
         return { backend: 'better-sqlite3' };
     } catch (_) {
         log('检测到 better-sqlite3 不可用，正在尝试批准并重建...', 'yellow');
@@ -974,16 +991,16 @@ function installRuntimeDependencies(appDir) {
 
     try {
         try {
-            execSync('npm install-scripts approve better-sqlite3', { cwd: appDir, stdio: 'inherit' });
+            execSync('npm install-scripts approve better-sqlite3', { cwd: appDir, stdio: 'inherit', windowsHide: true });
         } catch (_) {
             // 旧版 npm 没有 install-scripts 子命令，直接尝试 rebuild。
         }
-        execSync('npm rebuild better-sqlite3 --foreground-scripts', { cwd: appDir, stdio: 'inherit' });
-        execFileSync(process.execPath, ['-e', nativeProbe], { cwd: appDir, stdio: 'ignore' });
+        execSync('npm rebuild better-sqlite3 --foreground-scripts', { cwd: appDir, stdio: 'inherit', windowsHide: true });
+        execFileSync(process.execPath, ['-e', nativeProbe], { cwd: appDir, stdio: 'ignore', windowsHide: true });
         return { backend: 'better-sqlite3' };
     } catch (_) {
         try {
-            execFileSync(process.execPath, ['-e', "require.resolve('sql.js')"], { cwd: appDir, stdio: 'ignore' });
+            execFileSync(process.execPath, ['-e', "require.resolve('sql.js')"], { cwd: appDir, stdio: 'ignore', windowsHide: true });
             log('[WARN] better-sqlite3 不可用，将使用 sql.js 回退', 'yellow');
             return { backend: 'sql.js' };
         } catch (error) {
@@ -1051,6 +1068,7 @@ function stopKnownWindowsServerProcesses() {
             },
             encoding: 'utf8',
             stdio: ['ignore', 'pipe', 'ignore'],
+            windowsHide: true,
         });
         return output.split(/\r?\n/).map(value => parseInt(value.trim(), 10)).filter(Number.isInteger);
     } catch (_) {
@@ -1102,7 +1120,11 @@ async function rollbackInstalledApplication(backupDir) {
         }
         if (!launchedByService) startInstalledDaemon(DEFAULT_PORT);
 
-        const running = await waitForInstalledDaemon(DEFAULT_PORT, 30000);
+        const running = await waitForInstalledDaemon(
+            DEFAULT_PORT,
+            INSTALL_READY_TIMEOUT_MS,
+            readInstalledVersion(),
+        );
         if (running) log(`[OK] 上一版服务已恢复 → http://localhost:${DEFAULT_PORT}/`, 'green');
         else log('[WARN] 上一版程序已恢复，但服务需要手动启动', 'yellow');
         return { restored: true, running };
@@ -1113,9 +1135,10 @@ async function rollbackInstalledApplication(backupDir) {
 }
 
 function setWindowsUserPath(binDir, removeOnly = false) {
-    const userPath = execSync('reg query HKCU\\Environment /v PATH 2>nul', {
+    const userPath = execFileSync('reg.exe', ['query', 'HKCU\\Environment', '/v', 'PATH'], {
         encoding: 'utf-8',
         stdio: ['pipe', 'pipe', 'ignore'],
+        windowsHide: true,
     }).trim();
     const pathMatch = userPath.match(/PATH\s+REG_(?:EXPAND_)?SZ\s+(.+)/);
     const currentParts = pathMatch ? pathMatch[1].trim().split(';').filter(Boolean) : [];
@@ -1142,6 +1165,7 @@ function setWindowsUserPath(binDir, removeOnly = false) {
     ], {
         env: { ...process.env, AGENT_LENS_NEW_PATH: newPath },
         stdio: 'ignore',
+        windowsHide: true,
     });
     return currentParts.join(';').toLowerCase() !== newPath.toLowerCase();
 }
@@ -1191,7 +1215,7 @@ function cmdPackage(argv = []) {
 
     if (!fs.existsSync(path.join(PROJECT_DIR, 'dist', 'index.html'))) {
         log('dist/ 不存在，正在构建前端...', 'yellow');
-        execSync('npm run build', { cwd: PROJECT_DIR, stdio: 'inherit' });
+        execSync('npm run build', { cwd: PROJECT_DIR, stdio: 'inherit', windowsHide: true });
     }
 
     log('使用 npm pack 生成可复现分发包...', 'cyan');
@@ -1199,6 +1223,7 @@ function cmdPackage(argv = []) {
     execSync(`npm pack --pack-destination "${outputDir}"`, {
         cwd: PROJECT_DIR,
         stdio: 'inherit',
+        windowsHide: true,
     });
     const created = fs.readdirSync(outputDir)
         .filter(name => !before.has(name) && /^z7ping-agent-lens-.+\.tgz$/.test(name))

@@ -81,6 +81,7 @@ test('cli package command creates an npm-compatible archive with current runtime
 test('cli installs production dependencies into the separated app directory', () => {
   const root = path.join(__dirname, '..');
   const cliSource = fs.readFileSync(path.join(root, 'server', 'cli.js'), 'utf8');
+  const serverSource = fs.readFileSync(path.join(root, 'server', 'server.js'), 'utf8');
 
   assert.match(cliSource, /npm install --omit=dev/);
   assert.match(cliSource, /--registry=https:\/\/registry\.npmjs\.org\//);
@@ -92,4 +93,8 @@ test('cli installs production dependencies into the separated app directory', ()
   assert.match(cliSource, /spawn\(process\.execPath, \[installedServer, String\(port\), '--daemon'\]/);
   assert.match(cliSource, /syncInstalledHooks\('上一版 Hooks 配置恢复失败'\)/);
   assert.doesNotMatch(cliSource, /\[installedCli, 'start', '--daemon'/);
+  assert.match(cliSource, /INSTALL_READY_TIMEOUT_MS = 120000/);
+  assert.match(cliSource, /readInstalledVersion\(\)/);
+  assert.doesNotMatch(cliSource, /agent-lens-daemon\.vbs/);
+  assert.match(serverSource, /server\.listen\([\s\S]*?writePid\(\)[\s\S]*?setTimeout\(\(\) => startBackgroundServices/);
 });
