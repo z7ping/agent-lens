@@ -46,6 +46,15 @@ test('Codex 生命周期正文遵守提示词策略且属性始终递归脱敏',
   assert.equal(disabled.redaction_applied, 1);
 });
 
+test('Pi 压缩与分支摘要遵守提示词采集策略', () => {
+  for (const eventType of ['compact_end', 'branch_summary']) {
+    const record = { event_type: eventType, role: eventType, content: 'token=pi-summary-secret' };
+    assert.equal(sanitizeEventRecord(record, { AGENT_LENS_PROMPT_CAPTURE: 'off' }).content, null);
+    assert.doesNotMatch(sanitizeEventRecord(record, { AGENT_LENS_PROMPT_CAPTURE: 'redacted' }).content, /pi-summary-secret/);
+    assert.equal(sanitizeEventRecord(record, { AGENT_LENS_PROMPT_CAPTURE: 'full' }).content, 'token=pi-summary-secret');
+  }
+});
+
 test('环境信息默认关闭，启用后也只采集允许名单', () => {
   assert.equal(getCapturePolicy({}).environment, 'off');
   assert.equal(captureEnvironment({ LANG: 'zh_CN', SECRET_TOKEN: 'nope' }, {}).value, null);

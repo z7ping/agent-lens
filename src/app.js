@@ -488,7 +488,7 @@ async function loadSessionCalls(card) {
     if (calls.length === 0) {
       body.innerHTML = '<div class="text-center py-4 text-neutral-400 text-sm">暂无调用记录</div>';
     } else {
-      // 统一口径：会话头"调用"数与执行概览一致（均以 timeline 工具记录为基准）
+      // 会话头调用统计以 timeline 的工具结果事件为统一口径。
       const toolRecords = calls.filter(c => c.role === 'tool_result' || c.role === 'tool_error');
       const errRecords = toolRecords.filter(c => c.role === 'tool_error' || c.error === true || c.success === false || c.success === 0 || c.error_message || (c.exit_code != null && c.exit_code !== 0));
       card.querySelectorAll('.session-metric').forEach(metric => {

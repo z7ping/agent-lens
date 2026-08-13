@@ -127,7 +127,7 @@ function sanitizeEventRecord(record, env = process.env) {
   const role = record.role || record.event_type || '';
   const eventType = record.event_type || role;
   const usesPromptPolicy = ['user', 'assistant', 'system'].includes(role)
-    || ['user_prompt', 'agent_stop', 'turn_stop'].includes(eventType);
+    || ['user_prompt', 'agent_stop', 'turn_stop', 'compact_end', 'branch_summary', 'custom_message'].includes(eventType);
   const usesConfigPolicy = eventType === 'context_discovery';
   const contentMode = usesConfigPolicy ? policy.config : (usesPromptPolicy ? policy.prompt : policy.tool);
   const content = captureValue(record.content, contentMode, { maxText: DEFAULT_MAX_TEXT });

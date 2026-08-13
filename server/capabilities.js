@@ -51,9 +51,9 @@ const SOURCE_CAPABILITIES = {
     },
   },
   pi: {
-    label: 'Pi', completeness: 'partial', summary: '会话文件包含对话和工具结果，独立生命周期信息有限。',
+    label: 'Pi', completeness: 'partial', summary: '原生树形 Session JSONL 可增量重建对话、分支、压缩、模型变化和并行工具；实时扩展尚未接入。',
     capabilities: {
-      session: ['supported', 'native_log', '可读取会话文件'], prompt: ['supported', 'native_log', '可读取用户消息'], conversation: ['supported', 'native_log', '可读取对话'], tool_lifecycle: ['partial', 'native_log', '按来源记录拆分调用与结果'], compact: ['unavailable', 'native_log', '来源未提供'], subagent: ['unavailable', 'native_log', '来源未提供可靠关系'], stop: ['unavailable', 'native_log', '来源未提供'], configuration: ['partial', 'static_scan', '仅静态发现'],
+      session: ['supported', 'native_log', '按原生 Session ID、parentSession 和 entry 树读取会话与派生关系'], prompt: ['supported', 'native_log', '可读取历史用户消息并应用提示词采集策略'], conversation: ['supported', 'native_log', '可读取普通回复；thinking 正文默认不采集'], tool_lifecycle: ['supported', 'native_log', '使用 toolCallId 配对并行调用与结果'], compact: ['partial', 'native_log', '可读取已持久化的压缩与分支摘要；缺少压缩开始时点'], subagent: ['unavailable', 'native_log', 'Pi 底层 agent 运行不等同于子 Agent，当前没有可靠子 Agent 身份'], stop: ['unavailable', 'native_log', '历史文件未提供独立 settled 事件'], configuration: ['partial', 'static_scan', '仅静态发现'],
     },
   },
   cursor: {

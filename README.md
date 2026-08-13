@@ -67,7 +67,7 @@ node server/cli.js install
 
 ### 任务复盘
 
-按工具来源和项目筛选会话，展开查看每轮对话、工具调用、成功情况和耗时。
+按工具来源和项目筛选会话。每次用户指令作为一个完整 Turn，用户与 AI 回复以气泡展示，思考信号、生命周期事件和工具调用按真实时间顺序穿插在同一条执行流中；连续工具调用默认折叠，错误保持醒目。
 
 ![AgentLens 任务复盘](https://raw.githubusercontent.com/z7ping/agent-lens/main/docs/static/4.webp)
 
@@ -98,11 +98,12 @@ agent-lens uninstall       # 卸载并清理
 ## 特性
 
 - **多 Agent 追踪** — 统计 SKILL / Tool / MCP 调用次数，还原有证据支持的可观察调用链
-- **调用链可视化** — 展示每次会话中已确认的 Agent、Turn、父事件和 Tool 生命周期关系
+- **统一任务执行流** — 按 Turn 将对话气泡、思考信号、生命周期事件和工具调用编排到同一条时间线
 - **Codex 生命周期透镜** — 实时展示会话、提示词提交、权限请求、上下文压缩、子 Agent 和 Turn 停止事件
+- **Pi 原生会话透镜** — 按树形 Session JSONL 重建分支、派生关系、模型/思考级别变化、压缩和并行工具配对
 - **分析仪表盘** — 总调用数、错误率、工具使用排行、慢调用
 - **概览** — 每个 AI 工具一张卡片，展示版本、配置目录、官网/文档/GitHub、Skills / MCP / Plugins / Extensions / Hooks 等能力资产、安装路径和装配路径诊断
-- **多数据源** — Hermes / OpenCode（SQLite 轮询）、Claude Code / Codex（实时 Hook + 历史导入）、Pi（JSONL 轮询）、Cursor（实时 Hook）
+- **多数据源** — Hermes / OpenCode（SQLite 轮询）、Claude Code / Codex（实时 Hook + 历史导入）、Pi（树形 JSONL 增量导入）、Cursor（实时 Hook）
 - **Timeline 可观测** — 稳定事件身份、跨来源 Session 隔离、Tool Use/Result 双事件、证据来源和错误自动归类
 - **本地安全** — 默认只监听 `127.0.0.1`，限制同源访问，对持久化内容执行可配置脱敏
 - **实时刷新** — 3 秒增量更新，无需手动刷新
@@ -117,7 +118,7 @@ agent-lens uninstall       # 卸载并清理
 | **Claude Code** | 实时 Hook + `~/.claude/projects` 历史导入 | 见下方 |
 | **Codex** | 11 类实时 Hook + `~/.codex/sessions` 历史导入 | 安装器自动配置；升级后需重新运行 `install` |
 | **Cursor** | 实时钩子 | 同 Claude Code |
-| **Pi** | 轮询 Pi session JSONL | 无需配置 |
+| **Pi** | 增量导入 Pi tree session JSONL | 无需配置；支持 `PI_CODING_AGENT_DIR` |
 | **OpenCode** | 轮询 `~/.local/share/opencode/opencode.db` | 无需配置 |
 
 ### 概览资产扫描
@@ -183,7 +184,7 @@ Codex 默认配置根目录为 `CODEX_HOME`，未设置时为 `~/.codex`。Agent
 
 #### Codex 生命周期与数据边界
 
-v0.5 会安装 `SessionStart`、`SessionEnd`、`UserPromptSubmit`、`PreToolUse`、`PermissionRequest`、`PostToolUse`、`PreCompact`、`PostCompact`、`SubagentStart`、`SubagentStop` 和 `Stop` 共 11 类 Codex Hook。任务复盘会单独展示生命周期轨迹，并保留原生 `turn_id`、`agent_id`、工具调用标识、模型和权限模式等来源字段。
+v0.5 会安装 `SessionStart`、`SessionEnd`、`UserPromptSubmit`、`PreToolUse`、`PermissionRequest`、`PostToolUse`、`PreCompact`、`PostCompact`、`SubagentStart`、`SubagentStop` 和 `Stop` 共 11 类 Codex Hook。任务复盘按 Turn 将生命周期事件、对话气泡和工具调用编排到同一条执行流，并保留原生 `turn_id`、`agent_id`、工具调用标识、模型和权限模式等来源字段。
 
 这些 Hook 只做被动采集：不会批准或阻断工具，不会修改提示词，也不会向模型追加上下文。`Stop` 与 `SubagentStop` 只返回中性的空 JSON；transcript 路径不写入 Timeline。提示词和最终助手消息继续遵守 `AGENT_LENS_PROMPT_CAPTURE`，权限请求中的工具参数遵守 `AGENT_LENS_TOOL_CAPTURE`。
 
@@ -292,7 +293,7 @@ Linux 使用 systemd user service，macOS 使用 launchd agent，两者支持完
 agent-lens service install       # 注册系统服务并启用自启
 agent-lens service start         # 启动系统服务
 agent-lens service stop          # 停止系统服务
-agent-lens service status        # 查看系统服务和自启状态
+agent-lens service status        # 查看服务、自启、版本和运行环境
 agent-lens service enable        # 启用开机自启
 agent-lens service disable       # 关闭开机自启
 agent-lens service uninstall     # 停止并移除系统服务
@@ -305,11 +306,13 @@ agent-lens service install     # 注册并启用登录后自启
 agent-lens service start       # 立即启动
 agent-lens service disable     # 关闭登录后自启
 agent-lens service enable      # 重新启用登录后自启
-agent-lens service status      # 查看自启和进程状态
+agent-lens service status      # 查看自启、进程、版本和运行环境
 agent-lens service uninstall   # 移除自启入口
 ```
 
 `agent-lens install` 会自动完成自启入口的注册和首次启动；上述命令主要用于后续手动管理。
+
+`service status` 会同时显示当前命令版本、磁盘中的已安装版本和 HTTP 服务实际返回的运行版本；安装版本与运行版本不一致时会明确提示，并附带 Node.js 版本、服务管理方式、默认地址和安装目录，便于确认升级后实际运行的是哪一份程序。
 
 ---
 

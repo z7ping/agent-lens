@@ -1,192 +1,180 @@
 #!/usr/bin/env node
 /**
  * Pi 适配器
- * 从 ~/.pi/agent/sessions/ 轮询 JSONL 会话文件，提取工具调用记录
+ *
+ * 原生 Session JSONL 是 Pi 的持久证据。适配器按字节偏移增量读取，使用
+ * entry id / parentId / parentSession / toolCallId 保留树形身份与工具配对。
  */
 
 const fs = require('fs');
 const path = require('path');
 const BaseAdapter = require('./base');
+const { stableHash } = require('../event-model');
+const { pi: { sessionsDir: PI_SESSIONS_DIR }, agentLens } = require('../paths');
 
-const { pi: { sessionsDir: PI_SESSIONS_DIR } } = require('../paths');
-const POLL_INTERVAL_MS = parseInt(process.env.PI_POLL_INTERVAL_MS, 10) || 30 * 60 * 1000;
+const POLL_INTERVAL_MS = parseInt(process.env.PI_POLL_INTERVAL_MS, 10) || 30 * 1000;
 const POLL_RECORD_LIMIT = parseInt(process.env.PI_POLL_RECORD_LIMIT, 10) || 10000;
+const IMPORT_STATE_VERSION = 1;
+
+function piEntryEventId(sessionId, nativeId) {
+    return `evt_${stableHash(`pi|${sessionId}|entry|${nativeId}`).slice(0, 32)}`;
+}
+
+function piToolEventId(sessionId, callId, eventType) {
+    return `evt_${stableHash(`pi|${sessionId}|tool|${callId}|${eventType}`).slice(0, 32)}`;
+}
+
+function normalizeTimestamp(value) {
+    if (typeof value === 'number' && Number.isFinite(value)) return new Date(value).toISOString();
+    return value ? String(value) : '';
+}
+
+function readCompleteLines(filePath, offset = 0) {
+    const stat = fs.statSync(filePath);
+    const start = offset >= 0 && offset <= stat.size ? offset : 0;
+    if (stat.size === start) return { lines: [], nextOffset: start, size: stat.size };
+
+    const fd = fs.openSync(filePath, 'r');
+    try {
+        const buffer = Buffer.allocUnsafe(stat.size - start);
+        fs.readSync(fd, buffer, 0, buffer.length, start);
+        const lastNewline = buffer.lastIndexOf(0x0a);
+        if (lastNewline < 0) return { lines: [], nextOffset: start, size: stat.size };
+        const complete = buffer.subarray(0, lastNewline + 1).toString('utf8');
+        return {
+            lines: complete.split(/\r?\n/).filter(Boolean),
+            nextOffset: start + lastNewline + 1,
+            size: stat.size,
+        };
+    } finally {
+        fs.closeSync(fd);
+    }
+}
 
 class PiAdapter extends BaseAdapter {
-    constructor() {
+    constructor(options = {}) {
         super();
+        this.sessionsDir = options.sessionsDir || PI_SESSIONS_DIR;
+        this.importStateFile = options.importStateFile || path.join(agentLens.stateDir, 'pi-import-state.json');
+        this.db = options.db || null;
+        this.registerProject = options.registerProject || ((...args) => this.updateProjectsFile(...args));
         this._pollTimer = null;
-        this._lastPollTime = 0; // 上次轮询时间（ms timestamp）
+        this._parentSessionCache = new Map();
     }
 
     get name() { return 'pi'; }
 
-    async pre(data) { /* no-op: Pi 无 hooks */ }
+    async pre(data) { /* Pi 实时扩展由独立被动入口接入。 */ }
 
-    async post(data) { /* no-op: Pi 无 hooks */ }
+    async post(data) { /* Pi 实时扩展由独立被动入口接入。 */ }
 
-    /**
-     * 从 JSONL session 文件中提取工具调用记录
-     */
-    async getRecords(filter = {}) {
-        if (!fs.existsSync(PI_SESSIONS_DIR)) return [];
-
-        const limit = Math.min(parseInt(filter.limit, 10) || 1000, 10000);
-        const sessionId = filter.session_id;
-        const projectKey = filter.project_key;
-        const records = [];
-
-        // 遍历项目目录
-        const projectDirs = fs.readdirSync(PI_SESSIONS_DIR, { withFileTypes: true })
-            .filter(d => d.isDirectory())
-            .map(d => path.join(PI_SESSIONS_DIR, d.name));
-
-        for (const projDir of projectDirs) {
-            const jsonlFiles = fs.readdirSync(projDir)
-                .filter(f => f.endsWith('.jsonl'))
-                .map(f => path.join(projDir, f));
-
-            for (const filePath of jsonlFiles) {
-                try {
-                    const lines = fs.readFileSync(filePath, 'utf-8').trim().split('\n').filter(Boolean);
-                    const entries = lines.map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
-                    let sessionMeta = null;
-
-                    for (const entry of entries) {
-                        try {
-                            // 提取 session 元数据
-                            if (entry.type === 'session') {
-                                sessionMeta = entry;
-                                continue;
-                            }
-
-                            if (entry.type !== 'message' || !entry.message) continue;
-
-                            const role = entry.message.role;
-                            const content = Array.isArray(entry.message.content) ? entry.message.content : [];
-                            const cwd = sessionMeta?.cwd || process.cwd();
-                            const sid = sessionMeta?.id || entry.sessionId || '';
-                            const projectKeyForCwd = this.getProjectKey(cwd);
-                            const projectNameForCwd = this.getProjectName(cwd);
-
-                            if (sessionId && sid !== sessionId) continue;
-                            if (projectKey) {
-                                if (projectKeyForCwd !== projectKey) continue;
-                            }
-
-                            this.updateProjectsFile(projectKeyForCwd, cwd, projectNameForCwd);
-
-                            if (role === 'user') {
-                                records.push({
-                                    ts: entry.timestamp || '',
-                                    session_id: sid,
-                                    project_key: projectKeyForCwd,
-                                    project_name: projectNameForCwd,
-                                    cwd,
-                                    source: this.name,
-                                    role: 'user',
-                                    content: this._extractText(content),
-                                    success: null,
-                                    source_event_id: entry.id || entry.message?.id || null,
-                                    capture_method: 'native_log',
-                                    visibility: 'captured',
-                                    confidence: 'confirmed',
-                                });
-                                continue;
-                            }
-
-                            if (role === 'assistant') {
-                                const assistantText = this._extractText(content);
-                                if (assistantText) {
-                                    records.push({
-                                        ts: entry.timestamp || '',
-                                        session_id: sid,
-                                        project_key: projectKeyForCwd,
-                                        project_name: projectNameForCwd,
-                                        cwd,
-                                        source: this.name,
-                                        role: 'assistant',
-                                        content: assistantText,
-                                        success: null,
-                                        source_event_id: entry.id || entry.message?.id || null,
-                                        capture_method: 'native_log',
-                                        visibility: 'captured',
-                                        confidence: 'confirmed',
-                                    });
-                                }
-                            }
-
-                            // 提取工具调用
-                            if (role === 'assistant') {
-                                for (const block of content) {
-                                    if (block.type !== 'toolCall') continue;
-
-                                    const toolName = block.name || 'unknown';
-                                    const args = block.arguments || {};
-
-                                    // 估算耗时：用 timestamp 差值
-                                    let durationMs = null;
-                                    // 查找对应的 toolResult
-                                    const toolResult = entries.find(e =>
-                                        e.type === 'message'
-                                        && (e.message?.role === 'tool' || e.message?.role === 'toolResult')
-                                        && e.message?.toolCallId === block.id
-                                    );
-                                    if (toolResult && entry.timestamp && toolResult.timestamp) {
-                                        durationMs = Math.round((new Date(toolResult.timestamp) - new Date(entry.timestamp)));
-                                    }
-
-                                    const record = {
-                                        ts: toolResult?.timestamp || entry.timestamp || '',
-                                        tool_started_at: entry.timestamp || '',
-                                        session_id: sid,
-                                        project_key: projectKeyForCwd,
-                                        project_name: projectNameForCwd,
-                                        cwd,
-                                        tool_name: toolName,
-                                        source: this.name,
-                                        role: toolResult?.message?.isError ? 'tool_error' : 'tool_result',
-                                        input_summary: this._summarizeInput(toolName, args),
-                                        success: !toolResult?.message?.isError,
-                                        output_snippet: toolResult ? this._extractText(toolResult.message?.content || []) : null,
-                                        call_id: block.id || null,
-                                        source_event_id: block.id || null,
-                                        capture_method: 'native_log',
-                                        visibility: 'captured',
-                                        confidence: toolResult ? 'confirmed' : 'partial',
-                                        missing_reason: toolResult ? null : '会话文件未找到对应 Tool Result',
-                                    };
-
-                                    if (durationMs !== null && durationMs >= 0) {
-                                        record.duration_ms = durationMs;
-                                    }
-
-                                    records.push(record);
-                                }
-                            }
-                        } catch (_) {}
-                    }
-                } catch (_) {}
+    _listSessionFiles() {
+        if (!fs.existsSync(this.sessionsDir)) return [];
+        const files = [];
+        for (const projectDir of fs.readdirSync(this.sessionsDir, { withFileTypes: true })) {
+            if (!projectDir.isDirectory()) continue;
+            const dir = path.join(this.sessionsDir, projectDir.name);
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+                if (entry.isFile() && entry.name.endsWith('.jsonl')) files.push(path.join(dir, entry.name));
             }
         }
+        return files.sort();
+    }
 
-        // 按时间倒序，返回最新记录
-        records.sort((a, b) => (b.ts || '').localeCompare(a.ts || ''));
-        return records.slice(0, limit);
+    _readImportState() {
+        try {
+            const parsed = JSON.parse(fs.readFileSync(this.importStateFile, 'utf8'));
+            if (parsed?.version === IMPORT_STATE_VERSION && parsed.files && typeof parsed.files === 'object') return parsed;
+        } catch (_) {}
+        return { version: IMPORT_STATE_VERSION, files: {} };
+    }
+
+    _writeImportState(state) {
+        fs.mkdirSync(path.dirname(this.importStateFile), { recursive: true });
+        const temp = `${this.importStateFile}.${process.pid}.tmp`;
+        fs.writeFileSync(temp, JSON.stringify(state, null, 2));
+        fs.renameSync(temp, this.importStateFile);
+    }
+
+    _fileStateKey(filePath) {
+        return stableHash(path.resolve(filePath).toLowerCase()).slice(0, 32);
+    }
+
+    _readSessionHeader(filePath) {
+        try {
+            const fd = fs.openSync(filePath, 'r');
+            try {
+                const size = Math.min(fs.fstatSync(fd).size, 64 * 1024);
+                const buffer = Buffer.alloc(size);
+                fs.readSync(fd, buffer, 0, size, 0);
+                const firstLine = buffer.toString('utf8').split(/\r?\n/, 1)[0];
+                const header = JSON.parse(firstLine);
+                return header?.type === 'session' ? header : null;
+            } finally {
+                fs.closeSync(fd);
+            }
+        } catch (_) {
+            return null;
+        }
+    }
+
+    _resolveParentSessionId(parentSession, currentFile) {
+        if (!parentSession) return null;
+        const resolved = path.isAbsolute(parentSession)
+            ? parentSession
+            : path.resolve(path.dirname(currentFile), parentSession);
+        if (this._parentSessionCache.has(resolved)) return this._parentSessionCache.get(resolved);
+        const id = this._readSessionHeader(resolved)?.id || null;
+        this._parentSessionCache.set(resolved, id);
+        return id;
+    }
+
+    _sessionMeta(header, filePath) {
+        if (!header) return null;
+        return {
+            id: String(header.id || ''),
+            cwd: String(header.cwd || process.cwd()),
+            version: header.version ?? null,
+            timestamp: normalizeTimestamp(header.timestamp),
+            parent_session_id: this._resolveParentSessionId(header.parentSession, filePath),
+            parent_session_available: Boolean(header.parentSession),
+        };
+    }
+
+    _baseRecord(meta, entry, sourceSequence, overrides = {}) {
+        const cwd = meta.cwd || process.cwd();
+        const projectKey = this.getProjectKey(cwd);
+        const parentNativeId = entry?.parentId || null;
+        return {
+            ts: normalizeTimestamp(entry?.timestamp || entry?.message?.timestamp || meta.timestamp),
+            timestamp: normalizeTimestamp(entry?.timestamp || entry?.message?.timestamp || meta.timestamp),
+            session_id: meta.id,
+            project_key: projectKey,
+            project_name: this.getProjectName(cwd),
+            cwd,
+            source: this.name,
+            source_sequence: sourceSequence,
+            parent_event_id: parentNativeId ? piEntryEventId(meta.id, parentNativeId) : null,
+            capture_method: 'native_log',
+            visibility: 'captured',
+            confidence: 'confirmed',
+            ...overrides,
+        };
     }
 
     _extractText(content) {
         const blocks = Array.isArray(content) ? content : [content];
-        return blocks
-            .map(block => {
-                if (!block) return '';
-                if (typeof block === 'string') return block;
-                if (block.type === 'text') return block.text || '';
-                if (block.type === 'thinking') return block.thinking || '';
-                return '';
-            })
-            .filter(Boolean)
-            .join('\n\n');
+        return blocks.map(block => {
+            if (!block) return '';
+            if (typeof block === 'string') return block;
+            return block.type === 'text' ? (block.text || '') : '';
+        }).filter(Boolean).join('\n\n');
+    }
+
+    _thinkingMetadata(content) {
+        const blocks = Array.isArray(content) ? content : [];
+        const thinking = blocks.filter(block => block?.type === 'thinking');
+        return thinking.length ? { thinking_present: true, thinking_blocks: thinking.length } : {};
     }
 
     _summarizeInput(toolName, input) {
@@ -194,13 +182,195 @@ class PiAdapter extends BaseAdapter {
         const summary = {};
         if (toolName === 'bash') {
             const cmd = String(input.command || '');
-            summary.command = cmd.length > 120 ? cmd.substring(0, 120) + '…' : cmd;
+            summary.command = cmd.length > 120 ? `${cmd.substring(0, 120)}…` : cmd;
         } else if (['read', 'write', 'edit'].includes(toolName)) {
             summary.file_path = input.path || '';
         } else {
             summary.keys = Object.keys(input).slice(0, 8);
         }
         return summary;
+    }
+
+    _turnIdForEntry(entry, contextByEntry) {
+        if (entry?.type === 'message' && entry.message?.role === 'user') return entry.id ? `pi-turn:${entry.id}` : null;
+        return entry?.parentId ? (contextByEntry[entry.parentId]?.turn_id || null) : null;
+    }
+
+    _parseLines(lines, parserState, filePath) {
+        const records = [];
+        const state = parserState || {};
+        state.line_number = Number.isInteger(state.line_number) ? state.line_number : 0;
+        state.context_by_entry = state.context_by_entry || {};
+        state.pending_calls = state.pending_calls || {};
+        let meta = state.session_meta || null;
+
+        for (const line of lines) {
+            const lineNumber = state.line_number++;
+            let entry;
+            try { entry = JSON.parse(line); } catch (_) { continue; }
+
+            if (entry.type === 'session') {
+                meta = this._sessionMeta(entry, filePath);
+                state.session_meta = meta;
+                if (!meta?.id) continue;
+                this.registerProject(this.getProjectKey(meta.cwd), meta.cwd, this.getProjectName(meta.cwd));
+                const attributes = {
+                    session_version: meta.version,
+                    parent_session_id: meta.parent_session_id,
+                    parent_session_available: meta.parent_session_available,
+                };
+                records.push(this._baseRecord(meta, entry, lineNumber * 1000, {
+                    event_id: piEntryEventId(meta.id, `session:${meta.id}`),
+                    source_event_id: `session:${meta.id}`,
+                    event_type: 'session_start',
+                    role: 'session_start',
+                    parent_event_id: null,
+                    attributes_json: attributes,
+                }));
+                continue;
+            }
+            if (!meta?.id || !entry?.id) continue;
+
+            const sequence = lineNumber * 1000;
+            const turnId = this._turnIdForEntry(entry, state.context_by_entry);
+            const entryEventId = piEntryEventId(meta.id, entry.id);
+            const base = this._baseRecord(meta, entry, sequence, {
+                event_id: entryEventId,
+                source_event_id: entry.id,
+                turn_id: turnId,
+            });
+            const attributes = { native_entry_type: entry.type, native_parent_id: entry.parentId || null };
+
+            if (entry.type === 'message' && entry.message) {
+                const role = entry.message.role;
+                const content = entry.message.content;
+                if (role === 'user') {
+                    records.push({ ...base, event_type: 'user_prompt', role: 'user', content: this._extractText(content), attributes_json: attributes });
+                } else if (role === 'assistant') {
+                    const toolCalls = (Array.isArray(content) ? content : []).filter(block => block?.type === 'toolCall');
+                    records.push({
+                        ...base,
+                        event_type: 'assistant',
+                        role: 'assistant',
+                        content: this._extractText(content) || null,
+                        attributes_json: {
+                            ...attributes,
+                            ...this._thinkingMetadata(content),
+                            provider: entry.message.provider || null,
+                            model: entry.message.model || null,
+                            stop_reason: entry.message.stopReason || null,
+                        },
+                    });
+                    toolCalls.forEach((block, index) => {
+                        const callId = String(block.id || '');
+                        if (!callId) return;
+                        const toolName = block.name || 'unknown';
+                        const inputSummary = this._summarizeInput(toolName, block.arguments || {});
+                        const useEventId = piToolEventId(meta.id, callId, 'tool_use');
+                        records.push({
+                            ...base,
+                            event_id: useEventId,
+                            source_event_id: `${entry.id}:tool:${callId}`,
+                            source_sequence: sequence + index + 1,
+                            event_type: 'tool_use',
+                            role: 'tool_use',
+                            call_id: callId,
+                            tool_name: toolName,
+                            input_summary: inputSummary,
+                            tool_input: inputSummary,
+                            parent_event_id: entryEventId,
+                            content: null,
+                            success: null,
+                        });
+                        state.pending_calls[callId] = {
+                            started_at: base.timestamp,
+                            tool_name: toolName,
+                            use_event_id: useEventId,
+                            turn_id: turnId,
+                        };
+                    });
+                } else if (role === 'tool' || role === 'toolResult') {
+                    const callId = String(entry.message.toolCallId || '');
+                    const pending = callId ? state.pending_calls[callId] : null;
+                    const startedAt = pending?.started_at || '';
+                    const endedAt = base.timestamp;
+                    const elapsed = startedAt && endedAt ? new Date(endedAt) - new Date(startedAt) : NaN;
+                    const isError = entry.message.isError === true;
+                    records.push({
+                        ...base,
+                        event_id: entryEventId,
+                        event_type: isError ? 'tool_error' : 'tool_result',
+                        role: isError ? 'tool_error' : 'tool_result',
+                        call_id: callId || null,
+                        tool_name: entry.message.toolName || pending?.tool_name || 'unknown',
+                        input_summary: pending?.input_summary || null,
+                        tool_input: pending?.input_summary || null,
+                        output_snippet: this._extractText(content) || null,
+                        success: !isError,
+                        duration_ms: Number.isFinite(elapsed) && elapsed >= 0 ? elapsed : null,
+                        parent_event_id: pending?.use_event_id || base.parent_event_id,
+                        turn_id: pending?.turn_id || turnId,
+                        confidence: pending ? 'confirmed' : 'partial',
+                        missing_reason: pending ? null : '当前增量范围未找到对应 Tool Use；仅保留来源 toolCallId',
+                        attributes_json: attributes,
+                    });
+                    if (callId) delete state.pending_calls[callId];
+                } else {
+                    const text = this._extractText(content);
+                    if (text) records.push({ ...base, event_type: role || 'message', role: role || 'message', content: text, attributes_json: attributes });
+                }
+            } else if (entry.type === 'model_change') {
+                records.push({ ...base, event_type: 'model_change', role: 'model_change', attributes_json: { ...attributes, provider: entry.provider || null, model: entry.modelId || null } });
+            } else if (entry.type === 'thinking_level_change') {
+                records.push({ ...base, event_type: 'thinking_level_change', role: 'thinking_level_change', attributes_json: { ...attributes, thinking_level: entry.thinkingLevel || null } });
+            } else if (entry.type === 'compaction') {
+                records.push({
+                    ...base,
+                    event_type: 'compact_end',
+                    role: 'compact_end',
+                    content: entry.summary || null,
+                    attributes_json: {
+                        ...attributes,
+                        tokens_before: entry.tokensBefore ?? null,
+                        first_kept_entry_id: entry.firstKeptEntryId || null,
+                        retained_tail_count: Array.isArray(entry.retainedTail) ? entry.retainedTail.length : 0,
+                        from_extension: entry.fromHook === true,
+                    },
+                });
+            } else if (entry.type === 'branch_summary') {
+                records.push({
+                    ...base,
+                    event_type: 'branch_summary',
+                    role: 'branch_summary',
+                    content: entry.summary || null,
+                    attributes_json: { ...attributes, branch_from_entry_id: entry.fromId || null, from_extension: entry.fromHook === true },
+                });
+            } else if (entry.type === 'session_info') {
+                records.push({ ...base, event_type: 'session_info', role: 'session_info', attributes_json: { ...attributes, session_name: entry.name || null } });
+            }
+
+            state.context_by_entry[entry.id] = { turn_id: turnId, event_id: entryEventId };
+        }
+        state.session_meta = meta;
+        return records;
+    }
+
+    async getRecords(filter = {}) {
+        const limit = Math.min(parseInt(filter.limit, 10) || 1000, POLL_RECORD_LIMIT);
+        const records = [];
+        for (const filePath of this._listSessionFiles()) {
+            try {
+                const { lines } = readCompleteLines(filePath, 0);
+                const parsed = this._parseLines(lines, {}, filePath);
+                for (const record of parsed) {
+                    if (filter.session_id && record.session_id !== filter.session_id) continue;
+                    if (filter.project_key && record.project_key !== filter.project_key) continue;
+                    records.push(record);
+                }
+            } catch (_) {}
+        }
+        records.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || '') || (b.source_sequence || 0) - (a.source_sequence || 0));
+        return records.slice(0, limit);
     }
 
     startPolling(intervalMs = POLL_INTERVAL_MS) {
@@ -210,110 +380,56 @@ class PiAdapter extends BaseAdapter {
     }
 
     async _pollOnce() {
-        const now = Date.now();
-        const records = await this.getRecords({ limit: POLL_RECORD_LIMIT });
+        const importState = this._readImportState();
+        const touchedSessions = new Map();
+        let changed = false;
 
-        // 只处理新记录（通过 timestamp 水位线）
-        const newRecords = records.filter(r => {
-            const ts = new Date(r.ts).getTime();
-            return ts > this._lastPollTime;
-        });
-
-        if (newRecords.length > 0) {
-            this._lastPollTime = now;
-            // 聚合写入 agent-lens.db
-            for (const record of newRecords) {
-                this._aggregateToDb(record);
-            }
-            this._upsertSessions(newRecords);
-        }
-    }
-
-    _upsertSessions(records) {
-        try {
-            const agentLensDb = require('../agent-lens-db');
-            const sessions = new Map();
+        for (const filePath of this._listSessionFiles()) {
+            const key = this._fileStateKey(filePath);
+            const stat = fs.statSync(filePath);
+            let fileState = importState.files[key] || { offset: 0, line_number: 0, context_by_entry: {}, pending_calls: {} };
+            if (stat.size < (fileState.offset || 0)) fileState = { offset: 0, line_number: 0, context_by_entry: {}, pending_calls: {} };
+            const chunk = readCompleteLines(filePath, fileState.offset || 0);
+            if (!chunk.lines.length) continue;
+            const records = this._parseLines(chunk.lines, fileState, filePath);
             for (const record of records) {
-                if (!record.session_id) continue;
-                const isTool = record.role === 'tool_result' || record.role === 'tool_error' || record.tool_name;
-                if (!sessions.has(record.session_id)) {
-                    sessions.set(record.session_id, {
-                        session_id: record.session_id,
-                        project_key: record.project_key || '',
-                        source: 'pi',
-                        start_time: record.ts || '',
-                        end_time: record.ts || '',
-                        tool_count: 0,
-                        error_count: 0,
-                        total_duration_ms: 0,
-                    });
-                }
-                const session = sessions.get(record.session_id);
-                if (record.ts && (!session.start_time || record.ts < session.start_time)) session.start_time = record.ts;
-                if (record.ts && (!session.end_time || record.ts > session.end_time)) session.end_time = record.ts;
-                if (isTool) {
-                    session.tool_count += 1;
-                    if (!record.success) session.error_count += 1;
-                    session.total_duration_ms += record.duration_ms || 0;
-                }
+                this._aggregateToDb(record);
+                if (record.session_id) touchedSessions.set(record.session_id, record.project_key || '');
             }
-            for (const session of sessions.values()) {
-                agentLensDb.upsertSession(session);
-            }
-        } catch (_) {}
+            fileState.offset = chunk.nextOffset;
+            fileState.size = chunk.size;
+            fileState.updated_at = new Date().toISOString();
+            importState.files[key] = fileState;
+            changed = true;
+        }
+
+        if (changed) this._writeImportState(importState);
+        if (touchedSessions.size) {
+            const agentLensDb = this.db || require('../agent-lens-db');
+            for (const [sessionId, projectKey] of touchedSessions) agentLensDb.recomputeSession('pi', sessionId, projectKey);
+        }
     }
 
     _aggregateToDb(record) {
-        try {
-            const agentLensDb = require('../agent-lens-db');
-            const date = (record.ts || '').slice(0, 10);
-            const isTool = record.role === 'tool_result' || record.role === 'tool_error' || record.tool_name;
-            // 写入 timeline 表，让前端能展开查看调用详情
-            const timelineRecord = {
-                source: 'pi',
-                session_id: record.session_id,
-                timestamp: record.ts || '',
-                tool_started_at: record.tool_started_at || null,
-                source_event_id: record.source_event_id || null,
-                source_sequence: record.source_sequence ?? null,
-                seq: null,
-                role: record.role || (record.success === false ? 'tool_error' : 'tool_result'),
-                event_type: record.role || (record.success === false ? 'tool_error' : 'tool_result'),
-                call_id: record.call_id || null,
-                tool_name: record.tool_name || null,
-                content: record.content || null,
-                tool_input: record.input_summary ? JSON.stringify(record.input_summary) : null,
-                success: record.success == null ? null : (record.success ? 1 : 0),
-                exit_code: null,
-                duration_ms: record.duration_ms ?? null,
-                output_snippet: record.output_snippet || null,
-                error_message: record.success === false ? (record.output_snippet || null) : null,
-                error_type: null,
-                error_detail: null,
-                project_key: record.project_key || null,
-                parent_seq: null,
-                capture_method: record.capture_method || 'native_log',
-                visibility: record.visibility || 'captured',
-                confidence: record.confidence || 'confirmed',
-                missing_reason: record.missing_reason || null,
-            };
-            if (isTool) {
-                const { resultInfo } = agentLensDb.insertToolEventPair(timelineRecord);
-                if (resultInfo.changes > 0) {
-                    agentLensDb.updateDailyStats(date, 'pi', record.tool_name, 1, record.success ? 0 : 1, record.duration_ms || 0);
-                }
-            } else {
-                agentLensDb.insertTimeline(timelineRecord);
-            }
-        } catch (_) {}
+        const agentLensDb = this.db || require('../agent-lens-db');
+        const info = agentLensDb.insertTimeline({
+            ...record,
+            timestamp: record.timestamp || record.ts || '',
+            tool_input: record.tool_input || record.input_summary || null,
+            error_message: record.success === false ? (record.output_snippet || null) : null,
+        });
+        if (info.changes > 0 && (record.event_type === 'tool_result' || record.event_type === 'tool_error')) {
+            const date = (record.timestamp || record.ts || '').slice(0, 10);
+            agentLensDb.updateDailyStats(date, 'pi', record.tool_name, 1, record.success ? 0 : 1, record.duration_ms || 0);
+        }
+        return info;
     }
 
     stopPolling() {
-        if (this._pollTimer) {
-            clearInterval(this._pollTimer);
-            this._pollTimer = null;
-        }
+        if (this._pollTimer) clearInterval(this._pollTimer);
+        this._pollTimer = null;
     }
 }
 
 module.exports = PiAdapter;
+module.exports.readCompleteLines = readCompleteLines;

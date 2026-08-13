@@ -180,6 +180,12 @@ function syncInstalledHooks(warningLabel = '更新 Hooks 配置失败') {
 }
 
 function isHttpReady(port, expectedVersion) {
+    return readHttpAppInfo(port).then(info => Boolean(
+        info && (!expectedVersion || info.version === expectedVersion)
+    ));
+}
+
+function readHttpAppInfo(port = DEFAULT_PORT) {
     return new Promise((resolve) => {
         const req = http.get({
             hostname: '127.0.0.1',
@@ -196,9 +202,11 @@ function isHttpReady(port, expectedVersion) {
                 if (res.statusCode < 200 || res.statusCode >= 300) return resolve(false);
                 try {
                     const info = JSON.parse(body || '{}');
-                    resolve(!expectedVersion || info.version === expectedVersion);
+                    resolve(info?.name === '@z7ping/agent-lens' && typeof info.version === 'string'
+                        ? info
+                        : null);
                 } catch (_) {
-                    resolve(false);
+                    resolve(null);
                 }
             });
         });
@@ -529,8 +537,7 @@ function launchdUninstall() {
 
 // ─── 统一 service 命令 ──────────────────────────────────────────
 
-function platformAction(action) {
-    const backend = getServiceBackend();
+function platformAction(action, backend = getServiceBackend()) {
     if (!backend) {
         log('[WARN] 当前平台不支持自动服务管理', 'yellow');
         log('  手动启动: agent-lens start --daemon', 'dim');
@@ -551,7 +558,37 @@ function platformAction(action) {
     return fn();
 }
 
-function cmdService(subcmd) {
+function getServiceBackendLabel(backend) {
+    return {
+        'windows-startup': 'Windows 当前用户启动项',
+        systemd: 'systemd user service',
+        launchd: 'launchd agent',
+    }[backend] || '当前平台不支持自动管理';
+}
+
+function displayVersion(version, fallback) {
+    return version ? `v${version}` : fallback;
+}
+
+async function printServiceDetails(backend) {
+    const commandVersion = getVersion();
+    const installedVersion = readInstalledVersion();
+    const runningInfo = await readHttpAppInfo(DEFAULT_PORT);
+    const commandMismatch = installedVersion && commandVersion !== installedVersion;
+    const runtimeMismatch = installedVersion && runningInfo && runningInfo.version !== installedVersion;
+
+    console.log('');
+    log('版本与环境:', 'cyan');
+    log(`  当前命令: ${displayVersion(commandVersion, '未知')}${commandMismatch ? '（与已安装应用不同）' : ''}`, commandMismatch ? 'yellow' : 'reset');
+    log(`  已安装应用: ${displayVersion(installedVersion, '未检测到')}`, installedVersion ? 'reset' : 'yellow');
+    log(`  运行中服务: ${displayVersion(runningInfo?.version, '未检测到')}${runtimeMismatch ? '（与已安装应用不同）' : ''}`, runtimeMismatch ? 'yellow' : 'reset');
+    log(`  Node.js: ${process.version}`);
+    log(`  管理方式: ${getServiceBackendLabel(backend)}`);
+    log(`  默认地址: http://127.0.0.1:${DEFAULT_PORT}/`);
+    log(`  安装目录: ${INSTALL_DIR}`, 'dim');
+}
+
+async function cmdService(subcmd) {
     switch (subcmd) {
         case 'install':   return platformAction('install');
         case 'uninstall': return platformAction('uninstall');
@@ -559,7 +596,15 @@ function cmdService(subcmd) {
         case 'stop':      return platformAction('stop');
         case 'enable':    return platformAction('enable');
         case 'disable':   return platformAction('disable');
-        case 'status':    return platformAction('status');
+        case 'status': {
+            const backend = getServiceBackend();
+            log('🧠 AgentLens 服务状态', 'bright');
+            log('═'.repeat(45), 'dim');
+            console.log('');
+            await Promise.resolve(platformAction('status', backend));
+            await printServiceDetails(backend);
+            return undefined;
+        }
         default:
             log('用法: agent-lens service <install|uninstall|start|stop|enable|disable|status>', 'cyan');
             return undefined;
@@ -1279,7 +1324,7 @@ function showHelp() {
     log('  service stop                  停止服务', 'dim');
     log('  service enable                启用开机自启', 'dim');
     log('  service disable               关闭开机自启', 'dim');
-    log('  service status                查看服务和自启状态', 'dim');
+    log('  service status                查看服务、自启、版本和运行环境', 'dim');
     console.log('');
     log('start 选项:', 'yellow');
     log('  --daemon, -d                  后台守护进程模式', 'dim');
