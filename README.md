@@ -93,7 +93,7 @@ agent-lens uninstall       # 卸载并清理
 
 > **Linux 注意**：需要 `sudo loginctl enable-linger <user>` 才能在未登录时保持服务运行。安装时会自动检测并提示。
 >
-> **Windows 注意**：安装时会在当前用户的“启动”目录写入 `AgentLens.vbs`，用户登录后隐藏启动，无需管理员权限。安装、服务管理、Hook 自动拉起和概览版本探测使用隐藏子进程；Hook 自动拉起仍作为服务意外退出后的兜底。
+> **Windows 注意**：安装时会在当前用户的“启动”目录写入 `AgentLens.vbs`，用户登录后隐藏启动，无需管理员权限。安装、服务管理、Hook 自动拉起和概览版本探测使用隐藏子进程；实时 Hook 通过安装到 `~/.agent-lens/bin/agent-lens-hook.exe` 的 GUI 子系统启动器执行 Node 脚本，避免每个事件闪现控制台窗口，并兼容 PowerShell 与 `cmd.exe`。升级后请重启正在运行的 AI 编码工具，使新的 Hook 命令和 PATH 生效。Hook 自动拉起仍作为服务意外退出后的兜底。
 
 ## 特性
 
@@ -228,6 +228,8 @@ Skill 目录会识别根目录下的 `.md` 文件，并递归识别包含 `SKILL
 运行 `node server/cli.js install` 会自动配置所有工具的 hooks。发布到 npm 后，也可以使用 `npx @z7ping/agent-lens install`。
 
 Codex v0.5 需要同步安装 11 类 Hook 并更新 Codex 的信任状态，推荐始终通过安装命令配置。下面仅给出 Claude Code 的手动配置示例；路径指向 `~/.agent-lens/app/hooks/`：
+
+Windows 不应直接照抄下面的 `node` 命令；安装器会自动改用 PATH 中的 `agent-lens-hook.exe`，同时保持 Hook 的标准输入、输出和退出码。
 
 ```json
 {
