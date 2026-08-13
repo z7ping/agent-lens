@@ -119,6 +119,7 @@ test('application staging copies runtime files without local state or dependenci
     'server.js',
     'runtime-paths.js',
     'install-layout.js',
+    'install-lock.js',
     'codex-lifecycle.js',
     'codex-context.js',
     'event-model.js',
