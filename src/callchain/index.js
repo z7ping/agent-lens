@@ -97,7 +97,8 @@ export function renderCallChain(data) {
   emptyState?.classList.add('hidden');
   container.innerHTML = sessions.map(renderSession).join('');
 
-  // 渲染后恢复展开状态
+  // 渲染后恢复当前列表中仍然存在的展开状态
+  let restoredSessionCount = 0;
   for (const sessionId of expandedSessionIds) {
     const card = container.querySelector(`.session-card[data-session-id="${sessionId}"]`);
     if (card) {
@@ -106,12 +107,13 @@ export function renderCallChain(data) {
       if (body) {
         body.classList.remove('hidden');
         if (arrow) arrow.style.transform = 'rotate(90deg)';
+        restoredSessionCount++;
       }
     }
   }
 
-  // 默认展开第一个会话（如果没有已展开的会话）
-  if (expandedSessionIds.size === 0 && sessions.length > 0) {
+  // 切换来源/项目后旧 Session 可能已不在当前列表；此时仍应展开并加载第一条。
+  if (restoredSessionCount === 0 && sessions.length > 0) {
     const firstCard = container.querySelector('.session-card');
     if (firstCard) {
       const body = firstCard.querySelector('.session-body');
@@ -168,28 +170,6 @@ function getSessionStatus(session) {
   if ((session.errors || 0) > 0) return { label: '有错误', cls: 'error' };
   if ((session.totalDuration || 0) > 5000) return { label: '偏慢', cls: 'slow' };
   return { label: '成功', cls: 'success' };
-}
-
-function summarizeCalls(calls) {
-  const summary = {
-    total: calls.length,
-    errors: 0,
-    slow: 0,
-    byType: {},
-    slowest: null,
-  };
-
-  for (const call of calls) {
-    const type = getToolType(call.tool_name || call.name || '');
-    summary.byType[type] = (summary.byType[type] || 0) + 1;
-    if (call.success === 0 || call.success === false || call.error || call.error_message) summary.errors++;
-    if ((call.duration_ms || 0) > 5000) summary.slow++;
-    if (!summary.slowest || (call.duration_ms || 0) > (summary.slowest.duration_ms || 0)) {
-      summary.slowest = call;
-    }
-  }
-
-  return summary;
 }
 
 function renderMetric(label, value, tone = '') {
@@ -482,6 +462,7 @@ const lifecycleLabels = {
   agent_stop: ['子 Agent 停止', '◈'],
   turn_stop: ['Turn 完成', '✓'],
   context_discovery: ['上下文发现', 'i'],
+  tool_use: ['工具开始', '›'],
   tool_result: ['工具完成', '·'],
   tool_error: ['工具失败', '!'],
 };
@@ -537,7 +518,7 @@ function lifecycleSummary(item, attributes) {
     return `${prefix}${item.content ? truncate(String(item.content).replace(/\s+/g, ' '), 180) : '未提供最后回复'}`;
   }
   if (eventType === 'turn_stop') {
-    return item.content ? truncate(String(item.content).replace(/\s+/g, ' '), 180) : 'Turn 已停止，来源未提供最后回复';
+    return item.content ? '来源提供了最终回复' : '来源未提供最终回复';
   }
   if (eventType === 'tool_result' || eventType === 'tool_error') {
     return `${item.tool_name || '未知工具'}${item.duration_ms != null ? ` · ${formatDuration(item.duration_ms)}` : ''}`;
@@ -545,61 +526,60 @@ function lifecycleSummary(item, attributes) {
   return '';
 }
 
-function renderLifecycleTrace(calls) {
-  if (!Array.isArray(calls)) return '';
-  const lifecycleSource = calls.find(item => primaryLifecycleTypes.has(item.event_type || item.role))?.source;
-  if (!lifecycleSource) {
-    return '';
-  }
-
-  const events = calls.filter(item => {
-    if (item.source !== lifecycleSource) return false;
-    const eventType = item.event_type || item.role;
-    if (primaryLifecycleTypes.has(eventType)) return true;
-    return (eventType === 'tool_result' || eventType === 'tool_error') && Boolean(item.turn_id);
-  });
-  const turns = new Set(events.map(item => item.turn_id).filter(Boolean));
-  const nodes = events.map(item => {
-    const eventType = item.event_type || item.role;
-    const [label, icon] = lifecycleLabels[eventType] || [eventType, '·'];
-    const attributes = getLifecycleAttributes(item);
-    const meta = [];
-    if (item.turn_id) meta.push(`<span title="${escapeHtml(item.turn_id)}">Turn ${escapeHtml(shortNativeId(item.turn_id))}</span>`);
-    if (item.agent_id) meta.push(`<span title="${escapeHtml(item.agent_id)}">Agent ${escapeHtml(shortNativeId(item.agent_id))}</span>`);
-    if (attributes.model) meta.push(`<span>${escapeHtml(attributes.model)}</span>`);
-    if (attributes.permission_mode) meta.push(`<span>权限 ${escapeHtml(attributes.permission_mode)}</span>`);
-    const summary = lifecycleSummary(item, attributes);
-    const missing = item.missing_reason
-      ? `<div class="lifecycle-missing">${escapeHtml(item.missing_reason)}</div>`
-      : '';
-    return `
-      <div class="lifecycle-node ${escapeHtml(eventType)}">
-        <div class="lifecycle-marker">${escapeHtml(icon)}</div>
-        <div class="lifecycle-card">
-          <div class="lifecycle-card-head">
-            <strong>${escapeHtml(label)}</strong>
-            <span class="lifecycle-time">${escapeHtml(formatTime(item.timestamp || item.ts))}</span>
-            ${renderEvidenceBadge(item)}
-          </div>
-          ${summary ? `<div class="lifecycle-summary">${renderMarkdownInline(summary)}</div>` : ''}
-          ${meta.length ? `<div class="lifecycle-meta">${meta.join('')}</div>` : ''}
-          ${missing}
-        </div>
-      </div>
-    `;
+function renderEvidenceBadges(items) {
+  const seen = new Set();
+  return (items || []).map(item => {
+    const key = [item?.capture_method, item?.visibility, item?.confidence].join(':');
+    if (seen.has(key)) return '';
+    seen.add(key);
+    return renderEvidenceBadge(item);
   }).join('');
+}
+
+function renderFlowEvent(item) {
+  const eventType = item.event_type || item.role || 'event';
+  const [label, icon] = lifecycleLabels[eventType] || [eventType, '·'];
+  const attributes = getLifecycleAttributes(item);
+  const summary = lifecycleSummary(item, attributes);
+  const meta = [];
+  if (item.agent_id) meta.push(`Agent ${shortNativeId(item.agent_id)}`);
+  if (attributes.model) meta.push(attributes.model);
+  if (attributes.permission_mode) meta.push(`权限 ${attributes.permission_mode}`);
 
   return `
-    <section class="codex-lifecycle-trace">
-      <div class="lifecycle-header">
-        <div>
-          <div class="lifecycle-title">${escapeHtml(sourceLabels[lifecycleSource] || lifecycleSource)} 生命周期</div>
-          <div class="lifecycle-subtitle">运行时事件、原生日志与当前环境重建按证据来源保持独立</div>
+    <div class="flow-event ${escapeHtml(eventType)}">
+      <span class="flow-marker">${escapeHtml(icon)}</span>
+      <div class="flow-event-body">
+        <div class="flow-event-line">
+          <strong>${escapeHtml(label)}</strong>
+          ${summary ? `<span class="flow-event-summary">${renderMarkdownInline(summary)}</span>` : ''}
+          <span class="flow-event-meta">${escapeHtml(formatTime(item.timestamp || item.ts))}</span>
+          ${renderEvidenceBadge(item)}
         </div>
-        <div class="lifecycle-count">${turns.size} Turn · ${events.length} 事件</div>
+        ${meta.length ? `<div class="flow-event-tags">${meta.map(value => `<span>${escapeHtml(value)}</span>`).join('')}</div>` : ''}
+        ${item.missing_reason ? `<div class="flow-event-missing">${escapeHtml(item.missing_reason)}</div>` : ''}
       </div>
-      <div class="lifecycle-list">${nodes}</div>
-    </section>
+    </div>
+  `;
+}
+
+function renderThinkingSignal(item) {
+  const attributes = getLifecycleAttributes(item);
+  if (!attributes.thinking_present) return '';
+  const count = Number(attributes.thinking_blocks || 0);
+  const detail = count > 0 ? `${count} 个来源可见块` : '来源记录了 thinking';
+  return `
+    <div class="flow-event thinking-observed">
+      <span class="flow-marker">◌</span>
+      <div class="flow-event-body">
+        <div class="flow-event-line">
+          <strong>思考</strong>
+          <span class="flow-event-summary">${escapeHtml(detail)} · 正文未采集</span>
+          <span class="flow-event-meta">${escapeHtml(formatTime(item.timestamp || item.ts))}</span>
+          ${renderEvidenceBadge(item)}
+        </div>
+      </div>
+    </div>
   `;
 }
 
@@ -688,133 +668,253 @@ function getFilePath(call, projectPath) {
   return { full, short };
 }
 
-/** 按轮次分组（role=user 为分隔） */
-function groupByRounds(calls) {
-  const rounds = [];
-  let currentRound = null;
-
-  for (const call of calls) {
-    if (call.role === 'user') {
-      currentRound = { userMessage: call, toolCalls: [], assistantMessages: [] };
-      rounds.push(currentRound);
-    } else if (call.role === 'assistant') {
-      if (currentRound) {
-        currentRound.assistantMessages.push(call);
-      } else {
-        // 没有前置 user 消息，作为首个轮次
-        currentRound = { userMessage: null, toolCalls: [], assistantMessages: [call] };
-        rounds.push(currentRound);
-      }
-    } else if (call.role === 'tool_result' || call.role === 'tool_error') {
-      if (!currentRound) {
-        currentRound = { userMessage: null, toolCalls: [], assistantMessages: [] };
-        rounds.push(currentRound);
-      }
-      currentRound.toolCalls.push(call);
-    }
-  }
-
-  return rounds;
+function normalizedMessageText(item) {
+  return extractUserText(item).replace(/\s+/g, ' ').trim();
 }
 
-/** 渲染单个轮次（默认折叠，仅展开最近一轮 / 有错误轮次） */
-function renderRound(round, index, sourceColor = '', defaultExpanded = false) {
-  const parts = [];
+function buildExecutionFlow(calls) {
+  const sessionBefore = [];
+  const sessionAfter = [];
+  const rounds = [];
+  const roundsByTurn = new Map();
+  let currentRound = null;
+  let pendingBetween = [];
 
-  const rand = Math.random().toString(36).slice(2, 8);
-  const userId = `round-user-${index}-${rand}`;
-  const aiId = `round-ai-${index}-${rand}`;
-  const toolsId = `round-tools-${index}-${rand}`;
+  const createRound = (turnId = null) => {
+    const round = {
+      turnId,
+      userMessage: null,
+      userEvidence: [],
+      beforeEvents: pendingBetween,
+      events: [],
+      completed: false,
+    };
+    pendingBetween = [];
+    rounds.push(round);
+    if (turnId) roundsByTurn.set(turnId, round);
+    return round;
+  };
 
-  // 用户消息（无消息时折叠头显示极淡提示，正文不渲染用户气泡）
-  const userContent = round.userMessage ? extractUserText(round.userMessage) : '';
-  const userExcerpt = userContent ? truncate(userContent.replace(/\s+/g, ' ').trim(), 60) : '';
+  for (const item of calls || []) {
+    const eventType = item.event_type || item.role;
+    if (eventType === 'session_start' || eventType === 'context_discovery') {
+      if (!currentRound) sessionBefore.push(item);
+      else if (currentRound.completed) pendingBetween.push(item);
+      else currentRound.events.push(item);
+      continue;
+    }
+    if (eventType === 'session_end') {
+      sessionAfter.push(...pendingBetween);
+      pendingBetween = [];
+      sessionAfter.push(item);
+      continue;
+    }
 
-  // AI 文本
-  const assistantTexts = [];
-  for (const msg of round.assistantMessages) {
-    const text = extractAssistantText(msg);
-    if (text) assistantTexts.push(text);
+    const isUser = item.role === 'user' || eventType === 'user_prompt';
+    if (isUser) {
+      const text = normalizedMessageText(item);
+      let round = item.turn_id ? roundsByTurn.get(item.turn_id) : null;
+      if (!round && currentRound && !currentRound.completed) {
+        const currentText = normalizedMessageText(currentRound.userMessage || {});
+        if ((text && currentText === text) || !currentText) round = currentRound;
+      }
+      if (!round) round = createRound(item.turn_id || null);
+      if (item.turn_id && !round.turnId) {
+        round.turnId = item.turn_id;
+        roundsByTurn.set(item.turn_id, round);
+      }
+      round.userEvidence.push(item);
+      if (!round.userMessage || (item.role === 'user' && round.userMessage.role !== 'user')) {
+        round.userMessage = item;
+      }
+      currentRound = round;
+      continue;
+    }
+
+    let round = item.turn_id ? roundsByTurn.get(item.turn_id) : null;
+    if (!round && item.turn_id) round = createRound(item.turn_id);
+    if (!round && currentRound?.completed) {
+      pendingBetween.push(item);
+      continue;
+    }
+    if (!round) round = currentRound;
+    if (!round && item.role === 'assistant') round = createRound();
+    if (!round) {
+      sessionBefore.push(item);
+      continue;
+    }
+    round.events.push(item);
+    if (eventType === 'turn_stop') round.completed = true;
+    currentRound = round;
   }
 
-  // 工具统计
-  const errorCount = round.toolCalls.filter(isErrorCall).length;
-  const hasError = errorCount > 0;
-  const hasSlow = round.toolCalls.some(c => (c.duration_ms || 0) > 5000);
-  const typeCounts = getToolTypeCounts(round.toolCalls, 3);
-  const expandedDefault = defaultExpanded || hasError;
+  sessionAfter.unshift(...pendingBetween);
+  return { sessionBefore, rounds, sessionAfter };
+}
 
-  // ── 轮次折叠头（始终可见） ──
+function messagesEquivalent(left, right) {
+  if (!left || !right) return false;
+  if (left === right) return true;
+  const shorterLength = Math.min(left.length, right.length);
+  return shorterLength >= 12 && (left.includes(right) || right.includes(left));
+}
+
+function renderChatMessage(role, item, roundIndex, eventIndex, evidenceItems = [item]) {
+  const text = role === 'assistant' ? extractAssistantText(item) : extractUserText(item);
+  if (!text) return '';
+  const id = `flow-${role}-${roundIndex}-${eventIndex}-${Math.random().toString(36).slice(2, 8)}`;
+  const label = role === 'assistant' ? 'AI' : '用户';
+  const bubble = role === 'assistant'
+    ? renderAssistantBubble(id, [text])
+    : `<div class="chat-bubble user">${renderMarkdownMessage(id, text)}</div>`;
+  return `
+    <div class="chat-message ${role}">
+      <div class="chat-meta">${label} · 第 ${roundIndex + 1} 轮 ${renderEvidenceBadges(evidenceItems)}</div>
+      ${bubble}
+    </div>
+  `;
+}
+
+function renderToolGroup(toolCalls, roundIndex, groupIndex, sourceColor) {
+  if (!toolCalls.length) return '';
+  const toolsId = `round-tools-${roundIndex}-${groupIndex}-${Math.random().toString(36).slice(2, 8)}`;
+  const tree = buildTree(toolCalls);
+  roundToolsCache.set(toolsId, { nodes: tree, sourceColor });
+  const errorCount = toolCalls.filter(isErrorCall).length;
+  const duration = toolCalls.reduce((sum, call) => sum + (Number(call.duration_ms) || 0), 0);
+  const typeBadges = getToolTypeCounts(toolCalls, 3)
+    .map(t => `<span class="tool-type-badge ${t.type}">${t.type} ${t.count}</span>`)
+    .join('');
+  return `
+    <div class="round-tools flow-tools collapsed" id="${toolsId}" data-errors-only="false">
+      <button class="round-tools-toggle" type="button" onclick="toggleRoundTools('${toolsId}')">
+        <span class="round-tools-title">
+          <span class="round-tools-chevron">›</span>
+          工具执行 · ${toolCalls.length} 次
+          <span class="round-tools-summary">${errorCount ? `${errorCount} 次失败` : '全部成功'}${duration ? ` · ${formatDuration(duration)}` : ''}</span>
+        </span>
+        <span class="round-tools-badges">
+          ${typeBadges}
+          ${errorCount ? `<span class="tool-error-badge">${errorCount} 错误</span>` : ''}
+        </span>
+      </button>
+      <div class="round-tools-body">
+        <label class="round-tools-filter" onclick="event.stopPropagation()">
+          <input type="checkbox" onchange="toggleRoundErrorFilter('${toolsId}', this.checked)">
+          只显示报错调用
+        </label>
+        <div class="round-calls"></div>
+      </div>
+    </div>
+  `;
+}
+
+function renderFlowItems(events, roundIndex, sourceColor) {
+  const parts = [];
+  let toolBatch = [];
+  let toolGroupIndex = 0;
+  const resultCallIds = new Set(events
+    .filter(item => item.role === 'tool_result' || item.role === 'tool_error')
+    .map(item => item.call_id || item.tool_use_id)
+    .filter(Boolean));
+  const assistantTexts = new Set(events
+    .filter(item => item.role === 'assistant')
+    .map(normalizedMessageText)
+    .filter(Boolean));
+  const renderedAssistantTexts = new Set();
+
+  const flushTools = () => {
+    if (!toolBatch.length) return;
+    parts.push(renderToolGroup(toolBatch, roundIndex, toolGroupIndex++, sourceColor));
+    toolBatch = [];
+  };
+
+  events.forEach((item, eventIndex) => {
+    const eventType = item.event_type || item.role;
+    if (item.role === 'tool_result' || item.role === 'tool_error') {
+      toolBatch.push(item);
+      return;
+    }
+    if (item.role === 'tool_use' && resultCallIds.has(item.call_id || item.tool_use_id)) return;
+    flushTools();
+
+    if (item.role === 'assistant') {
+      const thinking = renderThinkingSignal(item);
+      if (thinking) parts.push(thinking);
+      const textKey = normalizedMessageText(item);
+      if (textKey && !renderedAssistantTexts.has(textKey)) {
+        parts.push(renderChatMessage('assistant', item, roundIndex, eventIndex));
+        renderedAssistantTexts.add(textKey);
+      }
+      return;
+    }
+
+    if (eventType === 'turn_stop') {
+      const textKey = normalizedMessageText(item);
+      const duplicatesAssistant = [...assistantTexts, ...renderedAssistantTexts]
+        .some(candidate => messagesEquivalent(textKey, candidate));
+      if (textKey && !duplicatesAssistant) {
+        parts.push(renderChatMessage('assistant', item, roundIndex, eventIndex));
+        renderedAssistantTexts.add(textKey);
+      }
+      parts.push(renderFlowEvent(item));
+      return;
+    }
+
+    if (eventType === 'user_prompt') return;
+    if (eventType === 'tool_use' || primaryLifecycleTypes.has(eventType)) {
+      parts.push(renderFlowEvent(item));
+    }
+  });
+  flushTools();
+  return parts.join('');
+}
+
+/** 渲染单个完整 Turn：用户气泡 → 可观察事件/工具 → AI 气泡。 */
+function renderRound(round, index, sourceColor = '', defaultExpanded = false) {
+  const toolCalls = round.events.filter(item => item.role === 'tool_result' || item.role === 'tool_error');
+  const errorCount = toolCalls.filter(isErrorCall).length;
+  const hasError = errorCount > 0;
+  const hasSlow = toolCalls.some(call => (call.duration_ms || 0) > 5000);
   const summaryMeta = [];
-  if (round.toolCalls.length > 0) summaryMeta.push(`<span class="round-summary-pill">${round.toolCalls.length} 工具</span>`);
+  if (toolCalls.length) summaryMeta.push(`<span class="round-summary-pill">${toolCalls.length} 工具</span>`);
   if (hasError) summaryMeta.push(`<span class="round-summary-pill error">${errorCount} 错误</span>`);
   if (hasSlow) summaryMeta.push(`<span class="round-summary-pill slow">慢</span>`);
-  parts.push(`
-    <div class="round-summary" onclick="toggleRound(this)">
-      <span class="round-summary-chevron">›</span>
-      <span class="round-summary-title">第 ${index + 1} 轮</span>
-      <span class="round-summary-user">${userExcerpt ? renderMarkdownInline(userExcerpt) : '<span class="round-summary-no-user">无用户消息</span>'}</span>
-      ${summaryMeta.length ? `<span class="round-summary-meta">${summaryMeta.join('')}</span>` : ''}
+  const timestamps = [round.userMessage, ...round.events]
+    .map(item => new Date(item?.timestamp || item?.ts || '').getTime())
+    .filter(Number.isFinite);
+  const roundDuration = timestamps.length > 1 ? Math.max(...timestamps) - Math.min(...timestamps) : 0;
+
+  const userBubble = round.userMessage
+    ? renderChatMessage('user', round.userMessage, index, 0, round.userEvidence)
+    : '';
+  const flowItems = renderFlowItems(round.events, index, sourceColor);
+  const content = userBubble || flowItems
+    ? `<div class="round-content"><div class="turn-flow">${userBubble}${flowItems}</div></div>`
+    : '';
+  const toolTypes = Array.from(new Set(toolCalls.map(call => getToolType(call.tool_name || '')).filter(Boolean)));
+  const expandedDefault = defaultExpanded || hasError;
+
+  return `
+    <div class="round-block${expandedDefault ? '' : ' collapsed'}" data-tool-types="${escapeHtml(toolTypes.join(' '))}" data-has-error="${hasError ? 'true' : 'false'}" data-has-slow="${hasSlow ? 'true' : 'false'}">
+      <div class="round-summary" onclick="toggleRound(this)">
+        <span class="round-summary-chevron">›</span>
+        <span class="round-summary-title">第 ${index + 1} 轮</span>
+        ${roundDuration ? `<span class="round-summary-duration">${formatDuration(roundDuration)}</span>` : ''}
+        ${summaryMeta.length ? `<span class="round-summary-meta">${summaryMeta.join('')}</span>` : ''}
+      </div>
+      ${content}
     </div>
-  `);
+  `;
+}
 
-  // ── 轮次正文（折叠时隐藏） ──
-  const content = [];
-
-  // 对话区：无用户消息时不渲染用户气泡
-  const convo = [];
-  if (userContent) {
-    convo.push(`
-      <div class="chat-message user">
-        <div class="chat-meta">用户 · 第 ${index + 1} 轮 ${renderEvidenceBadge(round.userMessage)}</div>
-        <div class="chat-bubble user">${renderMarkdownMessage(userId, userContent)}</div>
-      </div>
-    `);
-  }
-  const assistantEvidence = round.assistantMessages[round.assistantMessages.length - 1] || {};
-  if (assistantTexts.length) {
-    convo.push(`
-      <div class="chat-message assistant">
-        <div class="chat-meta">AI · 第 ${index + 1} 轮 ${renderEvidenceBadge(assistantEvidence)}</div>
-        ${renderAssistantBubble(aiId, assistantTexts)}
-      </div>
-    `);
-  }
-  if (convo.length) content.push(`<div class="round-conversation">${convo.join('')}</div>`);
-
-  // 工具调用（默认折叠，折叠时 DOM 只保留摘要，展开时懒加载详情）
-  if (round.toolCalls.length > 0) {
-    const tree = buildTree(round.toolCalls);
-    roundToolsCache.set(toolsId, { nodes: tree, sourceColor });
-    const typeBadges = typeCounts.map(t => `<span class="tool-type-badge ${t.type}">${t.type} ${t.count}</span>`).join('');
-    content.push(`
-      <div class="round-tools collapsed" id="${toolsId}" data-errors-only="false">
-        <button class="round-tools-toggle" type="button" onclick="toggleRoundTools('${toolsId}')">
-          <span class="round-tools-title">
-            <span class="round-tools-chevron">›</span>
-            工具调用 · ${round.toolCalls.length} 次
-          </span>
-          <span class="round-tools-badges">
-            ${typeBadges}
-            ${errorCount ? `<span class="tool-error-badge">${errorCount} 错误</span>` : ''}
-          </span>
-        </button>
-        <div class="round-tools-body">
-          <label class="round-tools-filter" onclick="event.stopPropagation()">
-            <input type="checkbox" onchange="toggleRoundErrorFilter('${toolsId}', this.checked)">
-            只显示报错调用
-          </label>
-          <div class="round-calls"></div>
-        </div>
-      </div>
-    `);
-  }
-
-  if (content.length) parts.push(`<div class="round-content">${content.join('')}</div>`);
-
-  const toolTypes = Array.from(new Set(round.toolCalls.map(c => getToolType(c.tool_name || '')).filter(Boolean)));
-
-  return `<div class="round-block${expandedDefault ? '' : ' collapsed'}" data-tool-types="${escapeHtml(toolTypes.join(' '))}" data-has-error="${hasError ? 'true' : 'false'}" data-has-slow="${hasSlow ? 'true' : 'false'}">${parts.join('')}</div>`;
+function renderSessionFlow(items, position) {
+  const events = (items || [])
+    .filter(item => primaryLifecycleTypes.has(item.event_type || item.role))
+    .map(renderFlowEvent)
+    .join('');
+  if (!events) return '';
+  return `<div class="session-flow-events ${position}">${events}</div>`;
 }
 
 window.toggleRound = function (summaryEl) {
@@ -1120,45 +1220,23 @@ export function renderCallChainCalls(calls) {
   // 从调用数据中提取来源颜色
   const src = calls[0]?.source || '';
   const sourceColor = (sourceColors[src] || {}).light || '';
-  const lifecycleTrace = renderLifecycleTrace(calls);
-
-  const rounds = groupByRounds(calls);
-  const toolRecords = calls.filter(c => c.role === 'tool_result' || c.role === 'tool_error');
-  const summary = summarizeCalls(toolRecords);
-  // 统一口径：总数 = 分类之和（均以时间线条目为基准）
-  const total = summary.total;
-  const typeCounts = getToolTypeCounts(toolRecords, 3);
-  const shownSum = typeCounts.reduce((s, t) => s + t.count, 0);
-  const other = total - shownSum;
-  const topTypes = typeCounts.map(t => `${t.type} ${t.count}`).join(' / ');
-  const overviewMain = `${total} 次工具调用${topTypes ? ` · ${topTypes}` : ''}${other > 0 ? ` / 其他 ${other}` : ''}`;
-  const slowest = summary.slowest
-    ? `${summary.slowest.tool_name || '工具'} ${formatDuration(summary.slowest.duration_ms)}`
-    : '—';
-  const overview = `
-    <div class="execution-overview">
-      <div>
-        <div class="overview-label">执行概览</div>
-        <div class="overview-main">${overviewMain}</div>
-      </div>
-      <div class="overview-pills">
-        <span class="overview-pill ${summary.errors ? 'error' : 'success'}">错误 ${summary.errors}</span>
-        <span class="overview-pill ${summary.slow ? 'slow' : ''}">慢调用 ${summary.slow}</span>
-        <span class="overview-pill">最慢 ${escapeHtml(slowest)}</span>
-      </div>
-    </div>
-  `;
-
+  const executionFlow = buildExecutionFlow(calls);
+  const { sessionBefore, rounds, sessionAfter } = executionFlow;
   // 无轮次数据（全是 tool 记录，无 user）,退化到平铺
   if (rounds.length === 0) {
     const flatCalls = calls.filter(call => ['tool_use', 'tool_result', 'tool_error'].includes(call.role));
     const tree = buildTree(flatCalls);
-    return overview + lifecycleTrace + tree.map((call, i) => renderCall(call, i, '', sourceColor)).join('');
+    const context = renderSessionFlow([...sessionBefore, ...sessionAfter], 'standalone');
+    return `<div class="task-execution-flow">${context}${tree.map((call, i) => renderCall(call, i, '', sourceColor)).join('')}</div>`;
   }
 
   // 轮次导航（长会话快速定位：全部 / 有错误 / 慢调用 / 最近一轮），带数量反馈
-  const errorRounds = rounds.filter(r => r.toolCalls.some(isErrorCall)).length;
-  const slowRounds = rounds.filter(r => r.toolCalls.some(c => (c.duration_ms || 0) > 5000)).length;
+  const errorRounds = rounds.filter(round => round.events.some(item =>
+    (item.role === 'tool_result' || item.role === 'tool_error') && isErrorCall(item)
+  )).length;
+  const slowRounds = rounds.filter(round => round.events.some(item =>
+    (item.role === 'tool_result' || item.role === 'tool_error') && (item.duration_ms || 0) > 5000
+  )).length;
   const nav = rounds.length > 1 ? `
     <div class="round-nav">
       <span class="round-nav-label">轮次</span>
@@ -1169,9 +1247,15 @@ export function renderCallChainCalls(calls) {
     </div>
   ` : '';
 
-  const roundsHtml = `<div class="rounds-container" data-nav="all">${rounds.map((round, i) => renderRound(round, i, sourceColor, i === rounds.length - 1)).join('')}</div>`;
+  const roundsHtml = `
+    <div class="task-execution-flow">
+      ${renderSessionFlow(sessionBefore, 'before')}
+      <div class="rounds-container" data-nav="all">${rounds.map((round, i) => `${renderSessionFlow(round.beforeEvents, 'between')}${renderRound(round, i, sourceColor, true)}`).join('')}</div>
+      ${renderSessionFlow(sessionAfter, 'after')}
+    </div>
+  `;
 
-  return nav + overview + lifecycleTrace + roundsHtml;
+  return nav + roundsHtml;
 }
 
 /** 切换调用行的详情面板 */

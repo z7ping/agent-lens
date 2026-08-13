@@ -430,9 +430,18 @@
   @apply text-4xl mb-3;
 }
 
-/* ═══ 轮次分组 ═══ */
-.round-conversation {
-  @apply flex flex-col gap-2 px-4 py-3 border-b border-neutral-100 dark:border-neutral-800 bg-white dark:bg-neutral-900;
+/* ═══ 统一任务执行流 ═══ */
+.task-execution-flow {
+  @apply bg-white dark:bg-neutral-900;
+}
+.session-flow-events {
+  @apply flex flex-col gap-1 px-4 py-2 border-b border-neutral-100 dark:border-neutral-800 bg-neutral-50/70 dark:bg-neutral-800/30;
+}
+.session-flow-events.after {
+  @apply border-t border-b-0;
+}
+.turn-flow {
+  @apply flex flex-col gap-2 px-4 py-3;
 }
 .chat-message {
   @apply flex flex-col gap-1;
@@ -566,11 +575,8 @@
 .round-summary-title {
   @apply text-sm font-semibold text-neutral-700 dark:text-neutral-200 flex-shrink-0;
 }
-.round-summary-user {
-  @apply text-xs text-neutral-500 dark:text-neutral-400 truncate min-w-0;
-}
-.round-summary-no-user {
-  @apply text-xs text-neutral-300 dark:text-neutral-600;
+.round-summary-duration {
+  @apply text-xs tabular-nums text-neutral-400 dark:text-neutral-500;
 }
 .round-summary-meta {
   @apply flex items-center gap-1.5 ml-auto flex-shrink-0;
@@ -638,6 +644,64 @@
 .round-tools .call-item {
   @apply ml-0;
 }
+.flow-tools {
+  @apply overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50/70 dark:bg-neutral-800/30;
+}
+.flow-tools .round-tools-toggle {
+  @apply px-3 py-2;
+}
+.flow-tools .round-tools-body {
+  @apply px-3 pb-3 border-t border-neutral-100 dark:border-neutral-700;
+}
+.flow-tools .round-tools-filter {
+  @apply mt-2;
+}
+.flow-event {
+  @apply flex items-start gap-2 rounded-lg border border-transparent bg-neutral-50/70 px-2.5 py-1.5 text-xs text-neutral-500 dark:bg-neutral-800/30 dark:text-neutral-400;
+}
+.flow-event.permission_request,
+.flow-event.tool_error {
+  @apply border-danger-100 bg-danger-50/70 dark:border-danger-500/20 dark:bg-danger-500/5;
+}
+.flow-event.thinking-observed {
+  @apply bg-violet-50/60 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300;
+}
+.flow-marker {
+  @apply mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-white text-xs font-semibold text-neutral-500 shadow-sm ring-1 ring-neutral-200 dark:bg-neutral-900 dark:text-neutral-300 dark:ring-neutral-700;
+}
+.thinking-observed .flow-marker {
+  @apply text-violet-600 ring-violet-200 dark:text-violet-300 dark:ring-violet-500/30;
+}
+.flow-event-body {
+  @apply min-w-0 flex-1;
+}
+.flow-event-line {
+  @apply flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1;
+}
+.flow-event-line strong {
+  @apply font-semibold text-neutral-700 dark:text-neutral-200;
+}
+.thinking-observed .flow-event-line strong {
+  @apply text-violet-700 dark:text-violet-300;
+}
+.flow-event-summary {
+  @apply min-w-0 break-words text-neutral-600 dark:text-neutral-300;
+}
+.thinking-observed .flow-event-summary {
+  @apply text-violet-600 dark:text-violet-300;
+}
+.flow-event-meta {
+  @apply ml-auto whitespace-nowrap tabular-nums text-neutral-400 dark:text-neutral-500;
+}
+.flow-event-tags {
+  @apply mt-1 flex flex-wrap gap-1;
+}
+.flow-event-tags span {
+  @apply rounded bg-white px-1.5 py-0.5 text-xs text-neutral-500 ring-1 ring-neutral-200 dark:bg-neutral-900 dark:text-neutral-400 dark:ring-neutral-700;
+}
+.flow-event-missing {
+  @apply mt-1 text-warning-600 dark:text-warning-400;
+}
 /* 错误调用定位：闪烁高亮 */
 .call-item.flash-error {
   animation: flash-error 2.5s ease-in-out;
@@ -703,31 +767,6 @@
 .rounds-container[data-nav="slow"] .round-block[data-has-slow="false"] { display: none; }
 .rounds-container[data-nav="last"] .round-block:not(:last-of-type) { display: none; }
 
-/* ═══ 执行概览 ═══ */
-.execution-overview {
-  @apply flex items-center justify-between gap-4 px-4 py-3 bg-neutral-50 dark:bg-neutral-800/40 border-b border-neutral-100 dark:border-neutral-800;
-}
-.overview-label {
-  @apply text-xs font-medium text-neutral-400;
-}
-.overview-main {
-  @apply text-sm font-semibold text-neutral-800 dark:text-neutral-100 mt-0.5;
-}
-.overview-pills {
-  @apply flex items-center gap-2 flex-wrap justify-end;
-}
-.overview-pill {
-  @apply text-xs px-2 py-1 rounded-md bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 text-neutral-500 dark:text-neutral-400;
-}
-.overview-pill.success {
-  @apply text-success-600 dark:text-success-400 border-success-100 dark:border-success-500/30 bg-success-50 dark:bg-success-500/10;
-}
-.overview-pill.error {
-  @apply text-danger-600 dark:text-danger-400 border-danger-100 dark:border-danger-500/30 bg-danger-50 dark:bg-danger-500/10;
-}
-.overview-pill.slow {
-  @apply text-warning-600 dark:text-warning-400 border-warning-100 dark:border-warning-500/30 bg-warning-50 dark:bg-warning-500/10;
-}
 .round-calls > .call-row + .call-row {
   border-top: 1px solid rgba(245, 245, 245, 0.6);
 }
@@ -818,6 +857,26 @@
   .tool-table-header,
   .tool-table-row {
     min-width: 720px;
+  }
+  .turn-flow,
+  .session-flow-events {
+    @apply px-3;
+  }
+  .chat-message.user,
+  .chat-message.assistant {
+    max-width: 94%;
+  }
+  .flow-event-meta {
+    @apply hidden;
+  }
+  .round-tools-title {
+    @apply flex-wrap;
+  }
+  .round-tools-summary {
+    @apply basis-full pl-5;
+  }
+  .round-tools-badges .tool-type-badge {
+    @apply hidden;
   }
 }
 
@@ -943,62 +1002,6 @@
 }
 .evidence-badge.unobservable {
   @apply bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400;
-}
-.codex-lifecycle-trace {
-  @apply mx-4 mb-4 overflow-hidden rounded-xl border border-emerald-200 bg-emerald-50/40 dark:border-emerald-900/70 dark:bg-emerald-950/20;
-}
-.lifecycle-header {
-  @apply flex items-start justify-between gap-4 border-b border-emerald-100 px-4 py-3 dark:border-emerald-900/60;
-}
-.lifecycle-title {
-  @apply text-sm font-semibold text-neutral-800 dark:text-neutral-100;
-}
-.lifecycle-subtitle {
-  @apply mt-0.5 text-xs text-neutral-500 dark:text-neutral-400;
-}
-.lifecycle-count {
-  @apply whitespace-nowrap rounded-full bg-white/80 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-neutral-900/70 dark:text-emerald-300;
-}
-.lifecycle-list {
-  @apply relative px-4 py-3;
-}
-.lifecycle-list::before {
-  content: '';
-  @apply absolute bottom-5 top-5 w-px bg-emerald-200 dark:bg-emerald-800;
-  left: 25px;
-}
-.lifecycle-node {
-  @apply relative flex gap-3 py-1.5;
-}
-.lifecycle-marker {
-  @apply relative z-[1] mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-emerald-300 bg-white text-xs font-bold text-emerald-700 dark:border-emerald-700 dark:bg-neutral-900 dark:text-emerald-300;
-}
-.lifecycle-node.tool_error .lifecycle-marker {
-  @apply border-danger-100 text-danger-600 dark:border-danger-500 dark:text-danger-400;
-}
-.lifecycle-card {
-  @apply min-w-0 flex-1 rounded-lg border border-neutral-200/80 bg-white px-3 py-2 dark:border-neutral-800 dark:bg-neutral-900/80;
-}
-.lifecycle-card-head {
-  @apply flex flex-wrap items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400;
-}
-.lifecycle-card-head strong {
-  @apply text-[13px] text-neutral-800 dark:text-neutral-100;
-}
-.lifecycle-time {
-  @apply tabular-nums;
-}
-.lifecycle-summary {
-  @apply mt-1.5 break-words text-[13px] leading-5 text-neutral-700 dark:text-neutral-200;
-}
-.lifecycle-meta {
-  @apply mt-1.5 flex flex-wrap gap-1.5;
-}
-.lifecycle-meta span {
-  @apply rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400;
-}
-.lifecycle-missing {
-  @apply mt-1.5 rounded bg-warning-50 px-2 py-1 text-xs text-warning-600 dark:bg-warning-500/10 dark:text-warning-400;
 }
 .app-subtitle {
   @apply min-w-0 truncate text-xs font-medium text-neutral-400 dark:text-neutral-500;

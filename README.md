@@ -67,7 +67,7 @@ node server/cli.js install
 
 ### 任务复盘
 
-按工具来源和项目筛选会话，展开查看每轮对话、工具调用、成功情况和耗时。
+按工具来源和项目筛选会话。每次用户指令作为一个完整 Turn，用户与 AI 回复以气泡展示，思考信号、生命周期事件和工具调用按真实时间顺序穿插在同一条执行流中；连续工具调用默认折叠，错误保持醒目。
 
 ![AgentLens 任务复盘](https://raw.githubusercontent.com/z7ping/agent-lens/main/docs/static/4.webp)
 
@@ -98,7 +98,7 @@ agent-lens uninstall       # 卸载并清理
 ## 特性
 
 - **多 Agent 追踪** — 统计 SKILL / Tool / MCP 调用次数，还原有证据支持的可观察调用链
-- **调用链可视化** — 展示每次会话中已确认的 Agent、Turn、父事件和 Tool 生命周期关系
+- **统一任务执行流** — 按 Turn 将对话气泡、思考信号、生命周期事件和工具调用编排到同一条时间线
 - **Codex 生命周期透镜** — 实时展示会话、提示词提交、权限请求、上下文压缩、子 Agent 和 Turn 停止事件
 - **Pi 原生会话透镜** — 按树形 Session JSONL 重建分支、派生关系、模型/思考级别变化、压缩和并行工具配对
 - **分析仪表盘** — 总调用数、错误率、工具使用排行、慢调用
@@ -184,7 +184,7 @@ Codex 默认配置根目录为 `CODEX_HOME`，未设置时为 `~/.codex`。Agent
 
 #### Codex 生命周期与数据边界
 
-v0.5 会安装 `SessionStart`、`SessionEnd`、`UserPromptSubmit`、`PreToolUse`、`PermissionRequest`、`PostToolUse`、`PreCompact`、`PostCompact`、`SubagentStart`、`SubagentStop` 和 `Stop` 共 11 类 Codex Hook。任务复盘会单独展示生命周期轨迹，并保留原生 `turn_id`、`agent_id`、工具调用标识、模型和权限模式等来源字段。
+v0.5 会安装 `SessionStart`、`SessionEnd`、`UserPromptSubmit`、`PreToolUse`、`PermissionRequest`、`PostToolUse`、`PreCompact`、`PostCompact`、`SubagentStart`、`SubagentStop` 和 `Stop` 共 11 类 Codex Hook。任务复盘按 Turn 将生命周期事件、对话气泡和工具调用编排到同一条执行流，并保留原生 `turn_id`、`agent_id`、工具调用标识、模型和权限模式等来源字段。
 
 这些 Hook 只做被动采集：不会批准或阻断工具，不会修改提示词，也不会向模型追加上下文。`Stop` 与 `SubagentStop` 只返回中性的空 JSON；transcript 路径不写入 Timeline。提示词和最终助手消息继续遵守 `AGENT_LENS_PROMPT_CAPTURE`，权限请求中的工具参数遵守 `AGENT_LENS_TOOL_CAPTURE`。
 
