@@ -100,9 +100,10 @@ agent-lens uninstall       # 卸载并清理
 - **多 Agent 追踪** — 统计 SKILL / Tool / MCP 调用次数，还原有证据支持的可观察调用链
 - **调用链可视化** — 展示每次会话中已确认的 Agent、Turn、父事件和 Tool 生命周期关系
 - **Codex 生命周期透镜** — 实时展示会话、提示词提交、权限请求、上下文压缩、子 Agent 和 Turn 停止事件
+- **Pi 原生会话透镜** — 按树形 Session JSONL 重建分支、派生关系、模型/思考级别变化、压缩和并行工具配对
 - **分析仪表盘** — 总调用数、错误率、工具使用排行、慢调用
 - **概览** — 每个 AI 工具一张卡片，展示版本、配置目录、官网/文档/GitHub、Skills / MCP / Plugins / Extensions / Hooks 等能力资产、安装路径和装配路径诊断
-- **多数据源** — Hermes / OpenCode（SQLite 轮询）、Claude Code / Codex（实时 Hook + 历史导入）、Pi（JSONL 轮询）、Cursor（实时 Hook）
+- **多数据源** — Hermes / OpenCode（SQLite 轮询）、Claude Code / Codex（实时 Hook + 历史导入）、Pi（树形 JSONL 增量导入）、Cursor（实时 Hook）
 - **Timeline 可观测** — 稳定事件身份、跨来源 Session 隔离、Tool Use/Result 双事件、证据来源和错误自动归类
 - **本地安全** — 默认只监听 `127.0.0.1`，限制同源访问，对持久化内容执行可配置脱敏
 - **实时刷新** — 3 秒增量更新，无需手动刷新
@@ -117,7 +118,7 @@ agent-lens uninstall       # 卸载并清理
 | **Claude Code** | 实时 Hook + `~/.claude/projects` 历史导入 | 见下方 |
 | **Codex** | 11 类实时 Hook + `~/.codex/sessions` 历史导入 | 安装器自动配置；升级后需重新运行 `install` |
 | **Cursor** | 实时钩子 | 同 Claude Code |
-| **Pi** | 轮询 Pi session JSONL | 无需配置 |
+| **Pi** | 增量导入 Pi tree session JSONL | 无需配置；支持 `PI_CODING_AGENT_DIR` |
 | **OpenCode** | 轮询 `~/.local/share/opencode/opencode.db` | 无需配置 |
 
 ### 概览资产扫描

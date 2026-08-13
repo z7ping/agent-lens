@@ -66,6 +66,7 @@ const piHome = resolvePath(
     'PI_HOME',
     IS_WIN ? firstExistingPath(winPiCandidates, winPiCandidates[0]) : path.join(HOME, '.pi')
 );
+const piAgentDir = resolvePath('PI_CODING_AGENT_DIR', path.join(piHome, 'agent'));
 
 // ─── agent-lens (self) ─────────────────────────────────
 const agentLensRuntime = getRuntimePaths({ layout: 'installed' });
@@ -93,7 +94,8 @@ module.exports = {
     },
     pi: {
         home: piHome,
-        sessionsDir: path.join(piHome, 'agent', 'sessions'),
+        agentDir: piAgentDir,
+        sessionsDir: path.join(piAgentDir, 'sessions'),
     },
     claudeCode: {
         home: claudeCodeHome,

@@ -1,6 +1,6 @@
 # AgentLens 架构文档
 
-> 最后更新：2026-08-12
+> 最后更新：2026-08-13
 > 目的：记录技术架构和关键决策，防止迭代中反复踩坑
 
 ---
@@ -59,7 +59,7 @@ AgentLens 同时使用实时 Hook、历史 JSONL 导入和本地数据库轮询�
 | **Claude Code** | 实时 Hook + JSONL 增量导入 | Hook stdin、`~/.claude/projects/**/*.jsonl` | ✅（历史） | ✅（历史） | ✅ |
 | **Codex** | 11 类实时 Hook + JSONL 增量导入 | Hook stdin、`~/.codex/sessions/**/*.jsonl` | ✅（实时提交 + 历史） | ✅（Turn 停止 + 历史） | ✅ |
 | **OpenCode** | SQLite 轮询 | `opencode.db` 的 session / message / part | ✅ | ✅ | ✅ |
-| **Pi** | JSONL 轮询 | Pi session JSONL | ✅ | ✅ | ✅ |
+| **Pi** | 树形 JSONL 增量导入 | Pi session JSONL 的 entry / parentId / parentSession | ✅ | ✅（thinking 正文除外） | ✅（toolCallId 配对） |
 | **Cursor** | 实时 Hook | Hook stdin | ❌ | ❌ | ✅ |
 | **OpenClaw** | 骨架 | 尚未实现 | ❌ | ❌ | ❌ |
 
@@ -68,6 +68,8 @@ AgentLens 同时使用实时 Hook、历史 JSONL 导入和本地数据库轮询�
 - Claude Code 的实时 Hook 当前只安装 `PreToolUse` 和 `PostToolUse`；用户和助手消息来自历史 JSONL 导入。
 - Codex 实时 Hook 覆盖 Session、提示词提交、权限请求、Tool、Compact、Subagent 和 Stop。生命周期事件与原生 JSONL 历史对话保持不同证据类型，不把两者合并成“完整模型输入”。
 - Codex 会话开始时按官方优先级静态发现当前 `AGENTS.md` 指令链；静态发现不能证明历史 Turn 实际加载过该内容。
+- Pi 按字节偏移读取原生 Session JSONL，使用 entry ID、`parentId`、`parentSession` 和 `toolCallId` 保留分支、派生 Session 与并行工具关系；模型切换、thinking level、压缩和分支摘要作为原生日志证据单独展示。
+- Pi 原生日志中的 thinking 只记录存在性和块数量，默认不采集正文，也不表述为模型隐藏思维链。
 - 历史文件不存在、会话持久化被关闭或格式发生变化时，对话记录可能缺失。
 - 用户消息和助手可见回复不等于模型收到的完整提示输入；系统指令、Developer 指令、项目规则、Skills、工具描述和 Memory 可能未被当前导入器保留。
 - AgentLens 不承诺获得模型未公开的隐藏思维过程。Pi 等来源若在原生日志中公开 thinking，只能按该来源的可见数据展示。

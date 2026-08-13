@@ -78,7 +78,7 @@ Vite dev server 会代理 `/api`、`/logs`、`/states`、`/projects.json` 到后
 - Codex（实时钩子 + 历史 JSONL 导入）
 - Hermes（定时轮询 state.db，含对话）
 - OpenCode（定时轮询 opencode.db，含对话）
-- Pi（定时轮询 session JSONL，含对话）
+- Pi（按字节偏移增量导入树形 session JSONL，含对话、分支、压缩和并行工具配对）
 - Cursor（实时钩子，仅工具调用）
 - OpenClaw（骨架，待实现）
 
@@ -92,7 +92,7 @@ Vite dev server 会代理 `/api`、`/logs`、`/states`、`/projects.json` 到后
 
 2. **PostToolUse 钩子** (`hooks/log.js`) — 在每次工具调用后触发。从调用栈弹出，构建包含耗时/成功/错误的日志记录，以 JSONL 格式追加到 `logs/<projectKey>.jsonl`，并更新 `projects.json`。
 
-3. **历史导入与轮询** (`server/importers/`、`server/adapters/`) — Codex/Claude Code 增量导入会话 JSONL；Hermes/OpenCode/Pi 轮询各自的本地数据库或会话文件，并统一写入 timeline。
+3. **历史导入与轮询** (`server/importers/`、`server/adapters/`) — Codex/Claude Code 增量导入会话 JSONL；Pi 按文件偏移增量导入树形 Session JSONL；Hermes/OpenCode 轮询本地数据库，并统一写入 timeline。
 
 4. **HTTP 服务器** (`server/server.js`) — 最小化静态文件服务器，端口 56789（定义在 `config.js`）。支持守护进程模式（`--daemon`），通过运行时 `run/server.pid` 管理生命周期。优先从 `dist/` 提供构建后的文件，否则从应用目录提供。
 
@@ -110,7 +110,7 @@ server/adapters/
 ├── codex.js         # 实时钩子
 ├── opencode.js      # 定时轮询 ~/.local/share/opencode/opencode.db
 ├── cursor.js        # 实时钩子
-├── pi.js            # 实时钩子
+├── pi.js            # 增量导入树形 session JSONL
 ├── openclaw.js      # 骨架
 └── index.js         # 注册表：getAdapter()、getAllAdapters()、stopAll()
 ```

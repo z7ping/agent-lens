@@ -467,13 +467,17 @@ function renderEvidenceBadge(item) {
   return `<span class="evidence-badge ${escapeHtml(visibility)}" title="${escapeHtml(title)}">${escapeHtml(label)}</span>`;
 }
 
-const codexLifecycleLabels = {
+const lifecycleLabels = {
   session_start: ['会话开始', '◉'],
   session_end: ['会话结束', '○'],
   user_prompt: ['提交提示词', '↗'],
   permission_request: ['权限请求', '◆'],
   compact_start: ['开始压缩', '⇣'],
   compact_end: ['压缩完成', '⇡'],
+  branch_summary: ['分支摘要', '⑂'],
+  model_change: ['模型切换', '↻'],
+  thinking_level_change: ['思考级别', '≋'],
+  agent_settled: ['运行稳定', '✓'],
   agent_start: ['子 Agent 启动', '◇'],
   agent_stop: ['子 Agent 停止', '◈'],
   turn_stop: ['Turn 完成', '✓'],
@@ -482,10 +486,11 @@ const codexLifecycleLabels = {
   tool_error: ['工具失败', '!'],
 };
 
-const codexPrimaryLifecycleTypes = new Set([
+const primaryLifecycleTypes = new Set([
   'session_start', 'session_end', 'user_prompt', 'permission_request',
   'compact_start', 'compact_end', 'agent_start', 'agent_stop', 'turn_stop',
-  'context_discovery',
+  'context_discovery', 'branch_summary', 'model_change', 'thinking_level_change',
+  'agent_settled',
 ]);
 
 function getLifecycleAttributes(item) {
@@ -515,8 +520,17 @@ function lifecycleSummary(item, attributes) {
   }
   if (eventType === 'session_end') return `结束原因：${attributes.lifecycle_reason || '来源未说明'}`;
   if (eventType === 'compact_start' || eventType === 'compact_end') {
-    return `触发方式：${attributes.compact_trigger === 'auto' ? '自动' : attributes.compact_trigger === 'manual' ? '手动' : '未知'}`;
+    const trigger = attributes.compact_trigger || attributes.compact_reason;
+    const label = trigger === 'auto' || trigger === 'threshold' ? '自动'
+      : trigger === 'manual' ? '手动'
+        : trigger === 'overflow' ? '溢出恢复' : '来源未说明';
+    const tokens = attributes.tokens_before != null ? ` · 压缩前 ${attributes.tokens_before} tokens` : '';
+    return `触发方式：${label}${tokens}`;
   }
+  if (eventType === 'branch_summary') return item.content ? truncate(String(item.content).replace(/\s+/g, ' '), 180) : '来源记录了分支摘要，但正文未采集';
+  if (eventType === 'model_change') return `模型：${[attributes.provider, attributes.model].filter(Boolean).join('/') || '来源未说明'}`;
+  if (eventType === 'thinking_level_change') return `级别：${attributes.thinking_level || '来源未说明'}；不采集 thinking 正文`;
+  if (eventType === 'agent_settled') return '本轮底层运行、自动重试、压缩和排队后续均已稳定';
   if (eventType === 'agent_start') return `类型：${attributes.agent_type || '未提供'}`;
   if (eventType === 'agent_stop') {
     const prefix = attributes.agent_type ? `${attributes.agent_type} · ` : '';
@@ -531,21 +545,23 @@ function lifecycleSummary(item, attributes) {
   return '';
 }
 
-function renderCodexLifecycleTrace(calls) {
-  if (!Array.isArray(calls) || !calls.some(item => item.source === 'codex' && codexPrimaryLifecycleTypes.has(item.event_type || item.role))) {
+function renderLifecycleTrace(calls) {
+  if (!Array.isArray(calls)) return '';
+  const lifecycleSource = calls.find(item => primaryLifecycleTypes.has(item.event_type || item.role))?.source;
+  if (!lifecycleSource) {
     return '';
   }
 
   const events = calls.filter(item => {
-    if (item.source !== 'codex') return false;
+    if (item.source !== lifecycleSource) return false;
     const eventType = item.event_type || item.role;
-    if (codexPrimaryLifecycleTypes.has(eventType)) return true;
+    if (primaryLifecycleTypes.has(eventType)) return true;
     return (eventType === 'tool_result' || eventType === 'tool_error') && Boolean(item.turn_id);
   });
   const turns = new Set(events.map(item => item.turn_id).filter(Boolean));
   const nodes = events.map(item => {
     const eventType = item.event_type || item.role;
-    const [label, icon] = codexLifecycleLabels[eventType] || [eventType, '·'];
+    const [label, icon] = lifecycleLabels[eventType] || [eventType, '·'];
     const attributes = getLifecycleAttributes(item);
     const meta = [];
     if (item.turn_id) meta.push(`<span title="${escapeHtml(item.turn_id)}">Turn ${escapeHtml(shortNativeId(item.turn_id))}</span>`);
@@ -577,8 +593,8 @@ function renderCodexLifecycleTrace(calls) {
     <section class="codex-lifecycle-trace">
       <div class="lifecycle-header">
         <div>
-          <div class="lifecycle-title">Codex 生命周期</div>
-          <div class="lifecycle-subtitle">运行时 Hook 证据；原生日志与当前环境重建保持独立</div>
+          <div class="lifecycle-title">${escapeHtml(sourceLabels[lifecycleSource] || lifecycleSource)} 生命周期</div>
+          <div class="lifecycle-subtitle">运行时事件、原生日志与当前环境重建按证据来源保持独立</div>
         </div>
         <div class="lifecycle-count">${turns.size} Turn · ${events.length} 事件</div>
       </div>
@@ -1104,7 +1120,7 @@ export function renderCallChainCalls(calls) {
   // 从调用数据中提取来源颜色
   const src = calls[0]?.source || '';
   const sourceColor = (sourceColors[src] || {}).light || '';
-  const lifecycleTrace = renderCodexLifecycleTrace(calls);
+  const lifecycleTrace = renderLifecycleTrace(calls);
 
   const rounds = groupByRounds(calls);
   const toolRecords = calls.filter(c => c.role === 'tool_result' || c.role === 'tool_error');
