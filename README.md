@@ -293,7 +293,7 @@ Linux 使用 systemd user service，macOS 使用 launchd agent，两者支持完
 agent-lens service install       # 注册系统服务并启用自启
 agent-lens service start         # 启动系统服务
 agent-lens service stop          # 停止系统服务
-agent-lens service status        # 查看系统服务和自启状态
+agent-lens service status        # 查看服务、自启、版本和运行环境
 agent-lens service enable        # 启用开机自启
 agent-lens service disable       # 关闭开机自启
 agent-lens service uninstall     # 停止并移除系统服务
@@ -306,11 +306,13 @@ agent-lens service install     # 注册并启用登录后自启
 agent-lens service start       # 立即启动
 agent-lens service disable     # 关闭登录后自启
 agent-lens service enable      # 重新启用登录后自启
-agent-lens service status      # 查看自启和进程状态
+agent-lens service status      # 查看自启、进程、版本和运行环境
 agent-lens service uninstall   # 移除自启入口
 ```
 
 `agent-lens install` 会自动完成自启入口的注册和首次启动；上述命令主要用于后续手动管理。
+
+`service status` 会同时显示当前命令版本、磁盘中的已安装版本和 HTTP 服务实际返回的运行版本；安装版本与运行版本不一致时会明确提示，并附带 Node.js 版本、服务管理方式、默认地址和安装目录，便于确认升级后实际运行的是哪一份程序。
 
 ---
 
