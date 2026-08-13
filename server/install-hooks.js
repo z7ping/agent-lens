@@ -15,6 +15,11 @@ const TOOL_TRACKER_DIR = RUNTIME_PATHS.appDir;
 const PRELOG_PATH = path.join(RUNTIME_PATHS.hooksDir, 'prelog.js').replace(/\\/g, '/');
 const LOG_PATH = path.join(RUNTIME_PATHS.hooksDir, 'log.js').replace(/\\/g, '/');
 const CODEX_LIFECYCLE_PATH = path.join(RUNTIME_PATHS.hooksDir, 'codex-lifecycle.js').replace(/\\/g, '/');
+const WINDOWS_HOOK_RUNNER_COMMAND = 'agent-lens-hook.exe';
+const WINDOWS_HOOK_RUNNER_PATH = path.join(
+    RUNTIME_PATHS.binDir || RUNTIME_PATHS.hooksDir,
+    RUNTIME_PATHS.binDir ? WINDOWS_HOOK_RUNNER_COMMAND : 'windows-hook-runner.exe',
+).replace(/\\/g, '/');
 const CLAUDE_SETTINGS_FILE = path.join(HOME, '.claude', 'settings.json');
 const CODEX_HOOKS_FILE = path.join(HOME, '.codex', 'hooks.json');
 const CURSOR_HOOKS_FILE = path.join(HOME, '.cursor', 'hooks.json');
@@ -73,7 +78,16 @@ function removeAgentLensHooks(config, marker = MARKER) {
     return changed;
 }
 
-function formatNodeHookCommand(scriptPath) {
+function formatNodeHookCommand(scriptPath, options = {}) {
+    const platform = options.platform || process.platform;
+    if (platform === 'win32') {
+        const runnerPath = options.windowsRunnerPath || WINDOWS_HOOK_RUNNER_PATH;
+        const runnerCommand = options.windowsRunnerCommand || WINDOWS_HOOK_RUNNER_COMMAND;
+        if (!fs.existsSync(runnerPath) && !options.skipRunnerCheck) {
+            throw new Error(`缺少 Windows 无窗口 Hook 启动器: ${runnerPath}`);
+        }
+        return `${runnerCommand} ${JSON.stringify(scriptPath)}`;
+    }
     return `node ${JSON.stringify(scriptPath)}`;
 }
 
@@ -85,7 +99,7 @@ function makeHookEntry(command, timeout = 5) {
 
 // ─── 1. Claude Code ──────────────────────────────────────
 
-function installClaudeCode() {
+function installClaudeCode(options = {}) {
     const settings = readJson(CLAUDE_SETTINGS_FILE);
     if (!settings.hooks) settings.hooks = {};
 
@@ -93,8 +107,8 @@ function installClaudeCode() {
     settings.hooks.PreToolUse = removeOldHooks(settings.hooks.PreToolUse, MARKER);
     settings.hooks.PostToolUse = removeOldHooks(settings.hooks.PostToolUse, MARKER);
 
-    settings.hooks.PreToolUse.push(makeHookEntry(formatNodeHookCommand(PRELOG_PATH), 5));
-    settings.hooks.PostToolUse.push(makeHookEntry(formatNodeHookCommand(LOG_PATH), 10));
+    settings.hooks.PreToolUse.push(makeHookEntry(formatNodeHookCommand(PRELOG_PATH, options), 5));
+    settings.hooks.PostToolUse.push(makeHookEntry(formatNodeHookCommand(LOG_PATH, options), 10));
 
     writeJson(CLAUDE_SETTINGS_FILE, settings);
     console.log('   [OK] Claude Code settings.json 已更新');
@@ -114,11 +128,11 @@ function configureCodexHooks(hooks, options = {}) {
         hooks.hooks[eventName] = removeOldHooks(hooks.hooks[eventName], MARKER);
     }
 
-    hooks.hooks.PreToolUse.push(makeHookEntry(formatNodeHookCommand(prelogPath), 5));
-    hooks.hooks.PostToolUse.push(makeHookEntry(formatNodeHookCommand(logPath), 10));
+    hooks.hooks.PreToolUse.push(makeHookEntry(formatNodeHookCommand(prelogPath, options), 5));
+    hooks.hooks.PostToolUse.push(makeHookEntry(formatNodeHookCommand(logPath, options), 10));
     for (const eventName of CODEX_LIFECYCLE_EVENTS) {
         const timeout = eventName === 'SessionEnd' ? 3 : 5;
-        hooks.hooks[eventName].push(makeHookEntry(formatNodeHookCommand(lifecyclePath), timeout));
+        hooks.hooks[eventName].push(makeHookEntry(formatNodeHookCommand(lifecyclePath, options), timeout));
     }
     return hooks;
 }
@@ -133,7 +147,7 @@ function installCodex(options = {}) {
 
 // ─── 3. Cursor ───────────────────────────────────────────
 
-function installCursor() {
+function installCursor(options = {}) {
     const hooks = readJson(CURSOR_HOOKS_FILE);
     if (!hooks.hooks) hooks.hooks = {};
 
@@ -141,8 +155,8 @@ function installCursor() {
     hooks.hooks.PreToolUse = removeOldHooks(hooks.hooks.PreToolUse, MARKER);
     hooks.hooks.PostToolUse = removeOldHooks(hooks.hooks.PostToolUse, MARKER);
 
-    hooks.hooks.PreToolUse.push(makeHookEntry(formatNodeHookCommand(PRELOG_PATH), 5));
-    hooks.hooks.PostToolUse.push(makeHookEntry(formatNodeHookCommand(LOG_PATH), 10));
+    hooks.hooks.PreToolUse.push(makeHookEntry(formatNodeHookCommand(PRELOG_PATH, options), 5));
+    hooks.hooks.PostToolUse.push(makeHookEntry(formatNodeHookCommand(LOG_PATH, options), 10));
 
     writeJson(CURSOR_HOOKS_FILE, hooks);
     console.log('   [OK] Cursor hooks.json 已更新');

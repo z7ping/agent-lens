@@ -59,6 +59,8 @@ test('cli package command creates an npm-compatible archive with current runtime
     'server/sources-status.js',
     'server/app-info.js',
     'server/install-layout.js',
+    'server/hooks/windows-hook-runner.exe',
+    'server/hooks/windows-hook-runner.cs',
     'server/importers/index.js',
     'dist/index.html',
     'package.json',

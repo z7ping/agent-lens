@@ -73,6 +73,7 @@ AgentLens 同时使用实时 Hook、历史 JSONL 导入和本地数据库轮询�
 - AgentLens 不承诺获得模型未公开的隐藏思维过程。Pi 等来源若在原生日志中公开 thinking，只能按该来源的可见数据展示。
 - 工具参数会按类型摘要，输出与错误会截断，Timeline 不是完整原始事件归档。
 - Codex hosted tools 不经过本地函数工具 Hook，部分特殊工具路径也可能选择绕过；子 Agent transcript 和工具归属并非总能观察到。
+- Windows 的 Claude Code、Codex 和 Cursor Hook 使用安装到 `bin/agent-lens-hook.exe` 的 GUI 子系统启动器派生 `node.exe`，并设置 `CreateNoWindow`；无空格命令名同时兼容 PowerShell 与 `cmd.exe`，启动器同步透传 stdin、stdout、stderr 和退出码，避免高频 Hook 产生可见控制台窗口而不改变协议。
 - 每条事件使用 `capture_method`、`visibility`、`confidence` 和 `missing_reason` 说明运行时捕获、原生日志、原生数据库、静态发现、推断或不可观察状态。
 - Tool Use 与 Tool Result 是两条关联事件；来源只提供合并工具记录时，会明确标记拆分事件的证据强度与缺失原因。
 
@@ -562,7 +563,9 @@ server/
 ├── hooks/
 │   ├── prelog.js            # PreToolUse hook脚本
 │   ├── log.js               # PostToolUse hook脚本
-│   └── codex-lifecycle.js   # Codex 生命周期被动采集入口
+│   ├── codex-lifecycle.js   # Codex 生命周期被动采集入口
+│   ├── windows-hook-runner.cs  # Windows 无窗口启动器源码
+│   └── windows-hook-runner.exe # Windows GUI 子系统启动器
 ├── codex-lifecycle.js       # Codex Hook 事件归一化
 ├── codex-context.js         # Codex 当前指令链静态发现
 ├── agent-lens-db.js              # SQLite存储层（timeline表）

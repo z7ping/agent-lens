@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 
 const {
   CODEX_LIFECYCLE_EVENTS,
@@ -20,9 +21,84 @@ function makeTempRoot() {
 
 test('quotes hook script paths so user directories may contain spaces', () => {
   assert.equal(
-    formatNodeHookCommand('C:/Users/Test User/.agent-lens/app/hooks/prelog.js'),
+    formatNodeHookCommand('C:/Users/Test User/.agent-lens/app/hooks/prelog.js', { platform: 'linux' }),
     'node "C:/Users/Test User/.agent-lens/app/hooks/prelog.js"',
   );
+});
+
+test('uses the GUI-subsystem runner for Windows Hook commands', () => {
+  const command = formatNodeHookCommand('C:/Users/Test User/.agent-lens/app/hooks/prelog.js', {
+    platform: 'win32',
+    windowsRunnerPath: 'C:/Users/Test User/.agent-lens/app/hooks/windows-hook-runner.exe',
+    skipRunnerCheck: true,
+  });
+
+  assert.equal(
+    command,
+    'agent-lens-hook.exe "C:/Users/Test User/.agent-lens/app/hooks/prelog.js"',
+  );
+  assert.doesNotMatch(command, /powershell|cmd\.exe|\bnode(?:\.exe)?\b/i);
+});
+
+test('Windows Hook runner is a GUI executable that preserves stdio and exit code', {
+  skip: process.platform !== 'win32',
+}, () => {
+  const runnerPath = path.join(__dirname, '..', 'server', 'hooks', 'windows-hook-runner.exe');
+  const probeRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-lens-hidden-hook-'));
+  const probePath = path.join(probeRoot, 'hook probe.js');
+  fs.writeFileSync(probePath, [
+    "const chunks = [];",
+    "process.stdin.on('data', chunk => chunks.push(chunk));",
+    "process.stdin.on('end', () => {",
+    "  process.stdout.write(Buffer.concat(chunks));",
+    "  process.stderr.write('错误输出');",
+    "  process.exit(7);",
+    "});",
+  ].join('\n'));
+
+  const binary = fs.readFileSync(runnerPath);
+  const peOffset = binary.readUInt32LE(0x3c);
+  const subsystem = binary.readUInt16LE(peOffset + 24 + 68);
+  assert.equal(subsystem, 2, 'runner must use the Windows GUI subsystem');
+
+  const input = '{"message":"中文 Ω"}';
+  const directResult = spawnSync(runnerPath, [probePath], {
+    input,
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+  assert.equal(directResult.status, 7);
+  assert.equal(directResult.stdout, input);
+  assert.equal(directResult.stderr, '错误输出');
+
+  const command = formatNodeHookCommand(probePath.replace(/\\/g, '/'), {
+    platform: 'win32',
+    windowsRunnerPath: runnerPath.replace(/\\/g, '/'),
+    windowsRunnerCommand: path.basename(runnerPath),
+  });
+  const env = { ...process.env, PATH: `${path.dirname(runnerPath)};${process.env.PATH || ''}` };
+  const results = [
+    {
+      shell: process.env.ComSpec || 'cmd.exe',
+      result: spawnSync(command, { shell: true, input, encoding: 'utf8', windowsHide: true, env }),
+    },
+    {
+      shell: 'powershell.exe',
+      result: spawnSync('powershell.exe', ['-NoProfile', '-Command', command], {
+        input,
+        encoding: 'utf8',
+        windowsHide: true,
+        env,
+      }),
+    },
+  ];
+  for (const { shell, result } of results) {
+    const expectedShellStatus = shell === 'powershell.exe' ? 0 : 7;
+    assert.equal(result.status, expectedShellStatus, `${shell}: ${result.stderr}`);
+    assert.equal(result.stdout, input);
+    assert.equal(result.stderr, '错误输出');
+  }
+  fs.rmSync(probeRoot, { recursive: true, force: true });
 });
 
 test('removes AgentLens hooks while preserving unrelated tool hooks', () => {
@@ -54,6 +130,7 @@ test('configures every Codex lifecycle hook idempotently while preserving unrela
     },
   };
   const options = {
+    platform: 'linux',
     prelogPath: 'C:/agent-lens/hooks/prelog.js',
     logPath: 'C:/agent-lens/hooks/log.js',
     lifecyclePath: 'C:/agent-lens/hooks/codex-lifecycle.js',

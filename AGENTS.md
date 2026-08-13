@@ -130,6 +130,7 @@ server/adapters/
 - **输入摘要**：钩子按工具类型摘要工具输入（Bash → 命令，文件工具 → 路径，MCP → 服务器名称）。保持日志文件小巧。
 - **增量渲染**：`index.html` 跟踪已渲染的 `seq` 值，自动刷新时仅追加新条目。
 - **双钩子实现**：Node.js 钩子为主/推荐。
+- **Windows Hook 启动**：安装后的 Hook 通过 PATH 中的 `agent-lens-hook.exe` 无窗口执行 Node 脚本；命令必须同时兼容 PowerShell 与 `cmd.exe`，并保持 stdin/stdout/stderr 与退出码透传，不能改成异步后台任务。
 
 ## 运行时数据
 

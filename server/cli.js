@@ -49,6 +49,7 @@ const LEGACY_INSTALL_RUNTIME_PATHS = getLegacyInstalledRuntimePaths();
 const INSTALL_ROOT = INSTALL_RUNTIME_PATHS.rootDir;
 const INSTALL_DIR = INSTALL_RUNTIME_PATHS.appDir;
 const INSTALL_BIN_DIR = INSTALL_RUNTIME_PATHS.binDir;
+const WINDOWS_HOOK_RUNNER_NAME = 'agent-lens-hook.exe';
 const SETTINGS_FILE = path.join(os.homedir(), '.claude', 'settings.json');
 const { DEFAULT_PORT } = require('./config');
 const INSTALL_READY_TIMEOUT_MS = 120000;
@@ -627,14 +628,18 @@ async function cmdInstall() {
         removeTree(updateRoot);
         log(`[OK] 程序已安装到 ${INSTALL_DIR}`, 'green');
 
-        console.log('');
-        log(`更新 Hooks 配置: ${SETTINGS_FILE}`, 'cyan');
-        syncInstalledHooks();
-
         try {
             createCommandEntry();
         } catch (error) {
+            if (isWin()) throw error;
             log(`[WARN] 创建命令入口失败: ${error.message}`, 'yellow');
+        }
+
+        console.log('');
+        log(`更新 Hooks 配置: ${SETTINGS_FILE}`, 'cyan');
+        syncInstalledHooks();
+        if (isWin()) {
+            log('[INFO] 请重启正在运行的 AI 编码工具，使新的无窗口 Hook 命令生效', 'yellow');
         }
 
         console.log('');
@@ -1175,9 +1180,15 @@ function createCommandEntry() {
     if (isWin()) {
         mkdirp(INSTALL_BIN_DIR);
         const batPath = path.join(INSTALL_BIN_DIR, 'agent-lens.cmd');
+        const hookRunnerSource = path.join(INSTALL_DIR, 'hooks', 'windows-hook-runner.exe');
+        const hookRunnerPath = path.join(INSTALL_BIN_DIR, WINDOWS_HOOK_RUNNER_NAME);
+        if (!fs.existsSync(hookRunnerSource)) {
+            throw new Error(`缺少 Windows 无窗口 Hook 启动器: ${hookRunnerSource}`);
+        }
+        fs.copyFileSync(hookRunnerSource, hookRunnerPath);
         const batContent = `@echo off\r\n"${process.execPath}" "${cliPath}" %*\r\n`;
         fs.writeFileSync(batPath, batContent, 'utf8');
-        log(`[OK] 已创建: ${batPath}`, 'green');
+        log(`[OK] 已创建: ${batPath}、${hookRunnerPath}`, 'green');
         try {
             const pathChanged = setWindowsUserPath(INSTALL_BIN_DIR);
             if (pathChanged) log('  PATH 已更新，请重启终端后使用 agent-lens', 'dim');

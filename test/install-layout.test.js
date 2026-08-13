@@ -128,6 +128,8 @@ test('application staging copies runtime files without local state or dependenci
     'package.json',
     path.join('hooks', 'prelog.js'),
     path.join('hooks', 'codex-lifecycle.js'),
+    path.join('hooks', 'windows-hook-runner.exe'),
+    path.join('hooks', 'windows-hook-runner.cs'),
     path.join('adapters', 'index.js'),
     path.join('dist', 'index.html'),
   ]) {
