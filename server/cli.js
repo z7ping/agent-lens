@@ -37,6 +37,7 @@ const {
     restoreBackupApplication,
     stageApplication,
 } = require('./install-layout');
+const { acquireInstallLock, removeInstallLock } = require('./install-lock');
 
 // ─── 配置 ────────────────────────────────────────────────────────
 
@@ -53,6 +54,8 @@ const WINDOWS_HOOK_RUNNER_NAME = 'agent-lens-hook.exe';
 const SETTINGS_FILE = path.join(os.homedir(), '.claude', 'settings.json');
 const { DEFAULT_PORT } = require('./config');
 const INSTALL_READY_TIMEOUT_MS = 120000;
+const WINDOWS_ACTIVATION_RETRY_DELAY_MS = 250;
+const WINDOWS_ACTIVATION_MAX_ATTEMPTS = 40;
 // ponytail: 版本号仅打包时用，按需读取，不复制 package.json
 function getVersion() {
     try { return require(path.join(PROJECT_DIR, 'package.json')).version; } catch { return '0.0.0'; }
@@ -634,6 +637,7 @@ async function cmdInstall() {
     let running = false;
     let rolledBack = false;
     let rollbackRunning = false;
+    let installLockHeld = false;
 
     try {
         console.log('');
@@ -652,6 +656,8 @@ async function cmdInstall() {
 
         console.log('');
         log('停止旧版服务并迁移运行数据...', 'cyan');
+        acquireInstallLock(INSTALL_RUNTIME_PATHS.installLockFile);
+        installLockHeld = true;
         await stopProcessesForUpgrade();
 
         if (fs.existsSync(LEGACY_INSTALL_RUNTIME_PATHS.rootDir) &&
@@ -669,7 +675,7 @@ async function cmdInstall() {
         const projectsJson = INSTALL_RUNTIME_PATHS.projectsFile;
         if (!fs.existsSync(projectsJson)) fs.writeFileSync(projectsJson, '{}', 'utf8');
 
-        backupDir = activateStagedApplication(stagedAppDir, INSTALL_DIR, INSTALL_ROOT);
+        backupDir = await activateStagedApplicationForUpgrade(stagedAppDir);
         removeTree(updateRoot);
         log(`[OK] 程序已安装到 ${INSTALL_DIR}`, 'green');
 
@@ -745,6 +751,10 @@ async function cmdInstall() {
         if (backupDir) log(`上一版程序保留在: ${backupDir}`, 'yellow');
         process.exitCode = 1;
         return;
+    } finally {
+        if (installLockHeld) {
+            try { removeInstallLock(INSTALL_RUNTIME_PATHS.installLockFile); } catch (_) {}
+        }
     }
 
     console.log('');
@@ -1087,7 +1097,7 @@ function stopPidFile(pidFile, label) {
     }
 }
 
-function stopKnownWindowsServerProcesses() {
+function stopKnownWindowsRuntimeProcesses() {
     if (!isWin()) return [];
     const knownRoots = [...new Set([
         INSTALL_ROOT,
@@ -1096,10 +1106,11 @@ function stopKnownWindowsServerProcesses() {
     const script = [
         '$roots = ConvertFrom-Json $env:AGENT_LENS_KNOWN_ROOTS_JSON',
         '$currentPid = [int]$env:AGENT_LENS_CURRENT_PID',
-        'Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne $currentPid -and $_.CommandLine -and $_.CommandLine -match "server\\.js" } | ForEach-Object {',
+        'Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne $currentPid -and $_.CommandLine } | ForEach-Object {',
         '  $command = ($_.CommandLine -replace "\\\\", "/").ToLowerInvariant()',
         '  $matched = $false',
-        '  foreach ($root in $roots) { if ($command.Contains([string]$root)) { $matched = $true; break } }',
+        '  $isRuntime = $command.Contains("/hooks/") -or $command -match "server\\.js" -or $command -match "cli\\.js.+start"',
+        '  if ($isRuntime) { foreach ($root in $roots) { if ($command.Contains([string]$root)) { $matched = $true; break } } }',
         '  if ($matched) { Stop-Process -Id $_.ProcessId -Force; Write-Output $_.ProcessId }',
         '}',
     ].join('\n');
@@ -1135,13 +1146,38 @@ async function stopProcessesForUpgrade() {
     if (path.resolve(LEGACY_INSTALL_RUNTIME_PATHS.pidFile) !== path.resolve(INSTALL_RUNTIME_PATHS.pidFile)) {
         stopPidFile(LEGACY_INSTALL_RUNTIME_PATHS.pidFile, '旧版安装');
     }
-    const stoppedWindowsPids = stopKnownWindowsServerProcesses();
+    const stoppedWindowsPids = stopKnownWindowsRuntimeProcesses();
     if (stoppedWindowsPids.length > 0) {
-        log(`[OK] 已清理旧版 Windows daemon: ${stoppedWindowsPids.join(', ')}`, 'green');
+        log(`[OK] 已清理旧版 Windows 运行进程: ${stoppedWindowsPids.join(', ')}`, 'green');
     }
     if (!await waitForPortClosed(DEFAULT_PORT, 10000)) {
         throw new Error(`端口 ${DEFAULT_PORT} 仍被占用，请先停止占用该端口的进程`);
     }
+}
+
+function isWindowsPathLockError(error) {
+    return error && ['EBUSY', 'EPERM', 'EACCES'].includes(error.code);
+}
+
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function activateStagedApplicationForUpgrade(stagedAppDir) {
+    const maxAttempts = isWin() ? WINDOWS_ACTIVATION_MAX_ATTEMPTS : 1;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        if (isWin()) stopKnownWindowsRuntimeProcesses();
+        try {
+            return activateStagedApplication(stagedAppDir, INSTALL_DIR, INSTALL_ROOT);
+        } catch (error) {
+            if (!isWin() || !isWindowsPathLockError(error) || attempt === maxAttempts) throw error;
+            if (attempt === 1) log('[WARN] 已安装目录仍被 Hook 或服务占用，正在等待释放...', 'yellow');
+            await delay(WINDOWS_ACTIVATION_RETRY_DELAY_MS);
+        }
+    }
+
+    return null;
 }
 
 async function rollbackInstalledApplication(backupDir) {

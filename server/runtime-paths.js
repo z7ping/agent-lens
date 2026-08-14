@@ -106,6 +106,7 @@ function buildPaths(dirs) {
     projectsFile: path.join(dirs.dataDir, 'projects.json'),
     pidFile: path.join(dirs.runDir, 'server.pid'),
     hookTokenFile: path.join(dirs.runDir, 'hook-token'),
+    installLockFile: path.join(dirs.runDir, 'install.lock'),
   };
 }
 

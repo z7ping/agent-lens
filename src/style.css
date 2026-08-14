@@ -459,7 +459,7 @@
   @apply text-[13px] leading-snug break-words px-3 py-2 border;
 }
 .chat-bubble.user {
-  @apply rounded-2xl rounded-br-md bg-primary-600 text-white border-primary-600 dark:bg-primary-500 dark:border-primary-500 dark:text-neutral-950;
+  @apply rounded-2xl rounded-br-md bg-[#22262b] text-white border-[#22262b] dark:bg-[#f0f1f3] dark:border-[#f0f1f3] dark:text-[#17191c];
 }
 .chat-bubble.assistant {
   @apply rounded-2xl rounded-bl-md bg-neutral-50 dark:bg-neutral-800/70 border-neutral-200 dark:border-neutral-700 text-neutral-800 dark:text-neutral-100;
@@ -512,7 +512,7 @@
   @apply text-xs px-1.5 py-0.5 rounded border border-transparent text-neutral-400 hover:text-neutral-700 hover:border-neutral-200 dark:hover:text-neutral-100 dark:hover:border-neutral-700 transition-colors;
 }
 .chat-bubble.user .markdown-toggle {
-  @apply text-white/70 hover:text-white hover:border-white/40;
+  @apply text-white/70 hover:text-white hover:border-white/40 dark:text-[#17191c]/60 dark:hover:text-[#17191c] dark:hover:border-[#17191c]/30;
 }
 .markdown-rendered {
   @apply space-y-1.5;
@@ -539,7 +539,7 @@
   @apply px-1 py-0.5 rounded bg-neutral-200/70 dark:bg-neutral-700 text-[12px] font-mono;
 }
 .chat-bubble.user .markdown-rendered code {
-  @apply bg-white/20 text-white;
+  @apply bg-white/20 text-white dark:bg-[#17191c]/10 dark:text-[#17191c];
 }
 .markdown-rendered pre {
   @apply overflow-x-auto rounded-md bg-neutral-900 text-neutral-100 p-2 text-[12px] leading-relaxed;
@@ -551,13 +551,13 @@
   @apply text-primary-600 dark:text-primary-400 underline underline-offset-2;
 }
 .chat-bubble.user .markdown-rendered a {
-  @apply text-white underline;
+  @apply text-white underline dark:text-[#17191c];
 }
 .markdown-source {
   @apply max-h-80 overflow-auto whitespace-pre-wrap font-mono text-[12px] leading-relaxed rounded-md bg-neutral-100 dark:bg-neutral-950/50 text-neutral-700 dark:text-neutral-200 p-2;
 }
 .chat-bubble.user .markdown-source {
-  @apply bg-white/15 text-white;
+  @apply bg-white/15 text-white dark:bg-[#17191c]/10 dark:text-[#17191c];
 }
 /* ═══ 轮次默认折叠（仅展开最近一轮 / 有错误轮次） ═══ */
 .round-block.collapsed .round-content {

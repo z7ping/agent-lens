@@ -12,6 +12,7 @@ const net = require('net');
 const { spawn } = require('child_process');
 
 const { DEFAULT_PORT } = require('../config');
+const { isInstallLocked } = require('../install-lock');
 const { ensureRuntimeDirs, getRuntimePaths } = require('../runtime-paths');
 
 /**
@@ -135,12 +136,16 @@ function getServerStatus(baseDir, port) {
 function ensureServerRunning(baseDir, port) {
     port = port || DEFAULT_PORT;
 
+    const runtimePaths = getRuntimePaths({ baseDir });
+    if (isInstallLocked(runtimePaths.installLockFile)) return;
+
     // 快速同步检查 PID 文件
     if (isServerRunningSync(baseDir)) return;
 
     // TCP 检查（异步但不等待结果——仅在可能需要启动时才做）
     checkPort(port, (inUse) => {
         if (inUse) return; // 端口已被占用（可能是另一个实例）
+        if (isInstallLocked(runtimePaths.installLockFile)) return;
 
         // 启动守护进程
         const serverPath = path.join(baseDir, 'server.js');

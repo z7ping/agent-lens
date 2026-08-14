@@ -8,6 +8,7 @@ const APP_ROOT_FILES = [
   'config.js',
   'runtime-paths.js',
   'install-layout.js',
+  'install-lock.js',
   'agent-lens-db.js',
   'capabilities.js',
   'codex-context.js',
