@@ -14,7 +14,7 @@ test('reads the current app version for UI display', () => {
   assert.equal(info.name, '@z7ping/agent-lens');
   assert.equal(info.version, packageJson.version);
   assert.equal(info.display_version, `v${packageJson.version}`);
-  assert.equal(info.subtitle, '多 Agent 调用链路观测与复盘工具');
+  assert.equal(info.subtitle, '看清智能体的每一次行动');
   assert.equal(info.repository_url, 'https://github.com/z7ping/agent-lens');
 });
 

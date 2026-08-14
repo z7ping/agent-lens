@@ -1,7 +1,7 @@
 {
   "name": "@z7ping/agent-lens",
   "version": "0.6.1",
-  "description": "多 Agent 调用的全链路可观测性工具。统计 SKILL / Tool / MCP 调用次数，还原每次会话中可观察的执行路径。",
+  "description": "Local observability and replay for AI coding agents. See every observable action and the evidence behind it.",
   "main": "server/cli.js",
   "bin": {
     "agent-lens": "server/cli.js"
@@ -33,7 +33,8 @@
     "tailwind.config.mjs",
     "postcss.config.mjs",
     "CHANGELOG.md",
-    "README.md"
+    "README.md",
+    "README.zh-CN.md"
   ],
   "repository": {
     "type": "git",

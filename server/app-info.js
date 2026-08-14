@@ -58,7 +58,7 @@ function getAppInfo(options = {}) {
         name: pkg.name || '@z7ping/agent-lens',
         version,
         display_version: `v${version}`,
-        subtitle: '多 Agent 调用链路观测与复盘工具',
+        subtitle: '看清智能体的每一次行动',
         repository_url: normalizeRepositoryUrl(pkg.repository),
         changelog: getCurrentChangelog(version, options.changelogPath),
     };

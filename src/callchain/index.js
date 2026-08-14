@@ -12,12 +12,10 @@ let expandedSessionIds = new Set();
 /** 轮次工具调用懒加载缓存（roundId → {nodes, sourceColor}），折叠时不在 DOM 中渲染详情 */
 const roundToolsCache = new Map();
 
-/** AI 长文本折叠缓存（bubbleId → 完整文本） */
-const assistantTextCache = new Map();
-
-/** AI 气泡折叠阈值 */
-const AI_MAX_LINES = 10;
-const AI_MAX_CHARS = 600;
+/** 对话气泡默认展示的最大视觉行数 */
+const CHAT_BUBBLE_MAX_LINES = 5;
+let chatBubbleResizeTimer = null;
+let chatBubbleResizeBound = false;
 
 // ─── 来源标签 & 颜色映射（共享给会话卡片和轮次头） ───────────────
 
@@ -54,7 +52,6 @@ export function renderCallChain(data) {
 
   // 重新渲染时清空懒加载缓存（旧轮次 id 已随 DOM 失效）
   roundToolsCache.clear();
-  assistantTextCache.clear();
 
   // 渲染前保存当前展开状态
   expandedSessionIds = new Set(
@@ -764,9 +761,7 @@ function renderChatMessage(role, item, roundIndex, eventIndex, evidenceItems = [
   if (!text) return '';
   const id = `flow-${role}-${roundIndex}-${eventIndex}-${Math.random().toString(36).slice(2, 8)}`;
   const label = role === 'assistant' ? 'AI' : '用户';
-  const bubble = role === 'assistant'
-    ? renderAssistantBubble(id, [text])
-    : `<div class="chat-bubble user">${renderMarkdownMessage(id, text)}</div>`;
+  const bubble = renderChatBubble(id, role, text);
   return `
     <div class="chat-message ${role}">
       <div class="chat-meta">${label} · 第 ${roundIndex + 1} 轮 ${renderEvidenceBadges(evidenceItems)}</div>
@@ -944,34 +939,112 @@ function getToolTypeCounts(calls, limit = 3) {
     .map(([type, count]) => ({ type, count }));
 }
 
-/** 渲染 AI 气泡（长文本默认折叠，底部渐隐遮罩 + 展开全文按钮） */
-function renderAssistantBubble(id, texts) {
-  const fullText = texts.join('\n\n');
-  const lines = fullText.split('\n');
-  const needsCollapse = lines.length > AI_MAX_LINES || fullText.length > AI_MAX_CHARS;
-  if (!needsCollapse) {
-    return `<div class="chat-bubble assistant">${renderMarkdownMessage(id, fullText)}</div>`;
-  }
-  assistantTextCache.set(id, fullText);
-  const preview = lines.length > AI_MAX_LINES
-    ? lines.slice(0, AI_MAX_LINES).join('\n')
-    : fullText.slice(0, AI_MAX_CHARS);
-  const hint = lines.length > AI_MAX_LINES ? `还有 ${lines.length - AI_MAX_LINES} 行` : '内容较长';
+/** 渲染统一对话气泡；是否超过 5 行在进入 DOM 后按实际高度判断。 */
+function renderChatBubble(id, role, text) {
   return `
-    <div class="chat-bubble assistant collapsed" id="${id}">
-      <div class="assistant-preview">${renderMarkdownMessage(`${id}-preview`, preview)}</div>
-      <span class="assistant-fade"></span>
-      <button type="button" class="assistant-expand" onclick="expandAssistant('${id}')" title="${hint}">展开全文 ↓</button>
+    <div class="chat-bubble ${role}" id="${id}" data-collapse-ready="false">
+      <div class="chat-bubble-body">
+        <div class="chat-bubble-content">${renderMarkdownMessage(`${id}-message`, text)}</div>
+        <span class="chat-bubble-fade" aria-hidden="true"></span>
+      </div>
+      <button type="button" class="chat-bubble-toggle hidden" aria-expanded="false" onclick="toggleChatBubble('${id}')">展开 ↓</button>
     </div>
   `;
 }
 
-window.expandAssistant = function (id) {
+function numericStyle(style, property) {
+  const value = Number.parseFloat(style[property]);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function activeMarkdownSurface(bubble) {
+  const message = bubble.querySelector('.markdown-message');
+  if (!message) return null;
+  return message.dataset.view === 'source'
+    ? message.querySelector('.markdown-source')
+    : message.querySelector('.markdown-rendered');
+}
+
+function measureChatBubble(bubble, preserveState = false) {
+  const content = bubble.querySelector('.chat-bubble-content');
+  const message = bubble.querySelector('.markdown-message');
+  const toolbar = message?.querySelector('.markdown-toolbar');
+  const surface = activeMarkdownSurface(bubble);
+  const button = bubble.querySelector('.chat-bubble-toggle');
+  if (!content || !surface || !button) return;
+
+  const surfaceStyle = getComputedStyle(surface);
+  const bubbleStyle = getComputedStyle(bubble);
+  const lineHeight = numericStyle(surfaceStyle, 'lineHeight') || numericStyle(bubbleStyle, 'lineHeight') || 18;
+  const surfacePadding = numericStyle(surfaceStyle, 'paddingTop') + numericStyle(surfaceStyle, 'paddingBottom');
+  const visibleSurfaceHeight = lineHeight * CHAT_BUBBLE_MAX_LINES + surfacePadding;
+  const toolbarStyle = toolbar ? getComputedStyle(toolbar) : null;
+  const toolbarHeight = toolbar
+    ? toolbar.getBoundingClientRect().height
+      + numericStyle(toolbarStyle, 'marginTop')
+      + numericStyle(toolbarStyle, 'marginBottom')
+    : 0;
+  const needsCollapse = surface.scrollHeight > visibleSurfaceHeight + 1;
+  const wasReady = bubble.dataset.collapseReady === 'true';
+  const keepExpanded = preserveState && wasReady && bubble.classList.contains('expanded');
+
+  bubble.dataset.collapseReady = 'true';
+  if (!needsCollapse) {
+    bubble.classList.remove('collapsible', 'collapsed', 'expanded');
+    content.style.removeProperty('--chat-bubble-collapsed-height');
+    button.classList.add('hidden');
+    button.setAttribute('aria-expanded', 'true');
+    return;
+  }
+
+  content.style.setProperty('--chat-bubble-collapsed-height', `${Math.ceil(toolbarHeight + visibleSurfaceHeight)}px`);
+  bubble.classList.add('collapsible');
+  bubble.classList.toggle('expanded', keepExpanded);
+  bubble.classList.toggle('collapsed', !keepExpanded);
+  button.classList.remove('hidden');
+  button.setAttribute('aria-expanded', keepExpanded ? 'true' : 'false');
+  button.textContent = keepExpanded ? '折叠 ↑' : '展开 ↓';
+  button.title = keepExpanded ? '折叠到 5 行' : '展开完整内容';
+}
+
+function bindChatBubbleResize() {
+  if (chatBubbleResizeBound || typeof window.addEventListener !== 'function') return;
+  chatBubbleResizeBound = true;
+  window.addEventListener('resize', () => {
+    if (chatBubbleResizeTimer != null) window.clearTimeout(chatBubbleResizeTimer);
+    chatBubbleResizeTimer = window.setTimeout(() => {
+      initializeChatBubbleCollapse(document, true);
+      chatBubbleResizeTimer = null;
+    }, 120);
+  });
+}
+
+export function initializeChatBubbleCollapse(root = document, preserveState = false) {
+  root.querySelectorAll?.('.chat-bubble').forEach(bubble => measureChatBubble(bubble, preserveState));
+  bindChatBubbleResize();
+}
+
+function refreshChatBubbleCollapse(bubble) {
+  if (!bubble) return;
+  if (typeof window.requestAnimationFrame === 'function') {
+    window.requestAnimationFrame(() => measureChatBubble(bubble, true));
+  } else {
+    measureChatBubble(bubble, true);
+  }
+}
+
+window.toggleChatBubble = function (id) {
   const bubble = document.getElementById(id);
-  if (!bubble || !assistantTextCache.has(id)) return;
-  bubble.innerHTML = renderMarkdownMessage(`${id}-full`, assistantTextCache.get(id));
-  bubble.classList.remove('collapsed');
-  assistantTextCache.delete(id);
+  if (!bubble?.classList.contains('collapsible')) return;
+  const shouldExpand = bubble.classList.contains('collapsed');
+  bubble.classList.toggle('collapsed', !shouldExpand);
+  bubble.classList.toggle('expanded', shouldExpand);
+  const button = bubble.querySelector('.chat-bubble-toggle');
+  if (button) {
+    button.setAttribute('aria-expanded', shouldExpand ? 'true' : 'false');
+    button.textContent = shouldExpand ? '折叠 ↑' : '展开 ↓';
+    button.title = shouldExpand ? '折叠到 5 行' : '展开完整内容';
+  }
 };
 
 window.toggleMarkdownSource = function (id) {
@@ -985,6 +1058,7 @@ window.toggleMarkdownSource = function (id) {
   rendered?.classList.toggle('hidden', !showingSource);
   source?.classList.toggle('hidden', showingSource);
   if (button) button.textContent = showingSource ? '源码' : '渲染';
+  refreshChatBubbleCollapse(message.closest('.chat-bubble'));
 };
 
 /** 轮次导航：按错误 / 慢调用 / 最近一轮过滤 */

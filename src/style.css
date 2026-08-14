@@ -107,7 +107,7 @@
 
   /* 列表卡片 */
   .list-card {
-    @apply bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl p-5;
+    @apply min-w-0 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl p-5;
   }
   .list-card .chart-title {
     @apply pb-3 border-b border-neutral-100 dark:border-neutral-800 mb-3;
@@ -127,7 +127,7 @@
     @apply flex items-center justify-between gap-3 pb-3 border-b border-neutral-100 dark:border-neutral-800 mb-2;
   }
   .tool-map-table {
-    @apply overflow-x-auto;
+    @apply max-w-full overflow-x-auto;
   }
   .tool-table-header,
   .tool-table-row {
@@ -444,7 +444,7 @@
   @apply flex flex-col gap-2 px-4 py-3;
 }
 .chat-message {
-  @apply flex flex-col gap-1;
+  @apply flex min-w-0 max-w-full flex-col gap-1;
 }
 .chat-message.user {
   @apply self-end items-end max-w-[72%];
@@ -456,54 +456,59 @@
   @apply text-xs font-medium text-neutral-400 dark:text-neutral-500 px-1;
 }
 .chat-bubble {
-  @apply text-[13px] leading-snug break-words px-3 py-2 border;
+  @apply min-w-0 max-w-full text-[13px] leading-snug break-words px-3 py-2 border;
+  position: relative;
 }
 .chat-bubble.user {
   @apply rounded-2xl rounded-br-md bg-[#22262b] text-white border-[#22262b] dark:bg-[#f0f1f3] dark:border-[#f0f1f3] dark:text-[#17191c];
+  --chat-bubble-fade-color: #22262b;
 }
 .chat-bubble.assistant {
   @apply rounded-2xl rounded-bl-md bg-neutral-50 dark:bg-neutral-800/70 border-neutral-200 dark:border-neutral-700 text-neutral-800 dark:text-neutral-100;
+  --chat-bubble-fade-color: #fafafa;
+}
+.dark .chat-bubble.user {
+  --chat-bubble-fade-color: #f0f1f3;
+}
+.dark .chat-bubble.assistant {
+  --chat-bubble-fade-color: #262626;
 }
 /* 无用户消息的轮次：折叠头内极淡提示（不再渲染用户气泡） */
 .chat-placeholder {
   @apply text-xs italic text-neutral-300 dark:text-neutral-600 px-1;
 }
-/* AI 长文本折叠 */
-.assistant-preview {
-  @apply block;
+/* 所有对话气泡超过 5 行时折叠 */
+.chat-bubble-body {
+  @apply relative min-w-0 max-w-full;
 }
-/* 底部渐隐遮罩 */
-.assistant-fade {
-  @apply block pointer-events-none;
+.chat-bubble.collapsed .chat-bubble-content {
+  max-height: var(--chat-bubble-collapsed-height);
+  overflow: hidden;
+}
+.chat-bubble-fade {
+  @apply hidden pointer-events-none;
+}
+.chat-bubble.collapsed .chat-bubble-fade {
+  @apply block;
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
-  height: 3.5rem;
-  background: linear-gradient(to bottom, transparent, #fafafa 85%);
+  height: 2.75rem;
+  background: linear-gradient(to bottom, transparent, var(--chat-bubble-fade-color) 82%);
 }
-.dark .assistant-fade {
-  background: linear-gradient(to bottom, transparent, #262626 85%);
+.chat-bubble-toggle {
+  @apply ml-auto mt-2 px-2.5 py-1 rounded-md border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs font-medium text-primary-600 dark:text-primary-400 hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors cursor-pointer;
+  display: block;
 }
-.assistant-expand {
-  @apply px-2.5 py-1 rounded-md border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs font-medium text-primary-600 dark:text-primary-400 hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors cursor-pointer;
-  position: absolute;
-  right: 0.75rem;
-  bottom: 0.5rem;
+.chat-bubble-toggle.hidden {
+  display: none;
 }
-.chat-bubble.assistant.collapsed {
-  position: relative;
-  overflow: hidden;
-}
-.chat-bubble.assistant.collapsed .assistant-preview {
-  max-height: 13rem;
-  overflow: hidden;
-}
-.chat-bubble.assistant.expanded {
-  position: relative;
+.chat-bubble.user .chat-bubble-toggle {
+  @apply bg-white/10 text-white border-white/25 hover:bg-white/20 dark:bg-[#17191c]/5 dark:text-[#17191c] dark:border-[#17191c]/20 dark:hover:bg-[#17191c]/10;
 }
 .markdown-message {
-  @apply relative;
+  @apply relative min-w-0 max-w-full;
 }
 .markdown-toolbar {
   @apply flex justify-end mb-1;
@@ -515,7 +520,7 @@
   @apply text-white/70 hover:text-white hover:border-white/40 dark:text-[#17191c]/60 dark:hover:text-[#17191c] dark:hover:border-[#17191c]/30;
 }
 .markdown-rendered {
-  @apply space-y-1.5;
+  @apply min-w-0 max-w-full space-y-1.5;
 }
 .markdown-rendered h1 {
   @apply text-base font-semibold leading-tight mt-1;
@@ -542,7 +547,7 @@
   @apply bg-white/20 text-white dark:bg-[#17191c]/10 dark:text-[#17191c];
 }
 .markdown-rendered pre {
-  @apply overflow-x-auto rounded-md bg-neutral-900 text-neutral-100 p-2 text-[12px] leading-relaxed;
+  @apply max-w-full overflow-x-auto rounded-md bg-neutral-900 text-neutral-100 p-2 text-[12px] leading-relaxed;
 }
 .markdown-rendered pre code {
   @apply p-0 bg-transparent text-inherit;
@@ -554,7 +559,7 @@
   @apply text-white underline dark:text-[#17191c];
 }
 .markdown-source {
-  @apply max-h-80 overflow-auto whitespace-pre-wrap font-mono text-[12px] leading-relaxed rounded-md bg-neutral-100 dark:bg-neutral-950/50 text-neutral-700 dark:text-neutral-200 p-2;
+  @apply min-w-0 max-w-full max-h-80 overflow-auto whitespace-pre-wrap font-mono text-[12px] leading-relaxed rounded-md bg-neutral-100 dark:bg-neutral-950/50 text-neutral-700 dark:text-neutral-200 p-2;
 }
 .chat-bubble.user .markdown-source {
   @apply bg-white/15 text-white dark:bg-[#17191c]/10 dark:text-[#17191c];
@@ -1003,8 +1008,63 @@
 .evidence-badge.unobservable {
   @apply bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400;
 }
+.app-nav-inner {
+  @apply flex h-14 items-center justify-between;
+}
+.app-nav-offset {
+  margin-top: 3.5rem;
+}
+.app-brand {
+  @apply flex items-center gap-2;
+}
+.app-brand-icon {
+  @apply shrink-0 text-lg leading-none;
+}
+.app-brand-copy {
+  @apply flex min-w-0 flex-col justify-center leading-none;
+}
+.app-brand-title {
+  @apply truncate text-base font-bold leading-tight;
+}
+.app-brand-divider {
+  @apply px-0.5 text-neutral-300 dark:text-neutral-600;
+}
 .app-subtitle {
-  @apply min-w-0 truncate text-xs font-medium text-neutral-400 dark:text-neutral-500;
+  @apply min-w-0 truncate text-xs font-medium leading-tight text-neutral-400 dark:text-neutral-500;
+}
+@media (max-width: 639px) {
+  .app-nav-inner {
+    height: 6rem;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: 3.5rem 2.5rem;
+    column-gap: 0.5rem;
+  }
+  .app-brand {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .app-brand-title {
+    @apply text-sm;
+  }
+  .app-nav-actions {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  #githubLink {
+    display: none;
+  }
+  #appVersion {
+    display: none;
+  }
+  #tabNav {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: center;
+  }
+  .app-nav-offset {
+    margin-top: 6rem;
+  }
 }
 .top-link {
   @apply inline-flex items-center justify-center px-2.5 py-1.5 rounded-lg text-xs font-medium text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-700 dark:hover:text-neutral-200 transition-colors;

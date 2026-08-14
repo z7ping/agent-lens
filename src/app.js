@@ -4,7 +4,7 @@
 
 import { CONFIG, escapeHtml } from './config.js';
 import { fetchProjects, fetchSessions, fetchSessionLogs, checkHookStatus, fetchSourceStatus, fetchCapabilities, fetchAppInfo } from './utils.js';
-import { renderCallChain } from './callchain/index.js';
+import { initializeChatBubbleCollapse, renderCallChain } from './callchain/index.js';
 import { initDashboard, loadDashboardData } from './dashboard/index.js';
 import { initOverview, loadOverview } from './overview/index.js';
 import { getExpandAllAction, shouldShowToolType, shouldShowToolTypeSet } from './ui-state.mjs';
@@ -502,6 +502,7 @@ async function loadSessionCalls(card) {
       // 动态导入 renderCallChain 中的 renderCall 函数
       const { renderCallChainCalls } = await import('./callchain/index.js');
       body.innerHTML = renderCallChainCalls(calls);
+      initializeChatBubbleCollapse(body);
       applyFilters(body);
     }
     body.dataset.loaded = '1';

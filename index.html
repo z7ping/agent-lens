@@ -3,17 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AgentLens</title>
+  <title>AgentLens | AI 智能体棱镜</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
   <link rel="stylesheet" href="/src/style.css">
   <!-- ═══ 第一层：Logo + 功能Tab + 主题切换 ═══ -->
   <nav class="fixed top-0 left-0 right-0 z-50 bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-800">
-    <div class="max-w-screen-2xl mx-auto px-4 h-12 flex items-center justify-between">
-      <a href="/" class="flex items-center gap-2 font-bold text-lg min-w-0 text-neutral-900 dark:text-neutral-100">
-        🧠
-        <span class="shrink-0">AgentLens</span>
-        <span id="appVersion" class="app-version">v...</span>
-        <span id="appSubtitle" class="app-subtitle hidden sm:inline">多 Agent 调用链路观测与复盘工具</span>
+    <div class="app-nav-inner max-w-screen-2xl mx-auto px-4">
+      <a href="/" class="app-brand min-w-0 text-neutral-900 dark:text-neutral-100">
+        <span class="app-brand-icon" aria-hidden="true">🧠</span>
+        <span class="app-brand-copy">
+          <span class="app-brand-title">AgentLens <span class="app-brand-divider">|</span> AI 智能体棱镜 <span id="appVersion" class="app-version">v...</span></span>
+          <span id="appSubtitle" class="app-subtitle">看清智能体的每一次行动</span>
+        </span>
       </a>
       <div class="flex items-center gap-1" id="tabNav">
         <button class="tab-btn active" data-tab="callchain" onclick="switchTab('callchain')">
@@ -29,7 +30,7 @@
           概览
         </button>
       </div>
-      <div class="flex items-center gap-1">
+      <div class="app-nav-actions flex items-center gap-1">
         <a id="githubLink" class="top-link hidden sm:inline-flex" href="https://github.com/z7ping/agent-lens" target="_blank" rel="noreferrer">GitHub</a>
         <button id="changelogBtn" class="top-link" type="button" onclick="openChangelog()">更新日志</button>
         <button id="themeToggle" class="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors" title="切换主题">
@@ -54,7 +55,7 @@
   </div>
 
   <!-- ═══ 第二层：来源 + 项目 + 工具类型 + 状态栏（不固定，随页面滚动） ═══ -->
-  <div class="mt-12 bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-800">
+  <div class="app-nav-offset bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-800">
     <div class="max-w-screen-2xl mx-auto px-4 pt-2 mb-1">
       <!-- 来源 Tab -->
       <div class="flex items-center gap-1 overflow-x-auto" id="toolTabs">
@@ -110,7 +111,7 @@
     </div>
   </div>
 
-  <!-- ═══ 主内容区（顶部仅留 48px 导航，筛选区随页面滚动） ═══ -->
+  <!-- ═══ 主内容区（筛选区随页面滚动） ═══ -->
   <main class="min-h-screen">
 
     <!-- ── 调用链 Tab ── -->

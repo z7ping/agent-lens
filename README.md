@@ -1,41 +1,43 @@
-# AgentLens
+# AgentLens | AI 智能体棱镜
+
+> **See every action your AI agents take.**
+
+**English** | [简体中文](README.zh-CN.md)
 
 [![npm version](https://img.shields.io/npm/v/@z7ping/agent-lens?logo=npm&color=cb3837)](https://www.npmjs.com/package/@z7ping/agent-lens)
 [![npm downloads](https://img.shields.io/npm/dm/@z7ping/agent-lens?logo=npm)](https://www.npmjs.com/package/@z7ping/agent-lens)
 [![Node.js](https://img.shields.io/node/v/@z7ping/agent-lens?logo=node.js&logoColor=white)](https://www.npmjs.com/package/@z7ping/agent-lens)
 [![License](https://img.shields.io/npm/l/@z7ping/agent-lens)](LICENSE)
 
-多 Agent 调用的全链路可观测性工具。统计 SKILL / Tool / MCP 调用次数，还原每一次会话中可观察的执行路径，并明确标记静态发现、推断与不可观察的信息。
+AgentLens is a local observability and replay tool for AI coding agents. It reconstructs the observable actions and execution path of each task, counts Skill, Tool, and MCP calls, and clearly distinguishes runtime capture, static discovery, inference, and information that cannot be observed.
 
-AgentLens – End-to-end observability for multi‑agent invocations.
-Aggregates call counts for SKILLs, Tools, and MCPs, and reconstructs the observable execution path of each session.
+> **In one line:** `npx @z7ping/agent-lens install` → open the dashboard in your browser.
 
-> **一句话**：`npx @z7ping/agent-lens install` → 打开浏览器查看仪表盘。
+## Install and use
 
-## 安装与使用
+Requires Node.js 18 or later.
 
-需要 Node.js 18 或更高版本。
+### Recommended: install from npm
 
-### 推荐：从 npm 安装
-
-[@z7ping/agent-lens（npm）](https://www.npmjs.com/package/@z7ping/agent-lens)
+[@z7ping/agent-lens on npm](https://www.npmjs.com/package/@z7ping/agent-lens)
 
 ```bash
 npx @z7ping/agent-lens install
 ```
 
-安装命令会把程序安装到 `~/.agent-lens/app/`，只安装生产运行依赖，并配置 Hooks、命令入口及当前平台的后台服务。数据库、日志和导入状态保留在 `~/.agent-lens/data|logs|state/`，升级程序不会覆盖这些运行数据。安装完成后访问 **http://localhost:56789/** 即可看到仪表盘。
+The installer places the application and production dependencies in `~/.agent-lens/app/`, configures Hooks, command entry points, and the platform background service. The database, logs, and importer state remain under `~/.agent-lens/data|logs|state/`, so application upgrades do not overwrite runtime data. When installation finishes, open **http://localhost:56789/**.
 
-从旧版升级时，安装器会识别 `.agent-lens` 根目录平铺布局和更早的 AppData/XDG 布局，停止旧 daemon、迁移缺失的运行数据并更新路径。遇到同名数据库或状态文件时保留现有目标文件，不会静默覆盖。
+When upgrading an older version, the installer recognizes both the former flat `.agent-lens` layout and older AppData/XDG layouts. It stops the old daemon, migrates missing runtime data, and updates paths. Existing database or state files at the destination are preserved and are never silently overwritten.
 
-### 直接调用 GitHub 仓库安装
+### Install directly from GitHub
 
 ```bash
 npx github:z7ping/agent-lens install
 ```
-> 仓库不跟踪 `dist/`，直接调用 GitHub 仓库时，当前环境需要能够安装开发依赖并完成 Vite 构建。若构建环境不确定，推荐使用 npm 安装方式。
 
-也可以从 GitHub 源码安装：
+> The repository does not track `dist/`. A direct GitHub install must be able to install development dependencies and run the Vite build. Use the npm package when the build environment is uncertain.
+
+You can also install from a cloned repository:
 
 ```bash
 git clone https://github.com/z7ping/agent-lens.git
@@ -45,116 +47,114 @@ npm run build
 node server/cli.js install
 ```
 
-## 界面预览
+## Interface preview
 
-### 概览：能力资产
+### Overview: capability assets
 
-按 AI 工具集中查看 Skills、MCP、Plugins、Extensions 和内置能力，并结合实际调用次数识别高频资产。
+Inspect Skills, MCPs, Plugins, Extensions, and built-in capabilities by AI tool, together with observed usage counts.
 
-![AgentLens 概览能力资产](https://raw.githubusercontent.com/z7ping/agent-lens/main/docs/static/1.webp)
+![AgentLens capability assets overview](https://raw.githubusercontent.com/z7ping/agent-lens/main/docs/static/1.webp)
 
-### 概览：装配路径
+### Overview: assembly paths
 
-检查各工具的配置目录、设置文件、Hooks、Skills、插件缓存和会话目录是否正确装配。
+Check whether configuration directories, settings, Hooks, Skills, plugin caches, and session directories are assembled correctly for each tool.
 
-![AgentLens 概览装配路径](https://raw.githubusercontent.com/z7ping/agent-lens/main/docs/static/2.webp)
+![AgentLens assembly paths overview](https://raw.githubusercontent.com/z7ping/agent-lens/main/docs/static/2.webp)
 
-### 工具栈地图
+### Tool stack map
 
-按调用频率、工作流价值、耗时和失败风险为工具生成可解释评分。
+Generate explainable scores from call frequency, workflow value, duration, and failure risk.
 
-![AgentLens 工具栈地图](https://raw.githubusercontent.com/z7ping/agent-lens/main/docs/static/3.webp)
+![AgentLens tool stack map](https://raw.githubusercontent.com/z7ping/agent-lens/main/docs/static/3.webp)
 
-### 任务复盘
+### Task replay
 
-按工具来源和项目筛选会话。每次用户指令作为一个完整 Turn，用户与 AI 回复以气泡展示，思考信号、生命周期事件和工具调用按真实时间顺序穿插在同一条执行流中；连续工具调用默认折叠，错误保持醒目。
+Filter sessions by source and project. Each user instruction becomes a complete Turn. User and AI messages, thinking signals, lifecycle events, and tool calls appear in one chronological execution flow. Consecutive tool calls are collapsed by default, while errors remain prominent.
 
-![AgentLens 任务复盘](https://raw.githubusercontent.com/z7ping/agent-lens/main/docs/static/4.webp)
+![AgentLens task replay](https://raw.githubusercontent.com/z7ping/agent-lens/main/docs/static/4.webp)
 
+### Common commands
 
-### 常用命令
-
-完成安装后，可以使用 `agent-lens` 管理服务：
+After installation, manage the service with `agent-lens`:
 
 ```bash
-agent-lens status          # 查看运行状态
-agent-lens start --daemon  # 后台启动
-agent-lens stop            # 停止服务
-agent-lens uninstall       # 卸载并清理
+agent-lens status          # Show runtime status
+agent-lens start --daemon  # Start in the background
+agent-lens stop            # Stop the service
+agent-lens uninstall       # Uninstall and clean up
 ```
 
-安装完成后服务会自动注册为系统服务或 daemon，支持开机自启和自动拉起。前台调试时可以运行 `agent-lens start`，按 Ctrl+C 停止。
+Installation registers a system service or daemon with automatic startup and recovery. For foreground debugging, run `agent-lens start` and press Ctrl+C to stop it.
 
-| 平台 | 服务机制 | 配置路径 |
-|------|---------|---------|
+| Platform | Service mechanism | Configuration path |
+|----------|-------------------|--------------------|
 | Linux | systemd user service | `~/.config/systemd/user/agent-lens.service` |
 | macOS | launchd agent | `~/Library/LaunchAgents/com.agent-lens.plist` |
-| Windows | 当前用户启动目录 + daemon/hook 自动守护 | `~/.agent-lens/`（无需管理员权限） |
+| Windows | Current-user Startup folder + daemon/Hook recovery | `~/.agent-lens/` (no administrator rights required) |
 
-> **Linux 注意**：需要 `sudo loginctl enable-linger <user>` 才能在未登录时保持服务运行。安装时会自动检测并提示。
+> **Linux:** `sudo loginctl enable-linger <user>` is required to keep the service running while the user is logged out. The installer detects this condition and displays guidance.
 >
-> **Windows 注意**：安装时会在当前用户的“启动”目录写入 `AgentLens.vbs`，用户登录后隐藏启动，无需管理员权限。安装、服务管理、Hook 自动拉起和概览版本探测使用隐藏子进程；实时 Hook 通过安装到 `~/.agent-lens/bin/agent-lens-hook.exe` 的 GUI 子系统启动器执行 Node 脚本，避免每个事件闪现控制台窗口，并兼容 PowerShell 与 `cmd.exe`。升级后请重启正在运行的 AI 编码工具，使新的 Hook 命令和 PATH 生效。Hook 自动拉起仍作为服务意外退出后的兜底。
+> **Windows:** installation writes `AgentLens.vbs` to the current user's Startup folder for hidden startup without administrator rights. Installation, service management, Hook recovery, and overview version detection use hidden child processes. Real-time Hooks run Node scripts through the GUI-subsystem `~/.agent-lens/bin/agent-lens-hook.exe` launcher, preventing a console window from flashing for every event while remaining compatible with PowerShell and `cmd.exe`. Restart any running AI coding tools after an upgrade so they pick up the new Hook command and PATH. Hook-based recovery remains a fallback when the service exits unexpectedly.
 
-## 特性
+## Features
 
-- **多 Agent 追踪** — 统计 SKILL / Tool / MCP 调用次数，还原有证据支持的可观察调用链
-- **统一任务执行流** — 按 Turn 将对话气泡、思考信号、生命周期事件和工具调用编排到同一条时间线
-- **Codex 生命周期透镜** — 实时展示会话、提示词提交、权限请求、上下文压缩、子 Agent 和 Turn 停止事件
-- **Pi 原生会话透镜** — 按树形 Session JSONL 重建分支、派生关系、模型/思考级别变化、压缩和并行工具配对
-- **分析仪表盘** — 总调用数、错误率、工具使用排行、慢调用
-- **概览** — 每个 AI 工具一张卡片，展示版本、配置目录、官网/文档/GitHub、Skills / MCP / Plugins / Extensions / Hooks 等能力资产、安装路径和装配路径诊断
-- **多数据源** — Hermes / OpenCode（SQLite 轮询）、Claude Code / Codex（实时 Hook + 历史导入）、Pi（树形 JSONL 增量导入）、Cursor（实时 Hook）
-- **Timeline 可观测** — 稳定事件身份、跨来源 Session 隔离、Tool Use/Result 双事件、证据来源和错误自动归类
-- **本地安全** — 默认只监听 `127.0.0.1`，限制同源访问，对持久化内容执行可配置脱敏
-- **实时刷新** — 3 秒增量更新，无需手动刷新
-- **暗色主题** — 亮/暗一键切换
+- **Multi-agent tracing** — Count Skill, Tool, and MCP calls and reconstruct evidence-backed observable call chains.
+- **Unified task flow** — Arrange conversation bubbles, thinking signals, lifecycle events, and tool calls on one Turn-based timeline.
+- **Codex lifecycle lens** — Observe sessions, prompt submission, permission requests, context compaction, subagents, and Turn stop events in real time.
+- **Native Pi session lens** — Rebuild branches, derived sessions, model/thinking-level changes, compaction, and parallel tool pairing from tree-structured Session JSONL.
+- **Analytics dashboard** — Total calls, error rate, tool ranking, and slow calls.
+- **Overview** — One card per AI tool with version, configuration directory, official links, capability assets, installation paths, and assembly diagnostics.
+- **Multiple data sources** — Hermes/OpenCode SQLite polling, Claude Code/Codex real-time Hooks and history imports, Pi tree JSONL incremental imports, and Cursor real-time Hooks.
+- **Observable Timeline** — Stable event identity, source-isolated Sessions, separate Tool Use/Result events, evidence metadata, and automatic error classification.
+- **Local security** — Listen on `127.0.0.1` by default, restrict browser origins, and apply configurable redaction before persistence.
+- **Live refresh** — Incremental updates every three seconds.
+- **Dark theme** — One-click light/dark switching.
 
+## Data source configuration
 
-## 数据源配置
+| Source | Method | Configuration |
+|--------|--------|---------------|
+| **Hermes** | Poll `~/.hermes/state.db` | None; works on startup |
+| **Claude Code** | Real-time Hooks + `~/.claude/projects` history import | See below |
+| **Codex** | 11 real-time Hook types + `~/.codex/sessions` history import | Configured by the installer; rerun `install` after upgrading |
+| **Cursor** | Real-time Hooks | Same as Claude Code |
+| **Pi** | Incremental Pi tree Session JSONL import | None; supports `PI_CODING_AGENT_DIR` |
+| **OpenCode** | Poll `~/.local/share/opencode/opencode.db` | None |
 
-| 数据源 | 方式 | 配置 |
-|--------|------|------|
-| **Hermes** | 自动轮询 `~/.hermes/state.db` | 无需配置，启动即用 |
-| **Claude Code** | 实时 Hook + `~/.claude/projects` 历史导入 | 见下方 |
-| **Codex** | 11 类实时 Hook + `~/.codex/sessions` 历史导入 | 安装器自动配置；升级后需重新运行 `install` |
-| **Cursor** | 实时钩子 | 同 Claude Code |
-| **Pi** | 增量导入 Pi tree session JSONL | 无需配置；支持 `PI_CODING_AGENT_DIR` |
-| **OpenCode** | 轮询 `~/.local/share/opencode/opencode.db` | 无需配置 |
+### Overview asset scanning
 
-### 概览资产扫描
+The Overview page displays stable capability assets for each AI tool: tool version, configuration directories, Skills, MCPs, Plugins, Extensions, Hooks, Adapters, and capabilities found through built-in definitions or historical calls.
 
-“概览”页用于查看每个 AI 工具的稳定能力资产，包括工具版本、配置目录、Skills、MCP、Plugins、Extensions、Hooks、Adapters 和内置/历史调用中发现的能力。
+Asset cards show installation or configuration paths and provide a copy-path action. The Assembly Paths view checks whether important configuration directories, files, Hooks, Skills, plugin caches, session directories, and state databases exist. It also shows installed, discoverable, and used Skill counts plus local/plugin source distribution. Tool cards link to available official websites, GitHub repositories, and documentation.
 
-资产卡片会显示安装路径或配置路径，并提供路径复制入口，便于定位和管理本地 Skill、MCP、插件、扩展等资源。概览页还提供“装配路径”视图，用于按工具检查配置目录、配置文件、Hook、Skills、插件缓存、会话目录或状态数据库等关键路径是否存在，并展示 SKILL 的已安装、可发现、已使用数量及本地/插件来源分布。工具卡片会展示可用的官网、GitHub、官方文档链接。
+Source tabs default to Pi, Codex, Claude Code CLI, OpenCode, Hermes, OpenClaw, and Cursor. You can drag them into another order; the browser stores the order locally and applies it to overview cards and high-frequency asset comparison columns. The project picker shows each project's sources and session count, and filters itself when you select a source tab.
 
-顶部工具来源 Tab 默认顺序为 Pi、Codex、Claude Code CLI、OpenCode、Hermes、OpenClaw、Cursor；也支持拖拽排序，排序保存在当前浏览器本地，并同步影响概览卡片和高频资产对照列顺序。项目下拉列表会显示项目对应的工具来源和会话数；切换顶部工具来源 Tab 时，项目列表会自动过滤为该工具存在记录的项目。
+Overview data uses a database snapshot followed by background refresh:
 
-概览数据采用“数据库快照 + 后台刷新”：
+1. `/api/overview` first returns the latest asset snapshot from `agent-lens.db` in the runtime data directory.
+2. Each request to `/api/overview` triggers a background scan and database update.
+3. After the core HTTP service is ready, periodic scans keep configuration changes from going stale. History imports and asset scans are not part of the installer's core readiness check.
+4. Call counts, frequently used assets, and cross-tool coverage continue to be aggregated from `timeline`; call facts are not stored twice.
 
-1. `/api/overview` 先读取运行时数据目录中的 `agent-lens.db` 最近一次资产快照，快速返回页面。
-2. 每次访问 `/api/overview` 后，服务会在后台触发一次资产扫描并更新数据库。
-3. 服务核心 HTTP 就绪后会按固定间隔定时扫描，避免配置变化长期不同步；历史导入和资产扫描不参与安装器的核心就绪判定。
-4. 调用次数、高频资产和跨工具覆盖矩阵继续从 `timeline` 聚合，不重复存储调用事实。
-
-定时扫描间隔通过环境变量配置，单位为毫秒：
+Configure the scan interval in milliseconds with:
 
 ```bash
 AGENT_LENS_OVERVIEW_SCAN_INTERVAL_MS=600000 node server/cli.js start
 ```
 
-默认值是 `600000`（10 分钟）。设为 `0` 可关闭服务端定时扫描；访问概览时仍会触发后台刷新。
+The default is `600000` (10 minutes). Set it to `0` to disable periodic server scans; opening the Overview page still triggers a background refresh.
 
-### 安全与敏感数据采集
+### Security and sensitive-data capture
 
-AgentLens v0.4 默认只在 `127.0.0.1` 上监听，API 拒绝非回环 Host、远程连接和未允许的浏览器 Origin。`/api/hook` 还要求请求携带安装级本机令牌：
+AgentLens v0.4 and later listen only on `127.0.0.1` by default. The API rejects non-loopback Hosts, remote connections, and unapproved browser Origins. `/api/hook` also requires an installation-specific local token:
 
 ```text
-X-AgentLens-Token: <运行目录 run/hook-token 中的令牌>
+X-AgentLens-Token: <token from run/hook-token in the runtime directory>
 ```
 
-令牌文件仅供本机集成读取，不应提交、复制到日志或公开分享。远程访问和局域网访问当前不受支持。
+The token file is only for local integrations. Do not commit it, copy it into logs, or share it publicly. Remote and LAN access are not currently supported.
 
-提示词、工具数据、配置和环境信息分别使用以下采集开关，取值为 `off`、`redacted` 或 `full`：
+Prompt, tool, configuration, and environment capture have separate switches. Each accepts `off`, `redacted`, or `full`:
 
 ```bash
 AGENT_LENS_PROMPT_CAPTURE=redacted
@@ -164,73 +164,71 @@ AGENT_LENS_ENV_CAPTURE=off
 AGENT_LENS_ENV_ALLOWLIST=SAFE_CUSTOM_NAME,ANOTHER_SAFE_NAME
 ```
 
-默认脱敏采集提示词、工具输入输出与配置，默认不采集环境变量。环境采集即使启用也只读取内置安全名单和 `AGENT_LENS_ENV_ALLOWLIST` 显式列出的名称。选择 `full` 会保存相应原文，应仅在确认本机数据库和日志访问边界后使用。v0.4 之前已存在的历史正文会保留，并标记为旧版采集策略未知，不会在升级时静默改写。
+Prompts, tool input/output, and configuration are redacted by default; environment variables are not captured by default. Even when environment capture is enabled, only the built-in safe list and names explicitly listed in `AGENT_LENS_ENV_ALLOWLIST` are read. `full` stores the corresponding original text and should only be used after confirming access controls around the local database and logs. Historical content created before v0.4 is preserved, marked as having an unknown legacy capture policy, and is not silently rewritten during upgrades.
 
-将 `AGENT_LENS_CONFIG_CAPTURE` 设为 `off` 时，概览不会扫描或展示配置路径与静态能力资产，并会在下一次刷新时清除已有配置盘点缓存；运行时已观察到的最小工具事件元数据仍会保留，用于计数和数据完整度说明。
+When `AGENT_LENS_CONFIG_CAPTURE=off`, the Overview page does not scan or display configuration paths or static capability assets, and clears cached inventory on the next refresh. Minimal metadata from observed runtime tool events remains available for counts and data-completeness reporting.
 
-#### Codex 概览扫描规则
+#### Codex overview scan rules
 
-Codex 默认配置根目录为 `CODEX_HOME`，未设置时为 `~/.codex`。AgentLens 会扫描：
+The Codex configuration root is `CODEX_HOME`, or `~/.codex` when it is unset. AgentLens scans:
 
-| 路径 | 类型 | 说明 |
-|------|------|------|
-| `~/.codex/skills` | Skill | 用户级 Skill 目录，支持递归识别 `SKILL.md` |
-| `~/.codex/plugins/cache/**/.codex-plugin/plugin.json` | Plugin | 已安装插件清单，并展示插件安装路径 |
-| `~/.codex/plugins/cache/**/SKILL.md` | Skill | 插件随包提供的 Skill |
-| `~/.codex/plugins` | Plugin | 插件根目录中的已安装条目 |
-| `~/.codex/config.toml` 中的 `[mcp_servers.*]` | MCP | Codex MCP 配置 |
-| `~/.codex/config.toml` 中的 `[plugins.*]` | Plugin | Codex 插件启用配置 |
-| `~/.codex/config.json` | MCP | JSON 配置格式 |
+| Path | Type | Description |
+|------|------|-------------|
+| `~/.codex/skills` | Skill | User-level Skills, recursively recognizing `SKILL.md` |
+| `~/.codex/plugins/cache/**/.codex-plugin/plugin.json` | Plugin | Installed plugin manifests and paths |
+| `~/.codex/plugins/cache/**/SKILL.md` | Skill | Skills bundled with plugins |
+| `~/.codex/plugins` | Plugin | Installed entries in the plugin root |
+| `[mcp_servers.*]` in `~/.codex/config.toml` | MCP | Codex MCP configuration |
+| `[plugins.*]` in `~/.codex/config.toml` | Plugin | Codex plugin enablement configuration |
+| `~/.codex/config.json` | MCP | JSON configuration format |
 
-#### Codex 生命周期与数据边界
+#### Codex lifecycle and data boundaries
 
-v0.5 会安装 `SessionStart`、`SessionEnd`、`UserPromptSubmit`、`PreToolUse`、`PermissionRequest`、`PostToolUse`、`PreCompact`、`PostCompact`、`SubagentStart`、`SubagentStop` 和 `Stop` 共 11 类 Codex Hook。任务复盘按 Turn 将生命周期事件、对话气泡和工具调用编排到同一条执行流，并保留原生 `turn_id`、`agent_id`、工具调用标识、模型和权限模式等来源字段。
+v0.5 installs 11 Codex Hook types: `SessionStart`, `SessionEnd`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PostToolUse`, `PreCompact`, `PostCompact`, `SubagentStart`, `SubagentStop`, and `Stop`. Task replay arranges lifecycle events, conversation bubbles, and tool calls into a Turn-based execution flow while preserving source-provided `turn_id`, `agent_id`, tool call identifiers, model, permission mode, and related fields.
 
-这些 Hook 只做被动采集：不会批准或阻断工具，不会修改提示词，也不会向模型追加上下文。`Stop` 与 `SubagentStop` 只返回中性的空 JSON；transcript 路径不写入 Timeline。提示词和最终助手消息继续遵守 `AGENT_LENS_PROMPT_CAPTURE`，权限请求中的工具参数遵守 `AGENT_LENS_TOOL_CAPTURE`。
+These Hooks only observe. They do not approve or block tools, modify prompts, or add context for the model. `Stop` and `SubagentStop` return neutral empty JSON, and transcript paths are not written to the Timeline. Prompts and final assistant messages follow `AGENT_LENS_PROMPT_CAPTURE`; tool parameters in permission requests follow `AGENT_LENS_TOOL_CAPTURE`.
 
-会话开始时，AgentLens 会按 Codex 的 `AGENTS.override.md` / `AGENTS.md` / fallback 文件优先级静态发现当前指令链，并将它标记为“当前环境发现”，而不是声称它一定进入了历史 Turn。将 `AGENT_LENS_CONFIG_CAPTURE` 设为 `off` 会完全关闭这项发现。
+At Session start, AgentLens statically discovers the current instruction chain using the Codex precedence of `AGENTS.override.md`, `AGENTS.md`, and fallback files. It labels this as a current-environment discovery rather than claiming it entered a historical Turn. `AGENT_LENS_CONFIG_CAPTURE=off` disables this discovery entirely.
 
-仍需注意以下边界：hosted tools（例如 WebSearch）不会触发工具 Hook，部分特殊工具路径也可能绕过默认 Hook；子 Agent transcript 并非总是提供；`SessionEnd` 可能在关闭、归档或闲置后才触发；AgentLens 不读取或推断隐藏思维过程。概览页和顶部来源状态会显示 AgentLens Codex Hook 的实际覆盖数，旧安装若显示低于 `11/11`，重新运行安装命令即可补齐。
+Some boundaries remain: hosted tools such as WebSearch do not trigger tool Hooks; some special tool paths may bypass default Hooks; subagent transcripts are not always available; `SessionEnd` may arrive only after closing, archiving, or idling; and AgentLens never reads or infers hidden chain-of-thought. The Overview page and top source status show actual Codex Hook coverage. If an older installation reports fewer than `11/11`, rerun the install command.
 
-#### Pi 概览扫描规则
+#### Pi overview scan rules
 
-Pi 的默认配置根目录来自 `PI_CODING_AGENT_DIR`，未设置时为 `~/.pi/agent`。AgentLens 会优先识别真正的 Pi agent 根目录，再扫描该目录下的能力资产，而不是只按某一台机器的 `~/.pi` 布局处理。
+The Pi configuration root comes from `PI_CODING_AGENT_DIR`, or `~/.pi/agent` when unset. AgentLens identifies the actual Pi agent root before scanning assets instead of assuming a single machine-specific `~/.pi` layout.
 
-Pi agent 根目录候选包括：
+Candidate Pi agent roots include:
 
-- 环境变量：`PI_CODING_AGENT_DIR`（Pi 官方配置根）、`PI_HOME`、`PI_AGENT_HOME`、`PI_CONFIG_HOME`、`PI_DATA_HOME`
-- 通用默认：`~/.pi/agent`、`~/.pi`
-- Linux：`~/.config/pi`、`~/.local/share/pi`
-- Windows：`%APPDATA%\Pi`、`%APPDATA%\pi`、`%LOCALAPPDATA%\Pi`、`%LOCALAPPDATA%\pi`
-- macOS：`~/Library/Application Support/Pi`、`~/Library/Application Support/pi`
+- Environment variables: `PI_CODING_AGENT_DIR`, `PI_HOME`, `PI_AGENT_HOME`, `PI_CONFIG_HOME`, `PI_DATA_HOME`
+- General defaults: `~/.pi/agent`, `~/.pi`
+- Linux: `~/.config/pi`, `~/.local/share/pi`
+- Windows: `%APPDATA%\Pi`, `%APPDATA%\pi`, `%LOCALAPPDATA%\Pi`, `%LOCALAPPDATA%\pi`
+- macOS: `~/Library/Application Support/Pi`, `~/Library/Application Support/pi`
 
-识别到 Pi agent 根目录后，会扫描：
+After finding the agent root, AgentLens scans the following locations. Skill directories recognize root-level `.md` files and recursively find subdirectories containing `SKILL.md`. Extension directories recognize subdirectories and `.js`, `.ts`, `.mjs`, and `.cjs` files.
 
-Skill 目录会识别根目录下的 `.md` 文件，并递归识别包含 `SKILL.md` 的子目录；Extension 目录会识别子目录以及 `.js` / `.ts` / `.mjs` / `.cjs` 文件。
+| Path | Type | Description |
+|------|------|-------------|
+| `<agentDir>/skills` | Skill | Default Pi user-level Skill directory |
+| `~/.agents/skills` | Skill | Shared user-level Pi / Agent Skills |
+| `skills` in `<agentDir>/settings.json` | Skill | Explicitly loaded Skill directories |
+| `extensions` in `<agentDir>/settings.json` | Extension | Explicitly loaded Extension paths |
+| `packages` in `<agentDir>/settings.json` | Plugin / Skill / Extension | Explicitly installed packages, including `npm:<package>` |
+| `<agentDir>/npm/package.json` + `<agentDir>/npm/node_modules/<package>` | Plugin | Pi npm dependencies identified by `pi-*`, `*/pi-*`, keywords, or `pkg.pi` |
+| `<agentDir>/npm/node_modules/<package>/skills` | Skill | Traditional Skill directory bundled with a Pi plugin |
+| `pi.skills` / `skills` in a package manifest | Skill | Skill resources declared by a Pi package |
+| `<agentDir>/extensions` | Extension | Pi Extension directory |
+| `<agentDir>/npm/node_modules/<package>/extensions` | Extension | Traditional Extension directory bundled with a Pi plugin |
+| `pi.extensions` / `extensions` in a package manifest | Extension | Extension resources declared by a Pi package |
+| `<agentDir>/pi-hermes-memory/skills` | Skill | Global/process-memory Skills from Pi Hermes Memory |
+| `<agentDir>/projects-memory/<project>/skills` | Skill | Project-level memory Skills |
 
-| 路径 | 类型 | 说明 |
-|------|------|------|
-| `<agentDir>/skills` | Skill | Pi 用户级默认 Skill 目录 |
-| `~/.agents/skills` | Skill | Pi / Agent Skills 共享的用户级 Skill 目录 |
-| `<agentDir>/settings.json` 中的 `skills` | Skill | Pi 配置显式加载的 Skill 目录 |
-| `<agentDir>/settings.json` 中的 `extensions` | Extension | Pi 配置显式加载的 Extension 路径 |
-| `<agentDir>/settings.json` 中的 `packages` | Plugin / Skill / Extension | Pi 配置显式安装的 package，支持 `npm:<package>` |
-| `<agentDir>/npm/package.json` + `<agentDir>/npm/node_modules/<package>` | Plugin | Pi npm 插件依赖，识别 `pi-*`、`*/pi-*`、`keywords` 或 `pkg.pi` 标记 |
-| `<agentDir>/npm/node_modules/<package>/skills` | Skill | Pi npm 插件随包提供的传统 Skill 目录 |
-| `<agentDir>/npm/node_modules/<package>/package.json` 中的 `pi.skills` / `skills` | Skill | Pi package 声明的 Skill 资源 |
-| `<agentDir>/extensions` | Extension | Pi extension 目录 |
-| `<agentDir>/npm/node_modules/<package>/extensions` | Extension | Pi npm 插件随包提供的传统 Extension 目录 |
-| `<agentDir>/npm/node_modules/<package>/package.json` 中的 `pi.extensions` / `extensions` | Extension | Pi package 声明的 Extension 资源 |
-| `<agentDir>/pi-hermes-memory/skills` | Skill | Pi Hermes Memory 的全局/过程记忆 Skill |
-| `<agentDir>/projects-memory/<project>/skills` | Skill | Pi 项目级记忆 Skill |
+### Configure Claude Code / Codex / Cursor Hooks
 
-### 配置 Claude Code / Codex / Cursor 钩子
+`node server/cli.js install` configures Hooks for all supported tools. With the npm release, use `npx @z7ping/agent-lens install`.
 
-运行 `node server/cli.js install` 会自动配置所有工具的 hooks。发布到 npm 后，也可以使用 `npx @z7ping/agent-lens install`。
+Codex v0.5 and later require all 11 Hook types and an updated Codex trust state, so the install command is always recommended. The following is only a manual Claude Code example; its paths point to `~/.agent-lens/app/hooks/`.
 
-Codex v0.5 需要同步安装 11 类 Hook 并更新 Codex 的信任状态，推荐始终通过安装命令配置。下面仅给出 Claude Code 的手动配置示例；路径指向 `~/.agent-lens/app/hooks/`：
-
-Windows 不应直接照抄下面的 `node` 命令；安装器会自动改用 PATH 中的 `agent-lens-hook.exe`，同时保持 Hook 的标准输入、输出和退出码。
+On Windows, do not copy the `node` commands below directly. The installer uses `agent-lens-hook.exe` from PATH while preserving Hook standard input, output, and exit codes.
 
 ```json
 {
@@ -255,226 +253,227 @@ Windows 不应直接照抄下面的 `node` 命令；安装器会自动改用 PAT
 
 ---
 
-## CLI 参考
+## CLI reference
 
-源码仓库中使用 `node server/cli.js`；完成安装后可将它替换为 `agent-lens`。例如，`node server/cli.js status` 和 `agent-lens status` 的含义相同。
+In the source repository, use `node server/cli.js`. After installation, replace it with `agent-lens`; for example, `node server/cli.js status` and `agent-lens status` are equivalent.
 
-### 完整命令
-
-```bash
-node server/cli.js install                       # 安装应用、依赖和 Hooks，并启动服务
-node server/cli.js start                         # 默认端口 56789，前台启动
-node server/cli.js start --daemon                # 后台启动
-node server/cli.js start -d                      # 后台启动的短参数
-node server/cli.js start 8080                    # 使用位置参数指定端口
-node server/cli.js start --port 8080             # 使用选项指定端口
-node server/cli.js start --port 8080 --open      # 启动后自动打开浏览器
-node server/cli.js stop                          # 停止后台服务
-node server/cli.js status                        # 查看默认服务状态
-node server/cli.js package                       # 构建并生成 npm 兼容的 .tgz
-node server/cli.js package --output ./release    # 指定分发包输出目录
-node server/cli.js uninstall                     # 卸载并删除配置及运行数据
-node server/cli.js help                          # 显示帮助
-node server/cli.js --help                        # 显示帮助
-node server/cli.js -h                            # 显示帮助
-```
-
-注意：
-
-- `start` 检测不到 `dist/` 时会先执行 `npm run build`。
-- `status` 当前固定检查并显示默认端口 56789。使用自定义端口启动时，应直接访问对应地址确认服务；PID 存在时仍可识别进程。
-- `uninstall` 会要求确认，并删除 AgentLens 安装目录、Hooks 配置和全部运行数据。
-
-### 系统服务与后台守护
-
-Linux 使用 systemd user service，macOS 使用 launchd agent，两者支持完整的 `service` 子命令：
+### Full command list
 
 ```bash
-agent-lens service install       # 注册系统服务并启用自启
-agent-lens service start         # 启动系统服务
-agent-lens service stop          # 停止系统服务
-agent-lens service status        # 查看服务、自启、版本和运行环境
-agent-lens service enable        # 启用开机自启
-agent-lens service disable       # 关闭开机自启
-agent-lens service uninstall     # 停止并移除系统服务
+node server/cli.js install                       # Install the app, dependencies, Hooks, and start the service
+node server/cli.js start                         # Start in foreground on port 56789
+node server/cli.js start --daemon                # Start in background
+node server/cli.js start -d                      # Short background option
+node server/cli.js start 8080                    # Set port with a positional argument
+node server/cli.js start --port 8080             # Set port with an option
+node server/cli.js start --port 8080 --open      # Open the browser after starting
+node server/cli.js stop                          # Stop the background service
+node server/cli.js status                        # Show default service status
+node server/cli.js package                       # Build an npm-compatible .tgz
+node server/cli.js package --output ./release    # Select the package output directory
+node server/cli.js uninstall                     # Remove configuration and runtime data
+node server/cli.js help                          # Show help
+node server/cli.js --help                        # Show help
+node server/cli.js -h                            # Show help
 ```
 
-Windows 使用当前用户的“启动”目录，同样支持全部 `service` 子命令：
+Notes:
+
+- `start` runs `npm run build` when it cannot find `dist/`.
+- `status` currently checks and displays the default port 56789. For a custom port, visit that address directly; a valid PID still identifies the process.
+- `uninstall` asks for confirmation, then removes the AgentLens installation, Hook configuration, and all runtime data.
+
+### System service and background daemon
+
+Linux uses a systemd user service and macOS uses a launchd agent. Both support the complete `service` command group:
 
 ```bash
-agent-lens service install     # 注册并启用登录后自启
-agent-lens service start       # 立即启动
-agent-lens service disable     # 关闭登录后自启
-agent-lens service enable      # 重新启用登录后自启
-agent-lens service status      # 查看自启、进程、版本和运行环境
-agent-lens service uninstall   # 移除自启入口
+agent-lens service install       # Register the service and enable auto-start
+agent-lens service start         # Start the service
+agent-lens service stop          # Stop the service
+agent-lens service status        # Show service, auto-start, version, and runtime details
+agent-lens service enable        # Enable auto-start
+agent-lens service disable       # Disable auto-start
+agent-lens service uninstall     # Stop and remove the service
 ```
 
-`agent-lens install` 会自动完成自启入口的注册和首次启动；上述命令主要用于后续手动管理。
+Windows uses the current user's Startup folder and supports the same command group:
 
-`service status` 会同时显示当前命令版本、磁盘中的已安装版本和 HTTP 服务实际返回的运行版本；安装版本与运行版本不一致时会明确提示，并附带 Node.js 版本、服务管理方式、默认地址和安装目录，便于确认升级后实际运行的是哪一份程序。
+```bash
+agent-lens service install     # Register and enable login startup
+agent-lens service start       # Start now
+agent-lens service disable     # Disable login startup
+agent-lens service enable      # Re-enable login startup
+agent-lens service status      # Show startup, process, version, and runtime details
+agent-lens service uninstall   # Remove the startup entry
+```
+
+`agent-lens install` registers auto-start and performs the first start. The commands above are primarily for later manual management.
+
+`service status` shows the current command version, the installed on-disk version, and the version returned by the live HTTP service. It reports mismatches and includes the Node.js version, service manager, default address, and installation directory, making it easier to verify which copy is actually running after an upgrade.
 
 ---
 
-## 常见问题
+## FAQ
 
-### 仪表盘白屏 / 只显示后端日志？
+### The dashboard is blank or only shows backend logs
 
-缺少 `dist/` 目录。`src/` 里的源码需要 Vite 处理才能运行。
+The `dist/` directory is missing. Source files under `src/` must be processed by Vite.
 
-**解决**：
-- 用 `npm start` 或 `node server/cli.js start`（会自动构建）
-- 如果安装了系统服务，重新运行 `node server/cli.js install` 会自动构建
+Fix it by either:
 
-### 端口 56789 被占了？
+- Running `npm start` or `node server/cli.js start`, which builds automatically.
+- Rerunning `node server/cli.js install` when using a system service.
+
+### Port 56789 is already in use
 
 ```bash
-node server/cli.js start 8080          # 位置参数
-node server/cli.js start --port 8080   # 等价写法
+node server/cli.js start 8080          # Positional port
+node server/cli.js start --port 8080   # Equivalent option
 ```
 
-当前 `status` 固定检查默认端口 56789；自定义端口启动后请访问 `http://localhost:8080/` 确认服务。
+`status` currently checks the default port 56789. After starting on a custom port, open `http://localhost:8080/` to confirm the service.
 
 ---
 
-## 开发与贡献
+## Development and contribution
 
-- [参与开发](https://github.com/z7ping/agent-lens/blob/main/CONTRIBUTING.md) — Issue、分支、提交、Pull Request 和验证要求。
-- [架构文档](https://github.com/z7ping/agent-lens/blob/main/ARCHITECTURE.md) — 当前数据源、存储、数据流和已知限制。
-- [安全策略](https://github.com/z7ping/agent-lens/blob/main/SECURITY.md) — 私密漏洞报告和敏感数据处理建议。
-- [更新日志](CHANGELOG.md) — 已经发布的变化。
+- [Contributing](https://github.com/z7ping/agent-lens/blob/main/CONTRIBUTING.md) — Issues, branches, commits, pull requests, and validation requirements.
+- [Architecture](https://github.com/z7ping/agent-lens/blob/main/ARCHITECTURE.md) — Current data sources, storage, data flow, and known limitations.
+- [Security policy](https://github.com/z7ping/agent-lens/blob/main/SECURITY.md) — Private vulnerability reporting and sensitive-data guidance.
+- [Changelog](CHANGELOG.md) — Released changes.
 
-项目的公开协作以 [GitHub Issues](https://github.com/z7ping/agent-lens/issues)、Milestones、Projects 和 Pull Requests 为准。Gitea 公共代码仓库仅作为镜像或备份，不承载另一套可编辑的任务状态。
+Public collaboration happens through [GitHub Issues](https://github.com/z7ping/agent-lens/issues), Milestones, Projects, and Pull Requests. The public Gitea repository is only a mirror or backup and does not maintain a separate editable task state.
 
-### 开发模式
+### Development mode
 
 ```bash
-npm install               # 安装依赖
-npm run dev               # 同时启动后端 56789 和 Vite 5173
-npm run dev:frontend      # 仅启动 Vite 5173，需另行启动后端
-npm run build             # 构建生产前端到 dist/
-npm test                  # 运行导入器测试和 Node.js 测试
+npm install               # Install dependencies
+npm run dev               # Start backend 56789 and Vite 5173 together
+npm run dev:frontend      # Start only Vite 5173; start the backend separately
+npm run build             # Build the production frontend into dist/
+npm test                  # Run importer and Node.js tests
 ```
 
-`npm run dev` 会同时启动前后端，不需要再单独执行 `node server/cli.js start`。访问 **http://localhost:5173/** 进行热更新开发；Vite 会把 `/api`、`/logs`、`/states` 和 `/projects.json` 代理到后端 56789。
+`npm run dev` starts both frontend and backend. Open **http://localhost:5173/** for hot reload; Vite proxies `/api`, `/logs`, `/states`, and `/projects.json` to the backend on port 56789.
 
 ### npm scripts
 
 ```bash
-npm run dev                                  # 后端 + Vite 联调
-npm run dev:frontend                         # 仅 Vite
-npm run build                                # 构建前端
-npm start                                    # 前台启动
-npm start -- --daemon                        # 后台启动并向 CLI 透传参数
-npm stop                                     # 停止服务
-npm run status                               # 查看状态
-npm run install-hooks                        # 执行完整 install 命令
-npm run package -- --output ./release        # 打包并透传输出目录
-npm test                                     # 运行全部测试
+npm run dev                                  # Backend + Vite development
+npm run dev:frontend                         # Vite only
+npm run build                                # Build frontend
+npm start                                    # Start in foreground
+npm start -- --daemon                        # Start in background, forwarding CLI arguments
+npm stop                                     # Stop service
+npm run status                               # Show status
+npm run install-hooks                        # Run the complete install command
+npm run package -- --output ./release        # Build a package and forward the output directory
+npm test                                     # Run all tests
 ```
 
-> `install-hooks` 是历史脚本名，当前实际执行完整安装流程，不只是写入 Hooks。
+> `install-hooks` is a historical script name. It now runs the complete installation flow, not only Hook configuration.
 
-### 目录结构
+### Directory structure
 
 ```text
 agent-lens/
-├── server/                    # 后端（纯 Node.js，无构建步骤）
-│   ├── server.js              # HTTP 服务（端口 56789）
-│   ├── cli.js                 # CLI 入口
-│   ├── routes.js              # API 路由
-│   ├── agent-lens-db.js       # SQLite 存储层
-│   ├── migrations.js          # 版本化数据库迁移
-│   ├── event-model.js         # 统一事件身份与证据字段
-│   ├── privacy.js             # 采集策略与持久化前脱敏
-│   ├── security.js            # 本机 HTTP 边界与 Hook 令牌
-│   ├── capabilities.js        # 来源数据完整度矩阵
-│   ├── config.js              # 服务配置
-│   ├── schema.sql             # 表结构定义
-│   ├── overview.js            # 概览资产扫描与数据库快照
-│   ├── adapters/              # 多工具适配器（Hermes / Claude Code / Cursor / Pi ...）
-│   ├── hooks/                 # 实时钩子（prelog.js / log.js）
-│   └── scripts/               # 工具脚本
-├── src/                       # 前端（Vite + Tailwind）
-│   ├── app.js                 # 主逻辑
-│   ├── config.js / utils.js   # 配置与工具函数
-│   ├── style.css              # 样式
-│   ├── callchain/             # 调用链 Tab
-│   ├── dashboard/             # 仪表盘 Tab（含 Chart.js 图表）
-│   └── overview/              # 概览 Tab（工具能力资产）
-├── dist/                      # 构建产物（npm run build 生成）
-├── index.html                 # 入口页面
+├── server/                    # Backend (plain Node.js, no build step)
+│   ├── server.js              # HTTP service on port 56789
+│   ├── cli.js                 # CLI entry point
+│   ├── routes.js              # API routes
+│   ├── agent-lens-db.js       # SQLite storage
+│   ├── migrations.js          # Versioned database migrations
+│   ├── event-model.js         # Unified event identity and evidence fields
+│   ├── privacy.js             # Capture policy and pre-persistence redaction
+│   ├── security.js            # Local HTTP boundary and Hook token
+│   ├── capabilities.js        # Source data-completeness matrix
+│   ├── config.js              # Service configuration
+│   ├── schema.sql             # Database schema
+│   ├── overview.js            # Asset scanning and database snapshots
+│   ├── adapters/              # Tool adapters (Hermes / Claude Code / Cursor / Pi ...)
+│   ├── hooks/                 # Real-time Hooks (prelog.js / log.js)
+│   └── scripts/               # Utility scripts
+├── src/                       # Frontend (Vite + Tailwind)
+│   ├── app.js                 # Main logic
+│   ├── config.js / utils.js   # Configuration and utilities
+│   ├── style.css              # Styles
+│   ├── callchain/             # Task replay tab
+│   ├── dashboard/             # Tool stack tab (including Chart.js charts)
+│   └── overview/              # Capability overview tab
+├── dist/                      # Build output (generated by npm run build)
+├── index.html                 # Entry page
 ├── package.json
 ├── vite.config.mjs
 └── tailwind.config.mjs
 ```
 
-## 数据模型
+## Data model
 
-### Timeline 表（核心）
+### Timeline table (core)
 
-| 字段 | 说明 |
-|------|------|
-| event_id | AgentLens 稳定事件标识 |
-| source / source_event_id | 数据来源与来源原生事件标识 |
-| session_key / session_id | 来源命名空间 Session 主键与来源原生会话标识 |
-| agent_id / turn_id | 来源能够提供时保存的 Agent 与 Turn 标识 |
-| parent_event_id | 已确认的父事件标识 |
-| timestamp / source_sequence | 展示时间与来源内稳定顺序 |
-| event_type / role | `user` / `assistant` / `tool_use` / `tool_result` / `tool_error` 等事件语义 |
-| call_id | 关联 Tool Use 与 Tool Result |
-| tool_name | 工具名称 |
-| capture_method | `runtime_hook` / `native_log` / `local_database` / `static_scan` / `inference` / `legacy_import` |
-| visibility / confidence | 已捕获、静态发现、推断、不可观察及可信度 |
-| missing_reason | 数据不完整时的明确原因 |
-| error_type | 错误分类：`windows_command` / `path_not_found` / `permission` / `timeout` / `syntax` / `unknown` |
-| error_detail | 错误详情 JSON |
+| Field | Description |
+|-------|-------------|
+| event_id | Stable AgentLens event identifier |
+| source / source_event_id | Data source and native source event identifier |
+| session_key / session_id | Source-namespaced Session key and native source Session identifier |
+| agent_id / turn_id | Source-provided Agent and Turn identifiers, when available |
+| parent_event_id | Confirmed parent event identifier |
+| timestamp / source_sequence | Display time and stable source ordering |
+| event_type / role | `user`, `assistant`, `tool_use`, `tool_result`, `tool_error`, and other event semantics |
+| call_id | Links Tool Use with Tool Result |
+| tool_name | Tool name |
+| capture_method | `runtime_hook`, `native_log`, `local_database`, `static_scan`, `inference`, or `legacy_import` |
+| visibility / confidence | Captured, statically discovered, inferred, or unobservable state and confidence |
+| missing_reason | Explicit reason when data is incomplete |
+| error_type | `windows_command`, `path_not_found`, `permission`, `timeout`, `syntax`, or `unknown` |
+| error_detail | Error detail JSON |
 
-### SQLite 表（agent-lens.db）
+### SQLite tables (`agent-lens.db`)
 
-开发模式运行数据统一保存在项目根目录 `.agent-lens/` 下：
+Development runtime data lives under `.agent-lens/` in the project root:
 
 ```text
 .agent-lens/
 ├── data/      # agent-lens.db, projects.json
-├── logs/      # JSONL 调用日志与调试日志
-├── state/     # 调用栈和导入水位线
+├── logs/      # JSONL call logs and debug logs
+├── state/     # Call stacks and importer watermarks
 └── run/       # server.pid, hook-token
 ```
 
-安装后，所有平台都统一使用用户主目录下的 `~/.agent-lens/`。程序、命令入口和运行数据分层存放：
+Installed applications use `~/.agent-lens/` on every platform, separating the application, command entry points, and runtime data:
 
 ```text
 ~/.agent-lens/
-├── app/                             # 可独立更新的程序与生产依赖
+├── app/                             # Independently updatable app and production dependencies
 │   ├── cli.js, server.js
-│   ├── dist/                        # 发布前构建的前端产物
+│   ├── dist/                        # Frontend built before release
 │   ├── hooks/                       # Hooks
-│   ├── adapters/                    # 工具适配器
-│   ├── importers/                   # 历史数据导入器
-│   └── node_modules/                # 仅生产运行依赖
-├── bin/                             # Windows 命令入口
+│   ├── adapters/                    # Tool adapters
+│   ├── importers/                   # History importers
+│   └── node_modules/                # Production dependencies only
+├── bin/                             # Windows command entry points
 ├── data/                            # agent-lens.db, projects.json
-├── logs/                            # JSONL 和服务日志
-├── state/                           # 调用栈和导入水位线
+├── logs/                            # JSONL and service logs
+├── state/                           # Call stacks and importer watermarks
 └── run/                             # server.pid, hook-token
 ```
 
-Windows 对应路径为 `C:\Users\<用户名>\.agent-lens\`。当前平铺布局升级成功后，安装器会清理根目录中的旧程序文件和旧 `node_modules`，但保留运行数据；更早的平台专有目录若存在数据冲突则会保留，供人工确认。
+On Windows this is `C:\Users\<username>\.agent-lens\`. After a successful upgrade from the flat layout, the installer removes obsolete application files and the old root `node_modules` while preserving runtime data. Conflicting data in older platform-specific directories is preserved for manual review.
 
-| 表名 | 用途 |
-|------|------|
-| schema_meta | 数据库 Schema 版本 |
-| sessions | 以 `source + session_id` 隔离的会话摘要 |
-| daily_stats | 按天+工具聚合统计 |
-| recent_errors | 最近错误（滚动保留 50 条） |
-| timeline | 统一可观测事件、生命周期属性、工具调用和证据元数据 |
-| overview_tools | 概览页工具身份与运行环境快照 |
-| overview_assets | 概览页能力资产快照 |
-| overview_scan_runs | 概览资产扫描记录、状态与错误信息 |
+| Table | Purpose |
+|-------|---------|
+| schema_meta | Database schema version |
+| sessions | Session summaries isolated by `source + session_id` |
+| daily_stats | Daily and per-tool aggregates |
+| recent_errors | The 50 most recent errors |
+| timeline | Unified observable events, lifecycle attributes, tool calls, and evidence metadata |
+| overview_tools | Tool identity and runtime environment snapshots |
+| overview_assets | Capability asset snapshots |
+| overview_scan_runs | Asset scan history, status, and errors |
 
 ---
 
-## 许可证
+## License
 
 MIT License

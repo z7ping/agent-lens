@@ -47,6 +47,23 @@ test('重复采集的对话只渲染一次，工具保持在过程回复和最�
   assert.ok(user < processReply && processReply < tools && tools < final);
 });
 
+test('用户和 AI 气泡都保留完整内容并提供统一折叠控件', async () => {
+  const userText = '用户内容第一段\n\n用户内容第二段\n\n用户内容第三段';
+  const assistantText = 'AI 内容第一段\n\nAI 内容第二段\n\nAI 内容第三段';
+  const html = await render([
+    event('user', { content: userText }),
+    event('assistant', { content: assistantText }),
+  ]);
+
+  assert.equal(count(html, 'chat-bubble-content'), 2);
+  assert.equal(count(html, 'chat-bubble-toggle hidden'), 2);
+  assert.match(html, /toggleChatBubble\('flow-user-/);
+  assert.match(html, /toggleChatBubble\('flow-assistant-/);
+  assert.match(html, /用户内容第三段/);
+  assert.match(html, /AI 内容第三段/);
+  assert.doesNotMatch(html, /assistant-preview|expandAssistant/);
+});
+
 test('Pi thinking 只展示来源可见元数据，不渲染正文', async () => {
   const hiddenThinking = '不应出现在界面中的 thinking 正文';
   const html = await render([
