@@ -5,6 +5,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 
+const hasWindowsRunner = fs.existsSync(path.join(__dirname, '..', 'server', 'hooks', 'windows-hook-runner.exe'));
+
 test('cli help documents every command, option, and platform mode', () => {
   const root = path.join(__dirname, '..');
   const cli = path.join(root, 'server', 'cli.js');
@@ -51,7 +53,7 @@ test('cli package command creates an npm-compatible archive with current runtime
   const archivePath = path.join(tmp, archives[0]);
   const listing = execFileSync('tar', ['-tzf', archivePath], { encoding: 'utf-8' });
 
-  for (const required of [
+  const requiredFiles = [
     'server/server.js',
     'server/cli.js',
     'server/routes.js',
@@ -60,14 +62,17 @@ test('cli package command creates an npm-compatible archive with current runtime
     'server/app-info.js',
     'server/install-layout.js',
     'server/install-lock.js',
-    'server/hooks/windows-hook-runner.exe',
+    'server/hooks/build-windows-hook-runner.ps1',
     'server/hooks/windows-hook-runner.cs',
     'server/importers/index.js',
     'dist/index.html',
     'package.json',
     'README.md',
     'CHANGELOG.md',
-  ]) {
+  ];
+  if (hasWindowsRunner) requiredFiles.push('server/hooks/windows-hook-runner.exe');
+
+  for (const required of requiredFiles) {
     assert.match(listing, new RegExp(`package/${required.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
   }
 

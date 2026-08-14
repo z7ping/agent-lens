@@ -13,6 +13,8 @@ const {
   stageApplication,
 } = require('../server/install-layout');
 
+const hasWindowsRunner = fs.existsSync(path.join(__dirname, '..', 'server', 'hooks', 'windows-hook-runner.exe'));
+
 function makeTempRoot() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'agent-lens-layout-test-'));
 }
@@ -114,7 +116,7 @@ test('application staging copies runtime files without local state or dependenci
 
   stageApplication(fixtureProject, stagedApp);
 
-  for (const required of [
+  const requiredFiles = [
     'cli.js',
     'server.js',
     'runtime-paths.js',
@@ -129,11 +131,13 @@ test('application staging copies runtime files without local state or dependenci
     'package.json',
     path.join('hooks', 'prelog.js'),
     path.join('hooks', 'codex-lifecycle.js'),
-    path.join('hooks', 'windows-hook-runner.exe'),
     path.join('hooks', 'windows-hook-runner.cs'),
     path.join('adapters', 'index.js'),
     path.join('dist', 'index.html'),
-  ]) {
+  ];
+  if (hasWindowsRunner) requiredFiles.push(path.join('hooks', 'windows-hook-runner.exe'));
+
+  for (const required of requiredFiles) {
     assert.equal(fs.existsSync(path.join(stagedApp, required)), true, `${required} should be staged`);
   }
   for (const forbidden of ['node_modules', 'package-lock.json', 'data', 'logs', 'state', 'run']) {

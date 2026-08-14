@@ -90,6 +90,34 @@ function isWin() {
     return process.platform === 'win32';
 }
 
+function ensureWindowsHookRunner(projectDir = PROJECT_DIR) {
+    if (!isWin()) return;
+    const runnerPath = path.join(projectDir, 'server', 'hooks', 'windows-hook-runner.exe');
+    if (fs.existsSync(runnerPath)) return;
+
+    const buildScript = path.join(projectDir, 'server', 'hooks', 'build-windows-hook-runner.ps1');
+    if (!fs.existsSync(buildScript)) {
+        throw new Error(`缺少 Windows Hook 启动器构建脚本: ${buildScript}`);
+    }
+
+    log('构建 Windows 无窗口 Hook 启动器...', 'cyan');
+    execFileSync('powershell.exe', [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        buildScript,
+    ], {
+        cwd: projectDir,
+        stdio: 'inherit',
+        windowsHide: true,
+    });
+
+    if (!fs.existsSync(runnerPath)) {
+        throw new Error(`Windows Hook 启动器构建完成后仍缺少: ${runnerPath}`);
+    }
+}
+
 function checkNodeAvailable() {
     try {
         execFileSync(process.execPath, ['--version'], { stdio: 'ignore', windowsHide: true });
@@ -644,6 +672,7 @@ async function cmdInstall() {
         log(`准备安装目录: ${INSTALL_ROOT}`, 'cyan');
         ensureRuntimeDirs(INSTALL_RUNTIME_PATHS);
         ensureFrontendBuild(PROJECT_DIR);
+        ensureWindowsHookRunner(PROJECT_DIR);
 
         removeTree(updateRoot);
         stageApplication(PROJECT_DIR, stagedAppDir);
@@ -1309,6 +1338,7 @@ function cmdPackage(argv = []) {
         log('dist/ 不存在，正在构建前端...', 'yellow');
         execSync('npm run build', { cwd: PROJECT_DIR, stdio: 'inherit', windowsHide: true });
     }
+    ensureWindowsHookRunner(PROJECT_DIR);
 
     log('使用 npm pack 生成可复现分发包...', 'cyan');
     const before = new Set(fs.readdirSync(outputDir));

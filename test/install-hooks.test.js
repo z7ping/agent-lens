@@ -43,7 +43,22 @@ test('uses the GUI-subsystem runner for Windows Hook commands', () => {
 test('Windows Hook runner is a GUI executable that preserves stdio and exit code', {
   skip: process.platform !== 'win32',
 }, () => {
-  const runnerPath = path.join(__dirname, '..', 'server', 'hooks', 'windows-hook-runner.exe');
+  const buildScript = path.join(__dirname, '..', 'server', 'hooks', 'build-windows-hook-runner.ps1');
+  const runnerRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-lens-runner-build-test-'));
+  const runnerPath = path.join(runnerRoot, 'windows-hook-runner.exe');
+  const buildResult = spawnSync('powershell.exe', [
+    '-NoProfile',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-File',
+    buildScript,
+    '-OutputPath',
+    runnerPath,
+  ], {
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+  assert.equal(buildResult.status, 0, buildResult.stderr || buildResult.stdout);
   const probeRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-lens-hidden-hook-'));
   const probePath = path.join(probeRoot, 'hook probe.js');
   fs.writeFileSync(probePath, [
@@ -99,6 +114,7 @@ test('Windows Hook runner is a GUI executable that preserves stdio and exit code
     assert.equal(result.stderr, '错误输出');
   }
   fs.rmSync(probeRoot, { recursive: true, force: true });
+  fs.rmSync(runnerRoot, { recursive: true, force: true });
 });
 
 test('removes AgentLens hooks while preserving unrelated tool hooks', () => {
