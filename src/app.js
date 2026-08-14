@@ -4,7 +4,7 @@
 
 import { CONFIG, escapeHtml } from './config.js';
 import { fetchProjects, fetchSessions, fetchSessionLogs, checkHookStatus, fetchSourceStatus, fetchCapabilities, fetchAppInfo } from './utils.js';
-import { initializeChatBubbleCollapse, renderCallChain } from './callchain/index.js';
+import { initializeChatBubbleCollapse, renderCallChain, renderCallChainCalls } from './callchain/index.js';
 import { initDashboard, loadDashboardData } from './dashboard/index.js';
 import { initOverview, loadOverview } from './overview/index.js';
 import { getExpandAllAction, shouldShowToolType, shouldShowToolTypeSet } from './ui-state.mjs';
@@ -18,6 +18,12 @@ let autoRefresh = false;
 let refreshTimer = null;
 let isDark = false;
 let appInfo = null;
+const SESSION_PAGE_LIMIT = 20;
+const TIMELINE_PAGE_LIMIT = 500;
+let sessionListItems = [];
+let sessionListNextCursor = '';
+let sessionListHasMore = false;
+const sessionCallsCache = new Map();
 
 // ─── 初始化 ─────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
@@ -231,13 +237,15 @@ window.toggleSort = function () {
 };
 
 // ─── 加载调用链 ─────────────────────────────────────
-async function loadCallChain() {
+async function loadCallChain(options = {}) {
+  const append = options.append === true;
   try {
     const params = new URLSearchParams();
     if (currentTool !== 'all') params.set('source', currentTool);
     if (currentProject) params.set('project', currentProject);
     params.set('sort', sortOrder);
-    params.set('limit', '100');
+    params.set('limit', String(SESSION_PAGE_LIMIT));
+    if (append && sessionListNextCursor) params.set('cursor', sessionListNextCursor);
 
     const res = await fetch(`${CONFIG.API_BASE}/api/sessions?${params}`);
     if (!res.ok) {
@@ -245,15 +253,36 @@ async function loadCallChain() {
       return;
     }
     const data = await res.json();
-    const sessions = data.items || [];
+    const pageItems = data.items || [];
+    const sessions = append ? sessionListItems.concat(pageItems) : pageItems;
+    sessionListItems = sessions;
+    sessionListNextCursor = data.next_cursor || '';
+    sessionListHasMore = data.has_more === true;
 
     renderCallChain(sessions);
+    renderSessionPager();
     applyFilters();
     updateStatusFromSessions(sessions);
   } catch {
     renderCallChain([]);
   }
 }
+
+function renderSessionPager() {
+  const container = document.getElementById('sessionContainer');
+  if (!container || sessionListItems.length === 0) return;
+  const pager = document.createElement('div');
+  pager.className = 'session-list-pager';
+  pager.innerHTML = sessionListHasMore
+    ? `<button class="session-list-more" type="button" onclick="loadMoreSessions()">加载更多会话 · 已显示 ${sessionListItems.length} 个</button>`
+    : `<span class="session-list-done">已显示全部 ${sessionListItems.length} 个会话</span>`;
+  container.appendChild(pager);
+}
+
+window.loadMoreSessions = function () {
+  if (!sessionListHasMore || !sessionListNextCursor) return;
+  loadCallChain({ append: true });
+};
 
 // ─── 工具类型过滤 ───────────────────────────────────
 window.filterTool = function (type) {
@@ -460,18 +489,29 @@ window.toggleSession = function (el) {
 };
 
 async function loadSessionCalls(card) {
+  return loadSessionCallsPage(card, { append: false });
+}
+
+async function loadSessionCallsPage(card, options = {}) {
+  const append = options.append === true;
   const sessionId = card.dataset.sessionId;
   const source = card.dataset.source;
   if (!sessionId) return;
 
   const body = card.querySelector('.session-body');
   if (!body) return;
+  const cacheKey = `${source || ''}:${sessionId}`;
+  const cached = append
+    ? (sessionCallsCache.get(cacheKey) || { calls: [], nextCursor: '', hasMore: false })
+    : { calls: [], nextCursor: '', hasMore: false };
 
   try {
+    body.dataset.loading = '1';
     const params = new URLSearchParams();
     params.set('session', sessionId);
     if (source) params.set('source', source);
-    params.set('limit', '5000');
+    params.set('limit', String(TIMELINE_PAGE_LIMIT));
+    if (append && cached.nextCursor) params.set('cursor', cached.nextCursor);
 
     const res = await fetch(`${CONFIG.API_BASE}/api/timeline?${params}`);
     if (!res.ok) {
@@ -480,10 +520,17 @@ async function loadSessionCalls(card) {
     }
 
     const data = await res.json();
-    const calls = (data.items || []).map(item => ({
+    const pageCalls = (data.items || []).map(item => ({
       ...item,
-      input_summary: typeof item.input_summary === 'string' ? JSON.parse(item.input_summary) : (item.input_summary || {}),
+      input_summary: parseInputSummary(item.input_summary),
     }));
+    const calls = append ? cached.calls.concat(pageCalls) : pageCalls;
+    const nextState = {
+      calls,
+      nextCursor: data.next_cursor || '',
+      hasMore: data.has_more === true,
+    };
+    sessionCallsCache.set(cacheKey, nextState);
 
     if (calls.length === 0) {
       body.innerHTML = '<div class="text-center py-4 text-neutral-400 text-sm">暂无调用记录</div>';
@@ -499,17 +546,52 @@ async function loadSessionCalls(card) {
         if (label === '成功') value.textContent = String(Math.max(toolRecords.length - errRecords.length, 0));
         if (label === '错误') value.textContent = String(errRecords.length);
       });
-      // 动态导入 renderCallChain 中的 renderCall 函数
-      const { renderCallChainCalls } = await import('./callchain/index.js');
-      body.innerHTML = renderCallChainCalls(calls);
+      body.innerHTML = renderCallChainCalls(calls) + renderTimelinePager(sessionId, source, nextState);
       initializeChatBubbleCollapse(body);
       applyFilters(body);
     }
     body.dataset.loaded = '1';
+    body.dataset.loading = '';
   } catch {
     body.innerHTML = '<div class="text-center py-4 text-neutral-400 text-sm">加载失败</div>';
+    body.dataset.loading = '';
   }
 }
+
+function parseInputSummary(value) {
+  if (!value) return {};
+  if (typeof value !== 'string') return value;
+  try { return JSON.parse(value); } catch { return {}; }
+}
+
+function renderTimelinePager(sessionId, source, state) {
+  const loaded = state.calls.length;
+  if (!state.hasMore) {
+    return `<div class="text-center py-3 text-xs text-neutral-400">已加载全部 ${loaded} 条事件</div>`;
+  }
+  return `
+    <div class="text-center py-3">
+      <button class="px-3 py-1.5 rounded-md border border-neutral-200 dark:border-neutral-700 text-sm text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+              type="button"
+              onclick="loadMoreSessionCalls('${encodeURIComponent(sessionId)}', '${encodeURIComponent(source || '')}')">
+        继续加载 · 已加载 ${loaded} 条
+      </button>
+    </div>
+  `;
+}
+
+window.loadMoreSessionCalls = function (encodedSessionId, encodedSource = '') {
+  const sessionId = decodeURIComponent(encodedSessionId);
+  const source = decodeURIComponent(encodedSource);
+  const selector = `.session-card[data-session-id="${CSS.escape(sessionId)}"][data-source="${CSS.escape(source)}"]`;
+  const card = document.querySelector(selector) || document.querySelector(`.session-card[data-session-id="${CSS.escape(sessionId)}"]`);
+  if (!card) return;
+  const body = card.querySelector('.session-body');
+  if (body?.dataset.loading === '1') return;
+  loadSessionCallsPage(card, { append: true });
+};
+
+window.loadSessionCalls = loadSessionCalls;
 
 window.toggleAllSessions = function () {
   const cards = document.querySelectorAll('.session-card');

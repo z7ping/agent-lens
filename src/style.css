@@ -266,7 +266,19 @@
 
   /* ═══ 会话卡片 ═══ */
   .session-card {
-    @apply bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl overflow-clip mb-3 shadow-sm transition-all border-l-[3px];
+    @apply bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl overflow-clip mb-3 border-l-[3px];
+    content-visibility: auto;
+    contain-intrinsic-size: 92px;
+    contain: layout paint style;
+  }
+  .session-list-pager {
+    @apply flex justify-center py-3;
+  }
+  .session-list-more {
+    @apply px-3 py-1.5 rounded-md border border-neutral-200 dark:border-neutral-700 text-sm text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors;
+  }
+  .session-list-done {
+    @apply text-xs text-neutral-400;
   }
   .call-item {
     @apply border-l-[3px] border-transparent ml-4 mb-1;
@@ -754,9 +766,6 @@
 /* ═══ 轮次导航（长会话快速定位） ═══ */
 .round-nav {
   @apply flex items-center gap-1.5 px-4 py-2 border-b border-neutral-100 dark:border-neutral-800 bg-white/95 dark:bg-neutral-900/95 backdrop-blur;
-  position: sticky;
-  top: 4.5rem;
-  z-index: 20;
 }
 .round-nav-label {
   @apply text-xs font-medium text-neutral-400 dark:text-neutral-500 mr-1 uppercase tracking-wider;

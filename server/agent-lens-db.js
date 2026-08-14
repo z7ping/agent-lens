@@ -299,13 +299,22 @@ function insertToolEventPair(record, dbOverride = null) {
 /** 查询 timeline 记录 */
 function queryTimeline(options = {}, dbOverride = null) {
   const db = dbOverride || getDb();
-  const { session_id, session_key, source, project_key, limit = 1000 } = options;
+  const { session_id, session_key, source, project_key, limit = 1000, after } = options;
   let where = 'WHERE 1=1';
   const params = [];
   if (session_id) { where += ' AND session_id = ?'; params.push(session_id); }
   if (session_key) { where += ' AND session_key = ?'; params.push(session_key); }
   if (source) { where += ' AND source = ?'; params.push(source); }
   if (project_key) { where += ' AND project_key = ?'; params.push(project_key); }
+  if (after?.timestamp && after.id != null) {
+    const orderValue = after.order == null ? after.id : after.order;
+    where += ` AND (
+      timestamp > ?
+      OR (timestamp = ? AND COALESCE(source_sequence, seq, id) > ?)
+      OR (timestamp = ? AND COALESCE(source_sequence, seq, id) = ? AND id > ?)
+    )`;
+    params.push(after.timestamp, after.timestamp, orderValue, after.timestamp, orderValue, after.id);
+  }
 
   return db.prepare(`
     SELECT * FROM timeline ${where} ORDER BY timestamp ASC, COALESCE(source_sequence, seq, id) ASC, id ASC LIMIT ?

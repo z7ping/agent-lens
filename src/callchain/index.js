@@ -105,6 +105,9 @@ export function renderCallChain(data) {
         body.classList.remove('hidden');
         if (arrow) arrow.style.transform = 'rotate(90deg)';
         restoredSessionCount++;
+        if (!body.dataset.loaded && window.loadSessionCalls) {
+          window.loadSessionCalls(card);
+        }
       }
     }
   }

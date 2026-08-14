@@ -125,13 +125,15 @@ async function handleApiSessions(req, res, params) {
         const source = params.get('source');
         const project = params.get('project');
         const limit = Math.min(parseInt(params.get('limit') || '50', 10), 200);
+        const cursor = decodeSessionCursor(params.get('cursor') || '');
+        const pageLimit = limit + 1;
 
         let allSessions = [];
 
         const adapters = source ? { [source]: getAdapter(source) } : Object.fromEntries(getAllAdapters());
         for (const [name, adapter] of Object.entries(adapters)) {
             if (!adapter || !adapter.getSessions) continue;
-            const sessions = await adapter.getSessions({ project_key: project, limit });
+            const sessions = await adapter.getSessions({ project_key: project, limit: cursor ? 200 : pageLimit });
             allSessions.push(...sessions);
         }
 
@@ -141,31 +143,83 @@ async function handleApiSessions(req, res, params) {
             const queryParams = [];
             if (source) { whereClause += ' AND source = ?'; queryParams.push(source); }
             if (project) { whereClause += ' AND project_key = ?'; queryParams.push(project); }
+            if (cursor) {
+                whereClause += ` AND (
+                    start_time < ?
+                    OR (start_time = ? AND COALESCE(session_key, source || ':' || session_id) > ?)
+                )`;
+                queryParams.push(cursor.startTime, cursor.startTime, cursor.key);
+            }
 
             const dbSessions = database.prepare(`
                 SELECT * FROM sessions ${whereClause}
-                ORDER BY start_time DESC LIMIT ?
-            `).all(...queryParams, limit * 2);
+                ORDER BY start_time DESC, COALESCE(session_key, source || ':' || session_id) ASC LIMIT ?
+            `).all(...queryParams, pageLimit * 2);
             allSessions.push(...dbSessions);
         }
 
         const seen = new Set();
-        const unique = allSessions.filter(s => {
-            const key = s.session_key || `${s.source || 'unknown'}:${s.session_id || ''}`;
+        let unique = allSessions.filter(s => {
+            const key = sessionCursorKey(s);
             if (seen.has(key)) return false;
             seen.add(key);
             return true;
         });
-        unique.sort((a, b) => (b.start_time || '').localeCompare(a.start_time || ''));
+        unique.sort(compareSessionsForPaging);
+        if (cursor) unique = unique.filter(s => isSessionAfterCursor(s, cursor));
 
         const projects = loadProjects();
-        for (const s of unique) {
+        const pageItems = unique.slice(0, limit);
+        for (const s of pageItems) {
             Object.assign(s, enrichProjectFields(s, projects));
         }
+        const hasMore = unique.length > limit;
+        const lastItem = pageItems[pageItems.length - 1] || null;
 
-        sendJson(res, { items: unique.slice(0, limit) });
+        sendJson(res, {
+            items: pageItems,
+            has_more: hasMore,
+            next_cursor: hasMore && lastItem ? encodeSessionCursor(lastItem) : null,
+        });
     } catch (e) {
         sendJson(res, { error: e.message }, 500);
+    }
+}
+
+function sessionCursorKey(session) {
+    return session?.session_key || `${session?.source || 'unknown'}:${session?.session_id || ''}`;
+}
+
+function compareSessionsForPaging(a, b) {
+    const byTime = (b.start_time || '').localeCompare(a.start_time || '');
+    if (byTime !== 0) return byTime;
+    return sessionCursorKey(a).localeCompare(sessionCursorKey(b));
+}
+
+function isSessionAfterCursor(session, cursor) {
+    const startTime = session.start_time || '';
+    if (startTime < cursor.startTime) return true;
+    if (startTime > cursor.startTime) return false;
+    return sessionCursorKey(session) > cursor.key;
+}
+
+function encodeSessionCursor(session) {
+    const payload = {
+        startTime: session.start_time || '',
+        key: sessionCursorKey(session),
+    };
+    if (!payload.startTime || !payload.key) return null;
+    return Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+}
+
+function decodeSessionCursor(cursor) {
+    if (!cursor) return null;
+    try {
+        const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+        if (!decoded?.startTime || !decoded?.key) return null;
+        return { startTime: String(decoded.startTime), key: String(decoded.key) };
+    } catch (_) {
+        return null;
     }
 }
 
@@ -174,14 +228,19 @@ async function handleApiTimeline(req, res, params) {
     const session = params.get('session');
     const source = params.get('source') || null;
     const limit = Math.min(parseInt(params.get('limit') || '1000', 10), 10000);
+    const cursor = params.get('cursor') || '';
 
     try {
-        const items = await loadTimelineItems({ project, session, source, limit });
+        const items = await loadTimelineItems({ project, session, source, limit, cursor });
 
         const projects = loadProjects();
+        const pageItems = items.slice(0, limit);
+        const hasMore = items.length > limit;
+        const lastItem = pageItems[pageItems.length - 1] || null;
+        const nextCursor = hasMore && lastItem ? encodeTimelineCursor(lastItem) : null;
 
         // 统一字段名：timeline 表用 timestamp，前端可能期望 ts
-        const formatted = items.map(row => {
+        const formatted = pageItems.map(row => {
             let attributes = null;
             if (row.attributes_json) {
                 try { attributes = JSON.parse(row.attributes_json); } catch (_) {}
@@ -193,7 +252,11 @@ async function handleApiTimeline(req, res, params) {
             };
         });
 
-        sendJson(res, { items: formatted });
+        sendJson(res, {
+            items: formatted,
+            has_more: Boolean(nextCursor),
+            next_cursor: nextCursor,
+        });
     } catch (e) {
         sendJson(res, { error: e.message }, 500);
     }
@@ -495,17 +558,21 @@ async function loadTimelineItems(options = {}) {
         session = '',
         source = '',
         limit = 1000,
+        cursor = '',
         queryTimelineFn = queryTimeline,
         getAdapterFn = getAdapter,
     } = options;
+    const after = decodeTimelineCursor(cursor);
+    const pageLimit = Math.max(1, limit) + 1;
 
     const rows = queryTimelineFn({
         session_id: session,
         source: source || undefined,
         project_key: project,
-        limit,
+        limit: pageLimit,
+        after,
     });
-    if (rows.length > 0 || !source) return rows;
+    if (rows.length > 0 || !source || after) return rows;
 
     const adapter = getAdapterFn(source);
     if (!adapter || typeof adapter.getRecords !== 'function') return rows;
@@ -515,7 +582,7 @@ async function loadTimelineItems(options = {}) {
             session_id: session,
             source,
             project_key: project,
-            limit,
+            limit: pageLimit,
         });
         return adapterRows.map(row => ({
             ...row,
@@ -523,6 +590,31 @@ async function loadTimelineItems(options = {}) {
         }));
     } catch (_) {
         return rows;
+    }
+}
+
+function encodeTimelineCursor(row) {
+    if (!row) return null;
+    const payload = {
+        timestamp: row.timestamp || row.ts || '',
+        order: row.source_sequence ?? row.seq ?? row.id,
+        id: row.id,
+    };
+    if (!payload.timestamp || payload.id == null) return null;
+    return Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+}
+
+function decodeTimelineCursor(cursor) {
+    if (!cursor) return null;
+    try {
+        const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+        if (!decoded?.timestamp || decoded.id == null) return null;
+        const id = Number(decoded.id);
+        const order = decoded.order == null ? id : Number(decoded.order);
+        if (!Number.isFinite(id) || !Number.isFinite(order)) return null;
+        return { timestamp: String(decoded.timestamp), order, id };
+    } catch (_) {
+        return null;
     }
 }
 
@@ -547,4 +639,4 @@ function handleApiAppInfo(req, res) {
     }
 }
 
-module.exports = { handleApiStats, handleApiTools, handleApiSessions, handleApiTimeline, handleApiSkills, handleApiCompare, handleApiErrors, handleApiToolMap, handleApiSourcesStatus, handleApiCapabilities, handleApiOverview, handleApiAppInfo, handleApiProjects, buildProjectIndex, loadTimelineItems };
+module.exports = { handleApiStats, handleApiTools, handleApiSessions, handleApiTimeline, handleApiSkills, handleApiCompare, handleApiErrors, handleApiToolMap, handleApiSourcesStatus, handleApiCapabilities, handleApiOverview, handleApiAppInfo, handleApiProjects, buildProjectIndex, loadTimelineItems, encodeTimelineCursor, decodeTimelineCursor, encodeSessionCursor, decodeSessionCursor };
