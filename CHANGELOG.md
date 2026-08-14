@@ -1,16 +1,43 @@
 # 更新日志
 
-## 0.6.2（未发布）
+## 0.7.0（未发布）
+
+### Added
+- 概览新增“配置透镜”视图，按来源展示配置覆盖链、能力证据、运行时状态和运行时/历史对账摘要。
+- `/api/overview` 为每个来源返回配置证据、配置链、运行状态、来源能力矩阵和对账摘要，区分静态发现、运行时 Hook、原生日志与本地数据库证据。
+- Codex 与 Pi 的概览扫描补充模型、审批策略、沙箱模式等运行边界配置；Pi settings 中的 MCP 配置也会进入能力资产。
+- Claude Code CLI 的概览扫描补充 `settings.json`、`.claude.json`、Commands、MCP、模型、权限模式和 AgentLens Hook 覆盖诊断。
+- Hermes 的概览扫描补充 `config.yaml` 中的模型、模型提供方、权限模式和沙箱模式等运行边界配置。
+- `/api/sources/status` 新增 AgentLens 自身安装诊断，检查应用目录、前端产物、Hook 脚本、运行目录、Hook token、PID 文件和 Windows Hook Runner。
+- `/api/hook` 新增 Pi 只观察运行时事件接收路径，可将 Pi runtime 事件按 `runtime_hook` 证据写入 timeline，并参与运行时/历史对账。
+- 发布包新增可被 Pi 宿主加载的只观察运行时扩展入口，注册 Session、Turn、工具和压缩相关原生事件并上报到 AgentLens；`/api/sources/status` 可诊断该扩展是否已随 AgentLens 打包、是否被 Pi settings 引用，以及缺失原因。
+- CLI 新增 `pi-extension status/install/upgrade/uninstall`，显式管理 AgentLens 自己的 Pi 只观察扩展配置；写入前备份 `settings.json`，并在配置损坏或 `extensions` schema 不确定时停止修改。
+- 配置透镜新增 Pi 工具调用级 runtime/native 对账摘要，按稳定 `call_id` 展示已对账、仅运行时、仅历史和冲突数量。
+- 任务复盘中的 Pi 工具事件新增逐调用对账徽标，显示“已对账”“仅运行时”“仅历史”和“对账冲突”等状态，并保留对账键与事件数量说明。
+- 主功能 Tab、来源和项目切换新增轻遮罩加载反馈；会话列表、会话详情分页、工具栈评分和概览刷新统一显示局部加载动画。
+
+### Changed
+- 配置透镜不再把磁盘发现等同于本次运行加载；同一能力可以同时显示“静态发现”和“本次调用”两类证据。
+- Pi 缺少可用运行时扩展时会明确标记为历史模式，并显示原生 JSONL 降级原因。
+- Claude Code CLI 的 Hook 配置状态改为按 AgentLens Pre/Post 工具 Hook 覆盖诊断，不再仅因 `settings.json` 存在就标记为已配置。
+- Pi 运行时工具结果会通过稳定 `tool_call_id` 关联到运行时 `tool_use`；缺少调用标识时保留事件但标记为部分可信。
+- Pi 工具事件会写入 `reconciliation_key` 元数据，便于解释同一工具调用在运行时事件和原生 JSONL 中的对应关系。
+
+## 0.6.2（2026-08-14）
 
 ### Added
 - 任务复盘的会话详情支持 timeline 游标分页，展开会话时先加载首屏事件，并可按需继续加载后续事件，避免长会话一次性渲染导致卡顿。
 - 任务复盘的会话列表支持 cursor 分页，首屏减少为 20 个会话，并可按需继续加载更多会话。
+- Windows Hook Runner 发布链路改为由 GitHub Actions 在 Windows runner 上从源码构建，并作为发布 job 的输入产物使用。
+- 发布流程新增基础校验材料，包括 Windows Hook Runner、npm 包和关键清单文件的 SHA-256 摘要，以及 npm SBOM。
 
 ### Changed
 - `/api/timeline` 返回 `has_more` 和 `next_cursor`，前端“展开全部”不再把单个超长会话的全部事件一次性拉到浏览器。
 - 会话卡片启用渲染隔离并减少滚动时的阴影和全属性过渡开销，降低长列表滑动卡顿。
+- Windows 源码安装在缺少无窗口 Hook Runner 时会尝试本机构建；无法构建时明确提示改用 npm 发布包。
+- npm 包和 GitHub Release 分发包使用 CI 构建出的 Windows Hook Runner，避免依赖维护者本机手工二进制。
 
-## 0.6.1（未发布）
+## 0.6.1（2026-08-14）
 
 ### Changed
 - 任务复盘中的用户与 AI 对话气泡统一在超过 5 行时默认折叠，并支持展开后再次折叠；Markdown 渲染、源码视图和窄屏换行会按实际高度重新判断。

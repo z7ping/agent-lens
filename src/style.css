@@ -57,6 +57,25 @@
   .tab-btn.active {
     @apply text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-500/10;
   }
+  .app-loading-overlay {
+    @apply fixed inset-0 z-40 flex items-start justify-center bg-white/45 dark:bg-neutral-950/45 backdrop-blur-[2px] pointer-events-none;
+    padding-top: 8.25rem;
+  }
+  .app-loading-panel {
+    @apply inline-flex items-center gap-2 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white/95 dark:bg-neutral-900/95 px-4 py-2 text-sm font-medium text-neutral-600 dark:text-neutral-300 shadow-sm;
+  }
+  .loading-spinner {
+    @apply inline-block h-4 w-4 rounded-full border-2 border-neutral-200 dark:border-neutral-700 border-t-primary-500 dark:border-t-primary-400 animate-spin;
+  }
+  .inline-loading {
+    @apply flex min-h-28 items-center justify-center gap-2 text-sm text-neutral-400 dark:text-neutral-500;
+  }
+  .inline-loading.compact {
+    @apply min-h-0 py-4;
+  }
+  .loading-button {
+    @apply inline-flex items-center justify-center gap-2 opacity-70 cursor-wait;
+  }
 
   /* 紧凑筛选标签 */
   .filter-chip-sm {
@@ -1017,6 +1036,21 @@
 .evidence-badge.unobservable {
   @apply bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400;
 }
+.reconciliation-badge {
+  @apply inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300 whitespace-nowrap;
+}
+.reconciliation-badge.matched {
+  @apply bg-success-50 text-success-600 dark:bg-success-500/10 dark:text-success-400;
+}
+.reconciliation-badge.runtime_only {
+  @apply bg-primary-50 text-primary-600 dark:bg-primary-500/10 dark:text-primary-400;
+}
+.reconciliation-badge.history_only {
+  @apply bg-info-50 text-info-600 dark:bg-info-500/10 dark:text-info-400;
+}
+.reconciliation-badge.conflict {
+  @apply bg-danger-50 text-danger-600 dark:bg-danger-500/10 dark:text-danger-400;
+}
 .app-nav-inner {
   @apply flex h-14 items-center justify-between;
 }
@@ -1464,6 +1498,139 @@
   @apply ml-2 text-xs text-neutral-400;
 }
 
+/* ═══ 概览：配置透镜 ═══ */
+.overview-config-grid {
+  @apply grid grid-cols-1 xl:grid-cols-2 gap-4;
+}
+.overview-config-card {
+  @apply bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg p-4 relative overflow-hidden;
+  border-top: 3px solid var(--tool-accent, #64748b);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 12px 30px rgba(15, 23, 42, 0.04);
+}
+.overview-config-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(140deg, color-mix(in srgb, var(--tool-accent, #64748b) 6%, transparent), transparent 44%);
+  pointer-events: none;
+}
+.overview-config-head {
+  @apply flex items-start justify-between gap-3 mb-4 relative;
+}
+.overview-config-metrics {
+  @apply relative grid grid-cols-3 gap-2 mb-4;
+}
+.overview-config-metrics div {
+  @apply rounded-md border border-neutral-100 dark:border-neutral-800 px-3 py-2;
+  background: color-mix(in srgb, var(--tool-surface, #f8fafc) 58%, white);
+}
+.dark .overview-config-metrics div {
+  background: color-mix(in srgb, var(--tool-accent, #64748b) 8%, #171717);
+}
+.overview-config-metrics span {
+  @apply block text-xs text-neutral-400;
+}
+.overview-config-metrics b {
+  @apply block text-lg font-bold text-neutral-900 dark:text-neutral-100;
+}
+.overview-config-section {
+  @apply relative border-t border-neutral-100 dark:border-neutral-800 pt-3 mt-3;
+}
+.overview-reconcile {
+  @apply grid grid-cols-2 lg:grid-cols-4 gap-2 rounded-md border px-3 py-2;
+  background: rgba(255, 255, 255, 0.72);
+}
+.dark .overview-reconcile {
+  background: rgba(23, 23, 23, 0.72);
+}
+.overview-reconcile.ok {
+  @apply border-success-100 dark:border-success-500/20;
+}
+.overview-reconcile.missing {
+  @apply border-danger-100 dark:border-danger-500/20 border-dashed;
+}
+.overview-reconcile.muted {
+  @apply border-neutral-100 dark:border-neutral-800;
+}
+.overview-reconcile span {
+  @apply min-w-0;
+}
+.overview-reconcile b {
+  @apply block truncate text-sm font-semibold text-neutral-800 dark:text-neutral-100;
+}
+.overview-reconcile small {
+  @apply block text-xs text-neutral-400;
+}
+.overview-reconcile-gap {
+  @apply mt-2 text-xs text-neutral-500 dark:text-neutral-400;
+}
+.overview-tool-reconcile {
+  @apply mt-2 grid grid-cols-2 lg:grid-cols-4 gap-2;
+}
+.overview-tool-reconcile span {
+  @apply min-w-0 rounded-md border border-neutral-100 px-3 py-2 dark:border-neutral-800;
+  background: rgba(255, 255, 255, 0.56);
+}
+.dark .overview-tool-reconcile span {
+  background: rgba(23, 23, 23, 0.56);
+}
+.overview-tool-reconcile span.danger {
+  @apply border-danger-100 dark:border-danger-500/20;
+}
+.overview-tool-reconcile b {
+  @apply block text-sm font-semibold text-neutral-800 dark:text-neutral-100;
+}
+.overview-tool-reconcile small {
+  @apply block truncate text-xs text-neutral-400;
+}
+.overview-config-chain,
+.overview-evidence-list {
+  @apply space-y-2;
+}
+.overview-config-chain-row,
+.overview-evidence-row {
+  @apply grid items-center gap-2 rounded-md border px-3 py-2;
+  background: rgba(255, 255, 255, 0.72);
+}
+.overview-config-chain-row {
+  @apply grid-cols-[4.5rem_minmax(0,0.9fr)_minmax(0,1.4fr)_5.5rem];
+}
+.overview-evidence-row {
+  @apply grid-cols-[4.5rem_minmax(0,1.1fr)_minmax(0,1.2fr)_5rem];
+}
+.dark .overview-config-chain-row,
+.dark .overview-evidence-row {
+  background: rgba(23, 23, 23, 0.72);
+}
+.overview-config-chain-row.ok,
+.overview-evidence-row.ok {
+  @apply border-success-100 dark:border-success-500/20;
+}
+.overview-config-chain-row.missing,
+.overview-evidence-row.missing {
+  @apply border-danger-100 dark:border-danger-500/20 border-dashed;
+}
+.overview-config-chain-row.muted,
+.overview-evidence-row.muted {
+  @apply border-neutral-100 dark:border-neutral-800;
+}
+.overview-config-chain-row span,
+.overview-evidence-row span {
+  @apply text-xs font-semibold text-neutral-500 dark:text-neutral-400;
+}
+.overview-config-chain-row b,
+.overview-evidence-row b {
+  @apply min-w-0 truncate text-sm font-semibold text-neutral-800 dark:text-neutral-100;
+}
+.overview-config-chain-row small,
+.overview-evidence-row small {
+  @apply min-w-0 truncate text-xs text-neutral-500 dark:text-neutral-400;
+}
+.overview-config-chain-row em,
+.overview-evidence-row em {
+  @apply not-italic text-xs font-semibold text-neutral-400 dark:text-neutral-500 text-right;
+}
+
 .type-skill {
   --asset-fg: #2563eb;
   --asset-bg: #eff6ff;
@@ -1513,5 +1680,13 @@
 @media (max-width: 760px) {
   .overview-header {
     @apply flex-col items-stretch;
+  }
+  .overview-config-chain-row,
+  .overview-evidence-row {
+    @apply grid-cols-1;
+  }
+  .overview-config-chain-row em,
+  .overview-evidence-row em {
+    @apply text-left;
   }
 }

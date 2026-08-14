@@ -257,6 +257,14 @@ async function main() {
         const { makeEventId } = require('./event-model');
 
         const source = data.source || 'hermes';
+        if (source === 'pi' && (data.event_type || data.runtime_event_type || data.type)) {
+            const { getAdapter } = require('./adapters');
+            const adapter = getAdapter('pi');
+            if (adapter && typeof adapter.ingestRuntimeEvent === 'function') {
+                adapter.ingestRuntimeEvent(data, { insertTimeline, updateDailyStats, recomputeSession });
+                return;
+            }
+        }
         const toolName = data.tool_name || '';
         const cwd = data.cwd || '';
         const sessionId = data.session_id || '';

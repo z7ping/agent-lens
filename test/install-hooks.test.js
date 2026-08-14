@@ -13,7 +13,7 @@ const {
   uninstallHooksFromFile,
   updateCodexTrustHash,
 } = require('../server/install-hooks');
-const { inspectCodexHookCoverage } = require('../server/sources-status');
+const { diagnoseAgentLensInstall, diagnosePiRuntimeExtension, inspectCodexHookCoverage } = require('../server/sources-status');
 
 function makeTempRoot() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'agent-lens-hooks-test-'));
@@ -169,6 +169,104 @@ test('configures every Codex lifecycle hook idempotently while preserving unrela
   assert.equal(config.hooks.SessionStart.length, 2, 'unrelated SessionStart hook should be preserved');
   const coverage = inspectCodexHookCoverage(JSON.stringify(config));
   assert.deepEqual(coverage, { configured: 11, expected: 11, complete: true, missingEvents: [] });
+});
+
+test('diagnoses installed AgentLens runtime files without reading real user state', () => {
+  const root = makeTempRoot();
+  const appDir = path.join(root, 'app');
+  const binDir = path.join(root, 'bin');
+  const hooksDir = path.join(appDir, 'hooks');
+  const distDir = path.join(appDir, 'dist');
+  const dataDir = path.join(root, 'data');
+  const runDir = path.join(root, 'run');
+  fs.mkdirSync(hooksDir, { recursive: true });
+  fs.mkdirSync(distDir, { recursive: true });
+  fs.mkdirSync(binDir, { recursive: true });
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.mkdirSync(runDir, { recursive: true });
+  fs.writeFileSync(path.join(appDir, 'package.json'), JSON.stringify({ version: '0.7.0-test' }));
+  fs.writeFileSync(path.join(distDir, 'index.html'), '<!doctype html>');
+  fs.writeFileSync(path.join(hooksDir, 'prelog.js'), '');
+  fs.writeFileSync(path.join(hooksDir, 'log.js'), '');
+  fs.writeFileSync(path.join(hooksDir, 'codex-lifecycle.js'), '');
+  fs.writeFileSync(path.join(runDir, 'hook-token'), 'test');
+
+  const withoutRunner = diagnoseAgentLensInstall({
+    baseDir: appDir,
+    platform: 'win32',
+    runtimePaths: {
+      rootDir: root,
+      appDir,
+      binDir,
+      hooksDir,
+      distDir,
+      dataDir,
+      runDir,
+      pidFile: path.join(runDir, 'server.pid'),
+      hookTokenFile: path.join(runDir, 'hook-token'),
+    },
+  });
+
+  assert.equal(withoutRunner.status, 'broken');
+  assert.ok(withoutRunner.missing_required.includes('windows_hook_runner'));
+  assert.equal(withoutRunner.version, '0.7.0-test');
+
+  fs.writeFileSync(path.join(binDir, 'agent-lens-hook.exe'), 'runner');
+  const withRunner = diagnoseAgentLensInstall({
+    baseDir: appDir,
+    platform: 'win32',
+    runtimePaths: {
+      rootDir: root,
+      appDir,
+      binDir,
+      hooksDir,
+      distDir,
+      dataDir,
+      runDir,
+      pidFile: path.join(runDir, 'server.pid'),
+      hookTokenFile: path.join(runDir, 'hook-token'),
+    },
+  });
+
+  assert.equal(withRunner.status, 'warn');
+  assert.ok(withRunner.missing_optional.includes('pid_file'));
+  assert.equal(withRunner.checks.find(item => item.id === 'windows_hook_runner').ok, true);
+});
+
+test('diagnoses packaged Pi runtime extension without mutating real Pi settings', () => {
+  const root = makeTempRoot();
+  const appDir = path.join(root, 'app');
+  const hooksDir = path.join(appDir, 'hooks');
+  const agentDir = path.join(root, 'pi-agent');
+  const settingsPath = path.join(agentDir, 'settings.json');
+  const extensionFile = path.join(hooksDir, 'pi-runtime-extension.js');
+  fs.mkdirSync(hooksDir, { recursive: true });
+  fs.mkdirSync(agentDir, { recursive: true });
+  fs.writeFileSync(extensionFile, 'module.exports = {};');
+
+  const packaged = diagnosePiRuntimeExtension({
+    agentDir,
+    settingsPath,
+    runtimePaths: { hooksDir },
+  });
+
+  assert.equal(packaged.status, 'packaged');
+  assert.equal(packaged.configured, false);
+  assert.equal(packaged.checks.find(item => item.id === 'extension_file').ok, true);
+  assert.equal(packaged.checks.find(item => item.id === 'settings_file').ok, false);
+
+  fs.writeFileSync(settingsPath, JSON.stringify({
+    extensions: [{ path: extensionFile }],
+  }));
+  const available = diagnosePiRuntimeExtension({
+    agentDir,
+    settingsPath,
+    runtimePaths: { hooksDir },
+  });
+
+  assert.equal(available.status, 'available');
+  assert.equal(available.configured, true);
+  assert.equal(available.configured_count, 1);
 });
 
 test('uninstall updates hook files and rebuilds Codex trust state for remaining hooks', () => {

@@ -51,6 +51,41 @@ const statusLabels = {
   partial: '部分',
 };
 
+const evidenceTypeLabels = {
+  runtime_hook: '运行时确认',
+  native_log: '原生日志',
+  local_database: '原生数据库',
+  cli_diagnostic: 'CLI 诊断',
+  static_scan: '静态发现',
+  inference: '行为推断',
+  unobservable: '不可观察',
+};
+
+const evidenceStatusLabels = {
+  disk_discovered: '磁盘发现',
+  agent_declared: 'Agent 声明',
+  invoked: '本次调用',
+  inferred_used: '推断使用',
+  unavailable: '不可用',
+  misconfigured: '配置异常',
+};
+
+const scopeLabels = {
+  user: '用户级',
+  project: '项目级',
+  session: '会话级',
+  command: '命令行',
+  runtime: '运行时',
+  unknown: '未知',
+};
+
+const reconciliationLabels = {
+  runtime_and_history: '运行时 + 历史',
+  runtime_only: '仅运行时',
+  history_only: '历史模式',
+  no_events: '暂无事件',
+};
+
 export function initOverview() {
   window.reloadOverview = () => loadOverview({ force: true });
   window.switchOverviewView = switchOverviewView;
@@ -75,9 +110,12 @@ export async function loadOverview(options = {}) {
   const loading = document.getElementById('overviewLoading');
   const empty = document.getElementById('overviewEmpty');
   const content = document.getElementById('overviewContent');
+  const refresh = document.querySelector('.overview-refresh');
   const cached = readCachedOverview();
   const initial = cached || stableOverviewShell();
   if (!options.silent) {
+    if (loading) loading.innerHTML = renderOverviewLoading('正在扫描本地能力资产...');
+    setOverviewRefreshLoading(refresh, true);
     renderOverview(initial);
     content?.classList.remove('hidden');
     loading?.classList.add('hidden');
@@ -86,6 +124,7 @@ export async function loadOverview(options = {}) {
 
   const data = await fetchOverview();
   loading?.classList.add('hidden');
+  setOverviewRefreshLoading(refresh, false);
 
   if (!data || !Array.isArray(data.tools)) {
     if (!initial && !options.silent) empty?.classList.remove('hidden');
@@ -100,15 +139,43 @@ export async function loadOverview(options = {}) {
   overviewLoaded = true;
 }
 
+function renderOverviewLoading(label) {
+  return `
+    <div class="inline-loading compact">
+      <span class="loading-spinner" aria-hidden="true"></span>
+      <span>${escapeHtml(label)}</span>
+    </div>
+  `;
+}
+
+function setOverviewRefreshLoading(button, loading) {
+  if (!button) return;
+  if (loading) {
+    if (!button.dataset.originalText) button.dataset.originalText = button.textContent || '';
+    button.disabled = true;
+    button.classList.add('loading-button');
+    button.innerHTML = '<span class="loading-spinner" aria-hidden="true"></span><span>刷新中</span>';
+  } else {
+    button.disabled = false;
+    button.classList.remove('loading-button');
+    if (button.dataset.originalText) {
+      button.textContent = button.dataset.originalText;
+      delete button.dataset.originalText;
+    }
+  }
+}
+
 function renderOverview(data) {
   const tools = orderOverviewTools(data.tools || [], readToolOrder());
   const focusedTools = filterOverviewTools(tools, currentOverviewSource);
   const cards = document.getElementById('overviewToolCards');
   const matrix = document.getElementById('overviewMatrix');
   const assembly = document.getElementById('overviewAssembly');
+  const configLens = document.getElementById('overviewConfigLens');
   if (cards) cards.innerHTML = focusedTools.map(renderToolCard).join('');
   if (matrix) matrix.innerHTML = renderMatrix(data.capability_matrix || [], tools);
   if (assembly) assembly.innerHTML = renderAssemblyView(focusedTools);
+  if (configLens) configLens.innerHTML = renderConfigLensView(focusedTools);
   applyOverviewView();
 }
 
@@ -310,6 +377,140 @@ function renderSkillFlow(flow) {
   `;
 }
 
+export function renderConfigLensView(tools) {
+  if (!tools.length) {
+    return '<div class="list-card overview-loading">当前来源暂无配置证据数据</div>';
+  }
+  return `
+    <div class="overview-config-grid">
+      ${tools.map(renderConfigLensCard).join('')}
+    </div>
+  `;
+}
+
+function renderConfigLensCard(tool) {
+  const runtime = tool.runtime_status || {};
+  const reconciliation = tool.reconciliation || {};
+  const configChain = Array.isArray(tool.config_chain) ? tool.config_chain : [];
+  const evidence = Array.isArray(tool.evidence) ? tool.evidence : [];
+  const assetEvidence = evidence.filter(item => item.subject_type !== 'config' && item.subject_type !== 'runtime');
+  const invoked = assetEvidence.filter(item => item.status === 'invoked');
+  const staticOnly = assetEvidence.filter(item => item.status === 'disk_discovered');
+  const gaps = evidence.filter(item => item.visibility === 'unobservable' || item.status === 'misconfigured' || item.status === 'unavailable');
+  const accent = tool.theme?.accent || '#64748b';
+  const surface = tool.theme?.surface || '#f8fafc';
+  return `
+    <article class="overview-config-card" style="--tool-accent:${escapeHtml(accent)}; --tool-surface:${escapeHtml(surface)}">
+      <header class="overview-config-head">
+        <div>
+          <h3 class="overview-tool-name"><span></span>${escapeHtml(tool.display_name || tool.tool || '未知工具')}</h3>
+          <p class="overview-tool-desc">${escapeHtml(configLensSummary(tool, runtime))}</p>
+        </div>
+        <span class="overview-status ${runtime.status === 'available' ? 'ok' : 'muted'}">${escapeHtml(runtimeStatusLabel(runtime.status))}</span>
+      </header>
+
+      <div class="overview-config-metrics">
+        <div><span>静态发现</span><b>${staticOnly.length}</b></div>
+        <div><span>调用确认</span><b>${invoked.length}</b></div>
+        <div><span>缺口</span><b>${gaps.length}</b></div>
+      </div>
+
+      ${renderReconciliation(reconciliation)}
+
+      <section class="overview-config-section">
+        <div class="overview-section-title">配置覆盖链</div>
+        <div class="overview-config-chain">
+          ${configChain.length ? configChain.slice(0, 8).map(renderConfigChainItem).join('') : '<div class="overview-empty-line">暂无配置路径证据</div>'}
+        </div>
+      </section>
+
+      <section class="overview-config-section">
+        <div class="overview-section-title">能力证据</div>
+        <div class="overview-evidence-list">
+          ${assetEvidence.length ? assetEvidence.slice(0, 12).map(renderEvidenceItem).join('') : '<div class="overview-empty-line">暂无能力证据</div>'}
+        </div>
+      </section>
+    </article>
+  `;
+}
+
+function renderReconciliation(reconciliation = {}) {
+  const mode = reconciliation.mode || 'no_events';
+  const cls = reconciliation.status === 'matched'
+    ? 'ok'
+    : reconciliation.status === 'degraded' || reconciliation.status === 'conflict'
+      ? 'missing'
+      : 'muted';
+  return `
+    <section class="overview-config-section">
+      <div class="overview-section-title">运行时/历史对账</div>
+      <div class="overview-reconcile ${cls}" title="${escapeHtml(reconciliation.gap_reason || '')}">
+        <span><b>${escapeHtml(reconciliationLabels[mode] || mode)}</b><small>对账模式</small></span>
+        <span><b>${Number(reconciliation.runtime_events || 0)}</b><small>运行时事件</small></span>
+        <span><b>${Number(reconciliation.history_events || 0)}</b><small>历史/本地事件</small></span>
+        <span><b>${escapeHtml(reconciliation.last_observed_at ? formatDateTime(reconciliation.last_observed_at) : '暂无')}</b><small>最后证据</small></span>
+      </div>
+      ${renderToolReconciliation(reconciliation.details?.tool_calls)}
+      ${reconciliation.gap_reason ? `<div class="overview-reconcile-gap">${escapeHtml(reconciliation.gap_reason)}</div>` : ''}
+    </section>
+  `;
+}
+
+function renderToolReconciliation(details = null) {
+  if (!details || !Number(details.tool_call_count || 0)) return '';
+  return `
+    <div class="overview-tool-reconcile">
+      <span><b>${Number(details.matched_calls || 0)}</b><small>工具已对账</small></span>
+      <span><b>${Number(details.runtime_only_calls || 0)}</b><small>仅运行时</small></span>
+      <span><b>${Number(details.history_only_calls || 0)}</b><small>仅历史</small></span>
+      <span class="${Number(details.conflict_calls || 0) ? 'danger' : ''}"><b>${Number(details.conflict_calls || 0)}</b><small>冲突</small></span>
+    </div>
+  `;
+}
+
+function configLensSummary(tool, runtime) {
+  if (runtime.degradation_reason) return runtime.degradation_reason;
+  if (runtime.last_event_at) return `最后确认事件：${formatDateTime(runtime.last_event_at)}`;
+  return tool.config_dir ? `配置目录：${shortPath(tool.config_dir, 80)}` : '尚未检测到配置目录';
+}
+
+function runtimeStatusLabel(status) {
+  const labels = {
+    available: '运行可用',
+    observed_history: '历史确认',
+    unknown: '待确认',
+  };
+  return labels[status] || status || '待确认';
+}
+
+function renderConfigChainItem(item) {
+  return `
+    <div class="overview-config-chain-row ${evidenceClass(item)}">
+      <span>${escapeHtml(scopeLabels[item.scope] || item.scope || '未知')}</span>
+      <b>${escapeHtml(item.label || '配置项')}</b>
+      <small title="${escapeHtml(item.path || item.missing_reason || '')}">${escapeHtml(shortPath(item.path || item.missing_reason || '无路径', 72))}</small>
+      <em>${escapeHtml(evidenceTypeLabels[item.evidence_type] || item.evidence_type || '证据')}</em>
+    </div>
+  `;
+}
+
+function renderEvidenceItem(item) {
+  return `
+    <div class="overview-evidence-row ${evidenceClass(item)}" title="${escapeHtml(item.missing_reason || '')}">
+      <span>${escapeHtml(typeLabels[item.subject_type] || item.subject_type || '能力')}</span>
+      <b>${escapeHtml(item.label || item.subject_id || 'unknown')}</b>
+      <small>${escapeHtml(evidenceStatusLabels[item.status] || item.status || '未知')} · ${escapeHtml(evidenceTypeLabels[item.evidence_type] || item.evidence_type || '证据')}</small>
+      <em>${escapeHtml(item.observed_at ? formatDateTime(item.observed_at) : (scopeLabels[item.scope] || item.scope || ''))}</em>
+    </div>
+  `;
+}
+
+function evidenceClass(item = {}) {
+  if (item.visibility === 'unobservable' || item.status === 'misconfigured' || item.status === 'unavailable') return 'missing';
+  if (item.status === 'invoked' || item.evidence_type === 'runtime_hook') return 'ok';
+  return 'muted';
+}
+
 function statusClass(status) {
   if (status === 'exists' || status === 'configured' || status === 'enabled' || status === 'detected' || status === 'complete') return 'ok';
   if (status === 'missing' || status === 'not_found') return 'missing';
@@ -326,7 +527,7 @@ function pathStatusLabel(status) {
 }
 
 function switchOverviewView(view) {
-  currentOverviewView = view === 'assembly' ? 'assembly' : 'assets';
+  currentOverviewView = ['assets', 'assembly', 'config'].includes(view) ? view : 'assets';
   applyOverviewView();
 }
 
@@ -336,6 +537,7 @@ function applyOverviewView() {
   });
   document.getElementById('overviewAssetsView')?.classList.toggle('hidden', currentOverviewView !== 'assets');
   document.getElementById('overviewAssemblyView')?.classList.toggle('hidden', currentOverviewView !== 'assembly');
+  document.getElementById('overviewConfigView')?.classList.toggle('hidden', currentOverviewView !== 'config');
 }
 
 function shortPath(value, maxLength = 42) {
@@ -346,6 +548,17 @@ function shortPath(value, maxLength = 42) {
 
 function sourceAccent(toolName, tools) {
   return tools.find(tool => tool.tool === toolName)?.theme?.accent || '#64748b';
+}
+
+function formatDateTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value || '');
+  return date.toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 function readCachedOverview() {
@@ -480,6 +693,11 @@ function stableOverviewShell() {
       status: 'unknown',
       config_dir: '查询后更新',
       paths: [],
+      evidence: [],
+      config_chain: [],
+      runtime_status: { status: 'unknown' },
+      reconciliation: { status: 'unknown', mode: 'no_events' },
+      capability_matrix: [],
       load_flow: [],
       assets: [],
       asset_groups: {},

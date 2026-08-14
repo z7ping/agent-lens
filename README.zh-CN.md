@@ -120,7 +120,7 @@ agent-lens uninstall       # 卸载并清理
 | **Claude Code** | 实时 Hook + `~/.claude/projects` 历史导入 | 见下方 |
 | **Codex** | 11 类实时 Hook + `~/.codex/sessions` 历史导入 | 安装器自动配置；升级后需重新运行 `install` |
 | **Cursor** | 实时 Hooks | 同 Claude Code |
-| **Pi** | Pi tree Session JSONL 增量导入 | 无需配置；支持 `PI_CODING_AGENT_DIR` |
+| **Pi** | Pi tree Session JSONL 增量导入 + 可选运行时扩展 | 历史导入无需配置；运行时采集使用 `agent-lens pi-extension install` |
 | **OpenCode** | 轮询 `~/.local/share/opencode/opencode.db` | 无需配置 |
 
 ### 概览资产扫描
@@ -271,6 +271,10 @@ node server/cli.js start --port 8080             # 使用选项指定端口
 node server/cli.js start --port 8080 --open      # 启动后自动打开浏览器
 node server/cli.js stop                          # 停止后台服务
 node server/cli.js status                        # 查看默认服务状态
+node server/cli.js pi-extension status           # 查看 Pi 运行时扩展状态
+node server/cli.js pi-extension install          # 追加 AgentLens 管理的 Pi 运行时扩展配置
+node server/cli.js pi-extension upgrade          # 刷新托管 Pi 扩展路径、版本和 hash
+node server/cli.js pi-extension uninstall        # 只移除 AgentLens 管理的 Pi 扩展配置
 node server/cli.js package                       # 构建并生成 npm 兼容的 .tgz
 node server/cli.js package --output ./release    # 指定分发包输出目录
 node server/cli.js uninstall                     # 卸载并删除配置及运行数据
@@ -283,6 +287,7 @@ node server/cli.js -h                            # 显示帮助
 
 - `start` 检测不到 `dist/` 时会先执行 `npm run build`。
 - `status` 当前固定检查并显示默认端口 56789。使用自定义端口启动时，应直接访问对应地址确认服务；PID 存在时仍可识别进程。
+- `pi-extension` 只管理 AgentLens 自己的 Pi 运行时扩展条目；写入前会备份 Pi `settings.json`，遇到 JSON 损坏或 `extensions` 不是数组时会停止修改。
 - `uninstall` 会要求确认，并删除 AgentLens 安装目录、Hooks 配置和全部运行数据。
 
 ### 系统服务与后台守护

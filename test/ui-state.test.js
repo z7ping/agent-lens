@@ -83,3 +83,74 @@ test('ignores stale async view requests when a newer request has started', async
   assert.equal(isLatestRequest(3, 3), true);
   assert.equal(isLatestRequest(2, 3), false);
 });
+
+test('renders overview configuration lens evidence states', async () => {
+  const { renderConfigLensView } = await import('../src/overview/index.js');
+  const html = renderConfigLensView([{
+    tool: 'codex',
+    display_name: 'Codex',
+    config_dir: 'C:/Users/test/.codex',
+    theme: { accent: '#10b981', surface: '#ecfdf5' },
+    runtime_status: {
+      status: 'available',
+      last_event_at: '2026-08-14T01:00:00.000Z',
+    },
+    reconciliation: {
+      status: 'matched',
+      mode: 'runtime_and_history',
+      runtime_events: 3,
+      history_events: 8,
+      last_observed_at: '2026-08-14T01:00:00.000Z',
+      details: {
+        tool_calls: {
+          tool_call_count: 4,
+          matched_calls: 2,
+          runtime_only_calls: 1,
+          history_only_calls: 1,
+          conflict_calls: 0,
+        },
+      },
+    },
+    config_chain: [{
+      scope: 'user',
+      label: 'Hook 配置',
+      path: 'C:/Users/test/.codex/hooks.json',
+      evidence_type: 'static_scan',
+      status: 'disk_discovered',
+    }],
+    evidence: [
+      {
+        subject_type: 'hook',
+        label: 'Hook 配置',
+        scope: 'user',
+        path: 'C:/Users/test/.codex/hooks.json',
+        evidence_type: 'static_scan',
+        status: 'disk_discovered',
+      },
+      {
+        subject_type: 'mcp',
+        label: 'github',
+        scope: 'session',
+        evidence_type: 'runtime_hook',
+        visibility: 'invoked',
+        status: 'invoked',
+        observed_at: '2026-08-14T01:00:00.000Z',
+      },
+    ],
+  }]);
+
+  assert.match(html, /配置覆盖链/);
+  assert.match(html, /能力证据/);
+  assert.match(html, /运行时\/历史对账/);
+  assert.match(html, /运行时 \+ 历史/);
+  assert.match(html, /运行时事件/);
+  assert.match(html, /历史\/本地事件/);
+  assert.match(html, /工具已对账/);
+  assert.match(html, /仅运行时/);
+  assert.match(html, /仅历史/);
+  assert.match(html, /冲突/);
+  assert.match(html, /Hook 配置/);
+  assert.match(html, /github/);
+  assert.match(html, /本次调用/);
+  assert.match(html, /运行时确认/);
+});

@@ -9,10 +9,13 @@ const { insertTimeline } = require('../server/agent-lens-db');
 
 const {
   buildOverview,
+  discoverClaudeAssets,
   discoverCodexAssets,
   discoverHermesAssets,
   discoverPiAssets,
+  inspectClaudeHooks,
   inspectCodexHooks,
+  queryOverview,
   readOverviewInventory,
   refreshOverviewInventory,
 } = require('../server/overview');
@@ -120,6 +123,121 @@ test('builds assembly paths and skill loading flow for tool diagnostics', () => 
   assert.equal(skillFlow.sources.plugin.count, 1);
 });
 
+test('builds configuration evidence without collapsing static discovery and invocation', () => {
+  const overview = buildOverview({
+    inventory: [
+      {
+        tool: 'codex',
+        display_name: 'Codex',
+        config_dir: 'C:/Users/test/.codex',
+        paths: [
+          { role: '配置目录', path: 'C:/Users/test/.codex', status: 'exists' },
+          { role: 'Hook 配置', path: 'C:/Users/test/.codex/hooks.json', status: 'complete', description: 'AgentLens Hook 11/11' },
+        ],
+        assets: [
+          { name: 'github', type: 'mcp', status: 'configured', path: 'C:/Users/test/.codex/config.toml' },
+          { name: 'brainstorming', type: 'skill', status: 'enabled', path: 'C:/Users/test/.codex/skills/brainstorming/SKILL.md' },
+        ],
+      },
+    ],
+    usageRows: [
+      {
+        source: 'codex',
+        tool_name: 'github',
+        call_count: 2,
+        last_observed_at: '2026-08-14T01:00:00.000Z',
+        capture_methods: 'runtime_hook,native_log',
+      },
+    ],
+    sourceEvidenceRows: [
+      { source: 'codex', capture_method: 'runtime_hook', event_count: 3, session_count: 1, last_observed_at: '2026-08-14T01:00:00.000Z' },
+      { source: 'codex', capture_method: 'native_log', event_count: 8, session_count: 1, last_observed_at: '2026-08-14T01:05:00.000Z' },
+    ],
+    priorityThreshold: 1,
+  });
+
+  const codex = overview.tools[0];
+  const github = codex.assets.find(asset => asset.name === 'github');
+
+  assert.ok(Array.isArray(codex.evidence));
+  assert.ok(Array.isArray(codex.config_chain));
+  assert.equal(codex.runtime_status.hook_status, 'complete');
+  assert.equal(codex.runtime_status.last_event_at, '2026-08-14T01:05:00.000Z');
+  assert.equal(codex.reconciliation.status, 'matched');
+  assert.equal(codex.reconciliation.mode, 'runtime_and_history');
+  assert.equal(codex.reconciliation.runtime_events, 3);
+  assert.equal(codex.reconciliation.history_events, 8);
+  assert.ok(codex.capability_matrix.some(item => item.capability === 'configuration'));
+
+  assert.equal(github.evidence.length, 2);
+  assert.deepEqual(github.evidence.map(item => item.status), ['disk_discovered', 'invoked']);
+  assert.equal(github.evidence[0].evidence_type, 'static_scan');
+  assert.equal(github.evidence[1].evidence_type, 'runtime_hook');
+  assert.equal(github.evidence[1].visibility, 'invoked');
+  assert.equal(github.evidence[1].observed_at, '2026-08-14T01:00:00.000Z');
+  assert.match(github.evidence[0].missing_reason, /不能证明本次运行已加载/);
+});
+
+test('marks sources as history mode when runtime events are absent', () => {
+  const overview = buildOverview({
+    inventory: [{
+      tool: 'pi',
+      display_name: 'Pi',
+      config_dir: 'C:/Users/test/.pi/agent',
+      assets: [],
+    }],
+    sourceEvidenceRows: [
+      { source: 'pi', capture_method: 'native_log', event_count: 42, session_count: 2, last_observed_at: '2026-08-14T02:00:00.000Z' },
+    ],
+  });
+
+  const pi = overview.tools[0];
+  assert.equal(pi.reconciliation.status, 'degraded');
+  assert.equal(pi.reconciliation.mode, 'history_only');
+  assert.equal(pi.reconciliation.history_events, 42);
+  assert.equal(pi.reconciliation.runtime_events, 0);
+  assert.match(pi.reconciliation.gap_reason, /历史模式/);
+  assert.match(pi.runtime_status.degradation_reason, /原生 JSONL/);
+});
+
+test('summarizes Pi runtime/native tool reconciliation by stable call id', () => {
+  const db = new Database(':memory:');
+  db.exec(fs.readFileSync(path.join(__dirname, '..', 'server', 'schema.sql'), 'utf-8'));
+
+  refreshOverviewInventory(db, {
+    now: '2026-08-14T00:00:00.000Z',
+    inventory: [{
+      tool: 'pi',
+      display_name: 'Pi',
+      description: 'Pi coding agent',
+      version: '0.83.0',
+      status: 'detected',
+      config_dir: 'C:/Users/test/.pi/agent',
+      assets: [],
+    }],
+  });
+
+  insertTimeline({ source: 'pi', session_id: 's1', timestamp: '2026-08-14T00:00:01.000Z', role: 'tool_use', event_type: 'tool_use', call_id: 'matched', tool_name: 'bash', capture_method: 'runtime_hook', source_sequence: 1 }, db);
+  insertTimeline({ source: 'pi', session_id: 's1', timestamp: '2026-08-14T00:00:02.000Z', role: 'tool_result', event_type: 'tool_result', call_id: 'matched', tool_name: 'bash', success: 1, capture_method: 'native_log', source_sequence: 2 }, db);
+  insertTimeline({ source: 'pi', session_id: 's1', timestamp: '2026-08-14T00:00:03.000Z', role: 'tool_use', event_type: 'tool_use', call_id: 'runtime-only', tool_name: 'read', capture_method: 'runtime_hook', source_sequence: 3 }, db);
+  insertTimeline({ source: 'pi', session_id: 's1', timestamp: '2026-08-14T00:00:04.000Z', role: 'tool_result', event_type: 'tool_result', call_id: 'history-only', tool_name: 'write', success: 1, capture_method: 'native_log', source_sequence: 4 }, db);
+  insertTimeline({ source: 'pi', session_id: 's1', timestamp: '2026-08-14T00:00:05.000Z', role: 'tool_result', event_type: 'tool_result', call_id: 'conflict', tool_name: 'edit', success: 1, capture_method: 'runtime_hook', source_sequence: 5 }, db);
+  insertTimeline({ source: 'pi', session_id: 's1', timestamp: '2026-08-14T00:00:06.000Z', role: 'tool_error', event_type: 'tool_error', call_id: 'conflict', tool_name: 'edit', success: 0, capture_method: 'native_log', source_sequence: 6 }, db);
+
+  const overview = queryOverview(db);
+  const pi = overview.tools.find(tool => tool.tool === 'pi');
+  const toolCalls = pi.reconciliation.details.tool_calls;
+
+  assert.equal(pi.reconciliation.status, 'conflict');
+  assert.equal(toolCalls.tool_call_count, 4);
+  assert.equal(toolCalls.matched_calls, 1);
+  assert.equal(toolCalls.runtime_only_calls, 1);
+  assert.equal(toolCalls.history_only_calls, 1);
+  assert.equal(toolCalls.conflict_calls, 1);
+  assert.ok(toolCalls.samples.some(item => item.call_id === 'matched' && item.status === 'matched'));
+  db.close();
+});
+
 test('keeps tool links and order when reading overview from database snapshot', () => {
   const db = new Database(':memory:');
   db.exec(fs.readFileSync(path.join(__dirname, '..', 'server', 'schema.sql'), 'utf-8'));
@@ -165,6 +283,9 @@ test('discovers Codex recursive skills, plugins and configured MCP paths', () =>
     description: 'Browser control',
   }), 'utf-8');
   fs.writeFileSync(path.join(codexDir, 'config.toml'), `
+model = "gpt-5"
+sandbox_mode = "workspace-write"
+
 [mcp_servers.node_repl]
 command = "node_repl"
 
@@ -180,6 +301,44 @@ enabled = true
   assert.equal(namesByType.get('plugin:browser').path, path.join(pluginDir, '.codex-plugin', 'plugin.json'));
   assert.equal(namesByType.get('mcp:node_repl').path, path.join(codexDir, 'config.toml'));
   assert.equal(namesByType.get('plugin:browser@openai-bundled').path, path.join(codexDir, 'config.toml'));
+  assert.equal(namesByType.get('builtin:模型:gpt-5').description, 'Codex 运行边界配置');
+  assert.equal(namesByType.get('builtin:沙箱模式:workspace-write').path, path.join(codexDir, 'config.toml'));
+});
+
+test('discovers Claude Code settings, global config, commands and runtime boundary assets', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-lens-claude-'));
+  const homeDir = path.join(tmp, 'home');
+  const claudeDir = path.join(homeDir, '.claude');
+  fs.mkdirSync(path.join(claudeDir, 'skills', 'reviewer'), { recursive: true });
+  fs.mkdirSync(path.join(claudeDir, 'commands', 'git'), { recursive: true });
+  fs.writeFileSync(path.join(claudeDir, 'skills', 'reviewer', 'SKILL.md'), '---\nname: reviewer\n---\n', 'utf-8');
+  fs.writeFileSync(path.join(claudeDir, 'commands', 'git', 'status.md'), '# status\n', 'utf-8');
+  fs.writeFileSync(path.join(claudeDir, 'settings.json'), JSON.stringify({
+    model: 'claude-opus-test',
+    permissionMode: 'acceptEdits',
+    hooks: {
+      PreToolUse: [{ hooks: [{ command: 'node C:/agent-lens/hooks/prelog.js' }] }],
+    },
+    mcpServers: {
+      filesystem: { command: 'fs-mcp' },
+    },
+  }), 'utf-8');
+  fs.writeFileSync(path.join(homeDir, '.claude.json'), JSON.stringify({
+    mcp_servers: {
+      github: { command: 'github-mcp' },
+    },
+  }), 'utf-8');
+
+  const assets = discoverClaudeAssets(claudeDir, { homeDir });
+  const namesByType = new Map(assets.map(asset => [`${asset.type}:${asset.name}`, asset]));
+
+  assert.equal(namesByType.get('skill:reviewer').path, path.join(claudeDir, 'skills', 'reviewer', 'SKILL.md'));
+  assert.equal(namesByType.get('builtin:git:status').path, path.join(claudeDir, 'commands', 'git', 'status.md'));
+  assert.equal(namesByType.get('mcp:filesystem').path, path.join(claudeDir, 'settings.json'));
+  assert.equal(namesByType.get('mcp:github').path, path.join(homeDir, '.claude.json'));
+  assert.equal(namesByType.get('builtin:模型:claude-opus-test').description, 'Claude Code 运行边界配置');
+  assert.equal(namesByType.get('builtin:权限模式:acceptEdits').path, path.join(claudeDir, 'settings.json'));
+  assert.deepEqual(inspectClaudeHooks(claudeDir).missing_events, ['PostToolUse']);
 });
 
 test('orders overview tools by product default order in API payload', () => {
@@ -209,6 +368,8 @@ test('discovers Hermes skills, plugins, MCP servers and toolsets across config r
   fs.writeFileSync(path.join(skillDir, 'SKILL.md'), '---\nname: test-driven-development\n---\n', 'utf-8');
   fs.writeFileSync(path.join(pluginDir, 'plugin.yaml'), 'name: clawd-on-desk\n', 'utf-8');
   fs.writeFileSync(path.join(runtimeDir, 'config.yaml'), `
+model: hermes-model-test
+permission_mode: suggest
 mcp_servers:
   codegraph:
     command: codegraph
@@ -228,6 +389,8 @@ platform_toolsets:
   assert.equal(namesByType.get('mcp:toolbox').path, mcpDir);
   assert.equal(namesByType.get('builtin:hermes-cli').path, path.join(runtimeDir, 'config.yaml'));
   assert.equal(namesByType.get('builtin:mcp-codegraph').path, path.join(runtimeDir, 'config.yaml'));
+  assert.equal(namesByType.get('builtin:模型:hermes-model-test').description, 'Hermes 运行边界配置');
+  assert.equal(namesByType.get('builtin:权限模式:suggest').path, path.join(runtimeDir, 'config.yaml'));
 });
 
 test('builds a capability matrix for high-frequency assets across tools', () => {
@@ -432,15 +595,24 @@ test('discovers Pi configured skills and package-declared resources', () => {
     version: '1.0.0',
   }));
   fs.writeFileSync(path.join(agentDir, 'settings.json'), JSON.stringify({
+    model: 'pi-model-pro',
+    sandboxMode: 'workspace-write',
+    mcpServers: {
+      github: { command: 'github-mcp' },
+    },
     skills: ['./explicit-skills'],
     extensions: ['+external-extensions/configured-extension/index.ts'],
     packages: ['npm:pi-settings-pack'],
   }));
 
   const assets = discoverPiAssets(agentDir, { homeDir });
+  const namesByType = new Map(assets.map(asset => [`${asset.type}:${asset.name}`, asset]));
   const skills = assets.filter(asset => asset.type === 'skill').map(asset => asset.name).sort();
   const extensions = assets.filter(asset => asset.type === 'extension').map(asset => asset.name).sort();
 
+  assert.equal(namesByType.get('mcp:github').path, path.join(agentDir, 'settings.json'));
+  assert.equal(namesByType.get('builtin:模型:pi-model-pro').description, 'Pi 运行边界配置');
+  assert.equal(namesByType.get('builtin:沙箱模式:workspace-write').path, path.join(agentDir, 'settings.json'));
   assert.deepEqual(skills, ['configured-skill', 'pack-skill', 'root-skill', 'settings-pack-skill', 'shared-skill']);
   assert.deepEqual(extensions, ['configured-extension', 'declared-extension', 'file-extension', 'pack-extension']);
 });
@@ -522,7 +694,6 @@ test('queryOverview reads cached inventory from database and merges timeline usa
   insertTimeline({ source: 'codex', session_id: 's1', timestamp: '2026-08-07T00:00:01.000Z', role: 'tool_result', tool_name: 'browser', success: 1, source_sequence: 1 }, db);
   insertTimeline({ source: 'codex', session_id: 's2', timestamp: '2026-08-07T00:00:02.000Z', role: 'tool_result', tool_name: 'browser', success: 1, source_sequence: 1 }, db);
 
-  const { queryOverview } = require('../server/overview');
   const overview = queryOverview(db, { priorityThreshold: 2 });
   const browser = overview.tools[0].assets.find(asset => asset.name === 'browser');
 

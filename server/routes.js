@@ -24,6 +24,82 @@ function sendJson(res, data, statusCode = 200) {
     res.end(JSON.stringify(data));
 }
 
+function normalizeGroupedValues(value) {
+    if (!value) return [];
+    return String(value).split(',').map(item => item.trim()).filter(Boolean).sort();
+}
+
+function setsIntersect(a, b) {
+    const bSet = new Set(b);
+    return a.some(item => bSet.has(item));
+}
+
+function piReconciliationStatus(row = {}) {
+    const runtimeCount = Number(row.runtime_count || 0);
+    const historyCount = Number(row.history_count || 0);
+    const runtimeSuccess = normalizeGroupedValues(row.runtime_success);
+    const historySuccess = normalizeGroupedValues(row.history_success);
+    const hasRuntime = runtimeCount > 0;
+    const hasHistory = historyCount > 0;
+    const hasConflict = hasRuntime && hasHistory && runtimeSuccess.length && historySuccess.length
+        && !setsIntersect(runtimeSuccess, historySuccess);
+    if (hasConflict) return 'conflict';
+    if (hasRuntime && hasHistory) return 'matched';
+    if (hasRuntime) return 'runtime_only';
+    if (hasHistory) return 'history_only';
+    return 'partial';
+}
+
+function buildPiReconciliationMap(rows = []) {
+    const map = new Map();
+    for (const row of rows || []) {
+        const sessionId = row.session_id || '';
+        const callId = row.call_id || '';
+        if (!sessionId || !callId) continue;
+        const status = piReconciliationStatus(row);
+        map.set(`${sessionId}::${callId}`, {
+            status,
+            key: `pi:${sessionId}:tool:${callId}`,
+            runtime_events: Number(row.runtime_count || 0),
+            history_events: Number(row.history_count || 0),
+            last_observed_at: row.last_observed_at || '',
+        });
+    }
+    return map;
+}
+
+function queryPiReconciliationRows(filters = {}) {
+    const db = getDb();
+    if (!db) return [];
+    const where = ["source = 'pi'", "call_id IS NOT NULL", "call_id != ''"];
+    const params = [];
+    if (filters.session) {
+        where.push('session_id = ?');
+        params.push(filters.session);
+    }
+    if (filters.project) {
+        where.push('project_key = ?');
+        params.push(filters.project);
+    }
+    return db.prepare(`
+        SELECT session_id, call_id,
+               SUM(CASE WHEN capture_method = 'runtime_hook' THEN 1 ELSE 0 END) as runtime_count,
+               SUM(CASE WHEN capture_method IN ('native_log', 'local_database') THEN 1 ELSE 0 END) as history_count,
+               GROUP_CONCAT(DISTINCT CASE
+                   WHEN capture_method = 'runtime_hook' AND event_type IN ('tool_result', 'tool_error')
+                   THEN COALESCE(CAST(success AS TEXT), 'unknown')
+               END) as runtime_success,
+               GROUP_CONCAT(DISTINCT CASE
+                   WHEN capture_method IN ('native_log', 'local_database') AND event_type IN ('tool_result', 'tool_error')
+                   THEN COALESCE(CAST(success AS TEXT), 'unknown')
+               END) as history_success,
+               MAX(timestamp) as last_observed_at
+        FROM timeline
+        WHERE ${where.join(' AND ')}
+        GROUP BY session_id, call_id
+    `).all(...params);
+}
+
 function loadProjects() {
     const projects = {};
     for (const file of PROJECT_REGISTRY_FILES) {
@@ -239,16 +315,25 @@ async function handleApiTimeline(req, res, params) {
         const lastItem = pageItems[pageItems.length - 1] || null;
         const nextCursor = hasMore && lastItem ? encodeTimelineCursor(lastItem) : null;
 
+        const hasPiRows = pageItems.some(row => row.source === 'pi' && row.call_id);
+        const reconciliationMap = hasPiRows
+            ? buildPiReconciliationMap(queryPiReconciliationRows({ session, project }))
+            : new Map();
+
         // 统一字段名：timeline 表用 timestamp，前端可能期望 ts
         const formatted = pageItems.map(row => {
             let attributes = null;
             if (row.attributes_json) {
                 try { attributes = JSON.parse(row.attributes_json); } catch (_) {}
             }
+            const reconciliation = row.source === 'pi' && row.call_id
+                ? reconciliationMap.get(`${row.session_id}::${row.call_id}`) || null
+                : null;
             return {
                 ...enrichProjectFields(row, projects),
                 ts: row.timestamp,
                 attributes,
+                reconciliation,
             };
         });
 
@@ -639,4 +724,4 @@ function handleApiAppInfo(req, res) {
     }
 }
 
-module.exports = { handleApiStats, handleApiTools, handleApiSessions, handleApiTimeline, handleApiSkills, handleApiCompare, handleApiErrors, handleApiToolMap, handleApiSourcesStatus, handleApiCapabilities, handleApiOverview, handleApiAppInfo, handleApiProjects, buildProjectIndex, loadTimelineItems, encodeTimelineCursor, decodeTimelineCursor, encodeSessionCursor, decodeSessionCursor };
+module.exports = { handleApiStats, handleApiTools, handleApiSessions, handleApiTimeline, handleApiSkills, handleApiCompare, handleApiErrors, handleApiToolMap, handleApiSourcesStatus, handleApiCapabilities, handleApiOverview, handleApiAppInfo, handleApiProjects, buildProjectIndex, buildPiReconciliationMap, loadTimelineItems, encodeTimelineCursor, decodeTimelineCursor, encodeSessionCursor, decodeSessionCursor };

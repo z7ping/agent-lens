@@ -69,7 +69,14 @@ export async function loadDashboardData(project, timeRange, source) {
 
 function renderLoadingState() {
   const table = document.getElementById('toolMapTable');
-  if (table) table.innerHTML = '<div class="text-sm text-neutral-400 py-6 text-center">加载中...</div>';
+  if (table) {
+    table.innerHTML = `
+      <div class="inline-loading compact">
+        <span class="loading-spinner" aria-hidden="true"></span>
+        <span>正在加载工具评分...</span>
+      </div>
+    `;
+  }
   renderToolDetail(null);
 }
 

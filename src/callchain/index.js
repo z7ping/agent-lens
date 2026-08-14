@@ -404,6 +404,7 @@ function renderCall(call, index, projectPath, sourceColor = '') {
       ? `<span class="call-status slow">偏慢</span>`
       : `<span class="call-status success">成功</span>`;
   const evidenceBadge = renderEvidenceBadge(call);
+  const reconciliationBadge = renderReconciliationBadge(call);
 
   // 结构化详情面板
   const detailContent = renderCallDetail(call, sourceColor);
@@ -418,6 +419,7 @@ function renderCall(call, index, projectPath, sourceColor = '') {
       </span>
       <span class="call-meta">
         ${evidenceBadge}
+        ${reconciliationBadge}
         <span class="call-duration">${duration}</span>
         ${statusBadge}
       </span>
@@ -445,6 +447,42 @@ function renderEvidenceBadge(item) {
         : (evidenceLabels[method] || '已捕获');
   const title = [label, item?.confidence ? `可信度：${item.confidence}` : '', item?.missing_reason || ''].filter(Boolean).join('；');
   return `<span class="evidence-badge ${escapeHtml(visibility)}" title="${escapeHtml(title)}">${escapeHtml(label)}</span>`;
+}
+
+const reconciliationLabels = {
+  matched: '已对账',
+  runtime_only: '仅运行时',
+  history_only: '仅历史',
+  conflict: '对账冲突',
+  partial: '部分对账',
+};
+
+function getReconciliationInfo(item) {
+  if (!item || item.source !== 'pi') return null;
+  if (item.reconciliation && typeof item.reconciliation === 'object') return item.reconciliation;
+
+  const attributes = getLifecycleAttributes(item);
+  if (attributes.reconciliation && typeof attributes.reconciliation === 'object') return attributes.reconciliation;
+  if (!attributes.reconciliation_key) return null;
+
+  return {
+    status: attributes.reconciliation_evidence === 'runtime_hook' ? 'runtime_only' : 'history_only',
+    key: attributes.reconciliation_key,
+  };
+}
+
+function renderReconciliationBadge(item) {
+  const info = getReconciliationInfo(item);
+  if (!info) return '';
+  const status = info.status || 'partial';
+  const label = reconciliationLabels[status] || reconciliationLabels.partial;
+  const title = [
+    label,
+    info.key ? `键：${info.key}` : '',
+    info.runtime_events != null ? `运行时事件：${info.runtime_events}` : '',
+    info.history_events != null ? `历史事件：${info.history_events}` : '',
+  ].filter(Boolean).join('；');
+  return `<span class="reconciliation-badge ${escapeHtml(status)}" title="${escapeHtml(title)}">${escapeHtml(label)}</span>`;
 }
 
 const lifecycleLabels = {
@@ -555,6 +593,7 @@ function renderFlowEvent(item) {
           ${summary ? `<span class="flow-event-summary">${renderMarkdownInline(summary)}</span>` : ''}
           <span class="flow-event-meta">${escapeHtml(formatTime(item.timestamp || item.ts))}</span>
           ${renderEvidenceBadge(item)}
+          ${renderReconciliationBadge(item)}
         </div>
         ${meta.length ? `<div class="flow-event-tags">${meta.map(value => `<span>${escapeHtml(value)}</span>`).join('')}</div>` : ''}
         ${item.missing_reason ? `<div class="flow-event-missing">${escapeHtml(item.missing_reason)}</div>` : ''}
@@ -577,6 +616,7 @@ function renderThinkingSignal(item) {
           <span class="flow-event-summary">${escapeHtml(detail)} · 正文未采集</span>
           <span class="flow-event-meta">${escapeHtml(formatTime(item.timestamp || item.ts))}</span>
           ${renderEvidenceBadge(item)}
+          ${renderReconciliationBadge(item)}
         </div>
       </div>
     </div>

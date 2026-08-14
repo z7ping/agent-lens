@@ -23,6 +23,7 @@ const APP_ROOT_FILES = [
   'routes.js',
   'tool-map.js',
   'overview.js',
+  'pi-extension-manager.js',
   'sources-status.js',
   'app-info.js',
 ];

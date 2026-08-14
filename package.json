@@ -1,6 +1,6 @@
 {
   "name": "@z7ping/agent-lens",
-  "version": "0.6.2",
+  "version": "0.7.0",
   "description": "Local observability and replay for AI coding agents. See every observable action and the evidence behind it.",
   "main": "server/cli.js",
   "bin": {

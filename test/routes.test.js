@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { buildProjectIndex, loadTimelineItems, encodeTimelineCursor, decodeTimelineCursor, encodeSessionCursor, decodeSessionCursor } = require('../server/routes');
+const { buildProjectIndex, buildPiReconciliationMap, loadTimelineItems, encodeTimelineCursor, decodeTimelineCursor, encodeSessionCursor, decodeSessionCursor } = require('../server/routes');
 
 test('falls back to source adapter records when timeline database has no rows', async () => {
   const items = await loadTimelineItems({
@@ -97,6 +97,43 @@ test('round-trips session cursor payloads', () => {
     key: 'codex:session-1',
   });
   assert.equal(decodeSessionCursor('not-a-cursor'), null);
+});
+
+test('builds Pi per-call reconciliation map for timeline rows', () => {
+  const map = buildPiReconciliationMap([
+    {
+      session_id: 'pi-session',
+      call_id: 'matched-call',
+      runtime_count: 1,
+      history_count: 2,
+      runtime_success: '1',
+      history_success: '1',
+      last_observed_at: '2026-08-14T09:00:00.000Z',
+    },
+    {
+      session_id: 'pi-session',
+      call_id: 'runtime-only',
+      runtime_count: 1,
+      history_count: 0,
+      runtime_success: '1',
+      history_success: '',
+    },
+    {
+      session_id: 'pi-session',
+      call_id: 'conflict-call',
+      runtime_count: 1,
+      history_count: 1,
+      runtime_success: '1',
+      history_success: '0',
+    },
+  ]);
+
+  assert.equal(map.get('pi-session::matched-call').status, 'matched');
+  assert.equal(map.get('pi-session::matched-call').runtime_events, 1);
+  assert.equal(map.get('pi-session::matched-call').history_events, 2);
+  assert.equal(map.get('pi-session::runtime-only').status, 'runtime_only');
+  assert.equal(map.get('pi-session::conflict-call').status, 'conflict');
+  assert.equal(map.get('missing::matched-call'), undefined);
 });
 
 test('builds project index with source badges and filters by selected source', () => {

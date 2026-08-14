@@ -118,7 +118,7 @@ Installation registers a system service or daemon with automatic startup and rec
 | **Claude Code** | Real-time Hooks + `~/.claude/projects` history import | See below |
 | **Codex** | 11 real-time Hook types + `~/.codex/sessions` history import | Configured by the installer; rerun `install` after upgrading |
 | **Cursor** | Real-time Hooks | Same as Claude Code |
-| **Pi** | Incremental Pi tree Session JSONL import | None; supports `PI_CODING_AGENT_DIR` |
+| **Pi** | Incremental Pi tree Session JSONL import + optional runtime extension | History import works without setup; runtime capture uses `agent-lens pi-extension install` |
 | **OpenCode** | Poll `~/.local/share/opencode/opencode.db` | None |
 
 ### Overview asset scanning
@@ -269,6 +269,10 @@ node server/cli.js start --port 8080             # Set port with an option
 node server/cli.js start --port 8080 --open      # Open the browser after starting
 node server/cli.js stop                          # Stop the background service
 node server/cli.js status                        # Show default service status
+node server/cli.js pi-extension status           # Check Pi runtime extension state
+node server/cli.js pi-extension install          # Add the AgentLens-managed Pi runtime extension entry
+node server/cli.js pi-extension upgrade          # Refresh the managed Pi extension path, version, and hash
+node server/cli.js pi-extension uninstall        # Remove only the AgentLens-managed Pi extension entry
 node server/cli.js package                       # Build an npm-compatible .tgz
 node server/cli.js package --output ./release    # Select the package output directory
 node server/cli.js uninstall                     # Remove configuration and runtime data
@@ -281,6 +285,7 @@ Notes:
 
 - `start` runs `npm run build` when it cannot find `dist/`.
 - `status` currently checks and displays the default port 56789. For a custom port, visit that address directly; a valid PID still identifies the process.
+- `pi-extension` only manages the AgentLens-owned Pi runtime extension entry. It backs up Pi `settings.json` before writing and stops when the JSON is damaged or the `extensions` schema is not an array.
 - `uninstall` asks for confirmation, then removes the AgentLens installation, Hook configuration, and all runtime data.
 
 ### System service and background daemon

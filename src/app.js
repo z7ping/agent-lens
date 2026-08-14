@@ -24,6 +24,64 @@ let sessionListItems = [];
 let sessionListNextCursor = '';
 let sessionListHasMore = false;
 const sessionCallsCache = new Map();
+const activeLoadingTokens = new Set();
+const loadingTimers = new Map();
+
+function inlineLoading(label = '正在加载...') {
+  return `<div class="inline-loading"><span class="loading-spinner" aria-hidden="true"></span><span>${escapeHtml(label)}</span></div>`;
+}
+
+function beginAppLoading(label = '正在加载...', options = {}) {
+  const token = Symbol(label);
+  activeLoadingTokens.add(token);
+  const delay = options.delayMs ?? 120;
+  const show = () => {
+    if (!activeLoadingTokens.has(token)) return;
+    const overlay = document.getElementById('appLoadingOverlay');
+    const text = document.getElementById('appLoadingText');
+    if (text) text.textContent = label;
+    overlay?.classList.remove('hidden');
+  };
+  if (delay <= 0) show();
+  else loadingTimers.set(token, setTimeout(show, delay));
+  return () => {
+    activeLoadingTokens.delete(token);
+    const timer = loadingTimers.get(token);
+    if (timer) {
+      clearTimeout(timer);
+      loadingTimers.delete(token);
+    }
+    if (activeLoadingTokens.size === 0) {
+      document.getElementById('appLoadingOverlay')?.classList.add('hidden');
+    }
+  };
+}
+
+async function withAppLoading(label, task, options = {}) {
+  const done = beginAppLoading(label, options);
+  try {
+    return await task();
+  } finally {
+    done();
+  }
+}
+
+function setButtonLoading(button, loading, label = '加载中...') {
+  if (!button) return;
+  if (loading) {
+    if (!button.dataset.originalText) button.dataset.originalText = button.textContent || '';
+    button.disabled = true;
+    button.classList.add('loading-button');
+    button.innerHTML = `<span class="loading-spinner" aria-hidden="true"></span><span>${escapeHtml(label)}</span>`;
+  } else {
+    button.disabled = false;
+    button.classList.remove('loading-button');
+    if (button.dataset.originalText) {
+      button.textContent = button.dataset.originalText;
+      delete button.dataset.originalText;
+    }
+  }
+}
 
 // ─── 初始化 ─────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
@@ -31,7 +89,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initAppInfo();
   initProjects();
   initEventListeners();
-  await loadCallChain();
+  await withAppLoading('正在加载任务复盘...', () => loadCallChain(), { delayMs: 0 });
   initDashboard();
   initOverview();
   startAutoRefresh();
@@ -96,8 +154,15 @@ async function initProjects() {
   select.addEventListener('change', () => {
     currentProject = select.value;
     updateFilterSummary();
-    loadCallChain();
-    loadDashboardData(currentProject, undefined, currentTool === 'all' ? '' : currentTool);
+    withAppLoading('正在切换项目...', async () => {
+      await loadCallChain();
+      if (currentTab === 'dashboard') {
+        await loadDashboardData(currentProject, undefined, currentTool === 'all' ? '' : currentTool);
+      }
+      if (currentTab === 'overview') {
+        await loadOverview({ source: currentTool === 'all' ? '' : currentTool });
+      }
+    }, { delayMs: 0 });
   });
   await reloadProjectOptions();
 }
@@ -147,7 +212,7 @@ function initEventListeners() {
 }
 
 // ─── Tab 切换 ───────────────────────────────────────
-window.switchTab = function (tab) {
+window.switchTab = async function (tab) {
   currentTab = tab;
   // 更新 tab 按钮样式
   document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -165,13 +230,17 @@ window.switchTab = function (tab) {
   document.getElementById('toolFilters')?.classList.toggle('hidden', tab !== 'callchain');
   document.getElementById('filterSummary')?.classList.toggle('hidden', tab !== 'callchain');
 
-  // 切换到仪表盘时加载数据（带上当前工具来源过滤）
-  if (tab === 'dashboard') {
-    loadDashboardData(currentProject, undefined, currentTool === 'all' ? '' : currentTool);
-  }
-  if (tab === 'overview') {
-    loadOverview({ source: currentTool === 'all' ? '' : currentTool });
-  }
+  await withAppLoading('正在切换视图...', async () => {
+    if (tab === 'callchain' && sessionListItems.length === 0) {
+      await loadCallChain();
+    }
+    if (tab === 'dashboard') {
+      await loadDashboardData(currentProject, undefined, currentTool === 'all' ? '' : currentTool);
+    }
+    if (tab === 'overview') {
+      await loadOverview({ source: currentTool === 'all' ? '' : currentTool });
+    }
+  }, { delayMs: 0 });
 };
 
 // ─── 来源 Tab 选择 ──────────────────────────────────
@@ -180,15 +249,17 @@ window.selectTool = async function (tool) {
   document.querySelectorAll('.tool-tab').forEach(tab => {
     tab.classList.toggle('active', tab.dataset.tool === tool);
   });
-  await reloadProjectOptions();
-  loadCallChain();
-  updateFilterSummary();
-  if (currentTab === 'dashboard') {
-    loadDashboardData(currentProject, undefined, tool === 'all' ? '' : tool);
-  }
-  if (currentTab === 'overview') {
-    loadOverview({ force: true, source: tool === 'all' ? '' : tool });
-  }
+  await withAppLoading('正在切换来源...', async () => {
+    await reloadProjectOptions();
+    await loadCallChain();
+    updateFilterSummary();
+    if (currentTab === 'dashboard') {
+      await loadDashboardData(currentProject, undefined, tool === 'all' ? '' : tool);
+    }
+    if (currentTab === 'overview') {
+      await loadOverview({ force: true, source: tool === 'all' ? '' : tool });
+    }
+  }, { delayMs: 0 });
 };
 
 // ─── 自动刷新 ───────────────────────────────────────
@@ -233,13 +304,17 @@ window.toggleSort = function () {
   if (btn) {
     btn.textContent = sortOrder === 'desc' ? '↓ 最新' : '↑ 最早';
   }
-  loadCallChain();
+  withAppLoading('正在重新排序...', () => loadCallChain());
 };
 
 // ─── 加载调用链 ─────────────────────────────────────
 async function loadCallChain(options = {}) {
   const append = options.append === true;
+  const container = document.getElementById('sessionContainer');
+  const moreButton = append ? document.querySelector('.session-list-more') : null;
   try {
+    if (append) setButtonLoading(moreButton, true, '加载更多...');
+    else if (container) container.innerHTML = inlineLoading('正在加载会话列表...');
     const params = new URLSearchParams();
     if (currentTool !== 'all') params.set('source', currentTool);
     if (currentProject) params.set('project', currentProject);
@@ -265,6 +340,8 @@ async function loadCallChain(options = {}) {
     updateStatusFromSessions(sessions);
   } catch {
     renderCallChain([]);
+  } finally {
+    if (append) setButtonLoading(moreButton, false);
   }
 }
 
@@ -459,7 +536,7 @@ window.setTimeRange = function (range) {
   document.querySelectorAll('.time-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.range === range);
   });
-  loadDashboardData(currentProject, range, currentTool === 'all' ? '' : currentTool);
+  withAppLoading('正在刷新工具栈...', () => loadDashboardData(currentProject, range, currentTool === 'all' ? '' : currentTool));
 };
 
 // ─── 会话展开/折叠 ─────────────────────────────────
@@ -507,6 +584,12 @@ async function loadSessionCallsPage(card, options = {}) {
 
   try {
     body.dataset.loading = '1';
+    if (append) {
+      const moreButton = body.querySelector('.timeline-more-button');
+      setButtonLoading(moreButton, true, '继续加载...');
+    } else {
+      body.innerHTML = inlineLoading('正在加载会话详情...');
+    }
     const params = new URLSearchParams();
     params.set('session', sessionId);
     if (source) params.set('source', source);
@@ -571,7 +654,7 @@ function renderTimelinePager(sessionId, source, state) {
   }
   return `
     <div class="text-center py-3">
-      <button class="px-3 py-1.5 rounded-md border border-neutral-200 dark:border-neutral-700 text-sm text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+      <button class="timeline-more-button px-3 py-1.5 rounded-md border border-neutral-200 dark:border-neutral-700 text-sm text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
               type="button"
               onclick="loadMoreSessionCalls('${encodeURIComponent(sessionId)}', '${encodeURIComponent(source || '')}')">
         继续加载 · 已加载 ${loaded} 条

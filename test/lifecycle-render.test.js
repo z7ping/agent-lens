@@ -86,6 +86,37 @@ test('Pi thinking 只展示来源可见元数据，不渲染正文', async () =>
   assert.ok(html.indexOf('thinking-observed') < html.indexOf('chat-message assistant'));
 });
 
+test('Pi 工具事件展示逐调用对账徽标', async () => {
+  const html = await render([
+    event('tool_result', {
+      source: 'pi',
+      tool_name: 'bash',
+      call_id: 'call-1',
+      success: 1,
+      reconciliation: {
+        status: 'matched',
+        key: 'pi:session:tool:call-1',
+        runtime_events: 1,
+        history_events: 1,
+      },
+    }),
+    event('tool_result', {
+      source: 'pi',
+      tool_name: 'edit',
+      call_id: 'call-2',
+      success: 1,
+      attributes_json: JSON.stringify({
+        reconciliation_key: 'pi:session:tool:call-2',
+        reconciliation_evidence: 'native_log',
+      }),
+    }),
+  ]);
+
+  assert.match(html, /reconciliation-badge matched/);
+  assert.match(html, /已对账/);
+  assert.match(html, /仅历史/);
+});
+
 test('压缩恢复产生的会话事件位于前后两个 Turn 之间', async () => {
   const html = await render([
     event('user', { content: '第一轮', turn_id: 'turn-1' }),

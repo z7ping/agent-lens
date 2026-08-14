@@ -24,9 +24,52 @@ function piToolEventId(sessionId, callId, eventType) {
     return `evt_${stableHash(`pi|${sessionId}|tool|${callId}|${eventType}`).slice(0, 32)}`;
 }
 
+function piRuntimeEventId(sessionId, nativeId, eventType) {
+    return `evt_${stableHash(`pi|${sessionId}|runtime|${nativeId}|${eventType}`).slice(0, 32)}`;
+}
+
 function normalizeTimestamp(value) {
     if (typeof value === 'number' && Number.isFinite(value)) return new Date(value).toISOString();
     return value ? String(value) : '';
+}
+
+function normalizeRuntimeEventType(value) {
+    const raw = String(value || '').trim();
+    const key = raw.replace(/[-\s]+/g, '_').toLowerCase();
+    const aliases = {
+        session: 'session_start',
+        session_start: 'session_start',
+        session_end: 'session_end',
+        session_shutdown: 'session_end',
+        input: 'user_prompt',
+        user_input: 'user_prompt',
+        user_prompt: 'user_prompt',
+        context: 'context_snapshot',
+        context_snapshot: 'context_snapshot',
+        turn_start: 'turn_start',
+        turn_end: 'turn_stop',
+        turn_stop: 'turn_stop',
+        agent_start: 'agent_start',
+        agent_end: 'agent_end',
+        tool_call: 'tool_use',
+        tool_use: 'tool_use',
+        tool_start: 'tool_use',
+        tool_result: 'tool_result',
+        tool_end: 'tool_result',
+        tool_error: 'tool_error',
+        compact_start: 'compact_start',
+        compact_end: 'compact_end',
+        compaction: 'compact_end',
+        settled: 'settled',
+    };
+    return aliases[key] || key || 'runtime_event';
+}
+
+function runtimeRoleForEvent(eventType, success) {
+    if (eventType === 'tool_result') return success === false ? 'tool_error' : 'tool_result';
+    if (eventType === 'tool_error') return 'tool_error';
+    if (eventType === 'user_prompt') return 'user';
+    return eventType;
 }
 
 function readCompleteLines(filePath, offset = 0) {
@@ -196,6 +239,92 @@ class PiAdapter extends BaseAdapter {
         return entry?.parentId ? (contextByEntry[entry.parentId]?.turn_id || null) : null;
     }
 
+    normalizeRuntimeEvent(data = {}) {
+        const eventType = normalizeRuntimeEventType(data.event_type || data.runtime_event_type || data.type);
+        const sessionId = String(data.session_id || data.sessionId || data.session?.id || '');
+        if (!sessionId) return [];
+        const cwd = String(data.cwd || data.project_cwd || data.session?.cwd || process.cwd());
+        const projectKey = data.project_key || this.getProjectKey(cwd);
+        const nativeId = String(data.source_event_id || data.native_id || data.id || data.event_id || `${eventType}:${data.timestamp || Date.now()}`);
+        const timestamp = normalizeTimestamp(data.timestamp || data.ts || Date.now());
+        const callId = data.tool_call_id || data.toolCallId || data.call_id || data.tool_use_id || '';
+        const toolName = data.tool_name || data.toolName || data.name || '';
+        const success = eventType === 'tool_error' ? false : data.success;
+        const attributes = {
+            ...(data.attributes && typeof data.attributes === 'object' ? data.attributes : {}),
+            runtime_event_type: eventType,
+            native_event_type: data.type || data.event_type || '',
+            extension_version: data.extension_version || data.version || '',
+            history_entry_id: data.history_entry_id || data.entry_id || '',
+        };
+        if (callId) {
+            attributes.reconciliation_key = `pi:${sessionId}:tool:${callId}`;
+            attributes.reconciliation_evidence = 'runtime_hook';
+        }
+        const common = {
+            event_id: callId && ['tool_use', 'tool_result', 'tool_error'].includes(eventType)
+                ? piToolEventId(sessionId, callId, eventType === 'tool_error' ? 'tool_result' : eventType)
+                : piRuntimeEventId(sessionId, nativeId, eventType),
+            source_event_id: nativeId,
+            session_id: sessionId,
+            source: this.name,
+            timestamp,
+            ts: timestamp,
+            cwd,
+            project_key: projectKey,
+            project_name: this.getProjectName(cwd),
+            source_sequence: data.seq ?? data.source_sequence ?? null,
+            event_type: eventType === 'tool_error' ? 'tool_error' : eventType,
+            role: runtimeRoleForEvent(eventType, success),
+            call_id: callId || null,
+            tool_use_id: callId || null,
+            tool_name: toolName || null,
+            content: data.content || data.text || data.summary || null,
+            tool_input: data.tool_input || data.input_summary || data.input || null,
+            output_snippet: data.output_snippet || data.output || data.result || null,
+            success: success == null ? null : Boolean(success),
+            duration_ms: data.duration_ms ?? null,
+            parent_event_id: data.parent_event_id || null,
+            turn_id: data.turn_id || data.turnId || (data.turn_id === 0 ? '0' : null),
+            agent_id: data.agent_id || data.agentId || null,
+            capture_method: 'runtime_hook',
+            visibility: 'captured',
+            confidence: callId || !['tool_use', 'tool_result', 'tool_error'].includes(eventType) ? 'confirmed' : 'partial',
+            missing_reason: callId || !['tool_use', 'tool_result', 'tool_error'].includes(eventType)
+                ? null
+                : 'Pi 运行时事件未提供稳定工具调用标识',
+            attributes_json: attributes,
+        };
+        if (eventType === 'tool_result' || eventType === 'tool_error') {
+            common.parent_event_id = data.parent_event_id || (callId ? piToolEventId(sessionId, callId, 'tool_use') : null);
+            common.success = eventType === 'tool_error' ? false : data.success !== false;
+        }
+        return [common];
+    }
+
+    ingestRuntimeEvent(data = {}, db = null) {
+        const agentLensDb = db || this.db || require('../agent-lens-db');
+        const records = this.normalizeRuntimeEvent(data);
+        const inserted = [];
+        for (const record of records) {
+            const info = agentLensDb.insertTimeline({
+                ...record,
+                tool_input: record.tool_input || null,
+                error_message: record.success === false ? (record.output_snippet || record.error_message || null) : null,
+            });
+            inserted.push({ record, info });
+            if (info.changes > 0 && (record.event_type === 'tool_result' || record.event_type === 'tool_error')) {
+                const date = (record.timestamp || '').slice(0, 10);
+                agentLensDb.updateDailyStats(date, 'pi', record.tool_name || 'unknown', 1, record.success ? 0 : 1, record.duration_ms || 0);
+            }
+        }
+        const first = records[0];
+        if (first?.session_id && typeof agentLensDb.recomputeSession === 'function') {
+            agentLensDb.recomputeSession('pi', first.session_id, first.project_key || '');
+        }
+        return { ok: true, inserted: inserted.reduce((sum, item) => sum + (item.info?.changes || 0), 0), records };
+    }
+
     _parseLines(lines, parserState, filePath) {
         const records = [];
         const state = parserState || {};
@@ -281,6 +410,11 @@ class PiAdapter extends BaseAdapter {
                             parent_event_id: entryEventId,
                             content: null,
                             success: null,
+                            attributes_json: {
+                                ...attributes,
+                                reconciliation_key: `pi:${meta.id}:tool:${callId}`,
+                                reconciliation_evidence: 'native_log',
+                            },
                         });
                         state.pending_calls[callId] = {
                             started_at: base.timestamp,
@@ -314,6 +448,13 @@ class PiAdapter extends BaseAdapter {
                         missing_reason: pending ? null : '当前增量范围未找到对应 Tool Use；仅保留来源 toolCallId',
                         attributes_json: attributes,
                     });
+                    if (callId) {
+                        records[records.length - 1].attributes_json = {
+                            ...records[records.length - 1].attributes_json,
+                            reconciliation_key: `pi:${meta.id}:tool:${callId}`,
+                            reconciliation_evidence: 'native_log',
+                        };
+                    }
                     if (callId) delete state.pending_calls[callId];
                 } else {
                     const text = this._extractText(content);

@@ -10,6 +10,7 @@
  *   agent-lens stop                          停止后台服务
  *   agent-lens status                        查看服务状态
  *   agent-lens service <subcommand>          管理系统服务
+ *   agent-lens pi-extension <subcommand>     管理 Pi 只观察运行时扩展
  *   agent-lens package [--output <dir>]      打包分发
  *   agent-lens uninstall                     卸载并清理所有配置和数据
  *
@@ -640,6 +641,67 @@ async function cmdService(subcmd) {
             log('用法: agent-lens service <install|uninstall|start|stop|enable|disable|status>', 'cyan');
             return undefined;
     }
+}
+
+function printPiExtensionStatus(status) {
+    log(`状态: ${status.label || status.status}`, status.status === 'available' ? 'green' : status.status === 'missing' ? 'yellow' : 'cyan');
+    log(`扩展文件: ${status.extensionFile}`, 'dim');
+    log(`Pi settings: ${status.settingsPath}`, 'dim');
+    log(`Pi agent: ${status.agentDir}`, 'dim');
+    if (status.version) log(`AgentLens 版本: ${status.version}`, 'dim');
+    if (status.sha256) log(`扩展 SHA-256: ${status.sha256}`, 'dim');
+    const failed = (status.checks || []).filter(item => !item.ok);
+    if (failed.length) {
+        log('未通过检查:', 'yellow');
+        for (const item of failed) {
+            log(`  - ${item.label}: ${item.target || item.id}`, 'dim');
+        }
+    }
+}
+
+function cmdPiExtension(argv = []) {
+    const subcmd = argv[0] || 'status';
+    const {
+        getPiExtensionStatus,
+        installPiExtension,
+        uninstallPiExtension,
+        upgradePiExtension,
+    } = require('./pi-extension-manager');
+
+    log('🧠 AgentLens Pi 运行时扩展', 'bright');
+    log('═'.repeat(45), 'dim');
+    console.log('');
+
+    if (subcmd === 'status') {
+        printPiExtensionStatus(getPiExtensionStatus());
+        return;
+    }
+    if (subcmd === 'install' || subcmd === 'upgrade') {
+        const result = subcmd === 'install' ? installPiExtension() : upgradePiExtension();
+        const label = result.action === 'unchanged'
+            ? '配置已是最新，无需修改'
+            : subcmd === 'install' ? 'Pi 扩展配置已安装' : 'Pi 扩展配置已升级';
+        log(`[OK] ${label}`, result.changed ? 'green' : 'cyan');
+        if (result.backupPath) log(`备份: ${result.backupPath}`, 'dim');
+        printPiExtensionStatus(result.status);
+        log('请重启 Pi，使扩展配置生效。', 'yellow');
+        return;
+    }
+    if (subcmd === 'uninstall') {
+        const result = uninstallPiExtension();
+        if (result.changed) {
+            log(`[OK] 已移除 ${result.removed} 条 AgentLens Pi 扩展配置`, 'green');
+            if (result.backupPath) log(`备份: ${result.backupPath}`, 'dim');
+            printPiExtensionStatus(result.status);
+        } else {
+            log('[OK] 未发现需要移除的 AgentLens Pi 扩展配置', 'cyan');
+            if (result.status) printPiExtensionStatus(result.status);
+        }
+        log('请重启 Pi，使扩展配置变更生效。', 'yellow');
+        return;
+    }
+
+    log('用法: agent-lens pi-extension <status|install|upgrade|uninstall>', 'cyan');
 }
 
 // ─── install 命令 ────────────────────────────────────────────────
@@ -1379,6 +1441,7 @@ function showHelp() {
     log('  stop                          停止后台服务', 'dim');
     log('  status                        查看默认服务状态', 'dim');
     log('  service <subcommand>          管理系统服务或 daemon', 'dim');
+    log('  pi-extension <subcommand>     管理 Pi 只观察运行时扩展', 'dim');
     log('  package [--output <dir>]      构建并生成 npm 兼容分发包', 'dim');
     log('  uninstall                     卸载并清理所有配置和数据', 'dim');
     log('  help, --help, -h              显示此帮助', 'dim');
@@ -1391,6 +1454,12 @@ function showHelp() {
     log('  service enable                启用开机自启', 'dim');
     log('  service disable               关闭开机自启', 'dim');
     log('  service status                查看服务、自启、版本和运行环境', 'dim');
+    console.log('');
+    log('pi-extension 子命令:', 'yellow');
+    log('  pi-extension status           查看 Pi 扩展文件和 settings 引用状态', 'dim');
+    log('  pi-extension install          追加 AgentLens 管理的 Pi 扩展配置', 'dim');
+    log('  pi-extension upgrade          刷新 AgentLens Pi 扩展路径、版本和 hash', 'dim');
+    log('  pi-extension uninstall        移除 AgentLens 管理的 Pi 扩展配置', 'dim');
     console.log('');
     log('start 选项:', 'yellow');
     log('  --daemon, -d                  后台守护进程模式', 'dim');
@@ -1412,6 +1481,7 @@ function showHelp() {
     log('  agent-lens start --daemon', 'dim');
     log('  agent-lens start --port 8080 --open', 'dim');
     log('  agent-lens service status', 'dim');
+    log('  agent-lens pi-extension status', 'dim');
     log('  agent-lens package --output ./release', 'dim');
     log('  agent-lens uninstall', 'dim');
 }
@@ -1439,6 +1509,9 @@ async function main() {
             break;
         case 'service':
             await Promise.resolve(cmdService(cmdArgs[0]));
+            break;
+        case 'pi-extension':
+            cmdPiExtension(cmdArgs);
             break;
         case 'status':
             await cmdStatus(PROJECT_DIR);

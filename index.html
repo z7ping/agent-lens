@@ -54,6 +54,13 @@
     </div>
   </div>
 
+  <div id="appLoadingOverlay" class="app-loading-overlay hidden" role="status" aria-live="polite" aria-atomic="true">
+    <div class="app-loading-panel">
+      <span class="loading-spinner" aria-hidden="true"></span>
+      <span id="appLoadingText">正在加载...</span>
+    </div>
+  </div>
+
   <!-- ═══ 第二层：来源 + 项目 + 工具类型 + 状态栏（不固定，随页面滚动） ═══ -->
   <div class="app-nav-offset bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-800">
     <div class="max-w-screen-2xl mx-auto px-4 pt-2 mb-1">
@@ -217,6 +224,7 @@
             <div class="overview-view-tabs" aria-label="概览视图">
               <button class="overview-view-tab active" data-overview-view="assets" onclick="switchOverviewView('assets')">能力资产</button>
               <button class="overview-view-tab" data-overview-view="assembly" onclick="switchOverviewView('assembly')">装配路径</button>
+              <button class="overview-view-tab" data-overview-view="config" onclick="switchOverviewView('config')">配置透镜</button>
             </div>
             <button class="overview-refresh" onclick="reloadOverview()">刷新</button>
           </div>
@@ -234,6 +242,9 @@
           </div>
           <div id="overviewAssemblyView" class="hidden">
             <div id="overviewAssembly"></div>
+          </div>
+          <div id="overviewConfigView" class="hidden">
+            <div id="overviewConfigLens"></div>
           </div>
         </div>
       </div>

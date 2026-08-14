@@ -66,6 +66,8 @@ test('按 Pi 原生身份重建树形事件、派生 Session 和并行工具配�
   const resultB = records.find(record => record.call_id === 'call-b' && record.event_type === 'tool_result');
   assert.equal(resultA.parent_event_id, useA.event_id);
   assert.equal(resultB.parent_event_id, useB.event_id);
+  assert.equal(useA.attributes_json.reconciliation_key, 'pi:session-child:tool:call-a');
+  assert.equal(resultA.attributes_json.reconciliation_key, 'pi:session-child:tool:call-a');
   assert.equal(resultA.duration_ms, 3000);
   assert.equal(resultB.duration_ms, 1000);
   assert.equal(resultA.turn_id, 'pi-turn:user-1');
@@ -118,4 +120,79 @@ test('按字节偏移增量读取，保留不完整尾行并避免重复导入',
   assert.deepEqual(appended.filter(record => record.event_type === 'tool_use').map(record => record.call_id), ['call-a', 'call-b']);
   assert.doesNotMatch(fs.readFileSync(stateFile, 'utf8'), /npm test|a\.js/);
   assert.ok(recomputed.some(args => args[0] === 'pi' && args[1] === 'session-child'));
+});
+
+test('接收 Pi 只观察运行时事件并保留 runtime_hook 证据', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-lens-pi-runtime-'));
+  const inserted = [];
+  const stats = [];
+  const recomputed = [];
+  const db = {
+    insertTimeline(record) { inserted.push(record); return { changes: 1 }; },
+    updateDailyStats(...args) { stats.push(args); },
+    recomputeSession(...args) { recomputed.push(args); },
+  };
+  const adapter = new PiAdapter({ sessionsDir: root, importStateFile: path.join(root, 'state.json'), db, registerProject() {} });
+
+  adapter.ingestRuntimeEvent({
+    source: 'pi',
+    event_type: 'session_start',
+    session_id: 'runtime-session',
+    cwd: 'F:/workspace/pi-runtime',
+    timestamp: '2026-08-14T03:00:00.000Z',
+    id: 'rt-session',
+    extension_version: '0.7.0-test',
+  }, db);
+  adapter.ingestRuntimeEvent({
+    source: 'pi',
+    event_type: 'user_input',
+    session_id: 'runtime-session',
+    cwd: 'F:/workspace/pi-runtime',
+    timestamp: '2026-08-14T03:00:01.000Z',
+    id: 'rt-user',
+    turn_id: 'pi-turn:rt-user',
+    content: '运行时输入',
+  }, db);
+  adapter.ingestRuntimeEvent({
+    source: 'pi',
+    event_type: 'tool_use',
+    session_id: 'runtime-session',
+    cwd: 'F:/workspace/pi-runtime',
+    timestamp: '2026-08-14T03:00:02.000Z',
+    id: 'rt-tool-use',
+    turn_id: 'pi-turn:rt-user',
+    tool_call_id: 'rt-call-1',
+    tool_name: 'bash',
+    input_summary: { command: 'npm test' },
+  }, db);
+  adapter.ingestRuntimeEvent({
+    source: 'pi',
+    event_type: 'tool_result',
+    session_id: 'runtime-session',
+    cwd: 'F:/workspace/pi-runtime',
+    timestamp: '2026-08-14T03:00:05.000Z',
+    id: 'rt-tool-result',
+    turn_id: 'pi-turn:rt-user',
+    tool_call_id: 'rt-call-1',
+    tool_name: 'bash',
+    success: true,
+    duration_ms: 3000,
+    output_snippet: 'ok',
+  }, db);
+
+  const runtimeEvents = inserted.filter(record => record.capture_method === 'runtime_hook');
+  assert.equal(runtimeEvents.length, 4);
+  assert.deepEqual(runtimeEvents.map(record => record.event_type), ['session_start', 'user_prompt', 'tool_use', 'tool_result']);
+  const session = runtimeEvents.find(record => record.event_type === 'session_start');
+  const use = runtimeEvents.find(record => record.event_type === 'tool_use');
+  const result = runtimeEvents.find(record => record.event_type === 'tool_result');
+  assert.equal(result.parent_event_id, use.event_id);
+  assert.equal(result.confidence, 'confirmed');
+  assert.equal(use.attributes_json.reconciliation_key, 'pi:runtime-session:tool:rt-call-1');
+  assert.equal(result.attributes_json.reconciliation_key, 'pi:runtime-session:tool:rt-call-1');
+  assert.equal(session.attributes_json.extension_version, '0.7.0-test');
+  assert.equal(stats.length, 1);
+  assert.equal(stats[0][1], 'pi');
+  assert.equal(stats[0][2], 'bash');
+  assert.ok(recomputed.some(args => args[0] === 'pi' && args[1] === 'runtime-session'));
 });

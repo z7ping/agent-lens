@@ -5,12 +5,14 @@ const { spawnSync } = require('child_process');
 const { DEFAULT_OVERVIEW_SCAN_INTERVAL_MS } = require('./config');
 const { hermes: HERMES_PATHS } = require('./paths');
 const { getCapturePolicy, captureConfigValue } = require('./privacy');
+const { getSourceCapability } = require('./capabilities');
 
 const ASSET_TYPES = ['skill', 'mcp', 'plugin', 'extension', 'hook', 'adapter', 'builtin'];
 const CODEX_EXPECTED_HOOK_EVENTS = [
     'SessionStart', 'SessionEnd', 'UserPromptSubmit', 'PreToolUse', 'PermissionRequest',
     'PostToolUse', 'PreCompact', 'PostCompact', 'SubagentStart', 'SubagentStop', 'Stop',
 ];
+const CLAUDE_EXPECTED_HOOK_EVENTS = ['PreToolUse', 'PostToolUse'];
 
 const TOOL_DEFINITIONS = [
     {
@@ -273,6 +275,33 @@ function scanFilesByName(baseDir, fileName, type, status = 'enabled', options = 
     return results;
 }
 
+function scanFilesByExtension(baseDir, extensions = [], type, status = 'enabled', options = {}) {
+    const results = [];
+    const maxDepth = options.maxDepth ?? 6;
+    const base = path.resolve(baseDir || '');
+    const wanted = new Set(extensions.map(ext => String(ext).toLowerCase()));
+    const visit = (dir, depth) => {
+        if (!dir || depth > maxDepth) return;
+        for (const entry of safeReadDir(dir)) {
+            const full = path.join(dir, entry.name);
+            if (entry.isDirectory()) {
+                visit(full, depth + 1);
+            } else if (entry.isFile() && wanted.has(path.extname(entry.name).toLowerCase())) {
+                const relative = path.relative(base, full).split(path.sep).filter(Boolean);
+                const name = relative.length ? relative.join(':').replace(/\.[^.:]+$/, '') : path.basename(entry.name, path.extname(entry.name));
+                results.push({
+                    name,
+                    type,
+                    status,
+                    path: full,
+                });
+            }
+        }
+    };
+    visit(base, 0);
+    return results;
+}
+
 function scanCodexPluginManifests(baseDir) {
     return scanFilesByName(baseDir, 'plugin.json', 'plugin', 'installed', { maxDepth: 8 })
         .map(asset => {
@@ -337,7 +366,134 @@ function scanJsonKeys(file, type, tool) {
     }
 }
 
+function formatConfigScalarName(label, value) {
+    const text = String(value ?? '').trim();
+    if (!text) return '';
+    return `${label}:${text.slice(0, 80)}`;
+}
+
+function scanJsonScalarValues(file, fieldLabels = {}, tool) {
+    try {
+        if (!fs.existsSync(file)) return [];
+        const data = JSON.parse(fs.readFileSync(file, 'utf-8'));
+        const assets = [];
+        const visit = (value) => {
+            if (!value || typeof value !== 'object') return;
+            for (const [key, child] of Object.entries(value)) {
+                const label = fieldLabels[key] || fieldLabels[key.toLowerCase()];
+                if (label && ['string', 'number', 'boolean'].includes(typeof child)) {
+                    const name = formatConfigScalarName(label, child);
+                    if (name) {
+                        assets.push({
+                            name,
+                            type: 'builtin',
+                            status: 'configured',
+                            path: file,
+                            description: `${tool} 运行边界配置`,
+                        });
+                    }
+                }
+                if (child && typeof child === 'object') visit(child);
+            }
+        };
+        visit(data);
+        return assets;
+    } catch (_) {
+        return [];
+    }
+}
+
+function scanJsonObjectKeys(file, objectNames = [], type, tool) {
+    try {
+        if (!fs.existsSync(file)) return [];
+        const data = JSON.parse(fs.readFileSync(file, 'utf-8'));
+        const wanted = new Set(objectNames.map(name => String(name).toLowerCase()));
+        const names = new Set();
+        const visit = (value) => {
+            if (!value || typeof value !== 'object') return;
+            for (const [key, child] of Object.entries(value)) {
+                if (wanted.has(key.toLowerCase()) && child && typeof child === 'object' && !Array.isArray(child)) {
+                    for (const name of Object.keys(child)) names.add(name);
+                }
+                if (child && typeof child === 'object') visit(child);
+            }
+        };
+        visit(data);
+        return Array.from(names).map(name => ({
+            name,
+            type,
+            status: 'configured',
+            path: file,
+            description: `${tool} 配置条目`,
+        }));
+    } catch (_) {
+        return [];
+    }
+}
+
+function scanTomlScalarValues(file, fieldLabels = {}, tool) {
+    try {
+        if (!fs.existsSync(file)) return [];
+        const content = fs.readFileSync(file, 'utf-8');
+        const assets = [];
+        for (const [field, label] of Object.entries(fieldLabels)) {
+            const escaped = field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(`^\\s*${escaped}\\s*=\\s*([^#\\r\\n]+)`, 'gmi');
+            let match;
+            while ((match = regex.exec(content))) {
+                const raw = match[1].trim().replace(/^["']|["']$/g, '');
+                const name = formatConfigScalarName(label, raw);
+                if (!name) continue;
+                assets.push({
+                    name,
+                    type: 'builtin',
+                    status: 'configured',
+                    path: file,
+                    description: `${tool} 运行边界配置`,
+                });
+            }
+        }
+        return assets;
+    } catch (_) {
+        return [];
+    }
+}
+
+function scanYamlScalarValues(file, fieldLabels = {}, tool) {
+    try {
+        if (!fs.existsSync(file)) return [];
+        const lines = fs.readFileSync(file, 'utf-8').split(/\r?\n/);
+        const assets = [];
+        for (const line of lines) {
+            if (!line.trim() || line.trim().startsWith('#') || line.startsWith(' ')) continue;
+            const match = line.match(/^([A-Za-z0-9_-]+):\s*([^#\r\n]+)$/);
+            if (!match) continue;
+            const label = fieldLabels[match[1]] || fieldLabels[match[1].toLowerCase()];
+            if (!label) continue;
+            const raw = match[2].trim().replace(/^["']|["']$/g, '');
+            const name = formatConfigScalarName(label, raw);
+            if (!name) continue;
+            assets.push({
+                name,
+                type: 'builtin',
+                status: 'configured',
+                path: file,
+                description: `${tool} 运行边界配置`,
+            });
+        }
+        return assets;
+    } catch (_) {
+        return [];
+    }
+}
+
 function discoverCodexAssets(configDir) {
+    const runtimeFields = {
+        model: '模型',
+        model_provider: '模型提供方',
+        approval_policy: '审批策略',
+        sandbox_mode: '沙箱模式',
+    };
     return [
         ...scanNamedDirectories(path.join(configDir, 'skills'), 'skill', 'enabled'),
         ...scanFilesByName(path.join(configDir, 'skills'), 'SKILL.md', 'skill', 'enabled'),
@@ -347,6 +503,8 @@ function discoverCodexAssets(configDir) {
         ...scanJsonKeys(path.join(configDir, 'config.json'), 'mcp', 'Codex'),
         ...scanTomlSections(path.join(configDir, 'config.toml'), 'mcp_servers', 'mcp', 'Codex'),
         ...scanTomlSections(path.join(configDir, 'config.toml'), 'plugins', 'plugin', 'Codex'),
+        ...scanTomlScalarValues(path.join(configDir, 'config.toml'), runtimeFields, 'Codex'),
+        ...scanJsonScalarValues(path.join(configDir, 'config.json'), runtimeFields, 'Codex'),
     ];
 }
 
@@ -382,12 +540,50 @@ function inspectCodexHooks(configDir) {
     };
 }
 
-function discoverClaudeAssets(configDir) {
+function inspectClaudeHooks(configDir) {
+    const settingsPath = path.join(configDir || '', 'settings.json');
+    const settings = readJsonFile(settingsPath);
+    const configuredEvents = [];
+    for (const eventName of CLAUDE_EXPECTED_HOOK_EVENTS) {
+        const groups = settings?.hooks?.[eventName];
+        const installed = Array.isArray(groups) && groups.some(group =>
+            Array.isArray(group?.hooks) && group.hooks.some(hook => /agent-lens/i.test(String(hook?.command || '')))
+        );
+        if (installed) configuredEvents.push(eventName);
+    }
+    const total = CLAUDE_EXPECTED_HOOK_EVENTS.length;
+    const status = configuredEvents.length === total ? 'complete' : configuredEvents.length > 0 ? 'partial' : 'missing';
+    return {
+        hooks_path: settingsPath,
+        status,
+        configured_count: configuredEvents.length,
+        expected_count: total,
+        configured_events: configuredEvents,
+        missing_events: CLAUDE_EXPECTED_HOOK_EVENTS.filter(eventName => !configuredEvents.includes(eventName)),
+        description: `AgentLens Hook ${configuredEvents.length}/${total}`,
+    };
+}
+
+function discoverClaudeAssets(configDir, options = {}) {
+    const homeDir = options.homeDir || os.homedir();
+    const globalConfigFile = path.join(homeDir, '.claude.json');
+    const runtimeFields = {
+        model: '模型',
+        permissionmode: '权限模式',
+        permissionMode: '权限模式',
+        permissions: '权限配置',
+    };
     return [
         ...scanNamedDirectories(path.join(configDir, 'skills'), 'skill', 'enabled'),
         ...scanNamedDirectories(path.join(configDir, 'commands'), 'builtin', 'available'),
+        ...scanFilesByName(path.join(configDir, 'skills'), 'SKILL.md', 'skill', 'enabled'),
+        ...scanFilesByExtension(path.join(configDir, 'commands'), ['.md'], 'builtin', 'available'),
         ...scanJsonKeys(path.join(configDir, 'settings.json'), 'mcp', 'Claude Code'),
-        ...scanJsonKeys(path.join(os.homedir(), '.claude.json'), 'mcp', 'Claude Code'),
+        ...scanJsonKeys(globalConfigFile, 'mcp', 'Claude Code'),
+        ...scanJsonObjectKeys(path.join(configDir, 'settings.json'), ['mcpServers', 'mcp_servers'], 'mcp', 'Claude Code'),
+        ...scanJsonObjectKeys(globalConfigFile, ['mcpServers', 'mcp_servers'], 'mcp', 'Claude Code'),
+        ...scanJsonScalarValues(path.join(configDir, 'settings.json'), runtimeFields, 'Claude Code'),
+        ...scanJsonScalarValues(globalConfigFile, runtimeFields, 'Claude Code'),
     ];
 }
 
@@ -483,12 +679,20 @@ function discoverHermesAssets(configDir, options = {}) {
     const userConfigDir = path.join(homeDir, '.hermes');
     const roots = uniqueDirs([configDir, userConfigDir]);
     const configFiles = uniqueDirs(roots.map(dir => path.join(dir, 'config.yaml')).filter(file => fs.existsSync(file)));
+    const runtimeFields = {
+        model: '模型',
+        provider: '模型提供方',
+        model_provider: '模型提供方',
+        permission_mode: '权限模式',
+        sandbox_mode: '沙箱模式',
+    };
     return [
         ...roots.flatMap(root => scanFilesByName(path.join(root, 'skills'), 'SKILL.md', 'skill', 'enabled', { maxDepth: 6 })),
         ...roots.flatMap(root => scanNamedDirectories(path.join(root, 'plugins'), 'plugin', 'installed')),
         ...roots.flatMap(root => scanNamedDirectories(path.join(root, 'mcp-servers'), 'mcp', 'configured')),
         ...configFiles.flatMap(scanHermesMcpConfig),
         ...configFiles.flatMap(scanHermesToolsets),
+        ...configFiles.flatMap(file => scanYamlScalarValues(file, runtimeFields, 'Hermes')),
     ];
 }
 
@@ -791,9 +995,29 @@ function scanPiProjectMemorySkills(agentDir) {
         ));
 }
 
+function scanPiRuntimeConfig(agentDir) {
+    const settingsPath = path.join(agentDir, 'settings.json');
+    const runtimeFields = {
+        model: '模型',
+        modelprovider: '模型提供方',
+        modelProvider: '模型提供方',
+        approvalpolicy: '审批策略',
+        approvalPolicy: '审批策略',
+        approval_policy: '审批策略',
+        sandboxmode: '沙箱模式',
+        sandboxMode: '沙箱模式',
+        sandbox_mode: '沙箱模式',
+    };
+    return [
+        ...scanJsonObjectKeys(settingsPath, ['mcp', 'mcpServers', 'mcp_servers'], 'mcp', 'Pi'),
+        ...scanJsonScalarValues(settingsPath, runtimeFields, 'Pi'),
+    ];
+}
+
 function discoverPiAssets(configDir, options = {}) {
     return dedupeAssets(getPiAgentDirs(configDir, options).flatMap(agentDir => [
         ...scanPiNpmPlugins(agentDir),
+        ...scanPiRuntimeConfig(agentDir),
         ...scanPiExtensionDirectory(path.join(agentDir, 'extensions'), 'Pi settings.json/agent 目录启用的 Extension'),
         ...scanConfiguredPiExtensionPaths(agentDir, options),
         ...scanChildSkillDirectories(path.join(agentDir, 'skills'), 'Pi 用户级默认 Skill'),
@@ -1000,6 +1224,136 @@ function buildUsageMap(rows = []) {
     return usage;
 }
 
+function buildUsageEvidenceMap(rows = []) {
+    const usage = new Map();
+    for (const row of rows) {
+        const tool = row.source || row.tool || '';
+        const name = row.tool_name || row.name || '';
+        if (!tool || !name) continue;
+        const capability = normalizeCapabilityName(name);
+        const key = `${tool}::${capability}`;
+        const current = usage.get(key) || {
+            count: 0,
+            last_observed_at: '',
+            evidence_types: new Set(),
+            visibility: 'invoked',
+            confidence: 'confirmed',
+        };
+        const count = Number(row.call_count ?? row.count ?? 1);
+        if (Number.isFinite(count) && count > 0) current.count += count;
+        if (row.last_observed_at && row.last_observed_at > current.last_observed_at) {
+            current.last_observed_at = row.last_observed_at;
+        }
+        for (const method of normalizeEvidenceMethods(row.capture_methods || row.capture_method)) {
+            current.evidence_types.add(method);
+        }
+        usage.set(key, current);
+    }
+    return usage;
+}
+
+function buildSourceEvidenceMap(rows = []) {
+    const bySource = new Map();
+    for (const row of rows) {
+        const source = row.source || row.tool || '';
+        if (!source) continue;
+        const current = bySource.get(source) || {
+            total_events: 0,
+            session_count: 0,
+            methods: {},
+            last_observed_at: '',
+        };
+        const count = Number(row.event_count ?? row.count ?? 0);
+        const sessions = Number(row.session_count ?? 0);
+        const method = row.capture_method || 'unknown';
+        current.total_events += Number.isFinite(count) ? count : 0;
+        current.session_count += Number.isFinite(sessions) ? sessions : 0;
+        current.methods[method] = {
+            count: (current.methods[method]?.count || 0) + (Number.isFinite(count) ? count : 0),
+            session_count: (current.methods[method]?.session_count || 0) + (Number.isFinite(sessions) ? sessions : 0),
+            last_observed_at: [current.methods[method]?.last_observed_at || '', row.last_observed_at || ''].sort().at(-1) || '',
+        };
+        if (row.last_observed_at && row.last_observed_at > current.last_observed_at) {
+            current.last_observed_at = row.last_observed_at;
+        }
+        bySource.set(source, current);
+    }
+    return bySource;
+}
+
+function buildPiToolReconciliation(rows = []) {
+    const summary = {
+        tool_call_count: 0,
+        matched_calls: 0,
+        runtime_only_calls: 0,
+        history_only_calls: 0,
+        partial_calls: 0,
+        conflict_calls: 0,
+        last_matched_at: '',
+        samples: [],
+    };
+
+    for (const row of rows || []) {
+        const runtimeCount = Number(row.runtime_count || 0);
+        const historyCount = Number(row.history_count || 0);
+        if (runtimeCount <= 0 && historyCount <= 0) continue;
+        summary.tool_call_count += 1;
+
+        const runtimeSuccess = normalizeGroupedValues(row.runtime_success);
+        const historySuccess = normalizeGroupedValues(row.history_success);
+        const hasRuntime = runtimeCount > 0;
+        const hasHistory = historyCount > 0;
+        const hasConflict = hasRuntime && hasHistory && runtimeSuccess.length && historySuccess.length
+            && !setsIntersect(runtimeSuccess, historySuccess);
+        let status = 'partial';
+        if (hasConflict) {
+            status = 'conflict';
+            summary.conflict_calls += 1;
+        } else if (hasRuntime && hasHistory) {
+            status = 'matched';
+            summary.matched_calls += 1;
+            if (row.last_observed_at && row.last_observed_at > summary.last_matched_at) summary.last_matched_at = row.last_observed_at;
+        } else if (hasRuntime) {
+            status = 'runtime_only';
+            summary.runtime_only_calls += 1;
+        } else {
+            status = 'history_only';
+            summary.history_only_calls += 1;
+        }
+        if (!row.call_id || runtimeCount + historyCount === 1) summary.partial_calls += 1;
+
+        if (summary.samples.length < 8) {
+            summary.samples.push({
+                session_id: row.session_id || '',
+                call_id: row.call_id || '',
+                tool_name: row.tool_name || '',
+                status,
+                runtime_events: runtimeCount,
+                history_events: historyCount,
+                last_observed_at: row.last_observed_at || '',
+            });
+        }
+    }
+
+    return summary;
+}
+
+function normalizeGroupedValues(value) {
+    if (!value) return [];
+    return String(value).split(',').map(item => item.trim()).filter(Boolean).sort();
+}
+
+function setsIntersect(a, b) {
+    const bSet = new Set(b);
+    return a.some(item => bSet.has(item));
+}
+
+function normalizeEvidenceMethods(value) {
+    if (!value) return [];
+    if (Array.isArray(value)) return value.map(String).filter(Boolean);
+    return String(value).split(',').map(item => item.trim()).filter(Boolean);
+}
+
 function buildObservedAssets(rows = []) {
     const byTool = new Map();
     for (const row of rows) {
@@ -1019,6 +1373,192 @@ function buildObservedAssets(rows = []) {
         assets.set(capability, existing);
     }
     return byTool;
+}
+
+function subjectIdFor(toolName, subjectType, label) {
+    return `${toolName}:${subjectType}:${normalizeCapabilityName(label || 'unknown')}`;
+}
+
+function scopeForPath(itemPath = '') {
+    const normalized = String(itemPath || '').replace(/\\/g, '/').toLowerCase();
+    if (!normalized) return 'unknown';
+    if (normalized.includes('/projects/') || normalized.includes('/projects-memory/')) return 'project';
+    if (normalized.includes('/sessions/')) return 'session';
+    if (normalized.includes('/hooks') || normalized.includes('/extensions')) return 'user';
+    if (normalized.includes('/.codex') || normalized.includes('/.claude') || normalized.includes('/.hermes') || normalized.includes('/.pi')) return 'user';
+    return 'unknown';
+}
+
+function evidenceStatusFromStaticStatus(status = '') {
+    if (['missing', 'not_found', 'capture_off'].includes(status)) return status === 'capture_off' ? 'unavailable' : 'misconfigured';
+    if (['enabled', 'installed', 'configured', 'detected', 'exists', 'complete', 'available', 'observed'].includes(status)) return 'disk_discovered';
+    return 'disk_discovered';
+}
+
+function pathRoleSubjectType(role = '') {
+    const text = String(role || '').toLowerCase();
+    if (text.includes('hook')) return 'hook';
+    if (text.includes('extension') || text.includes('扩展')) return 'extension';
+    if (text.includes('skill')) return 'skill';
+    if (text.includes('mcp')) return 'mcp';
+    if (text.includes('plugin') || text.includes('插件')) return 'plugin';
+    if (text.includes('会话')) return 'runtime';
+    return 'config';
+}
+
+function buildEvidenceItem(toolName, options = {}) {
+    const subjectType = options.subject_type || 'config';
+    const label = options.label || options.subject_id || 'unknown';
+    return {
+        source: toolName,
+        subject_type: subjectType,
+        subject_id: options.subject_id || subjectIdFor(toolName, subjectType, label),
+        label,
+        scope: options.scope || 'unknown',
+        evidence_type: options.evidence_type || 'static_scan',
+        visibility: options.visibility || 'discovered',
+        confidence: options.confidence || 'partial',
+        status: options.status || 'disk_discovered',
+        path: options.path || '',
+        observed_at: options.observed_at || '',
+        session_id: options.session_id || '',
+        turn_id: options.turn_id || '',
+        missing_reason: options.missing_reason || '',
+        attributes: options.attributes || {},
+    };
+}
+
+function buildAssetEvidence(toolName, asset, usageEvidence) {
+    const evidence = [];
+    const subjectType = ASSET_TYPES.includes(asset.type) ? asset.type : 'builtin';
+    const label = asset.name || 'unknown';
+    if (asset.path || asset.status !== 'observed') {
+        evidence.push(buildEvidenceItem(toolName, {
+            subject_type: subjectType,
+            label,
+            scope: scopeForPath(asset.path),
+            evidence_type: 'static_scan',
+            visibility: 'discovered',
+            confidence: asset.path ? 'partial' : 'unknown',
+            status: evidenceStatusFromStaticStatus(asset.status),
+            path: asset.path || '',
+            missing_reason: '静态发现只能证明当前磁盘或配置中存在该能力，不能证明本次运行已加载',
+            attributes: { asset_status: asset.status || 'unknown' },
+        }));
+    }
+    if (usageEvidence && usageEvidence.count > 0) {
+        const evidenceTypes = Array.from(usageEvidence.evidence_types || []);
+        evidence.push(buildEvidenceItem(toolName, {
+            subject_type: subjectType,
+            label,
+            scope: 'session',
+            evidence_type: evidenceTypes.includes('runtime_hook') ? 'runtime_hook' : (evidenceTypes[0] || 'native_log'),
+            visibility: 'invoked',
+            confidence: 'confirmed',
+            status: 'invoked',
+            observed_at: usageEvidence.last_observed_at || '',
+            missing_reason: '',
+            attributes: {
+                call_count: usageEvidence.count,
+                evidence_types: evidenceTypes,
+            },
+        }));
+    }
+    return evidence;
+}
+
+function buildConfigChain(toolName, paths = []) {
+    return paths.map(item => buildEvidenceItem(toolName, {
+        subject_type: pathRoleSubjectType(item.role),
+        label: item.role || '配置项',
+        scope: scopeForPath(item.path),
+        evidence_type: 'static_scan',
+        visibility: item.status === 'missing' ? 'unobservable' : 'discovered',
+        confidence: item.status === 'missing' ? 'unknown' : 'partial',
+        status: evidenceStatusFromStaticStatus(item.status),
+        path: item.path || '',
+        missing_reason: item.status === 'missing'
+            ? '当前扫描未发现该路径'
+            : '静态路径诊断不能证明历史任务实际加载该配置',
+        attributes: {
+            role: item.role || '',
+            path_status: item.status || 'unknown',
+            description: item.description || '',
+        },
+    }));
+}
+
+function buildRuntimeStatus(tool = {}, usageRows = [], reconciliation = {}) {
+    const rows = usageRows.filter(row => (row.source || row.tool) === tool.tool);
+    const lastObservedAt = rows.reduce((latest, row) => row.last_observed_at && row.last_observed_at > latest ? row.last_observed_at : latest, '');
+    const hookPath = (tool.paths || []).find(item => /hook/i.test(String(item.role || '')));
+    const extensionPath = (tool.paths || []).find(item => /extension|扩展/i.test(String(item.role || '')));
+    const extensionAvailable = ['exists', 'enabled', 'configured', 'complete'].includes(extensionPath?.status);
+    const status = hookPath?.status === 'complete' || hookPath?.status === 'configured' || extensionAvailable
+        ? 'available'
+        : rows.length ? 'observed_history' : 'unknown';
+    const degradationReason = tool.tool === 'pi' && !extensionAvailable
+        ? 'Pi 运行时扩展尚未接入；当前仍以原生 JSONL 历史模式为主'
+        : '';
+    return {
+        status,
+        last_event_at: reconciliation.last_observed_at || lastObservedAt,
+        hook_status: hookPath?.status || '',
+        extension_status: extensionPath?.status || '',
+        degradation_reason: degradationReason,
+    };
+}
+
+function buildReconciliation(toolName, sourceEvidence = {}, details = {}) {
+    const methods = sourceEvidence.methods || {};
+    const runtime = methods.runtime_hook || { count: 0, session_count: 0, last_observed_at: '' };
+    const nativeLog = methods.native_log || { count: 0, session_count: 0, last_observed_at: '' };
+    const localDatabase = methods.local_database || { count: 0, session_count: 0, last_observed_at: '' };
+    const historyCount = (nativeLog.count || 0) + (localDatabase.count || 0);
+    const hasRuntime = (runtime.count || 0) > 0;
+    const hasHistory = historyCount > 0;
+    let mode = 'no_events';
+    let status = 'unknown';
+    let gapReason = '尚未发现可对账事件';
+    const piToolDetails = toolName === 'pi' ? (details.pi_tool_calls || {}) : {};
+    if (toolName === 'pi' && piToolDetails.conflict_calls > 0) {
+        mode = 'runtime_and_history';
+        status = 'conflict';
+        gapReason = 'Pi 运行时事件与原生 JSONL 存在工具调用结果差异';
+    } else if (hasRuntime && hasHistory) {
+        mode = 'runtime_and_history';
+        status = toolName === 'pi' && piToolDetails.tool_call_count > 0 && piToolDetails.matched_calls === 0 ? 'partial' : 'matched';
+        gapReason = toolName === 'pi' && piToolDetails.tool_call_count > 0 && piToolDetails.matched_calls === 0
+            ? '已同时发现运行时与历史证据，但尚未按工具调用标识对上同一事件'
+            : '';
+    } else if (hasRuntime) {
+        mode = 'runtime_only';
+        status = 'partial';
+        gapReason = '当前只有运行时事件，尚未看到原生日志或本地数据库补录';
+    } else if (hasHistory) {
+        mode = 'history_only';
+        status = 'degraded';
+        gapReason = toolName === 'pi'
+            ? 'Pi 运行时扩展尚未接入或未产生事件，当前退化为原生 JSONL 历史模式'
+            : '当前只有历史或本地数据库证据，未看到运行时 Hook 事件';
+    }
+    return {
+        status,
+        mode,
+        total_events: sourceEvidence.total_events || 0,
+        session_count: sourceEvidence.session_count || 0,
+        runtime_events: runtime.count || 0,
+        runtime_sessions: runtime.session_count || 0,
+        history_events: historyCount,
+        history_sessions: (nativeLog.session_count || 0) + (localDatabase.session_count || 0),
+        local_database_events: localDatabase.count || 0,
+        native_log_events: nativeLog.count || 0,
+        last_runtime_at: runtime.last_observed_at || '',
+        last_history_at: [nativeLog.last_observed_at || '', localDatabase.last_observed_at || ''].sort().at(-1) || '',
+        last_observed_at: sourceEvidence.last_observed_at || '',
+        gap_reason: gapReason,
+        details: toolName === 'pi' ? { tool_calls: piToolDetails } : {},
+    };
 }
 
 function themeForTool(toolName, explicitTheme) {
@@ -1092,8 +1632,11 @@ function buildAssemblyPaths(tool = {}) {
             );
             break;
         case 'claude-code':
+            const claudeHookDiagnostics = inspectClaudeHooks(configDir);
             paths.push(
                 assemblyPath('设置文件', path.join(configDir, 'settings.json'), fileStatus(path.join(configDir, 'settings.json'))),
+                assemblyPath('全局项目索引', path.join(os.homedir(), '.claude.json'), fileStatus(path.join(os.homedir(), '.claude.json'))),
+                assemblyPath('Hook 配置', claudeHookDiagnostics.hooks_path, claudeHookDiagnostics.status, claudeHookDiagnostics.description),
                 assemblyPath('用户 Skills', path.join(configDir, 'skills'), dirStatus(path.join(configDir, 'skills'))),
                 assemblyPath('命令目录', path.join(configDir, 'commands'), dirStatus(path.join(configDir, 'commands'))),
                 assemblyPath('项目历史', path.join(configDir, 'projects'), dirStatus(path.join(configDir, 'projects')))
@@ -1181,6 +1724,9 @@ function buildLoadFlow(assets = []) {
 function buildOverview(options = {}) {
     const inventory = options.inventory || discoverInventory();
     const usageMap = buildUsageMap(options.usageRows || []);
+    const usageEvidenceMap = buildUsageEvidenceMap(options.usageRows || []);
+    const sourceEvidenceMap = buildSourceEvidenceMap(options.sourceEvidenceRows || []);
+    const piToolReconciliation = buildPiToolReconciliation(options.piToolReconciliationRows || []);
     const observedAssets = buildObservedAssets(options.usageRows || []);
     const priorityThreshold = Number(options.priorityThreshold || 5);
     const assetIndex = new Map();
@@ -1193,6 +1739,7 @@ function buildOverview(options = {}) {
         const assets = [...discovered, ...observed].map(asset => {
             const capability = normalizeCapabilityName(asset.name);
             const callCount = usageMap.get(`${tool.tool}::${capability}`) || 0;
+            const usageEvidence = usageEvidenceMap.get(`${tool.tool}::${capability}`);
             const item = {
                 name: asset.name || 'unknown',
                 capability,
@@ -1204,10 +1751,18 @@ function buildOverview(options = {}) {
                 call_count: callCount,
                 is_priority: callCount >= priorityThreshold,
             };
+            item.evidence = buildAssetEvidence(tool.tool, item, usageEvidence);
             if (!assetIndex.has(capability)) assetIndex.set(capability, new Map());
             assetIndex.get(capability).set(tool.tool, item);
             return item;
         }).sort((a, b) => b.call_count - a.call_count || a.name.localeCompare(b.name));
+        const paths = buildAssemblyPaths(tool);
+        const configChain = buildConfigChain(tool.tool, paths);
+        const assetEvidence = assets.flatMap(asset => asset.evidence || []);
+        const capability = getSourceCapability(tool.tool);
+        const reconciliation = buildReconciliation(tool.tool, sourceEvidenceMap.get(tool.tool), {
+            pi_tool_calls: piToolReconciliation,
+        });
 
         return {
             tool: tool.tool,
@@ -1219,7 +1774,12 @@ function buildOverview(options = {}) {
             order: tool.order ?? TOOL_DEFINITION_BY_NAME.get(tool.tool)?.order ?? 999,
             links: tool.links || TOOL_DEFINITION_BY_NAME.get(tool.tool)?.links || {},
             theme: themeForTool(tool.tool, tool.theme),
-            paths: buildAssemblyPaths(tool),
+            paths,
+            evidence: [...configChain, ...assetEvidence],
+            config_chain: configChain,
+            runtime_status: buildRuntimeStatus({ ...tool, paths }, options.usageRows || [], reconciliation),
+            reconciliation,
+            capability_matrix: capability?.capabilities || [],
             load_flow: buildLoadFlow(assets),
             assets,
             asset_groups: groupAssets(assets),
@@ -1260,22 +1820,52 @@ function buildOverview(options = {}) {
 
 function queryOverview(db, options = {}) {
     let usageRows = [];
+    let sourceEvidenceRows = [];
+    let piToolReconciliationRows = [];
     let inventory = [];
     const configCaptureOff = getCapturePolicy(options.env).config === 'off';
     if (db) {
         const sinceClause = options.since ? 'AND timestamp >= ?' : '';
         const params = options.since ? [options.since] : [];
         usageRows = db.prepare(`
-            SELECT source, tool_name, COUNT(*) as call_count
+            SELECT source, tool_name, COUNT(*) as call_count,
+                   MAX(timestamp) as last_observed_at,
+                   GROUP_CONCAT(DISTINCT capture_method) as capture_methods
             FROM timeline
             WHERE role IN ('tool_result', 'tool_error') AND tool_name IS NOT NULL ${sinceClause}
             GROUP BY source, tool_name
+        `).all(...params);
+        sourceEvidenceRows = db.prepare(`
+            SELECT source, capture_method, COUNT(*) as event_count,
+                   COUNT(DISTINCT session_key) as session_count,
+                   MAX(timestamp) as last_observed_at
+            FROM timeline
+            WHERE source IS NOT NULL AND source != '' ${sinceClause}
+            GROUP BY source, capture_method
+        `).all(...params);
+        piToolReconciliationRows = db.prepare(`
+            SELECT session_id, call_id,
+                   MAX(tool_name) as tool_name,
+                   SUM(CASE WHEN capture_method = 'runtime_hook' THEN 1 ELSE 0 END) as runtime_count,
+                   SUM(CASE WHEN capture_method IN ('native_log', 'local_database') THEN 1 ELSE 0 END) as history_count,
+                   GROUP_CONCAT(DISTINCT CASE
+                       WHEN capture_method = 'runtime_hook' AND event_type IN ('tool_result', 'tool_error')
+                       THEN COALESCE(CAST(success AS TEXT), 'unknown')
+                   END) as runtime_success,
+                   GROUP_CONCAT(DISTINCT CASE
+                       WHEN capture_method IN ('native_log', 'local_database') AND event_type IN ('tool_result', 'tool_error')
+                       THEN COALESCE(CAST(success AS TEXT), 'unknown')
+                   END) as history_success,
+                   MAX(timestamp) as last_observed_at
+            FROM timeline
+            WHERE source = 'pi' AND call_id IS NOT NULL AND call_id != '' ${sinceClause}
+            GROUP BY session_id, call_id
         `).all(...params);
         inventory = configCaptureOff ? [] : readOverviewInventory(db);
     }
     if (configCaptureOff) inventory = discoverInventory({ env: options.env });
     else if (!inventory.length) inventory = db ? stableInventoryShell() : discoverInventory({ env: options.env });
-    return buildOverview({ inventory, usageRows, priorityThreshold: options.priorityThreshold || 5 });
+    return buildOverview({ inventory, usageRows, sourceEvidenceRows, piToolReconciliationRows, priorityThreshold: options.priorityThreshold || 5 });
 }
 
 let overviewRefreshInFlight = false;
@@ -1326,6 +1916,8 @@ module.exports = {
     stopOverviewScanner,
     writeOverviewInventory,
     discoverCodexAssets,
+    discoverClaudeAssets,
+    inspectClaudeHooks,
     inspectCodexHooks,
     discoverHermesAssets,
     discoverPiAssets,
