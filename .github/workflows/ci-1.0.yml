@@ -44,5 +44,8 @@ jobs:
       - name: Build distributable
         run: npm run build:dist
 
+      - name: Smoke distributable
+        run: npm run smoke:dist
+
       - name: Verify npm package contents
         run: npm pack --dry-run
