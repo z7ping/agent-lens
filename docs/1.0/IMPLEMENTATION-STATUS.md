@@ -35,16 +35,20 @@
 - `/api/v1/sessions`
 - `/api/v1/usage`
 - `/api/v1/events` SSE
-- Vite Web：Timeline / Sessions / Tools & Assets
-- Timeline SSE 增量 DOM 更新；Sessions / Tools & Assets 在有新数据时提示显式 Refresh，避免实时事件打断阅读上下文
+- Vite Web：执行轨迹 / 会话 / 工具与能力
+- Web 主界面已完成简体中文化
+- 执行轨迹 SSE 使用增量 DOM 更新，保留滚动位置、Evidence 展开状态和阅读上下文
+- 会话 / 工具与能力在不能安全增量更新时只提示有新数据，由用户显式刷新
 
 ### Operations
 
 - Codex / Claude Hook Manager
 - CLI：start / status / doctor / hook
 - npm 单包分发构建
+- 构建后 Daemon / Web 发行包启动冒烟测试
 - GitHub Release -> npm Artifact Workflow
-- Windows Electron 桌面壳 + 托盘 + NSIS 安装包 Workflow
+- Windows Electron 桌面壳 + 中文托盘 + NSIS 安装包 Workflow
+- Windows 桌面图标已更新为符合 electron-builder 要求的 256×256 AgentLens 图标
 
 ## Repository Cleanup
 
@@ -90,15 +94,35 @@ docs/static/
 - 幂等的 `unchanged` Replay 不触发 SSE 更新噪声。
 - SSE 实时更新不能通过反复全量替换内容区破坏滚动位置、展开状态和阅读上下文。
 
-## 尚待最终验证
+## 自动验收状态
 
-当前实现状态不等于已经通过最终 Release Acceptance。合并 / 发布前仍需要在当前 HEAD 确认：
+当前 1.0 自动验收基线使用 Node.js `>=22.23.0`。
+
+已在 Linux / Windows GitHub Actions 上实际通过：
 
 1. `npm run typecheck`
 2. `npm test`
 3. `npm run build:dist`
-4. `npm pack --dry-run` 或 `npm run release:check`
-5. Linux / Windows CI 当前 HEAD 全绿
-6. Windows NSIS Installer 至少完成一次实际构建验证
+4. 构建后 Daemon / 中文 Web 启动冒烟测试
+5. `npm pack --dry-run` / npm 包内容检查
+6. Cordis compatibility tests
+7. Codex / Claude Code / Pi Source tests
+8. Canonical Observation + 多 Evidence 去重验收
+
+Windows 安装包也已经完成一次真实流水线验证：
+
+- electron-builder / NSIS 构建成功；
+- 实际产出 `AgentLens-1.0.0-alpha.0-Setup-x64.exe`；
+- 生成 `SHA256SUMS.txt`；
+- GitHub Actions Artifact 上传成功；
+- 验收 Artifact：`agent-lens-windows-32427597438`。
+
+## 仍需人工体验 / 发布决策
+
+以下内容不适合仅凭 CI 宣称完成：
+
+- 在真实 Windows 桌面环境中点击安装、启动、托盘、退出和卸载；
+- 使用真实 Codex / Claude Code / Pi 本机数据观察中文 Web 的信息密度、交互和轨迹可读性；
+- 根据实际体验决定是否继续调整 UI。
 
 本文不代表已经完成 Merge、npm Publish 或 GitHub Release；这些操作仍然必须由仓库所有者明确触发。
