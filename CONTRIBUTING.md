@@ -15,7 +15,7 @@ Issue、Milestone、Project 和 Pull Request 以 GitHub 为准。安全问题请
 
 ## 本地开发
 
-要求 Node.js **22.12+**。
+要求 Node.js **22.23+**。
 
 ```bash
 npm install
@@ -73,26 +73,29 @@ packages/
 
 Pull Request 应满足：
 
+- 标题和正文统一使用中文；
 - 只解决一个明确问题；
 - 描述背景、实现、风险和验证结果；
 - 新行为有相应测试，或说明无法自动测试的原因；
 - `npm run typecheck`、`npm test`、`npm run build:dist` 通过；
 - 不包含真实提示词、凭据、本机数据；
 - Web 只消费 `@agent-lens/protocol` / `/api/v1/*`；
-- Source 通过稳定 `SourceDefinition` Contract 接入；
+- Source 通过稳定 `SourceDefinition` Contract 接入，并由 Cordis-native Plugin 入口注册；
 - 不把静态 Asset Discovery 当作实际 Usage；
 - 不重新引入 0.x Adapter / Importer / timeline / overview Runtime；
 - 涉及 Core Contract、Canonical Identity、Evidence 语义或 Runtime 所有权时，先做 Contract Review / ADR。
 
 ## 提交风格
 
-推荐 Conventional Commit 风格，例如：
+提交信息统一使用中文，推荐保持清晰的“类型（范围）：说明”结构，例如：
 
 ```text
-feat(1.0): add source capability
-fix(1.0): preserve evidence identity
-docs(1.0): clarify runtime boundary
+功能(1.0)：新增来源能力
+修复(1.0)：保留证据身份
+文档(1.0)：澄清运行时边界
 ```
+
+代码标识符、API 名称、类型名和命令仍保持英文，不要求为了提交语言翻译技术标识符。
 
 ## 文档职责
 
