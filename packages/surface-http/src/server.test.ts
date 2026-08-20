@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import test from 'node:test'
 import {
   DefaultIdentityService,
@@ -11,9 +14,13 @@ import type {
 import { SqliteStorageService } from '@agent-lens/storage-sqlite'
 import { startHttpSurface } from './server'
 
-test('HTTP surface exposes v1 health and timeline protocol on loopback', async () => {
+test('HTTP surface exposes v1 API and production web assets on loopback', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   await storage.migrate()
+  const webRoot = await mkdtemp(join(tmpdir(), 'agent-lens-web-'))
+  await mkdir(join(webRoot, 'assets'), { recursive: true })
+  await writeFile(join(webRoot, 'index.html'), '<!doctype html><title>AgentLens Web</title>', 'utf8')
+  await writeFile(join(webRoot, 'assets', 'app.js'), 'console.log("agent-lens")', 'utf8')
 
   const identity = new DefaultIdentityService(storage)
   const observations = new DefaultObservationService(storage, identity)
@@ -44,7 +51,7 @@ test('HTTP surface exposes v1 health and timeline protocol on loopback', async (
     }],
   })
 
-  const surface = await startHttpSurface(storage, { port: 0 })
+  const surface = await startHttpSurface(storage, { port: 0, staticDir: webRoot })
   try {
     assert.equal(surface.host, '127.0.0.1')
     assert.ok(surface.port > 0)
@@ -68,6 +75,23 @@ test('HTTP surface exposes v1 health and timeline protocol on loopback', async (
     assert.equal(timeline.items[0]?.kind, 'message.user')
     assert.equal(timeline.items[0]?.evidence.length, 1)
 
+    const home = await fetch(`${base}/`)
+    assert.equal(home.status, 200)
+    assert.match(home.headers.get('content-type') ?? '', /^text\/html/)
+    assert.match(await home.text(), /AgentLens Web/)
+
+    const asset = await fetch(`${base}/assets/app.js`)
+    assert.equal(asset.status, 200)
+    assert.match(asset.headers.get('content-type') ?? '', /^text\/javascript/)
+    assert.match(await asset.text(), /agent-lens/)
+
+    const spaRoute = await fetch(`${base}/sessions/http-session-1`)
+    assert.equal(spaRoute.status, 200)
+    assert.match(await spaRoute.text(), /AgentLens Web/)
+
+    const missingAsset = await fetch(`${base}/assets/missing.js`)
+    assert.equal(missingAsset.status, 404)
+
     const badKind = await fetch(`${base}/api/v1/timeline?kind=not-a-real-kind`)
     assert.equal(badKind.status, 400)
     assert.deepEqual(await badKind.json(), {
@@ -75,10 +99,12 @@ test('HTTP surface exposes v1 health and timeline protocol on loopback', async (
       message: 'Unknown timeline kind: not-a-real-kind',
     })
 
-    const missing = await fetch(`${base}/api/v1/not-found`)
-    assert.equal(missing.status, 404)
+    const missingApi = await fetch(`${base}/api/v1/not-found`)
+    assert.equal(missingApi.status, 404)
+    assert.deepEqual(await missingApi.json(), { error: 'not_found' })
   } finally {
     await surface.dispose()
     storage.close()
+    await rm(webRoot, { recursive: true, force: true })
   }
 })

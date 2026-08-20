@@ -9,6 +9,7 @@ import {
 
 export interface HttpSurfacePluginConfig {
   port?: number
+  staticDir?: string
 }
 
 const manifest = {
@@ -23,6 +24,7 @@ const applyHttpSurface = Object.assign(
   async (ctx: AgentLensContext, config: HttpSurfacePluginConfig = {}) => {
     const surface = await startHttpSurface(ctx.storage, {
       port: config.port ?? DEFAULT_AGENT_LENS_HTTP_PORT,
+      ...(config.staticDir ? { staticDir: config.staticDir } : {}),
     })
     return () => surface.dispose()
   },

@@ -1,5 +1,6 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import {
   AgentLensApplication,
   coreServicesPlugin,
@@ -19,12 +20,17 @@ const dbPath = process.env.AGENT_LENS_DB_PATH
 const configuredPort = process.env.AGENT_LENS_PORT
   ? Number(process.env.AGENT_LENS_PORT)
   : DEFAULT_AGENT_LENS_HTTP_PORT
+const webRoot = process.env.AGENT_LENS_WEB_ROOT
+  ?? fileURLToPath(new URL('../../web/dist/', import.meta.url))
 
 const app = new AgentLensApplication()
 app.use(sqliteStoragePlugin, { path: dbPath })
 app.useRuntime(coreServicesPlugin)
 app.use(codexSourcePlugin)
-app.use(httpSurfacePlugin, { port: configuredPort })
+app.use(httpSurfacePlugin, {
+  port: configuredPort,
+  staticDir: webRoot,
+})
 
 const runtimeController = new AbortController()
 let syncPromise: ReturnType<typeof syncRegisteredSourceHistory> | null = null
@@ -64,7 +70,7 @@ process.once('SIGTERM', () => {
 try {
   await app.start()
   console.info(`[AgentLens] 1.0 runtime started (db: ${dbPath})`)
-  console.info(`[AgentLens] HTTP surface: http://127.0.0.1:${configuredPort}`)
+  console.info(`[AgentLens] Web/UI: http://127.0.0.1:${configuredPort} (root: ${webRoot})`)
 
   syncPromise = syncRegisteredSourceHistory(app.context, runtimeController.signal)
   const historyResults = await syncPromise

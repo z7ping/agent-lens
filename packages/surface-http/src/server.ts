@@ -1,4 +1,6 @@
 import { createServer, type Server, type ServerResponse } from 'node:http'
+import { readFile, stat } from 'node:fs/promises'
+import { extname, resolve, sep } from 'node:path'
 import type { StorageService } from '@agent-lens/core'
 import { TimelineProjection } from '@agent-lens/projection-timeline'
 import {
@@ -15,6 +17,7 @@ export const DEFAULT_AGENT_LENS_HTTP_PORT = 56789
 
 export interface HttpSurfaceOptions {
   port?: number
+  staticDir?: string
 }
 
 export interface RunningHttpSurface {
@@ -22,6 +25,18 @@ export interface RunningHttpSurface {
   readonly port: number
   readonly server: Server
   dispose(): Promise<void>
+}
+
+const MIME_TYPES: Record<string, string> = {
+  '.css': 'text/css; charset=utf-8',
+  '.html': 'text/html; charset=utf-8',
+  '.ico': 'image/x-icon',
+  '.js': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.map': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.txt': 'text/plain; charset=utf-8',
+  '.webp': 'image/webp',
 }
 
 function jsonValue(value: unknown, depth = 0): JsonValue {
@@ -48,6 +63,19 @@ function writeJson(response: ServerResponse, statusCode: number, body: unknown):
   response.setHeader('content-type', 'application/json; charset=utf-8')
   response.setHeader('cache-control', 'no-store')
   response.setHeader('content-length', Buffer.byteLength(content))
+  response.end(content)
+}
+
+function writeBytes(
+  response: ServerResponse,
+  statusCode: number,
+  contentType: string,
+  content: Buffer,
+): void {
+  response.statusCode = statusCode
+  response.setHeader('content-type', contentType)
+  response.setHeader('cache-control', 'no-store')
+  response.setHeader('content-length', content.byteLength)
   response.end(content)
 }
 
@@ -99,6 +127,52 @@ function parseTimelineQuery(params: URLSearchParams): TimelineQueryDto {
   }
 }
 
+async function regularFile(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isFile()
+  } catch {
+    return false
+  }
+}
+
+function safeStaticPath(root: string, pathname: string): string | null {
+  let decoded: string
+  try {
+    decoded = decodeURIComponent(pathname)
+  } catch {
+    return null
+  }
+  const candidate = resolve(root, decoded.replace(/^\/+/, ''))
+  return candidate === root || candidate.startsWith(`${root}${sep}`) ? candidate : null
+}
+
+async function serveStatic(
+  response: ServerResponse,
+  pathname: string,
+  staticDir: string,
+): Promise<boolean> {
+  const root = resolve(staticDir)
+  const requested = pathname === '/' ? '/index.html' : pathname
+  const candidate = safeStaticPath(root, requested)
+  if (!candidate) return false
+
+  let target = candidate
+  if (!await regularFile(target)) {
+    if (extname(requested)) return false
+    target = resolve(root, 'index.html')
+    if (!await regularFile(target)) return false
+  }
+
+  const content = await readFile(target)
+  writeBytes(
+    response,
+    200,
+    MIME_TYPES[extname(target).toLowerCase()] ?? 'application/octet-stream',
+    content,
+  )
+  return true
+}
+
 export async function startHttpSurface(
   storage: StorageService,
   options: HttpSurfaceOptions = {},
@@ -139,6 +213,15 @@ export async function startHttpSurface(
 
       if (url.pathname === '/api/v1/timeline') {
         writeJson(response, 200, await timeline.query(parseTimelineQuery(url.searchParams)))
+        return
+      }
+
+      if (url.pathname.startsWith('/api/')) {
+        writeJson(response, 404, { error: 'not_found' })
+        return
+      }
+
+      if (options.staticDir && await serveStatic(response, url.pathname, options.staticDir)) {
         return
       }
 
@@ -192,4 +275,6 @@ export async function startHttpSurface(
 export const httpSurfaceInternals = {
   parseTimelineQuery,
   jsonValue,
+  safeStaticPath,
+  serveStatic,
 }
