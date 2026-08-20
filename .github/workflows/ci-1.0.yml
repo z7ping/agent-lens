@@ -29,7 +29,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 22.12.0
           package-manager-cache: false
 
       - name: Install dependencies
@@ -40,3 +40,9 @@ jobs:
 
       - name: Test
         run: npm test
+
+      - name: Build distributable
+        run: npm run build:dist
+
+      - name: Verify npm package contents
+        run: npm pack --dry-run

@@ -1,26 +1,71 @@
 {
-  "name": "agent-lens-workspace",
+  "name": "@z7ping/agent-lens",
   "version": "1.0.0-alpha.0",
-  "private": true,
+  "description": "Local observability and replay for AI coding agents, rebuilt around a canonical evidence model.",
+  "private": false,
   "type": "module",
   "workspaces": [
     "packages/*",
     "apps/*"
   ],
+  "bin": {
+    "agent-lens": "dist/cli.mjs",
+    "agent-lens-hook-codex": "dist/hooks/agent-lens-hook-codex.mjs",
+    "agent-lens-hook-claude": "dist/hooks/agent-lens-hook-claude.mjs"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "README.zh-CN.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
   "scripts": {
     "dev": "npm run dev --workspace @agent-lens/daemon",
+    "cli": "npm run start --workspace @agent-lens/cli --",
     "dev:web": "npm run dev --workspace @agent-lens/web",
     "build:web": "npm run build --workspace @agent-lens/web",
+    "build:dist": "node scripts/build-distribution.mjs",
+    "build": "npm run build:dist",
     "start": "npm run start --workspace @agent-lens/daemon",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present"
+    "test": "npm run test --workspaces --if-present",
+    "release:check": "npm run typecheck && npm test && npm run build:dist && npm pack --dry-run",
+    "prepack": "npm run build:dist"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/z7ping/agent-lens.git"
+  },
+  "homepage": "https://github.com/z7ping/agent-lens#readme",
+  "bugs": {
+    "url": "https://github.com/z7ping/agent-lens/issues"
+  },
+  "keywords": [
+    "claude-code",
+    "codex",
+    "pi",
+    "ai-tools",
+    "observability",
+    "agent"
+  ],
+  "author": "7ping <z7ping@outlook.com>",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "engines": {
     "node": ">=22.12.0"
   },
+  "license": "MIT",
+  "dependencies": {
+    "@deepseek-ai/cordis": "4.0.1",
+    "better-sqlite3": "13.0.3"
+  },
   "devDependencies": {
-    "@types/node": "^22.20.0",
-    "tsx": "^4.22.4",
-    "typescript": "^6.0.3"
+    "@types/node": "22.20.0",
+    "esbuild": "0.25.12",
+    "tsx": "4.22.4",
+    "typescript": "6.0.3"
   }
 }

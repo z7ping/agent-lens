@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -22,8 +23,10 @@ const dbPath = process.env.AGENT_LENS_DB_PATH
 const configuredPort = process.env.AGENT_LENS_PORT
   ? Number(process.env.AGENT_LENS_PORT)
   : DEFAULT_AGENT_LENS_HTTP_PORT
+const bundledWebRoot = fileURLToPath(new URL('./web/', import.meta.url))
+const workspaceWebRoot = fileURLToPath(new URL('../../web/dist/', import.meta.url))
 const webRoot = process.env.AGENT_LENS_WEB_ROOT
-  ?? fileURLToPath(new URL('../../web/dist/', import.meta.url))
+  ?? (existsSync(fileURLToPath(new URL('./web/index.html', import.meta.url))) ? bundledWebRoot : workspaceWebRoot)
 
 const app = new AgentLensApplication()
 app.use(sqliteStoragePlugin, { path: dbPath })
