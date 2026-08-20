@@ -1,0 +1,9 @@
+{
+  "name": "@agent-lens/core",
+  "version": "1.0.0-alpha.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}
