@@ -1,14 +1,15 @@
 # AgentLens 1.0 Alpha 实现状态
 
-更新日期：2026-08-20
+更新日期：2026-08-21
 
 ## 已实现
 
 ### Core / Runtime
 
 - 全新的 1.0 Core Domain 与 Contract
-- Cordis Runtime Adapter（`@deepseek-ai/cordis@4.0.1`）
-- 与框架无关的 Core Services
+- Cordis Runtime（`@deepseek-ai/cordis@4.0.1`）
+- AgentLens 作为 Cordis Application 运行，Source / Storage / Surface 入口采用 Cordis-native Plugin
+- Core Domain / Core Services、Repository Contract、Parser / Normalizer 保持与 Cordis 解耦
 - 全新的 SQLite 1.0 Repository 与 Checkpoint
 - Canonical Observation + Evidence Commit Pipeline
 
@@ -17,6 +18,8 @@
 - Codex：History、Runtime Hook Durable Inbox、Assets
 - Claude Code：History、Runtime Hook Durable Inbox、Assets
 - Pi：History、原生 Runtime Tail、Assets
+
+三个 Source package 都保留独立 `SourceDefinition`，同时由各自 Cordis Plugin 入口注册到 `ctx.sources`；不存在通用 `defineSourcePlugin()` Adapter。
 
 ### Projections / Protocol
 
@@ -78,7 +81,9 @@ docs/static/
 
 - 同一个原生事件分别被 History 与 Runtime 观察到时，仍然只产生一条 Canonical Observation，并保留多份 Evidence。
 - 通用 Source Runner 不包含任何按 Source 区分的业务分支。
-- Core 与 Cordis 解耦。
+- Core Domain / Core Services、Repository Contract、Parser / Normalizer 不依赖 Cordis。
+- Source / Storage / Surface 的运行时入口直接是 Cordis Plugin，不再经过通用类别 Adapter。
+- Cordis Plugin 不得绕过 Canonical Pipeline 直接制造 Source 事实。
 - Web 与 Core / Storage / Source 解耦，只消费 Protocol DTO。
 - 静态 Asset Discovery 不计为 Usage。
 - Hook install / uninstall 必须保留第三方 Handler。

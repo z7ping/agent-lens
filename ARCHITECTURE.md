@@ -1,7 +1,7 @@
 # AgentLens 1.0 架构
 
 > 状态：1.0 alpha 实现基线  
-> 更新日期：2026-08-20
+> 更新日期：2026-08-21
 
 ## 1. 产品定位
 
@@ -76,26 +76,31 @@ AgentLens Web / Desktop
 
 ## 4. Runtime 架构
 
-Cordis 是唯一的 Plugin Runtime。
+Cordis 是唯一的 Plugin Runtime，AgentLens 1.0 本身是一个 Cordis Application。
 
 ```text
 AgentLensApplication
   |
-  +-- storage-sqlite
-  +-- core-services
-  +-- source-codex
-  +-- source-claude
-  +-- source-pi
-  +-- surface-http
+  +-- storage-sqlite      # Cordis Plugin
+  +-- core-services       # Cordis Runtime Service Provider
+  +-- source-codex        # Cordis Plugin
+  +-- source-claude       # Cordis Plugin
+  +-- source-pi           # Cordis Plugin
+  +-- surface-http        # Cordis Plugin
 ```
 
 绑定决策：
 
 - 精确锁定依赖：`@deepseek-ai/cordis@4.0.1`；
-- 所有 Cordis 耦合统一隔离在 `packages/runtime-cordis`；
-- Core Domain 与 Core Services 不依赖 Cordis；
+- **Core is framework-agnostic; runtime extensions are Cordis-native**；
+- Core Domain、Core Services、Repository Contract、Parser / Normalizer、Protocol DTO 不依赖 Cordis；
+- Source / Storage / Surface 等运行时插件入口直接使用 Cordis Context / inject / lifecycle；
+- 不在 Cordis 前再维护 `defineSourcePlugin / defineStoragePlugin / defineSurfacePlugin` 这类通用 Adapter；
+- `runtime-cordis` 负责 Context Service typing、Application bootstrap、Core Service Provider、Compatibility Test 与少量 metadata compatibility helper，而不是再次抽象一套 Plugin Runtime；
 - AgentLens 不在 Cordis 之外再实现第二套 DI / 生命周期 / Plugin Loader；
 - DSH 仅作为架构与产品化参考，不是运行时依赖。
+
+这意味着 Cordis 决定“组件如何运行”，而 AgentLens Core Contract 决定“组件可以表达什么事实”。Cordis-native Plugin 不得绕过 Canonical Pipeline 直接制造事实。
 
 ## 5. Package 职责
 
@@ -109,18 +114,18 @@ apps/
   hook-claude/      被动式 Claude Code Hook 进程
 
 packages/
-  core/             领域模型 + 公共 Contract
+  core/             领域模型 + 公共 Contract（Cordis-independent）
   core-services/    与框架无关的 Service 实现
-  runtime-cordis/   Cordis 适配 / Runtime 边界
+  runtime-cordis/   Cordis Context / Application / Compatibility 边界
   protocol/         对外 DTO 边界
-  storage-sqlite/   全新的 1.0 持久化实现
-  source-codex/     Codex Source 实现
-  source-claude/    Claude Code Source 实现
-  source-pi/        Pi Source 实现
+  storage-sqlite/   SQLite Repository + Cordis Storage Plugin 入口
+  source-codex/     Codex 纯解析能力 + Cordis Source Plugin 入口
+  source-claude/    Claude Code 纯解析能力 + Cordis Source Plugin 入口
+  source-pi/        Pi 纯解析能力 + Cordis Source Plugin 入口
   projection-timeline/
   projection-session/
   projection-usage/
-  surface-http/
+  surface-http/     HTTP 能力 + Cordis Surface Plugin 入口
   hook-manager/
 ```
 
@@ -136,6 +141,8 @@ detect
   -> discoverAssets?
   -> normalize
 ```
+
+Source package 的运行时入口直接是 Cordis Plugin，典型职责只是把自身 `SourceDefinition` 注册进 `ctx.sources`。Parser、Normalizer、History Reader、Asset Scanner 等实现应尽量保持纯 TypeScript / Core Contract，可脱离 Cordis 单独测试。
 
 Runtime Runner 必须保持通用，不得出现 Codex / Claude / Pi 专用分支。
 
@@ -256,6 +263,8 @@ History / Runtime 合并的目标是增强 Evidence，而不是制造重复事�
 
 Schema 通过 Core Repository 接口访问。业务功能不得绕过 Repository 直接写临时 SQL。
 
+SQLite Repository 实现本身保持 Cordis-independent；`storage-sqlite` 的插件入口使用 Cordis 生命周期创建、提供并释放 `ctx.storage`。
+
 ## 12. Projections
 
 Projection 是派生读模型，不是第二份事实来源。
@@ -297,13 +306,15 @@ HTTP Server 固定监听 loopback `127.0.0.1`，默认端口 `56789`。
 
 API 路由优先于 SPA / 静态资源 fallback。
 
+`surface-http` 的 Server / DTO 处理逻辑保持普通 TypeScript；其插件入口直接作为 Cordis Plugin 订阅 `observation/committed` 并管理 Surface 生命周期。
+
 ## 14. 实时更新
 
 当 Canonical Observation 新建或新增 Evidence 后，Core Services 通过 Cordis Event Bridge 发布 `observation/committed`。
 
 幂等的 `unchanged` commit 不广播事件。
 
-HTTP 层把该事件转换为 SSE。Web Client 会合并短时间内的事件突发再刷新 Projection，因此一批 Hook 事件不会造成“一条记录一次全量重绘”。
+HTTP 层把该事件转换为 SSE。Web Client 对 Timeline 使用增量 DOM 协调，不允许每个 SSE 事件触发整页 / 整块内容区重绘；暂未实现安全增量更新的视图只提示存在新数据，由用户显式刷新。
 
 ## 15. Web
 
@@ -390,6 +401,6 @@ Daemon 仍然提供同一套 `127.0.0.1:56789` HTTP / SSE Surface。卸载 Deskt
 
 ## 21. 架构验收规则
 
-新增一个 Source，正常情况下只需要新增一个 Source package，并在 Composition Root 中注册。
+新增一个 Source，正常情况下只需要新增一个 Source package，并在 Composition Root 中注册其 Cordis Plugin；Parser / Normalizer / SourceDefinition 仍按 Core Contract 实现。
 
 如果新增 Source 必须修改 Core 语义类型、Canonical Identity、Evidence 语义或 Plugin Runtime 所有权，这就不是普通接入，而是一次 Contract Review。

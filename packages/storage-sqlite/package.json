@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@agent-lens/core": "1.0.0-alpha.0",
+    "@agent-lens/runtime-cordis": "1.0.0-alpha.0",
     "better-sqlite3": "13.0.3"
   },
   "devDependencies": {

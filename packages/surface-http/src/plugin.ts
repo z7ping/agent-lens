@@ -1,8 +1,7 @@
-import type {
-  AgentLensPluginManifest,
-  CoreEventMap,
-  StorageService,
-} from '@agent-lens/core'
+import {
+  defineAgentLensPlugin,
+  type AgentLensContext,
+} from '@agent-lens/runtime-cordis'
 import { HttpEventHub } from './events'
 import {
   DEFAULT_AGENT_LENS_HTTP_PORT,
@@ -14,37 +13,35 @@ export interface HttpSurfacePluginConfig {
   staticDir?: string
 }
 
-export interface HttpSurfaceRuntime {
-  readonly storage: StorageService
-  onObservationCommitted(
-    listener: (event: CoreEventMap['observation/committed']) => void,
-  ): void
-}
-
-export const httpSurfaceManifest = {
+const manifest = {
   pluginId: '@agent-lens/surface-http',
   pluginVersion: '1.0.0-alpha.0',
   apiVersion: '1.0',
   pluginType: 'surface',
   displayName: 'AgentLens HTTP Surface',
-} as const satisfies AgentLensPluginManifest
+} as const
 
-export async function createHttpSurface(
-  runtime: HttpSurfaceRuntime,
-  config: HttpSurfacePluginConfig = {},
-) {
-  const eventHub = new HttpEventHub()
-  runtime.onObservationCommitted(event => {
-    eventHub.publish({
-      type: 'observation.committed',
-      observationId: event.observationId,
-      emittedAt: new Date().toISOString(),
+const applyHttpSurface = Object.assign(
+  async (ctx: AgentLensContext, config: HttpSurfacePluginConfig = {}) => {
+    const eventHub = new HttpEventHub()
+    ctx.on('observation/committed', event => {
+      eventHub.publish({
+        type: 'observation.committed',
+        observationId: event.observationId,
+        emittedAt: new Date().toISOString(),
+      })
     })
-  })
+    const surface = await startHttpSurface(ctx.storage, {
+      port: config.port ?? DEFAULT_AGENT_LENS_HTTP_PORT,
+      ...(config.staticDir ? { staticDir: config.staticDir } : {}),
+      eventHub,
+    })
+    return async () => {
+      eventHub.close()
+      await surface.dispose()
+    }
+  },
+  { inject: ['storage'] },
+)
 
-  return startHttpSurface(runtime.storage, {
-    port: config.port ?? DEFAULT_AGENT_LENS_HTTP_PORT,
-    ...(config.staticDir ? { staticDir: config.staticDir } : {}),
-    eventHub,
-  })
-}
+export const httpSurfacePlugin = defineAgentLensPlugin(manifest, applyHttpSurface)

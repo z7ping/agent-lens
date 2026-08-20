@@ -4,6 +4,10 @@ import type {
   SourceDefinition,
   SourcePluginManifest,
 } from '@agent-lens/core'
+import {
+  defineAgentLensPlugin,
+  type AgentLensContext,
+} from '@agent-lens/runtime-cordis'
 import { discoverCodexAssets } from './assets'
 import { detectCodex } from './detect'
 import { ingestCodexHistory } from './history'
@@ -49,6 +53,16 @@ export const codexSourceDefinition: SourceDefinition = {
   startCapture: startCodexRuntimeCapture,
   normalize: normalizeCodexRecord,
 }
+
+const applyCodexSource = Object.assign(
+  (ctx: AgentLensContext) => {
+    const registration = ctx.sources.register(codexSourceDefinition)
+    return () => registration.dispose()
+  },
+  { inject: ['sources'] },
+)
+
+export const codexSourcePlugin = defineAgentLensPlugin(codexManifest, applyCodexSource)
 
 export * from './assets'
 export * from './detect'

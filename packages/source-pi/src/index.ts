@@ -34,6 +34,10 @@ import type {
   SourceRecord,
   SourceRecordEmitter,
 } from '@agent-lens/core'
+import {
+  defineAgentLensPlugin,
+  type AgentLensContext,
+} from '@agent-lens/runtime-cordis'
 
 const SOURCE_ID = 'pi'
 const PARSER_VERSION = '1'
@@ -771,3 +775,13 @@ export const piSourceDefinition: SourceDefinition = {
   startCapture: startPiRuntimeCapture,
   normalize: normalizePiRecord,
 }
+
+const applyPiSource = Object.assign(
+  (ctx: AgentLensContext) => {
+    const registration = ctx.sources.register(piSourceDefinition)
+    return () => registration.dispose()
+  },
+  { inject: ['sources'] },
+)
+
+export const piSourcePlugin = defineAgentLensPlugin(piManifest, applyPiSource)

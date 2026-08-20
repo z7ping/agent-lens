@@ -34,6 +34,10 @@ import type {
   SourceRecord,
   SourceRecordEmitter,
 } from '@agent-lens/core'
+import {
+  defineAgentLensPlugin,
+  type AgentLensContext,
+} from '@agent-lens/runtime-cordis'
 
 const SOURCE_ID = 'claude-code'
 const PARSER_VERSION = '1'
@@ -961,6 +965,16 @@ export const claudeSourceDefinition: SourceDefinition = {
   startCapture: startClaudeRuntimeCapture,
   normalize: normalizeClaudeRecord,
 }
+
+const applyClaudeSource = Object.assign(
+  (ctx: AgentLensContext) => {
+    const registration = ctx.sources.register(claudeSourceDefinition)
+    return () => registration.dispose()
+  },
+  { inject: ['sources'] },
+)
+
+export const claudeSourcePlugin = defineAgentLensPlugin(claudeManifest, applyClaudeSource)
 
 export const claudeInternals = {
   runtimeInboxDirectory,

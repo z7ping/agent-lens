@@ -31,9 +31,12 @@ AgentLens 1.0 是一次 **Clean Rebuild（彻底重建）**。
 ### Cordis
 
 - 精确锁定 `@deepseek-ai/cordis@4.0.1`。
-- Cordis 是唯一的 Plugin Runtime。
-- Cordis 耦合必须放在 `packages/runtime-cordis`。
-- Core Domain / Core Services 必须保持与框架无关。
+- Cordis 是唯一的 Plugin Runtime；AgentLens 1.0 本身是 Cordis Application。
+- **Core is framework-agnostic; runtime extensions are Cordis-native.**
+- Core Domain / Core Services、Repository Contract、Parser / Normalizer、Protocol DTO 必须保持与 Cordis 无关。
+- Source / Storage / Surface 等需要运行时生命周期的插件入口可以直接依赖 Cordis / `runtime-cordis` Context typing，并使用 `ctx`、`inject`、dispose 生命周期。
+- 不得再引入 `defineSourcePlugin()`、`defineStoragePlugin()`、`defineSurfacePlugin()` 之类通用适配层，把 Cordis Plugin 再包装成第二套 AgentLens Runtime Model。
+- `defineAgentLensPlugin()` 仅允许作为 metadata / API-version compatibility helper，不得扩展成第二套 Lifecycle / DI / Plugin Loader。
 - 不得再引入第二套 DI Container、Plugin Loader 或 Lifecycle Runtime。
 
 ### Canonical Data Flow
@@ -50,7 +53,7 @@ SourceRecord
 -> Surface/Web
 ```
 
-Source 不得直接写展示表。
+Cordis-native 不意味着插件可以绕过这条链路。Source 不得直接写 Canonical Repository 或展示表；Storage / Surface 也不得反向拥有 Canonical Domain。
 
 ### Evidence
 
@@ -74,9 +77,17 @@ Web / Surface 消费 `@agent-lens/protocol` DTO。浏览器代码不得直接 im
 packages/source-<name>/
 ```
 
-并在 Daemon Composition Root 中注册。
+并在 Daemon Composition Root 中注册它导出的 Cordis Plugin。
 
-它应实现稳定的 `SourceDefinition` Contract：
+推荐结构：
+
+```text
+packages/source-<name>/
+  parser / history / normalize / assets   # 纯 TypeScript / Core Contract
+  plugin entry                            # Cordis-native
+```
+
+它仍应实现稳定的 `SourceDefinition` Contract：
 
 ```text
 detect
@@ -84,6 +95,8 @@ declareCapabilities
 ingestHistory? / startCapture? / discoverAssets?
 normalize
 ```
+
+插件入口负责把 `SourceDefinition` 注册到 `ctx.sources`，不得自行复制 History / Runtime Runner、Identity、Observation Commit 或 Dedup 流程。
 
 通用 Source Runner 中不得出现 `if (sourceId === ...)` 之类的来源分支。
 
@@ -141,6 +154,8 @@ Inbox 条目只有在成功完成 Canonical Ingestion 后才能确认并删除�
 使用 Core Repository Interface。
 
 除了 storage package 自己在实现 Repository，不得绕过 `StorageService` 在业务代码里直接写功能专用 SQL。
+
+Storage Plugin 可以直接使用 Cordis 生命周期提供 `ctx.storage`，但 SQLite Repository 实现本身不应依赖 Cordis。
 
 不得重新引入旧 `timeline` / `overview` 表作为 1.0 规范事实。
 

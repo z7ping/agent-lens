@@ -1,26 +1,27 @@
 import { mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import type { AgentLensPluginManifest } from '@agent-lens/core'
+import {
+  defineAgentLensPlugin,
+  type AgentLensContext,
+} from '@agent-lens/runtime-cordis'
 import { SqliteStorageService } from './storage'
 
 export interface SqliteStoragePluginConfig {
   path: string
 }
 
-export const sqliteStorageManifest = {
+const manifest = {
   pluginId: '@agent-lens/storage-sqlite',
   pluginVersion: '1.0.0-alpha.0',
   apiVersion: '1.0',
   pluginType: 'storage',
   displayName: 'AgentLens SQLite Storage',
-} as const satisfies AgentLensPluginManifest
+} as const
 
-export async function createSqliteStorage(
+const applyStorage = async (
+  ctx: AgentLensContext,
   config: SqliteStoragePluginConfig,
-): Promise<{
-  storage: SqliteStorageService
-  dispose(): void
-}> {
+) => {
   if (!config?.path) {
     throw new Error('SQLite storage requires a database path')
   }
@@ -32,14 +33,15 @@ export async function createSqliteStorage(
   const storage = new SqliteStorageService({ path: config.path })
   try {
     await storage.migrate()
-    return {
-      storage,
-      dispose() {
-        storage.close()
-      },
+    const unprovide = ctx.provide('storage', storage)
+    return () => {
+      unprovide()
+      storage.close()
     }
   } catch (error) {
     storage.close()
     throw error
   }
 }
+
+export const sqliteStoragePlugin = defineAgentLensPlugin(manifest, applyStorage)

@@ -1,13 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { Context, type Plugin } from '@deepseek-ai/cordis'
-import type {
-  SourceDefinition,
-  SourceService,
-  StorageService,
-} from '@agent-lens/core'
+import type { StorageService } from '@agent-lens/core'
 import './context'
-import { defineAgentLensPlugin, defineSourcePlugin } from './plugin'
+import { defineAgentLensPlugin } from './plugin'
 
 const repositories = {} as StorageService['repositories']
 const checkpoints: StorageService['checkpoints'] = {
@@ -81,64 +77,4 @@ test('AgentLens plugin metadata rejects incompatible API versions', () => {
     }, plugin),
     /Unsupported AgentLens Plugin API/,
   )
-})
-
-test('SourceDefinition is adapted to Cordis inside the runtime boundary', async () => {
-  const root = new Context()
-  let registered: SourceDefinition | null = null
-  let disposed = false
-
-  const sources: SourceService = {
-    register(definition) {
-      registered = definition
-      return {
-        dispose() {
-          disposed = true
-          registered = null
-        },
-      }
-    },
-    list() {
-      return registered ? [registered] : []
-    },
-    async detect() {
-      return []
-    },
-  }
-
-  const provider: Plugin.Function<void> = (ctx) => {
-    ctx.provide('sources', sources)
-  }
-
-  const definition: SourceDefinition = {
-    manifest: {
-      pluginId: '@agent-lens/test-source',
-      pluginVersion: '1.0.0',
-      apiVersion: '1.0',
-      pluginType: 'source',
-      displayName: 'Test Source',
-      sourceId: 'test-source',
-      productId: 'test-source',
-      parserVersion: '1',
-    },
-    async detect() {
-      return []
-    },
-    async declareCapabilities() {
-      return []
-    },
-    async normalize() {
-      return { observations: [], evidenceCandidates: [] }
-    },
-  }
-
-  const providerFiber = await root.plugin(provider)
-  const sourceFiber = await root.plugin(defineSourcePlugin(definition))
-
-  assert.equal(registered, definition)
-
-  await sourceFiber.dispose()
-  assert.equal(disposed, true)
-  assert.equal(registered, null)
-  await providerFiber.dispose()
 })
