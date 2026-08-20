@@ -5,13 +5,14 @@ import { fileURLToPath } from 'node:url'
 import {
   AgentLensApplication,
   coreServicesPlugin,
+  defineSourcePlugin,
   discoverRegisteredSourceAssets,
   startRegisteredSourceCapture,
   syncRegisteredSourceHistory,
 } from '@agent-lens/runtime-cordis'
-import { claudeSourcePlugin } from '@agent-lens/source-claude'
-import { codexSourcePlugin } from '@agent-lens/source-codex'
-import { piSourcePlugin } from '@agent-lens/source-pi'
+import { claudeSourceDefinition } from '@agent-lens/source-claude'
+import { codexSourceDefinition } from '@agent-lens/source-codex'
+import { piSourceDefinition } from '@agent-lens/source-pi'
 import { sqliteStoragePlugin } from '@agent-lens/storage-sqlite'
 import {
   DEFAULT_AGENT_LENS_HTTP_PORT,
@@ -31,9 +32,9 @@ const webRoot = process.env.AGENT_LENS_WEB_ROOT
 const app = new AgentLensApplication()
 app.use(sqliteStoragePlugin, { path: dbPath })
 app.useRuntime(coreServicesPlugin)
-app.use(codexSourcePlugin)
-app.use(claudeSourcePlugin)
-app.use(piSourcePlugin)
+app.use(defineSourcePlugin(codexSourceDefinition))
+app.use(defineSourcePlugin(claudeSourceDefinition))
+app.use(defineSourcePlugin(piSourceDefinition))
 app.use(httpSurfacePlugin, {
   port: configuredPort,
   staticDir: webRoot,
