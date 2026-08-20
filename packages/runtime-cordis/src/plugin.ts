@@ -2,7 +2,10 @@ import type { Plugin } from '@deepseek-ai/cordis'
 import {
   AGENT_LENS_PLUGIN_API_VERSION,
   type AgentLensPluginManifest,
+  type CoreEventMap,
+  type Disposable,
   type SourceDefinition,
+  type StorageService,
 } from '@agent-lens/core'
 import type { AgentLensContext } from './context'
 
@@ -48,4 +51,62 @@ export function defineSourcePlugin(
   )
 
   return defineAgentLensPlugin(definition.manifest, applySource)
+}
+
+export interface StoragePluginInstance extends Disposable {
+  readonly storage: StorageService
+}
+
+export type StoragePluginFactory<Config> = (
+  config: Config,
+) => StoragePluginInstance | Promise<StoragePluginInstance>
+
+export function defineStoragePlugin<Config>(
+  manifest: AgentLensPluginManifest,
+  factory: StoragePluginFactory<Config>,
+): AgentLensCordisPlugin<Config> {
+  const applyStorage = async (ctx: AgentLensContext, config: Config) => {
+    const instance = await factory(config)
+    const unprovide = ctx.provide('storage', instance.storage)
+    return async () => {
+      unprovide()
+      await instance.dispose()
+    }
+  }
+
+  return defineAgentLensPlugin(manifest, applyStorage)
+}
+
+export interface SurfaceRuntimeContext {
+  readonly storage: StorageService
+  onObservationCommitted(
+    listener: (event: CoreEventMap['observation/committed']) => void,
+  ): void
+}
+
+export type SurfacePluginFactory<Config> = (
+  runtime: SurfaceRuntimeContext,
+  config: Config,
+) => Disposable | Promise<Disposable>
+
+export function defineSurfacePlugin<Config>(
+  manifest: AgentLensPluginManifest,
+  factory: SurfacePluginFactory<Config>,
+): AgentLensCordisPlugin<Config> {
+  const applySurface = Object.assign(
+    async (ctx: AgentLensContext, config: Config) => {
+      const instance = await factory({
+        storage: ctx.storage,
+        onObservationCommitted(listener) {
+          ctx.on('observation/committed', listener)
+        },
+      }, config)
+      return async () => {
+        await instance.dispose()
+      }
+    },
+    { inject: ['storage'] },
+  )
+
+  return defineAgentLensPlugin(manifest, applySurface)
 }

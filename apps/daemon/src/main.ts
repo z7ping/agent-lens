@@ -6,6 +6,8 @@ import {
   AgentLensApplication,
   coreServicesPlugin,
   defineSourcePlugin,
+  defineStoragePlugin,
+  defineSurfacePlugin,
   discoverRegisteredSourceAssets,
   startRegisteredSourceCapture,
   syncRegisteredSourceHistory,
@@ -13,10 +15,14 @@ import {
 import { claudeSourceDefinition } from '@agent-lens/source-claude'
 import { codexSourceDefinition } from '@agent-lens/source-codex'
 import { piSourceDefinition } from '@agent-lens/source-pi'
-import { sqliteStoragePlugin } from '@agent-lens/storage-sqlite'
 import {
+  createSqliteStorage,
+  sqliteStorageManifest,
+} from '@agent-lens/storage-sqlite'
+import {
+  createHttpSurface,
   DEFAULT_AGENT_LENS_HTTP_PORT,
-  httpSurfacePlugin,
+  httpSurfaceManifest,
 } from '@agent-lens/surface-http'
 
 const dbPath = process.env.AGENT_LENS_DB_PATH
@@ -30,12 +36,12 @@ const webRoot = process.env.AGENT_LENS_WEB_ROOT
   ?? (existsSync(fileURLToPath(new URL('./web/index.html', import.meta.url))) ? bundledWebRoot : workspaceWebRoot)
 
 const app = new AgentLensApplication()
-app.use(sqliteStoragePlugin, { path: dbPath })
+app.use(defineStoragePlugin(sqliteStorageManifest, createSqliteStorage), { path: dbPath })
 app.useRuntime(coreServicesPlugin)
 app.use(defineSourcePlugin(codexSourceDefinition))
 app.use(defineSourcePlugin(claudeSourceDefinition))
 app.use(defineSourcePlugin(piSourceDefinition))
-app.use(httpSurfacePlugin, {
+app.use(defineSurfacePlugin(httpSurfaceManifest, createHttpSurface), {
   port: configuredPort,
   staticDir: webRoot,
 })
