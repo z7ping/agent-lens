@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./health": "./src/health.ts",
     "./timeline": "./src/timeline.ts"
   },
   "scripts": {

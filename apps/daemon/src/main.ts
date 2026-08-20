@@ -9,14 +9,22 @@ import {
 } from '@agent-lens/runtime-cordis'
 import { codexSourcePlugin } from '@agent-lens/source-codex'
 import { sqliteStoragePlugin } from '@agent-lens/storage-sqlite'
+import {
+  DEFAULT_AGENT_LENS_HTTP_PORT,
+  httpSurfacePlugin,
+} from '@agent-lens/surface-http'
 
 const dbPath = process.env.AGENT_LENS_DB_PATH
   ?? join(homedir(), '.agent-lens', '1.0', 'agent-lens.db')
+const configuredPort = process.env.AGENT_LENS_PORT
+  ? Number(process.env.AGENT_LENS_PORT)
+  : DEFAULT_AGENT_LENS_HTTP_PORT
 
 const app = new AgentLensApplication()
 app.use(sqliteStoragePlugin, { path: dbPath })
 app.useRuntime(coreServicesPlugin)
 app.use(codexSourcePlugin)
+app.use(httpSurfacePlugin, { port: configuredPort })
 
 const runtimeController = new AbortController()
 let syncPromise: ReturnType<typeof syncRegisteredSourceHistory> | null = null
@@ -56,6 +64,7 @@ process.once('SIGTERM', () => {
 try {
   await app.start()
   console.info(`[AgentLens] 1.0 runtime started (db: ${dbPath})`)
+  console.info(`[AgentLens] HTTP surface: http://127.0.0.1:${configuredPort}`)
 
   syncPromise = syncRegisteredSourceHistory(app.context, runtimeController.signal)
   const historyResults = await syncPromise

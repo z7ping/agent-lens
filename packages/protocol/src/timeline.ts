@@ -3,25 +3,28 @@ export const AGENT_LENS_PROTOCOL_VERSION = '1.0' as const
 export type JsonPrimitive = string | number | boolean | null
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue }
 
-export type TimelineObservationKind =
-  | 'session.lifecycle'
-  | 'message.user'
-  | 'message.assistant'
-  | 'message.reasoning'
-  | 'model.call'
-  | 'model.changed'
-  | 'tool.call'
-  | 'tool.progress'
-  | 'tool.result'
-  | 'permission.request'
-  | 'permission.response'
-  | 'subagent.spawn'
-  | 'subagent.end'
-  | 'context.compaction'
-  | 'context.summary'
-  | 'artifact.action'
-  | 'usage'
-  | 'unknown'
+export const TIMELINE_OBSERVATION_KINDS = [
+  'session.lifecycle',
+  'message.user',
+  'message.assistant',
+  'message.reasoning',
+  'model.call',
+  'model.changed',
+  'tool.call',
+  'tool.progress',
+  'tool.result',
+  'permission.request',
+  'permission.response',
+  'subagent.spawn',
+  'subagent.end',
+  'context.compaction',
+  'context.summary',
+  'artifact.action',
+  'usage',
+  'unknown',
+] as const
+
+export type TimelineObservationKind = typeof TIMELINE_OBSERVATION_KINDS[number]
 
 export type TimelineCaptureMethod =
   | 'runtime-hook'

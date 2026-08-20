@@ -1,0 +1,23 @@
+{
+  "name": "@agent-lens/surface-http",
+  "version": "1.0.0-alpha.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "tsx --test \"src/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@agent-lens/core": "1.0.0-alpha.0",
+    "@agent-lens/projection-timeline": "1.0.0-alpha.0",
+    "@agent-lens/protocol": "1.0.0-alpha.0",
+    "@agent-lens/runtime-cordis": "1.0.0-alpha.0"
+  },
+  "devDependencies": {
+    "@agent-lens/core-services": "1.0.0-alpha.0",
+    "@agent-lens/storage-sqlite": "1.0.0-alpha.0"
+  }
+}
