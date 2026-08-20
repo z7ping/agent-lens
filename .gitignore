@@ -9,6 +9,8 @@ trace_error.log
 
 # 忽略分发目录
 dist/
+release/
+apps/desktop/runtime/
 
 # 忽略临时文件
 *.tmp
