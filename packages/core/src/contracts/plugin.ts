@@ -1,3 +1,5 @@
+export const AGENT_LENS_PLUGIN_API_VERSION = '1.0' as const
+
 export type AgentLensPluginType = 'source' | 'analyzer' | 'storage' | 'surface'
 
 /**

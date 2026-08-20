@@ -1,80 +1,24 @@
 {
-  "name": "@z7ping/agent-lens",
-  "version": "0.7.0",
-  "description": "Local observability and replay for AI coding agents. See every observable action and the evidence behind it.",
-  "main": "server/cli.js",
-  "bin": {
-    "agent-lens": "server/cli.js"
-  },
+  "name": "agent-lens-workspace",
+  "version": "1.0.0-alpha.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
-    "dev": "concurrently -n backend,frontend -c blue,green \"node server/cli.js start\" \"vite --port 5173\"",
-    "dev:frontend": "vite --port 5173",
-    "build": "vite build",
-    "start": "node server/cli.js start",
-    "stop": "node server/cli.js stop",
-    "status": "node server/cli.js status",
-    "install-hooks": "node server/cli.js install",
-    "package": "node server/cli.js package",
-    "test": "node server/scripts/test-importers.js && node --test test/*.test.js",
-    "prepublishOnly": "vite build"
-  },
-  "files": [
-    "dist/index.html",
-    "dist/assets/",
-    "server/*.js",
-    "server/schema.sql",
-    "server/adapters/",
-    "server/hooks/",
-    "server/importers/",
-    "server/scripts/",
-    "src/",
-    "index.html",
-    "vite.config.mjs",
-    "tailwind.config.mjs",
-    "postcss.config.mjs",
-    "CHANGELOG.md",
-    "README.md",
-    "README.zh-CN.md"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/z7ping/agent-lens.git"
-  },
-  "homepage": "https://github.com/z7ping/agent-lens#readme",
-  "bugs": {
-    "url": "https://github.com/z7ping/agent-lens/issues"
-  },
-  "keywords": [
-    "claude-code",
-    "ai-tools",
-    "monitoring",
-    "visualization",
-    "agent"
-  ],
-  "author": "7ping <z7ping@outlook.com>",
-  "publishConfig": {
-    "access": "public",
-    "registry": "https://registry.npmjs.org/"
+    "dev": "npm run dev --workspace @agent-lens/daemon",
+    "start": "npm run start --workspace @agent-lens/daemon",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.19.0"
   },
-  "license": "MIT",
   "devDependencies": {
-    "@tailwindcss/typography": "^0.5.16",
-    "autoprefixer": "^10.4.21",
-    "chart.js": "^4.5.1",
-    "concurrently": "^9.1.2",
-    "postcss": "^8.5.4",
-    "tailwindcss": "^3.4.17",
-    "vite": "^6.3.5"
-  },
-  "optionalDependencies": {
-    "better-sqlite3": "12.11.1",
-    "sql.js": "^1.11.0"
-  },
-  "allowScripts": {
-    "better-sqlite3@12.11.1": true,
-    "esbuild@0.25.12": true
+    "@types/node": "^22.20.0",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3"
   }
 }

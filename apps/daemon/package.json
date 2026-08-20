@@ -1,0 +1,14 @@
+{
+  "name": "@agent-lens/daemon",
+  "version": "1.0.0-alpha.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/main.ts",
+    "start": "tsx src/main.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@agent-lens/runtime-cordis": "1.0.0-alpha.0"
+  }
+}
