@@ -1,35 +1,35 @@
-# AgentLens 1.0 Architecture
+# AgentLens 1.0 架构
 
-> Status: 1.0 alpha implementation baseline  
-> Updated: 2026-08-20
+> 状态：1.0 alpha 实现基线  
+> 更新日期：2026-08-20
 
-## 1. Positioning
+## 1. 产品定位
 
-AgentLens 1.0 is a local observability and trajectory viewer for AI coding agents. It does not try to become a universal agent framework, and it does not own the execution loop of Codex, Claude Code, Pi, or other agents.
+AgentLens 1.0 是一个面向 AI 编码 Agent 的本地可观测与执行轨迹查看器。它不试图成为通用 Agent 框架，也不接管 Codex、Claude Code、Pi 或其他 Agent 的执行循环。
 
-Its job is to answer four questions:
+它主要回答四个问题：
 
-1. What happened?
-2. Which source/evidence proves it happened?
-3. Which task/session/interaction did it belong to?
-4. Which tools and capability assets were actually used?
+1. 发生了什么？
+2. 哪个来源 / 哪份证据证明它发生了？
+3. 它属于哪个任务 / 会话 / 交互？
+4. 实际使用了哪些 Tool 和能力资产？
 
-## 2. Clean Rebuild boundary
+## 2. Clean Rebuild 边界
 
-1.0 is a clean rebuild. The 0.x implementation is reference material only.
+1.0 是一次彻底重建。0.x 实现仅作为参考材料存在。
 
-0.x may be reused for:
+0.x 可以复用：
 
-- validated parsing algorithms;
-- fixtures and regression cases;
-- useful UI ideas;
-- migration/import rules.
+- 已验证的解析算法；
+- fixture 和回归用例；
+- 有价值的 UI 思路；
+- 迁移 / 导入规则。
 
-0.x must not remain in the 1.0 runtime path as a compatibility layer. In particular, 1.0 does not wrap the old Adapter, Importer, timeline table, overview table, server lifecycle, or service manager.
+0.x 不得作为兼容层继续存在于 1.0 运行时链路中。特别是，1.0 不会包装或保留旧 Adapter、Importer、timeline 表、overview 表、server 生命周期或 service manager。
 
-There is no long-lived dual schema, dual runtime, or LegacyTimelineProjection.
+不存在长期并存的双 Schema、双 Runtime，也不存在 `LegacyTimelineProjection`。
 
-## 3. Canonical pipeline
+## 3. Canonical Pipeline
 
 ```text
 Native Source
@@ -72,11 +72,11 @@ SQLite 1.0 repositories
 AgentLens Web / Desktop
 ```
 
-The canonical fact is `CanonicalObservation`. Raw/native records remain `SourceRecord`; they are evidence inputs, not presentation models.
+系统中的规范事实是 `CanonicalObservation`。原始 / 原生数据记录保留为 `SourceRecord`；它们是证据输入，不是展示模型。
 
-## 4. Runtime architecture
+## 4. Runtime 架构
 
-Cordis is the sole plugin runtime.
+Cordis 是唯一的 Plugin Runtime。
 
 ```text
 AgentLensApplication
@@ -89,34 +89,34 @@ AgentLensApplication
   +-- surface-http
 ```
 
-Binding decision:
+绑定决策：
 
-- exact dependency: `@deepseek-ai/cordis@4.0.1`;
-- all Cordis coupling is isolated in `packages/runtime-cordis`;
-- Core Domain and Core Services do not depend on Cordis;
-- AgentLens does not implement a second DI/lifecycle/plugin loader beside Cordis;
-- DSH is an architecture/productization reference, not a runtime dependency.
+- 精确锁定依赖：`@deepseek-ai/cordis@4.0.1`；
+- 所有 Cordis 耦合统一隔离在 `packages/runtime-cordis`；
+- Core Domain 与 Core Services 不依赖 Cordis；
+- AgentLens 不在 Cordis 之外再实现第二套 DI / 生命周期 / Plugin Loader；
+- DSH 仅作为架构与产品化参考，不是运行时依赖。
 
-## 5. Package responsibilities
+## 5. Package 职责
 
 ```text
 apps/
-  daemon/           composition root
-  cli/              start/status/doctor/hook commands
-  web/              browser UI
-  desktop/          Electron Windows shell
-  hook-codex/       passive Codex hook process
-  hook-claude/      passive Claude Code hook process
+  daemon/           组合根（composition root）
+  cli/              start/status/doctor/hook 命令
+  web/              浏览器 UI
+  desktop/          Electron Windows 桌面壳
+  hook-codex/       被动式 Codex Hook 进程
+  hook-claude/      被动式 Claude Code Hook 进程
 
 packages/
-  core/             domain + public contracts
-  core-services/    framework-independent service implementations
-  runtime-cordis/   Cordis adapter/runtime boundary
-  protocol/         external DTO boundary
-  storage-sqlite/   fresh 1.0 persistence
-  source-codex/     Codex source implementation
-  source-claude/    Claude Code source implementation
-  source-pi/        Pi source implementation
+  core/             领域模型 + 公共 Contract
+  core-services/    与框架无关的 Service 实现
+  runtime-cordis/   Cordis 适配 / Runtime 边界
+  protocol/         对外 DTO 边界
+  storage-sqlite/   全新的 1.0 持久化实现
+  source-codex/     Codex Source 实现
+  source-claude/    Claude Code Source 实现
+  source-pi/        Pi Source 实现
   projection-timeline/
   projection-session/
   projection-usage/
@@ -124,45 +124,45 @@ packages/
   hook-manager/
 ```
 
-## 6. Source model
+## 6. Source 模型
 
-Every source implements the same `SourceDefinition` contract:
+所有 Source 都实现同一套 `SourceDefinition` Contract：
 
 ```text
 detect
   -> declareCapabilities
-  -> ingestHistory?      
-  -> startCapture?       
-  -> discoverAssets?     
+  -> ingestHistory?
+  -> startCapture?
+  -> discoverAssets?
   -> normalize
 ```
 
-The runtime runners are generic. They do not contain Codex/Claude/Pi branches.
+Runtime Runner 必须保持通用，不得出现 Codex / Claude / Pi 专用分支。
 
 ### 6.1 Codex
 
-- History: `~/.codex/sessions/**/*.jsonl`, byte-offset checkpoints.
-- Runtime: Hook subprocess -> durable inbox -> `startCapture()`.
-- Assets: Skill, MCP, Plugin, Hook, Rule/AGENTS.
-- Stable native call IDs are preferred for history/runtime reconciliation.
+- History：`~/.codex/sessions/**/*.jsonl`，使用字节偏移 checkpoint。
+- Runtime：Hook 子进程 -> durable inbox -> `startCapture()`。
+- Assets：Skill、MCP、Plugin、Hook、Rule / AGENTS。
+- 历史与运行时对账优先使用稳定的原生 call ID。
 
 ### 6.2 Claude Code
 
-- History: Claude project/session JSONL.
-- Runtime: Hook subprocess -> durable inbox -> `startCapture()`.
-- Assets: Skill, MCP, Plugin, Hook, Command.
-- `tool_use_id` is the preferred reconciliation key.
+- History：Claude project / session JSONL。
+- Runtime：Hook 子进程 -> durable inbox -> `startCapture()`。
+- Assets：Skill、MCP、Plugin、Hook、Command。
+- 优先使用 `tool_use_id` 作为历史 / 运行时对账键。
 
 ### 6.3 Pi
 
-- History: native Session JSONL.
-- Runtime: continuous tailing of the native Session JSONL; no synthetic Hook is required.
-- Assets: Skill, Extension, MCP, Memory-related assets discoverable from the Pi configuration root.
-- Parent session, model change, compaction, and native tree structure are preserved when observable.
+- History：原生 Session JSONL。
+- Runtime：持续 tail 原生 Session JSONL，不人为增加 Hook。
+- Assets：从 Pi 配置根可发现的 Skill、Extension、MCP、Memory 相关资产。
+- 在来源可观测的前提下保留 parent session、model change、compaction 以及原生树结构。
 
-## 7. Runtime Hook rule
+## 7. Runtime Hook 规则
 
-Hook processes must remain passive and cheap.
+Hook 进程必须保持被动、廉价。
 
 ```text
 Agent Hook subprocess
@@ -171,13 +171,13 @@ Agent Hook subprocess
   -> exit
 ```
 
-The daemon owns ingestion. Inbox files are deleted only after the record has successfully passed through the canonical pipeline. A daemon restart therefore does not require the originating agent process to replay the event.
+真正的数据摄取由 Daemon 负责。只有记录成功通过 Canonical Pipeline 后，Inbox 文件才会被删除。因此 Daemon 重启后，不要求原始 Agent 再次重放该事件。
 
-Hook code must not depend on Cordis, SQLite, Core Services, or HTTP.
+Hook 代码不得依赖 Cordis、SQLite、Core Services 或 HTTP。
 
-## 8. Identity model
+## 8. Identity 模型
 
-The 1.0 identity graph separates source identity from product/task identity:
+1.0 的身份图将来源身份与产品 / 任务身份分离：
 
 ```text
 Host
@@ -188,49 +188,49 @@ Host
         -> Interaction (derived/presentational boundary)
 ```
 
-`SourceSession` owns the source-native session ID. `LogicalSession` is the canonical task/session scope used by projections.
+`SourceSession` 持有来源原生 Session ID。`LogicalSession` 是 Projection 使用的规范任务 / 会话范围。
 
-Cross-session semantics use explicit relationships (`resume`, `continuation`, `fork`, `subagent`, `import-copy`, `related`) rather than overloading one string session key.
+跨 Session 语义通过显式关系表达（`resume`、`continuation`、`fork`、`subagent`、`import-copy`、`related`），而不是继续把语义塞进某个字符串 session key。
 
-## 9. Observation and Evidence
+## 9. Observation 与 Evidence
 
-A `CanonicalObservation` says what AgentLens believes happened.
+`CanonicalObservation` 表达 AgentLens 认为“发生了什么”。
 
-`Evidence` says why AgentLens believes it.
+`Evidence` 表达 AgentLens“为什么认为它发生了”。
 
-Evidence records preserve:
+Evidence 保留以下信息：
 
-- capture method: runtime-hook / native-log / native-db / static-scan / external-import;
-- derivation: observed / reported / derived / estimated / inferred;
-- source locator;
-- source record ID;
-- parser version;
-- event/capture time;
-- confidence;
-- missing reason where applicable.
+- capture method：runtime-hook / native-log / native-db / static-scan / external-import；
+- derivation：observed / reported / derived / estimated / inferred；
+- source locator；
+- source record ID；
+- parser version；
+- event / capture time；
+- confidence；
+- 必要时的 missing reason。
 
-The same semantic event may have several evidence records. Example: one native Tool Call may be observed by a Hook and later reported in JSONL; it stays one Canonical Observation with two Evidence records.
+同一个语义事件可以拥有多份 Evidence。例如，一个原生 Tool Call 既被 Hook 实时观察到，后来又出现在 JSONL 中，它仍然只是一条 Canonical Observation，但会拥有两份 Evidence。
 
-## 10. Deduplication
+## 10. 去重
 
-The canonical identity preference is:
+规范身份的优先级为：
 
-1. native event ID;
-2. native call ID;
-3. shared event key;
-4. source sequence;
-5. payload fingerprint + event time;
-6. deterministic semantic fallback.
+1. native event ID；
+2. native call ID；
+3. shared event key；
+4. source sequence；
+5. payload fingerprint + event time；
+6. 确定性的语义 fallback。
 
-Deduplication is scoped by source, installation, logical session, and observation kind.
+去重范围由 source、installation、logical session 和 observation kind 共同限定。
 
-History/runtime merging must strengthen evidence; it must not manufacture duplicate facts.
+History / Runtime 合并的目标是增强 Evidence，而不是制造重复事实。
 
 ## 11. Storage
 
-1.0 uses a fresh SQLite schema. The old `timeline` and `overview_*` tables are not part of the runtime model.
+1.0 使用全新的 SQLite Schema。旧 `timeline` 和 `overview_*` 表不属于 1.0 Runtime Model。
 
-Current canonical tables include:
+当前规范表包括：
 
 - hosts
 - agent_products
@@ -254,36 +254,36 @@ Current canonical tables include:
 - tool_definitions
 - source_checkpoints
 
-The schema is accessed through Core repository interfaces. Feature code does not reach around repositories with ad-hoc SQL.
+Schema 通过 Core Repository 接口访问。业务功能不得绕过 Repository 直接写临时 SQL。
 
 ## 12. Projections
 
-Projections are derived read models, not second sources of truth.
+Projection 是派生读模型，不是第二份事实来源。
 
 ### TimelineProjection
 
-Produces ordered canonical observations with full Evidence DTOs. Ordering uses effective event time first, not storage insertion order.
+输出按时间排序的 Canonical Observation，并附带完整 Evidence DTO。排序优先使用有效事件时间，而不是持久化插入顺序。
 
 ### SessionProjection
 
-Groups canonical observations by LogicalSession and derives Interaction boundaries. A user message starts a user-triggered Interaction; pre-user autonomous activity can become a background Interaction. Session lifecycle events alone do not fabricate a turn.
+按 LogicalSession 聚合 Canonical Observation，并派生 Interaction 边界。用户消息会开启一个 user-triggered Interaction；首次用户输入之前的自主活动可以归入 background Interaction。单独的 session lifecycle 事件不会凭空制造一次 turn。
 
 ### ToolAssetUsageProjection
 
-Tool usage is derived directly from `tool.call` / `tool.result` observations.
+Tool Usage 直接从 `tool.call` / `tool.result` Observation 派生。
 
-Asset usage is emitted only when attribution is defensible, currently including:
+只有归因足够可靠时才生成 Asset Usage，目前包括：
 
-- MCP naming such as `mcp__server__tool`;
-- explicit Claude `Skill` input.
+- 类似 `mcp__server__tool` 的 MCP 命名；
+- Claude `Skill` Tool 中明确给出的 Skill 参数。
 
-Generic Bash/Read/Write calls are not forced into an Asset category.
+普通 Bash / Read / Write 调用不会被强行归入某种 Asset。
 
-## 13. Protocol and HTTP surface
+## 13. Protocol 与 HTTP Surface
 
-`@agent-lens/protocol` is the external boundary. Web code does not import Core, SQLite, or Source packages.
+`@agent-lens/protocol` 是对外边界。Web 不直接 import Core、SQLite 或 Source package。
 
-Current HTTP API:
+当前 HTTP API：
 
 ```text
 GET /api/v1/health
@@ -293,51 +293,51 @@ GET /api/v1/usage
 GET /api/v1/events       # SSE
 ```
 
-The HTTP server is fixed to loopback `127.0.0.1`; default port is `56789`.
+HTTP Server 固定监听 loopback `127.0.0.1`，默认端口 `56789`。
 
-API routes have priority over SPA/static fallback.
+API 路由优先于 SPA / 静态资源 fallback。
 
-## 14. Live updates
+## 14. 实时更新
 
-Core Services publish `observation/committed` through the Cordis event bridge after a canonical observation is created or gains new evidence.
+当 Canonical Observation 新建或新增 Evidence 后，Core Services 通过 Cordis Event Bridge 发布 `observation/committed`。
 
-`unchanged` idempotent commits do not broadcast.
+幂等的 `unchanged` commit 不广播事件。
 
-HTTP converts this event to SSE. The Web client batches bursts before refreshing projections, so a Hook burst does not cause one full repaint per record.
+HTTP 层把该事件转换为 SSE。Web Client 会合并短时间内的事件突发再刷新 Projection，因此一批 Hook 事件不会造成“一条记录一次全量重绘”。
 
 ## 15. Web
 
-The 1.0 Web app is Vite + native TypeScript.
+1.0 Web 使用 Vite + 原生 TypeScript。
 
-Views:
+当前视图：
 
 - Timeline
 - Sessions / Interactions
 - Tools & Assets
 
-The Web consumes only `/api/v1/*` protocol DTOs.
+Web 仅消费 `/api/v1/*` 的 Protocol DTO。
 
-## 16. Hook management
+## 16. Hook 管理
 
-`packages/hook-manager` owns Codex and Claude Code Hook configuration.
+`packages/hook-manager` 负责 Codex 与 Claude Code 的 Hook 配置。
 
-Supported operations:
+支持操作：
 
 - status
 - install
 - uninstall
 
-Rules:
+规则：
 
-- installation is idempotent;
-- only AgentLens handlers are removed/replaced;
-- third-party handlers in the same Hook group are preserved;
-- Codex trusted hashes are maintained only for AgentLens entries;
-- configuration writes are atomic.
+- 安装必须幂等；
+- 只移除 / 替换 AgentLens 自己的 handler；
+- 同一 Hook group 中的第三方 handler 必须保留；
+- Codex trusted hash 只维护 AgentLens 自己的条目；
+- 配置写入必须原子化。
 
 ## 17. CLI
 
-Current CLI surface:
+当前 CLI：
 
 ```text
 agent-lens start
@@ -348,13 +348,13 @@ agent-lens hook install [codex|claude|all]
 agent-lens hook uninstall [codex|claude|all]
 ```
 
-`start` is foreground by design. The CLI does not pretend to be a cross-platform service manager.
+`start` 明确采用前台运行。CLI 不伪装成跨平台 Service Manager。
 
-## 18. Distribution
+## 18. 分发
 
-The npm package is `@z7ping/agent-lens`.
+npm 包名为 `@z7ping/agent-lens`。
 
-The distribution build bundles internal workspaces into:
+分发构建会把内部 workspace 打包进：
 
 ```text
 dist/cli.mjs
@@ -363,33 +363,33 @@ dist/web/
 dist/hooks/
 ```
 
-Cordis and `better-sqlite3` remain external runtime dependencies.
+Cordis 与 `better-sqlite3` 保留为外部 Runtime Dependency。
 
-The release workflow verifies Linux and Windows, packs one exact npm tarball, creates SBOM/checksums, attaches artifacts to the GitHub Release, then publishes that exact tarball.
+Release Workflow 会分别在 Linux / Windows 验证，打出唯一 npm tarball，生成 SBOM / checksum，将产物附加到 GitHub Release，最后发布同一份 tarball。
 
-## 19. Windows desktop
+## 19. Windows Desktop
 
-Electron is a shell, not an alternative AgentLens runtime.
+Electron 只是桌面壳，不是另一套 AgentLens Runtime。
 
-Responsibilities:
+职责：
 
-- single instance;
-- BrowserWindow;
-- tray lifecycle;
-- start/stop/restart daemon;
-- local log access;
-- NSIS installer packaging.
+- 单实例；
+- BrowserWindow；
+- 托盘生命周期；
+- 启动 / 停止 / 重启 Daemon；
+- 本地日志访问；
+- NSIS 安装包。
 
-The daemon still serves the same `127.0.0.1:56789` HTTP/SSE surface. Uninstalling the desktop app does not automatically delete `~/.agent-lens/1.0` observation data.
+Daemon 仍然提供同一套 `127.0.0.1:56789` HTTP / SSE Surface。卸载 Desktop App 不会自动删除 `~/.agent-lens/1.0` 下的观测数据。
 
-## 20. Non-goals for 1.0 baseline
+## 20. 1.0 基线的非目标
 
-The current 1.0 baseline does not claim runtime support for every 0.x adapter. Hermes, OpenCode, Cursor, and OpenClaw remain outside the 1.0 runtime until implemented against the stable Source Contract.
+当前 1.0 基线不声称继续支持 0.x 的全部 Adapter。Hermes、OpenCode、Cursor、OpenClaw 在按照稳定 Source Contract 重新实现之前，都不属于 1.0 Runtime。
 
-It also does not promise hidden chain-of-thought access or reconstruct information that the source does not expose.
+1.0 也不承诺获取隐藏思维链，或重建来源本身没有暴露的信息。
 
-## 21. Architecture acceptance rule
+## 21. 架构验收规则
 
-A new Source should normally require only a new Source package plus registration in the composition root.
+新增一个 Source，正常情况下只需要新增一个 Source package，并在 Composition Root 中注册。
 
-If a new Source requires changes to Core semantic types, canonical identity, evidence semantics, or Plugin Runtime ownership, that is a Contract Review, not an ordinary adapter task.
+如果新增 Source 必须修改 Core 语义类型、Canonical Identity、Evidence 语义或 Plugin Runtime 所有权，这就不是普通接入，而是一次 Contract Review。

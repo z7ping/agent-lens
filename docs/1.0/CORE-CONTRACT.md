@@ -1,15 +1,15 @@
 # AgentLens 1.0 Core Contract
 
-> Status: implemented baseline  
-> API version: `1.0`
+> 状态：已实现的基线  
+> API 版本：`1.0`
 
-This document defines the stable semantic boundary that Source, Runtime, Storage, Projection, and Surface packages must obey.
+本文定义 Source、Runtime、Storage、Projection 与 Surface package 必须共同遵守的稳定语义边界。
 
-## 1. Contract goals
+## 1. Contract 目标
 
-The Core Contract exists so that adding another AI coding agent does not require rewriting storage, identity, projections, protocol, or Web code.
+Core Contract 的目标是：新增一个 AI 编码 Agent 时，不需要重写 Storage、Identity、Projection、Protocol 或 Web。
 
-The contract separates five concerns:
+Contract 将以下五类关注点分开：
 
 ```text
 Native data
@@ -20,7 +20,7 @@ Native data
   -> derived projections
 ```
 
-Core is framework-independent. It must not import Cordis, Electron, HTTP, or a source-specific package.
+Core 必须与框架无关，不得 import Cordis、Electron、HTTP 或任何 Source 专用 package。
 
 ## 2. Plugin API
 
@@ -28,13 +28,13 @@ Core is framework-independent. It must not import Cordis, Electron, HTTP, or a s
 AGENT_LENS_PLUGIN_API_VERSION = '1.0'
 ```
 
-Plugin manifests are metadata. Runtime ownership belongs to Cordis.
+Plugin Manifest 只负责元数据。Runtime 所有权属于 Cordis。
 
-AgentLens must not create a second lifecycle, dependency-injection container, or plugin-loader runtime.
+AgentLens 不得创建第二套生命周期、DI Container 或 Plugin Loader Runtime。
 
 ## 3. SourceDefinition
 
-Every source implements the same contract shape:
+所有 Source 都实现同一套 Contract：
 
 ```ts
 interface SourceDefinition {
@@ -54,36 +54,36 @@ interface SourceDefinition {
 }
 ```
 
-Optional methods describe capabilities; absence is valid and must not be emulated with fake data.
+可选方法用于表达 Source 实际具备的能力；某个能力不存在是合法状态，不得通过伪造数据补齐。
 
 ## 4. SourceRecord
 
-A SourceRecord is the persisted native ingestion unit.
+`SourceRecord` 是持久化后的原生摄取单元。
 
-Required semantics:
+必须具备的语义：
 
-- stable AgentLens record ID;
-- `sourceId`;
-- `installationId`;
-- native type;
-- capture time;
-- parser version;
-- payload;
-- source locator.
+- 稳定的 AgentLens record ID；
+- `sourceId`；
+- `installationId`；
+- native type；
+- capture time；
+- parser version；
+- payload；
+- source locator。
 
-When available it should also preserve:
+来源能够提供时，还应保留：
 
-- source-native session ID;
-- source-native event/call ID;
-- source sequence;
-- native event time;
-- payload fingerprint.
+- 来源原生 Session ID；
+- 来源原生 event / call ID；
+- source sequence；
+- 原生 event time；
+- payload fingerprint。
 
-SourceRecord is not a UI event and must not be shaped around a current Web page.
+`SourceRecord` 不是 UI Event，也不能围绕某个当前页面的数据形状设计。
 
 ## 5. NormalizedSourceOutput
 
-Normalization returns semantic candidates rather than directly writing presentation tables.
+Normalization 返回语义 Candidate，而不是直接写展示表。
 
 ```text
 NormalizedSourceOutput
@@ -92,13 +92,13 @@ NormalizedSourceOutput
   +-- coverage[]?
 ```
 
-Unknown native records should be preserved as `unknown` observations when dropping them would erase potentially useful evidence.
+对于未知原生记录，如果直接丢弃会损失潜在有效 Evidence，应保留为 `unknown` Observation。
 
 ## 6. ObservationCandidate
 
-An ObservationCandidate describes the semantic event before canonical identity is resolved.
+`ObservationCandidate` 描述 Canonical Identity 解析之前的语义事件。
 
-Current observation kinds include:
+当前 Observation Kind 包括：
 
 ```text
 session.lifecycle
@@ -121,26 +121,26 @@ usage
 unknown
 ```
 
-A source must map native events to the closest defensible semantic kind. It must not invent meaning merely to fit a projection.
+Source 必须把原生事件映射到最接近且可被证据支持的语义 Kind。不能为了适配某个 Projection 而凭空发明语义。
 
 ## 7. IdentityHints
 
-Normalization may provide:
+Normalization 可以提供：
 
-- native session ID;
-- native parent session ID;
-- workspace path;
-- repository root;
-- native actor ID;
-- actor role;
-- interaction-native ID;
-- model name.
+- native session ID；
+- native parent session ID；
+- workspace path；
+- repository root；
+- native actor ID；
+- actor role；
+- interaction-native ID；
+- model name。
 
-IdentityService owns canonicalization. Source packages must not manufacture Core database IDs.
+Canonicalization 由 `IdentityService` 负责。Source package 不得自行制造 Core Database ID。
 
-## 8. Canonical identities
+## 8. Canonical Identity
 
-Core identity entities are:
+Core Identity Entity 包括：
 
 ```text
 Host
@@ -157,15 +157,15 @@ Interaction
 
 ### LogicalSession
 
-Canonical task/session scope for projections.
+Projection 使用的规范任务 / 会话范围。
 
 ### SourceSession
 
-Binds one source-native session ID to one installation and optionally one LogicalSession.
+将一个来源原生 Session ID 与某个 Installation 绑定，并可选关联到 LogicalSession。
 
 ### SessionRelationship
 
-Explicit relationship types:
+显式关系类型：
 
 ```text
 resume
@@ -176,13 +176,13 @@ import-copy
 related
 ```
 
-Do not encode these semantics in string naming conventions when an explicit relationship is available.
+已有显式关系时，不要再用字符串命名约定承载这些语义。
 
-## 9. EvidenceCandidate and Evidence
+## 9. EvidenceCandidate 与 Evidence
 
-Every Canonical Observation must be explainable by Evidence.
+每一条 Canonical Observation 都必须能够被 Evidence 解释。
 
-Capture methods:
+Capture Method：
 
 ```text
 runtime-hook
@@ -192,7 +192,7 @@ static-scan
 external-import
 ```
 
-Derivations:
+Derivation：
 
 ```text
 observed
@@ -202,7 +202,7 @@ estimated
 inferred
 ```
 
-Confidence:
+Confidence：
 
 ```text
 exact
@@ -212,13 +212,13 @@ low
 unknown
 ```
 
-Evidence may include source record ID, source locator, parser version, native stable ID, event time, capture time, and missing reason.
+Evidence 可以包含 source record ID、source locator、parser version、native stable ID、event time、capture time 和 missing reason。
 
-Confidence cannot exceed what the capture method and derivation support.
+Confidence 不得高于 capture method 与 derivation 本身能够支持的可信度。
 
 ## 10. DedupHints
 
-Preferred semantic identity order:
+首选语义身份顺序：
 
 ```text
 nativeEventId
@@ -229,7 +229,7 @@ payloadFingerprint + eventTime
 semantic fallback
 ```
 
-The Observation Service scopes identity by:
+Observation Service 的身份作用域为：
 
 ```text
 sourceId
@@ -238,11 +238,11 @@ logicalSessionId
 kind
 ```
 
-This is intentional: two different sources reporting superficially similar data are not silently assumed to be the same fact.
+这是刻意设计的：不同 Source 报告了表面相似的数据时，不能在没有依据的情况下自动认定为同一事实。
 
 ## 11. ObservationService.commit
 
-Commit is the canonical write boundary.
+`commit` 是规范写入边界。
 
 ```text
 CommitObservationInput
@@ -253,22 +253,22 @@ CommitObservationInput
   +-- evidenceCandidates
 ```
 
-Possible results:
+可能返回：
 
 ```text
-created    new canonical fact
-merged     existing fact gained evidence
-unchanged  idempotent replay; no semantic change
+created    新的规范事实
+merged     既有事实新增了 Evidence
+unchanged  幂等重放，没有语义变化
 ```
 
-Required behavior:
+必须满足：
 
-- persist Evidence before/with Observation transactionally;
-- preserve existing evidence when merging;
-- never create a second canonical fact only because a second capture path observed the same native call;
-- `unchanged` is a valid success result.
+- Evidence 与 Observation 在事务边界内一起持久化；
+- merge 时保留已有 Evidence；
+- 同一个原生 call 被第二条采集路径观察到时，不得因此生成第二条规范事实；
+- `unchanged` 是合法成功结果。
 
-Acceptance example:
+验收示例：
 
 ```text
 Codex JSONL Tool Call(call_c1)
@@ -277,11 +277,11 @@ Codex JSONL Tool Call(call_c1)
 + 2 Evidence records
 ```
 
-Equivalent source-specific tests should exist when another source exposes both history and runtime evidence.
+如果其他 Source 同时存在 History 与 Runtime Evidence，也应具备等价的 Source 专用测试。
 
-## 12. Source runners
+## 12. Source Runner
 
-`core-services/source-runner` provides generic orchestration:
+`core-services/source-runner` 提供通用编排：
 
 ```text
 SourceHistoryRunner
@@ -289,45 +289,45 @@ SourceRuntimeRunner
 SourceAssetRunner
 ```
 
-Rules:
+规则：
 
-- runners receive SourceDefinition, Host, DetectedSource and AbortSignal;
-- runners own installation resolution and capability registration;
-- history/runtime both call the same `processSourceRecord` pipeline;
-- runtime emit is serialized;
-- Source-specific branching is forbidden in generic runners.
+- Runner 接收 `SourceDefinition`、Host、DetectedSource 与 AbortSignal；
+- Runner 负责 Installation Resolution 与 Capability Registration；
+- History / Runtime 都必须进入同一个 `processSourceRecord` Pipeline；
+- Runtime Emit 必须串行化；
+- 通用 Runner 中禁止出现 Source 专用分支。
 
-## 13. Checkpoints
+## 13. Checkpoint
 
-Checkpoints are scoped by source and installation.
+Checkpoint 按 Source 与 Installation 隔离。
 
-They are for ingestion position/state, not business facts.
+它只记录摄取位置 / 状态，不是业务事实。
 
-Examples:
+例如：
 
-- JSONL byte offset;
-- file path and size;
-- parser sequence.
+- JSONL byte offset；
+- file path 与 size；
+- parser sequence。
 
-If a file shrinks or its identity changes, the source may reset its checkpoint deliberately.
+如果文件缩小或身份发生变化，Source 可以有意识地重置 Checkpoint。
 
-## 14. Runtime capture durability
+## 14. Runtime Capture Durability
 
-Runtime Hook delivery is at-least-once at the inbox boundary.
+Runtime Hook 在 Inbox 边界采用 at-least-once 交付语义。
 
-Required flow:
+必须遵循：
 
 ```text
 Hook -> atomic inbox file -> daemon emit -> canonical commit -> ack/delete file
 ```
 
-A failed canonical commit must leave the inbox entry available for retry.
+Canonical Commit 失败时，Inbox Entry 必须保留，以便重试。
 
-Idempotence is therefore mandatory.
+因此幂等性是强制要求。
 
-## 15. Asset contract
+## 15. Asset Contract
 
-Asset discovery returns explicit structures:
+Asset Discovery 返回显式结构：
 
 ```text
 DiscoveredAsset
@@ -340,34 +340,34 @@ DiscoveredAsset
        +-- evidenceCandidates[]
 ```
 
-AssetDefinition represents capability identity such as Skill, MCP, Plugin, Hook, Rule, Extension, or other supported type.
+`AssetDefinition` 表达能力身份，例如 Skill、MCP、Plugin、Hook、Rule、Extension 或其他支持类型。
 
-AssetBinding represents that asset in a particular installation/path/source.
+`AssetBinding` 表达该 Asset 在某个 Installation / Path / Source 中的具体绑定。
 
-AssetStateObservation may state that a binding is installed/configured/enabled/discoverable.
+`AssetStateObservation` 可以表达该 Binding 是否 installed / configured / enabled / discoverable。
 
-Static discovery does **not** prove invocation.
+静态发现 **不等于** 实际调用。
 
-## 16. Tool and Asset usage
+## 16. Tool 与 Asset Usage
 
-Tool invocation is derived from Canonical `tool.call` / `tool.result` observations.
+Tool Invocation 从 Canonical `tool.call` / `tool.result` Observation 派生。
 
-Asset usage is a separate projection concern.
+Asset Usage 是独立的 Projection Concern。
 
-Only defensible attribution is allowed. Current examples:
+只有能够可靠归因时才允许生成 Asset Usage。目前示例：
 
-- `mcp__server__tool` -> MCP server `server`;
-- Claude `Skill` tool with explicit skill name -> Skill usage.
+- `mcp__server__tool` -> MCP Server `server`；
+- Claude `Skill` Tool 且明确给出 Skill 名称 -> Skill Usage。
 
-A generic filesystem or shell tool must not be labelled as a Skill/Plugin/MCP merely because such assets are installed.
+普通文件系统或 Shell Tool 不能仅因为机器上安装了某个 Skill / Plugin / MCP，就被标记为对应 Asset Usage。
 
-## 17. Coverage and Capability
+## 17. Coverage 与 Capability
 
-Capability declaration describes what a Source can observe.
+Capability Declaration 表达某个 Source 能观测什么。
 
-Coverage describes what AgentLens actually knows for a subject/time range.
+Coverage 表达 AgentLens 对某个 Subject / 时间范围实际掌握了多少。
 
-Coverage statuses:
+Coverage Status：
 
 ```text
 complete
@@ -376,13 +376,13 @@ unknown
 unavailable
 ```
 
-An unavailable source capability must not be reported as complete coverage.
+Source 不具备某项能力时，不能报告为 complete coverage。
 
 ## 18. StorageService
 
-Core depends on repository interfaces, not SQLite directly.
+Core 依赖 Repository Interface，而不是直接依赖 SQLite。
 
-RepositorySet currently exposes:
+当前 `RepositorySet` 暴露：
 
 ```text
 hosts
@@ -396,15 +396,15 @@ assets
 tools
 ```
 
-Storage also exposes scoped checkpoints and transactions.
+Storage 还提供带作用域的 Checkpoint 与 Transaction。
 
-SQLite is one implementation of this contract.
+SQLite 只是该 Contract 的一种实现。
 
-## 19. Projection contract
+## 19. Projection Contract
 
-Projection output is rebuildable from canonical data.
+Projection Output 必须能够从 Canonical Data 重建。
 
-Current projections:
+当前 Projection：
 
 ```text
 TimelineProjection
@@ -412,21 +412,21 @@ SessionProjection
 ToolAssetUsageProjection
 ```
 
-No projection may become a second canonical write path.
+任何 Projection 都不得成为第二条 Canonical Write Path。
 
-Projection-specific caching/materialization can be added later only if rebuild/invalidation semantics remain explicit.
+未来允许增加 Projection Cache / Materialization，但前提是 Rebuild / Invalidation 语义仍然明确。
 
-## 20. Protocol boundary
+## 20. Protocol 边界
 
-`@agent-lens/protocol` owns public DTOs.
+`@agent-lens/protocol` 负责公共 DTO。
 
-Surface/Web code should consume protocol DTOs rather than Core domain models.
+Surface / Web 应消费 Protocol DTO，而不是 Core Domain Model。
 
-This keeps storage and domain refactors from becoming browser API changes accidentally.
+这样 Storage / Domain 重构时，不会意外变成 Browser API Breaking Change。
 
-## 21. Runtime event bridge
+## 21. Runtime Event Bridge
 
-Core event names include:
+Core Event Name 包括：
 
 ```text
 source/registered
@@ -439,28 +439,28 @@ projection/invalidated
 projection/rebuilt
 ```
 
-Cordis adapts these events to runtime consumers.
+Cordis 负责把这些 Event 适配给 Runtime Consumer。
 
-`observation/committed` is emitted only when a canonical observation is created or gains new evidence; unchanged replays do not produce live-update noise.
+只有 Canonical Observation 新建或新增 Evidence 时才发送 `observation/committed`；`unchanged` 重放不产生实时更新噪声。
 
-## 22. Contract-change rule
+## 22. Contract 变更规则
 
-Adding a new Source is ordinary feature work when the existing contract can express its data honestly.
+如果现有 Contract 能够诚实表达一个新 Source 的数据，那么新增 Source 属于普通 Feature Work。
 
-A Contract Review is required when implementation would need to change any of these:
+如果实现必须修改以下任意内容，就需要 Contract Review：
 
-- canonical identity semantics;
-- Observation kind meaning;
-- Evidence semantics;
-- Source lifecycle contract;
-- Plugin Runtime ownership;
-- transaction/dedup guarantees;
-- public protocol semantics.
+- Canonical Identity 语义；
+- Observation Kind 含义；
+- Evidence 语义；
+- Source Lifecycle Contract；
+- Plugin Runtime 所有权；
+- Transaction / Dedup 保证；
+- Public Protocol 语义。
 
-Do not weaken the contract with source-specific escape hatches merely to land one adapter faster.
+不要为了更快接入某一个 Adapter，就给 Contract 增加 Source 专用逃生口。
 
-## 23. Compatibility rule
+## 23. 兼容性规则
 
-1.0 does not promise runtime compatibility with 0.x adapters or persistence tables.
+1.0 不承诺兼容 0.x Adapter Runtime 或持久化表。
 
-Any legacy migration must be one-shot import into the 1.0 contract. It must not keep the 0.x runtime model alive indefinitely.
+任何 Legacy Migration 都必须是一次性导入到 1.0 Contract，而不是无限期保留 0.x Runtime Model。

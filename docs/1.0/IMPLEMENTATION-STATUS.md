@@ -1,29 +1,29 @@
-# AgentLens 1.0 Alpha Implementation Status
+# AgentLens 1.0 Alpha 实现状态
 
-Updated: 2026-08-20
+更新日期：2026-08-20
 
-## Implemented
+## 已实现
 
 ### Core / Runtime
 
-- Clean 1.0 Core Domain and contracts
-- Cordis runtime adapter (`@deepseek-ai/cordis@4.0.1`)
-- framework-independent Core Services
-- fresh SQLite 1.0 repositories and checkpoints
-- canonical Observation + Evidence commit pipeline
+- 全新的 1.0 Core Domain 与 Contract
+- Cordis Runtime Adapter（`@deepseek-ai/cordis@4.0.1`）
+- 与框架无关的 Core Services
+- 全新的 SQLite 1.0 Repository 与 Checkpoint
+- Canonical Observation + Evidence Commit Pipeline
 
 ### Sources
 
-- Codex: history, runtime Hook durable inbox, assets
-- Claude Code: history, runtime Hook durable inbox, assets
-- Pi: history, native runtime tail, assets
+- Codex：History、Runtime Hook Durable Inbox、Assets
+- Claude Code：History、Runtime Hook Durable Inbox、Assets
+- Pi：History、原生 Runtime Tail、Assets
 
 ### Projections / Protocol
 
-- TimelineProjection
+- `TimelineProjection`
 - Session / Interaction Projection
 - Tool / Asset Usage Projection
-- versioned `@agent-lens/protocol` DTOs
+- 带版本的 `@agent-lens/protocol` DTO
 
 ### Surfaces
 
@@ -32,43 +32,43 @@ Updated: 2026-08-20
 - `/api/v1/sessions`
 - `/api/v1/usage`
 - `/api/v1/events` SSE
-- Vite Web: Timeline / Sessions / Tools & Assets
+- Vite Web：Timeline / Sessions / Tools & Assets
 
 ### Operations
 
-- Hook Manager for Codex and Claude
-- CLI: start / status / doctor / hook
-- npm single-package distribution build
-- GitHub Release -> npm artifact workflow
-- Windows Electron shell + tray + NSIS installer workflow
+- Codex / Claude Hook Manager
+- CLI：start / status / doctor / hook
+- npm 单包分发构建
+- GitHub Release -> npm Artifact Workflow
+- Windows Electron 桌面壳 + 托盘 + NSIS 安装包 Workflow
 
-## Intentionally not carried forward from 0.x
+## 明确没有从 0.x 直接带入的能力
 
-These are not part of the 1.0 baseline until reimplemented against the new contract:
+以下内容在按照新 Contract 重新实现之前，不属于 1.0 基线：
 
-- Hermes runtime Source
-- OpenCode runtime Source
-- Cursor runtime Source
-- OpenClaw runtime Source
-- 0.x Adapter/Importer runtime
-- 0.x timeline/overview canonical tables
-- 0.x service manager/PID architecture
-- old HTTP API compatibility layer
+- Hermes Runtime Source
+- OpenCode Runtime Source
+- Cursor Runtime Source
+- OpenClaw Runtime Source
+- 0.x Adapter / Importer Runtime
+- 0.x timeline / overview 规范表
+- 0.x service manager / PID 架构
+- 旧 HTTP API Compatibility Layer
 
-## Key acceptance invariants
+## 关键验收不变量
 
-- A native event observed by history and runtime remains one Canonical Observation with multiple Evidence records.
-- Generic Source runners contain no per-source business branches.
-- Core is Cordis-independent.
-- Web is Core/Storage/Source-independent and consumes Protocol DTOs only.
-- Static Asset discovery is not counted as usage.
-- Hook install/uninstall preserves third-party handlers.
-- `unchanged` idempotent replay does not trigger SSE update noise.
+- 同一个原生事件分别被 History 与 Runtime 观察到时，仍然只产生一条 Canonical Observation，并保留多份 Evidence。
+- 通用 Source Runner 不包含任何按 Source 区分的业务分支。
+- Core 与 Cordis 解耦。
+- Web 与 Core / Storage / Source 解耦，只消费 Protocol DTO。
+- 静态 Asset Discovery 不计为 Usage。
+- Hook install / uninstall 必须保留第三方 Handler。
+- 幂等的 `unchanged` Replay 不触发 SSE 更新噪声。
 
-## Release validation
+## Release 验证
 
-The branch CI runs Linux and Windows typecheck/tests/distribution build/npm pack checks.
+分支 CI 会在 Linux 与 Windows 上执行 Typecheck、Test、Distribution Build 与 npm pack 检查。
 
-The release workflow repeats verification before publishing the exact packed tarball. Windows installer construction runs separately on `windows-latest` and attaches the NSIS artifact to the GitHub Release.
+Release Workflow 会在发布前重复验证，并发布实际打包出的同一份 tarball。Windows Installer 在独立的 `windows-latest` Job 中构建，并把 NSIS Artifact 附加到 GitHub Release。
 
-No merge, npm publication, or GitHub Release is implied by this document; those remain explicit repository-owner actions.
+本文不代表已经完成 Merge、npm Publish 或 GitHub Release；这些操作仍然必须由仓库所有者明确触发。

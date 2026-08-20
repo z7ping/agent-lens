@@ -1,42 +1,42 @@
 # AGENTS.md
 
-This file defines the working rules for AI coding agents modifying AgentLens 1.0.
+本文定义 AI 编码 Agent 修改 AgentLens 1.0 时必须遵守的工作规则。
 
-## 1. Current project state
+## 1. 当前项目状态
 
-AgentLens 1.0 is a **Clean Rebuild**.
+AgentLens 1.0 是一次 **Clean Rebuild（彻底重建）**。
 
-The 0.x implementation is reference material only. Do not restore old runtime architecture by wrapping or reusing:
+0.x 实现仅作为参考材料。不要通过包装或复用以下内容，把旧 Runtime Architecture 带回 1.0：
 
-- `server/adapters/*` runtime ownership;
-- old Importer orchestration;
-- legacy `timeline` / `overview_*` canonical tables;
-- old service manager / PID architecture;
-- legacy HTTP response shapes.
+- `server/adapters/*` 的 Runtime 所有权；
+- 旧 Importer 编排方式；
+- 旧 `timeline` / `overview_*` 规范表；
+- 旧 service manager / PID 架构；
+- 旧 HTTP Response Shape。
 
-0.x code may still be consulted for parser behavior, fixtures, UI ideas, and migration logic.
+0.x 代码仍可以用于参考解析行为、fixture、UI 思路和迁移逻辑。
 
-## 2. Required reading before architecture changes
+## 2. 修改架构前必须阅读
 
-Read:
+依次阅读：
 
 1. `ARCHITECTURE.md`
 2. `docs/1.0/CORE-CONTRACT.md`
 3. `docs/adr/0001-agentlens-1.0-clean-rebuild-and-cordis-runtime.md`
 
-If implementation conflicts with these documents, do not silently work around the contract. Either fix an implementation bug or record a deliberate Contract Review/ADR.
+如果实现与这些文档冲突，不要静默绕过 Contract。要么修复实现 Bug，要么明确发起 Contract Review / ADR。
 
-## 3. Architecture rules
+## 3. 架构规则
 
 ### Cordis
 
-- `@deepseek-ai/cordis@4.0.1` is pinned exactly.
-- Cordis is the sole Plugin Runtime.
-- Cordis coupling belongs in `packages/runtime-cordis`.
-- Core Domain/Core Services must stay framework-independent.
-- Do not add a second DI container, plugin loader, or lifecycle runtime.
+- 精确锁定 `@deepseek-ai/cordis@4.0.1`。
+- Cordis 是唯一的 Plugin Runtime。
+- Cordis 耦合必须放在 `packages/runtime-cordis`。
+- Core Domain / Core Services 必须保持与框架无关。
+- 不得再引入第二套 DI Container、Plugin Loader 或 Lifecycle Runtime。
 
-### Canonical data flow
+### Canonical Data Flow
 
 ```text
 SourceRecord
@@ -50,33 +50,33 @@ SourceRecord
 -> Surface/Web
 ```
 
-Do not write presentation tables directly from a Source.
+Source 不得直接写展示表。
 
 ### Evidence
 
-Every canonical fact must remain explainable by Evidence.
+每一条规范事实都必须能由 Evidence 解释。
 
-A second capture path should strengthen evidence for the same fact instead of creating a duplicate observation.
+同一事实的第二条采集路径应该增强 Evidence，而不是创建重复 Observation。
 
 ### Projections
 
-Projections are rebuildable read models. They are not additional canonical write paths.
+Projection 是可重建的读模型，不是额外的规范写入路径。
 
 ### Protocol
 
-Web/surfaces consume `@agent-lens/protocol` DTOs. Browser code must not import Core, SQLite, or Source packages.
+Web / Surface 消费 `@agent-lens/protocol` DTO。浏览器代码不得直接 import Core、SQLite 或 Source package。
 
-## 4. Adding a Source
+## 4. 新增 Source
 
-A Source normally needs:
+正常情况下，一个 Source 只需要新增：
 
 ```text
 packages/source-<name>/
 ```
 
-and registration in the daemon composition root.
+并在 Daemon Composition Root 中注册。
 
-It should implement the stable SourceDefinition contract:
+它应实现稳定的 `SourceDefinition` Contract：
 
 ```text
 detect
@@ -85,82 +85,82 @@ ingestHistory? / startCapture? / discoverAssets?
 normalize
 ```
 
-Generic Source runners must not gain `if (sourceId === ...)` branches.
+通用 Source Runner 中不得出现 `if (sourceId === ...)` 之类的来源分支。
 
-If a new Source cannot be represented honestly without changing canonical semantics, stop and treat that as Contract Review.
+如果某个新 Source 无法在不歪曲事实的前提下适配现有 Contract，应停止普通接入流程，按 Contract Review 处理。
 
-## 5. Current 1.0 Sources
+## 5. 当前 1.0 Source
 
-Implemented:
+已实现：
 
 - Codex
 - Claude Code
 - Pi
 
-Not yet considered 1.0 runtime support merely because 0.x had code for them:
+不能因为 0.x 曾经支持过，就视为已经属于 1.0 Runtime：
 
 - Hermes
 - OpenCode
 - Cursor
 - OpenClaw
 
-## 6. Hook rules
+## 6. Hook 规则
 
-Hook subprocesses are passive capture shims.
+Hook 子进程只是被动采集 Shim。
 
-They may:
+允许做：
 
-- read stdin/native event data;
-- sanitize/truncate sensitive fields;
-- atomically write a durable inbox record;
-- return a neutral result.
+- 读取 stdin / 原生事件数据；
+- 清洗 / 截断敏感字段；
+- 原子写入 durable inbox；
+- 返回中性结果。
 
-They must not depend on:
+不得依赖：
 
-- Cordis;
-- SQLite;
-- Core Services;
-- HTTP;
-- daemon lifecycle.
+- Cordis；
+- SQLite；
+- Core Services；
+- HTTP；
+- Daemon 生命周期。
 
-Inbox entries are acknowledged only after successful canonical ingestion.
+Inbox 条目只有在成功完成 Canonical Ingestion 后才能确认并删除。
 
-## 7. Asset rules
+## 7. Asset 规则
 
-Never equate static discovery with invocation.
+绝不能把“静态发现”直接等同于“实际调用”。
 
-Examples:
+例如：
 
-- installed Skill -> Asset state;
-- configured MCP -> Asset state;
-- `mcp__server__tool` call -> attributable MCP usage;
-- generic Bash call -> Tool usage only unless there is explicit evidence for an Asset.
+- 已安装 Skill -> Asset state；
+- 已配置 MCP -> Asset state；
+- 调用 `mcp__server__tool` -> 可归因的 MCP Usage；
+- 普通 Bash 调用 -> 仅算 Tool Usage，除非有明确 Evidence 能证明对应 Asset。
 
-## 8. Storage rules
+## 8. Storage 规则
 
-Use Core repository interfaces.
+使用 Core Repository Interface。
 
-Do not reach around StorageService with feature-specific direct SQL unless the storage package is implementing a repository itself.
+除了 storage package 自己在实现 Repository，不得绕过 `StorageService` 在业务代码里直接写功能专用 SQL。
 
-Do not reintroduce old `timeline`/`overview` tables as canonical 1.0 facts.
+不得重新引入旧 `timeline` / `overview` 表作为 1.0 规范事实。
 
-## 9. UI rules
+## 9. UI 规则
 
-1.0 Web is Vite + native TypeScript.
+1.0 Web 使用 Vite + 原生 TypeScript。
 
-Current views:
+当前视图：
 
 - Timeline
 - Sessions / Interactions
 - Tools & Assets
 
-Use `/api/v1/*` only.
+只使用 `/api/v1/*`。
 
-SSE is the live-update mechanism. Do not replace it with short-interval polling unless there is a measured reason and an explicit decision.
+实时更新使用 SSE。除非有明确的性能数据和正式决策，不要改回短间隔轮询。
 
-## 10. CLI/Desktop rules
+## 10. CLI / Desktop 规则
 
-CLI:
+CLI：
 
 ```text
 agent-lens start
@@ -169,11 +169,11 @@ agent-lens doctor
 agent-lens hook ...
 ```
 
-`start` is foreground by design.
+`start` 明确以前台方式运行。
 
-Electron owns Windows desktop lifecycle only. Do not move Core/Source logic into `apps/desktop`.
+Electron 只负责 Windows Desktop Lifecycle。不要把 Core / Source 逻辑搬进 `apps/desktop`。
 
-## 11. Common development commands
+## 11. 常用开发命令
 
 ```bash
 npm install
@@ -186,42 +186,44 @@ npm run cli -- doctor
 npm run desktop:win      # Windows runner
 ```
 
-Node.js requirement: `>=22.12.0`.
+Node.js 要求：`>=22.12.0`。
 
-## 12. Tests expected for semantic changes
+## 12. 语义变更必须覆盖的测试
 
-Add/update tests when changing:
+修改以下内容时需要新增 / 更新测试：
 
-- normalization mappings;
-- dedup keys;
-- identity resolution;
-- history/runtime reconciliation;
-- checkpoint behavior;
-- Asset attribution;
-- Projection ordering/grouping;
-- Hook install/uninstall safety;
-- Protocol/API behavior;
-- Cordis compatibility.
+- normalization mapping；
+- dedup key；
+- identity resolution；
+- history / runtime reconciliation；
+- checkpoint 行为；
+- Asset 归因；
+- Projection 排序 / 分组；
+- Hook install / uninstall 安全性；
+- Protocol / API 行为；
+- Cordis compatibility。
 
-Key invariant:
+关键不变量：
 
 ```text
 same native semantic event from multiple evidence paths
 => one CanonicalObservation + multiple Evidence records
 ```
 
-## 13. Documentation discipline
+即：同一原生语义事件来自多条 Evidence Path 时，只产生一条 `CanonicalObservation`，但保留多份 `Evidence`。
 
-Architecture decisions that change ownership/boundaries must update:
+## 13. 文档纪律
 
-- `ARCHITECTURE.md`;
-- `docs/1.0/CORE-CONTRACT.md` when the contract changes;
-- an ADR when the decision is durable and costly to reverse.
+任何改变架构所有权 / 边界的决策，都必须同步更新：
 
-Do not document a planned capability as implemented.
+- `ARCHITECTURE.md`；
+- Contract 变化时更新 `docs/1.0/CORE-CONTRACT.md`；
+- 对长期、难以逆转的决策补充 ADR。
 
-## 14. Branch/release safety
+不要把“计划能力”写成“已实现能力”。
 
-The 1.0 rebuild is developed on `refactor/1.0-foundation` until deliberately merged.
+## 14. 分支 / 发布安全
 
-Do not merge to `main`, publish npm, create a GitHub Release, or alter release secrets unless explicitly requested by the repository owner.
+1.0 重建在明确合并前始终开发于 `refactor/1.0-foundation`。
+
+未经仓库所有者明确要求，不得合并到 `main`、发布 npm、创建 GitHub Release 或修改 Release Secret。
