@@ -139,7 +139,7 @@ function checkpointKey(filePath: string): string {
 
 export async function* ingestCodexHistory(ctx: SourceExecutionContext): AsyncIterable<SourceRecord> {
   const sessionsDir = ctx.installation.dataRoot
-    ?? join(ctx.installation.configRoot ?? '', 'sessions')
+    ?? (ctx.installation.configRoot ? join(ctx.installation.configRoot, 'sessions') : undefined)
   if (!sessionsDir) return
 
   const files = await listJsonlFiles(sessionsDir)

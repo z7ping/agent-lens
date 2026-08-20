@@ -8,12 +8,12 @@ async function createStorage() {
   return storage
 }
 
-test('SQLite storage migrates to schema version 1 and exposes required tables', async () => {
+test('SQLite storage migrates to schema version 2 and exposes required tables', async () => {
   const storage = await createStorage()
   try {
     const health = await storage.health()
     assert.equal(health.ok, true)
-    assert.equal(health.schemaVersion, 1)
+    assert.equal(health.schemaVersion, 2)
 
     const rows = storage.db.prepare(`
       SELECT name FROM sqlite_master
@@ -34,6 +34,7 @@ test('SQLite storage migrates to schema version 1 and exposes required tables', 
       'agent_actors',
       'interactions',
       'source_records',
+      'source_checkpoints',
       'observations',
       'evidence',
       'coverage',
@@ -77,6 +78,28 @@ test('repositories round-trip identity data', async () => {
     assert.equal((await storage.repositories.hosts.get('host-1'))?.platform, 'win32')
     assert.equal((await storage.repositories.installations.getProduct('codex'))?.name, 'Codex')
     assert.equal((await storage.repositories.installations.get('install-1'))?.version, '1.2.3')
+  } finally {
+    storage.close()
+  }
+})
+
+test('source checkpoints persist values independently by scope', async () => {
+  const storage = await createStorage()
+  try {
+    await storage.checkpoints.set('codex:install-a', 'history:file-a', { offset: 128 })
+    await storage.checkpoints.set('codex:install-b', 'history:file-a', { offset: 256 })
+
+    assert.deepEqual(
+      await storage.checkpoints.get('codex:install-a', 'history:file-a'),
+      { offset: 128 },
+    )
+    assert.deepEqual(
+      await storage.checkpoints.get('codex:install-b', 'history:file-a'),
+      { offset: 256 },
+    )
+
+    await storage.checkpoints.clear('codex:install-a', 'history:file-a')
+    assert.equal(await storage.checkpoints.get('codex:install-a', 'history:file-a'), null)
   } finally {
     storage.close()
   }

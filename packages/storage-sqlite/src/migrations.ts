@@ -13,6 +13,11 @@ const migrations: readonly Migration[] = [
     name: 'initial-1.0-schema',
     url: new URL('../migrations/001-initial.sql', import.meta.url),
   },
+  {
+    version: 2,
+    name: 'source-checkpoints',
+    url: new URL('../migrations/002-source-checkpoints.sql', import.meta.url),
+  },
 ]
 
 export async function migrateDatabase(db: Database.Database): Promise<number> {

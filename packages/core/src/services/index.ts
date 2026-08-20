@@ -252,6 +252,12 @@ export interface RepositorySet {
   tools: ToolRepository
 }
 
+export interface CheckpointRepository {
+  get<T>(scope: string, key: string): Promise<T | null>
+  set<T>(scope: string, key: string, value: T): Promise<void>
+  clear(scope: string, key: string): Promise<void>
+}
+
 export interface StorageTransaction extends RepositorySet {}
 
 export interface StorageHealth {
@@ -262,6 +268,7 @@ export interface StorageHealth {
 
 export interface StorageService {
   readonly repositories: RepositorySet
+  readonly checkpoints: CheckpointRepository
   transaction<T>(fn: (tx: StorageTransaction) => Promise<T>): Promise<T>
   migrate(): Promise<void>
   health(): Promise<StorageHealth>

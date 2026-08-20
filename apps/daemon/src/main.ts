@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import {
   AgentLensApplication,
   coreServicesPlugin,
+  syncRegisteredSourceHistory,
 } from '@agent-lens/runtime-cordis'
 import { codexSourcePlugin } from '@agent-lens/source-codex'
 import { sqliteStoragePlugin } from '@agent-lens/storage-sqlite'
@@ -15,13 +16,19 @@ app.use(sqliteStoragePlugin, { path: dbPath })
 app.useRuntime(coreServicesPlugin)
 app.use(codexSourcePlugin)
 
+const syncController = new AbortController()
+let syncPromise: Promise<unknown> | null = null
 let shuttingDown = false
 
 async function shutdown(signal: string): Promise<void> {
   if (shuttingDown) return
   shuttingDown = true
+  syncController.abort()
 
   try {
+    if (syncPromise) {
+      await syncPromise.catch(() => undefined)
+    }
     await app.stop()
     console.info(`[AgentLens] daemon stopped (${signal})`)
     process.exitCode = 0
@@ -42,7 +49,15 @@ process.once('SIGTERM', () => {
 try {
   await app.start()
   console.info(`[AgentLens] 1.0 runtime started (db: ${dbPath})`)
+
+  syncPromise = syncRegisteredSourceHistory(app.context, syncController.signal)
+  const results = await syncPromise
+  for (const result of results) {
+    console.info(
+      `[AgentLens] history synced: ${result.sourceId} records=${result.records} created=${result.observationsCreated} merged=${result.observationsMerged} unchanged=${result.observationsUnchanged}`,
+    )
+  }
 } catch (error) {
-  console.error('[AgentLens] daemon startup failed', error)
+  console.error('[AgentLens] daemon startup/history sync failed', error)
   process.exitCode = 1
 }

@@ -1,3 +1,4 @@
+export * from './checkpoints'
 export * from './executor'
 export * from './migrations'
 export * from './repositories'

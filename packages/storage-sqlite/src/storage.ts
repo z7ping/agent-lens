@@ -1,10 +1,12 @@
 import Database from 'better-sqlite3'
 import type {
+  CheckpointRepository,
   RepositorySet,
   StorageHealth,
   StorageService,
   StorageTransaction,
 } from '@agent-lens/core'
+import { SqliteCheckpointRepository } from './checkpoints'
 import { SqliteExecutor } from './executor'
 import { migrateDatabase } from './migrations'
 import { createSqliteRepositories } from './repositories'
@@ -17,6 +19,7 @@ export interface SqliteStorageOptions {
 export class SqliteStorageService implements StorageService {
   readonly db: Database.Database
   readonly repositories: RepositorySet
+  readonly checkpoints: CheckpointRepository
   readonly executor: SqliteExecutor
 
   constructor(options: SqliteStorageOptions) {
@@ -32,6 +35,7 @@ export class SqliteStorageService implements StorageService {
 
     this.executor = new SqliteExecutor(this.db)
     this.repositories = createSqliteRepositories(this.executor)
+    this.checkpoints = new SqliteCheckpointRepository(this.executor)
   }
 
   async transaction<T>(fn: (tx: StorageTransaction) => Promise<T>): Promise<T> {

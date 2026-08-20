@@ -6,8 +6,16 @@ import './context'
 import { defineAgentLensPlugin } from './plugin'
 
 const repositories = {} as StorageService['repositories']
+const checkpoints: StorageService['checkpoints'] = {
+  async get() {
+    return null
+  },
+  async set() {},
+  async clear() {},
+}
 const storage: StorageService = {
   repositories,
+  checkpoints,
   async transaction<T>(fn): Promise<T> {
     return fn(repositories)
   },
