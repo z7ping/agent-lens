@@ -163,16 +163,16 @@ Storage Plugin 可以直接使用 Cordis 生命周期提供 `ctx.storage`，但 
 
 1.0 Web 使用 Vite + 原生 TypeScript，只消费 `/api/v1/*`。
 
-当前视图：
+当前面向用户的主视图使用简体中文：
 
-- Timeline
-- Sessions / Interactions
-- Tools & Assets
+- 执行轨迹；
+- 会话；
+- 工具与能力。
 
 实时更新使用 SSE，但 SSE 事件不得直接触发整页 / 整个内容区反复重绘。
 
-- Timeline 应优先做增量 DOM 协调，保留滚动位置、Evidence 展开状态和当前阅读上下文；
-- Sessions / Tools & Assets 如果暂时无法安全增量更新，应只提示“有新数据”，由用户显式刷新；
+- 执行轨迹应优先做增量 DOM 协调，保留滚动位置、Evidence 展开状态和当前阅读上下文；
+- 会话 / 工具与能力如果暂时无法安全增量更新，应只提示“有新数据”，由用户显式刷新；
 - 除非有明确性能数据和正式决策，不要改回短间隔轮询。
 
 ## 10. CLI / Desktop 规则
@@ -203,7 +203,7 @@ npm run cli -- doctor
 npm run desktop:win      # Windows runner
 ```
 
-Node.js 要求：`>=22.12.0`。
+Node.js 要求：`>=22.23.0`。
 
 ## 12. 语义变更必须覆盖的测试
 
@@ -229,7 +229,7 @@ same native semantic event from multiple evidence paths
 
 即：同一原生语义事件来自多条 Evidence Path 时，只产生一条 `CanonicalObservation`，但保留多份 `Evidence`。
 
-## 13. 文档纪律
+## 13. 文档与协作纪律
 
 任何改变架构所有权 / 边界的决策，都必须同步更新：
 
@@ -238,6 +238,8 @@ same native semantic event from multiple evidence paths
 - 对长期、难以逆转的决策补充 ADR。
 
 不要把“计划能力”写成“已实现能力”。不要让已删除的 0.x 路径继续出现在当前开发说明中，除非明确标注为 Git 历史参考。
+
+提交信息统一使用中文；Pull Request 的标题和正文也统一使用中文。代码标识符、API、类型名、命令保持英文即可。
 
 ## 14. 分支 / 发布安全
 
