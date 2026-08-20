@@ -1,7 +1,9 @@
 import { arch, hostname, platform } from 'node:os'
 import {
+  SourceAssetRunner,
   SourceHistoryRunner,
   SourceRuntimeRunner,
+  type SourceAssetDiscoveryResult,
   type SourceHistorySyncResult,
   type SourceRuntimeCaptureHandle,
 } from '@agent-lens/core-services/source-runner'
@@ -43,6 +45,45 @@ export async function syncRegisteredSourceHistory(
       throw new Error(`Detected source has no registered definition: ${item.sourceId}`)
     }
     results.push(await runner.sync({
+      source,
+      host,
+      detected: item,
+      abortSignal,
+    }))
+  }
+
+  return results
+}
+
+export async function discoverRegisteredSourceAssets(
+  ctx: AgentLensContext,
+  abortSignal: AbortSignal,
+): Promise<SourceAssetDiscoveryResult[]> {
+  const host = await runtimeHost(ctx)
+  const detected = await ctx.sources.detect({
+    host,
+    env: process.env,
+  })
+  const definitions = new Map(
+    ctx.sources.list().map(source => [source.manifest.sourceId, source]),
+  )
+  const runner = new SourceAssetRunner(
+    ctx.storage,
+    ctx.identity,
+    ctx.capabilities,
+    ctx.assets,
+    ctx.evidence,
+  )
+  const results: SourceAssetDiscoveryResult[] = []
+
+  for (const item of detected) {
+    if (abortSignal.aborted) break
+    const source = definitions.get(item.sourceId)
+    if (!source) {
+      throw new Error(`Detected source has no registered definition: ${item.sourceId}`)
+    }
+    if (!source.discoverAssets) continue
+    results.push(await runner.scan({
       source,
       host,
       detected: item,

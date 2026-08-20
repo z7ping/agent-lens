@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import {
   AgentLensApplication,
   coreServicesPlugin,
+  discoverRegisteredSourceAssets,
   startRegisteredSourceCapture,
   syncRegisteredSourceHistory,
 } from '@agent-lens/runtime-cordis'
@@ -57,10 +58,20 @@ try {
   console.info(`[AgentLens] 1.0 runtime started (db: ${dbPath})`)
 
   syncPromise = syncRegisteredSourceHistory(app.context, runtimeController.signal)
-  const results = await syncPromise
-  for (const result of results) {
+  const historyResults = await syncPromise
+  for (const result of historyResults) {
     console.info(
       `[AgentLens] history synced: ${result.sourceId} records=${result.records} created=${result.observationsCreated} merged=${result.observationsMerged} unchanged=${result.observationsUnchanged}`,
+    )
+  }
+
+  const assetResults = await discoverRegisteredSourceAssets(
+    app.context,
+    runtimeController.signal,
+  )
+  for (const result of assetResults) {
+    console.info(
+      `[AgentLens] assets scanned: ${result.sourceId} assets=${result.assetsDiscovered} states=${result.statesRecorded}`,
     )
   }
 

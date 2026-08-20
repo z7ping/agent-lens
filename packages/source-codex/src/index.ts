@@ -8,6 +8,7 @@ import {
   defineAgentLensPlugin,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
+import { discoverCodexAssets } from './assets'
 import { detectCodex } from './detect'
 import { ingestCodexHistory } from './history'
 import { normalizeCodexRecord } from './normalize'
@@ -36,7 +37,7 @@ export async function declareCodexCapabilities(
     { sourceId: 'codex', name: 'subagent', status: 'available', captureModes: ['runtime-hook'] },
     { sourceId: 'codex', name: 'usage', status: 'unavailable', captureModes: [], reason: 'No stable usage mapping is implemented yet' },
     { sourceId: 'codex', name: 'context', status: 'partial', captureModes: ['runtime-hook'], reason: 'Compaction lifecycle is observable; full model context exposure is not proven' },
-    { sourceId: 'codex', name: 'asset-discovery', status: 'unavailable', captureModes: [], reason: 'Static asset discovery is the next Codex phase' },
+    { sourceId: 'codex', name: 'asset-discovery', status: 'available', captureModes: ['static-scan'] },
     { sourceId: 'codex', name: 'asset-invocation', status: 'unavailable', captureModes: [], reason: 'Asset invocation attribution is not yet implemented' },
     { sourceId: 'codex', name: 'thinking', status: 'partial', captureModes: ['history'], reason: 'Only source-visible reasoning records can be observed' },
     { sourceId: 'codex', name: 'artifact-action', status: 'unavailable', captureModes: [], reason: 'Artifact attribution is not yet implemented' },
@@ -47,6 +48,7 @@ export const codexSourceDefinition: SourceDefinition = {
   manifest: codexManifest,
   detect: detectCodex,
   declareCapabilities: declareCodexCapabilities,
+  discoverAssets: discoverCodexAssets,
   ingestHistory: ingestCodexHistory,
   startCapture: startCodexRuntimeCapture,
   normalize: normalizeCodexRecord,
@@ -62,6 +64,7 @@ const applyCodexSource = Object.assign(
 
 export const codexSourcePlugin = defineAgentLensPlugin(codexManifest, applyCodexSource)
 
+export * from './assets'
 export * from './detect'
 export * from './format'
 export * from './history'

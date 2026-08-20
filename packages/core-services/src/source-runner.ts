@@ -1,9 +1,11 @@
 import type {
   AgentInstallation,
+  AssetService,
   CapabilityService,
   CoverageService,
   DetectedSource,
   Disposable,
+  EvidenceService,
   Host,
   IdentityService,
   ObservationService,
@@ -39,6 +41,20 @@ export interface SourceRuntimeCaptureInput {
 export interface SourceRuntimeCaptureHandle extends Disposable {
   sourceId: string
   installationId: string
+}
+
+export interface SourceAssetDiscoveryInput {
+  source: SourceDefinition
+  host: Host
+  detected: DetectedSource
+  abortSignal: AbortSignal
+}
+
+export interface SourceAssetDiscoveryResult {
+  sourceId: string
+  installationId: string
+  assetsDiscovered: number
+  statesRecorded: number
 }
 
 interface ProcessResult {
@@ -309,5 +325,80 @@ export class SourceRuntimeRunner {
         }
       },
     }
+  }
+}
+
+export class SourceAssetRunner {
+  constructor(
+    private readonly storage: StorageService,
+    private readonly identity: IdentityService,
+    private readonly capabilities: CapabilityService,
+    private readonly assets: AssetService,
+    private readonly evidence: EvidenceService,
+  ) {}
+
+  async scan(input: SourceAssetDiscoveryInput): Promise<SourceAssetDiscoveryResult> {
+    const { source, host, detected, abortSignal } = input
+    if (source.manifest.sourceId !== detected.sourceId) {
+      throw new Error(
+        `Source mismatch: definition=${source.manifest.sourceId}, detected=${detected.sourceId}`,
+      )
+    }
+
+    const installation = await resolveInstallation(this.identity, host, detected)
+    const declaredCapabilities = await source.declareCapabilities(detected)
+    this.capabilities.registerSourceCapabilities(
+      source.manifest.sourceId,
+      declaredCapabilities,
+    )
+
+    const result: SourceAssetDiscoveryResult = {
+      sourceId: source.manifest.sourceId,
+      installationId: installation.id,
+      assetsDiscovered: 0,
+      statesRecorded: 0,
+    }
+    if (!source.discoverAssets) return result
+
+    const checkpoint = new ScopedCheckpointService(
+      this.storage,
+      `${source.manifest.sourceId}:${installation.id}`,
+    )
+
+    for await (const discovered of source.discoverAssets({
+      host,
+      installation,
+      abortSignal,
+      checkpoint,
+    })) {
+      if (abortSignal.aborted) break
+
+      const definition = await this.assets.resolveDefinition(discovered.definition)
+      const binding = await this.assets.resolveBinding({
+        assetId: definition.id,
+        installationId: installation.id,
+        ...(discovered.binding?.path ? { path: discovered.binding.path } : {}),
+        ...(discovered.binding?.source ? { source: discovered.binding.source } : {}),
+        ...(discovered.binding?.version ? { version: discovered.binding.version } : {}),
+      })
+      result.assetsDiscovered += 1
+
+      for (const state of discovered.states ?? []) {
+        const evidenceRefs: string[] = []
+        for (const candidate of state.evidenceCandidates ?? []) {
+          evidenceRefs.push((await this.evidence.create(candidate)).id)
+        }
+        await this.assets.recordState({
+          assetBindingId: binding.id,
+          state: state.state,
+          value: state.value,
+          observedAt: state.observedAt,
+          evidenceRefs,
+        })
+        result.statesRecorded += 1
+      }
+    }
+
+    return result
   }
 }

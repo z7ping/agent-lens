@@ -1,6 +1,11 @@
 import type { AgentInstallation, Host } from '../domain/identity'
 import type { AgentProductId, Confidence, Disposable } from '../domain/common'
 import type {
+  AssetDefinitionHint,
+  AssetState,
+} from '../domain/assets'
+import type {
+  EvidenceCandidate,
   NormalizedSourceOutput,
   ObservationCapability,
   SourceRecord,
@@ -51,10 +56,23 @@ export interface SourceRecordEmitter {
   emit(record: SourceRecord): void | Promise<void>
 }
 
+export interface DiscoveredAssetBindingHint {
+  path?: string
+  source?: string
+  version?: string
+}
+
+export interface DiscoveredAssetStateHint {
+  state: AssetState
+  value: boolean | 'unknown'
+  observedAt: string
+  evidenceCandidates?: EvidenceCandidate[]
+}
+
 export interface DiscoveredAsset {
-  nativeType: string
-  nativeIdentity?: string
-  payload: unknown
+  definition: AssetDefinitionHint
+  binding?: DiscoveredAssetBindingHint
+  states?: DiscoveredAssetStateHint[]
 }
 
 export interface SourceDefinition {
