@@ -41,6 +41,7 @@ export interface SourceRuntimeCaptureInput {
 export interface SourceRuntimeCaptureHandle extends Disposable {
   sourceId: string
   installationId: string
+  dispose(): Promise<void>
 }
 
 export interface SourceAssetDiscoveryInput {
@@ -273,7 +274,9 @@ export class SourceRuntimeRunner {
       return {
         sourceId: source.manifest.sourceId,
         installationId: installation.id,
-        dispose: () => capabilityRegistration.dispose(),
+        async dispose(): Promise<void> {
+          await capabilityRegistration.dispose()
+        },
       }
     }
 

@@ -122,7 +122,7 @@ function renderSession(session: SessionDetailDto): HTMLElement {
   title.append(element('strong', '', session.productId), element('span', 'pill', session.sourceIds.join(', ') || 'unknown source'))
   top.append(title, element('span', 'muted', `${formatTime(session.startedAt)} → ${formatTime(session.endedAt)}`))
   const stats = element('div', 'stat-grid')
-  for (const [label, value] of [['Observations', session.observationCount], ['Interactions', session.interactionCount], ['Native sessions', session.nativeSessionIds.length]]) {
+  for (const [label, value] of [['Observations', session.observationCount], ['Interactions', session.interactionCount], ['Native sessions', session.nativeSessionIds.length]] as const) {
     const stat = element('div', 'stat'); stat.append(element('strong', '', String(value)), element('span', '', label)); stats.append(stat)
   }
   const ids = element('div', 'identifiers')

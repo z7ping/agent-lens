@@ -47,8 +47,8 @@ const SENSITIVE_KEY = /(password|passwd|secret|token|api[_-]?key|authorization|c
 
 interface PiSessionMetadata {
   nativeSessionId: string
-  cwd?: string
-  version?: string
+  cwd?: string | undefined
+  version?: string | undefined
   nativeParentSessionId?: string
 }
 
