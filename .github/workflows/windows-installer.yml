@@ -61,7 +61,7 @@ jobs:
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: agent-lens-windows-${{ github.ref_name || github.sha }}
+          name: agent-lens-windows-${{ github.run_id }}
           path: |
             release/windows/*.exe
             release/windows/SHA256SUMS.txt
