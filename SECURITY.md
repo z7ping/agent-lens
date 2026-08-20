@@ -1,58 +1,70 @@
 # 安全策略
 
-AgentLens 会读取本地 Agent 会话、工具参数、输出摘要、配置路径和能力资产。这些数据可能包含源代码、提示词、文件路径、访问令牌或其他敏感信息。
+AgentLens 会读取本地 AI 编码 Agent 暴露的 Session、Tool 调用、结果、配置路径和能力资产。这些数据可能包含源代码、提示词、文件路径、访问令牌或其他敏感信息。
 
-## 默认安全边界
+## 1.0 当前安全边界
 
-- HTTP 服务只监听 `127.0.0.1`，当前不支持局域网或公网访问。
-- API 拒绝非回环 Host、远程连接和未允许的浏览器 Origin，不返回通配 CORS。
-- `/api/hook` 只接受 JSON，并要求 `X-AgentLens-Token` 或 Bearer 令牌。令牌保存在运行目录 `run/hook-token`，不得提交或分享。
-- 提示词、工具数据和配置默认使用 `redacted` 档位；环境信息默认 `off`，启用后也只读取允许名单。
-- 凭据字段、Authorization、Cookie、常见 Token 和 URL 敏感参数会在写入 Timeline 与 JSONL 前脱敏。
-- v0.4 之前的历史正文不会在迁移中静默改写，其采集策略标记为未知。分享旧数据库前仍需人工检查。
+- HTTP Surface 固定监听 `127.0.0.1`，默认端口 `56789`。
+- 当前 `/api/v1/*` 是本机只读 GET Surface；1.0 **没有网络认证层**，安全边界依赖 loopback 监听。不要通过反向代理、端口转发或其他方式把它暴露到不可信网络。
+- 静态文件只从配置的 Web 构建目录读取，并通过真实目录边界检查阻止路径逃逸。
+- Codex / Claude Hook 子进程只做被动采集、敏感字段清洗和 Durable Inbox 原子写入，不应执行 AgentLens Core / SQLite / HTTP 逻辑。
+- 默认数据目录是 `~/.agent-lens/1.0/`，其中的 SQLite 数据库和 Inbox 都应视为敏感本机数据。
+- Source 原生日志本身可能包含 Prompt、Tool 参数、Tool Result 或路径信息。即使 Hook 路径会清洗常见敏感字段，也不要假设所有来源数据天然适合公开分享。
+- AgentLens 不声称获取来源未暴露的隐藏思维链。
 
-自定义本机开发前端如需直连 API，可用 `AGENT_LENS_ALLOWED_ORIGINS` 显式增加 `http://localhost:<端口>` 或 `http://127.0.0.1:<端口>`；非回环来源会被忽略。仓库自带 Vite 开发代理无需放宽该名单。
+## 本机数据
 
-采集档位可通过 `AGENT_LENS_PROMPT_CAPTURE`、`AGENT_LENS_TOOL_CAPTURE`、`AGENT_LENS_CONFIG_CAPTURE` 和 `AGENT_LENS_ENV_CAPTURE` 调整，取值为 `off`、`redacted` 或 `full`。启用 `full` 意味着相应原文会进入本机持久化存储。
+典型目录：
 
-`AGENT_LENS_CONFIG_CAPTURE=off` 会停止配置盘点，并在下一次概览刷新时清除已缓存的配置路径与静态能力资产；查询接口会立即隐藏旧缓存。环境采集保持关闭时不会读取环境内容。
+```text
+~/.agent-lens/1.0/
+├── agent-lens.db
+└── inbox/
+    ├── codex/
+    └── claude/
+```
+
+请不要：
+
+- 把该目录提交到 Git；
+- 把数据库、Inbox、真实 Session JSONL 或 Hook 输入直接上传到 Issue；
+- 在截图或日志中暴露 API Key、Token、Cookie、Authorization、源代码或本机路径；
+- 将 `127.0.0.1:56789` 通过代理或端口映射暴露到公网 / 不可信局域网。
+
+## Hook 配置
+
+`agent-lens hook install` / `uninstall` 只应修改 AgentLens 自己管理的 Handler，并保留同一配置中的第三方 Handler。
+
+如果发现以下行为，请按安全问题处理：
+
+- 安装 / 卸载覆盖或删除第三方 Hook；
+- Hook 可以被非预期输入诱导执行任意命令；
+- Durable Inbox 写入发生路径逃逸；
+- 敏感字段清洗明显失效；
+- Daemon 可以从非 loopback 网络访问；
+- 静态资源存在路径遍历或任意文件读取；
+- 数据库 / Session / Prompt 被未授权进程或网络接口暴露。
 
 ## 报告安全问题
 
-请不要通过公开 GitHub Issue 报告以下问题：
+请不要通过公开 GitHub Issue 报告可利用的安全漏洞。
 
-- API Key、Token、密码或环境变量泄露。
-- 提示词、会话、源代码或本机路径被未授权访问。
-- HTTP 服务能够被非预期网络访问。
-- 路径遍历、任意文件读取或写入。
-- Hook、MCP、插件或导入器导致的命令执行问题。
-- 脱敏逻辑失效。
+可使用：
 
-请使用以下任一私密渠道：
+1. [GitHub 私密安全报告](https://github.com/z7ping/agent-lens/security/advisories/new)
+2. 邮件：`z7ping@outlook.com`，标题以 `[AgentLens Security]` 开头
 
-1. [GitHub 私密安全报告](https://github.com/z7ping/agent-lens/security/advisories/new)。
-2. 邮件发送至 `z7ping@outlook.com`，标题以 `[AgentLens Security]` 开头。
+报告中建议包含：
 
-报告中请包含：
-
-- 受影响版本和平台。
-- 最小复现步骤。
-- 实际影响和可利用条件。
-- 已知缓解方法。
-- 必要的脱敏日志；不要发送真实凭据。
+- 受影响版本和平台；
+- 最小复现步骤；
+- 实际影响和可利用条件；
+- 已知缓解方法；
+- 必要的脱敏日志，禁止发送真实凭据。
 
 ## 处理原则
 
-- 收到报告后优先确认影响范围和临时缓解措施。
-- 修复发布前不公开可直接利用的细节。
-- 发布修复后在 CHANGELOG 和安全公告中说明受影响版本与升级建议。
+- 优先确认影响范围和临时缓解措施；
+- 修复发布前不公开可直接利用的细节；
+- 修复发布后在 CHANGELOG / Security Advisory 中说明受影响版本和升级建议；
 - 未经报告者同意，不公开其身份信息。
-
-## 用户侧建议
-
-- 只在可信机器和可信项目中运行 AgentLens。
-- 不要将运行时 `.agent-lens/` 目录提交到版本控制。
-- 不要把服务端口暴露到公网或不受信任的局域网。
-- 不要绕过回环监听、Origin 校验或 Hook 令牌保护。
-- 分享截图、数据库或日志前先检查提示词、代码、路径和凭据。
-- MCP 健康检查和外部命令只应在确认配置可信后手动执行。

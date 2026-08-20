@@ -6,15 +6,15 @@
 
 AgentLens 1.0 是一次 **Clean Rebuild（彻底重建）**。
 
-0.x 实现仅作为参考材料。不要通过包装或复用以下内容，把旧 Runtime Architecture 带回 1.0：
+0.x 的旧 Runtime / UI / Test 已从 1.0 工作树移除，不再作为可直接复用的实现存在。需要参考 0.x 的解析行为、fixture、UI 思路或迁移逻辑时，请通过 Git 历史 / Tag 查阅，并重新按 1.0 Contract 验证后再选择性迁移。
 
-- `server/adapters/*` 的 Runtime 所有权；
-- 旧 Importer 编排方式；
+禁止为了“兼容旧实现”重新恢复以下架构：
+
+- 旧 Adapter / Importer Runtime；
 - 旧 `timeline` / `overview_*` 规范表；
 - 旧 service manager / PID 架构；
-- 旧 HTTP Response Shape。
-
-0.x 代码仍可以用于参考解析行为、fixture、UI 思路和迁移逻辑。
+- 旧 HTTP Response Shape；
+- 根目录 `server/`、`src/`、`test/` 作为 1.0 Runtime / UI / Test 入口。
 
 ## 2. 修改架构前必须阅读
 
@@ -146,7 +146,7 @@ Inbox 条目只有在成功完成 Canonical Ingestion 后才能确认并删除�
 
 ## 9. UI 规则
 
-1.0 Web 使用 Vite + 原生 TypeScript。
+1.0 Web 使用 Vite + 原生 TypeScript，只消费 `/api/v1/*`。
 
 当前视图：
 
@@ -154,9 +154,11 @@ Inbox 条目只有在成功完成 Canonical Ingestion 后才能确认并删除�
 - Sessions / Interactions
 - Tools & Assets
 
-只使用 `/api/v1/*`。
+实时更新使用 SSE，但 SSE 事件不得直接触发整页 / 整个内容区反复重绘。
 
-实时更新使用 SSE。除非有明确的性能数据和正式决策，不要改回短间隔轮询。
+- Timeline 应优先做增量 DOM 协调，保留滚动位置、Evidence 展开状态和当前阅读上下文；
+- Sessions / Tools & Assets 如果暂时无法安全增量更新，应只提示“有新数据”，由用户显式刷新；
+- 除非有明确性能数据和正式决策，不要改回短间隔轮询。
 
 ## 10. CLI / Desktop 规则
 
@@ -220,7 +222,7 @@ same native semantic event from multiple evidence paths
 - Contract 变化时更新 `docs/1.0/CORE-CONTRACT.md`；
 - 对长期、难以逆转的决策补充 ADR。
 
-不要把“计划能力”写成“已实现能力”。
+不要把“计划能力”写成“已实现能力”。不要让已删除的 0.x 路径继续出现在当前开发说明中，除非明确标注为 Git 历史参考。
 
 ## 14. 分支 / 发布安全
 

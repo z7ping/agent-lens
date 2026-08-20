@@ -33,6 +33,7 @@
 - `/api/v1/usage`
 - `/api/v1/events` SSE
 - Vite Web：Timeline / Sessions / Tools & Assets
+- Timeline SSE 增量 DOM 更新；Sessions / Tools & Assets 在有新数据时提示显式 Refresh，避免实时事件打断阅读上下文
 
 ### Operations
 
@@ -41,6 +42,24 @@
 - npm 单包分发构建
 - GitHub Release -> npm Artifact Workflow
 - Windows Electron 桌面壳 + 托盘 + NSIS 安装包 Workflow
+
+## Repository Cleanup
+
+1.0 工作树已移除旧 0.x Runtime / UI / Test：
+
+```text
+server/
+src/
+test/
+index.html
+vite.config.mjs
+docs/superpowers/
+docs/static/
+```
+
+0.x 历史实现仍可通过 Git 历史 / Tag 查阅，但不再作为 1.0 工作树的一部分，也不得被重新接回 1.0 Runtime。
+
+历史 `CHANGELOG.md` 保留，用于记录已经发生过的 0.x 演进。
 
 ## 明确没有从 0.x 直接带入的能力
 
@@ -64,11 +83,17 @@
 - 静态 Asset Discovery 不计为 Usage。
 - Hook install / uninstall 必须保留第三方 Handler。
 - 幂等的 `unchanged` Replay 不触发 SSE 更新噪声。
+- SSE 实时更新不能通过反复全量替换内容区破坏滚动位置、展开状态和阅读上下文。
 
-## Release 验证
+## 尚待最终验证
 
-分支 CI 会在 Linux 与 Windows 上执行 Typecheck、Test、Distribution Build 与 npm pack 检查。
+当前实现状态不等于已经通过最终 Release Acceptance。合并 / 发布前仍需要在当前 HEAD 确认：
 
-Release Workflow 会在发布前重复验证，并发布实际打包出的同一份 tarball。Windows Installer 在独立的 `windows-latest` Job 中构建，并把 NSIS Artifact 附加到 GitHub Release。
+1. `npm run typecheck`
+2. `npm test`
+3. `npm run build:dist`
+4. `npm pack --dry-run` 或 `npm run release:check`
+5. Linux / Windows CI 当前 HEAD 全绿
+6. Windows NSIS Installer 至少完成一次实际构建验证
 
 本文不代表已经完成 Merge、npm Publish 或 GitHub Release；这些操作仍然必须由仓库所有者明确触发。
