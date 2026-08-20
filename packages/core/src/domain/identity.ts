@@ -140,7 +140,7 @@ export interface InstallationIdentityHint {
 }
 
 export interface ProjectIdentityHint {
-  name?: string
+  name?: string | undefined
   repositoryIdentity?: string
 }
 

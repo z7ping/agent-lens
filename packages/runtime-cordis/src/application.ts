@@ -19,7 +19,7 @@ interface PluginRegistration {
 }
 
 export interface AgentLensApplicationOptions {
-  plugins?: readonly Array<{
+  plugins?: ReadonlyArray<{
     plugin: AgentLensCordisPlugin<any>
     config?: unknown
   }>

@@ -49,7 +49,7 @@ export interface Evidence {
   derivation: Derivation
   confidence: Confidence
   sourceRecordId?: SourceRecordId
-  sourceLocator?: SourceLocator
+  sourceLocator?: SourceLocator | undefined
   parserVersion?: string
   eventTime?: string
   capturedAt: string

@@ -16,7 +16,9 @@ const checkpoints: StorageService['checkpoints'] = {
 const storage: StorageService = {
   repositories,
   checkpoints,
-  async transaction<T>(fn): Promise<T> {
+  async transaction<T>(
+    fn: (tx: StorageService['repositories']) => Promise<T>,
+  ): Promise<T> {
     return fn(repositories)
   },
   async migrate(): Promise<void> {},

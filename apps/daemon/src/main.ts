@@ -17,7 +17,7 @@ app.useRuntime(coreServicesPlugin)
 app.use(codexSourcePlugin)
 
 const syncController = new AbortController()
-let syncPromise: Promise<unknown> | null = null
+let syncPromise: ReturnType<typeof syncRegisteredSourceHistory> | null = null
 let shuttingDown = false
 
 async function shutdown(signal: string): Promise<void> {
