@@ -9,12 +9,14 @@
   ],
   "scripts": {
     "dev": "npm run dev --workspace @agent-lens/daemon",
+    "dev:web": "npm run dev --workspace @agent-lens/web",
+    "build:web": "npm run build --workspace @agent-lens/web",
     "start": "npm run start --workspace @agent-lens/daemon",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.12.0"
   },
   "devDependencies": {
     "@types/node": "^22.20.0",
