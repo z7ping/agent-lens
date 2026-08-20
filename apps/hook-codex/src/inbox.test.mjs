@@ -24,10 +24,12 @@ test('Codex hook persists one sanitized durable inbox event', async () => {
 
     const files = await readdir(inbox)
     assert.equal(files.length, 1)
-    assert.equal(files[0]?.endsWith('.json'), true)
+    const file = files[0]
+    assert.ok(file)
+    assert.equal(file.endsWith('.json'), true)
 
     const envelope = JSON.parse(
-      await readFile(join(inbox, files[0]!), 'utf8'),
+      await readFile(join(inbox, file), 'utf8'),
     )
     assert.equal(envelope.event.hook_event_name, 'PreToolUse')
     assert.equal(envelope.event.call_id, 'call-1')
