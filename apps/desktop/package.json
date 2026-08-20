@@ -4,8 +4,10 @@
   "private": true,
   "type": "module",
   "main": "src/main.mjs",
+  "description": "AgentLens Windows 桌面壳。",
+  "author": "7ping <z7ping@outlook.com>",
   "scripts": {
-    "dist:win": "electron-builder --win nsis"
+    "dist:win": "node ../../scripts/prepare-desktop-icon.mjs && electron-builder --win nsis"
   },
   "dependencies": {
     "@deepseek-ai/cordis": "4.0.1",
@@ -38,7 +40,7 @@
           "arch": ["x64"]
         }
       ],
-      "icon": "assets/icon.ico",
+      "icon": "assets/icon.png",
       "artifactName": "AgentLens-${version}-Setup-${arch}.${ext}"
     },
     "nsis": {
