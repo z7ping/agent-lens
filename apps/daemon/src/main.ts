@@ -10,6 +10,7 @@ import {
 } from '@agent-lens/runtime-cordis'
 import { claudeSourcePlugin } from '@agent-lens/source-claude'
 import { codexSourcePlugin } from '@agent-lens/source-codex'
+import { piSourcePlugin } from '@agent-lens/source-pi'
 import { sqliteStoragePlugin } from '@agent-lens/storage-sqlite'
 import {
   DEFAULT_AGENT_LENS_HTTP_PORT,
@@ -29,6 +30,7 @@ app.use(sqliteStoragePlugin, { path: dbPath })
 app.useRuntime(coreServicesPlugin)
 app.use(codexSourcePlugin)
 app.use(claudeSourcePlugin)
+app.use(piSourcePlugin)
 app.use(httpSurfacePlugin, {
   port: configuredPort,
   staticDir: webRoot,
