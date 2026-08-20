@@ -46,3 +46,4 @@ tracker.db-wal
 .playwright-mcp/
 .superpowers/
 .superpowers/
+server/hooks/windows-hook-runner.exe

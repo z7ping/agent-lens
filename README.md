@@ -1,13 +1,35 @@
-# AgentLens | AI 智能体棱镜
+<h1 align="center">AgentLens</h1>
 
-> **See every action your AI agents take.**
+<p align="center">
+  <strong>AI 智能体透镜</strong>
+</p>
 
-**English** | [简体中文](README.zh-CN.md)
+<p align="center">
+  <em>See every action your AI agents take.</em>
+</p>
 
-[![npm version](https://img.shields.io/npm/v/@z7ping/agent-lens?logo=npm&color=cb3837)](https://www.npmjs.com/package/@z7ping/agent-lens)
-[![npm downloads](https://img.shields.io/npm/dm/@z7ping/agent-lens?logo=npm)](https://www.npmjs.com/package/@z7ping/agent-lens)
-[![Node.js](https://img.shields.io/node/v/@z7ping/agent-lens?logo=node.js&logoColor=white)](https://www.npmjs.com/package/@z7ping/agent-lens)
-[![License](https://img.shields.io/npm/l/@z7ping/agent-lens)](LICENSE)
+<p align="center">
+  <a href="README.md"><strong>English</strong></a>
+  ·
+  <a href="README.zh-CN.md">简体中文</a>
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/@z7ping/agent-lens"><img alt="npm version" src="https://img.shields.io/npm/v/@z7ping/agent-lens?logo=npm&color=cb3837"></a>
+  <a href="https://www.npmjs.com/package/@z7ping/agent-lens"><img alt="npm downloads" src="https://img.shields.io/npm/dm/@z7ping/agent-lens?logo=npm"></a>
+  <a href="https://www.npmjs.com/package/@z7ping/agent-lens"><img alt="Node.js" src="https://img.shields.io/node/v/@z7ping/agent-lens?logo=node.js&logoColor=white"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/npm/l/@z7ping/agent-lens"></a>
+  <a href="https://github.com/z7ping/agent-lens/actions/workflows/npm-publish.yml"><img alt="Publish to npm" src="https://github.com/z7ping/agent-lens/actions/workflows/npm-publish.yml/badge.svg"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/z7ping/agent-lens/releases"><img alt="GitHub release" src="https://img.shields.io/github/v/release/z7ping/agent-lens?logo=github"></a>
+  <a href="https://github.com/z7ping/agent-lens/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/z7ping/agent-lens?style=social"></a>
+  <a href="https://github.com/z7ping/agent-lens/issues"><img alt="Issues" src="https://img.shields.io/github/issues/z7ping/agent-lens"></a>
+  <img alt="Platform support" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-2f6f9f">
+  <img alt="Local first" src="https://img.shields.io/badge/local--first-yes-0f766e">
+  <img alt="Privacy by default" src="https://img.shields.io/badge/privacy-redaction%20by%20default-7c3aed">
+</p>
 
 AgentLens is a local observability and replay tool for AI coding agents. It reconstructs the observable actions and execution path of each task, counts Skill, Tool, and MCP calls, and clearly distinguishes runtime capture, static discovery, inference, and information that cannot be observed.
 
