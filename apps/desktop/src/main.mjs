@@ -128,12 +128,12 @@ function createTray() {
   tray = new Tray(image)
   tray.setToolTip('AgentLens')
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Open AgentLens', click: showWindow },
-    { label: 'Restart runtime', click: () => void restartDaemon() },
-    { label: 'Open data folder', click: () => void shell.openPath(join(homedir(), '.agent-lens', '1.0')) },
-    { label: 'Open logs', click: () => void shell.openPath(app.getPath('logs')) },
+    { label: '打开 AgentLens', click: showWindow },
+    { label: '重启运行时', click: () => void restartDaemon() },
+    { label: '打开数据目录', click: () => void shell.openPath(join(homedir(), '.agent-lens', '1.0')) },
+    { label: '打开日志目录', click: () => void shell.openPath(app.getPath('logs')) },
     { type: 'separator' },
-    { label: 'Quit', click: () => { quitting = true; app.quit() } },
+    { label: '退出', click: () => { quitting = true; app.quit() } },
   ]))
   tray.on('double-click', showWindow)
 }
@@ -160,9 +160,9 @@ if (!singleInstance) {
   } else {
     await dialog.showMessageBox({
       type: 'error',
-      title: 'AgentLens runtime failed to start',
-      message: 'The AgentLens daemon did not become ready.',
-      detail: `See ${join(app.getPath('logs'), 'daemon.log')} for details.`,
+      title: 'AgentLens 运行时启动失败',
+      message: 'AgentLens Daemon 未能正常启动。',
+      detail: `请查看日志：${join(app.getPath('logs'), 'daemon.log')}`,
     })
     quitting = true
     app.quit()
