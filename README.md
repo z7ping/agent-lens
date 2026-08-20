@@ -35,7 +35,7 @@ AgentLens does **not** execute the agent and does not claim access to hidden cha
 
 ## Quick start
 
-Requires Node.js **22.12+**.
+Requires Node.js **22.23+**.
 
 ### npm
 
@@ -95,21 +95,21 @@ Uninstalling the desktop application does not automatically delete `~/.agent-len
 
 ## UI
 
-The 1.0 Web UI currently exposes three projections:
+The current 1.0 Web shell is localized in Simplified Chinese and exposes three projections:
 
-### Timeline
+### 执行轨迹 (Timeline)
 
-Canonical observations ordered by effective event time, including Evidence records, capture method, derivation, confidence, and source locator.
+Canonical observations ordered by effective event time, including Evidence records, capture method, derivation, confidence, and source locator. Raw payload and Evidence details are collapsed by default.
 
-### Sessions / Interactions
+### 会话 (Sessions / Interactions)
 
-Logical sessions derived from canonical observations. User messages define user-triggered Interaction boundaries; observable autonomous activity can form background interactions.
+Logical sessions derived from canonical observations. User messages define user-triggered Interaction boundaries; observable autonomous activity can form background interactions. Sessions can jump directly to the matching execution trajectory.
 
-### Tools & Assets
+### 工具与能力 (Tools & Assets)
 
 Tool calls/results, success/failure counts, duration, source/product attribution, and defensible Skill/MCP usage attribution.
 
-The UI uses Server-Sent Events for live refresh. Idempotent `unchanged` commits do not trigger refresh noise.
+The UI receives live updates through Server-Sent Events. Timeline updates use incremental DOM reconciliation so new observations do not destroy scroll position or expanded Evidence state. Sessions and Tools & Assets show a new-data indicator when a safe incremental update is not available. Idempotent `unchanged` commits do not trigger refresh noise.
 
 ## CLI
 
@@ -141,7 +141,7 @@ Native source
   -> Web / Desktop
 ```
 
-Cordis is the sole plugin runtime and is pinned to `@deepseek-ai/cordis@4.0.1`. All Cordis-specific integration is isolated in `packages/runtime-cordis`; Core remains framework-independent.
+Cordis is the sole plugin runtime and is pinned to `@deepseek-ai/cordis@4.0.1`. AgentLens Core remains framework-independent; runtime extension entrypoints such as Source, Storage, and Surface are Cordis-native plugins. `packages/runtime-cordis` owns shared Context typing, metadata helpers, and compatibility tests rather than wrapping runtime extensions behind a second AgentLens plugin runtime.
 
 See:
 
