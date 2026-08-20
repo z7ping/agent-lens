@@ -8,7 +8,7 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "test": "tsx --test \"src/**/*.test.ts\""
+    "test": "tsx --experimental-test-isolation=none --test \"src/**/*.test.ts\""
   },
   "dependencies": {
     "@agent-lens/core": "1.0.0-alpha.0",
