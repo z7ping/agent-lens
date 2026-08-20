@@ -8,6 +8,7 @@ import {
   startRegisteredSourceCapture,
   syncRegisteredSourceHistory,
 } from '@agent-lens/runtime-cordis'
+import { claudeSourcePlugin } from '@agent-lens/source-claude'
 import { codexSourcePlugin } from '@agent-lens/source-codex'
 import { sqliteStoragePlugin } from '@agent-lens/storage-sqlite'
 import {
@@ -27,6 +28,7 @@ const app = new AgentLensApplication()
 app.use(sqliteStoragePlugin, { path: dbPath })
 app.useRuntime(coreServicesPlugin)
 app.use(codexSourcePlugin)
+app.use(claudeSourcePlugin)
 app.use(httpSurfacePlugin, {
   port: configuredPort,
   staticDir: webRoot,
@@ -43,9 +45,7 @@ async function shutdown(signal: string): Promise<void> {
   runtimeController.abort()
 
   try {
-    if (syncPromise) {
-      await syncPromise.catch(() => undefined)
-    }
+    if (syncPromise) await syncPromise.catch(() => undefined)
     for (const handle of [...captureHandles].reverse()) {
       await handle.dispose().catch(() => undefined)
     }
@@ -59,13 +59,8 @@ async function shutdown(signal: string): Promise<void> {
   }
 }
 
-process.once('SIGINT', () => {
-  void shutdown('SIGINT')
-})
-
-process.once('SIGTERM', () => {
-  void shutdown('SIGTERM')
-})
+process.once('SIGINT', () => void shutdown('SIGINT'))
+process.once('SIGTERM', () => void shutdown('SIGTERM'))
 
 try {
   await app.start()
@@ -80,20 +75,14 @@ try {
     )
   }
 
-  const assetResults = await discoverRegisteredSourceAssets(
-    app.context,
-    runtimeController.signal,
-  )
+  const assetResults = await discoverRegisteredSourceAssets(app.context, runtimeController.signal)
   for (const result of assetResults) {
     console.info(
       `[AgentLens] assets scanned: ${result.sourceId} assets=${result.assetsDiscovered} states=${result.statesRecorded}`,
     )
   }
 
-  captureHandles = await startRegisteredSourceCapture(
-    app.context,
-    runtimeController.signal,
-  )
+  captureHandles = await startRegisteredSourceCapture(app.context, runtimeController.signal)
   for (const handle of captureHandles) {
     console.info(`[AgentLens] runtime capture started: ${handle.sourceId}`)
   }

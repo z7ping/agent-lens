@@ -1,0 +1,9 @@
+{
+  "name": "@agent-lens/hook-claude",
+  "version": "1.0.0-alpha.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "agent-lens-hook-claude": "./bin/agent-lens-hook-claude.mjs"
+  }
+}
