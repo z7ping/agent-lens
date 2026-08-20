@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@agent-lens/core": "1.0.0-alpha.0",
+    "@agent-lens/core-services": "1.0.0-alpha.0",
     "@deepseek-ai/cordis": "4.0.1"
   }
 }

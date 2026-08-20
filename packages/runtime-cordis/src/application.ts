@@ -12,26 +12,30 @@ export type AgentLensApplicationState =
   | 'stopping'
   | 'stopped'
 
-export interface AgentLensPluginRegistration {
-  plugin: AgentLensCordisPlugin<any>
+interface PluginRegistration {
+  plugin: Plugin<any>
   config?: unknown
+  validateManifest: boolean
 }
 
 export interface AgentLensApplicationOptions {
-  plugins?: readonly AgentLensPluginRegistration[]
+  plugins?: readonly Array<{
+    plugin: AgentLensCordisPlugin<any>
+    config?: unknown
+  }>
 }
 
 export class AgentLensApplication {
   readonly context: Context
 
-  private readonly registrations: AgentLensPluginRegistration[] = []
+  private readonly registrations: PluginRegistration[] = []
   private readonly fibers: Fiber[] = []
   private _state: AgentLensApplicationState = 'idle'
 
   constructor(options: AgentLensApplicationOptions = {}) {
     this.context = new Context()
-    if (options.plugins) {
-      this.registrations.push(...options.plugins)
+    for (const registration of options.plugins ?? []) {
+      this.use(registration.plugin, registration.config)
     }
   }
 
@@ -39,13 +43,30 @@ export class AgentLensApplication {
     return this._state
   }
 
+  /** Register an AgentLens extension plugin with Plugin API validation. */
   use(plugin: AgentLensCordisPlugin<any>, config?: unknown): this {
-    if (this._state !== 'idle') {
-      throw new Error('Plugins can only be registered before AgentLens starts')
-    }
-
+    this.assertConfigurable()
     assertAgentLensPluginCompatible(plugin.manifest)
-    this.registrations.push(config === undefined ? { plugin } : { plugin, config })
+    this.registrations.push({
+      plugin,
+      ...(config === undefined ? {} : { config }),
+      validateManifest: true,
+    })
+    return this
+  }
+
+  /**
+   * Register an internal Cordis composition plugin.
+   * This is for AgentLens runtime wiring (for example Core Service providers),
+   * not a second public plugin API.
+   */
+  useRuntime(plugin: Plugin<any>, config?: unknown): this {
+    this.assertConfigurable()
+    this.registrations.push({
+      plugin,
+      ...(config === undefined ? {} : { config }),
+      validateManifest: false,
+    })
     return this
   }
 
@@ -62,7 +83,11 @@ export class AgentLensApplication {
 
     try {
       for (const registration of this.registrations) {
-        assertAgentLensPluginCompatible(registration.plugin.manifest)
+        if (registration.validateManifest) {
+          assertAgentLensPluginCompatible(
+            (registration.plugin as AgentLensCordisPlugin<any>).manifest,
+          )
+        }
         const fiber = registration.config === undefined
           ? await load(registration.plugin)
           : await load(registration.plugin, registration.config)
@@ -91,6 +116,12 @@ export class AgentLensApplication {
       await this.disposeLoadedFibers()
     } finally {
       this._state = 'stopped'
+    }
+  }
+
+  private assertConfigurable(): void {
+    if (this._state !== 'idle') {
+      throw new Error('Plugins can only be registered before AgentLens starts')
     }
   }
 

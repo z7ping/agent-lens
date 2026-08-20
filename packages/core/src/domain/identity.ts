@@ -131,6 +131,7 @@ export interface HostIdentityHint {
 }
 
 export interface InstallationIdentityHint {
+  hostId: HostId
   productId: AgentProductId
   executable?: string
   version?: string

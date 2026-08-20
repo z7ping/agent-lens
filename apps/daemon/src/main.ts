@@ -1,6 +1,10 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { AgentLensApplication } from '@agent-lens/runtime-cordis'
+import {
+  AgentLensApplication,
+  coreServicesPlugin,
+} from '@agent-lens/runtime-cordis'
+import { codexSourcePlugin } from '@agent-lens/source-codex'
 import { sqliteStoragePlugin } from '@agent-lens/storage-sqlite'
 
 const dbPath = process.env.AGENT_LENS_DB_PATH
@@ -8,6 +12,8 @@ const dbPath = process.env.AGENT_LENS_DB_PATH
 
 const app = new AgentLensApplication()
 app.use(sqliteStoragePlugin, { path: dbPath })
+app.useRuntime(coreServicesPlugin)
+app.use(codexSourcePlugin)
 
 let shuttingDown = false
 

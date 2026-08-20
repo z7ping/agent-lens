@@ -16,7 +16,6 @@ import type {
   SourceSessionIdentityHint,
   Workspace,
   WorkspaceIdentityHint,
-  ObservationIdentityHints,
 } from '../domain/identity'
 import type {
   AgentInstallationId,
@@ -54,12 +53,16 @@ import type {
   ToolDefinition,
   ToolDefinitionHint,
 } from '../domain/assets'
-import type { DetectedSource, SourceDefinition } from '../contracts/source'
+import type {
+  DetectedSource,
+  SourceDefinition,
+  SourceDetectionContext,
+} from '../contracts/source'
 
 export interface SourceService {
   register(definition: SourceDefinition): Disposable
   list(): SourceDefinition[]
-  detect(context?: unknown): Promise<DetectedSource[]>
+  detect(context: SourceDetectionContext): Promise<DetectedSource[]>
 }
 
 export interface IdentityService {
@@ -79,9 +82,11 @@ export interface EvidenceService {
 }
 
 export interface CommitObservationInput {
+  sourceId: string
+  host: Host
+  installation: AgentInstallation
   candidate: ObservationCandidate
   evidenceCandidates: EvidenceCandidate[]
-  identityHints: ObservationIdentityHints
 }
 
 export interface ObservationCommitResult {
@@ -174,10 +179,6 @@ export interface InstallationRepository {
   put(installation: AgentInstallation): Promise<void>
 }
 
-/**
- * Project/workspace/session topology is kept behind one repository boundary.
- * This keeps Core independent from the physical SQLite table split.
- */
 export interface SessionRepository {
   getProject(id: ProjectId): Promise<Project | null>
   putProject(project: Project): Promise<void>
@@ -251,7 +252,6 @@ export interface RepositorySet {
   tools: ToolRepository
 }
 
-/** A transaction exposes the same domain repositories, scoped to one atomic unit. */
 export interface StorageTransaction extends RepositorySet {}
 
 export interface StorageHealth {
