@@ -1,592 +1,395 @@
-# AgentLens 架构文档
+# AgentLens 1.0 Architecture
 
-> 最后更新：2026-08-13
-> 目的：记录技术架构和关键决策，防止迭代中反复踩坑
+> Status: 1.0 alpha implementation baseline  
+> Updated: 2026-08-20
 
----
+## 1. Positioning
 
-## 1. 系统架构概览
+AgentLens 1.0 is a local observability and trajectory viewer for AI coding agents. It does not try to become a universal agent framework, and it does not own the execution loop of Codex, Claude Code, Pi, or other agents.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        AgentLens                                │
-├─────────────────────────────────────────────────────────────────┤
-│  前端 (Vite + Tailwind)          后端 (Node.js + SQLite)        │
-│  ┌─────────────────────┐         ┌─────────────────────┐       │
-│  │  调用链 Tab          │  ◄──►  │  HTTP Server :56789 │       │
-│  │  仪表盘 Tab          │        │  ┌───────────────┐  │       │
-│  │  概览 Tab            │        │  │  /api/overview│  │       │
-│  └─────────────────────┘        │  │  agent-lens.db     │  │       │
-│                                 │  │ timeline/overview │ │       │
-│                                 │  └───────────────┘  │       │
-│                                 └─────────────────────┘       │
-└─────────────────────────────────────────────────────────────────┘
-                                    ▲
-                                    │ 数据写入
-                    ┌───────────────┼───────────────┐
-                    │               │               │
-            ┌───────┴───────┐ ┌─────┴─────┐ ┌───────┴───────┐
-            │   Hermes      │ │  Hooks    │ │   OpenCode    │
-            │   (轮询DB)    │ │ (实时)    │ │   (轮询DB)    │
-            └───────────────┘ └───────────┘ └───────────────┘
-```
+Its job is to answer four questions:
 
-### 安装与运行目录边界
+1. What happened?
+2. Which source/evidence proves it happened?
+3. Which task/session/interaction did it belong to?
+4. Which tools and capability assets were actually used?
 
-所有平台使用 `~/.agent-lens` 作为稳定安装根目录，但程序和运行数据不再平铺：
+## 2. Clean Rebuild boundary
+
+1.0 is a clean rebuild. The 0.x implementation is reference material only.
+
+0.x may be reused for:
+
+- validated parsing algorithms;
+- fixtures and regression cases;
+- useful UI ideas;
+- migration/import rules.
+
+0.x must not remain in the 1.0 runtime path as a compatibility layer. In particular, 1.0 does not wrap the old Adapter, Importer, timeline table, overview table, server lifecycle, or service manager.
+
+There is no long-lived dual schema, dual runtime, or LegacyTimelineProjection.
+
+## 3. Canonical pipeline
 
 ```text
-~/.agent-lens/
-├── app/          # 服务端、前端产物、Hooks、适配器和生产依赖
-├── bin/          # Windows agent-lens.cmd
-├── data/         # SQLite 数据库与项目注册表
-├── logs/         # JSONL 与诊断日志
-├── state/        # 调用栈与导入水位线
-└── run/          # PID
+Native Source
+  |
+  | history / runtime / static scan
+  v
+SourceRecord
+  |
+  v
+SourceDefinition.normalize()
+  |
+  +--> ObservationCandidate
+  +--> EvidenceCandidate
+  +--> IdentityHints
+  +--> DedupHints
+  |
+  v
+IdentityService
+  |
+  v
+ObservationService.commit()
+  |
+  +--> Evidence
+  +--> CanonicalObservation
+  |
+  v
+SQLite 1.0 repositories
+  |
+  +--> TimelineProjection
+  +--> SessionProjection
+  +--> ToolAssetUsageProjection
+  |
+  v
+@agent-lens/protocol DTOs
+  |
+  +--> HTTP /api/v1/*
+  +--> SSE /api/v1/events
+  |
+  v
+AgentLens Web / Desktop
 ```
 
-`server/runtime-paths.js` 是路径契约的唯一来源。安装器先把程序和生产依赖写入 `.update/app`，验证后切换到正式 `app/`；服务完成核心数据库初始化后先监听 HTTP、写入 PID，再延迟启动历史导入、概览扫描和适配器轮询。安装器通过 PID、HTTP 与实际版本联合检查就绪，成功后才清理当前平铺布局的旧程序文件。历史 AppData/XDG 布局只迁移目标中缺失的数据，同名数据库或状态文件不会被覆盖。
+The canonical fact is `CanonicalObservation`. Raw/native records remain `SourceRecord`; they are evidence inputs, not presentation models.
 
----
+## 4. Runtime architecture
 
-## 2. 数据采集方式对比
+Cordis is the sole plugin runtime.
 
-AgentLens 同时使用实时 Hook、历史 JSONL 导入和本地数据库轮询。Hook 负责低延迟生命周期与工具观测，历史数据源负责补齐对话和未安装 Hook 时产生的任务。
-
-| 适配器 | 主要采集方式 | 数据来源 | 用户消息 | AI 可见回复 | 工具调用 |
-|--------|--------------|----------|:--------:|:----------:|:--------:|
-| **Hermes** | SQLite 轮询 | `state.db` 的 messages / sessions | ✅ | ✅ | ✅ |
-| **Claude Code** | 实时 Hook + JSONL 增量导入 | Hook stdin、`~/.claude/projects/**/*.jsonl` | ✅（历史） | ✅（历史） | ✅ |
-| **Codex** | 11 类实时 Hook + JSONL 增量导入 | Hook stdin、`~/.codex/sessions/**/*.jsonl` | ✅（实时提交 + 历史） | ✅（Turn 停止 + 历史） | ✅ |
-| **OpenCode** | SQLite 轮询 | `opencode.db` 的 session / message / part | ✅ | ✅ | ✅ |
-| **Pi** | 树形 JSONL 增量导入 | Pi session JSONL 的 entry / parentId / parentSession | ✅ | ✅（thinking 正文除外） | ✅（toolCallId 配对） |
-| **Cursor** | 实时 Hook | Hook stdin | ❌ | ❌ | ✅ |
-| **OpenClaw** | 骨架 | 尚未实现 | ❌ | ❌ | ❌ |
-
-### 数据完整度边界
-
-- Claude Code 的实时 Hook 当前只安装 `PreToolUse` 和 `PostToolUse`；用户和助手消息来自历史 JSONL 导入。
-- Codex 实时 Hook 覆盖 Session、提示词提交、权限请求、Tool、Compact、Subagent 和 Stop。生命周期事件与原生 JSONL 历史对话保持不同证据类型，不把两者合并成“完整模型输入”。
-- Codex 会话开始时按官方优先级静态发现当前 `AGENTS.md` 指令链；静态发现不能证明历史 Turn 实际加载过该内容。
-- Pi 按字节偏移读取原生 Session JSONL，使用 entry ID、`parentId`、`parentSession` 和 `toolCallId` 保留分支、派生 Session 与并行工具关系；模型切换、thinking level、压缩和分支摘要作为原生日志证据单独展示。
-- Pi 原生日志中的 thinking 只记录存在性和块数量，默认不采集正文，也不表述为模型隐藏思维链。
-- 历史文件不存在、会话持久化被关闭或格式发生变化时，对话记录可能缺失。
-- 用户消息和助手可见回复不等于模型收到的完整提示输入；系统指令、Developer 指令、项目规则、Skills、工具描述和 Memory 可能未被当前导入器保留。
-- AgentLens 不承诺获得模型未公开的隐藏思维过程。Pi 等来源若在原生日志中公开 thinking，只能按该来源的可见数据展示。
-- 工具参数会按类型摘要，输出与错误会截断，Timeline 不是完整原始事件归档。
-- Codex hosted tools 不经过本地函数工具 Hook，部分特殊工具路径也可能选择绕过；子 Agent transcript 和工具归属并非总能观察到。
-- Windows 的 Claude Code、Codex 和 Cursor Hook 使用安装到 `bin/agent-lens-hook.exe` 的 GUI 子系统启动器派生 `node.exe`，并设置 `CreateNoWindow`；无空格命令名同时兼容 PowerShell 与 `cmd.exe`，启动器同步透传 stdin、stdout、stderr 和退出码，避免高频 Hook 产生可见控制台窗口而不改变协议。
-- 每条事件使用 `capture_method`、`visibility`、`confidence` 和 `missing_reason` 说明运行时捕获、原生日志、原生数据库、静态发现、推断或不可观察状态。
-- Tool Use 与 Tool Result 是两条关联事件；来源只提供合并工具记录时，会明确标记拆分事件的证据强度与缺失原因。
-
----
-
-## 3. Timeline 表结构
-
-```sql
-CREATE TABLE timeline (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  event_id TEXT NOT NULL,         -- AgentLens 稳定事件身份
-  source TEXT NOT NULL,           -- 数据来源
-  source_event_id TEXT,           -- 来源原生事件身份
-  session_key TEXT NOT NULL,      -- source + session_id 内部身份
-  session_id TEXT NOT NULL,       -- 来源原生 Session ID
-  agent_id TEXT,
-  turn_id TEXT,
-  parent_event_id TEXT,
-  timestamp TEXT NOT NULL,
-  source_sequence INTEGER,
-  seq INTEGER,                    -- 旧 Hook 序号兼容字段
-  event_type TEXT NOT NULL,
-  role TEXT NOT NULL,             -- 旧 API 兼容语义
-  call_id TEXT,                   -- 关联 Tool Use / Result
-  tool_name TEXT,
-  content TEXT,
-  tool_input TEXT,
-  success INTEGER,
-  duration_ms REAL,
-  project_key TEXT,
-  capture_method TEXT NOT NULL,
-  visibility TEXT NOT NULL,
-  confidence TEXT NOT NULL,
-  missing_reason TEXT,
-  redaction_applied INTEGER,
-  capture_policy TEXT,
-  attributes_json TEXT              -- 生命周期来源属性（JSON）
-);
+```text
+AgentLensApplication
+  |
+  +-- storage-sqlite
+  +-- core-services
+  +-- source-codex
+  +-- source-claude
+  +-- source-pi
+  +-- surface-http
 ```
 
-### role 字段语义
+Binding decision:
 
-| role | 含义 | 来源 |
-|------|------|------|
-| `user` | 用户输入的消息 | Hermes、Claude Code/Codex 历史导入、OpenCode、Pi |
-| `assistant` | AI对用户可见的文字回复 | Hermes、Claude Code/Codex 历史导入、OpenCode、Pi |
-| `tool_use` | 工具调用开始及输入摘要 | Hook、原生日志，或由合并记录明确拆分 |
-| `tool_result` | 工具调用成功 | 所有适配器 |
-| `tool_error` | 工具调用失败 | 所有适配器 |
+- exact dependency: `@deepseek-ai/cordis@4.0.1`;
+- all Cordis coupling is isolated in `packages/runtime-cordis`;
+- Core Domain and Core Services do not depend on Cordis;
+- AgentLens does not implement a second DI/lifecycle/plugin loader beside Cordis;
+- DSH is an architecture/productization reference, not a runtime dependency.
 
-### 身份、去重与迁移
+## 5. Package responsibilities
 
-- `sessions` 使用 `session_key = source + session_id` 作为主键，不同来源的同名 Session 不会覆盖。
-- Timeline 以 `event_id` 去重；有原生事件 ID 时优先使用，没有时结合来源顺序、调用 ID 和规范化内容生成稳定摘要。
-- 时间戳只参与排序和展示，不再作为唯一键，因此同一毫秒发生的并行事件可以同时保存。
-- 数据库通过 `schema_meta` 记录 Schema 版本。旧库升级前创建本地备份，迁移在事务中复制、校验行数并替换旧表；失败时回滚。
+```text
+apps/
+  daemon/           composition root
+  cli/              start/status/doctor/hook commands
+  web/              browser UI
+  desktop/          Electron Windows shell
+  hook-codex/       passive Codex hook process
+  hook-claude/      passive Claude Code hook process
 
----
-
-## 4. 概览资产快照
-
-“概览”页展示当前机器上各 AI 工具的稳定能力资产。它和工具栈地图不同：
-
-- 工具栈地图回答“哪些工具调用表现好、风险高、常形成链路”。
-- 概览回答“每个 AI 工具装了什么能力资产、这些能力在其他工具中是否也具备”。
-
-### 4.1 数据表
-
-概览稳定资产写入运行时数据目录中的 `agent-lens.db`：
-
-```sql
-overview_tools (
-  tool TEXT PRIMARY KEY,
-  display_name TEXT,
-  description TEXT,
-  version TEXT,
-  status TEXT,
-  config_dir TEXT,
-  theme_json TEXT,
-  last_scanned_at TEXT
-)
-
-overview_assets (
-  tool TEXT,
-  name TEXT,
-  capability TEXT,
-  type TEXT,
-  status TEXT,
-  path TEXT,
-  description TEXT,
-  last_scanned_at TEXT,
-  PRIMARY KEY (tool, capability, type, path)
-)
-
-overview_scan_runs (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  started_at TEXT,
-  finished_at TEXT,
-  status TEXT,
-  tool_count INTEGER,
-  asset_count INTEGER,
-  error_message TEXT
-)
+packages/
+  core/             domain + public contracts
+  core-services/    framework-independent service implementations
+  runtime-cordis/   Cordis adapter/runtime boundary
+  protocol/         external DTO boundary
+  storage-sqlite/   fresh 1.0 persistence
+  source-codex/     Codex source implementation
+  source-claude/    Claude Code source implementation
+  source-pi/        Pi source implementation
+  projection-timeline/
+  projection-session/
+  projection-usage/
+  surface-http/
+  hook-manager/
 ```
 
-`overview_tools` 和 `overview_assets` 存低频变化的事实：版本、配置目录、资产清单、路径和状态。调用次数、高频资产、跨工具覆盖矩阵不作为稳定事实重复存储，而是在查询时从 `timeline` 聚合后合并。
+## 6. Source model
 
-### 4.2 刷新策略
+Every source implements the same `SourceDefinition` contract:
 
-概览采用“快照优先，后台刷新”：
-
-1. 前端请求 `/api/overview`。
-2. 后端优先读取 `overview_tools` / `overview_assets` 快照。
-3. 响应返回后排队一次后台扫描，扫描完成后更新快照表。
-4. 服务核心 HTTP 就绪后再延迟启动定时扫描；Windows 上的工具版本探测使用隐藏子进程。
-5. 前端还会缓存上一次 `/api/overview` 结果，首屏可先渲染缓存或稳定工具骨架。
-
-服务端定时扫描间隔由 `AGENT_LENS_OVERVIEW_SCAN_INTERVAL_MS` 控制，默认 10 分钟，设为 `0` 可关闭定时扫描。访问 `/api/overview` 仍会触发后台刷新。
-
-### 4.3 Pi 资产发现规则
-
-Pi 的配置根由 `PI_CODING_AGENT_DIR` 控制，默认是 `~/.pi/agent`。概览扫描不会把 `~/.pi` 当成唯一固定布局，而是先归一化 Pi agent 根目录候选，再在 agent 根下扫描稳定资产。
-
-Pi agent 根目录候选：
-
-- `PI_CODING_AGENT_DIR`
-- `PI_HOME`
-- `PI_AGENT_HOME`
-- `PI_CONFIG_HOME`
-- `PI_DATA_HOME`
-- `~/.pi/agent`
-- `~/.pi`
-- `~/.config/pi`
-- `~/.local/share/pi`
-- `%APPDATA%\Pi` / `%APPDATA%\pi`
-- `%LOCALAPPDATA%\Pi` / `%LOCALAPPDATA%\pi`
-- `~/Library/Application Support/Pi` / `~/Library/Application Support/pi`
-
-候选目录只有在出现 Pi agent 标记时才会参与扫描：`npm/package.json`、`extensions`、`skills`、`pi-hermes-memory` 或 `projects-memory`。
-
-识别到 agent 根目录后扫描：
-
-- Skill 资源扫描会识别根目录 `.md` 文件，并递归识别包含 `SKILL.md` 的子目录；Extension 资源扫描会识别子目录以及 `.js` / `.ts` / `.mjs` / `.cjs` 文件。
-- `<agentDir>/skills`：Pi 用户级默认 Skill 目录。
-- `~/.agents/skills`：Pi / Agent Skills 共享的用户级 Skill 目录。
-- `<agentDir>/settings.json` 中的 `skills`：Pi 配置显式加载的 Skill 目录。
-- `<agentDir>/settings.json` 中的 `extensions`：Pi 配置显式加载的 Extension 路径。
-- `<agentDir>/settings.json` 中的 `packages`：Pi 配置显式安装的 package，`npm:<package>` 会映射到 `<agentDir>/npm/node_modules/<package>`。
-- `<agentDir>/npm/package.json` 与 `<agentDir>/npm/node_modules/<package>`：Pi npm 插件。包名 `pi-*`、scope 内含 `/pi-*`、`package.json` 中有 `pi` 字段，或 `keywords` 含 `pi-extension` / `pi-package` / `pi-*` 时视为 Pi 插件。
-- `<agentDir>/npm/node_modules/<package>/skills`：插件随包提供的传统 Skill 目录。
-- `<agentDir>/npm/node_modules/<package>/package.json` 中的 `pi.skills` / `skills`：Pi package 声明的 Skill 资源。
-- `<agentDir>/extensions`：Pi extension。
-- `<agentDir>/npm/node_modules/<package>/extensions`：插件随包提供的传统 Extension 目录。
-- `<agentDir>/npm/node_modules/<package>/package.json` 中的 `pi.extensions` / `extensions`：Pi package 声明的 Extension 资源。
-- `<agentDir>/pi-hermes-memory/skills`：Pi Hermes Memory 提供的 Skill。
-- `<agentDir>/projects-memory/<project>/skills`：项目级记忆 Skill。
-
----
-
-## 5. 关键设计决策
-
-### 5.1 为什么用轮询而不是实时推送？
-
-**决策**：Hermes 和 OpenCode 使用轮询（30分钟间隔）+ fs.watch 补充。
-
-**原因**：
-- state.db 和 opencode.db 是 SQLite 文件，无法直接监听变更
-- fs.watch 可以检测文件修改，但不能保证实时性（可能漏事件）
-- 30分钟轮询是兜底机制，确保数据不丢失
-
-**权衡**：牺牲实时性换取可靠性。hooks 适配器是实时的，但数据不完整。
-
-### 5.2 为什么同时保留 Hook 和历史导入？
-
-**决策**：支持 Hook 的来源仍保留历史 JSONL 或数据库导入。
-
-**原因**：
-- Hook 适合低延迟捕获工具调用和来源明确提供的生命周期，但不能覆盖 hosted tools、隐藏思维过程或来源未公开的数据。
-- 历史数据源可以补齐用户消息、助手可见回复和未安装 Hook 时产生的任务。
-- 两种来源互为补充，并通过幂等标识和导入水位线避免重复写入。
-
-**影响**：同一来源需要同时维护实时适配器和历史解析器；界面必须说明记录来自运行时捕获、历史导入还是静态发现，不能把三者混合描述为完整提示词。
-
-### 5.3 为什么用 timeline 表而不是 sessions 表？
-
-**决策**：前端主要查询 timeline 表，sessions 表只用于统计。
-
-**原因**：
-- timeline 表存储原始事件，支持灵活查询
-- sessions 表是聚合数据，用于快速统计
-- 分离关注点：timeline 负责详情，sessions 负责概览
-
-### 5.4 为什么 call-item 用容器而不是分开的边框？
-
-**决策**：call-row 和 call-detail 共享一个 call-item 容器，容器画左边线。
-
-**原因**：
-- 避免 call-row 和 round-header 的边框视觉冲突
-- 统一缩进：call-item 有 ml-4 缩进，与 round-header 对齐
-- 简化样式管理：一条边线控制，不需要分别调整
-
-### 5.5 为什么只监听本机并保护 Hook 写入？
-
-**决策**：HTTP 服务固定绑定 `127.0.0.1`，读取 API 校验回环 Host 与同源 Origin，`/api/hook` 额外要求安装级本机令牌、JSON Content-Type 和请求体上限。
-
-**原因**：任务、提示词、配置路径和工具输出属于本机敏感数据。CORS 只能限制浏览器读取响应，不能替代监听范围和写入认证。
-
-**影响**：当前不支持局域网或公网访问；Vite 开发代理把请求改写为后端同源，额外本机开发来源必须通过 `AGENT_LENS_ALLOWED_ORIGINS` 显式允许。写入令牌保存在运行目录的 `run/hook-token`，不会写入日志或仓库。
-
-### 5.6 为什么默认脱敏而不是默认完整采集？
-
-**决策**：提示词、工具数据和配置默认 `redacted`，环境信息默认 `off`；`full` 只能由用户显式开启。
-
-**原因**：本机存储仍可能被备份、日志分享或其他本机进程读取。入库前脱敏比只在界面遮挡更接近真实的数据最小化。
-
----
-
-## 6. 已知限制
-
-### 6.1 数据完整性限制
-
-| 限制 | 影响 | 临时解决方案 |
-|------|------|-------------|
-| 实时 Hook 主要只有工具事件 | 新任务对话可能需要等待历史导入 | 使用 JSONL/数据库轮询补齐 |
-| Cursor 无对话历史导入 | 只能复盘工具调用 | 在来源能力矩阵中明确标记 |
-| 提示词组成不完整 | 不能还原全部模型可见输入 | 区分捕获、扫描、诊断、推断和不可观察 |
-| 工具输入输出被摘要和脱敏 | 不能把 Timeline 当作完整审计日志 | 使用采集策略说明和来源证据，不默认保留敏感原文 |
-| OpenClaw 尚未实现 | 无可用任务数据 | 保持为规划状态 |
-
-### 6.2 实时性限制
-
-| 限制 | 影响 | 缓解措施 |
-|------|------|----------|
-| 轮询间隔30分钟 | 新数据最多延迟30分钟 | fs.watch检测到变更时立即触发 |
-| fs.watch可能漏事件 | 极端情况数据丢失 | 30分钟轮询兜底 |
-| 无WebSocket推送 | 需手动刷新才能看到新数据 | 3秒轮询前端（仅统计） |
-| 概览资产不是实时事实 | 新装插件/Skill 可能延迟出现 | 访问概览触发后台刷新 + 定时扫描 |
-
-### 6.3 性能限制
-
-| 限制 | 影响 | 当前处理 |
-|------|------|----------|
-| state.db 460MB+ | 全表扫描慢 | 水位线优化，只查增量 |
-| 单次LIMIT5000 | 大会话可能截断 | 分批加载（未实现） |
-| 前端无虚拟滚动 | 大量会话渲染慢 | 分页显示（100条/页） |
-
----
-
-## 7. 数据流详解
-
-### 7.1 Hermes 数据流
-
-```
-Hermes Agent
-    │
-    ▼
-state.db (messages表)
-    │
-    ├──► hermes.js adapter (轮询)
-    │       │
-    │       ▼
-    │    agent-lens.db (timeline表)
-    │       │
-    │       ▼
-    │    HTTP API (/api/timeline)
-    │       │
-    │       ▼
-    │    前端渲染 (callchain/index.js)
-    │
-    └──► hermes plugin (hooks)
-            │
-            ▼
-         POST /api/hook (本机令牌保护的实时推送)
-            │
-            ▼
-         agent-lens.db (timeline表)
+```text
+detect
+  -> declareCapabilities
+  -> ingestHistory?      
+  -> startCapture?       
+  -> discoverAssets?     
+  -> normalize
 ```
 
-### 7.2 Hooks 适配器数据流
+The runtime runners are generic. They do not contain Codex/Claude/Pi branches.
 
-```
-Claude Code / Codex / Pi / Cursor
-    │
-    ├──► PreToolUse hook (prelog.js)
-    │       │
-    │       ▼
-    │    Timeline Tool Use 事件
-    │    状态文件 (.agent-lens/state/<projectKey>.json)
-    │
-    └──► PostToolUse hook (log.js)
-            │
-            ▼
-         脱敏 JSONL + Timeline Tool Result/Error
-            │
-            ▼
-         agent-lens.db (timeline表)
-            │
-            ▼
-         HTTP API → 前端
-```
+### 6.1 Codex
 
----
+- History: `~/.codex/sessions/**/*.jsonl`, byte-offset checkpoints.
+- Runtime: Hook subprocess -> durable inbox -> `startCapture()`.
+- Assets: Skill, MCP, Plugin, Hook, Rule/AGENTS.
+- Stable native call IDs are preferred for history/runtime reconciliation.
 
-### 7.3 概览数据流
+### 6.2 Claude Code
 
-```
-服务启动 / 访问概览 / 定时器
-    │
-    ▼
-overview.js 扫描本机 AI 工具环境
-    │
-    ├── 工具版本、配置目录、状态
-    ├── Skills / MCP / Plugins / Extensions / Hooks / Adapters
-    ▼
-agent-lens.db
-    ├── overview_tools
-    ├── overview_assets
-    └── overview_scan_runs
-    │
-    ├── timeline 聚合调用次数
-    ▼
-/api/overview
-    │
-    ▼
-前端概览 Tab
-    ├── 每工具一张卡片
-    ├── 紧凑资产卡片
-    └── 高频资产跨工具覆盖矩阵
+- History: Claude project/session JSONL.
+- Runtime: Hook subprocess -> durable inbox -> `startCapture()`.
+- Assets: Skill, MCP, Plugin, Hook, Command.
+- `tool_use_id` is the preferred reconciliation key.
+
+### 6.3 Pi
+
+- History: native Session JSONL.
+- Runtime: continuous tailing of the native Session JSONL; no synthetic Hook is required.
+- Assets: Skill, Extension, MCP, Memory-related assets discoverable from the Pi configuration root.
+- Parent session, model change, compaction, and native tree structure are preserved when observable.
+
+## 7. Runtime Hook rule
+
+Hook processes must remain passive and cheap.
+
+```text
+Agent Hook subprocess
+  -> sanitize
+  -> atomic JSON write to ~/.agent-lens/1.0/inbox/<source>/
+  -> exit
 ```
 
----
+The daemon owns ingestion. Inbox files are deleted only after the record has successfully passed through the canonical pipeline. A daemon restart therefore does not require the originating agent process to replay the event.
 
-## 8. 前端渲染逻辑
+Hook code must not depend on Cordis, SQLite, Core Services, or HTTP.
 
-### 8.1 调用链 Tab 渲染流程
+## 8. Identity model
 
-```
-1. loadCallChain()
-   └─► fetch /api/sessions
-   └─► renderCallChain(sessions)
-       └─► 按时间排序，显示会话列表
+The 1.0 identity graph separates source identity from product/task identity:
 
-2. toggleSession(card)
-   └─► loadSessionCalls(card)
-       └─► fetch /api/timeline?session=<id>
-       └─► renderCallChainCalls(calls)
-           └─► groupByRounds(calls)
-               └─► 按role=user分割轮次
-           └─► renderRound(round)
-               └─► 渲染用户消息、AI回复、工具调用
+```text
+Host
+  -> AgentInstallation
+     -> LogicalSession
+        -> SourceSession
+        -> AgentActor
+        -> Interaction (derived/presentational boundary)
 ```
 
-### 8.2 轮次分组逻辑
+`SourceSession` owns the source-native session ID. `LogicalSession` is the canonical task/session scope used by projections.
 
-```javascript
-// groupByRounds 函数
-for (const call of calls) {
-  if (call.role === 'user') {
-    // 新建轮次，以用户消息开头
-    currentRound = { userMessage: call, toolCalls: [], assistantMessages: [] };
-  } else if (call.role === 'assistant') {
-    // AI回复，加入当前轮次
-    currentRound.assistantMessages.push(call);
-  } else if (call.role === 'tool_result' || call.role === 'tool_error') {
-    // 工具调用，加入当前轮次
-    currentRound.toolCalls.push(call);
-  }
-}
+Cross-session semantics use explicit relationships (`resume`, `continuation`, `fork`, `subagent`, `import-copy`, `related`) rather than overloading one string session key.
+
+## 9. Observation and Evidence
+
+A `CanonicalObservation` says what AgentLens believes happened.
+
+`Evidence` says why AgentLens believes it.
+
+Evidence records preserve:
+
+- capture method: runtime-hook / native-log / native-db / static-scan / external-import;
+- derivation: observed / reported / derived / estimated / inferred;
+- source locator;
+- source record ID;
+- parser version;
+- event/capture time;
+- confidence;
+- missing reason where applicable.
+
+The same semantic event may have several evidence records. Example: one native Tool Call may be observed by a Hook and later reported in JSONL; it stays one Canonical Observation with two Evidence records.
+
+## 10. Deduplication
+
+The canonical identity preference is:
+
+1. native event ID;
+2. native call ID;
+3. shared event key;
+4. source sequence;
+5. payload fingerprint + event time;
+6. deterministic semantic fallback.
+
+Deduplication is scoped by source, installation, logical session, and observation kind.
+
+History/runtime merging must strengthen evidence; it must not manufacture duplicate facts.
+
+## 11. Storage
+
+1.0 uses a fresh SQLite schema. The old `timeline` and `overview_*` tables are not part of the runtime model.
+
+Current canonical tables include:
+
+- hosts
+- agent_products
+- agent_installations
+- projects
+- workspaces
+- logical_sessions
+- source_sessions
+- session_relationships
+- agent_actors
+- interactions
+- source_records
+- observations
+- evidence
+- observation_evidence
+- coverage
+- capability_declarations
+- asset_definitions
+- asset_bindings
+- asset_state_observations
+- tool_definitions
+- source_checkpoints
+
+The schema is accessed through Core repository interfaces. Feature code does not reach around repositories with ad-hoc SQL.
+
+## 12. Projections
+
+Projections are derived read models, not second sources of truth.
+
+### TimelineProjection
+
+Produces ordered canonical observations with full Evidence DTOs. Ordering uses effective event time first, not storage insertion order.
+
+### SessionProjection
+
+Groups canonical observations by LogicalSession and derives Interaction boundaries. A user message starts a user-triggered Interaction; pre-user autonomous activity can become a background Interaction. Session lifecycle events alone do not fabricate a turn.
+
+### ToolAssetUsageProjection
+
+Tool usage is derived directly from `tool.call` / `tool.result` observations.
+
+Asset usage is emitted only when attribution is defensible, currently including:
+
+- MCP naming such as `mcp__server__tool`;
+- explicit Claude `Skill` input.
+
+Generic Bash/Read/Write calls are not forced into an Asset category.
+
+## 13. Protocol and HTTP surface
+
+`@agent-lens/protocol` is the external boundary. Web code does not import Core, SQLite, or Source packages.
+
+Current HTTP API:
+
+```text
+GET /api/v1/health
+GET /api/v1/timeline
+GET /api/v1/sessions
+GET /api/v1/usage
+GET /api/v1/events       # SSE
 ```
 
-### 8.3 视觉层级
+The HTTP server is fixed to loopback `127.0.0.1`; default port is `56789`.
 
+API routes have priority over SPA/static fallback.
+
+## 14. Live updates
+
+Core Services publish `observation/committed` through the Cordis event bridge after a canonical observation is created or gains new evidence.
+
+`unchanged` idempotent commits do not broadcast.
+
+HTTP converts this event to SSE. The Web client batches bursts before refreshing projections, so a Hook burst does not cause one full repaint per record.
+
+## 15. Web
+
+The 1.0 Web app is Vite + native TypeScript.
+
+Views:
+
+- Timeline
+- Sessions / Interactions
+- Tools & Assets
+
+The Web consumes only `/api/v1/*` protocol DTOs.
+
+## 16. Hook management
+
+`packages/hook-manager` owns Codex and Claude Code Hook configuration.
+
+Supported operations:
+
+- status
+- install
+- uninstall
+
+Rules:
+
+- installation is idempotent;
+- only AgentLens handlers are removed/replaced;
+- third-party handlers in the same Hook group are preserved;
+- Codex trusted hashes are maintained only for AgentLens entries;
+- configuration writes are atomic.
+
+## 17. CLI
+
+Current CLI surface:
+
+```text
+agent-lens start
+agent-lens status [--json]
+agent-lens doctor [--json]
+agent-lens hook status [codex|claude|all]
+agent-lens hook install [codex|claude|all]
+agent-lens hook uninstall [codex|claude|all]
 ```
-Session Card (来源色左边线)
-├── Session Header (时间、工具数、错误数)
-└── Session Body (展开后)
-    ├── Round Header (轮次色左边线)
-    │   ├── 第 N 轮
-    │   ├── 用户消息 (round-user-msg)
-    │   └── N 次调用
-    ├── Round Calls (工具色左边线)
-    │   ├── Call Item (工具色左边线)
-    │   │   ├── Call Row (工具名、输入摘要)
-    │   │   └── Call Detail (展开后：完整输入输出)
-    │   └── ...
-    └── Round Assistant (AI回复)
-        ├── AI 标签
-        └── 回复文本
+
+`start` is foreground by design. The CLI does not pretend to be a cross-platform service manager.
+
+## 18. Distribution
+
+The npm package is `@z7ping/agent-lens`.
+
+The distribution build bundles internal workspaces into:
+
+```text
+dist/cli.mjs
+dist/daemon.mjs
+dist/web/
+dist/hooks/
 ```
 
----
+Cordis and `better-sqlite3` remain external runtime dependencies.
 
-## 9. 颜色系统
+The release workflow verifies Linux and Windows, packs one exact npm tarball, creates SBOM/checksums, attaches artifacts to the GitHub Release, then publishes that exact tarball.
 
-| 来源 | 颜色 | 用途 |
-|------|------|------|
-| hermes | #a855f7 (紫色) | Session边框、轮次边框 |
-| claude-code | #f97316 (橙色) | Session边框、轮次边框 |
-| codex | #22c55e (绿色) | Session边框、轮次边框 |
-| opencode | #3b82f6 (蓝色) | Session边框、轮次边框 |
-| pi | #ec4899 (粉色) | Session边框、轮次边框 |
-| cursor | #06b6d4 (青色) | Session边框、轮次边框 |
+## 19. Windows desktop
 
-| 工具类型 | 颜色 | 用途 |
-|----------|------|------|
-| bash | #3b82f6 (蓝色) | Call-item边框、工具标签 |
-| read | #f97316 (橙色) | Call-item边框、工具标签 |
-| write | #22c55e (绿色) | Call-item边框、工具标签 |
-| mcp | #a855f7 (紫色) | Call-item边框、工具标签 |
-| agent | #ec4899 (粉色) | Call-item边框、工具标签 |
+Electron is a shell, not an alternative AgentLens runtime.
 
----
+Responsibilities:
 
-## 10. 未来改进方向
+- single instance;
+- BrowserWindow;
+- tray lifecycle;
+- start/stop/restart daemon;
+- local log access;
+- NSIS installer packaging.
 
-### 10.1 数据完整性（高优先级）
+The daemon still serves the same `127.0.0.1:56789` HTTP/SSE surface. Uninstalling the desktop app does not automatically delete `~/.agent-lens/1.0` observation data.
 
-- [ ] OpenCode适配器：验证opencode.db是否包含user/assistant消息
-- [ ] 考虑从JSONL文件提取user/assistant消息（如果存在）
-- [ ] 文档化各工具的hook事件能力
+## 20. Non-goals for 1.0 baseline
 
-### 10.2 实时性（中优先级）
+The current 1.0 baseline does not claim runtime support for every 0.x adapter. Hermes, OpenCode, Cursor, and OpenClaw remain outside the 1.0 runtime until implemented against the stable Source Contract.
 
-- [ ] WebSocket推送新数据
-- [ ] 减少轮询间隔（30分钟→5分钟）
-- [ ] 前端自动刷新新会话
+It also does not promise hidden chain-of-thought access or reconstruct information that the source does not expose.
 
-### 10.3 性能（低优先级）
+## 21. Architecture acceptance rule
 
-- [ ] 虚拟滚动（大量会话）
-- [ ] 分批加载（大会话的工具调用）
-- [ ] 数据归档（旧数据压缩）
+A new Source should normally require only a new Source package plus registration in the composition root.
 
----
-
-## 11. 踩坑记录
-
-### 11.1 Codex hooks 信任机制
-
-**问题**：修改 hooks.json 后，codex 静默跳过所有 hooks。
-
-**原因**：codex 使用 per-hook SHA256 哈希验证信任，不是 whole-file 哈希。
-
-**解决**：
-- 哈希计算：`SHA256(canonical_json(NormalizedHookIdentity))`
-- NormalizedHookIdentity = event_name + matcher + group(handler)
-- 事件名用 snake_case（`pre_tool_use`，不是 `pretooluse`）
-
-**教训**：不要假设工具的行为，读源码确认。
-
-### 11.2 call-item 边框冲突
-
-**问题**：call-row 和 round-header 的左边线在同一水平位置，视觉冲突。
-
-**尝试的方案**：
-1. call-item 容器画一条线，call-row/call-detail 共享 → 破坏缩进
-2. 移除 call-row 边框，只保留 call-detail → 用户不满意
-3. 最终方案：call-item 容器 + ml-4 缩进 + call-detail 无额外margin
-
-**教训**：UI改动要截图验证，不能只看代码。
-
-### 11.3 Hermes timeline 数据缺失
-
-**问题**：hermes session 展开后显示"暂无调用记录"。
-
-**原因**：水位线初始化时只查 MAX(timestamp)，跳过了更早的 user/assistant 消息。
-
-**实际状态**：timeline 表有数据（user:563, assistant:2378），但 API 查询时被水位线过滤。
-
-**教训**：水位线逻辑要考虑所有 role，不只是 tool_result。
-
----
-
-## 附录：文件结构速查
-
-```
-server/
-├── adapters/
-│   ├── base.js              # 适配器基类
-│   ├── hermes.js            # Hermes（轮询state.db）
-│   ├── claude-code.js       # Claude Code（hooks）
-│   ├── codex.js             # Codex（hooks）
-│   ├── opencode.js          # OpenCode（轮询opencode.db）
-│   ├── pi.js                # Pi（轮询 session JSONL）
-│   ├── cursor.js            # Cursor（hooks）
-│   └── index.js             # 适配器注册表
-├── hooks/
-│   ├── prelog.js            # PreToolUse hook脚本
-│   ├── log.js               # PostToolUse hook脚本
-│   ├── codex-lifecycle.js   # Codex 生命周期被动采集入口
-│   ├── windows-hook-runner.cs  # Windows 无窗口启动器源码
-│   └── windows-hook-runner.exe # Windows GUI 子系统启动器
-├── codex-lifecycle.js       # Codex Hook 事件归一化
-├── codex-context.js         # Codex 当前指令链静态发现
-├── agent-lens-db.js              # SQLite存储层（timeline表）
-├── migrations.js                 # Schema 版本、备份和无损迁移
-├── event-model.js                # Session/Event 身份与证据规范
-├── privacy.js                    # 采集档位、允许名单和入库前脱敏
-├── security.js                   # 本机 HTTP 边界与 Hook 令牌
-├── capabilities.js               # 各来源采集能力矩阵
-├── runtime-paths.js          # 开发、安装及历史布局路径契约
-├── install-layout.js         # 程序暂存、迁移、激活、失败回滚与旧布局清理
-├── server.js                # HTTP服务
-├── routes.js                # API路由
-└── install-hooks.js         # 安装hooks到各工具
-
-src/
-├── app.js                   # 主逻辑（加载、过滤、切换）
-├── callchain/
-│   └── index.js             # 调用链渲染（轮次分组、会话卡片）
-├── dashboard/
-│   └── index.js             # 仪表盘渲染（图表、统计）
-└── style.css                # 全局样式
-```
+If a new Source requires changes to Core semantic types, canonical identity, evidence semantics, or Plugin Runtime ownership, that is a Contract Review, not an ordinary adapter task.
