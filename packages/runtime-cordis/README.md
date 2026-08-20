@@ -1,7 +1,9 @@
 # @agent-lens/runtime-cordis
 
-Cordis adapter for the AgentLens 1.0 clean rebuild.
+AgentLens 1.0 的 Cordis 运行时公共层。
 
-This package owns Cordis-specific Context, Plugin and Fiber integration. `@agent-lens/core` stays framework-independent.
+AgentLens 1.0 本身是 Cordis Application；Source、Storage、Surface 等运行时扩展入口直接采用 Cordis-native Plugin，不再通过通用 AgentLens Adapter 二次包装。
 
-`@deepseek-ai/cordis` is intentionally pinned exactly at `4.0.1`; upgrades must pass the runtime compatibility tests before this pin changes.
+本包负责共享的 Cordis Context typing、Plugin 元数据 / API 版本辅助能力和兼容性测试。`@agent-lens/core`、Core Services、Repository Contract、Parser / Normalizer 与 Protocol DTO 保持框架无关。
+
+`@deepseek-ai/cordis` 固定精确版本 `4.0.1`；升级前必须先通过运行时兼容性测试。
