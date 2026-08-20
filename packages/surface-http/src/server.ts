@@ -2,14 +2,18 @@ import { createServer, type Server, type ServerResponse } from 'node:http'
 import { readFile, stat } from 'node:fs/promises'
 import { extname, resolve, sep } from 'node:path'
 import type { StorageService } from '@agent-lens/core'
+import { SessionProjection } from '@agent-lens/projection-session'
 import { TimelineProjection } from '@agent-lens/projection-timeline'
+import { ToolAssetUsageProjection } from '@agent-lens/projection-usage'
 import {
   AGENT_LENS_PROTOCOL_VERSION,
   TIMELINE_OBSERVATION_KINDS,
   type HealthResponseDto,
   type JsonValue,
+  type SessionQueryDto,
   type TimelineObservationKind,
   type TimelineQueryDto,
+  type ToolAssetUsageQueryDto,
 } from '@agent-lens/protocol'
 
 export const AGENT_LENS_HTTP_HOST = '127.0.0.1' as const
@@ -28,14 +32,9 @@ export interface RunningHttpSurface {
 }
 
 const MIME_TYPES: Record<string, string> = {
-  '.css': 'text/css; charset=utf-8',
-  '.html': 'text/html; charset=utf-8',
-  '.ico': 'image/x-icon',
-  '.js': 'text/javascript; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.map': 'application/json; charset=utf-8',
-  '.svg': 'image/svg+xml',
-  '.txt': 'text/plain; charset=utf-8',
+  '.css': 'text/css; charset=utf-8', '.html': 'text/html; charset=utf-8', '.ico': 'image/x-icon',
+  '.js': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8',
+  '.map': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.txt': 'text/plain; charset=utf-8',
   '.webp': 'image/webp',
 }
 
@@ -66,12 +65,7 @@ function writeJson(response: ServerResponse, statusCode: number, body: unknown):
   response.end(content)
 }
 
-function writeBytes(
-  response: ServerResponse,
-  statusCode: number,
-  contentType: string,
-  content: Buffer,
-): void {
+function writeBytes(response: ServerResponse, statusCode: number, contentType: string, content: Buffer): void {
   response.statusCode = statusCode
   response.setHeader('content-type', contentType)
   response.setHeader('cache-control', 'no-store')
@@ -83,6 +77,16 @@ function badRequest(message: string): Error & { statusCode: number } {
   const error = new Error(message) as Error & { statusCode: number }
   error.statusCode = 400
   return error
+}
+
+function parseLimit(params: URLSearchParams, max: number): number | undefined {
+  const raw = params.get('limit')
+  if (!raw) return undefined
+  const limit = Number(raw)
+  if (!Number.isInteger(limit) || limit < 1 || limit > max) {
+    throw badRequest(`Limit must be an integer between 1 and ${max}`)
+  }
+  return limit
 }
 
 function optionalTimestamp(params: URLSearchParams, key: string): string | undefined {
@@ -101,83 +105,68 @@ function parseTimelineQuery(params: URLSearchParams): TimelineQueryDto {
     }
     kind = kindValue as TimelineObservationKind
   }
-
-  const limitValue = params.get('limit')
-  let limit: number | undefined
-  if (limitValue) {
-    limit = Number(limitValue)
-    if (!Number.isInteger(limit) || limit < 1 || limit > 1000) {
-      throw badRequest('Timeline limit must be an integer between 1 and 1000')
-    }
-  }
-
   const from = optionalTimestamp(params, 'from')
   const to = optionalTimestamp(params, 'to')
   if (from && to && Date.parse(from) > Date.parse(to)) {
     throw badRequest('Timeline from must be earlier than or equal to to')
   }
-
+  const limit = parseLimit(params, 1000)
   return {
     ...(params.get('installationId') ? { installationId: params.get('installationId')! } : {}),
     ...(params.get('logicalSessionId') ? { logicalSessionId: params.get('logicalSessionId')! } : {}),
-    ...(kind ? { kind } : {}),
-    ...(from ? { from } : {}),
-    ...(to ? { to } : {}),
+    ...(kind ? { kind } : {}), ...(from ? { from } : {}), ...(to ? { to } : {}),
+    ...(limit === undefined ? {} : { limit }),
+  }
+}
+
+function parseSessionQuery(params: URLSearchParams): SessionQueryDto {
+  const limit = parseLimit(params, 500)
+  return {
+    ...(params.get('installationId') ? { installationId: params.get('installationId')! } : {}),
+    ...(params.get('logicalSessionId') ? { logicalSessionId: params.get('logicalSessionId')! } : {}),
+    ...(limit === undefined ? {} : { limit }),
+  }
+}
+
+function parseUsageQuery(params: URLSearchParams): ToolAssetUsageQueryDto {
+  const limit = parseLimit(params, 500)
+  return {
+    ...(params.get('installationId') ? { installationId: params.get('installationId')! } : {}),
+    ...(params.get('logicalSessionId') ? { logicalSessionId: params.get('logicalSessionId')! } : {}),
     ...(limit === undefined ? {} : { limit }),
   }
 }
 
 async function regularFile(path: string): Promise<boolean> {
-  try {
-    return (await stat(path)).isFile()
-  } catch {
-    return false
-  }
+  try { return (await stat(path)).isFile() } catch { return false }
 }
 
 function safeStaticPath(root: string, pathname: string): string | null {
   let decoded: string
-  try {
-    decoded = decodeURIComponent(pathname)
-  } catch {
-    return null
-  }
+  try { decoded = decodeURIComponent(pathname) } catch { return null }
   const candidate = resolve(root, decoded.replace(/^\/+/, ''))
   return candidate === root || candidate.startsWith(`${root}${sep}`) ? candidate : null
 }
 
-async function serveStatic(
-  response: ServerResponse,
-  pathname: string,
-  staticDir: string,
-): Promise<boolean> {
+async function serveStatic(response: ServerResponse, pathname: string, staticDir: string): Promise<boolean> {
   const root = resolve(staticDir)
   const requested = pathname === '/' ? '/index.html' : pathname
   const candidate = safeStaticPath(root, requested)
   if (!candidate) return false
-
   let target = candidate
   if (!await regularFile(target)) {
     if (extname(requested)) return false
     target = resolve(root, 'index.html')
     if (!await regularFile(target)) return false
   }
-
-  const content = await readFile(target)
-  writeBytes(
-    response,
-    200,
-    MIME_TYPES[extname(target).toLowerCase()] ?? 'application/octet-stream',
-    content,
-  )
+  writeBytes(response, 200, MIME_TYPES[extname(target).toLowerCase()] ?? 'application/octet-stream', await readFile(target))
   return true
 }
 
-export async function startHttpSurface(
-  storage: StorageService,
-  options: HttpSurfaceOptions = {},
-): Promise<RunningHttpSurface> {
+export async function startHttpSurface(storage: StorageService, options: HttpSurfaceOptions = {}): Promise<RunningHttpSurface> {
   const timeline = new TimelineProjection(storage)
+  const sessions = new SessionProjection(storage)
+  const usage = new ToolAssetUsageProjection(storage)
   const requestedPort = options.port ?? DEFAULT_AGENT_LENS_HTTP_PORT
   if (!Number.isInteger(requestedPort) || requestedPort < 0 || requestedPort > 65535) {
     throw new Error(`Invalid AgentLens HTTP port: ${requestedPort}`)
@@ -185,96 +174,48 @@ export async function startHttpSurface(
 
   const server = createServer(async (request, response) => {
     try {
-      if (request.method !== 'GET') {
-        writeJson(response, 405, { error: 'method_not_allowed' })
-        return
-      }
-
+      if (request.method !== 'GET') { writeJson(response, 405, { error: 'method_not_allowed' }); return }
       const url = new URL(request.url ?? '/', `http://${AGENT_LENS_HTTP_HOST}`)
       if (url.pathname === '/api/v1/health') {
         const health = await storage.health()
         const details = health.details
-          ? Object.fromEntries(
-            Object.entries(health.details).map(([key, value]) => [key, jsonValue(value)]),
-          )
+          ? Object.fromEntries(Object.entries(health.details).map(([key, value]) => [key, jsonValue(value)]))
           : undefined
         const body: HealthResponseDto = {
-          status: health.ok ? 'ok' : 'degraded',
-          protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
-          storage: {
-            ok: health.ok,
-            ...(health.schemaVersion === undefined ? {} : { schemaVersion: health.schemaVersion }),
-            ...(details ? { details } : {}),
-          },
+          status: health.ok ? 'ok' : 'degraded', protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
+          storage: { ok: health.ok, ...(health.schemaVersion === undefined ? {} : { schemaVersion: health.schemaVersion }), ...(details ? { details } : {}) },
         }
-        writeJson(response, health.ok ? 200 : 503, body)
-        return
+        writeJson(response, health.ok ? 200 : 503, body); return
       }
-
-      if (url.pathname === '/api/v1/timeline') {
-        writeJson(response, 200, await timeline.query(parseTimelineQuery(url.searchParams)))
-        return
-      }
-
-      if (url.pathname.startsWith('/api/')) {
-        writeJson(response, 404, { error: 'not_found' })
-        return
-      }
-
-      if (options.staticDir && await serveStatic(response, url.pathname, options.staticDir)) {
-        return
-      }
-
+      if (url.pathname === '/api/v1/timeline') { writeJson(response, 200, await timeline.query(parseTimelineQuery(url.searchParams))); return }
+      if (url.pathname === '/api/v1/sessions') { writeJson(response, 200, await sessions.query(parseSessionQuery(url.searchParams))); return }
+      if (url.pathname === '/api/v1/usage') { writeJson(response, 200, await usage.query(parseUsageQuery(url.searchParams))); return }
+      if (url.pathname.startsWith('/api/')) { writeJson(response, 404, { error: 'not_found' }); return }
+      if (options.staticDir && await serveStatic(response, url.pathname, options.staticDir)) return
       writeJson(response, 404, { error: 'not_found' })
     } catch (error) {
       const statusCode = error && typeof error === 'object' && 'statusCode' in error
-        ? Number((error as { statusCode: unknown }).statusCode)
-        : 500
-      writeJson(response, statusCode, {
-        error: statusCode === 400 ? 'bad_request' : 'internal_error',
-        ...(statusCode === 400 && error instanceof Error ? { message: error.message } : {}),
-      })
+        ? Number((error as { statusCode: unknown }).statusCode) : 500
+      writeJson(response, statusCode, { error: statusCode === 400 ? 'bad_request' : 'internal_error', ...(statusCode === 400 && error instanceof Error ? { message: error.message } : {}) })
     }
   })
 
-  await new Promise<void>((resolve, reject) => {
-    const onError = (error: Error) => {
-      server.off('listening', onListening)
-      reject(error)
-    }
-    const onListening = () => {
-      server.off('error', onError)
-      resolve()
-    }
-    server.once('error', onError)
-    server.once('listening', onListening)
-    server.listen(requestedPort, AGENT_LENS_HTTP_HOST)
+  await new Promise<void>((resolvePromise, reject) => {
+    const onError = (error: Error) => { server.off('listening', onListening); reject(error) }
+    const onListening = () => { server.off('error', onError); resolvePromise() }
+    server.once('error', onError); server.once('listening', onListening); server.listen(requestedPort, AGENT_LENS_HTTP_HOST)
   })
-
   const address = server.address()
-  if (!address || typeof address === 'string') {
-    server.close()
-    throw new Error('AgentLens HTTP server did not expose a TCP address')
-  }
-
+  if (!address || typeof address === 'string') { server.close(); throw new Error('AgentLens HTTP server did not expose a TCP address') }
   let disposed = false
   return {
-    host: AGENT_LENS_HTTP_HOST,
-    port: address.port,
-    server,
+    host: AGENT_LENS_HTTP_HOST, port: address.port, server,
     async dispose(): Promise<void> {
       if (disposed) return
       disposed = true
-      await new Promise<void>((resolve, reject) => {
-        server.close(error => error ? reject(error) : resolve())
-      })
+      await new Promise<void>((resolvePromise, reject) => server.close(error => error ? reject(error) : resolvePromise()))
     },
   }
 }
 
-export const httpSurfaceInternals = {
-  parseTimelineQuery,
-  jsonValue,
-  safeStaticPath,
-  serveStatic,
-}
+export const httpSurfaceInternals = { parseTimelineQuery, parseSessionQuery, parseUsageQuery, jsonValue, safeStaticPath, serveStatic }
