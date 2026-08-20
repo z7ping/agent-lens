@@ -9,6 +9,9 @@ on:
       - main
     paths:
       - .github/workflows/windows-installer.yml
+      - apps/desktop/**
+      - scripts/prepare-desktop-icon.mjs
+      - scripts/prepare-desktop.mjs
 
 permissions:
   contents: write
