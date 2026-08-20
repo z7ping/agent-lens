@@ -33,7 +33,7 @@ AgentLens 不负责执行 Agent，也不会声称可以读取模型未暴露的�
 
 ## 快速开始
 
-要求 Node.js **22.12+**。
+要求 Node.js **22.23+**。
 
 ### npm 安装
 
@@ -93,21 +93,21 @@ AgentLens Core、Source、SQLite、HTTP/SSE 不搬进 Electron 私有实现中�
 
 ## Web 1.0
 
-当前有三个主要视图。
+当前 Web 界面使用简体中文，主要提供三个视图。
 
-### Timeline
+### 执行轨迹
 
-按真实事件时间展示 Canonical Observation，并显示 Evidence、capture method、derivation、confidence 和 source locator。
+按真实事件时间展示 Canonical Observation，并显示 Evidence、capture method、derivation、confidence 和 source locator。原始 Payload 与 Evidence 默认收起，需要时再展开查看。
 
-### Sessions / Interactions
+### 会话
 
-基于 Canonical Observation 派生 Logical Session 和 Interaction。用户消息是主要 Interaction 边界；用户消息之前的可观察自主行为可以形成 background interaction。
+基于 Canonical Observation 派生 Logical Session 和 Interaction。用户消息是主要 Interaction 边界；用户消息之前的可观察自主行为可以形成 background interaction。会话可以直接跳转到对应执行轨迹。
 
-### Tools & Assets
+### 工具与能力
 
 展示 Tool 调用/结果、成功失败、耗时、来源，以及能够可靠归因的 Skill / MCP 使用情况。
 
-页面通过 SSE 实时更新。幂等重放得到 `unchanged` 时不会制造无意义刷新。
+页面通过 SSE 接收实时变化。执行轨迹采用增量 DOM 协调，避免新事件到来时整页重绘、打断滚动位置和 Evidence 展开状态；会话与工具视图在不能安全增量更新时只提示有新数据，由用户显式刷新。幂等重放得到 `unchanged` 时不会制造无意义刷新。
 
 ## CLI
 
@@ -139,7 +139,7 @@ Native Source
   -> Web / Desktop
 ```
 
-Cordis 是唯一 Plugin Runtime，固定依赖 `@deepseek-ai/cordis@4.0.1`。所有 Cordis 耦合集中在 `packages/runtime-cordis`，Core 不依赖 Cordis。
+Cordis 是唯一 Plugin Runtime，固定依赖 `@deepseek-ai/cordis@4.0.1`。AgentLens Core 保持框架无关；Source / Storage / Surface 等运行时扩展入口直接采用 Cordis-native Plugin，`packages/runtime-cordis` 负责共享 Context typing、元数据和兼容性测试，不再额外包一层通用 AgentLens Plugin Runtime。
 
 详细文档：
 
