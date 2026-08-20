@@ -1,5 +1,6 @@
 import type {
   HealthResponseDto,
+  LiveUpdateEventDto,
   SessionQueryDto,
   SessionResponseDto,
   TimelineQueryDto,
@@ -33,9 +34,7 @@ function withParams(path: string, params: URLSearchParams): string {
   return params.size ? `${path}?${params.toString()}` : path
 }
 
-export function getHealth(): Promise<HealthResponseDto> {
-  return requestJson('/api/v1/health')
-}
+export function getHealth(): Promise<HealthResponseDto> { return requestJson('/api/v1/health') }
 
 export function getTimeline(query: TimelineQueryDto = {}): Promise<TimelineResponseDto> {
   const params = scopedParams(query)
@@ -51,4 +50,14 @@ export function getSessions(query: SessionQueryDto = {}): Promise<SessionRespons
 
 export function getUsage(query: ToolAssetUsageQueryDto = {}): Promise<ToolAssetUsageResponseDto> {
   return requestJson(withParams('/api/v1/usage', scopedParams(query)))
+}
+
+export function subscribeUpdates(onEvent: (event: LiveUpdateEventDto) => void): () => void {
+  const source = new EventSource('/api/v1/events')
+  source.addEventListener('observation', raw => {
+    try {
+      onEvent(JSON.parse((raw as MessageEvent<string>).data) as LiveUpdateEventDto)
+    } catch {}
+  })
+  return () => source.close()
 }

@@ -2,6 +2,7 @@ import {
   defineAgentLensPlugin,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
+import { HttpEventHub } from './events'
 import {
   DEFAULT_AGENT_LENS_HTTP_PORT,
   startHttpSurface,
@@ -22,11 +23,23 @@ const manifest = {
 
 const applyHttpSurface = Object.assign(
   async (ctx: AgentLensContext, config: HttpSurfacePluginConfig = {}) => {
+    const eventHub = new HttpEventHub()
+    ctx.on('observation/committed', event => {
+      eventHub.publish({
+        type: 'observation.committed',
+        observationId: event.observationId,
+        emittedAt: new Date().toISOString(),
+      })
+    })
     const surface = await startHttpSurface(ctx.storage, {
       port: config.port ?? DEFAULT_AGENT_LENS_HTTP_PORT,
       ...(config.staticDir ? { staticDir: config.staticDir } : {}),
+      eventHub,
     })
-    return () => surface.dispose()
+    return async () => {
+      eventHub.close()
+      await surface.dispose()
+    }
   },
   { inject: ['storage'] },
 )

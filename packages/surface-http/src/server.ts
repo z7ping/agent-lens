@@ -15,6 +15,7 @@ import {
   type TimelineQueryDto,
   type ToolAssetUsageQueryDto,
 } from '@agent-lens/protocol'
+import type { HttpEventHub } from './events'
 
 export const AGENT_LENS_HTTP_HOST = '127.0.0.1' as const
 export const DEFAULT_AGENT_LENS_HTTP_PORT = 56789
@@ -22,6 +23,7 @@ export const DEFAULT_AGENT_LENS_HTTP_PORT = 56789
 export interface HttpSurfaceOptions {
   port?: number
   staticDir?: string
+  eventHub?: HttpEventHub
 }
 
 export interface RunningHttpSurface {
@@ -83,9 +85,7 @@ function parseLimit(params: URLSearchParams, max: number): number | undefined {
   const raw = params.get('limit')
   if (!raw) return undefined
   const limit = Number(raw)
-  if (!Number.isInteger(limit) || limit < 1 || limit > max) {
-    throw badRequest(`Limit must be an integer between 1 and ${max}`)
-  }
+  if (!Number.isInteger(limit) || limit < 1 || limit > max) throw badRequest(`Limit must be an integer between 1 and ${max}`)
   return limit
 }
 
@@ -100,16 +100,12 @@ function parseTimelineQuery(params: URLSearchParams): TimelineQueryDto {
   const kindValue = params.get('kind')
   let kind: TimelineObservationKind | undefined
   if (kindValue) {
-    if (!(TIMELINE_OBSERVATION_KINDS as readonly string[]).includes(kindValue)) {
-      throw badRequest(`Unknown timeline kind: ${kindValue}`)
-    }
+    if (!(TIMELINE_OBSERVATION_KINDS as readonly string[]).includes(kindValue)) throw badRequest(`Unknown timeline kind: ${kindValue}`)
     kind = kindValue as TimelineObservationKind
   }
   const from = optionalTimestamp(params, 'from')
   const to = optionalTimestamp(params, 'to')
-  if (from && to && Date.parse(from) > Date.parse(to)) {
-    throw badRequest('Timeline from must be earlier than or equal to to')
-  }
+  if (from && to && Date.parse(from) > Date.parse(to)) throw badRequest('Timeline from must be earlier than or equal to to')
   const limit = parseLimit(params, 1000)
   return {
     ...(params.get('installationId') ? { installationId: params.get('installationId')! } : {}),
@@ -168,19 +164,20 @@ export async function startHttpSurface(storage: StorageService, options: HttpSur
   const sessions = new SessionProjection(storage)
   const usage = new ToolAssetUsageProjection(storage)
   const requestedPort = options.port ?? DEFAULT_AGENT_LENS_HTTP_PORT
-  if (!Number.isInteger(requestedPort) || requestedPort < 0 || requestedPort > 65535) {
-    throw new Error(`Invalid AgentLens HTTP port: ${requestedPort}`)
-  }
+  if (!Number.isInteger(requestedPort) || requestedPort < 0 || requestedPort > 65535) throw new Error(`Invalid AgentLens HTTP port: ${requestedPort}`)
 
   const server = createServer(async (request, response) => {
     try {
       if (request.method !== 'GET') { writeJson(response, 405, { error: 'method_not_allowed' }); return }
       const url = new URL(request.url ?? '/', `http://${AGENT_LENS_HTTP_HOST}`)
+      if (url.pathname === '/api/v1/events') {
+        if (!options.eventHub) { writeJson(response, 503, { error: 'events_unavailable' }); return }
+        options.eventHub.connect(response)
+        return
+      }
       if (url.pathname === '/api/v1/health') {
         const health = await storage.health()
-        const details = health.details
-          ? Object.fromEntries(Object.entries(health.details).map(([key, value]) => [key, jsonValue(value)]))
-          : undefined
+        const details = health.details ? Object.fromEntries(Object.entries(health.details).map(([key, value]) => [key, jsonValue(value)])) : undefined
         const body: HealthResponseDto = {
           status: health.ok ? 'ok' : 'degraded', protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
           storage: { ok: health.ok, ...(health.schemaVersion === undefined ? {} : { schemaVersion: health.schemaVersion }), ...(details ? { details } : {}) },
@@ -194,8 +191,7 @@ export async function startHttpSurface(storage: StorageService, options: HttpSur
       if (options.staticDir && await serveStatic(response, url.pathname, options.staticDir)) return
       writeJson(response, 404, { error: 'not_found' })
     } catch (error) {
-      const statusCode = error && typeof error === 'object' && 'statusCode' in error
-        ? Number((error as { statusCode: unknown }).statusCode) : 500
+      const statusCode = error && typeof error === 'object' && 'statusCode' in error ? Number((error as { statusCode: unknown }).statusCode) : 500
       writeJson(response, statusCode, { error: statusCode === 400 ? 'bad_request' : 'internal_error', ...(statusCode === 400 && error instanceof Error ? { message: error.message } : {}) })
     }
   })
@@ -213,6 +209,7 @@ export async function startHttpSurface(storage: StorageService, options: HttpSur
     async dispose(): Promise<void> {
       if (disposed) return
       disposed = true
+      options.eventHub?.close()
       await new Promise<void>((resolvePromise, reject) => server.close(error => error ? reject(error) : resolvePromise()))
     },
   }

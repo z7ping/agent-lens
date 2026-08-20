@@ -7,7 +7,7 @@ import {
   type TimelineQueryDto,
   type ToolAssetUsageResponseDto,
 } from '@agent-lens/protocol'
-import { getHealth, getSessions, getTimeline, getUsage } from './api'
+import { getHealth, getSessions, getTimeline, getUsage, subscribeUpdates } from './api'
 import './styles.css'
 
 type ViewId = 'timeline' | 'sessions' | 'usage'
@@ -72,6 +72,7 @@ shell.append(header, nav, toolbar, summary, errorBox, content)
 root.replaceChildren(shell)
 
 let currentView: ViewId = 'timeline'
+let liveRefreshTimer: number | undefined
 
 function scopedQuery() {
   const installationId = installationInput.value.trim()
@@ -144,14 +145,7 @@ function renderUsage(response: ToolAssetUsageResponseDto): HTMLElement[] {
   table.append(element('div', 'usage-row usage-head', 'Tool · Calls · Results · Errors · Duration · Sources'))
   for (const tool of response.tools) {
     const row = element('div', 'usage-row')
-    row.append(
-      element('strong', '', tool.nativeToolName),
-      element('span', '', `${tool.callCount} calls`),
-      element('span', '', `${tool.resultCount} results`),
-      element('span', tool.errorCount ? 'danger' : '', `${tool.errorCount} errors`),
-      element('span', '', `${Math.round(tool.totalDurationMs)} ms`),
-      element('span', 'muted', tool.sourceIds.join(', ')),
-    )
+    row.append(element('strong', '', tool.nativeToolName), element('span', '', `${tool.callCount} calls`), element('span', '', `${tool.resultCount} results`), element('span', tool.errorCount ? 'danger' : '', `${tool.errorCount} errors`), element('span', '', `${Math.round(tool.totalDurationMs)} ms`), element('span', 'muted', tool.sourceIds.join(', ')))
     table.append(row)
   }
   toolSection.append(table)
@@ -204,6 +198,14 @@ async function refreshView(): Promise<void> {
   finally { refreshButton.disabled = false }
 }
 
+function scheduleLiveRefresh(): void {
+  if (liveRefreshTimer !== undefined) window.clearTimeout(liveRefreshTimer)
+  liveRefreshTimer = window.setTimeout(() => {
+    liveRefreshTimer = undefined
+    void refreshView()
+  }, 150)
+}
+
 function activateView(view: ViewId): void {
   currentView = view
   for (const [id, button] of viewButtons) button.classList.toggle('active', id === view)
@@ -215,5 +217,6 @@ for (const [id, button] of viewButtons) button.addEventListener('click', () => a
 refreshButton.addEventListener('click', () => void Promise.all([refreshHealth(), refreshView()]))
 kindSelect.addEventListener('change', () => void refreshView())
 limitSelect.addEventListener('change', () => void refreshView())
+subscribeUpdates(scheduleLiveRefresh)
 activateView('timeline')
 void refreshHealth()

@@ -11,13 +11,17 @@ import {
   DefaultToolService,
 } from '@agent-lens/core-services'
 import type { AgentLensContext } from './context'
+import { EventingObservationService } from './eventing-observations'
 
 const applyCoreServices: Plugin.Function<void> = (ctx: AgentLensContext) => {
   const storage = ctx.storage
   const sources = new DefaultSourceService()
   const identity = new DefaultIdentityService(storage)
   const evidence = new DefaultEvidenceService(storage)
-  const observations = new DefaultObservationService(storage, identity)
+  const observations = new EventingObservationService(
+    new DefaultObservationService(storage, identity),
+    ctx,
+  )
   const coverage = new DefaultCoverageService(storage, evidence)
   const capabilities = new DefaultCapabilityService()
   const assets = new DefaultAssetService(storage)
