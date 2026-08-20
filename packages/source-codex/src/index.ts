@@ -11,6 +11,7 @@ import {
 import { detectCodex } from './detect'
 import { ingestCodexHistory } from './history'
 import { normalizeCodexRecord } from './normalize'
+import { startCodexRuntimeCapture } from './runtime'
 
 export const codexManifest: SourcePluginManifest = {
   pluginId: '@agent-lens/source-codex',
@@ -27,15 +28,15 @@ export async function declareCodexCapabilities(
   _detected: DetectedSource,
 ): Promise<ObservationCapability[]> {
   return [
-    { sourceId: 'codex', name: 'session', status: 'available', captureModes: ['history'] },
+    { sourceId: 'codex', name: 'session', status: 'available', captureModes: ['history', 'runtime-hook'] },
     { sourceId: 'codex', name: 'transcript', status: 'available', captureModes: ['history'] },
-    { sourceId: 'codex', name: 'tool-call', status: 'available', captureModes: ['history'] },
-    { sourceId: 'codex', name: 'tool-result', status: 'available', captureModes: ['history'] },
-    { sourceId: 'codex', name: 'permission', status: 'unavailable', captureModes: [], reason: 'Not mapped by the initial history parser' },
-    { sourceId: 'codex', name: 'subagent', status: 'unavailable', captureModes: [], reason: 'Not mapped by the initial history parser' },
-    { sourceId: 'codex', name: 'usage', status: 'unavailable', captureModes: [], reason: 'Not mapped by the initial history parser' },
-    { sourceId: 'codex', name: 'context', status: 'unavailable', captureModes: [], reason: 'Model context exposure is not proven by rollout history' },
-    { sourceId: 'codex', name: 'asset-discovery', status: 'unavailable', captureModes: [], reason: 'Static asset discovery is a later Codex phase' },
+    { sourceId: 'codex', name: 'tool-call', status: 'available', captureModes: ['history', 'runtime-hook'] },
+    { sourceId: 'codex', name: 'tool-result', status: 'available', captureModes: ['history', 'runtime-hook'] },
+    { sourceId: 'codex', name: 'permission', status: 'available', captureModes: ['runtime-hook'] },
+    { sourceId: 'codex', name: 'subagent', status: 'available', captureModes: ['runtime-hook'] },
+    { sourceId: 'codex', name: 'usage', status: 'unavailable', captureModes: [], reason: 'No stable usage mapping is implemented yet' },
+    { sourceId: 'codex', name: 'context', status: 'partial', captureModes: ['runtime-hook'], reason: 'Compaction lifecycle is observable; full model context exposure is not proven' },
+    { sourceId: 'codex', name: 'asset-discovery', status: 'unavailable', captureModes: [], reason: 'Static asset discovery is the next Codex phase' },
     { sourceId: 'codex', name: 'asset-invocation', status: 'unavailable', captureModes: [], reason: 'Asset invocation attribution is not yet implemented' },
     { sourceId: 'codex', name: 'thinking', status: 'partial', captureModes: ['history'], reason: 'Only source-visible reasoning records can be observed' },
     { sourceId: 'codex', name: 'artifact-action', status: 'unavailable', captureModes: [], reason: 'Artifact attribution is not yet implemented' },
@@ -47,6 +48,7 @@ export const codexSourceDefinition: SourceDefinition = {
   detect: detectCodex,
   declareCapabilities: declareCodexCapabilities,
   ingestHistory: ingestCodexHistory,
+  startCapture: startCodexRuntimeCapture,
   normalize: normalizeCodexRecord,
 }
 
@@ -64,3 +66,4 @@ export * from './detect'
 export * from './format'
 export * from './history'
 export * from './normalize'
+export * from './runtime'

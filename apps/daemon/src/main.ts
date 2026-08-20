@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import {
   AgentLensApplication,
   coreServicesPlugin,
+  startRegisteredSourceCapture,
   syncRegisteredSourceHistory,
 } from '@agent-lens/runtime-cordis'
 import { codexSourcePlugin } from '@agent-lens/source-codex'
@@ -16,19 +17,24 @@ app.use(sqliteStoragePlugin, { path: dbPath })
 app.useRuntime(coreServicesPlugin)
 app.use(codexSourcePlugin)
 
-const syncController = new AbortController()
+const runtimeController = new AbortController()
 let syncPromise: ReturnType<typeof syncRegisteredSourceHistory> | null = null
+let captureHandles: Awaited<ReturnType<typeof startRegisteredSourceCapture>> = []
 let shuttingDown = false
 
 async function shutdown(signal: string): Promise<void> {
   if (shuttingDown) return
   shuttingDown = true
-  syncController.abort()
+  runtimeController.abort()
 
   try {
     if (syncPromise) {
       await syncPromise.catch(() => undefined)
     }
+    for (const handle of [...captureHandles].reverse()) {
+      await handle.dispose().catch(() => undefined)
+    }
+    captureHandles = []
     await app.stop()
     console.info(`[AgentLens] daemon stopped (${signal})`)
     process.exitCode = 0
@@ -50,14 +56,27 @@ try {
   await app.start()
   console.info(`[AgentLens] 1.0 runtime started (db: ${dbPath})`)
 
-  syncPromise = syncRegisteredSourceHistory(app.context, syncController.signal)
+  syncPromise = syncRegisteredSourceHistory(app.context, runtimeController.signal)
   const results = await syncPromise
   for (const result of results) {
     console.info(
       `[AgentLens] history synced: ${result.sourceId} records=${result.records} created=${result.observationsCreated} merged=${result.observationsMerged} unchanged=${result.observationsUnchanged}`,
     )
   }
+
+  captureHandles = await startRegisteredSourceCapture(
+    app.context,
+    runtimeController.signal,
+  )
+  for (const handle of captureHandles) {
+    console.info(`[AgentLens] runtime capture started: ${handle.sourceId}`)
+  }
 } catch (error) {
-  console.error('[AgentLens] daemon startup/history sync failed', error)
+  runtimeController.abort()
+  for (const handle of [...captureHandles].reverse()) {
+    await handle.dispose().catch(() => undefined)
+  }
+  await app.stop().catch(() => undefined)
+  console.error('[AgentLens] daemon startup failed', error)
   process.exitCode = 1
 }

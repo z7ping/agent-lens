@@ -3,6 +3,7 @@ import type {
   JsonValue,
   NormalizedSourceOutput,
   ObservationCandidate,
+  ObservationIdentityHints,
   SourceNormalizationContext,
   SourceRecord,
 } from '@agent-lens/core'
@@ -12,13 +13,24 @@ import {
 } from './format'
 
 function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' ? value as Record<string, unknown> : {}
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+}
+
+function stringField(record: Record<string, unknown>, ...names: string[]): string | undefined {
+  for (const name of names) {
+    const value = record[name]
+    if (typeof value === 'string' && value) return value
+  }
+  return undefined
 }
 
 function evidenceFor(record: SourceRecord): EvidenceCandidate {
+  const runtime = record.locator.kind === 'runtime-hook'
   return {
-    captureMethod: 'native-log',
-    derivation: 'reported',
+    captureMethod: runtime ? 'runtime-hook' : 'native-log',
+    derivation: runtime ? 'observed' : 'reported',
     sourceRecordId: record.id,
     sourceLocator: record.locator,
     parserVersion: record.parserVersion,
@@ -29,7 +41,7 @@ function evidenceFor(record: SourceRecord): EvidenceCandidate {
   }
 }
 
-function identityHints(record: SourceRecord, envelope: CodexStoredEnvelope) {
+function identityHints(record: SourceRecord, envelope: CodexStoredEnvelope): ObservationIdentityHints {
   return {
     nativeSessionId: envelope.session.nativeSessionId || record.sourceSessionNativeId || 'unknown',
     ...(envelope.session.cwd ? { workspacePath: envelope.session.cwd } : {}),
@@ -42,6 +54,7 @@ function candidate(
   kind: ObservationCandidate['kind'],
   payload: unknown,
   dedup: Partial<NonNullable<ObservationCandidate['dedupHints']>> = {},
+  extraIdentity: Partial<ObservationIdentityHints> = {},
 ): ObservationCandidate {
   return {
     kind,
@@ -51,7 +64,10 @@ function candidate(
     ...(record.occurredAt ? { occurredAt: record.occurredAt } : {}),
     capturedAt: record.capturedAt,
     payload,
-    identityHints: identityHints(record, envelope),
+    identityHints: {
+      ...identityHints(record, envelope),
+      ...extraIdentity,
+    },
     dedupHints: {
       ...(record.nativeId ? { nativeEventId: record.nativeId } : {}),
       ...(record.sourceSequence === undefined ? {} : { sourceSequence: record.sourceSequence }),
@@ -64,17 +80,164 @@ function candidate(
 function unknownCandidate(
   record: SourceRecord,
   envelope: CodexStoredEnvelope,
+  rawPayload: JsonValue = envelope.entry as JsonValue,
 ): ObservationCandidate {
   return candidate(record, envelope, 'unknown', {
     rawType: record.nativeType,
-    rawPayload: envelope.entry as JsonValue,
+    rawPayload,
   })
+}
+
+function runtimeSuccess(response: unknown): { success: boolean; exitCode?: number } {
+  const value = asRecord(response)
+  const rawExitCode = value.exit_code ?? value.exitCode
+  const exitCode = typeof rawExitCode === 'number'
+    ? rawExitCode
+    : typeof rawExitCode === 'string' && /^-?\d+$/.test(rawExitCode)
+      ? Number.parseInt(rawExitCode, 10)
+      : undefined
+  const success = value.success === false || (exitCode !== undefined && exitCode !== 0)
+    ? false
+    : true
+  return {
+    success,
+    ...(exitCode === undefined ? {} : { exitCode }),
+  }
+}
+
+function runtimeEnvelope(record: SourceRecord): {
+  envelope: CodexStoredEnvelope
+  event: Record<string, unknown>
+} {
+  const payload = asRecord(record.payload)
+  const session = asRecord(payload.session)
+  const event = asRecord(payload.runtimeEvent)
+  const cwd = stringField(session, 'cwd')
+  return {
+    envelope: {
+      entry: event,
+      session: {
+        nativeSessionId: stringField(session, 'nativeSessionId')
+          ?? record.sourceSessionNativeId
+          ?? 'runtime-unknown',
+        ...(cwd ? { cwd } : {}),
+      },
+    },
+    event,
+  }
+}
+
+function normalizeRuntimeRecord(
+  record: SourceRecord,
+): ObservationCandidate {
+  const { envelope, event } = runtimeEnvelope(record)
+  const hookName = stringField(event, 'hook_event_name', 'event_name', 'type') ?? 'UnknownHookEvent'
+  const callId = stringField(event, 'call_id', 'tool_use_id')
+  const toolName = stringField(event, 'tool_name', 'name', 'tool') ?? 'unknown'
+  const actorId = stringField(event, 'agent_id', 'subagent_id')
+  const turnId = stringField(event, 'turn_id')
+  const actorIdentity: Partial<ObservationIdentityHints> = actorId
+    ? { nativeActorId: actorId, actorRole: 'subagent' }
+    : {}
+
+  if (hookName === 'PreToolUse') {
+    const stableCallId = callId ?? `codex-runtime-call-${record.id}`
+    return candidate(record, envelope, 'tool.call', {
+      callId: stableCallId,
+      nativeToolName: toolName,
+      input: event.tool_input ?? event.input ?? {},
+      ...(turnId ? { turnId } : {}),
+    }, { nativeCallId: stableCallId }, actorIdentity)
+  }
+
+  if (hookName === 'PostToolUse') {
+    const stableCallId = callId ?? `codex-runtime-call-${record.id}`
+    const response = event.tool_response ?? event.output ?? event.result ?? null
+    const outcome = runtimeSuccess(response)
+    return candidate(record, envelope, 'tool.result', {
+      callId: stableCallId,
+      nativeToolName: toolName,
+      success: outcome.success,
+      ...(outcome.exitCode === undefined ? {} : { exitCode: outcome.exitCode }),
+      ...(response == null ? {} : { output: response }),
+      ...(typeof event.duration_ms === 'number' ? { durationMs: event.duration_ms } : {}),
+    }, { nativeCallId: stableCallId }, actorIdentity)
+  }
+
+  if (hookName === 'SessionStart' || hookName === 'SessionEnd') {
+    return candidate(record, envelope, 'session.lifecycle', {
+      event: hookName === 'SessionStart' ? 'session.started' : 'session.ended',
+      ...(stringField(event, 'source') ? { source: stringField(event, 'source') } : {}),
+      ...(stringField(event, 'reason') ? { reason: stringField(event, 'reason') } : {}),
+      ...(stringField(event, 'model') ? { model: stringField(event, 'model') } : {}),
+    })
+  }
+
+  if (hookName === 'UserPromptSubmit') {
+    return candidate(record, envelope, 'message.user', {
+      text: stringField(event, 'prompt', 'user_prompt', 'message') ?? '',
+      ...(turnId ? { turnId } : {}),
+    })
+  }
+
+  if (hookName === 'PermissionRequest') {
+    return candidate(record, envelope, 'permission.request', {
+      nativeToolName: toolName,
+      input: event.tool_input ?? {},
+      ...(turnId ? { turnId } : {}),
+    }, {}, actorIdentity)
+  }
+
+  if (hookName === 'PreCompact' || hookName === 'PostCompact') {
+    return candidate(record, envelope, 'context.compaction', {
+      phase: hookName === 'PreCompact' ? 'start' : 'end',
+      ...(stringField(event, 'trigger') ? { trigger: stringField(event, 'trigger') } : {}),
+      ...(turnId ? { turnId } : {}),
+    })
+  }
+
+  if (hookName === 'SubagentStart' || hookName === 'SubagentStop') {
+    return candidate(
+      record,
+      envelope,
+      hookName === 'SubagentStart' ? 'subagent.spawn' : 'subagent.end',
+      {
+        ...(actorId ? { nativeActorId: actorId } : {}),
+        ...(stringField(event, 'agent_type') ? { agentType: stringField(event, 'agent_type') } : {}),
+        ...(turnId ? { turnId } : {}),
+        ...(hookName === 'SubagentStop' && stringField(event, 'last_assistant_message')
+          ? { lastAssistantMessage: stringField(event, 'last_assistant_message') }
+          : {}),
+      },
+      {},
+      actorIdentity,
+    )
+  }
+
+  if (hookName === 'Stop') {
+    return candidate(record, envelope, 'session.lifecycle', {
+      event: 'turn.stopped',
+      ...(turnId ? { turnId } : {}),
+      ...(stringField(event, 'last_assistant_message')
+        ? { lastAssistantMessage: stringField(event, 'last_assistant_message') }
+        : {}),
+    }, {}, actorIdentity)
+  }
+
+  return unknownCandidate(record, envelope, event as unknown as JsonValue)
 }
 
 export async function normalizeCodexRecord(
   record: SourceRecord,
   _ctx: SourceNormalizationContext,
 ): Promise<NormalizedSourceOutput> {
+  if (record.locator.kind === 'runtime-hook') {
+    return {
+      observations: [normalizeRuntimeRecord(record)],
+      evidenceCandidates: [evidenceFor(record)],
+    }
+  }
+
   const envelope = asRecord(record.payload) as unknown as CodexStoredEnvelope
   const entry = asRecord(envelope.entry)
   const payload = asRecord(entry.payload)

@@ -1,12 +1,15 @@
 import type {
+  AgentInstallation,
   CapabilityService,
   CoverageService,
   DetectedSource,
+  Disposable,
   Host,
   IdentityService,
   ObservationService,
   SourceCheckpointService,
   SourceDefinition,
+  SourceRecord,
   StorageService,
 } from '@agent-lens/core'
 
@@ -21,6 +24,24 @@ export interface SourceHistorySyncResult {
   sourceId: string
   installationId: string
   records: number
+  observationsCreated: number
+  observationsMerged: number
+  observationsUnchanged: number
+}
+
+export interface SourceRuntimeCaptureInput {
+  source: SourceDefinition
+  host: Host
+  detected: DetectedSource
+  abortSignal: AbortSignal
+}
+
+export interface SourceRuntimeCaptureHandle extends Disposable {
+  sourceId: string
+  installationId: string
+}
+
+interface ProcessResult {
   observationsCreated: number
   observationsMerged: number
   observationsUnchanged: number
@@ -55,6 +76,60 @@ function later(left: string | undefined, right: string): string {
   return Date.parse(right) > Date.parse(left) ? right : left
 }
 
+async function resolveInstallation(
+  identity: IdentityService,
+  host: Host,
+  detected: DetectedSource,
+): Promise<AgentInstallation> {
+  return identity.resolveInstallation({
+    hostId: host.id,
+    productId: detected.productId,
+    ...(detected.executable ? { executable: detected.executable } : {}),
+    ...(detected.version ? { version: detected.version } : {}),
+    ...(detected.configRoot ? { configRoot: detected.configRoot } : {}),
+    ...(detected.dataRoot ? { dataRoot: detected.dataRoot } : {}),
+  })
+}
+
+async function processSourceRecord(
+  storage: StorageService,
+  observations: ObservationService,
+  coverage: CoverageService,
+  source: SourceDefinition,
+  host: Host,
+  installation: AgentInstallation,
+  record: SourceRecord,
+): Promise<ProcessResult> {
+  await storage.repositories.sourceRecords.put(record)
+
+  const normalized = await source.normalize(record, { host, installation })
+  const result: ProcessResult = {
+    observationsCreated: 0,
+    observationsMerged: 0,
+    observationsUnchanged: 0,
+  }
+
+  for (const observation of normalized.observations) {
+    const committed = await observations.commit({
+      sourceId: source.manifest.sourceId,
+      host,
+      installation,
+      candidate: observation,
+      evidenceCandidates: normalized.evidenceCandidates,
+    })
+
+    if (committed.status === 'created') result.observationsCreated += 1
+    else if (committed.status === 'merged') result.observationsMerged += 1
+    else result.observationsUnchanged += 1
+  }
+
+  for (const declaration of normalized.coverage ?? []) {
+    await coverage.declare(declaration)
+  }
+
+  return result
+}
+
 export class SourceHistoryRunner {
   constructor(
     private readonly storage: StorageService,
@@ -72,15 +147,7 @@ export class SourceHistoryRunner {
       )
     }
 
-    const installation = await this.identity.resolveInstallation({
-      hostId: host.id,
-      productId: detected.productId,
-      ...(detected.executable ? { executable: detected.executable } : {}),
-      ...(detected.version ? { version: detected.version } : {}),
-      ...(detected.configRoot ? { configRoot: detected.configRoot } : {}),
-      ...(detected.dataRoot ? { dataRoot: detected.dataRoot } : {}),
-    })
-
+    const installation = await resolveInstallation(this.identity, host, detected)
     const declaredCapabilities = await source.declareCapabilities(detected)
     this.capabilities.registerSourceCapabilities(
       source.manifest.sourceId,
@@ -113,33 +180,23 @@ export class SourceHistoryRunner {
     })) {
       if (abortSignal.aborted) break
 
-      await this.storage.repositories.sourceRecords.put(record)
       result.records += 1
-
       const time = record.occurredAt ?? record.capturedAt
       coverageFrom = earlier(coverageFrom, time)
       coverageTo = later(coverageTo, time)
 
-      const normalized = await source.normalize(record, { host, installation })
-      for (const observation of normalized.observations) {
-        const committed = await this.observations.commit({
-          sourceId: source.manifest.sourceId,
-          host,
-          installation,
-          candidate: observation,
-          // NormalizedSourceOutput evidence is SourceRecord-scoped and therefore
-          // applies to every candidate emitted from that SourceRecord.
-          evidenceCandidates: normalized.evidenceCandidates,
-        })
-
-        if (committed.status === 'created') result.observationsCreated += 1
-        else if (committed.status === 'merged') result.observationsMerged += 1
-        else result.observationsUnchanged += 1
-      }
-
-      for (const declaration of normalized.coverage ?? []) {
-        await this.coverage.declare(declaration)
-      }
+      const processed = await processSourceRecord(
+        this.storage,
+        this.observations,
+        this.coverage,
+        source,
+        host,
+        installation,
+        record,
+      )
+      result.observationsCreated += processed.observationsCreated
+      result.observationsMerged += processed.observationsMerged
+      result.observationsUnchanged += processed.observationsUnchanged
     }
 
     if (!abortSignal.aborted) {
@@ -169,5 +226,88 @@ export class SourceHistoryRunner {
     }
 
     return result
+  }
+}
+
+export class SourceRuntimeRunner {
+  constructor(
+    private readonly storage: StorageService,
+    private readonly identity: IdentityService,
+    private readonly observations: ObservationService,
+    private readonly capabilities: CapabilityService,
+    private readonly coverage: CoverageService,
+  ) {}
+
+  async start(input: SourceRuntimeCaptureInput): Promise<SourceRuntimeCaptureHandle> {
+    const { source, host, detected, abortSignal } = input
+    if (source.manifest.sourceId !== detected.sourceId) {
+      throw new Error(
+        `Source mismatch: definition=${source.manifest.sourceId}, detected=${detected.sourceId}`,
+      )
+    }
+
+    const installation = await resolveInstallation(this.identity, host, detected)
+    const declaredCapabilities = await source.declareCapabilities(detected)
+    const capabilityRegistration = this.capabilities.registerSourceCapabilities(
+      source.manifest.sourceId,
+      declaredCapabilities,
+    )
+
+    if (!source.startCapture) {
+      return {
+        sourceId: source.manifest.sourceId,
+        installationId: installation.id,
+        dispose: () => capabilityRegistration.dispose(),
+      }
+    }
+
+    const checkpoint = new ScopedCheckpointService(
+      this.storage,
+      `${source.manifest.sourceId}:${installation.id}`,
+    )
+    let closed = false
+    let tail: Promise<void> = Promise.resolve()
+
+    const capture = await source.startCapture(
+      {
+        host,
+        installation,
+        abortSignal,
+        checkpoint,
+      },
+      {
+        emit: (record) => {
+          if (closed) throw new Error(`Source runtime is closed: ${source.manifest.sourceId}`)
+          const task = tail.then(async () => {
+            await processSourceRecord(
+              this.storage,
+              this.observations,
+              this.coverage,
+              source,
+              host,
+              installation,
+              record,
+            )
+          })
+          tail = task.then(() => undefined, () => undefined)
+          return task
+        },
+      },
+    )
+
+    return {
+      sourceId: source.manifest.sourceId,
+      installationId: installation.id,
+      async dispose(): Promise<void> {
+        if (closed) return
+        closed = true
+        try {
+          await capture.dispose()
+          await tail
+        } finally {
+          await capabilityRegistration.dispose()
+        }
+      },
+    }
   }
 }

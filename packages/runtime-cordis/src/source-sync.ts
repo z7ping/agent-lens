@@ -1,16 +1,25 @@
 import { arch, hostname, platform } from 'node:os'
-import { SourceHistoryRunner, type SourceHistorySyncResult } from '@agent-lens/core-services/source-runner'
+import {
+  SourceHistoryRunner,
+  SourceRuntimeRunner,
+  type SourceHistorySyncResult,
+  type SourceRuntimeCaptureHandle,
+} from '@agent-lens/core-services/source-runner'
 import type { AgentLensContext } from './context'
+
+async function runtimeHost(ctx: AgentLensContext) {
+  return ctx.identity.resolveHost({
+    name: hostname(),
+    platform: platform(),
+    arch: arch(),
+  })
+}
 
 export async function syncRegisteredSourceHistory(
   ctx: AgentLensContext,
   abortSignal: AbortSignal,
 ): Promise<SourceHistorySyncResult[]> {
-  const host = await ctx.identity.resolveHost({
-    name: hostname(),
-    platform: platform(),
-    arch: arch(),
-  })
+  const host = await runtimeHost(ctx)
   const detected = await ctx.sources.detect({
     host,
     env: process.env,
@@ -42,4 +51,49 @@ export async function syncRegisteredSourceHistory(
   }
 
   return results
+}
+
+export async function startRegisteredSourceCapture(
+  ctx: AgentLensContext,
+  abortSignal: AbortSignal,
+): Promise<SourceRuntimeCaptureHandle[]> {
+  const host = await runtimeHost(ctx)
+  const detected = await ctx.sources.detect({
+    host,
+    env: process.env,
+  })
+  const definitions = new Map(
+    ctx.sources.list().map(source => [source.manifest.sourceId, source]),
+  )
+  const runner = new SourceRuntimeRunner(
+    ctx.storage,
+    ctx.identity,
+    ctx.observations,
+    ctx.capabilities,
+    ctx.coverage,
+  )
+  const handles: SourceRuntimeCaptureHandle[] = []
+
+  try {
+    for (const item of detected) {
+      if (abortSignal.aborted) break
+      const source = definitions.get(item.sourceId)
+      if (!source) {
+        throw new Error(`Detected source has no registered definition: ${item.sourceId}`)
+      }
+      if (!source.startCapture) continue
+      handles.push(await runner.start({
+        source,
+        host,
+        detected: item,
+        abortSignal,
+      }))
+    }
+    return handles
+  } catch (error) {
+    for (const handle of handles.reverse()) {
+      await handle.dispose().catch(() => undefined)
+    }
+    throw error
+  }
 }
