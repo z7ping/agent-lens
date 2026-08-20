@@ -7,7 +7,7 @@
   "description": "AgentLens Windows 桌面壳。",
   "author": "7ping <z7ping@outlook.com>",
   "scripts": {
-    "dist:win": "node ../../scripts/prepare-desktop-icon.mjs && electron-builder --win nsis"
+    "dist:win": "electron-builder --win nsis"
   },
   "dependencies": {
     "@deepseek-ai/cordis": "4.0.1",
