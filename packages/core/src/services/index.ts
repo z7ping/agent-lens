@@ -1,15 +1,17 @@
 import type {
-  AgentInstallation,
   AgentActor,
   AgentActorIdentityHint,
-  AgentInstallation as Installation,
-  InstallationIdentityHint,
+  AgentInstallation,
+  AgentProduct,
   Host,
   HostIdentityHint,
+  InstallationIdentityHint,
+  Interaction,
   LogicalSession,
   LogicalSessionIdentityHint,
   Project,
   ProjectIdentityHint,
+  SessionRelationship,
   SourceSession,
   SourceSessionIdentityHint,
   Workspace,
@@ -18,10 +20,18 @@ import type {
 } from '../domain/identity'
 import type {
   AgentInstallationId,
+  AgentProductId,
   AssetDefinitionId,
   Disposable,
   EvidenceId,
+  HostId,
+  InteractionId,
+  LogicalSessionId,
   ObservationId,
+  ProjectId,
+  SourceRecordId,
+  SourceSessionId,
+  WorkspaceId,
 } from '../domain/common'
 import type {
   CanonicalObservation,
@@ -32,6 +42,7 @@ import type {
   ObservationCapability,
   ObservationCandidate,
   ObservationCoverage,
+  SourceRecord,
 } from '../domain/observation'
 import type {
   AssetBinding,
@@ -53,7 +64,7 @@ export interface SourceService {
 
 export interface IdentityService {
   resolveHost(hint: HostIdentityHint): Promise<Host>
-  resolveInstallation(hint: InstallationIdentityHint): Promise<Installation>
+  resolveInstallation(hint: InstallationIdentityHint): Promise<AgentInstallation>
   resolveProject(hint: ProjectIdentityHint): Promise<Project | null>
   resolveWorkspace(hint: WorkspaceIdentityHint): Promise<Workspace | null>
   resolveLogicalSession(hint: LogicalSessionIdentityHint): Promise<LogicalSession>
@@ -81,6 +92,7 @@ export interface ObservationCommitResult {
 
 export interface ObservationQuery {
   installationId?: AgentInstallationId
+  logicalSessionId?: LogicalSessionId
   kind?: CanonicalObservation['kind']
   from?: string
   to?: string
@@ -149,26 +161,53 @@ export interface ProjectionService {
   invalidate(input: ProjectionInvalidation): Promise<void>
 }
 
-export interface StorageTransaction {}
-export interface StorageHealth {
-  ok: boolean
-  details?: Readonly<Record<string, unknown>>
-}
-
-export interface StorageService {
-  transaction<T>(fn: (tx: StorageTransaction) => Promise<T>): Promise<T>
-  migrate(): Promise<void>
-  health(): Promise<StorageHealth>
-}
-
 export interface HostRepository {
-  get(id: string): Promise<Host | null>
+  get(id: HostId): Promise<Host | null>
   put(host: Host): Promise<void>
 }
 
 export interface InstallationRepository {
+  getProduct(id: AgentProductId): Promise<AgentProduct | null>
+  putProduct(product: AgentProduct): Promise<void>
   get(id: AgentInstallationId): Promise<AgentInstallation | null>
+  listByProduct(productId: AgentProductId): Promise<AgentInstallation[]>
   put(installation: AgentInstallation): Promise<void>
+}
+
+/**
+ * Project/workspace/session topology is kept behind one repository boundary.
+ * This keeps Core independent from the physical SQLite table split.
+ */
+export interface SessionRepository {
+  getProject(id: ProjectId): Promise<Project | null>
+  putProject(project: Project): Promise<void>
+  getWorkspace(id: WorkspaceId): Promise<Workspace | null>
+  putWorkspace(workspace: Workspace): Promise<void>
+  getLogicalSession(id: LogicalSessionId): Promise<LogicalSession | null>
+  putLogicalSession(session: LogicalSession): Promise<void>
+  getSourceSession(id: SourceSessionId): Promise<SourceSession | null>
+  findSourceSession(
+    sourceId: string,
+    installationId: AgentInstallationId,
+    nativeSessionId: string,
+  ): Promise<SourceSession | null>
+  putSourceSession(session: SourceSession): Promise<void>
+  putRelationship(relationship: SessionRelationship): Promise<void>
+  listRelationships(logicalSessionId: LogicalSessionId): Promise<SessionRelationship[]>
+  getActor(id: string): Promise<AgentActor | null>
+  putActor(actor: AgentActor): Promise<void>
+  getInteraction(id: InteractionId): Promise<Interaction | null>
+  putInteraction(interaction: Interaction): Promise<void>
+}
+
+export interface SourceRecordRepository {
+  get(id: SourceRecordId): Promise<SourceRecord | null>
+  findByNativeId(
+    sourceId: string,
+    installationId: AgentInstallationId,
+    nativeId: string,
+  ): Promise<SourceRecord | null>
+  put(record: SourceRecord): Promise<void>
 }
 
 export interface ObservationRepository {
@@ -196,5 +235,34 @@ export interface AssetRepository {
 }
 
 export interface ToolRepository {
+  get(id: string): Promise<ToolDefinition | null>
   put(definition: ToolDefinition): Promise<void>
+}
+
+export interface RepositorySet {
+  hosts: HostRepository
+  installations: InstallationRepository
+  sessions: SessionRepository
+  sourceRecords: SourceRecordRepository
+  observations: ObservationRepository
+  evidence: EvidenceRepository
+  coverage: CoverageRepository
+  assets: AssetRepository
+  tools: ToolRepository
+}
+
+/** A transaction exposes the same domain repositories, scoped to one atomic unit. */
+export interface StorageTransaction extends RepositorySet {}
+
+export interface StorageHealth {
+  ok: boolean
+  schemaVersion?: number
+  details?: Readonly<Record<string, unknown>>
+}
+
+export interface StorageService {
+  readonly repositories: RepositorySet
+  transaction<T>(fn: (tx: StorageTransaction) => Promise<T>): Promise<T>
+  migrate(): Promise<void>
+  health(): Promise<StorageHealth>
 }

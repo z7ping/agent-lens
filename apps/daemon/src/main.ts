@@ -1,6 +1,14 @@
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { AgentLensApplication } from '@agent-lens/runtime-cordis'
+import { sqliteStoragePlugin } from '@agent-lens/storage-sqlite'
+
+const dbPath = process.env.AGENT_LENS_DB_PATH
+  ?? join(homedir(), '.agent-lens', '1.0', 'agent-lens.db')
 
 const app = new AgentLensApplication()
+app.use(sqliteStoragePlugin, { path: dbPath })
+
 let shuttingDown = false
 
 async function shutdown(signal: string): Promise<void> {
@@ -27,7 +35,7 @@ process.once('SIGTERM', () => {
 
 try {
   await app.start()
-  console.info('[AgentLens] 1.0 Cordis runtime started')
+  console.info(`[AgentLens] 1.0 runtime started (db: ${dbPath})`)
 } catch (error) {
   console.error('[AgentLens] daemon startup failed', error)
   process.exitCode = 1

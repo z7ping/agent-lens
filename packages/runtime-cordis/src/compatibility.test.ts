@@ -5,9 +5,11 @@ import type { StorageService } from '@agent-lens/core'
 import './context'
 import { defineAgentLensPlugin } from './plugin'
 
+const repositories = {} as StorageService['repositories']
 const storage: StorageService = {
-  async transaction<T>(fn: (tx: {}) => Promise<T>): Promise<T> {
-    return fn({})
+  repositories,
+  async transaction<T>(fn): Promise<T> {
+    return fn(repositories)
   },
   async migrate(): Promise<void> {},
   async health() {
