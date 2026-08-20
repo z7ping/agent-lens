@@ -4,9 +4,9 @@ on:
   release:
     types: [published]
   workflow_dispatch:
-  push:
+  pull_request:
     branches:
-      - refactor/1.0-foundation
+      - main
     paths:
       - .github/workflows/windows-installer.yml
 
