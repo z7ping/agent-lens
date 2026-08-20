@@ -45,6 +45,11 @@ await build({
 
 await cp(resolve(root, 'apps/web/dist'), resolve(dist, 'web'), { recursive: true })
 await cp(
+  resolve(root, 'packages/storage-sqlite/migrations'),
+  resolve(dist, 'migrations'),
+  { recursive: true },
+)
+await cp(
   resolve(root, 'apps/hook-codex/bin/agent-lens-hook-codex.mjs'),
   resolve(dist, 'hooks/agent-lens-hook-codex.mjs'),
 )

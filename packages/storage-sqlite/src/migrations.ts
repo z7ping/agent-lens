@@ -4,21 +4,42 @@ import type Database from 'better-sqlite3'
 interface Migration {
   version: number
   name: string
-  url: URL
+  fileName: string
 }
 
 const migrations: readonly Migration[] = [
   {
     version: 1,
     name: 'initial-1.0-schema',
-    url: new URL('../migrations/001-initial.sql', import.meta.url),
+    fileName: '001-initial.sql',
   },
   {
     version: 2,
     name: 'source-checkpoints',
-    url: new URL('../migrations/002-source-checkpoints.sql', import.meta.url),
+    fileName: '002-source-checkpoints.sql',
   },
 ]
+
+async function readMigrationSql(fileName: string): Promise<string> {
+  const candidates = [
+    new URL(`../migrations/${fileName}`, import.meta.url),
+    new URL(`./migrations/${fileName}`, import.meta.url),
+  ]
+
+  let lastError: unknown
+  for (const url of candidates) {
+    try {
+      return await readFile(url, 'utf8')
+    } catch (error) {
+      lastError = error
+      if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')) {
+        throw error
+      }
+    }
+  }
+
+  throw lastError ?? new Error(`Migration file not found: ${fileName}`)
+}
 
 export async function migrateDatabase(db: Database.Database): Promise<number> {
   db.exec(`
@@ -35,7 +56,7 @@ export async function migrateDatabase(db: Database.Database): Promise<number> {
   for (const migration of migrations) {
     if (applied.has(migration.version)) continue
 
-    const sql = await readFile(migration.url, 'utf8')
+    const sql = await readMigrationSql(migration.fileName)
     db.exec('BEGIN IMMEDIATE')
     try {
       db.exec(sql)
