@@ -62,7 +62,7 @@ export interface AgentOverviewDto {
   capabilities: AgentCapabilityDto[]
   assetInventory: AgentAssetInventoryDto[]
   usedAssets: AgentUsedAssetDto[]
-  assetInventoryStatus: 'complete' | 'unavailable'
+  assetInventoryStatus: 'available' | 'unavailable'
 }
 
 export interface AgentOverviewResponseDto {

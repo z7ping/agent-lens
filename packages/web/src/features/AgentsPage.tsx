@@ -118,7 +118,7 @@ export function AgentsPage({ model }: { model: AgentLensClientModel }) {
           <section className="mt-5">
             <div className="flex items-center justify-between">
               <h3 className="section-label">能力资产</h3>
-              <span className="text-[11px] text-muted">{agent.assetInventoryStatus === 'complete' ? `${agent.assetInventory.length} 项` : '不可用'}</span>
+              <span className="text-[11px] text-muted">{agent.assetInventoryStatus === 'available' ? `${agent.assetInventory.length} 项` : '不可用'}</span>
             </div>
             {agent.assetInventoryStatus === 'unavailable'
               ? <div className="text-sm text-muted">当前 Storage 未提供资产库存查询能力</div>
@@ -139,7 +139,7 @@ export function AgentsPage({ model }: { model: AgentLensClientModel }) {
                       </div>)}
                     </div>)}
                   </div>
-                : <div className="text-sm text-muted">已完成资产扫描，当前没有发现能力资产</div>}
+                : <div className="text-sm text-muted">当前没有已记录的能力资产</div>}
           </section>
 
           <section className="mt-5">

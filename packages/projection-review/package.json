@@ -13,5 +13,9 @@
     "@agent-lens/projection-session": "1.0.0-alpha.0",
     "@agent-lens/projection-timeline": "1.0.0-alpha.0",
     "@agent-lens/protocol": "1.0.0-alpha.0"
+  },
+  "devDependencies": {
+    "@agent-lens/core-services": "1.0.0-alpha.0",
+    "@agent-lens/storage-sqlite": "1.0.0-alpha.0"
   }
 }

@@ -160,7 +160,7 @@ export class AgentOverviewProjection {
         })),
         assetInventory,
         usedAssets: [...usedAssets.values()].sort((a, b) => b.callCount - a.callCount || a.canonicalName.localeCompare(b.canonicalName)),
-        assetInventoryStatus: this.storage.assetInventory ? 'complete' as const : 'unavailable' as const,
+        assetInventoryStatus: this.storage.assetInventory ? 'available' as const : 'unavailable' as const,
       }
     }))
     return { items, meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION, generatedAt: new Date().toISOString() } }
