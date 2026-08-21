@@ -1,0 +1,119 @@
+import type {
+  CanonicalObservation,
+  ObservationQuery,
+  ObservationRepository,
+} from '@agent-lens/core'
+import type { SqliteExecutor } from './executor'
+
+const MAX_SEQUENCE = Number.MAX_SAFE_INTEGER
+
+function decodeJson<T>(value: unknown, fallback: T): T {
+  if (typeof value !== 'string' || value.length === 0) return fallback
+  return JSON.parse(value) as T
+}
+
+function mapObservation(row: any, evidenceRefs: string[] = []): CanonicalObservation {
+  return {
+    id: row.id,
+    hostId: row.host_id,
+    installationId: row.installation_id,
+    projectId: row.project_id ?? undefined,
+    workspaceId: row.workspace_id ?? undefined,
+    logicalSessionId: row.logical_session_id,
+    sourceSessionId: row.source_session_id,
+    interactionId: row.interaction_id ?? undefined,
+    actorId: row.actor_id ?? undefined,
+    kind: row.kind,
+    sourceSequence: row.source_sequence == null ? undefined : Number(row.source_sequence),
+    canonicalSequence: row.canonical_sequence == null ? undefined : Number(row.canonical_sequence),
+    occurredAt: row.occurred_at ?? undefined,
+    capturedAt: row.captured_at,
+    payload: decodeJson(row.payload_json, null),
+    evidenceRefs,
+  } as CanonicalObservation
+}
+
+function reverseQuery(executor: SqliteExecutor, query: ObservationQuery): Promise<CanonicalObservation[]> {
+  const { db } = executor
+  return executor.run(() => {
+    const conditions: string[] = []
+    const params: unknown[] = []
+    if (query.installationId) {
+      conditions.push('installation_id = ?')
+      params.push(query.installationId)
+    }
+    if (query.logicalSessionId) {
+      conditions.push('logical_session_id = ?')
+      params.push(query.logicalSessionId)
+    }
+    if (query.kind) {
+      conditions.push('kind = ?')
+      params.push(query.kind)
+    }
+    if (query.from) {
+      conditions.push('COALESCE(occurred_at, captured_at) >= ?')
+      params.push(query.from)
+    }
+    if (query.to) {
+      conditions.push('COALESCE(occurred_at, captured_at) <= ?')
+      params.push(query.to)
+    }
+    if (query.before) {
+      const sequence = query.before.sequence ?? MAX_SEQUENCE
+      conditions.push(`(
+        COALESCE(occurred_at, captured_at) < ?
+        OR (
+          COALESCE(occurred_at, captured_at) = ?
+          AND (
+            COALESCE(canonical_sequence, source_sequence, ${MAX_SEQUENCE}) < ?
+            OR (
+              COALESCE(canonical_sequence, source_sequence, ${MAX_SEQUENCE}) = ?
+              AND id < ?
+            )
+          )
+        )
+      )`)
+      params.push(query.before.effectiveAt, query.before.effectiveAt, sequence, sequence, query.before.id)
+    }
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
+    const limit = Math.max(1, Math.min(query.limit ?? 500, 5000))
+    const rows = db.prepare(`
+      SELECT * FROM observations ${where}
+      ORDER BY
+        COALESCE(occurred_at, captured_at) DESC,
+        COALESCE(canonical_sequence, source_sequence, ${MAX_SEQUENCE}) DESC,
+        id DESC
+      LIMIT ?
+    `).all(...params, limit)
+    if (!rows.length) return []
+
+    const ids = rows.map(row => (row as any).id as string)
+    const placeholders = ids.map(() => '?').join(', ')
+    const evidenceRows = db.prepare(`
+      SELECT observation_id, evidence_id
+      FROM observation_evidence
+      WHERE observation_id IN (${placeholders})
+      ORDER BY observation_id, evidence_id
+    `).all(...ids) as Array<{ observation_id: string; evidence_id: string }>
+    const evidenceByObservation = new Map<string, string[]>()
+    for (const row of evidenceRows) {
+      const values = evidenceByObservation.get(row.observation_id) ?? []
+      values.push(row.evidence_id)
+      evidenceByObservation.set(row.observation_id, values)
+    }
+    return rows.map(row => mapObservation(row, evidenceByObservation.get((row as any).id) ?? []))
+  })
+}
+
+export function withSqliteObservationPagination(
+  executor: SqliteExecutor,
+  base: ObservationRepository,
+): ObservationRepository {
+  return {
+    ...base,
+    async query(query) {
+      if (query.order !== 'desc' && !query.before) return base.query(query)
+      return reverseQuery(executor, query)
+    },
+  }
+}

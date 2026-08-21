@@ -2,6 +2,7 @@ import type {
   AgentInstallation,
   CanonicalObservation,
   Evidence,
+  ObservationCursor,
   ObservationQuery,
   SourceLocator,
   SourceSession,
@@ -17,7 +18,6 @@ import {
   type TimelineSourceLocatorDto,
 } from '@agent-lens/protocol'
 
-const MAX_SCAN_ROWS = 5000
 const DEFAULT_LIMIT = 200
 const MAX_LIMIT = 1000
 
@@ -71,6 +71,10 @@ function effectiveTime(observation: CanonicalObservation): string {
   return observation.occurredAt ?? observation.capturedAt
 }
 
+function effectiveSequence(observation: Pick<CanonicalObservation, 'canonicalSequence' | 'sourceSequence'>): number | undefined {
+  return observation.canonicalSequence ?? observation.sourceSequence
+}
+
 function compareTimelineItems(left: TimelineItemDto, right: TimelineItemDto): number {
   const leftTime = Date.parse(left.effectiveAt)
   const rightTime = Date.parse(right.effectiveAt)
@@ -86,20 +90,66 @@ function compareTimelineItems(left: TimelineItemDto, right: TimelineItemDto): nu
   return left.id.localeCompare(right.id)
 }
 
+function encodeCursor(value: ObservationCursor): string {
+  return JSON.stringify({
+    effectiveAt: value.effectiveAt,
+    ...(value.sequence === undefined ? {} : { sequence: value.sequence }),
+    id: value.id,
+  })
+}
+
+function decodeCursor(value: string): ObservationCursor {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(value)
+  } catch {
+    throw new Error('Invalid timeline cursor')
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Invalid timeline cursor')
+  const record = parsed as Record<string, unknown>
+  if (typeof record.effectiveAt !== 'string' || !Number.isFinite(Date.parse(record.effectiveAt))) {
+    throw new Error('Invalid timeline cursor')
+  }
+  if (typeof record.id !== 'string' || !record.id) throw new Error('Invalid timeline cursor')
+  if (record.sequence !== undefined && (typeof record.sequence !== 'number' || !Number.isSafeInteger(record.sequence))) {
+    throw new Error('Invalid timeline cursor')
+  }
+  return {
+    effectiveAt: record.effectiveAt,
+    ...(record.sequence === undefined ? {} : { sequence: record.sequence }),
+    id: record.id,
+  }
+}
+
+function cursorForObservation(observation: CanonicalObservation): ObservationCursor {
+  const sequence = effectiveSequence(observation)
+  return {
+    effectiveAt: effectiveTime(observation),
+    ...(sequence === undefined ? {} : { sequence }),
+    id: observation.id,
+  }
+}
+
+export function encodeTimelineCursor(item: Pick<TimelineItemDto, 'effectiveAt' | 'canonicalSequence' | 'sourceSequence' | 'id'>): string {
+  const sequence = item.canonicalSequence ?? item.sourceSequence
+  return encodeCursor({
+    effectiveAt: item.effectiveAt,
+    ...(sequence === undefined ? {} : { sequence }),
+    id: item.id,
+  })
+}
+
 export class TimelineProjection {
   constructor(private readonly storage: StorageService) {}
 
-  async query(query: TimelineQueryDto = {}): Promise<TimelineResponseDto> {
-    const requestedLimit = Math.max(1, Math.min(query.limit ?? DEFAULT_LIMIT, MAX_LIMIT))
-    const coreQuery: ObservationQuery = {
-      ...(query.installationId ? { installationId: query.installationId } : {}),
-      ...(query.logicalSessionId ? { logicalSessionId: query.logicalSessionId } : {}),
-      ...(query.kind ? { kind: query.kind } : {}),
-      ...(query.from ? { from: query.from } : {}),
-      ...(query.to ? { to: query.to } : {}),
-      limit: MAX_SCAN_ROWS,
+  async mapObservations(observations: CanonicalObservation[]): Promise<TimelineItemDto[]> {
+    const evidenceById = new Map<string, Evidence>()
+    const evidenceIds = [...new Set(observations.flatMap(observation => observation.evidenceRefs))]
+    if (evidenceIds.length && this.storage.repositories.evidence.getMany) {
+      for (const evidence of await this.storage.repositories.evidence.getMany(evidenceIds)) {
+        evidenceById.set(evidence.id, evidence)
+      }
     }
-    const observations = await this.storage.repositories.observations.query(coreQuery)
 
     const sourceSessionCache = new Map<string, SourceSession | null>()
     const installationCache = new Map<string, AgentInstallation | null>()
@@ -123,7 +173,9 @@ export class TimelineProjection {
         throw new Error(`Timeline projection integrity error: missing installation ${observation.installationId}`)
       }
 
-      const evidence = await this.storage.repositories.evidence.listForObservation(observation.id)
+      const evidence = this.storage.repositories.evidence.getMany
+        ? observation.evidenceRefs.map(id => evidenceById.get(id)).filter((item): item is Evidence => Boolean(item))
+        : await this.storage.repositories.evidence.listForObservation(observation.id)
       const item: TimelineItemDto = {
         id: observation.id,
         kind: observation.kind,
@@ -149,15 +201,38 @@ export class TimelineProjection {
     }))
 
     items.sort(compareTimelineItems)
-    const hasMore = items.length > requestedLimit
-    const limited = items.slice(0, requestedLimit)
+    return items
+  }
+
+  async query(query: TimelineQueryDto = {}): Promise<TimelineResponseDto> {
+    const requestedLimit = Math.max(1, Math.min(query.limit ?? DEFAULT_LIMIT, MAX_LIMIT))
+    const direction = query.direction ?? 'forward'
+    const decodedCursor = query.cursor ? decodeCursor(query.cursor) : undefined
+    const coreQuery: ObservationQuery = {
+      ...(query.installationId ? { installationId: query.installationId } : {}),
+      ...(query.logicalSessionId ? { logicalSessionId: query.logicalSessionId } : {}),
+      ...(query.kind ? { kind: query.kind } : {}),
+      ...(query.from ? { from: query.from } : {}),
+      ...(query.to ? { to: query.to } : {}),
+      ...(decodedCursor && direction === 'forward' ? { after: decodedCursor } : {}),
+      ...(decodedCursor && direction === 'backward' ? { before: decodedCursor } : {}),
+      order: direction === 'backward' ? 'desc' : 'asc',
+      limit: requestedLimit + 1,
+    }
+    const observations = await this.storage.repositories.observations.query(coreQuery)
+    const hasMore = observations.length > requestedLimit
+    const limitedObservations = observations.slice(0, requestedLimit)
+    const items = await this.mapObservations(limitedObservations)
+    const cursorObservation = limitedObservations.at(-1)
 
     return {
-      items: limited,
+      items,
       meta: {
         protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
-        count: limited.length,
+        count: items.length,
         hasMore,
+        ...(hasMore && cursorObservation ? { nextCursor: encodeCursor(cursorForObservation(cursorObservation)) } : {}),
+        direction,
         generatedAt: new Date().toISOString(),
       },
     }
@@ -167,4 +242,7 @@ export class TimelineProjection {
 export const timelineProjectionInternals = {
   toJsonValue,
   compareTimelineItems,
+  encodeCursor,
+  decodeCursor,
+  cursorForObservation,
 }

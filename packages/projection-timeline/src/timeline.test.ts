@@ -113,6 +113,7 @@ test('TimelineProjection maps canonical facts to protocol DTOs in effective-time
     })
 
     assert.equal(response.meta.protocolVersion, '1.0')
+    assert.equal(response.meta.direction, 'forward')
     assert.equal(response.meta.count, 2)
     assert.equal(response.meta.hasMore, false)
     assert.equal(response.items[0]?.kind, 'message.user')
@@ -133,7 +134,7 @@ test('TimelineProjection maps canonical facts to protocol DTOs in effective-time
   }
 })
 
-test('TimelineProjection applies protocol limit after chronological projection ordering', async () => {
+test('TimelineProjection uses a stable cursor without duplicate or missing observations', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   await storage.migrate()
 
@@ -171,16 +172,72 @@ test('TimelineProjection applies protocol limit after chronological projection o
       })
     }
 
-    const response = await new TimelineProjection(storage).query({
-      installationId: installation.id,
-      limit: 2,
-    })
-    assert.equal(response.meta.count, 2)
-    assert.equal(response.meta.hasMore, true)
+    const projection = new TimelineProjection(storage)
+    const first = await projection.query({ installationId: installation.id, limit: 2 })
+    assert.equal(first.meta.count, 2)
+    assert.equal(first.meta.hasMore, true)
+    assert.ok(first.meta.nextCursor)
     assert.deepEqual(
-      response.items.map(item => item.effectiveAt),
+      first.items.map(item => item.effectiveAt),
       ['2026-08-20T08:00:00.000Z', '2026-08-20T10:00:00.000Z'],
     )
+
+    const second = await projection.query({
+      installationId: installation.id,
+      limit: 2,
+      cursor: first.meta.nextCursor,
+    })
+    assert.equal(second.meta.hasMore, false)
+    assert.deepEqual(second.items.map(item => item.effectiveAt), ['2026-08-20T12:00:00.000Z'])
+    assert.equal(new Set([...first.items, ...second.items].map(item => item.id)).size, 3)
+  } finally {
+    storage.close()
+  }
+})
+
+test('TimelineProjection paginates backward from the tail without duplicate or missing observations', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+
+  try {
+    const identity = new DefaultIdentityService(storage)
+    const observations = new DefaultObservationService(storage, identity)
+    const host = await identity.resolveHost({ name: 'timeline-backward-host' })
+    const installation = await identity.resolveInstallation({ hostId: host.id, productId: 'codex' })
+
+    for (const hour of [8, 10, 12]) {
+      const occurredAt = `2026-08-20T${String(hour).padStart(2, '0')}:00:00.000Z`
+      await observations.commit({
+        sourceId: 'codex', host, installation,
+        candidate: {
+          kind: 'unknown', nativeEventId: `backward-${hour}`, sourceSequence: hour,
+          occurredAt, capturedAt: occurredAt, payload: { hour },
+          identityHints: { nativeSessionId: 'session-backward' },
+          dedupHints: { nativeEventId: `backward-${hour}` },
+        },
+        evidenceCandidates: [],
+      })
+    }
+
+    const projection = new TimelineProjection(storage)
+    const latest = await projection.query({ installationId: installation.id, direction: 'backward', limit: 2 })
+    assert.equal(latest.meta.direction, 'backward')
+    assert.equal(latest.meta.hasMore, true)
+    assert.ok(latest.meta.nextCursor)
+    assert.deepEqual(latest.items.map(item => item.effectiveAt), [
+      '2026-08-20T10:00:00.000Z',
+      '2026-08-20T12:00:00.000Z',
+    ])
+
+    const older = await projection.query({
+      installationId: installation.id,
+      direction: 'backward',
+      cursor: latest.meta.nextCursor,
+      limit: 2,
+    })
+    assert.equal(older.meta.hasMore, false)
+    assert.deepEqual(older.items.map(item => item.effectiveAt), ['2026-08-20T08:00:00.000Z'])
+    assert.equal(new Set([...older.items, ...latest.items].map(item => item.id)).size, 3)
   } finally {
     storage.close()
   }

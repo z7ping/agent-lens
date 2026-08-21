@@ -32,6 +32,8 @@ import type {
 } from '@agent-lens/core'
 import { SqliteExecutor } from './executor'
 
+const MAX_SEQUENCE = Number.MAX_SAFE_INTEGER
+
 function encodeJson(value: unknown): string {
   const encoded = JSON.stringify(value)
   if (encoded === undefined) {
@@ -624,20 +626,49 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
           conditions.push('COALESCE(occurred_at, captured_at) <= ?')
           params.push(query.to)
         }
+        if (query.after) {
+          const sequence = query.after.sequence ?? MAX_SEQUENCE
+          conditions.push(`(
+            COALESCE(occurred_at, captured_at) > ?
+            OR (
+              COALESCE(occurred_at, captured_at) = ?
+              AND (
+                COALESCE(canonical_sequence, source_sequence, ${MAX_SEQUENCE}) > ?
+                OR (
+                  COALESCE(canonical_sequence, source_sequence, ${MAX_SEQUENCE}) = ?
+                  AND id > ?
+                )
+              )
+            )
+          )`)
+          params.push(query.after.effectiveAt, query.after.effectiveAt, sequence, sequence, query.after.id)
+        }
         const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
         const limit = Math.max(1, Math.min(query.limit ?? 500, 5000))
         const rows = db.prepare(`
           SELECT * FROM observations ${where}
-          ORDER BY COALESCE(canonical_sequence, source_sequence) ASC, COALESCE(occurred_at, captured_at) ASC, id ASC
+          ORDER BY
+            COALESCE(occurred_at, captured_at) ASC,
+            COALESCE(canonical_sequence, source_sequence, ${MAX_SEQUENCE}) ASC,
+            id ASC
           LIMIT ?
         `).all(...params, limit)
-        const evidenceStatement = db.prepare(
-          'SELECT evidence_id FROM observation_evidence WHERE observation_id = ? ORDER BY evidence_id',
-        )
-        return rows.map(row => {
-          const evidenceRows = evidenceStatement.all((row as any).id) as Array<{ evidence_id: string }>
-          return mapObservation(row, evidenceRows.map(item => item.evidence_id))
-        })
+        if (!rows.length) return []
+        const ids = rows.map(row => (row as any).id as string)
+        const placeholders = ids.map(() => '?').join(', ')
+        const evidenceRows = db.prepare(`
+          SELECT observation_id, evidence_id
+          FROM observation_evidence
+          WHERE observation_id IN (${placeholders})
+          ORDER BY observation_id, evidence_id
+        `).all(...ids) as Array<{ observation_id: string; evidence_id: string }>
+        const evidenceByObservation = new Map<string, string[]>()
+        for (const row of evidenceRows) {
+          const values = evidenceByObservation.get(row.observation_id) ?? []
+          values.push(row.evidence_id)
+          evidenceByObservation.set(row.observation_id, values)
+        }
+        return rows.map(row => mapObservation(row, evidenceByObservation.get((row as any).id) ?? []))
       })
     },
     async put(observation) {
@@ -691,6 +722,16 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
       return executor.run(() => {
         const row = db.prepare('SELECT * FROM evidence WHERE id = ?').get(id)
         return row ? mapEvidence(row) : null
+      })
+    },
+    async getMany(ids) {
+      if (!ids.length) return []
+      return executor.run(() => {
+        const uniqueIds = [...new Set(ids)]
+        const placeholders = uniqueIds.map(() => '?').join(', ')
+        return db.prepare(`SELECT * FROM evidence WHERE id IN (${placeholders}) ORDER BY id`)
+          .all(...uniqueIds)
+          .map(mapEvidence)
       })
     },
     async put(item) {

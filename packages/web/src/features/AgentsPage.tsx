@@ -76,6 +76,10 @@ function summarizedStates(asset: AgentAssetInventoryDto): Array<{ state: string;
   return [...states].map(([state, value]) => ({ state, value }))
 }
 
+function stateValue(asset: AgentAssetInventoryDto, state: string): boolean | 'unknown' | undefined {
+  return summarizedStates(asset).find(item => item.state === state)?.value
+}
+
 function StateBadge({ state, value }: { state: string; value: boolean | 'unknown' }) {
   return <span className="asset-state" data-value={String(value)}>{stateLabel[state] ?? state}{value === 'unknown' ? ' 未知' : value ? '' : ' 否'}</span>
 }
@@ -101,7 +105,7 @@ function AssetCard({ agent, asset }: { agent: AgentOverviewDto; asset: AgentAsse
   return <div className="asset-item">
     <div className="asset-item-head">
       <span className="asset-type">{assetTypeLabel[asset.type] ?? asset.type}</span>
-      {usage > 0 && <span className="asset-usage">{usage} 次</span>}
+      {usage > 0 && <span className="asset-usage">{usage} 次真实调用</span>}
     </div>
     <div className="asset-name" title={asset.displayName ?? asset.canonicalName}>{asset.displayName ?? asset.canonicalName}</div>
     <div className="asset-states">
@@ -133,6 +137,43 @@ function FrequentAssets({ agent, assets }: { agent: AgentOverviewDto; assets: Ag
   </div>
 }
 
+function SkillLifecycle({ agent, skills }: { agent: AgentOverviewDto; skills: AgentAssetInventoryDto[] }) {
+  if (!skills.length) return null
+  const installedReported = skills.some(asset => stateValue(asset, 'installed') !== undefined)
+  const installed = installedReported ? skills.filter(asset => stateValue(asset, 'installed') === true).length : skills.length
+  const discoverableReported = skills.some(asset => stateValue(asset, 'discoverable') !== undefined)
+  const discoverable = skills.filter(asset => stateValue(asset, 'discoverable') === true).length
+  const used = skills.filter(asset => assetUsageCount(agent, asset) > 0).length
+
+  const sourceMap = new Map<string, { count: number; used: number }>()
+  for (const asset of skills) {
+    const sources = new Set(asset.bindings.map(binding => binding.source).filter((value): value is string => Boolean(value)))
+    if (!sources.size) sources.add('未标注来源')
+    for (const source of sources) {
+      const item = sourceMap.get(source) ?? { count: 0, used: 0 }
+      item.count += 1
+      if (assetUsageCount(agent, asset) > 0) item.used += 1
+      sourceMap.set(source, item)
+    }
+  }
+  const sources = [...sourceMap.entries()].sort((a, b) => b[1].count - a[1].count).slice(0, 5)
+
+  return <section className="skill-lifecycle">
+    <div className="section-heading-row"><div><h3>Skill 生命周期</h3><p>从本机资产发现，到 Agent 可发现，再到有 Evidence 支撑的真实调用。</p></div></div>
+    <div className="skill-funnel">
+      <div><strong>{installed}</strong><span>{installedReported ? '已安装' : '已发现'}</span></div>
+      <i>→</i>
+      <div data-muted={!discoverableReported}><strong>{discoverableReported ? discoverable : '—'}</strong><span>{discoverableReported ? '可发现' : '可发现状态未报告'}</span></div>
+      <i>→</i>
+      <div data-active><strong>{used}</strong><span>已使用</span></div>
+    </div>
+    {!discoverableReported && <p className="skill-funnel-note">Source 没有明确报告 discoverable 时，不把“未报告”误算成 0。</p>}
+    {sources.length > 0 && <div className="skill-source-list">
+      {sources.map(([source, item]) => <div key={source}><span title={source}>{source}</span><b>{item.count}</b><small>{item.used} 个已使用</small></div>)}
+    </div>}
+  </section>
+}
+
 function AgentCard({ agent }: { agent: AgentOverviewDto }) {
   const [showAllBindings, setShowAllBindings] = useState(false)
   const installation = agent.installations[0]
@@ -148,11 +189,12 @@ function AgentCard({ agent }: { agent: AgentOverviewDto }) {
 
   const userGrouped = grouped.filter(([type]) => type !== 'builtin')
   const builtinAssets = grouped.find(([type]) => type === 'builtin')?.[1] ?? []
+  const skillAssets = grouped.find(([type]) => type === 'skill')?.[1] ?? []
   const priorityAssets = useMemo(() => [...agent.assetInventory]
     .map(asset => ({ asset, usage: assetUsageCount(agent, asset) }))
-    .filter(item => item.usage > 0)
+    .filter(item => item.usage > 0 && (item.asset.type === 'skill' || item.asset.type === 'mcp'))
     .sort((a, b) => b.usage - a.usage || (a.asset.displayName ?? a.asset.canonicalName).localeCompare(b.asset.displayName ?? b.asset.canonicalName))
-    .slice(0, 5)
+    .slice(0, 6)
     .map(item => item.asset), [agent])
 
   const bindings = agent.assetInventory.flatMap(asset => asset.bindings.map(binding => ({ asset, binding })))
@@ -175,7 +217,7 @@ function AgentCard({ agent }: { agent: AgentOverviewDto }) {
     </div>
 
     <section className="agent-primary-section">
-      <div className="section-heading-row"><div><h3>我的资产</h3><p>用户安装、配置或维护的能力</p></div><span className="section-total">{userAssetCount}</span></div>
+      <div className="section-heading-row"><div><h3>我的资产</h3><p>用户安装、配置或维护的能力；内建工具单独放在后面。</p></div><span className="section-total">{userAssetCount}</span></div>
       <div className="asset-kpis">
         {userGrouped.length ? userGrouped.map(([type, items]) => <div key={type} className="asset-kpi"><strong>{items.length}</strong><span>{assetTypeLabel[type] ?? type}</span></div>) : <div className="muted-empty compact">暂无可识别的用户资产</div>}
       </div>
@@ -183,9 +225,11 @@ function AgentCard({ agent }: { agent: AgentOverviewDto }) {
     </section>
 
     <section className="agent-primary-section">
-      <div className="section-heading-row"><div><h3>最近真正用过</h3><p>仅展示有 Evidence 支撑的 Skill / MCP</p></div></div>
+      <div className="section-heading-row"><div><h3>最近真正用过</h3><p>只统计有 Evidence 支撑的 Skill / MCP，不把内建工具混进来。</p></div></div>
       <FrequentAssets agent={agent} assets={priorityAssets}/>
     </section>
+
+    <SkillLifecycle agent={agent} skills={skillAssets}/>
 
     <section className="agent-disclosures">
       {userGrouped.map(([type, assets]) => <AssetGroup key={type} agent={agent} type={type} assets={assets}/>)}
@@ -215,6 +259,59 @@ function AgentCard({ agent }: { agent: AgentOverviewDto }) {
   </article>
 }
 
+type MatrixStatus = 'used' | 'discoverable' | 'configured' | 'discovered' | 'unobserved'
+
+function matrixStatus(agent: AgentOverviewDto, type: 'skill' | 'mcp', canonicalName: string): MatrixStatus {
+  const used = agent.usedAssets.some(item => item.type === type && item.canonicalName === canonicalName && item.callCount > 0)
+  if (used) return 'used'
+  const asset = agent.assetInventory.find(item => item.type === type && item.canonicalName === canonicalName)
+  if (!asset) return 'unobserved'
+  if (stateValue(asset, 'discoverable') === true) return 'discoverable'
+  if (['installed', 'configured', 'enabled', 'exposed'].some(state => stateValue(asset, state) === true)) return 'configured'
+  return 'discovered'
+}
+
+const matrixStatusLabel: Record<MatrixStatus, string> = {
+  used: '已使用',
+  discoverable: '可发现',
+  configured: '已配置',
+  discovered: '已发现',
+  unobserved: '未观察到',
+}
+
+function CrossAgentMatrix({ agents }: { agents: AgentOverviewDto[] }) {
+  const rows = useMemo(() => {
+    const map = new Map<string, { type: 'skill' | 'mcp'; canonicalName: string; displayName: string; calls: number }>()
+    for (const agent of agents) {
+      for (const used of agent.usedAssets) {
+        const key = `${used.type}:${used.canonicalName}`
+        const asset = agent.assetInventory.find(item => item.type === used.type && item.canonicalName === used.canonicalName)
+        const current = map.get(key) ?? { type: used.type, canonicalName: used.canonicalName, displayName: asset?.displayName ?? used.canonicalName, calls: 0 }
+        current.calls += used.callCount
+        map.set(key, current)
+      }
+    }
+    return [...map.values()].sort((a, b) => b.calls - a.calls || a.displayName.localeCompare(b.displayName)).slice(0, 10)
+  }, [agents])
+
+  if (agents.length < 2 || !rows.length) return null
+  return <section className="cross-agent-matrix">
+    <div className="matrix-heading"><div><span className="eyebrow">Cross Agent</span><h2>高频资产覆盖矩阵</h2><p>只拿真实用过的 Skill / MCP 做横向对照；“未观察到”不等于一定缺失。</p></div></div>
+    <div className="matrix-scroll">
+      <div className="matrix-table" style={{ ['--matrix-agents' as string]: agents.length }}>
+        <div className="matrix-header"><span>资产</span>{agents.map(agent => <span key={agent.sourceId}><i className={`source-dot ${sourceDot(agent.sourceId)}`}/>{agentLabel(agent.sourceId, agent.displayName)}</span>)}</div>
+        {rows.map(row => <div className="matrix-row" key={`${row.type}:${row.canonicalName}`}>
+          <span className="matrix-asset"><b>{row.displayName}</b><small>{assetTypeLabel[row.type]} · {row.calls} 次真实调用</small></span>
+          {agents.map(agent => {
+            const status = matrixStatus(agent, row.type, row.canonicalName)
+            return <span key={agent.sourceId} className="matrix-cell" data-status={status}>{matrixStatusLabel[status]}</span>
+          })}
+        </div>)}
+      </div>
+    </div>
+  </section>
+}
+
 export function AgentsPage({ model }: { model: AgentLensClientModel }) {
   const snapshot = useClientSnapshot(model)
   const agents = snapshot.facets?.agents ?? []
@@ -228,9 +325,10 @@ export function AgentsPage({ model }: { model: AgentLensClientModel }) {
       <button className="icon-button toolbar-end" onClick={() => void model.refreshFacetsAndAgents()} title="刷新 Agent 概览" aria-label="刷新 Agent 概览">↻</button>
     </div>
     <div className="page-content agents-content">
-      <header className="page-heading"><div><span className="eyebrow">Workspace</span><h1>Agent 概览</h1><p>看清自己的 AI 资产、真实使用和 Agent 装配情况。</p></div></header>
+      <header className="page-heading"><div><span className="eyebrow">Workspace</span><h1>Agent 概览</h1><p>先看结论：我有哪些 AI 资产、哪些真的用过、Skill 从发现到使用卡在哪一步。</p></div></header>
       <div className="agents-grid">{shown.map(agent => <AgentCard key={agent.sourceId} agent={agent}/>)}</div>
       {!shown.length && <div className="empty-state roomy">没有可显示的 Agent</div>}
+      {!sourceId && <CrossAgentMatrix agents={items}/>} 
     </div>
   </main>
 }

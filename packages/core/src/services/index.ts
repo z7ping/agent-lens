@@ -95,12 +95,21 @@ export interface ObservationCommitResult {
   mergedEvidenceIds: EvidenceId[]
 }
 
+export interface ObservationCursor {
+  effectiveAt: string
+  sequence?: number
+  id: ObservationId
+}
+
 export interface ObservationQuery {
   installationId?: AgentInstallationId
   logicalSessionId?: LogicalSessionId
   kind?: CanonicalObservation['kind']
   from?: string
   to?: string
+  after?: ObservationCursor
+  before?: ObservationCursor
+  order?: 'asc' | 'desc'
   limit?: number
 }
 
@@ -230,6 +239,7 @@ export interface ObservationRepository {
 
 export interface EvidenceRepository {
   get(id: EvidenceId): Promise<Evidence | null>
+  getMany?(ids: EvidenceId[]): Promise<Evidence[]>
   put(evidence: Evidence): Promise<void>
   listForObservation(observationId: ObservationId): Promise<Evidence[]>
 }

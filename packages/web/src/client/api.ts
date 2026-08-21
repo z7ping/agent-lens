@@ -3,6 +3,8 @@ import type {
   FacetResponseDto,
   HealthResponseDto,
   LiveUpdateEventDto,
+  ReviewDetailDirection,
+  ReviewDetailFilter,
   ReviewResponseDto,
   ReviewSessionDetailDto,
   SessionRelationshipResponseDto,
@@ -46,17 +48,31 @@ export class AgentLensApi {
   facets(): Promise<FacetResponseDto> { return getJson('/api/v1/facets') }
   agents(): Promise<AgentOverviewResponseDto> { return getJson('/api/v1/agents') }
 
-  review(filters: ReviewFilters): Promise<ReviewResponseDto> {
+  review(filters: ReviewFilters, limit = 40): Promise<ReviewResponseDto> {
     const params = new URLSearchParams()
     appendFilters(params, filters)
     if (filters.status !== 'all') params.set('status', filters.status)
     if (filters.search.trim()) params.set('search', filters.search.trim())
-    params.set('limit', '200')
+    params.set('limit', String(Math.max(1, Math.min(limit, 500))))
     return getJson(`/api/v1/review?${params}`)
   }
 
-  reviewDetail(id: string): Promise<ReviewSessionDetailDto> {
-    return getJson(`/api/v1/review/${encodeURIComponent(id)}`)
+  reviewDetail(
+    id: string,
+    options: {
+      cursor?: string
+      limit?: number
+      direction?: ReviewDetailDirection
+      filter?: ReviewDetailFilter
+    } = {},
+  ): Promise<ReviewSessionDetailDto> {
+    const params = new URLSearchParams()
+    if (options.cursor) params.set('cursor', options.cursor)
+    if (options.direction) params.set('direction', options.direction)
+    if (options.filter && options.filter !== 'all') params.set('filter', options.filter)
+    if (options.limit !== undefined) params.set('limit', String(Math.max(1, Math.min(options.limit, 100))))
+    const query = params.toString()
+    return getJson(`/api/v1/review/${encodeURIComponent(id)}${query ? `?${query}` : ''}`)
   }
 
   relationships(id: string): Promise<SessionRelationshipResponseDto> {

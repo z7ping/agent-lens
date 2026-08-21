@@ -28,6 +28,9 @@ const bundledWebRoot = fileURLToPath(new URL('./web/', import.meta.url))
 const workspaceWebRoot = fileURLToPath(new URL('../../../packages/web/dist/', import.meta.url))
 const webRoot = process.env.AGENT_LENS_WEB_ROOT
   ?? (existsSync(fileURLToPath(new URL('./web/index.html', import.meta.url))) ? bundledWebRoot : workspaceWebRoot)
+const daemonMode = process.env.AGENT_LENS_DAEMON_MODE === 'managed' ? 'managed' : 'foreground'
+const interactiveTerminal = Boolean(process.stdin.isTTY && process.stdout.isTTY)
+const startedAt = Date.now()
 
 const app = new AgentLensApplication()
 app.use(sqliteStoragePlugin, { path: dbPath })
@@ -43,6 +46,11 @@ let syncPromise: ReturnType<typeof syncRegisteredSourceHistory> | null = null
 let captureHandles: Awaited<ReturnType<typeof startRegisteredSourceCapture>> = []
 let shuttingDown = false
 
+function runtimeAge(): string {
+  const seconds = Math.max(0, Math.round((Date.now() - startedAt) / 1000))
+  return `${seconds}s`
+}
+
 async function shutdown(signal: string): Promise<void> {
   if (shuttingDown) return
   shuttingDown = true
@@ -55,7 +63,7 @@ async function shutdown(signal: string): Promise<void> {
     }
     captureHandles = []
     await app.stop()
-    console.info(`[AgentLens] daemon stopped (${signal})`)
+    console.info(`[AgentLens] daemon stopped (${signal}, mode=${daemonMode}, uptime=${runtimeAge()})`)
     process.exitCode = 0
   } catch (error) {
     console.error('[AgentLens] daemon shutdown failed', error)
@@ -63,12 +71,31 @@ async function shutdown(signal: string): Promise<void> {
   }
 }
 
-process.once('SIGINT', () => void shutdown('SIGINT'))
-process.once('SIGTERM', () => void shutdown('SIGTERM'))
+function handleSignal(signal: 'SIGINT' | 'SIGTERM'): void {
+  console.warn(
+    `[AgentLens] daemon received ${signal} (mode=${daemonMode}, interactive=${interactiveTerminal}, pid=${process.pid}, ppid=${process.ppid}, uptime=${runtimeAge()})`,
+  )
+
+  // SIGTERM is the authoritative lifecycle signal for managed/background
+  // processes. A non-interactive runner may forward a single SIGINT when the
+  // launching command/session ends; do not let that tear down a long-running
+  // daemon. Interactive foreground Ctrl+C still behaves normally.
+  if (signal === 'SIGINT' && (daemonMode === 'managed' || !interactiveTerminal)) {
+    console.warn('[AgentLens] ignored SIGINT outside interactive foreground mode; use SIGTERM for intentional shutdown')
+    return
+  }
+
+  void shutdown(signal)
+}
+
+process.on('SIGINT', () => handleSignal('SIGINT'))
+process.on('SIGTERM', () => handleSignal('SIGTERM'))
 
 try {
   await app.start()
-  console.info(`[AgentLens] 1.0 runtime started (db: ${dbPath})`)
+  console.info(
+    `[AgentLens] 1.0 runtime started (db: ${dbPath}, mode=${daemonMode}, interactive=${interactiveTerminal}, pid=${process.pid}, ppid=${process.ppid})`,
+  )
   console.info(`[AgentLens] Web/UI: http://127.0.0.1:${configuredPort} (root: ${webRoot})`)
 
   syncPromise = syncRegisteredSourceHistory(app.context, runtimeController.signal)
