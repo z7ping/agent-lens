@@ -39,7 +39,11 @@ function payloadRecord(value: unknown): Record<string, unknown> {
 
 function brief(value: unknown, max = 120): string {
   if (value === undefined || value === null) return ''
-  const text = typeof value === 'string' ? value : (() => { try { return JSON.stringify(value) } catch { return String(value) } })()
+  let text: string
+  if (typeof value === 'string') text = value
+  else {
+    try { text = JSON.stringify(value) ?? String(value) } catch { text = String(value) }
+  }
   return text.length > max ? `${text.slice(0, max)}…` : text
 }
 
