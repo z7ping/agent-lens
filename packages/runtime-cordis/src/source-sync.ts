@@ -7,6 +7,7 @@ import {
   type SourceHistorySyncResult,
   type SourceRuntimeCaptureHandle,
 } from '@agent-lens/core-services/source-runner'
+import type { DetectedSource, Host } from '@agent-lens/core'
 import type { AgentLensContext } from './context'
 
 async function runtimeHost(ctx: AgentLensContext) {
@@ -19,6 +20,23 @@ async function runtimeHost(ctx: AgentLensContext) {
 
 function emitDetected(ctx: AgentLensContext, sourceId: string, installationId: string): void {
   ctx.emit('source/detected', { sourceId, installationId })
+}
+
+async function registerDetectedSource(
+  ctx: AgentLensContext,
+  host: Host,
+  detected: DetectedSource,
+): Promise<string> {
+  const installation = await ctx.identity.resolveInstallation({
+    hostId: host.id,
+    productId: detected.productId,
+    ...(detected.executable ? { executable: detected.executable } : {}),
+    ...(detected.version ? { version: detected.version } : {}),
+    ...(detected.configRoot ? { configRoot: detected.configRoot } : {}),
+    ...(detected.dataRoot ? { dataRoot: detected.dataRoot } : {}),
+  })
+  emitDetected(ctx, detected.sourceId, installation.id)
+  return installation.id
 }
 
 export async function syncRegisteredSourceHistory(
@@ -48,6 +66,7 @@ export async function syncRegisteredSourceHistory(
     if (!source) {
       throw new Error(`Detected source has no registered definition: ${item.sourceId}`)
     }
+    await registerDetectedSource(ctx, host, item)
     const result = await runner.sync({
       source,
       host,
@@ -88,6 +107,7 @@ export async function discoverRegisteredSourceAssets(
     if (!source) {
       throw new Error(`Detected source has no registered definition: ${item.sourceId}`)
     }
+    await registerDetectedSource(ctx, host, item)
     if (!source.discoverAssets) continue
     const result = await runner.scan({
       source,
@@ -130,6 +150,7 @@ export async function startRegisteredSourceCapture(
       if (!source) {
         throw new Error(`Detected source has no registered definition: ${item.sourceId}`)
       }
+      await registerDetectedSource(ctx, host, item)
       if (!source.startCapture) continue
       const handle = await runner.start({
         source,
