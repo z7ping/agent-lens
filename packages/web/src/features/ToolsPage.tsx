@@ -16,7 +16,7 @@ function rate(success: number, error: number): string {
 function assetTypeLabel(type: string): string {
   if (type === 'skill') return '技能'
   if (type === 'mcp') return 'MCP（模型上下文协议）'
-  return type
+  return '其他'
 }
 
 export function ToolsPage({ model }: { model: AgentLensClientModel }) {
