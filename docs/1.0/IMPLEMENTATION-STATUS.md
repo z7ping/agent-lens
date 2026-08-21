@@ -148,6 +148,51 @@ docs/static/
 - 旧 HTTP API Compatibility Layer
 - 0.x Tool Stack Map 的价值分 / 风险分 / 工作流推荐算法
 
+## 已确认后续方向：AI 资产备份（未实现）
+
+资产备份已经确认作为 AgentLens 的重要产品方向，但当前仅记录需求与边界，不进入本轮 Web Presentation Recovery 实现，也不因此继续扩展 1.0 基础架构。
+
+目标不是简单复制某个 Agent 的整个配置目录，而是基于 AgentLens 已有的资产发现与清单能力，让用户明确知道“有什么重要 AI 资产、哪些会被备份、备份是否完整”，并生成可验证的本地 Backup Snapshot。
+
+### MVP 备份范围
+
+P0：
+
+- Skill
+- Rule / Memory，例如 `CLAUDE.md`、`AGENTS.md`、自定义 Rules / Memory
+- Session / History 原始数据
+- MCP 配置
+
+P1：
+
+- Plugin / Extension 配置
+- Hook 配置
+- Agent Settings / Config / Model 等用户级配置
+
+默认不把缓存、程序本体、`node_modules`、临时文件等运行产物作为备份资产；API Key、Token、Credential 等敏感信息不得默认进入备份。
+
+### MVP 产品闭环
+
+第一阶段只要求形成以下闭环：
+
+1. 扫描可备份资产；
+2. 展示备份清单、来源与大小；
+3. 支持全部备份或选择性备份；
+4. 生成本地 Backup Snapshot；
+5. 通过 Manifest / Hash 等信息校验备份完整性。
+
+恢复能力放到后续阶段；恢复时应支持预览、差异比较和冲突处理，而不是直接无条件覆盖用户现有环境。
+
+### 关键原则
+
+- 复用现有 Source / Asset Inventory 已发现的“资产是什么、在哪里”等事实，不为 Backup 再造一套独立资产扫描体系。
+- Session 等动态数据优先备份 Agent 的原始数据，而不是把 AgentLens Projection 结果当作备份源；Canonical Observation / Projection 用于观察与分析，不替代用户的原始 AI 资产。
+- Backup Snapshot 应包含独立 Manifest，至少记录 Agent、资产类型、资产名称、原始路径、备份路径、版本、Hash、大小、修改时间、敏感信息状态与 Backup Format Version。
+- 备份必须显式区分“发现到了”“选择备份”“备份成功”“校验通过”等状态，避免把资产可见性误认为已经安全保存。
+- 第一阶段保持本地优先，不同时引入云同步、Git 同步、WebDAV、NAS、自动跨设备迁移、增量备份、多版本历史等扩展能力。
+
+长期产品链路可以从现有的“观察 / 分析”继续延伸为：发现 AI 资产 → 理解使用情况 → 保存重要资产 → 恢复 / 迁移，但后续能力必须按实际需求逐步实现。
+
 ## 关键验收不变量
 
 - 同一个原生事件分别被 History 与 Runtime 观察到时，仍然只产生一条 Canonical Observation，并保留多份 Evidence。
