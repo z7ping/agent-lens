@@ -83,3 +83,77 @@ test('SessionProjection derives user interactions from canonical observations', 
     storage.close()
   }
 })
+
+test('SessionProjection keeps recent sessions visible after more than 5000 older observations', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    const identity = new DefaultIdentityService(storage)
+    const observations = new DefaultObservationService(storage, identity)
+    const host = await identity.resolveHost({ name: 'session-visibility-host' })
+    const installation = await identity.resolveInstallation({ hostId: host.id, productId: 'codex' })
+
+    const addUser = (nativeSessionId: string, nativeEventId: string, at: string, text: string) => observations.commit({
+      sourceId: 'codex',
+      host,
+      installation,
+      candidate: {
+        kind: 'message.user',
+        nativeEventId,
+        occurredAt: at,
+        capturedAt: at,
+        payload: { text },
+        identityHints: { nativeSessionId },
+        dedupHints: { nativeEventId },
+      },
+      evidenceCandidates: [],
+    })
+
+    const old = await addUser('old-session', 'old-root', '2026-07-01T00:00:00.000Z', 'old')
+    const oldObservation = old.observation
+    const insert = storage.db.prepare(`
+      INSERT INTO observations(
+        id, host_id, installation_id, project_id, workspace_id, logical_session_id, source_session_id,
+        interaction_id, actor_id, kind, source_sequence, canonical_sequence, occurred_at, captured_at, payload_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    const insertMany = storage.db.transaction(() => {
+      const base = Date.parse('2026-07-01T00:00:01.000Z')
+      for (let index = 0; index < 5000; index += 1) {
+        const at = new Date(base + index).toISOString()
+        insert.run(
+          `bulk-old-${index}`,
+          oldObservation.hostId,
+          oldObservation.installationId,
+          oldObservation.projectId ?? null,
+          oldObservation.workspaceId ?? null,
+          oldObservation.logicalSessionId,
+          oldObservation.sourceSessionId,
+          null,
+          null,
+          'message.assistant',
+          index + 2,
+          index + 2,
+          at,
+          at,
+          JSON.stringify({ text: `old-${index}` }),
+        )
+      }
+    })
+    insertMany()
+
+    const recent = await addUser('recent-session', 'recent-root', '2026-08-21T12:00:00.000Z', 'recent')
+    const projection = new SessionProjection(storage)
+
+    const latest = await projection.query({ installationId: installation.id, limit: 1 })
+    assert.equal(latest.items.length, 1)
+    assert.equal(latest.items[0]?.id, recent.observation.logicalSessionId)
+    assert.equal(latest.meta.hasMore, true)
+
+    const oldById = await projection.query({ logicalSessionId: oldObservation.logicalSessionId, limit: 1 })
+    assert.equal(oldById.items.length, 1)
+    assert.equal(oldById.items[0]?.observationCount, 5001)
+  } finally {
+    storage.close()
+  }
+})
