@@ -17,7 +17,7 @@
 - 这条事实来自哪个原生来源；
 - Runtime Hook 和历史日志是不是同一件事；
 - 哪些 Tool 真正调用过、哪些失败了；
-- 哪些 Skill / MCP 能够被可靠归因为“实际使用过”。
+- 哪些 Skill / MCP 已安装或配置，哪些又能够被可靠归因为“实际使用过”。
 
 AgentLens 不负责执行 Agent，也不会声称可以读取模型未暴露的隐藏思维链。
 
@@ -93,21 +93,48 @@ AgentLens Core、Source、SQLite、HTTP/SSE 不搬进 Electron 私有实现中�
 
 ## Web 1.0
 
-当前 Web 界面使用简体中文，主要提供三个视图。
+Web 本身是独立的 Cordis Surface Plugin：`@agent-lens/web`。它通过 `ctx.http.mountStatic()` 挂载 React SPA；不开 Web 时 HTTP/API 仍可独立运行。Web 只消费 `@agent-lens/protocol` DTO，不直接依赖 Core、SQLite 或 Source 实现。
 
-### 执行轨迹
+当前技术栈：React 19 + Vite + Tailwind CSS。业务状态放在 React 外的 `AgentLensClientModel` 中，React 通过 `useSyncExternalStore` 订阅，因此实时数据流不依赖组件级状态拼接。
 
-按真实事件时间展示 Canonical Observation，并显示 Evidence、capture method、derivation、confidence 和 source locator。原始 Payload 与 Evidence 默认收起，需要时再展开查看。
+界面采用两级顶部结构：一级是产品导航，二级是 Agent 快捷入口与当前页面筛选。Agent 快捷入口会根据本机扫描结果自动初始化，用户也可以自行 Pin 常用 Agent；是否 Pin 只影响界面展示，不控制 Source 是否启用。
 
-### 会话
+### 任务复盘
 
-基于 Canonical Observation 派生 Logical Session 和 Interaction。用户消息是主要 Interaction 边界；用户消息之前的可观察自主行为可以形成 background interaction。会话可以直接跳转到对应执行轨迹。
+采用 `Session List | Session Detail` 左右布局，以 Session / Interaction 为主要阅读结构：
 
-### 工具与能力
+- 用户与 Agent 消息以对话形式展示；
+- 连续 Tool Call 归为执行过程，可展开查看结果、错误与耗时；
+- Permission、Subagent、Context、Model 等生命周期事件穿插在真实执行流中；
+- Codex、Claude Code、Pi 保留各自有意义的事件标签；
+- Pi 可展示原生 parent/session relationship；
+- Evidence 与 Raw Payload 放在临时 Inspector 中，默认不打断主阅读流。
 
-展示 Tool 调用/结果、成功失败、耗时、来源，以及能够可靠归因的 Skill / MCP 使用情况。
+支持按 Agent、项目、时间、错误状态和关键字筛选，不再要求用户手工输入 installationId / logicalSessionId。
 
-页面通过 SSE 接收实时变化。执行轨迹采用增量 DOM 协调，避免新事件到来时整页重绘、打断滚动位置和 Evidence 展开状态；会话与工具视图在不能安全增量更新时只提示有新数据，由用户显式刷新。幂等重放得到 `unchanged` 时不会制造无意义刷新。
+### 工具分析
+
+基于 Canonical Observation 统计真实 Tool 使用情况，包括调用次数、涉及 Session、成功/失败、总耗时与平均耗时，并支持 Agent、项目和时间范围筛选。
+
+当前优先展示可证实事实；0.x 中的价值分、风险分、工作流候选等启发式分析不会未经重新设计直接搬回 1.0。
+
+### Agent 概览
+
+展示本机 Agent 的：
+
+- 检测状态与 Installation 信息；
+- Source 声明的可观测 Capability；
+- 静态扫描得到的 Skill / MCP / Plugin / Extension / Hook 等能力资产；
+- Asset Binding 路径、版本及 installed/configured/enabled/discoverable 等状态；
+- 能够由 Evidence 可靠归因的 Skill / MCP 实际使用记录。
+
+“装了 / 配了”和“真正用过”在模型与界面中保持分离。
+
+### 实时更新
+
+Web 使用 SSE 接收 Observation、Source Detection 与 Asset 变化。SSE 会在首屏 Snapshot 请求前建立，避免启动扫描期间出现 API → SSE 的事件盲区。
+
+`AgentLensClientModel` 对高频事件做短窗口合批：任务复盘、工具统计和 Agent 资产分别按各自节奏更新；React 只消费稳定 Snapshot，不通过整页 DOM 替换制造“自动刷新页面”的体验。页面退出时主动关闭 SSE。
 
 ## CLI
 
@@ -136,7 +163,7 @@ Native Source
   -> Projections
   -> @agent-lens/protocol
   -> HTTP / SSE
-  -> Web / Desktop
+  -> @agent-lens/web / Desktop
 ```
 
 Cordis 是唯一 Plugin Runtime，固定依赖 `@deepseek-ai/cordis@4.0.1`。AgentLens Core 保持框架无关；Source / Storage / Surface 等运行时扩展入口直接采用 Cordis-native Plugin，`packages/runtime-cordis` 负责共享 Context typing、元数据和兼容性测试，不再额外包一层通用 AgentLens Plugin Runtime。
@@ -146,6 +173,7 @@ Cordis 是唯一 Plugin Runtime，固定依赖 `@deepseek-ai/cordis@4.0.1`。Age
 - [1.0 架构](ARCHITECTURE.md)
 - [Core Contract](docs/1.0/CORE-CONTRACT.md)
 - [ADR-0001：Clean Rebuild 与 Cordis Runtime](docs/adr/0001-agentlens-1.0-clean-rebuild-and-cordis-runtime.md)
+- [ADR-0002：Web Plugin 与 Client State Model](docs/adr/0002-web-plugin-and-client-state-model.md)
 
 ## Evidence 是一等公民
 
@@ -210,13 +238,14 @@ npm run desktop:win        # Windows runner
 
 ```text
 apps/
-  cli/ daemon/ web/ desktop/ hook-codex/ hook-claude/
+  cli/ daemon/ desktop/ hook-codex/ hook-claude/
 packages/
   core/ core-services/ runtime-cordis/ protocol/
   storage-sqlite/
   source-codex/ source-claude/ source-pi/
   projection-timeline/ projection-session/ projection-usage/
-  surface-http/ hook-manager/
+  projection-review/ projection-overview/
+  surface-http/ web/ hook-manager/
 ```
 
 ## 发布流程
