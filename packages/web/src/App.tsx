@@ -43,6 +43,12 @@ function PinnedProvider({ agents, children }: PropsWithChildren<{ agents: AgentF
   return <PinnedContext.Provider value={value}>{children}</PinnedContext.Provider>
 }
 
+const navigation = [
+  ['/review', '任务复盘'],
+  ['/tools', '工具分析'],
+  ['/agents', 'Agent 概览'],
+] as const
+
 function Shell({ model }: { model: AgentLensClientModel }) {
   const snapshot = useClientSnapshot(model)
   const [theme, setTheme] = useState(readTheme)
@@ -52,18 +58,23 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     setTheme(next)
     writeTheme(next)
   }
+  const healthLabel = snapshot.health?.status === 'ok' ? '运行正常' : snapshot.health ? '运行降级' : '连接中'
+
   return <PinnedProvider agents={agents}>
-    <div className="min-h-screen bg-canvas text-ink">
-      <header className="sticky top-0 z-30 border-b border-line bg-surface/95 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-[1800px] items-center gap-7 px-5">
-          <div className="flex items-center gap-2 font-semibold tracking-tight"><span className="grid size-7 place-items-center rounded-lg bg-accent text-white">A</span><span>AgentLens</span></div>
-          <nav className="flex h-full items-center gap-1 text-sm">
-            {[[ '/review', '任务复盘' ], [ '/tools', '工具分析' ], [ '/agents', 'Agent 概览' ]].map(([to,label]) => <NavLink key={to} to={to} className={({isActive}) => `nav-item ${isActive ? 'nav-item-active' : ''}`}>{label}</NavLink>)}
+    <div className="app-shell">
+      <header className="app-header">
+        <div className="app-header-inner">
+          <div className="brand" aria-label="AgentLens">
+            <span className="brand-mark">A</span>
+            <span className="brand-name">AgentLens</span>
+          </div>
+          <nav className="app-nav" aria-label="主导航">
+            {navigation.map(([to, label]) => <NavLink key={to} to={to} className={({ isActive }) => `nav-item ${isActive ? 'nav-item-active' : ''}`}>{label}</NavLink>)}
           </nav>
-          <div className="ml-auto flex items-center gap-2 text-xs text-muted">
-            <span className={`size-2 rounded-full ${snapshot.liveConnected ? 'bg-success' : 'bg-warning'}`} />
-            <span>{snapshot.health?.status === 'ok' ? '运行正常' : snapshot.health ? '运行降级' : '连接中'}</span>
-            <button className="icon-button" onClick={toggleTheme} title="切换主题">{theme === 'dark' ? '☀' : '◐'}</button>
+          <div className="app-status">
+            <span className={`live-dot ${snapshot.liveConnected ? 'live-dot-online' : 'live-dot-waiting'}`} />
+            <span className="status-label">{healthLabel}</span>
+            <button className="theme-toggle" onClick={toggleTheme} title="切换主题" aria-label="切换主题">{theme === 'dark' ? '☀' : '◐'}</button>
           </div>
         </div>
       </header>
