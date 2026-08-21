@@ -298,7 +298,7 @@ export class AgentLensClientModel {
       if (this.refreshTimer) clearTimeout(this.refreshTimer)
       this.refreshTimer = setTimeout(() => {
         this.refreshTimer = null
-        void this.refreshReview({ preserveDetail: true })
+        void this.refreshReview()
       }, 140)
     }
     if (affected.includes('usage')) {
