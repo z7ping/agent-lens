@@ -2,6 +2,7 @@ import type {
   AgentOverviewResponseDto,
   FacetResponseDto,
   HealthResponseDto,
+  LiveUpdateArea,
   LiveUpdateEventDto,
   ReviewResponseDto,
   ReviewSessionDetailDto,
@@ -264,21 +265,22 @@ export class AgentLensClientModel {
   }
 
   private onLiveEvent(event: LiveUpdateEventDto): void {
-    if (event.affected.includes('review')) {
+    const affected: readonly LiveUpdateArea[] = event.affected
+    if (affected.includes('review')) {
       if (this.refreshTimer) clearTimeout(this.refreshTimer)
       this.refreshTimer = setTimeout(() => {
         this.refreshTimer = null
         void this.refreshReview()
       }, 140)
     }
-    if (event.affected.includes('usage')) {
+    if (affected.includes('usage')) {
       if (this.usageTimer) clearTimeout(this.usageTimer)
       this.usageTimer = setTimeout(() => {
         this.usageTimer = null
         void this.refreshUsage()
       }, 800)
     }
-    if (event.affected.includes('agents')) {
+    if (affected.includes('agents')) {
       if (this.agentsTimer) clearTimeout(this.agentsTimer)
       this.agentsTimer = setTimeout(() => {
         this.agentsTimer = null

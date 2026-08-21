@@ -193,6 +193,7 @@ export class ReviewProjection {
     const workspace = session.workspaceId ? await this.storage.repositories.sessions.getWorkspace(session.workspaceId) : null
     const observations = await this.storage.repositories.observations.query({ logicalSessionId: session.id, limit: 5000 })
     const firstUser = observations.find(item => item.kind === 'message.user')
+    const preview = firstUser ? textFromPayload(firstUser.payload) : undefined
     const toolCount = observations.filter(item => item.kind === 'tool.call').length
     const errorCount = observations.filter(observationError).length
     return {
@@ -203,7 +204,7 @@ export class ReviewProjection {
       ...(session.workspaceId ? { workspaceId: session.workspaceId } : {}),
       ...(workspace?.path ? { workspacePath: workspace.path } : {}),
       ...(logical?.title ? { title: logical.title } : {}),
-      ...(firstUser ? { preview: textFromPayload(firstUser.payload) } : {}),
+      ...(preview ? { preview } : {}),
       startedAt: session.startedAt, endedAt: session.endedAt,
       durationMs: durationMs(session.startedAt, session.endedAt),
       observationCount: session.observationCount, interactionCount: session.interactionCount,
