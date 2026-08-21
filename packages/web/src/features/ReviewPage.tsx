@@ -200,12 +200,12 @@ type ToolKind = 'shell' | 'read' | 'edit' | 'search' | 'mcp' | 'web' | 'tool'
 
 function detectToolKind(name: string): ToolKind {
   const value = name.toLowerCase()
+  if (value.includes('mcp')) return 'mcp'
+  if (/(web|browser|http|url)/.test(value)) return 'web'
   if (/(bash|shell|exec|command|terminal|powershell|cmd)/.test(value)) return 'shell'
   if (/(read|cat|open[_-]?file|get[_-]?file|view[_-]?file)/.test(value)) return 'read'
   if (/(write|edit|patch|replace|create[_-]?file|apply[_-]?patch)/.test(value)) return 'edit'
   if (/(grep|search|find|glob|ripgrep|rg)/.test(value)) return 'search'
-  if (value.includes('mcp')) return 'mcp'
-  if (/(web|browser|fetch|http|url)/.test(value)) return 'web'
   return 'tool'
 }
 
@@ -477,6 +477,10 @@ function Interaction({ interaction, inspect, highLatency, defaultExpanded }: { i
     return result
   }, [interaction.nodes])
 
+  useEffect(() => {
+    if (defaultExpanded) setExpanded(true)
+  }, [defaultExpanded])
+
   return <details className={`interaction-block ${stats.errorCount ? 'interaction-has-error' : ''}`} open={expanded} onToggle={event => setExpanded(event.currentTarget.open)}>
     <summary className="interaction-summary">
       <span className="interaction-chevron">›</span>
@@ -526,7 +530,10 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
   const detail = review.detail
 
   useEffect(() => { if (sessionId && sessionId !== review.selectedId) void model.selectReviewSession(sessionId) }, [sessionId])
-  useEffect(() => setRoundFilter('all'), [detail?.id])
+  useEffect(() => {
+    setRoundFilter('all')
+    setInspect(null)
+  }, [detail?.id])
   const select = (id: string) => { void model.selectReviewSession(id); navigate(`/review/${encodeURIComponent(id)}`) }
 
   const threshold = useMemo(() => detail ? highLatencyThreshold(detail.interactions) : null, [detail])
