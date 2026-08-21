@@ -27,6 +27,8 @@ let daemonStableTimer = null
 let unexpectedExitTimes = []
 let stoppingDaemon = false
 let quitting = false
+let quitAfterDaemonStop = false
+let quitStopPromise = null
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
@@ -158,6 +160,10 @@ async function stopDaemon() {
     if (current.exitCode === null) {
       writeDaemonLog(`--- daemon pid=${current.pid ?? 'unknown'} did not stop in time; sending SIGKILL ---`)
       current.kill('SIGKILL')
+      await Promise.race([
+        new Promise(resolve => current.once('exit', resolve)),
+        sleep(500),
+      ])
     }
   } finally {
     stoppingDaemon = false
@@ -216,7 +222,7 @@ function createTray() {
     { label: '打开数据目录', click: () => void shell.openPath(join(homedir(), '.agent-lens', '1.0')) },
     { label: '打开日志目录', click: () => void shell.openPath(app.getPath('logs')) },
     { type: 'separator' },
-    { label: '退出', click: () => { quitting = true; app.quit() } },
+    { label: '退出', click: () => app.quit() },
   ]))
   tray.on('double-click', showWindow)
 }
@@ -226,10 +232,17 @@ if (!singleInstance) {
   app.quit()
 } else {
   app.on('second-instance', showWindow)
-  app.on('before-quit', () => {
+  app.on('before-quit', event => {
+    if (quitAfterDaemonStop) return
+    event.preventDefault()
     quitting = true
     clearRecoveryTimers()
-    void stopDaemon()
+    if (!quitStopPromise) {
+      quitStopPromise = stopDaemon().finally(() => {
+        quitAfterDaemonStop = true
+        app.quit()
+      })
+    }
   })
   app.on('window-all-closed', event => event?.preventDefault?.())
 
@@ -249,7 +262,6 @@ if (!singleInstance) {
       message: 'AgentLens Daemon 未能正常启动。',
       detail: `请查看日志：${join(app.getPath('logs'), 'daemon.log')}`,
     })
-    quitting = true
     app.quit()
   }
 }
