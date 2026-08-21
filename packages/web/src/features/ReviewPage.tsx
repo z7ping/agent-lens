@@ -35,15 +35,15 @@ function formatRange(start: string, end: string): string {
 
 function duration(ms: number): string {
   const value = Math.max(0, ms)
-  if (value < 1000) return `${value}ms`
-  if (value < 60_000) return `${(value / 1000).toFixed(value < 10_000 ? 1 : 0)}s`
-  if (value < 3_600_000) return `${Math.round(value / 60_000)}m`
+  if (value < 1000) return `${value} 毫秒`
+  if (value < 60_000) return `${(value / 1000).toFixed(value < 10_000 ? 1 : 0)} 秒`
+  if (value < 3_600_000) return `${Math.round(value / 60_000)} 分钟`
   if (value < 86_400_000) {
     const hours = value / 3_600_000
-    return `${hours < 10 ? hours.toFixed(1) : Math.round(hours)}h`
+    return `${hours < 10 ? hours.toFixed(1) : Math.round(hours)} 小时`
   }
   const days = value / 86_400_000
-  return `${days < 10 ? days.toFixed(1) : Math.round(days)}天`
+  return `${days < 10 ? days.toFixed(1) : Math.round(days)} 天`
 }
 
 function elapsed(start: string, end: string): number {
@@ -98,6 +98,22 @@ const evidenceCaptureLabel: Record<TimelineEvidenceDto['captureMethod'], string>
   'external-import': '外部导入',
 }
 
+const evidenceDerivationLabel: Record<string, string> = {
+  observed: '已观测',
+  reported: '来源报告',
+  derived: '推导',
+  estimated: '估算',
+  inferred: '推断',
+}
+
+const evidenceConfidenceLabel: Record<string, string> = {
+  exact: '精确',
+  high: '高',
+  medium: '中',
+  low: '低',
+  unknown: '未知',
+}
+
 function EvidenceBadges({ evidence, compact = false }: { evidence: TimelineEvidenceDto[]; compact?: boolean }) {
   const visible = useMemo(() => {
     const seen = new Set<string>()
@@ -112,7 +128,12 @@ function EvidenceBadges({ evidence, compact = false }: { evidence: TimelineEvide
         key,
         label,
         confidence: item.confidence,
-        title: [evidenceCaptureLabel[item.captureMethod], `来源：${item.derivation}`, `可信度：${item.confidence}`, item.missingReason ?? ''].filter(Boolean).join(' · '),
+        title: [
+          evidenceCaptureLabel[item.captureMethod],
+          `来源：${evidenceDerivationLabel[item.derivation] ?? item.derivation}`,
+          `可信度：${evidenceConfidenceLabel[item.confidence] ?? item.confidence}`,
+          item.missingReason ?? '',
+        ].filter(Boolean).join(' · '),
       })
     }
     return items.slice(0, compact ? 1 : 2)
@@ -130,14 +151,14 @@ function sourceEventLabel(node: ReviewEventNodeDto): string {
   const action = stringValue(payload, 'action', 'event', 'type', 'status').toLowerCase()
   if (node.sourceId === 'codex') {
     if (node.kind === 'context.compaction') return '上下文压缩'
-    if (node.kind === 'subagent.spawn') return '启动 Subagent'
-    if (node.kind === 'subagent.end') return 'Subagent 完成'
+    if (node.kind === 'subagent.spawn') return '启动子智能体'
+    if (node.kind === 'subagent.end') return '子智能体完成'
     if (node.kind === 'permission.request') return '权限请求'
-    if (node.kind === 'session.lifecycle' && action.includes('stop')) return 'Turn Stop'
+    if (node.kind === 'session.lifecycle' && action.includes('stop')) return '轮次停止'
   }
   if (node.sourceId === 'claude-code') {
     if (node.kind === 'permission.request') return '权限请求'
-    if (node.kind === 'subagent.spawn') return '启动 Subagent'
+    if (node.kind === 'subagent.spawn') return '启动子智能体'
     if (node.kind === 'context.summary') return '上下文摘要'
     if (node.kind === 'context.compaction') return '上下文压缩'
   }
@@ -165,12 +186,12 @@ function sourceEventSummary(node: ReviewEventNodeDto): string {
   if (node.kind === 'subagent.spawn' || node.kind === 'subagent.end') {
     const type = stringValue(payload, 'agentType', 'agent_type', 'subagentType', 'subagent_type', 'name')
     const agentId = stringValue(payload, 'agentId', 'agent_id', 'subagentId', 'subagent_id')
-    return [type, agentId ? `Agent ${agentId}` : ''].filter(Boolean).join(' · ') || brief(payload, 100)
+    return [type, agentId ? `子智能体 ${agentId}` : ''].filter(Boolean).join(' · ') || brief(payload, 100)
   }
   if (node.kind === 'context.compaction') {
     const trigger = stringValue(payload, 'trigger', 'compactTrigger', 'compact_trigger', 'reason', 'compactReason', 'compact_reason')
     const before = numberValue(payload, 'tokensBefore', 'tokens_before')
-    return [trigger ? `触发：${trigger}` : '', before !== undefined ? `压缩前 ${before.toLocaleString()} tokens` : ''].filter(Boolean).join(' · ') || brief(payload, 100)
+    return [trigger ? `触发：${trigger}` : '', before !== undefined ? `压缩前 ${before.toLocaleString()} 个词元` : ''].filter(Boolean).join(' · ') || brief(payload, 100)
   }
   if (node.kind === 'context.summary') {
     return brief(payload.summary ?? payload.text ?? payload.content ?? payload, 120)
@@ -184,7 +205,7 @@ function sourceEventSummary(node: ReviewEventNodeDto): string {
   if (node.kind === 'usage') {
     const input = numberValue(payload, 'inputTokens', 'input_tokens')
     const output = numberValue(payload, 'outputTokens', 'output_tokens')
-    if (input !== undefined || output !== undefined) return `输入 ${input ?? 0} · 输出 ${output ?? 0} tokens`
+    if (input !== undefined || output !== undefined) return `输入 ${input ?? 0} · 输出 ${output ?? 0} 个词元`
   }
   if (node.kind === 'artifact.action') {
     const path = stringValue(payload, 'path', 'filePath', 'file_path')
@@ -211,6 +232,16 @@ function detectToolKind(name: string): ToolKind {
   return 'tool'
 }
 
+function toolKindLabel(kind: ToolKind): string {
+  if (kind === 'shell') return '命令'
+  if (kind === 'read') return '读取'
+  if (kind === 'edit') return '修改'
+  if (kind === 'search') return '搜索'
+  if (kind === 'mcp') return 'MCP（模型上下文协议）'
+  if (kind === 'web') return '网络'
+  return '工具'
+}
+
 function toolInputRecord(node: ReviewToolNodeDto): Record<string, JsonValue> {
   return payloadRecord(node.input)
 }
@@ -225,12 +256,12 @@ function toolPresentation(node: ReviewToolNodeDto): { kind: ToolKind; icon: stri
   }
   if (kind === 'read') {
     const path = stringValue(input, 'path', 'file_path', 'filePath', 'filename') || brief(node.input, 120)
-    return { kind, icon: 'R', label: '读取', primary: path, secondary: output }
+    return { kind, icon: '读', label: '读取', primary: path, secondary: output }
   }
   if (kind === 'edit') {
     const path = stringValue(input, 'path', 'file_path', 'filePath', 'filename', 'new_path', 'old_path') || brief(node.input, 120)
     const patch = stringValue(input, 'patch', 'diff', 'content')
-    return { kind, icon: 'E', label: '修改', primary: path, secondary: patch ? brief(patch, 110) : output }
+    return { kind, icon: '改', label: '修改', primary: path, secondary: patch ? brief(patch, 110) : output }
   }
   if (kind === 'search') {
     const query = stringValue(input, 'query', 'pattern', 'search', 'glob') || brief(node.input, 120)
@@ -239,7 +270,7 @@ function toolPresentation(node: ReviewToolNodeDto): { kind: ToolKind; icon: stri
   }
   if (kind === 'mcp') {
     const target = stringValue(input, 'tool', 'server', 'mcp_server', 'name', 'method') || brief(node.input, 120)
-    return { kind, icon: 'M', label: 'MCP', primary: target, secondary: output }
+    return { kind, icon: '协', label: 'MCP（模型上下文协议）', primary: target, secondary: output }
   }
   if (kind === 'web') {
     const target = stringValue(input, 'url', 'query', 'href', 'path') || brief(node.input, 120)
@@ -270,25 +301,31 @@ function StructuredToolDetail({ node }: { node: ReviewToolNodeDto }) {
   </section>
 }
 
+function roleLabel(role: ReviewMessageNodeDto['role']): string {
+  if (role === 'user') return '用户'
+  if (role === 'assistant') return '智能体'
+  return '思考过程'
+}
+
 function Inspector({ node, onClose }: { node: ReviewNodeDto; onClose(): void }) {
   return <aside className="inspector-panel">
     <div className="inspector-head">
       <div>
         <div className="eyebrow">事件详情</div>
-        <div className="inspector-title">{node.type === 'tool' ? node.name : node.type === 'event' ? sourceEventLabel(node) : node.role}</div>
+        <div className="inspector-title">{node.type === 'tool' ? node.name : node.type === 'event' ? sourceEventLabel(node) : roleLabel(node.role)}</div>
       </div>
       <button className="icon-button" onClick={onClose} aria-label="关闭事件详情">×</button>
     </div>
     {node.type === 'tool' && <StructuredToolDetail node={node}/>} 
     <section className="inspector-section">
-      <h3 className="section-label">Evidence</h3>
+      <h3 className="section-label">证据</h3>
       {node.evidence.length ? node.evidence.map(item => <div key={item.id} className="evidence-card">
-        <div className="evidence-meta"><b>{evidenceCaptureLabel[item.captureMethod]}</b><span>{item.derivation}</span><span>{item.confidence}</span></div>
+        <div className="evidence-meta"><b>{evidenceCaptureLabel[item.captureMethod]}</b><span>{evidenceDerivationLabel[item.derivation] ?? item.derivation}</span><span>可信度：{evidenceConfidenceLabel[item.confidence] ?? item.confidence}</span></div>
         <div className="evidence-path">{item.sourceLocator?.path ?? item.sourceRecordId ?? item.id}</div>
         {item.missingReason && <div className="evidence-missing">{item.missingReason}</div>}
-      </div>) : <div className="muted-empty">无 Evidence</div>}
+      </div>) : <div className="muted-empty">无证据</div>}
     </section>
-    <section className="inspector-section"><h3 className="section-label">Raw Payload</h3><pre className="raw-json">{JSON.stringify(node.payload, null, 2)}</pre></section>
+    <section className="inspector-section"><h3 className="section-label">原始数据</h3><pre className="raw-json">{JSON.stringify(node.payload, null, 2)}</pre></section>
   </aside>
 }
 
@@ -334,7 +371,7 @@ function MarkdownSurface({ text }: { text: string }) {
     </div>
     <div className="markdown-message-actions">
       {collapsible && <button onClick={() => setExpanded(value => !value)}>{expanded ? '收起到 5 行' : '展开全文'}</button>}
-      <button onClick={() => setView(value => value === 'rendered' ? 'source' : 'rendered')}>{view === 'rendered' ? '查看源码' : 'Markdown 渲染'}</button>
+      <button onClick={() => setView(value => value === 'rendered' ? 'source' : 'rendered')}>{view === 'rendered' ? '查看源码' : '返回渲染'}</button>
     </div>
   </div>
 }
@@ -343,7 +380,7 @@ function MessageBubble({ node, inspect }: { node: ReviewMessageNodeDto; inspect(
   if (node.role === 'reasoning') {
     return <details className="thinking-block">
       <summary>
-        <span className="thinking-label">Thinking</span>
+        <span className="thinking-label">思考过程</span>
         <span className="thinking-preview">{brief(node.text, 78)}</span>
         <EvidenceBadges evidence={node.evidence} compact/>
         <time>{formatClock(node.at)}</time>
@@ -355,9 +392,9 @@ function MessageBubble({ node, inspect }: { node: ReviewMessageNodeDto; inspect(
 
   const user = node.role === 'user'
   return <div className={`chat-row ${user ? 'chat-row-user' : 'chat-row-agent'}`}>
-    <div className={`chat-avatar ${user ? 'chat-avatar-user' : 'chat-avatar-agent'}`}>{user ? '你' : 'AI'}</div>
+    <div className={`chat-avatar ${user ? 'chat-avatar-user' : 'chat-avatar-agent'}`}>{user ? '你' : '智'}</div>
     <div className={`chat-bubble ${user ? 'chat-bubble-user' : 'chat-bubble-agent'}`}>
-      <div className="chat-meta"><span>{user ? '你' : 'Agent'}</span><EvidenceBadges evidence={node.evidence}/><time>{formatClock(node.at)}</time></div>
+      <div className="chat-meta"><span>{user ? '你' : '智能体'}</span><EvidenceBadges evidence={node.evidence}/><time>{formatClock(node.at)}</time></div>
       <MarkdownSurface text={node.text}/>
       {node.evidence.length > 0 && <div className="chat-actions"><button onClick={() => inspect(node)}>证据详情 · {node.evidence.length}</button></div>}
     </div>
@@ -397,7 +434,7 @@ function ToolRunGroup({ items, inspect }: { items: ReviewToolNodeDto[]; inspect(
     <summary>
       <span className="execution-group-icon">↳</span>
       <span className="execution-group-copy"><b>工具执行</b><small>{items.length} 次调用</small></span>
-      <span className="execution-kind-counts">{typeCounts.map(([kind, count]) => <span key={kind}>{kind} {count}</span>)}</span>
+      <span className="execution-kind-counts">{typeCounts.map(([kind, count]) => <span key={kind}>{toolKindLabel(kind)} {count}</span>)}</span>
       <span className={`execution-summary-status ${errors ? 'is-error' : 'is-ok'}`}>{errors ? `${errors} 个错误` : '全部完成'}</span>
       {totalDuration > 0 && <span className="execution-total">{duration(totalDuration)}</span>}
     </summary>
@@ -744,7 +781,7 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
           </header>
 
           {detail.sourceIds.includes('pi') && review.relationships?.items.length ? <details className="pi-session-tree">
-            <summary>Pi Session Tree · {review.relationships.items.length} 条关系</summary>
+            <summary>Pi 会话树 · {review.relationships.items.length} 条关系</summary>
             <div>{review.relationships.items.map(item => <div key={item.id}>{item.fromNativeSessionId ?? item.fromSessionId} <span>→</span> {item.toNativeSessionId ?? item.toSessionId}</div>)}</div>
           </details> : null}
 
