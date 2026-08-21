@@ -1,0 +1,143 @@
+/*
+ * AgentLens visual color system.
+ *
+ * Goals:
+ * - Keep the product neutral and readable for long sessions.
+ * - Use accent color only for focus and selection, not as decoration.
+ * - Keep source colors as small semantic markers.
+ * - Preserve sufficient contrast for secondary information in both themes.
+ */
+
+:root {
+  --al-canvas:#F7F7F5;
+  --al-surface:#FFFFFF;
+  --al-surface-raised:#FFFFFF;
+  --al-soft:#F1F1EE;
+  --al-soft-2:#FAFAF8;
+  --al-line:#E7E7E2;
+  --al-line-strong:#D7D8D2;
+  --al-ink:#171816;
+  --al-ink-2:#383A36;
+  --al-muted:#626761;
+  --al-muted-2:#7D837B;
+  --al-accent:#5B5BD6;
+  --al-accent-soft:#EEEEFF;
+  --al-success:#157A55;
+  --al-success-soft:#E9F6EF;
+  --al-warning:#9A6A14;
+  --al-warning-soft:#FFF5DD;
+  --al-danger:#C13F4D;
+  --al-danger-soft:#FFF0F2;
+  --al-shadow:0 1px 2px rgb(22 24 20 / .035),0 10px 28px rgb(22 24 20 / .035);
+  --al-shadow-lg:0 22px 70px rgb(22 24 20 / .16);
+}
+
+:root[data-theme='dark'] {
+  --al-canvas:#111210;
+  --al-surface:#181A17;
+  --al-surface-raised:#1D1F1C;
+  --al-soft:#22241F;
+  --al-soft-2:#151613;
+  --al-line:#2C2E29;
+  --al-line-strong:#3A3D36;
+  --al-ink:#F4F5F2;
+  --al-ink-2:#D4D7D0;
+  --al-muted:#A1A79D;
+  --al-muted-2:#7E857A;
+  --al-accent:#8A88FF;
+  --al-accent-soft:#29284B;
+  --al-success:#5BC995;
+  --al-success-soft:#173328;
+  --al-warning:#E0B25A;
+  --al-warning-soft:#352A16;
+  --al-danger:#EF7A87;
+  --al-danger-soft:#351E22;
+  --al-shadow:0 1px 2px rgb(0 0 0 / .18),0 12px 30px rgb(0 0 0 / .16);
+  --al-shadow-lg:0 24px 72px rgb(0 0 0 / .44);
+}
+
+/* Keep primary navigation and work surfaces visually quiet. */
+.app-header{
+  background:color-mix(in srgb,var(--al-surface) 96%,transparent);
+}
+.workspace-toolbar{
+  background:color-mix(in srgb,var(--al-surface) 98%,var(--al-canvas));
+}
+
+/* Selection is visible without flooding large areas with brand color. */
+.scope-chip-active,
+.session-item-active{
+  background:color-mix(in srgb,var(--al-accent-soft) 72%,var(--al-surface));
+}
+.session-item-active{
+  box-shadow:inset 2px 0 0 var(--al-accent);
+}
+
+/* Conversation surfaces: user input is distinct, assistant remains the reading surface. */
+.chat-bubble-user{
+  border-color:color-mix(in srgb,var(--al-accent) 16%,var(--al-line));
+  background:color-mix(in srgb,var(--al-accent-soft) 58%,var(--al-surface));
+}
+.chat-bubble-agent{
+  background:var(--al-surface);
+  box-shadow:0 1px 0 color-mix(in srgb,var(--al-line) 78%,transparent);
+}
+
+/* Execution and overview cards should separate by surface, not heavy borders. */
+.execution-group,
+.agent-card,
+.tool-summary-card,
+.tool-table-card,
+.pi-session-tree,
+.evidence-card{
+  border-color:color-mix(in srgb,var(--al-line) 78%,transparent);
+}
+
+/* Source colors remain semantic accents only. */
+.agent-card[data-source='codex']{--agent-accent:#16866D}
+.agent-card[data-source='claude-code']{--agent-accent:#C96E4D}
+.agent-card[data-source='pi']{--agent-accent:#756FDC}
+:root[data-theme='dark'] .agent-card[data-source='codex']{--agent-accent:#4DC7A2}
+:root[data-theme='dark'] .agent-card[data-source='claude-code']{--agent-accent:#E59675}
+:root[data-theme='dark'] .agent-card[data-source='pi']{--agent-accent:#9B96FF}
+
+/* Secondary text must stay readable; hierarchy comes from weight and spacing first. */
+.review-session-submeta,
+.session-item-foot,
+.chat-meta,
+.execution-duration,
+.event-source,
+.event-row time,
+.frequent-rank,
+.frequent-main span,
+.asset-path code,
+.assembly-list span{
+  color:var(--al-muted);
+}
+
+/* Status colors are reserved for state, never generic decoration. */
+.event-permission{
+  background:color-mix(in srgb,var(--al-warning-soft) 72%,var(--al-surface));
+}
+.event-subagent{
+  background:color-mix(in srgb,var(--al-accent-soft) 64%,var(--al-surface));
+}
+.asset-state{
+  background:color-mix(in srgb,var(--al-success-soft) 78%,var(--al-surface));
+}
+.asset-state[data-value='false']{
+  background:color-mix(in srgb,var(--al-danger-soft) 78%,var(--al-surface));
+}
+
+/* Dark mode should be charcoal rather than blue-black and avoid glowing separators. */
+:root[data-theme='dark'] .review-reader-pane,
+:root[data-theme='dark'] .app-shell{
+  background:var(--al-canvas);
+}
+:root[data-theme='dark'] .chat-avatar-agent,
+:root[data-theme='dark'] .execution-group,
+:root[data-theme='dark'] .agent-card,
+:root[data-theme='dark'] .tool-summary-card,
+:root[data-theme='dark'] .tool-table-card{
+  box-shadow:none;
+}
