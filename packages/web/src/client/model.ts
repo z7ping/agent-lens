@@ -22,7 +22,9 @@ export interface ClientSnapshot {
     detail: ReviewSessionDetailDto | null
     relationships: SessionRelationshipResponseDto | null
     selectedId: string
+    limit: number
     loading: boolean
+    loadingMore: boolean
     error: string
   }
   usage: {
@@ -35,6 +37,9 @@ export interface ClientSnapshot {
 
 type Listener = () => void
 const initialQuery: QueryFilters = { sourceId: '', projectId: '', range: '7d' }
+const INITIAL_REVIEW_LIMIT = 40
+const REVIEW_PAGE_SIZE = 40
+const MAX_REVIEW_LIMIT = 500
 
 export class AgentLensClientModel {
   private snapshot: ClientSnapshot = {
@@ -48,7 +53,9 @@ export class AgentLensClientModel {
       detail: null,
       relationships: null,
       selectedId: '',
+      limit: INITIAL_REVIEW_LIMIT,
       loading: true,
+      loadingMore: false,
       error: '',
     },
     usage: {
@@ -93,7 +100,6 @@ export class AgentLensClientModel {
   }
 
   async start(): Promise<void> {
-    // Subscribe before the initial snapshot so startup scans cannot fall into an API→SSE blind window.
     if (!this.unsubscribeLive) {
       this.unsubscribeLive = this.api.subscribe(
         event => this.onLiveEvent(event),
@@ -138,7 +144,7 @@ export class AgentLensClientModel {
     const filters = { ...this.snapshot.review.filters, ...patch }
     this.publish({
       ...this.snapshot,
-      review: { ...this.snapshot.review, filters },
+      review: { ...this.snapshot.review, filters, limit: INITIAL_REVIEW_LIMIT },
     })
     void this.refreshReview()
   }
@@ -152,15 +158,32 @@ export class AgentLensClientModel {
     void this.refreshUsage()
   }
 
-  async refreshReview(): Promise<void> {
+  async loadMoreReview(): Promise<void> {
+    const current = this.snapshot.review
+    if (current.loading || current.loadingMore || !current.response?.meta.hasMore) return
+    const nextLimit = Math.min(current.limit + REVIEW_PAGE_SIZE, MAX_REVIEW_LIMIT)
+    if (nextLimit === current.limit) return
+    this.publish({
+      ...this.snapshot,
+      review: { ...current, limit: nextLimit, loadingMore: true, error: '' },
+    })
+    await this.refreshReview({ preserveDetail: true, loadingMore: true })
+  }
+
+  async refreshReview(options: { preserveDetail?: boolean; loadingMore?: boolean } = {}): Promise<void> {
     const generation = ++this.reviewGeneration
     const current = this.snapshot.review
     this.publish({
       ...this.snapshot,
-      review: { ...current, loading: true, error: '' },
+      review: {
+        ...current,
+        loading: options.loadingMore ? current.loading : true,
+        loadingMore: options.loadingMore ?? false,
+        error: '',
+      },
     })
     try {
-      const response = await this.api.review(current.filters)
+      const response = await this.api.review(current.filters, current.limit)
       if (generation !== this.reviewGeneration) return
       let selectedId = this.snapshot.review.selectedId
       if (!selectedId || !response.items.some(item => item.id === selectedId)) {
@@ -173,11 +196,13 @@ export class AgentLensClientModel {
           response,
           selectedId,
           loading: false,
+          loadingMore: false,
           error: '',
         },
       })
-      if (selectedId) await this.selectReviewSession(selectedId)
-      else {
+      if (selectedId && (!options.preserveDetail || this.snapshot.review.detail?.id !== selectedId)) {
+        await this.selectReviewSession(selectedId)
+      } else if (!selectedId) {
         this.publish({
           ...this.snapshot,
           review: {
@@ -194,6 +219,7 @@ export class AgentLensClientModel {
         review: {
           ...this.snapshot.review,
           loading: false,
+          loadingMore: false,
           error: error instanceof Error ? error.message : String(error),
         },
       })
@@ -272,7 +298,7 @@ export class AgentLensClientModel {
       if (this.refreshTimer) clearTimeout(this.refreshTimer)
       this.refreshTimer = setTimeout(() => {
         this.refreshTimer = null
-        void this.refreshReview()
+        void this.refreshReview({ preserveDetail: true })
       }, 140)
     }
     if (affected.includes('usage')) {
