@@ -25,15 +25,15 @@ export function AgentScope({ agents, value, onChange }: { agents: AgentFacetDto[
       <span>{agentLabel(agent.sourceId, agent.displayName)}</span>
     </button>)}
     <details className="agent-scope-manage">
-      <summary className="scope-manage-button" title="管理 Agent 快捷入口" aria-label="管理 Agent 快捷入口">＋</summary>
+      <summary className="scope-manage-button" title="管理智能体快捷入口" aria-label="管理智能体快捷入口">＋</summary>
       <div className="agent-scope-menu">
-        <div className="agent-scope-menu-title">快捷 Agent</div>
+        <div className="agent-scope-menu-title">快捷智能体</div>
         {agents.length ? agents.map(agent => <label key={agent.sourceId} className="agent-scope-option">
           <input type="checkbox" checked={pinned.includes(agent.sourceId)} onChange={() => toggle(agent.sourceId)} />
           <span className={`source-dot ${sourceDot(agent.sourceId)}`} />
           <span className="agent-scope-option-name">{agentLabel(agent.sourceId, agent.displayName)}</span>
           <span className={`agent-scope-option-state ${agent.detected ? 'is-detected' : ''}`}>{agent.detected ? '已检测' : '未检测'}</span>
-        </label>) : <div className="agent-scope-empty">暂未发现 Agent</div>}
+        </label>) : <div className="agent-scope-empty">暂未发现智能体</div>}
       </div>
     </details>
   </div>

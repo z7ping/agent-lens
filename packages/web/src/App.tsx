@@ -46,7 +46,7 @@ function PinnedProvider({ agents, children }: PropsWithChildren<{ agents: AgentF
 const navigation = [
   ['/review', '任务复盘'],
   ['/tools', '工具分析'],
-  ['/agents', 'Agent 概览'],
+  ['/agents', '智能体概览'],
 ] as const
 
 function Shell({ model }: { model: AgentLensClientModel }) {

@@ -38,9 +38,14 @@ function appendFilters(params: URLSearchParams, filters: QueryFilters): void {
 }
 
 async function getJson<T>(path: string): Promise<T> {
-  const response = await fetch(path, { headers: { accept: 'application/json' } })
-  if (!response.ok) throw new Error(`AgentLens API ${response.status}: ${path}`)
-  return response.json() as Promise<T>
+  try {
+    const response = await fetch(path, { headers: { accept: 'application/json' } })
+    if (!response.ok) throw new Error(`AgentLens 接口请求失败（状态码 ${response.status}）：${path}`)
+    return response.json() as Promise<T>
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('AgentLens 接口请求失败')) throw error
+    throw new Error('AgentLens 接口请求失败，请检查运行状态和连接。')
+  }
 }
 
 export class AgentLensApi {

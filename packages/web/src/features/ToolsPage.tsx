@@ -3,14 +3,20 @@ import { useClientSnapshot } from '../App'
 import { AgentScope } from '../components/AgentScope'
 
 function duration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`
-  return `${(ms / 60_000).toFixed(1)}m`
+  if (ms < 1000) return `${ms} 毫秒`
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)} 秒`
+  return `${(ms / 60_000).toFixed(1)} 分钟`
 }
 
 function rate(success: number, error: number): string {
   const total = success + error
   return total ? `${Math.round(success / total * 100)}%` : '—'
+}
+
+function assetTypeLabel(type: string): string {
+  if (type === 'skill') return '技能'
+  if (type === 'mcp') return 'MCP（模型上下文协议）'
+  return '其他'
 }
 
 export function ToolsPage({ model }: { model: AgentLensClientModel }) {
@@ -34,7 +40,7 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
     </div>
 
     <div className="page-content tools-content">
-      <header className="page-heading"><div><span className="eyebrow">Usage</span><h1>工具分析</h1><p>只展示可验证的调用事实：用了什么、失败多少、耗时如何。</p></div></header>
+      <header className="page-heading"><div><span className="eyebrow">使用情况</span><h1>工具分析</h1><p>只展示可验证的调用事实：用了什么、失败多少、耗时如何。</p></div></header>
 
       <section className="tool-summary-grid">
         <div className="tool-summary-card"><span>最高频</span><strong>{mostUsed?.nativeToolName ?? '—'}</strong><small>{mostUsed ? `${mostUsed.callCount} 次调用 · ${mostUsed.sessionCount} 个会话` : '暂无数据'}</small></div>
@@ -57,8 +63,8 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
       </section>
 
       {data?.assets.length ? <section className="attributed-assets">
-        <div className="section-heading-row"><div><h3>可归因能力资产</h3><p>有证据能够关联到具体 Skill / MCP 的真实调用</p></div></div>
-        <div className="attributed-asset-list">{data.assets.map(asset => <div key={`${asset.type}:${asset.canonicalName}`} className="attributed-asset"><b>{asset.canonicalName}</b><span>{asset.type.toUpperCase()}</span><strong>{asset.callCount}</strong><small>次</small></div>)}</div>
+        <div className="section-heading-row"><div><h3>可归因能力资产</h3><p>有证据能够关联到具体技能和 MCP（模型上下文协议）的真实调用</p></div></div>
+        <div className="attributed-asset-list">{data.assets.map(asset => <div key={`${asset.type}:${asset.canonicalName}`} className="attributed-asset"><b>{asset.canonicalName}</b><span>{assetTypeLabel(asset.type)}</span><strong>{asset.callCount}</strong><small>次</small></div>)}</div>
       </section> : null}
     </div>
   </main>
