@@ -29,6 +29,7 @@ const workspaceWebRoot = fileURLToPath(new URL('../../../packages/web/dist/', im
 const webRoot = process.env.AGENT_LENS_WEB_ROOT
   ?? (existsSync(fileURLToPath(new URL('./web/index.html', import.meta.url))) ? bundledWebRoot : workspaceWebRoot)
 const daemonMode = process.env.AGENT_LENS_DAEMON_MODE === 'managed' ? 'managed' : 'foreground'
+const interactiveTerminal = Boolean(process.stdin.isTTY && process.stdout.isTTY)
 const startedAt = Date.now()
 
 const app = new AgentLensApplication()
@@ -72,14 +73,15 @@ async function shutdown(signal: string): Promise<void> {
 
 function handleSignal(signal: 'SIGINT' | 'SIGTERM'): void {
   console.warn(
-    `[AgentLens] daemon received ${signal} (mode=${daemonMode}, pid=${process.pid}, ppid=${process.ppid}, uptime=${runtimeAge()})`,
+    `[AgentLens] daemon received ${signal} (mode=${daemonMode}, interactive=${interactiveTerminal}, pid=${process.pid}, ppid=${process.ppid}, uptime=${runtimeAge()})`,
   )
 
-  // Managed processes (currently the Electron desktop runtime) are supervised by
-  // their parent and must not disappear because a console/process-group sends a
-  // stray SIGINT. The supervisor always uses SIGTERM for intentional shutdown.
-  if (signal === 'SIGINT' && daemonMode === 'managed') {
-    console.warn('[AgentLens] ignored SIGINT in managed mode; use SIGTERM for intentional shutdown')
+  // SIGTERM is the authoritative lifecycle signal for managed/background
+  // processes. A non-interactive runner may forward a single SIGINT when the
+  // launching command/session ends; do not let that tear down a long-running
+  // daemon. Interactive foreground Ctrl+C still behaves normally.
+  if (signal === 'SIGINT' && (daemonMode === 'managed' || !interactiveTerminal)) {
+    console.warn('[AgentLens] ignored SIGINT outside interactive foreground mode; use SIGTERM for intentional shutdown')
     return
   }
 
@@ -92,7 +94,7 @@ process.on('SIGTERM', () => handleSignal('SIGTERM'))
 try {
   await app.start()
   console.info(
-    `[AgentLens] 1.0 runtime started (db: ${dbPath}, mode=${daemonMode}, pid=${process.pid}, ppid=${process.ppid})`,
+    `[AgentLens] 1.0 runtime started (db: ${dbPath}, mode=${daemonMode}, interactive=${interactiveTerminal}, pid=${process.pid}, ppid=${process.ppid})`,
   )
   console.info(`[AgentLens] Web/UI: http://127.0.0.1:${configuredPort} (root: ${webRoot})`)
 
