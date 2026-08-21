@@ -1,0 +1,1058 @@
+@reference "./styles.css";
+
+/*
+ * AgentLens Session Detail
+ *
+ * Final review presentation layer.
+ * Tailwind utilities own spacing, typography, shape and semantic palettes.
+ * Product tokens remain responsible for neutral surfaces and theme identity.
+ *
+ * Visual model:
+ * Session -> Turn -> Conversation -> Execution -> Result
+ */
+
+.review-page {
+  --review-reader-max: 1040px;
+  --review-indent: 38px;
+  --session-source: var(--al-accent);
+  @apply flex flex-col overflow-hidden;
+  height: calc(100vh - 52px);
+}
+
+/* ── Session navigation ─────────────────────────────────────────── */
+.review-layout {
+  @apply grid min-h-0 flex-1;
+  grid-template-columns: 352px minmax(0, 1fr);
+  background: var(--al-canvas);
+}
+
+.session-panel {
+  @apply flex min-h-0 flex-col border-r;
+  border-color: var(--al-line);
+  background: color-mix(in srgb, var(--al-soft-2) 54%, var(--al-surface));
+}
+
+.session-panel-head {
+  @apply flex h-14 shrink-0 items-center justify-between gap-3 border-b px-4;
+  border-color: var(--al-line);
+  background: var(--al-surface);
+}
+
+.session-panel-head > div {
+  @apply flex items-baseline gap-2;
+}
+
+.session-panel-head b {
+  @apply text-sm font-bold tracking-tight;
+  color: var(--al-ink);
+}
+
+.session-panel-head > div span,
+.session-panel-head .count-badge {
+  @apply text-xs;
+  color: var(--al-muted);
+}
+
+.session-scroll {
+  @apply min-h-0 flex-1 overflow-auto p-2;
+}
+
+.session-item {
+  --session-source: var(--al-accent);
+  @apply relative my-0.5 w-full rounded-xl border border-transparent px-4 py-3 text-left transition-all duration-150;
+  background: transparent;
+}
+
+.session-item:hover {
+  border-color: color-mix(in srgb, var(--al-line) 64%, transparent);
+  background: color-mix(in srgb, var(--al-surface) 78%, transparent);
+}
+
+.session-item:has([class*="bg-[#D97757]"]) { --session-source: #D97757; }
+.session-item:has([class*="bg-[#10A37F]"]) { --session-source: #10A37F; }
+.session-item:has([class*="bg-[#7C6FE8]"]) { --session-source: #7C6FE8; }
+
+.session-item-active {
+  border-color: color-mix(in srgb, var(--session-source) 22%, var(--al-line)) !important;
+  background: var(--al-surface) !important;
+  box-shadow: inset 3px 0 0 var(--session-source), 0 1px 2px rgb(20 22 18 / .04) !important;
+}
+
+.session-item-meta {
+  @apply flex items-center gap-2 text-xs font-medium;
+  color: var(--al-muted);
+}
+
+.session-item-meta .source-dot {
+  @apply h-2 w-2 ring-2;
+  --tw-ring-color: var(--al-surface);
+}
+
+.session-item-meta time {
+  @apply ml-auto text-xs font-normal tabular-nums;
+  color: var(--al-muted);
+}
+
+.session-item-title {
+  @apply mt-2 line-clamp-2 text-sm font-semibold leading-5;
+  color: var(--al-ink);
+}
+
+.session-item-active .session-item-title {
+  @apply font-bold;
+}
+
+.session-item-foot {
+  @apply mt-2 flex items-center gap-2 text-xs leading-5;
+  color: var(--al-muted);
+}
+
+.session-item-foot span:first-child {
+  @apply min-w-0 flex-1 truncate;
+}
+
+.session-item-foot span:last-child {
+  @apply shrink-0 tabular-nums;
+}
+
+.session-load-more {
+  @apply mx-1 mt-3 min-h-10 w-[calc(100%-0.5rem)] rounded-lg border px-3 text-xs font-semibold transition-colors;
+  border-color: var(--al-line);
+  background: var(--al-surface);
+  color: var(--al-muted);
+}
+
+.session-load-more:hover:not(:disabled) {
+  border-color: var(--al-line-strong);
+  background: var(--al-soft);
+  color: var(--al-ink);
+}
+
+/* ── Session header ─────────────────────────────────────────────── */
+.review-reader-pane {
+  @apply min-h-0 min-w-0 overflow-auto;
+  background: var(--al-surface);
+}
+
+.review-reader {
+  @apply mx-auto pb-28 pt-9;
+  width: min(100%, var(--review-reader-max));
+  padding-inline: 48px;
+}
+
+.review-session-head {
+  --session-source: var(--al-accent);
+  @apply grid items-end gap-7 border-b pb-6;
+  grid-template-columns: minmax(0, 1fr) auto;
+  border-color: var(--al-line);
+  box-shadow: inset 0 3px 0 color-mix(in srgb, var(--session-source) 72%, transparent);
+  padding-top: 12px;
+}
+
+.review-session-head:has([class*="bg-[#D97757]"]) { --session-source: #D97757; }
+.review-session-head:has([class*="bg-[#10A37F]"]) { --session-source: #10A37F; }
+.review-session-head:has([class*="bg-[#7C6FE8]"]) { --session-source: #7C6FE8; }
+
+.review-session-copy {
+  @apply min-w-0;
+}
+
+.review-session-meta {
+  @apply flex flex-wrap items-center gap-2 text-[13px] font-medium;
+  color: var(--al-muted);
+}
+
+.review-session-meta .source-dot {
+  @apply h-2.5 w-2.5 ring-[3px];
+  --tw-ring-color: color-mix(in srgb, var(--session-source) 14%, transparent);
+}
+
+.review-session-meta b {
+  @apply text-[13px] font-semibold;
+  color: var(--al-ink-2);
+}
+
+.review-session-title {
+  @apply mt-2.5 text-2xl font-bold leading-snug tracking-tight;
+  max-width: 820px;
+  color: var(--al-ink);
+}
+
+.review-session-submeta {
+  @apply mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs leading-5;
+  color: var(--al-muted);
+}
+
+.review-session-submeta code {
+  @apply max-w-full truncate font-mono text-xs;
+  color: var(--al-muted);
+}
+
+.session-status-error {
+  @apply rounded-md border px-2 py-0.5 text-xs font-semibold;
+  border-color: color-mix(in srgb, var(--al-danger) 24%, transparent);
+  background: var(--al-danger-soft);
+  color: var(--al-danger);
+}
+
+.review-metrics {
+  @apply flex items-center pb-1;
+}
+
+.review-metric {
+  @apply min-w-0 border-l px-3.5 text-left;
+  border-color: var(--al-line);
+}
+
+.review-metric:first-child {
+  @apply border-l-0 pl-0;
+}
+
+.review-metric:last-child {
+  @apply pr-0;
+}
+
+.review-metric b {
+  @apply block text-base font-bold tabular-nums;
+  color: var(--al-ink-2);
+}
+
+.review-metric span {
+  @apply mt-0.5 block text-xs;
+  color: var(--al-muted);
+}
+
+.review-metric[data-tone="danger"] b {
+  color: var(--al-danger);
+}
+
+/* ── Turn navigation ────────────────────────────────────────────── */
+.round-nav {
+  @apply sticky top-0 z-20 -mx-1 flex flex-wrap items-center gap-1 border-b px-1 py-3 backdrop-blur-xl;
+  border-color: var(--al-line);
+  background: color-mix(in srgb, var(--al-surface) 94%, transparent);
+}
+
+.round-nav button {
+  @apply relative min-h-8 rounded-md px-2.5 text-xs font-semibold transition-colors;
+  background: transparent !important;
+  color: var(--al-muted);
+}
+
+.round-nav button:hover:not(:disabled) {
+  background: var(--al-soft) !important;
+  color: var(--al-ink);
+}
+
+.round-nav button.active {
+  color: var(--al-ink);
+}
+
+.round-nav button.active::after {
+  content: "";
+  @apply absolute bottom-[-13px] left-2.5 right-2.5 h-0.5 rounded-full;
+  background: var(--al-accent);
+}
+
+.round-nav button span {
+  @apply ml-1 text-xs tabular-nums;
+  color: var(--al-muted);
+}
+
+.round-nav button:disabled {
+  @apply cursor-not-allowed opacity-40;
+}
+
+.round-nav small {
+  @apply hidden;
+}
+
+/* ── Turn / interaction ─────────────────────────────────────────── */
+.review-flow {
+  @apply mt-0;
+}
+
+.interaction-block {
+  @apply my-5 overflow-hidden rounded-xl border;
+  border-color: var(--al-line);
+  background: var(--al-surface);
+  box-shadow: 0 1px 2px rgb(20 22 18 / .025);
+}
+
+.interaction-block.interaction-has-error {
+  border-color: color-mix(in srgb, var(--al-danger) 32%, var(--al-line));
+}
+
+.interaction-summary {
+  @apply flex min-h-14 cursor-pointer list-none items-center gap-2.5 border-b px-4 py-2.5 transition-colors;
+  border-color: var(--al-line);
+  background: color-mix(in srgb, var(--al-soft-2) 72%, var(--al-surface));
+  color: var(--al-ink-2);
+}
+
+.interaction-summary::-webkit-details-marker {
+  @apply hidden;
+}
+
+.interaction-summary:hover {
+  background: var(--al-soft);
+}
+
+.interaction-chevron {
+  @apply inline-block w-4 shrink-0 text-lg leading-none transition-transform;
+  color: var(--al-muted);
+}
+
+.interaction-block[open] .interaction-chevron {
+  transform: rotate(90deg);
+}
+
+.interaction-title {
+  @apply shrink-0 whitespace-nowrap text-sm font-bold;
+  color: var(--al-ink);
+}
+
+.interaction-preview {
+  @apply min-w-0 flex-1 truncate text-[13px];
+  color: var(--al-muted);
+}
+
+.interaction-summary-meta {
+  @apply ml-auto flex shrink-0 items-center gap-1.5;
+}
+
+.interaction-summary-meta span {
+  @apply rounded-md px-1.5 py-0.5 text-xs font-medium;
+  background: var(--al-soft);
+  color: var(--al-muted);
+}
+
+.interaction-summary-meta .is-error {
+  background: var(--al-danger-soft);
+  color: var(--al-danger);
+}
+
+.interaction-summary-meta .is-latency {
+  background: var(--al-warning-soft);
+  color: var(--al-warning);
+}
+
+.interaction-flow {
+  @apply flex flex-col gap-4 px-5 py-5;
+}
+
+/* ── Conversation bubbles ───────────────────────────────────────── */
+.chat-row {
+  @apply flex min-w-0 flex-col gap-1;
+}
+
+.chat-avatar {
+  @apply hidden;
+}
+
+.chat-row-user {
+  @apply self-end items-end;
+  padding-left: 20%;
+}
+
+.chat-row-agent {
+  @apply self-start items-start;
+  padding-right: 12%;
+}
+
+.chat-bubble {
+  @apply min-w-0 max-w-full text-sm leading-relaxed;
+}
+
+.chat-bubble-user {
+  max-width: 72%;
+  @apply rounded-2xl rounded-br-md border border-zinc-900 bg-zinc-900 px-4 py-3 text-white shadow-sm;
+}
+
+.chat-bubble-agent {
+  max-width: 86%;
+  @apply rounded-2xl rounded-bl-md border px-4 py-3 shadow-sm;
+  border-color: var(--al-line);
+  background: color-mix(in srgb, var(--al-soft-2) 76%, var(--al-surface));
+  color: var(--al-ink-2);
+}
+
+.chat-meta {
+  @apply mb-1.5 flex flex-wrap items-center gap-2 px-0.5 text-xs font-medium;
+  color: var(--al-muted);
+}
+
+.chat-row-user .chat-meta {
+  @apply justify-end;
+}
+
+.chat-meta time {
+  @apply font-normal tabular-nums;
+  color: var(--al-muted);
+}
+
+.chat-bubble-user .chat-meta,
+.chat-bubble-user .chat-meta time,
+.chat-bubble-user .evidence-inline,
+.chat-bubble-user .evidence-inline-more,
+.chat-bubble-user .markdown-message-actions button,
+.chat-bubble-user .chat-actions button {
+  color: rgb(255 255 255 / .72);
+}
+
+.chat-bubble-user .markdown,
+.chat-bubble-user .markdown p,
+.chat-bubble-user .markdown li,
+.chat-bubble-user .markdown strong,
+.chat-bubble-user .markdown em {
+  @apply text-white;
+}
+
+.chat-bubble-user .markdown :not(pre) > code {
+  @apply bg-white/15 text-white;
+}
+
+.chat-bubble-user .markdown a {
+  @apply text-white underline decoration-white/50 underline-offset-2;
+}
+
+.chat-bubble-user .markdown pre,
+.chat-bubble-user .markdown-source {
+  @apply border-white/15 bg-black/25 text-zinc-100;
+}
+
+.chat-bubble-agent .markdown {
+  color: var(--al-ink-2);
+}
+
+.chat-actions,
+.markdown-message-actions {
+  @apply mt-1.5 flex items-center gap-3;
+}
+
+.chat-actions button,
+.evidence-link,
+.markdown-message-actions button {
+  @apply border-0 bg-transparent p-0 text-xs font-medium transition-colors;
+  color: var(--al-muted);
+}
+
+.chat-actions button:hover,
+.evidence-link:hover,
+.markdown-message-actions button:hover {
+  color: var(--al-ink-2);
+}
+
+.markdown pre,
+.markdown-source {
+  @apply my-2.5 overflow-auto rounded-lg border p-3 font-mono text-xs leading-relaxed;
+  border-color: var(--al-line);
+  background: var(--al-soft-2);
+  color: var(--al-ink-2);
+}
+
+.markdown :not(pre) > code {
+  @apply rounded px-1 py-0.5 font-mono text-[0.9em];
+  background: var(--al-soft);
+  color: var(--al-ink-2);
+}
+
+.markdown-fade {
+  background: linear-gradient(to bottom, transparent, var(--al-soft-2));
+}
+
+.chat-bubble-user .markdown-fade {
+  background: linear-gradient(to bottom, transparent, #18181b);
+}
+
+/* Evidence remains visible but secondary. */
+.evidence-inline-list {
+  @apply inline-flex items-center gap-1;
+}
+
+.evidence-inline {
+  @apply inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-medium;
+  background: color-mix(in srgb, var(--al-accent-soft) 58%, transparent);
+  color: var(--al-accent);
+}
+
+.evidence-inline[data-confidence="low"],
+.evidence-inline[data-confidence="unknown"] {
+  background: var(--al-soft);
+  color: var(--al-muted);
+}
+
+.evidence-inline-more {
+  @apply text-[11px];
+  color: var(--al-muted);
+}
+
+/* ── Thinking ───────────────────────────────────────────────────── */
+.thinking-block {
+  @apply overflow-hidden rounded-lg border-l-2;
+  margin-left: var(--review-indent);
+  border-color: #a78bfa;
+  background: color-mix(in srgb, #f5f3ff 62%, var(--al-surface));
+}
+
+.thinking-block > summary {
+  @apply flex min-h-9 cursor-pointer list-none flex-wrap items-center gap-2 px-3 py-1.5 text-xs;
+  color: var(--al-muted);
+}
+
+.thinking-block > summary::-webkit-details-marker {
+  @apply hidden;
+}
+
+.thinking-block > summary:hover {
+  color: var(--al-ink-2);
+}
+
+.thinking-label {
+  @apply font-semibold text-violet-700;
+}
+
+.thinking-preview,
+.thinking-block time {
+  @apply text-xs;
+  color: var(--al-muted);
+}
+
+.thinking-content {
+  @apply px-3 pb-3 pt-1 text-[13px] leading-relaxed;
+  color: var(--al-muted);
+}
+
+/* ── Execution group ────────────────────────────────────────────── */
+.execution-group {
+  @apply overflow-hidden rounded-xl border;
+  margin-left: var(--review-indent);
+  border-color: var(--al-line);
+  background: color-mix(in srgb, var(--al-soft-2) 72%, var(--al-surface));
+}
+
+.execution-group > summary {
+  @apply flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-2 border-b px-3 py-2;
+  border-color: var(--al-line);
+  background: var(--al-surface);
+}
+
+.execution-group > summary::-webkit-details-marker {
+  @apply hidden;
+}
+
+.execution-group > summary:hover {
+  background: var(--al-soft-2);
+}
+
+.execution-group-icon {
+  @apply grid h-7 w-7 place-items-center rounded-md border text-xs font-bold;
+  border-color: var(--al-line);
+  background: var(--al-soft);
+  color: var(--al-ink-2);
+}
+
+.execution-group-copy {
+  @apply flex items-baseline gap-2;
+}
+
+.execution-group-copy b {
+  @apply text-[13px] font-bold;
+  color: var(--al-ink);
+}
+
+.execution-group-copy small,
+.execution-total {
+  @apply text-xs tabular-nums;
+  color: var(--al-muted);
+}
+
+.execution-summary-status {
+  @apply ml-auto text-xs font-semibold;
+}
+
+.execution-summary-status.is-ok {
+  color: var(--al-success);
+}
+
+.execution-summary-status.is-error {
+  color: var(--al-danger);
+}
+
+.execution-kind-counts {
+  @apply hidden;
+}
+
+.execution-group-toolbar {
+  @apply flex min-h-9 items-center justify-between gap-3 border-b px-3 py-1.5 text-xs;
+  border-color: var(--al-line);
+  background: color-mix(in srgb, var(--al-soft) 52%, var(--al-surface));
+  color: var(--al-muted);
+}
+
+.execution-group-toolbar label {
+  @apply flex cursor-pointer items-center gap-1.5 text-xs;
+}
+
+.execution-group-toolbar input {
+  @apply h-3.5 w-3.5;
+  accent-color: var(--al-accent);
+}
+
+.execution-list {
+  @apply relative;
+  counter-reset: execution-step;
+}
+
+.execution-row {
+  --tool-accent: var(--al-muted);
+  @apply grid min-h-16 w-full items-start gap-2 border-b px-3 py-2.5 text-left transition-colors;
+  grid-template-columns: 34px 32px minmax(0, 1fr) auto;
+  border-color: var(--al-line);
+  background: transparent;
+  counter-increment: execution-step;
+}
+
+.execution-row:last-child {
+  @apply border-b-0;
+}
+
+.execution-row:hover {
+  background: var(--al-surface);
+}
+
+.execution-row[data-status="error"] {
+  background: color-mix(in srgb, var(--al-danger-soft) 56%, var(--al-surface));
+}
+
+.execution-row[data-kind="shell"] { --tool-accent: #b45309; }
+.execution-row[data-kind="read"] { --tool-accent: #2563eb; }
+.execution-row[data-kind="edit"] { --tool-accent: #15803d; }
+.execution-row[data-kind="search"] { --tool-accent: #0891b2; }
+.execution-row[data-kind="mcp"] { --tool-accent: #4f46e5; }
+.execution-row[data-kind="web"] { --tool-accent: #0f766e; }
+
+.execution-rail {
+  @apply relative flex w-[34px] shrink-0 justify-center;
+}
+
+.execution-rail::before {
+  content: counter(execution-step);
+  @apply relative z-10 mt-1.5 grid h-6 w-6 place-items-center rounded-full border bg-white text-xs font-semibold tabular-nums;
+  border-color: color-mix(in srgb, var(--tool-accent) 38%, var(--al-line));
+  color: var(--tool-accent);
+}
+
+.execution-dot {
+  @apply hidden;
+}
+
+.execution-line {
+  @apply absolute left-1/2 top-[30px] -translate-x-1/2;
+  bottom: -20px;
+  width: 1px;
+  background: color-mix(in srgb, var(--tool-accent) 24%, var(--al-line));
+}
+
+.execution-tool-icon {
+  @apply mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-lg border font-mono text-xs font-bold;
+}
+
+.execution-row[data-kind="shell"] .execution-tool-icon {
+  @apply border-amber-200 bg-amber-50 text-amber-700;
+}
+.execution-row[data-kind="read"] .execution-tool-icon {
+  @apply border-blue-200 bg-blue-50 text-blue-700;
+}
+.execution-row[data-kind="edit"] .execution-tool-icon {
+  @apply border-green-200 bg-green-50 text-green-700;
+}
+.execution-row[data-kind="search"] .execution-tool-icon {
+  @apply border-cyan-200 bg-cyan-50 text-cyan-700;
+}
+.execution-row[data-kind="mcp"] .execution-tool-icon {
+  @apply border-indigo-200 bg-indigo-50 text-indigo-700;
+}
+.execution-row[data-kind="web"] .execution-tool-icon {
+  @apply border-teal-200 bg-teal-50 text-teal-700;
+}
+.execution-row[data-kind="tool"] .execution-tool-icon {
+  @apply border-zinc-200 bg-zinc-100 text-zinc-600;
+}
+
+.execution-main {
+  @apply min-w-0 py-1;
+}
+
+.execution-name {
+  @apply flex min-w-0 flex-wrap items-center gap-1.5;
+}
+
+.execution-name b {
+  @apply min-w-0 truncate font-mono text-[13px] font-semibold;
+  color: var(--al-ink);
+}
+
+.tool-kind-label {
+  @apply rounded px-1.5 py-0.5 text-xs font-semibold;
+  background: color-mix(in srgb, var(--tool-accent) 10%, var(--al-surface));
+  color: var(--tool-accent);
+}
+
+.tool-status-label {
+  @apply rounded px-1.5 py-0.5 text-xs font-semibold;
+  background: var(--al-soft);
+  color: var(--al-muted);
+}
+
+.execution-row[data-status="success"] .tool-status-label {
+  background: var(--al-success-soft);
+  color: var(--al-success);
+}
+
+.execution-row[data-status="error"] .tool-status-label {
+  background: var(--al-danger-soft);
+  color: var(--al-danger);
+}
+
+.execution-row[data-status="running"] .tool-status-label {
+  background: var(--al-warning-soft);
+  color: var(--al-warning);
+}
+
+.execution-preview {
+  @apply mt-1 block min-w-0 truncate text-xs leading-5;
+  color: var(--al-muted);
+}
+
+.execution-primary {
+  @apply font-mono text-[13px];
+  color: var(--al-ink-2);
+}
+
+.execution-preview-error {
+  color: var(--al-danger) !important;
+}
+
+.execution-duration {
+  @apply pt-2 text-right font-mono text-xs tabular-nums;
+  min-width: 56px;
+  color: var(--al-muted);
+}
+
+/* ── Lifecycle events ───────────────────────────────────────────── */
+.event-row {
+  @apply flex min-h-10 w-full items-start gap-2.5 rounded-lg border px-3 py-2 text-left text-xs transition-colors;
+  width: calc(100% - var(--review-indent));
+  margin-left: var(--review-indent);
+  border-color: var(--al-line);
+  background: color-mix(in srgb, var(--al-soft-2) 66%, var(--al-surface));
+  color: var(--al-muted);
+}
+
+.event-row:hover {
+  background: var(--al-soft);
+}
+
+.event-mark {
+  @apply mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-md border bg-white text-xs font-bold;
+  border-color: var(--al-line);
+  color: var(--al-muted);
+}
+
+.event-mark::before { content: "·"; }
+.event-permission .event-mark::before { content: "◆"; }
+.event-subagent .event-mark::before { content: "◇"; }
+.event-context .event-mark::before { content: "⇣"; }
+.event-model .event-mark::before { content: "↻"; }
+.event-lifecycle .event-mark::before { content: "◉"; }
+.event-artifact .event-mark::before { content: "▣"; }
+.event-usage .event-mark::before { content: "Σ"; }
+.event-unknown .event-mark::before { content: "·"; }
+
+.event-permission {
+  border-color: color-mix(in srgb, var(--al-warning) 25%, var(--al-line));
+  background: color-mix(in srgb, var(--al-warning-soft) 64%, var(--al-surface));
+}
+.event-permission .event-mark {
+  @apply border-amber-200 bg-amber-50 text-amber-700;
+}
+
+.event-subagent {
+  border-color: color-mix(in srgb, var(--al-accent) 22%, var(--al-line));
+}
+.event-subagent .event-mark {
+  @apply border-violet-200 bg-violet-50 text-violet-700;
+}
+
+.event-context .event-mark {
+  @apply border-sky-200 bg-sky-50 text-sky-700;
+}
+.event-model .event-mark {
+  @apply border-indigo-200 bg-indigo-50 text-indigo-700;
+}
+.event-lifecycle .event-mark {
+  @apply border-zinc-200 bg-zinc-50 text-zinc-600;
+}
+.event-artifact .event-mark {
+  @apply border-emerald-200 bg-emerald-50 text-emerald-700;
+}
+.event-usage .event-mark {
+  @apply border-cyan-200 bg-cyan-50 text-cyan-700;
+}
+
+.event-copy {
+  @apply min-w-0 flex-1;
+}
+
+.event-copy b {
+  @apply block text-[13px] font-semibold;
+  color: var(--al-ink-2);
+}
+
+.event-copy small {
+  @apply mt-0.5 block min-w-0 truncate text-xs;
+  color: var(--al-muted);
+}
+
+.event-source,
+.event-row time {
+  @apply shrink-0 pt-0.5 text-xs tabular-nums;
+  color: var(--al-muted);
+}
+
+.raw-event-group {
+  @apply overflow-hidden rounded-lg border;
+  margin-left: var(--review-indent);
+  border-color: var(--al-line);
+}
+
+.raw-event-group > summary {
+  @apply flex min-h-9 cursor-pointer list-none items-center justify-between gap-3 px-3 text-xs font-medium;
+  background: var(--al-soft-2);
+  color: var(--al-muted);
+}
+
+.raw-event-group > summary::-webkit-details-marker {
+  @apply hidden;
+}
+
+.raw-event-group > summary:hover {
+  background: var(--al-soft);
+  color: var(--al-ink-2);
+}
+
+/* ── Technical inspector ────────────────────────────────────────── */
+.inspector-panel {
+  background: var(--al-surface-raised);
+}
+
+.evidence-card,
+.tool-detail-code,
+.raw-json {
+  border-color: var(--al-line);
+  background: var(--al-soft-2);
+}
+
+/* ── Dark theme ─────────────────────────────────────────────────── */
+:root[data-theme="dark"] .session-panel,
+:root[data-theme="dark"] .review-reader-pane {
+  background: var(--al-canvas);
+}
+
+:root[data-theme="dark"] .session-item-active {
+  background: var(--al-surface) !important;
+}
+
+:root[data-theme="dark"] .chat-bubble-user {
+  @apply border-zinc-100 bg-zinc-100 text-zinc-900;
+}
+
+:root[data-theme="dark"] .chat-bubble-user .chat-meta,
+:root[data-theme="dark"] .chat-bubble-user .chat-meta time,
+:root[data-theme="dark"] .chat-bubble-user .evidence-inline,
+:root[data-theme="dark"] .chat-bubble-user .evidence-inline-more,
+:root[data-theme="dark"] .chat-bubble-user .markdown-message-actions button,
+:root[data-theme="dark"] .chat-bubble-user .chat-actions button {
+  color: rgb(24 24 27 / .64);
+}
+
+:root[data-theme="dark"] .chat-bubble-user .markdown,
+:root[data-theme="dark"] .chat-bubble-user .markdown p,
+:root[data-theme="dark"] .chat-bubble-user .markdown li,
+:root[data-theme="dark"] .chat-bubble-user .markdown strong,
+:root[data-theme="dark"] .chat-bubble-user .markdown em {
+  @apply text-zinc-900;
+}
+
+:root[data-theme="dark"] .chat-bubble-user .markdown :not(pre) > code {
+  @apply bg-black/10 text-zinc-900;
+}
+
+:root[data-theme="dark"] .chat-bubble-user .markdown a {
+  @apply text-zinc-900 decoration-zinc-500;
+}
+
+:root[data-theme="dark"] .chat-bubble-user .markdown pre,
+:root[data-theme="dark"] .chat-bubble-user .markdown-source {
+  @apply border-black/10 bg-black/5 text-zinc-900;
+}
+
+:root[data-theme="dark"] .chat-bubble-user .markdown-fade {
+  background: linear-gradient(to bottom, transparent, #f4f4f5);
+}
+
+:root[data-theme="dark"] .chat-bubble-agent,
+:root[data-theme="dark"] .interaction-block,
+:root[data-theme="dark"] .execution-group {
+  background: var(--al-surface);
+  box-shadow: none;
+}
+
+:root[data-theme="dark"] .thinking-block {
+  border-color: #8b5cf6;
+  background: color-mix(in srgb, #2e1065 30%, var(--al-surface));
+}
+
+:root[data-theme="dark"] .thinking-label {
+  @apply text-violet-300;
+}
+
+:root[data-theme="dark"] .execution-rail::before {
+  background: var(--al-surface);
+}
+
+:root[data-theme="dark"] .execution-row[data-kind="shell"] .execution-tool-icon {
+  @apply border-amber-800 bg-amber-950 text-amber-300;
+}
+:root[data-theme="dark"] .execution-row[data-kind="read"] .execution-tool-icon {
+  @apply border-blue-800 bg-blue-950 text-blue-300;
+}
+:root[data-theme="dark"] .execution-row[data-kind="edit"] .execution-tool-icon {
+  @apply border-green-800 bg-green-950 text-green-300;
+}
+:root[data-theme="dark"] .execution-row[data-kind="search"] .execution-tool-icon {
+  @apply border-cyan-800 bg-cyan-950 text-cyan-300;
+}
+:root[data-theme="dark"] .execution-row[data-kind="mcp"] .execution-tool-icon {
+  @apply border-indigo-800 bg-indigo-950 text-indigo-300;
+}
+:root[data-theme="dark"] .execution-row[data-kind="web"] .execution-tool-icon {
+  @apply border-teal-800 bg-teal-950 text-teal-300;
+}
+:root[data-theme="dark"] .execution-row[data-kind="tool"] .execution-tool-icon {
+  @apply border-zinc-700 bg-zinc-800 text-zinc-300;
+}
+
+:root[data-theme="dark"] .event-mark {
+  background: var(--al-surface-raised);
+}
+
+:root[data-theme="dark"] .event-permission .event-mark {
+  @apply border-amber-800 bg-amber-950 text-amber-300;
+}
+:root[data-theme="dark"] .event-subagent .event-mark {
+  @apply border-violet-800 bg-violet-950 text-violet-300;
+}
+:root[data-theme="dark"] .event-context .event-mark {
+  @apply border-sky-800 bg-sky-950 text-sky-300;
+}
+:root[data-theme="dark"] .event-model .event-mark {
+  @apply border-indigo-800 bg-indigo-950 text-indigo-300;
+}
+:root[data-theme="dark"] .event-lifecycle .event-mark {
+  @apply border-zinc-700 bg-zinc-800 text-zinc-300;
+}
+:root[data-theme="dark"] .event-artifact .event-mark {
+  @apply border-emerald-800 bg-emerald-950 text-emerald-300;
+}
+:root[data-theme="dark"] .event-usage .event-mark {
+  @apply border-cyan-800 bg-cyan-950 text-cyan-300;
+}
+
+/* ── Responsive ─────────────────────────────────────────────────── */
+@media (max-width: 1080px) {
+  .review-layout {
+    grid-template-columns: 310px minmax(0, 1fr);
+  }
+
+  .review-reader {
+    padding-inline: 32px;
+  }
+
+  .review-session-head {
+    @apply grid-cols-1 items-start;
+  }
+
+  .review-metrics {
+    @apply justify-start;
+  }
+
+  .chat-row-user {
+    padding-left: 10%;
+  }
+
+  .chat-row-agent {
+    padding-right: 4%;
+  }
+}
+
+@media (max-width: 760px) {
+  .review-page {
+    --review-indent: 14px;
+    @apply min-h-[calc(100vh-52px)] overflow-visible;
+    height: auto;
+  }
+
+  .review-layout {
+    @apply block;
+  }
+
+  .session-panel {
+    @apply border-b border-r-0;
+    max-height: 36vh;
+    border-color: var(--al-line);
+  }
+
+  .review-reader-pane {
+    @apply overflow-visible;
+  }
+
+  .review-reader {
+    @apply px-4 pb-20 pt-6;
+  }
+
+  .review-session-title {
+    @apply text-xl;
+  }
+
+  .review-metrics {
+    @apply flex-wrap gap-y-2;
+  }
+
+  .chat-row-user,
+  .chat-row-agent {
+    @apply w-full px-0;
+  }
+
+  .chat-bubble-user,
+  .chat-bubble-agent {
+    max-width: 92%;
+  }
+
+  .interaction-preview {
+    @apply hidden;
+  }
+
+  .execution-row {
+    grid-template-columns: 30px 30px minmax(0, 1fr);
+  }
+
+  .execution-duration {
+    @apply col-start-3 row-start-2 pt-0 text-left;
+  }
+
+  .event-source {
+    @apply hidden;
+  }
+}
