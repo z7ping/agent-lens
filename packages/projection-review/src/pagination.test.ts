@@ -47,14 +47,14 @@ test('ReviewProjection paginates only on complete interaction boundaries', async
     assert.equal(first.page.hasMore, true)
     assert.ok(first.page.nextCursor)
 
-    const second = await projection.get(logicalSessionId, { limit: 1, cursor: first.page.nextCursor })
+    const second = await projection.get(logicalSessionId, { limit: 1, cursor: first.page.nextCursor! })
     assert.ok(second)
     assert.equal(second.interactions[0]?.ordinal, 2)
     assert.equal(second.interactions[0]?.nodes.length, 2)
     assert.equal(second.page.hasMore, true)
     assert.ok(second.page.nextCursor)
 
-    const third = await projection.get(logicalSessionId, { limit: 1, cursor: second.page.nextCursor })
+    const third = await projection.get(logicalSessionId, { limit: 1, cursor: second.page.nextCursor! })
     assert.ok(third)
     assert.equal(third.interactions[0]?.ordinal, 3)
     assert.equal(third.page.hasMore, false)
@@ -103,16 +103,17 @@ test('ReviewProjection can jump to the latest rounds and page backward by comple
 
     const older = await projection.get(logicalSessionId, {
       direction: 'backward',
-      cursor: latest.page.nextCursor,
+      cursor: latest.page.nextCursor!,
       limit: 2,
     })
     assert.ok(older)
     assert.deepEqual(older.interactions.map(item => item.ordinal), [2, 3])
     assert.equal(older.page.hasMore, true)
+    assert.ok(older.page.nextCursor)
 
     const oldest = await projection.get(logicalSessionId, {
       direction: 'backward',
-      cursor: older.page.nextCursor,
+      cursor: older.page.nextCursor!,
       limit: 2,
     })
     assert.ok(oldest)
@@ -174,7 +175,7 @@ test('ReviewProjection evaluates error and latency filters against the complete 
     assert.ok(firstErrors.page.nextCursor)
 
     const secondErrors = await projection.get(logicalSessionId, {
-      filter: 'errors', cursor: firstErrors.page.nextCursor, limit: 1,
+      filter: 'errors', cursor: firstErrors.page.nextCursor!, limit: 1,
     })
     assert.ok(secondErrors)
     assert.deepEqual(secondErrors.interactions.map(item => item.ordinal), [4])
