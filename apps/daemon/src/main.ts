@@ -17,6 +17,7 @@ import {
   DEFAULT_AGENT_LENS_HTTP_PORT,
   httpSurfacePlugin,
 } from '@agent-lens/surface-http'
+import { webPlugin } from '@agent-lens/web'
 
 const dbPath = process.env.AGENT_LENS_DB_PATH
   ?? join(homedir(), '.agent-lens', '1.0', 'agent-lens.db')
@@ -24,7 +25,7 @@ const configuredPort = process.env.AGENT_LENS_PORT
   ? Number(process.env.AGENT_LENS_PORT)
   : DEFAULT_AGENT_LENS_HTTP_PORT
 const bundledWebRoot = fileURLToPath(new URL('./web/', import.meta.url))
-const workspaceWebRoot = fileURLToPath(new URL('../../web/dist/', import.meta.url))
+const workspaceWebRoot = fileURLToPath(new URL('../../../packages/web/dist/', import.meta.url))
 const webRoot = process.env.AGENT_LENS_WEB_ROOT
   ?? (existsSync(fileURLToPath(new URL('./web/index.html', import.meta.url))) ? bundledWebRoot : workspaceWebRoot)
 
@@ -34,10 +35,8 @@ app.useRuntime(coreServicesPlugin)
 app.use(codexSourcePlugin)
 app.use(claudeSourcePlugin)
 app.use(piSourcePlugin)
-app.use(httpSurfacePlugin, {
-  port: configuredPort,
-  staticDir: webRoot,
-})
+app.use(httpSurfacePlugin, { port: configuredPort })
+app.use(webPlugin, { staticDir: webRoot })
 
 const runtimeController = new AbortController()
 let syncPromise: ReturnType<typeof syncRegisteredSourceHistory> | null = null

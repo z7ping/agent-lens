@@ -6,11 +6,17 @@ import { HttpEventHub } from './events'
 import {
   DEFAULT_AGENT_LENS_HTTP_PORT,
   startHttpSurface,
+  type RunningHttpSurface,
 } from './server'
+
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    http: RunningHttpSurface
+  }
+}
 
 export interface HttpSurfacePluginConfig {
   port?: number
-  staticDir?: string
 }
 
 const manifest = {
@@ -33,10 +39,11 @@ const applyHttpSurface = Object.assign(
     })
     const surface = await startHttpSurface(ctx.storage, {
       port: config.port ?? DEFAULT_AGENT_LENS_HTTP_PORT,
-      ...(config.staticDir ? { staticDir: config.staticDir } : {}),
       eventHub,
     })
+    const unprovide = ctx.provide('http', surface)
     return async () => {
+      unprovide()
       eventHub.close()
       await surface.dispose()
     }

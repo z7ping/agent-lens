@@ -43,7 +43,7 @@ await build({
   outfile: resolve(dist, 'daemon.mjs'),
 })
 
-await cp(resolve(root, 'apps/web/dist'), resolve(dist, 'web'), { recursive: true })
+await cp(resolve(root, 'packages/web/dist'), resolve(dist, 'web'), { recursive: true })
 await cp(
   resolve(root, 'packages/storage-sqlite/migrations'),
   resolve(dist, 'migrations'),

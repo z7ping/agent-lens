@@ -1,7 +1,7 @@
 import { createServer, type Server, type ServerResponse } from 'node:http'
 import { readFile, stat } from 'node:fs/promises'
 import { extname, resolve, sep } from 'node:path'
-import type { StorageService } from '@agent-lens/core'
+import type { Disposable, StorageService } from '@agent-lens/core'
 import { SessionProjection } from '@agent-lens/projection-session'
 import { TimelineProjection } from '@agent-lens/projection-timeline'
 import { ToolAssetUsageProjection } from '@agent-lens/projection-usage'
@@ -20,8 +20,15 @@ import type { HttpEventHub } from './events'
 export const AGENT_LENS_HTTP_HOST = '127.0.0.1' as const
 export const DEFAULT_AGENT_LENS_HTTP_PORT = 56789
 
+export interface HttpStaticMount {
+  id: string
+  directory: string
+  spaFallback?: boolean
+}
+
 export interface HttpSurfaceOptions {
   port?: number
+  /** @deprecated Use RunningHttpSurface.mountStatic() through the Cordis http service. */
   staticDir?: string
   eventHub?: HttpEventHub
 }
@@ -30,6 +37,7 @@ export interface RunningHttpSurface {
   readonly host: typeof AGENT_LENS_HTTP_HOST
   readonly port: number
   readonly server: Server
+  mountStatic(mount: HttpStaticMount): Disposable
   dispose(): Promise<void>
 }
 
@@ -144,14 +152,19 @@ function safeStaticPath(root: string, pathname: string): string | null {
   return candidate === root || candidate.startsWith(`${root}${sep}`) ? candidate : null
 }
 
-async function serveStatic(response: ServerResponse, pathname: string, staticDir: string): Promise<boolean> {
+async function serveStatic(
+  response: ServerResponse,
+  pathname: string,
+  staticDir: string,
+  spaFallback = true,
+): Promise<boolean> {
   const root = resolve(staticDir)
   const requested = pathname === '/' ? '/index.html' : pathname
   const candidate = safeStaticPath(root, requested)
   if (!candidate) return false
   let target = candidate
   if (!await regularFile(target)) {
-    if (extname(requested)) return false
+    if (!spaFallback || extname(requested)) return false
     target = resolve(root, 'index.html')
     if (!await regularFile(target)) return false
   }
@@ -163,6 +176,10 @@ export async function startHttpSurface(storage: StorageService, options: HttpSur
   const timeline = new TimelineProjection(storage)
   const sessions = new SessionProjection(storage)
   const usage = new ToolAssetUsageProjection(storage)
+  const staticMounts = new Map<string, HttpStaticMount>()
+  if (options.staticDir) {
+    staticMounts.set('legacy-static-dir', { id: 'legacy-static-dir', directory: options.staticDir, spaFallback: true })
+  }
   const requestedPort = options.port ?? DEFAULT_AGENT_LENS_HTTP_PORT
   if (!Number.isInteger(requestedPort) || requestedPort < 0 || requestedPort > 65535) throw new Error(`Invalid AgentLens HTTP port: ${requestedPort}`)
 
@@ -188,7 +205,9 @@ export async function startHttpSurface(storage: StorageService, options: HttpSur
       if (url.pathname === '/api/v1/sessions') { writeJson(response, 200, await sessions.query(parseSessionQuery(url.searchParams))); return }
       if (url.pathname === '/api/v1/usage') { writeJson(response, 200, await usage.query(parseUsageQuery(url.searchParams))); return }
       if (url.pathname.startsWith('/api/')) { writeJson(response, 404, { error: 'not_found' }); return }
-      if (options.staticDir && await serveStatic(response, url.pathname, options.staticDir)) return
+      for (const mount of [...staticMounts.values()].reverse()) {
+        if (await serveStatic(response, url.pathname, mount.directory, mount.spaFallback ?? true)) return
+      }
       writeJson(response, 404, { error: 'not_found' })
     } catch (error) {
       const statusCode = error && typeof error === 'object' && 'statusCode' in error ? Number((error as { statusCode: unknown }).statusCode) : 500
@@ -205,10 +224,23 @@ export async function startHttpSurface(storage: StorageService, options: HttpSur
   if (!address || typeof address === 'string') { server.close(); throw new Error('AgentLens HTTP server did not expose a TCP address') }
   let disposed = false
   return {
-    host: AGENT_LENS_HTTP_HOST, port: address.port, server,
+    host: AGENT_LENS_HTTP_HOST,
+    port: address.port,
+    server,
+    mountStatic(mount): Disposable {
+      if (!mount.id || !mount.directory) throw new Error('Static mount requires id and directory')
+      const registered = { ...mount }
+      staticMounts.set(mount.id, registered)
+      return {
+        dispose() {
+          if (staticMounts.get(mount.id) === registered) staticMounts.delete(mount.id)
+        },
+      }
+    },
     async dispose(): Promise<void> {
       if (disposed) return
       disposed = true
+      staticMounts.clear()
       options.eventHub?.close()
       await new Promise<void>((resolvePromise, reject) => server.close(error => error ? reject(error) : resolvePromise()))
     },
