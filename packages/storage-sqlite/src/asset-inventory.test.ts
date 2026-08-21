@@ -6,6 +6,27 @@ test('asset inventory reader returns definitions, bindings and latest-first stat
   const storage = new SqliteStorageService({ path: ':memory:' })
   await storage.migrate()
   try {
+    const firstSeenAt = '2026-08-20T09:00:00.000Z'
+    await storage.repositories.hosts.put({
+      id: 'host:test',
+      name: 'test-host',
+      platform: 'win32',
+      arch: 'x64',
+      createdAt: firstSeenAt,
+      lastSeenAt: firstSeenAt,
+    })
+    await storage.repositories.installations.putProduct({
+      id: 'codex',
+      name: 'Codex',
+    })
+    await storage.repositories.installations.put({
+      id: 'installation:codex',
+      hostId: 'host:test',
+      productId: 'codex',
+      firstSeenAt,
+      lastSeenAt: firstSeenAt,
+    })
+
     await storage.repositories.assets.putDefinition({
       id: 'asset:skill:review',
       type: 'skill',
