@@ -93,6 +93,14 @@ export class AgentLensClientModel {
   }
 
   async start(): Promise<void> {
+    // Subscribe before the initial snapshot so startup scans cannot fall into an API→SSE blind window.
+    if (!this.unsubscribeLive) {
+      this.unsubscribeLive = this.api.subscribe(
+        event => this.onLiveEvent(event),
+        connected => this.patch({ liveConnected: connected }),
+      )
+    }
+
     const health = await this.api.health().catch(() => null)
     if (health) this.patch({ health })
     await Promise.all([
@@ -100,12 +108,6 @@ export class AgentLensClientModel {
       this.refreshReview(),
       this.refreshUsage(),
     ])
-    if (!this.unsubscribeLive) {
-      this.unsubscribeLive = this.api.subscribe(
-        event => this.onLiveEvent(event),
-        connected => this.patch({ liveConnected: connected }),
-      )
-    }
   }
 
   stop(): void {

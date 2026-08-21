@@ -7,6 +7,7 @@ import './styles.css'
 
 writeTheme(readTheme())
 void clientModel.start()
+window.addEventListener('pagehide', () => clientModel.stop(), { once: true })
 
 const root = document.getElementById('root')
 if (!root) throw new Error('AgentLens Web root is missing')
