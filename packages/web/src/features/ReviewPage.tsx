@@ -28,9 +28,22 @@ function formatRange(start: string, end: string): string {
 }
 
 function duration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`
-  return `${Math.round(ms / 60_000)}m`
+  const value = Math.max(0, ms)
+  if (value < 1000) return `${value}ms`
+  if (value < 60_000) return `${(value / 1000).toFixed(1)}s`
+  if (value < 3_600_000) return `${Math.round(value / 60_000)}m`
+  if (value < 86_400_000) {
+    const hours = value / 3_600_000
+    return `${hours < 10 ? hours.toFixed(1) : Math.round(hours)}h`
+  }
+  const days = value / 86_400_000
+  return `${days < 10 ? days.toFixed(1) : Math.round(days)}天`
+}
+
+function compactTitle(value: string | undefined, max = 110): string {
+  const text = value?.replace(/\s+/g, ' ').trim() ?? ''
+  if (!text) return 'Session 复盘'
+  return text.length > max ? `${text.slice(0, max)}…` : text
 }
 
 function payloadRecord(value: unknown): Record<string, unknown> {
@@ -44,7 +57,8 @@ function brief(value: unknown, max = 120): string {
   else {
     try { text = JSON.stringify(value) ?? String(value) } catch { text = String(value) }
   }
-  return text.length > max ? `${text.slice(0, max)}…` : text
+  const normalized = text.replace(/\s+/g, ' ').trim()
+  return normalized.length > max ? `${normalized.slice(0, max)}…` : normalized
 }
 
 function sourceEventLabel(node: ReviewEventNodeDto): string {
@@ -71,6 +85,11 @@ function sourceEventLabel(node: ReviewEventNodeDto): string {
   return node.label
 }
 
+function isGenericRawEvent(node: ReviewEventNodeDto): boolean {
+  if (node.category !== 'unknown') return false
+  return /^(原始事件|raw event|event)$/i.test(sourceEventLabel(node).trim())
+}
+
 function Inspector({ node, onClose }: { node: ReviewNodeDto; onClose(): void }) {
   return <div className="fixed inset-y-0 right-0 z-50 w-[min(520px,92vw)] overflow-y-auto border-l border-line bg-surface p-5 shadow-2xl">
     <div className="mb-5 flex items-center justify-between">
@@ -94,7 +113,7 @@ function MessageBubble({ node, inspect }: { node: ReviewMessageNodeDto; inspect(
 
   if (node.role === 'reasoning') {
     return <details className="thinking-block">
-      <summary><span>Thinking</span><span>{formatClock(node.at)}</span></summary>
+      <summary><span className="min-w-0 truncate">Thinking{brief(node.text, 72) ? ` · ${brief(node.text, 72)}` : ''}</span><span>{formatClock(node.at)}</span></summary>
       <div className="markdown px-4 pb-3 pt-1 text-sm text-muted"><ReactMarkdown>{node.text}</ReactMarkdown></div>
       {node.evidence.length > 0 && <button className="mx-4 mb-3 text-xs text-muted hover:text-accent" onClick={() => inspect(node)}>证据 · {node.evidence.length}</button>}
     </details>
@@ -136,8 +155,8 @@ function ToolRunGroup({ items, inspect }: { items: ReviewToolNodeDto[]; inspect(
   return <details className={`execution-group ${errors ? 'execution-group-error' : ''}`} open={errors > 0}>
     <summary>
       <span className="execution-group-icon">⌁</span>
-      <span className="min-w-0 flex-1"><b>执行过程</b><span className="ml-2 text-xs font-normal text-muted">{items.length} 次工具调用 · {names.slice(0, 3).join(' / ')}{names.length > 3 ? ' …' : ''}</span></span>
-      <span className={`execution-summary-status ${errors ? 'text-danger' : 'text-success'}`}>{errors ? `${errors} 错误` : '成功'}</span>
+      <span className="min-w-0 flex-1"><b>执行过程</b><span className="ml-2 text-xs font-normal text-muted">{items.length} 次调用 · {names.slice(0, 3).join(' / ')}{names.length > 3 ? ' …' : ''}</span></span>
+      <span className={`execution-summary-status ${errors ? 'text-danger' : 'text-success'}`}>{errors ? `${errors} 错误` : '完成'}</span>
       {totalDuration > 0 && <span className="text-xs text-muted">{duration(totalDuration)}</span>}
     </summary>
     <div className="execution-list">{items.map((node, index) => <ToolRow key={node.id} node={node} inspect={inspect} last={index === items.length - 1}/>)}</div>
@@ -152,17 +171,42 @@ function EventRow({ event, inspect }: { event: ReviewEventNodeDto; inspect(node:
   </button>
 }
 
+function RawEventGroup({ items, inspect }: { items: ReviewEventNodeDto[]; inspect(node: ReviewNodeDto): void }) {
+  return <details className="raw-event-group">
+    <summary><span>原始事件</span><span>{items.length} 条</span><time>{formatClock(items[items.length - 1]?.at ?? '')}</time></summary>
+    <div>{items.map(item => <EventRow key={item.id} event={item} inspect={inspect}/>)}</div>
+  </details>
+}
+
+type InteractionEntry = ReviewNodeDto
+  | { type: 'tool-group'; items: ReviewToolNodeDto[] }
+  | { type: 'raw-event-group'; items: ReviewEventNodeDto[] }
+
 function Interaction({ ordinal, trigger, nodes, inspect }: { ordinal: number; trigger: 'user' | 'background'; nodes: ReviewNodeDto[]; inspect(node: ReviewNodeDto): void }) {
   const groups = useMemo(() => {
-    const result: Array<ReviewNodeDto | { type: 'tool-group'; items: ReviewToolNodeDto[] }> = []
+    const result: InteractionEntry[] = []
     let tools: ReviewToolNodeDto[] = []
-    const flush = () => { if (tools.length) { result.push({ type: 'tool-group', items: tools }); tools = [] } }
+    let rawEvents: ReviewEventNodeDto[] = []
+    const flushTools = () => { if (tools.length) { result.push({ type: 'tool-group', items: tools }); tools = [] } }
+    const flushRawEvents = () => { if (rawEvents.length) { result.push({ type: 'raw-event-group', items: rawEvents }); rawEvents = [] } }
+
     for (const node of nodes) {
-      if (node.type === 'tool') { tools.push(node); continue }
-      flush()
+      if (node.type === 'tool') {
+        flushRawEvents()
+        tools.push(node)
+        continue
+      }
+      if (node.type === 'event' && isGenericRawEvent(node)) {
+        flushTools()
+        rawEvents.push(node)
+        continue
+      }
+      flushTools()
+      flushRawEvents()
       result.push(node)
     }
-    flush()
+    flushTools()
+    flushRawEvents()
     return result
   }, [nodes])
 
@@ -170,6 +214,7 @@ function Interaction({ ordinal, trigger, nodes, inspect }: { ordinal: number; tr
     <div className="interaction-separator"><span>{trigger === 'background' ? '后台活动' : `第 ${ordinal} 轮`}</span><i/></div>
     <div className="interaction-flow">{groups.map((entry, index) => {
       if (entry.type === 'tool-group') return <ToolRunGroup key={`tools-${index}`} items={entry.items} inspect={inspect}/>
+      if (entry.type === 'raw-event-group') return <RawEventGroup key={`raw-${index}`} items={entry.items} inspect={inspect}/>
       if (entry.type === 'message') return <MessageBubble key={entry.id} node={entry} inspect={inspect}/>
       return <EventRow key={entry.id} event={entry as ReviewEventNodeDto} inspect={inspect}/>
     })}</div>
@@ -203,33 +248,34 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
       <button className="icon-button" onClick={() => void model.refreshReview()} title="刷新">↻</button>
     </div>
 
-    <div className="min-h-0 flex-1 md:grid md:grid-cols-[320px_minmax(0,1fr)]">
+    <div className="min-h-0 flex-1 md:grid md:grid-cols-[300px_minmax(0,1fr)]">
       <aside className="session-list border-r border-line bg-surface">
         <div className="flex items-center justify-between border-b border-line px-4 py-3"><span className="text-sm font-semibold">Sessions</span><span className="text-xs text-muted">{review.response?.items.length ?? 0}</span></div>
         <div className="overflow-y-auto">
           {review.loading && !review.response && <div className="empty">加载 Session…</div>}
           {review.response?.items.map(item => <button key={item.id} className={`session-item ${review.selectedId === item.id ? 'session-item-active' : ''}`} onClick={() => select(item.id)}>
             <div className="flex items-center gap-2"><span className={`size-2 rounded-full ${sourceDot(item.sourceIds[0] ?? '')}`}/><span className="text-xs font-medium">{agentLabel(item.sourceIds[0] ?? '', item.productId)}</span><span className="ml-auto text-[11px] text-muted">{formatTime(item.endedAt)}</span></div>
-            <div className="mt-2 line-clamp-2 text-sm font-semibold leading-5">{item.title ?? item.preview ?? item.projectName ?? '未命名 Session'}</div>
-            <div className="mt-2 flex items-center gap-2 text-[11px] text-muted"><span className="truncate">{item.projectName ?? item.workspacePath?.split(/[\\/]/).pop() ?? '无项目'}</span><span className="ml-auto">{item.toolCount} 调用</span>{item.errorCount > 0 && <span className="text-danger">{item.errorCount} 错误</span>}</div>
+            <div className="mt-1.5 line-clamp-2 text-[13px] font-semibold leading-5">{compactTitle(item.title ?? item.preview ?? item.projectName)}</div>
+            <div className="mt-1.5 flex items-center gap-2 text-[11px] text-muted"><span className="truncate">{item.projectName ?? item.workspacePath?.split(/[\\/]/).pop() ?? '无项目'}</span><span className="ml-auto">{item.toolCount} 调用</span>{item.errorCount > 0 && <span className="text-danger">{item.errorCount} 错误</span>}</div>
           </button>)}
         </div>
       </aside>
 
       <section className="min-w-0 overflow-y-auto bg-canvas">
         {review.error && <div className="m-5 rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger">{review.error}</div>}
-        {!review.detail ? <div className="empty h-full">选择一个 Session 开始复盘</div> : <div className="mx-auto max-w-5xl px-7 py-6">
+        {!review.detail ? <div className="empty h-full">选择一个 Session 开始复盘</div> : <div className="mx-auto max-w-5xl px-6 py-5">
           <header className="review-session-head">
             <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2 text-xs text-muted"><span className={`size-2 rounded-full ${sourceDot(review.detail.sourceIds[0] ?? '')}`}/><span className="font-medium text-ink">{review.detail.sourceIds.map(id => agentLabel(id)).join(' / ')}</span><span>·</span><span>{review.detail.projectName ?? review.detail.workspacePath ?? '无项目'}</span>{review.detail.errorCount > 0 && <span className="session-status-error">有错误</span>}</div>
-              <h1 className="mt-2 text-xl font-semibold leading-7">{review.detail.title ?? review.detail.preview ?? 'Session 复盘'}</h1>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted"><span className={`size-2 rounded-full ${sourceDot(review.detail.sourceIds[0] ?? '')}`}/><span className="font-medium text-ink">{review.detail.sourceIds.map(id => agentLabel(id)).join(' / ')}</span><span>·</span><span>{review.detail.projectName ?? '无项目'}</span>{review.detail.errorCount > 0 && <span className="session-status-error">有错误</span>}</div>
+              <h1 className="review-session-title" title={review.detail.title ?? review.detail.preview}>{compactTitle(review.detail.title ?? review.detail.preview)}</h1>
+              {review.detail.workspacePath && <div className="review-workspace" title={review.detail.workspacePath}>{review.detail.workspacePath}</div>}
               <div className="mt-2 text-xs text-muted">{formatRange(review.detail.startedAt, review.detail.endedAt)}</div>
             </div>
             <div className="review-metrics">
+              <Metric value={review.detail.interactionCount} label="轮次"/>
               <Metric value={review.detail.toolCount} label="调用"/>
-              <Metric value={Math.max(review.detail.toolCount - review.detail.errorCount, 0)} label="成功" tone="success"/>
               {review.detail.errorCount > 0 && <Metric value={review.detail.errorCount} label="错误" tone="danger"/>}
-              <Metric value={duration(review.detail.durationMs)} label="总耗时"/>
+              <Metric value={duration(review.detail.durationMs)} label="会话跨度"/>
             </div>
           </header>
 
@@ -238,7 +284,7 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
             <div>{review.relationships.items.map(item => <div key={item.id} className="font-mono text-xs text-muted">{item.fromNativeSessionId ?? item.fromSessionId} <span className="px-2">→</span> {item.toNativeSessionId ?? item.toSessionId}</div>)}</div>
           </details> : null}
 
-          <div className="space-y-2">{review.detail.interactions.map(interaction => <Interaction key={interaction.id} ordinal={interaction.ordinal} trigger={interaction.trigger} nodes={interaction.nodes} inspect={setInspect}/>)}</div>
+          <div className="space-y-1">{review.detail.interactions.map(interaction => <Interaction key={interaction.id} ordinal={interaction.ordinal} trigger={interaction.trigger} nodes={interaction.nodes} inspect={setInspect}/>)}</div>
         </div>}
       </section>
     </div>
