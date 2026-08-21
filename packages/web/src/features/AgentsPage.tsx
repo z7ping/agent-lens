@@ -154,14 +154,6 @@ function AgentCard({ agent }: { agent: AgentOverviewDto }) {
   const builtinAssets = grouped.find(([type]) => type === 'builtin')?.[1] ?? []
 
   const priorityAssets = useMemo(() => [...agent.assetInventory]
-    .filter(asset => asset.type !== 'builtin')
-    .map(asset => ({ asset, usage: assetUsageCount(agent, asset) }))
-    .filter(item => item.usage > 0)
-    .sort((a, b) => b.usage - a.usage || (a.asset.displayName ?? a.asset.canonicalName).localeCompare(b.asset.displayName ?? b.asset.canonicalName))
-    .slice(0, 6), [agent])
-
-  const builtinPriorityAssets = useMemo(() => [...agent.assetInventory]
-    .filter(asset => asset.type === 'builtin')
     .map(asset => ({ asset, usage: assetUsageCount(agent, asset) }))
     .filter(item => item.usage > 0)
     .sort((a, b) => b.usage - a.usage || (a.asset.displayName ?? a.asset.canonicalName).localeCompare(b.asset.displayName ?? b.asset.canonicalName))
@@ -170,7 +162,7 @@ function AgentCard({ agent }: { agent: AgentOverviewDto }) {
   const bindings = agent.assetInventory.flatMap(asset => asset.bindings.map(binding => ({ asset, binding })))
   const visibleBindings = showAllBindings ? bindings : bindings.slice(0, ASSEMBLY_PATH_LIMIT)
   const userAssetCount = userGrouped.reduce((sum, [, assets]) => sum + assets.length, 0)
-  const userUsageCount = agent.usedAssets.filter(item => item.type !== 'builtin').reduce((sum, item) => sum + item.callCount, 0)
+  const userUsageCount = agent.usedAssets.reduce((sum, item) => sum + item.callCount, 0)
 
   return <article className="agent-overview-card" data-source={agent.sourceId}>
     <header className="agent-overview-head">
@@ -198,15 +190,15 @@ function AgentCard({ agent }: { agent: AgentOverviewDto }) {
         {userGrouped.length
           ? userGrouped.map(([type, items]) => <span key={type}>{assetTypeLabel[type] ?? type} <b>{items.length}</b></span>)
           : <span>暂无可识别的用户资产</span>}
-        {userUsageCount > 0 && <span className="agent-used-summary">实际调用 <b>{userUsageCount}</b></span>}
+        {userUsageCount > 0 && <span className="agent-used-summary">可靠归因调用 <b>{userUsageCount}</b></span>}
       </div>
     </section>
 
     <section className="agent-section">
       <div className="agent-section-title">高频用户资产</div>
       {priorityAssets.length
-        ? <div className="asset-card-grid priority">{priorityAssets.map(({ asset }) => <AssetCard key={asset.id} agent={agent} asset={asset} priority/>)}</div>
-        : <div className="overview-empty-line">暂无能够可靠归因的 Skill / MCP / Plugin 等高频资产</div>}
+        ? <div className="asset-card-grid priority mt-2">{priorityAssets.map(({ asset }) => <AssetCard key={asset.id} agent={agent} asset={asset} priority/>)}</div>
+        : <div className="overview-empty-line mt-2">暂无能够可靠归因的 Skill / MCP 高频资产</div>}
     </section>
 
     <section className="agent-section space-y-2">
@@ -216,11 +208,10 @@ function AgentCard({ agent }: { agent: AgentOverviewDto }) {
 
     {builtinAssets.length > 0 && <section className="agent-section builtin-section">
       <div className="agent-section-heading">
-        <div><div className="agent-section-title">Agent 内建能力</div><p>与用户资产分开展示，主要用于理解 Agent 自身的执行能力。</p></div>
+        <div><div className="agent-section-title">Agent 内建能力</div><p>与用户资产分开展示；当前不把内建能力计入 Skill / MCP 的可靠使用归因。</p></div>
         <span>{builtinAssets.length} 个</span>
       </div>
-      {builtinPriorityAssets.length > 0 && <div className="asset-card-grid priority builtin-priority">{builtinPriorityAssets.map(({ asset }) => <AssetCard key={asset.id} agent={agent} asset={asset}/>)}</div>}
-      <div className="mt-2"><AssetGroup agent={agent} type="builtin" assets={builtinAssets}/></div>
+      <AssetGroup agent={agent} type="builtin" assets={builtinAssets}/>
     </section>}
 
     <div className="agent-detail-grid">
