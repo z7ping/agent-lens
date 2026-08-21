@@ -3,37 +3,57 @@
 /*
  * AgentLens Session Detail
  *
- * Final review presentation layer.
- * Tailwind utilities own spacing, typography, shape and semantic palettes.
- * Product tokens remain responsible for neutral surfaces and theme identity.
+ * One presentation layer for review. Tailwind owns spacing, typography,
+ * radius and semantic palettes; product tokens own neutral surfaces/themes.
  *
- * Visual model:
- * Session -> Turn -> Conversation -> Execution -> Result
+ * Reading model:
+ * Session -> Turn -> User/Agent -> Thinking/Execution/Event -> Result
  */
 
 .review-page {
-  --review-reader-max: 1040px;
-  --review-indent: 38px;
+  --review-reader-max: 1360px;
+  --review-indent: 28px;
   --session-source: var(--al-accent);
   @apply flex flex-col overflow-hidden;
   height: calc(100vh - 52px);
 }
 
+/* ── Toolbar ───────────────────────────────────────────────────── */
+.review-page .workspace-toolbar {
+  @apply min-h-11 shrink-0 gap-2 border-b px-4;
+  height: 44px;
+  border-color: var(--al-line);
+  background: var(--al-surface);
+}
+
+.review-page .filter {
+  @apply h-8 rounded-lg border px-3 text-[13px] font-medium;
+  border-color: var(--al-line);
+  background: var(--al-soft-2);
+  color: var(--al-ink-2);
+}
+
+.review-page .filter:hover,
+.review-page .filter:focus {
+  border-color: var(--al-line-strong);
+  background: var(--al-surface);
+}
+
 /* ── Session navigation ─────────────────────────────────────────── */
 .review-layout {
   @apply grid min-h-0 flex-1;
-  grid-template-columns: 352px minmax(0, 1fr);
+  grid-template-columns: 332px minmax(0, 1fr);
   background: var(--al-canvas);
 }
 
 .session-panel {
   @apply flex min-h-0 flex-col border-r;
   border-color: var(--al-line);
-  background: color-mix(in srgb, var(--al-soft-2) 54%, var(--al-surface));
+  background: color-mix(in srgb, var(--al-soft-2) 58%, var(--al-surface));
 }
 
 .session-panel-head {
-  @apply flex h-14 shrink-0 items-center justify-between gap-3 border-b px-4;
+  @apply flex h-12 shrink-0 items-center justify-between gap-3 border-b px-4;
   border-color: var(--al-line);
   background: var(--al-surface);
 }
@@ -59,13 +79,13 @@
 
 .session-item {
   --session-source: var(--al-accent);
-  @apply relative my-0.5 w-full rounded-xl border border-transparent px-4 py-3 text-left transition-all duration-150;
+  @apply relative my-0.5 w-full rounded-lg border border-transparent px-3 py-3 text-left transition-colors;
   background: transparent;
 }
 
 .session-item:hover {
-  border-color: color-mix(in srgb, var(--al-line) 64%, transparent);
-  background: color-mix(in srgb, var(--al-surface) 78%, transparent);
+  border-color: color-mix(in srgb, var(--al-line) 68%, transparent);
+  background: var(--al-surface);
 }
 
 .session-item:has([class*="bg-[#D97757]"]) { --session-source: #D97757; }
@@ -73,13 +93,13 @@
 .session-item:has([class*="bg-[#7C6FE8]"]) { --session-source: #7C6FE8; }
 
 .session-item-active {
-  border-color: color-mix(in srgb, var(--session-source) 22%, var(--al-line)) !important;
+  border-color: color-mix(in srgb, var(--session-source) 28%, var(--al-line)) !important;
   background: var(--al-surface) !important;
-  box-shadow: inset 3px 0 0 var(--session-source), 0 1px 2px rgb(20 22 18 / .04) !important;
+  box-shadow: inset 3px 0 0 var(--session-source) !important;
 }
 
 .session-item-meta {
-  @apply flex items-center gap-2 text-xs font-medium;
+  @apply flex items-center gap-2 text-xs font-semibold;
   color: var(--al-muted);
 }
 
@@ -94,7 +114,7 @@
 }
 
 .session-item-title {
-  @apply mt-2 line-clamp-2 text-sm font-semibold leading-5;
+  @apply mt-1.5 line-clamp-2 text-[13px] font-semibold leading-5;
   color: var(--al-ink);
 }
 
@@ -103,7 +123,7 @@
 }
 
 .session-item-foot {
-  @apply mt-2 flex items-center gap-2 text-xs leading-5;
+  @apply mt-1.5 flex items-center gap-2 text-xs leading-5;
   color: var(--al-muted);
 }
 
@@ -128,25 +148,24 @@
   color: var(--al-ink);
 }
 
-/* ── Session header ─────────────────────────────────────────────── */
+/* ── Reader width + session header ──────────────────────────────── */
 .review-reader-pane {
   @apply min-h-0 min-w-0 overflow-auto;
   background: var(--al-surface);
 }
 
 .review-reader {
-  @apply mx-auto pb-28 pt-9;
-  width: min(100%, var(--review-reader-max));
-  padding-inline: 48px;
+  @apply mx-auto w-full pb-24 pt-6;
+  max-width: var(--review-reader-max);
+  padding-inline: 28px;
 }
 
 .review-session-head {
   --session-source: var(--al-accent);
-  @apply grid items-end gap-7 border-b pb-6;
+  @apply grid items-end gap-5 border-b pb-4 pt-3;
   grid-template-columns: minmax(0, 1fr) auto;
   border-color: var(--al-line);
   box-shadow: inset 0 3px 0 color-mix(in srgb, var(--session-source) 72%, transparent);
-  padding-top: 12px;
 }
 
 .review-session-head:has([class*="bg-[#D97757]"]) { --session-source: #D97757; }
@@ -158,7 +177,7 @@
 }
 
 .review-session-meta {
-  @apply flex flex-wrap items-center gap-2 text-[13px] font-medium;
+  @apply flex flex-wrap items-center gap-2 text-xs font-medium;
   color: var(--al-muted);
 }
 
@@ -168,18 +187,18 @@
 }
 
 .review-session-meta b {
-  @apply text-[13px] font-semibold;
+  @apply text-[13px] font-bold;
   color: var(--al-ink-2);
 }
 
 .review-session-title {
-  @apply mt-2.5 text-2xl font-bold leading-snug tracking-tight;
-  max-width: 820px;
+  @apply mt-2 line-clamp-2 text-lg font-bold leading-6 tracking-tight;
+  max-width: 900px;
   color: var(--al-ink);
 }
 
 .review-session-submeta {
-  @apply mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs leading-5;
+  @apply mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs leading-5;
   color: var(--al-muted);
 }
 
@@ -190,17 +209,17 @@
 
 .session-status-error {
   @apply rounded-md border px-2 py-0.5 text-xs font-semibold;
-  border-color: color-mix(in srgb, var(--al-danger) 24%, transparent);
+  border-color: color-mix(in srgb, var(--al-danger) 28%, transparent);
   background: var(--al-danger-soft);
   color: var(--al-danger);
 }
 
 .review-metrics {
-  @apply flex items-center pb-1;
+  @apply flex items-center pb-0.5;
 }
 
 .review-metric {
-  @apply min-w-0 border-l px-3.5 text-left;
+  @apply min-w-14 border-l px-3 text-left;
   border-color: var(--al-line);
 }
 
@@ -213,7 +232,7 @@
 }
 
 .review-metric b {
-  @apply block text-base font-bold tabular-nums;
+  @apply block text-sm font-bold tabular-nums;
   color: var(--al-ink-2);
 }
 
@@ -226,37 +245,36 @@
   color: var(--al-danger);
 }
 
-/* ── Turn navigation ────────────────────────────────────────────── */
+/* ── Round navigation: obvious controls ─────────────────────────── */
 .round-nav {
-  @apply sticky top-0 z-20 -mx-1 flex flex-wrap items-center gap-1 border-b px-1 py-3 backdrop-blur-xl;
+  @apply sticky top-0 z-20 -mx-1 flex flex-wrap items-center gap-1.5 border-b px-1 py-2.5 backdrop-blur-xl;
   border-color: var(--al-line);
-  background: color-mix(in srgb, var(--al-surface) 94%, transparent);
+  background: color-mix(in srgb, var(--al-surface) 95%, transparent);
 }
 
 .round-nav button {
-  @apply relative min-h-8 rounded-md px-2.5 text-xs font-semibold transition-colors;
-  background: transparent !important;
+  @apply min-h-8 rounded-lg border px-2.5 text-xs font-semibold transition-colors;
+  border-color: var(--al-line);
+  background: var(--al-soft-2) !important;
   color: var(--al-muted);
 }
 
 .round-nav button:hover:not(:disabled) {
+  border-color: var(--al-line-strong);
   background: var(--al-soft) !important;
   color: var(--al-ink);
 }
 
 .round-nav button.active {
-  color: var(--al-ink);
-}
-
-.round-nav button.active::after {
-  content: "";
-  @apply absolute bottom-[-13px] left-2.5 right-2.5 h-0.5 rounded-full;
-  background: var(--al-accent);
+  border-color: color-mix(in srgb, var(--al-accent) 34%, var(--al-line));
+  background: var(--al-accent-soft) !important;
+  color: var(--al-accent);
 }
 
 .round-nav button span {
   @apply ml-1 text-xs tabular-nums;
-  color: var(--al-muted);
+  color: currentColor;
+  opacity: .75;
 }
 
 .round-nav button:disabled {
@@ -273,20 +291,19 @@
 }
 
 .interaction-block {
-  @apply my-5 overflow-hidden rounded-xl border;
+  @apply my-4 overflow-hidden rounded-xl border;
   border-color: var(--al-line);
   background: var(--al-surface);
-  box-shadow: 0 1px 2px rgb(20 22 18 / .025);
 }
 
 .interaction-block.interaction-has-error {
-  border-color: color-mix(in srgb, var(--al-danger) 32%, var(--al-line));
+  border-color: color-mix(in srgb, var(--al-danger) 36%, var(--al-line));
 }
 
 .interaction-summary {
-  @apply flex min-h-14 cursor-pointer list-none items-center gap-2.5 border-b px-4 py-2.5 transition-colors;
+  @apply flex min-h-12 cursor-pointer list-none items-center gap-2.5 border-b px-4 py-2 transition-colors;
   border-color: var(--al-line);
-  background: color-mix(in srgb, var(--al-soft-2) 72%, var(--al-surface));
+  background: color-mix(in srgb, var(--al-soft-2) 78%, var(--al-surface));
   color: var(--al-ink-2);
 }
 
@@ -299,7 +316,9 @@
 }
 
 .interaction-chevron {
-  @apply inline-block w-4 shrink-0 text-lg leading-none transition-transform;
+  @apply inline-grid h-6 w-6 shrink-0 place-items-center rounded-md border text-base leading-none transition-transform;
+  border-color: var(--al-line);
+  background: var(--al-surface);
   color: var(--al-muted);
 }
 
@@ -308,12 +327,12 @@
 }
 
 .interaction-title {
-  @apply shrink-0 whitespace-nowrap text-sm font-bold;
+  @apply shrink-0 whitespace-nowrap text-[13px] font-bold;
   color: var(--al-ink);
 }
 
 .interaction-preview {
-  @apply min-w-0 flex-1 truncate text-[13px];
+  @apply min-w-0 flex-1 truncate text-xs;
   color: var(--al-muted);
 }
 
@@ -322,26 +341,29 @@
 }
 
 .interaction-summary-meta span {
-  @apply rounded-md px-1.5 py-0.5 text-xs font-medium;
-  background: var(--al-soft);
+  @apply rounded-md border px-1.5 py-0.5 text-xs font-semibold;
+  border-color: var(--al-line);
+  background: var(--al-surface);
   color: var(--al-muted);
 }
 
 .interaction-summary-meta .is-error {
+  border-color: color-mix(in srgb, var(--al-danger) 22%, var(--al-line));
   background: var(--al-danger-soft);
   color: var(--al-danger);
 }
 
 .interaction-summary-meta .is-latency {
+  border-color: color-mix(in srgb, var(--al-warning) 22%, var(--al-line));
   background: var(--al-warning-soft);
   color: var(--al-warning);
 }
 
 .interaction-flow {
-  @apply flex flex-col gap-4 px-5 py-5;
+  @apply flex flex-col gap-3.5 px-4 py-4;
 }
 
-/* ── Conversation bubbles ───────────────────────────────────────── */
+/* ── Conversation steps ─────────────────────────────────────────── */
 .chat-row {
   @apply flex min-w-0 flex-col gap-1;
 }
@@ -352,12 +374,12 @@
 
 .chat-row-user {
   @apply self-end items-end;
-  padding-left: 20%;
+  padding-left: 14%;
 }
 
 .chat-row-agent {
   @apply self-start items-start;
-  padding-right: 12%;
+  padding-right: 6%;
 }
 
 .chat-bubble {
@@ -365,25 +387,40 @@
 }
 
 .chat-bubble-user {
-  max-width: 72%;
+  max-width: 78%;
   @apply rounded-2xl rounded-br-md border border-zinc-900 bg-zinc-900 px-4 py-3 text-white shadow-sm;
 }
 
 .chat-bubble-agent {
-  max-width: 86%;
+  max-width: 92%;
   @apply rounded-2xl rounded-bl-md border px-4 py-3 shadow-sm;
-  border-color: var(--al-line);
-  background: color-mix(in srgb, var(--al-soft-2) 76%, var(--al-surface));
+  border-color: #bfdbfe;
+  background: color-mix(in srgb, #eff6ff 48%, var(--al-surface));
   color: var(--al-ink-2);
 }
 
 .chat-meta {
-  @apply mb-1.5 flex flex-wrap items-center gap-2 px-0.5 text-xs font-medium;
+  @apply mb-1.5 flex flex-wrap items-center gap-2 text-xs font-semibold;
   color: var(--al-muted);
+}
+
+.chat-meta::before {
+  @apply inline-grid h-5 w-5 shrink-0 place-items-center rounded-md border text-[11px] font-bold;
 }
 
 .chat-row-user .chat-meta {
   @apply justify-end;
+}
+
+.chat-row-user .chat-meta::before {
+  content: "⌨";
+  order: -1;
+  @apply border-white/20 bg-white/10 text-white;
+}
+
+.chat-row-agent .chat-meta::before {
+  content: "✦";
+  @apply border-blue-200 bg-blue-50 text-blue-700;
 }
 
 .chat-meta time {
@@ -394,10 +431,8 @@
 .chat-bubble-user .chat-meta,
 .chat-bubble-user .chat-meta time,
 .chat-bubble-user .evidence-inline,
-.chat-bubble-user .evidence-inline-more,
-.chat-bubble-user .markdown-message-actions button,
-.chat-bubble-user .chat-actions button {
-  color: rgb(255 255 255 / .72);
+.chat-bubble-user .evidence-inline-more {
+  color: rgb(255 255 255 / .74);
 }
 
 .chat-bubble-user .markdown,
@@ -425,22 +460,37 @@
   color: var(--al-ink-2);
 }
 
+/* Buttons must read as controls, not body copy. */
 .chat-actions,
 .markdown-message-actions {
-  @apply mt-1.5 flex items-center gap-3;
+  @apply mt-2 flex flex-wrap items-center gap-1.5;
 }
 
 .chat-actions button,
 .evidence-link,
 .markdown-message-actions button {
-  @apply border-0 bg-transparent p-0 text-xs font-medium transition-colors;
+  @apply inline-flex min-h-7 items-center rounded-md border px-2 py-1 text-xs font-semibold transition-colors;
+  border-color: var(--al-line);
+  background: var(--al-surface);
   color: var(--al-muted);
 }
 
 .chat-actions button:hover,
 .evidence-link:hover,
 .markdown-message-actions button:hover {
+  border-color: var(--al-line-strong);
+  background: var(--al-soft);
   color: var(--al-ink-2);
+}
+
+.chat-bubble-user .chat-actions button,
+.chat-bubble-user .markdown-message-actions button {
+  @apply border-white/20 bg-white/10 text-white;
+}
+
+.chat-bubble-user .chat-actions button:hover,
+.chat-bubble-user .markdown-message-actions button:hover {
+  @apply border-white/30 bg-white/15;
 }
 
 .markdown pre,
@@ -465,19 +515,21 @@
   background: linear-gradient(to bottom, transparent, #18181b);
 }
 
-/* Evidence remains visible but secondary. */
+/* ── Evidence ───────────────────────────────────────────────────── */
 .evidence-inline-list {
   @apply inline-flex items-center gap-1;
 }
 
 .evidence-inline {
-  @apply inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-medium;
-  background: color-mix(in srgb, var(--al-accent-soft) 58%, transparent);
+  @apply inline-flex items-center rounded border px-1.5 py-0.5 text-[11px] font-semibold;
+  border-color: color-mix(in srgb, var(--al-accent) 18%, var(--al-line));
+  background: color-mix(in srgb, var(--al-accent-soft) 66%, var(--al-surface));
   color: var(--al-accent);
 }
 
 .evidence-inline[data-confidence="low"],
 .evidence-inline[data-confidence="unknown"] {
+  border-color: var(--al-line);
   background: var(--al-soft);
   color: var(--al-muted);
 }
@@ -487,16 +539,16 @@
   color: var(--al-muted);
 }
 
-/* ── Thinking ───────────────────────────────────────────────────── */
+/* ── Thinking step ──────────────────────────────────────────────── */
 .thinking-block {
-  @apply overflow-hidden rounded-lg border-l-2;
+  @apply overflow-hidden rounded-lg border;
   margin-left: var(--review-indent);
-  border-color: #a78bfa;
-  background: color-mix(in srgb, #f5f3ff 62%, var(--al-surface));
+  border-color: #ddd6fe;
+  background: color-mix(in srgb, #f5f3ff 76%, var(--al-surface));
 }
 
 .thinking-block > summary {
-  @apply flex min-h-9 cursor-pointer list-none flex-wrap items-center gap-2 px-3 py-1.5 text-xs;
+  @apply flex min-h-10 cursor-pointer list-none flex-wrap items-center gap-2 px-3 py-2 text-xs;
   color: var(--al-muted);
 }
 
@@ -504,12 +556,17 @@
   @apply hidden;
 }
 
+.thinking-block > summary::before {
+  content: "≋";
+  @apply grid h-6 w-6 shrink-0 place-items-center rounded-md border border-violet-200 bg-violet-100 text-sm font-black text-violet-700;
+}
+
 .thinking-block > summary:hover {
-  color: var(--al-ink-2);
+  background: color-mix(in srgb, #ede9fe 64%, var(--al-surface));
 }
 
 .thinking-label {
-  @apply font-semibold text-violet-700;
+  @apply font-bold text-violet-700;
 }
 
 .thinking-preview,
@@ -519,22 +576,23 @@
 }
 
 .thinking-content {
-  @apply px-3 pb-3 pt-1 text-[13px] leading-relaxed;
+  @apply border-t px-3 pb-3 pt-2 text-[13px] leading-relaxed;
+  border-color: #ede9fe;
   color: var(--al-muted);
 }
 
-/* ── Execution group ────────────────────────────────────────────── */
+/* ── Execution step ─────────────────────────────────────────────── */
 .execution-group {
   @apply overflow-hidden rounded-xl border;
   margin-left: var(--review-indent);
-  border-color: var(--al-line);
-  background: color-mix(in srgb, var(--al-soft-2) 72%, var(--al-surface));
+  border-color: #bfdbfe;
+  background: color-mix(in srgb, #eff6ff 34%, var(--al-surface));
 }
 
 .execution-group > summary {
   @apply flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-2 border-b px-3 py-2;
-  border-color: var(--al-line);
-  background: var(--al-surface);
+  border-color: #dbeafe;
+  background: color-mix(in srgb, #eff6ff 64%, var(--al-surface));
 }
 
 .execution-group > summary::-webkit-details-marker {
@@ -542,14 +600,16 @@
 }
 
 .execution-group > summary:hover {
-  background: var(--al-soft-2);
+  background: color-mix(in srgb, #dbeafe 54%, var(--al-surface));
 }
 
 .execution-group-icon {
-  @apply grid h-7 w-7 place-items-center rounded-md border text-xs font-bold;
-  border-color: var(--al-line);
-  background: var(--al-soft);
-  color: var(--al-ink-2);
+  @apply grid h-7 w-7 place-items-center rounded-lg border border-blue-200 bg-blue-100 text-[0px] font-black text-blue-700;
+}
+
+.execution-group-icon::before {
+  content: "⌘";
+  @apply text-sm;
 }
 
 .execution-group-copy {
@@ -557,8 +617,7 @@
 }
 
 .execution-group-copy b {
-  @apply text-[13px] font-bold;
-  color: var(--al-ink);
+  @apply text-[13px] font-bold text-blue-900;
 }
 
 .execution-group-copy small,
@@ -568,14 +627,18 @@
 }
 
 .execution-summary-status {
-  @apply ml-auto text-xs font-semibold;
+  @apply ml-auto rounded-md border px-1.5 py-0.5 text-xs font-semibold;
 }
 
 .execution-summary-status.is-ok {
+  border-color: color-mix(in srgb, var(--al-success) 24%, var(--al-line));
+  background: var(--al-success-soft);
   color: var(--al-success);
 }
 
 .execution-summary-status.is-error {
+  border-color: color-mix(in srgb, var(--al-danger) 24%, var(--al-line));
+  background: var(--al-danger-soft);
   color: var(--al-danger);
 }
 
@@ -585,13 +648,15 @@
 
 .execution-group-toolbar {
   @apply flex min-h-9 items-center justify-between gap-3 border-b px-3 py-1.5 text-xs;
-  border-color: var(--al-line);
-  background: color-mix(in srgb, var(--al-soft) 52%, var(--al-surface));
+  border-color: #dbeafe;
+  background: var(--al-surface);
   color: var(--al-muted);
 }
 
 .execution-group-toolbar label {
-  @apply flex cursor-pointer items-center gap-1.5 text-xs;
+  @apply flex cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-semibold;
+  border-color: var(--al-line);
+  background: var(--al-soft-2);
 }
 
 .execution-group-toolbar input {
@@ -607,9 +672,9 @@
 .execution-row {
   --tool-accent: var(--al-muted);
   @apply grid min-h-16 w-full items-start gap-2 border-b px-3 py-2.5 text-left transition-colors;
-  grid-template-columns: 34px 32px minmax(0, 1fr) auto;
+  grid-template-columns: 34px 34px minmax(0, 1fr) auto;
   border-color: var(--al-line);
-  background: transparent;
+  background: var(--al-surface);
   counter-increment: execution-step;
 }
 
@@ -618,11 +683,11 @@
 }
 
 .execution-row:hover {
-  background: var(--al-surface);
+  background: var(--al-soft-2);
 }
 
 .execution-row[data-status="error"] {
-  background: color-mix(in srgb, var(--al-danger-soft) 56%, var(--al-surface));
+  background: color-mix(in srgb, var(--al-danger-soft) 64%, var(--al-surface));
 }
 
 .execution-row[data-kind="shell"] { --tool-accent: #b45309; }
@@ -638,8 +703,8 @@
 
 .execution-rail::before {
   content: counter(execution-step);
-  @apply relative z-10 mt-1.5 grid h-6 w-6 place-items-center rounded-full border bg-white text-xs font-semibold tabular-nums;
-  border-color: color-mix(in srgb, var(--tool-accent) 38%, var(--al-line));
+  @apply relative z-10 mt-1 grid h-7 w-7 place-items-center rounded-full border-2 bg-white text-xs font-bold tabular-nums;
+  border-color: color-mix(in srgb, var(--tool-accent) 52%, var(--al-line));
   color: var(--tool-accent);
 }
 
@@ -648,40 +713,37 @@
 }
 
 .execution-line {
-  @apply absolute left-1/2 top-[30px] -translate-x-1/2;
-  bottom: -20px;
-  width: 1px;
-  background: color-mix(in srgb, var(--tool-accent) 24%, var(--al-line));
+  @apply absolute left-1/2 top-8 -translate-x-1/2;
+  bottom: -18px;
+  width: 2px;
+  background: color-mix(in srgb, var(--tool-accent) 26%, var(--al-line));
 }
 
 .execution-tool-icon {
-  @apply mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-lg border font-mono text-xs font-bold;
+  @apply mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg border text-[0px] font-black;
 }
 
-.execution-row[data-kind="shell"] .execution-tool-icon {
-  @apply border-amber-200 bg-amber-50 text-amber-700;
+.execution-tool-icon::before {
+  @apply text-sm leading-none;
 }
-.execution-row[data-kind="read"] .execution-tool-icon {
-  @apply border-blue-200 bg-blue-50 text-blue-700;
-}
-.execution-row[data-kind="edit"] .execution-tool-icon {
-  @apply border-green-200 bg-green-50 text-green-700;
-}
-.execution-row[data-kind="search"] .execution-tool-icon {
-  @apply border-cyan-200 bg-cyan-50 text-cyan-700;
-}
-.execution-row[data-kind="mcp"] .execution-tool-icon {
-  @apply border-indigo-200 bg-indigo-50 text-indigo-700;
-}
-.execution-row[data-kind="web"] .execution-tool-icon {
-  @apply border-teal-200 bg-teal-50 text-teal-700;
-}
-.execution-row[data-kind="tool"] .execution-tool-icon {
-  @apply border-zinc-200 bg-zinc-100 text-zinc-600;
-}
+
+.execution-row[data-kind="shell"] .execution-tool-icon { @apply border-amber-200 bg-amber-100 text-amber-800; }
+.execution-row[data-kind="shell"] .execution-tool-icon::before { content: ">_"; @apply font-mono text-xs; }
+.execution-row[data-kind="read"] .execution-tool-icon { @apply border-blue-200 bg-blue-100 text-blue-800; }
+.execution-row[data-kind="read"] .execution-tool-icon::before { content: "▤"; }
+.execution-row[data-kind="edit"] .execution-tool-icon { @apply border-green-200 bg-green-100 text-green-800; }
+.execution-row[data-kind="edit"] .execution-tool-icon::before { content: "✎"; }
+.execution-row[data-kind="search"] .execution-tool-icon { @apply border-cyan-200 bg-cyan-100 text-cyan-800; }
+.execution-row[data-kind="search"] .execution-tool-icon::before { content: "⌕"; }
+.execution-row[data-kind="mcp"] .execution-tool-icon { @apply border-indigo-200 bg-indigo-100 text-indigo-800; }
+.execution-row[data-kind="mcp"] .execution-tool-icon::before { content: "⬡"; }
+.execution-row[data-kind="web"] .execution-tool-icon { @apply border-teal-200 bg-teal-100 text-teal-800; }
+.execution-row[data-kind="web"] .execution-tool-icon::before { content: "↗"; }
+.execution-row[data-kind="tool"] .execution-tool-icon { @apply border-zinc-200 bg-zinc-100 text-zinc-700; }
+.execution-row[data-kind="tool"] .execution-tool-icon::before { content: "◇"; }
 
 .execution-main {
-  @apply min-w-0 py-1;
+  @apply min-w-0 py-0.5;
 }
 
 .execution-name {
@@ -694,28 +756,33 @@
 }
 
 .tool-kind-label {
-  @apply rounded px-1.5 py-0.5 text-xs font-semibold;
+  @apply rounded border px-1.5 py-0.5 text-xs font-bold;
+  border-color: color-mix(in srgb, var(--tool-accent) 20%, var(--al-line));
   background: color-mix(in srgb, var(--tool-accent) 10%, var(--al-surface));
   color: var(--tool-accent);
 }
 
 .tool-status-label {
-  @apply rounded px-1.5 py-0.5 text-xs font-semibold;
+  @apply rounded border px-1.5 py-0.5 text-xs font-semibold;
+  border-color: var(--al-line);
   background: var(--al-soft);
   color: var(--al-muted);
 }
 
 .execution-row[data-status="success"] .tool-status-label {
+  border-color: color-mix(in srgb, var(--al-success) 20%, var(--al-line));
   background: var(--al-success-soft);
   color: var(--al-success);
 }
 
 .execution-row[data-status="error"] .tool-status-label {
+  border-color: color-mix(in srgb, var(--al-danger) 20%, var(--al-line));
   background: var(--al-danger-soft);
   color: var(--al-danger);
 }
 
 .execution-row[data-status="running"] .tool-status-label {
+  border-color: color-mix(in srgb, var(--al-warning) 20%, var(--al-line));
   background: var(--al-warning-soft);
   color: var(--al-warning);
 }
@@ -735,18 +802,18 @@
 }
 
 .execution-duration {
-  @apply pt-2 text-right font-mono text-xs tabular-nums;
+  @apply pt-1.5 text-right font-mono text-xs tabular-nums;
   min-width: 56px;
   color: var(--al-muted);
 }
 
-/* ── Lifecycle events ───────────────────────────────────────────── */
+/* ── Lifecycle / semantic steps ─────────────────────────────────── */
 .event-row {
-  @apply flex min-h-10 w-full items-start gap-2.5 rounded-lg border px-3 py-2 text-left text-xs transition-colors;
+  @apply flex min-h-11 w-full items-start gap-2.5 rounded-lg border px-3 py-2 text-left text-xs transition-colors;
   width: calc(100% - var(--review-indent));
   margin-left: var(--review-indent);
   border-color: var(--al-line);
-  background: color-mix(in srgb, var(--al-soft-2) 66%, var(--al-surface));
+  background: var(--al-soft-2);
   color: var(--al-muted);
 }
 
@@ -755,7 +822,7 @@
 }
 
 .event-mark {
-  @apply mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-md border bg-white text-xs font-bold;
+  @apply mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg border bg-white text-[13px] font-black;
   border-color: var(--al-line);
   color: var(--al-muted);
 }
@@ -768,45 +835,41 @@
 .event-lifecycle .event-mark::before { content: "◉"; }
 .event-artifact .event-mark::before { content: "▣"; }
 .event-usage .event-mark::before { content: "Σ"; }
-.event-unknown .event-mark::before { content: "·"; }
 
 .event-permission {
-  border-color: color-mix(in srgb, var(--al-warning) 25%, var(--al-line));
-  background: color-mix(in srgb, var(--al-warning-soft) 64%, var(--al-surface));
+  border-color: #fde68a;
+  background: color-mix(in srgb, #fffbeb 78%, var(--al-surface));
 }
-.event-permission .event-mark {
-  @apply border-amber-200 bg-amber-50 text-amber-700;
-}
+.event-permission .event-mark { @apply border-amber-200 bg-amber-100 text-amber-800; }
 
 .event-subagent {
-  border-color: color-mix(in srgb, var(--al-accent) 22%, var(--al-line));
+  border-color: #ddd6fe;
+  background: color-mix(in srgb, #f5f3ff 78%, var(--al-surface));
 }
-.event-subagent .event-mark {
-  @apply border-violet-200 bg-violet-50 text-violet-700;
-}
+.event-subagent .event-mark { @apply border-violet-200 bg-violet-100 text-violet-800; }
 
-.event-context .event-mark {
-  @apply border-sky-200 bg-sky-50 text-sky-700;
+.event-context {
+  border-color: #bae6fd;
+  background: color-mix(in srgb, #f0f9ff 76%, var(--al-surface));
 }
-.event-model .event-mark {
-  @apply border-indigo-200 bg-indigo-50 text-indigo-700;
+.event-context .event-mark { @apply border-sky-200 bg-sky-100 text-sky-800; }
+
+.event-model {
+  border-color: #c7d2fe;
+  background: color-mix(in srgb, #eef2ff 76%, var(--al-surface));
 }
-.event-lifecycle .event-mark {
-  @apply border-zinc-200 bg-zinc-50 text-zinc-600;
-}
-.event-artifact .event-mark {
-  @apply border-emerald-200 bg-emerald-50 text-emerald-700;
-}
-.event-usage .event-mark {
-  @apply border-cyan-200 bg-cyan-50 text-cyan-700;
-}
+.event-model .event-mark { @apply border-indigo-200 bg-indigo-100 text-indigo-800; }
+
+.event-lifecycle .event-mark { @apply border-zinc-200 bg-zinc-100 text-zinc-700; }
+.event-artifact .event-mark { @apply border-emerald-200 bg-emerald-100 text-emerald-800; }
+.event-usage .event-mark { @apply border-cyan-200 bg-cyan-100 text-cyan-800; }
 
 .event-copy {
   @apply min-w-0 flex-1;
 }
 
 .event-copy b {
-  @apply block text-[13px] font-semibold;
+  @apply block text-[13px] font-bold;
   color: var(--al-ink-2);
 }
 
@@ -828,7 +891,7 @@
 }
 
 .raw-event-group > summary {
-  @apply flex min-h-9 cursor-pointer list-none items-center justify-between gap-3 px-3 text-xs font-medium;
+  @apply flex min-h-9 cursor-pointer list-none items-center justify-between gap-3 px-3 text-xs font-semibold;
   background: var(--al-soft-2);
   color: var(--al-muted);
 }
@@ -871,10 +934,12 @@
 :root[data-theme="dark"] .chat-bubble-user .chat-meta,
 :root[data-theme="dark"] .chat-bubble-user .chat-meta time,
 :root[data-theme="dark"] .chat-bubble-user .evidence-inline,
-:root[data-theme="dark"] .chat-bubble-user .evidence-inline-more,
-:root[data-theme="dark"] .chat-bubble-user .markdown-message-actions button,
-:root[data-theme="dark"] .chat-bubble-user .chat-actions button {
+:root[data-theme="dark"] .chat-bubble-user .evidence-inline-more {
   color: rgb(24 24 27 / .64);
+}
+
+:root[data-theme="dark"] .chat-bubble-user .chat-meta::before {
+  @apply border-black/10 bg-black/5 text-zinc-800;
 }
 
 :root[data-theme="dark"] .chat-bubble-user .markdown,
@@ -889,95 +954,102 @@
   @apply bg-black/10 text-zinc-900;
 }
 
-:root[data-theme="dark"] .chat-bubble-user .markdown a {
-  @apply text-zinc-900 decoration-zinc-500;
-}
-
 :root[data-theme="dark"] .chat-bubble-user .markdown pre,
 :root[data-theme="dark"] .chat-bubble-user .markdown-source {
   @apply border-black/10 bg-black/5 text-zinc-900;
+}
+
+:root[data-theme="dark"] .chat-bubble-user .chat-actions button,
+:root[data-theme="dark"] .chat-bubble-user .markdown-message-actions button {
+  @apply border-black/10 bg-black/5 text-zinc-700;
 }
 
 :root[data-theme="dark"] .chat-bubble-user .markdown-fade {
   background: linear-gradient(to bottom, transparent, #f4f4f5);
 }
 
-:root[data-theme="dark"] .chat-bubble-agent,
-:root[data-theme="dark"] .interaction-block,
-:root[data-theme="dark"] .execution-group {
-  background: var(--al-surface);
+:root[data-theme="dark"] .chat-bubble-agent {
+  border-color: #1e3a5f;
+  background: color-mix(in srgb, #172554 22%, var(--al-surface));
   box-shadow: none;
 }
 
+:root[data-theme="dark"] .chat-row-agent .chat-meta::before {
+  @apply border-blue-800 bg-blue-950 text-blue-300;
+}
+
+:root[data-theme="dark"] .interaction-block,
+:root[data-theme="dark"] .execution-row {
+  background: var(--al-surface);
+}
+
 :root[data-theme="dark"] .thinking-block {
-  border-color: #8b5cf6;
-  background: color-mix(in srgb, #2e1065 30%, var(--al-surface));
+  border-color: #5b21b6;
+  background: color-mix(in srgb, #2e1065 34%, var(--al-surface));
+}
+
+:root[data-theme="dark"] .thinking-block > summary::before {
+  @apply border-violet-800 bg-violet-950 text-violet-300;
 }
 
 :root[data-theme="dark"] .thinking-label {
   @apply text-violet-300;
 }
 
+:root[data-theme="dark"] .execution-group {
+  border-color: #1e3a5f;
+  background: color-mix(in srgb, #172554 18%, var(--al-surface));
+}
+
+:root[data-theme="dark"] .execution-group > summary {
+  border-color: #1e3a5f;
+  background: color-mix(in srgb, #172554 28%, var(--al-surface));
+}
+
+:root[data-theme="dark"] .execution-group-icon {
+  @apply border-blue-800 bg-blue-950 text-blue-300;
+}
+
+:root[data-theme="dark"] .execution-group-copy b {
+  @apply text-blue-200;
+}
+
 :root[data-theme="dark"] .execution-rail::before {
   background: var(--al-surface);
 }
 
-:root[data-theme="dark"] .execution-row[data-kind="shell"] .execution-tool-icon {
-  @apply border-amber-800 bg-amber-950 text-amber-300;
-}
-:root[data-theme="dark"] .execution-row[data-kind="read"] .execution-tool-icon {
-  @apply border-blue-800 bg-blue-950 text-blue-300;
-}
-:root[data-theme="dark"] .execution-row[data-kind="edit"] .execution-tool-icon {
-  @apply border-green-800 bg-green-950 text-green-300;
-}
-:root[data-theme="dark"] .execution-row[data-kind="search"] .execution-tool-icon {
-  @apply border-cyan-800 bg-cyan-950 text-cyan-300;
-}
-:root[data-theme="dark"] .execution-row[data-kind="mcp"] .execution-tool-icon {
-  @apply border-indigo-800 bg-indigo-950 text-indigo-300;
-}
-:root[data-theme="dark"] .execution-row[data-kind="web"] .execution-tool-icon {
-  @apply border-teal-800 bg-teal-950 text-teal-300;
-}
-:root[data-theme="dark"] .execution-row[data-kind="tool"] .execution-tool-icon {
-  @apply border-zinc-700 bg-zinc-800 text-zinc-300;
-}
+:root[data-theme="dark"] .execution-row[data-kind="shell"] .execution-tool-icon { @apply border-amber-800 bg-amber-950 text-amber-300; }
+:root[data-theme="dark"] .execution-row[data-kind="read"] .execution-tool-icon { @apply border-blue-800 bg-blue-950 text-blue-300; }
+:root[data-theme="dark"] .execution-row[data-kind="edit"] .execution-tool-icon { @apply border-green-800 bg-green-950 text-green-300; }
+:root[data-theme="dark"] .execution-row[data-kind="search"] .execution-tool-icon { @apply border-cyan-800 bg-cyan-950 text-cyan-300; }
+:root[data-theme="dark"] .execution-row[data-kind="mcp"] .execution-tool-icon { @apply border-indigo-800 bg-indigo-950 text-indigo-300; }
+:root[data-theme="dark"] .execution-row[data-kind="web"] .execution-tool-icon { @apply border-teal-800 bg-teal-950 text-teal-300; }
+:root[data-theme="dark"] .execution-row[data-kind="tool"] .execution-tool-icon { @apply border-zinc-700 bg-zinc-800 text-zinc-300; }
 
 :root[data-theme="dark"] .event-mark {
   background: var(--al-surface-raised);
 }
 
-:root[data-theme="dark"] .event-permission .event-mark {
-  @apply border-amber-800 bg-amber-950 text-amber-300;
-}
-:root[data-theme="dark"] .event-subagent .event-mark {
-  @apply border-violet-800 bg-violet-950 text-violet-300;
-}
-:root[data-theme="dark"] .event-context .event-mark {
-  @apply border-sky-800 bg-sky-950 text-sky-300;
-}
-:root[data-theme="dark"] .event-model .event-mark {
-  @apply border-indigo-800 bg-indigo-950 text-indigo-300;
-}
-:root[data-theme="dark"] .event-lifecycle .event-mark {
-  @apply border-zinc-700 bg-zinc-800 text-zinc-300;
-}
-:root[data-theme="dark"] .event-artifact .event-mark {
-  @apply border-emerald-800 bg-emerald-950 text-emerald-300;
-}
-:root[data-theme="dark"] .event-usage .event-mark {
-  @apply border-cyan-800 bg-cyan-950 text-cyan-300;
-}
+:root[data-theme="dark"] .event-permission { border-color:#78350f; background:color-mix(in srgb,#451a03 34%,var(--al-surface)); }
+:root[data-theme="dark"] .event-subagent { border-color:#5b21b6; background:color-mix(in srgb,#2e1065 28%,var(--al-surface)); }
+:root[data-theme="dark"] .event-context { border-color:#075985; background:color-mix(in srgb,#082f49 28%,var(--al-surface)); }
+:root[data-theme="dark"] .event-model { border-color:#3730a3; background:color-mix(in srgb,#1e1b4b 30%,var(--al-surface)); }
+:root[data-theme="dark"] .event-permission .event-mark { @apply border-amber-800 bg-amber-950 text-amber-300; }
+:root[data-theme="dark"] .event-subagent .event-mark { @apply border-violet-800 bg-violet-950 text-violet-300; }
+:root[data-theme="dark"] .event-context .event-mark { @apply border-sky-800 bg-sky-950 text-sky-300; }
+:root[data-theme="dark"] .event-model .event-mark { @apply border-indigo-800 bg-indigo-950 text-indigo-300; }
+:root[data-theme="dark"] .event-lifecycle .event-mark { @apply border-zinc-700 bg-zinc-800 text-zinc-300; }
+:root[data-theme="dark"] .event-artifact .event-mark { @apply border-emerald-800 bg-emerald-950 text-emerald-300; }
+:root[data-theme="dark"] .event-usage .event-mark { @apply border-cyan-800 bg-cyan-950 text-cyan-300; }
 
 /* ── Responsive ─────────────────────────────────────────────────── */
-@media (max-width: 1080px) {
+@media (max-width: 1180px) {
   .review-layout {
-    grid-template-columns: 310px minmax(0, 1fr);
+    grid-template-columns: 300px minmax(0, 1fr);
   }
 
   .review-reader {
-    padding-inline: 32px;
+    padding-inline: 20px;
   }
 
   .review-session-head {
@@ -989,17 +1061,17 @@
   }
 
   .chat-row-user {
-    padding-left: 10%;
+    padding-left: 8%;
   }
 
   .chat-row-agent {
-    padding-right: 4%;
+    padding-right: 2%;
   }
 }
 
 @media (max-width: 760px) {
   .review-page {
-    --review-indent: 14px;
+    --review-indent: 12px;
     @apply min-h-[calc(100vh-52px)] overflow-visible;
     height: auto;
   }
@@ -1019,11 +1091,11 @@
   }
 
   .review-reader {
-    @apply px-4 pb-20 pt-6;
+    @apply px-3 pb-16 pt-4;
   }
 
   .review-session-title {
-    @apply text-xl;
+    @apply text-base leading-6;
   }
 
   .review-metrics {
@@ -1037,7 +1109,7 @@
 
   .chat-bubble-user,
   .chat-bubble-agent {
-    max-width: 92%;
+    max-width: 96%;
   }
 
   .interaction-preview {
@@ -1045,7 +1117,7 @@
   }
 
   .execution-row {
-    grid-template-columns: 30px 30px minmax(0, 1fr);
+    grid-template-columns: 30px 32px minmax(0, 1fr);
   }
 
   .execution-duration {
