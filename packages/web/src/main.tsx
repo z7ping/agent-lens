@@ -6,7 +6,7 @@ import { readTheme, writeTheme } from './client/preferences'
 import './styles.css'
 import './theme.css'
 import './readability.css'
-import './review-recovery.css'
+import './review.css'
 
 writeTheme(readTheme())
 void clientModel.start()
