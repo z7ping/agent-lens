@@ -1,250 +1,60 @@
 import { createServer, type Server, type ServerResponse } from 'node:http'
 import { readFile, stat } from 'node:fs/promises'
 import { extname, resolve, sep } from 'node:path'
-import type { Disposable, StorageService } from '@agent-lens/core'
+import type { CapabilityService, Disposable, SourceService, StorageService } from '@agent-lens/core'
+import { AgentOverviewProjection, FacetProjection, SessionRelationshipProjection } from '@agent-lens/projection-overview'
+import { ReviewProjection } from '@agent-lens/projection-review'
 import { SessionProjection } from '@agent-lens/projection-session'
 import { TimelineProjection } from '@agent-lens/projection-timeline'
 import { ToolAssetUsageProjection } from '@agent-lens/projection-usage'
 import {
-  AGENT_LENS_PROTOCOL_VERSION,
-  TIMELINE_OBSERVATION_KINDS,
-  type HealthResponseDto,
-  type JsonValue,
-  type SessionQueryDto,
-  type TimelineObservationKind,
-  type TimelineQueryDto,
-  type ToolAssetUsageQueryDto,
+  AGENT_LENS_PROTOCOL_VERSION, TIMELINE_OBSERVATION_KINDS,
+  type HealthResponseDto, type JsonValue, type ReviewQueryDto, type ReviewStatusFilter,
+  type SessionQueryDto, type TimelineObservationKind, type TimelineQueryDto, type ToolAssetUsageQueryDto,
 } from '@agent-lens/protocol'
 import type { HttpEventHub } from './events'
 
 export const AGENT_LENS_HTTP_HOST = '127.0.0.1' as const
 export const DEFAULT_AGENT_LENS_HTTP_PORT = 56789
+export interface HttpStaticMount { id: string; directory: string; spaFallback?: boolean }
+export interface HttpSurfaceOptions { port?: number; staticDir?: string; eventHub?: HttpEventHub; sources?: SourceService; capabilities?: CapabilityService }
+export interface RunningHttpSurface { readonly host: typeof AGENT_LENS_HTTP_HOST; readonly port: number; readonly server: Server; mountStatic(mount: HttpStaticMount): Disposable; dispose(): Promise<void> }
+const MIME_TYPES: Record<string,string> = { '.css':'text/css; charset=utf-8','.html':'text/html; charset=utf-8','.ico':'image/x-icon','.js':'text/javascript; charset=utf-8','.json':'application/json; charset=utf-8','.map':'application/json; charset=utf-8','.svg':'image/svg+xml','.txt':'text/plain; charset=utf-8','.webp':'image/webp' }
+function jsonValue(value: unknown, depth=0): JsonValue { if(depth>16)return '[max-depth]'; if(value===null)return null; if(typeof value==='string'||typeof value==='boolean')return value; if(typeof value==='number')return Number.isFinite(value)?value:null; if(typeof value==='bigint')return value.toString(); if(Array.isArray(value))return value.map(item=>jsonValue(item,depth+1)); if(typeof value==='object'){const result:Record<string,JsonValue>={}; for(const [key,item] of Object.entries(value as Record<string,unknown>)){if(item===undefined||typeof item==='function'||typeof item==='symbol')continue; result[key]=jsonValue(item,depth+1)} return result} return null }
+function writeJson(response:ServerResponse,statusCode:number,body:unknown):void { const content=JSON.stringify(body); response.statusCode=statusCode; response.setHeader('content-type','application/json; charset=utf-8'); response.setHeader('cache-control','no-store'); response.setHeader('content-length',Buffer.byteLength(content)); response.end(content) }
+function writeBytes(response:ServerResponse,statusCode:number,contentType:string,content:Buffer):void { response.statusCode=statusCode; response.setHeader('content-type',contentType); response.setHeader('cache-control','no-store'); response.setHeader('content-length',content.byteLength); response.end(content) }
+function badRequest(message:string):Error&{statusCode:number}{const error=new Error(message) as Error&{statusCode:number}; error.statusCode=400; return error}
+function parseLimit(params:URLSearchParams,max:number):number|undefined { const raw=params.get('limit'); if(!raw)return undefined; const limit=Number(raw); if(!Number.isInteger(limit)||limit<1||limit>max)throw badRequest(`Limit must be an integer between 1 and ${max}`); return limit }
+function optionalTimestamp(params:URLSearchParams,key:string):string|undefined { const value=params.get(key); if(!value)return undefined; if(!Number.isFinite(Date.parse(value)))throw badRequest(`Invalid ${key} timestamp`); return value }
+function parseTimelineQuery(params:URLSearchParams):TimelineQueryDto { const kindValue=params.get('kind'); let kind:TimelineObservationKind|undefined; if(kindValue){if(!(TIMELINE_OBSERVATION_KINDS as readonly string[]).includes(kindValue))throw badRequest(`Unknown timeline kind: ${kindValue}`); kind=kindValue as TimelineObservationKind} const from=optionalTimestamp(params,'from'),to=optionalTimestamp(params,'to'); if(from&&to&&Date.parse(from)>Date.parse(to))throw badRequest('Timeline from must be earlier than or equal to to'); const limit=parseLimit(params,1000); return {...(params.get('installationId')?{installationId:params.get('installationId')!}:{}),...(params.get('logicalSessionId')?{logicalSessionId:params.get('logicalSessionId')!}:{}),...(kind?{kind}:{}),...(from?{from}:{}),...(to?{to}:{}),...(limit===undefined?{}:{limit})} }
+function parseSessionQuery(params:URLSearchParams):SessionQueryDto { const limit=parseLimit(params,500); return {...(params.get('installationId')?{installationId:params.get('installationId')!}:{}),...(params.get('logicalSessionId')?{logicalSessionId:params.get('logicalSessionId')!}:{}),...(limit===undefined?{}:{limit})} }
+function parseUsageQuery(params:URLSearchParams):ToolAssetUsageQueryDto { const limit=parseLimit(params,500),from=optionalTimestamp(params,'from'),to=optionalTimestamp(params,'to'); return {...(params.get('installationId')?{installationId:params.get('installationId')!}:{}),...(params.get('logicalSessionId')?{logicalSessionId:params.get('logicalSessionId')!}:{}),...(params.get('sourceId')?{sourceId:params.get('sourceId')!}:{}),...(params.get('projectId')?{projectId:params.get('projectId')!}:{}),...(from?{from}:{}),...(to?{to}:{}),...(limit===undefined?{}:{limit})} }
+function parseReviewQuery(params:URLSearchParams):ReviewQueryDto { const limit=parseLimit(params,500),from=optionalTimestamp(params,'from'),to=optionalTimestamp(params,'to'); const statusValue=params.get('status'); if(statusValue&&!['all','with-errors','clean'].includes(statusValue))throw badRequest(`Unknown review status: ${statusValue}`); return {...(params.get('sourceId')?{sourceId:params.get('sourceId')!}:{}),...(params.get('projectId')?{projectId:params.get('projectId')!}:{}),...(from?{from}:{}),...(to?{to}:{}),...(statusValue?{status:statusValue as ReviewStatusFilter}:{}),...(params.get('search')?{search:params.get('search')!}:{}),...(limit===undefined?{}:{limit})} }
+async function regularFile(path:string):Promise<boolean>{try{return(await stat(path)).isFile()}catch{return false}}
+function safeStaticPath(root:string,pathname:string):string|null{let decoded:string;try{decoded=decodeURIComponent(pathname)}catch{return null} const candidate=resolve(root,decoded.replace(/^\/+/,'')); return candidate===root||candidate.startsWith(`${root}${sep}`)?candidate:null}
+async function serveStatic(response:ServerResponse,pathname:string,staticDir:string,spaFallback=true):Promise<boolean>{const root=resolve(staticDir),requested=pathname==='/'?'/index.html':pathname,candidate=safeStaticPath(root,requested); if(!candidate)return false; let target=candidate; if(!await regularFile(target)){if(!spaFallback||extname(requested))return false; target=resolve(root,'index.html'); if(!await regularFile(target))return false} writeBytes(response,200,MIME_TYPES[extname(target).toLowerCase()]??'application/octet-stream',await readFile(target)); return true}
 
-export interface HttpStaticMount {
-  id: string
-  directory: string
-  spaFallback?: boolean
+export async function startHttpSurface(storage:StorageService,options:HttpSurfaceOptions={}):Promise<RunningHttpSurface>{
+ const timeline=new TimelineProjection(storage),sessions=new SessionProjection(storage),usage=new ToolAssetUsageProjection(storage),review=new ReviewProjection(storage),facets=new FacetProjection(storage,options.sources),agents=new AgentOverviewProjection(storage,options.sources,options.capabilities),relationships=new SessionRelationshipProjection(storage)
+ const staticMounts=new Map<string,HttpStaticMount>(); if(options.staticDir)staticMounts.set('legacy-static-dir',{id:'legacy-static-dir',directory:options.staticDir,spaFallback:true})
+ const requestedPort=options.port??DEFAULT_AGENT_LENS_HTTP_PORT; if(!Number.isInteger(requestedPort)||requestedPort<0||requestedPort>65535)throw new Error(`Invalid AgentLens HTTP port: ${requestedPort}`)
+ const server=createServer(async(request,response)=>{try{if(request.method!=='GET'){writeJson(response,405,{error:'method_not_allowed'});return} const url=new URL(request.url??'/',`http://${AGENT_LENS_HTTP_HOST}`)
+  if(url.pathname==='/api/v1/events'){if(!options.eventHub){writeJson(response,503,{error:'events_unavailable'});return} options.eventHub.connect(response);return}
+  if(url.pathname==='/api/v1/health'){const health=await storage.health(); const details=health.details?Object.fromEntries(Object.entries(health.details).map(([key,value])=>[key,jsonValue(value)])):undefined; const body:HealthResponseDto={status:health.ok?'ok':'degraded',protocolVersion:AGENT_LENS_PROTOCOL_VERSION,storage:{ok:health.ok,...(health.schemaVersion===undefined?{}:{schemaVersion:health.schemaVersion}),...(details?{details}:{})}}; writeJson(response,health.ok?200:503,body);return}
+  if(url.pathname==='/api/v1/facets'){writeJson(response,200,await facets.query());return}
+  if(url.pathname==='/api/v1/agents'){writeJson(response,200,await agents.query());return}
+  if(url.pathname==='/api/v1/review'){writeJson(response,200,await review.query(parseReviewQuery(url.searchParams)));return}
+  if(url.pathname.startsWith('/api/v1/review/')){const id=decodeURIComponent(url.pathname.slice('/api/v1/review/'.length)); const detail=await review.get(id); writeJson(response,detail?200:404,detail??{error:'not_found'});return}
+  if(url.pathname==='/api/v1/relationships'){const id=url.searchParams.get('logicalSessionId'); if(!id)throw badRequest('logicalSessionId is required'); writeJson(response,200,await relationships.query(id));return}
+  if(url.pathname==='/api/v1/timeline'){writeJson(response,200,await timeline.query(parseTimelineQuery(url.searchParams)));return}
+  if(url.pathname==='/api/v1/sessions'){writeJson(response,200,await sessions.query(parseSessionQuery(url.searchParams)));return}
+  if(url.pathname==='/api/v1/usage'){writeJson(response,200,await usage.query(parseUsageQuery(url.searchParams)));return}
+  if(url.pathname.startsWith('/api/')){writeJson(response,404,{error:'not_found'});return}
+  for(const mount of [...staticMounts.values()].reverse())if(await serveStatic(response,url.pathname,mount.directory,mount.spaFallback??true))return
+  writeJson(response,404,{error:'not_found'})
+ }catch(error){const statusCode=error&&typeof error==='object'&&'statusCode' in error?Number((error as {statusCode:unknown}).statusCode):500; writeJson(response,statusCode,{error:statusCode===400?'bad_request':'internal_error',...(statusCode===400&&error instanceof Error?{message:error.message}:{})})}})
+ await new Promise<void>((resolvePromise,reject)=>{const onError=(error:Error)=>{server.off('listening',onListening);reject(error)},onListening=()=>{server.off('error',onError);resolvePromise()}; server.once('error',onError);server.once('listening',onListening);server.listen(requestedPort,AGENT_LENS_HTTP_HOST)})
+ const address=server.address(); if(!address||typeof address==='string'){server.close();throw new Error('AgentLens HTTP server did not expose a TCP address')} let disposed=false
+ return {host:AGENT_LENS_HTTP_HOST,port:address.port,server,mountStatic(mount){if(!mount.id||!mount.directory)throw new Error('Static mount requires id and directory'); const registered={...mount}; staticMounts.set(mount.id,registered); return{dispose(){if(staticMounts.get(mount.id)===registered)staticMounts.delete(mount.id)}}},async dispose(){if(disposed)return;disposed=true;staticMounts.clear();options.eventHub?.close();await new Promise<void>((resolvePromise,reject)=>server.close(error=>error?reject(error):resolvePromise()))}}
 }
-
-export interface HttpSurfaceOptions {
-  port?: number
-  /** @deprecated Use RunningHttpSurface.mountStatic() through the Cordis http service. */
-  staticDir?: string
-  eventHub?: HttpEventHub
-}
-
-export interface RunningHttpSurface {
-  readonly host: typeof AGENT_LENS_HTTP_HOST
-  readonly port: number
-  readonly server: Server
-  mountStatic(mount: HttpStaticMount): Disposable
-  dispose(): Promise<void>
-}
-
-const MIME_TYPES: Record<string, string> = {
-  '.css': 'text/css; charset=utf-8', '.html': 'text/html; charset=utf-8', '.ico': 'image/x-icon',
-  '.js': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8',
-  '.map': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.txt': 'text/plain; charset=utf-8',
-  '.webp': 'image/webp',
-}
-
-function jsonValue(value: unknown, depth = 0): JsonValue {
-  if (depth > 16) return '[max-depth]'
-  if (value === null) return null
-  if (typeof value === 'string' || typeof value === 'boolean') return value
-  if (typeof value === 'number') return Number.isFinite(value) ? value : null
-  if (typeof value === 'bigint') return value.toString()
-  if (Array.isArray(value)) return value.map(item => jsonValue(item, depth + 1))
-  if (typeof value === 'object') {
-    const result: Record<string, JsonValue> = {}
-    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
-      if (item === undefined || typeof item === 'function' || typeof item === 'symbol') continue
-      result[key] = jsonValue(item, depth + 1)
-    }
-    return result
-  }
-  return null
-}
-
-function writeJson(response: ServerResponse, statusCode: number, body: unknown): void {
-  const content = JSON.stringify(body)
-  response.statusCode = statusCode
-  response.setHeader('content-type', 'application/json; charset=utf-8')
-  response.setHeader('cache-control', 'no-store')
-  response.setHeader('content-length', Buffer.byteLength(content))
-  response.end(content)
-}
-
-function writeBytes(response: ServerResponse, statusCode: number, contentType: string, content: Buffer): void {
-  response.statusCode = statusCode
-  response.setHeader('content-type', contentType)
-  response.setHeader('cache-control', 'no-store')
-  response.setHeader('content-length', content.byteLength)
-  response.end(content)
-}
-
-function badRequest(message: string): Error & { statusCode: number } {
-  const error = new Error(message) as Error & { statusCode: number }
-  error.statusCode = 400
-  return error
-}
-
-function parseLimit(params: URLSearchParams, max: number): number | undefined {
-  const raw = params.get('limit')
-  if (!raw) return undefined
-  const limit = Number(raw)
-  if (!Number.isInteger(limit) || limit < 1 || limit > max) throw badRequest(`Limit must be an integer between 1 and ${max}`)
-  return limit
-}
-
-function optionalTimestamp(params: URLSearchParams, key: string): string | undefined {
-  const value = params.get(key)
-  if (!value) return undefined
-  if (!Number.isFinite(Date.parse(value))) throw badRequest(`Invalid ${key} timestamp`)
-  return value
-}
-
-function parseTimelineQuery(params: URLSearchParams): TimelineQueryDto {
-  const kindValue = params.get('kind')
-  let kind: TimelineObservationKind | undefined
-  if (kindValue) {
-    if (!(TIMELINE_OBSERVATION_KINDS as readonly string[]).includes(kindValue)) throw badRequest(`Unknown timeline kind: ${kindValue}`)
-    kind = kindValue as TimelineObservationKind
-  }
-  const from = optionalTimestamp(params, 'from')
-  const to = optionalTimestamp(params, 'to')
-  if (from && to && Date.parse(from) > Date.parse(to)) throw badRequest('Timeline from must be earlier than or equal to to')
-  const limit = parseLimit(params, 1000)
-  return {
-    ...(params.get('installationId') ? { installationId: params.get('installationId')! } : {}),
-    ...(params.get('logicalSessionId') ? { logicalSessionId: params.get('logicalSessionId')! } : {}),
-    ...(kind ? { kind } : {}), ...(from ? { from } : {}), ...(to ? { to } : {}),
-    ...(limit === undefined ? {} : { limit }),
-  }
-}
-
-function parseSessionQuery(params: URLSearchParams): SessionQueryDto {
-  const limit = parseLimit(params, 500)
-  return {
-    ...(params.get('installationId') ? { installationId: params.get('installationId')! } : {}),
-    ...(params.get('logicalSessionId') ? { logicalSessionId: params.get('logicalSessionId')! } : {}),
-    ...(limit === undefined ? {} : { limit }),
-  }
-}
-
-function parseUsageQuery(params: URLSearchParams): ToolAssetUsageQueryDto {
-  const limit = parseLimit(params, 500)
-  return {
-    ...(params.get('installationId') ? { installationId: params.get('installationId')! } : {}),
-    ...(params.get('logicalSessionId') ? { logicalSessionId: params.get('logicalSessionId')! } : {}),
-    ...(limit === undefined ? {} : { limit }),
-  }
-}
-
-async function regularFile(path: string): Promise<boolean> {
-  try { return (await stat(path)).isFile() } catch { return false }
-}
-
-function safeStaticPath(root: string, pathname: string): string | null {
-  let decoded: string
-  try { decoded = decodeURIComponent(pathname) } catch { return null }
-  const candidate = resolve(root, decoded.replace(/^\/+/, ''))
-  return candidate === root || candidate.startsWith(`${root}${sep}`) ? candidate : null
-}
-
-async function serveStatic(
-  response: ServerResponse,
-  pathname: string,
-  staticDir: string,
-  spaFallback = true,
-): Promise<boolean> {
-  const root = resolve(staticDir)
-  const requested = pathname === '/' ? '/index.html' : pathname
-  const candidate = safeStaticPath(root, requested)
-  if (!candidate) return false
-  let target = candidate
-  if (!await regularFile(target)) {
-    if (!spaFallback || extname(requested)) return false
-    target = resolve(root, 'index.html')
-    if (!await regularFile(target)) return false
-  }
-  writeBytes(response, 200, MIME_TYPES[extname(target).toLowerCase()] ?? 'application/octet-stream', await readFile(target))
-  return true
-}
-
-export async function startHttpSurface(storage: StorageService, options: HttpSurfaceOptions = {}): Promise<RunningHttpSurface> {
-  const timeline = new TimelineProjection(storage)
-  const sessions = new SessionProjection(storage)
-  const usage = new ToolAssetUsageProjection(storage)
-  const staticMounts = new Map<string, HttpStaticMount>()
-  if (options.staticDir) {
-    staticMounts.set('legacy-static-dir', { id: 'legacy-static-dir', directory: options.staticDir, spaFallback: true })
-  }
-  const requestedPort = options.port ?? DEFAULT_AGENT_LENS_HTTP_PORT
-  if (!Number.isInteger(requestedPort) || requestedPort < 0 || requestedPort > 65535) throw new Error(`Invalid AgentLens HTTP port: ${requestedPort}`)
-
-  const server = createServer(async (request, response) => {
-    try {
-      if (request.method !== 'GET') { writeJson(response, 405, { error: 'method_not_allowed' }); return }
-      const url = new URL(request.url ?? '/', `http://${AGENT_LENS_HTTP_HOST}`)
-      if (url.pathname === '/api/v1/events') {
-        if (!options.eventHub) { writeJson(response, 503, { error: 'events_unavailable' }); return }
-        options.eventHub.connect(response)
-        return
-      }
-      if (url.pathname === '/api/v1/health') {
-        const health = await storage.health()
-        const details = health.details ? Object.fromEntries(Object.entries(health.details).map(([key, value]) => [key, jsonValue(value)])) : undefined
-        const body: HealthResponseDto = {
-          status: health.ok ? 'ok' : 'degraded', protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
-          storage: { ok: health.ok, ...(health.schemaVersion === undefined ? {} : { schemaVersion: health.schemaVersion }), ...(details ? { details } : {}) },
-        }
-        writeJson(response, health.ok ? 200 : 503, body); return
-      }
-      if (url.pathname === '/api/v1/timeline') { writeJson(response, 200, await timeline.query(parseTimelineQuery(url.searchParams))); return }
-      if (url.pathname === '/api/v1/sessions') { writeJson(response, 200, await sessions.query(parseSessionQuery(url.searchParams))); return }
-      if (url.pathname === '/api/v1/usage') { writeJson(response, 200, await usage.query(parseUsageQuery(url.searchParams))); return }
-      if (url.pathname.startsWith('/api/')) { writeJson(response, 404, { error: 'not_found' }); return }
-      for (const mount of [...staticMounts.values()].reverse()) {
-        if (await serveStatic(response, url.pathname, mount.directory, mount.spaFallback ?? true)) return
-      }
-      writeJson(response, 404, { error: 'not_found' })
-    } catch (error) {
-      const statusCode = error && typeof error === 'object' && 'statusCode' in error ? Number((error as { statusCode: unknown }).statusCode) : 500
-      writeJson(response, statusCode, { error: statusCode === 400 ? 'bad_request' : 'internal_error', ...(statusCode === 400 && error instanceof Error ? { message: error.message } : {}) })
-    }
-  })
-
-  await new Promise<void>((resolvePromise, reject) => {
-    const onError = (error: Error) => { server.off('listening', onListening); reject(error) }
-    const onListening = () => { server.off('error', onError); resolvePromise() }
-    server.once('error', onError); server.once('listening', onListening); server.listen(requestedPort, AGENT_LENS_HTTP_HOST)
-  })
-  const address = server.address()
-  if (!address || typeof address === 'string') { server.close(); throw new Error('AgentLens HTTP server did not expose a TCP address') }
-  let disposed = false
-  return {
-    host: AGENT_LENS_HTTP_HOST,
-    port: address.port,
-    server,
-    mountStatic(mount): Disposable {
-      if (!mount.id || !mount.directory) throw new Error('Static mount requires id and directory')
-      const registered = { ...mount }
-      staticMounts.set(mount.id, registered)
-      return {
-        dispose() {
-          if (staticMounts.get(mount.id) === registered) staticMounts.delete(mount.id)
-        },
-      }
-    },
-    async dispose(): Promise<void> {
-      if (disposed) return
-      disposed = true
-      staticMounts.clear()
-      options.eventHub?.close()
-      await new Promise<void>((resolvePromise, reject) => server.close(error => error ? reject(error) : resolvePromise()))
-    },
-  }
-}
-
-export const httpSurfaceInternals = { parseTimelineQuery, parseSessionQuery, parseUsageQuery, jsonValue, safeStaticPath, serveStatic }
+export const httpSurfaceInternals={parseTimelineQuery,parseSessionQuery,parseUsageQuery,parseReviewQuery,jsonValue,safeStaticPath,serveStatic}

@@ -12,7 +12,9 @@ export interface ToolUsageDto {
   resultCount: number
   successCount: number
   errorCount: number
+  sessionCount: number
   totalDurationMs: number
+  averageDurationMs: number
   firstUsedAt: string
   lastUsedAt: string
   observationIds: string[]
@@ -33,6 +35,10 @@ export interface AssetUsageDto {
 export interface ToolAssetUsageQueryDto {
   installationId?: string
   logicalSessionId?: string
+  sourceId?: string
+  projectId?: string
+  from?: string
+  to?: string
   limit?: number
 }
 
