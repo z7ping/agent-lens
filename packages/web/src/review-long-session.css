@@ -1,6 +1,51 @@
 .interaction-block {
   content-visibility: auto;
   contain-intrinsic-size: auto 220px;
+  margin: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.interaction-block + .interaction-block {
+  border-top: 1px solid var(--al-line);
+}
+
+.interaction-block.interaction-has-error {
+  border-color: var(--al-line);
+}
+
+.interaction-summary {
+  min-height: 42px;
+  padding: 10px 0 8px;
+  border: 0;
+  background: transparent;
+}
+
+.interaction-block + .interaction-block .interaction-summary {
+  padding-top: 12px;
+}
+
+.interaction-summary:hover {
+  background: transparent;
+}
+
+.interaction-chevron {
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+}
+
+.interaction-block.interaction-has-error > .interaction-summary {
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--al-danger) 68%, transparent);
+  padding-left: 8px;
+}
+
+.interaction-flow {
+  padding: 2px 0 20px;
 }
 
 .detail-load-sentinel {
