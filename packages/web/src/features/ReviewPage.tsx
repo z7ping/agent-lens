@@ -133,7 +133,7 @@ function ToolRunGroup({ items, inspect }: { items: ReviewToolNodeDto[]; inspect(
   const errors = items.filter(item => item.status === 'error').length
   const totalDuration = items.reduce((sum, item) => sum + (item.durationMs ?? 0), 0)
   const names = [...new Set(items.map(item => item.name))]
-  return <details className={`execution-group ${errors ? 'execution-group-error' : ''}`} defaultOpen={errors > 0}>
+  return <details className={`execution-group ${errors ? 'execution-group-error' : ''}`} open={errors > 0}>
     <summary>
       <span className="execution-group-icon">⌁</span>
       <span className="min-w-0 flex-1"><b>执行过程</b><span className="ml-2 text-xs font-normal text-muted">{items.length} 次工具调用 · {names.slice(0, 3).join(' / ')}{names.length > 3 ? ' …' : ''}</span></span>
