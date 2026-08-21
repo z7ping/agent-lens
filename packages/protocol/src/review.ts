@@ -4,6 +4,8 @@ import { AGENT_LENS_PROTOCOL_VERSION } from './timeline'
 export type ReviewStatusFilter = 'all' | 'with-errors' | 'clean'
 export type ReviewMessageRole = 'user' | 'assistant' | 'reasoning'
 export type ReviewEventCategory = 'permission' | 'subagent' | 'context' | 'model' | 'lifecycle' | 'artifact' | 'usage' | 'unknown'
+export type ReviewDetailFilter = 'all' | 'errors' | 'latency' | 'latest'
+export type ReviewDetailDirection = 'forward' | 'backward'
 
 export interface ReviewSessionSummaryDto {
   id: string
@@ -84,6 +86,9 @@ export interface ReviewDetailPageDto {
   count: number
   hasMore: boolean
   nextCursor?: string
+  direction: ReviewDetailDirection
+  filter: ReviewDetailFilter
+  latencyThresholdMs?: number
 }
 
 export interface ReviewSessionDetailDto extends ReviewSessionSummaryDto {
@@ -94,6 +99,8 @@ export interface ReviewSessionDetailDto extends ReviewSessionSummaryDto {
 export interface ReviewDetailQueryDto {
   cursor?: string
   limit?: number
+  direction?: ReviewDetailDirection
+  filter?: ReviewDetailFilter
 }
 
 export interface ReviewQueryDto {

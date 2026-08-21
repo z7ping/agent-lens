@@ -142,23 +142,9 @@ export function encodeTimelineCursor(item: Pick<TimelineItemDto, 'effectiveAt' |
 export class TimelineProjection {
   constructor(private readonly storage: StorageService) {}
 
-  async query(query: TimelineQueryDto = {}): Promise<TimelineResponseDto> {
-    const requestedLimit = Math.max(1, Math.min(query.limit ?? DEFAULT_LIMIT, MAX_LIMIT))
-    const coreQuery: ObservationQuery = {
-      ...(query.installationId ? { installationId: query.installationId } : {}),
-      ...(query.logicalSessionId ? { logicalSessionId: query.logicalSessionId } : {}),
-      ...(query.kind ? { kind: query.kind } : {}),
-      ...(query.from ? { from: query.from } : {}),
-      ...(query.to ? { to: query.to } : {}),
-      ...(query.cursor ? { after: decodeCursor(query.cursor) } : {}),
-      limit: requestedLimit + 1,
-    }
-    const observations = await this.storage.repositories.observations.query(coreQuery)
-    const hasMore = observations.length > requestedLimit
-    const limitedObservations = observations.slice(0, requestedLimit)
-
+  async mapObservations(observations: CanonicalObservation[]): Promise<TimelineItemDto[]> {
     const evidenceById = new Map<string, Evidence>()
-    const evidenceIds = [...new Set(limitedObservations.flatMap(observation => observation.evidenceRefs))]
+    const evidenceIds = [...new Set(observations.flatMap(observation => observation.evidenceRefs))]
     if (evidenceIds.length && this.storage.repositories.evidence.getMany) {
       for (const evidence of await this.storage.repositories.evidence.getMany(evidenceIds)) {
         evidenceById.set(evidence.id, evidence)
@@ -168,7 +154,7 @@ export class TimelineProjection {
     const sourceSessionCache = new Map<string, SourceSession | null>()
     const installationCache = new Map<string, AgentInstallation | null>()
 
-    const items = await Promise.all(limitedObservations.map(async observation => {
+    const items = await Promise.all(observations.map(async observation => {
       let sourceSession = sourceSessionCache.get(observation.sourceSessionId)
       if (sourceSession === undefined) {
         sourceSession = await this.storage.repositories.sessions.getSourceSession(observation.sourceSessionId)
@@ -215,14 +201,38 @@ export class TimelineProjection {
     }))
 
     items.sort(compareTimelineItems)
-    const last = limitedObservations.at(-1)
+    return items
+  }
+
+  async query(query: TimelineQueryDto = {}): Promise<TimelineResponseDto> {
+    const requestedLimit = Math.max(1, Math.min(query.limit ?? DEFAULT_LIMIT, MAX_LIMIT))
+    const direction = query.direction ?? 'forward'
+    const decodedCursor = query.cursor ? decodeCursor(query.cursor) : undefined
+    const coreQuery: ObservationQuery = {
+      ...(query.installationId ? { installationId: query.installationId } : {}),
+      ...(query.logicalSessionId ? { logicalSessionId: query.logicalSessionId } : {}),
+      ...(query.kind ? { kind: query.kind } : {}),
+      ...(query.from ? { from: query.from } : {}),
+      ...(query.to ? { to: query.to } : {}),
+      ...(decodedCursor && direction === 'forward' ? { after: decodedCursor } : {}),
+      ...(decodedCursor && direction === 'backward' ? { before: decodedCursor } : {}),
+      order: direction === 'backward' ? 'desc' : 'asc',
+      limit: requestedLimit + 1,
+    }
+    const observations = await this.storage.repositories.observations.query(coreQuery)
+    const hasMore = observations.length > requestedLimit
+    const limitedObservations = observations.slice(0, requestedLimit)
+    const items = await this.mapObservations(limitedObservations)
+    const cursorObservation = limitedObservations.at(-1)
+
     return {
       items,
       meta: {
         protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
         count: items.length,
         hasMore,
-        ...(hasMore && last ? { nextCursor: encodeCursor(cursorForObservation(last)) } : {}),
+        ...(hasMore && cursorObservation ? { nextCursor: encodeCursor(cursorForObservation(cursorObservation)) } : {}),
+        direction,
         generatedAt: new Date().toISOString(),
       },
     }

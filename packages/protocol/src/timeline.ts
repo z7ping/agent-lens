@@ -86,6 +86,8 @@ export interface TimelineItemDto {
   evidence: TimelineEvidenceDto[]
 }
 
+export type TimelineDirection = 'forward' | 'backward'
+
 export interface TimelineQueryDto {
   installationId?: string
   logicalSessionId?: string
@@ -93,6 +95,7 @@ export interface TimelineQueryDto {
   from?: string
   to?: string
   cursor?: string
+  direction?: TimelineDirection
   limit?: number
 }
 
@@ -103,6 +106,7 @@ export interface TimelineResponseDto {
     count: number
     hasMore: boolean
     nextCursor?: string
+    direction: TimelineDirection
     generatedAt: string
   }
 }

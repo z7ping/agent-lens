@@ -108,6 +108,8 @@ export interface ObservationQuery {
   from?: string
   to?: string
   after?: ObservationCursor
+  before?: ObservationCursor
+  order?: 'asc' | 'desc'
   limit?: number
 }
 

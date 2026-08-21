@@ -10,6 +10,7 @@ import { SqliteAssetInventoryReader } from './asset-inventory'
 import { SqliteCheckpointRepository } from './checkpoints'
 import { SqliteExecutor } from './executor'
 import { migrateDatabase } from './migrations'
+import { withSqliteObservationPagination } from './observation-pagination'
 import { createSqliteRepositories } from './repositories'
 
 export interface SqliteStorageOptions {
@@ -36,7 +37,11 @@ export class SqliteStorageService implements StorageService {
     }
 
     this.executor = new SqliteExecutor(this.db)
-    this.repositories = createSqliteRepositories(this.executor)
+    const repositories = createSqliteRepositories(this.executor)
+    this.repositories = {
+      ...repositories,
+      observations: withSqliteObservationPagination(this.executor, repositories.observations),
+    }
     this.checkpoints = new SqliteCheckpointRepository(this.executor)
     this.assetInventory = new SqliteAssetInventoryReader(this.executor)
   }
