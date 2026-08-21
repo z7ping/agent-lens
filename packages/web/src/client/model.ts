@@ -229,9 +229,14 @@ export class AgentLensClientModel {
   async selectReviewSession(id: string): Promise<void> {
     if (!id) return
     const generation = ++this.detailGeneration
+    const changingSession = this.snapshot.review.selectedId !== id
     this.publish({
       ...this.snapshot,
-      review: { ...this.snapshot.review, selectedId: id },
+      review: {
+        ...this.snapshot.review,
+        selectedId: id,
+        ...(changingSession ? { detail: null, relationships: null } : {}),
+      },
     })
     try {
       const [detail, relationships] = await Promise.all([
