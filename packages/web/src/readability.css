@@ -1,0 +1,124 @@
+/*
+ * AgentLens readability baseline.
+ *
+ * Product rule:
+ * - No core readable or interactive text below 12px.
+ * - Secondary metadata is normally 12-13px.
+ * - Primary body / table / conversation text is 13-14px.
+ * - Tiny typography must never be used as a substitute for information hierarchy.
+ */
+
+/* App shell / navigation */
+.app-status{font-size:12px}
+.nav-item{font-size:14px}
+.brand-mark{font-size:14px}
+
+/* Workspace controls */
+.workspace-toolbar{height:50px;min-height:50px}
+.filter{height:34px;font-size:13px;padding-left:11px}
+.scope-chip,.scope-manage-button{height:32px;font-size:13px;padding-inline:10px}
+.agent-scope-manage>summary{width:32px}
+.agent-scope-menu{top:38px}
+.agent-scope-menu-title,.agent-scope-option-state,.agent-scope-empty{font-size:12px}
+.agent-scope-option{min-height:40px;font-size:13px}
+
+/* Shared headings / metadata */
+.page-heading p{font-size:13px}
+.eyebrow,.section-label{font-size:12px;letter-spacing:.07em}
+.section-heading-row h3{font-size:14px}
+.section-heading-row p{font-size:12px}
+.count-badge,.section-total,.disclosure-count{font-size:12px;min-height:22px}
+.empty-state,.muted-empty,.page-error{font-size:13px}
+.markdown pre,.raw-json{font-size:12px;line-height:1.65}
+
+/* Review: session navigator */
+.review-layout{grid-template-columns:336px minmax(0,1fr)}
+.session-panel-head{height:52px}
+.session-panel-head b{font-size:14px}
+.session-panel-head>div span{font-size:12px}
+.session-item{padding:12px 11px 11px}
+.session-item-meta{font-size:12px}
+.session-item-title{font-size:14px;line-height:1.5}
+.session-item-foot{font-size:12px;line-height:1.4}
+
+/* Review: reading pane */
+.review-reader{width:min(100%,980px);padding-top:30px}
+.review-session-meta{font-size:12px}
+.review-session-title{font-size:20px;line-height:1.5}
+.review-session-submeta{font-size:12px}
+.session-status-error{font-size:12px;padding:3px 7px}
+.review-metric b{font-size:15px}
+.review-metric span{font-size:12px}
+.interaction-separator span{font-size:12px}
+.chat-avatar{width:28px;height:28px;font-size:12px}
+.chat-bubble{font-size:14px;line-height:1.7;padding:11px 14px}
+.chat-meta{font-size:12px;margin-bottom:6px}
+.chat-actions button,.evidence-link{font-size:12px}
+
+/* Review: thinking / execution / events */
+.thinking-block>summary{min-height:34px;font-size:12px;padding:7px 9px}
+.thinking-content{font-size:13px;line-height:1.7}
+.execution-group>summary{min-height:44px;padding:9px 11px}
+.execution-group-icon{width:24px;height:24px;font-size:12px}
+.execution-group-copy b{font-size:13px}
+.execution-group-copy small{font-size:12px}
+.execution-summary-status,.execution-total{font-size:12px}
+.execution-row{min-height:50px}
+.execution-main{padding:9px 0}
+.execution-name b{font-size:13px}
+.tool-status-label{font-size:12px;padding:2px 6px}
+.execution-preview{font-size:12px;line-height:1.45}
+.execution-duration{font-size:12px;padding-top:10px}
+.event-row{min-height:34px;font-size:12px;padding-block:6px}
+.raw-event-group>summary{min-height:32px;font-size:12px;padding-block:6px}
+.pi-session-tree>summary,.pi-session-tree>div{font-size:12px}
+.evidence-card{font-size:12px}
+
+/* Agent overview */
+.agent-identity h2{font-size:17px}
+.agent-identity p{font-size:13px;line-height:1.6}
+.agent-status{font-size:12px;padding:5px 9px}
+.agent-installation small{font-size:12px}
+.agent-installation b,.agent-installation code{font-size:13px}
+.asset-kpi{min-width:88px;padding:10px 11px}
+.asset-kpi strong{font-size:16px}
+.asset-kpi span{font-size:12px}
+.reliable-usage,.reliable-usage b{font-size:12px}
+.frequent-asset-row{min-height:40px}
+.frequent-rank{font-size:12px;width:20px}
+.frequent-main b{font-size:13px}
+.frequent-main span{font-size:12px}
+.frequent-asset-row strong{font-size:13px}
+.frequent-asset-row small{font-size:12px}
+.disclosure-group>summary{min-height:44px;font-size:13px}
+.disclosure-count{font-size:12px;min-width:24px;height:22px}
+.asset-item{padding:11px 12px}
+.asset-type,.asset-usage,.asset-state,.asset-more-state,.asset-discovered,.asset-path code,.copy-link{font-size:12px}
+.asset-name{font-size:13px}
+.asset-states{min-height:20px}
+.asset-type,.asset-state{padding:2px 5px}
+.show-more-button{font-size:12px;padding:7px 10px}
+.assembly-list>div{min-height:38px;font-size:12px;grid-template-columns:86px minmax(0,1fr)}
+.assembly-list code{font-size:12px}
+.capability-row{min-height:38px;font-size:13px}
+.capability-row b{font-size:12px}
+
+/* Tool analysis */
+.tool-summary-card>span,.tool-summary-card small{font-size:12px}
+.tool-summary-card strong{font-size:16px}
+.table-section-head h2{font-size:14px}
+.table-section-head p{font-size:12px}
+.tool-table{font-size:13px}
+.tool-table th{height:40px;font-size:12px}
+.tool-table td{height:54px}
+.tool-name{font-size:13px}
+.tool-source{font-size:12px}
+.attributed-asset{height:42px}
+.attributed-asset b{font-size:13px}
+.attributed-asset span,.attributed-asset small{font-size:12px}
+.attributed-asset strong{font-size:13px}
+
+@media(max-width:900px){
+  .nav-item{font-size:13px}
+  .review-layout{display:block}
+}
