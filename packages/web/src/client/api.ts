@@ -55,8 +55,12 @@ export class AgentLensApi {
     return getJson(`/api/v1/review?${params}`)
   }
 
-  reviewDetail(id: string): Promise<ReviewSessionDetailDto> {
-    return getJson(`/api/v1/review/${encodeURIComponent(id)}`)
+  reviewDetail(id: string, options: { cursor?: string; limit?: number } = {}): Promise<ReviewSessionDetailDto> {
+    const params = new URLSearchParams()
+    if (options.cursor) params.set('cursor', options.cursor)
+    if (options.limit !== undefined) params.set('limit', String(Math.max(1, Math.min(options.limit, 100))))
+    const query = params.toString()
+    return getJson(`/api/v1/review/${encodeURIComponent(id)}${query ? `?${query}` : ''}`)
   }
 
   relationships(id: string): Promise<SessionRelationshipResponseDto> {

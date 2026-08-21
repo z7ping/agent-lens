@@ -489,7 +489,7 @@ function Interaction({ interaction, inspect, highLatency, defaultExpanded }: { i
       <span className="interaction-summary-meta">
         {stats.toolCount > 0 && <span>{stats.toolCount} 工具</span>}
         {stats.errorCount > 0 && <span className="is-error">{stats.errorCount} 错误</span>}
-        {highLatency && <span className="is-latency">高耗时</span>}
+        {highLatency && <span className="is-latency">耗时较高</span>}
         {stats.durationMs > 0 && <span>{duration(stats.durationMs)}</span>}
       </span>
     </summary>
@@ -524,6 +524,8 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
   const navigate = useNavigate()
   const [inspect, setInspect] = useState<ReviewNodeDto | null>(null)
   const [roundFilter, setRoundFilter] = useState<RoundFilter>('all')
+  const [roundFilterLoading, setRoundFilterLoading] = useState(false)
+  const detailLoadSentinelRef = useRef<HTMLDivElement>(null)
   const review = snapshot.review
   const agents = snapshot.facets?.agents ?? []
   const projects = snapshot.facets?.projects ?? []
@@ -532,9 +534,35 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
   useEffect(() => { if (sessionId && sessionId !== review.selectedId) void model.selectReviewSession(sessionId) }, [sessionId])
   useEffect(() => {
     setRoundFilter('all')
+    setRoundFilterLoading(false)
     setInspect(null)
   }, [detail?.id])
+  useEffect(() => {
+    const sentinel = detailLoadSentinelRef.current
+    if (!sentinel || !detail?.page.hasMore || review.detailLoadingMore || review.detailLoadingAll || review.error) return
+    const root = sentinel.closest('.review-reader-pane')
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) void model.loadMoreReviewDetail()
+    }, { root, rootMargin: '800px 0px' })
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [detail?.id, detail?.page.hasMore, detail?.page.nextCursor, review.detailLoadingMore, review.detailLoadingAll, review.error, model])
+
   const select = (id: string) => { void model.selectReviewSession(id); navigate(`/review/${encodeURIComponent(id)}`) }
+  const selectRoundFilter = async (filter: RoundFilter) => {
+    if (filter === 'all') {
+      setRoundFilter(filter)
+      return
+    }
+    const activeDetailId = detail?.id
+    if (detail?.page.hasMore) {
+      setRoundFilterLoading(true)
+      await model.ensureFullReviewDetail()
+      setRoundFilterLoading(false)
+      if (model.getSnapshot().review.detail?.id !== activeDetailId) return
+    }
+    setRoundFilter(filter)
+  }
 
   const threshold = useMemo(() => detail ? highLatencyThreshold(detail.interactions) : null, [detail])
   const annotatedInteractions = useMemo(() => (detail?.interactions ?? []).map(interaction => {
@@ -549,6 +577,7 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
     if (roundFilter === 'latest') return annotatedInteractions.slice(-1)
     return annotatedInteractions
   }, [annotatedInteractions, roundFilter])
+  const incomplete = detail?.page.hasMore ?? false
 
   return <main className="review-page">
     <div className="workspace-toolbar">
@@ -578,7 +607,7 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
 
       <section className="review-reader-pane">
         {review.error && <div className="page-error">{review.error}</div>}
-        {!detail ? <div className="empty-state fill">选择一个会话开始复盘</div> : <div className="review-reader">
+        {!detail ? <div className="empty-state fill">{review.selectedId && review.detailLoading ? '加载会话详情…' : '选择一个会话开始复盘'}</div> : <div className="review-reader">
           <header className="review-session-head">
             <div className="review-session-copy">
               <div className="review-session-meta"><span className={`source-dot ${sourceDot(detail.sourceIds[0] ?? '')}`}/><b>{detail.sourceIds.map(id => agentLabel(id)).join(' / ')}</b><span>{detail.projectName ?? '无项目'}</span>{detail.errorCount > 0 && <span className="session-status-error">有错误</span>}</div>
@@ -602,11 +631,13 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
           </details> : null}
 
           <div className="round-nav" aria-label="轮次快速导航">
-            <button className={roundFilter === 'all' ? 'active' : ''} onClick={() => setRoundFilter('all')}>全部 <span>{annotatedInteractions.length}</span></button>
-            <button className={roundFilter === 'errors' ? 'active' : ''} disabled={!errorRoundCount} onClick={() => setRoundFilter('errors')}>有错误 <span>{errorRoundCount}</span></button>
-            <button className={roundFilter === 'latency' ? 'active' : ''} disabled={!latencyRoundCount} onClick={() => setRoundFilter('latency')}>高耗时 <span>{latencyRoundCount}</span></button>
-            <button className={roundFilter === 'latest' ? 'active' : ''} disabled={!annotatedInteractions.length} onClick={() => setRoundFilter('latest')}>最近一轮</button>
-            <small>“高耗时”按本会话轮次耗时分布自适应识别，不使用固定阈值。</small>
+            <button className={roundFilter === 'all' ? 'active' : ''} onClick={() => void selectRoundFilter('all')}>全部 <span>{annotatedInteractions.length}{incomplete ? '+' : ''}</span></button>
+            <button className={roundFilter === 'errors' ? 'active' : ''} disabled={roundFilterLoading || (!incomplete && !errorRoundCount)} onClick={() => void selectRoundFilter('errors')}>有错误 <span>{errorRoundCount}{incomplete ? '+' : ''}</span></button>
+            <button className={roundFilter === 'latency' ? 'active' : ''} disabled={roundFilterLoading || (!incomplete && !latencyRoundCount)} onClick={() => void selectRoundFilter('latency')}>耗时较高 <span>{latencyRoundCount}{incomplete ? '+' : ''}</span></button>
+            <button className={roundFilter === 'latest' ? 'active' : ''} disabled={roundFilterLoading || !annotatedInteractions.length} onClick={() => void selectRoundFilter('latest')}>最近一轮</button>
+            {roundFilterLoading && <span className="round-nav-status">正在扫描完整会话…</span>}
+            {review.detailHasNewData && <button className="round-nav-live" onClick={() => void model.selectReviewSession(detail.id)}>有新记录 · 刷新</button>}
+            <small>“耗时较高”是按本会话已完整读取的轮次耗时分布计算出的相对提示。</small>
           </div>
 
           <div className="review-flow">
@@ -618,6 +649,9 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
               inspect={setInspect}
             />)}
             {!visibleInteractions.length && <div className="round-filter-empty">当前筛选条件没有匹配的轮次。</div>}
+            {roundFilter === 'all' && <div ref={detailLoadSentinelRef} className="detail-load-sentinel" aria-live="polite">
+              {review.detailLoadingMore ? '正在加载后续轮次…' : detail.page.hasMore ? (review.error ? <button onClick={() => void model.loadMoreReviewDetail()}>加载失败 · 重试</button> : '继续向下滚动，后续轮次会自动加载') : `已完整加载 ${detail.interactions.length} 轮`}
+            </div>}
           </div>
         </div>}
       </section>

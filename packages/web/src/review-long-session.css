@@ -1,0 +1,40 @@
+.interaction-block {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 220px;
+}
+
+.detail-load-sentinel {
+  min-height: 52px;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  color: var(--al-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.detail-load-sentinel button {
+  min-height: 32px;
+  border: 1px solid var(--al-line);
+  border-radius: 8px;
+  padding: 0 12px;
+  background: var(--al-surface);
+  color: var(--al-ink-2);
+}
+
+.round-nav-status {
+  margin-left: auto;
+  color: var(--al-muted);
+  font-size: 12px;
+}
+
+.round-nav .round-nav-live {
+  margin-left: auto;
+  border-color: color-mix(in srgb, var(--al-accent) 34%, var(--al-line));
+  background: var(--al-accent-soft) !important;
+  color: var(--al-accent);
+}
+
+.round-nav-status + .round-nav-live {
+  margin-left: 0;
+}

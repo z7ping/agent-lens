@@ -7,6 +7,7 @@ import './styles.css'
 import './theme.css'
 import './readability.css'
 import './review.css'
+import './review-long-session.css'
 
 writeTheme(readTheme())
 void clientModel.start()
