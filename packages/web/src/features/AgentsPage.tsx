@@ -3,20 +3,29 @@ import type { AgentAssetInventoryDto, AgentOverviewDto } from '@agent-lens/proto
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
 import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
+import { copyText } from '../client/clipboard'
 
 const capabilityLabel: Record<string, string> = {
-  session: 'Session',
+  session: '会话',
   transcript: '对话记录',
   'tool-call': '工具调用',
   'tool-result': '工具结果',
   permission: '权限',
-  subagent: 'Subagent',
+  subagent: '子智能体',
   context: '上下文',
-  thinking: 'Thinking',
+  thinking: '思考过程',
   'asset-discovery': '资产发现',
   'asset-invocation': '资产调用',
   'artifact-action': '产物操作',
-  usage: 'Usage',
+  usage: '使用情况',
+}
+
+const capabilityStatusLabel: Record<string, string> = {
+  available: '可用',
+  partial: '部分可用',
+  experimental: '实验性',
+  unavailable: '不可用',
+  'not-applicable': '不适用',
 }
 
 const stateLabel: Record<string, string> = {
@@ -24,19 +33,19 @@ const stateLabel: Record<string, string> = {
   configured: '已配置',
   enabled: '已启用',
   discoverable: '可发现',
-  exposed: '已暴露',
+  exposed: '已开放',
   invoked: '已调用',
   observed: '已观测',
 }
 
 const assetTypeLabel: Record<string, string> = {
-  skill: 'Skills',
-  mcp: 'MCP',
-  plugin: 'Plugins',
-  extension: 'Extensions',
-  hook: 'Hooks',
-  memory: 'Memory',
-  rule: 'Rules',
+  skill: '技能',
+  mcp: 'MCP（模型上下文协议）',
+  plugin: '插件',
+  extension: '扩展',
+  hook: '钩子',
+  memory: '记忆',
+  rule: '规则',
   builtin: '内建能力',
   unknown: '其他',
 }
@@ -46,9 +55,9 @@ const USER_ASSET_LIMIT = 24
 const ASSEMBLY_PATH_LIMIT = 18
 
 const agentDescription: Record<string, string> = {
-  codex: 'OpenAI Codex · 本机历史、Runtime Hook 与能力资产',
-  'claude-code': 'Anthropic Claude Code · Session、Hook 与能力资产',
-  pi: 'Pi · 原生 Session、分支关系与能力资产',
+  codex: 'OpenAI Codex · 本机历史、运行时钩子与能力资产',
+  'claude-code': 'Anthropic Claude Code · 会话、钩子与能力资产',
+  pi: 'Pi · 原生会话、分支关系与能力资产',
 }
 
 function shortPath(path: string, max = 58): string {
@@ -88,7 +97,7 @@ function CopyPath({ path }: { path: string }) {
   const [copied, setCopied] = useState(false)
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(path)
+      await copyText(path)
       setCopied(true)
       window.setTimeout(() => setCopied(false), 1200)
     } catch {
@@ -126,7 +135,7 @@ function AssetGroup({ agent, type, assets }: { agent: AgentOverviewDto; type: st
 }
 
 function FrequentAssets({ agent, assets }: { agent: AgentOverviewDto; assets: AgentAssetInventoryDto[] }) {
-  if (!assets.length) return <div className="muted-empty compact">暂无能够可靠归因的 Skill / MCP 使用记录</div>
+  if (!assets.length) return <div className="muted-empty compact">暂无能够可靠归因的技能或 MCP（模型上下文协议）使用记录</div>
   return <div className="frequent-assets">
     {assets.map((asset, index) => <div key={asset.id} className="frequent-asset-row">
       <span className="frequent-rank">{index + 1}</span>
@@ -159,7 +168,7 @@ function SkillLifecycle({ agent, skills }: { agent: AgentOverviewDto; skills: Ag
   const sources = [...sourceMap.entries()].sort((a, b) => b[1].count - a[1].count).slice(0, 5)
 
   return <section className="skill-lifecycle">
-    <div className="section-heading-row"><div><h3>Skill 生命周期</h3><p>从本机资产发现，到 Agent 可发现，再到有 Evidence 支撑的真实调用。</p></div></div>
+    <div className="section-heading-row"><div><h3>技能生命周期</h3><p>从本机资产发现，到智能体可发现，再到有证据支撑的真实调用。</p></div></div>
     <div className="skill-funnel">
       <div><strong>{installed}</strong><span>{installedReported ? '已安装' : '已发现'}</span></div>
       <i>→</i>
@@ -167,7 +176,7 @@ function SkillLifecycle({ agent, skills }: { agent: AgentOverviewDto; skills: Ag
       <i>→</i>
       <div data-active><strong>{used}</strong><span>已使用</span></div>
     </div>
-    {!discoverableReported && <p className="skill-funnel-note">Source 没有明确报告 discoverable 时，不把“未报告”误算成 0。</p>}
+    {!discoverableReported && <p className="skill-funnel-note">数据源没有明确报告“可发现”状态时，不把“未报告”误算成 0。</p>}
     {sources.length > 0 && <div className="skill-source-list">
       {sources.map(([source, item]) => <div key={source}><span title={source}>{source}</span><b>{item.count}</b><small>{item.used} 个已使用</small></div>)}
     </div>}
@@ -206,7 +215,7 @@ function AgentCard({ agent }: { agent: AgentOverviewDto }) {
     <header className="agent-card-head">
       <div className="agent-identity">
         <span className={`source-dot large ${sourceDot(agent.sourceId)}`}/>
-        <div><h2>{agentLabel(agent.sourceId, agent.displayName)}</h2><p>{agentDescription[agent.sourceId] ?? '本机 Agent 的安装、资产与使用情况'}</p></div>
+        <div><h2>{agentLabel(agent.sourceId, agent.displayName)}</h2><p>{agentDescription[agent.sourceId] ?? '本机智能体的安装、资产与使用情况'}</p></div>
       </div>
       <span className={`agent-status ${agent.detected ? 'is-detected' : ''}`}>{agent.detected ? '已检测' : '未检测'}</span>
     </header>
@@ -225,7 +234,7 @@ function AgentCard({ agent }: { agent: AgentOverviewDto }) {
     </section>
 
     <section className="agent-primary-section">
-      <div className="section-heading-row"><div><h3>最近真正用过</h3><p>只统计有 Evidence 支撑的 Skill / MCP，不把内建工具混进来。</p></div></div>
+      <div className="section-heading-row"><div><h3>最近真正用过</h3><p>只统计有证据支撑的技能和 MCP（模型上下文协议），不把内建工具混进来。</p></div></div>
       <FrequentAssets agent={agent} assets={priorityAssets}/>
     </section>
 
@@ -233,7 +242,7 @@ function AgentCard({ agent }: { agent: AgentOverviewDto }) {
 
     <section className="agent-disclosures">
       {userGrouped.map(([type, assets]) => <AssetGroup key={type} agent={agent} type={type} assets={assets}/>)}
-      {agent.assetInventoryStatus === 'unavailable' && <div className="muted-empty compact">当前 Storage 未提供资产库存查询能力</div>}
+      {agent.assetInventoryStatus === 'unavailable' && <div className="muted-empty compact">当前存储未提供资产库存查询能力</div>}
     </section>
 
     <section className="agent-secondary">
@@ -241,9 +250,9 @@ function AgentCard({ agent }: { agent: AgentOverviewDto }) {
       <details className="disclosure-group">
         <summary><span>装配路径</span><span className="disclosure-count">{bindings.length}</span></summary>
         <div className="assembly-list">
-          {installation?.executable && <div><span>Executable</span><code>{installation.executable}</code></div>}
-          {installation?.configRoot && <div><span>Config</span><code>{installation.configRoot}</code></div>}
-          {installation?.dataRoot && <div><span>Data</span><code>{installation.dataRoot}</code></div>}
+          {installation?.executable && <div><span>可执行文件</span><code>{installation.executable}</code></div>}
+          {installation?.configRoot && <div><span>配置</span><code>{installation.configRoot}</code></div>}
+          {installation?.dataRoot && <div><span>数据</span><code>{installation.dataRoot}</code></div>}
           {visibleBindings.map(({ asset, binding }) => binding.path ? <div key={binding.id}><span>{assetTypeLabel[asset.type] ?? asset.type}</span><code>{binding.path}</code></div> : null)}
           {!installation && !bindings.some(item => item.binding.path) && <div className="muted-empty compact">暂无装配路径</div>}
         </div>
@@ -252,7 +261,7 @@ function AgentCard({ agent }: { agent: AgentOverviewDto }) {
       <details className="disclosure-group">
         <summary><span>可观测能力</span><span className="disclosure-count">{agent.capabilities.length}</span></summary>
         <div className="capability-list">
-          {agent.capabilities.map(cap => <div key={cap.name} className="capability-row" title={cap.reason}><span>{capabilityLabel[cap.name] ?? cap.name}</span><b data-status={cap.status}>{cap.status}</b></div>)}
+          {agent.capabilities.map(cap => <div key={cap.name} className="capability-row"><span>{capabilityLabel[cap.name] ?? cap.name}</span><b data-status={cap.status}>{capabilityStatusLabel[cap.status] ?? cap.status}</b></div>)}
         </div>
       </details>
     </section>
@@ -296,7 +305,7 @@ function CrossAgentMatrix({ agents }: { agents: AgentOverviewDto[] }) {
 
   if (agents.length < 2 || !rows.length) return null
   return <section className="cross-agent-matrix">
-    <div className="matrix-heading"><div><span className="eyebrow">Cross Agent</span><h2>高频资产覆盖矩阵</h2><p>只拿真实用过的 Skill / MCP 做横向对照；“未观察到”不等于一定缺失。</p></div></div>
+    <div className="matrix-heading"><div><span className="eyebrow">跨智能体</span><h2>高频资产覆盖矩阵</h2><p>只拿真实用过的技能和 MCP（模型上下文协议）做横向对照；“未观察到”不等于一定缺失。</p></div></div>
     <div className="matrix-scroll">
       <div className="matrix-table" style={{ ['--matrix-agents' as string]: agents.length }}>
         <div className="matrix-header"><span>资产</span>{agents.map(agent => <span key={agent.sourceId}><i className={`source-dot ${sourceDot(agent.sourceId)}`}/>{agentLabel(agent.sourceId, agent.displayName)}</span>)}</div>
@@ -322,12 +331,12 @@ export function AgentsPage({ model }: { model: AgentLensClientModel }) {
   return <main className="workspace-page">
     <div className="workspace-toolbar">
       <AgentScope agents={agents} value={sourceId} onChange={setSourceId}/>
-      <button className="icon-button toolbar-end" onClick={() => void model.refreshFacetsAndAgents()} title="刷新 Agent 概览" aria-label="刷新 Agent 概览">↻</button>
+      <button className="icon-button toolbar-end" onClick={() => void model.refreshFacetsAndAgents()} title="刷新智能体概览" aria-label="刷新智能体概览">↻</button>
     </div>
     <div className="page-content agents-content">
-      <header className="page-heading"><div><span className="eyebrow">Workspace</span><h1>Agent 概览</h1><p>先看结论：我有哪些 AI 资产、哪些真的用过、Skill 从发现到使用卡在哪一步。</p></div></header>
+      <header className="page-heading"><div><span className="eyebrow">工作区</span><h1>智能体概览</h1><p>先看结论：我有哪些人工智能资产、哪些真的用过、技能从发现到使用卡在哪一步。</p></div></header>
       <div className="agents-grid">{shown.map(agent => <AgentCard key={agent.sourceId} agent={agent}/>)}</div>
-      {!shown.length && <div className="empty-state roomy">没有可显示的 Agent</div>}
+      {!shown.length && <div className="empty-state roomy">没有可显示的智能体</div>}
       {!sourceId && <CrossAgentMatrix agents={items}/>} 
     </div>
   </main>
