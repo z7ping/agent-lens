@@ -24,7 +24,7 @@ function formatRange(start: string, end: string): string {
   const right = new Date(end)
   const sameDay = left.toDateString() === right.toDateString()
   const date = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(left)
-  return sameDay ? `${date} ${formatClock(start)} ~ ${formatClock(end)}` : `${formatTime(start)} ~ ${formatTime(end)}`
+  return sameDay ? `${date} ${formatClock(start)} – ${formatClock(end)}` : `${formatTime(start)} – ${formatTime(end)}`
 }
 
 function duration(ms: number): string {
@@ -40,9 +40,9 @@ function duration(ms: number): string {
   return `${days < 10 ? days.toFixed(1) : Math.round(days)}天`
 }
 
-function compactTitle(value: string | undefined, max = 110): string {
+function compactTitle(value: string | undefined, max = 92): string {
   const text = value?.replace(/\s+/g, ' ').trim() ?? ''
-  if (!text) return 'Session 复盘'
+  if (!text) return '未命名会话'
   return text.length > max ? `${text.slice(0, max)}…` : text
 }
 
@@ -65,22 +65,22 @@ function sourceEventLabel(node: ReviewEventNodeDto): string {
   const payload = payloadRecord(node.payload)
   const action = typeof payload.action === 'string' ? payload.action : typeof payload.event === 'string' ? payload.event : ''
   if (node.sourceId === 'codex') {
-    if (node.kind === 'context.compaction') return 'Codex · 上下文压缩'
-    if (node.kind === 'subagent.spawn') return 'Codex · 启动 Subagent'
-    if (node.kind === 'subagent.end') return 'Codex · Subagent 完成'
-    if (node.kind === 'permission.request') return 'Codex · 权限请求'
-    if (node.kind === 'session.lifecycle' && action.toLowerCase().includes('stop')) return 'Codex · Turn Stop'
+    if (node.kind === 'context.compaction') return '上下文压缩'
+    if (node.kind === 'subagent.spawn') return '启动 Subagent'
+    if (node.kind === 'subagent.end') return 'Subagent 完成'
+    if (node.kind === 'permission.request') return '权限请求'
+    if (node.kind === 'session.lifecycle' && action.toLowerCase().includes('stop')) return 'Turn Stop'
   }
   if (node.sourceId === 'claude-code') {
-    if (node.kind === 'permission.request') return 'Claude · 权限请求'
-    if (node.kind === 'subagent.spawn') return 'Claude · 启动 Subagent'
-    if (node.kind === 'context.summary') return 'Claude · Summary'
-    if (node.kind === 'context.compaction') return 'Claude · Compact'
+    if (node.kind === 'permission.request') return '权限请求'
+    if (node.kind === 'subagent.spawn') return '启动 Subagent'
+    if (node.kind === 'context.summary') return '上下文摘要'
+    if (node.kind === 'context.compaction') return '上下文压缩'
   }
   if (node.sourceId === 'pi') {
-    if (node.kind === 'model.changed') return 'Pi · 模型切换'
-    if (node.kind === 'context.compaction') return 'Pi · Compaction'
-    if (node.kind === 'context.summary') return 'Pi · Branch Summary'
+    if (node.kind === 'model.changed') return '模型切换'
+    if (node.kind === 'context.compaction') return '上下文压缩'
+    if (node.kind === 'context.summary') return '分支摘要'
   }
   return node.label
 }
@@ -91,20 +91,23 @@ function isGenericRawEvent(node: ReviewEventNodeDto): boolean {
 }
 
 function Inspector({ node, onClose }: { node: ReviewNodeDto; onClose(): void }) {
-  return <div className="fixed inset-y-0 right-0 z-50 w-[min(520px,92vw)] overflow-y-auto border-l border-line bg-surface p-5 shadow-2xl">
-    <div className="mb-5 flex items-center justify-between">
-      <div><div className="text-xs text-muted">事件检查器</div><div className="font-semibold">{node.type === 'tool' ? node.name : node.type === 'event' ? sourceEventLabel(node) : node.role}</div></div>
-      <button className="icon-button" onClick={onClose}>×</button>
+  return <aside className="inspector-panel">
+    <div className="inspector-head">
+      <div>
+        <div className="eyebrow">事件详情</div>
+        <div className="inspector-title">{node.type === 'tool' ? node.name : node.type === 'event' ? sourceEventLabel(node) : node.role}</div>
+      </div>
+      <button className="icon-button" onClick={onClose} aria-label="关闭事件详情">×</button>
     </div>
-    <section className="space-y-2">
+    <section className="inspector-section">
       <h3 className="section-label">Evidence</h3>
-      {node.evidence.length ? node.evidence.map(item => <div key={item.id} className="rounded-lg border border-line bg-soft p-3 text-xs">
-        <div className="flex gap-2"><b>{item.captureMethod}</b><span>{item.derivation}</span><span>{item.confidence}</span></div>
-        <div className="mt-1 break-all text-muted">{item.sourceLocator?.path ?? item.sourceRecordId ?? item.id}</div>
-      </div>) : <div className="text-sm text-muted">无 Evidence</div>}
+      {node.evidence.length ? node.evidence.map(item => <div key={item.id} className="evidence-card">
+        <div className="evidence-meta"><b>{item.captureMethod}</b><span>{item.derivation}</span><span>{item.confidence}</span></div>
+        <div className="evidence-path">{item.sourceLocator?.path ?? item.sourceRecordId ?? item.id}</div>
+      </div>) : <div className="muted-empty">无 Evidence</div>}
     </section>
-    <section className="mt-6"><h3 className="section-label">Raw Payload</h3><pre className="raw-json">{JSON.stringify(node.payload, null, 2)}</pre></section>
-  </div>
+    <section className="inspector-section"><h3 className="section-label">Raw Payload</h3><pre className="raw-json">{JSON.stringify(node.payload, null, 2)}</pre></section>
+  </aside>
 }
 
 function MessageBubble({ node, inspect }: { node: ReviewMessageNodeDto; inspect(node: ReviewNodeDto): void }) {
@@ -113,9 +116,13 @@ function MessageBubble({ node, inspect }: { node: ReviewMessageNodeDto; inspect(
 
   if (node.role === 'reasoning') {
     return <details className="thinking-block">
-      <summary><span className="min-w-0 truncate">Thinking{brief(node.text, 72) ? ` · ${brief(node.text, 72)}` : ''}</span><span>{formatClock(node.at)}</span></summary>
-      <div className="markdown px-4 pb-3 pt-1 text-sm text-muted"><ReactMarkdown>{node.text}</ReactMarkdown></div>
-      {node.evidence.length > 0 && <button className="mx-4 mb-3 text-xs text-muted hover:text-accent" onClick={() => inspect(node)}>证据 · {node.evidence.length}</button>}
+      <summary>
+        <span className="thinking-label">Thinking</span>
+        <span className="thinking-preview">{brief(node.text, 78)}</span>
+        <time>{formatClock(node.at)}</time>
+      </summary>
+      <div className="markdown thinking-content"><ReactMarkdown>{node.text}</ReactMarkdown></div>
+      {node.evidence.length > 0 && <button className="evidence-link" onClick={() => inspect(node)}>查看证据 · {node.evidence.length}</button>}
     </details>
   }
 
@@ -123,41 +130,42 @@ function MessageBubble({ node, inspect }: { node: ReviewMessageNodeDto; inspect(
   return <div className={`chat-row ${user ? 'chat-row-user' : 'chat-row-agent'}`}>
     <div className={`chat-avatar ${user ? 'chat-avatar-user' : 'chat-avatar-agent'}`}>{user ? '你' : 'AI'}</div>
     <div className={`chat-bubble ${user ? 'chat-bubble-user' : 'chat-bubble-agent'}`}>
-      <div className="chat-meta"><span>{user ? '用户' : 'Agent'}</span><time>{formatClock(node.at)}</time></div>
+      <div className="chat-meta"><span>{user ? '你' : 'Agent'}</span><time>{formatClock(node.at)}</time></div>
       <div className={`markdown chat-content ${collapsible && !expanded ? 'chat-content-collapsed' : ''}`}><ReactMarkdown>{node.text}</ReactMarkdown></div>
-      <div className="mt-2 flex items-center gap-3">
-        {collapsible && <button className="text-xs font-medium text-accent" onClick={() => setExpanded(value => !value)}>{expanded ? '收起' : '展开全文'}</button>}
-        {node.evidence.length > 0 && <button className="text-xs text-muted hover:text-accent" onClick={() => inspect(node)}>证据 · {node.evidence.length}</button>}
-      </div>
+      {(collapsible || node.evidence.length > 0) && <div className="chat-actions">
+        {collapsible && <button onClick={() => setExpanded(value => !value)}>{expanded ? '收起' : '展开全文'}</button>}
+        {node.evidence.length > 0 && <button onClick={() => inspect(node)}>证据 · {node.evidence.length}</button>}
+      </div>}
     </div>
   </div>
 }
 
 function ToolRow({ node, inspect, last }: { node: ReviewToolNodeDto; inspect(node: ReviewNodeDto): void; last: boolean }) {
   const status = node.status === 'error' ? 'error' : node.status === 'success' ? 'success' : node.status === 'running' ? 'running' : 'unknown'
-  const input = brief(node.input, 110)
-  const output = brief(node.output, 110)
+  const input = brief(node.input, 130)
+  const output = brief(node.output, 130)
   return <button className="execution-row" data-status={status} onClick={() => inspect(node)}>
     <span className="execution-rail" aria-hidden="true"><span className="execution-dot"/>{!last && <span className="execution-line"/>}</span>
-    <span className="min-w-0 flex-1 py-2">
-      <span className="flex items-center gap-2"><b className="font-mono text-xs">{node.name}</b><span className="tool-status-label">{node.status === 'error' ? '失败' : node.status === 'success' ? '完成' : node.status === 'running' ? '执行中' : '未知'}</span></span>
-      {input && <span className="mt-1 block truncate text-xs text-muted">输入 · {input}</span>}
-      {output && <span className={`mt-1 block truncate text-xs ${node.status === 'error' ? 'text-danger' : 'text-muted'}`}>结果 · {output}</span>}
+    <span className="execution-main">
+      <span className="execution-name"><b>{node.name}</b><span className="tool-status-label">{node.status === 'error' ? '失败' : node.status === 'success' ? '完成' : node.status === 'running' ? '执行中' : '未知'}</span></span>
+      {input && <span className="execution-preview">{input}</span>}
+      {output && <span className={`execution-preview ${node.status === 'error' ? 'execution-preview-error' : ''}`}>{output}</span>}
     </span>
-    <span className="pt-2 text-xs text-muted">{node.durationMs !== undefined ? duration(node.durationMs) : formatClock(node.at)}</span>
+    <span className="execution-duration">{node.durationMs !== undefined ? duration(node.durationMs) : formatClock(node.at)}</span>
   </button>
 }
 
 function ToolRunGroup({ items, inspect }: { items: ReviewToolNodeDto[]; inspect(node: ReviewNodeDto): void }) {
   const errors = items.filter(item => item.status === 'error').length
+  const [expanded, setExpanded] = useState(errors > 0)
   const totalDuration = items.reduce((sum, item) => sum + (item.durationMs ?? 0), 0)
   const names = [...new Set(items.map(item => item.name))]
-  return <details className={`execution-group ${errors ? 'execution-group-error' : ''}`} open={errors > 0}>
+  return <details className={`execution-group ${errors ? 'execution-group-error' : ''}`} open={expanded} onToggle={event => setExpanded(event.currentTarget.open)}>
     <summary>
-      <span className="execution-group-icon">⌁</span>
-      <span className="min-w-0 flex-1"><b>执行过程</b><span className="ml-2 text-xs font-normal text-muted">{items.length} 次调用 · {names.slice(0, 3).join(' / ')}{names.length > 3 ? ' …' : ''}</span></span>
-      <span className={`execution-summary-status ${errors ? 'text-danger' : 'text-success'}`}>{errors ? `${errors} 错误` : '完成'}</span>
-      {totalDuration > 0 && <span className="text-xs text-muted">{duration(totalDuration)}</span>}
+      <span className="execution-group-icon">↳</span>
+      <span className="execution-group-copy"><b>执行过程</b><small>{items.length} 次调用 · {names.slice(0, 3).join(' / ')}{names.length > 3 ? ' …' : ''}</small></span>
+      <span className={`execution-summary-status ${errors ? 'is-error' : 'is-ok'}`}>{errors ? `${errors} 个错误` : '完成'}</span>
+      {totalDuration > 0 && <span className="execution-total">{duration(totalDuration)}</span>}
     </summary>
     <div className="execution-list">{items.map((node, index) => <ToolRow key={node.id} node={node} inspect={inspect} last={index === items.length - 1}/>)}</div>
   </details>
@@ -165,15 +173,16 @@ function ToolRunGroup({ items, inspect }: { items: ReviewToolNodeDto[]; inspect(
 
 function EventRow({ event, inspect }: { event: ReviewEventNodeDto; inspect(node: ReviewNodeDto): void }) {
   return <button className={`event-row event-${event.category}`} onClick={() => inspect(event)}>
-    <span className={`size-1.5 rounded-full ${sourceDot(event.sourceId)}`}/>
-    <span className="font-medium">{sourceEventLabel(event)}</span>
-    <span className="ml-auto text-xs text-muted">{formatClock(event.at)}</span>
+    <span className="event-mark" />
+    <span>{sourceEventLabel(event)}</span>
+    <span className="event-source">{agentLabel(event.sourceId)}</span>
+    <time>{formatClock(event.at)}</time>
   </button>
 }
 
 function RawEventGroup({ items, inspect }: { items: ReviewEventNodeDto[]; inspect(node: ReviewNodeDto): void }) {
   return <details className="raw-event-group">
-    <summary><span>原始事件</span><span>{items.length} 条</span><time>{formatClock(items[items.length - 1]?.at ?? '')}</time></summary>
+    <summary><span>原始事件 · {items.length}</span><time>{formatClock(items[items.length - 1]?.at ?? '')}</time></summary>
     <div>{items.map(item => <EventRow key={item.id} event={item} inspect={inspect}/>)}</div>
   </details>
 }
@@ -221,7 +230,7 @@ function Interaction({ ordinal, trigger, nodes, inspect }: { ordinal: number; tr
   </section>
 }
 
-function Metric({ value, label, tone = '' }: { value: string | number; label: string; tone?: 'success' | 'danger' | '' }) {
+function Metric({ value, label, tone = '' }: { value: string | number; label: string; tone?: 'danger' | '' }) {
   return <div className="review-metric" data-tone={tone}><b>{value}</b><span>{label}</span></div>
 }
 
@@ -237,54 +246,57 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
   useEffect(() => { if (sessionId && sessionId !== review.selectedId) void model.selectReviewSession(sessionId) }, [sessionId])
   const select = (id: string) => { void model.selectReviewSession(id); navigate(`/review/${encodeURIComponent(id)}`) }
 
-  return <main className="mx-auto flex h-[calc(100vh-3.5rem)] max-w-[1800px] flex-col">
-    <div className="toolbar">
+  return <main className="review-page">
+    <div className="workspace-toolbar">
       <AgentScope agents={agents} value={review.filters.sourceId} onChange={sourceId => model.setReviewFilters({ sourceId })}/>
-      <div className="toolbar-divider"/>
+      <span className="toolbar-divider" />
       <select className="filter" value={review.filters.projectId} onChange={e => model.setReviewFilters({ projectId: e.target.value })}><option value="">全部项目</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name ?? p.repositoryIdentity ?? p.id}</option>)}</select>
       <select className="filter" value={review.filters.range} onChange={e => model.setReviewFilters({ range: e.target.value as typeof review.filters.range })}><option value="today">今天</option><option value="7d">最近 7 天</option><option value="30d">最近 30 天</option><option value="all">全部时间</option></select>
       <select className="filter" value={review.filters.status} onChange={e => model.setReviewFilters({ status: e.target.value as typeof review.filters.status })}><option value="all">全部状态</option><option value="clean">无错误</option><option value="with-errors">有错误</option></select>
-      <input className="filter ml-auto w-56" placeholder="搜索任务…" value={review.filters.search} onChange={e => model.setReviewFilters({ search: e.target.value })}/>
-      <button className="icon-button" onClick={() => void model.refreshReview()} title="刷新">↻</button>
+      <input className="filter search-filter" placeholder="搜索会话…" value={review.filters.search} onChange={e => model.setReviewFilters({ search: e.target.value })}/>
+      <button className="icon-button" onClick={() => void model.refreshReview()} title="刷新" aria-label="刷新">↻</button>
     </div>
 
-    <div className="min-h-0 flex-1 md:grid md:grid-cols-[300px_minmax(0,1fr)]">
-      <aside className="session-list border-r border-line bg-surface">
-        <div className="flex items-center justify-between border-b border-line px-4 py-3"><span className="text-sm font-semibold">Sessions</span><span className="text-xs text-muted">{review.response?.items.length ?? 0}</span></div>
-        <div className="overflow-y-auto">
-          {review.loading && !review.response && <div className="empty">加载 Session…</div>}
+    <div className="review-layout">
+      <aside className="session-panel">
+        <div className="session-panel-head"><div><b>会话</b><span>按时间倒序</span></div><span className="count-badge">{review.response?.items.length ?? 0}</span></div>
+        <div className="session-scroll">
+          {review.loading && !review.response && <div className="empty-state">加载会话…</div>}
           {review.response?.items.map(item => <button key={item.id} className={`session-item ${review.selectedId === item.id ? 'session-item-active' : ''}`} onClick={() => select(item.id)}>
-            <div className="flex items-center gap-2"><span className={`size-2 rounded-full ${sourceDot(item.sourceIds[0] ?? '')}`}/><span className="text-xs font-medium">{agentLabel(item.sourceIds[0] ?? '', item.productId)}</span><span className="ml-auto text-[11px] text-muted">{formatTime(item.endedAt)}</span></div>
-            <div className="mt-1.5 line-clamp-2 text-[13px] font-semibold leading-5">{compactTitle(item.title ?? item.preview ?? item.projectName)}</div>
-            <div className="mt-1.5 flex items-center gap-2 text-[11px] text-muted"><span className="truncate">{item.projectName ?? item.workspacePath?.split(/[\\/]/).pop() ?? '无项目'}</span><span className="ml-auto">{item.toolCount} 调用</span>{item.errorCount > 0 && <span className="text-danger">{item.errorCount} 错误</span>}</div>
+            <div className="session-item-meta"><span className={`source-dot ${sourceDot(item.sourceIds[0] ?? '')}`}/><span>{agentLabel(item.sourceIds[0] ?? '', item.productId)}</span><time>{formatTime(item.endedAt)}</time></div>
+            <div className="session-item-title">{compactTitle(item.title ?? item.preview ?? item.projectName, 74)}</div>
+            <div className="session-item-foot"><span>{item.projectName ?? item.workspacePath?.split(/[\\/]/).pop() ?? '无项目'}</span><span>{item.toolCount} 调用{item.errorCount > 0 ? ` · ${item.errorCount} 错误` : ''}</span></div>
           </button>)}
+          {!review.loading && !review.response?.items.length && <div className="empty-state">当前筛选范围没有会话</div>}
         </div>
       </aside>
 
-      <section className="min-w-0 overflow-y-auto bg-canvas">
-        {review.error && <div className="m-5 rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger">{review.error}</div>}
-        {!review.detail ? <div className="empty h-full">选择一个 Session 开始复盘</div> : <div className="mx-auto max-w-5xl px-6 py-5">
+      <section className="review-reader-pane">
+        {review.error && <div className="page-error">{review.error}</div>}
+        {!review.detail ? <div className="empty-state fill">选择一个会话开始复盘</div> : <div className="review-reader">
           <header className="review-session-head">
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2 text-xs text-muted"><span className={`size-2 rounded-full ${sourceDot(review.detail.sourceIds[0] ?? '')}`}/><span className="font-medium text-ink">{review.detail.sourceIds.map(id => agentLabel(id)).join(' / ')}</span><span>·</span><span>{review.detail.projectName ?? '无项目'}</span>{review.detail.errorCount > 0 && <span className="session-status-error">有错误</span>}</div>
+            <div className="review-session-copy">
+              <div className="review-session-meta"><span className={`source-dot ${sourceDot(review.detail.sourceIds[0] ?? '')}`}/><b>{review.detail.sourceIds.map(id => agentLabel(id)).join(' / ')}</b><span>{review.detail.projectName ?? '无项目'}</span>{review.detail.errorCount > 0 && <span className="session-status-error">有错误</span>}</div>
               <h1 className="review-session-title" title={review.detail.title ?? review.detail.preview}>{compactTitle(review.detail.title ?? review.detail.preview)}</h1>
-              {review.detail.workspacePath && <div className="review-workspace" title={review.detail.workspacePath}>{review.detail.workspacePath}</div>}
-              <div className="mt-2 text-xs text-muted">{formatRange(review.detail.startedAt, review.detail.endedAt)}</div>
+              <div className="review-session-submeta">
+                <span>{formatRange(review.detail.startedAt, review.detail.endedAt)}</span>
+                {review.detail.workspacePath && <code title={review.detail.workspacePath}>{review.detail.workspacePath}</code>}
+              </div>
             </div>
             <div className="review-metrics">
               <Metric value={review.detail.interactionCount} label="轮次"/>
               <Metric value={review.detail.toolCount} label="调用"/>
               {review.detail.errorCount > 0 && <Metric value={review.detail.errorCount} label="错误" tone="danger"/>}
-              <Metric value={duration(review.detail.durationMs)} label="会话跨度"/>
+              <Metric value={duration(review.detail.durationMs)} label="跨度"/>
             </div>
           </header>
 
-          {review.detail.sourceIds.includes('pi') && review.relationships?.items.length ? <details className="pi-session-tree mb-5">
+          {review.detail.sourceIds.includes('pi') && review.relationships?.items.length ? <details className="pi-session-tree">
             <summary>Pi Session Tree · {review.relationships.items.length} 条关系</summary>
-            <div>{review.relationships.items.map(item => <div key={item.id} className="font-mono text-xs text-muted">{item.fromNativeSessionId ?? item.fromSessionId} <span className="px-2">→</span> {item.toNativeSessionId ?? item.toSessionId}</div>)}</div>
+            <div>{review.relationships.items.map(item => <div key={item.id}>{item.fromNativeSessionId ?? item.fromSessionId} <span>→</span> {item.toNativeSessionId ?? item.toSessionId}</div>)}</div>
           </details> : null}
 
-          <div className="space-y-1">{review.detail.interactions.map(interaction => <Interaction key={interaction.id} ordinal={interaction.ordinal} trigger={interaction.trigger} nodes={interaction.nodes} inspect={setInspect}/>)}</div>
+          <div className="review-flow">{review.detail.interactions.map(interaction => <Interaction key={interaction.id} ordinal={interaction.ordinal} trigger={interaction.trigger} nodes={interaction.nodes} inspect={setInspect}/>)}</div>
         </div>}
       </section>
     </div>
