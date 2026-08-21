@@ -95,8 +95,8 @@ function scheduleDaemonRecovery(code, signal) {
     void dialog.showMessageBox({
       type: 'error',
       title: 'AgentLens 运行时反复退出',
-      message: 'AgentLens Daemon 在一分钟内多次异常退出，已停止自动重启。',
-      detail: `最后一次退出：code=${code} signal=${signal ?? 'none'}。请查看日志：${join(app.getPath('logs'), 'daemon.log')}`,
+      message: 'AgentLens 后台服务在一分钟内多次异常退出，已停止自动重启。',
+      detail: `最后一次退出：退出码=${code}，信号=${signal ?? '无'}。请查看日志：${join(app.getPath('logs'), 'daemon.log')}`,
     })
     return
   }
@@ -259,7 +259,7 @@ if (!singleInstance) {
     await dialog.showMessageBox({
       type: 'error',
       title: 'AgentLens 运行时启动失败',
-      message: 'AgentLens Daemon 未能正常启动。',
+      message: 'AgentLens 后台服务未能正常启动。',
       detail: `请查看日志：${join(app.getPath('logs'), 'daemon.log')}`,
     })
     app.quit()
