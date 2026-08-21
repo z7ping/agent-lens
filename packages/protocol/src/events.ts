@@ -11,4 +11,13 @@ export interface ObservationCommittedEventDto {
   emittedAt: string
 }
 
-export type LiveUpdateEventDto = ObservationCommittedEventDto
+export interface AgentChangedEventDto {
+  type: 'agent.changed'
+  sourceId?: string
+  installationId?: string
+  assetBindingId?: string
+  affected: ['agents']
+  emittedAt: string
+}
+
+export type LiveUpdateEventDto = ObservationCommittedEventDto | AgentChangedEventDto

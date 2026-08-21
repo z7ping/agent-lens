@@ -37,23 +37,45 @@ const initialQuery: QueryFilters = { sourceId: '', projectId: '', range: '7d' }
 
 export class AgentLensClientModel {
   private snapshot: ClientSnapshot = {
-    health: null, facets: null, agents: null, liveConnected: false,
-    review: { filters: { ...initialQuery, status: 'all', search: '' }, response: null, detail: null, relationships: null, selectedId: '', loading: true, error: '' },
-    usage: { filters: { ...initialQuery }, response: null, loading: true, error: '' },
+    health: null,
+    facets: null,
+    agents: null,
+    liveConnected: false,
+    review: {
+      filters: { ...initialQuery, status: 'all', search: '' },
+      response: null,
+      detail: null,
+      relationships: null,
+      selectedId: '',
+      loading: true,
+      error: '',
+    },
+    usage: {
+      filters: { ...initialQuery },
+      response: null,
+      loading: true,
+      error: '',
+    },
   }
   private readonly listeners = new Set<Listener>()
   private notifyQueued = false
   private refreshTimer: ReturnType<typeof setTimeout> | null = null
   private usageTimer: ReturnType<typeof setTimeout> | null = null
+  private agentsTimer: ReturnType<typeof setTimeout> | null = null
   private unsubscribeLive: (() => void) | null = null
   private reviewGeneration = 0
   private detailGeneration = 0
   private usageGeneration = 0
+  private agentsGeneration = 0
 
   constructor(private readonly api = new AgentLensApi()) {}
 
   getSnapshot = (): ClientSnapshot => this.snapshot
-  subscribe = (listener: Listener): (() => void) => { this.listeners.add(listener); return () => this.listeners.delete(listener) }
+
+  subscribe = (listener: Listener): (() => void) => {
+    this.listeners.add(listener)
+    return () => this.listeners.delete(listener)
+  }
 
   private publish(next: ClientSnapshot): void {
     this.snapshot = next
@@ -65,17 +87,24 @@ export class AgentLensClientModel {
     })
   }
 
-  private patch(patch: Partial<ClientSnapshot>): void { this.publish({ ...this.snapshot, ...patch }) }
+  private patch(patch: Partial<ClientSnapshot>): void {
+    this.publish({ ...this.snapshot, ...patch })
+  }
 
   async start(): Promise<void> {
-    const [health, facets, agents] = await Promise.allSettled([this.api.health(), this.api.facets(), this.api.agents()])
-    this.patch({
-      ...(health.status === 'fulfilled' ? { health: health.value } : {}),
-      ...(facets.status === 'fulfilled' ? { facets: facets.value } : {}),
-      ...(agents.status === 'fulfilled' ? { agents: agents.value } : {}),
-    })
-    await Promise.all([this.refreshReview(), this.refreshUsage()])
-    if (!this.unsubscribeLive) this.unsubscribeLive = this.api.subscribe(event => this.onLiveEvent(event), connected => this.patch({ liveConnected: connected }))
+    const health = await this.api.health().catch(() => null)
+    if (health) this.patch({ health })
+    await Promise.all([
+      this.refreshFacetsAndAgents(),
+      this.refreshReview(),
+      this.refreshUsage(),
+    ])
+    if (!this.unsubscribeLive) {
+      this.unsubscribeLive = this.api.subscribe(
+        event => this.onLiveEvent(event),
+        connected => this.patch({ liveConnected: connected }),
+      )
+    }
   }
 
   stop(): void {
@@ -83,68 +112,154 @@ export class AgentLensClientModel {
     this.unsubscribeLive = null
     if (this.refreshTimer) clearTimeout(this.refreshTimer)
     if (this.usageTimer) clearTimeout(this.usageTimer)
+    if (this.agentsTimer) clearTimeout(this.agentsTimer)
+    this.refreshTimer = null
+    this.usageTimer = null
+    this.agentsTimer = null
   }
 
   async refreshFacetsAndAgents(): Promise<void> {
-    const [facets, agents] = await Promise.all([this.api.facets(), this.api.agents()])
-    this.patch({ facets, agents })
+    const generation = ++this.agentsGeneration
+    const [facets, agents] = await Promise.allSettled([
+      this.api.facets(),
+      this.api.agents(),
+    ])
+    if (generation !== this.agentsGeneration) return
+    this.patch({
+      ...(facets.status === 'fulfilled' ? { facets: facets.value } : {}),
+      ...(agents.status === 'fulfilled' ? { agents: agents.value } : {}),
+    })
   }
 
   setReviewFilters(patch: Partial<ReviewFilters>): void {
     const filters = { ...this.snapshot.review.filters, ...patch }
-    this.publish({ ...this.snapshot, review: { ...this.snapshot.review, filters } })
+    this.publish({
+      ...this.snapshot,
+      review: { ...this.snapshot.review, filters },
+    })
     void this.refreshReview()
   }
 
   setUsageFilters(patch: Partial<QueryFilters>): void {
     const filters = { ...this.snapshot.usage.filters, ...patch }
-    this.publish({ ...this.snapshot, usage: { ...this.snapshot.usage, filters } })
+    this.publish({
+      ...this.snapshot,
+      usage: { ...this.snapshot.usage, filters },
+    })
     void this.refreshUsage()
   }
 
   async refreshReview(): Promise<void> {
     const generation = ++this.reviewGeneration
     const current = this.snapshot.review
-    this.publish({ ...this.snapshot, review: { ...current, loading: true, error: '' } })
+    this.publish({
+      ...this.snapshot,
+      review: { ...current, loading: true, error: '' },
+    })
     try {
       const response = await this.api.review(current.filters)
       if (generation !== this.reviewGeneration) return
       let selectedId = this.snapshot.review.selectedId
-      if (!selectedId || !response.items.some(item => item.id === selectedId)) selectedId = response.items[0]?.id ?? ''
-      this.publish({ ...this.snapshot, review: { ...this.snapshot.review, response, selectedId, loading: false, error: '' } })
+      if (!selectedId || !response.items.some(item => item.id === selectedId)) {
+        selectedId = response.items[0]?.id ?? ''
+      }
+      this.publish({
+        ...this.snapshot,
+        review: {
+          ...this.snapshot.review,
+          response,
+          selectedId,
+          loading: false,
+          error: '',
+        },
+      })
       if (selectedId) await this.selectReviewSession(selectedId)
-      else this.publish({ ...this.snapshot, review: { ...this.snapshot.review, detail: null, relationships: null } })
+      else {
+        this.publish({
+          ...this.snapshot,
+          review: {
+            ...this.snapshot.review,
+            detail: null,
+            relationships: null,
+          },
+        })
+      }
     } catch (error) {
       if (generation !== this.reviewGeneration) return
-      this.publish({ ...this.snapshot, review: { ...this.snapshot.review, loading: false, error: error instanceof Error ? error.message : String(error) } })
+      this.publish({
+        ...this.snapshot,
+        review: {
+          ...this.snapshot.review,
+          loading: false,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      })
     }
   }
 
   async selectReviewSession(id: string): Promise<void> {
     if (!id) return
     const generation = ++this.detailGeneration
-    this.publish({ ...this.snapshot, review: { ...this.snapshot.review, selectedId: id } })
+    this.publish({
+      ...this.snapshot,
+      review: { ...this.snapshot.review, selectedId: id },
+    })
     try {
-      const [detail, relationships] = await Promise.all([this.api.reviewDetail(id), this.api.relationships(id)])
+      const [detail, relationships] = await Promise.all([
+        this.api.reviewDetail(id),
+        this.api.relationships(id),
+      ])
       if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== id) return
-      this.publish({ ...this.snapshot, review: { ...this.snapshot.review, detail, relationships, error: '' } })
+      this.publish({
+        ...this.snapshot,
+        review: {
+          ...this.snapshot.review,
+          detail,
+          relationships,
+          error: '',
+        },
+      })
     } catch (error) {
       if (generation !== this.detailGeneration) return
-      this.publish({ ...this.snapshot, review: { ...this.snapshot.review, error: error instanceof Error ? error.message : String(error) } })
+      this.publish({
+        ...this.snapshot,
+        review: {
+          ...this.snapshot.review,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      })
     }
   }
 
   async refreshUsage(): Promise<void> {
     const generation = ++this.usageGeneration
     const current = this.snapshot.usage
-    this.publish({ ...this.snapshot, usage: { ...current, loading: true, error: '' } })
+    this.publish({
+      ...this.snapshot,
+      usage: { ...current, loading: true, error: '' },
+    })
     try {
       const response = await this.api.usage(current.filters)
       if (generation !== this.usageGeneration) return
-      this.publish({ ...this.snapshot, usage: { ...this.snapshot.usage, response, loading: false, error: '' } })
+      this.publish({
+        ...this.snapshot,
+        usage: {
+          ...this.snapshot.usage,
+          response,
+          loading: false,
+          error: '',
+        },
+      })
     } catch (error) {
       if (generation !== this.usageGeneration) return
-      this.publish({ ...this.snapshot, usage: { ...this.snapshot.usage, loading: false, error: error instanceof Error ? error.message : String(error) } })
+      this.publish({
+        ...this.snapshot,
+        usage: {
+          ...this.snapshot.usage,
+          loading: false,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      })
     }
   }
 
@@ -163,7 +278,13 @@ export class AgentLensClientModel {
         void this.refreshUsage()
       }, 800)
     }
-    if (event.affected.includes('agents')) void this.refreshFacetsAndAgents()
+    if (event.affected.includes('agents')) {
+      if (this.agentsTimer) clearTimeout(this.agentsTimer)
+      this.agentsTimer = setTimeout(() => {
+        this.agentsTimer = null
+        void this.refreshFacetsAndAgents()
+      }, 250)
+    }
   }
 }
 

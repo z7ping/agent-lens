@@ -1,3 +1,4 @@
+export * from './asset-inventory'
 export * from './checkpoints'
 export * from './executor'
 export * from './migrations'

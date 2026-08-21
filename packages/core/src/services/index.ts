@@ -140,6 +140,17 @@ export interface AssetService {
   recordState(input: AssetStateInput): Promise<AssetStateObservation>
 }
 
+export interface AssetInventoryEntry {
+  definition: AssetDefinition
+  binding: AssetBinding
+  states: AssetStateObservation[]
+}
+
+/** Read-only storage contract used by projections and surfaces. */
+export interface AssetInventoryReader {
+  listByInstallation(installationId: AgentInstallationId): Promise<AssetInventoryEntry[]>
+}
+
 export interface ToolService {
   resolveDefinition(input: ToolDefinitionHint): Promise<ToolDefinition>
   findByNativeName(installationId: AgentInstallationId, nativeToolName: string): Promise<ToolDefinition | null>
@@ -269,6 +280,7 @@ export interface StorageHealth {
 export interface StorageService {
   readonly repositories: RepositorySet
   readonly checkpoints: CheckpointRepository
+  readonly assetInventory?: AssetInventoryReader
   transaction<T>(fn: (tx: StorageTransaction) => Promise<T>): Promise<T>
   migrate(): Promise<void>
   health(): Promise<StorageHealth>

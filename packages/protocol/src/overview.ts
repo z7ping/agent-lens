@@ -26,6 +26,31 @@ export interface AgentUsedAssetDto {
   confidence: 'high' | 'medium' | 'low'
 }
 
+export interface AgentAssetStateDto {
+  state: 'installed' | 'configured' | 'enabled' | 'discoverable' | 'exposed' | 'invoked'
+  value: boolean | 'unknown'
+  observedAt: string
+  evidenceCount: number
+}
+
+export interface AgentAssetBindingDto {
+  id: string
+  installationId: string
+  path?: string
+  source?: string
+  version?: string
+  states: AgentAssetStateDto[]
+}
+
+export interface AgentAssetInventoryDto {
+  id: string
+  type: 'skill' | 'mcp' | 'plugin' | 'extension' | 'hook' | 'memory' | 'rule' | 'builtin' | 'unknown'
+  canonicalName: string
+  displayName?: string
+  upstreamIdentity?: string
+  bindings: AgentAssetBindingDto[]
+}
+
 export interface AgentOverviewDto {
   sourceId: string
   productId: string
@@ -35,8 +60,9 @@ export interface AgentOverviewDto {
   detected: boolean
   installations: AgentInstallationOverviewDto[]
   capabilities: AgentCapabilityDto[]
+  assetInventory: AgentAssetInventoryDto[]
   usedAssets: AgentUsedAssetDto[]
-  assetInventoryStatus: 'usage-only'
+  assetInventoryStatus: 'complete' | 'unavailable'
 }
 
 export interface AgentOverviewResponseDto {

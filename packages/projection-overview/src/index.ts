@@ -1,13 +1,34 @@
-import type { CapabilityService, SourceService, StorageService } from '@agent-lens/core'
+import type {
+  AssetInventoryEntry,
+  CapabilityService,
+  SourceService,
+  StorageService,
+} from '@agent-lens/core'
 import { TimelineProjection } from '@agent-lens/projection-timeline'
 import { ToolAssetUsageProjection } from '@agent-lens/projection-usage'
 import {
   AGENT_LENS_PROTOCOL_VERSION,
+  type AgentAssetInventoryDto,
+  type AgentAssetStateDto,
   type AgentOverviewResponseDto,
   type FacetResponseDto,
   type SessionRelationshipDto,
   type SessionRelationshipResponseDto,
 } from '@agent-lens/protocol'
+
+function latestStates(entry: AssetInventoryEntry): AgentAssetStateDto[] {
+  const latest = new Map<string, AgentAssetStateDto>()
+  for (const state of entry.states) {
+    if (latest.has(state.state)) continue
+    latest.set(state.state, {
+      state: state.state,
+      value: state.value,
+      observedAt: state.observedAt,
+      evidenceCount: state.evidenceRefs.length,
+    })
+  }
+  return [...latest.values()].sort((a, b) => a.state.localeCompare(b.state))
+}
 
 export class FacetProjection {
   constructor(private readonly storage: StorageService, private readonly sources?: SourceService) {}
@@ -60,6 +81,8 @@ export class AgentOverviewProjection {
     const items = await Promise.all(definitions.map(async definition => {
       const installations = await this.storage.repositories.installations.listByProduct(definition.manifest.productId)
       const usedAssets = new Map<string, AgentOverviewResponseDto['items'][number]['usedAssets'][number]>()
+      const inventory = new Map<string, AgentAssetInventoryDto>()
+
       for (const installation of installations) {
         const usage = await this.usage.query({ installationId: installation.id, limit: 500 })
         for (const asset of usage.assets) {
@@ -71,11 +94,48 @@ export class AgentOverviewProjection {
             firstUsedAt: previous.firstUsedAt < asset.firstUsedAt ? previous.firstUsedAt : asset.firstUsedAt,
             lastUsedAt: previous.lastUsedAt > asset.lastUsedAt ? previous.lastUsedAt : asset.lastUsedAt,
           } : {
-            type: asset.type, canonicalName: asset.canonicalName, callCount: asset.callCount,
-            firstUsedAt: asset.firstUsedAt, lastUsedAt: asset.lastUsedAt, confidence: asset.confidence,
+            type: asset.type,
+            canonicalName: asset.canonicalName,
+            callCount: asset.callCount,
+            firstUsedAt: asset.firstUsedAt,
+            lastUsedAt: asset.lastUsedAt,
+            confidence: asset.confidence,
           })
         }
+
+        if (this.storage.assetInventory) {
+          for (const entry of await this.storage.assetInventory.listByInstallation(installation.id)) {
+            let asset = inventory.get(entry.definition.id)
+            if (!asset) {
+              asset = {
+                id: entry.definition.id,
+                type: entry.definition.type,
+                canonicalName: entry.definition.canonicalName,
+                ...(entry.definition.displayName ? { displayName: entry.definition.displayName } : {}),
+                ...(entry.definition.upstreamIdentity ? { upstreamIdentity: entry.definition.upstreamIdentity } : {}),
+                bindings: [],
+              }
+              inventory.set(entry.definition.id, asset)
+            }
+            asset.bindings.push({
+              id: entry.binding.id,
+              installationId: entry.binding.installationId,
+              ...(entry.binding.path ? { path: entry.binding.path } : {}),
+              ...(entry.binding.source ? { source: entry.binding.source } : {}),
+              ...(entry.binding.version ? { version: entry.binding.version } : {}),
+              states: latestStates(entry),
+            })
+          }
+        }
       }
+
+      const assetInventory = [...inventory.values()]
+      for (const asset of assetInventory) {
+        asset.bindings.sort((a, b) => (a.path ?? a.source ?? a.id).localeCompare(b.path ?? b.source ?? b.id))
+      }
+      assetInventory.sort((a, b) => a.type.localeCompare(b.type)
+        || (a.displayName ?? a.canonicalName).localeCompare(b.displayName ?? b.canonicalName))
+
       return {
         sourceId: definition.manifest.sourceId,
         productId: definition.manifest.productId,
@@ -84,17 +144,23 @@ export class AgentOverviewProjection {
         enabled: true,
         detected: installations.length > 0,
         installations: installations.map(item => ({
-          id: item.id, ...(item.version ? { version: item.version } : {}),
+          id: item.id,
+          ...(item.version ? { version: item.version } : {}),
           ...(item.executable ? { executable: item.executable } : {}),
           ...(item.configRoot ? { configRoot: item.configRoot } : {}),
           ...(item.dataRoot ? { dataRoot: item.dataRoot } : {}),
-          firstSeenAt: item.firstSeenAt, lastSeenAt: item.lastSeenAt,
+          firstSeenAt: item.firstSeenAt,
+          lastSeenAt: item.lastSeenAt,
         })),
         capabilities: (this.capabilities?.listForSource(definition.manifest.sourceId) ?? []).map(item => ({
-          name: item.name, status: item.status, captureModes: item.captureModes, ...(item.reason ? { reason: item.reason } : {}),
+          name: item.name,
+          status: item.status,
+          captureModes: item.captureModes,
+          ...(item.reason ? { reason: item.reason } : {}),
         })),
+        assetInventory,
         usedAssets: [...usedAssets.values()].sort((a, b) => b.callCount - a.callCount || a.canonicalName.localeCompare(b.canonicalName)),
-        assetInventoryStatus: 'usage-only' as const,
+        assetInventoryStatus: this.storage.assetInventory ? 'complete' as const : 'unavailable' as const,
       }
     }))
     return { items, meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION, generatedAt: new Date().toISOString() } }
@@ -108,8 +174,11 @@ export class SessionRelationshipProjection {
   async query(logicalSessionId: string): Promise<SessionRelationshipResponseDto> {
     const canonical = await this.storage.repositories.sessions.listRelationships(logicalSessionId)
     const items: SessionRelationshipDto[] = canonical.map(item => ({
-      id: item.id, fromSessionId: item.fromSessionId, toSessionId: item.toSessionId,
-      type: item.type, confidence: item.confidence,
+      id: item.id,
+      fromSessionId: item.fromSessionId,
+      toSessionId: item.toSessionId,
+      type: item.type,
+      confidence: item.confidence,
     }))
 
     const timeline = await this.timeline.query({ logicalSessionId, limit: 1000 })
@@ -122,7 +191,8 @@ export class SessionRelationshipProjection {
         sourceId: source.sourceId,
         fromSessionId: source.nativeParentSessionId,
         toSessionId: logicalSessionId,
-        type: 'native-parent', confidence: 'high',
+        type: 'native-parent',
+        confidence: 'high',
         fromNativeSessionId: source.nativeParentSessionId,
         toNativeSessionId: source.nativeSessionId,
       })

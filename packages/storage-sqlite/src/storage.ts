@@ -6,6 +6,7 @@ import type {
   StorageService,
   StorageTransaction,
 } from '@agent-lens/core'
+import { SqliteAssetInventoryReader } from './asset-inventory'
 import { SqliteCheckpointRepository } from './checkpoints'
 import { SqliteExecutor } from './executor'
 import { migrateDatabase } from './migrations'
@@ -20,6 +21,7 @@ export class SqliteStorageService implements StorageService {
   readonly db: Database.Database
   readonly repositories: RepositorySet
   readonly checkpoints: CheckpointRepository
+  readonly assetInventory: SqliteAssetInventoryReader
   readonly executor: SqliteExecutor
 
   constructor(options: SqliteStorageOptions) {
@@ -36,6 +38,7 @@ export class SqliteStorageService implements StorageService {
     this.executor = new SqliteExecutor(this.db)
     this.repositories = createSqliteRepositories(this.executor)
     this.checkpoints = new SqliteCheckpointRepository(this.executor)
+    this.assetInventory = new SqliteAssetInventoryReader(this.executor)
   }
 
   async transaction<T>(fn: (tx: StorageTransaction) => Promise<T>): Promise<T> {

@@ -17,6 +17,10 @@ async function runtimeHost(ctx: AgentLensContext) {
   })
 }
 
+function emitDetected(ctx: AgentLensContext, sourceId: string, installationId: string): void {
+  ctx.emit('source/detected', { sourceId, installationId })
+}
+
 export async function syncRegisteredSourceHistory(
   ctx: AgentLensContext,
   abortSignal: AbortSignal,
@@ -44,12 +48,14 @@ export async function syncRegisteredSourceHistory(
     if (!source) {
       throw new Error(`Detected source has no registered definition: ${item.sourceId}`)
     }
-    results.push(await runner.sync({
+    const result = await runner.sync({
       source,
       host,
       detected: item,
       abortSignal,
-    }))
+    })
+    results.push(result)
+    emitDetected(ctx, result.sourceId, result.installationId)
   }
 
   return results
@@ -83,12 +89,14 @@ export async function discoverRegisteredSourceAssets(
       throw new Error(`Detected source has no registered definition: ${item.sourceId}`)
     }
     if (!source.discoverAssets) continue
-    results.push(await runner.scan({
+    const result = await runner.scan({
       source,
       host,
       detected: item,
       abortSignal,
-    }))
+    })
+    results.push(result)
+    emitDetected(ctx, result.sourceId, result.installationId)
   }
 
   return results
@@ -123,12 +131,14 @@ export async function startRegisteredSourceCapture(
         throw new Error(`Detected source has no registered definition: ${item.sourceId}`)
       }
       if (!source.startCapture) continue
-      handles.push(await runner.start({
+      const handle = await runner.start({
         source,
         host,
         detected: item,
         abortSignal,
-      }))
+      })
+      handles.push(handle)
+      emitDetected(ctx, handle.sourceId, handle.installationId)
     }
     return handles
   } catch (error) {
