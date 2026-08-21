@@ -132,7 +132,7 @@ function EvidenceBadges({ evidence, compact = false }: { evidence: TimelineEvide
           evidenceCaptureLabel[item.captureMethod],
           `来源：${evidenceDerivationLabel[item.derivation] ?? item.derivation}`,
           `可信度：${evidenceConfidenceLabel[item.confidence] ?? item.confidence}`,
-          item.missingReason ?? '',
+          item.missingReason ? '证据信息不完整' : '',
         ].filter(Boolean).join(' · '),
       })
     }
@@ -322,7 +322,7 @@ function Inspector({ node, onClose }: { node: ReviewNodeDto; onClose(): void }) 
       {node.evidence.length ? node.evidence.map(item => <div key={item.id} className="evidence-card">
         <div className="evidence-meta"><b>{evidenceCaptureLabel[item.captureMethod]}</b><span>{evidenceDerivationLabel[item.derivation] ?? item.derivation}</span><span>可信度：{evidenceConfidenceLabel[item.confidence] ?? item.confidence}</span></div>
         <div className="evidence-path">{item.sourceLocator?.path ?? item.sourceRecordId ?? item.id}</div>
-        {item.missingReason && <div className="evidence-missing">{item.missingReason}</div>}
+        {item.missingReason && <div className="evidence-missing">证据信息不完整</div>}
       </div>) : <div className="muted-empty">无证据</div>}
     </section>
     <section className="inspector-section"><h3 className="section-label">原始数据</h3><pre className="raw-json">{JSON.stringify(node.payload, null, 2)}</pre></section>
@@ -363,7 +363,7 @@ function MarkdownSurface({ text }: { text: string }) {
   return <div className="markdown-message" data-view={view}>
     <div
       ref={surfaceRef}
-      className={`markdown-surface ${collapsible && !expanded ? 'is-collapsed' : ''}`}
+      className={`markdown-surface ${collapsible && !expanded ? 'is-collapsed' : ''}`
       style={collapsible && !expanded && collapsedHeight ? { maxHeight: `${collapsedHeight}px` } : undefined}
     >
       {view === 'rendered' ? <div className="markdown"><ReactMarkdown>{text}</ReactMarkdown></div> : <pre className="markdown-source">{text}</pre>}
