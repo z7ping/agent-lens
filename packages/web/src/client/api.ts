@@ -3,6 +3,8 @@ import type {
   FacetResponseDto,
   HealthResponseDto,
   LiveUpdateEventDto,
+  ReviewDetailDirection,
+  ReviewDetailFilter,
   ReviewResponseDto,
   ReviewSessionDetailDto,
   SessionRelationshipResponseDto,
@@ -55,9 +57,19 @@ export class AgentLensApi {
     return getJson(`/api/v1/review?${params}`)
   }
 
-  reviewDetail(id: string, options: { cursor?: string; limit?: number } = {}): Promise<ReviewSessionDetailDto> {
+  reviewDetail(
+    id: string,
+    options: {
+      cursor?: string
+      limit?: number
+      direction?: ReviewDetailDirection
+      filter?: ReviewDetailFilter
+    } = {},
+  ): Promise<ReviewSessionDetailDto> {
     const params = new URLSearchParams()
     if (options.cursor) params.set('cursor', options.cursor)
+    if (options.direction) params.set('direction', options.direction)
+    if (options.filter && options.filter !== 'all') params.set('filter', options.filter)
     if (options.limit !== undefined) params.set('limit', String(Math.max(1, Math.min(options.limit, 100))))
     const query = params.toString()
     return getJson(`/api/v1/review/${encodeURIComponent(id)}${query ? `?${query}` : ''}`)

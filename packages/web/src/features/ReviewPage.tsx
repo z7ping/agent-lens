@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown'
 import { useNavigate, useParams } from 'react-router-dom'
 import type {
   JsonValue,
+  ReviewDetailFilter,
   ReviewEventNodeDto,
   ReviewInteractionDto,
   ReviewMessageNodeDto,
@@ -13,6 +14,7 @@ import type {
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
 import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
+import { VirtualRoundMount } from '../components/VirtualRoundMount'
 
 function formatTime(value: string): string {
   return new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(value))
@@ -447,8 +449,20 @@ function interactionStats(interaction: ReviewInteractionDto): InteractionStats {
   }
 }
 
-function Interaction({ interaction, inspect, highLatency, defaultExpanded }: { interaction: ReviewInteractionDto; inspect(node: ReviewNodeDto): void; highLatency: boolean; defaultExpanded: boolean }) {
-  const [expanded, setExpanded] = useState(defaultExpanded)
+function Interaction({
+  interaction,
+  inspect,
+  highLatency,
+  defaultExpanded,
+  expansionStore,
+}: {
+  interaction: ReviewInteractionDto
+  inspect(node: ReviewNodeDto): void
+  highLatency: boolean
+  defaultExpanded: boolean
+  expansionStore: Map<string, boolean>
+}) {
+  const [expanded, setExpanded] = useState(() => expansionStore.get(interaction.id) ?? defaultExpanded)
   const stats = useMemo(() => interactionStats(interaction), [interaction])
   const groups = useMemo(() => {
     const result: InteractionEntry[] = []
@@ -478,10 +492,23 @@ function Interaction({ interaction, inspect, highLatency, defaultExpanded }: { i
   }, [interaction.nodes])
 
   useEffect(() => {
-    if (defaultExpanded) setExpanded(true)
-  }, [defaultExpanded])
+    const stored = expansionStore.get(interaction.id)
+    if (stored !== undefined) {
+      setExpanded(stored)
+      return
+    }
+    if (defaultExpanded) {
+      setExpanded(true)
+      expansionStore.set(interaction.id, true)
+    }
+  }, [defaultExpanded, expansionStore, interaction.id])
 
-  return <details className={`interaction-block ${stats.errorCount ? 'interaction-has-error' : ''}`} open={expanded} onToggle={event => setExpanded(event.currentTarget.open)}>
+  const onToggle = (open: boolean) => {
+    setExpanded(open)
+    expansionStore.set(interaction.id, open)
+  }
+
+  return <details className={`interaction-block ${stats.errorCount ? 'interaction-has-error' : ''}`} open={expanded} onToggle={event => onToggle(event.currentTarget.open)}>
     <summary className="interaction-summary">
       <span className="interaction-chevron">›</span>
       <span className="interaction-title">{interaction.trigger === 'background' ? '后台活动' : `第 ${interaction.ordinal} 轮`}</span>
@@ -506,7 +533,7 @@ function Metric({ value, label, tone = '' }: { value: string | number; label: st
   return <div className="review-metric" data-tone={tone}><b>{value}</b><span>{label}</span></div>
 }
 
-type RoundFilter = 'all' | 'errors' | 'latency' | 'latest'
+type RoundFilter = ReviewDetailFilter
 
 function highLatencyThreshold(interactions: ReviewInteractionDto[]): number | null {
   const values = interactions.map(item => elapsed(item.startedAt, item.endedAt)).filter(value => value > 0).sort((a, b) => a - b)
@@ -526,58 +553,149 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
   const [roundFilter, setRoundFilter] = useState<RoundFilter>('all')
   const [roundFilterLoading, setRoundFilterLoading] = useState(false)
   const detailLoadSentinelRef = useRef<HTMLDivElement>(null)
+  const readerPaneRef = useRef<HTMLElement>(null)
+  const followingTailRef = useRef(false)
+  const roundExpansionRef = useRef(new Map<string, boolean>())
   const review = snapshot.review
   const agents = snapshot.facets?.agents ?? []
   const projects = snapshot.facets?.projects ?? []
   const detail = review.detail
 
-  useEffect(() => { if (sessionId && sessionId !== review.selectedId) void model.selectReviewSession(sessionId) }, [sessionId])
+  useEffect(() => { if (sessionId && sessionId !== review.selectedId) void model.selectReviewSession(sessionId) }, [sessionId, review.selectedId, model])
   useEffect(() => {
+    roundExpansionRef.current.clear()
     setRoundFilter('all')
     setRoundFilterLoading(false)
     setInspect(null)
+    followingTailRef.current = false
   }, [detail?.id])
   useEffect(() => {
+    if (detail?.page.filter) setRoundFilter(detail.page.filter)
+  }, [detail?.page.filter])
+
+  useEffect(() => {
     const sentinel = detailLoadSentinelRef.current
-    if (!sentinel || !detail?.page.hasMore || review.detailLoadingMore || review.detailLoadingAll || review.error) return
+    if (!sentinel || !detail?.page.hasMore || detail.page.direction !== 'forward' || review.detailLoadingMore || review.error) return
     const root = sentinel.closest('.review-reader-pane')
     const observer = new IntersectionObserver(entries => {
       if (entries.some(entry => entry.isIntersecting)) void model.loadMoreReviewDetail()
     }, { root, rootMargin: '800px 0px' })
     observer.observe(sentinel)
     return () => observer.disconnect()
-  }, [detail?.id, detail?.page.hasMore, detail?.page.nextCursor, review.detailLoadingMore, review.detailLoadingAll, review.error, model])
+  }, [detail?.id, detail?.page.hasMore, detail?.page.nextCursor, detail?.page.direction, review.detailLoadingMore, review.error, model])
+
+  const lastInteractionKey = detail?.interactions.at(-1)
+    ? `${detail.interactions.at(-1)!.id}:${detail.interactions.at(-1)!.endedAt}:${detail.interactions.at(-1)!.nodes.length}`
+    : ''
+  useEffect(() => {
+    if (!review.detailHasNewData || !detail || detail.page.filter !== 'all') return
+    const includesTail = detail.page.direction === 'backward' || !detail.page.hasMore
+    if (!includesTail || !followingTailRef.current) return
+    const frame = window.requestAnimationFrame(() => {
+      const pane = readerPaneRef.current
+      if (!pane) return
+      pane.scrollTop = pane.scrollHeight
+      model.acknowledgeReviewNewData()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [review.detailHasNewData, lastInteractionKey, detail?.page.direction, detail?.page.hasMore, detail?.page.filter, model])
 
   const select = (id: string) => { void model.selectReviewSession(id); navigate(`/review/${encodeURIComponent(id)}`) }
+  const scrollTop = () => window.requestAnimationFrame(() => { if (readerPaneRef.current) readerPaneRef.current.scrollTop = 0 })
+  const scrollBottom = () => window.requestAnimationFrame(() => {
+    const pane = readerPaneRef.current
+    if (!pane) return
+    pane.scrollTop = pane.scrollHeight
+    followingTailRef.current = true
+    model.acknowledgeReviewNewData()
+  })
+
   const selectRoundFilter = async (filter: RoundFilter) => {
-    if (filter === 'all') {
-      setRoundFilter(filter)
-      return
+    if (!detail || roundFilterLoading) return
+    const selectedId = detail.id
+    setRoundFilterLoading(true)
+    try {
+      if (filter === 'all') {
+        await model.showReviewFromStart()
+        if (model.getSnapshot().review.selectedId === selectedId) {
+          setRoundFilter('all')
+          scrollTop()
+        }
+      } else {
+        await model.selectReviewDetailFilter(filter)
+        if (model.getSnapshot().review.selectedId === selectedId) {
+          setRoundFilter(filter)
+          scrollTop()
+        }
+      }
+    } finally {
+      if (model.getSnapshot().review.selectedId === selectedId) setRoundFilterLoading(false)
     }
-    const activeDetailId = detail?.id
-    if (detail?.page.hasMore) {
-      setRoundFilterLoading(true)
-      await model.ensureFullReviewDetail()
-      setRoundFilterLoading(false)
-      if (model.getSnapshot().review.detail?.id !== activeDetailId) return
-    }
-    setRoundFilter(filter)
   }
 
-  const threshold = useMemo(() => detail ? highLatencyThreshold(detail.interactions) : null, [detail])
+  const jumpToLatest = async () => {
+    if (!detail || roundFilterLoading) return
+    const selectedId = detail.id
+    setRoundFilterLoading(true)
+    try {
+      await model.jumpToLatestReviewDetail()
+      if (model.getSnapshot().review.selectedId === selectedId) {
+        setRoundFilter('all')
+        scrollBottom()
+      }
+    } finally {
+      if (model.getSnapshot().review.selectedId === selectedId) setRoundFilterLoading(false)
+    }
+  }
+
+  const loadOlder = async () => {
+    const pane = readerPaneRef.current
+    if (!pane || review.detailLoadingMore) return
+    const beforeHeight = pane.scrollHeight
+    const beforeTop = pane.scrollTop
+    await model.loadMoreReviewDetail()
+    window.requestAnimationFrame(() => {
+      const current = readerPaneRef.current
+      if (!current) return
+      current.scrollTop = beforeTop + (current.scrollHeight - beforeHeight)
+    })
+  }
+
+  const threshold = useMemo(() => {
+    if (!detail) return null
+    if (detail.page.latencyThresholdMs !== undefined) return detail.page.latencyThresholdMs
+    if (detail.page.filter === 'all' && detail.page.direction === 'forward' && !detail.page.hasMore) {
+      return highLatencyThreshold(detail.interactions)
+    }
+    return null
+  }, [detail])
   const annotatedInteractions = useMemo(() => (detail?.interactions ?? []).map(interaction => {
     const stats = interactionStats(interaction)
-    return { interaction, stats, highLatency: threshold !== null && stats.durationMs >= threshold }
+    return {
+      interaction,
+      stats,
+      highLatency: detail?.page.filter === 'latency' || (threshold !== null && stats.durationMs >= threshold),
+    }
   }), [detail, threshold])
-  const errorRoundCount = annotatedInteractions.filter(item => item.stats.errorCount > 0).length
-  const latencyRoundCount = annotatedInteractions.filter(item => item.highLatency).length
-  const visibleInteractions = useMemo(() => {
-    if (roundFilter === 'errors') return annotatedInteractions.filter(item => item.stats.errorCount > 0)
-    if (roundFilter === 'latency') return annotatedInteractions.filter(item => item.highLatency)
-    if (roundFilter === 'latest') return annotatedInteractions.slice(-1)
-    return annotatedInteractions
-  }, [annotatedInteractions, roundFilter])
-  const incomplete = detail?.page.hasMore ?? false
+  const pageIncomplete = detail?.page.hasMore ?? false
+  const isBackward = detail?.page.direction === 'backward'
+  const isFiltered = roundFilter !== 'all'
+
+  const onReaderScroll = () => {
+    const pane = readerPaneRef.current
+    if (!pane) return
+    followingTailRef.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 180
+    if (followingTailRef.current && review.detailHasNewData && detail?.page.filter === 'all') {
+      const includesTail = detail.page.direction === 'backward' || !detail.page.hasMore
+      if (includesTail) model.acknowledgeReviewNewData()
+    }
+  }
+
+  const emptyLabel = roundFilter === 'errors'
+    ? '完整会话没有错误轮次。'
+    : roundFilter === 'latency'
+      ? '完整会话没有相对耗时较高的轮次。'
+      : '当前筛选条件没有匹配的轮次。'
 
   return <main className="review-page">
     <div className="workspace-toolbar">
@@ -605,7 +723,7 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
         </div>
       </aside>
 
-      <section className="review-reader-pane">
+      <section ref={readerPaneRef} className="review-reader-pane" onScroll={onReaderScroll}>
         {review.error && <div className="page-error">{review.error}</div>}
         {!detail ? <div className="empty-state fill">{review.selectedId && review.detailLoading ? '加载会话详情…' : '选择一个会话开始复盘'}</div> : <div className="review-reader">
           <header className="review-session-head">
@@ -631,26 +749,45 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
           </details> : null}
 
           <div className="round-nav" aria-label="轮次快速导航">
-            <button className={roundFilter === 'all' ? 'active' : ''} onClick={() => void selectRoundFilter('all')}>全部 <span>{annotatedInteractions.length}{incomplete ? '+' : ''}</span></button>
-            <button className={roundFilter === 'errors' ? 'active' : ''} disabled={roundFilterLoading || (!incomplete && !errorRoundCount)} onClick={() => void selectRoundFilter('errors')}>有错误 <span>{errorRoundCount}{incomplete ? '+' : ''}</span></button>
-            <button className={roundFilter === 'latency' ? 'active' : ''} disabled={roundFilterLoading || (!incomplete && !latencyRoundCount)} onClick={() => void selectRoundFilter('latency')}>耗时较高 <span>{latencyRoundCount}{incomplete ? '+' : ''}</span></button>
-            <button className={roundFilter === 'latest' ? 'active' : ''} disabled={roundFilterLoading || !annotatedInteractions.length} onClick={() => void selectRoundFilter('latest')}>最近一轮</button>
-            {roundFilterLoading && <span className="round-nav-status">正在扫描完整会话…</span>}
-            {review.detailHasNewData && <button className="round-nav-live" onClick={() => void model.selectReviewSession(detail.id)}>有新记录 · 刷新</button>}
-            <small>“耗时较高”是按本会话已完整读取的轮次耗时分布计算出的相对提示。</small>
+            <button className={roundFilter === 'all' && !isBackward ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('all')}>全部 {roundFilter === 'all' && !isBackward && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
+            <button className={roundFilter === 'errors' ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('errors')}>有错误 {roundFilter === 'errors' && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
+            <button className={roundFilter === 'latency' ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('latency')}>耗时较高 {roundFilter === 'latency' && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
+            <button className={roundFilter === 'latest' ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('latest')}>最近一轮</button>
+            <button className={isBackward && roundFilter === 'all' ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void jumpToLatest()}>跳到最新 ↓</button>
+            {isBackward && roundFilter === 'all' && pageIncomplete && <button disabled={roundFilterLoading} onClick={() => void model.showReviewFromStart().then(scrollTop)}>从头查看 ↑</button>}
+            {roundFilterLoading && <span className="round-nav-status">正在查询完整会话…</span>}
+            {review.detailHasNewData && <button className="round-nav-live" onClick={() => void jumpToLatest()}>有新记录 ↓</button>}
+            <small>“耗时较高”由服务器基于完整会话的轮次耗时分布计算。</small>
           </div>
 
           <div className="review-flow">
-            {visibleInteractions.map((item, index) => <Interaction
+            {isBackward && roundFilter === 'all' && pageIncomplete && <div className="detail-load-sentinel detail-load-sentinel-top" aria-live="polite">
+              {review.detailLoadingMore ? '正在加载更早轮次…' : review.error ? <button onClick={() => void loadOlder()}>加载失败 · 重试</button> : <button onClick={() => void loadOlder()}>加载更早轮次</button>}
+            </div>}
+            {annotatedInteractions.map((item, index) => <VirtualRoundMount
               key={item.interaction.id}
-              interaction={item.interaction}
-              highLatency={item.highLatency}
-              defaultExpanded={item.stats.errorCount > 0 || roundFilter !== 'all' || item.interaction.id === annotatedInteractions.at(-1)?.interaction.id || index === 0}
-              inspect={setInspect}
-            />)}
-            {!visibleInteractions.length && <div className="round-filter-empty">当前筛选条件没有匹配的轮次。</div>}
-            {roundFilter === 'all' && <div ref={detailLoadSentinelRef} className="detail-load-sentinel" aria-live="polite">
-              {review.detailLoadingMore ? '正在加载后续轮次…' : detail.page.hasMore ? (review.error ? <button onClick={() => void model.loadMoreReviewDetail()}>加载失败 · 重试</button> : '继续向下滚动，后续轮次会自动加载') : `已完整加载 ${detail.interactions.length} 轮`}
+              eager={index < 6 || item.interaction.id === annotatedInteractions.at(-1)?.interaction.id}
+              estimate={item.stats.toolCount > 12 ? 420 : item.stats.toolCount > 4 ? 300 : 220}
+            >
+              <Interaction
+                interaction={item.interaction}
+                highLatency={item.highLatency}
+                defaultExpanded={item.stats.errorCount > 0 || isFiltered || item.interaction.id === annotatedInteractions.at(-1)?.interaction.id || index === 0}
+                expansionStore={roundExpansionRef.current}
+                inspect={setInspect}
+              />
+            </VirtualRoundMount>)}
+            {!annotatedInteractions.length && <div className="round-filter-empty">{emptyLabel}</div>}
+            {!isBackward && roundFilter !== 'latest' && <div ref={detailLoadSentinelRef} className="detail-load-sentinel" aria-live="polite">
+              {review.detailLoadingMore
+                ? `正在加载${isFiltered ? '后续匹配' : '后续'}轮次…`
+                : detail.page.hasMore
+                  ? review.error
+                    ? <button onClick={() => void model.loadMoreReviewDetail()}>加载失败 · 重试</button>
+                    : `继续向下滚动，${isFiltered ? '后续匹配' : '后续'}轮次会自动加载`
+                  : isFiltered
+                    ? `已加载全部 ${detail.interactions.length} 个匹配轮次`
+                    : `已完整加载 ${detail.interactions.length} 轮`}
             </div>}
           </div>
         </div>}
