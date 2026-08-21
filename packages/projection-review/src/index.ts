@@ -1,9 +1,10 @@
 import type { CanonicalObservation, StorageService } from '@agent-lens/core'
 import { SessionProjection } from '@agent-lens/projection-session'
-import { TimelineProjection } from '@agent-lens/projection-timeline'
+import { TimelineProjection, encodeTimelineCursor } from '@agent-lens/projection-timeline'
 import {
   AGENT_LENS_PROTOCOL_VERSION,
   type JsonValue,
+  type ReviewDetailQueryDto,
   type ReviewEventCategory,
   type ReviewEventNodeDto,
   type ReviewInteractionDto,
@@ -19,6 +20,9 @@ import {
 
 const MAX_SESSIONS = 500
 const DEFAULT_LIMIT = 100
+const DEFAULT_DETAIL_LIMIT = 20
+const MAX_DETAIL_LIMIT = 100
+const TIMELINE_CHUNK = 250
 
 function asRecord(value: JsonValue | unknown): Record<string, any> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {}
@@ -145,7 +149,7 @@ function buildNodes(items: TimelineItemDto[]): ReviewNodeDto[] {
   return nodes
 }
 
-function buildInteractions(items: TimelineItemDto[]): ReviewInteractionDto[] {
+function splitInteractionGroups(items: TimelineItemDto[]): TimelineItemDto[][] {
   const groups: TimelineItemDto[][] = []
   let current: TimelineItemDto[] = []
   for (const item of items) {
@@ -157,15 +161,25 @@ function buildInteractions(items: TimelineItemDto[]): ReviewInteractionDto[] {
     current.push(item)
   }
   if (current.length) groups.push(current)
+  return groups
+}
 
-  return groups.map((group, index) => ({
-    id: `${group[0]!.logicalSessionId}:review:${index + 1}`,
-    ordinal: index + 1,
-    trigger: group[0]!.kind === 'message.user' ? 'user' : 'background',
-    startedAt: group[0]!.effectiveAt,
-    endedAt: group[group.length - 1]!.effectiveAt,
-    nodes: buildNodes(group),
-  }))
+function buildInteractionGroups(groups: TimelineItemDto[][], startingOrdinal = 1): ReviewInteractionDto[] {
+  return groups.map((group, index) => {
+    const ordinal = startingOrdinal + index
+    return {
+      id: `${group[0]!.logicalSessionId}:review:${ordinal}`,
+      ordinal,
+      trigger: group[0]!.kind === 'message.user' ? 'user' : 'background',
+      startedAt: group[0]!.effectiveAt,
+      endedAt: group[group.length - 1]!.effectiveAt,
+      nodes: buildNodes(group),
+    }
+  })
+}
+
+function buildInteractions(items: TimelineItemDto[], startingOrdinal = 1): ReviewInteractionDto[] {
+  return buildInteractionGroups(splitInteractionGroups(items), startingOrdinal)
 }
 
 function durationMs(startedAt: string, endedAt: string): number {
@@ -176,6 +190,31 @@ function durationMs(startedAt: string, endedAt: string): number {
 function observationError(item: CanonicalObservation): boolean {
   if (item.kind !== 'tool.result') return false
   return asRecord(item.payload).success === false
+}
+
+interface ReviewCursorPayload {
+  timelineCursor: string
+  ordinal: number
+}
+
+function encodeReviewCursor(value: ReviewCursorPayload): string {
+  return JSON.stringify(value)
+}
+
+function decodeReviewCursor(value: string): ReviewCursorPayload {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(value)
+  } catch {
+    throw new Error('Invalid review cursor')
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Invalid review cursor')
+  const record = parsed as Record<string, unknown>
+  if (typeof record.timelineCursor !== 'string' || !record.timelineCursor) throw new Error('Invalid review cursor')
+  if (typeof record.ordinal !== 'number' || !Number.isSafeInteger(record.ordinal) || record.ordinal < 1) {
+    throw new Error('Invalid review cursor')
+  }
+  return { timelineCursor: record.timelineCursor, ordinal: record.ordinal }
 }
 
 export class ReviewProjection {
@@ -238,14 +277,89 @@ export class ReviewProjection {
     }
   }
 
-  async get(logicalSessionId: string): Promise<ReviewSessionDetailDto | null> {
+  private async interactionPage(
+    logicalSessionId: string,
+    query: ReviewDetailQueryDto,
+  ): Promise<{ interactions: ReviewInteractionDto[]; hasMore: boolean; nextCursor?: string }> {
+    const requestedLimit = Math.max(1, Math.min(query.limit ?? DEFAULT_DETAIL_LIMIT, MAX_DETAIL_LIMIT))
+    const decoded = query.cursor ? decodeReviewCursor(query.cursor) : null
+    const startingOrdinal = decoded?.ordinal ?? 1
+    let timelineCursor = decoded?.timelineCursor
+    let pending: TimelineItemDto[] = []
+    const completed: TimelineItemDto[][] = []
+    let exhausted = false
+    let stoppedAtNextInteraction = false
+
+    while (!exhausted && !stoppedAtNextInteraction && completed.length <= requestedLimit) {
+      const page = await this.timeline.query({
+        logicalSessionId,
+        ...(timelineCursor ? { cursor: timelineCursor } : {}),
+        limit: TIMELINE_CHUNK,
+      })
+
+      for (const item of page.items) {
+        if (item.kind === 'message.user' && pending.length) {
+          completed.push(pending)
+          pending = []
+          if (completed.length > requestedLimit) {
+            stoppedAtNextInteraction = true
+            break
+          }
+        }
+        if (!pending.length && item.kind === 'session.lifecycle') continue
+        pending.push(item)
+      }
+
+      if (stoppedAtNextInteraction) break
+      if (!page.meta.hasMore) {
+        exhausted = true
+        if (pending.length) completed.push(pending)
+        pending = []
+        break
+      }
+      if (!page.meta.nextCursor) throw new Error('Timeline pagination integrity error: missing next cursor')
+      timelineCursor = page.meta.nextCursor
+    }
+
+    const includedGroups = completed.slice(0, requestedLimit)
+    const interactions = buildInteractionGroups(includedGroups, startingOrdinal)
+    const hasMore = completed.length > requestedLimit || !exhausted || pending.length > 0
+    const lastIncluded = includedGroups.at(-1)?.at(-1)
+    const nextCursor = hasMore && lastIncluded
+      ? encodeReviewCursor({
+          timelineCursor: encodeTimelineCursor(lastIncluded),
+          ordinal: startingOrdinal + interactions.length,
+        })
+      : undefined
+
+    return { interactions, hasMore, ...(nextCursor ? { nextCursor } : {}) }
+  }
+
+  async get(logicalSessionId: string, query: ReviewDetailQueryDto = {}): Promise<ReviewSessionDetailDto | null> {
     const sessionResult = await this.sessions.query({ logicalSessionId, limit: 1 })
     const session = sessionResult.items.find(item => item.id === logicalSessionId)
     if (!session) return null
     const summary = await this.summary(session)
-    const timeline = await this.timeline.query({ logicalSessionId, limit: 1000 })
-    return { ...summary, interactions: buildInteractions(timeline.items) }
+    const page = await this.interactionPage(logicalSessionId, query)
+    return {
+      ...summary,
+      interactions: page.interactions,
+      page: {
+        count: page.interactions.length,
+        hasMore: page.hasMore,
+        ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
+      },
+    }
   }
 }
 
-export const reviewProjectionInternals = { textFromPayload, buildNodes, buildInteractions, eventCategory }
+export const reviewProjectionInternals = {
+  textFromPayload,
+  buildNodes,
+  buildInteractions,
+  splitInteractionGroups,
+  buildInteractionGroups,
+  eventCategory,
+  encodeReviewCursor,
+  decodeReviewCursor,
+}

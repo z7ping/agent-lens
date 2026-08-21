@@ -18,6 +18,11 @@ const migrations: readonly Migration[] = [
     name: 'source-checkpoints',
     fileName: '002-source-checkpoints.sql',
   },
+  {
+    version: 3,
+    name: 'observation-timeline-order-index',
+    fileName: '003-observation-timeline-order-index.sql',
+  },
 ]
 
 async function readMigrationSql(fileName: string): Promise<string> {

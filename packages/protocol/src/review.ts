@@ -80,8 +80,20 @@ export interface ReviewInteractionDto {
   nodes: ReviewNodeDto[]
 }
 
+export interface ReviewDetailPageDto {
+  count: number
+  hasMore: boolean
+  nextCursor?: string
+}
+
 export interface ReviewSessionDetailDto extends ReviewSessionSummaryDto {
   interactions: ReviewInteractionDto[]
+  page: ReviewDetailPageDto
+}
+
+export interface ReviewDetailQueryDto {
+  cursor?: string
+  limit?: number
 }
 
 export interface ReviewQueryDto {

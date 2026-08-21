@@ -133,7 +133,7 @@ test('TimelineProjection maps canonical facts to protocol DTOs in effective-time
   }
 })
 
-test('TimelineProjection applies protocol limit after chronological projection ordering', async () => {
+test('TimelineProjection uses a stable cursor without duplicate or missing observations', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   await storage.migrate()
 
@@ -171,16 +171,24 @@ test('TimelineProjection applies protocol limit after chronological projection o
       })
     }
 
-    const response = await new TimelineProjection(storage).query({
-      installationId: installation.id,
-      limit: 2,
-    })
-    assert.equal(response.meta.count, 2)
-    assert.equal(response.meta.hasMore, true)
+    const projection = new TimelineProjection(storage)
+    const first = await projection.query({ installationId: installation.id, limit: 2 })
+    assert.equal(first.meta.count, 2)
+    assert.equal(first.meta.hasMore, true)
+    assert.ok(first.meta.nextCursor)
     assert.deepEqual(
-      response.items.map(item => item.effectiveAt),
+      first.items.map(item => item.effectiveAt),
       ['2026-08-20T08:00:00.000Z', '2026-08-20T10:00:00.000Z'],
     )
+
+    const second = await projection.query({
+      installationId: installation.id,
+      limit: 2,
+      cursor: first.meta.nextCursor,
+    })
+    assert.equal(second.meta.hasMore, false)
+    assert.deepEqual(second.items.map(item => item.effectiveAt), ['2026-08-20T12:00:00.000Z'])
+    assert.equal(new Set([...first.items, ...second.items].map(item => item.id)).size, 3)
   } finally {
     storage.close()
   }

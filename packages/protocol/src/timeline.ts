@@ -92,6 +92,7 @@ export interface TimelineQueryDto {
   kind?: TimelineObservationKind
   from?: string
   to?: string
+  cursor?: string
   limit?: number
 }
 
@@ -101,6 +102,7 @@ export interface TimelineResponseDto {
     protocolVersion: typeof AGENT_LENS_PROTOCOL_VERSION
     count: number
     hasMore: boolean
+    nextCursor?: string
     generatedAt: string
   }
 }
