@@ -19,7 +19,7 @@ It answers:
 - which native source proves it happened;
 - how history and runtime observations reconcile;
 - which tools were called and which calls failed;
-- which Skills/MCP assets were actually attributable to observed usage.
+- which Skills/MCP assets are installed or configured, and which can be defensibly attributed to actual usage.
 
 AgentLens does **not** execute the agent and does not claim access to hidden chain-of-thought.
 
@@ -93,23 +93,50 @@ The daemon and HTTP/SSE architecture remain the same as the CLI/npm distribution
 
 Uninstalling the desktop application does not automatically delete `~/.agent-lens/1.0` observation data.
 
-## UI
+## Web 1.0
 
-The current 1.0 Web shell is localized in Simplified Chinese and exposes three projections:
+The Web UI is itself a Cordis Surface Plugin: `@agent-lens/web`. It mounts the React SPA through `ctx.http.mountStatic()`, so the HTTP/API surface can run without the Web plugin. Web consumes only `@agent-lens/protocol` DTOs and does not directly depend on Core, SQLite, or Source implementations.
 
-### 执行轨迹 (Timeline)
+Current stack: React 19 + Vite + Tailwind CSS. Product state lives outside React in `AgentLensClientModel`; React subscribes with `useSyncExternalStore`, keeping live event processing independent from component-local state.
 
-Canonical observations ordered by effective event time, including Evidence records, capture method, derivation, confidence, and source locator. Raw payload and Evidence details are collapsed by default.
+The shell uses a two-level top layout: primary product navigation, then Agent shortcuts plus page-specific filters. Agent shortcuts are initialized from detected local agents and can be pinned by the user. Pinning only changes UI visibility; it does not enable or disable Sources.
 
-### 会话 (Sessions / Interactions)
+### Task Review
 
-Logical sessions derived from canonical observations. User messages define user-triggered Interaction boundaries; observable autonomous activity can form background interactions. Sessions can jump directly to the matching execution trajectory.
+Task Review uses a `Session List | Session Detail` split layout and treats Session / Interaction as the main reading structure:
 
-### 工具与能力 (Tools & Assets)
+- user and Agent messages are rendered conversationally;
+- consecutive tool calls are grouped as an execution process with results, errors, and duration;
+- permission, subagent, context, model, and lifecycle events remain interleaved in the execution stream;
+- Codex, Claude Code, and Pi retain source-specific event semantics where they matter;
+- Pi can expose native parent/session relationships;
+- Evidence and Raw Payload live in a temporary Inspector instead of dominating the main reading flow.
 
-Tool calls/results, success/failure counts, duration, source/product attribution, and defensible Skill/MCP usage attribution.
+Filtering is by Agent, project, time range, error state, and search text. Users no longer need to type installationId or logicalSessionId manually.
 
-The UI receives live updates through Server-Sent Events. Timeline updates use incremental DOM reconciliation so new observations do not destroy scroll position or expanded Evidence state. Sessions and Tools & Assets show a new-data indicator when a safe incremental update is not available. Idempotent `unchanged` commits do not trigger refresh noise.
+### Tool Analysis
+
+Tool Analysis derives factual usage metrics from Canonical Observations: call count, affected Sessions, success/failure, total duration, and average duration, with Agent/project/time filters.
+
+The 1.0 baseline favors evidence-backed facts. The old 0.x value scores, risk scores, and workflow candidates are not copied back without a redesigned analyzer contract.
+
+### Agent Overview
+
+Agent Overview exposes:
+
+- detected state and installation metadata;
+- Source-declared observation capabilities;
+- statically discovered Skills, MCP, Plugins, Extensions, Hooks, and related assets;
+- asset binding path/version plus installed/configured/enabled/discoverable state observations;
+- Skill/MCP usage that can be defensibly attributed from Evidence.
+
+“Installed/configured” and “actually used” remain separate concepts in both the model and the UI.
+
+### Live updates
+
+Web receives Observation, Source Detection, and Asset changes over SSE. The SSE connection is established before the initial snapshot requests so startup scans do not fall into an API-to-SSE blind window.
+
+`AgentLensClientModel` batches high-frequency updates over short windows for Task Review, usage analytics, and Agent inventory separately. React renders stable snapshots rather than replacing the full page DOM on every event. The client closes the SSE connection when the page exits.
 
 ## CLI
 
@@ -138,7 +165,7 @@ Native source
   -> Projections
   -> @agent-lens/protocol
   -> HTTP / SSE
-  -> Web / Desktop
+  -> @agent-lens/web / Desktop
 ```
 
 Cordis is the sole plugin runtime and is pinned to `@deepseek-ai/cordis@4.0.1`. AgentLens Core remains framework-independent; runtime extension entrypoints such as Source, Storage, and Surface are Cordis-native plugins. `packages/runtime-cordis` owns shared Context typing, metadata helpers, and compatibility tests rather than wrapping runtime extensions behind a second AgentLens plugin runtime.
@@ -148,6 +175,7 @@ See:
 - [Architecture](ARCHITECTURE.md)
 - [Core Contract](docs/1.0/CORE-CONTRACT.md)
 - [ADR-0001: Clean Rebuild and Cordis Runtime Ownership](docs/adr/0001-agentlens-1.0-clean-rebuild-and-cordis-runtime.md)
+- [ADR-0002: Web Plugin and Client State Model](docs/adr/0002-web-plugin-and-client-state-model.md)
 
 ## Evidence model
 
@@ -207,13 +235,14 @@ Repository layout:
 
 ```text
 apps/
-  cli/ daemon/ web/ desktop/ hook-codex/ hook-claude/
+  cli/ daemon/ desktop/ hook-codex/ hook-claude/
 packages/
   core/ core-services/ runtime-cordis/ protocol/
   storage-sqlite/
   source-codex/ source-claude/ source-pi/
   projection-timeline/ projection-session/ projection-usage/
-  surface-http/ hook-manager/
+  projection-review/ projection-overview/
+  surface-http/ web/ hook-manager/
 ```
 
 ## Release model
