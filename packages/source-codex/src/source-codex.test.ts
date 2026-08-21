@@ -1,0 +1,163 @@
+import assert from 'node:assert/strict'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import test from 'node:test'
+import type {
+  AgentInstallation,
+  Host,
+  SourceCheckpointService,
+  SourceExecutionContext,
+} from '@agent-lens/core'
+import {
+  codexSourceDefinition,
+  detectCodex,
+} from './index'
+
+class MemoryCheckpoint implements SourceCheckpointService {
+  private readonly values = new Map<string, unknown>()
+
+  async get<T>(key: string): Promise<T | null> {
+    return (this.values.get(key) as T | undefined) ?? null
+  }
+
+  async set<T>(key: string, value: T): Promise<void> {
+    this.values.set(key, value)
+  }
+
+  async clear(key: string): Promise<void> {
+    this.values.delete(key)
+  }
+}
+
+const host: Host = {
+  id: 'host-1',
+  name: 'test-host',
+  platform: process.platform,
+  arch: process.arch,
+  createdAt: '2026-08-20T00:00:00.000Z',
+  lastSeenAt: '2026-08-20T00:00:00.000Z',
+}
+
+async function withFixture() {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-codex-'))
+  const sessions = join(root, 'sessions')
+  const fixturePath = join(sessions, '2026', '07', '02', 'rollout-test.jsonl')
+  await mkdir(dirname(fixturePath), { recursive: true })
+  const fixture = await readFile(new URL('./__fixtures__/codex-sample.jsonl', import.meta.url), 'utf8')
+  await writeFile(fixturePath, fixture, 'utf8')
+  return { root, sessions, fixturePath }
+}
+
+function installation(root: string, sessions: string): AgentInstallation {
+  return {
+    id: 'codex-install-1',
+    hostId: host.id,
+    productId: 'codex',
+    configRoot: root,
+    dataRoot: sessions,
+    firstSeenAt: '2026-08-20T00:00:00.000Z',
+    lastSeenAt: '2026-08-20T00:00:00.000Z',
+  }
+}
+
+test('detect uses CODEX_HOME without importing Prototype path logic', async () => {
+  const { root, sessions } = await withFixture()
+  try {
+    const detected = await detectCodex({
+      host,
+      env: { CODEX_HOME: root, PATH: '' },
+    })
+    assert.equal(detected.length, 1)
+    assert.equal(detected[0]?.sourceId, 'codex')
+    assert.equal(detected[0]?.configRoot, root)
+    assert.equal(detected[0]?.dataRoot, sessions)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('history ingest is incremental and preserves every native record', async () => {
+  const { root, sessions } = await withFixture()
+  const checkpoint = new MemoryCheckpoint()
+  const controller = new AbortController()
+  const sourceContext: SourceExecutionContext = {
+    host,
+    installation: installation(root, sessions),
+    abortSignal: controller.signal,
+    checkpoint,
+  }
+
+  try {
+    const first = []
+    for await (const record of codexSourceDefinition.ingestHistory!(sourceContext)) first.push(record)
+    assert.equal(first.length, 8)
+    assert.equal(first[0]?.sourceSessionNativeId, 'codex-test-1')
+    assert.equal(first[1]?.nativeType, 'event_msg/task_started')
+
+    const second = []
+    for await (const record of codexSourceDefinition.ingestHistory!(sourceContext)) second.push(record)
+    assert.equal(second.length, 0)
+
+    const serialized = JSON.stringify(first)
+    assert.equal(serialized.includes('<permissions instructions>sandbox'), false)
+    assert.equal(serialized.includes('<environment_context>'), false)
+    assert.equal(serialized.includes('[redacted:injected-context]'), true)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('normalizer maps known facts and preserves unknown native events', async () => {
+  const { root, sessions } = await withFixture()
+  const checkpoint = new MemoryCheckpoint()
+  const sourceContext: SourceExecutionContext = {
+    host,
+    installation: installation(root, sessions),
+    abortSignal: new AbortController().signal,
+    checkpoint,
+  }
+
+  try {
+    const records = []
+    for await (const record of codexSourceDefinition.ingestHistory!(sourceContext)) records.push(record)
+
+    const kinds: string[] = []
+    const outputs = []
+    for (const record of records) {
+      const normalized = await codexSourceDefinition.normalize(record, {
+        host,
+        installation: sourceContext.installation,
+      })
+      kinds.push(normalized.observations[0]!.kind)
+      outputs.push(normalized.observations[0]!)
+      assert.equal(normalized.evidenceCandidates[0]?.sourceRecordId, record.id)
+    }
+
+    assert.deepEqual(kinds, [
+      'session.lifecycle',
+      'unknown',
+      'message.user',
+      'message.assistant',
+      'tool.call',
+      'tool.result',
+      'unknown',
+      'unknown',
+    ])
+
+    assert.deepEqual(outputs[4]?.payload, {
+      callId: 'call_c1',
+      nativeToolName: 'shell_command',
+      input: { command: 'npm test' },
+    })
+    assert.deepEqual(outputs[5]?.payload, {
+      callId: 'call_c1',
+      success: false,
+      exitCode: 1,
+      output: 'failed 1 test',
+    })
+    assert.equal((outputs[1]?.payload as any).rawType, 'event_msg/task_started')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})

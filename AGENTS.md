@@ -1,152 +1,248 @@
 # AGENTS.md
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+本文定义 AI 编码 Agent 修改 AgentLens 1.0 时必须遵守的工作规则。
 
-## 项目概述
+## 1. 当前项目状态
 
-AgentLens 是一个实时监控和可视化 AI 编码工具调用的工具。通过实时 Hook、历史 JSONL 导入和本地数据库轮询记录对话与工具调用，并在浏览器仪表盘中展示。支持多工具适配器架构（Claude Code、Codex、Hermes、OpenCode、Cursor、Pi）。
+AgentLens 1.0 是一次 **Clean Rebuild（彻底重建）**。
 
-**主要运行时依赖：better-sqlite3（原生 SQLite 模块，可选依赖中安装）。**
+0.x 的旧 Runtime / UI / Test 已从 1.0 工作树移除，不再作为可直接复用的实现存在。需要参考 0.x 的解析行为、fixture、UI 思路或迁移逻辑时，请通过 Git 历史 / Tag 查阅，并重新按 1.0 Contract 验证后再选择性迁移。
 
-## 常用命令
+禁止为了“兼容旧实现”重新恢复以下架构：
+
+- 旧 Adapter / Importer Runtime；
+- 旧 `timeline` / `overview_*` 规范表；
+- 旧 service manager / PID 架构；
+- 旧 HTTP Response Shape；
+- 根目录 `server/`、`src/`、`test/` 作为 1.0 Runtime / UI / Test 入口。
+
+## 2. 修改架构前必须阅读
+
+依次阅读：
+
+1. `ARCHITECTURE.md`
+2. `docs/1.0/CORE-CONTRACT.md`
+3. `docs/adr/0001-agentlens-1.0-clean-rebuild-and-cordis-runtime.md`
+
+如果实现与这些文档冲突，不要静默绕过 Contract。要么修复实现 Bug，要么明确发起 Contract Review / ADR。
+
+## 3. 架构规则
+
+### Cordis
+
+- 精确锁定 `@deepseek-ai/cordis@4.0.1`。
+- Cordis 是唯一的 Plugin Runtime；AgentLens 1.0 本身是 Cordis Application。
+- **Core is framework-agnostic; runtime extensions are Cordis-native.**
+- Core Domain / Core Services、Repository Contract、Parser / Normalizer、Protocol DTO 必须保持与 Cordis 无关。
+- Source / Storage / Surface 等需要运行时生命周期的插件入口可以直接依赖 Cordis / `runtime-cordis` Context typing，并使用 `ctx`、`inject`、dispose 生命周期。
+- 不得再引入 `defineSourcePlugin()`、`defineStoragePlugin()`、`defineSurfacePlugin()` 之类通用适配层，把 Cordis Plugin 再包装成第二套 AgentLens Runtime Model。
+- `defineAgentLensPlugin()` 仅允许作为 metadata / API-version compatibility helper，不得扩展成第二套 Lifecycle / DI / Plugin Loader。
+- 不得再引入第二套 DI Container、Plugin Loader 或 Lifecycle Runtime。
+
+### Canonical Data Flow
+
+```text
+SourceRecord
+-> SourceDefinition.normalize()
+-> ObservationCandidate + EvidenceCandidate
+-> IdentityService
+-> ObservationService.commit()
+-> CanonicalObservation + Evidence
+-> Projection
+-> Protocol DTO
+-> Surface/Web
+```
+
+Cordis-native 不意味着插件可以绕过这条链路。Source 不得直接写 Canonical Repository 或展示表；Storage / Surface 也不得反向拥有 Canonical Domain。
+
+### Evidence
+
+每一条规范事实都必须能由 Evidence 解释。
+
+同一事实的第二条采集路径应该增强 Evidence，而不是创建重复 Observation。
+
+### Projections
+
+Projection 是可重建的读模型，不是额外的规范写入路径。
+
+### Protocol
+
+Web / Surface 消费 `@agent-lens/protocol` DTO。浏览器代码不得直接 import Core、SQLite 或 Source package。
+
+## 4. 新增 Source
+
+正常情况下，一个 Source 只需要新增：
+
+```text
+packages/source-<name>/
+```
+
+并在 Daemon Composition Root 中注册它导出的 Cordis Plugin。
+
+推荐结构：
+
+```text
+packages/source-<name>/
+  parser / history / normalize / assets   # 纯 TypeScript / Core Contract
+  plugin entry                            # Cordis-native
+```
+
+它仍应实现稳定的 `SourceDefinition` Contract：
+
+```text
+detect
+declareCapabilities
+ingestHistory? / startCapture? / discoverAssets?
+normalize
+```
+
+插件入口负责把 `SourceDefinition` 注册到 `ctx.sources`，不得自行复制 History / Runtime Runner、Identity、Observation Commit 或 Dedup 流程。
+
+通用 Source Runner 中不得出现 `if (sourceId === ...)` 之类的来源分支。
+
+如果某个新 Source 无法在不歪曲事实的前提下适配现有 Contract，应停止普通接入流程，按 Contract Review 处理。
+
+## 5. 当前 1.0 Source
+
+已实现：
+
+- Codex
+- Claude Code
+- Pi
+
+不能因为 0.x 曾经支持过，就视为已经属于 1.0 Runtime：
+
+- Hermes
+- OpenCode
+- Cursor
+- OpenClaw
+
+## 6. Hook 规则
+
+Hook 子进程只是被动采集 Shim。
+
+允许做：
+
+- 读取 stdin / 原生事件数据；
+- 清洗 / 截断敏感字段；
+- 原子写入 durable inbox；
+- 返回中性结果。
+
+不得依赖：
+
+- Cordis；
+- SQLite；
+- Core Services；
+- HTTP；
+- Daemon 生命周期。
+
+Inbox 条目只有在成功完成 Canonical Ingestion 后才能确认并删除。
+
+## 7. Asset 规则
+
+绝不能把“静态发现”直接等同于“实际调用”。
+
+例如：
+
+- 已安装 Skill -> Asset state；
+- 已配置 MCP -> Asset state；
+- 调用 `mcp__server__tool` -> 可归因的 MCP Usage；
+- 普通 Bash 调用 -> 仅算 Tool Usage，除非有明确 Evidence 能证明对应 Asset。
+
+## 8. Storage 规则
+
+使用 Core Repository Interface。
+
+除了 storage package 自己在实现 Repository，不得绕过 `StorageService` 在业务代码里直接写功能专用 SQL。
+
+Storage Plugin 可以直接使用 Cordis 生命周期提供 `ctx.storage`，但 SQLite Repository 实现本身不应依赖 Cordis。
+
+不得重新引入旧 `timeline` / `overview` 表作为 1.0 规范事实。
+
+## 9. UI 规则
+
+1.0 Web 使用 Vite + 原生 TypeScript，只消费 `/api/v1/*`。
+
+当前面向用户的主视图使用简体中文：
+
+- 执行轨迹；
+- 会话；
+- 工具与能力。
+
+实时更新使用 SSE，但 SSE 事件不得直接触发整页 / 整个内容区反复重绘。
+
+- 执行轨迹应优先做增量 DOM 协调，保留滚动位置、Evidence 展开状态和当前阅读上下文；
+- 会话 / 工具与能力如果暂时无法安全增量更新，应只提示“有新数据”，由用户显式刷新；
+- 除非有明确性能数据和正式决策，不要改回短间隔轮询。
+
+## 10. CLI / Desktop 规则
+
+CLI：
+
+```text
+agent-lens start
+agent-lens status
+agent-lens doctor
+agent-lens hook ...
+```
+
+`start` 明确以前台方式运行。
+
+Electron 只负责 Windows Desktop Lifecycle。不要把 Core / Source 逻辑搬进 `apps/desktop`。
+
+## 11. 常用开发命令
 
 ```bash
-# GitHub 源码安装（推荐的 GitHub 使用方式）
-npm install && npm run build && node server/cli.js install
-
-# npm Registry 安装
-npx @z7ping/agent-lens install
-
-# 源码运行与管理
-node server/cli.js start              # 前台启动（开发调试用）
-node server/cli.js start --daemon     # 后台守护进程
-node server/cli.js start -d           # 后台守护进程（短参数）
-node server/cli.js start 8080         # 指定端口（位置参数）
-node server/cli.js start --port 8080  # 指定端口（选项）
-node server/cli.js start --open       # 启动后打开浏览器
-node server/cli.js stop               # 停止服务
-node server/cli.js status             # 查看默认端口 56789 的状态
-node server/cli.js package --output ./release  # 生成 .tgz 分发包
-node server/cli.js help               # 完整帮助
-node server/cli.js uninstall          # 卸载并清理
-
-# Linux（systemd user service）/ macOS（launchd agent）
-node server/cli.js service install    # 注册系统服务（开机自启）
-node server/cli.js service start      # 启动服务
-node server/cli.js service stop       # 停止服务
-node server/cli.js service enable     # 启用开机自启
-node server/cli.js service disable    # 关闭开机自启
-node server/cli.js service status     # 查看状态
-node server/cli.js service uninstall  # 移除系统服务
-
-# Windows 使用当前用户启动目录 + daemon
-agent-lens service install
-agent-lens service start
-agent-lens service status
+npm install
+npm run typecheck
+npm test
+npm run build:dist
+npm pack --dry-run
+npm run build:web
+npm run cli -- doctor
+npm run desktop:win      # Windows runner
 ```
 
-安装完成后可把 `node server/cli.js` 替换为 `agent-lens`。Windows 支持全部 `service` 子命令，自启入口位于当前用户的“启动”目录，无需管理员权限。自定义端口启动时，当前 `status` 仍固定检查默认端口 56789。
+Node.js 要求：`>=22.23.0`。
 
-前端需要 Vite 构建，测试使用 Node.js 内置 test runner。
+## 12. 语义变更必须覆盖的测试
 
-### 开发模式
+修改以下内容时需要新增 / 更新测试：
 
-```bash
-# 前后端联调（推荐）
-npm run dev           # 同时启动后端 56789 和 Vite 5173
-npm run dev:frontend  # 仅 vite dev server
+- normalization mapping；
+- dedup key；
+- identity resolution；
+- history / runtime reconciliation；
+- checkpoint 行为；
+- Asset 归因；
+- Projection 排序 / 分组；
+- Hook install / uninstall 安全性；
+- Protocol / API 行为；
+- Cordis compatibility。
 
-# 构建生产版本
-npm run build         # vite build → dist/
-npm test              # 导入器测试 + Node.js test runner
+关键不变量：
+
+```text
+same native semantic event from multiple evidence paths
+=> one CanonicalObservation + multiple Evidence records
 ```
 
-Vite dev server 会代理 `/api`、`/logs`、`/states`、`/projects.json` 到后端 server.js。
+即：同一原生语义事件来自多条 Evidence Path 时，只产生一条 `CanonicalObservation`，但保留多份 `Evidence`。
 
-### 自动守护（核心特性）
+## 13. 文档与协作纪律
 
-安装后，**无需手动启动服务器**：
-- `hooks/prelog.js` 在每次工具调用时检测服务是否运行
-- 如果服务未运行，自动通过已安装的 `agent-lens start --daemon` 在后台启动
-- 服务写入运行时 `run/server.pid` 管理生命周期
-- 服务挂掉后，下次工具调用会自动拉起
+任何改变架构所有权 / 边界的决策，都必须同步更新：
 
-## 多工具支持
+- `ARCHITECTURE.md`；
+- Contract 变化时更新 `docs/1.0/CORE-CONTRACT.md`；
+- 对长期、难以逆转的决策补充 ADR。
 
-支持追踪以下 AI 编码工具：
-- Claude Code（实时钩子 + 历史 JSONL 导入）
-- Codex（实时钩子 + 历史 JSONL 导入）
-- Hermes（定时轮询 state.db，含对话）
-- OpenCode（定时轮询 opencode.db，含对话）
-- Pi（按字节偏移增量导入树形 session JSONL，含对话、分支、压缩和并行工具配对）
-- Cursor（实时钩子，仅工具调用）
-- OpenClaw（骨架，待实现）
+不要把“计划能力”写成“已实现能力”。不要让已删除的 0.x 路径继续出现在当前开发说明中，除非明确标注为 Git 历史参考。
 
-## 架构
+提交信息统一使用中文；Pull Request 的标题和正文也统一使用中文。代码标识符、API、类型名、命令保持英文即可。
 
-系统是**实时 Hook + 历史导入/轮询 + 统一存储与展示**的多工具适配器管道：
+## 14. 分支 / 发布安全
 
-### 管道阶段
+1.0 重建在明确合并前始终开发于 `refactor/1.0-foundation`。
 
-1. **PreToolUse 钩子** (`hooks/prelog.js`) — 在每次工具调用前触发。从 stdin 读取 JSON，委托给来源适配器的 `pre()` 方法。将记录推入持久化调用栈 (`state/<projectKey>.json`)，并写入独立 `tool_use` 事件，包含稳定 `event_id`、`call_id`、`seq` 和父事件关系。
-
-2. **PostToolUse 钩子** (`hooks/log.js`) — 在每次工具调用后触发。从调用栈弹出，构建关联的 `tool_result`/`tool_error` 事件；持久化前执行采集策略与脱敏，再追加 JSONL、Timeline 并更新 `projects.json`。
-
-3. **历史导入与轮询** (`server/importers/`、`server/adapters/`) — Codex/Claude Code 增量导入会话 JSONL；Pi 按文件偏移增量导入树形 Session JSONL；Hermes/OpenCode 轮询本地数据库，并统一写入 timeline。
-
-4. **HTTP 服务器** (`server/server.js`) — 最小化静态文件服务器，默认在 `127.0.0.1:56789` 监听。校验本机 Host/Origin，Hook 写入需要 `run/hook-token`，并通过 `run/server.pid` 管理生命周期。
-
-5. **浏览器可视化** (`index.html`) — 单页面 Tab 切换（任务复盘 / 工具栈 / 概览），通过 `/api/*` 查询统一后的数据。
-
-### 适配器架构
-
-适配器定义在 `server/adapters/` 目录，继承 `BaseAdapter`（`server/adapters/base.js`）：
-
-```
-server/adapters/
-├── base.js          # 基类：getProjectKey()、日志写入、状态管理
-├── claude-code.js   # 实时钩子（stdin JSON）
-├── hermes.js        # 定时轮询 ~/.hermes/state.db
-├── codex.js         # 实时钩子
-├── opencode.js      # 定时轮询 ~/.local/share/opencode/opencode.db
-├── cursor.js        # 实时钩子
-├── pi.js            # 增量导入树形 session JSONL
-├── openclaw.js      # 骨架
-└── index.js         # 注册表：getAdapter()、getAllAdapters()、stopAll()
-```
-
-**添加新适配器**：
-1. 继承 `BaseAdapter`，实现 `name` getter、`pre(data)`、`post(data)`、`getRecords(filter)` 方法
-2. 在 `server/adapters/index.js` 中注册：`adapters.set('name', new MyAdapter())`
-3. 钩子（`server/hooks/prelog.js`、`server/hooks/log.js`）通过 `getDefaultAdapter()` 自动委托
-
-## 核心设计模式
-
-- **多项目隔离**：项目键 = 工作目录路径 MD5 的前 12 位。所有状态/日志文件按此键命名空间隔离。
-- **调用链重建**：Tool Use 与 Result 使用 `call_id` 关联；`parent_event_id` 表示已确认父事件，`seq`/`parent_seq` 只作为旧 Hook 兼容字段。
-- **跨来源隔离**：Session 内部键 = `source + session_id`；事件使用稳定 `event_id`，禁止以时间戳和 role 作为唯一去重依据。
-- **证据边界**：事件必须区分运行时捕获、原生日志、本地数据库、静态发现、推断和旧版导入，并为缺失 Agent/Turn 等信息提供原因。
-- **敏感数据**：提示词、工具数据和配置默认脱敏，环境信息默认关闭；统一在持久化前处理。
-- **输入摘要**：钩子按工具类型摘要工具输入（Bash → 命令，文件工具 → 路径，MCP → 服务器名称）。保持日志文件小巧。
-- **增量渲染**：`index.html` 跟踪已渲染的 `seq` 值，自动刷新时仅追加新条目。
-- **双钩子实现**：Node.js 钩子为主/推荐。
-- **Windows Hook 启动**：安装后的 Hook 通过 PATH 中的 `agent-lens-hook.exe` 无窗口执行 Node 脚本；命令必须同时兼容 PowerShell 与 `cmd.exe`，并保持 stdin/stdout/stderr 与退出码透传，不能改成异步后台任务。
-
-## 运行时数据
-
-源码运行时使用项目根目录 `.agent-lens/`；安装后统一使用用户主目录 `~/.agent-lens/`，程序和生产依赖放在 `app/`，Windows 命令入口放在 `bin/`，运行数据保留在根目录的 `data/`、`logs/`、`state/`、`run/`。安装器兼容当前平铺布局和更早的 AppData/XDG 布局。
-
-- `.agent-lens/data/projects.json` — 项目注册表：映射 `projectKey` 到 `{cwd, name, last_seen}`
-- `.agent-lens/logs/<projectKey>.jsonl` — 仅追加日志文件，每个工具调用一个 JSON 对象
-- `.agent-lens/state/<projectKey>.json` — 临时调用栈状态（执行期间活跃读写）
-- `.agent-lens/app/dist/` — 安装后的 Vite 构建输出（生产环境使用）
-- `.agent-lens/run/server.pid` — 服务进程 PID 文件
-- `.agent-lens/run/hook-token` — 本机 `/api/hook` 写入令牌，不得输出或提交
-- `.agent-lens/data/agent-lens.db` — SQLite 数据库，存储 sessions、daily_stats、recent_errors、timeline 表
-
-## 约定
-
-- **UI 文本为中文 (zh-CN)** — HTML 文件中所有面向用户的字符串
-- **无框架** — 原生 HTML/CSS/JS + Vite，CSS 变量用于主题（亮/暗）
-- **钩子输入格式**：钩子从 stdin 接收 JSON，包含 `tool_name`、`cwd`、`session_id`、`tool_response`、`duration_ms` 等字段
-- **错误检测**：结构化工具检查 `success`/`exit_code`；Bash 模式匹配 stdout 中的已知错误字符串
+未经仓库所有者明确要求，不得合并到 `main`、发布 npm、创建 GitHub Release 或修改 Release Secret。

@@ -1,5 +1,0 @@
-{"type":"user","message":{"role":"user","content":"帮我修复测试失败"},"sessionId":"claude-test-1","timestamp":"2026-07-01T10:00:00.000Z","cwd":"F:\\proj"}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"好的，先看看测试结果"},{"type":"tool_use","id":"call_1","name":"Bash","input":{"command":"npm test"}}]},"sessionId":"claude-test-1","timestamp":"2026-07-01T10:00:01.000Z","cwd":"F:\\proj"}
-{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"call_1","is_error":false,"content":"1 failing test"}]},"sessionId":"claude-test-1","timestamp":"2026-07-01T10:00:03.000Z","cwd":"F:\\proj"}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"call_2","name":"Edit","input":{"file_path":"src/foo.ts","old_string":"a","new_string":"b"}}]},"sessionId":"claude-test-1","timestamp":"2026-07-01T10:00:04.000Z","cwd":"F:\\proj"}
-{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"call_2","is_error":true,"content":"Error: file not found"}]},"sessionId":"claude-test-1","timestamp":"2026-07-01T10:00:06.000Z","cwd":"F:\\proj"}

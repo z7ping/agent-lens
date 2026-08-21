@@ -1,0 +1,13 @@
+{
+  "name": "@agent-lens/hook-codex",
+  "version": "1.0.0-alpha.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "agent-lens-hook-codex": "bin/agent-lens-hook-codex.mjs"
+  },
+  "scripts": {
+    "typecheck": "node --check src/inbox.mjs && node --check bin/agent-lens-hook-codex.mjs",
+    "test": "node --test src/inbox.test.mjs"
+  }
+}

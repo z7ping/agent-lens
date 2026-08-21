@@ -1,90 +1,109 @@
 # 参与 AgentLens 开发
 
-感谢你关注 AgentLens。项目的界面文本、开发文档和 Issue 沟通统一使用中文。
+AgentLens 1.0 是一次 Clean Rebuild。当前工作树只保留 1.0 实现；0.x 代码需要参考时请通过 Git 历史 / Tag 查阅，不要把旧 Runtime 直接恢复回来。
 
-## 唯一事实来源
+## 开始之前
 
-- [GitHub Issues](https://github.com/z7ping/agent-lens/issues)：缺陷、需求和开发任务。
-- GitHub Milestones：版本范围和完成度。
-- GitHub Projects：任务状态。
-- GitHub Pull Requests：代码评审和合并。
-- [CHANGELOG.md](CHANGELOG.md)：已经发布的变化。
+架构或 Contract 相关修改前，依次阅读：
 
-Gitea 仅作为代码镜像或备份，不在那里创建、更新或关闭 Issue、Milestone、Project 和 Pull Request。仓库本地远端名称不代表治理平台；即使某个工作副本将 Gitea 命名为 `origin`，任务和评审仍以 GitHub 为准。
+1. `ARCHITECTURE.md`
+2. `docs/1.0/CORE-CONTRACT.md`
+3. `docs/adr/0001-agentlens-1.0-clean-rebuild-and-cordis-runtime.md`
+4. `AGENTS.md`
 
-## 提交问题
-
-请优先使用仓库提供的 Issue 模板：
-
-- 缺陷报告：描述复现步骤、预期结果、实际结果和环境。
-- 功能建议：描述用户问题、目标结果和不做的范围。
-- 开发任务：用于已经确定方案、可以直接实施的工作。
-
-安全漏洞、提示词泄露、凭据暴露或未经授权的远程访问问题，请不要创建公开 Issue，改用 [SECURITY.md](SECURITY.md) 中的私密报告方式。
-
-## 开始开发前
-
-1. 搜索是否已有重复 Issue。
-2. 对非小型修复先创建或认领 Issue。
-3. 确认 Issue 的目标、非目标和验收标准。
-4. 涉及事件模型、数据库、安全边界或公共适配器协议时，先在 GitHub Issue 中与维护者确认方案，再开始大规模实现。
+Issue、Milestone、Project 和 Pull Request 以 GitHub 为准。安全问题请按 `SECURITY.md` 私密报告。
 
 ## 本地开发
 
-环境要求：Node.js 18 或更高版本。
+要求 Node.js **22.23+**。
 
 ```bash
 npm install
+npm run typecheck
+npm test
+npm run build:dist
+npm pack --dry-run
+```
+
+开发运行：
+
+```bash
 npm run dev
 ```
 
-常用验证命令：
+Web 单独开发：
 
 ```bash
-npm test
-npm run build
+npm run dev:web
 ```
 
-运行时数据会写入项目根目录 `.agent-lens/`。禁止提交该目录、真实会话、提示词、配置文件、数据库、Token 或其他本机数据。
+CLI：
 
-## 分支与提交
+```bash
+npm run cli -- doctor
+npm run cli -- hook status all
+npm run cli -- start
+```
 
-建议分支名称带上 Issue 编号：
+默认 1.0 数据目录是：
 
 ```text
-feat/123-codex-context-lens
-fix/124-timeline-dedup
-docs/125-install-guide
+~/.agent-lens/1.0/
 ```
 
-提交信息使用简洁的中文或约定式前缀：
+其中可能包含 Session、Tool 参数、Evidence、配置路径和其他本机数据。禁止提交真实运行数据、数据库、Prompt、Token、凭据或本机绝对路径。
+
+## 当前仓库结构
 
 ```text
-feat: 捕获 Codex 用户提示词
-fix: 修复并行事件错误去重
-docs: 补充配置透镜设计说明
+apps/
+  cli/ daemon/ web/ desktop/ hook-codex/ hook-claude/
+
+packages/
+  core/ core-services/ runtime-cordis/ protocol/
+  storage-sqlite/
+  source-codex/ source-claude/ source-pi/
+  projection-timeline/ projection-session/ projection-usage/
+  surface-http/ hook-manager/
 ```
 
-在提交或 Pull Request 中使用 `Refs #123` 关联任务；确认合并后应关闭任务时，在 Pull Request 描述中使用 `Closes #123`。
+不要新增根级 `server/`、`src/` 或 `test/` 来承载 1.0 Runtime / UI / Test。
 
 ## Pull Request 要求
 
 Pull Request 应满足：
 
-- 只解决一个明确问题，避免混入无关修改。
-- 描述背景、实现、风险和验证结果。
-- 关联对应 GitHub Issue。
-- 新行为有相应测试，或说明无法自动测试的原因。
-- `npm test` 和 `npm run build` 通过。
-- 面向用户的字符串和文档使用中文。
-- 不包含真实提示词、凭据、本机绝对路径和运行时数据。
-- 数据库变更包含向前迁移和旧数据兼容验证。
-- 新适配器明确标注捕获、诊断、扫描、推断和不可观察能力。
+- 标题和正文统一使用中文；
+- 只解决一个明确问题；
+- 描述背景、实现、风险和验证结果；
+- 新行为有相应测试，或说明无法自动测试的原因；
+- `npm run typecheck`、`npm test`、`npm run build:dist` 通过；
+- 不包含真实提示词、凭据、本机数据；
+- Web 只消费 `@agent-lens/protocol` / `/api/v1/*`；
+- Source 通过稳定 `SourceDefinition` Contract 接入，并由 Cordis-native Plugin 入口注册；
+- 不把静态 Asset Discovery 当作实际 Usage；
+- 不重新引入 0.x Adapter / Importer / timeline / overview Runtime；
+- 涉及 Core Contract、Canonical Identity、Evidence 语义或 Runtime 所有权时，先做 Contract Review / ADR。
+
+## 提交风格
+
+提交信息统一使用中文，推荐保持清晰的“类型（范围）：说明”结构，例如：
+
+```text
+功能(1.0)：新增来源能力
+修复(1.0)：保留证据身份
+文档(1.0)：澄清运行时边界
+```
+
+代码标识符、API 名称、类型名和命令仍保持英文，不要求为了提交语言翻译技术标识符。
 
 ## 文档职责
 
-- README：用户当前可以使用的能力。
-- CHANGELOG：已经发布了什么。
-- ARCHITECTURE：当前真实架构和已知限制。
+- `README.md` / `README.zh-CN.md`：对外能力和使用方式；
+- `ARCHITECTURE.md`：当前真实架构；
+- `docs/1.0/CORE-CONTRACT.md`：稳定 Contract；
+- `docs/adr/*`：长期、难以逆转的架构决策；
+- `docs/1.0/IMPLEMENTATION-STATUS.md`：当前 1.0 实现与验证状态；
+- `CHANGELOG.md`：历史发布记录。
 
-不要在多个文档中重复维护任务状态。任务是否进行中、由谁负责以及是否阻塞，以 GitHub Issue 和 Project 为准。
+不要把计划中的能力写成已经实现的能力。

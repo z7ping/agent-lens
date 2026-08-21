@@ -1,0 +1,16 @@
+{
+  "name": "@agent-lens/core-services",
+  "version": "1.0.0-alpha.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./source-runner": "./src/source-runner.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@agent-lens/core": "1.0.0-alpha.0"
+  }
+}

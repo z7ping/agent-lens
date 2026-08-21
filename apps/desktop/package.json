@@ -1,0 +1,55 @@
+{
+  "name": "@agent-lens/desktop",
+  "version": "1.0.0-alpha.0",
+  "private": true,
+  "type": "module",
+  "main": "src/main.mjs",
+  "description": "AgentLens Windows 桌面壳。",
+  "author": "7ping <z7ping@outlook.com>",
+  "scripts": {
+    "dist:win": "electron-builder --win nsis"
+  },
+  "dependencies": {
+    "@deepseek-ai/cordis": "4.0.1",
+    "better-sqlite3": "13.0.3"
+  },
+  "devDependencies": {
+    "electron": "43.4.0",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "dev.z7ping.agentlens",
+    "productName": "AgentLens",
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**/*"
+    ],
+    "files": [
+      "src/**/*",
+      "runtime/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "../../release/windows"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "assets/icon.png",
+      "artifactName": "AgentLens-${version}-Setup-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "AgentLens",
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}
