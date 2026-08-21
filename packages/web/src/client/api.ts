@@ -46,12 +46,12 @@ export class AgentLensApi {
   facets(): Promise<FacetResponseDto> { return getJson('/api/v1/facets') }
   agents(): Promise<AgentOverviewResponseDto> { return getJson('/api/v1/agents') }
 
-  review(filters: ReviewFilters): Promise<ReviewResponseDto> {
+  review(filters: ReviewFilters, limit = 40): Promise<ReviewResponseDto> {
     const params = new URLSearchParams()
     appendFilters(params, filters)
     if (filters.status !== 'all') params.set('status', filters.status)
     if (filters.search.trim()) params.set('search', filters.search.trim())
-    params.set('limit', '200')
+    params.set('limit', String(Math.max(1, Math.min(limit, 500))))
     return getJson(`/api/v1/review?${params}`)
   }
 
