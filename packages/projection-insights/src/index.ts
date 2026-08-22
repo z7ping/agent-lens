@@ -378,7 +378,7 @@ export class UsageInsightsProjection {
     const calls = await loadToolCalls(this.storage, sessions, query)
 
     let comparison: InsightsResponseDto['comparison']
-    if (query.from) {
+    if (query.from && !loaded.sampled) {
       const currentFromMs = Date.parse(query.from)
       const currentTo = query.to ?? new Date().toISOString()
       const currentToMs = Date.parse(currentTo)
