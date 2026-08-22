@@ -385,7 +385,7 @@ async function handleBackupRequest(
     return true
   }
 
-  const match = url.pathname.match(/^\/api\/v1\/backups\/([^/]+)(?:\/(verify|export|restore-preview))?$/)
+  const match = url.pathname.match(/^\/api\/v1\/backups\/([^/]+)(?:\/(verify|export|restore-preview|restore))?$/)
   if (!match) {
     writeJson(response, 404, { error: 'not_found' })
     return true
