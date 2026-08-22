@@ -1,7 +1,13 @@
 import type {
   AgentOverviewResponseDto,
+  BackupCreateRequestDto,
+  BackupOverviewResponseDto,
+  BackupRestorePreviewResponseDto,
+  BackupSnapshotResponseDto,
+  BackupVerifyResponseDto,
   FacetResponseDto,
   HealthResponseDto,
+  InsightsResponseDto,
   LiveUpdateEventDto,
   ReviewDetailDirection,
   ReviewDetailFilter,
@@ -37,10 +43,20 @@ function appendFilters(params: URLSearchParams, filters: QueryFilters): void {
   if (from) params.set('from', from)
 }
 
-async function getJson<T>(path: string): Promise<T> {
+async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> {
   try {
-    const response = await fetch(path, { headers: { accept: 'application/json' } })
-    if (!response.ok) throw new Error(`AgentLens 接口请求失败（状态码 ${response.status}）：${path}`)
+    const response = await fetch(path, {
+      ...init,
+      headers: { accept: 'application/json', ...(init.headers ?? {}) },
+    })
+    if (!response.ok) {
+      let detail = ''
+      try {
+        const body = await response.json() as { message?: unknown }
+        if (typeof body.message === 'string' && body.message) detail = `：${body.message}`
+      } catch { /* non-json error */ }
+      throw new Error(`AgentLens 接口请求失败（状态码 ${response.status}）${detail}：${path}`)
+    }
     return response.json() as Promise<T>
   } catch (error) {
     if (error instanceof Error && error.message.startsWith('AgentLens 接口请求失败')) throw error
@@ -48,10 +64,21 @@ async function getJson<T>(path: string): Promise<T> {
   }
 }
 
+async function requestBlob(path: string): Promise<Blob> {
+  try {
+    const response = await fetch(path, { headers: { accept: 'application/vnd.agentlens.backup' } })
+    if (!response.ok) throw new Error(`AgentLens 接口请求失败（状态码 ${response.status}）：${path}`)
+    return response.blob()
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('AgentLens 接口请求失败')) throw error
+    throw new Error('备份包导出失败，请检查运行状态和连接。')
+  }
+}
+
 export class AgentLensApi {
-  health(): Promise<HealthResponseDto> { return getJson('/api/v1/health') }
-  facets(): Promise<FacetResponseDto> { return getJson('/api/v1/facets') }
-  agents(): Promise<AgentOverviewResponseDto> { return getJson('/api/v1/agents') }
+  health(): Promise<HealthResponseDto> { return requestJson('/api/v1/health') }
+  facets(): Promise<FacetResponseDto> { return requestJson('/api/v1/facets') }
+  agents(): Promise<AgentOverviewResponseDto> { return requestJson('/api/v1/agents') }
 
   review(filters: ReviewFilters, limit = 40): Promise<ReviewResponseDto> {
     const params = new URLSearchParams()
@@ -59,7 +86,7 @@ export class AgentLensApi {
     if (filters.status !== 'all') params.set('status', filters.status)
     if (filters.search.trim()) params.set('search', filters.search.trim())
     params.set('limit', String(Math.max(1, Math.min(limit, 500))))
-    return getJson(`/api/v1/review?${params}`)
+    return requestJson(`/api/v1/review?${params}`)
   }
 
   reviewDetail(
@@ -77,18 +104,60 @@ export class AgentLensApi {
     if (options.filter && options.filter !== 'all') params.set('filter', options.filter)
     if (options.limit !== undefined) params.set('limit', String(Math.max(1, Math.min(options.limit, 100))))
     const query = params.toString()
-    return getJson(`/api/v1/review/${encodeURIComponent(id)}${query ? `?${query}` : ''}`)
+    return requestJson(`/api/v1/review/${encodeURIComponent(id)}${query ? `?${query}` : ''}`)
   }
 
   relationships(id: string): Promise<SessionRelationshipResponseDto> {
-    return getJson(`/api/v1/relationships?logicalSessionId=${encodeURIComponent(id)}`)
+    return requestJson(`/api/v1/relationships?logicalSessionId=${encodeURIComponent(id)}`)
   }
 
   usage(filters: QueryFilters): Promise<ToolAssetUsageResponseDto> {
     const params = new URLSearchParams()
     appendFilters(params, filters)
     params.set('limit', '500')
-    return getJson(`/api/v1/usage?${params}`)
+    return requestJson(`/api/v1/usage?${params}`)
+  }
+
+  insights(filters: QueryFilters): Promise<InsightsResponseDto> {
+    const params = new URLSearchParams()
+    appendFilters(params, filters)
+    return requestJson(`/api/v1/insights?${params}`)
+  }
+
+  backupOverview(): Promise<BackupOverviewResponseDto> {
+    return requestJson('/api/v1/backups')
+  }
+
+  backupSnapshot(id: string): Promise<BackupSnapshotResponseDto> {
+    return requestJson(`/api/v1/backups/${encodeURIComponent(id)}`)
+  }
+
+  createBackup(input: BackupCreateRequestDto): Promise<BackupSnapshotResponseDto> {
+    return requestJson('/api/v1/backups', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    })
+  }
+
+  verifyBackup(id: string): Promise<BackupVerifyResponseDto> {
+    return requestJson(`/api/v1/backups/${encodeURIComponent(id)}/verify`, { method: 'POST' })
+  }
+
+  backupRestorePreview(id: string): Promise<BackupRestorePreviewResponseDto> {
+    return requestJson(`/api/v1/backups/${encodeURIComponent(id)}/restore-preview`)
+  }
+
+  exportBackup(id: string): Promise<Blob> {
+    return requestBlob(`/api/v1/backups/${encodeURIComponent(id)}/export`)
+  }
+
+  importBackup(file: Blob): Promise<BackupSnapshotResponseDto> {
+    return requestJson('/api/v1/backups/import', {
+      method: 'POST',
+      headers: { 'content-type': 'application/vnd.agentlens.backup' },
+      body: file,
+    })
   }
 
   subscribe(onEvent: (event: LiveUpdateEventDto) => void, onConnection: (connected: boolean) => void): () => void {

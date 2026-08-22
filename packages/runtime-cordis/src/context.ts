@@ -1,6 +1,7 @@
 import type { Context as CordisContext } from '@deepseek-ai/cordis'
 import type {
   AssetService,
+  BackupService,
   CapabilityService,
   CoreEventMap,
   CoverageService,
@@ -23,6 +24,7 @@ declare module '@deepseek-ai/cordis' {
     capabilities: CapabilityService
     assets: AssetService
     tools: ToolService
+    backup: BackupService
   }
 
   interface Events {

@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { backupLocalPlugin } from '@agent-lens/backup-local'
 import {
   AgentLensApplication,
   coreServicesPlugin,
@@ -23,6 +24,8 @@ import { webPlugin } from '@agent-lens/web'
 
 const dbPath = process.env.AGENT_LENS_DB_PATH
   ?? join(homedir(), '.agent-lens', '1.0', 'agent-lens.db')
+const vaultPath = process.env.AGENT_LENS_VAULT_PATH
+  ?? join(homedir(), '.agent-lens', '1.0', 'vault')
 const configuredPort = process.env.AGENT_LENS_PORT
   ? Number(process.env.AGENT_LENS_PORT)
   : DEFAULT_AGENT_LENS_HTTP_PORT
@@ -40,6 +43,7 @@ app.useRuntime(coreServicesPlugin)
 app.use(codexSourcePlugin)
 app.use(claudeSourcePlugin)
 app.use(piSourcePlugin)
+app.useRuntime(backupLocalPlugin, { vaultPath })
 app.use(httpSurfacePlugin, { port: configuredPort })
 app.use(webPlugin, { staticDir: webRoot })
 
@@ -108,6 +112,7 @@ try {
     `[AgentLens] 1.0 runtime started (db: ${dbPath}, mode=${daemonMode}, interactive=${interactiveTerminal}, pid=${process.pid}, ppid=${process.ppid})`,
   )
   console.info(`[AgentLens] Web/UI: http://127.0.0.1:${configuredPort} (root: ${webRoot})`)
+  console.info(`[AgentLens] backup vault: ${vaultPath}`)
 
   const prepared = await prepareRegisteredSources(app.context, runtimeController.signal)
   logSourceFailures(prepared.failures)

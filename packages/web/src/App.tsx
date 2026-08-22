@@ -8,6 +8,8 @@ import { BackgroundDataNotice } from './components/BackgroundDataNotice'
 import { ReviewStateOverlay } from './components/ReviewStateOverlay'
 import { ReviewTurnRail } from './components/ReviewTurnRail'
 import { AgentsPage } from './features/AgentsPage'
+import { BackupPage } from './features/BackupPage'
+import { InsightsPage } from './features/InsightsPage'
 import { ReviewPage } from './features/ReviewPage'
 import { ToolsPage } from './features/ToolsPage'
 
@@ -50,7 +52,9 @@ function PinnedProvider({ agents, children }: PropsWithChildren<{ agents: AgentF
 const navigation = [
   ['/review', '任务复盘'],
   ['/tools', '工具分析'],
+  ['/insights', '使用洞察'],
   ['/agents', '智能体概览'],
+  ['/backup', '资产备份'],
 ] as const
 
 function Shell({ model }: { model: AgentLensClientModel }) {
@@ -110,7 +114,9 @@ function Shell({ model }: { model: AgentLensClientModel }) {
         <Route path="/review" element={<ReviewPage model={model} />} />
         <Route path="/review/:sessionId" element={<ReviewPage model={model} />} />
         <Route path="/tools" element={<ToolsPage model={model} />} />
+        <Route path="/insights" element={<InsightsPage model={model} />} />
         <Route path="/agents" element={<AgentsPage model={model} />} />
+        <Route path="/backup" element={<BackupPage />} />
         <Route path="*" element={<Navigate to="/review" replace />} />
       </Routes>
       {onReview && <ReviewStateOverlay model={model} snapshot={snapshot}/>} 

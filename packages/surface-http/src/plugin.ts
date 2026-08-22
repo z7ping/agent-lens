@@ -43,14 +43,14 @@ const applyHttpSurface = Object.assign(
             ...(observation.projectId ? { projectId: observation.projectId } : {}),
           } : {}),
           ...(sourceSession ? { sourceId: sourceSession.sourceId } : {}),
-          affected: ['review', 'sessions', 'usage'],
+          affected: ['review', 'sessions', 'usage', 'insights'],
           emittedAt: new Date().toISOString(),
         })
       })().catch(() => {
         eventHub.publish({
           type: 'observation.committed',
           observationId: event.observationId,
-          affected: ['review', 'sessions', 'usage'],
+          affected: ['review', 'sessions', 'usage', 'insights'],
           emittedAt: new Date().toISOString(),
         })
       })
@@ -80,6 +80,7 @@ const applyHttpSurface = Object.assign(
       eventHub,
       sources: ctx.sources,
       capabilities: ctx.capabilities,
+      backup: ctx.backup,
     })
     const unprovide = ctx.provide('http', surface)
     return async () => {
@@ -88,7 +89,7 @@ const applyHttpSurface = Object.assign(
       await surface.dispose()
     }
   },
-  { inject: ['storage', 'sources', 'capabilities'] },
+  { inject: ['storage', 'sources', 'capabilities', 'backup'] },
 )
 
 export const httpSurfacePlugin = defineAgentLensPlugin(manifest, applyHttpSurface)
