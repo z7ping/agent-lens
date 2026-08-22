@@ -9,6 +9,7 @@ import {
 } from '@agent-lens/core-services'
 import type {
   HealthResponseDto,
+  InsightsResponseDto,
   TimelineResponseDto,
 } from '@agent-lens/protocol'
 import { SqliteStorageService } from '@agent-lens/storage-sqlite'
@@ -74,6 +75,24 @@ test('HTTP surface exposes v1 API and production web assets on loopback', async 
     assert.equal(timeline.items[0]?.sourceId, 'codex')
     assert.equal(timeline.items[0]?.kind, 'message.user')
     assert.equal(timeline.items[0]?.evidence.length, 1)
+
+    const insightsResponse = await fetch(
+      `${base}/api/v1/insights?from=${encodeURIComponent('2026-08-01T00:00:00.000Z')}&to=${encodeURIComponent('2026-08-31T23:59:59.999Z')}`,
+    )
+    assert.equal(insightsResponse.status, 200)
+    const insights = await insightsResponse.json() as InsightsResponseDto
+    assert.equal(insights.meta.protocolVersion, '1.0')
+    assert.equal(insights.summary.sessionCount, 1)
+    assert.equal(insights.summary.interactionCount, 1)
+
+    const badInsightsRange = await fetch(
+      `${base}/api/v1/insights?from=${encodeURIComponent('2026-09-01T00:00:00.000Z')}&to=${encodeURIComponent('2026-08-01T00:00:00.000Z')}`,
+    )
+    assert.equal(badInsightsRange.status, 400)
+    assert.deepEqual(await badInsightsRange.json(), {
+      error: 'bad_request',
+      message: 'Insights from must be earlier than or equal to to',
+    })
 
     const home = await fetch(`${base}/`)
     assert.equal(home.status, 200)
