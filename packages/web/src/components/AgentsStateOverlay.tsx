@@ -1,10 +1,18 @@
-import type { ClientSnapshot } from '../client/model'
-import { CommandRow, EmptyStatePanel, WorkspaceSkeleton } from './StateViews'
+import type { AgentLensClientModel, ClientSnapshot } from '../client/model'
+import { CommandRow, EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from './StateViews'
 
-export function AgentsStateOverlay({ snapshot }: { snapshot: ClientSnapshot }) {
+export function AgentsStateOverlay({ model, snapshot }: { model: AgentLensClientModel; snapshot: ClientSnapshot }) {
   const response = snapshot.agents
   const hasSseBanner = Boolean(snapshot.health && !snapshot.liveConnected)
   const shellClass = `agents-state-overlay ${hasSseBanner ? 'has-sse-banner' : ''}`
+
+  if (!response && snapshot.facets) {
+    return <div className={`${shellClass} is-empty`}>
+      <div className="agents-state-inner">
+        <ErrorStateBanner message="智能体概览暂时无法加载。后台服务仍可访问，可重试概览查询或运行诊断命令。" onRetry={() => void model.refreshFacetsAndAgents()}/>
+      </div>
+    </div>
+  }
 
   if (!response) {
     return <div className={`${shellClass} is-loading`} aria-live="polite">
