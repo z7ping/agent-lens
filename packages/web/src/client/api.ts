@@ -7,6 +7,7 @@ import type {
   BackupVerifyResponseDto,
   FacetResponseDto,
   HealthResponseDto,
+  InsightsResponseDto,
   LiveUpdateEventDto,
   ReviewDetailDirection,
   ReviewDetailFilter,
@@ -115,6 +116,12 @@ export class AgentLensApi {
     appendFilters(params, filters)
     params.set('limit', '500')
     return requestJson(`/api/v1/usage?${params}`)
+  }
+
+  insights(filters: QueryFilters): Promise<InsightsResponseDto> {
+    const params = new URLSearchParams()
+    appendFilters(params, filters)
+    return requestJson(`/api/v1/insights?${params}`)
   }
 
   backupOverview(): Promise<BackupOverviewResponseDto> {
