@@ -12,6 +12,7 @@ import './prototype.css'
 import './review-polish.css'
 import './states.css'
 import './live-notice.css'
+import './backup.css'
 
 writeTheme(readTheme())
 void clientModel.start()
