@@ -1,0 +1,203 @@
+/*
+ * AgentLens 原型字体系统。
+ *
+ * 目标：
+ * - 原型和正式 Web 使用同一套字号层级；
+ * - 正常界面文字不低于 12px；
+ * - 信息层级由语义令牌、字重和间距共同表达，不再依赖 8-11px 的极小字号；
+ * - 本文件通过更高选择器优先级收口旧原型中的零散字号。
+ */
+
+/* 设计稿索引 */
+:root body .hub-hero h1{font-size:var(--text-hero-title)}
+:root body .hub-hero p{font-size:var(--text-body);line-height:var(--line-height-reading)}
+:root body .hub-note{font-size:var(--text-secondary);line-height:var(--line-height-reading)}
+:root body .card .no{font-size:var(--text-caption)}
+:root body .card h2{font-size:var(--text-section-title)}
+:root body .card p,:root body .card .go,:root body .files{font-size:var(--text-secondary)}
+:root body .files code{font-size:var(--text-caption)}
+
+/* 应用外壳与公共控件 */
+:root body .brand-mark{font-size:var(--text-body)}
+:root body .brand-name{font-size:15px}
+:root body .nav-item{font-size:var(--text-body)}
+:root body .app-status,:root body .tip::after{font-size:var(--text-caption)}
+:root body .sse-banner{font-size:var(--text-secondary)}
+:root body .filter,:root body .scope-chip,:root body .scope-manage-button{font-size:var(--text-control)}
+:root body .agent-scope-menu-title,
+:root body .agent-scope-option-state,
+:root body .agent-scope-empty{font-size:var(--text-caption)}
+:root body .agent-scope-option{font-size:var(--text-control)}
+
+/* 页面层级 */
+:root body .page-heading h1,:root body .future-heading h1{font-size:var(--text-page-title);line-height:var(--line-height-tight)}
+:root body .page-heading p,:root body .future-heading p{font-size:var(--text-secondary);line-height:var(--line-height-reading)}
+:root body .eyebrow,:root body .section-label,:root body .future-section-label{font-size:var(--text-caption)}
+:root body .section-heading-row h3{font-size:var(--text-card-title)}
+:root body .section-heading-row p{font-size:var(--text-caption)}
+
+/* 按钮、徽章、证据 */
+:root body .btn{font-size:var(--text-control)}
+:root body .btn.small,
+:root body .badge,
+:root body .count-badge,
+:root body .ev,
+:root body .ev-more{font-size:var(--text-caption)}
+
+/* 任务复盘 */
+:root body .session-panel-head b{font-size:var(--text-secondary)}
+:root body .session-panel-head span,
+:root body .session-group,
+:root body .si-meta,
+:root body .si-foot{font-size:var(--text-caption)}
+:root body .si-title{font-size:var(--text-body)}
+:root body .si-foot .errs::before{font-size:var(--text-caption)}
+:root body .load-more{font-size:var(--text-secondary)}
+:root body .rh-meta{font-size:var(--text-caption)}
+:root body .rh-meta b{font-size:var(--text-secondary)}
+:root body .rh-title{font-size:var(--font-size-xl)}
+:root body .chat-meta,
+:root body .execution-duration,
+:root body .event-source,
+:root body .event-row time{font-size:var(--text-caption)}
+:root body .chat-bubble,
+:root body .markdown{font-size:var(--text-body);line-height:var(--line-height-reading)}
+:root body .markdown pre{font-size:var(--text-caption);line-height:var(--line-height-normal)}
+:root body .raw-json{font-size:var(--text-caption);line-height:var(--line-height-normal)}
+
+/* 智能体概览 */
+:root body .agent-identity h2{font-size:17px}
+:root body .agent-identity p,
+:root body .agent-installation b,
+:root body .agent-installation code,
+:root body .frequent-main b,
+:root body .asset-name,
+:root body .capability-row{font-size:var(--text-secondary)}
+:root body .agent-status,
+:root body .agent-installation small,
+:root body .asset-kpi span,
+:root body .reliable-usage,
+:root body .reliable-usage b,
+:root body .frequent-rank,
+:root body .frequent-main span,
+:root body .frequent-asset-row strong,
+:root body .frequent-asset-row small,
+:root body .disclosure-group>summary,
+:root body .disclosure-count,
+:root body .asset-type,
+:root body .asset-usage,
+:root body .asset-state,
+:root body .asset-more-state,
+:root body .asset-discovered,
+:root body .asset-path code,
+:root body .copy-link,
+:root body .show-more-button,
+:root body .assembly-list>div,
+:root body .assembly-list code,
+:root body .capability-row b{font-size:var(--text-caption)}
+:root body .asset-kpi strong{font-size:var(--text-section-title)}
+:root body .skill-funnel strong{font-size:20px}
+:root body .skill-funnel span,
+:root body .skill-funnel-note,
+:root body .skill-source-list span,
+:root body .skill-source-list small,
+:root body .matrix-header>span,
+:root body .matrix-asset small,
+:root body .matrix-cell{font-size:var(--text-caption)}
+:root body .skill-source-list b,
+:root body .matrix-asset b{font-size:var(--text-secondary)}
+:root body .matrix-heading h2{font-size:17px}
+:root body .matrix-heading p{font-size:var(--text-secondary)}
+
+/* 工具分析 */
+:root body .tool-summary-card>span,
+:root body .tool-summary-card small,
+:root body .table-section-head p,
+:root body .tool-table th,
+:root body .tool-source,
+:root body .attributed-asset span,
+:root body .attributed-asset small{font-size:var(--text-caption)}
+:root body .table-section-head h2,
+:root body .tool-table,
+:root body .tool-name,
+:root body .attributed-asset b,
+:root body .attributed-asset strong{font-size:var(--text-secondary)}
+:root body .tool-summary-card strong{font-size:var(--text-section-title)}
+
+/* 长期能力原型：资产备份 / 使用洞察 */
+:root body .prototype-flag,
+:root body .future-kpi .delta,
+:root body .future-section-label,
+:root body .protection-count span,
+:root body .protection-meta,
+:root body .builder-check small,
+:root body .builder-path code,
+:root body .snapshot-table th,
+:root body .snapshot-name small,
+:root body .hash,
+:root body .link-btn,
+:root body .restore-node,
+:root body .chart-legend,
+:root body .chart-axis,
+:root body .insight-proof,
+:root body .insight-kind,
+:root body .comparison-table th,
+:root body .comparison-table small,
+:root body .metric-note,
+:root body .pattern-chip,
+:root body .pattern-arrow,
+:root body .pattern-value,
+:root body .adoption-head span,
+:root body .evolution-item time,
+:root body .evolution-item p,
+:root body .integrity-strip code{font-size:var(--text-caption)}
+
+:root body .future-kpi-head,
+:root body .future-kpi small,
+:root body .future-card-head p,
+:root body .future-card-foot,
+:root body .builder-label,
+:root body .builder-check,
+:root body .safety-note,
+:root body .builder-summary span,
+:root body .snapshot-table,
+:root body .snapshot-name b,
+:root body .restore-card p,
+:root body .migration-row,
+:root body .insight-item p,
+:root body .comparison-table,
+:root body .adoption-head b,
+:root body .evolution-item b,
+:root body .integrity-strip,
+:root body .future-note{font-size:var(--text-secondary)}
+
+:root body .future-card-head h2,
+:root body .future-card-head h3,
+:root body .protection-card-head b,
+:root body .restore-card h3,
+:root body .insight-item-head b{font-size:var(--text-card-title)}
+:root body .future-kpi strong{font-size:var(--text-metric)}
+:root body .protection-count strong{font-size:15px}
+
+/* 新版正式洞察原型使用的同名结构 */
+:root body .insight-kpi>span,
+:root body .insight-kpi>small,
+:root body .insight-card-head p,
+:root body .insight-trend-column strong,
+:root body .insight-trend-column>span,
+:root body .insight-comparison-item span,
+:root body .insight-inline-empty,
+:root body .insight-agent-table th,
+:root body .insight-agent-table td:first-child small,
+:root body .insight-asset-row span,
+:root body .insight-asset-row>strong small,
+:root body .insight-pattern-steps b,
+:root body .insight-pattern-meta,
+:root body .insight-method-note,
+:root body .insight-method-note b{font-size:var(--text-caption)}
+:root body .insight-card-head h2,
+:root body .insight-agent-table,
+:root body .insight-agent-table td:first-child b,
+:root body .insight-asset-row b{font-size:var(--text-secondary)}
+:root body .insight-kpi>strong{font-size:var(--text-metric-lg)}
+:root body .insight-asset-row>strong{font-size:var(--text-section-title)}
