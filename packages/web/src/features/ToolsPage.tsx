@@ -3,6 +3,7 @@ import type { ToolUsageDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
 import { AgentScope } from '../components/AgentScope'
+import { EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from '../components/StateViews'
 
 function duration(ms: number): string {
   if (ms < 1000) return `${ms} 毫秒`
@@ -62,6 +63,7 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
   const attributedCalls = Math.max(0, totalCalls - unattributedCalls)
   const attributionCoverage = totalCalls ? Math.round(attributedCalls / totalCalls * 100) : 0
   const maxCalls = Math.max(1, ...tools.map(tool => tool.callCount))
+  const canRelaxFilters = Boolean(usage.filters.sourceId || usage.filters.projectId || usage.filters.range !== 'all')
   const [selectedToolKey, setSelectedToolKey] = useState<string | null>(null)
   const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'callCount', direction: 'descending' })
   const selectedTool = useMemo(() => tools.find(tool => toolKey(tool.sourceIds, tool.nativeToolName) === selectedToolKey), [selectedToolKey, tools])
@@ -77,6 +79,7 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
       : { key, direction: 'descending' })
   }
   const ariaSort = (key: SortKey): 'none' | SortDirection => sort.key === key ? sort.direction : 'none'
+  const relaxFilters = () => model.setUsageFilters({ sourceId: '', projectId: '', range: 'all' })
 
   return <main className="workspace-page">
     <div className="workspace-toolbar">
@@ -90,46 +93,55 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
     <div className="page-content tools-content">
       <header className="page-heading"><div><span className="eyebrow">使用情况</span><h1>工具分析</h1><p>只展示可验证的调用事实：用了什么、失败多少、耗时如何，以及有多少调用能够可靠归因到具体能力资产。</p></div></header>
 
-      <section className="tool-summary-grid">
-        <div className="tool-summary-card"><span>最高频</span><strong>{mostUsed?.nativeToolName ?? '—'}</strong><small>{mostUsed ? `${mostUsed.callCount} 次调用 · ${mostUsed.sessionCount} 个会话` : '暂无数据'}</small></div>
-        <div className="tool-summary-card"><span>失败最多</span><strong className={mostErrors ? 'is-danger' : ''}>{mostErrors?.nativeToolName ?? '—'}</strong><small>{mostErrors ? `${mostErrors.errorCount} 次失败` : '当前范围无已知失败'}</small></div>
-        <div className="tool-summary-card"><span>平均最慢</span><strong>{slowest?.nativeToolName ?? '—'}</strong><small>{slowest ? `${duration(slowest.averageDurationMs)} / 次` : '暂无数据'}</small></div>
-        <div className="tool-summary-card" title="只统计有明确证据能够归因到技能或 MCP（模型上下文协议）的调用；普通命令、读取等不会被强行归因。"><span>可靠归因覆盖</span><strong>{totalCalls ? `${attributionCoverage}%` : '—'}</strong><small>{totalCalls ? `尚未可靠归因 ${unattributedCalls} 次调用` : '暂无调用数据'}</small></div>
-      </section>
+      {usage.error && <ErrorStateBanner message={usage.error} onRetry={() => void model.refreshUsage()}/>} 
 
-      <section className="tool-table-card">
-        <div className="table-section-head"><div><h2>工具调用</h2><p>{tools.length} 个工具 · 点击表头排序，点击一行查看详情</p></div></div>
-        <div className="table-scroll">
-          <table className="tool-table">
-            <thead><tr>
-              <th>工具</th>
-              <th aria-sort={ariaSort('callCount')} onClick={() => toggleSort('callCount')} style={{ cursor: 'pointer' }}>调用 {sort.key === 'callCount' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
-              <th aria-sort={ariaSort('sessionCount')} onClick={() => toggleSort('sessionCount')} style={{ cursor: 'pointer' }}>会话 {sort.key === 'sessionCount' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
-              <th aria-sort={ariaSort('successRate')} onClick={() => toggleSort('successRate')} style={{ cursor: 'pointer' }}>成功率 {sort.key === 'successRate' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
-              <th aria-sort={ariaSort('errorCount')} onClick={() => toggleSort('errorCount')} style={{ cursor: 'pointer' }}>失败 {sort.key === 'errorCount' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
-              <th aria-sort={ariaSort('totalDurationMs')} onClick={() => toggleSort('totalDurationMs')} style={{ cursor: 'pointer' }}>总耗时 {sort.key === 'totalDurationMs' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
-              <th aria-sort={ariaSort('averageDurationMs')} onClick={() => toggleSort('averageDurationMs')} style={{ cursor: 'pointer' }}>平均耗时 {sort.key === 'averageDurationMs' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
-            </tr></thead>
-            <tbody>{sortedTools.map(tool => {
-              const successRate = rateValue(tool.successCount, tool.errorCount)
-              const key = toolKey(tool.sourceIds, tool.nativeToolName)
-              return <tr key={key} tabIndex={0} onClick={() => setSelectedToolKey(key)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedToolKey(key) } }}>
-                <td><b className="tool-name">{tool.nativeToolName}</b><span className="tool-source">{tool.sourceIds.join(' / ')}</span></td>
-                <td><span className="tool-bar-cell"><span>{tool.callCount}</span><span className="metric-bar" aria-hidden="true"><i style={{ width: `${Math.max(4, tool.callCount / maxCalls * 100)}%` }}/></span></span></td>
-                <td>{tool.sessionCount}</td>
-                <td><span className="tool-rate-cell" data-rate={successRate >= 95 ? 'good' : successRate >= 80 ? 'mid' : 'low'}><span>{rate(tool.successCount, tool.errorCount)}</span><span className="metric-bar" aria-hidden="true"><i style={{ width: `${successRate}%` }}/></span></span></td>
-                <td className={tool.errorCount ? 'cell-danger' : 'cell-muted'}>{tool.errorCount}</td><td>{duration(tool.totalDurationMs)}</td><td>{duration(tool.averageDurationMs)}</td>
-              </tr>
-            })}</tbody>
-          </table>
-          {!tools.length && <div className="empty-state roomy">当前筛选范围没有工具调用</div>}
-        </div>
-      </section>
+      {usage.loading && !data ? <WorkspaceSkeleton kind="table"/> : <>
+        <section className="tool-summary-grid">
+          <div className="tool-summary-card"><span>最高频</span><strong>{mostUsed?.nativeToolName ?? '—'}</strong><small>{mostUsed ? `${mostUsed.callCount} 次调用 · ${mostUsed.sessionCount} 个会话` : '暂无数据'}</small></div>
+          <div className="tool-summary-card"><span>失败最多</span><strong className={mostErrors ? 'is-danger' : ''}>{mostErrors?.nativeToolName ?? '—'}</strong><small>{mostErrors ? `${mostErrors.errorCount} 次失败` : '当前范围无已知失败'}</small></div>
+          <div className="tool-summary-card"><span>平均最慢</span><strong>{slowest?.nativeToolName ?? '—'}</strong><small>{slowest ? `${duration(slowest.averageDurationMs)} / 次` : '暂无数据'}</small></div>
+          <div className="tool-summary-card" title="只统计有明确证据能够归因到技能或 MCP（模型上下文协议）的调用；普通命令、读取等不会被强行归因。"><span>可靠归因覆盖</span><strong>{totalCalls ? `${attributionCoverage}%` : '—'}</strong><small>{totalCalls ? `尚未可靠归因 ${unattributedCalls} 次调用` : '暂无调用数据'}</small></div>
+        </section>
 
-      {assets.length ? <section className="attributed-assets">
-        <div className="section-heading-row"><div><h3>可归因能力资产</h3><p>有证据能够关联到具体技能和 MCP（模型上下文协议）的真实调用</p></div></div>
-        <div className="attributed-asset-list">{assets.map(asset => <div key={`${asset.type}:${asset.canonicalName}`} className="attributed-asset"><b>{asset.canonicalName}</b><span>{assetTypeLabel(asset.type)}</span><span title={`归因方式：${asset.attribution}`}>{confidenceLabel(asset.confidence)}</span><strong>{asset.callCount}</strong><small>次</small></div>)}</div>
-      </section> : null}
+        <section className="tool-table-card">
+          <div className="table-section-head"><div><h2>工具调用</h2><p>{tools.length} 个工具 · 点击表头排序，点击一行查看详情</p></div></div>
+          <div className="table-scroll">
+            {tools.length ? <table className="tool-table">
+              <thead><tr>
+                <th>工具</th>
+                <th aria-sort={ariaSort('callCount')} onClick={() => toggleSort('callCount')} style={{ cursor: 'pointer' }}>调用 {sort.key === 'callCount' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
+                <th aria-sort={ariaSort('sessionCount')} onClick={() => toggleSort('sessionCount')} style={{ cursor: 'pointer' }}>会话 {sort.key === 'sessionCount' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
+                <th aria-sort={ariaSort('successRate')} onClick={() => toggleSort('successRate')} style={{ cursor: 'pointer' }}>成功率 {sort.key === 'successRate' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
+                <th aria-sort={ariaSort('errorCount')} onClick={() => toggleSort('errorCount')} style={{ cursor: 'pointer' }}>失败 {sort.key === 'errorCount' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
+                <th aria-sort={ariaSort('totalDurationMs')} onClick={() => toggleSort('totalDurationMs')} style={{ cursor: 'pointer' }}>总耗时 {sort.key === 'totalDurationMs' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
+                <th aria-sort={ariaSort('averageDurationMs')} onClick={() => toggleSort('averageDurationMs')} style={{ cursor: 'pointer' }}>平均耗时 {sort.key === 'averageDurationMs' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
+              </tr></thead>
+              <tbody>{sortedTools.map(tool => {
+                const successRate = rateValue(tool.successCount, tool.errorCount)
+                const key = toolKey(tool.sourceIds, tool.nativeToolName)
+                return <tr key={key} tabIndex={0} onClick={() => setSelectedToolKey(key)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedToolKey(key) } }}>
+                  <td><b className="tool-name">{tool.nativeToolName}</b><span className="tool-source">{tool.sourceIds.join(' / ')}</span></td>
+                  <td><span className="tool-bar-cell"><span>{tool.callCount}</span><span className="metric-bar" aria-hidden="true"><i style={{ width: `${Math.max(4, tool.callCount / maxCalls * 100)}%` }}/></span></span></td>
+                  <td>{tool.sessionCount}</td>
+                  <td><span className="tool-rate-cell" data-rate={successRate >= 95 ? 'good' : successRate >= 80 ? 'mid' : 'low'}><span>{rate(tool.successCount, tool.errorCount)}</span><span className="metric-bar" aria-hidden="true"><i style={{ width: `${successRate}%` }}/></span></span></td>
+                  <td className={tool.errorCount ? 'cell-danger' : 'cell-muted'}>{tool.errorCount}</td><td>{duration(tool.totalDurationMs)}</td><td>{duration(tool.averageDurationMs)}</td>
+                </tr>
+              })}</tbody>
+            </table> : <div className="tools-empty-state"><EmptyStatePanel
+              icon="⌕"
+              title="当前筛选范围没有工具调用"
+              description="试试放宽时间范围或清除项目、智能体筛选。新的工具调用进入 AgentLens 后会出现在这里。"
+              action={canRelaxFilters ? { label: '放宽筛选条件', onClick: relaxFilters } : { label: '刷新', onClick: () => void model.refreshUsage() }}
+              compact
+            /></div>}
+          </div>
+        </section>
+
+        {assets.length ? <section className="attributed-assets">
+          <div className="section-heading-row"><div><h3>可归因能力资产</h3><p>有证据能够关联到具体技能和 MCP（模型上下文协议）的真实调用</p></div></div>
+          <div className="attributed-asset-list">{assets.map(asset => <div key={`${asset.type}:${asset.canonicalName}`} className="attributed-asset"><b>{asset.canonicalName}</b><span>{assetTypeLabel(asset.type)}</span><span title={`归因方式：${asset.attribution}`}>{confidenceLabel(asset.confidence)}</span><strong>{asset.callCount}</strong><small>次</small></div>)}</div>
+        </section> : null}
+      </>}
     </div>
 
     {selectedTool && <>
