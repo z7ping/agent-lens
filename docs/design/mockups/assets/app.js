@@ -1,4 +1,4 @@
-/* AgentLens Mock 共享交互：主题持久化 / 抽屉 / Tab / 排序 / 复制 */
+/* AgentLens Mock 共享交互：主题持久化 / 抽屉 / Tab / 排序 / 复制 / 长期能力导航 */
 (function () {
   var KEY = 'al-mock-theme'
   function applyTheme(t) {
@@ -8,6 +8,22 @@
   var saved = 'light'
   try { saved = localStorage.getItem(KEY) || 'light' } catch (e) {}
   applyTheme(saved)
+
+  // 长期能力原型加入既有主导航；老画板无需逐页复制导航标记。
+  var futureNav = [
+    { href: 'backup.html', label: '资产备份' },
+    { href: 'insights.html', label: '使用洞察' },
+  ]
+  document.querySelectorAll('.app-nav').forEach(function (nav) {
+    futureNav.forEach(function (item) {
+      if (nav.querySelector('a[href="' + item.href + '"]')) return
+      var a = document.createElement('a')
+      a.className = 'nav-item'
+      a.href = item.href
+      a.textContent = item.label
+      nav.appendChild(a)
+    })
+  })
 
   function closeAllDrawers() {
     document.querySelectorAll('.drawer.show').forEach(function (d) { d.classList.remove('show') })
