@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - refactor/1.0-foundation
+      - feature/asset-backup-insights
   pull_request:
     branches:
       - main
