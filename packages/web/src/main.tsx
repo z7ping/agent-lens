@@ -11,6 +11,7 @@ import './review-long-session.css'
 import './prototype.css'
 import './review-polish.css'
 import './states.css'
+import './live-notice.css'
 
 writeTheme(readTheme())
 void clientModel.start()
