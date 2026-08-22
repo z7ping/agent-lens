@@ -32,7 +32,8 @@ body{color:var(--al-text-primary)}
 .btn.primary,
 .btn.primary:hover,
 .round-nav-live,
-.live-pill{
+.live-pill,
+.chat-row-user .chat-avatar{
   color:var(--al-on-accent)!important;
 }
 
@@ -44,11 +45,11 @@ body{color:var(--al-text-primary)}
 
 .live-pill i{background:currentColor!important}
 
-/* ── 用户气泡：修复“浅紫背景 + 残留白字” ───────────────────── */
+/* ── 用户气泡：严格对齐原型 58% 强调色软底 ─────────────────── */
 .chat-bubble-user,
 :root[data-theme='dark'] .chat-bubble-user{
   border-color:color-mix(in srgb,var(--al-accent) 18%,var(--al-line))!important;
-  background:var(--al-accent-soft)!important;
+  background:color-mix(in srgb,var(--al-accent-soft) 58%,var(--al-surface))!important;
   color:var(--al-text-primary)!important;
 }
 
@@ -61,6 +62,14 @@ body{color:var(--al-text-primary)}
 :root[data-theme='dark'] .chat-bubble-user .evidence-inline,
 :root[data-theme='dark'] .chat-bubble-user .evidence-inline-more{
   color:var(--al-text-muted)!important;
+}
+
+/* 旧 review.css 给键盘标记写死了白字/白底透明色；软底气泡下必须改回语义色。 */
+.chat-row-user .chat-meta::before,
+:root[data-theme='dark'] .chat-row-user .chat-meta::before{
+  border-color:color-mix(in srgb,var(--al-accent) 22%,var(--al-line))!important;
+  background:var(--al-surface)!important;
+  color:var(--al-accent)!important;
 }
 
 .chat-bubble-user .markdown,
@@ -99,7 +108,7 @@ body{color:var(--al-text-primary)}
 
 .chat-bubble-user .markdown-fade,
 :root[data-theme='dark'] .chat-bubble-user .markdown-fade{
-  background:linear-gradient(to bottom,transparent,var(--al-accent-soft))!important;
+  background:linear-gradient(to bottom,transparent,color-mix(in srgb,var(--al-accent-soft) 58%,var(--al-surface)))!important;
 }
 
 .chat-bubble-user .markdown-message-actions,
@@ -137,30 +146,34 @@ body{color:var(--al-text-primary)}
   color:var(--al-accent)!important;
 }
 
-/* ── 思考块：取消写死紫色背景，回归原型中性层级 ─────────────── */
+/* ── 思考块：对齐原型 26% 强调色软底 ───────────────────────── */
 .thinking-block,
 :root[data-theme='dark'] .thinking-block{
   border-color:var(--al-line)!important;
-  background:transparent!important;
+  background:color-mix(in srgb,var(--al-accent-soft) 26%,var(--al-surface))!important;
   color:var(--al-text-muted)!important;
 }
 
 .thinking-block>summary::before,
 :root[data-theme='dark'] .thinking-block>summary::before{
-  border-color:var(--al-line)!important;
-  background:var(--al-soft)!important;
-  color:var(--al-text-secondary)!important;
+  border-color:color-mix(in srgb,var(--al-accent) 22%,var(--al-line))!important;
+  background:var(--al-accent-soft)!important;
+  color:var(--al-accent)!important;
 }
 
 .thinking-label,
-:root[data-theme='dark'] .thinking-label,
+:root[data-theme='dark'] .thinking-label{
+  color:var(--al-accent)!important;
+}
+
 .thinking-content,
 :root[data-theme='dark'] .thinking-content{
+  border-color:var(--al-line)!important;
   color:var(--al-text-secondary)!important;
 }
 
 .thinking-block>summary:hover{
-  background:var(--al-soft-2)!important;
+  background:color-mix(in srgb,var(--al-accent-soft) 44%,transparent)!important;
 }
 
 /* ── 工具执行块：表面保持中性，工具类型只在小图标上着色 ───── */
@@ -187,6 +200,11 @@ body{color:var(--al-text-primary)}
   color:var(--al-text-secondary)!important;
 }
 
+.execution-rail::before,
+:root[data-theme='dark'] .execution-rail::before{
+  background:var(--al-surface)!important;
+}
+
 .execution-row[data-kind='shell']{--tool-accent:var(--al-tool-shell-fg)}
 .execution-row[data-kind='read']{--tool-accent:var(--al-tool-read-fg)}
 .execution-row[data-kind='edit']{--tool-accent:var(--al-tool-edit-fg)}
@@ -200,6 +218,20 @@ body{color:var(--al-text-primary)}
 .execution-row[data-kind='search'] .execution-tool-icon{color:var(--al-tool-search-fg)!important;background:var(--al-tool-search-bg)!important;border-color:var(--al-tool-search-line)!important}
 .execution-row[data-kind='mcp'] .execution-tool-icon{color:var(--al-tool-mcp-fg)!important;background:var(--al-tool-mcp-bg)!important;border-color:var(--al-tool-mcp-line)!important}
 .execution-row[data-kind='web'] .execution-tool-icon{color:var(--al-tool-web-fg)!important;background:var(--al-tool-web-bg)!important;border-color:var(--al-tool-web-line)!important}
+.execution-row[data-kind='tool'] .execution-tool-icon{color:var(--al-text-secondary)!important;background:var(--al-soft)!important;border-color:var(--al-line)!important}
+
+/* ── 禁止用整块透明度降低普通文字对比度 ───────────────────── */
+.protection-card.is-muted{
+  opacity:1!important;
+  border-style:dashed;
+  background:var(--al-soft-2);
+}
+
+.skill-funnel>div[data-muted='true']{
+  opacity:1!important;
+  border-style:dashed;
+  background:var(--al-soft-2);
+}
 
 /* ── 状态与辅助文字 ─────────────────────────────────────────── */
 .badge.warn,
@@ -221,5 +253,5 @@ body{color:var(--al-text-primary)}
   color:var(--al-text-subtle);
 }
 
-/* 禁止用透明度制造正常文字层级；透明度仅留给 disabled。 */
+/* 正常信息不依赖 opacity 制造层级；disabled 控件仍可按交互状态降透明度。 */
 .round-nav button span:not([aria-disabled='true']){opacity:1}
