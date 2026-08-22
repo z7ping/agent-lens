@@ -1,0 +1,260 @@
+/*
+ * AgentLens 1.0 正式字体系统。
+ *
+ * 本文件最后加载，是 Web 字体与字号的最终收口层：
+ * - 正常界面文字不低于 12px；
+ * - 统一系统字体栈，避免未打包 Inter 带来的环境差异；
+ * - 页面只使用语义字号层级，不再依赖 8-11px 的极小字号制造层次；
+ * - 旧页面 CSS 暂保留布局职责，本文件统一覆盖其字体表现。
+ */
+
+:root {
+  --font-ui:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  --font-mono:ui-monospace,"SFMono-Regular",Consolas,"Liberation Mono",monospace;
+
+  --font-size-xs:12px;
+  --font-size-sm:13px;
+  --font-size-md:14px;
+  --font-size-lg:16px;
+  --font-size-xl:18px;
+  --font-size-2xl:22px;
+  --font-size-3xl:26px;
+  --font-size-metric:24px;
+  --font-size-metric-lg:28px;
+
+  --text-caption:var(--font-size-xs);
+  --text-secondary:var(--font-size-sm);
+  --text-body:var(--font-size-md);
+  --text-control:var(--font-size-sm);
+  --text-card-title:var(--font-size-md);
+  --text-section-title:var(--font-size-lg);
+  --text-page-title:var(--font-size-2xl);
+  --text-hero-title:var(--font-size-3xl);
+  --text-metric:var(--font-size-metric);
+  --text-metric-lg:var(--font-size-metric-lg);
+
+  --line-height-tight:1.25;
+  --line-height-normal:1.55;
+  --line-height-reading:1.7;
+}
+
+html body{
+  font-family:var(--font-ui);
+  font-size:var(--text-body);
+  line-height:var(--line-height-normal);
+}
+html body code,
+html body pre,
+html body .raw-json,
+html body .hash,
+html body .builder-path code,
+html body .integrity-strip code,
+html body .drawer-file code,
+html body .state-command code{
+  font-family:var(--font-mono);
+}
+
+/* 应用外壳 */
+html body .brand-mark{font-size:var(--text-body)}
+html body .brand-name{font-size:15px}
+html body .nav-item{font-size:var(--text-body)}
+html body .app-status{font-size:var(--text-caption)}
+html body .workspace-toolbar{min-height:50px;height:50px}
+html body .filter{height:34px;font-size:var(--text-control)}
+html body .scope-chip,
+html body .scope-manage-button{height:32px;font-size:var(--text-control)}
+html body .agent-scope-menu-title,
+html body .agent-scope-option-state,
+html body .agent-scope-empty{font-size:var(--text-caption)}
+html body .agent-scope-option{font-size:var(--text-control)}
+
+/* 页面标题与公共信息 */
+html body .page-heading h1,
+html body .future-heading h1{font-size:var(--text-page-title);line-height:var(--line-height-tight)}
+html body .page-heading p,
+html body .future-heading p{font-size:var(--text-secondary);line-height:var(--line-height-reading)}
+html body .eyebrow,
+html body .section-label,
+html body .future-section-label{font-size:var(--text-caption)}
+html body .section-heading-row h3{font-size:var(--text-card-title)}
+html body .section-heading-row p{font-size:var(--text-caption)}
+html body .count-badge,
+html body .section-total,
+html body .disclosure-count{font-size:var(--text-caption);min-height:22px}
+html body .empty-state,
+html body .muted-empty,
+html body .page-error{font-size:var(--text-secondary)}
+
+/* Markdown / 长文本 */
+html body .markdown{font-size:var(--text-body);line-height:var(--line-height-reading)}
+html body .markdown pre{font-size:var(--text-caption);line-height:var(--line-height-normal)}
+html body .markdown code{font-size:.92em}
+html body .raw-json{font-size:var(--text-caption);line-height:var(--line-height-normal)}
+
+/* 任务复盘 */
+html body .session-panel-head b{font-size:var(--text-secondary)}
+html body .session-panel-head span,
+html body .session-group,
+html body .review-session-submeta,
+html body .session-item-foot,
+html body .chat-meta,
+html body .execution-duration,
+html body .event-source,
+html body .event-row time{font-size:var(--text-caption)}
+html body .session-item-title,
+html body .chat-bubble{font-size:var(--text-body)}
+html body .review-head h1,
+html body .rh-title{font-size:var(--font-size-xl)}
+html body .review-head-meta,
+html body .rh-meta{font-size:var(--text-caption)}
+html body .review-head-meta b,
+html body .rh-meta b{font-size:var(--text-secondary)}
+html body .execution-group,
+html body .event-row{font-size:var(--text-secondary)}
+
+/* 智能体概览 */
+html body .agent-identity h2{font-size:17px}
+html body .agent-identity p{font-size:var(--text-secondary);line-height:1.6}
+html body .agent-status{font-size:var(--text-caption)}
+html body .agent-installation small{font-size:var(--text-caption)}
+html body .agent-installation b,
+html body .agent-installation code{font-size:var(--text-secondary)}
+html body .asset-kpi strong{font-size:var(--text-section-title)}
+html body .asset-kpi span,
+html body .reliable-usage,
+html body .reliable-usage b,
+html body .frequent-rank,
+html body .frequent-main span,
+html body .frequent-asset-row small,
+html body .asset-type,
+html body .asset-usage,
+html body .asset-state,
+html body .asset-more-state,
+html body .asset-discovered,
+html body .asset-path code,
+html body .copy-link,
+html body .show-more-button,
+html body .assembly-list>div,
+html body .assembly-list code,
+html body .capability-row b{font-size:var(--text-caption)}
+html body .frequent-main b,
+html body .frequent-asset-row strong,
+html body .asset-name,
+html body .capability-row{font-size:var(--text-secondary)}
+html body .disclosure-group>summary{font-size:var(--text-secondary)}
+html body .skill-funnel strong{font-size:20px}
+html body .skill-funnel span,
+html body .skill-funnel-note,
+html body .skill-source-list span,
+html body .skill-source-list small,
+html body .matrix-header>span,
+html body .matrix-asset small,
+html body .matrix-cell{font-size:var(--text-caption)}
+html body .skill-source-list b,
+html body .matrix-asset b{font-size:var(--text-secondary)}
+html body .matrix-heading h2{font-size:17px}
+html body .matrix-heading p{font-size:var(--text-secondary)}
+
+/* 工具分析 */
+html body .tool-summary-card>span,
+html body .tool-summary-card small,
+html body .table-section-head p,
+html body .tool-table th,
+html body .tool-source,
+html body .attributed-asset span,
+html body .attributed-asset small{font-size:var(--text-caption)}
+html body .table-section-head h2,
+html body .tool-table,
+html body .tool-name,
+html body .attributed-asset b,
+html body .attributed-asset strong{font-size:var(--text-secondary)}
+html body .tool-summary-card strong{font-size:var(--text-section-title)}
+
+/* 状态与首次运行 */
+html body .state-empty h3{font-size:var(--text-card-title)}
+html body .state-empty p,
+html body .state-button,
+html body .state-command code,
+html body .state-command button,
+html body .state-error-copy span,
+html body .first-run-heading p,
+html body .first-run-no,
+html body .first-run-step p,
+html body .first-run-footer,
+html body .evidence-empty-detail,
+html body .inspector-panel .inspector-section .muted-empty:not(.compact){font-size:var(--text-caption)}
+html body .state-error-copy b,
+html body .first-run-step b{font-size:var(--text-secondary)}
+html body .first-run-heading h2{font-size:17px}
+
+/* 资产备份 */
+html body .backup-toolbar-note,
+html body .prototype-flag,
+html body .future-kpi .delta,
+html body .future-section-label,
+html body .protection-count span,
+html body .protection-meta,
+html body .integrity-strip code,
+html body .snapshot-table th,
+html body .snapshot-name small,
+html body .hash,
+html body .link-btn,
+html body .backup-empty span,
+html body .restore-node,
+html body .builder-check small,
+html body .insight-kind,
+html body .drawer-section h3,
+html body .drawer-file,
+html body .drawer-file code,
+html body .preview-file small,
+html body .preview-summary span{font-size:var(--text-caption)}
+html body .backup-error,
+html body .future-kpi-head,
+html body .future-kpi small,
+html body .future-card-head p,
+html body .protection-card-head b,
+html body .integrity-strip,
+html body .snapshot-table,
+html body .snapshot-name b,
+html body .backup-empty b,
+html body .restore-card h3,
+html body .restore-card p,
+html body .builder-label,
+html body .builder-check,
+html body .safety-note,
+html body .builder-summary span,
+html body .insight-item-head b,
+html body .insight-item p,
+html body .future-note{font-size:var(--text-secondary)}
+html body .future-card-head h2,
+html body .future-card-head h3{font-size:var(--text-card-title)}
+html body .future-kpi strong{font-size:var(--text-metric)}
+html body .protection-count strong{font-size:15px}
+html body .preview-summary b{font-size:17px}
+
+/* 使用洞察 */
+html body .insight-kpi>span,
+html body .insight-kpi>small,
+html body .insight-card-head p,
+html body .insight-trend-column strong,
+html body .insight-trend-column>span,
+html body .insight-comparison-item span,
+html body .insight-inline-empty,
+html body .insight-agent-table th,
+html body .insight-agent-table td:first-child small,
+html body .insight-asset-row span,
+html body .insight-asset-row>strong small,
+html body .insight-pattern-steps b,
+html body .insight-pattern-meta,
+html body .insight-method-note,
+html body .insight-method-note b{font-size:var(--text-caption)}
+html body .insight-card-head h2,
+html body .insight-agent-table,
+html body .insight-agent-table td:first-child b,
+html body .insight-asset-row b{font-size:var(--text-secondary)}
+html body .insight-kpi>strong{font-size:var(--text-metric-lg)}
+html body .insight-asset-row>strong{font-size:var(--text-section-title)}
+
+@media(max-width:900px){
+  html body .nav-item{font-size:var(--text-secondary)}
+}
