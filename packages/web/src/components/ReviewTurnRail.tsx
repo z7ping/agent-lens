@@ -23,13 +23,14 @@ export function ReviewTurnRail({ detail }: { detail: ReviewSessionDetailDto }) {
   useEffect(() => {
     let observer: IntersectionObserver | undefined
     let resizeObserver: ResizeObserver | undefined
-    let frame = 0
+    let positionFrame = 0
+    let observerFrame = 0
     const pane = document.querySelector<HTMLElement>('.review-reader-pane')
     if (!pane) return
 
     const updatePosition = () => {
-      window.cancelAnimationFrame(frame)
-      frame = window.requestAnimationFrame(() => {
+      window.cancelAnimationFrame(positionFrame)
+      positionFrame = window.requestAnimationFrame(() => {
         const rect = pane.getBoundingClientRect()
         setPosition({
           left: Math.max(0, rect.left + 4),
@@ -48,7 +49,7 @@ export function ReviewTurnRail({ detail }: { detail: ReviewSessionDetailDto }) {
       if (shell) resizeObserver.observe(shell)
     }
 
-    frame = window.requestAnimationFrame(() => {
+    observerFrame = window.requestAnimationFrame(() => {
       const shells = [...document.querySelectorAll<HTMLElement>('.review-reader-pane .virtual-round-shell')]
       if (!shells.length || typeof IntersectionObserver === 'undefined') return
       observer = new IntersectionObserver(entries => {
@@ -63,7 +64,8 @@ export function ReviewTurnRail({ detail }: { detail: ReviewSessionDetailDto }) {
     })
 
     return () => {
-      window.cancelAnimationFrame(frame)
+      window.cancelAnimationFrame(positionFrame)
+      window.cancelAnimationFrame(observerFrame)
       window.removeEventListener('resize', updatePosition)
       resizeObserver?.disconnect()
       observer?.disconnect()
