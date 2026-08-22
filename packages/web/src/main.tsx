@@ -10,6 +10,7 @@ import './review.css'
 import './review-long-session.css'
 import './prototype.css'
 import './review-polish.css'
+import './states.css'
 
 writeTheme(readTheme())
 void clientModel.start()
