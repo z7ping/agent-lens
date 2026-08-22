@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>设计系统 · AgentLens 设计提案静态稿</title>
+<link rel="stylesheet" href="assets/tokens.css">
+<link rel="stylesheet" href="assets/components.css">
+</head>
+<body>
+<div class="app-shell">
+  <header class="app-header">
+    <div class="app-header-inner">
+      <div class="brand"><span class="brand-mark">A</span><span class="brand-name">AgentLens</span><span style="font-size:11px;color:var(--al-muted-2)">设计系统</span></div>
+      <nav class="app-nav">
+        <a class="nav-item" href="review.html">任务复盘</a>
+        <a class="nav-item" href="tools.html">工具分析</a>
+        <a class="nav-item" href="agents.html">智能体概览</a>
+        <a class="nav-item" href="states.html">状态与引导</a>
+      </nav>
+      <div class="app-status"><button class="icon-button" data-theme-toggle title="切换主题">◐</button></div>
+    </div>
+  </header>
+
+  <div class="page-scroll">
+    <div class="page-content">
+
+      <section>
+        <header class="page-heading" style="margin-bottom:14px"><div><h1 style="font-size:19px">字号阶梯</h1><p>最小 11px（caption），正文 13–14px；替换现网 7–10px 的用法（§5.1）。</p></div></header>
+        <div class="type-spec" style="border:1px solid var(--al-line);border-radius:12px;background:var(--al-surface);padding:18px 20px">
+          <div class="t"><small>display 20/700</small><span style="font-size:20px;font-weight:700">重构 agent-lens 存储层</span></div>
+          <div class="t"><small>title 16/700</small><span style="font-size:16px;font-weight:700">Codex · 已检测</span></div>
+          <div class="t"><small>body 14/400</small><span style="font-size:14px">帮我把 storage-sqlite 里散落的 SQL 收敛到 Repository 接口后面。</span></div>
+          <div class="t"><small>body-sm 13/620</small><span style="font-size:13px;font-weight:620">列表主文本 / 表格主体</span></div>
+          <div class="t"><small>secondary 12</small><span style="font-size:12px;color:var(--al-muted)">元信息、徽章、表头、工具名标签</span></div>
+          <div class="t"><small>caption 11（下限）</small><span style="font-size:11px;color:var(--al-muted-2)">时间戳、路径、辅助注释 —— 不再出现更小的字号</span></div>
+        </div>
+      </section>
+
+      <section style="margin-top:30px">
+        <header class="page-heading" style="margin-bottom:14px"><div><h1 style="font-size:19px">色彩 Token</h1><p>沿用 theme.css 色板；muted-2 对比度提升至 ≥4.5:1。右上角可切换明暗预览。</p></div></header>
+        <div class="ds-row" style="border:1px solid var(--al-line);border-radius:12px;background:var(--al-surface);padding:18px 20px">
+          <div class="swatch"><i style="background:var(--al-canvas)"></i><span>--al-canvas</span></div>
+          <div class="swatch"><i style="background:var(--al-surface)"></i><span>--al-surface</span></div>
+          <div class="swatch"><i style="background:var(--al-soft)"></i><span>--al-soft</span></div>
+          <div class="swatch"><i style="background:var(--al-accent)"></i><span>--al-accent</span></div>
+          <div class="swatch"><i style="background:var(--al-success)"></i><span>--al-success</span></div>
+          <div class="swatch"><i style="background:var(--al-warning)"></i><span>--al-warning</span></div>
+          <div class="swatch"><i style="background:var(--al-danger)"></i><span>--al-danger</span></div>
+        </div>
+        <div class="ds-row" style="margin-top:12px;border:1px solid var(--al-line);border-radius:12px;background:var(--al-surface);padding:14px 20px">
+          <span style="font-size:12px;color:var(--al-muted)">来源语义色：</span>
+          <span class="badge ok"><span class="src-dot dot-codex"></span>Codex</span>
+          <span class="badge warn"><span class="src-dot dot-claude"></span>Claude Code</span>
+          <span class="badge info"><span class="src-dot dot-pi"></span>Pi</span>
+          <span style="font-size:11.5px;color:var(--al-muted-2)">只用于 ≤7px 点状标记与 ≤3px 描边，不做大面积填充</span>
+        </div>
+      </section>
+
+      <section style="margin-top:30px">
+        <header class="page-heading" style="margin-bottom:14px"><div><h1 style="font-size:19px">Evidence 徽章规范</h1><p>捕获方式决定图标形状，推导方式与置信度决定描边（§5.3）。</p></div></header>
+        <div style="border:1px solid var(--al-line);border-radius:12px;background:var(--al-surface);padding:18px 20px;display:flex;flex-direction:column;gap:12px;font-size:12.5px;color:var(--al-muted)">
+          <div class="ds-row"><span style="width:170px">runtime-hook（实心点）</span><span class="ev-list"><span class="ev" data-cap="hook"><i></i>运行时捕获</span></span></div>
+          <div class="ds-row"><span style="width:170px">native-log（空心圈）</span><span class="ev-list"><span class="ev" data-cap="log"><i></i>原生日志</span></span></div>
+          <div class="ds-row"><span style="width:170px">static-scan（虚线框）</span><span class="ev-list"><span class="ev" data-cap="scan"><i></i>静态发现</span></span></div>
+          <div class="ds-row"><span style="width:170px">derived / estimated（琥珀）</span><span class="ev-list"><span class="ev" data-conf="medium" title="推导 · 置信度中"><i></i>推导</span><span class="ev" data-cap="scan" data-conf="medium"><i></i>估算</span></span></div>
+          <div class="ds-row"><span style="width:170px">low / unknown（灰·点线）</span><span class="ev-list"><span class="ev" data-cap="log" data-conf="low"><i></i>外部导入</span></span></div>
+          <div class="ds-row"><span style="width:170px">多条折叠 + Inspector 展开</span><span class="ev-list"><span class="ev" data-cap="hook"><i></i>运行时捕获</span><span class="ev" data-cap="log"><i></i>原生日志</span><span class="ev-more">+2</span></span></div>
+        </div>
+      </section>
+
+      <section style="margin-top:30px">
+        <header class="page-heading" style="margin-bottom:14px"><div><h1 style="font-size:19px">工具类型图标 chip</h1><p>内联 SVG 图标（G4），currentColor 继承色板 token，跨平台渲染一致。</p></div></header>
+        <div class="ds-row" style="border:1px solid var(--al-line);border-radius:12px;background:var(--al-surface);padding:18px 20px">
+          <span class="kicon kind-shell"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 5 6 8 3 11"/><line x1="6" y1="11" x2="13" y2="11"/></svg></span><small style="color:var(--al-muted);width:52px">命令</small>
+          <span class="kicon kind-read"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2h5l3 3v9a1 1 0 01-1 1H4a1 1 0 01-1-1V3a1 1 0 011-1z"/><polyline points="9 2 9 5 12 5"/></svg></span><small style="color:var(--al-muted);width:52px">读取</small>
+          <span class="kicon kind-edit"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 2.5l2 2-8 8H3.5v-2l8-8z"/><path d="M10 4l2 2"/></svg></span><small style="color:var(--al-muted);width:52px">修改</small>
+          <span class="kicon kind-search"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="6.5" r="4.5"/><line x1="10" y1="10" x2="14" y2="14"/></svg></span><small style="color:var(--al-muted);width:52px">搜索</small>
+          <span class="kicon kind-mcp"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="4.5" cy="8" r="2.5"/><circle cx="11.5" cy="8" r="2.5"/><line x1="7" y1="8" x2="9" y2="8"/><line x1="4.5" y1="5.5" x2="4.5" y2="3"/><line x1="11.5" y1="5.5" x2="11.5" y2="3"/></svg></span><small style="color:var(--al-muted);width:70px">MCP</small>
+          <span class="kicon kind-web"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.5"/><ellipse cx="8" cy="8" rx="3" ry="6.5"/><line x1="2" y1="8" x2="14" y2="8"/></svg></span><small style="color:var(--al-muted);width:52px">网络</small>
+          <span class="kicon kind-tool"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 1.5l4 4-2 2-4-4 2-2z"/><path d="M8.5 3.5l-6 6v3h3l6-6"/><path d="M10.5 1.5l2 2"/></svg></span><small style="color:var(--al-muted)">其他工具</small>
+        </div>
+      </section>
+
+      <section style="margin-top:30px;margin-bottom:40px">
+        <header class="page-heading" style="margin-bottom:14px"><div><h1 style="font-size:19px">组件样本</h1></div></header>
+        <div style="border:1px solid var(--al-line);border-radius:12px;background:var(--al-surface);padding:18px 20px;display:flex;flex-direction:column;gap:14px">
+          <div class="ds-row">
+            <button class="btn primary">主要动作</button><button class="btn">次级动作</button><button class="btn small">小按钮</button>
+            <button class="live-pill" style="position:static"><i></i>有新记录 · 2 条 ↓</button>
+          </div>
+          <div class="ds-row">
+            <span class="badge ok">已使用</span><span class="badge err">1 错误</span><span class="badge warn">耗时较高</span><span class="badge info">MCP</span><span class="count-badge">42</span>
+            <span class="round-seg"><button class="active">全部 <em>6</em></button><button>有错误 <em>2</em></button></span>
+          </div>
+          <div class="ds-row">
+            <span class="status-pill tip" data-tip="Tooltip 示例：悬停查看 Daemon 端口与 SSE 状态"><span class="live-dot"></span>运行中 :56789</span>
+            <span style="position:relative;display:inline-flex"><span class="live-dot warn"></span><span style="margin-left:8px;font-size:12px;color:var(--al-muted)">SSE 等待中</span></span>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+<script src="assets/app.js"></script>
+</body>
+</html>
