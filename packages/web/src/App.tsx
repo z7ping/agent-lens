@@ -105,7 +105,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
         <Route path="*" element={<Navigate to="/review" replace />} />
       </Routes>
       {onReview && <ReviewStateOverlay model={model} snapshot={snapshot}/>} 
-      {onAgents && <AgentsStateOverlay snapshot={snapshot}/>} 
+      {onAgents && <AgentsStateOverlay model={model} snapshot={snapshot}/>} 
       {showTurnRail && <ReviewTurnRail detail={snapshot.review.detail!}/>} 
     </div>
   </PinnedProvider>
