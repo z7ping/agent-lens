@@ -94,7 +94,7 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
         <div className="tool-summary-card"><span>最高频</span><strong>{mostUsed?.nativeToolName ?? '—'}</strong><small>{mostUsed ? `${mostUsed.callCount} 次调用 · ${mostUsed.sessionCount} 个会话` : '暂无数据'}</small></div>
         <div className="tool-summary-card"><span>失败最多</span><strong className={mostErrors ? 'is-danger' : ''}>{mostErrors?.nativeToolName ?? '—'}</strong><small>{mostErrors ? `${mostErrors.errorCount} 次失败` : '当前范围无已知失败'}</small></div>
         <div className="tool-summary-card"><span>平均最慢</span><strong>{slowest?.nativeToolName ?? '—'}</strong><small>{slowest ? `${duration(slowest.averageDurationMs)} / 次` : '暂无数据'}</small></div>
-        <div className="tool-summary-card" title="只统计有明确证据能够归因到技能或 MCP（模型上下文协议）的调用；普通命令、读取等不会被强行归因。"><span>归因覆盖</span><strong>{totalCalls ? `${attributionCoverage}%` : '—'}</strong><small>{totalCalls ? `未归因工具调用 ${unattributedCalls} 次` : '暂无调用数据'}</small></div>
+        <div className="tool-summary-card" title="只统计有明确证据能够归因到技能或 MCP（模型上下文协议）的调用；普通命令、读取等不会被强行归因。"><span>可靠归因覆盖</span><strong>{totalCalls ? `${attributionCoverage}%` : '—'}</strong><small>{totalCalls ? `尚未可靠归因 ${unattributedCalls} 次调用` : '暂无调用数据'}</small></div>
       </section>
 
       <section className="tool-table-card">
