@@ -429,7 +429,7 @@ export class UsageInsightsProjection {
         generatedAt: new Date().toISOString(),
         ...(query.from ? { from: query.from } : {}),
         ...(query.to ? { to: query.to } : {}),
-        sampled: loaded.sampled || usage.meta.hasMoreTools,
+        sampled: loaded.sampled,
         sessionSampleLimit: SESSION_SAMPLE_LIMIT,
         workflowPatternMinimumSessions: WORKFLOW_PATTERN_MINIMUM_SESSIONS,
         notes: [
