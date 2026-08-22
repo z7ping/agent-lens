@@ -3,6 +3,7 @@ import { BrowserRouter, NavLink, Navigate, Route, Routes, useLocation } from 're
 import type { AgentFacetDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel, ClientSnapshot } from './client/model'
 import { readPinnedAgents, readTheme, writePinnedAgents, writeTheme } from './client/preferences'
+import { AgentsStateOverlay } from './components/AgentsStateOverlay'
 import { ReviewStateOverlay } from './components/ReviewStateOverlay'
 import { ReviewTurnRail } from './components/ReviewTurnRail'
 import { AgentsPage } from './features/AgentsPage'
@@ -64,6 +65,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const healthLabel = snapshot.health?.status === 'ok' ? '运行正常' : snapshot.health ? '运行降级' : '连接中'
   const liveLabel = snapshot.liveConnected ? '实时已连接' : '实时未连接'
   const onReview = location.pathname.startsWith('/review')
+  const onAgents = location.pathname.startsWith('/agents')
   const showTurnRail = onReview && snapshot.review.detail
 
   return <PinnedProvider agents={agents}>
@@ -103,6 +105,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
         <Route path="*" element={<Navigate to="/review" replace />} />
       </Routes>
       {onReview && <ReviewStateOverlay model={model} snapshot={snapshot}/>} 
+      {onAgents && <AgentsStateOverlay snapshot={snapshot}/>} 
       {showTurnRail && <ReviewTurnRail detail={snapshot.review.detail!}/>} 
     </div>
   </PinnedProvider>
