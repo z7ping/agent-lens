@@ -4,6 +4,7 @@ import {
   DefaultIdentityService,
   DefaultObservationService,
 } from '@agent-lens/core-services'
+import type { CanonicalObservation, StorageService } from '@agent-lens/core'
 import { SqliteStorageService } from '@agent-lens/storage-sqlite'
 import { ToolAssetUsageProjection } from './index'
 
@@ -102,4 +103,71 @@ test('ToolAssetUsageProjection attributes only defensible MCP and Skill usage', 
   } finally {
     storage.close()
   }
+})
+
+test('ToolAssetUsageProjection paginates beyond the repository row limit', async () => {
+  const calls: CanonicalObservation[] = Array.from({ length: 5_001 }, (_, index) => {
+    const at = new Date(Date.UTC(2026, 7, 20, 12, 0, 0, index)).toISOString()
+    const id = `tool-call-${String(index).padStart(5, '0')}`
+    return {
+      id,
+      hostId: 'host',
+      installationId: 'installation',
+      logicalSessionId: 'session',
+      sourceSessionId: 'source-session',
+      kind: 'tool.call',
+      canonicalSequence: index,
+      occurredAt: at,
+      capturedAt: at,
+      payload: {
+        callId: id,
+        nativeToolName: 'Bash',
+      },
+      evidenceRefs: [],
+    }
+  })
+  const storage = {
+    repositories: {
+      observations: {
+        async query(query: { kind?: string; after?: { id: string }; limit?: number }) {
+          if (query.kind !== 'tool.call') return []
+          const start = query.after
+            ? calls.findIndex(item => item.id === query.after!.id) + 1
+            : 0
+          return calls.slice(start, start + (query.limit ?? 500))
+        },
+      },
+      sessions: {
+        async getSourceSession() {
+          return {
+            id: 'source-session',
+            sourceId: 'codex',
+            installationId: 'installation',
+            logicalSessionId: 'session',
+            nativeSessionId: 'native-session',
+            createdAt: '2026-08-20T12:00:00.000Z',
+            updatedAt: '2026-08-20T12:00:00.000Z',
+          }
+        },
+      },
+      installations: {
+        async get() {
+          return {
+            id: 'installation',
+            hostId: 'host',
+            productId: 'codex',
+            createdAt: '2026-08-20T12:00:00.000Z',
+            updatedAt: '2026-08-20T12:00:00.000Z',
+          }
+        },
+      },
+    },
+  } as unknown as StorageService
+
+  const response = await new ToolAssetUsageProjection(storage).query()
+
+  assert.equal(response.tools.length, 1)
+  assert.equal(response.tools[0]?.nativeToolName, 'Bash')
+  assert.equal(response.tools[0]?.callCount, 5_001)
+  assert.equal(response.meta.unattributedToolCalls, 5_001)
 })

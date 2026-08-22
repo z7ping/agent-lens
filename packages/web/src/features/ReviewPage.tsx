@@ -8,6 +8,7 @@ import type {
   ReviewInteractionDto,
   ReviewMessageNodeDto,
   ReviewNodeDto,
+  ReviewSessionSummaryDto,
   ReviewToolNodeDto,
   TimelineEvidenceDto,
 } from '@agent-lens/protocol'
@@ -25,12 +26,49 @@ function formatClock(value: string): string {
   return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date(value))
 }
 
+function formatHourMinute(value: string): string {
+  if (!value) return ''
+  return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value))
+}
+
 function formatRange(start: string, end: string): string {
   const left = new Date(start)
   const right = new Date(end)
   const sameDay = left.toDateString() === right.toDateString()
   const date = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(left)
   return sameDay ? `${date} ${formatClock(start)} – ${formatClock(end)}` : `${formatTime(start)} – ${formatTime(end)}`
+}
+
+function localDayStart(value: Date): number {
+  return new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime()
+}
+
+function sessionDayLabel(value: string, now = new Date()): '今天' | '昨天' | '更早' {
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) return '更早'
+  const day = localDayStart(date)
+  const today = localDayStart(now)
+  if (day === today) return '今天'
+  if (day === today - 86_400_000) return '昨天'
+  return '更早'
+}
+
+function sessionRelativeTime(value: string, now = new Date()): string {
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) return value
+  const group = sessionDayLabel(value, now)
+  if (group === '今天') {
+    const diff = Math.max(0, now.getTime() - date.getTime())
+    const minutes = Math.floor(diff / 60_000)
+    if (minutes < 1) return '刚刚'
+    if (minutes < 60) return `${minutes} 分钟前`
+    const hours = Math.floor(diff / 3_600_000)
+    if (hours <= 1) return '约 1 小时前'
+    return `${hours} 小时前`
+  }
+  if (group === '昨天') return `昨天 ${formatHourMinute(value)}`
+  if (date.getFullYear() === now.getFullYear()) return `${date.getMonth() + 1}月${date.getDate()}日 ${formatHourMinute(value)}`
+  return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(date)
 }
 
 function duration(ms: number): string {
@@ -363,7 +401,7 @@ function MarkdownSurface({ text }: { text: string }) {
   return <div className="markdown-message" data-view={view}>
     <div
       ref={surfaceRef}
-      className={`markdown-surface ${collapsible && !expanded ? 'is-collapsed' : ''}`
+      className={`markdown-surface ${collapsible && !expanded ? 'is-collapsed' : ''}`}
       style={collapsible && !expanded && collapsedHeight ? { maxHeight: `${collapsedHeight}px` } : undefined}
     >
       {view === 'rendered' ? <div className="markdown"><ReactMarkdown>{text}</ReactMarkdown></div> : <pre className="markdown-source">{text}</pre>}
@@ -597,6 +635,17 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
   const agents = snapshot.facets?.agents ?? []
   const projects = snapshot.facets?.projects ?? []
   const detail = review.detail
+  const sessionGroups = useMemo(() => {
+    const groups = new Map<'今天' | '昨天' | '更早', ReviewSessionSummaryDto[]>()
+    const now = new Date()
+    for (const item of review.response?.items ?? []) {
+      const label = sessionDayLabel(item.endedAt, now)
+      const items = groups.get(label) ?? []
+      items.push(item)
+      groups.set(label, items)
+    }
+    return [...groups.entries()].map(([label, items]) => ({ label, items }))
+  }, [review.response?.items])
 
   useEffect(() => { if (sessionId && sessionId !== review.selectedId) void model.selectReviewSession(sessionId) }, [sessionId, review.selectedId, model])
   useEffect(() => {
@@ -750,11 +799,14 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
         <div className="session-panel-head"><div><b>会话</b><span>按时间倒序</span></div><span className="count-badge">{review.response?.items.length ?? 0}{review.response?.meta.hasMore ? '+' : ''}</span></div>
         <div className="session-scroll">
           {review.loading && !review.response && <div className="empty-state">加载会话…</div>}
-          {review.response?.items.map(item => <button key={item.id} className={`session-item ${review.selectedId === item.id ? 'session-item-active' : ''}`} onClick={() => select(item.id)}>
-            <div className="session-item-meta"><span className={`source-dot ${sourceDot(item.sourceIds[0] ?? '')}`}/><span>{agentLabel(item.sourceIds[0] ?? '', item.productId)}</span><time>{formatTime(item.endedAt)}</time></div>
-            <div className="session-item-title">{compactTitle(item.title ?? item.preview ?? item.projectName, 74)}</div>
-            <div className="session-item-foot"><span>{item.projectName ?? item.workspacePath?.split(/[\\/]/).pop() ?? '无项目'}</span><span>{item.toolCount} 调用{item.errorCount > 0 ? ` · ${item.errorCount} 错误` : ''}</span></div>
-          </button>)}
+          {sessionGroups.map(group => <section className="session-group-block" key={group.label}>
+            <div className="session-group">{group.label}</div>
+            {group.items.map(item => <button key={item.id} className={`session-item ${review.selectedId === item.id ? 'session-item-active' : ''}`} onClick={() => select(item.id)}>
+              <div className="session-item-meta"><span className={`source-dot ${sourceDot(item.sourceIds[0] ?? '')}`}/><span>{agentLabel(item.sourceIds[0] ?? '', item.productId)}</span><time title={formatTime(item.endedAt)}>{sessionRelativeTime(item.endedAt)}</time></div>
+              <div className="session-item-title">{compactTitle(item.title ?? item.preview ?? item.projectName, 74)}</div>
+              <div className="session-item-foot"><span>{item.projectName ?? item.workspacePath?.split(/[\\/]/).pop() ?? '无项目'}</span><span>{item.toolCount} 调用{item.errorCount > 0 ? ` · ${item.errorCount} 错误` : ''}</span></div>
+            </button>)}
+          </section>)}
           {review.response?.meta.hasMore && <button className="session-load-more" disabled={review.loadingMore} onClick={() => void model.loadMoreReview()}>{review.loadingMore ? '加载中…' : `加载更多会话 · 再显示最多 40 条`}</button>}
           {!review.loading && !review.response?.items.length && <div className="empty-state">当前筛选范围没有会话</div>}
         </div>

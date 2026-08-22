@@ -6,8 +6,10 @@ import {
   AgentLensApplication,
   coreServicesPlugin,
   discoverRegisteredSourceAssets,
+  prepareRegisteredSources,
   startRegisteredSourceCapture,
   syncRegisteredSourceHistory,
+  type RegisteredSourceFailure,
 } from '@agent-lens/runtime-cordis'
 import { claudeSourcePlugin } from '@agent-lens/source-claude'
 import { codexSourcePlugin } from '@agent-lens/source-codex'
@@ -42,13 +44,22 @@ app.use(httpSurfacePlugin, { port: configuredPort })
 app.use(webPlugin, { staticDir: webRoot })
 
 const runtimeController = new AbortController()
-let syncPromise: ReturnType<typeof syncRegisteredSourceHistory> | null = null
-let captureHandles: Awaited<ReturnType<typeof startRegisteredSourceCapture>> = []
+let syncPromise: Promise<void> | null = null
+let captureHandles: Awaited<ReturnType<typeof startRegisteredSourceCapture>>['results'] = []
 let shuttingDown = false
 
 function runtimeAge(): string {
   const seconds = Math.max(0, Math.round((Date.now() - startedAt) / 1000))
   return `${seconds}s`
+}
+
+function logSourceFailures(failures: RegisteredSourceFailure[]): void {
+  for (const failure of failures) {
+    console.error(
+      `[AgentLens] source ${failure.stage} failed: ${failure.sourceId}`,
+      failure.error,
+    )
+  }
 }
 
 async function shutdown(signal: string): Promise<void> {
@@ -98,25 +109,38 @@ try {
   )
   console.info(`[AgentLens] Web/UI: http://127.0.0.1:${configuredPort} (root: ${webRoot})`)
 
-  syncPromise = syncRegisteredSourceHistory(app.context, runtimeController.signal)
-  const historyResults = await syncPromise
-  for (const result of historyResults) {
-    console.info(
-      `[AgentLens] history synced: ${result.sourceId} records=${result.records} created=${result.observationsCreated} merged=${result.observationsMerged} unchanged=${result.observationsUnchanged}`,
-    )
-  }
+  const prepared = await prepareRegisteredSources(app.context, runtimeController.signal)
+  logSourceFailures(prepared.failures)
 
-  const assetResults = await discoverRegisteredSourceAssets(app.context, runtimeController.signal)
-  for (const result of assetResults) {
-    console.info(
-      `[AgentLens] assets scanned: ${result.sourceId} assets=${result.assetsDiscovered} states=${result.statesRecorded}`,
-    )
-  }
-
-  captureHandles = await startRegisteredSourceCapture(app.context, runtimeController.signal)
+  const capture = await startRegisteredSourceCapture(
+    app.context,
+    runtimeController.signal,
+    prepared.targets,
+  )
+  captureHandles = capture.results
+  logSourceFailures(capture.failures)
   for (const handle of captureHandles) {
     console.info(`[AgentLens] runtime capture started: ${handle.sourceId}`)
   }
+
+  syncPromise = (async () => {
+    const [history, assets] = await Promise.all([
+      syncRegisteredSourceHistory(app.context, runtimeController.signal, prepared.targets),
+      discoverRegisteredSourceAssets(app.context, runtimeController.signal, prepared.targets),
+    ])
+    logSourceFailures([...history.failures, ...assets.failures])
+    for (const result of history.results) {
+      console.info(
+        `[AgentLens] history synced: ${result.sourceId} records=${result.records} created=${result.observationsCreated} merged=${result.observationsMerged} unchanged=${result.observationsUnchanged}`,
+      )
+    }
+    for (const result of assets.results) {
+      console.info(
+        `[AgentLens] assets scanned: ${result.sourceId} assets=${result.assetsDiscovered} states=${result.statesRecorded}`,
+      )
+    }
+  })()
+  await syncPromise
 } catch (error) {
   runtimeController.abort()
   for (const handle of [...captureHandles].reverse()) {

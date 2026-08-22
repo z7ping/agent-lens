@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgentLens UI/UX 设计提案 · 高保真静态稿</title>
+<link rel="stylesheet" href="assets/tokens.css">
+<style>
+body{background:var(--al-canvas)}
+.hub{max-width:1060px;margin:0 auto;padding:56px 28px 80px}
+.hub-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;margin-bottom:14px}
+.hub-hero h1{margin:6px 0 0;font-size:26px;font-weight:750;letter-spacing:-.02em}
+.hub-hero p{margin:10px 0 0;max-width:700px;color:var(--al-muted);font-size:13.5px;line-height:1.75}
+.hub-note{margin:18px 0 30px;padding:12px 16px;border:1px solid var(--al-line);border-left:3px solid var(--al-warning);border-radius:10px;background:var(--al-warning-soft);color:var(--al-warning);font-size:12.5px;line-height:1.7}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.card{display:flex;flex-direction:column;gap:8px;padding:20px;border:1px solid var(--al-line);border-radius:14px;background:var(--al-surface);box-shadow:var(--al-shadow);text-decoration:none;color:inherit;transition:.16s}
+.card:hover{border-color:color-mix(in srgb,var(--al-accent) 40%,var(--al-line));transform:translateY(-2px);box-shadow:var(--al-shadow-lg)}
+.card .no{font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--al-muted-2)}
+.card h2{margin:0;font-size:16px;font-weight:700}
+.card p{margin:0;font-size:12.5px;line-height:1.7;color:var(--al-muted)}
+.card .go{margin-top:auto;padding-top:10px;color:var(--al-accent);font-size:12px;font-weight:650}
+.card.future{border-style:dashed}.card.future .no{color:var(--al-warning)}
+.files{margin-top:34px;border:1px solid var(--al-line);border-radius:12px;background:var(--al-surface);padding:16px 20px;font-size:12.5px;color:var(--al-muted);line-height:2}
+.files code{font-family:var(--font-mono);font-size:11.5px;color:var(--al-ink-2);background:var(--al-soft);border-radius:5px;padding:1px 6px}
+</style>
+</head>
+<body>
+<div class="hub">
+  <div class="hub-hero">
+    <div>
+      <span class="eyebrow" style="color:var(--al-accent)">UI / UX DESIGN PROPOSAL</span>
+      <h1>AgentLens 高保真静态稿</h1>
+      <p>基于 <code style="font-family:var(--font-mono);font-size:12px">packages/web</code> 现状与 <code style="font-family:var(--font-mono);font-size:12px">docs/PRODUCT-DIRECTION.md</code> 的设计提案演示。七个画板覆盖 1.0 核心界面、状态/设计系统，以及长期能力中的“资产备份”和“使用洞察”；右上角可切换明暗主题（跨页记忆）。示例数据均为虚构。</p>
+    </div>
+    <button class="btn" data-theme-toggle>◐ 切换主题</button>
+  </div>
+
+  <div class="hub-note">设计提案：核心画板用于 1.0 Web 表现层验收；“资产备份 / 使用洞察”为长期能力高保真原型，<b>不代表已进入 1.0 实现范围</b>，也不改变现有 Contract / 架构边界。</div>
+
+  <div class="cards">
+    <a class="card" href="review.html">
+      <span class="no">BOARD 01 · 核心视图</span>
+      <h2>任务复盘</h2>
+      <p>时间分组的会话列表、分区重排的轮次导航、工具耗时占比条、浮动“有新记录”提示、Tab 化 Inspector（详情 / 证据 / 原始数据）。可点击工具行与事件行体验 Inspector。</p>
+      <span class="go">打开画板 →</span>
+    </a>
+    <a class="card" href="tools.html">
+      <span class="no">BOARD 02</span>
+      <h2>工具分析</h2>
+      <p>四卡 KPI（含归因覆盖率）、可排序表格 + 调用分布条 + 成功率双色条、行钻取抽屉、带置信度的可归因资产。表头可点击排序。</p>
+      <span class="go">打开画板 →</span>
+    </a>
+    <a class="card" href="agents.html">
+      <span class="no">BOARD 03</span>
+      <h2>智能体概览</h2>
+      <p>资产卡片、技能生命周期漏斗、跨 Agent 覆盖矩阵。静态发现与真实调用保持分离，具体资产默认折叠。</p>
+      <span class="go">打开画板 →</span>
+    </a>
+    <a class="card" href="states.html">
+      <span class="no">BOARD 04</span>
+      <h2>状态与引导</h2>
+      <p>骨架屏、SSE 断开横幅、页级错误恢复、带行动指引的空状态、首次运行三步引导、后台视图新数据提示。</p>
+      <span class="go">打开画板 →</span>
+    </a>
+    <a class="card" href="system.html">
+      <span class="no">BOARD 05</span>
+      <h2>设计系统</h2>
+      <p>字号阶梯（≥11px 下限）、色彩 Token、Evidence 徽章规范、工具类型图标、组件样本。</p>
+      <span class="go">打开画板 →</span>
+    </a>
+    <a class="card future" href="backup.html">
+      <span class="no">BOARD 06 · 长期能力</span>
+      <h2>资产备份</h2>
+      <p>统一查看 Codex / Claude Code / Pi 的技能、MCP、规则、记忆、Session 与关键配置；创建本地不可变快照、完整性校验、导出/导入、恢复预演，并明确敏感信息排除与跨 Agent 迁移边界。</p>
+      <span class="go">打开长期能力画板 →</span>
+    </a>
+    <a class="card future" href="insights.html">
+      <span class="no">BOARD 07 · 长期能力</span>
+      <h2>使用洞察</h2>
+      <p>从事实统计继续走向趋势、Agent 使用对比、常见工作流组合、资产采用情况和工作方式演进；每条模式都标明样本范围和证据入口，不做综合评分。</p>
+      <span class="go">打开长期能力画板 →</span>
+    </a>
+  </div>
+
+  <div class="files">
+    目录结构：<br>
+    <code>index.html</code> 本页（画板导航） · <code>review.html</code> · <code>tools.html</code> · <code>agents.html</code> · <code>states.html</code> · <code>system.html</code> · <code>backup.html</code> · <code>insights.html</code><br>
+    共享资源：<code>assets/tokens.css</code>（设计 token） · <code>assets/components.css</code>（核心组件样式） · <code>assets/future.css</code>（长期能力组件） · <code>assets/app.js</code>（主题 / 抽屉 / 排序 / 复制 / 导航交互）
+  </div>
+</div>
+<script src="assets/app.js"></script>
+</body>
+</html>

@@ -16,6 +16,7 @@ export interface ClientSnapshot {
   health: HealthResponseDto | null
   facets: FacetResponseDto | null
   agents: AgentOverviewResponseDto | null
+  agentsHasNewData: boolean
   liveConnected: boolean
   review: {
     filters: ReviewFilters
@@ -35,6 +36,7 @@ export interface ClientSnapshot {
     filters: QueryFilters
     response: ToolAssetUsageResponseDto | null
     loading: boolean
+    hasNewData: boolean
     error: string
   }
 }
@@ -79,6 +81,7 @@ export class AgentLensClientModel {
     health: null,
     facets: null,
     agents: null,
+    agentsHasNewData: false,
     liveConnected: false,
     review: {
       filters: { ...initialQuery, status: 'all', search: '' },
@@ -98,6 +101,7 @@ export class AgentLensClientModel {
       filters: { ...initialQuery },
       response: null,
       loading: true,
+      hasNewData: false,
       error: '',
     },
   }
@@ -105,13 +109,13 @@ export class AgentLensClientModel {
   private notifyQueued = false
   private refreshTimer: ReturnType<typeof setTimeout> | null = null
   private detailTimer: ReturnType<typeof setTimeout> | null = null
-  private usageTimer: ReturnType<typeof setTimeout> | null = null
-  private agentsTimer: ReturnType<typeof setTimeout> | null = null
   private unsubscribeLive: (() => void) | null = null
   private reviewGeneration = 0
   private detailGeneration = 0
   private usageGeneration = 0
   private agentsGeneration = 0
+  private usageInvalidation = 0
+  private agentsInvalidation = 0
 
   constructor(private readonly api = new AgentLensApi()) {}
 
@@ -158,16 +162,13 @@ export class AgentLensClientModel {
     this.unsubscribeLive = null
     if (this.refreshTimer) clearTimeout(this.refreshTimer)
     if (this.detailTimer) clearTimeout(this.detailTimer)
-    if (this.usageTimer) clearTimeout(this.usageTimer)
-    if (this.agentsTimer) clearTimeout(this.agentsTimer)
     this.refreshTimer = null
     this.detailTimer = null
-    this.usageTimer = null
-    this.agentsTimer = null
   }
 
   async refreshFacetsAndAgents(): Promise<void> {
     const generation = ++this.agentsGeneration
+    const invalidation = this.agentsInvalidation
     const [facets, agents] = await Promise.allSettled([
       this.api.facets(),
       this.api.agents(),
@@ -175,7 +176,9 @@ export class AgentLensClientModel {
     if (generation !== this.agentsGeneration) return
     this.patch({
       ...(facets.status === 'fulfilled' ? { facets: facets.value } : {}),
-      ...(agents.status === 'fulfilled' ? { agents: agents.value } : {}),
+      ...(agents.status === 'fulfilled'
+        ? { agents: agents.value, agentsHasNewData: this.agentsInvalidation !== invalidation }
+        : {}),
     })
   }
 
@@ -425,6 +428,7 @@ export class AgentLensClientModel {
 
   async refreshUsage(): Promise<void> {
     const generation = ++this.usageGeneration
+    const invalidation = this.usageInvalidation
     const current = this.snapshot.usage
     this.publish({
       ...this.snapshot,
@@ -439,6 +443,7 @@ export class AgentLensClientModel {
           ...this.snapshot.usage,
           response,
           loading: false,
+          hasNewData: this.usageInvalidation !== invalidation,
           error: '',
         },
       })
@@ -512,18 +517,15 @@ export class AgentLensClientModel {
       }, 220)
     }
     if (affected.includes('usage')) {
-      if (this.usageTimer) clearTimeout(this.usageTimer)
-      this.usageTimer = setTimeout(() => {
-        this.usageTimer = null
-        void this.refreshUsage()
-      }, 800)
+      this.usageInvalidation += 1
+      const usage = this.snapshot.usage
+      if (!usage.hasNewData) {
+        this.publish({ ...this.snapshot, usage: { ...usage, hasNewData: true } })
+      }
     }
     if (affected.includes('agents')) {
-      if (this.agentsTimer) clearTimeout(this.agentsTimer)
-      this.agentsTimer = setTimeout(() => {
-        this.agentsTimer = null
-        void this.refreshFacetsAndAgents()
-      }, 250)
+      this.agentsInvalidation += 1
+      if (!this.snapshot.agentsHasNewData) this.patch({ agentsHasNewData: true })
     }
   }
 }

@@ -1,5 +1,13 @@
-import type { CanonicalObservation, ObservationCursor, StorageService } from '@agent-lens/core'
-import { SessionProjection } from '@agent-lens/projection-session'
+import type {
+  CanonicalObservation,
+  ObservationCursor,
+  SessionSummaryRecord,
+  StorageService,
+} from '@agent-lens/core'
+import {
+  SessionProjection,
+  type SessionProjectionEntry,
+} from '@agent-lens/projection-session'
 import { TimelineProjection, encodeTimelineCursor } from '@agent-lens/projection-timeline'
 import {
   AGENT_LENS_PROTOCOL_VERSION,
@@ -288,11 +296,10 @@ export class ReviewProjection {
     this.timeline = new TimelineProjection(storage)
   }
 
-  private async summary(session: Awaited<ReturnType<SessionProjection['query']>>['items'][number]): Promise<ReviewSessionSummaryDto> {
-    const logical = await this.storage.repositories.sessions.getLogicalSession(session.id)
+  private async summary(entry: SessionProjectionEntry): Promise<ReviewSessionSummaryDto> {
+    const { session, logicalSession: logical, observations } = entry
     const project = session.projectId ? await this.storage.repositories.sessions.getProject(session.projectId) : null
     const workspace = session.workspaceId ? await this.storage.repositories.sessions.getWorkspace(session.workspaceId) : null
-    const observations = await this.storage.repositories.observations.query({ logicalSessionId: session.id, limit: 5000 })
     const firstUser = observations.find(item => item.kind === 'message.user')
     const preview = firstUser ? textFromPayload(firstUser.payload) : undefined
     const toolCount = observations.filter(item => item.kind === 'tool.call').length
@@ -313,10 +320,37 @@ export class ReviewProjection {
     }
   }
 
+  private summaryFromRecord(record: SessionSummaryRecord): ReviewSessionSummaryDto {
+    const preview = record.firstUserPayload === undefined
+      ? undefined
+      : textFromPayload(record.firstUserPayload)
+    return {
+      id: record.logicalSessionId,
+      installationId: record.installationId,
+      productId: record.productId,
+      sourceIds: record.sourceIds,
+      ...(record.projectId ? { projectId: record.projectId } : {}),
+      ...(record.projectName ? { projectName: record.projectName } : {}),
+      ...(record.workspaceId ? { workspaceId: record.workspaceId } : {}),
+      ...(record.workspacePath ? { workspacePath: record.workspacePath } : {}),
+      ...(record.title ? { title: record.title } : {}),
+      ...(preview ? { preview } : {}),
+      startedAt: record.startedAt,
+      endedAt: record.endedAt,
+      durationMs: durationMs(record.startedAt, record.endedAt),
+      observationCount: record.observationCount,
+      interactionCount: record.interactionCount,
+      toolCount: record.toolCount,
+      errorCount: record.errorCount,
+      hasErrors: record.errorCount > 0,
+    }
+  }
+
   async query(query: ReviewQueryDto = {}): Promise<ReviewResponseDto> {
     const requestedLimit = Math.max(1, Math.min(query.limit ?? DEFAULT_LIMIT, MAX_SESSIONS))
-    const raw = await this.sessions.query({ limit: MAX_SESSIONS })
-    const summaries = await Promise.all(raw.items.map(item => this.summary(item)))
+    const summaries = this.storage.sessionSummaries
+      ? (await this.storage.sessionSummaries.query({ limit: MAX_SESSIONS })).items.map(item => this.summaryFromRecord(item))
+      : await this.fallbackSummaries()
     const search = query.search?.trim().toLowerCase()
     const filtered = summaries.filter(item => {
       if (query.sourceId && !item.sourceIds.includes(query.sourceId)) return false
@@ -337,6 +371,11 @@ export class ReviewProjection {
       items: filtered.slice(0, requestedLimit),
       meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION, count: Math.min(filtered.length, requestedLimit), hasMore, generatedAt: new Date().toISOString() },
     }
+  }
+
+  private async fallbackSummaries(): Promise<ReviewSessionSummaryDto[]> {
+    const raw = await this.sessions.queryEntries({ limit: MAX_SESSIONS })
+    return Promise.all(raw.entries.map(item => this.summary(item)))
   }
 
   private async scanInteractionDescriptors(logicalSessionId: string): Promise<InteractionDescriptor[]> {
@@ -638,8 +677,8 @@ export class ReviewProjection {
   }
 
   async get(logicalSessionId: string, query: ReviewDetailQueryDto = {}): Promise<ReviewSessionDetailDto | null> {
-    const sessionResult = await this.sessions.query({ logicalSessionId, limit: 1 })
-    const session = sessionResult.items.find(item => item.id === logicalSessionId)
+    const sessionResult = await this.sessions.queryEntries({ logicalSessionId, limit: 1 })
+    const session = sessionResult.entries.find(item => item.session.id === logicalSessionId)
     if (!session) return null
     const summary = await this.summary(session)
     const filter = query.filter ?? 'all'

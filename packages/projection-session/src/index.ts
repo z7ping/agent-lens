@@ -20,6 +20,18 @@ const MAX_LIMIT = 500
 const DISCOVERY_CHUNK = 1000
 const SESSION_CHUNK = 1000
 
+export interface SessionProjectionEntry {
+  session: SessionDetailDto
+  logicalSession: LogicalSession
+  installation: AgentInstallation
+  observations: CanonicalObservation[]
+}
+
+export interface SessionProjectionEntries {
+  entries: SessionProjectionEntry[]
+  hasMore: boolean
+}
+
 function effectiveAt(observation: CanonicalObservation): string {
   return observation.occurredAt ?? observation.capturedAt
 }
@@ -101,6 +113,16 @@ export class SessionProjection {
     installationId: string | undefined,
     limit: number,
   ): Promise<{ ids: string[]; hasMore: boolean }> {
+    if (this.storage.sessionSummaries) {
+      const result = await this.storage.sessionSummaries.query({
+        limit,
+        ...(installationId ? { installationId } : {}),
+      })
+      return {
+        ids: result.items.map(item => item.logicalSessionId),
+        hasMore: result.hasMore,
+      }
+    }
     const ids: string[] = []
     const seen = new Set<string>()
     let before: ObservationCursor | undefined
@@ -129,21 +151,26 @@ export class SessionProjection {
   }
 
   private async loadSessionObservations(
-    logicalSessionId: string,
+    logicalSessionIds: string[],
     installationId?: string,
-  ): Promise<CanonicalObservation[]> {
-    const values: CanonicalObservation[] = []
+  ): Promise<Map<string, CanonicalObservation[]>> {
+    const values = new Map<string, CanonicalObservation[]>(
+      logicalSessionIds.map(id => [id, []]),
+    )
+    if (!logicalSessionIds.length) return values
     let after: ObservationCursor | undefined
 
     while (true) {
       const page = await this.storage.repositories.observations.query({
-        logicalSessionId,
+        logicalSessionIds,
         ...(installationId ? { installationId } : {}),
         ...(after ? { after } : {}),
         limit: SESSION_CHUNK,
       })
       if (!page.length) break
-      values.push(...page)
+      for (const observation of page) {
+        values.get(observation.logicalSessionId)?.push(observation)
+      }
       if (page.length < SESSION_CHUNK) break
       after = cursorForObservation(page[page.length - 1]!)
     }
@@ -151,7 +178,7 @@ export class SessionProjection {
     return values
   }
 
-  async query(query: SessionQueryDto = {}): Promise<SessionResponseDto> {
+  async queryEntries(query: SessionQueryDto = {}): Promise<SessionProjectionEntries> {
     const limit = Math.max(1, Math.min(query.limit ?? DEFAULT_LIMIT, MAX_LIMIT))
     let sessionIds: string[]
     let hasMore = false
@@ -164,13 +191,18 @@ export class SessionProjection {
       hasMore = discovered.hasMore
     }
 
+    const observationsBySession = await this.loadSessionObservations(
+      sessionIds,
+      query.installationId,
+    )
+
     const sessionCache = new Map<string, LogicalSession | null>()
     const installationCache = new Map<string, AgentInstallation | null>()
     const sourceSessionCache = new Map<string, SourceSession | null>()
-    const items: SessionDetailDto[] = []
+    const entries: SessionProjectionEntry[] = []
 
     for (const logicalSessionId of sessionIds) {
-      const values = await this.loadSessionObservations(logicalSessionId, query.installationId)
+      const values = observationsBySession.get(logicalSessionId) ?? []
       if (!values.length) continue
 
       let session = sessionCache.get(logicalSessionId)
@@ -207,7 +239,7 @@ export class SessionProjection {
       }
 
       const interactions = buildInteractions(sorted)
-      items.push({
+      const detail: SessionDetailDto = {
         id: session.id,
         installationId: session.installationId,
         productId: installation.productId,
@@ -222,16 +254,31 @@ export class SessionProjection {
         interactionCount: interactions.length,
         observationCounts: counts,
         interactions,
+      }
+      entries.push({
+        session: detail,
+        logicalSession: session,
+        installation,
+        observations: sorted,
       })
     }
 
-    items.sort((left, right) => right.endedAt.localeCompare(left.endedAt) || left.id.localeCompare(right.id))
+    entries.sort((left, right) => (
+      right.session.endedAt.localeCompare(left.session.endedAt)
+      || left.session.id.localeCompare(right.session.id)
+    ))
+    return { entries, hasMore }
+  }
+
+  async query(query: SessionQueryDto = {}): Promise<SessionResponseDto> {
+    const projected = await this.queryEntries(query)
+    const items = projected.entries.map(entry => entry.session)
     return {
       items,
       meta: {
         protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
         count: items.length,
-        hasMore,
+        hasMore: projected.hasMore,
         generatedAt: new Date().toISOString(),
       },
     }

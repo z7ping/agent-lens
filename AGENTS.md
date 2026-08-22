@@ -161,7 +161,7 @@ Storage Plugin 可以直接使用 Cordis 生命周期提供 `ctx.storage`，但 
 
 ## 9. UI 规则
 
-1.0 Web 使用 Vite + 原生 TypeScript，只消费 `/api/v1/*`。
+1.0 Web 使用 Vite + React + TypeScript，只消费 `/api/v1/*`。
 
 当前面向用户的主视图使用简体中文：
 

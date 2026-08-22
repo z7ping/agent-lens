@@ -1,6 +1,7 @@
 import type {
   AgentInstallation,
   CanonicalObservation,
+  ObservationCursor,
   SourceSession,
   StorageService,
 } from '@agent-lens/core'
@@ -13,7 +14,7 @@ import {
   type UsageAssetType,
 } from '@agent-lens/protocol'
 
-const MAX_SCAN_ROWS = 5000
+const SCAN_CHUNK = 1000
 const DEFAULT_LIMIT = 100
 const MAX_LIMIT = 500
 
@@ -25,6 +26,14 @@ function stringField(record: Record<string, unknown>, ...names: string[]): strin
   return undefined
 }
 function effectiveAt(observation: CanonicalObservation): string { return observation.occurredAt ?? observation.capturedAt }
+function cursorForObservation(observation: CanonicalObservation): ObservationCursor {
+  const sequence = observation.canonicalSequence ?? observation.sourceSequence
+  return {
+    effectiveAt: effectiveAt(observation),
+    ...(sequence === undefined ? {} : { sequence }),
+    id: observation.id,
+  }
+}
 function callId(observation: CanonicalObservation): string | undefined { return stringField(asRecord(observation.payload), 'callId', 'call_id', 'toolUseId', 'tool_use_id') }
 function toolName(observation: CanonicalObservation): string | undefined { return stringField(asRecord(observation.payload), 'nativeToolName', 'toolName', 'tool_name', 'name') }
 function inferAssetUsage(nativeToolName: string, payload: Record<string, unknown>): { type: UsageAssetType; canonicalName: string } | null {
@@ -55,13 +64,38 @@ function updateWindow(accumulator: { firstUsedAt: string; lastUsedAt: string }, 
 export class ToolAssetUsageProjection {
   constructor(private readonly storage: StorageService) {}
 
+  private async loadKind(
+    kind: 'tool.call' | 'tool.result',
+    query: ToolAssetUsageQueryDto,
+  ): Promise<CanonicalObservation[]> {
+    const observations: CanonicalObservation[] = []
+    let after: ObservationCursor | undefined
+    while (true) {
+      const page = await this.storage.repositories.observations.query({
+        kind,
+        ...(query.installationId ? { installationId: query.installationId } : {}),
+        ...(query.logicalSessionId ? { logicalSessionId: query.logicalSessionId } : {}),
+        ...(query.from ? { from: query.from } : {}),
+        ...(query.to ? { to: query.to } : {}),
+        ...(after ? { after } : {}),
+        limit: SCAN_CHUNK,
+      })
+      if (!page.length) break
+      observations.push(...page)
+      if (page.length < SCAN_CHUNK) break
+      after = cursorForObservation(page[page.length - 1]!)
+    }
+    return observations
+  }
+
   async query(query: ToolAssetUsageQueryDto = {}): Promise<ToolAssetUsageResponseDto> {
     const limit = Math.max(1, Math.min(query.limit ?? DEFAULT_LIMIT, MAX_LIMIT))
-    const observations = (await this.storage.repositories.observations.query({
-      ...(query.installationId ? { installationId: query.installationId } : {}),
-      ...(query.logicalSessionId ? { logicalSessionId: query.logicalSessionId } : {}),
-      ...(query.from ? { from: query.from } : {}), ...(query.to ? { to: query.to } : {}), limit: MAX_SCAN_ROWS,
-    })).filter(item => (item.kind === 'tool.call' || item.kind === 'tool.result') && (!query.projectId || item.projectId === query.projectId))
+    const [calls, results] = await Promise.all([
+      this.loadKind('tool.call', query),
+      this.loadKind('tool.result', query),
+    ])
+    const observations = [...calls, ...results]
+      .filter(item => !query.projectId || item.projectId === query.projectId)
 
     const sourceSessionCache = new Map<string, SourceSession | null>()
     const installationCache = new Map<string, AgentInstallation | null>()
