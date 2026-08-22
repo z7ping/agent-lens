@@ -22,7 +22,7 @@ export function VirtualRoundMount({
     const root = element.closest('.review-reader-pane')
     const observer = new IntersectionObserver(entries => {
       const entry = entries[0]
-      if (entry) setMounted(entry.isIntersecting)
+      if (entry?.isIntersecting) setMounted(true)
     }, {
       root,
       rootMargin: '1200px 0px',
