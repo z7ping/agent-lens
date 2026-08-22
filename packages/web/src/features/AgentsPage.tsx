@@ -38,6 +38,16 @@ const stateLabel: Record<string, string> = {
   observed: '已观测',
 }
 
+const negativeStateLabel: Record<string, string> = {
+  installed: '未安装',
+  configured: '未配置',
+  enabled: '未启用',
+  discoverable: '不可发现',
+  exposed: '未开放',
+  invoked: '未观察到使用',
+  observed: '未观察到',
+}
+
 const assetTypeLabel: Record<string, string> = {
   skill: '技能',
   mcp: 'MCP（模型上下文协议）',
@@ -90,7 +100,9 @@ function stateValue(asset: AgentAssetInventoryDto, state: string): boolean | 'un
 }
 
 function StateBadge({ state, value }: { state: string; value: boolean | 'unknown' }) {
-  return <span className="asset-state" data-value={String(value)}>{stateLabel[state] ?? state}{value === 'unknown' ? ' 未知' : value ? '' : ' 否'}</span>
+  const positive = stateLabel[state] ?? state
+  const label = value === 'unknown' ? `${positive}状态未知` : value ? positive : negativeStateLabel[state] ?? `非${positive}`
+  return <span className="asset-state" data-value={String(value)}>{label}</span>
 }
 
 function CopyPath({ path }: { path: string }) {
