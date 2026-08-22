@@ -59,6 +59,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     writeTheme(next)
   }
   const healthLabel = snapshot.health?.status === 'ok' ? '运行正常' : snapshot.health ? '运行降级' : '连接中'
+  const liveLabel = snapshot.liveConnected ? '实时已连接' : '实时未连接'
 
   return <PinnedProvider agents={agents}>
     <div className="app-shell">
@@ -72,12 +73,23 @@ function Shell({ model }: { model: AgentLensClientModel }) {
             {navigation.map(([to, label]) => <NavLink key={to} to={to} className={({ isActive }) => `nav-item ${isActive ? 'nav-item-active' : ''}`}>{label}</NavLink>)}
           </nav>
           <div className="app-status">
-            <span className={`live-dot ${snapshot.liveConnected ? 'live-dot-online' : 'live-dot-waiting'}`} />
-            <span className="status-label">{healthLabel}</span>
+            <span className={`status-pill ${snapshot.health?.status === 'ok' ? 'status-pill-online' : snapshot.health ? 'status-pill-warn' : ''}`} title="AgentLens 后台服务状态">
+              <span className={`live-dot ${snapshot.health?.status === 'ok' ? 'live-dot-online' : 'live-dot-waiting'}`} />
+              <span>{healthLabel}</span>
+            </span>
+            <span className={`status-pill ${snapshot.liveConnected ? 'status-pill-online' : 'status-pill-warn'}`} title="实时数据通道状态">
+              <span className={`live-dot ${snapshot.liveConnected ? 'live-dot-online' : 'live-dot-waiting'}`} />
+              <span>{liveLabel}</span>
+            </span>
             <button className="theme-toggle" onClick={toggleTheme} title="切换主题" aria-label="切换主题">{theme === 'dark' ? '☀' : '◐'}</button>
           </div>
         </div>
       </header>
+      {snapshot.health && !snapshot.liveConnected && <div className="sse-banner" role="status">
+        <span className="live-dot live-dot-waiting" />
+        <span>实时通道已断开</span>
+        <small>页面保留当前内容；重新连接后会继续接收新数据。</small>
+      </div>}
       <Routes>
         <Route path="/review" element={<ReviewPage model={model} />} />
         <Route path="/review/:sessionId" element={<ReviewPage model={model} />} />
