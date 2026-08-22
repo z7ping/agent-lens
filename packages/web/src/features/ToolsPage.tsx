@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import type { ToolUsageDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
 import { AgentScope } from '../components/AgentScope'
@@ -25,8 +26,23 @@ function assetTypeLabel(type: string): string {
   return '其他'
 }
 
+function confidenceLabel(confidence: string): string {
+  if (confidence === 'high') return '高可信'
+  if (confidence === 'medium') return '中可信'
+  if (confidence === 'low') return '低可信'
+  return '可信度未知'
+}
+
 function toolKey(sourceIds: string[], nativeToolName: string): string {
   return `${sourceIds.join('\u0000')}:${nativeToolName}`
+}
+
+type SortKey = 'callCount' | 'sessionCount' | 'successRate' | 'errorCount' | 'totalDurationMs' | 'averageDurationMs'
+type SortDirection = 'ascending' | 'descending'
+
+function sortMetric(tool: ToolUsageDto, key: SortKey): number {
+  if (key === 'successRate') return rateValue(tool.successCount, tool.errorCount)
+  return tool[key]
 }
 
 export function ToolsPage({ model }: { model: AgentLensClientModel }) {
@@ -47,7 +63,20 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
   const attributionCoverage = totalCalls ? Math.round(attributedCalls / totalCalls * 100) : 0
   const maxCalls = Math.max(1, ...tools.map(tool => tool.callCount))
   const [selectedToolKey, setSelectedToolKey] = useState<string | null>(null)
+  const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'callCount', direction: 'descending' })
   const selectedTool = useMemo(() => tools.find(tool => toolKey(tool.sourceIds, tool.nativeToolName) === selectedToolKey), [selectedToolKey, tools])
+  const sortedTools = useMemo(() => [...tools].sort((a, b) => {
+    const delta = sortMetric(a, sort.key) - sortMetric(b, sort.key)
+    if (delta === 0) return a.nativeToolName.localeCompare(b.nativeToolName)
+    return sort.direction === 'ascending' ? delta : -delta
+  }), [tools, sort])
+
+  const toggleSort = (key: SortKey) => {
+    setSort(current => current.key === key
+      ? { key, direction: current.direction === 'descending' ? 'ascending' : 'descending' }
+      : { key, direction: 'descending' })
+  }
+  const ariaSort = (key: SortKey): 'none' | SortDirection => sort.key === key ? sort.direction : 'none'
 
   return <main className="workspace-page">
     <div className="workspace-toolbar">
@@ -69,11 +98,19 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
       </section>
 
       <section className="tool-table-card">
-        <div className="table-section-head"><div><h2>工具调用</h2><p>{tools.length} 个工具 · 点击一行查看详情</p></div></div>
+        <div className="table-section-head"><div><h2>工具调用</h2><p>{tools.length} 个工具 · 点击表头排序，点击一行查看详情</p></div></div>
         <div className="table-scroll">
           <table className="tool-table">
-            <thead><tr><th>工具</th><th>调用</th><th>会话</th><th>成功率</th><th>失败</th><th>总耗时</th><th>平均耗时</th></tr></thead>
-            <tbody>{tools.map(tool => {
+            <thead><tr>
+              <th>工具</th>
+              <th aria-sort={ariaSort('callCount')} onClick={() => toggleSort('callCount')} style={{ cursor: 'pointer' }}>调用 {sort.key === 'callCount' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
+              <th aria-sort={ariaSort('sessionCount')} onClick={() => toggleSort('sessionCount')} style={{ cursor: 'pointer' }}>会话 {sort.key === 'sessionCount' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
+              <th aria-sort={ariaSort('successRate')} onClick={() => toggleSort('successRate')} style={{ cursor: 'pointer' }}>成功率 {sort.key === 'successRate' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
+              <th aria-sort={ariaSort('errorCount')} onClick={() => toggleSort('errorCount')} style={{ cursor: 'pointer' }}>失败 {sort.key === 'errorCount' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
+              <th aria-sort={ariaSort('totalDurationMs')} onClick={() => toggleSort('totalDurationMs')} style={{ cursor: 'pointer' }}>总耗时 {sort.key === 'totalDurationMs' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
+              <th aria-sort={ariaSort('averageDurationMs')} onClick={() => toggleSort('averageDurationMs')} style={{ cursor: 'pointer' }}>平均耗时 {sort.key === 'averageDurationMs' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
+            </tr></thead>
+            <tbody>{sortedTools.map(tool => {
               const successRate = rateValue(tool.successCount, tool.errorCount)
               const key = toolKey(tool.sourceIds, tool.nativeToolName)
               return <tr key={key} tabIndex={0} onClick={() => setSelectedToolKey(key)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedToolKey(key) } }}>
@@ -91,7 +128,7 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
 
       {assets.length ? <section className="attributed-assets">
         <div className="section-heading-row"><div><h3>可归因能力资产</h3><p>有证据能够关联到具体技能和 MCP（模型上下文协议）的真实调用</p></div></div>
-        <div className="attributed-asset-list">{assets.map(asset => <div key={`${asset.type}:${asset.canonicalName}`} className="attributed-asset"><b>{asset.canonicalName}</b><span>{assetTypeLabel(asset.type)}</span><strong>{asset.callCount}</strong><small>次</small></div>)}</div>
+        <div className="attributed-asset-list">{assets.map(asset => <div key={`${asset.type}:${asset.canonicalName}`} className="attributed-asset"><b>{asset.canonicalName}</b><span>{assetTypeLabel(asset.type)}</span><span title={`归因方式：${asset.attribution}`}>{confidenceLabel(asset.confidence)}</span><strong>{asset.callCount}</strong><small>次</small></div>)}</div>
       </section> : null}
     </div>
 
