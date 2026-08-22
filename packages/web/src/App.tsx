@@ -1,8 +1,9 @@
 import { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore, type PropsWithChildren } from 'react'
-import { BrowserRouter, NavLink, Navigate, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import type { AgentFacetDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel, ClientSnapshot } from './client/model'
 import { readPinnedAgents, readTheme, writePinnedAgents, writeTheme } from './client/preferences'
+import { ReviewTurnRail } from './components/ReviewTurnRail'
 import { AgentsPage } from './features/AgentsPage'
 import { ReviewPage } from './features/ReviewPage'
 import { ToolsPage } from './features/ToolsPage'
@@ -51,6 +52,7 @@ const navigation = [
 
 function Shell({ model }: { model: AgentLensClientModel }) {
   const snapshot = useClientSnapshot(model)
+  const location = useLocation()
   const [theme, setTheme] = useState(readTheme)
   const agents = snapshot.facets?.agents ?? []
   const toggleTheme = () => {
@@ -60,6 +62,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   }
   const healthLabel = snapshot.health?.status === 'ok' ? '运行正常' : snapshot.health ? '运行降级' : '连接中'
   const liveLabel = snapshot.liveConnected ? '实时已连接' : '实时未连接'
+  const showTurnRail = location.pathname.startsWith('/review') && snapshot.review.detail
 
   return <PinnedProvider agents={agents}>
     <div className="app-shell">
@@ -97,6 +100,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
         <Route path="/agents" element={<AgentsPage model={model} />} />
         <Route path="*" element={<Navigate to="/review" replace />} />
       </Routes>
+      {showTurnRail && <ReviewTurnRail detail={snapshot.review.detail!}/>} 
     </div>
   </PinnedProvider>
 }
