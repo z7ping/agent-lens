@@ -42,8 +42,8 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
   const mostErrors = errorCandidate?.errorCount ? errorCandidate : undefined
   const slowest = [...tools].sort((a, b) => b.averageDurationMs - a.averageDurationMs)[0]
   const totalCalls = tools.reduce((sum, tool) => sum + tool.callCount, 0)
-  const attributedCalls = Math.min(totalCalls, assets.reduce((sum, asset) => sum + asset.callCount, 0))
-  const unattributedCalls = Math.max(0, totalCalls - attributedCalls)
+  const unattributedCalls = data?.meta.unattributedToolCalls ?? 0
+  const attributedCalls = Math.max(0, totalCalls - unattributedCalls)
   const attributionCoverage = totalCalls ? Math.round(attributedCalls / totalCalls * 100) : 0
   const maxCalls = Math.max(1, ...tools.map(tool => tool.callCount))
   const [selectedToolKey, setSelectedToolKey] = useState<string | null>(null)
