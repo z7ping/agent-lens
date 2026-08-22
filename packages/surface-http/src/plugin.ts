@@ -43,14 +43,14 @@ const applyHttpSurface = Object.assign(
             ...(observation.projectId ? { projectId: observation.projectId } : {}),
           } : {}),
           ...(sourceSession ? { sourceId: sourceSession.sourceId } : {}),
-          affected: ['review', 'sessions', 'usage'],
+          affected: ['review', 'sessions', 'usage', 'insights'],
           emittedAt: new Date().toISOString(),
         })
       })().catch(() => {
         eventHub.publish({
           type: 'observation.committed',
           observationId: event.observationId,
-          affected: ['review', 'sessions', 'usage'],
+          affected: ['review', 'sessions', 'usage', 'insights'],
           emittedAt: new Date().toISOString(),
         })
       })
