@@ -10,6 +10,7 @@ import type {
   SourceService,
   StorageService,
 } from '@agent-lens/core'
+import { UsageInsightsProjection } from '@agent-lens/projection-insights'
 import { AgentOverviewProjection, FacetProjection, SessionRelationshipProjection } from '@agent-lens/projection-overview'
 import { ReviewProjection } from '@agent-lens/projection-review'
 import { SessionProjection } from '@agent-lens/projection-session'
@@ -24,6 +25,7 @@ import {
   type BackupSnapshotResponseDto,
   type BackupVerifyResponseDto,
   type HealthResponseDto,
+  type InsightsQueryDto,
   type JsonValue,
   type ReviewDetailDirection,
   type ReviewDetailFilter,
@@ -202,6 +204,20 @@ function parseUsageQuery(params: URLSearchParams): ToolAssetUsageQueryDto {
     ...(from ? { from } : {}),
     ...(to ? { to } : {}),
     ...(limit === undefined ? {} : { limit }),
+  }
+}
+
+function parseInsightsQuery(params: URLSearchParams): InsightsQueryDto {
+  const from = optionalTimestamp(params, 'from')
+  const to = optionalTimestamp(params, 'to')
+  if (from && to && Date.parse(from) > Date.parse(to)) {
+    throw badRequest('Insights from must be earlier than or equal to to')
+  }
+  return {
+    ...(params.get('sourceId') ? { sourceId: params.get('sourceId')! } : {}),
+    ...(params.get('projectId') ? { projectId: params.get('projectId')! } : {}),
+    ...(from ? { from } : {}),
+    ...(to ? { to } : {}),
   }
 }
 
@@ -421,6 +437,7 @@ export async function startHttpSurface(
   const timeline = new TimelineProjection(storage)
   const sessions = new SessionProjection(storage)
   const usage = new ToolAssetUsageProjection(storage)
+  const insights = new UsageInsightsProjection(storage)
   const review = new ReviewProjection(storage)
   const facets = new FacetProjection(storage, options.sources)
   const agents = new AgentOverviewProjection(storage, options.sources, options.capabilities)
@@ -509,6 +526,10 @@ export async function startHttpSurface(
         writeJson(response, 200, await usage.query(parseUsageQuery(url.searchParams)))
         return
       }
+      if (url.pathname === '/api/v1/insights') {
+        writeJson(response, 200, await insights.query(parseInsightsQuery(url.searchParams)))
+        return
+      }
       if (url.pathname.startsWith('/api/')) {
         writeJson(response, 404, { error: 'not_found' })
         return
@@ -582,6 +603,7 @@ export const httpSurfaceInternals = {
   parseTimelineQuery,
   parseSessionQuery,
   parseUsageQuery,
+  parseInsightsQuery,
   parseReviewQuery,
   parseReviewDetailQuery,
   parseBackupCreate,
