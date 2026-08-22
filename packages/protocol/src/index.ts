@@ -1,3 +1,4 @@
+export * from './backup'
 export * from './events'
 export * from './facets'
 export * from './health'
