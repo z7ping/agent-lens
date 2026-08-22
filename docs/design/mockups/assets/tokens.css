@@ -1,3 +1,5 @@
+@import "./typography.css";
+
 /* AgentLens Mock Tokens —— 与 packages/web/src/theme.css 同源的色板 + 对比度修正 */
 :root {
   --al-canvas:#F7F7F5;
@@ -21,9 +23,40 @@
   --al-danger-soft:#FFF0F2;
   --al-shadow:0 1px 2px rgb(22 24 20 / .04),0 10px 28px rgb(22 24 20 / .05);
   --al-shadow-lg:0 22px 70px rgb(22 24 20 / .16);
+
   --font-ui:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
   --font-mono:"SFMono-Regular",Consolas,"Liberation Mono",monospace;
-  --radius-sm:7px;--radius-md:10px;--radius-lg:14px;
+
+  /* 字体基础令牌：正常界面文字不低于 12px。 */
+  --font-size-xs:12px;
+  --font-size-sm:13px;
+  --font-size-md:14px;
+  --font-size-lg:16px;
+  --font-size-xl:18px;
+  --font-size-2xl:22px;
+  --font-size-3xl:26px;
+  --font-size-metric:24px;
+  --font-size-metric-lg:28px;
+
+  /* 语义字体令牌：页面只表达信息层级，不自行发明字号。 */
+  --text-caption:var(--font-size-xs);
+  --text-secondary:var(--font-size-sm);
+  --text-body:var(--font-size-md);
+  --text-control:var(--font-size-sm);
+  --text-card-title:var(--font-size-md);
+  --text-section-title:var(--font-size-lg);
+  --text-page-title:var(--font-size-2xl);
+  --text-hero-title:var(--font-size-3xl);
+  --text-metric:var(--font-size-metric);
+  --text-metric-lg:var(--font-size-metric-lg);
+
+  --line-height-tight:1.25;
+  --line-height-normal:1.55;
+  --line-height-reading:1.7;
+
+  --radius-sm:7px;
+  --radius-md:10px;
+  --radius-lg:14px;
 }
 :root[data-theme='dark'] {
   --al-canvas:#111210;
@@ -54,7 +87,7 @@
 
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
-body{font-family:var(--font-ui);background:var(--al-canvas);color:var(--al-ink);font-size:14px;-webkit-font-smoothing:antialiased;color-scheme:light}
+body{font-family:var(--font-ui);background:var(--al-canvas);color:var(--al-ink);font-size:var(--text-body);line-height:var(--line-height-normal);-webkit-font-smoothing:antialiased;color-scheme:light}
 :root[data-theme='dark'] body{color-scheme:dark}
 button,select,input{font:inherit;color:inherit}
 button{cursor:pointer}
