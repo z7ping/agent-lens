@@ -363,7 +363,7 @@ function MarkdownSurface({ text }: { text: string }) {
   return <div className="markdown-message" data-view={view}>
     <div
       ref={surfaceRef}
-      className={`markdown-surface ${collapsible && !expanded ? 'is-collapsed' : ''}`
+      className={`markdown-surface ${collapsible && !expanded ? 'is-collapsed' : ''}`}
       style={collapsible && !expanded && collapsedHeight ? { maxHeight: `${collapsedHeight}px` } : undefined}
     >
       {view === 'rendered' ? <div className="markdown"><ReactMarkdown>{text}</ReactMarkdown></div> : <pre className="markdown-source">{text}</pre>}

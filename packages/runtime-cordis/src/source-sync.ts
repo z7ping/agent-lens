@@ -7,10 +7,34 @@ import {
   type SourceHistorySyncResult,
   type SourceRuntimeCaptureHandle,
 } from '@agent-lens/core-services/source-runner'
-import type { DetectedSource, Host } from '@agent-lens/core'
+import type { DetectedSource, Host, SourceDefinition } from '@agent-lens/core'
 import type { AgentLensContext } from './context'
 
-async function runtimeHost(ctx: AgentLensContext) {
+export type RegisteredSourceStage = 'detect' | 'history' | 'assets' | 'capture'
+
+export interface RegisteredSourceTarget {
+  source: SourceDefinition
+  host: Host
+  detected: DetectedSource
+}
+
+export interface RegisteredSourceFailure {
+  sourceId: string
+  stage: RegisteredSourceStage
+  error: unknown
+}
+
+export interface RegisteredSourcePreparation {
+  targets: RegisteredSourceTarget[]
+  failures: RegisteredSourceFailure[]
+}
+
+export interface RegisteredSourceStageResult<T> {
+  results: T[]
+  failures: RegisteredSourceFailure[]
+}
+
+async function runtimeHost(ctx: AgentLensContext): Promise<Host> {
   return ctx.identity.resolveHost({
     name: hostname(),
     platform: platform(),
@@ -26,7 +50,7 @@ async function registerDetectedSource(
   ctx: AgentLensContext,
   host: Host,
   detected: DetectedSource,
-): Promise<string> {
+): Promise<void> {
   const installation = await ctx.identity.resolveInstallation({
     hostId: host.id,
     productId: detected.productId,
@@ -36,21 +60,49 @@ async function registerDetectedSource(
     ...(detected.dataRoot ? { dataRoot: detected.dataRoot } : {}),
   })
   emitDetected(ctx, detected.sourceId, installation.id)
-  return installation.id
+}
+
+export async function prepareRegisteredSources(
+  ctx: AgentLensContext,
+  abortSignal: AbortSignal,
+): Promise<RegisteredSourcePreparation> {
+  const host = await runtimeHost(ctx)
+  const batches = await Promise.all(ctx.sources.list().map(async source => {
+    if (abortSignal.aborted) {
+      return { targets: [], failures: [] } satisfies RegisteredSourcePreparation
+    }
+    try {
+      const detected = await source.detect({ host, env: process.env })
+      const targets: RegisteredSourceTarget[] = []
+      for (const item of detected) {
+        if (item.sourceId !== source.manifest.sourceId) {
+          throw new Error(
+            `Source mismatch: definition=${source.manifest.sourceId}, detected=${item.sourceId}`,
+          )
+        }
+        await registerDetectedSource(ctx, host, item)
+        targets.push({ source, host, detected: item })
+      }
+      return { targets, failures: [] } satisfies RegisteredSourcePreparation
+    } catch (error) {
+      return {
+        targets: [],
+        failures: [{ sourceId: source.manifest.sourceId, stage: 'detect', error }],
+      } satisfies RegisteredSourcePreparation
+    }
+  }))
+
+  return {
+    targets: batches.flatMap(batch => batch.targets),
+    failures: batches.flatMap(batch => batch.failures),
+  }
 }
 
 export async function syncRegisteredSourceHistory(
   ctx: AgentLensContext,
   abortSignal: AbortSignal,
-): Promise<SourceHistorySyncResult[]> {
-  const host = await runtimeHost(ctx)
-  const detected = await ctx.sources.detect({
-    host,
-    env: process.env,
-  })
-  const definitions = new Map(
-    ctx.sources.list().map(source => [source.manifest.sourceId, source]),
-  )
+  targets: RegisteredSourceTarget[],
+): Promise<RegisteredSourceStageResult<SourceHistorySyncResult>> {
   const runner = new SourceHistoryRunner(
     ctx.storage,
     ctx.identity,
@@ -59,39 +111,25 @@ export async function syncRegisteredSourceHistory(
     ctx.coverage,
   )
   const results: SourceHistorySyncResult[] = []
+  const failures: RegisteredSourceFailure[] = []
 
-  for (const item of detected) {
+  for (const target of targets) {
     if (abortSignal.aborted) break
-    const source = definitions.get(item.sourceId)
-    if (!source) {
-      throw new Error(`Detected source has no registered definition: ${item.sourceId}`)
+    try {
+      results.push(await runner.sync({ ...target, abortSignal }))
+    } catch (error) {
+      failures.push({ sourceId: target.source.manifest.sourceId, stage: 'history', error })
     }
-    await registerDetectedSource(ctx, host, item)
-    const result = await runner.sync({
-      source,
-      host,
-      detected: item,
-      abortSignal,
-    })
-    results.push(result)
-    emitDetected(ctx, result.sourceId, result.installationId)
   }
 
-  return results
+  return { results, failures }
 }
 
 export async function discoverRegisteredSourceAssets(
   ctx: AgentLensContext,
   abortSignal: AbortSignal,
-): Promise<SourceAssetDiscoveryResult[]> {
-  const host = await runtimeHost(ctx)
-  const detected = await ctx.sources.detect({
-    host,
-    env: process.env,
-  })
-  const definitions = new Map(
-    ctx.sources.list().map(source => [source.manifest.sourceId, source]),
-  )
+  targets: RegisteredSourceTarget[],
+): Promise<RegisteredSourceStageResult<SourceAssetDiscoveryResult>> {
   const runner = new SourceAssetRunner(
     ctx.storage,
     ctx.identity,
@@ -100,40 +138,26 @@ export async function discoverRegisteredSourceAssets(
     ctx.evidence,
   )
   const results: SourceAssetDiscoveryResult[] = []
+  const failures: RegisteredSourceFailure[] = []
 
-  for (const item of detected) {
+  for (const target of targets) {
     if (abortSignal.aborted) break
-    const source = definitions.get(item.sourceId)
-    if (!source) {
-      throw new Error(`Detected source has no registered definition: ${item.sourceId}`)
+    if (!target.source.discoverAssets) continue
+    try {
+      results.push(await runner.scan({ ...target, abortSignal }))
+    } catch (error) {
+      failures.push({ sourceId: target.source.manifest.sourceId, stage: 'assets', error })
     }
-    await registerDetectedSource(ctx, host, item)
-    if (!source.discoverAssets) continue
-    const result = await runner.scan({
-      source,
-      host,
-      detected: item,
-      abortSignal,
-    })
-    results.push(result)
-    emitDetected(ctx, result.sourceId, result.installationId)
   }
 
-  return results
+  return { results, failures }
 }
 
 export async function startRegisteredSourceCapture(
   ctx: AgentLensContext,
   abortSignal: AbortSignal,
-): Promise<SourceRuntimeCaptureHandle[]> {
-  const host = await runtimeHost(ctx)
-  const detected = await ctx.sources.detect({
-    host,
-    env: process.env,
-  })
-  const definitions = new Map(
-    ctx.sources.list().map(source => [source.manifest.sourceId, source]),
-  )
+  targets: RegisteredSourceTarget[],
+): Promise<RegisteredSourceStageResult<SourceRuntimeCaptureHandle>> {
   const runner = new SourceRuntimeRunner(
     ctx.storage,
     ctx.identity,
@@ -141,31 +165,18 @@ export async function startRegisteredSourceCapture(
     ctx.capabilities,
     ctx.coverage,
   )
-  const handles: SourceRuntimeCaptureHandle[] = []
+  const results: SourceRuntimeCaptureHandle[] = []
+  const failures: RegisteredSourceFailure[] = []
 
-  try {
-    for (const item of detected) {
-      if (abortSignal.aborted) break
-      const source = definitions.get(item.sourceId)
-      if (!source) {
-        throw new Error(`Detected source has no registered definition: ${item.sourceId}`)
-      }
-      await registerDetectedSource(ctx, host, item)
-      if (!source.startCapture) continue
-      const handle = await runner.start({
-        source,
-        host,
-        detected: item,
-        abortSignal,
-      })
-      handles.push(handle)
-      emitDetected(ctx, handle.sourceId, handle.installationId)
+  for (const target of targets) {
+    if (abortSignal.aborted) break
+    if (!target.source.startCapture) continue
+    try {
+      results.push(await runner.start({ ...target, abortSignal }))
+    } catch (error) {
+      failures.push({ sourceId: target.source.manifest.sourceId, stage: 'capture', error })
     }
-    return handles
-  } catch (error) {
-    for (const handle of handles.reverse()) {
-      await handle.dispose().catch(() => undefined)
-    }
-    throw error
   }
+
+  return { results, failures }
 }

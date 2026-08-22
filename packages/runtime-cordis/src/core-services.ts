@@ -6,7 +6,6 @@ import {
   DefaultEvidenceService,
   DefaultIdentityService,
   DefaultObservationService,
-  DefaultProjectionService,
   DefaultSourceService,
   DefaultToolService,
 } from '@agent-lens/core-services'
@@ -27,7 +26,6 @@ const applyCoreServices: Plugin.Function<void> = (ctx: AgentLensContext) => {
   const capabilities = new DefaultCapabilityService()
   const assets = new EventingAssetService(new DefaultAssetService(storage), ctx)
   const tools = new DefaultToolService(storage)
-  const projections = new DefaultProjectionService()
 
   ctx.provide('sources', sources)
   ctx.provide('identity', identity)
@@ -37,7 +35,6 @@ const applyCoreServices: Plugin.Function<void> = (ctx: AgentLensContext) => {
   ctx.provide('capabilities', capabilities)
   ctx.provide('assets', assets)
   ctx.provide('tools', tools)
-  ctx.provide('projections', projections)
 }
 
 applyCoreServices.inject = ['storage']

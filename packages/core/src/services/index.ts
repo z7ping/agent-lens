@@ -25,6 +25,7 @@ import type {
   EvidenceId,
   HostId,
   InteractionId,
+  JsonValue,
   LogicalSessionId,
   ObservationId,
   ProjectId,
@@ -104,6 +105,7 @@ export interface ObservationCursor {
 export interface ObservationQuery {
   installationId?: AgentInstallationId
   logicalSessionId?: LogicalSessionId
+  logicalSessionIds?: LogicalSessionId[]
   kind?: CanonicalObservation['kind']
   from?: string
   to?: string
@@ -158,6 +160,32 @@ export interface AssetInventoryEntry {
 /** Read-only storage contract used by projections and surfaces. */
 export interface AssetInventoryReader {
   listByInstallation(installationId: AgentInstallationId): Promise<AssetInventoryEntry[]>
+}
+
+export interface SessionSummaryRecord {
+  logicalSessionId: LogicalSessionId
+  installationId: AgentInstallationId
+  productId: AgentProductId
+  sourceIds: string[]
+  projectId?: ProjectId
+  projectName?: string
+  workspaceId?: WorkspaceId
+  workspacePath?: string
+  title?: string
+  firstUserPayload?: JsonValue
+  startedAt: string
+  endedAt: string
+  observationCount: number
+  interactionCount: number
+  toolCount: number
+  errorCount: number
+}
+
+export interface SessionSummaryReader {
+  query(input: {
+    limit: number
+    installationId?: AgentInstallationId
+  }): Promise<{ items: SessionSummaryRecord[]; hasMore: boolean }>
 }
 
 export interface ToolService {
@@ -291,6 +319,7 @@ export interface StorageService {
   readonly repositories: RepositorySet
   readonly checkpoints: CheckpointRepository
   readonly assetInventory?: AssetInventoryReader
+  readonly sessionSummaries?: SessionSummaryReader
   transaction<T>(fn: (tx: StorageTransaction) => Promise<T>): Promise<T>
   migrate(): Promise<void>
   health(): Promise<StorageHealth>

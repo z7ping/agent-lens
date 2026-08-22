@@ -46,6 +46,11 @@ function reverseQuery(executor: SqliteExecutor, query: ObservationQuery): Promis
       conditions.push('logical_session_id = ?')
       params.push(query.logicalSessionId)
     }
+    if (query.logicalSessionIds?.length) {
+      const placeholders = query.logicalSessionIds.map(() => '?').join(', ')
+      conditions.push(`logical_session_id IN (${placeholders})`)
+      params.push(...query.logicalSessionIds)
+    }
     if (query.kind) {
       conditions.push('kind = ?')
       params.push(query.kind)

@@ -114,3 +114,51 @@ test('ReviewProjection omits preview when the first user message has no displaya
     storage.close()
   }
 })
+
+test('ReviewProjection summary list uses the optimized session summary reader', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    const identity = new DefaultIdentityService(storage)
+    const observations = new DefaultObservationService(storage, identity)
+    const host = await identity.resolveHost({ name: 'review-batch-host' })
+    const installation = await identity.resolveInstallation({ hostId: host.id, productId: 'codex' })
+    for (let index = 0; index < 3; index += 1) {
+      const at = `2026-08-21T03:00:0${index}.000Z`
+      await observations.commit({
+        sourceId: 'codex',
+        host,
+        installation,
+        candidate: {
+          kind: 'message.user',
+          nativeEventId: `batch-user-${index}`,
+          occurredAt: at,
+          capturedAt: at,
+          payload: { text: `任务 ${index}` },
+          identityHints: { nativeSessionId: `batch-session-${index}` },
+          dedupHints: { nativeEventId: `batch-user-${index}` },
+        },
+        evidenceCandidates: [],
+      })
+    }
+
+    const originalQuery = storage.repositories.observations.query.bind(
+      storage.repositories.observations,
+    )
+    let perSessionQueries = 0
+    let batchedQueries = 0
+    storage.repositories.observations.query = async query => {
+      if (query.logicalSessionId) perSessionQueries += 1
+      if (query.logicalSessionIds?.length) batchedQueries += 1
+      return originalQuery(query)
+    }
+
+    const response = await new ReviewProjection(storage).query()
+
+    assert.equal(response.items.length, 3)
+    assert.equal(perSessionQueries, 0)
+    assert.equal(batchedQueries, 0)
+  } finally {
+    storage.close()
+  }
+})

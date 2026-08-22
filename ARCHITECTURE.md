@@ -60,7 +60,9 @@ SQLite 1.0 repositories
   |
   +--> TimelineProjection
   +--> SessionProjection
+  +--> ReviewProjection
   +--> ToolAssetUsageProjection
+  +--> Facet / Agent / Relationship Projection
   |
   v
 @agent-lens/protocol DTOs
@@ -108,7 +110,6 @@ AgentLensApplication
 apps/
   daemon/           组合根（composition root）
   cli/              start/status/doctor/hook 命令
-  web/              浏览器 UI
   desktop/          Electron Windows 桌面壳
   hook-codex/       被动式 Codex Hook 进程
   hook-claude/      被动式 Claude Code Hook 进程
@@ -124,9 +125,12 @@ packages/
   source-pi/        Pi 纯解析能力 + Cordis Source Plugin 入口
   projection-timeline/
   projection-session/
+  projection-review/
   projection-usage/
+  projection-overview/
   surface-http/     HTTP 能力 + Cordis Surface Plugin 入口
   hook-manager/
+  web/              Vite + React 浏览器 UI
 ```
 
 ## 6. Source 模型
@@ -145,6 +149,8 @@ detect
 Source package 的运行时入口直接是 Cordis Plugin，典型职责只是把自身 `SourceDefinition` 注册进 `ctx.sources`。Parser、Normalizer、History Reader、Asset Scanner 等实现应尽量保持纯 TypeScript / Core Contract，可脱离 Cordis 单独测试。
 
 Runtime Runner 必须保持通用，不得出现 Codex / Claude / Pi 专用分支。
+
+Daemon 启动时只执行一次来源探测并复用探测结果。实时采集优先启动，History Ingestion 与 Asset Discovery 随后并行执行；单个 Source 在探测、历史、资产或实时采集阶段失败时记录该来源错误，但不得阻止其他 Source 与 HTTP Surface 继续运行。
 
 ### 6.1 Codex
 
@@ -265,9 +271,13 @@ Schema 通过 Core Repository 接口访问。业务功能不得绕过 Repository
 
 SQLite Repository 实现本身保持 Cordis-independent；`storage-sqlite` 的插件入口使用 Cordis 生命周期创建、提供并释放 `ctx.storage`。
 
+Storage 可以暴露只读的 Projection 优化 Reader。当前 SQLite 提供会话摘要聚合 Reader，避免任务列表为每个会话重复加载全部 Observation；它不保存第二份事实，结果仍完全由 Canonical 表重建。
+
 ## 12. Projections
 
 Projection 是派生读模型，不是第二份事实来源。
+
+当前 Projection 都是按请求从 Canonical Repository 重建的只读计算，不注册到 Cordis Context，也没有伪造的 rebuild 生命周期。Core 中的 `ProjectionService` 仅为未来真正引入可物化、可失效的 Projection Cache 保留；在出现实际缓存前，不作为运行时服务提供。
 
 ### TimelineProjection
 
@@ -296,6 +306,11 @@ Tool Usage 直接从 `tool.call` / `tool.result` Observation 派生。
 
 ```text
 GET /api/v1/health
+GET /api/v1/facets
+GET /api/v1/agents
+GET /api/v1/review
+GET /api/v1/review/:logicalSessionId
+GET /api/v1/relationships
 GET /api/v1/timeline
 GET /api/v1/sessions
 GET /api/v1/usage
@@ -318,13 +333,13 @@ HTTP 层把该事件转换为 SSE。Web Client 对 Timeline 使用增量 DOM 协
 
 ## 15. Web
 
-1.0 Web 使用 Vite + 原生 TypeScript。
+1.0 Web 使用 Vite + React + TypeScript。
 
 当前视图：
 
-- Timeline
-- Sessions / Interactions
-- Tools & Assets
+- 执行轨迹
+- 会话
+- 工具与能力
 
 Web 仅消费 `/api/v1/*` 的 Protocol DTO。
 

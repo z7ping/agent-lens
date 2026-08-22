@@ -400,6 +400,8 @@ Storage 还提供带作用域的 Checkpoint 与 Transaction。
 
 SQLite 只是该 Contract 的一种实现。
 
+Storage 可以提供只读的 Projection 优化能力，例如按会话聚合规范 Observation 的 `SessionSummaryReader`。这类能力只能返回可由 Canonical Repository 重建的结果，不得成为新的写入路径；缺少优化能力时 Projection 必须仍可从基础 Repository 正确重建。
+
 ## 19. Projection Contract
 
 Projection Output 必须能够从 Canonical Data 重建。
@@ -409,12 +411,18 @@ Projection Output 必须能够从 Canonical Data 重建。
 ```text
 TimelineProjection
 SessionProjection
+ReviewProjection
 ToolAssetUsageProjection
+FacetProjection
+AgentOverviewProjection
+SessionRelationshipProjection
 ```
 
 任何 Projection 都不得成为第二条 Canonical Write Path。
 
 未来允许增加 Projection Cache / Materialization，但前提是 Rebuild / Invalidation 语义仍然明确。
+
+当前 Projection 按请求直接读取 Canonical Repository，不提供无实际物化行为的 Runtime 注册项。`ProjectionService` 只在未来确实存在可重建、可失效的物化读模型时进入 Cordis Context。
 
 ## 20. Protocol 边界
 
