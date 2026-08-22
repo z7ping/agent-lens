@@ -53,7 +53,7 @@ export function ReviewTurnRail({ detail }: { detail: ReviewSessionDetailDto }) {
   }
 
   if (detail.interactions.length < 2) return null
-  return <nav className="turn-rail" aria-label="轮次导航">
+  return <nav className="turn-rail" style={{ position: 'fixed', left: '324px', top: '110px', bottom: '44px' }} aria-label="轮次导航">
     {detail.interactions.map((interaction, index) => <button
       key={interaction.id}
       className={`turn-tick ${activeIndex === index ? 'active' : ''} ${hasError(detail, index) ? 'err' : ''}`}
