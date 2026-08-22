@@ -1,5 +1,6 @@
-import type { Confidence } from '@agent-lens/core'
 import { AGENT_LENS_PROTOCOL_VERSION } from './timeline'
+
+export type InsightConfidenceDto = 'exact' | 'high' | 'medium' | 'low' | 'unknown'
 
 export interface InsightsQueryDto {
   sourceId?: string
@@ -34,7 +35,7 @@ export interface InsightAssetUsageDto {
   firstUsedAt: string
   lastUsedAt: string
   attribution: 'derived'
-  confidence: Confidence
+  confidence: InsightConfidenceDto
   observationIds: string[]
 }
 
