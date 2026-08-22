@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react'
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
 import { AgentScope } from '../components/AgentScope'
@@ -8,9 +9,14 @@ function duration(ms: number): string {
   return `${(ms / 60_000).toFixed(1)} 分钟`
 }
 
+function rateValue(success: number, error: number): number {
+  const total = success + error
+  return total ? Math.round(success / total * 100) : 0
+}
+
 function rate(success: number, error: number): string {
   const total = success + error
-  return total ? `${Math.round(success / total * 100)}%` : '—'
+  return total ? `${rateValue(success, error)}%` : '—'
 }
 
 function assetTypeLabel(type: string): string {
@@ -19,16 +25,29 @@ function assetTypeLabel(type: string): string {
   return '其他'
 }
 
+function toolKey(sourceIds: string[], nativeToolName: string): string {
+  return `${sourceIds.join('\u0000')}:${nativeToolName}`
+}
+
 export function ToolsPage({ model }: { model: AgentLensClientModel }) {
   const snapshot = useClientSnapshot(model)
   const usage = snapshot.usage
   const data = usage.response
   const agents = snapshot.facets?.agents ?? []
   const projects = snapshot.facets?.projects ?? []
-  const mostUsed = data?.tools[0]
-  const errorCandidate = [...(data?.tools ?? [])].sort((a, b) => b.errorCount - a.errorCount)[0]
+  const tools = data?.tools ?? []
+  const assets = data?.assets ?? []
+  const mostUsed = [...tools].sort((a, b) => b.callCount - a.callCount)[0]
+  const errorCandidate = [...tools].sort((a, b) => b.errorCount - a.errorCount)[0]
   const mostErrors = errorCandidate?.errorCount ? errorCandidate : undefined
-  const slowest = [...(data?.tools ?? [])].sort((a, b) => b.averageDurationMs - a.averageDurationMs)[0]
+  const slowest = [...tools].sort((a, b) => b.averageDurationMs - a.averageDurationMs)[0]
+  const totalCalls = tools.reduce((sum, tool) => sum + tool.callCount, 0)
+  const attributedCalls = Math.min(totalCalls, assets.reduce((sum, asset) => sum + asset.callCount, 0))
+  const unattributedCalls = Math.max(0, totalCalls - attributedCalls)
+  const attributionCoverage = totalCalls ? Math.round(attributedCalls / totalCalls * 100) : 0
+  const maxCalls = Math.max(1, ...tools.map(tool => tool.callCount))
+  const [selectedToolKey, setSelectedToolKey] = useState<string | null>(null)
+  const selectedTool = useMemo(() => tools.find(tool => toolKey(tool.sourceIds, tool.nativeToolName) === selectedToolKey), [selectedToolKey, tools])
 
   return <main className="workspace-page">
     <div className="workspace-toolbar">
@@ -40,32 +59,61 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
     </div>
 
     <div className="page-content tools-content">
-      <header className="page-heading"><div><span className="eyebrow">使用情况</span><h1>工具分析</h1><p>只展示可验证的调用事实：用了什么、失败多少、耗时如何。</p></div></header>
+      <header className="page-heading"><div><span className="eyebrow">使用情况</span><h1>工具分析</h1><p>只展示可验证的调用事实：用了什么、失败多少、耗时如何，以及有多少调用能够可靠归因到具体能力资产。</p></div></header>
 
       <section className="tool-summary-grid">
         <div className="tool-summary-card"><span>最高频</span><strong>{mostUsed?.nativeToolName ?? '—'}</strong><small>{mostUsed ? `${mostUsed.callCount} 次调用 · ${mostUsed.sessionCount} 个会话` : '暂无数据'}</small></div>
         <div className="tool-summary-card"><span>失败最多</span><strong className={mostErrors ? 'is-danger' : ''}>{mostErrors?.nativeToolName ?? '—'}</strong><small>{mostErrors ? `${mostErrors.errorCount} 次失败` : '当前范围无已知失败'}</small></div>
         <div className="tool-summary-card"><span>平均最慢</span><strong>{slowest?.nativeToolName ?? '—'}</strong><small>{slowest ? `${duration(slowest.averageDurationMs)} / 次` : '暂无数据'}</small></div>
+        <div className="tool-summary-card" title="只统计有明确证据能够归因到技能或 MCP（模型上下文协议）的调用；普通命令、读取等不会被强行归因。"><span>归因覆盖</span><strong>{totalCalls ? `${attributionCoverage}%` : '—'}</strong><small>{totalCalls ? `未归因工具调用 ${unattributedCalls} 次` : '暂无调用数据'}</small></div>
       </section>
 
       <section className="tool-table-card">
-        <div className="table-section-head"><div><h2>工具调用</h2><p>{data?.tools.length ?? 0} 个工具</p></div></div>
+        <div className="table-section-head"><div><h2>工具调用</h2><p>{tools.length} 个工具 · 点击一行查看详情</p></div></div>
         <div className="table-scroll">
           <table className="tool-table">
             <thead><tr><th>工具</th><th>调用</th><th>会话</th><th>成功率</th><th>失败</th><th>总耗时</th><th>平均耗时</th></tr></thead>
-            <tbody>{data?.tools.map(tool => <tr key={`${tool.sourceIds.join('-')}:${tool.nativeToolName}`}>
-              <td><b className="tool-name">{tool.nativeToolName}</b><span className="tool-source">{tool.sourceIds.join(' / ')}</span></td>
-              <td>{tool.callCount}</td><td>{tool.sessionCount}</td><td>{rate(tool.successCount, tool.errorCount)}</td><td className={tool.errorCount ? 'cell-danger' : 'cell-muted'}>{tool.errorCount}</td><td>{duration(tool.totalDurationMs)}</td><td>{duration(tool.averageDurationMs)}</td>
-            </tr>)}</tbody>
+            <tbody>{tools.map(tool => {
+              const successRate = rateValue(tool.successCount, tool.errorCount)
+              const key = toolKey(tool.sourceIds, tool.nativeToolName)
+              return <tr key={key} tabIndex={0} onClick={() => setSelectedToolKey(key)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedToolKey(key) } }}>
+                <td><b className="tool-name">{tool.nativeToolName}</b><span className="tool-source">{tool.sourceIds.join(' / ')}</span></td>
+                <td><span className="tool-bar-cell"><span>{tool.callCount}</span><span className="metric-bar" aria-hidden="true"><i style={{ width: `${Math.max(4, tool.callCount / maxCalls * 100)}%` }}/></span></span></td>
+                <td>{tool.sessionCount}</td>
+                <td><span className="tool-rate-cell" data-rate={successRate >= 95 ? 'good' : successRate >= 80 ? 'mid' : 'low'}><span>{rate(tool.successCount, tool.errorCount)}</span><span className="metric-bar" aria-hidden="true"><i style={{ width: `${successRate}%` }}/></span></span></td>
+                <td className={tool.errorCount ? 'cell-danger' : 'cell-muted'}>{tool.errorCount}</td><td>{duration(tool.totalDurationMs)}</td><td>{duration(tool.averageDurationMs)}</td>
+              </tr>
+            })}</tbody>
           </table>
-          {!data?.tools.length && <div className="empty-state roomy">当前筛选范围没有工具调用</div>}
+          {!tools.length && <div className="empty-state roomy">当前筛选范围没有工具调用</div>}
         </div>
       </section>
 
-      {data?.assets.length ? <section className="attributed-assets">
+      {assets.length ? <section className="attributed-assets">
         <div className="section-heading-row"><div><h3>可归因能力资产</h3><p>有证据能够关联到具体技能和 MCP（模型上下文协议）的真实调用</p></div></div>
-        <div className="attributed-asset-list">{data.assets.map(asset => <div key={`${asset.type}:${asset.canonicalName}`} className="attributed-asset"><b>{asset.canonicalName}</b><span>{assetTypeLabel(asset.type)}</span><strong>{asset.callCount}</strong><small>次</small></div>)}</div>
+        <div className="attributed-asset-list">{assets.map(asset => <div key={`${asset.type}:${asset.canonicalName}`} className="attributed-asset"><b>{asset.canonicalName}</b><span>{assetTypeLabel(asset.type)}</span><strong>{asset.callCount}</strong><small>次</small></div>)}</div>
       </section> : null}
     </div>
+
+    {selectedTool && <>
+      <button className="tool-drawer-scrim" onClick={() => setSelectedToolKey(null)} aria-label="关闭工具详情" />
+      <aside className="tool-drill-drawer" aria-label="工具详情">
+        <header className="tool-drill-head">
+          <div><span className="eyebrow">工具详情</span><h2>{selectedTool.nativeToolName}</h2><span className="tool-source">{selectedTool.sourceIds.join(' / ')}</span></div>
+          <button className="icon-button" onClick={() => setSelectedToolKey(null)} aria-label="关闭工具详情">×</button>
+        </header>
+        <div className="tool-drill-body">
+          <div className="tool-drill-grid">
+            <div className="tool-drill-stat"><b>{selectedTool.callCount}</b><span>调用次数</span></div>
+            <div className="tool-drill-stat"><b>{selectedTool.sessionCount}</b><span>涉及会话</span></div>
+            <div className="tool-drill-stat"><b>{rate(selectedTool.successCount, selectedTool.errorCount)}</b><span>成功率</span></div>
+            <div className="tool-drill-stat"><b className={selectedTool.errorCount ? 'cell-danger' : ''}>{selectedTool.errorCount}</b><span>失败次数</span></div>
+            <div className="tool-drill-stat"><b>{duration(selectedTool.totalDurationMs)}</b><span>总耗时</span></div>
+            <div className="tool-drill-stat"><b>{duration(selectedTool.averageDurationMs)}</b><span>平均耗时</span></div>
+          </div>
+          <div className="tool-drill-note">当前工具分析接口提供聚合事实，不虚构逐次错误或会话分布。具体调用过程、输入输出和证据可在“任务复盘”中定位对应会话查看。</div>
+        </div>
+      </aside>
+    </>}
   </main>
 }
