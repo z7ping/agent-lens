@@ -23,6 +23,20 @@
   margin-top: 0;
 }
 
+/* 桌面端固定任务复盘工作区高度，让会话列表与详情各自承担滚动。 */
+@media (min-width: 901px) {
+  .app-shell:has(.review-page) {
+    height: 100vh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .review-page {
+    height: auto;
+    min-height: 0;
+  }
+}
+
 @media (max-width: 1100px) {
   .review-page .search-filter {
     width: 160px;
