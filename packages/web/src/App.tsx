@@ -115,8 +115,8 @@ function Shell({ model }: { model: AgentLensClientModel }) {
       </Routes>
       {onReview && <ReviewStateOverlay model={model} snapshot={snapshot}/>} 
       {onAgents && <AgentsStateOverlay model={model} snapshot={snapshot}/>} 
-      {onTools && snapshot.usage.hasNewData && <BackgroundDataNotice label="工具分析" loading={snapshot.usage.loading} hasSseBanner={hasSseBanner} onRefresh={() => void model.refreshUsage()}/>} 
-      {onAgents && snapshot.agentsHasNewData && <BackgroundDataNotice label="智能体概览" loading={false} hasSseBanner={hasSseBanner} onRefresh={() => void model.refreshFacetsAndAgents()}/>} 
+      {onTools && snapshot.usage.hasNewData && <BackgroundDataNotice label="工具分析" hasSseBanner={hasSseBanner} onRefresh={() => model.refreshUsage()}/>} 
+      {onAgents && snapshot.agentsHasNewData && <BackgroundDataNotice label="智能体概览" hasSseBanner={hasSseBanner} onRefresh={() => model.refreshFacetsAndAgents()}/>} 
       {showTurnRail && <ReviewTurnRail detail={snapshot.review.detail!}/>} 
     </div>
   </PinnedProvider>
