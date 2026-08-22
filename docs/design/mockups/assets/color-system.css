@@ -1,0 +1,39 @@
+/*
+ * AgentLens 原型配色收口层。
+ *
+ * 原则：
+ * - 所有正文/辅助文字只使用文本语义令牌；
+ * - 所有实色语义背景必须使用对应的 --al-on-* 前景色；
+ * - 暗色主题不再默认“实色背景一定配白字”。
+ */
+
+/* 强调色实底 */
+:root body .brand-mark,
+:root body .btn.primary,
+:root body .btn.primary:hover,
+:root body .live-pill,
+:root body .round-nav-live {
+  color:var(--al-on-accent)!important;
+}
+
+/* 成功色实底 */
+:root body .heat.used,
+:root body .matrix-cell[data-status='used'],
+:root body .step.done .no {
+  color:var(--al-on-success)!important;
+}
+
+/* 让实时状态点跟随当前前景，而不是固定白色。 */
+:root body .live-pill i {
+  background:currentColor;
+}
+
+/* 小字号警告文本必须使用修正后的 warning token。 */
+:root body .badge.warn,
+:root body .prototype-flag,
+:root body .status-pill-warn,
+:root body .sse-banner,
+:root body .step.pending .no,
+:root body .evidence-inline[data-confidence='medium'] {
+  color:var(--al-warning);
+}
