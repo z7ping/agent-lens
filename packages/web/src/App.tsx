@@ -4,6 +4,7 @@ import type { AgentFacetDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel, ClientSnapshot } from './client/model'
 import { readPinnedAgents, readTheme, writePinnedAgents, writeTheme } from './client/preferences'
 import { AgentsStateOverlay } from './components/AgentsStateOverlay'
+import { BackgroundDataNotice } from './components/BackgroundDataNotice'
 import { ReviewStateOverlay } from './components/ReviewStateOverlay'
 import { ReviewTurnRail } from './components/ReviewTurnRail'
 import { AgentsPage } from './features/AgentsPage'
@@ -65,8 +66,11 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const healthLabel = snapshot.health?.status === 'ok' ? '运行正常' : snapshot.health ? '运行降级' : '连接中'
   const liveLabel = snapshot.liveConnected ? '实时已连接' : '实时未连接'
   const onReview = location.pathname.startsWith('/review')
+  const onTools = location.pathname.startsWith('/tools')
   const onAgents = location.pathname.startsWith('/agents')
+  const hasSseBanner = Boolean(snapshot.health && !snapshot.liveConnected)
   const showTurnRail = onReview && snapshot.review.detail
+  const navigationHasNewData = (to: string) => to === '/tools' ? snapshot.usage.hasNewData : to === '/agents' ? snapshot.agentsHasNewData : false
 
   return <PinnedProvider agents={agents}>
     <div className="app-shell">
@@ -77,7 +81,12 @@ function Shell({ model }: { model: AgentLensClientModel }) {
             <span className="brand-name">AgentLens</span>
           </div>
           <nav className="app-nav" aria-label="主导航">
-            {navigation.map(([to, label]) => <NavLink key={to} to={to} className={({ isActive }) => `nav-item ${isActive ? 'nav-item-active' : ''}`}>{label}</NavLink>)}
+            {navigation.map(([to, label]) => {
+              const hasNewData = navigationHasNewData(to)
+              return <NavLink key={to} to={to} aria-label={hasNewData ? `${label}，有新数据` : label} className={({ isActive }) => `nav-item ${isActive ? 'nav-item-active' : ''}`}>
+                <span>{label}</span>{hasNewData && <span className="nav-new-dot" title="有新数据" aria-hidden="true"/>}
+              </NavLink>
+            })}
           </nav>
           <div className="app-status">
             <span className={`status-pill ${snapshot.health?.status === 'ok' ? 'status-pill-online' : snapshot.health ? 'status-pill-warn' : ''}`} title="AgentLens 后台服务状态">
@@ -92,7 +101,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
           </div>
         </div>
       </header>
-      {snapshot.health && !snapshot.liveConnected && <div className="sse-banner" role="status">
+      {hasSseBanner && <div className="sse-banner" role="status">
         <span className="live-dot live-dot-waiting" />
         <span>实时通道已断开</span>
         <small>页面保留当前内容；重新连接后会继续接收新数据。</small>
@@ -106,6 +115,8 @@ function Shell({ model }: { model: AgentLensClientModel }) {
       </Routes>
       {onReview && <ReviewStateOverlay model={model} snapshot={snapshot}/>} 
       {onAgents && <AgentsStateOverlay model={model} snapshot={snapshot}/>} 
+      {onTools && snapshot.usage.hasNewData && <BackgroundDataNotice label="工具分析" loading={snapshot.usage.loading} hasSseBanner={hasSseBanner} onRefresh={() => void model.refreshUsage()}/>} 
+      {onAgents && snapshot.agentsHasNewData && <BackgroundDataNotice label="智能体概览" loading={false} hasSseBanner={hasSseBanner} onRefresh={() => void model.refreshFacetsAndAgents()}/>} 
       {showTurnRail && <ReviewTurnRail detail={snapshot.review.detail!}/>} 
     </div>
   </PinnedProvider>
