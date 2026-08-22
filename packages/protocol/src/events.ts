@@ -1,4 +1,4 @@
-export type LiveUpdateArea = 'review' | 'sessions' | 'usage' | 'agents'
+export type LiveUpdateArea = 'review' | 'sessions' | 'usage' | 'agents' | 'insights'
 
 export interface ObservationCommittedEventDto {
   type: 'observation.committed'
