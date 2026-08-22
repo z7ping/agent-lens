@@ -1,0 +1,225 @@
+/*
+ * AgentLens 1.0 最终配色收口层。
+ *
+ * 本文件必须最后加载，职责只有两类：
+ * 1. 强制正式 Web 使用与高保真原型一致的语义配色；
+ * 2. 清理历史 Tailwind / HEX 规则留下的前景色与背景色错配。
+ */
+
+:root {
+  /* 工具语义色：与高保真原型一致。 */
+  --al-tool-shell-fg:#B45309;--al-tool-shell-bg:#FFF4E0;--al-tool-shell-line:#F0DCBE;
+  --al-tool-read-fg:#2563EB;--al-tool-read-bg:#EAF1FE;--al-tool-read-line:#D4E2FB;
+  --al-tool-edit-fg:#157A55;--al-tool-edit-bg:#E9F6EF;--al-tool-edit-line:#CDEADD;
+  --al-tool-search-fg:#0E7490;--al-tool-search-bg:#E5F6FA;--al-tool-search-line:#C8E9F1;
+  --al-tool-mcp-fg:#5B5BD6;--al-tool-mcp-bg:#EEEEFF;--al-tool-mcp-line:#DCDCFA;
+  --al-tool-web-fg:#0F766E;--al-tool-web-bg:#E6F5F3;--al-tool-web-line:#CBE9E4;
+}
+
+:root[data-theme='dark'] {
+  --al-tool-shell-fg:#F5C36B;--al-tool-shell-bg:#352A16;--al-tool-shell-line:#4A3B1D;
+  --al-tool-read-fg:#8FB3FF;--al-tool-read-bg:#1C2A49;--al-tool-read-line:#2C3D63;
+  --al-tool-edit-fg:#5BC995;--al-tool-edit-bg:#173328;--al-tool-edit-line:#24503B;
+  --al-tool-search-fg:#67D4E8;--al-tool-search-bg:#12333A;--al-tool-search-line:#1E4A54;
+  --al-tool-mcp-fg:#9B96FF;--al-tool-mcp-bg:#29284B;--al-tool-mcp-line:#3B3A6B;
+  --al-tool-web-fg:#5FD4C4;--al-tool-web-bg:#143430;--al-tool-web-line:#20504A;
+}
+
+body{color:var(--al-text-primary)}
+
+/* ── 实色背景必须使用 on-color ─────────────────────────────── */
+.brand-mark,
+.btn.primary,
+.btn.primary:hover,
+.round-nav-live,
+.live-pill{
+  color:var(--al-on-accent)!important;
+}
+
+.matrix-cell[data-status='used'],
+.heat.used,
+.step.done .no{
+  color:var(--al-on-success)!important;
+}
+
+.live-pill i{background:currentColor!important}
+
+/* ── 用户气泡：修复“浅紫背景 + 残留白字” ───────────────────── */
+.chat-bubble-user,
+:root[data-theme='dark'] .chat-bubble-user{
+  border-color:color-mix(in srgb,var(--al-accent) 18%,var(--al-line))!important;
+  background:var(--al-accent-soft)!important;
+  color:var(--al-text-primary)!important;
+}
+
+.chat-bubble-user .chat-meta,
+.chat-bubble-user .chat-meta time,
+.chat-bubble-user .evidence-inline,
+.chat-bubble-user .evidence-inline-more,
+:root[data-theme='dark'] .chat-bubble-user .chat-meta,
+:root[data-theme='dark'] .chat-bubble-user .chat-meta time,
+:root[data-theme='dark'] .chat-bubble-user .evidence-inline,
+:root[data-theme='dark'] .chat-bubble-user .evidence-inline-more{
+  color:var(--al-text-muted)!important;
+}
+
+.chat-bubble-user .markdown,
+.chat-bubble-user .markdown p,
+.chat-bubble-user .markdown li,
+.chat-bubble-user .markdown strong,
+.chat-bubble-user .markdown em,
+:root[data-theme='dark'] .chat-bubble-user .markdown,
+:root[data-theme='dark'] .chat-bubble-user .markdown p,
+:root[data-theme='dark'] .chat-bubble-user .markdown li,
+:root[data-theme='dark'] .chat-bubble-user .markdown strong,
+:root[data-theme='dark'] .chat-bubble-user .markdown em{
+  color:var(--al-text-primary)!important;
+}
+
+.chat-bubble-user .markdown :not(pre)>code,
+:root[data-theme='dark'] .chat-bubble-user .markdown :not(pre)>code{
+  background:color-mix(in srgb,var(--al-accent) 10%,var(--al-surface))!important;
+  color:var(--al-text-secondary)!important;
+}
+
+.chat-bubble-user .markdown a,
+:root[data-theme='dark'] .chat-bubble-user .markdown a{
+  color:var(--al-accent)!important;
+  text-decoration-color:color-mix(in srgb,var(--al-accent) 55%,transparent)!important;
+}
+
+.chat-bubble-user .markdown pre,
+.chat-bubble-user .markdown-source,
+:root[data-theme='dark'] .chat-bubble-user .markdown pre,
+:root[data-theme='dark'] .chat-bubble-user .markdown-source{
+  border-color:var(--al-line)!important;
+  background:var(--al-soft-2)!important;
+  color:var(--al-text-secondary)!important;
+}
+
+.chat-bubble-user .markdown-fade,
+:root[data-theme='dark'] .chat-bubble-user .markdown-fade{
+  background:linear-gradient(to bottom,transparent,var(--al-accent-soft))!important;
+}
+
+.chat-bubble-user .markdown-message-actions,
+:root[data-theme='dark'] .chat-bubble-user .markdown-message-actions{
+  border-color:color-mix(in srgb,var(--al-accent) 16%,var(--al-line))!important;
+}
+
+.chat-bubble-user .chat-actions button,
+.chat-bubble-user .markdown-message-actions button,
+:root[data-theme='dark'] .chat-bubble-user .chat-actions button,
+:root[data-theme='dark'] .chat-bubble-user .markdown-message-actions button{
+  border-color:var(--al-line)!important;
+  background:var(--al-surface)!important;
+  color:var(--al-text-muted)!important;
+}
+
+.chat-bubble-user .chat-actions button:hover,
+.chat-bubble-user .markdown-message-actions button:hover{
+  background:var(--al-soft)!important;
+  color:var(--al-text-secondary)!important;
+}
+
+/* Agent 气泡保持阅读表面，不在暗色主题中偷偷切成蓝黑。 */
+.chat-bubble-agent,
+:root[data-theme='dark'] .chat-bubble-agent{
+  border-color:var(--al-line)!important;
+  background:var(--al-surface)!important;
+  color:var(--al-text-secondary)!important;
+}
+
+.chat-row-agent .chat-meta::before,
+:root[data-theme='dark'] .chat-row-agent .chat-meta::before{
+  border-color:color-mix(in srgb,var(--al-accent) 24%,var(--al-line))!important;
+  background:var(--al-accent-soft)!important;
+  color:var(--al-accent)!important;
+}
+
+/* ── 思考块：取消写死紫色背景，回归原型中性层级 ─────────────── */
+.thinking-block,
+:root[data-theme='dark'] .thinking-block{
+  border-color:var(--al-line)!important;
+  background:transparent!important;
+  color:var(--al-text-muted)!important;
+}
+
+.thinking-block>summary::before,
+:root[data-theme='dark'] .thinking-block>summary::before{
+  border-color:var(--al-line)!important;
+  background:var(--al-soft)!important;
+  color:var(--al-text-secondary)!important;
+}
+
+.thinking-label,
+:root[data-theme='dark'] .thinking-label,
+.thinking-content,
+:root[data-theme='dark'] .thinking-content{
+  color:var(--al-text-secondary)!important;
+}
+
+.thinking-block>summary:hover{
+  background:var(--al-soft-2)!important;
+}
+
+/* ── 工具执行块：表面保持中性，工具类型只在小图标上着色 ───── */
+.execution-group,
+:root[data-theme='dark'] .execution-group{
+  border-color:var(--al-line)!important;
+  background:var(--al-surface)!important;
+}
+
+.execution-group>summary,
+:root[data-theme='dark'] .execution-group>summary{
+  border-color:var(--al-line)!important;
+  background:var(--al-surface)!important;
+}
+
+.execution-group>summary:hover{
+  background:var(--al-soft-2)!important;
+}
+
+.execution-group-icon,
+:root[data-theme='dark'] .execution-group-icon{
+  border-color:var(--al-line)!important;
+  background:var(--al-soft)!important;
+  color:var(--al-text-secondary)!important;
+}
+
+.execution-row[data-kind='shell']{--tool-accent:var(--al-tool-shell-fg)}
+.execution-row[data-kind='read']{--tool-accent:var(--al-tool-read-fg)}
+.execution-row[data-kind='edit']{--tool-accent:var(--al-tool-edit-fg)}
+.execution-row[data-kind='search']{--tool-accent:var(--al-tool-search-fg)}
+.execution-row[data-kind='mcp']{--tool-accent:var(--al-tool-mcp-fg)}
+.execution-row[data-kind='web']{--tool-accent:var(--al-tool-web-fg)}
+
+.execution-row[data-kind='shell'] .execution-tool-icon{color:var(--al-tool-shell-fg)!important;background:var(--al-tool-shell-bg)!important;border-color:var(--al-tool-shell-line)!important}
+.execution-row[data-kind='read'] .execution-tool-icon{color:var(--al-tool-read-fg)!important;background:var(--al-tool-read-bg)!important;border-color:var(--al-tool-read-line)!important}
+.execution-row[data-kind='edit'] .execution-tool-icon{color:var(--al-tool-edit-fg)!important;background:var(--al-tool-edit-bg)!important;border-color:var(--al-tool-edit-line)!important}
+.execution-row[data-kind='search'] .execution-tool-icon{color:var(--al-tool-search-fg)!important;background:var(--al-tool-search-bg)!important;border-color:var(--al-tool-search-line)!important}
+.execution-row[data-kind='mcp'] .execution-tool-icon{color:var(--al-tool-mcp-fg)!important;background:var(--al-tool-mcp-bg)!important;border-color:var(--al-tool-mcp-line)!important}
+.execution-row[data-kind='web'] .execution-tool-icon{color:var(--al-tool-web-fg)!important;background:var(--al-tool-web-bg)!important;border-color:var(--al-tool-web-line)!important}
+
+/* ── 状态与辅助文字 ─────────────────────────────────────────── */
+.badge.warn,
+.status-pill-warn,
+.sse-banner,
+.step.pending .no,
+.evidence-inline[data-confidence='medium'],
+.interaction-summary-meta .is-latency{
+  color:var(--al-warning)!important;
+}
+
+.eyebrow,
+.section-label,
+.future-section-label,
+.session-group,
+.agent-scope-option-state,
+.matrix-asset small,
+.matrix-cell[data-status='unobserved']{
+  color:var(--al-text-subtle);
+}
+
+/* 禁止用透明度制造正常文字层级；透明度仅留给 disabled。 */
+.round-nav button span:not([aria-disabled='true']){opacity:1}

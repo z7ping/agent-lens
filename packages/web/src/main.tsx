@@ -15,6 +15,7 @@ import './live-notice.css'
 import './backup.css'
 import './insights.css'
 import './typography.css'
+import './color-system.css'
 
 writeTheme(readTheme())
 void clientModel.start()
