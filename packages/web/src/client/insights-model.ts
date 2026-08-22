@@ -1,4 +1,8 @@
-import type { InsightsResponseDto, LiveUpdateEventDto } from '@agent-lens/protocol'
+import type {
+  InsightsResponseDto,
+  LiveUpdateArea,
+  LiveUpdateEventDto,
+} from '@agent-lens/protocol'
 import { AgentLensApi, type QueryFilters } from './api'
 
 export interface InsightsClientSnapshot {
@@ -89,7 +93,8 @@ export class InsightsClientModel {
   }
 
   private onLiveEvent(event: LiveUpdateEventDto): void {
-    if (!event.affected.includes('insights')) return
+    const affected: readonly LiveUpdateArea[] = event.affected
+    if (!affected.includes('insights')) return
     this.invalidation += 1
     if (!this.snapshot.hasNewData) {
       this.publish({ ...this.snapshot, hasNewData: true })
