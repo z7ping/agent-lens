@@ -17,14 +17,41 @@ function hasError(detail: ReviewSessionDetailDto, index: number): boolean {
 
 export function ReviewTurnRail({ detail }: { detail: ReviewSessionDetailDto }) {
   const [activeIndex, setActiveIndex] = useState(0)
+  const [position, setPosition] = useState<{ left: number; top: number; bottom: number } | null>(null)
   const tips = useMemo(() => detail.interactions.map((_, index) => preview(detail, index)), [detail])
 
   useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      const pane = document.querySelector<HTMLElement>('.review-reader-pane')
+    let observer: IntersectionObserver | undefined
+    let resizeObserver: ResizeObserver | undefined
+    let frame = 0
+    const pane = document.querySelector<HTMLElement>('.review-reader-pane')
+    if (!pane) return
+
+    const updatePosition = () => {
+      window.cancelAnimationFrame(frame)
+      frame = window.requestAnimationFrame(() => {
+        const rect = pane.getBoundingClientRect()
+        setPosition({
+          left: Math.max(0, rect.left + 4),
+          top: Math.max(8, rect.top + 8),
+          bottom: Math.max(18, window.innerHeight - rect.bottom + 18),
+        })
+      })
+    }
+
+    updatePosition()
+    window.addEventListener('resize', updatePosition)
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(updatePosition)
+      resizeObserver.observe(pane)
+      const shell = pane.closest<HTMLElement>('.app-shell')
+      if (shell) resizeObserver.observe(shell)
+    }
+
+    frame = window.requestAnimationFrame(() => {
       const shells = [...document.querySelectorAll<HTMLElement>('.review-reader-pane .virtual-round-shell')]
-      if (!pane || !shells.length || typeof IntersectionObserver === 'undefined') return
-      const observer = new IntersectionObserver(entries => {
+      if (!shells.length || typeof IntersectionObserver === 'undefined') return
+      observer = new IntersectionObserver(entries => {
         const visible = entries
           .filter(entry => entry.isIntersecting)
           .sort((a, b) => Math.abs(a.boundingClientRect.top - pane.getBoundingClientRect().top) - Math.abs(b.boundingClientRect.top - pane.getBoundingClientRect().top))[0]
@@ -32,15 +59,14 @@ export function ReviewTurnRail({ detail }: { detail: ReviewSessionDetailDto }) {
         const index = shells.indexOf(visible.target as HTMLElement)
         if (index >= 0) setActiveIndex(index)
       }, { root: pane, rootMargin: '-12% 0px -68% 0px', threshold: 0 })
-      shells.forEach(shell => observer.observe(shell))
-      ;(pane as HTMLElement & { __agentLensTurnObserver?: IntersectionObserver }).__agentLensTurnObserver?.disconnect()
-      ;(pane as HTMLElement & { __agentLensTurnObserver?: IntersectionObserver }).__agentLensTurnObserver = observer
+      shells.forEach(shell => observer?.observe(shell))
     })
+
     return () => {
       window.cancelAnimationFrame(frame)
-      const pane = document.querySelector<HTMLElement>('.review-reader-pane') as (HTMLElement & { __agentLensTurnObserver?: IntersectionObserver }) | null
-      pane?.__agentLensTurnObserver?.disconnect()
-      if (pane) delete pane.__agentLensTurnObserver
+      window.removeEventListener('resize', updatePosition)
+      resizeObserver?.disconnect()
+      observer?.disconnect()
     }
   }, [detail.id, detail.interactions.length, detail.page.filter, detail.page.direction])
 
@@ -52,8 +78,8 @@ export function ReviewTurnRail({ detail }: { detail: ReviewSessionDetailDto }) {
     target.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
-  if (detail.interactions.length < 2) return null
-  return <nav className="turn-rail" style={{ position: 'fixed', left: '324px', top: '110px', bottom: '44px' }} aria-label="轮次导航">
+  if (detail.interactions.length < 2 || !position) return null
+  return <nav className="turn-rail" style={{ position: 'fixed', ...position }} aria-label="轮次导航">
     {detail.interactions.map((interaction, index) => <button
       key={interaction.id}
       className={`turn-tick ${activeIndex === index ? 'active' : ''} ${hasError(detail, index) ? 'err' : ''}`}
