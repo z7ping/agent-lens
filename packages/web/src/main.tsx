@@ -10,12 +10,14 @@ import './review.css'
 import './review-long-session.css'
 import './prototype.css'
 import './review-polish.css'
+import './review-balanced.css'
 import './states.css'
 import './live-notice.css'
 import './backup.css'
 import './insights.css'
 import './typography.css'
 import './color-system.css'
+import './review-balanced-runtime'
 
 writeTheme(readTheme())
 void clientModel.start()
