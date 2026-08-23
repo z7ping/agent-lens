@@ -8,6 +8,9 @@
 <link rel="stylesheet" href="assets/components.css">
 <style>
   .review-shell{height:100vh}
+  /* 气泡底部操作统一为一条紧凑操作栏，避免按钮区域反客为主。 */
+  .review-shell .b-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:4px;min-height:0;margin-top:6px;padding-top:5px}
+  .review-shell .b-actions button{min-height:0;padding:1px 5px;line-height:1.45}
 </style>
 </head>
 <body>
@@ -155,7 +158,7 @@
                   <span class="tr-main"><span class="tr-name"><b>grep</b><span class="tag">搜索</span></span><span class="tr-prev">"CREATE TABLE" → 21 张规范表</span></span><span class="tr-dur">0.3 秒</span></button>
                 <button class="trow" data-open-drawer="#inspector"><span class="rail"><i></i></span><span class="kicon kind-shell sm"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 5 6 8 3 11"/><line x1="6" y1="11" x2="13" y2="11"/></svg></span>
                   <span class="tr-main"><span class="tr-name"><b>bash</b><span class="tag">命令</span></span><span class="tr-prev">npm test -- --filter storage → 42 通过</span></span><span class="tr-dur">12.4 秒</span></button>
-                <button class="trow" data-open-drawer="#inspector"><span class="rail"><i></i></span><span class="kicon kind-read sm"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2h5l3 3v9a1 1 0 01-1 1H4a1 1 0 01-1-1V3a1 1 0 011-1z"/><polyline points="9 2 9 5 12 5"/></svg></span>
+                <button class="trow" data-open-drawer="#inspector"><span class="rail"><i></i></span><span class="kicon kind-read sm"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2h5l3 3v9a1 1 0 01-1 1H4a1 1 0 011-1V3a1 1 0 011-1z"/><polyline points="9 2 9 5 12 5"/></svg></span>
                   <span class="tr-main"><span class="tr-name"><b>read_file</b><span class="tag">读取</span></span><span class="tr-prev">docs/adr/0001-agentlens-1.0-clean-rebuild-and-cordis-runtime.md</span></span><span class="tr-dur">0.2 秒</span></button>
               </div>
             </details>
