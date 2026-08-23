@@ -16,6 +16,8 @@ import './backup.css'
 import './insights.css'
 import './typography.css'
 import './color-system.css'
+import './review-reference.css'
+import './review-message-actions.css'
 
 writeTheme(readTheme())
 void clientModel.start()
