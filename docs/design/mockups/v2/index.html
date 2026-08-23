@@ -31,32 +31,33 @@ body{background:var(--al-canvas)}
 <div class="hub">
   <div class="hub-hero">
     <div>
-      <span class="eyebrow" style="color:var(--al-accent)">UI / UX DESIGN PROPOSAL · V2 融合版</span>
-      <h1>AgentLens 高保真静态稿 · v2</h1>
-      <p>融合两套设计：以「轻度降噪」为视觉基调，保留证据可见性与全量状态覆盖；吸收 turn-rail、KPI 细线长条、审计视图开关、SVG 图标集；收编资产备份与使用洞察两个长期能力原型。明暗主题跨页记忆。</p>
+      <span class="eyebrow" style="color:var(--al-accent)">UI / UX DESIGN PROPOSAL · V2.1</span>
+      <h1>AgentLens 高保真静态稿 · v2.1</h1>
+      <p>以产品定位重新收敛 v2：五个页面顶部直达，只用顺序、留白和分隔表达任务、使用、资产的关联；保留真实会话列表与证据可见性；长会话采用智能折叠；资产备份和使用洞察按现有实现同步。明暗主题跨页记忆。</p>
     </div>
     <button class="btn" data-theme-toggle>◐ 切换主题</button>
   </div>
 
   <div class="decisions">
-    <b class="t">v2 关键融合决策</b>
+    <b class="t">v2.1 关键融合决策</b>
     <ul>
       <li><b>降噪基调：</b>KPI 成细线长条、徽章透明底、正常态中性色、分区靠细线不靠卡片堆叠；异常才用强语义色。</li>
-      <li><b>证据可见性：</b>Evidence 徽章默认可见但安静；右上角「显示审计细节」开关（记忆偏好）补全权限事件、生命周期原始事件、后台活动轮与证据说明——阅读流与审计流分层，但证据不默认隐藏。</li>
-      <li><b>轮次呈现：</b>连续流式 + 恒展开（标题为锚点）；左缘 turn-rail 只负责定位，「全部/有错误/耗时较高」筛选保留在 round-nav，二者分工明确。</li>
+      <li><b>信息架构：</b>任务复盘 / 工具分析 / 使用洞察 / 智能体概览 / 资产备份五个页面顶部直达；只用留白与细分隔表达关联，不增加分类层。</li>
+      <li><b>证据可见性：</b>Evidence 徽章默认可见但安静；「显示原始记录」只补充权限、生命周期、后台活动与原始载荷，不把证据本身藏起来。</li>
+      <li><b>轮次呈现：</b>最近轮与错误轮默认展开，其余轮保留标题锚点；支持展开当前页。turn-rail 负责定位，round-nav 负责筛选。</li>
       <li><b>会话列表：</b>保留卡片化（描边减淡），修复“条目区分不明显”；按项目聚合作为切换项出现在面板头（P1 讨论项）。</li>
-      <li><b>消息布局：</b>用户气泡右对齐、智能体内容左侧限宽（ChatGPT / Codex 习惯）；工具图标统一内联 SVG。</li>
+      <li><b>消息布局：</b>用户使用高对比深色气泡，智能体内容左侧限宽；来源记录中的 reasoning 命名为「可观察过程片段」，不暗示隐藏思维。</li>
       <li><b>字号下限：</b>统一 11px（修正 balanced 稿 10.5px 徽章与其自身 12px 规范的矛盾）。</li>
-      <li><b>长期能力：</b>资产备份 / 使用洞察整页收编，标注「长期能力原型」，不属于 1.0 承诺范围。</li>
+      <li><b>真实数据口径：</b>缺失耗时显示为未观察到；洞察先展示统计范围与样本覆盖；智能体采用来源列表 + 单一详情，避免资产很多时巨卡并排。</li>
     </ul>
   </div>
 
-  <div class="sec-label2">当前界面 · 1.0 三视图 + 全局规范</div>
+  <div class="sec-label2">当前界面 · 五个直达页面 + 全局规范</div>
   <div class="cards">
     <a class="card" href="review.html">
       <span class="no">BOARD 01 · 核心视图</span>
       <h2>任务复盘</h2>
-      <p>turn-rail 定位 + 连续流轮次 + 审计细节开关 + 卡片化会话列表 + Tab 化 Inspector。试试：点击工具行开 Inspector；点「显示审计细节」看审计层；滚动看 turn-rail 联动。</p>
+      <p>真实会话列表 + turn-rail 定位 + 智能折叠轮次 + 原始记录开关 + Tab 化 Inspector。试试：点击工具行开 Inspector；展开原始记录；滚动看 turn-rail 联动。</p>
       <span class="go">打开画板 →</span>
     </a>
     <a class="card" href="tools.html">
@@ -68,7 +69,7 @@ body{background:var(--al-canvas)}
     <a class="card" href="agents.html">
       <span class="no">BOARD 03</span>
       <h2>智能体概览</h2>
-      <p>卡片网格 + disclosure 收纳策略 + 比例化技能漏斗 + 双层编码覆盖矩阵。</p>
+      <p>来源列表 + 单一智能体详情 + disclosure 收纳策略 + 比例化技能漏斗 + 双层编码覆盖矩阵。</p>
       <span class="go">打开画板 →</span>
     </a>
     <a class="card" href="states.html">
@@ -85,16 +86,16 @@ body{background:var(--al-canvas)}
     </a>
   </div>
 
-  <div class="sec-label2">长期能力原型 · 不属于 1.0 范围</div>
+  <div class="sec-label2">已实现能力 · 设计结构同步</div>
   <div class="cards">
     <a class="card" href="backup.html">
-      <span class="no">FUTURE · 主线二</span>
+      <span class="no">ASSET CENTER · 主线二</span>
       <h2>资产备份</h2>
       <p>保护范围 / 快照清单与 Hash 校验 / 导入恢复 Dry Run / 敏感信息默认排除 / 迁移边界预演。对应 PRODUCT-DIRECTION「保住」。</p>
       <span class="go">打开画板 →</span>
     </a>
     <a class="card" href="insights.html">
-      <span class="no">FUTURE · 主线三</span>
+      <span class="no">USAGE ANALYSIS · 主线三</span>
       <h2>使用洞察</h2>
       <p>趋势图、Agent 使用对比、工作流模式（含识别规则抽屉）、资产采用情况；事实与模式分层，不做评分。对应 PRODUCT-DIRECTION「看懂」。</p>
       <span class="go">打开画板 →</span>

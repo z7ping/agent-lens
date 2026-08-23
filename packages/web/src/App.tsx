@@ -50,11 +50,11 @@ function PinnedProvider({ agents, children }: PropsWithChildren<{ agents: AgentF
 }
 
 const navigation = [
-  ['/review', '任务复盘'],
-  ['/tools', '工具分析'],
-  ['/insights', '使用洞察'],
-  ['/agents', '智能体概览'],
-  ['/backup', '资产备份'],
+  { to: '/review', label: '任务复盘' },
+  { to: '/tools', label: '工具分析', startsGroup: true },
+  { to: '/insights', label: '使用洞察' },
+  { to: '/agents', label: '智能体概览', startsGroup: true },
+  { to: '/backup', label: '资产备份' },
 ] as const
 
 function Shell({ model }: { model: AgentLensClientModel }) {
@@ -85,10 +85,10 @@ function Shell({ model }: { model: AgentLensClientModel }) {
             <span className="brand-name">AgentLens</span>
           </div>
           <nav className="app-nav" aria-label="主导航">
-            {navigation.map(([to, label]) => {
-              const hasNewData = navigationHasNewData(to)
-              return <NavLink key={to} to={to} aria-label={hasNewData ? `${label}，有新数据` : label} className={({ isActive }) => `nav-item ${isActive ? 'nav-item-active' : ''}`}>
-                <span>{label}</span>{hasNewData && <span className="nav-new-dot" title="有新数据" aria-hidden="true"/>}
+            {navigation.map(item => {
+              const hasNewData = navigationHasNewData(item.to)
+              return <NavLink key={item.to} to={item.to} aria-label={hasNewData ? `${item.label}，有新数据` : item.label} className={({ isActive }) => `nav-item ${'startsGroup' in item ? 'nav-group-start ' : ''}${isActive ? 'nav-item-active' : ''}`}>
+                <span>{item.label}</span>{hasNewData && <span className="nav-new-dot" title="有新数据" aria-hidden="true"/>}
               </NavLink>
             })}
           </nav>

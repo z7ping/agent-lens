@@ -89,10 +89,33 @@ function elapsed(start: string, end: string): number {
   return Number.isFinite(value) && value > 0 ? value : 0
 }
 
-function compactTitle(value: string | undefined, max = 92): string {
-  const text = value?.replace(/\s+/g, ' ').trim() ?? ''
-  if (!text) return '未命名会话'
+const injectedTitlePatterns = [
+  /<recommended_plugins>[\s\S]*?<\/recommended_plugins>/gi,
+  /# AGENTS\.md instructions[^\n]*[\s\S]*?<\/INSTRUCTIONS>/gi,
+  /<environment_context>[\s\S]*?<\/environment_context>/gi,
+  /<app-context>[\s\S]*?<\/app-context>/gi,
+  /<skills_instructions>[\s\S]*?<\/skills_instructions>/gi,
+  /<permissions instructions>[\s\S]*?<\/permissions instructions>/gi,
+  /<collaboration_mode>[\s\S]*?<\/collaboration_mode>/gi,
+]
+
+function cleanSessionTitle(value: string | undefined): string {
+  let text = value?.trim() ?? ''
+  for (const pattern of injectedTitlePatterns) text = text.replace(pattern, ' ')
+  text = text.replace(/\s+/g, ' ').trim()
+  if (/^(?:<recommended_plugins>|# AGENTS\.md instructions|<environment_context>)/i.test(text)) return ''
+  return text
+}
+
+function compactTitle(value: string | undefined, max = 92, fallback = '未命名会话'): string {
+  const text = cleanSessionTitle(value)
+  if (!text) return fallback
   return text.length > max ? `${text.slice(0, max)}…` : text
+}
+
+function sessionTitle(candidates: Array<string | undefined>, fallback: string, max = 92): string {
+  const value = candidates.find(candidate => cleanSessionTitle(candidate))
+  return compactTitle(value, max, fallback)
 }
 
 function payloadRecord(value: unknown): Record<string, JsonValue> {
@@ -331,7 +354,7 @@ function StructuredToolDetail({ node }: { node: ReviewToolNodeDto }) {
   return <section className="tool-detail">
     <div className="tool-detail-summary">
       <span className={`tool-detail-icon tool-kind-${info.kind}`}>{info.icon}</span>
-      <div><b>{node.name}</b><span>{info.label} · {status}{node.durationMs !== undefined ? ` · ${duration(node.durationMs)}` : ''}</span></div>
+      <div><b>{node.name}</b><span>{info.label} · {status}{node.durationMs !== undefined && node.durationMs > 0 ? ` · ${duration(node.durationMs)}` : ''}</span></div>
     </div>
     {info.primary && <div className="tool-detail-section"><h4>{primaryLabel}</h4><pre className="tool-detail-code">{info.primary}</pre></div>}
     {Object.keys(input).length > 0 && <div className="tool-detail-section"><h4>结构化输入</h4><PrettyJson value={node.input}/></div>}
@@ -342,7 +365,7 @@ function StructuredToolDetail({ node }: { node: ReviewToolNodeDto }) {
 function roleLabel(role: ReviewMessageNodeDto['role']): string {
   if (role === 'user') return '用户'
   if (role === 'assistant') return '智能体'
-  return '思考过程'
+  return '可观察过程片段'
 }
 
 function Inspector({ node, onClose }: { node: ReviewNodeDto; onClose(): void }) {
@@ -363,7 +386,7 @@ function Inspector({ node, onClose }: { node: ReviewNodeDto; onClose(): void }) 
         {item.missingReason && <div className="evidence-missing">证据信息不完整</div>}
       </div>) : <div className="muted-empty">无证据</div>}
     </section>
-    <section className="inspector-section"><h3 className="section-label">原始数据</h3><pre className="raw-json">{JSON.stringify(node.payload, null, 2)}</pre></section>
+    <section className="inspector-section"><h3 className="section-label">来源原始记录</h3><pre className="raw-json">{JSON.stringify(node.payload, null, 2)}</pre></section>
   </aside>
 }
 
@@ -418,7 +441,7 @@ function MessageBubble({ node, inspect }: { node: ReviewMessageNodeDto; inspect(
   if (node.role === 'reasoning') {
     return <details className="thinking-block">
       <summary>
-        <span className="thinking-label">思考过程</span>
+        <span className="thinking-label">可观察过程片段</span>
         <span className="thinking-preview">{brief(node.text, 78)}</span>
         <EvidenceBadges evidence={node.evidence} compact/>
         <time>{formatClock(node.at)}</time>
@@ -450,7 +473,7 @@ function ToolRow({ node, inspect, last }: { node: ReviewToolNodeDto; inspect(nod
       {info.primary && <span className="execution-preview execution-primary">{info.primary}</span>}
       {info.secondary && <span className={`execution-preview ${node.status === 'error' ? 'execution-preview-error' : ''}`}>{info.secondary}</span>}
     </span>
-    <span className="execution-duration">{node.durationMs !== undefined ? duration(node.durationMs) : formatClock(node.at)}</span>
+    <span className="execution-duration">{node.durationMs !== undefined && node.durationMs > 0 ? duration(node.durationMs) : formatClock(node.at)}</span>
   </button>
 }
 
@@ -530,12 +553,16 @@ function Interaction({
   highLatency,
   defaultExpanded,
   expansionStore,
+  forceExpanded,
+  forceRevision,
 }: {
   interaction: ReviewInteractionDto
   inspect(node: ReviewNodeDto): void
   highLatency: boolean
   defaultExpanded: boolean
   expansionStore: Map<string, boolean>
+  forceExpanded: boolean
+  forceRevision: number
 }) {
   const [expanded, setExpanded] = useState(() => expansionStore.get(interaction.id) ?? defaultExpanded)
   const stats = useMemo(() => interactionStats(interaction), [interaction])
@@ -577,6 +604,12 @@ function Interaction({
       expansionStore.set(interaction.id, true)
     }
   }, [defaultExpanded, expansionStore, interaction.id])
+
+  useEffect(() => {
+    if (forceRevision === 0) return
+    setExpanded(forceExpanded)
+    expansionStore.set(interaction.id, forceExpanded)
+  }, [expansionStore, forceExpanded, forceRevision, interaction.id])
 
   const onToggle = (open: boolean) => {
     setExpanded(open)
@@ -627,6 +660,8 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
   const [inspect, setInspect] = useState<ReviewNodeDto | null>(null)
   const [roundFilter, setRoundFilter] = useState<RoundFilter>('all')
   const [roundFilterLoading, setRoundFilterLoading] = useState(false)
+  const [expandAllRounds, setExpandAllRounds] = useState(false)
+  const [roundExpansionRevision, setRoundExpansionRevision] = useState(0)
   const detailLoadSentinelRef = useRef<HTMLDivElement>(null)
   const readerPaneRef = useRef<HTMLElement>(null)
   const followingTailRef = useRef(false)
@@ -652,6 +687,8 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
     roundExpansionRef.current.clear()
     setRoundFilter('all')
     setRoundFilterLoading(false)
+    setExpandAllRounds(false)
+    setRoundExpansionRevision(0)
     setInspect(null)
     followingTailRef.current = false
   }, [detail?.id])
@@ -783,6 +820,11 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
       ? '完整会话没有相对耗时较高的轮次。'
       : '当前筛选条件没有匹配的轮次。'
 
+  const toggleRoundExpansion = () => {
+    setExpandAllRounds(value => !value)
+    setRoundExpansionRevision(value => value + 1)
+  }
+
   return <main className="review-page">
     <div className="workspace-toolbar">
       <AgentScope agents={agents} value={review.filters.sourceId} onChange={sourceId => model.setReviewFilters({ sourceId })}/>
@@ -803,7 +845,7 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
             <div className="session-group">{group.label}</div>
             {group.items.map(item => <button key={item.id} className={`session-item ${review.selectedId === item.id ? 'session-item-active' : ''}`} onClick={() => select(item.id)}>
               <div className="session-item-meta"><span className={`source-dot ${sourceDot(item.sourceIds[0] ?? '')}`}/><span>{agentLabel(item.sourceIds[0] ?? '', item.productId)}</span><time title={formatTime(item.endedAt)}>{sessionRelativeTime(item.endedAt)}</time></div>
-              <div className="session-item-title">{compactTitle(item.title ?? item.preview ?? item.projectName, 74)}</div>
+              <div className="session-item-title">{sessionTitle([item.title, item.preview], item.projectName ? `${item.projectName} 会话` : `${agentLabel(item.sourceIds[0] ?? '', item.productId)} 会话`, 74)}</div>
               <div className="session-item-foot"><span>{item.projectName ?? item.workspacePath?.split(/[\\/]/).pop() ?? '无项目'}</span><span>{item.toolCount} 调用{item.errorCount > 0 ? ` · ${item.errorCount} 错误` : ''}</span></div>
             </button>)}
           </section>)}
@@ -818,7 +860,7 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
           <header className="review-session-head">
             <div className="review-session-copy">
               <div className="review-session-meta"><span className={`source-dot ${sourceDot(detail.sourceIds[0] ?? '')}`}/><b>{detail.sourceIds.map(id => agentLabel(id)).join(' / ')}</b><span>{detail.projectName ?? '无项目'}</span>{detail.errorCount > 0 && <span className="session-status-error">有错误</span>}</div>
-              <h1 className="review-session-title" title={detail.title ?? detail.preview}>{compactTitle(detail.title ?? detail.preview)}</h1>
+              <h1 className="review-session-title" title={sessionTitle([detail.title, detail.preview], detail.projectName ? `${detail.projectName} 会话` : `${agentLabel(detail.sourceIds[0] ?? '')} 会话`)}>{sessionTitle([detail.title, detail.preview], detail.projectName ? `${detail.projectName} 会话` : `${agentLabel(detail.sourceIds[0] ?? '')} 会话`)}</h1>
               <div className="review-session-submeta">
                 <span>{formatRange(detail.startedAt, detail.endedAt)}</span>
                 {detail.workspacePath && <code title={detail.workspacePath}>{detail.workspacePath}</code>}
@@ -841,8 +883,8 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
             <button className={roundFilter === 'all' && !isBackward ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('all')}>全部 {roundFilter === 'all' && !isBackward && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
             <button className={roundFilter === 'errors' ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('errors')}>有错误 {roundFilter === 'errors' && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
             <button className={roundFilter === 'latency' ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('latency')}>耗时较高 {roundFilter === 'latency' && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
-            <button className={roundFilter === 'latest' ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('latest')}>最近一轮</button>
             <button className={isBackward && roundFilter === 'all' ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void jumpToLatest()}>跳到最新 ↓</button>
+            <button className="round-nav-expand" disabled={roundFilterLoading} onClick={toggleRoundExpansion}>{expandAllRounds ? '收起当前页' : '展开当前页'}</button>
             {isBackward && roundFilter === 'all' && pageIncomplete && <button disabled={roundFilterLoading} onClick={() => void model.showReviewFromStart().then(scrollTop)}>从头查看 ↑</button>}
             {roundFilterLoading && <span className="round-nav-status">正在查询完整会话…</span>}
             {review.detailHasNewData && <button className="round-nav-live" onClick={() => void jumpToLatest()}>有新记录 ↓</button>}
@@ -861,8 +903,10 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
               <Interaction
                 interaction={item.interaction}
                 highLatency={item.highLatency}
-                defaultExpanded={item.stats.errorCount > 0 || isFiltered || item.interaction.id === annotatedInteractions.at(-1)?.interaction.id || index === 0}
+                defaultExpanded={expandAllRounds || item.stats.errorCount > 0 || isFiltered || item.interaction.id === annotatedInteractions.at(-1)?.interaction.id}
                 expansionStore={roundExpansionRef.current}
+                forceExpanded={expandAllRounds}
+                forceRevision={roundExpansionRevision}
                 inspect={setInspect}
               />
             </VirtualRoundMount>)}

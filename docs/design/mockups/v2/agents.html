@@ -14,8 +14,10 @@
       <div class="brand"><span class="brand-mark">A</span><span class="brand-name">AgentLens</span></div>
       <nav class="app-nav">
         <a class="nav-item" href="review.html">任务复盘</a>
-        <a class="nav-item" href="tools.html">工具分析</a>
-        <a class="nav-item active" href="#">智能体概览</a>
+        <a class="nav-item nav-group-start" href="tools.html">工具分析</a>
+        <a class="nav-item" href="insights.html">使用洞察</a>
+        <a class="nav-item nav-group-start active" href="#">智能体概览</a>
+        <a class="nav-item" href="backup.html">资产备份</a>
       </nav>
       <div class="app-status">
         <span class="status-pill tip" data-tip="Daemon 运行中 · 127.0.0.1:56789&#10;SSE 实时通道已连接"><span class="live-dot"></span>运行中 :56789</span>
@@ -38,7 +40,14 @@
     <div class="page-content">
       <header class="page-heading"><div><span class="eyebrow">工作区</span><h1>智能体概览</h1><p>先看结论：我有哪些 AI 能力资产、哪些真的用过、技能从发现到使用卡在哪一步。静态发现 ≠ 实际调用。</p></div></header>
 
-      <div class="agents-grid">
+      <div class="agents-browser">
+        <nav class="agent-source-nav" aria-label="智能体列表">
+          <h2>本机智能体</h2>
+          <button class="agent-source-option active"><span class="src-dot lg dot-codex"></span><span class="copy"><b>Codex</b><small>21 项用户资产</small></span><small>已检测</small></button>
+          <button class="agent-source-option"><span class="src-dot lg dot-claude"></span><span class="copy"><b>Claude Code</b><small>18 项用户资产</small></span><small>已检测</small></button>
+          <button class="agent-source-option"><span class="src-dot lg dot-pi"></span><span class="copy"><b>Pi</b><small>7 项用户资产</small></span><small>未检测</small></button>
+        </nav>
+        <div class="agents-grid">
         <!-- Codex：卡片网格保留，内部按「存在 → 资产 → 使用」三段 + disclosure 收纳（来自 balanced） -->
         <article class="acard src-codex">
           <header class="acard-head">
@@ -94,7 +103,7 @@
               <div class="cap-row"><span>工具结果</span><b class="ok">可用</b></div>
               <div class="cap-row"><span>权限</span><b class="ok">可用</b></div>
               <div class="cap-row"><span>子智能体</span><b class="partial">部分可用</b></div>
-              <div class="cap-row"><span>思考过程</span><b class="partial">部分可用</b></div>
+              <div class="cap-row"><span>可观察过程片段</span><b class="partial">部分可用</b></div>
               <div class="cap-row"><span>资产发现</span><b class="ok">可用</b></div>
               <div class="cap-row"><span>使用情况</span><b class="exp">实验性</b></div>
             </div>
@@ -139,6 +148,7 @@
           <details class="disclosure"><summary>装配路径 <span class="count-badge" style="margin-left:auto">24</span></summary></details>
           <details class="disclosure"><summary>可观测能力 <span class="count-badge" style="margin-left:auto">9</span></summary></details>
         </article>
+        </div>
       </div>
 
       <section class="matrix-card">

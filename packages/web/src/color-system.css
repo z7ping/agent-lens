@@ -45,12 +45,12 @@ body{color:var(--al-text-primary)}
 
 .live-pill i{background:currentColor!important}
 
-/* ── 用户气泡：严格对齐原型 58% 强调色软底 ─────────────────── */
+/* ── 用户气泡：与智能体正文形成明确的叙事边界 ──────────────── */
 .chat-bubble-user,
 :root[data-theme='dark'] .chat-bubble-user{
-  border-color:color-mix(in srgb,var(--al-accent) 18%,var(--al-line))!important;
-  background:color-mix(in srgb,var(--al-accent-soft) 58%,var(--al-surface))!important;
-  color:var(--al-text-primary)!important;
+  border-color:var(--al-user-bubble)!important;
+  background:var(--al-user-bubble)!important;
+  color:var(--al-user-bubble-text)!important;
 }
 
 .chat-bubble-user .chat-meta,
@@ -61,15 +61,15 @@ body{color:var(--al-text-primary)}
 :root[data-theme='dark'] .chat-bubble-user .chat-meta time,
 :root[data-theme='dark'] .chat-bubble-user .evidence-inline,
 :root[data-theme='dark'] .chat-bubble-user .evidence-inline-more{
-  color:var(--al-text-muted)!important;
+  color:var(--al-user-bubble-muted)!important;
 }
 
 /* 旧 review.css 给键盘标记写死了白字/白底透明色；软底气泡下必须改回语义色。 */
 .chat-row-user .chat-meta::before,
 :root[data-theme='dark'] .chat-row-user .chat-meta::before{
   border-color:color-mix(in srgb,var(--al-accent) 22%,var(--al-line))!important;
-  background:var(--al-surface)!important;
-  color:var(--al-accent)!important;
+  background:var(--al-user-bubble-code)!important;
+  color:var(--al-user-bubble-text)!important;
 }
 
 .chat-bubble-user .markdown,
@@ -82,33 +82,33 @@ body{color:var(--al-text-primary)}
 :root[data-theme='dark'] .chat-bubble-user .markdown li,
 :root[data-theme='dark'] .chat-bubble-user .markdown strong,
 :root[data-theme='dark'] .chat-bubble-user .markdown em{
-  color:var(--al-text-primary)!important;
+  color:var(--al-user-bubble-text)!important;
 }
 
 .chat-bubble-user .markdown :not(pre)>code,
 :root[data-theme='dark'] .chat-bubble-user .markdown :not(pre)>code{
-  background:color-mix(in srgb,var(--al-accent) 10%,var(--al-surface))!important;
-  color:var(--al-text-secondary)!important;
+  background:var(--al-user-bubble-code)!important;
+  color:var(--al-user-bubble-text)!important;
 }
 
 .chat-bubble-user .markdown a,
 :root[data-theme='dark'] .chat-bubble-user .markdown a{
-  color:var(--al-accent)!important;
-  text-decoration-color:color-mix(in srgb,var(--al-accent) 55%,transparent)!important;
+  color:var(--al-user-bubble-link)!important;
+  text-decoration-color:color-mix(in srgb,var(--al-user-bubble-link) 65%,transparent)!important;
 }
 
 .chat-bubble-user .markdown pre,
 .chat-bubble-user .markdown-source,
 :root[data-theme='dark'] .chat-bubble-user .markdown pre,
 :root[data-theme='dark'] .chat-bubble-user .markdown-source{
-  border-color:var(--al-line)!important;
-  background:var(--al-soft-2)!important;
-  color:var(--al-text-secondary)!important;
+  border-color:color-mix(in srgb,var(--al-user-bubble-text) 18%,transparent)!important;
+  background:var(--al-user-bubble-code)!important;
+  color:var(--al-user-bubble-text)!important;
 }
 
 .chat-bubble-user .markdown-fade,
 :root[data-theme='dark'] .chat-bubble-user .markdown-fade{
-  background:linear-gradient(to bottom,transparent,color-mix(in srgb,var(--al-accent-soft) 58%,var(--al-surface)))!important;
+  background:linear-gradient(to bottom,transparent,var(--al-user-bubble))!important;
 }
 
 .chat-bubble-user .markdown-message-actions,

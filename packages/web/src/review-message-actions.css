@@ -15,7 +15,7 @@
   grid-column: 1 / -1;
 }
 
-/* 只在对话气泡内拆掉 MarkdownSurface 的中间布局盒；思考过程等其它场景不受影响。 */
+/* 只在对话气泡内拆掉 MarkdownSurface 的中间布局盒；可观察过程片段等其它场景不受影响。 */
 .review-page .chat-bubble > .markdown-message {
   display: contents;
 }

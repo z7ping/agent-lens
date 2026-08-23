@@ -17,12 +17,23 @@ function duration(ms: number): string {
 function deltaLabel(value: number | null): string {
   if (value === null) return '无可比基线'
   if (value === 0) return '持平'
-  return `${value > 0 ? '+' : ''}${value}%`
+  return `${value > 0 ? '增加' : '减少'} ${Math.abs(value)}%`
 }
 
 function deltaClass(value: number | null): string {
   if (value === null || value === 0) return 'neutral'
-  return value > 0 ? 'up' : 'down'
+  return 'changed'
+}
+
+function formatDate(value: string | undefined): string {
+  if (!value) return ''
+  const date = new Date(value)
+  return Number.isFinite(date.getTime()) ? date.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }) : value
+}
+
+function formatGeneratedAt(value: string): string {
+  const date = new Date(value)
+  return Number.isFinite(date.getTime()) ? date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : value
 }
 
 function assetTypeLabel(type: string): string {
@@ -80,11 +91,18 @@ export function InsightsPage({ model }: { model: AgentLensClientModel }) {
       {insights.error && <ErrorStateBanner message={insights.error} onRetry={() => void insightsModel.refresh()}/>} 
 
       {insights.loading && !data ? <WorkspaceSkeleton kind="table"/> : data && data.summary.sessionCount > 0 ? <>
+        <section className="insight-coverage-strip" aria-label="洞察统计覆盖范围">
+          <div><span>统计范围</span><b>{data.meta.from && data.meta.to ? `${formatDate(data.meta.from)} — ${formatDate(data.meta.to)}` : '全部已载入历史'}</b></div>
+          <div><span>会话样本</span><b>{data.summary.sessionCount} 个</b></div>
+          <div><span>覆盖状态</span><b className={data.meta.sampled ? 'is-warning' : ''}>{data.meta.sampled ? `最近 ${data.meta.sessionSampleLimit} 个以内的安全样本` : '当前范围完整聚合'}</b></div>
+          <div><span>生成时间</span><b>{formatGeneratedAt(data.meta.generatedAt)}</b></div>
+        </section>
+
         <section className="insight-kpi-grid">
           <div className="insight-kpi"><span>会话</span><strong>{data.summary.sessionCount}</strong><small>{comparison ? `较上周期 ${deltaLabel(delta?.sessionCountPercent ?? null)}` : '当前筛选范围'}</small></div>
           <div className="insight-kpi"><span>交互轮次</span><strong>{data.summary.interactionCount}</strong><small>{comparison ? `较上周期 ${deltaLabel(delta?.interactionCountPercent ?? null)}` : '按规范交互聚合'}</small></div>
           <div className="insight-kpi"><span>工具调用</span><strong>{data.summary.toolCallCount}</strong><small>{comparison ? `较上周期 ${deltaLabel(delta?.toolCallCountPercent ?? null)}` : '只统计已观察调用'}</small></div>
-          <div className="insight-kpi"><span>明确失败</span><strong>{data.summary.errorCount}</strong><small>仅统计结果明确标记失败的工具调用 · 会话总时长 {duration(data.summary.totalDurationMs)}</small></div>
+          <div className="insight-kpi"><span>明确失败</span><strong>{data.summary.errorCount}</strong><small>仅统计结果明确标记失败的工具调用 · 会话跨度合计 {duration(data.summary.totalDurationMs)}</small></div>
         </section>
 
         <section className="insight-grid insight-grid-main">
@@ -106,7 +124,7 @@ export function InsightsPage({ model }: { model: AgentLensClientModel }) {
               <MetricDelta label="交互轮次" value={delta?.interactionCountPercent ?? null}/>
               <MetricDelta label="工具调用" value={delta?.toolCallCountPercent ?? null}/>
               <MetricDelta label="明确失败" value={delta?.errorCountPercent ?? null}/>
-              <MetricDelta label="总时长" value={delta?.totalDurationMsPercent ?? null}/>
+              <MetricDelta label="会话跨度" value={delta?.totalDurationMsPercent ?? null}/>
               <div className="insight-comparison-item"><span>上周期会话</span><b className="neutral">{comparison.previous.sessionCount}</b></div>
             </div> : <div className="insight-inline-empty">{data.meta.sampled && boundedRange ? '保持空白比使用不完整的上一周期样本生成百分比更可靠。' : '全部时间没有天然的“上一等长周期”，因此不强行生成对比。'}</div>}
           </article>
@@ -115,7 +133,7 @@ export function InsightsPage({ model }: { model: AgentLensClientModel }) {
         <section className="insight-card">
           <div className="insight-card-head"><div><h2>Agent 使用结构</h2><p>同一会话若同时包含多个来源，会分别计入对应 Agent；这是“会话中出现过该来源”，不是独占归因。</p></div></div>
           <div className="insight-agent-table-wrap"><table className="insight-agent-table">
-            <thead><tr><th>Agent</th><th>会话</th><th>交互</th><th>工具调用</th><th>明确失败</th><th>已观察资产调用</th><th>总时长</th></tr></thead>
+            <thead><tr><th>Agent</th><th>会话</th><th>交互</th><th>工具调用</th><th>明确失败</th><th>已观察资产调用</th><th>会话跨度合计</th></tr></thead>
             <tbody>{data.agents.map(agent => <tr key={agent.sourceId}><td><b>{agentLabel(agent.sourceId)}</b><small>{agent.productIds.join(' / ')}</small></td><td>{agent.sessionCount}</td><td>{agent.interactionCount}</td><td>{agent.toolCallCount}</td><td>{agent.errorCount}</td><td>{agent.observedAssetCallCount}</td><td>{duration(agent.totalDurationMs)}</td></tr>)}</tbody>
           </table></div>
         </section>

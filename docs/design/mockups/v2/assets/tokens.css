@@ -19,6 +19,10 @@
   --al-warning-soft:#FFF5DD;
   --al-danger:#C13F4D;
   --al-danger-soft:#FFF0F2;
+  --al-user-bubble:#262824;
+  --al-user-bubble-text:#F8F9F6;
+  --al-user-bubble-muted:#C3C9BE;
+  --al-user-bubble-code:#353831;
   --al-shadow:0 1px 2px rgb(22 24 20 / .04),0 10px 28px rgb(22 24 20 / .05);
   --al-shadow-lg:0 22px 70px rgb(22 24 20 / .16);
   --font-ui:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
@@ -45,6 +49,10 @@
   --al-warning-soft:#352A16;
   --al-danger:#EF7A87;
   --al-danger-soft:#351E22;
+  --al-user-bubble:#E7E9E4;
+  --al-user-bubble-text:#171816;
+  --al-user-bubble-muted:#555B52;
+  --al-user-bubble-code:#D8DBD4;
   --al-shadow:0 1px 2px rgb(0 0 0 / .18),0 12px 30px rgb(0 0 0 / .16);
   --al-shadow-lg:0 24px 72px rgb(0 0 0 / .44);
 }

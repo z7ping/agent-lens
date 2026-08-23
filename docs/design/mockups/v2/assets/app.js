@@ -1,4 +1,4 @@
-/* AgentLens v2 共享交互：主题 / 审计视图 / 抽屉 / Tab / 排序 / 复制 / turn-rail */
+/* AgentLens v2.1 共享交互：主题 / 原始记录 / 抽屉 / Tab / 排序 / 复制 / turn-rail */
 (function () {
   var KEY = 'al-mock-theme'
   function applyTheme(t) {
@@ -7,7 +7,7 @@
   }
   try { applyTheme(localStorage.getItem(KEY) || 'light') } catch (e) { applyTheme('light') }
 
-  /* 审计细节开关（记忆偏好） */
+  /* 原始记录开关（证据徽章始终可见） */
   var AKEY = 'al-mock-audit'
   function applyAudit(on) {
     document.body.classList.toggle('audit-mode', on)
@@ -47,6 +47,13 @@
         copyBtn.textContent = '已复制'
         setTimeout(function () { copyBtn.textContent = old }, 1200)
       }).catch(function () {})
+    }
+    var expandBtn = e.target.closest('[data-expand-rounds]')
+    if (expandBtn) {
+      var expand = expandBtn.getAttribute('aria-pressed') !== 'true'
+      document.querySelectorAll('details.interaction:not(.audit-only)').forEach(function (round) { round.open = expand })
+      expandBtn.setAttribute('aria-pressed', String(expand))
+      expandBtn.textContent = expand ? '收起当前页' : '展开当前页'
     }
   })
 
@@ -162,11 +169,6 @@
     reader.addEventListener('scroll', updateActive, { passive: true })
     requestAnimationFrame(updateActive)
   }
-
-  /* 轮次恒展开：标题仅作阅读锚点，不响应折叠 */
-  document.querySelectorAll('details.interaction > summary').forEach(function (s) {
-    s.addEventListener('click', function (e) { e.preventDefault() })
-  })
 
   /* 工具类型 SVG 图标注入 */
   var toolIcons = {

@@ -159,8 +159,12 @@
   padding: 10px 2px 20px;
 }
 
-/* 轮次永远作为连续阅读锚点展示；内部思考、工具组、原始事件仍可独立折叠。 */
+/* 长会话默认只展开最近轮与错误轮；标题始终作为连续阅读锚点。 */
 .review-page details.interaction-block > .interaction-flow {
+  display: none !important;
+}
+
+.review-page details.interaction-block[open] > .interaction-flow {
   display: flex !important;
 }
 

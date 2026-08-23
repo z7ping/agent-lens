@@ -14,8 +14,10 @@
       <div class="brand"><span class="brand-mark">A</span><span class="brand-name">AgentLens</span></div>
       <nav class="app-nav">
         <a class="nav-item active" href="#">任务复盘</a>
-        <a class="nav-item" href="tools.html">工具分析</a>
-        <a class="nav-item" href="agents.html">智能体概览</a>
+        <a class="nav-item nav-group-start" href="tools.html">工具分析</a>
+        <a class="nav-item" href="insights.html">使用洞察</a>
+        <a class="nav-item nav-group-start" href="agents.html">智能体概览</a>
+        <a class="nav-item" href="backup.html">资产备份</a>
       </nav>
       <div class="app-status">
         <span class="status-pill tip" data-tip="Daemon 运行中 · 127.0.0.1:56789&#10;SSE 实时通道已连接"><span class="live-dot"></span>运行中 :56789</span>
@@ -89,23 +91,25 @@
       </div>
     </aside>
 
-    <section class="reader-pane" id="readerPane" data-reader>
-      <!-- turn-rail：只负责定位（筛选在 round-nav） -->
-      <nav class="turn-rail" aria-label="轮次定位">
-        <button class="turn-tick active" data-target="#round-1" data-tip="第 1 轮 · 收敛改动清单"><i></i><i></i><i></i></button>
-        <button class="turn-tick err" data-target="#round-2" data-tip="第 2 轮 · 1 次失败后恢复"><i></i><i></i><i></i></button>
-        <button class="turn-tick" data-target="#round-3" data-tip="第 3 轮 · 全量回归（耗时较高）"><i></i><i></i><i></i></button>
-        <button class="turn-tick dim audit-only" data-target="#round-bg" data-tip="后台活动 · 仅审计视图显示"><i></i><i></i></button>
-      </nav>
+    <!-- turn-rail：只负责定位（筛选在 round-nav）。
+         注意必须是 .review-layout 的直接子元素：
+         放进 reader-pane 会相对滚动内容定位，随阅读滚走。 -->
+    <nav class="turn-rail" aria-label="轮次定位">
+      <button class="turn-tick active" data-target="#round-1" data-tip="第 1 轮 · 收敛改动清单"><i></i><i></i><i></i></button>
+      <button class="turn-tick err" data-target="#round-2" data-tip="第 2 轮 · 1 次失败后恢复"><i></i><i></i><i></i></button>
+      <button class="turn-tick" data-target="#round-3" data-tip="第 3 轮 · 全量回归（耗时较高）"><i></i><i></i><i></i></button>
+      <button class="turn-tick dim audit-only" data-target="#round-bg" data-tip="后台活动 · 仅审计视图显示"><i></i><i></i></button>
+    </nav>
 
+    <section class="reader-pane" id="readerPane" data-reader>
       <div class="reader-inner">
         <header class="review-head">
           <div class="rh-meta"><span class="src-dot lg dot-codex"></span><b>Codex</b><span>agent-lens</span><span class="badge err">有错误</span></div>
           <h1 class="rh-title">重构 agent-lens 存储层：引入 Repository 接口</h1>
           <div class="rh-sub"><span>2026/08/22 13:58 – 14:32</span><code title="F:\01-ai-gen-workspaces\agent-lens">F:\01-ai-gen-workspaces\agent-lens</code></div>
           <div class="rh-actions">
-            <button class="audit-toggle" data-audit-toggle aria-pressed="false">显示审计细节</button>
-            <span class="audit-note-inline audit-only">审计视图：显示权限事件、生命周期原始事件与证据说明</span>
+            <button class="audit-toggle" data-audit-toggle aria-pressed="false">显示原始记录</button>
+            <span class="audit-note-inline audit-only">原始记录视图：补充权限、生命周期、后台活动与证据说明</span>
           </div>
           <div class="rh-metrics">
             <div class="metric"><b>6</b><span>轮次</span></div>
@@ -121,11 +125,11 @@
             <button class="tip" data-tip="只显示含失败工具调用的轮次">有错误 <em>2</em></button>
             <button class="tip" data-tip="由服务端基于完整会话的轮次耗时分布计算（上四分位）">耗时较高 <em>2</em></button>
           </div>
-          <div class="round-act"><button data-scroll-bottom="#readerPane">跳到最新 ↓</button></div>
+          <div class="round-act"><button data-expand-rounds aria-pressed="false">展开当前页</button><button data-scroll-bottom="#readerPane">跳到最新 ↓</button></div>
         </div>
 
-        <!-- 第 1 轮：恒展开，标题为锚点 -->
-        <details class="interaction" id="round-1" open>
+        <!-- 第 1 轮：默认收起，标题保留为连续阅读锚点 -->
+        <details class="interaction" id="round-1">
           <summary><span class="it-title">第 1 轮</span><span class="it-preview">先列出改动清单，不要直接动代码</span>
             <span class="it-meta"><span>5 工具</span><span>41 秒</span></span></summary>
           <div class="it-flow">
@@ -136,7 +140,7 @@
               </div>
             </div>
             <details class="thinking">
-              <summary><span class="t-label">思考过程</span><span class="t-preview">先盘点 SQL 分布，再按 Repository 边界归并……</span><time>13:58:40</time></summary>
+              <summary><span class="t-label">可观察过程片段</span><span class="t-preview">先盘点 SQL 分布，再按 Repository 边界归并……</span><time>13:58:40</time></summary>
               <div class="thinking-body">先盘点 packages/storage-sqlite/src 下所有 better-sqlite3 调用点；按 hosts / observations / evidence 三组归并；迁移顺序保持对 Repository 接口零破坏。</div>
             </details>
 
@@ -228,7 +232,7 @@
           </div>
         </details>
 
-        <!-- 第 3 轮：耗时较高（恒展开，内容从简示意） -->
+        <!-- 第 3 轮：最近一轮且耗时较高，默认展开 -->
         <details class="interaction" id="round-3" open>
           <summary><span class="it-title">第 3 轮</span><span class="it-preview">把 migration 拆成两个事务并回归测试…</span>
             <span class="it-meta"><span>8 工具</span><span class="latency">耗时较高</span><span>22 分钟</span></span></summary>

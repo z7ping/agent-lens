@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>使用洞察（长期能力原型） · AgentLens v2</title>
+<title>使用洞察 · AgentLens v2.1</title>
 <link rel="stylesheet" href="assets/tokens.css">
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="assets/future.css">
@@ -15,10 +15,10 @@
       <div class="brand"><span class="brand-mark">A</span><span class="brand-name">AgentLens</span></div>
       <nav class="app-nav">
         <a class="nav-item" href="review.html">任务复盘</a>
-        <a class="nav-item" href="tools.html">工具分析</a>
-        <a class="nav-item" href="agents.html">智能体概览</a>
-        <a class="nav-item" href="backup.html">资产备份</a>
+        <a class="nav-item nav-group-start" href="tools.html">工具分析</a>
         <a class="nav-item active" href="#">使用洞察</a>
+        <a class="nav-item nav-group-start" href="agents.html">智能体概览</a>
+        <a class="nav-item" href="backup.html">资产备份</a>
       </nav>
       <div class="app-status">
         <span class="status-pill tip" data-tip="所有洞察都应能回溯到 Observation / Evidence；示例数字仅用于设计展示"><span class="live-dot"></span>证据可追溯</span>
@@ -46,7 +46,7 @@
     <main class="future-content">
       <header class="future-heading">
         <div>
-          <span class="eyebrow">USAGE INSIGHTS <span class="prototype-flag">长期能力原型</span></span>
+          <span class="eyebrow">USAGE INSIGHTS <span class="prototype-flag live">已实现页面结构</span></span>
           <h1>使用洞察</h1>
           <p>从“用了多少”继续走到“形成了什么模式”。这里不做综合评分，也不猜哪个 Agent 更聪明；只把可追溯的会话、工具、资产使用事实组织成趋势、对比和工作流模式。</p>
         </div>
@@ -55,6 +55,13 @@
           <button class="btn">洞察说明</button>
         </div>
       </header>
+
+      <section class="coverage-strip" aria-label="洞察统计覆盖范围">
+        <span>统计范围<b>2026/07/24 — 2026/08/22</b></span>
+        <span>会话样本<b>128 个</b></span>
+        <span>覆盖状态<b>当前范围完整聚合</b></span>
+        <span>生成时间<b>08/23 10:30</b></span>
+      </section>
 
       <section class="future-kpis" aria-label="本期使用概览">
         <article class="future-kpi">

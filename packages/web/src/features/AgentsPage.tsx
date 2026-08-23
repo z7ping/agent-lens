@@ -13,7 +13,7 @@ const capabilityLabel: Record<string, string> = {
   permission: '权限',
   subagent: '子智能体',
   context: '上下文',
-  thinking: '思考过程',
+  thinking: '可观察过程片段',
   'asset-discovery': '资产发现',
   'asset-invocation': '资产调用',
   'artifact-action': '产物操作',
@@ -233,8 +233,8 @@ function AgentCard({ agent }: { agent: AgentOverviewDto }) {
     </header>
 
     <div className="agent-installation">
-      <span><small>版本</small><b>{installation?.version ?? '未检测'}</b></span>
-      <span className="agent-config"><small>配置目录</small><code title={installation?.configRoot}>{installation?.configRoot ? shortPath(installation.configRoot, 52) : '未检测'}</code></span>
+      <span><small>版本</small><b>{installation?.version ?? (agent.detected ? '版本未取得' : '未检测')}</b></span>
+      <span className="agent-config"><small>配置目录</small><code title={installation?.configRoot}>{installation?.configRoot ? shortPath(installation.configRoot, 52) : agent.detected ? '路径未取得' : '未检测'}</code></span>
     </div>
 
     <section className="agent-primary-section">
@@ -338,18 +338,32 @@ export function AgentsPage({ model }: { model: AgentLensClientModel }) {
   const agents = snapshot.facets?.agents ?? []
   const items = snapshot.agents?.items ?? []
   const [sourceId, setSourceId] = useState('')
-  const shown = sourceId ? items.filter(item => item.sourceId === sourceId) : items
+  const fallbackSourceId = items.find(item => item.detected)?.sourceId || items[0]?.sourceId || ''
+  const selectedSourceId = items.some(item => item.sourceId === sourceId) ? sourceId : fallbackSourceId
+  const selectedAgent = items.find(item => item.sourceId === selectedSourceId)
 
   return <main className="workspace-page">
     <div className="workspace-toolbar">
-      <AgentScope agents={agents} value={sourceId} onChange={setSourceId}/>
+      <AgentScope agents={agents} value={selectedSourceId} onChange={setSourceId} allLabel={false}/>
       <button className="icon-button toolbar-end" onClick={() => void model.refreshFacetsAndAgents()} title="刷新智能体概览" aria-label="刷新智能体概览">↻</button>
     </div>
     <div className="page-content agents-content">
       <header className="page-heading"><div><span className="eyebrow">工作区</span><h1>智能体概览</h1><p>先看结论：我有哪些人工智能资产、哪些真的用过、技能从发现到使用卡在哪一步。</p></div></header>
-      <div className="agents-grid">{shown.map(agent => <AgentCard key={agent.sourceId} agent={agent}/>)}</div>
-      {!shown.length && <div className="empty-state roomy">没有可显示的智能体</div>}
-      {!sourceId && <CrossAgentMatrix agents={items}/>} 
+      {items.length ? <div className="agents-browser">
+        <nav className="agent-source-nav" aria-label="智能体列表">
+          <div className="agent-source-nav-head"><b>本机智能体</b><span>{items.length}</span></div>
+          {items.map(agent => {
+            const assetCount = agent.assetInventory.filter(asset => asset.type !== 'builtin').length
+            return <button key={agent.sourceId} className={`agent-source-option ${agent.sourceId === selectedSourceId ? 'is-active' : ''}`} onClick={() => setSourceId(agent.sourceId)} aria-current={agent.sourceId === selectedSourceId ? 'true' : undefined}>
+              <span className={`source-dot large ${sourceDot(agent.sourceId)}`}/>
+              <span className="agent-source-copy"><b>{agentLabel(agent.sourceId, agent.displayName)}</b><small>{assetCount} 项用户资产</small></span>
+              <span className={`agent-source-state ${agent.detected ? 'is-detected' : ''}`}>{agent.detected ? '已检测' : '未检测'}</span>
+            </button>
+          })}
+        </nav>
+        <div className="agent-detail-pane">{selectedAgent && <AgentCard key={selectedAgent.sourceId} agent={selectedAgent}/>}</div>
+      </div> : <div className="empty-state roomy">没有可显示的智能体</div>}
+      <CrossAgentMatrix agents={items}/>
     </div>
   </main>
 }

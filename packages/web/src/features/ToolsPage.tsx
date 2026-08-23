@@ -6,14 +6,15 @@ import { AgentScope } from '../components/AgentScope'
 import { EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from '../components/StateViews'
 
 function duration(ms: number): string {
+  if (ms <= 0) return '未观察到'
   if (ms < 1000) return `${ms} 毫秒`
   if (ms < 60_000) return `${(ms / 1000).toFixed(1)} 秒`
   return `${(ms / 60_000).toFixed(1)} 分钟`
 }
 
-function rateValue(success: number, error: number): number {
+function rateValue(success: number, error: number): number | null {
   const total = success + error
-  return total ? Math.round(success / total * 100) : 0
+  return total ? Math.round(success / total * 100) : null
 }
 
 function rate(success: number, error: number): string {
@@ -42,7 +43,7 @@ type SortKey = 'callCount' | 'sessionCount' | 'successRate' | 'errorCount' | 'to
 type SortDirection = 'ascending' | 'descending'
 
 function sortMetric(tool: ToolUsageDto, key: SortKey): number {
-  if (key === 'successRate') return rateValue(tool.successCount, tool.errorCount)
+  if (key === 'successRate') return rateValue(tool.successCount, tool.errorCount) ?? -1
   return tool[key]
 }
 
@@ -57,7 +58,7 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
   const mostUsed = [...tools].sort((a, b) => b.callCount - a.callCount)[0]
   const errorCandidate = [...tools].sort((a, b) => b.errorCount - a.errorCount)[0]
   const mostErrors = errorCandidate?.errorCount ? errorCandidate : undefined
-  const slowest = [...tools].sort((a, b) => b.averageDurationMs - a.averageDurationMs)[0]
+  const slowest = [...tools].filter(tool => tool.averageDurationMs > 0).sort((a, b) => b.averageDurationMs - a.averageDurationMs)[0]
   const totalCalls = tools.reduce((sum, tool) => sum + tool.callCount, 0)
   const unattributedCalls = data?.meta.unattributedToolCalls ?? 0
   const attributedCalls = Math.max(0, totalCalls - unattributedCalls)
@@ -124,7 +125,7 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
                   <td><b className="tool-name">{tool.nativeToolName}</b><span className="tool-source">{tool.sourceIds.join(' / ')}</span></td>
                   <td><span className="tool-bar-cell"><span>{tool.callCount}</span><span className="metric-bar" aria-hidden="true"><i style={{ width: `${Math.max(4, tool.callCount / maxCalls * 100)}%` }}/></span></span></td>
                   <td>{tool.sessionCount}</td>
-                  <td><span className="tool-rate-cell" data-rate={successRate >= 95 ? 'good' : successRate >= 80 ? 'mid' : 'low'}><span>{rate(tool.successCount, tool.errorCount)}</span><span className="metric-bar" aria-hidden="true"><i style={{ width: `${successRate}%` }}/></span></span></td>
+                  <td><span className="tool-rate-cell" data-rate={successRate === null ? 'unknown' : successRate >= 95 ? 'good' : successRate >= 80 ? 'mid' : 'low'}><span>{rate(tool.successCount, tool.errorCount)}</span><span className="metric-bar" aria-hidden="true"><i style={{ width: `${successRate ?? 0}%` }}/></span></span></td>
                   <td className={tool.errorCount ? 'cell-danger' : 'cell-muted'}>{tool.errorCount}</td><td>{duration(tool.totalDurationMs)}</td><td>{duration(tool.averageDurationMs)}</td>
                 </tr>
               })}</tbody>

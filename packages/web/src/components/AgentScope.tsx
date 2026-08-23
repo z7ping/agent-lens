@@ -15,11 +15,11 @@ export function sourceDot(sourceId: string): string {
   return 'bg-muted'
 }
 
-export function AgentScope({ agents, value, onChange }: { agents: AgentFacetDto[]; value: string; onChange(value: string): void }) {
+export function AgentScope({ agents, value, onChange, allLabel = '全部' }: { agents: AgentFacetDto[]; value: string; onChange(value: string): void; allLabel?: string | false }) {
   const { pinned, toggle } = usePinnedAgents()
   const shown = pinned.map(id => agents.find(agent => agent.sourceId === id)).filter((agent): agent is AgentFacetDto => Boolean(agent))
   return <div className="agent-scope">
-    <button className={`scope-chip ${value === '' ? 'scope-chip-active' : ''}`} onClick={() => onChange('')}>全部</button>
+    {allLabel && <button className={`scope-chip ${value === '' ? 'scope-chip-active' : ''}`} onClick={() => onChange('')}>{allLabel}</button>}
     {shown.map(agent => <button key={agent.sourceId} className={`scope-chip ${value === agent.sourceId ? 'scope-chip-active' : ''}`} onClick={() => onChange(agent.sourceId)}>
       <span className={`source-dot ${sourceDot(agent.sourceId)}`} />
       <span>{agentLabel(agent.sourceId, agent.displayName)}</span>

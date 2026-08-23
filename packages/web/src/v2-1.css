@@ -1,0 +1,48 @@
+/* v2.1：跨页面的信息层级与真实数据口径补丁。 */
+
+.review-page .chat-bubble-user{
+  border-color:var(--al-user-bubble)!important;
+  background:var(--al-user-bubble)!important;
+  color:var(--al-user-bubble-text)!important;
+}
+.review-page .chat-bubble-user .chat-meta,
+.review-page .chat-bubble-user .chat-meta time,
+.review-page .chat-bubble-user .evidence-inline,
+.review-page .chat-bubble-user .evidence-inline-more{color:var(--al-user-bubble-muted)!important}
+.review-page .chat-bubble-user .markdown,
+.review-page .chat-bubble-user .markdown p,
+.review-page .chat-bubble-user .markdown li,
+.review-page .chat-bubble-user .markdown strong,
+.review-page .chat-bubble-user .markdown em{color:var(--al-user-bubble-text)!important}
+.review-page .chat-bubble-user .markdown-fade{background:linear-gradient(to bottom,transparent,var(--al-user-bubble))!important}
+
+.insight-coverage-strip{
+  margin-bottom:14px;
+  padding:12px 14px;
+  border:1px solid var(--al-line);
+  border-radius:12px;
+  background:var(--al-soft-2);
+  display:grid;
+  grid-template-columns:1.25fr .7fr 1fr .8fr;
+  gap:10px;
+}
+.insight-coverage-strip>div{min-width:0;display:flex;flex-direction:column;gap:4px}
+.insight-coverage-strip span{color:var(--al-muted);font-size:10.5px}
+.insight-coverage-strip b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--al-ink-2);font-size:11.5px;font-weight:650}
+.insight-coverage-strip b.is-warning{color:var(--al-warning)}
+.insight-comparison-item b.changed{color:var(--al-ink-2)}
+
+.round-nav-expand{color:var(--al-muted)!important}
+
+@media(max-width:900px){
+  .insight-coverage-strip{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
+@media(max-width:560px){
+  .app-header .nav-item{padding-inline:4px;font-size:11px}
+  .app-header .nav-item-active::after{left:4px;right:4px}
+  .app-header .nav-group-start{margin-left:5px}
+  .app-header .nav-group-start::before{left:-3px}
+  .insight-coverage-strip{grid-template-columns:1fr 1fr}
+  .insight-coverage-strip>div:first-child{grid-column:1/-1}
+}

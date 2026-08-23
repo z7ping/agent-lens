@@ -50,6 +50,15 @@ function sourceDotClass(sourceId: string): string {
   return 'dot-none'
 }
 
+function sourceLabel(sourceId: string, displayName?: string): string {
+  const cleaned = displayName?.replace(/\s+Source$/i, '').trim()
+  if (cleaned) return cleaned
+  if (sourceId === 'claude-code') return 'Claude Code'
+  if (sourceId === 'codex') return 'Codex'
+  if (sourceId === 'pi') return 'Pi'
+  return sourceId
+}
+
 function previewStatusLabel(status: string): string {
   if (status === 'unchanged') return '一致'
   if (status === 'missing') return '当前缺失'
@@ -209,7 +218,7 @@ export function BackupPage() {
       <div className="agent-scope">
         <button className={`scope-chip ${selectedSources.length === sources.filter(source => source.detected).length ? 'active' : ''}`} onClick={() => setSelectedSources(sources.filter(source => source.detected).map(source => source.sourceId))}>全部智能体</button>
         {sources.map(source => <button key={source.sourceId} disabled={!source.detected} className={`scope-chip ${selectedSources.includes(source.sourceId) ? 'active' : ''}`} onClick={() => toggleSource(source.sourceId)}>
-          <span className={`src-dot ${sourceDotClass(source.sourceId)}`}/>{source.displayName}
+          <span className={`src-dot ${sourceDotClass(source.sourceId)}`}/>{sourceLabel(source.sourceId, source.displayName)}
         </button>)}
       </div>
       <span className="toolbar-divider"/>
@@ -246,7 +255,7 @@ export function BackupPage() {
               <div className="future-card-body">
                 <div className="protection-grid">
                   {sources.map(source => <article key={source.sourceId} className={`protection-card ${!source.detected ? 'is-muted' : ''}`}>
-                    <div className="protection-card-head"><span className={`src-dot lg ${sourceDotClass(source.sourceId)}`}/><b>{source.displayName}</b><span className={`badge ${source.detected ? 'ok' : ''}`}>{source.detected ? '已检测' : '未检测'}</span></div>
+                    <div className="protection-card-head"><span className={`src-dot lg ${sourceDotClass(source.sourceId)}`}/><b>{sourceLabel(source.sourceId, source.displayName)}</b><span className={`badge ${source.detected ? 'ok' : ''}`}>{source.detected ? '已检测' : '未检测'}</span></div>
                     <div className="protection-counts">
                       <div className="protection-count"><strong>{source.kinds.skill ?? 0}</strong><span>技能文件</span></div>
                       <div className="protection-count"><strong>{source.kinds.session ?? 0}</strong><span>会话文件</span></div>
@@ -267,7 +276,7 @@ export function BackupPage() {
                   const checked = verification[snapshot.id]
                   return <tr key={snapshot.id}>
                     <td><div className="snapshot-name"><span className="snapshot-icon">{checked ? (checked.valid ? '✓' : '!') : '•'}</span><span><b>{formatTime(snapshot.createdAt)}</b><small>{snapshot.fileCount} 个文件</small></span></div></td>
-                    <td>{snapshot.sourceIds.join(' · ') || '—'}</td>
+                    <td>{snapshot.sourceIds.map(sourceId => sourceLabel(sourceId)).join(' · ') || '—'}</td>
                     <td>{formatBytes(snapshot.totalBytes)}</td>
                     <td>{checked ? <span className={`badge ${checked.valid ? 'ok' : 'err'}`}>{checked.valid ? '校验通过' : '校验失败'}</span> : <span className="badge">未校验</span>}</td>
                     <td>{snapshot.excludedCount}</td>
@@ -292,7 +301,7 @@ export function BackupPage() {
               <div className="future-card-head"><div><h2>创建快照</h2><p>选择本次真正要保护的范围。</p></div><span className="badge info">本地</span></div>
               <div className="future-card-body snapshot-builder">
                 <div className="builder-block"><div className="builder-label"><span>智能体</span><span>{selectedSources.length} / {sources.filter(source => source.detected).length}</span></div><div className="builder-checks">
-                  {sources.filter(source => source.detected).map(source => <label key={source.sourceId} className="builder-check"><input type="checkbox" checked={selectedSources.includes(source.sourceId)} onChange={() => toggleSource(source.sourceId)}/><span className={`src-dot ${sourceDotClass(source.sourceId)}`}/>{source.displayName}<small>{source.fileCount} 文件</small></label>)}
+                  {sources.filter(source => source.detected).map(source => <label key={source.sourceId} className="builder-check"><input type="checkbox" checked={selectedSources.includes(source.sourceId)} onChange={() => toggleSource(source.sourceId)}/><span className={`src-dot ${sourceDotClass(source.sourceId)}`}/>{sourceLabel(source.sourceId, source.displayName)}<small>{source.fileCount} 文件</small></label>)}
                 </div></div>
                 <div className="builder-block"><div className="builder-label"><span>资产类型</span><button className="link-btn" onClick={() => setSelectedKinds(selectedKinds.length === ALL_KINDS.length ? [] : ALL_KINDS)}>{selectedKinds.length === ALL_KINDS.length ? '清空' : '全选'}</button></div><div className="builder-checks">
                   {ALL_KINDS.map(kind => <label key={kind} className="builder-check"><input type="checkbox" checked={selectedKinds.includes(kind)} onChange={() => toggleKind(kind)}/>{kindLabel(kind)}<small>{sources.filter(source => selectedSources.includes(source.sourceId)).reduce((sum, source) => sum + (source.kinds[kind] ?? 0), 0)}</small></label>)}
