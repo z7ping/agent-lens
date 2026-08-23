@@ -1,0 +1,62 @@
+/* AgentLens Mock Tokens (v2) —— 与 packages/web/src/theme.css 同源色板 + 对比度修正 */
+:root {
+  --al-canvas:#F7F7F5;
+  --al-surface:#FFFFFF;
+  --al-surface-raised:#FFFFFF;
+  --al-soft:#F1F1EE;
+  --al-soft-2:#FAFAF8;
+  --al-line:#E7E7E2;
+  --al-line-strong:#D7D8D2;
+  --al-ink:#171816;
+  --al-ink-2:#383A36;
+  --al-muted:#5D6258;
+  --al-muted-2:#66707C;
+  --al-accent:#5B5BD6;
+  --al-accent-soft:#EEEEFF;
+  --al-success:#157A55;
+  --al-success-soft:#E9F6EF;
+  --al-warning:#9A6A14;
+  --al-warning-soft:#FFF5DD;
+  --al-danger:#C13F4D;
+  --al-danger-soft:#FFF0F2;
+  --al-shadow:0 1px 2px rgb(22 24 20 / .04),0 10px 28px rgb(22 24 20 / .05);
+  --al-shadow-lg:0 22px 70px rgb(22 24 20 / .16);
+  --font-ui:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  --font-mono:"SFMono-Regular",Consolas,"Liberation Mono",monospace;
+  --radius-sm:7px;--radius-md:10px;--radius-lg:14px;
+}
+:root[data-theme='dark'] {
+  --al-canvas:#111210;
+  --al-surface:#181A17;
+  --al-surface-raised:#1D1F1C;
+  --al-soft:#22241F;
+  --al-soft-2:#151613;
+  --al-line:#2C2E29;
+  --al-line-strong:#3A3D36;
+  --al-ink:#F4F5F2;
+  --al-ink-2:#D4D7D0;
+  --al-muted:#A6AC9F;
+  --al-muted-2:#98A2AE;
+  --al-accent:#8A88FF;
+  --al-accent-soft:#29284B;
+  --al-success:#5BC995;
+  --al-success-soft:#173328;
+  --al-warning:#E0B25A;
+  --al-warning-soft:#352A16;
+  --al-danger:#EF7A87;
+  --al-danger-soft:#351E22;
+  --al-shadow:0 1px 2px rgb(0 0 0 / .18),0 12px 30px rgb(0 0 0 / .16);
+  --al-shadow-lg:0 24px 72px rgb(0 0 0 / .44);
+}
+:root{--src-codex:#16866D;--src-claude:#C96E4D;--src-pi:#756FDC}
+:root[data-theme='dark']{--src-codex:#4DC7A2;--src-claude:#E59675;--src-pi:#9B96FF}
+
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font-family:var(--font-ui);background:var(--al-canvas);color:var(--al-ink);font-size:14px;-webkit-font-smoothing:antialiased;color-scheme:light}
+:root[data-theme='dark'] body{color-scheme:dark}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer}
+button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible,a:focus-visible{outline:2px solid color-mix(in srgb,var(--al-accent) 55%,transparent);outline-offset:2px}
+::selection{background:var(--al-accent-soft);color:var(--al-ink)}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}

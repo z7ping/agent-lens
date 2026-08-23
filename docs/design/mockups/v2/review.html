@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>任务复盘 · AgentLens v2 融合稿</title>
+<link rel="stylesheet" href="assets/tokens.css">
+<link rel="stylesheet" href="assets/base.css">
+</head>
+<body>
+<div class="app-shell review-shell">
+  <header class="app-header">
+    <div class="app-header-inner">
+      <div class="brand"><span class="brand-mark">A</span><span class="brand-name">AgentLens</span></div>
+      <nav class="app-nav">
+        <a class="nav-item active" href="#">任务复盘</a>
+        <a class="nav-item" href="tools.html">工具分析</a>
+        <a class="nav-item" href="agents.html">智能体概览</a>
+      </nav>
+      <div class="app-status">
+        <span class="status-pill tip" data-tip="Daemon 运行中 · 127.0.0.1:56789&#10;SSE 实时通道已连接"><span class="live-dot"></span>运行中 :56789</span>
+        <button class="icon-button" data-theme-toggle title="切换主题" aria-label="切换主题">◐</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="workspace-toolbar">
+    <div class="agent-scope">
+      <button class="scope-chip active">全部</button>
+      <button class="scope-chip"><span class="src-dot dot-codex"></span>Codex</button>
+      <button class="scope-chip"><span class="src-dot dot-claude"></span>Claude Code</button>
+      <button class="scope-chip"><span class="src-dot dot-pi"></span>Pi</button>
+      <details class="scope-manage">
+        <summary title="管理智能体快捷入口" aria-label="管理智能体快捷入口">＋</summary>
+        <div class="scope-pop">
+          <div class="scope-pop-title">快捷智能体</div>
+          <label><input type="checkbox" checked><span class="src-dot dot-codex"></span><span>Codex</span><span class="st on">已检测</span></label>
+          <label><input type="checkbox" checked><span class="src-dot dot-claude"></span><span>Claude Code</span><span class="st on">已检测</span></label>
+          <label><input type="checkbox"><span class="src-dot dot-pi"></span><span>Pi</span><span class="st">未检测</span></label>
+        </div>
+      </details>
+    </div>
+    <span class="toolbar-divider"></span>
+    <select class="filter"><option>项目：agent-lens</option><option>全部项目</option><option>packages/web</option></select>
+    <select class="filter"><option>今天</option><option>最近 7 天</option><option>最近 30 天</option><option>全部时间</option></select>
+    <select class="filter"><option>有错误</option><option>全部状态</option><option>无错误</option></select>
+    <input class="filter search-filter" value="storage" placeholder="搜索会话…">
+    <button class="icon-button" title="刷新" aria-label="刷新">↻</button>
+  </div>
+
+  <div class="review-layout">
+    <aside class="session-panel">
+      <div class="session-panel-head">
+        <b>会话</b>
+        <span>40+</span>
+        <div class="seg" title="讨论项：按项目聚合（P1 候选）">
+          <button class="active">按时间</button><button>按项目</button>
+        </div>
+      </div>
+      <div class="session-scroll">
+        <div class="session-group">今天</div>
+        <button class="session-item active src-codex" data-session-id="storage-refactor">
+          <div class="si-meta"><span class="src-dot dot-codex"></span><span>Codex</span><time title="2026/08/22 14:32:05">14 分钟前</time></div>
+          <div class="si-title">重构 agent-lens 存储层：引入 Repository 接口</div>
+          <div class="si-foot"><span class="grow">agent-lens</span><span>24 调用</span><span class="errs">2 错误</span></div>
+        </button>
+        <button class="session-item src-claude" data-session-id="sse-fix">
+          <div class="si-meta"><span class="src-dot dot-claude"></span><span>Claude Code</span><time title="2026/08/22 13:05:41">约 1 小时前</time></div>
+          <div class="si-title">修复 Web 端 SSE 断线重连后重复渲染的问题</div>
+          <div class="si-foot"><span class="grow">packages/web</span><span>18 调用</span></div>
+        </button>
+        <button class="session-item src-pi" data-session-id="wal-research">
+          <div class="si-meta"><span class="src-dot dot-pi"></span><span>Pi</span><time title="2026/08/22 11:47:12">3 小时前</time></div>
+          <div class="si-title">调研 SQLite WAL 模式在 Windows 的锁定行为</div>
+          <div class="si-foot"><span class="grow">无项目</span><span>9 调用</span><span class="errs">1 错误</span></div>
+        </button>
+        <div class="session-group">昨天</div>
+        <button class="session-item src-codex" data-session-id="checkpoint-test">
+          <div class="si-meta"><span class="src-dot dot-codex"></span><span>Codex</span><time title="2026/08/21 22:14:33">昨天 22:14</time></div>
+          <div class="si-title">为 source-claude 补充 history checkpoint 回归测试</div>
+          <div class="si-foot"><span class="grow">agent-lens</span><span>31 调用</span></div>
+        </button>
+        <button class="session-item src-claude" data-session-id="adr-backup">
+          <div class="si-meta"><span class="src-dot dot-claude"></span><span>Claude Code</span><time title="2026/08/21 20:03:57">昨天 20:03</time></div>
+          <div class="si-title">起草 ADR-0003：资产备份快照格式与 Manifest 校验</div>
+          <div class="si-foot"><span class="grow">docs/adr</span><span>12 调用</span></div>
+        </button>
+        <button class="load-more">加载更多会话 · 再显示最多 40 条</button>
+      </div>
+    </aside>
+
+    <section class="reader-pane" id="readerPane" data-reader>
+      <!-- turn-rail：只负责定位（筛选在 round-nav） -->
+      <nav class="turn-rail" aria-label="轮次定位">
+        <button class="turn-tick active" data-target="#round-1" data-tip="第 1 轮 · 收敛改动清单"><i></i><i></i><i></i></button>
+        <button class="turn-tick err" data-target="#round-2" data-tip="第 2 轮 · 1 次失败后恢复"><i></i><i></i><i></i></button>
+        <button class="turn-tick" data-target="#round-3" data-tip="第 3 轮 · 全量回归（耗时较高）"><i></i><i></i><i></i></button>
+        <button class="turn-tick dim audit-only" data-target="#round-bg" data-tip="后台活动 · 仅审计视图显示"><i></i><i></i></button>
+      </nav>
+
+      <div class="reader-inner">
+        <header class="review-head">
+          <div class="rh-meta"><span class="src-dot lg dot-codex"></span><b>Codex</b><span>agent-lens</span><span class="badge err">有错误</span></div>
+          <h1 class="rh-title">重构 agent-lens 存储层：引入 Repository 接口</h1>
+          <div class="rh-sub"><span>2026/08/22 13:58 – 14:32</span><code title="F:\01-ai-gen-workspaces\agent-lens">F:\01-ai-gen-workspaces\agent-lens</code></div>
+          <div class="rh-actions">
+            <button class="audit-toggle" data-audit-toggle aria-pressed="false">显示审计细节</button>
+            <span class="audit-note-inline audit-only">审计视图：显示权限事件、生命周期原始事件与证据说明</span>
+          </div>
+          <div class="rh-metrics">
+            <div class="metric"><b>6</b><span>轮次</span></div>
+            <div class="metric"><b>24</b><span>调用</span></div>
+            <div class="metric danger"><b>2</b><span>错误</span></div>
+            <div class="metric"><b>34 分钟</b><span title="跨度 = endedAt − startedAt，包含空闲间隔">跨度</span></div>
+          </div>
+        </header>
+
+        <div class="round-nav">
+          <div class="round-seg">
+            <button class="active">全部 <em>6</em></button>
+            <button class="tip" data-tip="只显示含失败工具调用的轮次">有错误 <em>2</em></button>
+            <button class="tip" data-tip="由服务端基于完整会话的轮次耗时分布计算（上四分位）">耗时较高 <em>2</em></button>
+          </div>
+          <div class="round-act"><button data-scroll-bottom="#readerPane">跳到最新 ↓</button></div>
+        </div>
+
+        <!-- 第 1 轮：恒展开，标题为锚点 -->
+        <details class="interaction" id="round-1" open>
+          <summary><span class="it-title">第 1 轮</span><span class="it-preview">先列出改动清单，不要直接动代码</span>
+            <span class="it-meta"><span>5 工具</span><span>41 秒</span></span></summary>
+          <div class="it-flow">
+            <div class="chat-row user">
+              <div class="bubble">
+                <div class="meta"><span>用户</span><span class="ev-list"><span class="ev" data-cap="hook"><i></i>运行时捕获</span></span><time>13:58:12</time></div>
+                <p>帮我把 storage-sqlite 里散落的 SQL 收敛到 Repository 接口后面。先列出改动清单，不要直接动代码。</p>
+              </div>
+            </div>
+            <details class="thinking">
+              <summary><span class="t-label">思考过程</span><span class="t-preview">先盘点 SQL 分布，再按 Repository 边界归并……</span><time>13:58:40</time></summary>
+              <div class="thinking-body">先盘点 packages/storage-sqlite/src 下所有 better-sqlite3 调用点；按 hosts / observations / evidence 三组归并；迁移顺序保持对 Repository 接口零破坏。</div>
+            </details>
+
+            <details class="toolgroup" open>
+              <summary><span class="tg-icon">↳</span><span class="tg-title">工具执行</span><small>5 次</small>
+                <span class="tg-counts">命令 2 · 读取 2 · 搜索 1</span>
+                <span class="tg-status ok">全部完成</span><span class="tg-total">总计 41 秒</span></summary>
+              <div class="tg-bar" title="耗时占比：npm test 54% · rg 28% · 其余 18%">
+                <i style="width:54%;background:#B45309"></i><i style="width:28%;background:#2563EB"></i><i style="width:12%;background:#0E7490"></i><i style="width:6%;background:#157A55"></i>
+              </div>
+              <div>
+                <button class="trow" data-open-drawer="#inspector"><span class="rail"><i></i></span><span class="kicon sm kind-shell"></span>
+                  <span class="tr-main"><span class="tr-name"><b>bash</b><span class="tag">命令</span><span class="ev-list"><span class="ev" data-cap="hook" title="运行时捕获 · 已观测 · 精确"><i></i>运行时捕获</span></span></span><span class="tr-prev">rg "better-sqlite3" packages/storage-sqlite/src</span></span><span class="tr-dur">0.4 秒</span></button>
+                <button class="trow" data-open-drawer="#inspector"><span class="rail"><i></i></span><span class="kicon sm kind-read"></span>
+                  <span class="tr-main"><span class="tr-name"><b>read_file</b><span class="tag">读取</span></span><span class="tr-prev">storage-sqlite/src/repository.ts · 214 行</span></span><span class="tr-dur">0.1 秒</span></button>
+                <button class="trow" data-open-drawer="#inspector"><span class="rail"><i></i></span><span class="kicon sm kind-search"></span>
+                  <span class="tr-main"><span class="tr-name"><b>grep</b><span class="tag">搜索</span></span><span class="tr-prev">"CREATE TABLE" → 21 张规范表</span></span><span class="tr-dur">0.3 秒</span></button>
+                <button class="trow" data-open-drawer="#inspector"><span class="rail"><i></i></span><span class="kicon sm kind-shell"></span>
+                  <span class="tr-main"><span class="tr-name"><b>bash</b><span class="tag">命令</span></span><span class="tr-prev">npm test -- --filter storage → 42 通过</span></span><span class="tr-dur">12.4 秒</span></button>
+                <button class="trow" data-open-drawer="#inspector"><span class="rail"><i></i></span><span class="kicon sm kind-read"></span>
+                  <span class="tr-main"><span class="tr-name"><b>read_file</b><span class="tag">读取</span></span><span class="tr-prev">docs/adr/0001-agentlens-1.0-clean-rebuild….md</span></span><span class="tr-dur">0.2 秒</span></button>
+              </div>
+            </details>
+
+            <button class="event-row perm" data-open-drawer="#inspector">
+              <span class="e-mark"></span><span class="e-copy"><b>权限请求</b><small>bash · allow</small></span><span class="e-src">Codex</span><time>13:59:02</time>
+            </button>
+
+            <div class="chat-row agent">
+              <div class="bubble">
+                <div class="meta"><span>Codex</span><span class="ev-list"><span class="ev" data-cap="hook"><i></i>运行时捕获</span><span class="ev" data-cap="log"><i></i>原生日志</span><span class="ev-more">+1</span></span><time>14:02:47</time></div>
+                <p>改动清单如下：</p>
+                <ul>
+                  <li>新增 <code>ObservationRepository</code> / <code>EvidenceRepository</code> 接口，收敛全部裸 SQL；</li>
+                  <li><code>StorageService</code> 只依赖接口，SQLite 实现移入内部；</li>
+                  <li>migration 保持不变，仅调整访问路径。</li>
+                </ul>
+                <div class="b-actions"><button data-open-drawer="#inspector">证据详情 · 2</button><button>查看源码</button></div>
+              </div>
+            </div>
+            <div class="audit-note audit-only"><b>证据说明</b>　该轮由运行时捕获与原生日志共同支撑；同一原生 Tool Call 的两条采集路径指向同一条 Canonical Observation，不重复计数。</div>
+          </div>
+        </details>
+
+        <!-- 第 2 轮：含错误 + 执行中 + 审计原始事件 -->
+        <details class="interaction has-error" id="round-2" open>
+          <summary><span class="it-title">第 2 轮</span><span class="it-preview">按清单动手。注意 migration 要拆成两个事务。</span>
+            <span class="it-meta"><span>5 工具</span><span class="err">1 错误</span><span>2 分 18 秒</span></span></summary>
+          <div class="it-flow">
+            <div class="chat-row user">
+              <div class="bubble">
+                <div class="meta"><span>用户</span><time>14:04:01</time></div>
+                <p>好，按这个清单动手。注意 migration 要拆成两个事务，避免锁整库。</p>
+              </div>
+            </div>
+            <details class="toolgroup" open>
+              <summary><span class="tg-icon">↳</span><span class="tg-title">工具执行</span><small>5 次</small>
+                <span class="tg-counts">修改 3 · 命令 2</span>
+                <span class="tg-status err">1 个错误</span><span class="tg-total">总计 138 秒</span></summary>
+              <div class="tg-toolbar"><span>共 5 次 · 1 次失败</span><label><input type="checkbox"> 只看错误</label></div>
+              <div>
+                <button class="trow" data-open-drawer="#inspector"><span class="rail"><i></i></span><span class="kicon sm kind-edit"></span>
+                  <span class="tr-main"><span class="tr-name"><b>edit_file</b><span class="tag">修改</span></span><span class="tr-prev">repository.ts · 新增 ObservationRepository</span></span><span class="tr-dur">0.8 秒</span></button>
+                <button class="trow error" data-open-drawer="#inspector"><span class="rail"><i style="background:var(--al-danger)"></i></span><span class="kicon sm kind-edit"></span>
+                  <span class="tr-main"><span class="tr-name"><b>apply_patch</b><span class="tag">修改</span><span class="badge err">失败</span></span><span class="tr-prev err-text">error: patch does not apply to lines 88–102</span></span><span class="tr-dur">1.2 秒</span></button>
+                <button class="trow" data-open-drawer="#inspector"><span class="rail"><i></i></span><span class="kicon sm kind-read"></span>
+                  <span class="tr-main"><span class="tr-name"><b>read_file</b><span class="tag">读取</span></span><span class="tr-prev">migration/0007_init.sql</span></span><span class="tr-dur">0.1 秒</span></button>
+                <button class="trow running" data-open-drawer="#inspector"><span class="rail"><i></i></span><span class="kicon sm kind-shell"></span>
+                  <span class="tr-main"><span class="tr-name"><b>bash</b><span class="tag">命令</span><span class="badge info">执行中</span></span><span class="tr-prev">npm run typecheck</span></span><span class="tr-dur">14:07:41</span></button>
+              </div>
+            </details>
+            <div class="chat-row agent">
+              <div class="bubble">
+                <div class="meta"><span>Codex</span><span class="ev-list"><span class="ev" data-cap="hook"><i></i>运行时捕获</span></span><time>14:06:19</time></div>
+                <p>apply_patch 与当前文件内容冲突，改为基于最新行号重新生成补丁后重试。</p>
+              </div>
+            </div>
+            <details class="rawgroup audit-only">
+              <summary><span>原始事件 · 2</span><time>14:07:41</time></summary>
+              <div>
+                <button class="event-row" data-open-drawer="#inspector">
+                  <span class="e-mark"></span><span class="e-copy"><b>使用情况</b><small>输入 18,204 · 输出 2,913 个词元</small></span><span class="e-src">Codex</span><time>14:06:55</time>
+                </button>
+                <button class="event-row" data-open-drawer="#inspector">
+                  <span class="e-mark"></span><span class="e-copy"><b>轮次停止</b><small>stop · end_turn</small></span><span class="e-src">Codex</span><time>14:06:58</time>
+                </button>
+              </div>
+            </details>
+          </div>
+        </details>
+
+        <!-- 第 3 轮：耗时较高（恒展开，内容从简示意） -->
+        <details class="interaction" id="round-3" open>
+          <summary><span class="it-title">第 3 轮</span><span class="it-preview">把 migration 拆成两个事务并回归测试…</span>
+            <span class="it-meta"><span>8 工具</span><span class="latency">耗时较高</span><span>22 分钟</span></span></summary>
+          <div class="it-flow">
+            <div class="chat-row user"><div class="bubble"><div class="meta"><span>用户</span><time>14:10:04</time></div><p>继续，回归全部 storage 测试，然后告诉我还剩什么。</p></div></div>
+            <details class="toolgroup">
+              <summary><span class="tg-icon">↳</span><span class="tg-title">工具执行</span><small>8 次</small>
+                <span class="tg-counts">命令 5 · 读取 2 · 修改 1</span>
+                <span class="tg-status ok">全部完成</span><span class="tg-total">总计 22 分钟</span></summary>
+              <div>
+                <button class="trow" data-open-drawer="#inspector"><span class="rail"><i></i></span><span class="kicon sm kind-shell"></span>
+                  <span class="tr-main"><span class="tr-name"><b>bash</b><span class="tag">命令</span></span><span class="tr-prev">npm test -- --filter storage → 全量通过</span></span><span class="tr-dur">4 分 42 秒</span></button>
+                <button class="trow" data-open-drawer="#inspector"><span class="rail"><i></i></span><span class="kicon sm kind-shell"></span>
+                  <span class="tr-main"><span class="tr-name"><b>git diff</b><span class="tag">命令</span></span><span class="tr-prev">核对 Repository 收敛范围</span></span><span class="tr-dur">0.1 秒</span></button>
+              </div>
+            </details>
+            <div class="chat-row agent"><div class="bubble"><div class="meta"><span>Codex</span><time>14:32:05</time></div><p>全部 storage 测试通过。剩余只需补两处文档说明和一组 migration 回归测试，不需要继续调整架构。</p></div></div>
+          </div>
+        </details>
+
+        <!-- 后台活动：仅审计视图 -->
+        <details class="interaction audit-only" id="round-bg" open>
+          <summary><span class="it-title">后台活动</span><span class="it-preview">checkpoint 同步 · 上下文压缩</span>
+            <span class="it-meta"><span>0 工具</span><span>3 分钟</span></span></summary>
+          <div class="it-flow">
+            <details class="rawgroup" open>
+              <summary><span>原始生命周期事件 · 2</span><time>14:21</time></summary>
+              <div>
+                <button class="event-row"><span class="e-mark"></span><span class="e-copy"><b>检查点同步</b><small>原生历史 checkpoint 已同步</small></span><span class="e-src">日志</span><time>14:18</time></button>
+                <button class="event-row"><span class="e-mark"></span><span class="e-copy"><b>上下文压缩</b><small>触发一次压缩</small></span><span class="e-src">运行时</span><time>14:21</time></button>
+              </div>
+            </details>
+          </div>
+        </details>
+
+        <div class="sentinel">已完整加载 6 轮</div>
+      </div>
+
+      <div class="live-wrap"><button class="live-pill" data-scroll-bottom="#readerPane"><i></i>有新记录 · 2 条 ↓</button></div>
+    </section>
+  </div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+
+<aside class="drawer" id="inspector" role="dialog" aria-modal="true" aria-label="事件详情">
+  <div class="dw-head">
+    <div>
+      <div class="dw-eyebrow">事件详情</div>
+      <div class="dw-title"><span class="kicon kind-edit"></span>apply_patch</div>
+      <div class="dw-sub">修改 · 失败 · 1.2 秒 · 今天 14:07:33</div>
+    </div>
+    <button class="icon-button" data-close-drawer aria-label="关闭">×</button>
+  </div>
+  <div class="tabs">
+    <button class="active" data-tab="detail">详情</button>
+    <button data-tab="evidence">证据 2</button>
+    <button data-tab="raw">原始数据</button>
+  </div>
+  <div class="dw-body">
+    <section data-panel="detail">
+      <h3 class="sec-label">路径</h3>
+      <pre class="code-block">packages/storage-sqlite/src/repository.ts</pre>
+      <h3 class="sec-label">错误输出</h3>
+      <pre class="code-block is-error">error: patch does not apply to lines 88–102
+note: file changed since last read (mtime 14:06:58)</pre>
+      <div class="audit-only">
+        <h3 class="sec-label">审计信息</h3>
+        <dl class="kv"><dt>观测 ID</dt><dd style="font-family:var(--font-mono);font-size:11px">obs_01J6…8V7</dd><dt>原生调用</dt><dd style="font-family:var(--font-mono);font-size:11px">call_a83f…</dd><dt>采集路径</dt><dd>运行时捕获 + 原生日志</dd></dl>
+      </div>
+    </section>
+    <section data-panel="evidence" hidden>
+      <h3 class="sec-label">证据 · 同一事实的两条采集路径</h3>
+      <div class="ev-card">
+        <div class="row1"><b>运行时捕获</b><span>已观测</span><span>可信度：精确</span></div>
+        <div class="path"><code title="C:\Users\Mr.wang\.agent-lens\1.0\inbox\codex\2026-08-22T06-07-32-114Z.json">~/.agent-lens/1.0/inbox/codex/2026-08-22T06-07-32-114Z.json</code><button class="copy-link" data-copy="~/.agent-lens/1.0/inbox/codex/2026-08-22T06-07-32-114Z.json">复制</button></div>
+      </div>
+      <div class="ev-card">
+        <div class="row1"><b>原生日志</b><span>来源报告</span><span>可信度：高</span></div>
+        <div class="path"><code title="C:\Users\Mr.wang\.codex\sessions\2026\08\22\rollout-2026-08-22T13-58-03.jsonl">~/.codex/sessions/2026/08/22/rollout-….jsonl</code><button class="copy-link" data-copy="~/.codex/sessions/2026/08/22/rollout-2026-08-22T13-58-03.jsonl">复制</button></div>
+      </div>
+      <p style="font-size:11.5px;color:var(--al-muted);line-height:1.7;margin-top:12px">同一原生 Tool Call 被 Hook 与 History JSONL 同时观察到时，仍只有一条 Canonical Observation，但保留两份 Evidence。</p>
+    </section>
+    <section data-panel="raw" hidden>
+      <h3 class="sec-label">原始 Payload</h3>
+      <pre class="code-block">{
+  "kind": "tool.call",
+  "nativeCallId": "call_a83f…",
+  "sourceId": "codex",
+  "name": "apply_patch",
+  "status": "error",
+  "startedAt": "2026-08-22T06:07:32.114Z",
+  "durationMs": 1187,
+  "input": { "path": "packages/storage-sqlite/src/repository.ts" }
+}</pre>
+    </section>
+  </div>
+</aside>
+<script src="assets/app.js"></script>
+</body>
+</html>

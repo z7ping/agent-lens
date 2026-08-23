@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgentLens UI/UX v2 融合稿 · 高保真静态稿</title>
+<link rel="stylesheet" href="assets/tokens.css">
+<style>
+body{background:var(--al-canvas)}
+.hub{max-width:1060px;margin:0 auto;padding:56px 28px 80px}
+.hub-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:24px}
+.hub-hero h1{margin:6px 0 0;font-size:26px;font-weight:750;letter-spacing:-.02em}
+.hub-hero p{margin:10px 0 0;max-width:660px;color:var(--al-muted);font-size:13.5px;line-height:1.75}
+.decisions{margin:22px 0 30px;padding:16px 20px;border:1px solid var(--al-line);border-left:3px solid var(--al-accent);border-radius:12px;background:var(--al-surface)}
+.decisions b.t{display:block;font-size:13px;margin-bottom:8px}
+.decisions ul{margin:0;padding-left:18px;font-size:12.5px;line-height:1.9;color:var(--al-muted)}
+.decisions li b{color:var(--al-ink-2)}
+.sec-label2{margin:30px 0 14px;display:flex;align-items:center;gap:10px;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--al-muted-2)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.card{display:flex;flex-direction:column;gap:8px;padding:20px;border:1px solid var(--al-line);border-radius:14px;background:var(--al-surface);box-shadow:var(--al-shadow);text-decoration:none;color:inherit;transition:.16s}
+.card:hover{border-color:color-mix(in srgb,var(--al-accent) 40%,var(--al-line));transform:translateY(-2px);box-shadow:var(--al-shadow-lg)}
+.card .no{font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--al-muted-2)}
+.card h2{margin:0;font-size:16px;font-weight:700}
+.card p{margin:0;font-size:12.5px;line-height:1.7;color:var(--al-muted)}
+.card .go{margin-top:auto;padding-top:10px;color:var(--al-accent);font-size:12px;font-weight:650}
+.files{margin-top:34px;border:1px solid var(--al-line);border-radius:12px;background:var(--al-surface);padding:16px 20px;font-size:12.5px;color:var(--al-muted);line-height:2}
+.files code{font-family:var(--font-mono);font-size:11.5px;color:var(--al-ink-2);background:var(--al-soft);border-radius:5px;padding:1px 6px}
+</style>
+</head>
+<body>
+<div class="hub">
+  <div class="hub-hero">
+    <div>
+      <span class="eyebrow" style="color:var(--al-accent)">UI / UX DESIGN PROPOSAL · V2 融合版</span>
+      <h1>AgentLens 高保真静态稿 · v2</h1>
+      <p>融合两套设计：以「轻度降噪」为视觉基调，保留证据可见性与全量状态覆盖；吸收 turn-rail、KPI 细线长条、审计视图开关、SVG 图标集；收编资产备份与使用洞察两个长期能力原型。明暗主题跨页记忆。</p>
+    </div>
+    <button class="btn" data-theme-toggle>◐ 切换主题</button>
+  </div>
+
+  <div class="decisions">
+    <b class="t">v2 关键融合决策</b>
+    <ul>
+      <li><b>降噪基调：</b>KPI 成细线长条、徽章透明底、正常态中性色、分区靠细线不靠卡片堆叠；异常才用强语义色。</li>
+      <li><b>证据可见性：</b>Evidence 徽章默认可见但安静；右上角「显示审计细节」开关（记忆偏好）补全权限事件、生命周期原始事件、后台活动轮与证据说明——阅读流与审计流分层，但证据不默认隐藏。</li>
+      <li><b>轮次呈现：</b>连续流式 + 恒展开（标题为锚点）；左缘 turn-rail 只负责定位，「全部/有错误/耗时较高」筛选保留在 round-nav，二者分工明确。</li>
+      <li><b>会话列表：</b>保留卡片化（描边减淡），修复“条目区分不明显”；按项目聚合作为切换项出现在面板头（P1 讨论项）。</li>
+      <li><b>消息布局：</b>用户气泡右对齐、智能体内容左侧限宽（ChatGPT / Codex 习惯）；工具图标统一内联 SVG。</li>
+      <li><b>字号下限：</b>统一 11px（修正 balanced 稿 10.5px 徽章与其自身 12px 规范的矛盾）。</li>
+      <li><b>长期能力：</b>资产备份 / 使用洞察整页收编，标注「长期能力原型」，不属于 1.0 承诺范围。</li>
+    </ul>
+  </div>
+
+  <div class="sec-label2">当前界面 · 1.0 三视图 + 全局规范</div>
+  <div class="cards">
+    <a class="card" href="review.html">
+      <span class="no">BOARD 01 · 核心视图</span>
+      <h2>任务复盘</h2>
+      <p>turn-rail 定位 + 连续流轮次 + 审计细节开关 + 卡片化会话列表 + Tab 化 Inspector。试试：点击工具行开 Inspector；点「显示审计细节」看审计层；滚动看 turn-rail 联动。</p>
+      <span class="go">打开画板 →</span>
+    </a>
+    <a class="card" href="tools.html">
+      <span class="no">BOARD 02</span>
+      <h2>工具分析</h2>
+      <p>KPI 细线长条（含归因覆盖率）、「需要关注」清单、可排序表格 + 分布条、行钻取抽屉、带置信度的可归因资产。</p>
+      <span class="go">打开画板 →</span>
+    </a>
+    <a class="card" href="agents.html">
+      <span class="no">BOARD 03</span>
+      <h2>智能体概览</h2>
+      <p>卡片网格 + disclosure 收纳策略 + 比例化技能漏斗 + 双层编码覆盖矩阵。</p>
+      <span class="go">打开画板 →</span>
+    </a>
+    <a class="card" href="states.html">
+      <span class="no">BOARD 04</span>
+      <h2>状态与引导</h2>
+      <p>按用途分组的行式布局：加载进行态 / 空状态 / 错误与实时 / 首次运行引导，覆盖全部状态变体。</p>
+      <span class="go">打开画板 →</span>
+    </a>
+    <a class="card" href="system.html">
+      <span class="no">BOARD 05</span>
+      <h2>设计系统</h2>
+      <p>统一后的字号阶梯（≥11px）、降噪原则、Evidence 徽章规范、SVG 工具图标、色彩 Token。</p>
+      <span class="go">打开画板 →</span>
+    </a>
+  </div>
+
+  <div class="sec-label2">长期能力原型 · 不属于 1.0 范围</div>
+  <div class="cards">
+    <a class="card" href="backup.html">
+      <span class="no">FUTURE · 主线二</span>
+      <h2>资产备份</h2>
+      <p>保护范围 / 快照清单与 Hash 校验 / 导入恢复 Dry Run / 敏感信息默认排除 / 迁移边界预演。对应 PRODUCT-DIRECTION「保住」。</p>
+      <span class="go">打开画板 →</span>
+    </a>
+    <a class="card" href="insights.html">
+      <span class="no">FUTURE · 主线三</span>
+      <h2>使用洞察</h2>
+      <p>趋势图、Agent 使用对比、工作流模式（含识别规则抽屉）、资产采用情况；事实与模式分层，不做评分。对应 PRODUCT-DIRECTION「看懂」。</p>
+      <span class="go">打开画板 →</span>
+    </a>
+  </div>
+
+  <div class="files">
+    目录结构：<code>v2/index.html</code> 本页 · <code>review / tools / agents / states / system / backup / insights.html</code><br>
+    共享资源：<code>assets/tokens.css</code> · <code>assets/base.css</code>（v2 融合基础样式） · <code>assets/future.css</code> · <code>assets/app.js</code><br>
+    旧版对照：<code>../index.html</code>（v1 基线稿）· <code>../review-calm.html</code>（另一交互探索稿）
+  </div>
+</div>
+<script src="assets/app.js"></script>
+</body>
+</html>

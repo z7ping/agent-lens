@@ -404,6 +404,7 @@ start docs\design\mockups\index.html
 
 ## 修订记录
 
+- rev6（2026-08-22）：另一套设计进入仓库（`*-balanced` 七页 / `review-calm` / `backup` / `insights`），对比后产出 **v2 融合稿**，见 `docs/design/mockups/v2/`。融合决策：① 降噪基调——KPI 细线长条、透明底中性徽章、细线分区、正常态不用强语义色；② **证据默认可见但安静**，calm 的「显示审计细节」降级为可选视图（记忆偏好），只补充权限事件之外的原始事件、后台轮与证据说明，不隐藏证据本身；③ turn-rail 只负责定位、round-nav 只负责筛选，分工明确；④ 轮次恒展开连续流（标题为锚点）；⑤ 会话卡片化保留（描边减淡）+「按时间/按项目」切换占位；⑥ 用户气泡右对齐；⑦ 工具图标统一内联 SVG；⑧ 状态页按用途分组为行式布局；⑨ backup/insights 整页收编并标注「长期能力原型」（不属于 1.0 承诺）；⑩ 字号下限统一 11px（修正 balanced 稿 10.5px 徽章与其自身规范的矛盾）。同轮清理：删除 `*-balanced` 八个页面及孤立资源（balanced-pages.css / review-balanced.css+js / color-system.css / typography.css）；`review-calm.html` 作为交互探索稿保留于原位。
 - rev5（2026-08-22）：新增**轮次导航轨**（用户参考 ChatGPT / Codex 提议）：阅读区左侧竖轨 + 每轮一组小横线刻度，悬浮预览该轮用户消息、点击跳转滚动、当前视口轮高亮、错误轮染红（`turn-rail` / `turn-tick`，见 components.css 与 review.html）。
 - rev4（2026-08-22）：决策落地——**D1A**：轮次分隔从「横贯全宽 1px 细线」改为「左侧 3px 竖向导轨段」（错误轮染红），恢复长会话滚动扫视的边界辨识度；**D2C** 确认：会话列表维持 rev2 卡片形态（接受密度代价，换取静止态边界与点击 affordance）；**D3B** 确认：漏斗保留水平条 + `min-width:8px` 兜底，纵向化待真实数据验证；**D4A**：DrillDrawer 会话分布从 3 个硬编码链接改为水平迷你条形图（前 5 + 「查看全部」入口，行可点击跳转）。四项决策全部关闭。
 - rev3（2026-08-22）：原型评审落地一批修正——① 工具类型图标从 Unicode 字符（`›_`/`读`/`⌕`/`协` 等）全部替换为内联 SVG（G4 完成，currentColor 继承色板 token）；② Inspector 不再默认打开（原默认打开会遮盖 Header 右侧操作区），并补充焦点陷阱实现注意；抽屉宽度改为 `min(520px, max(320px, 42vw))`，中屏不再大面积遮盖；③ 排序表头支持升序/降序切换（`aria-sort` 双向 + ↑/↓ 指示）；④ round-nav 去掉 `backdrop-filter` 毛玻璃，改不透明背景，规避长列表快速滚动的重绘成本；⑤ 技能生命周期漏斗填充条增加 `min-width:8px`，极端低比例（如 1/15）时仍可见。待决策项：D1 轮次分隔形态（左侧竖线段 vs 极轻卡片）、D2 会话列表平铺 vs 卡片、D3 漏斗纵向化、D4 DrillDrawer 会话分布条形图化。
