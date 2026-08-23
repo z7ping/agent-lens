@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>工具分析 · 轻度降噪 · AgentLens</title>
+<link rel="stylesheet" href="assets/tokens.css"><link rel="stylesheet" href="assets/components.css"><link rel="stylesheet" href="assets/balanced-pages.css">
+</head>
+<body>
+<div class="app-shell balanced-page balanced-tools">
+<header class="app-header"><div class="app-header-inner">
+  <div class="brand"><span class="brand-mark">A</span><span class="brand-name">AgentLens</span></div>
+  <nav class="app-nav"><a class="nav-item" href="review-balanced.html">任务复盘</a><a class="nav-item active" href="tools-balanced.html">工具分析</a><a class="nav-item" href="agents-balanced.html">智能体概览</a><a class="nav-item" href="backup-balanced.html">资产备份</a><a class="nav-item" href="insights-balanced.html">使用洞察</a></nav>
+  <div class="app-status"><span class="status-pill tip" data-tip="服务运行正常 · SSE 实时通道已连接"><span class="live-dot"></span>运行中</span><button class="icon-button" data-theme-toggle title="切换主题">◐</button></div>
+</div></header>
+<div class="workspace-toolbar">
+  <div class="agent-scope"><button class="scope-chip active">全部</button><button class="scope-chip"><span class="src-dot dot-codex"></span>Codex</button><button class="scope-chip"><span class="src-dot dot-claude"></span>Claude Code</button><button class="scope-chip"><span class="src-dot dot-pi"></span>Pi</button></div>
+  <span class="toolbar-divider"></span><select class="filter"><option>全部项目</option><option>agent-lens</option></select><select class="filter"><option>最近 7 天</option><option>今天</option><option>最近 30 天</option></select><button class="icon-button toolbar-end">↻</button>
+</div>
+<div class="page-scroll"><main class="balanced-content">
+  <header class="balanced-heading"><div><span class="eyebrow">使用事实</span><h1>工具分析</h1><p>先看最常用、最容易失败、最慢的工具；工具类别、耗时、调用来源和可靠归因都保留，但正常状态不再反复用颜色和徽章强调。</p></div><div class="balanced-heading-actions"><span class="soft-badge">7 个工具</span><span class="soft-badge">最近 7 天</span></div></header>
+
+  <section class="balanced-kpis">
+    <article class="balanced-kpi"><span class="k-label">最高频</span><strong>bash</strong><small>128 次调用 · 23 个会话</small></article>
+    <article class="balanced-kpi"><span class="k-label">失败最多</span><strong class="danger">apply_patch</strong><small>6 次失败 · 成功率 90%</small></article>
+    <article class="balanced-kpi"><span class="k-label">平均最慢</span><strong>web_search</strong><small>4.2 秒 / 次 · 12 次调用</small></article>
+    <article class="balanced-kpi"><span class="k-label">可靠归因覆盖</span><strong>87%</strong><small>42 次调用未可靠归因到 Skill / MCP</small></article>
+  </section>
+
+  <div class="balanced-grid">
+    <section class="balanced-section" style="margin-top:0;padding-top:0;border-top:0">
+      <div class="balanced-section-head"><div><h2>工具调用</h2><p>点击行进入调用详情；颜色只用于工具类型小徽章和异常值。</p></div><div class="balanced-section-actions"><button class="btn small">调用 ↓</button></div></div>
+      <div class="balanced-panel balanced-table-wrap"><table class="balanced-table">
+        <thead><tr><th>工具</th><th class="num">调用</th><th class="num">会话</th><th>成功率</th><th class="num">失败</th><th class="num">平均耗时</th></tr></thead>
+        <tbody>
+          <tr data-open-drawer="#tool-detail"><td><span class="balanced-tool"><span class="kicon kind-shell sm"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><polyline points="3 5 6 8 3 11"/><line x1="6" y1="11" x2="13" y2="11"/></svg></span><span class="meta"><b>bash</b><small>Codex / Claude Code</small></span></span></td><td class="num">128</td><td class="num">23</td><td><span class="balanced-rate"><span class="bar-track"><span class="bar-fill" style="width:96%"></span></span>96%</span></td><td class="num err">5</td><td class="num">1.8 秒</td></tr>
+          <tr data-open-drawer="#tool-detail"><td><span class="balanced-tool"><span class="kicon kind-read sm"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2h5l3 3v9a1 1 0 01-1 1H4a1 1 0 01-1-1V3a1 1 0 011-1z"/><polyline points="9 2 9 5 12 5"/></svg></span><span class="meta"><b>read_file</b><small>Codex / Claude Code / Pi</small></span></span></td><td class="num">94</td><td class="num">19</td><td><span class="balanced-rate"><span class="bar-track"><span class="bar-fill" style="width:99%"></span></span>99%</span></td><td class="num">1</td><td class="num">320 毫秒</td></tr>
+          <tr data-open-drawer="#tool-detail"><td><span class="balanced-tool"><span class="kicon kind-edit sm"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11.5 2.5l2 2-8 8H3.5v-2l8-8z"/><path d="M10 4l2 2"/></svg></span><span class="meta"><b>apply_patch</b><small>Codex</small></span></span></td><td class="num">61</td><td class="num">14</td><td><span class="balanced-rate"><span class="bar-track"><span class="bar-fill" style="width:90%;background:var(--al-warning)"></span></span>90%</span></td><td class="num err">6</td><td class="num">2.1 秒</td></tr>
+          <tr data-open-drawer="#tool-detail"><td><span class="balanced-tool"><span class="kicon kind-search sm"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6.5" cy="6.5" r="4.5"/><line x1="10" y1="10" x2="14" y2="14"/></svg></span><span class="meta"><b>grep</b><small>Claude Code</small></span></span></td><td class="num">47</td><td class="num">11</td><td><span class="balanced-rate"><span class="bar-track"><span class="bar-fill" style="width:100%"></span></span>100%</span></td><td class="num">0</td><td class="num">410 毫秒</td></tr>
+          <tr data-open-drawer="#tool-detail"><td><span class="balanced-tool"><span class="kicon kind-mcp sm"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="4.5" cy="8" r="2.5"/><circle cx="11.5" cy="8" r="2.5"/><line x1="7" y1="8" x2="9" y2="8"/></svg></span><span class="meta"><b>mcp__github__search_issues</b><small>Claude Code</small></span></span></td><td class="num">18</td><td class="num">5</td><td><span class="balanced-rate"><span class="bar-track"><span class="bar-fill" style="width:83%;background:var(--al-warning)"></span></span>83%</span></td><td class="num err">3</td><td class="num">3.4 秒</td></tr>
+          <tr data-open-drawer="#tool-detail"><td><span class="balanced-tool"><span class="kicon kind-web sm"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"/><ellipse cx="8" cy="8" rx="3" ry="6.5"/><line x1="2" y1="8" x2="14" y2="8"/></svg></span><span class="meta"><b>web_search</b><small>Pi</small></span></span></td><td class="num">12</td><td class="num">4</td><td><span class="balanced-rate"><span class="bar-track"><span class="bar-fill" style="width:92%"></span></span>92%</span></td><td class="num">1</td><td class="num">4.2 秒</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <aside class="balanced-stack">
+      <section><div class="balanced-section-head"><div><h2>需要关注</h2><p>只把异常和明显长尾提升到第一层。</p></div></div><div class="tool-attention-list">
+        <div class="tool-attention"><span class="kicon kind-edit sm">!</span><span><b>apply_patch 失败偏多</b><small>6 次失败，集中在 3 个会话</small></span><span class="value" style="color:var(--al-danger)">90%</span></div>
+        <div class="tool-attention"><span class="kicon kind-mcp sm">!</span><span><b>GitHub MCP 成功率偏低</b><small>3 次失败，多为网络 / 权限问题</small></span><span class="value" style="color:var(--al-warning)">83%</span></div>
+        <div class="tool-attention"><span class="kicon kind-web sm">↗</span><span><b>web_search 平均最慢</b><small>样本 12 次，平均 4.2 秒</small></span><span class="value">4.2s</span></div>
+      </div></section>
+      <section class="balanced-section"><div class="balanced-section-head"><div><h2>调用来源</h2><p>来源只做辅助解释，不和工具主体抢权重。</p></div></div><div class="balanced-note"><strong>Codex</strong><span>占 54% 调用</span></div><div class="balanced-note"><strong>Claude Code</strong><span>占 38% 调用</span></div><div class="balanced-note"><strong>Pi</strong><span>占 8% 调用</span></div></section>
+    </aside>
+  </div>
+
+  <section class="balanced-section"><div class="balanced-section-head"><div><h2>可归因能力资产</h2><p>只有存在 Evidence 的调用才关联到具体 Skill / MCP；普通命令不会被强行归因。</p></div><span class="soft-badge">覆盖率 87%</span></div><div class="attribution-list">
+    <article class="attribution-item"><h3>github-mcp-server <span class="soft-badge accent">MCP</span></h3><p>38 次可靠调用 · 5 个会话 · 原生工具名精确归因</p></article>
+    <article class="attribution-item"><h3>doc-renderer <span class="soft-badge">技能</span></h3><p>21 次可靠调用 · 2 个会话 · 运行时捕获</p></article>
+    <article class="attribution-item"><h3>code-reviewer <span class="soft-badge">技能</span></h3><p>14 次可靠调用 · 4 个会话 · Evidence 可追溯</p></article>
+  </div></section>
+</main></div>
+<div class="scrim" id="scrim"></div><aside class="drawer" id="tool-detail"><div class="dw-head"><div><div class="dw-eyebrow">工具详情</div><div class="dw-title">apply_patch</div><div class="dw-sub">61 次调用 · 6 次失败</div></div><button class="icon-button" data-close-drawer>×</button></div><div class="dw-body"><div class="sec-label">最近错误示例</div><div class="ev-card"><div class="row1"><b>补丁上下文不匹配</b><span>Codex</span><span>2.1 秒</span></div><div class="path"><code>packages/web/src/features/ReviewPage.tsx</code></div></div><div class="sec-label">证据</div><div class="ev-card"><div class="row1"><b>运行时捕获</b><span>精确</span><span>Hook</span></div></div></div></aside>
+</div><script src="assets/app.js"></script></body></html>

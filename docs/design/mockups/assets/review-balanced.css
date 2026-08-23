@@ -25,6 +25,10 @@
 .balanced-review .it-title{color:var(--al-ink-2)}
 .balanced-review .it-preview{max-width:420px}
 .balanced-review .it-flow{gap:12px;padding-top:10px}
+.balanced-review .chat-row.user{align-items:flex-end;padding-left:7%;padding-right:0}
+.balanced-review .chat-row.agent{align-items:flex-start;padding-right:7%;padding-left:0}
+.balanced-review .chat-row.user .bubble{margin-left:auto}
+.balanced-review .chat-row.agent .bubble{margin-right:auto}
 .balanced-review .bubble{box-shadow:none}
 .balanced-review .ev{height:18px;padding:0 5px;border-color:color-mix(in srgb,var(--al-line) 72%,transparent);background:transparent;font-size:10.5px;font-weight:540}
 .balanced-review .thinking{border-color:color-mix(in srgb,var(--al-accent) 14%,var(--al-line));background:color-mix(in srgb,var(--al-accent-soft) 18%,var(--al-surface))}
@@ -47,4 +51,4 @@
 .balanced-review .round-act .latest{color:var(--al-ink-2)}
 .balanced-review .round-act .latest:hover{color:var(--al-accent)}
 @media(max-width:960px){.balanced-review .turn-rail{display:none}.balanced-review .reader-inner{padding-inline:20px}}
-@media(max-width:760px){.balanced-review .review-layout{display:block}.balanced-review .session-panel{max-height:34vh;border-right:0;border-bottom:1px solid var(--al-line)}.balanced-review .reader-pane{overflow:visible}.balanced-review .reader-inner{padding:18px 14px 90px}.balanced-review .workspace-toolbar .filter:nth-of-type(-n+3){display:none}.balanced-review .toolgroup{margin-left:0}.balanced-review .chat-row.user{padding-left:0}}
+@media(max-width:760px){.balanced-review .review-layout{display:block}.balanced-review .session-panel{max-height:34vh;border-right:0;border-bottom:1px solid var(--al-line)}.balanced-review .reader-pane{overflow:visible}.balanced-review .reader-inner{padding:18px 14px 90px}.balanced-review .workspace-toolbar .filter:nth-of-type(-n+3){display:none}.balanced-review .toolgroup{margin-left:0}.balanced-review .chat-row.user{padding-left:0}.balanced-review .chat-row.agent{padding-right:0}.balanced-review .bubble{max-width:96%}}
