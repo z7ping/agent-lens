@@ -45,9 +45,12 @@ body{color:var(--al-text-primary)}
 
 .live-pill i{background:currentColor!important}
 
-/* ── 用户气泡：与智能体正文形成明确的叙事边界 ──────────────── */
-.chat-bubble-user,
-:root[data-theme='dark'] .chat-bubble-user{
+/* ── 用户气泡：与智能体正文形成明确的叙事边界 ────────────────
+ * Review 的高保真层存在 .review-page .chat-bubble-user !important 规则，
+ * 因此这里必须至少保持相同特异性，确保最终语义 Token 真正生效。
+ */
+.review-page .chat-bubble-user,
+:root[data-theme='dark'] .review-page .chat-bubble-user{
   border-color:var(--al-user-bubble)!important;
   background:var(--al-user-bubble)!important;
   color:var(--al-user-bubble-text)!important;
@@ -64,10 +67,10 @@ body{color:var(--al-text-primary)}
   color:var(--al-user-bubble-muted)!important;
 }
 
-/* 旧 review.css 给键盘标记写死了白字/白底透明色；软底气泡下必须改回语义色。 */
+/* 用户气泡中的来源标记与代码片段必须继续使用用户气泡专属语义色。 */
 .chat-row-user .chat-meta::before,
 :root[data-theme='dark'] .chat-row-user .chat-meta::before{
-  border-color:color-mix(in srgb,var(--al-accent) 22%,var(--al-line))!important;
+  border-color:color-mix(in srgb,var(--al-user-bubble-text) 22%,transparent)!important;
   background:var(--al-user-bubble-code)!important;
   color:var(--al-user-bubble-text)!important;
 }
@@ -113,22 +116,22 @@ body{color:var(--al-text-primary)}
 
 .chat-bubble-user .markdown-message-actions,
 :root[data-theme='dark'] .chat-bubble-user .markdown-message-actions{
-  border-color:color-mix(in srgb,var(--al-accent) 16%,var(--al-line))!important;
+  border-color:color-mix(in srgb,var(--al-user-bubble-text) 16%,transparent)!important;
 }
 
 .chat-bubble-user .chat-actions button,
 .chat-bubble-user .markdown-message-actions button,
 :root[data-theme='dark'] .chat-bubble-user .chat-actions button,
 :root[data-theme='dark'] .chat-bubble-user .markdown-message-actions button{
-  border-color:var(--al-line)!important;
-  background:var(--al-surface)!important;
-  color:var(--al-text-muted)!important;
+  border-color:color-mix(in srgb,var(--al-user-bubble-text) 18%,transparent)!important;
+  background:var(--al-user-bubble-code)!important;
+  color:var(--al-user-bubble-text)!important;
 }
 
 .chat-bubble-user .chat-actions button:hover,
 .chat-bubble-user .markdown-message-actions button:hover{
-  background:var(--al-soft)!important;
-  color:var(--al-text-secondary)!important;
+  background:color-mix(in srgb,var(--al-user-bubble-code) 78%,var(--al-user-bubble-text))!important;
+  color:var(--al-user-bubble-text)!important;
 }
 
 /* Agent 气泡保持阅读表面，不在暗色主题中偷偷切成蓝黑。 */
