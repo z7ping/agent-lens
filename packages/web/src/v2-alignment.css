@@ -158,6 +158,7 @@
   padding-right: 13px;
 }
 
+.tool-table th[role='button']:focus-visible,
 .tool-table tbody tr:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--al-accent) 55%, transparent);
   outline-offset: -2px;
@@ -283,6 +284,37 @@
 .capability-row { align-items: flex-start; }
 .capability-row > span { min-width: 0; line-height: 1.55; color: var(--al-muted); }
 .capability-row > b { flex: 0 0 auto; margin-top: 1px; }
+
+/* ── 1.0 表现契约：正常文字下限 12px ──
+ * review-reference.css 等历史高特异性规则仍保留布局职责；
+ * 本层用更明确的最终选择器阻止 11/11.5px 重新漏到真实界面。
+ */
+.review-page .session-panel-head > div span,
+.review-page .session-panel-head .count-badge,
+.review-page .session-item-meta,
+.review-page .session-item-foot,
+.review-page .review-session-submeta code,
+.review-page .review-metric span,
+.review-page .interaction-chevron,
+.review-page .interaction-summary-meta span,
+.review-page .chat-meta,
+.review-page .chat-actions button,
+.review-page .markdown-message-actions button,
+.review-page .evidence-link,
+.background-data-notice,
+.background-data-notice button {
+  font-size: 12px !important;
+}
+
+/* Insights 历史移动端规则曾把整个品牌隐藏；当前基线只隐藏品牌文字，Logo 始终保留。 */
+@media (max-width: 560px) {
+  .app-header .brand {
+    display: flex !important;
+  }
+  .app-header .brand-name {
+    display: none !important;
+  }
+}
 
 @media (max-width: 760px) {
   .review-audit-controls { align-items: flex-start; flex-direction: column; gap: 5px; }
