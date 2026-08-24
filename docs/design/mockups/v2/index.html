@@ -10,14 +10,14 @@ body{background:var(--al-canvas)}
 .hub{max-width:1060px;margin:0 auto;padding:56px 28px 80px}
 .hub-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:24px}
 .hub-hero h1{margin:6px 0 0;font-size:26px;font-weight:750;letter-spacing:-.02em}
-.hub-hero p{margin:10px 0 0;max-width:660px;color:var(--al-muted);font-size:13.5px;line-height:1.75}
+.hub-hero p{margin:10px 0 0;max-width:660px;color:var(--al-muted);font-size:14px;line-height:1.75}
 .decisions{margin:22px 0 30px;padding:16px 20px;border:1px solid var(--al-line);border-left:3px solid var(--al-accent);border-radius:12px;background:var(--al-surface)}
-.decisions b.t{display:block;font-size:13px;margin-bottom:8px}.decisions ul{margin:0;padding-left:18px;font-size:12.5px;line-height:1.9;color:var(--al-muted)}.decisions li b{color:var(--al-ink-2)}
-.sec-label2{margin:30px 0 14px;display:flex;align-items:center;gap:10px;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--al-muted-2)}
+.decisions b.t{display:block;font-size:13px;margin-bottom:8px}.decisions ul{margin:0;padding-left:18px;font-size:13px;line-height:1.9;color:var(--al-muted)}.decisions li b{color:var(--al-ink-2)}
+.sec-label2{margin:30px 0 14px;display:flex;align-items:center;gap:10px;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--al-muted-2)}
 .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
 .card{display:flex;flex-direction:column;gap:8px;padding:20px;border:1px solid var(--al-line);border-radius:14px;background:var(--al-surface);box-shadow:var(--al-shadow);text-decoration:none;color:inherit;transition:.16s}.card:hover{border-color:color-mix(in srgb,var(--al-accent) 40%,var(--al-line));transform:translateY(-2px);box-shadow:var(--al-shadow-lg)}
-.card .no{font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--al-muted-2)}.card h2{margin:0;font-size:16px;font-weight:700}.card p{margin:0;font-size:12.5px;line-height:1.7;color:var(--al-muted)}.card .go{margin-top:auto;padding-top:10px;color:var(--al-accent);font-size:12px;font-weight:650}
-.files{margin-top:34px;border:1px solid var(--al-line);border-radius:12px;background:var(--al-surface);padding:16px 20px;font-size:12.5px;color:var(--al-muted);line-height:2}.files code{font-family:var(--font-mono);font-size:11.5px;color:var(--al-ink-2);background:var(--al-soft);border-radius:5px;padding:1px 6px}
+.card .no{font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--al-muted-2)}.card h2{margin:0;font-size:16px;font-weight:700}.card p{margin:0;font-size:13px;line-height:1.7;color:var(--al-muted)}.card .go{margin-top:auto;padding-top:10px;color:var(--al-accent);font-size:12px;font-weight:650}
+.files{margin-top:34px;border:1px solid var(--al-line);border-radius:12px;background:var(--al-surface);padding:16px 20px;font-size:13px;color:var(--al-muted);line-height:2}.files code{font-family:var(--font-mono);font-size:12px;color:var(--al-ink-2);background:var(--al-soft);border-radius:5px;padding:1px 6px}
 </style>
 </head>
 <body>
@@ -28,7 +28,7 @@ body{background:var(--al-canvas)}
       <h1>AgentLens 当前高保真原型</h1>
       <p>这是仓库内唯一有效的高保真原型基线。正式 Web 对齐以本目录为准；历史 v1、review-calm 等探索稿已删除，不再作为实现或验收依据。</p>
     </div>
-    <button class="btn" data-theme-toggle>◐ 切换主题</button>
+    <button class="btn" data-theme-toggle aria-label="切换主题"></button>
   </div>
 
   <div class="decisions">
@@ -38,17 +38,17 @@ body{background:var(--al-canvas)}
       <li><b>证据可见：</b>Evidence（证据）默认可见；原始记录与审计细节按需展开。</li>
       <li><b>长会话：</b>最近轮与错误轮默认展开，turn-rail 定位，round-nav 筛选。</li>
       <li><b>真实口径：</b>发现 ≠ 使用，未知 ≠ 0；缺失事实不通过演示数据补齐。</li>
-      <li><b>表现：</b>高信息密度但降低视觉噪音，正常态中性，异常才使用强语义色。</li>
+      <li><b>表现：</b>正常文字下限 12px；高信息密度但降低视觉噪音，正常态中性，异常才使用强语义色。</li>
     </ul>
   </div>
 
   <div class="sec-label2">当前页面</div>
   <div class="cards">
-    <a class="card" href="review.html"><span class="no">BOARD 01 · 核心视图</span><h2>任务复盘</h2><p>真实会话列表、轮次定位与筛选、智能折叠、Evidence（证据）和三页签检查器。</p><span class="go">打开画板 →</span></a>
+    <a class="card" href="review.html"><span class="no">BOARD 01 · 核心视图</span><h2>任务复盘</h2><p>真实会话列表、轮次定位与筛选、智能折叠、Evidence（证据）、原始记录审计模式和三页签检查器。</p><span class="go">打开画板 →</span></a>
     <a class="card" href="tools.html"><span class="no">BOARD 02</span><h2>工具分析</h2><p>细线 KPI、可排序表格、需要关注、真实会话钻取和可归因能力资产。</p><span class="go">打开画板 →</span></a>
     <a class="card" href="agents.html"><span class="no">BOARD 03</span><h2>智能体概览</h2><p>来源列表 + 单一详情、真实采集状态、资产使用比例、技能生命周期与跨智能体矩阵。</p><span class="go">打开画板 →</span></a>
-    <a class="card" href="states.html"><span class="no">BOARD 04</span><h2>状态与引导</h2><p>加载、空状态、错误恢复、实时断开和首次运行引导。</p><span class="go">打开画板 →</span></a>
-    <a class="card" href="system.html"><span class="no">BOARD 05</span><h2>设计系统</h2><p>字号、配色、Evidence（证据）、工具图标与组件规范。</p><span class="go">打开画板 →</span></a>
+    <a class="card" href="states.html"><span class="no">BOARD 04</span><h2>状态与引导</h2><p>加载、空状态、错误恢复、实时断开和当前三步首次运行引导。</p><span class="go">打开画板 →</span></a>
+    <a class="card" href="system.html"><span class="no">BOARD 05</span><h2>设计系统</h2><p>12px 字号下限、配色、Evidence（证据）、SVG 工具图标与来源状态规范。</p><span class="go">打开画板 →</span></a>
     <a class="card" href="backup.html"><span class="no">BOARD 06</span><h2>资产备份</h2><p>保护范围、快照、校验、导入导出与恢复预演，严格遵守真实实现边界。</p><span class="go">打开画板 →</span></a>
     <a class="card" href="insights.html"><span class="no">BOARD 07</span><h2>使用洞察</h2><p>样本覆盖、趋势、智能体使用对比、工作流模式和资产采用情况。</p><span class="go">打开画板 →</span></a>
   </div>
