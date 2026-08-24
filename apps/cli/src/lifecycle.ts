@@ -21,6 +21,7 @@ export interface LifecycleStatus {
   registered: boolean
   active: boolean
   autostart: boolean
+  hidden?: boolean
   detail?: string
 }
 
@@ -114,9 +115,11 @@ function windowsStatusScript(): string {
   return [
     "$ErrorActionPreference = 'Stop'",
     `$task = Get-ScheduledTask -TaskName ${psQuote(WINDOWS_TASK_NAME)} -ErrorAction SilentlyContinue`,
-    "if ($null -eq $task) { [pscustomobject]@{ registered = $false; active = $false; autostart = $false; state = 'Missing' } | ConvertTo-Json -Compress; exit 0 }",
+    "if ($null -eq $task) { [pscustomobject]@{ registered = $false; active = $false; autostart = $false; hidden = $false; state = 'Missing' } | ConvertTo-Json -Compress; exit 0 }",
     "$hasLogon = @($task.Triggers | Where-Object { $_.CimClass.CimClassName -eq 'MSFT_TaskLogonTrigger' -and $_.Enabled }).Count -gt 0",
-    '[pscustomobject]@{ registered = $true; active = ($task.State -eq \'Running\'); autostart = $hasLogon; state = [string]$task.State } | ConvertTo-Json -Compress',
+    '$action = @($task.Actions)[0]',
+    "$hidden = $null -ne $action -and $action.Execute -ieq 'powershell.exe' -and $action.Arguments -match 'WindowStyle\\s+Hidden'",
+    '[pscustomobject]@{ registered = $true; active = ($task.State -eq \'Running\'); autostart = $hasLogon; hidden = $hidden; state = [string]$task.State } | ConvertTo-Json -Compress',
   ].join('\n')
 }
 
@@ -133,12 +136,13 @@ async function ensureWindowsDefinition(options: LifecycleOptions, autostart: boo
 async function windowsStatus(): Promise<LifecycleStatus> {
   const result = await powershell(windowsStatusScript())
   if (result.code !== 0) throw new Error(`读取 Windows 后台任务状态失败${result.stderr ? `：${result.stderr}` : ''}`)
-  const parsed = JSON.parse(result.stdout || '{}') as { registered?: boolean; active?: boolean; autostart?: boolean; state?: string }
+  const parsed = JSON.parse(result.stdout || '{}') as { registered?: boolean; active?: boolean; autostart?: boolean; hidden?: boolean; state?: string }
   return {
     manager: 'windows-task-scheduler',
     registered: parsed.registered === true,
     active: parsed.active === true,
     autostart: parsed.autostart === true,
+    hidden: parsed.hidden === true,
     detail: parsed.state,
   }
 }
@@ -362,6 +366,7 @@ export const lifecycleInternals = {
   preferencesPath,
   windowsManagedArgument,
   windowsTaskScript,
+  windowsStatusScript,
   systemdUnit,
   launchdPlist,
   psQuote,
