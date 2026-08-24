@@ -11,10 +11,51 @@
   contain: layout paint style;
 }
 
-/* 长会话性能层只负责虚拟挂载与布局提示，不再覆盖正式 Review 视觉。 */
+/* 长会话性能层同时负责桌面阅读区的独立滚动上下文。 */
 .interaction-block {
   content-visibility: auto;
   contain-intrinsic-size: auto 220px;
+}
+
+.review-page .review-layout,
+.review-page .session-panel {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.review-page .session-scroll,
+.review-page .review-reader-pane {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.review-page .session-group-block + .session-group-block {
+  margin-top: 2px;
+}
+
+.review-page .session-group {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  margin: 8px 0 4px;
+  padding: 5px 7px;
+  border-bottom: 1px solid color-mix(in srgb, var(--al-line) 62%, transparent);
+  background: color-mix(in srgb, var(--al-soft-2) 94%, transparent);
+  backdrop-filter: blur(8px);
+  color: var(--al-muted-2);
+  font-size: var(--text-caption);
+  font-weight: 680;
+  letter-spacing: .04em;
+}
+
+.review-page .session-group-block:first-child .session-group {
+  margin-top: 0;
+}
+
+.round-nav-expand {
+  color: var(--al-muted);
 }
 
 .detail-load-sentinel {
@@ -23,7 +64,7 @@
   place-items: center;
   padding: 12px;
   color: var(--al-muted);
-  font-size: 12px;
+  font-size: var(--text-caption);
   text-align: center;
 }
 
@@ -49,7 +90,7 @@
 .round-nav-status {
   margin-left: auto;
   color: var(--al-muted);
-  font-size: 12px;
+  font-size: var(--text-caption);
 }
 
 .round-nav .round-nav-live {
@@ -58,4 +99,35 @@
 
 .round-nav-status + .round-nav-live {
   margin-left: 0;
+}
+
+@media (min-width: 901px) {
+  .app-shell:has(.review-page) {
+    height: 100vh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .review-page {
+    height: auto;
+    min-height: 0;
+  }
+}
+
+@media (max-width: 1100px) {
+  .review-page .search-filter {
+    width: 160px;
+    min-width: 140px;
+  }
+}
+
+@media (max-width: 900px) {
+  .review-page .workspace-toolbar {
+    padding-inline: 12px;
+  }
+
+  .review-page .search-filter {
+    width: 150px;
+    min-width: 130px;
+  }
 }
