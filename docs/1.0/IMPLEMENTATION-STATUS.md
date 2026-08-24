@@ -1,6 +1,6 @@
 # AgentLens 1.0 Alpha 实现状态
 
-更新日期：2026-08-21
+更新日期：2026-08-24
 
 ## 已实现
 
@@ -32,6 +32,7 @@ Source 检测后会先幂等解析 Installation 并立即发送 `source/detected
 - Task Review Projection
 - Agent Overview / Facet / Session Relationship Projection
 - 带版本的 `@agent-lens/protocol` DTO
+- `/api/v1/health` 报告运行时管理来源、运行模式、PID 与启动时间；`runtime` 字段保持 1.0 向后兼容，新客户端允许较早 1.0 Daemon 未返回该字段
 
 ### HTTP / SSE Surface
 
@@ -129,12 +130,20 @@ Agent 快捷入口按本机检测结果自动初始化，同时允许用户 Pin 
 ### Operations
 
 - Codex / Claude Hook Manager
-- CLI：start / status / doctor / hook
+- CLI：setup / start / status / doctor / hook
+- `agent-lens setup` 一次性初始化：校验 Node.js、准备 `~/.agent-lens/1.0`、识别 Codex / Claude Code / Pi、只为本机实际存在的 Codex / Claude Code 补齐 AgentLens Hook、报告已有运行时
+- Pi 初始化明确不安装 Hook，继续使用原生 History / Runtime Tail
+- `setup` 不启动长期 Daemon、不创建后台服务、不配置开机自启
+- `start` 启动前先探测默认 HTTP 地址；已有兼容 Daemon 时直接复用，不重复启动
+- npm 与 Windows Desktop 共用默认数据根和默认端口；Desktop 只停止自己拥有的 Daemon
+- Windows Desktop 首次正式安装运行时默认启用登录 Windows 后自动运行，可从托盘关闭；登录自启以隐藏窗口进入托盘
 - npm 单包分发构建
 - 构建后 Daemon / Web 发行包启动冒烟测试
 - GitHub Release -> npm Artifact Workflow
 - Windows Electron 桌面壳 + 中文托盘 + NSIS 安装包 Workflow
 - Windows 桌面图标已更新为符合 electron-builder 要求的 256×256 AgentLens 图标
+
+当前还**没有**实现 npm CLI 的 `service` / `autostart` 命令。它们属于下一阶段发行 / 运维层，必须继续遵守 ADR-0004 的单 Daemon、共享数据和所有权规则，不能恢复 0.x PID / Service Manager 架构。
 
 ## Repository Cleanup
 
@@ -227,6 +236,8 @@ P1：
 - 静态 Asset Discovery 不计为 Usage。
 - Asset Inventory 的“已安装 / 已配置”和 Evidence-backed Usage 的“实际用过”必须分开表达。
 - Hook install / uninstall 必须保留第三方 Handler。
+- CLI 初始化只修改 AgentLens 自己负责的集成配置，不为未检测到的 Agent 强行安装 Hook。
+- npm / Desktop 共存不得产生第二个默认 Daemon、第二套默认数据库或重复采集链路。
 - 幂等的 `unchanged` Replay 不触发 SSE 更新噪声。
 - SSE 实时更新不能通过反复全量替换内容区破坏滚动位置、展开状态和阅读上下文。
 - SSE 必须在首屏 Snapshot 之前建立，避免启动扫描期间出现事件盲区。
@@ -246,14 +257,18 @@ P1：
 7. Codex / Claude Code / Pi Source tests
 8. Canonical Observation + 多 Evidence 去重验收
 
-本轮 Web Feature Parity 新增了以下自动回归覆盖：
+本轮新增自动回归覆盖：
 
+- CLI 运行时所有者字段兼容旧 Health Payload；
+- CLI `setup` 只为实际检测到且缺失 / 不完整的 Codex / Claude Hook 选择安装目标；
+- Codex trusted 配置缺失时允许 `setup` 幂等修复；
+- HTTP Health Runtime 元数据；
 - Task Review Interaction / Tool Result / Error / Preview；
 - Agent Overview Asset Inventory 与 Usage 分离；
 - SQLite Asset Inventory Reader；
 - HTTP `mountStatic()` 动态 SPA 挂载 / 卸载。
 
-本轮改动已经进入同一套 typecheck / test / distribution build 路径；本文不把尚未最终确认的最新 PR Check 状态写成“已通过”。
+本轮改动已经进入同一套 typecheck / test / distribution build 路径；本文不把尚未最终确认的最新 `main` CI 状态写成“已通过”。
 
 Windows 安装包此前已经完成一次真实流水线验证：
 
@@ -267,9 +282,10 @@ Windows 安装包此前已经完成一次真实流水线验证：
 
 以下内容不适合仅凭自动验收宣称完成：
 
-- 在真实 Windows 桌面环境中点击安装、启动、托盘、退出和卸载；
+- 在真实 Windows 桌面环境中点击安装、启动、登录自启、托盘、退出和卸载；
+- 在真实 npm 全局安装环境执行 `agent-lens setup`，确认 Codex / Claude / Pi 检测结果与 Hook 补齐行为符合预期；
 - 使用真实 Codex / Claude Code / Pi 本机数据体验任务复盘的信息密度、Interaction 分组、Tool Group 与 Agent 专属事件表达；
 - 检查 Agent 概览中真实 Skill / MCP / Plugin / Extension / Hook 的扫描状态是否符合实际安装环境；
 - 根据实际体验决定是否继续调整 UI。
 
-本文不代表已经完成 Merge、npm Publish 或 GitHub Release；这些操作仍然必须由仓库所有者明确触发。
+本文不代表已经完成 npm Publish 或 GitHub Release；这些操作仍然必须由仓库所有者明确触发。
