@@ -15,6 +15,7 @@ import type {
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
 import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
+import { ToolKindIcon } from '../components/ToolKindIcon'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
 
 function formatTime(value: string): string {
@@ -307,37 +308,37 @@ function toolInputRecord(node: ReviewToolNodeDto): Record<string, JsonValue> {
   return payloadRecord(node.input)
 }
 
-function toolPresentation(node: ReviewToolNodeDto): { kind: ToolKind; icon: string; label: string; primary: string; secondary: string } {
+function toolPresentation(node: ReviewToolNodeDto): { kind: ToolKind; label: string; primary: string; secondary: string } {
   const input = toolInputRecord(node)
   const kind = detectToolKind(node.name)
   const output = brief(node.output, 110)
   if (kind === 'shell') {
     const command = stringValue(input, 'command', 'cmd', 'script', 'raw') || brief(node.input, 140)
-    return { kind, icon: '›_', label: '命令', primary: command, secondary: output }
+    return { kind, label: '命令', primary: command, secondary: output }
   }
   if (kind === 'read') {
     const path = stringValue(input, 'path', 'file_path', 'filePath', 'filename') || brief(node.input, 120)
-    return { kind, icon: '读', label: '读取', primary: path, secondary: output }
+    return { kind, label: '读取', primary: path, secondary: output }
   }
   if (kind === 'edit') {
     const path = stringValue(input, 'path', 'file_path', 'filePath', 'filename', 'new_path', 'old_path') || brief(node.input, 120)
     const patch = stringValue(input, 'patch', 'diff', 'content')
-    return { kind, icon: '改', label: '修改', primary: path, secondary: patch ? brief(patch, 110) : output }
+    return { kind, label: '修改', primary: path, secondary: patch ? brief(patch, 110) : output }
   }
   if (kind === 'search') {
     const query = stringValue(input, 'query', 'pattern', 'search', 'glob') || brief(node.input, 120)
     const path = stringValue(input, 'path', 'cwd', 'directory')
-    return { kind, icon: '⌕', label: '搜索', primary: query, secondary: path || output }
+    return { kind, label: '搜索', primary: query, secondary: path || output }
   }
   if (kind === 'mcp') {
     const target = stringValue(input, 'tool', 'server', 'mcp_server', 'name', 'method') || brief(node.input, 120)
-    return { kind, icon: '协', label: 'MCP（模型上下文协议）', primary: target, secondary: output }
+    return { kind, label: 'MCP（模型上下文协议）', primary: target, secondary: output }
   }
   if (kind === 'web') {
     const target = stringValue(input, 'url', 'query', 'href', 'path') || brief(node.input, 120)
-    return { kind, icon: '↗', label: '网络', primary: target, secondary: output }
+    return { kind, label: '网络', primary: target, secondary: output }
   }
-  return { kind, icon: '◇', label: '工具', primary: brief(node.input, 130), secondary: output }
+  return { kind, label: '工具', primary: brief(node.input, 130), secondary: output }
 }
 
 function PrettyJson({ value }: { value: unknown }) {
@@ -353,7 +354,7 @@ function StructuredToolDetail({ node }: { node: ReviewToolNodeDto }) {
   const status = node.status === 'error' ? '失败' : node.status === 'success' ? '完成' : node.status === 'running' ? '执行中' : '未知'
   return <section className="tool-detail">
     <div className="tool-detail-summary">
-      <span className={`tool-detail-icon tool-kind-${info.kind}`}>{info.icon}</span>
+      <span className={`tool-detail-icon tool-kind-${info.kind}`}><ToolKindIcon kind={info.kind}/></span>
       <div><b>{node.name}</b><span>{info.label} · {status}{node.durationMs !== undefined && node.durationMs > 0 ? ` · ${duration(node.durationMs)}` : ''}</span></div>
     </div>
     {info.primary && <div className="tool-detail-section"><h4>{primaryLabel}</h4><pre className="tool-detail-code">{info.primary}</pre></div>}
@@ -523,7 +524,7 @@ function ToolRow({ node, inspect, last }: { node: ReviewToolNodeDto; inspect(nod
   const info = toolPresentation(node)
   return <button className="execution-row" data-status={status} data-kind={info.kind} onClick={() => inspect(node)}>
     <span className="execution-rail" aria-hidden="true"><span className="execution-dot"/>{!last && <span className="execution-line"/>}</span>
-    <span className={`execution-tool-icon tool-kind-${info.kind}`}>{info.icon}</span>
+    <span className={`execution-tool-icon tool-kind-${info.kind}`}><ToolKindIcon kind={info.kind}/></span>
     <span className="execution-main">
       <span className="execution-name"><b>{node.name}</b><span className="tool-kind-label">{info.label}</span><span className="tool-status-label">{node.status === 'error' ? '失败' : node.status === 'success' ? '完成' : node.status === 'running' ? '执行中' : '未知'}</span><EvidenceBadges evidence={node.evidence} compact/></span>
       {info.primary && <span className="execution-preview execution-primary">{info.primary}</span>}
