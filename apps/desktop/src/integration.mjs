@@ -6,7 +6,8 @@ import { app } from 'electron'
 
 function runCli(args, env) {
   return new Promise(resolve => {
-    const cliEntry = join(app.getAppPath(), 'runtime', 'cli.mjs')
+    const cliEntry = join(process.resourcesPath, 'app.asar.unpacked', 'runtime', 'cli.mjs')
+    if (!existsSync(cliEntry)) return resolve(false)
     const child = spawn(process.execPath, [cliEntry, ...args], {
       env: {
         ...process.env,
@@ -40,8 +41,8 @@ async function refreshDesktopIntegration() {
   if (existsSync(join(home, '.claude'))) targets.push('claude')
 
   if (!targets.length) {
-    // Even without a detected Agent, status resolves the profile and registers
-    // Desktop as a valid Hook provider for a later installation.
+    // 即使当前没有检测到 Agent，也登记 Desktop 为可用 Hook Provider，
+    // 以后安装 Codex / Claude Code 时无需重新安装客户端。
     await runCli(['hook', 'status', 'all', '--json'], env)
     return
   }
