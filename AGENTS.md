@@ -25,6 +25,7 @@ AgentLens 1.0 是一次 **Clean Rebuild（彻底重建）**。
 1. `ARCHITECTURE.md`
 2. `docs/1.0/CORE-CONTRACT.md`
 3. `docs/adr/0001-agentlens-1.0-clean-rebuild-and-cordis-runtime.md`
+4. 涉及 npm / Desktop 生命周期时阅读 `docs/adr/0004-dual-distribution-single-runtime-lifecycle.md`
 
 如果实现与这些文档冲突，不要静默绕过 Contract。要么修复实现 Bug，要么明确发起 Contract Review / ADR。
 
@@ -193,13 +194,20 @@ Storage Plugin 可以直接使用 Cordis 生命周期提供 `ctx.storage`，但 
 CLI：
 
 ```text
+agent-lens setup
 agent-lens start
 agent-lens status
 agent-lens doctor
 agent-lens hook ...
 ```
 
-`start` 明确以前台方式运行。
+`setup` 是一次性初始化入口：检查 Node.js 与数据目录，识别 Codex / Claude Code / Pi，本机存在 Codex / Claude Code 时只补齐 AgentLens 自己缺失的 Hook，并报告已有运行时。Pi 使用原生 History / Runtime Tail，不安装 Hook。
+
+`setup` 不启动长期前台 Daemon，也不创建后台服务或开机自启；后台生命周期属于后续独立的发行 / 运维层。不得把 `setup` 扩展成 0.x service manager 的新包装。
+
+`start` 明确以前台方式运行。启动前必须先探测默认运行时；已有兼容 Daemon 时直接复用，不启动第二套。
+
+npm 与 Windows Desktop 可以同时安装，但同一默认数据根 / 默认端口同一时刻只允许一个有效 Daemon。Desktop 只能停止自己启动的 Daemon，不得误杀 npm / service 管理的外部运行时。
 
 Electron 只负责 Windows Desktop Lifecycle。不要把 Core / Source 逻辑搬进 `apps/desktop`。
 
@@ -212,6 +220,7 @@ npm test
 npm run build:dist
 npm pack --dry-run
 npm run build:web
+npm run cli -- setup
 npm run cli -- doctor
 npm run desktop:win      # Windows runner
 ```
@@ -230,6 +239,7 @@ Node.js 要求：`>=22.23.0`。
 - Asset 归因；
 - Projection 排序 / 分组；
 - Hook install / uninstall 安全性；
+- CLI 初始化目标选择与幂等性；
 - Protocol / API 行为；
 - Cordis compatibility。
 
@@ -247,6 +257,7 @@ same native semantic event from multiple evidence paths
 任何改变架构所有权 / 边界的决策，都必须同步更新：
 
 - `ARCHITECTURE.md`；
+- `docs/1.0/IMPLEMENTATION-STATUS.md`；
 - Contract 变化时更新 `docs/1.0/CORE-CONTRACT.md`；
 - 对长期、难以逆转的决策补充 ADR。
 
