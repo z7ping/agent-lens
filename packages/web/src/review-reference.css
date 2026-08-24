@@ -3,7 +3,7 @@
  *
  * 以 docs/design/mockups/review.html 为呈现基准。
  * 这里只调整 Review 的视觉与阅读层级，不改变 Protocol / Projection / SSE / 分页 / 虚拟挂载。
- * 必须在 color-system.css 之后加载，避免旧 review.css 的高特异性规则再次盖回原型。
+ * 本文件在 color-system.css 之前加载；这里只消费语义 Token，最终配色由 color-system.css 收口。
  */
 
 /* ── 工作区与会话列表 ───────────────────────────────────── */
@@ -410,8 +410,9 @@
 }
 
 .review-page .chat-bubble-user {
-  border-color: color-mix(in srgb, var(--al-accent) 18%, var(--al-line)) !important;
-  background: color-mix(in srgb, var(--al-accent-soft) 58%, var(--al-surface)) !important;
+  border-color: var(--al-user-bubble) !important;
+  background: var(--al-user-bubble) !important;
+  color: var(--al-user-bubble-text) !important;
 }
 
 .review-page .chat-bubble-agent {
