@@ -141,6 +141,16 @@ Hook 子进程只是被动采集 Shim。
 
 Inbox 条目只有在成功完成 Canonical Ingestion 后才能确认并删除。
 
+Windows npm 发行允许使用无窗口 Hook 启动器，但它只能负责进程启动包装：
+
+- 使用隐藏 PowerShell 和 `CreateNoWindow` 启动 Node Hook；
+- 保持原 stdin / stdout 语义路径；
+- 不解析业务事件；
+- 不访问 Core、SQLite、HTTP 或 Daemon；
+- 任何失败都不得阻断上游 Agent Hook 流程。
+
+无窗口 Hook 启动器不是新的 Runtime，不得扩展成 0.x Hook Runner / Service Manager 的复刻。
+
 ## 7. Asset 规则
 
 绝不能把“静态发现”直接等同于“实际调用”。
@@ -217,7 +227,10 @@ npm 后台生命周期只属于发行 / 运维层：
 - 不维护 PID 文件，不恢复 0.x Service Manager；
 - 系统托管入口统一执行 `service run`，由 Daemon Health 报告 `owner=service`、`mode=managed`；
 - `service restart` 遇到 Desktop / 前台 CLI 所有的现有运行时不得强行接管；
-- `autostart` 只控制登录后是否自动启动，不等同于“当前是否运行”。
+- `autostart` 只控制登录后是否自动启动，不等同于“当前是否运行”；
+- Windows 计划任务必须使用隐藏窗口定义，不直接用可见 `node.exe` 作为正式后台任务动作；
+- `status / doctor` 必须同时报告 Daemon 与系统托管状态，不能只看端口是否在线；
+- Windows 旧任务定义如果未确认隐藏窗口，`doctor` 应警告而不是误报正常。
 
 源码模式注册 `service` / `autostart` 前必须先生成正式 `dist/cli.mjs`，不要把临时 `tsx` 开发入口注册到系统启动项。
 
@@ -257,6 +270,8 @@ Node.js 要求：`>=22.23.0`。
 - Hook install / uninstall 安全性；
 - CLI 初始化目标选择与幂等性；
 - Windows / systemd / launchd 生命周期定义生成；
+- Windows 后台任务隐藏窗口定义与诊断；
+- Windows Hook 无窗口命令与 stdin -> Durable Inbox 执行链；
 - 运行时所有权与互斥接管规则；
 - Protocol / API 行为；
 - Cordis compatibility。
