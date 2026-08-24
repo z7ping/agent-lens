@@ -13,6 +13,7 @@ export function ReviewStateOverlay({ model, snapshot }: { model: AgentLensClient
   const review = snapshot.review
   const response = review.response
   const detectedCount = snapshot.agents?.items.filter(agent => agent.detected).length ?? 0
+  const enabledCount = snapshot.agents?.items.filter(agent => agent.supported && agent.enabled).length ?? 0
   const serviceReady = snapshot.health?.status === 'ok' && snapshot.health.storage.ok
   const hasSseBanner = Boolean(snapshot.health && !snapshot.liveConnected)
   const shellClass = `review-state-overlay ${hasSseBanner ? 'has-sse-banner' : ''}`
@@ -36,7 +37,7 @@ export function ReviewStateOverlay({ model, snapshot }: { model: AgentLensClient
     const broad = broadReviewFilters(review)
     return <div className={`${shellClass} is-blocking`}>
       <div className="review-state-blocking-inner">
-        {broad ? <FirstRunGuide detectedCount={detectedCount} serviceReady={serviceReady} liveConnected={snapshot.liveConnected}/>
+        {broad ? <FirstRunGuide detectedCount={detectedCount} enabledCount={enabledCount} serviceReady={serviceReady} liveConnected={snapshot.liveConnected}/>
           : <EmptyStatePanel
             icon="⌕"
             title="没有匹配的会话"
