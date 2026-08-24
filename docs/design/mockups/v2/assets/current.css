@@ -43,7 +43,6 @@ th,
 .round-act button em,
 .src-copy small,
 .src-copy em,
-.acard-id p,
 .strip,
 .sec-h p,
 .chip,
@@ -126,6 +125,68 @@ th,
 .src-option[data-source='hermes'] .src-copy em,
 .src-option[data-source='opencode'] .src-copy em { color: var(--al-muted); }
 
+/* 智能体详情字号与正式页统一。 */
+.src-copy b { font-size: 13px; }
+.acard-id p { font-size: 13px !important; }
+.strip b,
+.strip code { font-size: 13px; }
+.sec-h h3 { font-size: 14px; }
+.chip b { font-size: 16px; }
+.freq-row b,
+.freq-row strong { font-size: 13px; }
+.funnel-row b { font-size: 13px; }
+
+/* 使用洞察与正式 1.0 的宽度、统计条、指标和趋势密度一致。 */
+.insight-content {
+  max-width: 1480px !important;
+  padding: 26px 28px 64px !important;
+}
+.insight-content .coverage {
+  margin: 0 0 14px !important;
+  padding: 12px 14px !important;
+  border: 1px solid var(--al-line) !important;
+  border-radius: 12px;
+  background: var(--al-soft-2);
+  grid-template-columns: 1.25fr .7fr 1fr .8fr !important;
+  gap: 10px;
+}
+.insight-content .coverage > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.insight-content .coverage b { font-size: 13px; font-weight: 650; }
+.insight-content .kpis { margin-bottom: 16px; gap: 12px; }
+.insight-content .kpi {
+  padding: 16px 17px;
+  border-radius: 13px;
+}
+.insight-content .kpi strong {
+  margin: 8px 0;
+  font-size: 28px;
+  line-height: 1;
+  font-weight: 740;
+  letter-spacing: -.04em;
+}
+.insight-content .grid { gap: 16px; margin-top: 16px; }
+.insight-content .kpis + .grid {
+  grid-template-columns: minmax(0,1.5fr) minmax(320px,.7fr);
+}
+.insight-content .card { border-radius: 14px; }
+.insight-content .trend { height: 230px; }
+.insight-content .compare { gap: 9px; }
+.insight-content .compare > div {
+  padding: 12px;
+  border: 1px solid var(--al-line);
+  border-radius: 10px;
+}
+.insight-content .agent-table {
+  min-width: 720px;
+  font-size: 13px;
+}
+.insight-content .agent-table th { font-size: 12px; }
+
 /* 备份当前稿与正式创建器保持同样的两列密度；动态补入的十类资产也使用这一布局。 */
 .future-grid > aside .future-card:first-child .future-card-body > .builder-check {
   display: inline-flex !important;
@@ -141,9 +202,17 @@ th,
   margin-top: 10px;
 }
 
+@media (max-width: 1180px) {
+  .insight-content .kpis { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .insight-content .kpis + .grid { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 820px) {
   .brand-name { display: none; }
   .brand { display: flex !important; }
+  .insight-content { padding: 20px 14px 48px !important; }
+  .insight-content .kpis,
+  .insight-content .grid { grid-template-columns: 1fr; }
   .future-grid > aside .future-card:first-child .future-card-body > .builder-check {
     width: 100%;
     margin-inline: 0;
@@ -153,4 +222,6 @@ th,
 @media (max-width: 560px) {
   .brand { display: flex !important; }
   .brand-name { display: none !important; }
+  .insight-content .coverage { grid-template-columns: 1fr 1fr !important; }
+  .insight-content .coverage > div:first-child { grid-column: 1 / -1; }
 }
