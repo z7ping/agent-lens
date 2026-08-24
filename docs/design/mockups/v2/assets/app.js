@@ -1,5 +1,10 @@
 /* AgentLens v2.1 共享交互：品牌 / 主题 / 原始记录 / 抽屉 / Tab / 排序 / 复制 / turn-rail */
 (function () {
+  var currentStyles = document.createElement('link')
+  currentStyles.rel = 'stylesheet'
+  currentStyles.href = 'assets/current.css'
+  document.head.appendChild(currentStyles)
+
   var KEY = 'al-mock-theme'
   var sunIcon = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="3.4"/><path d="M10 1.8v2M10 16.2v2M1.8 10h2M16.2 10h2M4.2 4.2l1.4 1.4M14.4 14.4l1.4 1.4M15.8 4.2l-1.4 1.4M5.6 14.4l-1.4 1.4"/></svg>'
   var moonIcon = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.8 12.8A6.7 6.7 0 0 1 7.2 4.2 6.8 6.8 0 1 0 15.8 12.8Z"/></svg>'
@@ -31,6 +36,16 @@
     })
   }
 
+  function renderSourceDots() {
+    document.querySelectorAll('.scope-pop label').forEach(function (label) {
+      var text = label.textContent || ''
+      var dot = label.querySelector('span')
+      if (!dot) return
+      if (text.indexOf('Hermes') >= 0) dot.classList.add('src-dot', 'dot-hermes')
+      if (text.indexOf('OpenCode') >= 0) dot.classList.add('src-dot', 'dot-opencode')
+    })
+  }
+
   function applyTheme(t) {
     document.documentElement.dataset.theme = t
     renderThemeControls(t)
@@ -50,6 +65,7 @@
   if (document.body) applyAudit(auditOn)
   document.addEventListener('DOMContentLoaded', function () {
     renderBrand()
+    renderSourceDots()
     renderThemeControls(document.documentElement.dataset.theme || 'light')
     applyAudit(auditOn)
   })
