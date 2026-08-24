@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { launchdPlist, systemdUnit, windowsStatusScript, windowsTaskScript } from './lifecycle'
+import { launchdPlist, lifecycleInternals, systemdUnit, windowsTaskScript } from './lifecycle'
 
 const options = {
   cliEntry: '/opt/agent-lens/dist/cli.mjs',
@@ -22,7 +22,7 @@ test('Windows 后台任务可独立于登录自启注册且隐藏控制台窗口
 })
 
 test('Windows 状态检查能识别隐藏窗口任务定义', () => {
-  const script = windowsStatusScript()
+  const script = lifecycleInternals.windowsStatusScript()
   assert.match(script, /WindowStyle\\s\+Hidden/)
   assert.match(script, /hidden = \$hidden/)
 })
