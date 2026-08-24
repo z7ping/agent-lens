@@ -49,6 +49,7 @@ export class InsightsClientModel {
       this.unsubscribeLive = this.api.subscribe(
         event => this.onLiveEvent(event),
         connected => this.publish({ ...this.snapshot, liveConnected: connected }),
+        () => this.invalidateAfterReconnect(),
       )
     }
     await this.refresh()
@@ -89,6 +90,13 @@ export class InsightsClientModel {
         loading: false,
         error: error instanceof Error ? error.message : String(error),
       })
+    }
+  }
+
+  private invalidateAfterReconnect(): void {
+    this.invalidation += 1
+    if (!this.snapshot.hasNewData) {
+      this.publish({ ...this.snapshot, hasNewData: true })
     }
   }
 
