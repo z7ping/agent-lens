@@ -48,7 +48,7 @@ function inferAssetUsage(nativeToolName: string, payload: Record<string, unknown
 
 interface ObservationMetadata { sourceId: string; productId: string }
 interface ToolAccumulator {
-  nativeToolName: string; sourceIds: Set<string>; productIds: Set<string>; sessionIds: Set<string>
+  nativeToolName: string; sourceIds: Set<string>; productIds: Set<string>; sessionCalls: Map<string, number>
   callCount: number; resultCount: number; successCount: number; errorCount: number; totalDurationMs: number
   firstUsedAt: string; lastUsedAt: string; observationIds: string[]
 }
@@ -128,12 +128,14 @@ export class ToolAssetUsageProjection {
       const productId = linkedCall?.productId ?? metadata.productId; const at = effectiveAt(observation); const key = `${sourceId}\u0000${name}`
       let tool = tools.get(key)
       if (!tool) {
-        tool = { nativeToolName: name, sourceIds: new Set(), productIds: new Set(), sessionIds: new Set(), callCount: 0, resultCount: 0, successCount: 0, errorCount: 0, totalDurationMs: 0, firstUsedAt: at, lastUsedAt: at, observationIds: [] }
+        tool = { nativeToolName: name, sourceIds: new Set(), productIds: new Set(), sessionCalls: new Map(), callCount: 0, resultCount: 0, successCount: 0, errorCount: 0, totalDurationMs: 0, firstUsedAt: at, lastUsedAt: at, observationIds: [] }
         tools.set(key, tool)
       }
-      tool.sourceIds.add(sourceId); tool.productIds.add(productId); tool.sessionIds.add(observation.logicalSessionId); tool.observationIds.push(observation.id); updateWindow(tool, at)
+      tool.sourceIds.add(sourceId); tool.productIds.add(productId); tool.observationIds.push(observation.id); updateWindow(tool, at)
       if (observation.kind === 'tool.call') {
-        tool.callCount += 1; const inferred = inferAssetUsage(name, payload)
+        tool.callCount += 1
+        tool.sessionCalls.set(observation.logicalSessionId, (tool.sessionCalls.get(observation.logicalSessionId) ?? 0) + 1)
+        const inferred = inferAssetUsage(name, payload)
         if (!inferred) unattributedToolCalls += 1
         else {
           const assetKey = `${inferred.type}\u0000${inferred.canonicalName}`; let asset = assets.get(assetKey)
@@ -151,7 +153,11 @@ export class ToolAssetUsageProjection {
     const toolDtos: ToolUsageDto[] = [...tools.values()].map(item => ({
       nativeToolName: item.nativeToolName, sourceIds: [...item.sourceIds].sort(), productIds: [...item.productIds].sort(),
       callCount: item.callCount, resultCount: item.resultCount, successCount: item.successCount, errorCount: item.errorCount,
-      sessionCount: item.sessionIds.size, totalDurationMs: item.totalDurationMs,
+      sessionCount: item.sessionCalls.size,
+      sessions: [...item.sessionCalls.entries()]
+        .map(([logicalSessionId, callCount]) => ({ logicalSessionId, callCount }))
+        .sort((a, b) => b.callCount - a.callCount || a.logicalSessionId.localeCompare(b.logicalSessionId)),
+      totalDurationMs: item.totalDurationMs,
       averageDurationMs: item.resultCount ? Math.round(item.totalDurationMs / item.resultCount) : 0,
       firstUsedAt: item.firstUsedAt, lastUsedAt: item.lastUsedAt, observationIds: item.observationIds,
     }))
