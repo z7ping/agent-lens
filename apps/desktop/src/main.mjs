@@ -10,7 +10,6 @@ import {
   Menu,
   Tray,
   dialog,
-  nativeImage,
   shell,
 } from 'electron'
 
@@ -386,8 +385,7 @@ function createWindow() {
 }
 
 function createTray() {
-  const image = nativeImage.createFromPath(appAsset('assets', 'icon.png')).resize({ width: 16, height: 16 })
-  tray = new Tray(image)
+  tray = new Tray(appAsset('assets', 'tray.ico'))
   tray.setToolTip('AgentLens')
   const template = [
     { label: '打开 AgentLens', click: showWindow },
