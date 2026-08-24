@@ -5,6 +5,8 @@ const typographyPath = 'packages/web/src/typography.css'
 const tokenPath = 'packages/web/src/tokens.css'
 const mockTokenPath = 'docs/design/mockups/v2/assets/tokens.css'
 const mockCurrentPath = 'docs/design/mockups/v2/assets/current.css'
+const mockAppPath = 'docs/design/mockups/v2/assets/app.js'
+const mockToolsPath = 'docs/design/mockups/v2/tools.html'
 const colorSystemPath = 'packages/web/src/color-system.css'
 const finalAlignmentPath = 'packages/web/src/v2-alignment.css'
 const reviewReferencePath = 'packages/web/src/review-reference.css'
@@ -53,6 +55,9 @@ for (const path of retiredReviewLayers) {
 if (!existsSync(mockCurrentPath)) {
   throw new Error('当前高保真原型必须保留 assets/current.css 作为最终表现契约')
 }
+if (!existsSync(mockAppPath)) {
+  throw new Error('当前高保真原型必须保留 assets/app.js 作为共享交互契约')
+}
 
 const typography = readFileSync(typographyPath, 'utf8')
 if (!/--font-size-xs:\s*12px\s*;/.test(typography)) {
@@ -77,6 +82,8 @@ for (const path of semanticPresentationPaths) {
 const tokenSource = readFileSync(tokenPath, 'utf8')
 const mockTokenSource = readFileSync(mockTokenPath, 'utf8')
 const mockCurrentSource = readFileSync(mockCurrentPath, 'utf8')
+const mockAppSource = readFileSync(mockAppPath, 'utf8')
+const mockToolsSource = readFileSync(mockToolsPath, 'utf8')
 const colorSystemSource = readFileSync(colorSystemPath, 'utf8')
 const finalAlignmentSource = readFileSync(finalAlignmentPath, 'utf8')
 const reviewReferenceSource = readFileSync(reviewReferencePath, 'utf8')
@@ -182,6 +189,33 @@ if (!/\.app-header\s+\.brand\s*\{\s*display:\s*flex\s*!important/m.test(finalAli
   throw new Error('窄窗口必须保留 AgentLens Logo，不能隐藏整个品牌区')
 }
 
+/* 第二轮 1:1 契约：五来源详情、当前原型结构和真实交互都必须被锁住。 */
+if (!finalAlignmentSource.includes(".agent-card[data-source='hermes']")
+  || !finalAlignmentSource.includes(".agent-card[data-source='opencode']")) {
+  throw new Error('正式智能体详情卡必须为 Hermes / OpenCode 使用稳定来源强调色')
+}
+if (!mockCurrentSource.includes('.snapshot-builder .builder-block')
+  || !mockCurrentSource.includes('.snapshot-builder .builder-checks')) {
+  throw new Error('资产备份当前稿必须使用正式的分组快照创建器结构')
+}
+if (!mockCurrentSource.includes('repeat(5,minmax(90px,1fr))')) {
+  throw new Error('智能体当前稿必须保留五来源覆盖矩阵布局')
+}
+if (!mockCurrentSource.includes('@media (max-width: 900px)')
+  || !mockCurrentSource.includes('@media (max-width: 560px)')) {
+  throw new Error('当前稿必须锁定 900px / 560px 的关键响应式断点')
+}
+if (!mockAppSource.includes('nextDirection')
+  || !mockAppSource.includes("event.key !== 'Enter' && event.key !== ' '")) {
+  throw new Error('当前原型必须支持双向排序和 Enter / Space 键盘操作')
+}
+if ((mockToolsSource.match(/data-sort="num"/g) ?? []).length !== 5) {
+  throw new Error('工具分析当前稿必须为五个数值表头提供真实排序数据')
+}
+if (!mockAppSource.includes('builder-summary') || !mockAppSource.includes('preview-summary')) {
+  throw new Error('资产备份当前稿必须包含创建摘要和恢复预演摘要')
+}
+
 /*
  * Token 数值正确并不足够：高特异性的历史组件规则仍可能覆盖背景，
  * 再和低特异性的前景色规则拼成“浅底浅字”。这里直接验证最终组件绑定。
@@ -208,4 +242,4 @@ if (!userMarkdownRule.test(colorSystemSource)) {
   throw new Error('用户消息 Markdown 正文必须绑定 --al-user-bubble-text，不能继承普通页面文字色')
 }
 
-console.log('Web 表现层收敛检查通过：加载顺序、12px 下限、五来源令牌、原型最终契约、用户气泡绑定和关键对比度均已校验')
+console.log('Web 表现层收敛检查通过：加载顺序、12px 下限、五来源、1:1 原型结构、键盘交互、响应式契约和关键对比度均已校验')
