@@ -160,13 +160,37 @@ export class AgentLensApi {
     })
   }
 
-  subscribe(onEvent: (event: LiveUpdateEventDto) => void, onConnection: (connected: boolean) => void): () => void {
+  subscribe(
+    onEvent: (event: LiveUpdateEventDto) => void,
+    onConnection: (connected: boolean) => void,
+    onReconnect?: () => void,
+  ): () => void {
     const source = new EventSource('/api/v1/events')
-    source.onopen = () => onConnection(true)
-    source.onerror = () => onConnection(false)
+    let opened = false
+    let disconnectedAfterOpen = false
+    let disposed = false
+
+    source.onopen = () => {
+      if (disposed) return
+      const reconnecting = opened && disconnectedAfterOpen
+      opened = true
+      disconnectedAfterOpen = false
+      onConnection(true)
+      if (reconnecting) onReconnect?.()
+    }
+    source.onerror = () => {
+      if (disposed) return
+      if (opened) disconnectedAfterOpen = true
+      onConnection(false)
+    }
     source.addEventListener('observation', raw => {
+      if (disposed) return
       try { onEvent(JSON.parse((raw as MessageEvent<string>).data) as LiveUpdateEventDto) } catch { /* ignore malformed frame */ }
     })
-    return () => { source.close(); onConnection(false) }
+    return () => {
+      disposed = true
+      source.close()
+      onConnection(false)
+    }
   }
 }
