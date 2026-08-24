@@ -131,6 +131,9 @@ packages/
   surface-http/     HTTP 能力 + Cordis Surface Plugin 入口
   hook-manager/
   web/              Vite + React 浏览器 UI
+
+scripts/
+  windows-hook-runner.ps1   # Windows Hook 无窗口进程包装；不属于 Runtime
 ```
 
 ## 6. Source 模型
@@ -187,6 +190,27 @@ Agent Hook subprocess
 真正的数据摄取由 Daemon 负责。只有记录成功通过 Canonical Pipeline 后，Inbox 文件才会被删除。因此 Daemon 重启后，不要求原始 Agent 再次重放该事件。
 
 Hook 代码不得依赖 Cordis、SQLite、Core Services 或 HTTP。
+
+Windows npm 正式发行可以为 Hook 增加一个无窗口执行包装：
+
+```text
+Native Hook
+  -> powershell.exe -WindowStyle Hidden
+  -> dist/hooks/agent-lens-hook-runner.ps1
+  -> ProcessStartInfo(CreateNoWindow=true)
+  -> Node Hook
+  -> durable inbox
+```
+
+该包装只解决 Windows 进程窗口问题：
+
+- 不解析 Hook 业务事件；
+- 不访问 Core、SQLite、HTTP 或 Daemon；
+- 不负责拉起后台运行时；
+- 子进程继承原有 stdin / stdout，保持 Hook 协议的数据路径；
+- 包装失败不得阻断上游 Agent Hook 流程。
+
+因此 Windows Hook Runner 不是第二套 Runtime，也不是 0.x Service Manager 的恢复。
 
 ## 8. Identity 模型
 
@@ -369,6 +393,8 @@ Web 仅消费 `/api/v1/*` 的 Protocol DTO。
 
 Hook 配置属于 AgentLens，而不是某一种发行方式。npm 与 Desktop 可以提供不同的 Hook 可执行入口，但必须写入同一套 1.0 durable inbox 语义；Hook 不负责拉起 Daemon。
 
+Windows 正式 npm 包的 `setup` / `hook install` 会在无窗口 Runner 和正式 Hook 脚本都存在时写入隐藏执行命令；若正式 Runner 缺失，则诊断必须明确报告，不能假装无窗口能力可用。
+
 ## 17. CLI 与 npm 后台生命周期
 
 当前 CLI：
@@ -426,10 +452,21 @@ mode  = managed
 - `service start` 只负责当前后台运行；
 - `autostart enable` 只控制下次登录是否自动启动；两者语义分离；
 - Windows 计划任务可以在无登录触发器时独立注册，因此“已注册后台任务”不等于“已开启登录自启”；
+- Windows 正式计划任务通过隐藏 PowerShell 调用 `service run`，不直接以可见 `node.exe` 作为任务动作；
+- Windows 计划任务状态会检查定义中是否包含隐藏窗口参数，旧定义由 `doctor` 标记为警告；
 - Linux 写入 `~/.config/systemd/user/agent-lens.service`，使用 `systemctl --user` 管理；
 - macOS 写入 `~/Library/LaunchAgents/com.agentlens.daemon.plist`，使用 `launchctl` 管理；
 - `service restart` 若发现当前 Daemon 由 Desktop 或前台 CLI 所有，不强制杀掉或接管；
 - 系统托管定义只指向正式 `dist/cli.mjs`。源码模式必须先执行 `npm run build:dist`，不得把临时 `tsx` 入口写进登录启动项。
+
+`status` 与 `doctor` 的职责也明确分层：
+
+- `status` 同时报告 Daemon 在线状态与系统托管状态；
+- 系统托管状态包含托管器、定义是否注册、当前是否运行、登录自启，以及 Windows 隐藏窗口状态；
+- `doctor` 检查 `owner=service` 与系统托管状态是否一致、系统显示运行但 Health 不可达等矛盾，以及 Windows 是否仍使用旧后台定义；
+- Windows `doctor` 额外检查正式发行的无窗口 Hook Runner 是否可用。
+
+这些诊断事实只属于运维层，不进入 Canonical Observation / Evidence。
 
 Windows / Linux / macOS 的系统托管配置只属于发行 / 运维层，不进入 Core、Source、Storage、Projection 或 Cordis Plugin Runtime。
 
@@ -455,11 +492,21 @@ dist/cli.mjs
 dist/daemon.mjs
 dist/web/
 dist/hooks/
+  agent-lens-hook-codex.mjs
+  agent-lens-hook-claude.mjs
+  agent-lens-hook-runner.ps1   # Windows 无窗口 Hook 执行包装
 ```
 
 Cordis 与 `better-sqlite3` 保留为外部 Runtime Dependency。
 
 Release Workflow 会分别在 Linux / Windows 验证，打出唯一 npm tarball，生成 SBOM / checksum，将产物附加到 GitHub Release，最后发布同一份 tarball。
+
+Windows CI 除普通 typecheck / test / distribution smoke 外，还验证两条真实运维链：
+
+1. 无窗口 Hook Runner 能把 stdin JSON 完整传给 Claude Hook，并实际写入 Durable Inbox；
+2. `autostart enable -> service start -> Health owner=service -> doctor -> service stop` 能形成闭环，并验证计划任务为隐藏窗口定义。
+
+自动化验证不能替代真实桌面视觉验收。注销 / 登录是否完全没有可见控制台闪现，以及真实 Codex / Claude Code Hook 的窗口体验和时延，仍属于 Windows 实机验收项。
 
 同一台机器可以同时安装 npm 与 Desktop，但同一默认数据根 / 默认端口同一时刻只允许一个有效 Daemon。兼容时复用现有 Daemon；不兼容时必须明确报告版本 / Protocol 冲突，不允许通过换端口偷偷启动第二套 1.0 事实链。
 
@@ -508,3 +555,5 @@ Daemon 仍然提供同一套 `127.0.0.1:56789` HTTP / SSE Surface。卸载 Deskt
 发行方式不得改变 Canonical Data Flow。npm 与 Desktop 共存时，不得因为生命周期管理来源不同而创建第二套 Runtime、第二套 Schema、第二份默认数据库或重复采集链路。
 
 后台生命周期定义只能引用正式发行入口，并由操作系统用户级托管器负责当前进程的启动 / 停止 / 恢复；AgentLens 不把 PID 文件重新提升为生命周期事实来源。
+
+Windows 无窗口后台任务与 Hook Runner 都只是运维 / 执行包装。任何实现不得把它们扩展为新的 Runtime、Source 或数据写入链路。
