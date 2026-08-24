@@ -15,6 +15,7 @@ import {
   type HookStatus,
   type HookTarget,
 } from '@agent-lens/hook-manager'
+import { resolveHookExecutionProfile } from './hook-execution'
 import {
   getLifecycleStatus,
   serviceRestart,
@@ -220,10 +221,11 @@ async function setup(json: boolean): Promise<number> {
   await access(root)
 
   const sources = sourceRoots()
-  let hooks = await getAllHookStatus()
+  const hookProfile = resolveHookExecutionProfile()
+  let hooks = await getAllHookStatus(hookProfile.options)
   const hookTargets = setupHookTargets(sources, hooks)
-  for (const target of hookTargets) await installHooks(target)
-  if (hookTargets.length) hooks = await getAllHookStatus()
+  for (const target of hookTargets) await installHooks(target, hookProfile.options)
+  if (hookTargets.length) hooks = await getAllHookStatus(hookProfile.options)
 
   const health = await healthOrNull()
   const result = {
@@ -237,6 +239,9 @@ async function setup(json: boolean): Promise<number> {
       ...(item.target === 'codex' ? { trusted: item.trusted } : {}),
       changed: hookTargets.includes(item.target),
     })),
+    hookExecution: process.platform === 'win32'
+      ? { windowsNoWindow: hookProfile.windowsNoWindow, runnerPath: hookProfile.runnerPath ?? null }
+      : null,
     runtime: health
       ? { online: true, url: daemonUrl('/'), owner: runtimeOwner(health), protocolVersion: health.protocolVersion ?? null }
       : { online: false, url: daemonUrl('/') },
@@ -259,6 +264,9 @@ async function setup(json: boolean): Promise<number> {
     const trust = item.target === 'codex' && item.trusted === false ? '，信任配置缺失' : ''
     console.log(`${item.installed && item.trusted !== false ? '[OK]' : '[WARN]'} ${item.target} Hook：${item.installed ? '已安装' : '未安装'}${changed}${trust}`)
   }
+  if (process.platform === 'win32') {
+    console.log(`${hookProfile.windowsNoWindow ? '[OK]' : '[WARN]'} Windows Hook：${hookProfile.windowsNoWindow ? '已使用无窗口启动器' : '未找到无窗口启动器，将使用标准命令入口'}`)
+  }
   const pi = sources.find(item => item.source === 'pi')
   if (pi?.detected) console.log('[OK] pi：使用原生历史与运行时采集，无需安装 Hook')
   if (health) {
@@ -273,13 +281,14 @@ async function setup(json: boolean): Promise<number> {
 
 async function runHook(action: string, targetValue: string | undefined, json: boolean): Promise<number> {
   const target = targetFrom(targetValue)
+  const hookProfile = resolveHookExecutionProfile()
   let statuses: HookStatus[]
   if (action === 'status') {
-    statuses = target === 'all' ? await getAllHookStatus() : [await getHookStatus(target)]
+    statuses = target === 'all' ? await getAllHookStatus(hookProfile.options) : [await getHookStatus(target, hookProfile.options)]
   } else if (action === 'install') {
-    statuses = target === 'all' ? await installAllHooks() : [await installHooks(target)]
+    statuses = target === 'all' ? await installAllHooks(hookProfile.options) : [await installHooks(target, hookProfile.options)]
   } else if (action === 'uninstall') {
-    statuses = target === 'all' ? await uninstallAllHooks() : [await uninstallHooks(target)]
+    statuses = target === 'all' ? await uninstallAllHooks(hookProfile.options) : [await uninstallHooks(target, hookProfile.options)]
   } else {
     throw new Error(`Unknown hook action: ${action}`)
   }
@@ -544,8 +553,9 @@ async function doctor(json: boolean): Promise<number> {
     })
   }
 
+  const hookProfile = resolveHookExecutionProfile()
   try {
-    const hooks = await getAllHookStatus()
+    const hooks = await getAllHookStatus(hookProfile.options)
     for (const item of hooks) {
       checks.push({
         id: `hook-${item.target}`,
@@ -556,6 +566,15 @@ async function doctor(json: boolean): Promise<number> {
     }
   } catch (error) {
     checks.push({ id: 'hooks', level: 'warn', message: 'Hook 状态无法读取', detail: error instanceof Error ? error.message : String(error) })
+  }
+
+  if (process.platform === 'win32') {
+    checks.push({
+      id: 'windows-hook-runner',
+      level: hookProfile.windowsNoWindow ? 'pass' : 'warn',
+      message: hookProfile.windowsNoWindow ? 'Windows Hook 无窗口启动器可用' : 'Windows Hook 无窗口启动器不可用',
+      detail: hookProfile.runnerPath ?? '未解析到启动器路径',
+    })
   }
 
   const result = {
