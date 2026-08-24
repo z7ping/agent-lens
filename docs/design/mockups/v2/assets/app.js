@@ -1,4 +1,4 @@
-/* AgentLens v2.1 共享交互：品牌 / 主题 / 原始记录 / 抽屉 / Tab / 排序 / 复制 / turn-rail */
+/* AgentLens v2.1 共享交互：最终样式 / 品牌 / 主题 / 智能体筛选 / 原始记录 / 抽屉 / Tab / 排序 / 复制 / turn-rail */
 (function () {
   var currentStyles = document.createElement('link')
   currentStyles.rel = 'stylesheet'
@@ -6,14 +6,15 @@
   document.head.appendChild(currentStyles)
 
   var KEY = 'al-mock-theme'
+  var AKEY = 'al-mock-audit'
   var sunIcon = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="3.4"/><path d="M10 1.8v2M10 16.2v2M1.8 10h2M16.2 10h2M4.2 4.2l1.4 1.4M14.4 14.4l1.4 1.4M15.8 4.2l-1.4 1.4M5.6 14.4l-1.4 1.4"/></svg>'
   var moonIcon = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.8 12.8A6.7 6.7 0 0 1 7.2 4.2 6.8 6.8 0 1 0 15.8 12.8Z"/></svg>'
 
-  function renderThemeControls(t) {
+  function renderThemeControls(theme) {
     document.querySelectorAll('[data-theme-toggle]').forEach(function (button) {
-      button.innerHTML = t === 'dark' ? sunIcon : moonIcon
-      button.setAttribute('aria-label', t === 'dark' ? '切换为浅色主题' : '切换为深色主题')
-      button.setAttribute('title', t === 'dark' ? '切换为浅色主题' : '切换为深色主题')
+      button.innerHTML = theme === 'dark' ? sunIcon : moonIcon
+      button.setAttribute('aria-label', theme === 'dark' ? '切换为浅色主题' : '切换为深色主题')
+      button.setAttribute('title', theme === 'dark' ? '切换为浅色主题' : '切换为深色主题')
     })
   }
 
@@ -36,13 +37,44 @@
     })
   }
 
+  function sourceRowsHtml() {
+    return [
+      ['codex', 'Codex', 'dot-codex', true],
+      ['claude-code', 'Claude Code', 'dot-claude', true],
+      ['pi', 'Pi', 'dot-pi', false],
+      ['hermes', 'Hermes', 'dot-hermes', false],
+      ['opencode', 'OpenCode', 'dot-opencode', false]
+    ].map(function (source) {
+      return '<label><input type="checkbox" ' + (source[3] ? 'checked' : '') + '><span class="src-dot ' + source[2] + '"></span><span>' + source[1] + '</span><span class="st ' + (source[3] ? 'on' : '') + '">' + (source[3] ? '已检测' : '未检测') + '</span></label>'
+    }).join('')
+  }
+
+  function syncScopeManagers() {
+    if (/backup\.html$/i.test(location.pathname)) return
+    document.querySelectorAll('.agent-scope').forEach(function (scope) {
+      if (scope.querySelector('.scope-manage')) return
+      var details = document.createElement('details')
+      details.className = 'scope-manage'
+      details.innerHTML = '<summary title="管理智能体快捷入口" aria-label="管理智能体快捷入口">＋</summary><div class="scope-pop"><div class="scope-pop-title">快捷智能体</div>' + sourceRowsHtml() + '</div>'
+      scope.appendChild(details)
+    })
+  }
+
   function renderSourceDots() {
     document.querySelectorAll('.scope-pop label').forEach(function (label) {
       var text = label.textContent || ''
-      var dot = label.querySelector('span')
+      var dot = label.querySelector('.src-dot') || label.querySelector('span')
       if (!dot) return
       if (text.indexOf('Hermes') >= 0) dot.classList.add('src-dot', 'dot-hermes')
       if (text.indexOf('OpenCode') >= 0) dot.classList.add('src-dot', 'dot-opencode')
+    })
+    document.querySelectorAll('.system-section .badge').forEach(function (badge) {
+      var text = badge.textContent || ''
+      if (text.indexOf('Hermes') < 0 && text.indexOf('OpenCode') < 0) return
+      if (badge.querySelector('.src-dot')) return
+      var dot = document.createElement('span')
+      dot.className = 'src-dot ' + (text.indexOf('Hermes') >= 0 ? 'dot-hermes' : 'dot-opencode')
+      badge.prepend(dot)
     })
   }
 
@@ -62,6 +94,7 @@
   }
 
   function syncBackupPrototype() {
+    if (!/backup\.html$/i.test(location.pathname)) return
     var grid = document.querySelector('.protection-grid')
     if (grid && !grid.querySelector('[data-source="hermes"]')) {
       ;[
@@ -83,16 +116,8 @@
     if (!safety) return
     var counts = { skill: 63, mcp: 18, session: 76, config: 11, plugin: 5, extension: 2, hook: 4, memory: 3, rule: 7, other: 1 }
     var labels = {
-      skill: '技能',
-      mcp: 'MCP（模型上下文协议）',
-      session: '会话 / 历史',
-      config: '关键配置',
-      plugin: '插件',
-      extension: '扩展',
-      hook: '钩子',
-      memory: '记忆',
-      rule: '规则',
-      other: '其他'
+      skill: '技能', mcp: 'MCP（模型上下文协议）', session: '会话 / 历史', config: '关键配置',
+      plugin: '插件', extension: '扩展', hook: '钩子', memory: '记忆', rule: '规则', other: '其他'
     }
     var existing = Array.prototype.slice.call(builder.querySelectorAll('.builder-check'))
     var existingKinds = ['skill', 'mcp', 'session', 'config']
@@ -111,81 +136,94 @@
     })
   }
 
-  function applyTheme(t) {
-    document.documentElement.dataset.theme = t
-    renderThemeControls(t)
-    try { localStorage.setItem(KEY, t) } catch (e) {}
+  function applyTheme(theme) {
+    document.documentElement.dataset.theme = theme
+    renderThemeControls(theme)
+    try { localStorage.setItem(KEY, theme) } catch (e) {}
   }
-  try { applyTheme(localStorage.getItem(KEY) || 'light') } catch (e) { applyTheme('light') }
 
-  /* 原始记录开关（证据徽章始终可见） */
-  var AKEY = 'al-mock-audit'
-  function applyAudit(on) {
-    document.body.classList.toggle('audit-mode', on)
-    document.querySelectorAll('[data-audit-toggle]').forEach(function (b) { b.setAttribute('aria-pressed', String(on)) })
-    try { localStorage.setItem(AKEY, on ? '1' : '0') } catch (e) {}
-  }
   var auditOn = false
   try { auditOn = localStorage.getItem(AKEY) === '1' } catch (e) {}
-  if (document.body) applyAudit(auditOn)
-  document.addEventListener('DOMContentLoaded', function () {
-    renderBrand()
-    renderSourceDots()
-    syncAgentSources()
-    syncBackupPrototype()
-    renderThemeControls(document.documentElement.dataset.theme || 'light')
-    applyAudit(auditOn)
-  })
+  function applyAudit(on) {
+    document.body.classList.toggle('audit-mode', on)
+    document.querySelectorAll('[data-audit-toggle]').forEach(function (button) { button.setAttribute('aria-pressed', String(on)) })
+    try { localStorage.setItem(AKEY, on ? '1' : '0') } catch (e) {}
+  }
+
+  try { applyTheme(localStorage.getItem(KEY) || 'light') } catch (e) { applyTheme('light') }
+
+  /* 页面脚本位于 body 末尾，可在事件绑定前补齐当前稿需要的共享组件。 */
+  renderBrand()
+  syncScopeManagers()
+  renderSourceDots()
+  syncAgentSources()
+  syncBackupPrototype()
+  renderThemeControls(document.documentElement.dataset.theme || 'light')
+  applyAudit(auditOn)
 
   function closeAllDrawers() {
-    document.querySelectorAll('.drawer.show').forEach(function (d) { d.classList.remove('show') })
-    var s = document.getElementById('scrim')
-    if (s) s.classList.remove('show')
-  }
-  function openDrawer(sel) {
-    var d = document.querySelector(sel)
-    if (!d) return
-    d.classList.add('show')
-    var s = document.getElementById('scrim')
-    if (s) s.classList.add('show')
+    document.querySelectorAll('.drawer.show').forEach(function (drawer) { drawer.classList.remove('show') })
+    var scrim = document.getElementById('scrim')
+    if (scrim) scrim.classList.remove('show')
   }
 
-  document.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-theme-toggle]')
-    if (t) { applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'); return }
-    var a = e.target.closest('[data-audit-toggle]')
-    if (a) { auditOn = !auditOn; applyAudit(auditOn); return }
-    var opener = e.target.closest('[data-open-drawer]')
-    if (opener) { openDrawer(opener.dataset.openDrawer); return }
-    if (e.target.closest('[data-close-drawer]') || e.target.id === 'scrim') { closeAllDrawers(); return }
-    var copyBtn = e.target.closest('[data-copy]')
-    if (copyBtn && navigator.clipboard) {
-      navigator.clipboard.writeText(copyBtn.dataset.copy).then(function () {
-        var old = copyBtn.textContent
-        copyBtn.textContent = '已复制'
-        setTimeout(function () { copyBtn.textContent = old }, 1200)
+  function openDrawer(selector) {
+    var drawer = document.querySelector(selector)
+    if (!drawer) return
+    drawer.classList.add('show')
+    var scrim = document.getElementById('scrim')
+    if (scrim) scrim.classList.add('show')
+  }
+
+  document.addEventListener('click', function (event) {
+    var themeButton = event.target.closest('[data-theme-toggle]')
+    if (themeButton) {
+      applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark')
+      return
+    }
+    var auditButton = event.target.closest('[data-audit-toggle]')
+    if (auditButton) {
+      auditOn = !auditOn
+      applyAudit(auditOn)
+      return
+    }
+    var opener = event.target.closest('[data-open-drawer]')
+    if (opener) {
+      openDrawer(opener.dataset.openDrawer)
+      return
+    }
+    if (event.target.closest('[data-close-drawer]') || event.target.id === 'scrim') {
+      closeAllDrawers()
+      return
+    }
+    var copyButton = event.target.closest('[data-copy]')
+    if (copyButton && navigator.clipboard) {
+      navigator.clipboard.writeText(copyButton.dataset.copy).then(function () {
+        var old = copyButton.textContent
+        copyButton.textContent = '已复制'
+        setTimeout(function () { copyButton.textContent = old }, 1200)
       }).catch(function () {})
     }
-    var expandBtn = e.target.closest('[data-expand-rounds]')
-    if (expandBtn) {
-      var expand = expandBtn.getAttribute('aria-pressed') !== 'true'
+    var expandButton = event.target.closest('[data-expand-rounds]')
+    if (expandButton) {
+      var expand = expandButton.getAttribute('aria-pressed') !== 'true'
       document.querySelectorAll('details.interaction:not(.audit-only)').forEach(function (round) { round.open = expand })
-      expandBtn.setAttribute('aria-pressed', String(expand))
-      expandBtn.textContent = expand ? '收起当前页' : '展开当前页'
+      expandButton.setAttribute('aria-pressed', String(expand))
+      expandButton.textContent = expand ? '收起当前页' : '展开当前页'
     }
   })
 
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') closeAllDrawers()
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape') closeAllDrawers()
   })
 
   document.querySelectorAll('.tabs').forEach(function (tabs) {
-    tabs.addEventListener('click', function (e) {
-      var b = e.target.closest('[data-tab]')
-      if (!b) return
-      tabs.querySelectorAll('[data-tab]').forEach(function (x) { x.classList.toggle('active', x === b) })
+    tabs.addEventListener('click', function (event) {
+      var button = event.target.closest('[data-tab]')
+      if (!button) return
+      tabs.querySelectorAll('[data-tab]').forEach(function (item) { item.classList.toggle('active', item === button) })
       var host = tabs.closest('.drawer') || document
-      host.querySelectorAll('[data-panel]').forEach(function (p) { p.hidden = p.dataset.panel !== b.dataset.tab })
+      host.querySelectorAll('[data-panel]').forEach(function (panel) { panel.hidden = panel.dataset.panel !== button.dataset.tab })
     })
   })
 
@@ -195,52 +233,59 @@
     th.setAttribute('role', 'button')
     function activate() {
       var table = th.closest('table')
-      var tb = table.querySelector('tbody')
-      var idx = Array.prototype.indexOf.call(th.parentElement.children, th)
+      var tbody = table && table.querySelector('tbody')
+      if (!table || !tbody) return
+      var index = Array.prototype.indexOf.call(th.parentElement.children, th)
       var numeric = th.dataset.sort === 'num'
-      var rows = Array.prototype.slice.call(tb.rows).sort(function (a, b) {
-        var x = a.children[idx].dataset.v, y = b.children[idx].dataset.v
-        return numeric ? (+y) - (+x) : String(y).localeCompare(String(x))
+      var rows = Array.prototype.slice.call(tbody.rows).sort(function (a, b) {
+        var left = a.children[index].dataset.v
+        var right = b.children[index].dataset.v
+        return numeric ? (+right) - (+left) : String(right).localeCompare(String(left))
       })
-      rows.forEach(function (r) { tb.appendChild(r) })
-      table.querySelectorAll('th').forEach(function (h) { h.removeAttribute('aria-sort') })
+      rows.forEach(function (row) { tbody.appendChild(row) })
+      table.querySelectorAll('th').forEach(function (item) { item.removeAttribute('aria-sort') })
       th.setAttribute('aria-sort', 'descending')
     }
     th.addEventListener('click', activate)
-    th.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate() }
+    th.addEventListener('keydown', function (event) {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        activate()
+      }
     })
   })
 
-  document.querySelectorAll('[data-scroll-bottom]').forEach(function (b) {
-    b.addEventListener('click', function () {
-      var pane = document.querySelector(b.getAttribute('data-scroll-bottom'))
+  document.querySelectorAll('[data-scroll-bottom]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      var pane = document.querySelector(button.getAttribute('data-scroll-bottom'))
       if (pane) pane.scrollTo({ top: pane.scrollHeight, behavior: 'smooth' })
     })
   })
 
-  document.querySelectorAll('details.scope-manage > summary').forEach(function (s) {
-    s.addEventListener('click', function (e) {
-      e.stopPropagation()
-      var d = s.parentElement
-      if (!d.hasAttribute('open')) {
-        document.querySelectorAll('details.scope-manage[open]').forEach(function (o) { if (o !== d) o.removeAttribute('open') })
+  document.querySelectorAll('details.scope-manage > summary').forEach(function (summary) {
+    summary.addEventListener('click', function (event) {
+      event.stopPropagation()
+      var details = summary.parentElement
+      if (!details.hasAttribute('open')) {
+        document.querySelectorAll('details.scope-manage[open]').forEach(function (open) {
+          if (open !== details) open.removeAttribute('open')
+        })
       }
     })
   })
-  document.addEventListener('click', function (e) {
-    if (!e.target.closest('.scope-manage')) {
-      document.querySelectorAll('details.scope-manage[open]').forEach(function (o) { o.removeAttribute('open') })
+  document.addEventListener('click', function (event) {
+    if (!event.target.closest('.scope-manage')) {
+      document.querySelectorAll('details.scope-manage[open]').forEach(function (open) { open.removeAttribute('open') })
     }
   })
 
-  /* 会话切换：保存/恢复阅读位置 */
+  /* 会话切换：保存 / 恢复阅读位置。 */
   var reader = document.querySelector('[data-reader]')
   if (reader) {
     var positions = Object.create(null)
     var sessions = Array.prototype.slice.call(document.querySelectorAll('.session-item'))
     var current = document.querySelector('.session-item.active') || null
-    function keyOf(item) {
+    function sessionKey(item) {
       if (!item) return ''
       var title = item.querySelector('.si-title')
       return item.dataset.sessionId || (title ? title.textContent.trim() : String(sessions.indexOf(item)))
@@ -248,47 +293,51 @@
     sessions.forEach(function (item) {
       item.addEventListener('click', function () {
         if (item === current) return
-        if (current) positions[keyOf(current)] = reader.scrollTop
+        if (current) positions[sessionKey(current)] = reader.scrollTop
         sessions.forEach(function (other) { other.classList.toggle('active', other === item) })
         current = item
-        reader.scrollTop = positions[keyOf(item)] !== undefined ? positions[keyOf(item)] : 0
+        reader.scrollTop = positions[sessionKey(item)] !== undefined ? positions[sessionKey(item)] : 0
       })
     })
   }
 
-  /* turn-rail：滚动联动 + 点击定位 */
+  /* turn-rail：滚动联动 + 点击定位。 */
   var rail = document.querySelector('.turn-rail')
   if (rail && reader) {
     var ticks = Array.prototype.slice.call(rail.querySelectorAll('.turn-tick'))
     var rounds = ticks.map(function (tick) {
-      var el = document.querySelector(tick.dataset.target)
+      var element = document.querySelector(tick.dataset.target)
       if (tick.dataset.tip) tick.setAttribute('aria-label', tick.dataset.tip)
-      return el
+      return element
     })
-    function isVisible(el) { return !!el && el.getClientRects().length > 0 }
-    ticks.forEach(function (tick, i) {
+    function visible(element) { return !!element && element.getClientRects().length > 0 }
+    ticks.forEach(function (tick, index) {
       tick.addEventListener('click', function () {
-        var el = rounds[i]
-        if (!isVisible(el)) return
-        var delta = el.getBoundingClientRect().top - reader.getBoundingClientRect().top - 88
+        var element = rounds[index]
+        if (!visible(element)) return
+        var delta = element.getBoundingClientRect().top - reader.getBoundingClientRect().top - 88
         reader.scrollTo({ top: reader.scrollTop + delta, behavior: 'smooth' })
       })
     })
     function updateActive() {
       var top = reader.getBoundingClientRect().top
-      var best = -1, bestDist = Infinity
-      rounds.forEach(function (el, i) {
-        if (!isVisible(el)) return
-        var d = Math.abs(el.getBoundingClientRect().top - top - 90)
-        if (d < bestDist) { bestDist = d; best = i }
+      var best = -1
+      var bestDistance = Infinity
+      rounds.forEach(function (element, index) {
+        if (!visible(element)) return
+        var distance = Math.abs(element.getBoundingClientRect().top - top - 90)
+        if (distance < bestDistance) {
+          bestDistance = distance
+          best = index
+        }
       })
-      ticks.forEach(function (tick, i) { tick.classList.toggle('active', i === best) })
+      ticks.forEach(function (tick, index) { tick.classList.toggle('active', index === best) })
     }
     reader.addEventListener('scroll', updateActive, { passive: true })
     requestAnimationFrame(updateActive)
   }
 
-  /* 工具类型 SVG 图标注入 */
+  /* 工具类型 SVG 图标注入。 */
   var toolIcons = {
     shell: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 5 6 8 3 11"/><line x1="6" y1="11" x2="13" y2="11"/></svg>',
     read: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 2h5l3 3v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><polyline points="9 2 9 5 12 5"/></svg>',
@@ -301,7 +350,10 @@
   document.querySelectorAll('.kicon[data-kind], .kicon[class*="kind-"]').forEach(function (icon) {
     var kind = 'tool'
     Object.keys(toolIcons).some(function (name) {
-      if (icon.classList.contains('kind-' + name)) { kind = name; return true }
+      if (icon.classList.contains('kind-' + name)) {
+        kind = name
+        return true
+      }
       return false
     })
     icon.innerHTML = toolIcons[kind]
