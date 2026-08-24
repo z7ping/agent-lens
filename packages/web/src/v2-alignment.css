@@ -289,7 +289,7 @@
   max-width: 94%;
 }
 
-/* ── 工具分析：四卡 KPI 收成 v2 细线长条 ── */
+/* ── 工具分析：严格跟随当前 v2 表格与抽屉密度 ── */
 .tool-summary-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -301,19 +301,20 @@
 }
 
 .tool-summary-card {
-  min-height: 86px;
+  min-height: 0;
   padding: 12px 16px;
   border: 0;
   border-right: 1px solid var(--al-line);
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+  display: block;
 }
 
 .tool-summary-card:last-child { border-right: 0; }
-.tool-summary-card > span { font-weight: 650; color: var(--al-muted); }
-.tool-summary-card strong { margin-top: 6px; font-size: 14px; }
-.tool-summary-card small { padding-top: 5px; }
+.tool-summary-card > span { display: block; font-weight: 650; color: var(--al-muted); }
+.tool-summary-card strong { display: block; margin: 5px 0; font-size: 14px; }
+.tool-summary-card small { display: block; padding-top: 0; }
 
 .tool-table-card,
 .attributed-assets,
@@ -321,11 +322,24 @@
 .agent-source-nav,
 .agent-card { box-shadow: none; }
 
+.tool-table-card > .table-section-head {
+  height: auto;
+  min-height: 0;
+  padding: 14px 16px;
+  display: block;
+}
+.tool-table-card > .table-section-head h2 { margin: 0; font-size: 14px; }
+.tool-table-card > .table-section-head p { margin: 3px 0 0; font-size: 12px; }
+
+.tool-table { font-size: 13px; }
 .tool-table th,
 .tool-table td {
-  padding-left: 13px;
-  padding-right: 13px;
+  height: auto;
+  padding: 10px 13px;
 }
+.tool-table th { font-size: 12px; }
+.tool-name { font-size: 13px; }
+.tool-source { font-size: 12px; }
 
 .tool-table th[role='button']:focus-visible,
 .tool-table tbody tr:focus-visible {
@@ -338,10 +352,11 @@
 
 .tool-attention-row {
   width: 100%;
-  min-height: 52px;
-  padding: 9px 4px;
+  min-height: 0;
+  padding: 9px 3px;
   border: 0;
-  border-bottom: 1px solid var(--al-line);
+  border-top: 1px solid var(--al-line);
+  border-bottom: 0;
   background: transparent;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -366,9 +381,18 @@
 .tool-attention-badge.is-danger { background: var(--al-danger-soft); color: var(--al-danger); }
 .tool-attention-badge.is-warning { background: var(--al-warning-soft); color: var(--al-warning); }
 
+.attributed-asset {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto minmax(80px, 220px) auto auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 0;
+  padding: 9px 2px;
+}
+
 .asset-usage-bar {
-  margin-left: auto;
-  width: min(220px, 22vw);
+  margin-left: 0;
+  width: 100%;
   min-width: 80px;
   height: 6px;
   border-radius: 999px;
@@ -385,7 +409,7 @@
   border-bottom: 1px solid var(--al-line);
 }
 .tool-drill-stat {
-  min-height: 66px;
+  min-height: 0;
   padding: 10px 12px;
   border: 0;
   border-right: 1px solid var(--al-line);
@@ -393,7 +417,23 @@
   background: transparent;
 }
 .tool-drill-stat:nth-child(3n) { border-right: 0; }
+
 .tool-session-section { margin-top: 18px; }
+.tool-session-section .table-section-head {
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  display: block;
+}
+.tool-session-section .table-section-head h2 {
+  margin: 0;
+  color: var(--al-muted-2);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .09em;
+}
+.tool-session-section .table-section-head p { margin: 4px 0 0; font-size: 12px; }
 .tool-session-list { display: flex; flex-direction: column; gap: 7px; margin-top: 8px; }
 
 .tool-session-link {
@@ -403,7 +443,7 @@
   border-radius: 9px;
   background: var(--al-soft-2);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 92px auto;
+  grid-template-columns: minmax(0, 1fr) 85px auto;
   gap: 9px;
   align-items: center;
   text-align: left;
@@ -505,6 +545,8 @@
   .tool-session-link { grid-template-columns: minmax(0, 1fr) auto; }
   .tool-session-link .metric-bar { display: none; }
   .asset-usage-bar { display: none; }
+  .attributed-asset { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .attributed-asset .asset-usage-bar { display: none; }
   .frequent-asset-row { grid-template-columns: 20px minmax(0, 1fr) 42px; }
   .frequent-usage-track { display: none; }
 }
