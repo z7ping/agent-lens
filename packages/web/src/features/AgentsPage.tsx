@@ -171,12 +171,14 @@ function AssetGroup({ agent, type, assets }: { agent: AgentOverviewDto; type: st
 
 function FrequentAssets({ agent, assets }: { agent: AgentOverviewDto; assets: AgentAssetInventoryDto[] }) {
   if (!assets.length) return <div className="muted-empty compact">暂无能够可靠归因的技能或 MCP（模型上下文协议）使用记录</div>
+  const rows = assets.map(asset => ({ asset, count: assetUsageCount(agent, asset) }))
+  const max = Math.max(1, ...rows.map(row => row.count))
   return <div className="frequent-assets">
-    {assets.map((asset, index) => <div key={asset.id} className="frequent-asset-row">
+    {rows.map(({ asset, count }, index) => <div key={asset.id} className="frequent-asset-row">
       <span className="frequent-rank">{index + 1}</span>
       <div className="frequent-main"><b>{asset.displayName ?? asset.canonicalName}</b><span>{assetTypeLabel[asset.type] ?? asset.type}</span></div>
-      <strong>{assetUsageCount(agent, asset)}</strong>
-      <small>次</small>
+      <span className="frequent-usage-track" aria-hidden="true"><i style={{ width: `${Math.max(4, count / max * 100)}%` }}/></span>
+      <strong>{count}</strong>
     </div>)}
   </div>
 }
@@ -188,33 +190,23 @@ function SkillLifecycle({ agent, skills }: { agent: AgentOverviewDto; skills: Ag
   const discoverableReported = skills.some(asset => stateValue(asset, 'discoverable') !== undefined)
   const discoverable = skills.filter(asset => stateValue(asset, 'discoverable') === true).length
   const used = skills.filter(asset => assetUsageCount(agent, asset) > 0).length
-
-  const sourceMap = new Map<string, { count: number; used: number }>()
-  for (const asset of skills) {
-    const sources = new Set(asset.bindings.map(binding => binding.source).filter((value): value is string => Boolean(value)))
-    if (!sources.size) sources.add('未标注来源')
-    for (const source of sources) {
-      const item = sourceMap.get(source) ?? { count: 0, used: 0 }
-      item.count += 1
-      if (assetUsageCount(agent, asset) > 0) item.used += 1
-      sourceMap.set(source, item)
-    }
-  }
-  const sources = [...sourceMap.entries()].sort((a, b) => b[1].count - a[1].count).slice(0, 5)
+  const baseline = Math.max(1, installed)
+  const rows = [
+    { key: 'installed', label: installedReported ? '已安装' : '已发现', value: installed, percent: 100, active: false },
+    { key: 'discoverable', label: discoverableReported ? '可发现' : '可发现状态未报告', value: discoverableReported ? discoverable : null, percent: discoverableReported ? Math.min(100, discoverable / baseline * 100) : 0, active: false },
+    { key: 'used', label: '已使用', value: used, percent: Math.min(100, used / baseline * 100), active: true },
+  ]
 
   return <section className="skill-lifecycle">
     <div className="section-heading-row"><div><h3>技能生命周期</h3><p>从本机资产发现，到智能体可发现，再到有证据支撑的真实调用。</p></div></div>
     <div className="skill-funnel">
-      <div><strong>{installed}</strong><span>{installedReported ? '已安装' : '已发现'}</span></div>
-      <i>→</i>
-      <div data-muted={!discoverableReported}><strong>{discoverableReported ? discoverable : '—'}</strong><span>{discoverableReported ? '可发现' : '可发现状态未报告'}</span></div>
-      <i>→</i>
-      <div data-active><strong>{used}</strong><span>已使用</span></div>
+      {rows.map(row => <div key={row.key} className="skill-funnel-row" data-active={row.active || undefined} data-muted={row.value === null || undefined}>
+        <span>{row.label}</span>
+        <span className="skill-funnel-track" aria-hidden="true"><i style={{ width: `${Math.max(row.value === null ? 0 : 4, row.percent)}%` }}/></span>
+        <strong>{row.value ?? '—'}</strong>
+      </div>)}
     </div>
     {!discoverableReported && <p className="skill-funnel-note">数据源没有明确报告“可发现”状态时，不把“未报告”误算成 0。</p>}
-    {sources.length > 0 && <div className="skill-source-list">
-      {sources.map(([source, item]) => <div key={source}><span title={source}>{source}</span><b>{item.count}</b><small>{item.used} 个已使用</small></div>)}
-    </div>}
   </section>
 }
 
