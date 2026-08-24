@@ -187,6 +187,8 @@ Task Scheduler
 
 路径已经消失的登记立即视为失效，不要求先删除 JSON。因此直接卸载 npm、直接卸载 Desktop、安装目录被移动等情况都不会让陈旧登记长期阻塞另一种发行方式。
 
+源码 `tsx` 调试入口不是正式安装，不写 `npm.json`。只有正式 `dist/cli.mjs` 或 Desktop 显式发行身份可以登记为 Hook Provider。
+
 ### 10. Windows Hook 使用稳定的共享分发器
 
 Windows Hook 配置不直接绑定 npm 安装目录，也不直接绑定 Desktop 安装目录。正式入口固定为用户数据目录中的共享分发器：
@@ -210,9 +212,9 @@ Native Hook
 4. 两种发行都无效时，中性退出，不阻断上游 Agent Hook；
 5. 不需要为了发行切换反复重写 Codex / Claude Hook 配置。
 
-Desktop 正式包把 `runtime/hooks` 解包到外部进程可访问的位置，并在启动后登记自身。只对本机实际存在的 Codex / Claude Code 修复 AgentLens 自己的 Hook；Pi 继续使用原生 History / Runtime Tail。
+Desktop 正式包把 `runtime/cli.mjs` 和 `runtime/hooks` 解包到外部进程可访问的位置，并在启动后登记自身。只对本机实际存在的 Codex / Claude Code 修复 AgentLens 自己的 Hook；Pi 继续使用原生 History / Runtime Tail。
 
-共享分发器和旧无窗口 Hook Runner 都属于执行包装，不得扩展成业务 Runtime：
+共享分发器属于执行包装，不得扩展成业务 Runtime：
 
 - 不解析业务事件；
 - 不访问 Core、SQLite、HTTP 或 Daemon；
@@ -282,7 +284,7 @@ Desktop 正式包把 `runtime/hooks` 解包到外部进程可访问的位置，�
 - npm 私有数据库；
 - Hook 自动拉起 Daemon；
 - 依赖 npm uninstall lifecycle 维护安装事实；
-- 在 Hook 分发器 / Runner 中复制 Source / Canonical / Daemon 逻辑。
+- 在共享 Hook 分发器中复制 Source / Canonical / Daemon 逻辑。
 
 ## 第一阶段落地状态
 
@@ -307,7 +309,10 @@ Desktop 正式包把 `runtime/hooks` 解包到外部进程可访问的位置，�
 17. Windows Hook 配置切换为稳定共享分发器；
 18. Desktop 启动后登记自身并修复已检测 Agent 的 Hook；
 19. Windows CI 验证陈旧 Desktop 登记自动回退有效 npm Provider；
-20. Windows CI 增加 `autostart -> service -> Health -> doctor -> stop` 生命周期冒烟。
+20. Windows CI 增加 `autostart -> service -> Health -> doctor -> stop` 生命周期冒烟；
+21. 旧单 Provider Windows Hook Runner 已删除，正式入口只保留共享分发器；
+22. Desktop 集成 CLI 与 Hook 文件都解包为外部进程可执行入口；
+23. 源码 CLI 不登记为正式 npm Provider。
 
 仍需真实系统环境验收：
 
