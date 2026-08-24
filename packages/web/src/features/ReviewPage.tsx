@@ -368,25 +368,81 @@ function roleLabel(role: ReviewMessageNodeDto['role']): string {
   return '可观察过程片段'
 }
 
+type InspectorTab = 'detail' | 'evidence' | 'raw'
+
 function Inspector({ node, onClose }: { node: ReviewNodeDto; onClose(): void }) {
-  return <aside className="inspector-panel">
+  const [tab, setTab] = useState<InspectorTab>('detail')
+  const panelRef = useRef<HTMLElement>(null)
+  const firstTabRef = useRef<HTMLButtonElement>(null)
+  const returnFocusRef = useRef<HTMLElement | null>(null)
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
+
+  useEffect(() => {
+    returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    firstTabRef.current?.focus()
+    const panel = panelRef.current
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        closeRef.current()
+        return
+      }
+      if (event.key !== 'Tab' || !panel) return
+      const focusable = [...panel.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+      if (!focusable.length) return
+      const first = focusable[0]!
+      const last = focusable[focusable.length - 1]!
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      window.requestAnimationFrame(() => returnFocusRef.current?.focus())
+    }
+  }, [])
+
+  const title = node.type === 'tool' ? node.name : node.type === 'event' ? sourceEventLabel(node) : roleLabel(node.role)
+  const detailSummary = node.type === 'event'
+    ? sourceEventSummary(node)
+    : node.type === 'message'
+      ? brief(node.text, 280)
+      : ''
+
+  return <aside ref={panelRef} className="inspector-panel" role="dialog" aria-modal="true" aria-label={`${title}详情`}>
     <div className="inspector-head">
       <div>
         <div className="eyebrow">事件详情</div>
-        <div className="inspector-title">{node.type === 'tool' ? node.name : node.type === 'event' ? sourceEventLabel(node) : roleLabel(node.role)}</div>
+        <div className="inspector-title">{title}</div>
       </div>
       <button className="icon-button" onClick={onClose} aria-label="关闭事件详情">×</button>
     </div>
-    {node.type === 'tool' && <StructuredToolDetail node={node}/>} 
-    <section className="inspector-section">
+    <div className="agent-scope" role="tablist" aria-label="事件详情分类" style={{ padding: '10px 14px 0' }}>
+      <button ref={firstTabRef} className={`scope-chip ${tab === 'detail' ? 'scope-chip-active' : ''}`} role="tab" aria-selected={tab === 'detail'} onClick={() => setTab('detail')}>详情</button>
+      <button className={`scope-chip ${tab === 'evidence' ? 'scope-chip-active' : ''}`} role="tab" aria-selected={tab === 'evidence'} onClick={() => setTab('evidence')}>证据 · {node.evidence.length}</button>
+      <button className={`scope-chip ${tab === 'raw' ? 'scope-chip-active' : ''}`} role="tab" aria-selected={tab === 'raw'} onClick={() => setTab('raw')}>原始数据</button>
+    </div>
+    {tab === 'detail' && <>
+      {node.type === 'tool' ? <StructuredToolDetail node={node}/> : <section className="inspector-section">
+        <h3 className="section-label">摘要</h3>
+        <div className="evidence-empty-detail">{detailSummary || '当前事件没有额外的结构化详情；可继续查看证据或来源原始记录。'}</div>
+      </section>}
+    </>}
+    {tab === 'evidence' && <section className="inspector-section">
       <h3 className="section-label">证据</h3>
       {node.evidence.length ? node.evidence.map(item => <div key={item.id} className="evidence-card">
         <div className="evidence-meta"><b>{evidenceCaptureLabel[item.captureMethod]}</b><span>{evidenceDerivationLabel[item.derivation] ?? item.derivation}</span><span>可信度：{evidenceConfidenceLabel[item.confidence] ?? item.confidence}</span></div>
         <div className="evidence-path">{item.sourceLocator?.path ?? item.sourceRecordId ?? item.id}</div>
         {item.missingReason && <div className="evidence-missing">证据信息不完整</div>}
       </div>) : <div className="muted-empty">无证据</div>}
-    </section>
-    <section className="inspector-section"><h3 className="section-label">来源原始记录</h3><pre className="raw-json">{JSON.stringify(node.payload, null, 2)}</pre></section>
+    </section>}
+    {tab === 'raw' && <section className="inspector-section"><h3 className="section-label">来源原始记录</h3><pre className="raw-json">{JSON.stringify(node.payload, null, 2)}</pre></section>}
   </aside>
 }
 
