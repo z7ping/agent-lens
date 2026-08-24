@@ -32,7 +32,14 @@ const FULL_MAX_TEXT: Record<CapturePolicyScope, number> = {
 const MAX_ARRAY_ITEMS = 100
 const MAX_OBJECT_KEYS = 100
 
-const SENSITIVE_KEY = /(?:^|[_-])(authorization|cookie|set-cookie|password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|client[_-]?secret)(?:$|[_-])/i
+const SENSITIVE_KEY = /(?:^|[_-])(authorization|cookie|set-cookie|password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|client[_-]?secret|credential|credentials)(?:$|[_-])/i
+const SENSITIVE_KEY_SUFFIX = /(?:authorization|cookie|cookies|password|passwd|pwd|secret|token|apikey|accesskey|privatekey|clientsecret|credential|credentials)$/
+
+function isSensitiveKey(key: string): boolean {
+  if (SENSITIVE_KEY.test(key)) return true
+  const normalized = key.replace(/[^a-z0-9]/gi, '').toLowerCase()
+  return SENSITIVE_KEY_SUFFIX.test(normalized)
+}
 
 const TOOL_OFF_SAFE_KEYS = new Set([
   'nativeToolName', 'toolName', 'tool_name', 'name', 'type', 'event', 'status',
@@ -122,7 +129,7 @@ function sanitizeValue(
   const entries = Object.entries(input as Record<string, unknown>).slice(0, MAX_OBJECT_KEYS)
   const value: Record<string, unknown> = {}
   for (const [key, item] of entries) {
-    if (SENSITIVE_KEY.test(key)) {
+    if (isSensitiveKey(key)) {
       value[key] = REDACTED
       changed = true
       continue
@@ -239,12 +246,20 @@ export class DefaultCapturePolicyService implements CapturePolicyService {
       }
     })
 
+    const assetHints = normalized.assetHints
+      ? (this.capture('config', normalized.assetHints).value ?? [])
+      : undefined
+
     return {
       ...normalized,
       observations,
       evidenceCandidates: structuralValue(normalized.evidenceCandidates) as NormalizedSourceOutput['evidenceCandidates'],
       ...(normalized.coverage
         ? { coverage: structuralValue(normalized.coverage) as NonNullable<NormalizedSourceOutput['coverage']> }
+        : {}),
+      ...(assetHints === undefined ? {} : { assetHints: assetHints as unknown[] }),
+      ...(normalized.sessionRelationshipHints
+        ? { sessionRelationshipHints: structuralValue(normalized.sessionRelationshipHints) as unknown[] }
         : {}),
     }
   }
@@ -258,6 +273,7 @@ export class DefaultCapturePolicyService implements CapturePolicyService {
 
 export const capturePolicyInternals = {
   normalizeMode,
+  isSensitiveKey,
   hardRedactText,
   privacyRedactText,
   observationScopes,

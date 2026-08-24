@@ -56,9 +56,11 @@ test('redacted masks credentials and local user path', () => {
   const policy = new DefaultCapturePolicyService(settings())
   const result = policy.capture('tool', {
     authorization: 'Bearer abcdefghijklmnop',
+    refreshToken: 'opaque-value-that-does-not-look-like-a-token',
     command: 'cat C:\\Users\\alice\\secret.txt',
   })
   assert.equal((result.value as Record<string, unknown>).authorization, REDACTED)
+  assert.equal((result.value as Record<string, unknown>).refreshToken, REDACTED)
   assert.match(String((result.value as Record<string, unknown>).command), /Users\\\[用户\]/)
 })
 
@@ -103,4 +105,14 @@ test('config off prevents static assets from entering persistence', () => {
     definition: { type: 'skill', canonicalName: 'example' },
     binding: { path: '/home/alice/.agent/skills/example' },
   }), null)
+})
+
+test('config off strips normalized asset hints as well as static discovery', () => {
+  const policy = new DefaultCapturePolicyService(settings({ config: 'off' }))
+  const output: NormalizedSourceOutput = {
+    observations: [],
+    evidenceCandidates: [],
+    assetHints: [{ token: 'opaque-config-secret', name: 'example' }],
+  }
+  assert.deepEqual(policy.sanitizeNormalizedOutput(output).assetHints, [])
 })
