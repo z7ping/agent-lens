@@ -13,7 +13,7 @@ export interface RuntimeHealthDto {
 export interface HealthResponseDto {
   status: 'ok' | 'degraded'
   protocolVersion: typeof AGENT_LENS_PROTOCOL_VERSION
-  runtime: RuntimeHealthDto
+  runtime?: RuntimeHealthDto
   storage: {
     ok: boolean
     schemaVersion?: number
