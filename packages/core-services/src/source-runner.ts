@@ -2,6 +2,7 @@ import type {
   AgentInstallation,
   AssetService,
   CapabilityService,
+  CapturePolicyService,
   CoverageService,
   DetectedSource,
   Disposable,
@@ -75,7 +76,7 @@ class ScopedCheckpointService implements SourceCheckpointService {
   }
 
   set<T>(key: string, value: T): Promise<void> {
-    return this.storage.checkpoints.set(this.scope, key, value)
+    return this.storage.checkpoints.set<T>(this.scope, key, value)
   }
 
   clear(key: string): Promise<void> {
@@ -112,27 +113,39 @@ async function processSourceRecord(
   storage: StorageService,
   observations: ObservationService,
   coverage: CoverageService,
+  capturePolicy: CapturePolicyService,
   source: SourceDefinition,
   host: Host,
   installation: AgentInstallation,
   record: SourceRecord,
 ): Promise<ProcessResult> {
-  await storage.repositories.sourceRecords.put(record)
+  let normalized
+  try {
+    normalized = await source.normalize(record, { host, installation })
+  } catch (error) {
+    // Preserve the ingest/evidence unit for diagnostics, but never persist an
+    // unsanitized native payload when normalization itself fails.
+    await storage.repositories.sourceRecords.put(capturePolicy.sanitizeSourceRecord(record))
+    throw error
+  }
 
-  const normalized = await source.normalize(record, { host, installation })
+  const persistedRecord = capturePolicy.sanitizeSourceRecord(record, normalized)
+  const persistedOutput = capturePolicy.sanitizeNormalizedOutput(normalized)
+  await storage.repositories.sourceRecords.put(persistedRecord)
+
   const result: ProcessResult = {
     observationsCreated: 0,
     observationsMerged: 0,
     observationsUnchanged: 0,
   }
 
-  for (const observation of normalized.observations) {
+  for (const observation of persistedOutput.observations) {
     const committed = await observations.commit({
       sourceId: source.manifest.sourceId,
       host,
       installation,
       candidate: observation,
-      evidenceCandidates: normalized.evidenceCandidates,
+      evidenceCandidates: persistedOutput.evidenceCandidates,
     })
 
     if (committed.status === 'created') result.observationsCreated += 1
@@ -140,7 +153,7 @@ async function processSourceRecord(
     else result.observationsUnchanged += 1
   }
 
-  for (const declaration of normalized.coverage ?? []) {
+  for (const declaration of persistedOutput.coverage ?? []) {
     await coverage.declare(declaration)
   }
 
@@ -154,6 +167,7 @@ export class SourceHistoryRunner {
     private readonly observations: ObservationService,
     private readonly capabilities: CapabilityService,
     private readonly coverage: CoverageService,
+    private readonly capturePolicy: CapturePolicyService,
   ) {}
 
   async sync(input: SourceHistorySyncInput): Promise<SourceHistorySyncResult> {
@@ -206,6 +220,7 @@ export class SourceHistoryRunner {
         this.storage,
         this.observations,
         this.coverage,
+        this.capturePolicy,
         source,
         host,
         installation,
@@ -253,6 +268,7 @@ export class SourceRuntimeRunner {
     private readonly observations: ObservationService,
     private readonly capabilities: CapabilityService,
     private readonly coverage: CoverageService,
+    private readonly capturePolicy: CapturePolicyService,
   ) {}
 
   async start(input: SourceRuntimeCaptureInput): Promise<SourceRuntimeCaptureHandle> {
@@ -302,6 +318,7 @@ export class SourceRuntimeRunner {
               this.storage,
               this.observations,
               this.coverage,
+              this.capturePolicy,
               source,
               host,
               installation,
@@ -338,6 +355,7 @@ export class SourceAssetRunner {
     private readonly capabilities: CapabilityService,
     private readonly assets: AssetService,
     private readonly evidence: EvidenceService,
+    private readonly capturePolicy: CapturePolicyService,
   ) {}
 
   async scan(input: SourceAssetDiscoveryInput): Promise<SourceAssetDiscoveryResult> {
@@ -361,7 +379,7 @@ export class SourceAssetRunner {
       assetsDiscovered: 0,
       statesRecorded: 0,
     }
-    if (!source.discoverAssets) return result
+    if (!source.discoverAssets || !this.capturePolicy.isEnabled('config')) return result
 
     const checkpoint = new ScopedCheckpointService(
       this.storage,
@@ -375,18 +393,20 @@ export class SourceAssetRunner {
       checkpoint,
     })) {
       if (abortSignal.aborted) break
+      const safeDiscovered = this.capturePolicy.sanitizeDiscoveredAsset(discovered)
+      if (!safeDiscovered) continue
 
-      const definition = await this.assets.resolveDefinition(discovered.definition)
+      const definition = await this.assets.resolveDefinition(safeDiscovered.definition)
       const binding = await this.assets.resolveBinding({
         assetId: definition.id,
         installationId: installation.id,
-        ...(discovered.binding?.path ? { path: discovered.binding.path } : {}),
-        ...(discovered.binding?.source ? { source: discovered.binding.source } : {}),
-        ...(discovered.binding?.version ? { version: discovered.binding.version } : {}),
+        ...(safeDiscovered.binding?.path ? { path: safeDiscovered.binding.path } : {}),
+        ...(safeDiscovered.binding?.source ? { source: safeDiscovered.binding.source } : {}),
+        ...(safeDiscovered.binding?.version ? { version: safeDiscovered.binding.version } : {}),
       })
       result.assetsDiscovered += 1
 
-      for (const state of discovered.states ?? []) {
+      for (const state of safeDiscovered.states ?? []) {
         const evidenceRefs: string[] = []
         for (const candidate of state.evidenceCandidates ?? []) {
           evidenceRefs.push((await this.evidence.create(candidate)).id)

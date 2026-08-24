@@ -109,6 +109,7 @@ export async function syncRegisteredSourceHistory(
     ctx.observations,
     ctx.capabilities,
     ctx.coverage,
+    ctx.capturePolicy,
   )
   const results: SourceHistorySyncResult[] = []
   const failures: RegisteredSourceFailure[] = []
@@ -136,6 +137,7 @@ export async function discoverRegisteredSourceAssets(
     ctx.capabilities,
     ctx.assets,
     ctx.evidence,
+    ctx.capturePolicy,
   )
   const results: SourceAssetDiscoveryResult[] = []
   const failures: RegisteredSourceFailure[] = []
@@ -164,6 +166,7 @@ export async function startRegisteredSourceCapture(
     ctx.observations,
     ctx.capabilities,
     ctx.coverage,
+    ctx.capturePolicy,
   )
   const results: SourceRuntimeCaptureHandle[] = []
   const failures: RegisteredSourceFailure[] = []

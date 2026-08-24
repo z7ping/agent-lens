@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@agent-lens/backup-local": "1.0.0-alpha.0",
+    "@agent-lens/capture-policy": "1.0.0-alpha.0",
     "@agent-lens/runtime-cordis": "1.0.0-alpha.0",
     "@agent-lens/source-claude": "1.0.0-alpha.0",
     "@agent-lens/source-codex": "1.0.0-alpha.0",

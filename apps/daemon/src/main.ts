@@ -3,6 +3,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { backupLocalPlugin } from '@agent-lens/backup-local'
+import { capturePolicyPlugin } from '@agent-lens/capture-policy'
 import {
   AgentLensApplication,
   coreServicesPlugin,
@@ -43,6 +44,7 @@ const INITIAL_BACKGROUND_SYNC_DELAY_MS = 600
 const app = new AgentLensApplication()
 app.use(sqliteStoragePlugin, { path: dbPath })
 app.useRuntime(coreServicesPlugin)
+app.useRuntime(capturePolicyPlugin)
 app.use(codexSourcePlugin)
 app.use(claudeSourcePlugin)
 app.use(piSourcePlugin)
@@ -118,6 +120,7 @@ try {
   )
   console.info(`[AgentLens] Web/UI: http://127.0.0.1:${configuredPort} (root: ${webRoot})`)
   console.info(`[AgentLens] backup vault: ${vaultPath}`)
+  console.info(`[AgentLens] capture policy: prompt=${app.context.capturePolicy.modeFor('prompt')} tool=${app.context.capturePolicy.modeFor('tool')} config=${app.context.capturePolicy.modeFor('config')} environment=${app.context.capturePolicy.modeFor('environment')}`)
 
   const prepared = await prepareRegisteredSources(app.context, runtimeController.signal)
   logSourceFailures(prepared.failures)

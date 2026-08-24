@@ -3,6 +3,7 @@ import type {
   AssetService,
   BackupService,
   CapabilityService,
+  CapturePolicyService,
   CoreEventMap,
   CoverageService,
   EvidenceService,
@@ -25,6 +26,7 @@ declare module '@deepseek-ai/cordis' {
     assets: AssetService
     tools: ToolService
     backup: BackupService
+    capturePolicy: CapturePolicyService
   }
 
   interface Events {
