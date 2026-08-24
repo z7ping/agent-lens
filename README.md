@@ -42,10 +42,13 @@ Requires Node.js **22.23+**.
 ```bash
 npm install -g @z7ping/agent-lens
 
-agent-lens doctor
-agent-lens hook install all
+agent-lens setup
 agent-lens start
 ```
+
+`agent-lens setup` performs one-time initialization: it validates Node.js and the data directory, detects local Codex / Claude Code / Pi roots, and installs or repairs only AgentLens-owned Hooks for detected Codex / Claude Code installations. Pi uses native history/runtime tailing and does not receive a Hook.
+
+`setup` does not create a background service or configure autostart. Use `agent-lens doctor` and `agent-lens status` for diagnostics.
 
 Open:
 
@@ -53,7 +56,7 @@ Open:
 http://127.0.0.1:56789/
 ```
 
-`agent-lens start` intentionally runs the daemon in the foreground. Background lifecycle on Windows is owned by the desktop application rather than a second cross-platform service manager.
+`agent-lens start` intentionally runs the daemon in the foreground. It probes the default AgentLens endpoint first and reuses a compatible existing daemon instead of starting a second one. npm and Windows Desktop may coexist while sharing the same default data root and runtime.
 
 ### Source checkout
 
@@ -68,8 +71,8 @@ npm run dev
 For the CLI from a checkout:
 
 ```bash
+npm run cli -- setup
 npm run cli -- doctor
-npm run cli -- hook install all
 npm run cli -- start
 ```
 
@@ -86,8 +89,11 @@ The Electron application is only a desktop shell. It owns:
 - single-instance behavior;
 - BrowserWindow;
 - system tray;
-- daemon start/stop/restart;
+- starting/reusing/stopping only the daemon it owns;
+- Windows login autostart;
 - log/data-folder access.
+
+On startup Desktop probes `127.0.0.1:56789`: it reuses a compatible daemon already owned by npm/service, and starts its own daemon only when no compatible runtime exists. Exiting Desktop does not kill an externally managed daemon.
 
 The daemon and HTTP/SSE architecture remain the same as the CLI/npm distribution.
 
@@ -141,6 +147,7 @@ Web receives Observation, Source Detection, and Asset changes over SSE. The SSE 
 ## CLI
 
 ```text
+agent-lens setup [--json]
 agent-lens start
 agent-lens status [--json]
 agent-lens doctor [--json]
@@ -149,7 +156,9 @@ agent-lens hook install [codex|claude|all]
 agent-lens hook uninstall [codex|claude|all]
 ```
 
-Hook installation is idempotent. AgentLens removes/replaces only its own handlers and preserves third-party handlers in the same configuration.
+`setup` is the recommended first-run entrypoint. Hook installation remains idempotent: AgentLens removes/replaces only its own handlers and preserves third-party handlers in the same configuration.
+
+The npm CLI does not yet expose `service` / `autostart` commands. Those are future distribution/operations features and must not reintroduce the 0.x PID/service-manager architecture.
 
 ## Architecture in one picture
 
@@ -176,6 +185,7 @@ See:
 - [Core Contract](docs/1.0/CORE-CONTRACT.md)
 - [ADR-0001: Clean Rebuild and Cordis Runtime Ownership](docs/adr/0001-agentlens-1.0-clean-rebuild-and-cordis-runtime.md)
 - [ADR-0002: Web Plugin and Client State Model](docs/adr/0002-web-plugin-and-client-state-model.md)
+- [ADR-0004: Dual distribution, single runtime, and lifecycle ownership](docs/adr/0004-dual-distribution-single-runtime-lifecycle.md)
 
 ## Evidence model
 
