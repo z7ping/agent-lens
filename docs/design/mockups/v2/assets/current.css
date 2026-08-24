@@ -23,6 +23,8 @@ body { font-size: 14px; }
 .page-heading p,
 .future-heading p,
 .heading p { font-size: 13px; }
+.future-heading p { max-width: 780px !important; }
+.review-layout { grid-template-columns: 320px minmax(0,1fr) !important; }
 
 /* 正常辅助文字统一 12px 下限。 */
 small,
@@ -316,6 +318,7 @@ th,
 }
 .matrix h2 { font-size: 17px !important; }
 .matrix p { margin: 5px 0 0 !important; font-size: 13px !important; }
+.matrix-wrap { overflow-x: auto; border: 1px solid var(--al-line); border-radius: 10px; margin-top: 12px; }
 .mrow {
   grid-template-columns: minmax(180px,1.4fr) repeat(5,minmax(90px,1fr)) !important;
   font-size: 12px !important;
@@ -407,7 +410,14 @@ th,
   padding: 18px 16px 14px;
   border-bottom: 0 !important;
 }
-.insight-content .day { grid-template-rows: minmax(100px,1fr) auto auto; min-width: 28px; font-size: 12px !important; }
+.insight-content .day {
+  display: grid !important;
+  grid-template-rows: minmax(100px,1fr) auto auto;
+  align-items: end;
+  justify-items: center;
+  min-width: 28px;
+  font-size: 12px !important;
+}
 .insight-content .bar { width: min(18px,70%) !important; border-radius: 5px 5px 2px 2px !important; opacity: .78; }
 .insight-content .compare {
   margin-top: 0 !important;
@@ -530,6 +540,13 @@ th,
   border-radius: 10px !important;
   background: var(--al-danger-soft) !important;
 }
+.state-surface:has(.steps) {
+  max-width: 820px;
+  padding: 22px !important;
+  border: 1px solid var(--al-line);
+  border-radius: 14px;
+  background: var(--al-surface);
+}
 .steps { display: flex; flex-direction: column; }
 .step {
   display: grid !important;
@@ -546,27 +563,23 @@ th,
 .step .bd b { font-size: 13px !important; }
 .step .bd p { font-size: 12px !important; line-height: 1.6; }
 
-/* 窄屏 Shell 与正式 Web 使用同一断点与保留策略。 */
-@media (max-width: 1080px) {
-  .app-header-inner { gap: 16px !important; padding-inline: 14px !important; }
-  .app-header .nav-item { padding-inline: 9px !important; }
-}
-
+/* 窄屏 Shell、Review 和智能体页与正式 Web 使用同一断点与保留策略。 */
 @media (max-width: 1180px) {
   .insight-content .kpis { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .insight-content .kpis + .grid { grid-template-columns: 1fr !important; }
 }
 
-@media (max-width: 860px) {
-  .agents-browser { grid-template-columns: 1fr !important; }
-  .source-nav {
-    position: static;
-    display: flex;
-    overflow-x: auto !important;
-    gap: 6px;
-  }
-  .source-nav h2 { display: none; }
-  .src-option { min-width: 180px; }
+@media (max-width: 1080px) {
+  .app-header-inner { gap: 16px !important; padding-inline: 14px !important; }
+  .app-header .nav-item { padding-inline: 9px !important; }
+}
+
+@media (max-width: 900px) {
+  .nav-item { font-size: 13px !important; }
+  .review-layout { display: grid !important; grid-template-columns: 1fr !important; }
+  .session-panel { display: flex !important; max-height: 34vh; border-right: 0 !important; border-bottom: 1px solid var(--al-line); }
+  .reader-pane { overflow: auto !important; }
+  .reader-inner { padding: 16px 16px 88px !important; }
 }
 
 @media (max-width: 820px) {
@@ -577,6 +590,7 @@ th,
   .app-status { flex: 0 0 auto; gap: 3px !important; }
   .status-pill { display: inline-flex !important; min-width: 30px; padding-inline: 8px !important; justify-content: center; }
   .status-pill .status-label { display: none; }
+  .session-panel { display: none !important; }
   .insight-content { padding: 20px 14px 48px !important; }
   .insight-content .kpis,
   .insight-content .grid { grid-template-columns: 1fr !important; }
@@ -591,6 +605,15 @@ th,
   .app-header .nav-item { padding-inline: 6px !important; font-size: 12px !important; }
   .app-status .status-pill,
   [data-theme-toggle] { width: 28px !important; min-width: 28px; height: 28px !important; }
+  .agents-browser { grid-template-columns: 1fr !important; }
+  .source-nav {
+    position: static;
+    display: flex;
+    overflow-x: auto !important;
+    gap: 6px;
+  }
+  .source-nav h2 { display: none; }
+  .src-option { min-width: 176px; }
   .insight-content .coverage { grid-template-columns: 1fr 1fr !important; }
   .insight-content .coverage > div:first-child { grid-column: 1 / -1; }
   .mrow { grid-template-columns: minmax(170px,1.4fr) repeat(5,minmax(90px,1fr)) !important; }
