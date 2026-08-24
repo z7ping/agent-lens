@@ -3,6 +3,7 @@ name: AgentLens 1.0 CI
 on:
   push:
     branches:
+      - main
       - refactor/1.0-foundation
       - feature/asset-backup-insights
   pull_request:
