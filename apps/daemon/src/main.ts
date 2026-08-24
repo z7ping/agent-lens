@@ -38,6 +38,7 @@ const webRoot = process.env.AGENT_LENS_WEB_ROOT
 const daemonMode = process.env.AGENT_LENS_DAEMON_MODE === 'managed' ? 'managed' : 'foreground'
 const interactiveTerminal = Boolean(process.stdin.isTTY && process.stdout.isTTY)
 const startedAt = Date.now()
+const INITIAL_BACKGROUND_SYNC_DELAY_MS = 600
 
 const app = new AgentLensApplication()
 app.use(sqliteStoragePlugin, { path: dbPath })
@@ -133,6 +134,12 @@ try {
   }
 
   syncPromise = (async () => {
+    // Health / Web 已经可用，Runtime Capture 也已经启动。给首屏一次很短的
+    // I/O 优先窗口，再开始 History / Asset 的后台扫描，避免首次接入大量
+    // Hermes / OpenCode 历史时与浏览器首批 Snapshot 查询争抢 SQLite/磁盘。
+    await new Promise(resolve => setTimeout(resolve, INITIAL_BACKGROUND_SYNC_DELAY_MS))
+    if (runtimeController.signal.aborted) return
+
     const [history, assets] = await Promise.all([
       syncRegisteredSourceHistory(app.context, runtimeController.signal, prepared.targets),
       discoverRegisteredSourceAssets(app.context, runtimeController.signal, prepared.targets),
