@@ -2,6 +2,8 @@ import { existsSync, readFileSync } from 'node:fs'
 
 const mainPath = 'packages/web/src/main.tsx'
 const typographyPath = 'packages/web/src/typography.css'
+const tokenPath = 'packages/web/src/tokens.css'
+const mockTokenPath = 'docs/design/mockups/v2/assets/tokens.css'
 const colorSystemPath = 'packages/web/src/color-system.css'
 const semanticPresentationPaths = [
   typographyPath,
@@ -25,9 +27,10 @@ if (lastCssImport !== './color-system.css') {
 }
 
 const typographyIndex = cssImports.indexOf('./typography.css')
+const tokenIndex = cssImports.indexOf('./tokens.css')
 const colorSystemIndex = cssImports.indexOf('./color-system.css')
-if (typographyIndex < 0 || colorSystemIndex < 0 || typographyIndex > colorSystemIndex) {
-  throw new Error('正式字体系统必须在最终配色系统之前加载')
+if (typographyIndex < 0 || tokenIndex < 0 || colorSystemIndex < 0 || typographyIndex > tokenIndex || tokenIndex + 1 !== colorSystemIndex) {
+  throw new Error('正式加载顺序必须保持：字体系统 → 设计令牌 → 最终配色系统')
 }
 
 for (const path of retiredReviewLayers) {
@@ -52,8 +55,92 @@ for (const path of semanticPresentationPaths) {
   }
 }
 
+const tokenSource = readFileSync(tokenPath, 'utf8')
+const mockTokenSource = readFileSync(mockTokenPath, 'utf8')
+
+function block(source, selector) {
+  const start = source.indexOf(`${selector} {`)
+  if (start < 0) throw new Error(`缺少设计令牌块：${selector}`)
+  const bodyStart = source.indexOf('{', start) + 1
+  const end = source.indexOf('}', bodyStart)
+  return source.slice(bodyStart, end)
+}
+
+function vars(sourceBlock) {
+  return new Map([...sourceBlock.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map(match => [match[1], match[2].trim()]))
+}
+
+const comparedTokens = [
+  '--al-canvas', '--al-surface', '--al-surface-raised', '--al-soft', '--al-soft-2',
+  '--al-line', '--al-line-strong', '--al-ink', '--al-ink-2', '--al-muted', '--al-muted-2',
+  '--al-accent', '--al-accent-soft', '--al-success', '--al-success-soft', '--al-warning',
+  '--al-warning-soft', '--al-danger', '--al-danger-soft', '--al-user-bubble',
+  '--al-user-bubble-text', '--al-user-bubble-muted', '--al-user-bubble-code',
+]
+
+const runtimeLight = vars(block(tokenSource, ':root'))
+const runtimeDark = vars(block(tokenSource, ":root[data-theme='dark']"))
+const mockLight = vars(block(mockTokenSource, ':root'))
+const mockDark = vars(block(mockTokenSource, ":root[data-theme='dark']"))
+
+for (const name of comparedTokens) {
+  if (runtimeLight.get(name)?.toLowerCase() !== mockLight.get(name)?.toLowerCase()) {
+    throw new Error(`浅色设计令牌与高保真原型不一致：${name}，正式=${runtimeLight.get(name)}，原型=${mockLight.get(name)}`)
+  }
+  if (runtimeDark.get(name)?.toLowerCase() !== mockDark.get(name)?.toLowerCase()) {
+    throw new Error(`暗色设计令牌与高保真原型不一致：${name}，正式=${runtimeDark.get(name)}，原型=${mockDark.get(name)}`)
+  }
+}
+
+function hexToRgb(value) {
+  const hex = value.trim()
+  if (!/^#[0-9a-f]{6}$/i.test(hex)) throw new Error(`对比度检查只接受 6 位 HEX：${hex}`)
+  return [1, 3, 5].map(index => Number.parseInt(hex.slice(index, index + 2), 16) / 255)
+}
+
+function luminance(value) {
+  const [r, g, b] = hexToRgb(value).map(channel => channel <= 0.04045
+    ? channel / 12.92
+    : ((channel + 0.055) / 1.055) ** 2.4)
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+
+function contrast(foreground, background) {
+  const a = luminance(foreground)
+  const b = luminance(background)
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
+}
+
+function assertContrast(label, foreground, background, minimum = 4.5) {
+  const ratio = contrast(foreground, background)
+  if (ratio < minimum) {
+    throw new Error(`${label} 对比度不足：${ratio.toFixed(2)} < ${minimum}（${foreground} / ${background}）`)
+  }
+}
+
+const contrastPairs = [
+  ['浅色正文/画布', runtimeLight.get('--al-ink'), runtimeLight.get('--al-canvas')],
+  ['浅色次要文字/软底', runtimeLight.get('--al-muted'), runtimeLight.get('--al-soft')],
+  ['浅色用户气泡', runtimeLight.get('--al-user-bubble-text'), runtimeLight.get('--al-user-bubble')],
+  ['浅色强调实底', '#FFFFFF', runtimeLight.get('--al-accent')],
+  ['浅色成功实底', '#FFFFFF', runtimeLight.get('--al-success')],
+  ['浅色警告实底', '#FFFFFF', runtimeLight.get('--al-warning')],
+  ['浅色危险实底', '#FFFFFF', runtimeLight.get('--al-danger')],
+  ['暗色正文/画布', runtimeDark.get('--al-ink'), runtimeDark.get('--al-canvas')],
+  ['暗色次要文字/软底', runtimeDark.get('--al-muted'), runtimeDark.get('--al-soft')],
+  ['暗色用户气泡', runtimeDark.get('--al-user-bubble-text'), runtimeDark.get('--al-user-bubble')],
+  ['暗色强调实底', '#171816', runtimeDark.get('--al-accent')],
+  ['暗色成功实底', '#171816', runtimeDark.get('--al-success')],
+  ['暗色警告实底', '#171816', runtimeDark.get('--al-warning')],
+  ['暗色危险实底', '#171816', runtimeDark.get('--al-danger')],
+]
+
+for (const [label, foreground, background] of contrastPairs) {
+  assertContrast(label, foreground, background)
+}
+
 if (!readFileSync(colorSystemPath, 'utf8').includes('AgentLens 1.0 最终配色收口层')) {
   throw new Error('最终配色系统文件缺少正式收口标识')
 }
 
-console.log('Web 表现层收敛检查通过')
+console.log('Web 表现层收敛检查通过：字号、原型令牌和关键前景/背景对比度均已校验')
