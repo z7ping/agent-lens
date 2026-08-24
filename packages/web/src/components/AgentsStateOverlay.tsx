@@ -26,7 +26,7 @@ export function AgentsStateOverlay({ model, snapshot }: { model: AgentLensClient
         <EmptyStatePanel
           icon="◇"
           title="未检测到受支持的智能体"
-          description="本机暂未检测到 Codex、Claude Code 或 Pi。AgentLens 不会把“未观察到”直接判断成“未安装”，可先运行诊断命令确认检测路径。"
+          description="本机暂未检测到 Codex、Claude Code、Pi、Hermes 或 OpenCode。AgentLens 不会把“未观察到”直接判断成“未安装”，可先运行诊断命令确认各来源的检测路径与采集状态。"
         >
           <CommandRow command="agent-lens doctor"/>
         </EmptyStatePanel>
