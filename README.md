@@ -43,12 +43,41 @@ Requires Node.js **22.23+**.
 npm install -g @z7ping/agent-lens
 
 agent-lens setup
-agent-lens start
 ```
 
 `agent-lens setup` performs one-time initialization: it validates Node.js and the data directory, detects local Codex / Claude Code / Pi roots, and installs or repairs only AgentLens-owned Hooks for detected Codex / Claude Code installations. Pi uses native history/runtime tailing and does not receive a Hook.
 
-`setup` does not create a background service or configure autostart. Use `agent-lens doctor` and `agent-lens status` for diagnostics.
+After setup, choose foreground or managed background operation:
+
+```bash
+# Foreground, useful for debugging
+agent-lens start
+
+# Managed background runtime
+agent-lens service start
+
+# Optional: start automatically after user login
+agent-lens autostart enable
+```
+
+Check state with:
+
+```bash
+agent-lens status
+agent-lens service status
+agent-lens autostart status
+agent-lens doctor
+```
+
+`setup` only initializes integration. It does not automatically enable background operation or login autostart. `service` controls whether AgentLens is running in the background now; `autostart` controls whether it starts after the next user login.
+
+The npm distribution maps background lifecycle directly to native user-level operating-system facilities:
+
+- Windows: current-user Task Scheduler;
+- Linux: `systemd --user`;
+- macOS: user-level `launchd`.
+
+AgentLens does not restore the 0.x PID/service-manager architecture and does not create a second runtime or database for managed mode.
 
 Open:
 
@@ -74,6 +103,14 @@ For the CLI from a checkout:
 npm run cli -- setup
 npm run cli -- doctor
 npm run cli -- start
+```
+
+Before testing `service` / `autostart` from a source checkout, build the formal distribution entrypoint so a temporary `tsx` command is never registered with the operating system:
+
+```bash
+npm run build:dist
+npm run cli -- service status
+npm run cli -- autostart status
 ```
 
 ## Windows desktop
@@ -151,6 +188,8 @@ agent-lens setup [--json]
 agent-lens start
 agent-lens status [--json]
 agent-lens doctor [--json]
+agent-lens service start|stop|restart|status [--json]
+agent-lens autostart enable|disable|status [--json]
 agent-lens hook status [codex|claude|all] [--json]
 agent-lens hook install [codex|claude|all]
 agent-lens hook uninstall [codex|claude|all]
@@ -158,7 +197,7 @@ agent-lens hook uninstall [codex|claude|all]
 
 `setup` is the recommended first-run entrypoint. Hook installation remains idempotent: AgentLens removes/replaces only its own handlers and preserves third-party handlers in the same configuration.
 
-The npm CLI does not yet expose `service` / `autostart` commands. Those are future distribution/operations features and must not reintroduce the 0.x PID/service-manager architecture.
+Managed background lifecycle is owned by native user-level OS facilities rather than AgentLens PID files. `service restart` also refuses to seize a runtime currently owned by Windows Desktop or a foreground CLI process.
 
 ## Architecture in one picture
 
