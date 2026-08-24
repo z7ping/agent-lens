@@ -47,7 +47,7 @@ Desktop 不是另一套 Runtime，npm 也不是 Desktop 的安装前置条件。
 127.0.0.1:56789
 ```
 
-Desktop 或未来的 npm 后台服务在启动自己的 Daemon 前，必须先探测现有 AgentLens Daemon。
+Desktop 或 npm 后台服务在启动自己的 Daemon 前，必须先探测现有 AgentLens Daemon。
 
 如果已有兼容的 1.0 Daemon：
 
@@ -71,7 +71,7 @@ desktop
 它们只回答“谁负责启动、停止、恢复这个 Daemon”，不改变 Canonical Data Flow，也不进入 Source / Storage / Projection 语义。
 
 - `cli`：前台运行；
-- `service`：未来 npm 后台 / 系统自启入口；
+- `service`：npm 后台 / 系统自启入口；
 - `desktop`：Electron 托盘与 Windows 登录生命周期。
 
 不得把运行时所有权实现成第二套 DI、Plugin Runtime、Source Adapter 或 0.x PID Service Manager。
@@ -88,21 +88,61 @@ Windows Desktop 启动时先探测已有 Daemon：
 
 ### 6. Windows 登录自启启动 Desktop，不直接启动第二套 Daemon
 
-客户端的“登录 Windows 后自动运行”应启动 Electron Desktop 到托盘，由 Desktop 按第 5 条决定复用还是启动 Daemon。
+客户端的“登录 Windows 后自动运行”启动 Electron Desktop 到托盘，由 Desktop 按第 5 条决定复用还是启动 Daemon。
 
 不得恢复 0.x 的 VBS + PID + detached daemon 作为 Windows Desktop 的正式生命周期。
 
-### 7. npm 的后台能力后续通过运维层恢复
+### 7. npm 后台能力使用操作系统原生用户级托管
 
-npm 发行保留前台：
+npm 发行同时支持前台：
 
 ```text
 agent-lens start
 ```
 
-后续可以增加 `setup`、后台 `service` 与 `autostart` 命令，但这些命令必须复用同一 Daemon、同一数据目录和相同互斥规则。
+以及后台：
 
-Linux 可使用 `systemd --user`，macOS 可使用 `launchd`；Windows npm 模式的具体后台机制单独实现。它们都不属于 Core Runtime。
+```text
+agent-lens service start
+agent-lens service stop
+agent-lens service restart
+agent-lens service status
+
+agent-lens autostart enable
+agent-lens autostart disable
+agent-lens autostart status
+```
+
+后台能力不恢复 AgentLens 自己的 PID / Service Manager，而是映射到操作系统原生的用户级托管能力：
+
+```text
+Windows -> 当前用户 Task Scheduler
+Linux   -> systemd --user
+macOS   -> LaunchAgent / launchd
+```
+
+系统托管器统一执行内部入口：
+
+```text
+agent-lens service run
+```
+
+该入口启动同一个正式 Daemon，并报告：
+
+```text
+owner = service
+mode  = managed
+```
+
+`service` 与 `autostart` 的语义必须分开：
+
+- `service start/stop`：控制当前会话中的后台运行；
+- `autostart enable/disable`：控制下次登录是否自动启动；
+- Windows 计划任务可以无登录触发器存在，因此后台任务“已注册”不等于“已启用登录自启”；
+- Linux 通过 `systemctl --user enable/disable` 管理登录自启；
+- macOS 通过 LaunchAgent 的 `RunAtLoad` 表达登录自启意图。
+
+源码开发模式不得把临时 `tsx` 入口注册进系统生命周期。调用 `service/autostart` 前必须先产生正式 `dist/cli.mjs`。
 
 ### 8. Hook 与发行方式解耦
 
@@ -122,20 +162,25 @@ npm 与 Desktop 可以使用不同的 Hook 可执行入口，但必须写入相�
 
 兼容时复用；不兼容时明确要求升级或切换运行方式，不能静默启动另一套 Runtime。
 
+`service restart` 如果发现当前运行时由 Desktop 或前台 CLI 管理，不得通过系统托管器强行杀掉并接管。
+
 ## 结果
 
 ### 正面结果
 
 - npm 与 Desktop 都可以长期独立使用；
+- npm 在 Windows / Linux / macOS 都有用户级后台常驻入口；
 - 同机安装两种发行方式不会天然导致双 Daemon；
 - 保留 1.0 Clean Rebuild 的单 Runtime / 单事实链；
-- 可以恢复 0.x 的“长期无感运行”体验，而不恢复旧 service manager / PID 架构；
-- Desktop、CLI、未来 systemd / launchd 可以共享同一套诊断与兼容语义。
+- 恢复 0.x 的“长期无感运行”体验，而不恢复旧 service manager / PID 架构；
+- Desktop、CLI、Task Scheduler、systemd 与 launchd 共享同一套运行时所有权和兼容语义。
 
 ### 代价
 
-- Desktop 启动必须增加现有 Daemon 探测与外部所有权处理；
-- CLI / Health 后续需要暴露足够的 Runtime 管理信息；
+- npm 后台能力依赖各操作系统原生用户级托管器；
+- Linux 用户环境需要可用的 `systemd --user`；
+- macOS 生命周期需要在真实 LaunchAgent 环境继续做安装 / 登录 / 停止验收；
+- Windows 计划任务需要继续实机确认后台 Node 进程不会造成控制台闪现；
 - 双发行卸载、Hook 切换和版本不兼容需要显式测试；
 - Windows 登录自启必须避免覆盖用户主动关闭自启的选择。
 
@@ -150,11 +195,24 @@ npm 与 Desktop 可以使用不同的 Hook 可执行入口，但必须写入相�
 - npm 私有数据库；
 - Hook 自动拉起 Daemon。
 
-## 第一阶段落地顺序
+## 第一阶段落地状态
+
+已完成：
 
 1. Desktop 启动前探测并复用已有兼容 Daemon；
 2. Desktop 只停止自己拥有的 Daemon；
 3. Windows Desktop 增加可关闭的登录自启；
-4. Health / CLI 状态增加 Runtime 所有权与版本信息；
+4. Health / CLI 状态增加 Runtime 所有权与运行模式；
 5. 增加 `agent-lens setup`；
-6. 再评估 npm 后台 `service` / `autostart` 的跨平台实现。
+6. 增加 npm `service` / `autostart`；
+7. Windows 使用用户级 Task Scheduler；
+8. Linux 使用 `systemd --user`；
+9. macOS 使用 LaunchAgent / `launchd`；
+10. 生命周期定义生成进入 CLI 自动测试。
+
+仍需真实系统环境验收：
+
+- Windows npm 后台启动 / 停止 / 登录自启 / 无控制台闪现；
+- Linux `systemd --user` 在常见发行版与 WSL 环境中的行为；
+- macOS LaunchAgent 登录加载、停止、重启行为；
+- npm 与 Desktop 同时启用登录自启时的竞争启动与单 Daemon 复用。
