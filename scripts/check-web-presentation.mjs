@@ -5,6 +5,7 @@ const typographyPath = 'packages/web/src/typography.css'
 const tokenPath = 'packages/web/src/tokens.css'
 const mockTokenPath = 'docs/design/mockups/v2/assets/tokens.css'
 const colorSystemPath = 'packages/web/src/color-system.css'
+const reviewReferencePath = 'packages/web/src/review-reference.css'
 const semanticPresentationPaths = [
   typographyPath,
   'packages/web/src/insights.css',
@@ -58,6 +59,7 @@ for (const path of semanticPresentationPaths) {
 const tokenSource = readFileSync(tokenPath, 'utf8')
 const mockTokenSource = readFileSync(mockTokenPath, 'utf8')
 const colorSystemSource = readFileSync(colorSystemPath, 'utf8')
+const reviewReferenceSource = readFileSync(reviewReferencePath, 'utf8')
 
 function block(source, selector) {
   const start = source.indexOf(`${selector} {`)
@@ -153,9 +155,21 @@ if (!reviewUserBubbleRule.test(colorSystemSource)) {
   throw new Error('用户消息气泡必须在最终配色层以 Review 级特异性绑定 --al-user-bubble / --al-user-bubble-text')
 }
 
+const referenceUserBubbleRule = /\.review-page\s+\.chat-bubble-user\s*\{([^}]*)\}/m.exec(reviewReferenceSource)
+if (!referenceUserBubbleRule) {
+  throw new Error('任务复盘高保真层缺少用户消息气泡规则')
+}
+if (!/background\s*:\s*var\(--al-user-bubble\)\s*!important/.test(referenceUserBubbleRule[1])
+  || !/color\s*:\s*var\(--al-user-bubble-text\)\s*!important/.test(referenceUserBubbleRule[1])) {
+  throw new Error('任务复盘高保真层必须直接消费用户气泡专用 Token')
+}
+if (/--al-accent-soft/.test(referenceUserBubbleRule[1])) {
+  throw new Error('任务复盘用户气泡不得回退到 --al-accent-soft 浅色背景')
+}
+
 const userMarkdownRule = /\.chat-bubble-user\s+\.markdown[\s\S]*?color\s*:\s*var\(--al-user-bubble-text\)\s*!important\s*;/m
 if (!userMarkdownRule.test(colorSystemSource)) {
   throw new Error('用户消息 Markdown 正文必须绑定 --al-user-bubble-text，不能继承普通页面文字色')
 }
 
-console.log('Web 表现层收敛检查通过：字号、原型令牌、组件绑定和关键前景/背景对比度均已校验')
+console.log('Web 表现层收敛检查通过：字号、原型令牌、用户气泡组件绑定和关键前景/背景对比度均已校验')
