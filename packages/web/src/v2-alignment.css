@@ -58,6 +58,7 @@
   display: flex;
   align-items: stretch;
   gap: 0;
+  width: 100%;
   margin-top: 13px;
   padding: 0;
   border-top: 1px solid var(--al-line);
@@ -99,6 +100,109 @@
 .review-page .round-nav-live,
 .review-page .round-nav small {
   order: 3;
+}
+
+/* 当前稿把过程片段做成左侧细线，而不是完整卡片。 */
+.review-page .thinking-block {
+  margin-left: 22px;
+  padding-left: 0;
+  overflow: hidden;
+  border: 0 !important;
+  border-left: 2px solid color-mix(in srgb, var(--al-accent) 26%, var(--al-line)) !important;
+  border-radius: 0;
+  background: transparent !important;
+}
+
+.review-page .thinking-block > summary {
+  min-height: 36px;
+  padding: 5px 0 5px 10px;
+  background: transparent !important;
+}
+
+.review-page .thinking-content {
+  padding: 2px 0 6px 12px;
+  border-top: 0 !important;
+  background: transparent !important;
+}
+
+/* 工具组与当前稿保持 22px 缩进和 38px 标题高度。 */
+.review-page .execution-group {
+  margin-left: 22px;
+}
+
+.review-page .execution-group > summary {
+  min-height: 38px;
+  padding: 5px 12px;
+}
+
+/* 原始记录使用更弱的虚线组，不和常规工具组竞争视觉层级。 */
+.review-page .raw-event-group {
+  margin-left: 44px;
+  border: 1px dashed var(--al-line-strong);
+  border-radius: 9px;
+  background: transparent;
+}
+
+.review-page .raw-event-group .event-row {
+  margin-left: 0;
+  border-radius: 0;
+}
+
+.review-page .event-row:not(.raw-event-group .event-row) {
+  margin-left: 22px;
+}
+
+/* turn-rail 使用当前稿的离散轮次刻度，不绘制纵向主线。 */
+.review-page .turn-rail,
+.turn-rail {
+  gap: 5px;
+  width: auto;
+  padding-top: 0;
+  opacity: .75;
+}
+
+.review-page .turn-rail:hover,
+.turn-rail:hover { opacity: 1; }
+
+.review-page .turn-rail::before,
+.turn-rail::before {
+  display: none;
+  content: none;
+}
+
+.review-page .turn-tick,
+.turn-tick {
+  gap: 3px;
+  padding: 5px 6px;
+  border-radius: 6px;
+}
+
+.review-page .turn-tick i,
+.turn-tick i,
+.review-page .turn-tick i:nth-child(2),
+.turn-tick i:nth-child(2),
+.review-page .turn-tick i:nth-child(3),
+.turn-tick i:nth-child(3) {
+  width: 11px;
+  height: 2px;
+  background: var(--al-line-strong);
+}
+
+.review-page .turn-tick.active i,
+.turn-tick.active i {
+  width: 13px;
+  height: 3px;
+  background: var(--al-accent);
+}
+
+.review-page .turn-tick.err i,
+.turn-tick.err i {
+  background: color-mix(in srgb, var(--al-danger) 55%, var(--al-line));
+}
+
+.review-page .turn-tick.err.active i,
+.turn-tick.err.active i {
+  background: var(--al-danger);
 }
 
 .inspector-head {
@@ -173,6 +277,16 @@
 .review-audit-controls > span {
   color: var(--al-muted);
   line-height: 1.5;
+}
+
+/* 对话尺寸继续以当前 v2 稿为准。 */
+.review-page .chat-bubble {
+  max-width: 88%;
+  box-shadow: none;
+}
+
+.review-page .chat-row-agent .chat-bubble {
+  max-width: 94%;
 }
 
 /* ── 工具分析：四卡 KPI 收成 v2 细线长条 ── */
@@ -356,6 +470,13 @@
 .review-page .chat-actions button,
 .review-page .markdown-message-actions button,
 .review-page .evidence-link,
+.review-page .execution-group-copy small,
+.review-page .execution-kind-counts,
+.review-page .execution-total,
+.review-page .execution-summary-status,
+.review-page .execution-group-toolbar,
+.review-page .execution-duration,
+.review-page .evidence-inline,
 .background-data-notice,
 .background-data-notice button {
   font-size: 12px !important;
