@@ -1,4 +1,4 @@
-/* v2.1：跨页面的信息层级与真实数据口径补丁。 */
+/* v2.1：跨页面的信息层级、阅读密度与真实数据口径收口。 */
 
 .review-page .chat-bubble-user{
   border-color:var(--al-user-bubble)!important;
@@ -16,6 +16,64 @@
 .review-page .chat-bubble-user .markdown em{color:var(--al-user-bubble-text)!important}
 .review-page .chat-bubble-user .markdown-fade{background:linear-gradient(to bottom,transparent,var(--al-user-bubble))!important}
 
+/*
+ * Review 的高保真层仍保留布局职责，但不再自行定义 10–11px 的微型字号。
+ * 这里使用正式语义字号令牌兜底，避免原型补丁覆盖 typography.css 后造成页面字体漂移。
+ */
+.review-page .session-panel-head>div span,
+.review-page .session-panel-head .count-badge,
+.review-page .session-item-meta,
+.review-page .session-item-foot,
+.review-page .review-session-submeta,
+.review-page .review-session-submeta code,
+.review-page .review-metric span,
+.review-page .interaction-chevron,
+.review-page .interaction-preview,
+.review-page .interaction-summary-meta span,
+.review-page .chat-meta,
+.review-page .chat-actions button,
+.review-page .markdown-message-actions button,
+.review-page .evidence-link,
+.review-page .execution-group-copy small,
+.review-page .execution-kind-counts,
+.review-page .execution-total,
+.review-page .execution-summary-status,
+.review-page .execution-group-toolbar,
+.review-page .tool-kind-label,
+.review-page .tool-status-label,
+.review-page .execution-preview,
+.review-page .execution-duration,
+.review-page .evidence-inline,
+.review-page .event-row,
+.turn-tick::after{
+  font-size:var(--text-caption);
+}
+.review-page .session-item-title,
+.review-page .interaction-title,
+.review-page .thinking-content,
+.review-page .execution-group>summary,
+.review-page .execution-group-copy b,
+.review-page .execution-name{
+  font-size:var(--text-secondary);
+}
+.review-page .chat-bubble{
+  font-size:var(--text-body);
+}
+
+/* 左右两列各自拥有滚动上下文，长会话不会再把会话列表和阅读区串成同一滚动链。 */
+.review-page .review-layout,
+.review-page .session-panel{
+  min-height:0;
+  overflow:hidden;
+}
+.review-page .session-scroll,
+.review-page .review-reader-pane{
+  min-height:0;
+  overflow:auto;
+  overscroll-behavior:contain;
+  scrollbar-gutter:stable;
+}
+
 .insight-coverage-strip{
   margin-bottom:14px;
   padding:12px 14px;
@@ -27,8 +85,8 @@
   gap:10px;
 }
 .insight-coverage-strip>div{min-width:0;display:flex;flex-direction:column;gap:4px}
-.insight-coverage-strip span{color:var(--al-muted);font-size:10.5px}
-.insight-coverage-strip b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--al-ink-2);font-size:11.5px;font-weight:650}
+.insight-coverage-strip span{color:var(--al-muted);font-size:var(--text-caption)}
+.insight-coverage-strip b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--al-ink-2);font-size:var(--text-secondary);font-weight:650}
 .insight-coverage-strip b.is-warning{color:var(--al-warning)}
 .insight-comparison-item b.changed{color:var(--al-ink-2)}
 
@@ -39,7 +97,7 @@
 }
 
 @media(max-width:560px){
-  .app-header .nav-item{padding-inline:4px;font-size:11px}
+  .app-header .nav-item{padding-inline:4px;font-size:var(--text-caption)}
   .app-header .nav-item-active::after{left:4px;right:4px}
   .app-header .nav-group-start{margin-left:5px}
   .app-header .nav-group-start::before{left:-3px}
