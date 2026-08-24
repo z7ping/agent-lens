@@ -5,6 +5,8 @@ export function agentLabel(sourceId: string, fallback?: string): string {
   if (sourceId === 'claude-code') return 'Claude Code'
   if (sourceId === 'codex') return 'Codex'
   if (sourceId === 'pi') return 'Pi'
+  if (sourceId === 'hermes') return 'Hermes'
+  if (sourceId === 'opencode') return 'OpenCode'
   return fallback ?? sourceId
 }
 
@@ -12,6 +14,8 @@ export function sourceDot(sourceId: string): string {
   if (sourceId === 'claude-code') return 'bg-[#D97757]'
   if (sourceId === 'codex') return 'bg-[#10A37F]'
   if (sourceId === 'pi') return 'bg-[#7C6FE8]'
+  if (sourceId === 'hermes') return 'source-hermes'
+  if (sourceId === 'opencode') return 'source-opencode'
   return 'bg-muted'
 }
 
