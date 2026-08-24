@@ -10,6 +10,7 @@ import {
   DefaultIdentityService,
 } from '@agent-lens/core-services'
 import { SourceAssetRunner } from '@agent-lens/core-services/source-runner'
+import { createTestCapturePolicy } from '@agent-lens/core-services/test-support'
 import { SqliteStorageService } from '@agent-lens/storage-sqlite'
 import { codexSourceDefinition, detectCodex } from './index'
 
@@ -64,12 +65,14 @@ test('Codex asset scan materializes stable definitions, bindings, states and evi
     const capabilities = new DefaultCapabilityService()
     const assets = new DefaultAssetService(storage)
     const evidence = new DefaultEvidenceService(storage)
+    const capturePolicy = createTestCapturePolicy(['codex'])
     const runner = new SourceAssetRunner(
       storage,
       identity,
       capabilities,
       assets,
       evidence,
+      capturePolicy,
     )
     const host = await identity.resolveHost({
       name: 'codex-asset-host',
