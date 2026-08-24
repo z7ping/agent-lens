@@ -51,6 +51,9 @@ Source 检测后会先幂等解析 Installation 并立即发送 `source/detected
 
 SSE 当前覆盖 Canonical Observation、Source Detection 和 Asset 变化。幂等 `unchanged` Observation 不产生实时刷新噪声。
 
+- SSE 服务端固定发送 15 秒心跳并建议 1.5 秒重连间隔；连接已经关闭、销毁或写入异常时会立即从 Event Hub 清理，避免长期保留失效客户端；
+- 浏览器识别“曾经连接成功 → 真正断线 → 再次连接”的恢复路径。由于 SSE 不回放断线窗口事件，重连后执行一次去抖的快照校准；任务复盘保留当前详情阅读上下文，使用洞察只标记存在新数据。
+
 ### Web Plugin
 
 Web 已从 `apps/web` 提升为独立 `packages/web` 包，并作为 `@agent-lens/web` Cordis Surface Plugin 运行。
@@ -281,6 +284,7 @@ P1：
 - 幂等的 `unchanged` Replay 不触发 SSE 更新噪声。
 - SSE 实时更新不能通过反复全量替换内容区破坏滚动位置、展开状态和阅读上下文。
 - SSE 必须在首屏 Snapshot 之前建立，避免启动扫描期间出现事件盲区。
+- SSE 在连接恢复后必须校准断线窗口可能遗漏的数据；正常高频事件仍保持增量 / 提示式更新，不能因为增加恢复逻辑退回持续全量刷新。
 
 ## 自动验收状态
 
@@ -319,6 +323,7 @@ P1：
 - Agent Overview Asset Inventory 与 Usage 分离；
 - SQLite Asset Inventory Reader；
 - HTTP `mountStatic()` 动态 SPA 挂载 / 卸载；
+- SSE 初始重连间隔、事件发布与客户端关闭后不再接收后续事件；
 - Web 表现层门禁禁止退役 `v2-1.css` / `review-balanced*` 回归，并校验正式语义字号不低于 12px、最终配色层加载顺序。
 
 本轮改动已经进入同一套 `check:web-presentation` / `check:desktop-shell` / typecheck / test / distribution build 路径；本文不把尚未最终确认的最新 `main` CI 状态写成“已通过”。
