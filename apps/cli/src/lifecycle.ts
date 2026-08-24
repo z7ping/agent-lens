@@ -302,11 +302,11 @@ async function ensureDefinition(options: LifecycleOptions, autostart: boolean): 
 export async function setAutostart(enabled: boolean, options: LifecycleOptions): Promise<LifecycleStatus> {
   const platform = platformOf(options)
   assertSupported(platform)
-  await writePreferences({ version: 1, autostart: enabled }, options.homeDir)
   await ensureDefinition(options, enabled)
   if (platform === 'linux') {
     await runChecked('systemctl', ['--user', enabled ? 'enable' : 'disable', LINUX_UNIT_NAME], `${enabled ? '启用' : '关闭'}开机自启`)
   }
+  await writePreferences({ version: 1, autostart: enabled }, options.homeDir)
   return getLifecycleStatus(options)
 }
 
@@ -314,14 +314,16 @@ export async function serviceStart(options: LifecycleOptions): Promise<Lifecycle
   const platform = platformOf(options)
   assertSupported(platform)
   const preferences = await readPreferences(options.homeDir)
-  await ensureDefinition(options, preferences.autostart)
+  const current = await getLifecycleStatus(options)
+  const autostart = current.registered ? current.autostart : preferences.autostart
+  await ensureDefinition(options, autostart)
   if (platform === 'win32') {
     await runChecked('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', `Start-ScheduledTask -TaskName ${psQuote(WINDOWS_TASK_NAME)}`], '启动 Windows 后台任务')
   } else if (platform === 'linux') {
     await runChecked('systemctl', ['--user', 'start', LINUX_UNIT_NAME], '启动 systemd 用户服务')
   } else {
-    const current = await run('launchctl', ['print', macTarget()])
-    if (current.code !== 0) {
+    const loaded = await run('launchctl', ['print', macTarget()])
+    if (loaded.code !== 0) {
       await runChecked('launchctl', ['bootstrap', macDomain(), macPlistPath(options.homeDir)], '加载 launchd 用户服务')
     }
     await runChecked('launchctl', ['kickstart', '-k', macTarget()], '启动 launchd 用户服务')
