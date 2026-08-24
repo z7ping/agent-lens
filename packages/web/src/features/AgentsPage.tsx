@@ -28,6 +28,13 @@ const capabilityStatusLabel: Record<string, string> = {
   'not-applicable': '不适用',
 }
 
+const captureModeLabel: Record<string, string> = {
+  history: '历史记录',
+  'runtime-hook': '运行时钩子',
+  'native-tail': '原生实时跟踪',
+  'static-scan': '静态扫描',
+}
+
 const stateLabel: Record<string, string> = {
   installed: '已安装',
   configured: '已配置',
@@ -77,6 +84,13 @@ function captureState(agent: Pick<AgentOverviewDto, 'supported' | 'enabled' | 'd
   if (!agent.detected) return { label: agent.enabled ? '未检测 · 已启用采集' : '未检测 · 未启用采集', title: agent.enabled ? '已允许采集，但本机尚未检测到该智能体' : '本机尚未检测到该智能体，当前也未启用采集', className: agent.enabled ? 'is-enabled' : 'is-disabled' }
   if (!agent.enabled) return { label: '已检测 · 未启用采集', title: '本机已检测到该智能体，但当前采集策略未启用此来源', className: 'is-disabled' }
   return { label: '已检测 · 采集中', title: '本机已检测到该智能体，且当前采集策略已启用此来源', className: 'is-enabled is-detected' }
+}
+
+function capabilityDetail(cap: AgentOverviewDto['capabilities'][number]): string {
+  const modes = cap.captureModes.map(mode => captureModeLabel[mode] ?? mode)
+  const parts = [modes.length ? `采集：${modes.join(' / ')}` : '采集：未声明']
+  if (cap.reason) parts.push(`说明：${cap.reason}`)
+  return parts.join(' · ')
 }
 
 function shortPath(path: string, max = 58): string {
@@ -283,7 +297,7 @@ function AgentCard({ agent }: { agent: AgentOverviewDto }) {
       <details className="disclosure-group">
         <summary><span>可观测能力</span><span className="disclosure-count">{agent.capabilities.length}</span></summary>
         <div className="capability-list">
-          {agent.capabilities.map(cap => <div key={cap.name} className="capability-row"><span>{capabilityLabel[cap.name] ?? cap.name}</span><b data-status={cap.status}>{capabilityStatusLabel[cap.status] ?? cap.status}</b></div>)}
+          {agent.capabilities.map(cap => <div key={cap.name} className="capability-row" title={capabilityDetail(cap)}><span>{capabilityLabel[cap.name] ?? cap.name} · {capabilityDetail(cap)}</span><b data-status={cap.status}>{capabilityStatusLabel[cap.status] ?? cap.status}</b></div>)}
         </div>
       </details>
     </section>
