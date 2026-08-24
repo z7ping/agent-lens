@@ -16,6 +16,8 @@ import {
 const DEFAULT_PORT = 56789
 const EXPECTED_PROTOCOL_VERSION = '1.0'
 const MAX_RESTARTS_PER_MINUTE = 5
+const DAEMON_HEALTH_TIMEOUT_MS = 900
+const DAEMON_PROBE_ATTEMPTS = 3
 const port = process.env.AGENT_LENS_PORT ? Number(process.env.AGENT_LENS_PORT) : DEFAULT_PORT
 const daemonUrl = `http://127.0.0.1:${port}`
 const startHidden = process.argv.includes('--hidden')
@@ -53,9 +55,9 @@ function writeDaemonLog(message) {
   daemonLog?.write(`${message}\n`)
 }
 
-async function readDaemonHealth() {
+async function readDaemonHealth(timeoutMs = DAEMON_HEALTH_TIMEOUT_MS) {
   try {
-    const response = await fetch(`${daemonUrl}/api/v1/health`, { signal: AbortSignal.timeout(500) })
+    const response = await fetch(`${daemonUrl}/api/v1/health`, { signal: AbortSignal.timeout(timeoutMs) })
     if (!response.ok && response.status !== 503) return null
     const health = await response.json()
     return health && typeof health === 'object' ? health : null
@@ -64,8 +66,25 @@ async function readDaemonHealth() {
   }
 }
 
+function assertCompatibleDaemon(health) {
+  if (health.protocolVersion === EXPECTED_PROTOCOL_VERSION) return
+  throw new Error(`检测到不兼容的 AgentLens 运行时：Protocol ${String(health.protocolVersion ?? 'unknown')}，当前客户端要求 ${EXPECTED_PROTOCOL_VERSION}`)
+}
+
+async function probeExistingDaemon() {
+  for (let attempt = 0; attempt < DAEMON_PROBE_ATTEMPTS; attempt += 1) {
+    const health = await readDaemonHealth()
+    if (health) return health
+    if (attempt < DAEMON_PROBE_ATTEMPTS - 1) await sleep(120)
+  }
+  return null
+}
+
 async function daemonReady() {
-  return Boolean(await readDaemonHealth())
+  const health = await readDaemonHealth()
+  if (!health) return false
+  assertCompatibleDaemon(health)
+  return true
 }
 
 function runtimeOwnerLabel(owner) {
@@ -125,11 +144,24 @@ function scheduleDaemonRecovery(code, signal) {
     daemonRestartTimer = null
     void (async () => {
       if (quitting || stoppingDaemon) return
-      await startDaemon()
-      if (await waitForDaemon()) {
-        writeDaemonLog(`--- daemon recovered ${new Date().toISOString()} ---`)
-        markDaemonStable()
-        if (mainWindow && !mainWindow.isDestroyed()) await mainWindow.loadURL(daemonUrl)
+      try {
+        await startDaemon()
+        if (await waitForDaemon()) {
+          writeDaemonLog(`--- daemon recovered ${new Date().toISOString()} ---`)
+          markDaemonStable()
+          if (mainWindow && !mainWindow.isDestroyed()) await mainWindow.loadURL(daemonUrl)
+        }
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error)
+        writeDaemonLog(`--- daemon recovery aborted: ${detail} ---`)
+        if (!quitting) {
+          void dialog.showMessageBox({
+            type: 'error',
+            title: 'AgentLens 运行时恢复失败',
+            message: '检测到无法安全复用的 AgentLens 运行时，已停止桌面端自动接管。',
+            detail,
+          })
+        }
       }
     })()
   }, delay)
@@ -138,11 +170,9 @@ function scheduleDaemonRecovery(code, signal) {
 async function startDaemon() {
   if (daemonOwnership === 'desktop' && daemon && daemon.exitCode === null) return 'desktop'
 
-  const existing = await readDaemonHealth()
+  const existing = await probeExistingDaemon()
   if (existing) {
-    if (existing.protocolVersion !== EXPECTED_PROTOCOL_VERSION) {
-      throw new Error(`检测到不兼容的 AgentLens 运行时：Protocol ${String(existing.protocolVersion ?? 'unknown')}，当前客户端要求 ${EXPECTED_PROTOCOL_VERSION}`)
-    }
+    assertCompatibleDaemon(existing)
     daemonOwnership = 'external'
     externalDaemonOwner = typeof existing.runtime?.owner === 'string' ? existing.runtime.owner : null
     await ensureDaemonLog()
@@ -215,8 +245,9 @@ async function stopDaemon() {
 
 async function restartDaemon() {
   if (daemonOwnership === 'external') {
-    const existing = await readDaemonHealth()
+    const existing = await probeExistingDaemon()
     if (existing) {
+      assertCompatibleDaemon(existing)
       const owner = typeof existing.runtime?.owner === 'string' ? existing.runtime.owner : externalDaemonOwner
       await dialog.showMessageBox({
         type: 'info',
@@ -243,29 +274,49 @@ function canManageLoginAutostart() {
   return process.platform === 'win32' && app.isPackaged
 }
 
-function loginAutostartOptions(openAtLogin) {
+function loginAutostartQueryOptions() {
   return {
-    openAtLogin,
     path: process.execPath,
     args: ['--hidden'],
   }
 }
 
+function loginAutostartOptions(openAtLogin) {
+  return {
+    ...loginAutostartQueryOptions(),
+    openAtLogin,
+  }
+}
+
 function isLoginAutostartEnabled() {
   if (!canManageLoginAutostart()) return false
-  return app.getLoginItemSettings(loginAutostartOptions(true)).openAtLogin
+  try {
+    return app.getLoginItemSettings(loginAutostartQueryOptions()).openAtLogin
+  } catch {
+    return false
+  }
 }
 
 function setLoginAutostart(enabled) {
-  if (!canManageLoginAutostart()) return
-  app.setLoginItemSettings(loginAutostartOptions(enabled))
+  if (!canManageLoginAutostart()) return false
+  try {
+    app.setLoginItemSettings(loginAutostartOptions(enabled))
+    return isLoginAutostartEnabled()
+  } catch {
+    return false
+  }
 }
 
 async function ensureInitialLoginAutostart() {
   if (!canManageLoginAutostart()) return
   const marker = join(app.getPath('userData'), 'login-autostart-initialized')
   if (existsSync(marker)) return
-  setLoginAutostart(true)
+  const enabled = setLoginAutostart(true)
+  if (!enabled) {
+    await ensureDaemonLog()
+    writeDaemonLog('--- initial login autostart registration was not confirmed; will retry next launch ---')
+    return
+  }
   await mkdir(app.getPath('userData'), { recursive: true })
   await writeFile(marker, 'initialized\n', 'utf8')
 }
@@ -316,7 +367,19 @@ function createTray() {
         label: '登录 Windows 后自动运行',
         type: 'checkbox',
         checked: isLoginAutostartEnabled(),
-        click: item => setLoginAutostart(item.checked),
+        click: item => {
+          const requested = item.checked
+          const actual = setLoginAutostart(requested)
+          item.checked = actual
+          if (actual !== requested) {
+            void dialog.showMessageBox({
+              type: 'warning',
+              title: '登录自启设置未生效',
+              message: requested ? 'Windows 没有确认启用 AgentLens 登录自启。' : 'Windows 没有确认关闭 AgentLens 登录自启。',
+              detail: '托盘状态已恢复为系统实际状态。请检查当前用户的启动应用权限后重试。',
+            })
+          }
+        },
       },
     ] : []),
     { label: '打开数据目录', click: () => void shell.openPath(join(homedir(), '.agent-lens', '1.0')) },
@@ -340,6 +403,7 @@ if (!singleInstance) {
     clearRecoveryTimers()
     if (!quitStopPromise) {
       quitStopPromise = stopDaemon().finally(() => {
+        daemonLog?.end()
         quitAfterDaemonStop = true
         app.quit()
       })
