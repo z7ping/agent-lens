@@ -3,217 +3,25 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>使用洞察 · AgentLens v2.1</title>
+<title>使用洞察 · AgentLens v2.1 当前稿</title>
 <link rel="stylesheet" href="assets/tokens.css">
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="assets/future.css">
+<style>
+.insight-content{max-width:1320px;margin:0 auto;padding:24px 28px 72px}.heading h1{margin:3px 0 6px;font-size:22px}.heading p{margin:0;max-width:820px;color:var(--al-muted);font-size:12.5px;line-height:1.7}.coverage{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin:18px 0;border-top:1px solid var(--al-line);border-bottom:1px solid var(--al-line)}.coverage>div{padding:10px 14px;border-right:1px solid var(--al-line)}.coverage>div:last-child{border-right:0}.coverage span{display:block;font-size:10.5px;color:var(--al-muted)}.coverage b{display:block;margin-top:4px;font-size:12px}.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.kpi{padding:14px;border:1px solid var(--al-line);border-radius:10px;background:var(--al-surface)}.kpi span,.kpi small{display:block;color:var(--al-muted);font-size:11px}.kpi strong{display:block;margin:5px 0;font-size:21px}.grid{display:grid;grid-template-columns:1.35fr 1fr;gap:14px;margin-top:14px}.card{border:1px solid var(--al-line);border-radius:12px;background:var(--al-surface);padding:16px}.card h2{margin:0;font-size:14px}.card p{margin:4px 0 0;color:var(--al-muted);font-size:11.5px;line-height:1.6}.trend{display:flex;align-items:end;gap:8px;height:180px;margin-top:18px;border-bottom:1px solid var(--al-line)}.day{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:end;gap:5px;height:100%;font-size:10px;color:var(--al-muted)}.bar{width:min(28px,70%);min-height:2px;border-radius:4px 4px 0 0;background:var(--al-accent)}.compare{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}.compare>div{padding:10px;border-radius:8px;background:var(--al-soft-2)}.compare span{display:block;font-size:11px;color:var(--al-muted)}.compare b{display:block;margin-top:4px;font-size:12px}.wide{margin-top:14px}.agent-table{width:100%;border-collapse:collapse;margin-top:10px;font-size:12px}.agent-table th,.agent-table td{padding:9px 10px;border-bottom:1px solid var(--al-line);text-align:left}.agent-table th{font-size:10.5px;color:var(--al-muted)}.list{margin-top:10px}.row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:9px 2px;border-bottom:1px solid var(--al-line)}.row b{font-size:12px}.row span{display:block;margin-top:2px;color:var(--al-muted);font-size:11px}.patterns{margin-top:10px;display:flex;flex-direction:column;gap:8px}.pattern{padding:10px;border:1px solid var(--al-line);border-radius:8px}.steps{display:flex;gap:5px;align-items:center;font-size:11.5px}.steps b{padding:2px 7px;border-radius:999px;background:var(--al-soft)}.pattern small{display:block;margin-top:7px;color:var(--al-muted)}.method{margin-top:14px;padding:12px 14px;border-left:3px solid var(--al-accent);background:var(--al-soft-2);font-size:11.5px;color:var(--al-muted);line-height:1.65}@media(max-width:860px){.coverage,.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.grid{grid-template-columns:1fr}}
+</style>
 </head>
 <body>
-<div class="app-shell future-page">
-  <header class="app-header">
-    <div class="app-header-inner">
-      <div class="brand"><span class="brand-mark">A</span><span class="brand-name">AgentLens</span></div>
-      <nav class="app-nav">
-        <a class="nav-item" href="review.html">任务复盘</a>
-        <a class="nav-item nav-group-start" href="tools.html">工具分析</a>
-        <a class="nav-item active" href="#">使用洞察</a>
-        <a class="nav-item nav-group-start" href="agents.html">智能体概览</a>
-        <a class="nav-item" href="backup.html">资产备份</a>
-      </nav>
-      <div class="app-status">
-        <span class="status-pill tip" data-tip="所有洞察都应能回溯到 Observation / Evidence；示例数字仅用于设计展示"><span class="live-dot"></span>证据可追溯</span>
-        <button class="icon-button" data-theme-toggle title="切换主题" aria-label="切换主题">◐</button>
-      </div>
-    </div>
-  </header>
-
-  <div class="workspace-toolbar">
-    <div class="agent-scope">
-      <button class="scope-chip active">全部智能体</button>
-      <button class="scope-chip"><span class="src-dot dot-codex"></span>Codex</button>
-      <button class="scope-chip"><span class="src-dot dot-claude"></span>Claude Code</button>
-      <button class="scope-chip"><span class="src-dot dot-pi"></span>Pi</button>
-    </div>
-    <span class="toolbar-divider"></span>
-    <select class="filter"><option>全部项目</option><option>agent-lens</option><option>FocusList</option></select>
-    <select class="filter"><option>最近 30 天</option><option>最近 7 天</option><option>最近 90 天</option><option>全部时间</option></select>
-    <select class="filter"><option>对比：前 30 天</option><option>不对比</option></select>
-    <button class="btn toolbar-end">导出当前分析</button>
-    <button class="icon-button" title="刷新洞察" aria-label="刷新洞察">↻</button>
-  </div>
-
-  <div class="page-scroll">
-    <main class="future-content">
-      <header class="future-heading">
-        <div>
-          <span class="eyebrow">USAGE INSIGHTS <span class="prototype-flag live">已实现页面结构</span></span>
-          <h1>使用洞察</h1>
-          <p>从“用了多少”继续走到“形成了什么模式”。这里不做综合评分，也不猜哪个 Agent 更聪明；只把可追溯的会话、工具、资产使用事实组织成趋势、对比和工作流模式。</p>
-        </div>
-        <div class="future-heading-actions">
-          <span class="badge info">示例数据 · 最近 30 天</span>
-          <button class="btn">洞察说明</button>
-        </div>
-      </header>
-
-      <section class="coverage-strip" aria-label="洞察统计覆盖范围">
-        <span>统计范围<b>2026/07/24 — 2026/08/22</b></span>
-        <span>会话样本<b>128 个</b></span>
-        <span>覆盖状态<b>当前范围完整聚合</b></span>
-        <span>生成时间<b>08/23 10:30</b></span>
-      </section>
-
-      <section class="future-kpis" aria-label="本期使用概览">
-        <article class="future-kpi">
-          <div class="future-kpi-head"><span>会话</span><span class="delta up">↑ 18%</span></div>
-          <strong>128</strong>
-          <small>前 30 天 108 个 · 其中 19 个会话观察到错误</small>
-        </article>
-        <article class="future-kpi">
-          <div class="future-kpi-head"><span>工具调用</span><span class="delta up">↑ 26%</span></div>
-          <strong>2,418</strong>
-          <small>21 个原生工具 · 可靠归因覆盖 71%</small>
-        </article>
-        <article class="future-kpi">
-          <div class="future-kpi-head"><span>真实使用的能力资产</span><span class="delta up">+6</span></div>
-          <strong>34</strong>
-          <small>技能 27 · MCP 7；另有 29 个已发现资产本期未观察到调用</small>
-        </article>
-        <article class="future-kpi">
-          <div class="future-kpi-head"><span>有错误的会话</span><span class="delta neutral" title="错误会话占比下降是正向变化，此处不做红绿编码">↓ 3.2%</span></div>
-          <strong>14.8%</strong>
-          <small>19 / 128；只展示观测事实，不解释错误责任归属</small>
-        </article>
-      </section>
-
-      <div class="future-grid">
-        <div class="future-stack">
-          <section class="future-card chart-card">
-            <div class="future-card-head">
-              <div><h2>使用趋势</h2><p>按天观察会话量与错误会话量；点击数据点后应能下钻到当天会话。</p></div>
-              <div><button class="btn small">按周</button> <button class="btn small">按天</button></div>
-            </div>
-            <div class="future-card-body">
-              <div class="chart-legend"><span><i class="legend-dot"></i>会话数</span><span><i class="legend-dot err"></i>有错误会话</span><span style="margin-left:auto">08/22 数据截至 17:08</span></div>
-              <svg class="trend-chart" viewBox="0 0 900 250" role="img" aria-label="最近 30 天会话与错误会话趋势示例">
-                <line class="chart-grid-line" x1="46" y1="32" x2="880" y2="32"/><line class="chart-grid-line" x1="46" y1="78" x2="880" y2="78"/><line class="chart-grid-line" x1="46" y1="124" x2="880" y2="124"/><line class="chart-grid-line" x1="46" y1="170" x2="880" y2="170"/><line class="chart-grid-line" x1="46" y1="216" x2="880" y2="216"/>
-                <text class="chart-axis" x="18" y="36">12</text><text class="chart-axis" x="24" y="82">9</text><text class="chart-axis" x="24" y="128">6</text><text class="chart-axis" x="24" y="174">3</text><text class="chart-axis" x="30" y="220">0</text>
-                <path class="chart-area" d="M46 172 L76 155 L106 187 L136 142 L166 157 L196 126 L226 145 L256 110 L286 125 L316 96 L346 132 L376 116 L406 85 L436 104 L466 75 L496 90 L526 112 L556 81 L586 68 L616 98 L646 74 L676 54 L706 86 L736 64 L766 45 L796 72 L826 56 L856 82 L880 60 L880 216 L46 216 Z"/>
-                <path class="chart-line" d="M46 172 L76 155 L106 187 L136 142 L166 157 L196 126 L226 145 L256 110 L286 125 L316 96 L346 132 L376 116 L406 85 L436 104 L466 75 L496 90 L526 112 L556 81 L586 68 L616 98 L646 74 L676 54 L706 86 L736 64 L766 45 L796 72 L826 56 L856 82 L880 60"/>
-                <path class="chart-error-line" d="M46 201 L76 201 L106 216 L136 201 L166 185 L196 201 L226 201 L256 185 L286 201 L316 185 L346 201 L376 216 L406 185 L436 201 L466 185 L496 201 L526 201 L556 185 L586 185 L616 201 L646 185 L676 170 L706 201 L736 185 L766 185 L796 201 L826 185 L856 201 L880 185"/>
-                <circle class="chart-point" cx="766" cy="45" r="4"/><circle class="chart-point" cx="880" cy="60" r="4"/>
-                <text class="chart-axis" x="46" y="240">07/24</text><text class="chart-axis" x="252" y="240">07/31</text><text class="chart-axis" x="460" y="240">08/07</text><text class="chart-axis" x="668" y="240">08/14</text><text class="chart-axis" x="844" y="240">08/22</text>
-              </svg>
-            </div>
-            <div class="future-card-foot">趋势只做计数和比例变化；若未来展示“为什么变化”，必须提供对应会话范围与证据入口。</div>
-          </section>
-
-          <section class="future-card">
-            <div class="future-card-head">
-              <div><h2>Agent 使用对比</h2><p>比较的是实际使用结构，不给 Agent 排综合名次。</p></div>
-              <span class="badge">同一时间范围</span>
-            </div>
-            <div class="future-table-scroll">
-              <table class="comparison-table">
-                <thead><tr><th>智能体</th><th>会话</th><th>工具调用</th><th>错误会话</th><th>会话中位跨度</th><th>真实使用资产</th></tr></thead>
-                <tbody>
-                  <tr><td><div class="comparison-agent"><span class="src-dot dot-codex"></span><span>Codex<small>主要集中在 agent-lens / FocusList</small></span></div></td><td>62<small>48.4%</small></td><td>1,284<small>20.7 / 会话</small></td><td>8<small>12.9%</small></td><td>18.4 分钟</td><td>19<small>技能 15 · MCP 4</small></td></tr>
-                  <tr><td><div class="comparison-agent"><span class="src-dot dot-claude"></span><span>Claude Code<small>主要集中在文档与内容仓库</small></span></div></td><td>51<small>39.8%</small></td><td>982<small>19.3 / 会话</small></td><td>9<small>17.6%</small></td><td>14.2 分钟</td><td>21<small>技能 17 · MCP 4</small></td></tr>
-                  <tr><td><div class="comparison-agent"><span class="src-dot dot-pi"></span><span>Pi<small>样本量较小</small></span></div></td><td>15<small>11.7%</small></td><td>152<small>10.1 / 会话</small></td><td>2<small>13.3%</small></td><td>9.8 分钟</td><td>6<small>技能 5 · MCP 1</small></td></tr>
-                </tbody>
-              </table>
-            </div>
-            <div class="future-card-foot">“会话跨度更短”不等于“效率更高”；任务难度不同，原型明确避免把相关性写成结论。</div>
-          </section>
-
-          <section class="future-card">
-            <div class="future-card-head">
-              <div><h2>常见工作流组合</h2><p>从同一 Interaction（轮次）或相邻调用中识别稳定出现的工具序列。</p></div>
-              <button class="btn small" data-open-drawer="#pattern-detail">查看识别规则</button>
-            </div>
-            <div class="future-card-body pattern-list">
-              <div class="pattern-row"><div class="pattern-seq"><span class="pattern-chip">读取</span><span class="pattern-arrow">→</span><span class="pattern-chip">修改</span><span class="pattern-arrow">→</span><span class="pattern-chip">测试</span></div><div class="pattern-bar"><i style="width:100%"></i></div><div class="pattern-value"><b>34</b> 轮次</div></div>
-              <div class="pattern-row"><div class="pattern-seq"><span class="pattern-chip">搜索</span><span class="pattern-arrow">→</span><span class="pattern-chip">读取</span><span class="pattern-arrow">→</span><span class="pattern-chip">修改</span></div><div class="pattern-bar"><i style="width:76%"></i></div><div class="pattern-value"><b>26</b> 轮次</div></div>
-              <div class="pattern-row"><div class="pattern-seq"><span class="pattern-chip">MCP</span><span class="pattern-arrow">→</span><span class="pattern-chip">读取</span><span class="pattern-arrow">→</span><span class="pattern-chip">命令</span></div><div class="pattern-bar"><i style="width:44%"></i></div><div class="pattern-value"><b>15</b> 轮次</div></div>
-              <div class="pattern-row"><div class="pattern-seq"><span class="pattern-chip">搜索</span><span class="pattern-arrow">→</span><span class="pattern-chip">网络</span></div><div class="pattern-bar"><i style="width:29%"></i></div><div class="pattern-value"><b>10</b> 轮次</div></div>
-            </div>
-          </section>
-
-          <section class="future-card">
-            <div class="future-card-head"><div><h2>能力资产采用情况</h2><p>“装了”与“真正用过”分开；没有调用证据就只标记为未观察到使用。</p></div><button class="btn small">查看全部 63 项</button></div>
-            <div class="future-card-body adoption-list">
-              <div class="adoption-row"><div class="adoption-head"><b>code-review</b><span>48 次 · 17 个会话</span></div><div class="adoption-bar"><i style="width:100%"></i></div></div>
-              <div class="adoption-row"><div class="adoption-head"><b>github</b><span>31 次 · 12 个会话</span></div><div class="adoption-bar"><i style="width:65%"></i></div></div>
-              <div class="adoption-row"><div class="adoption-head"><b>agent-swe</b><span>22 次 · 9 个会话</span></div><div class="adoption-bar"><i style="width:46%"></i></div></div>
-              <div class="adoption-row"><div class="adoption-head"><b>filesystem MCP</b><span>16 次 · 8 个会话</span></div><div class="adoption-bar"><i style="width:33%"></i></div></div>
-              <div class="adoption-row is-unused"><div class="adoption-head"><b>pdf-helper</b><span>已发现 · 30 天未观察到调用</span></div><div class="adoption-bar"><i style="width:5%"></i></div></div>
-              <div class="adoption-row is-unused"><div class="adoption-head"><b>legacy-release</b><span>已发现 · 30 天未观察到调用</span></div><div class="adoption-bar"><i style="width:5%"></i></div></div>
-            </div>
-          </section>
-        </div>
-
-        <aside class="future-stack">
-          <section class="future-card">
-            <div class="future-card-head"><div><h2>本期值得注意</h2><p>“事实”与“模式”分层，不输出推荐分。</p></div><span class="badge info">4 条</span></div>
-            <div class="future-card-body insight-list">
-              <article class="insight-item">
-                <div class="insight-item-head"><span class="insight-kind fact">事实</span><b>29 个已发现资产本期未观察到使用</b></div>
-                <p>其中技能 21 个、MCP 3 个、其他用户资产 5 个；不把“未观察到”写成“没有价值”。</p>
-                <div class="insight-proof"><span class="ev" data-cap="scan"><i></i>静态发现</span><span class="ev"><i></i>运行时观测</span><span>范围：128 会话</span></div>
-              </article>
-              <article class="insight-item">
-                <div class="insight-item-head"><span class="insight-kind">模式</span><b>“读取 → 修改 → 测试”成为最常见工具组合</b></div>
-                <p>最近 30 天出现 34 个轮次，比前 30 天多 12 个；可下钻到对应 Interaction 验证。</p>
-                <div class="insight-proof"><span class="ev"><i></i>运行时捕获</span><span>34 个轮次 · 26 个会话</span></div>
-              </article>
-              <article class="insight-item">
-                <div class="insight-item-head"><span class="insight-kind">模式</span><b>Codex 在代码仓库任务中的使用占比上升</b></div>
-                <p>agent-lens / FocusList 两个项目中，Codex 会话占比从 41% 升到 58%。这是使用选择变化，不等于效果更好。</p>
-                <div class="insight-proof"><span class="ev" data-cap="log"><i></i>原生日志</span><span>2 个项目 · 74 会话</span></div>
-              </article>
-              <article class="insight-item">
-                <div class="insight-item-head"><span class="insight-kind fact">事实</span><b>工具可靠归因覆盖从 63% 升到 71%</b></div>
-                <p>更多调用能落到具体 Skill / MCP；仍有 701 次普通或证据不足的调用保持未归因。</p>
-                <div class="insight-proof"><span class="ev"><i></i>Observation</span><span>2,418 次调用</span></div>
-              </article>
-            </div>
-          </section>
-
-          <section class="future-card">
-            <div class="future-card-head"><div><h3>工作方式演进</h3><p>只记录可验证变化。</p></div></div>
-            <div class="future-card-body evolution">
-              <div class="evolution-item"><time>08/18 – 08/22</time><b>代码任务中测试调用明显增加</b><p>测试类调用占修改后后续调用的 61%，前一周期为 44%。</p></div>
-              <div class="evolution-item"><time>08/11 – 08/17</time><b>开始稳定使用 GitHub 能力资产</b><p>连续 5 天观察到调用，共覆盖 12 个会话。</p></div>
-              <div class="evolution-item"><time>08/04 – 08/10</time><b>Claude Code 的文档仓库会话增多</b><p>内容与文档项目占其会话的 47%，此前为 29%。</p></div>
-              <div class="evolution-item"><time>07/24 – 08/03</time><b>可归因资产样本开始稳定</b><p>当期起归因覆盖率连续 10 天高于 60%。</p></div>
-            </div>
-          </section>
-
-          <section class="future-card">
-            <div class="future-card-head"><div><h3>洞察边界</h3></div></div>
-            <div class="future-card-body">
-              <div class="future-note"><b>不做“Agent 评分”。</b> 会话耗时、错误率、工具数量都强依赖任务难度和使用方式。原型只展示事实、相对变化和有证据范围的模式；任何解释都必须能回到原始会话与 Evidence。</div>
-            </div>
-          </section>
-        </aside>
-      </div>
-    </main>
-  </div>
-</div>
-
-<div id="scrim" class="scrim"></div>
-<aside id="pattern-detail" class="drawer" role="dialog" aria-modal="true" aria-label="工作流模式识别规则">
-  <div class="dw-head">
-    <div><div class="dw-eyebrow">模式解释</div><div class="dw-title">“读取 → 修改 → 测试” <span class="badge info">34 轮次</span></div><div class="dw-sub">模式不是模型主观总结，而是从标准化工具序列统计得到。</div></div>
-    <button class="icon-button" data-close-drawer aria-label="关闭">×</button>
-  </div>
-  <div class="future-drawer-body">
-    <section class="drawer-section"><h3>识别范围</h3><dl class="drawer-kv"><dt>时间</dt><dd>最近 30 天</dd><dt>样本</dt><dd>128 个会话 · 612 个 Interaction</dd><dt>匹配</dt><dd>34 个 Interaction · 26 个会话</dd><dt>来源</dt><dd>Codex 18 · Claude Code 14 · Pi 2</dd></dl></section>
-    <section class="drawer-section"><h3>规则</h3><dl class="drawer-kv"><dt>序列单位</dt><dd>同一 Interaction 内按时间排序的工具类别</dd><dt>间隔</dt><dd>忽略连续重复读取；相邻工具间最长 120 秒</dd><dt>工具映射</dt><dd>原生工具名 → 读取 / 修改 / 测试等规范类别</dd><dt>最低样本</dt><dd>至少 5 个不同会话才展示为“模式”</dd></dl></section>
-    <section class="drawer-section"><h3>可追溯证据</h3><div class="drawer-file-list"><div class="drawer-file"><span>会话</span><code>review/session/codex-20260822-1432</code><span>3 次</span></div><div class="drawer-file"><span>会话</span><code>review/session/claude-20260821-2210</code><span>2 次</span></div><div class="drawer-file"><span>更多</span><code>其余 24 个会话</code><span>查看</span></div></div></section>
-  </div>
-</aside>
-
-<script src="assets/app.js"></script>
-</body>
-</html>
+<div class="app-shell">
+<header class="app-header"><div class="app-header-inner"><div class="brand"><span class="brand-mark">A</span><span class="brand-name">AgentLens</span></div><nav class="app-nav"><a class="nav-item" href="review.html">任务复盘</a><a class="nav-item nav-group-start" href="tools.html">工具分析</a><a class="nav-item active" href="#">使用洞察</a><a class="nav-item nav-group-start" href="agents.html">智能体概览</a><a class="nav-item" href="backup.html">资产备份</a></nav><div class="app-status"><span class="status-pill tip" data-tip="后台服务：正常&#10;实时通道：已连接"><span class="live-dot"></span>运行中</span><button class="icon-button" data-theme-toggle>◐</button></div></div></header>
+<div class="workspace-toolbar"><div class="agent-scope"><button class="scope-chip active">全部智能体</button><button class="scope-chip"><span class="src-dot dot-codex"></span>Codex</button><button class="scope-chip"><span class="src-dot dot-claude"></span>Claude Code</button><button class="scope-chip"><span class="src-dot dot-pi"></span>Pi</button></div><span class="toolbar-divider"></span><select class="filter"><option>全部项目</option><option>agent-lens</option></select><select class="filter"><option>最近 7 天</option><option>今天</option><option>最近 30 天</option><option>全部时间</option></select><button class="icon-button toolbar-end">↻</button></div>
+<div class="page-scroll"><main class="insight-content">
+<header class="heading"><span class="eyebrow">长期观察</span><h1>使用洞察</h1><p>把已经采集的会话、工具和能力资产事实聚合成趋势与重复模式。这里不做 Agent 综合评分，也不把共同出现包装成因果结论。</p></header>
+<section class="coverage"><div><span>统计范围</span><b>2026/08/18 — 2026/08/24</b></div><div><span>会话样本</span><b>42 个</b></div><div><span>覆盖状态</span><b>当前范围完整聚合</b></div><div><span>生成时间</span><b>08/24 22:58</b></div></section>
+<section class="kpis"><article class="kpi"><span>会话</span><strong>42</strong><small>较上周期增加 12%</small></article><article class="kpi"><span>交互轮次</span><strong>286</strong><small>较上周期增加 8%</small></article><article class="kpi"><span>工具调用</span><strong>814</strong><small>只统计已观察调用</small></article><article class="kpi"><span>明确失败</span><strong>17</strong><small>只统计结果明确标记失败</small></article></section>
+<div class="grid"><article class="card"><h2>使用趋势</h2><p>按会话结束日期聚合；固定时间窗内的空白日期保留为 0。</p><div class="trend"><div class="day"><div class="bar" style="height:32%"></div><b>4</b><span>08/18</span></div><div class="day"><div class="bar" style="height:48%"></div><b>6</b><span>08/19</span></div><div class="day"><div class="bar" style="height:24%"></div><b>3</b><span>08/20</span></div><div class="day"><div class="bar" style="height:64%"></div><b>8</b><span>08/21</span></div><div class="day"><div class="bar" style="height:80%"></div><b>10</b><span>08/22</span></div><div class="day"><div class="bar" style="height:40%"></div><b>5</b><span>08/23</span></div><div class="day"><div class="bar" style="height:48%"></div><b>6</b><span>08/24</span></div></div></article><article class="card"><h2>周期变化</h2><p>当前时间窗与紧邻的等长上一个时间窗比较；全部时间不强行生成比较。</p><div class="compare"><div><span>会话</span><b>增加 12%</b></div><div><span>交互轮次</span><b>增加 8%</b></div><div><span>工具调用</span><b>增加 15%</b></div><div><span>明确失败</span><b>减少 6%</b></div><div><span>会话跨度</span><b>增加 4%</b></div><div><span>上周期会话</span><b>37</b></div></div></article></div>
+<section class="card wide"><h2>Agent 使用结构</h2><p>同一会话若同时包含多个来源，会分别计入对应 Agent；这是“会话中出现过该来源”，不是独占归因。</p><table class="agent-table"><thead><tr><th>Agent</th><th>会话</th><th>交互</th><th>工具调用</th><th>明确失败</th><th>已观察资产调用</th><th>会话跨度合计</th></tr></thead><tbody><tr><td><b>Claude Code</b></td><td>22</td><td>151</td><td>438</td><td>7</td><td>96</td><td>8.4 小时</td></tr><tr><td><b>Codex</b></td><td>15</td><td>108</td><td>312</td><td>8</td><td>71</td><td>6.1 小时</td></tr><tr><td><b>Pi</b></td><td>5</td><td>27</td><td>64</td><td>2</td><td>12</td><td>1.7 小时</td></tr></tbody></table></section>
+<div class="grid"><article class="card"><h2>能力资产采用</h2><p>只展示能够可靠从工具名归因到具体技能或 MCP 的真实调用。</p><div class="list"><div class="row"><div><b>github-mcp-server</b><span>MCP · Claude Code / Codex</span></div><strong>38 次</strong></div><div class="row"><div><b>code-review</b><span>技能 · Claude Code</span></div><strong>24 次</strong></div><div class="row"><div><b>doc-renderer</b><span>技能 · Codex</span></div><strong>16 次</strong></div></div></article><article class="card"><h2>重复工作流模式</h2><p>连续工具类别序列至少出现在多个不同会话后才显示。</p><div class="patterns"><div class="pattern"><div class="steps"><b>读取</b><i>→</i><b>修改</b><i>→</i><b>命令</b></div><small>12 个会话 · 19 次出现 · 57 条样本观测</small></div><div class="pattern"><div class="steps"><b>搜索</b><i>→</i><b>读取</b><i>→</i><b>修改</b></div><small>8 个会话 · 11 次出现 · 33 条样本观测</small></div></div></article></div>
+<section class="method"><b>统计口径：</b>趋势、Agent 使用结构和工作流模式都基于当前筛选范围的已观察事实；样本超过安全上限时明确标注 sampled（抽样），并关闭可能失真的周期比较。</section>
+</main></div></div><script src="assets/app.js"></script>
+</body></html>
