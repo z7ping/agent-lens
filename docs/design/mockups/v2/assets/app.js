@@ -37,6 +37,25 @@
     })
   }
 
+  function normalizeStatusPills() {
+    document.querySelectorAll('.status-pill').forEach(function (pill) {
+      var label = pill.querySelector('.status-label')
+      if (!label) {
+        Array.prototype.slice.call(pill.childNodes).forEach(function (node) {
+          if (node.nodeType !== Node.TEXT_NODE || !node.textContent.trim()) return
+          if (!label) {
+            label = document.createElement('span')
+            label.className = 'status-label'
+            node.replaceWith(label)
+          } else {
+            node.remove()
+          }
+        })
+      }
+      if (label) label.textContent = '运行正常'
+    })
+  }
+
   function sourceRowsHtml() {
     return [
       ['codex', 'Codex', 'dot-codex', true],
@@ -93,8 +112,67 @@
     })
   }
 
+  function syncAgentDetails() {
+    if (!/agents\.html$/i.test(location.pathname)) return
+
+    document.querySelectorAll('.caps .cap').forEach(function (cap) {
+      if (cap.dataset.currentCapability === 'true') return
+      var title = cap.querySelector('b')
+      var detail = cap.querySelector('span')
+      if (!title || !detail) return
+      var parts = title.textContent.split(' · ')
+      var name = parts.shift() || title.textContent
+      var status = parts.join(' · ') || '可用'
+      cap.innerHTML = '<span>' + name + ' · ' + detail.textContent + '</span><b>' + status + '</b>'
+      cap.dataset.currentCapability = 'true'
+    })
+
+    var matrix = document.querySelector('.matrix')
+    if (!matrix || matrix.dataset.currentMatrix === 'true') return
+    var rows = Array.prototype.slice.call(matrix.querySelectorAll('.mrow'))
+    rows.forEach(function (row, index) {
+      if (index === 0) {
+        if (row.textContent.indexOf('Hermes') < 0) row.insertAdjacentHTML('beforeend', '<span><span class="src-dot dot-hermes"></span>Hermes</span><span><span class="src-dot dot-opencode"></span>OpenCode</span>')
+        return
+      }
+      var first = row.children[0]
+      if (first) first.classList.add('m-asset')
+      if (row.children.length < 6) row.insertAdjacentHTML('beforeend', '<span>未观察到</span><span>未观察到</span>')
+      Array.prototype.slice.call(row.children, 1).forEach(function (cell) {
+        var text = cell.textContent.trim()
+        cell.classList.add('heat')
+        if (text === '已使用') cell.classList.add('used')
+        else if (text === '可发现') cell.classList.add('discoverable')
+        else if (text === '已配置') cell.classList.add('configured')
+        else if (text === '已发现') cell.classList.add('discovered')
+        else cell.classList.add('unobserved')
+      })
+    })
+    matrix.dataset.currentMatrix = 'true'
+  }
+
+  function syncInsightsPrototype() {
+    if (!/insights\.html$/i.test(location.pathname)) return
+    document.querySelectorAll('h2,th,p').forEach(function (node) {
+      if (node.textContent.indexOf('Agent 使用结构') >= 0) node.textContent = node.textContent.replace('Agent 使用结构', '智能体使用结构')
+      if (node.tagName === 'TH' && node.textContent.trim() === 'Agent') node.textContent = '智能体'
+      if (node.textContent.indexOf('对应 Agent') >= 0) node.textContent = node.textContent.replace('对应 Agent', '对应智能体')
+      if (node.textContent.indexOf('综合评分') >= 0) node.textContent = node.textContent.replace('Agent 综合评分', '智能体综合评分')
+    })
+  }
+
+  function backupSourceChip(id, label, dot) {
+    return '<button class="scope-chip" disabled data-source="' + id + '"><span class="src-dot ' + dot + '"></span>' + label + '</button>'
+  }
+
   function syncBackupPrototype() {
     if (!/backup\.html$/i.test(location.pathname)) return
+
+    var toolbarScope = document.querySelector('.workspace-toolbar .agent-scope')
+    if (toolbarScope && !toolbarScope.querySelector('[data-source="hermes"]')) {
+      toolbarScope.insertAdjacentHTML('beforeend', backupSourceChip('hermes', 'Hermes', 'dot-hermes') + backupSourceChip('opencode', 'OpenCode', 'dot-opencode'))
+    }
+
     var grid = document.querySelector('.protection-grid')
     if (grid && !grid.querySelector('[data-source="hermes"]')) {
       ;[
@@ -111,29 +189,34 @@
 
     var createButton = document.querySelector('.snapshot-create-button')
     var builder = createButton && createButton.closest('.future-card-body')
-    if (!builder || builder.querySelector('[data-kind="plugin"]')) return
-    var safety = builder.querySelector('.safety-note')
-    if (!safety) return
-    var counts = { skill: 63, mcp: 18, session: 76, config: 11, plugin: 5, extension: 2, hook: 4, memory: 3, rule: 7, other: 1 }
-    var labels = {
-      skill: '技能', mcp: 'MCP（模型上下文协议）', session: '会话 / 历史', config: '关键配置',
-      plugin: '插件', extension: '扩展', hook: '钩子', memory: '记忆', rule: '规则', other: '其他'
+    if (builder && builder.dataset.currentBuilder !== 'true') {
+      var kinds = [
+        ['skill', '技能', 63], ['mcp', 'MCP（模型上下文协议）', 18], ['plugin', '插件', 5], ['extension', '扩展', 2], ['hook', '钩子', 4],
+        ['memory', '记忆', 3], ['rule', '规则', 7], ['session', '会话 / 历史', 76], ['config', '关键配置', 11], ['other', '其他', 1]
+      ]
+      var kindHtml = kinds.map(function (kind) {
+        return '<label class="builder-check" data-kind="' + kind[0] + '"><input type="checkbox" checked>' + kind[1] + '<small>' + kind[2] + '</small></label>'
+      }).join('')
+      builder.classList.add('snapshot-builder')
+      builder.innerHTML = '<div class="builder-block"><div class="builder-label"><span>智能体</span><span>3 / 3</span></div><div class="builder-checks">' +
+        '<label class="builder-check"><input type="checkbox" checked><span class="src-dot dot-codex"></span>Codex<small>80 文件</small></label>' +
+        '<label class="builder-check"><input type="checkbox" checked><span class="src-dot dot-claude"></span>Claude Code<small>85 文件</small></label>' +
+        '<label class="builder-check"><input type="checkbox" checked><span class="src-dot dot-pi"></span>Pi<small>19 文件</small></label>' +
+        '</div></div><div class="builder-block"><div class="builder-label"><span>资产类型</span><button class="link-btn">清空</button></div><div class="builder-checks">' + kindHtml +
+        '</div></div><div class="safety-note"><span>✓</span><div><b>敏感信息保护强制开启</b><span>凭据、Token、私钥和秘密赋值会整文件排除并记录原因。</span></div></div>' +
+        '<div class="builder-summary"><span>按分类统计约 <b>190</b> 条文件引用</span><span>重叠路径会自动去重</span></div>' +
+        '<button class="btn primary snapshot-create-button">创建并校验快照</button>'
+      builder.dataset.currentBuilder = 'true'
     }
-    var existing = Array.prototype.slice.call(builder.querySelectorAll('.builder-check'))
-    var existingKinds = ['skill', 'mcp', 'session', 'config']
-    existing.slice(-4).forEach(function (label, index) {
-      var kind = existingKinds[index]
-      if (!kind) return
-      label.dataset.kind = kind
-      if (!label.querySelector('small')) label.insertAdjacentHTML('beforeend', '<small>' + counts[kind] + '</small>')
-    })
-    ;['plugin', 'extension', 'hook', 'memory', 'rule', 'other'].forEach(function (kind) {
-      var label = document.createElement('label')
-      label.className = 'builder-check'
-      label.dataset.kind = kind
-      label.innerHTML = '<input type="checkbox" checked> ' + labels[kind] + '<small>' + counts[kind] + '</small>'
-      builder.insertBefore(label, safety)
-    })
+
+    var preview = document.getElementById('restore-preview')
+    if (preview && preview.dataset.currentPreview !== 'true') {
+      preview.innerHTML = '<div class="dw-head"><div><div class="dw-eyebrow">恢复预演</div><div class="dw-title">快照差异 <span class="badge warn">1 项需关注</span></div><div class="dw-sub">backup-20260824-2142</div></div><button class="icon-button" data-close-drawer aria-label="关闭">×</button></div>' +
+        '<div class="future-drawer-body"><section class="drawer-section"><h3>差异摘要</h3><div class="preview-summary"><span><b>182</b> 一致</span><span><b>1</b> 缺失</span><span><b>1</b> 已修改</span><span><b>0</b> 阻止</span></div></section>' +
+        '<section class="drawer-section"><h3>文件</h3><div class="drawer-file-list"><div class="drawer-file preview-file"><span class="badge ok">一致</span><code>skills/code-review/SKILL.md</code></div><div class="drawer-file preview-file"><span class="badge warn">当前已修改</span><code>sessions/2026-08-21.jsonl</code><small>当前文件内容与快照 Hash 不同</small></div></div></section>' +
+        '<section class="drawer-section"><div class="future-note"><b>这里只做预演。</b> 当前版本没有直接写回接口，因此查看差异不会修改任何已检测智能体的文件。</div></section></div>'
+      preview.dataset.currentPreview = 'true'
+    }
   }
 
   function applyTheme(theme) {
@@ -154,9 +237,12 @@
 
   /* 页面脚本位于 body 末尾，可在事件绑定前补齐当前稿需要的共享组件。 */
   renderBrand()
+  normalizeStatusPills()
   syncScopeManagers()
   renderSourceDots()
   syncAgentSources()
+  syncAgentDetails()
+  syncInsightsPrototype()
   syncBackupPrototype()
   renderThemeControls(document.documentElement.dataset.theme || 'light')
   applyAudit(auditOn)
