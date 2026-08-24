@@ -12,6 +12,7 @@ import {
   DefaultObservationService,
 } from '@agent-lens/core-services'
 import { SourceHistoryRunner, SourceRuntimeRunner } from '@agent-lens/core-services/source-runner'
+import { createTestCapturePolicy } from '@agent-lens/core-services/test-support'
 import { SqliteStorageService } from '@agent-lens/storage-sqlite'
 import { detectOpenCode, openCodeSourceDefinition } from './index'
 
@@ -64,8 +65,9 @@ test('OpenCode Source reads native SQLite history and observes in-place part upd
     const observations = new DefaultObservationService(storage, identity)
     const capabilities = new DefaultCapabilityService()
     const coverage = new DefaultCoverageService(storage, evidence)
-    const history = new SourceHistoryRunner(storage, identity, observations, capabilities, coverage)
-    const runtime = new SourceRuntimeRunner(storage, identity, observations, capabilities, coverage)
+    const capturePolicy = createTestCapturePolicy(['opencode'])
+    const history = new SourceHistoryRunner(storage, identity, observations, capabilities, coverage, capturePolicy)
+    const runtime = new SourceRuntimeRunner(storage, identity, observations, capabilities, coverage, capturePolicy)
     const host = await identity.resolveHost({ name: 'opencode-test-host' })
     const [detected] = await detectOpenCode({ host, env: { OPENCODE_HOME: sourceRoot } })
     assert.ok(detected)
