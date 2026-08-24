@@ -59,11 +59,15 @@ if (!/--font-size-xs:\s*12px\s*;/.test(typography)) {
   throw new Error('正式字体系统的最小语义字号必须保持为 12px')
 }
 
+function declaredPixelFontSizes(source) {
+  return [...source.matchAll(/\{([^{}]*)\}/gs)]
+    .flatMap(blockMatch => [...blockMatch[1].matchAll(/font-size\s*:\s*(\d+(?:\.\d+)?)px\b/g)])
+    .map(match => Number(match[1]))
+}
+
 for (const path of semanticPresentationPaths) {
   const source = readFileSync(path, 'utf8')
-  const tooSmall = [...source.matchAll(/font-size\s*:\s*(\d+(?:\.\d+)?)px\b/g)]
-    .map(match => Number(match[1]))
-    .filter(value => value < 12)
+  const tooSmall = declaredPixelFontSizes(source).filter(value => value < 12)
 
   if (tooSmall.length > 0) {
     throw new Error(`${path} 出现小于 12px 的当前有效字号：${[...new Set(tooSmall)].join(', ')}px`)
