@@ -1,7 +1,7 @@
 # AgentLens 1.0 架构
 
 > 状态：1.0 alpha 实现基线  
-> 更新日期：2026-08-21
+> 更新日期：2026-08-24
 
 ## 1. 产品定位
 
@@ -365,6 +365,8 @@ Web 仅消费 `/api/v1/*` 的 Protocol DTO。
 - Codex trusted hash 只维护 AgentLens 自己的条目；
 - 配置写入必须原子化。
 
+Hook 配置属于 AgentLens，而不是某一种发行方式。npm 与 Desktop 可以提供不同的 Hook 可执行入口，但必须写入同一套 1.0 durable inbox 语义；Hook 不负责拉起 Daemon。
+
 ## 17. CLI
 
 当前 CLI：
@@ -378,11 +380,24 @@ agent-lens hook install [codex|claude|all]
 agent-lens hook uninstall [codex|claude|all]
 ```
 
-`start` 明确采用前台运行。CLI 不伪装成跨平台 Service Manager。
+`start` 明确采用前台运行。启动前先探测默认 HTTP 地址；如果已经存在兼容 AgentLens Daemon，则直接复用并报告现有运行状态，不启动第二个 Daemon。
+
+CLI 不恢复 0.x PID / Service Manager。未来增加 `setup`、后台 `service`、`autostart` 时，它们属于发行 / 运维层，并必须遵守单 Daemon 与共享数据规则。
 
 ## 18. 分发
 
+AgentLens 1.0 正式支持两种一等发行方式：
+
+- npm / CLI；
+- Windows Desktop / NSIS 安装包。
+
 npm 包名为 `@z7ping/agent-lens`。
+
+两种发行方式复用同一套 Core、Cordis Runtime、Protocol、Web、Canonical 数据模型和默认数据根：
+
+```text
+~/.agent-lens/1.0/
+```
 
 分发构建会把内部 workspace 打包进：
 
@@ -397,6 +412,8 @@ Cordis 与 `better-sqlite3` 保留为外部 Runtime Dependency。
 
 Release Workflow 会分别在 Linux / Windows 验证，打出唯一 npm tarball，生成 SBOM / checksum，将产物附加到 GitHub Release，最后发布同一份 tarball。
 
+同一台机器可以同时安装 npm 与 Desktop，但同一默认数据根 / 默认端口同一时刻只允许一个有效 Daemon。兼容时复用现有 Daemon；不兼容时必须明确报告版本 / Protocol 冲突，不允许通过换端口偷偷启动第二套 1.0 事实链。
+
 ## 19. Windows Desktop
 
 Electron 只是桌面壳，不是另一套 AgentLens Runtime。
@@ -406,11 +423,24 @@ Electron 只是桌面壳，不是另一套 AgentLens Runtime。
 - 单实例；
 - BrowserWindow；
 - 托盘生命周期；
-- 启动 / 停止 / 重启 Daemon；
+- 启动 / 停止 / 重启自己拥有的 Daemon；
+- 启动前探测并复用已有兼容 Daemon；
+- Windows 登录后自动运行；
 - 本地日志访问；
 - NSIS 安装包。
 
+Desktop 启动时先探测 `127.0.0.1:56789`：
+
+- 没有兼容 Daemon：Desktop 启动并管理自己的 Daemon；
+- 已有兼容 Daemon：Desktop 直接连接，不启动第二个 Daemon；
+- 已有不兼容 Daemon：明确报告冲突，不接管、不换端口绕过；
+- Desktop 退出时，只停止由当前 Desktop 启动的 Daemon，不误杀 npm / service 管理的外部 Daemon。
+
+Windows 登录自启启动 Electron 到托盘，再由 Desktop 按上述规则决定复用或创建 Daemon；不恢复 0.x VBS + PID + detached daemon 作为正式桌面生命周期。
+
 Daemon 仍然提供同一套 `127.0.0.1:56789` HTTP / SSE Surface。卸载 Desktop App 不会自动删除 `~/.agent-lens/1.0` 下的观测数据。
+
+完整决策见 `docs/adr/0004-dual-distribution-single-runtime-lifecycle.md`。
 
 ## 20. 1.0 基线的非目标
 
@@ -423,3 +453,5 @@ Daemon 仍然提供同一套 `127.0.0.1:56789` HTTP / SSE Surface。卸载 Deskt
 新增一个 Source，正常情况下只需要新增一个 Source package，并在 Composition Root 中注册其 Cordis Plugin；Parser / Normalizer / SourceDefinition 仍按 Core Contract 实现。
 
 如果新增 Source 必须修改 Core 语义类型、Canonical Identity、Evidence 语义或 Plugin Runtime 所有权，这就不是普通接入，而是一次 Contract Review。
+
+发行方式不得改变 Canonical Data Flow。npm 与 Desktop 共存时，不得因为生命周期管理来源不同而创建第二套 Runtime、第二套 Schema、第二份默认数据库或重复采集链路。
