@@ -79,6 +79,79 @@ Windows Release Workflow 会生成 x64 NSIS 安装包：
 AgentLens-<version>-Setup-x64.exe
 ```
 
+### 本地构建 Windows 安装包
+
+要求：
+
+- Windows x64；
+- Node.js **>= 22.23.0**；
+- 已安装 npm 依赖。
+
+在仓库根目录执行：
+
+```powershell
+node -v
+npm install
+npm run desktop:win
+```
+
+`npm run desktop:win` 会依次执行：
+
+```text
+Web 表现层收敛检查
+-> Electron 主进程语法检查
+-> 构建正式 dist
+-> 准备桌面运行时
+-> electron-builder
+-> NSIS x64 安装包
+```
+
+生成的安装包位于：
+
+```text
+release/windows/
+```
+
+例如当前版本会生成类似：
+
+```text
+AgentLens-1.0.0-alpha.0-Setup-x64.exe
+```
+
+NSIS 安装器允许选择安装目录，并创建桌面快捷方式和开始菜单快捷方式。卸载 AgentLens 不会自动删除用户观测数据。
+
+### 使用 GitHub Actions 构建
+
+也可以不在本机准备 Windows 打包环境，直接在 GitHub 仓库中手动执行：
+
+```text
+Actions
+-> Windows Installer
+-> Run workflow
+```
+
+工作流会在 `windows-latest` 上完成依赖安装、表现层检查、桌面主进程检查、类型检查、测试和安装包构建，并上传：
+
+```text
+AgentLens-<version>-Setup-x64.exe
+SHA256SUMS.txt
+```
+
+手动执行时可以从该次 Actions 运行的 Artifacts 下载；正式发布 GitHub Release 时，安装包和校验文件会自动附加到 Release。
+
+### Windows 代码签名
+
+开发版和 alpha 阶段没有代码签名证书也可以正常构建安装包，但 Windows 可能显示“未知发布者”或 SmartScreen 提示。
+
+正式发布时可在 GitHub Secrets 中配置：
+
+```text
+WINDOWS_CSC_LINK
+WINDOWS_CSC_KEY_PASSWORD
+```
+
+Windows Installer 工作流已经预留这两个签名变量，不需要为了签名再维护另一套打包流程。
+
 Electron 只承担桌面壳职责：
 
 - 单实例；
