@@ -1,21 +1,28 @@
-import { existsSync } from 'node:fs'
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  writeFileSync,
+} from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
 import type { HookManagerOptions } from '@agent-lens/hook-manager'
-import { registerInstallation, type InstallationKind, type InstallationRecord } from './installations'
+import { registerInstallationSync, type InstallationKind, type InstallationRecord } from './installations'
 
 export interface HookExecutionProfile {
   options: HookManagerOptions
   windowsNoWindow: boolean
   dispatcherPath?: string
+  /** 兼容上一轮 doctor 字段；现在它实际指向共享分发器。 */
+  runnerPath?: string
   installation?: InstallationRecord
 }
 
-interface PrepareHookExecutionOptions {
-  version: string
+interface ResolveHookExecutionOptions {
+  version?: string
   moduleUrl?: string
   platform?: NodeJS.Platform
   nodePath?: string
@@ -43,17 +50,17 @@ function sharedDispatcherPath(homeDir = homedir()): string {
   return join(homeDir, '.agent-lens', '1.0', 'runtime', 'windows-hook-dispatcher.ps1')
 }
 
-async function installSharedDispatcher(source: string, target: string): Promise<void> {
-  const content = await readFile(source, 'utf8')
+function installSharedDispatcherSync(source: string, target: string): void {
+  const content = readFileSync(source, 'utf8')
   try {
-    if (await readFile(target, 'utf8') === content) return
+    if (readFileSync(target, 'utf8') === content) return
   } catch {
     // Install below.
   }
-  await mkdir(dirname(target), { recursive: true })
+  mkdirSync(dirname(target), { recursive: true })
   const temporary = `${target}.${randomUUID()}.tmp`
-  await writeFile(temporary, content, { encoding: 'utf8', mode: 0o600 })
-  await rename(temporary, target)
+  writeFileSync(temporary, content, { encoding: 'utf8', mode: 0o600 })
+  renameSync(temporary, target)
 }
 
 function distributionContext(
@@ -79,7 +86,8 @@ function distributionContext(
   }
 }
 
-export async function prepareHookExecutionProfile(options: PrepareHookExecutionOptions): Promise<HookExecutionProfile> {
+export function resolveHookExecutionProfile(options: ResolveHookExecutionOptions = {}): HookExecutionProfile {
+  const version = options.version ?? process.env.AGENT_LENS_VERSION ?? '1.0.0-alpha.0'
   const moduleUrl = options.moduleUrl ?? import.meta.url
   const platform = options.platform ?? process.platform
   const nodePath = options.nodePath ?? process.execPath
@@ -91,9 +99,9 @@ export async function prepareHookExecutionProfile(options: PrepareHookExecutionO
 
   let installation: InstallationRecord | undefined
   if ([context.executable, context.hooksRoot, codexScript, claudeScript].every(existsSync)) {
-    installation = await registerInstallation({
+    installation = registerInstallationSync({
       kind: context.kind,
-      version: options.version,
+      version,
       executable: context.executable,
       hookRoot: context.hooksRoot,
       electronRunAsNode: context.electronRunAsNode,
@@ -105,10 +113,10 @@ export async function prepareHookExecutionProfile(options: PrepareHookExecutionO
 
   const dispatcherPath = sharedDispatcherPath(options.homeDir)
   if (!installation || !existsSync(dispatcherSource)) {
-    return { options: {}, windowsNoWindow: false, dispatcherPath, installation }
+    return { options: {}, windowsNoWindow: false, dispatcherPath, runnerPath: dispatcherPath, installation }
   }
 
-  await installSharedDispatcher(dispatcherSource, dispatcherPath)
+  installSharedDispatcherSync(dispatcherSource, dispatcherPath)
   return {
     options: {
       codexCommand: windowsDispatcherCommand(dispatcherPath, 'codex'),
@@ -116,6 +124,7 @@ export async function prepareHookExecutionProfile(options: PrepareHookExecutionO
     },
     windowsNoWindow: true,
     dispatcherPath,
+    runnerPath: dispatcherPath,
     installation,
   }
 }
@@ -123,4 +132,5 @@ export async function prepareHookExecutionProfile(options: PrepareHookExecutionO
 export const hookExecutionInternals = {
   sharedDispatcherPath,
   distributionContext,
+  installSharedDispatcherSync,
 }
