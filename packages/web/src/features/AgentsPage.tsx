@@ -68,6 +68,15 @@ const agentDescription: Record<string, string> = {
   codex: 'OpenAI Codex · 本机历史、运行时钩子与能力资产',
   'claude-code': 'Anthropic Claude Code · 会话、钩子与能力资产',
   pi: 'Pi · 原生会话、分支关系与能力资产',
+  hermes: 'Hermes · 本机会话、观察器与能力资产',
+  opencode: 'OpenCode · 本机会话、原生记录与能力资产',
+}
+
+function captureState(agent: Pick<AgentOverviewDto, 'supported' | 'enabled' | 'detected'>): { label: string; title: string; className: string } {
+  if (!agent.supported) return { label: '未支持', title: '当前版本未声明支持该智能体', className: 'is-unsupported' }
+  if (!agent.detected) return { label: agent.enabled ? '未检测 · 已启用采集' : '未检测 · 未启用采集', title: agent.enabled ? '已允许采集，但本机尚未检测到该智能体' : '本机尚未检测到该智能体，当前也未启用采集', className: agent.enabled ? 'is-enabled' : 'is-disabled' }
+  if (!agent.enabled) return { label: '已检测 · 未启用采集', title: '本机已检测到该智能体，但当前采集策略未启用此来源', className: 'is-disabled' }
+  return { label: '已检测 · 采集中', title: '本机已检测到该智能体，且当前采集策略已启用此来源', className: 'is-enabled is-detected' }
 }
 
 function shortPath(path: string, max = 58): string {
@@ -222,14 +231,15 @@ function AgentCard({ agent }: { agent: AgentOverviewDto }) {
   const visibleBindings = showAllBindings ? bindings : bindings.slice(0, ASSEMBLY_PATH_LIMIT)
   const userAssetCount = userGrouped.reduce((sum, [, assets]) => sum + assets.length, 0)
   const userUsageCount = agent.usedAssets.reduce((sum, item) => sum + item.callCount, 0)
+  const status = captureState(agent)
 
-  return <article className="agent-card" data-source={agent.sourceId}>
+  return <article className="agent-card" data-source={agent.sourceId} data-enabled={String(agent.enabled)}>
     <header className="agent-card-head">
       <div className="agent-identity">
         <span className={`source-dot large ${sourceDot(agent.sourceId)}`}/>
         <div><h2>{agentLabel(agent.sourceId, agent.displayName)}</h2><p>{agentDescription[agent.sourceId] ?? '本机智能体的安装、资产与使用情况'}</p></div>
       </div>
-      <span className={`agent-status ${agent.detected ? 'is-detected' : ''}`}>{agent.detected ? '已检测' : '未检测'}</span>
+      <span className={`agent-status ${status.className}`} title={status.title}>{status.label}</span>
     </header>
 
     <div className="agent-installation">
@@ -354,10 +364,11 @@ export function AgentsPage({ model }: { model: AgentLensClientModel }) {
           <div className="agent-source-nav-head"><b>本机智能体</b><span>{items.length}</span></div>
           {items.map(agent => {
             const assetCount = agent.assetInventory.filter(asset => asset.type !== 'builtin').length
-            return <button key={agent.sourceId} className={`agent-source-option ${agent.sourceId === selectedSourceId ? 'is-active' : ''}`} onClick={() => setSourceId(agent.sourceId)} aria-current={agent.sourceId === selectedSourceId ? 'true' : undefined}>
+            const status = captureState(agent)
+            return <button key={agent.sourceId} className={`agent-source-option ${agent.sourceId === selectedSourceId ? 'is-active' : ''}`} onClick={() => setSourceId(agent.sourceId)} aria-current={agent.sourceId === selectedSourceId ? 'true' : undefined} title={status.title}>
               <span className={`source-dot large ${sourceDot(agent.sourceId)}`}/>
               <span className="agent-source-copy"><b>{agentLabel(agent.sourceId, agent.displayName)}</b><small>{assetCount} 项用户资产</small></span>
-              <span className={`agent-source-state ${agent.detected ? 'is-detected' : ''}`}>{agent.detected ? '已检测' : '未检测'}</span>
+              <span className={`agent-source-state ${status.className}`}>{status.label}</span>
             </button>
           })}
         </nav>
