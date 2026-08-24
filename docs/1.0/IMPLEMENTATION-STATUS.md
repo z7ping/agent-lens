@@ -63,7 +63,11 @@ Web 已从 `apps/web` 提升为独立 `packages/web` 包，并作为 `@agent-len
 - React 使用 `useSyncExternalStore` 消费稳定 Snapshot；
 - SSE 在首屏 Snapshot 请求前建立，消除启动阶段 API → SSE 事件盲区；
 - 高频实时事件分区域短窗口合批，不通过整页 DOM 替换制造“自动刷新页面”的体验；
-- 页面退出时主动关闭 SSE。
+- 页面退出时主动关闭 SSE；
+- 已删除历史 `v2-1.css` 补丁层：长会话布局、洞察布局、字号和窄屏导航分别回收到明确职责文件；
+- `typography.css` 统一普通界面最小 12px 的语义字号，使用洞察不再依赖 9.5–11.5px 原型字号；
+- `color-system.css` 现在作为真正最后加载的最终配色层，避免后续补丁再次覆盖语义色；
+- 任务复盘桌面端会话列表与详情阅读区使用独立滚动上下文，并保持 `overscroll-behavior` 与稳定滚动条占位。
 
 当前顶部采用扁平直达结构：
 
@@ -158,7 +162,9 @@ Agent 快捷入口按本机检测结果自动初始化，同时允许用户 Pin 
 - 正式 Windows Desktop 将 `runtime/hooks` 从 ASAR 解包，以便 PowerShell / Electron-as-Node 可访问 Hook 文件
 - Desktop 启动后登记自身为 Hook Provider；只对本机实际存在的 Codex / Claude Code 修复 AgentLens 自己的 Hook，不为 Pi 安装 Hook
 - npm 与 Windows Desktop 共用默认数据根和默认端口；Desktop 只停止自己拥有的 Daemon
+- Windows Desktop 启动前使用有限重试探测现有 Daemon，降低高负载或启动阶段的单次超时误判；等待就绪时继续校验 Protocol 兼容性
 - Windows Desktop 首次正式安装运行时默认启用登录 Windows 后自动运行，可从托盘关闭；登录自启以隐藏窗口进入托盘
+- Desktop 登录自启写入后会重新读取 Windows 实际状态；只有首次启用确认成功才写初始化标记，托盘切换失败时恢复系统真实勾选状态
 - npm 单包分发构建
 - 构建后 Daemon / Web 发行包启动冒烟测试
 - GitHub Release -> npm Artifact Workflow
@@ -180,6 +186,8 @@ vite.config.mjs
 docs/superpowers/
 docs/static/
 ```
+
+Web 表现层同时已删除退役的 `review-balanced*`、`review-polish.css` 与 `v2-1.css` 补丁层；后续视觉调整必须进入明确职责文件，不再新增按版本命名的覆盖层。
 
 0.x 历史实现仍可通过 Git 历史 / Tag 查阅，但不再作为 1.0 工作树的一部分，也不得被重新接回 1.0 Runtime。
 
@@ -262,12 +270,14 @@ P1：
 - Hook install / uninstall 必须保留第三方 Handler。
 - CLI 初始化只修改 AgentLens 自己负责的集成配置，不为未检测到的 Agent 强行安装 Hook。
 - npm / Desktop 共存不得产生第二个默认 Daemon、第二套默认数据库或重复采集链路。
+- Desktop 不能把单次短超时直接当成“没有现有 Daemon”；现有运行时的 Protocol 不兼容时必须明确失败，不能误判为自己的运行时已经就绪。
 - npm 后台托管不得通过 PID 文件成为第二套生命周期事实来源。
 - Windows 后台任务必须能诊断是否使用隐藏窗口定义；旧定义不得被误报为已完成无窗口收敛。
 - Windows 共享 Hook 分发器只能选择有效安装并启动原 Hook，不能访问 Core、SQLite、HTTP 或 Daemon 生命周期。
 - 安装登记必须按真实 executable / HookRoot / Hook 脚本存在性判定有效性，陈旧 JSON 不得阻塞另一发行方式。
 - 卸载 npm 或 Desktop 不能要求重新写 Native Hook 配置才能切换到另一有效 Provider。
 - 登录自启状态必须以系统托管定义成功为前提，本地偏好不得领先于系统真实状态。
+- Web 正式表现层不得重新引入 `v2-1.css`、`review-balanced*` 或其他按历史版本命名的最终覆盖层。
 - 幂等的 `unchanged` Replay 不触发 SSE 更新噪声。
 - SSE 实时更新不能通过反复全量替换内容区破坏滚动位置、展开状态和阅读上下文。
 - SSE 必须在首屏 Snapshot 之前建立，避免启动扫描期间出现事件盲区。
@@ -308,9 +318,10 @@ P1：
 - Task Review Interaction / Tool Result / Error / Preview；
 - Agent Overview Asset Inventory 与 Usage 分离；
 - SQLite Asset Inventory Reader；
-- HTTP `mountStatic()` 动态 SPA 挂载 / 卸载。
+- HTTP `mountStatic()` 动态 SPA 挂载 / 卸载；
+- Web 表现层门禁禁止退役 `v2-1.css` / `review-balanced*` 回归，并校验正式语义字号不低于 12px、最终配色层加载顺序。
 
-本轮改动已经进入同一套 typecheck / test / distribution build 路径；本文不把尚未最终确认的最新 `main` CI 状态写成“已通过”。
+本轮改动已经进入同一套 `check:web-presentation` / `check:desktop-shell` / typecheck / test / distribution build 路径；本文不把尚未最终确认的最新 `main` CI 状态写成“已通过”。
 
 Windows 安装包此前已经完成一次真实流水线验证：
 
