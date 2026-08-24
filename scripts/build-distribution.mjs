@@ -57,6 +57,10 @@ await cp(
   resolve(root, 'apps/hook-claude/bin/agent-lens-hook-claude.mjs'),
   resolve(dist, 'hooks/agent-lens-hook-claude.mjs'),
 )
+await cp(
+  resolve(root, 'scripts/windows-hook-runner.ps1'),
+  resolve(dist, 'hooks/agent-lens-hook-runner.ps1'),
+)
 
 for (const path of [
   resolve(dist, 'cli.mjs'),
