@@ -249,13 +249,53 @@ Native Hook
   -> Node / Electron-as-Node Hook
 ```
 
-## 9. 当前实机稳定化验收重点
+这两套 PowerShell 都只是 Windows 执行包装，不属于 AgentLens Runtime。
 
-1. Windows 登录后 Desktop 是否静默进入托盘，不出现可见控制台闪烁；
-2. Desktop 登录自启开关是否与 Windows 系统实际状态一致；
-3. npm service 已运行时启动 Desktop，是否只复用一个 Daemon；
-4. Desktop 已运行时再启动 npm service，是否仍保持一个 Daemon；
-5. Codex / Claude Hook 在 npm / Desktop 共存与单侧卸载后是否持续写入 Durable Inbox；
-6. 退出 Desktop 时，如果当前复用的是 npm / service Daemon，外部 Daemon 必须继续运行；
-7. 卸载任一发行后，另一发行必须能够通过真实文件校验自动接管 Hook Provider；
-8. 长时间运行期间 SSE 断线、Daemon 异常退出与恢复不能制造重复采集或第二套 Runtime。
+## 9. 当前自动验收
+
+三平台 CI 继续执行：
+
+- 类型检查；
+- 单元测试；
+- 正式发行构建；
+- Daemon / Web 冒烟；
+- npm pack 内容检查。
+
+Windows 额外验证：
+
+- 用户级后台任务注册；
+- 登录自启；
+- 后台任务隐藏窗口定义；
+- `owner=service` Health；
+- `doctor` 生命周期一致性；
+- 共享 Hook 分发器 stdin -> Durable Inbox；
+- 陈旧 Desktop 登记存在时自动回退有效 npm Provider。
+
+## 10. 仍需人工实机验收
+
+自动化不能替代以下体验检查：
+
+- Windows 登录后的肉眼无黑框；
+- Desktop 登录自启开关与 Windows 系统实际状态一致；
+- 真实 Codex / Claude Code Hook 是否完全无闪窗；
+- npm service 已运行时启动 Desktop，只复用一个 Daemon；
+- Desktop 已运行时再启动 npm service，最终仍只有一个 Daemon；
+- Desktop 与 npm 都安装后轮流启动；
+- 两边都设置登录自启时最终只有一个 Daemon；
+- 退出 Desktop 时，如果复用外部 npm / service Daemon，外部 Daemon 继续运行；
+- 卸载 npm 后 Desktop Hook 继续工作；
+- 卸载 Desktop 后 npm Hook 继续工作；
+- 长时间 SSE 断线 / Daemon 异常恢复不制造重复采集或第二 Runtime；
+- Linux 常见发行版 / WSL 的 `systemd --user`；
+- macOS LaunchAgent 登录加载 / 停止 / 重启。
+
+## 11. 禁止回退
+
+不得因为处理安装 / 卸载问题重新引入：
+
+- PID 事实文件；
+- 0.x Service Manager；
+- Hook 自动拉起 Daemon；
+- npm 与 Desktop 各自数据库；
+- 两个默认 Daemon；
+- Hook 分发器中的 Source / Canonical / SQLite / HTTP 业务逻辑。
