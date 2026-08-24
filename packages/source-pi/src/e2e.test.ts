@@ -16,6 +16,7 @@ import {
   SourceHistoryRunner,
   SourceRuntimeRunner,
 } from '@agent-lens/core-services/source-runner'
+import { createTestCapturePolicy } from '@agent-lens/core-services/test-support'
 import { SqliteStorageService } from '@agent-lens/storage-sqlite'
 import { detectPi, piSourceDefinition } from './index'
 
@@ -111,9 +112,10 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
     const capabilities = new DefaultCapabilityService()
     const coverage = new DefaultCoverageService(storage, evidence)
     const assets = new DefaultAssetService(storage)
-    const history = new SourceHistoryRunner(storage, identity, observations, capabilities, coverage)
-    const assetRunner = new SourceAssetRunner(storage, identity, capabilities, assets, evidence)
-    const runtime = new SourceRuntimeRunner(storage, identity, observations, capabilities, coverage)
+    const capturePolicy = createTestCapturePolicy(['pi'])
+    const history = new SourceHistoryRunner(storage, identity, observations, capabilities, coverage, capturePolicy)
+    const assetRunner = new SourceAssetRunner(storage, identity, capabilities, assets, evidence, capturePolicy)
+    const runtime = new SourceRuntimeRunner(storage, identity, observations, capabilities, coverage, capturePolicy)
     const host = await identity.resolveHost({ name: 'pi-test-host' })
     const [detected] = await detectPi({
       host,
