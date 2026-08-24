@@ -104,9 +104,17 @@
   color-scheme:dark;
 }
 
+.source-dot.source-codex,
+.src-dot.dot-codex{background:var(--src-codex)!important}
+.source-dot.source-claude,
+.src-dot.dot-claude{background:var(--src-claude)!important}
+.source-dot.source-pi,
+.src-dot.dot-pi{background:var(--src-pi)!important}
 .source-dot.source-hermes,
 .src-dot.dot-hermes{background:var(--src-hermes)!important}
 .source-dot.source-opencode,
 .src-dot.dot-opencode{background:var(--src-opencode)!important}
+.source-dot.source-unknown,
+.src-dot.dot-none{background:var(--al-muted-2)!important}
 .agent-card[data-source='hermes']{--agent-accent:var(--src-hermes)}
 .agent-card[data-source='opencode']{--agent-accent:var(--src-opencode)}
