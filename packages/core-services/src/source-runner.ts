@@ -6,6 +6,7 @@ import type {
   CoverageService,
   DetectedSource,
   Disposable,
+  EvidenceCandidate,
   EvidenceService,
   Host,
   IdentityService,
@@ -63,6 +64,7 @@ interface ProcessResult {
   observationsCreated: number
   observationsMerged: number
   observationsUnchanged: number
+  evidenceCandidates: EvidenceCandidate[]
 }
 
 class ScopedCheckpointService implements SourceCheckpointService {
@@ -137,6 +139,7 @@ async function processSourceRecord(
     observationsCreated: 0,
     observationsMerged: 0,
     observationsUnchanged: 0,
+    evidenceCandidates: persistedOutput.evidenceCandidates,
   }
 
   for (const observation of persistedOutput.observations) {
@@ -202,6 +205,8 @@ export class SourceHistoryRunner {
     )
     let coverageFrom: string | undefined
     let coverageTo: string | undefined
+    let coverageFromEvidence: EvidenceCandidate[] = []
+    let coverageToEvidence: EvidenceCandidate[] = []
 
     for await (const record of source.ingestHistory({
       host,
@@ -212,10 +217,6 @@ export class SourceHistoryRunner {
       if (abortSignal.aborted) break
 
       result.records += 1
-      const time = record.occurredAt ?? record.capturedAt
-      coverageFrom = earlier(coverageFrom, time)
-      coverageTo = later(coverageTo, time)
-
       const processed = await processSourceRecord(
         this.storage,
         this.observations,
@@ -229,6 +230,18 @@ export class SourceHistoryRunner {
       result.observationsCreated += processed.observationsCreated
       result.observationsMerged += processed.observationsMerged
       result.observationsUnchanged += processed.observationsUnchanged
+
+      const time = record.occurredAt ?? record.capturedAt
+      const nextFrom = earlier(coverageFrom, time)
+      if (nextFrom !== coverageFrom) {
+        coverageFrom = nextFrom
+        coverageFromEvidence = processed.evidenceCandidates
+      }
+      const nextTo = later(coverageTo, time)
+      if (nextTo !== coverageTo) {
+        coverageTo = nextTo
+        coverageToEvidence = processed.evidenceCandidates
+      }
     }
 
     if (!abortSignal.aborted) {
@@ -244,7 +257,14 @@ export class SourceHistoryRunner {
           continue
         }
 
+        // A History scan can only prove coverage for capabilities whose declared
+        // capture channel actually includes history. Runtime-hook/native-tail and
+        // static-scan capabilities must not inherit the transcript time window.
+        if (!capability.captureModes.includes('history')) continue
         if (!coverageFrom || !coverageTo) continue
+        const boundaryEvidence = coverageFrom === coverageTo
+          ? coverageFromEvidence
+          : [...coverageFromEvidence, ...coverageToEvidence]
         await this.coverage.declare({
           subjectType: 'AgentInstallation',
           subjectId: installation.id,
@@ -253,6 +273,7 @@ export class SourceHistoryRunner {
           to: coverageTo,
           status: capability.status === 'available' ? 'complete' : 'partial',
           ...(capability.reason ? { reason: capability.reason } : {}),
+          ...(boundaryEvidence.length ? { evidenceCandidates: boundaryEvidence } : {}),
         })
       }
     }

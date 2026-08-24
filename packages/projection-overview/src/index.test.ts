@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { SourceService } from '@agent-lens/core'
+import type { CapturePolicyService, SourceService } from '@agent-lens/core'
 import { DefaultIdentityService } from '@agent-lens/core-services'
 import { SqliteStorageService } from '@agent-lens/storage-sqlite'
-import { AgentOverviewProjection } from './index'
+import { AgentOverviewProjection, FacetProjection } from './index'
 
 const sources = {
   list: () => [{
@@ -19,6 +19,14 @@ const sources = {
     },
   }],
 } as unknown as SourceService
+
+function policy(enabled: boolean): CapturePolicyService {
+  return {
+    isSourceEnabled(sourceId: string) {
+      return sourceId === 'codex' && enabled
+    },
+  } as unknown as CapturePolicyService
+}
 
 test('AgentOverviewProjection keeps inventory state separate from observed usage', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
@@ -58,6 +66,7 @@ test('AgentOverviewProjection keeps inventory state separate from observed usage
     assert.equal(response.items.length, 1)
     const agent = response.items[0]!
     assert.equal(agent.sourceId, 'codex')
+    assert.equal(agent.enabled, true)
     assert.equal(agent.detected, true)
     assert.equal(agent.assetInventoryStatus, 'available')
     assert.equal(agent.assetInventory.length, 1)
@@ -69,6 +78,24 @@ test('AgentOverviewProjection keeps inventory state separate from observed usage
       evidenceCount: 1,
     }])
     assert.deepEqual(agent.usedAssets, [])
+  } finally {
+    storage.close()
+  }
+})
+
+test('AgentOverview 与 Facet 使用采集策略报告真实 enabled 状态', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    const disabled = policy(false)
+    const overview = await new AgentOverviewProjection(storage, sources, undefined, disabled).query()
+    const facets = await new FacetProjection(storage, sources, disabled).query()
+
+    assert.equal(overview.items[0]?.sourceId, 'codex')
+    assert.equal(overview.items[0]?.supported, true)
+    assert.equal(overview.items[0]?.enabled, false)
+    assert.equal(facets.agents[0]?.sourceId, 'codex')
+    assert.equal(facets.agents[0]?.enabled, false)
   } finally {
     storage.close()
   }

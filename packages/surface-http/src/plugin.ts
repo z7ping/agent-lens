@@ -80,6 +80,7 @@ const applyHttpSurface = Object.assign(
       eventHub,
       sources: ctx.sources,
       capabilities: ctx.capabilities,
+      capturePolicy: ctx.capturePolicy,
       backup: ctx.backup,
     })
     const unprovide = ctx.provide('http', surface)
@@ -89,7 +90,7 @@ const applyHttpSurface = Object.assign(
       await surface.dispose()
     }
   },
-  { inject: ['storage', 'sources', 'capabilities', 'backup'] },
+  { inject: ['storage', 'sources', 'capabilities', 'capturePolicy', 'backup'] },
 )
 
 export const httpSurfacePlugin = defineAgentLensPlugin(manifest, applyHttpSurface)

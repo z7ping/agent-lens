@@ -6,6 +6,7 @@ import type {
   BackupCreateInput,
   BackupService,
   CapabilityService,
+  CapturePolicyService,
   Disposable,
   SourceService,
   StorageService,
@@ -63,6 +64,7 @@ export interface HttpSurfaceOptions {
   eventHub?: HttpEventHub
   sources?: SourceService
   capabilities?: CapabilityService
+  capturePolicy?: CapturePolicyService
   backup?: BackupService
 }
 
@@ -451,8 +453,8 @@ export async function startHttpSurface(
   const usage = new ToolAssetUsageProjection(storage)
   const insights = new UsageInsightsProjection(storage)
   const review = new ReviewProjection(storage)
-  const facets = new FacetProjection(storage, options.sources)
-  const agents = new AgentOverviewProjection(storage, options.sources, options.capabilities)
+  const facets = new FacetProjection(storage, options.sources, options.capturePolicy)
+  const agents = new AgentOverviewProjection(storage, options.sources, options.capabilities, options.capturePolicy)
   const relationships = new SessionRelationshipProjection(storage)
   const staticMounts = new Map<string, HttpStaticMount>()
   if (options.staticDir) {

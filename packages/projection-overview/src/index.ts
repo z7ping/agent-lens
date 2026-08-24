@@ -1,6 +1,7 @@
 import type {
   AssetInventoryEntry,
   CapabilityService,
+  CapturePolicyService,
   SourceService,
   StorageService,
 } from '@agent-lens/core'
@@ -30,8 +31,16 @@ function latestStates(entry: AssetInventoryEntry): AgentAssetStateDto[] {
   return [...latest.values()].sort((a, b) => a.state.localeCompare(b.state))
 }
 
+function sourceEnabled(policy: CapturePolicyService | undefined, sourceId: string): boolean {
+  return policy ? policy.isSourceEnabled(sourceId) : true
+}
+
 export class FacetProjection {
-  constructor(private readonly storage: StorageService, private readonly sources?: SourceService) {}
+  constructor(
+    private readonly storage: StorageService,
+    private readonly sources?: SourceService,
+    private readonly capturePolicy?: CapturePolicyService,
+  ) {}
 
   async query(): Promise<FacetResponseDto> {
     const definitions = this.sources?.list() ?? []
@@ -42,7 +51,7 @@ export class FacetProjection {
         productId: definition.manifest.productId,
         displayName: definition.manifest.displayName,
         supported: true,
-        enabled: true,
+        enabled: sourceEnabled(this.capturePolicy, definition.manifest.sourceId),
         detected: installations.length > 0,
         installationIds: installations.map(item => item.id),
       }
@@ -72,6 +81,7 @@ export class AgentOverviewProjection {
     private readonly storage: StorageService,
     private readonly sources?: SourceService,
     private readonly capabilities?: CapabilityService,
+    private readonly capturePolicy?: CapturePolicyService,
   ) {
     this.usage = new ToolAssetUsageProjection(storage)
   }
@@ -141,7 +151,7 @@ export class AgentOverviewProjection {
         productId: definition.manifest.productId,
         displayName: definition.manifest.displayName,
         supported: true,
-        enabled: true,
+        enabled: sourceEnabled(this.capturePolicy, definition.manifest.sourceId),
         detected: installations.length > 0,
         installations: installations.map(item => ({
           id: item.id,
