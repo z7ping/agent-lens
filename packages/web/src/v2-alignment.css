@@ -52,6 +52,38 @@
   background: var(--al-accent);
 }
 
+.review-audit-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+  margin-top: 8px;
+}
+
+.review-audit-toggle {
+  min-height: 26px;
+  padding: 3px 9px;
+  border: 1px solid var(--al-line);
+  border-radius: 7px;
+  background: var(--al-surface);
+  color: var(--al-ink-2);
+  font-size: 11.5px;
+  font-weight: 620;
+}
+
+.review-audit-toggle:hover,
+.review-audit-toggle[aria-pressed='true'] {
+  border-color: color-mix(in srgb, var(--al-accent) 40%, var(--al-line));
+  background: var(--al-accent-soft);
+  color: var(--al-accent);
+}
+
+.review-audit-controls > span {
+  color: var(--al-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 /* ── 工具分析：四卡 KPI 收成 v2 细线长条 ── */
 .tool-summary-grid {
   display: grid;
@@ -378,6 +410,12 @@
 }
 
 @media (max-width: 760px) {
+  .review-audit-controls {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+
   .tool-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
