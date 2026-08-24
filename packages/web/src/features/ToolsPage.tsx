@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { ToolUsageDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
-import { AgentScope } from '../components/AgentScope'
+import { AgentScope, agentLabel } from '../components/AgentScope'
 import { EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from '../components/StateViews'
 import { ToolKindIcon, toolVisualKind } from '../components/ToolKindIcon'
 
@@ -39,6 +39,10 @@ function confidenceLabel(confidence: string): string {
 
 function toolKey(sourceIds: string[], nativeToolName: string): string {
   return `${sourceIds.join('\u0000')}:${nativeToolName}`
+}
+
+function sourceLabels(sourceIds: string[]): string {
+  return sourceIds.map(sourceId => agentLabel(sourceId)).join(' / ')
 }
 
 function shortSessionId(id: string): string {
@@ -84,12 +88,26 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
     return sort.direction === 'ascending' ? delta : -delta
   }), [tools, sort])
 
+  useEffect(() => {
+    if (!selectedTool) return
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSelectedToolKey(null)
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [selectedTool])
+
   const toggleSort = (key: SortKey) => {
     setSort(current => current.key === key
       ? { key, direction: current.direction === 'descending' ? 'ascending' : 'descending' }
       : { key, direction: 'descending' })
   }
   const ariaSort = (key: SortKey): 'none' | SortDirection => sort.key === key ? sort.direction : 'none'
+  const sortKeyDown = (event: React.KeyboardEvent<HTMLTableCellElement>, key: SortKey) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return
+    event.preventDefault()
+    toggleSort(key)
+  }
   const relaxFilters = () => model.setUsageFilters({ sourceId: '', projectId: '', range: 'all' })
   const openReviewSession = (logicalSessionId: string) => {
     const params = new URLSearchParams()
@@ -128,18 +146,18 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
             {tools.length ? <table className="tool-table">
               <thead><tr>
                 <th>工具</th>
-                <th aria-sort={ariaSort('callCount')} onClick={() => toggleSort('callCount')} style={{ cursor: 'pointer' }}>调用 {sort.key === 'callCount' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
-                <th aria-sort={ariaSort('sessionCount')} onClick={() => toggleSort('sessionCount')} style={{ cursor: 'pointer' }}>会话 {sort.key === 'sessionCount' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
-                <th aria-sort={ariaSort('successRate')} onClick={() => toggleSort('successRate')} style={{ cursor: 'pointer' }}>成功率 {sort.key === 'successRate' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
-                <th aria-sort={ariaSort('errorCount')} onClick={() => toggleSort('errorCount')} style={{ cursor: 'pointer' }}>失败 {sort.key === 'errorCount' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
-                <th aria-sort={ariaSort('averageDurationMs')} onClick={() => toggleSort('averageDurationMs')} style={{ cursor: 'pointer' }}>平均耗时 {sort.key === 'averageDurationMs' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
+                <th tabIndex={0} role="button" aria-sort={ariaSort('callCount')} onClick={() => toggleSort('callCount')} onKeyDown={event => sortKeyDown(event, 'callCount')} style={{ cursor: 'pointer' }}>调用 {sort.key === 'callCount' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
+                <th tabIndex={0} role="button" aria-sort={ariaSort('sessionCount')} onClick={() => toggleSort('sessionCount')} onKeyDown={event => sortKeyDown(event, 'sessionCount')} style={{ cursor: 'pointer' }}>会话 {sort.key === 'sessionCount' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
+                <th tabIndex={0} role="button" aria-sort={ariaSort('successRate')} onClick={() => toggleSort('successRate')} onKeyDown={event => sortKeyDown(event, 'successRate')} style={{ cursor: 'pointer' }}>成功率 {sort.key === 'successRate' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
+                <th tabIndex={0} role="button" aria-sort={ariaSort('errorCount')} onClick={() => toggleSort('errorCount')} onKeyDown={event => sortKeyDown(event, 'errorCount')} style={{ cursor: 'pointer' }}>失败 {sort.key === 'errorCount' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
+                <th tabIndex={0} role="button" aria-sort={ariaSort('averageDurationMs')} onClick={() => toggleSort('averageDurationMs')} onKeyDown={event => sortKeyDown(event, 'averageDurationMs')} style={{ cursor: 'pointer' }}>平均耗时 {sort.key === 'averageDurationMs' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
               </tr></thead>
               <tbody>{sortedTools.map(tool => {
                 const successRate = rateValue(tool.successCount, tool.errorCount)
                 const key = toolKey(tool.sourceIds, tool.nativeToolName)
                 const kind = toolVisualKind(tool.nativeToolName)
                 return <tr key={key} tabIndex={0} onClick={() => setSelectedToolKey(key)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedToolKey(key) } }}>
-                  <td><span className="tool-table-name"><ToolKindIcon kind={kind}/><span><b className="tool-name">{tool.nativeToolName}</b><span className="tool-source">{tool.sourceIds.join(' / ')}</span></span></span></td>
+                  <td><span className="tool-table-name"><ToolKindIcon kind={kind}/><span><b className="tool-name">{tool.nativeToolName}</b><span className="tool-source">{sourceLabels(tool.sourceIds)}</span></span></span></td>
                   <td><span className="tool-bar-cell"><span>{tool.callCount}</span><span className="metric-bar" aria-hidden="true"><i style={{ width: `${Math.max(4, tool.callCount / maxCalls * 100)}%` }}/></span></span></td>
                   <td>{tool.sessionCount}</td>
                   <td><span className="tool-rate-cell" data-rate={successRate === null ? 'unknown' : successRate >= 95 ? 'good' : successRate >= 80 ? 'mid' : 'low'}><span>{rate(tool.successCount, tool.errorCount)}</span><span className="metric-bar" aria-hidden="true"><i style={{ width: `${successRate ?? 0}%` }}/></span></span></td>
@@ -183,7 +201,7 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
       <button className="tool-drawer-scrim" onClick={() => setSelectedToolKey(null)} aria-label="关闭工具详情" />
       <aside className="tool-drill-drawer" aria-label="工具详情">
         <header className="tool-drill-head">
-          <div><span className="eyebrow">工具详情</span><h2 className="tool-drawer-title"><ToolKindIcon kind={toolVisualKind(selectedTool.nativeToolName)}/>{selectedTool.nativeToolName}</h2><span className="tool-source">{selectedTool.sourceIds.join(' / ')}</span></div>
+          <div><span className="eyebrow">工具详情</span><h2 className="tool-drawer-title"><ToolKindIcon kind={toolVisualKind(selectedTool.nativeToolName)}/>{selectedTool.nativeToolName}</h2><span className="tool-source">{sourceLabels(selectedTool.sourceIds)}</span></div>
           <button className="icon-button" onClick={() => setSelectedToolKey(null)} aria-label="关闭工具详情">×</button>
         </header>
         <div className="tool-drill-body">
@@ -203,7 +221,7 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
                 const label = summary?.title ?? summary?.preview ?? `会话 ${shortSessionId(session.logicalSessionId)}`
                 const max = selectedTool.sessions[0]?.callCount ?? 1
                 return <button key={session.logicalSessionId} className="tool-session-link" onClick={() => openReviewSession(session.logicalSessionId)} title={label}>
-                  <span className="tool-session-copy"><b>{label}</b><small>{summary?.sourceIds?.join(' / ') ?? selectedTool.sourceIds.join(' / ')} · {session.callCount} 次调用</small></span>
+                  <span className="tool-session-copy"><b>{label}</b><small>{sourceLabels(summary?.sourceIds ?? selectedTool.sourceIds)} · {session.callCount} 次调用</small></span>
                   <span className="metric-bar" aria-hidden="true"><i style={{ width: `${Math.max(5, session.callCount / max * 100)}%` }}/></span>
                   <span className="tool-session-open">打开 →</span>
                 </button>
