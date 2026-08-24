@@ -41,17 +41,41 @@ AgentLens 不负责执行 Agent，也不会声称可以读取模型未暴露的�
 npm install -g @z7ping/agent-lens
 
 agent-lens setup
-agent-lens start
 ```
 
 `agent-lens setup` 会完成一次性初始化：检查 Node.js 与数据目录，识别本机 Codex / Claude Code / Pi，并只为实际存在的 Codex / Claude Code 补齐 AgentLens 自己的 Hook。Pi 使用原生 History / Runtime Tail，不安装 Hook。
 
-`setup` 不会创建后台服务，也不会配置开机自启；需要查看诊断详情时仍可执行：
+初始化完成后可以选择前台或后台运行：
 
 ```bash
-agent-lens doctor
-agent-lens status
+# 前台运行，适合调试
+agent-lens start
+
+# 后台常驻，适合长期使用
+agent-lens service start
+
+# 可选：登录系统后自动运行
+agent-lens autostart enable
 ```
+
+查看状态：
+
+```bash
+agent-lens status
+agent-lens service status
+agent-lens autostart status
+agent-lens doctor
+```
+
+`setup` 只负责初始化，不会自动替用户开启后台常驻或登录自启。`service` 负责“现在是否后台运行”，`autostart` 只负责“下次登录是否自动启动”，两者互相独立。
+
+npm 后台生命周期直接使用操作系统原生的用户级托管能力：
+
+- Windows：当前用户计划任务；
+- Linux：`systemd --user`；
+- macOS：用户级 `launchd`。
+
+AgentLens 不恢复 0.x 的 PID / Service Manager 架构，也不会因为后台方式不同创建第二套 Runtime 或数据库。
 
 打开：
 
@@ -77,6 +101,14 @@ npm run dev
 npm run cli -- setup
 npm run cli -- doctor
 npm run cli -- start
+```
+
+需要测试 `service` / `autostart` 时，先生成正式发行入口，避免把临时 `tsx` 开发命令注册进系统启动项：
+
+```bash
+npm run build:dist
+npm run cli -- service status
+npm run cli -- autostart status
 ```
 
 ## Windows 桌面版
@@ -227,6 +259,8 @@ agent-lens setup [--json]
 agent-lens start
 agent-lens status [--json]
 agent-lens doctor [--json]
+agent-lens service start|stop|restart|status [--json]
+agent-lens autostart enable|disable|status [--json]
 agent-lens hook status [codex|claude|all] [--json]
 agent-lens hook install [codex|claude|all]
 agent-lens hook uninstall [codex|claude|all]
@@ -234,7 +268,7 @@ agent-lens hook uninstall [codex|claude|all]
 
 `setup` 是推荐的首次初始化入口。Hook 安装是幂等的，只修改 AgentLens 自己的 handler；同一个 Hook group 中的第三方 handler 会被保留。Codex trust hash 也只维护 AgentLens 对应条目。
 
-当前 npm CLI 尚未提供 `service` / `autostart` 命令；这两项属于后续发行 / 运维层，不会恢复 0.x PID / Service Manager 架构。
+后台生命周期由操作系统原生用户级托管器负责，AgentLens 自身不维护 PID 文件。`service restart` 也不会强行接管由 Windows 客户端或前台 CLI 所有的现有运行时。
 
 ## 一张图理解 1.0
 
