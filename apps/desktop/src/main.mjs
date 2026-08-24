@@ -56,7 +56,7 @@ function writeDaemonLog(message) {
 async function readDaemonHealth() {
   try {
     const response = await fetch(`${daemonUrl}/api/v1/health`, { signal: AbortSignal.timeout(500) })
-    if (!response.ok) return null
+    if (!response.ok && response.status !== 503) return null
     const health = await response.json()
     return health && typeof health === 'object' ? health : null
   } catch {
