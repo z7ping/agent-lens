@@ -1,0 +1,196 @@
+/*
+ * AgentLens v2.1 当前高保真原型最终对齐层。
+ *
+ * 只修正式 Web 与 docs/design/mockups/v2 的表现差异；
+ * 不改变协议、投影、采集或存储语义。保持最后加载，避免历史样式重新覆盖当前基线。
+ */
+
+/* ── 任务复盘：Inspector 与 v2 横向 Tab 一致 ── */
+.inspector-head {
+  background: var(--al-surface-raised);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.inspector-panel > .agent-scope {
+  width: 100%;
+  padding: 0 20px !important;
+  gap: 18px;
+  border-bottom: 1px solid var(--al-line);
+  background: var(--al-surface-raised);
+}
+
+.inspector-panel > .agent-scope .scope-chip {
+  position: relative;
+  height: 38px;
+  padding: 0 1px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--al-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.inspector-panel > .agent-scope .scope-chip:hover {
+  background: transparent;
+  color: var(--al-ink);
+}
+
+.inspector-panel > .agent-scope .scope-chip-active {
+  color: var(--al-accent);
+}
+
+.inspector-panel > .agent-scope .scope-chip-active::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--al-accent);
+}
+
+/* ── 工具分析：四卡 KPI 收成 v2 细线长条 ── */
+.tool-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  margin: 18px 0;
+  border-top: 1px solid var(--al-line);
+  border-bottom: 1px solid var(--al-line);
+  background: var(--al-surface);
+}
+
+.tool-summary-card {
+  min-height: 84px;
+  padding: 12px 16px;
+  border: 0;
+  border-right: 1px solid var(--al-line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.tool-summary-card:last-child {
+  border-right: 0;
+}
+
+.tool-summary-card > span {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--al-muted);
+}
+
+.tool-summary-card strong {
+  margin-top: 6px;
+  font-size: 14px;
+}
+
+.tool-summary-card small {
+  padding-top: 5px;
+  font-size: 11px;
+}
+
+.tool-table-card,
+.attributed-assets,
+.cross-agent-matrix,
+.agent-source-nav,
+.agent-card {
+  box-shadow: none;
+}
+
+/* v2 表格只保留：工具 / 调用 / 会话 / 成功率 / 失败 / 平均耗时。 */
+.tool-table th:nth-child(6),
+.tool-table td:nth-child(6) {
+  display: none;
+}
+
+.tool-table th,
+.tool-table td {
+  padding-left: 13px;
+  padding-right: 13px;
+}
+
+.tool-table tbody tr:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--al-accent) 55%, transparent);
+  outline-offset: -2px;
+}
+
+/* 工具详情：原型是横向指标条，而不是六块独立卡片。 */
+.tool-drill-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  border-top: 1px solid var(--al-line);
+  border-bottom: 1px solid var(--al-line);
+}
+
+.tool-drill-stat {
+  min-height: 64px;
+  padding: 10px 12px;
+  border: 0;
+  border-right: 1px solid var(--al-line);
+  border-radius: 0;
+  background: transparent;
+}
+
+.tool-drill-stat:nth-child(3n) {
+  border-right: 0;
+}
+
+/* ── 智能体概览：保持 v2 单来源详情，弱化卡片堆叠 ── */
+.asset-kpi {
+  border-color: transparent;
+  background: var(--al-soft-2);
+}
+
+.agent-primary-section,
+.skill-lifecycle,
+.agent-disclosures,
+.agent-secondary {
+  border-top-color: var(--al-line);
+}
+
+.capability-row {
+  align-items: flex-start;
+}
+
+.capability-row > span {
+  min-width: 0;
+  line-height: 1.55;
+  color: var(--al-muted);
+}
+
+.capability-row > b {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+@media (max-width: 760px) {
+  .tool-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tool-summary-card:nth-child(2) {
+    border-right: 0;
+  }
+
+  .tool-summary-card:nth-child(-n + 2) {
+    border-bottom: 1px solid var(--al-line);
+  }
+
+  .tool-drill-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tool-drill-stat,
+  .tool-drill-stat:nth-child(3n) {
+    border-right: 1px solid var(--al-line);
+  }
+
+  .tool-drill-stat:nth-child(2n) {
+    border-right: 0;
+  }
+}
