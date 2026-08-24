@@ -15,11 +15,11 @@ import './states.css'
 import './live-notice.css'
 import './backup.css'
 import './insights.css'
-import './typography.css'
 import './color-system.css'
 import './review-reference.css'
 import './review-message-actions.css'
 import './v2-1.css'
+import './typography.css'
 
 writeTheme(readTheme())
 void clientModel.start()
