@@ -17,6 +17,7 @@ function run(command, args) {
 
 await rm(dist, { recursive: true, force: true })
 await mkdir(resolve(dist, 'hooks'), { recursive: true })
+await mkdir(resolve(dist, 'integrations', 'hermes'), { recursive: true })
 
 await run(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'build:web'])
 
@@ -60,6 +61,11 @@ await cp(
 await cp(
   resolve(root, 'scripts/windows-hook-dispatcher.ps1'),
   resolve(dist, 'hooks/windows-hook-dispatcher.ps1'),
+)
+await cp(
+  resolve(root, 'apps/hook-hermes/plugin/agent-lens-observer'),
+  resolve(dist, 'integrations/hermes/agent-lens-observer'),
+  { recursive: true },
 )
 
 for (const path of [
