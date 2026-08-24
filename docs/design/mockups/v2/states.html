@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>状态与引导 · AgentLens v2 融合稿</title>
+<title>状态与引导 · AgentLens v2.1</title>
 <link rel="stylesheet" href="assets/tokens.css">
 <link rel="stylesheet" href="assets/base.css">
 </head>
@@ -18,146 +18,83 @@
         <a class="nav-item" href="insights.html">使用洞察</a>
         <a class="nav-item nav-group-start" href="agents.html">智能体概览</a>
         <a class="nav-item" href="backup.html">资产备份</a>
-        <a class="nav-item active" href="#">设计规范</a>
       </nav>
-      <div class="app-status"><button class="icon-button" data-theme-toggle title="切换主题" aria-label="切换主题">◐</button></div>
+      <div class="app-status">
+        <span class="status-pill"><span class="live-dot"></span>运行正常</span>
+        <button class="icon-button" data-theme-toggle title="切换主题" aria-label="切换主题">◐</button>
+      </div>
     </div>
   </header>
 
   <div class="page-scroll">
     <div class="page-content">
-      <header class="page-heading"><div><span class="eyebrow">全局规范</span><h1>状态与引导</h1><p>按用途分组：加载与反馈 / 空状态 / 错误与实时 / 首次运行。每个状态都给出结论和下一步动作。</p></div></header>
+      <header class="page-heading"><div><span class="eyebrow">全局规范</span><h1>状态与首次运行</h1><p>状态页只表达 AgentLens 可以确认的事实：检测结果、采集开关、Daemon（后台服务）、实时通道、加载结果与错误原因。不会把“未观察到”推断成“未安装”。</p></div></header>
 
       <div class="state-groups">
-        <!-- 组 1：加载与反馈 -->
         <section class="state-group">
-          <div class="state-group-head"><h2>加载与进行态</h2><p>骨架屏替代文字加载；进行中的工作保持可见。</p></div>
+          <div class="state-group-head"><h2>加载与进行态</h2><p>首屏和详情加载使用骨架屏；分页和实时更新保持阅读连续性。</p></div>
           <div class="state-demo">
-            <div><h3>会话列表骨架屏</h3><p class="state-desc">首屏加载时替换“加载会话…”文字，避免跳动。</p></div>
-            <div class="state-surface" style="display:flex;flex-direction:column;gap:9px;padding:6px 0">
-              <div style="display:flex;gap:10px;align-items:center"><span class="sk" style="width:9px;height:9px;border-radius:99px"></span><span class="sk" style="width:64px;height:11px"></span><span class="sk" style="width:52px;height:11px;margin-left:auto"></span></div>
-              <span class="sk" style="height:12px;width:82%"></span>
-              <span class="sk" style="height:12px;width:58%"></span>
-              <div style="height:6px"></div>
-              <div style="display:flex;gap:10px;align-items:center"><span class="sk" style="width:9px;height:9px;border-radius:99px"></span><span class="sk" style="width:70px;height:11px"></span><span class="sk" style="width:44px;height:11px;margin-left:auto"></span></div>
-              <span class="sk" style="height:12px;width:74%"></span>
-              <span class="sk" style="height:12px;width:49%"></span>
+            <div><h3>会话列表骨架屏</h3><p class="state-desc">保留列表宽度和三层信息结构，避免加载完成后跳动。</p></div>
+            <div class="state-surface" style="display:flex;flex-direction:column;gap:9px;padding:8px 0">
+              <div style="display:flex;gap:10px;align-items:center"><span class="sk" style="width:9px;height:9px;border-radius:99px"></span><span class="sk" style="width:66px;height:11px"></span><span class="sk" style="width:48px;height:11px;margin-left:auto"></span></div>
+              <span class="sk" style="height:13px;width:82%"></span><span class="sk" style="height:11px;width:58%"></span>
+              <div style="height:4px"></div>
+              <div style="display:flex;gap:10px;align-items:center"><span class="sk" style="width:9px;height:9px;border-radius:99px"></span><span class="sk" style="width:58px;height:11px"></span><span class="sk" style="width:52px;height:11px;margin-left:auto"></span></div>
+              <span class="sk" style="height:13px;width:74%"></span><span class="sk" style="height:11px;width:49%"></span>
             </div>
           </div>
           <div class="state-demo">
-            <div><h3>详情阅读器骨架屏</h3><p class="state-desc">头区 + 指标条 + 前两个轮次块的占位。</p></div>
-            <div class="state-surface" style="display:flex;flex-direction:column;gap:10px;padding:6px 0">
-              <span class="sk" style="height:18px;width:46%"></span>
-              <span class="sk" style="height:11px;width:30%"></span>
+            <div><h3>详情加载与分页</h3><p class="state-desc">详情使用结构化骨架；长会话加载更多轮次时不阻断当前阅读。</p></div>
+            <div class="state-surface" style="display:flex;flex-direction:column;gap:10px;padding:8px 0">
+              <span class="sk" style="height:18px;width:46%"></span><span class="sk" style="height:11px;width:30%"></span>
               <div style="display:flex;gap:8px"><span class="sk" style="height:52px;flex:1;border-radius:10px"></span><span class="sk" style="height:52px;flex:1;border-radius:10px"></span><span class="sk" style="height:52px;flex:1;border-radius:10px"></span></div>
               <span class="sk" style="height:68px;width:88%;border-radius:12px"></span>
-              <span class="sk" style="height:38px;width:76%;border-radius:10px"></span>
-            </div>
-          </div>
-          <div class="state-demo">
-            <div><h3>分页进行态</h3><p class="state-desc">按钮禁用 + 哨兵文案；失败时可重试。</p></div>
-            <div class="state-surface">
-              <button class="load-more" disabled style="width:auto;padding:0 18px">加载中…</button>
-              <div class="sentinel" style="text-align:left;padding:14px 0 0">正在加载更早轮次…（失败时变为「加载失败 · 重试」按钮）</div>
+              <div class="sentinel" style="text-align:left;padding:10px 0 0">正在加载后续轮次… · 失败时提供「加载失败 · 重试」</div>
             </div>
           </div>
         </section>
 
-        <!-- 组 2：空状态 -->
         <section class="state-group">
-          <div class="state-group-head"><h2>空状态</h2><p>结论句 + 原因句 + 行动区；行动区永远给出可复制命令或出口按钮。</p></div>
+          <div class="state-group-head"><h2>空状态</h2><p>结论 + 原因 + 下一步，不把未知状态写成否定事实。</p></div>
           <div class="state-demo">
-            <div><h3>无匹配会话</h3><p class="state-desc">任务复盘 · 筛选过严或尚无数据。</p></div>
-            <div class="state-surface empty-box">
-              <div class="empty-icon">⌕</div>
-              <h4>没有匹配的会话</h4>
-              <p>当前筛选范围没有会话。试试放宽时间范围，或安装 Hook 开始捕获实时会话。</p>
-              <div class="ds-row" style="justify-content:center">
-                <button class="btn">放宽筛选条件</button>
-                <span class="cmd-row"><code>agent-lens hook install all</code><button class="copy-link" data-copy="agent-lens hook install all">复制</button></span>
-              </div>
-            </div>
+            <div><h3>没有匹配的会话</h3><p class="state-desc">筛选过严时优先提供“放宽筛选条件”。</p></div>
+            <div class="state-surface empty-box"><div class="empty-icon">⌕</div><h4>没有匹配的会话</h4><p>当前筛选范围没有会话。可以先放宽时间、项目、智能体或状态筛选，再继续查找。</p><button class="btn">放宽筛选条件</button></div>
           </div>
           <div class="state-demo">
-            <div><h3>工具分析无调用 / 资产未发现</h3><p class="state-desc">工具与资产视图共用同一模式。</p></div>
-            <div class="state-surface empty-box">
-              <div class="empty-icon">◇</div>
-              <h4>当前筛选范围没有工具调用</h4>
-              <p>放宽时间范围或清除项目筛选；确认 Hook 已安装后，新的调用会实时出现在这里。</p>
-              <button class="btn">放宽筛选条件</button>
-            </div>
+            <div><h3>未检测到受支持的智能体</h3><p class="state-desc">覆盖 Codex、Claude Code、Pi、Hermes、OpenCode；检测不到不等于没有安装。</p></div>
+            <div class="state-surface empty-box"><div class="empty-icon">◇</div><h4>未检测到受支持的智能体</h4><p>可运行诊断命令确认各来源的检测路径与采集状态。</p><span class="cmd-row"><code>agent-lens doctor</code><button class="copy-link" data-copy="agent-lens doctor">复制</button></span></div>
           </div>
           <div class="state-demo">
-            <div><h3>未检测到智能体</h3><p class="state-desc">首次运行或环境迁移后。</p></div>
-            <div class="state-surface empty-box">
-              <div class="empty-icon">◇</div>
-              <h4>未检测到受支持的智能体</h4>
-              <p>本机未发现 Codex / Claude Code / Pi 安装。安装任一智能体后重启 AgentLens 即可自动检测。</p>
-              <span class="cmd-row"><code>agent-lens doctor</code><button class="copy-link" data-copy="agent-lens doctor">复制</button></span>
-            </div>
-          </div>
-          <div class="state-demo">
-            <div><h3>轮次筛选空态 / Inspector 证据变体</h3><p class="state-desc">筛选无结果按语义给文案；证据缺失明示 missingReason。</p></div>
-            <div class="state-surface" style="display:flex;flex-direction:column;gap:12px">
-              <div style="font-size:12.5px;color:var(--al-muted)">筛选「有错误」但完整会话无错误：<b style="color:var(--al-ink-2)">完整会话没有错误轮次。</b></div>
-              <div class="ev-card">
-                <div class="row1"><b>原生日志</b><span>来源报告</span><span>可信度：中</span></div>
-                <div class="path"><code>~/.codex/sessions/2026/08/22/rollout-….jsonl</code></div>
-                <div class="ev-miss">证据信息不完整：来源未记录本次调用的输出结果</div>
-              </div>
-              <div class="ev-empty">无证据 —— 该事实暂无任何采集路径支撑</div>
-            </div>
+            <div><h3>无证据</h3><p class="state-desc">Evidence（证据）缺失时直接说明，不推断采集来源。</p></div>
+            <div class="state-surface"><div class="ev-card"><div class="row1"><b>原生日志</b><span>来源报告</span><span>可信度：中</span></div><div class="path"><code>~/.codex/sessions/…</code></div><div class="ev-miss">证据信息不完整：来源未记录本次调用的输出结果</div></div><div class="ev-empty" style="margin-top:10px">无证据 —— 该事实暂无任何采集路径支撑</div></div>
           </div>
         </section>
 
-        <!-- 组 3：错误与实时 -->
         <section class="state-group">
-          <div class="state-group-head"><h2>错误与实时连接</h2><p>保留原始错误原因；SSE 断开不打断阅读。</p></div>
+          <div class="state-group-head"><h2>错误与实时连接</h2><p>错误保留真实原因；实时通道断开时不遮挡页面。</p></div>
           <div class="state-demo">
-            <div><h3>页级错误横幅</h3><p class="state-desc">连续失败时提示 doctor。</p></div>
-            <div class="state-surface page-error">
-              <span style="flex:1;min-width:200px">无法加载会话详情：connection refused (127.0.0.1:56789)</span>
-              <button class="btn small primary">重试</button>
-              <button class="btn small">运行 agent-lens doctor</button>
-            </div>
+            <div><h3>页级错误</h3><p class="state-desc">当前页面可重试，并给出统一诊断入口。</p></div>
+            <div class="state-surface page-error"><span style="flex:1;min-width:200px">无法加载当前数据：保留后台返回的原始错误原因</span><button class="btn small primary">重试</button><span class="cmd-row"><code>agent-lens doctor</code><button class="copy-link" data-copy="agent-lens doctor">复制</button></span></div>
           </div>
           <div class="state-demo">
-            <div><h3>SSE 断开横幅</h3><p class="state-desc">Header 之下，重连成功自动消失。</p></div>
-            <div class="state-surface" style="padding:0">
-              <div class="sse-banner">⚠ 实时连接已断开 · 正在重连（第 2 次）<small>数据可能滞后</small></div>
-              <div style="padding:12px;font-size:12px;color:var(--al-muted)">页面内容保持可读、可滚动，不弹窗打断。</div>
-            </div>
+            <div><h3>实时通道断开</h3><p class="state-desc">Header 下方显示状态；页面内容仍可读、可滚动，恢复连接后自动继续接收。</p></div>
+            <div class="state-surface" style="padding:0"><div class="sse-banner"><span class="live-dot"></span>实时通道已断开<small>页面保留当前内容；重新连接后继续接收新数据。</small></div><div style="padding:12px;font-size:12px;color:var(--al-muted)">不会弹窗打断正在进行的任务复盘。</div></div>
           </div>
           <div class="state-demo">
-            <div><h3>后台视图新数据</h3><p class="state-desc">非当前视图只提示，由用户显式刷新（AGENTS.md §9）。</p></div>
-            <div class="state-surface" style="padding:4px 0">
-              <div style="display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--al-line);padding-bottom:8px;font-size:13px">
-                <span style="position:relative;color:var(--al-ink)">任务复盘<span class="nav-dot" style="top:-5px;right:-11px"></span></span>
-                <span style="position:relative;color:var(--al-accent);font-weight:650">工具分析<span class="nav-dot" style="top:-5px;right:-10px;background:var(--al-danger)"></span></span>
-                <span style="color:var(--al-muted)">智能体概览</span>
-              </div>
-              <div style="margin-top:11px;display:flex;align-items:center;gap:10px">
-                <span class="badge info">工具有新数据</span>
-                <span style="font-size:11.5px;color:var(--al-muted)">来自 2 个进行中的会话</span>
-                <button class="btn small" style="margin-left:auto">↻ 刷新查看</button>
-              </div>
-            </div>
+            <div><h3>后台页面有新数据</h3><p class="state-desc">导航显示圆点，当前页面顶部出现“刷新查看”；不会自动改变用户正在看的内容。</p></div>
+            <div class="state-surface" style="padding:8px 0"><div style="display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--al-line);padding-bottom:8px;font-size:13px"><span>任务复盘</span><span style="position:relative;color:var(--al-accent);font-weight:650">工具分析<span class="nav-dot" style="top:-5px;right:-10px"></span></span><span>智能体概览</span></div><div style="margin-top:11px;display:flex;align-items:center;gap:10px"><span class="badge info">工具分析有新数据</span><button class="btn small" style="margin-left:auto">刷新查看</button></div></div>
           </div>
         </section>
 
-        <!-- 组 4：首次运行引导 -->
         <section class="state-group">
-          <div class="state-group-head"><h2>首次运行引导</h2><p>三步 checklist；全部完成后自动消失。</p></div>
+          <div class="state-group-head"><h2>首次运行三步</h2><p>检测来源 → 启用采集并确认运行 → 产生可复盘会话。Hook 属于具体来源的采集实现，不单独暴露为产品步骤。</p></div>
           <div class="state-demo">
-            <div><h3>三步 Checklist</h3><p class="state-desc">检测 → Hook → 数据流入。</p></div>
-            <div class="state-surface">
-              <div class="steps">
-                <div class="step done"><span class="no">✓</span><div class="bd"><b>检测智能体</b><p>已发现 Codex、Claude Code、Pi 共 3 个安装</p></div></div>
-                <div class="step pending"><span class="no">2</span><div class="bd"><b>安装实时 Hook</b><p>Codex 已装；Claude Code 待安装</p>
-                  <span class="cmd-row" style="margin-top:7px"><code>agent-lens hook install claude</code><button class="copy-link" data-copy="agent-lens hook install claude">复制</button></span></div></div>
-                <div class="step done"><span class="no">✓</span><div class="bd"><b>等待数据流入</b><p>128 条 Canonical Observation 已入库 · SSE 已连接</p></div></div>
-              </div>
-            </div>
+            <div><h3>三步引导</h3><p class="state-desc">每一步只根据真实状态完成；首条会话进入后自动消失。</p></div>
+            <div class="state-surface"><div class="steps">
+              <div class="step done"><span class="no">✓</span><div class="bd"><b>检测智能体</b><p>已检测到 3 个受支持的智能体</p></div></div>
+              <div class="step pending"><span class="no">2</span><div class="bd"><b>启用采集并确认运行</b><p>当前有 1 个来源允许采集；后台服务正常，实时数据通道暂未连接</p><span class="cmd-row" style="margin-top:7px"><code>agent-lens doctor</code><button class="copy-link" data-copy="agent-lens doctor">复制</button></span></div></div>
+              <div class="step pending"><span class="no">3</span><div class="bd"><b>产生一条可复盘会话</b><p>在已启用采集的智能体中开始一次任务</p></div></div>
+            </div></div>
           </div>
         </section>
       </div>
