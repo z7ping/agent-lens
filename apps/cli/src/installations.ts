@@ -1,5 +1,10 @@
-import { existsSync } from 'node:fs'
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  writeFileSync,
+} from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -45,11 +50,11 @@ export function installationPath(kind: InstallationKind, homeDir = homedir()): s
   return join(installationsDir(homeDir), `${kind}.json`)
 }
 
-async function atomicWrite(path: string, content: string): Promise<void> {
-  await mkdir(dirname(path), { recursive: true })
+function atomicWriteSync(path: string, content: string): void {
+  mkdirSync(dirname(path), { recursive: true })
   const temporary = `${path}.${randomUUID()}.tmp`
-  await writeFile(temporary, content, { encoding: 'utf8', mode: 0o600 })
-  await rename(temporary, path)
+  writeFileSync(temporary, content, { encoding: 'utf8', mode: 0o600 })
+  renameSync(temporary, path)
 }
 
 function isInstallationRecord(value: unknown, kind: InstallationKind): value is InstallationRecord {
@@ -65,9 +70,9 @@ function isInstallationRecord(value: unknown, kind: InstallationKind): value is 
     && typeof record.updatedAt === 'string'
 }
 
-async function readRecord(kind: InstallationKind, homeDir?: string): Promise<InstallationRecord | null> {
+function readRecordSync(kind: InstallationKind, homeDir?: string): InstallationRecord | null {
   try {
-    const parsed = JSON.parse(await readFile(installationPath(kind, homeDir), 'utf8')) as unknown
+    const parsed = JSON.parse(readFileSync(installationPath(kind, homeDir), 'utf8')) as unknown
     return isInstallationRecord(parsed, kind) ? parsed : null
   } catch {
     return null
@@ -83,8 +88,8 @@ function validateRecord(record: InstallationRecord | null): { valid: boolean; re
   return { valid: true }
 }
 
-export async function registerInstallation(input: RegisterInstallationInput): Promise<InstallationRecord> {
-  const previous = await readRecord(input.kind, input.homeDir)
+export function registerInstallationSync(input: RegisterInstallationInput): InstallationRecord {
+  const previous = readRecordSync(input.kind, input.homeDir)
   const now = new Date().toISOString()
   const record: InstallationRecord = {
     schemaVersion: 1,
@@ -96,25 +101,38 @@ export async function registerInstallation(input: RegisterInstallationInput): Pr
     registeredAt: previous?.registeredAt ?? now,
     updatedAt: now,
   }
-  await atomicWrite(installationPath(input.kind, input.homeDir), `${JSON.stringify(record, null, 2)}\n`)
+  atomicWriteSync(installationPath(input.kind, input.homeDir), `${JSON.stringify(record, null, 2)}\n`)
   return record
 }
 
-export async function getInstallationStatus(kind: InstallationKind, homeDir?: string): Promise<InstallationStatus> {
-  const record = await readRecord(kind, homeDir)
+export function getInstallationStatusSync(kind: InstallationKind, homeDir?: string): InstallationStatus {
+  const record = readRecordSync(kind, homeDir)
   const validity = validateRecord(record)
   return { kind, record, ...validity }
 }
 
+export function listInstallationStatusSync(homeDir?: string): InstallationStatus[] {
+  return [
+    getInstallationStatusSync('desktop', homeDir),
+    getInstallationStatusSync('npm', homeDir),
+  ]
+}
+
+export async function registerInstallation(input: RegisterInstallationInput): Promise<InstallationRecord> {
+  return registerInstallationSync(input)
+}
+
+export async function getInstallationStatus(kind: InstallationKind, homeDir?: string): Promise<InstallationStatus> {
+  return getInstallationStatusSync(kind, homeDir)
+}
+
 export async function listInstallationStatus(homeDir?: string): Promise<InstallationStatus[]> {
-  return Promise.all([
-    getInstallationStatus('desktop', homeDir),
-    getInstallationStatus('npm', homeDir),
-  ])
+  return listInstallationStatusSync(homeDir)
 }
 
 export const installationInternals = {
   dataRoot,
   isInstallationRecord,
   validateRecord,
+  readRecordSync,
 }
