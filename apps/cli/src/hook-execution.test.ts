@@ -1,18 +1,17 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { windowsHookCommand } from './hook-execution'
+import { windowsDispatcherCommand } from './hook-execution'
 
-test('Windows Hook 命令通过隐藏 PowerShell 调起 Node Hook', () => {
-  const command = windowsHookCommand(
-    'C:\\Program Files\\nodejs\\node.exe',
-    'C:\\Agent Lens\\dist\\hooks\\agent-lens-hook-runner.ps1',
-    'C:\\Agent Lens\\dist\\hooks\\agent-lens-hook-codex.mjs',
-  )
+test('Windows Hook 命令固定指向用户级共享分发器', () => {
+  const dispatcher = 'C:\\Users\\tester\\.agent-lens\\1.0\\runtime\\windows-hook-dispatcher.ps1'
+  const codex = windowsDispatcherCommand(dispatcher, 'codex')
+  const claude = windowsDispatcherCommand(dispatcher, 'claude')
 
-  assert.match(command, /^powershell\.exe /)
-  assert.match(command, /-WindowStyle Hidden/)
-  assert.match(command, /-ExecutionPolicy Bypass/)
-  assert.match(command, /agent-lens-hook-runner\.ps1/)
-  assert.match(command, /agent-lens-hook-codex\.mjs/)
-  assert.match(command, /"C:\\Program Files\\nodejs\\node\.exe"/)
+  assert.match(codex, /^powershell\.exe /)
+  assert.match(codex, /-WindowStyle Hidden/)
+  assert.match(codex, /-ExecutionPolicy Bypass/)
+  assert.match(codex, /windows-hook-dispatcher\.ps1/)
+  assert.match(codex, /agent-lens-hook-codex$/)
+  assert.match(claude, /agent-lens-hook-claude$/)
+  assert.doesNotMatch(codex, /node\.exe/)
 })
