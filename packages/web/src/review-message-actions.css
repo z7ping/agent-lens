@@ -66,6 +66,13 @@
   border-top-color: color-mix(in srgb, var(--al-accent) 18%, var(--al-line));
 }
 
+/* 长会话滚动时保持 sticky 轮次栏为不透明表面，避免背景模糊持续触发合成重绘。 */
+.review-page .round-nav {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: var(--al-surface);
+}
+
 @media (max-width: 640px) {
   .review-page .chat-bubble .markdown-message-actions,
   .review-page .chat-bubble > .chat-actions {
