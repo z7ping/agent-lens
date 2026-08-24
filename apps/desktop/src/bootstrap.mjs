@@ -1,2 +1,2 @@
-import './integration.mjs'
 await import('./main.mjs')
+await import('./integration.mjs')
