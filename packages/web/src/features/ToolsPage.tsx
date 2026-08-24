@@ -5,6 +5,7 @@ import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
 import { AgentScope } from '../components/AgentScope'
 import { EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from '../components/StateViews'
+import { ToolKindIcon, toolVisualKind } from '../components/ToolKindIcon'
 
 function duration(ms: number): string {
   if (ms <= 0) return '未观察到'
@@ -136,8 +137,9 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
               <tbody>{sortedTools.map(tool => {
                 const successRate = rateValue(tool.successCount, tool.errorCount)
                 const key = toolKey(tool.sourceIds, tool.nativeToolName)
+                const kind = toolVisualKind(tool.nativeToolName)
                 return <tr key={key} tabIndex={0} onClick={() => setSelectedToolKey(key)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedToolKey(key) } }}>
-                  <td><b className="tool-name">{tool.nativeToolName}</b><span className="tool-source">{tool.sourceIds.join(' / ')}</span></td>
+                  <td><span className="tool-table-name"><ToolKindIcon kind={kind}/><span><b className="tool-name">{tool.nativeToolName}</b><span className="tool-source">{tool.sourceIds.join(' / ')}</span></span></span></td>
                   <td><span className="tool-bar-cell"><span>{tool.callCount}</span><span className="metric-bar" aria-hidden="true"><i style={{ width: `${Math.max(4, tool.callCount / maxCalls * 100)}%` }}/></span></span></td>
                   <td>{tool.sessionCount}</td>
                   <td><span className="tool-rate-cell" data-rate={successRate === null ? 'unknown' : successRate >= 95 ? 'good' : successRate >= 80 ? 'mid' : 'low'}><span>{rate(tool.successCount, tool.errorCount)}</span><span className="metric-bar" aria-hidden="true"><i style={{ width: `${successRate ?? 0}%` }}/></span></span></td>
@@ -181,7 +183,7 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
       <button className="tool-drawer-scrim" onClick={() => setSelectedToolKey(null)} aria-label="关闭工具详情" />
       <aside className="tool-drill-drawer" aria-label="工具详情">
         <header className="tool-drill-head">
-          <div><span className="eyebrow">工具详情</span><h2>{selectedTool.nativeToolName}</h2><span className="tool-source">{selectedTool.sourceIds.join(' / ')}</span></div>
+          <div><span className="eyebrow">工具详情</span><h2 className="tool-drawer-title"><ToolKindIcon kind={toolVisualKind(selectedTool.nativeToolName)}/>{selectedTool.nativeToolName}</h2><span className="tool-source">{selectedTool.sourceIds.join(' / ')}</span></div>
           <button className="icon-button" onClick={() => setSelectedToolKey(null)} aria-label="关闭工具详情">×</button>
         </header>
         <div className="tool-drill-body">
