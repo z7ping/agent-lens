@@ -180,7 +180,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
             })}
           </nav>
           <div className="app-status">
-            <span className={`status-pill ${statusHealthy ? 'status-pill-online' : snapshot.health ? 'status-pill-warn' : ''}`} title={healthTitle}>
+            <span className={`status-pill status-tip ${statusHealthy ? 'status-pill-online' : snapshot.health ? 'status-pill-warn' : ''}`} data-tip={healthTitle} aria-label={healthTitle}>
               <span className={`live-dot ${statusHealthy ? 'live-dot-online' : 'live-dot-waiting'}`} />
               <span>{healthLabel}</span>
             </span>
