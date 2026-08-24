@@ -35,7 +35,7 @@ Desktop 不是另一套 Runtime，npm 也不是 Desktop 的安装前置条件。
 ~/.agent-lens/1.0/
 ```
 
-包括数据库、durable inbox、Vault / Backup 等 1.0 数据。
+包括数据库、durable inbox、Vault / Backup、运行时偏好和安装登记。
 
 不得因为发行方式不同创建互不相容的数据库或观测事实副本。
 
@@ -146,7 +146,7 @@ mode  = managed
 
 ### 8. Windows npm 后台任务必须避免可见控制台窗口
 
-Windows 用户级计划任务不直接把 `node.exe` 作为任务动作，而是执行隐藏 PowerShell，再由 PowerShell启动正式 `service run`：
+Windows 用户级计划任务不直接把 `node.exe` 作为任务动作，而是执行隐藏 PowerShell，再由 PowerShell 启动正式 `service run`：
 
 ```text
 Task Scheduler
@@ -159,40 +159,67 @@ Task Scheduler
 
 `service status` / `status` / `doctor` 必须能够判断当前计划任务定义是否包含隐藏窗口参数。较早版本创建的直接 `node.exe` 任务不能被误报为“无窗口已完成”；重新执行 `agent-lens service start` 会按当前定义刷新任务。
 
-### 9. Hook 与发行方式解耦
+### 9. npm 与 Desktop 使用可失效自愈的安装登记
 
-Hook 仍然只是被动采集 Shim：
+双发行不能依赖某一种安装器的卸载回调作为事实来源。npm 7+ 不提供可用的 package uninstall lifecycle，因此 `npm uninstall` 后 AgentLens 不能假设自己一定收到清理事件。
+
+1.0 使用用户级安装登记：
 
 ```text
-Native Hook -> sanitize -> durable inbox
+~/.agent-lens/1.0/installations/
+  npm.json
+  desktop.json
 ```
 
-Hook 不依赖 Daemon 是否正在运行，也不负责拉起 Daemon。
+登记只记录发行 / 运维信息，例如：
 
-npm 与 Desktop 可以使用不同的 Hook 可执行入口，但必须写入相同的 1.0 durable inbox 格式。卸载一种发行方式时，如果另一种发行仍存在，不得破坏仍有效的 AgentLens Hook 链路。
+- 发行类型；
+- 版本；
+- 可执行入口；
+- Hook 目录；
+- Desktop 是否需要 `ELECTRON_RUN_AS_NODE`。
 
-Windows npm 发行允许增加一个极小的无窗口 Hook 执行包装：
+登记文件本身不是“已安装”的最终事实。每次使用前都必须验证：
+
+- executable 是否真实存在；
+- HookRoot 是否真实存在；
+- Codex / Claude Hook 脚本是否真实存在。
+
+路径已经消失的登记立即视为失效，不要求先删除 JSON。因此直接卸载 npm、直接卸载 Desktop、安装目录被移动等情况都不会让陈旧登记长期阻塞另一种发行方式。
+
+### 10. Windows Hook 使用稳定的共享分发器
+
+Windows Hook 配置不直接绑定 npm 安装目录，也不直接绑定 Desktop 安装目录。正式入口固定为用户数据目录中的共享分发器：
 
 ```text
 Native Hook
-  -> powershell.exe -WindowStyle Hidden
-  -> agent-lens-hook-runner.ps1
-  -> ProcessStartInfo(CreateNoWindow=true)
-  -> Node Hook
+  -> ~/.agent-lens/1.0/runtime/windows-hook-dispatcher.ps1
+  -> installations/desktop.json + npm.json
+  -> 验证真实安装文件
+  -> 优先 Desktop，失败则 npm
+  -> CreateNoWindow
+  -> 对应 Node / Electron-as-Node Hook
   -> durable inbox
 ```
 
-这个 Hook Runner 的边界必须保持严格：
+共享分发器的核心语义是：
 
-- 只负责启动子进程；
+1. Desktop 与 npm 都有效时优先 Desktop，因为客户端是自包含发行，不依赖外部 Node 安装；
+2. Desktop 登记存在但文件已被卸载时，立刻跳过并回退 npm；
+3. npm 被卸载而 Desktop 仍有效时，立刻使用 Desktop；
+4. 两种发行都无效时，中性退出，不阻断上游 Agent Hook；
+5. 不需要为了发行切换反复重写 Codex / Claude Hook 配置。
+
+Desktop 正式包把 `runtime/hooks` 解包到外部进程可访问的位置，并在启动后登记自身。只对本机实际存在的 Codex / Claude Code 修复 AgentLens 自己的 Hook；Pi 继续使用原生 History / Runtime Tail。
+
+共享分发器和旧无窗口 Hook Runner 都属于执行包装，不得扩展成业务 Runtime：
+
 - 不解析业务事件；
 - 不访问 Core、SQLite、HTTP 或 Daemon；
-- 不改变 stdin / stdout 的语义路径；
+- 不改变 stdin / stdout 语义路径；
 - AgentLens 采集失败不得阻断上游 Agent Hook 流程。
 
-因此它不是新的 Runtime，也不是 0.x Service Manager 的回归。
-
-### 10. 诊断必须同时观察 Daemon 与系统托管
+### 11. 诊断必须同时观察 Daemon 与系统托管
 
 `agent-lens status` 不能只回答端口是否在线。它还需要报告：
 
@@ -209,11 +236,11 @@ Native Hook
 - `owner=service` 与系统托管状态是否一致；
 - 系统托管显示运行但 Health 不可达等不一致；
 - Windows 是否仍保留旧的可见后台任务定义；
-- Windows 正式发行包是否包含无窗口 Hook Runner。
+- Windows 正式发行包是否包含共享无窗口 Hook 分发器。
 
 诊断信息属于运维事实，不进入 Canonical Observation。
 
-### 11. 版本与兼容检查优先于抢占
+### 12. 版本与兼容检查优先于抢占
 
 双发行共存时可能出现 npm 与 Desktop 版本不同。启动方必须优先检查已有 Daemon 的 Protocol / Runtime Compatibility。
 
@@ -228,9 +255,10 @@ Native Hook
 - npm 与 Desktop 都可以长期独立使用；
 - npm 在 Windows / Linux / macOS 都有用户级后台常驻入口；
 - 同机安装两种发行方式不会天然导致双 Daemon；
+- Hook 配置不再绑定某个易消失的安装路径；
+- 直接卸载任一种发行后，共享分发器可以立即跳过陈旧登记；
 - 保留 1.0 Clean Rebuild 的单 Runtime / 单事实链；
 - 恢复 0.x 的“长期无感运行”体验，而不恢复旧 service manager / PID 架构；
-- Desktop、CLI、Task Scheduler、systemd 与 launchd 共享同一套运行时所有权和兼容语义；
 - Windows 后台与 Hook 都有可诊断的无窗口执行路径。
 
 ### 代价
@@ -239,8 +267,8 @@ Native Hook
 - Linux 用户环境需要可用的 `systemd --user`；
 - macOS 生命周期需要在真实 LaunchAgent 环境继续做安装 / 登录 / 停止验收；
 - Windows 仍需在真实桌面登录环境确认视觉上没有控制台闪现；
-- Windows Hook Runner 增加一个极小的 PowerShell 执行包装，需要持续验证 stdin / stdout 继承和时延；
-- 双发行卸载、Hook 切换和版本不兼容需要显式测试；
+- 安装登记可能保留陈旧 JSON，但其有效性必须由真实文件验证；
+- 双发行版本差异和 Hook Provider 选择需要持续回归；
 - Windows 登录自启必须避免覆盖用户主动关闭自启的选择。
 
 ## 不做
@@ -253,7 +281,8 @@ Native Hook
 - Desktop 私有数据库；
 - npm 私有数据库；
 - Hook 自动拉起 Daemon；
-- 在 Hook Runner 中复制 Source / Canonical / Daemon 逻辑。
+- 依赖 npm uninstall lifecycle 维护安装事实；
+- 在 Hook 分发器 / Runner 中复制 Source / Canonical / Daemon 逻辑。
 
 ## 第一阶段落地状态
 
@@ -272,14 +301,19 @@ Native Hook
 11. `status / doctor` 纳入系统托管状态；
 12. Windows npm 后台任务使用隐藏 PowerShell；
 13. Windows 计划任务隐藏状态进入诊断；
-14. Windows npm 发行增加无窗口 Hook Runner；
-15. Windows CI 增加 Hook stdin -> Durable Inbox 冒烟；
-16. Windows CI 增加 `autostart -> service -> Health -> doctor -> stop` 生命周期冒烟。
+14. Windows Hook 无窗口执行进入正式发行包；
+15. 增加 `installations/npm.json` / `desktop.json` 安装登记；
+16. 安装登记使用真实文件存在性判定有效性；
+17. Windows Hook 配置切换为稳定共享分发器；
+18. Desktop 启动后登记自身并修复已检测 Agent 的 Hook；
+19. Windows CI 验证陈旧 Desktop 登记自动回退有效 npm Provider；
+20. Windows CI 增加 `autostart -> service -> Health -> doctor -> stop` 生命周期冒烟。
 
 仍需真实系统环境验收：
 
 - Windows npm 注销 / 登录后的后台启动与视觉无控制台闪现；
-- Windows Codex / Claude Code 真 Hook 场景下的无窗口表现与时延；
+- Windows Codex / Claude Code 真 Hook 场景下的共享分发器无窗口表现与时延；
+- 真实安装 Desktop + npm 后分别卸载其中一方，确认另一方 Hook 不间断；
 - Linux `systemd --user` 在常见发行版与 WSL 环境中的行为；
 - macOS LaunchAgent 登录加载、停止、重启行为；
 - npm 与 Desktop 同时启用登录自启时的竞争启动与单 Daemon 复用。
