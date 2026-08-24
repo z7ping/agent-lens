@@ -611,6 +611,7 @@ function Interaction({
   expansionStore,
   forceExpanded,
   forceRevision,
+  showRawRecords,
 }: {
   interaction: ReviewInteractionDto
   inspect(node: ReviewNodeDto): void
@@ -619,6 +620,7 @@ function Interaction({
   expansionStore: Map<string, boolean>
   forceExpanded: boolean
   forceRevision: number
+  showRawRecords: boolean
 }) {
   const [expanded, setExpanded] = useState(() => expansionStore.get(interaction.id) ?? defaultExpanded)
   const stats = useMemo(() => interactionStats(interaction), [interaction])
@@ -686,7 +688,7 @@ function Interaction({
     </summary>
     <div className="interaction-flow">{groups.map((entry, index) => {
       if (entry.type === 'tool-group') return <ToolRunGroup key={`tools-${index}`} items={entry.items} inspect={inspect}/>
-      if (entry.type === 'raw-event-group') return <RawEventGroup key={`raw-${index}`} items={entry.items} inspect={inspect}/>
+      if (entry.type === 'raw-event-group') return showRawRecords ? <RawEventGroup key={`raw-${index}`} items={entry.items} inspect={inspect}/> : null
       if (entry.type === 'message') return <MessageBubble key={entry.id} node={entry} inspect={inspect}/>
       return <EventRow key={entry.id} event={entry as ReviewEventNodeDto} inspect={inspect}/>
     })}</div>
@@ -718,6 +720,7 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
   const [roundFilterLoading, setRoundFilterLoading] = useState(false)
   const [expandAllRounds, setExpandAllRounds] = useState(false)
   const [roundExpansionRevision, setRoundExpansionRevision] = useState(0)
+  const [showRawRecords, setShowRawRecords] = useState(false)
   const detailLoadSentinelRef = useRef<HTMLDivElement>(null)
   const readerPaneRef = useRef<HTMLElement>(null)
   const followingTailRef = useRef(false)
@@ -745,6 +748,7 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
     setRoundFilterLoading(false)
     setExpandAllRounds(false)
     setRoundExpansionRevision(0)
+    setShowRawRecords(false)
     setInspect(null)
     followingTailRef.current = false
   }, [detail?.id])
@@ -921,6 +925,10 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
                 <span>{formatRange(detail.startedAt, detail.endedAt)}</span>
                 {detail.workspacePath && <code title={detail.workspacePath}>{detail.workspacePath}</code>}
               </div>
+              <div className="review-audit-controls">
+                <button className="review-audit-toggle" aria-pressed={showRawRecords} onClick={() => setShowRawRecords(value => !value)}>{showRawRecords ? '隐藏原始记录' : '显示原始记录'}</button>
+                {showRawRecords && <span>原始记录视图：补充来源原始事件与载荷；Evidence（证据）始终保持可见。</span>}
+              </div>
             </div>
             <div className="review-metrics">
               <Metric value={detail.interactionCount} label="轮次"/>
@@ -963,6 +971,7 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
                 expansionStore={roundExpansionRef.current}
                 forceExpanded={expandAllRounds}
                 forceRevision={roundExpansionRevision}
+                showRawRecords={showRawRecords}
                 inspect={setInspect}
               />
             </VirtualRoundMount>)}
