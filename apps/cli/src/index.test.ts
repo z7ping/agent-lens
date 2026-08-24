@@ -23,3 +23,31 @@ test('CLI runtime owner parser tolerates old health payloads', () => {
   assert.equal(cliInternals.runtimeOwner({ runtime: { owner: 'service' } }), 'service')
   assert.equal(cliInternals.runtimeOwner({ runtime: null }), null)
 })
+
+test('CLI setup only installs hooks for detected sources that need repair', () => {
+  const sources = [
+    { source: 'codex' as const, detected: true },
+    { source: 'claude' as const, detected: false },
+    { source: 'pi' as const, detected: true },
+  ]
+  assert.deepEqual(cliInternals.setupHookTargets(sources, [
+    { target: 'codex', installed: false, trusted: false },
+    { target: 'claude', installed: false, trusted: undefined },
+  ]), ['codex'])
+
+  assert.deepEqual(cliInternals.setupHookTargets([
+    { source: 'codex' as const, detected: true },
+    { source: 'claude' as const, detected: true },
+  ], [
+    { target: 'codex', installed: true, trusted: false },
+    { target: 'claude', installed: true, trusted: undefined },
+  ]), ['codex'])
+
+  assert.deepEqual(cliInternals.setupHookTargets([
+    { source: 'codex' as const, detected: true },
+    { source: 'claude' as const, detected: true },
+  ], [
+    { target: 'codex', installed: true, trusted: true },
+    { target: 'claude', installed: true, trusted: undefined },
+  ]), [])
+})
