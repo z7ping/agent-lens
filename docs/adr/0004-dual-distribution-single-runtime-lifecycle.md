@@ -144,7 +144,22 @@ mode  = managed
 
 源码开发模式不得把临时 `tsx` 入口注册进系统生命周期。调用 `service/autostart` 前必须先产生正式 `dist/cli.mjs`。
 
-### 8. Hook 与发行方式解耦
+### 8. Windows npm 后台任务必须避免可见控制台窗口
+
+Windows 用户级计划任务不直接把 `node.exe` 作为任务动作，而是执行隐藏 PowerShell，再由 PowerShell启动正式 `service run`：
+
+```text
+Task Scheduler
+  -> powershell.exe -WindowStyle Hidden
+  -> node dist/cli.mjs service run
+  -> dist/daemon.mjs
+```
+
+目的只是避免用户登录会话中出现 Node 控制台窗口，不改变 Runtime 所有权或 Daemon 架构。
+
+`service status` / `status` / `doctor` 必须能够判断当前计划任务定义是否包含隐藏窗口参数。较早版本创建的直接 `node.exe` 任务不能被误报为“无窗口已完成”；重新执行 `agent-lens service start` 会按当前定义刷新任务。
+
+### 9. Hook 与发行方式解耦
 
 Hook 仍然只是被动采集 Shim：
 
@@ -156,7 +171,49 @@ Hook 不依赖 Daemon 是否正在运行，也不负责拉起 Daemon。
 
 npm 与 Desktop 可以使用不同的 Hook 可执行入口，但必须写入相同的 1.0 durable inbox 格式。卸载一种发行方式时，如果另一种发行仍存在，不得破坏仍有效的 AgentLens Hook 链路。
 
-### 9. 版本与兼容检查优先于抢占
+Windows npm 发行允许增加一个极小的无窗口 Hook 执行包装：
+
+```text
+Native Hook
+  -> powershell.exe -WindowStyle Hidden
+  -> agent-lens-hook-runner.ps1
+  -> ProcessStartInfo(CreateNoWindow=true)
+  -> Node Hook
+  -> durable inbox
+```
+
+这个 Hook Runner 的边界必须保持严格：
+
+- 只负责启动子进程；
+- 不解析业务事件；
+- 不访问 Core、SQLite、HTTP 或 Daemon；
+- 不改变 stdin / stdout 的语义路径；
+- AgentLens 采集失败不得阻断上游 Agent Hook 流程。
+
+因此它不是新的 Runtime，也不是 0.x Service Manager 的回归。
+
+### 10. 诊断必须同时观察 Daemon 与系统托管
+
+`agent-lens status` 不能只回答端口是否在线。它还需要报告：
+
+- 当前 Daemon 是否在线；
+- 当前 Runtime Owner；
+- 系统托管器类型；
+- 后台定义是否注册；
+- 当前是否运行；
+- 登录自启是否启用；
+- Windows 后台任务是否为隐藏窗口定义。
+
+`agent-lens doctor` 在此基础上检查：
+
+- `owner=service` 与系统托管状态是否一致；
+- 系统托管显示运行但 Health 不可达等不一致；
+- Windows 是否仍保留旧的可见后台任务定义；
+- Windows 正式发行包是否包含无窗口 Hook Runner。
+
+诊断信息属于运维事实，不进入 Canonical Observation。
+
+### 11. 版本与兼容检查优先于抢占
 
 双发行共存时可能出现 npm 与 Desktop 版本不同。启动方必须优先检查已有 Daemon 的 Protocol / Runtime Compatibility。
 
@@ -173,14 +230,16 @@ npm 与 Desktop 可以使用不同的 Hook 可执行入口，但必须写入相�
 - 同机安装两种发行方式不会天然导致双 Daemon；
 - 保留 1.0 Clean Rebuild 的单 Runtime / 单事实链；
 - 恢复 0.x 的“长期无感运行”体验，而不恢复旧 service manager / PID 架构；
-- Desktop、CLI、Task Scheduler、systemd 与 launchd 共享同一套运行时所有权和兼容语义。
+- Desktop、CLI、Task Scheduler、systemd 与 launchd 共享同一套运行时所有权和兼容语义；
+- Windows 后台与 Hook 都有可诊断的无窗口执行路径。
 
 ### 代价
 
 - npm 后台能力依赖各操作系统原生用户级托管器；
 - Linux 用户环境需要可用的 `systemd --user`；
 - macOS 生命周期需要在真实 LaunchAgent 环境继续做安装 / 登录 / 停止验收；
-- Windows 计划任务需要继续实机确认后台 Node 进程不会造成控制台闪现；
+- Windows 仍需在真实桌面登录环境确认视觉上没有控制台闪现；
+- Windows Hook Runner 增加一个极小的 PowerShell 执行包装，需要持续验证 stdin / stdout 继承和时延；
 - 双发行卸载、Hook 切换和版本不兼容需要显式测试；
 - Windows 登录自启必须避免覆盖用户主动关闭自启的选择。
 
@@ -193,7 +252,8 @@ npm 与 Desktop 可以使用不同的 Hook 可执行入口，但必须写入相�
 - 双端口并行运行两套 1.0 Daemon；
 - Desktop 私有数据库；
 - npm 私有数据库；
-- Hook 自动拉起 Daemon。
+- Hook 自动拉起 Daemon；
+- 在 Hook Runner 中复制 Source / Canonical / Daemon 逻辑。
 
 ## 第一阶段落地状态
 
@@ -208,11 +268,18 @@ npm 与 Desktop 可以使用不同的 Hook 可执行入口，但必须写入相�
 7. Windows 使用用户级 Task Scheduler；
 8. Linux 使用 `systemd --user`；
 9. macOS 使用 LaunchAgent / `launchd`；
-10. 生命周期定义生成进入 CLI 自动测试。
+10. 生命周期定义生成进入 CLI 自动测试；
+11. `status / doctor` 纳入系统托管状态；
+12. Windows npm 后台任务使用隐藏 PowerShell；
+13. Windows 计划任务隐藏状态进入诊断；
+14. Windows npm 发行增加无窗口 Hook Runner；
+15. Windows CI 增加 Hook stdin -> Durable Inbox 冒烟；
+16. Windows CI 增加 `autostart -> service -> Health -> doctor -> stop` 生命周期冒烟。
 
 仍需真实系统环境验收：
 
-- Windows npm 后台启动 / 停止 / 登录自启 / 无控制台闪现；
+- Windows npm 注销 / 登录后的后台启动与视觉无控制台闪现；
+- Windows Codex / Claude Code 真 Hook 场景下的无窗口表现与时延；
 - Linux `systemd --user` 在常见发行版与 WSL 环境中的行为；
 - macOS LaunchAgent 登录加载、停止、重启行为；
 - npm 与 Desktop 同时启用登录自启时的竞争启动与单 Daemon 复用。
