@@ -32,6 +32,8 @@ import {
   type ReviewDetailQueryDto,
   type ReviewQueryDto,
   type ReviewStatusFilter,
+  type RuntimeModeDto,
+  type RuntimeOwnerDto,
   type SessionQueryDto,
   type TimelineDirection,
   type TimelineObservationKind,
@@ -44,6 +46,7 @@ export const AGENT_LENS_HTTP_HOST = '127.0.0.1' as const
 export const DEFAULT_AGENT_LENS_HTTP_PORT = 56789
 const MAX_JSON_BODY_BYTES = 1024 * 1024
 const MAX_BACKUP_BODY_BYTES = 256 * 1024 * 1024
+const RUNTIME_STARTED_AT = new Date().toISOString()
 const BACKUP_KINDS = new Set<BackupAssetKind>([
   'skill', 'mcp', 'plugin', 'extension', 'hook', 'memory', 'rule', 'session', 'config', 'other',
 ])
@@ -81,6 +84,15 @@ const MIME_TYPES: Record<string, string> = {
   '.svg': 'image/svg+xml',
   '.txt': 'text/plain; charset=utf-8',
   '.webp': 'image/webp',
+}
+
+function currentRuntimeOwner(): RuntimeOwnerDto {
+  const value = process.env.AGENT_LENS_RUNTIME_OWNER
+  return value === 'cli' || value === 'service' || value === 'desktop' ? value : 'unknown'
+}
+
+function currentRuntimeMode(): RuntimeModeDto {
+  return process.env.AGENT_LENS_DAEMON_MODE === 'managed' ? 'managed' : 'foreground'
 }
 
 function jsonValue(value: unknown, depth = 0): JsonValue {
@@ -481,6 +493,12 @@ export async function startHttpSurface(
         const body: HealthResponseDto = {
           status: health.ok ? 'ok' : 'degraded',
           protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
+          runtime: {
+            owner: currentRuntimeOwner(),
+            mode: currentRuntimeMode(),
+            pid: process.pid,
+            startedAt: RUNTIME_STARTED_AT,
+          },
           storage: {
             ok: health.ok,
             ...(health.schemaVersion === undefined ? {} : { schemaVersion: health.schemaVersion }),
@@ -607,6 +625,8 @@ export const httpSurfaceInternals = {
   parseReviewQuery,
   parseReviewDetailQuery,
   parseBackupCreate,
+  currentRuntimeOwner,
+  currentRuntimeMode,
   jsonValue,
   safeStaticPath,
   serveStatic,
