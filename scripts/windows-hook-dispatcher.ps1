@@ -43,20 +43,30 @@ try {
   if ($null -eq $installation) { $installation = Get-ValidInstallation 'npm' }
   if ($null -eq $installation) { exit 0 }
 
+  # PowerShell cannot safely let a child Hook inherit the same piped stdin handle while
+  # the parent synchronously waits for that child: EOF ownership becomes ambiguous and
+  # Node's `for await (process.stdin)` can wait forever. Consume the native Hook JSON
+  # first, then give the selected provider its own redirected stdin and close it
+  # explicitly so the child always observes EOF.
+  $rawInput = [Console]::In.ReadToEnd()
+
   $startInfo = New-Object System.Diagnostics.ProcessStartInfo
   $startInfo.FileName = $installation.executable
   $startInfo.Arguments = '"' + $installation.hookScript.Replace('"', '\"') + '"'
   $startInfo.UseShellExecute = $false
   $startInfo.CreateNoWindow = $true
+  $startInfo.RedirectStandardInput = $true
   if ($installation.electronRunAsNode) {
     $startInfo.EnvironmentVariables['ELECTRON_RUN_AS_NODE'] = '1'
   }
 
-  # Inherit stdin/stdout so the Agent's native Hook JSON and neutral output keep
-  # the same byte path. The dispatcher only chooses an installed provider.
+  # stdout/stderr stay inherited and therefore keep the upstream Hook flow neutral.
+  # stdin is explicitly forwarded as text because supported native Hooks provide JSON.
   $process = New-Object System.Diagnostics.Process
   $process.StartInfo = $startInfo
   [void]$process.Start()
+  $process.StandardInput.Write($rawInput)
+  $process.StandardInput.Close()
   $process.WaitForExit()
 } catch {
   # Observability must never block the upstream Agent Hook flow.
