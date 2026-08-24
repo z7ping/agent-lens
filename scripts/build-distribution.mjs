@@ -58,10 +58,6 @@ await cp(
   resolve(dist, 'hooks/agent-lens-hook-claude.mjs'),
 )
 await cp(
-  resolve(root, 'scripts/windows-hook-runner.ps1'),
-  resolve(dist, 'hooks/agent-lens-hook-runner.ps1'),
-)
-await cp(
   resolve(root, 'scripts/windows-hook-dispatcher.ps1'),
   resolve(dist, 'hooks/windows-hook-dispatcher.ps1'),
 )
