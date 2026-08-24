@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./source-runner": "./src/source-runner.ts"
+    "./source-runner": "./src/source-runner.ts",
+    "./test-support": "./src/test-support.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
