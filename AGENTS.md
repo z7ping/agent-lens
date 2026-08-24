@@ -26,6 +26,7 @@ AgentLens 1.0 是一次 **Clean Rebuild（彻底重建）**。
 2. `docs/1.0/CORE-CONTRACT.md`
 3. `docs/adr/0001-agentlens-1.0-clean-rebuild-and-cordis-runtime.md`
 4. 涉及 npm / Desktop 生命周期时阅读 `docs/adr/0004-dual-distribution-single-runtime-lifecycle.md`
+5. 涉及安装、卸载、后台、自启、Hook Provider 切换时同时阅读 `docs/1.0/DISTRIBUTION-OPERATIONS.md`
 
 如果实现与这些文档冲突，不要静默绕过 Contract。要么修复实现 Bug，要么明确发起 Contract Review / ADR。
 
@@ -141,15 +142,18 @@ Hook 子进程只是被动采集 Shim。
 
 Inbox 条目只有在成功完成 Canonical Ingestion 后才能确认并删除。
 
-Windows npm 发行允许使用无窗口 Hook 启动器，但它只能负责进程启动包装：
+Windows 正式发行使用用户级共享 Hook 分发器，但它只能负责 Provider 选择和进程启动包装：
 
-- 使用隐藏 PowerShell 和 `CreateNoWindow` 启动 Node Hook；
+- Native Hook 固定指向 `~/.agent-lens/1.0/runtime/windows-hook-dispatcher.ps1`；
+- 每次调用验证 `installations/desktop.json` / `npm.json` 对应真实文件；
+- Desktop 有效时优先 Desktop，否则回退 npm；
+- 使用隐藏 PowerShell 和 `CreateNoWindow` 启动真实 Hook；
 - 保持原 stdin / stdout 语义路径；
 - 不解析业务事件；
 - 不访问 Core、SQLite、HTTP 或 Daemon；
 - 任何失败都不得阻断上游 Agent Hook 流程。
 
-无窗口 Hook 启动器不是新的 Runtime，不得扩展成 0.x Hook Runner / Service Manager 的复刻。
+共享 Hook 分发器不是新的 Runtime，不得扩展成 0.x Hook Runner / Service Manager 的复刻。源码 `tsx` 调试入口不得登记为正式 npm Hook Provider。
 
 ## 7. Asset 规则
 
@@ -232,11 +236,19 @@ npm 后台生命周期只属于发行 / 运维层：
 - `status / doctor` 必须同时报告 Daemon 与系统托管状态，不能只看端口是否在线；
 - Windows 旧任务定义如果未确认隐藏窗口，`doctor` 应警告而不是误报正常。
 
-源码模式注册 `service` / `autostart` 前必须先生成正式 `dist/cli.mjs`，不要把临时 `tsx` 开发入口注册到系统启动项。
+双发行安装登记规则：
+
+- `~/.agent-lens/1.0/installations/npm.json` 与 `desktop.json` 只记录候选 Provider；
+- 登记有效性必须由 executable、HookRoot、Codex/Claude Hook 文件真实存在性决定；
+- 直接卸载一种发行后，陈旧 JSON 不得阻塞另一种发行；
+- 不依赖 npm uninstall lifecycle 维护安装事实；
+- Windows Native Hook 配置保持稳定共享分发入口，不因 npm/Desktop 切换反复重写。
+
+源码模式注册 `service` / `autostart` 前必须先生成正式 `dist/cli.mjs`，不要把临时 `tsx` 开发入口注册到系统启动项；源码 CLI 也不得登记为正式 npm 安装。
 
 npm 与 Windows Desktop 可以同时安装，但同一默认数据根 / 默认端口同一时刻只允许一个有效 Daemon。Desktop 只能停止自己启动的 Daemon，不得误杀 npm / service 管理的外部运行时。
 
-Electron 只负责 Windows Desktop Lifecycle。不要把 Core / Source 逻辑搬进 `apps/desktop`。
+Electron 只负责 Windows Desktop Lifecycle 与发行集成。不要把 Core / Source 逻辑搬进 `apps/desktop`。
 
 ## 11. 常用开发命令
 
@@ -271,7 +283,8 @@ Node.js 要求：`>=22.23.0`。
 - CLI 初始化目标选择与幂等性；
 - Windows / systemd / launchd 生命周期定义生成；
 - Windows 后台任务隐藏窗口定义与诊断；
-- Windows Hook 无窗口命令与 stdin -> Durable Inbox 执行链；
+- Windows 共享 Hook 分发器 stdin -> Durable Inbox 与失效 Provider 回退；
+- npm / Desktop 安装登记有效性与源码不登记边界；
 - 运行时所有权与互斥接管规则；
 - Protocol / API 行为；
 - Cordis compatibility。
@@ -291,6 +304,7 @@ same native semantic event from multiple evidence paths
 
 - `ARCHITECTURE.md`；
 - `docs/1.0/IMPLEMENTATION-STATUS.md`；
+- `docs/1.0/DISTRIBUTION-OPERATIONS.md`（发行 / 运维变化）；
 - Contract 变化时更新 `docs/1.0/CORE-CONTRACT.md`；
 - 对长期、难以逆转的决策补充 ADR。
 
