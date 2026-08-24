@@ -28,6 +28,9 @@ jobs:
         if: github.event_name == 'release'
         run: node scripts/check-release-version.mjs
 
+      - name: Verify Web presentation convergence
+        run: npm run check:web-presentation
+
       - name: Verify source
         run: |
           npm run typecheck
