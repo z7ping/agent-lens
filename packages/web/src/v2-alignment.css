@@ -30,6 +30,41 @@
   stroke-linejoin: round;
 }
 
+.status-tip {
+  position: relative;
+  cursor: help;
+}
+
+.status-tip::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 7px);
+  right: 0;
+  z-index: 95;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 24px));
+  padding: 8px 11px;
+  border: 1px solid var(--al-line);
+  border-radius: 9px;
+  background: var(--al-surface-raised);
+  box-shadow: var(--al-shadow-lg);
+  color: var(--al-ink-2);
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: left;
+  white-space: pre-line;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition: opacity .14s, transform .14s;
+}
+
+.status-tip:hover::after,
+.status-tip:focus-within::after {
+  opacity: 1;
+  transform: none;
+}
+
 /* 最终覆盖层不得重新引入小于 12px 的正常界面文字。 */
 .review-audit-toggle,
 .review-audit-controls > span,
@@ -532,6 +567,9 @@
   }
   .app-header .brand-name {
     display: none !important;
+  }
+  .status-tip::after {
+    right: -34px;
   }
 }
 
