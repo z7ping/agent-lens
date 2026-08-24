@@ -46,6 +46,71 @@
     })
   }
 
+  function syncAgentSources() {
+    var nav = document.querySelector('.source-nav')
+    if (!nav || nav.querySelector('[data-source="hermes"]')) return
+    ;[
+      { id: 'hermes', label: 'Hermes', dot: 'dot-hermes' },
+      { id: 'opencode', label: 'OpenCode', dot: 'dot-opencode' }
+    ].forEach(function (source) {
+      var button = document.createElement('button')
+      button.className = 'src-option'
+      button.dataset.source = source.id
+      button.innerHTML = '<span class="src-dot lg ' + source.dot + '"></span><span class="src-copy"><b>' + source.label + '</b><small>0 项用户资产</small><em>未检测 · 未启用采集</em></span>'
+      nav.appendChild(button)
+    })
+  }
+
+  function syncBackupPrototype() {
+    var grid = document.querySelector('.protection-grid')
+    if (grid && !grid.querySelector('[data-source="hermes"]')) {
+      ;[
+        { id: 'hermes', label: 'Hermes', dot: 'dot-hermes' },
+        { id: 'opencode', label: 'OpenCode', dot: 'dot-opencode' }
+      ].forEach(function (source) {
+        var card = document.createElement('article')
+        card.className = 'protection-card is-muted'
+        card.dataset.source = source.id
+        card.innerHTML = '<div class="protection-card-head"><span class="src-dot lg ' + source.dot + '"></span><b>' + source.label + '</b><span class="badge">未检测</span></div><div class="protection-counts"><div class="protection-count"><strong>0</strong><span>技能文件</span></div><div class="protection-count"><strong>0</strong><span>会话文件</span></div><div class="protection-count"><strong>0</strong><span>全部文件</span></div></div><div class="protection-meta"><span>MCP 0 · 插件/扩展 0</span><span>暂无路径</span></div>'
+        grid.appendChild(card)
+      })
+    }
+
+    var createButton = document.querySelector('.snapshot-create-button')
+    var builder = createButton && createButton.closest('.future-card-body')
+    if (!builder || builder.querySelector('[data-kind="plugin"]')) return
+    var safety = builder.querySelector('.safety-note')
+    if (!safety) return
+    var counts = { skill: 63, mcp: 18, session: 76, config: 11, plugin: 5, extension: 2, hook: 4, memory: 3, rule: 7, other: 1 }
+    var labels = {
+      skill: '技能',
+      mcp: 'MCP（模型上下文协议）',
+      session: '会话 / 历史',
+      config: '关键配置',
+      plugin: '插件',
+      extension: '扩展',
+      hook: '钩子',
+      memory: '记忆',
+      rule: '规则',
+      other: '其他'
+    }
+    var existing = Array.prototype.slice.call(builder.querySelectorAll('.builder-check'))
+    var existingKinds = ['skill', 'mcp', 'session', 'config']
+    existing.slice(-4).forEach(function (label, index) {
+      var kind = existingKinds[index]
+      if (!kind) return
+      label.dataset.kind = kind
+      if (!label.querySelector('small')) label.insertAdjacentHTML('beforeend', '<small>' + counts[kind] + '</small>')
+    })
+    ;['plugin', 'extension', 'hook', 'memory', 'rule', 'other'].forEach(function (kind) {
+      var label = document.createElement('label')
+      label.className = 'builder-check'
+      label.dataset.kind = kind
+      label.innerHTML = '<input type="checkbox" checked> ' + labels[kind] + '<small>' + counts[kind] + '</small>'
+      builder.insertBefore(label, safety)
+    })
+  }
+
   function applyTheme(t) {
     document.documentElement.dataset.theme = t
     renderThemeControls(t)
@@ -66,6 +131,8 @@
   document.addEventListener('DOMContentLoaded', function () {
     renderBrand()
     renderSourceDots()
+    syncAgentSources()
+    syncBackupPrototype()
     renderThemeControls(document.documentElement.dataset.theme || 'light')
     applyAudit(auditOn)
   })
