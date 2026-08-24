@@ -18,6 +18,7 @@ import './review-reference.css'
 import './review-message-actions.css'
 import './shell-responsive.css'
 import './typography.css'
+import './tokens.css'
 import './color-system.css'
 
 writeTheme(readTheme())
