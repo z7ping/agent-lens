@@ -30,7 +30,7 @@ const DEFAULT_PORT = 56789
 const MIN_NODE = [22, 23, 0] as const
 
 type CheckLevel = 'pass' | 'warn' | 'fail'
-type SourceId = 'codex' | 'claude' | 'pi'
+type SourceId = 'codex' | 'claude' | 'pi' | 'hermes' | 'opencode'
 type RuntimeOwner = 'cli' | 'service'
 type RuntimeMode = 'foreground' | 'managed'
 
@@ -166,12 +166,31 @@ function lifecycleDetail(status: LifecycleStatus): string {
   return parts.join(' · ')
 }
 
+function firstCandidate(candidates: string[]): string {
+  return candidates.find(candidate => existsSync(candidate)) ?? candidates[0]!
+}
+
 function sourceRoots(): DetectedSourceRoot[] {
-  const roots = [
-    ['codex', process.env.CODEX_HOME ?? join(homedir(), '.codex')],
-    ['claude', process.env.CLAUDE_HOME ?? join(homedir(), '.claude')],
-    ['pi', process.env.PI_HOME ?? join(homedir(), '.pi')],
-  ] as const
+  const home = homedir()
+  const hermesRoot = process.env.HERMES_HOME ?? firstCandidate(process.platform === 'win32'
+    ? [
+        join(process.env.LOCALAPPDATA ?? join(home, 'AppData', 'Local'), 'hermes'),
+        join(home, '.hermes'),
+      ]
+    : [join(home, '.hermes')])
+  const openCodeRoot = process.env.OPENCODE_HOME ?? firstCandidate(process.platform === 'win32'
+    ? [
+        join(process.env.APPDATA ?? join(home, 'AppData', 'Roaming'), 'opencode'),
+        join(home, '.local', 'share', 'opencode'),
+      ]
+    : [join(process.env.XDG_DATA_HOME ?? join(home, '.local', 'share'), 'opencode')])
+  const roots: ReadonlyArray<readonly [SourceId, string]> = [
+    ['codex', process.env.CODEX_HOME ?? join(home, '.codex')],
+    ['claude', process.env.CLAUDE_HOME ?? join(home, '.claude')],
+    ['pi', process.env.PI_HOME ?? join(home, '.pi')],
+    ['hermes', hermesRoot],
+    ['opencode', openCodeRoot],
+  ]
   return roots.map(([source, root]) => ({ source, root, detected: existsSync(root) }))
 }
 
@@ -268,7 +287,11 @@ async function setup(json: boolean): Promise<number> {
     console.log(`${hookProfile.windowsNoWindow ? '[OK]' : '[WARN]'} Windows Hook：${hookProfile.windowsNoWindow ? '已使用无窗口启动器' : '未找到无窗口启动器，将使用标准命令入口'}`)
   }
   const pi = sources.find(item => item.source === 'pi')
-  if (pi?.detected) console.log('[OK] pi：使用原生历史与运行时采集，无需安装 Hook')
+  if (pi?.detected) console.log('[OK] Pi：使用原生历史与运行时采集，无需安装 Hook')
+  const openCode = sources.find(item => item.source === 'opencode')
+  if (openCode?.detected) console.log('[OK] OpenCode：使用原生数据库历史与运行时采集，无需安装 Hook')
+  const hermes = sources.find(item => item.source === 'hermes')
+  if (hermes?.detected) console.log('[OK] Hermes：默认使用 state.db；实时 Observer 为显式启用的可选增强')
   if (health) {
     console.log(`[OK] 运行时：已在线（管理方式：${runtimeOwnerLabel(runtimeOwner(health))}）`)
     console.log(`Web：${daemonUrl('/')}`)
