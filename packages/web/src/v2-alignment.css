@@ -43,7 +43,64 @@
   font-size: 12px;
 }
 
-/* ── 任务复盘：Inspector 与 v2 横向 Tab 一致 ── */
+/* ── 任务复盘：当前 v2 阅读几何 + Inspector 横向 Tab ── */
+.review-page .review-reader {
+  max-width: 1080px;
+  padding: 20px 32px 120px;
+}
+
+.review-page .review-session-title {
+  font-size: 21px;
+  line-height: 1.4;
+}
+
+.review-page .review-metrics {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  margin-top: 13px;
+  padding: 0;
+  border-top: 1px solid var(--al-line);
+  border-bottom: 1px solid var(--al-line);
+}
+
+.review-page .review-metric,
+.review-page .review-metric:first-child,
+.review-page .review-metric:last-child {
+  display: block;
+  min-width: 96px;
+  padding: 10px 16px;
+  border: 0;
+  border-right: 1px solid var(--al-line);
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.review-page .review-metric:first-child { padding-left: 2px; }
+.review-page .review-metric:last-child { border-right: 0; }
+.review-page .review-metric[data-tone='danger'] {
+  border-color: var(--al-line);
+  background: transparent;
+}
+.review-page .review-metric[data-tone='danger'] b { color: var(--al-danger); }
+
+/* 当前稿顺序：轮次筛选 → 展开当前页 → 跳到最新。 */
+.review-page .round-nav button:nth-of-type(4) {
+  order: 2;
+  margin-left: 0;
+}
+.review-page .round-nav button:nth-of-type(5) {
+  order: 1;
+  margin-left: auto;
+}
+.review-page .round-nav button:nth-of-type(n + 6),
+.review-page .round-nav-status,
+.review-page .round-nav-live,
+.review-page .round-nav small {
+  order: 3;
+}
+
 .inspector-head {
   background: var(--al-surface-raised);
   backdrop-filter: none;
