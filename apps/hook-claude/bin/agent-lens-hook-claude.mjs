@@ -6,6 +6,15 @@ import { join } from 'node:path'
 
 const MAX_STRING = 32 * 1024
 const SENSITIVE_KEY = /(password|passwd|secret|token|api[_-]?key|authorization|cookie)/i
+const DEFAULT_ENABLED_SOURCES = ['claude-code']
+
+function sourceCaptureEnabled(sourceId, env = process.env) {
+  const raw = String(env.AGENT_LENS_ENABLED_SOURCES || '').trim()
+  const normalizedSourceId = String(sourceId || '').trim().toLowerCase()
+  if (!raw) return DEFAULT_ENABLED_SOURCES.includes(normalizedSourceId)
+  if (raw.toLowerCase() === 'none') return false
+  return raw.split(',').some(value => value.trim().toLowerCase() === normalizedSourceId)
+}
 
 function sanitize(value, depth = 0) {
   if (depth > 8) return '[max-depth]'
@@ -33,7 +42,7 @@ function sha256(value) {
 
 let raw = ''
 for await (const chunk of process.stdin) raw += chunk
-if (!raw.trim()) process.exit(0)
+if (!raw.trim() || !sourceCaptureEnabled('claude-code')) process.exit(0)
 
 try {
   const parsed = sanitize(JSON.parse(raw))

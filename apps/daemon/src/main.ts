@@ -121,6 +121,7 @@ try {
   console.info(`[AgentLens] Web/UI: http://127.0.0.1:${configuredPort} (root: ${webRoot})`)
   console.info(`[AgentLens] backup vault: ${vaultPath}`)
   console.info(`[AgentLens] capture policy: prompt=${app.context.capturePolicy.modeFor('prompt')} tool=${app.context.capturePolicy.modeFor('tool')} config=${app.context.capturePolicy.modeFor('config')} environment=${app.context.capturePolicy.modeFor('environment')}`)
+  console.info(`[AgentLens] enabled sources: ${app.context.capturePolicy.settings.enabledSources.join(', ') || '(none)'}`)
 
   const prepared = await prepareRegisteredSources(app.context, runtimeController.signal)
   logSourceFailures(prepared.failures)

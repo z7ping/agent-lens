@@ -5,6 +5,7 @@ import { join } from 'node:path'
 
 const MAX_STRING = 32 * 1024
 const SENSITIVE_KEY = /(password|passwd|secret|token|api[_-]?key|authorization|cookie)/i
+const DEFAULT_ENABLED_SOURCES = ['claude-code']
 
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex')
@@ -28,6 +29,17 @@ function sanitize(value, depth = 0) {
   return result
 }
 
+export function enabledSources(env = process.env) {
+  const raw = String(env.AGENT_LENS_ENABLED_SOURCES || '').trim()
+  if (!raw) return [...DEFAULT_ENABLED_SOURCES]
+  if (raw.toLowerCase() === 'none') return []
+  return [...new Set(raw.split(',').map(value => value.trim().toLowerCase()).filter(Boolean))]
+}
+
+export function sourceCaptureEnabled(sourceId, env = process.env) {
+  return enabledSources(env).includes(String(sourceId || '').trim().toLowerCase())
+}
+
 export function codexInboxDirectory(env = process.env) {
   return env.AGENT_LENS_CODEX_INBOX
     || join(homedir(), '.agent-lens', '1.0', 'inbox', 'codex')
@@ -38,6 +50,9 @@ export function neutralHookOutput(eventName) {
 }
 
 export async function persistCodexHookEvent(rawEvent, options = {}) {
+  const env = options.env || process.env
+  if (!sourceCaptureEnabled('codex', env)) return null
+
   const event = sanitize(rawEvent)
   const capturedAt = new Date().toISOString()
   const suppliedId = typeof event.source_event_id === 'string' && event.source_event_id
@@ -46,7 +61,7 @@ export async function persistCodexHookEvent(rawEvent, options = {}) {
       ? event.hook_invocation_id
       : randomUUID()
   const id = String(suppliedId)
-  const inbox = options.inboxDir || codexInboxDirectory(options.env)
+  const inbox = options.inboxDir || codexInboxDirectory(env)
   const fileKey = sha256(id).slice(0, 24)
   const timestampKey = capturedAt.replace(/[^0-9]/g, '')
   const finalPath = join(inbox, `${timestampKey}-${fileKey}.json`)

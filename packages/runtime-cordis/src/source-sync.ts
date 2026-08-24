@@ -46,6 +46,10 @@ function emitDetected(ctx: AgentLensContext, sourceId: string, installationId: s
   ctx.emit('source/detected', { sourceId, installationId })
 }
 
+function sourceEnabled(ctx: AgentLensContext, source: SourceDefinition): boolean {
+  return ctx.capturePolicy.isSourceEnabled(source.manifest.sourceId)
+}
+
 async function registerDetectedSource(
   ctx: AgentLensContext,
   host: Host,
@@ -67,7 +71,8 @@ export async function prepareRegisteredSources(
   abortSignal: AbortSignal,
 ): Promise<RegisteredSourcePreparation> {
   const host = await runtimeHost(ctx)
-  const batches = await Promise.all(ctx.sources.list().map(async source => {
+  const enabledSources = ctx.sources.list().filter(source => sourceEnabled(ctx, source))
+  const batches = await Promise.all(enabledSources.map(async source => {
     if (abortSignal.aborted) {
       return { targets: [], failures: [] } satisfies RegisteredSourcePreparation
     }
@@ -116,6 +121,7 @@ export async function syncRegisteredSourceHistory(
 
   for (const target of targets) {
     if (abortSignal.aborted) break
+    if (!sourceEnabled(ctx, target.source)) continue
     try {
       results.push(await runner.sync({ ...target, abortSignal }))
     } catch (error) {
@@ -144,6 +150,7 @@ export async function discoverRegisteredSourceAssets(
 
   for (const target of targets) {
     if (abortSignal.aborted) break
+    if (!sourceEnabled(ctx, target.source)) continue
     if (!target.source.discoverAssets) continue
     try {
       results.push(await runner.scan({ ...target, abortSignal }))
@@ -173,6 +180,7 @@ export async function startRegisteredSourceCapture(
 
   for (const target of targets) {
     if (abortSignal.aborted) break
+    if (!sourceEnabled(ctx, target.source)) continue
     if (!target.source.startCapture) continue
     try {
       results.push(await runner.start({ ...target, abortSignal }))

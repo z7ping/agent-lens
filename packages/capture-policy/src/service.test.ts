@@ -2,10 +2,12 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { NormalizedSourceOutput, SourceRecord } from '@agent-lens/core'
 import {
+  DEFAULT_ENABLED_SOURCES,
   DefaultCapturePolicyService,
   NOT_CAPTURED,
   REDACTED,
   capturePolicySettingsFromEnv,
+  enabledSourcesFromEnv,
 } from './service'
 
 function settings(overrides: Partial<ReturnType<typeof capturePolicySettingsFromEnv>> = {}) {
@@ -14,6 +16,7 @@ function settings(overrides: Partial<ReturnType<typeof capturePolicySettingsFrom
     tool: 'redacted' as const,
     config: 'redacted' as const,
     environment: 'off' as const,
+    enabledSources: [...DEFAULT_ENABLED_SOURCES],
     ...overrides,
   }
 }
@@ -43,13 +46,26 @@ function normalized(kind: 'message.user' | 'tool.call', payload: unknown): Norma
   }
 }
 
-test('uses conservative 0.x-compatible defaults', () => {
+test('uses conservative defaults with only Claude Code source enabled', () => {
   assert.deepEqual(capturePolicySettingsFromEnv({}), {
     prompt: 'redacted',
     tool: 'redacted',
     config: 'redacted',
     environment: 'off',
+    enabledSources: ['claude-code'],
   })
+})
+
+test('source allowlist is explicit, case-insensitive and supports none', () => {
+  assert.deepEqual(enabledSourcesFromEnv(' Codex,PI,codex, hermes '), ['codex', 'pi', 'hermes'])
+  assert.deepEqual(enabledSourcesFromEnv('none'), [])
+
+  const policy = new DefaultCapturePolicyService(settings({
+    enabledSources: ['CLAUDE-CODE', 'Codex'],
+  }))
+  assert.equal(policy.isSourceEnabled('claude-code'), true)
+  assert.equal(policy.isSourceEnabled('CODEX'), true)
+  assert.equal(policy.isSourceEnabled('pi'), false)
 })
 
 test('redacted masks credentials and local user path', () => {

@@ -9,6 +9,7 @@ export interface CapturePolicySettings {
   tool: CapturePolicyMode
   config: CapturePolicyMode
   environment: CapturePolicyMode
+  enabledSources: readonly string[]
 }
 
 export interface CaptureValueOptions {
@@ -22,16 +23,18 @@ export interface CaptureValueResult<T = unknown> {
 }
 
 /**
- * Persistence-boundary privacy contract.
+ * Capture policy contract shared by the runtime and Source runners.
  *
  * Source implementations may perform source-specific defensive cleanup, but all
  * official persistence must still pass through this service so privacy behavior
- * cannot drift between Sources.
+ * cannot drift between Sources. Source activation is checked before detection or
+ * ingestion, keeping disabled Sources outside the collection pipeline entirely.
  */
 export interface CapturePolicyService {
   readonly settings: Readonly<CapturePolicySettings>
   modeFor(scope: CapturePolicyScope): CapturePolicyMode
   isEnabled(scope: CapturePolicyScope): boolean
+  isSourceEnabled(sourceId: string): boolean
   capture<T>(scope: CapturePolicyScope, value: T, options?: CaptureValueOptions): CaptureValueResult<T>
   sanitizeSourceRecord(record: SourceRecord, normalized?: NormalizedSourceOutput): SourceRecord
   sanitizeNormalizedOutput(normalized: NormalizedSourceOutput): NormalizedSourceOutput

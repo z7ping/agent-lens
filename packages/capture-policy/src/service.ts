@@ -14,6 +14,7 @@ import type {
 
 export const REDACTED = '[已脱敏]'
 export const NOT_CAPTURED = '[未采集：隐私策略关闭]'
+export const DEFAULT_ENABLED_SOURCES = ['claude-code'] as const
 
 const DEFAULT_MAX_TEXT: Record<CapturePolicyScope, number> = {
   prompt: 20_000,
@@ -55,6 +56,21 @@ function normalizeMode(value: unknown, fallback: CapturePolicyMode): CapturePoli
     : fallback
 }
 
+function normalizeSourceId(value: unknown): string {
+  return String(value ?? '').trim().toLowerCase()
+}
+
+export function normalizeEnabledSources(values: readonly string[]): string[] {
+  return [...new Set(values.map(normalizeSourceId).filter(Boolean))]
+}
+
+export function enabledSourcesFromEnv(value: string | undefined): string[] {
+  const raw = String(value ?? '').trim()
+  if (!raw) return [...DEFAULT_ENABLED_SOURCES]
+  if (raw.toLowerCase() === 'none') return []
+  return normalizeEnabledSources(raw.split(','))
+}
+
 export function capturePolicySettingsFromEnv(
   env: Readonly<Record<string, string | undefined>>,
 ): CapturePolicySettings {
@@ -63,6 +79,7 @@ export function capturePolicySettingsFromEnv(
     tool: normalizeMode(env.AGENT_LENS_TOOL_CAPTURE, 'redacted'),
     config: normalizeMode(env.AGENT_LENS_CONFIG_CAPTURE, 'redacted'),
     environment: normalizeMode(env.AGENT_LENS_ENV_CAPTURE, 'off'),
+    enabledSources: enabledSourcesFromEnv(env.AGENT_LENS_ENABLED_SOURCES),
   }
 }
 
@@ -184,9 +201,12 @@ function structuralValue(value: unknown, maxText = 4_000): unknown {
 
 export class DefaultCapturePolicyService implements CapturePolicyService {
   readonly settings: Readonly<CapturePolicySettings>
+  private readonly enabledSourceIds: ReadonlySet<string>
 
   constructor(settings: CapturePolicySettings) {
-    this.settings = Object.freeze({ ...settings })
+    const enabledSources = Object.freeze(normalizeEnabledSources(settings.enabledSources))
+    this.settings = Object.freeze({ ...settings, enabledSources })
+    this.enabledSourceIds = new Set(enabledSources)
   }
 
   modeFor(scope: CapturePolicyScope): CapturePolicyMode {
@@ -195,6 +215,10 @@ export class DefaultCapturePolicyService implements CapturePolicyService {
 
   isEnabled(scope: CapturePolicyScope): boolean {
     return this.modeFor(scope) !== 'off'
+  }
+
+  isSourceEnabled(sourceId: string): boolean {
+    return this.enabledSourceIds.has(normalizeSourceId(sourceId))
   }
 
   capture<T>(
@@ -273,6 +297,7 @@ export class DefaultCapturePolicyService implements CapturePolicyService {
 
 export const capturePolicyInternals = {
   normalizeMode,
+  normalizeSourceId,
   isSensitiveKey,
   hardRedactText,
   privacyRedactText,

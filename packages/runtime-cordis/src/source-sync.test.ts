@@ -51,7 +51,14 @@ function sourceDefinition(
   }
 }
 
-test('prepareRegisteredSources detects each source once and isolates detection failures', async () => {
+function capturePolicy(enabledSources: string[]) {
+  const enabled = new Set(enabledSources)
+  return {
+    isSourceEnabled(sourceId: string) { return enabled.has(sourceId) },
+  }
+}
+
+test('prepareRegisteredSources detects each enabled source once and isolates detection failures', async () => {
   let goodDetections = 0
   let badDetections = 0
   const good = sourceDefinition('good', async () => {
@@ -65,6 +72,7 @@ test('prepareRegisteredSources detects each source once and isolates detection f
   const emitted: unknown[][] = []
   const ctx = {
     sources: { list: () => [good, bad] },
+    capturePolicy: capturePolicy(['good', 'bad']),
     identity: {
       async resolveHost() { return host },
       async resolveInstallation() { return installation },
@@ -82,6 +90,29 @@ test('prepareRegisteredSources detects each source once and isolates detection f
   assert.equal(prepared.failures[0]?.sourceId, 'bad')
   assert.equal(prepared.failures[0]?.stage, 'detect')
   assert.equal(emitted.length, 1)
+})
+
+test('disabled sources are filtered before detect', async () => {
+  let detections = 0
+  const disabled = sourceDefinition('disabled', async () => {
+    detections += 1
+    return [{ sourceId: 'disabled', productId: 'test-product', confidence: 'exact' }]
+  })
+  const ctx = {
+    sources: { list: () => [disabled] },
+    capturePolicy: capturePolicy([]),
+    identity: {
+      async resolveHost() { return host },
+      async resolveInstallation() { return installation },
+    },
+    emit() {},
+  } as unknown as AgentLensContext
+
+  const prepared = await prepareRegisteredSources(ctx, new AbortController().signal)
+
+  assert.equal(detections, 0)
+  assert.deepEqual(prepared.targets, [])
+  assert.deepEqual(prepared.failures, [])
 })
 
 test('history synchronization continues after one source fails', async () => {
@@ -107,6 +138,7 @@ test('history synchronization continues after one source fails', async () => {
       registerSourceCapabilities() { return { dispose() {} } },
     },
     coverage: {},
+    capturePolicy: capturePolicy(['failing', 'healthy']),
   } as unknown as AgentLensContext
 
   const settled = await syncRegisteredSourceHistory(
@@ -119,4 +151,31 @@ test('history synchronization continues after one source fails', async () => {
   assert.equal(settled.failures[0]?.sourceId, 'failing')
   assert.equal(settled.results.length, 1)
   assert.equal(settled.results[0]?.sourceId, 'healthy')
+})
+
+test('disabled prepared targets are ignored by later stages', async () => {
+  let historyReads = 0
+  const disabled = sourceDefinition('disabled', async () => [])
+  disabled.ingestHistory = async function* () {
+    historyReads += 1
+  }
+  const targets: RegisteredSourceTarget[] = [{
+    source: disabled,
+    host,
+    detected: { sourceId: 'disabled', productId: 'test-product', confidence: 'exact' },
+  }]
+  const ctx = {
+    storage: {},
+    identity: { async resolveInstallation() { return installation } },
+    observations: {},
+    capabilities: { registerSourceCapabilities() { return { dispose() {} } } },
+    coverage: {},
+    capturePolicy: capturePolicy([]),
+  } as unknown as AgentLensContext
+
+  const settled = await syncRegisteredSourceHistory(ctx, new AbortController().signal, targets)
+
+  assert.equal(historyReads, 0)
+  assert.deepEqual(settled.results, [])
+  assert.deepEqual(settled.failures, [])
 })

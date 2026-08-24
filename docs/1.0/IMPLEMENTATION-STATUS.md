@@ -2,7 +2,7 @@
 
 更新日期：2026-08-24
 
-本文只记录当前 1.0 实现事实。详细架构边界见 `ARCHITECTURE.md`、`docs/1.0/CORE-CONTRACT.md` 与 ADR；双发行运维见 `docs/1.0/DISTRIBUTION-OPERATIONS.md`。
+本文只记录当前 1.0 实现事实。详细架构边界见 `ARCHITECTURE.md`、`docs/1.0/CORE-CONTRACT.md` 与 ADR；双发行运维见 `docs/1.0/DISTRIBUTION-OPERATIONS.md`；采集边界见 `docs/1.0/CAPTURE-POLICY.md`。
 
 ## 1. Core / Runtime
 
@@ -15,7 +15,8 @@
 - Core Domain / Core Services、Repository Contract、Parser / Normalizer 与 Cordis 解耦；
 - SQLite 1.0 Repository 与 Checkpoint；
 - `SourceRecord -> normalize -> ObservationCandidate + EvidenceCandidate -> Canonical Observation + Evidence`；
-- Asset Inventory 通过 Core Contract 暴露，Projection 不直接依赖 SQLite 实现。
+- Asset Inventory 通过 Core Contract 暴露，Projection 不直接依赖 SQLite 实现；
+- 独立 `@agent-lens/capture-policy` 统一控制来源启用与持久化隐私边界。
 
 禁止恢复 0.x Adapter / Importer Runtime、旧 `timeline` / `overview_*` 规范表、旧 Service Manager / PID 架构。
 
@@ -23,36 +24,58 @@
 
 当前已经作为独立 Cordis Source Plugin 注册到 Daemon：
 
-### Codex
+- Claude Code；
+- Codex；
+- Pi；
+- Hermes；
+- OpenCode。
 
-- History；
-- Runtime Hook Durable Inbox；
-- Assets。
+**注册不等于启用采集。** 当前默认来源允许列表只有 `claude-code`。通过 `AGENT_LENS_ENABLED_SOURCES` 可以显式启用其他来源，例如：
+
+```text
+AGENT_LENS_ENABLED_SOURCES=claude-code,codex,pi,hermes,opencode
+```
+
+`AGENT_LENS_ENABLED_SOURCES=none` 可以关闭全部来源。禁用来源在 `detect()` 前就被过滤，不进入 History / Runtime / Asset 流程；后续阶段也会再次检查来源开关，避免旧 Target 或错误调用绕过门禁。
 
 ### Claude Code
 
+- 默认启用；
 - History；
 - Runtime Hook Durable Inbox；
-- Assets。
+- Assets；
+- Hook 遵守同一来源允许列表，禁用 `claude-code` 后不再写 Inbox。
+
+### Codex
+
+- 默认关闭，需显式启用 `codex`；
+- History；
+- Runtime Hook Durable Inbox；
+- Assets；
+- Hook 遵守同一来源允许列表，默认不再写 Inbox。
 
 ### Pi
 
+- 默认关闭，需显式启用 `pi`；
 - History；
 - 原生 Runtime Tail；
 - Assets。
 
 ### Hermes
 
+- 默认关闭，需显式启用 `hermes`；
 - `state.db` History；
 - `state.db` Native Tail：文件变化触发 + 周期兜底；
 - 对消息行使用 rowid + fingerprint，允许识别原地更新；
 - Skills / Plugins / MCP / Toolsets / Memories 静态资产发现；
 - 可选 Hermes `agent-lens-observer` Plugin 形成 Runtime Hook Durable Inbox Evidence；
 - Observer 只使用 Python 标准库写本地 Inbox，不访问 HTTP / SQLite / Core / Cordis，不返回行为修改指令；
+- Observer 同样遵守来源允许列表，即使用户已经显式安装 / 启用插件，未启用 `hermes` 时也不写 Inbox；
 - Hermes 第三方插件遵守显式启用模型，AgentLens 不在 `setup` 中静默启用。
 
 ### OpenCode
 
+- 默认关闭，需显式启用 `opencode`；
 - `opencode.db` History；
 - 关联 `part + message + session` 恢复对话、角色、Workspace 与工具信息；
 - 原生数据库变化驱动 Runtime Tail + 周期兜底；
@@ -61,7 +84,7 @@
 
 Hermes / OpenCode 的详细边界见 `docs/1.0/HERMES-OPENCODE-SOURCES.md`。
 
-所有 Source 继续共用 Source Runner、Identity、Observation Commit、Evidence 与 Dedup；通用 Runner 不包含按 `sourceId` 分支。
+所有启用 Source 继续共用 Source Runner、Identity、Observation Commit、Evidence 与 Dedup；通用 Runner 不包含按具体 `sourceId` 分支，只通过 `CapturePolicyService.isSourceEnabled(sourceId)` 执行统一门禁。
 
 ## 3. Projections / Protocol
 
@@ -214,6 +237,7 @@ Codex / Claude：
 
 ```text
 Native Hook
+-> source allowlist
 -> passive shim
 -> Durable Inbox
 -> Source.startCapture()
@@ -224,18 +248,22 @@ Hermes 可选 Observer：
 
 ```text
 Hermes Plugin Hook
+-> source allowlist
 -> passive observer
 -> Durable Inbox
 -> Hermes Source.startCapture()
 -> Canonical Pipeline
 ```
 
-所有 Hook / Observer 都不得直接写 AgentLens SQLite、不得加载 Cordis/Core、不得依赖 HTTP、不得阻断上游 Agent。
+所有 Hook / Observer 都不得直接写 AgentLens SQLite、不得加载 Cordis/Core、不得依赖 HTTP、不得阻断上游 Agent。来源未启用时必须在 Durable Inbox 之前停止采集。
 
-OpenCode / Pi 不为实时采集额外安装 Native Hook，继续使用原生数据 Runtime Tail。
+OpenCode / Pi 不为实时采集额外安装 Native Hook，继续使用原生数据 Runtime Tail；来源关闭时不会启动对应 Tail。
 
 ## 10. 关键验收不变量
 
+- 默认只启用 Claude Code 来源；其他来源必须显式加入 `AGENT_LENS_ENABLED_SOURCES`；
+- 禁用 Source 在 `detect()` 之前被过滤，也不能进入 History / Runtime / Asset；
+- Codex / Claude / Hermes Hook 或 Observer 必须遵守同一来源允许列表，禁用时不得继续写 Inbox；
 - 同一原生事实由 History 与 Runtime 同时观察到时，应合并为 Canonical Observation 并增强 Evidence，而不是制造重复事实；
 - Source Runner 不得出现来源业务分支；
 - Core / Repository / Parser / Normalizer 不依赖 Cordis；
@@ -267,6 +295,10 @@ OpenCode / Pi 不为实时采集额外安装 Native Hook，继续使用原生数
 
 本轮新增自动测试包含：
 
+- 来源允许列表默认值、显式启用与全部关闭；
+- 禁用 Source 在 Detect 前被过滤；
+- 禁用的旧 Target 在后续 History 阶段仍被忽略；
+- Codex Hook 默认不写 Inbox，显式启用后才持久化；
 - OpenCode 原生 SQLite History；
 - OpenCode 同一 Tool Part 原地更新后的 Runtime Tail；
 - OpenCode History Replay 幂等；
@@ -288,10 +320,12 @@ OpenCode / Pi 不为实时采集额外安装 Native Hook，继续使用原生数
 - Desktop 登录自启；
 - 托盘与退出；
 - npm / Desktop 共存时是否只有一个 Daemon；
-- Codex / Claude Hooks 是否持续采集；
+- 来源默认值是否确实只采 Claude Code；
+- 显式启用 Codex / Pi / Hermes / OpenCode 后，Detect / History / Runtime / Asset 是否按来源能力正确恢复；
+- Codex / Claude Hooks 是否严格跟随来源开关；
 - 卸载任一发行后另一发行是否继续工作；
 - 真实 Hermes / OpenCode 本机数据是否完整映射；
-- Hermes Observer 显式启用后的 Hook 延迟、稳定性和与 `state.db` Evidence 对账；
+- Hermes Observer 显式启用且来源开启后的 Hook 延迟、稳定性和与 `state.db` Evidence 对账；
 - 明暗主题、长会话、工具密集场景下的文字/背景对比度。
 
 本文不代表已经完成 npm Publish 或 GitHub Release；发布仍必须由仓库所有者明确触发。

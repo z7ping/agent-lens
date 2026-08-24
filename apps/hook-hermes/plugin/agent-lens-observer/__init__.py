@@ -22,6 +22,19 @@ _MAX_STRING = 32 * 1024
 _SENSITIVE_KEY = re.compile(r"password|passwd|secret|token|api[_-]?key|authorization|cookie", re.I)
 _PENDING_LOCK = threading.Lock()
 _PENDING_CALLS: dict[str, list[str]] = {}
+_DEFAULT_ENABLED_SOURCES = ("claude-code",)
+
+
+def _source_enabled(source_id: str) -> bool:
+    raw = os.environ.get("AGENT_LENS_ENABLED_SOURCES", "").strip()
+    normalized_source_id = source_id.strip().lower()
+    if not raw:
+        return normalized_source_id in _DEFAULT_ENABLED_SOURCES
+    if raw.lower() == "none":
+        return False
+    return normalized_source_id in {
+        item.strip().lower() for item in raw.split(",") if item.strip()
+    }
 
 
 def _captured_at() -> str:
@@ -86,6 +99,8 @@ def _correlate(event_name: str, payload: dict[str, Any]) -> None:
 
 def _persist(event_name: str, kwargs: dict[str, Any]) -> None:
     try:
+        if not _source_enabled("hermes"):
+            return
         event = dict(kwargs)
         _correlate(event_name, event)
         event["hook_event_name"] = event_name
@@ -129,6 +144,8 @@ def _callback(event_name: str):
 def register(ctx: Any) -> None:
     """Register passive lifecycle observers. Hermes keeps this plugin opt-in."""
 
+    if not _source_enabled("hermes"):
+        return
     for event_name in (
         "pre_tool_call",
         "post_tool_call",

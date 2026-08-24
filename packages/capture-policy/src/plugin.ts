@@ -8,6 +8,7 @@ export interface CapturePolicyPluginConfig {
   tool?: CapturePolicyMode
   config?: CapturePolicyMode
   environment?: CapturePolicyMode
+  enabledSources?: readonly string[]
 }
 
 const applyCapturePolicy: Plugin.Function<CapturePolicyPluginConfig> = (
@@ -20,9 +21,10 @@ const applyCapturePolicy: Plugin.Function<CapturePolicyPluginConfig> = (
     tool: config.tool ?? defaults.tool,
     config: config.config ?? defaults.config,
     environment: config.environment ?? defaults.environment,
+    enabledSources: config.enabledSources ?? defaults.enabledSources,
   }
   ctx.provide('capturePolicy', new DefaultCapturePolicyService(settings))
 }
 
-/** First-party mandatory runtime privacy boundary. */
+/** First-party mandatory runtime privacy and collection boundary. */
 export const capturePolicyPlugin = applyCapturePolicy

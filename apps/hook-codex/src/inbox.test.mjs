@@ -4,11 +4,35 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import {
+  enabledSources,
   neutralHookOutput,
   persistCodexHookEvent,
+  sourceCaptureEnabled,
 } from './inbox.mjs'
 
-test('Codex hook persists one sanitized durable inbox event', async () => {
+test('source collection defaults to Claude Code only', () => {
+  assert.deepEqual(enabledSources({}), ['claude-code'])
+  assert.equal(sourceCaptureEnabled('claude-code', {}), true)
+  assert.equal(sourceCaptureEnabled('codex', {}), false)
+  assert.equal(sourceCaptureEnabled('codex', { AGENT_LENS_ENABLED_SOURCES: 'claude-code,codex' }), true)
+  assert.equal(sourceCaptureEnabled('claude-code', { AGENT_LENS_ENABLED_SOURCES: 'none' }), false)
+})
+
+test('Codex hook does not write inbox while source is disabled', async () => {
+  const inbox = await mkdtemp(join(tmpdir(), 'agent-lens-hook-codex-disabled-'))
+  try {
+    const result = await persistCodexHookEvent({ hook_event_name: 'PreToolUse' }, {
+      inboxDir: inbox,
+      env: {},
+    })
+    assert.equal(result, null)
+    assert.deepEqual(await readdir(inbox), [])
+  } finally {
+    await rm(inbox, { recursive: true, force: true })
+  }
+})
+
+test('Codex hook persists one sanitized durable inbox event when source is enabled', async () => {
   const inbox = await mkdtemp(join(tmpdir(), 'agent-lens-hook-codex-'))
   try {
     await persistCodexHookEvent({
@@ -20,7 +44,10 @@ test('Codex hook persists one sanitized durable inbox event', async () => {
         command: 'npm test',
         api_key: 'should-not-be-written',
       },
-    }, { inboxDir: inbox })
+    }, {
+      inboxDir: inbox,
+      env: { AGENT_LENS_ENABLED_SOURCES: 'codex' },
+    })
 
     const files = await readdir(inbox)
     assert.equal(files.length, 1)
