@@ -5,8 +5,12 @@
   currentStyles.href = 'assets/current.css'
   document.head.appendChild(currentStyles)
 
-  var KEY = 'al-mock-theme'
-  var AKEY = 'al-mock-audit'
+  var parityStyles = document.createElement('style')
+  parityStyles.textContent = '.tip::after{white-space:pre-line!important;max-width:min(320px,calc(100vw - 24px))!important}.tip{position:relative;cursor:help}'
+  document.head.appendChild(parityStyles)
+
+  var THEME_KEY = 'al-mock-theme'
+  var AUDIT_KEY = 'al-mock-audit'
   var sunIcon = '<svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="3.4"/><path d="M10 1.8v2M10 16.2v2M1.8 10h2M16.2 10h2M4.2 4.2l1.4 1.4M14.4 14.4l1.4 1.4M15.8 4.2l-1.4 1.4M5.6 14.4l-1.4 1.4"/></svg>'
   var moonIcon = '<svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.8 12.8A6.7 6.7 0 0 1 7.2 4.2 6.8 6.8 0 1 0 15.8 12.8Z"/></svg>'
 
@@ -58,13 +62,13 @@
 
   function sourceRowsHtml() {
     return [
-      ['codex', 'Codex', 'dot-codex', true],
-      ['claude-code', 'Claude Code', 'dot-claude', true],
-      ['pi', 'Pi', 'dot-pi', false],
-      ['hermes', 'Hermes', 'dot-hermes', false],
-      ['opencode', 'OpenCode', 'dot-opencode', false]
+      ['Codex', 'dot-codex', true],
+      ['Claude Code', 'dot-claude', true],
+      ['Pi', 'dot-pi', false],
+      ['Hermes', 'dot-hermes', false],
+      ['OpenCode', 'dot-opencode', false]
     ].map(function (source) {
-      return '<label><input type="checkbox" ' + (source[3] ? 'checked' : '') + '><span class="src-dot ' + source[2] + '"></span><span>' + source[1] + '</span><span class="st ' + (source[3] ? 'on' : '') + '">' + (source[3] ? '已检测' : '未检测') + '</span></label>'
+      return '<label><input type="checkbox" ' + (source[2] ? 'checked' : '') + '><span class="src-dot ' + source[1] + '"></span><span>' + source[0] + '</span><span class="st ' + (source[2] ? 'on' : '') + '">' + (source[2] ? '已检测' : '未检测') + '</span></label>'
     }).join('')
   }
 
@@ -80,17 +84,9 @@
   }
 
   function renderSourceDots() {
-    document.querySelectorAll('.scope-pop label').forEach(function (label) {
-      var text = label.textContent || ''
-      var dot = label.querySelector('.src-dot') || label.querySelector('span')
-      if (!dot) return
-      if (text.indexOf('Hermes') >= 0) dot.classList.add('src-dot', 'dot-hermes')
-      if (text.indexOf('OpenCode') >= 0) dot.classList.add('src-dot', 'dot-opencode')
-    })
     document.querySelectorAll('.system-section .badge').forEach(function (badge) {
       var text = badge.textContent || ''
-      if (text.indexOf('Hermes') < 0 && text.indexOf('OpenCode') < 0) return
-      if (badge.querySelector('.src-dot')) return
+      if ((text.indexOf('Hermes') < 0 && text.indexOf('OpenCode') < 0) || badge.querySelector('.src-dot')) return
       var dot = document.createElement('span')
       dot.className = 'src-dot ' + (text.indexOf('Hermes') >= 0 ? 'dot-hermes' : 'dot-opencode')
       badge.prepend(dot)
@@ -114,9 +110,8 @@
 
   function syncAgentDetails() {
     if (!/agents\.html$/i.test(location.pathname)) return
-
-    var card = document.querySelector('.agents-browser .acard')
-    if (card) card.classList.add('src-claude')
+    var selectedCard = document.querySelector('.agents-browser .acard')
+    if (selectedCard) selectedCard.classList.add('src-claude')
 
     document.querySelectorAll('.caps .cap').forEach(function (cap) {
       if (cap.dataset.currentCapability === 'true') return
@@ -151,27 +146,24 @@
         else cell.classList.add('unobserved')
       })
     })
-    if (!matrix.querySelector('.matrix-wrap')) {
-      var wrap = document.createElement('div')
-      wrap.className = 'matrix-wrap'
-      rows.forEach(function (row) { wrap.appendChild(row) })
-      matrix.appendChild(wrap)
-    }
+    var wrap = document.createElement('div')
+    wrap.className = 'matrix-wrap'
+    rows.forEach(function (row) { wrap.appendChild(row) })
+    matrix.appendChild(wrap)
     matrix.dataset.currentMatrix = 'true'
-  }
-
-  function syncInsightsPrototype() {
-    if (!/insights\.html$/i.test(location.pathname)) return
-    document.querySelectorAll('h2,th,p').forEach(function (node) {
-      if (node.textContent.indexOf('Agent 使用结构') >= 0) node.textContent = node.textContent.replace('Agent 使用结构', '智能体使用结构')
-      if (node.tagName === 'TH' && node.textContent.trim() === 'Agent') node.textContent = '智能体'
-      if (node.textContent.indexOf('对应 Agent') >= 0) node.textContent = node.textContent.replace('对应 Agent', '对应智能体')
-      if (node.textContent.indexOf('Agent 综合评分') >= 0) node.textContent = node.textContent.replace('Agent 综合评分', '智能体综合评分')
-    })
   }
 
   function backupSourceChip(id, label, dot) {
     return '<button class="scope-chip" disabled data-source="' + id + '"><span class="src-dot ' + dot + '"></span>' + label + '</button>'
+  }
+
+  function builderKindHtml() {
+    return [
+      ['skill', '技能', 63], ['mcp', 'MCP（模型上下文协议）', 18], ['plugin', '插件', 5], ['extension', '扩展', 2], ['hook', '钩子', 4],
+      ['memory', '记忆', 3], ['rule', '规则', 7], ['session', '会话 / 历史', 76], ['config', '关键配置', 11], ['other', '其他', 1]
+    ].map(function (kind) {
+      return '<label class="builder-check" data-kind="' + kind[0] + '"><input type="checkbox" checked>' + kind[1] + '<small>' + kind[2] + '</small></label>'
+    }).join('')
   }
 
   function syncBackupPrototype() {
@@ -188,30 +180,23 @@
         { id: 'hermes', label: 'Hermes', dot: 'dot-hermes' },
         { id: 'opencode', label: 'OpenCode', dot: 'dot-opencode' }
       ].forEach(function (source) {
-        var protectionCard = document.createElement('article')
-        protectionCard.className = 'protection-card is-muted'
-        protectionCard.dataset.source = source.id
-        protectionCard.innerHTML = '<div class="protection-card-head"><span class="src-dot lg ' + source.dot + '"></span><b>' + source.label + '</b><span class="badge">未检测</span></div><div class="protection-counts"><div class="protection-count"><strong>0</strong><span>技能文件</span></div><div class="protection-count"><strong>0</strong><span>会话文件</span></div><div class="protection-count"><strong>0</strong><span>全部文件</span></div></div><div class="protection-meta"><span>MCP 0 · 插件/扩展 0</span><span>暂无路径</span></div>'
-        grid.appendChild(protectionCard)
+        var card = document.createElement('article')
+        card.className = 'protection-card is-muted'
+        card.dataset.source = source.id
+        card.innerHTML = '<div class="protection-card-head"><span class="src-dot lg ' + source.dot + '"></span><b>' + source.label + '</b><span class="badge">未检测</span></div><div class="protection-counts"><div class="protection-count"><strong>0</strong><span>技能文件</span></div><div class="protection-count"><strong>0</strong><span>会话文件</span></div><div class="protection-count"><strong>0</strong><span>全部文件</span></div></div><div class="protection-meta"><span>MCP 0 · 插件/扩展 0</span><span>暂无路径</span></div>'
+        grid.appendChild(card)
       })
     }
 
     var createButton = document.querySelector('.snapshot-create-button')
     var builder = createButton && createButton.closest('.future-card-body')
     if (builder && builder.dataset.currentBuilder !== 'true') {
-      var kinds = [
-        ['skill', '技能', 63], ['mcp', 'MCP（模型上下文协议）', 18], ['plugin', '插件', 5], ['extension', '扩展', 2], ['hook', '钩子', 4],
-        ['memory', '记忆', 3], ['rule', '规则', 7], ['session', '会话 / 历史', 76], ['config', '关键配置', 11], ['other', '其他', 1]
-      ]
-      var kindHtml = kinds.map(function (kind) {
-        return '<label class="builder-check" data-kind="' + kind[0] + '"><input type="checkbox" checked>' + kind[1] + '<small>' + kind[2] + '</small></label>'
-      }).join('')
       builder.classList.add('snapshot-builder')
-      builder.innerHTML = '<div class="builder-block"><div class="builder-label"><span>智能体</span><span>3 / 3</span></div><div class="builder-checks">' +
+      builder.innerHTML = '<div class="builder-block"><div class="builder-label"><span>智能体</span><span data-builder-count>3 / 3</span></div><div class="builder-checks">' +
         '<label class="builder-check"><input type="checkbox" checked><span class="src-dot dot-codex"></span>Codex<small>80 文件</small></label>' +
         '<label class="builder-check"><input type="checkbox" checked><span class="src-dot dot-claude"></span>Claude Code<small>85 文件</small></label>' +
         '<label class="builder-check"><input type="checkbox" checked><span class="src-dot dot-pi"></span>Pi<small>19 文件</small></label>' +
-        '</div></div><div class="builder-block"><div class="builder-label"><span>资产类型</span><button class="link-btn">清空</button></div><div class="builder-checks">' + kindHtml +
+        '</div></div><div class="builder-block"><div class="builder-label"><span>资产类型</span><button class="link-btn" data-builder-toggle>清空</button></div><div class="builder-checks" data-kind-checks>' + builderKindHtml() +
         '</div></div><div class="safety-note"><span>✓</span><div><b>敏感信息保护强制开启</b><span>凭据、Token、私钥和秘密赋值会整文件排除并记录原因。</span></div></div>' +
         '<div class="builder-summary"><span>按分类统计约 <b>190</b> 条文件引用</span><span>重叠路径会自动去重</span></div>' +
         '<button class="btn primary snapshot-create-button">创建并校验快照</button>'
@@ -223,7 +208,8 @@
       preview.innerHTML = '<div class="dw-head"><div><div class="dw-eyebrow">恢复预演</div><div class="dw-title">快照差异 <span class="badge warn">1 项需关注</span></div><div class="dw-sub">backup-20260824-2142</div></div><button class="icon-button" data-close-drawer aria-label="关闭">×</button></div>' +
         '<div class="future-drawer-body"><section class="drawer-section"><h3>差异摘要</h3><div class="preview-summary"><span><b>182</b> 一致</span><span><b>1</b> 缺失</span><span><b>1</b> 已修改</span><span><b>0</b> 阻止</span></div></section>' +
         '<section class="drawer-section"><h3>文件</h3><div class="drawer-file-list"><div class="drawer-file preview-file"><span class="badge ok">一致</span><code>skills/code-review/SKILL.md</code></div><div class="drawer-file preview-file"><span class="badge warn">当前已修改</span><code>sessions/2026-08-21.jsonl</code><small>当前文件内容与快照 Hash 不同</small></div></div></section>' +
-        '<section class="drawer-section"><div class="future-note"><b>这里只做预演。</b> 当前版本没有直接写回接口，因此查看差异不会修改任何已检测智能体的文件。</div></section></div>'
+        '<section class="drawer-section"><div class="future-note"><b>这里只做预演。</b> 当前版本没有直接写回接口，因此查看差异不会修改任何已检测智能体的文件。</div></section></div>' +
+        '<div class="future-drawer-footer"><span>仅预览 · 不会自动写回</span><button class="btn" data-close-drawer>关闭</button></div>'
       preview.dataset.currentPreview = 'true'
     }
   }
@@ -231,27 +217,25 @@
   function applyTheme(theme) {
     document.documentElement.dataset.theme = theme
     renderThemeControls(theme)
-    try { localStorage.setItem(KEY, theme) } catch (e) {}
+    try { localStorage.setItem(THEME_KEY, theme) } catch (e) {}
   }
 
   var auditOn = false
-  try { auditOn = localStorage.getItem(AKEY) === '1' } catch (e) {}
+  try { auditOn = localStorage.getItem(AUDIT_KEY) === '1' } catch (e) {}
   function applyAudit(on) {
     document.body.classList.toggle('audit-mode', on)
     document.querySelectorAll('[data-audit-toggle]').forEach(function (button) { button.setAttribute('aria-pressed', String(on)) })
-    try { localStorage.setItem(AKEY, on ? '1' : '0') } catch (e) {}
+    try { localStorage.setItem(AUDIT_KEY, on ? '1' : '0') } catch (e) {}
   }
 
-  try { applyTheme(localStorage.getItem(KEY) || 'light') } catch (e) { applyTheme('light') }
+  try { applyTheme(localStorage.getItem(THEME_KEY) || 'light') } catch (e) { applyTheme('light') }
 
-  /* 页面脚本位于 body 末尾，可在事件绑定前补齐当前稿需要的共享组件。 */
   renderBrand()
   normalizeStatusPills()
   syncScopeManagers()
   renderSourceDots()
   syncAgentSources()
   syncAgentDetails()
-  syncInsightsPrototype()
   syncBackupPrototype()
   renderThemeControls(document.documentElement.dataset.theme || 'light')
   applyAudit(auditOn)
@@ -270,6 +254,25 @@
     if (scrim) scrim.classList.add('show')
   }
 
+  function refreshBuilderToggle(button) {
+    var block = button.closest('.builder-block')
+    var boxes = block ? Array.prototype.slice.call(block.querySelectorAll('input[type="checkbox"]')) : []
+    var allChecked = boxes.length > 0 && boxes.every(function (box) { return box.checked })
+    button.textContent = allChecked ? '清空' : '全选'
+  }
+
+  document.addEventListener('change', function (event) {
+    var box = event.target.closest('.snapshot-builder input[type="checkbox"]')
+    if (!box) return
+    var builder = box.closest('.snapshot-builder')
+    if (!builder) return
+    var sourceBoxes = Array.prototype.slice.call(builder.querySelectorAll('.builder-block:first-child input[type="checkbox"]'))
+    var count = builder.querySelector('[data-builder-count]')
+    if (count) count.textContent = sourceBoxes.filter(function (item) { return item.checked }).length + ' / ' + sourceBoxes.length
+    var toggle = builder.querySelector('[data-builder-toggle]')
+    if (toggle) refreshBuilderToggle(toggle)
+  })
+
   document.addEventListener('click', function (event) {
     var themeButton = event.target.closest('[data-theme-toggle]')
     if (themeButton) {
@@ -280,6 +283,15 @@
     if (auditButton) {
       auditOn = !auditOn
       applyAudit(auditOn)
+      return
+    }
+    var builderToggle = event.target.closest('[data-builder-toggle]')
+    if (builderToggle) {
+      var block = builderToggle.closest('.builder-block')
+      var boxes = block ? Array.prototype.slice.call(block.querySelectorAll('input[type="checkbox"]')) : []
+      var shouldCheck = !boxes.every(function (box) { return box.checked })
+      boxes.forEach(function (box) { box.checked = shouldCheck })
+      refreshBuilderToggle(builderToggle)
       return
     }
     var opener = event.target.closest('[data-open-drawer]')
@@ -384,7 +396,6 @@
     }
   })
 
-  /* 会话切换：保存 / 恢复阅读位置。 */
   var reader = document.querySelector('[data-reader]')
   if (reader) {
     var positions = Object.create(null)
@@ -406,7 +417,6 @@
     })
   }
 
-  /* turn-rail：滚动联动 + 点击定位。 */
   var rail = document.querySelector('.turn-rail')
   if (rail && reader) {
     var ticks = Array.prototype.slice.call(rail.querySelectorAll('.turn-tick'))
@@ -442,7 +452,6 @@
     requestAnimationFrame(updateActive)
   }
 
-  /* 工具类型 SVG 图标注入。 */
   var toolIcons = {
     shell: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 5 6 8 3 11"/><line x1="6" y1="11" x2="13" y2="11"/></svg>',
     read: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 2h5l3 3v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><polyline points="9 2 9 5 12 5"/></svg>',
