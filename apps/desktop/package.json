@@ -24,7 +24,8 @@
     "asarUnpack": [
       "node_modules/better-sqlite3/**/*",
       "runtime/cli.mjs",
-      "runtime/hooks/**/*"
+      "runtime/hooks/**/*",
+      "runtime/integrations/**/*"
     ],
     "files": [
       "src/**/*",
