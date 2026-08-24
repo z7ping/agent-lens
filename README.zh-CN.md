@@ -40,9 +40,17 @@ AgentLens 不负责执行 Agent，也不会声称可以读取模型未暴露的�
 ```bash
 npm install -g @z7ping/agent-lens
 
-agent-lens doctor
-agent-lens hook install all
+agent-lens setup
 agent-lens start
+```
+
+`agent-lens setup` 会完成一次性初始化：检查 Node.js 与数据目录，识别本机 Codex / Claude Code / Pi，并只为实际存在的 Codex / Claude Code 补齐 AgentLens 自己的 Hook。Pi 使用原生 History / Runtime Tail，不安装 Hook。
+
+`setup` 不会创建后台服务，也不会配置开机自启；需要查看诊断详情时仍可执行：
+
+```bash
+agent-lens doctor
+agent-lens status
 ```
 
 打开：
@@ -51,7 +59,7 @@ agent-lens start
 http://127.0.0.1:56789/
 ```
 
-`agent-lens start` 设计为前台运行。1.0 CLI 不伪装成跨平台 service manager；Windows 后台生命周期由桌面应用负责。
+`agent-lens start` 设计为前台运行；启动前会先探测已有 AgentLens Daemon，兼容时直接复用，不启动第二套。npm 与 Windows Desktop 可以同时安装，但共享同一个默认数据根与默认运行时。
 
 ### 源码运行
 
@@ -66,8 +74,8 @@ npm run dev
 源码环境使用 CLI：
 
 ```bash
+npm run cli -- setup
 npm run cli -- doctor
-npm run cli -- hook install all
 npm run cli -- start
 ```
 
@@ -157,8 +165,11 @@ Electron 只承担桌面壳职责：
 - 单实例；
 - BrowserWindow；
 - 系统托盘；
-- Daemon 启停/重启；
+- 启动 / 复用 / 停止自己拥有的 Daemon；
+- Windows 登录后自动运行；
 - 日志和数据目录入口。
+
+桌面端启动时先检查 `127.0.0.1:56789`：已有兼容 npm / service Daemon 时直接复用；只有没有兼容运行时时才创建自己的 Daemon。退出桌面应用时不会误杀外部方式管理的 Daemon。
 
 AgentLens Core、Source、SQLite、HTTP/SSE 不搬进 Electron 私有实现中，桌面版和 CLI/npm 版仍然使用同一个 Daemon。
 
@@ -212,6 +223,7 @@ Web 使用 SSE 接收 Observation、Source Detection 与 Asset 变化。SSE 会�
 ## CLI
 
 ```text
+agent-lens setup [--json]
 agent-lens start
 agent-lens status [--json]
 agent-lens doctor [--json]
@@ -220,7 +232,9 @@ agent-lens hook install [codex|claude|all]
 agent-lens hook uninstall [codex|claude|all]
 ```
 
-Hook 安装是幂等的，只修改 AgentLens 自己的 handler；同一个 Hook group 中的第三方 handler 会被保留。Codex trust hash 也只维护 AgentLens 对应条目。
+`setup` 是推荐的首次初始化入口。Hook 安装是幂等的，只修改 AgentLens 自己的 handler；同一个 Hook group 中的第三方 handler 会被保留。Codex trust hash 也只维护 AgentLens 对应条目。
+
+当前 npm CLI 尚未提供 `service` / `autostart` 命令；这两项属于后续发行 / 运维层，不会恢复 0.x PID / Service Manager 架构。
 
 ## 一张图理解 1.0
 
@@ -247,6 +261,7 @@ Cordis 是唯一 Plugin Runtime，固定依赖 `@deepseek-ai/cordis@4.0.1`。Age
 - [Core Contract](docs/1.0/CORE-CONTRACT.md)
 - [ADR-0001：Clean Rebuild 与 Cordis Runtime](docs/adr/0001-agentlens-1.0-clean-rebuild-and-cordis-runtime.md)
 - [ADR-0002：Web Plugin 与 Client State Model](docs/adr/0002-web-plugin-and-client-state-model.md)
+- [ADR-0004：双发行、单运行时与生命周期所有权](docs/adr/0004-dual-distribution-single-runtime-lifecycle.md)
 
 ## Evidence 是一等公民
 
