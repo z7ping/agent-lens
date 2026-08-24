@@ -6,7 +6,7 @@
 
 AgentLens 1.0 是一次 **Clean Rebuild（彻底重建）**。
 
-当前 `main` 已进入 **v2.1 表现层收敛 + 1.0 稳定化** 阶段。默认目标是整理现有实现、修复缺陷、提高数据与运行稳定性，不继续扩功能，不重新设计已经确定的 1.0 架构。
+当前 `main` 已进入 **v2.1 表现层收敛 + 1.0 稳定化** 阶段。默认目标是整理现有实现、修复缺陷、提高数据与运行稳定性，不继续无边界扩功能，不重新设计已经确定的 1.0 架构。
 
 0.x 的旧 Runtime / UI / Test 已从 1.0 工作树移除，不再作为可直接复用的实现存在。需要参考 0.x 的解析行为、fixture、UI 思路或迁移逻辑时，请通过 Git 历史 / Tag 查阅，并重新按 1.0 Contract 验证后再选择性迁移。
 
@@ -27,6 +27,7 @@ AgentLens 1.0 是一次 **Clean Rebuild（彻底重建）**。
 3. `docs/adr/0001-agentlens-1.0-clean-rebuild-and-cordis-runtime.md`
 4. 涉及 npm / Desktop 生命周期时阅读 `docs/adr/0004-dual-distribution-single-runtime-lifecycle.md`
 5. 涉及安装、卸载、后台、自启、Hook Provider 切换时同时阅读 `docs/1.0/DISTRIBUTION-OPERATIONS.md`
+6. 涉及 Hermes / OpenCode 采集边界时阅读 `docs/1.0/HERMES-OPENCODE-SOURCES.md`
 
 如果实现与这些文档冲突，不要静默绕过 Contract。要么修复实现 Bug，要么明确发起 Contract Review / ADR。
 
@@ -108,29 +109,34 @@ normalize
 
 ## 5. 当前 1.0 Source
 
-已实现：
+已实现并注册到 Cordis Runtime：
 
 - Codex
 - Claude Code
 - Pi
+- Hermes
+- OpenCode
+
+其中：
+
+- Hermes：`state.db` History / Native Tail + Assets；可选 `agent-lens-observer` Hermes Plugin 只写 Durable Inbox，形成额外 Runtime Hook Evidence；
+- OpenCode：`opencode.db` History + 数据库变化驱动 Native Tail，不额外安装 Hook。
 
 不能因为 0.x 曾经支持过，就视为已经属于 1.0 Runtime：
 
-- Hermes
-- OpenCode
 - Cursor
 - OpenClaw
 
 ## 6. Hook 规则
 
-Hook 子进程只是被动采集 Shim。
+Hook 子进程 / 宿主观察插件只是被动采集 Shim。
 
 允许做：
 
 - 读取 stdin / 原生事件数据；
 - 清洗 / 截断敏感字段；
 - 原子写入 durable inbox；
-- 返回中性结果。
+- 返回中性结果或不返回行为指令。
 
 不得依赖：
 
@@ -141,6 +147,8 @@ Hook 子进程只是被动采集 Shim。
 - Daemon 生命周期。
 
 Inbox 条目只有在成功完成 Canonical Ingestion 后才能确认并删除。
+
+Hermes 的 `agent-lens-observer` 同样受以上规则约束，并遵守 Hermes 自身的显式启用模型：AgentLens 可以随发行包提供插件文件，但不得在用户没有明确动作时静默启用第三方 Hermes Plugin。
 
 Windows 正式发行使用用户级共享 Hook 分发器，但它只能负责 Provider 选择和进程启动包装：
 
@@ -195,7 +203,9 @@ Storage Plugin 可以直接使用 Cordis 生命周期提供 `ctx.storage`，但 
 - Evidence、生命周期、工具执行、轮次等 Agent 特有信息必须保留；
 - 字体与字号统一由正式语义字号系统收口，普通界面文字不得回退到 12px 以下；
 - 会话列表与会话详情在桌面端必须保持独立滚动上下文；
-- 不通过新增叠层补丁长期解决视觉冲突；新增样式前先确认现有收口层职责和加载顺序。
+- 不通过新增叠层补丁长期解决视觉冲突；新增样式前先确认现有收口层职责和加载顺序；
+- `packages/web/src/tokens.css` 是正式运行时最终基础设计令牌层，必须与 `docs/design/mockups/v2/assets/tokens.css` 的基础色值保持一致；
+- 页面样式不得依赖旧色板覆盖顺序制造最终颜色；关键前景/背景组合必须通过 `check:web-presentation` 对比度门禁。
 
 实时更新使用 SSE，但 SSE 事件不得直接触发整页 / 整个内容区反复重绘。
 
@@ -217,7 +227,7 @@ agent-lens autostart enable|disable|status
 agent-lens hook ...
 ```
 
-`setup` 是一次性初始化入口：检查 Node.js 与数据目录，识别 Codex / Claude Code / Pi，本机存在 Codex / Claude Code 时只补齐 AgentLens 自己缺失的 Hook，并报告已有运行时。Pi 使用原生 History / Runtime Tail，不安装 Hook。
+`setup` 是一次性初始化入口：检查 Node.js 与数据目录，并报告本机 Source / Hook 状态；Codex / Claude Code 的 Native Hook 仍只补齐 AgentLens 自己缺失的配置。Pi / OpenCode 使用原生 History / Runtime Tail，不安装 Native Hook。Hermes 默认使用 `state.db` History / Native Tail；Hermes Observer 属于显式启用的可选增强，不得在 `setup` 中静默启用。
 
 `setup` 不自动启动长期 Daemon，也不默认打开 npm 登录自启；后台生命周期通过独立 `service` / `autostart` 命令管理。不得把 `setup` 扩展成 0.x service manager 的新包装。
 
@@ -254,68 +264,9 @@ Electron 只负责 Windows Desktop Lifecycle 与发行集成。不要把 Core / 
 
 ```bash
 npm install
+npm run check:web-presentation
 npm run typecheck
 npm test
 npm run build:dist
 npm pack --dry-run
-npm run build:web
-npm run cli -- setup
-npm run cli -- doctor
-npm run cli -- service status
-npm run cli -- autostart status
-npm run desktop:win      # Windows runner
 ```
-
-Node.js 要求：`>=22.23.0`。
-
-## 12. 语义变更必须覆盖的测试
-
-修改以下内容时需要新增 / 更新测试：
-
-- normalization mapping；
-- dedup key；
-- identity resolution；
-- history / runtime reconciliation；
-- checkpoint 行为；
-- Asset 归因；
-- Projection 排序 / 分组；
-- Hook install / uninstall 安全性；
-- CLI 初始化目标选择与幂等性；
-- Windows / systemd / launchd 生命周期定义生成；
-- Windows 后台任务隐藏窗口定义与诊断；
-- Windows 共享 Hook 分发器 stdin -> Durable Inbox 与失效 Provider 回退；
-- npm / Desktop 安装登记有效性与源码不登记边界；
-- 运行时所有权与互斥接管规则；
-- Protocol / API 行为；
-- Cordis compatibility。
-
-关键不变量：
-
-```text
-same native semantic event from multiple evidence paths
-=> one CanonicalObservation + multiple Evidence records
-```
-
-即：同一原生语义事件来自多条 Evidence Path 时，只产生一条 `CanonicalObservation`，但保留多份 `Evidence`。
-
-## 13. 文档与协作纪律
-
-任何改变架构所有权 / 边界的决策，都必须同步更新：
-
-- `ARCHITECTURE.md`；
-- `docs/1.0/IMPLEMENTATION-STATUS.md`；
-- `docs/1.0/DISTRIBUTION-OPERATIONS.md`（发行 / 运维变化）；
-- Contract 变化时更新 `docs/1.0/CORE-CONTRACT.md`；
-- 对长期、难以逆转的决策补充 ADR。
-
-不要把“计划能力”写成“已实现能力”。不要让已删除的 0.x 路径继续出现在当前开发说明中，除非明确标注为 Git 历史参考。
-
-提交信息统一使用中文；Pull Request 的标题和正文也统一使用中文。代码标识符、API、类型名、命令保持英文即可。
-
-## 14. 分支 / 发布安全
-
-当前 1.0 已在 `main` 进入表现层收敛和稳定化阶段。仓库所有者明确要求直接在 `main` 收敛时，可以在核对最新 HEAD 后提交；不得依据旧文档自动切回已完成使命的历史工作分支。
-
-默认不新增功能、不改大版本架构、不发布。
-
-未经仓库所有者明确要求，不得发布 npm、创建 GitHub Release、修改 Release Secret 或执行其它发布动作。
