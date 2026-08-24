@@ -4,6 +4,7 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
+import { setTimeout as delay } from 'node:timers/promises'
 import {
   getAllHookStatus,
   getHookStatus,
@@ -14,6 +15,14 @@ import {
   type HookStatus,
   type HookTarget,
 } from '@agent-lens/hook-manager'
+import {
+  getLifecycleStatus,
+  serviceRestart,
+  serviceStart,
+  serviceStop,
+  setAutostart,
+  type LifecycleStatus,
+} from './lifecycle'
 
 const VERSION = '1.0.0-alpha.0'
 const DEFAULT_PORT = 56789
@@ -21,6 +30,8 @@ const MIN_NODE = [22, 23, 0] as const
 
 type CheckLevel = 'pass' | 'warn' | 'fail'
 type SourceId = 'codex' | 'claude' | 'pi'
+type RuntimeOwner = 'cli' | 'service'
+type RuntimeMode = 'foreground' | 'managed'
 
 export interface DoctorCheck {
   id: string
@@ -44,6 +55,8 @@ function usage(): string {
     '  agent-lens start',
     '  agent-lens status [--json]',
     '  agent-lens doctor [--json]',
+    '  agent-lens service start|stop|restart|status [--json]',
+    '  agent-lens autostart enable|disable|status [--json]',
     '  agent-lens hook status [codex|claude|all] [--json]',
     '  agent-lens hook install [codex|claude|all]',
     '  agent-lens hook uninstall [codex|claude|all]',
@@ -78,6 +91,24 @@ async function fetchHealth(): Promise<Record<string, unknown>> {
   return response.json() as Promise<Record<string, unknown>>
 }
 
+async function healthOrNull(): Promise<Record<string, unknown> | null> {
+  try {
+    return await fetchHealth()
+  } catch {
+    return null
+  }
+}
+
+async function waitForHealth(timeoutMs = 4000): Promise<Record<string, unknown> | null> {
+  const deadline = Date.now() + timeoutMs
+  do {
+    const health = await healthOrNull()
+    if (health) return health
+    await delay(200)
+  } while (Date.now() < deadline)
+  return null
+}
+
 function runtimeOwner(health: Record<string, unknown>): string | null {
   const runtime = health.runtime
   if (!runtime || typeof runtime !== 'object' || Array.isArray(runtime)) return null
@@ -90,6 +121,22 @@ function runtimeOwnerLabel(owner: string | null): string {
   if (owner === 'service') return '后台服务'
   if (owner === 'cli') return '命令行'
   return owner ?? '未报告'
+}
+
+function lifecycleManagerLabel(status: LifecycleStatus): string {
+  if (status.manager === 'windows-task-scheduler') return 'Windows 用户级计划任务'
+  if (status.manager === 'systemd-user') return 'systemd 用户服务'
+  return 'launchd 用户服务'
+}
+
+function lifecycleOptions(): { cliEntry: string } {
+  const current = fileURLToPath(import.meta.url)
+  if (current.endsWith('.mjs')) return { cliEntry: current }
+  const built = fileURLToPath(new URL('../../../dist/cli.mjs', import.meta.url))
+  if (!existsSync(built)) {
+    throw new Error('源码模式使用 service/autostart 前请先执行 npm run build:dist，后台服务只注册正式 dist 入口。')
+  }
+  return { cliEntry: built }
 }
 
 function sourceRoots(): DetectedSourceRoot[] {
@@ -142,9 +189,9 @@ async function setup(json: boolean): Promise<number> {
     return 1
   }
 
-  const dataRoot = join(homedir(), '.agent-lens', '1.0')
-  await mkdir(dataRoot, { recursive: true })
-  await access(dataRoot)
+  const root = join(homedir(), '.agent-lens', '1.0')
+  await mkdir(root, { recursive: true })
+  await access(root)
 
   const sources = sourceRoots()
   let hooks = await getAllHookStatus()
@@ -152,17 +199,11 @@ async function setup(json: boolean): Promise<number> {
   for (const target of hookTargets) await installHooks(target)
   if (hookTargets.length) hooks = await getAllHookStatus()
 
-  let health: Record<string, unknown> | null = null
-  try {
-    health = await fetchHealth()
-  } catch {
-    // Setup configures local integration but does not own the long-running daemon lifecycle.
-  }
-
+  const health = await healthOrNull()
   const result = {
     ok: true,
     version: VERSION,
-    dataRoot,
+    dataRoot: root,
     sources,
     hooks: hooks.map(item => ({
       target: item.target,
@@ -181,7 +222,7 @@ async function setup(json: boolean): Promise<number> {
   }
 
   console.log('AgentLens 初始化完成。')
-  console.log(`[OK] 数据目录：${dataRoot}`)
+  console.log(`[OK] 数据目录：${root}`)
   for (const source of sources) {
     console.log(`${source.detected ? '[OK]' : '[跳过]'} ${source.source}：${source.detected ? '已检测到' : '未检测到'}（${source.root}）`)
   }
@@ -198,8 +239,9 @@ async function setup(json: boolean): Promise<number> {
     console.log(`[OK] 运行时：已在线（管理方式：${runtimeOwnerLabel(runtimeOwner(health))}）`)
     console.log(`Web：${daemonUrl('/')}`)
   } else {
-    console.log('[提示] 运行时当前未启动；初始化不会自动创建后台服务。')
+    console.log('[提示] 运行时当前未启动。需要长期常驻时可执行 agent-lens service start。')
   }
+  console.log('[提示] 需要登录系统后自动运行时可执行 agent-lens autostart enable。')
   return 0
 }
 
@@ -221,14 +263,14 @@ async function runHook(action: string, targetValue: string | undefined, json: bo
   return action === 'status' && statuses.some(status => !status.installed) ? 1 : 0
 }
 
-async function startDaemon(): Promise<number> {
+async function startDaemon(owner: RuntimeOwner = 'cli', mode: RuntimeMode = 'foreground'): Promise<number> {
   try {
     const health = await fetchHealth()
     console.log(`AgentLens 已在运行（管理方式：${runtimeOwnerLabel(runtimeOwner(health))}）`)
     console.log(`Web: ${daemonUrl('/')}`)
     return 0
   } catch {
-    // No compatible AgentLens health endpoint is currently reachable; start a foreground daemon.
+    // No compatible AgentLens health endpoint is currently reachable; start one daemon only.
   }
 
   const explicit = process.env.AGENT_LENS_DAEMON_ENTRY
@@ -244,17 +286,128 @@ async function startDaemon(): Promise<number> {
     stdio: 'inherit',
     env: {
       ...process.env,
-      AGENT_LENS_DAEMON_MODE: 'foreground',
-      AGENT_LENS_RUNTIME_OWNER: 'cli',
+      AGENT_LENS_DAEMON_MODE: mode,
+      AGENT_LENS_RUNTIME_OWNER: owner,
     },
   })
+
+  const forwarded = new Map<NodeJS.Signals, () => void>()
+  if (mode === 'managed') {
+    for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+      const handler = () => {
+        if (!child.killed) child.kill(signal)
+      }
+      forwarded.set(signal, handler)
+      process.once(signal, handler)
+    }
+  }
+
   return new Promise<number>((resolve, reject) => {
-    child.once('error', reject)
+    const cleanup = () => {
+      for (const [signal, handler] of forwarded) process.off(signal, handler)
+    }
+    child.once('error', error => {
+      cleanup()
+      reject(error)
+    })
     child.once('exit', (code, signal) => {
+      cleanup()
       if (signal) resolve(1)
       else resolve(code ?? 0)
     })
   })
+}
+
+function printLifecycleState(state: LifecycleStatus): void {
+  console.log(`系统托管：${lifecycleManagerLabel(state)}`)
+  console.log(`服务定义：${state.registered ? '已注册' : '未注册'}`)
+  console.log(`后台任务：${state.active ? '运行中' : '未运行'}`)
+  console.log(`登录自启：${state.autostart ? '已启用' : '未启用'}`)
+  if (state.detail) console.log(`系统状态：${state.detail}`)
+}
+
+async function runService(action: string, json: boolean): Promise<number> {
+  if (action === 'run') return startDaemon('service', 'managed')
+  if (!['start', 'stop', 'restart', 'status'].includes(action)) {
+    throw new Error(`Unknown service action: ${action}`)
+  }
+
+  const options = lifecycleOptions()
+  const before = await healthOrNull()
+  if (action === 'restart' && before && runtimeOwner(before) !== 'service') {
+    const result = {
+      ok: false,
+      reason: 'runtime-owned-elsewhere',
+      owner: runtimeOwner(before),
+      message: `当前运行时由${runtimeOwnerLabel(runtimeOwner(before))}管理，后台服务不会强行接管。`,
+    }
+    if (json) console.log(JSON.stringify(result, null, 2))
+    else console.log(result.message)
+    return 1
+  }
+
+  let lifecycle: LifecycleStatus
+  if (action === 'start') lifecycle = await serviceStart(options)
+  else if (action === 'stop') lifecycle = await serviceStop(options)
+  else if (action === 'restart') lifecycle = await serviceRestart(options)
+  else lifecycle = await getLifecycleStatus(options)
+
+  let health = await healthOrNull()
+  if ((action === 'start' || action === 'restart') && !health) health = await waitForHealth()
+  if (action === 'stop' && health && runtimeOwner(health) === 'service') {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      await delay(150)
+      health = await healthOrNull()
+      if (!health || runtimeOwner(health) !== 'service') break
+    }
+  }
+
+  const result = {
+    ok: true,
+    action,
+    lifecycle,
+    runtime: health
+      ? { online: true, owner: runtimeOwner(health), url: daemonUrl('/') }
+      : { online: false, url: daemonUrl('/') },
+  }
+  if (json) {
+    console.log(JSON.stringify(result, null, 2))
+    return 0
+  }
+
+  if (action === 'start') console.log('AgentLens 后台服务启动请求已完成。')
+  else if (action === 'stop') console.log('AgentLens 后台服务停止请求已完成。')
+  else if (action === 'restart') console.log('AgentLens 后台服务重启请求已完成。')
+  printLifecycleState(lifecycle)
+  if (health) {
+    console.log(`运行时：在线（管理方式：${runtimeOwnerLabel(runtimeOwner(health))}）`)
+    console.log(`Web：${daemonUrl('/')}`)
+  } else {
+    console.log('运行时：当前离线')
+  }
+  return 0
+}
+
+async function runAutostart(action: string, json: boolean): Promise<number> {
+  if (!['enable', 'disable', 'status'].includes(action)) {
+    throw new Error(`Unknown autostart action: ${action}`)
+  }
+  const options = lifecycleOptions()
+  const lifecycle = action === 'enable'
+    ? await setAutostart(true, options)
+    : action === 'disable'
+      ? await setAutostart(false, options)
+      : await getLifecycleStatus(options)
+
+  const result = { ok: true, action, lifecycle }
+  if (json) {
+    console.log(JSON.stringify(result, null, 2))
+    return 0
+  }
+  if (action === 'enable') console.log('AgentLens 登录后自动运行已启用。')
+  else if (action === 'disable') console.log('AgentLens 登录后自动运行已关闭。')
+  printLifecycleState(lifecycle)
+  return 0
 }
 
 async function status(json: boolean): Promise<number> {
@@ -287,11 +440,11 @@ async function doctor(json: boolean): Promise<number> {
     detail: `requires >= ${MIN_NODE.join('.')}`,
   })
 
-  const dataRoot = join(homedir(), '.agent-lens', '1.0')
+  const root = join(homedir(), '.agent-lens', '1.0')
   try {
-    await mkdir(dataRoot, { recursive: true })
-    await access(dataRoot)
-    checks.push({ id: 'data-root', level: 'pass', message: 'AgentLens data directory is accessible', detail: dataRoot })
+    await mkdir(root, { recursive: true })
+    await access(root)
+    checks.push({ id: 'data-root', level: 'pass', message: 'AgentLens data directory is accessible', detail: root })
   } catch (error) {
     checks.push({ id: 'data-root', level: 'fail', message: 'AgentLens data directory is not accessible', detail: String(error) })
   }
@@ -303,12 +456,12 @@ async function doctor(json: boolean): Promise<number> {
     checks.push({ id: 'daemon', level: 'warn', message: 'Daemon is not currently reachable', detail: error instanceof Error ? error.message : String(error) })
   }
 
-  for (const { source, root, detected } of sourceRoots()) {
+  for (const { source, root: sourceRoot, detected } of sourceRoots()) {
     checks.push({
       id: `source-${source}`,
       level: detected ? 'pass' : 'warn',
       message: `${source} source ${detected ? 'detected' : 'not detected'}`,
-      detail: root,
+      detail: sourceRoot,
     })
   }
 
@@ -357,6 +510,8 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
   if (command === 'start') return startDaemon()
   if (command === 'status') return status(json)
   if (command === 'doctor') return doctor(json)
+  if (command === 'service') return runService(args[1] ?? 'status', json)
+  if (command === 'autostart') return runAutostart(args[1] ?? 'status', json)
   if (command === 'hook') return runHook(args[1] ?? 'status', args[2], json)
   throw new Error(`Unknown command: ${command}\n\n${usage()}`)
 }
@@ -376,4 +531,5 @@ export const cliInternals = {
   runtimeOwner,
   sourceRoots,
   setupHookTargets,
+  lifecycleOptions,
 }
