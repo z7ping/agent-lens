@@ -290,6 +290,78 @@
   border-top-color: var(--al-line);
 }
 
+.frequent-asset-row {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) minmax(90px, 180px) 42px;
+  gap: 9px;
+  align-items: center;
+}
+
+.frequent-usage-track,
+.skill-funnel-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--al-soft);
+  overflow: hidden;
+}
+
+.frequent-usage-track > i,
+.skill-funnel-track > i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--al-accent);
+}
+
+.frequent-asset-row > strong {
+  text-align: right;
+}
+
+.skill-funnel {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.skill-funnel > .skill-funnel-row {
+  min-height: 28px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr) 34px;
+  gap: 10px;
+  align-items: center;
+  justify-content: initial;
+}
+
+.skill-funnel > .skill-funnel-row[data-active] {
+  border: 0;
+  background: transparent;
+}
+
+.skill-funnel > .skill-funnel-row[data-muted='true'] {
+  opacity: .72;
+}
+
+.skill-funnel-row > span:first-child {
+  color: var(--al-muted);
+  font-size: 11.5px;
+  text-align: left;
+}
+
+.skill-funnel-row > strong {
+  color: var(--al-ink);
+  font-size: 12.5px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.skill-funnel-row[data-active] .skill-funnel-track > i {
+  background: var(--al-success);
+}
+
 .capability-row {
   align-items: flex-start;
 }
@@ -340,6 +412,14 @@
   }
 
   .asset-usage-bar {
+    display: none;
+  }
+
+  .frequent-asset-row {
+    grid-template-columns: 20px minmax(0, 1fr) 42px;
+  }
+
+  .frequent-usage-track {
     display: none;
   }
 }
