@@ -11,12 +11,12 @@ export function agentLabel(sourceId: string, fallback?: string): string {
 }
 
 export function sourceDot(sourceId: string): string {
-  if (sourceId === 'claude-code') return 'bg-[#D97757]'
-  if (sourceId === 'codex') return 'bg-[#10A37F]'
-  if (sourceId === 'pi') return 'bg-[#7C6FE8]'
+  if (sourceId === 'claude-code') return 'source-claude'
+  if (sourceId === 'codex') return 'source-codex'
+  if (sourceId === 'pi') return 'source-pi'
   if (sourceId === 'hermes') return 'source-hermes'
   if (sourceId === 'opencode') return 'source-opencode'
-  return 'bg-muted'
+  return 'source-unknown'
 }
 
 export function AgentScope({ agents, value, onChange, allLabel = '全部' }: { agents: AgentFacetDto[]; value: string; onChange(value: string): void; allLabel?: string | false }) {
