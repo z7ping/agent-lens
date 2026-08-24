@@ -12,9 +12,42 @@ on:
       - codex/fix-runtime-projection-stability
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
+  refresh-lock:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.23.0
+          package-manager-cache: false
+
+      - name: Regenerate npm lockfile from clean dependency graph
+        shell: bash
+        run: |
+          rm -f package-lock.json
+          rm -rf node_modules
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Commit regenerated lockfile when changed
+        shell: bash
+        run: |
+          if git diff --quiet -- package-lock.json; then
+            echo 'package-lock.json 已是最新'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package-lock.json
+          git commit -m '重新生成跨平台 npm 锁文件'
+          git push origin HEAD:main
+
   verify:
     strategy:
       fail-fast: false
