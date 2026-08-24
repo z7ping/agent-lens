@@ -6,6 +6,7 @@ import type {
   BackupVerifyResponseDto,
 } from '@agent-lens/protocol'
 import { AgentLensApi } from '../client/api'
+import { agentLabel } from '../components/AgentScope'
 import { WorkspaceSkeleton } from '../components/StateViews'
 
 const ALL_KINDS: BackupAssetKindDto[] = [
@@ -47,16 +48,14 @@ function sourceDotClass(sourceId: string): string {
   if (sourceId === 'codex') return 'dot-codex'
   if (sourceId === 'claude-code') return 'dot-claude'
   if (sourceId === 'pi') return 'dot-pi'
+  if (sourceId === 'hermes') return 'dot-hermes'
+  if (sourceId === 'opencode') return 'dot-opencode'
   return 'dot-none'
 }
 
 function sourceLabel(sourceId: string, displayName?: string): string {
   const cleaned = displayName?.replace(/\s+Source$/i, '').trim()
-  if (cleaned) return cleaned
-  if (sourceId === 'claude-code') return 'Claude Code'
-  if (sourceId === 'codex') return 'Codex'
-  if (sourceId === 'pi') return 'Pi'
-  return sourceId
+  return cleaned || agentLabel(sourceId)
 }
 
 function previewStatusLabel(status: string): string {
@@ -97,6 +96,14 @@ export function BackupPage() {
   }
 
   useEffect(() => { void refresh() }, [])
+  useEffect(() => {
+    if (!preview) return
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setPreview(null)
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [preview])
 
   const sources = overview?.sources ?? []
   const snapshots = overview?.snapshots ?? []
@@ -327,7 +334,7 @@ export function BackupPage() {
       <div className="future-drawer-body">
         <section className="drawer-section"><h3>差异摘要</h3><div className="preview-summary"><span><b>{preview.unchanged}</b> 一致</span><span><b>{preview.missing}</b> 缺失</span><span><b>{preview.modified}</b> 已修改</span><span><b>{preview.blocked}</b> 阻止</span></div></section>
         <section className="drawer-section"><h3>文件</h3><div className="drawer-file-list">{preview.items.map(item => <div key={`${item.sourceId}:${item.archivePath}`} className="drawer-file preview-file"><span className={`badge ${item.status === 'blocked' ? 'err' : item.status === 'modified' ? 'warn' : item.status === 'unchanged' ? 'ok' : 'info'}`}>{previewStatusLabel(item.status)}</span><code>{item.targetPath ?? item.archivePath}</code>{item.reason && <small>{item.reason}</small>}</div>)}</div></section>
-        <section className="drawer-section"><div className="future-note"><b>这里只做预演。</b> 当前版本没有直接写回接口，因此查看差异不会修改 Codex、Claude Code 或 Pi 的任何文件。</div></section>
+        <section className="drawer-section"><div className="future-note"><b>这里只做预演。</b> 当前版本没有直接写回接口，因此查看差异不会修改任何已检测智能体的文件。</div></section>
       </div>
     </aside></>}
   </>
