@@ -54,25 +54,48 @@ jobs:
       - name: Build distributable
         run: npm run build:dist
 
-      - name: Verify Windows no-window Hook runner
+      - name: Verify Windows shared Hook dispatcher
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $inbox = Join-Path $env:RUNNER_TEMP 'agent-lens-hook-inbox'
           New-Item -ItemType Directory -Force -Path $inbox | Out-Null
           $env:AGENT_LENS_CLAUDE_INBOX = $inbox
-          $nodePath = (Get-Command node).Source
-          $runner = Join-Path $PWD 'dist/hooks/agent-lens-hook-runner.ps1'
-          $hook = Join-Path $PWD 'dist/hooks/agent-lens-hook-claude.mjs'
-          $payload = '{"hook_event_name":"PreToolUse","hook_invocation_id":"ci-windows-hook-runner"}'
 
-          $payload | powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File $runner $nodePath $hook
-          if ($LASTEXITCODE -ne 0) { throw 'Windows Hook 无窗口启动器执行失败' }
+          # Resolving Hook status is enough to register the current npm distribution
+          # and install the stable user-level dispatcher. Missing native Hook config is
+          # expected in CI, so its command exit code is intentionally ignored here.
+          node dist/cli.mjs hook status all --json | Out-Null
+
+          $agentLensRoot = Join-Path $HOME '.agent-lens/1.0'
+          $installations = Join-Path $agentLensRoot 'installations'
+          $dispatcher = Join-Path $agentLensRoot 'runtime/windows-hook-dispatcher.ps1'
+          if (-not (Test-Path $dispatcher)) { throw '共享 Windows Hook 分发器未安装' }
+          if (-not (Test-Path (Join-Path $installations 'npm.json'))) { throw 'npm 安装登记未生成' }
+
+          # Simulate an uninstalled Desktop that left a stale registry record behind.
+          # The dispatcher must validate real files, skip Desktop immediately, and fall
+          # back to the still-valid npm provider without rewriting Hook configuration.
+          $staleDesktop = @{
+            schemaVersion = 1
+            kind = 'desktop'
+            version = 'stale-ci'
+            executable = 'C:\missing-agent-lens\AgentLens.exe'
+            hookRoot = 'C:\missing-agent-lens\hooks'
+            electronRunAsNode = $true
+            registeredAt = (Get-Date).ToUniversalTime().ToString('o')
+            updatedAt = (Get-Date).ToUniversalTime().ToString('o')
+          } | ConvertTo-Json
+          $staleDesktop | Set-Content -Encoding UTF8 (Join-Path $installations 'desktop.json')
+
+          $payload = '{"hook_event_name":"PreToolUse","hook_invocation_id":"ci-shared-dispatcher-fallback"}'
+          $payload | powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File $dispatcher agent-lens-hook-claude
+          if ($LASTEXITCODE -ne 0) { throw '共享 Windows Hook 分发器执行失败' }
 
           $files = @(Get-ChildItem -Path $inbox -Filter '*.json')
-          if ($files.Count -ne 1) { throw "Windows Hook 启动器没有产生唯一 Inbox 事件，实际：$($files.Count)" }
+          if ($files.Count -ne 1) { throw "共享分发器没有产生唯一 Inbox 事件，实际：$($files.Count)" }
           $captured = Get-Content -Raw $files[0].FullName | ConvertFrom-Json
-          if ($captured.event.hook_invocation_id -ne 'ci-windows-hook-runner') { throw 'Windows Hook 启动器没有完整传递 stdin JSON' }
+          if ($captured.event.hook_invocation_id -ne 'ci-shared-dispatcher-fallback') { throw '共享分发器没有完整传递 stdin JSON' }
 
       - name: Verify Windows npm lifecycle
         if: runner.os == 'Windows'
