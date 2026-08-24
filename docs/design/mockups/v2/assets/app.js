@@ -7,8 +7,8 @@
 
   var KEY = 'al-mock-theme'
   var AKEY = 'al-mock-audit'
-  var sunIcon = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="3.4"/><path d="M10 1.8v2M10 16.2v2M1.8 10h2M16.2 10h2M4.2 4.2l1.4 1.4M14.4 14.4l1.4 1.4M15.8 4.2l-1.4 1.4M5.6 14.4l-1.4 1.4"/></svg>'
-  var moonIcon = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.8 12.8A6.7 6.7 0 0 1 7.2 4.2 6.8 6.8 0 1 0 15.8 12.8Z"/></svg>'
+  var sunIcon = '<svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="3.4"/><path d="M10 1.8v2M10 16.2v2M1.8 10h2M16.2 10h2M4.2 4.2l1.4 1.4M14.4 14.4l1.4 1.4M15.8 4.2l-1.4 1.4M5.6 14.4l-1.4 1.4"/></svg>'
+  var moonIcon = '<svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.8 12.8A6.7 6.7 0 0 1 7.2 4.2 6.8 6.8 0 1 0 15.8 12.8Z"/></svg>'
 
   function renderThemeControls(theme) {
     document.querySelectorAll('[data-theme-toggle]').forEach(function (button) {
@@ -115,6 +115,9 @@
   function syncAgentDetails() {
     if (!/agents\.html$/i.test(location.pathname)) return
 
+    var card = document.querySelector('.agents-browser .acard')
+    if (card) card.classList.add('src-claude')
+
     document.querySelectorAll('.caps .cap').forEach(function (cap) {
       if (cap.dataset.currentCapability === 'true') return
       var title = cap.querySelector('b')
@@ -148,6 +151,12 @@
         else cell.classList.add('unobserved')
       })
     })
+    if (!matrix.querySelector('.matrix-wrap')) {
+      var wrap = document.createElement('div')
+      wrap.className = 'matrix-wrap'
+      rows.forEach(function (row) { wrap.appendChild(row) })
+      matrix.appendChild(wrap)
+    }
     matrix.dataset.currentMatrix = 'true'
   }
 
@@ -157,7 +166,7 @@
       if (node.textContent.indexOf('Agent 使用结构') >= 0) node.textContent = node.textContent.replace('Agent 使用结构', '智能体使用结构')
       if (node.tagName === 'TH' && node.textContent.trim() === 'Agent') node.textContent = '智能体'
       if (node.textContent.indexOf('对应 Agent') >= 0) node.textContent = node.textContent.replace('对应 Agent', '对应智能体')
-      if (node.textContent.indexOf('综合评分') >= 0) node.textContent = node.textContent.replace('Agent 综合评分', '智能体综合评分')
+      if (node.textContent.indexOf('Agent 综合评分') >= 0) node.textContent = node.textContent.replace('Agent 综合评分', '智能体综合评分')
     })
   }
 
@@ -179,11 +188,11 @@
         { id: 'hermes', label: 'Hermes', dot: 'dot-hermes' },
         { id: 'opencode', label: 'OpenCode', dot: 'dot-opencode' }
       ].forEach(function (source) {
-        var card = document.createElement('article')
-        card.className = 'protection-card is-muted'
-        card.dataset.source = source.id
-        card.innerHTML = '<div class="protection-card-head"><span class="src-dot lg ' + source.dot + '"></span><b>' + source.label + '</b><span class="badge">未检测</span></div><div class="protection-counts"><div class="protection-count"><strong>0</strong><span>技能文件</span></div><div class="protection-count"><strong>0</strong><span>会话文件</span></div><div class="protection-count"><strong>0</strong><span>全部文件</span></div></div><div class="protection-meta"><span>MCP 0 · 插件/扩展 0</span><span>暂无路径</span></div>'
-        grid.appendChild(card)
+        var protectionCard = document.createElement('article')
+        protectionCard.className = 'protection-card is-muted'
+        protectionCard.dataset.source = source.id
+        protectionCard.innerHTML = '<div class="protection-card-head"><span class="src-dot lg ' + source.dot + '"></span><b>' + source.label + '</b><span class="badge">未检测</span></div><div class="protection-counts"><div class="protection-count"><strong>0</strong><span>技能文件</span></div><div class="protection-count"><strong>0</strong><span>会话文件</span></div><div class="protection-count"><strong>0</strong><span>全部文件</span></div></div><div class="protection-meta"><span>MCP 0 · 插件/扩展 0</span><span>暂无路径</span></div>'
+        grid.appendChild(protectionCard)
       })
     }
 
@@ -300,7 +309,15 @@
   })
 
   document.addEventListener('keydown', function (event) {
-    if (event.key === 'Escape') closeAllDrawers()
+    if (event.key === 'Escape') {
+      closeAllDrawers()
+      return
+    }
+    if (event.key !== 'Enter' && event.key !== ' ') return
+    var opener = event.target.closest('[data-open-drawer]')
+    if (!opener) return
+    event.preventDefault()
+    openDrawer(opener.dataset.openDrawer)
   })
 
   document.querySelectorAll('.tabs').forEach(function (tabs) {
@@ -323,14 +340,16 @@
       if (!table || !tbody) return
       var index = Array.prototype.indexOf.call(th.parentElement.children, th)
       var numeric = th.dataset.sort === 'num'
+      var nextDirection = th.getAttribute('aria-sort') === 'descending' ? 'ascending' : 'descending'
       var rows = Array.prototype.slice.call(tbody.rows).sort(function (a, b) {
-        var left = a.children[index].dataset.v
-        var right = b.children[index].dataset.v
-        return numeric ? (+right) - (+left) : String(right).localeCompare(String(left))
+        var left = a.children[index].dataset.v || a.children[index].textContent.trim()
+        var right = b.children[index].dataset.v || b.children[index].textContent.trim()
+        var delta = numeric ? (+left) - (+right) : String(left).localeCompare(String(right))
+        return nextDirection === 'descending' ? -delta : delta
       })
       rows.forEach(function (row) { tbody.appendChild(row) })
       table.querySelectorAll('th').forEach(function (item) { item.removeAttribute('aria-sort') })
-      th.setAttribute('aria-sort', 'descending')
+      th.setAttribute('aria-sort', nextDirection)
     }
     th.addEventListener('click', activate)
     th.addEventListener('keydown', function (event) {
