@@ -1,8 +1,39 @@
-/* AgentLens v2.1 共享交互：主题 / 原始记录 / 抽屉 / Tab / 排序 / 复制 / turn-rail */
+/* AgentLens v2.1 共享交互：品牌 / 主题 / 原始记录 / 抽屉 / Tab / 排序 / 复制 / turn-rail */
 (function () {
   var KEY = 'al-mock-theme'
+  var sunIcon = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="3.4"/><path d="M10 1.8v2M10 16.2v2M1.8 10h2M16.2 10h2M4.2 4.2l1.4 1.4M14.4 14.4l1.4 1.4M15.8 4.2l-1.4 1.4M5.6 14.4l-1.4 1.4"/></svg>'
+  var moonIcon = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.8 12.8A6.7 6.7 0 0 1 7.2 4.2 6.8 6.8 0 1 0 15.8 12.8Z"/></svg>'
+
+  function renderThemeControls(t) {
+    document.querySelectorAll('[data-theme-toggle]').forEach(function (button) {
+      button.innerHTML = t === 'dark' ? sunIcon : moonIcon
+      button.setAttribute('aria-label', t === 'dark' ? '切换为浅色主题' : '切换为深色主题')
+      button.setAttribute('title', t === 'dark' ? '切换为浅色主题' : '切换为深色主题')
+    })
+  }
+
+  function renderBrand() {
+    document.querySelectorAll('.brand-mark').forEach(function (mark) {
+      if (mark.querySelector('img')) return
+      mark.textContent = ''
+      var img = document.createElement('img')
+      img.src = '../../../../packages/web/public/favicon.png'
+      img.alt = ''
+      img.setAttribute('aria-hidden', 'true')
+      img.style.width = '100%'
+      img.style.height = '100%'
+      img.style.display = 'block'
+      img.style.objectFit = 'contain'
+      img.style.borderRadius = '7px'
+      mark.appendChild(img)
+      mark.style.background = 'transparent'
+      mark.style.boxShadow = 'none'
+    })
+  }
+
   function applyTheme(t) {
     document.documentElement.dataset.theme = t
+    renderThemeControls(t)
     try { localStorage.setItem(KEY, t) } catch (e) {}
   }
   try { applyTheme(localStorage.getItem(KEY) || 'light') } catch (e) { applyTheme('light') }
@@ -17,7 +48,11 @@
   var auditOn = false
   try { auditOn = localStorage.getItem(AKEY) === '1' } catch (e) {}
   if (document.body) applyAudit(auditOn)
-  document.addEventListener('DOMContentLoaded', function () { applyAudit(auditOn) })
+  document.addEventListener('DOMContentLoaded', function () {
+    renderBrand()
+    renderThemeControls(document.documentElement.dataset.theme || 'light')
+    applyAudit(auditOn)
+  })
 
   function closeAllDrawers() {
     document.querySelectorAll('.drawer.show').forEach(function (d) { d.classList.remove('show') })
@@ -124,14 +159,14 @@
     var current = document.querySelector('.session-item.active') || null
     function keyOf(item) {
       if (!item) return ''
-      var t = item.querySelector('.si-title')
-      return item.dataset.sessionId || (t ? t.textContent.trim() : String(sessions.indexOf(item)))
+      var title = item.querySelector('.si-title')
+      return item.dataset.sessionId || (title ? title.textContent.trim() : String(sessions.indexOf(item)))
     }
     sessions.forEach(function (item) {
       item.addEventListener('click', function () {
         if (item === current) return
         if (current) positions[keyOf(current)] = reader.scrollTop
-        sessions.forEach(function (o) { o.classList.toggle('active', o === item) })
+        sessions.forEach(function (other) { other.classList.toggle('active', other === item) })
         current = item
         reader.scrollTop = positions[keyOf(item)] !== undefined ? positions[keyOf(item)] : 0
       })
@@ -142,14 +177,14 @@
   var rail = document.querySelector('.turn-rail')
   if (rail && reader) {
     var ticks = Array.prototype.slice.call(rail.querySelectorAll('.turn-tick'))
-    var rounds = ticks.map(function (tk) {
-      var el = document.querySelector(tk.dataset.target)
-      if (tk.dataset.tip) tk.setAttribute('aria-label', tk.dataset.tip)
+    var rounds = ticks.map(function (tick) {
+      var el = document.querySelector(tick.dataset.target)
+      if (tick.dataset.tip) tick.setAttribute('aria-label', tick.dataset.tip)
       return el
     })
     function isVisible(el) { return !!el && el.getClientRects().length > 0 }
-    ticks.forEach(function (tk, i) {
-      tk.addEventListener('click', function () {
+    ticks.forEach(function (tick, i) {
+      tick.addEventListener('click', function () {
         var el = rounds[i]
         if (!isVisible(el)) return
         var delta = el.getBoundingClientRect().top - reader.getBoundingClientRect().top - 88
@@ -164,7 +199,7 @@
         var d = Math.abs(el.getBoundingClientRect().top - top - 90)
         if (d < bestDist) { bestDist = d; best = i }
       })
-      ticks.forEach(function (tk, i) { tk.classList.toggle('active', i === best) })
+      ticks.forEach(function (tick, i) { tick.classList.toggle('active', i === best) })
     }
     reader.addEventListener('scroll', updateActive, { passive: true })
     requestAnimationFrame(updateActive)
