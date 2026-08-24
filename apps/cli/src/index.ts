@@ -66,8 +66,22 @@ async function fetchHealth(): Promise<Record<string, unknown>> {
     headers: { accept: 'application/json' },
     signal: AbortSignal.timeout(1500),
   })
-  if (!response.ok) throw new Error(`HTTP ${response.status}`)
+  if (!response.ok && response.status !== 503) throw new Error(`HTTP ${response.status}`)
   return response.json() as Promise<Record<string, unknown>>
+}
+
+function runtimeOwner(health: Record<string, unknown>): string | null {
+  const runtime = health.runtime
+  if (!runtime || typeof runtime !== 'object' || Array.isArray(runtime)) return null
+  const owner = (runtime as Record<string, unknown>).owner
+  return typeof owner === 'string' && owner ? owner : null
+}
+
+function runtimeOwnerLabel(owner: string | null): string {
+  if (owner === 'desktop') return 'Windows 客户端'
+  if (owner === 'service') return '后台服务'
+  if (owner === 'cli') return '命令行'
+  return owner ?? '未报告'
 }
 
 function formatHookStatus(status: HookStatus): string {
@@ -102,6 +116,15 @@ async function runHook(action: string, targetValue: string | undefined, json: bo
 }
 
 async function startDaemon(): Promise<number> {
+  try {
+    const health = await fetchHealth()
+    console.log(`AgentLens 已在运行（管理方式：${runtimeOwnerLabel(runtimeOwner(health))}）`)
+    console.log(`Web: ${daemonUrl('/')}`)
+    return 0
+  } catch {
+    // No compatible AgentLens health endpoint is currently reachable; start a foreground daemon.
+  }
+
   const explicit = process.env.AGENT_LENS_DAEMON_ENTRY
   const bundled = fileURLToPath(new URL('./daemon.mjs', import.meta.url))
   const dev = fileURLToPath(new URL('../../daemon/src/main.ts', import.meta.url))
@@ -113,7 +136,11 @@ async function startDaemon(): Promise<number> {
 
   const child = spawn(process.execPath, commandArgs, {
     stdio: 'inherit',
-    env: process.env,
+    env: {
+      ...process.env,
+      AGENT_LENS_DAEMON_MODE: 'foreground',
+      AGENT_LENS_RUNTIME_OWNER: 'cli',
+    },
   })
   return new Promise<number>((resolve, reject) => {
     child.once('error', reject)
@@ -127,11 +154,13 @@ async function startDaemon(): Promise<number> {
 async function status(json: boolean): Promise<number> {
   try {
     const health = await fetchHealth()
-    if (json) console.log(JSON.stringify({ online: true, url: daemonUrl('/'), health }, null, 2))
+    const owner = runtimeOwner(health)
+    if (json) console.log(JSON.stringify({ online: true, url: daemonUrl('/'), owner, health }, null, 2))
     else {
-      console.log(`AgentLens daemon: online`)
+      console.log('AgentLens daemon: online')
       console.log(`Web: ${daemonUrl('/')}`)
       console.log(`Protocol: ${String(health.protocolVersion ?? 'unknown')}`)
+      console.log(`管理方式: ${runtimeOwnerLabel(owner)}`)
     }
     return 0
   } catch (error) {
@@ -163,7 +192,7 @@ async function doctor(json: boolean): Promise<number> {
 
   try {
     const health = await fetchHealth()
-    checks.push({ id: 'daemon', level: 'pass', message: 'Daemon is reachable', detail: `${daemonUrl('/')} · protocol ${String(health.protocolVersion ?? 'unknown')}` })
+    checks.push({ id: 'daemon', level: 'pass', message: 'Daemon is reachable', detail: `${daemonUrl('/')} · protocol ${String(health.protocolVersion ?? 'unknown')} · owner ${runtimeOwnerLabel(runtimeOwner(health))}` })
   } catch (error) {
     checks.push({ id: 'daemon', level: 'warn', message: 'Daemon is not currently reachable', detail: error instanceof Error ? error.message : String(error) })
   }
@@ -237,4 +266,4 @@ if (process.argv[1] && dirname(fileURLToPath(import.meta.url)) === dirname(proce
   })
 }
 
-export const cliInternals = { parseNodeVersion, versionAtLeast, targetFrom, daemonUrl }
+export const cliInternals = { parseNodeVersion, versionAtLeast, targetFrom, daemonUrl, runtimeOwner }
