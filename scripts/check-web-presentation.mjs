@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 
 const mainPath = 'packages/web/src/main.tsx'
+const appPath = 'packages/web/src/App.tsx'
 const typographyPath = 'packages/web/src/typography.css'
 const tokenPath = 'packages/web/src/tokens.css'
 const mockTokenPath = 'docs/design/mockups/v2/assets/tokens.css'
@@ -26,6 +27,7 @@ const retiredReviewLayers = [
 ]
 
 const main = readFileSync(mainPath, 'utf8')
+const appSource = readFileSync(appPath, 'utf8')
 const cssImports = [...main.matchAll(/import\s+['"](.+?\.css)['"]/g)].map(match => match[1])
 const lastCssImport = cssImports.at(-1)
 
@@ -87,6 +89,13 @@ const mockToolsSource = readFileSync(mockToolsPath, 'utf8')
 const colorSystemSource = readFileSync(colorSystemPath, 'utf8')
 const finalAlignmentSource = readFileSync(finalAlignmentPath, 'utf8')
 const reviewReferenceSource = readFileSync(reviewReferencePath, 'utf8')
+
+try {
+  // 静态高保真原型不是 TypeScript 构建的一部分，至少在 CI 中保证共享脚本语法可执行。
+  new Function(mockAppSource)
+} catch (error) {
+  throw new Error(`当前高保真原型共享脚本存在语法错误：${error instanceof Error ? error.message : String(error)}`)
+}
 
 function block(source, selector) {
   const start = source.indexOf(`${selector} {`)
@@ -215,6 +224,12 @@ if ((mockToolsSource.match(/data-sort="num"/g) ?? []).length !== 5) {
 if (!mockAppSource.includes('builder-summary') || !mockAppSource.includes('preview-summary')) {
   throw new Error('资产备份当前稿必须包含创建摘要和恢复预演摘要')
 }
+if (!appSource.includes('className={`status-pill status-tip') || !appSource.includes('data-tip={healthTitle}')) {
+  throw new Error('正式顶部运行状态必须使用与当前稿一致的自定义提示卡，而不是浏览器原生 title')
+}
+if (!finalAlignmentSource.includes('.status-tip::after') || !finalAlignmentSource.includes('white-space: pre-line')) {
+  throw new Error('正式顶部运行状态提示卡必须支持多行事实说明')
+}
 
 /*
  * Token 数值正确并不足够：高特异性的历史组件规则仍可能覆盖背景，
@@ -242,4 +257,4 @@ if (!userMarkdownRule.test(colorSystemSource)) {
   throw new Error('用户消息 Markdown 正文必须绑定 --al-user-bubble-text，不能继承普通页面文字色')
 }
 
-console.log('Web 表现层收敛检查通过：加载顺序、12px 下限、五来源、1:1 原型结构、键盘交互、响应式契约和关键对比度均已校验')
+console.log('Web 表现层收敛检查通过：加载顺序、12px 下限、五来源、1:1 原型结构、顶部状态提示、键盘交互、响应式契约和关键对比度均已校验')
