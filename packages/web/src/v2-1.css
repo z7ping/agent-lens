@@ -44,7 +44,12 @@
 .review-page .execution-preview,
 .review-page .execution-duration,
 .review-page .evidence-inline,
+.review-page .evidence-inline-more,
 .review-page .event-row,
+.review-page .event-copy small,
+.review-page .event-source,
+.review-page .event-row time,
+.review-page .session-group,
 .turn-tick::after{
   font-size:var(--text-caption);
 }
@@ -72,6 +77,28 @@
   overflow:auto;
   overscroll-behavior:contain;
   scrollbar-gutter:stable;
+}
+
+/*
+ * 高保真原型里仍有少量仅用于视觉压缩的 10–11px 文本。
+ * 这些位置保留紧凑布局，但统一回到 12/13px 语义层级，避免不同页面阅读密度失衡。
+ */
+.app-header .status-pill,
+.agent-source-nav-head b,
+.agent-source-nav-head span,
+.agent-source-copy small,
+.agent-source-state,
+.tool-detail-code,
+.evidence-meta,
+.evidence-path,
+.evidence-missing,
+.tool-drill-stat span,
+.tool-drill-note{
+  font-size:var(--text-caption);
+}
+.agent-source-copy b,
+.evidence-meta b{
+  font-size:var(--text-secondary);
 }
 
 .insight-coverage-strip{
