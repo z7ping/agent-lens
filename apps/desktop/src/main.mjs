@@ -3,6 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { spawn } from 'node:child_process'
+import { connect } from 'node:net'
 import {
   app,
   BrowserWindow,
@@ -16,8 +17,10 @@ import {
 const DEFAULT_PORT = 56789
 const EXPECTED_PROTOCOL_VERSION = '1.0'
 const MAX_RESTARTS_PER_MINUTE = 5
+const DAEMON_FAST_HEALTH_TIMEOUT_MS = 250
 const DAEMON_HEALTH_TIMEOUT_MS = 900
-const DAEMON_PROBE_ATTEMPTS = 3
+const DAEMON_BUSY_PROBE_ATTEMPTS = 3
+const DAEMON_PORT_TIMEOUT_MS = 180
 const port = process.env.AGENT_LENS_PORT ? Number(process.env.AGENT_LENS_PORT) : DEFAULT_PORT
 const daemonUrl = `http://127.0.0.1:${port}`
 const startHidden = process.argv.includes('--hidden')
@@ -71,13 +74,40 @@ function assertCompatibleDaemon(health) {
   throw new Error(`检测到不兼容的 AgentLens 运行时：Protocol ${String(health.protocolVersion ?? 'unknown')}，当前客户端要求 ${EXPECTED_PROTOCOL_VERSION}`)
 }
 
+function isDaemonPortOpen(timeoutMs = DAEMON_PORT_TIMEOUT_MS) {
+  return new Promise(resolve => {
+    let settled = false
+    const socket = connect({ host: '127.0.0.1', port })
+    const done = value => {
+      if (settled) return
+      settled = true
+      socket.destroy()
+      resolve(value)
+    }
+    socket.setTimeout(timeoutMs)
+    socket.once('connect', () => done(true))
+    socket.once('timeout', () => done(false))
+    socket.once('error', () => done(false))
+  })
+}
+
 async function probeExistingDaemon() {
-  for (let attempt = 0; attempt < DAEMON_PROBE_ATTEMPTS; attempt += 1) {
+  const fastHealth = await readDaemonHealth(DAEMON_FAST_HEALTH_TIMEOUT_MS)
+  if (fastHealth) return fastHealth
+
+  // 冷启动时默认端口通常会立即拒绝连接，此时直接拉起自己的 Daemon，
+  // 不再为了“确认不存在”连续等待多个 Health 超时。
+  // 如果端口已经被占用，则继续使用较长 Health 探测，避免把一个正在
+  // 启动或暂时繁忙的现有 AgentLens 误判成“没有运行时”。
+  if (!await isDaemonPortOpen()) return null
+
+  for (let attempt = 0; attempt < DAEMON_BUSY_PROBE_ATTEMPTS; attempt += 1) {
     const health = await readDaemonHealth()
     if (health) return health
-    if (attempt < DAEMON_PROBE_ATTEMPTS - 1) await sleep(120)
+    if (attempt < DAEMON_BUSY_PROBE_ATTEMPTS - 1) await sleep(120)
   }
-  return null
+
+  throw new Error(`端口 ${port} 已被占用，但没有得到兼容的 AgentLens Health 响应。为避免启动第二个默认运行时，桌面端不会继续接管。`)
 }
 
 async function daemonReady() {
