@@ -72,17 +72,21 @@ function distributionContext(
   executable: string
   hooksRoot: string
   electronRunAsNode: boolean
+  formalDistribution: boolean
 } {
   const current = fileURLToPath(moduleUrl)
+  const desktop = env.AGENT_LENS_DISTRIBUTION === 'desktop'
+  const formalDistribution = current.endsWith('.mjs') || desktop
   const distRoot = current.endsWith('.mjs')
     ? dirname(current)
     : resolve(dirname(current), '../../../dist')
-  const kind: InstallationKind = env.AGENT_LENS_DISTRIBUTION === 'desktop' ? 'desktop' : 'npm'
+  const kind: InstallationKind = desktop ? 'desktop' : 'npm'
   return {
     kind,
     executable: env.AGENT_LENS_INSTALLATION_EXECUTABLE || nodePath,
     hooksRoot: env.AGENT_LENS_HOOK_ROOT || join(distRoot, 'hooks'),
-    electronRunAsNode: kind === 'desktop',
+    electronRunAsNode: desktop,
+    formalDistribution,
   }
 }
 
@@ -98,7 +102,7 @@ export function resolveHookExecutionProfile(options: ResolveHookExecutionOptions
   const dispatcherSource = join(context.hooksRoot, 'windows-hook-dispatcher.ps1')
 
   let installation: InstallationRecord | undefined
-  if ([context.executable, context.hooksRoot, codexScript, claudeScript].every(existsSync)) {
+  if (context.formalDistribution && [context.executable, context.hooksRoot, codexScript, claudeScript].every(existsSync)) {
     installation = registerInstallationSync({
       kind: context.kind,
       version,
