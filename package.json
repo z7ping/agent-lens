@@ -25,6 +25,7 @@
     "cli": "npm run start --workspace @agent-lens/cli --",
     "dev:web": "npm run dev --workspace @agent-lens/web",
     "build:web": "npm run build --workspace @agent-lens/web",
+    "check:web-presentation": "node scripts/check-web-presentation.mjs",
     "build:dist": "node scripts/build-distribution.mjs",
     "build": "npm run build:dist",
     "smoke:dist": "node scripts/smoke-distribution.mjs",
@@ -33,7 +34,7 @@
     "start": "npm run start --workspace @agent-lens/daemon",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
-    "release:check": "npm run typecheck && npm test && npm run build:dist && npm run smoke:dist && npm pack --dry-run",
+    "release:check": "npm run check:web-presentation && npm run typecheck && npm test && npm run build:dist && npm run smoke:dist && npm pack --dry-run",
     "prepack": "npm run build:dist"
   },
   "repository": {
