@@ -1,4 +1,4 @@
-/* AgentLens Mock Tokens (v2) —— 与 packages/web/src/theme.css 同源色板 + 对比度修正 */
+/* AgentLens Mock Tokens (v2) —— 与 packages/web/src/tokens.css 同源色板 + 对比度修正 */
 :root {
   --al-canvas:#F7F7F5;
   --al-surface:#FFFFFF;
@@ -28,6 +28,11 @@
   --font-ui:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
   --font-mono:"SFMono-Regular",Consolas,"Liberation Mono",monospace;
   --radius-sm:7px;--radius-md:10px;--radius-lg:14px;
+  --src-codex:#16866D;
+  --src-claude:#C96E4D;
+  --src-pi:#756FDC;
+  --src-hermes:#8B5CF6;
+  --src-opencode:#0E7490;
 }
 :root[data-theme='dark'] {
   --al-canvas:#111210;
@@ -55,9 +60,12 @@
   --al-user-bubble-code:#D8DBD4;
   --al-shadow:0 1px 2px rgb(0 0 0 / .18),0 12px 30px rgb(0 0 0 / .16);
   --al-shadow-lg:0 24px 72px rgb(0 0 0 / .44);
+  --src-codex:#4DC7A2;
+  --src-claude:#E59675;
+  --src-pi:#9B96FF;
+  --src-hermes:#B69CFF;
+  --src-opencode:#67D4E8;
 }
-:root{--src-codex:#16866D;--src-claude:#C96E4D;--src-pi:#756FDC}
-:root[data-theme='dark']{--src-codex:#4DC7A2;--src-claude:#E59675;--src-pi:#9B96FF}
 
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
