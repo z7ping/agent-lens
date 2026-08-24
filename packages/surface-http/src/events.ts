@@ -24,7 +24,8 @@ export class HttpEventHub {
     response.setHeader('x-accel-buffering', 'no')
     response.flushHeaders?.()
 
-    const client: Client = {
+    let client!: Client
+    client = {
       response,
       heartbeat: setInterval(() => this.write(client, ': heartbeat\n\n'), 15_000),
     }
