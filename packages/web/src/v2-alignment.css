@@ -101,12 +101,6 @@
   box-shadow: none;
 }
 
-/* v2 表格只保留：工具 / 调用 / 会话 / 成功率 / 失败 / 平均耗时。 */
-.tool-table th:nth-child(6),
-.tool-table td:nth-child(6) {
-  display: none;
-}
-
 .tool-table th,
 .tool-table td {
   padding-left: 13px;
@@ -116,6 +110,92 @@
 .tool-table tbody tr:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--al-accent) 55%, transparent);
   outline-offset: -2px;
+}
+
+.tool-attention {
+  margin-top: 22px;
+}
+
+.tool-attention-list {
+  margin-top: 8px;
+  border-top: 1px solid var(--al-line);
+}
+
+.tool-attention-row {
+  width: 100%;
+  min-height: 50px;
+  padding: 9px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--al-line);
+  background: transparent;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  text-align: left;
+}
+
+.tool-attention-row:hover {
+  background: var(--al-soft-2);
+}
+
+.tool-attention-row > span:nth-child(2) {
+  min-width: 0;
+}
+
+.tool-attention-row b {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--al-ink);
+}
+
+.tool-attention-row small {
+  display: block;
+  margin-top: 2px;
+  color: var(--al-muted);
+  font-size: 11.5px;
+}
+
+.tool-attention-row > strong {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tool-attention-badge {
+  min-width: 58px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 650;
+  text-align: center;
+}
+
+.tool-attention-badge.is-danger {
+  background: var(--al-danger-soft);
+  color: var(--al-danger);
+}
+
+.tool-attention-badge.is-warning {
+  background: var(--al-warning-soft);
+  color: var(--al-warning);
+}
+
+.asset-usage-bar {
+  margin-left: auto;
+  width: min(220px, 22vw);
+  min-width: 80px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--al-soft);
+  overflow: hidden;
+}
+
+.asset-usage-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--al-accent);
 }
 
 /* 工具详情：原型是横向指标条，而不是六块独立卡片。 */
@@ -138,6 +218,63 @@
 
 .tool-drill-stat:nth-child(3n) {
   border-right: 0;
+}
+
+.tool-session-section {
+  margin-top: 18px;
+}
+
+.tool-session-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.tool-session-link {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--al-line);
+  border-radius: 9px;
+  background: var(--al-soft-2);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px auto;
+  gap: 9px;
+  align-items: center;
+  text-align: left;
+}
+
+.tool-session-link:hover {
+  border-color: var(--al-line-strong);
+  background: var(--al-soft);
+}
+
+.tool-session-copy {
+  min-width: 0;
+}
+
+.tool-session-copy b {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--al-ink);
+  font-size: 12.5px;
+  font-weight: 620;
+}
+
+.tool-session-copy small {
+  display: block;
+  margin-top: 2px;
+  color: var(--al-muted-2);
+  font-size: 11px;
+}
+
+.tool-session-open {
+  color: var(--al-accent);
+  font-size: 11.5px;
+  font-weight: 650;
+  white-space: nowrap;
 }
 
 /* ── 智能体概览：保持 v2 单来源详情，弱化卡片堆叠 ── */
@@ -192,5 +329,17 @@
 
   .tool-drill-stat:nth-child(2n) {
     border-right: 0;
+  }
+
+  .tool-session-link {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .tool-session-link .metric-bar {
+    display: none;
+  }
+
+  .asset-usage-bar {
+    display: none;
   }
 }
