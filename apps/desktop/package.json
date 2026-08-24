@@ -21,6 +21,7 @@
     "appId": "dev.z7ping.agentlens",
     "productName": "AgentLens",
     "asar": true,
+    "electronDist": ".electron-dist/electron-v43.4.0-win32-x64",
     "asarUnpack": [
       "node_modules/better-sqlite3/**/*",
       "runtime/cli.mjs",

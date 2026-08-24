@@ -11,6 +11,7 @@ trace_error.log
 dist/
 release/
 apps/desktop/runtime/
+apps/desktop/.electron-dist/
 
 # 忽略临时文件
 *.tmp
