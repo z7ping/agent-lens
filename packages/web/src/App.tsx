@@ -102,6 +102,12 @@ const runtimeModeLabel: Record<string, string> = {
   managed: '托管',
 }
 
+function ThemeGlyph({ dark }: { dark: boolean }) {
+  return dark
+    ? <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="3.4"/><path d="M10 1.8v2M10 16.2v2M1.8 10h2M16.2 10h2M4.2 4.2l1.4 1.4M14.4 14.4l1.4 1.4M15.8 4.2l-1.4 1.4M5.6 14.4l-1.4 1.4"/></svg>
+    : <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M15.8 12.8A6.7 6.7 0 0 1 7.2 4.2 6.8 6.8 0 1 0 15.8 12.8Z"/></svg>
+}
+
 function Shell({ model }: { model: AgentLensClientModel }) {
   const snapshot = useClientSnapshot(model)
   const location = useLocation()
@@ -115,8 +121,8 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     setTheme(next)
     writeTheme(next)
   }
-  const healthLabel = snapshot.health?.status === 'ok' ? '运行中' : snapshot.health ? '运行降级' : '连接中'
   const statusHealthy = snapshot.health?.status === 'ok' && snapshot.liveConnected
+  const healthLabel = !snapshot.health ? '连接中' : snapshot.health.status !== 'ok' ? '运行降级' : snapshot.liveConnected ? '运行正常' : '实时断开'
   const runtime = snapshot.health?.runtime
   const healthTitle = [
     snapshot.health ? `后台服务：${snapshot.health.status === 'ok' ? '正常' : '降级'}` : '后台服务：连接中',
@@ -162,7 +168,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
       <header className="app-header">
         <div className="app-header-inner">
           <div className="brand" aria-label="AgentLens">
-            <span className="brand-mark">A</span>
+            <img className="brand-logo" src="/favicon.png" alt="" aria-hidden="true"/>
             <span className="brand-name">AgentLens</span>
           </div>
           <nav className="app-nav" aria-label="主导航">
@@ -178,7 +184,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
               <span className={`live-dot ${statusHealthy ? 'live-dot-online' : 'live-dot-waiting'}`} />
               <span>{healthLabel}</span>
             </span>
-            <button className="theme-toggle" onClick={toggleTheme} title={theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'} aria-label="切换主题">◐</button>
+            <button className="theme-toggle" onClick={toggleTheme} title={theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'} aria-label={theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'}><ThemeGlyph dark={theme === 'dark'}/></button>
           </div>
         </div>
       </header>
