@@ -26,7 +26,7 @@
     "dev:web": "npm run dev --workspace @agent-lens/web",
     "build:web": "npm run build --workspace @agent-lens/web",
     "check:web-presentation": "node scripts/check-web-presentation.mjs",
-    "check:desktop-shell": "node --check apps/desktop/src/main.mjs",
+    "check:desktop-shell": "node --check apps/desktop/src/bootstrap.mjs && node --check apps/desktop/src/integration.mjs && node --check apps/desktop/src/main.mjs",
     "build:dist": "node scripts/build-distribution.mjs",
     "build": "npm run build:dist",
     "smoke:dist": "node scripts/smoke-distribution.mjs",
