@@ -89,14 +89,19 @@ function psQuote(value: string): string {
   return `'${value.replace(/'/g, "''")}'`
 }
 
-export function windowsTaskScript(options: LifecycleOptions, autostart: boolean): string {
+function windowsManagedArgument(options: LifecycleOptions): string {
   const nodePath = options.nodePath ?? process.execPath
-  const argument = `"${options.cliEntry}" service run`
+  const command = `& ${psQuote(nodePath)} ${psQuote(options.cliEntry)} service run`
+  return `-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command "${command}"`
+}
+
+export function windowsTaskScript(options: LifecycleOptions, autostart: boolean): string {
+  const argument = windowsManagedArgument(options)
   return [
     "$ErrorActionPreference = 'Stop'",
     `$taskName = ${psQuote(WINDOWS_TASK_NAME)}`,
     '$user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name',
-    `$action = New-ScheduledTaskAction -Execute ${psQuote(nodePath)} -Argument ${psQuote(argument)}`,
+    `$action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ${psQuote(argument)}`,
     '$settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)',
     '$principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited',
     autostart
@@ -355,6 +360,7 @@ export const lifecycleInternals = {
   dataRoot,
   runtimeDir,
   preferencesPath,
+  windowsManagedArgument,
   windowsTaskScript,
   systemdUnit,
   launchdPlist,
