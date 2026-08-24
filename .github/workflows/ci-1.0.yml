@@ -39,6 +39,9 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
+      - name: Verify Web presentation convergence
+        run: npm run check:web-presentation
+
       - name: Typecheck
         run: npm run typecheck
 
