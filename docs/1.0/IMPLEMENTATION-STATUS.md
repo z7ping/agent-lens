@@ -135,9 +135,13 @@ Agent 快捷入口按本机检测结果自动初始化，同时允许用户 Pin 
 - Pi 初始化明确不安装 Hook，继续使用原生 History / Runtime Tail
 - `setup` 不自动启动长期 Daemon，也不默认开启 npm 登录自启
 - `start` 启动前先探测默认 HTTP 地址；已有兼容 Daemon 时直接复用，不重复启动
+- `status` 现在同时报告 Daemon 与系统托管状态；即使 Daemon 离线，也能看到后台定义、当前运行、登录自启和 Windows 隐藏窗口状态
+- `doctor` 增加系统托管一致性检查：识别 `service` 所有权与系统托管状态不一致，以及 Windows 旧后台任务定义
 - npm 后台命令：`service start / stop / restart / status`
 - npm 登录自启命令：`autostart enable / disable / status`
 - Windows npm 后台使用当前用户 Task Scheduler；后台任务可无登录触发器独立注册，`autostart` 只控制登录触发器
+- Windows npm 后台任务不再直接执行 `node.exe`，而是由隐藏 PowerShell 启动 `service run`，降低用户登录会话中弹控制台窗口的风险
+- Windows 计划任务状态会检查当前任务定义是否包含隐藏窗口参数；旧定义会被 `doctor` 标记为警告，重新执行 `agent-lens service start` 可刷新定义
 - Linux npm 后台使用 `systemd --user`，服务文件位于 `~/.config/systemd/user/agent-lens.service`
 - macOS npm 后台使用 LaunchAgent / `launchd`，定义位于 `~/Library/LaunchAgents/com.agentlens.daemon.plist`
 - 系统托管统一进入内部 `service run`，Daemon 报告 `owner=service`、`mode=managed`
@@ -145,6 +149,9 @@ Agent 快捷入口按本机检测结果自动初始化，同时允许用户 Pin 
 - `service restart` 遇到 Desktop / 前台 CLI 所有的当前运行时不会强行接管
 - 本地 `lifecycle.json` 只保存自启偏好，不保存 PID；系统托管配置成功后再写偏好，避免本地状态领先于系统真实状态
 - `service start` 会保留已存在的系统自启设置，避免重新注册后台定义时意外关闭登录自启
+- Windows npm 发行包包含 `dist/hooks/agent-lens-hook-runner.ps1` 无窗口 Hook 启动器
+- Windows `setup` / `hook install` 在正式发行包可用时，将 Codex / Claude Hook 命令切换为“隐藏 PowerShell -> `CreateNoWindow` Node Hook”；Hook 仍只继承 stdin/stdout、写 Durable Inbox，不接触 Daemon 生命周期
+- `doctor` 在 Windows 单独报告无窗口 Hook 启动器是否可用
 - npm 与 Windows Desktop 共用默认数据根和默认端口；Desktop 只停止自己拥有的 Daemon
 - Windows Desktop 首次正式安装运行时默认启用登录 Windows 后自动运行，可从托盘关闭；登录自启以隐藏窗口进入托盘
 - npm 单包分发构建
@@ -185,7 +192,7 @@ docs/static/
 - 旧 HTTP API Compatibility Layer
 - 0.x Tool Stack Map 的价值分 / 风险分 / 工作流推荐算法
 
-注意：1.0 已经重新实现“后台常驻 / 登录自启”这一**产品能力**，但实现方式是操作系统原生用户级托管，不代表恢复了上述 0.x service manager / PID 架构。
+注意：1.0 已经重新实现“后台常驻 / 登录自启”这一**产品能力**，但实现方式是操作系统原生用户级托管，不代表恢复了上述 0.x service manager / PID 架构。Windows 无窗口 Hook 启动器也只是 Hook 执行包装，不是新的 Runtime 或 Service Manager。
 
 ## 已实现能力：本地 AI 资产备份
 
@@ -249,6 +256,8 @@ P1：
 - CLI 初始化只修改 AgentLens 自己负责的集成配置，不为未检测到的 Agent 强行安装 Hook。
 - npm / Desktop 共存不得产生第二个默认 Daemon、第二套默认数据库或重复采集链路。
 - npm 后台托管不得通过 PID 文件成为第二套生命周期事实来源。
+- Windows 后台任务必须能诊断是否使用隐藏窗口定义；旧定义不得被误报为已完成无窗口收敛。
+- Windows 无窗口 Hook 启动器只能负责进程启动与标准输入输出继承，不能访问 Core、SQLite、HTTP 或 Daemon 生命周期。
 - 登录自启状态必须以系统托管定义成功为前提，本地偏好不得领先于系统真实状态。
 - 幂等的 `unchanged` Replay 不触发 SSE 更新噪声。
 - SSE 实时更新不能通过反复全量替换内容区破坏滚动位置、展开状态和阅读上下文。
@@ -274,7 +283,12 @@ P1：
 - CLI 运行时所有者字段兼容旧 Health Payload；
 - CLI `setup` 只为实际检测到且缺失 / 不完整的 Codex / Claude Hook 选择安装目标；
 - Codex trusted 配置缺失时允许 `setup` 幂等修复；
-- Windows 用户级计划任务定义生成：后台任务与登录触发器分离；
+- `status` / `doctor` 生命周期摘要与 Windows 隐藏窗口状态表达；
+- Windows 用户级计划任务定义生成：后台任务与登录触发器分离，并通过隐藏 PowerShell 启动 `service run`；
+- Windows 计划任务状态脚本识别隐藏窗口定义；
+- Windows Hook 无窗口命令生成；
+- Windows CI 构建后真实执行无窗口 Hook 启动器，验证 stdin JSON 可完整进入 Claude Durable Inbox；
+- Windows CI 构建后真实执行 `autostart enable -> service start -> Health owner=service -> doctor -> service stop` 生命周期链；
 - Linux `systemd --user` Unit 生成与 `KillMode=control-group`；
 - macOS LaunchAgent `RunAtLoad` 与异常恢复定义生成；
 - HTTP Health Runtime 元数据；
@@ -299,7 +313,8 @@ Windows 安装包此前已经完成一次真实流水线验证：
 
 - 在真实 Windows 桌面环境中点击安装、启动、登录自启、托盘、退出和卸载；
 - 在真实 npm 全局安装环境执行 `agent-lens setup`，确认 Codex / Claude / Pi 检测结果与 Hook 补齐行为符合预期；
-- Windows npm：`service start/stop/restart`、`autostart enable/disable`、注销重新登录以及后台 Node 是否出现控制台闪现；
+- Windows npm：注销重新登录后确认隐藏后台任务不会产生可见控制台闪现；
+- Windows Hook：在真实 Codex / Claude Code 交互中确认无窗口启动器不会产生可见闪窗，并保持 Hook 时延可接受；
 - Linux npm：常见发行版与 WSL 的 `systemd --user` 启动、停止、enable/disable；
 - macOS npm：LaunchAgent bootstrap / bootout / kickstart 与登录加载；
 - npm 与 Windows Desktop 同时启用登录自启时，确认竞争启动最终仍只有一个默认 Daemon；
