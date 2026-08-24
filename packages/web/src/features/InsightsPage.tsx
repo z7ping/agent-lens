@@ -86,7 +86,7 @@ export function InsightsPage({ model }: { model: AgentLensClientModel }) {
     </div>
 
     <div className="page-content insights-content">
-      <header className="page-heading"><div><span className="eyebrow">长期观察</span><h1>使用洞察</h1><p>把已经采集的会话、工具和能力资产事实聚合成趋势与重复模式。这里不做 Agent 综合评分，也不把共同出现包装成因果结论。</p></div></header>
+      <header className="page-heading"><div><span className="eyebrow">长期观察</span><h1>使用洞察</h1><p>把已经采集的会话、工具和能力资产事实聚合成趋势与重复模式。这里不做智能体综合评分，也不把共同出现包装成因果结论。</p></div></header>
 
       {insights.error && <ErrorStateBanner message={insights.error} onRetry={() => void insightsModel.refresh()}/>} 
 
@@ -131,19 +131,19 @@ export function InsightsPage({ model }: { model: AgentLensClientModel }) {
         </section>
 
         <section className="insight-card">
-          <div className="insight-card-head"><div><h2>Agent 使用结构</h2><p>同一会话若同时包含多个来源，会分别计入对应 Agent；这是“会话中出现过该来源”，不是独占归因。</p></div></div>
+          <div className="insight-card-head"><div><h2>智能体使用结构</h2><p>同一会话若同时包含多个来源，会分别计入对应智能体；这是“会话中出现过该来源”，不是独占归因。</p></div></div>
           <div className="insight-agent-table-wrap"><table className="insight-agent-table">
-            <thead><tr><th>Agent</th><th>会话</th><th>交互</th><th>工具调用</th><th>明确失败</th><th>已观察资产调用</th><th>会话跨度合计</th></tr></thead>
-            <tbody>{data.agents.map(agent => <tr key={agent.sourceId}><td><b>{agentLabel(agent.sourceId)}</b><small>{agent.productIds.join(' / ')}</small></td><td>{agent.sessionCount}</td><td>{agent.interactionCount}</td><td>{agent.toolCallCount}</td><td>{agent.errorCount}</td><td>{agent.observedAssetCallCount}</td><td>{duration(agent.totalDurationMs)}</td></tr>)}</tbody>
+            <thead><tr><th>智能体</th><th>会话</th><th>交互</th><th>工具调用</th><th>明确失败</th><th>已观察资产调用</th><th>会话跨度合计</th></tr></thead>
+            <tbody>{data.agents.map(agent => <tr key={agent.sourceId}><td><b>{agentLabel(agent.sourceId)}</b></td><td>{agent.sessionCount}</td><td>{agent.interactionCount}</td><td>{agent.toolCallCount}</td><td>{agent.errorCount}</td><td>{agent.observedAssetCallCount}</td><td>{duration(agent.totalDurationMs)}</td></tr>)}</tbody>
           </table></div>
         </section>
 
         <section className="insight-grid">
           <article className="insight-card">
-            <div className="insight-card-head"><div><h2>能力资产采用</h2><p>这里只展示能够可靠从工具名归因到具体 Skill / MCP 的真实调用；不会把普通命令硬归因到资产。</p></div></div>
+            <div className="insight-card-head"><div><h2>能力资产采用</h2><p>这里只展示能够可靠从工具名归因到具体技能或 MCP（模型上下文协议）的真实调用；不会把普通命令硬归因到资产。</p></div></div>
             {data.assets.length ? <div className="insight-asset-list">{data.assets.slice(0, 12).map(asset => <div className="insight-asset-row" key={`${asset.type}:${asset.canonicalName}`}>
               <div><b>{asset.canonicalName}</b><span>{assetTypeLabel(asset.type)} · {asset.sourceIds.map(sourceId => agentLabel(sourceId)).join(' / ')}</span></div><strong>{asset.callCount}<small> 次</small></strong>
-            </div>)}</div> : <div className="insight-inline-empty">当前范围没有可可靠归因的 Skill 或 MCP 调用。</div>}
+            </div>)}</div> : <div className="insight-inline-empty">当前范围没有可可靠归因的技能或 MCP（模型上下文协议）调用。</div>}
           </article>
 
           <article className="insight-card">
@@ -158,7 +158,7 @@ export function InsightsPage({ model }: { model: AgentLensClientModel }) {
         <section className="insight-method-note">
           <b>统计口径</b>
           {data.meta.notes.map(note => <span key={note}>{note}</span>)}
-          {data.meta.sampled && <span className="is-warning">会话数量超过一次投影的 {data.meta.sessionSampleLimit} 个样本上限：会话趋势、Agent 使用结构和工作流模式只基于最近样本；能力资产采用仍按当前时间筛选汇总可读取的已观察调用；周期比较已关闭。</span>}
+          {data.meta.sampled && <span className="is-warning">会话数量超过一次投影的 {data.meta.sessionSampleLimit} 个样本上限：会话趋势、智能体使用结构和工作流模式只基于最近样本；能力资产采用仍按当前时间筛选汇总可读取的已观察调用；周期比较已关闭。</span>}
         </section>
       </> : <div className="insight-empty-wrap"><EmptyStatePanel
         icon="⌁"
