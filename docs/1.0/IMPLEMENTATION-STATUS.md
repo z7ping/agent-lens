@@ -135,13 +135,13 @@ Agent 快捷入口按本机检测结果自动初始化，同时允许用户 Pin 
 - Pi 初始化明确不安装 Hook，继续使用原生 History / Runtime Tail
 - `setup` 不自动启动长期 Daemon，也不默认开启 npm 登录自启
 - `start` 启动前先探测默认 HTTP 地址；已有兼容 Daemon 时直接复用，不重复启动
-- `status` 现在同时报告 Daemon 与系统托管状态；即使 Daemon 离线，也能看到后台定义、当前运行、登录自启和 Windows 隐藏窗口状态
+- `status` 同时报告 Daemon 与系统托管状态；即使 Daemon 离线，也能看到后台定义、当前运行、登录自启和 Windows 隐藏窗口状态
 - `doctor` 增加系统托管一致性检查：识别 `service` 所有权与系统托管状态不一致，以及 Windows 旧后台任务定义
 - npm 后台命令：`service start / stop / restart / status`
 - npm 登录自启命令：`autostart enable / disable / status`
 - Windows npm 后台使用当前用户 Task Scheduler；后台任务可无登录触发器独立注册，`autostart` 只控制登录触发器
-- Windows npm 后台任务不再直接执行 `node.exe`，而是由隐藏 PowerShell 启动 `service run`，降低用户登录会话中弹控制台窗口的风险
-- Windows 计划任务状态会检查当前任务定义是否包含隐藏窗口参数；旧定义会被 `doctor` 标记为警告，重新执行 `agent-lens service start` 可刷新定义
+- Windows npm 后台任务由隐藏 PowerShell 启动 `service run`，不直接把 `node.exe` 暴露为可见后台任务动作
+- Windows 计划任务状态检查当前任务定义是否包含隐藏窗口参数；旧定义会被 `doctor` 标记为警告，重新执行 `agent-lens service start` 可刷新定义
 - Linux npm 后台使用 `systemd --user`，服务文件位于 `~/.config/systemd/user/agent-lens.service`
 - macOS npm 后台使用 LaunchAgent / `launchd`，定义位于 `~/Library/LaunchAgents/com.agentlens.daemon.plist`
 - 系统托管统一进入内部 `service run`，Daemon 报告 `owner=service`、`mode=managed`
@@ -149,9 +149,14 @@ Agent 快捷入口按本机检测结果自动初始化，同时允许用户 Pin 
 - `service restart` 遇到 Desktop / 前台 CLI 所有的当前运行时不会强行接管
 - 本地 `lifecycle.json` 只保存自启偏好，不保存 PID；系统托管配置成功后再写偏好，避免本地状态领先于系统真实状态
 - `service start` 会保留已存在的系统自启设置，避免重新注册后台定义时意外关闭登录自启
-- Windows npm 发行包包含 `dist/hooks/agent-lens-hook-runner.ps1` 无窗口 Hook 启动器
-- Windows `setup` / `hook install` 在正式发行包可用时，将 Codex / Claude Hook 命令切换为“隐藏 PowerShell -> `CreateNoWindow` Node Hook”；Hook 仍只继承 stdin/stdout、写 Durable Inbox，不接触 Daemon 生命周期
-- `doctor` 在 Windows 单独报告无窗口 Hook 启动器是否可用
+- 新增双发行安装登记：`~/.agent-lens/1.0/installations/npm.json` 与 `desktop.json`
+- 安装登记不是安装事实；每次使用前检查 executable、HookRoot、Codex Hook、Claude Hook 是否仍真实存在，失效登记立即跳过
+- 不依赖 npm uninstall lifecycle 清理登记；npm 7+ 没有可用的 package uninstall lifecycle，直接 `npm uninstall` 后陈旧 JSON 允许保留但不得继续被当作有效 Provider
+- Windows Hook 配置不再绑定某个 npm / Desktop 安装路径，稳定指向 `~/.agent-lens/1.0/runtime/windows-hook-dispatcher.ps1`
+- Windows 共享 Hook 分发器优先有效 Desktop Provider；Desktop 不存在或已卸载时自动回退有效 npm Provider；两边都无效时中性退出
+- 共享 Hook 分发器只负责 Provider 选择与 `CreateNoWindow` 进程启动，继承 stdin/stdout、写 Durable Inbox 的业务仍由原 Hook 完成
+- 正式 Windows Desktop 将 `runtime/hooks` 从 ASAR 解包，以便 PowerShell / Electron-as-Node 可访问 Hook 文件
+- Desktop 启动后登记自身为 Hook Provider；只对本机实际存在的 Codex / Claude Code 修复 AgentLens 自己的 Hook，不为 Pi 安装 Hook
 - npm 与 Windows Desktop 共用默认数据根和默认端口；Desktop 只停止自己拥有的 Daemon
 - Windows Desktop 首次正式安装运行时默认启用登录 Windows 后自动运行，可从托盘关闭；登录自启以隐藏窗口进入托盘
 - npm 单包分发构建
@@ -159,6 +164,8 @@ Agent 快捷入口按本机检测结果自动初始化，同时允许用户 Pin 
 - GitHub Release -> npm Artifact Workflow
 - Windows Electron 桌面壳 + 中文托盘 + NSIS 安装包 Workflow
 - Windows 桌面图标已更新为符合 electron-builder 要求的 256×256 AgentLens 图标
+
+双发行运维细节见 `docs/1.0/DISTRIBUTION-OPERATIONS.md`，长期边界见 ADR-0004。
 
 ## Repository Cleanup
 
@@ -192,7 +199,7 @@ docs/static/
 - 旧 HTTP API Compatibility Layer
 - 0.x Tool Stack Map 的价值分 / 风险分 / 工作流推荐算法
 
-注意：1.0 已经重新实现“后台常驻 / 登录自启”这一**产品能力**，但实现方式是操作系统原生用户级托管，不代表恢复了上述 0.x service manager / PID 架构。Windows 无窗口 Hook 启动器也只是 Hook 执行包装，不是新的 Runtime 或 Service Manager。
+注意：1.0 已经重新实现“后台常驻 / 登录自启”这一**产品能力**，但实现方式是操作系统原生用户级托管，不代表恢复了上述 0.x service manager / PID 架构。Windows 共享 Hook 分发器也只是 Hook 执行包装，不是新的 Runtime 或 Service Manager。
 
 ## 已实现能力：本地 AI 资产备份
 
@@ -257,7 +264,9 @@ P1：
 - npm / Desktop 共存不得产生第二个默认 Daemon、第二套默认数据库或重复采集链路。
 - npm 后台托管不得通过 PID 文件成为第二套生命周期事实来源。
 - Windows 后台任务必须能诊断是否使用隐藏窗口定义；旧定义不得被误报为已完成无窗口收敛。
-- Windows 无窗口 Hook 启动器只能负责进程启动与标准输入输出继承，不能访问 Core、SQLite、HTTP 或 Daemon 生命周期。
+- Windows 共享 Hook 分发器只能选择有效安装并启动原 Hook，不能访问 Core、SQLite、HTTP 或 Daemon 生命周期。
+- 安装登记必须按真实 executable / HookRoot / Hook 脚本存在性判定有效性，陈旧 JSON 不得阻塞另一发行方式。
+- 卸载 npm 或 Desktop 不能要求重新写 Native Hook 配置才能切换到另一有效 Provider。
 - 登录自启状态必须以系统托管定义成功为前提，本地偏好不得领先于系统真实状态。
 - 幂等的 `unchanged` Replay 不触发 SSE 更新噪声。
 - SSE 实时更新不能通过反复全量替换内容区破坏滚动位置、展开状态和阅读上下文。
@@ -286,8 +295,12 @@ P1：
 - `status` / `doctor` 生命周期摘要与 Windows 隐藏窗口状态表达；
 - Windows 用户级计划任务定义生成：后台任务与登录触发器分离，并通过隐藏 PowerShell 启动 `service run`；
 - Windows 计划任务状态脚本识别隐藏窗口定义；
-- Windows Hook 无窗口命令生成；
-- Windows CI 构建后真实执行无窗口 Hook 启动器，验证 stdin JSON 可完整进入 Claude Durable Inbox；
+- 安装登记按真实文件存在性判断有效 / 失效；
+- npm / Desktop 使用独立登记文件；
+- Windows Hook 命令固定指向用户级共享分发器，不绑定 Node 或某个安装目录；
+- Windows CI 构建后安装共享分发器并登记 npm Provider；
+- Windows CI 伪造陈旧 Desktop 登记，验证分发器跳过无效 Desktop 并自动回退有效 npm Provider；
+- Windows CI 验证共享分发器 stdin JSON 可完整进入 Claude Durable Inbox；
 - Windows CI 构建后真实执行 `autostart enable -> service start -> Health owner=service -> doctor -> service stop` 生命周期链；
 - Linux `systemd --user` Unit 生成与 `KillMode=control-group`；
 - macOS LaunchAgent `RunAtLoad` 与异常恢复定义生成；
@@ -314,7 +327,8 @@ Windows 安装包此前已经完成一次真实流水线验证：
 - 在真实 Windows 桌面环境中点击安装、启动、登录自启、托盘、退出和卸载；
 - 在真实 npm 全局安装环境执行 `agent-lens setup`，确认 Codex / Claude / Pi 检测结果与 Hook 补齐行为符合预期；
 - Windows npm：注销重新登录后确认隐藏后台任务不会产生可见控制台闪现；
-- Windows Hook：在真实 Codex / Claude Code 交互中确认无窗口启动器不会产生可见闪窗，并保持 Hook 时延可接受；
+- Windows Hook：在真实 Codex / Claude Code 交互中确认共享分发器不会产生可见闪窗，并保持 Hook 时延可接受；
+- npm + Desktop 同时安装后分别卸载 npm / Desktop，确认剩余发行方式无需重写 Native Hook 配置即可继续采集；
 - Linux npm：常见发行版与 WSL 的 `systemd --user` 启动、停止、enable/disable；
 - macOS npm：LaunchAgent bootstrap / bootout / kickstart 与登录加载；
 - npm 与 Windows Desktop 同时启用登录自启时，确认竞争启动最终仍只有一个默认 Daemon；
