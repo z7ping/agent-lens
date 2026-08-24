@@ -83,14 +83,23 @@ Desktop：
 
 - 登录 Windows 后可自动进入托盘；
 - 启动前探测已有兼容 Daemon；
+- 探测使用短重试窗口，避免高负载时把“响应稍慢”误判成“没有 Daemon”而启动第二套运行时；
 - npm Daemon 已存在时直接复用；
 - 只有没有兼容 Daemon 时才启动自己拥有的 Daemon；
+- 等待 Daemon 就绪时仍校验 Protocol 版本，不把不兼容运行时误判为启动成功；
 - 退出时只停止自己拥有的 Daemon；
 - 启动后登记自身为可用 Hook Provider；
 - 只对本机实际检测到的 Codex / Claude Code 修复 AgentLens Hook；
 - Pi 不安装 Hook。
 
 Desktop 的 Hook 文件在正式安装包中解包到外部进程可访问路径，避免 PowerShell / Electron-as-Node 无法直接读取 `app.asar` 内部 Hook 文件。
+
+Windows 登录自启以系统真实状态为准：
+
+- 首次默认启用后会再次读取 Windows 登录项状态；
+- 只有确认启用后才写入“一次性初始化完成”标记；
+- 托盘切换自启后也会再次读取系统状态；
+- 如果 Windows 未接受修改，托盘勾选恢复为系统真实状态，并给出明确提示。
 
 ## 4. 安装登记
 
@@ -216,6 +225,8 @@ Desktop 和 npm service 都必须在启动 Daemon 前探测现有 `127.0.0.1:567
 协议不兼容：明确报错。  
 禁止通过换端口偷偷启动第二个 1.0 Runtime。
 
+Desktop 的健康探测不是单次 500ms 判定；当前会进行有限重试，以降低 Windows 启动阶段、磁盘繁忙或高负载时的误判概率。即使启动竞争已经发生，Desktop 也必须以 Health / Protocol 为最终事实，而不是只相信自己刚创建的子进程。
+
 `service restart` 发现当前运行时属于 Desktop / 前台 CLI 时不得强制接管。
 
 ## 8. Windows 无窗口运行
@@ -238,48 +249,13 @@ Native Hook
   -> Node / Electron-as-Node Hook
 ```
 
-这两套 PowerShell 都只是 Windows 执行包装，不属于 AgentLens Runtime。
+## 9. 当前实机稳定化验收重点
 
-## 9. 当前自动验收
-
-三平台 CI 继续执行：
-
-- 类型检查；
-- 单元测试；
-- 正式发行构建；
-- Daemon / Web 冒烟；
-- npm pack 内容检查。
-
-Windows 额外验证：
-
-- 用户级后台任务注册；
-- 登录自启；
-- 后台任务隐藏窗口定义；
-- `owner=service` Health；
-- `doctor` 生命周期一致性；
-- 共享 Hook 分发器 stdin -> Durable Inbox；
-- 陈旧 Desktop 登记存在时自动回退有效 npm Provider。
-
-## 10. 仍需人工实机验收
-
-自动化不能替代以下体验检查：
-
-- Windows 登录后的肉眼无黑框；
-- 真实 Codex / Claude Code Hook 是否完全无闪窗；
-- Desktop 与 npm 都安装后轮流启动；
-- 两边都设置登录自启时最终只有一个 Daemon；
-- 卸载 npm 后 Desktop Hook 继续工作；
-- 卸载 Desktop 后 npm Hook 继续工作；
-- Linux 常见发行版 / WSL 的 `systemd --user`；
-- macOS LaunchAgent 登录加载 / 停止 / 重启。
-
-## 11. 禁止回退
-
-不得因为处理安装 / 卸载问题重新引入：
-
-- PID 事实文件；
-- 0.x Service Manager；
-- Hook 自动拉起 Daemon；
-- npm 与 Desktop 各自数据库；
-- 两个默认 Daemon；
-- Hook 分发器中的 Source / Canonical / SQLite / HTTP 业务逻辑。
+1. Windows 登录后 Desktop 是否静默进入托盘，不出现可见控制台闪烁；
+2. Desktop 登录自启开关是否与 Windows 系统实际状态一致；
+3. npm service 已运行时启动 Desktop，是否只复用一个 Daemon；
+4. Desktop 已运行时再启动 npm service，是否仍保持一个 Daemon；
+5. Codex / Claude Hook 在 npm / Desktop 共存与单侧卸载后是否持续写入 Durable Inbox；
+6. 退出 Desktop 时，如果当前复用的是 npm / service Daemon，外部 Daemon 必须继续运行；
+7. 卸载任一发行后，另一发行必须能够通过真实文件校验自动接管 Hook Provider；
+8. 长时间运行期间 SSE 断线、Daemon 异常退出与恢复不能制造重复采集或第二套 Runtime。
