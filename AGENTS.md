@@ -198,14 +198,28 @@ agent-lens setup
 agent-lens start
 agent-lens status
 agent-lens doctor
+agent-lens service start|stop|restart|status
+agent-lens autostart enable|disable|status
 agent-lens hook ...
 ```
 
 `setup` 是一次性初始化入口：检查 Node.js 与数据目录，识别 Codex / Claude Code / Pi，本机存在 Codex / Claude Code 时只补齐 AgentLens 自己缺失的 Hook，并报告已有运行时。Pi 使用原生 History / Runtime Tail，不安装 Hook。
 
-`setup` 不启动长期前台 Daemon，也不创建后台服务或开机自启；后台生命周期属于后续独立的发行 / 运维层。不得把 `setup` 扩展成 0.x service manager 的新包装。
+`setup` 不自动启动长期 Daemon，也不默认打开 npm 登录自启；后台生命周期通过独立 `service` / `autostart` 命令管理。不得把 `setup` 扩展成 0.x service manager 的新包装。
 
 `start` 明确以前台方式运行。启动前必须先探测默认运行时；已有兼容 Daemon 时直接复用，不启动第二套。
+
+npm 后台生命周期只属于发行 / 运维层：
+
+- Windows：当前用户计划任务；
+- Linux：`systemd --user`；
+- macOS：用户级 `launchd`；
+- 不维护 PID 文件，不恢复 0.x Service Manager；
+- 系统托管入口统一执行 `service run`，由 Daemon Health 报告 `owner=service`、`mode=managed`；
+- `service restart` 遇到 Desktop / 前台 CLI 所有的现有运行时不得强行接管；
+- `autostart` 只控制登录后是否自动启动，不等同于“当前是否运行”。
+
+源码模式注册 `service` / `autostart` 前必须先生成正式 `dist/cli.mjs`，不要把临时 `tsx` 开发入口注册到系统启动项。
 
 npm 与 Windows Desktop 可以同时安装，但同一默认数据根 / 默认端口同一时刻只允许一个有效 Daemon。Desktop 只能停止自己启动的 Daemon，不得误杀 npm / service 管理的外部运行时。
 
@@ -222,6 +236,8 @@ npm pack --dry-run
 npm run build:web
 npm run cli -- setup
 npm run cli -- doctor
+npm run cli -- service status
+npm run cli -- autostart status
 npm run desktop:win      # Windows runner
 ```
 
@@ -240,6 +256,8 @@ Node.js 要求：`>=22.23.0`。
 - Projection 排序 / 分组；
 - Hook install / uninstall 安全性；
 - CLI 初始化目标选择与幂等性；
+- Windows / systemd / launchd 生命周期定义生成；
+- 运行时所有权与互斥接管规则；
 - Protocol / API 行为；
 - Cordis compatibility。
 
