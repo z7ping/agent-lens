@@ -70,12 +70,12 @@ jobs:
           $agentLensRoot = Join-Path $HOME '.agent-lens/1.0'
           $installations = Join-Path $agentLensRoot 'installations'
           $dispatcher = Join-Path $agentLensRoot 'runtime/windows-hook-dispatcher.ps1'
+          $npmRecordPath = Join-Path $installations 'npm.json'
+          $desktopRecordPath = Join-Path $installations 'desktop.json'
           if (-not (Test-Path $dispatcher)) { throw '共享 Windows Hook 分发器未安装' }
-          if (-not (Test-Path (Join-Path $installations 'npm.json'))) { throw 'npm 安装登记未生成' }
+          if (-not (Test-Path $npmRecordPath)) { throw 'npm 安装登记未生成' }
 
-          # Simulate an uninstalled Desktop that left a stale registry record behind.
-          # The dispatcher must validate real files, skip Desktop immediately, and fall
-          # back to the still-valid npm provider without rewriting Hook configuration.
+          $now = (Get-Date).ToUniversalTime().ToString('o')
           $staleDesktop = @{
             schemaVersion = 1
             kind = 'desktop'
@@ -83,19 +83,75 @@ jobs:
             executable = 'C:\missing-agent-lens\AgentLens.exe'
             hookRoot = 'C:\missing-agent-lens\hooks'
             electronRunAsNode = $true
-            registeredAt = (Get-Date).ToUniversalTime().ToString('o')
-            updatedAt = (Get-Date).ToUniversalTime().ToString('o')
+            registeredAt = $now
+            updatedAt = $now
           } | ConvertTo-Json
-          $staleDesktop | Set-Content -Encoding UTF8 (Join-Path $installations 'desktop.json')
+          $staleDesktop | Set-Content -Encoding UTF8 $desktopRecordPath
 
-          $payload = '{"hook_event_name":"PreToolUse","hook_invocation_id":"ci-shared-dispatcher-fallback"}'
+          # Desktop stale -> valid npm fallback.
+          $payload = '{"hook_event_name":"PreToolUse","hook_invocation_id":"ci-desktop-stale-npm-valid"}'
           $payload | powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File $dispatcher agent-lens-hook-claude
           if ($LASTEXITCODE -ne 0) { throw '共享 Windows Hook 分发器执行失败' }
 
           $files = @(Get-ChildItem -Path $inbox -Filter '*.json')
-          if ($files.Count -ne 1) { throw "共享分发器没有产生唯一 Inbox 事件，实际：$($files.Count)" }
+          if ($files.Count -ne 1) { throw "Desktop 陈旧时 npm 回退没有产生唯一 Inbox 事件，实际：$($files.Count)" }
           $captured = Get-Content -Raw $files[0].FullName | ConvertFrom-Json
-          if ($captured.event.hook_invocation_id -ne 'ci-shared-dispatcher-fallback') { throw '共享分发器没有完整传递 stdin JSON' }
+          if ($captured.event.hook_invocation_id -ne 'ci-desktop-stale-npm-valid') { throw 'npm 回退没有完整传递 stdin JSON' }
+
+          Remove-Item -Force (Join-Path $inbox '*.json') -ErrorAction SilentlyContinue
+
+          # npm stale -> valid Desktop fallback. Use the CI Node executable with the
+          # distributable hook root to exercise the same provider selection path;
+          # ELECTRON_RUN_AS_NODE is intentionally enabled to cover Desktop semantics.
+          $nodeExecutable = (Get-Command node).Source
+          $hookRoot = (Resolve-Path 'dist/hooks').Path
+          $validDesktop = @{
+            schemaVersion = 1
+            kind = 'desktop'
+            version = 'desktop-ci'
+            executable = $nodeExecutable
+            hookRoot = $hookRoot
+            electronRunAsNode = $true
+            registeredAt = $now
+            updatedAt = $now
+          } | ConvertTo-Json
+          $validDesktop | Set-Content -Encoding UTF8 $desktopRecordPath
+
+          $staleNpm = @{
+            schemaVersion = 1
+            kind = 'npm'
+            version = 'stale-ci'
+            executable = 'C:\missing-agent-lens\node.exe'
+            hookRoot = 'C:\missing-agent-lens\hooks'
+            electronRunAsNode = $false
+            registeredAt = $now
+            updatedAt = $now
+          } | ConvertTo-Json
+          $staleNpm | Set-Content -Encoding UTF8 $npmRecordPath
+
+          $payload = '{"hook_event_name":"PreToolUse","hook_invocation_id":"ci-npm-stale-desktop-valid"}'
+          $payload | powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File $dispatcher agent-lens-hook-claude
+          if ($LASTEXITCODE -ne 0) { throw 'Desktop Provider 回退执行失败' }
+
+          $files = @(Get-ChildItem -Path $inbox -Filter '*.json')
+          if ($files.Count -ne 1) { throw "npm 陈旧时 Desktop 回退没有产生唯一 Inbox 事件，实际：$($files.Count)" }
+          $captured = Get-Content -Raw $files[0].FullName | ConvertFrom-Json
+          if ($captured.event.hook_invocation_id -ne 'ci-npm-stale-desktop-valid') { throw 'Desktop 回退没有完整传递 stdin JSON' }
+
+          Remove-Item -Force (Join-Path $inbox '*.json') -ErrorAction SilentlyContinue
+
+          # Both providers stale -> neutral exit, no Inbox event.
+          $staleDesktop | Set-Content -Encoding UTF8 $desktopRecordPath
+          $payload = '{"hook_event_name":"PreToolUse","hook_invocation_id":"ci-both-stale"}'
+          $payload | powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File $dispatcher agent-lens-hook-claude
+          if ($LASTEXITCODE -ne 0) { throw 'Provider 全失效时共享分发器没有中性退出' }
+          $files = @(Get-ChildItem -Path $inbox -Filter '*.json')
+          if ($files.Count -ne 0) { throw "Provider 全失效时仍产生 Inbox 事件，实际：$($files.Count)" }
+
+          # Restore the current npm registration so this destructive matrix does not
+          # leak stale-provider state into the following lifecycle integration test.
+          node dist/cli.mjs hook status all --json | Out-Null
+          if (-not (Test-Path $npmRecordPath)) { throw '共享分发器矩阵结束后 npm 登记未恢复' }
 
       - name: Verify Windows npm lifecycle
         if: runner.os == 'Windows'
