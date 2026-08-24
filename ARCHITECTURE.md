@@ -109,7 +109,7 @@ AgentLensApplication
 ```text
 apps/
   daemon/           组合根（composition root）
-  cli/              setup/start/status/doctor/hook 命令
+  cli/              setup/start/status/doctor/service/autostart/hook 命令
   desktop/          Electron Windows 桌面壳
   hook-codex/       被动式 Codex Hook 进程
   hook-claude/      被动式 Claude Code Hook 进程
@@ -369,7 +369,7 @@ Web 仅消费 `/api/v1/*` 的 Protocol DTO。
 
 Hook 配置属于 AgentLens，而不是某一种发行方式。npm 与 Desktop 可以提供不同的 Hook 可执行入口，但必须写入同一套 1.0 durable inbox 语义；Hook 不负责拉起 Daemon。
 
-## 17. CLI
+## 17. CLI 与 npm 后台生命周期
 
 当前 CLI：
 
@@ -378,6 +378,8 @@ agent-lens setup [--json]
 agent-lens start
 agent-lens status [--json]
 agent-lens doctor [--json]
+agent-lens service start|stop|restart|status [--json]
+agent-lens autostart enable|disable|status [--json]
 agent-lens hook status [codex|claude|all]
 agent-lens hook install [codex|claude|all]
 agent-lens hook uninstall [codex|claude|all]
@@ -392,11 +394,44 @@ agent-lens hook uninstall [codex|claude|all]
 5. Pi 使用原生 History / Runtime Tail，不安装 Hook；
 6. 探测并报告现有 Daemon 与管理方式。
 
-`setup` 不启动长期前台 Daemon，不创建后台服务，也不写开机自启。这样初始化保持可重复、可退出，不演化成 0.x service manager 的新包装。
+`setup` 不自动启动长期 Daemon，也不默认打开 npm 登录自启。
 
 `start` 明确采用前台运行。启动前先探测默认 HTTP 地址；如果已经存在兼容 AgentLens Daemon，则直接复用并报告现有运行状态，不启动第二个 Daemon。
 
-CLI 不恢复 0.x PID / Service Manager。后续增加后台 `service`、`autostart` 时，它们属于发行 / 运维层，并必须遵守单 Daemon 与共享数据规则。
+npm 后台模式通过操作系统原生的**用户级托管能力**实现，而不是恢复 0.x Service Manager：
+
+```text
+Windows -> 当前用户 Task Scheduler
+Linux   -> systemd --user
+macOS   -> LaunchAgent / launchd
+```
+
+统一内部入口为：
+
+```text
+agent-lens service run
+```
+
+该入口由系统托管器调用，启动同一个 `dist/daemon.mjs`，并向 Health 报告：
+
+```text
+owner = service
+mode  = managed
+```
+
+关键边界：
+
+- 不维护 PID 文件；
+- 不另建数据库或运行时；
+- `service start` 只负责当前后台运行；
+- `autostart enable` 只控制下次登录是否自动启动；两者语义分离；
+- Windows 计划任务可以在无登录触发器时独立注册，因此“已注册后台任务”不等于“已开启登录自启”；
+- Linux 写入 `~/.config/systemd/user/agent-lens.service`，使用 `systemctl --user` 管理；
+- macOS 写入 `~/Library/LaunchAgents/com.agentlens.daemon.plist`，使用 `launchctl` 管理；
+- `service restart` 若发现当前 Daemon 由 Desktop 或前台 CLI 所有，不强制杀掉或接管；
+- 系统托管定义只指向正式 `dist/cli.mjs`。源码模式必须先执行 `npm run build:dist`，不得把临时 `tsx` 入口写进登录启动项。
+
+Windows / Linux / macOS 的系统托管配置只属于发行 / 运维层，不进入 Core、Source、Storage、Projection 或 Cordis Plugin Runtime。
 
 ## 18. 分发
 
@@ -452,6 +487,8 @@ Desktop 启动时先探测 `127.0.0.1:56789`：
 
 Windows 登录自启启动 Electron 到托盘，再由 Desktop 按上述规则决定复用或创建 Daemon；不恢复 0.x VBS + PID + detached daemon 作为正式桌面生命周期。
 
+如果同一台 Windows 机器同时启用了 Desktop 登录自启与 npm `autostart`，两边都必须先探测默认运行时。先成功建立兼容 Daemon 的一方成为当次运行时所有者，另一方复用已有 Daemon，不启动第二套。
+
 Daemon 仍然提供同一套 `127.0.0.1:56789` HTTP / SSE Surface。卸载 Desktop App 不会自动删除 `~/.agent-lens/1.0` 下的观测数据。
 
 完整决策见 `docs/adr/0004-dual-distribution-single-runtime-lifecycle.md`。
@@ -469,3 +506,5 @@ Daemon 仍然提供同一套 `127.0.0.1:56789` HTTP / SSE Surface。卸载 Deskt
 如果新增 Source 必须修改 Core 语义类型、Canonical Identity、Evidence 语义或 Plugin Runtime 所有权，这就不是普通接入，而是一次 Contract Review。
 
 发行方式不得改变 Canonical Data Flow。npm 与 Desktop 共存时，不得因为生命周期管理来源不同而创建第二套 Runtime、第二套 Schema、第二份默认数据库或重复采集链路。
+
+后台生命周期定义只能引用正式发行入口，并由操作系统用户级托管器负责当前进程的启动 / 停止 / 恢复；AgentLens 不把 PID 文件重新提升为生命周期事实来源。
