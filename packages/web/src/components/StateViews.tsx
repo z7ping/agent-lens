@@ -103,30 +103,32 @@ export function WorkspaceSkeleton({ kind = 'cards' }: { kind?: 'cards' | 'table'
 
 export function FirstRunGuide({
   detectedCount,
+  enabledCount,
   serviceReady,
   liveConnected,
 }: {
   detectedCount: number
+  enabledCount: number
   serviceReady: boolean
   liveConnected: boolean
 }) {
-  const runtimeReady = serviceReady && liveConnected
+  const captureReady = enabledCount > 0 && serviceReady && liveConnected
   return <section className="first-run-guide" aria-label="首次运行引导">
-    <div className="first-run-heading"><span className="eyebrow">开始使用</span><h2>完成这三步，就可以开始复盘</h2><p>这里只使用 AgentLens 当前能够确认的状态，不把“未观察到”推断成“未安装”。</p></div>
+    <div className="first-run-heading"><span className="eyebrow">开始使用</span><h2>完成这三步，就可以开始复盘</h2><p>引导只使用 AgentLens 当前能够确认的事实：检测结果、采集开关、后台状态和实时连接；不会把“未观察到”推断成“未安装”。</p></div>
     <div className="first-run-steps">
       <div className={`first-run-step ${detectedCount > 0 ? 'is-done' : 'is-pending'}`}>
         <span className="first-run-no">{detectedCount > 0 ? '✓' : '1'}</span>
-        <div><b>检测智能体</b><p>{detectedCount > 0 ? `已检测到 ${detectedCount} 个受支持的智能体。` : '尚未检测到 Codex、Claude Code 或 Pi。'}</p></div>
+        <div><b>检测智能体</b><p>{detectedCount > 0 ? `已检测到 ${detectedCount} 个受支持的智能体。` : '暂未检测到受支持的智能体；可运行诊断命令确认本机检测路径。'}</p></div>
       </div>
-      <div className={`first-run-step ${runtimeReady ? 'is-done' : 'is-pending'}`}>
-        <span className="first-run-no">{runtimeReady ? '✓' : '2'}</span>
-        <div><b>确认 AgentLens 运行状态</b><p>{serviceReady ? (liveConnected ? '后台服务正常，实时数据通道已连接。' : '后台服务正常，但实时数据通道当前未连接。') : '后台服务当前不可用或处于降级状态。'}</p></div>
+      <div className={`first-run-step ${captureReady ? 'is-done' : 'is-pending'}`}>
+        <span className="first-run-no">{captureReady ? '✓' : '2'}</span>
+        <div><b>启用采集并确认运行</b><p>{enabledCount > 0 ? `当前有 ${enabledCount} 个来源已允许采集；${serviceReady ? (liveConnected ? '后台服务和实时数据通道均正常。' : '后台服务正常，实时数据通道暂未连接。') : '后台服务当前不可用或处于降级状态。'}` : '当前没有来源允许采集；请先按采集隐私策略启用需要观察的来源。'}</p></div>
       </div>
       <div className="first-run-step is-pending">
         <span className="first-run-no">3</span>
-        <div><b>产生一条可复盘会话</b><p>开始一次智能体任务。会话进入 AgentLens 后，这张引导卡会自动消失。</p></div>
+        <div><b>产生一条可复盘会话</b><p>在已启用采集的智能体里开始一次任务。首条会话进入 AgentLens 后，这张引导会自动消失。</p></div>
       </div>
     </div>
-    {(!detectedCount || !runtimeReady) && <div className="first-run-footer"><span>需要排查时可运行：</span><CommandRow command="agent-lens doctor"/></div>}
+    {(!detectedCount || !captureReady) && <div className="first-run-footer"><span>需要确认安装、运行或采集状态时：</span><CommandRow command="agent-lens doctor"/></div>}
   </section>
 }
