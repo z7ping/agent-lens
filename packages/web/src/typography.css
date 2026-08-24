@@ -1,7 +1,7 @@
 /*
  * AgentLens 1.0 正式字体系统。
  *
- * 本文件最后加载，是 Web 字体与字号的最终收口层：
+ * 本文件负责 Web 字体与字号的最终收口：
  * - 正常界面文字不低于 12px；
  * - 统一系统字体栈，避免未打包 Inter 带来的环境差异；
  * - 页面只使用语义字号层级，不再依赖 8-11px 的极小字号制造层次；
@@ -58,7 +58,8 @@ html body .state-command code{
 html body .brand-mark{font-size:var(--text-body)}
 html body .brand-name{font-size:15px}
 html body .nav-item{font-size:var(--text-body)}
-html body .app-status{font-size:var(--text-caption)}
+html body .app-status,
+html body .app-header .status-pill{font-size:var(--text-caption)}
 html body .workspace-toolbar{min-height:50px;height:50px}
 html body .filter{height:34px;font-size:var(--text-control)}
 html body .scope-chip,
@@ -94,14 +95,42 @@ html body .raw-json{font-size:var(--text-caption);line-height:var(--line-height-
 /* 任务复盘 */
 html body .session-panel-head b{font-size:var(--text-secondary)}
 html body .session-panel-head span,
+html body .session-panel-head .count-badge,
 html body .session-group,
-html body .review-session-submeta,
+html body .session-item-meta,
 html body .session-item-foot,
+html body .review-session-submeta,
+html body .review-session-submeta code,
+html body .review-metric span,
+html body .interaction-chevron,
+html body .interaction-preview,
+html body .interaction-summary-meta span,
 html body .chat-meta,
+html body .chat-actions button,
+html body .markdown-message-actions button,
+html body .evidence-link,
+html body .execution-group-copy small,
+html body .execution-kind-counts,
+html body .execution-total,
+html body .execution-summary-status,
+html body .execution-group-toolbar,
+html body .tool-kind-label,
+html body .tool-status-label,
+html body .execution-preview,
 html body .execution-duration,
+html body .evidence-inline,
+html body .evidence-inline-more,
+html body .event-row,
+html body .event-copy small,
 html body .event-source,
-html body .event-row time{font-size:var(--text-caption)}
+html body .event-row time,
+html body .turn-tick::after{font-size:var(--text-caption)}
 html body .session-item-title,
+html body .interaction-title,
+html body .thinking-content,
+html body .execution-group>summary,
+html body .execution-group-copy b,
+html body .execution-name{font-size:var(--text-secondary)}
 html body .chat-bubble{font-size:var(--text-body)}
 html body .review-head h1,
 html body .rh-title{font-size:var(--font-size-xl)}
@@ -115,7 +144,12 @@ html body .event-row{font-size:var(--text-secondary)}
 /* 智能体概览 */
 html body .agent-identity h2{font-size:17px}
 html body .agent-identity p{font-size:var(--text-secondary);line-height:1.6}
-html body .agent-status{font-size:var(--text-caption)}
+html body .agent-status,
+html body .agent-source-nav-head b,
+html body .agent-source-nav-head span,
+html body .agent-source-copy small,
+html body .agent-source-state{font-size:var(--text-caption)}
+html body .agent-source-copy b{font-size:var(--text-secondary)}
 html body .agent-installation small{font-size:var(--text-caption)}
 html body .agent-installation b,
 html body .agent-installation code{font-size:var(--text-secondary)}
@@ -162,12 +196,19 @@ html body .table-section-head p,
 html body .tool-table th,
 html body .tool-source,
 html body .attributed-asset span,
-html body .attributed-asset small{font-size:var(--text-caption)}
+html body .attributed-asset small,
+html body .tool-detail-code,
+html body .evidence-path,
+html body .evidence-missing,
+html body .tool-drill-stat span,
+html body .tool-drill-note{font-size:var(--text-caption)}
 html body .table-section-head h2,
 html body .tool-table,
 html body .tool-name,
 html body .attributed-asset b,
-html body .attributed-asset strong{font-size:var(--text-secondary)}
+html body .attributed-asset strong,
+html body .evidence-meta b{font-size:var(--text-secondary)}
+html body .evidence-meta{font-size:var(--text-caption)}
 html body .tool-summary-card strong{font-size:var(--text-section-title)}
 
 /* 状态与首次运行 */
@@ -247,11 +288,13 @@ html body .insight-asset-row>strong small,
 html body .insight-pattern-steps b,
 html body .insight-pattern-meta,
 html body .insight-method-note,
-html body .insight-method-note b{font-size:var(--text-caption)}
+html body .insight-method-note b,
+html body .insight-coverage-strip span{font-size:var(--text-caption)}
 html body .insight-card-head h2,
 html body .insight-agent-table,
 html body .insight-agent-table td:first-child b,
-html body .insight-asset-row b{font-size:var(--text-secondary)}
+html body .insight-asset-row b,
+html body .insight-coverage-strip b{font-size:var(--text-secondary)}
 html body .insight-kpi>strong{font-size:var(--text-metric-lg)}
 html body .insight-asset-row>strong{font-size:var(--text-section-title)}
 
