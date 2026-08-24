@@ -8,10 +8,13 @@ const options = {
   homeDir: '/home/tester',
 } as const
 
-test('Windows 后台任务可独立于登录自启注册', () => {
+test('Windows 后台任务可独立于登录自启注册且隐藏控制台窗口', () => {
   const manual = windowsTaskScript({ ...options, platform: 'win32' }, false)
   const autostart = windowsTaskScript({ ...options, platform: 'win32' }, true)
 
+  assert.match(manual, /powershell\.exe/)
+  assert.match(manual, /WindowStyle Hidden/)
+  assert.match(manual, /\/usr\/local\/bin\/node/)
   assert.match(manual, /service run/)
   assert.doesNotMatch(manual, /New-ScheduledTaskTrigger/)
   assert.match(autostart, /New-ScheduledTaskTrigger -AtLogOn/)
