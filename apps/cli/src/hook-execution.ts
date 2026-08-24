@@ -109,15 +109,27 @@ export function resolveHookExecutionProfile(options: ResolveHookExecutionOptions
       executable: context.executable,
       hookRoot: context.hooksRoot,
       electronRunAsNode: context.electronRunAsNode,
-      homeDir: options.homeDir,
+      ...(options.homeDir ? { homeDir: options.homeDir } : {}),
     })
   }
 
-  if (platform !== 'win32') return { options: {}, windowsNoWindow: false, installation }
+  if (platform !== 'win32') {
+    return {
+      options: {},
+      windowsNoWindow: false,
+      ...(installation ? { installation } : {}),
+    }
+  }
 
   const dispatcherPath = sharedDispatcherPath(options.homeDir)
   if (!installation || !existsSync(dispatcherSource)) {
-    return { options: {}, windowsNoWindow: false, dispatcherPath, runnerPath: dispatcherPath, installation }
+    return {
+      options: {},
+      windowsNoWindow: false,
+      dispatcherPath,
+      runnerPath: dispatcherPath,
+      ...(installation ? { installation } : {}),
+    }
   }
 
   installSharedDispatcherSync(dispatcherSource, dispatcherPath)
