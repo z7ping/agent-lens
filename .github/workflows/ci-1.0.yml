@@ -54,6 +54,26 @@ jobs:
       - name: Build distributable
         run: npm run build:dist
 
+      - name: Verify Windows no-window Hook runner
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $inbox = Join-Path $env:RUNNER_TEMP 'agent-lens-hook-inbox'
+          New-Item -ItemType Directory -Force -Path $inbox | Out-Null
+          $env:AGENT_LENS_CLAUDE_INBOX = $inbox
+          $nodePath = (Get-Command node).Source
+          $runner = Join-Path $PWD 'dist/hooks/agent-lens-hook-runner.ps1'
+          $hook = Join-Path $PWD 'dist/hooks/agent-lens-hook-claude.mjs'
+          $payload = '{"hook_event_name":"PreToolUse","hook_invocation_id":"ci-windows-hook-runner"}'
+
+          $payload | powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File $runner $nodePath $hook
+          if ($LASTEXITCODE -ne 0) { throw 'Windows Hook 无窗口启动器执行失败' }
+
+          $files = @(Get-ChildItem -Path $inbox -Filter '*.json')
+          if ($files.Count -ne 1) { throw "Windows Hook 启动器没有产生唯一 Inbox 事件，实际：$($files.Count)" }
+          $captured = Get-Content -Raw $files[0].FullName | ConvertFrom-Json
+          if ($captured.event.hook_invocation_id -ne 'ci-windows-hook-runner') { throw 'Windows Hook 启动器没有完整传递 stdin JSON' }
+
       - name: Verify Windows npm lifecycle
         if: runner.os == 'Windows'
         shell: pwsh
@@ -77,6 +97,9 @@ jobs:
             $lifecycleCheck = $doctor.checks | Where-Object { $_.id -eq 'lifecycle' }
             if ($null -eq $lifecycleCheck) { throw 'doctor 缺少 lifecycle 检查' }
             if ($lifecycleCheck.level -ne 'pass') { throw "doctor lifecycle 未通过：$($lifecycleCheck.detail)" }
+            $hookRunnerCheck = $doctor.checks | Where-Object { $_.id -eq 'windows-hook-runner' }
+            if ($null -eq $hookRunnerCheck) { throw 'doctor 缺少 Windows Hook 启动器检查' }
+            if ($hookRunnerCheck.level -ne 'pass') { throw "Windows Hook 启动器检查未通过：$($hookRunnerCheck.detail)" }
           }
           finally {
             node dist/cli.mjs service stop
