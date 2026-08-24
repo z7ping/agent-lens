@@ -5,6 +5,44 @@
  * 不改变协议、投影、采集或存储语义。保持最后加载，避免历史样式重新覆盖当前基线。
  */
 
+/* ── 全局 Shell：正式 Logo、稳定 Header、统一主题图标 ── */
+.app-header {
+  background: var(--al-surface);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.brand-logo {
+  width: 27px;
+  height: 27px;
+  flex: 0 0 auto;
+  border-radius: 7px;
+  object-fit: contain;
+}
+
+.theme-toggle svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.55;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* 最终覆盖层不得重新引入小于 12px 的正常界面文字。 */
+.review-audit-toggle,
+.review-audit-controls > span,
+.tool-summary-card > span,
+.tool-summary-card small,
+.tool-attention-row small,
+.tool-attention-badge,
+.tool-session-copy small,
+.tool-session-open,
+.skill-funnel-row > span:first-child {
+  font-size: 12px;
+}
+
 /* ── 任务复盘：Inspector 与 v2 横向 Tab 一致 ── */
 .inspector-head {
   background: var(--al-surface-raised);
@@ -56,18 +94,17 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 28px;
+  min-height: 30px;
   margin-top: 8px;
 }
 
 .review-audit-toggle {
-  min-height: 26px;
+  min-height: 28px;
   padding: 3px 9px;
   border: 1px solid var(--al-line);
   border-radius: 7px;
   background: var(--al-surface);
   color: var(--al-ink-2);
-  font-size: 11.5px;
   font-weight: 620;
 }
 
@@ -80,7 +117,6 @@
 
 .review-audit-controls > span {
   color: var(--al-muted);
-  font-size: 11px;
   line-height: 1.5;
 }
 
@@ -96,7 +132,7 @@
 }
 
 .tool-summary-card {
-  min-height: 84px;
+  min-height: 86px;
   padding: 12px 16px;
   border: 0;
   border-right: 1px solid var(--al-line);
@@ -105,33 +141,16 @@
   box-shadow: none;
 }
 
-.tool-summary-card:last-child {
-  border-right: 0;
-}
-
-.tool-summary-card > span {
-  font-size: 11px;
-  font-weight: 650;
-  color: var(--al-muted);
-}
-
-.tool-summary-card strong {
-  margin-top: 6px;
-  font-size: 14px;
-}
-
-.tool-summary-card small {
-  padding-top: 5px;
-  font-size: 11px;
-}
+.tool-summary-card:last-child { border-right: 0; }
+.tool-summary-card > span { font-weight: 650; color: var(--al-muted); }
+.tool-summary-card strong { margin-top: 6px; font-size: 14px; }
+.tool-summary-card small { padding-top: 5px; }
 
 .tool-table-card,
 .attributed-assets,
 .cross-agent-matrix,
 .agent-source-nav,
-.agent-card {
-  box-shadow: none;
-}
+.agent-card { box-shadow: none; }
 
 .tool-table th,
 .tool-table td {
@@ -144,18 +163,12 @@
   outline-offset: -2px;
 }
 
-.tool-attention {
-  margin-top: 22px;
-}
-
-.tool-attention-list {
-  margin-top: 8px;
-  border-top: 1px solid var(--al-line);
-}
+.tool-attention { margin-top: 22px; }
+.tool-attention-list { margin-top: 8px; border-top: 1px solid var(--al-line); }
 
 .tool-attention-row {
   width: 100%;
-  min-height: 50px;
+  min-height: 52px;
   padding: 9px 4px;
   border: 0;
   border-bottom: 1px solid var(--al-line);
@@ -167,51 +180,21 @@
   text-align: left;
 }
 
-.tool-attention-row:hover {
-  background: var(--al-soft-2);
-}
-
-.tool-attention-row > span:nth-child(2) {
-  min-width: 0;
-}
-
-.tool-attention-row b {
-  display: block;
-  font-family: var(--font-mono);
-  font-size: 12.5px;
-  color: var(--al-ink);
-}
-
-.tool-attention-row small {
-  display: block;
-  margin-top: 2px;
-  color: var(--al-muted);
-  font-size: 11.5px;
-}
-
-.tool-attention-row > strong {
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-}
+.tool-attention-row:hover { background: var(--al-soft-2); }
+.tool-attention-row > span:nth-child(2) { min-width: 0; }
+.tool-attention-row b { display: block; font-family: var(--font-mono); font-size: 13px; color: var(--al-ink); }
+.tool-attention-row small { display: block; margin-top: 2px; color: var(--al-muted); }
+.tool-attention-row > strong { font-size: 12px; font-variant-numeric: tabular-nums; }
 
 .tool-attention-badge {
-  min-width: 58px;
+  min-width: 62px;
   padding: 2px 7px;
   border-radius: 999px;
-  font-size: 10.5px;
   font-weight: 650;
   text-align: center;
 }
-
-.tool-attention-badge.is-danger {
-  background: var(--al-danger-soft);
-  color: var(--al-danger);
-}
-
-.tool-attention-badge.is-warning {
-  background: var(--al-warning-soft);
-  color: var(--al-warning);
-}
+.tool-attention-badge.is-danger { background: var(--al-danger-soft); color: var(--al-danger); }
+.tool-attention-badge.is-warning { background: var(--al-warning-soft); color: var(--al-warning); }
 
 .asset-usage-bar {
   margin-left: auto;
@@ -222,15 +205,8 @@
   background: var(--al-soft);
   overflow: hidden;
 }
+.asset-usage-bar > i { display: block; height: 100%; border-radius: inherit; background: var(--al-accent); }
 
-.asset-usage-bar > i {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--al-accent);
-}
-
-/* 工具详情：原型是横向指标条，而不是六块独立卡片。 */
 .tool-drill-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -238,30 +214,17 @@
   border-top: 1px solid var(--al-line);
   border-bottom: 1px solid var(--al-line);
 }
-
 .tool-drill-stat {
-  min-height: 64px;
+  min-height: 66px;
   padding: 10px 12px;
   border: 0;
   border-right: 1px solid var(--al-line);
   border-radius: 0;
   background: transparent;
 }
-
-.tool-drill-stat:nth-child(3n) {
-  border-right: 0;
-}
-
-.tool-session-section {
-  margin-top: 18px;
-}
-
-.tool-session-list {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  margin-top: 8px;
-}
+.tool-drill-stat:nth-child(3n) { border-right: 0; }
+.tool-session-section { margin-top: 18px; }
+.tool-session-list { display: flex; flex-direction: column; gap: 7px; margin-top: 8px; }
 
 .tool-session-link {
   width: 100%;
@@ -275,52 +238,18 @@
   align-items: center;
   text-align: left;
 }
-
-.tool-session-link:hover {
-  border-color: var(--al-line-strong);
-  background: var(--al-soft);
-}
-
-.tool-session-copy {
-  min-width: 0;
-}
-
-.tool-session-copy b {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--al-ink);
-  font-size: 12.5px;
-  font-weight: 620;
-}
-
-.tool-session-copy small {
-  display: block;
-  margin-top: 2px;
-  color: var(--al-muted-2);
-  font-size: 11px;
-}
-
-.tool-session-open {
-  color: var(--al-accent);
-  font-size: 11.5px;
-  font-weight: 650;
-  white-space: nowrap;
-}
+.tool-session-link:hover { border-color: var(--al-line-strong); background: var(--al-soft); }
+.tool-session-copy { min-width: 0; }
+.tool-session-copy b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--al-ink); font-size: 13px; font-weight: 620; }
+.tool-session-copy small { display: block; margin-top: 2px; color: var(--al-muted-2); }
+.tool-session-open { color: var(--al-accent); font-weight: 650; white-space: nowrap; }
 
 /* ── 智能体概览：保持 v2 单来源详情，弱化卡片堆叠 ── */
-.asset-kpi {
-  border-color: transparent;
-  background: var(--al-soft-2);
-}
-
+.asset-kpi { border-color: transparent; background: var(--al-soft-2); }
 .agent-primary-section,
 .skill-lifecycle,
 .agent-disclosures,
-.agent-secondary {
-  border-top-color: var(--al-line);
-}
+.agent-secondary { border-top-color: var(--al-line); }
 
 .frequent-asset-row {
   display: grid;
@@ -328,36 +257,15 @@
   gap: 9px;
   align-items: center;
 }
-
 .frequent-usage-track,
-.skill-funnel-track {
-  height: 6px;
-  border-radius: 999px;
-  background: var(--al-soft);
-  overflow: hidden;
-}
-
+.skill-funnel-track { height: 6px; border-radius: 999px; background: var(--al-soft); overflow: hidden; }
 .frequent-usage-track > i,
-.skill-funnel-track > i {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--al-accent);
-}
+.skill-funnel-track > i { display: block; height: 100%; border-radius: inherit; background: var(--al-accent); }
+.frequent-asset-row > strong { text-align: right; }
 
-.frequent-asset-row > strong {
-  text-align: right;
-}
-
-.skill-funnel {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  margin-top: 10px;
-}
-
+.skill-funnel { display: flex; flex-direction: column; gap: 5px; margin-top: 10px; }
 .skill-funnel > .skill-funnel-row {
-  min-height: 28px;
+  min-height: 30px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -367,97 +275,27 @@
   align-items: center;
   justify-content: initial;
 }
-
-.skill-funnel > .skill-funnel-row[data-active] {
-  border: 0;
-  background: transparent;
-}
-
-.skill-funnel > .skill-funnel-row[data-muted='true'] {
-  opacity: .72;
-}
-
-.skill-funnel-row > span:first-child {
-  color: var(--al-muted);
-  font-size: 11.5px;
-  text-align: left;
-}
-
-.skill-funnel-row > strong {
-  color: var(--al-ink);
-  font-size: 12.5px;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-.skill-funnel-row[data-active] .skill-funnel-track > i {
-  background: var(--al-success);
-}
-
-.capability-row {
-  align-items: flex-start;
-}
-
-.capability-row > span {
-  min-width: 0;
-  line-height: 1.55;
-  color: var(--al-muted);
-}
-
-.capability-row > b {
-  flex: 0 0 auto;
-  margin-top: 1px;
-}
+.skill-funnel > .skill-funnel-row[data-active] { border: 0; background: transparent; }
+.skill-funnel > .skill-funnel-row[data-muted='true'] { opacity: .72; }
+.skill-funnel-row > span:first-child { color: var(--al-muted); text-align: left; }
+.skill-funnel-row > strong { color: var(--al-ink); font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; }
+.skill-funnel-row[data-active] .skill-funnel-track > i { background: var(--al-success); }
+.capability-row { align-items: flex-start; }
+.capability-row > span { min-width: 0; line-height: 1.55; color: var(--al-muted); }
+.capability-row > b { flex: 0 0 auto; margin-top: 1px; }
 
 @media (max-width: 760px) {
-  .review-audit-controls {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 5px;
-  }
-
-  .tool-summary-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .tool-summary-card:nth-child(2) {
-    border-right: 0;
-  }
-
-  .tool-summary-card:nth-child(-n + 2) {
-    border-bottom: 1px solid var(--al-line);
-  }
-
-  .tool-drill-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
+  .review-audit-controls { align-items: flex-start; flex-direction: column; gap: 5px; }
+  .tool-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tool-summary-card:nth-child(2) { border-right: 0; }
+  .tool-summary-card:nth-child(-n + 2) { border-bottom: 1px solid var(--al-line); }
+  .tool-drill-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tool-drill-stat,
-  .tool-drill-stat:nth-child(3n) {
-    border-right: 1px solid var(--al-line);
-  }
-
-  .tool-drill-stat:nth-child(2n) {
-    border-right: 0;
-  }
-
-  .tool-session-link {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .tool-session-link .metric-bar {
-    display: none;
-  }
-
-  .asset-usage-bar {
-    display: none;
-  }
-
-  .frequent-asset-row {
-    grid-template-columns: 20px minmax(0, 1fr) 42px;
-  }
-
-  .frequent-usage-track {
-    display: none;
-  }
+  .tool-drill-stat:nth-child(3n) { border-right: 1px solid var(--al-line); }
+  .tool-drill-stat:nth-child(2n) { border-right: 0; }
+  .tool-session-link { grid-template-columns: minmax(0, 1fr) auto; }
+  .tool-session-link .metric-bar { display: none; }
+  .asset-usage-bar { display: none; }
+  .frequent-asset-row { grid-template-columns: 20px minmax(0, 1fr) 42px; }
+  .frequent-usage-track { display: none; }
 }
