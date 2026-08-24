@@ -19,7 +19,6 @@
     "react-router-dom": "7.18.2"
   },
   "devDependencies": {
-    "@rolldown/binding-wasm32-wasi": "1.2.5",
     "@tailwindcss/vite": "4.3.3",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
