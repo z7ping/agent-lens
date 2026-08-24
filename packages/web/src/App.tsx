@@ -1,5 +1,5 @@
-import { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore, type PropsWithChildren } from 'react'
-import { BrowserRouter, NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PropsWithChildren } from 'react'
+import { BrowserRouter, NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import type { AgentFacetDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel, ClientSnapshot } from './client/model'
 import { readPinnedAgents, readTheme, writePinnedAgents, writeTheme } from './client/preferences'
@@ -57,10 +57,46 @@ const navigation = [
   { to: '/backup', label: '资产备份' },
 ] as const
 
+type ReviewFilters = ClientSnapshot['review']['filters']
+
+function reviewFiltersFromSearch(search: string): ReviewFilters {
+  const params = new URLSearchParams(search)
+  const range = params.get('range')
+  const status = params.get('status')
+  return {
+    sourceId: params.get('source') ?? '',
+    projectId: params.get('project') ?? '',
+    range: range === 'today' || range === '7d' || range === '30d' || range === 'all' ? range : '7d',
+    status: status === 'clean' || status === 'with-errors' || status === 'all' ? status : 'all',
+    search: params.get('q') ?? '',
+  }
+}
+
+function reviewSearchFromFilters(filters: ReviewFilters): string {
+  const params = new URLSearchParams()
+  if (filters.sourceId) params.set('source', filters.sourceId)
+  if (filters.projectId) params.set('project', filters.projectId)
+  params.set('range', filters.range)
+  params.set('status', filters.status)
+  if (filters.search) params.set('q', filters.search)
+  return `?${params.toString()}`
+}
+
+function sameReviewFilters(left: ReviewFilters, right: ReviewFilters): boolean {
+  return left.sourceId === right.sourceId
+    && left.projectId === right.projectId
+    && left.range === right.range
+    && left.status === right.status
+    && left.search === right.search
+}
+
 function Shell({ model }: { model: AgentLensClientModel }) {
   const snapshot = useClientSnapshot(model)
   const location = useLocation()
+  const navigate = useNavigate()
   const [theme, setTheme] = useState(readTheme)
+  const reviewUrlReadyRef = useRef(false)
+  const skipReviewUrlWriteRef = useRef(false)
   const agents = snapshot.facets?.agents ?? []
   const toggleTheme = () => {
     const next = theme === 'dark' ? 'light' : 'dark'
@@ -75,6 +111,32 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const hasSseBanner = Boolean(snapshot.health && !snapshot.liveConnected)
   const showTurnRail = onReview && snapshot.review.detail
   const navigationHasNewData = (to: string) => to === '/tools' ? snapshot.usage.hasNewData : to === '/agents' ? snapshot.agentsHasNewData : false
+
+  useEffect(() => {
+    if (!onReview) {
+      reviewUrlReadyRef.current = false
+      skipReviewUrlWriteRef.current = false
+      return
+    }
+    if (reviewUrlReadyRef.current && !location.search) return
+    const filters = reviewFiltersFromSearch(location.search)
+    reviewUrlReadyRef.current = true
+    if (!sameReviewFilters(filters, model.getSnapshot().review.filters)) {
+      skipReviewUrlWriteRef.current = true
+      model.setReviewFilters(filters)
+    }
+  }, [location.search, model, onReview])
+
+  useEffect(() => {
+    if (!onReview || !reviewUrlReadyRef.current) return
+    if (skipReviewUrlWriteRef.current) {
+      skipReviewUrlWriteRef.current = false
+      return
+    }
+    const search = reviewSearchFromFilters(snapshot.review.filters)
+    if (location.search === search) return
+    navigate({ pathname: location.pathname, search }, { replace: true })
+  }, [location.pathname, location.search, navigate, onReview, snapshot.review.filters])
 
   return <PinnedProvider agents={agents}>
     <div className="app-shell">
