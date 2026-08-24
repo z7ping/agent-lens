@@ -17,6 +17,7 @@ import {
   SourceHistoryRunner,
   SourceRuntimeRunner,
 } from '@agent-lens/core-services/source-runner'
+import { createTestCapturePolicy } from '@agent-lens/core-services/test-support'
 import { SqliteStorageService } from '@agent-lens/storage-sqlite'
 import { detectHermes, hermesSourceDefinition } from './index'
 
@@ -79,9 +80,10 @@ test('Hermes Source combines state.db history, assets and optional runtime-hook 
     const capabilities = new DefaultCapabilityService()
     const coverage = new DefaultCoverageService(storage, evidence)
     const assets = new DefaultAssetService(storage)
-    const history = new SourceHistoryRunner(storage, identity, observations, capabilities, coverage)
-    const runtime = new SourceRuntimeRunner(storage, identity, observations, capabilities, coverage)
-    const assetRunner = new SourceAssetRunner(storage, identity, capabilities, assets, evidence)
+    const capturePolicy = createTestCapturePolicy(['hermes'])
+    const history = new SourceHistoryRunner(storage, identity, observations, capabilities, coverage, capturePolicy)
+    const runtime = new SourceRuntimeRunner(storage, identity, observations, capabilities, coverage, capturePolicy)
+    const assetRunner = new SourceAssetRunner(storage, identity, capabilities, assets, evidence, capturePolicy)
     const host = await identity.resolveHost({ name: 'hermes-test-host' })
     const [detected] = await detectHermes({ host, env: { HERMES_HOME: hermesRoot } })
     assert.ok(detected)
