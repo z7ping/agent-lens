@@ -22,7 +22,7 @@ export interface LifecycleStatus {
   active: boolean
   autostart: boolean
   hidden?: boolean
-  detail?: string
+  detail?: string | undefined
 }
 
 interface LifecyclePreferences {
