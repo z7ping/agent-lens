@@ -455,6 +455,9 @@
 .tool-session-open { color: var(--al-accent); font-weight: 650; white-space: nowrap; }
 
 /* ── 智能体概览：保持 v2 单来源详情，弱化卡片堆叠 ── */
+.agent-card[data-source='hermes'] { --agent-accent: var(--src-hermes); }
+.agent-card[data-source='opencode'] { --agent-accent: var(--src-opencode); }
+
 .asset-kpi { border-color: transparent; background: var(--al-soft-2); }
 .agent-primary-section,
 .skill-lifecycle,
