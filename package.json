@@ -31,12 +31,12 @@
     "build": "npm run build:dist",
     "smoke:dist": "node scripts/smoke-distribution.mjs",
     "desktop:prepare": "node scripts/prepare-desktop.mjs",
-    "desktop:win": "npm run build:dist && npm run desktop:prepare && npm run dist:win --workspace @agent-lens/desktop",
+    "desktop:win": "npm run check:web-presentation && npm run check:desktop-shell && npm run build:dist && npm run desktop:prepare && npm run dist:win --workspace @agent-lens/desktop",
     "start": "npm run start --workspace @agent-lens/daemon",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "release:check": "npm run check:web-presentation && npm run check:desktop-shell && npm run typecheck && npm test && npm run build:dist && npm run smoke:dist && npm pack --dry-run",
-    "prepack": "npm run build:dist"
+    "prepack": "npm run check:web-presentation && npm run check:desktop-shell && npm run build:dist"
   },
   "repository": {
     "type": "git",
