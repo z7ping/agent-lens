@@ -20,6 +20,7 @@ const DEFAULT_PORT = 56789
 const MIN_NODE = [22, 23, 0] as const
 
 type CheckLevel = 'pass' | 'warn' | 'fail'
+type SourceId = 'codex' | 'claude' | 'pi'
 
 export interface DoctorCheck {
   id: string
@@ -28,11 +29,18 @@ export interface DoctorCheck {
   detail?: string
 }
 
+interface DetectedSourceRoot {
+  source: SourceId
+  root: string
+  detected: boolean
+}
+
 function usage(): string {
   return [
     'AgentLens 1.0',
     '',
-    'Usage:',
+    '用法：',
+    '  agent-lens setup [--json]',
     '  agent-lens start',
     '  agent-lens status [--json]',
     '  agent-lens doctor [--json]',
@@ -84,6 +92,30 @@ function runtimeOwnerLabel(owner: string | null): string {
   return owner ?? '未报告'
 }
 
+function sourceRoots(): DetectedSourceRoot[] {
+  const roots = [
+    ['codex', process.env.CODEX_HOME ?? join(homedir(), '.codex')],
+    ['claude', process.env.CLAUDE_HOME ?? join(homedir(), '.claude')],
+    ['pi', process.env.PI_HOME ?? join(homedir(), '.pi')],
+  ] as const
+  return roots.map(([source, root]) => ({ source, root, detected: existsSync(root) }))
+}
+
+function setupHookTargets(
+  sources: readonly Pick<DetectedSourceRoot, 'source' | 'detected'>[],
+  statuses: readonly Pick<HookStatus, 'target' | 'installed' | 'trusted'>[],
+): HookTarget[] {
+  const detected = new Set(sources.filter(item => item.detected).map(item => item.source))
+  const byTarget = new Map(statuses.map(item => [item.target, item]))
+  const result: HookTarget[] = []
+  for (const target of ['codex', 'claude'] as const) {
+    if (!detected.has(target)) continue
+    const status = byTarget.get(target)
+    if (!status || !status.installed || (target === 'codex' && status.trusted === false)) result.push(target)
+  }
+  return result
+}
+
 function formatHookStatus(status: HookStatus): string {
   const trust = status.target === 'codex'
     ? `, trust=${status.trusted === true ? 'ok' : status.trusted === false ? 'missing' : 'unknown'}`
@@ -95,6 +127,80 @@ function targetFrom(value: string | undefined): HookTarget | 'all' {
   if (!value || value === 'all') return 'all'
   if (value === 'codex' || value === 'claude') return value
   throw new Error(`Unknown hook target: ${value}`)
+}
+
+async function setup(json: boolean): Promise<number> {
+  const actualNode = parseNodeVersion(process.versions.node)
+  if (!versionAtLeast(actualNode, MIN_NODE)) {
+    const result = {
+      ok: false,
+      version: VERSION,
+      error: `Node.js 版本过低：当前 ${process.versions.node}，要求 >= ${MIN_NODE.join('.')}`,
+    }
+    if (json) console.log(JSON.stringify(result, null, 2))
+    else console.log(result.error)
+    return 1
+  }
+
+  const dataRoot = join(homedir(), '.agent-lens', '1.0')
+  await mkdir(dataRoot, { recursive: true })
+  await access(dataRoot)
+
+  const sources = sourceRoots()
+  let hooks = await getAllHookStatus()
+  const hookTargets = setupHookTargets(sources, hooks)
+  for (const target of hookTargets) await installHooks(target)
+  if (hookTargets.length) hooks = await getAllHookStatus()
+
+  let health: Record<string, unknown> | null = null
+  try {
+    health = await fetchHealth()
+  } catch {
+    // Setup configures local integration but does not own the long-running daemon lifecycle.
+  }
+
+  const result = {
+    ok: true,
+    version: VERSION,
+    dataRoot,
+    sources,
+    hooks: hooks.map(item => ({
+      target: item.target,
+      installed: item.installed,
+      ...(item.target === 'codex' ? { trusted: item.trusted } : {}),
+      changed: hookTargets.includes(item.target),
+    })),
+    runtime: health
+      ? { online: true, url: daemonUrl('/'), owner: runtimeOwner(health), protocolVersion: health.protocolVersion ?? null }
+      : { online: false, url: daemonUrl('/') },
+  }
+
+  if (json) {
+    console.log(JSON.stringify(result, null, 2))
+    return 0
+  }
+
+  console.log('AgentLens 初始化完成。')
+  console.log(`[OK] 数据目录：${dataRoot}`)
+  for (const source of sources) {
+    console.log(`${source.detected ? '[OK]' : '[跳过]'} ${source.source}：${source.detected ? '已检测到' : '未检测到'}（${source.root}）`)
+  }
+  for (const item of hooks) {
+    const source = sources.find(sourceItem => sourceItem.source === item.target)
+    if (!source?.detected) continue
+    const changed = hookTargets.includes(item.target) ? '，本次已补齐' : ''
+    const trust = item.target === 'codex' && item.trusted === false ? '，信任配置缺失' : ''
+    console.log(`${item.installed && item.trusted !== false ? '[OK]' : '[WARN]'} ${item.target} Hook：${item.installed ? '已安装' : '未安装'}${changed}${trust}`)
+  }
+  const pi = sources.find(item => item.source === 'pi')
+  if (pi?.detected) console.log('[OK] pi：使用原生历史与运行时采集，无需安装 Hook')
+  if (health) {
+    console.log(`[OK] 运行时：已在线（管理方式：${runtimeOwnerLabel(runtimeOwner(health))}）`)
+    console.log(`Web：${daemonUrl('/')}`)
+  } else {
+    console.log('[提示] 运行时当前未启动；初始化不会自动创建后台服务。')
+  }
+  return 0
 }
 
 async function runHook(action: string, targetValue: string | undefined, json: boolean): Promise<number> {
@@ -157,16 +263,16 @@ async function status(json: boolean): Promise<number> {
     const owner = runtimeOwner(health)
     if (json) console.log(JSON.stringify({ online: true, url: daemonUrl('/'), owner, health }, null, 2))
     else {
-      console.log('AgentLens daemon: online')
+      console.log('AgentLens 后台运行时：在线')
       console.log(`Web: ${daemonUrl('/')}`)
-      console.log(`Protocol: ${String(health.protocolVersion ?? 'unknown')}`)
+      console.log(`协议版本: ${String(health.protocolVersion ?? 'unknown')}`)
       console.log(`管理方式: ${runtimeOwnerLabel(owner)}`)
     }
     return 0
   } catch (error) {
     const result = { online: false, url: daemonUrl('/'), error: error instanceof Error ? error.message : String(error) }
     if (json) console.log(JSON.stringify(result, null, 2))
-    else console.log(`AgentLens daemon: offline (${result.error})`)
+    else console.log(`AgentLens 后台运行时：离线（${result.error}）`)
     return 1
   }
 }
@@ -197,16 +303,11 @@ async function doctor(json: boolean): Promise<number> {
     checks.push({ id: 'daemon', level: 'warn', message: 'Daemon is not currently reachable', detail: error instanceof Error ? error.message : String(error) })
   }
 
-  const sourceRoots = [
-    ['codex', process.env.CODEX_HOME ?? join(homedir(), '.codex')],
-    ['claude', process.env.CLAUDE_HOME ?? join(homedir(), '.claude')],
-    ['pi', process.env.PI_HOME ?? join(homedir(), '.pi')],
-  ] as const
-  for (const [source, root] of sourceRoots) {
+  for (const { source, root, detected } of sourceRoots()) {
     checks.push({
       id: `source-${source}`,
-      level: existsSync(root) ? 'pass' : 'warn',
-      message: `${source} source ${existsSync(root) ? 'detected' : 'not detected'}`,
+      level: detected ? 'pass' : 'warn',
+      message: `${source} source ${detected ? 'detected' : 'not detected'}`,
       detail: root,
     })
   }
@@ -252,6 +353,7 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
     console.log(VERSION)
     return 0
   }
+  if (command === 'setup') return setup(json)
   if (command === 'start') return startDaemon()
   if (command === 'status') return status(json)
   if (command === 'doctor') return doctor(json)
@@ -266,4 +368,12 @@ if (process.argv[1] && dirname(fileURLToPath(import.meta.url)) === dirname(proce
   })
 }
 
-export const cliInternals = { parseNodeVersion, versionAtLeast, targetFrom, daemonUrl, runtimeOwner }
+export const cliInternals = {
+  parseNodeVersion,
+  versionAtLeast,
+  targetFrom,
+  daemonUrl,
+  runtimeOwner,
+  sourceRoots,
+  setupHookTargets,
+}
