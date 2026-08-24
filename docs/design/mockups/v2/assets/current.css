@@ -30,6 +30,7 @@ time,
 th,
 .eyebrow,
 .section-label,
+.sec-label,
 .future-section-label,
 .badge,
 .count-badge,
@@ -39,8 +40,29 @@ th,
 .proj-group,
 .si-meta,
 .si-foot,
+.rh-sub code,
+.metric span,
 .round-seg button em,
 .round-act button em,
+.it-meta span,
+.bubble .meta,
+.b-actions button,
+.tg-counts,
+.tg-status,
+.tg-total,
+.tg-toolbar,
+.tr-name .tag,
+.tr-dur,
+.e-src,
+.rawgroup > summary time,
+.scope-pop-title,
+.scope-pop .st,
+.dw-eyebrow,
+.code-block,
+.ev-card .row1 span,
+.ev-card .path code,
+.copy-link,
+.ev-miss,
 .src-copy small,
 .src-copy em,
 .strip,
@@ -124,6 +146,18 @@ th,
 /* 五来源在来源列表中必须有稳定状态，不依赖颜色表达含义。 */
 .src-option[data-source='hermes'] .src-copy em,
 .src-option[data-source='opencode'] .src-copy em { color: var(--al-muted); }
+
+/* 工具分析正文层级与正式页一致。 */
+.data-table { font-size: 13px !important; }
+.tc-head h2,
+.tool-cell b,
+.attention-row b,
+.asset-row b,
+.asset-row strong,
+.sess-link b:first-child { font-size: 13px !important; }
+.attention-row > strong,
+.sess-link > b:last-child { font-size: 12px !important; }
+.drawer-stats b { font-size: 14px; }
 
 /* 智能体来源列表追平正式 AgentSourceNav。 */
 .agents-browser {
