@@ -4,13 +4,17 @@ const mainPath = 'packages/web/src/main.tsx'
 const typographyPath = 'packages/web/src/typography.css'
 const tokenPath = 'packages/web/src/tokens.css'
 const mockTokenPath = 'docs/design/mockups/v2/assets/tokens.css'
+const mockCurrentPath = 'docs/design/mockups/v2/assets/current.css'
 const colorSystemPath = 'packages/web/src/color-system.css'
+const finalAlignmentPath = 'packages/web/src/v2-alignment.css'
 const reviewReferencePath = 'packages/web/src/review-reference.css'
 const semanticPresentationPaths = [
   typographyPath,
   'packages/web/src/insights.css',
   'packages/web/src/review-long-session.css',
   'packages/web/src/shell-responsive.css',
+  finalAlignmentPath,
+  mockCurrentPath,
 ]
 const retiredReviewLayers = [
   'packages/web/src/review-balanced.css',
@@ -23,21 +27,31 @@ const main = readFileSync(mainPath, 'utf8')
 const cssImports = [...main.matchAll(/import\s+['"](.+?\.css)['"]/g)].map(match => match[1])
 const lastCssImport = cssImports.at(-1)
 
-if (lastCssImport !== './color-system.css') {
-  throw new Error(`Web 最终配色系统必须最后加载，当前最后一个 CSS 是：${lastCssImport ?? '无'}`)
+if (lastCssImport !== './v2-alignment.css') {
+  throw new Error(`v2.1 最终对齐层必须最后加载，当前最后一个 CSS 是：${lastCssImport ?? '无'}`)
 }
 
 const typographyIndex = cssImports.indexOf('./typography.css')
 const tokenIndex = cssImports.indexOf('./tokens.css')
 const colorSystemIndex = cssImports.indexOf('./color-system.css')
-if (typographyIndex < 0 || tokenIndex < 0 || colorSystemIndex < 0 || typographyIndex > tokenIndex || tokenIndex + 1 !== colorSystemIndex) {
-  throw new Error('正式加载顺序必须保持：字体系统 → 设计令牌 → 最终配色系统')
+const finalAlignmentIndex = cssImports.indexOf('./v2-alignment.css')
+if (
+  typographyIndex < 0 || tokenIndex < 0 || colorSystemIndex < 0 || finalAlignmentIndex < 0
+  || typographyIndex > tokenIndex
+  || tokenIndex + 1 !== colorSystemIndex
+  || colorSystemIndex + 1 !== finalAlignmentIndex
+) {
+  throw new Error('正式加载顺序必须保持：字体系统 → 设计令牌 → 最终配色系统 → v2.1 最终对齐层')
 }
 
 for (const path of retiredReviewLayers) {
   if (existsSync(path)) {
     throw new Error(`已退役的表现层不应重新出现：${path}`)
   }
+}
+
+if (!existsSync(mockCurrentPath)) {
+  throw new Error('当前高保真原型必须保留 assets/current.css 作为最终表现契约')
 }
 
 const typography = readFileSync(typographyPath, 'utf8')
@@ -52,13 +66,15 @@ for (const path of semanticPresentationPaths) {
     .filter(value => value < 12)
 
   if (tooSmall.length > 0) {
-    throw new Error(`${path} 出现小于 12px 的正式字号：${[...new Set(tooSmall)].join(', ')}px`)
+    throw new Error(`${path} 出现小于 12px 的当前有效字号：${[...new Set(tooSmall)].join(', ')}px`)
   }
 }
 
 const tokenSource = readFileSync(tokenPath, 'utf8')
 const mockTokenSource = readFileSync(mockTokenPath, 'utf8')
+const mockCurrentSource = readFileSync(mockCurrentPath, 'utf8')
 const colorSystemSource = readFileSync(colorSystemPath, 'utf8')
+const finalAlignmentSource = readFileSync(finalAlignmentPath, 'utf8')
 const reviewReferenceSource = readFileSync(reviewReferencePath, 'utf8')
 
 function block(source, selector) {
@@ -79,6 +95,7 @@ const comparedTokens = [
   '--al-accent', '--al-accent-soft', '--al-success', '--al-success-soft', '--al-warning',
   '--al-warning-soft', '--al-danger', '--al-danger-soft', '--al-user-bubble',
   '--al-user-bubble-text', '--al-user-bubble-muted', '--al-user-bubble-code',
+  '--src-codex', '--src-claude', '--src-pi', '--src-hermes', '--src-opencode',
 ]
 
 const runtimeLight = vars(block(tokenSource, ':root'))
@@ -145,6 +162,21 @@ for (const [label, foreground, background] of contrastPairs) {
 if (!colorSystemSource.includes('AgentLens 1.0 最终配色收口层')) {
   throw new Error('最终配色系统文件缺少正式收口标识')
 }
+if (!finalAlignmentSource.includes('AgentLens v2.1 当前高保真原型最终对齐层')) {
+  throw new Error('v2.1 最终对齐层缺少当前高保真基线标识')
+}
+if (!/\.app-header\s*\{[\s\S]*?backdrop-filter\s*:\s*none/m.test(finalAlignmentSource)) {
+  throw new Error('正式 Header 必须在最终对齐层关闭背景模糊')
+}
+if (!/\.app-header\s*,\s*\n?\.round-nav\s*\{[\s\S]*?backdrop-filter\s*:\s*none\s*!important/m.test(mockCurrentSource)) {
+  throw new Error('当前高保真原型必须关闭 Header / round-nav 背景模糊')
+}
+if (!mockCurrentSource.includes('.dot-hermes') || !mockCurrentSource.includes('.dot-opencode')) {
+  throw new Error('当前高保真原型必须包含 Hermes / OpenCode 来源色')
+}
+if (!/\.app-header\s+\.brand\s*\{\s*display:\s*flex\s*!important/m.test(finalAlignmentSource)) {
+  throw new Error('窄窗口必须保留 AgentLens Logo，不能隐藏整个品牌区')
+}
 
 /*
  * Token 数值正确并不足够：高特异性的历史组件规则仍可能覆盖背景，
@@ -172,4 +204,4 @@ if (!userMarkdownRule.test(colorSystemSource)) {
   throw new Error('用户消息 Markdown 正文必须绑定 --al-user-bubble-text，不能继承普通页面文字色')
 }
 
-console.log('Web 表现层收敛检查通过：字号、原型令牌、用户气泡组件绑定和关键前景/背景对比度均已校验')
+console.log('Web 表现层收敛检查通过：加载顺序、12px 下限、五来源令牌、原型最终契约、用户气泡绑定和关键对比度均已校验')
