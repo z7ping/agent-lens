@@ -32,7 +32,7 @@ test('CLI setup only installs hooks for detected sources that need repair', () =
   ]
   assert.deepEqual(cliInternals.setupHookTargets(sources, [
     { target: 'codex', installed: false, trusted: false },
-    { target: 'claude', installed: false, trusted: undefined },
+    { target: 'claude', installed: false },
   ]), ['codex'])
 
   assert.deepEqual(cliInternals.setupHookTargets([
@@ -40,7 +40,7 @@ test('CLI setup only installs hooks for detected sources that need repair', () =
     { source: 'claude' as const, detected: true },
   ], [
     { target: 'codex', installed: true, trusted: false },
-    { target: 'claude', installed: true, trusted: undefined },
+    { target: 'claude', installed: true },
   ]), ['codex'])
 
   assert.deepEqual(cliInternals.setupHookTargets([
@@ -48,7 +48,7 @@ test('CLI setup only installs hooks for detected sources that need repair', () =
     { source: 'claude' as const, detected: true },
   ], [
     { target: 'codex', installed: true, trusted: true },
-    { target: 'claude', installed: true, trusted: undefined },
+    { target: 'claude', installed: true },
   ]), [])
 })
 
