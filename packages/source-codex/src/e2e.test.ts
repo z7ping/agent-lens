@@ -11,6 +11,7 @@ import {
   DefaultObservationService,
 } from '@agent-lens/core-services'
 import { SourceHistoryRunner } from '@agent-lens/core-services/source-runner'
+import { createTestCapturePolicy } from '@agent-lens/core-services/test-support'
 import { SqliteStorageService } from '@agent-lens/storage-sqlite'
 import {
   codexSourceDefinition,
@@ -41,12 +42,14 @@ test('Codex fixture enters canonical facts and remains idempotent', async () => 
     const observations = new DefaultObservationService(storage, identity)
     const capabilities = new DefaultCapabilityService()
     const coverage = new DefaultCoverageService(storage, evidence)
+    const capturePolicy = createTestCapturePolicy(['codex'])
     const runner = new SourceHistoryRunner(
       storage,
       identity,
       observations,
       capabilities,
       coverage,
+      capturePolicy,
     )
     const host = await identity.resolveHost({
       name: 'codex-e2e-host',
