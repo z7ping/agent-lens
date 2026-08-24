@@ -4,6 +4,11 @@ export type UsageAttribution = 'derived'
 export type UsageConfidence = 'high' | 'medium' | 'low'
 export type UsageAssetType = 'mcp' | 'skill'
 
+export interface ToolUsageSessionDto {
+  logicalSessionId: string
+  callCount: number
+}
+
 export interface ToolUsageDto {
   nativeToolName: string
   sourceIds: string[]
@@ -13,6 +18,7 @@ export interface ToolUsageDto {
   successCount: number
   errorCount: number
   sessionCount: number
+  sessions: ToolUsageSessionDto[]
   totalDurationMs: number
   averageDurationMs: number
   firstUsedAt: string
