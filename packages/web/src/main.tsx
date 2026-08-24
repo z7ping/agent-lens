@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
+import { installLiveRecovery } from './client/live-recovery'
 import { clientModel } from './client/model'
 import { readTheme, writeTheme } from './client/preferences'
 import './styles.css'
@@ -20,8 +21,12 @@ import './typography.css'
 import './color-system.css'
 
 writeTheme(readTheme())
+const disposeLiveRecovery = installLiveRecovery(clientModel)
 void clientModel.start()
-window.addEventListener('pagehide', () => clientModel.stop(), { once: true })
+window.addEventListener('pagehide', () => {
+  disposeLiveRecovery()
+  clientModel.stop()
+}, { once: true })
 
 const root = document.getElementById('root')
 if (!root) throw new Error('AgentLens Web root is missing')
