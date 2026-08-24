@@ -44,7 +44,7 @@ function shortSessionId(id: string): string {
   return id.length > 16 ? `${id.slice(0, 8)}…${id.slice(-5)}` : id
 }
 
-type SortKey = 'callCount' | 'sessionCount' | 'successRate' | 'errorCount' | 'totalDurationMs' | 'averageDurationMs'
+type SortKey = 'callCount' | 'sessionCount' | 'successRate' | 'errorCount' | 'averageDurationMs'
 type SortDirection = 'ascending' | 'descending'
 
 function sortMetric(tool: ToolUsageDto, key: SortKey): number {
@@ -70,6 +70,7 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
   const attributedCalls = Math.max(0, totalCalls - unattributedCalls)
   const attributionCoverage = totalCalls ? Math.round(attributedCalls / totalCalls * 100) : 0
   const maxCalls = Math.max(1, ...tools.map(tool => tool.callCount))
+  const maxAssetCalls = Math.max(1, ...assets.map(asset => asset.callCount))
   const canRelaxFilters = Boolean(usage.filters.sourceId || usage.filters.projectId || usage.filters.range !== 'all')
   const blockingError = Boolean(usage.error && !data)
   const [selectedToolKey, setSelectedToolKey] = useState<string | null>(null)
@@ -130,7 +131,6 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
                 <th aria-sort={ariaSort('sessionCount')} onClick={() => toggleSort('sessionCount')} style={{ cursor: 'pointer' }}>会话 {sort.key === 'sessionCount' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
                 <th aria-sort={ariaSort('successRate')} onClick={() => toggleSort('successRate')} style={{ cursor: 'pointer' }}>成功率 {sort.key === 'successRate' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
                 <th aria-sort={ariaSort('errorCount')} onClick={() => toggleSort('errorCount')} style={{ cursor: 'pointer' }}>失败 {sort.key === 'errorCount' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
-                <th aria-sort={ariaSort('totalDurationMs')} onClick={() => toggleSort('totalDurationMs')} style={{ cursor: 'pointer' }}>总耗时 {sort.key === 'totalDurationMs' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
                 <th aria-sort={ariaSort('averageDurationMs')} onClick={() => toggleSort('averageDurationMs')} style={{ cursor: 'pointer' }}>平均耗时 {sort.key === 'averageDurationMs' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
               </tr></thead>
               <tbody>{sortedTools.map(tool => {
@@ -141,7 +141,7 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
                   <td><span className="tool-bar-cell"><span>{tool.callCount}</span><span className="metric-bar" aria-hidden="true"><i style={{ width: `${Math.max(4, tool.callCount / maxCalls * 100)}%` }}/></span></span></td>
                   <td>{tool.sessionCount}</td>
                   <td><span className="tool-rate-cell" data-rate={successRate === null ? 'unknown' : successRate >= 95 ? 'good' : successRate >= 80 ? 'mid' : 'low'}><span>{rate(tool.successCount, tool.errorCount)}</span><span className="metric-bar" aria-hidden="true"><i style={{ width: `${successRate ?? 0}%` }}/></span></span></td>
-                  <td className={tool.errorCount ? 'cell-danger' : 'cell-muted'}>{tool.errorCount}</td><td>{duration(tool.totalDurationMs)}</td><td>{duration(tool.averageDurationMs)}</td>
+                  <td className={tool.errorCount ? 'cell-danger' : 'cell-muted'}>{tool.errorCount}</td><td>{duration(tool.averageDurationMs)}</td>
                 </tr>
               })}</tbody>
             </table> : <div className="tools-empty-state"><EmptyStatePanel
@@ -154,9 +154,25 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
           </div>
         </section>
 
+        {(mostErrors || slowest) && <section className="tool-attention">
+          <div className="section-heading-row"><div><h3>需要关注</h3><p>只列当前筛选范围内有事实支撑的异常与耗时项。</p></div></div>
+          <div className="tool-attention-list">
+            {mostErrors && <button className="tool-attention-row" onClick={() => setSelectedToolKey(toolKey(mostErrors.sourceIds, mostErrors.nativeToolName))}>
+              <span className="tool-attention-badge is-danger">失败集中</span>
+              <span><b>{mostErrors.nativeToolName}</b><small>{mostErrors.errorCount} 次已知失败 · 成功率 {rate(mostErrors.successCount, mostErrors.errorCount)}</small></span>
+              <strong>{mostErrors.errorCount} 次</strong>
+            </button>}
+            {slowest && <button className="tool-attention-row" onClick={() => setSelectedToolKey(toolKey(slowest.sourceIds, slowest.nativeToolName))}>
+              <span className="tool-attention-badge is-warning">平均最慢</span>
+              <span><b>{slowest.nativeToolName}</b><small>{slowest.callCount} 次调用 · {slowest.sessionCount} 个会话</small></span>
+              <strong>{duration(slowest.averageDurationMs)}</strong>
+            </button>}
+          </div>
+        </section>}
+
         {assets.length ? <section className="attributed-assets">
           <div className="section-heading-row"><div><h3>可归因能力资产</h3><p>有证据能够关联到具体技能和 MCP（模型上下文协议）的真实调用</p></div></div>
-          <div className="attributed-asset-list">{assets.map(asset => <div key={`${asset.type}:${asset.canonicalName}`} className="attributed-asset"><b>{asset.canonicalName}</b><span>{assetTypeLabel(asset.type)}</span><span title={`归因方式：${asset.attribution}`}>{confidenceLabel(asset.confidence)}</span><strong>{asset.callCount}</strong><small>次</small></div>)}</div>
+          <div className="attributed-asset-list">{assets.map(asset => <div key={`${asset.type}:${asset.canonicalName}`} className="attributed-asset"><b>{asset.canonicalName}</b><span>{assetTypeLabel(asset.type)}</span><span title={`归因方式：${asset.attribution}`}>{confidenceLabel(asset.confidence)}</span><span className="asset-usage-bar" aria-hidden="true"><i style={{ width: `${Math.max(4, asset.callCount / maxAssetCalls * 100)}%` }}/></span><strong>{asset.callCount}</strong><small>次</small></div>)}</div>
         </section> : null}
       </>}
     </div>
@@ -177,28 +193,24 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
             <div className="tool-drill-stat"><b>{duration(selectedTool.totalDurationMs)}</b><span>总耗时</span></div>
             <div className="tool-drill-stat"><b>{duration(selectedTool.averageDurationMs)}</b><span>平均耗时</span></div>
           </div>
-          <section style={{ marginTop: 18 }}>
-            <div className="table-section-head"><div><h2>相关会话</h2><p>按该工具在会话中的调用次数排序 · 点击直接进入任务复盘</p></div></div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
-              {selectedTool.sessions.slice(0, 5).map(session => {
+          <section className="tool-session-section">
+            <div className="table-section-head"><div><h2>会话分布 · Top 3</h2><p>按该工具在会话中的调用次数排序 · 点击直接进入任务复盘</p></div></div>
+            <div className="tool-session-list">
+              {selectedTool.sessions.slice(0, 3).map(session => {
                 const summary = sessionSummaries.get(session.logicalSessionId)
                 const label = summary?.title ?? summary?.preview ?? `会话 ${shortSessionId(session.logicalSessionId)}`
                 const max = selectedTool.sessions[0]?.callCount ?? 1
-                return <button
-                  key={session.logicalSessionId}
-                  onClick={() => openReviewSession(session.logicalSessionId)}
-                  style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 110px 42px', gap: 10, alignItems: 'center', width: '100%', padding: '7px 8px', border: '1px solid var(--al-line)', borderRadius: 8, background: 'var(--al-surface)', textAlign: 'left' }}
-                  title={label}
-                >
-                  <span style={{ minWidth: 0, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', fontSize: 12 }}>{label}</span>
+                return <button key={session.logicalSessionId} className="tool-session-link" onClick={() => openReviewSession(session.logicalSessionId)} title={label}>
+                  <span className="tool-session-copy"><b>{label}</b><small>{summary?.sourceIds?.join(' / ') ?? selectedTool.sourceIds.join(' / ')} · {session.callCount} 次调用</small></span>
                   <span className="metric-bar" aria-hidden="true"><i style={{ width: `${Math.max(5, session.callCount / max * 100)}%` }}/></span>
-                  <b style={{ textAlign: 'right', fontSize: 12 }}>{session.callCount}</b>
+                  <span className="tool-session-open">打开 →</span>
                 </button>
               })}
               {!selectedTool.sessions.length && <div className="tool-drill-note">当前范围没有可定位的会话记录。</div>}
             </div>
-            {selectedTool.sessions.length > 5 && <div className="tool-drill-note">前 5 个会话 · 共 {selectedTool.sessions.length} 个。完整调用过程、输入输出和 Evidence（证据）在任务复盘中查看。</div>}
+            {selectedTool.sessions.length > 3 && <div className="tool-drill-note">前 3 个会话 · 共 {selectedTool.sessions.length} 个。完整调用过程、输入输出和 Evidence（证据）在任务复盘中查看。</div>}
           </section>
+          {selectedTool.errorCount > 0 && <div className="tool-drill-note">当前聚合接口只提供失败次数和相关会话，不包含可安全展示的逐次错误载荷；错误示例请进入上方相关会话查看，避免用推测内容冒充事实。</div>}
         </div>
       </aside>
     </>}
