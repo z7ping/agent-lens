@@ -23,15 +23,13 @@ export class HttpEventHub {
     response.setHeader('connection', 'keep-alive')
     response.setHeader('x-accel-buffering', 'no')
     response.flushHeaders?.()
-    response.write('event: ready\ndata: {}\n\n')
 
     const client: Client = {
       response,
-      heartbeat: setInterval(() => {
-        if (!response.destroyed) response.write(': heartbeat\n\n')
-      }, 15_000),
+      heartbeat: setInterval(() => this.write(client, ': heartbeat\n\n'), 15_000),
     }
     this.clients.add(client)
+    this.write(client, 'retry: 1500\nevent: ready\ndata: {}\n\n')
 
     response.once('close', () => this.remove(client))
     response.once('error', () => this.remove(client))
@@ -40,10 +38,7 @@ export class HttpEventHub {
   publish(event: LiveUpdateEventDto): void {
     if (this.closed) return
     const payload = `event: observation\ndata: ${JSON.stringify(event)}\n\n`
-    for (const client of [...this.clients]) {
-      if (client.response.destroyed) this.remove(client)
-      else client.response.write(payload)
-    }
+    for (const client of [...this.clients]) this.write(client, payload)
   }
 
   close(): void {
@@ -51,7 +46,19 @@ export class HttpEventHub {
     this.closed = true
     for (const client of [...this.clients]) {
       this.remove(client)
-      client.response.end()
+      if (!client.response.destroyed) client.response.end()
+    }
+  }
+
+  private write(client: Client, payload: string): void {
+    if (client.response.destroyed || client.response.writableEnded) {
+      this.remove(client)
+      return
+    }
+    try {
+      client.response.write(payload)
+    } catch {
+      this.remove(client)
     }
   }
 
