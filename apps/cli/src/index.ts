@@ -46,6 +46,11 @@ interface DetectedSourceRoot {
   detected: boolean
 }
 
+interface LifecycleProbe {
+  status: LifecycleStatus | null
+  error: string | null
+}
+
 function usage(): string {
   return [
     'AgentLens 1.0',
@@ -129,14 +134,35 @@ function lifecycleManagerLabel(status: LifecycleStatus): string {
   return 'launchd 用户服务'
 }
 
-function lifecycleOptions(): { cliEntry: string } {
+function lifecycleOptions(requireBuilt = true): { cliEntry: string } {
   const current = fileURLToPath(import.meta.url)
   if (current.endsWith('.mjs')) return { cliEntry: current }
   const built = fileURLToPath(new URL('../../../dist/cli.mjs', import.meta.url))
-  if (!existsSync(built)) {
-    throw new Error('源码模式使用 service/autostart 前请先执行 npm run build:dist，后台服务只注册正式 dist 入口。')
+  if (existsSync(built)) return { cliEntry: built }
+  if (!requireBuilt) return { cliEntry: current }
+  throw new Error('源码模式使用 service/autostart 前请先执行 npm run build:dist，后台服务只注册正式 dist 入口。')
+}
+
+async function lifecycleStatusProbe(): Promise<LifecycleProbe> {
+  try {
+    return { status: await getLifecycleStatus(lifecycleOptions(false)), error: null }
+  } catch (error) {
+    return { status: null, error: error instanceof Error ? error.message : String(error) }
   }
-  return { cliEntry: built }
+}
+
+function lifecycleDetail(status: LifecycleStatus): string {
+  const parts = [
+    lifecycleManagerLabel(status),
+    status.registered ? '已注册' : '未注册',
+    status.active ? '运行中' : '未运行',
+    status.autostart ? '登录自启已启用' : '登录自启未启用',
+  ]
+  if (status.manager === 'windows-task-scheduler' && status.registered) {
+    parts.push(status.hidden === true ? '隐藏窗口' : '窗口隐藏未确认')
+  }
+  if (status.detail) parts.push(status.detail)
+  return parts.join(' · ')
 }
 
 function sourceRoots(): DetectedSourceRoot[] {
@@ -165,9 +191,9 @@ function setupHookTargets(
 
 function formatHookStatus(status: HookStatus): string {
   const trust = status.target === 'codex'
-    ? `, trust=${status.trusted === true ? 'ok' : status.trusted === false ? 'missing' : 'unknown'}`
+    ? `，信任=${status.trusted === true ? '正常' : status.trusted === false ? '缺失' : '未知'}`
     : ''
-  return `${status.target}: ${status.installed ? 'installed' : 'not installed'} (${status.installedEvents.length} events${trust})`
+  return `${status.target}：${status.installed ? '已安装' : '未安装'}（${status.installedEvents.length} 个事件${trust}）`
 }
 
 function targetFrom(value: string | undefined): HookTarget | 'all' {
@@ -321,8 +347,11 @@ async function startDaemon(owner: RuntimeOwner = 'cli', mode: RuntimeMode = 'for
 function printLifecycleState(state: LifecycleStatus): void {
   console.log(`系统托管：${lifecycleManagerLabel(state)}`)
   console.log(`服务定义：${state.registered ? '已注册' : '未注册'}`)
-  console.log(`后台任务：${state.active ? '运行中' : '未运行'}`)
+  console.log(`后台运行：${state.active ? '运行中' : '未运行'}`)
   console.log(`登录自启：${state.autostart ? '已启用' : '未启用'}`)
+  if (state.manager === 'windows-task-scheduler' && state.registered) {
+    console.log(`后台窗口：${state.hidden === true ? '隐藏' : '隐藏状态未确认'}`)
+  }
   if (state.detail) console.log(`系统状态：${state.detail}`)
 }
 
@@ -411,23 +440,40 @@ async function runAutostart(action: string, json: boolean): Promise<number> {
 }
 
 async function status(json: boolean): Promise<number> {
+  let health: Record<string, unknown> | null = null
+  let healthError: string | null = null
   try {
-    const health = await fetchHealth()
-    const owner = runtimeOwner(health)
-    if (json) console.log(JSON.stringify({ online: true, url: daemonUrl('/'), owner, health }, null, 2))
-    else {
-      console.log('AgentLens 后台运行时：在线')
-      console.log(`Web: ${daemonUrl('/')}`)
-      console.log(`协议版本: ${String(health.protocolVersion ?? 'unknown')}`)
-      console.log(`管理方式: ${runtimeOwnerLabel(owner)}`)
-    }
-    return 0
+    health = await fetchHealth()
   } catch (error) {
-    const result = { online: false, url: daemonUrl('/'), error: error instanceof Error ? error.message : String(error) }
-    if (json) console.log(JSON.stringify(result, null, 2))
-    else console.log(`AgentLens 后台运行时：离线（${result.error}）`)
-    return 1
+    healthError = error instanceof Error ? error.message : String(error)
   }
+  const lifecycle = await lifecycleStatusProbe()
+  const owner = health ? runtimeOwner(health) : null
+  const result = {
+    online: health !== null,
+    url: daemonUrl('/'),
+    owner,
+    ...(health ? { health } : { error: healthError }),
+    lifecycle: lifecycle.status,
+    lifecycleError: lifecycle.error,
+  }
+
+  if (json) {
+    console.log(JSON.stringify(result, null, 2))
+    return health ? 0 : 1
+  }
+
+  if (health) {
+    console.log('AgentLens 后台运行时：在线')
+    console.log(`Web：${daemonUrl('/')}`)
+    console.log(`协议版本：${String(health.protocolVersion ?? 'unknown')}`)
+    console.log(`管理方式：${runtimeOwnerLabel(owner)}`)
+  } else {
+    console.log(`AgentLens 后台运行时：离线（${healthError ?? '无法连接'}）`)
+  }
+  if (lifecycle.status) printLifecycleState(lifecycle.status)
+  else console.log(`系统托管：无法读取（${lifecycle.error ?? '未知错误'}）`)
+  return health ? 0 : 1
 }
 
 async function doctor(json: boolean): Promise<number> {
@@ -436,31 +482,64 @@ async function doctor(json: boolean): Promise<number> {
   checks.push({
     id: 'node',
     level: versionAtLeast(actualNode, MIN_NODE) ? 'pass' : 'fail',
-    message: `Node ${process.versions.node}`,
-    detail: `requires >= ${MIN_NODE.join('.')}`,
+    message: `Node.js ${process.versions.node}`,
+    detail: `要求 >= ${MIN_NODE.join('.')}`,
   })
 
   const root = join(homedir(), '.agent-lens', '1.0')
   try {
     await mkdir(root, { recursive: true })
     await access(root)
-    checks.push({ id: 'data-root', level: 'pass', message: 'AgentLens data directory is accessible', detail: root })
+    checks.push({ id: 'data-root', level: 'pass', message: 'AgentLens 数据目录可访问', detail: root })
   } catch (error) {
-    checks.push({ id: 'data-root', level: 'fail', message: 'AgentLens data directory is not accessible', detail: String(error) })
+    checks.push({ id: 'data-root', level: 'fail', message: 'AgentLens 数据目录不可访问', detail: String(error) })
   }
 
+  let health: Record<string, unknown> | null = null
   try {
-    const health = await fetchHealth()
-    checks.push({ id: 'daemon', level: 'pass', message: 'Daemon is reachable', detail: `${daemonUrl('/')} · protocol ${String(health.protocolVersion ?? 'unknown')} · owner ${runtimeOwnerLabel(runtimeOwner(health))}` })
+    health = await fetchHealth()
+    checks.push({
+      id: 'daemon',
+      level: 'pass',
+      message: '后台运行时可连接',
+      detail: `${daemonUrl('/')} · 协议 ${String(health.protocolVersion ?? 'unknown')} · ${runtimeOwnerLabel(runtimeOwner(health))}`,
+    })
   } catch (error) {
-    checks.push({ id: 'daemon', level: 'warn', message: 'Daemon is not currently reachable', detail: error instanceof Error ? error.message : String(error) })
+    checks.push({ id: 'daemon', level: 'warn', message: '后台运行时当前不可连接', detail: error instanceof Error ? error.message : String(error) })
+  }
+
+  const lifecycle = await lifecycleStatusProbe()
+  if (lifecycle.status) {
+    const owner = health ? runtimeOwner(health) : null
+    const staleWindowsDefinition = lifecycle.status.manager === 'windows-task-scheduler'
+      && lifecycle.status.registered
+      && lifecycle.status.hidden !== true
+    const ownershipMismatch = (lifecycle.status.active && !health)
+      || (owner === 'service' && !lifecycle.status.active)
+    checks.push({
+      id: 'lifecycle',
+      level: staleWindowsDefinition || ownershipMismatch ? 'warn' : 'pass',
+      message: staleWindowsDefinition
+        ? 'Windows 后台任务仍是旧定义，未确认隐藏控制台窗口'
+        : ownershipMismatch
+          ? '系统托管状态与当前运行时状态不一致'
+          : '系统托管状态可读取',
+      detail: `${lifecycleDetail(lifecycle.status)}${staleWindowsDefinition ? ' · 执行 agent-lens service start 可刷新定义' : ''}`,
+    })
+  } else {
+    checks.push({
+      id: 'lifecycle',
+      level: 'warn',
+      message: '系统托管状态无法读取',
+      detail: lifecycle.error ?? '未知错误',
+    })
   }
 
   for (const { source, root: sourceRoot, detected } of sourceRoots()) {
     checks.push({
       id: `source-${source}`,
       level: detected ? 'pass' : 'warn',
-      message: `${source} source ${detected ? 'detected' : 'not detected'}`,
+      message: `${source}：${detected ? '已检测到' : '未检测到'}`,
       detail: sourceRoot,
     })
   }
@@ -476,7 +555,7 @@ async function doctor(json: boolean): Promise<number> {
       })
     }
   } catch (error) {
-    checks.push({ id: 'hooks', level: 'warn', message: 'Hook status could not be read', detail: error instanceof Error ? error.message : String(error) })
+    checks.push({ id: 'hooks', level: 'warn', message: 'Hook 状态无法读取', detail: error instanceof Error ? error.message : String(error) })
   }
 
   const result = {
@@ -532,4 +611,5 @@ export const cliInternals = {
   sourceRoots,
   setupHookTargets,
   lifecycleOptions,
+  lifecycleDetail,
 }
