@@ -14,6 +14,8 @@ import {
 } from '@agent-lens/runtime-cordis'
 import { claudeSourcePlugin } from '@agent-lens/source-claude'
 import { codexSourcePlugin } from '@agent-lens/source-codex'
+import { hermesSourcePlugin } from '@agent-lens/source-hermes'
+import { openCodeSourcePlugin } from '@agent-lens/source-opencode'
 import { piSourcePlugin } from '@agent-lens/source-pi'
 import { sqliteStoragePlugin } from '@agent-lens/storage-sqlite'
 import {
@@ -43,6 +45,8 @@ app.useRuntime(coreServicesPlugin)
 app.use(codexSourcePlugin)
 app.use(claudeSourcePlugin)
 app.use(piSourcePlugin)
+app.use(hermesSourcePlugin)
+app.use(openCodeSourcePlugin)
 app.useRuntime(backupLocalPlugin, { vaultPath })
 app.use(httpSurfacePlugin, { port: configuredPort })
 app.use(webPlugin, { staticDir: webRoot })
