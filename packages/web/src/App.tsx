@@ -90,6 +90,18 @@ function sameReviewFilters(left: ReviewFilters, right: ReviewFilters): boolean {
     && left.search === right.search
 }
 
+const runtimeOwnerLabel: Record<string, string> = {
+  cli: '命令行',
+  service: '后台服务',
+  desktop: '桌面端',
+  unknown: '未知来源',
+}
+
+const runtimeModeLabel: Record<string, string> = {
+  foreground: '前台',
+  managed: '托管',
+}
+
 function Shell({ model }: { model: AgentLensClientModel }) {
   const snapshot = useClientSnapshot(model)
   const location = useLocation()
@@ -103,8 +115,15 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     setTheme(next)
     writeTheme(next)
   }
-  const healthLabel = snapshot.health?.status === 'ok' ? '运行正常' : snapshot.health ? '运行降级' : '连接中'
-  const liveLabel = snapshot.liveConnected ? '实时已连接' : '实时未连接'
+  const healthLabel = snapshot.health?.status === 'ok' ? '运行中' : snapshot.health ? '运行降级' : '连接中'
+  const statusHealthy = snapshot.health?.status === 'ok' && snapshot.liveConnected
+  const runtime = snapshot.health?.runtime
+  const healthTitle = [
+    snapshot.health ? `后台服务：${snapshot.health.status === 'ok' ? '正常' : '降级'}` : '后台服务：连接中',
+    runtime ? `归属：${runtimeOwnerLabel[runtime.owner] ?? runtime.owner} · PID ${runtime.pid} · ${runtimeModeLabel[runtime.mode] ?? runtime.mode}` : null,
+    snapshot.health ? `存储：${snapshot.health.storage.ok ? '正常' : '异常'}${snapshot.health.storage.schemaVersion === undefined ? '' : ` · Schema ${snapshot.health.storage.schemaVersion}`}` : null,
+    `实时通道：${snapshot.liveConnected ? '已连接' : '未连接'}`,
+  ].filter((item): item is string => Boolean(item)).join('\n')
   const onReview = location.pathname.startsWith('/review')
   const onTools = location.pathname.startsWith('/tools')
   const onAgents = location.pathname.startsWith('/agents')
@@ -155,15 +174,11 @@ function Shell({ model }: { model: AgentLensClientModel }) {
             })}
           </nav>
           <div className="app-status">
-            <span className={`status-pill ${snapshot.health?.status === 'ok' ? 'status-pill-online' : snapshot.health ? 'status-pill-warn' : ''}`} title="AgentLens 后台服务状态">
-              <span className={`live-dot ${snapshot.health?.status === 'ok' ? 'live-dot-online' : 'live-dot-waiting'}`} />
+            <span className={`status-pill ${statusHealthy ? 'status-pill-online' : snapshot.health ? 'status-pill-warn' : ''}`} title={healthTitle}>
+              <span className={`live-dot ${statusHealthy ? 'live-dot-online' : 'live-dot-waiting'}`} />
               <span>{healthLabel}</span>
             </span>
-            <span className={`status-pill ${snapshot.liveConnected ? 'status-pill-online' : 'status-pill-warn'}`} title="实时数据通道状态">
-              <span className={`live-dot ${snapshot.liveConnected ? 'live-dot-online' : 'live-dot-waiting'}`} />
-              <span>{liveLabel}</span>
-            </span>
-            <button className="theme-toggle" onClick={toggleTheme} title="切换主题" aria-label="切换主题">{theme === 'dark' ? '☀' : '◐'}</button>
+            <button className="theme-toggle" onClick={toggleTheme} title={theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'} aria-label="切换主题">◐</button>
           </div>
         </div>
       </header>
