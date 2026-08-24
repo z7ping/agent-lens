@@ -47,6 +47,7 @@ const INITIAL_REVIEW_LIMIT = 40
 const REVIEW_PAGE_SIZE = 40
 const MAX_REVIEW_LIMIT = 500
 const REVIEW_DETAIL_PAGE_SIZE = 20
+const REVIEW_SEARCH_DEBOUNCE_MS = 250
 
 function mergeReviewDetail(current: ReviewSessionDetailDto, next: ReviewSessionDetailDto): ReviewSessionDetailDto {
   const interactions = new Map(current.interactions.map(item => [item.id, item]))
@@ -109,6 +110,7 @@ export class AgentLensClientModel {
   private notifyQueued = false
   private refreshTimer: ReturnType<typeof setTimeout> | null = null
   private detailTimer: ReturnType<typeof setTimeout> | null = null
+  private reviewSearchTimer: ReturnType<typeof setTimeout> | null = null
   private unsubscribeLive: (() => void) | null = null
   private reviewGeneration = 0
   private detailGeneration = 0
@@ -162,8 +164,10 @@ export class AgentLensClientModel {
     this.unsubscribeLive = null
     if (this.refreshTimer) clearTimeout(this.refreshTimer)
     if (this.detailTimer) clearTimeout(this.detailTimer)
+    if (this.reviewSearchTimer) clearTimeout(this.reviewSearchTimer)
     this.refreshTimer = null
     this.detailTimer = null
+    this.reviewSearchTimer = null
   }
 
   async refreshFacetsAndAgents(): Promise<void> {
@@ -184,10 +188,23 @@ export class AgentLensClientModel {
 
   setReviewFilters(patch: Partial<ReviewFilters>): void {
     const filters = { ...this.snapshot.review.filters, ...patch }
+    const keys = Object.keys(patch)
+    const searchOnly = keys.length === 1 && keys[0] === 'search'
     this.publish({
       ...this.snapshot,
       review: { ...this.snapshot.review, filters, limit: INITIAL_REVIEW_LIMIT },
     })
+    if (this.reviewSearchTimer) {
+      clearTimeout(this.reviewSearchTimer)
+      this.reviewSearchTimer = null
+    }
+    if (searchOnly) {
+      this.reviewSearchTimer = setTimeout(() => {
+        this.reviewSearchTimer = null
+        void this.refreshReview()
+      }, REVIEW_SEARCH_DEBOUNCE_MS)
+      return
+    }
     void this.refreshReview()
   }
 
