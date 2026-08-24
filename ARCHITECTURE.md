@@ -109,7 +109,7 @@ AgentLensApplication
 ```text
 apps/
   daemon/           组合根（composition root）
-  cli/              start/status/doctor/hook 命令
+  cli/              setup/start/status/doctor/hook 命令
   desktop/          Electron Windows 桌面壳
   hook-codex/       被动式 Codex Hook 进程
   hook-claude/      被动式 Claude Code Hook 进程
@@ -321,6 +321,8 @@ HTTP Server 固定监听 loopback `127.0.0.1`，默认端口 `56789`。
 
 API 路由优先于 SPA / 静态资源 fallback。
 
+`/api/v1/health` 除 Protocol 与 Storage 状态外，新版 Daemon 还报告运行时管理来源、运行模式、PID 与启动时间。该 `runtime` 字段在 1.0 协议中按向后兼容方式扩展：新版 Daemon 必须返回，新版客户端仍需容忍较早的 1.0 Daemon 未返回该字段。
+
 `surface-http` 的 Server / DTO 处理逻辑保持普通 TypeScript；其插件入口直接作为 Cordis Plugin 订阅 `observation/committed` 并管理 Surface 生命周期。
 
 ## 14. 实时更新
@@ -372,6 +374,7 @@ Hook 配置属于 AgentLens，而不是某一种发行方式。npm 与 Desktop �
 当前 CLI：
 
 ```text
+agent-lens setup [--json]
 agent-lens start
 agent-lens status [--json]
 agent-lens doctor [--json]
@@ -380,9 +383,20 @@ agent-lens hook install [codex|claude|all]
 agent-lens hook uninstall [codex|claude|all]
 ```
 
+`setup` 是一次性初始化入口，职责限定为：
+
+1. 校验 Node.js 最低版本；
+2. 创建并检查 `~/.agent-lens/1.0` 数据目录；
+3. 识别本机 Codex / Claude Code / Pi 默认数据根；
+4. 对实际存在的 Codex / Claude Code 只补齐 AgentLens 自己缺失或不完整的 Hook；
+5. Pi 使用原生 History / Runtime Tail，不安装 Hook；
+6. 探测并报告现有 Daemon 与管理方式。
+
+`setup` 不启动长期前台 Daemon，不创建后台服务，也不写开机自启。这样初始化保持可重复、可退出，不演化成 0.x service manager 的新包装。
+
 `start` 明确采用前台运行。启动前先探测默认 HTTP 地址；如果已经存在兼容 AgentLens Daemon，则直接复用并报告现有运行状态，不启动第二个 Daemon。
 
-CLI 不恢复 0.x PID / Service Manager。未来增加 `setup`、后台 `service`、`autostart` 时，它们属于发行 / 运维层，并必须遵守单 Daemon 与共享数据规则。
+CLI 不恢复 0.x PID / Service Manager。后续增加后台 `service`、`autostart` 时，它们属于发行 / 运维层，并必须遵守单 Daemon 与共享数据规则。
 
 ## 18. 分发
 
