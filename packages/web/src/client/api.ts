@@ -17,6 +17,8 @@ import type {
   ToolAssetUsageResponseDto,
 } from '@agent-lens/protocol'
 
+export const LIVE_RECONNECTED_EVENT = 'agent-lens:live-reconnected'
+
 export interface QueryFilters {
   sourceId: string
   projectId: string
@@ -176,7 +178,10 @@ export class AgentLensApi {
       opened = true
       disconnectedAfterOpen = false
       onConnection(true)
-      if (reconnecting) onReconnect?.()
+      if (reconnecting) {
+        onReconnect?.()
+        window.dispatchEvent(new Event(LIVE_RECONNECTED_EVENT))
+      }
     }
     source.onerror = () => {
       if (disposed) return
