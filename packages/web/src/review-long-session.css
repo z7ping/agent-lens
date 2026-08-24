@@ -11,50 +11,10 @@
   contain: layout paint style;
 }
 
+/* 长会话性能层只负责虚拟挂载与布局提示，不再覆盖正式 Review 视觉。 */
 .interaction-block {
   content-visibility: auto;
   contain-intrinsic-size: auto 220px;
-  margin: 0;
-  overflow: visible;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-}
-
-.interaction-block.interaction-has-error {
-  border-color: var(--al-line);
-}
-
-.interaction-summary {
-  min-height: 42px;
-  padding: 10px 0 8px;
-  border: 0;
-  background: transparent;
-}
-
-.virtual-round-shell + .virtual-round-shell .interaction-summary {
-  padding-top: 12px;
-}
-
-.interaction-summary:hover {
-  background: transparent;
-}
-
-.interaction-chevron {
-  width: 20px;
-  height: 20px;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-}
-
-.interaction-block.interaction-has-error > .interaction-summary {
-  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--al-danger) 68%, transparent);
-  padding-left: 8px;
-}
-
-.interaction-flow {
-  padding: 2px 0 20px;
 }
 
 .detail-load-sentinel {
@@ -94,9 +54,6 @@
 
 .round-nav .round-nav-live {
   margin-left: auto;
-  border-color: color-mix(in srgb, var(--al-accent) 34%, var(--al-line));
-  background: var(--al-accent-soft) !important;
-  color: var(--al-accent);
 }
 
 .round-nav-status + .round-nav-live {
