@@ -31,6 +31,9 @@ jobs:
       - name: Verify Web presentation convergence
         run: npm run check:web-presentation
 
+      - name: Verify desktop shell syntax
+        run: npm run check:desktop-shell
+
       - name: Verify source
         run: |
           npm run typecheck
