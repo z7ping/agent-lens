@@ -126,9 +126,28 @@ th,
 .src-option[data-source='hermes'] .src-copy em,
 .src-option[data-source='opencode'] .src-copy em { color: var(--al-muted); }
 
+/* 备份当前稿与正式创建器保持同样的两列密度；动态补入的十类资产也使用这一布局。 */
+.future-grid > aside .future-card:first-child .future-card-body > .builder-check {
+  display: inline-flex !important;
+  width: calc(50% - 6px);
+  min-height: 38px;
+  margin: 3px 2px;
+  vertical-align: top;
+}
+.future-grid > aside .future-card:first-child .future-card-body > .builder-check small {
+  margin-left: auto;
+}
+.future-grid > aside .future-card:first-child .future-card-body > .safety-note {
+  margin-top: 10px;
+}
+
 @media (max-width: 820px) {
   .brand-name { display: none; }
   .brand { display: flex !important; }
+  .future-grid > aside .future-card:first-child .future-card-body > .builder-check {
+    width: 100%;
+    margin-inline: 0;
+  }
 }
 
 @media (max-width: 560px) {
