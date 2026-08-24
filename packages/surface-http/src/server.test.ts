@@ -63,6 +63,10 @@ test('HTTP surface exposes v1 API and production web assets on loopback', async 
     const health = await healthResponse.json() as HealthResponseDto
     assert.equal(health.status, 'ok')
     assert.equal(health.protocolVersion, '1.0')
+    assert.equal(health.runtime.owner, 'unknown')
+    assert.equal(health.runtime.mode, 'foreground')
+    assert.equal(health.runtime.pid, process.pid)
+    assert.ok(Number.isFinite(Date.parse(health.runtime.startedAt)))
     assert.equal(health.storage.ok, true)
 
     const timelineResponse = await fetch(
