@@ -57,6 +57,7 @@ for (const path of semanticPresentationPaths) {
 
 const tokenSource = readFileSync(tokenPath, 'utf8')
 const mockTokenSource = readFileSync(mockTokenPath, 'utf8')
+const colorSystemSource = readFileSync(colorSystemPath, 'utf8')
 
 function block(source, selector) {
   const start = source.indexOf(`${selector} {`)
@@ -139,8 +140,22 @@ for (const [label, foreground, background] of contrastPairs) {
   assertContrast(label, foreground, background)
 }
 
-if (!readFileSync(colorSystemPath, 'utf8').includes('AgentLens 1.0 最终配色收口层')) {
+if (!colorSystemSource.includes('AgentLens 1.0 最终配色收口层')) {
   throw new Error('最终配色系统文件缺少正式收口标识')
 }
 
-console.log('Web 表现层收敛检查通过：字号、原型令牌和关键前景/背景对比度均已校验')
+/*
+ * Token 数值正确并不足够：高特异性的历史组件规则仍可能覆盖背景，
+ * 再和低特异性的前景色规则拼成“浅底浅字”。这里直接验证最终组件绑定。
+ */
+const reviewUserBubbleRule = /\.review-page\s+\.chat-bubble-user\s*,[\s\S]*?\{[\s\S]*?background\s*:\s*var\(--al-user-bubble\)\s*!important\s*;[\s\S]*?color\s*:\s*var\(--al-user-bubble-text\)\s*!important\s*;/m
+if (!reviewUserBubbleRule.test(colorSystemSource)) {
+  throw new Error('用户消息气泡必须在最终配色层以 Review 级特异性绑定 --al-user-bubble / --al-user-bubble-text')
+}
+
+const userMarkdownRule = /\.chat-bubble-user\s+\.markdown[\s\S]*?color\s*:\s*var\(--al-user-bubble-text\)\s*!important\s*;/m
+if (!userMarkdownRule.test(colorSystemSource)) {
+  throw new Error('用户消息 Markdown 正文必须绑定 --al-user-bubble-text，不能继承普通页面文字色')
+}
+
+console.log('Web 表现层收敛检查通过：字号、原型令牌、组件绑定和关键前景/背景对比度均已校验')
