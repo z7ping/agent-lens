@@ -1,0 +1,21 @@
+/* 应用外壳的窄屏响应式规则。只负责导航压缩，不承担页面级视觉补丁。 */
+
+@media (max-width: 560px) {
+  .app-header .nav-item {
+    padding-inline: 4px;
+    font-size: var(--text-caption);
+  }
+
+  .app-header .nav-item-active::after {
+    left: 4px;
+    right: 4px;
+  }
+
+  .app-header .nav-group-start {
+    margin-left: 5px;
+  }
+
+  .app-header .nav-group-start::before {
+    left: -3px;
+  }
+}
