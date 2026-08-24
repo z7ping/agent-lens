@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import type { ToolUsageDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
@@ -39,6 +40,10 @@ function toolKey(sourceIds: string[], nativeToolName: string): string {
   return `${sourceIds.join('\u0000')}:${nativeToolName}`
 }
 
+function shortSessionId(id: string): string {
+  return id.length > 16 ? `${id.slice(0, 8)}…${id.slice(-5)}` : id
+}
+
 type SortKey = 'callCount' | 'sessionCount' | 'successRate' | 'errorCount' | 'totalDurationMs' | 'averageDurationMs'
 type SortDirection = 'ascending' | 'descending'
 
@@ -49,6 +54,7 @@ function sortMetric(tool: ToolUsageDto, key: SortKey): number {
 
 export function ToolsPage({ model }: { model: AgentLensClientModel }) {
   const snapshot = useClientSnapshot(model)
+  const navigate = useNavigate()
   const usage = snapshot.usage
   const data = usage.response
   const agents = snapshot.facets?.agents ?? []
@@ -69,6 +75,7 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
   const [selectedToolKey, setSelectedToolKey] = useState<string | null>(null)
   const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'callCount', direction: 'descending' })
   const selectedTool = useMemo(() => tools.find(tool => toolKey(tool.sourceIds, tool.nativeToolName) === selectedToolKey), [selectedToolKey, tools])
+  const sessionSummaries = useMemo(() => new Map((snapshot.review.response?.items ?? []).map(item => [item.id, item])), [snapshot.review.response?.items])
   const sortedTools = useMemo(() => [...tools].sort((a, b) => {
     const delta = sortMetric(a, sort.key) - sortMetric(b, sort.key)
     if (delta === 0) return a.nativeToolName.localeCompare(b.nativeToolName)
@@ -82,6 +89,14 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
   }
   const ariaSort = (key: SortKey): 'none' | SortDirection => sort.key === key ? sort.direction : 'none'
   const relaxFilters = () => model.setUsageFilters({ sourceId: '', projectId: '', range: 'all' })
+  const openReviewSession = (logicalSessionId: string) => {
+    const params = new URLSearchParams()
+    if (usage.filters.sourceId) params.set('source', usage.filters.sourceId)
+    if (usage.filters.projectId) params.set('project', usage.filters.projectId)
+    params.set('range', usage.filters.range)
+    params.set('status', 'all')
+    navigate(`/review/${encodeURIComponent(logicalSessionId)}?${params.toString()}`)
+  }
 
   return <main className="workspace-page">
     <div className="workspace-toolbar">
@@ -162,7 +177,28 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
             <div className="tool-drill-stat"><b>{duration(selectedTool.totalDurationMs)}</b><span>总耗时</span></div>
             <div className="tool-drill-stat"><b>{duration(selectedTool.averageDurationMs)}</b><span>平均耗时</span></div>
           </div>
-          <div className="tool-drill-note">当前工具分析接口提供聚合事实，不虚构逐次错误或会话分布。具体调用过程、输入输出和证据可在“任务复盘”中定位对应会话查看。</div>
+          <section style={{ marginTop: 18 }}>
+            <div className="table-section-head"><div><h2>相关会话</h2><p>按该工具在会话中的调用次数排序 · 点击直接进入任务复盘</p></div></div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+              {selectedTool.sessions.slice(0, 5).map(session => {
+                const summary = sessionSummaries.get(session.logicalSessionId)
+                const label = summary?.title ?? summary?.preview ?? `会话 ${shortSessionId(session.logicalSessionId)}`
+                const max = selectedTool.sessions[0]?.callCount ?? 1
+                return <button
+                  key={session.logicalSessionId}
+                  onClick={() => openReviewSession(session.logicalSessionId)}
+                  style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 110px 42px', gap: 10, alignItems: 'center', width: '100%', padding: '7px 8px', border: '1px solid var(--al-line)', borderRadius: 8, background: 'var(--al-surface)', textAlign: 'left' }}
+                  title={label}
+                >
+                  <span style={{ minWidth: 0, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', fontSize: 12 }}>{label}</span>
+                  <span className="metric-bar" aria-hidden="true"><i style={{ width: `${Math.max(5, session.callCount / max * 100)}%` }}/></span>
+                  <b style={{ textAlign: 'right', fontSize: 12 }}>{session.callCount}</b>
+                </button>
+              })}
+              {!selectedTool.sessions.length && <div className="tool-drill-note">当前范围没有可定位的会话记录。</div>}
+            </div>
+            {selectedTool.sessions.length > 5 && <div className="tool-drill-note">前 5 个会话 · 共 {selectedTool.sessions.length} 个。完整调用过程、输入输出和 Evidence（证据）在任务复盘中查看。</div>}
+          </section>
         </div>
       </aside>
     </>}
