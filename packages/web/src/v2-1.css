@@ -79,6 +79,28 @@
   scrollbar-gutter:stable;
 }
 
+/* 会话分组与桌面固定高度属于当前 Review 结构，不再保留额外 polish 覆盖层。 */
+.review-page .session-group-block + .session-group-block{
+  margin-top:2px;
+}
+.review-page .session-group{
+  position:sticky;
+  top:0;
+  z-index:3;
+  margin:8px 0 4px;
+  padding:5px 7px;
+  border-bottom:1px solid color-mix(in srgb,var(--al-line) 62%,transparent);
+  background:color-mix(in srgb,var(--al-soft-2) 94%,transparent);
+  backdrop-filter:blur(8px);
+  color:var(--al-muted-2);
+  font-size:var(--text-caption);
+  font-weight:680;
+  letter-spacing:.04em;
+}
+.review-page .session-group-block:first-child .session-group{
+  margin-top:0;
+}
+
 /*
  * 高保真原型里仍有少量仅用于视觉压缩的 10–11px 文本。
  * 这些位置保留紧凑布局，但统一回到 12/13px 语义层级，避免不同页面阅读密度失衡。
@@ -119,7 +141,28 @@
 
 .round-nav-expand{color:var(--al-muted)!important}
 
+@media(min-width:901px){
+  .app-shell:has(.review-page){
+    height:100vh;
+    min-height:0;
+    overflow:hidden;
+  }
+  .review-page{
+    height:auto;
+    min-height:0;
+  }
+}
+
+@media(max-width:1100px){
+  .review-page .search-filter{
+    width:160px;
+    min-width:140px;
+  }
+}
+
 @media(max-width:900px){
+  .review-page .workspace-toolbar{padding-inline:12px}
+  .review-page .search-filter{width:150px;min-width:130px}
   .insight-coverage-strip{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 
