@@ -51,3 +51,17 @@ test('CLI setup only installs hooks for detected sources that need repair', () =
     { target: 'claude', installed: true, trusted: undefined },
   ]), [])
 })
+
+test('CLI lifecycle summary exposes Windows hidden-window state', () => {
+  assert.equal(
+    cliInternals.lifecycleDetail({
+      manager: 'windows-task-scheduler',
+      registered: true,
+      active: true,
+      autostart: true,
+      hidden: true,
+      detail: 'Running',
+    }),
+    'Windows 用户级计划任务 · 已注册 · 运行中 · 登录自启已启用 · 隐藏窗口 · Running',
+  )
+})
