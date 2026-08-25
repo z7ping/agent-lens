@@ -7,6 +7,7 @@ import type {
 } from '@agent-lens/protocol'
 import { AgentLensApi } from '../client/api'
 import { agentLabel } from '../components/AgentScope'
+import { CompactPageHeading } from '../components/CompactPageHeading'
 import { WorkspaceSkeleton } from '../components/StateViews'
 import { UiIcon } from '../components/UiIcon'
 
@@ -249,12 +250,14 @@ export function BackupPage() {
 
   const indexTime = overview?.index?.generatedAt
   const indexRefreshing = overview?.index?.refreshing ?? false
+  const detectedSourceCount = sources.filter(source => source.detected).length
+  const allDetectedSelected = detectedSourceCount > 0 && selectedSources.length === detectedSourceCount
 
   return <>
     <div className="workspace-toolbar">
       <div className="agent-scope">
-        <button className={`scope-chip ${selectedSources.length === sources.filter(source => source.detected).length ? 'active' : ''}`} onClick={() => setSelectedSources(sources.filter(source => source.detected).map(source => source.sourceId))}>全部智能体</button>
-        {sources.map(source => <button key={source.sourceId} disabled={!source.detected} className={`scope-chip ${selectedSources.includes(source.sourceId) ? 'active' : ''}`} onClick={() => toggleSource(source.sourceId)}>
+        <button className={`scope-chip ${allDetectedSelected ? 'scope-chip-active' : ''}`} onClick={() => setSelectedSources(sources.filter(source => source.detected).map(source => source.sourceId))}>全部智能体</button>
+        {sources.map(source => <button key={source.sourceId} disabled={!source.detected} className={`scope-chip ${selectedSources.includes(source.sourceId) ? 'scope-chip-active' : ''}`} onClick={() => toggleSource(source.sourceId)}>
           <span className={`src-dot ${sourceDotClass(source.sourceId)}`}/>{sourceLabel(source.sourceId, source.displayName)}
         </button>)}
       </div>
@@ -267,19 +270,15 @@ export function BackupPage() {
 
     <div className="page-scroll">
       <main className="future-content backup-page">
-        <header className="future-heading">
-          <div>
-            <span className="eyebrow">AI 资产保险库 <span className="prototype-flag live">本地真实数据</span></span>
-            <h1>资产备份</h1>
-            <p>把各智能体的原始会话和已发现资产保存为本地不可变快照。清单（Manifest）和 SHA-256 用于完整性校验；导入不会直接覆盖当前文件，恢复必须先经过预演。</p>
-          </div>
+        <div className="future-heading">
+          <CompactPageHeading title="资产备份" description="将智能体原始会话和已发现资产保存为本地不可变快照。清单与 SHA-256 用于完整性校验；导入不会直接覆盖当前文件，恢复必须先经过差异预演。"><span className="prototype-flag live">本地真实数据</span></CompactPageHeading>
           <button className="btn" disabled={loading || Boolean(busy)} onClick={() => void refresh(true)}>{loading ? '正在扫描…' : <><UiIcon name="refresh" size={14}/>{' 刷新扫描'}</>}</button>
-        </header>
+        </div>
 
         {error && <div className="backup-error" role="alert"><b>操作失败</b><span>{error}</span><button className="link-btn" onClick={() => setError('')}>关闭</button></div>}
 
         <section className="future-kpis" aria-label="备份概览">
-          <article className="future-kpi"><div className="future-kpi-head"><span>可备份源文件</span><span className={`badge ${indexRefreshing ? 'info' : 'ok'}`}>{indexRefreshing ? '后台更新中' : '索引就绪'}</span></div><strong>{protectedFiles}</strong><small>{indexTime ? `索引更新于 ${formatTime(indexTime)} · ` : ''}{sources.filter(source => source.detected).length} 个智能体</small></article>
+          <article className="future-kpi"><div className="future-kpi-head"><span>可备份源文件</span><span className={`badge ${indexRefreshing ? 'info' : 'ok'}`}>{indexRefreshing ? '后台更新中' : '索引就绪'}</span></div><strong>{protectedFiles}</strong><small>{indexTime ? `索引更新于 ${formatTime(indexTime)} · ` : ''}{detectedSourceCount} 个智能体</small></article>
           <article className="future-kpi"><div className="future-kpi-head"><span>本地快照</span><span className="delta neutral">{snapshots[0] ? `最近 ${formatTime(snapshots[0].createdAt)}` : '尚无快照'}</span></div><strong>{snapshots.length}</strong><small>逻辑内容共 {formatBytes(totalSnapshotBytes)}；相同文件由内容库复用</small></article>
           <article className="future-kpi"><div className="future-kpi-head"><span>最近校验</span><span className={`badge ${Object.values(verification).some(result => !result.valid) ? 'err' : Object.keys(verification).length ? 'ok' : ''}`}>{Object.keys(verification).length ? (Object.values(verification).every(result => result.valid) ? '通过' : '需关注') : '未执行'}</span></div><strong>{Object.values(verification).filter(result => result.valid).length}/{Object.keys(verification).length || '—'}</strong><small>校验清单和每个快照文件的 SHA-256</small></article>
           <article className="future-kpi"><div className="future-kpi-head"><span>扫描阶段排除</span><span className="badge warn">安全优先</span></div><strong>{excludedFiles}</strong><small>符号链接、越界路径等在扫描阶段排除；秘密内容在创建快照时继续检查</small></article>
@@ -337,7 +336,7 @@ export function BackupPage() {
             <section className="future-card">
               <div className="future-card-head"><div><h2>创建快照</h2><p>选择本次真正要保护的范围。</p></div><span className="badge info">本地</span></div>
               <div className="future-card-body snapshot-builder">
-                <div className="builder-block"><div className="builder-label"><span>智能体</span><span>{selectedSources.length} / {sources.filter(source => source.detected).length}</span></div><div className="builder-checks">
+                <div className="builder-block"><div className="builder-label"><span>智能体</span><span>{selectedSources.length} / {detectedSourceCount}</span></div><div className="builder-checks">
                   {sources.filter(source => source.detected).map(source => <label key={source.sourceId} className="builder-check"><input type="checkbox" checked={selectedSources.includes(source.sourceId)} onChange={() => toggleSource(source.sourceId)}/><span className={`src-dot ${sourceDotClass(source.sourceId)}`}/>{sourceLabel(source.sourceId, source.displayName)}<small>{source.fileCount} 文件</small></label>)}
                 </div></div>
                 <div className="builder-block"><div className="builder-label"><span>资产类型</span><button className="link-btn" onClick={() => setSelectedKinds(selectedKinds.length === ALL_KINDS.length ? [] : ALL_KINDS)}>{selectedKinds.length === ALL_KINDS.length ? '清空' : '全选'}</button></div><div className="builder-checks">
