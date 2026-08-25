@@ -1,4 +1,4 @@
-import type { AgentInstallation, Host } from '../domain/identity'
+import type { AgentInstallation, Host, RuntimeProfile } from '../domain/identity'
 import type { AgentProductId, Confidence, Disposable } from '../domain/common'
 import type {
   AssetDefinitionHint,
@@ -24,6 +24,13 @@ export interface SourceDetectionContext {
   env?: Readonly<Record<string, string | undefined>>
 }
 
+export interface DetectedRuntimeProfile {
+  nativeProfileId: string
+  name?: string
+  configRoot?: string
+  dataRoot?: string
+}
+
 export interface DetectedSource {
   sourceId: string
   productId: AgentProductId
@@ -31,6 +38,7 @@ export interface DetectedSource {
   version?: string
   configRoot?: string
   dataRoot?: string
+  runtimeProfile?: DetectedRuntimeProfile
   confidence: Confidence
 }
 
@@ -43,6 +51,7 @@ export interface SourceCheckpointService {
 export interface SourceExecutionContext {
   host: Host
   installation: AgentInstallation
+  runtimeProfile?: RuntimeProfile
   abortSignal: AbortSignal
   checkpoint: SourceCheckpointService
 }
@@ -50,6 +59,7 @@ export interface SourceExecutionContext {
 export interface SourceNormalizationContext {
   host: Host
   installation: AgentInstallation
+  runtimeProfile?: RuntimeProfile
 }
 
 export interface SourceRecordEmitter {
@@ -57,6 +67,7 @@ export interface SourceRecordEmitter {
 }
 
 export interface DiscoveredAssetBindingHint {
+  runtimeProfileId?: string
   path?: string
   source?: string
   version?: string
