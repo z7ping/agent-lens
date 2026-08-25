@@ -56,8 +56,10 @@ function sha256(value) {
 
 let raw = ''
 for await (const chunk of process.stdin) raw += chunk
+const hadUtf8Bom = raw.charCodeAt(0) === 0xFEFF
+if (hadUtf8Bom) raw = raw.slice(1)
 const captureEnabled = sourceCaptureEnabled('claude-code')
-await diagnostic(`stdin chars=${raw.length} captureEnabled=${captureEnabled} inbox=${inboxDirectory()}`)
+await diagnostic(`stdin chars=${raw.length} strippedBom=${hadUtf8Bom} captureEnabled=${captureEnabled} inbox=${inboxDirectory()}`)
 if (!raw.trim() || !captureEnabled) {
   await diagnostic(`neutral early-exit empty=${!raw.trim()} captureEnabled=${captureEnabled}`)
   process.exit(0)
