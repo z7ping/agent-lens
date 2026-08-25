@@ -3,6 +3,7 @@ import type { AgentAssetInventoryDto, AgentOverviewDto } from '@agent-lens/proto
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
 import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
+import { UiIcon } from '../components/UiIcon'
 import { copyText } from '../client/clipboard'
 
 const capabilityLabel: Record<string, string> = {
@@ -361,7 +362,7 @@ export function AgentsPage({ model }: { model: AgentLensClientModel }) {
   return <main className="workspace-page">
     <div className="workspace-toolbar">
       <AgentScope agents={agents} value={selectedSourceId} onChange={setSourceId} allLabel={false}/>
-      <button className="icon-button toolbar-end" onClick={() => void model.refreshFacetsAndAgents()} title="刷新智能体概览" aria-label="刷新智能体概览">↻</button>
+      <button className="icon-button toolbar-end" onClick={() => void model.refreshFacetsAndAgents()} title="刷新智能体概览" aria-label="刷新智能体概览"><UiIcon name="refresh" size={15}/></button>
     </div>
     <div className="page-content agents-content">
       <header className="page-heading"><div><span className="eyebrow">工作区</span><h1>智能体概览</h1><p>先看结论：我有哪些人工智能资产、哪些真的用过、技能从发现到使用卡在哪一步。</p></div></header>
