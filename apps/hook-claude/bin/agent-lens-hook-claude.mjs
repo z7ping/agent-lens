@@ -17,7 +17,11 @@ function sourceCaptureEnabled(sourceId, env = process.env) {
 }
 
 async function diagnostic(message) {
-  const path = String(process.env.AGENT_LENS_HOOK_CAPTURE_LOG || '').trim()
+  const path = String(
+    process.env.AGENT_LENS_HOOK_CAPTURE_LOG
+      || process.env.AGENT_LENS_HOOK_DISPATCHER_LOG
+      || '',
+  ).trim()
   if (!path) return
   try {
     await appendFile(path, `${new Date().toISOString()} pid=${process.pid} claude-hook ${message}\n`, 'utf8')
