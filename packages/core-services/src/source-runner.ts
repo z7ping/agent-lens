@@ -11,6 +11,7 @@ import type {
   Host,
   IdentityService,
   ObservationService,
+  SessionRelationshipCandidate,
   SourceCheckpointService,
   SourceDefinition,
   SourceRecord,
@@ -72,8 +73,14 @@ interface RuntimeStatusWriter {
   put(status: SourceRuntimeStatus): Promise<void>
 }
 
-type StorageWithRuntimeStatus = StorageService & {
+interface RelationshipCandidateWriter {
+  put(candidate: SessionRelationshipCandidate): Promise<void>
+  tryPromote(candidate: SessionRelationshipCandidate): Promise<unknown>
+}
+
+type StorageWithRuntimeExtensions = StorageService & {
   sourceRuntimeStatus?: RuntimeStatusWriter
+  sessionRelationshipCandidates?: RelationshipCandidateWriter
 }
 
 class ScopedCheckpointService implements SourceCheckpointService {
@@ -110,13 +117,23 @@ function errorSummary(error: unknown): string {
   return String(error).slice(0, 1000)
 }
 
-async function putRuntimeStatus(
-  storage: StorageService,
-  status: SourceRuntimeStatus,
-): Promise<void> {
-  const writer = (storage as StorageWithRuntimeStatus).sourceRuntimeStatus
+async function putRuntimeStatus(storage: StorageService, status: SourceRuntimeStatus): Promise<void> {
+  const writer = (storage as StorageWithRuntimeExtensions).sourceRuntimeStatus
   if (!writer) return
   await writer.put(status)
+}
+
+async function persistRelationshipCandidates(
+  storage: StorageService,
+  candidates: readonly SessionRelationshipCandidate[] | undefined,
+): Promise<void> {
+  if (!candidates?.length) return
+  const writer = (storage as StorageWithRuntimeExtensions).sessionRelationshipCandidates
+  if (!writer) return
+  for (const candidate of candidates) {
+    await writer.put(candidate)
+    await writer.tryPromote(candidate)
+  }
 }
 
 async function markRunning(
@@ -137,10 +154,7 @@ async function markRunning(
   return status
 }
 
-async function markHealthy(
-  storage: StorageService,
-  status: SourceRuntimeStatus,
-): Promise<void> {
+async function markHealthy(storage: StorageService, status: SourceRuntimeStatus): Promise<void> {
   await putRuntimeStatus(storage, {
     ...status,
     state: 'healthy',
@@ -219,6 +233,8 @@ async function processSourceRecord(
     else if (committed.status === 'merged') result.observationsMerged += 1
     else result.observationsUnchanged += 1
   }
+
+  await persistRelationshipCandidates(storage, persistedOutput.sessionRelationshipHints)
 
   for (const declaration of persistedOutput.coverage ?? []) {
     await coverage.declare(declaration)
@@ -471,6 +487,7 @@ export class SourceAssetRunner {
         const binding = await this.assets.resolveBinding({
           assetId: definition.id,
           installationId: installation.id,
+          ...(safeDiscovered.binding?.runtimeProfileId ? { runtimeProfileId: safeDiscovered.binding.runtimeProfileId } : {}),
           ...(safeDiscovered.binding?.path ? { path: safeDiscovered.binding.path } : {}),
           ...(safeDiscovered.binding?.source ? { source: safeDiscovered.binding.source } : {}),
           ...(safeDiscovered.binding?.version ? { version: safeDiscovered.binding.version } : {}),
