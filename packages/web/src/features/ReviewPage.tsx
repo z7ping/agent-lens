@@ -426,7 +426,7 @@ function Inspector({ node, onClose }: { node: ReviewNodeDto; onClose(): void }) 
         <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
       </button>
     </div>
-    <div className="agent-scope" role="tablist" aria-label="事件详情分类" style={{ padding: '10px 14px 0' }}>
+    <div className="agent-scope" role="tablist" aria-label="事件详情分类">
       <button ref={firstTabRef} className={`scope-chip ${tab === 'detail' ? 'scope-chip-active' : ''}`} role="tab" aria-selected={tab === 'detail'} onClick={() => setTab('detail')}>详情</button>
       <button className={`scope-chip ${tab === 'evidence' ? 'scope-chip-active' : ''}`} role="tab" aria-selected={tab === 'evidence'} onClick={() => setTab('evidence')}>证据 · {node.evidence.length}</button>
       <button className={`scope-chip ${tab === 'raw' ? 'scope-chip-active' : ''}`} role="tab" aria-selected={tab === 'raw'} onClick={() => setTab('raw')}>原始数据</button>
