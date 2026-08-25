@@ -12,6 +12,24 @@ export type BackupAssetKindDto =
   | 'config'
   | 'other'
 
+export interface BackupKindSummaryDto {
+  fileCount: number
+  totalBytes: number
+  logicalAssetCount?: number
+}
+
+export interface BackupDataRootSummaryDto {
+  scope: 'config' | 'data'
+  path: string
+  fileCount: number
+  totalBytes: number
+}
+
+export interface BackupAgeBucketSummaryDto {
+  fileCount: number
+  totalBytes: number
+}
+
 export interface BackupSnapshotSummaryDto {
   id: string
   createdAt: string
@@ -28,8 +46,20 @@ export interface BackupProtectionSourceDto {
   displayName: string
   detected: boolean
   fileCount: number
+  totalBytes: number
+  logicalAssetCount: number
   excludedCount: number
   kinds: Partial<Record<BackupAssetKindDto, number>>
+  kindDetails: Partial<Record<BackupAssetKindDto, BackupKindSummaryDto>>
+  roots: BackupDataRootSummaryDto[]
+  oldestModifiedAt?: string
+  latestModifiedAt?: string
+  ageBuckets: {
+    recent30Days: BackupAgeBucketSummaryDto
+    days31To90: BackupAgeBucketSummaryDto
+    days91To180: BackupAgeBucketSummaryDto
+    olderThan180Days: BackupAgeBucketSummaryDto
+  }
 }
 
 export interface BackupOverviewResponseDto {
