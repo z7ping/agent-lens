@@ -1,12 +1,12 @@
 /* AgentLens Mock Tokens (v2) —— 与 packages/web/src/tokens.css 同源色板 + 对比度修正 */
 :root {
-  --al-canvas:#F7F8FA;
+  --al-canvas:#F5F7FA;
   --al-surface:#FFFFFF;
   --al-surface-raised:#FFFFFF;
-  --al-soft:#F2F4F7;
+  --al-soft:#EEF2F6;
   --al-soft-2:#FAFBFC;
-  --al-line:#E6E8EB;
-  --al-line-strong:#D8DDE3;
+  --al-line:#E1E6EC;
+  --al-line-strong:#D5DBE3;
   --al-ink:#171A1F;
   --al-ink-2:#3F4650;
   --al-muted:#667085;
@@ -96,8 +96,8 @@ button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visi
 .future-heading.compact>div{gap:0!important}
 .future-heading.compact .prototype-flag{margin-left:0!important}
 
-/* 冷中性工作区：统一的是色彩体系，不是强迫所有区域同色。
-   一级分析页使用浅灰画布承托白色数据卡；任务复盘阅读区保持白色，侧栏用更浅的冷灰区分层级。 */
+/* 冷中性工作区：外层画布使用可感知的冷灰，数据承载层保持白色。
+   任务复盘阅读区保持白色，侧栏用更浅的冷灰区分；其余一级页面直接落在同一冷灰画布上。 */
 .app-shell,.page-scroll,.review-layout,.future-page{background:var(--al-canvas)!important}
 .page-content,.future-content,.insight-content,.reader-inner{background:transparent!important}
 .reader-pane{background:var(--al-surface)!important}
