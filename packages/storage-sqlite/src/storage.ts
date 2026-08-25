@@ -101,6 +101,25 @@ export class SqliteStorageService implements StorageService {
       const failedSources = (sourceRuntime as Array<{ state: string }>).filter(item => item.state === 'failed').length
       const runningSources = (sourceRuntime as Array<{ state: string }>).filter(item => item.state === 'running').length
 
+      const unknownObservations = this.db.prepare(`
+        SELECT sr.source_id AS sourceId,
+               sr.native_type AS nativeType,
+               COUNT(DISTINCT o.id) AS count,
+               MAX(COALESCE(o.occurred_at, o.captured_at)) AS lastSeenAt
+        FROM observations o
+        JOIN observation_evidence oe ON oe.observation_id = o.id
+        JOIN evidence e ON e.id = oe.evidence_id
+        JOIN source_records sr ON sr.id = e.source_record_id
+        WHERE o.kind = 'unknown'
+        GROUP BY sr.source_id, sr.native_type
+        ORDER BY count DESC, sr.source_id, sr.native_type
+        LIMIT 100
+      `).all()
+      const unknownCount = (unknownObservations as Array<{ count: number }>).reduce(
+        (sum, item) => sum + Number(item.count || 0),
+        0,
+      )
+
       return {
         ok: probe.ok === 1,
         schemaVersion,
@@ -112,6 +131,10 @@ export class SqliteStorageService implements StorageService {
             failed: failedSources,
             running: runningSources,
             items: sourceRuntime,
+          },
+          unknownObservations: {
+            total: unknownCount,
+            groups: unknownObservations,
           },
         },
       }
