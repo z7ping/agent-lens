@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { AgentOverviewDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel, ClientSnapshot } from '../client/model'
 import { agentLabel } from './AgentScope'
@@ -124,12 +125,13 @@ function DiagnosticAgent({ agent, diagnostics }: { agent: AgentOverviewDto; diag
 
 function AgentDiagnosticsPanel({ snapshot }: { snapshot: ClientSnapshot }) {
   const agents = snapshot.agents?.items.filter(agent => agent.detected || agent.enabled) ?? []
-  if (!agents.length || !snapshot.health) return null
   const rows = agents.map(agent => ({ agent, diagnostics: diagnosticsFor(agent, snapshot) }))
   const failed = rows.reduce((sum, item) => sum + item.diagnostics.failedStages, 0)
   const unknown = rows.reduce((sum, item) => sum + item.diagnostics.unknownCount, 0)
   const hasIssue = failed > 0 || unknown > 0
-  return <details className="agent-diagnostics-dock" defaultOpen={hasIssue}>
+  const [open, setOpen] = useState(hasIssue)
+  if (!agents.length || !snapshot.health) return null
+  return <details className="agent-diagnostics-dock" open={open} onToggle={event => setOpen(event.currentTarget.open)}>
     <summary>
       <span><b>采集诊断</b><small>区分没有发生、来源不提供与尚未适配</small></span>
       <span className="agent-diagnostics-summary" data-state={hasIssue ? 'warn' : 'ok'}>{hasIssue ? `${failed} 异常 · ${unknown} 待适配` : '运行正常'}</span>
