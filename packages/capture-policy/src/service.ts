@@ -283,7 +283,11 @@ export class DefaultCapturePolicyService implements CapturePolicyService {
         : {}),
       ...(assetHints === undefined ? {} : { assetHints: assetHints as unknown[] }),
       ...(normalized.sessionRelationshipHints
-        ? { sessionRelationshipHints: structuralValue(normalized.sessionRelationshipHints) as unknown[] }
+        ? {
+            sessionRelationshipHints: structuralValue(
+              normalized.sessionRelationshipHints,
+            ) as NonNullable<NormalizedSourceOutput['sessionRelationshipHints']>,
+          }
         : {}),
     }
   }
