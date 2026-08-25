@@ -26,6 +26,12 @@ bootStage(`entered ready=${app.isReady()} packaged=${app.isPackaged} log=${bootL
 for (const event of ['will-finish-launching', 'ready', 'browser-window-created', 'before-quit', 'will-quit', 'quit']) {
   app.on(event, () => bootStage(`event:${event}`))
 }
+app.on('render-process-gone', (_event, _webContents, details) => {
+  bootStage(`render-process-gone:reason=${details.reason} exitCode=${details.exitCode}`)
+})
+app.on('child-process-gone', (_event, details) => {
+  bootStage(`child-process-gone:type=${details.type} reason=${details.reason} exitCode=${details.exitCode} name=${details.name ?? ''}`)
+})
 process.on('uncaughtException', error => {
   bootStage(`uncaughtException:${error instanceof Error ? error.stack ?? error.message : String(error)}`)
 })
