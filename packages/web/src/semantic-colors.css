@@ -1,0 +1,60 @@
+/*
+ * AgentLens 1.0 共享语义配色。
+ *
+ * 这里只定义跨页面可复用的语义色和通用状态表达。
+ * 页面组件的背景、边框和局部前景色由页面自己的样式文件负责。
+ */
+
+:root {
+  --al-tool-shell-fg:#B45309;--al-tool-shell-bg:#FFF4E0;--al-tool-shell-line:#F0DCBE;
+  --al-tool-read-fg:#2563EB;--al-tool-read-bg:#EAF1FE;--al-tool-read-line:#D4E2FB;
+  --al-tool-edit-fg:#157A55;--al-tool-edit-bg:#E9F6EF;--al-tool-edit-line:#CDEADD;
+  --al-tool-search-fg:#0E7490;--al-tool-search-bg:#E5F6FA;--al-tool-search-line:#C8E9F1;
+  --al-tool-mcp-fg:#5B5BD6;--al-tool-mcp-bg:#EEEEFF;--al-tool-mcp-line:#DCDCFA;
+  --al-tool-web-fg:#0F766E;--al-tool-web-bg:#E6F5F3;--al-tool-web-line:#CBE9E4;
+}
+
+:root[data-theme='dark'] {
+  --al-tool-shell-fg:#F5C36B;--al-tool-shell-bg:#352A16;--al-tool-shell-line:#4A3B1D;
+  --al-tool-read-fg:#8FB3FF;--al-tool-read-bg:#1C2A49;--al-tool-read-line:#2C3D63;
+  --al-tool-edit-fg:#5BC995;--al-tool-edit-bg:#173328;--al-tool-edit-line:#24503B;
+  --al-tool-search-fg:#67D4E8;--al-tool-search-bg:#12333A;--al-tool-search-line:#1E4A54;
+  --al-tool-mcp-fg:#9B96FF;--al-tool-mcp-bg:#29284B;--al-tool-mcp-line:#3B3A6B;
+  --al-tool-web-fg:#5FD4C4;--al-tool-web-bg:#143430;--al-tool-web-line:#20504A;
+}
+
+body { color: var(--al-text-primary); }
+
+.brand-mark,
+.btn.primary,
+.round-nav-live,
+.live-pill,
+.chat-row-user .chat-avatar { color: var(--al-on-accent); }
+
+.matrix-cell[data-status='used'],
+.heat.used,
+.step.done .no { color: var(--al-on-success); }
+
+.live-pill i { background: currentColor; }
+
+.protection-card.is-muted,
+.skill-funnel > div[data-muted='true'] {
+  opacity: 1;
+  border-style: dashed;
+  background: var(--al-soft-2);
+}
+
+.badge.warn,
+.status-pill-warn,
+.sse-banner,
+.step.pending .no,
+.evidence-inline[data-confidence='medium'],
+.interaction-summary-meta .is-latency { color: var(--al-warning); }
+
+.eyebrow,
+.section-label,
+.future-section-label,
+.session-group,
+.agent-scope-option-state,
+.matrix-asset small,
+.matrix-cell[data-status='unobserved'] { color: var(--al-text-subtle); }
