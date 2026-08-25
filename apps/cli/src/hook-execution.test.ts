@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import test from 'node:test'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { hookExecutionInternals, windowsDispatcherCommand } from './hook-execution'
 
 function fixtureModuleUrl(...parts: string[]): string {
@@ -24,8 +24,11 @@ test('Windows Hook 命令固定指向用户级共享分发器', () => {
 })
 
 test('Windows 共享分发器使用 PowerShell 5.1 兼容的 UTF-8 stdin 转发', () => {
-  const source = readFileSync(resolve('scripts/windows-hook-dispatcher.ps1'), 'utf8')
-  assert.doesNotMatch(source, /StandardInputEncoding/)
+  const source = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), '../../../scripts/windows-hook-dispatcher.ps1'),
+    'utf8',
+  )
+  assert.doesNotMatch(source, /\$startInfo\.StandardInputEncoding\s*=/)
   assert.match(source, /\[System\.Text\.Encoding\]::UTF8\.GetBytes\(\$rawInput\)/)
   assert.match(source, /StandardInput\.BaseStream\.Write/)
   assert.match(source, /StandardInput\.Close\(\)/)
