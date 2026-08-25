@@ -9,17 +9,17 @@
  */
 
 :root {
-  --al-canvas:#F7F7F5;
+  --al-canvas:#F7F8FA;
   --al-surface:#FFFFFF;
   --al-surface-raised:#FFFFFF;
-  --al-soft:#F1F1EE;
-  --al-soft-2:#FAFAF8;
-  --al-line:#E7E7E2;
-  --al-line-strong:#D7D8D2;
-  --al-ink:#171816;
-  --al-ink-2:#383A36;
-  --al-muted:#5D6258;
-  --al-muted-2:#66707C;
+  --al-soft:#F2F4F7;
+  --al-soft-2:#FAFBFC;
+  --al-line:#E6E8EB;
+  --al-line-strong:#D8DDE3;
+  --al-ink:#171A1F;
+  --al-ink-2:#3F4650;
+  --al-muted:#667085;
+  --al-muted-2:#7B8494;
   --al-accent:#5B5BD6;
   --al-accent-soft:#EEEEFF;
   --al-success:#157A55;
@@ -39,14 +39,14 @@
   --al-on-warning:#FFFFFF;
   --al-on-danger:#FFFFFF;
 
-  --al-user-bubble:#262824;
-  --al-user-bubble-text:#F8F9F6;
-  --al-user-bubble-muted:#C3C9BE;
-  --al-user-bubble-code:#353831;
+  --al-user-bubble:#262A30;
+  --al-user-bubble-text:#F8F9FB;
+  --al-user-bubble-muted:#C9CFD8;
+  --al-user-bubble-code:#343941;
   --al-user-bubble-link:#C8C7FF;
 
-  --al-shadow:0 1px 2px rgb(22 24 20 / .04),0 10px 28px rgb(22 24 20 / .05);
-  --al-shadow-lg:0 22px 70px rgb(22 24 20 / .16);
+  --al-shadow:0 1px 2px rgb(16 24 40 / .035),0 10px 28px rgb(16 24 40 / .045);
+  --al-shadow-lg:0 22px 70px rgb(16 24 40 / .15);
   --font-ui:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
   --font-mono:"SFMono-Regular",Consolas,"Liberation Mono",monospace;
   --radius-sm:7px;
@@ -62,17 +62,17 @@
 }
 
 :root[data-theme='dark'] {
-  --al-canvas:#111210;
-  --al-surface:#181A17;
-  --al-surface-raised:#1D1F1C;
-  --al-soft:#22241F;
-  --al-soft-2:#151613;
-  --al-line:#2C2E29;
-  --al-line-strong:#3A3D36;
-  --al-ink:#F4F5F2;
-  --al-ink-2:#D4D7D0;
-  --al-muted:#A6AC9F;
-  --al-muted-2:#98A2AE;
+  --al-canvas:#0F1115;
+  --al-surface:#171A20;
+  --al-surface-raised:#1C2027;
+  --al-soft:#22262E;
+  --al-soft-2:#13161B;
+  --al-line:#2B3038;
+  --al-line-strong:#3A414C;
+  --al-ink:#F4F6F8;
+  --al-ink-2:#D6DBE2;
+  --al-muted:#A7B0BE;
+  --al-muted-2:#8994A5;
   --al-accent:#8A88FF;
   --al-accent-soft:#29284B;
   --al-success:#5BC995;
@@ -82,18 +82,18 @@
   --al-danger:#EF7A87;
   --al-danger-soft:#351E22;
 
-  --al-on-accent:#171816;
-  --al-on-success:#171816;
-  --al-on-warning:#171816;
-  --al-on-danger:#171816;
+  --al-on-accent:#171A1F;
+  --al-on-success:#171A1F;
+  --al-on-warning:#171A1F;
+  --al-on-danger:#171A1F;
 
-  --al-user-bubble:#E7E9E4;
-  --al-user-bubble-text:#171816;
-  --al-user-bubble-muted:#555B52;
-  --al-user-bubble-code:#D8DBD4;
+  --al-user-bubble:#E7EAF0;
+  --al-user-bubble-text:#171A1F;
+  --al-user-bubble-muted:#59616D;
+  --al-user-bubble-code:#D8DCE3;
   --al-user-bubble-link:#4D4DB8;
 
-  --al-shadow:0 1px 2px rgb(0 0 0 / .18),0 12px 30px rgb(0 0 0 / .16);
+  --al-shadow:0 1px 2px rgb(0 0 0 / .2),0 12px 30px rgb(0 0 0 / .18);
   --al-shadow-lg:0 24px 72px rgb(0 0 0 / .44);
 
   --src-codex:#4DC7A2;
