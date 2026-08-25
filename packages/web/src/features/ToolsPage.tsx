@@ -6,6 +6,7 @@ import { useClientSnapshot } from '../App'
 import { AgentScope, agentLabel } from '../components/AgentScope'
 import { EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from '../components/StateViews'
 import { ToolKindIcon, toolVisualKind } from '../components/ToolKindIcon'
+import { UiIcon } from '../components/UiIcon'
 
 function duration(ms: number): string {
   if (ms <= 0) return '未观察到'
@@ -103,6 +104,9 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
       : { key, direction: 'descending' })
   }
   const ariaSort = (key: SortKey): 'none' | SortDirection => sort.key === key ? sort.direction : 'none'
+  const sortIcon = (key: SortKey) => sort.key === key
+    ? <UiIcon name={sort.direction === 'descending' ? 'sort-down' : 'sort-up'} size={12}/>
+    : null
   const sortKeyDown = (event: React.KeyboardEvent<HTMLTableCellElement>, key: SortKey) => {
     if (event.key !== 'Enter' && event.key !== ' ') return
     event.preventDefault()
@@ -124,7 +128,7 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
       <span className="toolbar-divider" />
       <select className="filter" value={usage.filters.projectId} onChange={e => model.setUsageFilters({ projectId: e.target.value })}><option value="">全部项目</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name ?? p.repositoryIdentity ?? p.id}</option>)}</select>
       <select className="filter" value={usage.filters.range} onChange={e => model.setUsageFilters({ range: e.target.value as typeof usage.filters.range })}><option value="today">今天</option><option value="7d">最近 7 天</option><option value="30d">最近 30 天</option><option value="all">全部时间</option></select>
-      <button className="icon-button toolbar-end" onClick={() => void model.refreshUsage()} title="刷新工具分析" aria-label="刷新工具分析">↻</button>
+      <button className="icon-button toolbar-end" onClick={() => void model.refreshUsage()} title="刷新工具分析" aria-label="刷新工具分析"><UiIcon name="refresh" size={15}/></button>
     </div>
 
     <div className="page-content tools-content">
@@ -146,11 +150,11 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
             {tools.length ? <table className="tool-table">
               <thead><tr>
                 <th>工具</th>
-                <th tabIndex={0} role="button" aria-sort={ariaSort('callCount')} onClick={() => toggleSort('callCount')} onKeyDown={event => sortKeyDown(event, 'callCount')} style={{ cursor: 'pointer' }}>调用 {sort.key === 'callCount' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
-                <th tabIndex={0} role="button" aria-sort={ariaSort('sessionCount')} onClick={() => toggleSort('sessionCount')} onKeyDown={event => sortKeyDown(event, 'sessionCount')} style={{ cursor: 'pointer' }}>会话 {sort.key === 'sessionCount' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
-                <th tabIndex={0} role="button" aria-sort={ariaSort('successRate')} onClick={() => toggleSort('successRate')} onKeyDown={event => sortKeyDown(event, 'successRate')} style={{ cursor: 'pointer' }}>成功率 {sort.key === 'successRate' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
-                <th tabIndex={0} role="button" aria-sort={ariaSort('errorCount')} onClick={() => toggleSort('errorCount')} onKeyDown={event => sortKeyDown(event, 'errorCount')} style={{ cursor: 'pointer' }}>失败 {sort.key === 'errorCount' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
-                <th tabIndex={0} role="button" aria-sort={ariaSort('averageDurationMs')} onClick={() => toggleSort('averageDurationMs')} onKeyDown={event => sortKeyDown(event, 'averageDurationMs')} style={{ cursor: 'pointer' }}>平均耗时 {sort.key === 'averageDurationMs' ? sort.direction === 'descending' ? '↓' : '↑' : ''}</th>
+                <th tabIndex={0} role="button" aria-sort={ariaSort('callCount')} onClick={() => toggleSort('callCount')} onKeyDown={event => sortKeyDown(event, 'callCount')} style={{ cursor: 'pointer' }}>调用 {sortIcon('callCount')}</th>
+                <th tabIndex={0} role="button" aria-sort={ariaSort('sessionCount')} onClick={() => toggleSort('sessionCount')} onKeyDown={event => sortKeyDown(event, 'sessionCount')} style={{ cursor: 'pointer' }}>会话 {sortIcon('sessionCount')}</th>
+                <th tabIndex={0} role="button" aria-sort={ariaSort('successRate')} onClick={() => toggleSort('successRate')} onKeyDown={event => sortKeyDown(event, 'successRate')} style={{ cursor: 'pointer' }}>成功率 {sortIcon('successRate')}</th>
+                <th tabIndex={0} role="button" aria-sort={ariaSort('errorCount')} onClick={() => toggleSort('errorCount')} onKeyDown={event => sortKeyDown(event, 'errorCount')} style={{ cursor: 'pointer' }}>失败 {sortIcon('errorCount')}</th>
+                <th tabIndex={0} role="button" aria-sort={ariaSort('averageDurationMs')} onClick={() => toggleSort('averageDurationMs')} onKeyDown={event => sortKeyDown(event, 'averageDurationMs')} style={{ cursor: 'pointer' }}>平均耗时 {sortIcon('averageDurationMs')}</th>
               </tr></thead>
               <tbody>{sortedTools.map(tool => {
                 const successRate = rateValue(tool.successCount, tool.errorCount)
@@ -202,7 +206,7 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
       <aside className="tool-drill-drawer" aria-label="工具详情">
         <header className="tool-drill-head">
           <div><span className="eyebrow">工具详情</span><h2 className="tool-drawer-title"><ToolKindIcon kind={toolVisualKind(selectedTool.nativeToolName)}/>{selectedTool.nativeToolName}</h2><span className="tool-source">{sourceLabels(selectedTool.sourceIds)}</span></div>
-          <button className="icon-button" onClick={() => setSelectedToolKey(null)} aria-label="关闭工具详情">×</button>
+          <button className="icon-button" onClick={() => setSelectedToolKey(null)} aria-label="关闭工具详情"><UiIcon name="close" size={15}/></button>
         </header>
         <div className="tool-drill-body">
           <div className="tool-drill-grid">
@@ -223,7 +227,7 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
                 return <button key={session.logicalSessionId} className="tool-session-link" onClick={() => openReviewSession(session.logicalSessionId)} title={label}>
                   <span className="tool-session-copy"><b>{label}</b><small>{sourceLabels(summary?.sourceIds ?? selectedTool.sourceIds)} · {session.callCount} 次调用</small></span>
                   <span className="metric-bar" aria-hidden="true"><i style={{ width: `${Math.max(5, session.callCount / max * 100)}%` }}/></span>
-                  <span className="tool-session-open">打开 →</span>
+                  <span className="tool-session-open">打开 <UiIcon name="arrow-right" size={13}/></span>
                 </button>
               })}
               {!selectedTool.sessions.length && <div className="tool-drill-note">当前范围没有可定位的会话记录。</div>}
