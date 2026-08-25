@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/brand/logo/agentlens-logo.svg" width="128" alt="AgentLens Logo" />
+</p>
+
 <h1 align="center">AgentLens</h1>
 
 <p align="center"><strong>Local observability and trajectory replay for AI coding agents.</strong></p>
