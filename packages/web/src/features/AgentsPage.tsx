@@ -3,6 +3,7 @@ import type { AgentAssetInventoryDto, AgentOverviewDto } from '@agent-lens/proto
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
 import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
+import { CompactPageHeading } from '../components/CompactPageHeading'
 import { UiIcon } from '../components/UiIcon'
 import { copyText } from '../client/clipboard'
 
@@ -365,7 +366,7 @@ export function AgentsPage({ model }: { model: AgentLensClientModel }) {
       <button className="icon-button toolbar-end" onClick={() => void model.refreshFacetsAndAgents()} title="刷新智能体概览" aria-label="刷新智能体概览"><UiIcon name="refresh" size={15}/></button>
     </div>
     <div className="page-content agents-content">
-      <header className="page-heading"><div><span className="eyebrow">工作区</span><h1>智能体概览</h1><p>先看结论：我有哪些人工智能资产、哪些真的用过、技能从发现到使用卡在哪一步。</p></div></header>
+      <CompactPageHeading title="智能体概览" description="集中查看本机智能体、用户资产、真实使用情况和技能生命周期。已检测只表示发现了智能体，不等于已经启用采集。"/>
       {items.length ? <div className="agents-browser">
         <nav className="agent-source-nav" aria-label="智能体列表">
           <div className="agent-source-nav-head"><b>本机智能体</b><span>{items.length}</span></div>
