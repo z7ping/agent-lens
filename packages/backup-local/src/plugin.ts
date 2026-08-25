@@ -2,6 +2,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { Plugin } from '@deepseek-ai/cordis'
 import type { AgentLensContext } from '@agent-lens/runtime-cordis'
+import { ExplainableBackupService } from './explainability'
 import { LocalBackupService } from './service'
 
 export interface BackupLocalPluginConfig {
@@ -12,16 +13,18 @@ const applyBackupLocal: Plugin.Function<BackupLocalPluginConfig> = (
   ctx: AgentLensContext,
   config: BackupLocalPluginConfig = {},
 ) => {
-  const service = new LocalBackupService(
+  const vaultPath = config.vaultPath ?? join(homedir(), '.agent-lens', '1.0', 'vault')
+  const localService = new LocalBackupService(
     ctx.storage,
     ctx.sources,
     ctx.identity,
-    { vaultPath: config.vaultPath ?? join(homedir(), '.agent-lens', '1.0', 'vault') },
+    { vaultPath },
   )
-  service.start()
+  const service = new ExplainableBackupService(localService, join(vaultPath, 'inventory-v1.json'))
+  localService.start()
   const dispose = ctx.provide('backup', service)
   return () => {
-    service.stop()
+    localService.stop()
     dispose()
   }
 }
