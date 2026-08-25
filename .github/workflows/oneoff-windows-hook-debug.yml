@@ -1,0 +1,74 @@
+name: One-off Windows Hook debug
+
+on:
+  push:
+    paths:
+      - '.github/workflows/oneoff-windows-hook-debug.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  debug:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Reproduce direct and dispatched Claude Hook
+        shell: pwsh
+        run: |
+          $inbox = Join-Path $env:RUNNER_TEMP 'agent-lens-hook-inbox'
+          $log = Join-Path $env:RUNNER_TEMP 'agent-lens-hook-debug.log'
+          New-Item -ItemType Directory -Force -Path $inbox | Out-Null
+          Remove-Item -Force $log -ErrorAction SilentlyContinue
+          $env:AGENT_LENS_CLAUDE_INBOX = $inbox
+          $env:AGENT_LENS_HOOK_DISPATCHER_LOG = $log
+
+          $hookRoot = (Resolve-Path 'apps/hook-claude/bin').Path
+          $hookScript = Join-Path $hookRoot 'agent-lens-hook-claude.mjs'
+          $payload = '{"hook_event_name":"PreToolUse","hook_invocation_id":"ci-fast-direct"}'
+
+          Write-Host "Node: $(node --version)"
+          $payload | node $hookScript
+          $directFiles = @(Get-ChildItem -Path $inbox -Filter '*.json')
+          Write-Host "direct inbox files=$($directFiles.Count)"
+          if (Test-Path $log) { Get-Content -Raw $log | Write-Host }
+          if ($directFiles.Count -ne 1) { throw 'Claude Hook 直接执行未落 Inbox' }
+
+          Remove-Item -Force (Join-Path $inbox '*.json') -ErrorAction SilentlyContinue
+          Remove-Item -Force $log -ErrorAction SilentlyContinue
+
+          $root = Join-Path $HOME '.agent-lens/1.0'
+          $runtime = Join-Path $root 'runtime'
+          $installations = Join-Path $root 'installations'
+          New-Item -ItemType Directory -Force -Path $runtime,$installations | Out-Null
+          $dispatcher = Join-Path $runtime 'windows-hook-dispatcher.ps1'
+          Copy-Item -Force 'scripts/windows-hook-dispatcher.ps1' $dispatcher
+
+          $now = (Get-Date).ToUniversalTime().ToString('o')
+          @{
+            schemaVersion = 1
+            kind = 'npm'
+            version = 'ci-fast'
+            executable = (Get-Command node).Source
+            hookRoot = $hookRoot
+            electronRunAsNode = $false
+            registeredAt = $now
+            updatedAt = $now
+          } | ConvertTo-Json | Set-Content -Encoding UTF8 (Join-Path $installations 'npm.json')
+          @{
+            schemaVersion = 1
+            kind = 'desktop'
+            version = 'stale-ci'
+            executable = 'C:\missing-agent-lens\AgentLens.exe'
+            hookRoot = 'C:\missing-agent-lens\hooks'
+            electronRunAsNode = $true
+            registeredAt = $now
+            updatedAt = $now
+          } | ConvertTo-Json | Set-Content -Encoding UTF8 (Join-Path $installations 'desktop.json')
+
+          $payload = '{"hook_event_name":"PreToolUse","hook_invocation_id":"ci-fast-dispatch"}'
+          $payload | powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File $dispatcher agent-lens-hook-claude
+          $dispatchedFiles = @(Get-ChildItem -Path $inbox -Filter '*.json')
+          Write-Host "dispatched inbox files=$($dispatchedFiles.Count)"
+          if (Test-Path $log) { Get-Content -Raw $log | Write-Host }
+          if ($dispatchedFiles.Count -ne 1) { throw '共享分发器执行未落 Inbox' }
