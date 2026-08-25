@@ -9,13 +9,13 @@
  */
 
 :root {
-  --al-canvas:#F7F8FA;
+  --al-canvas:#F5F7FA;
   --al-surface:#FFFFFF;
   --al-surface-raised:#FFFFFF;
-  --al-soft:#F2F4F7;
+  --al-soft:#EEF2F6;
   --al-soft-2:#FAFBFC;
-  --al-line:#E6E8EB;
-  --al-line-strong:#D8DDE3;
+  --al-line:#E1E6EC;
+  --al-line-strong:#D5DBE3;
   --al-ink:#171A1F;
   --al-ink-2:#3F4650;
   --al-muted:#667085;
