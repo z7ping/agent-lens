@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import type {
   BackupAssetKindDto,
   BackupOverviewResponseDto,
+  BackupProtectionSourceDto,
   BackupRestorePreviewResponseDto,
   BackupVerifyResponseDto,
 } from '@agent-lens/protocol'
@@ -11,9 +12,10 @@ import { CompactPageHeading } from '../components/CompactPageHeading'
 import { WorkspaceSkeleton } from '../components/StateViews'
 import { UiIcon } from '../components/UiIcon'
 
-const ALL_KINDS: BackupAssetKindDto[] = [
-  'skill', 'mcp', 'plugin', 'extension', 'hook', 'memory', 'rule', 'session', 'config', 'other',
-]
+const RECOMMENDED_KINDS: BackupAssetKindDto[] = ['config', 'skill', 'mcp', 'plugin', 'extension', 'hook', 'rule']
+const OPTIONAL_KINDS: BackupAssetKindDto[] = ['session', 'memory']
+const OTHER_KINDS: BackupAssetKindDto[] = ['other']
+const ALL_KINDS: BackupAssetKindDto[] = [...RECOMMENDED_KINDS, ...OPTIONAL_KINDS, ...OTHER_KINDS]
 
 type PendingConfirmation =
   | { type: 'create' }
@@ -29,7 +31,19 @@ function kindLabel(kind: BackupAssetKindDto): string {
   if (kind === 'rule') return '规则'
   if (kind === 'session') return '会话 / 历史'
   if (kind === 'config') return '关键配置'
-  return '其他'
+  return '其他 / 未分类'
+}
+
+function kindRecommendation(kind: BackupAssetKindDto): '建议备份' | '按需备份' | '默认排除' {
+  if (RECOMMENDED_KINDS.includes(kind)) return '建议备份'
+  if (OPTIONAL_KINDS.includes(kind)) return '按需备份'
+  return '默认排除'
+}
+
+function recommendationTone(kind: BackupAssetKindDto): string {
+  if (RECOMMENDED_KINDS.includes(kind)) return 'ok'
+  if (OPTIONAL_KINDS.includes(kind)) return 'info'
+  return ''
 }
 
 function formatBytes(bytes: number): string {
@@ -37,6 +51,10 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`
   return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`
+}
+
+function formatOptionalBytes(bytes: number | undefined): string {
+  return bytes === undefined ? '大小待扫描' : formatBytes(bytes)
 }
 
 function formatTime(value: string): string {
@@ -71,6 +89,40 @@ function previewStatusLabel(status: string): string {
   return '阻止恢复'
 }
 
+function kindFiles(source: BackupProtectionSourceDto, kind: BackupAssetKindDto): number {
+  return source.kindDetails?.[kind]?.fileCount ?? source.kinds[kind] ?? 0
+}
+
+function kindLogicalAssets(source: BackupProtectionSourceDto, kind: BackupAssetKindDto): number | undefined {
+  return source.kindDetails?.[kind]?.logicalAssetCount
+}
+
+function kindBytes(source: BackupProtectionSourceDto, kind: BackupAssetKindDto): number | undefined {
+  return source.kindDetails?.[kind]?.totalBytes
+}
+
+function kindDetailText(source: BackupProtectionSourceDto, kind: BackupAssetKindDto): string {
+  const files = kindFiles(source, kind)
+  const logical = kindLogicalAssets(source, kind)
+  return logical === undefined ? `${files.toLocaleString()} 个文件` : `${logical.toLocaleString()} 项 · ${files.toLocaleString()} 个文件`
+}
+
+function sumKindFiles(sources: BackupProtectionSourceDto[], sourceIds: string[], kind: BackupAssetKindDto): number {
+  return sources
+    .filter(source => sourceIds.includes(source.sourceId))
+    .reduce((sum, source) => sum + kindFiles(source, kind), 0)
+}
+
+function sumKindLogicalAssets(sources: BackupProtectionSourceDto[], sourceIds: string[], kind: BackupAssetKindDto): number | undefined {
+  const selected = sources.filter(source => sourceIds.includes(source.sourceId))
+  const values = selected.map(source => kindLogicalAssets(source, kind)).filter((value): value is number => value !== undefined)
+  return values.length ? values.reduce((sum, value) => sum + value, 0) : undefined
+}
+
+function policyKinds(kindGroup: BackupAssetKindDto[], sources: BackupProtectionSourceDto[], sourceIds: string[]): BackupAssetKindDto[] {
+  return kindGroup.filter(kind => sumKindFiles(sources, sourceIds, kind) > 0)
+}
+
 export function BackupPage() {
   const api = useMemo(() => new AgentLensApi(), [])
   const [overview, setOverview] = useState<BackupOverviewResponseDto | null>(null)
@@ -78,9 +130,10 @@ export function BackupPage() {
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
   const [selectedSources, setSelectedSources] = useState<string[]>([])
-  const [selectedKinds, setSelectedKinds] = useState<BackupAssetKindDto[]>(ALL_KINDS)
+  const [selectedKinds, setSelectedKinds] = useState<BackupAssetKindDto[]>(RECOMMENDED_KINDS)
   const [verification, setVerification] = useState<Record<string, BackupVerifyResponseDto>>({})
   const [preview, setPreview] = useState<BackupRestorePreviewResponseDto | null>(null)
+  const [detailSourceId, setDetailSourceId] = useState<string | null>(null)
   const [confirmation, setConfirmation] = useState<PendingConfirmation | null>(null)
   const selectionInitialized = useRef(false)
   const importInput = useRef<HTMLInputElement>(null)
@@ -104,24 +157,34 @@ export function BackupPage() {
 
   useEffect(() => { void refresh() }, [])
   useEffect(() => {
-    if (!preview && !confirmation) return
+    if (!preview && !confirmation && !detailSourceId) return
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || busy) return
       if (confirmation) setConfirmation(null)
-      else setPreview(null)
+      else if (preview) setPreview(null)
+      else setDetailSourceId(null)
     }
     window.addEventListener('keydown', closeOnEscape)
     return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [preview, confirmation, busy])
+  }, [preview, confirmation, detailSourceId, busy])
 
   const sources = overview?.sources ?? []
   const snapshots = overview?.snapshots ?? []
   const protectedFiles = sources.reduce((sum, source) => sum + source.fileCount, 0)
+  const protectedBytes = sources.reduce((sum, source) => sum + (source.totalBytes ?? 0), 0)
+  const hasProtectedBytes = sources.some(source => source.totalBytes !== undefined)
   const excludedFiles = sources.reduce((sum, source) => sum + source.excludedCount, 0)
   const totalSnapshotBytes = snapshots.reduce((sum, snapshot) => sum + snapshot.totalBytes, 0)
   const estimatedSelected = sources
     .filter(source => selectedSources.includes(source.sourceId))
-    .reduce((sum, source) => sum + selectedKinds.reduce((kindSum, kind) => kindSum + (source.kinds[kind] ?? 0), 0), 0)
+    .reduce((sum, source) => sum + selectedKinds.reduce((kindSum, kind) => kindSum + kindFiles(source, kind), 0), 0)
+  const estimatedSelectedBytes = sources
+    .filter(source => selectedSources.includes(source.sourceId))
+    .reduce((sum, source) => sum + selectedKinds.reduce((kindSum, kind) => kindSum + (kindBytes(source, kind) ?? 0), 0), 0)
+  const hasSelectedBytes = sources
+    .filter(source => selectedSources.includes(source.sourceId))
+    .some(source => selectedKinds.some(kind => kindBytes(source, kind) !== undefined))
+  const detailSource = sources.find(source => source.sourceId === detailSourceId) ?? null
 
   const toggleSource = (sourceId: string) => {
     setSelectedSources(current => current.includes(sourceId)
@@ -246,12 +309,33 @@ export function BackupPage() {
     else await importBackup(pending.file)
   }
 
+  const copyPath = async (path: string) => {
+    try {
+      await navigator.clipboard.writeText(path)
+    } catch {
+      setError('复制路径失败，请手动选择路径文本。')
+    }
+  }
+
   if (loading && !overview) return <WorkspaceSkeleton />
 
   const indexTime = overview?.index?.generatedAt
   const indexRefreshing = overview?.index?.refreshing ?? false
   const detectedSourceCount = sources.filter(source => source.detected).length
   const allDetectedSelected = detectedSourceCount > 0 && selectedSources.length === detectedSourceCount
+  const recommendedVisible = policyKinds(RECOMMENDED_KINDS, sources, selectedSources)
+  const optionalVisible = policyKinds(OPTIONAL_KINDS, sources, selectedSources)
+  const otherVisible = policyKinds(OTHER_KINDS, sources, selectedSources)
+
+  const renderKindCheck = (kind: BackupAssetKindDto) => {
+    const files = sumKindFiles(sources, selectedSources, kind)
+    const logical = sumKindLogicalAssets(sources, selectedSources, kind)
+    return <label key={kind} className="builder-check">
+      <input type="checkbox" checked={selectedKinds.includes(kind)} onChange={() => toggleKind(kind)}/>
+      {kindLabel(kind)}
+      <small>{logical === undefined ? `${files.toLocaleString()} 文件` : `${logical.toLocaleString()} 项 · ${files.toLocaleString()} 文件`}</small>
+    </label>
+  }
 
   return <>
     <div className="workspace-toolbar">
@@ -271,33 +355,33 @@ export function BackupPage() {
     <div className="page-scroll">
       <main className="future-content backup-page">
         <div className="future-heading">
-          <CompactPageHeading title="资产备份" description="将智能体原始会话和已发现资产保存为本地不可变快照。清单与 SHA-256 用于完整性校验；导入不会直接覆盖当前文件，恢复必须先经过差异预演。"><span className="prototype-flag live">本地真实数据</span></CompactPageHeading>
+          <CompactPageHeading title="资产备份" description="看清智能体真正有哪些数据、在哪里、占多少，再决定哪些值得进入本地不可变快照。恢复仍必须先经过差异预演。"><span className="prototype-flag live">本地真实数据</span></CompactPageHeading>
           <button className="btn" disabled={loading || Boolean(busy)} onClick={() => void refresh(true)}>{loading ? '正在扫描…' : <><UiIcon name="refresh" size={14}/>{' 刷新扫描'}</>}</button>
         </div>
 
         {error && <div className="backup-error" role="alert"><b>操作失败</b><span>{error}</span><button className="link-btn" onClick={() => setError('')}>关闭</button></div>}
 
         <section className="future-kpis" aria-label="备份概览">
-          <article className="future-kpi"><div className="future-kpi-head"><span>可备份源文件</span><span className={`badge ${indexRefreshing ? 'info' : 'ok'}`}>{indexRefreshing ? '后台更新中' : '索引就绪'}</span></div><strong>{protectedFiles}</strong><small>{indexTime ? `索引更新于 ${formatTime(indexTime)} · ` : ''}{detectedSourceCount} 个智能体</small></article>
+          <article className="future-kpi"><div className="future-kpi-head"><span>可备份物理文件</span><span className={`badge ${indexRefreshing ? 'info' : 'ok'}`}>{indexRefreshing ? '后台更新中' : '索引就绪'}</span></div><strong>{protectedFiles.toLocaleString()}</strong><small>{hasProtectedBytes ? `${formatBytes(protectedBytes)} · ` : ''}{indexTime ? `索引更新于 ${formatTime(indexTime)} · ` : ''}{detectedSourceCount} 个智能体</small></article>
           <article className="future-kpi"><div className="future-kpi-head"><span>本地快照</span><span className="delta neutral">{snapshots[0] ? `最近 ${formatTime(snapshots[0].createdAt)}` : '尚无快照'}</span></div><strong>{snapshots.length}</strong><small>逻辑内容共 {formatBytes(totalSnapshotBytes)}；相同文件由内容库复用</small></article>
           <article className="future-kpi"><div className="future-kpi-head"><span>最近校验</span><span className={`badge ${Object.values(verification).some(result => !result.valid) ? 'err' : Object.keys(verification).length ? 'ok' : ''}`}>{Object.keys(verification).length ? (Object.values(verification).every(result => result.valid) ? '通过' : '需关注') : '未执行'}</span></div><strong>{Object.values(verification).filter(result => result.valid).length}/{Object.keys(verification).length || '—'}</strong><small>校验清单和每个快照文件的 SHA-256</small></article>
-          <article className="future-kpi"><div className="future-kpi-head"><span>扫描阶段排除</span><span className="badge warn">安全优先</span></div><strong>{excludedFiles}</strong><small>符号链接、越界路径等在扫描阶段排除；秘密内容在创建快照时继续检查</small></article>
+          <article className="future-kpi"><div className="future-kpi-head"><span>扫描阶段排除</span><span className="badge warn">安全优先</span></div><strong>{excludedFiles.toLocaleString()}</strong><small>符号链接、越界路径等在扫描阶段排除；秘密内容在创建快照时继续检查</small></article>
         </section>
 
         <div className="future-grid">
           <div className="future-stack">
             <section className="future-card">
-              <div className="future-card-head"><div><h2>保护范围</h2><p>这里展示来源当前真实暴露的原始会话根目录和资产绑定路径，不根据“应该安装什么”猜测。</p></div></div>
+              <div className="future-card-head"><div><h2>保护范围</h2><p>逻辑资产和物理文件分开显示。旧索引只知道文件数量时，会明确写成“文件”，不会把 4,000 个文件误称为 4,000 个 MCP。</p></div></div>
               <div className="future-card-body">
                 <div className="protection-grid">
                   {sources.map(source => <article key={source.sourceId} className={`protection-card ${!source.detected ? 'is-muted' : ''}`}>
                     <div className="protection-card-head"><span className={`src-dot lg ${sourceDotClass(source.sourceId)}`}/><b>{sourceLabel(source.sourceId, source.displayName)}</b><span className={`badge ${source.detected ? 'ok' : ''}`}>{source.detected ? '已检测' : '未检测'}</span></div>
                     <div className="protection-counts">
-                      <div className="protection-count"><strong>{source.kinds.skill ?? 0}</strong><span>技能文件</span></div>
-                      <div className="protection-count"><strong>{source.kinds.session ?? 0}</strong><span>会话文件</span></div>
-                      <div className="protection-count"><strong>{source.fileCount}</strong><span>全部文件</span></div>
+                      <div className="protection-count"><strong>{source.logicalAssetCount === undefined ? '—' : source.logicalAssetCount.toLocaleString()}</strong><span>逻辑资产</span></div>
+                      <div className="protection-count"><strong>{source.fileCount.toLocaleString()}</strong><span>物理文件</span></div>
+                      <div className="protection-count"><strong>{source.totalBytes === undefined ? '—' : formatBytes(source.totalBytes)}</strong><span>数据大小</span></div>
                     </div>
-                    <div className="protection-meta"><span>MCP {source.kinds.mcp ?? 0} · 插件/扩展 {(source.kinds.plugin ?? 0) + (source.kinds.extension ?? 0)}</span><span>{source.excludedCount ? `排除 ${source.excludedCount}` : '路径正常'}</span></div>
+                    <div className="protection-meta"><span>MCP {kindDetailText(source, 'mcp')} · 会话 {kindFiles(source, 'session').toLocaleString()} 文件</span><button className="link-btn" disabled={!source.detected} onClick={() => setDetailSourceId(source.sourceId)}>数据详情</button></div>
                   </article>)}
                 </div>
                 <div className="future-section-label">当前备份目录</div>
@@ -334,29 +418,48 @@ export function BackupPage() {
 
           <aside className="future-stack">
             <section className="future-card">
-              <div className="future-card-head"><div><h2>创建快照</h2><p>选择本次真正要保护的范围。</p></div><span className="badge info">本地</span></div>
+              <div className="future-card-head"><div><h2>创建快照</h2><p>按数据价值选择，不需要面对十几万文件逐个勾选。</p></div><span className="badge info">本地</span></div>
               <div className="future-card-body snapshot-builder">
                 <div className="builder-block"><div className="builder-label"><span>智能体</span><span>{selectedSources.length} / {detectedSourceCount}</span></div><div className="builder-checks">
-                  {sources.filter(source => source.detected).map(source => <label key={source.sourceId} className="builder-check"><input type="checkbox" checked={selectedSources.includes(source.sourceId)} onChange={() => toggleSource(source.sourceId)}/><span className={`src-dot ${sourceDotClass(source.sourceId)}`}/>{sourceLabel(source.sourceId, source.displayName)}<small>{source.fileCount} 文件</small></label>)}
+                  {sources.filter(source => source.detected).map(source => <label key={source.sourceId} className="builder-check"><input type="checkbox" checked={selectedSources.includes(source.sourceId)} onChange={() => toggleSource(source.sourceId)}/><span className={`src-dot ${sourceDotClass(source.sourceId)}`}/>{sourceLabel(source.sourceId, source.displayName)}<small>{source.fileCount.toLocaleString()} 文件</small></label>)}
                 </div></div>
-                <div className="builder-block"><div className="builder-label"><span>资产类型</span><button className="link-btn" onClick={() => setSelectedKinds(selectedKinds.length === ALL_KINDS.length ? [] : ALL_KINDS)}>{selectedKinds.length === ALL_KINDS.length ? '清空' : '全选'}</button></div><div className="builder-checks">
-                  {ALL_KINDS.map(kind => <label key={kind} className="builder-check"><input type="checkbox" checked={selectedKinds.includes(kind)} onChange={() => toggleKind(kind)}/>{kindLabel(kind)}<small>{sources.filter(source => selectedSources.includes(source.sourceId)).reduce((sum, source) => sum + (source.kinds[kind] ?? 0), 0)}</small></label>)}
-                </div></div>
+
+                {recommendedVisible.length > 0 && <div className="builder-block"><div className="builder-label"><span>建议备份</span><span className="badge ok">恢复价值高</span></div><div className="builder-checks">{recommendedVisible.map(renderKindCheck)}</div></div>}
+                {optionalVisible.length > 0 && <div className="builder-block"><div className="builder-label"><span>按需备份</span><span className="badge info">可能占用较大</span></div><div className="builder-checks">{optionalVisible.map(renderKindCheck)}</div></div>}
+                {otherVisible.length > 0 && <div className="builder-block"><div className="builder-label"><span>默认排除</span><span className="badge">价值不明确</span></div><div className="builder-checks">{otherVisible.map(renderKindCheck)}</div></div>}
+
                 <div className="safety-note"><span><UiIcon name="check" size={15}/></span><div><b>敏感信息保护强制开启</b><span>没有关闭入口。发现凭据文件名、私钥、常见令牌或配置中的秘密赋值时，整文件排除并只记录原因。</span></div></div>
-                <div className="builder-summary"><span>按分类统计约 <b>{estimatedSelected}</b> 条文件引用</span><span>重叠路径会自动去重</span></div>
+                <div className="builder-summary"><span>预计涉及约 <b>{estimatedSelected.toLocaleString()}</b> 条分类文件引用</span><span>{hasSelectedBytes ? `分类大小约 ${formatBytes(estimatedSelectedBytes)}` : '大小将在新版扫描索引补齐后显示'} · 重叠路径创建时自动去重</span></div>
                 <button className="btn primary snapshot-create-button" disabled={Boolean(busy) || !selectedSources.length || !selectedKinds.length} onClick={requestCreateSnapshot}>{busy === 'create' ? '正在创建快照…' : '创建并校验快照'}</button>
               </div>
             </section>
 
             <section className="future-card"><div className="future-card-head"><div><h3>备份原则</h3></div></div><div className="future-card-body backup-principles">
+              <div className="insight-item"><div className="insight-item-head"><span className="insight-kind fact">先看懂</span><b>逻辑资产和物理文件分开</b></div><p>文件很多不等于装了很多 MCP 或技能；不确定时只展示可验证的物理文件数量。</p></div>
               <div className="insight-item"><div className="insight-item-head"><span className="insight-kind fact">原始优先</span><b>会话保存原生文件</b></div><p>规范观测用于查看和分析，不替代原工具的会话 / 历史文件。</p></div>
-              <div className="insight-item"><div className="insight-item-head"><span className="insight-kind fact">增量复用</span><b>相同内容只保存一份</b></div><p>未变化文件直接复用已有 SHA-256 内容；只有变化文件重新读取、检查并写入。</p></div>
-              <div className="insight-item"><div className="insight-item-head"><span className="insight-kind fact">不碰凭据</span><b>默认拒绝保存秘密</b></div><p>可携带备份包不应该顺手变成凭据泄漏包。</p></div>
+              <div className="insight-item"><div className="insight-item-head"><span className="insight-kind fact">不清理</span><b>AgentLens 不删除原始数据</b></div><p>这里只决定哪些数据进入快照，不承担第三方智能体的数据清理职责。</p></div>
             </div></section>
           </aside>
         </div>
       </main>
     </div>
+
+    {detailSource && <><div className="scrim show" onClick={() => setDetailSourceId(null)}/><aside className="drawer show" aria-label={`${sourceLabel(detailSource.sourceId, detailSource.displayName)} 数据详情`}>
+      <div className="dw-head"><div><div className="dw-eyebrow">数据详情</div><div className="dw-title"><span className={`src-dot lg ${sourceDotClass(detailSource.sourceId)}`}/>{sourceLabel(detailSource.sourceId, detailSource.displayName)}</div><div className="dw-sub">帮助判断这些数据是什么、在哪里，以及是否值得进入快照。</div></div><button className="icon-button" onClick={() => setDetailSourceId(null)} aria-label="关闭"><UiIcon name="close" size={15}/></button></div>
+      <div className="future-drawer-body">
+        <section className="drawer-section"><h3>数据规模</h3><div className="preview-summary"><span><b>{detailSource.logicalAssetCount === undefined ? '—' : detailSource.logicalAssetCount.toLocaleString()}</b> 逻辑资产</span><span><b>{detailSource.fileCount.toLocaleString()}</b> 物理文件</span><span><b>{formatOptionalBytes(detailSource.totalBytes)}</b> 数据大小</span><span><b>{detailSource.excludedCount.toLocaleString()}</b> 扫描排除</span></div>{detailSource.logicalAssetCount === undefined && <div className="future-note">当前索引还不能可靠计算全部逻辑资产数量，因此不会把文件数冒充为 MCP、技能或会话数量。</div>}</section>
+
+        <section className="drawer-section"><h3>资产分类</h3><div className="drawer-file-list">
+          {ALL_KINDS.filter(kind => kindFiles(detailSource, kind) > 0).map(kind => <div key={kind} className="drawer-file preview-file"><span className={`badge ${recommendationTone(kind)}`}>{kindRecommendation(kind)}</span><b>{kindLabel(kind)}</b><code>{kindDetailText(detailSource, kind)}{kindBytes(detailSource, kind) === undefined ? '' : ` · ${formatBytes(kindBytes(detailSource, kind)!)}`}</code></div>)}
+        </div></section>
+
+        <section className="drawer-section"><h3>数据位置</h3>{detailSource.roots?.length ? <div className="drawer-file-list">{detailSource.roots.map(root => <div key={`${root.scope}:${root.path}`} className="drawer-file"><span className="badge">{root.scope === 'config' ? '配置目录' : '数据目录'}</span><code>{root.path}</code><small>{root.fileCount === undefined ? '' : `${root.fileCount.toLocaleString()} 文件`}{root.totalBytes === undefined ? '' : ` · ${formatBytes(root.totalBytes)}`}</small><button className="link-btn" onClick={() => void copyPath(root.path)}>复制路径</button></div>)}</div> : <div className="future-note">当前索引版本只提供分类文件统计；刷新到包含目录统计的新版索引后，这里会显示真实配置目录和数据目录。</div>}</section>
+
+        {(detailSource.oldestModifiedAt || detailSource.latestModifiedAt || detailSource.ageBuckets) && <section className="drawer-section"><h3>时间分布</h3>{detailSource.oldestModifiedAt || detailSource.latestModifiedAt ? <div className="integrity-strip"><span>最早 {detailSource.oldestModifiedAt ? formatTime(detailSource.oldestModifiedAt) : '—'}</span><span className="grow"/><span>最近 {detailSource.latestModifiedAt ? formatTime(detailSource.latestModifiedAt) : '—'}</span></div> : null}{detailSource.ageBuckets && <div className="preview-summary"><span><b>{detailSource.ageBuckets.recent30Days.fileCount.toLocaleString()}</b> 最近 30 天</span><span><b>{detailSource.ageBuckets.days31To90.fileCount.toLocaleString()}</b> 31–90 天</span><span><b>{detailSource.ageBuckets.days91To180.fileCount.toLocaleString()}</b> 91–180 天</span><span><b>{detailSource.ageBuckets.olderThan180Days.fileCount.toLocaleString()}</b> 180 天以前</span></div>}</section>}
+
+        <section className="drawer-section"><div className="future-note"><b>这里只帮助你决定备什么。</b> AgentLens 1.0 不删除、不移动、不清理 {sourceLabel(detailSource.sourceId, detailSource.displayName)} 的原始数据。</div></section>
+      </div>
+    </aside></>}
 
     {preview && <><div className="scrim show" onClick={() => setPreview(null)}/><aside className="drawer show" aria-label="恢复预演">
       <div className="dw-head"><div><div className="dw-eyebrow">恢复预演</div><div className="dw-title">快照差异 <span className={`badge ${preview.blocked ? 'warn' : 'ok'}`}>{preview.blocked ? `${preview.blocked} 项阻止` : '路径检查通过'}</span></div><div className="dw-sub">{preview.snapshotId}</div></div><button className="icon-button" onClick={() => setPreview(null)} aria-label="关闭"><UiIcon name="close" size={15}/></button></div>
@@ -377,7 +480,7 @@ export function BackupPage() {
           : <p>文件 <b>{confirmation.file.name}</b>（{formatBytes(confirmation.file.size)}）将经过完整性校验后写入本地备份仓，不会覆盖当前智能体文件。</p>}
         <div className="backup-confirm-facts">
           {confirmation.type === 'create'
-            ? <><span>约 {estimatedSelected} 条文件引用</span><span>索引 {indexTime ? formatTime(indexTime) : '准备中'}</span></>
+            ? <><span>约 {estimatedSelected.toLocaleString()} 条分类文件引用</span><span>{hasSelectedBytes ? `分类大小约 ${formatBytes(estimatedSelectedBytes)}` : `索引 ${indexTime ? formatTime(indexTime) : '准备中'}`}</span></>
             : <><span>只导入到本地备份仓</span><span>恢复仍需单独预演</span></>}
         </div>
         <div className="backup-confirm-actions">
