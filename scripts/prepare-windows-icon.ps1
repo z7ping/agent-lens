@@ -22,7 +22,7 @@ try {
 
   # 24 位 RGB 不包含 Alpha 通道。先用桌面壳的深色基底铺满，再按正式 Logo
   # 的透明度合成，因此资源写入 EXE / 快捷方式后不会出现整张图被当作透明的情况。
-  $bitmap = New-Object System.Drawing.Bitmap($size, $size, [System.Drawing.Imaging.PixelFormat]::Format24bppRgb)
+  $bitmap = [System.Drawing.Bitmap]::new($size, $size, [System.Drawing.Imaging.PixelFormat]::Format24bppRgb)
   $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
   $graphics.Clear([System.Drawing.Color]::FromArgb(11, 13, 16))
   $graphics.CompositingMode = [System.Drawing.Drawing2D.CompositingMode]::SourceOver
@@ -40,7 +40,7 @@ finally {
   if ($null -ne $source) { $source.Dispose() }
 }
 
-$check = [System.Drawing.Bitmap]::FromFile($outputPath)
+$check = [System.Drawing.Image]::FromFile($outputPath)
 try {
   if ($check.Width -ne $size -or $check.Height -ne $size) {
     throw "Windows 图标生成尺寸异常：$($check.Width)x$($check.Height)"
