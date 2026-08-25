@@ -8,12 +8,12 @@ async function createStorage() {
   return storage
 }
 
-test('SQLite storage migrates to schema version 3 and exposes required tables', async () => {
+test('SQLite storage migrates to schema version 4 and exposes required tables', async () => {
   const storage = await createStorage()
   try {
     const health = await storage.health()
     assert.equal(health.ok, true)
-    assert.equal(health.schemaVersion, 3)
+    assert.equal(health.schemaVersion, 4)
 
     const rows = storage.db.prepare(`
       SELECT name FROM sqlite_master
@@ -26,11 +26,14 @@ test('SQLite storage migrates to schema version 3 and exposes required tables', 
       'hosts',
       'agent_products',
       'agent_installations',
+      'runtime_profiles',
       'projects',
       'workspaces',
       'logical_sessions',
       'source_sessions',
       'session_relationships',
+      'session_relationship_candidates',
+      'source_runtime_status',
       'agent_actors',
       'interactions',
       'source_records',
@@ -45,6 +48,15 @@ test('SQLite storage migrates to schema version 3 and exposes required tables', 
     ]) {
       assert.equal(tables.has(table), true, `missing table ${table}`)
     }
+
+    const profileColumns = storage.db.prepare('PRAGMA table_info(runtime_profiles)').all() as Array<{ name: string }>
+    assert.equal(profileColumns.some(column => column.name === 'native_profile_id'), true)
+    const sessionColumns = storage.db.prepare('PRAGMA table_info(logical_sessions)').all() as Array<{ name: string }>
+    assert.equal(sessionColumns.some(column => column.name === 'runtime_profile_id'), true)
+    const sourceSessionColumns = storage.db.prepare('PRAGMA table_info(source_sessions)').all() as Array<{ name: string }>
+    assert.equal(sourceSessionColumns.some(column => column.name === 'runtime_profile_id'), true)
+    const bindingColumns = storage.db.prepare('PRAGMA table_info(asset_bindings)').all() as Array<{ name: string }>
+    assert.equal(bindingColumns.some(column => column.name === 'runtime_profile_id'), true)
   } finally {
     storage.close()
   }
