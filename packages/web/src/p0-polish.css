@@ -89,10 +89,15 @@
   padding-bottom: 5px;
 }
 
+/* 不再把事件标记放大成实心圆；使用无文字的 SVG mask 表达生命周期。 */
 .review-page .event-lifecycle .event-mark {
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   margin-top: 0;
+  border-radius: 0;
+  background: var(--al-muted);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='5.2' fill='none' stroke='black' stroke-width='1.6'/%3E%3Ccircle cx='8' cy='8' r='1.4' fill='black'/%3E%3C/svg%3E") center / 14px 14px no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='5.2' fill='none' stroke='black' stroke-width='1.6'/%3E%3Ccircle cx='8' cy='8' r='1.4' fill='black'/%3E%3C/svg%3E") center / 14px 14px no-repeat;
 }
 
 .review-page .event-lifecycle .event-copy {
@@ -115,8 +120,13 @@
   white-space: nowrap;
 }
 
+/* 主阅读层保留简短事件说明；原始载荷仍只在详情/原始记录中出现。 */
 .review-page .event-lifecycle .event-copy small {
-  display: none;
+  display: inline-block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .review-page .event-lifecycle .evidence-inline-list {
@@ -161,8 +171,9 @@
 }
 
 @media (max-width: 640px) {
+  /* Evidence（证据）在窄屏也不能消失，由最终布局层负责换行。 */
   .review-page .event-lifecycle .evidence-inline-list {
-    display: none;
+    display: inline-flex;
   }
 
   .app-shell:has(.nav-item-active[href='/backup']) .workspace-skeleton::before,
