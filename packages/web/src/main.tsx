@@ -19,8 +19,6 @@ import './backup.css'
 import './insights.css'
 import './tools.css'
 import './agents.css'
-import './p0-polish.css'
-import './v2-alignment.css'
 import './review.css'
 import './review-long-session.css'
 
