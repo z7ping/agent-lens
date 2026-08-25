@@ -14,7 +14,7 @@
 3. 一个 Session / Asset 属于哪一个运行配置（Runtime Profile）；
 4. 原生父子 / 恢复 / 分叉关系是否有证据，哪些只是候选；
 5. 某类数据没有出现时，是“没有发生”“来源不提供”还是“AgentLens 尚未支持”；
-6. 数据库、备份索引和 Inbox 是否健康，数据增长是否可控。
+6. 数据库、备份索引和 Hook 运行链是否健康，数据增长是否可控。
 
 ## 批次一：核心模型与来源诊断
 
@@ -107,10 +107,19 @@ Prompt / Tool / Config / Environment 的隐私策略保持独立，默认仍按�
 
 ## 批次三：长期运行
 
-随后完成：
+已落地：
 
-1. SQLite / WAL / SourceRecord / Observation / Evidence / Session 数量和增长诊断；
-2. Checkpoint、Inbox、备份索引、Vault 健康；
+1. `/api/v1/health` 暴露 SQLite 主库、WAL 和逻辑页大小；
+2. 统计 SourceRecord / Observation / Evidence / Session 当前总量；
+3. 统计最近 7 天上述核心数据的新增量，用于观察真实增长趋势；
+4. 暴露 Source Checkpoint 数量和最近更新时间；
+5. 智能体概览“采集诊断”面板展示数据规模、7 天增量和 Checkpoint 健康；
+6. 诊断 UI 保持正式设计约束：无毛玻璃，正常文字不低于 12px。
+
+批次三剩余：
+
+1. Hook 运行链健康：复用 Hook Manager / 共享分发器的真实安装与执行状态，不在 Storage 层跨层扫描；
+2. 备份索引 / Vault 健康：由 `backup-local` 自己提供索引存在性、最近刷新、Vault 大小等状态；
 3. 最近 Session 可靠性：新会话实时出现，分页 / 长会话不会隐藏最近任务。
 
 ## 暂不做
