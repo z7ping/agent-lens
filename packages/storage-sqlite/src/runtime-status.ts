@@ -27,12 +27,15 @@ export class SqliteSourceRuntimeStatusRepository {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           state = excluded.state,
-          last_started_at = excluded.last_started_at,
-          last_success_at = excluded.last_success_at,
-          last_error_at = excluded.last_error_at,
-          error_count = excluded.error_count,
-          last_error_summary = excluded.last_error_summary,
-          checkpoint_summary = excluded.checkpoint_summary
+          last_started_at = COALESCE(excluded.last_started_at, source_runtime_status.last_started_at),
+          last_success_at = COALESCE(excluded.last_success_at, source_runtime_status.last_success_at),
+          last_error_at = COALESCE(excluded.last_error_at, source_runtime_status.last_error_at),
+          error_count = CASE
+            WHEN excluded.state = 'failed' THEN source_runtime_status.error_count + 1
+            ELSE source_runtime_status.error_count
+          END,
+          last_error_summary = COALESCE(excluded.last_error_summary, source_runtime_status.last_error_summary),
+          checkpoint_summary = COALESCE(excluded.checkpoint_summary, source_runtime_status.checkpoint_summary)
       `).run(
         statusId(status),
         status.sourceId,
@@ -43,7 +46,7 @@ export class SqliteSourceRuntimeStatusRepository {
         status.lastStartedAt ?? null,
         status.lastSuccessAt ?? null,
         status.lastErrorAt ?? null,
-        status.errorCount,
+        status.state === 'failed' ? 1 : 0,
         status.lastErrorSummary ?? null,
         status.checkpointSummary ?? null,
       )
