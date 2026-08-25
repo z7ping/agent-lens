@@ -43,11 +43,10 @@ try {
   if ($null -eq $installation) { $installation = Get-ValidInstallation 'npm' }
   if ($null -eq $installation) { exit 0 }
 
-  # PowerShell cannot safely let a child Hook inherit the same piped stdin handle while
-  # the parent synchronously waits for that child: EOF ownership becomes ambiguous and
-  # Node's `for await (process.stdin)` can wait forever. Consume the native Hook JSON
-  # first, then give the selected provider its own redirected stdin and close it
-  # explicitly so the child always observes EOF.
+  # Consume the upstream JSON before starting the selected provider, then forward it
+  # through a private UTF-8 stdin pipe and close that pipe explicitly. This makes EOF
+  # ownership deterministic and also avoids Windows PowerShell/.NET choosing an ANSI
+  # encoding that can make Node reject otherwise valid JSON.
   $rawInput = [Console]::In.ReadToEnd()
 
   $startInfo = New-Object System.Diagnostics.ProcessStartInfo
@@ -56,16 +55,18 @@ try {
   $startInfo.UseShellExecute = $false
   $startInfo.CreateNoWindow = $true
   $startInfo.RedirectStandardInput = $true
+  $startInfo.StandardInputEncoding = New-Object System.Text.UTF8Encoding($false)
   if ($installation.electronRunAsNode) {
     $startInfo.EnvironmentVariables['ELECTRON_RUN_AS_NODE'] = '1'
   }
 
   # stdout/stderr stay inherited and therefore keep the upstream Hook flow neutral.
-  # stdin is explicitly forwarded as text because supported native Hooks provide JSON.
   $process = New-Object System.Diagnostics.Process
   $process.StartInfo = $startInfo
   [void]$process.Start()
-  $process.StandardInput.Write($rawInput)
+  if ($rawInput.Length -gt 0) {
+    $process.StandardInput.Write($rawInput)
+  }
   $process.StandardInput.Close()
   $process.WaitForExit()
 } catch {
