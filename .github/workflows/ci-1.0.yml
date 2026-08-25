@@ -92,10 +92,23 @@ jobs:
             }
           }
 
-          # Resolving Hook status is enough to register the current npm distribution
-          # and install the stable user-level dispatcher. Missing native Hook config is
-          # expected in CI, so its command exit code is intentionally ignored here.
-          node dist/cli.mjs hook status all --json | Out-Null
+          function Refresh-NpmHookRegistration {
+            # hook status also performs the formal npm-provider registration. CI has no
+            # native Codex/Claude configuration, so a non-zero status result is expected
+            # here and must not become the step's final native-process exit code.
+            $previousNativePreference = $PSNativeCommandUseErrorActionPreference
+            try {
+              $PSNativeCommandUseErrorActionPreference = $false
+              node dist/cli.mjs hook status all --json | Out-Null
+              $registrationExitCode = $LASTEXITCODE
+            } finally {
+              $PSNativeCommandUseErrorActionPreference = $previousNativePreference
+            }
+            Write-Host "[AgentLens] npm Hook 登记完成，status exit=$registrationExitCode（CI 无原生 Hook 配置时允许非零）"
+            $global:LASTEXITCODE = 0
+          }
+
+          Refresh-NpmHookRegistration
 
           $agentLensRoot = Join-Path $HOME '.agent-lens/1.0'
           $installations = Join-Path $agentLensRoot 'installations'
@@ -180,7 +193,7 @@ jobs:
 
           # Restore the current npm registration so this destructive matrix does not
           # leak stale-provider state into the following lifecycle integration test.
-          node dist/cli.mjs hook status all --json | Out-Null
+          Refresh-NpmHookRegistration
           if (-not (Test-Path $npmRecordPath)) { Show-DispatcherDiagnostics; throw '共享分发器矩阵结束后 npm 登记未恢复' }
 
       - name: Verify Windows npm lifecycle
