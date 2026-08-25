@@ -6,6 +6,7 @@ import { useClientSnapshot } from '../App'
 import { AgentScope, agentLabel } from '../components/AgentScope'
 import { BackgroundDataNotice } from '../components/BackgroundDataNotice'
 import { EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from '../components/StateViews'
+import { UiIcon } from '../components/UiIcon'
 
 function duration(ms: number): string {
   if (ms < 1000) return `${ms} 毫秒`
@@ -82,7 +83,7 @@ export function InsightsPage({ model }: { model: AgentLensClientModel }) {
         <option value="30d">最近 30 天</option>
         <option value="all">全部时间</option>
       </select>
-      <button className="icon-button toolbar-end" onClick={() => void insightsModel.refresh()} title="刷新使用洞察" aria-label="刷新使用洞察">↻</button>
+      <button className="icon-button toolbar-end" onClick={() => void insightsModel.refresh()} title="刷新使用洞察" aria-label="刷新使用洞察"><UiIcon name="refresh" size={15}/></button>
     </div>
 
     <div className="page-content insights-content">
@@ -161,7 +162,7 @@ export function InsightsPage({ model }: { model: AgentLensClientModel }) {
           {data.meta.sampled && <span className="is-warning">会话数量超过一次投影的 {data.meta.sessionSampleLimit} 个样本上限：会话趋势、智能体使用结构和工作流模式只基于最近样本；能力资产采用仍按当前时间筛选汇总可读取的已观察调用；周期比较已关闭。</span>}
         </section>
       </> : <div className="insight-empty-wrap"><EmptyStatePanel
-        icon="⌁"
+        icon={<UiIcon name="trend" size={20}/>}
         title="当前筛选范围还没有可分析的会话"
         description="使用洞察只基于 AgentLens 已经采集到的真实会话事实。扩大时间范围或清除筛选后再查看。"
         action={canRelaxFilters ? { label: '放宽筛选条件', onClick: relaxFilters } : { label: '刷新', onClick: () => void insightsModel.refresh() }}
