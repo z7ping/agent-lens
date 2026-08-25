@@ -44,9 +44,10 @@ try {
   if ($null -eq $installation) { exit 0 }
 
   # Consume the upstream JSON before starting the selected provider, then forward it
-  # through a private UTF-8 stdin pipe and close that pipe explicitly. This makes EOF
-  # ownership deterministic and also avoids Windows PowerShell/.NET choosing an ANSI
-  # encoding that can make Node reject otherwise valid JSON.
+  # through a private stdin pipe. Write UTF-8 bytes directly to the redirected base
+  # stream instead of ProcessStartInfo.StandardInputEncoding: Windows PowerShell 5.1
+  # can run on .NET Framework variants where that property is unavailable, which used
+  # to make the passive dispatcher silently skip an otherwise valid provider.
   $rawInput = [Console]::In.ReadToEnd()
 
   $startInfo = New-Object System.Diagnostics.ProcessStartInfo
@@ -55,7 +56,6 @@ try {
   $startInfo.UseShellExecute = $false
   $startInfo.CreateNoWindow = $true
   $startInfo.RedirectStandardInput = $true
-  $startInfo.StandardInputEncoding = New-Object System.Text.UTF8Encoding($false)
   if ($installation.electronRunAsNode) {
     $startInfo.EnvironmentVariables['ELECTRON_RUN_AS_NODE'] = '1'
   }
@@ -65,7 +65,9 @@ try {
   $process.StartInfo = $startInfo
   [void]$process.Start()
   if ($rawInput.Length -gt 0) {
-    $process.StandardInput.Write($rawInput)
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($rawInput)
+    $process.StandardInput.BaseStream.Write($bytes, 0, $bytes.Length)
+    $process.StandardInput.BaseStream.Flush()
   }
   $process.StandardInput.Close()
   $process.WaitForExit()
