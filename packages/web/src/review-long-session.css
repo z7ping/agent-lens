@@ -1,15 +1,6 @@
-.virtual-round-shell {
-  min-width: 0;
-}
-
-.virtual-round-shell + .virtual-round-shell {
-  border-top: 1px solid var(--al-line);
-}
-
-.virtual-round-shell[data-mounted="false"] {
-  overflow: hidden;
-  contain: layout paint style;
-}
+.virtual-round-shell { min-width: 0; }
+.virtual-round-shell + .virtual-round-shell { border-top: 1px solid var(--al-line); }
+.virtual-round-shell[data-mounted="false"] { overflow: hidden; contain: layout paint style; }
 
 /* 长会话性能层同时负责桌面阅读区的独立滚动上下文。 */
 .interaction-block {
@@ -31,190 +22,125 @@
   scrollbar-gutter: stable;
 }
 
-.review-page .session-group-block + .session-group-block {
-  margin-top: 2px;
-}
-
+.review-page .session-group-block + .session-group-block { margin-top: 2px; }
 .review-page .session-group {
   position: sticky;
   top: 0;
   z-index: 3;
-  margin: 8px 0 4px;
-  padding: 5px 7px;
+  margin: 6px 0 3px;
+  padding: 4px 6px;
   border-bottom: 1px solid color-mix(in srgb, var(--al-line) 62%, transparent);
-  background: color-mix(in srgb, var(--al-soft-2) 94%, transparent);
-  backdrop-filter: blur(8px);
+  background: var(--al-soft-2);
   color: var(--al-muted-2);
-  font-size: var(--text-caption);
+  font-size: 12px;
   font-weight: 680;
   letter-spacing: .04em;
 }
+.review-page .session-group-block:first-child .session-group { margin-top: 0; }
 
-.review-page .session-group-block:first-child .session-group {
-  margin-top: 0;
-}
-
-.round-nav-expand {
-  color: var(--al-muted);
-}
-
+.round-nav-expand { color: var(--al-muted); }
 .detail-load-sentinel {
-  min-height: 52px;
+  min-height: 44px;
   display: grid;
   place-items: center;
-  padding: 12px;
+  padding: 10px;
   color: var(--al-muted);
-  font-size: var(--text-caption);
+  font-size: 12px;
   text-align: center;
 }
-
-.detail-load-sentinel-top {
-  min-height: 44px;
-  border-bottom: 1px solid var(--al-line);
-}
-
+.detail-load-sentinel-top { min-height: 40px; border-bottom: 1px solid var(--al-line); }
 .detail-load-sentinel button {
-  min-height: 32px;
+  min-height: 28px;
+  padding: 0 10px;
   border: 1px solid var(--al-line);
-  border-radius: 8px;
-  padding: 0 12px;
+  border-radius: 7px;
   background: var(--al-surface);
   color: var(--al-ink-2);
+  font-size: 12px;
 }
-
-.detail-load-sentinel button:hover {
-  border-color: var(--al-line-strong);
-  background: var(--al-soft);
-}
-
-.round-nav-status {
-  margin-left: auto;
-  color: var(--al-muted);
-  font-size: var(--text-caption);
-}
-
-.round-nav .round-nav-live {
-  margin-left: auto;
-}
-
-.round-nav-status + .round-nav-live {
-  margin-left: 0;
-}
+.detail-load-sentinel button:hover { border-color: var(--al-line-strong); background: var(--al-soft); }
+.round-nav-status { margin-left: auto; color: var(--al-muted); font-size: 12px; }
+.round-nav .round-nav-live { margin-left: auto; }
+.round-nav-status + .round-nav-live { margin-left: 0; }
 
 /* 长会话轮次轨：只做导航刻度，不绘制贯穿阅读区的主线。 */
 .turn-rail {
   position: absolute;
-  top: 118px;
-  bottom: 90px;
+  top: 104px;
+  bottom: 84px;
   left: -4px;
   z-index: 18;
   display: flex;
   width: auto;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   padding-top: 0;
-  opacity: .75;
+  opacity: .68;
   pointer-events: none;
 }
-
 .turn-rail:hover { opacity: 1; }
 .turn-rail::before { display: none; content: none; }
-
 .turn-tick {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
-  padding: 5px 6px;
+  gap: 2px;
+  padding: 4px 5px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 5px;
   background: transparent;
   pointer-events: auto;
 }
-
 .turn-tick i,
 .turn-tick i:nth-child(2),
 .turn-tick i:nth-child(3) {
-  width: 11px;
+  width: 10px;
   height: 2px;
   border-radius: 99px;
   background: var(--al-line-strong);
 }
-
-.turn-tick.active i {
-  width: 13px;
-  height: 3px;
-  background: var(--al-accent);
-}
-
-.turn-tick.err i {
-  background: color-mix(in srgb, var(--al-danger) 55%, var(--al-line));
-}
-
-.turn-tick.err.active i {
-  background: var(--al-danger);
-}
-
+.turn-tick.active i { width: 12px; height: 3px; background: var(--al-accent); }
+.turn-tick.err i { background: color-mix(in srgb, var(--al-danger) 55%, var(--al-line)); }
+.turn-tick.err.active i { background: var(--al-danger); }
 .turn-tick::after {
   content: attr(data-tip);
   position: absolute;
   top: 50%;
-  left: calc(100% + 10px);
+  left: calc(100% + 8px);
   z-index: 90;
   width: max-content;
   max-width: 320px;
-  padding: 8px 11px;
+  padding: 7px 10px;
   transform: translateY(-50%);
   border: 1px solid var(--al-line);
-  border-radius: 9px;
+  border-radius: 8px;
   background: var(--al-surface-raised);
   box-shadow: var(--al-shadow-lg);
   color: var(--al-ink-2);
   font-size: 12px;
-  line-height: 1.55;
+  line-height: 1.5;
   text-align: left;
   white-space: normal;
   opacity: 0;
   pointer-events: none;
   transition: opacity .14s;
 }
-
 .turn-tick:hover::after,
-.turn-tick:focus-visible::after {
-  opacity: 1;
-}
+.turn-tick:focus-visible::after { opacity: 1; }
 
 @media (min-width: 901px) {
-  .app-shell:has(.review-page) {
-    height: 100vh;
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  .review-page {
-    height: auto;
-    min-height: 0;
-  }
+  .app-shell:has(.review-page) { height: 100vh; min-height: 0; overflow: hidden; }
+  .review-page { height: auto; min-height: 0; }
 }
 
 @media (max-width: 1100px) {
   .turn-rail { display: none; }
-
-  .review-page .search-filter {
-    width: 160px;
-    min-width: 140px;
-  }
+  .review-page .search-filter { width: 160px; min-width: 140px; }
 }
 
 @media (max-width: 900px) {
-  .review-page .workspace-toolbar {
-    padding-inline: 12px;
-  }
-
-  .review-page .search-filter {
-    width: 150px;
-    min-width: 130px;
-  }
+  .review-page .workspace-toolbar { padding-inline: 12px; }
+  .review-page .search-filter { width: 150px; min-width: 130px; }
 }
