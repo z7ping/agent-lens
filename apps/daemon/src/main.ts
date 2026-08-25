@@ -24,7 +24,7 @@ import {
   httpSurfacePlugin,
 } from '@agent-lens/surface-http'
 import { webPlugin } from '@agent-lens/web'
-import { dshSourcePlugin } from './sources/dsh.js'
+import { profiledDshSourcePlugin } from './sources/dsh-profiled.js'
 
 const dbPath = process.env.AGENT_LENS_DB_PATH
   ?? join(homedir(), '.agent-lens', '1.0', 'agent-lens.db')
@@ -51,7 +51,7 @@ app.use(claudeSourcePlugin)
 app.use(piSourcePlugin)
 app.use(hermesSourcePlugin)
 app.use(openCodeSourcePlugin)
-app.use(dshSourcePlugin)
+app.use(profiledDshSourcePlugin)
 app.useRuntime(backupLocalPlugin, { vaultPath })
 app.use(httpSurfacePlugin, { port: configuredPort })
 app.use(webPlugin, { staticDir: webRoot })
@@ -100,10 +100,6 @@ function handleSignal(signal: 'SIGINT' | 'SIGTERM'): void {
     `[AgentLens] daemon received ${signal} (mode=${daemonMode}, interactive=${interactiveTerminal}, pid=${process.pid}, ppid=${process.ppid}, uptime=${runtimeAge()})`,
   )
 
-  // SIGTERM is the authoritative lifecycle signal for managed/background
-  // processes. A non-interactive runner may forward a single SIGINT when the
-  // launching command/session ends; do not let that tear down a long-running
-  // daemon. Interactive foreground Ctrl+C still behaves normally.
   if (signal === 'SIGINT' && (daemonMode === 'managed' || !interactiveTerminal)) {
     console.warn('[AgentLens] ignored SIGINT outside interactive foreground mode; use SIGTERM for intentional shutdown')
     return
@@ -140,9 +136,6 @@ try {
   }
 
   syncPromise = (async () => {
-    // Health / Web 已经可用，Runtime Capture 也已经启动。给首屏一次很短的
-    // I/O 优先窗口，再开始 History / Asset 的后台扫描，避免首次接入大量
-    // Hermes / OpenCode 历史时与浏览器首批 Snapshot 查询争抢 SQLite/磁盘。
     await new Promise(resolve => setTimeout(resolve, INITIAL_BACKGROUND_SYNC_DELAY_MS))
     if (runtimeController.signal.aborted) return
 
