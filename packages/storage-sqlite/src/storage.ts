@@ -80,6 +80,26 @@ export class SqliteStorageService implements StorageService {
           'SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations',
         ).get() as { version: number }).version)
         : 0
+      const runtimeStatusTable = this.db.prepare(`
+        SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'source_runtime_status'
+      `).get()
+      const sourceRuntime = runtimeStatusTable
+        ? this.db.prepare(`
+            SELECT source_id AS sourceId,
+                   installation_id AS installationId,
+                   runtime_profile_id AS runtimeProfileId,
+                   stage,
+                   state,
+                   last_success_at AS lastSuccessAt,
+                   last_error_at AS lastErrorAt,
+                   error_count AS errorCount,
+                   last_error_summary AS lastErrorSummary
+            FROM source_runtime_status
+            ORDER BY source_id, installation_id, runtime_profile_id, stage
+          `).all()
+        : []
+      const failedSources = (sourceRuntime as Array<{ state: string }>).filter(item => item.state === 'failed').length
+      const runningSources = (sourceRuntime as Array<{ state: string }>).filter(item => item.state === 'running').length
 
       return {
         ok: probe.ok === 1,
@@ -88,6 +108,11 @@ export class SqliteStorageService implements StorageService {
           path: this.db.name,
           readonly: this.db.readonly,
           inTransaction: this.db.inTransaction,
+          sourceRuntime: {
+            failed: failedSources,
+            running: runningSources,
+            items: sourceRuntime,
+          },
         },
       }
     })
