@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/brand/logo/agentlens-logo.svg" width="128" alt="AgentLens Logo" />
+</p>
+
 <h1 align="center">AgentLens</h1>
 
 <p align="center"><strong>本地 AI 编码 Agent 的观测与执行轨迹查看器。</strong></p>
