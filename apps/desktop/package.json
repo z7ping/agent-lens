@@ -7,8 +7,8 @@
   "description": "AgentLens Windows 桌面壳。",
   "author": "7ping <z7ping@outlook.com>",
   "scripts": {
-    "dist:win": "node ../../scripts/prepare-windows-icon.mjs && electron-builder --win nsis",
-    "dist:win:dir": "node ../../scripts/prepare-windows-icon.mjs && electron-builder --win dir"
+    "dist:win": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ../../scripts/prepare-windows-icon.ps1 && electron-builder --win nsis",
+    "dist:win:dir": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ../../scripts/prepare-windows-icon.ps1 && electron-builder --win dir"
   },
   "dependencies": {
     "@deepseek-ai/cordis": "4.0.1",
