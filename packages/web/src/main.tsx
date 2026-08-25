@@ -18,6 +18,7 @@ import './backup.css'
 import './insights.css'
 import './tools.css'
 import './agents.css'
+import './agent-diagnostics.css'
 import './review.css'
 import './review-long-session.css'
 
