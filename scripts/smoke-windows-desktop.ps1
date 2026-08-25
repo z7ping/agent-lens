@@ -12,6 +12,7 @@ $smokeRoot = Join-Path $env:RUNNER_TEMP ("agent-lens-desktop-smoke-" + [Guid]::N
 New-Item -ItemType Directory -Force -Path $smokeRoot | Out-Null
 $desktopStdout = Join-Path $smokeRoot 'desktop.stdout.log'
 $desktopStderr = Join-Path $smokeRoot 'desktop.stderr.log'
+$desktopBootLog = Join-Path $smokeRoot 'desktop.boot.log'
 
 function Assert-EmbeddedIconVisible([string]$path) {
   $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($path)
@@ -48,7 +49,7 @@ function Assert-EmbeddedIconVisible([string]$path) {
 
 function Write-DesktopDiagnostics {
   Write-Host '[AgentLens] 桌面启动失败，输出可用运行日志：'
-  foreach ($candidate in @($desktopStdout, $desktopStderr)) {
+  foreach ($candidate in @($desktopBootLog, $desktopStdout, $desktopStderr)) {
     if (Test-Path -LiteralPath $candidate) {
       Write-Host "--- $candidate ---"
       Get-Content -LiteralPath $candidate -Tail 200 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
@@ -72,6 +73,7 @@ $previous = @{
   AGENT_LENS_DB_PATH = $env:AGENT_LENS_DB_PATH
   AGENT_LENS_VAULT_PATH = $env:AGENT_LENS_VAULT_PATH
   AGENT_LENS_ENABLED_SOURCES = $env:AGENT_LENS_ENABLED_SOURCES
+  AGENT_LENS_DESKTOP_BOOT_LOG = $env:AGENT_LENS_DESKTOP_BOOT_LOG
   ELECTRON_ENABLE_LOGGING = $env:ELECTRON_ENABLE_LOGGING
 }
 
@@ -79,6 +81,7 @@ $env:AGENT_LENS_PORT = [string]$port
 $env:AGENT_LENS_DB_PATH = Join-Path $smokeRoot 'agent-lens.db'
 $env:AGENT_LENS_VAULT_PATH = Join-Path $smokeRoot 'vault'
 $env:AGENT_LENS_ENABLED_SOURCES = 'none'
+$env:AGENT_LENS_DESKTOP_BOOT_LOG = $desktopBootLog
 $env:ELECTRON_ENABLE_LOGGING = '1'
 
 $process = $null
