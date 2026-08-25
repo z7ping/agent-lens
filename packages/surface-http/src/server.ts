@@ -388,6 +388,21 @@ async function handleBackupRequest(
     return true
   }
 
+  if (url.pathname === '/api/v1/backups/refresh') {
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: 'method_not_allowed' })
+      return true
+    }
+    if (!backup.refreshIndex) {
+      writeJson(response, 501, { error: 'backup_refresh_unavailable' })
+      return true
+    }
+    const overview = await backup.refreshIndex()
+    const body: BackupOverviewResponseDto = { ...overview, meta: backupMeta() }
+    writeJson(response, 200, body)
+    return true
+  }
+
   if (url.pathname === '/api/v1/backups/import') {
     if (request.method !== 'POST') {
       writeJson(response, 405, { error: 'method_not_allowed' })

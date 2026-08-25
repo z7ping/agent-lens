@@ -110,8 +110,6 @@ function rememberBackupSnapshot(response: BackupSnapshotResponseDto): void {
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
     meta: { ...backupOverviewCache.meta, generatedAt: response.meta.generatedAt },
   }
-  // BackupPage 会在创建/导入成功后调用 refresh。这里复用刚刚更新的概览一次，
-  // 避免紧接着再次遍历所有 Source 目录；手动刷新仍会走真实扫描。
   reuseBackupOverviewOnce = true
 }
 
@@ -188,6 +186,14 @@ export class AgentLensApi {
       },
     )
     return backupOverviewInFlight
+  }
+
+  async refreshBackupOverview(): Promise<BackupOverviewResponseDto> {
+    this.backupOverviewLoaded = true
+    reuseBackupOverviewOnce = false
+    const result = await requestJson<BackupOverviewResponseDto>('/api/v1/backups/refresh', { method: 'POST' })
+    backupOverviewCache = result
+    return result
   }
 
   backupSnapshot(id: string): Promise<BackupSnapshotResponseDto> {

@@ -36,6 +36,10 @@ export interface BackupOverviewResponseDto {
   vaultPath: string
   sources: BackupProtectionSourceDto[]
   snapshots: BackupSnapshotSummaryDto[]
+  index?: {
+    generatedAt: string
+    refreshing: boolean
+  }
   meta: {
     protocolVersion: typeof AGENT_LENS_PROTOCOL_VERSION
     generatedAt: string

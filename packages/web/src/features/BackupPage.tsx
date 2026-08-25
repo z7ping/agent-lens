@@ -13,6 +13,10 @@ const ALL_KINDS: BackupAssetKindDto[] = [
   'skill', 'mcp', 'plugin', 'extension', 'hook', 'memory', 'rule', 'session', 'config', 'other',
 ]
 
+type PendingConfirmation =
+  | { type: 'create' }
+  | { type: 'import'; file: File }
+
 function kindLabel(kind: BackupAssetKindDto): string {
   if (kind === 'skill') return '技能'
   if (kind === 'mcp') return 'MCP（模型上下文协议）'
@@ -75,14 +79,15 @@ export function BackupPage() {
   const [selectedKinds, setSelectedKinds] = useState<BackupAssetKindDto[]>(ALL_KINDS)
   const [verification, setVerification] = useState<Record<string, BackupVerifyResponseDto>>({})
   const [preview, setPreview] = useState<BackupRestorePreviewResponseDto | null>(null)
+  const [confirmation, setConfirmation] = useState<PendingConfirmation | null>(null)
   const selectionInitialized = useRef(false)
   const importInput = useRef<HTMLInputElement>(null)
 
-  const refresh = async () => {
+  const refresh = async (force = false) => {
     setLoading(true)
     setError('')
     try {
-      const next = await api.backupOverview()
+      const next = force ? await api.refreshBackupOverview() : await api.backupOverview()
       setOverview(next)
       if (!selectionInitialized.current) {
         selectionInitialized.current = true
@@ -97,13 +102,15 @@ export function BackupPage() {
 
   useEffect(() => { void refresh() }, [])
   useEffect(() => {
-    if (!preview) return
+    if (!preview && !confirmation) return
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setPreview(null)
+      if (event.key !== 'Escape' || busy) return
+      if (confirmation) setConfirmation(null)
+      else setPreview(null)
     }
     window.addEventListener('keydown', closeOnEscape)
     return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [preview])
+  }, [preview, confirmation, busy])
 
   const sources = overview?.sources ?? []
   const snapshots = overview?.snapshots ?? []
@@ -119,10 +126,16 @@ export function BackupPage() {
       ? current.filter(item => item !== sourceId)
       : [...current, sourceId])
   }
+
   const toggleKind = (kind: BackupAssetKindDto) => {
     setSelectedKinds(current => current.includes(kind)
       ? current.filter(item => item !== kind)
       : [...current, kind])
+  }
+
+  const requestCreateSnapshot = () => {
+    if (!selectedSources.length || !selectedKinds.length || busy) return
+    setConfirmation({ type: 'create' })
   }
 
   const createSnapshot = async () => {
@@ -202,10 +215,15 @@ export function BackupPage() {
     }
   }
 
-  const importBackup = async (event: ChangeEvent<HTMLInputElement>) => {
+  const selectImportBackup = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     event.target.value = ''
     if (!file || busy) return
+    setConfirmation({ type: 'import', file })
+  }
+
+  const importBackup = async (file: File) => {
+    if (busy) return
     setBusy('import')
     setError('')
     try {
@@ -218,7 +236,18 @@ export function BackupPage() {
     }
   }
 
+  const confirmCriticalOperation = async () => {
+    if (!confirmation || busy) return
+    const pending = confirmation
+    setConfirmation(null)
+    if (pending.type === 'create') await createSnapshot()
+    else await importBackup(pending.file)
+  }
+
   if (loading && !overview) return <WorkspaceSkeleton />
+
+  const indexTime = overview?.index?.generatedAt
+  const indexRefreshing = overview?.index?.refreshing ?? false
 
   return <>
     <div className="workspace-toolbar">
@@ -231,8 +260,8 @@ export function BackupPage() {
       <span className="toolbar-divider"/>
       <span className="backup-toolbar-note">默认排除凭据、令牌与私钥</span>
       <button className="btn toolbar-end" disabled={Boolean(busy)} onClick={() => importInput.current?.click()}>{busy === 'import' ? '正在导入…' : '↑ 导入备份包'}</button>
-      <button className="btn primary" disabled={Boolean(busy) || !selectedSources.length || !selectedKinds.length} onClick={() => void createSnapshot()}>{busy === 'create' ? '正在创建…' : '＋ 创建快照'}</button>
-      <input ref={importInput} className="backup-file-input" type="file" accept=".agentlens-backup,application/vnd.agentlens.backup" onChange={event => void importBackup(event)}/>
+      <button className="btn primary" disabled={Boolean(busy) || !selectedSources.length || !selectedKinds.length} onClick={requestCreateSnapshot}>{busy === 'create' ? '正在创建…' : '＋ 创建快照'}</button>
+      <input ref={importInput} className="backup-file-input" type="file" accept=".agentlens-backup,application/vnd.agentlens.backup" onChange={selectImportBackup}/>
     </div>
 
     <div className="page-scroll">
@@ -241,24 +270,24 @@ export function BackupPage() {
           <div>
             <span className="eyebrow">AI 资产保险库 <span className="prototype-flag live">本地真实数据</span></span>
             <h1>资产备份</h1>
-            <p>把各智能体的原始会话和已发现资产保存为本地不可变快照。Manifest（清单）和 SHA-256 用于完整性校验；导入不会直接覆盖当前文件，恢复必须先经过预演。</p>
+            <p>把各智能体的原始会话和已发现资产保存为本地不可变快照。清单（Manifest）和 SHA-256 用于完整性校验；导入不会直接覆盖当前文件，恢复必须先经过预演。</p>
           </div>
-          <button className="btn" disabled={loading || Boolean(busy)} onClick={() => void refresh()}>↻ 刷新扫描</button>
+          <button className="btn" disabled={loading || Boolean(busy)} onClick={() => void refresh(true)}>{loading ? '正在扫描…' : '↻ 刷新扫描'}</button>
         </header>
 
         {error && <div className="backup-error" role="alert"><b>操作失败</b><span>{error}</span><button className="link-btn" onClick={() => setError('')}>关闭</button></div>}
 
         <section className="future-kpis" aria-label="备份概览">
-          <article className="future-kpi"><div className="future-kpi-head"><span>可备份源文件</span><span className="badge ok">已扫描</span></div><strong>{protectedFiles}</strong><small>{sources.filter(source => source.detected).length} 个智能体提供原始会话或资产路径</small></article>
-          <article className="future-kpi"><div className="future-kpi-head"><span>本地快照</span><span className="delta neutral">{snapshots[0] ? `最近 ${formatTime(snapshots[0].createdAt)}` : '尚无快照'}</span></div><strong>{snapshots.length}</strong><small>总计 {formatBytes(totalSnapshotBytes)}</small></article>
-          <article className="future-kpi"><div className="future-kpi-head"><span>最近校验</span><span className={`badge ${Object.values(verification).some(result => !result.valid) ? 'err' : Object.keys(verification).length ? 'ok' : ''}`}>{Object.keys(verification).length ? (Object.values(verification).every(result => result.valid) ? '通过' : '需关注') : '未执行'}</span></div><strong>{Object.values(verification).filter(result => result.valid).length}/{Object.keys(verification).length || '—'}</strong><small>校验 Manifest 和每个快照文件的 SHA-256</small></article>
-          <article className="future-kpi"><div className="future-kpi-head"><span>扫描阶段排除</span><span className="badge warn">安全优先</span></div><strong>{excludedFiles}</strong><small>符号链接、越界路径等会在扫描阶段排除；秘密内容在创建快照时继续检查</small></article>
+          <article className="future-kpi"><div className="future-kpi-head"><span>可备份源文件</span><span className={`badge ${indexRefreshing ? 'info' : 'ok'}`}>{indexRefreshing ? '后台更新中' : '索引就绪'}</span></div><strong>{protectedFiles}</strong><small>{indexTime ? `索引更新于 ${formatTime(indexTime)} · ` : ''}{sources.filter(source => source.detected).length} 个智能体</small></article>
+          <article className="future-kpi"><div className="future-kpi-head"><span>本地快照</span><span className="delta neutral">{snapshots[0] ? `最近 ${formatTime(snapshots[0].createdAt)}` : '尚无快照'}</span></div><strong>{snapshots.length}</strong><small>逻辑内容共 {formatBytes(totalSnapshotBytes)}；相同文件由内容库复用</small></article>
+          <article className="future-kpi"><div className="future-kpi-head"><span>最近校验</span><span className={`badge ${Object.values(verification).some(result => !result.valid) ? 'err' : Object.keys(verification).length ? 'ok' : ''}`}>{Object.keys(verification).length ? (Object.values(verification).every(result => result.valid) ? '通过' : '需关注') : '未执行'}</span></div><strong>{Object.values(verification).filter(result => result.valid).length}/{Object.keys(verification).length || '—'}</strong><small>校验清单和每个快照文件的 SHA-256</small></article>
+          <article className="future-kpi"><div className="future-kpi-head"><span>扫描阶段排除</span><span className="badge warn">安全优先</span></div><strong>{excludedFiles}</strong><small>符号链接、越界路径等在扫描阶段排除；秘密内容在创建快照时继续检查</small></article>
         </section>
 
         <div className="future-grid">
           <div className="future-stack">
             <section className="future-card">
-              <div className="future-card-head"><div><h2>保护范围</h2><p>这里展示的是 Source 当前真实暴露的原始 Session 根目录和资产绑定路径，不根据“应该安装什么”猜测。</p></div></div>
+              <div className="future-card-head"><div><h2>保护范围</h2><p>这里展示来源当前真实暴露的原始会话根目录和资产绑定路径，不根据“应该安装什么”猜测。</p></div></div>
               <div className="future-card-body">
                 <div className="protection-grid">
                   {sources.map(source => <article key={source.sourceId} className={`protection-card ${!source.detected ? 'is-muted' : ''}`}>
@@ -272,13 +301,13 @@ export function BackupPage() {
                   </article>)}
                 </div>
                 <div className="future-section-label">当前备份目录</div>
-                <div className="integrity-strip"><strong>本地 Vault</strong><code>{overview?.vaultPath ?? '—'}</code><span className="grow"/><span>快照不写入规范事实表</span></div>
+                <div className="integrity-strip"><strong>本地备份仓</strong><code>{overview?.vaultPath ?? '—'}</code><span className="grow"/><span>{indexTime ? `索引 ${formatTime(indexTime)}` : '索引准备中'} · 不写入规范事实表</span></div>
               </div>
             </section>
 
             <section className="future-card">
-              <div className="future-card-head"><div><h2>最近快照</h2><p>快照创建后内容不可变；导出只是把已经校验的快照封装成可携带备份包。</p></div><button className="btn small" disabled={Boolean(busy) || !snapshots.length} onClick={() => void verifyAll()}>{busy === 'verify-all' ? '校验中…' : '验证全部'}</button></div>
-              {snapshots.length ? <div className="future-table-scroll"><table className="snapshot-table"><thead><tr><th>快照</th><th>来源</th><th>大小</th><th>完整性</th><th>排除</th><th>Hash</th><th className="align-right">操作</th></tr></thead><tbody>
+              <div className="future-card-head"><div><h2>最近快照</h2><p>快照创建后清单不可变；相同内容只在本地内容库保存一份。</p></div><button className="btn small" disabled={Boolean(busy) || !snapshots.length} onClick={() => void verifyAll()}>{busy === 'verify-all' ? '校验中…' : '验证全部'}</button></div>
+              {snapshots.length ? <div className="future-table-scroll"><table className="snapshot-table"><thead><tr><th>快照</th><th>来源</th><th>大小</th><th>完整性</th><th>排除</th><th>哈希</th><th className="align-right">操作</th></tr></thead><tbody>
                 {snapshots.map(snapshot => {
                   const checked = verification[snapshot.id]
                   return <tr key={snapshot.id}>
@@ -295,10 +324,10 @@ export function BackupPage() {
             </section>
 
             <section className="future-card">
-              <div className="future-card-head"><div><h2>导入与恢复</h2><p>导入只进入本地 Vault；正式写回前必须先计算当前机器上的差异。</p></div><span className="badge info">恢复预演优先</span></div>
+              <div className="future-card-head"><div><h2>导入与恢复</h2><p>导入只进入本地备份仓；正式写回前必须先计算当前机器上的差异。</p></div><span className="badge info">恢复预演优先</span></div>
               <div className="future-card-body"><div className="restore-grid">
-                <article className="restore-card"><h3>导入备份包</h3><p>先验证 Manifest 与文件 Hash；同名快照只有内容完全一致才允许复用。</p><div className="restore-flow"><span className="restore-node">选择文件</span><span className="restore-arrow">→</span><span className="restore-node">完整性校验</span><span className="restore-arrow">→</span><span className="restore-node">进入 Vault</span></div><div className="restore-action"><button className="btn" disabled={Boolean(busy)} onClick={() => importInput.current?.click()}>选择备份包</button></div></article>
-                <article className="restore-card"><h3>恢复到原智能体</h3><p>目标路径由当前机器重新检测的 config/data 根目录和快照相对路径计算，不信任导入包里的绝对路径。</p><div className="restore-flow"><span className="restore-node">选择快照</span><span className="restore-arrow">→</span><span className="restore-node">对比当前</span><span className="restore-arrow">→</span><span className="restore-node">人工确认</span></div><div className="restore-action"><span className="badge warn">当前版本只开放预演，不直接写回</span></div></article>
+                <article className="restore-card"><h3>导入备份包</h3><p>先验证清单与文件哈希；同名快照只有内容完全一致才允许复用。选择后还会再次确认。</p><div className="restore-flow"><span className="restore-node">选择文件</span><span className="restore-arrow">→</span><span className="restore-node">二次确认</span><span className="restore-arrow">→</span><span className="restore-node">完整性校验</span></div><div className="restore-action"><button className="btn" disabled={Boolean(busy)} onClick={() => importInput.current?.click()}>选择备份包</button></div></article>
+                <article className="restore-card"><h3>恢复到原智能体</h3><p>目标路径由当前机器重新检测的配置/数据根目录和快照相对路径计算，不信任导入包里的绝对路径。</p><div className="restore-flow"><span className="restore-node">选择快照</span><span className="restore-arrow">→</span><span className="restore-node">对比当前</span><span className="restore-arrow">→</span><span className="restore-node">人工确认</span></div><div className="restore-action"><span className="badge warn">当前版本只开放预演，不直接写回</span></div></article>
               </div></div>
             </section>
           </div>
@@ -313,15 +342,15 @@ export function BackupPage() {
                 <div className="builder-block"><div className="builder-label"><span>资产类型</span><button className="link-btn" onClick={() => setSelectedKinds(selectedKinds.length === ALL_KINDS.length ? [] : ALL_KINDS)}>{selectedKinds.length === ALL_KINDS.length ? '清空' : '全选'}</button></div><div className="builder-checks">
                   {ALL_KINDS.map(kind => <label key={kind} className="builder-check"><input type="checkbox" checked={selectedKinds.includes(kind)} onChange={() => toggleKind(kind)}/>{kindLabel(kind)}<small>{sources.filter(source => selectedSources.includes(source.sourceId)).reduce((sum, source) => sum + (source.kinds[kind] ?? 0), 0)}</small></label>)}
                 </div></div>
-                <div className="safety-note"><span>✓</span><div><b>敏感信息保护强制开启</b><span>第一阶段没有关闭入口。发现凭据文件名、私钥、常见 Token 或配置中的秘密赋值时，整文件排除并只记录原因。</span></div></div>
+                <div className="safety-note"><span>✓</span><div><b>敏感信息保护强制开启</b><span>没有关闭入口。发现凭据文件名、私钥、常见令牌或配置中的秘密赋值时，整文件排除并只记录原因。</span></div></div>
                 <div className="builder-summary"><span>按分类统计约 <b>{estimatedSelected}</b> 条文件引用</span><span>重叠路径会自动去重</span></div>
-                <button className="btn primary snapshot-create-button" disabled={Boolean(busy) || !selectedSources.length || !selectedKinds.length} onClick={() => void createSnapshot()}>{busy === 'create' ? '正在复制并计算 Hash…' : '创建并校验快照'}</button>
+                <button className="btn primary snapshot-create-button" disabled={Boolean(busy) || !selectedSources.length || !selectedKinds.length} onClick={requestCreateSnapshot}>{busy === 'create' ? '正在创建快照…' : '创建并校验快照'}</button>
               </div>
             </section>
 
             <section className="future-card"><div className="future-card-head"><div><h3>备份原则</h3></div></div><div className="future-card-body backup-principles">
-              <div className="insight-item"><div className="insight-item-head"><span className="insight-kind fact">原始优先</span><b>Session 保存原生文件</b></div><p>规范观测用于查看和分析，不替代原工具的 Session / History 文件。</p></div>
-              <div className="insight-item"><div className="insight-item-head"><span className="insight-kind fact">可验证</span><b>每个文件都有 SHA-256</b></div><p>创建、导出、导入都可以重新校验，损坏不会静默跳过。</p></div>
+              <div className="insight-item"><div className="insight-item-head"><span className="insight-kind fact">原始优先</span><b>会话保存原生文件</b></div><p>规范观测用于查看和分析，不替代原工具的会话 / 历史文件。</p></div>
+              <div className="insight-item"><div className="insight-item-head"><span className="insight-kind fact">增量复用</span><b>相同内容只保存一份</b></div><p>未变化文件直接复用已有 SHA-256 内容；只有变化文件重新读取、检查并写入。</p></div>
               <div className="insight-item"><div className="insight-item-head"><span className="insight-kind fact">不碰凭据</span><b>默认拒绝保存秘密</b></div><p>可携带备份包不应该顺手变成凭据泄漏包。</p></div>
             </div></section>
           </aside>
@@ -337,5 +366,25 @@ export function BackupPage() {
         <section className="drawer-section"><div className="future-note"><b>这里只做预演。</b> 当前版本没有直接写回接口，因此查看差异不会修改任何已检测智能体的文件。</div></section>
       </div>
     </aside></>}
+
+    {confirmation && <><div className="scrim show backup-confirm-scrim" onClick={() => !busy && setConfirmation(null)}/><section className="backup-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="backup-confirm-title">
+      <div className="backup-confirm-icon">!</div>
+      <div className="backup-confirm-copy">
+        <span className="eyebrow">关键操作确认</span>
+        <h2 id="backup-confirm-title">{confirmation.type === 'create' ? '确认创建本地快照？' : '确认导入这个备份包？'}</h2>
+        {confirmation.type === 'create'
+          ? <p>将把当前选中的 {selectedSources.length} 个智能体、{selectedKinds.length} 类资产写入本地备份仓。敏感信息保护保持强制开启；已有相同内容会直接复用。</p>
+          : <p>文件 <b>{confirmation.file.name}</b>（{formatBytes(confirmation.file.size)}）将经过完整性校验后写入本地备份仓，不会覆盖当前智能体文件。</p>}
+        <div className="backup-confirm-facts">
+          {confirmation.type === 'create'
+            ? <><span>约 {estimatedSelected} 条文件引用</span><span>索引 {indexTime ? formatTime(indexTime) : '准备中'}</span></>
+            : <><span>只导入到本地备份仓</span><span>恢复仍需单独预演</span></>}
+        </div>
+        <div className="backup-confirm-actions">
+          <button className="btn" disabled={Boolean(busy)} onClick={() => setConfirmation(null)}>取消</button>
+          <button className="btn primary" disabled={Boolean(busy)} onClick={() => void confirmCriticalOperation()}>{confirmation.type === 'create' ? '确认创建' : '确认导入'}</button>
+        </div>
+      </div>
+    </section></>}
   </>
 }

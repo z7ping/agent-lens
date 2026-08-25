@@ -45,6 +45,9 @@ import type {
 
 const MANIFEST_SCHEMA_VERSION = 1 as const
 const BUNDLE_VERSION = 1 as const
+const INVENTORY_VERSION = 1 as const
+const INDEX_REFRESH_INTERVAL_MS = 5 * 60 * 1000
+const INDEX_STARTUP_STALE_MS = 60 * 1000
 const MAX_IMPORT_BYTES = 256 * 1024 * 1024
 const MAX_BUNDLE_JSON_BYTES = 768 * 1024 * 1024
 const SENSITIVE_FILE_NAME = /(?:^|[._-])(auth|credentials?|secrets?|tokens?)(?:[._-]|$)|\.(?:pem|key)$|^id_(?:rsa|ed25519)$/i
@@ -67,19 +70,46 @@ interface CandidateRoot {
 }
 
 interface CandidateFile {
-  target: BackupTarget
+  sourceId: string
+  productId: string
+  installationId: string
   path: string
   scope: BackupSourceScope
-  rootPath: string
   sourceRelativePath: string
   archivePath: string
   kinds: Set<BackupAssetKind>
+  size: number
+  mtimeMs: number
+  ctimeMs: number
 }
 
 interface BackupPlan {
   files: CandidateFile[]
   excluded: BackupExcludedEntry[]
   targets: BackupTarget[]
+}
+
+interface BackupIndexedFile {
+  sourceId: string
+  productId: string
+  installationId: string
+  originalPath: string
+  sourceScope: BackupSourceScope
+  sourceRelativePath: string
+  archivePath: string
+  kinds: BackupAssetKind[]
+  size: number
+  mtimeMs: number
+  ctimeMs: number
+  sha256?: string
+}
+
+interface BackupInventory {
+  version: 1
+  generatedAt: string
+  sources: BackupProtectionSource[]
+  files: BackupIndexedFile[]
+  excluded: BackupExcludedEntry[]
 }
 
 interface BackupBundleFile {
@@ -91,6 +121,13 @@ interface BackupBundle {
   bundleVersion: 1
   manifest: BackupSnapshotManifest
   files: BackupBundleFile[]
+}
+
+interface HashUpdate {
+  size: number
+  mtimeMs: number
+  ctimeMs: number
+  sha256: string
 }
 
 class ScopedCheckpointService implements SourceCheckpointService {
@@ -150,9 +187,14 @@ function assetKind(type: string): BackupAssetKind {
   return 'other'
 }
 
-function selectedKind(kinds: Set<BackupAssetKind>, input: BackupCreateInput): boolean {
+function selectedKind(kinds: Iterable<BackupAssetKind>, input: BackupCreateInput): boolean {
   if (!input.kinds?.length) return true
-  return input.kinds.some(kind => kinds.has(kind))
+  const available = new Set(kinds)
+  return input.kinds.some(kind => available.has(kind))
+}
+
+function selectedSource(sourceId: string, input: BackupCreateInput): boolean {
+  return !input.sourceIds?.length || input.sourceIds.includes(sourceId)
 }
 
 function sourceScope(
@@ -182,6 +224,24 @@ function exclusion(
     kinds: [...new Set(kinds)].sort(),
     reason,
   }
+}
+
+function indexedExclusion(
+  file: BackupIndexedFile,
+  reason: BackupExcludedEntry['reason'],
+): BackupExcludedEntry {
+  return {
+    sourceId: file.sourceId,
+    productId: file.productId,
+    installationId: file.installationId,
+    originalPath: file.originalPath,
+    kinds: [...file.kinds].sort(),
+    reason,
+  }
+}
+
+function inventoryFileKey(file: Pick<BackupIndexedFile, 'sourceId' | 'installationId' | 'originalPath'>): string {
+  return `${file.sourceId}\u0000${file.installationId}\u0000${resolve(file.originalPath)}`
 }
 
 function manifestPayload(manifest: Omit<BackupSnapshotManifest, 'manifestSha256'>): string {
@@ -300,12 +360,50 @@ function parseManifest(value: unknown): BackupSnapshotManifest {
   return typed
 }
 
+function parseInventory(value: unknown): BackupInventory | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const inventory = value as Partial<BackupInventory>
+  if (inventory.version !== INVENTORY_VERSION
+    || typeof inventory.generatedAt !== 'string'
+    || !Array.isArray(inventory.sources)
+    || !Array.isArray(inventory.files)
+    || !Array.isArray(inventory.excluded)) return null
+  for (const file of inventory.files) {
+    if (!file || typeof file !== 'object'
+      || typeof file.sourceId !== 'string'
+      || typeof file.productId !== 'string'
+      || typeof file.installationId !== 'string'
+      || typeof file.originalPath !== 'string'
+      || (file.sourceScope !== 'config' && file.sourceScope !== 'data')
+      || typeof file.sourceRelativePath !== 'string'
+      || typeof file.archivePath !== 'string'
+      || !Array.isArray(file.kinds)
+      || typeof file.size !== 'number'
+      || typeof file.mtimeMs !== 'number'
+      || typeof file.ctimeMs !== 'number'
+      || (file.sha256 !== undefined && typeof file.sha256 !== 'string')) return null
+    try {
+      safePortableRelative(file.archivePath)
+      safePortableRelative(file.sourceRelativePath)
+    } catch {
+      return null
+    }
+  }
+  return inventory as BackupInventory
+}
+
 export interface LocalBackupServiceOptions {
   vaultPath: string
 }
 
 export class LocalBackupService implements BackupService {
   private readonly snapshotsPath: string
+  private readonly blobsPath: string
+  private readonly inventoryPath: string
+  private inventory: BackupInventory | null = null
+  private inventoryLoadInFlight: Promise<BackupInventory> | null = null
+  private refreshInFlight: Promise<BackupInventory> | null = null
+  private refreshTimer: NodeJS.Timeout | null = null
 
   constructor(
     private readonly storage: StorageService,
@@ -314,6 +412,31 @@ export class LocalBackupService implements BackupService {
     private readonly options: LocalBackupServiceOptions,
   ) {
     this.snapshotsPath = join(options.vaultPath, 'snapshots')
+    this.blobsPath = join(options.vaultPath, 'blobs')
+    this.inventoryPath = join(options.vaultPath, 'inventory-v1.json')
+  }
+
+  start(): void {
+    void this.ensureInventory()
+      .then(inventory => {
+        const age = Date.now() - Date.parse(inventory.generatedAt)
+        if (!Number.isFinite(age) || age >= INDEX_STARTUP_STALE_MS) {
+          return this.rebuildInventory()
+        }
+        return inventory
+      })
+      .catch(() => {})
+    if (!this.refreshTimer) {
+      this.refreshTimer = setInterval(() => {
+        void this.rebuildInventory().catch(() => {})
+      }, INDEX_REFRESH_INTERVAL_MS)
+      this.refreshTimer.unref()
+    }
+  }
+
+  stop(): void {
+    if (this.refreshTimer) clearInterval(this.refreshTimer)
+    this.refreshTimer = null
   }
 
   private async targets(input: BackupCreateInput = {}): Promise<BackupTarget[]> {
@@ -347,11 +470,10 @@ export class LocalBackupService implements BackupService {
     return targets
   }
 
-  private async rootsForTarget(target: BackupTarget, input: BackupCreateInput): Promise<{ roots: CandidateRoot[]; excluded: BackupExcludedEntry[] }> {
+  private async rootsForTarget(target: BackupTarget): Promise<{ roots: CandidateRoot[]; excluded: BackupExcludedEntry[] }> {
     const roots = new Map<string, CandidateRoot>()
     const excluded: BackupExcludedEntry[] = []
     const addRoot = (path: string, kinds: BackupAssetKind[], preferredScope?: BackupSourceScope) => {
-      if (!selectedKind(new Set(kinds), input)) return
       const scoped = preferredScope
         ? { scope: preferredScope, rootPath: preferredScope === 'data' ? target.detected.dataRoot : target.detected.configRoot }
         : sourceScope(target.detected, path)
@@ -396,13 +518,13 @@ export class LocalBackupService implements BackupService {
     return { roots: [...roots.values()], excluded }
   }
 
-  private async plan(input: BackupCreateInput = {}): Promise<BackupPlan> {
-    const targets = await this.targets(input)
+  private async plan(): Promise<BackupPlan> {
+    const targets = await this.targets()
     const files = new Map<string, CandidateFile>()
     const excluded: BackupExcludedEntry[] = []
 
     for (const target of targets) {
-      const roots = await this.rootsForTarget(target, input)
+      const roots = await this.rootsForTarget(target)
       excluded.push(...roots.excluded)
       for (const root of roots.roots) {
         const rootState = await pathState(root.path)
@@ -420,6 +542,14 @@ export class LocalBackupService implements BackupService {
             excluded.push(exclusion(target, item.path, root.kinds, 'outside-source-roots'))
             continue
           }
+          let meta
+          try {
+            meta = await lstat(item.path)
+            if (!meta.isFile()) continue
+          } catch {
+            excluded.push(exclusion(target, item.path, root.kinds, 'unreadable'))
+            continue
+          }
           const sourceRelativePath = safePortableRelative(toPortablePath(relativePath))
           const archivePath = safePortableRelative([
             safeSegment(target.source.manifest.sourceId),
@@ -433,13 +563,17 @@ export class LocalBackupService implements BackupService {
             for (const kind of root.kinds) existing.kinds.add(kind)
           } else {
             files.set(key, {
-              target,
+              sourceId: target.source.manifest.sourceId,
+              productId: target.detected.productId,
+              installationId: target.installation.id,
               path: item.path,
               scope: root.scope,
-              rootPath: root.rootPath,
               sourceRelativePath,
               archivePath,
               kinds: new Set(root.kinds),
+              size: meta.size,
+              mtimeMs: meta.mtimeMs,
+              ctimeMs: meta.ctimeMs,
             })
           }
         }
@@ -453,11 +587,9 @@ export class LocalBackupService implements BackupService {
     }
   }
 
-  async overview(input: BackupCreateInput = {}): Promise<BackupOverview> {
-    const plan = await this.plan(input)
+  private protectionSources(plan: BackupPlan): BackupProtectionSource[] {
     const bySource = new Map<string, BackupProtectionSource>()
     for (const source of this.sources.list()) {
-      if (input.sourceIds?.length && !input.sourceIds.includes(source.manifest.sourceId)) continue
       bySource.set(source.manifest.sourceId, {
         sourceId: source.manifest.sourceId,
         productId: source.manifest.productId,
@@ -473,20 +605,162 @@ export class LocalBackupService implements BackupService {
       if (item) item.detected = true
     }
     for (const file of plan.files) {
-      const item = bySource.get(file.target.source.manifest.sourceId)
+      const item = bySource.get(file.sourceId)
       if (!item) continue
       item.fileCount += 1
       for (const kind of file.kinds) item.kinds[kind] = (item.kinds[kind] ?? 0) + 1
     }
-    for (const item of plan.excluded) {
-      const source = bySource.get(item.sourceId)
+    for (const excluded of plan.excluded) {
+      const item = bySource.get(excluded.sourceId)
+      if (item) item.excludedCount += 1
+    }
+    return [...bySource.values()].sort((a, b) => a.displayName.localeCompare(b.displayName))
+  }
+
+  private inventoryFromPlan(plan: BackupPlan): BackupInventory {
+    const previous = new Map(
+      (this.inventory?.files ?? []).map(file => [inventoryFileKey(file), file]),
+    )
+    const files: BackupIndexedFile[] = plan.files.map(file => {
+      const indexed: BackupIndexedFile = {
+        sourceId: file.sourceId,
+        productId: file.productId,
+        installationId: file.installationId,
+        originalPath: file.path,
+        sourceScope: file.scope,
+        sourceRelativePath: file.sourceRelativePath,
+        archivePath: file.archivePath,
+        kinds: [...file.kinds].sort(),
+        size: file.size,
+        mtimeMs: file.mtimeMs,
+        ctimeMs: file.ctimeMs,
+      }
+      const old = previous.get(inventoryFileKey(indexed))
+      if (old?.sha256
+        && old.size === indexed.size
+        && old.mtimeMs === indexed.mtimeMs
+        && old.ctimeMs === indexed.ctimeMs) {
+        indexed.sha256 = old.sha256
+      }
+      return indexed
+    })
+    return {
+      version: INVENTORY_VERSION,
+      generatedAt: new Date().toISOString(),
+      sources: this.protectionSources(plan),
+      files,
+      excluded: [...plan.excluded].sort(
+        (a, b) => a.sourceId.localeCompare(b.sourceId) || a.originalPath.localeCompare(b.originalPath),
+      ),
+    }
+  }
+
+  private async readInventory(): Promise<BackupInventory | null> {
+    try {
+      return parseInventory(JSON.parse(await readFile(this.inventoryPath, 'utf8')))
+    } catch {
+      return null
+    }
+  }
+
+  private async writeInventory(inventory: BackupInventory): Promise<void> {
+    await mkdir(this.options.vaultPath, { recursive: true })
+    const stage = `${this.inventoryPath}.${randomUUID().slice(0, 8)}.tmp`
+    await writeFile(stage, `${JSON.stringify(inventory, null, 2)}\n`, { flag: 'wx' })
+    try {
+      await rename(stage, this.inventoryPath)
+    } catch (error) {
+      await rm(stage, { force: true })
+      throw error
+    }
+    this.inventory = inventory
+  }
+
+  private async ensureInventory(): Promise<BackupInventory> {
+    if (this.inventory) return this.inventory
+    if (this.inventoryLoadInFlight) return this.inventoryLoadInFlight
+    const promise = (async () => {
+      const stored = await this.readInventory()
+      if (stored) {
+        this.inventory = stored
+        return stored
+      }
+      return this.rebuildInventory()
+    })()
+    this.inventoryLoadInFlight = promise
+    try {
+      return await promise
+    } finally {
+      if (this.inventoryLoadInFlight === promise) this.inventoryLoadInFlight = null
+    }
+  }
+
+  private async rebuildInventory(): Promise<BackupInventory> {
+    if (this.refreshInFlight) return this.refreshInFlight
+    const promise = (async () => {
+      const plan = await this.plan()
+      const inventory = this.inventoryFromPlan(plan)
+      await this.writeInventory(inventory)
+      return inventory
+    })()
+    this.refreshInFlight = promise
+    try {
+      return await promise
+    } finally {
+      if (this.refreshInFlight === promise) this.refreshInFlight = null
+    }
+  }
+
+  private filteredSources(inventory: BackupInventory, input: BackupCreateInput): BackupProtectionSource[] {
+    const bySource = new Map<string, BackupProtectionSource>()
+    for (const source of inventory.sources) {
+      if (!selectedSource(source.sourceId, input)) continue
+      bySource.set(source.sourceId, {
+        sourceId: source.sourceId,
+        productId: source.productId,
+        displayName: source.displayName,
+        detected: source.detected,
+        fileCount: 0,
+        excludedCount: 0,
+        kinds: {},
+      })
+    }
+    for (const file of inventory.files) {
+      if (!selectedSource(file.sourceId, input) || !selectedKind(file.kinds, input)) continue
+      const source = bySource.get(file.sourceId)
+      if (!source) continue
+      source.fileCount += 1
+      for (const kind of file.kinds) {
+        if (input.kinds?.length && !input.kinds.includes(kind)) continue
+        source.kinds[kind] = (source.kinds[kind] ?? 0) + 1
+      }
+    }
+    for (const excluded of inventory.excluded) {
+      if (!selectedSource(excluded.sourceId, input) || !selectedKind(excluded.kinds, input)) continue
+      const source = bySource.get(excluded.sourceId)
       if (source) source.excludedCount += 1
     }
+    return [...bySource.values()].sort((a, b) => a.displayName.localeCompare(b.displayName))
+  }
+
+  private async overviewFromInventory(inventory: BackupInventory, input: BackupCreateInput = {}): Promise<BackupOverview> {
     return {
       vaultPath: this.options.vaultPath,
-      sources: [...bySource.values()].sort((a, b) => a.displayName.localeCompare(b.displayName)),
+      sources: this.filteredSources(inventory, input),
       snapshots: await this.listSnapshots(),
+      index: {
+        generatedAt: inventory.generatedAt,
+        refreshing: Boolean(this.refreshInFlight),
+      },
     }
+  }
+
+  async overview(input: BackupCreateInput = {}): Promise<BackupOverview> {
+    return this.overviewFromInventory(await this.ensureInventory(), input)
+  }
+
+  async refreshIndex(input: BackupCreateInput = {}): Promise<BackupOverview> {
+    return this.overviewFromInventory(await this.rebuildInventory(), input)
   }
 
   async listSnapshots(): Promise<BackupSnapshotSummary[]> {
@@ -516,49 +790,150 @@ export class LocalBackupService implements BackupService {
     }
   }
 
+  private blobPath(hash: string): string {
+    if (!/^[a-f0-9]{64}$/.test(hash)) throw new Error('Invalid backup blob hash')
+    return join(this.blobsPath, hash.slice(0, 2), hash)
+  }
+
+  private async blobReusable(hash: string, size: number): Promise<boolean> {
+    try {
+      const meta = await lstat(this.blobPath(hash))
+      return meta.isFile() && meta.size === size
+    } catch {
+      return false
+    }
+  }
+
+  private async storeBlob(hash: string, bytes: Buffer): Promise<void> {
+    const path = this.blobPath(hash)
+    await mkdir(join(path, '..'), { recursive: true })
+    try {
+      await writeFile(path, bytes, { flag: 'wx' })
+      return
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code !== 'EEXIST') throw error
+    }
+    const existing = await readFile(path)
+    if (existing.byteLength !== bytes.byteLength || sha256(existing) !== hash) {
+      throw new Error(`备份内容库存在损坏或 Hash 冲突：${hash}`)
+    }
+  }
+
+  private async readSnapshotFile(id: string, file: BackupManifestFile): Promise<Buffer> {
+    try {
+      return await readFile(this.blobPath(file.sha256))
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') throw error
+    }
+    return readFile(join(this.snapshotsPath, id, 'files', ...safePortableRelative(file.archivePath).split('/')))
+  }
+
+  private async applyHashUpdates(updates: Map<string, HashUpdate>): Promise<void> {
+    if (!updates.size) return
+    const inventory = await this.ensureInventory()
+    let changed = false
+    for (const file of inventory.files) {
+      const update = updates.get(inventoryFileKey(file))
+      if (!update) continue
+      if (file.size !== update.size || file.mtimeMs !== update.mtimeMs || file.ctimeMs !== update.ctimeMs) continue
+      if (file.sha256 === update.sha256) continue
+      file.sha256 = update.sha256
+      changed = true
+    }
+    if (changed) await this.writeInventory(inventory)
+  }
+
   async createSnapshot(input: BackupCreateInput = {}): Promise<BackupSnapshotManifest> {
-    const plan = await this.plan(input)
-    if (!plan.files.length && !plan.excluded.length) throw new Error('没有发现可备份的源文件')
+    const inventory = await this.ensureInventory()
+    const files = inventory.files.filter(file => selectedSource(file.sourceId, input) && selectedKind(file.kinds, input))
+    const excluded = inventory.excluded
+      .filter(item => selectedSource(item.sourceId, input) && selectedKind(item.kinds, input))
+      .map(item => ({ ...item, kinds: [...item.kinds] }))
+    if (!files.length && !excluded.length) throw new Error('没有发现可备份的源文件')
+
     await mkdir(this.snapshotsPath, { recursive: true })
+    await mkdir(this.blobsPath, { recursive: true })
     const createdAt = new Date().toISOString()
     const id = `${createdAt.replace(/[-:.]/g, '').replace('Z', 'Z')}-${randomUUID().slice(0, 8)}`
     const stagePath = join(this.snapshotsPath, `${id}.tmp`)
     const finalPath = join(this.snapshotsPath, id)
     const manifestFiles: BackupManifestFile[] = []
-    const excluded = [...plan.excluded]
+    const hashUpdates = new Map<string, HashUpdate>()
 
     await rm(stagePath, { recursive: true, force: true })
-    await mkdir(join(stagePath, 'files'), { recursive: true })
+    await mkdir(stagePath, { recursive: true })
     try {
-      for (const candidate of plan.files) {
+      for (const candidate of files) {
+        let meta
+        try {
+          meta = await lstat(candidate.originalPath)
+        } catch {
+          excluded.push(indexedExclusion(candidate, 'unreadable'))
+          continue
+        }
+        if (meta.isSymbolicLink()) {
+          excluded.push(indexedExclusion(candidate, 'symbolic-link'))
+          continue
+        }
+        if (!meta.isFile()) {
+          excluded.push(indexedExclusion(candidate, 'unreadable'))
+          continue
+        }
+
+        const metadataMatches = candidate.size === meta.size
+          && candidate.mtimeMs === meta.mtimeMs
+          && candidate.ctimeMs === meta.ctimeMs
+        if (metadataMatches && candidate.sha256 && await this.blobReusable(candidate.sha256, candidate.size)) {
+          manifestFiles.push({
+            sourceId: candidate.sourceId,
+            productId: candidate.productId,
+            installationId: candidate.installationId,
+            sourceScope: candidate.sourceScope,
+            sourceRelativePath: candidate.sourceRelativePath,
+            originalPath: candidate.originalPath,
+            archivePath: candidate.archivePath,
+            kinds: [...candidate.kinds],
+            size: candidate.size,
+            sha256: candidate.sha256,
+          })
+          continue
+        }
+
         let bytes: Buffer
         try {
-          bytes = await readFile(candidate.path)
+          bytes = await readFile(candidate.originalPath)
         } catch {
-          excluded.push(exclusion(candidate.target, candidate.path, candidate.kinds, 'unreadable'))
+          excluded.push(indexedExclusion(candidate, 'unreadable'))
           continue
         }
-        const reason = sensitiveReason(candidate.path, candidate.kinds, bytes)
+        const kinds = new Set(candidate.kinds)
+        const reason = sensitiveReason(candidate.originalPath, kinds, bytes)
         if (reason) {
-          excluded.push(exclusion(candidate.target, candidate.path, candidate.kinds, reason))
+          excluded.push(indexedExclusion(candidate, reason))
           continue
         }
-        const output = join(stagePath, 'files', ...candidate.archivePath.split('/'))
-        await mkdir(join(output, '..'), { recursive: true })
-        await writeFile(output, bytes, { flag: 'wx' })
+        const hash = sha256(bytes)
+        await this.storeBlob(hash, bytes)
         manifestFiles.push({
-          sourceId: candidate.target.source.manifest.sourceId,
-          productId: candidate.target.detected.productId,
-          installationId: candidate.target.installation.id,
-          sourceScope: candidate.scope,
+          sourceId: candidate.sourceId,
+          productId: candidate.productId,
+          installationId: candidate.installationId,
+          sourceScope: candidate.sourceScope,
           sourceRelativePath: candidate.sourceRelativePath,
-          originalPath: candidate.path,
+          originalPath: candidate.originalPath,
           archivePath: candidate.archivePath,
-          kinds: [...candidate.kinds].sort(),
+          kinds: [...candidate.kinds],
           size: bytes.byteLength,
-          sha256: sha256(bytes),
+          sha256: hash,
+        })
+        hashUpdates.set(inventoryFileKey(candidate), {
+          size: meta.size,
+          mtimeMs: meta.mtimeMs,
+          ctimeMs: meta.ctimeMs,
+          sha256: hash,
         })
       }
+
       manifestFiles.sort((a, b) => a.archivePath.localeCompare(b.archivePath))
       excluded.sort((a, b) => a.sourceId.localeCompare(b.sourceId) || a.originalPath.localeCompare(b.originalPath))
       const base: Omit<BackupSnapshotManifest, 'manifestSha256'> = {
@@ -574,6 +949,7 @@ export class LocalBackupService implements BackupService {
       }
       await writeFile(join(stagePath, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, { flag: 'wx' })
       await rename(stagePath, finalPath)
+      await this.applyHashUpdates(hashUpdates)
       return manifest
     } catch (error) {
       await rm(stagePath, { recursive: true, force: true })
@@ -588,9 +964,8 @@ export class LocalBackupService implements BackupService {
     const mismatchedFiles: string[] = []
     let checkedFiles = 0
     for (const file of manifest.files) {
-      const path = join(this.snapshotsPath, id, 'files', ...safePortableRelative(file.archivePath).split('/'))
       try {
-        const bytes = await readFile(path)
+        const bytes = await this.readSnapshotFile(id, file)
         checkedFiles += 1
         if (bytes.byteLength !== file.size || sha256(bytes) !== file.sha256) mismatchedFiles.push(file.archivePath)
       } catch {
@@ -622,7 +997,7 @@ export class LocalBackupService implements BackupService {
     if (!verified.valid) throw new Error('快照完整性校验失败，拒绝导出')
     const files: BackupBundleFile[] = []
     for (const file of manifest.files) {
-      const bytes = await readFile(join(this.snapshotsPath, id, 'files', ...file.archivePath.split('/')))
+      const bytes = await this.readSnapshotFile(id, file)
       files.push({ archivePath: file.archivePath, dataBase64: bytes.toString('base64') })
     }
     const bundle: BackupBundle = { bundleVersion: BUNDLE_VERSION, manifest, files }
@@ -663,6 +1038,7 @@ export class LocalBackupService implements BackupService {
     }
 
     await mkdir(this.snapshotsPath, { recursive: true })
+    await mkdir(this.blobsPath, { recursive: true })
     const existing = await this.getSnapshot(manifest.id)
     if (existing) {
       if (existing.manifestSha256 === manifest.manifestSha256) return existing
@@ -671,12 +1047,10 @@ export class LocalBackupService implements BackupService {
     const stagePath = join(this.snapshotsPath, `${manifest.id}.tmp`)
     const finalPath = join(this.snapshotsPath, manifest.id)
     await rm(stagePath, { recursive: true, force: true })
-    await mkdir(join(stagePath, 'files'), { recursive: true })
+    await mkdir(stagePath, { recursive: true })
     try {
       for (const file of manifest.files) {
-        const output = join(stagePath, 'files', ...file.archivePath.split('/'))
-        await mkdir(join(output, '..'), { recursive: true })
-        await writeFile(output, fileMap.get(file.archivePath)!, { flag: 'wx' })
+        await this.storeBlob(file.sha256, fileMap.get(file.archivePath)!)
       }
       await writeFile(join(stagePath, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, { flag: 'wx' })
       await rename(stagePath, finalPath)
@@ -692,7 +1066,9 @@ export class LocalBackupService implements BackupService {
     if (!manifest) throw new Error(`找不到快照：${id}`)
     const targets = await this.targets({ sourceIds: [...new Set(manifest.files.map(file => file.sourceId))] })
     const bySource = new Map<string, BackupTarget>()
-    for (const target of targets) if (!bySource.has(target.source.manifest.sourceId)) bySource.set(target.source.manifest.sourceId, target)
+    for (const target of targets) {
+      if (!bySource.has(target.source.manifest.sourceId)) bySource.set(target.source.manifest.sourceId, target)
+    }
     const items: BackupRestorePreviewEntry[] = []
 
     for (const file of manifest.files) {
@@ -756,4 +1132,5 @@ export const backupLocalInternals = {
   sensitiveReason,
   manifestPayload,
   parseManifest,
+  parseInventory,
 }

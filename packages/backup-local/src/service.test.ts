@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import test from 'node:test'
 import type {
   Host,
@@ -13,6 +13,7 @@ import type {
 import { LocalBackupService } from './service'
 
 function fixtureServices(configRoot: string, dataRoot: string) {
+  const calls = { detect: 0, discover: 0 }
   const host: Host = {
     id: 'host-test',
     name: 'test',
@@ -33,6 +34,7 @@ function fixtureServices(configRoot: string, dataRoot: string) {
       parserVersion: '1',
     },
     async detect() {
+      calls.detect += 1
       return [{
         sourceId: 'test-source',
         productId: 'test-product',
@@ -43,6 +45,7 @@ function fixtureServices(configRoot: string, dataRoot: string) {
     },
     async declareCapabilities() { return [] },
     async *discoverAssets() {
+      calls.discover += 1
       yield {
         definition: { type: 'skill', canonicalName: 'review' },
         binding: { path: join(configRoot, 'skills', 'review'), source: 'test:skills' },
@@ -77,16 +80,46 @@ function fixtureServices(configRoot: string, dataRoot: string) {
       }
     },
   } as unknown as IdentityService
-  return { storage, sources, identity }
+  return { storage, sources, identity, calls }
 }
 
-test('creates, verifies, exports and imports a raw local snapshot while excluding secrets', async () => {
+async function listBlobHashes(vault: string): Promise<string[]> {
+  const root = join(vault, 'blobs')
+  const result: string[] = []
+  let prefixes
+  try {
+    prefixes = await readdir(root, { withFileTypes: true })
+  } catch {
+    return result
+  }
+  for (const prefix of prefixes) {
+    if (!prefix.isDirectory()) continue
+    const entries = await readdir(join(root, prefix.name), { withFileTypes: true })
+    for (const entry of entries) if (entry.isFile()) result.push(entry.name)
+  }
+  return result.sort()
+}
+
+async function writeLegacySnapshot(vault: string, manifest: Awaited<ReturnType<LocalBackupService['createSnapshot']>>, sourceVault: string) {
+  const snapshotRoot = join(vault, 'snapshots', manifest.id)
+  await mkdir(join(snapshotRoot, 'files'), { recursive: true })
+  for (const file of manifest.files) {
+    const bytes = await readFile(join(sourceVault, 'blobs', file.sha256.slice(0, 2), file.sha256))
+    const output = join(snapshotRoot, 'files', ...file.archivePath.split('/'))
+    await mkdir(dirname(output), { recursive: true })
+    await writeFile(output, bytes)
+  }
+  await writeFile(join(snapshotRoot, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
+}
+
+test('indexes once, reuses content-addressed blobs, and keeps legacy snapshots compatible', async () => {
   const root = await mkdtemp(join(tmpdir(), 'agentlens-backup-'))
   const configRoot = join(root, 'agent')
   const dataRoot = join(configRoot, 'sessions')
   const skillRoot = join(configRoot, 'skills', 'review')
   const vaultA = join(root, 'vault-a')
   const vaultB = join(root, 'vault-b')
+  const vaultLegacy = join(root, 'vault-legacy')
   try {
     await mkdir(skillRoot, { recursive: true })
     await mkdir(dataRoot, { recursive: true })
@@ -96,7 +129,15 @@ test('creates, verifies, exports and imports a raw local snapshot while excludin
 
     const deps = fixtureServices(configRoot, dataRoot)
     const first = new LocalBackupService(deps.storage, deps.sources, deps.identity, { vaultPath: vaultA })
+
+    const indexed = await first.refreshIndex()
+    assert.ok(indexed.index?.generatedAt)
+    assert.equal(indexed.sources[0]?.fileCount, 3)
+    const discoverAfterIndex = deps.calls.discover
+
+    await first.overview()
     const manifest = await first.createSnapshot()
+    assert.equal(deps.calls.discover, discoverAfterIndex, 'overview/create should consume the persisted index instead of rescanning')
 
     assert.equal(manifest.schemaVersion, 1)
     assert.equal(manifest.files.length, 2)
@@ -106,18 +147,36 @@ test('creates, verifies, exports and imports a raw local snapshot while excludin
     assert.equal(manifest.excluded[0]?.reason, 'sensitive-content')
     assert.equal(JSON.stringify(manifest).includes('secretsecret'), false)
 
-    const verified = await first.verifySnapshot(manifest.id)
-    assert.equal(verified.valid, true)
-    assert.equal(verified.checkedFiles, 2)
+    const initialBlobs = await listBlobHashes(vaultA)
+    assert.deepEqual(initialBlobs, manifest.files.map(file => file.sha256).sort())
+    assert.equal((await first.verifySnapshot(manifest.id)).valid, true)
+
+    const unchanged = await first.createSnapshot()
+    assert.deepEqual(unchanged.files.map(file => file.sha256), manifest.files.map(file => file.sha256))
+    assert.deepEqual(await listBlobHashes(vaultA), initialBlobs, 'unchanged snapshots should not duplicate file content')
+
+    await writeLegacySnapshot(vaultLegacy, manifest, vaultA)
+    const legacy = new LocalBackupService(deps.storage, deps.sources, deps.identity, { vaultPath: vaultLegacy })
+    assert.equal((await legacy.verifySnapshot(manifest.id)).valid, true, 'legacy per-snapshot files remain readable')
+    assert.ok((await legacy.exportSnapshot(manifest.id)).byteLength > 0)
 
     const exported = await first.exportSnapshot(manifest.id)
-    const second = new LocalBackupService(deps.storage, deps.sources, deps.identity, { vaultPath: vaultB })
-    const imported = await second.importSnapshot(exported)
+    const importedService = new LocalBackupService(deps.storage, deps.sources, deps.identity, { vaultPath: vaultB })
+    const imported = await importedService.importSnapshot(exported)
     assert.equal(imported.manifestSha256, manifest.manifestSha256)
-    assert.equal((await second.verifySnapshot(imported.id)).valid, true)
+    assert.equal((await importedService.verifySnapshot(imported.id)).valid, true)
+    assert.deepEqual(await listBlobHashes(vaultB), manifest.files.map(file => file.sha256).sort())
 
     await writeFile(join(skillRoot, 'SKILL.md'), '# Review changed\n', 'utf8')
-    const preview = await second.previewRestore(imported.id)
+    await first.refreshIndex()
+    const changed = await first.createSnapshot()
+    assert.equal((await listBlobHashes(vaultA)).length, initialBlobs.length + 1)
+    assert.notEqual(
+      changed.files.find(file => file.kinds.includes('skill'))?.sha256,
+      manifest.files.find(file => file.kinds.includes('skill'))?.sha256,
+    )
+
+    const preview = await importedService.previewRestore(imported.id)
     const skill = preview.items.find(item => item.kinds.includes('skill'))
     assert.equal(skill?.status, 'modified')
     assert.equal(preview.blocked, 0)

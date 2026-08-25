@@ -18,8 +18,12 @@ const applyBackupLocal: Plugin.Function<BackupLocalPluginConfig> = (
     ctx.identity,
     { vaultPath: config.vaultPath ?? join(homedir(), '.agent-lens', '1.0', 'vault') },
   )
+  service.start()
   const dispose = ctx.provide('backup', service)
-  return () => dispose()
+  return () => {
+    service.stop()
+    dispose()
+  }
 }
 
 applyBackupLocal.inject = ['storage', 'sources', 'identity']

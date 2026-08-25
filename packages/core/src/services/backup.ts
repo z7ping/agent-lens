@@ -68,10 +68,16 @@ export interface BackupSnapshotManifest {
   manifestSha256: string
 }
 
+export interface BackupIndexStatus {
+  generatedAt: string
+  refreshing: boolean
+}
+
 export interface BackupOverview {
   vaultPath: string
   sources: BackupProtectionSource[]
   snapshots: BackupSnapshotSummary[]
+  index?: BackupIndexStatus
 }
 
 export interface BackupCreateInput {
@@ -111,6 +117,7 @@ export interface BackupRestorePreview {
 
 export interface BackupService {
   overview(input?: BackupCreateInput): Promise<BackupOverview>
+  refreshIndex?(input?: BackupCreateInput): Promise<BackupOverview>
   listSnapshots(): Promise<BackupSnapshotSummary[]>
   getSnapshot(id: string): Promise<BackupSnapshotManifest | null>
   createSnapshot(input?: BackupCreateInput): Promise<BackupSnapshotManifest>
