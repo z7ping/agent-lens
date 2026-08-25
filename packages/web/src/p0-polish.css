@@ -80,7 +80,7 @@
   color: var(--al-user-bubble-text) !important;
 }
 
-/* 生命周期在复盘流中只占一排。原始 action/reason 仍可在检查器里查看，主流程不泄漏英文原值。 */
+/* 生命周期保留真实事件标题，只压成单排；具体中文文案由任务复盘投影生成。 */
 .review-page .event-lifecycle {
   min-height: 36px;
   align-items: center;
@@ -106,16 +106,13 @@
 
 .review-page .event-lifecycle .event-copy b {
   display: inline-block;
-  flex: 0 0 auto;
-  font-size: 0 !important;
-  white-space: nowrap;
-}
-
-.review-page .event-lifecycle .event-copy b::before {
-  content: '会话生命周期';
+  min-width: 0;
+  overflow: hidden;
   color: var(--al-ink-2);
   font-size: 12px;
   font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .review-page .event-lifecycle .event-copy small {

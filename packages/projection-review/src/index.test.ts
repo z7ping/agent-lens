@@ -5,7 +5,7 @@ import {
   DefaultObservationService,
 } from '@agent-lens/core-services'
 import { SqliteStorageService } from '@agent-lens/storage-sqlite'
-import { ReviewProjection } from './index'
+import { ReviewProjection, reviewProjectionInternals } from './index'
 
 test('ReviewProjection builds task summaries and interaction tool status from canonical facts', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
@@ -161,4 +161,15 @@ test('ReviewProjection summary list uses the optimized session summary reader', 
   } finally {
     storage.close()
   }
+})
+
+test('ReviewProjection localizes real lifecycle actions instead of collapsing them to one title', () => {
+  const label = reviewProjectionInternals.lifecycleEventLabel
+  assert.equal(label({ event: 'session.started' }), '会话开始')
+  assert.equal(label({ event: 'session.resumed' }), '恢复会话')
+  assert.equal(label({ event: 'session.discovered' }), '发现会话')
+  assert.equal(label({ event: 'session.ended' }), '会话结束')
+  assert.equal(label({ event: 'turn.stopped' }), '轮次停止')
+  assert.equal(label({ action: 'session_interrupted' }), '会话中断')
+  assert.equal(label({ event: 'vendor.future.lifecycle' }), '会话状态变化')
 })

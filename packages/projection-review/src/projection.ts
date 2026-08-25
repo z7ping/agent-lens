@@ -1,0 +1,712 @@
+import type {
+  CanonicalObservation,
+  ObservationCursor,
+  SessionSummaryRecord,
+  StorageService,
+} from '@agent-lens/core'
+import {
+  SessionProjection,
+  type SessionProjectionEntry,
+} from '@agent-lens/projection-session'
+import { TimelineProjection, encodeTimelineCursor } from '@agent-lens/projection-timeline'
+import {
+  AGENT_LENS_PROTOCOL_VERSION,
+  type JsonValue,
+  type ReviewDetailDirection,
+  type ReviewDetailFilter,
+  type ReviewDetailPageDto,
+  type ReviewDetailQueryDto,
+  type ReviewEventCategory,
+  type ReviewEventNodeDto,
+  type ReviewInteractionDto,
+  type ReviewMessageNodeDto,
+  type ReviewNodeDto,
+  type ReviewQueryDto,
+  type ReviewResponseDto,
+  type ReviewSessionDetailDto,
+  type ReviewSessionSummaryDto,
+  type ReviewToolNodeDto,
+  type TimelineItemDto,
+} from '@agent-lens/protocol'
+
+const MAX_SESSIONS = 500
+const DEFAULT_LIMIT = 100
+const DEFAULT_DETAIL_LIMIT = 20
+const MAX_DETAIL_LIMIT = 100
+const TIMELINE_CHUNK = 250
+const DESCRIPTOR_SCAN_CHUNK = 1000
+
+function asRecord(value: JsonValue | unknown): Record<string, any> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {}
+}
+
+function stringField(record: Record<string, any>, ...keys: string[]): string | undefined {
+  for (const key of keys) if (typeof record[key] === 'string' && record[key]) return record[key]
+  return undefined
+}
+
+function textFromPayload(value: JsonValue | unknown): string | undefined {
+  if (typeof value === 'string') return value
+  if (Array.isArray(value)) {
+    const parts = value.map(textFromPayload).filter((item): item is string => Boolean(item))
+    return parts.length ? parts.join('\n') : undefined
+  }
+  const record = asRecord(value)
+  const direct = stringField(record, 'text', 'message', 'content', 'summary', 'prompt')
+  if (direct) return direct
+  for (const key of ['content', 'message', 'parts']) {
+    if (record[key] && record[key] !== value) {
+      const nested = textFromPayload(record[key])
+      if (nested) return nested
+    }
+  }
+  return undefined
+}
+
+function toolCallId(item: TimelineItemDto): string | undefined {
+  return stringField(asRecord(item.payload), 'callId', 'call_id', 'toolUseId', 'tool_use_id')
+}
+
+function toolName(item: TimelineItemDto): string {
+  return stringField(asRecord(item.payload), 'nativeToolName', 'toolName', 'tool_name', 'name') ?? 'Tool'
+}
+
+function eventCategory(kind: TimelineItemDto['kind']): ReviewEventCategory {
+  if (kind.startsWith('permission.')) return 'permission'
+  if (kind.startsWith('subagent.')) return 'subagent'
+  if (kind.startsWith('context.')) return 'context'
+  if (kind.startsWith('model.')) return 'model'
+  if (kind === 'session.lifecycle') return 'lifecycle'
+  if (kind === 'artifact.action') return 'artifact'
+  if (kind === 'usage') return 'usage'
+  return 'unknown'
+}
+
+function eventLabel(kind: TimelineItemDto['kind']): string {
+  const labels: Partial<Record<TimelineItemDto['kind'], string>> = {
+    'session.lifecycle': '会话生命周期',
+    'model.call': '模型调用',
+    'model.changed': '模型切换',
+    'tool.progress': '工具进度',
+    'permission.request': '权限请求',
+    'permission.response': '权限响应',
+    'subagent.spawn': '启动子 Agent',
+    'subagent.end': '子 Agent 结束',
+    'context.compaction': '上下文压缩',
+    'context.summary': '上下文摘要',
+    'artifact.action': '产物操作',
+    usage: '用量',
+    unknown: '原始事件',
+  }
+  return labels[kind] ?? kind
+}
+
+function buildNodes(items: TimelineItemDto[]): ReviewNodeDto[] {
+  const nodes: ReviewNodeDto[] = []
+  const toolsByCallId = new Map<string, ReviewToolNodeDto>()
+
+  for (const item of items) {
+    if (item.kind === 'message.user' || item.kind === 'message.assistant' || item.kind === 'message.reasoning') {
+      const node: ReviewMessageNodeDto = {
+        type: 'message', id: item.id,
+        role: item.kind === 'message.user' ? 'user' : item.kind === 'message.assistant' ? 'assistant' : 'reasoning',
+        at: item.effectiveAt, sourceId: item.sourceId,
+        text: textFromPayload(item.payload) ?? '（无可显示文本）', payload: item.payload,
+        evidence: item.evidence, observationIds: [item.id],
+      }
+      nodes.push(node)
+      continue
+    }
+
+    if (item.kind === 'tool.call') {
+      const payload = asRecord(item.payload)
+      const id = toolCallId(item)
+      const node: ReviewToolNodeDto = {
+        type: 'tool', id: item.id, at: item.effectiveAt, sourceId: item.sourceId,
+        name: toolName(item), ...(id ? { callId: id } : {}), status: 'running',
+        startedAt: item.effectiveAt,
+        ...(payload.input !== undefined ? { input: payload.input as JsonValue } : {}),
+        payload: item.payload, evidence: item.evidence, observationIds: [item.id],
+      }
+      nodes.push(node)
+      if (id) toolsByCallId.set(id, node)
+      continue
+    }
+
+    if (item.kind === 'tool.result') {
+      const payload = asRecord(item.payload)
+      const id = toolCallId(item)
+      const linked = id ? toolsByCallId.get(id) : undefined
+      if (linked) {
+        linked.endedAt = item.effectiveAt
+        linked.status = payload.success === false ? 'error' : payload.success === true ? 'success' : 'unknown'
+        const duration = payload.durationMs ?? payload.duration_ms
+        if (typeof duration === 'number' && Number.isFinite(duration) && duration >= 0) linked.durationMs = duration
+        if (payload.output !== undefined) linked.output = payload.output as JsonValue
+        else if (payload.result !== undefined) linked.output = payload.result as JsonValue
+        else linked.output = item.payload
+        linked.evidence = [...linked.evidence, ...item.evidence]
+        linked.observationIds.push(item.id)
+        continue
+      }
+    }
+
+    const node: ReviewEventNodeDto = {
+      type: 'event', id: item.id, at: item.effectiveAt, sourceId: item.sourceId,
+      kind: item.kind, category: eventCategory(item.kind), label: eventLabel(item.kind),
+      payload: item.payload, evidence: item.evidence, observationIds: [item.id],
+    }
+    nodes.push(node)
+  }
+  return nodes
+}
+
+function splitInteractionGroups(items: TimelineItemDto[]): TimelineItemDto[][] {
+  const groups: TimelineItemDto[][] = []
+  let current: TimelineItemDto[] = []
+  for (const item of items) {
+    if (item.kind === 'message.user' && current.length) {
+      groups.push(current)
+      current = []
+    }
+    if (!current.length && item.kind === 'session.lifecycle') continue
+    current.push(item)
+  }
+  if (current.length) groups.push(current)
+  return groups
+}
+
+function buildInteractionGroups(groups: TimelineItemDto[][], startingOrdinal = 1): ReviewInteractionDto[] {
+  return groups.map((group, index) => {
+    const ordinal = startingOrdinal + index
+    return {
+      id: `${group[0]!.logicalSessionId}:review:${ordinal}`,
+      ordinal,
+      trigger: group[0]!.kind === 'message.user' ? 'user' : 'background',
+      startedAt: group[0]!.effectiveAt,
+      endedAt: group[group.length - 1]!.effectiveAt,
+      nodes: buildNodes(group),
+    }
+  })
+}
+
+function buildInteractions(items: TimelineItemDto[], startingOrdinal = 1): ReviewInteractionDto[] {
+  return buildInteractionGroups(splitInteractionGroups(items), startingOrdinal)
+}
+
+function durationMs(startedAt: string, endedAt: string): number {
+  const value = Date.parse(endedAt) - Date.parse(startedAt)
+  return Number.isFinite(value) && value > 0 ? value : 0
+}
+
+function observationError(item: CanonicalObservation): boolean {
+  if (item.kind !== 'tool.result') return false
+  return asRecord(item.payload).success === false
+}
+
+function observationEffectiveAt(item: CanonicalObservation): string {
+  return item.occurredAt ?? item.capturedAt
+}
+
+function observationCursor(item: CanonicalObservation): ObservationCursor {
+  const sequence = item.canonicalSequence ?? item.sourceSequence
+  return {
+    effectiveAt: observationEffectiveAt(item),
+    ...(sequence === undefined ? {} : { sequence }),
+    id: item.id,
+  }
+}
+
+type TimelineReviewCursor = {
+  mode: 'timeline'
+  direction: ReviewDetailDirection
+  timelineCursor: string
+  ordinal: number
+}
+
+type FilterReviewCursor = {
+  mode: 'filter'
+  filter: Exclude<ReviewDetailFilter, 'all' | 'latest'>
+  ordinal: number
+}
+
+type ReviewCursorPayload = TimelineReviewCursor | FilterReviewCursor
+
+function encodeReviewCursor(value: ReviewCursorPayload): string {
+  return JSON.stringify(value)
+}
+
+function decodeReviewCursor(value: string): ReviewCursorPayload {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(value)
+  } catch {
+    throw new Error('Invalid review cursor')
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Invalid review cursor')
+  const record = parsed as Record<string, unknown>
+
+  if (record.mode === 'filter') {
+    if (record.filter !== 'errors' && record.filter !== 'latency') throw new Error('Invalid review cursor')
+    if (typeof record.ordinal !== 'number' || !Number.isSafeInteger(record.ordinal) || record.ordinal < 1) {
+      throw new Error('Invalid review cursor')
+    }
+    return { mode: 'filter', filter: record.filter, ordinal: record.ordinal }
+  }
+
+  const legacyTimeline = record.mode === undefined && typeof record.timelineCursor === 'string'
+  if (record.mode !== 'timeline' && !legacyTimeline) throw new Error('Invalid review cursor')
+  if (typeof record.timelineCursor !== 'string' || !record.timelineCursor) throw new Error('Invalid review cursor')
+  if (typeof record.ordinal !== 'number' || !Number.isSafeInteger(record.ordinal) || record.ordinal < 1) {
+    throw new Error('Invalid review cursor')
+  }
+  const direction = record.direction === 'backward' ? 'backward' : 'forward'
+  return { mode: 'timeline', direction, timelineCursor: record.timelineCursor, ordinal: record.ordinal }
+}
+
+interface InteractionDescriptor {
+  ordinal: number
+  trigger: 'user' | 'background'
+  start: ObservationCursor
+  end: ObservationCursor
+  startedAt: string
+  endedAt: string
+  hasError: boolean
+}
+
+function highLatencyThreshold(descriptors: InteractionDescriptor[]): number | null {
+  const values = descriptors
+    .map(item => durationMs(item.startedAt, item.endedAt))
+    .filter(value => value > 0)
+    .sort((a, b) => a - b)
+  if (values.length < 2) return null
+  const middle = Math.floor(values.length / 2)
+  const median = values.length % 2 ? values[middle]! : (values[middle - 1]! + values[middle]!) / 2
+  const upperIndex = Math.min(values.length - 1, Math.floor((values.length - 1) * 0.75))
+  const upperQuartile = values[upperIndex]!
+  return Math.max(upperQuartile, median * 1.75)
+}
+
+export class ReviewProjection {
+  private readonly sessions: SessionProjection
+  private readonly timeline: TimelineProjection
+
+  constructor(private readonly storage: StorageService) {
+    this.sessions = new SessionProjection(storage)
+    this.timeline = new TimelineProjection(storage)
+  }
+
+  private async summary(entry: SessionProjectionEntry): Promise<ReviewSessionSummaryDto> {
+    const { session, logicalSession: logical, observations } = entry
+    const project = session.projectId ? await this.storage.repositories.sessions.getProject(session.projectId) : null
+    const workspace = session.workspaceId ? await this.storage.repositories.sessions.getWorkspace(session.workspaceId) : null
+    const firstUser = observations.find(item => item.kind === 'message.user')
+    const preview = firstUser ? textFromPayload(firstUser.payload) : undefined
+    const toolCount = observations.filter(item => item.kind === 'tool.call').length
+    const errorCount = observations.filter(observationError).length
+    return {
+      id: session.id, installationId: session.installationId, productId: session.productId,
+      sourceIds: session.sourceIds,
+      ...(session.projectId ? { projectId: session.projectId } : {}),
+      ...(project?.name ? { projectName: project.name } : {}),
+      ...(session.workspaceId ? { workspaceId: session.workspaceId } : {}),
+      ...(workspace?.path ? { workspacePath: workspace.path } : {}),
+      ...(logical?.title ? { title: logical.title } : {}),
+      ...(preview ? { preview } : {}),
+      startedAt: session.startedAt, endedAt: session.endedAt,
+      durationMs: durationMs(session.startedAt, session.endedAt),
+      observationCount: session.observationCount, interactionCount: session.interactionCount,
+      toolCount, errorCount, hasErrors: errorCount > 0,
+    }
+  }
+
+  private summaryFromRecord(record: SessionSummaryRecord): ReviewSessionSummaryDto {
+    const preview = record.firstUserPayload === undefined
+      ? undefined
+      : textFromPayload(record.firstUserPayload)
+    return {
+      id: record.logicalSessionId,
+      installationId: record.installationId,
+      productId: record.productId,
+      sourceIds: record.sourceIds,
+      ...(record.projectId ? { projectId: record.projectId } : {}),
+      ...(record.projectName ? { projectName: record.projectName } : {}),
+      ...(record.workspaceId ? { workspaceId: record.workspaceId } : {}),
+      ...(record.workspacePath ? { workspacePath: record.workspacePath } : {}),
+      ...(record.title ? { title: record.title } : {}),
+      ...(preview ? { preview } : {}),
+      startedAt: record.startedAt,
+      endedAt: record.endedAt,
+      durationMs: durationMs(record.startedAt, record.endedAt),
+      observationCount: record.observationCount,
+      interactionCount: record.interactionCount,
+      toolCount: record.toolCount,
+      errorCount: record.errorCount,
+      hasErrors: record.errorCount > 0,
+    }
+  }
+
+  async query(query: ReviewQueryDto = {}): Promise<ReviewResponseDto> {
+    const requestedLimit = Math.max(1, Math.min(query.limit ?? DEFAULT_LIMIT, MAX_SESSIONS))
+    const summaries = this.storage.sessionSummaries
+      ? (await this.storage.sessionSummaries.query({ limit: MAX_SESSIONS })).items.map(item => this.summaryFromRecord(item))
+      : await this.fallbackSummaries()
+    const search = query.search?.trim().toLowerCase()
+    const filtered = summaries.filter(item => {
+      if (query.sourceId && !item.sourceIds.includes(query.sourceId)) return false
+      if (query.projectId && item.projectId !== query.projectId) return false
+      if (query.from && item.endedAt < query.from) return false
+      if (query.to && item.startedAt > query.to) return false
+      if (query.status === 'with-errors' && !item.hasErrors) return false
+      if (query.status === 'clean' && item.hasErrors) return false
+      if (search) {
+        const haystack = [item.title, item.preview, item.projectName, item.workspacePath, ...item.sourceIds].filter(Boolean).join('\n').toLowerCase()
+        if (!haystack.includes(search)) return false
+      }
+      return true
+    })
+    filtered.sort((a, b) => b.endedAt.localeCompare(a.endedAt) || a.id.localeCompare(b.id))
+    const hasMore = filtered.length > requestedLimit
+    return {
+      items: filtered.slice(0, requestedLimit),
+      meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION, count: Math.min(filtered.length, requestedLimit), hasMore, generatedAt: new Date().toISOString() },
+    }
+  }
+
+  private async fallbackSummaries(): Promise<ReviewSessionSummaryDto[]> {
+    const raw = await this.sessions.queryEntries({ limit: MAX_SESSIONS })
+    return Promise.all(raw.entries.map(item => this.summary(item)))
+  }
+
+  private async scanInteractionDescriptors(logicalSessionId: string): Promise<InteractionDescriptor[]> {
+    const descriptors: InteractionDescriptor[] = []
+    let after: ObservationCursor | undefined
+    let current: InteractionDescriptor | null = null
+
+    const flush = () => {
+      if (!current) return
+      descriptors.push(current)
+      current = null
+    }
+
+    while (true) {
+      const observations = await this.storage.repositories.observations.query({
+        logicalSessionId,
+        ...(after ? { after } : {}),
+        limit: DESCRIPTOR_SCAN_CHUNK,
+      })
+      if (!observations.length) break
+
+      for (const observation of observations) {
+        if (observation.kind === 'message.user' && current) flush()
+        if (!current && observation.kind === 'session.lifecycle') continue
+        if (!current) {
+          const cursor = observationCursor(observation)
+          current = {
+            ordinal: descriptors.length + 1,
+            trigger: observation.kind === 'message.user' ? 'user' : 'background',
+            start: cursor,
+            end: cursor,
+            startedAt: cursor.effectiveAt,
+            endedAt: cursor.effectiveAt,
+            hasError: false,
+          }
+        }
+        current.end = observationCursor(observation)
+        current.endedAt = observationEffectiveAt(observation)
+        current.hasError ||= observationError(observation)
+      }
+
+      after = observationCursor(observations[observations.length - 1]!)
+      if (observations.length < DESCRIPTOR_SCAN_CHUNK) break
+    }
+    flush()
+    return descriptors
+  }
+
+  private async countInteractions(logicalSessionId: string): Promise<number> {
+    let userCount = 0
+    let after: ObservationCursor | undefined
+    while (true) {
+      const observations = await this.storage.repositories.observations.query({
+        logicalSessionId,
+        kind: 'message.user',
+        ...(after ? { after } : {}),
+        limit: DESCRIPTOR_SCAN_CHUNK,
+      })
+      if (!observations.length) break
+      userCount += observations.length
+      after = observationCursor(observations[observations.length - 1]!)
+      if (observations.length < DESCRIPTOR_SCAN_CHUNK) break
+    }
+
+    let leadingBackground = false
+    let probeAfter: ObservationCursor | undefined
+    outer: while (true) {
+      const probe = await this.storage.repositories.observations.query({
+        logicalSessionId,
+        ...(probeAfter ? { after: probeAfter } : {}),
+        limit: 100,
+      })
+      if (!probe.length) break
+      for (const observation of probe) {
+        if (observation.kind === 'session.lifecycle') continue
+        leadingBackground = observation.kind !== 'message.user'
+        break outer
+      }
+      probeAfter = observationCursor(probe[probe.length - 1]!)
+      if (probe.length < 100) break
+    }
+    return userCount + (leadingBackground ? 1 : 0)
+  }
+
+  private async materializeDescriptor(logicalSessionId: string, descriptor: InteractionDescriptor): Promise<ReviewInteractionDto> {
+    const first = await this.storage.repositories.observations.get(descriptor.start.id)
+    if (!first) throw new Error(`Review projection integrity error: missing observation ${descriptor.start.id}`)
+    const observations: CanonicalObservation[] = [first]
+    let after = descriptor.start
+
+    while (observations[observations.length - 1]!.id !== descriptor.end.id) {
+      const page = await this.storage.repositories.observations.query({
+        logicalSessionId,
+        after,
+        limit: DESCRIPTOR_SCAN_CHUNK,
+      })
+      if (!page.length) throw new Error(`Review projection integrity error: incomplete interaction ${descriptor.ordinal}`)
+      let found = false
+      for (const observation of page) {
+        observations.push(observation)
+        if (observation.id === descriptor.end.id) {
+          found = true
+          break
+        }
+      }
+      if (found) break
+      after = observationCursor(page[page.length - 1]!)
+    }
+
+    const items = await this.timeline.mapObservations(observations)
+    const interaction = buildInteractionGroups([items], descriptor.ordinal)[0]
+    if (!interaction) throw new Error(`Review projection integrity error: empty interaction ${descriptor.ordinal}`)
+    return interaction
+  }
+
+  private async forwardInteractionPage(
+    logicalSessionId: string,
+    query: ReviewDetailQueryDto,
+  ): Promise<{ interactions: ReviewInteractionDto[]; page: ReviewDetailPageDto }> {
+    const requestedLimit = Math.max(1, Math.min(query.limit ?? DEFAULT_DETAIL_LIMIT, MAX_DETAIL_LIMIT))
+    const decoded = query.cursor ? decodeReviewCursor(query.cursor) : null
+    if (decoded && (decoded.mode !== 'timeline' || decoded.direction !== 'forward')) throw new Error('Invalid review cursor')
+    const startingOrdinal = decoded?.ordinal ?? 1
+    let timelineCursor = decoded?.timelineCursor
+    let pending: TimelineItemDto[] = []
+    const completed: TimelineItemDto[][] = []
+    let exhausted = false
+    let stoppedAtNextInteraction = false
+
+    while (!exhausted && !stoppedAtNextInteraction && completed.length <= requestedLimit) {
+      const page = await this.timeline.query({
+        logicalSessionId,
+        ...(timelineCursor ? { cursor: timelineCursor } : {}),
+        direction: 'forward',
+        limit: TIMELINE_CHUNK,
+      })
+
+      for (const item of page.items) {
+        if (item.kind === 'message.user' && pending.length) {
+          completed.push(pending)
+          pending = []
+          if (completed.length > requestedLimit) {
+            stoppedAtNextInteraction = true
+            break
+          }
+        }
+        if (!pending.length && item.kind === 'session.lifecycle') continue
+        pending.push(item)
+      }
+
+      if (stoppedAtNextInteraction) break
+      if (!page.meta.hasMore) {
+        exhausted = true
+        if (pending.length) completed.push(pending)
+        pending = []
+        break
+      }
+      if (!page.meta.nextCursor) throw new Error('Timeline pagination integrity error: missing next cursor')
+      timelineCursor = page.meta.nextCursor
+    }
+
+    const includedGroups = completed.slice(0, requestedLimit)
+    const interactions = buildInteractionGroups(includedGroups, startingOrdinal)
+    const hasMore = completed.length > requestedLimit || !exhausted || pending.length > 0
+    const lastIncluded = includedGroups.at(-1)?.at(-1)
+    const nextCursor = hasMore && lastIncluded
+      ? encodeReviewCursor({
+          mode: 'timeline',
+          direction: 'forward',
+          timelineCursor: encodeTimelineCursor(lastIncluded),
+          ordinal: startingOrdinal + interactions.length,
+        })
+      : undefined
+
+    return {
+      interactions,
+      page: {
+        count: interactions.length,
+        hasMore,
+        ...(nextCursor ? { nextCursor } : {}),
+        direction: 'forward',
+        filter: 'all',
+      },
+    }
+  }
+
+  private async backwardInteractionPage(
+    logicalSessionId: string,
+    query: ReviewDetailQueryDto,
+    filter: ReviewDetailFilter = 'all',
+  ): Promise<{ interactions: ReviewInteractionDto[]; page: ReviewDetailPageDto }> {
+    const requestedLimit = filter === 'latest' ? 1 : Math.max(1, Math.min(query.limit ?? DEFAULT_DETAIL_LIMIT, MAX_DETAIL_LIMIT))
+    const decoded = query.cursor ? decodeReviewCursor(query.cursor) : null
+    if (decoded && (decoded.mode !== 'timeline' || decoded.direction !== 'backward')) throw new Error('Invalid review cursor')
+    const endingOrdinal = decoded?.ordinal ?? await this.countInteractions(logicalSessionId)
+    if (endingOrdinal < 1) {
+      return { interactions: [], page: { count: 0, hasMore: false, direction: 'backward', filter } }
+    }
+
+    let timelineCursor = decoded?.timelineCursor
+    let pendingDescending: TimelineItemDto[] = []
+    const groupsLatestFirst: TimelineItemDto[][] = []
+    let exhausted = false
+
+    while (!exhausted && groupsLatestFirst.length < requestedLimit) {
+      const page = await this.timeline.query({
+        logicalSessionId,
+        ...(timelineCursor ? { cursor: timelineCursor } : {}),
+        direction: 'backward',
+        limit: TIMELINE_CHUNK,
+      })
+      const descendingItems = [...page.items].reverse()
+      for (const item of descendingItems) {
+        pendingDescending.push(item)
+        if (item.kind === 'message.user') {
+          groupsLatestFirst.push([...pendingDescending].reverse())
+          pendingDescending = []
+          if (groupsLatestFirst.length >= requestedLimit) break
+        }
+      }
+
+      if (groupsLatestFirst.length >= requestedLimit) break
+      if (!page.meta.hasMore) {
+        exhausted = true
+        if (pendingDescending.length) {
+          const chronological = [...pendingDescending].reverse()
+          while (chronological[0]?.kind === 'session.lifecycle') chronological.shift()
+          if (chronological.length) groupsLatestFirst.push(chronological)
+          pendingDescending = []
+        }
+        break
+      }
+      if (!page.meta.nextCursor) throw new Error('Timeline pagination integrity error: missing next cursor')
+      timelineCursor = page.meta.nextCursor
+    }
+
+    const chronologicalGroups = [...groupsLatestFirst].reverse()
+    const startingOrdinal = endingOrdinal - chronologicalGroups.length + 1
+    const interactions = buildInteractionGroups(chronologicalGroups, startingOrdinal)
+    const hasMore = filter === 'latest' ? false : startingOrdinal > 1
+    const oldestIncluded = chronologicalGroups[0]?.[0]
+    const nextCursor = hasMore && oldestIncluded
+      ? encodeReviewCursor({
+          mode: 'timeline',
+          direction: 'backward',
+          timelineCursor: encodeTimelineCursor(oldestIncluded),
+          ordinal: startingOrdinal - 1,
+        })
+      : undefined
+
+    return {
+      interactions,
+      page: {
+        count: interactions.length,
+        hasMore,
+        ...(nextCursor ? { nextCursor } : {}),
+        direction: 'backward',
+        filter,
+      },
+    }
+  }
+
+  private async filteredInteractionPage(
+    logicalSessionId: string,
+    query: ReviewDetailQueryDto,
+    filter: 'errors' | 'latency',
+  ): Promise<{ interactions: ReviewInteractionDto[]; page: ReviewDetailPageDto }> {
+    const requestedLimit = Math.max(1, Math.min(query.limit ?? DEFAULT_DETAIL_LIMIT, MAX_DETAIL_LIMIT))
+    const decoded = query.cursor ? decodeReviewCursor(query.cursor) : null
+    if (decoded && (decoded.mode !== 'filter' || decoded.filter !== filter)) throw new Error('Invalid review cursor')
+    const afterOrdinal = decoded?.ordinal ?? 0
+    const descriptors = await this.scanInteractionDescriptors(logicalSessionId)
+    const threshold = filter === 'latency' ? highLatencyThreshold(descriptors) : null
+    const matches = descriptors.filter(descriptor => {
+      if (descriptor.ordinal <= afterOrdinal) return false
+      if (filter === 'errors') return descriptor.hasError
+      return threshold !== null && durationMs(descriptor.startedAt, descriptor.endedAt) >= threshold
+    })
+    const selected = matches.slice(0, requestedLimit)
+    const interactions: ReviewInteractionDto[] = []
+    for (const descriptor of selected) interactions.push(await this.materializeDescriptor(logicalSessionId, descriptor))
+    const hasMore = matches.length > requestedLimit
+    const last = selected.at(-1)
+    const nextCursor = hasMore && last
+      ? encodeReviewCursor({ mode: 'filter', filter, ordinal: last.ordinal })
+      : undefined
+
+    return {
+      interactions,
+      page: {
+        count: interactions.length,
+        hasMore,
+        ...(nextCursor ? { nextCursor } : {}),
+        direction: 'forward',
+        filter,
+        ...(threshold === null ? {} : { latencyThresholdMs: threshold }),
+      },
+    }
+  }
+
+  async get(logicalSessionId: string, query: ReviewDetailQueryDto = {}): Promise<ReviewSessionDetailDto | null> {
+    const sessionResult = await this.sessions.queryEntries({ logicalSessionId, limit: 1 })
+    const session = sessionResult.entries.find(item => item.session.id === logicalSessionId)
+    if (!session) return null
+    const summary = await this.summary(session)
+    const filter = query.filter ?? 'all'
+    const direction = query.direction ?? 'forward'
+    const result = filter === 'errors' || filter === 'latency'
+      ? await this.filteredInteractionPage(logicalSessionId, query, filter)
+      : filter === 'latest'
+        ? await this.backwardInteractionPage(logicalSessionId, { ...query, direction: 'backward' }, 'latest')
+        : direction === 'backward'
+          ? await this.backwardInteractionPage(logicalSessionId, query)
+          : await this.forwardInteractionPage(logicalSessionId, query)
+
+    return {
+      ...summary,
+      interactions: result.interactions,
+      page: result.page,
+    }
+  }
+}
+
+export const reviewProjectionInternals = {
+  textFromPayload,
+  buildNodes,
+  buildInteractions,
+  splitInteractionGroups,
+  buildInteractionGroups,
+  eventCategory,
+  encodeReviewCursor,
+  decodeReviewCursor,
+  highLatencyThreshold,
+}
