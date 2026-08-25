@@ -4,6 +4,7 @@ import type {
   BackupOverviewResponseDto,
   BackupRestorePreviewResponseDto,
   BackupSnapshotResponseDto,
+  BackupSnapshotSummaryDto,
   BackupVerifyResponseDto,
   FacetResponseDto,
   HealthResponseDto,
@@ -29,6 +30,10 @@ export interface ReviewFilters extends QueryFilters {
   status: 'all' | 'with-errors' | 'clean'
   search: string
 }
+
+let backupOverviewInFlight: Promise<BackupOverviewResponseDto> | null = null
+let backupOverviewCache: BackupOverviewResponseDto | null = null
+let reuseBackupOverviewOnce = false
 
 function rangeStart(range: QueryFilters['range']): string | undefined {
   if (range === 'all') return undefined
@@ -77,7 +82,42 @@ async function requestBlob(path: string): Promise<Blob> {
   }
 }
 
+function backupSnapshotSummary(response: BackupSnapshotResponseDto): BackupSnapshotSummaryDto {
+  const sourceIds = new Set<string>()
+  let totalBytes = 0
+  for (const file of response.snapshot.files) {
+    sourceIds.add(file.sourceId)
+    totalBytes += file.size
+  }
+  for (const item of response.snapshot.excluded) sourceIds.add(item.sourceId)
+  return {
+    id: response.snapshot.id,
+    createdAt: response.snapshot.createdAt,
+    sourceIds: [...sourceIds].sort(),
+    fileCount: response.snapshot.files.length,
+    excludedCount: response.snapshot.excluded.length,
+    totalBytes,
+    manifestSha256: response.snapshot.manifestSha256,
+  }
+}
+
+function rememberBackupSnapshot(response: BackupSnapshotResponseDto): void {
+  if (!backupOverviewCache) return
+  const summary = backupSnapshotSummary(response)
+  backupOverviewCache = {
+    ...backupOverviewCache,
+    snapshots: [summary, ...backupOverviewCache.snapshots.filter(item => item.id !== summary.id)]
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
+    meta: { ...backupOverviewCache.meta, generatedAt: response.meta.generatedAt },
+  }
+  // BackupPage 会在创建/导入成功后调用 refresh。这里复用刚刚更新的概览一次，
+  // 避免紧接着再次遍历所有 Source 目录；手动刷新仍会走真实扫描。
+  reuseBackupOverviewOnce = true
+}
+
 export class AgentLensApi {
+  private backupOverviewLoaded = false
+
   health(): Promise<HealthResponseDto> { return requestJson('/api/v1/health') }
   facets(): Promise<FacetResponseDto> { return requestJson('/api/v1/facets') }
   agents(): Promise<AgentOverviewResponseDto> { return requestJson('/api/v1/agents') }
@@ -127,19 +167,41 @@ export class AgentLensApi {
   }
 
   backupOverview(): Promise<BackupOverviewResponseDto> {
-    return requestJson('/api/v1/backups')
+    const firstLoad = !this.backupOverviewLoaded
+    this.backupOverviewLoaded = true
+    if (reuseBackupOverviewOnce && backupOverviewCache) {
+      reuseBackupOverviewOnce = false
+      return Promise.resolve(backupOverviewCache)
+    }
+    if (firstLoad && backupOverviewCache) return Promise.resolve(backupOverviewCache)
+    if (backupOverviewInFlight) return backupOverviewInFlight
+    reuseBackupOverviewOnce = false
+    backupOverviewInFlight = requestJson<BackupOverviewResponseDto>('/api/v1/backups').then(
+      result => {
+        backupOverviewCache = result
+        backupOverviewInFlight = null
+        return result
+      },
+      error => {
+        backupOverviewInFlight = null
+        throw error
+      },
+    )
+    return backupOverviewInFlight
   }
 
   backupSnapshot(id: string): Promise<BackupSnapshotResponseDto> {
     return requestJson(`/api/v1/backups/${encodeURIComponent(id)}`)
   }
 
-  createBackup(input: BackupCreateRequestDto): Promise<BackupSnapshotResponseDto> {
-    return requestJson('/api/v1/backups', {
+  async createBackup(input: BackupCreateRequestDto): Promise<BackupSnapshotResponseDto> {
+    const result = await requestJson<BackupSnapshotResponseDto>('/api/v1/backups', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(input),
     })
+    rememberBackupSnapshot(result)
+    return result
   }
 
   verifyBackup(id: string): Promise<BackupVerifyResponseDto> {
@@ -154,12 +216,14 @@ export class AgentLensApi {
     return requestBlob(`/api/v1/backups/${encodeURIComponent(id)}/export`)
   }
 
-  importBackup(file: Blob): Promise<BackupSnapshotResponseDto> {
-    return requestJson('/api/v1/backups/import', {
+  async importBackup(file: Blob): Promise<BackupSnapshotResponseDto> {
+    const result = await requestJson<BackupSnapshotResponseDto>('/api/v1/backups/import', {
       method: 'POST',
       headers: { 'content-type': 'application/vnd.agentlens.backup' },
       body: file,
     })
+    rememberBackupSnapshot(result)
+    return result
   }
 
   subscribe(

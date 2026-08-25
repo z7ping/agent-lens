@@ -1,0 +1,172 @@
+/*
+ * AgentLens 1.0 P0 体验收口。
+ *
+ * 只处理已确认的表现与反馈问题：工具图标尺寸、任务复盘对比度/生命周期密度、
+ * 以及资产备份首次扫描时的可见反馈。保持最后加载，不改变 Core Contract。
+ */
+
+/* ToolKindIcon 的 SVG 没有固有 CSS 尺寸时会采用浏览器默认尺寸；统一钳制到紧凑图标。 */
+.tool-kind-svg {
+  display: inline-grid;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  place-items: center;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.tool-kind-svg > svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.tools-content .tool-table-name {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.tools-content .tool-table-name > .tool-kind-svg {
+  width: 18px;
+  height: 18px;
+  flex-basis: 18px;
+}
+
+.tools-content .tool-table-name > .tool-kind-svg > svg {
+  width: 14px;
+  height: 14px;
+}
+
+.tool-drawer-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+}
+
+.tool-drawer-title .tool-kind-svg,
+.execution-tool-icon .tool-kind-svg,
+.tool-detail-icon .tool-kind-svg {
+  width: 16px;
+  height: 16px;
+  flex-basis: 16px;
+}
+
+.tool-drawer-title .tool-kind-svg > svg,
+.execution-tool-icon .tool-kind-svg > svg,
+.tool-detail-icon .tool-kind-svg > svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* 用户气泡中的证据徽标必须与气泡底色形成独立层级，低可信也不能靠低对比度表达。 */
+.review-page .chat-bubble-user .evidence-inline,
+.review-page .chat-bubble-user .evidence-inline[data-confidence='low'],
+.review-page .chat-bubble-user .evidence-inline[data-confidence='unknown'] {
+  border-color: color-mix(in srgb, var(--al-user-bubble-text) 30%, transparent) !important;
+  background: var(--al-user-bubble-code) !important;
+  color: var(--al-user-bubble-text) !important;
+}
+
+.review-page .chat-bubble-user .evidence-inline[data-confidence='low'],
+.review-page .chat-bubble-user .evidence-inline[data-confidence='unknown'] {
+  border-style: dashed;
+}
+
+.review-page .chat-bubble-user .evidence-inline-more {
+  color: var(--al-user-bubble-text) !important;
+}
+
+/* 生命周期在复盘流中只占一排。原始 action/reason 仍可在检查器里查看，主流程不泄漏英文原值。 */
+.review-page .event-lifecycle {
+  min-height: 36px;
+  align-items: center;
+  flex-wrap: nowrap;
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+.review-page .event-lifecycle .event-mark {
+  width: 22px;
+  height: 22px;
+  margin-top: 0;
+}
+
+.review-page .event-lifecycle .event-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.review-page .event-lifecycle .event-copy b {
+  display: inline-block;
+  flex: 0 0 auto;
+  font-size: 0 !important;
+  white-space: nowrap;
+}
+
+.review-page .event-lifecycle .event-copy b::before {
+  content: '会话生命周期';
+  color: var(--al-ink-2);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.review-page .event-lifecycle .event-copy small {
+  display: none;
+}
+
+.review-page .event-lifecycle .evidence-inline-list {
+  flex-wrap: nowrap;
+}
+
+.review-page .event-lifecycle .event-source,
+.review-page .event-lifecycle time {
+  padding-top: 0;
+  white-space: nowrap;
+}
+
+/* 资产备份首次进入会触发真实目录扫描；明确告诉用户当前正在做什么，而不是只留通用骨架。 */
+.app-shell:has(.nav-item-active[href='/backup']) .workspace-skeleton {
+  position: relative;
+  padding-top: 86px;
+}
+
+.app-shell:has(.nav-item-active[href='/backup']) .workspace-skeleton::before {
+  content: '正在扫描资产备份范围';
+  position: absolute;
+  top: 28px;
+  left: 28px;
+  color: var(--al-ink);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.app-shell:has(.nav-item-active[href='/backup']) .workspace-skeleton::after {
+  content: '正在读取本机智能体的会话与资产目录。首次扫描或文件较多时可能需要一些时间。';
+  position: absolute;
+  top: 55px;
+  left: 28px;
+  right: 28px;
+  color: var(--al-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+@media (max-width: 640px) {
+  .review-page .event-lifecycle .evidence-inline-list {
+    display: none;
+  }
+
+  .app-shell:has(.nav-item-active[href='/backup']) .workspace-skeleton::before,
+  .app-shell:has(.nav-item-active[href='/backup']) .workspace-skeleton::after {
+    left: 14px;
+    right: 14px;
+  }
+}

@@ -21,6 +21,7 @@ import './typography.css'
 import './tokens.css'
 import './color-system.css'
 import './v2-alignment.css'
+import './p0-polish.css'
 
 writeTheme(readTheme())
 const disposeLiveRecovery = installLiveRecovery(clientModel)
