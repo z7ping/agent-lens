@@ -44,6 +44,19 @@ function Assert-EmbeddedIconVisible([string]$path) {
   }
 }
 
+function Write-DesktopDiagnostics {
+  Write-Host '[AgentLens] 桌面启动失败，输出可用运行日志：'
+  $logs = @(Get-ChildItem -Path $env:APPDATA -Filter 'daemon.log' -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 5)
+  if ($logs.Count -eq 0) {
+    Write-Host '[AgentLens] 未找到 daemon.log'
+    return
+  }
+  foreach ($log in $logs) {
+    Write-Host "--- $($log.FullName) ---"
+    Get-Content -LiteralPath $log.FullName -Tail 200 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
+  }
+}
+
 Assert-EmbeddedIconVisible $resolved
 
 $previous = @{
@@ -89,6 +102,10 @@ try {
   }
 
   Write-Host "[AgentLens] Windows 打包客户端启动冒烟通过：pid=$($process.Id), port=$port"
+}
+catch {
+  Write-DesktopDiagnostics
+  throw
 }
 finally {
   if ($null -ne $process -and -not $process.HasExited) {
