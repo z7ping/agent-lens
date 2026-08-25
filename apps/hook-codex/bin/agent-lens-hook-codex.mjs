@@ -10,7 +10,8 @@ async function readStdin(limit = 2 * 1024 * 1024) {
     if (total > limit) throw new Error('Codex hook payload exceeds 2 MiB limit')
     chunks.push(buffer)
   }
-  return Buffer.concat(chunks).toString('utf8')
+  const raw = Buffer.concat(chunks).toString('utf8')
+  return raw.charCodeAt(0) === 0xFEFF ? raw.slice(1) : raw
 }
 
 let eventName = ''
