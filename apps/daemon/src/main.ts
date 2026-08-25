@@ -24,6 +24,7 @@ import {
   httpSurfacePlugin,
 } from '@agent-lens/surface-http'
 import { webPlugin } from '@agent-lens/web'
+import { dshSourcePlugin } from './sources/dsh.js'
 
 const dbPath = process.env.AGENT_LENS_DB_PATH
   ?? join(homedir(), '.agent-lens', '1.0', 'agent-lens.db')
@@ -50,6 +51,7 @@ app.use(claudeSourcePlugin)
 app.use(piSourcePlugin)
 app.use(hermesSourcePlugin)
 app.use(openCodeSourcePlugin)
+app.use(dshSourcePlugin)
 app.useRuntime(backupLocalPlugin, { vaultPath })
 app.use(httpSurfacePlugin, { port: configuredPort })
 app.use(webPlugin, { staticDir: webRoot })
