@@ -1,3 +1,4 @@
+import { existsSync, statSync } from 'node:fs'
 import Database from 'better-sqlite3'
 import type {
   CheckpointRepository,
@@ -20,6 +21,15 @@ import { SqliteSessionSummaryReader } from './session-summaries'
 export interface SqliteStorageOptions {
   path: string
   readonly?: boolean
+}
+
+function fileSize(path: string): number {
+  if (!path || path === ':memory:' || !existsSync(path)) return 0
+  try {
+    return statSync(path).size
+  } catch {
+    return 0
+  }
 }
 
 export class SqliteStorageService implements StorageService {
@@ -137,6 +147,46 @@ export class SqliteStorageService implements StorageService {
         if (item.status in coverageSummary) coverageSummary[item.status] += 1
       }
 
+      const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+      const count = (table: string): number => Number((this.db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get() as { count: number }).count)
+      const recentCount = (table: string, column: string): number => Number((this.db.prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE ${column} >= ?`).get(cutoff) as { count: number }).count)
+      const pageCount = Number(this.db.pragma('page_count', { simple: true }))
+      const pageSize = Number(this.db.pragma('page_size', { simple: true }))
+      const databaseBytes = fileSize(this.db.name)
+      const walBytes = fileSize(`${this.db.name}-wal`)
+      const checkpointTable = this.db.prepare(`
+        SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'source_checkpoints'
+      `).get()
+      const checkpointSummary = checkpointTable
+        ? this.db.prepare(`
+            SELECT COUNT(*) AS count, MAX(updated_at) AS lastUpdatedAt
+            FROM source_checkpoints
+          `).get() as { count: number; lastUpdatedAt: string | null }
+        : { count: 0, lastUpdatedAt: null }
+
+      const dataGrowth = {
+        databaseBytes,
+        walBytes,
+        logicalBytes: pageCount * pageSize,
+        sevenDayCutoff: cutoff,
+        totals: {
+          sourceRecords: count('source_records'),
+          observations: count('observations'),
+          evidence: count('evidence'),
+          sessions: count('logical_sessions'),
+        },
+        last7Days: {
+          sourceRecords: recentCount('source_records', 'captured_at'),
+          observations: recentCount('observations', 'captured_at'),
+          evidence: recentCount('evidence', 'captured_at'),
+          sessions: Number((this.db.prepare(`
+            SELECT COUNT(*) AS count
+            FROM logical_sessions
+            WHERE COALESCE(started_at, ended_at) >= ?
+          `).get(cutoff) as { count: number }).count),
+        },
+      }
+
       return {
         ok: probe.ok === 1,
         schemaVersion,
@@ -156,6 +206,11 @@ export class SqliteStorageService implements StorageService {
           coverage: {
             summary: coverageSummary,
             items: coverageItems,
+          },
+          dataGrowth,
+          checkpoints: {
+            count: Number(checkpointSummary.count || 0),
+            lastUpdatedAt: checkpointSummary.lastUpdatedAt,
           },
         },
       }
