@@ -25,7 +25,7 @@
     "cli": "npm run start --workspace @agent-lens/cli --",
     "dev:web": "npm run dev --workspace @agent-lens/web",
     "build:web": "npm run build --workspace @agent-lens/web",
-    "check:web-presentation": "node scripts/check-web-presentation.mjs",
+    "check:web-presentation": "node scripts/check-web-presentation.mjs && node scripts/check-review-contract.mjs",
     "check:brand-assets": "node scripts/check-brand-assets.mjs",
     "check:desktop-shell": "node --check apps/desktop/src/bootstrap.mjs && node --check apps/desktop/src/integration.mjs && node --check apps/desktop/src/main.mjs",
     "build:dist": "node scripts/build-distribution.mjs",
@@ -58,7 +58,7 @@
   "author": "7ping <z7ping@outlook.com>",
   "publishConfig": {
     "access": "public",
-    "registry": "https://registry.npmjs.org/"
+    "registry": "https://registry.npmjs.org"
   },
   "engines": {
     "node": ">=22.23.0"
