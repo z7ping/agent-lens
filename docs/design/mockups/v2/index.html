@@ -16,7 +16,7 @@ body{background:var(--al-canvas)}
 .sec-label2{margin:30px 0 14px;display:flex;align-items:center;gap:10px;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--al-muted-2)}
 .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
 .card{display:flex;flex-direction:column;gap:8px;padding:20px;border:1px solid var(--al-line);border-radius:14px;background:var(--al-surface);box-shadow:var(--al-shadow);text-decoration:none;color:inherit;transition:.16s}.card:hover{border-color:color-mix(in srgb,var(--al-accent) 40%,var(--al-line));transform:translateY(-2px);box-shadow:var(--al-shadow-lg)}
-.card.experimental{border-style:dashed;background:color-mix(in srgb,var(--al-soft) 48%,var(--al-surface))}.card .no{font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--al-muted-2)}.card h2{margin:0;font-size:16px;font-weight:700}.card p{margin:0;font-size:13px;line-height:1.7;color:var(--al-muted)}.card .go{margin-top:auto;padding-top:10px;color:var(--al-accent);font-size:12px;font-weight:650}
+.card .no{font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--al-muted-2)}.card h2{margin:0;font-size:16px;font-weight:700}.card p{margin:0;font-size:13px;line-height:1.7;color:var(--al-muted)}.card .go{margin-top:auto;padding-top:10px;color:var(--al-accent);font-size:12px;font-weight:650}
 .files{margin-top:34px;border:1px solid var(--al-line);border-radius:12px;background:var(--al-surface);padding:16px 20px;font-size:13px;color:var(--al-muted);line-height:2}.files code{font-family:var(--font-mono);font-size:12px;color:var(--al-ink-2);background:var(--al-soft);border-radius:5px;padding:1px 6px}
 </style>
 </head>
@@ -26,7 +26,7 @@ body{background:var(--al-canvas)}
     <div>
       <span class="eyebrow" style="color:var(--al-accent)">UI / UX DESIGN PROPOSAL · V2.1 · CURRENT</span>
       <h1>AgentLens 当前高保真原型</h1>
-      <p>这是仓库内当前高保真原型基线。任务复盘已确认采用“执行轨迹审阅版”：保留 1.0 双栏、长会话与完整证据能力，同时恢复 0.x 更清晰的执行轨迹表达。</p>
+      <p>这是仓库内当前高保真原型基线。任务复盘采用“对话主线 + 执行轨迹证据”的正式方案，保留 1.0 双栏、长会话与完整证据能力。</p>
     </div>
     <button class="btn" data-theme-toggle aria-label="切换主题"></button>
   </div>
@@ -45,8 +45,7 @@ body{background:var(--al-canvas)}
 
   <div class="sec-label2">当前页面</div>
   <div class="cards">
-    <a class="card" href="review-trajectory.html"><span class="no">BOARD 01 · 正式基线</span><h2>任务复盘</h2><p>1.0 双栏与长会话能力 + 执行轨迹表达：生命周期紧凑单排、思考弱强调、工具折叠摘要、完整证据与原始记录检查器。</p><span class="go">打开正式画板 →</span></a>
-    <a class="card experimental" href="review.html"><span class="no">HISTORY · 历史对照</span><h2>任务复盘 · 旧基线</h2><p>保留上一版任务复盘画板，仅用于回看布局与能力差异，不再作为正式 Web 的视觉实现依据。</p><span class="go">打开历史画板 →</span></a>
+    <a class="card" href="review.html"><span class="no">BOARD 01 · 正式基线</span><h2>任务复盘</h2><p>1.0 双栏与长会话能力 + 执行轨迹表达：生命周期紧凑单排、思考弱强调、工具折叠摘要、完整证据与原始记录检查器。</p><span class="go">打开画板 →</span></a>
     <a class="card" href="tools.html"><span class="no">BOARD 02</span><h2>工具分析</h2><p>细线 KPI、可排序表格、需要关注、真实会话钻取和可归因能力资产。</p><span class="go">打开画板 →</span></a>
     <a class="card" href="agents.html"><span class="no">BOARD 03</span><h2>智能体概览</h2><p>来源列表 + 单一详情、真实采集状态、资产使用比例、技能生命周期与跨智能体矩阵。</p><span class="go">打开画板 →</span></a>
     <a class="card" href="states.html"><span class="no">BOARD 04</span><h2>状态与引导</h2><p>加载、空状态、错误恢复、实时断开和当前三步首次运行引导。</p><span class="go">打开画板 →</span></a>
@@ -57,9 +56,9 @@ body{background:var(--al-canvas)}
 
   <div class="files">
     当前原型目录：<code>docs/design/mockups/v2/</code><br>
-    任务复盘正式基线：<code>review-trajectory.html</code><br>
-    任务复盘历史对照：<code>review.html</code><br>
+    任务复盘正式基线：<code>review.html</code><br>
     其他正式基线：<code>tools / agents / states / system / backup / insights.html</code><br>
+    历史任务复盘方案通过 Git 历史追溯，不在当前原型目录重复保留。<br>
     共享资源：<code>assets/tokens.css</code> · <code>assets/base.css</code> · <code>assets/future.css</code> · <code>assets/app.js</code>
   </div>
 </div>
