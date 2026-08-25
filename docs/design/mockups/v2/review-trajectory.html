@@ -13,7 +13,13 @@
 .session-scroll,.reader-pane{min-height:0;overflow:auto}
 .reader-pane .reader-inner{max-width:1320px;padding-bottom:96px}
 
-/* 本页所有正常可见辅助文字以 12px 为下限，覆盖旧基线中的 11/11.5px。 */
+/* 工具栏弹层不能被横向滚动容器裁掉。 */
+.review-shell .workspace-toolbar{position:relative;z-index:35;overflow:visible}
+.review-shell .scope-manage{position:relative;z-index:70}
+.review-shell .scope-manage[open]{z-index:80}
+.review-shell .scope-pop{z-index:90}
+
+/* 正常可见辅助文字以 12px 为下限。 */
 .review-shell .session-panel-head span,
 .review-shell .count-badge,
 .review-shell .session-group,
@@ -28,12 +34,18 @@
 .review-shell .round-act button em,
 .review-shell .sentinel{font-size:12px}
 
-/* 深色用户气泡里的证据必须使用气泡自身的高对比文字体系。 */
+/* 用户深色气泡内的证据、操作必须保持足够对比度。 */
 .review-shell .chat-row.user .ev{color:var(--al-user-bubble-muted);border-color:color-mix(in srgb,var(--al-user-bubble-muted) 48%,transparent);background:color-mix(in srgb,var(--al-user-bubble-text) 8%,transparent)}
 .review-shell .chat-row.user .ev i{background:var(--al-user-bubble-muted)}
 .review-shell .chat-row.user .ev[data-cap='log'] i{background:transparent;border-color:var(--al-user-bubble-muted)}
+.review-shell .chat-row.user .ev[data-cap='db'] i{width:7px;height:7px;border-radius:2px;background:transparent;border:1.5px solid var(--al-user-bubble-muted)}
+.trajectory-flow .chat-row.user .bubble{max-width:min(78%,760px)}
+.trajectory-message-actions{display:flex;align-items:center;gap:4px;margin-top:8px;padding-top:7px;border-top:1px solid color-mix(in srgb,var(--al-user-bubble-muted) 24%,transparent)}
+.trajectory-message-actions button{height:26px;padding:0 7px;border:0;border-radius:6px;background:transparent;color:var(--al-user-bubble-muted);font-size:12px;font-weight:620}
+.trajectory-message-actions button:hover{background:color-mix(in srgb,var(--al-user-bubble-text) 10%,transparent);color:var(--al-user-bubble-text)}
+.trajectory-message-source{margin-top:7px;padding:8px 9px;border-radius:7px;background:var(--al-user-bubble-code);color:var(--al-user-bubble-text);font:12px/1.55 var(--font-mono);white-space:pre-wrap;overflow:auto}
 
-/* 会话生命周期：左侧真实事件，右侧证据/来源/时间形成稳定元信息列。 */
+/* 会话生命周期：真实事件 + 稳定元信息列。 */
 .trajectory-lifecycle{padding:6px 0 8px}
 .trajectory-life-row{min-height:38px;display:grid;grid-template-columns:18px minmax(0,1fr) minmax(240px,300px);align-items:center;gap:8px;padding:5px 8px;border-bottom:1px solid color-mix(in srgb,var(--al-line) 58%,transparent)}
 .trajectory-life-icon{width:18px;height:18px;display:grid;place-items:center;color:var(--al-muted)}
@@ -46,7 +58,7 @@
 .trajectory-source{min-width:72px;text-align:right}
 .trajectory-meta time{text-align:right;font-variant-numeric:tabular-nums}
 
-/* 轮次：连续流式分段。箭头明确告诉用户可折叠。 */
+/* 轮次连续流式分段。 */
 .trajectory-round{margin-top:16px;border-top:1px solid var(--al-line-strong)}
 .trajectory-round>summary{list-style:none;min-height:44px;display:grid;grid-template-columns:14px 28px auto minmax(0,1fr) auto;align-items:center;gap:8px;padding:0 8px;cursor:pointer}
 .trajectory-round>summary::-webkit-details-marker{display:none}
@@ -60,10 +72,7 @@
 .trajectory-round[open]>summary{background:color-mix(in srgb,var(--al-soft-2) 68%,transparent)}
 .trajectory-flow{padding:7px 9px 13px}
 
-/* 用户输入保持右侧深色气泡，但控制最大宽度，避免变成聊天页。 */
-.trajectory-flow .chat-row.user .bubble{max-width:min(78%,760px)}
-
-/* 思考使用通用强调色，不借用任何智能体来源色。 */
+/* 思考使用通用强调色，不借来源色。 */
 .trajectory-thought{min-height:38px;margin:7px 0;display:grid;grid-template-columns:18px minmax(0,1fr) minmax(220px,280px);align-items:center;gap:8px;padding:6px 9px;border:1px solid color-mix(in srgb,var(--al-accent) 22%,var(--al-line));border-radius:8px;background:color-mix(in srgb,var(--al-accent-soft) 42%,var(--al-surface));color:var(--al-accent)}
 .trajectory-thought-icon{width:17px;height:17px;border:1px solid currentColor;border-radius:5px;display:grid;place-items:center;font-size:10px;opacity:.72}
 .trajectory-thought-main{min-width:0;display:flex;align-items:center;gap:8px}
@@ -71,7 +80,7 @@
 .trajectory-thought-main span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:color-mix(in srgb,var(--al-accent) 64%,var(--al-muted));font-size:12px}
 .trajectory-thought-meta{display:flex;align-items:center;justify-content:flex-end;gap:9px;color:var(--al-muted);font-size:12px;white-space:nowrap}
 
-/* 工具执行：摘要优先，展开后是紧凑明细。 */
+/* 工具执行：摘要优先，展开后紧凑明细。 */
 .trajectory-tools{margin:7px 0;border:1px solid var(--al-line);border-radius:8px;background:var(--al-surface);overflow:hidden}
 .trajectory-tools>summary{list-style:none;min-height:40px;display:flex;align-items:center;gap:8px;padding:0 10px;cursor:pointer}
 .trajectory-tools>summary::-webkit-details-marker{display:none}
@@ -92,19 +101,17 @@
 .trajectory-tool-row .desc,.trajectory-tool-row time{color:var(--al-muted)}
 .trajectory-tool-row.error{background:var(--al-danger-soft)}
 
-/* 恢复成功是真正的状态语义，所以保留成功色。 */
 .trajectory-recovery{min-height:38px;margin:7px 0;display:grid;grid-template-columns:18px minmax(0,1fr) minmax(240px,300px);align-items:center;gap:8px;padding:6px 9px;border:1px solid var(--al-line);border-radius:8px;background:var(--al-surface)}
 .trajectory-recovery .mark{width:17px;height:17px;border-radius:50%;display:grid;place-items:center;background:var(--al-success-soft);color:var(--al-success);font-size:11px;font-weight:700}
 .trajectory-recovery .main{min-width:0;display:flex;align-items:center;gap:8px}
 .trajectory-recovery .main b{flex:0 0 auto;font-size:13px;color:var(--al-ink-2)}
 .trajectory-recovery .main span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--al-muted);font-size:12px}
 
-/* 智能体回复是内容类型，不是“成功状态”；使用中性视觉。 */
+/* 智能体回复是内容类型，不是成功状态。 */
 .trajectory-agent-response{max-width:min(76%,840px);margin:8px 0;padding:8px 11px;border-left:2px solid color-mix(in srgb,var(--al-ink-2) 26%,var(--al-line-strong));background:color-mix(in srgb,var(--al-soft-2) 72%,var(--al-surface));color:var(--al-ink-2);font-size:13px;line-height:1.62}
 .trajectory-agent-meta{display:flex;align-items:center;gap:8px;margin-bottom:4px;color:var(--al-muted);font-size:12px}
 .trajectory-agent-meta b{color:var(--al-ink-2);font-weight:650}
 .trajectory-agent-meta time{margin-left:auto;font-variant-numeric:tabular-nums}
-
 .session-item .si-title{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
 
 @media(max-width:1180px){
@@ -115,130 +122,85 @@
   .trajectory-tool-tags{display:none}
   .trajectory-agent-response{max-width:84%}
 }
-
-/* 小屏不删除证据：元信息换到事件正文下一行。 */
+@media(max-width:900px){.review-shell .workspace-toolbar{overflow-x:auto;overflow-y:visible}}
 @media(max-width:760px){
   .trajectory-life-row,.trajectory-thought,.trajectory-recovery{grid-template-columns:18px minmax(0,1fr)}
-  .trajectory-life-row>.trajectory-meta,
-  .trajectory-recovery>.trajectory-meta,
-  .trajectory-thought>.trajectory-thought-meta{grid-column:2;display:flex;justify-content:flex-start;align-items:center;flex-wrap:wrap;gap:6px 9px;margin-top:1px;white-space:normal}
-  .trajectory-meta .ev{justify-self:start}
-  .trajectory-source{min-width:0;text-align:left}
-  .trajectory-meta time{text-align:left}
-  .trajectory-round>summary{grid-template-columns:14px 26px auto minmax(0,1fr)}
-  .trajectory-round-meta{display:none}
-  .trajectory-agent-response{max-width:94%}
-  .trajectory-flow .chat-row.user .bubble{max-width:94%}
-  .trajectory-tool-row{grid-template-columns:26px 108px minmax(0,1fr)}
-  .trajectory-tool-row time{display:none}
+  .trajectory-life-row>.trajectory-meta,.trajectory-recovery>.trajectory-meta,.trajectory-thought>.trajectory-thought-meta{grid-column:2;display:flex;justify-content:flex-start;align-items:center;flex-wrap:wrap;gap:6px 9px;margin-top:1px;white-space:normal}
+  .trajectory-meta .ev{justify-self:start}.trajectory-source{min-width:0;text-align:left}.trajectory-meta time{text-align:left}
+  .trajectory-round>summary{grid-template-columns:14px 26px auto minmax(0,1fr)}.trajectory-round-meta{display:none}
+  .trajectory-agent-response{max-width:94%}.trajectory-flow .chat-row.user .bubble{max-width:94%}
+  .trajectory-tool-row{grid-template-columns:26px 108px minmax(0,1fr)}.trajectory-tool-row time{display:none}
 }
 </style>
 </head>
 <body>
 <div class="app-shell review-shell">
-  <header class="app-header">
-    <div class="app-header-inner">
-      <div class="brand"><span class="brand-mark">A</span><span class="brand-name">AgentLens</span></div>
-      <nav class="app-nav">
-        <a class="nav-item active" href="#">任务复盘</a>
-        <a class="nav-item nav-group-start" href="tools.html">工具分析</a>
-        <a class="nav-item" href="insights.html">使用洞察</a>
-        <a class="nav-item nav-group-start" href="agents.html">智能体概览</a>
-        <a class="nav-item" href="backup.html">资产备份</a>
-      </nav>
-      <div class="app-status">
-        <span class="status-pill tip" data-tip="后台服务：正常&#10;归属：后台服务 · 托管&#10;存储：正常&#10;实时通道：已连接"><span class="live-dot"></span>运行正常</span>
-        <button class="icon-button" data-theme-toggle aria-label="切换主题"></button>
-      </div>
-    </div>
-  </header>
+  <header class="app-header"><div class="app-header-inner"><div class="brand"><span class="brand-mark">A</span><span class="brand-name">AgentLens</span></div><nav class="app-nav"><a class="nav-item active" href="#">任务复盘</a><a class="nav-item nav-group-start" href="tools.html">工具分析</a><a class="nav-item" href="insights.html">使用洞察</a><a class="nav-item nav-group-start" href="agents.html">智能体概览</a><a class="nav-item" href="backup.html">资产备份</a></nav><div class="app-status"><span class="status-pill tip" data-tip="后台服务：正常&#10;归属：后台服务 · 托管&#10;存储：正常&#10;实时通道：已连接"><span class="live-dot"></span>运行正常</span><button class="icon-button" data-theme-toggle aria-label="切换主题"></button></div></div></header>
 
   <div class="workspace-toolbar">
-    <div class="agent-scope">
-      <button class="scope-chip active">全部智能体</button>
-      <button class="scope-chip"><span class="src-dot dot-codex"></span>Codex</button>
-      <button class="scope-chip"><span class="src-dot dot-claude"></span>Claude Code</button>
-      <button class="scope-chip"><span class="src-dot dot-pi"></span>Pi</button>
-      <details class="scope-manage">
-        <summary title="管理智能体快捷入口" aria-label="管理智能体快捷入口">＋</summary>
-        <div class="scope-pop"><div class="scope-pop-title">快捷智能体</div><label><input type="checkbox" checked><span class="src-dot dot-codex"></span><span>Codex</span><span class="st on">已检测</span></label><label><input type="checkbox" checked><span class="src-dot dot-claude"></span><span>Claude Code</span><span class="st on">已检测</span></label><label><input type="checkbox"><span class="src-dot dot-pi"></span><span>Pi</span><span class="st">未检测</span></label><label><input type="checkbox"><span></span><span>Hermes</span><span class="st">未检测</span></label><label><input type="checkbox"><span></span><span>OpenCode</span><span class="st">未检测</span></label></div>
-      </details>
-    </div>
-    <span class="toolbar-divider"></span>
-    <select class="filter"><option>全部项目</option><option>agent-lens</option><option>packages/web</option></select>
-    <select class="filter"><option>最近 7 天</option><option>今天</option><option>最近 30 天</option><option>全部时间</option></select>
-    <select class="filter"><option>全部状态</option><option>有错误</option><option>无错误</option></select>
-    <input class="filter search-filter" value="storage" placeholder="搜索会话…">
-    <button class="icon-button" title="刷新" aria-label="刷新">↻</button>
+    <div class="agent-scope"><button class="scope-chip active">全部智能体</button><button class="scope-chip"><span class="src-dot dot-codex"></span>Codex</button><button class="scope-chip"><span class="src-dot dot-claude"></span>Claude Code</button><button class="scope-chip"><span class="src-dot dot-pi"></span>Pi</button><details class="scope-manage"><summary title="管理智能体快捷入口" aria-label="管理智能体快捷入口">＋</summary><div class="scope-pop"><div class="scope-pop-title">快捷智能体</div><label><input type="checkbox" checked><span class="src-dot dot-codex"></span><span>Codex</span><span class="st on">已检测</span></label><label><input type="checkbox" checked><span class="src-dot dot-claude"></span><span>Claude Code</span><span class="st on">已检测</span></label><label><input type="checkbox"><span class="src-dot dot-pi"></span><span>Pi</span><span class="st">未检测</span></label><label><input type="checkbox"><span class="src-dot dot-hermes"></span><span>Hermes</span><span class="st">未检测</span></label><label><input type="checkbox"><span class="src-dot dot-opencode"></span><span>OpenCode</span><span class="st">未检测</span></label></div></details></div>
+    <span class="toolbar-divider"></span><select class="filter"><option>全部项目</option><option>agent-lens</option><option>packages/web</option></select><select class="filter"><option>最近 7 天</option><option>今天</option><option>最近 30 天</option><option>全部时间</option></select><select class="filter"><option>全部状态</option><option>有错误</option><option>无错误</option></select><input class="filter search-filter" value="storage" placeholder="搜索会话…"><button class="icon-button" title="刷新" aria-label="刷新">↻</button>
   </div>
 
   <div class="review-layout">
-    <aside class="session-panel">
-      <div class="session-panel-head"><div><b>会话</b><span>按时间倒序</span></div><span class="count-badge">40+</span></div>
-      <div class="session-scroll">
-        <div class="session-group">今天</div>
-        <button class="session-item active src-codex"><div class="si-meta"><span class="src-dot dot-codex"></span><span>Codex</span><time>14 分钟前</time></div><div class="si-title">重构 agent-lens 存储层：引入 Repository 接口</div><div class="si-foot"><span class="grow">agent-lens</span><span>24 调用</span><span class="errs">2 错误</span></div></button>
-        <button class="session-item src-claude"><div class="si-meta"><span class="src-dot dot-claude"></span><span>Claude Code</span><time>约 1 小时前</time></div><div class="si-title">修复 Web 端实时通道重连后的重复渲染</div><div class="si-foot"><span class="grow">packages/web</span><span>18 调用</span></div></button>
-        <div class="session-group">昨天</div>
-        <button class="session-item src-pi"><div class="si-meta"><span class="src-dot dot-pi"></span><span>Pi</span><time>昨天 21:47</time></div><div class="si-title">调研 SQLite WAL 模式在 Windows 的锁定行为</div><div class="si-foot"><span class="grow">无项目</span><span>9 调用</span><span class="errs">1 错误</span></div></button>
-        <div class="session-group">更早</div>
-        <button class="session-item src-codex"><div class="si-meta"><span class="src-dot dot-codex"></span><span>Codex</span><time>8月20日 16:24</time></div><div class="si-title">补充 Windows 安装升级卸载回归矩阵</div><div class="si-foot"><span class="grow">agent-lens</span><span>31 调用</span></div></button>
-      </div>
-    </aside>
-
+    <aside class="session-panel"><div class="session-panel-head"><div><b>会话</b><span>按时间倒序</span></div><span class="count-badge">40+</span></div><div class="session-scroll"><div class="session-group">今天</div><button class="session-item active src-codex"><div class="si-meta"><span class="src-dot dot-codex"></span><span>Codex</span><time>14 分钟前</time></div><div class="si-title">重构 agent-lens 存储层：引入 Repository 接口</div><div class="si-foot"><span class="grow">agent-lens</span><span>24 调用</span><span class="errs">2 错误</span></div></button><button class="session-item src-claude"><div class="si-meta"><span class="src-dot dot-claude"></span><span>Claude Code</span><time>约 1 小时前</time></div><div class="si-title">修复 Web 端实时通道重连后的重复渲染</div><div class="si-foot"><span class="grow">packages/web</span><span>18 调用</span></div></button><div class="session-group">昨天</div><button class="session-item src-pi"><div class="si-meta"><span class="src-dot dot-pi"></span><span>Pi</span><time>昨天 21:47</time></div><div class="si-title">调研 SQLite WAL 模式在 Windows 的锁定行为</div><div class="si-foot"><span class="grow">无项目</span><span>9 调用</span><span class="errs">1 错误</span></div></button></div></aside>
     <nav class="turn-rail" aria-label="轮次定位"><button class="turn-tick active" data-target="#trajectory-round-1" data-tip="第 1 轮 · 收敛改动清单"><i></i><i></i><i></i></button><button class="turn-tick err" data-target="#trajectory-round-2" data-tip="第 2 轮 · 1 次失败后恢复"><i></i><i></i><i></i></button><button class="turn-tick" data-target="#trajectory-round-3" data-tip="第 3 轮 · 全量验证"><i></i><i></i><i></i></button></nav>
 
-    <section class="reader-pane" id="readerPane" data-reader>
-      <div class="reader-inner">
-        <header class="review-head">
-          <div class="rh-meta"><span class="src-dot lg dot-codex"></span><b>Codex</b><span>agent-lens</span><span class="badge err">有错误</span></div>
-          <h1 class="rh-title">重构 agent-lens 存储层：引入 Repository 接口</h1>
-          <div class="rh-sub"><span>2026/08/24 22:14 – 22:48</span><code>F:\01-ai-gen-workspaces\agent-lens</code></div>
-          <div class="rh-actions"><button class="audit-toggle" data-audit-toggle aria-pressed="false">显示原始记录</button><span class="audit-note-inline audit-only">原始记录视图：补充来源原始事件与载荷；证据始终保持可见。</span></div>
-          <div class="rh-metrics"><div class="metric"><b>6</b><span>轮次</span></div><div class="metric"><b>24</b><span>调用</span></div><div class="metric danger"><b>2</b><span>错误</span></div><div class="metric"><b>34 分钟</b><span>跨度</span></div></div>
-        </header>
-        <div class="round-nav"><div class="round-seg"><button class="active">全部 <em>6</em></button><button>有错误 <em>2</em></button><button>耗时较高 <em>2</em></button></div><div class="round-act"><button data-expand-rounds aria-pressed="false">展开当前页</button><button data-scroll-bottom="#readerPane">跳到最新 ↓</button></div></div>
+    <section class="reader-pane" id="readerPane" data-reader><div class="reader-inner">
+      <header class="review-head"><div class="rh-meta"><span class="src-dot lg dot-codex"></span><b>Codex</b><span>agent-lens</span><span class="badge err">有错误</span></div><h1 class="rh-title">重构 agent-lens 存储层：引入 Repository 接口</h1><div class="rh-sub"><span>2026/08/24 22:14 – 22:48</span><code>F:\01-ai-gen-workspaces\agent-lens</code></div><div class="rh-actions"><button class="audit-toggle" data-audit-toggle aria-pressed="false">显示原始记录</button><span class="audit-note-inline audit-only">原始记录视图：补充来源原始事件与载荷；证据始终保持可见。</span></div><div class="rh-metrics"><div class="metric"><b>6</b><span>轮次</span></div><div class="metric"><b>24</b><span>调用</span></div><div class="metric danger"><b>2</b><span>错误</span></div><div class="metric"><b>34 分钟</b><span>跨度</span></div></div></header>
+      <div class="round-nav"><div class="round-seg"><button class="active">全部 <em>6</em></button><button>有错误 <em>2</em></button><button>耗时较高 <em>2</em></button></div><div class="round-act"><button data-expand-rounds aria-pressed="false">展开当前页</button><button data-scroll-bottom="#readerPane">跳到最新 ↓</button></div></div>
 
-        <section class="trajectory-lifecycle" aria-label="会话生命周期">
-          <div class="trajectory-life-row"><span class="trajectory-life-icon" aria-hidden="true"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.2"></circle><circle cx="8" cy="8" r="1.4"></circle></svg></span><div class="trajectory-life-main"><span class="trajectory-life-title">会话开始</span><span class="trajectory-life-desc">启动方式：命令行</span></div><div class="trajectory-meta"><span class="ev" data-cap="log"><i></i>原生日志</span><span class="trajectory-source">Codex</span><time>22:14:04</time></div></div>
-          <div class="trajectory-life-row"><span class="trajectory-life-icon" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M12.5 5.5A5 5 0 1 0 13 9"></path><path d="M12.5 2.8v2.7H9.8"></path></svg></span><div class="trajectory-life-main"><span class="trajectory-life-title">模型切换</span><span class="trajectory-life-desc">切换到 gpt-5.6-codex</span></div><div class="trajectory-meta"><span class="ev" data-cap="log"><i></i>原生日志</span><span class="trajectory-source">Codex</span><time>22:14:08</time></div></div>
-          <div class="trajectory-life-row"><span class="trajectory-life-icon" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M8 2.7 12.3 8 8 13.3 3.7 8 8 2.7Z"></path></svg></span><div class="trajectory-life-main"><span class="trajectory-life-title">思考级别</span><span class="trajectory-life-desc">中等 · 正文未采集</span></div><div class="trajectory-meta"><span class="ev" data-cap="log"><i></i>原生日志</span><span class="trajectory-source">Codex</span><time>22:14:08</time></div></div>
-        </section>
+      <section class="trajectory-lifecycle" aria-label="会话生命周期">
+        <div class="trajectory-life-row"><span class="trajectory-life-icon" aria-hidden="true"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.2"></circle><circle cx="8" cy="8" r="1.4"></circle></svg></span><div class="trajectory-life-main"><span class="trajectory-life-title">会话开始</span><span class="trajectory-life-desc">启动方式：命令行</span></div><div class="trajectory-meta"><span class="ev" data-cap="log"><i></i>原生日志</span><span class="trajectory-source">Codex</span><time>22:14:04</time></div></div>
+        <div class="trajectory-life-row"><span class="trajectory-life-icon" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M12.5 5.5A5 5 0 1 0 13 9"></path><path d="M12.5 2.8v2.7H9.8"></path></svg></span><div class="trajectory-life-main"><span class="trajectory-life-title">模型切换</span><span class="trajectory-life-desc">切换到 gpt-5.6-codex</span></div><div class="trajectory-meta"><span class="ev" data-cap="log"><i></i>原生日志</span><span class="trajectory-source">Codex</span><time>22:14:08</time></div></div>
+        <div class="trajectory-life-row"><span class="trajectory-life-icon" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M8 2.7 12.3 8 8 13.3 3.7 8 8 2.7Z"></path></svg></span><div class="trajectory-life-main"><span class="trajectory-life-title">思考级别</span><span class="trajectory-life-desc">中等 · 正文未采集</span></div><div class="trajectory-meta"><span class="ev" data-cap="log"><i></i>原生日志</span><span class="trajectory-source">Codex</span><time>22:14:08</time></div></div>
+      </section>
 
-        <details class="trajectory-round" id="trajectory-round-1">
-          <summary><span class="trajectory-round-index">01</span><span class="trajectory-round-title">第 1 轮</span><span class="trajectory-round-preview">先列出改动清单，不要直接动代码</span><span class="trajectory-round-meta"><span>5 工具</span><span>41 秒</span></span></summary>
-          <div class="trajectory-flow"><div class="chat-row user"><div class="bubble"><div class="meta"><span>用户</span><span class="ev-list"><span class="ev" data-cap="hook"><i></i>运行时捕获</span></span><time>22:14:12</time></div><p>帮我把 storage-sqlite 里散落的 SQL 收敛到 Repository 接口后面。先列出改动清单，不要直接动代码。</p></div></div><div class="trajectory-thought"><span class="trajectory-thought-icon">思</span><div class="trajectory-thought-main"><b>思考</b><span>检查存储边界、调用方和现有测试，先确认最小改动面。</span></div><div class="trajectory-thought-meta"><span>1 个来源可见块</span><time>22:14:18</time></div></div><details class="trajectory-tools"><summary><span class="kicon sm kind-read"></span><b>工具执行</b><span class="trajectory-tools-summary">5 次调用 · 全部成功 · 1.5 秒</span><span class="trajectory-tool-tags"><span class="trajectory-tool-tag read">读取 3</span><span class="trajectory-tool-tag">搜索 2</span></span></summary><div class="trajectory-tool-list"><div class="trajectory-tool-row"><span class="kicon sm kind-search"></span><code>search</code><span class="desc">查找 Repository / SQL 调用点</span><time>1.2 秒</time></div><div class="trajectory-tool-row"><span class="kicon sm kind-read"></span><code>read_file</code><span class="desc">packages/storage-sqlite/src/index.ts</span><time>0.3 秒</time></div></div></details><div class="trajectory-agent-response"><div class="trajectory-agent-meta"><b>智能体</b><span class="ev-list"><span class="ev" data-cap="log"><i></i>原生日志</span></span><time>22:15:01</time></div>建议先收敛 Repository 接口，再迁移调用方，最后用现有存储测试做回归。</div></div>
-        </details>
+      <details class="trajectory-round" id="trajectory-round-1"><summary><span class="trajectory-round-index">01</span><span class="trajectory-round-title">第 1 轮</span><span class="trajectory-round-preview">先列出改动清单，不要直接动代码</span><span class="trajectory-round-meta"><span>5 工具</span><span>41 秒</span></span></summary><div class="trajectory-flow">
+        <div class="chat-row user"><div class="bubble"><div class="meta"><span>用户</span><span class="ev-list"><span class="ev" data-cap="hook"><i></i>运行时捕获</span><span class="ev" data-cap="db"><i></i>原生数据库</span></span><time>22:14:12</time></div><p>帮我把 storage-sqlite 里散落的 SQL 收敛到 Repository 接口后面。先列出改动清单，不要直接动代码。</p><div class="trajectory-message-actions"><button data-open-drawer="#message-inspector">证据详情 · 2</button><button data-message-source>查看源码</button></div><pre class="trajectory-message-source" hidden>帮我把 storage-sqlite 里散落的 SQL 收敛到 Repository 接口后面。先列出改动清单，不要直接动代码。</pre></div></div>
+        <div class="trajectory-thought"><span class="trajectory-thought-icon">思</span><div class="trajectory-thought-main"><b>思考</b><span>检查存储边界、调用方和现有测试，先确认最小改动面。</span></div><div class="trajectory-thought-meta"><span>1 个来源可见块</span><time>22:14:18</time></div></div>
+        <details class="trajectory-tools"><summary><span class="kicon sm kind-read"></span><b>工具执行</b><span class="trajectory-tools-summary">5 次调用 · 全部成功 · 1.5 秒</span><span class="trajectory-tool-tags"><span class="trajectory-tool-tag read">读取 3</span><span class="trajectory-tool-tag">搜索 2</span></span></summary><div class="trajectory-tool-list"><div class="trajectory-tool-row"><span class="kicon sm kind-search"></span><code>search</code><span class="desc">查找 Repository / SQL 调用点</span><time>1.2 秒</time></div><div class="trajectory-tool-row"><span class="kicon sm kind-read"></span><code>read_file</code><span class="desc">packages/storage-sqlite/src/index.ts</span><time>0.3 秒</time></div></div></details>
+        <div class="trajectory-agent-response"><div class="trajectory-agent-meta"><b>智能体</b><span class="ev-list"><span class="ev" data-cap="log"><i></i>原生日志</span></span><time>22:15:01</time></div>建议先收敛 Repository 接口，再迁移调用方，最后用现有存储测试做回归。</div>
+      </div></details>
 
-        <details class="trajectory-round" id="trajectory-round-2" open>
-          <summary><span class="trajectory-round-index">02</span><span class="trajectory-round-title">第 2 轮</span><span class="trajectory-round-preview">实现 Repository 并补回归测试</span><span class="trajectory-round-meta"><span>8 工具</span><span class="errs">1 错误</span><span>2 分钟</span></span></summary>
-          <div class="trajectory-flow"><div class="chat-row user"><div class="bubble"><div class="meta"><span>用户</span><time>22:20:03</time></div><p>按这个范围改，别碰已经确定的运行时架构。</p></div></div><div class="trajectory-thought"><span class="trajectory-thought-icon">思</span><div class="trajectory-thought-main"><b>思考</b><span>保持核心契约不变，只处理 storage-sqlite 内部边界。</span></div><div class="trajectory-thought-meta"><time>22:20:09</time></div></div><details class="trajectory-tools" open><summary><span class="kicon sm kind-edit"></span><b>工具执行</b><span class="trajectory-tools-summary">8 次调用 · 7 成功 · 1 错误 · 9.4 秒</span><span class="trajectory-tool-tags"><span class="trajectory-tool-tag edit">修改 4</span><span class="trajectory-tool-tag read">读取 2</span><span class="trajectory-tool-tag">命令 2</span></span></summary><div class="trajectory-tool-list"><div class="trajectory-tool-row"><span class="kicon sm kind-edit"></span><code>apply_patch</code><span class="desc">新增 Repository 接口与实现</span><time>0.8 秒</time></div><div class="trajectory-tool-row error"><span class="kicon sm kind-shell"></span><code>test</code><span class="desc">首次测试失败：旧断言仍依赖直接 SQL</span><time>8.6 秒</time></div></div></details><div class="trajectory-recovery"><span class="mark">✓</span><div class="main"><b>错误恢复</b><span>更新旧断言后重新执行，回归测试通过。</span></div><div class="trajectory-meta"><span class="ev" data-cap="hook"><i></i>运行时捕获</span><span class="trajectory-source">Codex</span><time>22:22:12</time></div></div><div class="trajectory-agent-response"><div class="trajectory-agent-meta"><b>智能体</b><span class="ev-list"><span class="ev" data-cap="hook"><i></i>运行时捕获</span></span><time>22:22:16</time></div>Repository 边界已经收敛，失败用例修复后回归通过。</div></div>
-        </details>
+      <details class="trajectory-round" id="trajectory-round-2" open><summary><span class="trajectory-round-index">02</span><span class="trajectory-round-title">第 2 轮</span><span class="trajectory-round-preview">实现 Repository 并补回归测试</span><span class="trajectory-round-meta"><span>8 工具</span><span class="errs">1 错误</span><span>2 分钟</span></span></summary><div class="trajectory-flow">
+        <div class="chat-row user"><div class="bubble"><div class="meta"><span>用户</span><span class="ev-list"><span class="ev" data-cap="db"><i></i>原生数据库</span></span><time>22:20:03</time></div><p>按这个范围改，别碰已经确定的运行时架构。</p><div class="trajectory-message-actions"><button data-open-drawer="#message-inspector">证据详情 · 1</button><button data-message-source>查看源码</button></div><pre class="trajectory-message-source" hidden>按这个范围改，别碰已经确定的运行时架构。</pre></div></div>
+        <div class="trajectory-thought"><span class="trajectory-thought-icon">思</span><div class="trajectory-thought-main"><b>思考</b><span>保持核心契约不变，只处理 storage-sqlite 内部边界。</span></div><div class="trajectory-thought-meta"><time>22:20:09</time></div></div>
+        <details class="trajectory-tools" open><summary><span class="kicon sm kind-edit"></span><b>工具执行</b><span class="trajectory-tools-summary">8 次调用 · 7 成功 · 1 错误 · 9.4 秒</span><span class="trajectory-tool-tags"><span class="trajectory-tool-tag edit">修改 4</span><span class="trajectory-tool-tag read">读取 2</span><span class="trajectory-tool-tag">命令 2</span></span></summary><div class="trajectory-tool-list"><div class="trajectory-tool-row"><span class="kicon sm kind-edit"></span><code>apply_patch</code><span class="desc">新增 Repository 接口与实现</span><time>0.8 秒</time></div><div class="trajectory-tool-row error"><span class="kicon sm kind-shell"></span><code>test</code><span class="desc">首次测试失败：旧断言仍依赖直接 SQL</span><time>8.6 秒</time></div></div></details>
+        <div class="trajectory-recovery"><span class="mark">✓</span><div class="main"><b>错误恢复</b><span>更新旧断言后重新执行，回归测试通过。</span></div><div class="trajectory-meta"><span class="ev" data-cap="hook"><i></i>运行时捕获</span><span class="trajectory-source">Codex</span><time>22:22:12</time></div></div>
+        <div class="trajectory-agent-response"><div class="trajectory-agent-meta"><b>智能体</b><span class="ev-list"><span class="ev" data-cap="hook"><i></i>运行时捕获</span></span><time>22:22:16</time></div>Repository 边界已经收敛，失败用例修复后回归通过。</div>
+      </div></details>
 
-        <details class="trajectory-round" id="trajectory-round-3" open>
-          <summary><span class="trajectory-round-index">03</span><span class="trajectory-round-title">第 3 轮</span><span class="trajectory-round-preview">全量验证与文档同步</span><span class="trajectory-round-meta"><span>11 工具</span><span>31 分钟</span></span></summary>
-          <div class="trajectory-flow"><details class="trajectory-tools"><summary><span class="kicon sm kind-shell"></span><b>工具执行</b><span class="trajectory-tools-summary">11 次调用 · 全部成功 · 31 分钟</span><span class="trajectory-tool-tags"><span class="trajectory-tool-tag">验证</span><span class="trajectory-tool-tag read">读取</span></span></summary></details><div class="trajectory-agent-response"><div class="trajectory-agent-meta"><b>智能体</b><time>22:47:51</time></div>类型检查、测试与构建结果已汇总；相关设计文档同步完成。</div></div>
-        </details>
+      <details class="trajectory-round" id="trajectory-round-3" open><summary><span class="trajectory-round-index">03</span><span class="trajectory-round-title">第 3 轮</span><span class="trajectory-round-preview">全量验证与文档同步</span><span class="trajectory-round-meta"><span>11 工具</span><span>31 分钟</span></span></summary><div class="trajectory-flow"><details class="trajectory-tools"><summary><span class="kicon sm kind-shell"></span><b>工具执行</b><span class="trajectory-tools-summary">11 次调用 · 全部成功 · 31 分钟</span><span class="trajectory-tool-tags"><span class="trajectory-tool-tag">验证</span><span class="trajectory-tool-tag read">读取</span></span></summary></details><div class="trajectory-agent-response"><div class="trajectory-agent-meta"><b>智能体</b><time>22:47:51</time></div>类型检查、测试与构建结果已汇总；相关设计文档同步完成。</div></div></details>
 
-        <section class="trajectory-lifecycle" aria-label="会话结束"><div class="trajectory-life-row"><span class="trajectory-life-icon" aria-hidden="true"><svg viewBox="0 0 16 16"><rect x="3.3" y="3.3" width="9.4" height="9.4" rx="1.8"></rect></svg></span><div class="trajectory-life-main"><span class="trajectory-life-title">会话结束</span><span class="trajectory-life-desc">正常结束 · 无未完成操作</span></div><div class="trajectory-meta"><span class="ev" data-cap="log"><i></i>原生日志</span><span class="trajectory-source">Codex</span><time>22:48:05</time></div></div></section>
-        <div class="sentinel">执行轨迹审阅版 · 仅用于确认任务复盘表现层</div>
-      </div>
-    </section>
+      <section class="trajectory-lifecycle" aria-label="会话结束"><div class="trajectory-life-row"><span class="trajectory-life-icon" aria-hidden="true"><svg viewBox="0 0 16 16"><rect x="3.3" y="3.3" width="9.4" height="9.4" rx="1.8"></rect></svg></span><div class="trajectory-life-main"><span class="trajectory-life-title">会话结束</span><span class="trajectory-life-desc">正常结束 · 无未完成操作</span></div><div class="trajectory-meta"><span class="ev" data-cap="log"><i></i>原生日志</span><span class="trajectory-source">Codex</span><time>22:48:05</time></div></div></section>
+      <div class="sentinel">执行轨迹审阅版 · 仅用于确认任务复盘表现层</div>
+    </div></section>
   </div>
 </div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="message-inspector" aria-label="消息证据详情">
+  <div class="dw-head"><div><div class="dw-eyebrow">消息详情</div><div class="dw-title">用户消息</div></div><button class="icon-button" data-close-drawer aria-label="关闭">×</button></div>
+  <div class="tabs"><button class="active" data-tab="detail">详情</button><button data-tab="evidence">证据 · 2</button><button data-tab="raw">原始数据</button></div>
+  <div class="dw-body">
+    <section data-panel="detail"><h3>摘要</h3><div class="ev-card"><div class="row1"><b>用户输入</b><span>已捕获</span><span>22:14:12</span></div><div class="path">消息正文由任务复盘投影展示；证据与来源原始记录独立保留。</div></div></section>
+    <section data-panel="evidence" hidden><h3>证据</h3><div class="ev-card"><div class="row1"><b>原生数据库</b><span>已观测</span><span>可信度：精确</span></div><div class="path"><code>native-db · message:turn-1:user</code></div></div><div class="ev-card"><div class="row1"><b>运行时捕获</b><span>已观测</span><span>可信度：精确</span></div><div class="path"><code>runtime-hook · session:storage-refactor</code></div></div></section>
+    <section data-panel="raw" hidden><h3>原始数据</h3><pre class="code-block">{
+  "role": "user",
+  "captureMethod": ["native-db", "runtime-hook"],
+  "source": "codex",
+  "at": "2026-08-24T22:14:12"
+}</pre></section>
+  </div>
+</aside>
+
 <script src="assets/app.js"></script>
 <script>
-/* 共享 app.js 只处理旧 interaction；本对比稿补齐 trajectory-round 的批量展开。 */
-document.querySelectorAll('[data-expand-rounds]').forEach(function(button){
-  button.addEventListener('click',function(event){
-    if(!document.querySelector('.trajectory-round')) return
-    event.stopPropagation()
-    var expand=button.getAttribute('aria-pressed')!=='true'
-    document.querySelectorAll('details.trajectory-round').forEach(function(round){round.open=expand})
-    button.setAttribute('aria-pressed',String(expand))
-    button.textContent=expand?'收起当前页':'展开当前页'
-  })
-})
+/* 新轨迹轮次的批量展开。 */
+document.querySelectorAll('[data-expand-rounds]').forEach(function(button){button.addEventListener('click',function(event){if(!document.querySelector('.trajectory-round'))return;event.stopPropagation();var expand=button.getAttribute('aria-pressed')!=='true';document.querySelectorAll('details.trajectory-round').forEach(function(round){round.open=expand});button.setAttribute('aria-pressed',String(expand));button.textContent=expand?'收起当前页':'展开当前页'})})
+/* 用户消息源码切换：保留正式 ReviewPage 的能力语义。 */
+document.querySelectorAll('[data-message-source]').forEach(function(button){button.addEventListener('click',function(){var bubble=button.closest('.bubble');var source=bubble&&bubble.querySelector('.trajectory-message-source');if(!source)return;var show=source.hasAttribute('hidden');if(show)source.removeAttribute('hidden');else source.setAttribute('hidden','');button.textContent=show?'返回渲染':'查看源码'})})
 </script>
 </body>
 </html>
