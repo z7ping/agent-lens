@@ -1,0 +1,189 @@
+/*
+ * 工具分析正式样式。
+ *
+ * 本文件是工具分析页面的视觉所有者，负责指标、表格、关注项、资产归因、
+ * 工具详情与会话钻取。不得通过阶段性覆盖层修正本页。
+ */
+
+.tool-kind-svg {
+  display: inline-grid;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  place-items: center;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.tool-kind-svg > svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.tools-content .tool-table-name {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.tools-content .tool-table-name > .tool-kind-svg {
+  width: 18px;
+  height: 18px;
+  flex-basis: 18px;
+}
+
+.tools-content .tool-table-name > .tool-kind-svg > svg {
+  width: 14px;
+  height: 14px;
+}
+
+.tool-drawer-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+}
+
+.tool-drawer-title .tool-kind-svg {
+  width: 16px;
+  height: 16px;
+  flex-basis: 16px;
+}
+
+.tool-drawer-title .tool-kind-svg > svg {
+  width: 16px;
+  height: 16px;
+}
+
+.tool-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  margin: 18px 0;
+  border-top: 1px solid var(--al-line);
+  border-bottom: 1px solid var(--al-line);
+  background: var(--al-surface);
+}
+
+.tool-summary-card {
+  display: block;
+  min-height: 0;
+  padding: 12px 16px;
+  border: 0;
+  border-right: 1px solid var(--al-line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.tool-summary-card:last-child { border-right: 0; }
+.tool-summary-card > span { display: block; color: var(--al-muted); font-size: 12px; font-weight: 650; }
+.tool-summary-card strong { display: block; margin: 5px 0; font-size: 14px; }
+.tool-summary-card small { display: block; padding-top: 0; font-size: 12px; }
+
+.tool-table-card,
+.attributed-assets,
+.cross-agent-matrix { box-shadow: none; }
+
+.tool-table-card > .table-section-head {
+  display: block;
+  height: auto;
+  min-height: 0;
+  padding: 14px 16px;
+}
+.tool-table-card > .table-section-head h2 { margin: 0; font-size: 14px; }
+.tool-table-card > .table-section-head p { margin: 3px 0 0; font-size: 12px; }
+.tool-table { font-size: 13px; }
+.tool-table th,
+.tool-table td { height: auto; padding: 10px 13px; }
+.tool-table th { font-size: 12px; }
+.tool-name { font-size: 13px; }
+.tool-source { font-size: 12px; }
+.tool-table th[role='button']:focus-visible,
+.tool-table tbody tr:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--al-accent) 55%, transparent);
+  outline-offset: -2px;
+}
+
+.tool-attention { margin-top: 22px; }
+.tool-attention-list { margin-top: 8px; border-top: 1px solid var(--al-line); }
+.tool-attention-row {
+  display: grid;
+  width: 100%;
+  min-height: 0;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 3px;
+  border: 0;
+  border-top: 1px solid var(--al-line);
+  background: transparent;
+  text-align: left;
+}
+.tool-attention-row:hover { background: var(--al-soft-2); }
+.tool-attention-row > span:nth-child(2) { min-width: 0; }
+.tool-attention-row b { display: block; color: var(--al-ink); font: 13px/1.4 var(--font-mono); }
+.tool-attention-row small { display: block; margin-top: 2px; color: var(--al-muted); font-size: 12px; }
+.tool-attention-row > strong { font-size: 12px; font-variant-numeric: tabular-nums; }
+.tool-attention-badge { min-width: 62px; padding: 2px 7px; border-radius: 999px; font-size: 12px; font-weight: 650; text-align: center; }
+.tool-attention-badge.is-danger { background: var(--al-danger-soft); color: var(--al-danger); }
+.tool-attention-badge.is-warning { background: var(--al-warning-soft); color: var(--al-warning); }
+
+.attributed-asset {
+  display: grid;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr) auto auto minmax(80px, 220px) auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 2px;
+}
+.asset-usage-bar { width: 100%; min-width: 80px; height: 6px; overflow: hidden; border-radius: 999px; background: var(--al-soft); }
+.asset-usage-bar > i { display: block; height: 100%; border-radius: inherit; background: var(--al-accent); }
+
+.tool-drill-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  border-top: 1px solid var(--al-line);
+  border-bottom: 1px solid var(--al-line);
+}
+.tool-drill-stat { min-height: 0; padding: 10px 12px; border: 0; border-right: 1px solid var(--al-line); background: transparent; }
+.tool-drill-stat:nth-child(3n) { border-right: 0; }
+.tool-session-section { margin-top: 18px; }
+.tool-session-section .table-section-head { display: block; height: auto; min-height: 0; padding: 0; border: 0; }
+.tool-session-section .table-section-head h2 { margin: 0; color: var(--al-muted-2); font-size: 12px; font-weight: 700; letter-spacing: .09em; }
+.tool-session-section .table-section-head p { margin: 4px 0 0; font-size: 12px; }
+.tool-session-list { display: flex; flex-direction: column; gap: 7px; margin-top: 8px; }
+.tool-session-link {
+  display: grid;
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) 85px auto;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 12px;
+  border: 1px solid var(--al-line);
+  border-radius: 9px;
+  background: var(--al-soft-2);
+  text-align: left;
+}
+.tool-session-link:hover { border-color: var(--al-line-strong); background: var(--al-soft); }
+.tool-session-copy { min-width: 0; }
+.tool-session-copy b { display: block; overflow: hidden; color: var(--al-ink); font-size: 13px; font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
+.tool-session-copy small { display: block; margin-top: 2px; color: var(--al-muted-2); font-size: 12px; }
+.tool-session-open { color: var(--al-accent); font-size: 12px; font-weight: 650; white-space: nowrap; }
+
+@media (max-width: 760px) {
+  .tool-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tool-summary-card:nth-child(2) { border-right: 0; }
+  .tool-summary-card:nth-child(-n + 2) { border-bottom: 1px solid var(--al-line); }
+  .tool-drill-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tool-drill-stat,
+  .tool-drill-stat:nth-child(3n) { border-right: 1px solid var(--al-line); }
+  .tool-drill-stat:nth-child(2n) { border-right: 0; }
+  .tool-session-link { grid-template-columns: minmax(0, 1fr) auto; }
+  .tool-session-link .metric-bar,
+  .asset-usage-bar,
+  .attributed-asset .asset-usage-bar { display: none; }
+  .attributed-asset { grid-template-columns: minmax(0, 1fr) auto auto; }
+}
