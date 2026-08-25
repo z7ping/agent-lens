@@ -33,17 +33,17 @@ if (!singleInstance) {
   let startupError = null
   try {
     await ensureDaemonLog()
-    writeDaemonLog(\`\\n--- AgentLens desktop start \\${new Date().toISOString()} packaged=\\${app.isPackaged} pid=\\${process.pid} ---\`)
+    writeDaemonLog('\\n--- AgentLens desktop start ' + new Date().toISOString() + ' packaged=' + app.isPackaged + ' pid=' + process.pid + ' ---')
     await startDaemon()
     runtimeReady = await waitForDaemon()
     if (!runtimeReady) {
-      throw new Error(\`AgentLens 后台服务未能正常启动。请查看日志：\\${join(app.getPath('logs'), 'daemon.log')}\`)
+      throw new Error('AgentLens 后台服务未能正常启动。请查看日志：' + join(app.getPath('logs'), 'daemon.log'))
     }
     markDaemonStable()
   } catch (error) {
     startupError = error
     const detail = error instanceof Error ? error.stack ?? error.message : String(error)
-    writeDaemonLog(\`--- desktop runtime startup failed: \\${detail} ---\`)
+    writeDaemonLog('--- desktop runtime startup failed: ' + detail + ' ---')
   }
 
   await app.whenReady()
@@ -55,7 +55,7 @@ if (!singleInstance) {
       type: 'error',
       title: 'AgentLens 启动失败',
       message: 'AgentLens Windows 客户端未能正常启动。',
-      detail: \`\\${detail}\\n\\n日志：\\${join(app.getPath('logs'), 'daemon.log')}\`,
+      detail: detail + '\\n\\n日志：' + join(app.getPath('logs'), 'daemon.log'),
     })
     app.quit()
   } else {
@@ -65,13 +65,13 @@ if (!singleInstance) {
       createTray()
     } catch (error) {
       tray = null
-      writeDaemonLog(\`--- tray creation failed: \\${error instanceof Error ? error.stack ?? error.message : String(error)} ---\`)
+      writeDaemonLog('--- tray creation failed: ' + (error instanceof Error ? error.stack ?? error.message : String(error)) + ' ---')
     }
 
     try {
       await ensureInitialLoginAutostart()
     } catch (error) {
-      writeDaemonLog(\`--- initial login autostart failed: \\${error instanceof Error ? error.message : String(error)} ---\`)
+      writeDaemonLog('--- initial login autostart failed: ' + (error instanceof Error ? error.message : String(error)) + ' ---')
     }
 
     await mainWindow.loadURL(daemonUrl)
