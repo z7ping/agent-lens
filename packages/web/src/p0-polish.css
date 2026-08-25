@@ -98,7 +98,7 @@
 .review-page .event-lifecycle .event-copy {
   display: flex;
   min-width: 0;
-  flex: 1;
+  flex: 0 1 auto;
   align-items: center;
   gap: 8px;
   overflow: hidden;
@@ -121,6 +121,10 @@
 
 .review-page .event-lifecycle .evidence-inline-list {
   flex-wrap: nowrap;
+}
+
+.review-page .event-lifecycle .event-source {
+  margin-left: auto;
 }
 
 .review-page .event-lifecycle .event-source,
