@@ -22,7 +22,7 @@ jobs:
           package-manager-cache: false
 
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Verify release tag matches package version
         if: github.event_name == 'release'
@@ -44,6 +44,31 @@ jobs:
         env:
           CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+
+      - name: Smoke packaged Windows desktop
+        shell: pwsh
+        run: ./scripts/smoke-windows-desktop.ps1
+
+      - name: Install and smoke Windows desktop
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem 'release/windows/AgentLens-*-Setup-x64.exe' | Select-Object -First 1
+          if ($null -eq $installer) { throw '没有找到 Windows 安装器' }
+
+          $installDir = Join-Path $env:RUNNER_TEMP 'agent-lens-installed-smoke'
+          Remove-Item -Recurse -Force $installDir -ErrorAction SilentlyContinue
+          $install = Start-Process -FilePath $installer.FullName -ArgumentList @('/S', "/D=$installDir") -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "Windows 安装器静默安装失败：$($install.ExitCode)" }
+
+          $installedExe = Join-Path $installDir 'AgentLens.exe'
+          if (-not (Test-Path $installedExe)) { throw "安装完成后没有找到 AgentLens.exe：$installedExe" }
+          ./scripts/smoke-windows-desktop.ps1 -ExecutablePath $installedExe
+
+          $uninstaller = Get-ChildItem $installDir -Filter 'Uninstall*.exe' | Select-Object -First 1
+          if ($null -ne $uninstaller) {
+            $uninstall = Start-Process -FilePath $uninstaller.FullName -ArgumentList '/S' -Wait -PassThru
+            if ($uninstall.ExitCode -ne 0) { throw "Windows 静默卸载失败：$($uninstall.ExitCode)" }
+          }
 
       - name: Create checksums
         shell: pwsh
