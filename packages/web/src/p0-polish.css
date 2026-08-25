@@ -1,62 +1,9 @@
 /*
  * AgentLens 1.0 P0 体验收口。
  *
- * 临时保留仍未迁移的工具图标与资产备份首次扫描反馈。
- * 任务复盘样式已全部归并到 review.css，不再在此覆盖。
+ * 仅临时保留资产备份首次扫描反馈。
+ * 工具分析样式已迁到 tools.css；任务复盘样式已迁到 review.css。
  */
-
-/* ToolKindIcon 的 SVG 没有固有 CSS 尺寸时会采用浏览器默认尺寸；统一钳制到紧凑图标。 */
-.tool-kind-svg {
-  display: inline-grid;
-  width: 16px;
-  height: 16px;
-  flex: 0 0 16px;
-  place-items: center;
-  line-height: 1;
-  vertical-align: middle;
-}
-
-.tool-kind-svg > svg {
-  display: block;
-  width: 16px;
-  height: 16px;
-}
-
-.tools-content .tool-table-name {
-  display: inline-flex;
-  min-width: 0;
-  align-items: center;
-  gap: 8px;
-}
-
-.tools-content .tool-table-name > .tool-kind-svg {
-  width: 18px;
-  height: 18px;
-  flex-basis: 18px;
-}
-
-.tools-content .tool-table-name > .tool-kind-svg > svg {
-  width: 14px;
-  height: 14px;
-}
-
-.tool-drawer-title {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 7px;
-}
-
-.tool-drawer-title .tool-kind-svg {
-  width: 16px;
-  height: 16px;
-  flex-basis: 16px;
-}
-
-.tool-drawer-title .tool-kind-svg > svg {
-  width: 16px;
-  height: 16px;
-}
 
 /* 资产备份首次进入会触发真实目录扫描；明确告诉用户当前正在做什么，而不是只留通用骨架。 */
 .app-shell:has(.nav-item-active[href='/backup']) .workspace-skeleton {
