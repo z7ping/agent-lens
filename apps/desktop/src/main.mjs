@@ -23,6 +23,23 @@ const DAEMON_PORT_TIMEOUT_MS = 180
 const port = process.env.AGENT_LENS_PORT ? Number(process.env.AGENT_LENS_PORT) : DEFAULT_PORT
 const daemonUrl = `http://127.0.0.1:${port}`
 const startHidden = process.argv.includes('--hidden')
+const startupPage = `data:text/html;charset=UTF-8,${encodeURIComponent(`<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>AgentLens</title>
+<style>
+  html,body{height:100%;margin:0;background:#0b0d10;color:#f1f4f8;font-family:"Segoe UI","Microsoft YaHei",sans-serif}
+  body{display:grid;place-items:center}
+  main{display:flex;align-items:center;gap:14px;padding:24px 28px;border:1px solid #252b34;border-radius:14px;background:#11151b}
+  strong{display:block;font-size:18px;letter-spacing:.01em}
+  span{display:block;margin-top:4px;color:#9da8b7;font-size:13px}
+  i{width:10px;height:10px;border-radius:50%;background:#8eb8ff;box-shadow:0 0 0 5px rgba(142,184,255,.12)}
+</style>
+</head>
+<body><main><i></i><div><strong>AgentLens</strong><span>正在启动本地运行时…</span></div></main></body>
+</html>`)} `
 
 let mainWindow = null
 let tray = null
@@ -44,6 +61,16 @@ function sleep(ms) {
 
 function appAsset(...parts) {
   return join(app.getAppPath(), ...parts)
+}
+
+function unpackedAsset(...parts) {
+  if (app.isPackaged) return join(process.resourcesPath, 'app.asar.unpacked', ...parts)
+  return appAsset(...parts)
+}
+
+function desktopIconPath() {
+  const windowsIcon = unpackedAsset('assets', 'icon-win.png')
+  return existsSync(windowsIcon) ? windowsIcon : unpackedAsset('assets', 'icon.png')
 }
 
 async function ensureDaemonLog() {
@@ -212,7 +239,9 @@ async function startDaemon() {
   await ensureDaemonLog()
   writeDaemonLog(`\n--- AgentLens desktop daemon start ${new Date().toISOString()} ---`)
 
-  const child = spawn(process.execPath, [appAsset('runtime', 'daemon.mjs')], {
+  const daemonEntry = unpackedAsset('runtime', 'daemon.mjs')
+  writeDaemonLog(`--- daemon entry ${daemonEntry} ---`)
+  const child = spawn(process.execPath, [daemonEntry], {
     env: {
       ...process.env,
       ELECTRON_RUN_AS_NODE: '1',
@@ -365,7 +394,7 @@ function createWindow() {
     minHeight: 600,
     show: false,
     backgroundColor: '#0b0d10',
-    icon: appAsset('assets', 'icon.png'),
+    icon: desktopIconPath(),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -379,13 +408,20 @@ function createWindow() {
   mainWindow.on('close', event => {
     if (quitting) return
     event.preventDefault()
+    if (!tray) {
+      app.quit()
+      return
+    }
     mainWindow?.hide()
   })
   mainWindow.on('closed', () => { mainWindow = null })
+  void mainWindow.loadURL(startupPage).catch(error => {
+    writeDaemonLog(`--- startup page failed: ${error instanceof Error ? error.message : String(error)} ---`)
+  })
 }
 
 function createTray() {
-  tray = new Tray(appAsset('assets', 'tray.ico'))
+  tray = new Tray(unpackedAsset('assets', 'tray.ico'))
   tray.setToolTip('AgentLens')
   const template = [
     { label: '打开 AgentLens', click: showWindow },
@@ -441,30 +477,40 @@ if (!singleInstance) {
 
   await app.whenReady()
   app.setAppUserModelId('dev.z7ping.agentlens')
-  await ensureInitialLoginAutostart()
-  createWindow()
-  createTray()
 
   try {
+    await ensureDaemonLog()
+    writeDaemonLog(`\n--- AgentLens desktop start ${new Date().toISOString()} packaged=${app.isPackaged} pid=${process.pid} ---`)
+    createWindow()
+
+    try {
+      createTray()
+    } catch (error) {
+      tray = null
+      writeDaemonLog(`--- tray creation failed: ${error instanceof Error ? error.stack ?? error.message : String(error)} ---`)
+    }
+
+    try {
+      await ensureInitialLoginAutostart()
+    } catch (error) {
+      writeDaemonLog(`--- initial login autostart failed: ${error instanceof Error ? error.message : String(error)} ---`)
+    }
+
     await startDaemon()
     if (await waitForDaemon()) {
       markDaemonStable()
       await mainWindow.loadURL(daemonUrl)
     } else {
-      await dialog.showMessageBox({
-        type: 'error',
-        title: 'AgentLens 运行时启动失败',
-        message: 'AgentLens 后台服务未能正常启动。',
-        detail: `请查看日志：${join(app.getPath('logs'), 'daemon.log')}`,
-      })
-      app.quit()
+      throw new Error(`AgentLens 后台服务未能正常启动。请查看日志：${join(app.getPath('logs'), 'daemon.log')}`)
     }
   } catch (error) {
+    const detail = error instanceof Error ? error.stack ?? error.message : String(error)
+    writeDaemonLog(`--- desktop startup failed: ${detail} ---`)
     await dialog.showMessageBox({
       type: 'error',
-      title: 'AgentLens 运行时不兼容',
-      message: '检测到已经运行的 AgentLens，但当前客户端无法安全复用。',
-      detail: error instanceof Error ? error.message : String(error),
+      title: 'AgentLens 启动失败',
+      message: 'AgentLens Windows 客户端未能正常启动。',
+      detail: `${detail}\n\n日志：${join(app.getPath('logs'), 'daemon.log')}`,
     })
     app.quit()
   }
