@@ -29,8 +29,17 @@ interface RuntimeProfileRepositoryExtension {
   attachAssetBinding(assetBindingId: string, runtimeProfileId: string): Promise<void>
 }
 
-type StorageWithRuntimeProfiles = StorageService & {
+interface SessionRelationshipCandidateRepositoryExtension {
+  tryPromoteForSession(
+    sourceId: string,
+    installationId: string,
+    nativeSessionId: string,
+  ): Promise<number>
+}
+
+type StorageWithRuntimeExtensions = StorageService & {
   runtimeProfiles?: RuntimeProfileRepositoryExtension
+  sessionRelationshipCandidates?: SessionRelationshipCandidateRepositoryExtension
 }
 
 export class RuntimeProfileObservationService implements ObservationService {
@@ -41,18 +50,28 @@ export class RuntimeProfileObservationService implements ObservationService {
 
   async commit(input: CommitObservationInput): Promise<ObservationCommitResult> {
     const result = await this.inner.commit(input)
+    const extensions = this.storage as StorageWithRuntimeExtensions
     const nativeProfileId = input.candidate.identityHints.runtimeProfileNativeId
-    const profiles = (this.storage as StorageWithRuntimeProfiles).runtimeProfiles
-    if (nativeProfileId && profiles) {
-      const profile = await profiles.resolve({
+    if (nativeProfileId && extensions.runtimeProfiles) {
+      const profile = await extensions.runtimeProfiles.resolve({
         installationId: input.installation.id,
         nativeProfileId,
       })
-      await profiles.attachSession(
+      await extensions.runtimeProfiles.attachSession(
         input.sourceId,
         input.installation.id,
         input.candidate.identityHints.nativeSessionId,
         profile.id,
+      )
+    }
+
+    const shouldRetryRelationships = input.candidate.kind === 'session.lifecycle'
+      || Boolean(input.candidate.identityHints.nativeParentSessionId)
+    if (shouldRetryRelationships && extensions.sessionRelationshipCandidates) {
+      await extensions.sessionRelationshipCandidates.tryPromoteForSession(
+        input.sourceId,
+        input.installation.id,
+        input.candidate.identityHints.nativeSessionId,
       )
     }
     return result
@@ -79,7 +98,7 @@ export class RuntimeProfileAssetService implements AssetService {
 
   async resolveBinding(input: AssetBindingHint): Promise<AssetBinding> {
     const binding = await this.inner.resolveBinding(input)
-    const profiles = (this.storage as StorageWithRuntimeProfiles).runtimeProfiles
+    const profiles = (this.storage as StorageWithRuntimeExtensions).runtimeProfiles
     if (input.runtimeProfileId && profiles) {
       await profiles.attachAssetBinding(binding.id, input.runtimeProfileId)
     }
