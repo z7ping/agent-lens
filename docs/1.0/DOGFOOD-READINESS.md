@@ -75,7 +75,7 @@
 - Pi
 - Hermes
 - OpenCode
-- DeepSeek Harness
+- DSH（DeepSeek Harness）
 
 实际采集仍要求 Source 在本机被检测到。`AGENT_LENS_ENABLED_SOURCES` 一旦显式配置，继续严格使用用户指定 allowlist。
 
@@ -83,19 +83,27 @@ Prompt / Tool / Config / Environment 的隐私策略保持独立，默认仍按�
 
 ## 批次二：狗粮诊断闭环
 
-接下来完成：
+已落地：
 
-1. Unknown Observation 按 Source / native type 聚合，并提供“待适配原生事件”视图；
-2. Coverage 进入正式 UI，明确区分：
-   - 没有发生；
-   - 来源不提供；
-   - AgentLens 尚未支持；
-3. 隐私端到端测试：
+1. Unknown Observation 按 Source / native type 聚合，并通过 `/api/v1/health` 暴露“待适配原生事件”统计；
+2. Coverage 进入健康诊断，保留完整 / 部分 / 来源不可用 / 未知状态、时间窗口与原因；
+3. 顶部运行状态显示来源异常、待适配事件与 Coverage 摘要；
+4. 智能体概览增加“采集诊断”面板，按来源展示运行阶段、未知事件与能力覆盖语义；
+5. UI 明确区分：
+   - 当前没有发生：采集链路健康、能力可用，但当前没有形成对应覆盖记录；
+   - 来源不提供：来源明确声明能力不可用或不适用；
+   - AgentLens 尚未支持：已经捕获原生事件，但当前尚未完成规范适配；
+   - 尚未确认：当前证据不足，不把缺失数据误判为 0；
+6. 隐私端到端回归覆盖：
    - DSH `request/header`；
    - MCP 配置；
    - 环境变量；
    - API Key / Token；
-   - Raw Payload / Evidence。
+   - Raw Payload / Canonical Payload。
+
+批次二剩余：
+
+- 根据真实狗粮数据继续校准 Coverage 语义和 Unknown 分组，不再扩新的诊断页面。
 
 ## 批次三：长期运行
 
