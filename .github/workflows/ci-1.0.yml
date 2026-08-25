@@ -54,6 +54,19 @@ jobs:
       - name: Build distributable
         run: npm run build:dist
 
+      - name: Prepare Windows desktop runtime
+        if: runner.os == 'Windows'
+        run: npm run desktop:prepare
+
+      - name: Build Windows desktop package
+        if: runner.os == 'Windows'
+        run: npm run dist:win:dir --workspace @agent-lens/desktop
+
+      - name: Smoke packaged Windows desktop
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/smoke-windows-desktop.ps1
+
       - name: Verify Windows shared Hook dispatcher
         if: runner.os == 'Windows'
         shell: pwsh
