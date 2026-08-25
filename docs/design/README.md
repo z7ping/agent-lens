@@ -19,10 +19,11 @@
 - 正式“全部智能体 +”已改为页面根层固定定位弹层，不再受工具栏裁切。
 - 正式任务复盘左侧会话列表已由手动加载改为接近底部自动分页，并保留点击重试入口。
 - 任务复盘现有证据（Evidence）、源码、原始数据、工具详情、生命周期、Pi 会话树、长会话分页、虚拟挂载和实时数据能力继续保留。
-- `review.css` 已成为任务复盘唯一正式视觉所有者；`review-reference.css`、`review-message-actions.css` 已删除，`review-long-session.css` 只保留长会话性能与独立滚动职责。
+- `review.css` 已成为任务复盘唯一正式视觉所有者；`review-reference.css`、`review-message-actions.css` 已删除，`review-long-session.css` 只保留长会话性能、独立滚动与轮次轨职责。
 - 全局壳层已建立正式 `shell.css`；共享语义色改由 `semantic-colors.css` 提供，历史 `color-system.css` 已删除。
 - 工具分析、使用洞察、智能体概览、资产备份已经分别由 `tools.css`、`insights.css`、`agents.css`、`backup.css` 正式接管。
-- `v2-alignment.css`、`p0-polish.css` 已完成迁空并删除，不能再作为新的覆盖层恢复。
+- `v2-alignment.css`、`p0-polish.css`、`prototype.css` 已完成迁空并删除，不能再作为新的覆盖层恢复。
+- `styles.css` 已收缩为 Tailwind 语义映射、浏览器基础规则、通用空状态与 Markdown，不再承载壳层、工具分析或智能体概览页面样式。
 - 资产备份历史压缩样式已整理，正常可见文字统一到不低于 12px；保护卡片不再通过整体透明度降低可读性。
 - 使用洞察已移除越权的顶部品牌隐藏规则，壳层响应式继续由 `shell.css` / `shell-responsive.css` 负责。
 - 用户可见文案默认中文优先；来源产品名、路径、命令和原始字段保留原文。
@@ -141,28 +142,29 @@
 
 当前按以下顺序收敛：
 
-1. **全局令牌 / 壳层：结构收敛完成，进入真实页面验收。** `tokens.css`、`semantic-colors.css`、`shell.css` 已形成明确职责；不再通过最终覆盖层争夺优先级。
-2. **任务复盘：结构收敛完成，进入真实页面验收。** `review.css` 是唯一正式视觉所有者；`review-long-session.css` 仅承担长会话性能、虚拟挂载与独立滚动。
-3. **其他一级页面：结构收敛完成，进入真实页面验收。** 工具分析、使用洞察、智能体概览、资产备份均已有正式页面样式所有者；阶段覆盖层已全部退役。
+1. **全局令牌 / 壳层：结构收敛完成，进入真实页面验收。** `tokens.css`、`semantic-colors.css`、`shell.css` 已形成明确职责；`styles.css` 已回归纯基础层，不再通过最终覆盖层争夺优先级。
+2. **任务复盘：结构收敛完成，进入真实页面验收。** `review.css` 是唯一正式视觉所有者；`review-long-session.css` 仅承担长会话性能、虚拟挂载、独立滚动与轮次轨。
+3. **其他一级页面：结构收敛完成，进入真实页面验收。** 工具分析、使用洞察、智能体概览、资产备份均已有正式页面样式所有者；阶段覆盖层与旧原型落地层已全部退役。
 4. **统一验证：进行中。** `check:web-presentation` 已改为检查“样式所有者”而非“最后加载覆盖”；继续完成三平台类型检查、测试、完整构建，并根据真实程序逐页视觉验收做最后修正。
 
 ## 8. 正式 CSS 维护边界
 
-正式程序不再新增 `final`、`alignment`、`polish`、`override` 一类“最后加载覆盖前面规则”的补丁式样式层。
+正式程序不再新增 `final`、`alignment`、`polish`、`override`、`prototype` 一类“最后加载覆盖前面规则”的补丁式样式层。
 
 正式职责固定为：
 
+- 全局基础：`styles.css`，只保留 Tailwind 映射、浏览器基础、通用状态与 Markdown；
 - 设计令牌：`tokens.css`；
 - 共享语义配色：`semantic-colors.css`；
 - 全局壳层：`shell.css`；响应式壳层规则由 `shell-responsive.css` 承担；
-- 任务复盘视觉：`review.css`；长会话性能 / 独立滚动：`review-long-session.css`；
+- 任务复盘视觉：`review.css`；长会话性能 / 独立滚动 / 轮次轨：`review-long-session.css`；
 - 工具分析：`tools.css`；
 - 使用洞察：`insights.css`；
 - 智能体概览：`agents.css`；
 - 资产备份：`backup.css`；
 - 共用 SVG：正式图标组件，不为单个覆盖规则建立临时最终层。
 
-`v2-alignment.css`、`p0-polish.css`、`color-system.css`、`review-reference.css`、`review-message-actions.css` 等历史覆盖层均已退役，不能重新创建。页面样式不得越权修改全局 Header / 导航；全局壳层也不得重新承载单页视觉规则。
+`v2-alignment.css`、`p0-polish.css`、`prototype.css`、`color-system.css`、`review-reference.css`、`review-message-actions.css` 等历史覆盖层均已退役，不能重新创建。页面样式不得越权修改全局 Header / 导航；全局壳层也不得重新承载单页视觉规则。
 
 CI 的 `check:web-presentation` 继续锁定：正式所有者文件不得依赖 `!important` 争夺优先级；已退役覆盖层不得重新创建；正常文字不低于 12px；设计令牌、关键交互、响应式和对比度契约必须继续满足。
 
