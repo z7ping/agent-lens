@@ -60,10 +60,14 @@ html body .brand-name{font-size:15px}
 html body .nav-item{font-size:var(--text-body)}
 html body .app-status,
 html body .app-header .status-pill{font-size:var(--text-caption)}
-html body .workspace-toolbar{min-height:50px;height:50px}
-html body .filter{height:34px;font-size:var(--text-control)}
+html body .workspace-toolbar,
+html body .review-page .workspace-toolbar{min-height:50px;height:50px}
+html body .filter,
+html body .review-page .filter{height:34px;font-size:var(--text-control)}
 html body .scope-chip,
-html body .scope-manage-button{height:32px;font-size:var(--text-control)}
+html body .scope-manage-button,
+html body .review-page .scope-chip,
+html body .review-page .scope-manage-button{height:32px;font-size:var(--text-control)}
 html body .agent-scope-menu-title,
 html body .agent-scope-option-state,
 html body .agent-scope-empty{font-size:var(--text-caption)}

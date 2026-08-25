@@ -89,15 +89,16 @@
   padding-bottom: 5px;
 }
 
-/* 不再把事件标记放大成实心圆；使用无文字的 SVG mask 表达生命周期。 */
+/* 已有生命周期图标规则改为消费正式 SVG 资产，不再维护一份内联副本。 */
 .review-page .event-lifecycle .event-mark {
-  width: 18px;
-  height: 18px;
+  width: 15px;
+  height: 15px;
   margin-top: 0;
   border-radius: 0;
-  background: var(--al-muted);
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='5.2' fill='none' stroke='black' stroke-width='1.6'/%3E%3Ccircle cx='8' cy='8' r='1.4' fill='black'/%3E%3C/svg%3E") center / 14px 14px no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='5.2' fill='none' stroke='black' stroke-width='1.6'/%3E%3Ccircle cx='8' cy='8' r='1.4' fill='black'/%3E%3C/svg%3E") center / 14px 14px no-repeat;
+  background: currentColor;
+  color: var(--al-muted);
+  -webkit-mask: url('/icons/review-lifecycle.svg') center / contain no-repeat;
+  mask: url('/icons/review-lifecycle.svg') center / contain no-repeat;
 }
 
 .review-page .event-lifecycle .event-copy {
