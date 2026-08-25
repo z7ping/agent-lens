@@ -39,21 +39,9 @@
 .review-page .session-group-block:first-child .session-group { margin-top: 0; }
 
 /*
- * 长会话导航只负责布局与弱化，不再决定功能入口是否显示。
- * “从头查看 / 跳到最新 / 有新记录”的可见性由 ReviewPage 的业务状态负责，
- * 避免表现层再次把冻结 UI 中的正式能力悄悄隐藏。
+ * 长会话性能层不得决定导航功能是否存在，也不按按钮序号改变业务操作语义。
+ * 筛选、展开、从头查看、跳到最新、有新记录均由 ReviewPage/review.css 所有。
  */
-.round-nav-expand { margin-left: auto; color: var(--al-muted); }
-.round-nav > button:nth-of-type(n+4) {
-  padding-inline: 7px;
-  color: var(--al-muted);
-  font-weight: 560;
-}
-.round-nav > button:nth-of-type(n+4):hover:not(:disabled) {
-  background: transparent;
-  color: var(--al-ink-2);
-}
-.round-nav .round-nav-live { color: var(--al-accent); }
 
 .detail-load-sentinel {
   min-height: 44px;
@@ -75,9 +63,6 @@
   font-size: 12px;
 }
 .detail-load-sentinel button:hover { border-color: var(--al-line-strong); background: var(--al-soft); }
-.round-nav-status { margin-left: auto; color: var(--al-muted); font-size: 12px; }
-.round-nav .round-nav-live { margin-left: 0; }
-.round-nav-status + .round-nav-live { margin-left: 0; }
 
 /* 长会话轮次轨：只做导航刻度，不绘制贯穿阅读区的主线。 */
 .turn-rail {
