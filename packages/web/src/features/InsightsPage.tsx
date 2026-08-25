@@ -5,6 +5,7 @@ import { InsightsClientModel } from '../client/insights-model'
 import { useClientSnapshot } from '../App'
 import { AgentScope, agentLabel } from '../components/AgentScope'
 import { BackgroundDataNotice } from '../components/BackgroundDataNotice'
+import { CompactPageHeading } from '../components/CompactPageHeading'
 import { EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from '../components/StateViews'
 import { UiIcon } from '../components/UiIcon'
 
@@ -87,7 +88,7 @@ export function InsightsPage({ model }: { model: AgentLensClientModel }) {
     </div>
 
     <div className="page-content insights-content">
-      <header className="page-heading"><div><span className="eyebrow">长期观察</span><h1>使用洞察</h1><p>把已经采集的会话、工具和能力资产事实聚合成趋势与重复模式。这里不做智能体综合评分，也不把共同出现包装成因果结论。</p></div></header>
+      <CompactPageHeading title="使用洞察" description="聚合已采集的会话、工具和能力资产事实，观察趋势与重复模式。这里只呈现可验证事实，不做智能体综合评分，也不把共同出现解释成因果关系。"/>
 
       {insights.error && <ErrorStateBanner message={insights.error} onRetry={() => void insightsModel.refresh()}/>} 
 
