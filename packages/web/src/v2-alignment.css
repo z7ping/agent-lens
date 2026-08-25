@@ -591,3 +591,407 @@
   .frequent-asset-row { grid-template-columns: 20px minmax(0, 1fr) 42px; }
   .frequent-usage-track { display: none; }
 }
+
+/* ── 1.0 转正：执行轨迹原型进入正式 Web ─────────────────── */
+.workspace-page,
+.review-page {
+  background: var(--al-canvas);
+}
+
+.workspace-toolbar {
+  position: relative;
+  z-index: 35;
+  overflow: visible;
+}
+
+.workspace-toolbar .agent-scope {
+  position: relative;
+  z-index: 60;
+  flex: 0 0 auto;
+}
+
+.workspace-toolbar .agent-scope-manage {
+  position: relative;
+  z-index: 80;
+}
+
+.workspace-toolbar .agent-scope-manage[open] {
+  z-index: 90;
+}
+
+.workspace-toolbar .agent-scope-menu {
+  z-index: 120;
+}
+
+/* 一级导航已经表达当前位置，正式页不再重复占用一整块标题说明区。 */
+.tools-content > .page-heading,
+.insights-content > .page-heading,
+.agents-content > .page-heading {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.tools-content,
+.insights-content,
+.agents-content {
+  padding-top: 16px;
+}
+
+/* 资产备份保留“本地真实数据 + 刷新”这种有操作价值的状态，不重复显示页名和介绍。 */
+.backup-page > .future-heading {
+  min-height: 30px;
+  margin-bottom: 10px;
+  align-items: center;
+}
+
+.backup-page > .future-heading h1,
+.backup-page > .future-heading p {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.backup-page > .future-heading .eyebrow {
+  font-size: 0;
+  letter-spacing: 0;
+}
+
+.backup-page > .future-heading .prototype-flag {
+  margin-left: 0;
+  font-size: 12px;
+}
+
+.backup-page {
+  padding-top: 16px;
+}
+
+/* 冷灰画布承托分析卡片；复盘阅读区保持白色，左侧会话区轻灰分层。 */
+.review-page .review-layout {
+  background: var(--al-canvas);
+}
+
+.review-page .session-panel {
+  background: var(--al-soft-2);
+}
+
+.review-page .review-reader-pane {
+  background: var(--al-surface);
+}
+
+.review-page .review-reader {
+  max-width: 1320px;
+  padding: 20px 32px 120px;
+}
+
+.review-page .review-session-head {
+  display: block;
+  box-shadow: none;
+}
+
+/* 轮次回到横向分隔语法：不是卡片，也不是整条彩色导轨。 */
+.review-page .review-flow {
+  gap: 0;
+  padding-top: 8px;
+}
+
+.review-page .interaction-block {
+  margin: 16px 0 0;
+  padding-left: 0;
+  border: 0;
+  border-top: 1px solid var(--al-line-strong);
+  background: transparent;
+}
+
+.review-page .interaction-block.interaction-has-error {
+  border-left: 0;
+  border-top-color: color-mix(in srgb, var(--al-danger) 42%, var(--al-line-strong));
+}
+
+.review-page .interaction-summary {
+  min-height: 44px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+}
+
+.review-page .interaction-block[open] > .interaction-summary {
+  background: color-mix(in srgb, var(--al-soft-2) 68%, transparent);
+}
+
+.review-page .interaction-title {
+  color: var(--al-ink-2);
+  font-size: 14px;
+  font-weight: 720;
+}
+
+.review-page .interaction-has-error .interaction-title {
+  color: var(--al-ink-2);
+}
+
+.review-page .interaction-preview {
+  flex: 1;
+  max-width: none;
+  color: var(--al-muted);
+}
+
+.review-page .interaction-flow {
+  gap: 8px;
+  padding: 7px 9px 13px;
+}
+
+/* 用户右侧深色气泡；智能体回复使用中性左强调，不再形成另一张“聊天卡片”。 */
+.review-page .chat-avatar {
+  display: none;
+}
+
+.review-page .chat-row-user {
+  align-items: flex-end;
+  padding-left: 7%;
+  padding-right: 0;
+}
+
+.review-page .chat-row-agent {
+  align-items: flex-start;
+  padding-left: 0;
+  padding-right: 7%;
+}
+
+.review-page .chat-bubble-user {
+  max-width: min(78%, 760px);
+  border-color: var(--al-user-bubble) !important;
+  background: var(--al-user-bubble) !important;
+  color: var(--al-user-bubble-text) !important;
+  box-shadow: none !important;
+}
+
+.review-page .chat-bubble-agent {
+  max-width: min(76%, 840px);
+  padding: 8px 11px;
+  border: 0 !important;
+  border-left: 2px solid color-mix(in srgb, var(--al-ink-2) 26%, var(--al-line-strong)) !important;
+  border-radius: 0 8px 8px 0;
+  background: color-mix(in srgb, var(--al-soft-2) 72%, var(--al-surface)) !important;
+  box-shadow: none !important;
+}
+
+.review-page .chat-bubble-user .chat-meta,
+.review-page .chat-bubble-user .chat-actions button,
+.review-page .chat-bubble-user .markdown-message-actions button,
+.review-page .chat-bubble-user .evidence-inline,
+.review-page .chat-bubble-user .evidence-inline-more {
+  color: var(--al-user-bubble-muted) !important;
+}
+
+.review-page .chat-bubble-user .evidence-inline {
+  border-color: color-mix(in srgb, var(--al-user-bubble-muted) 48%, transparent);
+  background: color-mix(in srgb, var(--al-user-bubble-text) 8%, transparent);
+}
+
+.review-page .chat-bubble-user .markdown,
+.review-page .chat-bubble-user .markdown p,
+.review-page .chat-bubble-user .markdown li,
+.review-page .chat-bubble-user .markdown strong,
+.review-page .chat-bubble-user .markdown-source {
+  color: var(--al-user-bubble-text) !important;
+}
+
+.review-page .chat-bubble-user .markdown code,
+.review-page .chat-bubble-user .markdown-source {
+  background: var(--al-user-bubble-code);
+}
+
+.review-page .chat-bubble-user .markdown a {
+  color: var(--al-user-bubble-link);
+}
+
+.review-page .chat-bubble-user .chat-actions,
+.review-page .chat-bubble-user .markdown-message-actions {
+  border-top-color: color-mix(in srgb, var(--al-user-bubble-muted) 24%, transparent) !important;
+}
+
+/* 可观察过程片段使用弱强调色块，与来源品牌色解耦。 */
+.review-page .thinking-block {
+  margin: 7px 0;
+  padding-left: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--al-accent) 22%, var(--al-line)) !important;
+  border-left: 1px solid color-mix(in srgb, var(--al-accent) 22%, var(--al-line)) !important;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--al-accent-soft) 42%, var(--al-surface)) !important;
+}
+
+.review-page .thinking-block > summary {
+  min-height: 38px;
+  padding: 6px 9px;
+  color: var(--al-accent);
+  background: transparent !important;
+}
+
+.review-page .thinking-content {
+  padding: 2px 10px 9px 35px;
+  border-top: 0 !important;
+  background: transparent !important;
+  color: var(--al-ink-2) !important;
+}
+
+/* 工具执行保持紧凑可折叠组；隐藏旧字符箭头，用 CSS 几何箭头作为展开提示。 */
+.review-page .execution-group {
+  margin: 7px 0;
+  border: 1px solid var(--al-line) !important;
+  border-radius: 8px;
+  background: var(--al-surface) !important;
+}
+
+.review-page .execution-group > summary {
+  min-height: 40px;
+  padding: 0 10px;
+  background: transparent !important;
+}
+
+.review-page .execution-group > summary::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-right: 1.5px solid var(--al-muted);
+  border-bottom: 1.5px solid var(--al-muted);
+  transform: rotate(-45deg);
+  transition: transform .14s;
+}
+
+.review-page .execution-group[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+.review-page .execution-group-icon {
+  display: none;
+}
+
+.review-page .execution-row {
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  padding: 8px 10px;
+}
+
+.review-page .execution-rail {
+  display: none;
+}
+
+/* 事件行采用“图标/事件 + 元信息”的轨迹行，不再做普通卡片。 */
+.review-page .event-row:not(.raw-event-group .event-row) {
+  margin: 6px 0;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto minmax(72px, auto) 66px;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 5px 8px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--al-line) 58%, transparent);
+  border-radius: 0;
+  background: transparent;
+}
+
+.review-page .event-row:not(.raw-event-group .event-row):hover {
+  background: var(--al-soft-2);
+}
+
+.review-page .event-row .event-copy {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.review-page .event-row .event-copy b {
+  flex: 0 0 auto;
+  font-size: 13px;
+}
+
+.review-page .event-row .event-copy small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.review-page .event-row .event-source,
+.review-page .event-row time {
+  font-size: 12px;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.review-page .event-row > .evidence-inline-list {
+  justify-self: end;
+}
+
+/* 原始记录继续退到审计层，不与主轨迹争夺视觉注意力。 */
+.review-page .raw-event-group {
+  margin: 7px 0 7px 26px;
+  border: 1px dashed var(--al-line-strong);
+  background: var(--al-soft-2);
+}
+
+/* 所有正式一级页面共用冷灰画布，白色 surface 只承载卡片/表格/阅读区。 */
+.tools-content,
+.insights-content,
+.agents-content,
+.backup-page {
+  background: transparent;
+}
+
+@media (max-width: 760px) {
+  .workspace-toolbar {
+    height: auto;
+    min-height: 46px;
+    flex-wrap: wrap;
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+
+  .review-page .review-reader {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .review-page .event-row:not(.raw-event-group .event-row) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .review-page .event-row .event-copy {
+    flex: 1 1 calc(100% - 34px);
+  }
+
+  .review-page .event-row > .evidence-inline-list {
+    margin-left: 26px;
+  }
+
+  .review-page .event-row .event-source,
+  .review-page .event-row time {
+    text-align: left;
+  }
+
+  .review-page .chat-bubble-user,
+  .review-page .chat-bubble-agent {
+    max-width: 94%;
+  }
+
+  .review-page .thinking-content {
+    padding-left: 10px;
+  }
+}
