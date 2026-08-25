@@ -76,3 +76,26 @@ button{cursor:pointer}
 button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible,a:focus-visible{outline:2px solid color-mix(in srgb,var(--al-accent) 55%,transparent);outline-offset:2px}
 ::selection{background:var(--al-accent-soft);color:var(--al-ink)}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* v2 原型壳层收口：一级导航已表达当前页面，不再重复占用首屏标题；
+   工具栏弹层必须越过正文，不允许被 overflow 裁切。正式实现确认后迁回 base/组件样式。 */
+.workspace-toolbar{position:relative!important;z-index:35!important;overflow:visible!important}
+.workspace-toolbar .agent-scope{position:relative;z-index:60;flex:0 0 auto}
+.workspace-toolbar .scope-manage{position:relative;z-index:80}
+.workspace-toolbar .scope-manage[open]{z-index:90}
+.workspace-toolbar .scope-pop{z-index:120!important}
+
+/* 保留 h1 的语义，但从视觉层删除“导航已选中 + 页面再重复标题”的冗余。 */
+.heading,.compact-heading{position:relative!important;height:0!important;min-height:0!important;margin:0!important;padding:0!important}
+.heading>h1,.compact-heading>h1{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+.heading>.heading-help,.compact-heading>.heading-help{display:none!important}
+
+/* 资产备份保留“本地真实数据 + 刷新”这一操作状态行，但去掉重复页名与介绍入口。 */
+.future-heading.compact{min-height:30px!important;margin-bottom:8px!important}
+.future-heading.compact h1,.future-heading.compact .heading-help{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+.future-heading.compact>div{gap:0!important}
+.future-heading.compact .prototype-flag{margin-left:0!important}
+
+@media(max-width:760px){
+  .workspace-toolbar{height:auto!important;min-height:46px!important;flex-wrap:wrap!important;padding-top:6px!important;padding-bottom:6px!important}
+}
