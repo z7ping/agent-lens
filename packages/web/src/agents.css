@@ -15,10 +15,10 @@
 
 .agents-browser {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-columns: 230px minmax(0, 1fr);
   align-items: start;
-  gap: 16px;
-  margin-top: 18px;
+  gap: 14px;
+  margin-top: 10px;
 }
 
 /* 来源列表 */
