@@ -7,19 +7,30 @@
 <link rel="stylesheet" href="assets/tokens.css">
 <link rel="stylesheet" href="assets/base.css">
 <style>
-/*
- * 执行轨迹审阅版只改任务复盘正文表达。
- * 顶部导航、筛选、会话列表、轮次轨、检查器与 Design Token 全部复用当前 v2 基线，
- * 避免为了对比正文而重新造一套视觉壳。
- */
+/* 执行轨迹审阅版：复用正式 v2 壳，只验证任务复盘正文表达。 */
 .review-shell{height:100dvh;overflow:hidden}
 .review-layout{min-height:0;overflow:hidden}
 .session-scroll,.reader-pane{min-height:0;overflow:auto}
 .reader-pane .reader-inner{max-width:1320px;padding-bottom:96px}
 
+/* 本页所有正常可见辅助文字以 12px 为下限，覆盖旧基线中的 11/11.5px。 */
+.review-shell .session-panel-head span,
+.review-shell .count-badge,
+.review-shell .session-group,
+.review-shell .si-meta,
+.review-shell .si-foot,
+.review-shell .rh-sub code,
+.review-shell .metric span,
+.review-shell .ev,
+.review-shell .bubble .meta,
+.review-shell .round-seg button em,
+.review-shell .round-act button em,
+.review-shell .sentinel{font-size:12px}
+
+/* 会话生命周期：左侧真实事件，右侧证据/来源/时间形成稳定元信息列。 */
 .trajectory-lifecycle{padding:6px 0 8px}
-.trajectory-life-row{min-height:38px;display:grid;grid-template-columns:18px minmax(0,1fr) auto;align-items:center;gap:8px;padding:5px 8px;border-bottom:1px solid color-mix(in srgb,var(--al-line) 58%,transparent)}
-.trajectory-life-icon{width:18px;height:18px;display:grid;place-items:center;color:var(--al-muted);flex:0 0 18px}
+.trajectory-life-row{min-height:38px;display:grid;grid-template-columns:18px minmax(0,1fr) minmax(240px,300px);align-items:center;gap:8px;padding:5px 8px;border-bottom:1px solid color-mix(in srgb,var(--al-line) 58%,transparent)}
+.trajectory-life-icon{width:18px;height:18px;display:grid;place-items:center;color:var(--al-muted)}
 .trajectory-life-icon svg{width:14px;height:14px;display:block;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .trajectory-life-main{min-width:0;display:flex;align-items:center;gap:8px}
 .trajectory-life-title{flex:0 0 auto;color:var(--al-ink-2);font-size:13px;font-weight:680;white-space:nowrap}
@@ -29,9 +40,12 @@
 .trajectory-source{min-width:72px;text-align:right}
 .trajectory-meta time{text-align:right;font-variant-numeric:tabular-nums}
 
+/* 轮次：连续流式分段。箭头明确告诉用户可折叠。 */
 .trajectory-round{margin-top:16px;border-top:1px solid var(--al-line-strong)}
-.trajectory-round>summary{list-style:none;min-height:44px;display:grid;grid-template-columns:28px auto minmax(0,1fr) auto;align-items:center;gap:8px;padding:0 8px;cursor:pointer}
+.trajectory-round>summary{list-style:none;min-height:44px;display:grid;grid-template-columns:14px 28px auto minmax(0,1fr) auto;align-items:center;gap:8px;padding:0 8px;cursor:pointer}
 .trajectory-round>summary::-webkit-details-marker{display:none}
+.trajectory-round>summary::before{content:"›";display:block;color:var(--al-muted);font-size:16px;line-height:1;transform-origin:center;transition:transform .14s,color .14s}
+.trajectory-round[open]>summary::before{transform:rotate(90deg);color:var(--al-ink-2)}
 .trajectory-round-index{font-family:var(--font-mono);font-size:12px;font-weight:650;color:var(--al-muted)}
 .trajectory-round-title{font-size:14px;font-weight:720;color:var(--al-ink)}
 .trajectory-round-preview{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--al-muted);font-size:12px}
@@ -39,16 +53,23 @@
 .trajectory-round[open]>summary{background:color-mix(in srgb,var(--al-soft-2) 68%,transparent)}
 .trajectory-flow{padding:7px 9px 13px}
 
-.trajectory-thought{min-height:38px;margin:7px 0;display:grid;grid-template-columns:18px minmax(0,1fr) auto;align-items:center;gap:8px;padding:6px 9px;border:1px solid color-mix(in srgb,var(--src-pi) 22%,var(--al-line));border-radius:8px;background:color-mix(in srgb,var(--src-pi) 7%,var(--al-surface));color:var(--src-pi)}
+/* 用户输入保持右侧深色气泡，但控制最大宽度，避免变成聊天页。 */
+.trajectory-flow .chat-row.user .bubble{max-width:min(78%,760px)}
+
+/* 思考使用通用强调色，不借用任何智能体来源色。 */
+.trajectory-thought{min-height:38px;margin:7px 0;display:grid;grid-template-columns:18px minmax(0,1fr) minmax(220px,280px);align-items:center;gap:8px;padding:6px 9px;border:1px solid color-mix(in srgb,var(--al-accent) 22%,var(--al-line));border-radius:8px;background:color-mix(in srgb,var(--al-accent-soft) 42%,var(--al-surface));color:var(--al-accent)}
 .trajectory-thought-icon{width:17px;height:17px;border:1px solid currentColor;border-radius:5px;display:grid;place-items:center;font-size:10px;opacity:.72}
 .trajectory-thought-main{min-width:0;display:flex;align-items:center;gap:8px}
 .trajectory-thought-main b{flex:0 0 auto;font-size:13px}
-.trajectory-thought-main span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:color-mix(in srgb,var(--src-pi) 72%,var(--al-muted));font-size:12px}
+.trajectory-thought-main span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:color-mix(in srgb,var(--al-accent) 64%,var(--al-muted));font-size:12px}
 .trajectory-thought-meta{display:flex;align-items:center;justify-content:flex-end;gap:9px;color:var(--al-muted);font-size:12px;white-space:nowrap}
 
+/* 工具执行：摘要优先，展开后是紧凑明细。 */
 .trajectory-tools{margin:7px 0;border:1px solid var(--al-line);border-radius:8px;background:var(--al-surface);overflow:hidden}
 .trajectory-tools>summary{list-style:none;min-height:40px;display:flex;align-items:center;gap:8px;padding:0 10px;cursor:pointer}
 .trajectory-tools>summary::-webkit-details-marker{display:none}
+.trajectory-tools>summary::before{content:"›";flex:0 0 auto;color:var(--al-muted);font-size:16px;line-height:1;transition:transform .14s,color .14s}
+.trajectory-tools[open]>summary::before{transform:rotate(90deg);color:var(--al-ink-2)}
 .trajectory-tools>summary b{font-size:13px}
 .trajectory-tools-summary{color:var(--al-muted);font-size:12px}
 .trajectory-tool-tags{margin-left:auto;display:flex;align-items:center;gap:5px}
@@ -62,38 +83,43 @@
 .trajectory-tool-row .desc,.trajectory-tool-row time{color:var(--al-muted)}
 .trajectory-tool-row.error{background:var(--al-danger-soft)}
 
-.trajectory-recovery{min-height:38px;margin:7px 0;display:grid;grid-template-columns:18px minmax(0,1fr) auto;align-items:center;gap:8px;padding:6px 9px;border:1px solid var(--al-line);border-radius:8px;background:var(--al-surface)}
+/* 恢复成功是真正的状态语义，所以保留成功色。 */
+.trajectory-recovery{min-height:38px;margin:7px 0;display:grid;grid-template-columns:18px minmax(0,1fr) minmax(240px,300px);align-items:center;gap:8px;padding:6px 9px;border:1px solid var(--al-line);border-radius:8px;background:var(--al-surface)}
 .trajectory-recovery .mark{width:17px;height:17px;border-radius:50%;display:grid;place-items:center;background:var(--al-success-soft);color:var(--al-success);font-size:11px;font-weight:700}
 .trajectory-recovery .main{min-width:0;display:flex;align-items:center;gap:8px}
 .trajectory-recovery .main b{flex:0 0 auto;font-size:13px;color:var(--al-ink-2)}
 .trajectory-recovery .main span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--al-muted);font-size:12px}
 
-.trajectory-agent-response{max-width:min(76%,840px);margin:8px 0;padding:8px 11px;border-left:2px solid color-mix(in srgb,var(--al-success) 46%,var(--al-line-strong));background:color-mix(in srgb,var(--al-success-soft) 28%,var(--al-surface));color:var(--al-ink-2);font-size:13px;line-height:1.62}
+/* 智能体回复是内容类型，不是“成功状态”；使用中性视觉。 */
+.trajectory-agent-response{max-width:min(76%,840px);margin:8px 0;padding:8px 11px;border-left:2px solid color-mix(in srgb,var(--al-ink-2) 26%,var(--al-line-strong));background:color-mix(in srgb,var(--al-soft-2) 72%,var(--al-surface));color:var(--al-ink-2);font-size:13px;line-height:1.62}
 .trajectory-agent-meta{display:flex;align-items:center;gap:8px;margin-bottom:4px;color:var(--al-muted);font-size:12px}
 .trajectory-agent-meta b{color:var(--al-ink-2);font-weight:650}
 .trajectory-agent-meta time{margin-left:auto;font-variant-numeric:tabular-nums}
 
-/* 左栏标题保持两行，防止真实长 Prompt 把单个会话撑高。 */
 .session-item .si-title{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
-
-/* 大屏保持元信息紧邻轨迹，而不是漂到屏幕最右侧。 */
-@media(min-width:1500px){
-  .trajectory-life-row,.trajectory-thought,.trajectory-recovery{grid-template-columns:18px minmax(0,1fr) minmax(240px,300px)}
-}
 
 @media(max-width:1180px){
   .reader-pane .reader-inner{padding-left:20px;padding-right:20px}
+  .trajectory-life-row,.trajectory-recovery{grid-template-columns:18px minmax(0,1fr) minmax(210px,250px)}
+  .trajectory-thought{grid-template-columns:18px minmax(0,1fr) minmax(190px,230px)}
   .trajectory-meta{grid-template-columns:auto minmax(72px,auto) 62px}
   .trajectory-tool-tags{display:none}
   .trajectory-agent-response{max-width:84%}
 }
 
+/* 小屏不删除证据：元信息换到事件正文下一行。 */
 @media(max-width:760px){
   .trajectory-life-row,.trajectory-thought,.trajectory-recovery{grid-template-columns:18px minmax(0,1fr)}
-  .trajectory-meta,.trajectory-thought-meta,.trajectory-recovery>.trajectory-meta{display:none}
-  .trajectory-round>summary{grid-template-columns:26px auto minmax(0,1fr)}
+  .trajectory-life-row>.trajectory-meta,
+  .trajectory-recovery>.trajectory-meta,
+  .trajectory-thought>.trajectory-thought-meta{grid-column:2;display:flex;justify-content:flex-start;align-items:center;flex-wrap:wrap;gap:6px 9px;margin-top:1px;white-space:normal}
+  .trajectory-meta .ev{justify-self:start}
+  .trajectory-source{min-width:0;text-align:left}
+  .trajectory-meta time{text-align:left}
+  .trajectory-round>summary{grid-template-columns:14px 26px auto minmax(0,1fr)}
   .trajectory-round-meta{display:none}
   .trajectory-agent-response{max-width:94%}
+  .trajectory-flow .chat-row.user .bubble{max-width:94%}
   .trajectory-tool-row{grid-template-columns:26px 108px minmax(0,1fr)}
   .trajectory-tool-row time{display:none}
 }
@@ -183,32 +209,15 @@
           <h1 class="rh-title">重构 agent-lens 存储层：引入 Repository 接口</h1>
           <div class="rh-sub"><span>2026/08/24 22:14 – 22:48</span><code>F:\01-ai-gen-workspaces\agent-lens</code></div>
           <div class="rh-actions"><button class="audit-toggle" data-audit-toggle aria-pressed="false">显示原始记录</button><span class="audit-note-inline audit-only">原始记录视图：补充来源原始事件与载荷；证据始终保持可见。</span></div>
-          <div class="rh-metrics">
-            <div class="metric"><b>6</b><span>轮次</span></div><div class="metric"><b>24</b><span>调用</span></div><div class="metric danger"><b>2</b><span>错误</span></div><div class="metric"><b>34 分钟</b><span>跨度</span></div>
-          </div>
+          <div class="rh-metrics"><div class="metric"><b>6</b><span>轮次</span></div><div class="metric"><b>24</b><span>调用</span></div><div class="metric danger"><b>2</b><span>错误</span></div><div class="metric"><b>34 分钟</b><span>跨度</span></div></div>
         </header>
 
-        <div class="round-nav">
-          <div class="round-seg"><button class="active">全部 <em>6</em></button><button>有错误 <em>2</em></button><button>耗时较高 <em>2</em></button></div>
-          <div class="round-act"><button data-expand-rounds aria-pressed="false">展开当前页</button><button data-scroll-bottom="#readerPane">跳到最新 ↓</button></div>
-        </div>
+        <div class="round-nav"><div class="round-seg"><button class="active">全部 <em>6</em></button><button>有错误 <em>2</em></button><button>耗时较高 <em>2</em></button></div><div class="round-act"><button data-expand-rounds aria-pressed="false">展开当前页</button><button data-scroll-bottom="#readerPane">跳到最新 ↓</button></div></div>
 
         <section class="trajectory-lifecycle" aria-label="会话生命周期">
-          <div class="trajectory-life-row">
-            <span class="trajectory-life-icon" aria-hidden="true"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.2"></circle><circle cx="8" cy="8" r="1.4"></circle></svg></span>
-            <div class="trajectory-life-main"><span class="trajectory-life-title">会话开始</span><span class="trajectory-life-desc">启动方式：命令行</span></div>
-            <div class="trajectory-meta"><span class="ev" data-cap="log"><i></i>原生日志</span><span class="trajectory-source">Codex</span><time>22:14:04</time></div>
-          </div>
-          <div class="trajectory-life-row">
-            <span class="trajectory-life-icon" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M12.5 5.5A5 5 0 1 0 13 9"></path><path d="M12.5 2.8v2.7H9.8"></path></svg></span>
-            <div class="trajectory-life-main"><span class="trajectory-life-title">模型切换</span><span class="trajectory-life-desc">切换到 gpt-5.6-codex</span></div>
-            <div class="trajectory-meta"><span class="ev" data-cap="log"><i></i>原生日志</span><span class="trajectory-source">Codex</span><time>22:14:08</time></div>
-          </div>
-          <div class="trajectory-life-row">
-            <span class="trajectory-life-icon" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M8 2.7 12.3 8 8 13.3 3.7 8 8 2.7Z"></path></svg></span>
-            <div class="trajectory-life-main"><span class="trajectory-life-title">思考级别</span><span class="trajectory-life-desc">中等 · 正文未采集</span></div>
-            <div class="trajectory-meta"><span class="ev" data-cap="log"><i></i>原生日志</span><span class="trajectory-source">Codex</span><time>22:14:08</time></div>
-          </div>
+          <div class="trajectory-life-row"><span class="trajectory-life-icon" aria-hidden="true"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.2"></circle><circle cx="8" cy="8" r="1.4"></circle></svg></span><div class="trajectory-life-main"><span class="trajectory-life-title">会话开始</span><span class="trajectory-life-desc">启动方式：命令行</span></div><div class="trajectory-meta"><span class="ev" data-cap="log"><i></i>原生日志</span><span class="trajectory-source">Codex</span><time>22:14:04</time></div></div>
+          <div class="trajectory-life-row"><span class="trajectory-life-icon" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M12.5 5.5A5 5 0 1 0 13 9"></path><path d="M12.5 2.8v2.7H9.8"></path></svg></span><div class="trajectory-life-main"><span class="trajectory-life-title">模型切换</span><span class="trajectory-life-desc">切换到 gpt-5.6-codex</span></div><div class="trajectory-meta"><span class="ev" data-cap="log"><i></i>原生日志</span><span class="trajectory-source">Codex</span><time>22:14:08</time></div></div>
+          <div class="trajectory-life-row"><span class="trajectory-life-icon" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M8 2.7 12.3 8 8 13.3 3.7 8 8 2.7Z"></path></svg></span><div class="trajectory-life-main"><span class="trajectory-life-title">思考级别</span><span class="trajectory-life-desc">中等 · 正文未采集</span></div><div class="trajectory-meta"><span class="ev" data-cap="log"><i></i>原生日志</span><span class="trajectory-source">Codex</span><time>22:14:08</time></div></div>
         </section>
 
         <details class="trajectory-round" id="trajectory-round-1" open>
@@ -234,32 +243,15 @@
 
         <details class="trajectory-round" id="trajectory-round-3" open>
           <summary><span class="trajectory-round-index">03</span><span class="trajectory-round-title">第 3 轮</span><span class="trajectory-round-preview">全量验证与文档同步</span><span class="trajectory-round-meta"><span>11 工具</span><span>31 分钟</span></span></summary>
-          <div class="trajectory-flow">
-            <details class="trajectory-tools"><summary><span class="kicon sm kind-shell"></span><b>工具执行</b><span class="trajectory-tools-summary">11 次调用 · 全部成功 · 31 分钟</span><span class="trajectory-tool-tags"><span class="trajectory-tool-tag">验证</span><span class="trajectory-tool-tag read">读取</span></span></summary></details>
-            <div class="trajectory-agent-response"><div class="trajectory-agent-meta"><b>智能体</b><time>22:47:51</time></div>类型检查、测试与构建结果已汇总；相关设计文档同步完成。</div>
-          </div>
+          <div class="trajectory-flow"><details class="trajectory-tools"><summary><span class="kicon sm kind-shell"></span><b>工具执行</b><span class="trajectory-tools-summary">11 次调用 · 全部成功 · 31 分钟</span><span class="trajectory-tool-tags"><span class="trajectory-tool-tag">验证</span><span class="trajectory-tool-tag read">读取</span></span></summary></details><div class="trajectory-agent-response"><div class="trajectory-agent-meta"><b>智能体</b><time>22:47:51</time></div>类型检查、测试与构建结果已汇总；相关设计文档同步完成。</div></div>
         </details>
 
-        <section class="trajectory-lifecycle" aria-label="会话结束">
-          <div class="trajectory-life-row">
-            <span class="trajectory-life-icon" aria-hidden="true"><svg viewBox="0 0 16 16"><rect x="4" y="4" width="8" height="8" rx="1.5"></rect></svg></span>
-            <div class="trajectory-life-main"><span class="trajectory-life-title">会话结束</span><span class="trajectory-life-desc">正常结束 · 无未完成操作</span></div>
-            <div class="trajectory-meta"><span class="ev" data-cap="log"><i></i>原生日志</span><span class="trajectory-source">Codex</span><time>22:48:05</time></div>
-          </div>
-        </section>
-
-        <div class="sentinel">已完整加载 6 轮</div>
+        <section class="trajectory-lifecycle" aria-label="会话结束"><div class="trajectory-life-row"><span class="trajectory-life-icon" aria-hidden="true"><svg viewBox="0 0 16 16"><rect x="3.3" y="3.3" width="9.4" height="9.4" rx="1.8"></rect></svg></span><div class="trajectory-life-main"><span class="trajectory-life-title">会话结束</span><span class="trajectory-life-desc">正常结束 · 无未完成操作</span></div><div class="trajectory-meta"><span class="ev" data-cap="log"><i></i>原生日志</span><span class="trajectory-source">Codex</span><time>22:48:05</time></div></div></section>
+        <div class="sentinel">执行轨迹审阅版 · 仅用于确认任务复盘表现层</div>
       </div>
     </section>
   </div>
 </div>
-
-<div class="scrim" id="scrim"></div>
-<aside class="drawer" id="inspector" aria-label="事件详情">
-  <div class="dw-head"><div><div class="dw-eyebrow">事件详情</div><div class="dw-title">read_file</div></div><button class="icon-button" data-close-drawer aria-label="关闭">×</button></div>
-  <div class="tabs"><button class="active" data-tab="detail">详情</button><button data-tab="evidence">证据 · 1</button><button data-tab="raw">原始数据</button></div>
-  <div class="dw-body"><section data-panel="detail"><h3>详情</h3><div class="ev-card"><div class="row1"><b>读取</b><span>完成</span><span>0.3 秒</span></div><div class="path"><code>packages/storage-sqlite/src/index.ts</code></div></div></section><section data-panel="evidence" hidden><h3>证据</h3><div class="ev-card"><div class="row1"><b>运行时捕获</b><span>已观测</span><span>可信度：精确</span></div></div></section><section data-panel="raw" hidden><h3>来源原始记录</h3><pre class="raw-json">{"type":"tool","name":"read_file","status":"success"}</pre></section></div>
-</aside>
 <script src="assets/app.js"></script>
 </body>
 </html>
