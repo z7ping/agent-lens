@@ -103,13 +103,15 @@ function enrichSource(source: BackupProtectionSource, files: IndexedFile[]): Bac
     bucket.totalBytes = (bucket.totalBytes ?? 0) + file.size
   }
 
+  const oldestModifiedAt = Number.isFinite(oldest) ? new Date(oldest).toISOString() : undefined
+  const latestModifiedAt = latest > 0 ? new Date(latest).toISOString() : undefined
   return {
     ...source,
     totalBytes,
     kindDetails,
     roots: [...roots.values()].sort((a, b) => a.scope.localeCompare(b.scope) || a.path.localeCompare(b.path)),
-    oldestModifiedAt: Number.isFinite(oldest) ? new Date(oldest).toISOString() : undefined,
-    latestModifiedAt: latest > 0 ? new Date(latest).toISOString() : undefined,
+    ...(oldestModifiedAt ? { oldestModifiedAt } : {}),
+    ...(latestModifiedAt ? { latestModifiedAt } : {}),
     ageBuckets,
   }
 }
