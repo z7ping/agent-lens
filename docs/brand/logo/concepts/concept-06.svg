@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="AgentLens concept 06">
+  <rect width="256" height="256" rx="52" fill="#0f172a"/>
+  <path d="M46 82 H104 C132 82 144 104 160 128" fill="none" stroke="#22d3ee" stroke-width="11" stroke-linecap="round"/>
+  <path d="M46 174 H104 C132 174 144 152 160 128" fill="none" stroke="#818cf8" stroke-width="11" stroke-linecap="round"/>
+  <circle cx="46" cy="82" r="10" fill="#2dd4bf"/>
+  <circle cx="46" cy="174" r="10" fill="#6366f1"/>
+  <circle cx="160" cy="128" r="13" fill="#fb923c"/>
+  <rect x="178" y="72" width="34" height="112" rx="17" fill="none" stroke="#f8fafc" stroke-width="10"/>
+  <rect x="205" y="92" width="24" height="72" rx="12" fill="none" stroke="#f8fafc" stroke-width="8"/>
+</svg>
