@@ -422,7 +422,9 @@ function Inspector({ node, onClose }: { node: ReviewNodeDto; onClose(): void }) 
         <div className="eyebrow">事件详情</div>
         <div className="inspector-title">{title}</div>
       </div>
-      <button className="icon-button" onClick={onClose} aria-label="关闭事件详情">×</button>
+      <button className="icon-button" onClick={onClose} aria-label="关闭事件详情">
+        <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+      </button>
     </div>
     <div className="agent-scope" role="tablist" aria-label="事件详情分类" style={{ padding: '10px 14px 0' }}>
       <button ref={firstTabRef} className={`scope-chip ${tab === 'detail' ? 'scope-chip-active' : ''}`} role="tab" aria-selected={tab === 'detail'} onClick={() => setTab('detail')}>详情</button>
@@ -550,7 +552,7 @@ function ToolRunGroup({ items, inspect }: { items: ReviewToolNodeDto[]; inspect(
   const visible = errorsOnly ? items.filter(item => item.status === 'error') : items
   return <details className={`execution-group ${errors ? 'execution-group-error' : ''}`} open={expanded} onToggle={event => setExpanded(event.currentTarget.open)}>
     <summary>
-      <span className="execution-group-icon">↳</span>
+      <span className="execution-group-icon" aria-hidden="true"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v4a3 3 0 0 0 3 3h6"/><path d="m9 7 3 3-3 3"/></svg></span>
       <span className="execution-group-copy"><b>工具执行</b><small>{items.length} 次调用</small></span>
       <span className="execution-kind-counts">{typeCounts.map(([kind, count]) => <span key={kind}>{toolKindLabel(kind)} {count}</span>)}</span>
       <span className={`execution-summary-status ${errors ? 'is-error' : 'is-ok'}`}>{errors ? `${errors} 个错误` : '全部完成'}</span>
@@ -722,6 +724,7 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
   const [expandAllRounds, setExpandAllRounds] = useState(false)
   const [roundExpansionRevision, setRoundExpansionRevision] = useState(0)
   const [showRawRecords, setShowRawRecords] = useState(false)
+  const sessionLoadSentinelRef = useRef<HTMLButtonElement>(null)
   const detailLoadSentinelRef = useRef<HTMLDivElement>(null)
   const readerPaneRef = useRef<HTMLElement>(null)
   const followingTailRef = useRef(false)
@@ -756,6 +759,17 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
   useEffect(() => {
     if (detail?.page.filter) setRoundFilter(detail.page.filter)
   }, [detail?.page.filter])
+
+  useEffect(() => {
+    const sentinel = sessionLoadSentinelRef.current
+    if (!sentinel || !review.response?.meta.hasMore || review.loading || review.loadingMore || review.error) return
+    const root = sentinel.closest('.session-scroll')
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) void model.loadMoreReview()
+    }, { root, rootMargin: '160px 0px' })
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [review.response?.items.length, review.response?.meta.hasMore, review.loading, review.loadingMore, review.error, model])
 
   useEffect(() => {
     const sentinel = detailLoadSentinelRef.current
@@ -894,7 +908,7 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
       <select className="filter" value={review.filters.range} onChange={e => model.setReviewFilters({ range: e.target.value as typeof review.filters.range })}><option value="today">今天</option><option value="7d">最近 7 天</option><option value="30d">最近 30 天</option><option value="all">全部时间</option></select>
       <select className="filter" value={review.filters.status} onChange={e => model.setReviewFilters({ status: e.target.value as typeof review.filters.status })}><option value="all">全部状态</option><option value="clean">无错误</option><option value="with-errors">有错误</option></select>
       <input className="filter search-filter" placeholder="搜索会话…" value={review.filters.search} onChange={e => model.setReviewFilters({ search: e.target.value })}/>
-      <button className="icon-button" onClick={() => void model.refreshReview()} title="刷新" aria-label="刷新">↻</button>
+      <button className="icon-button" onClick={() => void model.refreshReview()} title="刷新" aria-label="刷新"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M13 3v4H9"/><path d="M12.2 6A5 5 0 1 0 13 9"/></svg></button>
     </div>
 
     <div className="review-layout">
@@ -910,7 +924,8 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
               <div className="session-item-foot"><span>{item.projectName ?? item.workspacePath?.split(/[\\/]/).pop() ?? '无项目'}</span><span>{item.toolCount} 调用{item.errorCount > 0 ? ` · ${item.errorCount} 错误` : ''}</span></div>
             </button>)}
           </section>)}
-          {review.response?.meta.hasMore && <button className="session-load-more" disabled={review.loadingMore} onClick={() => void model.loadMoreReview()}>{review.loadingMore ? '加载中…' : `加载更多会话 · 再显示最多 40 条`}</button>}
+          {review.response?.meta.hasMore && <button ref={sessionLoadSentinelRef} className="session-load-more" disabled={review.loadingMore} onClick={() => void model.loadMoreReview()}>{review.loadingMore ? '正在加载更多会话…' : review.error ? '加载失败 · 点击重试' : '继续向下滚动，自动加载更多会话'}</button>}
+          {review.response && !review.response.meta.hasMore && review.response.items.length > 0 && <div className="session-load-more" aria-live="polite">已加载全部会话</div>}
           {!review.loading && !review.response?.items.length && <div className="empty-state">当前筛选范围没有会话</div>}
         </div>
       </aside>
