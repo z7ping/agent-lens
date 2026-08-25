@@ -8,7 +8,7 @@ $outputPath = Join-Path $root 'apps/desktop/assets/icon-win.png'
 $size = 512
 
 if (-not (Test-Path -LiteralPath $sourcePath)) {
-  throw "没有找到正式 Logo：$sourcePath"
+  throw "AgentLens icon source was not found: $sourcePath"
 }
 
 $source = $null
@@ -17,11 +17,11 @@ $graphics = $null
 try {
   $source = [System.Drawing.Image]::FromFile($sourcePath)
   if ($source.Width -ne $source.Height -or $source.Width -lt 256) {
-    throw "Windows 应用图标至少需要 256x256 的正方形源图，当前为 $($source.Width)x$($source.Height)"
+    throw "Windows app icon must be a square image at least 256x256; got $($source.Width)x$($source.Height)"
   }
 
-  # 24 位 RGB 不包含 Alpha 通道。先用桌面壳的深色基底铺满，再按正式 Logo
-  # 的透明度合成，因此资源写入 EXE / 快捷方式后不会出现整张图被当作透明的情况。
+  # Format24bppRgb has no alpha channel. Fill the desktop shell background first,
+  # then composite the formal logo so Windows shell resources cannot become blank.
   $bitmap = [System.Drawing.Bitmap]::new($size, $size, [System.Drawing.Imaging.PixelFormat]::Format24bppRgb)
   $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
   $graphics.Clear([System.Drawing.Color]::FromArgb(11, 13, 16))
@@ -43,15 +43,15 @@ finally {
 $check = [System.Drawing.Image]::FromFile($outputPath)
 try {
   if ($check.Width -ne $size -or $check.Height -ne $size) {
-    throw "Windows 图标生成尺寸异常：$($check.Width)x$($check.Height)"
+    throw "Generated Windows icon has unexpected dimensions: $($check.Width)x$($check.Height)"
   }
   if ($check.PixelFormat -band [System.Drawing.Imaging.PixelFormat]::Alpha) {
-    throw "Windows 图标仍包含 Alpha 通道：$($check.PixelFormat)"
+    throw "Generated Windows icon still has an alpha channel: $($check.PixelFormat)"
   }
   if ($check.PixelFormat -band [System.Drawing.Imaging.PixelFormat]::PAlpha) {
-    throw "Windows 图标仍包含预乘 Alpha 通道：$($check.PixelFormat)"
+    throw "Generated Windows icon still has premultiplied alpha: $($check.PixelFormat)"
   }
-  Write-Host "[AgentLens] Windows 图标已生成：$outputPath（$size x $size，$($check.PixelFormat)，无透明通道）"
+  Write-Host "[AgentLens] Windows icon ready: $outputPath ($size x $size, $($check.PixelFormat), opaque)"
 }
 finally {
   $check.Dispose()
