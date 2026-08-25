@@ -10,6 +10,8 @@ $resolved = (Resolve-Path $ExecutablePath).Path
 $port = Get-Random -Minimum 57000 -Maximum 57999
 $smokeRoot = Join-Path $env:RUNNER_TEMP ("agent-lens-desktop-smoke-" + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force -Path $smokeRoot | Out-Null
+$desktopStdout = Join-Path $smokeRoot 'desktop.stdout.log'
+$desktopStderr = Join-Path $smokeRoot 'desktop.stderr.log'
 
 function Assert-EmbeddedIconVisible([string]$path) {
   $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($path)
@@ -46,6 +48,12 @@ function Assert-EmbeddedIconVisible([string]$path) {
 
 function Write-DesktopDiagnostics {
   Write-Host '[AgentLens] 桌面启动失败，输出可用运行日志：'
+  foreach ($candidate in @($desktopStdout, $desktopStderr)) {
+    if (Test-Path -LiteralPath $candidate) {
+      Write-Host "--- $candidate ---"
+      Get-Content -LiteralPath $candidate -Tail 200 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
+    }
+  }
   $logs = @(Get-ChildItem -Path $env:APPDATA -Filter 'daemon.log' -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 5)
   if ($logs.Count -eq 0) {
     Write-Host '[AgentLens] 未找到 daemon.log'
@@ -64,17 +72,19 @@ $previous = @{
   AGENT_LENS_DB_PATH = $env:AGENT_LENS_DB_PATH
   AGENT_LENS_VAULT_PATH = $env:AGENT_LENS_VAULT_PATH
   AGENT_LENS_ENABLED_SOURCES = $env:AGENT_LENS_ENABLED_SOURCES
+  ELECTRON_ENABLE_LOGGING = $env:ELECTRON_ENABLE_LOGGING
 }
 
 $env:AGENT_LENS_PORT = [string]$port
 $env:AGENT_LENS_DB_PATH = Join-Path $smokeRoot 'agent-lens.db'
 $env:AGENT_LENS_VAULT_PATH = Join-Path $smokeRoot 'vault'
 $env:AGENT_LENS_ENABLED_SOURCES = 'none'
+$env:ELECTRON_ENABLE_LOGGING = '1'
 
 $process = $null
 try {
   Write-Host "[AgentLens] 按双击等价方式启动打包客户端：$resolved"
-  $process = Start-Process -FilePath $resolved -PassThru
+  $process = Start-Process -FilePath $resolved -PassThru -RedirectStandardOutput $desktopStdout -RedirectStandardError $desktopStderr
   $health = $null
   $deadline = (Get-Date).AddSeconds(30)
 
