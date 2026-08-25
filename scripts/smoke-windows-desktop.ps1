@@ -23,8 +23,8 @@ $env:AGENT_LENS_ENABLED_SOURCES = 'none'
 
 $process = $null
 try {
-  Write-Host "[AgentLens] 启动打包客户端：$resolved"
-  $process = Start-Process -FilePath $resolved -ArgumentList '--disable-gpu' -PassThru
+  Write-Host "[AgentLens] 按双击等价方式启动打包客户端：$resolved"
+  $process = Start-Process -FilePath $resolved -PassThru
   $health = $null
   $deadline = (Get-Date).AddSeconds(30)
 
