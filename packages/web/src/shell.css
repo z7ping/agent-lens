@@ -364,11 +364,7 @@
   overflow: auto;
 }
 
-/* 冻结高保真使用紧凑页名，不再显示大段常驻介绍。 */
-.tools-content,
-.insights-content,
-.agents-content { padding-top: 16px; background: transparent; }
-
+.compact-page-heading,
 .tools-content > .page-heading,
 .insights-content > .page-heading,
 .agents-content > .page-heading {
@@ -379,23 +375,17 @@
   margin: 0 0 8px;
 }
 
+.compact-page-heading-main,
 .tools-content > .page-heading > div,
 .insights-content > .page-heading > div,
 .agents-content > .page-heading > div {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 8px;
 }
 
-.tools-content > .page-heading .eyebrow,
-.insights-content > .page-heading .eyebrow,
-.agents-content > .page-heading .eyebrow,
-.tools-content > .page-heading p,
-.insights-content > .page-heading p,
-.agents-content > .page-heading p {
-  display: none;
-}
-
+.compact-page-heading h1,
 .tools-content > .page-heading h1,
 .insights-content > .page-heading h1,
 .agents-content > .page-heading h1 {
@@ -405,6 +395,65 @@
   font-weight: 700;
   letter-spacing: -.02em;
 }
+
+.heading-help {
+  position: relative;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--al-muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: help;
+}
+
+.heading-help:hover,
+.heading-help:focus-visible { background: var(--al-soft); color: var(--al-ink); outline: none; }
+
+.heading-help::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 130;
+  width: max-content;
+  max-width: min(410px, calc(100vw - 32px));
+  padding: 8px 11px;
+  border: 1px solid var(--al-line);
+  border-radius: 9px;
+  background: var(--al-surface-raised);
+  box-shadow: var(--al-shadow-lg);
+  color: var(--al-ink-2);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.6;
+  text-align: left;
+  white-space: normal;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition: opacity .14s, transform .14s;
+}
+
+.heading-help:hover::after,
+.heading-help:focus-visible::after { opacity: 1; transform: none; }
+
+/* 旧页面结构在接入 CompactPageHeading 前保持同一视觉。 */
+.tools-content,
+.insights-content,
+.agents-content { padding-top: 16px; background: transparent; }
+
+.tools-content > .page-heading .eyebrow,
+.insights-content > .page-heading .eyebrow,
+.agents-content > .page-heading .eyebrow,
+.tools-content > .page-heading p,
+.insights-content > .page-heading p,
+.agents-content > .page-heading p { display: none; }
 
 .page-heading h1 { margin: 3px 0 0; font-size: 21px; font-weight: 700; letter-spacing: -.02em; }
 .page-heading p { margin: 7px 0 0; color: var(--al-muted); font-size: 13px; line-height: 1.6; }
@@ -446,4 +495,5 @@
   .status-tip::after { right: -34px; }
   .workspace-toolbar { padding-right: 10px; padding-left: 10px; }
   .page-content { padding: 20px 14px 40px; }
+  .heading-help::after { left: auto; right: 0; }
 }
