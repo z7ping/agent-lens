@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import test from 'node:test'
 import { pathToFileURL } from 'node:url'
@@ -20,6 +21,14 @@ test('Windows Hook 命令固定指向用户级共享分发器', () => {
   assert.match(codex, /agent-lens-hook-codex$/)
   assert.match(claude, /agent-lens-hook-claude$/)
   assert.doesNotMatch(codex, /node\.exe/)
+})
+
+test('Windows 共享分发器使用 PowerShell 5.1 兼容的 UTF-8 stdin 转发', () => {
+  const source = readFileSync(resolve('scripts/windows-hook-dispatcher.ps1'), 'utf8')
+  assert.doesNotMatch(source, /StandardInputEncoding/)
+  assert.match(source, /\[System\.Text\.Encoding\]::UTF8\.GetBytes\(\$rawInput\)/)
+  assert.match(source, /StandardInput\.BaseStream\.Write/)
+  assert.match(source, /StandardInput\.Close\(\)/)
 })
 
 test('源码 CLI 不冒充正式 npm 安装，正式 mjs 与 Desktop 可以登记', () => {
