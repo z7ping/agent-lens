@@ -1,10 +1,13 @@
 import { createHash } from 'node:crypto'
-import { access, readFile, readdir } from 'node:fs/promises'
+import { watch, type FSWatcher } from 'node:fs'
+import { access, readFile, readdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import * as zlib from 'node:zlib'
 import type {
   DetectedSource,
+  DiscoveredAsset,
+  Disposable,
   EvidenceCandidate,
   NormalizedSourceOutput,
   ObservationCapability,
@@ -16,12 +19,15 @@ import type {
   SourceNormalizationContext,
   SourcePluginManifest,
   SourceRecord,
+  SourceRecordEmitter,
 } from '@agent-lens/core'
 import { defineAgentLensPlugin, type AgentLensContext } from '@agent-lens/runtime-cordis'
 
 const SOURCE_ID = 'dsh'
-const PARSER_VERSION = '1'
+const PARSER_VERSION = '2'
 const MAX_STRING = 64 * 1024
+const RUNTIME_POLL_MS = 2000
+const RUNTIME_DEBOUNCE_MS = 180
 const PACKED_TAGS = new Set(['text-chunks', 'reasoning-chunks', 'usage-chunks', 'signature-chunks', 'tool-call-chunks'])
 const SENSITIVE_KEY = /(password|passwd|secret|token|api[_-]?key|authorization|cookie)/i
 
@@ -57,7 +63,19 @@ interface DshEnvelope {
     parentSessionId?: string
     parentEventSeq?: number
   }
-  captureChannel: 'history'
+  captureChannel: 'history' | 'native-tail'
+}
+
+interface ProfileManifest {
+  name?: string
+  version?: string
+  dependencies?: Record<string, string>
+  devDependencies?: Record<string, string>
+  dsh?: {
+    profile?: {
+      bundles?: string[]
+    }
+  }
 }
 
 function sha256(value: string): string {
@@ -142,11 +160,15 @@ async function sessionFiles(profileRoot: string): Promise<string[]> {
     for (const entry of entries) {
       const path = join(dir, entry.name)
       if (entry.isDirectory()) await walk(path)
-      else if (entry.isFile() && (entry.name.endsWith('.jsonl') || entry.name.endsWith('.jsonl.zst'))) result.push(path)
+      else if (entry.isFile() && isSessionFile(path)) result.push(path)
     }
   }
   await walk(root)
   return result.sort()
+}
+
+function isSessionFile(path: string): boolean {
+  return path.endsWith('.jsonl') || path.endsWith('.jsonl.zst')
 }
 
 function decodeSession(buffer: Buffer, path: string): string {
@@ -184,36 +206,54 @@ export async function detectDsh(ctx: SourceDetectionContext): Promise<DetectedSo
   const detected: DetectedSource[] = []
   for (const profile of await profileRoots(env)) {
     const sessions = await sessionFiles(profile.root)
+    const hasProfile = await exists(join(profile.root, 'package.json'))
     const hasConfig = await exists(join(profile.root, 'settings.yaml')) || await exists(join(profile.root, 'cordis.patch.yml'))
-    if (!sessions.length && !hasConfig) continue
+    if (!sessions.length && !hasProfile && !hasConfig) continue
     detected.push({
       sourceId: SOURCE_ID,
       productId: SOURCE_ID,
       configRoot: profile.root,
       dataRoot: profile.root,
-      confidence: sessions.length ? 'exact' : 'high',
+      confidence: sessions.length || hasProfile ? 'exact' : 'high',
     })
   }
   return detected
 }
 
-function eventRecord(session: ParsedSession, event: DshEvent, ctx: SourceExecutionContext): SourceRecord {
+function sessionIdentity(session: ParsedSession, ctx: SourceExecutionContext) {
   const nativeSessionId = stringField(session.header, 'sessionId') ?? basename(session.path).replace(/\.jsonl(?:\.zst)?$/, '')
+  return {
+    nativeSessionId,
+    cwd: stringField(session.header, 'cwd'),
+    parentSessionId: stringField(session.header, 'parentSessionId'),
+    parentEventSeq: numberField(session.header, 'parentEventSeq'),
+    profile: basename(ctx.installation.dataRoot ?? ctx.installation.configRoot ?? '') || 'default',
+  }
+}
+
+function checkpointKey(nativeSessionId: string): string {
+  return `session:${sha256(nativeSessionId).slice(0, 24)}`
+}
+
+function eventRecord(
+  session: ParsedSession,
+  event: DshEvent,
+  ctx: SourceExecutionContext,
+  captureChannel: DshEnvelope['captureChannel'] = 'history',
+): SourceRecord {
+  const identity = sessionIdentity(session, ctx)
   const seq = numberField(event, 'seq') ?? 0
   const nativeType = stringField(event, 'type') ?? 'unknown'
   const capturedAt = new Date().toISOString()
   const occurredAt = normalizeTimestamp(event.time, normalizeTimestamp(session.header.createdAt, capturedAt)) ?? capturedAt
-  const fingerprint = sha256(JSON.stringify([nativeSessionId, seq, nativeType, event.data ?? null]))
-  const cwd = stringField(session.header, 'cwd')
-  const parentSessionId = stringField(session.header, 'parentSessionId')
-  const parentEventSeq = numberField(session.header, 'parentEventSeq')
+  const fingerprint = sha256(JSON.stringify([identity.nativeSessionId, seq, nativeType, event.data ?? null]))
   return {
-    id: `dsh-${sha256(`${nativeSessionId}:${seq}:${fingerprint}`).slice(0, 32)}`,
+    id: `dsh-${sha256(`${identity.nativeSessionId}:${seq}:${fingerprint}`).slice(0, 32)}`,
     sourceId: SOURCE_ID,
     installationId: ctx.installation.id,
-    sourceSessionNativeId: nativeSessionId,
+    sourceSessionNativeId: identity.nativeSessionId,
     nativeType,
-    nativeId: `${nativeSessionId}:${seq}`,
+    nativeId: `${identity.nativeSessionId}:${seq}`,
     sourceSequence: seq * 10,
     occurredAt,
     capturedAt,
@@ -222,13 +262,13 @@ function eventRecord(session: ParsedSession, event: DshEvent, ctx: SourceExecuti
     payload: {
       event: sanitize(event) as DshEvent,
       session: {
-        nativeSessionId,
-        profile: basename(ctx.installation.dataRoot ?? ctx.installation.configRoot ?? '') || 'default',
-        ...(cwd ? { cwd } : {}),
-        ...(parentSessionId ? { parentSessionId } : {}),
-        ...(parentEventSeq === undefined ? {} : { parentEventSeq }),
+        nativeSessionId: identity.nativeSessionId,
+        profile: identity.profile,
+        ...(identity.cwd ? { cwd: identity.cwd } : {}),
+        ...(identity.parentSessionId ? { parentSessionId: identity.parentSessionId } : {}),
+        ...(identity.parentEventSeq === undefined ? {} : { parentEventSeq: identity.parentEventSeq }),
       },
-      captureChannel: 'history',
+      captureChannel,
     } satisfies DshEnvelope,
     parserVersion: PARSER_VERSION,
   }
@@ -242,15 +282,152 @@ export async function* ingestDshHistory(ctx: SourceExecutionContext): AsyncItera
     let session: ParsedSession | null = null
     try { session = await readSession(path) } catch { continue }
     if (!session) continue
-    const nativeSessionId = stringField(session.header, 'sessionId') ?? path
-    const checkpointKey = `session:${sha256(nativeSessionId).slice(0, 24)}`
-    let after = await ctx.checkpoint.get<number>(checkpointKey) ?? -1
+    const identity = sessionIdentity(session, ctx)
+    let after = await ctx.checkpoint.get<number>(checkpointKey(identity.nativeSessionId)) ?? -1
     for (const event of session.events) {
       const seq = numberField(event, 'seq') ?? 0
       if (seq <= after) continue
-      yield eventRecord(session, event, ctx)
+      yield eventRecord(session, event, ctx, 'history')
       after = seq
-      await ctx.checkpoint.set(checkpointKey, after)
+      await ctx.checkpoint.set(checkpointKey(identity.nativeSessionId), after)
+    }
+  }
+}
+
+async function emitChangedSession(
+  path: string,
+  ctx: SourceExecutionContext,
+  emitter: SourceRecordEmitter,
+): Promise<void> {
+  if (ctx.abortSignal.aborted || !isSessionFile(path) || !await exists(path)) return
+  let session: ParsedSession | null = null
+  try { session = await readSession(path) } catch { return }
+  if (!session) return
+  const identity = sessionIdentity(session, ctx)
+  const key = checkpointKey(identity.nativeSessionId)
+  let after = await ctx.checkpoint.get<number>(key) ?? -1
+  for (const event of session.events) {
+    if (ctx.abortSignal.aborted) return
+    const seq = numberField(event, 'seq') ?? 0
+    if (seq <= after) continue
+    await emitter.emit(eventRecord(session, event, ctx, 'native-tail'))
+    after = seq
+    await ctx.checkpoint.set(key, after)
+  }
+}
+
+export async function startDshRuntimeCapture(
+  ctx: SourceExecutionContext,
+  emitter: SourceRecordEmitter,
+): Promise<Disposable> {
+  const profileRoot = ctx.installation.dataRoot
+  const sessionsRoot = profileRoot ? join(profileRoot, 'sessions') : ''
+  if (!profileRoot || !await exists(sessionsRoot)) return { dispose() {} }
+
+  let stopped = false
+  let watcher: FSWatcher | null = null
+  let pollTimer: NodeJS.Timeout | null = null
+  const debounce = new Map<string, NodeJS.Timeout>()
+  const mtimes = new Map<string, number>()
+
+  const schedule = (path: string) => {
+    if (stopped || !isSessionFile(path)) return
+    const previous = debounce.get(path)
+    if (previous) clearTimeout(previous)
+    debounce.set(path, setTimeout(() => {
+      debounce.delete(path)
+      void emitChangedSession(path, ctx, emitter).catch(() => undefined)
+    }, RUNTIME_DEBOUNCE_MS))
+  }
+
+  const poll = async () => {
+    if (stopped || ctx.abortSignal.aborted) return
+    for (const path of await sessionFiles(profileRoot)) {
+      const meta = await stat(path).catch(() => null)
+      if (!meta) continue
+      const previous = mtimes.get(path)
+      mtimes.set(path, meta.mtimeMs)
+      if (previous !== undefined && previous !== meta.mtimeMs) schedule(path)
+    }
+  }
+
+  try {
+    watcher = watch(sessionsRoot, { recursive: true }, (_event, fileName) => {
+      if (!fileName) return
+      schedule(join(sessionsRoot, fileName.toString()))
+    })
+    watcher.on('error', () => {
+      watcher?.close()
+      watcher = null
+    })
+  } catch {
+    watcher = null
+  }
+
+  if (!watcher) {
+    await poll()
+    pollTimer = setInterval(() => { void poll().catch(() => undefined) }, RUNTIME_POLL_MS)
+  }
+
+  return {
+    dispose() {
+      stopped = true
+      watcher?.close()
+      if (pollTimer) clearInterval(pollTimer)
+      for (const timer of debounce.values()) clearTimeout(timer)
+      debounce.clear()
+    },
+  }
+}
+
+async function readProfileManifest(root: string): Promise<ProfileManifest | null> {
+  try {
+    return JSON.parse(await readFile(join(root, 'package.json'), 'utf8')) as ProfileManifest
+  } catch {
+    return null
+  }
+}
+
+function installedAsset(path: string, observedAt: string) {
+  return [{ state: 'installed' as const, value: true as const, observedAt }]
+}
+
+export async function* discoverDshAssets(ctx: SourceExecutionContext): AsyncIterable<DiscoveredAsset> {
+  const root = ctx.installation.configRoot ?? ctx.installation.dataRoot
+  if (!root || ctx.abortSignal.aborted) return
+  const manifestPath = join(root, 'package.json')
+  const manifest = await readProfileManifest(root)
+  const manifestMeta = await stat(manifestPath).catch(() => null)
+  const observedAt = manifestMeta?.mtime.toISOString() ?? new Date().toISOString()
+  const bundles = Array.isArray(manifest?.dsh?.profile?.bundles) ? manifest!.dsh!.profile!.bundles! : []
+
+  for (const name of bundles) {
+    if (ctx.abortSignal.aborted) return
+    yield {
+      definition: { type: 'plugin', canonicalName: name, displayName: name },
+      binding: { path: manifestPath, source: 'dsh:bundle', version: manifest?.dependencies?.[name] },
+      states: installedAsset(manifestPath, observedAt),
+    }
+  }
+
+  const bundleSet = new Set(bundles)
+  const dependencies = { ...(manifest?.dependencies ?? {}), ...(manifest?.devDependencies ?? {}) }
+  for (const [name, version] of Object.entries(dependencies)) {
+    if (ctx.abortSignal.aborted || bundleSet.has(name)) continue
+    yield {
+      definition: { type: 'plugin', canonicalName: name, displayName: name },
+      binding: { path: join(root, 'node_modules', name), source: 'dsh:profile-plugin', version },
+      states: installedAsset(manifestPath, observedAt),
+    }
+  }
+
+  const patchPath = join(root, 'cordis.patch.yml')
+  const patchMeta = await stat(patchPath).catch(() => null)
+  if (patchMeta) {
+    yield {
+      definition: { type: 'rule', canonicalName: 'profile-config', displayName: 'Profile 配置覆盖' },
+      binding: { path: patchPath, source: 'dsh:profile-config' },
+      states: [{ state: 'configured', value: true, observedAt: patchMeta.mtime.toISOString() }],
     }
   }
 }
@@ -266,9 +443,10 @@ function textFromContent(content: unknown): string {
 }
 
 function evidenceFor(record: SourceRecord): EvidenceCandidate {
+  const envelope = record.payload as DshEnvelope
   return {
     captureMethod: 'native-log',
-    derivation: 'reported',
+    derivation: envelope.captureChannel === 'native-tail' ? 'observed' : 'reported',
     sourceRecordId: record.id,
     sourceLocator: record.locator,
     parserVersion: record.parserVersion,
@@ -279,9 +457,10 @@ function evidenceFor(record: SourceRecord): EvidenceCandidate {
   }
 }
 
-function identity(record: SourceRecord, envelope: DshEnvelope): ObservationIdentityHints {
+function identity(_record: SourceRecord, envelope: DshEnvelope): ObservationIdentityHints {
   return {
     nativeSessionId: envelope.session.nativeSessionId,
+    ...(envelope.session.parentSessionId ? { nativeParentSessionId: envelope.session.parentSessionId } : {}),
     ...(envelope.session.cwd ? { workspacePath: envelope.session.cwd } : {}),
   }
 }
@@ -380,17 +559,17 @@ export async function normalizeDshRecord(record: SourceRecord, _ctx: SourceNorma
 
 export async function declareDshCapabilities(_detected: DetectedSource): Promise<ObservationCapability[]> {
   return [
-    { sourceId: SOURCE_ID, name: 'session', status: 'available', captureModes: ['history'] },
-    { sourceId: SOURCE_ID, name: 'transcript', status: 'available', captureModes: ['history'] },
-    { sourceId: SOURCE_ID, name: 'tool-call', status: 'available', captureModes: ['history'] },
-    { sourceId: SOURCE_ID, name: 'tool-result', status: 'available', captureModes: ['history'] },
-    { sourceId: SOURCE_ID, name: 'usage', status: 'available', captureModes: ['history'] },
-    { sourceId: SOURCE_ID, name: 'context', status: 'partial', captureModes: ['history'], reason: 'request/header 可作为模型请求上下文证据；压缩 assistant/chunk 暂不展开' },
+    { sourceId: SOURCE_ID, name: 'session', status: 'available', captureModes: ['history', 'native-tail'] },
+    { sourceId: SOURCE_ID, name: 'transcript', status: 'available', captureModes: ['history', 'native-tail'] },
+    { sourceId: SOURCE_ID, name: 'tool-call', status: 'available', captureModes: ['history', 'native-tail'] },
+    { sourceId: SOURCE_ID, name: 'tool-result', status: 'available', captureModes: ['history', 'native-tail'] },
+    { sourceId: SOURCE_ID, name: 'usage', status: 'available', captureModes: ['history', 'native-tail'] },
+    { sourceId: SOURCE_ID, name: 'context', status: 'partial', captureModes: ['history', 'native-tail'], reason: 'request/header 可作为模型请求上下文证据；压缩 assistant/chunk 暂不展开' },
     { sourceId: SOURCE_ID, name: 'permission', status: 'unavailable', captureModes: [], reason: '当前 SessionEventMap 没有稳定权限事件映射' },
-    { sourceId: SOURCE_ID, name: 'subagent', status: 'partial', captureModes: ['history'], reason: 'SessionHeader lineage 作为会话血统证据保留，暂未投影为 subagent 事件' },
-    { sourceId: SOURCE_ID, name: 'asset-discovery', status: 'unavailable', captureModes: [], reason: '首版先接会话事实流，Bundle/Plugin 资产后续按稳定语义补充' },
+    { sourceId: SOURCE_ID, name: 'subagent', status: 'partial', captureModes: ['history', 'native-tail'], reason: 'SessionHeader lineage 已进入 SourceSession.nativeParentSessionId；关系类型仍保持保守，不把所有父子会话强行判定为 subagent' },
+    { sourceId: SOURCE_ID, name: 'asset-discovery', status: 'available', captureModes: ['static-scan'] },
     { sourceId: SOURCE_ID, name: 'thinking', status: 'unavailable', captureModes: [], reason: '不展开压缩 reasoning chunk' },
-    { sourceId: SOURCE_ID, name: 'asset-invocation', status: 'unavailable', captureModes: [], reason: '尚未建立 DSH 工具到 Bundle/Plugin 资产的稳定归因' },
+    { sourceId: SOURCE_ID, name: 'asset-invocation', status: 'unavailable', captureModes: [], reason: '尚未建立 DSH 工具到 Bundle/Plugin 资产的稳定调用归因' },
     { sourceId: SOURCE_ID, name: 'artifact-action', status: 'unavailable', captureModes: [], reason: '尚未建立稳定 artifact 映射' },
   ]
 }
@@ -410,7 +589,9 @@ export const dshSourceDefinition: SourceDefinition = {
   manifest: dshManifest,
   detect: detectDsh,
   declareCapabilities: declareDshCapabilities,
+  discoverAssets: discoverDshAssets,
   ingestHistory: ingestDshHistory,
+  startCapture: startDshRuntimeCapture,
   normalize: normalizeDshRecord,
 }
 
@@ -424,4 +605,12 @@ const applyDshSource = Object.assign(
 
 export const dshSourcePlugin = defineAgentLensPlugin(dshManifest, applyDshSource)
 
-export const dshSourceInternals = { dshHome, profileRoots, sessionFiles, parseDshJsonl, normalizeTimestamp }
+export const dshSourceInternals = {
+  dshHome,
+  profileRoots,
+  sessionFiles,
+  parseDshJsonl,
+  normalizeTimestamp,
+  readProfileManifest,
+  checkpointKey,
+}
