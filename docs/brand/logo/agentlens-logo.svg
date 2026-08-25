@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="AgentLens">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#1768f2"/>
+      <stop offset="0.48" stop-color="#079eea"/>
+      <stop offset="1" stop-color="#20d8cf"/>
+    </linearGradient>
+    <linearGradient id="mint" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#35dfe0"/>
+      <stop offset="1" stop-color="#7ff1bd"/>
+    </linearGradient>
+    <linearGradient id="violet" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#85a9ff"/>
+      <stop offset="1" stop-color="#5b68ef"/>
+    </linearGradient>
+    <linearGradient id="focus" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffc22b"/>
+      <stop offset="1" stop-color="#ff7a21"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1024" height="1024" rx="196" fill="url(#bg)"/>
+
+  <rect x="716" y="360" width="150" height="310" rx="76" fill="#fff"/>
+  <ellipse cx="758" cy="515" rx="43" ry="121" fill="url(#bg)"/>
+
+  <rect x="518" y="314" width="222" height="402" rx="112" fill="#fff"/>
+  <ellipse cx="617" cy="515" rx="58" ry="150" fill="url(#bg)"/>
+
+  <path d="M192 318 C 308 344, 420 438, 600 514" fill="none" stroke="#fff" stroke-width="18" stroke-linecap="round"/>
+  <path d="M192 700 C 318 674, 438 574, 600 516" fill="none" stroke="#fff" stroke-width="18" stroke-linecap="round"/>
+
+  <circle cx="192" cy="318" r="38" fill="url(#mint)"/>
+  <circle cx="192" cy="700" r="38" fill="url(#violet)"/>
+  <circle cx="600" cy="515" r="48" fill="url(#focus)"/>
+</svg>
