@@ -3,6 +3,7 @@ import type {
   AssetBindingId,
   AssetDefinitionId,
   EvidenceId,
+  RuntimeProfileId,
   ToolDefinitionId,
 } from './common'
 
@@ -29,6 +30,7 @@ export interface AssetBinding {
   id: AssetBindingId
   assetId: AssetDefinitionId
   installationId: AgentInstallationId
+  runtimeProfileId?: RuntimeProfileId
   path?: string
   source?: string
   version?: string
@@ -73,6 +75,7 @@ export interface AssetDefinitionHint {
 export interface AssetBindingHint {
   assetId: AssetDefinitionId
   installationId: AgentInstallationId
+  runtimeProfileId?: RuntimeProfileId
   path?: string
   source?: string
   version?: string
