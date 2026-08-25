@@ -28,6 +28,11 @@
 .review-shell .round-act button em,
 .review-shell .sentinel{font-size:12px}
 
+/* 深色用户气泡里的证据必须使用气泡自身的高对比文字体系。 */
+.review-shell .chat-row.user .ev{color:var(--al-user-bubble-muted);border-color:color-mix(in srgb,var(--al-user-bubble-muted) 48%,transparent);background:color-mix(in srgb,var(--al-user-bubble-text) 8%,transparent)}
+.review-shell .chat-row.user .ev i{background:var(--al-user-bubble-muted)}
+.review-shell .chat-row.user .ev[data-cap='log'] i{background:transparent;border-color:var(--al-user-bubble-muted)}
+
 /* 会话生命周期：左侧真实事件，右侧证据/来源/时间形成稳定元信息列。 */
 .trajectory-lifecycle{padding:6px 0 8px}
 .trajectory-life-row{min-height:38px;display:grid;grid-template-columns:18px minmax(0,1fr) minmax(240px,300px);align-items:center;gap:8px;padding:5px 8px;border-bottom:1px solid color-mix(in srgb,var(--al-line) 58%,transparent)}
@@ -156,14 +161,7 @@
       <button class="scope-chip"><span class="src-dot dot-pi"></span>Pi</button>
       <details class="scope-manage">
         <summary title="管理智能体快捷入口" aria-label="管理智能体快捷入口">＋</summary>
-        <div class="scope-pop">
-          <div class="scope-pop-title">快捷智能体</div>
-          <label><input type="checkbox" checked><span class="src-dot dot-codex"></span><span>Codex</span><span class="st on">已检测</span></label>
-          <label><input type="checkbox" checked><span class="src-dot dot-claude"></span><span>Claude Code</span><span class="st on">已检测</span></label>
-          <label><input type="checkbox"><span class="src-dot dot-pi"></span><span>Pi</span><span class="st">未检测</span></label>
-          <label><input type="checkbox"><span></span><span>Hermes</span><span class="st">未检测</span></label>
-          <label><input type="checkbox"><span></span><span>OpenCode</span><span class="st">未检测</span></label>
-        </div>
+        <div class="scope-pop"><div class="scope-pop-title">快捷智能体</div><label><input type="checkbox" checked><span class="src-dot dot-codex"></span><span>Codex</span><span class="st on">已检测</span></label><label><input type="checkbox" checked><span class="src-dot dot-claude"></span><span>Claude Code</span><span class="st on">已检测</span></label><label><input type="checkbox"><span class="src-dot dot-pi"></span><span>Pi</span><span class="st">未检测</span></label><label><input type="checkbox"><span></span><span>Hermes</span><span class="st">未检测</span></label><label><input type="checkbox"><span></span><span>OpenCode</span><span class="st">未检测</span></label></div>
       </details>
     </div>
     <span class="toolbar-divider"></span>
@@ -188,11 +186,7 @@
       </div>
     </aside>
 
-    <nav class="turn-rail" aria-label="轮次定位">
-      <button class="turn-tick active" data-target="#trajectory-round-1" data-tip="第 1 轮 · 收敛改动清单"><i></i><i></i><i></i></button>
-      <button class="turn-tick err" data-target="#trajectory-round-2" data-tip="第 2 轮 · 1 次失败后恢复"><i></i><i></i><i></i></button>
-      <button class="turn-tick" data-target="#trajectory-round-3" data-tip="第 3 轮 · 全量验证"><i></i><i></i><i></i></button>
-    </nav>
+    <nav class="turn-rail" aria-label="轮次定位"><button class="turn-tick active" data-target="#trajectory-round-1" data-tip="第 1 轮 · 收敛改动清单"><i></i><i></i><i></i></button><button class="turn-tick err" data-target="#trajectory-round-2" data-tip="第 2 轮 · 1 次失败后恢复"><i></i><i></i><i></i></button><button class="turn-tick" data-target="#trajectory-round-3" data-tip="第 3 轮 · 全量验证"><i></i><i></i><i></i></button></nav>
 
     <section class="reader-pane" id="readerPane" data-reader>
       <div class="reader-inner">
@@ -203,7 +197,6 @@
           <div class="rh-actions"><button class="audit-toggle" data-audit-toggle aria-pressed="false">显示原始记录</button><span class="audit-note-inline audit-only">原始记录视图：补充来源原始事件与载荷；证据始终保持可见。</span></div>
           <div class="rh-metrics"><div class="metric"><b>6</b><span>轮次</span></div><div class="metric"><b>24</b><span>调用</span></div><div class="metric danger"><b>2</b><span>错误</span></div><div class="metric"><b>34 分钟</b><span>跨度</span></div></div>
         </header>
-
         <div class="round-nav"><div class="round-seg"><button class="active">全部 <em>6</em></button><button>有错误 <em>2</em></button><button>耗时较高 <em>2</em></button></div><div class="round-act"><button data-expand-rounds aria-pressed="false">展开当前页</button><button data-scroll-bottom="#readerPane">跳到最新 ↓</button></div></div>
 
         <section class="trajectory-lifecycle" aria-label="会话生命周期">
@@ -212,25 +205,14 @@
           <div class="trajectory-life-row"><span class="trajectory-life-icon" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M8 2.7 12.3 8 8 13.3 3.7 8 8 2.7Z"></path></svg></span><div class="trajectory-life-main"><span class="trajectory-life-title">思考级别</span><span class="trajectory-life-desc">中等 · 正文未采集</span></div><div class="trajectory-meta"><span class="ev" data-cap="log"><i></i>原生日志</span><span class="trajectory-source">Codex</span><time>22:14:08</time></div></div>
         </section>
 
-        <details class="trajectory-round" id="trajectory-round-1" open>
+        <details class="trajectory-round" id="trajectory-round-1">
           <summary><span class="trajectory-round-index">01</span><span class="trajectory-round-title">第 1 轮</span><span class="trajectory-round-preview">先列出改动清单，不要直接动代码</span><span class="trajectory-round-meta"><span>5 工具</span><span>41 秒</span></span></summary>
-          <div class="trajectory-flow">
-            <div class="chat-row user"><div class="bubble"><div class="meta"><span>用户</span><span class="ev-list"><span class="ev" data-cap="hook"><i></i>运行时捕获</span></span><time>22:14:12</time></div><p>帮我把 storage-sqlite 里散落的 SQL 收敛到 Repository 接口后面。先列出改动清单，不要直接动代码。</p></div></div>
-            <div class="trajectory-thought"><span class="trajectory-thought-icon">思</span><div class="trajectory-thought-main"><b>思考</b><span>检查存储边界、调用方和现有测试，先确认最小改动面。</span></div><div class="trajectory-thought-meta"><span>1 个来源可见块</span><time>22:14:18</time></div></div>
-            <details class="trajectory-tools"><summary><span class="kicon sm kind-read"></span><b>工具执行</b><span class="trajectory-tools-summary">5 次调用 · 全部成功 · 1.5 秒</span><span class="trajectory-tool-tags"><span class="trajectory-tool-tag read">读取 3</span><span class="trajectory-tool-tag">搜索 2</span></span></summary><div class="trajectory-tool-list"><div class="trajectory-tool-row"><span class="kicon sm kind-search"></span><code>search</code><span class="desc">查找 Repository / SQL 调用点</span><time>1.2 秒</time></div><div class="trajectory-tool-row"><span class="kicon sm kind-read"></span><code>read_file</code><span class="desc">packages/storage-sqlite/src/index.ts</span><time>0.3 秒</time></div></div></details>
-            <div class="trajectory-agent-response"><div class="trajectory-agent-meta"><b>智能体</b><span class="ev-list"><span class="ev" data-cap="log"><i></i>原生日志</span></span><time>22:15:01</time></div>建议先收敛 Repository 接口，再迁移调用方，最后用现有存储测试做回归。</div>
-          </div>
+          <div class="trajectory-flow"><div class="chat-row user"><div class="bubble"><div class="meta"><span>用户</span><span class="ev-list"><span class="ev" data-cap="hook"><i></i>运行时捕获</span></span><time>22:14:12</time></div><p>帮我把 storage-sqlite 里散落的 SQL 收敛到 Repository 接口后面。先列出改动清单，不要直接动代码。</p></div></div><div class="trajectory-thought"><span class="trajectory-thought-icon">思</span><div class="trajectory-thought-main"><b>思考</b><span>检查存储边界、调用方和现有测试，先确认最小改动面。</span></div><div class="trajectory-thought-meta"><span>1 个来源可见块</span><time>22:14:18</time></div></div><details class="trajectory-tools"><summary><span class="kicon sm kind-read"></span><b>工具执行</b><span class="trajectory-tools-summary">5 次调用 · 全部成功 · 1.5 秒</span><span class="trajectory-tool-tags"><span class="trajectory-tool-tag read">读取 3</span><span class="trajectory-tool-tag">搜索 2</span></span></summary><div class="trajectory-tool-list"><div class="trajectory-tool-row"><span class="kicon sm kind-search"></span><code>search</code><span class="desc">查找 Repository / SQL 调用点</span><time>1.2 秒</time></div><div class="trajectory-tool-row"><span class="kicon sm kind-read"></span><code>read_file</code><span class="desc">packages/storage-sqlite/src/index.ts</span><time>0.3 秒</time></div></div></details><div class="trajectory-agent-response"><div class="trajectory-agent-meta"><b>智能体</b><span class="ev-list"><span class="ev" data-cap="log"><i></i>原生日志</span></span><time>22:15:01</time></div>建议先收敛 Repository 接口，再迁移调用方，最后用现有存储测试做回归。</div></div>
         </details>
 
         <details class="trajectory-round" id="trajectory-round-2" open>
           <summary><span class="trajectory-round-index">02</span><span class="trajectory-round-title">第 2 轮</span><span class="trajectory-round-preview">实现 Repository 并补回归测试</span><span class="trajectory-round-meta"><span>8 工具</span><span class="errs">1 错误</span><span>2 分钟</span></span></summary>
-          <div class="trajectory-flow">
-            <div class="chat-row user"><div class="bubble"><div class="meta"><span>用户</span><time>22:20:03</time></div><p>按这个范围改，别碰已经确定的运行时架构。</p></div></div>
-            <div class="trajectory-thought"><span class="trajectory-thought-icon">思</span><div class="trajectory-thought-main"><b>思考</b><span>保持核心契约不变，只处理 storage-sqlite 内部边界。</span></div><div class="trajectory-thought-meta"><time>22:20:09</time></div></div>
-            <details class="trajectory-tools" open><summary><span class="kicon sm kind-edit"></span><b>工具执行</b><span class="trajectory-tools-summary">8 次调用 · 7 成功 · 1 错误 · 9.4 秒</span><span class="trajectory-tool-tags"><span class="trajectory-tool-tag edit">修改 4</span><span class="trajectory-tool-tag read">读取 2</span><span class="trajectory-tool-tag">命令 2</span></span></summary><div class="trajectory-tool-list"><div class="trajectory-tool-row"><span class="kicon sm kind-edit"></span><code>apply_patch</code><span class="desc">新增 Repository 接口与实现</span><time>0.8 秒</time></div><div class="trajectory-tool-row error"><span class="kicon sm kind-shell"></span><code>test</code><span class="desc">首次测试失败：旧断言仍依赖直接 SQL</span><time>8.6 秒</time></div></div></details>
-            <div class="trajectory-recovery"><span class="mark">✓</span><div class="main"><b>错误恢复</b><span>更新旧断言后重新执行，回归测试通过。</span></div><div class="trajectory-meta"><span class="ev" data-cap="hook"><i></i>运行时捕获</span><span class="trajectory-source">Codex</span><time>22:22:12</time></div></div>
-            <div class="trajectory-agent-response"><div class="trajectory-agent-meta"><b>智能体</b><span class="ev-list"><span class="ev" data-cap="hook"><i></i>运行时捕获</span></span><time>22:22:16</time></div>Repository 边界已经收敛，失败用例修复后回归通过。</div>
-          </div>
+          <div class="trajectory-flow"><div class="chat-row user"><div class="bubble"><div class="meta"><span>用户</span><time>22:20:03</time></div><p>按这个范围改，别碰已经确定的运行时架构。</p></div></div><div class="trajectory-thought"><span class="trajectory-thought-icon">思</span><div class="trajectory-thought-main"><b>思考</b><span>保持核心契约不变，只处理 storage-sqlite 内部边界。</span></div><div class="trajectory-thought-meta"><time>22:20:09</time></div></div><details class="trajectory-tools" open><summary><span class="kicon sm kind-edit"></span><b>工具执行</b><span class="trajectory-tools-summary">8 次调用 · 7 成功 · 1 错误 · 9.4 秒</span><span class="trajectory-tool-tags"><span class="trajectory-tool-tag edit">修改 4</span><span class="trajectory-tool-tag read">读取 2</span><span class="trajectory-tool-tag">命令 2</span></span></summary><div class="trajectory-tool-list"><div class="trajectory-tool-row"><span class="kicon sm kind-edit"></span><code>apply_patch</code><span class="desc">新增 Repository 接口与实现</span><time>0.8 秒</time></div><div class="trajectory-tool-row error"><span class="kicon sm kind-shell"></span><code>test</code><span class="desc">首次测试失败：旧断言仍依赖直接 SQL</span><time>8.6 秒</time></div></div></details><div class="trajectory-recovery"><span class="mark">✓</span><div class="main"><b>错误恢复</b><span>更新旧断言后重新执行，回归测试通过。</span></div><div class="trajectory-meta"><span class="ev" data-cap="hook"><i></i>运行时捕获</span><span class="trajectory-source">Codex</span><time>22:22:12</time></div></div><div class="trajectory-agent-response"><div class="trajectory-agent-meta"><b>智能体</b><span class="ev-list"><span class="ev" data-cap="hook"><i></i>运行时捕获</span></span><time>22:22:16</time></div>Repository 边界已经收敛，失败用例修复后回归通过。</div></div>
         </details>
 
         <details class="trajectory-round" id="trajectory-round-3" open>
