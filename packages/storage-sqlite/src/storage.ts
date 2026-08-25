@@ -12,6 +12,7 @@ import { SqliteExecutor } from './executor'
 import { migrateDatabase } from './migrations'
 import { withSqliteObservationPagination } from './observation-pagination'
 import { createSqliteRepositories } from './repositories'
+import { SqliteSessionRelationshipCandidateRepository } from './relationship-candidates'
 import { SqliteSourceRuntimeStatusRepository } from './runtime-status'
 import { SqliteSessionSummaryReader } from './session-summaries'
 
@@ -27,6 +28,7 @@ export class SqliteStorageService implements StorageService {
   readonly assetInventory: SqliteAssetInventoryReader
   readonly sessionSummaries: SqliteSessionSummaryReader
   readonly sourceRuntimeStatus: SqliteSourceRuntimeStatusRepository
+  readonly sessionRelationshipCandidates: SqliteSessionRelationshipCandidateRepository
   readonly executor: SqliteExecutor
 
   constructor(options: SqliteStorageOptions) {
@@ -50,6 +52,7 @@ export class SqliteStorageService implements StorageService {
     this.assetInventory = new SqliteAssetInventoryReader(this.executor)
     this.sessionSummaries = new SqliteSessionSummaryReader(this.executor)
     this.sourceRuntimeStatus = new SqliteSourceRuntimeStatusRepository(this.executor)
+    this.sessionRelationshipCandidates = new SqliteSessionRelationshipCandidateRepository(this.executor)
   }
 
   async transaction<T>(fn: (tx: StorageTransaction) => Promise<T>): Promise<T> {
