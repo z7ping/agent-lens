@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
+import { installInspectorOutsideDismiss } from './client/inspector-dismiss'
 import { installLiveRecovery } from './client/live-recovery'
 import { clientModel } from './client/model'
 import { readTheme, writeTheme } from './client/preferences'
@@ -24,8 +25,10 @@ import './review-long-session.css'
 
 writeTheme(readTheme())
 const disposeLiveRecovery = installLiveRecovery(clientModel)
+const disposeInspectorOutsideDismiss = installInspectorOutsideDismiss()
 void clientModel.start()
 window.addEventListener('pagehide', () => {
+  disposeInspectorOutsideDismiss()
   disposeLiveRecovery()
   clientModel.stop()
 }, { once: true })
