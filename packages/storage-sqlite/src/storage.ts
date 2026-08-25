@@ -13,6 +13,7 @@ import { migrateDatabase } from './migrations'
 import { withSqliteObservationPagination } from './observation-pagination'
 import { createSqliteRepositories } from './repositories'
 import { SqliteSessionRelationshipCandidateRepository } from './relationship-candidates'
+import { SqliteRuntimeProfileRepository } from './runtime-profiles'
 import { SqliteSourceRuntimeStatusRepository } from './runtime-status'
 import { SqliteSessionSummaryReader } from './session-summaries'
 
@@ -27,6 +28,7 @@ export class SqliteStorageService implements StorageService {
   readonly checkpoints: CheckpointRepository
   readonly assetInventory: SqliteAssetInventoryReader
   readonly sessionSummaries: SqliteSessionSummaryReader
+  readonly runtimeProfiles: SqliteRuntimeProfileRepository
   readonly sourceRuntimeStatus: SqliteSourceRuntimeStatusRepository
   readonly sessionRelationshipCandidates: SqliteSessionRelationshipCandidateRepository
   readonly executor: SqliteExecutor
@@ -51,6 +53,7 @@ export class SqliteStorageService implements StorageService {
     this.checkpoints = new SqliteCheckpointRepository(this.executor)
     this.assetInventory = new SqliteAssetInventoryReader(this.executor)
     this.sessionSummaries = new SqliteSessionSummaryReader(this.executor)
+    this.runtimeProfiles = new SqliteRuntimeProfileRepository(this.executor)
     this.sourceRuntimeStatus = new SqliteSourceRuntimeStatusRepository(this.executor)
     this.sessionRelationshipCandidates = new SqliteSessionRelationshipCandidateRepository(this.executor)
   }
