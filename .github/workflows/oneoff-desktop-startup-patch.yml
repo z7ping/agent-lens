@@ -28,3 +28,4 @@ jobs:
           git diff --cached --check
           git commit -m "解耦桌面运行时与界面就绪"
           git push origin HEAD:main
+      # one-off patch v2
