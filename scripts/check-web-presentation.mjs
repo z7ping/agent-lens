@@ -7,10 +7,10 @@ const tokenPath = 'packages/web/src/tokens.css'
 const semanticColorPath = 'packages/web/src/semantic-colors.css'
 const shellPath = 'packages/web/src/shell.css'
 const toolsPath = 'packages/web/src/tools.css'
+const agentsPath = 'packages/web/src/agents.css'
+const backupPath = 'packages/web/src/backup.css'
 const reviewPath = 'packages/web/src/review.css'
 const reviewLongPath = 'packages/web/src/review-long-session.css'
-const transitionPath = 'packages/web/src/v2-alignment.css'
-const p0Path = 'packages/web/src/p0-polish.css'
 const mockTokenPath = 'docs/design/mockups/v2/assets/tokens.css'
 const mockCurrentPath = 'docs/design/mockups/v2/assets/current.css'
 const mockAppPath = 'docs/design/mockups/v2/assets/app.js'
@@ -25,6 +25,8 @@ const retiredLayers = [
   'packages/web/src/review-v2-final.css',
   'packages/web/src/color-system.css',
   'packages/web/src/v2-1.css',
+  'packages/web/src/v2-alignment.css',
+  'packages/web/src/p0-polish.css',
 ]
 
 const main = readFileSync(mainPath, 'utf8')
@@ -41,8 +43,9 @@ const requiredImports = [
   './typography.css',
   './semantic-colors.css',
   './shell.css',
+  './backup.css',
   './tools.css',
-  './v2-alignment.css',
+  './agents.css',
   './review.css',
   './review-long-session.css',
 ]
@@ -53,10 +56,10 @@ for (const path of requiredImports) {
 if (!(indexOf('./tokens.css') < indexOf('./semantic-colors.css')
   && indexOf('./semantic-colors.css') < indexOf('./shell.css')
   && indexOf('./shell.css') < indexOf('./tools.css')
-  && indexOf('./tools.css') < indexOf('./v2-alignment.css')
-  && indexOf('./v2-alignment.css') < indexOf('./review.css')
+  && indexOf('./tools.css') < indexOf('./agents.css')
+  && indexOf('./agents.css') < indexOf('./review.css')
   && indexOf('./review.css') + 1 === indexOf('./review-long-session.css'))) {
-  throw new Error('正式样式顺序必须保持：设计令牌 → 共享语义色 → 壳层 → 页面所有者；过渡层不得覆盖已迁移页面；长会话性能层紧随 review.css')
+  throw new Error('正式样式顺序必须保持：设计令牌 → 共享语义色 → 壳层 → 页面所有者；长会话性能层紧随 review.css')
 }
 
 if (!existsSync(mockCurrentPath)) throw new Error('当前高保真原型必须保留 assets/current.css')
@@ -78,10 +81,9 @@ const semanticPresentationPaths = [
   semanticColorPath,
   shellPath,
   toolsPath,
+  agentsPath,
   reviewPath,
   reviewLongPath,
-  p0Path,
-  transitionPath,
   'packages/web/src/insights.css',
   'packages/web/src/shell-responsive.css',
   mockCurrentPath,
@@ -96,10 +98,10 @@ for (const path of semanticPresentationPaths) {
 
 const shellSource = readFileSync(shellPath, 'utf8')
 const toolsSource = readFileSync(toolsPath, 'utf8')
+const agentsSource = readFileSync(agentsPath, 'utf8')
+const backupSource = readFileSync(backupPath, 'utf8')
 const reviewSource = readFileSync(reviewPath, 'utf8')
 const semanticColorSource = readFileSync(semanticColorPath, 'utf8')
-const transitionSource = readFileSync(transitionPath, 'utf8')
-const p0Source = readFileSync(p0Path, 'utf8')
 const tokenSource = readFileSync(tokenPath, 'utf8')
 const mockTokenSource = readFileSync(mockTokenPath, 'utf8')
 const mockCurrentSource = readFileSync(mockCurrentPath, 'utf8')
@@ -110,21 +112,12 @@ for (const [name, source] of [
   ['shell.css', shellSource],
   ['semantic-colors.css', semanticColorSource],
   ['tools.css', toolsSource],
+  ['agents.css', agentsSource],
   ['review.css', reviewSource],
 ]) {
   if (/!important\b/.test(source)) {
     throw new Error(`${name} 作为正式所有者文件不得依赖 !important 争夺优先级`)
   }
-}
-
-if (!transitionSource.includes('仅保留尚未迁回正式页面样式')) {
-  throw new Error('v2-alignment.css 必须明确保持为只减不增的迁移清单')
-}
-if (/\.review-page\b|\.app-header\b|\.status-tip\b|\.tool-summary-grid\b|\.tool-table-card\b|\.tool-attention-row\b|\.tool-session-link\b/.test(transitionSource)) {
-  throw new Error('v2-alignment.css 不得重新包含任务复盘、全局壳层或工具分析规则')
-}
-if (/\.tool-kind-svg\b|\.tool-drawer-title\b|\.tools-content\s+\.tool-table-name\b/.test(p0Source)) {
-  throw new Error('p0-polish.css 不得重新包含工具分析规则')
 }
 
 if (!/\.app-header\s*\{[\s\S]*?backdrop-filter\s*:\s*none/m.test(shellSource)) {
@@ -146,6 +139,22 @@ if (!toolsSource.includes('.tool-summary-grid')
   || !toolsSource.includes('.tool-session-link')
   || !toolsSource.includes('.tool-kind-svg')) {
   throw new Error('工具分析正式样式必须保留指标、表格、关注项、会话钻取和 SVG 工具图标能力')
+}
+
+if (!agentsSource.includes('智能体概览正式样式')) {
+  throw new Error('agents.css 必须明确作为智能体概览正式样式所有者')
+}
+if (!agentsSource.includes(".agent-card[data-source='hermes']")
+  || !agentsSource.includes(".agent-card[data-source='opencode']")
+  || !agentsSource.includes('.frequent-asset-row')
+  || !agentsSource.includes('.skill-funnel')) {
+  throw new Error('智能体概览正式样式必须保留五来源扩展、高频资产和技能漏斗能力')
+}
+
+if (!backupSource.includes("正在扫描资产备份范围")
+  || !backupSource.includes('.snapshot-builder')
+  || !backupSource.includes('.preview-summary')) {
+  throw new Error('backup.css 必须保留首次扫描反馈、快照创建器与恢复预演能力')
 }
 
 if (!reviewSource.includes('AgentLens 1.0 任务复盘正式样式')) {
@@ -258,4 +267,4 @@ if (!appSource.includes('className={`status-pill status-tip') || !appSource.incl
   throw new Error('正式顶部运行状态必须使用自定义提示卡')
 }
 
-console.log('Web 表现层收敛检查通过：样式所有者、加载边界、12px 下限、设计令牌、关键交互、响应式与对比度均已校验')
+console.log('Web 表现层收敛检查通过：阶段覆盖层已退役，样式所有者、加载边界、12px 下限、设计令牌、关键交互、响应式与对比度均已校验')
