@@ -1,0 +1,128 @@
+/*
+ * AgentLens 1.0 正式 Web 壳层。
+ *
+ * 只负责应用 Header、状态入口、工作区工具栏、一级页面公共画布和标题语义。
+ * 页面内部视觉由各页面自己的样式文件负责。
+ */
+
+.app-header {
+  background: var(--al-surface);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.brand-logo {
+  width: 27px;
+  height: 27px;
+  flex: 0 0 auto;
+  border-radius: 7px;
+  object-fit: contain;
+}
+
+.theme-toggle svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.55;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.status-tip {
+  position: relative;
+  cursor: help;
+}
+
+.status-tip::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 7px);
+  right: 0;
+  z-index: 95;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 24px));
+  padding: 8px 11px;
+  border: 1px solid var(--al-line);
+  border-radius: 9px;
+  background: var(--al-surface-raised);
+  box-shadow: var(--al-shadow-lg);
+  color: var(--al-ink-2);
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: left;
+  white-space: pre-line;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition: opacity .14s, transform .14s;
+}
+
+.status-tip:hover::after,
+.status-tip:focus-within::after {
+  opacity: 1;
+  transform: none;
+}
+
+.workspace-page,
+.review-page {
+  background: var(--al-canvas);
+}
+
+.workspace-toolbar {
+  position: relative;
+  z-index: 35;
+  overflow: visible;
+}
+
+.workspace-toolbar .agent-scope {
+  position: relative;
+  z-index: 60;
+  flex: 0 0 auto;
+}
+
+.workspace-toolbar .agent-scope-manage {
+  position: relative;
+  z-index: 80;
+}
+
+.workspace-toolbar .agent-scope-manage[open] { z-index: 90; }
+.workspace-toolbar .agent-scope-menu { z-index: 120; }
+
+/* 一级导航已经表达当前位置，正文只保留语义 h1。 */
+.tools-content > .page-heading,
+.insights-content > .page-heading,
+.agents-content > .page-heading {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.tools-content,
+.insights-content,
+.agents-content {
+  padding-top: 16px;
+  background: transparent;
+}
+
+@media (max-width: 560px) {
+  .app-header .brand { display: flex; }
+  .app-header .brand-name { display: none; }
+  .status-tip::after { right: -34px; }
+}
+
+@media (max-width: 760px) {
+  .workspace-toolbar {
+    height: auto;
+    min-height: 46px;
+    flex-wrap: wrap;
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+}
