@@ -11,6 +11,32 @@ function stableId(prefix: string, parts: unknown[]): string {
   return `${prefix}-${digest}`
 }
 
+function mapCandidate(row: {
+  source_id: string
+  installation_id: string
+  runtime_profile_id: string | null
+  from_native_session_id: string
+  to_native_session_id: string
+  native_parent_event_id: string | null
+  relation_type: SessionRelationshipType | null
+  native_relation: string | null
+  confidence: SessionRelationshipCandidate['confidence']
+  evidence_refs_json: string
+}): SessionRelationshipCandidate {
+  return {
+    sourceId: row.source_id,
+    installationId: row.installation_id,
+    ...(row.runtime_profile_id ? { runtimeProfileId: row.runtime_profile_id } : {}),
+    fromNativeSessionId: row.from_native_session_id,
+    toNativeSessionId: row.to_native_session_id,
+    ...(row.native_parent_event_id ? { nativeParentEventId: row.native_parent_event_id } : {}),
+    ...(row.relation_type ? { type: row.relation_type } : {}),
+    ...(row.native_relation ? { nativeRelation: row.native_relation } : {}),
+    confidence: row.confidence,
+    evidenceRefs: JSON.parse(row.evidence_refs_json || '[]') as string[],
+  }
+}
+
 export class SqliteSessionRelationshipCandidateRepository {
   constructor(private readonly executor: SqliteExecutor) {}
 
@@ -93,5 +119,27 @@ export class SqliteSessionRelationshipCandidateRepository {
       )
       return relationship
     })
+  }
+
+  async tryPromoteForSession(
+    sourceId: string,
+    installationId: string,
+    nativeSessionId: string,
+  ): Promise<number> {
+    const candidates = await this.executor.run(() => this.executor.db.prepare(`
+      SELECT source_id, installation_id, runtime_profile_id,
+             from_native_session_id, to_native_session_id, native_parent_event_id,
+             relation_type, native_relation, confidence, evidence_refs_json
+      FROM session_relationship_candidates
+      WHERE source_id = ? AND installation_id = ?
+        AND (from_native_session_id = ? OR to_native_session_id = ?)
+      ORDER BY observed_at, id
+    `).all(sourceId, installationId, nativeSessionId, nativeSessionId).map(row => mapCandidate(row as any)))
+
+    let promoted = 0
+    for (const candidate of candidates) {
+      if (await this.tryPromote(candidate)) promoted += 1
+    }
+    return promoted
   }
 }
