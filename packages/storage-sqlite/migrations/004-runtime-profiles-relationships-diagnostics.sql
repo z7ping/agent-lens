@@ -39,6 +39,7 @@ CREATE INDEX IF NOT EXISTS idx_relationship_candidates_native
   ON session_relationship_candidates(source_id, installation_id, from_native_session_id, to_native_session_id);
 
 CREATE TABLE IF NOT EXISTS source_runtime_status (
+  id TEXT PRIMARY KEY,
   source_id TEXT NOT NULL,
   installation_id TEXT NOT NULL REFERENCES agent_installations(id),
   runtime_profile_id TEXT REFERENCES runtime_profiles(id),
@@ -49,7 +50,8 @@ CREATE TABLE IF NOT EXISTS source_runtime_status (
   last_error_at TEXT,
   error_count INTEGER NOT NULL DEFAULT 0,
   last_error_summary TEXT,
-  checkpoint_summary TEXT,
-  PRIMARY KEY(source_id, installation_id, stage, runtime_profile_id)
+  checkpoint_summary TEXT
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_source_runtime_status_identity
+  ON source_runtime_status(source_id, installation_id, stage, IFNULL(runtime_profile_id, ''));
 CREATE INDEX IF NOT EXISTS idx_source_runtime_status_state ON source_runtime_status(state);
