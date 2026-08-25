@@ -1,4 +1,6 @@
-export function CompactPageHeading({ title, description, children }: { title: string; description: string; children?: React.ReactNode }) {
+import type { ReactNode } from 'react'
+
+export function CompactPageHeading({ title, description, children }: { title: string; description: string; children?: ReactNode }) {
   return <header className="compact-page-heading">
     <div className="compact-page-heading-main">
       <h1>{title}</h1>
