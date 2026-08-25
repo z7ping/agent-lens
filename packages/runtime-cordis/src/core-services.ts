@@ -12,6 +12,10 @@ import {
 import type { AgentLensContext } from './context'
 import { EventingAssetService } from './eventing-assets'
 import { EventingObservationService } from './eventing-observations'
+import {
+  RuntimeProfileAssetService,
+  RuntimeProfileObservationService,
+} from './runtime-profile-services'
 
 const applyCoreServices: Plugin.Function<void> = (ctx: AgentLensContext) => {
   const storage = ctx.storage
@@ -19,12 +23,18 @@ const applyCoreServices: Plugin.Function<void> = (ctx: AgentLensContext) => {
   const identity = new DefaultIdentityService(storage)
   const evidence = new DefaultEvidenceService(storage)
   const observations = new EventingObservationService(
-    new DefaultObservationService(storage, identity),
+    new RuntimeProfileObservationService(
+      new DefaultObservationService(storage, identity),
+      storage,
+    ),
     ctx,
   )
   const coverage = new DefaultCoverageService(storage, evidence)
   const capabilities = new DefaultCapabilityService()
-  const assets = new EventingAssetService(new DefaultAssetService(storage), ctx)
+  const assets = new EventingAssetService(
+    new RuntimeProfileAssetService(new DefaultAssetService(storage), storage),
+    ctx,
+  )
   const tools = new DefaultToolService(storage)
 
   ctx.provide('sources', sources)
