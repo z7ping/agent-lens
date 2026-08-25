@@ -8,6 +8,7 @@ import type {
   InteractionId,
   LogicalSessionId,
   ProjectId,
+  RuntimeProfileId,
   SourceSessionId,
   WorkspaceId,
 } from './common'
@@ -40,6 +41,17 @@ export interface AgentInstallation {
   lastSeenAt: string
 }
 
+export interface RuntimeProfile {
+  id: RuntimeProfileId
+  installationId: AgentInstallationId
+  nativeProfileId: string
+  name?: string
+  configRoot?: string
+  dataRoot?: string
+  firstSeenAt: string
+  lastSeenAt: string
+}
+
 export interface Project {
   id: ProjectId
   name?: string
@@ -60,6 +72,7 @@ export interface Workspace {
 export interface LogicalSession {
   id: LogicalSessionId
   installationId: AgentInstallationId
+  runtimeProfileId?: RuntimeProfileId
   projectId?: ProjectId
   workspaceId?: WorkspaceId
   title?: string
@@ -71,6 +84,7 @@ export interface SourceSession {
   id: SourceSessionId
   sourceId: string
   installationId: AgentInstallationId
+  runtimeProfileId?: RuntimeProfileId
   nativeSessionId: string
   logicalSessionId?: LogicalSessionId
   nativeParentSessionId?: string
@@ -90,6 +104,19 @@ export interface SessionRelationship {
   toSessionId: LogicalSessionId
   type: SessionRelationshipType
   evidenceRefs: EvidenceId[]
+  confidence: Confidence
+}
+
+export interface SessionRelationshipCandidate {
+  sourceId: string
+  installationId: AgentInstallationId
+  runtimeProfileId?: RuntimeProfileId
+  fromNativeSessionId: string
+  toNativeSessionId: string
+  nativeParentEventId?: string
+  type?: SessionRelationshipType
+  nativeRelation?: string
+  evidenceRefs?: EvidenceId[]
   confidence: Confidence
 }
 
@@ -139,6 +166,14 @@ export interface InstallationIdentityHint {
   dataRoot?: string
 }
 
+export interface RuntimeProfileIdentityHint {
+  installationId: AgentInstallationId
+  nativeProfileId: string
+  name?: string
+  configRoot?: string
+  dataRoot?: string
+}
+
 export interface ProjectIdentityHint {
   name?: string | undefined
   repositoryIdentity?: string
@@ -153,6 +188,7 @@ export interface WorkspaceIdentityHint {
 
 export interface LogicalSessionIdentityHint {
   installationId: AgentInstallationId
+  runtimeProfileId?: RuntimeProfileId
   nativeSessionId: string
   projectId?: ProjectId
   workspaceId?: WorkspaceId
@@ -161,6 +197,7 @@ export interface LogicalSessionIdentityHint {
 export interface SourceSessionIdentityHint {
   sourceId: string
   installationId: AgentInstallationId
+  runtimeProfileId?: RuntimeProfileId
   nativeSessionId: string
   logicalSessionId?: LogicalSessionId
   nativeParentSessionId?: string
@@ -176,6 +213,7 @@ export interface AgentActorIdentityHint {
 export interface ObservationIdentityHints {
   nativeSessionId: string
   nativeParentSessionId?: string
+  runtimeProfileNativeId?: string
   workspacePath?: string
   repositoryRoot?: string
   nativeActorId?: string
