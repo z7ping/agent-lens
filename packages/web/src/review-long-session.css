@@ -151,6 +151,38 @@
 .turn-tick:hover::after,
 .turn-tick:focus-visible::after { opacity: 1; }
 
+/*
+ * 消息操作栏必须是一个视觉行：Markdown 的“查看源码/返回渲染”和气泡的“证据详情”
+ * 虽然来自两个组件，但统一进入气泡的 flex 排版上下文，禁止因宽度和响应式变化重新断行。
+ */
+.chat-bubble {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.chat-bubble > .chat-meta {
+  width: 100%;
+  flex: 0 0 100%;
+}
+.chat-bubble > .markdown-message { display: contents; }
+.chat-bubble .markdown-surface {
+  width: 100%;
+  flex: 0 0 100%;
+}
+.chat-bubble .markdown-message-actions,
+.chat-bubble > .chat-actions {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+.chat-bubble-user .markdown-message-actions { margin-left: auto; }
+.chat-bubble-user > .chat-actions {
+  margin-left: 0;
+  margin-right: 0;
+}
+.chat-bubble .markdown-message-actions button,
+.chat-bubble > .chat-actions button { white-space: nowrap; }
+
 @media (min-width: 901px) {
   .app-shell:has(.review-page) { height: 100vh; min-height: 0; overflow: hidden; }
   .review-page { height: auto; min-height: 0; }
