@@ -11,6 +11,7 @@ import type {
   Host,
   IdentityService,
   ObservationService,
+  RuntimeProfile,
   SessionRelationshipCandidate,
   SourceCheckpointService,
   SourceDefinition,
@@ -18,6 +19,7 @@ import type {
   SourceRuntimeStatus,
   StorageService,
 } from '@agent-lens/core'
+import { deriveParentRelationshipCandidates } from './relationship-hints'
 
 export interface SourceHistorySyncInput {
   source: SourceDefinition
@@ -78,9 +80,20 @@ interface RelationshipCandidateWriter {
   tryPromote(candidate: SessionRelationshipCandidate): Promise<unknown>
 }
 
+interface RuntimeProfileResolver {
+  resolve(hint: {
+    installationId: string
+    nativeProfileId: string
+    name?: string
+    configRoot?: string
+    dataRoot?: string
+  }): Promise<RuntimeProfile>
+}
+
 type StorageWithRuntimeExtensions = StorageService & {
   sourceRuntimeStatus?: RuntimeStatusWriter
   sessionRelationshipCandidates?: RelationshipCandidateWriter
+  runtimeProfiles?: RuntimeProfileResolver
 }
 
 class ScopedCheckpointService implements SourceCheckpointService {
@@ -141,10 +154,12 @@ async function markRunning(
   sourceId: string,
   installationId: string,
   stage: SourceRuntimeStatus['stage'],
+  runtimeProfileId?: string,
 ): Promise<SourceRuntimeStatus> {
   const status: SourceRuntimeStatus = {
     sourceId,
     installationId,
+    ...(runtimeProfileId ? { runtimeProfileId } : {}),
     stage,
     state: 'running',
     lastStartedAt: new Date().toISOString(),
@@ -181,14 +196,37 @@ async function resolveInstallation(
   host: Host,
   detected: DetectedSource,
 ): Promise<AgentInstallation> {
+  const profileScoped = Boolean(detected.runtimeProfile)
   return identity.resolveInstallation({
     hostId: host.id,
     productId: detected.productId,
     ...(detected.executable ? { executable: detected.executable } : {}),
     ...(detected.version ? { version: detected.version } : {}),
-    ...(detected.configRoot ? { configRoot: detected.configRoot } : {}),
-    ...(detected.dataRoot ? { dataRoot: detected.dataRoot } : {}),
+    ...(!profileScoped && detected.configRoot ? { configRoot: detected.configRoot } : {}),
+    ...(!profileScoped && detected.dataRoot ? { dataRoot: detected.dataRoot } : {}),
   })
+}
+
+async function resolveRuntimeProfile(
+  storage: StorageService,
+  installation: AgentInstallation,
+  detected: DetectedSource,
+): Promise<RuntimeProfile | undefined> {
+  if (!detected.runtimeProfile) return undefined
+  const resolver = (storage as StorageWithRuntimeExtensions).runtimeProfiles
+  if (!resolver) return undefined
+  const profile = detected.runtimeProfile
+  return resolver.resolve({
+    installationId: installation.id,
+    nativeProfileId: profile.nativeProfileId,
+    ...(profile.name ? { name: profile.name } : {}),
+    ...(profile.configRoot ?? detected.configRoot ? { configRoot: profile.configRoot ?? detected.configRoot } : {}),
+    ...(profile.dataRoot ?? detected.dataRoot ? { dataRoot: profile.dataRoot ?? detected.dataRoot } : {}),
+  })
+}
+
+function checkpointScope(sourceId: string, installationId: string, runtimeProfile?: RuntimeProfile): string {
+  return `${sourceId}:${installationId}${runtimeProfile ? `:${runtimeProfile.id}` : ''}`
 }
 
 async function processSourceRecord(
@@ -199,11 +237,16 @@ async function processSourceRecord(
   source: SourceDefinition,
   host: Host,
   installation: AgentInstallation,
+  runtimeProfile: RuntimeProfile | undefined,
   record: SourceRecord,
 ): Promise<ProcessResult> {
   let normalized
   try {
-    normalized = await source.normalize(record, { host, installation })
+    normalized = await source.normalize(record, {
+      host,
+      installation,
+      ...(runtimeProfile ? { runtimeProfile } : {}),
+    })
   } catch (error) {
     await storage.repositories.sourceRecords.put(capturePolicy.sanitizeSourceRecord(record))
     throw error
@@ -221,6 +264,9 @@ async function processSourceRecord(
   }
 
   for (const observation of persistedOutput.observations) {
+    if (runtimeProfile && !observation.identityHints.runtimeProfileNativeId) {
+      observation.identityHints.runtimeProfileNativeId = runtimeProfile.nativeProfileId
+    }
     const committed = await observations.commit({
       sourceId: source.manifest.sourceId,
       host,
@@ -234,7 +280,14 @@ async function processSourceRecord(
     else result.observationsUnchanged += 1
   }
 
-  await persistRelationshipCandidates(storage, persistedOutput.sessionRelationshipHints)
+  const explicitRelationships = persistedOutput.sessionRelationshipHints ?? []
+  const derivedRelationships = deriveParentRelationshipCandidates(
+    source.manifest.sourceId,
+    installation.id,
+    persistedOutput.observations,
+  ).map(candidate => runtimeProfile ? { ...candidate, runtimeProfileId: runtimeProfile.id } : candidate)
+  const relationshipCandidates = explicitRelationships.length ? explicitRelationships : derivedRelationships
+  await persistRelationshipCandidates(storage, relationshipCandidates)
 
   for (const declaration of persistedOutput.coverage ?? []) {
     await coverage.declare(declaration)
@@ -260,7 +313,14 @@ export class SourceHistoryRunner {
     }
 
     const installation = await resolveInstallation(this.identity, host, detected)
-    const runtimeStatus = await markRunning(this.storage, source.manifest.sourceId, installation.id, 'history')
+    const runtimeProfile = await resolveRuntimeProfile(this.storage, installation, detected)
+    const runtimeStatus = await markRunning(
+      this.storage,
+      source.manifest.sourceId,
+      installation.id,
+      'history',
+      runtimeProfile?.id,
+    )
 
     try {
       const declaredCapabilities = await source.declareCapabilities(detected)
@@ -280,13 +340,22 @@ export class SourceHistoryRunner {
         return result
       }
 
-      const checkpoint = new ScopedCheckpointService(this.storage, `${source.manifest.sourceId}:${installation.id}`)
+      const checkpoint = new ScopedCheckpointService(
+        this.storage,
+        checkpointScope(source.manifest.sourceId, installation.id, runtimeProfile),
+      )
       let coverageFrom: string | undefined
       let coverageTo: string | undefined
       let coverageFromEvidence: EvidenceCandidate[] = []
       let coverageToEvidence: EvidenceCandidate[] = []
 
-      for await (const record of source.ingestHistory({ host, installation, abortSignal, checkpoint })) {
+      for await (const record of source.ingestHistory({
+        host,
+        installation,
+        ...(runtimeProfile ? { runtimeProfile } : {}),
+        abortSignal,
+        checkpoint,
+      })) {
         if (abortSignal.aborted) break
         result.records += 1
         const processed = await processSourceRecord(
@@ -297,6 +366,7 @@ export class SourceHistoryRunner {
           source,
           host,
           installation,
+          runtimeProfile,
           record,
         )
         result.observationsCreated += processed.observationsCreated
@@ -320,8 +390,8 @@ export class SourceHistoryRunner {
         for (const capability of declaredCapabilities) {
           if (capability.status === 'unavailable' || capability.status === 'not-applicable') {
             await this.coverage.declare({
-              subjectType: 'AgentInstallation',
-              subjectId: installation.id,
+              subjectType: runtimeProfile ? 'RuntimeProfile' : 'AgentInstallation',
+              subjectId: runtimeProfile?.id ?? installation.id,
               capability: capability.name,
               status: 'unavailable',
               reason: capability.reason ?? `Source reports capability as ${capability.status}`,
@@ -334,8 +404,8 @@ export class SourceHistoryRunner {
             ? coverageFromEvidence
             : [...coverageFromEvidence, ...coverageToEvidence]
           await this.coverage.declare({
-            subjectType: 'AgentInstallation',
-            subjectId: installation.id,
+            subjectType: runtimeProfile ? 'RuntimeProfile' : 'AgentInstallation',
+            subjectId: runtimeProfile?.id ?? installation.id,
             capability: capability.name,
             from: coverageFrom,
             to: coverageTo,
@@ -372,7 +442,14 @@ export class SourceRuntimeRunner {
     }
 
     const installation = await resolveInstallation(this.identity, host, detected)
-    const runtimeStatus = await markRunning(this.storage, source.manifest.sourceId, installation.id, 'runtime')
+    const runtimeProfile = await resolveRuntimeProfile(this.storage, installation, detected)
+    const runtimeStatus = await markRunning(
+      this.storage,
+      source.manifest.sourceId,
+      installation.id,
+      'runtime',
+      runtimeProfile?.id,
+    )
     try {
       const declaredCapabilities = await source.declareCapabilities(detected)
       const capabilityRegistration = this.capabilities.registerSourceCapabilities(source.manifest.sourceId, declaredCapabilities)
@@ -388,12 +465,21 @@ export class SourceRuntimeRunner {
         }
       }
 
-      const checkpoint = new ScopedCheckpointService(this.storage, `${source.manifest.sourceId}:${installation.id}`)
+      const checkpoint = new ScopedCheckpointService(
+        this.storage,
+        checkpointScope(source.manifest.sourceId, installation.id, runtimeProfile),
+      )
       let closed = false
       let tail: Promise<void> = Promise.resolve()
 
       const capture = await source.startCapture(
-        { host, installation, abortSignal, checkpoint },
+        {
+          host,
+          installation,
+          ...(runtimeProfile ? { runtimeProfile } : {}),
+          abortSignal,
+          checkpoint,
+        },
         {
           emit: (record) => {
             if (closed) throw new Error(`Source runtime is closed: ${source.manifest.sourceId}`)
@@ -407,6 +493,7 @@ export class SourceRuntimeRunner {
                   source,
                   host,
                   installation,
+                  runtimeProfile,
                   record,
                 )
                 await markHealthy(this.storage, runtimeStatus)
@@ -460,7 +547,14 @@ export class SourceAssetRunner {
     }
 
     const installation = await resolveInstallation(this.identity, host, detected)
-    const runtimeStatus = await markRunning(this.storage, source.manifest.sourceId, installation.id, 'assets')
+    const runtimeProfile = await resolveRuntimeProfile(this.storage, installation, detected)
+    const runtimeStatus = await markRunning(
+      this.storage,
+      source.manifest.sourceId,
+      installation.id,
+      'assets',
+      runtimeProfile?.id,
+    )
     try {
       const declaredCapabilities = await source.declareCapabilities(detected)
       this.capabilities.registerSourceCapabilities(source.manifest.sourceId, declaredCapabilities)
@@ -476,9 +570,18 @@ export class SourceAssetRunner {
         return result
       }
 
-      const checkpoint = new ScopedCheckpointService(this.storage, `${source.manifest.sourceId}:${installation.id}`)
+      const checkpoint = new ScopedCheckpointService(
+        this.storage,
+        checkpointScope(source.manifest.sourceId, installation.id, runtimeProfile),
+      )
 
-      for await (const discovered of source.discoverAssets({ host, installation, abortSignal, checkpoint })) {
+      for await (const discovered of source.discoverAssets({
+        host,
+        installation,
+        ...(runtimeProfile ? { runtimeProfile } : {}),
+        abortSignal,
+        checkpoint,
+      })) {
         if (abortSignal.aborted) break
         const safeDiscovered = this.capturePolicy.sanitizeDiscoveredAsset(discovered)
         if (!safeDiscovered) continue
@@ -487,7 +590,9 @@ export class SourceAssetRunner {
         const binding = await this.assets.resolveBinding({
           assetId: definition.id,
           installationId: installation.id,
-          ...(safeDiscovered.binding?.runtimeProfileId ? { runtimeProfileId: safeDiscovered.binding.runtimeProfileId } : {}),
+          ...(safeDiscovered.binding?.runtimeProfileId ?? runtimeProfile?.id
+            ? { runtimeProfileId: safeDiscovered.binding?.runtimeProfileId ?? runtimeProfile!.id }
+            : {}),
           ...(safeDiscovered.binding?.path ? { path: safeDiscovered.binding.path } : {}),
           ...(safeDiscovered.binding?.source ? { source: safeDiscovered.binding.source } : {}),
           ...(safeDiscovered.binding?.version ? { version: safeDiscovered.binding.version } : {}),
