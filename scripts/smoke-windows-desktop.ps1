@@ -4,10 +4,47 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+Add-Type -AssemblyName System.Drawing
+
 $resolved = (Resolve-Path $ExecutablePath).Path
 $port = Get-Random -Minimum 57000 -Maximum 57999
 $smokeRoot = Join-Path $env:RUNNER_TEMP ("agent-lens-desktop-smoke-" + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force -Path $smokeRoot | Out-Null
+
+function Assert-EmbeddedIconVisible([string]$path) {
+  $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($path)
+  if ($null -eq $icon) { throw 'AgentLens.exe 没有可提取的 Windows 应用图标' }
+
+  $bitmap = $null
+  try {
+    $bitmap = $icon.ToBitmap()
+    if ($bitmap.Width -lt 16 -or $bitmap.Height -lt 16) {
+      throw "AgentLens.exe 内嵌图标尺寸异常：$($bitmap.Width)x$($bitmap.Height)"
+    }
+
+    $opaqueSamples = 0
+    $colors = [System.Collections.Generic.HashSet[string]]::new()
+    $stepX = [Math]::Max(1, [Math]::Floor($bitmap.Width / 16))
+    $stepY = [Math]::Max(1, [Math]::Floor($bitmap.Height / 16))
+    for ($x = 0; $x -lt $bitmap.Width; $x += $stepX) {
+      for ($y = 0; $y -lt $bitmap.Height; $y += $stepY) {
+        $pixel = $bitmap.GetPixel($x, $y)
+        if ($pixel.A -gt 0) { $opaqueSamples += 1 }
+        [void]$colors.Add("$($pixel.A),$($pixel.R),$($pixel.G),$($pixel.B)")
+      }
+    }
+
+    if ($opaqueSamples -eq 0) { throw 'AgentLens.exe 内嵌图标采样结果全部透明' }
+    if ($colors.Count -lt 2) { throw 'AgentLens.exe 内嵌图标采样结果为单色空图' }
+    Write-Host "[AgentLens] Windows EXE 图标检查通过：$($bitmap.Width)x$($bitmap.Height)，采样颜色=$($colors.Count)"
+  }
+  finally {
+    if ($null -ne $bitmap) { $bitmap.Dispose() }
+    $icon.Dispose()
+  }
+}
+
+Assert-EmbeddedIconVisible $resolved
 
 $previous = @{
   AGENT_LENS_PORT = $env:AGENT_LENS_PORT
