@@ -405,9 +405,9 @@
       }).catch(function () {})
     }
     var expandButton = event.target.closest('[data-expand-rounds]')
-    if (expandButton) {
+    if (expandButton && !document.querySelector('.trajectory-round')) {
       var expand = expandButton.getAttribute('aria-pressed') !== 'true'
-      document.querySelectorAll('details.interaction:not(.audit-only), details.trajectory-round:not([hidden])').forEach(function (round) { round.open = expand })
+      document.querySelectorAll('details.interaction:not(.audit-only)').forEach(function (round) { round.open = expand })
       expandButton.setAttribute('aria-pressed', String(expand))
       expandButton.textContent = expand ? '收起当前页' : '展开当前页'
     }
