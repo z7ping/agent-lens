@@ -1,4 +1,4 @@
-export type UiIconName = 'refresh' | 'close' | 'search' | 'sort-up' | 'sort-down' | 'arrow-right' | 'plus' | 'trend' | 'check'
+export type UiIconName = 'refresh' | 'close' | 'search' | 'sort-up' | 'sort-down' | 'arrow-right' | 'plus' | 'trend' | 'check' | 'upload' | 'alert' | 'dot'
 
 export function UiIcon({ name, size = 16, className }: { name: UiIconName; size?: number; className?: string }) {
   const path = (() => {
@@ -10,6 +10,9 @@ export function UiIcon({ name, size = 16, className }: { name: UiIconName; size?
     if (name === 'arrow-right') return <><path d="M3 8h9"/><path d="m9 5 3 3-3 3"/></>
     if (name === 'trend') return <><path d="M3 11.5 6.2 8l2.3 2 4.5-5"/><path d="M10 5h3v3"/></>
     if (name === 'check') return <path d="m3.5 8.2 2.7 2.7 6.3-6.3"/>
+    if (name === 'upload') return <><path d="M8 11V3"/><path d="m5 6 3-3 3 3"/><path d="M3 11v2h10v-2"/></>
+    if (name === 'alert') return <><path d="M8 2.5 14 13H2L8 2.5Z"/><path d="M8 6v3.2"/><path d="M8 11.3h.01"/></>
+    if (name === 'dot') return <circle cx="8" cy="8" r="2" fill="currentColor" stroke="none"/>
     return <path d="M8 3v10M3 8h10"/>
   })()
 
