@@ -66,9 +66,12 @@ jobs:
             updatedAt = $now
           } | ConvertTo-Json | Set-Content -Encoding UTF8 (Join-Path $installations 'desktop.json')
 
-          $payload = '{"hook_event_name":"PreToolUse","hook_invocation_id":"ci-fast-dispatch"}'
+          $payload = '{"hook_event_name":"PreToolUse","hook_invocation_id":"ci-fast-dispatch","message":"中文输入"}'
           $payload | powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File $dispatcher agent-lens-hook-claude
           $dispatchedFiles = @(Get-ChildItem -Path $inbox -Filter '*.json')
           Write-Host "dispatched inbox files=$($dispatchedFiles.Count)"
           if (Test-Path $log) { Get-Content -Raw $log | Write-Host }
           if ($dispatchedFiles.Count -ne 1) { throw '共享分发器执行未落 Inbox' }
+          $captured = Get-Content -Raw $dispatchedFiles[0].FullName | ConvertFrom-Json
+          if ($captured.event.hook_invocation_id -ne 'ci-fast-dispatch') { throw '共享分发器没有保留 Hook 调用标识' }
+          if ($captured.event.message -ne '中文输入') { throw "共享分发器 Unicode 转发失败：$($captured.event.message)" }
