@@ -1,6 +1,7 @@
 export type HostId = string
 export type AgentProductId = string
 export type AgentInstallationId = string
+export type RuntimeProfileId = string
 export type AgentActorId = string
 export type ProjectId = string
 export type WorkspaceId = string
