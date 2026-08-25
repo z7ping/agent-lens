@@ -29,7 +29,7 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0;
-  margin: 18px 0;
+  margin: 8px 0 16px;
   border-top: 1px solid var(--al-line);
   border-bottom: 1px solid var(--al-line);
   background: var(--al-surface);
