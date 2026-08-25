@@ -16,7 +16,7 @@ import type {
   SourceSessionId,
   WorkspaceId,
 } from './common'
-import type { ObservationIdentityHints } from './identity'
+import type { ObservationIdentityHints, SessionRelationshipCandidate } from './identity'
 
 export interface SourceLocator {
   kind: 'file' | 'database' | 'runtime-hook' | 'external'
@@ -174,7 +174,7 @@ export interface NormalizedSourceOutput {
   evidenceCandidates: EvidenceCandidate[]
   coverage?: CoverageDeclaration[]
   assetHints?: unknown[]
-  sessionRelationshipHints?: unknown[]
+  sessionRelationshipHints?: SessionRelationshipCandidate[]
 }
 
 export interface UnknownObservationPayload {
