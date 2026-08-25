@@ -1,6 +1,6 @@
 # AgentLens 1.0 狗粮准备基线
 
-> 状态：进行中  
+> 状态：可开始长期狗粮  
 > 日期：2026-08-25
 
 本文记录 AgentLens 1.0 进入长期真实使用前的准备项。目标不是继续扩展 P1/P2 功能，而是确保多来源采集在长期运行中可解释、可诊断、可验证。
@@ -101,9 +101,7 @@ Prompt / Tool / Config / Environment 的隐私策略保持独立，默认仍按�
    - API Key / Token；
    - Raw Payload / Canonical Payload。
 
-批次二剩余：
-
-- 根据真实狗粮数据继续校准 Coverage 语义和 Unknown 分组，不再扩新的诊断页面。
+后续只根据真实狗粮数据校准 Coverage 语义和 Unknown 分组，不再为此扩新的诊断页面。
 
 ## 批次三：长期运行
 
@@ -114,13 +112,34 @@ Prompt / Tool / Config / Environment 的隐私策略保持独立，默认仍按�
 3. 统计最近 7 天上述核心数据的新增量，用于观察真实增长趋势；
 4. 暴露 Source Checkpoint 数量和最近更新时间；
 5. 智能体概览“采集诊断”面板展示数据规模、7 天增量和 Checkpoint 健康；
-6. 诊断 UI 保持正式设计约束：无毛玻璃，正常文字不低于 12px。
+6. 诊断 UI 保持正式设计约束：无毛玻璃，正常文字不低于 12px；
+7. 资产备份页继续以 `backup-local` 的真实索引状态展示“索引就绪 / 后台更新中”、最近索引时间、Vault 路径和快照数量，不复制第二套备份健康模型；
+8. 最近 Session 按最后真实事件时间倒序，新事件会把旧会话重新带回顶部；实时 Review 事件会刷新列表，但不会强制切走用户正在查看的会话；
+9. 增加最近 Session 排序回归测试，锁定长期狗粮时“刚发生的任务必须容易找到”。
 
-批次三剩余：
+### Hook 运行链边界
 
-1. Hook 运行链健康：复用 Hook Manager / 共享分发器的真实安装与执行状态，不在 Storage 层跨层扫描；
-2. 备份索引 / Vault 健康：由 `backup-local` 自己提供索引存在性、最近刷新、Vault 大小等状态；
-3. 最近 Session 可靠性：新会话实时出现，分页 / 长会话不会隐藏最近任务。
+Hook 安装、事件完整性和 Codex 信任状态已经由 Hook Manager 与 `agent-lens doctor` 提供真实诊断。当前不在 Daemon / Storage 中复制 Hook 配置解析逻辑，也不为了一个 UI 状态引入未同步的 workspace 依赖。
+
+因此狗粮阶段的 Hook 真相源保持：
+
+```text
+agent-lens doctor
+agent-lens hook status all
+```
+
+后续在可以正常重生成 workspace lockfile 的开发环境中，再把同一份 Hook Manager 状态接入 Web 采集诊断；这属于表现层收口，不阻塞长期狗粮。
+
+## 狗粮阶段执行原则
+
+从现在开始，优先通过真实日常使用发现问题：
+
+1. 发现 Source 失败，先看顶部运行状态和“采集诊断”；
+2. 发现事件缺失，先判断 Coverage 和 Unknown，而不是直接认定 Source 没数据；
+3. 每周观察数据库 / WAL / 7 天增长，暂不自动清理；
+4. Hook 异常使用 `agent-lens doctor` / `agent-lens hook status all` 确认；
+5. 备份问题优先看资产备份页的真实索引时间、Vault 和快照状态；
+6. 所有真实狗粮问题再进入修复清单，不继续凭假设扩 P1/P2。
 
 ## 暂不做
 
