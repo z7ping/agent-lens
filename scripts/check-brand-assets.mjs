@@ -41,6 +41,11 @@ for (const path of masterSvgPaths) {
   requireText(!/<style\b[^>]*>[\s\S]*?@import/i.test(svg), `品牌 SVG 主源不得导入外部样式：${path}`)
 }
 
+for (const path of ['README.md', 'README.zh-CN.md']) {
+  const readme = read(path)
+  requireText(readme.includes('docs/brand/logo/agentlens-logo.svg'), `仓库首页未使用正式品牌 Logo：${path}`)
+}
+
 const index = read('packages/web/index.html')
 requireText(index.includes('/agentlens-icon-small.svg'), 'Web favicon 未使用小尺寸品牌图标')
 requireText(!index.includes('/favicon.ico') && !index.includes('/favicon.png'), 'Web 仍引用旧 favicon')
@@ -70,4 +75,4 @@ for (const asset of ['icon-app.ico', 'icon-window.png', 'tray.ico']) {
   requireText(gitignore.includes(`apps/desktop/assets/${asset}`), `生成资产未加入 .gitignore：${asset}`)
 }
 
-console.log('AgentLens 品牌图标检查通过：正式图标引用统一，品牌存档 SVG 均为自包含纯矢量主源。')
+console.log('AgentLens 品牌图标检查通过：README、正式图标引用与品牌存档 SVG 均已统一。')
