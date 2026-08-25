@@ -1,0 +1,68 @@
+name: Apply AgentLens brand references
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/apply-brand-references.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Apply exact brand reference migration
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace(path, old, new):
+              file = Path(path)
+              text = file.read_text(encoding='utf-8')
+              if old not in text:
+                  raise SystemExit(f'expected text not found: {path}: {old!r}')
+              file.write_text(text.replace(old, new), encoding='utf-8')
+
+          replace(
+              'packages/web/src/App.tsx',
+              'src="/favicon.png"',
+              'src="/agentlens-icon.svg"',
+          )
+          replace(
+              'docs/design/mockups/v2/assets/app.js',
+              "img.src = '../../../../packages/web/public/favicon.png'",
+              "img.src = '../../../../packages/web/public/agentlens-icon.svg'",
+          )
+          replace(
+              'apps/desktop/src/main.mjs',
+              "function desktopIconPath() {\n  const windowsIcon = unpackedAsset('assets', 'icon-win.png')\n  return existsSync(windowsIcon) ? windowsIcon : unpackedAsset('assets', 'icon.png')\n}",
+              "function desktopIconPath() {\n  const windowIcon = unpackedAsset('assets', 'icon-window.png')\n  if (existsSync(windowIcon)) return windowIcon\n  return unpackedAsset('assets', 'icon-win.png')\n}",
+          )
+
+          gitignore = Path('.gitignore')
+          text = gitignore.read_text(encoding='utf-8')
+          entries = [
+              'apps/desktop/assets/icon-app.ico',
+              'apps/desktop/assets/icon-window.png',
+              'apps/desktop/assets/tray.ico',
+          ]
+          missing = [entry for entry in entries if entry not in text]
+          if missing:
+              text = text.rstrip() + '\n' + '\n'.join(missing) + '\n'
+              gitignore.write_text(text, encoding='utf-8')
+          PY
+
+          git rm -f apps/desktop/assets/icon.png apps/desktop/assets/tray.ico packages/web/public/favicon.ico packages/web/public/favicon.png
+
+      - name: Commit migration
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .gitignore apps/desktop/src/main.mjs packages/web/src/App.tsx docs/design/mockups/v2/assets/app.js
+          git commit -m "统一 AgentLens 品牌图标引用"
+          git push
