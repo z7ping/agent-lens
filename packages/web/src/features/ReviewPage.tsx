@@ -846,6 +846,21 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
     }
   }
 
+  const showFromStart = async () => {
+    if (!detail || roundFilterLoading) return
+    const selectedId = detail.id
+    setRoundFilterLoading(true)
+    try {
+      await model.showReviewFromStart()
+      if (model.getSnapshot().review.selectedId === selectedId) {
+        setRoundFilter('all')
+        scrollTop()
+      }
+    } finally {
+      if (model.getSnapshot().review.selectedId === selectedId) setRoundFilterLoading(false)
+    }
+  }
+
   const loadOlder = async () => {
     const pane = readerPaneRef.current
     if (!pane || review.detailLoadingMore) return
@@ -878,6 +893,8 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
   const pageIncomplete = detail?.page.hasMore ?? false
   const isBackward = detail?.page.direction === 'backward'
   const isFiltered = roundFilter !== 'all'
+  const atStart = roundFilter === 'all' && !isBackward
+  const atLatest = roundFilter === 'all' && isBackward && !review.detailHasNewData
 
   const onReaderScroll = () => {
     const pane = readerPaneRef.current
@@ -960,14 +977,18 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
           </details> : null}
 
           <div className="round-nav" aria-label="轮次快速导航">
-            <button className={roundFilter === 'all' && !isBackward ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('all')}>全部 {roundFilter === 'all' && !isBackward && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
-            <button className={roundFilter === 'errors' ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('errors')}>有错误 {roundFilter === 'errors' && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
-            <button className={roundFilter === 'latency' ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('latency')}>耗时较高 {roundFilter === 'latency' && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
-            <button className={isBackward && roundFilter === 'all' ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void jumpToLatest()}>跳到最新 ↓</button>
-            <button className="round-nav-expand" disabled={roundFilterLoading} onClick={toggleRoundExpansion}>{expandAllRounds ? '收起当前页' : '展开当前页'}</button>
-            {isBackward && roundFilter === 'all' && pageIncomplete && <button disabled={roundFilterLoading} onClick={() => void model.showReviewFromStart().then(scrollTop)}>从头查看 ↑</button>}
+            <div className="round-nav-filters" aria-label="轮次筛选">
+              <button className={roundFilter === 'all' && !isBackward ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('all')}>全部 {roundFilter === 'all' && !isBackward && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
+              <button className={roundFilter === 'errors' ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('errors')}>有错误 {roundFilter === 'errors' && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
+              <button className={roundFilter === 'latency' ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('latency')}>耗时较高 {roundFilter === 'latency' && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
+            </div>
+            <div className="round-nav-actions" aria-label="轮次操作">
+              <button className="round-nav-expand" disabled={roundFilterLoading} onClick={toggleRoundExpansion}>{expandAllRounds ? '收起当前页' : '展开当前页'}</button>
+              <button className="round-nav-from-start" disabled={roundFilterLoading || atStart} onClick={() => void showFromStart()}>从头查看 ↑</button>
+              <button className="round-nav-latest" disabled={roundFilterLoading || atLatest} onClick={() => void jumpToLatest()}>跳到最新 ↓</button>
+              {review.detailHasNewData && <button className="round-nav-live" onClick={() => void jumpToLatest()}>有新记录 ↓</button>}
+            </div>
             {roundFilterLoading && <span className="round-nav-status">正在查询完整会话…</span>}
-            {review.detailHasNewData && <button className="round-nav-live" onClick={() => void jumpToLatest()}>有新记录 ↓</button>}
             <small>“耗时较高”由服务器基于完整会话的轮次耗时分布计算。</small>
           </div>
 
