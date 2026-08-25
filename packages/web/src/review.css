@@ -367,16 +367,30 @@
 .raw-event-group > summary::-webkit-details-marker { display: none; }
 .raw-event-group .event-row { margin: 0; padding-inline: 10px; }
 
-/* 详情检查器。 */
-.inspector-panel { position: fixed; top: 0; right: 0; bottom: 0; z-index: 80; width: min(500px,94vw); padding: 18px; overflow: auto; border-left: 1px solid var(--al-line); background: var(--al-surface-raised); box-shadow: var(--al-shadow-lg); }
-.inspector-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--al-line); background: var(--al-surface-raised); }
+/* 详情检查器：直接按冻结稿抽屉几何落地，不再叠加父级 padding。 */
+.inspector-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 80;
+  width: min(520px,94vw);
+  padding: 0 0 28px;
+  overflow: auto;
+  border-left: 1px solid var(--al-line);
+  background: var(--al-surface-raised);
+  box-shadow: var(--al-shadow-lg);
+}
+.inspector-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px 20px 0; background: var(--al-surface-raised); }
 .inspector-title { margin-top: 3px; color: var(--al-ink); font-size: 16px; font-weight: 700; }
-.inspector-panel > .agent-scope { width: max-content; max-width: calc(100% - 36px); margin: 12px 18px 0; padding: 2px; gap: 2px; border: 1px solid var(--al-line); border-radius: 8px; background: var(--al-soft-2); }
-.inspector-panel > .agent-scope .scope-chip { height: 26px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: var(--al-muted); font-size: 12px; font-weight: 620; }
+.inspector-panel > .agent-scope { width: max-content; max-width: calc(100% - 40px); margin: 14px 20px 0; padding: 3px; gap: 2px; border: 1px solid var(--al-line); border-radius: 9px; background: var(--al-soft-2); }
+.inspector-panel > .agent-scope .scope-chip { height: 27px; padding: 0 12px; border: 0; border-radius: 7px; background: transparent; color: var(--al-muted); font-size: 12px; font-weight: 620; }
 .inspector-panel > .agent-scope .scope-chip:hover { background: var(--al-soft); color: var(--al-ink); }
 .inspector-panel > .agent-scope .scope-chip-active { background: var(--al-surface); color: var(--al-accent); box-shadow: inset 0 0 0 1px color-mix(in srgb,var(--al-accent) 30%,var(--al-line)); }
+.inspector-section,
+.tool-detail { margin-right: 20px; margin-left: 20px; }
 .inspector-section { margin-top: 16px; }
-.section-label { margin: 0 0 7px; color: var(--al-muted); font-size: 12px; font-weight: 700; letter-spacing: .04em; }
+.section-label { margin: 0 0 8px; color: var(--al-muted); font-size: 12px; font-weight: 700; letter-spacing: .04em; }
 .evidence-card { padding: 9px; border: 1px solid var(--al-line); border-radius: 8px; background: var(--al-soft-2); font-size: 12px; }
 .evidence-card + .evidence-card { margin-top: 7px; }
 .evidence-meta { display: flex; flex-wrap: wrap; gap: 7px; color: var(--al-muted); font-size: 12px; }
