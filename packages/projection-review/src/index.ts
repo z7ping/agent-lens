@@ -93,20 +93,23 @@ export function lifecycleEventLabel(payload: JsonValue | unknown): string {
   }
   if (exact[action]) return exact[action]
 
-  if (action.includes('resume')) return '恢复会话'
-  if (action.includes('restart')) return '重新开始会话'
-  if (action.includes('continue')) return '继续会话'
-  if (action.includes('discover')) return '发现会话'
-  if (action.includes('initialize') || action.includes('init')) return '会话初始化'
-  if (action.includes('create')) return '创建会话'
-  if (action.includes('pause')) return '会话暂停'
-  if (action.includes('interrupt')) return '会话中断'
-  if (action.includes('cancel')) return '会话取消'
-  if (action.includes('abort')) return '会话终止'
-  if (action.startsWith('turn.') && action.includes('start')) return '轮次开始'
-  if (action.startsWith('turn.') && (action.includes('stop') || action.includes('end'))) return '轮次停止'
-  if (action.includes('start')) return '会话开始'
-  if (action.includes('stop') || action.includes('end') || action.includes('close')) return '会话结束'
+  const parts = new Set(action.split('.').filter(Boolean))
+  const has = (...values: string[]) => values.some(value => parts.has(value))
+  if (has('resume', 'resumed')) return '恢复会话'
+  if (has('restart', 'restarted')) return '重新开始会话'
+  if (has('continue', 'continued')) return '继续会话'
+  if (has('discover', 'discovered')) return '发现会话'
+  if (has('initialize', 'initialized', 'init')) return '会话初始化'
+  if (has('create', 'created')) return '创建会话'
+  if (has('pause', 'paused')) return '会话暂停'
+  if (has('interrupt', 'interrupted')) return '会话中断'
+  if (has('cancel', 'cancelled', 'canceled')) return '会话取消'
+  if (has('abort', 'aborted')) return '会话终止'
+  if (parts.has('turn') && has('start', 'started')) return '轮次开始'
+  if (parts.has('turn') && has('stop', 'stopped')) return '轮次停止'
+  if (parts.has('turn') && has('end', 'ended')) return '轮次结束'
+  if (has('start', 'started')) return '会话开始'
+  if (has('stop', 'stopped', 'end', 'ended', 'close', 'closed')) return '会话结束'
 
   return '会话状态变化'
 }
