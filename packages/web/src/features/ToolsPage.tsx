@@ -4,6 +4,7 @@ import type { ToolUsageDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
 import { AgentScope, agentLabel } from '../components/AgentScope'
+import { CompactPageHeading } from '../components/CompactPageHeading'
 import { EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from '../components/StateViews'
 import { ToolKindIcon, toolVisualKind } from '../components/ToolKindIcon'
 import { UiIcon } from '../components/UiIcon'
@@ -132,7 +133,7 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
     </div>
 
     <div className="page-content tools-content">
-      <header className="page-heading"><div><span className="eyebrow">使用情况</span><h1>工具分析</h1><p>只展示可验证的调用事实：用了什么、失败多少、耗时如何，以及有多少调用能够可靠归因到具体能力资产。</p></div></header>
+      <CompactPageHeading title="工具分析" description="只展示可验证的调用事实：用了什么、失败多少、耗时如何，以及有多少调用能够可靠归因到具体能力资产。"/>
 
       {usage.error && <ErrorStateBanner message={usage.error} onRetry={() => void model.refreshUsage()}/>} 
 
