@@ -214,6 +214,21 @@
     }
   }
 
+  function syncSessionAutoLoadHint() {
+    document.querySelectorAll('.session-load-more').forEach(function (control) {
+      var hint = document.createElement('div')
+      hint.className = control.className
+      hint.dataset.sessionAutoLoad = 'true'
+      hint.setAttribute('role', 'status')
+      hint.setAttribute('aria-live', 'polite')
+      hint.textContent = '滚轮 / 滚动条向下到底部，自动加载更多会话 · 每次最多 40 条'
+      hint.title = '滚动左侧会话列表到底部时自动加载下一批会话'
+      hint.style.cursor = 'default'
+      hint.style.pointerEvents = 'none'
+      control.replaceWith(hint)
+    })
+  }
+
   function applyTheme(theme) {
     document.documentElement.dataset.theme = theme
     renderThemeControls(theme)
@@ -237,6 +252,7 @@
   syncAgentSources()
   syncAgentDetails()
   syncBackupPrototype()
+  syncSessionAutoLoadHint()
   renderThemeControls(document.documentElement.dataset.theme || 'light')
   applyAudit(auditOn)
 
