@@ -7,7 +7,8 @@
   "description": "AgentLens Windows 桌面壳。",
   "author": "7ping <z7ping@outlook.com>",
   "scripts": {
-    "dist:win": "electron-builder --win nsis"
+    "dist:win": "node ../../scripts/prepare-windows-icon.mjs && electron-builder --win nsis",
+    "dist:win:dir": "node ../../scripts/prepare-windows-icon.mjs && electron-builder --win dir"
   },
   "dependencies": {
     "@deepseek-ai/cordis": "4.0.1",
@@ -24,9 +25,8 @@
     "electronDist": ".electron-dist/electron-v43.4.0-win32-x64",
     "asarUnpack": [
       "node_modules/better-sqlite3/**/*",
-      "runtime/cli.mjs",
-      "runtime/hooks/**/*",
-      "runtime/integrations/**/*"
+      "runtime/**/*",
+      "assets/**/*"
     ],
     "files": [
       "src/**/*",
@@ -44,7 +44,7 @@
           "arch": ["x64"]
         }
       ],
-      "icon": "assets/icon.png",
+      "icon": "assets/icon-win.png",
       "artifactName": "AgentLens-${version}-Setup-${arch}.${ext}"
     },
     "nsis": {
