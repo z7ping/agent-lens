@@ -101,6 +101,91 @@
   margin-left: 0;
 }
 
+/* 长会话轮次轨：只做导航刻度，不绘制贯穿阅读区的主线。 */
+.turn-rail {
+  position: absolute;
+  top: 118px;
+  bottom: 90px;
+  left: -4px;
+  z-index: 18;
+  display: flex;
+  width: auto;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding-top: 0;
+  opacity: .75;
+  pointer-events: none;
+}
+
+.turn-rail:hover { opacity: 1; }
+.turn-rail::before { display: none; content: none; }
+
+.turn-tick {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  pointer-events: auto;
+}
+
+.turn-tick i,
+.turn-tick i:nth-child(2),
+.turn-tick i:nth-child(3) {
+  width: 11px;
+  height: 2px;
+  border-radius: 99px;
+  background: var(--al-line-strong);
+}
+
+.turn-tick.active i {
+  width: 13px;
+  height: 3px;
+  background: var(--al-accent);
+}
+
+.turn-tick.err i {
+  background: color-mix(in srgb, var(--al-danger) 55%, var(--al-line));
+}
+
+.turn-tick.err.active i {
+  background: var(--al-danger);
+}
+
+.turn-tick::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 10px);
+  z-index: 90;
+  width: max-content;
+  max-width: 320px;
+  padding: 8px 11px;
+  transform: translateY(-50%);
+  border: 1px solid var(--al-line);
+  border-radius: 9px;
+  background: var(--al-surface-raised);
+  box-shadow: var(--al-shadow-lg);
+  color: var(--al-ink-2);
+  font-size: 12px;
+  line-height: 1.55;
+  text-align: left;
+  white-space: normal;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .14s;
+}
+
+.turn-tick:hover::after,
+.turn-tick:focus-visible::after {
+  opacity: 1;
+}
+
 @media (min-width: 901px) {
   .app-shell:has(.review-page) {
     height: 100vh;
@@ -115,6 +200,8 @@
 }
 
 @media (max-width: 1100px) {
+  .turn-rail { display: none; }
+
   .review-page .search-filter {
     width: 160px;
     min-width: 140px;
