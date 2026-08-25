@@ -66,4 +66,37 @@ export class SqliteRuntimeProfileRepository {
       }
     })
   }
+
+  async attachSession(
+    sourceId: string,
+    installationId: string,
+    nativeSessionId: string,
+    runtimeProfileId: string,
+  ): Promise<void> {
+    await this.executor.run(() => {
+      this.executor.db.prepare(`
+        UPDATE source_sessions
+        SET runtime_profile_id = ?
+        WHERE source_id = ? AND installation_id = ? AND native_session_id = ?
+      `).run(runtimeProfileId, sourceId, installationId, nativeSessionId)
+      this.executor.db.prepare(`
+        UPDATE logical_sessions
+        SET runtime_profile_id = ?
+        WHERE id IN (
+          SELECT logical_session_id FROM source_sessions
+          WHERE source_id = ? AND installation_id = ? AND native_session_id = ?
+        )
+      `).run(runtimeProfileId, sourceId, installationId, nativeSessionId)
+    })
+  }
+
+  async attachAssetBinding(assetBindingId: string, runtimeProfileId: string): Promise<void> {
+    await this.executor.run(() => {
+      this.executor.db.prepare(`
+        UPDATE asset_bindings
+        SET runtime_profile_id = ?
+        WHERE id = ?
+      `).run(runtimeProfileId, assetBindingId)
+    })
+  }
 }
