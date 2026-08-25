@@ -475,43 +475,54 @@ if (!singleInstance) {
   })
   app.on('window-all-closed', event => event?.preventDefault?.())
 
+  // Runtime ownership is independent from Chromium/UI readiness. Start or reuse the
+  // single Daemon as soon as the process owns the desktop instance lock, so a slow
+  // or unavailable GUI session cannot leave AgentLens silently doing nothing.
+  let runtimeReady = false
+  let startupError = null
+  try {
+    await ensureDaemonLog()
+    writeDaemonLog('\n--- AgentLens desktop start ' + new Date().toISOString() + ' packaged=' + app.isPackaged + ' pid=' + process.pid + ' ---')
+    await startDaemon()
+    runtimeReady = await waitForDaemon()
+    if (!runtimeReady) {
+      throw new Error('AgentLens 后台服务未能正常启动。请查看日志：' + join(app.getPath('logs'), 'daemon.log'))
+    }
+    markDaemonStable()
+  } catch (error) {
+    startupError = error
+    const detail = error instanceof Error ? error.stack ?? error.message : String(error)
+    writeDaemonLog('--- desktop runtime startup failed: ' + detail + ' ---')
+  }
+
   await app.whenReady()
   app.setAppUserModelId('dev.z7ping.agentlens')
 
-  try {
-    await ensureDaemonLog()
-    writeDaemonLog(`\n--- AgentLens desktop start ${new Date().toISOString()} packaged=${app.isPackaged} pid=${process.pid} ---`)
+  if (startupError || !runtimeReady) {
+    const detail = startupError instanceof Error ? startupError.stack ?? startupError.message : String(startupError ?? '运行时未就绪')
+    await dialog.showMessageBox({
+      type: 'error',
+      title: 'AgentLens 启动失败',
+      message: 'AgentLens Windows 客户端未能正常启动。',
+      detail: detail + '\n\n日志：' + join(app.getPath('logs'), 'daemon.log'),
+    })
+    app.quit()
+  } else {
     createWindow()
 
     try {
       createTray()
     } catch (error) {
       tray = null
-      writeDaemonLog(`--- tray creation failed: ${error instanceof Error ? error.stack ?? error.message : String(error)} ---`)
+      writeDaemonLog('--- tray creation failed: ' + (error instanceof Error ? error.stack ?? error.message : String(error)) + ' ---')
     }
 
     try {
       await ensureInitialLoginAutostart()
     } catch (error) {
-      writeDaemonLog(`--- initial login autostart failed: ${error instanceof Error ? error.message : String(error)} ---`)
+      writeDaemonLog('--- initial login autostart failed: ' + (error instanceof Error ? error.message : String(error)) + ' ---')
     }
 
-    await startDaemon()
-    if (await waitForDaemon()) {
-      markDaemonStable()
-      await mainWindow.loadURL(daemonUrl)
-    } else {
-      throw new Error(`AgentLens 后台服务未能正常启动。请查看日志：${join(app.getPath('logs'), 'daemon.log')}`)
-    }
-  } catch (error) {
-    const detail = error instanceof Error ? error.stack ?? error.message : String(error)
-    writeDaemonLog(`--- desktop startup failed: ${detail} ---`)
-    await dialog.showMessageBox({
-      type: 'error',
-      title: 'AgentLens 启动失败',
-      message: 'AgentLens Windows 客户端未能正常启动。',
-      detail: `${detail}\n\n日志：${join(app.getPath('logs'), 'daemon.log')}`,
-    })
-    app.quit()
+    await mainWindow.loadURL(daemonUrl)
   }
 }
