@@ -405,7 +405,7 @@ export async function* discoverDshAssets(ctx: SourceExecutionContext): AsyncIter
     if (ctx.abortSignal.aborted) return
     yield {
       definition: { type: 'plugin', canonicalName: name, displayName: name },
-      binding: { path: manifestPath, source: 'dsh:bundle', version: manifest?.dependencies?.[name] },
+      binding: { path: manifestPath, source: 'dsh:bundle' },
       states: installedAsset(manifestPath, observedAt),
     }
   }
