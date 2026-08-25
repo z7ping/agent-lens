@@ -1,0 +1,59 @@
+schema_version: "0.1"
+status: active
+
+goal:
+  summary: "完成 AgentLens 1.0 正式程序 UI 适配与 v2.1 表现层稳定化收口"
+
+phase:
+  type: stabilization
+  summary: "功能与 1.0 架构基本冻结后的表现层收敛、真实使用问题修复与稳定化"
+
+scope:
+  include:
+    - "正式 Web 界面与高保真表现一致性收口"
+    - "任务复盘、会话、工具与能力等现有功能的真实使用问题"
+    - "阻塞 1.0 验收的运行稳定性和桌面端问题"
+  exclude:
+    - "新增 P1 / P2 功能"
+    - "重新设计已经确定的 1.0 架构"
+    - "恢复 0.x 旧 Runtime / Service Manager / PID 等已废弃架构"
+
+constraints:
+  required:
+    - "每次写入前重新确认 main 最新状态，不依赖旧会话中的 HEAD"
+    - "界面修改保持现有真实业务链，不用演示数据或视觉替代隐藏真实能力"
+    - "重要实现变化同步相关架构、契约或设计文档"
+  forbidden:
+    - "未经明确要求发布 npm 包或创建 Release"
+    - "主动扩展 P1 / P2 功能"
+    - "为了表现层问题重新设计已冻结的 1.0 架构"
+  frozen:
+    - "Cordis-native 1.0 Runtime 与 Canonical Data Flow"
+    - "任务复盘保持高信息密度，用户消息右侧、智能体消息左侧"
+    - "保留 Evidence、生命周期、工具执行、轮次和长会话 turn-rail"
+    - "正式设计令牌与 docs/design/mockups/v2 高保真基线"
+  deferred: []
+
+acceptance:
+  - "普通界面文字不低于 12px，关键前景/背景组合满足表现检查门禁"
+  - "任务复盘冻结交互契约在正式运行时保持成立"
+  - "现有真实业务与 Evidence 信息不因视觉收口被隐藏或伪造"
+  - "与修改面匹配的局部和受影响范围验证通过"
+  - "不引入 P1 / P2 扩展或新的 1.0 架构分叉"
+
+progress:
+  current:
+    - "任务复盘长会话交互契约已纳入表现检查，继续全局 UI 与真实使用体验收口"
+  next:
+    - "继续检查任务复盘、会话、工具与能力页面的剩余表现与交互问题"
+    - "修复阻塞 1.0 验收的运行稳定性或桌面端问题"
+    - "在收口阶段末执行与当前版本门禁相匹配的完整验证"
+
+decisions:
+  - "当前直接在 main 收敛，但写入前必须重新读取最新 main"
+  - "目标是降低视觉噪音，不以隐藏 Agent 特有信息换取简洁"
+
+repository:
+  provider: github
+  branch: main
+  pull_request: null
