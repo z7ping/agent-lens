@@ -27,7 +27,7 @@
       if (mark.querySelector('img')) return
       mark.textContent = ''
       var img = document.createElement('img')
-      img.src = '../../../../packages/web/public/favicon.png'
+      img.src = '../../../../packages/web/public/agentlens-icon.svg'
       img.alt = ''
       img.setAttribute('aria-hidden', 'true')
       img.style.width = '100%'

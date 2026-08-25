@@ -69,8 +69,9 @@ function unpackedAsset(...parts) {
 }
 
 function desktopIconPath() {
-  const windowsIcon = unpackedAsset('assets', 'icon-win.png')
-  return existsSync(windowsIcon) ? windowsIcon : unpackedAsset('assets', 'icon.png')
+  const windowIcon = unpackedAsset('assets', 'icon-window.png')
+  if (existsSync(windowIcon)) return windowIcon
+  return unpackedAsset('assets', 'icon-win.png')
 }
 
 async function ensureDaemonLog() {

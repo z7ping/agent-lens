@@ -51,3 +51,6 @@ tracker.db-wal
 .superpowers/
 .superpowers/
 server/hooks/windows-hook-runner.exe
+apps/desktop/assets/icon-app.ico
+apps/desktop/assets/icon-window.png
+apps/desktop/assets/tray.ico

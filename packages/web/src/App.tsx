@@ -168,7 +168,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
       <header className="app-header">
         <div className="app-header-inner">
           <div className="brand" aria-label="AgentLens">
-            <img className="brand-logo" src="/favicon.png" alt="" aria-hidden="true"/>
+            <img className="brand-logo" src="/agentlens-icon.svg" alt="" aria-hidden="true"/>
             <span className="brand-name">AgentLens</span>
           </div>
           <nav className="app-nav" aria-label="主导航">
