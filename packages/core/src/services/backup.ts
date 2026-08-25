@@ -12,14 +12,44 @@ export type BackupAssetKind =
 
 export type BackupSourceScope = 'config' | 'data'
 
+export interface BackupKindSummary {
+  fileCount: number
+  totalBytes: number
+  logicalAssetCount?: number
+}
+
+export interface BackupDataRootSummary {
+  scope: BackupSourceScope
+  path: string
+  fileCount: number
+  totalBytes: number
+}
+
+export interface BackupAgeBucketSummary {
+  fileCount: number
+  totalBytes: number
+}
+
 export interface BackupProtectionSource {
   sourceId: string
   productId: string
   displayName: string
   detected: boolean
   fileCount: number
+  totalBytes: number
+  logicalAssetCount: number
   excludedCount: number
   kinds: Partial<Record<BackupAssetKind, number>>
+  kindDetails: Partial<Record<BackupAssetKind, BackupKindSummary>>
+  roots: BackupDataRootSummary[]
+  oldestModifiedAt?: string
+  latestModifiedAt?: string
+  ageBuckets: {
+    recent30Days: BackupAgeBucketSummary
+    days31To90: BackupAgeBucketSummary
+    days91To180: BackupAgeBucketSummary
+    olderThan180Days: BackupAgeBucketSummary
+  }
 }
 
 export interface BackupSnapshotSummary {
