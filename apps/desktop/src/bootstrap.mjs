@@ -1,5 +1,6 @@
 import { appendFileSync, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
+import { app } from 'electron'
 
 function bootStage(stage) {
   const target = process.env.AGENT_LENS_DESKTOP_BOOT_LOG
@@ -12,7 +13,17 @@ function bootStage(stage) {
   }
 }
 
-bootStage('entered')
+bootStage(`entered ready=${app.isReady()}`)
+for (const event of ['will-finish-launching', 'ready', 'browser-window-created', 'before-quit', 'will-quit', 'quit']) {
+  app.on(event, () => bootStage(`event:${event}`))
+}
+process.on('uncaughtException', error => {
+  bootStage(`uncaughtException:${error instanceof Error ? error.stack ?? error.message : String(error)}`)
+})
+process.on('unhandledRejection', error => {
+  bootStage(`unhandledRejection:${error instanceof Error ? error.stack ?? error.message : String(error)}`)
+})
+
 bootStage('before-main-import')
 await import('./main.mjs')
 bootStage('after-main-import')
