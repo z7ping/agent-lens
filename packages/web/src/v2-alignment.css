@@ -1,50 +1,11 @@
 /*
  * AgentLens v2 过渡层。
  *
- * 仅保留尚未迁回正式页面样式的智能体概览与资产备份规则。
- * 壳层已迁到 shell.css；任务复盘已迁到 review.css；工具分析已迁到 tools.css。
- * 本文件不得再新增规则，后续按页面迁空后删除。
+ * 仅保留尚未迁回正式页面样式的资产备份规则。
+ * 壳层已迁到 shell.css；任务复盘已迁到 review.css；工具分析已迁到 tools.css；
+ * 智能体概览已迁到 agents.css。
+ * 本文件不得再新增规则，资产备份迁移完成后直接删除。
  */
-
-/* ── 智能体概览 ───────────────────────────────────────── */
-.agent-card[data-source='hermes'] { --agent-accent: var(--src-hermes); }
-.agent-card[data-source='opencode'] { --agent-accent: var(--src-opencode); }
-.asset-kpi { border-color: transparent; background: var(--al-soft-2); }
-.agent-primary-section,
-.skill-lifecycle,
-.agent-disclosures,
-.agent-secondary { border-top-color: var(--al-line); }
-.agent-source-nav,
-.agent-card { box-shadow: none; }
-.frequent-asset-row {
-  display: grid;
-  grid-template-columns: 20px minmax(0, 1fr) minmax(90px, 180px) 42px;
-  align-items: center;
-  gap: 9px;
-}
-.frequent-usage-track,
-.skill-funnel-track { height: 6px; overflow: hidden; border-radius: 999px; background: var(--al-soft); }
-.frequent-usage-track > i,
-.skill-funnel-track > i { display: block; height: 100%; border-radius: inherit; background: var(--al-accent); }
-.frequent-asset-row > strong { text-align: right; }
-.skill-funnel { display: flex; flex-direction: column; gap: 5px; margin-top: 10px; }
-.skill-funnel > .skill-funnel-row {
-  display: grid;
-  min-height: 30px;
-  grid-template-columns: 88px minmax(0, 1fr) 34px;
-  align-items: center;
-  gap: 10px;
-  border: 0;
-  background: transparent;
-}
-.skill-funnel > .skill-funnel-row[data-active] { border: 0; background: transparent; }
-.skill-funnel > .skill-funnel-row[data-muted='true'] { opacity: .72; }
-.skill-funnel-row > span:first-child { color: var(--al-muted); font-size: 12px; text-align: left; }
-.skill-funnel-row > strong { color: var(--al-ink); font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; }
-.skill-funnel-row[data-active] .skill-funnel-track > i { background: var(--al-success); }
-.capability-row { align-items: flex-start; }
-.capability-row > span { min-width: 0; color: var(--al-muted); line-height: 1.55; }
-.capability-row > b { flex: 0 0 auto; margin-top: 1px; }
 
 /* ── 资产备份尚未迁移的标题收口 ───────────────────────── */
 .backup-page { padding-top: 16px; background: transparent; }
@@ -66,8 +27,3 @@
 
 .background-data-notice,
 .background-data-notice button { font-size: 12px; }
-
-@media (max-width: 760px) {
-  .frequent-usage-track { display: none; }
-  .frequent-asset-row { grid-template-columns: 20px minmax(0, 1fr) 42px; }
-}
