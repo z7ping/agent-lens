@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs'
 
+const mainSource = readFileSync('packages/web/src/main.tsx', 'utf8')
+const inspectorDismiss = readFileSync('packages/web/src/client/inspector-dismiss.ts', 'utf8')
 const reviewPage = readFileSync('packages/web/src/features/ReviewPage.tsx', 'utf8')
 const reviewCss = readFileSync('packages/web/src/review.css', 'utf8')
 const longCss = readFileSync('packages/web/src/review-long-session.css', 'utf8')
@@ -28,6 +30,16 @@ if (/\{[^{}]*&&\s*<button[^>]*className="round-nav-(?:from-start|latest)"/s.test
   throw new Error('从头查看和跳到最新必须常驻渲染；无意义状态使用 disabled，不得条件移除')
 }
 
+if (!mainSource.includes('installInspectorOutsideDismiss')
+  || !mainSource.includes('disposeInspectorOutsideDismiss')) {
+  throw new Error('任务复盘事件详情抽屉必须安装并释放外部点击关闭行为')
+}
+if (!inspectorDismiss.includes('.inspector-panel[role="dialog"][aria-modal="true"]')
+  || !inspectorDismiss.includes('panel.contains(target)')
+  || !inspectorDismiss.includes('button[aria-label="关闭事件详情"]')) {
+  throw new Error('事件详情抽屉必须支持点击抽屉外关闭，并保证抽屉内点击不触发关闭')
+}
+
 if (/\.round-nav[^{}]*\{[^{}]*display\s*:\s*none/gs.test(longCss)
   || /\.round-nav[^,{]*[^{}]*\{[^{}]*visibility\s*:\s*hidden/gs.test(longCss)) {
   throw new Error('长会话性能层不得隐藏任务复盘导航或业务操作')
@@ -51,4 +63,4 @@ if (!longCss.includes('消息操作栏必须是一个视觉行')
   throw new Error('用户/智能体消息的源码与证据操作必须保持同一视觉行')
 }
 
-console.log('任务复盘冻结交互契约检查通过：筛选/操作语义组固定，关键入口常驻，性能 CSS 不得隐藏业务操作，消息操作保持单行')
+console.log('任务复盘冻结交互契约检查通过：导航语义固定，抽屉支持外部点击关闭，性能 CSS 不得隐藏业务操作，消息操作保持单行')
