@@ -119,11 +119,11 @@ export function FirstRunGuide({
     <div className="first-run-heading"><span className="eyebrow">开始使用</span><h2>完成这三步，就可以开始复盘</h2><p>引导只使用 AgentLens 当前能够确认的事实：检测结果、采集开关、后台状态和实时连接；不会把“未观察到”推断成“未安装”。</p></div>
     <div className="first-run-steps">
       <div className={`first-run-step ${detectedCount > 0 ? 'is-done' : 'is-pending'}`}>
-        <span className="first-run-no">{detectedCount > 0 ? '✓' : '1'}</span>
+        <span className="first-run-no">{detectedCount > 0 ? <UiIcon name="check" size={14}/> : '1'}</span>
         <div><b>检测智能体</b><p>{detectedCount > 0 ? `已检测到 ${detectedCount} 个受支持的智能体。` : '暂未检测到受支持的智能体；可运行诊断命令确认本机检测路径。'}</p></div>
       </div>
       <div className={`first-run-step ${captureReady ? 'is-done' : 'is-pending'}`}>
-        <span className="first-run-no">{captureReady ? '✓' : '2'}</span>
+        <span className="first-run-no">{captureReady ? <UiIcon name="check" size={14}/> : '2'}</span>
         <div><b>启用采集并确认运行</b><p>{enabledCount > 0 ? `当前有 ${enabledCount} 个来源已允许采集；${serviceReady ? (liveConnected ? '后台服务和实时数据通道均正常。' : '后台服务正常，实时数据通道暂未连接。') : '后台服务当前不可用或处于降级状态。'}` : '当前没有来源允许采集；请先按采集隐私策略启用需要观察的来源。'}</p></div>
       </div>
       <div className="first-run-step is-pending">
