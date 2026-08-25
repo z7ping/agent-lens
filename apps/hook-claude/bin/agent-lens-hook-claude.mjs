@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createHash, randomUUID } from 'node:crypto'
-import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -14,6 +14,16 @@ function sourceCaptureEnabled(sourceId, env = process.env) {
   if (!raw) return DEFAULT_ENABLED_SOURCES.includes(normalizedSourceId)
   if (raw.toLowerCase() === 'none') return false
   return raw.split(',').some(value => value.trim().toLowerCase() === normalizedSourceId)
+}
+
+async function diagnostic(message) {
+  const path = String(process.env.AGENT_LENS_HOOK_CAPTURE_LOG || '').trim()
+  if (!path) return
+  try {
+    await appendFile(path, `${new Date().toISOString()} pid=${process.pid} claude-hook ${message}\n`, 'utf8')
+  } catch {
+    // Diagnostics must never affect the passive Hook path.
+  }
 }
 
 function sanitize(value, depth = 0) {
@@ -42,10 +52,16 @@ function sha256(value) {
 
 let raw = ''
 for await (const chunk of process.stdin) raw += chunk
-if (!raw.trim() || !sourceCaptureEnabled('claude-code')) process.exit(0)
+const captureEnabled = sourceCaptureEnabled('claude-code')
+await diagnostic(`stdin chars=${raw.length} captureEnabled=${captureEnabled} inbox=${inboxDirectory()}`)
+if (!raw.trim() || !captureEnabled) {
+  await diagnostic(`neutral early-exit empty=${!raw.trim()} captureEnabled=${captureEnabled}`)
+  process.exit(0)
+}
 
 try {
   const parsed = sanitize(JSON.parse(raw))
+  await diagnostic('json parsed')
   const capturedAt = new Date().toISOString()
   const suppliedId = typeof parsed.source_event_id === 'string' && parsed.source_event_id
     ? parsed.source_event_id
@@ -70,6 +86,8 @@ try {
     await rm(tempPath, { force: true }).catch(() => undefined)
     if (!error || typeof error !== 'object' || error.code !== 'EEXIST') throw error
   }
-} catch {
+  await diagnostic(`capture persisted file=${finalPath}`)
+} catch (error) {
+  await diagnostic(`capture failed=${error instanceof Error ? error.stack ?? error.message : String(error)}`)
   // Passive hook: never block Claude Code because AgentLens capture failed.
 }
