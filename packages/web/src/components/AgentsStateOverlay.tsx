@@ -22,6 +22,20 @@ function numberValue(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0
 }
 
+function formatBytes(value: number): string {
+  if (!value) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  const index = Math.min(units.length - 1, Math.floor(Math.log(value) / Math.log(1024)))
+  const scaled = value / (1024 ** index)
+  return `${scaled >= 100 || index === 0 ? scaled.toFixed(0) : scaled.toFixed(1)} ${units[index]}`
+}
+
+function formatTime(value: string): string {
+  if (!value) return '暂无'
+  const time = new Date(value)
+  return Number.isNaN(time.getTime()) ? value : time.toLocaleString()
+}
+
 const capabilityLabel: Record<string, string> = {
   session: '会话',
   transcript: '对话记录',
@@ -92,6 +106,33 @@ function coverageStatus(agent: AgentOverviewDto, diagnostics: AgentDiagnostics, 
   return { label: '尚未确认', state: 'unknown', title: '当前缺少足够的运行或覆盖证据，不能判断为 0。' }
 }
 
+function StorageDiagnostics({ snapshot }: { snapshot: ClientSnapshot }) {
+  const details = recordValue(snapshot.health?.storage.details)
+  const growth = recordValue(details?.dataGrowth)
+  const totals = recordValue(growth?.totals)
+  const last7Days = recordValue(growth?.last7Days)
+  const checkpoints = recordValue(details?.checkpoints)
+  if (!growth) return null
+  return <section className="agent-storage-diagnostics">
+    <div className="agent-storage-head">
+      <div><b>AgentLens 数据增长</b><small>只观察增长，不自动删除历史事实</small></div>
+      <strong>{formatBytes(numberValue(growth.databaseBytes) + numberValue(growth.walBytes))}</strong>
+    </div>
+    <div className="agent-storage-kpis">
+      <span><small>主数据库</small><b>{formatBytes(numberValue(growth.databaseBytes))}</b></span>
+      <span><small>WAL</small><b>{formatBytes(numberValue(growth.walBytes))}</b></span>
+      <span><small>会话</small><b>{numberValue(totals?.sessions).toLocaleString()}</b><em>7 天 +{numberValue(last7Days?.sessions).toLocaleString()}</em></span>
+      <span><small>观测事件</small><b>{numberValue(totals?.observations).toLocaleString()}</b><em>7 天 +{numberValue(last7Days?.observations).toLocaleString()}</em></span>
+      <span><small>原始记录</small><b>{numberValue(totals?.sourceRecords).toLocaleString()}</b><em>7 天 +{numberValue(last7Days?.sourceRecords).toLocaleString()}</em></span>
+      <span><small>证据</small><b>{numberValue(totals?.evidence).toLocaleString()}</b><em>7 天 +{numberValue(last7Days?.evidence).toLocaleString()}</em></span>
+    </div>
+    <div className="agent-checkpoint-health">
+      <span>采集检查点 <b>{numberValue(checkpoints?.count).toLocaleString()}</b></span>
+      <span>最近更新 <b>{formatTime(stringValue(checkpoints?.lastUpdatedAt))}</b></span>
+    </div>
+  </section>
+}
+
 function DiagnosticAgent({ agent, diagnostics }: { agent: AgentOverviewDto; diagnostics: AgentDiagnostics }) {
   const hasUnknown = diagnostics.unknownCount > 0
   const hasFailure = diagnostics.failedStages > 0
@@ -137,6 +178,7 @@ function AgentDiagnosticsPanel({ snapshot }: { snapshot: ClientSnapshot }) {
       <span className="agent-diagnostics-summary" data-state={hasIssue ? 'warn' : 'ok'}>{hasIssue ? `${failed} 异常 · ${unknown} 待适配` : '运行正常'}</span>
     </summary>
     <div className="agent-diagnostics-body">
+      <StorageDiagnostics snapshot={snapshot}/>
       <div className="agent-diagnostics-legend">
         <span data-state="complete">已覆盖</span>
         <span data-state="empty">当前没有发生</span>
