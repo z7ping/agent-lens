@@ -19,7 +19,7 @@ export function sourceDot(sourceId: string): string {
   return 'source-unknown'
 }
 
-export function AgentScope({ agents, value, onChange, allLabel = '全部' }: { agents: AgentFacetDto[]; value: string; onChange(value: string): void; allLabel?: string | false }) {
+export function AgentScope({ agents, value, onChange, allLabel = '全部智能体' }: { agents: AgentFacetDto[]; value: string; onChange(value: string): void; allLabel?: string | false }) {
   const { pinned, toggle } = usePinnedAgents()
   const shown = pinned.map(id => agents.find(agent => agent.sourceId === id)).filter((agent): agent is AgentFacetDto => Boolean(agent))
   return <div className="agent-scope">
