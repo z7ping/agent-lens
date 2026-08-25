@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { copyText } from '../client/clipboard'
+import { UiIcon } from './UiIcon'
 
 export function CommandRow({ command }: { command: string }) {
   const [copied, setCopied] = useState(false)
@@ -23,15 +24,16 @@ export function EmptyStatePanel({
   children,
   compact = false,
 }: {
-  icon: string
+  icon: ReactNode
   title: string
   description: string
   action?: { label: string; onClick(): void }
   children?: ReactNode
   compact?: boolean
 }) {
+  const renderedIcon = icon === '⌕' ? <UiIcon name="search" size={20}/> : icon
   return <div className={`state-empty ${compact ? 'is-compact' : ''}`}>
-    <div className="state-empty-icon" aria-hidden="true">{icon}</div>
+    <div className="state-empty-icon" aria-hidden="true">{renderedIcon}</div>
     <h3>{title}</h3>
     <p>{description}</p>
     {(action || children) && <div className="state-actions">
