@@ -7,6 +7,15 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const sourcePath = resolve(root, 'apps', 'desktop', 'assets', 'icon.png')
 const outputPath = resolve(root, 'apps', 'desktop', 'assets', 'icon-win.png')
 const background = [0x0b, 0x0d, 0x10]
+const crcTable = (() => {
+  const table = new Uint32Array(256)
+  for (let n = 0; n < 256; n += 1) {
+    let value = n
+    for (let k = 0; k < 8; k += 1) value = (value & 1) ? (0xedb88320 ^ (value >>> 1)) : (value >>> 1)
+    table[n] = value >>> 0
+  }
+  return table
+})()
 
 const source = await readFile(sourcePath)
 const decoded = decodePng(source)
@@ -172,16 +181,6 @@ function pngChunk(type, data) {
   chunk.writeUInt32BE(crc32(Buffer.concat([typeBuffer, data])), 8 + data.length)
   return chunk
 }
-
-const crcTable = (() => {
-  const table = new Uint32Array(256)
-  for (let n = 0; n < 256; n += 1) {
-    let value = n
-    for (let k = 0; k < 8; k += 1) value = (value & 1) ? (0xedb88320 ^ (value >>> 1)) : (value >>> 1)
-    table[n] = value >>> 0
-  }
-  return table
-})()
 
 function crc32(buffer) {
   let crc = 0xffffffff
