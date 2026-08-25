@@ -23,6 +23,11 @@ const migrations: readonly Migration[] = [
     name: 'observation-timeline-order-index',
     fileName: '003-observation-timeline-order-index.sql',
   },
+  {
+    version: 4,
+    name: 'runtime-profiles-relationships-diagnostics',
+    fileName: '004-runtime-profiles-relationships-diagnostics.sql',
+  },
 ]
 
 async function readMigrationSql(fileName: string): Promise<string> {
