@@ -4,25 +4,21 @@
   "private": true,
   "type": "module",
   "main": "src/bootstrap.mjs",
-  "description": "AgentLens Windows 桌面壳。",
-  "author": "7ping <z7ping@outlook.com>",
   "scripts": {
+    "start": "electron .",
     "dist:win": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ../../scripts/prepare-windows-icon.ps1 && electron-builder --win nsis",
     "dist:win:dir": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ../../scripts/prepare-windows-icon.ps1 && electron-builder --win dir"
   },
   "dependencies": {
-    "@deepseek-ai/cordis": "4.0.1",
-    "better-sqlite3": "13.0.3"
+    "electron": "41.0.2"
   },
   "devDependencies": {
-    "electron": "43.4.0",
-    "electron-builder": "26.15.3"
+    "electron-builder": "26.8.1"
   },
   "build": {
-    "appId": "dev.z7ping.agentlens",
+    "appId": "dev.agentlens.desktop",
     "productName": "AgentLens",
     "asar": true,
-    "electronDist": ".electron-dist/electron-v43.4.0-win32-x64",
     "asarUnpack": [
       "node_modules/**/*",
       "runtime/**/*",
@@ -35,20 +31,23 @@
       "package.json"
     ],
     "directories": {
-      "output": "../../release/windows"
+      "output": ".electron-dist"
     },
     "win": {
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
-      "icon": "assets/icon-win.png",
+      "icon": "assets/icon-app.ico",
       "artifactName": "AgentLens-${version}-Setup-${arch}.${ext}"
     },
     "nsis": {
       "oneClick": false,
+      "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
