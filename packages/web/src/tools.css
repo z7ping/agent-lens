@@ -1,10 +1,12 @@
 /*
- * 工具分析正式样式。
+ * AgentLens 1.0 工具分析正式样式。
  *
- * 本文件是工具分析页面的视觉所有者，负责指标、表格、关注项、资产归因、
- * 工具详情与会话钻取。不得通过阶段性覆盖层修正本页。
+ * 本文件完整负责指标、表格、关注项、资产归因、工具详情、抽屉与会话钻取。
  */
 
+.tools-content { overflow: auto; }
+
+/* SVG 工具图标 */
 .tool-kind-svg {
   display: inline-grid;
   width: 16px;
@@ -14,49 +16,15 @@
   line-height: 1;
   vertical-align: middle;
 }
+.tool-kind-svg > svg { display: block; width: 16px; height: 16px; }
+.tools-content .tool-table-name { display: inline-flex; min-width: 0; align-items: center; gap: 8px; }
+.tools-content .tool-table-name > .tool-kind-svg { width: 18px; height: 18px; flex-basis: 18px; }
+.tools-content .tool-table-name > .tool-kind-svg > svg { width: 14px; height: 14px; }
+.tool-drawer-title { display: flex; min-width: 0; align-items: center; gap: 7px; }
+.tool-drawer-title .tool-kind-svg { width: 16px; height: 16px; flex-basis: 16px; }
+.tool-drawer-title .tool-kind-svg > svg { width: 16px; height: 16px; }
 
-.tool-kind-svg > svg {
-  display: block;
-  width: 16px;
-  height: 16px;
-}
-
-.tools-content .tool-table-name {
-  display: inline-flex;
-  min-width: 0;
-  align-items: center;
-  gap: 8px;
-}
-
-.tools-content .tool-table-name > .tool-kind-svg {
-  width: 18px;
-  height: 18px;
-  flex-basis: 18px;
-}
-
-.tools-content .tool-table-name > .tool-kind-svg > svg {
-  width: 14px;
-  height: 14px;
-}
-
-.tool-drawer-title {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 7px;
-}
-
-.tool-drawer-title .tool-kind-svg {
-  width: 16px;
-  height: 16px;
-  flex-basis: 16px;
-}
-
-.tool-drawer-title .tool-kind-svg > svg {
-  width: 16px;
-  height: 16px;
-}
-
+/* 摘要指标 */
 .tool-summary-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -79,12 +47,37 @@
 }
 .tool-summary-card:last-child { border-right: 0; }
 .tool-summary-card > span { display: block; color: var(--al-muted); font-size: 12px; font-weight: 650; }
-.tool-summary-card strong { display: block; margin: 5px 0; font-size: 14px; }
-.tool-summary-card small { display: block; padding-top: 0; font-size: 12px; }
+.tool-summary-card strong {
+  display: block;
+  overflow: hidden;
+  margin: 5px 0;
+  color: var(--al-ink);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 660;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tool-summary-card strong.is-danger { color: var(--al-danger); }
+.tool-summary-card small { display: block; padding-top: 0; color: var(--al-muted-2); font-size: 12px; }
 
-.tool-table-card,
-.attributed-assets,
-.cross-agent-matrix { box-shadow: none; }
+/* 工具表格 */
+.tool-table-card {
+  overflow: hidden;
+  border: 1px solid var(--al-line);
+  border-radius: 12px;
+  background: var(--al-surface);
+  box-shadow: none;
+}
+
+.table-section-head {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--al-line);
+}
 
 .tool-table-card > .table-section-head {
   display: block;
@@ -92,20 +85,51 @@
   min-height: 0;
   padding: 14px 16px;
 }
-.tool-table-card > .table-section-head h2 { margin: 0; font-size: 14px; }
-.tool-table-card > .table-section-head p { margin: 3px 0 0; font-size: 12px; }
-.tool-table { font-size: 13px; }
-.tool-table th,
-.tool-table td { height: auto; padding: 10px 13px; }
-.tool-table th { font-size: 12px; }
-.tool-name { font-size: 13px; }
-.tool-source { font-size: 12px; }
+
+.table-section-head h2,
+.tool-table-card > .table-section-head h2 { margin: 0; font-size: 14px; font-weight: 700; }
+.table-section-head p,
+.tool-table-card > .table-section-head p { margin: 3px 0 0; color: var(--al-muted-2); font-size: 12px; }
+
+.table-scroll { overflow-x: auto; }
+.tool-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
+.tool-table th {
+  padding: 10px 13px;
+  background: var(--al-soft-2);
+  color: var(--al-muted);
+  font-size: 12px;
+  font-weight: 660;
+  white-space: nowrap;
+}
+.tool-table td {
+  padding: 10px 13px;
+  border-top: 1px solid var(--al-line);
+  color: var(--al-ink-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.tool-table tbody tr { cursor: pointer; }
+.tool-table tbody tr:hover td { background: var(--al-soft-2); }
 .tool-table th[role='button']:focus-visible,
 .tool-table tbody tr:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--al-accent) 55%, transparent);
   outline-offset: -2px;
 }
 
+.tool-name { display: block; color: var(--al-ink); font-family: var(--font-mono); font-size: 13px; font-weight: 640; }
+.tool-source { display: block; margin-top: 2px; color: var(--al-muted-2); font-size: 12px; }
+.tool-bar-cell,
+.tool-rate-cell { display: flex; min-width: 120px; align-items: center; gap: 8px; }
+.metric-bar { display: inline-block; width: 76px; height: 6px; overflow: hidden; border-radius: 99px; background: var(--al-soft); }
+.metric-bar > i { display: block; height: 100%; border-radius: 99px; background: var(--al-accent); }
+.tool-rate-cell .metric-bar { width: 52px; }
+.tool-rate-cell[data-rate='good'] { color: var(--al-success); font-weight: 640; }
+.tool-rate-cell[data-rate='mid'] { color: var(--al-warning); font-weight: 640; }
+.tool-rate-cell[data-rate='unknown'] { color: var(--al-muted-2); }
+.cell-danger { color: var(--al-danger); font-weight: 640; }
+.cell-muted { color: var(--al-muted-2); }
+
+/* 关注项 */
 .tool-attention { margin-top: 22px; }
 .tool-attention-list { margin-top: 8px; border-top: 1px solid var(--al-line); }
 .tool-attention-row {
@@ -130,6 +154,16 @@
 .tool-attention-badge.is-danger { background: var(--al-danger-soft); color: var(--al-danger); }
 .tool-attention-badge.is-warning { background: var(--al-warning-soft); color: var(--al-warning); }
 
+/* 资产归因 */
+.attributed-assets {
+  margin-top: 14px;
+  padding: 14px 16px 8px;
+  border: 1px solid var(--al-line);
+  border-radius: 12px;
+  background: var(--al-surface);
+  box-shadow: none;
+}
+.attributed-asset-list { margin-top: 8px; }
 .attributed-asset {
   display: grid;
   min-height: 0;
@@ -137,9 +171,50 @@
   align-items: center;
   gap: 8px;
   padding: 9px 2px;
+  border-top: 1px solid var(--al-line);
+  font-size: 13px;
 }
+.attributed-asset:first-child { border-top: 0; }
+.attributed-asset b { color: var(--al-ink); font-family: var(--font-mono); font-size: 13px; }
+.attributed-asset span { color: var(--al-muted); }
+.attributed-asset strong { font-size: 13px; font-variant-numeric: tabular-nums; }
+.attributed-asset small { color: var(--al-muted-2); font-size: 12px; }
 .asset-usage-bar { width: 100%; min-width: 80px; height: 6px; overflow: hidden; border-radius: 999px; background: var(--al-soft); }
 .asset-usage-bar > i { display: block; height: 100%; border-radius: inherit; background: var(--al-accent); }
+
+/* 工具详情抽屉 */
+.tool-drawer-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  border: 0;
+  background: rgb(10 12 10 / .28);
+}
+
+.tool-drill-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 80;
+  display: flex;
+  width: min(520px, max(320px, 42vw));
+  flex-direction: column;
+  border-left: 1px solid var(--al-line);
+  background: var(--al-surface-raised);
+  box-shadow: var(--al-shadow-lg);
+}
+
+.tool-drill-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--al-line);
+}
+.tool-drill-head h2 { margin: 3px 0 0; font-family: var(--font-mono); font-size: 16px; }
+.tool-drill-body { padding: 16px 20px 28px; overflow: auto; }
 
 .tool-drill-grid {
   display: grid;
@@ -150,6 +225,11 @@
 }
 .tool-drill-stat { min-height: 0; padding: 10px 12px; border: 0; border-right: 1px solid var(--al-line); background: transparent; }
 .tool-drill-stat:nth-child(3n) { border-right: 0; }
+.tool-drill-stat b { font-size: 14px; font-variant-numeric: tabular-nums; }
+.tool-drill-stat span { color: var(--al-muted); font-size: 12px; }
+.tool-drill-note { margin-top: 16px; padding: 10px 12px; border-radius: 9px; background: var(--al-soft-2); color: var(--al-muted); font-size: 12px; line-height: 1.65; }
+
+/* 会话钻取 */
 .tool-session-section { margin-top: 18px; }
 .tool-session-section .table-section-head { display: block; height: auto; min-height: 0; padding: 0; border: 0; }
 .tool-session-section .table-section-head h2 { margin: 0; color: var(--al-muted-2); font-size: 12px; font-weight: 700; letter-spacing: .09em; }
@@ -173,6 +253,10 @@
 .tool-session-copy small { display: block; margin-top: 2px; color: var(--al-muted-2); font-size: 12px; }
 .tool-session-open { color: var(--al-accent); font-size: 12px; font-weight: 650; white-space: nowrap; }
 
+@media (max-width: 1100px) {
+  .tool-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 @media (max-width: 760px) {
   .tool-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tool-summary-card:nth-child(2) { border-right: 0; }
@@ -186,4 +270,9 @@
   .asset-usage-bar,
   .attributed-asset .asset-usage-bar { display: none; }
   .attributed-asset { grid-template-columns: minmax(0, 1fr) auto auto; }
+}
+
+@media (max-width: 560px) {
+  .tool-summary-grid { grid-template-columns: 1fr; }
+  .tool-drill-drawer { width: 100vw; }
 }
