@@ -120,6 +120,23 @@ export class SqliteStorageService implements StorageService {
         0,
       )
 
+      const coverageItems = this.db.prepare(`
+        SELECT subject_type AS subjectType,
+               subject_id AS subjectId,
+               capability,
+               from_time AS "from",
+               to_time AS "to",
+               status,
+               reason
+        FROM coverage
+        ORDER BY subject_type, subject_id, capability, COALESCE(to_time, from_time) DESC
+        LIMIT 300
+      `).all()
+      const coverageSummary = { complete: 0, partial: 0, unavailable: 0, unknown: 0 }
+      for (const item of coverageItems as Array<{ status: keyof typeof coverageSummary }>) {
+        if (item.status in coverageSummary) coverageSummary[item.status] += 1
+      }
+
       return {
         ok: probe.ok === 1,
         schemaVersion,
@@ -135,6 +152,10 @@ export class SqliteStorageService implements StorageService {
           unknownObservations: {
             total: unknownCount,
             groups: unknownObservations,
+          },
+          coverage: {
+            summary: coverageSummary,
+            items: coverageItems,
           },
         },
       }
