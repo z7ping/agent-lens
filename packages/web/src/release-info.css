@@ -1,0 +1,188 @@
+/* AgentLens 1.0 发行信息组件正式样式：版本、GitHub 与更新日志。 */
+
+.brand-version {
+  flex: 0 0 auto;
+  color: var(--al-muted-2);
+  font-size: 12px;
+  font-weight: 560;
+  letter-spacing: -.01em;
+  white-space: nowrap;
+}
+
+.header-link {
+  display: inline-flex;
+  height: 28px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--al-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 560;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+
+.header-link:hover,
+.header-link:focus-visible {
+  outline: none;
+  background: var(--al-soft);
+  color: var(--al-ink);
+}
+
+.release-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 220;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: color-mix(in srgb, #111827 44%, transparent);
+}
+
+.release-dialog {
+  display: flex;
+  width: min(600px, calc(100vw - 40px));
+  max-height: min(720px, calc(100vh - 40px));
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--al-line);
+  border-radius: 14px;
+  background: var(--al-surface-raised);
+  box-shadow: var(--al-shadow-lg);
+  color: var(--al-ink);
+}
+
+.release-dialog-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--al-line);
+}
+
+.release-dialog-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+}
+
+.release-dialog-header p {
+  margin: 4px 0 0;
+  color: var(--al-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.release-dialog-close {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--al-muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.release-dialog-close:hover,
+.release-dialog-close:focus-visible {
+  outline: none;
+  background: var(--al-soft);
+  color: var(--al-ink);
+}
+
+.release-dialog-content {
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 20px 14px;
+}
+
+.release-section {
+  padding: 12px 0 2px;
+}
+
+.release-section + .release-section {
+  border-top: 1px solid var(--al-line);
+}
+
+.release-section h3 {
+  margin: 0 0 7px;
+  color: var(--al-ink-2);
+  font-size: 13px;
+  font-weight: 680;
+}
+
+.release-section ul {
+  margin: 0;
+  padding-left: 19px;
+  color: var(--al-ink-2);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.release-section li + li { margin-top: 5px; }
+
+.release-empty {
+  margin: 18px 0;
+  color: var(--al-muted);
+  font-size: 13px;
+}
+
+.release-dialog-footer {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--al-line);
+  color: var(--al-muted);
+  font-size: 12px;
+}
+
+.release-dialog-footer > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.release-dialog-footer a {
+  color: var(--al-accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.release-dialog-footer a:hover,
+.release-dialog-footer a:focus-visible { text-decoration: underline; }
+
+@media (max-width: 820px) {
+  .brand-version,
+  .header-link-github { display: none; }
+}
+
+@media (max-width: 560px) {
+  .release-dialog-backdrop { padding: 10px; }
+  .release-dialog {
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px);
+  }
+  .release-dialog-header,
+  .release-dialog-content,
+  .release-dialog-footer { padding-left: 15px; padding-right: 15px; }
+  .release-dialog-footer { align-items: flex-start; flex-direction: column; }
+}

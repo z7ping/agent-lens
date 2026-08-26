@@ -73,7 +73,27 @@ AgentLens-<version>-Setup-x64.exe
 
 真正的升级仍复用现有 Windows Installer 语义：稳定 `appId`、直接覆盖旧安装、保留 `~/.agent-lens/1.0`、启动后数据库 Migration 与 Desktop Provider 重新登记。
 
-## 5. 自动化门禁
+## 5. Web 发行信息入口
+
+1.0 Web 顶部恢复 0.x 已验证过的轻量发行信息结构，但不恢复旧 `/app-info` HTTP Response Shape：
+
+```text
+AgentLens · v<当前版本>
+                    运行状态 · GitHub · 更新日志 · 主题
+```
+
+规则：
+
+- 当前版本直接读取正式 Web workspace 的 `package.json`，不在 React 中维护第二份版本常量；
+- GitHub 固定指向 `z7ping/agent-lens` 仓库；
+- “更新日志”使用轻量弹层，不增加一级导航页面；
+- 当前版本摘要在 Web 构建时直接读取仓库根 `CHANGELOG.md` 当前版本章节，不通过浏览器请求 GitHub，也不恢复 0.x 的 app-info API；
+- 弹层提供“发布记录”和“完整更新日志”两个外部入口；
+- 窄屏隐藏 GitHub 文本入口和品牌旁版本号，但保留“更新日志”和主题入口，避免挤压主导航。
+
+这里展示的版本与日志属于发行静态元数据，不属于 Canonical Observation，也不进入 Projection / SQLite。
+
+## 6. 自动化门禁
 
 `apps/desktop/src/update-check.test.mjs` 至少覆盖：
 
@@ -87,7 +107,9 @@ AgentLens-<version>-Setup-x64.exe
 
 Desktop workspace 的 `npm test` 已纳入根级 `npm test --workspaces --if-present`，因此三平台主 CI 和 Windows Installer 工作流都会执行这组纯逻辑测试。
 
-## 6. 暂不做的能力
+Web 发行信息另外由 `scripts/check-release-info.mjs` 进入 `check:web-presentation`，固定检查版本来源、CHANGELOG 来源、GitHub / 更新日志入口和最小字号约束。
+
+## 7. 暂不做的能力
 
 Alpha 阶段暂不引入 `electron-updater`，也暂不做：
 

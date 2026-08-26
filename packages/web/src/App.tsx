@@ -5,6 +5,7 @@ import type { AgentLensClientModel, ClientSnapshot } from './client/model'
 import { readPinnedAgents, readTheme, writePinnedAgents, writeTheme } from './client/preferences'
 import { AgentsStateOverlay } from './components/AgentsStateOverlay'
 import { BackgroundDataNotice } from './components/BackgroundDataNotice'
+import { BrandVersion, ReleaseInfo } from './components/ReleaseInfo'
 import { ReviewStateOverlay } from './components/ReviewStateOverlay'
 import { ReviewTurnRail } from './components/ReviewTurnRail'
 import { AgentsPage } from './features/AgentsPage'
@@ -202,6 +203,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
           <div className="brand" aria-label="AgentLens">
             <img className="brand-logo" src="/agentlens-icon.svg" alt="" aria-hidden="true"/>
             <span className="brand-name">AgentLens</span>
+            <BrandVersion />
           </div>
           <nav className="app-nav" aria-label="主导航">
             {navigation.map(item => {
@@ -216,6 +218,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
               <span className={`live-dot ${statusHealthy ? 'live-dot-online' : 'live-dot-waiting'}`} />
               <span>{healthLabel}</span>
             </span>
+            <ReleaseInfo />
             <button className="theme-toggle" onClick={toggleTheme} title={theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'} aria-label={theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'}><ThemeGlyph dark={theme === 'dark'}/></button>
           </div>
         </div>
