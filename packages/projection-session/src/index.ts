@@ -1,3 +1,5 @@
+export * from './summary-plugin'
+
 import type {
   AgentInstallation,
   CanonicalObservation,
