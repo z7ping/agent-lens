@@ -19,6 +19,7 @@ on:
       - 'packages/storage-sqlite/src/session-summaries.ts'
       - 'packages/storage-sqlite/src/observation-pagination.ts'
       - 'packages/storage-sqlite/src/repositories.ts'
+      - 'packages/storage-sqlite/src/migrations.ts'
       - 'packages/storage-sqlite/migrations/**'
       - 'packages/projection-review/src/**'
       - 'packages/projection-session/src/**'
