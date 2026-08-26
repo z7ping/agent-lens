@@ -16,7 +16,11 @@ export class EventingObservationService implements ObservationService {
   async commit(input: CommitObservationInput): Promise<ObservationCommitResult> {
     const result = await this.inner.commit(input)
     if (result.status !== 'unchanged') {
-      this.ctx.emit('observation/committed', { observationId: result.observation.id })
+      this.ctx.emit('observation/committed', {
+        observationId: result.observation.id,
+        logicalSessionId: result.observation.logicalSessionId,
+        status: result.status,
+      })
     }
     return result
   }
