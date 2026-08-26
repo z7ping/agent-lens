@@ -185,6 +185,7 @@ export interface SessionSummaryReader {
   query(input: {
     limit: number
     installationId?: AgentInstallationId
+    logicalSessionId?: LogicalSessionId
   }): Promise<{ items: SessionSummaryRecord[]; hasMore: boolean }>
 }
 
