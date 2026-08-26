@@ -31,7 +31,8 @@ jobs:
       - name: Note unsigned prerelease
         if: github.event_name == 'release' && github.event.release.prerelease == true
         shell: pwsh
-        run: Write-Host 'AgentLens prerelease: Windows installer may be published unsigned for alpha/beta/rc dogfood.'
+        run: |
+          Write-Host 'AgentLens prerelease: Windows installer may be published unsigned for alpha/beta/rc dogfood.'
 
       - name: Require Windows release signing credentials
         if: github.event_name == 'release' && github.event.release.prerelease == false
