@@ -24,7 +24,6 @@ claude.write_text(s.replace(old, new, 1))
 doc = Path('docs/1.0/PERFORMANCE-BASELINE.md')
 s = doc.read_text()
 section = r'''
-
 ## Source 历史扫描与实时采集基线（2026-08-26）
 
 这一阶段遵守 ADR-0006：Source 的检查点只用于增量读取与扫描跳过，不改变 Canonical Observation / Evidence 的事实来源。
@@ -75,6 +74,6 @@ DSH Runtime 仍以文件监听为主；文件读取期间若发生再次追加�
 其中 Codex 可因此避免对未变化文件重复读取最多 256KB 的 `session_meta` 预览；Claude Code 可避免在 EOF 上重复创建 JSONL 读取流。语义检查点与历史记录归一化逻辑均未改变。
 '''
 if '## Source 历史扫描与实时采集基线（2026-08-26）' not in s:
-    doc.write_text(s.rstrip() + section + '\n')
+    doc.write_text(s.rstrip() + '\n\n' + section.strip() + '\n')
 
-# trigger finalize
+# trigger finalize v2
