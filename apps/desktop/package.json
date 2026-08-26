@@ -8,6 +8,7 @@
   "author": "7ping <z7ping@outlook.com>",
   "scripts": {
     "start": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ../../scripts/prepare-windows-icon.ps1 && electron .",
+    "test": "node --test src/update-check.test.mjs",
     "dist:win": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ../../scripts/prepare-windows-icon.ps1 && electron-builder --win nsis",
     "dist:win:dir": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ../../scripts/prepare-windows-icon.ps1 && electron-builder --win dir"
   },
