@@ -21,3 +21,5 @@ jobs:
           package-manager-cache: false
       - run: npm ci --no-audit --no-fund
       - run: npm run perf:dsh-history-idle -- --files=2000 --events-per-file=20 --payload-bytes=4096 --samples=8
+
+# trigger
