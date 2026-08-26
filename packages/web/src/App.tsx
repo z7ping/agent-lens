@@ -124,6 +124,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const location = useLocation()
   const navigate = useNavigate()
   const [theme, setTheme] = useState(readTheme)
+  const [agentOverviewSourceId, setAgentOverviewSourceId] = useState('')
   const reviewUrlReadyRef = useRef(false)
   const skipReviewUrlWriteRef = useRef(false)
   const agents = snapshot.facets?.agents ?? []
@@ -200,9 +201,9 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     <div className="app-shell">
       <header className="app-header">
         <div className="app-header-inner">
-          <div className="brand" aria-label="AgentLens">
+          <div className="brand" aria-label="AgentLens 智能体透镜">
             <img className="brand-logo" src="/agentlens-icon.svg" alt="" aria-hidden="true"/>
-            <span className="brand-name">AgentLens</span>
+            <span className="brand-name">AgentLens · 智能体透镜</span>
             <BrandVersion />
           </div>
           <nav className="app-nav" aria-label="主导航">
@@ -233,12 +234,12 @@ function Shell({ model }: { model: AgentLensClientModel }) {
         <Route path="/review/:sessionId" element={<ReviewPage model={model} />} />
         <Route path="/tools" element={<ToolsPage model={model} />} />
         <Route path="/insights" element={<InsightsPage model={model} />} />
-        <Route path="/agents" element={<AgentsPage model={model} />} />
+        <Route path="/agents" element={<AgentsPage model={model} sourceId={agentOverviewSourceId} onSourceIdChange={setAgentOverviewSourceId} />} />
         <Route path="/backup" element={<BackupPage />} />
         <Route path="*" element={<Navigate to="/review" replace />} />
       </Routes>
       {onReview && <ReviewStateOverlay model={model} snapshot={snapshot}/>} 
-      {onAgents && <AgentsStateOverlay model={model} snapshot={snapshot}/>} 
+      {onAgents && <AgentsStateOverlay model={model} snapshot={snapshot} sourceId={agentOverviewSourceId}/>} 
       {onTools && snapshot.usage.hasNewData && <BackgroundDataNotice label="工具分析" hasSseBanner={hasSseBanner} onRefresh={() => model.refreshUsage()}/>} 
       {onAgents && snapshot.agentsHasNewData && <BackgroundDataNotice label="智能体概览" hasSseBanner={hasSseBanner} onRefresh={() => model.refreshFacetsAndAgents()}/>} 
       {showTurnRail && <ReviewTurnRail detail={snapshot.review.detail!}/>} 
