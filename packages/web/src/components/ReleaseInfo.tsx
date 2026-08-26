@@ -5,6 +5,15 @@ import changelogMarkdown from '../../../../CHANGELOG.md?raw'
 const REPOSITORY_URL = 'https://github.com/z7ping/agent-lens'
 const CHANGELOG_URL = `${REPOSITORY_URL}/blob/main/CHANGELOG.md`
 const RELEASES_URL = `${REPOSITORY_URL}/releases`
+const SECTION_LABELS: Record<string, string> = {
+  Added: '新增',
+  Changed: '调整',
+  Fixed: '修复',
+  Security: '安全',
+  Deprecated: '弃用',
+  Removed: '移除',
+  'Known limitations': '已知限制',
+}
 
 interface ChangelogSection {
   title: string
@@ -24,6 +33,11 @@ function stripInlineMarkdown(value: string): string {
     .trim()
 }
 
+function sectionLabel(value: string): string {
+  const title = stripInlineMarkdown(value)
+  return SECTION_LABELS[title] ?? title
+}
+
 export function parseCurrentChangelog(markdown: string, version: string): CurrentChangelog {
   const lines = markdown.split(/\r?\n/)
   const start = lines.findIndex(line => line.startsWith(`## ${version}`))
@@ -37,7 +51,7 @@ export function parseCurrentChangelog(markdown: string, version: string): Curren
     const line = lines[index]!
     if (/^##\s+/.test(line)) break
     if (/^###\s+/.test(line)) {
-      current = { title: stripInlineMarkdown(line.replace(/^###\s+/, '')), items: [] }
+      current = { title: sectionLabel(line.replace(/^###\s+/, '')), items: [] }
       sections.push(current)
       continue
     }

@@ -39,7 +39,9 @@ process.on('unhandledRejection', error => {
   bootStage(`unhandledRejection:${error instanceof Error ? error.stack ?? error.message : String(error)}`)
 })
 
-bootStage('before-main-import')
+bootStage('before-external-links-import')
+await import('./external-links.mjs')
+bootStage('after-external-links-import')
 await import('./main.mjs')
 bootStage('after-main-import')
 await import('./integration.mjs')

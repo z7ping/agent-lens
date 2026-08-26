@@ -32,6 +32,9 @@ if (!releaseInfo.includes("from '../../../../CHANGELOG.md?raw'")) {
 for (const required of ['GitHub', '更新日志', '发布记录', '完整更新日志', 'https://github.com/z7ping/agent-lens']) {
   if (!releaseInfo.includes(required)) throw new Error(`发行信息组件缺少：${required}`)
 }
+for (const label of ['新增', '调整', '修复', '安全', '已知限制']) {
+  if (!releaseInfo.includes(`'${label}'`)) throw new Error(`发行信息组件缺少中文日志分类：${label}`)
+}
 if (!changelog.includes(`## ${packageJson.version}`)) {
   throw new Error(`CHANGELOG.md 缺少当前 Web 版本 ${packageJson.version} 的章节`)
 }
