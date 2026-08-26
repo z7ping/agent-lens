@@ -17,6 +17,7 @@ import { SqliteSessionRelationshipCandidateRepository } from './relationship-can
 import { SqliteRuntimeProfileRepository } from './runtime-profiles'
 import { SqliteSourceRuntimeStatusRepository } from './runtime-status'
 import { SqliteSessionSummaryReader } from './session-summaries'
+import { SqliteToolUsageObservationReader } from './tool-usage-observations'
 
 export interface SqliteStorageOptions {
   path: string
@@ -39,6 +40,7 @@ export class SqliteStorageService implements StorageService {
   readonly assetInventory: SqliteAssetInventoryReader
   readonly sessionSummaries: SqliteSessionSummaryReader
   readonly sessionSummaryProjection: SqliteSessionSummaryReader
+  readonly toolUsageObservations: SqliteToolUsageObservationReader
   readonly runtimeProfiles: SqliteRuntimeProfileRepository
   readonly sourceRuntimeStatus: SqliteSourceRuntimeStatusRepository
   readonly sessionRelationshipCandidates: SqliteSessionRelationshipCandidateRepository
@@ -66,6 +68,7 @@ export class SqliteStorageService implements StorageService {
     const sessionSummaries = new SqliteSessionSummaryReader(this.executor)
     this.sessionSummaries = sessionSummaries
     this.sessionSummaryProjection = sessionSummaries
+    this.toolUsageObservations = new SqliteToolUsageObservationReader(this.executor)
     this.runtimeProfiles = new SqliteRuntimeProfileRepository(this.executor)
     this.sourceRuntimeStatus = new SqliteSourceRuntimeStatusRepository(this.executor)
     this.sessionRelationshipCandidates = new SqliteSessionRelationshipCandidateRepository(this.executor)
