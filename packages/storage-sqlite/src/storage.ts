@@ -38,6 +38,7 @@ export class SqliteStorageService implements StorageService {
   readonly checkpoints: CheckpointRepository
   readonly assetInventory: SqliteAssetInventoryReader
   readonly sessionSummaries: SqliteSessionSummaryReader
+  readonly sessionSummaryProjection: SqliteSessionSummaryReader
   readonly runtimeProfiles: SqliteRuntimeProfileRepository
   readonly sourceRuntimeStatus: SqliteSourceRuntimeStatusRepository
   readonly sessionRelationshipCandidates: SqliteSessionRelationshipCandidateRepository
@@ -62,7 +63,9 @@ export class SqliteStorageService implements StorageService {
     }
     this.checkpoints = new SqliteCheckpointRepository(this.executor)
     this.assetInventory = new SqliteAssetInventoryReader(this.executor)
-    this.sessionSummaries = new SqliteSessionSummaryReader(this.executor)
+    const sessionSummaries = new SqliteSessionSummaryReader(this.executor)
+    this.sessionSummaries = sessionSummaries
+    this.sessionSummaryProjection = sessionSummaries
     this.runtimeProfiles = new SqliteRuntimeProfileRepository(this.executor)
     this.sourceRuntimeStatus = new SqliteSourceRuntimeStatusRepository(this.executor)
     this.sessionRelationshipCandidates = new SqliteSessionRelationshipCandidateRepository(this.executor)
