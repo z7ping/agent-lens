@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -26,10 +26,19 @@ jobs:
           package-manager-cache: false
 
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify release tag matches package version
+        run: node scripts/check-release-version.mjs
 
       - name: Verify Web presentation convergence
         run: npm run check:web-presentation
+
+      - name: Verify brand assets
+        run: npm run check:brand-assets
+
+      - name: Verify desktop shell syntax
+        run: npm run check:desktop-shell
 
       - name: Typecheck
         run: npm run typecheck
@@ -61,13 +70,24 @@ jobs:
           package-manager-cache: false
 
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Verify release tag matches package version
         run: node scripts/check-release-version.mjs
 
+      - name: Verify release is prerelease
+        shell: bash
+        run: |
+          node -e "const p=require('./package.json'); if (!/-/.test(p.version)) { console.error('alpha workflow requires a prerelease version'); process.exit(1) }"
+
       - name: Verify Web presentation convergence
         run: npm run check:web-presentation
+
+      - name: Verify brand assets
+        run: npm run check:brand-assets
+
+      - name: Verify desktop shell syntax
+        run: npm run check:desktop-shell
 
       - name: Verify source
         run: |
@@ -102,8 +122,8 @@ jobs:
         shell: bash
         run: gh release upload "$GITHUB_REF_NAME" release/*.tgz release/SHA256SUMS.txt release/sbom.cdx.json --clobber
 
-      - name: Publish exact tarball to npm
+      - name: Publish exact tarball to npm alpha tag
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         shell: bash
-        run: npm publish "$(ls release/*.tgz)" --access public --provenance
+        run: npm publish "$(ls release/*.tgz)" --tag alpha --access public --provenance
