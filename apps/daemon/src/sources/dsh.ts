@@ -317,6 +317,8 @@ async function emitChangedSession(
   emitter: SourceRecordEmitter,
 ): Promise<void> {
   if (ctx.abortSignal.aborted || !isSessionFile(path) || !await exists(path)) return
+  const before = await stat(path).catch(() => null)
+  if (!before) return
   let session: ParsedSession | null = null
   try { session = await readSession(path) } catch { return }
   if (!session) return
@@ -331,8 +333,10 @@ async function emitChangedSession(
     after = seq
     await ctx.checkpoint.set(key, after)
   }
-  const meta = await stat(path).catch(() => null)
-  if (meta) await ctx.checkpoint.set(fileCheckpointKey(path), { path, size: meta.size, mtimeMs: meta.mtimeMs })
+  const afterMeta = await stat(path).catch(() => null)
+  if (afterMeta && afterMeta.size === before.size && afterMeta.mtimeMs === before.mtimeMs) {
+    await ctx.checkpoint.set(fileCheckpointKey(path), { path, size: before.size, mtimeMs: before.mtimeMs })
+  }
 }
 
 export async function startDshRuntimeCapture(
