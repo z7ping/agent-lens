@@ -76,3 +76,5 @@ DSH Runtime 仍以文件监听为主；文件读取期间若发生再次追加�
 '''
 if '## Source 历史扫描与实时采集基线（2026-08-26）' not in s:
     doc.write_text(s.rstrip() + section + '\n')
+
+# trigger finalize
