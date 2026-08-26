@@ -20,6 +20,6 @@ jobs:
           node-version: 22.23.0
           package-manager-cache: false
       - run: npm ci --no-audit --no-fund
-      - run: npx tsx scripts/performance/daemon-startup-benchmark.ts --sessions=100 --observations-per-session=20 --timeout-ms=30000
+      - run: npx tsx scripts/performance/daemon-startup-benchmark.ts --sessions=1000 --observations-per-session=100 --timeout-ms=30000
 
-# trigger smoke v2
+# trigger s
