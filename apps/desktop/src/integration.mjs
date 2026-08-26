@@ -156,6 +156,7 @@ async function startDesktopUpdateChecks() {
 }
 
 app.whenReady().then(async () => {
+  if (process.env.AGENT_LENS_DESKTOP_SMOKE === '1') return
   await refreshDesktopIntegration()
   await startDesktopUpdateChecks()
 }).catch(() => undefined)

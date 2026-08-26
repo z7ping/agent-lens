@@ -23,6 +23,7 @@ const DAEMON_BUSY_PROBE_ATTEMPTS = 3
 const DAEMON_PORT_TIMEOUT_MS = 180
 const port = process.env.AGENT_LENS_PORT ? Number(process.env.AGENT_LENS_PORT) : DEFAULT_PORT
 const daemonUrl = `http://127.0.0.1:${port}`
+const desktopSmokeMode = process.env.AGENT_LENS_DESKTOP_SMOKE === '1'
 const loginAutostart = createLoginAutostartController({ app })
 const startupPage = `data:text/html;charset=UTF-8,${encodeURIComponent(`<!doctype html>
 <html lang="zh-CN">
@@ -55,6 +56,7 @@ let quitAfterDaemonStop = false
 let quitStopPromise = null
 let daemonOwnership = 'none'
 let externalDaemonOwner = null
+let pendingShowRequest = false
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
@@ -336,7 +338,7 @@ async function restartDaemon() {
 }
 
 function canManageLoginAutostart() {
-  return loginAutostart.isSupported()
+  return !desktopSmokeMode && loginAutostart.isSupported()
 }
 
 function isLoginAutostartEnabled() {
@@ -368,6 +370,7 @@ async function ensureInitialLoginAutostart() {
 }
 
 function showWindow() {
+  pendingShowRequest = true
   if (!mainWindow) return
   if (mainWindow.isMinimized()) mainWindow.restore()
   mainWindow.show()
@@ -375,7 +378,7 @@ function showWindow() {
 }
 
 function createWindow() {
-  const startHidden = loginAutostart.shouldStartHidden(process.argv)
+  const startHidden = loginAutostart.shouldStartHidden(process.argv) && !pendingShowRequest
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 840,
@@ -448,7 +451,9 @@ const singleInstance = app.requestSingleInstanceLock()
 if (!singleInstance) {
   app.quit()
 } else {
-  app.on('second-instance', showWindow)
+  app.on('second-instance', (_event, argv) => {
+    if (!argv.includes('--hidden')) showWindow()
+  })
   app.on('before-quit', event => {
     if (quitAfterDaemonStop) return
     event.preventDefault()
@@ -464,39 +469,12 @@ if (!singleInstance) {
   })
   app.on('window-all-closed', event => event?.preventDefault?.())
 
-  // Runtime ownership is independent from Chromium/UI readiness. Start or reuse the
-  // single Daemon as soon as the process owns the desktop instance lock, so a slow
-  // or unavailable GUI session cannot leave AgentLens silently doing nothing.
-  let runtimeReady = false
-  let startupError = null
-  try {
-    await ensureDaemonLog()
-    writeDaemonLog('\n--- AgentLens desktop start ' + new Date().toISOString() + ' packaged=' + app.isPackaged + ' pid=' + process.pid + ' ---')
-    await startDaemon()
-    runtimeReady = await waitForDaemon()
-    if (!runtimeReady) {
-      throw new Error('AgentLens 后台服务未能正常启动。请查看日志：' + join(app.getPath('logs'), 'daemon.log'))
-    }
-    markDaemonStable()
-  } catch (error) {
-    startupError = error
-    const detail = error instanceof Error ? error.stack ?? error.message : String(error)
-    writeDaemonLog('--- desktop runtime startup failed: ' + detail + ' ---')
-  }
+  // 动态导入的主模块必须立即完成求值。这里不能顶层 await app.whenReady()：
+  // Electron 要等入口模块返回事件循环后才会发出 ready，否则打包应用会无窗口卡住。
+  void (async () => {
+    await app.whenReady()
+    if (process.platform === 'win32') app.setAppUserModelId('dev.z7ping.agentlens')
 
-  await app.whenReady()
-  if (process.platform === 'win32') app.setAppUserModelId('dev.z7ping.agentlens')
-
-  if (startupError || !runtimeReady) {
-    const detail = startupError instanceof Error ? startupError.stack ?? startupError.message : String(startupError ?? '运行时未就绪')
-    await dialog.showMessageBox({
-      type: 'error',
-      title: 'AgentLens 启动失败',
-      message: 'AgentLens 桌面端未能正常启动。',
-      detail: detail + '\n\n日志：' + join(app.getPath('logs'), 'daemon.log'),
-    })
-    app.quit()
-  } else {
     createWindow()
 
     try {
@@ -512,6 +490,36 @@ if (!singleInstance) {
       writeDaemonLog('--- initial login autostart failed: ' + (error instanceof Error ? error.message : String(error)) + ' ---')
     }
 
-    await mainWindow.loadURL(daemonUrl)
-  }
+    try {
+      await ensureDaemonLog()
+      writeDaemonLog('\n--- AgentLens desktop start ' + new Date().toISOString() + ' packaged=' + app.isPackaged + ' pid=' + process.pid + ' ---')
+      await startDaemon()
+      if (!await waitForDaemon()) {
+        throw new Error('AgentLens 后台服务未能正常启动。请查看日志：' + join(app.getPath('logs'), 'daemon.log'))
+      }
+      markDaemonStable()
+      await mainWindow.loadURL(daemonUrl)
+    } catch (error) {
+      const detail = error instanceof Error ? error.stack ?? error.message : String(error)
+      writeDaemonLog('--- desktop runtime startup failed: ' + detail + ' ---')
+      await dialog.showMessageBox({
+        type: 'error',
+        title: 'AgentLens 启动失败',
+        message: 'AgentLens 桌面端未能正常启动。',
+        detail: detail + '\n\n日志：' + join(app.getPath('logs'), 'daemon.log'),
+      })
+      app.quit()
+    }
+  })().catch(async error => {
+    const detail = error instanceof Error ? error.stack ?? error.message : String(error)
+    writeDaemonLog('--- desktop shell startup failed: ' + detail + ' ---')
+    await app.whenReady()
+    await dialog.showMessageBox({
+      type: 'error',
+      title: 'AgentLens 启动失败',
+      message: 'AgentLens 桌面窗口未能正常创建。',
+      detail,
+    })
+    app.quit()
+  })
 }

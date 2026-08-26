@@ -4,49 +4,47 @@
 
 <h1 align="center">AgentLens</h1>
 
-<p align="center"><strong>Local observability and trajectory replay for AI coding agents.</strong></p>
+<p align="center"><strong>本地 AI 编码 Agent 的观测与执行轨迹查看器。</strong></p>
 
 <p align="center">
-  <a href="README.md"><strong>English</strong></a> ·
-  <a href="README.zh-CN.md">简体中文</a>
+  <a href="README.md"><strong>简体中文</strong></a> ·
+  <a href="README.en.md">English</a>
 </p>
 
-> **1.0 alpha:** AgentLens 1.0 is a clean rebuild around Canonical Observation + Evidence. The 0.x runtime is reference material only and is not part of the 1.0 execution path.
+> **1.0 alpha：** AgentLens 1.0 是一次 Clean Rebuild，以 Canonical Observation + Evidence 为核心。0.x 只保留为实现参考和回归材料，不再进入 1.0 运行时。
 
-## What AgentLens does
+## AgentLens 解决什么问题
 
-AgentLens observes what local AI coding agents expose and turns those native records into one evidence-backed model.
+不同 AI 编码工具的数据散落在 Hook、JSONL、SQLite、配置文件中。AgentLens 把这些**可观察数据**统一成一套有证据来源的执行模型，用来回答：
 
-It answers:
+- 一次任务到底发生了什么；
+- 这条事实来自哪个原生来源；
+- Runtime Hook 和历史日志是不是同一件事；
+- 哪些 Tool 真正调用过、哪些失败了；
+- 哪些 Skill / MCP 已安装或配置，哪些又能够被可靠归因为“实际使用过”。
 
-- what happened during a task/session;
-- which native source proves it happened;
-- how history and runtime observations reconcile;
-- which tools were called and which calls failed;
-- which Skills/MCP assets are installed or configured, and which can be defensibly attributed to actual usage.
+AgentLens 不负责执行 Agent，也不会声称可以读取模型未暴露的隐藏思维链。
 
-AgentLens does **not** execute the agent and does not claim access to hidden chain-of-thought.
-
-## 1.0 source support
+## 1.0 已支持的 Source
 
 | Source | History | Runtime | Assets |
 | --- | --- | --- | --- |
-| Codex | Native session JSONL | Runtime Hooks + durable inbox | Skills, MCP, Plugins, Hooks, Rules |
-| Claude Code | Project/session JSONL | Runtime Hooks + durable inbox | Skills, MCP, Plugins, Hooks, Commands |
-| Pi | Native Session JSONL | Continuous native JSONL tail | Skills, Extensions, MCP, Memory-related assets |
-| Hermes | Native SQLite session history | Native SQLite tail + optional Runtime Hook | Skills, MCP, Plugins, Memory-related assets |
-| OpenCode | Native session/runtime data | Incremental native runtime collection | Assets recognized through the 1.0 Source Contract |
-| DeepSeek Harness | Profile Session JSONL / JSONL.ZST with Turn, Step, Tool, Usage, Request Header, and session lineage | Watches changed session files and tails by event sequence | Profile Bundles, external Plugins, profile configuration overrides |
+| Codex | 原生 Session JSONL | Runtime Hook + Durable Inbox | Skill、MCP、Plugin、Hook、Rule |
+| Claude Code | Project/Session JSONL | Runtime Hook + Durable Inbox | Skill、MCP、Plugin、Hook、Command |
+| Pi | 原生 Session JSONL | 持续尾读原生 JSONL | Skill、Extension、MCP、Memory 类资产 |
+| Hermes | 原生 SQLite 会话历史 | SQLite 原生尾读 + 可选 Runtime Hook | Skill、MCP、Plugin、Memory 等 |
+| OpenCode | 原生会话/运行数据 | 原生运行数据增量采集 | 按 1.0 Source Contract 发现可识别资产 |
+| DeepSeek Harness | Profile Session JSONL / JSONL.ZST，保留 Turn、Step、Tool、Usage、Request Header 与会话血统 | 监听发生变化的会话文件并按事件序号增量采集 | Profile Bundle、树外 Plugin、Profile 配置覆盖 |
 
-DeepSeek Harness maps `SessionHeader.cwd` to an AgentLens Workspace and preserves `parentSessionId` as native lineage evidence. AgentLens does not infer `subagent` merely because a parent session exists.
+DeepSeek Harness 的 `SessionHeader.cwd` 会映射为 AgentLens Workspace；`parentSessionId` 会作为原生父会话事实进入 `SourceSession.nativeParentSessionId`。AgentLens 保留这条血统，但不会仅凭“存在父会话”就把关系强行判定为子智能体。
 
-DSH Bundle/Plugin discovery follows the profile's own `package.json`, including `dsh.profile.bundles` and dependency declarations. `cordis.patch.yml` is recorded as a profile configuration override. Compressed reasoning chunks are not expanded, and hidden reasoning, permission events, or asset-usage attribution are not inferred without reliable native evidence.
+DSH Profile 的 Bundle / Plugin 发现依据 Profile 自身 `package.json` 的 `dsh.profile.bundles` 与依赖声明；`cordis.patch.yml` 作为 Profile 配置覆盖记录。当前不会展开压缩 reasoning chunk，也不会在缺乏可靠事实时推断隐藏思维、权限事件或资产调用归因。
 
-## Quick start
+## 快速开始
 
-Requires Node.js **22.23+**.
+要求 Node.js **22.23+**。
 
-### npm
+### npm 安装
 
 ```bash
 npm install -g @z7ping/agent-lens
@@ -54,22 +52,22 @@ npm install -g @z7ping/agent-lens
 agent-lens setup
 ```
 
-`agent-lens setup` performs one-time initialization: it validates Node.js and the data directory, detects supported local Sources, and installs or repairs only AgentLens-owned Hooks for Sources that require Hooks. Native history/runtime-tail Sources are not modified just to integrate with AgentLens.
+`agent-lens setup` 会完成一次性初始化：检查 Node.js 与数据目录，识别本机可用 Source，并只为需要 Hook 的来源补齐 AgentLens 自己的 Hook。原生 History / Runtime Tail 来源不会为了接入 AgentLens 强行修改第三方工具配置。
 
-After setup, choose foreground or managed background operation:
+初始化完成后可以选择前台或后台运行：
 
 ```bash
-# Foreground, useful for debugging
+# 前台运行，适合调试
 agent-lens start
 
-# Managed background runtime
+# 后台常驻，适合长期使用
 agent-lens service start
 
-# Optional: start automatically after user login
+# 可选：登录系统后自动运行
 agent-lens autostart enable
 ```
 
-Check state with:
+查看状态：
 
 ```bash
 agent-lens status
@@ -78,25 +76,25 @@ agent-lens autostart status
 agent-lens doctor
 ```
 
-`setup` only initializes integration. It does not automatically enable background operation or login autostart. `service` controls whether AgentLens is running in the background now; `autostart` controls whether it starts after the next user login.
+`setup` 只负责初始化，不会自动替用户开启后台常驻或登录自启。`service` 负责“现在是否后台运行”，`autostart` 只负责“下次登录是否自动启动”，两者互相独立。
 
-The npm distribution maps background lifecycle directly to native user-level operating-system facilities:
+npm 后台生命周期直接使用操作系统原生的用户级托管能力：
 
-- Windows: current-user Task Scheduler;
-- Linux: `systemd --user`;
-- macOS: user-level `launchd`.
+- Windows：当前用户计划任务；
+- Linux：`systemd --user`；
+- macOS：用户级 `launchd`。
 
-AgentLens does not restore the 0.x PID/service-manager architecture and does not create a second runtime or database for managed mode.
+AgentLens 不恢复 0.x 的 PID / Service Manager 架构，也不会因为后台方式不同创建第二套 Runtime 或数据库。
 
-Open:
+打开：
 
 ```text
 http://127.0.0.1:56789/
 ```
 
-`agent-lens start` intentionally runs the daemon in the foreground. It probes the default AgentLens endpoint first and reuses a compatible existing daemon instead of starting a second one. npm and Windows Desktop may coexist while sharing the same default data root and runtime.
+`agent-lens start` 设计为前台运行；启动前会先探测已有 AgentLens Daemon，兼容时直接复用，不启动第二套。npm 与 Windows Desktop 可以同时安装，但共享同一个默认数据根与默认运行时。
 
-### Source checkout
+### 源码运行
 
 ```bash
 npm install
@@ -106,7 +104,7 @@ npm run build:web
 npm run dev
 ```
 
-For the CLI from a checkout:
+源码环境使用 CLI：
 
 ```bash
 npm run cli -- setup
@@ -114,7 +112,7 @@ npm run cli -- doctor
 npm run cli -- start
 ```
 
-Before testing `service` / `autostart` from a source checkout, build the formal distribution entrypoint so a temporary `tsx` command is never registered with the operating system:
+需要测试 `service` / `autostart` 时，先生成正式发行入口，避免把临时 `tsx` 开发命令注册进系统启动项：
 
 ```bash
 npm run build:dist
@@ -122,73 +120,147 @@ npm run cli -- service status
 npm run cli -- autostart status
 ```
 
-## Windows desktop
+## Windows 桌面版
 
-The Windows release workflow builds an x64 NSIS installer:
+Windows Release Workflow 会生成 x64 NSIS 安装包：
 
 ```text
 AgentLens-<version>-Setup-x64.exe
 ```
 
-The Electron application is only a desktop shell. It owns:
+### 本地构建 Windows 安装包
 
-- single-instance behavior;
-- BrowserWindow;
-- system tray;
-- starting/reusing/stopping only the daemon it owns;
-- Windows login autostart;
-- log/data-folder access.
+要求：
 
-On startup Desktop probes `127.0.0.1:56789`: it reuses a compatible daemon already owned by npm/service, and starts its own daemon only when no compatible runtime exists. Exiting Desktop does not kill an externally managed daemon.
+- Windows x64；
+- Node.js **>= 22.23.0**；
+- PowerShell 7（`pwsh`）；
+- 已安装 npm 依赖。
 
-The daemon and HTTP/SSE architecture remain the same as the CLI/npm distribution.
+在仓库根目录执行：
 
-Uninstalling the desktop application does not automatically delete `~/.agent-lens/1.0` observation data.
+```powershell
+node -v
+npm install
+npm run desktop:win
+```
+
+`npm run desktop:win` 会依次执行：
+
+```text
+Web 表现层收敛检查
+-> Electron 主进程语法检查
+-> 构建正式 dist
+-> 准备桌面运行时
+-> electron-builder
+-> NSIS x64 安装包
+```
+
+生成的安装包位于：
+
+```text
+release/windows/
+```
+
+例如当前版本会生成类似：
+
+```text
+AgentLens-1.0.0-alpha.0-Setup-x64.exe
+```
+
+NSIS 安装器允许选择安装目录，并创建桌面快捷方式和开始菜单快捷方式。卸载 AgentLens 不会自动删除用户观测数据。
+
+### 使用 GitHub Actions 构建
+
+也可以不在本机准备 Windows 打包环境，直接在 GitHub 仓库中手动执行：
+
+```text
+Actions
+-> Windows Installer
+-> Run workflow
+```
+
+工作流会在 `windows-latest` 上完成依赖安装、表现层检查、桌面主进程检查、类型检查、测试和安装包构建，并上传：
+
+```text
+AgentLens-<version>-Setup-x64.exe
+SHA256SUMS.txt
+```
+
+手动执行时可以从该次 Actions 运行的 Artifacts 下载；正式发布 GitHub Release 时，安装包和校验文件会自动附加到 Release。
+
+### Windows 代码签名
+
+开发版和 alpha 阶段没有代码签名证书也可以正常构建安装包，但 Windows 可能显示“未知发布者”或 SmartScreen 提示。
+
+正式发布时可在 GitHub Secrets 中配置：
+
+```text
+WINDOWS_CSC_LINK
+WINDOWS_CSC_KEY_PASSWORD
+```
+
+Windows Installer 工作流已经预留这两个签名变量，不需要为了签名再维护另一套打包流程。
+
+Electron 只承担桌面壳职责：
+
+- 单实例；
+- BrowserWindow；
+- 系统托盘；
+- 启动 / 复用 / 停止自己拥有的 Daemon；
+- Windows 登录后自动运行；
+- 日志和数据目录入口。
+
+桌面端启动时先检查 `127.0.0.1:56789`：已有兼容 npm / service Daemon 时直接复用；只有没有兼容运行时时才创建自己的 Daemon。退出桌面应用时不会误杀外部方式管理的 Daemon。
+
+AgentLens Core、Source、SQLite、HTTP/SSE 不搬进 Electron 私有实现中，桌面版和 CLI/npm 版仍然使用同一个 Daemon。
+
+卸载桌面应用不会自动删除 `~/.agent-lens/1.0` 中的观测数据。
 
 ## Web 1.0
 
-The Web UI is itself a Cordis Surface Plugin: `@agent-lens/web`. It mounts the React SPA through `ctx.http.mountStatic()`, so the HTTP/API surface can run without the Web plugin. Web consumes only `@agent-lens/protocol` DTOs and does not directly depend on Core, SQLite, or Source implementations.
+Web 本身是独立的 Cordis Surface Plugin：`@agent-lens/web`。它通过 `ctx.http.mountStatic()` 挂载 React SPA；不开 Web 时 HTTP/API 仍可独立运行。Web 只消费 `@agent-lens/protocol` DTO，不直接依赖 Core、SQLite 或 Source 实现。
 
-Current stack: React 19 + Vite + Tailwind CSS. Product state lives outside React in `AgentLensClientModel`; React subscribes with `useSyncExternalStore`, keeping live event processing independent from component-local state.
+当前技术栈：React 19 + Vite + Tailwind CSS。业务状态放在 React 外的 `AgentLensClientModel` 中，React 通过 `useSyncExternalStore` 订阅，因此实时数据流不依赖组件级状态拼接。
 
-The shell uses a two-level top layout: primary product navigation, then Agent shortcuts plus page-specific filters. Agent shortcuts are initialized from detected local agents and can be pinned by the user. Pinning only changes UI visibility; it does not enable or disable Sources.
+界面采用两级顶部结构：一级是产品导航，二级是 Agent 快捷入口与当前页面筛选。Agent 快捷入口会根据本机扫描结果自动初始化，用户也可以自行 Pin 常用 Agent；是否 Pin 只影响界面展示，不控制 Source 是否启用。
 
-### Task Review
+### 任务复盘
 
-Task Review uses a `Session List | Session Detail` split layout and treats Session / Interaction as the main reading structure:
+采用 `Session List | Session Detail` 左右布局，以 Session / Interaction 为主要阅读结构：
 
-- user and Agent messages are rendered conversationally;
-- consecutive tool calls are grouped as an execution process with results, errors, and duration;
-- permission, subagent, context, model, and lifecycle events remain interleaved in the execution stream;
-- Codex, Claude Code, Pi, Hermes, OpenCode, and DeepSeek Harness retain source-specific native facts where they matter;
-- Pi and DeepSeek Harness can preserve native parent/session relationships;
-- Evidence and Raw Payload live in a temporary Inspector instead of dominating the main reading flow.
+- 用户与 Agent 消息以对话形式展示；
+- 连续 Tool Call 归为执行过程，可展开查看结果、错误与耗时；
+- Permission、Subagent、Context、Model 等生命周期事件穿插在真实执行流中；
+- Codex、Claude Code、Pi、Hermes、OpenCode、DeepSeek Harness 保留各自有意义的原生事实；
+- Pi 与 DeepSeek Harness 可保留原生 parent/session relationship；
+- Evidence 与 Raw Payload 放在临时 Inspector 中，默认不打断主阅读流。
 
-Filtering is by Agent, project, time range, error state, and search text. Users no longer need to type installationId or logicalSessionId manually.
+支持按 Agent、项目、时间、错误状态和关键字筛选，不再要求用户手工输入 installationId / logicalSessionId。
 
-### Tool Analysis
+### 工具分析
 
-Tool Analysis derives factual usage metrics from Canonical Observations: call count, affected Sessions, success/failure, total duration, and average duration, with Agent/project/time filters.
+基于 Canonical Observation 统计真实 Tool 使用情况，包括调用次数、涉及 Session、成功/失败、总耗时与平均耗时，并支持 Agent、项目和时间范围筛选。
 
-The 1.0 baseline favors evidence-backed facts. The old 0.x value scores, risk scores, and workflow candidates are not copied back without a redesigned analyzer contract.
+当前优先展示可证实事实；0.x 中的价值分、风险分、工作流候选等启发式分析不会未经重新设计直接搬回 1.0。
 
-### Agent Overview
+### Agent 概览
 
-Agent Overview exposes:
+展示本机 Agent 的：
 
-- detected state and installation metadata;
-- Source-declared observation capabilities;
-- statically discovered Skills, MCP, Plugins, Extensions, Hooks, and related assets;
-- asset binding path/version plus installed/configured/enabled/discoverable state observations;
-- Skill/MCP usage that can be defensibly attributed from Evidence.
+- 检测状态与 Installation 信息；
+- Source 声明的可观测 Capability；
+- 静态扫描得到的 Skill / MCP / Plugin / Extension / Hook 等能力资产；
+- Asset Binding 路径、版本及 installed/configured/enabled/discoverable 等状态；
+- 能够由 Evidence 可靠归因的 Skill / MCP 实际使用记录。
 
-“Installed/configured” and “actually used” remain separate concepts in both the model and the UI.
+“装了 / 配了”和“真正用过”在模型与界面中保持分离。
 
-### Live updates
+### 实时更新
 
-Web receives Observation, Source Detection, and Asset changes over SSE. The SSE connection is established before the initial snapshot requests so startup scans do not fall into an API-to-SSE blind window.
+Web 使用 SSE 接收 Observation、Source Detection 与 Asset 变化。SSE 会在首屏 Snapshot 请求前建立，避免启动扫描期间出现 API → SSE 的事件盲区。
 
-`AgentLensClientModel` batches high-frequency updates over short windows for Task Review, usage analytics, and Agent inventory separately. React renders stable snapshots rather than replacing the full page DOM on every event. The client closes the SSE connection when the page exits.
+`AgentLensClientModel` 对高频事件做短窗口合批：任务复盘、工具统计和 Agent 资产分别按各自节奏更新；React 只消费稳定 Snapshot，不通过整页 DOM 替换制造“自动刷新页面”的体验。页面退出时主动关闭 SSE。
 
 ## CLI
 
@@ -204,14 +276,14 @@ agent-lens hook install [codex|claude|all]
 agent-lens hook uninstall [codex|claude|all]
 ```
 
-`setup` is the recommended first-run entrypoint. Hook installation remains idempotent: AgentLens removes/replaces only its own handlers and preserves third-party handlers in the same configuration.
+`setup` 是推荐的首次初始化入口。Hook 安装是幂等的，只修改 AgentLens 自己的 handler；同一个 Hook group 中的第三方 handler 会被保留。Codex trust hash 也只维护 AgentLens 对应条目。
 
-Managed background lifecycle is owned by native user-level OS facilities rather than AgentLens PID files. `service restart` also refuses to seize a runtime currently owned by Windows Desktop or a foreground CLI process.
+后台生命周期由操作系统原生用户级托管器负责，AgentLens 自身不维护 PID 文件。`service restart` 也不会强行接管由 Windows 客户端或前台 CLI 所有的现有运行时。
 
-## Architecture in one picture
+## 一张图理解 1.0
 
 ```text
-Native source
+Native Source
   -> SourceRecord
   -> SourceDefinition.normalize()
   -> ObservationCandidate + EvidenceCandidate
@@ -225,22 +297,21 @@ Native source
   -> @agent-lens/web / Desktop
 ```
 
-Cordis is the sole plugin runtime and is pinned to `@deepseek-ai/cordis@4.0.1`. AgentLens Core remains framework-independent; runtime extension entrypoints such as Source, Storage, and Surface are Cordis-native plugins. `packages/runtime-cordis` owns shared Context typing, metadata helpers, and compatibility tests rather than wrapping runtime extensions behind a second AgentLens plugin runtime.
+Cordis 是唯一 Plugin Runtime，固定依赖 `@deepseek-ai/cordis@4.0.1`。AgentLens Core 保持框架无关；Source / Storage / Surface 等运行时扩展入口直接采用 Cordis-native Plugin，`packages/runtime-cordis` 负责共享 Context typing、元数据和兼容性测试，不再额外包一层通用 AgentLens Plugin Runtime。
 
-See:
+详细文档：
 
-- [Architecture](ARCHITECTURE.md)
+- [1.0 架构](ARCHITECTURE.md)
 - [Core Contract](docs/1.0/CORE-CONTRACT.md)
-- [ADR-0001: Clean Rebuild and Cordis Runtime Ownership](docs/adr/0001-agentlens-1.0-clean-rebuild-and-cordis-runtime.md)
-- [ADR-0002: Web Plugin and Client State Model](docs/adr/0002-web-plugin-and-client-state-model.md)
-- [ADR-0004: Dual distribution, single runtime, and lifecycle ownership](docs/adr/0004-dual-distribution-single-runtime-lifecycle.md)
-- [ADR-0005: Runtime Profile, Session Relationships, and Asset Topology](docs/adr/0005-runtime-profile-session-relationship-and-asset-topology.md)
+- [ADR-0001：Clean Rebuild 与 Cordis Runtime](docs/adr/0001-agentlens-1.0-clean-rebuild-and-cordis-runtime.md)
+- [ADR-0002：Web Plugin 与 Client State Model](docs/adr/0002-web-plugin-and-client-state-model.md)
+- [ADR-0004：双发行、单运行时与生命周期所有权](docs/adr/0004-dual-distribution-single-runtime-lifecycle.md)
 
-## Evidence model
+## Evidence 是一等公民
 
-A Canonical Observation states what AgentLens believes happened. Evidence states why.
+Canonical Observation 表达“AgentLens 认为发生了什么”，Evidence 表达“为什么这么认为”。
 
-Evidence preserves capture method and derivation, for example:
+例如：
 
 ```text
 runtime-hook + observed
@@ -248,22 +319,29 @@ native-log  + reported
 static-scan + observed
 ```
 
-If one native tool call is seen by both a runtime Hook and history JSONL, AgentLens should produce one canonical `tool.call` with two Evidence records rather than two facts.
+同一个 Tool Call 如果既被 Runtime Hook 看见、又出现在历史 JSONL 中，正确结果应该是：
 
-## Assets are not usage
+```text
+1 个 Canonical tool.call
++ 2 条 Evidence
+```
 
-Static discovery can prove that a Skill/MCP/Plugin/Hook is installed or configured. It does not prove it ran.
+而不是两条重复事实。
 
-Asset usage is emitted only when attribution is defensible. Current examples include:
+## “装了”不等于“用过”
 
-- `mcp__server__tool` -> MCP server usage;
-- explicit Claude `Skill` tool input -> Skill usage.
+静态扫描只能证明 Skill/MCP/Plugin/Hook 已安装、已配置或可发现，不能证明实际调用。
 
-Generic Bash/Read/Write calls are not forced into an Asset category.
+当前 Asset Usage 只在可以可靠归因时生成，例如：
 
-## Local data
+- `mcp__server__tool` -> MCP server；
+- Claude `Skill` Tool 明确传入 skill 名称 -> Skill usage。
 
-Default 1.0 data root:
+普通 Bash / Read / Write 不会因为机器上装了某个 Skill 就被强行归进去。
+
+## 本地数据
+
+默认数据目录：
 
 ```text
 ~/.agent-lens/1.0/
@@ -273,13 +351,11 @@ Default 1.0 data root:
     └── claude/
 ```
 
-The HTTP server binds to `127.0.0.1` only by design. Default port: `56789`.
+HTTP 只监听 `127.0.0.1`，默认端口 `56789`。
 
-Runtime Hook processes sanitize sensitive-key fields before writing durable inbox records. The daemon owns canonical persistence.
+Runtime Hook 进程只负责轻量脱敏和原子写 Durable Inbox；真正的 Canonical Persist 由 Daemon 完成。
 
-## Development
-
-Useful commands:
+## 开发命令
 
 ```bash
 npm install
@@ -290,7 +366,7 @@ npm pack --dry-run
 npm run desktop:win        # Windows runner
 ```
 
-Repository layout:
+目录：
 
 ```text
 apps/
@@ -304,21 +380,21 @@ packages/
   surface-http/ web/ hook-manager/
 ```
 
-DeepSeek Harness Source currently lives in `apps/daemon/src/sources/dsh.ts` while its behavior and lockfile changes settle. It will only be extracted into `packages/source-dsh` when that can happen without duplicating a second implementation.
+DeepSeek Harness Source 当前先内聚在 `apps/daemon/src/sources/dsh.ts`，待行为与锁文件变更一起收稳后再提取为独立 `packages/source-dsh`，不会为了目录形式复制第二套实现。
 
-## Release model
+## 发布流程
 
-A GitHub Release triggers:
+创建 GitHub Release 后：
 
-1. Linux + Windows + macOS verification;
-2. typecheck/tests/distribution build;
-3. exact npm tarball packing;
-4. SBOM + SHA-256 checksums;
-5. GitHub Release artifact upload;
-6. publish of that exact prerelease tarball to the npm `alpha` dist-tag;
-7. a separate Windows workflow that builds and attaches the NSIS installer.
+1. Linux + Windows 验证；
+2. typecheck / tests / distribution build；
+3. 打出唯一 npm tarball；
+4. 生成 SBOM 和 SHA-256；
+5. 上传 GitHub Release artifacts；
+6. 发布**同一个 tarball**到 npm；
+7. Windows Workflow 构建并上传 NSIS Installer。
 
-The release tag must match `package.json` exactly (`v` prefix is allowed).
+Release tag 必须与 `package.json` version 一致，允许 `v` 前缀。
 
 ## License
 

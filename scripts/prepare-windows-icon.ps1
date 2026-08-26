@@ -47,10 +47,7 @@ function New-GradientBrush(
 
 function Draw-AppIcon([System.Drawing.Graphics]$graphics) {
   # 1254 x 1254 坐标与 docs/design/brand/agentlens-icon-master.svg 保持一致。
-  $graphics.FillRectangle([System.Drawing.Brushes]::Black, 0, 0, 1254, 1254)
-
-  $bgRect = [System.Drawing.RectangleF]::new(0, 0, 1254, 1254)
-  $bgBrush = New-GradientBrush $bgRect @('#005DFF', '#007FFA', '#00A1F2', '#00C0EC', '#00DDE4') @([single]0, [single]0.27, [single]0.55, [single]0.78, [single]1) 45
+  $bgBrush = New-GradientBrush ([System.Drawing.RectangleF]::new(0, 0, 1254, 1254)) @('#005DFF', '#007FFA', '#00A1F2', '#00C0EC', '#00DDE4') @([single]0, [single]0.27, [single]0.55, [single]0.78, [single]1) 45
   $bgPath = New-RoundedRectPath 0 0 1254 1254 250
   try {
     $graphics.FillPath($bgBrush, $bgPath)
@@ -209,6 +206,25 @@ function Save-Png([string]$path, [int]$size, [bool]$small) {
   [System.IO.File]::WriteAllBytes($path, $bytes)
 }
 
+function Assert-TransparentCorners([string]$path) {
+  $bitmap = [System.Drawing.Bitmap]::FromFile($path)
+  try {
+    $corners = @(
+      $bitmap.GetPixel(0, 0),
+      $bitmap.GetPixel($bitmap.Width - 1, 0),
+      $bitmap.GetPixel(0, $bitmap.Height - 1),
+      $bitmap.GetPixel($bitmap.Width - 1, $bitmap.Height - 1)
+    )
+    foreach ($pixel in $corners) {
+      if ($pixel.A -ne 0) {
+        throw "Windows icon corner is not transparent: $path (alpha=$($pixel.A))"
+      }
+    }
+  } finally {
+    $bitmap.Dispose()
+  }
+}
+
 function Write-Ico([string]$path, [int[]]$sizes) {
   $images = @()
   foreach ($size in $sizes) {
@@ -249,6 +265,8 @@ Save-Png $windowPng 256 $false
 Save-Png $compatPng 512 $false
 Write-Ico $appIco @(16, 20, 24, 32, 40, 48, 64, 128, 256)
 Write-Ico $trayIco @(16, 20, 24, 32, 40, 48)
+Assert-TransparentCorners $windowPng
+Assert-TransparentCorners $compatPng
 
 $windowCheck = [System.Drawing.Image]::FromFile($windowPng)
 try {

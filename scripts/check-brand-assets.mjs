@@ -51,7 +51,7 @@ for (const path of archivedSvgPaths) {
   requireText(!/<style\b[^>]*>[\s\S]*?@import/i.test(svg), `品牌 SVG 不得导入外部样式：${path}`)
 }
 
-for (const path of ['README.md', 'README.zh-CN.md']) {
+for (const path of ['README.md', 'README.en.md']) {
   const readme = read(path)
   requireText(readme.includes('docs/brand/logo/agentlens-logo.svg'), `仓库首页未使用正式品牌 Logo：${path}`)
 }

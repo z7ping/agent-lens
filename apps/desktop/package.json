@@ -9,8 +9,8 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test src/update-check.test.mjs src/login-autostart.test.mjs",
-    "dist:win": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ../../scripts/prepare-windows-icon.ps1 && electron-builder --win nsis --config.electronDist=.electron-dist/electron-v43.4.0-win32-x64",
-    "dist:win:dir": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ../../scripts/prepare-windows-icon.ps1 && electron-builder --win dir --config.electronDist=.electron-dist/electron-v43.4.0-win32-x64",
+    "dist:win": "pwsh -NoLogo -NoProfile -File ../../scripts/prepare-windows-icon.ps1 && electron-builder --win nsis --config.electronDist=.electron-dist/electron-v43.4.0-win32-x64",
+    "dist:win:dir": "pwsh -NoLogo -NoProfile -File ../../scripts/prepare-windows-icon.ps1 && electron-builder --win dir --config.electronDist=.electron-dist/electron-v43.4.0-win32-x64",
     "dist:mac": "bash ../../scripts/prepare-macos-icon.sh && electron-builder --mac dmg zip --config.directories.output=../../release/macos",
     "dist:mac:release": "bash ../../scripts/prepare-macos-icon.sh && electron-builder --mac dmg zip --config.directories.output=../../release/macos --config.mac.forceCodeSigning=true --config.mac.notarize=true",
     "dist:mac:dir": "bash ../../scripts/prepare-macos-icon.sh && electron-builder --mac dir --config.directories.output=../../release/macos",

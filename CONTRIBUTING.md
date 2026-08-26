@@ -99,7 +99,7 @@ Pull Request 应满足：
 
 ## 文档职责
 
-- `README.md` / `README.zh-CN.md`：对外能力和使用方式；
+- `README.md` / `README.en.md`：对外能力和使用方式；
 - `ARCHITECTURE.md`：当前真实架构；
 - `docs/1.0/CORE-CONTRACT.md`：稳定 Contract；
 - `docs/adr/*`：长期、难以逆转的架构决策；
