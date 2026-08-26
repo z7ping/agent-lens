@@ -5,6 +5,10 @@ import { fileURLToPath } from 'node:url'
 import { backupLocalPlugin } from '@agent-lens/backup-local'
 import { capturePolicyPlugin } from '@agent-lens/capture-policy'
 import {
+  SESSION_SUMMARY_PROJECTION_ID,
+  sessionSummaryProjectionPlugin,
+} from '@agent-lens/projection-session'
+import {
   AgentLensApplication,
   coreServicesPlugin,
   discoverRegisteredSourceAssets,
@@ -45,6 +49,7 @@ const INITIAL_BACKGROUND_SYNC_DELAY_MS = 600
 const app = new AgentLensApplication()
 app.use(sqliteStoragePlugin, { path: dbPath })
 app.useRuntime(coreServicesPlugin)
+app.useRuntime(sessionSummaryProjectionPlugin)
 app.useRuntime(capturePolicyPlugin)
 app.use(codexSourcePlugin)
 app.use(claudeSourcePlugin)
@@ -137,6 +142,15 @@ try {
 
   syncPromise = (async () => {
     await new Promise(resolve => setTimeout(resolve, INITIAL_BACKGROUND_SYNC_DELAY_MS))
+    if (runtimeController.signal.aborted) return
+
+    try {
+      await app.context.projections.rebuild(SESSION_SUMMARY_PROJECTION_ID)
+      console.info('[AgentLens] session summary projection rebuilt')
+    } catch (error) {
+      console.error('[AgentLens] session summary projection rebuild failed', error)
+    }
+
     if (runtimeController.signal.aborted) return
 
     const [history, assets] = await Promise.all([
