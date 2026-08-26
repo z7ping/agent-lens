@@ -41,6 +41,44 @@ test('prerelease builds can advance through later prereleases into stable', () =
   assert.equal(update?.downloadUrl, 'https://example.test/setup.exe')
 })
 
+test('platform-specific desktop assets are preferred', () => {
+  const release = {
+    tag_name: 'v1.0.0-alpha.1',
+    prerelease: true,
+    draft: false,
+    html_url: 'https://example.test/release',
+    assets: [
+      { name: 'AgentLens-1.0.0-alpha.1-Setup-x64.exe', browser_download_url: 'https://example.test/windows.exe' },
+      { name: 'AgentLens-1.0.0-alpha.1-macOS-arm64.zip', browser_download_url: 'https://example.test/mac.zip' },
+      { name: 'AgentLens-1.0.0-alpha.1-macOS-arm64.dmg', browser_download_url: 'https://example.test/mac.dmg' },
+      { name: 'AgentLens-1.0.0-alpha.1-Linux-x64.deb', browser_download_url: 'https://example.test/linux.deb' },
+      { name: 'AgentLens-1.0.0-alpha.1-Linux-x64.AppImage', browser_download_url: 'https://example.test/linux.AppImage' },
+    ],
+  }
+
+  assert.equal(
+    selectUpdateRelease([release], '1.0.0-alpha.0', { platform: 'darwin', arch: 'arm64' })?.downloadUrl,
+    'https://example.test/mac.dmg',
+  )
+  assert.equal(
+    selectUpdateRelease([release], '1.0.0-alpha.0', { platform: 'linux', arch: 'x64' })?.downloadUrl,
+    'https://example.test/linux.AppImage',
+  )
+})
+
+test('missing platform asset falls back to the release page', () => {
+  const update = selectUpdateRelease([
+    {
+      tag_name: 'v1.0.0-alpha.1',
+      prerelease: true,
+      draft: false,
+      html_url: 'https://example.test/release',
+      assets: [{ name: 'AgentLens-1.0.0-alpha.1-Setup-x64.exe', browser_download_url: 'https://example.test/windows.exe' }],
+    },
+  ], '1.0.0-alpha.0', { platform: 'darwin', arch: 'arm64' })
+  assert.equal(update?.downloadUrl, 'https://example.test/release')
+})
+
 test('drafts, malformed tags and older releases are ignored', () => {
   const update = selectUpdateRelease([
     { tag_name: 'v9.0.0', draft: true, prerelease: false, html_url: 'https://example.test/draft' },
@@ -59,15 +97,24 @@ test('daily check interval is persisted as a 24 hour gate', () => {
 
 test('fetchAvailableUpdate uses release list and returns selected update', async () => {
   const update = await fetchAvailableUpdate('1.0.0-alpha.0', {
+    platform: 'linux',
+    arch: 'x64',
     signal: AbortSignal.timeout(1000),
     fetchImpl: async (url, init) => {
       assert.match(url, /\/releases\?per_page=20$/)
       assert.equal(init.headers['User-Agent'], 'AgentLens/1.0.0-alpha.0')
       return {
         ok: true,
-        json: async () => [{ tag_name: 'v1.0.0-alpha.1', prerelease: true, draft: false, html_url: 'https://example.test/a1', assets: [] }],
+        json: async () => [{
+          tag_name: 'v1.0.0-alpha.1',
+          prerelease: true,
+          draft: false,
+          html_url: 'https://example.test/a1',
+          assets: [{ name: 'AgentLens-1.0.0-alpha.1-Linux-x64.AppImage', browser_download_url: 'https://example.test/linux.AppImage' }],
+        }],
       }
     },
   })
   assert.equal(update?.version, '1.0.0-alpha.1')
+  assert.equal(update?.downloadUrl, 'https://example.test/linux.AppImage')
 })

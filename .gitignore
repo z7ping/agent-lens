@@ -13,6 +13,7 @@ release/
 apps/desktop/runtime/
 apps/desktop/.electron-dist/
 apps/desktop/assets/icon-win.png
+apps/desktop/build/icon.icns
 
 # 忽略临时文件
 *.tmp

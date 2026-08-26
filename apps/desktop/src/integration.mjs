@@ -33,7 +33,7 @@ function runCli(args, env) {
 }
 
 async function refreshDesktopIntegration() {
-  if (process.platform !== 'win32' || !app.isPackaged) return
+  if (!app.isPackaged) return
 
   const hookRoot = join(process.resourcesPath, 'app.asar.unpacked', 'runtime', 'hooks')
   if (!existsSync(hookRoot)) return
@@ -103,7 +103,7 @@ async function notifyUpdate(update) {
     type: 'info',
     title: 'AgentLens 有新版本',
     message: title,
-    detail: '当前版本不会自动替换。你可以直接运行新版安装器覆盖升级，现有 ~/.agent-lens/1.0 数据会保留。',
+    detail: '当前版本不会自动替换。你可以下载对应平台的新版本覆盖升级，现有 ~/.agent-lens/1.0 数据会保留。',
     buttons: ['前往下载', '稍后'],
     defaultId: 0,
     cancelId: 1,
@@ -112,14 +112,17 @@ async function notifyUpdate(update) {
 }
 
 async function checkDesktopUpdate() {
-  if (process.platform !== 'win32' || !app.isPackaged) return
+  if (!app.isPackaged) return
 
   const state = await readUpdateState()
   if (!shouldCheckForUpdate(state.lastCheckedAt)) return
 
   let update
   try {
-    update = await fetchAvailableUpdate(app.getVersion())
+    update = await fetchAvailableUpdate(app.getVersion(), {
+      platform: process.platform,
+      arch: process.arch,
+    })
   } catch {
     // 自动检查更新绝不能改变启动、运行时或离线使用语义。
     return
@@ -146,7 +149,7 @@ async function checkDesktopUpdate() {
 }
 
 async function startDesktopUpdateChecks() {
-  if (process.platform !== 'win32' || !app.isPackaged) return
+  if (!app.isPackaged) return
   await checkDesktopUpdate()
   updateTimer = setInterval(() => void checkDesktopUpdate(), UPDATE_CHECK_INTERVAL_MS)
   updateTimer.unref?.()

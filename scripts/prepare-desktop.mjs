@@ -21,18 +21,24 @@ await access(resolve(dist, 'web', 'index.html')).catch(() => {
 await rm(runtime, { recursive: true, force: true })
 await cp(dist, runtime, { recursive: true })
 
-const pkg = JSON.parse(await readFile(resolve(root, 'apps', 'desktop', 'package.json'), 'utf8'))
-const electronDistRel = pkg.build.electronDist
-if (electronDistRel) {
-  await ensureElectronDist(resolve(root, 'apps', 'desktop', electronDistRel), pkg.devDependencies.electron)
+if (process.platform === 'win32') {
+  const pkg = JSON.parse(await readFile(resolve(root, 'apps', 'desktop', 'package.json'), 'utf8'))
+  const target = resolve(
+    root,
+    'apps',
+    'desktop',
+    '.electron-dist',
+    `electron-v${pkg.devDependencies.electron}-win32-x64`,
+  )
+  await ensureWindowsElectronDist(target, pkg.devDependencies.electron)
 }
 
-console.log('[AgentLens] desktop runtime prepared')
+console.log(`[AgentLens] desktop runtime prepared for ${process.platform}/${process.arch}`)
 
-async function ensureElectronDist(target, electronVersion) {
+async function ensureWindowsElectronDist(target, electronVersion) {
   if (existsSync(join(target, 'electron.exe'))) return
   const get = require('@electron/get')
-  console.log(`[AgentLens] preparing electron ${electronVersion} dist at ${target}`)
+  console.log(`[AgentLens] preparing electron ${electronVersion} Windows dist at ${target}`)
   const zipPath = await get.downloadArtifact({
     version: electronVersion,
     platform: 'win32',

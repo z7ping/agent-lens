@@ -1,5 +1,4 @@
 const RELEASES_API = 'https://api.github.com/repos/z7ping/agent-lens/releases?per_page=20'
-const WINDOWS_SETUP_PATTERN = /^AgentLens-.*-Setup-x64\.exe$/i
 export const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 
 export function parseSemver(value) {
@@ -53,14 +52,46 @@ function releaseVersion(release) {
   return parseSemver(release?.tag_name ?? release?.name ?? '')
 }
 
-function releaseDownloadUrl(release) {
-  const setup = Array.isArray(release?.assets)
-    ? release.assets.find(asset => WINDOWS_SETUP_PATTERN.test(asset?.name ?? '') && typeof asset?.browser_download_url === 'string')
-    : null
-  return setup?.browser_download_url ?? release?.html_url ?? null
+function assetPriority(name, platform, arch) {
+  if (typeof name !== 'string') return 0
+  const escapedArch = String(arch).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+  if (platform === 'darwin') {
+    if (new RegExp(`^AgentLens-.*-macOS-${escapedArch}\\.dmg$`, 'i').test(name)) return 30
+    if (new RegExp(`^AgentLens-.*-macOS-${escapedArch}\\.zip$`, 'i').test(name)) return 20
+    return 0
+  }
+
+  if (platform === 'linux') {
+    if (new RegExp(`^AgentLens-.*-Linux-${escapedArch}\\.AppImage$`, 'i').test(name)) return 30
+    if (new RegExp(`^AgentLens-.*-Linux-${escapedArch}\\.deb$`, 'i').test(name)) return 20
+    return 0
+  }
+
+  if (new RegExp(`^AgentLens-.*-Setup-${escapedArch}\\.exe$`, 'i').test(name)) return 30
+  return 0
 }
 
-export function selectUpdateRelease(releases, currentVersion) {
+function releaseDownloadUrl(release, options = {}) {
+  const platform = options.platform ?? 'win32'
+  const arch = options.arch ?? 'x64'
+  const assets = Array.isArray(release?.assets) ? release.assets : []
+
+  let selected = null
+  let selectedPriority = 0
+  for (const asset of assets) {
+    if (typeof asset?.browser_download_url !== 'string') continue
+    const priority = assetPriority(asset?.name ?? '', platform, arch)
+    if (priority > selectedPriority) {
+      selected = asset
+      selectedPriority = priority
+    }
+  }
+
+  return selected?.browser_download_url ?? release?.html_url ?? null
+}
+
+export function selectUpdateRelease(releases, currentVersion, options = {}) {
   const current = parseSemver(currentVersion)
   if (!current || !Array.isArray(releases)) return null
   const acceptPrereleases = current.prerelease.length > 0
@@ -80,7 +111,7 @@ export function selectUpdateRelease(releases, currentVersion) {
   }
 
   if (!selected || !selectedVersion) return null
-  const downloadUrl = releaseDownloadUrl(selected)
+  const downloadUrl = releaseDownloadUrl(selected, options)
   if (!downloadUrl) return null
   return {
     version: `${selectedVersion.major}.${selectedVersion.minor}.${selectedVersion.patch}${selectedVersion.prerelease.length ? `-${selectedVersion.prerelease.join('.')}` : ''}`,
@@ -110,5 +141,8 @@ export async function fetchAvailableUpdate(currentVersion, options = {}) {
   })
   if (!response.ok) throw new Error(`GitHub Release 检查失败：HTTP ${response.status}`)
   const releases = await response.json()
-  return selectUpdateRelease(releases, currentVersion)
+  return selectUpdateRelease(releases, currentVersion, {
+    platform: options.platform ?? 'win32',
+    arch: options.arch ?? 'x64',
+  })
 }

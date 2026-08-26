@@ -12,8 +12,9 @@ const fullSvgPath = 'packages/web/public/agentlens-icon.svg'
 const smallSvgPath = 'packages/web/public/agentlens-icon-small.svg'
 const archiveFullPath = 'docs/brand/logo/agentlens-logo.svg'
 const archiveSmallPath = 'docs/brand/logo/agentlens-logo-small.svg'
+const desktopBuildSvgPath = 'apps/desktop/build/icon.svg'
 
-for (const path of [canonicalPath, fullSvgPath, smallSvgPath, archiveFullPath, archiveSmallPath]) {
+for (const path of [canonicalPath, fullSvgPath, smallSvgPath, archiveFullPath, archiveSmallPath, desktopBuildSvgPath]) {
   requireText(existsSync(resolve(root, path)), `缺少品牌 SVG：${path}`)
 }
 
@@ -24,7 +25,7 @@ requireText(canonicalSvg.includes('#005DFF') && canonicalSvg.includes('#00DDE4')
 requireText(canonicalSvg.includes('#FFB10F') && canonicalSvg.includes('#FF7B20'), '新品牌橙色焦点缺失')
 requireText(canonicalSvg.includes('viewBox="0 0 1254 1254"'), '主母版 viewBox 规格不正确')
 
-for (const path of [fullSvgPath, smallSvgPath, archiveFullPath, archiveSmallPath]) {
+for (const path of [fullSvgPath, smallSvgPath, archiveFullPath, archiveSmallPath, desktopBuildSvgPath]) {
   requireText(read(path) === canonicalSvg, `品牌派生 SVG 未与主母版逐字同步：${path}`)
 }
 
@@ -67,23 +68,33 @@ requireText(mockApp.includes('packages/web/public/agentlens-icon.svg'), '最新�
 
 const desktopPackage = read('apps/desktop/package.json')
 requireText(desktopPackage.includes('"icon": "assets/icon-app.ico"'), 'Windows EXE/安装器未使用多尺寸 ICO')
-requireText(desktopPackage.includes('prepare-windows-icon.ps1'), '桌面启动/打包未经过品牌资产生成器')
+requireText(desktopPackage.includes('prepare-windows-icon.ps1'), 'Windows 桌面启动/打包未经过品牌资产生成器')
+requireText(desktopPackage.includes('"icon": "build/icon.icns"'), 'macOS App 未使用由品牌主母版生成的 ICNS')
+requireText(desktopPackage.includes('prepare-macos-icon.sh'), 'macOS 桌面打包未经过品牌资产生成器')
+requireText(desktopPackage.includes('"icon": "build/icon.svg"'), 'Linux App 未直接使用品牌 SVG 主母版派生资产')
 
 const desktopMain = read('apps/desktop/src/main.mjs')
-requireText(desktopMain.includes("unpackedAsset('assets', 'icon-window.png')"), '桌面窗口未使用 256px 专用图标')
-requireText(desktopMain.includes("unpackedAsset('assets', 'tray.ico')"), '桌面托盘未使用多尺寸 ICO')
+requireText(desktopMain.includes("unpackedAsset('assets', 'icon-window.png')"), 'Windows 桌面窗口未使用 256px 专用图标')
+requireText(desktopMain.includes("unpackedAsset('assets', 'tray.ico')"), 'Windows 桌面托盘未使用多尺寸 ICO')
 requireText(!desktopMain.includes("unpackedAsset('assets', 'icon.png')"), '桌面入口仍保留旧 icon.png 兜底')
 
-const generator = read('scripts/prepare-windows-icon.ps1')
-requireText(generator.includes('@(16, 20, 24, 32, 40, 48, 64, 128, 256)'), '应用 ICO 尺寸矩阵不完整')
-requireText(generator.includes('@(16, 20, 24, 32, 40, 48)'), '托盘 ICO 尺寸矩阵不完整')
-requireText(generator.includes('#005DFF') && generator.includes('#00DDE4'), 'Windows 派生器仍使用旧品牌底色')
-requireText(generator.includes('#FFB10F') && generator.includes('#FF7B20'), 'Windows 派生器缺少新橙色焦点')
-requireText(generator.includes('1254'), 'Windows 派生器未按新 1254 主母版坐标系同步')
+const windowsGenerator = read('scripts/prepare-windows-icon.ps1')
+requireText(windowsGenerator.includes('@(16, 20, 24, 32, 40, 48, 64, 128, 256)'), '应用 ICO 尺寸矩阵不完整')
+requireText(windowsGenerator.includes('@(16, 20, 24, 32, 40, 48)'), '托盘 ICO 尺寸矩阵不完整')
+requireText(windowsGenerator.includes('#005DFF') && windowsGenerator.includes('#00DDE4'), 'Windows 派生器仍使用旧品牌底色')
+requireText(windowsGenerator.includes('#FFB10F') && windowsGenerator.includes('#FF7B20'), 'Windows 派生器缺少新橙色焦点')
+requireText(windowsGenerator.includes('1254'), 'Windows 派生器未按新 1254 主母版坐标系同步')
+
+const macGenerator = read('scripts/prepare-macos-icon.sh')
+for (const size of [16, 32, 64, 128, 256, 512, 1024]) {
+  requireText(macGenerator.includes(`make_icon ${size}`), `macOS ICNS 派生器缺少 ${size}px 图标`)
+}
+requireText(macGenerator.includes('iconutil -c icns'), 'macOS 派生器未生成正式 ICNS')
 
 const gitignore = read('.gitignore')
 for (const asset of ['icon-app.ico', 'icon-window.png', 'tray.ico']) {
-  requireText(gitignore.includes(`apps/desktop/assets/${asset}`), `生成资产未加入 .gitignore：${asset}`)
+  requireText(gitignore.includes(`apps/desktop/assets/${asset}`), `Windows 生成资产未加入 .gitignore：${asset}`)
 }
+requireText(gitignore.includes('apps/desktop/build/icon.icns'), 'macOS 生成 ICNS 未加入 .gitignore')
 
-console.log('AgentLens 品牌图标检查通过：新主母版已同步到 Web、最新版原型、README 存档与 Windows 派生链。')
+console.log('AgentLens 品牌图标检查通过：新主母版已同步到 Web、最新版原型与 Windows/macOS/Linux 桌面派生链。')

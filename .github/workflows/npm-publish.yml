@@ -107,7 +107,7 @@ jobs:
           npm pack --pack-destination release
           npm sbom --sbom-format cyclonedx > release/sbom.cdx.json
           cp package-lock.json release/package-lock.json
-          sha256sum release/*.tgz release/package-lock.json release/sbom.cdx.json > release/SHA256SUMS.txt
+          sha256sum release/*.tgz release/package-lock.json release/sbom.cdx.json > release/SHA256SUMS-npm.txt
 
       - name: Upload verification artifact
         uses: actions/upload-artifact@v4
@@ -120,7 +120,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
-        run: gh release upload "$GITHUB_REF_NAME" release/*.tgz release/SHA256SUMS.txt release/sbom.cdx.json --clobber
+        run: gh release upload "$GITHUB_REF_NAME" release/*.tgz release/SHA256SUMS-npm.txt release/sbom.cdx.json --clobber
 
       - name: Publish exact tarball to npm alpha tag
         env:

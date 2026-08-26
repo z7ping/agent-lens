@@ -99,7 +99,7 @@ jobs:
             $hash = (Get-FileHash $file.FullName -Algorithm SHA256).Hash.ToLower()
             "$hash  $($file.Name)"
           }
-          $lines | Set-Content release/windows/SHA256SUMS.txt
+          $lines | Set-Content release/windows/SHA256SUMS-windows.txt
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
@@ -107,7 +107,7 @@ jobs:
           name: agent-lens-windows-${{ github.run_id }}
           path: |
             release/windows/*.exe
-            release/windows/SHA256SUMS.txt
+            release/windows/SHA256SUMS-windows.txt
           if-no-files-found: error
 
       - name: Attach installer to GitHub Release
@@ -115,4 +115,4 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$GITHUB_REF_NAME" release/windows/*.exe release/windows/SHA256SUMS.txt --clobber
+        run: gh release upload "$GITHUB_REF_NAME" release/windows/*.exe release/windows/SHA256SUMS-windows.txt --clobber

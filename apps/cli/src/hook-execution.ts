@@ -34,6 +34,10 @@ function commandQuote(value: string): string {
   return `"${value}"`
 }
 
+function posixQuote(value: string): string {
+  return "'" + value.replace(/'/g, "'\"'\"'") + "'"
+}
+
 export function windowsDispatcherCommand(dispatcherPath: string, target: 'codex' | 'claude'): string {
   return [
     'powershell.exe',
@@ -44,6 +48,10 @@ export function windowsDispatcherCommand(dispatcherPath: string, target: 'codex'
     '-File', commandQuote(dispatcherPath),
     target === 'codex' ? 'agent-lens-hook-codex' : 'agent-lens-hook-claude',
   ].join(' ')
+}
+
+export function posixDesktopHookCommand(executable: string, scriptPath: string): string {
+  return `env ELECTRON_RUN_AS_NODE=1 ${posixQuote(executable)} ${posixQuote(scriptPath)}`
 }
 
 function sharedDispatcherPath(homeDir = homedir()): string {
@@ -114,8 +122,14 @@ export function resolveHookExecutionProfile(options: ResolveHookExecutionOptions
   }
 
   if (platform !== 'win32') {
+    const desktopCommands = context.kind === 'desktop' && installation
+      ? {
+          codexCommand: posixDesktopHookCommand(context.executable, codexScript),
+          claudeCommand: posixDesktopHookCommand(context.executable, claudeScript),
+        }
+      : {}
     return {
-      options: {},
+      options: desktopCommands,
       windowsNoWindow: false,
       ...(installation ? { installation } : {}),
     }

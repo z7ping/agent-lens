@@ -1,0 +1,169 @@
+name: macOS and Linux Desktop
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/desktop/**'
+      - 'apps/cli/src/hook-execution*'
+      - 'scripts/prepare-desktop.mjs'
+      - 'scripts/prepare-macos-icon.sh'
+      - 'scripts/check-brand-assets.mjs'
+      - 'scripts/smoke-desktop-runtime.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'docs/design/brand/agentlens-icon-master.svg'
+      - '.github/workflows/desktop-macos-linux.yml'
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-latest
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.23.0
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify release tag matches package version
+        if: github.event_name == 'release'
+        run: node scripts/check-release-version.mjs
+
+      - name: Verify source
+        run: |
+          npm run check:web-presentation
+          npm run check:brand-assets
+          npm run check:desktop-shell
+          npm run typecheck
+          npm test
+
+      - name: Build macOS desktop
+        run: npm run desktop:mac
+
+      - name: Smoke packaged desktop runtime
+        shell: bash
+        run: |
+          EXECUTABLE="$(find release/macos -type f -path '*/AgentLens.app/Contents/MacOS/AgentLens' | head -n 1)"
+          if [ -z "$EXECUTABLE" ]; then
+            echo "没有找到 macOS AgentLens 可执行文件" >&2
+            exit 1
+          fi
+          node scripts/smoke-desktop-runtime.mjs "$EXECUTABLE"
+
+      - name: Create checksums
+        shell: bash
+        run: |
+          cd release/macos
+          shopt -s nullglob
+          files=(AgentLens-*.dmg AgentLens-*.zip)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "没有找到 macOS 发布产物" >&2
+            exit 1
+          fi
+          shasum -a 256 "${files[@]}" > "SHA256SUMS-macos-${{ matrix.arch }}.txt"
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-lens-macos-${{ matrix.arch }}-${{ github.run_id }}
+          path: |
+            release/macos/AgentLens-*.dmg
+            release/macos/AgentLens-*.zip
+            release/macos/SHA256SUMS-macos-${{ matrix.arch }}.txt
+          if-no-files-found: error
+
+      - name: Attach macOS artifacts to GitHub Release
+        if: github.event_name == 'release'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" release/macos/AgentLens-*.dmg release/macos/AgentLens-*.zip "release/macos/SHA256SUMS-macos-${{ matrix.arch }}.txt" --clobber
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.23.0
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify release tag matches package version
+        if: github.event_name == 'release'
+        run: node scripts/check-release-version.mjs
+
+      - name: Verify source
+        run: |
+          npm run check:web-presentation
+          npm run check:brand-assets
+          npm run check:desktop-shell
+          npm run typecheck
+          npm test
+
+      - name: Build Linux desktop
+        run: npm run desktop:linux
+
+      - name: Smoke packaged desktop runtime
+        shell: bash
+        run: |
+          EXECUTABLE="$(find release/linux -type f -path '*/linux-unpacked/agentlens' | head -n 1)"
+          if [ -z "$EXECUTABLE" ]; then
+            echo "没有找到 Linux AgentLens 可执行文件" >&2
+            exit 1
+          fi
+          node scripts/smoke-desktop-runtime.mjs "$EXECUTABLE"
+
+      - name: Create checksums
+        shell: bash
+        run: |
+          cd release/linux
+          shopt -s nullglob
+          files=(AgentLens-*.AppImage AgentLens-*.deb)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "没有找到 Linux 发布产物" >&2
+            exit 1
+          fi
+          sha256sum "${files[@]}" > SHA256SUMS-linux-x64.txt
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-lens-linux-x64-${{ github.run_id }}
+          path: |
+            release/linux/AgentLens-*.AppImage
+            release/linux/AgentLens-*.deb
+            release/linux/SHA256SUMS-linux-x64.txt
+          if-no-files-found: error
+
+      - name: Attach Linux artifacts to GitHub Release
+        if: github.event_name == 'release'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" release/linux/AgentLens-*.AppImage release/linux/AgentLens-*.deb release/linux/SHA256SUMS-linux-x64.txt --clobber

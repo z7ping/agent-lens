@@ -3,7 +3,11 @@ import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { hookExecutionInternals, windowsDispatcherCommand } from './hook-execution'
+import {
+  hookExecutionInternals,
+  posixDesktopHookCommand,
+  windowsDispatcherCommand,
+} from './hook-execution'
 
 function fixtureModuleUrl(...parts: string[]): string {
   return pathToFileURL(resolve(...parts)).href
@@ -21,6 +25,17 @@ test('Windows Hook 命令固定指向用户级共享分发器', () => {
   assert.match(codex, /agent-lens-hook-codex$/)
   assert.match(claude, /agent-lens-hook-claude$/)
   assert.doesNotMatch(codex, /node\.exe/)
+})
+
+test('macOS/Linux Desktop Hook 使用 Electron Node 模式直连打包脚本', () => {
+  const command = posixDesktopHookCommand(
+    "/Applications/AgentLens Test.app/Contents/MacOS/AgentLens",
+    "/Users/tester's AgentLens/runtime/hooks/agent-lens-hook-codex.mjs",
+  )
+  assert.match(command, /^env ELECTRON_RUN_AS_NODE=1 /)
+  assert.match(command, /AgentLens Test\.app/)
+  assert.match(command, /agent-lens-hook-codex\.mjs/)
+  assert.match(command, /test'"'"'s AgentLens/)
 })
 
 test('Windows 共享分发器使用 PowerShell 5.1 兼容的 UTF-8 stdin 转发', () => {
