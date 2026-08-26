@@ -35,7 +35,7 @@ test('macOS/Linux Desktop Hook 使用 Electron Node 模式直连打包脚本', (
   assert.match(command, /^env ELECTRON_RUN_AS_NODE=1 /)
   assert.match(command, /AgentLens Test\.app/)
   assert.match(command, /agent-lens-hook-codex\.mjs/)
-  assert.match(command, /test'"'"'s AgentLens/)
+  assert.match(command, /tester'"'"'s AgentLens/)
 })
 
 test('Windows 共享分发器使用 PowerShell 5.1 兼容的 UTF-8 stdin 转发', () => {
