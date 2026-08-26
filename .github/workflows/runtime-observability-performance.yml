@@ -1,0 +1,60 @@
+name: AgentLens Runtime Observability Performance
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/performance/web-live-visibility-benchmark.ts'
+      - 'scripts/performance/daemon-idle-cpu-benchmark.ts'
+      - 'packages/web/src/client/model.ts'
+      - 'packages/web/src/client/api.ts'
+      - 'apps/daemon/src/main.ts'
+      - 'packages/source-*/src/runtime.ts'
+      - 'package.json'
+      - '.github/workflows/runtime-observability-performance.yml'
+      - 'docs/1.0/PERFORMANCE-BASELINE.md'
+
+permissions:
+  contents: read
+
+jobs:
+  runtime-observability:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.23.0
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Measure Web new-event renderable latency
+        shell: bash
+        run: |
+          mkdir -p performance-artifacts
+          npm run perf:web-live-visibility -- --samples=10 --budget-p95-ms=500 | tee performance-artifacts/web-live-visibility.txt
+
+      - name: Build distributable for Daemon measurement
+        run: npm run build:dist
+
+      - name: Measure Daemon idle CPU
+        shell: bash
+        run: |
+          npm run perf:daemon-idle-cpu -- --samples=8 --window-ms=1000 --settle-ms=3000 --budget-p95-percent=5 | tee performance-artifacts/daemon-idle-cpu.txt
+
+      - name: Upload runtime performance report
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-lens-runtime-observability-${{ github.run_id }}
+          path: performance-artifacts/
+          if-no-files-found: error
