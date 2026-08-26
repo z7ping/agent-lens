@@ -111,10 +111,19 @@ async function waitForHealth(startedAt: number): Promise<number> {
 
 async function waitForExit(child: ChildProcess, timeout = 10_000): Promise<void> {
   if (child.exitCode != null) return
-  await Promise.race([
-    new Promise<void>(resolve => child.once('exit', () => resolve())),
-    new Promise<void>((_, reject) => setTimeout(() => reject(new Error('daemon shutdown timeout')), timeout)),
-  ])
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      child.off('exit', onExit)
+      reject(new Error('daemon shutdown timeout'))
+    }, timeout)
+    timer.unref()
+
+    const onExit = () => {
+      clearTimeout(timer)
+      resolve()
+    }
+    child.once('exit', onExit)
+  })
 }
 
 function spawnDaemon(): { child: ChildProcess; output: { value: string } } {
