@@ -28,6 +28,10 @@ import {
   httpSurfacePlugin,
 } from '@agent-lens/surface-http'
 import { webPlugin } from '@agent-lens/web'
+import {
+  beginSessionSummaryProjectionRun,
+  markSessionSummaryProjectionClean,
+} from './projection-readiness.js'
 import { profiledDshSourcePlugin } from './sources/dsh-profiled.js'
 
 const dbPath = process.env.AGENT_LENS_DB_PATH
@@ -65,6 +69,8 @@ const runtimeController = new AbortController()
 let syncPromise: Promise<void> | null = null
 let captureHandles: Awaited<ReturnType<typeof startRegisteredSourceCapture>>['results'] = []
 let shuttingDown = false
+let reuseSessionSummaryProjection = false
+let sessionSummaryProjectionReady = false
 
 function runtimeAge(): string {
   const seconds = Math.max(0, Math.round((Date.now() - startedAt) / 1000))
@@ -91,7 +97,17 @@ async function shutdown(signal: string): Promise<void> {
       await handle.dispose().catch(() => undefined)
     }
     captureHandles = []
+    let readinessError: unknown
+    if (sessionSummaryProjectionReady) {
+      try {
+        await markSessionSummaryProjectionClean(app.context.storage, app.context.projections)
+      } catch (error) {
+        readinessError = error
+        console.error('[AgentLens] session summary projection clean checkpoint failed', error)
+      }
+    }
     await app.stop()
+    if (readinessError) throw readinessError
     console.info(`[AgentLens] daemon stopped (${signal}, mode=${daemonMode}, uptime=${runtimeAge()})`)
     process.exitCode = 0
   } catch (error) {
@@ -126,6 +142,9 @@ try {
   console.info(`[AgentLens] capture policy: prompt=${app.context.capturePolicy.modeFor('prompt')} tool=${app.context.capturePolicy.modeFor('tool')} config=${app.context.capturePolicy.modeFor('config')} environment=${app.context.capturePolicy.modeFor('environment')}`)
   console.info(`[AgentLens] enabled sources: ${app.context.capturePolicy.settings.enabledSources.join(', ') || '(none)'}`)
 
+  reuseSessionSummaryProjection = await beginSessionSummaryProjectionRun(app.context.storage)
+  sessionSummaryProjectionReady = reuseSessionSummaryProjection
+
   const prepared = await prepareRegisteredSources(app.context, runtimeController.signal)
   logSourceFailures(prepared.failures)
 
@@ -144,11 +163,17 @@ try {
     await new Promise(resolve => setTimeout(resolve, INITIAL_BACKGROUND_SYNC_DELAY_MS))
     if (runtimeController.signal.aborted) return
 
-    try {
-      await app.context.projections.rebuild(SESSION_SUMMARY_PROJECTION_ID)
-      console.info('[AgentLens] session summary projection rebuilt')
-    } catch (error) {
-      console.error('[AgentLens] session summary projection rebuild failed', error)
+    if (reuseSessionSummaryProjection) {
+      console.info('[AgentLens] session summary projection reused from clean shutdown')
+    } else {
+      try {
+        await app.context.projections.rebuild(SESSION_SUMMARY_PROJECTION_ID)
+        sessionSummaryProjectionReady = true
+        console.info('[AgentLens] session summary projection rebuilt')
+      } catch (error) {
+        sessionSummaryProjectionReady = false
+        console.error('[AgentLens] session summary projection rebuild failed', error)
+      }
     }
 
     if (runtimeController.signal.aborted) return

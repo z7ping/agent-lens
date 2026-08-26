@@ -305,6 +305,18 @@ export class SqliteSessionSummaryReader implements SessionSummaryProjectionStore
     })
   }
 
+  async isMaterialized(): Promise<boolean> {
+    return this.executor.run(() => {
+      const observationExists = Boolean(this.executor.db.prepare(
+        'SELECT 1 FROM observations LIMIT 1',
+      ).get())
+      if (!observationExists) return true
+      return Boolean(this.executor.db.prepare(
+        'SELECT 1 FROM session_summary_projection LIMIT 1',
+      ).get())
+    })
+  }
+
   async rebuild(input: { logicalSessionId?: string } = {}): Promise<void> {
     await this.executor.transaction(async () => {
       const rebuiltAt = new Date().toISOString()

@@ -14,6 +14,63 @@ const applySessionSummaryProjection: Plugin.Function<void> = (ctx: AgentLensCont
   const store = ctx.storage.sessionSummaryProjection
   if (!store) return
 
+  const pending = new Set<string>()
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let flushPromise: Promise<void> | undefined
+
+  const schedule = () => {
+    if (timer || flushPromise || pending.size === 0) return
+    timer = setTimeout(() => {
+      timer = undefined
+      void flush().catch(error => {
+        console.error('[AgentLens] session summary projection refresh failed', error)
+      })
+    }, REBUILD_DEBOUNCE_MS)
+  }
+
+  const runPending = async () => {
+    while (pending.size > 0) {
+      const ids = [...pending]
+      pending.clear()
+      for (let index = 0; index < ids.length; index += 1) {
+        const logicalSessionId = ids[index]!
+        const scope = { subjectType: 'logical-session', subjectId: logicalSessionId }
+        try {
+          ctx.emit('projection/invalidated', {
+            projectionId: SESSION_SUMMARY_PROJECTION_ID,
+            ...scope,
+          })
+          await ctx.projections.rebuild(SESSION_SUMMARY_PROJECTION_ID, scope)
+        } catch (error) {
+          for (const remaining of ids.slice(index)) pending.add(remaining)
+          throw error
+        }
+      }
+    }
+  }
+
+  async function flush(): Promise<void> {
+    if (timer) {
+      clearTimeout(timer)
+      timer = undefined
+    }
+    if (flushPromise) {
+      await flushPromise
+      if (pending.size > 0) await flush()
+      return
+    }
+    if (pending.size === 0) return
+
+    const current = runPending()
+    flushPromise = current
+    try {
+      await current
+    } finally {
+      if (flushPromise === current) flushPromise = undefined
+      schedule()
+    }
+  }
+
   const definition: ProjectionDefinition = {
     id: SESSION_SUMMARY_PROJECTION_ID,
     async rebuild(scope) {
@@ -25,46 +82,15 @@ const applySessionSummaryProjection: Plugin.Function<void> = (ctx: AgentLensCont
         ...(scope?.subjectId ? { subjectId: scope.subjectId } : {}),
       })
     },
+    flush,
   }
 
   ctx.projections.register(definition)
 
-  const pending = new Set<string>()
-  let timer: ReturnType<typeof setTimeout> | undefined
-  let flushing = false
-
-  const flush = async () => {
-    if (flushing || pending.size === 0) return
-    flushing = true
-    if (timer) {
-      clearTimeout(timer)
-      timer = undefined
-    }
-    const ids = [...pending]
-    pending.clear()
-    try {
-      for (const logicalSessionId of ids) {
-        const scope = { subjectType: 'logical-session', subjectId: logicalSessionId }
-        ctx.emit('projection/invalidated', {
-          projectionId: SESSION_SUMMARY_PROJECTION_ID,
-          ...scope,
-        })
-        await ctx.projections.rebuild(SESSION_SUMMARY_PROJECTION_ID, scope)
-      }
-    } catch (error) {
-      console.error('[AgentLens] session summary projection refresh failed', error)
-    } finally {
-      flushing = false
-      if (pending.size > 0 && !timer) {
-        timer = setTimeout(() => void flush(), REBUILD_DEBOUNCE_MS)
-      }
-    }
-  }
-
   ctx.on('observation/committed', event => {
     if (event.status !== 'created') return
     pending.add(event.logicalSessionId)
-    if (!timer) timer = setTimeout(() => void flush(), REBUILD_DEBOUNCE_MS)
+    schedule()
   })
 }
 

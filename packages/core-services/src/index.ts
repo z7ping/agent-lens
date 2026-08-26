@@ -541,6 +541,12 @@ export class DefaultProjectionService implements ProjectionService {
     await projection.rebuild(scope)
   }
 
+  async flush(projectionId: string): Promise<void> {
+    const projection = this.projections.get(projectionId)
+    if (!projection) throw new Error(`Unknown projection: ${projectionId}`)
+    await projection.flush?.()
+  }
+
   async invalidate(input: ProjectionInvalidation): Promise<void> {
     await this.rebuild(input.projectionId, {
       ...(input.subjectType ? { subjectType: input.subjectType } : {}),

@@ -194,6 +194,8 @@ export interface SessionSummaryReader {
  * must be fully rebuildable from Canonical Observation data.
  */
 export interface SessionSummaryProjectionStore extends SessionSummaryReader {
+  /** Cheap integrity guard used before trusting a persisted projection across restarts. */
+  isMaterialized(): Promise<boolean>
   rebuild(input?: {
     logicalSessionId?: LogicalSessionId
   }): Promise<void>
@@ -217,11 +219,14 @@ export interface ProjectionInvalidation extends ProjectionScope {
 export interface ProjectionDefinition {
   id: string
   rebuild(scope?: ProjectionScope): Promise<void>
+  /** Drain pending incremental work before a controlled shutdown. */
+  flush?(): Promise<void>
 }
 
 export interface ProjectionService {
   register(projection: ProjectionDefinition): Disposable
   rebuild(projectionId: string, scope?: ProjectionScope): Promise<void>
+  flush(projectionId: string): Promise<void>
   invalidate(input: ProjectionInvalidation): Promise<void>
 }
 
