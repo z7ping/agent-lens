@@ -38,6 +38,8 @@ jobs:
 
       - name: Compile NSIS installer
         run: npm run dist:win --workspace @agent-lens/desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
       - name: Verify installer exists
         shell: pwsh
@@ -45,3 +47,20 @@ jobs:
           $installer = Get-ChildItem 'release/windows/AgentLens-*-Setup-x64.exe' | Select-Object -First 1
           if ($null -eq $installer) { throw '没有生成 Windows NSIS 安装器' }
           Write-Host "Installer: $($installer.FullName)"
+
+      - name: Create checksum
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem 'release/windows/AgentLens-*-Setup-x64.exe' | Select-Object -First 1
+          if ($null -eq $installer) { throw '没有生成 Windows NSIS 安装器' }
+          $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLower()
+          "$hash  $($installer.Name)" | Set-Content release/windows/SHA256SUMS-windows.txt
+
+      - name: Upload unsigned installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-lens-windows-unsigned-${{ github.run_id }}
+          path: |
+            release/windows/AgentLens-*-Setup-x64.exe
+            release/windows/SHA256SUMS-windows.txt
+          if-no-files-found: error
