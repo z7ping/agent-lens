@@ -188,6 +188,16 @@ export interface SessionSummaryReader {
   }): Promise<{ items: SessionSummaryRecord[]; hasMore: boolean }>
 }
 
+/**
+ * Writable derived view used by the Session Summary projection. Implementations
+ * must be fully rebuildable from Canonical Observation data.
+ */
+export interface SessionSummaryProjectionStore extends SessionSummaryReader {
+  rebuild(input?: {
+    logicalSessionId?: LogicalSessionId
+  }): Promise<void>
+}
+
 export interface ToolService {
   resolveDefinition(input: ToolDefinitionHint): Promise<ToolDefinition>
   findByNativeName(installationId: AgentInstallationId, nativeToolName: string): Promise<ToolDefinition | null>
@@ -320,6 +330,7 @@ export interface StorageService {
   readonly checkpoints: CheckpointRepository
   readonly assetInventory?: AssetInventoryReader
   readonly sessionSummaries?: SessionSummaryReader
+  readonly sessionSummaryProjection?: SessionSummaryProjectionStore
   transaction<T>(fn: (tx: StorageTransaction) => Promise<T>): Promise<T>
   migrate(): Promise<void>
   health(): Promise<StorageHealth>
