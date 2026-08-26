@@ -7,6 +7,7 @@ import { createServer } from 'node:net'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const daemon = resolve(root, 'dist', 'daemon.mjs')
+const cliEntry = resolve(root, 'dist', 'cli.mjs')
 const webRoot = resolve(root, 'dist', 'web')
 const temp = await mkdtemp(join(tmpdir(), 'agent-lens-smoke-'))
 
@@ -21,6 +22,25 @@ async function freePort() {
   await new Promise(resolvePromise => server.close(resolvePromise))
   if (!port) throw new Error('Could not allocate a smoke-test port')
   return port
+}
+
+function runCli(args) {
+  return new Promise((resolvePromise, reject) => {
+    const child = spawn(process.execPath, [cliEntry, ...args], {
+      cwd: root,
+      env: { ...process.env, AGENT_LENS_DISABLE_UPDATE_CHECK: '1' },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let stdout = ''
+    let stderr = ''
+    child.stdout.on('data', chunk => { stdout += chunk.toString() })
+    child.stderr.on('data', chunk => { stderr += chunk.toString() })
+    child.once('error', reject)
+    child.once('exit', code => {
+      if (code === 0) resolvePromise({ stdout, stderr })
+      else reject(new Error(`CLI exited with ${code}\n${stdout}\n${stderr}`))
+    })
+  })
 }
 
 const port = await freePort()
@@ -59,6 +79,15 @@ async function health() {
 }
 
 try {
+  const version = await runCli(['--version'])
+  if (version.stdout.trim() !== '1.0.0-alpha.0') {
+    throw new Error(`Unexpected CLI version output: ${version.stdout}`)
+  }
+  const help = await runCli(['--help'])
+  if (!help.stdout.includes('agent-lens update --check') || !help.stdout.includes('agent-lens update')) {
+    throw new Error(`CLI update help is missing:\n${help.stdout}`)
+  }
+
   const result = await health()
   if (result?.status !== 'ok' || result?.protocolVersion !== '1.0') {
     throw new Error(`Unexpected health response: ${JSON.stringify(result)}`)

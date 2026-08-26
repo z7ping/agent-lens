@@ -34,6 +34,12 @@ const common = {
 await build({
   ...common,
   entryPoints: [resolve(root, 'apps/cli/src/index.ts')],
+  outfile: resolve(dist, 'cli-core.mjs'),
+})
+
+await build({
+  ...common,
+  entryPoints: [resolve(root, 'apps/cli/src/entry.ts')],
   outfile: resolve(dist, 'cli.mjs'),
   banner: { js: '#!/usr/bin/env node' },
 })
@@ -70,8 +76,9 @@ await cp(
 
 for (const path of [
   resolve(dist, 'cli.mjs'),
-  resolve(dist, 'hooks/agent-lens-hook-codex.mjs'),
-  resolve(dist, 'hooks/agent-lens-hook-claude.mjs'),
+  resolve(dist, 'cli-core.mjs'),
+  resolve(dist, 'hooks', 'agent-lens-hook-codex.mjs'),
+  resolve(dist, 'hooks', 'agent-lens-hook-claude.mjs'),
 ]) {
   await chmod(path, 0o755).catch(() => undefined)
 }
