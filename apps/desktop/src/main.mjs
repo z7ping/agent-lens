@@ -12,6 +12,7 @@ import {
   dialog,
   shell,
 } from 'electron'
+import { createLoginAutostartController } from './login-autostart.mjs'
 
 const DEFAULT_PORT = 56789
 const EXPECTED_PROTOCOL_VERSION = '1.0'
@@ -22,7 +23,7 @@ const DAEMON_BUSY_PROBE_ATTEMPTS = 3
 const DAEMON_PORT_TIMEOUT_MS = 180
 const port = process.env.AGENT_LENS_PORT ? Number(process.env.AGENT_LENS_PORT) : DEFAULT_PORT
 const daemonUrl = `http://127.0.0.1:${port}`
-const startHidden = process.argv.includes('--hidden')
+const loginAutostart = createLoginAutostartController({ app })
 const startupPage = `data:text/html;charset=UTF-8,${encodeURIComponent(`<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -72,6 +73,11 @@ function desktopIconPath() {
   const windowIcon = unpackedAsset('assets', 'icon-window.png')
   if (existsSync(windowIcon)) return windowIcon
   return unpackedAsset('assets', 'icon-win.png')
+}
+
+async function trayIcon() {
+  if (process.platform === 'win32') return unpackedAsset('assets', 'tray.ico')
+  return app.getFileIcon(process.execPath, { size: 'small' })
 }
 
 async function ensureDaemonLog() {
@@ -145,7 +151,7 @@ async function daemonReady() {
 }
 
 function runtimeOwnerLabel(owner) {
-  if (owner === 'desktop') return 'Windows 客户端'
+  if (owner === 'desktop') return '桌面端'
   if (owner === 'service') return '后台服务'
   if (owner === 'cli') return '命令行'
   return '其他 AgentLens 进程'
@@ -312,7 +318,7 @@ async function restartDaemon() {
         type: 'info',
         title: '后台服务由其他方式管理',
         message: `当前 AgentLens 后台服务由${runtimeOwnerLabel(owner)}管理。`,
-        detail: '桌面客户端正在复用该运行时，不会擅自停止或重启它。请使用对应的命令行或后台服务管理入口进行重启。',
+        detail: '桌面端正在复用该运行时，不会擅自停止或重启它。请使用对应的命令行或后台服务管理入口进行重启。',
       })
       return
     }
@@ -330,46 +336,27 @@ async function restartDaemon() {
 }
 
 function canManageLoginAutostart() {
-  return process.platform === 'win32' && app.isPackaged
-}
-
-function loginAutostartQueryOptions() {
-  return {
-    path: process.execPath,
-    args: ['--hidden'],
-  }
-}
-
-function loginAutostartOptions(openAtLogin) {
-  return {
-    ...loginAutostartQueryOptions(),
-    openAtLogin,
-  }
+  return loginAutostart.isSupported()
 }
 
 function isLoginAutostartEnabled() {
-  if (!canManageLoginAutostart()) return false
-  try {
-    return app.getLoginItemSettings(loginAutostartQueryOptions()).openAtLogin
-  } catch {
-    return false
-  }
+  return loginAutostart.isEnabled()
 }
 
 function setLoginAutostart(enabled) {
-  if (!canManageLoginAutostart()) return false
-  try {
-    app.setLoginItemSettings(loginAutostartOptions(enabled))
-    return isLoginAutostartEnabled()
-  } catch {
-    return false
-  }
+  return loginAutostart.setEnabled(enabled)
 }
 
 async function ensureInitialLoginAutostart() {
   if (!canManageLoginAutostart()) return
   const marker = join(app.getPath('userData'), 'login-autostart-initialized')
-  if (existsSync(marker)) return
+  if (existsSync(marker)) {
+    if (isLoginAutostartEnabled() && !loginAutostart.refreshRegistrationIfEnabled()) {
+      await ensureDaemonLog()
+      writeDaemonLog('--- existing login autostart registration could not be refreshed ---')
+    }
+    return
+  }
   const enabled = setLoginAutostart(true)
   if (!enabled) {
     await ensureDaemonLog()
@@ -388,6 +375,7 @@ function showWindow() {
 }
 
 function createWindow() {
+  const startHidden = loginAutostart.shouldStartHidden(process.argv)
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 840,
@@ -421,15 +409,15 @@ function createWindow() {
   })
 }
 
-function createTray() {
-  tray = new Tray(unpackedAsset('assets', 'tray.ico'))
+async function createTray() {
+  tray = new Tray(await trayIcon())
   tray.setToolTip('AgentLens')
   const template = [
     { label: '打开 AgentLens', click: showWindow },
     { label: '重启运行时', click: () => void restartDaemon() },
     ...(canManageLoginAutostart() ? [
       {
-        label: '登录 Windows 后自动运行',
+        label: `登录 ${loginAutostart.platformLabel()} 后自动运行`,
         type: 'checkbox',
         checked: isLoginAutostartEnabled(),
         click: item => {
@@ -440,7 +428,7 @@ function createTray() {
             void dialog.showMessageBox({
               type: 'warning',
               title: '登录自启设置未生效',
-              message: requested ? 'Windows 没有确认启用 AgentLens 登录自启。' : 'Windows 没有确认关闭 AgentLens 登录自启。',
+              message: requested ? '系统没有确认启用 AgentLens 登录自启。' : '系统没有确认关闭 AgentLens 登录自启。',
               detail: '托盘状态已恢复为系统实际状态。请检查当前用户的启动应用权限后重试。',
             })
           }
@@ -497,14 +485,14 @@ if (!singleInstance) {
   }
 
   await app.whenReady()
-  app.setAppUserModelId('dev.z7ping.agentlens')
+  if (process.platform === 'win32') app.setAppUserModelId('dev.z7ping.agentlens')
 
   if (startupError || !runtimeReady) {
     const detail = startupError instanceof Error ? startupError.stack ?? startupError.message : String(startupError ?? '运行时未就绪')
     await dialog.showMessageBox({
       type: 'error',
       title: 'AgentLens 启动失败',
-      message: 'AgentLens Windows 客户端未能正常启动。',
+      message: 'AgentLens 桌面端未能正常启动。',
       detail: detail + '\n\n日志：' + join(app.getPath('logs'), 'daemon.log'),
     })
     app.quit()
@@ -512,7 +500,7 @@ if (!singleInstance) {
     createWindow()
 
     try {
-      createTray()
+      await createTray()
     } catch (error) {
       tray = null
       writeDaemonLog('--- tray creation failed: ' + (error instanceof Error ? error.stack ?? error.message : String(error)) + ' ---')
