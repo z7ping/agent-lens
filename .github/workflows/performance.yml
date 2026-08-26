@@ -17,6 +17,8 @@ on:
     paths:
       - 'scripts/performance/**'
       - 'packages/source-pi/src/**'
+      - 'apps/daemon/src/main.ts'
+      - 'apps/daemon/src/projection-readiness.ts'
       - 'apps/daemon/src/sources/dsh.ts'
       - 'packages/storage-sqlite/src/session-summaries.ts'
       - 'packages/storage-sqlite/src/observation-pagination.ts'
@@ -217,5 +219,42 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: agent-lens-performance-dsh-history-idle-${{ steps.profile.outputs.profile }}
+          path: performance-artifacts/
+          if-no-files-found: error
+
+  daemon-startup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.23.0
+          package-manager-cache: false
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Resolve benchmark profile
+        id: profile
+        shell: bash
+        run: |
+          PROFILE="${{ github.event.inputs.profile || 'smoke' }}"
+          case "$PROFILE" in
+            smoke) echo 'args=--sessions=100 --observations-per-session=20 --startup-mode=cycle --timeout-ms=30000' >> "$GITHUB_OUTPUT" ;;
+            s) echo 'args=--sessions=1000 --observations-per-session=100 --startup-mode=cycle --timeout-ms=30000' >> "$GITHUB_OUTPUT" ;;
+            m) echo 'args=--sessions=10000 --observations-per-session=100 --startup-mode=clean --timeout-ms=60000' >> "$GITHUB_OUTPUT" ;;
+            *) echo "Unknown profile: $PROFILE" >&2; exit 1 ;;
+          esac
+          echo "profile=$PROFILE" >> "$GITHUB_OUTPUT"
+      - name: Run Daemon startup benchmark
+        shell: bash
+        run: |
+          mkdir -p performance-artifacts
+          npm run perf:daemon-startup -- ${{ steps.profile.outputs.args }} | tee performance-artifacts/daemon-startup-${{ steps.profile.outputs.profile }}.txt
+      - name: Upload performance report
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-lens-performance-daemon-startup-${{ steps.profile.outputs.profile }}
           path: performance-artifacts/
           if-no-files-found: error
