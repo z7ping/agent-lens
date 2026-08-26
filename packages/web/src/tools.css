@@ -130,7 +130,13 @@
 .cell-muted { color: var(--al-muted-2); }
 
 /* 关注项 */
-.tool-attention { margin-top: 22px; }
+.tool-attention {
+  margin-top: 16px;
+  padding: 14px 16px 8px;
+  border: 1px solid var(--al-line);
+  border-radius: 12px;
+  background: var(--al-surface);
+}
 .tool-attention-list { margin-top: 8px; border-top: 1px solid var(--al-line); }
 .tool-attention-row {
   display: grid;
