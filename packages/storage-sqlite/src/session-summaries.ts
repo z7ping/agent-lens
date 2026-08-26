@@ -267,10 +267,23 @@ export class SqliteSessionSummaryReader implements SessionSummaryProjectionStore
         const rows = this.executor.db.prepare(
           sessionSummaryProjectionSelectSql(whereClause(conditions)),
         ).all(...params)
-        return {
-          items: rows.slice(0, limit).map(mapSummary),
-          hasMore: rows.length > limit,
+
+        if (rows.length || !input.logicalSessionId || !projectionExists) {
+          return {
+            items: rows.slice(0, limit).map(mapSummary),
+            hasMore: rows.length > limit,
+          }
         }
+
+        const targetObservationExists = Boolean(this.executor.db.prepare(
+          'SELECT 1 FROM observations WHERE logical_session_id = ? LIMIT 1',
+        ).get(input.logicalSessionId))
+        if (!targetObservationExists) {
+          return { items: [], hasMore: false }
+        }
+        // The projection is globally available but this exact session can still be
+        // inside the debounced refresh window. Fall through to an exact canonical
+        // query for correctness; the steady-state path above remains indexed.
       }
 
       const conditions: string[] = []
