@@ -37,6 +37,7 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "perf:session-summary": "tsx scripts/performance/session-summary-benchmark.ts",
+    "perf:review-detail": "tsx scripts/performance/review-detail-benchmark.ts",
     "release:check": "npm run check:web-presentation && npm run check:brand-assets && npm run check:desktop-shell && npm run typecheck && npm test && npm run build:dist && npm run smoke:dist && npm pack --dry-run",
     "prepack": "npm run check:web-presentation && npm run check:brand-assets && npm run check:desktop-shell && npm run build:dist"
   },
