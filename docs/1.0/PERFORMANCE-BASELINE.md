@@ -1,18 +1,28 @@
 # AgentLens 1.0 性能基线
 
-状态：第三阶段首轮优化完成  
+状态：第四阶段首轮优化完成  
 日期：2026-08-26  
 关联：ADR-0006
 
 ## 1. 目标
 
-性能治理遵循“先测量、再定位、最后优化”。第一阶段先建立百万级基线并定位热点；第二阶段只对已经确认的会话摘要热点实施优化；第三阶段进入长会话任务复盘，继续坚持先测量、不机械复制持久化 Projection 方案。
+性能治理遵循“先测量、再定位、最后优化”。当前已经完成会话摘要、长会话任务复盘、工具分析 / 智能体概览三类核心读路径的首轮治理。
 
 架构护栏：
 
 1. Web / Surface 不为性能绕过 Projection 直接访问 SQLite；
 2. 缓存 / 持久化 Projection 不成为第二事实源，必须可由 Canonical 数据重建；
 3. 性能与运行诊断不写入 Canonical Observation。
+
+统一优化顺序：
+
+```text
+基准 + EXPLAIN QUERY PLAN
+  -> 索引
+  -> SQL / Repository 查询重构
+  -> 增量 / 持久化 Projection
+  -> 必要的只读缓存
+```
 
 ## 2. 基准规模
 
@@ -32,6 +42,16 @@
 | S | 500 | 5,000 | 5,000 | 本地快速复现 |
 | M | 2,000 | 20,000 | 20,000 | 1.0 长会话正式基线 |
 
+### 工具分析 / 智能体概览
+
+| 级别 | Installation | Session / Installation | Tool Call / Session | Tool Observation | 用途 |
+| --- | ---: | ---: | ---: | ---: | --- |
+| smoke | 2 | 10 | 10 | 400 | 普通性能烟测 |
+| S | 4 | 50 | 50 | 20,000 | 快速规模验证 |
+| M | 6 | 100 | 100 | 120,000 | 1.0 正式基线 |
+
+M 级工具夹具为 60,000 次 Tool Call，每次包含 `tool.call + tool.result`，并关联 120,000 条 Evidence。
+
 当前正式判断以各对象的 M 级基准为准。L 不进入普通 CI。
 
 ## 3. 性能对象优先级
@@ -42,9 +62,9 @@
 4. Source 历史导入与后台扫描；
 5. 资产 / 备份扫描。
 
-第一阶段确认会话列表摘要是第一个数据库热点；第三阶段确认任务复盘虽然对 Timeline 做了分页，但详情入口此前仍存在分页前的整会话派生工作。该公共前置成本已经在第三阶段首轮优化中消除。
+前三项已经完成首轮治理。下一阶段转入 Source 历史导入与后台扫描。
 
-## 4. 会话摘要基准
+## 4. 会话摘要：首轮基线
 
 基准脚本：
 
@@ -52,56 +72,16 @@
 scripts/performance/session-summary-benchmark.ts
 ```
 
-运行 M 级基线：
+M 级数据：10,000 Session / 1,000,000 Observation / 2,000,000 Evidence。
 
-```bash
-npm run perf:session-summary
-```
-
-快速运行：
-
-```bash
-npm run perf:session-summary -- --sessions=1000 --observations-per-session=100 --evidence-per-observation=2 --samples=10
-```
-
-脚本必须：
-
-- 使用正式 SQLite migration；
-- 使用正式 `SqliteSessionSummaryReader` 执行查询；
-- fixture 只写临时数据库；
-- 不通过 Source / Observation Service 制造百万级数据，避免把基准时间混入业务 normalization 开销；
-- 记录 fixture 生成耗时；
-- 记录数据库 / WAL 大小；
-- 输出 Projection 重建耗时；
-- 输出查询 P50 / P95 / min / max；
-- 输出查询计划摘要；
-- 结束后删除临时数据库；
-- 不写入 AgentLens 正式数据目录。
-
-## 5. 2026-08-26 会话摘要 M 级首轮结果
-
-运行环境：GitHub Actions `ubuntu-24.04`，Node.js `22.23.0`。
-
-数据规模：
-
-```text
-Session      10,000
-Observation  1,000,000
-Evidence     2,000,000
-```
-
-结果：
+优化前：
 
 | 指标 | 实测 |
 | --- | ---: |
 | fixture 生成 | 29,992 ms |
 | SQLite 数据库 | 941.4 MiB |
-| 会话列表 20 条 min | 462.32 ms |
 | 会话列表 20 条 P50 | 479.25 ms |
 | 会话列表 20 条 P95 | 506.37 ms |
-| 会话列表 20 条 max | 507.25 ms |
-
-首轮 P95 相对 `< 100 ms` 软预算约慢 5 倍，确认属于需要治理的正式热点，而不是共享 runner 抖动。
 
 主要查询计划信号：
 
@@ -112,17 +92,11 @@ CORRELATED SCALAR SUBQUERY
 USE TEMP B-TREE FOR DISTINCT
 ```
 
-第一阶段结论：
+结论：会话摘要每次重新聚合大范围 Canonical Observation，普通索引无法消除随全库数据增长的核心复杂度。
 
-- Timeline 游标查询已有独立表达式索引，当前热点不是单 Session Timeline 分页；
-- Session Summary 每次仍需对大范围 Observation 做会话聚合和排序，成本随 Canonical 数据量增长；
-- `logical_sessions.started_at / ended_at` 当前不是 Observation commit 链维护的可靠派生字段，不能为了性能把它们直接当成最新会话事实源；
-- 继续增加普通索引不能消除“每次重新聚合百万 Observation”的核心复杂度；
-- 因此进入可重建、由 Canonical Observation 驱动的 Session Summary Projection，而不是让 Web / Surface 或 Source 绕过架构边界。
+## 5. 会话摘要：持久化可重建 Projection
 
-## 6. 第二阶段：持久化会话摘要 Projection
-
-第二阶段落地链路：
+落地链路：
 
 ```text
 Canonical Observation
@@ -133,60 +107,38 @@ Canonical Observation
   -> SessionSummaryReader
 ```
 
-实现约束：
+约束：
 
 - Canonical Observation 仍是唯一事实源；
-- `session_summary_projection` 是可删除、可全量重建的派生状态；
+- `session_summary_projection` 可删除、可全量重建；
 - Source 不直接写摘要；
 - Web / Surface 不直接访问 SQLite；
-- 新 Observation 提交后按 `logicalSessionId` 刷新对应摘要；
-- 同一 Session 的连续事件使用约 500 ms 去重窗口合并刷新；
-- 老数据库启动后后台执行一次全量重建，不把数据库升级变成同步 HTTP 启动阻塞；
-- Projection 尚未可用时保留旧查询作为冷启动兼容回退。
+- 新 Observation 提交后按 `logicalSessionId` 刷新摘要；
+- 同一 Session 连续事件使用约 500 ms 去重窗口合并刷新；
+- 老数据库启动后后台全量重建，不阻塞 HTTP 首先可用；
+- Projection 尚未可用时保留 Canonical 回退。
 
-同时把原本只有 Contract、尚未正式接入 Cordis Context 的 `ProjectionService` 接入运行时，避免为这一项性能优化建立旁路机制。
-
-## 7. 2026-08-26 会话摘要 M 级优化后结果
-
-运行环境与首轮一致：GitHub Actions `ubuntu-24.04`，Node.js `22.23.0`。
-
-数据规模：
-
-```text
-Session      10,000
-Observation  1,000,000
-Evidence     2,000,000
-```
-
-结果：
+优化后 M 级：
 
 | 指标 | 优化前 | 优化后 |
 | --- | ---: | ---: |
 | SQLite 数据库 | 941.4 MiB | 945.7 MiB |
 | Projection 行数 | - | 10,000 |
 | Projection 全量重建 | - | 2,412.54 ms |
-| 会话列表 20 条 min | 462.32 ms | 0.24 ms |
 | 会话列表 20 条 P50 | 479.25 ms | 0.27 ms |
-| 会话列表 20 条 P95 | 506.37 ms | 0.54 ms |
-| 会话列表 20 条 max | 507.25 ms | 0.55 ms |
+| 会话列表 20 条 P95 | 506.37 ms | **0.54 ms** |
 
-M 级会话摘要 P95 从 `506.37 ms` 降至 `0.54 ms`，约提升 `938x`，耗时降低约 `99.89%`，明显低于 `< 100 ms` 软预算。
+P95 约提升 `938x`，降低约 `99.89%`。
 
-优化后的查询计划：
+优化后的查询计划直接走：
 
 ```text
 SCAN summary USING INDEX idx_session_summary_projection_recent
-SEARCH logical USING INDEX sqlite_autoindex_logical_sessions_1 (id=?)
-SEARCH installation USING INDEX sqlite_autoindex_agent_installations_1 (id=?)
-SEARCH project USING INDEX sqlite_autoindex_projects_1 (id=?) LEFT-JOIN
-SEARCH workspace USING INDEX sqlite_autoindex_workspaces_1 (id=?) LEFT-JOIN
 ```
 
-关键变化：查询路径不再扫描百万级 Observation，也不再为会话排序建立临时 B-Tree。读路径成本主要随返回 Session 数量变化，而不再随全部 Observation 数量线性放大。
+日常查询不再扫描百万 Observation。
 
-全量重建约 `2.41 s` 是重建可派生状态的后台成本，不进入日常会话列表查询关键路径。后续继续关注实际旧库首次升级体验，但不把这一结果混同于查询 P95。
-
-## 8. 第三阶段：长会话任务复盘
+## 6. 长会话任务复盘：基线
 
 基准脚本：
 
@@ -194,105 +146,156 @@ SEARCH workspace USING INDEX sqlite_autoindex_workspaces_1 (id=?) LEFT-JOIN
 scripts/performance/review-detail-benchmark.ts
 ```
 
-M 级数据模型：单个逻辑会话包含 2,000 个交互，每个交互 10 条 Observation，共 20,000 Observation / 20,000 Evidence。夹具同时制造固定比例的工具错误与高延迟交互，用于覆盖四条真实读路径：
+M 级：2,000 Interaction / 20,000 Observation / 20,000 Evidence。
 
-```text
-首屏正向分页
-最新交互
-错误筛选
-高延迟筛选
-```
-
-普通 push 使用 `smoke`；M 级只在明确基准阶段或手动性能工作流执行。
-
-### 8.1 优化前 smoke 结果
-
-规模：50 Interaction / 500 Observation / 500 Evidence。
+优化前：
 
 | 路径 | P50 | P95 |
 | --- | ---: | ---: |
-| 首屏正向分页 | 22.35 ms | 27.49 ms |
-| 最新交互 | 27.33 ms | 30.75 ms |
-| 错误筛选 | 9.29 ms | 9.45 ms |
-| 高延迟筛选 | 13.44 ms | 15.03 ms |
+| 首屏正向分页 | 112.56 ms | 159.91 ms |
+| 最新交互 | 114.51 ms | 127.09 ms |
+| 错误筛选 | 221.10 ms | 235.91 ms |
+| 高延迟筛选 | 222.37 ms | 241.24 ms |
 
-### 8.2 优化前 M 级结果
-
-规模：2,000 Interaction / 20,000 Observation / 20,000 Evidence。SQLite 数据库约 `13.8 MiB`。
-
-| 路径 | min | P50 | P95 | max |
-| --- | ---: | ---: | ---: | ---: |
-| 首屏正向分页 | 99.49 ms | 112.56 ms | **159.91 ms** | 159.91 ms |
-| 最新交互 | 110.31 ms | 114.51 ms | **127.09 ms** | 127.09 ms |
-| 错误筛选 | 215.29 ms | 221.10 ms | **235.91 ms** | 235.91 ms |
-| 高延迟筛选 | 218.74 ms | 222.37 ms | **241.24 ms** | 241.24 ms |
-
-Timeline 查询计划本身正常：
+Timeline 查询本身已经走：
 
 ```text
 SEARCH observations USING INDEX idx_observations_timeline_order (logical_session_id=?)
 ```
 
-因此第三阶段首轮热点不是 Timeline 缺索引，而是 Projection 组合方式。
+真正热点是 `ReviewProjection.get()` 在分页前先通过 Session Projection 物化整段会话来生成顶部摘要，导致“只看 20 条首屏也先处理整个长会话”。
 
-### 8.3 优化前结构性结论
+## 7. 长会话任务复盘：首轮优化
 
-此前 `ReviewProjection.get()` 在真正执行分页前，会先调用 `SessionProjection.queryEntries({ logicalSessionId })` 生成顶部会话摘要。该调用会把指定会话的全部 Observation 分块加载、排序、统计并构建全部 Interaction。
-
-这意味着：
-
-```text
-用户只打开 20 条首屏
-  -> 先物化整个长会话
-  -> 再执行分页 Timeline
-```
-
-所以首屏虽然显示分页，关键路径仍包含 O(n) 的整会话派生成本。500 Observation 到 20,000 Observation 时，首屏 P95 从 `27.49 ms` 增至 `159.91 ms`，增长趋势与这一结构性问题一致。
-
-“最新交互”除同样承担前置整会话摘要成本外，还需要计算总交互序号；“错误 / 高延迟”本身设计上需要扫描全会话交互描述符，因此其 M 级 P95 达到约 `236–241 ms`。
-
-### 8.4 首轮优化方案
-
-没有为任务复盘新增第二张持久化 Projection，而是复用第二阶段已经存在的 `session_summary_projection`：
+没有新增第二张持久化 Projection，而是复用已有 `session_summary_projection`：
 
 ```text
 ReviewProjection.get(logicalSessionId)
   -> SessionSummaryReader 精确读取 logicalSessionId
-  -> 复用 observationCount / interactionCount / toolCount / errorCount / 首条用户消息
   -> Timeline 只分页读取当前需要显示的交互
 ```
 
-具体变化：
+同时：
 
-- `SessionSummaryReader.query()` 增加可选 `logicalSessionId` 精确条件；
-- SQLite 稳态精确读取直接走 `session_summary_projection` 主键索引；
-- `ReviewProjection.get()` 不再为了顶部摘要调用 `SessionProjection.queryEntries()` 物化整个会话；
-- “最新 / 向后分页”的总交互数直接复用摘要中的 `interactionCount`，不再额外扫描全部用户消息计数；
-- Timeline 分页实现和 `idx_observations_timeline_order` 保持不变；
-- 如果目标会话刚产生、摘要行仍处于约 500 ms 的去重刷新窗口内，则仅对该 `logicalSessionId` 临时执行 Canonical 精确聚合，确保性能优化不造成“会话暂时不存在”的错误结果。
+- “最新 / 向后分页”直接复用摘要中的 `interactionCount`；
+- 如果目标会话刚产生、摘要仍处于约 500 ms 刷新窗口，只对该 `logicalSessionId` 临时执行 Canonical 精确聚合；
+- 错误 / 高延迟筛选仍保留全会话扫描语义，不为当前已经达标的性能新增持久化 Projection。
 
-稳态摘要精确查询计划：
+优化后 M 级：
+
+| 路径 | 优化前 P95 | 优化后 P95 | 变化 |
+| --- | ---: | ---: | ---: |
+| 首屏正向分页 | 159.91 ms | **29.50 ms** | 约快 5.4 倍 |
+| 最新交互 | 127.09 ms | **31.94 ms** | 约快 4.0 倍 |
+| 错误筛选 | 235.91 ms | **192.44 ms** | 降低约 18% |
+| 高延迟筛选 | 241.24 ms | **181.13 ms** | 降低约 25% |
+
+500 Observation 到 20,000 Observation 时，首屏仍保持同一数量级，说明首屏和最新已经摆脱分页前整会话物化的线性成本。
+
+## 8. 工具分析 / 智能体概览：基线与热点
+
+基准脚本：
 
 ```text
-SEARCH session_summary_projection USING COVERING INDEX sqlite_autoindex_session_summary_projection_1 (logical_session_id=?)
+scripts/performance/tool-overview-benchmark.ts
 ```
 
-### 8.5 优化后 M 级结果
+初始实现存在两层放大：
 
-同样规模：2,000 Interaction / 20,000 Observation / 20,000 Evidence。任务复盘基准在执行前使用正式 `sessionSummaryProjection.rebuild({ logicalSessionId })` 建立生产态派生数据；单会话摘要重建约 `67.41 ms`，该重建属于派生状态维护成本，不进入稳态详情请求关键路径。
+1. `ToolAssetUsageProjection` 分别读取所有 `tool.call` 与 `tool.result`，完整 Observation Repository 还会加载 Evidence 引用并做额外元数据查询；
+2. `AgentOverviewProjection` 对每个 Installation 重复调用完整 Tool Usage 聚合，即使页面最终只使用 `usage.assets`。
 
-| 路径 | 优化前 P95 | 优化后 P50 | 优化后 P95 | 变化 |
+初始 smoke 查询计划还显示 `installationId + kind` 只命中 `kind` 索引，并需要临时排序。
+
+第四阶段第一刀在 Storage 边界增加了工具聚合专用的轻量只读 Reader：
+
+```text
+Projection
+  -> ToolUsageObservationReader
+  -> Canonical observations + source/install metadata
+```
+
+它不是缓存或新事实源，只从 Canonical Observation 读取工具聚合真正需要的字段，并且：
+
+- 不读取 Evidence 关联；
+- 不为每条 Observation 再查询 SourceSession / Installation；
+- 单页从 1,000 提升到 5,000；
+- v6 增加按 `kind + timeline order` 与 `installation + kind + timeline order` 的组合表达式索引。
+
+查询计划从临时排序改为直接走：
+
+```text
+SEARCH observations USING INDEX idx_observations_installation_kind_timeline_order (installation_id=? AND kind=?)
+SEARCH observations USING INDEX idx_observations_kind_timeline_order (kind=?)
+```
+
+轻量 Reader + 索引后的 M 级结果：
+
+| 路径 | P50 | P95 |
+| --- | ---: | ---: |
+| 单 Installation Tool Analysis | 88.29 ms | 113.34 ms |
+| 全局 Tool Analysis | 614.13 ms | **669.60 ms** |
+| Agent Overview（6 Installation） | 538.14 ms | **586.97 ms** |
+
+索引已经正确命中，但全局聚合和 Overview 仍超过 `< 500 ms` 软预算。此时主要成本已从 SQLite 选行转为 Node 侧大批量对象物化与重复聚合。
+
+## 9. 工具分析 / 智能体概览：流式聚合优化
+
+第二刀继续保持既有架构，没有新增持久化表：
+
+### 9.1 Tool Analysis
+
+`ToolAssetUsageProjection` 从：
+
+```text
+全部 calls 装入数组
++ 全部 results 装入数组
+-> 合并数组
+-> 第一轮构建 call identity
+-> 第二轮完整聚合
+```
+
+调整为：
+
+```text
+分页读取 tool.call
+-> 边读边建立 call identity / tool / asset 聚合
+-> 释放页面
+分页读取 tool.result
+-> 边读边关联并更新 tool 聚合
+-> 释放页面
+```
+
+因此不再在 Node 中同时持有完整 call/result 两个大数组，也不再为 call 事件做重复全量扫描。
+
+### 9.2 Agent Overview
+
+Agent Overview 实际只消费 `usage.assets`。新增 Projection 内部的 `queryAssets()` 轻量路径，仅扫描 `tool.call` 并计算 MCP / Skill 等资产使用情况，不再额外计算：
+
+- `tool.result`；
+- success / error；
+- duration；
+- 工具 Session 明细；
+- 不会被 Overview 使用的完整 Tool DTO。
+
+这仍然是 Projection 对 Canonical Observation 的派生，不产生第二事实源。
+
+### 9.3 优化后 M 级结果
+
+运行环境：GitHub Actions `ubuntu-24.04`，Node.js `22.23.0`。  
+规模：6 Installation / 600 Session / 60,000 Tool Call / 120,000 Tool Observation / 120,000 Evidence，SQLite 约 `99.9 MiB`。
+
+| 路径 | 第一刀 P95 | 流式优化后 P50 | 流式优化后 P95 | 变化 |
 | --- | ---: | ---: | ---: | ---: |
-| 首屏正向分页 | 159.91 ms | 25.29 ms | **29.50 ms** | 约快 5.4 倍 |
-| 最新交互 | 127.09 ms | 21.92 ms | **31.94 ms** | 约快 4.0 倍 |
-| 错误筛选 | 235.91 ms | 173.71 ms | **192.44 ms** | 降低约 18% |
-| 高延迟筛选 | 241.24 ms | 169.98 ms | **181.13 ms** | 降低约 25% |
+| 单 Installation Tool Analysis | 113.34 ms | 56.06 ms | **70.17 ms** | 降低约 38% |
+| 全局 Tool Analysis | 669.60 ms | 385.65 ms | **425.71 ms** | 降低约 36% |
+| Agent Overview（6 Installation） | 586.97 ms | 130.56 ms | **137.38 ms** | 约快 4.27 倍 |
 
-首屏从 500 Observation 的优化后 smoke P95 `22.39 ms` 到 20,000 Observation 的 M 级 P95 `29.50 ms`，数据量增长 40 倍但仍处于同一数量级；“最新”也从 smoke P95 `21.17 ms` 到 M 级 `31.94 ms`。这说明首屏和最新的公共关键路径已经摆脱“先处理整个会话”的线性成本，主要成本重新由当前页物化决定。
+三条路径均进入当前 `< 500 ms` 软预算。Agent Overview 的收益最大，因为去掉了原先为资产摘要计算大量无用 Tool Result / 会话统计的工作。
 
-错误 / 高延迟筛选也因为公共前置整会话物化被移除而下降，但其自身仍按设计扫描全部交互描述符，所以仍属于 O(n) 路径。当前 P95 约 `181–192 ms`，明显低于 `< 500 ms` 软预算，第三阶段暂不为它们继续新增持久化 Projection；后续只有在真实狗粮或更大规模基准显示有必要时，再独立治理。
+当前不继续为了追求更低数字新增工具持久化 Projection。后续只有在真实狗粮或更大规模数据表明全局 Tool Analysis 再次成为热点时，才评估增量可重建聚合。
 
-## 9. 第一版性能预算
+## 10. 第一版性能预算
 
 这些是软预算，不是最终 SLA：
 
@@ -303,29 +306,30 @@ SEARCH session_summary_projection USING COVERING INDEX sqlite_autoindex_session_
 | 会话详情最新交互 P95 | < 200 ms | **31.94 ms，通过** |
 | 会话详情错误筛选 P95 | < 500 ms | **192.44 ms，通过** |
 | 会话详情高延迟筛选 P95 | < 500 ms | **181.13 ms，通过** |
-| Tool Analysis P95 | < 500 ms | 待测 |
-| Agent Overview P95 | < 500 ms | 待测 |
+| Tool Analysis P95 | < 500 ms | **425.71 ms，通过** |
+| Agent Overview P95 | < 500 ms | **137.38 ms，通过** |
 | Daemon Health Ready | < 2 s | 待测 |
 | Web 新事件可见延迟 | < 500 ms | 待测 |
 | 空闲 CPU | 接近 0 | 待测 |
 
-预算不因为现状超标而修改。当前任务复盘四条路径均在预算内；已经确认并能低风险消除的首屏 / 最新结构性浪费已处理完，错误 / 高延迟不为了追求更低数字而过度设计。
+预算不因为现状超标而修改；达到预算后也不继续为了跑分增加不必要复杂度。
 
-## 10. 后续优化顺序
+## 11. 后续优化顺序
 
-数据库热点统一按以下顺序处理：
+前三项核心读路径首轮治理已经完成。下一性能对象：
 
 ```text
-基准 + EXPLAIN QUERY PLAN
-  -> 索引
-  -> SQL / Repository 查询重构
-  -> 增量 / 持久化 Projection
-  -> 必要的只读缓存
+Source 历史导入与后台扫描
+  -> Checkpoint 是否真正增量
+  -> 是否存在重复全量目录 / DB 扫描
+  -> 多 Source 并发与磁盘 IO
+  -> Daemon Ready 是否被历史同步阻塞
+
+资产 / 备份扫描
+  -> mtime / size 指纹
+  -> Hash 重算策略
+  -> inventory 增量更新
 ```
-
-会话摘要和长会话任务复盘首轮治理均已完成。下一性能对象转入 Tool Analysis / Agent Overview 聚合，仍从正式基准和查询计划开始，不预设一定需要新 Projection。
-
-错误 / 高延迟筛选保留为观察项：它们仍扫描整会话描述符，但当前 M 级明显低于预算，因此不阻塞 1.0 稳定化。
 
 任何新增持久化 Projection 都必须：
 
@@ -335,11 +339,9 @@ SEARCH session_summary_projection USING COVERING INDEX sqlite_autoindex_session_
 - 不允许 Source 直接写入；
 - 不改变 Canonical Observation / Evidence 的身份与语义。
 
-## 11. CI 策略
+## 12. CI 策略
 
 普通主 CI 不执行 M / L 基准。
-
-分为：
 
 ```text
 主 CI / Performance push
