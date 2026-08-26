@@ -183,7 +183,7 @@ jobs:
       - name: Smoke packaged desktop runtime
         shell: bash
         run: |
-          EXECUTABLE="$(find release/linux -type f -path '*/linux-unpacked/agentlens' | head -n 1)"
+          EXECUTABLE="$(find release/linux -type f -path '*/linux*-unpacked/agentlens' | head -n 1)"
           if [ -z "$EXECUTABLE" ]; then
             echo "没有找到 Linux AgentLens 可执行文件" >&2
             exit 1
