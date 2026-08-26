@@ -1,6 +1,6 @@
 # AgentLens 1.0 性能基线
 
-状态：第一阶段  
+状态：第二阶段  
 日期：2026-08-26  
 关联：ADR-0006
 
@@ -34,7 +34,7 @@
 4. Source 历史导入与后台扫描；
 5. 资产 / 备份扫描。
 
-当前已确认会话列表摘要是第一个数据库热点候选：每次查询会按 `logical_session_id` 聚合 Observation，并计算起止时间、Observation / 用户消息 / 工具 / 错误数量，同时查询首条用户消息、首条有效内容和来源集合。
+当前已确认会话列表摘要是第一个数据库热点：每次查询会按 `logical_session_id` 聚合 Observation，并计算起止时间、Observation / 用户消息 / 工具 / 错误数量，同时查询首条用户消息、首条有效内容和来源集合。
 
 ## 4. 会话摘要基准
 
@@ -69,7 +69,49 @@ npm run perf:session-summary -- --sessions=1000 --observations-per-session=100 -
 - 结束后删除临时数据库；
 - 不写入 AgentLens 正式数据目录。
 
-## 5. 第一版性能预算
+## 5. 2026-08-26 M 级首轮结果
+
+运行环境：GitHub Actions `ubuntu-24.04`，Node.js `22.23.0`。
+
+数据规模：
+
+```text
+Session      10,000
+Observation  1,000,000
+Evidence     2,000,000
+```
+
+结果：
+
+| 指标 | 实测 |
+| --- | ---: |
+| fixture 生成 | 29,992 ms |
+| SQLite 数据库 | 941.4 MiB |
+| 会话列表 20 条 min | 462.32 ms |
+| 会话列表 20 条 P50 | 479.25 ms |
+| 会话列表 20 条 P95 | 506.37 ms |
+| 会话列表 20 条 max | 507.25 ms |
+
+首轮 P95 相对 `< 100 ms` 软预算约慢 5 倍，确认属于需要治理的正式热点，而不是共享 runner 抖动。
+
+主要查询计划信号：
+
+```text
+SCAN observations USING INDEX idx_observations_session
+USE TEMP B-TREE FOR ORDER BY
+CORRELATED SCALAR SUBQUERY
+USE TEMP B-TREE FOR DISTINCT
+```
+
+结论：
+
+- Timeline 游标查询已有独立表达式索引，当前热点不是单 Session Timeline 分页；
+- Session Summary 每次仍需对大范围 Observation 做会话聚合和排序，成本随 Canonical 数据量增长；
+- `logical_sessions.started_at / ended_at` 当前不是 Observation commit 链维护的可靠派生字段，不能为了性能把它们直接当成最新会话事实源；
+- 继续增加普通索引不能消除“每次重新聚合百万 Observation”的核心复杂度；
+- 下一阶段进入可重建、由 Canonical Observation 驱动的增量 Session Summary Projection 设计与验证，不引入 Web/Surface 旁路或 Source 直写摘要。
+
+## 6. 第一版性能预算
 
 这些是软预算，不是最终 SLA：
 
@@ -85,7 +127,7 @@ npm run perf:session-summary -- --sessions=1000 --observations-per-session=100 -
 
 第一轮如果现状明显超预算，不直接修改预算来“通过”，先定位复杂度原因。
 
-## 6. 优化顺序
+## 7. 优化顺序
 
 会话摘要等数据库热点统一按以下顺序处理：
 
@@ -97,7 +139,9 @@ npm run perf:session-summary -- --sessions=1000 --observations-per-session=100 -
   -> 必要的只读缓存
 ```
 
-如果最终新增 Session Summary Projection，它必须：
+首轮会话摘要已经完成查询计划与索引能力判断，下一步进入增量 / 持久化 Projection 验证。
+
+如果新增 Session Summary Projection，它必须：
 
 - 由 Canonical Observation 驱动；
 - 可全量重建；
@@ -105,11 +149,11 @@ npm run perf:session-summary -- --sessions=1000 --observations-per-session=100 -
 - 不允许 Source 直接写入；
 - 不改变 Canonical Observation / Evidence 的身份与语义。
 
-## 7. CI 策略
+## 8. CI 策略
 
 普通主 CI 暂不执行 M / L 基准。
 
-后续分为：
+分为：
 
 ```text
 主 CI
@@ -118,8 +162,8 @@ npm run perf:session-summary -- --sessions=1000 --observations-per-session=100 -
 
 独立 Performance Workflow
   -> M / L 数据规模
-  -> 手动或定时执行
+  -> 手动执行
   -> 保存性能报告
 ```
 
-不因为共享 runner 的几十毫秒波动阻断普通开发。
+性能工作流在 push 时保持 `smoke`，M 级通过 `workflow_dispatch` 手动运行；不因为共享 runner 的几十毫秒波动阻断普通开发。
