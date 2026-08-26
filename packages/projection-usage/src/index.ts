@@ -16,7 +16,8 @@ import {
   type UsageAssetType,
 } from '@agent-lens/protocol'
 
-const SCAN_CHUNK = 1000
+const REPOSITORY_SCAN_CHUNK = 1000
+const LIGHT_SCAN_CHUNK = 5000
 const DEFAULT_LIMIT = 100
 const MAX_LIMIT = 500
 
@@ -80,6 +81,7 @@ export class ToolAssetUsageProjection {
   ): Promise<UsageObservation[]> {
     const observations: UsageObservation[] = []
     const reader = usageReader(this.storage)
+    const scanChunk = reader ? LIGHT_SCAN_CHUNK : REPOSITORY_SCAN_CHUNK
     let after: ObservationCursor | undefined
     while (true) {
       const page = reader
@@ -92,7 +94,7 @@ export class ToolAssetUsageProjection {
             ...(query.from ? { from: query.from } : {}),
             ...(query.to ? { to: query.to } : {}),
             ...(after ? { after } : {}),
-            limit: SCAN_CHUNK,
+            limit: scanChunk,
           })
         : await this.storage.repositories.observations.query({
             kind,
@@ -101,11 +103,11 @@ export class ToolAssetUsageProjection {
             ...(query.from ? { from: query.from } : {}),
             ...(query.to ? { to: query.to } : {}),
             ...(after ? { after } : {}),
-            limit: SCAN_CHUNK,
+            limit: scanChunk,
           })
       if (!page.length) break
       observations.push(...page)
-      if (page.length < SCAN_CHUNK) break
+      if (page.length < scanChunk) break
       after = cursorForObservation(page[page.length - 1]!)
     }
     return observations
