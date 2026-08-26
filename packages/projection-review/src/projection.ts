@@ -566,11 +566,12 @@ export class ReviewProjection {
     logicalSessionId: string,
     query: ReviewDetailQueryDto,
     filter: ReviewDetailFilter = 'all',
+    knownInteractionCount?: number,
   ): Promise<{ interactions: ReviewInteractionDto[]; page: ReviewDetailPageDto }> {
     const requestedLimit = filter === 'latest' ? 1 : Math.max(1, Math.min(query.limit ?? DEFAULT_DETAIL_LIMIT, MAX_DETAIL_LIMIT))
     const decoded = query.cursor ? decodeReviewCursor(query.cursor) : null
     if (decoded && (decoded.mode !== 'timeline' || decoded.direction !== 'backward')) throw new Error('Invalid review cursor')
-    const endingOrdinal = decoded?.ordinal ?? await this.countInteractions(logicalSessionId)
+    const endingOrdinal = decoded?.ordinal ?? knownInteractionCount ?? await this.countInteractions(logicalSessionId)
     if (endingOrdinal < 1) {
       return { interactions: [], page: { count: 0, hasMore: false, direction: 'backward', filter } }
     }
@@ -677,18 +678,29 @@ export class ReviewProjection {
   }
 
   async get(logicalSessionId: string, query: ReviewDetailQueryDto = {}): Promise<ReviewSessionDetailDto | null> {
-    const sessionResult = await this.sessions.queryEntries({ logicalSessionId, limit: 1 })
-    const session = sessionResult.entries.find(item => item.session.id === logicalSessionId)
-    if (!session) return null
-    const summary = await this.summary(session)
+    let summary: ReviewSessionSummaryDto | null = null
+    if (this.storage.sessionSummaries) {
+      const summaryResult = await this.storage.sessionSummaries.query({
+        logicalSessionId,
+        limit: 1,
+      })
+      const record = summaryResult.items.find(item => item.logicalSessionId === logicalSessionId)
+      if (record) summary = this.summaryFromRecord(record)
+    } else {
+      const sessionResult = await this.sessions.queryEntries({ logicalSessionId, limit: 1 })
+      const session = sessionResult.entries.find(item => item.session.id === logicalSessionId)
+      if (session) summary = await this.summary(session)
+    }
+    if (!summary) return null
+
     const filter = query.filter ?? 'all'
     const direction = query.direction ?? 'forward'
     const result = filter === 'errors' || filter === 'latency'
       ? await this.filteredInteractionPage(logicalSessionId, query, filter)
       : filter === 'latest'
-        ? await this.backwardInteractionPage(logicalSessionId, { ...query, direction: 'backward' }, 'latest')
+        ? await this.backwardInteractionPage(logicalSessionId, { ...query, direction: 'backward' }, 'latest', summary.interactionCount)
         : direction === 'backward'
-          ? await this.backwardInteractionPage(logicalSessionId, query)
+          ? await this.backwardInteractionPage(logicalSessionId, query, 'all', summary.interactionCount)
           : await this.forwardInteractionPage(logicalSessionId, query)
 
     return {
