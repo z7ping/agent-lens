@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import {
   access,
+  open,
   opendir,
   readFile,
   readdir,
@@ -43,6 +44,7 @@ const SOURCE_ID = 'pi'
 const PARSER_VERSION = '1'
 const POLL_MS = 500
 const MAX_STRING = 64 * 1024
+const SESSION_HEADER_BYTES = 64 * 1024
 const SENSITIVE_KEY = /(password|passwd|secret|token|api[_-]?key|authorization|cookie)/i
 
 interface PiSessionMetadata {
@@ -219,14 +221,21 @@ async function* readJsonlLines(filePath: string, startOffset: number): AsyncIter
 }
 
 async function readSessionHeader(filePath: string): Promise<Record<string, unknown> | null> {
+  let handle
   try {
-    const text = await readFile(filePath, 'utf8')
-    const first = text.split(/\r?\n/, 1)[0]
+    handle = await open(filePath, 'r')
+    const buffer = Buffer.alloc(SESSION_HEADER_BYTES)
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0)
+    const preview = buffer.subarray(0, bytesRead).toString('utf8')
+    const newline = preview.search(/\r?\n/)
+    const first = newline >= 0 ? preview.slice(0, newline) : preview
     if (!first) return null
     const entry = asRecord(JSON.parse(first))
     return entry.type === 'session' ? entry : null
   } catch {
     return null
+  } finally {
+    await handle?.close().catch(() => undefined)
   }
 }
 
@@ -277,6 +286,13 @@ export async function* ingestPiHistory(ctx: SourceExecutionContext): AsyncIterab
     const fileStat = await stat(filePath)
     const key = historyCheckpointKey(filePath)
     const previous = await ctx.checkpoint.get<HistoryCheckpoint>(key)
+    const unchanged = previous
+      && previous.path === filePath
+      && previous.offset === fileStat.size
+      && previous.size === fileStat.size
+      && previous.mtimeMs === fileStat.mtimeMs
+    if (unchanged) continue
+
     const reset = !previous || previous.path !== filePath || fileStat.size < previous.offset
     let offset = reset ? 0 : previous.offset
     let sequence = reset ? 0 : previous.sequence
