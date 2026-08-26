@@ -351,18 +351,17 @@ function CrossAgentMatrix({ agents }: { agents: AgentOverviewDto[] }) {
   </section>
 }
 
-export function AgentsPage({ model }: { model: AgentLensClientModel }) {
+export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: AgentLensClientModel; sourceId: string; onSourceIdChange(sourceId: string): void }) {
   const snapshot = useClientSnapshot(model)
   const agents = snapshot.facets?.agents ?? []
   const items = snapshot.agents?.items ?? []
-  const [sourceId, setSourceId] = useState('')
   const fallbackSourceId = items.find(item => item.detected)?.sourceId || items[0]?.sourceId || ''
   const selectedSourceId = items.some(item => item.sourceId === sourceId) ? sourceId : fallbackSourceId
   const selectedAgent = items.find(item => item.sourceId === selectedSourceId)
 
   return <main className="workspace-page">
     <div className="workspace-toolbar">
-      <AgentScope agents={agents} value={selectedSourceId} onChange={setSourceId} allLabel={false}/>
+      <AgentScope agents={agents} value={selectedSourceId} onChange={onSourceIdChange} allLabel={false}/>
       <button className="icon-button toolbar-end" onClick={() => void model.refreshFacetsAndAgents()} title="刷新智能体概览" aria-label="刷新智能体概览"><UiIcon name="refresh" size={15}/></button>
     </div>
     <div className="page-content agents-content">
@@ -373,7 +372,7 @@ export function AgentsPage({ model }: { model: AgentLensClientModel }) {
           {items.map(agent => {
             const assetCount = agent.assetInventory.filter(asset => asset.type !== 'builtin').length
             const status = captureState(agent)
-            return <button key={agent.sourceId} className={`agent-source-option ${agent.sourceId === selectedSourceId ? 'is-active' : ''}`} onClick={() => setSourceId(agent.sourceId)} aria-current={agent.sourceId === selectedSourceId ? 'true' : undefined} title={status.title}>
+            return <button key={agent.sourceId} className={`agent-source-option ${agent.sourceId === selectedSourceId ? 'is-active' : ''}`} onClick={() => onSourceIdChange(agent.sourceId)} aria-current={agent.sourceId === selectedSourceId ? 'true' : undefined} title={status.title}>
               <span className={`source-dot large ${sourceDot(agent.sourceId)}`}/>
               <span className="agent-source-copy"><b>{agentLabel(agent.sourceId, agent.displayName)}</b><small>{assetCount} 项用户资产</small></span>
               <span className={`agent-source-state ${status.className}`}>{status.label}</span>
