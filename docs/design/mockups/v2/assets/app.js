@@ -6,7 +6,7 @@
   document.head.appendChild(currentStyles)
 
   var parityStyles = document.createElement('style')
-  parityStyles.textContent = '.tip::after{white-space:pre-line!important;max-width:min(320px,calc(100vw - 24px))!important}.tip{position:relative;cursor:help}'
+  parityStyles.textContent = '.tip::after{white-space:pre-line!important;max-width:min(320px,calc(100vw - 24px))!important}.tip{position:relative;cursor:help}.brand-name-cn{margin-left:6px;color:var(--al-muted);font-size:12px;font-weight:560;white-space:nowrap}.attention:first-of-type{padding:14px 16px 8px;border:1px solid var(--al-line);border-radius:12px;background:var(--al-surface)}'
   document.head.appendChild(parityStyles)
 
   var THEME_KEY = 'al-mock-theme'
@@ -39,6 +39,21 @@
       mark.style.background = 'transparent'
       mark.style.boxShadow = 'none'
     })
+    document.querySelectorAll('.brand').forEach(function (brand) {
+      if (brand.querySelector('.brand-name-cn')) return
+      var name = brand.querySelector('.brand-name')
+      if (!name) return
+      var cn = document.createElement('span')
+      cn.className = 'brand-name-cn'
+      cn.textContent = '智能体透镜'
+      name.insertAdjacentElement('afterend', cn)
+    })
+  }
+
+  function removeRedundantPageHeadings() {
+    if (!/(tools|insights|agents|backup)\.html$/i.test(location.pathname)) return
+    var heading = document.querySelector('.compact-heading, .heading, .future-heading .compact-heading')
+    if (heading) heading.remove()
   }
 
   function normalizeStatusPills() {
@@ -79,7 +94,7 @@
   }
 
   function syncScopeManagers() {
-    if (/backup\.html$/i.test(location.pathname)) return
+    if (/(backup|agents)\.html$/i.test(location.pathname)) return
     document.querySelectorAll('.agent-scope').forEach(function (scope) {
       if (scope.querySelector('.scope-manage')) return
       var details = document.createElement('details')
@@ -100,6 +115,11 @@
   }
 
   function syncAgentSources() {
+    if (!/agents\.html$/i.test(location.pathname)) return
+    var toolbar = document.querySelector('.workspace-toolbar .agent-scope')
+    if (toolbar && !toolbar.querySelector('[data-source="hermes"]')) {
+      toolbar.insertAdjacentHTML('beforeend', '<button class="scope-chip" data-source="hermes"><span class="src-dot dot-hermes"></span>Hermes</button><button class="scope-chip" data-source="opencode"><span class="src-dot dot-opencode"></span>OpenCode</button>')
+    }
     var nav = document.querySelector('.source-nav')
     if (!nav || nav.querySelector('[data-source="hermes"]')) return
     ;[
@@ -304,6 +324,7 @@
   try { applyTheme(localStorage.getItem(THEME_KEY) || 'light') } catch (e) { applyTheme('light') }
 
   renderBrand()
+  removeRedundantPageHeadings()
   normalizeStatusPills()
   normalizeScopeLabels()
   syncScopeManagers()
