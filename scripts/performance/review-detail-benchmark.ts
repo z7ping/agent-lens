@@ -173,6 +173,14 @@ try {
     throw new Error(`fixture count mismatch: ${JSON.stringify(counts)}`)
   }
 
+  const projectionStart = performance.now()
+  await storage.sessionSummaryProjection?.rebuild({ logicalSessionId })
+  const projectionRebuildMs = performance.now() - projectionStart
+  const projectionRows = Number((db.prepare(
+    'SELECT COUNT(*) AS count FROM session_summary_projection WHERE logical_session_id = ?',
+  ).get(logicalSessionId) as { count: number }).count)
+  if (projectionRows !== 1) throw new Error(`session summary projection mismatch: ${projectionRows}`)
+
   const results = []
   results.push(await measure('first-page-forward', options.samples, async () => {
     const detail = await review.get(logicalSessionId, { limit: options.limit, direction: 'forward' })
@@ -202,6 +210,14 @@ try {
     LIMIT ?
   `).all(logicalSessionId, 250) as Array<{ detail: string }>
 
+  const summaryPlan = db.prepare(`
+    EXPLAIN QUERY PLAN
+    SELECT logical_session_id
+    FROM session_summary_projection
+    WHERE logical_session_id = ?
+    LIMIT 1
+  `).all(logicalSessionId) as Array<{ detail: string }>
+
   const databaseBytes = fileSize(databasePath)
   const walBytes = fileSize(`${databasePath}-wal`)
   console.log(JSON.stringify({
@@ -209,6 +225,8 @@ try {
       ...counts,
       interactions: options.interactions,
       buildMs: Number(fixtureMs.toFixed(2)),
+      sessionSummaryProjectionRows: projectionRows,
+      sessionSummaryProjectionRebuildMs: Number(projectionRebuildMs.toFixed(2)),
       databaseBytes,
       databaseMiB: mb(databaseBytes),
       walBytes,
@@ -216,6 +234,7 @@ try {
     },
     reviewDetail: results,
     queryPlan: plan.map(row => row.detail),
+    sessionSummaryQueryPlan: summaryPlan.map(row => row.detail),
   }, null, 2))
 } finally {
   storage.close()
