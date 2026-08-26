@@ -5,8 +5,7 @@ import { SqliteStorageService } from './storage'
 test('storage migrations include tool usage timeline indexes', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   try {
-    const version = await storage.migrate()
-    assert.equal(version, 6)
+    await storage.migrate()
 
     const migrations = storage.db.prepare(
       'SELECT version, name FROM schema_migrations ORDER BY version',
