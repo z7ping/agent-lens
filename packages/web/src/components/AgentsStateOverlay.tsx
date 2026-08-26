@@ -165,7 +165,7 @@ function DiagnosticAgent({ agent, diagnostics }: { agent: AgentOverviewDto; diag
 }
 
 function AgentDiagnosticsPanel({ snapshot, sourceId }: { snapshot: ClientSnapshot; sourceId: string }) {
-  const availableAgents = snapshot.agents?.items.filter(agent => agent.detected || agent.enabled) ?? []
+  const availableAgents = snapshot.agents?.items ?? []
   const fallbackSourceId = availableAgents.find(agent => agent.detected)?.sourceId || availableAgents[0]?.sourceId || ''
   const selectedSourceId = availableAgents.some(agent => agent.sourceId === sourceId) ? sourceId : fallbackSourceId
   const selectedAgent = availableAgents.find(agent => agent.sourceId === selectedSourceId)
