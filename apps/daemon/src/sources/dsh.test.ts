@@ -6,6 +6,7 @@ import test from 'node:test'
 import type { SourceExecutionContext, SourceRecord } from '@agent-lens/core'
 import {
   discoverDshAssets,
+  ingestDshHistory,
   normalizeDshRecord,
   parseDshJsonl,
 } from './dsh'
@@ -86,6 +87,36 @@ test('DSH 归一化把父会话和工作区写入身份提示', async () => {
     nativeParentSessionId: 'parent',
     workspacePath: '/repo/demo',
   })
+})
+
+test('DSH 历史检查点跳过未变化文件，并在追加事件后继续增量读取', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-dsh-history-'))
+  const sessions = join(root, 'sessions')
+  const path = join(sessions, 'session.jsonl')
+  const context = sourceContext(root)
+  const drain = async () => {
+    const records: SourceRecord[] = []
+    for await (const record of ingestDshHistory(context)) records.push(record)
+    return records
+  }
+
+  try {
+    await mkdir(sessions, { recursive: true })
+    const header = JSON.stringify({ sessionId: 'session-1', cwd: '/repo/demo' })
+    const first = JSON.stringify({ seq: 1, type: 'user/message', time: 1, data: { content: '一' } })
+    await writeFile(path, `${header}\n${first}\n`)
+
+    assert.equal((await drain()).length, 1)
+    assert.equal((await drain()).length, 0)
+
+    const second = JSON.stringify({ seq: 2, type: 'assistant/message', time: 2, data: { content: '二' } })
+    await writeFile(path, `${header}\n${first}\n${second}\n`)
+    const appended = await drain()
+    assert.equal(appended.length, 1)
+    assert.equal(appended[0]?.nativeId, 'session-1:2')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
 })
 
 test('DSH Profile 静态发现区分 Bundle、树外插件和配置覆盖', async () => {
