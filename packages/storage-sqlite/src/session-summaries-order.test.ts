@@ -34,11 +34,17 @@ test('session summary projection preserves ordering and can rebuild one session'
     })
 
     const older = await commitMessage('session-older', '2026-08-25T10:00:00.000Z', '较早会话')
-    await commitMessage('session-newer', '2026-08-25T10:05:00.000Z', '较新会话')
+    const newer = await commitMessage('session-newer', '2026-08-25T10:05:00.000Z', '较新会话')
 
     const fallback = await storage.sessionSummaries.query({ limit: 10 })
     assert.equal(fallback.items.length, 2)
     assert.equal(fallback.items[0]?.endedAt, '2026-08-25T10:05:00.000Z')
+
+    const exactFallback = await storage.sessionSummaries.query({
+      logicalSessionId: older.observation.logicalSessionId,
+      limit: 1,
+    })
+    assert.deepEqual(exactFallback.items.map(item => item.logicalSessionId), [older.observation.logicalSessionId])
 
     await storage.sessionSummaryProjection.rebuild()
     assert.equal(Number((storage.db.prepare('SELECT COUNT(*) AS count FROM session_summary_projection').get() as { count: number }).count), 2)
@@ -48,6 +54,20 @@ test('session summary projection preserves ordering and can rebuild one session'
       projected.items.map(item => [item.logicalSessionId, item.endedAt, item.observationCount]),
       fallback.items.map(item => [item.logicalSessionId, item.endedAt, item.observationCount]),
     )
+
+    const exactProjected = await storage.sessionSummaries.query({
+      logicalSessionId: newer.observation.logicalSessionId,
+      limit: 1,
+    })
+    assert.deepEqual(exactProjected.items.map(item => item.logicalSessionId), [newer.observation.logicalSessionId])
+
+    const pending = await commitMessage('session-pending', '2026-08-25T10:07:00.000Z', '尚在刷新窗口中的新会话')
+    const exactPending = await storage.sessionSummaries.query({
+      logicalSessionId: pending.observation.logicalSessionId,
+      limit: 1,
+    })
+    assert.deepEqual(exactPending.items.map(item => item.logicalSessionId), [pending.observation.logicalSessionId])
+    assert.equal(exactPending.items[0]?.observationCount, 1)
 
     await commitMessage('session-older', '2026-08-25T10:10:00.000Z', '较早会话后来又有新消息')
     await storage.sessionSummaryProjection.rebuild({ logicalSessionId: older.observation.logicalSessionId })
