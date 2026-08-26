@@ -124,7 +124,7 @@ jobs:
         id: profile
         shell: bash
         run: |
-          PROFILE="${{ github.event.inputs.profile || 'm' }}"
+          PROFILE="${{ github.event.inputs.profile || 'smoke' }}"
           case "$PROFILE" in
             smoke) echo 'args=--installations=2 --sessions-per-installation=10 --calls-per-session=10 --evidence-per-observation=1 --samples=3 --limit=100' >> "$GITHUB_OUTPUT" ;;
             s) echo 'args=--installations=4 --sessions-per-installation=50 --calls-per-session=50 --evidence-per-observation=1 --samples=8 --limit=100' >> "$GITHUB_OUTPUT" ;;
