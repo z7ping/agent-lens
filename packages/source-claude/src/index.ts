@@ -257,6 +257,13 @@ export async function* ingestClaudeHistory(
     const fileStat = await stat(filePath)
     const key = historyCheckpointKey(filePath)
     const previous = await ctx.checkpoint.get<HistoryCheckpoint>(key)
+    const unchanged = previous
+      && previous.path === filePath
+      && previous.offset === fileStat.size
+      && previous.size === fileStat.size
+      && previous.mtimeMs === fileStat.mtimeMs
+    if (unchanged) continue
+
     const reset = !previous || previous.path !== filePath || fileStat.size < previous.offset
     let offset = reset ? 0 : previous.offset
     let sequence = reset ? 0 : previous.sequence
