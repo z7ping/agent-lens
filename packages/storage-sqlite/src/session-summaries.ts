@@ -109,7 +109,7 @@ function legacyQuerySql(installationFilter: string): string {
   `
 }
 
-function projectionSelectSql(installationFilter: string): string {
+export function sessionSummaryProjectionSelectSql(installationFilter: string): string {
   return `
     SELECT
       summary.logical_session_id,
@@ -237,18 +237,17 @@ export class SqliteSessionSummaryReader implements SessionSummaryProjectionStore
   query(input: { limit: number; installationId?: string }): Promise<{ items: SessionSummaryRecord[]; hasMore: boolean }> {
     const limit = Math.max(1, Math.min(input.limit, MAX_LIMIT))
     return this.executor.run(() => {
-      const projectionCount = Number((this.executor.db.prepare(
-        'SELECT COUNT(*) AS count FROM session_summary_projection',
-      ).get() as { count: number }).count)
-      const observationCount = Number((this.executor.db.prepare(
-        'SELECT COUNT(*) AS count FROM observations',
-      ).get() as { count: number }).count)
+      const projectionExists = Boolean(this.executor.db.prepare(
+        'SELECT 1 FROM session_summary_projection LIMIT 1',
+      ).get())
+      const observationExists = projectionExists
+        ? true
+        : Boolean(this.executor.db.prepare('SELECT 1 FROM observations LIMIT 1').get())
 
-      const useProjection = projectionCount > 0 || observationCount === 0
-      if (useProjection) {
+      if (projectionExists || !observationExists) {
         const installationFilter = input.installationId ? 'WHERE summary.installation_id = ?' : ''
         const params = input.installationId ? [input.installationId, limit + 1] : [limit + 1]
-        const rows = this.executor.db.prepare(projectionSelectSql(installationFilter)).all(...params)
+        const rows = this.executor.db.prepare(sessionSummaryProjectionSelectSql(installationFilter)).all(...params)
         return {
           items: rows.slice(0, limit).map(mapSummary),
           hasMore: rows.length > limit,
