@@ -38,7 +38,7 @@ function mapSummary(row: any): SessionSummaryRecord {
   }
 }
 
-function legacyQuerySql(installationFilter: string): string {
+function legacyQuerySql(observationFilter: string): string {
   return `
     WITH session_aggregates AS (
       SELECT
@@ -53,7 +53,7 @@ function legacyQuerySql(installationFilter: string): string {
           ELSE 0
         END) AS error_count
       FROM observations
-      ${installationFilter}
+      ${observationFilter}
       GROUP BY logical_session_id
       ORDER BY ended_at DESC, logical_session_id ASC
       LIMIT ?
@@ -109,7 +109,7 @@ function legacyQuerySql(installationFilter: string): string {
   `
 }
 
-export function sessionSummaryProjectionSelectSql(installationFilter: string): string {
+export function sessionSummaryProjectionSelectSql(summaryFilter: string): string {
   return `
     SELECT
       summary.logical_session_id,
@@ -134,7 +134,7 @@ export function sessionSummaryProjectionSelectSql(installationFilter: string): s
     JOIN agent_installations AS installation ON installation.id = summary.installation_id
     LEFT JOIN projects AS project ON project.id = logical.project_id
     LEFT JOIN workspaces AS workspace ON workspace.id = logical.workspace_id
-    ${installationFilter}
+    ${summaryFilter}
     ORDER BY summary.ended_at DESC, summary.logical_session_id ASC
     LIMIT ?
   `
@@ -231,10 +231,18 @@ function rebuildInsertSql(sessionFilter: string): string {
   `
 }
 
+function whereClause(conditions: string[]): string {
+  return conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
+}
+
 export class SqliteSessionSummaryReader implements SessionSummaryProjectionStore {
   constructor(private readonly executor: SqliteExecutor) {}
 
-  query(input: { limit: number; installationId?: string }): Promise<{ items: SessionSummaryRecord[]; hasMore: boolean }> {
+  query(input: {
+    limit: number
+    installationId?: string
+    logicalSessionId?: string
+  }): Promise<{ items: SessionSummaryRecord[]; hasMore: boolean }> {
     const limit = Math.max(1, Math.min(input.limit, MAX_LIMIT))
     return this.executor.run(() => {
       const projectionExists = Boolean(this.executor.db.prepare(
@@ -245,18 +253,38 @@ export class SqliteSessionSummaryReader implements SessionSummaryProjectionStore
         : Boolean(this.executor.db.prepare('SELECT 1 FROM observations LIMIT 1').get())
 
       if (projectionExists || !observationExists) {
-        const installationFilter = input.installationId ? 'WHERE summary.installation_id = ?' : ''
-        const params = input.installationId ? [input.installationId, limit + 1] : [limit + 1]
-        const rows = this.executor.db.prepare(sessionSummaryProjectionSelectSql(installationFilter)).all(...params)
+        const conditions: string[] = []
+        const params: unknown[] = []
+        if (input.logicalSessionId) {
+          conditions.push('summary.logical_session_id = ?')
+          params.push(input.logicalSessionId)
+        }
+        if (input.installationId) {
+          conditions.push('summary.installation_id = ?')
+          params.push(input.installationId)
+        }
+        params.push(limit + 1)
+        const rows = this.executor.db.prepare(
+          sessionSummaryProjectionSelectSql(whereClause(conditions)),
+        ).all(...params)
         return {
           items: rows.slice(0, limit).map(mapSummary),
           hasMore: rows.length > limit,
         }
       }
 
-      const installationFilter = input.installationId ? 'WHERE installation_id = ?' : ''
-      const params = input.installationId ? [input.installationId, limit + 1] : [limit + 1]
-      const rows = this.executor.db.prepare(legacyQuerySql(installationFilter)).all(...params)
+      const conditions: string[] = []
+      const params: unknown[] = []
+      if (input.logicalSessionId) {
+        conditions.push('logical_session_id = ?')
+        params.push(input.logicalSessionId)
+      }
+      if (input.installationId) {
+        conditions.push('installation_id = ?')
+        params.push(input.installationId)
+      }
+      params.push(limit + 1)
+      const rows = this.executor.db.prepare(legacyQuerySql(whereClause(conditions))).all(...params)
       return {
         items: rows.slice(0, limit).map(mapSummary),
         hasMore: rows.length > limit,
