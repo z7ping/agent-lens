@@ -29,7 +29,9 @@ interface ScopeMenuPosition {
 
 export function AgentScope({ agents, value, onChange, allLabel = '全部智能体' }: { agents: AgentFacetDto[]; value: string; onChange(value: string): void; allLabel?: string | false }) {
   const { pinned, toggle } = usePinnedAgents()
-  const shown = pinned.map(id => agents.find(agent => agent.sourceId === id)).filter((agent): agent is AgentFacetDto => Boolean(agent))
+  const shown = allLabel === false
+    ? agents
+    : pinned.map(id => agents.find(agent => agent.sourceId === id)).filter((agent): agent is AgentFacetDto => Boolean(agent))
   const detailsRef = useRef<HTMLDetailsElement>(null)
   const summaryRef = useRef<HTMLElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -121,13 +123,13 @@ export function AgentScope({ agents, value, onChange, allLabel = '全部智能�
       <span className={`source-dot ${sourceDot(agent.sourceId)}`} />
       <span>{agentLabel(agent.sourceId, agent.displayName)}</span>
     </button>)}
-    <details ref={detailsRef} className="agent-scope-manage" onToggle={event => setMenuOpen(event.currentTarget.open)}>
+    {allLabel !== false && <details ref={detailsRef} className="agent-scope-manage" onToggle={event => setMenuOpen(event.currentTarget.open)}>
       <summary ref={summaryRef} className="scope-manage-button" title="管理智能体快捷入口" aria-label="管理智能体快捷入口">
         <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
           <path d="M8 3v10M3 8h10" />
         </svg>
       </summary>
       {menuOpen && typeof document !== 'undefined' ? createPortal(menu, document.body) : null}
-    </details>
+    </details>}
   </div>
 }
