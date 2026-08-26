@@ -28,6 +28,11 @@ const migrations: readonly Migration[] = [
     name: 'runtime-profiles-relationships-diagnostics',
     fileName: '004-runtime-profiles-relationships-diagnostics.sql',
   },
+  {
+    version: 5,
+    name: 'session-summary-projection',
+    fileName: '005-session-summary-projection.sql',
+  },
 ]
 
 async function readMigrationSql(fileName: string): Promise<string> {
