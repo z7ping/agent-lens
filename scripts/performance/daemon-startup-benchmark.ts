@@ -2,8 +2,11 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
-import { spawn } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
+import { projectionReadinessInternals } from '../../apps/daemon/src/projection-readiness'
 import { SqliteStorageService } from '../../packages/storage-sqlite/src/index'
+
+type StartupMode = 'unclean' | 'clean' | 'cycle'
 
 function readPositiveInt(name: string, fallback: number): number {
   const prefix = `--${name}=`
@@ -14,9 +17,18 @@ function readPositiveInt(name: string, fallback: number): number {
   return value
 }
 
+function readStartupMode(): StartupMode {
+  const prefix = '--startup-mode='
+  const raw = process.argv.find(arg => arg.startsWith(prefix))?.slice(prefix.length)
+  if (!raw) return 'cycle'
+  if (raw === 'unclean' || raw === 'clean' || raw === 'cycle') return raw
+  throw new Error(`startup-mode must be one of unclean, clean, cycle; received ${raw}`)
+}
+
 const sessions = readPositiveInt('sessions', 100)
 const observationsPerSession = readPositiveInt('observations-per-session', 20)
 const timeoutMs = readPositiveInt('timeout-ms', 30_000)
+const startupMode = readStartupMode()
 const root = mkdtempSync(join(tmpdir(), 'agent-lens-daemon-startup-'))
 const databasePath = join(root, 'agent-lens.db')
 const vaultPath = join(root, 'vault')
@@ -71,7 +83,16 @@ async function seed(): Promise<number> {
   db.pragma('synchronous = NORMAL')
   const rebuildStarted = performance.now()
   await storage.sessionSummaryProjection.rebuild()
-  return performance.now() - rebuildStarted
+  const elapsed = performance.now() - rebuildStarted
+
+  if (startupMode === 'clean') {
+    await storage.checkpoints.set(
+      projectionReadinessInternals.CHECKPOINT_SCOPE,
+      projectionReadinessInternals.CHECKPOINT_KEY,
+      { version: 1, clean: true, markedAt: new Date().toISOString() },
+    )
+  }
+  return elapsed
 }
 
 async function waitForHealth(startedAt: number): Promise<number> {
@@ -88,22 +109,17 @@ async function waitForHealth(startedAt: number): Promise<number> {
   throw new Error(`health timeout after ${timeoutMs}ms`)
 }
 
-async function waitForExit(child: ReturnType<typeof spawn>, timeout = 5_000): Promise<void> {
+async function waitForExit(child: ChildProcess, timeout = 10_000): Promise<void> {
   if (child.exitCode != null) return
   await Promise.race([
     new Promise<void>(resolve => child.once('exit', () => resolve())),
-    new Promise<void>((resolve, reject) => setTimeout(() => reject(new Error('daemon shutdown timeout')), timeout)),
+    new Promise<void>((_, reject) => setTimeout(() => reject(new Error('daemon shutdown timeout')), timeout)),
   ])
 }
 
-let child: ReturnType<typeof spawn> | undefined
-try {
-  const initialProjectionRebuildMs = await seed()
-  storage.close()
-
-  let output = ''
-  const startedAt = performance.now()
-  child = spawn(process.execPath, ['--import', 'tsx', 'apps/daemon/src/main.ts'], {
+function spawnDaemon(): { child: ChildProcess; output: { value: string } } {
+  const output = { value: '' }
+  const child = spawn(process.execPath, ['--import', 'tsx', 'apps/daemon/src/main.ts'], {
     cwd: process.cwd(),
     env: {
       ...process.env,
@@ -117,19 +133,63 @@ try {
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
-  child.stdout?.on('data', chunk => { output += String(chunk) })
-  child.stderr?.on('data', chunk => { output += String(chunk) })
+  child.stdout?.on('data', chunk => { output.value += String(chunk) })
+  child.stderr?.on('data', chunk => { output.value += String(chunk) })
+  return { child, output }
+}
 
-  const healthReadyMs = await waitForHealth(startedAt)
-  const deadline = Date.now() + timeoutMs
-  while (!output.includes('session summary projection rebuilt') && Date.now() < deadline) {
-    if (child.exitCode != null) throw new Error(`daemon exited early: ${child.exitCode}\n${output}`)
-    await new Promise(resolve => setTimeout(resolve, 25))
+async function stopDaemon(child: ChildProcess): Promise<void> {
+  if (child.exitCode != null) return
+  child.kill('SIGTERM')
+  try {
+    await waitForExit(child)
+  } catch {
+    child.kill('SIGKILL')
+    await waitForExit(child).catch(() => undefined)
   }
-  if (!output.includes('session summary projection rebuilt')) {
-    throw new Error(`projection rebuild timeout after ${timeoutMs}ms\n${output}`)
+}
+
+async function runStartup(action: 'rebuilt' | 'reused') {
+  const { child, output } = spawnDaemon()
+  const startedAt = performance.now()
+  try {
+    const healthReadyMs = await waitForHealth(startedAt)
+    const expected = action === 'rebuilt'
+      ? 'session summary projection rebuilt'
+      : 'session summary projection reused from clean shutdown'
+    const deadline = Date.now() + timeoutMs
+    while (!output.value.includes(expected) && Date.now() < deadline) {
+      if (child.exitCode != null) throw new Error(`daemon exited early: ${child.exitCode}\n${output.value}`)
+      await new Promise(resolve => setTimeout(resolve, 25))
+    }
+    if (!output.value.includes(expected)) {
+      throw new Error(`${action} decision timeout after ${timeoutMs}ms\n${output.value}`)
+    }
+    const projectionDecisionReadyMs = performance.now() - startedAt
+    return {
+      action,
+      healthReadyMs: Number(healthReadyMs.toFixed(2)),
+      projectionDecisionReadyMs: Number(projectionDecisionReadyMs.toFixed(2)),
+      backgroundMsAfterHealth: Number((projectionDecisionReadyMs - healthReadyMs).toFixed(2)),
+    }
+  } finally {
+    await stopDaemon(child)
   }
-  const redundantProjectionReadyMs = performance.now() - startedAt
+}
+
+try {
+  const initialProjectionRebuildMs = await seed()
+  storage.close()
+
+  const startup: Record<string, unknown> = {}
+  if (startupMode === 'unclean') {
+    startup.unclean = await runStartup('rebuilt')
+  } else if (startupMode === 'clean') {
+    startup.clean = await runStartup('reused')
+  } else {
+    startup.unclean = await runStartup('rebuilt')
+    startup.clean = await runStartup('reused')
+  }
 
   console.log(JSON.stringify({
     fixture: {
@@ -137,22 +197,10 @@ try {
       observations: sessions * observationsPerSession,
       prebuiltProjectionMs: Number(initialProjectionRebuildMs.toFixed(2)),
     },
-    startup: {
-      healthReadyMs: Number(healthReadyMs.toFixed(2)),
-      redundantProjectionReadyMs: Number(redundantProjectionReadyMs.toFixed(2)),
-      redundantBackgroundMsAfterHealth: Number((redundantProjectionReadyMs - healthReadyMs).toFixed(2)),
-    },
+    mode: startupMode,
+    startup,
   }, null, 2))
 } finally {
-  if (child && child.exitCode == null) {
-    child.kill('SIGTERM')
-    try {
-      await waitForExit(child)
-    } catch {
-      child.kill('SIGKILL')
-      await waitForExit(child).catch(() => undefined)
-    }
-  }
   try { storage.close() } catch {}
   rmSync(root, { recursive: true, force: true })
 }
