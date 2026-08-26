@@ -28,7 +28,13 @@ jobs:
         if: github.event_name == 'release'
         run: node scripts/check-release-version.mjs
 
+      - name: Note unsigned prerelease
+        if: github.event_name == 'release' && github.event.release.prerelease == true
+        shell: pwsh
+        run: Write-Host 'AgentLens prerelease: Windows installer may be published unsigned for alpha/beta/rc dogfood.'
+
       - name: Require Windows release signing credentials
+        if: github.event_name == 'release' && github.event.release.prerelease == false
         env:
           CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
@@ -45,13 +51,14 @@ jobs:
           npm run typecheck
           npm test
 
-      - name: Build signed Windows installer
+      - name: Build Windows installer
         run: npm run desktop:win
         env:
           CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
 
       - name: Verify Windows installer signature
+        if: github.event_name == 'release' && github.event.release.prerelease == false
         shell: pwsh
         run: |
           $installer = Get-ChildItem 'release/windows/AgentLens-*-Setup-x64.exe' | Select-Object -First 1
@@ -82,8 +89,11 @@ jobs:
 
           $installedExe = Join-Path $installDir 'AgentLens.exe'
           if (-not (Test-Path $installedExe)) { throw "安装完成后没有找到 AgentLens.exe：$installedExe" }
-          $installedSignature = Get-AuthenticodeSignature $installedExe
-          if ($installedSignature.Status -ne 'Valid') { throw "安装后的 AgentLens.exe 签名无效：$($installedSignature.Status)" }
+          $requireSignature = '${{ github.event_name == 'release' && github.event.release.prerelease == false }}' -eq 'true'
+          if ($requireSignature) {
+            $installedSignature = Get-AuthenticodeSignature $installedExe
+            if ($installedSignature.Status -ne 'Valid') { throw "安装后的 AgentLens.exe 签名无效：$($installedSignature.Status)" }
+          }
           ./scripts/smoke-windows-desktop.ps1 -ExecutablePath $installedExe
 
           # 模拟真实用户数据。覆盖升级和普通卸载默认都必须保留它。
