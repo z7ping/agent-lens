@@ -34,8 +34,13 @@ AgentLens does **not** execute the agent and does not claim access to hidden cha
 | Codex | Native session JSONL | Runtime Hooks + durable inbox | Skills, MCP, Plugins, Hooks, Rules |
 | Claude Code | Project/session JSONL | Runtime Hooks + durable inbox | Skills, MCP, Plugins, Hooks, Commands |
 | Pi | Native Session JSONL | Continuous native JSONL tail | Skills, Extensions, MCP, Memory-related assets |
+| Hermes | Native SQLite session history | Native SQLite tail + optional Runtime Hook | Skills, MCP, Plugins, Memory-related assets |
+| OpenCode | Native session/runtime data | Incremental native runtime collection | Assets recognized through the 1.0 Source Contract |
+| DeepSeek Harness | Profile Session JSONL / JSONL.ZST with Turn, Step, Tool, Usage, Request Header, and session lineage | Watches changed session files and tails by event sequence | Profile Bundles, external Plugins, profile configuration overrides |
 
-0.x integrations such as Hermes, OpenCode, Cursor, and OpenClaw are **not** automatically considered 1.0 support. They must return through the 1.0 Source Contract.
+DeepSeek Harness maps `SessionHeader.cwd` to an AgentLens Workspace and preserves `parentSessionId` as native lineage evidence. AgentLens does not infer `subagent` merely because a parent session exists.
+
+DSH Bundle/Plugin discovery follows the profile's own `package.json`, including `dsh.profile.bundles` and dependency declarations. `cordis.patch.yml` is recorded as a profile configuration override. Compressed reasoning chunks are not expanded, and hidden reasoning, permission events, or asset-usage attribution are not inferred without reliable native evidence.
 
 ## Quick start
 
@@ -49,7 +54,7 @@ npm install -g @z7ping/agent-lens
 agent-lens setup
 ```
 
-`agent-lens setup` performs one-time initialization: it validates Node.js and the data directory, detects local Codex / Claude Code / Pi roots, and installs or repairs only AgentLens-owned Hooks for detected Codex / Claude Code installations. Pi uses native history/runtime tailing and does not receive a Hook.
+`agent-lens setup` performs one-time initialization: it validates Node.js and the data directory, detects supported local Sources, and installs or repairs only AgentLens-owned Hooks for Sources that require Hooks. Native history/runtime-tail Sources are not modified just to integrate with AgentLens.
 
 After setup, choose foreground or managed background operation:
 
@@ -155,8 +160,8 @@ Task Review uses a `Session List | Session Detail` split layout and treats Sessi
 - user and Agent messages are rendered conversationally;
 - consecutive tool calls are grouped as an execution process with results, errors, and duration;
 - permission, subagent, context, model, and lifecycle events remain interleaved in the execution stream;
-- Codex, Claude Code, and Pi retain source-specific event semantics where they matter;
-- Pi can expose native parent/session relationships;
+- Codex, Claude Code, Pi, Hermes, OpenCode, and DeepSeek Harness retain source-specific native facts where they matter;
+- Pi and DeepSeek Harness can preserve native parent/session relationships;
 - Evidence and Raw Payload live in a temporary Inspector instead of dominating the main reading flow.
 
 Filtering is by Agent, project, time range, error state, and search text. Users no longer need to type installationId or logicalSessionId manually.
@@ -229,6 +234,7 @@ See:
 - [ADR-0001: Clean Rebuild and Cordis Runtime Ownership](docs/adr/0001-agentlens-1.0-clean-rebuild-and-cordis-runtime.md)
 - [ADR-0002: Web Plugin and Client State Model](docs/adr/0002-web-plugin-and-client-state-model.md)
 - [ADR-0004: Dual distribution, single runtime, and lifecycle ownership](docs/adr/0004-dual-distribution-single-runtime-lifecycle.md)
+- [ADR-0005: Runtime Profile, Session Relationships, and Asset Topology](docs/adr/0005-runtime-profile-session-relationship-and-asset-topology.md)
 
 ## Evidence model
 
@@ -292,22 +298,24 @@ apps/
 packages/
   core/ core-services/ runtime-cordis/ protocol/
   storage-sqlite/
-  source-codex/ source-claude/ source-pi/
+  source-codex/ source-claude/ source-pi/ source-hermes/ source-opencode/
   projection-timeline/ projection-session/ projection-usage/
   projection-review/ projection-overview/
   surface-http/ web/ hook-manager/
 ```
 
+DeepSeek Harness Source currently lives in `apps/daemon/src/sources/dsh.ts` while its behavior and lockfile changes settle. It will only be extracted into `packages/source-dsh` when that can happen without duplicating a second implementation.
+
 ## Release model
 
 A GitHub Release triggers:
 
-1. Linux + Windows verification;
+1. Linux + Windows + macOS verification;
 2. typecheck/tests/distribution build;
 3. exact npm tarball packing;
 4. SBOM + SHA-256 checksums;
 5. GitHub Release artifact upload;
-6. publish of that exact tarball to npm;
+6. publish of that exact prerelease tarball to the npm `alpha` dist-tag;
 7. a separate Windows workflow that builds and attaches the NSIS installer.
 
 The release tag must match `package.json` exactly (`v` prefix is allowed).
