@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { cliEntryInternals } from './entry.ts'
+import { cliEntryInternals } from './entry'
 
 test('JSON 与长运行命令不追加被动更新提示', () => {
   assert.equal(cliEntryInternals.shouldOfferPassiveUpdate(['status', '--json'], 0), false)

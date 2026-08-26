@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { compareSemver, npmInstallArgs, selectUpdateVersion, shouldCheckForUpdate } from './update.ts'
+import { compareSemver, npmInstallArgs, selectUpdateVersion, shouldCheckForUpdate } from './update'
 
 test('SemVer 按 alpha beta rc stable 顺序比较', () => {
   assert.ok(compareSemver('1.0.0-alpha.1', '1.0.0-alpha.0') > 0)
