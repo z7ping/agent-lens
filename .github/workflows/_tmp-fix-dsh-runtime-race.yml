@@ -1,0 +1,60 @@
+name: 临时修正 DSH 实时检查点竞态
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/_tmp-fix-dsh-runtime-race.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - name: 修正竞态
+        shell: python {0}
+        run: |
+          from pathlib import Path
+          p = Path('apps/daemon/src/sources/dsh.ts')
+          s = p.read_text()
+          old = '''  if (ctx.abortSignal.aborted || !isSessionFile(path) || !await exists(path)) return
+  let session: ParsedSession | null = null
+  try { session = await readSession(path) } catch { return }
+  if (!session) return
+'''
+          new = '''  if (ctx.abortSignal.aborted || !isSessionFile(path) || !await exists(path)) return
+  const before = await stat(path).catch(() => null)
+  if (!before) return
+  let session: ParsedSession | null = null
+  try { session = await readSession(path) } catch { return }
+  if (!session) return
+'''
+          if old not in s:
+            raise SystemExit('start block not found')
+          s = s.replace(old, new, 1)
+          old = '''  const meta = await stat(path).catch(() => null)
+  if (meta) await ctx.checkpoint.set(fileCheckpointKey(path), { path, size: meta.size, mtimeMs: meta.mtimeMs })
+}
+'''
+          new = '''  const afterMeta = await stat(path).catch(() => null)
+  if (afterMeta && afterMeta.size === before.size && afterMeta.mtimeMs === before.mtimeMs) {
+    await ctx.checkpoint.set(fileCheckpointKey(path), { path, size: before.size, mtimeMs: before.mtimeMs })
+  }
+}
+'''
+          if old not in s:
+            raise SystemExit('end block not found')
+          p.write_text(s.replace(old, new, 1))
+      - name: 提交
+        run: |
+          git config user.name 'agentlens-ci'
+          git config user.email 'actions@users.noreply.github.com'
+          git add apps/daemon/src/sources/dsh.ts
+          git diff --cached --check
+          git commit -m '修正 DSH 实时扫描检查点竞态'
+          git push origin HEAD:main
