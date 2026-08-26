@@ -115,7 +115,7 @@ function StorageDiagnostics({ snapshot }: { snapshot: ClientSnapshot }) {
   if (!growth) return null
   return <section className="agent-storage-diagnostics">
     <div className="agent-storage-head">
-      <div><b>AgentLens 数据增长</b><small>只观察增长，不自动删除历史事实</small></div>
+      <div><b>AgentLens 数据增长</b><small>全局存储状态 · 不随智能体筛选变化</small></div>
       <strong>{formatBytes(numberValue(growth.databaseBytes) + numberValue(growth.walBytes))}</strong>
     </div>
     <div className="agent-storage-kpis">
@@ -164,17 +164,20 @@ function DiagnosticAgent({ agent, diagnostics }: { agent: AgentOverviewDto; diag
   </section>
 }
 
-function AgentDiagnosticsPanel({ snapshot }: { snapshot: ClientSnapshot }) {
-  const agents = snapshot.agents?.items.filter(agent => agent.detected || agent.enabled) ?? []
-  const rows = agents.map(agent => ({ agent, diagnostics: diagnosticsFor(agent, snapshot) }))
-  const failed = rows.reduce((sum, item) => sum + item.diagnostics.failedStages, 0)
-  const unknown = rows.reduce((sum, item) => sum + item.diagnostics.unknownCount, 0)
+function AgentDiagnosticsPanel({ snapshot, sourceId }: { snapshot: ClientSnapshot; sourceId: string }) {
+  const availableAgents = snapshot.agents?.items.filter(agent => agent.detected || agent.enabled) ?? []
+  const fallbackSourceId = availableAgents.find(agent => agent.detected)?.sourceId || availableAgents[0]?.sourceId || ''
+  const selectedSourceId = availableAgents.some(agent => agent.sourceId === sourceId) ? sourceId : fallbackSourceId
+  const selectedAgent = availableAgents.find(agent => agent.sourceId === selectedSourceId)
+  const diagnostics = selectedAgent ? diagnosticsFor(selectedAgent, snapshot) : null
+  const failed = diagnostics?.failedStages ?? 0
+  const unknown = diagnostics?.unknownCount ?? 0
   const hasIssue = failed > 0 || unknown > 0
   const [open, setOpen] = useState(hasIssue)
-  if (!agents.length || !snapshot.health) return null
+  if (!selectedAgent || !diagnostics || !snapshot.health) return null
   return <details className="agent-diagnostics-dock" open={open} onToggle={event => setOpen(event.currentTarget.open)}>
     <summary>
-      <span><b>采集诊断</b><small>区分没有发生、来源不提供与尚未适配</small></span>
+      <span><b>采集诊断</b><small>{agentLabel(selectedAgent.sourceId, selectedAgent.displayName)} · 区分没有发生、来源不提供与尚未适配</small></span>
       <span className="agent-diagnostics-summary" data-state={hasIssue ? 'warn' : 'ok'}>{hasIssue ? `${failed} 异常 · ${unknown} 待适配` : '运行正常'}</span>
     </summary>
     <div className="agent-diagnostics-body">
@@ -185,12 +188,12 @@ function AgentDiagnosticsPanel({ snapshot }: { snapshot: ClientSnapshot }) {
         <span data-state="unavailable">来源不提供</span>
         <span data-state="unsupported">AgentLens 尚未支持</span>
       </div>
-      {rows.map(item => <DiagnosticAgent key={item.agent.sourceId} agent={item.agent} diagnostics={item.diagnostics}/>)}
+      <DiagnosticAgent agent={selectedAgent} diagnostics={diagnostics}/>
     </div>
   </details>
 }
 
-export function AgentsStateOverlay({ model, snapshot }: { model: AgentLensClientModel; snapshot: ClientSnapshot }) {
+export function AgentsStateOverlay({ model, snapshot, sourceId }: { model: AgentLensClientModel; snapshot: ClientSnapshot; sourceId: string }) {
   const response = snapshot.agents
   const hasSseBanner = Boolean(snapshot.health && !snapshot.liveConnected)
   const shellClass = `agents-state-overlay ${hasSseBanner ? 'has-sse-banner' : ''}`
@@ -223,5 +226,5 @@ export function AgentsStateOverlay({ model, snapshot }: { model: AgentLensClient
     </div>
   }
 
-  return <AgentDiagnosticsPanel snapshot={snapshot}/>
+  return <AgentDiagnosticsPanel snapshot={snapshot} sourceId={sourceId}/>
 }
