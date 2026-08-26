@@ -1,6 +1,6 @@
 # AgentLens 1.0 桌面发行矩阵
 
-更新日期：2026-08-26  
+更新日期：2026-08-27  
 状态：Alpha 跨平台桌面发行基线
 
 ## 1. 发行范围
@@ -31,7 +31,7 @@ npm run desktop:mac:release
 npm run desktop:linux
 ```
 
-普通 `desktop:mac` 用于无签名 CI 验证；`desktop:mac:release` 只用于正式 Release，强制代码签名和 Apple 公证。
+普通 `desktop:mac` 用于无签名构建；`desktop:mac:release` 用于正式稳定版，强制代码签名和 Apple 公证。
 
 各平台都先执行 Web / 品牌 / 桌面壳检查，构建同一份正式 `dist/`，再复制到 Desktop `runtime/` 后交给 electron-builder 打包。
 
@@ -62,7 +62,12 @@ docs/design/brand/agentlens-icon-master.svg
 - 手动运行；
 - GitHub Release 发布。
 
-普通 push / 手动验证允许无签名构建，用于验证源码、原生依赖、打包和随包 Runtime；**GitHub Release 不允许 Windows/macOS 静默回退成未签名产物**。
+当前签名策略按 GitHub Release 是否标记为 prerelease 区分：
+
+- Alpha / Beta / RC 等预发布版允许 Windows/macOS 生成并公开上传未签名产物，用于狗粮和早期测试；
+- Stable Release 继续强制 Windows 代码签名，以及 macOS Developer ID 签名 + Apple 公证；
+- 未签名预发布包仍必须通过完整源码检查、打包 Runtime 冒烟、安装/升级验证和 SHA256 校验；
+- 未签名 Windows/macOS 包可能触发 SmartScreen / Gatekeeper 警告，这属于预发布阶段已知限制。
 
 Release 发布时，各平台产物自动附加到同一个 Release Assets。
 
@@ -79,7 +84,7 @@ SHA256SUMS-npm.txt
 
 ## 5. Windows 代码签名
 
-正式 Windows Release 工作流要求以下 GitHub Secrets：
+Stable Windows Release 工作流要求以下 GitHub Secrets：
 
 ```text
 WINDOWS_CSC_LINK
@@ -88,17 +93,17 @@ WINDOWS_CSC_KEY_PASSWORD
 
 `WINDOWS_CSC_LINK` 按 electron-builder 支持的证书输入方式提供 PFX / P12 证书，密码放在 `WINDOWS_CSC_KEY_PASSWORD`。
 
-Release 工作流会在构建前检查凭据，构建后使用 Windows Authenticode 再次验证：
+Stable Release 工作流会在构建前检查凭据，构建后使用 Windows Authenticode 再次验证：
 
 - NSIS Setup 签名必须为 `Valid`；
 - 安装后的 `AgentLens.exe` 签名也必须为 `Valid`；
-- 任一不满足时停止 Release 产物上传。
+- 任一不满足时停止 Stable Release 产物上传。
 
-日常 `Windows Installer Compile` 仍是无凭据的可构建性验证，不承担“正式签名产物”语义。
+预发布 Release 不要求上述 Secrets，可以生成未签名 NSIS Setup；日常 `Windows Installer Compile` 仍是无凭据的可构建性验证，不承担“正式签名产物”语义。
 
 ## 6. macOS Developer ID 与公证
 
-正式 macOS Release 使用：
+Stable macOS Release 使用：
 
 - Developer ID Application 代码签名；
 - Hardened Runtime；
@@ -133,7 +138,7 @@ APPLE_API_ISSUER
 
 `APPLE_API_KEY_P8` 保存 `.p8` 文件正文；工作流只在 Runner 临时目录物化它，不写入仓库和构建产物。
 
-缺少 Developer ID 或公证凭据时，正式 Release 直接失败，不发布一个会被 Gatekeeper 当作普通未签名应用的 DMG。
+预发布 Release 使用普通 `desktop:mac` 生成未签名、未公证的 DMG / ZIP；Stable Release 缺少 Developer ID 或公证凭据时仍直接失败，禁止 Stable 静默回退成未签名产物。
 
 ## 7. 桌面运行时冒烟
 
