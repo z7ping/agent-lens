@@ -28,6 +28,12 @@ jobs:
         if: github.event_name == 'release'
         run: node scripts/check-release-version.mjs
 
+      - name: Require Windows release signing credentials
+        env:
+          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+        run: node scripts/check-release-signing.mjs windows
+
       - name: Verify Web presentation convergence
         run: npm run check:web-presentation
 
@@ -39,11 +45,23 @@ jobs:
           npm run typecheck
           npm test
 
-      - name: Build Windows installer
+      - name: Build signed Windows installer
         run: npm run desktop:win
         env:
           CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+
+      - name: Verify Windows installer signature
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem 'release/windows/AgentLens-*-Setup-x64.exe' | Select-Object -First 1
+          if ($null -eq $installer) { throw '没有找到 Windows 安装器' }
+          $signature = Get-AuthenticodeSignature $installer.FullName
+          if ($signature.Status -ne 'Valid') {
+            throw "Windows 安装器签名无效：$($signature.Status) $($signature.StatusMessage)"
+          }
+          Write-Host "Signed installer: $($installer.Name)"
+          Write-Host "Publisher: $($signature.SignerCertificate.Subject)"
 
       - name: Smoke packaged Windows desktop
         shell: pwsh
@@ -64,6 +82,8 @@ jobs:
 
           $installedExe = Join-Path $installDir 'AgentLens.exe'
           if (-not (Test-Path $installedExe)) { throw "安装完成后没有找到 AgentLens.exe：$installedExe" }
+          $installedSignature = Get-AuthenticodeSignature $installedExe
+          if ($installedSignature.Status -ne 'Valid') { throw "安装后的 AgentLens.exe 签名无效：$($installedSignature.Status)" }
           ./scripts/smoke-windows-desktop.ps1 -ExecutablePath $installedExe
 
           # 模拟真实用户数据。覆盖升级和普通卸载默认都必须保留它。
