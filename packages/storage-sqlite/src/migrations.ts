@@ -33,6 +33,11 @@ const migrations: readonly Migration[] = [
     name: 'session-summary-projection',
     fileName: '005-session-summary-projection.sql',
   },
+  {
+    version: 6,
+    name: 'observation-tool-usage-order-indexes',
+    fileName: '006-observation-tool-usage-order-indexes.sql',
+  },
 ]
 
 async function readMigrationSql(fileName: string): Promise<string> {
