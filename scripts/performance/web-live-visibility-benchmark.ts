@@ -61,10 +61,11 @@ async function measureOne(index: number): Promise<number> {
   startedAt = performance.now()
   emitEvent({
     type: 'observation.committed',
-    occurredAt: new Date().toISOString(),
+    observationId: `live-observation-${index}`,
     logicalSessionId,
     affected: ['review'],
-  } as LiveUpdateEventDto)
+    emittedAt: new Date().toISOString(),
+  })
 
   try {
     return await visible
