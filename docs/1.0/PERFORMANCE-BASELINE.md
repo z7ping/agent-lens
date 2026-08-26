@@ -1,6 +1,6 @@
 # AgentLens 1.0 性能基线
 
-状态：第三阶段基线完成  
+状态：第三阶段首轮优化完成  
 日期：2026-08-26  
 关联：ADR-0006
 
@@ -42,7 +42,7 @@
 4. Source 历史导入与后台扫描；
 5. 资产 / 备份扫描。
 
-第一阶段确认会话列表摘要是第一个数据库热点；第三阶段进一步确认任务复盘虽然对 Timeline 做了分页，但详情入口仍存在分页前的整会话派生工作。
+第一阶段确认会话列表摘要是第一个数据库热点；第三阶段确认任务复盘虽然对 Timeline 做了分页，但详情入口此前仍存在分页前的整会话派生工作。该公共前置成本已经在第三阶段首轮优化中消除。
 
 ## 4. 会话摘要基准
 
@@ -186,7 +186,7 @@ SEARCH workspace USING INDEX sqlite_autoindex_workspaces_1 (id=?) LEFT-JOIN
 
 全量重建约 `2.41 s` 是重建可派生状态的后台成本，不进入日常会话列表查询关键路径。后续继续关注实际旧库首次升级体验，但不把这一结果混同于查询 P95。
 
-## 8. 第三阶段：长会话任务复盘基线
+## 8. 第三阶段：长会话任务复盘
 
 基准脚本：
 
@@ -205,7 +205,7 @@ M 级数据模型：单个逻辑会话包含 2,000 个交互，每个交互 10 �
 
 普通 push 使用 `smoke`；M 级只在明确基准阶段或手动性能工作流执行。
 
-### 8.1 smoke 结果
+### 8.1 优化前 smoke 结果
 
 规模：50 Interaction / 500 Observation / 500 Evidence。
 
@@ -216,7 +216,7 @@ M 级数据模型：单个逻辑会话包含 2,000 个交互，每个交互 10 �
 | 错误筛选 | 9.29 ms | 9.45 ms |
 | 高延迟筛选 | 13.44 ms | 15.03 ms |
 
-### 8.2 M 级结果
+### 8.2 优化前 M 级结果
 
 规模：2,000 Interaction / 20,000 Observation / 20,000 Evidence。SQLite 数据库约 `13.8 MiB`。
 
@@ -235,9 +235,9 @@ SEARCH observations USING INDEX idx_observations_timeline_order (logical_session
 
 因此第三阶段首轮热点不是 Timeline 缺索引，而是 Projection 组合方式。
 
-### 8.3 结构性结论
+### 8.3 优化前结构性结论
 
-当前 `ReviewProjection.get()` 在真正执行分页前，会先调用 `SessionProjection.queryEntries({ logicalSessionId })` 生成顶部会话摘要。该调用会把指定会话的全部 Observation 分块加载、排序、统计并构建全部 Interaction。
+此前 `ReviewProjection.get()` 在真正执行分页前，会先调用 `SessionProjection.queryEntries({ logicalSessionId })` 生成顶部会话摘要。该调用会把指定会话的全部 Observation 分块加载、排序、统计并构建全部 Interaction。
 
 这意味着：
 
@@ -249,14 +249,48 @@ SEARCH observations USING INDEX idx_observations_timeline_order (logical_session
 
 所以首屏虽然显示分页，关键路径仍包含 O(n) 的整会话派生成本。500 Observation 到 20,000 Observation 时，首屏 P95 从 `27.49 ms` 增至 `159.91 ms`，增长趋势与这一结构性问题一致。
 
-“最新交互”除同样承担前置整会话摘要成本外，还需要计算总交互序号；“错误 / 高延迟”本身设计上需要扫描全会话交互描述符，因此其 M 级 P95 已达到约 `236–241 ms`。
+“最新交互”除同样承担前置整会话摘要成本外，还需要计算总交互序号；“错误 / 高延迟”本身设计上需要扫描全会话交互描述符，因此其 M 级 P95 达到约 `236–241 ms`。
 
-下一步优化顺序已经明确：
+### 8.4 首轮优化方案
 
-1. **首屏 / 最新优先**：复用第二阶段已有 `session_summary_projection`，为任务复盘顶部摘要提供按 `logicalSessionId` 的精确读取，消除 `ReviewProjection.get()` 的无意义整会话物化；
-2. 保持 Timeline 分页与现有表达式索引，不重复优化已经正确的分页查询；
-3. 重新跑 M，确认首屏 / 最新从“随整会话线性增长”回归到“主要随返回页大小增长”；
-4. **错误 / 高延迟暂不新增持久化 Projection**，先单独评估 236–241 ms 是否需要进入下一轮治理，再决定 SQL 重构、描述符聚合或可重建派生视图。
+没有为任务复盘新增第二张持久化 Projection，而是复用第二阶段已经存在的 `session_summary_projection`：
+
+```text
+ReviewProjection.get(logicalSessionId)
+  -> SessionSummaryReader 精确读取 logicalSessionId
+  -> 复用 observationCount / interactionCount / toolCount / errorCount / 首条用户消息
+  -> Timeline 只分页读取当前需要显示的交互
+```
+
+具体变化：
+
+- `SessionSummaryReader.query()` 增加可选 `logicalSessionId` 精确条件；
+- SQLite 稳态精确读取直接走 `session_summary_projection` 主键索引；
+- `ReviewProjection.get()` 不再为了顶部摘要调用 `SessionProjection.queryEntries()` 物化整个会话；
+- “最新 / 向后分页”的总交互数直接复用摘要中的 `interactionCount`，不再额外扫描全部用户消息计数；
+- Timeline 分页实现和 `idx_observations_timeline_order` 保持不变；
+- 如果目标会话刚产生、摘要行仍处于约 500 ms 的去重刷新窗口内，则仅对该 `logicalSessionId` 临时执行 Canonical 精确聚合，确保性能优化不造成“会话暂时不存在”的错误结果。
+
+稳态摘要精确查询计划：
+
+```text
+SEARCH session_summary_projection USING COVERING INDEX sqlite_autoindex_session_summary_projection_1 (logical_session_id=?)
+```
+
+### 8.5 优化后 M 级结果
+
+同样规模：2,000 Interaction / 20,000 Observation / 20,000 Evidence。任务复盘基准在执行前使用正式 `sessionSummaryProjection.rebuild({ logicalSessionId })` 建立生产态派生数据；单会话摘要重建约 `67.41 ms`，该重建属于派生状态维护成本，不进入稳态详情请求关键路径。
+
+| 路径 | 优化前 P95 | 优化后 P50 | 优化后 P95 | 变化 |
+| --- | ---: | ---: | ---: | ---: |
+| 首屏正向分页 | 159.91 ms | 25.29 ms | **29.50 ms** | 约快 5.4 倍 |
+| 最新交互 | 127.09 ms | 21.92 ms | **31.94 ms** | 约快 4.0 倍 |
+| 错误筛选 | 235.91 ms | 173.71 ms | **192.44 ms** | 降低约 18% |
+| 高延迟筛选 | 241.24 ms | 169.98 ms | **181.13 ms** | 降低约 25% |
+
+首屏从 500 Observation 的优化后 smoke P95 `22.39 ms` 到 20,000 Observation 的 M 级 P95 `29.50 ms`，数据量增长 40 倍但仍处于同一数量级；“最新”也从 smoke P95 `21.17 ms` 到 M 级 `31.94 ms`。这说明首屏和最新的公共关键路径已经摆脱“先处理整个会话”的线性成本，主要成本重新由当前页物化决定。
+
+错误 / 高延迟筛选也因为公共前置整会话物化被移除而下降，但其自身仍按设计扫描全部交互描述符，所以仍属于 O(n) 路径。当前 P95 约 `181–192 ms`，明显低于 `< 500 ms` 软预算，第三阶段暂不为它们继续新增持久化 Projection；后续只有在真实狗粮或更大规模基准显示有必要时，再独立治理。
 
 ## 9. 第一版性能预算
 
@@ -265,17 +299,17 @@ SEARCH observations USING INDEX idx_observations_timeline_order (logical_session
 | 指标 | M 级目标 | 当前结果 |
 | --- | ---: | ---: |
 | 会话列表 20 条 P95 | < 100 ms | **0.54 ms，通过** |
-| 会话详情首屏 P95 | < 200 ms | **159.91 ms，通过，但存在 O(n) 结构性成本** |
-| 会话详情最新交互 P95 | < 200 ms | **127.09 ms，通过，但存在 O(n) 结构性成本** |
-| 会话详情错误筛选 P95 | < 500 ms | **235.91 ms，通过** |
-| 会话详情高延迟筛选 P95 | < 500 ms | **241.24 ms，通过** |
+| 会话详情首屏 P95 | < 200 ms | **29.50 ms，通过** |
+| 会话详情最新交互 P95 | < 200 ms | **31.94 ms，通过** |
+| 会话详情错误筛选 P95 | < 500 ms | **192.44 ms，通过** |
+| 会话详情高延迟筛选 P95 | < 500 ms | **181.13 ms，通过** |
 | Tool Analysis P95 | < 500 ms | 待测 |
 | Agent Overview P95 | < 500 ms | 待测 |
 | Daemon Health Ready | < 2 s | 待测 |
 | Web 新事件可见延迟 | < 500 ms | 待测 |
 | 空闲 CPU | 接近 0 | 待测 |
 
-预算不因为现状超标而修改；即使当前数值通过预算，只要已确认存在会随数据量持续放大的结构性成本，也应优先消除明显的无意义工作。
+预算不因为现状超标而修改。当前任务复盘四条路径均在预算内；已经确认并能低风险消除的首屏 / 最新结构性浪费已处理完，错误 / 高延迟不为了追求更低数字而过度设计。
 
 ## 10. 后续优化顺序
 
@@ -289,7 +323,9 @@ SEARCH observations USING INDEX idx_observations_timeline_order (logical_session
   -> 必要的只读缓存
 ```
 
-会话摘要已经完成完整闭环。长会话任务复盘当前处于“已完成首轮基线与结构定位”，下一步先复用现有会话摘要 Projection 消除详情入口的整会话物化，不新增第二事实源，也不机械复制新 Projection。
+会话摘要和长会话任务复盘首轮治理均已完成。下一性能对象转入 Tool Analysis / Agent Overview 聚合，仍从正式基准和查询计划开始，不预设一定需要新 Projection。
+
+错误 / 高延迟筛选保留为观察项：它们仍扫描整会话描述符，但当前 M 级明显低于预算，因此不阻塞 1.0 稳定化。
 
 任何新增持久化 Projection 都必须：
 
