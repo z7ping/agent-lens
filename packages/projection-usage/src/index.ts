@@ -75,11 +75,11 @@ function hasEmbeddedMetadata(observation: UsageObservation): observation is Tool
 export class ToolAssetUsageProjection {
   constructor(private readonly storage: StorageService) {}
 
-  private async loadKind(
+  private async forEachKind(
     kind: 'tool.call' | 'tool.result',
     query: ToolAssetUsageQueryDto,
-  ): Promise<UsageObservation[]> {
-    const observations: UsageObservation[] = []
+    visit: (observation: UsageObservation) => Promise<void> | void,
+  ): Promise<void> {
     const reader = usageReader(this.storage)
     const scanChunk = reader ? LIGHT_SCAN_CHUNK : REPOSITORY_SCAN_CHUNK
     let after: ObservationCursor | undefined
@@ -106,95 +106,203 @@ export class ToolAssetUsageProjection {
             limit: scanChunk,
           })
       if (!page.length) break
-      observations.push(...page)
+      for (const observation of page) {
+        if (query.projectId && observation.projectId !== query.projectId) continue
+        await visit(observation)
+      }
       if (page.length < scanChunk) break
       after = cursorForObservation(page[page.length - 1]!)
     }
-    return observations
+  }
+
+  private metadataResolver() {
+    const sourceSessionCache = new Map<string, SourceSession | null>()
+    const installationCache = new Map<string, AgentInstallation | null>()
+    const metadataCache = new Map<string, ObservationMetadata | null>()
+    return async (observation: UsageObservation): Promise<ObservationMetadata | null> => {
+      if (hasEmbeddedMetadata(observation)) return { sourceId: observation.sourceId, productId: observation.productId }
+      const cached = metadataCache.get(observation.id); if (cached !== undefined) return cached
+      let sourceSession = sourceSessionCache.get(observation.sourceSessionId)
+      if (sourceSession === undefined) {
+        sourceSession = await this.storage.repositories.sessions.getSourceSession(observation.sourceSessionId)
+        sourceSessionCache.set(observation.sourceSessionId, sourceSession)
+      }
+      let installation = installationCache.get(observation.installationId)
+      if (installation === undefined) {
+        installation = await this.storage.repositories.installations.get(observation.installationId)
+        installationCache.set(observation.installationId, installation)
+      }
+      const metadata = sourceSession && installation ? { sourceId: sourceSession.sourceId, productId: installation.productId } : null
+      metadataCache.set(observation.id, metadata)
+      return metadata
+    }
+  }
+
+  async queryAssets(query: ToolAssetUsageQueryDto = {}): Promise<AssetUsageDto[]> {
+    const metadataFor = this.metadataResolver()
+    const assets = new Map<string, AssetAccumulator>()
+
+    await this.forEachKind('tool.call', query, async observation => {
+      const metadata = await metadataFor(observation)
+      if (!metadata || (query.sourceId && metadata.sourceId !== query.sourceId)) return
+      const payload = asRecord(observation.payload)
+      const name = toolName(observation)
+      if (!name) return
+      const inferred = inferAssetUsage(name, payload)
+      if (!inferred) return
+      const at = effectiveAt(observation)
+      const key = `${inferred.type}\u0000${inferred.canonicalName}`
+      let asset = assets.get(key)
+      if (!asset) {
+        asset = { type: inferred.type, canonicalName: inferred.canonicalName, sourceIds: new Set(), callCount: 0, firstUsedAt: at, lastUsedAt: at, observationIds: [] }
+        assets.set(key, asset)
+      }
+      asset.sourceIds.add(metadata.sourceId)
+      asset.callCount += 1
+      asset.observationIds.push(observation.id)
+      updateWindow(asset, at)
+    })
+
+    const result: AssetUsageDto[] = [...assets.values()].map(item => ({
+      type: item.type,
+      canonicalName: item.canonicalName,
+      sourceIds: [...item.sourceIds].sort(),
+      callCount: item.callCount,
+      firstUsedAt: item.firstUsedAt,
+      lastUsedAt: item.lastUsedAt,
+      attribution: 'derived',
+      confidence: 'high',
+      observationIds: item.observationIds,
+    }))
+    result.sort((a, b) => b.callCount - a.callCount || b.lastUsedAt.localeCompare(a.lastUsedAt) || a.canonicalName.localeCompare(b.canonicalName))
+    return result
   }
 
   async query(query: ToolAssetUsageQueryDto = {}): Promise<ToolAssetUsageResponseDto> {
     const limit = Math.max(1, Math.min(query.limit ?? DEFAULT_LIMIT, MAX_LIMIT))
-    const [calls, results] = await Promise.all([
-      this.loadKind('tool.call', query),
-      this.loadKind('tool.result', query),
-    ])
-    const observations = [...calls, ...results]
-      .filter(item => !query.projectId || item.projectId === query.projectId)
-
-    const sourceSessionCache = new Map<string, SourceSession | null>()
-    const installationCache = new Map<string, AgentInstallation | null>()
-    const metadataCache = new Map<string, ObservationMetadata | null>()
-    const metadataFor = async (observation: UsageObservation): Promise<ObservationMetadata | null> => {
-      if (hasEmbeddedMetadata(observation)) return { sourceId: observation.sourceId, productId: observation.productId }
-      const cached = metadataCache.get(observation.id); if (cached !== undefined) return cached
-      let sourceSession = sourceSessionCache.get(observation.sourceSessionId)
-      if (sourceSession === undefined) { sourceSession = await this.storage.repositories.sessions.getSourceSession(observation.sourceSessionId); sourceSessionCache.set(observation.sourceSessionId, sourceSession) }
-      let installation = installationCache.get(observation.installationId)
-      if (installation === undefined) { installation = await this.storage.repositories.installations.get(observation.installationId); installationCache.set(observation.installationId, installation) }
-      const metadata = sourceSession && installation ? { sourceId: sourceSession.sourceId, productId: installation.productId } : null
-      metadataCache.set(observation.id, metadata); return metadata
-    }
-
+    const metadataFor = this.metadataResolver()
     const callsByIdentity = new Map<string, { name: string; sourceId: string; productId: string }>()
-    for (const observation of observations) {
-      if (observation.kind !== 'tool.call') continue
-      const metadata = await metadataFor(observation); const id = callId(observation); const name = toolName(observation)
-      if (!metadata || !id || !name || (query.sourceId && metadata.sourceId !== query.sourceId)) continue
-      callsByIdentity.set(`${observation.logicalSessionId}\u0000${id}`, { name, sourceId: metadata.sourceId, productId: metadata.productId })
-    }
+    const tools = new Map<string, ToolAccumulator>()
+    const assets = new Map<string, AssetAccumulator>()
+    let unattributedToolCalls = 0
 
-    const tools = new Map<string, ToolAccumulator>(); const assets = new Map<string, AssetAccumulator>(); let unattributedToolCalls = 0
-    for (const observation of observations) {
-      const metadata = await metadataFor(observation); if (!metadata) continue
-      const payload = asRecord(observation.payload); const identity = callId(observation)
-      const linkedCall = identity ? callsByIdentity.get(`${observation.logicalSessionId}\u0000${identity}`) : undefined
-      const name = toolName(observation) ?? linkedCall?.name; if (!name) continue
-      const sourceId = linkedCall?.sourceId ?? metadata.sourceId; if (query.sourceId && sourceId !== query.sourceId) continue
-      const productId = linkedCall?.productId ?? metadata.productId; const at = effectiveAt(observation); const key = `${sourceId}\u0000${name}`
+    await this.forEachKind('tool.call', query, async observation => {
+      const metadata = await metadataFor(observation)
+      if (!metadata || (query.sourceId && metadata.sourceId !== query.sourceId)) return
+      const payload = asRecord(observation.payload)
+      const identity = callId(observation)
+      const name = toolName(observation)
+      if (!name) return
+      if (identity) callsByIdentity.set(`${observation.logicalSessionId}\u0000${identity}`, { name, sourceId: metadata.sourceId, productId: metadata.productId })
+
+      const at = effectiveAt(observation)
+      const key = `${metadata.sourceId}\u0000${name}`
       let tool = tools.get(key)
       if (!tool) {
         tool = { nativeToolName: name, sourceIds: new Set(), productIds: new Set(), sessionCalls: new Map(), callCount: 0, resultCount: 0, successCount: 0, errorCount: 0, totalDurationMs: 0, firstUsedAt: at, lastUsedAt: at, observationIds: [] }
         tools.set(key, tool)
       }
-      tool.sourceIds.add(sourceId); tool.productIds.add(productId); tool.observationIds.push(observation.id); updateWindow(tool, at)
-      if (observation.kind === 'tool.call') {
-        tool.callCount += 1
-        tool.sessionCalls.set(observation.logicalSessionId, (tool.sessionCalls.get(observation.logicalSessionId) ?? 0) + 1)
-        const inferred = inferAssetUsage(name, payload)
-        if (!inferred) unattributedToolCalls += 1
-        else {
-          const assetKey = `${inferred.type}\u0000${inferred.canonicalName}`; let asset = assets.get(assetKey)
-          if (!asset) { asset = { type: inferred.type, canonicalName: inferred.canonicalName, sourceIds: new Set(), callCount: 0, firstUsedAt: at, lastUsedAt: at, observationIds: [] }; assets.set(assetKey, asset) }
-          asset.sourceIds.add(sourceId); asset.callCount += 1; asset.observationIds.push(observation.id); updateWindow(asset, at)
-        }
-      } else {
-        tool.resultCount += 1; const success = payload.success
-        if (success === false) tool.errorCount += 1; else if (success === true) tool.successCount += 1
-        const duration = payload.durationMs ?? payload.duration_ms
-        if (typeof duration === 'number' && Number.isFinite(duration) && duration >= 0) tool.totalDurationMs += duration
+      tool.sourceIds.add(metadata.sourceId)
+      tool.productIds.add(metadata.productId)
+      tool.observationIds.push(observation.id)
+      tool.callCount += 1
+      tool.sessionCalls.set(observation.logicalSessionId, (tool.sessionCalls.get(observation.logicalSessionId) ?? 0) + 1)
+      updateWindow(tool, at)
+
+      const inferred = inferAssetUsage(name, payload)
+      if (!inferred) {
+        unattributedToolCalls += 1
+        return
       }
-    }
+      const assetKey = `${inferred.type}\u0000${inferred.canonicalName}`
+      let asset = assets.get(assetKey)
+      if (!asset) {
+        asset = { type: inferred.type, canonicalName: inferred.canonicalName, sourceIds: new Set(), callCount: 0, firstUsedAt: at, lastUsedAt: at, observationIds: [] }
+        assets.set(assetKey, asset)
+      }
+      asset.sourceIds.add(metadata.sourceId)
+      asset.callCount += 1
+      asset.observationIds.push(observation.id)
+      updateWindow(asset, at)
+    })
+
+    await this.forEachKind('tool.result', query, async observation => {
+      const metadata = await metadataFor(observation)
+      if (!metadata) return
+      const payload = asRecord(observation.payload)
+      const identity = callId(observation)
+      const linkedCall = identity ? callsByIdentity.get(`${observation.logicalSessionId}\u0000${identity}`) : undefined
+      const name = toolName(observation) ?? linkedCall?.name
+      if (!name) return
+      const sourceId = linkedCall?.sourceId ?? metadata.sourceId
+      if (query.sourceId && sourceId !== query.sourceId) return
+      const productId = linkedCall?.productId ?? metadata.productId
+      const at = effectiveAt(observation)
+      const key = `${sourceId}\u0000${name}`
+      let tool = tools.get(key)
+      if (!tool) {
+        tool = { nativeToolName: name, sourceIds: new Set(), productIds: new Set(), sessionCalls: new Map(), callCount: 0, resultCount: 0, successCount: 0, errorCount: 0, totalDurationMs: 0, firstUsedAt: at, lastUsedAt: at, observationIds: [] }
+        tools.set(key, tool)
+      }
+      tool.sourceIds.add(sourceId)
+      tool.productIds.add(productId)
+      tool.observationIds.push(observation.id)
+      tool.resultCount += 1
+      updateWindow(tool, at)
+      const success = payload.success
+      if (success === false) tool.errorCount += 1
+      else if (success === true) tool.successCount += 1
+      const duration = payload.durationMs ?? payload.duration_ms
+      if (typeof duration === 'number' && Number.isFinite(duration) && duration >= 0) tool.totalDurationMs += duration
+    })
 
     const toolDtos: ToolUsageDto[] = [...tools.values()].map(item => ({
-      nativeToolName: item.nativeToolName, sourceIds: [...item.sourceIds].sort(), productIds: [...item.productIds].sort(),
-      callCount: item.callCount, resultCount: item.resultCount, successCount: item.successCount, errorCount: item.errorCount,
+      nativeToolName: item.nativeToolName,
+      sourceIds: [...item.sourceIds].sort(),
+      productIds: [...item.productIds].sort(),
+      callCount: item.callCount,
+      resultCount: item.resultCount,
+      successCount: item.successCount,
+      errorCount: item.errorCount,
       sessionCount: item.sessionCalls.size,
       sessions: [...item.sessionCalls.entries()]
         .map(([logicalSessionId, callCount]) => ({ logicalSessionId, callCount }))
         .sort((a, b) => b.callCount - a.callCount || a.logicalSessionId.localeCompare(b.logicalSessionId)),
       totalDurationMs: item.totalDurationMs,
       averageDurationMs: item.resultCount ? Math.round(item.totalDurationMs / item.resultCount) : 0,
-      firstUsedAt: item.firstUsedAt, lastUsedAt: item.lastUsedAt, observationIds: item.observationIds,
+      firstUsedAt: item.firstUsedAt,
+      lastUsedAt: item.lastUsedAt,
+      observationIds: item.observationIds,
     }))
     toolDtos.sort((a, b) => b.callCount - a.callCount || b.lastUsedAt.localeCompare(a.lastUsedAt) || a.nativeToolName.localeCompare(b.nativeToolName))
+
     const assetDtos: AssetUsageDto[] = [...assets.values()].map(item => ({
-      type: item.type, canonicalName: item.canonicalName, sourceIds: [...item.sourceIds].sort(), callCount: item.callCount,
-      firstUsedAt: item.firstUsedAt, lastUsedAt: item.lastUsedAt, attribution: 'derived', confidence: 'high', observationIds: item.observationIds,
+      type: item.type,
+      canonicalName: item.canonicalName,
+      sourceIds: [...item.sourceIds].sort(),
+      callCount: item.callCount,
+      firstUsedAt: item.firstUsedAt,
+      lastUsedAt: item.lastUsedAt,
+      attribution: 'derived',
+      confidence: 'high',
+      observationIds: item.observationIds,
     }))
     assetDtos.sort((a, b) => b.callCount - a.callCount || b.lastUsedAt.localeCompare(a.lastUsedAt) || a.canonicalName.localeCompare(b.canonicalName))
-    const hasMoreTools = toolDtos.length > limit; const limitedTools = toolDtos.slice(0, limit)
-    return { tools: limitedTools, assets: assetDtos, meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION, toolCount: limitedTools.length, assetCount: assetDtos.length, unattributedToolCalls, hasMoreTools, generatedAt: new Date().toISOString() } }
+
+    const hasMoreTools = toolDtos.length > limit
+    const limitedTools = toolDtos.slice(0, limit)
+    return {
+      tools: limitedTools,
+      assets: assetDtos,
+      meta: {
+        protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
+        toolCount: limitedTools.length,
+        assetCount: assetDtos.length,
+        unattributedToolCalls,
+        hasMoreTools,
+        generatedAt: new Date().toISOString(),
+      },
+    }
   }
 }
 
