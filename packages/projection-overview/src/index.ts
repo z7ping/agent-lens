@@ -94,8 +94,8 @@ export class AgentOverviewProjection {
       const inventory = new Map<string, AgentAssetInventoryDto>()
 
       for (const installation of installations) {
-        const usage = await this.usage.query({ installationId: installation.id, limit: 500 })
-        for (const asset of usage.assets) {
+        const assets = await this.usage.queryAssets({ installationId: installation.id })
+        for (const asset of assets) {
           const key = `${asset.type}\u0000${asset.canonicalName}`
           const previous = usedAssets.get(key)
           usedAssets.set(key, previous ? {
