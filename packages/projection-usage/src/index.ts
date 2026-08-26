@@ -4,6 +4,8 @@ import type {
   ObservationCursor,
   SourceSession,
   StorageService,
+  ToolUsageObservationReader,
+  ToolUsageObservationRecord,
 } from '@agent-lens/core'
 import {
   AGENT_LENS_PROTOCOL_VERSION,
@@ -18,6 +20,8 @@ const SCAN_CHUNK = 1000
 const DEFAULT_LIMIT = 100
 const MAX_LIMIT = 500
 
+type UsageObservation = CanonicalObservation | ToolUsageObservationRecord
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 }
@@ -25,8 +29,8 @@ function stringField(record: Record<string, unknown>, ...names: string[]): strin
   for (const name of names) { const value = record[name]; if (typeof value === 'string' && value) return value }
   return undefined
 }
-function effectiveAt(observation: CanonicalObservation): string { return observation.occurredAt ?? observation.capturedAt }
-function cursorForObservation(observation: CanonicalObservation): ObservationCursor {
+function effectiveAt(observation: UsageObservation): string { return observation.occurredAt ?? observation.capturedAt }
+function cursorForObservation(observation: UsageObservation): ObservationCursor {
   const sequence = observation.canonicalSequence ?? observation.sourceSequence
   return {
     effectiveAt: effectiveAt(observation),
@@ -34,8 +38,8 @@ function cursorForObservation(observation: CanonicalObservation): ObservationCur
     id: observation.id,
   }
 }
-function callId(observation: CanonicalObservation): string | undefined { return stringField(asRecord(observation.payload), 'callId', 'call_id', 'toolUseId', 'tool_use_id') }
-function toolName(observation: CanonicalObservation): string | undefined { return stringField(asRecord(observation.payload), 'nativeToolName', 'toolName', 'tool_name', 'name') }
+function callId(observation: UsageObservation): string | undefined { return stringField(asRecord(observation.payload), 'callId', 'call_id', 'toolUseId', 'tool_use_id') }
+function toolName(observation: UsageObservation): string | undefined { return stringField(asRecord(observation.payload), 'nativeToolName', 'toolName', 'tool_name', 'name') }
 function inferAssetUsage(nativeToolName: string, payload: Record<string, unknown>): { type: UsageAssetType; canonicalName: string } | null {
   const mcp = nativeToolName.match(/^mcp__(.+?)__(.+)$/i)
   if (mcp?.[1]) return { type: 'mcp', canonicalName: mcp[1] }
@@ -60,6 +64,12 @@ function updateWindow(accumulator: { firstUsedAt: string; lastUsedAt: string }, 
   if (at < accumulator.firstUsedAt) accumulator.firstUsedAt = at
   if (at > accumulator.lastUsedAt) accumulator.lastUsedAt = at
 }
+function usageReader(storage: StorageService): ToolUsageObservationReader | undefined {
+  return (storage as StorageService & { readonly toolUsageObservations?: ToolUsageObservationReader }).toolUsageObservations
+}
+function hasEmbeddedMetadata(observation: UsageObservation): observation is ToolUsageObservationRecord {
+  return 'sourceId' in observation && 'productId' in observation
+}
 
 export class ToolAssetUsageProjection {
   constructor(private readonly storage: StorageService) {}
@@ -67,19 +77,32 @@ export class ToolAssetUsageProjection {
   private async loadKind(
     kind: 'tool.call' | 'tool.result',
     query: ToolAssetUsageQueryDto,
-  ): Promise<CanonicalObservation[]> {
-    const observations: CanonicalObservation[] = []
+  ): Promise<UsageObservation[]> {
+    const observations: UsageObservation[] = []
+    const reader = usageReader(this.storage)
     let after: ObservationCursor | undefined
     while (true) {
-      const page = await this.storage.repositories.observations.query({
-        kind,
-        ...(query.installationId ? { installationId: query.installationId } : {}),
-        ...(query.logicalSessionId ? { logicalSessionId: query.logicalSessionId } : {}),
-        ...(query.from ? { from: query.from } : {}),
-        ...(query.to ? { to: query.to } : {}),
-        ...(after ? { after } : {}),
-        limit: SCAN_CHUNK,
-      })
+      const page = reader
+        ? await reader.query({
+            kind,
+            ...(query.installationId ? { installationId: query.installationId } : {}),
+            ...(query.logicalSessionId ? { logicalSessionId: query.logicalSessionId } : {}),
+            ...(query.projectId ? { projectId: query.projectId } : {}),
+            ...(query.sourceId ? { sourceId: query.sourceId } : {}),
+            ...(query.from ? { from: query.from } : {}),
+            ...(query.to ? { to: query.to } : {}),
+            ...(after ? { after } : {}),
+            limit: SCAN_CHUNK,
+          })
+        : await this.storage.repositories.observations.query({
+            kind,
+            ...(query.installationId ? { installationId: query.installationId } : {}),
+            ...(query.logicalSessionId ? { logicalSessionId: query.logicalSessionId } : {}),
+            ...(query.from ? { from: query.from } : {}),
+            ...(query.to ? { to: query.to } : {}),
+            ...(after ? { after } : {}),
+            limit: SCAN_CHUNK,
+          })
       if (!page.length) break
       observations.push(...page)
       if (page.length < SCAN_CHUNK) break
@@ -100,7 +123,8 @@ export class ToolAssetUsageProjection {
     const sourceSessionCache = new Map<string, SourceSession | null>()
     const installationCache = new Map<string, AgentInstallation | null>()
     const metadataCache = new Map<string, ObservationMetadata | null>()
-    const metadataFor = async (observation: CanonicalObservation): Promise<ObservationMetadata | null> => {
+    const metadataFor = async (observation: UsageObservation): Promise<ObservationMetadata | null> => {
+      if (hasEmbeddedMetadata(observation)) return { sourceId: observation.sourceId, productId: observation.productId }
       const cached = metadataCache.get(observation.id); if (cached !== undefined) return cached
       let sourceSession = sourceSessionCache.get(observation.sourceSessionId)
       if (sourceSession === undefined) { sourceSession = await this.storage.repositories.sessions.getSourceSession(observation.sourceSessionId); sourceSessionCache.set(observation.sourceSessionId, sourceSession) }
