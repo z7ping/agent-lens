@@ -98,7 +98,7 @@ try {
     INSERT INTO observations(
       id, host_id, installation_id, project_id, workspace_id, logical_session_id, source_session_id,
       interaction_id, actor_id, kind, source_sequence, canonical_sequence, occurred_at, captured_at, payload_json
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?)
   `)
   const insertEvidence = db.prepare(`
     INSERT INTO evidence(id, capture_method, derivation, confidence, source_record_id, source_locator_json, parser_version, event_time, captured_at, missing_reason)
@@ -118,7 +118,6 @@ try {
 
     let sequence = 0
     for (let interactionIndex = 0; interactionIndex < options.interactions; interactionIndex += 1) {
-      const interactionId = `interaction-${interactionIndex}`
       const base = interactionIndex * 200
       const slow = interactionIndex % 10 === 0
       for (let observationIndex = 0; observationIndex < options.observationsPerInteraction; observationIndex += 1) {
@@ -148,7 +147,7 @@ try {
 
         insertObservation.run(
           observationId, 'host-perf', 'installation-perf', 'project-perf', 'workspace-perf',
-          logicalSessionId, 'source-session-long', interactionId, kind, sequence, sequence,
+          logicalSessionId, 'source-session-long', kind, sequence, sequence,
           occurredAt, occurredAt, JSON.stringify(payload),
         )
 
