@@ -54,6 +54,12 @@ interface ParsedSession {
   events: DshEvent[]
 }
 
+interface DshFileCheckpoint {
+  path: string
+  size: number
+  mtimeMs: number
+}
+
 interface DshEnvelope {
   event: DshEvent
   session: {
@@ -235,6 +241,10 @@ function checkpointKey(nativeSessionId: string): string {
   return `session:${sha256(nativeSessionId).slice(0, 24)}`
 }
 
+function fileCheckpointKey(path: string): string {
+  return `file:${sha256(path).slice(0, 24)}`
+}
+
 function eventRecord(
   session: ParsedSession,
   event: DshEvent,
@@ -279,6 +289,12 @@ export async function* ingestDshHistory(ctx: SourceExecutionContext): AsyncItera
   if (!root || ctx.abortSignal.aborted) return
   for (const path of await sessionFiles(root)) {
     if (ctx.abortSignal.aborted) return
+    const meta = await stat(path).catch(() => null)
+    if (!meta) continue
+    const fileKey = fileCheckpointKey(path)
+    const previousFile = await ctx.checkpoint.get<DshFileCheckpoint>(fileKey)
+    if (previousFile?.path === path && previousFile.size === meta.size && previousFile.mtimeMs === meta.mtimeMs) continue
+
     let session: ParsedSession | null = null
     try { session = await readSession(path) } catch { continue }
     if (!session) continue
@@ -291,6 +307,7 @@ export async function* ingestDshHistory(ctx: SourceExecutionContext): AsyncItera
       after = seq
       await ctx.checkpoint.set(checkpointKey(identity.nativeSessionId), after)
     }
+    await ctx.checkpoint.set(fileKey, { path, size: meta.size, mtimeMs: meta.mtimeMs })
   }
 }
 
@@ -314,6 +331,8 @@ async function emitChangedSession(
     after = seq
     await ctx.checkpoint.set(key, after)
   }
+  const meta = await stat(path).catch(() => null)
+  if (meta) await ctx.checkpoint.set(fileCheckpointKey(path), { path, size: meta.size, mtimeMs: meta.mtimeMs })
 }
 
 export async function startDshRuntimeCapture(

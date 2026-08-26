@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { createReadStream } from 'node:fs'
+import { createReadStream, watch, type FSWatcher } from 'node:fs'
 import {
   access,
   open,
@@ -42,7 +42,8 @@ import {
 
 const SOURCE_ID = 'pi'
 const PARSER_VERSION = '1'
-const POLL_MS = 500
+const RUNTIME_FALLBACK_POLL_MS = 5000
+const RUNTIME_DEBOUNCE_MS = 180
 const MAX_STRING = 64 * 1024
 const SESSION_HEADER_BYTES = 64 * 1024
 const SENSITIVE_KEY = /(password|passwd|secret|token|api[_-]?key|authorization|cookie)/i
@@ -276,106 +277,140 @@ function nativeId(entry: Record<string, unknown>, sessionId: string): string | u
   return stringField(entry, 'id')
 }
 
+async function* ingestPiFile(
+  ctx: SourceExecutionContext,
+  filePath: string,
+): AsyncIterable<SourceRecord> {
+  if (ctx.abortSignal.aborted || extname(filePath).toLowerCase() !== '.jsonl') return
+  let fileStat
+  try { fileStat = await stat(filePath) } catch { return }
+  const key = historyCheckpointKey(filePath)
+  const previous = await ctx.checkpoint.get<HistoryCheckpoint>(key)
+  const unchanged = previous
+    && previous.path === filePath
+    && previous.offset === fileStat.size
+    && previous.size === fileStat.size
+    && previous.mtimeMs === fileStat.mtimeMs
+  if (unchanged) return
+
+  const reset = !previous || previous.path !== filePath || fileStat.size < previous.offset
+  let offset = reset ? 0 : previous.offset
+  let sequence = reset ? 0 : previous.sequence
+  const session = await sessionMetadata(filePath)
+
+  for await (const line of readJsonlLines(filePath, offset)) {
+    if (ctx.abortSignal.aborted) return
+    sequence += 1
+    offset = line.endOffset
+    if (!line.text.trim()) {
+      await ctx.checkpoint.set(key, {
+        path: filePath, offset, sequence, size: fileStat.size, mtimeMs: fileStat.mtimeMs,
+      })
+      continue
+    }
+    const entry = parseLine(line.text)
+    const fingerprint = sha256(line.text)
+    const entryId = nativeId(entry, session.nativeSessionId)
+    const timestamp = normalizeTimestamp(entry.timestamp)
+      ?? normalizeTimestamp(asRecord(entry.message).timestamp)
+    yield {
+      id: `pi-record-${sha256(`${filePath}|${line.startOffset}|${fingerprint}`).slice(0, 32)}`,
+      sourceId: SOURCE_ID,
+      installationId: ctx.installation.id,
+      sourceSessionNativeId: session.nativeSessionId,
+      nativeType: `history/${stringField(entry, 'type') ?? 'unknown'}`,
+      ...(entryId ? { nativeId: entryId } : {}),
+      sourceSequence: sequence * 1000,
+      ...(timestamp ? { occurredAt: timestamp } : {}),
+      capturedAt: new Date().toISOString(),
+      locator: { kind: 'file', path: filePath, offset: line.startOffset },
+      fingerprint,
+      payload: { entry, session } satisfies PiStoredEnvelope,
+      parserVersion: PARSER_VERSION,
+    }
+    await ctx.checkpoint.set(key, {
+      path: filePath, offset, sequence, size: fileStat.size, mtimeMs: fileStat.mtimeMs,
+    })
+  }
+}
+
 export async function* ingestPiHistory(ctx: SourceExecutionContext): AsyncIterable<SourceRecord> {
   const sessionsDir = ctx.installation.dataRoot
     ?? (ctx.installation.configRoot ? join(ctx.installation.configRoot, 'sessions') : undefined)
   if (!sessionsDir) return
-
   for (const filePath of await listJsonlFiles(sessionsDir)) {
     if (ctx.abortSignal.aborted) return
-    const fileStat = await stat(filePath)
-    const key = historyCheckpointKey(filePath)
-    const previous = await ctx.checkpoint.get<HistoryCheckpoint>(key)
-    const unchanged = previous
-      && previous.path === filePath
-      && previous.offset === fileStat.size
-      && previous.size === fileStat.size
-      && previous.mtimeMs === fileStat.mtimeMs
-    if (unchanged) continue
-
-    const reset = !previous || previous.path !== filePath || fileStat.size < previous.offset
-    let offset = reset ? 0 : previous.offset
-    let sequence = reset ? 0 : previous.sequence
-    const session = await sessionMetadata(filePath)
-
-    for await (const line of readJsonlLines(filePath, offset)) {
-      if (ctx.abortSignal.aborted) return
-      sequence += 1
-      offset = line.endOffset
-      if (!line.text.trim()) {
-        await ctx.checkpoint.set(key, {
-          path: filePath,
-          offset,
-          sequence,
-          size: fileStat.size,
-          mtimeMs: fileStat.mtimeMs,
-        })
-        continue
-      }
-      const entry = parseLine(line.text)
-      const fingerprint = sha256(line.text)
-      const entryId = nativeId(entry, session.nativeSessionId)
-      const timestamp = normalizeTimestamp(entry.timestamp)
-        ?? normalizeTimestamp(asRecord(entry.message).timestamp)
-      const record: SourceRecord = {
-        id: `pi-record-${sha256(`${filePath}|${line.startOffset}|${fingerprint}`).slice(0, 32)}`,
-        sourceId: SOURCE_ID,
-        installationId: ctx.installation.id,
-        sourceSessionNativeId: session.nativeSessionId,
-        nativeType: `history/${stringField(entry, 'type') ?? 'unknown'}`,
-        ...(entryId ? { nativeId: entryId } : {}),
-        sourceSequence: sequence * 1000,
-        ...(timestamp ? { occurredAt: timestamp } : {}),
-        capturedAt: new Date().toISOString(),
-        locator: { kind: 'file', path: filePath, offset: line.startOffset },
-        fingerprint,
-        payload: { entry, session } satisfies PiStoredEnvelope,
-        parserVersion: PARSER_VERSION,
-      }
-      yield record
-      await ctx.checkpoint.set(key, {
-        path: filePath,
-        offset,
-        sequence,
-        size: fileStat.size,
-        mtimeMs: fileStat.mtimeMs,
-      })
-    }
+    yield* ingestPiFile(ctx, filePath)
   }
-}
-
-async function sleep(ms: number, signal: AbortSignal): Promise<void> {
-  if (signal.aborted) return
-  await new Promise<void>(resolveSleep => {
-    const timer = setTimeout(done, ms)
-    function done() {
-      signal.removeEventListener('abort', done)
-      clearTimeout(timer)
-      resolveSleep()
-    }
-    signal.addEventListener('abort', done, { once: true })
-  })
 }
 
 export async function startPiRuntimeCapture(
   ctx: SourceExecutionContext,
   emitter: SourceRecordEmitter,
 ): Promise<Disposable> {
+  const sessionsDir = ctx.installation.dataRoot
+    ?? (ctx.installation.configRoot ? join(ctx.installation.configRoot, 'sessions') : undefined)
+  if (!sessionsDir || !await exists(sessionsDir)) return { dispose() {} }
+
   let stopped = false
-  const task = (async () => {
-    while (!stopped && !ctx.abortSignal.aborted) {
-      for await (const record of ingestPiHistory(ctx)) {
-        if (stopped || ctx.abortSignal.aborted) break
+  let watcher: FSWatcher | null = null
+  let pollTimer: NodeJS.Timeout | null = null
+  const debounce = new Map<string, NodeJS.Timeout>()
+  let processing = Promise.resolve()
+
+  const emitFile = (filePath: string) => {
+    processing = processing.then(async () => {
+      for await (const record of ingestPiFile(ctx, filePath)) {
+        if (stopped || ctx.abortSignal.aborted) return
         await emitter.emit(record)
       }
-      if (!stopped && !ctx.abortSignal.aborted) await sleep(POLL_MS, ctx.abortSignal)
-    }
-  })()
+    }).catch(() => undefined)
+  }
+
+  const schedule = (filePath: string) => {
+    if (stopped || extname(filePath).toLowerCase() !== '.jsonl') return
+    const previous = debounce.get(filePath)
+    if (previous) clearTimeout(previous)
+    debounce.set(filePath, setTimeout(() => {
+      debounce.delete(filePath)
+      emitFile(filePath)
+    }, RUNTIME_DEBOUNCE_MS))
+  }
+
+  const poll = async () => {
+    if (stopped || ctx.abortSignal.aborted) return
+    for (const filePath of await listJsonlFiles(sessionsDir)) schedule(filePath)
+  }
+
+  const startFallbackPolling = () => {
+    if (pollTimer || stopped) return
+    pollTimer = setInterval(() => { void poll().catch(() => undefined) }, RUNTIME_FALLBACK_POLL_MS)
+  }
+
+  try {
+    watcher = watch(sessionsDir, { recursive: true }, (_event, fileName) => {
+      if (!fileName) return
+      schedule(join(sessionsDir, fileName.toString()))
+    })
+    watcher.on('error', () => {
+      watcher?.close()
+      watcher = null
+      startFallbackPolling()
+    })
+  } catch {
+    watcher = null
+    startFallbackPolling()
+  }
+
   return {
     async dispose(): Promise<void> {
       if (stopped) return
       stopped = true
-      await task
+      watcher?.close()
+      if (pollTimer) clearInterval(pollTimer)
+      for (const timer of debounce.values()) clearTimeout(timer)
+      debounce.clear()
+      await processing
     },
   }
 }
