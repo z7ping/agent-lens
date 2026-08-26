@@ -9,6 +9,7 @@ import type {
   EvidenceService,
   IdentityService,
   ObservationService,
+  ProjectionService,
   SourceService,
   StorageService,
   ToolService,
@@ -25,6 +26,7 @@ declare module '@deepseek-ai/cordis' {
     capabilities: CapabilityService
     assets: AssetService
     tools: ToolService
+    projections: ProjectionService
     backup: BackupService
     capturePolicy: CapturePolicyService
   }
