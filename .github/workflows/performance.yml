@@ -18,8 +18,12 @@ on:
       - 'scripts/performance/**'
       - 'packages/storage-sqlite/src/session-summaries.ts'
       - 'packages/storage-sqlite/src/observation-pagination.ts'
+      - 'packages/storage-sqlite/src/repositories.ts'
+      - 'packages/storage-sqlite/migrations/**'
       - 'packages/projection-review/src/**'
       - 'packages/projection-session/src/**'
+      - 'packages/projection-usage/src/**'
+      - 'packages/projection-overview/src/**'
       - '.github/workflows/performance.yml'
       - 'docs/1.0/PERFORMANCE-BASELINE.md'
       - 'docs/adr/0006-performance-governance-and-architecture-guardrails.md'
@@ -127,5 +131,56 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: agent-lens-performance-review-detail-${{ steps.profile.outputs.profile }}
+          path: performance-artifacts/
+          if-no-files-found: error
+
+  tool-overview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.23.0
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Resolve benchmark profile
+        id: profile
+        shell: bash
+        run: |
+          PROFILE="${{ github.event.inputs.profile || 'smoke' }}"
+          case "$PROFILE" in
+            smoke)
+              echo 'args=--installations=2 --sessions-per-installation=10 --calls-per-session=10 --evidence-per-observation=1 --samples=3 --limit=100' >> "$GITHUB_OUTPUT"
+              ;;
+            s)
+              echo 'args=--installations=4 --sessions-per-installation=50 --calls-per-session=50 --evidence-per-observation=1 --samples=8 --limit=100' >> "$GITHUB_OUTPUT"
+              ;;
+            m)
+              echo 'args=--installations=6 --sessions-per-installation=100 --calls-per-session=100 --evidence-per-observation=1 --samples=10 --limit=100' >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "Unknown profile: $PROFILE" >&2
+              exit 1
+              ;;
+          esac
+          echo "profile=$PROFILE" >> "$GITHUB_OUTPUT"
+
+      - name: Run tool analysis and agent overview benchmark
+        shell: bash
+        run: |
+          mkdir -p performance-artifacts
+          npm run perf:tool-overview -- ${{ steps.profile.outputs.args }} | tee performance-artifacts/tool-overview-${{ steps.profile.outputs.profile }}.txt
+
+      - name: Upload performance report
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-lens-performance-tool-overview-${{ steps.profile.outputs.profile }}
           path: performance-artifacts/
           if-no-files-found: error
