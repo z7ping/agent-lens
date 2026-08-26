@@ -58,3 +58,5 @@ jobs:
           git diff --cached --check
           git commit -m '修正 DSH 实时扫描检查点竞态'
           git push origin HEAD:main
+
+# trigger
