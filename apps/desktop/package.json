@@ -8,10 +8,11 @@
   "author": "7ping <z7ping@outlook.com>",
   "scripts": {
     "start": "electron .",
-    "test": "node --test src/update-check.test.mjs",
+    "test": "node --test src/update-check.test.mjs src/login-autostart.test.mjs",
     "dist:win": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ../../scripts/prepare-windows-icon.ps1 && electron-builder --win nsis --config.electronDist=.electron-dist/electron-v43.4.0-win32-x64",
     "dist:win:dir": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ../../scripts/prepare-windows-icon.ps1 && electron-builder --win dir --config.electronDist=.electron-dist/electron-v43.4.0-win32-x64",
     "dist:mac": "bash ../../scripts/prepare-macos-icon.sh && electron-builder --mac dmg zip --config.directories.output=../../release/macos",
+    "dist:mac:release": "bash ../../scripts/prepare-macos-icon.sh && electron-builder --mac dmg zip --config.directories.output=../../release/macos --config.mac.forceCodeSigning=true --config.mac.notarize=true",
     "dist:mac:dir": "bash ../../scripts/prepare-macos-icon.sh && electron-builder --mac dir --config.directories.output=../../release/macos",
     "dist:linux": "electron-builder --linux AppImage deb --config.directories.output=../../release/linux",
     "dist:linux:dir": "electron-builder --linux dir --config.directories.output=../../release/linux"
@@ -57,6 +58,9 @@
     "mac": {
       "icon": "build/icon.icns",
       "category": "public.app-category.developer-tools",
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
       "artifactName": "AgentLens-${version}-macOS-${arch}.${ext}"
     },
     "linux": {
