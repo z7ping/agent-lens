@@ -46,3 +46,5 @@ jobs:
           git diff --cached --check
           git commit -m 'perf: 避免干净启动重复重建会话摘要'
           git push origin HEAD:main
+
+# trigger
