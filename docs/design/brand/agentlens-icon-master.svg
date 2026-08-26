@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1254 1254" role="img" aria-labelledby="title desc">
+  <title id="title">AgentLens 主品牌图标</title>
+  <desc id="desc">两个来源节点沿轨迹汇聚至镜头焦点，表达对智能体活动轨迹的观察与聚焦。</desc>
+
+  <defs>
+    <linearGradient id="background" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#0874F6"/>
+      <stop offset="0.44" stop-color="#079CEB"/>
+      <stop offset="1" stop-color="#19D9D0"/>
+    </linearGradient>
+    <linearGradient id="upperNode" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#3DDFE5"/>
+      <stop offset="1" stop-color="#78F0C3"/>
+    </linearGradient>
+    <linearGradient id="lowerNode" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#82B0FF"/>
+      <stop offset="1" stop-color="#6570F2"/>
+    </linearGradient>
+    <linearGradient id="focus" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFC229"/>
+      <stop offset="1" stop-color="#FF7B22"/>
+    </linearGradient>
+    <filter id="focusGlow" x="-70%" y="-70%" width="240%" height="240%">
+      <feGaussianBlur stdDeviation="8"/>
+    </filter>
+  </defs>
+
+  <!-- 圆角之外保持透明；这是全平台派生资产的唯一品牌底板。 -->
+  <rect x="0" y="0" width="1254" height="1254" rx="226" fill="url(#background)"/>
+
+  <!-- 后镜筒。 -->
+  <path
+    d="M893 448 H1001
+       C1060 448 1104 496 1104 556
+       V704
+       C1104 764 1060 812 1001 812
+       H893
+       C930 768 949 705 949 630
+       C949 555 930 492 893 448 Z"
+    fill="#FFFFFF"/>
+  <path
+    d="M902 486 H948
+       C1004 486 1044 536 1044 630
+       C1044 724 1004 774 948 774
+       H902
+       C928 735 941 686 941 630
+       C941 574 928 525 902 486 Z"
+    fill="url(#background)"/>
+
+  <!-- 主透镜。 -->
+  <path
+    d="M759 391 H839
+       C917 391 968 489 968 627
+       C968 765 917 863 839 863
+       H759
+       C675 863 624 765 624 627
+       C624 489 675 391 759 391 Z"
+    fill="#FFFFFF"/>
+  <path
+    d="M765 426
+       C831 426 873 511 873 627
+       C873 743 831 828 765 828
+       C699 828 658 743 658 627
+       C658 511 699 426 765 426 Z"
+    fill="url(#background)"/>
+
+  <!-- 两条观测轨迹：来源节点 -> 镜头焦点。 -->
+  <path
+    d="M238 394 C 354 417, 454 505, 617 577 C 663 597, 706 613, 746 627"
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-width="17"
+    stroke-linecap="round"/>
+  <path
+    d="M238 852 C 360 826, 468 731, 620 671 C 668 652, 709 638, 746 627"
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-width="17"
+    stroke-linecap="round"/>
+
+  <!-- 交汇处保留定稿图中的轻微焦点光晕。 -->
+  <circle cx="746" cy="627" r="54" fill="#FFFFFF" opacity="0.16" filter="url(#focusGlow)"/>
+
+  <!-- 来源节点与焦点。 -->
+  <circle cx="238" cy="394" r="46" fill="url(#upperNode)"/>
+  <circle cx="238" cy="852" r="46" fill="url(#lowerNode)"/>
+  <circle cx="746" cy="627" r="59" fill="url(#focus)"/>
+</svg>
