@@ -7,22 +7,31 @@ const requireText = (condition, message) => {
   if (!condition) throw new Error(`[brand-assets] ${message}`)
 }
 
+const canonicalPath = 'docs/design/brand/agentlens-icon-master.svg'
 const fullSvgPath = 'packages/web/public/agentlens-icon.svg'
 const smallSvgPath = 'packages/web/public/agentlens-icon-small.svg'
-requireText(existsSync(resolve(root, fullSvgPath)), '缺少主品牌 SVG')
-requireText(existsSync(resolve(root, smallSvgPath)), '缺少小尺寸品牌 SVG')
+const archiveFullPath = 'docs/brand/logo/agentlens-logo.svg'
+const archiveSmallPath = 'docs/brand/logo/agentlens-logo-small.svg'
 
-const fullSvg = read(fullSvgPath)
-const smallSvg = read(smallSvgPath)
-for (const svg of [fullSvg, smallSvg]) {
-  requireText(svg.includes('#1768f2') && svg.includes('#20d8cf'), '品牌蓝青渐变缺失')
-  requireText(svg.includes('#ffc22b') && svg.includes('#ff7a21'), '聚焦橙色缺失')
-  requireText(svg.includes('stroke="#fff"'), '轨迹线缺失')
+for (const path of [canonicalPath, fullSvgPath, smallSvgPath, archiveFullPath, archiveSmallPath]) {
+  requireText(existsSync(resolve(root, path)), `缺少品牌 SVG：${path}`)
 }
 
-const masterSvgPaths = [
-  'docs/brand/logo/agentlens-logo.svg',
-  'docs/brand/logo/agentlens-logo-small.svg',
+const canonicalSvg = read(canonicalPath)
+requireText(canonicalSvg.includes('AgentLens 应用图标矢量主母版'), '主母版 title 不是 AgentLens')
+requireText(!canonicalSvg.includes('Narratica'), '主母版仍残留 Narratica 文案')
+requireText(canonicalSvg.includes('#005DFF') && canonicalSvg.includes('#00DDE4'), '新品牌蓝青渐变缺失')
+requireText(canonicalSvg.includes('#FFB10F') && canonicalSvg.includes('#FF7B20'), '新品牌橙色焦点缺失')
+requireText(canonicalSvg.includes('viewBox="0 0 1254 1254"'), '主母版 viewBox 规格不正确')
+
+for (const path of [fullSvgPath, smallSvgPath, archiveFullPath, archiveSmallPath]) {
+  requireText(read(path) === canonicalSvg, `品牌派生 SVG 未与主母版逐字同步：${path}`)
+}
+
+const archivedSvgPaths = [
+  canonicalPath,
+  archiveFullPath,
+  archiveSmallPath,
   'docs/brand/logo/concepts/concept-01.svg',
   'docs/brand/logo/concepts/concept-02.svg',
   'docs/brand/logo/concepts/concept-03.svg',
@@ -30,15 +39,15 @@ const masterSvgPaths = [
   'docs/brand/logo/concepts/concept-05-final.svg',
   'docs/brand/logo/concepts/concept-06.svg',
 ]
-for (const path of masterSvgPaths) {
-  requireText(existsSync(resolve(root, path)), `缺少品牌 SVG 主源：${path}`)
+for (const path of archivedSvgPaths) {
+  requireText(existsSync(resolve(root, path)), `缺少品牌 SVG 存档：${path}`)
   const svg = read(path)
-  requireText(/<svg\b[^>]*\bviewBox="[^"]+"/i.test(svg), `品牌 SVG 主源缺少独立 viewBox：${path}`)
-  requireText(!/<(?:image|foreignObject|script)\b/i.test(svg), `品牌 SVG 主源不得包含位图、外部对象或脚本：${path}`)
-  requireText(!/(?:href|xlink:href)="(?:https?:|data:image)/i.test(svg), `品牌 SVG 主源不得依赖外链或嵌入位图：${path}`)
-  requireText(!/<text\b/i.test(svg), `品牌 SVG 主源不得依赖字体渲染；文字需转为矢量几何：${path}`)
-  requireText(!/@font-face|font-family\s*:/i.test(svg), `品牌 SVG 主源不得依赖字体：${path}`)
-  requireText(!/<style\b[^>]*>[\s\S]*?@import/i.test(svg), `品牌 SVG 主源不得导入外部样式：${path}`)
+  requireText(/<svg\b[^>]*\bviewBox="[^"]+"/i.test(svg), `品牌 SVG 缺少独立 viewBox：${path}`)
+  requireText(!/<(?:image|foreignObject|script)\b/i.test(svg), `品牌 SVG 不得包含位图、外部对象或脚本：${path}`)
+  requireText(!/(?:href|xlink:href)="(?:https?:|data:image)/i.test(svg), `品牌 SVG 不得依赖外链或嵌入位图：${path}`)
+  requireText(!/<text\b/i.test(svg), `品牌 SVG 不得依赖字体渲染；文字需转为矢量几何：${path}`)
+  requireText(!/@font-face|font-family\s*:/i.test(svg), `品牌 SVG 不得依赖字体：${path}`)
+  requireText(!/<style\b[^>]*>[\s\S]*?@import/i.test(svg), `品牌 SVG 不得导入外部样式：${path}`)
 }
 
 for (const path of ['README.md', 'README.zh-CN.md']) {
@@ -47,14 +56,14 @@ for (const path of ['README.md', 'README.zh-CN.md']) {
 }
 
 const index = read('packages/web/index.html')
-requireText(index.includes('/agentlens-icon-small.svg'), 'Web favicon 未使用小尺寸品牌图标')
+requireText(index.includes('/agentlens-icon-small.svg'), 'Web favicon 未使用品牌图标')
 requireText(!index.includes('/favicon.ico') && !index.includes('/favicon.png'), 'Web 仍引用旧 favicon')
 
 const app = read('packages/web/src/App.tsx')
 requireText(app.includes('src="/agentlens-icon.svg"'), 'Web Header 未使用主品牌图标')
 
 const mockApp = read('docs/design/mockups/v2/assets/app.js')
-requireText(mockApp.includes('packages/web/public/agentlens-icon.svg'), '高保真原型未使用主品牌图标')
+requireText(mockApp.includes('packages/web/public/agentlens-icon.svg'), '最新版高保真原型未使用正式 Web 品牌图标')
 
 const desktopPackage = read('apps/desktop/package.json')
 requireText(desktopPackage.includes('"icon": "assets/icon-app.ico"'), 'Windows EXE/安装器未使用多尺寸 ICO')
@@ -68,11 +77,13 @@ requireText(!desktopMain.includes("unpackedAsset('assets', 'icon.png')"), '桌�
 const generator = read('scripts/prepare-windows-icon.ps1')
 requireText(generator.includes('@(16, 20, 24, 32, 40, 48, 64, 128, 256)'), '应用 ICO 尺寸矩阵不完整')
 requireText(generator.includes('@(16, 20, 24, 32, 40, 48)'), '托盘 ICO 尺寸矩阵不完整')
-requireText(generator.includes('Draw-SmallIcon'), '缺少小尺寸专用几何')
+requireText(generator.includes('#005DFF') && generator.includes('#00DDE4'), 'Windows 派生器仍使用旧品牌底色')
+requireText(generator.includes('#FFB10F') && generator.includes('#FF7B20'), 'Windows 派生器缺少新橙色焦点')
+requireText(generator.includes('1254'), 'Windows 派生器未按新 1254 主母版坐标系同步')
 
 const gitignore = read('.gitignore')
 for (const asset of ['icon-app.ico', 'icon-window.png', 'tray.ico']) {
   requireText(gitignore.includes(`apps/desktop/assets/${asset}`), `生成资产未加入 .gitignore：${asset}`)
 }
 
-console.log('AgentLens 品牌图标检查通过：README、正式图标引用与品牌存档 SVG 均已统一。')
+console.log('AgentLens 品牌图标检查通过：新主母版已同步到 Web、最新版原型、README 存档与 Windows 派生链。')

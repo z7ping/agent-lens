@@ -20,86 +20,153 @@ function New-RoundedRectPath([single]$x, [single]$y, [single]$width, [single]$he
   return $path
 }
 
-function New-LinearBrush([System.Drawing.RectangleF]$rect, [System.Drawing.Color]$start, [System.Drawing.Color]$end, [single]$angle = 45) {
-  return [System.Drawing.Drawing2D.LinearGradientBrush]::new($rect, $start, $end, $angle)
+function New-GradientBrush(
+  [System.Drawing.RectangleF]$rect,
+  [string[]]$colors,
+  [single[]]$positions,
+  [single]$angle = 45
+) {
+  if ($colors.Count -ne $positions.Count -or $colors.Count -lt 2) {
+    throw 'Gradient colors/positions mismatch'
+  }
+
+  $brush = [System.Drawing.Drawing2D.LinearGradientBrush]::new(
+    $rect,
+    [System.Drawing.Color]::Black,
+    [System.Drawing.Color]::White,
+    $angle
+  )
+  $blend = [System.Drawing.Drawing2D.ColorBlend]::new($colors.Count)
+  $blend.Colors = [System.Drawing.Color[]]@($colors | ForEach-Object {
+    [System.Drawing.ColorTranslator]::FromHtml($_)
+  })
+  $blend.Positions = [single[]]$positions
+  $brush.InterpolationColors = $blend
+  return $brush
 }
 
 function Draw-AppIcon([System.Drawing.Graphics]$graphics) {
-  $bgRect = [System.Drawing.RectangleF]::new(0, 0, 1024, 1024)
-  $bgBrush = New-LinearBrush $bgRect ([System.Drawing.ColorTranslator]::FromHtml('#1768f2')) ([System.Drawing.ColorTranslator]::FromHtml('#20d8cf')) 45
-  $bgPath = New-RoundedRectPath 0 0 1024 1024 196
-  try { $graphics.FillPath($bgBrush, $bgPath) } finally { $bgBrush.Dispose(); $bgPath.Dispose() }
+  # 1254 x 1254 坐标与 docs/design/brand/agentlens-icon-master.svg 保持一致。
+  $graphics.FillRectangle([System.Drawing.Brushes]::Black, 0, 0, 1254, 1254)
 
-  $white = [System.Drawing.Brushes]::White
+  $bgRect = [System.Drawing.RectangleF]::new(0, 0, 1254, 1254)
+  $bgBrush = New-GradientBrush $bgRect @('#005DFF', '#007FFA', '#00A1F2', '#00C0EC', '#00DDE4') @([single]0, [single]0.27, [single]0.55, [single]0.78, [single]1) 45
+  $bgPath = New-RoundedRectPath 0 0 1254 1254 250
+  try {
+    $graphics.FillPath($bgBrush, $bgPath)
+  } finally {
+    $bgBrush.Dispose()
+    $bgPath.Dispose()
+  }
 
-  $rearPath = New-RoundedRectPath 716 360 150 310 76
-  try { $graphics.FillPath($white, $rearPath) } finally { $rearPath.Dispose() }
-  $rearHoleBrush = New-LinearBrush $bgRect ([System.Drawing.ColorTranslator]::FromHtml('#1768f2')) ([System.Drawing.ColorTranslator]::FromHtml('#20d8cf')) 45
-  try { $graphics.FillEllipse($rearHoleBrush, 715, 394, 86, 242) } finally { $rearHoleBrush.Dispose() }
+  $whiteBody = New-GradientBrush ([System.Drawing.RectangleF]::new(628, 395, 477, 474)) @('#FFFFFF', '#FFFDFD', '#F8F7F9') @([single]0, [single]0.58, [single]1) 41
 
-  $frontPath = New-RoundedRectPath 518 314 222 402 112
-  try { $graphics.FillPath($white, $frontPath) } finally { $frontPath.Dispose() }
-  $frontHoleBrush = New-LinearBrush $bgRect ([System.Drawing.ColorTranslator]::FromHtml('#1768f2')) ([System.Drawing.ColorTranslator]::FromHtml('#20d8cf')) 45
-  try { $graphics.FillEllipse($frontHoleBrush, 559, 365, 116, 300) } finally { $frontHoleBrush.Dispose() }
+  $rear = [System.Drawing.Drawing2D.GraphicsPath]::new()
+  try {
+    $rear.StartFigure()
+    $rear.AddLine(934, 454, 1012, 454)
+    $rear.AddBezier(1012, 454, 1068, 454, 1105, 532, 1105, 632)
+    $rear.AddBezier(1105, 632, 1105, 732, 1068, 810, 1012, 810)
+    $rear.AddLine(1012, 810, 934, 810)
+    $rear.AddBezier(934, 810, 970, 766, 989, 703, 989, 632)
+    $rear.AddBezier(989, 632, 989, 561, 970, 498, 934, 454)
+    $rear.CloseFigure()
+    $graphics.FillPath($whiteBody, $rear)
+  } finally {
+    $rear.Dispose()
+  }
 
-  $pen = [System.Drawing.Pen]::new([System.Drawing.Color]::White, 18)
-  $pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
-  $pen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
+  $ring = [System.Drawing.Drawing2D.GraphicsPath]::new([System.Drawing.Drawing2D.FillMode]::Alternate)
+  try {
+    $ring.StartFigure()
+    $ring.AddLine(767, 395, 844, 395)
+    $ring.AddBezier(844, 395, 920, 395, 973, 495, 973, 632)
+    $ring.AddBezier(973, 632, 973, 769, 920, 869, 844, 869)
+    $ring.AddLine(844, 869, 767, 869)
+    $ring.AddBezier(767, 869, 688, 869, 628, 769, 628, 632)
+    $ring.AddBezier(628, 632, 628, 495, 688, 395, 767, 395)
+    $ring.CloseFigure()
+
+    $ring.StartFigure()
+    $ring.AddBezier(768, 431, 711, 431, 667, 520, 667, 632)
+    $ring.AddBezier(667, 632, 667, 744, 711, 832, 768, 832)
+    $ring.AddBezier(768, 832, 825, 832, 869, 744, 869, 632)
+    $ring.AddBezier(869, 632, 869, 520, 825, 431, 768, 431)
+    $ring.CloseFigure()
+    $graphics.FillPath($whiteBody, $ring)
+  } finally {
+    $ring.Dispose()
+    $whiteBody.Dispose()
+  }
+
+  $upperBrush = New-GradientBrush ([System.Drawing.RectangleF]::new(268, 391, 478, 239)) @('#D8FFFF', '#FFFFFF', '#FFFFFF', '#FFF4DE') @([single]0, [single]0.2, [single]0.84, [single]1) 26
   $upper = [System.Drawing.Drawing2D.GraphicsPath]::new()
+  try {
+    $upper.StartFigure()
+    $upper.AddBezier(270, 391, 356, 411, 439, 465, 514, 522)
+    $upper.AddBezier(514, 522, 580, 572, 632, 600, 704, 618)
+    $upper.AddLine(704, 618, 746, 630)
+    $upper.AddLine(746, 630, 704, 627)
+    $upper.AddBezier(704, 627, 628, 615, 572, 592, 518, 559)
+    $upper.AddBezier(518, 559, 429, 505, 364, 446, 268, 420)
+    $upper.AddLine(268, 420, 270, 391)
+    $upper.CloseFigure()
+    $graphics.FillPath($upperBrush, $upper)
+  } finally {
+    $upper.Dispose()
+    $upperBrush.Dispose()
+  }
+
+  $lowerBrush = New-GradientBrush ([System.Drawing.RectangleF]::new(268, 630, 478, 238)) @('#C6DBFF', '#F9FDFF', '#FFFFFF', '#FFF4DE') @([single]0, [single]0.22, [single]0.84, [single]1) 334
   $lower = [System.Drawing.Drawing2D.GraphicsPath]::new()
   try {
-    $upper.AddBezier(192, 318, 308, 344, 420, 438, 600, 514)
-    $lower.AddBezier(192, 700, 318, 674, 438, 574, 600, 516)
-    $graphics.DrawPath($pen, $upper)
-    $graphics.DrawPath($pen, $lower)
-  } finally { $upper.Dispose(); $lower.Dispose(); $pen.Dispose() }
+    $lower.StartFigure()
+    $lower.AddBezier(268, 839, 366, 810, 428, 754, 514, 695)
+    $lower.AddBezier(514, 695, 583, 648, 640, 632, 704, 633)
+    $lower.AddLine(704, 633, 746, 630)
+    $lower.AddLine(746, 630, 704, 639)
+    $lower.AddBezier(704, 639, 636, 656, 586, 679, 538, 710)
+    $lower.AddBezier(538, 710, 450, 767, 381, 831, 271, 868)
+    $lower.AddLine(271, 868, 268, 839)
+    $lower.CloseFigure()
+    $graphics.FillPath($lowerBrush, $lower)
+  } finally {
+    $lower.Dispose()
+    $lowerBrush.Dispose()
+  }
 
-  $mintBrush = New-LinearBrush ([System.Drawing.RectangleF]::new(154, 280, 76, 76)) ([System.Drawing.ColorTranslator]::FromHtml('#35dfe0')) ([System.Drawing.ColorTranslator]::FromHtml('#7ff1bd')) 45
-  $violetBrush = New-LinearBrush ([System.Drawing.RectangleF]::new(154, 662, 76, 76)) ([System.Drawing.ColorTranslator]::FromHtml('#85a9ff')) ([System.Drawing.ColorTranslator]::FromHtml('#5b68ef')) 45
-  $focusBrush = New-LinearBrush ([System.Drawing.RectangleF]::new(552, 467, 96, 96)) ([System.Drawing.ColorTranslator]::FromHtml('#ffc22b')) ([System.Drawing.ColorTranslator]::FromHtml('#ff7a21')) 90
+  $upperNode = New-GradientBrush ([System.Drawing.RectangleF]::new(189, 355, 92, 92)) @('#80FBD5', '#70FBE0') @([single]0, [single]1) 50
+  $lowerNode = New-GradientBrush ([System.Drawing.RectangleF]::new(189, 816, 92, 92)) @('#74A6FC', '#6B9DFF') @([single]0, [single]1) 45
+  $centerNode = New-GradientBrush ([System.Drawing.RectangleF]::new(698, 569, 92, 122)) @('#FFB10F', '#FDA122', '#FF7B20') @([single]0, [single]0.35, [single]1) 53
   try {
-    $graphics.FillEllipse($mintBrush, 154, 280, 76, 76)
-    $graphics.FillEllipse($violetBrush, 154, 662, 76, 76)
-    $graphics.FillEllipse($focusBrush, 552, 467, 96, 96)
-  } finally { $mintBrush.Dispose(); $violetBrush.Dispose(); $focusBrush.Dispose() }
+    $graphics.FillEllipse($upperNode, 189, 355, 92, 92)
+    $graphics.FillEllipse($lowerNode, 189, 816, 92, 92)
+    $graphics.FillEllipse($centerNode, 698, 569, 92, 122)
+  } finally {
+    $upperNode.Dispose()
+    $lowerNode.Dispose()
+    $centerNode.Dispose()
+  }
+
+  $outline = New-RoundedRectPath 1 1 1252 1252 249
+  $outlinePen = [System.Drawing.Pen]::new([System.Drawing.ColorTranslator]::FromHtml('#153747'), 2)
+  try {
+    $graphics.DrawPath($outlinePen, $outline)
+  } finally {
+    $outlinePen.Dispose()
+    $outline.Dispose()
+  }
 }
 
 function Draw-SmallIcon([System.Drawing.Graphics]$graphics) {
-  $bgRect = [System.Drawing.RectangleF]::new(0, 0, 64, 64)
-  $bgBrush = New-LinearBrush $bgRect ([System.Drawing.ColorTranslator]::FromHtml('#1768f2')) ([System.Drawing.ColorTranslator]::FromHtml('#20d8cf')) 45
-  $bgPath = New-RoundedRectPath 0 0 64 64 12
-  try { $graphics.FillPath($bgBrush, $bgPath) } finally { $bgBrush.Dispose(); $bgPath.Dispose() }
-
-  $rearPath = New-RoundedRectPath 48 18 11 28 5.5
-  try { $graphics.FillPath([System.Drawing.Brushes]::White, $rearPath) } finally { $rearPath.Dispose() }
-  $rearHoleBrush = New-LinearBrush $bgRect ([System.Drawing.ColorTranslator]::FromHtml('#1768f2')) ([System.Drawing.ColorTranslator]::FromHtml('#20d8cf')) 45
-  try { $graphics.FillEllipse($rearHoleBrush, 48.9, 23.4, 5.2, 17.2) } finally { $rearHoleBrush.Dispose() }
-
-  $frontPath = New-RoundedRectPath 37 14 17 36 8.5
-  try { $graphics.FillPath([System.Drawing.Brushes]::White, $frontPath) } finally { $frontPath.Dispose() }
-  $frontHoleBrush = New-LinearBrush $bgRect ([System.Drawing.ColorTranslator]::FromHtml('#1768f2')) ([System.Drawing.ColorTranslator]::FromHtml('#20d8cf')) 45
-  try { $graphics.FillEllipse($frontHoleBrush, 40.3, 20.8, 7.4, 22.4) } finally { $frontHoleBrush.Dispose() }
-
-  $pen = [System.Drawing.Pen]::new([System.Drawing.Color]::White, 3.2)
-  $pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
-  $pen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
-  $upper = [System.Drawing.Drawing2D.GraphicsPath]::new()
-  $lower = [System.Drawing.Drawing2D.GraphicsPath]::new()
+  # 小尺寸不再维护另一套旧几何；直接从新主母版坐标统一派生。
+  $state = $graphics.Save()
   try {
-    $upper.AddBezier(12, 18, 21, 20, 29, 27, 41, 32)
-    $lower.AddBezier(12, 46, 22, 44, 30, 37, 41, 32)
-    $graphics.DrawPath($pen, $upper)
-    $graphics.DrawPath($pen, $lower)
-  } finally { $upper.Dispose(); $lower.Dispose(); $pen.Dispose() }
-
-  $mintBrush = New-LinearBrush ([System.Drawing.RectangleF]::new(7.5, 13.5, 9, 9)) ([System.Drawing.ColorTranslator]::FromHtml('#35dfe0')) ([System.Drawing.ColorTranslator]::FromHtml('#7ff1bd')) 45
-  $violetBrush = New-LinearBrush ([System.Drawing.RectangleF]::new(7.5, 41.5, 9, 9)) ([System.Drawing.ColorTranslator]::FromHtml('#85a9ff')) ([System.Drawing.ColorTranslator]::FromHtml('#5b68ef')) 45
-  $focusBrush = New-LinearBrush ([System.Drawing.RectangleF]::new(36.5, 27.5, 9, 9)) ([System.Drawing.ColorTranslator]::FromHtml('#ffc22b')) ([System.Drawing.ColorTranslator]::FromHtml('#ff7a21')) 90
-  try {
-    $graphics.FillEllipse($mintBrush, 7.5, 13.5, 9, 9)
-    $graphics.FillEllipse($violetBrush, 7.5, 41.5, 9, 9)
-    $graphics.FillEllipse($focusBrush, 36.5, 27.5, 9, 9)
-  } finally { $mintBrush.Dispose(); $violetBrush.Dispose(); $focusBrush.Dispose() }
+    $graphics.ScaleTransform([single](64.0 / 1254.0), [single](64.0 / 1254.0))
+    Draw-AppIcon $graphics
+  } finally {
+    $graphics.Restore($state)
+  }
 }
 
 function New-IconBitmap([int]$size, [bool]$small) {
@@ -113,13 +180,15 @@ function New-IconBitmap([int]$size, [bool]$small) {
     $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
     $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
     if ($small) {
-      $graphics.ScaleTransform($size / 64.0, $size / 64.0)
+      $graphics.ScaleTransform([single]($size / 64.0), [single]($size / 64.0))
       Draw-SmallIcon $graphics
     } else {
-      $graphics.ScaleTransform($size / 1024.0, $size / 1024.0)
+      $graphics.ScaleTransform([single]($size / 1254.0), [single]($size / 1254.0))
       Draw-AppIcon $graphics
     }
-  } finally { $graphics.Dispose() }
+  } finally {
+    $graphics.Dispose()
+  }
   return $bitmap
 }
 
@@ -129,7 +198,10 @@ function Get-PngBytes([int]$size, [bool]$small) {
   try {
     $bitmap.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png)
     return ,$stream.ToArray()
-  } finally { $stream.Dispose(); $bitmap.Dispose() }
+  } finally {
+    $stream.Dispose()
+    $bitmap.Dispose()
+  }
 }
 
 function Save-Png([string]$path, [int]$size, [bool]$small) {
@@ -166,7 +238,10 @@ function Write-Ico([string]$path, [int[]]$sizes) {
     foreach ($bytes in $images) { $writer.Write([byte[]]$bytes) }
     $writer.Flush()
     [System.IO.File]::WriteAllBytes($path, $stream.ToArray())
-  } finally { $writer.Dispose(); $stream.Dispose() }
+  } finally {
+    $writer.Dispose()
+    $stream.Dispose()
+  }
 }
 
 New-Item -ItemType Directory -Force -Path $assetRoot | Out-Null
@@ -178,7 +253,9 @@ Write-Ico $trayIco @(16, 20, 24, 32, 40, 48)
 $windowCheck = [System.Drawing.Image]::FromFile($windowPng)
 try {
   if ($windowCheck.Width -ne 256 -or $windowCheck.Height -ne 256) { throw 'Unexpected window icon dimensions' }
-} finally { $windowCheck.Dispose() }
+} finally {
+  $windowCheck.Dispose()
+}
 
 $appBytes = [System.IO.File]::ReadAllBytes($appIco)
 $trayBytes = [System.IO.File]::ReadAllBytes($trayIco)
@@ -187,4 +264,4 @@ $trayCount = [System.BitConverter]::ToUInt16($trayBytes, 4)
 if ($appCount -ne 9) { throw "Unexpected app ICO frame count: $appCount" }
 if ($trayCount -ne 6) { throw "Unexpected tray ICO frame count: $trayCount" }
 
-Write-Host "[AgentLens] Windows brand assets ready: app ICO=$appCount frames; tray ICO=$trayCount frames; window PNG=256px; compatibility PNG=512px"
+Write-Host "[AgentLens] Windows brand assets ready from 1254 master geometry: app ICO=$appCount frames; tray ICO=$trayCount frames; window PNG=256px; compatibility PNG=512px"
