@@ -88,6 +88,14 @@ async function waitForHealth(startedAt: number): Promise<number> {
   throw new Error(`health timeout after ${timeoutMs}ms`)
 }
 
+async function waitForExit(child: ReturnType<typeof spawn>, timeout = 5_000): Promise<void> {
+  if (child.exitCode != null) return
+  await Promise.race([
+    new Promise<void>(resolve => child.once('exit', () => resolve())),
+    new Promise<void>((resolve, reject) => setTimeout(() => reject(new Error('daemon shutdown timeout')), timeout)),
+  ])
+}
+
 let child: ReturnType<typeof spawn> | undefined
 try {
   const initialProjectionRebuildMs = await seed()
@@ -95,7 +103,7 @@ try {
 
   let output = ''
   const startedAt = performance.now()
-  child = spawn('npm', ['run', 'start', '--workspace', '@agent-lens/daemon'], {
+  child = spawn(process.execPath, ['--import', 'tsx', 'apps/daemon/src/main.ts'], {
     cwd: process.cwd(),
     env: {
       ...process.env,
@@ -138,7 +146,12 @@ try {
 } finally {
   if (child && child.exitCode == null) {
     child.kill('SIGTERM')
-    await new Promise(resolve => child?.once('exit', resolve))
+    try {
+      await waitForExit(child)
+    } catch {
+      child.kill('SIGKILL')
+      await waitForExit(child).catch(() => undefined)
+    }
   }
   try { storage.close() } catch {}
   rmSync(root, { recursive: true, force: true })
