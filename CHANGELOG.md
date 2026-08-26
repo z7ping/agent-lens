@@ -1,5 +1,31 @@
 # 更新日志
 
+## 1.0.0-alpha.0（2026-08-26）
+
+### Added
+- 以 Canonical Observation + Evidence 为核心完成 1.0 Clean Rebuild，Source、Storage、Surface 统一走 Core Contract 与 Cordis 运行时，不再复用 0.x 运行架构。
+- 正式支持 Codex、Claude Code、Pi、Hermes、OpenCode、DeepSeek Harness 六类 Source，统一历史采集、实时采集、资产发现与 Coverage（覆盖范围）表达。
+- 新增 RuntimeProfile（运行配置）模型，区分安装实例与 Profile / Environment；DeepSeek Harness 多 Profile 不再伪装成多份安装。
+- 新增 SessionRelationshipCandidate（会话关系候选）到正式 SessionRelationship 的晋升链，保留 parent / fork / resume / subagent 等原生关系事实，不做无证据强推断。
+- 新增 SourceRuntimeStatus（来源运行状态）、未知事件统计、Coverage 汇总、Checkpoint 与数据库增长诊断，为长期狗粮提供来源健康与缺口可见性。
+- 任务复盘、工具分析、智能体概览、资产备份统一接入真实 1.0 数据；任务复盘保留 Evidence、原始数据、生命周期、Pi / DSH 会话关系和长会话能力。
+- CLI 提供 `setup`、`start`、`status`、`doctor`、`service`、`autostart` 与 Hook 管理；npm / Windows Desktop 共享同一默认数据目录与单实例 Daemon。
+- 新增品牌主 SVG、小尺寸 SVG 与候选设计母版归档，并加入纯矢量、自包含和正式引用检查。
+
+### Changed
+- Web 采用冻结后的 1.0 高保真体系：冷中性灰画布、白色数据层、用户消息右侧、智能体左侧；关键交互进入表现层契约检查，CSS 不再负责隐藏业务操作。
+- Source 默认只采集本机实际检测到的正式一方来源；内容仍遵守 CapturePolicy，提示词、工具、配置和环境信息按独立档位控制。
+- npm 后台生命周期直接使用 Windows 当前用户计划任务、Linux `systemd --user`、macOS 用户级 `launchd`，不恢复 PID / Service Manager 体系。
+- npm 预发布通过 GitHub Release 发布同一个已验证 tarball，并固定使用 npm `alpha` dist-tag，不占用 `latest`。
+
+### Security
+- HTTP 默认仅监听 `127.0.0.1`；敏感键在 SourceRecord、Normalize Output、Raw Payload 与 Evidence 持久化前统一脱敏。
+- DSH request/header、MCP 配置、环境变量、API Key / Token 等新增端到端隐私回归，默认不把凭据写入观测数据库。
+
+### Known limitations
+- `1.0.0-alpha.0` 主要用于真实狗粮与模型/Source 稳定化；部分来源能力可能显示为 partial / unavailable / unknown，应以 Coverage 与 Evidence 为准。
+- Windows Desktop 仍处于实机安装、覆盖升级和启动诊断验收阶段；npm/CLI 是本次 alpha 的主要发布入口。
+
 ## 0.7.0（未发布）
 
 ### Added
