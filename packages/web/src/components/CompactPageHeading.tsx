@@ -1,11 +1,9 @@
 import type { ReactNode } from 'react'
 
-export function CompactPageHeading({ title, description, children }: { title: string; description: string; children?: ReactNode }) {
-  return <header className="compact-page-heading">
-    <div className="compact-page-heading-main">
-      <h1>{title}</h1>
-      {children}
-      <button className="heading-help" type="button" aria-label={`查看${title}说明`} data-tip={description}>i</button>
-    </div>
-  </header>
+/**
+ * 一级导航已经明确当前页面，工作区内不再重复渲染同名页面标题。
+ * 保留组件签名，避免各页面为了表现层收口产生无意义结构改写。
+ */
+export function CompactPageHeading(_: { title: string; description: string; children?: ReactNode }) {
+  return null
 }
