@@ -21,3 +21,5 @@ jobs:
           package-manager-cache: false
       - run: npm ci --no-audit --no-fund
       - run: npx tsx scripts/performance/daemon-startup-benchmark.ts --sessions=100 --observations-per-session=20 --timeout-ms=30000
+
+# trigger smoke
