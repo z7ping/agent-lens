@@ -50,8 +50,13 @@ jobs:
         if: github.event_name == 'release'
         run: node scripts/check-release-version.mjs
 
+      - name: Note unsigned prerelease
+        if: github.event_name == 'release' && github.event.release.prerelease == true
+        shell: bash
+        run: echo 'AgentLens prerelease: macOS DMG/ZIP may be published unsigned and without notarization for alpha/beta/rc dogfood.'
+
       - name: Materialize App Store Connect API key
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' && github.event.release.prerelease == false
         shell: bash
         env:
           APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
@@ -64,7 +69,7 @@ jobs:
           fi
 
       - name: Require macOS release signing and notarization credentials
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' && github.event.release.prerelease == false
         env:
           CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.MACOS_CSC_KEY_PASSWORD }}
@@ -83,14 +88,14 @@ jobs:
           npm run typecheck
           npm test
 
-      - name: Build macOS desktop validation package
-        if: github.event_name != 'release'
+      - name: Build unsigned macOS desktop
+        if: github.event_name != 'release' || github.event.release.prerelease == true
         run: npm run desktop:mac
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
       - name: Build signed and notarized macOS desktop
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' && github.event.release.prerelease == false
         run: npm run desktop:mac:release
         env:
           CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}
@@ -102,7 +107,7 @@ jobs:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
 
       - name: Verify macOS signature and notarization
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' && github.event.release.prerelease == false
         shell: bash
         run: |
           APP="$(find release/macos -type d -path '*/AgentLens.app' -print -quit)"
