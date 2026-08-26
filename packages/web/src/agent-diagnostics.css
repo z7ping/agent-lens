@@ -1,15 +1,50 @@
+/*
+ * 智能体概览采集诊断。
+ *
+ * 宽屏时作为 app-shell 的正式右侧栏参与布局，不能用 fixed 覆盖业务内容；
+ * 小屏退化为可折叠底部面板，避免把主工作区压到不可用宽度。
+ */
+.app-shell:has(> .agent-diagnostics-dock){
+  display:grid;
+  grid-template-columns:minmax(0,1fr) clamp(280px,24vw,360px);
+  grid-template-rows:52px auto minmax(0,1fr);
+  min-height:100vh;
+}
+.app-shell:has(> .agent-diagnostics-dock[open]){
+  grid-template-columns:minmax(0,1fr) clamp(320px,28vw,420px);
+}
+.app-shell:has(> .agent-diagnostics-dock)>.app-header{
+  grid-column:1/-1;
+  grid-row:1;
+}
+.app-shell:has(> .agent-diagnostics-dock)>.sse-banner{
+  grid-column:1/-1;
+  grid-row:2;
+}
+.app-shell:has(> .agent-diagnostics-dock)>.workspace-page{
+  grid-column:1;
+  grid-row:3;
+  min-width:0;
+  min-height:0;
+}
+
 .agent-diagnostics-dock{
-  position:fixed;
-  z-index:28;
-  top:108px;
-  right:18px;
-  width:min(460px,calc(100vw - 36px));
-  max-height:calc(100vh - 132px);
+  position:relative;
+  z-index:1;
+  grid-column:2;
+  grid-row:3;
+  align-self:start;
+  top:auto;
+  right:auto;
+  width:auto;
+  min-width:0;
+  max-height:calc(100dvh - 126px);
+  margin:56px 18px 18px 0;
   overflow:hidden;
   border:1px solid var(--al-line);
   border-radius:12px;
   background:var(--al-surface);
-  box-shadow:var(--al-shadow);
+  box-shadow:none;
 }
 .agent-diagnostics-dock[open]{overflow:auto}
 .agent-diagnostics-dock>summary{
@@ -74,11 +109,41 @@
 .agent-diagnostic-capability>span{font-size:12px;color:var(--al-ink-2)}
 .agent-diagnostic-capability>b{flex:none}
 .agent-diagnostic-empty{padding:7px 0;color:var(--al-muted);font-size:12px;line-height:1.5}
-@media(max-width:820px){
-  .agent-diagnostics-dock{top:auto;right:10px;bottom:12px;width:min(420px,calc(100vw - 20px));max-height:56vh}
+
+@media(max-width:1100px){
+  .app-shell:has(> .agent-diagnostics-dock),
+  .app-shell:has(> .agent-diagnostics-dock[open]){
+    grid-template-columns:minmax(0,1fr) 300px;
+  }
+  .agents-browser{grid-template-columns:1fr}
+  .agent-source-nav{position:static}
 }
+
+@media(max-width:760px){
+  .app-shell:has(> .agent-diagnostics-dock),
+  .app-shell:has(> .agent-diagnostics-dock[open]){
+    display:flex;
+    flex-direction:column;
+    min-height:100vh;
+  }
+  .agent-diagnostics-dock{
+    position:fixed;
+    z-index:28;
+    top:auto;
+    right:10px;
+    bottom:12px;
+    left:auto;
+    width:min(420px,calc(100vw - 20px));
+    max-height:56vh;
+    margin:0;
+    box-shadow:var(--al-shadow);
+  }
+  .agents-content{padding-bottom:calc(56vh + 28px)}
+}
+
 @media(max-width:560px){
   .agent-diagnostics-dock{left:8px;right:8px;bottom:8px;width:auto;max-height:58vh}
   .agent-diagnostics-dock>summary small{display:none}
   .agent-storage-kpis{grid-template-columns:1fr}
+  .agents-content{padding-bottom:calc(58vh + 24px)}
 }
