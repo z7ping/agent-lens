@@ -53,7 +53,8 @@ jobs:
       - name: Note unsigned prerelease
         if: github.event_name == 'release' && github.event.release.prerelease == true
         shell: bash
-        run: echo 'AgentLens prerelease: macOS DMG/ZIP may be published unsigned and without notarization for alpha/beta/rc dogfood.'
+        run: |
+          echo 'AgentLens prerelease: macOS DMG/ZIP may be published unsigned and without notarization for alpha/beta/rc dogfood.'
 
       - name: Materialize App Store Connect API key
         if: github.event_name == 'release' && github.event.release.prerelease == false
