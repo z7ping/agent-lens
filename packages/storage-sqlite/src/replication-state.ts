@@ -384,8 +384,15 @@ export class SqliteReplicationStateRepository {
       const decision = assertFreezeSequence({
         stream: mapStream(streamRow),
         incomingSequence: input.sequence,
+        incomingBatchId: input.batchId,
         incomingContentHash: input.contentHash,
-        ...(existing ? { existingBatch: { sequence: existing.sequence, contentHash: existing.contentHash } } : {}),
+        ...(existing ? {
+          existingBatch: {
+            sequence: existing.sequence,
+            batchId: existing.batchId,
+            contentHash: existing.contentHash,
+          },
+        } : {}),
       })
       if (decision === 'exact-retry' && existing) return this.mapFrozenBatch(existing)
 
