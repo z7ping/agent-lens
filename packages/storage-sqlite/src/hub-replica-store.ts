@@ -1,9 +1,10 @@
-import type { JsonValue, WireEntityEnvelope } from '@agent-lens/protocol/replication'
+import type { JsonValue } from '@agent-lens/core'
 import type { KnownReplicationEntityType } from '@agent-lens/core/replication'
 import type { SqliteExecutor } from './executor'
 
 export type SqliteHubReplicaGenerationStatus = 'staged' | 'active' | 'retired'
 export type SqliteHubReplicationStreamStatus = 'active' | 'paused' | 'revoked'
+export type SqliteHubRemoteScope = 'node' | 'shared'
 
 export interface SqliteHubReplicaGenerationRecord {
   originNodeId: string
@@ -39,12 +40,12 @@ export interface SqliteHubRemoteReplicaEntityRecord {
   entityType: KnownReplicationEntityType
   originEntityId: string
   replicaKey: string
-  scope: WireEntityEnvelope['scope']
+  scope: SqliteHubRemoteScope
   entityVersion: number
   contentHash: string
   body: JsonValue
-  references?: WireEntityEnvelope['references']
-  sharedIdentity?: WireEntityEnvelope['sharedIdentity']
+  references?: unknown
+  sharedIdentity?: unknown
   updatedSequence: number
   updatedAt: string
 }
@@ -142,14 +143,7 @@ export class SqliteHubReplicaStore {
           status = excluded.status,
           ack_sequence = excluded.ack_sequence,
           updated_at = excluded.updated_at
-      `).run(
-        record.streamId,
-        record.originNodeId,
-        record.status,
-        record.ackSequence,
-        record.createdAt,
-        record.updatedAt,
-      )
+      `).run(record.streamId, record.originNodeId, record.status, record.ackSequence, record.createdAt, record.updatedAt)
     })
   }
 
@@ -192,7 +186,7 @@ export class SqliteHubReplicaStore {
 
   async getCommittedBatch(streamId: string, sequence: number): Promise<SqliteHubCommittedBatchRecord | undefined> {
     return this.executor.run(() => {
-      const row = this.executor.db.prepare(`
+      return this.executor.db.prepare(`
         SELECT stream_id AS streamId,
                sequence,
                origin_node_id AS originNodeId,
@@ -203,7 +197,6 @@ export class SqliteHubReplicaStore {
         FROM hub_committed_batches
         WHERE stream_id = ? AND sequence = ?
       `).get(streamId, sequence) as BatchRow | undefined
-      return row
     })
   }
 
