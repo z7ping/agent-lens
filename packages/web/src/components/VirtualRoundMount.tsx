@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { isValidElement, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 export function VirtualRoundMount({
   children,
@@ -14,6 +14,10 @@ export function VirtualRoundMount({
   const ref = useRef<HTMLDivElement>(null)
   const [mounted, setMounted] = useState(eager)
   const [height, setHeight] = useState(estimate)
+  const childInteractionId = isValidElement<{ interaction?: { id?: string } }>(children)
+    ? children.props.interaction?.id
+    : undefined
+  const stableInteractionId = interactionId ?? childInteractionId
 
   useEffect(() => {
     const element = ref.current
@@ -55,9 +59,15 @@ export function VirtualRoundMount({
     ref={ref}
     className="virtual-round-shell"
     data-mounted={mounted ? 'true' : 'false'}
-    data-interaction-id={interactionId || undefined}
-    style={mounted ? undefined : { height: `${height}px` }}
+    data-interaction-id={stableInteractionId || undefined}
+    style={mounted ? undefined : { height: `${height}px`, position: 'relative' }}
   >
+    {!mounted && stableInteractionId && <span
+      className="interaction-block virtual-round-anchor"
+      data-interaction-id={stableInteractionId}
+      aria-hidden="true"
+      style={{ position: 'absolute', top: 0, left: 0, width: 0, height: 0, margin: 0, padding: 0, border: 0 }}
+    />}
     {mounted ? children : null}
   </div>
 }
