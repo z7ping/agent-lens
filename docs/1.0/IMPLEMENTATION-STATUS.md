@@ -330,9 +330,9 @@ OpenCode / Pi 不为实时采集额外安装 Native Hook，继续使用原生数
 
 本文不代表已经完成 npm Publish 或 GitHub Release；发布仍必须由仓库所有者明确触发。
 
-## 13. 多机 Hub（设计已收口，功能尚未实现）
+## 13. 多机 Hub（设计冻结，功能尚未实现）
 
-ADR-0007 与 Hub 专项 Contract / Protocol / Security / Operations / UX / Test 文档已经完成实现前收口，但当前代码仍**没有**实现 Node Identity、Replication Packages、Storage Migration、Pairing / TLS、Wire Endpoint、History Boundary、Bootstrap / Outbox、Remote Import、Replica Generation 或多机 Web。
+ADR-0007 与 Hub 专项 Contract / Protocol / Security / Operations / UX / Test 文档已经完成实现前收口；新增 `HUB-REPLICA-STORAGE-CONTRACT.md` 后，Remote Replica 的物理存储边界也已明确。当前代码仍**没有**实现 Node Identity、Replication Packages、Remote Replica Store、Storage Migration、Pairing / TLS、Wire Endpoint、History Boundary、Bootstrap / Outbox、Remote Import、Replica Generation、Unified Read Repository 或多机 Web。
 
 Hub 文档入口：`docs/1.0/HUB-DESIGN-INDEX.md`。
 
@@ -341,15 +341,20 @@ Hub 文档入口：`docs/1.0/HUB-DESIGN-INDEX.md`。
 - 每个 AgentLens 实例都是持久 Node；Standalone / 普通接入节点 / Hub / Pure Hub 是能力组合，Alpha 只允许四个正式 Profile，不允许 `replicationUpstream + hubAccept` 形成级联 Hub；
 - Hub Local-first，本机 Canonical Pipeline 独立；Hub 是 Replica + Aggregator；
 - 本机 Canonical ID 不直接作为 Hub 全局主键。机器作用域实体使用 `nodeId + entityType + originEntityId` 的确定性 Replica Namespace；现有 Host / Canonical ID 不因 Hub 立即整库迁移；
-- Shared Entity 必须显式拥有 Shared Identity + deterministic Merge Contract；未知 Entity 默认 Node-scoped；Project / AssetDefinition 是 Conditional Shared，ToolDefinition Alpha Node-scoped；
+- Hub 的“统一 Store”正式指 **一个 Storage Boundary / 一个默认数据库 / 一个统一 Read Repository**，不代表 Remote Replica 必须写进现有 Local Canonical SQL 表；
+- Local Canonical Store 保持现有不变量；Remote Replica Store 原生保存 `value / redacted / omitted` 及其原因，禁止用空串、`{}`、`[hidden]` 等占位值伪造未获授权字段；
+- Shared Entity 必须显式拥有 Shared Identity + deterministic Merge Contract；未知 Entity 默认 Node-scoped；Project / AssetDefinition 是 Conditional Shared，采用 Origin Row + Shared Group Membership，ToolDefinition Alpha Node-scoped；
 - Hub 本机不走 HTTPS 自我复制，但本机 origin 必须能参与 Shared Project / Asset 聚合；
 - Replication Policy 与 History Scope 分离：`metadata-only / redacted / full` 回答“传什么”，`from-now / include-existing` 回答“是否补已有历史”；
-- `from-now` 是持久 History Boundary，Reconciliation 不能绕过；新事实仍允许携带所需旧身份 / FK dependency closure；
+- `from-now` 是持久 History Boundary，Reconciliation 不能绕过；新事实允许携带必要旧依赖，但 Dependency Closure 必须字段最小化，Boundary 前非必要 title/path/body/time 等继续标记为 `omitted(history-boundary|dependency-minimized)`；
 - `metadata-only` 不发 Prompt / Tool 正文，并默认隐藏完整 Workspace 本机路径，但仍可能发送项目 / 仓库、Agent / Tool、时间等必要元数据，因此不是匿名模式；
 - Durable Replication 采用 at-least-once + immutable in-flight Batch + contiguous Sequence/ACK + deterministic Hash + idempotent Import + Canonical Reconciliation；Cordis Event 只做 fast path；
 - ambiguous commit 不能用同 sequence 换内容重发。Policy 收紧后遇到旧策略 ambiguous Batch 时必须安全暂停，通过 authenticated Stream Rollover + Reconciliation 恢复；
+- Policy 收紧不自动 Purge Hub 已有旧完整值；Remote Replica 必须区分“当前 Policy 未再授权刷新”与“旧值仍保留”，不能把 retained prior value 冒充成当前重新确认值；
 - 普通 Scan absence 不表示删除；Tombstone 是持久删除事实。显式 Re-bootstrap 使用 staged Replica Generation，完成 Bootstrap + Reconcile + validate 后才原子切换 active Generation；
-- Hub 使用统一 Canonical Store，不按 Node 分库；Stream / Cursor / Sequence Receipt / Generation / Alias / Shared Assertion / Conflict / Tombstone 属于 Replication Control Plane；
+- Hub Storage Boundary 不按 Node 分库；Stream / Cursor / Sequence Receipt / Generation / Shared Assertion / Membership / Conflict / Tombstone 属于 Replication Control Plane / Shared Identity State，不混入 Agent 行为 Observation；
+- Unified Read Repository 是 Projection 的正式 Hub 入口：合并 Local Canonical + Active Remote Replica + Shared Resolver，并显式暴露字段 availability；Web / Projection 不直接读取 Replica 私表；
+- 远程实体对外使用保留的 Replica ID 命名空间，Hub 本机仍保留现有 Local Canonical ID；Shared Group Key 只用于聚合身份，不作为 Conditional Shared 领域 FK；
 - Pairing 使用一次性 Secret + Node Key Possession；Hub Identity、Node Identity、TLS Identity 分离；Hub Identity 需要签名 Pairing Receipt / Handshake serverProof，长期 Request Signature 绑定 Hub / Node / Stream / Key / Request / Nonce / Body；
 - Clone Detection 不能仅因 IP / hostname / metadata 变化冻结合法 Node；真正并发 runtime instance / sequence divergence 等强冲突才触发 hard conflict；
 - Node 只主动向 Hub 发起 HTTPS 出站连接；现有 `127.0.0.1:56789` Local Surface 不暴露网络；Alpha 不内建 Remote Web Login 或远程执行能力；
@@ -364,10 +369,10 @@ H1 Node Identity / Composition
  -> H2 Replication Core
  -> H3 R1 Protocol / Identity Proof
  -> H4 Policy / History / Outbox / Reconcile
- -> H5 Hub Import / Replica Generation
+ -> H5 Remote Replica Storage / Hub Import / Generation
  -> H6 Security / Surface
  -> H7 E2E Sync
- -> H8 Web / CLI
+ -> H8 Unified Read / Projection / Web / CLI
  -> H9 Delete / Identity / Recovery Ops
  -> H10 Performance / Hardening
 ```
