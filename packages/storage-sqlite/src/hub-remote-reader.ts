@@ -36,6 +36,7 @@ export interface HubRemoteReadQuery {
 
 export interface HubRemoteObservationQuery {
   originNodeId: string
+  generationId: string
   logicalSessionOriginId: string
   limit?: number
 }
@@ -165,9 +166,9 @@ export class SqliteHubRemoteReadRepository {
   }
 
   /**
-   * Resolve the typed LogicalSession node reference inside active remote
-   * CanonicalObservation envelopes. The private JSON storage detail stays
-   * below this repository boundary; projections never inspect references_json.
+   * Resolve the typed LogicalSession node reference inside one active remote
+   * generation's CanonicalObservation envelopes. The private JSON storage
+   * detail stays below this repository boundary.
    */
   async listCanonicalObservationsForLogicalSession(
     query: HubRemoteObservationQuery,
@@ -175,6 +176,7 @@ export class SqliteHubRemoteReadRepository {
     return this.executor.run(() => {
       const rows = this.executor.db.prepare(`${ACTIVE_REMOTE_SELECT}
         AND e.origin_node_id = ?
+        AND e.generation_id = ?
         AND e.entity_type = 'CanonicalObservation'
         AND json_extract(e.references_json, '$.logicalSession.kind') = 'node'
         AND json_extract(e.references_json, '$.logicalSession.entityType') = 'LogicalSession'
@@ -194,6 +196,7 @@ export class SqliteHubRemoteReadRepository {
         LIMIT ?
       `).all(
         query.originNodeId,
+        query.generationId,
         query.logicalSessionOriginId,
         boundedLimit(query.limit),
       ) as RemoteRow[]
