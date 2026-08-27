@@ -7,38 +7,15 @@ import type {
 } from '@agent-lens/core'
 import type {
   ReplicationAvailability,
+  UnifiedCanonicalObservation,
+  UnifiedLogicalSession,
+  UnifiedLogicalSessionReader,
+  UnifiedObservationReader,
 } from '@agent-lens/core/replication'
 import type {
   HubRemoteObservationQuery,
   HubRemoteReadEntity,
 } from './hub-remote-reader'
-
-export type HubUnifiedReadOrigin =
-  | {
-      kind: 'local'
-      nodeId: string
-      entityId: string
-    }
-  | {
-      kind: 'remote'
-      nodeId: string
-      entityId: string
-      generationId: string
-    }
-
-export interface HubUnifiedLogicalSession {
-  publicId: string
-  entityType: 'LogicalSession'
-  origin: HubUnifiedReadOrigin
-  body: Readonly<Record<string, ReplicationAvailability>>
-}
-
-export interface HubUnifiedCanonicalObservation {
-  publicId: string
-  entityType: 'CanonicalObservation'
-  origin: HubUnifiedReadOrigin
-  body: Readonly<Record<string, ReplicationAvailability>>
-}
 
 export interface HubRemoteReadPort {
   get(publicId: string): Promise<HubRemoteReadEntity | undefined>
@@ -121,21 +98,17 @@ function remoteAvailabilityBody(
 }
 
 /**
- * First H8 Unified Read slice.
- *
- * It composes Local Canonical LogicalSession with the formal active-generation
- * Remote Replica read boundary. Local Canonical IDs stay unchanged, while
- * remote entities are addressed only by ReplicaKey. Projection/Web callers do
- * not inspect Hub replica tables or generation state themselves.
+ * SQLite implementation of the Core Unified LogicalSession read contract.
+ * Local Canonical IDs stay unchanged; remote entities are addressed by ReplicaKey.
  */
-export class HubUnifiedLogicalSessionReader {
+export class HubUnifiedLogicalSessionReader implements UnifiedLogicalSessionReader {
   constructor(
     private readonly localNodeId: string,
     private readonly localSessions: SessionRepository,
     private readonly remote: HubRemoteReadPort,
   ) {}
 
-  async get(publicId: string): Promise<HubUnifiedLogicalSession | undefined> {
+  async get(publicId: string): Promise<UnifiedLogicalSession | undefined> {
     const local = await this.localSessions.getLogicalSession(publicId as LogicalSession['id'])
     if (local) {
       return {
@@ -167,22 +140,21 @@ export class HubUnifiedLogicalSessionReader {
 }
 
 /**
- * Availability-aware observation reader for one Unified LogicalSession.
- * It deliberately does not cast remote bodies into CanonicalObservation,
- * because metadata-only/history policy may omit fields that Local Core expects.
+ * SQLite implementation of the Core availability-aware observation contract.
+ * Remote bodies are never cast into CanonicalObservation.
  */
-export class HubUnifiedObservationReader {
+export class HubUnifiedObservationReader implements UnifiedObservationReader {
   constructor(
     private readonly localNodeId: string,
     private readonly localObservations: ObservationRepository,
-    private readonly sessions: HubUnifiedLogicalSessionReader,
+    private readonly sessions: UnifiedLogicalSessionReader,
     private readonly remote: HubRemoteReadPort,
   ) {}
 
   async queryForLogicalSession(
     logicalSessionPublicId: string,
     limit = 500,
-  ): Promise<readonly HubUnifiedCanonicalObservation[]> {
+  ): Promise<readonly UnifiedCanonicalObservation[]> {
     const session = await this.sessions.get(logicalSessionPublicId)
     if (!session) return []
     const boundedLimit = Math.max(1, Math.min(limit, 5000))
