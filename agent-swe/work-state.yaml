@@ -2,80 +2,91 @@ schema_version: "0.1"
 status: active
 
 goal:
-  summary: "继续 AgentLens 1.0 Alpha Hub，下一阶段实现 H5 Durable Replication State / Outbox / Reconciliation"
+  summary: "继续 AgentLens 1.0 Alpha Hub，下一阶段实现 H6 Replica Generation / Bootstrap Canonical Enumeration"
 
 phase:
   type: implementation
-  summary: "H1-H4 已完成并通过三平台验证；下一步只建立 Node 侧可恢复的复制状态、Outbox 与 Canonical Reconciliation，不联网、不落 Hub Remote Replica Store"
+  summary: "H1-H5 已完成并通过三平台验证；下一步把 Canonical Entity 按 H2 Identity、H4 Policy/History、H3 Wire Contract 确定性生成本机 R1 Pending/Frozen Batch，仍不联网、不落 Hub Remote Replica Store"
 
 scope:
   include:
-    - "定义 Node-side Replication Relationship / Stream / Generation / Cursor / ACK 的持久状态模型"
-    - "SQLite durable replication state / outbox / reconciliation watermark 的 Migration 与 Repository"
-    - "Outbox Item 的 immutable sequence/batch identity/content hash 状态机"
-    - "Canonical Store reconciliation 发现漏入队 upsert 的确定性机制"
-    - "Cordis Event 只作为 fast-path trigger，不能成为唯一 durable enqueue 依据"
-    - "Bootstrap / incremental / reconcile 三种 Outbox phase 的持久状态表达"
-    - "Policy Revision / History Revision 与 Outbox Item 的冻结绑定"
-    - "崩溃恢复、exact retry、ACK advance、gap prevention 与重复入队幂等测试"
+    - "定义可复制 Canonical Entity 的枚举契约与稳定分页 / 高水位语义"
+    - "按 H2 Entity Scope / ReplicaKey / Shared Identity 构造 Origin Identity 与 Wire Ref"
+    - "按 H4 Replication Policy / History Boundary 将 Canonical Entity 转换为 Availability body"
+    - "按 H3 R1 Entity Envelope / semantic hash 生成确定性 Wire Entity"
+    - "处理父子依赖、Node Ref / Shared Ref 与批次内引用顺序"
+    - "Bootstrap / incremental / reconcile 共用同一实体生成路径，仅由 phase / cursor / history authorization 区分"
+    - "将生成结果写入 H5 Durable Pending，并从 Pending 确定性冻结 R1 Batch"
+    - "定义 Bootstrap high-water / staged activation 基础，避免 Bootstrap 期间新增事实丢失"
+    - "覆盖相同 Canonical 状态重复生成稳定、跨 Node ReplicaKey 隔离、from-now 依赖最小形态、策略 fail-closed 测试"
   exclude:
     - "真实 HTTP / HTTPS、Pairing、TLS、Request Signature"
     - "Hub Remote Replica SQLite Schema / transactional import"
     - "真正向 Hub 发包的 Replication Client"
     - "Hub Unified Read / Projection / Web / CLI"
-    - "Shared Identity Hub-side persistence / merge integration"
     - "HA、多 Hub、Federation、Remote Web、Remote Control"
 
 constraints:
   required:
-    - "实现前核对 SQLite migration / repository 现状与 Canonical commit 边界"
-    - "Canonical commit 成功后即使进程在 Event / fast enqueue 前崩溃，Reconciliation 仍能补回漏项"
-    - "Outbox 与 Replication Control Plane 不能进入 Canonical Observation"
-    - "第一次可能发网后 sequence / batchId / semantic contentHash 必须 immutable"
-    - "Policy / History 变更只影响尚未冻结的生成；已冻结 Outbox Item 不得就地改写"
-    - "H5 不改变 Local-first：复制状态损坏或暂停不能阻塞 Canonical Capture"
+    - "Canonical Store 是唯一生成事实源；不得从 Projection、Summary、Usage 或 Source Checkpoint 生成复制事实"
+    - "Entity 枚举必须显式遵循 H2 Entity Scope Registry，not-replicated 类型不得进入生成器"
+    - "Machine-scoped Entity 使用 ReplicaKey；Project / AssetDefinition R1 Wire Origin 继续保持 Node scope"
+    - "所有字段先经过 H4 policy/history transform，再进入 H3 Wire Entity；生成器不得绕过 fail-closed Field Contract"
+    - "同一 Canonical 状态、Node Identity、Policy/History Revision 下生成结果必须确定性稳定"
+    - "Bootstrap 必须能与期间新增 Canonical Fact 对账，不以一次无边界全表扫描宣称完成"
+    - "H6 只生成本机可发送批次，不建立网络可达性"
   forbidden:
     - "未经明确要求发布 npm 或创建 Release"
-    - "在 H5 提前实现真实网络、Pairing、Remote Import 或 Unified Read"
-    - "只依赖 Cordis Event 写 Outbox"
-    - "通过扫描缺失来推断删除；删除必须等待后续 durable Tombstone 机制"
-    - "把 Projection 或 Source Checkpoint 当成复制事实源"
+    - "在 H6 提前实现 Pairing、Remote Import、TLS 或 Unified Read"
+    - "直接复制 SQLite row 作为 Wire Entity"
+    - "为方便生成而修改本机 Canonical ID / FK"
+    - "使用 Projection 结果补齐 Canonical Entity 缺失字段"
+    - "用 row absence 推断 Tombstone"
   frozen:
     - "H1 persistent nodeId + capability-driven Composition"
     - "H2 ReplicaKey / Shared Identity / Entity Scope"
     - "H3 R1 Wire DTO / Semantic Hash / Sequence / ACK 语义"
     - "H4 Replication Policy / History Boundary / fail-closed Field Contract"
+    - "H5 Durable Stream / Pending / Frozen Batch / Reconciliation 状态机"
     - "Local-first、单 Hub 星型拓扑、不提供 Remote Control"
   deferred:
-    - action: "H6+ Hub Remote Store / transactional ingest / security transport / unified read"
-      until: "H5 Durable Replication State / Outbox / Reconciliation 完成并验证"
+    - action: "H7+ Hub Remote Store / transactional ingest / security transport / unified read"
+      until: "H6 Replica Generation / Bootstrap Canonical Enumeration 完成并验证"
 
 acceptance:
-  - "Replication durable state 可在 Daemon 重启后恢复 stream/generation/next sequence/ack 状态"
-  - "同一逻辑待复制事实不会因重复 fast-path / reconciliation 产生多个未决 Outbox Item"
-  - "Canonical commit 后模拟 fast enqueue 丢失时，reconciliation 能补出 Outbox Item"
-  - "已冻结 sequence 的 batch identity / content hash 不会被 Policy/History 变更就地修改"
-  - "ACK 只能单调推进，不能跨 gap"
-  - "exact retry 能重新取得同一 sequence / content hash 的冻结 Outbox Item"
-  - "reconciliation 不依据 row absence 生成删除"
-  - "H5 不引入 Replication HTTP Server/Client、Pairing/TLS 或 Hub Remote Store"
+  - "至少一条完整 Canonical 依赖链可从本机 Repository 生成合法 R1 Entity Envelope 并写入 Durable Pending"
+  - "Node-scoped Entity 的 origin/ref 使用稳定 ReplicaKey，跨 Node 不碰撞"
+  - "AgentProduct Shared Root Ref 按 H2/H3 既定算法生成；Project / AssetDefinition 不错误晋升为 Shared Wire Origin"
+  - "metadata-only / redacted / full 与 include-existing / from-now 在真实实体生成路径上继续生效"
+  - "from-now 边界前普通历史不生成正文，必要旧依赖仅生成 Minimum Dependency Shape"
+  - "同一输入重复生成 semantic hash 稳定，不制造重复未决 Pending"
+  - "Bootstrap 有明确 high-water / cursor 语义，并能在结束后通过 incremental/reconcile 覆盖扫描期间新增事实"
+  - "Pending 能按 H3 Batch Contract 确定性冻结，sequence/batchId/contentHash 一经冻结不变"
+  - "H6 不引入 Replication HTTP Server/Client、Pairing/TLS 或 Hub Remote Store"
 
 progress:
   current:
     - "H1 已实现 persistent Node Identity、Capability Profile 与 ctx.node"
     - "H2 已实现 Entity Scope、ReplicaKey / SharedKey、Portable Identity、Shared Membership"
     - "H3 已实现 @agent-lens/protocol/replication：R1 DTO、Typed Ref、Availability、Handshake compatibility、Semantic Hash、Sequence/ACK"
-    - "H4 已实现 @agent-lens/core/replication：metadata-only/redacted/full、include-existing/from-now、Minimum Dependency Shape、credential/path protection 与 policy/history transition"
-    - "H4 出站变换默认 fail-closed：未登记字段 omitted(policy)，not-replicated Entity 直接拒绝"
-    - "H4 最终候选 dad21f5cba00011ef37d25619de9e3fbbc6d2ccd 已通过 Linux/macOS/Windows 三平台主 CI"
+    - "H4 已实现 metadata-only/redacted/full、include-existing/from-now、Minimum Dependency Shape 与 fail-closed outbound transform"
+    - "H5 已实现 SQLite schema v7 Durable Replication Control Plane、Stream/Generation/Pending/Frozen Batch/ACK/Reconciliation Cursor"
+    - "H5 Pending 支持幂等/冻结前替换，Frozen Batch 锁定 sequence+batchId+contentHash，ACK 连续推进并支持重启恢复"
+    - "H5 Reconciliation 已有 Core Source/Sink contract 与 SQLite Durable Sink，可在 fast-path 漏失后补 Pending"
+    - "H5 支持同一 Relationship 的 Stream Rollover，不把 relationshipId 错设为单 Stream 唯一键"
+    - "H5 最终候选 908a512c05aeb4ffc084c34cac29a4abd58ccd46 已通过 Linux/macOS/Windows 三平台主 CI"
   next:
-    - "先核对 storage-sqlite migration/repository 与 Canonical commit 事务边界"
-    - "再定义最小 durable schema / repository / state machine 和 crash-recovery 测试"
+    - "先列出 H6 第一批可复制 Canonical Entity 的依赖拓扑与现有 Repository 读取能力"
+    - "再定义 Canonical Enumeration / Entity Generator 的最小 framework-agnostic contract"
+    - "优先打通一条真实依赖链到 Durable Pending/Frozen Batch，再扩完整 Entity Registry"
 
 decisions:
-  - "Capture Policy、Replication Policy、Wire Protocol、Durable Replication State 保持四层边界，不互相充当事实源"
-  - "Cordis Event 只做低延迟 fast path；Canonical Reconciliation 是漏项修复的 durable safety net"
-  - "H5 只生成/保存待发送状态，不实现网络发送"
+  - "Pending Entity 与 Frozen Batch 分层：Pending 可由 reconciliation 更新，Frozen Batch 不可变"
+  - "Frozen exact retry 同时绑定 sequence、batchId、contentHash"
+  - "Reconciliation page cursor 只在整页 Durable enqueue 成功后推进，失败重扫由 dedup/candidateHash 吸收"
+  - "Replication Control Plane 表与 Canonical Fact 表隔离，不成为第二事实源"
+  - "同一 Relationship 可跨 Policy/History rollover 保留多个历史 Stream"
+  - "H6 先完成确定性本机 Replica Generation，再进入 Remote Store/Transport"
   - "只有改变冻结长期不变量时才发起 ADR / Contract Review"
 
 repository:
