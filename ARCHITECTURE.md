@@ -562,60 +562,80 @@ Windows 无窗口后台任务与 Hook Runner 都只是运维 / 执行包装。�
 
 ## 22. 多机 Hub 架构
 
-状态：**架构已接受并完成实现前复核，Alpha 实现尚未开始。** 完整决策见 `docs/adr/0007-multi-machine-hub-local-first-canonical-replication.md`。
+状态：**架构与实现前 Contract 已收口，Alpha 功能尚未实现。** 入口见 `docs/1.0/HUB-DESIGN-INDEX.md`，长期决策见 `docs/adr/0007-multi-machine-hub-local-first-canonical-replication.md`。
 
-每个 AgentLens 实例都是一个持久 Node。Standalone、普通接入节点、Hub、Pure Hub 只是同一个 `AgentLensApplication` 的能力组合，不是四套程序，也不在 Core 中维护互斥角色：
+每个 AgentLens 实例都是一个持久 Node。Standalone、普通接入节点、Hub、Pure Hub 是同一个 `AgentLensApplication` 的能力组合，不是四套程序；Alpha 只允许四个已定义 Profile，不允许 `replicationUpstream + hubAccept` 形成隐藏级联 Hub。
 
-```text
-AgentLens Node
-  localCapture        true | false
-  replicationUpstream true | false
-  hubAccept           true | false
-```
-
-Hub 继续遵守 Local-first。本机 Source 先形成 Local Canonical Store；只有经过独立 Replication Policy 允许的数据才进入 Hub：
+Hub 继续 Local-first：
 
 ```text
 Native Source
   -> Capture Policy
   -> Local Canonical Store
   -> Replication Policy
-  -> Bootstrap / Incremental Replication
-  -> Hub Unified Canonical Store
+  -> History Scope
+  -> Replication
+  -> Hub Unified Store
   -> Projection
   -> Unified Web
 ```
 
-当前本机 Canonical ID 不被直接提升为跨机全局主键。现有 `Host.id` 仍有单机身份算法约束，因此机器作用域实体通过确定性的 Replication Namespace 映射：
+Replication Policy 回答“哪些字段允许离开本机”；History Scope 独立回答“是否允许补传建立边界前已经存在的历史”。首次接入根据用户选择分支：
+
+```text
+Pair + choose Policy / History Scope
+  |
+  +-- include-existing
+  |     -> resumable Bootstrap
+  |     -> mandatory Reconciliation
+  |
+  +-- from-now
+        -> persist History Boundary
+        -> send only later facts + required dependency closure
+        -> Reconciliation still respects the boundary
+
+then -> Incremental
+```
+
+因此“首次连接”不等于强制全历史 Bootstrap，也不能靠后续 Reconciliation 绕过 `from-now` 的授权边界。
+
+当前本机 Canonical ID 不直接提升为跨机全局主键。现有 `Host.id` 仍有单机身份算法约束，机器作用域实体通过：
 
 ```text
 ReplicaKey = stable(nodeId, entityType, originEntityId)
 ```
 
-Hub 保存 `originNodeId` / `originEntityId` 用于追溯，但不重新运行 Source Parser 或 `IdentityService` 来猜测远程事实。Project、AgentProduct、AssetDefinition 等 Shared Entity 使用各自的 Shared Identity + 字段级确定性 Merge Contract 汇聚；禁止通用 last-write-wins。
+形成确定性跨机命名空间。Hub 保存 origin provenance，但不重新运行 Source Parser / `IdentityService` 猜测远程事实。Shared / Conditional Shared Entity 使用显式 Shared Identity、deterministic Merge 与来源 Assertion；未知 Entity 默认 Node-scoped。
 
-Alpha 固定单 Hub 星型拓扑：一个 Node 最多一个 upstream Hub，不支持 Hub Federation、级联 Hub 或一个 Node 同时同步多个 Hub。
+Hub 本机不通过 HTTPS 自我复制，但它自己的 Node origin 仍必须参与 Shared Project / Asset 聚合。Project / Workspace 继续区分跨机器逻辑身份与具体设备路径。
 
-首次连接不是只同步“从现在开始”的新数据，而是：
+Durable Replication 使用：
 
 ```text
-Pair
-  -> Bootstrap Sync（可恢复）
-  -> Incremental Sync
+at-least-once transport
++ immutable in-flight batch
++ contiguous sequence / ACK
++ deterministic hash / idempotent import
++ Canonical Reconciliation
 ```
 
-Cordis `observation/committed` 等事件只用于低延迟 fast path；Durable Replication 还必须通过 Canonical Reconciliation 查漏补缺。删除必须使用持久 Tombstone，不能因为一次扫描“没看到”就推断删除。
+Cordis `observation/committed` 等事件只是低延迟 fast path，不是 Durable Replication Fact。普通 scan absence 不表示删除；删除使用 Tombstone。显式 Re-bootstrap 采用 staged Replica Generation，旧 active Generation 在新 Generation 完整校准和原子切换前继续可查询。
 
-Hub 使用统一 Canonical Store，不按 Node 分数据库；Node Registry、Cursor、Replica Source、Conflict、Tombstone 等属于 Replication Control Plane，不混入 Agent 行为 Observation。
+Policy 收紧必须立即阻止新的旧 Policy 出站。如果旧 Policy Batch 的提交结果不确定，不允许为了填 sequence gap 继续发送用户已经禁止的正文；通过 authenticated Stream Rollover + Reconciliation 恢复。
 
-安全边界保持分离：
+Hub 使用统一 Canonical Store，不按 Node 分数据库。Node Registry、Stream / Cursor、Sequence Receipt、Replica Generation、Alias、Shared Assertion、Conflict、Tombstone 等属于 Replication Control Plane，不混入 Agent 行为 Observation。
+
+安全边界：
 
 - 现有 `surface-http` 继续只监听 `127.0.0.1:56789`；
-- 新增独立 Hub HTTPS Replication Surface；
+- Hub Replication 使用独立 authenticated HTTPS Surface；
 - Node 只主动连接 Hub，Hub 不反向访问 Node；
-- Pairing 使用短期一次性凭证，长期 Node 身份使用持久非对称密钥；
-- Hub 支持 TLS 与 Hub Identity Fingerprint 绑定；
-- Capture Policy 与 Replication Policy 分离，Alpha 至少支持 `metadata-only / redacted / full`；复制策略只能进一步收紧本机数据，不能恢复已关闭 / 脱敏内容；
-- Alpha 默认不开放远程 Web，也不提供远程 Agent / Shell / Hook / Skill 管理能力。
+- Pairing 使用短期一次性 Secret + Node Key Possession；
+- Hub Identity、Node Identity、TLS Identity 分离；Hub Identity 必须签名 Pairing Receipt / Handshake Proof；
+- 长期请求签名绑定 Hub / Node / Stream / Key / Method / Path / Timestamp / Nonce / Raw Body Hash；
+- `metadata-only` 不同步 Prompt / Tool 正文并默认隐藏完整本机路径，但仍会同步项目 / 仓库、Agent / Tool、时间等必要元数据，因此不是匿名模式；
+- Alpha 不内建 Remote Web 登录，也不提供远程 Agent / Shell / Hook / Skill 管理能力。
 
-产品版本、Replication Protocol 与 Storage Schema 独立演进。协议不兼容时只暂停 Replication，本机采集、Canonical Commit、SQLite 与 Web 必须继续工作。推荐升级顺序为先 Hub、后 Node，支持滚动升级。
+跨机器时间只做 best-effort 排序：Hub 保留 origin `occurredAt / capturedAt`，不以 `replicatedAt` 覆盖业务时间，也不因机器时钟相差毫秒就推断跨 Node 因果关系。
+
+AgentLens Version、Replication Protocol 与 Storage Schema 独立演进。协议不兼容只暂停 Replication，本机采集、Canonical Commit、SQLite 与 Web 继续工作；推荐先升级 Hub，再滚动升级 Nodes。
