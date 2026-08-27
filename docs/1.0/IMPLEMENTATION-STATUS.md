@@ -22,9 +22,15 @@
 - Hub H1 Node Runtime 基础：默认数据根首次启动创建持久 `node.json` UUID，损坏身份文件不静默重置；
 - Node Runtime 通过 Cordis `ctx.node` 统一暴露 `dataRoot / identity / profile / capabilities`，后续 Runtime Plugin 不自行重复读取身份文件；
 - `AGENT_LENS_PROFILE` 当前支持 `standalone / node / hub / pure-hub` 四种 Alpha Profile，默认保持 `standalone`；
-- Daemon Composition Root 按 `localCapture` 决定是否注册本机 Source；`pure-hub` 不注册本机 Source，但仍保留 Storage / Projection / Local Web。
+- Daemon Composition Root 按 `localCapture` 决定是否注册本机 Source；`pure-hub` 不注册本机 Source，但仍保留 Storage / Projection / Local Web；
+- Hub H2 Replication Core 通过 `@agent-lens/core/replication` 子路径暴露，不进入默认 Core Domain 导出；
+- H2 已实现 Replication Entity Scope Registry，未知实体默认 `node-scoped`；
+- H2 已实现 `agentlens-replica-r1` ReplicaKey、SharedRootKey / SharedGroupKey 的确定性纯函数；
+- H2 已实现 `project-repository-v1` / `asset-upstream-v1` Portable Identity 规范化；只有可靠跨机身份才能建立 Conditional Shared Membership；
+- H2 已实现 AgentProduct Shared Root、Project / AssetDefinition Shared Group / Membership 的内存级确定性聚合与冲突拒绝；Origin Identity / ReplicaKey 保持独立，不改写本机领域引用；
+- H2 确定性哈希为纯 TypeScript SHA-256，不依赖 Cordis、SQLite、Transport 或 Node `crypto`。
 
-H1 只建立身份和能力组合，`node / hub / pure-hub` 当前**不会**启动 Replication 网络行为。
+H1/H2 只建立 Node Runtime 与 Replication Identity 基础，`node / hub / pure-hub` 当前**不会**启动 Replication 网络行为，也没有 Remote Replica Store。
 
 禁止恢复 0.x Adapter / Importer Runtime、旧 `timeline / overview_*` 规范表、旧 Service Manager / PID 架构。
 
@@ -224,7 +230,13 @@ npm run build:dist
 - Node Identity 首次创建与重启稳定性；
 - 损坏 Node Identity fail-closed；
 - 四种 Alpha Profile 与非法 Capability 组合；
-- `ctx.node` Runtime Service 注入。
+- `ctx.node` Runtime Service 注入；
+- H2 Entity Scope Registry 与未知实体默认 Node-scoped；
+- ReplicaKey 同源稳定性与跨 Node 隔离；
+- SHA-256 标准向量；
+- Git Repository Portable Identity 规范化与本机路径拒绝；
+- Project / AssetDefinition Conditional Shared Membership；
+- Shared Identity 聚合输入顺序无关、同一 Origin 多 Group 冲突 fail-closed。
 
 本文不把未重新核验的 CI 状态写成“已通过”。
 
@@ -245,30 +257,37 @@ npm run build:dist
 
 ## 10. 多机 Hub
 
-状态：**长期设计已冻结；H1 Node Identity + Capability Composition 已实现，H2+ 尚未实现。**
+状态：**长期设计已冻结；H1 Node Runtime 与 H2 Replication Core / Shared Identity 已实现，H3+ 尚未实现。**
 
-H1 当前实现：
+当前已实现基础：
 
 ```text
 ~/.agent-lens/1.0/node.json
  -> persistent random nodeId
- -> runtime profile
- -> capabilities
+ -> runtime profile / capabilities
  -> Cordis ctx.node
  -> Daemon capability-driven Source composition
+
+@agent-lens/core/replication
+ -> Entity Scope Registry
+ -> ReplicaKey / SharedKey
+ -> Portable Identity
+ -> Shared Root / Shared Group / Membership
 ```
+
+H2 仍只是纯内存 / 纯函数 Replication Domain 基础，不表示 Hub 已能接收或保存远端数据。
 
 当前仍**没有**实现：
 
 ```text
 Node long-term key material
-Replication Core / ReplicaKey import graph
-Shared Identity runtime implementation
+R1 Wire DTO / Schema / protocol negotiation
 Replication Policy / History Boundary
-Durable Replication state / Reconciliation
+Durable Replication state / Outbox / Reconciliation
 R1 network endpoints
 Pairing / TLS / signatures
-Remote Replica Store / migrations
+Remote Replica Store / migrations / transactional import
+Shared Identity persistence / import integration
 Replica Generation
 Unified Read Repository
 Hub-aware Projection / Web / CLI
@@ -297,5 +316,7 @@ Tombstone / Purge / recovery operations
 - Hook / Observer 被动、fail-open；
 - Hub 实现不得破坏 Local-first；
 - `pure-hub` 只停止新本机 Source，不删除现有本机历史；
+- Replication Identity 不替换本机 Canonical ID；
+- Conditional Shared Group 不成为 Project / AssetDefinition 的领域 FK target；
 - Hub Remote Replica 不伪造 Local Canonical Fact；
 - Hub 不开放 Remote Control。
