@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import type { Context, Plugin } from '@deepseek-ai/cordis'
 
 export const NODE_IDENTITY_SCHEMA_VERSION = 1 as const
 export const DEFAULT_AGENT_LENS_PROFILE = 'standalone' as const
@@ -20,9 +21,22 @@ export interface AgentLensNodeCapabilities {
   hubAccept: boolean
 }
 
+export interface AgentLensNodeRuntime {
+  dataRoot: string
+  identity: AgentLensNodeIdentity
+  profile: AgentLensRuntimeProfile
+  capabilities: AgentLensNodeCapabilities
+}
+
 export interface LoadOrCreateNodeIdentityOptions {
   randomId?: () => string
   now?: () => Date
+}
+
+export interface ResolveAgentLensNodeRuntimeOptions {
+  dataRoot?: string
+  profile?: AgentLensRuntimeProfile
+  identity?: LoadOrCreateNodeIdentityOptions
 }
 
 const PROFILE_CAPABILITIES: Record<AgentLensRuntimeProfile, AgentLensNodeCapabilities> = {
@@ -171,3 +185,26 @@ export function loadOrCreateNodeIdentity(
     return raced
   }
 }
+
+export function resolveAgentLensNodeRuntime(
+  options: ResolveAgentLensNodeRuntimeOptions = {},
+): AgentLensNodeRuntime {
+  const dataRoot = options.dataRoot ?? resolveAgentLensDataRoot()
+  const profile = options.profile ?? resolveAgentLensRuntimeProfile()
+  return {
+    dataRoot,
+    identity: loadOrCreateNodeIdentity(dataRoot, options.identity),
+    profile,
+    capabilities: capabilitiesForProfile(profile),
+  }
+}
+
+const applyNodeRuntime: Plugin.Function<AgentLensNodeRuntime> = (
+  ctx: Context,
+  runtime: AgentLensNodeRuntime,
+) => {
+  ctx.provide('node', runtime)
+}
+
+/** Internal runtime composition service; it does not introduce a second plugin model. */
+export const nodeRuntimePlugin = applyNodeRuntime
