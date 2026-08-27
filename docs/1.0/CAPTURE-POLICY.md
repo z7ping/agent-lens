@@ -1,9 +1,11 @@
 # AgentLens 1.0 采集隐私策略
 
-更新日期：2026-08-24  
+更新日期：2026-08-27  
 状态：1.0 P0 稳定化基线
 
 AgentLens 通过独立的 `@agent-lens/capture-policy` 插件统一控制**来源启用边界**与**持久化边界**上的采集行为。该插件是独立实现，但在官方 Daemon 中属于**强制基础插件**：禁用 Source 不得进入 Detect / History / Runtime / Asset 流程，启用 Source 也不能绕过隐私门禁把原始正文写入 1.0 数据库。
+
+多机 Hub 引入后，还必须增加独立的 **Replication Policy（复制策略）**：本机允许持久化的数据，不等于自动允许离开本机进入 Hub。Capture Policy 与 Replication Policy 是两道不同门禁。
 
 ## 1. 为什么是独立插件
 
@@ -212,6 +214,47 @@ CapturePolicy = 控制未来来源采集与写入
 Retention/Purge = 控制既有数据清理（本轮不做）
 ```
 
-## 10. 当前不做的事情
+## 10. Hub Replication Policy
 
-本轮 P0 不扩展为新的设置中心，也不增加远程认证层，不修改 Agent 原生数据。后续可以在 CLI / Web 上为来源允许列表和四类内容档位增加可视化设置，但任何设置入口最终都只能修改同一个 `CapturePolicyService` 策略，不能再出现第二套来源开关或脱敏实现。
+多机 Hub 的复制边界不复用 Capture Policy 作为“默认允许上传”的快捷方式。
+
+正式顺序：
+
+```text
+Native Source
+  -> Capture Policy
+  -> Local Canonical Store
+  -> Replication Policy
+  -> Replication Wire DTO
+  -> Hub
+```
+
+Capture Policy 决定本机拥有什么；Replication Policy 决定其中什么可以离开本机。两者必须满足单调约束：
+
+> Replication 只能进一步收紧本机已经持久化的内容，不能恢复 Capture Policy 已经关闭或脱敏的信息。
+
+Alpha 至少定义三档：
+
+| 档位 | 语义 |
+| --- | --- |
+| `metadata-only` | 只复制形成 Session、Agent、Tool、Usage、Identity、Evidence 结构所需的最小元数据，不发送 Prompt / Tool 正文 |
+| `redacted` | 允许复制正文，但在出站 Wire DTO 上再次执行 Hub 复制脱敏与长度限制 |
+| `full` | 允许复制本机已经持久化的普通业务正文；已识别凭据仍强制遮蔽 |
+
+关键规则：
+
+- `metadata-only` 不能因为 Hub 需要 Projection 就回退上传原始 `SourceRecord.payload`；
+- `redacted` / `full` 都必须再次执行网络出站安全处理，不能把“本机已存”视为“适合发网”；
+- 如果 Capture Policy 已经把某字段设为 `off` 或遮蔽，Replication Policy 不能恢复原文；
+- Wire DTO 必须显式区分 `omitted` / `redacted` / 原始为空，避免 Hub 把“未复制”误解释成事实为空；
+- Bootstrap Sync 与 Incremental Sync 必须使用同一个 Replication Policy；
+- 修改 Replication Policy 不能静默让 Hub 自动获得过去未授权上传的历史正文；如果用户扩大复制范围，需要明确触发 / 同意对应历史 Bootstrap / Reconcile；
+- 收紧 Replication Policy 不等于自动删除 Hub 中已存在的更完整历史副本，历史清理 / Tombstone / Purge 必须是独立显式动作。
+
+首次 Pair / 启用 Hub 时，UI / CLI 必须明确展示当前 Replication Policy，不能以“连接 Hub”为由默认把本机已有完整数据库复制出去。
+
+## 11. 当前不做的事情
+
+当前 P0 / Hub 架构阶段不扩展为通用账号权限系统，不修改 Agent 原生数据，也不把远程 Web 登录与 Replication Policy 混在一起。
+
+后续可以在 CLI / Web 上为来源允许列表、四类 Capture 档位和 Hub Replication 档位增加可视化设置，但每个设置必须落回唯一策略服务，不能出现页面一套、CLI 一套、Replication Client 又一套的独立脱敏规则。
