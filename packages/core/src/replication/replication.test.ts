@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { sha256Hex } from './hash'
 import {
   agentProductSharedRootAssertion,
   assetDefinitionSharedGroupMembership,
@@ -13,6 +14,13 @@ import {
   replicaIdentityFor,
   replicationEntityScope,
 } from './index'
+
+test('pure TypeScript SHA-256 matches the standard vector', () => {
+  assert.equal(
+    sha256Hex('abc'),
+    'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
+  )
+})
 
 test('Entity Scope Registry follows the frozen Alpha scopes and defaults unknown entities to node-scoped', () => {
   assert.equal(replicationEntityScope('AgentProduct'), 'shared')
@@ -87,9 +95,8 @@ test('same portable Project identity joins one Shared Group while preserving dis
   const originB = createOriginEntityRef('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'Project', 'project-local-b')
   const memberA = projectSharedGroupMembership(originA, 'https://github.com/acme/project.git')
   const memberB = projectSharedGroupMembership(originB, 'git@github.com:ACME/PROJECT.git')
+  if (!memberA || !memberB) assert.fail('portable Project identities must create memberships')
 
-  assert.ok(memberA)
-  assert.ok(memberB)
   assert.equal(memberA.key, memberB.key)
   assert.notEqual(memberA.replicaKey, memberB.replicaKey)
   assert.equal(memberA.origin.originEntityId, 'project-local-a')
@@ -137,7 +144,7 @@ test('AssetDefinition membership keeps the origin identity instead of rewriting 
     'asset-local-123',
   )
   const membership = assetDefinitionSharedGroupMembership(origin, 'npm:@acme/skill')
-  assert.ok(membership)
+  if (!membership) assert.fail('portable AssetDefinition identity must create membership')
   assert.equal(membership.origin, origin)
   assert.equal(membership.origin.originEntityId, 'asset-local-123')
   assert.match(membership.key, /^shared-group-r1-[0-9a-f]{64}$/)
@@ -147,11 +154,13 @@ test('Shared Identity state is deterministic regardless of assertion arrival ord
   const projectA = projectSharedGroupMembership(
     createOriginEntityRef('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Project', 'project-a'),
     'https://github.com/acme/project.git',
-  )!
+  )
   const projectB = projectSharedGroupMembership(
     createOriginEntityRef('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'Project', 'project-b'),
     'git@github.com:acme/project.git',
-  )!
+  )
+  if (!projectA || !projectB) assert.fail('portable Project identities must create memberships')
+
   const productA = agentProductSharedRootAssertion(
     createOriginEntityRef('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'AgentProduct', 'claude'),
   )
@@ -177,8 +186,9 @@ test('Shared Identity state is deterministic regardless of assertion arrival ord
 
 test('one Conditional Shared origin cannot silently belong to two groups', () => {
   const origin = createOriginEntityRef('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Project', 'project-a')
-  const first = projectSharedGroupMembership(origin, 'https://github.com/acme/one.git')!
-  const second = projectSharedGroupMembership(origin, 'https://github.com/acme/two.git')!
+  const first = projectSharedGroupMembership(origin, 'https://github.com/acme/one.git')
+  const second = projectSharedGroupMembership(origin, 'https://github.com/acme/two.git')
+  if (!first || !second) assert.fail('portable Project identities must create memberships')
 
   assert.throws(
     () => buildSharedIdentityState({ memberships: [first, second] }),
