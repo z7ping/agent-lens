@@ -92,15 +92,25 @@ export function assertReplicationStreamState(state: ReplicationStreamState): voi
 export function assertFreezeSequence(input: {
   stream: ReplicationStreamState
   incomingSequence: number
-  existingBatch?: Pick<FrozenReplicationBatch, 'sequence' | 'contentHash'>
+  incomingBatchId: string
+  existingBatch?: Pick<FrozenReplicationBatch, 'sequence' | 'batchId' | 'contentHash'>
   incomingContentHash: string
 }): 'freeze' | 'exact-retry' {
+  if (!input.incomingBatchId) {
+    throw new DurableReplicationError('BATCH_IMMUTABLE', 'Frozen batch requires a stable batchId')
+  }
   if (input.existingBatch) {
     if (input.existingBatch.sequence !== input.incomingSequence) {
       throw new DurableReplicationError('SEQUENCE_REUSE_CONFLICT', 'Existing batch sequence does not match retry')
     }
-    if (input.existingBatch.contentHash !== input.incomingContentHash) {
-      throw new DurableReplicationError('SEQUENCE_REUSE_CONFLICT', 'Frozen sequence cannot be reused with different content')
+    if (
+      input.existingBatch.batchId !== input.incomingBatchId
+      || input.existingBatch.contentHash !== input.incomingContentHash
+    ) {
+      throw new DurableReplicationError(
+        'SEQUENCE_REUSE_CONFLICT',
+        'Frozen sequence cannot be reused with a different batchId or content hash',
+      )
     }
     return 'exact-retry'
   }
