@@ -47,7 +47,7 @@ function product(): WireEntityEnvelope {
     scope: 'shared',
     originEntityId: 'codex',
     entityVersion: 1,
-    body: { name: 'Codex' },
+    body: { name: { state: 'value', value: 'Codex' } },
   })
 }
 
@@ -58,7 +58,7 @@ function installation(id = 'install-1'): WireEntityEnvelope {
     scope: 'node',
     originEntityId: id,
     entityVersion: 1,
-    body: { version: '1.0.0' },
+    body: { version: { state: 'value', value: '1.0.0' } },
     references: {
       product: {
         kind: 'shared',
@@ -129,7 +129,7 @@ test('H7 rolls back entities, shared identity, committed batch and ACK when one 
       scope: 'node',
       originEntityId: 'host-rollback',
       entityVersion: 1,
-      body: { name: 'rollback' },
+      body: { name: { state: 'value', value: 'rollback' } },
       replicaKey: replicaKeyFor(createOriginEntityRef('node-a', 'Host', 'host-rollback')),
     })
     const projectIdentity = { algorithm: 'project-repository-v1' as const, normalized: 'https://github.com/z7ping/agent-lens' }
@@ -138,7 +138,7 @@ test('H7 rolls back entities, shared identity, committed batch and ACK when one 
       scope: 'node',
       originEntityId: 'project-bad',
       entityVersion: 1,
-      body: { name: 'bad' },
+      body: { name: { state: 'value', value: 'bad' } },
       replicaKey: replicaKeyFor(createOriginEntityRef('node-a', 'Project', 'project-bad')),
       sharedIdentity: {
         identityAlgorithm: projectIdentity.algorithm,
@@ -241,7 +241,7 @@ test('H7 rejects a node-scoped Host that claims shared Wire scope before persist
       scope: 'shared',
       originEntityId: 'host-forged-scope',
       entityVersion: 1,
-      body: { name: 'forged' },
+      body: { name: { state: 'value', value: 'forged' } },
       replicaKey: replicaKeyFor(createOriginEntityRef('node-a', 'Host', 'host-forged-scope')),
     })
 
@@ -257,6 +257,38 @@ test('H7 rejects a node-scoped Host that claims shared Wire scope before persist
       generationId: 'gen-a',
       entityType: 'Host',
       originEntityId: 'host-forged-scope',
+    }), false)
+  } finally {
+    await storage.close()
+  }
+})
+
+test('H7 rejects a hash-valid entity body that bypasses ReplicationAvailability', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  try {
+    await storage.migrate()
+    const store = new SqliteHubReplicaStore(storage.executor)
+    const rawHost = entity({
+      entityType: 'Host',
+      scope: 'node',
+      originEntityId: 'host-raw-body',
+      entityVersion: 1,
+      body: { name: 'raw-unwrapped-value' },
+      replicaKey: replicaKeyFor(createOriginEntityRef('node-a', 'Host', 'host-raw-body')),
+    })
+
+    await assert.rejects(
+      importReplicationBatch({ store, batch: baseBatch(1, [rawHost]) }),
+      /ReplicationAvailability/,
+    )
+
+    assert.equal(await store.getStream('stream-a'), undefined)
+    assert.equal(await store.getGeneration('node-a', 'gen-a'), undefined)
+    assert.equal(await store.hasEntity({
+      originNodeId: 'node-a',
+      generationId: 'gen-a',
+      entityType: 'Host',
+      originEntityId: 'host-raw-body',
     }), false)
   } finally {
     await storage.close()
