@@ -2,71 +2,82 @@ schema_version: "0.1"
 status: active
 
 goal:
-  summary: "继续 AgentLens 1.0 Alpha Hub，下一阶段实现 H2 Replication Core / Shared Identity"
+  summary: "继续 AgentLens 1.0 Alpha Hub，下一阶段实现 H3 R1 Protocol Core / Wire Contract"
 
 phase:
   type: implementation
-  summary: "H1 Node Identity + Capability Composition 已完成并通过自动验证；下一步只做 H2 纯 Replication Core，不联网、不落 Remote Store"
+  summary: "H1 Node Runtime 与 H2 Replication Core / Shared Identity 已完成；下一步把冻结的 R1 长期协议语义落成可执行 DTO、Schema、Hash 与纯校验，不启动网络"
 
 scope:
   include:
-    - "Replication Entity Scope Registry"
-    - "agentlens-replica-r1 ReplicaKey 纯函数"
-    - "Typed EntityRef 与 Node-scoped / Shared Root / Conditional Shared 基础模型"
-    - "project-repository-v1 / asset-upstream-v1 Portable Identity 规范化与 SharedKey 纯函数"
-    - "Shared Root / Shared Group / Membership 的内存级确定性语义与测试"
+    - "建立独立 Replication Protocol R1.x 代码边界与版本常量"
+    - "Handshake / Batch / Entity Envelope 的版本化 DTO 与运行时 Schema / Validator"
+    - "Node Ref / Shared Ref 两类 Typed EntityRef Wire 模型"
+    - "Availability 的 value / real-null / redacted / 各类 omitted 显式状态"
+    - "Shared Identity Assertion Wire 模型，并复用 H2 Identity Algorithm / SharedKey 语义"
+    - "RFC 8785 / JCS 兼容 Canonical JSON + SHA-256 Entity / Batch content hash"
+    - "Protocol / Entity Version compatibility、Sequence / ACK / Gap / Reuse 的纯校验与稳定错误码"
+    - "R1 DTO / Schema / Hash / compatibility / sequence 语义测试"
   exclude:
-    - "R1 HTTP / HTTPS、Pairing、TLS、Request Signature"
-    - "Remote Replica SQLite Schema / Migration / Hub Import"
-    - "Bootstrap、Outbox、ACK、Reconciliation、Replica Generation"
-    - "Hub Web / CLI 多机交互"
+    - "真实 HTTP / HTTPS Route、Socket、Pairing、TLS、Request Signature"
+    - "Replication Policy 内容变换与 History Boundary 执行"
+    - "Remote Replica SQLite Schema / Migration / transactional import"
+    - "Bootstrap / Outbox / Reconciliation / Replica Generation Runtime"
+    - "Hub Unified Read / Projection / Web / CLI"
     - "HA、多 Hub、Federation、Remote Web、Remote Control"
-    - "继续扩 Hub 架构文档"
+    - "继续扩写长期 Hub 设计文档"
 
 constraints:
   required:
-    - "实现前读取 ARCHITECTURE.md、ADR-0007 与 docs/1.0/HUB-DESIGN.md"
+    - "实现前读取 docs/1.0/HUB-REPLICATION-PROTOCOL.md，并以其冻结语义为边界"
     - "写入前重新确认 main 最新状态"
-    - "H2 保持纯 TypeScript / framework-agnostic，不依赖 Cordis、SQLite 或 Transport"
-    - "未知 Entity 默认 Node-scoped，不为了跨机聚合进行模糊合并"
+    - "H3 Protocol 与 Product SemVer / SQLite Migration 保持独立版本概念"
+    - "Wire Entity 不直接等同 Core Interface 或 SQLite Row"
+    - "Project / AssetDefinition 在 Wire 上保持 Node-scoped Origin，只允许附 Shared Identity Assertion"
+    - "所有 Validator 对未知必需语义 fail-closed，不静默丢字段后返回成功"
+    - "H3 保持 framework-agnostic，不依赖 Cordis、SQLite 或具体 HTTP 框架"
   forbidden:
     - "未经明确要求发布 npm 或创建 Release"
-    - "在 H2 提前实现网络同步或 Remote Store"
-    - "修改现有本机 Canonical ID 规则"
-    - "Conditional Shared 通过统一主键批量 Rewrite origin FK"
+    - "在 H3 提前实现真实网络同步、Pairing 或 Remote Store"
+    - "通过字符串批量替换实现 Typed Ref 映射"
+    - "把 null / 空串 / hidden 占位符当作 Availability 状态"
+    - "修改 H2 ReplicaKey / Shared Identity 算法而不触发 Contract Review"
   frozen:
-    - "H1 持久 nodeId 位于默认 ~/.agent-lens/1.0/node.json，Node Runtime 通过 ctx.node 暴露"
-    - "四种 Alpha Profile：standalone / node / hub / pure-hub"
-    - "Local-first、单 Hub 星型拓扑"
-    - "本机 Canonical Identity 与跨机 Replication Identity 分离"
-    - "AgentProduct Shared Root；Project / AssetDefinition Conditional Shared"
-    - "不提供 Remote Control"
+    - "H1 persistent nodeId + capability-driven Composition"
+    - "H2 Entity Scope Registry、agentlens-replica-r1、Shared Root / Conditional Shared 语义"
+    - "AgentProduct Shared Root；Project / AssetDefinition Conditional Shared 但 Wire Origin 仍为 Node scope"
+    - "R1 Node Ref 与 Shared Ref 只有两类，Alpha 禁止跨 Node direct Ref"
+    - "R1 使用 Canonical JSON + SHA-256 语义 Hash；Raw HTTP Body Hash 属于后续 Request Signature 边界"
+    - "Local-first、单 Hub 星型拓扑、不提供 Remote Control"
   deferred:
-    - action: "H3+ R1 Protocol / Policy / Storage / Security / E2E / Unified Read"
-      until: "H2 Replication Core / Shared Identity 完成并验证"
+    - action: "H4+ Replication Policy / History Boundary / Storage / Security / E2E / Unified Read"
+      until: "H3 R1 Protocol Core / Wire Contract 完成并验证"
 
 acceptance:
-  - "两个 Node 拥有相同 originEntityId 时生成不同 ReplicaKey"
-  - "同一 Node / entityType / originEntityId 的 ReplicaKey 确定且稳定"
-  - "未知 Entity Scope 默认 Node-scoped"
-  - "相同可靠 Git Repository Identity 可确定性进入同一 Project Shared Group"
-  - "只有本机路径、名称相似或缺失 Portable Identity 时不会错误跨机合并"
-  - "Project / AssetDefinition 建立 Membership 时 origin identity 与领域引用不被重写"
-  - "H2 不引入网络、SQLite Migration 或 Replication Runtime 生命周期"
+  - "R1 Protocol Version、Identity Algorithm、Entity Version 可以独立协商 / 拒绝"
+  - "未知 Entity Type / 未支持 Entity Version 明确返回稳定错误，不静默忽略"
+  - "Project / AssetDefinition Entity Envelope 始终使用 Node Origin Ref，可选附 Shared Identity Assertion"
+  - "Typed Ref 只允许 Node Ref / Shared Root Ref，无法构造 Alpha 跨 Node direct Ref"
+  - "Availability 能无歧义区分真实 null、redacted 与各类 omitted 原因"
+  - "Canonical JSON 对对象键顺序稳定，SHA-256 content hash 确定"
+  - "Sequence exact retry / reuse conflict / gap / next sequence 语义有纯测试覆盖"
+  - "H3 不引入 HTTP Server、SQLite Migration、Pairing/TLS 或 Replication Runtime 生命周期"
 
 progress:
   current:
-    - "H1 已实现：持久 Node Identity、四种 Capability Profile、ctx.node Runtime Service、Daemon capability-driven Source composition"
-    - "H1 自动测试覆盖身份稳定性、损坏身份 fail-closed、Profile/非法组合、ctx.node 注入"
-    - "H1 未引入 Replication 网络、Remote Store 或本机 Canonical Identity 迁移"
+    - "H1 已实现 persistent Node Identity、四种 Capability Profile、ctx.node Runtime Service 与 capability-driven Source composition"
+    - "H2 已实现 Entity Scope Registry、ReplicaKey / SharedKey、Portable Identity、Shared Root / Shared Group / Membership"
+    - "H2 Shared Identity 保留 Origin Identity / ReplicaKey，不改写本机 Canonical ID 或领域 FK"
+    - "H2 Replication Core 通过 @agent-lens/core/replication 子路径暴露，生产代码不依赖 Cordis、SQLite、Transport 或 Node crypto"
   next:
-    - "下一次从 H2 Replication Entity Scope Registry 与 ReplicaKey 纯函数开始"
-    - "随后实现 Shared Identity normalization / Shared Group Membership 的纯模型与测试"
+    - "先建立 R1 Protocol DTO / Schema / stable error code 的最小闭环"
+    - "再实现 Canonical JSON / content hash 与 Sequence / ACK compatibility 纯校验"
 
 decisions:
-  - "H1 没有新增独立 node-identity workspace，身份能力留在现有 runtime-cordis 薄运行时边界，避免多余 package / lockfile 复杂度"
-  - "H1 不新增 AGENT_LENS_DATA_ROOT 配置面；默认 Node Identity 与 npm/Desktop 继续共用既有 ~/.agent-lens/1.0 数据根"
-  - "Hub Alpha 不再继续过度设计；只有改变长期不变量时才发起 ADR / Contract Review"
+  - "H2 暂不新增 replication-core workspace；在没有独立 Runtime/Storage 消费者前保留 @agent-lens/core/replication 子路径，避免无价值 lockfile 噪音"
+  - "H2 Portable Identity 采用保守合并：未知 Provider 宁可产生假阴性，也不猜测大小写等语义制造误合并"
+  - "H3 开始后精确 Wire DTO / Schema / Error Enum 由代码与测试成为权威来源，不在长期 Markdown 手工复制第二份字段表"
+  - "只有改变冻结长期不变量时才发起 ADR / Contract Review"
 
 repository:
   provider: github
