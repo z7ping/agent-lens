@@ -129,6 +129,7 @@ export function BackupPage() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
   const [selectedSources, setSelectedSources] = useState<string[]>([])
   const [selectedKinds, setSelectedKinds] = useState<BackupAssetKindDto[]>(RECOMMENDED_KINDS)
   const [verification, setVerification] = useState<Record<string, BackupVerifyResponseDto>>({})
@@ -156,6 +157,11 @@ export function BackupPage() {
   }
 
   useEffect(() => { void refresh() }, [])
+  useEffect(() => {
+    if (!success) return
+    const timer = window.setTimeout(() => setSuccess(''), 7000)
+    return () => window.clearTimeout(timer)
+  }, [success])
   useEffect(() => {
     if (!preview && !confirmation && !detailSourceId) return
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -200,6 +206,7 @@ export function BackupPage() {
 
   const requestCreateSnapshot = () => {
     if (!selectedSources.length || !selectedKinds.length || busy) return
+    setSuccess('')
     setConfirmation({ type: 'create' })
   }
 
@@ -207,10 +214,15 @@ export function BackupPage() {
     if (!selectedSources.length || !selectedKinds.length || busy) return
     setBusy('create')
     setError('')
+    setSuccess('')
     try {
-      await api.createBackup({ sourceIds: selectedSources, kinds: selectedKinds })
+      const result = await api.createBackup({ sourceIds: selectedSources, kinds: selectedKinds })
+      const bytes = result.snapshot.files.reduce((sum, file) => sum + file.size, 0)
+      const excluded = result.snapshot.excluded.length
+      setSuccess(`快照已创建：${result.snapshot.files.length.toLocaleString()} 个文件 · ${formatBytes(bytes)}${excluded ? ` · ${excluded.toLocaleString()} 项按安全规则排除` : ''}`)
       await refresh()
     } catch (reason) {
+      setSuccess('')
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
       setBusy('')
@@ -360,6 +372,7 @@ export function BackupPage() {
         </div>
 
         {error && <div className="backup-error" role="alert"><b>操作失败</b><span>{error}</span><button className="link-btn" onClick={() => setError('')}>关闭</button></div>}
+        {success && <div className="future-note" role="status"><b>操作完成</b> · {success}</div>}
 
         <section className="future-kpis" aria-label="备份概览">
           <article className="future-kpi"><div className="future-kpi-head"><span>可备份物理文件</span><span className={`badge ${indexRefreshing ? 'info' : 'ok'}`}>{indexRefreshing ? '后台更新中' : '索引就绪'}</span></div><strong>{protectedFiles.toLocaleString()}</strong><small>{hasProtectedBytes ? `${formatBytes(protectedBytes)} · ` : ''}{indexTime ? `索引更新于 ${formatTime(indexTime)} · ` : ''}{detectedSourceCount} 个智能体</small></article>
