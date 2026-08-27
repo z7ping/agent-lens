@@ -3,13 +3,16 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
+import { AgentLensApplication } from './application'
 import {
   assertNodeCapabilities,
   capabilitiesForProfile,
   defaultAgentLensDataRoot,
   loadOrCreateNodeIdentity,
   nodeIdentityPath,
+  nodeRuntimePlugin,
   resolveAgentLensDataRoot,
+  resolveAgentLensNodeRuntime,
   resolveAgentLensRuntimeProfile,
 } from './node-identity'
 
@@ -102,4 +105,34 @@ test('runtime profile defaults to standalone and rejects unknown values', () => 
   assert.equal(resolveAgentLensRuntimeProfile(undefined), 'standalone')
   assert.equal(resolveAgentLensRuntimeProfile(' PURE-HUB '), 'pure-hub')
   assert.throws(() => resolveAgentLensRuntimeProfile('federated'), /Unknown AGENT_LENS_PROFILE/)
+})
+
+test('Node Runtime resolves once and is exposed through Cordis context', async () => {
+  const root = tempRoot()
+  const app = new AgentLensApplication()
+  try {
+    const runtime = resolveAgentLensNodeRuntime({
+      dataRoot: root,
+      profile: 'hub',
+      identity: {
+        randomId: () => 'cae21657-7efe-4e52-a74c-b29108a1760a',
+        now: () => new Date('2026-08-27T01:00:00.000Z'),
+      },
+    })
+
+    app.useRuntime(nodeRuntimePlugin, runtime)
+    await app.start()
+
+    assert.equal(app.context.node, runtime)
+    assert.equal(app.context.node.identity.nodeId, 'cae21657-7efe-4e52-a74c-b29108a1760a')
+    assert.equal(app.context.node.profile, 'hub')
+    assert.deepEqual(app.context.node.capabilities, {
+      localCapture: true,
+      replicationUpstream: false,
+      hubAccept: true,
+    })
+  } finally {
+    await app.stop().catch(() => undefined)
+    rmSync(root, { recursive: true, force: true })
+  }
 })
