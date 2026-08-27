@@ -1,7 +1,7 @@
 # AgentLens 1.0 架构
 
 > 状态：1.0 alpha 实现基线  
-> 更新日期：2026-08-24
+> 更新日期：2026-08-27
 
 ## 1. 产品定位
 
@@ -557,3 +557,48 @@ Daemon 仍然提供同一套 `127.0.0.1:56789` HTTP / SSE Surface。卸载 Deskt
 后台生命周期定义只能引用正式发行入口，并由操作系统用户级托管器负责当前进程的启动 / 停止 / 恢复；AgentLens 不把 PID 文件重新提升为生命周期事实来源。
 
 Windows 无窗口后台任务与 Hook Runner 都只是运维 / 执行包装。任何实现不得把它们扩展为新的 Runtime、Source 或数据写入链路。
+
+## 22. 多机 Hub 架构
+
+状态：**架构已接受，Alpha 实现尚未开始。** 完整决策见 `docs/adr/0007-multi-machine-hub-local-first-canonical-replication.md`。
+
+AgentLens 的多机能力继续遵守 Local-first：Node 与 Hub 不是两套程序，而是同一个 `AgentLensApplication` 的不同 Cordis Plugin Composition。Standalone 没有 Hub 也必须完整可用；Hub 默认可以同时采集本机，也允许关闭本机采集成为 Pure Hub。
+
+目标角色组合：
+
+```text
+Standalone
+  = common runtime + local sources
+
+Node
+  = common runtime + local sources + replication-client
+
+Hub
+  = common runtime + local sources + replication-server + node-registry
+
+Pure Hub
+  = common runtime + replication-server + node-registry
+```
+
+Node 在本机完成 Source -> Canonical Pipeline -> Local Storage 后，通过独立 Replication Protocol 把 Canonical Entity State 同步给 Hub。Hub 是 Canonical Replica + Aggregator，不重新解释原生 Source，不重新生成一套 Canonical ID，不同步 SQLite 文件或 Projection。
+
+```text
+Node A Canonical Store --+
+                         |
+Node B Canonical Store --+--> Hub Unified Canonical Store --> Projection --> Unified Web
+                         |
+Hub Local Sources -------+
+```
+
+Hub 使用统一 Canonical Store，不按 Node 分数据库。Node / Host Identity 使用持久 UUID；Replication 的 Node Registry、Cursor、Entity Source 与 Conflict 属于独立 Control Plane，不混入被观测 Agent 的 Canonical Observation。
+
+网络安全边界保持分离：
+
+- 现有 `surface-http` 继续只监听 `127.0.0.1:56789`；
+- 新增独立 `surface-replication` 作为 Hub HTTPS 网络入口；
+- Node 只主动向 Hub 建立出站连接，Hub 不反向访问 Node；
+- Pairing 使用短期一次性凭证，长期 Node 身份使用持久非对称密钥；
+- Hub 支持 TLS 与 Hub Identity Fingerprint 绑定；
+- Alpha 默认不开放远程 Web，也不提供远程执行 Agent / Shell / Hook / Skill 管理能力。
+
+产品版本、Replication Protocol 与 Storage Schema 独立演进。协议不兼容时只暂停 Replication，Node 本机采集、Canonical Commit、SQLite 与 Web 必须继续工作；未同步数据由 Durable Outbox 保留。推荐升级顺序为先 Hub、后 Node，支持滚动升级。
