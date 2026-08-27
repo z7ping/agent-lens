@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { SqliteStorageService } from './storage'
 
-test('storage migrations include durable replication state and canonical change journal', async () => {
+test('storage migrations include durable replication state, canonical changes, and progress', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   try {
     await storage.migrate()
@@ -10,8 +10,8 @@ test('storage migrations include durable replication state and canonical change 
     const migrations = storage.db.prepare(
       'SELECT version, name FROM schema_migrations ORDER BY version',
     ).all() as Array<{ version: number; name: string }>
-    assert.equal(migrations.at(-1)?.version, 8)
-    assert.equal(migrations.at(-1)?.name, 'replication-canonical-change-journal')
+    assert.equal(migrations.at(-1)?.version, 9)
+    assert.equal(migrations.at(-1)?.name, 'replication-change-progress')
 
     const indexes = storage.db.prepare("PRAGMA index_list('observations')").all() as Array<{ name: string }>
     const names = new Set(indexes.map(item => item.name))
@@ -26,6 +26,7 @@ test('storage migrations include durable replication state and canonical change 
     assert.deepEqual(replicationTables.map(row => row.name), [
       'replication_batch_items',
       'replication_canonical_changes',
+      'replication_change_progress',
       'replication_entity_state',
       'replication_frozen_batches',
       'replication_pending_entities',
