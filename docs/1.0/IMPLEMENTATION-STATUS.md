@@ -1,6 +1,6 @@
 # AgentLens 1.0 Alpha 实现状态
 
-更新日期：2026-08-24
+更新日期：2026-08-27
 
 本文只记录当前 1.0 实现事实。详细架构边界见 `ARCHITECTURE.md`、`docs/1.0/CORE-CONTRACT.md` 与 ADR；双发行运维见 `docs/1.0/DISTRIBUTION-OPERATIONS.md`；采集边界见 `docs/1.0/CAPTURE-POLICY.md`。
 
@@ -329,3 +329,23 @@ OpenCode / Pi 不为实时采集额外安装 Native Hook，继续使用原生数
 - 明暗主题、长会话、工具密集场景下的文字/背景对比度。
 
 本文不代表已经完成 npm Publish 或 GitHub Release；发布仍必须由仓库所有者明确触发。
+
+## 13. 多机 Hub（架构已定，尚未实现）
+
+ADR-0007 已接受 AgentLens 1.0 Alpha 的多机 Hub 架构，但当前代码尚未实现 Node / Hub 角色、Replication Protocol、Remote Ingest 或配对流程。
+
+已确定的实现边界：
+
+- Node / Hub 是同一 AgentLens Runtime 的不同 Cordis Plugin Composition，不拆成两套程序；
+- Hub 默认可以同时采集本机，允许 `localCapture=false` 的 Pure Hub；
+- Node 保持 Local-first，本机 Canonical Store 是本机事实产生链，Hub 是 Canonical Replica + Aggregator；
+- Canonical ID 在 Node 生成并在 Hub 保持不变；
+- Hub 使用统一 Canonical Store，不按 Node 分数据库；
+- Replication Metadata 属于独立 Control Plane，不写成 Agent 行为 Observation；
+- Node 只主动向 Hub 发起 HTTPS 出站连接；现有 `127.0.0.1:56789` Local Surface 不直接暴露到网络；
+- Pairing / TLS / Node Key / Hub Identity 与远程 Web 登录边界分离；Alpha 默认不开放远程 Web；
+- AgentLens Version、Replication Protocol、Storage Schema 独立演进；协议不兼容只暂停同步，不阻塞 Node 本地采集。
+
+建议实现顺序：Role-driven Composition Root -> Persistent Node / Host Identity -> Replication Wire DTO / Handshake -> Durable Outbox -> Hub Node Registry / Remote Ingest -> Pairing / TLS -> Projection Scope -> Web 多机视图。
+
+完整决策、被拒绝方案和验证标准见 `docs/adr/0007-multi-machine-hub-local-first-canonical-replication.md`。
