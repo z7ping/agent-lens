@@ -25,14 +25,14 @@ export interface GenerateWireEntityInput {
   entityType: KnownReplicationEntityType
   originEntityId: string
   body: Readonly<Record<string, CoreJsonValue | undefined>>
-  references?: Readonly<Record<string, WireEntityRef | readonly WireEntityRef[]>>
-  capturedAt?: string
-  dependencyRequired?: boolean
+  references?: Readonly<Record<string, WireEntityRef | readonly WireEntityRef[]>> | undefined
+  capturedAt?: string | undefined
+  dependencyRequired?: boolean | undefined
   phase: ReplicationHistoryPhase
   policy: ReplicationPolicy
   history: HistoryBoundary
-  captureStates?: Readonly<Record<string, 'available' | 'not-captured' | 'redacted'>>
-  sharedIdentity?: SharedIdentityAssertion
+  captureStates?: Readonly<Record<string, 'available' | 'not-captured' | 'redacted'>> | undefined
+  sharedIdentity?: SharedIdentityAssertion | undefined
 }
 
 export type GenerateWireEntityResult =
