@@ -2,6 +2,7 @@ import type { JsonValue as CoreJsonValue } from '@agent-lens/core'
 import {
   sharedRootKeyFor,
   type FrozenReplicationBatch,
+  type KnownReplicationEntityType,
   type PendingReplicationEntity,
   type ReplicationStreamState,
 } from '@agent-lens/core/replication'
@@ -32,6 +33,20 @@ export interface BatchFreezeStore {
     payload: CoreJsonValue
     pendingItemIds: readonly string[]
   }): Promise<FrozenReplicationBatch>
+}
+
+export interface PendingDependencyLookup {
+  findOpen(input: {
+    streamId: string
+    generationId: string
+    entityType: KnownReplicationEntityType
+    originEntityId: string
+  }): Promise<PendingReplicationEntity | undefined>
+  findOpenAgentProductSharedRoot(input: {
+    streamId: string
+    generationId: string
+    sharedKey: string
+  }): Promise<PendingReplicationEntity | undefined>
 }
 
 export interface BuiltReplicationBatch {
@@ -122,7 +137,7 @@ function topologicallySort(items: readonly PendingReplicationEntity[]): Array<{
     const index = ready.shift()!
     ordered.push(nodes[index]!)
     for (const dependent of outgoing[index]!) {
-      indegree[dependent]!--
+      indegree[dependent] = (indegree[dependent] ?? 0) - 1
       if (indegree[dependent] === 0) {
         ready.push(dependent)
         ready.sort((a, b) => stableNodeKey(a).localeCompare(stableNodeKey(b)))
@@ -142,17 +157,71 @@ function phaseRank(phase: PendingReplicationEntity['phase']): number {
   return 2
 }
 
+function batchGroupKey(item: PendingReplicationEntity): string {
+  return `${phaseRank(item.phase)}\u0000${item.phase}\u0000${item.policyRevision}\u0000${item.historyRevision}\u0000${item.generationId}`
+}
+
 function selectCompatiblePending(items: readonly PendingReplicationEntity[]): readonly PendingReplicationEntity[] {
   if (items.length === 0) return []
   const groups = new Map<string, PendingReplicationEntity[]>()
   for (const item of items) {
-    const key = `${phaseRank(item.phase)}\u0000${item.phase}\u0000${item.policyRevision}\u0000${item.historyRevision}\u0000${item.generationId}`
+    const key = batchGroupKey(item)
     const group = groups.get(key) ?? []
     group.push(item)
     groups.set(key, group)
   }
   const key = [...groups.keys()].sort()[0]!
   return groups.get(key)!
+}
+
+async function expandPendingDependencyClosure(input: {
+  seed: readonly PendingReplicationEntity[]
+  lookup: PendingDependencyLookup
+  streamId: string
+  generationId: string
+  maxItems?: number
+}): Promise<readonly PendingReplicationEntity[]> {
+  if (input.seed.length === 0) return []
+  const groupKey = batchGroupKey(input.seed[0]!)
+  const maxItems = Math.max(input.seed.length, Math.min(input.maxItems ?? 5000, 10000))
+  const items = new Map(input.seed.map(item => [item.id, item]))
+  const queue = [...input.seed]
+
+  while (queue.length > 0) {
+    const current = queue.shift()!
+    const entity = entityFromPending(current)
+    for (const ref of allRefs(entity)) {
+      let dependency: PendingReplicationEntity | undefined
+      if (ref.kind === 'node') {
+        dependency = await input.lookup.findOpen({
+          streamId: input.streamId,
+          generationId: input.generationId,
+          entityType: ref.entityType as KnownReplicationEntityType,
+          originEntityId: ref.originEntityId,
+        })
+      } else if (ref.entityType === 'AgentProduct') {
+        dependency = await input.lookup.findOpenAgentProductSharedRoot({
+          streamId: input.streamId,
+          generationId: input.generationId,
+          sharedKey: ref.sharedKey,
+        })
+      }
+
+      if (!dependency || items.has(dependency.id)) continue
+      if (batchGroupKey(dependency) !== groupKey) {
+        throw new Error(
+          `Open dependency ${dependency.entityType}:${dependency.originEntityId} belongs to a different replication batch group`,
+        )
+      }
+      items.set(dependency.id, dependency)
+      queue.push(dependency)
+      if (items.size > maxItems) {
+        throw new Error(`Replication Pending dependency closure exceeds ${maxItems} items`)
+      }
+    }
+  }
+
+  return [...items.values()]
 }
 
 function identityPromotions(entities: readonly WireEntityEnvelope[]): readonly SharedIdentityAssertion[] {
@@ -223,20 +292,30 @@ export function buildReplicationBatch(input: {
 
 export async function freezeNextReplicationBatch(input: {
   store: BatchFreezeStore
+  dependencies: PendingDependencyLookup
   nodeId: string
   hubId: string
   streamId: string
   scanLimit?: number
   entityLimit?: number
+  dependencyClosureLimit?: number
 }): Promise<FrozenReplicationBatch | null> {
   const stream = await input.store.getStream(input.streamId)
   if (!stream) throw new Error(`Unknown replication stream: ${input.streamId}`)
   const pending = await input.store.listPending(input.streamId, input.scanLimit ?? 1000)
+  const compatible = selectCompatiblePending(pending)
+  const closure = await expandPendingDependencyClosure({
+    seed: compatible,
+    lookup: input.dependencies,
+    streamId: stream.streamId,
+    generationId: stream.generationId,
+    ...(input.dependencyClosureLimit === undefined ? {} : { maxItems: input.dependencyClosureLimit }),
+  })
   const built = buildReplicationBatch({
     nodeId: input.nodeId,
     hubId: input.hubId,
     stream,
-    pending,
+    pending: closure,
     ...(input.entityLimit === undefined ? {} : { entityLimit: input.entityLimit }),
   })
   if (!built) return null
