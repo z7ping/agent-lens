@@ -2,21 +2,23 @@ schema_version: "0.1"
 status: active
 
 goal:
-  summary: "按已冻结的 AgentLens 1.0 Alpha Hub 设计进入 H1：Node Identity + Capability Composition"
+  summary: "继续 AgentLens 1.0 Alpha Hub，下一阶段实现 H2 Replication Core / Shared Identity"
 
 phase:
   type: implementation
-  summary: "Hub 文档治理与架构冻结已完成；下一次实现只从 H1 身份与 Cordis 组合根开始"
+  summary: "H1 Node Identity + Capability Composition 已完成并通过自动验证；下一步只做 H2 纯 Replication Core，不联网、不落 Remote Store"
 
 scope:
   include:
-    - "持久 Node Identity 的最小实现"
-    - "localCapture / replicationUpstream / hubAccept 合法能力组合"
-    - "Daemon Composition Root 按能力装配"
-    - "H1 对 Standalone、npm / Desktop 共用数据根的回归验证"
+    - "Replication Entity Scope Registry"
+    - "agentlens-replica-r1 ReplicaKey 纯函数"
+    - "Typed EntityRef 与 Node-scoped / Shared Root / Conditional Shared 基础模型"
+    - "project-repository-v1 / asset-upstream-v1 Portable Identity 规范化与 SharedKey 纯函数"
+    - "Shared Root / Shared Group / Membership 的内存级确定性语义与测试"
   exclude:
-    - "R1 网络协议、Pairing、TLS、Hub HTTP Surface"
-    - "Remote Replica Store、Bootstrap、Outbox、Reconciliation"
+    - "R1 HTTP / HTTPS、Pairing、TLS、Request Signature"
+    - "Remote Replica SQLite Schema / Migration / Hub Import"
+    - "Bootstrap、Outbox、ACK、Reconciliation、Replica Generation"
     - "Hub Web / CLI 多机交互"
     - "HA、多 Hub、Federation、Remote Web、Remote Control"
     - "继续扩 Hub 架构文档"
@@ -25,42 +27,46 @@ constraints:
   required:
     - "实现前读取 ARCHITECTURE.md、ADR-0007 与 docs/1.0/HUB-DESIGN.md"
     - "写入前重新确认 main 最新状态"
-    - "保持无 Hub 配置时当前 Standalone 行为不变"
-    - "精确 Wire / Schema 在未来实现阶段由代码或标准 Schema 成为权威来源"
+    - "H2 保持纯 TypeScript / framework-agnostic，不依赖 Cordis、SQLite 或 Transport"
+    - "未知 Entity 默认 Node-scoped，不为了跨机聚合进行模糊合并"
   forbidden:
     - "未经明确要求发布 npm 或创建 Release"
-    - "在 H1 提前实现网络同步"
-    - "重新拆分已收敛的 Hub 长期文档"
+    - "在 H2 提前实现网络同步或 Remote Store"
+    - "修改现有本机 Canonical ID 规则"
+    - "Conditional Shared 通过统一主键批量 Rewrite origin FK"
   frozen:
+    - "H1 持久 nodeId 位于默认 ~/.agent-lens/1.0/node.json，Node Runtime 通过 ctx.node 暴露"
+    - "四种 Alpha Profile：standalone / node / hub / pure-hub"
     - "Local-first、单 Hub 星型拓扑"
-    - "Node 与 Hub 共用同一个 AgentLens Runtime / Cordis 组合根"
     - "本机 Canonical Identity 与跨机 Replication Identity 分离"
-    - "Remote Replica 不伪造 Local Canonical Fact"
+    - "AgentProduct Shared Root；Project / AssetDefinition Conditional Shared"
     - "不提供 Remote Control"
   deferred:
-    - action: "H2+ Replication Core / R1 / Storage / Security / Unified Read"
-      until: "H1 Node Identity + Capability Composition 完成并验证"
+    - action: "H3+ R1 Protocol / Policy / Storage / Security / E2E / Unified Read"
+      until: "H2 Replication Core / Shared Identity 完成并验证"
 
 acceptance:
-  - "首次初始化生成持久 nodeId，重启保持不变"
-  - "npm / Desktop 默认数据根共享同一 Node Identity"
-  - "四种 Alpha Capability Profile 可表达，非法组合明确拒绝"
-  - "Pure Hub Profile 不装配本机 Source"
-  - "Standalone 无功能回归"
-  - "H1 不引入任何 Replication 网络行为"
+  - "两个 Node 拥有相同 originEntityId 时生成不同 ReplicaKey"
+  - "同一 Node / entityType / originEntityId 的 ReplicaKey 确定且稳定"
+  - "未知 Entity Scope 默认 Node-scoped"
+  - "相同可靠 Git Repository Identity 可确定性进入同一 Project Shared Group"
+  - "只有本机路径、名称相似或缺失 Portable Identity 时不会错误跨机合并"
+  - "Project / AssetDefinition 建立 Membership 时 origin identity 与领域引用不被重写"
+  - "H2 不引入网络、SQLite Migration 或 Replication Runtime 生命周期"
 
 progress:
   current:
-    - "Hub Alpha 长期文档已收敛为 HUB-DESIGN / HUB-REPLICATION-PROTOCOL / HUB-PAIRING-SECURITY / HUB-OPERATIONS + ADR-0007"
-    - "重复 Contract / Plan / Test Matrix / UX / Index 文档已删除，架构冻结完成"
+    - "H1 已实现：持久 Node Identity、四种 Capability Profile、ctx.node Runtime Service、Daemon capability-driven Source composition"
+    - "H1 自动测试覆盖身份稳定性、损坏身份 fail-closed、Profile/非法组合、ctx.node 注入"
+    - "H1 Linux/macOS 自动验证已通过；Windows 同代码路径已有完整三平台绿灯，最终精简版继续由 main CI 验证"
   next:
-    - "下一次实现从 H1 Node Identity + Capability Composition 开始"
-    - "先检查现有数据根初始化、AgentLensApplication 与 Daemon Composition Root，再做最小改动"
+    - "下一次从 H2 Replication Entity Scope Registry 与 ReplicaKey 纯函数开始"
+    - "随后实现 Shared Identity normalization / Shared Group Membership 的纯模型与测试"
 
 decisions:
-  - "Hub Alpha 不再继续过度设计；只有新发现会改变长期不变量时才发起 ADR / Contract Review"
-  - "短期阶段计划进入 Work State，长期文档不维护重复 H1-H10 清单"
-  - "测试门禁随实现进入实际测试代码，不长期维护独立 Hub Test Matrix Markdown"
+  - "H1 没有新增独立 node-identity workspace，身份能力留在现有 runtime-cordis 薄运行时边界，避免多余 package / lockfile 复杂度"
+  - "H1 不新增 AGENT_LENS_DATA_ROOT 配置面；默认 Node Identity 与 npm/Desktop 继续共用既有 ~/.agent-lens/1.0 数据根"
+  - "Hub Alpha 不再继续过度设计；只有改变长期不变量时才发起 ADR / Contract Review"
 
 repository:
   provider: github

@@ -18,7 +18,13 @@
 - SQLite 1.0 Repository / Checkpoint；
 - `SourceRecord -> normalize -> ObservationCandidate + EvidenceCandidate -> CanonicalObservation + Evidence`；
 - Asset Inventory 通过 Core Contract 暴露；
-- `@agent-lens/capture-policy` 统一 Source allowlist 与持久化隐私门禁。
+- `@agent-lens/capture-policy` 统一 Source allowlist 与持久化隐私门禁；
+- Hub H1 Node Runtime 基础：默认数据根首次启动创建持久 `node.json` UUID，损坏身份文件不静默重置；
+- Node Runtime 通过 Cordis `ctx.node` 统一暴露 `dataRoot / identity / profile / capabilities`，后续 Runtime Plugin 不自行重复读取身份文件；
+- `AGENT_LENS_PROFILE` 当前支持 `standalone / node / hub / pure-hub` 四种 Alpha Profile，默认保持 `standalone`；
+- Daemon Composition Root 按 `localCapture` 决定是否注册本机 Source；`pure-hub` 不注册本机 Source，但仍保留 Storage / Projection / Local Web。
+
+H1 只建立身份和能力组合，`node / hub / pure-hub` 当前**不会**启动 Replication 网络行为。
 
 禁止恢复 0.x Adapter / Importer Runtime、旧 `timeline / overview_*` 规范表、旧 Service Manager / PID 架构。
 
@@ -170,6 +176,8 @@ Hub 未来即使能看到 Remote Asset metadata，也不代表当前资产备份
 - Windows Codex / Claude Native Hook 使用共享 Dispatcher；
 - npm / Desktop 陈旧安装登记不得阻塞另一发行方式。
 
+Node Identity 也使用同一个默认 `~/.agent-lens/1.0/` 数据根，因此 npm / Desktop 复用同一 Daemon 时不会生成第二套 Node 身份。
+
 详细规则见 `docs/1.0/DISTRIBUTION-OPERATIONS.md` 和 ADR-0004。
 
 ## 7. Hook 边界
@@ -212,7 +220,11 @@ npm run build:dist
 - OpenCode History / Runtime Tail / Replay；
 - Hermes History / Normalize / Assets / Runtime Inbox / Replay；
 - Web Design Token 一致性；
-- Web 关键前景/背景对比度。
+- Web 关键前景/背景对比度；
+- Node Identity 首次创建与重启稳定性；
+- 损坏 Node Identity fail-closed；
+- 四种 Alpha Profile 与非法 Capability 组合；
+- `ctx.node` Runtime Service 注入。
 
 本文不把未重新核验的 CI 状态写成“已通过”。
 
@@ -233,20 +245,30 @@ npm run build:dist
 
 ## 10. 多机 Hub
 
-状态：**长期设计已冻结，功能尚未实现。**
+状态：**长期设计已冻结；H1 Node Identity + Capability Composition 已实现，H2+ 尚未实现。**
 
-当前代码仍没有实现：
+H1 当前实现：
 
 ```text
-Node Identity persistence / key material
-Hub capability composition
-Replication packages
+~/.agent-lens/1.0/node.json
+ -> persistent random nodeId
+ -> runtime profile
+ -> capabilities
+ -> Cordis ctx.node
+ -> Daemon capability-driven Source composition
+```
+
+当前仍**没有**实现：
+
+```text
+Node long-term key material
+Replication Core / ReplicaKey import graph
+Shared Identity runtime implementation
 Replication Policy / History Boundary
 Durable Replication state / Reconciliation
 R1 network endpoints
 Pairing / TLS / signatures
 Remote Replica Store / migrations
-Shared Identity state
 Replica Generation
 Unified Read Repository
 Hub-aware Projection / Web / CLI
@@ -271,8 +293,9 @@ Tombstone / Purge / recovery operations
 - Projection 不成为第二事实源；
 - Web 只消费 Protocol DTO；
 - 静态 Asset Discovery 不算 Usage；
-- npm / Desktop 不产生第二个默认 Daemon / 数据库；
+- npm / Desktop 不产生第二个默认 Daemon / 数据库 / Node Identity；
 - Hook / Observer 被动、fail-open；
 - Hub 实现不得破坏 Local-first；
+- `pure-hub` 只停止新本机 Source，不删除现有本机历史；
 - Hub Remote Replica 不伪造 Local Canonical Fact；
 - Hub 不开放 Remote Control。
