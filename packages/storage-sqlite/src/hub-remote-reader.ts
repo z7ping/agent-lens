@@ -34,6 +34,12 @@ export interface HubRemoteReadQuery {
   limit?: number
 }
 
+export interface HubRemoteObservationQuery {
+  originNodeId: string
+  logicalSessionOriginId: string
+  limit?: number
+}
+
 interface RemoteRow {
   publicId: string
   originNodeId: string
@@ -109,6 +115,10 @@ const ACTIVE_REMOTE_SELECT = `
   WHERE g.status = 'active'
 `
 
+function boundedLimit(value: number | undefined): number {
+  return Math.max(1, Math.min(value ?? 500, 5000))
+}
+
 /**
  * Formal read boundary for remote replica state.
  * Consumers never query Hub replica private tables or perform generation filtering themselves.
@@ -143,14 +153,50 @@ export class SqliteHubRemoteReadRepository {
       params.push(query.sharedKey)
     }
     const extraWhere = conditions.length ? ` AND ${conditions.join(' AND ')}` : ''
-    const limit = Math.max(1, Math.min(query.limit ?? 500, 5000))
 
     return this.executor.run(() => {
       const rows = this.executor.db.prepare(`${ACTIVE_REMOTE_SELECT}
         ${extraWhere}
         ORDER BY e.origin_node_id, e.entity_type, e.replica_key
         LIMIT ?
-      `).all(...params, limit) as RemoteRow[]
+      `).all(...params, boundedLimit(query.limit)) as RemoteRow[]
+      return rows.map(mapRow)
+    })
+  }
+
+  /**
+   * Resolve the typed LogicalSession node reference inside active remote
+   * CanonicalObservation envelopes. The private JSON storage detail stays
+   * below this repository boundary; projections never inspect references_json.
+   */
+  async listCanonicalObservationsForLogicalSession(
+    query: HubRemoteObservationQuery,
+  ): Promise<readonly HubRemoteReadEntity[]> {
+    return this.executor.run(() => {
+      const rows = this.executor.db.prepare(`${ACTIVE_REMOTE_SELECT}
+        AND e.origin_node_id = ?
+        AND e.entity_type = 'CanonicalObservation'
+        AND json_extract(e.references_json, '$.logicalSession.kind') = 'node'
+        AND json_extract(e.references_json, '$.logicalSession.entityType') = 'LogicalSession'
+        AND json_extract(e.references_json, '$.logicalSession.originEntityId') = ?
+        ORDER BY
+          COALESCE(
+            json_extract(e.body_json, '$.occurredAt.value'),
+            json_extract(e.body_json, '$.capturedAt.value'),
+            e.updated_at
+          ),
+          COALESCE(
+            json_extract(e.body_json, '$.canonicalSequence.value'),
+            json_extract(e.body_json, '$.sourceSequence.value'),
+            9007199254740991
+          ),
+          e.replica_key
+        LIMIT ?
+      `).all(
+        query.originNodeId,
+        query.logicalSessionOriginId,
+        boundedLimit(query.limit),
+      ) as RemoteRow[]
       return rows.map(mapRow)
     })
   }
