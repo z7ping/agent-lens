@@ -2,79 +2,80 @@ schema_version: "0.1"
 status: active
 
 goal:
-  summary: "继续 AgentLens 1.0 Alpha Hub，下一阶段实现 H4 Replication Policy / History Boundary"
+  summary: "继续 AgentLens 1.0 Alpha Hub，下一阶段实现 H5 Durable Replication State / Outbox / Reconciliation"
 
 phase:
   type: implementation
-  summary: "H1 Node Runtime、H2 Replication Identity、H3 R1 Protocol Core 已完成；下一步只实现出站复制策略与历史边界的纯变换，不联网、不落 Remote Store"
+  summary: "H1-H4 已完成并通过三平台验证；下一步只建立 Node 侧可恢复的复制状态、Outbox 与 Canonical Reconciliation，不联网、不落 Hub Remote Replica Store"
 
 scope:
   include:
-    - "Replication Policy 的 metadata-only / redacted / full 三种模式及持久 Revision 模型"
-    - "History Scope 的 include-existing / from-now 边界模型与 Revision"
-    - "Canonical Entity State -> R1 Wire Entity body / Availability 的确定性纯变换"
-    - "字段级 policy allow / redact / omit 规则，以及 credential / secret 永久保护门禁"
-    - "from-now History Boundary 对普通历史、依赖最小形态与 Reconciliation 的授权判定"
-    - "Policy 收紧/放宽的 revision 语义与是否允许历史 backfill 的纯决策"
-    - "Minimum Dependency Shape 契约与 policy/history transform 测试"
+    - "定义 Node-side Replication Relationship / Stream / Generation / Cursor / ACK 的持久状态模型"
+    - "SQLite durable replication state / outbox / reconciliation watermark 的 Migration 与 Repository"
+    - "Outbox Item 的 immutable sequence/batch identity/content hash 状态机"
+    - "Canonical Store reconciliation 发现漏入队 upsert 的确定性机制"
+    - "Cordis Event 只作为 fast-path trigger，不能成为唯一 durable enqueue 依据"
+    - "Bootstrap / incremental / reconcile 三种 Outbox phase 的持久状态表达"
+    - "Policy Revision / History Revision 与 Outbox Item 的冻结绑定"
+    - "崩溃恢复、exact retry、ACK advance、gap prevention 与重复入队幂等测试"
   exclude:
     - "真实 HTTP / HTTPS、Pairing、TLS、Request Signature"
-    - "Remote Replica SQLite Schema / Migration / transactional import"
-    - "Durable Outbox / ACK Store / Reconciliation Runtime"
-    - "Bootstrap Runtime / Replica Generation staged activation"
+    - "Hub Remote Replica SQLite Schema / transactional import"
+    - "真正向 Hub 发包的 Replication Client"
     - "Hub Unified Read / Projection / Web / CLI"
+    - "Shared Identity Hub-side persistence / merge integration"
     - "HA、多 Hub、Federation、Remote Web、Remote Control"
 
 constraints:
   required:
-    - "实现前读取 docs/1.0/CAPTURE-POLICY.md、HUB-DESIGN.md 与 HUB-REPLICATION-PROTOCOL.md"
-    - "Capture Policy 与 Replication Policy 严格分离：本机可存不等于允许出站"
-    - "Replication Policy 只能减少本机已有内容，不能恢复 Capture 阶段已关闭或已脱敏的数据"
-    - "所有省略必须映射到 H3 Availability 的明确原因，不用 null / 空串 / hidden 占位"
-    - "from-now 必须有持久、可比较的 History Boundary 语义，Reconcile 不得绕过"
-    - "H4 保持 framework-agnostic，不依赖 Cordis、SQLite 或 Transport"
+    - "实现前核对 SQLite migration / repository 现状与 Canonical commit 边界"
+    - "Canonical commit 成功后即使进程在 Event / fast enqueue 前崩溃，Reconciliation 仍能补回漏项"
+    - "Outbox 与 Replication Control Plane 不能进入 Canonical Observation"
+    - "第一次可能发网后 sequence / batchId / semantic contentHash 必须 immutable"
+    - "Policy / History 变更只影响尚未冻结的生成；已冻结 Outbox Item 不得就地改写"
+    - "H5 不改变 Local-first：复制状态损坏或暂停不能阻塞 Canonical Capture"
   forbidden:
     - "未经明确要求发布 npm 或创建 Release"
-    - "在 H4 提前实现网络、Pairing、Remote Store 或 Outbox Runtime"
-    - "Policy 放宽后自动补传此前未授权的历史正文"
-    - "Policy 收紧后为了填 Sequence gap 继续生成已禁止内容"
-    - "把 Replication Policy 状态写入 Canonical Observation"
+    - "在 H5 提前实现真实网络、Pairing、Remote Import 或 Unified Read"
+    - "只依赖 Cordis Event 写 Outbox"
+    - "通过扫描缺失来推断删除；删除必须等待后续 durable Tombstone 机制"
+    - "把 Projection 或 Source Checkpoint 当成复制事实源"
   frozen:
     - "H1 persistent nodeId + capability-driven Composition"
-    - "H2 Entity Scope Registry、ReplicaKey / Shared Identity 算法"
-    - "H3 R1 Wire DTO、Typed Ref、Availability、Compatibility、Semantic Hash、Sequence 语义"
-    - "Project / AssetDefinition Wire Origin 始终为 Node scope"
+    - "H2 ReplicaKey / Shared Identity / Entity Scope"
+    - "H3 R1 Wire DTO / Semantic Hash / Sequence / ACK 语义"
+    - "H4 Replication Policy / History Boundary / fail-closed Field Contract"
     - "Local-first、单 Hub 星型拓扑、不提供 Remote Control"
   deferred:
-    - action: "H5+ durable replication state / bootstrap-outbox / remote storage / security / unified read"
-      until: "H4 Replication Policy / History Boundary 完成并验证"
+    - action: "H6+ Hub Remote Store / transactional ingest / security transport / unified read"
+      until: "H5 Durable Replication State / Outbox / Reconciliation 完成并验证"
 
 acceptance:
-  - "metadata-only 不产生 Prompt / Tool 正文，只保留允许的结构元数据"
-  - "redacted 对明确敏感字段输出 redacted Availability，并保持结构可解释"
-  - "full 也不能复制凭据、私钥、token 等永久禁止内容"
-  - "Capture 阶段未保存的数据不能被 Replication Policy 恢复"
-  - "from-now 边界前普通实体正文返回 omitted(history-boundary)，必要依赖只能生成 minimum dependency shape"
-  - "Reconciliation 使用同一 History Boundary，不会把旧历史绕过授权补回"
-  - "Policy 放宽默认不触发未授权历史 backfill，必须有显式授权决策"
-  - "Policy 收紧能给出需要 stream rollover / reconcile 的纯决策，不生成已禁止 payload"
-  - "H4 不引入网络、SQLite Migration 或 Replication Runtime 生命周期"
+  - "Replication durable state 可在 Daemon 重启后恢复 stream/generation/next sequence/ack 状态"
+  - "同一逻辑待复制事实不会因重复 fast-path / reconciliation 产生多个未决 Outbox Item"
+  - "Canonical commit 后模拟 fast enqueue 丢失时，reconciliation 能补出 Outbox Item"
+  - "已冻结 sequence 的 batch identity / content hash 不会被 Policy/History 变更就地修改"
+  - "ACK 只能单调推进，不能跨 gap"
+  - "exact retry 能重新取得同一 sequence / content hash 的冻结 Outbox Item"
+  - "reconciliation 不依据 row absence 生成删除"
+  - "H5 不引入 Replication HTTP Server/Client、Pairing/TLS 或 Hub Remote Store"
 
 progress:
   current:
-    - "H1 已实现 persistent Node Identity、四种 Capability Profile、ctx.node Runtime Service 与 capability-driven Source composition"
-    - "H2 已实现 Entity Scope Registry、ReplicaKey / SharedKey、Portable Identity、Shared Root / Shared Group / Membership"
-    - "H3 已实现 @agent-lens/protocol/replication：R1 DTO、Typed Ref、Availability、Handshake compatibility、Entity/Batch/Tombstone hash、Sequence/ACK 校验"
-    - "H3 Protocol Core 与 Local Read Protocol 共用现有 @agent-lens/protocol workspace，但通过 ./replication 子路径隔离；未引入新 workspace / lockfile 噪音"
+    - "H1 已实现 persistent Node Identity、Capability Profile 与 ctx.node"
+    - "H2 已实现 Entity Scope、ReplicaKey / SharedKey、Portable Identity、Shared Membership"
+    - "H3 已实现 @agent-lens/protocol/replication：R1 DTO、Typed Ref、Availability、Handshake compatibility、Semantic Hash、Sequence/ACK"
+    - "H4 已实现 @agent-lens/core/replication：metadata-only/redacted/full、include-existing/from-now、Minimum Dependency Shape、credential/path protection 与 policy/history transition"
+    - "H4 出站变换默认 fail-closed：未登记字段 omitted(policy)，not-replicated Entity 直接拒绝"
+    - "H4 最终候选 dad21f5cba00011ef37d25619de9e3fbbc6d2ccd 已通过 Linux/macOS/Windows 三平台主 CI"
   next:
-    - "先定义 Replication Policy / History Boundary 的纯模型与 revision 规则"
-    - "再实现 Canonical-to-Wire field transform、Availability 与 minimum dependency shape 测试"
+    - "先核对 storage-sqlite migration/repository 与 Canonical commit 事务边界"
+    - "再定义最小 durable schema / repository / state machine 和 crash-recovery 测试"
 
 decisions:
-  - "H2 暂不新增 replication-core workspace；保留 @agent-lens/core/replication 子路径"
-  - "H3 不新增 replication-protocol workspace；当前由 @agent-lens/protocol/replication 作为 Wire 权威实现，未来出现独立发行/依赖需求时再抽包"
-  - "Handshake 可选 Identity / Entity 能力只取交集；只有明确 required 的算法或实体类型缺少共同版本才拒绝"
-  - "H3 Semantic Hash 与未来 Raw HTTP Body Signature Hash 保持分离"
+  - "Capture Policy、Replication Policy、Wire Protocol、Durable Replication State 保持四层边界，不互相充当事实源"
+  - "Cordis Event 只做低延迟 fast path；Canonical Reconciliation 是漏项修复的 durable safety net"
+  - "H5 只生成/保存待发送状态，不实现网络发送"
   - "只有改变冻结长期不变量时才发起 ADR / Contract Review"
 
 repository:
