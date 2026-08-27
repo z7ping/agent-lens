@@ -11,7 +11,6 @@ import {
   loadOrCreateNodeIdentity,
   nodeIdentityPath,
   nodeRuntimePlugin,
-  resolveAgentLensDataRoot,
   resolveAgentLensNodeRuntime,
   resolveAgentLensRuntimeProfile,
 } from './node-identity'
@@ -49,13 +48,8 @@ test('corrupt Node Identity fails closed instead of silently generating a new id
   }
 })
 
-test('data root defaults to ~/.agent-lens/1.0 and supports one explicit override', () => {
+test('Node Identity uses the shared 1.0 default data root', () => {
   assert.equal(defaultAgentLensDataRoot('/home/tester'), join('/home/tester', '.agent-lens', '1.0'))
-  assert.equal(resolveAgentLensDataRoot({}, '/home/tester'), join('/home/tester', '.agent-lens', '1.0'))
-  assert.equal(
-    resolveAgentLensDataRoot({ AGENT_LENS_DATA_ROOT: '/srv/agent-lens' }, '/home/tester'),
-    '/srv/agent-lens',
-  )
 })
 
 test('Alpha runtime profiles map to the four frozen capability combinations', () => {
