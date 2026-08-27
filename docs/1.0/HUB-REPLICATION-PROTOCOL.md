@@ -23,14 +23,16 @@ AgentLens Version       1.0.0-alpha.x
 Replication Protocol   R1.x
 Storage Schema          migration N
 Identity Algorithms     project-repository-v1 / asset-upstream-v1 / ...
+Entity Schema           entityType + entityVersion
 ```
 
 - Protocol Major：破坏 Identity、Reference、Delete、History、Signature、必填 Wire 语义时升级；
 - Minor：仅向后兼容扩展；
 - Capability：兼容的可选能力，不能代替 Major；
-- Identity Algorithm Version：Shared Identity normalization / key 结果改变时必须显式演进，不能静默改变。
+- Identity Algorithm Version：Shared Identity normalization / key 结果改变时必须显式演进；
+- `entityVersion`：某个 Replication Entity body 的独立 schema version。
 
-连接建立后固定使用协商版本。
+Node 只能按已协商的 Protocol / Capability / Entity Version 发送数据。Hub 不允许“看不懂但先落盘以后再说”的静默降级。
 
 ## 3. Relationship / Stream / Generation
 
@@ -66,6 +68,8 @@ protocolMajorRange
 
 Node 保存 Hub Identity Public Key + Receipt。
 
+Hub Local nodeId 不允许作为 Remote Pairing Node 注册到自己，避免自复制环。
+
 ## 5. Handshake
 
 概念 Request：
@@ -81,6 +85,7 @@ interface ReplicationHandshakeRequest {
   protocol: { major: number; minMinor: number; maxMinor: number }
   capabilities: string[]
   identityAlgorithms: string[]
+  entityVersions: Record<string, number[]>
   replicationPolicy: 'metadata-only' | 'redacted' | 'full'
   policyRevision: number
   historyRevision: number
@@ -99,6 +104,7 @@ interface ReplicationHandshakeResponse {
   selectedProtocol: { major: number; minor: number }
   capabilities: string[]
   acceptedIdentityAlgorithms: string[]
+  acceptedEntityVersions: Record<string, number[]>
   acceptedStreamId: string
   activeReplicaGenerationId?: string
   hubAckSequence: number
@@ -109,7 +115,7 @@ interface ReplicationHandshakeResponse {
 
 `serverProof` 至少绑定：clientNonce、hubId、nodeId、streamId、selectedProtocol、hubAckSequence、serverTime。
 
-没有共同 Protocol / 必需 Identity Algorithm 时只阻塞 Replication。
+没有共同 Protocol / 必需 Identity Algorithm / 必需 Entity Version 时只阻塞 Replication。
 
 ## 6. Policy / History Revision
 
@@ -220,7 +226,17 @@ G1 active
  -> retire G1
 ```
 
-G2 未激活前不进入正式 Unified Read / Projection；对应 Remote Node Conditional Shared memberships 也跟随 G2 staged / activate。
+G2 未激活前不进入正式 Unified Read / Projection。
+
+**所有 Remote origin 派生的 Shared Identity State 都必须跟随 Generation staged / activated**，包括：
+
+- Conditional Shared Membership；
+- Remote AgentProduct Shared Root assertion；
+- 其他未来 Shared Root assertion。
+
+否则 G2 尚未完整时就可能提前改变 active Shared Merge 结果。
+
+Hub Local assertion 不属于 Remote Generation。
 
 ## 14. Replication Entity Envelope
 
@@ -251,6 +267,17 @@ interface ReplicationEntityEnvelope {
 ### Conditional Shared
 
 Project / AssetDefinition **始终 `scope='node'`**，保持 Origin Replica。拥有 Portable Identity 时附带 SharedIdentityAssertion；Shared Group 不是 Domain FK target。
+
+### Entity Version
+
+Hub 对每个 `entityType` 校验 `entityVersion`：
+
+- 支持 -> 正常 decode；
+- 未协商 / 未支持 -> `ENTITY_VERSION_UNSUPPORTED`；
+- 未知 Entity Type -> `ENTITY_TYPE_UNSUPPORTED`；
+- 不允许静默丢字段后假装同步成功。
+
+只有被当前 selected Protocol 明确定义为 optional、且不参与必须 Reference Graph 的扩展，才允许通过 Capability 做可选忽略。
 
 ## 15. Shared Identity Assertion
 
@@ -352,7 +379,7 @@ Node-scoped / Conditional Origin 删除通过 Tombstone 表达；Conditional Ori
 
 ## 21. Hub 对外统一 Entity ID
 
-R1 Replication Wire 使用 originEntityId；Hub Unified Read / `/api/v1/*` 对外 ID 规则由 Storage / Protocol Read Contract 固定：
+R1 Replication Wire 使用 originEntityId；Hub Unified Read / `/api/v1/*` 对外 ID：
 
 - Hub Local：保持现有 Local Canonical ID；
 - Remote：使用带保留 Replica namespace 的 ReplicaKey；
@@ -386,6 +413,8 @@ PROTOCOL_UNSUPPORTED
 PROTOCOL_CAPABILITY_REQUIRED
 IDENTITY_ALGORITHM_UNSUPPORTED
 SHARED_IDENTITY_MISMATCH
+ENTITY_TYPE_UNSUPPORTED
+ENTITY_VERSION_UNSUPPORTED
 STREAM_UNKNOWN
 STREAM_FROZEN
 SEQUENCE_GAP
@@ -426,6 +455,8 @@ Hub 验证身份、ownership、timestamp、nonce、body hash。
 Pairing Request 必须有 `nodeProof`，证明提交者持有 nodePublicKey 对应 Private Key。
 
 Pair Secret = 用户授权；nodeProof = Key possession。
+
+Hub 必须拒绝 `nodeId == hubLocalNodeId` 的自配对关系。
 
 ## 25. Transport Surface
 
@@ -473,24 +504,48 @@ committedAt
 
 长期状态包括 Replica Entity Map、Shared Assertions / Membership、Promotion provenance、Generation、Tombstone；Conditional Shared 不依赖主键 Alias 维持 FK。
 
-## 29. R1 验收不变量
+## 29. Runtime Invalidation
+
+Remote Import 事务成功后，Hub 必须发布独立的运行时变更 / invalidation 事件，用于：
+
+```text
+Unified Read invalidation
+Projection refresh / cache invalidation
+surface-http SSE notification
+```
+
+它不是 Agent 行为事实，不进入 Canonical Observation，也不能伪造成本机 `observation/committed`。
+
+概念上可以使用：
+
+```text
+replication/committed
+```
+
+事件至少携带 nodeId、generationId、affected entity/scope 摘要；具体 Cordis Event 名称 H5/H8 可调整。
+
+## 30. R1 验收不变量
 
 - Pairing Receipt / serverProof 可验证；
+- Hub 不允许自配对；
 - Header / Body 修改导致签名失败；
 - Sequence retry / gap / ambiguity 正确；
 - Policy 收紧可安全 Rollover；
 - `from-now` 不被 Bootstrap / Reconcile / Dependency Closure 绕过；
 - `history-boundary / dependency-minimized` 在 Wire / Storage 中可区分；
 - staged Generation 未完成不进入正式查询；
+- Remote Shared Root assertion 与 Conditional Membership 都跟随 Generation；
 - Project / AssetDefinition 以 Origin Replica 传输；
 - Promotion 只建立 Membership；
 - Hub 对 SharedKey / Identity Algorithm 自行重算验证；
+- unknown entity type/version 不静默丢弃；
 - Remote Entity Unified ID 不与 Hub Local ID 冲突；
 - omitted / redacted / null / retained prior state 可解释；
-- 非共同 Protocol / Algorithm 只阻塞 Replication；
+- Remote Import commit 后有独立 runtime invalidation；
+- 非共同 Protocol / Algorithm / Entity Version 只阻塞 Replication；
 - Node 本地采集始终独立。
 
-## 30. 当前非目标
+## 31. 当前非目标
 
 - Batch 乱序并发；
 - 多 upstream / Federation；
