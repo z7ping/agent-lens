@@ -332,20 +332,24 @@ OpenCode / Pi 不为实时采集额外安装 Native Hook，继续使用原生数
 
 ## 13. 多机 Hub（架构已定，尚未实现）
 
-ADR-0007 已接受 AgentLens 1.0 Alpha 的多机 Hub 架构，但当前代码尚未实现 Node / Hub 角色、Replication Protocol、Remote Ingest 或配对流程。
+ADR-0007 已在实现前复核修订。当前代码仍**没有**实现 Node Identity、Replication Protocol、Bootstrap、Remote Ingest、Pairing、TLS 或多机 Web；本节只记录已确定的实现边界。
 
-已确定的实现边界：
+已确定：
 
-- Node / Hub 是同一 AgentLens Runtime 的不同 Cordis Plugin Composition，不拆成两套程序；
-- Hub 默认可以同时采集本机，允许 `localCapture=false` 的 Pure Hub；
-- Node 保持 Local-first，本机 Canonical Store 是本机事实产生链，Hub 是 Canonical Replica + Aggregator；
-- Canonical ID 在 Node 生成并在 Hub 保持不变；
-- Hub 使用统一 Canonical Store，不按 Node 分数据库；
-- Replication Metadata 属于独立 Control Plane，不写成 Agent 行为 Observation；
+- 每个 AgentLens 实例都是一个持久 Node；Standalone / 普通接入节点 / Hub / Pure Hub 是 `localCapture`、`replicationUpstream`、`hubAccept` 的能力组合，不拆成两套程序，也不在 Core 中做四个互斥领域角色；
+- Hub 保持 Local-first：本机 Canonical Pipeline 独立工作，Hub 是 Canonical Replica + Aggregator；
+- 当前本机 Canonical ID **不直接作为 Hub 全局主键**。机器作用域实体通过 `nodeId + entityType + originEntityId` 形成确定性 Replica Key，避免当前 Host ID 算法在跨机环境中碰撞；
+- `nodeId` 使用持久 UUID；现有 Host / Canonical ID 不因为 Hub 立即整库迁移，后续若修改 Host Identity 必须单独做 Contract Review / Migration；
+- Shared Canonical Entity 使用字段级确定性 Merge Contract，不采用通用 last-write-wins，也不要求整实体字节级完全一致；
+- Alpha 固定单 Hub 星型拓扑，一个 Node 最多一个 upstream Hub，不支持 Hub Federation、级联 Hub 或一个 Node 同步多个 Hub；
+- 第一次接入必须先做可恢复的 Bootstrap Sync，再进入 Incremental Sync；
+- Durable Outbox 不能只依赖 Cordis Event，必须有 Canonical Reconciliation 查漏补缺；删除依赖持久 Tombstone；
+- Hub 使用统一 Canonical Store，不按 Node 分数据库；Replication Metadata 属于独立 Control Plane，不写成 Agent 行为 Observation；
+- Capture Policy 与 Replication Policy 分离。Hub 复制至少区分 `metadata-only / redacted / full`，复制策略只能进一步收紧本机已经持久化的数据，不能恢复 Capture Policy 已经关闭 / 脱敏的正文；
 - Node 只主动向 Hub 发起 HTTPS 出站连接；现有 `127.0.0.1:56789` Local Surface 不直接暴露到网络；
-- Pairing / TLS / Node Key / Hub Identity 与远程 Web 登录边界分离；Alpha 默认不开放远程 Web；
+- Pairing / TLS / Node Key / Hub Identity 与远程 Web 登录边界分离；Alpha 默认不开放远程 Web，也不提供远程执行能力；
 - AgentLens Version、Replication Protocol、Storage Schema 独立演进；协议不兼容只暂停同步，不阻塞 Node 本地采集。
 
-建议实现顺序：Role-driven Composition Root -> Persistent Node / Host Identity -> Replication Wire DTO / Handshake -> Durable Outbox -> Hub Node Registry / Remote Ingest -> Pairing / TLS -> Projection Scope -> Web 多机视图。
+当前建议实现顺序：Node Identity + capability-driven Composition Root -> Replica Key / Shared Merge Contract -> Replication Wire DTO / Handshake -> Replication Policy -> Bootstrap -> Durable Outbox + Reconciliation -> Hub Registry / Remote Ingest -> Pairing / TLS -> Projection Scope -> Web 多机视图 -> Tombstone。
 
 完整决策、被拒绝方案和验证标准见 `docs/adr/0007-multi-machine-hub-local-first-canonical-replication.md`。
