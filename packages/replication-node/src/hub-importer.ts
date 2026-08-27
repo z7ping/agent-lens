@@ -134,7 +134,7 @@ function conditionalSharedType(entityType: string): ConditionalSharedEntityType 
   return undefined
 }
 
-function expectedConditionalAlgorithm(entityType: ConditionalSharedEntityType): string {
+function expectedConditionalAlgorithm(entityType: ConditionalSharedEntityType): PortableIdentity['algorithm'] {
   return entityType === 'Project' ? 'project-repository-v1' : 'asset-upstream-v1'
 }
 
@@ -168,7 +168,7 @@ function validateAndBuildIdentityState(input: {
     protocolError(`${entityType} shared identity algorithm mismatch`)
   }
   const portableIdentity: PortableIdentity = {
-    algorithm: entity.sharedIdentity.identityAlgorithm,
+    algorithm: expectedAlgorithm,
     normalized: entity.sharedIdentity.normalizedPortableIdentity,
   }
   const expectedKey = sharedGroupKeyFor(entityType, portableIdentity)
@@ -181,7 +181,7 @@ function validateAndBuildIdentityState(input: {
     entityType,
     originEntityId: entity.originEntityId,
     stateKind: 'conditional-membership',
-    identityAlgorithm: entity.sharedIdentity.identityAlgorithm,
+    identityAlgorithm: expectedAlgorithm,
     normalizedIdentity: entity.sharedIdentity.normalizedPortableIdentity,
     sharedKey: expectedKey,
     updatedSequence: input.sequence,
