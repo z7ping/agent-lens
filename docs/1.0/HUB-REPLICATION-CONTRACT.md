@@ -76,11 +76,31 @@ Replication Scope 固定分为四类：
 
 ## 3. Node-scoped Replica Key
 
-Node-scoped 与 Conditional Shared 的 Origin Row 都使用确定性 Replica Namespace：
+Node-scoped 与 Conditional Shared 的 Origin Row 都使用确定性 Replica Namespace。
+
+规范输入必须带独立 domain separator：
 
 ```text
-ReplicaKey = stable(nodeId, entityType, originEntityId)
+ReplicaKeyMaterial =
+  'agentlens-replica-r1'
+  + entityType
+  + nodeId
+  + originEntityId
 ```
+
+概念上：
+
+```text
+ReplicaKey = stable(ReplicaKeyMaterial)
+```
+
+要求：
+
+- `entityType` 必须进入 key material；
+- Replication Key 使用独立命名域，不能直接复用本机 `project/session/host/...` Identity 的生成域；
+- 即使 Core 当前各类 ID 只是 TypeScript `string` alias，也不能因此把语义命名空间混在一起；
+- 具体可读前缀可以由 `replication-core` 实现决定，但必须能从格式或 metadata 明确识别“这是 Hub Replica Key”，且同一 R1 算法跨平台稳定；
+- 改变 key material、domain separator 或 hash/canonicalization 语义属于 Replication Identity 兼容变化，必须评估 Protocol Major。
 
 Wire DTO 必须携带：
 
@@ -164,7 +184,7 @@ Origin Row -> 改主键 -> Shared Row -> 全量重写 FK
 
 这个模型优先保留 provenance、Local-first 与现有 Canonical Identity，不为 Hub 引入破坏性身份迁移。
 
-## 5. Shared Identity Contract
+## 5. Shared Identity Contract 与算法版本
 
 任何 `shared` 或 `conditional-shared` Entity 都必须显式注册：
 
@@ -179,7 +199,22 @@ Conditional Shared 还必须注册：
 MembershipContract
 ```
 
-没有这些 Contract，不允许跨 Node 聚合。
+Shared Identity 算法必须版本化。R1 至少使用类似：
+
+```text
+project-repository-v1
+asset-upstream-v1
+```
+
+的稳定 Algorithm ID。
+
+规则：
+
+- Node 发送的 `sharedKey` 只是 identity assertion，不能直接成为 Hub 信任的目标 ID；
+- Hub 必须按已协商 Algorithm Version，从 Wire 中允许参与 Shared Identity 的字段重新执行 Identity Resolver / Normalizer，并重新计算 SharedKey；
+- Node 提供的 normalized identity / sharedKey 与 Hub 重算结果不一致时，拒绝该 Membership / Batch，返回稳定 Identity Conflict，而不是使用客户端值；
+- 改变 normalization 语义导致既有 identity 可能得到不同 SharedKey 时，必须升级 Shared Identity Algorithm Version，并评估 Protocol Major / Migration；
+- Hub 不运行 Source Parser；这里重算的是正式 Replication Shared Identity Contract，不是重新解释原生 Source。
 
 ### 5.1 AgentProduct
 
@@ -189,240 +224,149 @@ Shared Identity：
 productId
 ```
 
-例如：
-
-```text
-claude-code
-codex
-pi
-hermes
-opencode
-```
+例如：claude-code / codex / pi / hermes / opencode。
 
 `productId` 是 invariant。
 
-`name / vendor / homepage` 为描述元数据：
-
-- 单边为空 -> 使用非空值；
-- placeholder 与更丰富值并存 -> 使用更丰富值；
-- 两个不同非空非 placeholder -> diagnostics + deterministic display rule；
-- 禁止 last-write-wins。
+`name / vendor / homepage`：单边为空取非空；placeholder 与丰富值并存取丰富值；不可解释差异进入 diagnostics；禁止 LWW。
 
 ### 5.2 Project
 
 Project 只有存在可靠 Portable Repository Identity 时才加入 Shared Project Group。
 
-Repository Identity Normalizer Alpha 规则：
+R1 Algorithm：
+
+```text
+project-repository-v1
+```
+
+Repository Identity Normalizer：
 
 - 支持标准 URI 与常见 Git SCP-like Remote；
 - 移除 userinfo / credential / query / fragment；
 - hostname 小写；
 - 去除尾部 `/` 与 `.git`；
 - 默认保留 repository path 大小写；Provider 明确大小写不敏感时才进一步规范；
-- 本机绝对路径、`repositoryRoot`、临时目录不得成为 Shared Identity。
+- 本机绝对路径、repositoryRoot、临时目录不得成为 Shared Identity。
 
 示例：
 
 ```text
 https://github.com/z7ping/agent-lens.git
 git@github.com:z7ping/agent-lens.git
+ -> github.com/z7ping/agent-lens
 ```
 
-归一为：
+Shared Group Key 使用独立命名域：
 
 ```text
-github.com/z7ping/agent-lens
+SharedProjectKeyMaterial =
+  'agentlens-shared-project-v1'
+  + normalizedRepositoryIdentity
+
+SharedProjectKey = stable(SharedProjectKeyMaterial)
 ```
 
-Shared Group Key：
+不能直接使用本机 Project ID 的生成域。
 
-```text
-SharedProjectKey = stable('project', normalizedRepositoryIdentity)
-```
+Group Merge Metadata：repositoryIdentity invariant；createdAt=min；lastSeenAt=max；name 为 deterministic display metadata。
 
-Group Merge Metadata：
+这些 merge 结果描述 Group，不覆盖 origin Project Row。
 
-- `repositoryIdentity` -> invariant；
-- `createdAt` -> `min()`；
-- `lastSeenAt` -> `max()`；
-- `name` -> deterministic display metadata；差异进入 Diagnostics。
-
-注意：这些 merge 结果描述 Shared Project Group，不要求覆盖任何 origin Project Row 的本机字段。
-
-只有本机路径 identity 时，不创建 Shared Group Membership。
+只有本机路径 identity 时，不创建 Membership。
 
 ### 5.3 AssetDefinition
 
-只有类型专用 Resolver 证明 `upstreamIdentity` 是 Portable Identity 时，Origin AssetDefinition 才加入 Shared Asset Group。
+只有类型专用 Resolver 证明 upstreamIdentity 是 Portable Identity 时才加入 Shared Asset Group。
+
+R1 Algorithm：
+
+```text
+asset-upstream-v1
+```
 
 非空字符串不自动等于 Portable Identity；本机路径、临时 ID、安装目录必须拒绝。
 
 Shared Group Key：
 
 ```text
-SharedAssetKey = stable('asset', type, normalizedPortableUpstreamIdentity)
+SharedAssetKeyMaterial =
+  'agentlens-shared-asset-v1'
+  + type
+  + normalizedPortableUpstreamIdentity
+
+SharedAssetKey = stable(SharedAssetKeyMaterial)
 ```
 
-Group Merge：
+Group Merge：type / normalized upstreamIdentity invariant；canonicalName 应一致；displayName deterministic；不可解释冲突进入 Conflict。
 
-- `type` -> invariant；
-- normalized `upstreamIdentity` -> invariant；
-- `canonicalName` -> 应一致；不可解释冲突进入 Replication Conflict；
-- `displayName` -> deterministic display metadata + diagnostics。
-
-仅有 `canonicalName` 时不创建 Shared Membership。
+仅 canonicalName 时不创建 Membership。
 
 ### 5.4 ToolDefinition
 
-Alpha 中 `ToolDefinition` 一律 Node-scoped，即使本机 `installationId` 为空。
-
-`Read`、`Bash`、`Search` 等名字不能证明跨 Agent / Plugin / MCP Schema 完全相同。跨机工具统计由 Projection 聚合，不通过提前合并 ToolDefinition 实体实现。
+Alpha 一律 Node-scoped。`Read` / `Bash` / `Search` 等名字不能证明跨 Agent / Plugin / MCP Schema 等价。
 
 ## 6. Typed EntityRef
 
-Wire Protocol 不传让 Hub 猜作用域的裸 ID。
-
-概念类型：
-
 ```ts
 type EntityRef =
-  | {
-      scope: 'node'
-      entityType: ReplicationEntityType
-      originEntityId: string
-    }
-  | {
-      scope: 'shared'
-      entityType: SharedRootEntityType
-      sharedKey: string
-    }
+  | { scope: 'node'; entityType: ReplicationEntityType; originEntityId: string }
+  | { scope: 'shared'; entityType: SharedRootEntityType; sharedKey: string }
 ```
 
-重要规则：
-
-- `shared` Ref 在 Alpha 只用于真正 Shared Root，例如 `AgentProduct`；
-- `Project` / `AssetDefinition` 即使拥有 Shared Group Membership，领域 FK 仍使用 `scope: 'node'` 指向 origin entity；
-- Shared Group Key 通过 Entity Envelope 的 Shared Identity Assertion / Promotion 传输，不把它伪装成 Project / AssetDefinition FK target；
-- Node-scoped Ref 的 nodeId 默认来自 Batch Header；Alpha 禁止跨 Node direct Ref。
-
-Hub Importer：
-
-```text
-node ref   -> ReplicaKey / origin entity map
-shared ref -> Shared Root map
-```
-
-Shared Group Membership 由独立 identity contract 解析。
+- shared Ref Alpha 只用于真正 Shared Root，例如 AgentProduct；
+- Project / AssetDefinition 即使有 Membership，领域 FK 仍使用 node Ref；
+- Shared Group Key 通过 Shared Identity Assertion / Promotion 传输，不作为 Project / AssetDefinition FK target；
+- Alpha 禁止跨 Node direct Ref。
 
 ## 7. 只重写声明式网络 Reference
 
-Remote Import 只把 Node 本地 ID 映射成 Hub 中对应的 Replica / Shared Root ID：
+Remote Import 只把 Node 本地 ID 映射成 Hub 中对应 Replica / Shared Root ID：hostId、installationId、runtimeProfileId、projectId、workspaceId、logicalSessionId、sourceSessionId、actorId、assetDefinitionId、assetBindingId、evidenceRefs、Relationship refs、Coverage subjectRef 等正式字段。
 
-- `hostId`；
-- `installationId`；
-- `runtimeProfileId`；
-- `projectId`；
-- `workspaceId`；
-- `logicalSessionId`；
-- `sourceSessionId`；
-- `actorId / parentActorId`；
-- `assetDefinitionId / assetBindingId`；
-- `evidenceRefs`；
-- `SessionRelationship.fromSessionId / toSessionId`；
-- Coverage `subjectRef`；
-- 其他正式注册的 EntityRef 字段。
-
-对于 Conditional Shared：
+Conditional Shared：
 
 ```text
-projectId / assetDefinitionId
--> origin ReplicaKey
+projectId / assetDefinitionId -> origin ReplicaKey
 ```
 
 不是 Shared Group Key。
 
-严禁对以下内容做字符串搜索替换：
+严禁搜索替换 CanonicalObservation.payload、SourceRecord.payload、Tool/Prompt 正文、Source Locator 文本或用户/Agent 消息正文。
 
-```text
-CanonicalObservation.payload
-SourceRecord.payload
-Tool / Prompt 正文
-Source Locator 文本
-任意用户 / Agent 消息正文
-```
-
-### 7.1 CanonicalObservation
-
-Wire DTO 不复制派生 `interactionId`。Hub 根据 Canonical Observation 重新执行 Interaction Projection。
-
-Observation 的 Domain refs 使用 Typed EntityRef；payload 只经过 Replication Policy transform，不做 ID 字符串替换。
-
-### 7.2 Coverage
-
-本机：
-
-```text
-subjectType
-subjectId
-```
-
-Wire：
-
-```text
-subjectRef: EntityRef
-```
-
-如果 subject 是 Conditional Shared Project / AssetDefinition，仍引用对应 origin entity；跨机 Group 由 Projection / Shared Group Resolver 解释。
+Wire 不复制派生 interactionId；Coverage 使用 Typed EntityRef。
 
 ## 8. Remote Import Dependency DAG
 
-Batch 数组顺序不决定落库顺序。Importer 按协议 DAG 处理：
-
 ```text
 0. validate identity declarations / promotions
-1. Shared Roots
-   AgentProduct
-2. Node Root
-   Host
-3. Installation
-   AgentInstallation
-   RuntimeProfile
-4. Conditional Origin Rows
-   Project
-   AssetDefinition
+1. Shared Roots: AgentProduct
+2. Host
+3. AgentInstallation / RuntimeProfile
+4. Conditional Origin Rows: Project / AssetDefinition
 5. Shared Group Assertions / Membership / Promotion
 6. Workspace
-7. Session
-   LogicalSession
-   SourceSession
-8. Evidence Source
-   SourceRecord
-   Evidence
-9. Actor / Relationship
-   AgentActor
-   SessionRelationship
-10. Asset
-   AssetBinding
-   AssetStateObservation
+7. LogicalSession / SourceSession
+8. SourceRecord / Evidence
+9. AgentActor / SessionRelationship
+10. AssetBinding / AssetStateObservation
 11. ToolDefinition
 12. CanonicalObservation
 13. Coverage
-14. ObservationEvidence / join relation
+14. ObservationEvidence / joins
 ```
 
-Promotion 可以在 DTO 中先声明，但只有 origin row 与 target Shared Group 都校验成功后才落 Membership。
-
-循环引用、缺失必须依赖、Actor parent cycle、非法跨 Node Ref 都使 Batch 回滚。
+Promotion 可以先声明，但只有 origin row、Algorithm Version、normalized identity 与 target Shared Group 全部校验成功后才落 Membership。
 
 ## 9. Shared Assertions 与 Membership
 
-Control Plane 必须保留每个 Shared 来源，例如：
+Control Plane 保存来源：
 
 ```text
 shared_entity_assertions
   origin_node_id
   entity_type
   origin_entity_id
+  identity_algorithm
   shared_key
   content_hash
   active
@@ -430,49 +374,22 @@ shared_entity_assertions
   last_seen_at
 ```
 
-对于 Conditional Shared，还存在逻辑 Membership：
+Conditional Shared Membership：
 
 ```text
 (originNodeId, entityType, originEntityId)
-  -> sharedKey
+  -> (identityAlgorithm, sharedKey)
 ```
 
-一个 Shared Group 的 merged metadata 应能够从 active assertions 重算。
+Group merged metadata 可从 active assertions 重算。
 
-因此：
-
-- Node A / B / Hub Local 可以拥有三个 Project Origin Rows，但属于一个 Shared Project Group；
-- 撤回 A 的 assertion 只移除 A 的 membership，不删除 B / Hub Local origin row；
-- Shared Group 无 active membership 后才 eligible for GC；
-- Group GC 不等于删除任何仍存在的 origin Canonical Row。
+A/B/Hub Local 可各有 Origin Row 但属于同 Group；撤回 A 不影响 B / Hub Local；Group 无 active membership 才 eligible for GC；Group GC 不删仍存在 origin row。
 
 ## 10. Identity Promotion
 
-Identity Promotion 只用于 Conditional Shared：某个 origin entity 最初没有可靠 Portable Identity，后来获得可靠 Shared Identity。
+Promotion = Conditional origin 从“无 Membership”变成“加入 Shared Group”。
 
-典型：
-
-```text
-Project Origin P1
-  path-only
-  -> no shared membership
-
-later:
-  git remote discovered
-  -> promote P1 into SharedProjectGroup G
-```
-
-### 10.1 Promotion 原则
-
-Promotion 必须：
-
-- 显式：由 Node 提交正式 Promotion Assertion；
-- 单向：`origin without membership -> shared group membership`；
-- 单调：同一个 origin 一旦绑定 Shared A，不能静默改到 Shared B；
-- 事务性：Shared Group 建立/合并、assertion、membership 同一事务；
-- 幂等；
-- 可追溯；
-- 可重放。
+必须显式、单向、单调、事务性、幂等、可追溯、可重放。
 
 概念 DTO：
 
@@ -480,6 +397,7 @@ Promotion 必须：
 interface IdentityPromotion {
   entityType: 'project' | 'asset-definition'
   originEntityId: string
+  identityAlgorithm: string
   targetSharedKey: string
   reason: string
   observedAt: string
@@ -487,198 +405,74 @@ interface IdentityPromotion {
 }
 ```
 
-### 10.2 Promotion 不重写 Canonical FK
+Hub 必须重算 targetSharedKey，不能盲信 DTO。
 
-Hub 收到合法 Promotion：
+Promotion 不重写 Canonical FK，不删除 origin row。
 
-```text
-BEGIN
-  validate origin ownership
-  validate conditional-shared contract
-  validate target Shared Identity
-  ensure Shared Group
-  persist / update source assertion
-  persist origin -> shared group membership
-  persist promotion provenance
-COMMIT
-```
+同一 Node old/new origin IDs 在强证据下可分别加入同 Group。本机重复实体清理属于独立 Core Identity Migration。
 
-明确禁止把 Promotion 实现成：
-
-```text
-rewrite Workspace.projectId -> SharedKey
-rewrite Observation.projectId -> SharedKey
-remove origin Project Row
-```
-
-原因：
-
-- 会让 Hub Local 与 Remote 形成两套物理语义；
-- 会破坏 origin provenance；
-- 会迫使本机 IdentityService 理解 Hub Alias；
-- Re-bootstrap / Tombstone / Node Identity Reset 更难解释；
-- Shared Group 本来就是聚合身份，不需要成为本机领域 FK 主键。
-
-### 10.3 一个 Node 出现多个 Origin ID
-
-Node 本地 Identity 演进后，可能存在：
-
-```text
-old Project ID（path identity）
-new Project ID（repository identity）
-```
-
-只要有强证据证明同一底层 Repository，两者可以分别保留 origin row，并同时 Membership 到同一 Shared Group。
-
-Hub 不需要把旧 origin alias 成新 origin，也不需要删除旧 row；Projection 可以在 Shared Group 视图中聚合它们。
-
-本机重复 Project 清理属于独立 Core Identity Migration，不由 Replication Side Effect 完成。
-
-### 10.4 Project Promotion 触发条件
-
-不能根据：
-
-```text
-name 相同
-目录名相同
-repositoryRoot 看起来相似
-```
-
-自动 Promotion。
-
-强证据包括：
-
-- 同一个稳定 Workspace 后续发现 Git Remote；
-- Source / Identity 层拥有更强的原生等价关系。
-
-已加入 Shared A 的同一 origin 如果后来 Remote 改成 B，不自动 Rebind。新的 identity 需要新的 origin / 显式 Rebind Contract；Alpha 不迁移历史。
-
-### 10.5 AssetDefinition Promotion
-
-不能仅因 canonicalName 相同 Promotion。
-
-必须有来源特有强证据，例如稳定 Binding、原生资产 ID、明确 upstream mapping。
-
-### 10.6 Promotion Conflict
-
-拒绝：
-
-- 同 origin 已 Membership Shared A，又要求绑定 Shared B；
-- target 不满足 Shared Identity Contract；
-- Node 试图操作其他 Node origin；
-- Shared invariant 冲突。
-
-Alpha 不提供“强制覆盖”。
+不能依据 name / 目录相似度自动 Promotion；已属于 Shared A 的同 origin 不自动 Rebind 到 B；Asset 必须有来源特有强证据。
 
 ## 11. 删除语义
 
-### 11.1 Node-scoped / Conditional Origin Tombstone
+### 11.1 Origin Tombstone
 
-Tombstone 针对：
+针对 originNodeId + entityType + originEntityId。依赖不安全则整批拒绝。
 
-```text
-originNodeId + entityType + originEntityId
-```
-
-Hub 删除 origin row 前必须依赖安全；dependent 未处理时整批拒绝。
-
-如果该 origin 还有 Shared Membership：
-
-```text
-delete origin
--> withdraw this origin membership/assertion
--> recompute Shared Group
-```
-
-不会删除其他 origin。
+Conditional origin 删除时同时 withdraw 该 origin membership/assertion，然后重算 Group，不影响其他 member。
 
 ### 11.2 Shared Root Assertion Withdrawal
 
-对于 AgentProduct 等 Shared Root，一个 Node 撤回描述 assertion 不等于删除 Shared Root，只是重新计算 merged metadata。
+来源撤回 AgentProduct 等描述 assertion 不等于删除 Shared Root。
 
 ### 11.3 Shared Group GC
 
-```text
-no active membership/assertion
--> Shared Group eligible for GC
-```
-
-Group GC 只清理聚合 identity/control state；不通过 Group GC 删除其他仍存在的 origin Canonical Row。
-
-Revocation 也不自动等于 withdrawal / delete。
+无 active membership/assertion 后 Group 才 eligible for GC。Group GC 不删除仍存在 origin row。Revocation 不自动 withdrawal。
 
 ## 12. Hub 本机与远程语义一致
 
-Hub Local Project / AssetDefinition 不经过 HTTPS，但仍以：
+Hub Local Project / AssetDefinition 不经过 HTTPS，但以 Hub nodeId + local Canonical ID 参与同一 Assertion / Membership Contract。
 
-```text
-originNodeId = Hub nodeId
-originEntityId = local Canonical ID
-```
+Hub Local FK 和 Remote FK 都保持指向各自 origin row；Shared Project / Asset 视图通过 Group Membership 聚合。
 
-参与同一 Shared Assertion / Membership Contract。
-
-因此：
-
-- Hub Local FK 保持指向本机 origin row；
-- Remote FK 保持指向 remote replica row；
-- Shared Project / Asset 视图统一通过 Group Membership 聚合；
-- 不存在“Remote 要改 FK，本机可以不改”的双轨实现。
+Hub Local Shared Identity Resolver 也必须使用同一 Algorithm Version / Normalizer，不能维护另一套“本机特例算法”。
 
 ## 13. Shared Group 与 Projection 边界
 
 Shared Group 是跨 Node Identity / Aggregation Contract，不是第二份 Agent 行为事实。
 
-Projection 可以通过正式 Repository / Resolver Contract 查询：
+Projection 通过正式 Repository / Resolver Contract 查询 SharedGroupKey -> member origin entity ids，实现跨设备 Workspace、项目 Session/Usage、Shared Asset 聚合。Web 不直接查 Control Plane 私表。
 
-```text
-SharedGroupKey
-  -> member origin entity ids
-```
-
-从而实现：
-
-- 同一项目跨设备 Workspace；
-- 项目级 Session / Usage 聚合；
-- Shared Asset 的跨设备状态聚合。
-
-Web 不得直接查询 Control Plane 私表。
-
-如果未来需要物化 Shared Group merged metadata，它必须可由 assertions / memberships 重建，并遵守 ADR-0006 的可重建派生数据原则。
+物化 Group metadata 时必须可由 assertions/memberships 重建，并遵守 ADR-0006。
 
 ## 14. Contract 验收不变量
 
-实现至少验证：
-
-- 两台相同 hostname/platform/arch 的 Node 不因本机 Host ID 冲突；
-- Project 只有本机路径时不跨 Node Group；
-- SSH / HTTPS 同 Git Remote 进入同一 Shared Project Group；
-- Hub Local + Remote 同 Git Remote 进入同一 Group；
-- 两个同名但无 Portable Identity Skill 不合并；
+- 两台相同 hostname/platform/arch Node 不冲突；
+- ReplicaKey 使用独立 replication domain separator；
+- 相同 origin 输入三平台得到相同 ReplicaKey；
+- Project 只有本机路径不 Group；
+- SSH/HTTPS 同 Remote 经 project-repository-v1 得到同 SharedProjectKey；
+- Hub 对 Node 自报 normalized identity/sharedKey 重算不一致时拒绝；
+- Identity Algorithm Version 改变不能静默与旧 key 混用；
+- Hub Local + Remote 使用相同 Algorithm Version 并进入同 Group；
+- 同名无 Portable Identity Skill 不合并；
 - ToolDefinition 同名仍 Node-scoped；
-- Interaction / Checkpoint / Runtime Status / Projection 不进入 Canonical Replication Batch；
-- EntityRef Scope 错误、引用缺失、非法跨 Node Ref 使 Batch 回滚；
-- payload 内的 ID 字符串不被改写；
-- Coverage subject 正确映射；
-- Promotion 后 origin Project Row 与其 FK 均保持不变；
-- Promotion 只新增/更新 Shared Membership；
-- 同一 Node 的 old/new Project Origin IDs 可在强证据下加入同一 Group；
-- 重放 Promotion 不产生重复 Membership；
-- 同 origin 尝试加入两个 Shared Group 被拒绝；
-- 一个 origin withdrawal 不影响其他 origin；
-- Shared Merge / Group 结果与 Batch 到达顺序无关。
+- 非复制实体不进入 Batch；
+- EntityRef 错误 / 缺依赖 / 非法跨 Node Ref rollback；
+- payload ID 字符串不改写；
+- Promotion 不改 origin FK，只改 Membership；
+- old/new origin IDs 可在强证据下进同 Group；
+- 重放 Promotion 不重复 Membership；
+- 同 origin 加两个 Group 被拒绝；
+- withdrawal 不影响其他 member；
+- Group Merge 与到达顺序无关。
 
 ## 15. 当前非目标
 
-Alpha Contract 不解决：
-
-- Hub Federation；
-- 多 upstream Hub；
+- Hub Federation / 多 upstream；
 - Shared Tool Global Identity；
-- Conditional Shared Group 自动 Rebind；
+- Conditional Shared 自动 Rebind；
 - 本机 Host / Canonical ID 整库迁移；
-- 自动根据名称、路径、模糊相似度做跨 Node 身份推断；
-- 通过 Replication 修改 Node 原生 Agent / Hook / Skill / Shell；
-- 把 Shared Project Group 强制改造成所有 Workspace 共用的物理 Project 主键。
-
-这些若未来需要，必须单独 Contract Review / ADR。
+- 模糊相似度跨 Node Identity；
+- Replication 修改 Node 原生环境；
+- Shared Project Group 变成统一物理 Project 主键。
