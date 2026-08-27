@@ -3,6 +3,7 @@ import {
   SHARED_GROUP_KEY_ALGORITHM,
   SHARED_ROOT_KEY_ALGORITHM,
   createOriginEntityRef,
+  getReplicationEntityContract,
   replicaKeyFor,
   replicationEntityScope,
   sharedGroupKeyFor,
@@ -113,6 +114,13 @@ export type HubBatchImportResult =
   | { status: 'committed'; ackSequence: number }
   | { status: 'exact-retry'; ackSequence: number }
 
+const OMITTED_REASONS = new Set([
+  'policy',
+  'not-captured',
+  'history-boundary',
+  'dependency-minimized',
+])
+
 function protocolError(message: string): never {
   throw new ReplicationProtocolError('BATCH_INVALID', message)
 }
@@ -143,6 +151,52 @@ function expectedWireScope(entityType: string): WireEntityEnvelope['scope'] {
   const scope = replicationEntityScope(entityType)
   if (scope === 'not-replicated') protocolError(`${entityType} is not replicated on R1`)
   return scope === 'shared' ? 'shared' : 'node'
+}
+
+function assertAvailabilityBody(entity: WireEntityEnvelope): void {
+  if (entity.body === null || Array.isArray(entity.body) || typeof entity.body !== 'object') {
+    protocolError(`${entity.entityType} body must be an Availability object`)
+  }
+
+  const contract = getReplicationEntityContract(entity.entityType as KnownReplicationEntityType)
+  if (!contract) protocolError(`${entity.entityType} has no replication field contract`)
+  const knownFields = new Set(contract.fields.map(field => field.field))
+
+  for (const [field, raw] of Object.entries(entity.body as Record<string, JsonValue>)) {
+    if (raw === null || Array.isArray(raw) || typeof raw !== 'object') {
+      protocolError(`${entity.entityType}.${field} must use ReplicationAvailability`)
+    }
+    const availability = raw as Record<string, JsonValue>
+    const state = availability.state
+    if (typeof state !== 'string') {
+      protocolError(`${entity.entityType}.${field} availability state is missing`)
+    }
+
+    switch (state) {
+      case 'value':
+        if (!Object.prototype.hasOwnProperty.call(availability, 'value')) {
+          protocolError(`${entity.entityType}.${field} value availability is missing value`)
+        }
+        if (!knownFields.has(field)) {
+          protocolError(`${entity.entityType}.${field} is not registered for entity version ${entity.entityVersion}`)
+        }
+        break
+      case 'null':
+        if (!knownFields.has(field)) {
+          protocolError(`${entity.entityType}.${field} is not registered for entity version ${entity.entityVersion}`)
+        }
+        break
+      case 'redacted':
+        break
+      case 'omitted':
+        if (typeof availability.reason !== 'string' || !OMITTED_REASONS.has(availability.reason)) {
+          protocolError(`${entity.entityType}.${field} omitted reason is invalid`)
+        }
+        break
+      default:
+        protocolError(`${entity.entityType}.${field} availability state is invalid`)
+    }
+  }
 }
 
 function validateAndBuildIdentityState(input: {
@@ -309,6 +363,7 @@ export async function importReplicationBatch(input: {
       if (entity.scope !== expectedScope) {
         throw new ReplicationProtocolError('ENTITY_SCOPE_INVALID', `${entity.entityType} scope mismatch: expected ${expectedScope}`)
       }
+      assertAvailabilityBody(entity)
       const origin = createOriginEntityRef(input.batch.nodeId, entity.entityType, entity.originEntityId)
       const expectedReplicaKey = replicaKeyFor(origin)
       if (entity.replicaKey && entity.replicaKey !== expectedReplicaKey) {
