@@ -1,5 +1,9 @@
 import type { JsonValue } from '@agent-lens/core'
-import type { KnownReplicationEntityType, PendingReplicationEntity } from '@agent-lens/core/replication'
+import {
+  sharedRootKeyFor,
+  type KnownReplicationEntityType,
+  type PendingReplicationEntity,
+} from '@agent-lens/core/replication'
 import type { SqliteExecutor } from './executor'
 
 interface PendingRow {
@@ -74,20 +78,21 @@ export class SqliteReplicationPendingDependencyReader {
     })
   }
 
-  async listOpenByType(input: {
+  async findOpenAgentProductSharedRoot(input: {
     streamId: string
     generationId: string
-    entityType: KnownReplicationEntityType
-    limit?: number
-  }): Promise<readonly PendingReplicationEntity[]> {
-    const limit = Math.max(1, Math.min(input.limit ?? 1000, 5000))
+    sharedKey: string
+  }): Promise<PendingReplicationEntity | undefined> {
     return this.executor.run(() => {
       const rows = this.executor.db.prepare(`${SELECT}
-        WHERE stream_id = ? AND generation_id = ? AND entity_type = ? AND frozen_sequence IS NULL
+        WHERE stream_id = ? AND generation_id = ? AND entity_type = 'AgentProduct'
+          AND frozen_sequence IS NULL
         ORDER BY rowid ASC
-        LIMIT ?
-      `).all(input.streamId, input.generationId, input.entityType, limit) as PendingRow[]
-      return rows.map(mapPending)
+      `).all(input.streamId, input.generationId) as PendingRow[]
+      const row = rows.find(candidate =>
+        sharedRootKeyFor('AgentProduct', candidate.originEntityId) === input.sharedKey,
+      )
+      return row ? mapPending(row) : undefined
     })
   }
 }
