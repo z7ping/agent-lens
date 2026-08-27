@@ -5,14 +5,15 @@
 上位文档：
 - `docs/adr/0007-multi-machine-hub-local-first-canonical-replication.md`
 - `docs/1.0/HUB-REPLICATION-CONTRACT.md`
+- `docs/1.0/HUB-REPLICATION-STATE-CONTRACT.md`
 
-本文定义 AgentLens Node 与 Hub 之间的线上协议边界：Handshake、Replication Stream、Batch Envelope、Sequence / ACK、Bootstrap、Reconciliation、错误模型、Capability Negotiation 与请求签名输入。本文不绑定 SQLite Schema，也不表示协议已经实现。
+本文定义 AgentLens Node 与 Hub 之间的线上协议边界：Handshake、Replication Stream、Batch Envelope、Sequence / ACK、Bootstrap、Reconciliation、History / Policy Revision、Replica Generation、错误模型、Capability Negotiation 与请求 / Hub 身份证明。本文不绑定 SQLite Schema，也不表示协议已经实现。
 
 ## 1. 协议目标
 
 Replication Protocol 只解决一件事：
 
-> 让一个已配对 Node 将经过 Replication Policy 允许的 Canonical Entity State，可靠、可恢复、可验证地复制到唯一 upstream Hub。
+> 让一个已配对 Node 将经过 Replication Policy 与 History Scope 允许的 Canonical Entity State，可靠、可恢复、可验证地复制到唯一 upstream Hub。
 
 不负责：
 
@@ -41,18 +42,28 @@ Alpha 初始协议为 `R1`。
 - Minor：保持向后兼容的可选字段 / Capability 扩展；
 - Capability：只表达语义兼容的可选能力，不能替代真正的 Major 升级。
 
-连接建立后，在当前连接 / stream 上使用双方协商出的固定协议版本，不在同一请求链中动态切换版本。
+连接建立后，在当前连接上使用双方协商出的固定协议版本，不在同一请求链中动态切换版本。
 
-## 3. Replication Stream
+## 3. Replication Relationship / Stream / Generation
 
-Sequence 不能只按 `nodeId` 计数，因为重新配对、重建 upstream 关系或显式 Reset 时需要重新开始一条同步历史。
-
-因此每次成功 Pairing 建立一条持久 `replicationStreamId`：
+R1 明确区分：
 
 ```text
 nodeId
-  + replicationStreamId
-  -> exactly one upstream Hub relationship
+hubId
+replicationStreamId
+replicaGenerationId
+```
+
+- `nodeId`：Node 长期实例身份；
+- `hubId`：Hub 长期信任身份；
+- `replicationStreamId`：sequence / ACK 的顺序命名空间；
+- `replicaGenerationId`：Hub 中某个 Node Replica 数据集的一代状态。
+
+每次成功 Pairing 建立第一条持久 Stream：
+
+```text
+nodeId + hubId + replicationStreamId
 ```
 
 规则：
@@ -60,12 +71,44 @@ nodeId
 - `replicationStreamId` 使用随机 UUID；
 - 一个 Node Alpha 同时最多一个 active stream；
 - 同一 stream 内 `batchSequence` 从 1 单调递增；
-- 重新配对默认创建新 stream，旧 stream 冻结，不复用其 sequence；
+- Re-pair 默认创建新 stream，旧 stream 冻结；
+- 已认证 relationship 可以按 State Contract 执行 Stream Rollover，不要求重新 Pair；
 - Hub Cursor 以 `nodeId + replicationStreamId` 为键；
-- Node Identity Reset 必须创建新的 Node 身份与新 stream；
-- stream 不能跨 Hub 搬用。
+- Node Identity Reset 必须创建新 nodeId 与新 stream；
+- stream 不能跨 `hubId` 搬用；
+- 换 stream 不自动换 Replica Generation；
+- Re-bootstrap 可以创建新的 staged Replica Generation。
 
-## 4. Handshake
+## 4. Pairing Receipt 与 Hub Identity Proof
+
+Hub Identity 不能只是数据库里一个从未参与密码学验证的 UUID / Public Key。
+
+Pairing 成功后，Hub 使用 Hub Identity Private Key 生成签名 Receipt，至少绑定：
+
+```text
+hubId
+hubKeyId
+nodeId
+nodeKeyId / nodePublicKeyFingerprint
+replicationStreamId
+issuedAt
+protocol major range
+```
+
+Node 保存：
+
+```text
+Hub Identity Public Key
+Pairing Receipt
+```
+
+Pairing Receipt 用于证明：
+
+> 这个 Node / Stream 确实由持有该 Hub Identity Private Key 的 Hub 授权建立。
+
+TLS Certificate 续期不能替代或重写这条长期 Hub Identity 关系。
+
+## 5. Handshake
 
 已配对 Node 在发送数据前必须 Handshake。
 
@@ -74,7 +117,10 @@ nodeId
 ```ts
 interface ReplicationHandshakeRequest {
   nodeId: string
+  knownHubId: string
   replicationStreamId: string
+  runtimeInstanceId: string
+  clientNonce: string
   agentLensVersion: string
   protocol: {
     major: number
@@ -83,15 +129,21 @@ interface ReplicationHandshakeRequest {
   }
   capabilities: string[]
   replicationPolicy: 'metadata-only' | 'redacted' | 'full'
+  policyRevision: number
+  historyRevision: number
   lastLocalAckSequence?: number
 }
 ```
+
+`runtimeInstanceId` 是当前 Daemon 启动实例的临时随机标识，只用于连接 / Clone Diagnostics，不属于 Node 长期身份。
 
 概念响应：
 
 ```ts
 interface ReplicationHandshakeResponse {
   hubId: string
+  hubKeyId: string
+  serverTime: string
   agentLensVersion: string
   selectedProtocol: {
     major: number
@@ -99,37 +151,79 @@ interface ReplicationHandshakeResponse {
   }
   capabilities: string[]
   acceptedStreamId: string
+  activeReplicaGenerationId?: string
   hubAckSequence: number
   requiredAction?: 'bootstrap' | 'resume' | 'reconcile' | 'none'
+  serverProof: string
 }
 ```
+
+`serverProof` 由 Hub Identity Private Key 对至少以下内容签名：
+
+```text
+clientNonce
+hubId
+nodeId
+replicationStreamId
+selectedProtocol
+hubAckSequence
+serverTime
+```
+
+Node 必须使用已配对的 Hub Identity Public Key 验证，而不是只因为 endpoint / IP 相同就接受响应。
 
 Hub 必须验证：
 
 - Node 已配对且未撤销；
-- stream 属于该 Node 且未冻结；
+- `knownHubId` 与当前 Hub Identity 一致；
+- stream 属于该 Node / Hub relationship 且未冻结；
 - 协议存在共同兼容版本；
-- Node 报告的 Hub Identity 与 TLS Pinning 关系有效；
-- 本地 ACK 与 Hub ACK 若不一致，按 Hub 已事务提交的 contiguous ACK 为恢复基准。
+- Node Request Signature 有效；
+- 本地 ACK 与 Hub ACK 若不一致，以 Hub 已事务提交的 contiguous ACK 为恢复基准。
 
 协议不兼容时只拒绝 Replication，不影响 Node 本地运行。
 
-## 5. Batch Envelope
+## 6. History Scope / Policy Revision
 
-所有 Bootstrap、Incremental、Reconciliation、Promotion、Tombstone 使用同一个 Batch Envelope，不维护多套传输语义。
+Replication Policy 与 History Scope 分离。
+
+协议状态至少能表达：
+
+```text
+policy
+policyRevision
+historyRevision
+```
+
+`policyRevision` / `historyRevision` 都是 Node relationship 内单调递增的运维版本，不等于 Protocol Version。
+
+History Boundary 的具体 baseline 不要求放进每个 Batch，但 Hub Status / Diagnostics 必须能关联当前 revision。
+
+`from-now` 的语义、Dependency Closure 与 Policy 收紧 / 放宽规则见 `HUB-REPLICATION-STATE-CONTRACT.md`。
+
+## 7. Batch Envelope
+
+Bootstrap、Incremental、Reconciliation、Promotion、Tombstone 使用同一个 Batch Envelope。
 
 概念结构：
 
 ```ts
 interface ReplicationBatch {
-  protocol: 'R1.x'
+  protocol: {
+    major: number
+    minor: number
+  }
   nodeId: string
+  hubId: string
   replicationStreamId: string
+  replicaGenerationId: string
   batchSequence: number
   batchId: string
   phase: 'bootstrap' | 'incremental' | 'reconcile'
   createdAt: string
   policy: 'metadata-only' | 'redacted' | 'full'
+  policyRevision: number
+  historyRevision: number
   entities: ReplicationEntity[]
   promotions?: IdentityPromotion[]
   tombstones?: ReplicationTombstone[]
@@ -139,15 +233,38 @@ interface ReplicationBatch {
 
 规则：
 
-- `batchId` 为随机 UUID，只用于诊断 / 去重辅助，sequence 才是 stream 顺序事实；
-- `contentHash` 对协议规范化后的 Batch 内容计算；
-- 单 Batch 必须事务性导入，要么全部提交，要么全部回滚；
+- `batchId` 为随机 UUID，只用于诊断 / 去重辅助；
+- sequence 才是 stream 的顺序事实；
+- `hubId` 必须与当前 Pairing Relationship 一致；
+- Batch 必须绑定当前 / staged Replica Generation；
+- 单 Batch 要么完整事务提交，要么完整回滚；
 - Hub 不允许部分 ACK；
 - Batch 数组顺序不决定落库顺序，Importer 按 Contract Dependency DAG 处理；
-- Entity DTO 的引用必须使用 Typed `EntityRef`；
+- Entity DTO 引用必须使用 Typed `EntityRef`；
 - payload 只经过 Replication Policy 处理，不做 Canonical ID 字符串替换。
 
-## 6. Sequence 与 ACK
+## 8. Deterministic Hash
+
+`Entity.contentHash` 与 `Batch.contentHash` 必须跨平台、跨进程确定性一致。
+
+R1 使用 UTF-8 JSON Wire DTO，并采用 RFC 8785 / JCS 兼容的 Canonical JSON 规则计算内容摘要：
+
+```text
+SHA-256(canonical JSON bytes)
+```
+
+要求：
+
+- Wire DTO 只能包含合法 JSON 值；
+- 禁止 `undefined`、NaN、Infinity 等非 JSON 值；
+- `Batch.contentHash` 计算时排除自身 `contentHash` 字段；
+- `Entity.contentHash` 计算在 Replication Policy transform 之后进行；
+- `entityVersion`、Typed Ref 与 omitted / redacted 状态均参与 hash；
+- Protocol Major 若改变 Canonical Encoding，必须明确升级兼容边界。
+
+Request Signature 的 Body Hash 与这里不同：它对实际发送的 Raw HTTP Body Bytes 做 SHA-256，不要求服务器重新 stringify 对象。
+
+## 9. Sequence 与 ACK
 
 Alpha 使用严格 contiguous sequence，不做乱序并发提交。
 
@@ -157,37 +274,81 @@ Hub 对 stream 维护：
 ackSequence = 已完整事务提交的最高连续 batchSequence
 ```
 
-处理规则：
-
 ### `batchSequence == ackSequence + 1`
 
-正常验证、事务导入；成功后 ACK 推进 1。
+正常验证、事务导入；成功后 ACK 推进。
 
 ### `batchSequence <= ackSequence`
 
-视为重试 / 重放。Hub 必须验证该 sequence 对应已提交 Batch 的稳定摘要：
+视为重试 / 重放。Hub 使用已保存 Sequence Receipt 验证：
 
-- 内容一致 -> 返回已有 ACK；
-- 同一 sequence 但内容不同 -> `SEQUENCE_REUSE_CONFLICT`，拒绝。
+- contentHash 一致 -> 返回已有 ACK；
+- 同一 sequence 但 contentHash 不同 -> `SEQUENCE_REUSE_CONFLICT`。
 
 ### `batchSequence > ackSequence + 1`
 
-出现 gap：
+返回：
 
 ```text
 SEQUENCE_GAP
 expected = ackSequence + 1
 ```
 
-Hub 不缓存未来 Batch，Node 从 expected sequence 恢复。
+Hub 不缓存未来 Batch。
 
-因此 Alpha 不需要复杂乱序窗口。
+## 10. Batch Commit Ambiguity
 
-## 7. Bootstrap 是收敛扫描，不是假装一致性快照
+Batch 第一次可能发网前必须冻结：
 
-Node 第一次连接已有历史数据时执行 Bootstrap。
+```text
+sequence
+batchId
+body
+contentHash
+```
 
-Bootstrap 不要求冻结本机采集，也不声称是数据库某一瞬间的 MVCC Snapshot：
+如果发生：
+
+```text
+timeout
+connection reset
+Hub crash / ACK response lost
+```
+
+Node 必须假设“可能已提交”，只能：
+
+```text
+resend exact same batch
+or handshake/status query ACK
+```
+
+不能使用同 sequence 重新序列化另一份内容。
+
+如果 Hub 明确在事务前拒绝并返回：
+
+```text
+committed = false
+```
+
+例如 `BATCH_TOO_LARGE`，Node 才能按返回规则重切该 expected sequence 的待同步内容。
+
+## 11. Policy 收紧与 Stream Rollover
+
+Policy 收紧必须立即停止新的旧 Policy 出站请求。
+
+如果存在“提交结果不确定”的旧 Policy Batch，而新 Policy 已禁止其中正文：
+
+- Node 不得为了填 sequence gap 继续发送旧敏感内容；
+- 旧 stream 进入安全暂停；
+- 使用已认证 Stream Rollover 建立新 stream；
+- existing Replica Generation 保留；
+- 新 stream 按新 Policy 执行 Reconciliation。
+
+Stream Rollover 不是 Re-pair，也不改变 nodeId / hubId / Node Key。
+
+## 12. Bootstrap 是收敛扫描，不是假装一致性快照
+
+第一次需要补传历史时：
 
 ```text
 Pair
@@ -197,22 +358,46 @@ Pair
  -> Incremental
 ```
 
-原因：AgentLens 在 Bootstrap 期间仍需 Local-first 持续采集。
-
 规则：
 
-- Bootstrap 按 Entity Scope / Dependency Contract 分批扫描当前允许复制的 Canonical State；
-- Bootstrap Batch 使用同一 stream sequence；
-- 网络中断后从 Hub ACK 恢复，不从零开始；
-- Bootstrap 期间产生的新变化进入本地待同步状态 / Outbox；
-- Bootstrap Complete 之后必须执行一次 Reconciliation；
-- Reconciliation 修正 Bootstrap 扫描过程中发生的新增 / 更新；
-- 删除不能通过“扫描不到”推断，仍依赖 Tombstone；
-- 完成 Reconciliation 后进入稳定 Incremental。
+- 不冻结 Local Capture；
+- 按 History Scope 与 Entity Dependency 分批扫描；
+- 使用同一 stream sequence；
+- 网络中断从 Hub ACK 恢复；
+- Bootstrap 期间的新变化进入待同步状态；
+- Complete 后必须 Reconcile；
+- 删除仍依赖 Tombstone；
+- `from-now` 必须遵守持久 History Boundary，不因全量扫描偷偷补传旧事实。
 
-这样目标是最终收敛，而不是为了一个个人多机 Hub 引入数据库级分布式 Snapshot。
+## 13. Replica Generation / Re-bootstrap
 
-## 8. Incremental 与 Reconciliation
+普通 Reconciliation：
+
+```text
+absence != delete
+```
+
+显式 Re-bootstrap 创建 staged `replicaGenerationId`：
+
+```text
+G1 active
+ -> G2 staged bootstrap
+ -> G2 mandatory reconciliation
+ -> validate complete
+ -> atomic activate G2
+ -> retire G1
+```
+
+在 G2 激活前：
+
+- G1 仍是可查询 active Replica；
+- G2 不能混入用户正式 Projection；
+- Local Capture 继续；
+- Re-bootstrap 失败不能把半成品当 active。
+
+只有完整 Generation 激活时，旧 Generation 中存在而新完整 Generation 不存在的 origin entity 才可以作为重建结果清理；普通 scan absence 永远不能制造 Tombstone。
+
+## 14. Incremental 与 Reconciliation
 
 Incremental Fast Path：
 
@@ -225,27 +410,29 @@ Canonical Change
 
 但 Event 不是 Durable Fact。
 
-Reconciliation 必须定期 / 按恢复条件从 Canonical Store 计算可复制 Entity 的稳定 `contentHash`，与本地 Replication State 对账：
+Reconciliation：
 
 ```text
 Canonical Store
- -> replication serialization
- -> policy transform
- -> entity content hash
- -> compare last acknowledged hash
- -> repair missing / stale pending state
+ -> History Boundary
+ -> Replication Policy
+ -> Wire serialization
+ -> entity contentHash
+ -> compare acknowledged state
+ -> repair pending / stale state
 ```
 
-触发 Reconciliation 的最小条件：
+最小触发：
 
 - Bootstrap 完成后；
-- Daemon 异常退出后恢复；
-- Hub ACK 与 Node 本地 Cursor 不一致；
-- Replication Policy 扩大后用户明确允许历史补传；
-- 用户显式执行 repair / resync；
-- 周期性低频完整性校准。
+- Daemon 异常退出后；
+- Hub ACK 与 Node Cursor 不一致；
+- 用户确认扩大历史授权；
+- Stream Rollover 后；
+- 用户显式 repair / resync；
+- 周期性低频校准。
 
-Alpha 不承诺 Exactly-once；正式语义为：
+正式语义：
 
 ```text
 at-least-once transport
@@ -254,7 +441,7 @@ at-least-once transport
 + reconciliation
 ```
 
-## 9. Replication Entity DTO
+## 15. Replication Entity DTO
 
 Wire Entity 不直接等于 Core Interface 或 SQLite Row。
 
@@ -272,29 +459,20 @@ interface ReplicationEntityEnvelope {
 }
 ```
 
-`entityVersion` 是某类 Entity DTO 的协议 Schema 版本，不是 SQLite migration。
-
-Node-scoped Entity：
+Node-scoped：
 
 - `originEntityId` 必填；
 - Hub 通过 `nodeId + entityType + originEntityId` 计算 Replica Key。
 
-Shared Entity：
+Shared：
 
 - `sharedKey` 必填；
-- `originEntityId` 仍保留，用于 Shared Assertion provenance；
+- `originEntityId` 保留 provenance；
 - Hub 按 Shared Identity / Merge Contract 处理。
 
-## 10. Omitted / Redacted 必须是显式状态
+## 16. Omitted / Redacted 必须显式
 
-Replication Policy 不能用 `null` 同时表达：
-
-- 原始字段就是 null；
-- 本机未采集；
-- 本次不允许复制；
-- 已脱敏。
-
-Wire DTO 对受策略控制字段使用显式值语义，例如：
+受 Policy 控制字段不能用 `null` 混淆多种含义：
 
 ```ts
 type ReplicatedValue<T> =
@@ -303,23 +481,30 @@ type ReplicatedValue<T> =
   | { state: 'redacted'; value?: T }
 ```
 
-Hub Projection 必须能区分“事实为空”与“Hub 没有获得该正文”。
+Hub 必须能区分：
 
-## 11. Identity Promotion
+- 原事实为空；
+- 本机没采集；
+- 本机有但不允许复制；
+- 已脱敏。
 
-Promotion 与普通 Entity 可以出现在同一 Batch，但 Importer 必须在 Dependency DAG 的 identity 阶段先处理。
+字段级边界见 `HUB-DATA-EXPOSURE-MATRIX.md`。
 
-同一 stream 中 Promotion：
+## 17. Identity Promotion
+
+Promotion 与普通 Entity 可以出现在同一 Batch，但 Importer 必须在 Dependency DAG identity 阶段优先处理。
+
+必须满足：
 
 - 幂等；
 - 单向 `node-scoped -> shared`；
-- Promotion 后旧 origin Ref 永久通过 Alias 解析至 Shared Key；
+- origin / Shared Identity provenance 可追溯；
 - 同 origin 晋升到另一个 Shared Key 属于冲突；
-- 旧 Batch 重试仍必须解析到晋升后的 Shared Entity。
+- 旧 Batch 重试不能重新制造重复 Identity。
 
-详细规则见 `HUB-REPLICATION-CONTRACT.md`。
+Hub 本机 Conditional Shared Entity 的参与规则见 State Contract；不要求通过 HTTPS 自我复制。
 
-## 12. Tombstone
+## 18. Tombstone
 
 概念结构：
 
@@ -337,24 +522,25 @@ interface ReplicationTombstone {
 规则：
 
 - Node-scoped 删除针对 origin identity；
-- Shared 删除实际是撤回该 Node 的 Shared Assertion；
-- Hub 不因为 Shared Assertion Withdrawal 直接删除仍被其他 Node 断言 / 引用的 Shared Entity；
+- Shared 删除是撤回该 Node 的 Shared Assertion；
+- 其他 Node 仍断言 / 引用时不能删除 Shared Identity；
 - Tombstone 必须持久化并参与 Reconciliation；
-- Alpha 不通过“当前扫描中缺失”推断删除。
+- Tombstone GC 遵守 `HUB-REPLICATION-STATE-CONTRACT.md`；
+- 普通扫描缺失不能制造 Tombstone。
 
-## 13. 错误模型
+## 19. 错误模型
 
-所有协议错误返回稳定 `code`，不让客户端依赖英文 message。
-
-概念：
+所有 Remote Protocol Error 返回稳定 `code`，客户端不依赖英文 message。
 
 ```ts
 interface ReplicationError {
   code: string
   message: string
   retryable: boolean
+  committed?: boolean
   expectedSequence?: number
   conflictId?: string
+  retryAfterMs?: number
   suggestedAction?: string
 }
 ```
@@ -365,36 +551,50 @@ Alpha 至少定义：
 | --- | --- | --- |
 | `AUTH_INVALID_SIGNATURE` | 否 | Node 请求签名无效 |
 | `AUTH_NODE_REVOKED` | 否 | Node 已撤销 |
-| `AUTH_HUB_IDENTITY_MISMATCH` | 否 | Hub 身份 / Pin 不匹配 |
+| `AUTH_CLOCK_SKEW` | 否 | 请求时间超出允许窗口 |
 | `PROTOCOL_UNSUPPORTED` | 否 | 无共同协议版本 |
-| `PROTOCOL_CAPABILITY_REQUIRED` | 否 | Batch 使用未协商能力 |
+| `PROTOCOL_CAPABILITY_REQUIRED` | 否 | 使用未协商能力 |
 | `STREAM_UNKNOWN` | 否 | stream 不存在 / 不属于 Node |
 | `STREAM_FROZEN` | 否 | stream 已被冻结 |
 | `SEQUENCE_GAP` | 是 | 缺少前序 Batch |
-| `SEQUENCE_REUSE_CONFLICT` | 否 | 同一 sequence 内容变化 |
+| `SEQUENCE_REUSE_CONFLICT` | 否 | 已提交 sequence 内容变化 |
 | `BATCH_TOO_LARGE` | 是 | 需要缩小批次 |
-| `BATCH_INVALID_REFERENCE` | 否 | Typed Ref 不合法 / 缺依赖 |
-| `BATCH_POLICY_INVALID` | 否 | 出站数据违反声明策略 |
+| `ENTITY_TOO_LARGE` | 否 | 单 Entity 超出协议限制 |
+| `BATCH_INVALID_REFERENCE` | 否 | Typed Ref / 依赖非法 |
+| `BATCH_POLICY_INVALID` | 否 | Wire 内容违反声明 Policy |
 | `IDENTITY_NODE_CONFLICT` | 否 | 同 nodeId 疑似被两个活跃实例使用 |
 | `IDENTITY_PROMOTION_CONFLICT` | 否 | Promotion 目标冲突 |
 | `SHARED_MERGE_CONFLICT` | 否 | Shared invariant 无法合并 |
 | `SERVER_BUSY` | 是 | Hub 暂时不可处理 |
+| `SERVER_STORAGE_PRESSURE` | 是 | Hub 存储压力，需要释放容量 |
 | `INTERNAL_ERROR` | 是 | Hub 内部临时错误；不得暴露敏感详情 |
 
-不可重试错误不等于删除 Outbox；Node 应暂停该 stream 并展示明确诊断，等待用户处理 / 升级 / 修复。
+TLS / SPKI / Hub Identity 在收到可信服务器响应之前就失败时，属于 Node 本地 Transport / Security Diagnostic，不应伪装成“Hub 返回的协议错误”。例如：
 
-## 14. 请求签名输入
+```text
+LOCAL_TLS_VALIDATION_FAILED
+LOCAL_HUB_IDENTITY_MISMATCH
+LOCAL_NETWORK_UNREACHABLE
+```
 
-TLS 之外，已配对 Node 对需要认证的 Replication 请求使用 Node Private Key 签名。
+不可重试 Remote Error 不等于删除 Outbox；Node 应 blocked / paused 并等待用户处理。
 
-为避免 JSON 字段顺序导致签名不稳定，签名针对原始 HTTP Body 的 SHA-256，而不是客户端自行 stringify 后比较对象。
+## 20. 请求签名输入
 
-概念签名输入：
+TLS 之外，已配对 Node 对认证请求使用 Node Private Key 签名。
+
+签名必须绑定身份 Header，不能只签 Body，否则攻击者可能把合法 Body 重新标成另一个 Stream / Node 请求。
+
+R1 Canonical Signature Input：
 
 ```text
 agentlens-r1\n
 <HTTP_METHOD>\n
 <PATH>\n
+<HUB_ID>\n
+<NODE_ID>\n
+<REPLICATION_STREAM_ID>\n
+<KEY_ID>\n
 <TIMESTAMP>\n
 <NONCE>\n
 <SHA256_RAW_BODY>
@@ -403,6 +603,7 @@ agentlens-r1\n
 请求携带：
 
 ```text
+Hub-Id
 Node-Id
 Replication-Stream-Id
 Key-Id
@@ -413,55 +614,87 @@ Signature
 
 Hub 验证：
 
+- Hub-Id 是否就是当前 Hub；
 - Node / Key 是否 active；
-- timestamp 在允许时钟偏差范围内；
-- nonce 未在重放窗口内使用；
-- body hash 与签名一致；
-- stream / node ownership 一致。
+- timestamp 是否在允许窗口；
+- nonce 是否未重放；
+- body hash / signature 是否匹配；
+- stream / node / hub ownership 是否一致。
 
-具体密钥生命周期与 TLS Pinning 见 `HUB-PAIRING-SECURITY.md`。
+## 21. Pairing Request 的 Key Possession
 
-## 15. Transport Surface
+Pairing Request 虽然尚未拥有长期 Hub 注册身份，但 Node 已在本地生成新 Key Pair。
+
+因此 Pairing Request 必须包含对自身关键字段的 `nodeProof`，证明请求者持有 `nodePublicKey` 对应 Private Key，避免只提交一个任意 Public Key 字符串。
+
+Pairing Secret 提供“用户授权”，`nodeProof` 提供“Node Key possession”，两者职责不同。
+
+## 22. Transport Surface
 
 Replication 使用独立 HTTPS Surface，不复用本机 `/api/v1/*`。
 
-Alpha 逻辑路由建议：
+Alpha 逻辑路由：
 
 ```text
 POST /replication/v1/pair
 POST /replication/v1/handshake
+POST /replication/v1/streams/rollover
 POST /replication/v1/batches
 GET  /replication/v1/status
 ```
 
-路由是 Wire Contract；监听地址 / 端口属于部署配置，不在本协议写死。
+- `/pair` 使用 Pairing Secret + Node Key Possession，不依赖已注册 Node Signature；
+- 其余路由均需长期 Node Request Signature；
+- `status` 不能泄露其他 Node 的控制面信息。
 
-现有 Web API 继续保持：
+监听地址 / 端口属于部署配置，不在 Wire Protocol 写死。
+
+现有 Web API 继续：
 
 ```text
 127.0.0.1:56789
 ```
 
-禁止通过 Hub 功能顺手把本机无认证 API 暴露到网络。
+## 23. Batch 大小、流控与压缩
 
-## 16. Batch 大小与流控
-
-Alpha 不提前写死一个永久最大值，但协议必须允许 Hub 返回限制：
+Hub 在 Handshake / Status 可以返回：
 
 ```text
 maxBatchBytes
+maxEntityBytes
 maxEntitiesPerBatch
 recommendedBatchBytes
 retryAfterMs
 ```
 
-Node 应优先按字节大小而不是只按 Entity 数量切批，因为 Prompt / Tool payload 大小差异很大。
+要求：
 
-超限返回 `BATCH_TOO_LARGE`，Node 缩小批次后重试同一待同步内容，并生成新的 sequence 之前不得跳过失败 sequence。
+- Node 优先按字节而非只按 Entity 数切批；
+- HTTP Surface 在完整 parse 前限制 Body Size；
+- 单 Entity 超限返回 `ENTITY_TOO_LARGE`；
+- `SERVER_STORAGE_PRESSURE` 不影响 Node 本地 Pipeline。
 
-## 17. 状态机
+R1 基础能力不要求 HTTP Compression。以后若新增 Compression Capability，必须同时限制压缩体和解压后字节数，防止压缩炸弹。
 
-Node Replication 状态至少包括：
+## 24. Clock Skew
+
+Security Timestamp 默认允许有限时钟偏差；具体策略见安全文档。
+
+Handshake Response 提供 `serverTime`，Node 可以估算 Clock Skew。
+
+重要：
+
+```text
+Security Timestamp 可接受
+!=
+跨机器业务事件具有精确全序
+```
+
+Hub 不使用 receive / replicated time 覆盖 `occurredAt / capturedAt`。跨 Node 排序与 tie-break 规则见 State Contract。
+
+## 25. Node Replication 状态机
+
+至少包括：
 
 ```text
 unpaired
@@ -471,40 +704,54 @@ bootstrapping
 reconciling
 synced
 degraded
+paused
 blocked
 revoked
 ```
 
-关键转换：
+`paused` 用于用户 / Policy 安全暂停，例如旧 Policy ambiguous Batch 等待 Stream Rollover。
+
+网络暂时不可达属于 `degraded`；协议 / 身份冲突属于 `blocked`；本地 Canonical Pipeline 始终独立。
+
+## 26. Sequence Receipt Retention
+
+Hub 不需要永久保存完整 Batch Body，但至少为 active / 可重放 Stream 保存：
 
 ```text
-unpaired -> paired -> handshaking
-handshaking -> bootstrapping | reconciling | synced
-bootstrapping -> reconciling -> synced
-synced -> degraded -> synced
-any active -> blocked      # protocol/conflict/manual intervention
-any active -> revoked
+nodeId
+streamId
+sequence
+contentHash
+committedAt
 ```
 
-网络暂时不可达属于 `degraded`，不是 `blocked`。本地 Canonical Pipeline 不受这些状态影响。
+用于验证 `same sequence + same content`。
 
-## 18. R1 验收不变量
+Receipt、Alias、Tombstone、Generation 等保留规则见 State Contract。
+
+## 27. R1 验收不变量
 
 实现 R1 时至少验证：
 
-- 重试同一已 ACK Batch 不重复写 Canonical Entity；
-- 同 sequence 不同内容被拒绝；
-- sequence gap 不被 Hub 静默跳过；
-- Bootstrap 中持续产生新 Observation，最终经过 Reconciliation 后 Hub 收敛；
-- Daemon 在 Canonical Commit 后、Outbox Fast Path 前崩溃，恢复后 Reconciliation 能补齐；
-- 重新 Pair 后新 stream 可以从 sequence 1 开始而不与旧 stream 混淆；
-- policy omitted 与真实 null 在 Hub 可区分；
-- Promotion 后旧 Batch 重试不会重新创建旧 Node-scoped Entity；
-- Shared Assertion Withdrawal 不误删其他 Node 的 Shared Entity；
-- 签名重放、Nonce 重用、stream/node 不匹配被拒绝；
-- Protocol 不兼容只阻塞 Replication，不影响 Node 本地采集与 Web。
+- Pairing Receipt 可由 Hub Identity Public Key 验证；
+- Handshake `serverProof` 错误时 Node 不继续发送数据；
+- 修改 Node-Id / Stream-Id Header 会导致 Request Signature 失败；
+- 重试同一已 ACK Batch 不重复写；
+- 同已提交 sequence 不同内容被拒绝；
+- sequence gap 不被静默跳过；
+- ambiguous commit 只重试同一 immutable Batch；
+- Policy 收紧后旧敏感 ambiguous Batch 不被继续重发，可通过 Stream Rollover 恢复；
+- Bootstrap 中持续采集后能通过 Reconciliation 收敛；
+- `from-now` 不会被 Reconciliation 绕过；
+- Re-bootstrap staged Generation 未完成时不替换 active Generation；
+- Daemon 在 Canonical Commit 后、Fast Path 前崩溃能被 Reconciliation 补齐；
+- policy omitted 与真实 null 可区分；
+- Shared Assertion Withdrawal 不误删其他 Node；
+- Nonce、Clock Skew、stream/node/hub 不匹配被拒绝；
+- Protocol 不兼容只阻塞 Replication，不影响本地采集 / Web；
+- Clock Skew 不会导致 Hub 改写业务事件时间。
 
-## 19. 当前非目标
+## 28. 当前非目标
 
 R1 不解决：
 
@@ -515,4 +762,5 @@ R1 不解决：
 - 分布式事务 / Exactly-once；
 - Remote Web Session；
 - Server push 控制 Node；
-- SQLite / PostgreSQL Schema 传输。
+- SQLite / PostgreSQL Schema 传输；
+- 基础协议强制压缩。
