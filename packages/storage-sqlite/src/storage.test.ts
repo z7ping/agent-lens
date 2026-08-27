@@ -8,12 +8,12 @@ async function createStorage() {
   return storage
 }
 
-test('SQLite storage migrates to schema version 8 and exposes required tables', async () => {
+test('SQLite storage migrates to schema version 9 and exposes required tables', async () => {
   const storage = await createStorage()
   try {
     const health = await storage.health()
     assert.equal(health.ok, true)
-    assert.equal(health.schemaVersion, 8)
+    assert.equal(health.schemaVersion, 9)
 
     const rows = storage.db.prepare(`
       SELECT name FROM sqlite_master
@@ -53,6 +53,7 @@ test('SQLite storage migrates to schema version 8 and exposes required tables', 
       'replication_batch_items',
       'replication_reconciliation_cursors',
       'replication_canonical_changes',
+      'replication_change_progress',
     ]) {
       assert.equal(tables.has(table), true, `missing table ${table}`)
     }
