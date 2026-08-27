@@ -330,26 +330,46 @@ OpenCode / Pi 不为实时采集额外安装 Native Hook，继续使用原生数
 
 本文不代表已经完成 npm Publish 或 GitHub Release；发布仍必须由仓库所有者明确触发。
 
-## 13. 多机 Hub（架构已定，尚未实现）
+## 13. 多机 Hub（设计已收口，功能尚未实现）
 
-ADR-0007 已在实现前复核修订。当前代码仍**没有**实现 Node Identity、Replication Protocol、Bootstrap、Remote Ingest、Pairing、TLS 或多机 Web；本节只记录已确定的实现边界。
+ADR-0007 与 Hub 专项 Contract / Protocol / Security / Operations / UX / Test 文档已经完成实现前收口，但当前代码仍**没有**实现 Node Identity、Replication Packages、Storage Migration、Pairing / TLS、Wire Endpoint、History Boundary、Bootstrap / Outbox、Remote Import、Replica Generation 或多机 Web。
 
-已确定：
+Hub 文档入口：`docs/1.0/HUB-DESIGN-INDEX.md`。
 
-- 每个 AgentLens 实例都是一个持久 Node；Standalone / 普通接入节点 / Hub / Pure Hub 是 `localCapture`、`replicationUpstream`、`hubAccept` 的能力组合，不拆成两套程序，也不在 Core 中做四个互斥领域角色；
-- Hub 保持 Local-first：本机 Canonical Pipeline 独立工作，Hub 是 Canonical Replica + Aggregator；
-- 当前本机 Canonical ID **不直接作为 Hub 全局主键**。机器作用域实体通过 `nodeId + entityType + originEntityId` 形成确定性 Replica Key，避免当前 Host ID 算法在跨机环境中碰撞；
-- `nodeId` 使用持久 UUID；现有 Host / Canonical ID 不因为 Hub 立即整库迁移，后续若修改 Host Identity 必须单独做 Contract Review / Migration；
-- Shared Canonical Entity 使用字段级确定性 Merge Contract，不采用通用 last-write-wins，也不要求整实体字节级完全一致；
-- Alpha 固定单 Hub 星型拓扑，一个 Node 最多一个 upstream Hub，不支持 Hub Federation、级联 Hub 或一个 Node 同步多个 Hub；
-- 第一次接入必须先做可恢复的 Bootstrap Sync，再进入 Incremental Sync；
-- Durable Outbox 不能只依赖 Cordis Event，必须有 Canonical Reconciliation 查漏补缺；删除依赖持久 Tombstone；
-- Hub 使用统一 Canonical Store，不按 Node 分数据库；Replication Metadata 属于独立 Control Plane，不写成 Agent 行为 Observation；
-- Capture Policy 与 Replication Policy 分离。Hub 复制至少区分 `metadata-only / redacted / full`，复制策略只能进一步收紧本机已经持久化的数据，不能恢复 Capture Policy 已经关闭 / 脱敏的正文；
-- Node 只主动向 Hub 发起 HTTPS 出站连接；现有 `127.0.0.1:56789` Local Surface 不直接暴露到网络；
-- Pairing / TLS / Node Key / Hub Identity 与远程 Web 登录边界分离；Alpha 默认不开放远程 Web，也不提供远程执行能力；
-- AgentLens Version、Replication Protocol、Storage Schema 独立演进；协议不兼容只暂停同步，不阻塞 Node 本地采集。
+当前确定边界：
 
-当前建议实现顺序：Node Identity + capability-driven Composition Root -> Replica Key / Shared Merge Contract -> Replication Wire DTO / Handshake -> Replication Policy -> Bootstrap -> Durable Outbox + Reconciliation -> Hub Registry / Remote Ingest -> Pairing / TLS -> Projection Scope -> Web 多机视图 -> Tombstone。
+- 每个 AgentLens 实例都是持久 Node；Standalone / 普通接入节点 / Hub / Pure Hub 是能力组合，Alpha 只允许四个正式 Profile，不允许 `replicationUpstream + hubAccept` 形成级联 Hub；
+- Hub Local-first，本机 Canonical Pipeline 独立；Hub 是 Replica + Aggregator；
+- 本机 Canonical ID 不直接作为 Hub 全局主键。机器作用域实体使用 `nodeId + entityType + originEntityId` 的确定性 Replica Namespace；现有 Host / Canonical ID 不因 Hub 立即整库迁移；
+- Shared Entity 必须显式拥有 Shared Identity + deterministic Merge Contract；未知 Entity 默认 Node-scoped；Project / AssetDefinition 是 Conditional Shared，ToolDefinition Alpha Node-scoped；
+- Hub 本机不走 HTTPS 自我复制，但本机 origin 必须能参与 Shared Project / Asset 聚合；
+- Replication Policy 与 History Scope 分离：`metadata-only / redacted / full` 回答“传什么”，`from-now / include-existing` 回答“是否补已有历史”；
+- `from-now` 是持久 History Boundary，Reconciliation 不能绕过；新事实仍允许携带所需旧身份 / FK dependency closure；
+- `metadata-only` 不发 Prompt / Tool 正文，并默认隐藏完整 Workspace 本机路径，但仍可能发送项目 / 仓库、Agent / Tool、时间等必要元数据，因此不是匿名模式；
+- Durable Replication 采用 at-least-once + immutable in-flight Batch + contiguous Sequence/ACK + deterministic Hash + idempotent Import + Canonical Reconciliation；Cordis Event 只做 fast path；
+- ambiguous commit 不能用同 sequence 换内容重发。Policy 收紧后遇到旧策略 ambiguous Batch 时必须安全暂停，通过 authenticated Stream Rollover + Reconciliation 恢复；
+- 普通 Scan absence 不表示删除；Tombstone 是持久删除事实。显式 Re-bootstrap 使用 staged Replica Generation，完成 Bootstrap + Reconcile + validate 后才原子切换 active Generation；
+- Hub 使用统一 Canonical Store，不按 Node 分库；Stream / Cursor / Sequence Receipt / Generation / Alias / Shared Assertion / Conflict / Tombstone 属于 Replication Control Plane；
+- Pairing 使用一次性 Secret + Node Key Possession；Hub Identity、Node Identity、TLS Identity 分离；Hub Identity 需要签名 Pairing Receipt / Handshake serverProof，长期 Request Signature 绑定 Hub / Node / Stream / Key / Request / Nonce / Body；
+- Clone Detection 不能仅因 IP / hostname / metadata 变化冻结合法 Node；真正并发 runtime instance / sequence divergence 等强冲突才触发 hard conflict；
+- Node 只主动向 Hub 发起 HTTPS 出站连接；现有 `127.0.0.1:56789` Local Surface 不暴露网络；Alpha 不内建 Remote Web Login 或远程执行能力；
+- 跨 Node 时间只提供 deterministic best-effort 排序，不使用 `replicatedAt` 覆盖 `occurredAt / capturedAt`，不声称毫秒级跨机因果全序；
+- npm / Desktop 共用同一默认数据根下的 nodeId、Hub Identity、Policy、History Boundary、Pairing Relationship、Stream / Generation State；切换 Runtime owner 不重建多机身份；
+- AgentLens Version、Replication Protocol、Storage Schema 独立演进；协议不兼容只暂停同步，不阻塞本地采集。
 
-完整决策、被拒绝方案和验证标准见 `docs/adr/0007-multi-machine-hub-local-first-canonical-replication.md`。
+当前文档计划的未来实施顺序：
+
+```text
+H1 Node Identity / Composition
+ -> H2 Replication Core
+ -> H3 R1 Protocol / Identity Proof
+ -> H4 Policy / History / Outbox / Reconcile
+ -> H5 Hub Import / Replica Generation
+ -> H6 Security / Surface
+ -> H7 E2E Sync
+ -> H8 Web / CLI
+ -> H9 Delete / Identity / Recovery Ops
+ -> H10 Performance / Hardening
+```
+
+以上全部仍是“已确定设计”，不是“已实现功能”。未来每完成一个阶段再按真实代码 / 测试结果更新本文。
