@@ -57,6 +57,70 @@ AGENT_LENS_ENV_CAPTURE=off
 
 详细规则见 `docs/1.0/CAPTURE-POLICY.md`。策略在 Daemon 启动时读取，修改后需要重启。策略只控制后续采集 / 写入，不会静默清理此前已持久化的正文或资产；历史清理必须通过显式的数据保留 / 清理操作完成。
 
+## Hub 多机复制安全边界
+
+ADR-0007 规定 Hub 继续保持 Local-first，并且 **Replication Surface 与现有 Local HTTP Surface 完全分离**。
+
+Alpha Hub 的安全拓扑：
+
+```text
+Node
+  -> outbound HTTPS
+  -> Hub Replication Surface
+
+Local Web / API
+  -> 127.0.0.1:56789
+```
+
+关键规则：
+
+- 不得为了 Hub 把现有 `127.0.0.1:56789` 改为 `0.0.0.0`；
+- Node 只主动向 Hub 建立出站连接，Hub 不反向访问 Node；
+- Alpha 默认不开放远程 Web，不把 Replication Surface 顺带做成网页登录入口；
+- Pairing 使用短期一次性凭证，成功后失效；
+- 长期 Node 身份使用非对称密钥，Node 私钥不得上传 Hub；
+- Hub Replication Surface 必须使用 TLS；自签场景必须通过 Hub Identity / SPKI Fingerprint 建立显式信任；
+- 未配对、已撤销或签名验证失败的 Node 不能上传数据；
+- Replication Batch 应绑定 Node Identity、Sequence、时间与 Payload Hash，配合幂等与 Cursor 限制伪造和重放；
+- Hub Control Plane 只负责 Pair / Register / Revoke / Status / Protocol / Replication Diagnostics，不提供远程 Shell、Agent 启动、Hook 修改、Skill 安装或系统命令执行；
+- 1.0 Alpha 固定单 Hub 星型拓扑：一个 Node 最多绑定一个 upstream Hub，不支持 Hub Federation、级联 Hub 或多 Hub 同步。
+
+### Node Identity 与复制数据根
+
+`nodeId` 表示一个 AgentLens 实例 / 数据根的持久身份，不等同于 hostname。
+
+复制整个 `~/.agent-lens/1.0/` 数据根到另一台机器，可能同时复制 Node Identity 和私钥。两个同时活跃实例不得共享同一 `nodeId` / Node Private Key；Hub 发现同一身份出现并发、互相矛盾的主机元数据或复制状态时，应视为安全 / 运维异常并拒绝静默合并。
+
+后续 Node Identity Reset / Re-pair 必须是显式操作，不能通过随机自动换 ID 掩盖身份复制问题。
+
+### Capture Policy 与 Replication Policy 不是同一权限
+
+“允许写入本机数据库”不等于“允许上传到 Hub”。正式数据路径是：
+
+```text
+Native Source
+  -> Capture Policy
+  -> Local Canonical Store
+  -> Replication Policy
+  -> Hub
+```
+
+Replication Policy 只能比本机 Capture Policy 更严格，不能恢复已经关闭或脱敏的正文。
+
+Alpha 至少区分：
+
+```text
+metadata-only
+redacted
+full
+```
+
+其中 `metadata-only` 不上传 Prompt / Tool 正文；`redacted` 在网络出站前再次脱敏；`full` 也不能关闭明确凭据保护。
+
+首次连接 Hub 必须让用户明确知道当前复制范围。修改为更宽松的 Replication Policy 时，不应静默把过去未授权的完整历史自动补传；收紧策略也不代表 Hub 已有副本会被自动清理。历史补传、Tombstone、Purge 都必须是独立且可解释的动作。
+
+详细规则见 `docs/1.0/CAPTURE-POLICY.md` 与 `docs/adr/0007-multi-machine-hub-local-first-canonical-replication.md`。
+
 ## 本机数据
 
 典型目录：
@@ -75,7 +139,8 @@ AGENT_LENS_ENV_CAPTURE=off
 - 把该目录提交到 Git；
 - 把数据库、Inbox、真实 Session JSONL 或 Hook 输入直接上传到 Issue；
 - 在截图或日志中暴露 API Key、Token、Cookie、Authorization、源代码或本机路径；
-- 将 `127.0.0.1:56789` 通过代理或端口映射暴露到公网 / 不可信局域网。
+- 将 `127.0.0.1:56789` 通过代理或端口映射暴露到公网 / 不可信局域网；
+- 在没有明确检查 Replication Policy 的情况下，把完整 AgentLens 数据目录或 Hub 导出作为普通日志分享。
 
 ## Hook 配置
 
@@ -89,7 +154,12 @@ AGENT_LENS_ENV_CAPTURE=off
 - 禁用来源仍执行 Detect / History / Runtime / Asset 或继续写 Durable Inbox；
 - 敏感字段清洗明显失效；
 - 采集隐私档位可以被 Source 绕过并把关闭/脱敏范围的原始正文写入 SQLite；
-- Daemon 可以从非 loopback 网络访问；
+- Daemon 可以从非 loopback 网络访问现有 Local HTTP Surface；
+- Hub Replication Surface 未经 Pair / TLS / Node 身份验证即可写入；
+- Replication Policy 可以恢复或上传 Capture Policy 已经禁止的正文；
+- `metadata-only` 实际上传 Prompt / Tool 正文或 Raw SourceRecord Payload；
+- 已撤销 Node 仍可继续上传；
+- Hub 能通过 Replication Control Plane 反向执行 Node 系统命令；
 - 静态资源存在路径遍历或任意文件读取；
 - 数据库 / Session / Prompt 被未授权进程或网络接口暴露。
 
