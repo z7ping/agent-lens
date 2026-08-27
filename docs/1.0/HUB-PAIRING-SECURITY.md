@@ -1,16 +1,12 @@
 # AgentLens 1.0 Hub Pairing 与安全边界
 
 更新日期：2026-08-27  
-状态：Alpha 安全设计，尚未实现  
-相关文档：
-- `docs/adr/0007-multi-machine-hub-local-first-canonical-replication.md`
-- `docs/1.0/HUB-REPLICATION-CONTRACT.md`
-- `docs/1.0/HUB-REPLICATION-STATE-CONTRACT.md`
-- `docs/1.0/HUB-REPLICATION-PROTOCOL.md`
-- `docs/1.0/HUB-DATA-EXPOSURE-MATRIX.md`
-- `SECURITY.md`
+状态：**Alpha 安全设计冻结，尚未实现**  
+上位设计：`docs/1.0/HUB-DESIGN.md`  
+协议语义：`docs/1.0/HUB-REPLICATION-PROTOCOL.md`  
+仓库总安全边界：`SECURITY.md`
 
-本文定义 Hub Replication 的身份、配对、TLS、密钥、Hub 身份证明、撤销、重放保护、Clone Detection 与敏感数据边界。它不为现有本机 Web API 增加网络认证，也不把 Hub 变成远程管理平台。
+本文是 Hub 专项安全知识的唯一长期入口，负责身份、配对、TLS、密钥、重放保护、Clone Detection、数据出站边界与 trusted-node 限制。它不为现有本机 Web API增加网络认证，也不把 Hub 变成远程管理平台。
 
 ## 1. 威胁模型
 
@@ -18,18 +14,16 @@ Alpha 至少防御：
 
 - 未配对机器上传；
 - 已撤销 Node 继续上传；
-- 伪造发现 / endpoint 诱导 Node；
+- 伪造 endpoint / discovery 诱导 Node；
 - 中间人替换自签 Hub；
-- endpoint 相同但服务器已不是原 Hub；
-- 请求重放；
-- 合法 Body 被改挂其他 Node / Stream Header；
-- 克隆数据根造成相同 Node Identity 并发；
-- 请求篡改；
-- Pairing Secret 被长期使用；
-- 私钥 / Secret 泄入 Canonical、日志、备份；
+- endpoint 相同但服务器已经不是原 Hub；
+- 请求重放 / Header-Body 篡改；
+- Pairing Secret 被长期复用；
+- 克隆数据根造成相同 Node Identity 真并发；
+- 私钥 / Secret 泄入 Canonical、日志或普通备份；
 - 已配对但被攻陷 Node 的资源滥用。
 
-Alpha 不声称防御已经完全控制 Node / Hub OS 管理员权限的攻击者，也不把已配对 Node 的业务事实声明视为远程证明（Remote Attestation）。
+Alpha 不声称防御已经完全控制 Node / Hub OS 管理员权限的攻击者，也不是 Remote Attestation 系统。
 
 ## 2. 三类身份必须分离
 
@@ -40,117 +34,277 @@ nodeId = persistent random UUID
 Node key pair = long-term request identity
 ```
 
-nodeId 不等于 hostname / Host.id / Pairing。
+nodeId 不等于 hostname / Host.id / Pairing Relationship。
 
 ### Hub Identity
 
 ```text
 hubId
-hub key pair
+Hub key pair
 ```
 
-Hub Key 签名 Pairing Receipt / Handshake serverProof；不能只是装饰字段。
+Hub Identity Key 必须实际签名 Pairing Receipt / Handshake serverProof，不能只是 metadata。
 
 ### TLS Identity
 
-TLS Certificate 负责传输端点；Hub Identity 负责长期产品信任身份。证书续期不等于新 Hub。
+TLS Certificate 负责传输端点；Hub Identity 负责长期产品信任身份。证书续期不等于换 Hub。
 
-## 3. 本地密钥存储
+## 3. 本地密钥材料
 
-默认数据根中 Node / Hub / TLS private material 必须使用最小文件权限 / ACL；不得进入 Canonical 表、SourceRecord、Evidence、Observation、普通 Asset Backup 或 Replication Batch；日志只输出截断 keyId/fingerprint。npm/Desktop 共用一套默认身份材料。
+Node / Hub / TLS private material：
+
+- 使用当前 OS 用户最小权限 / ACL；
+- 不进入 Canonical Observation / Evidence / SourceRecord；
+- 不进入普通 Asset Backup；
+- 不进入 Replication Batch；
+- 日志只输出截断 keyId / fingerprint；
+- npm / Desktop 共用同一默认数据根下的身份材料。
 
 未来可接 OS Credential Store，但 Alpha 不强依赖某个平台。
 
-## 4. Pairing Secret
+## 4. Pairing Secret 与 Key Possession
 
-至少 128 bit CSPRNG，短有效期、单次成功即失效、失败次数受限；Hub 只存 verifier，不长期存明文。短显示码不能是全部安全熵。
+Pairing Secret：
 
-## 5. 首次配对
+- 至少 128 bit CSPRNG；
+- 短有效期；
+- 成功一次即失效；
+- 尝试次数受限；
+- Hub 不长期存明文；
+- 短显示码不能是全部安全熵。
 
-Hub 生成 Pairing Offer：hubId、endpoint、Hub Identity fingerprint、TLS trust hint、Secret、expiresAt。
+Pair Request 同时提交 Node Public Key 与 `nodeProof`，证明客户端持有对应 Private Key。
 
-Node 在发送 Secret 前先验证公共 CA/hostname 或自管理 TLS SPKI Pin。Discovery 只提供 endpoint。
+Pair Secret 证明“用户授权这次接入”；nodeProof 证明“提交者持有这把 Node Key”。
 
-Pair Request 包含 nodeId、nodePublicKey/keyId、displayName、version/protocol、Secret、nodeProof。nodeProof 证明持有 Node Private Key。
-
-Hub 验证后注册 Node、创建 stream、消费 Secret，并由 Hub Identity Private Key 签 Pairing Receipt，至少绑定 Hub/Node/Key/Stream/时间/Protocol Range。Node 必须验证并持久化 Receipt。
-
-## 6. Pairing Receipt
-
-Receipt 不能由 endpoint/IP/TLS Certificate 代替。IP/hostname/证书正常续期时，长期信任仍由 Hub Identity 验证。
-
-## 7. Handshake Hub Proof
-
-Node 发送 clientNonce；Hub serverProof 至少绑定 clientNonce、hubId、nodeId、streamId、selectedProtocol、hubAckSequence、serverTime。Node 只有 TLS/SPKI + Receipt + serverProof 全部有效才发送 Replication Data。
-
-## 8. TLS
-
-自管理 TLS：Pin SPKI，不 Pin 整张证书；同 Key 续签无需 Re-pair；TLS Key 变化不能静默接受。
-
-公共 CA：正常 CA/hostname 验证。TLS 配置失败不得降级明文 HTTP。
-
-## 9. 长期 Node 请求认证
-
-R1 Signature 绑定：method、path、hubId、nodeId、streamId、keyId、timestamp、nonce、raw body SHA-256。Hub 用注册 Public Key 验证。
-
-## 10. 重放保护
-
-Timestamp 默认建议 ±5 分钟、Nonce window、contiguous Sequence、same-sequence same-hash。Clock Skew 使用明确诊断，不作为网络错误。
-
-## 11. Clock Skew 与业务时间
-
-签名 Timestamp / serverTime 只用于安全与 skew diagnostics。Hub 不用 receive time 覆盖 occurredAt / capturedAt，也不把跨 Node 时间戳当可信全局因果序。
-
-## 12. Node Revocation
-
-Revocation 冻结 stream、拒绝未来上传、默认保留已有历史。它不等于删除历史 / Shared Membership / 本机数据。
-
-## 13. Node Key Rotation
-
-有旧私钥时由旧 Key 签新 Key rotation；nodeId 可保留。旧 Key 丢失/泄露时需要 revoke + explicit re-pair + new stream；是否复用 nodeId 需用户明确授权。
-
-## 14. Hub Identity Rotation
-
-Alpha 不做无感 Rotation。Hub Identity Key 丢失/更换默认要求 Node 重新确认/Re-pair；endpoint 相同不能绕过。
-
-## 15. Clone Detection
-
-每次 Daemon 启动生成临时 runtimeInstanceId。
-
-强信号：同 nodeId/stream 真正并发不同 runtimeInstance、sequence 分叉、同 stream 不同 immutable Batch 竞争。
-
-弱信号：IP/hostname/metadata 变化、sleep/wake 旧连接残留。弱信号只 diagnostics，不能单独冻结。
-
-强冲突才 `IDENTITY_NODE_CONFLICT -> freeze stream`。
-
-## 16. Pairing 与 Policy / History Scope
-
-首次 Pairing 必须明确 metadata-only/redacted/full 与 from-now/include-existing。连接 Hub 不等于默认上传整个本地数据库。
-
-## 17. Local Web 与 Replication Surface
+## 5. Pairing 流程
 
 ```text
-Local Web/API -> 127.0.0.1:56789, no network auth
-Replication Surface -> authenticated HTTPS
+Hub 创建 Pairing Offer
+ -> Node 验证 TLS / Hub Identity hint
+ -> Node 提交 Secret + Public Key + nodeProof
+ -> Hub 注册 Node / 创建 Stream
+ -> Hub 消费 Secret
+ -> Hub Identity Key 签 Pairing Receipt
+ -> Node 验证并保存 Receipt
 ```
 
-Replication Credential 不能用于网页登录。Headless Pure Hub 用本机/SSH CLI或用户自建可信 loopback tunnel 管理。
+Pairing Receipt 至少绑定：Hub、Node、Node Key、Stream、时间与 Protocol Range。
 
-## 18. 网络发现
+Hub 必须拒绝把自己的 local nodeId 配对为 Remote Node。
 
-mDNS/LAN Discovery 全部不可信，只提供 endpoint hint。信任仍依赖 TLS/SPKI、Hub Identity、Pairing Secret、Receipt/Proof。
+## 6. Handshake Hub Proof
 
-## 19. 日志与诊断脱敏
+每次建立 Replication Session，Node 提供 client nonce；Hub 使用 Hub Identity Key 对本次会话关键状态签 `serverProof`。
 
-可记录截断 node/hub/stream ID、sequence、error code、protocol、bytes/count、skew。
+Node 只有同时满足：
 
-禁止 Pair Secret、Private Key、完整 Signature、Prompt/Tool正文、Raw Batch、Authorization/Cookie/Token、带凭据原始 Repository URL。
+```text
+TLS / SPKI valid
+Pairing Receipt valid
+serverProof valid
+```
 
-## 20. Hub 聚合数据安全半径
+才发送 Replication Data。
 
-Hub DB 汇聚多机数据，风险高于单 Node。数据根只允许当前 OS 用户；不宣称 SQLite 透明加密；full 用户优先系统磁盘加密；Canonical Replica 与 Security/Control Plane Recovery 分开设计。
+## 7. TLS
 
-## 21. Trusted Node 与数据真实性边界
+### 自管理 TLS
+
+Pin SPKI，不 Pin 整张证书；同 Key 续签无需 Re-pair。TLS Key 变化不能静默接受。
+
+### 公共 CA
+
+正常验证 CA 与 hostname。
+
+无论哪种模式，TLS 配置失败都不得降级为明文 HTTP。
+
+## 8. 长期请求认证与重放保护
+
+R1 Request Signature 至少绑定：
+
+```text
+method / path
+hubId / nodeId / streamId / keyId
+timestamp / nonce
+raw body SHA-256
+```
+
+Hub 验证注册 Public Key、ownership、timestamp、nonce、body hash。
+
+重放保护组合：
+
+```text
+timestamp window
+nonce cache
+contiguous sequence / ACK
+same-sequence same-hash
+```
+
+Clock Skew 产生明确安全诊断，不被误报为普通网络失败。
+
+## 9. Node Revocation 与 Key Rotation
+
+### Revocation
+
+冻结 Stream、拒绝未来上传，默认保留已有 Remote Replica 与 Shared provenance。
+
+Revocation 不等于 Delete History。
+
+### Node Key Rotation
+
+旧 Key 仍可用时，由旧 Key 授权新 Key；nodeId 可保留。
+
+旧 Key 丢失 / 泄露时，采用 revoke + explicit re-pair + new stream。不得静默把未知新 Key 接到旧 Node。
+
+### Hub Identity Rotation
+
+Alpha 不做无感 Rotation。Hub Identity Key 丢失或更换时，Node 必须重新确认 / Re-pair；endpoint 相同不能绕过。
+
+## 10. Clone Detection
+
+每次 Daemon 启动生成临时 `runtimeInstanceId`。
+
+强冲突信号：
+
+- 同 nodeId / stream 真正并发不同 runtimeInstance；
+- sequence 分叉；
+- 同 stream 竞争不同 immutable Batch。
+
+弱信号：
+
+- IP / hostname / metadata 变化；
+- sleep / wake 旧连接残留。
+
+弱信号只做 diagnostics，不能单独 freeze。强冲突进入 `IDENTITY_NODE_CONFLICT`。
+
+## 11. Replication Policy 与数据暴露
+
+Capture Policy 是 Local Canonical 上限；Replication Policy 只能进一步收紧。
+
+### metadata-only
+
+默认允许：
+
+- Node / Agent / Tool / Session 结构；
+- 时间与必要关系；
+- 清洗后的 Project / Repository Portable Identity；
+- 用于 Shared Identity 的非凭据 metadata。
+
+默认禁止：
+
+- Prompt / Tool body；
+- SourceRecord payload；
+- 完整 Workspace path；
+- executable / configRoot / dataRoot 等本机敏感路径。
+
+因此 `metadata-only` **不是匿名模式**。
+
+### redacted
+
+允许必要正文 / 路径进入出站转换，但必须执行：
+
+- credential 强制遮蔽；
+- 路径脱敏；
+- 敏感字段清洗；
+- 内容限长。
+
+### full
+
+只允许发送 Local Capture 已经保存且用户允许复制的普通业务正文 / 必要路径；凭据、Secret、Private Key 仍强制排除。
+
+## 12. Repository / Asset Identity 清洗
+
+Portable Identity 进入 Wire / SharedKey / Log 前必须移除：
+
+```text
+userinfo
+credential/token
+query
+fragment
+```
+
+本机绝对路径不能作为 Shared Project Identity。
+
+Hub 重算 SharedKey 只能证明算法一致，不能证明 Node 现实中拥有该 Repository / Asset。
+
+## 13. History Scope 与安全边界
+
+首次连接必须明确：
+
+```text
+Policy: metadata-only | redacted | full
+History: from-now | include-existing
+```
+
+连接 Hub 不能默认上传整个本地数据库。
+
+`from-now` 的 Dependency Closure 只能携带建立 Boundary 后新事实引用图所需的最小字段；不能借依赖补齐偷传 Boundary 前正文、完整路径或旧会话元数据。
+
+## 14. Local Web 与 Replication Surface
+
+```text
+Local Web/API
+ -> 127.0.0.1:56789
+ -> 不因为 Hub 改成网络监听
+
+Replication Surface
+ -> 独立 authenticated HTTPS
+```
+
+Replication Credential 不能用于 Local Web 登录。
+
+Alpha 不内建 Remote Web Login；Headless Hub 通过本机 / SSH CLI 或用户自己建立可信 loopback tunnel 管理。
+
+## 15. Discovery 不建立信任
+
+mDNS / LAN Discovery 最多提供 endpoint hint。
+
+正式信任依赖：
+
+```text
+TLS / SPKI
+Hub Identity
+Pairing Secret
+Pairing Receipt
+Handshake Proof
+Node Request Signature
+```
+
+## 16. 日志与诊断脱敏
+
+可以记录：
+
+- 截断 nodeId / hubId / streamId；
+- sequence；
+- error code；
+- protocol / entity version；
+- bytes / entity count；
+- clock skew。
+
+禁止记录：
+
+- Pair Secret；
+- Private Key；
+- 完整 Signature；
+- Prompt / Tool 正文；
+- Raw Batch；
+- Authorization / Cookie / Token；
+- 带凭据的原始 Repository URL。
+
+## 17. Hub 聚合数据安全半径
+
+Hub 聚合多个 Node 的数据，风险高于单机：
+
+- 数据根只允许当前 OS 用户；
+- Alpha 不声称 SQLite 透明加密；
+- full 用户优先依赖系统磁盘加密；
+- Hub Identity / Pairing Trust / Replica Data 的恢复边界分开；
+- 关闭 Hub 或撤销 Node 不自动清除已复制内容。
+
+若用户希望清除 Hub 已有敏感内容，必须是独立 Purge / Delete 操作，而不是 Policy Setting Change 的隐含副作用。
+
+## 18. Trusted-node 真实性边界
 
 Alpha 是：
 
@@ -161,59 +315,50 @@ single user
 
 密码学能证明：
 
-```text
-Node Key -> 这条请求由已配对 Node Key 发出
-Request Signature -> 请求未被传输途中篡改
-Shared Identity Recompute -> normalized identity / sharedKey 符合协商算法
-```
+- 请求来自某把已配对 Node Key；
+- 请求在传输过程中未被篡改；
+- Shared Identity 计算符合协商算法。
 
-密码学**不能证明**：
+密码学不能证明：
 
-```text
-这个 Node 真的拥有它声称的 Git repository
-这个 Tool / Prompt / Session 一定来自真实上游 Agent
-已被完全攻陷的 Node 没有伪造格式合法的 Canonical State
-```
+- Node 真的拥有它声称的 Git Repository；
+- Tool / Prompt / Session 一定来自真实上游 Agent；
+- 已被完全攻陷的 Node 没有伪造格式合法的 Canonical State。
 
-因此：
+因此必须保留 originNodeId / assertion provenance；Node A 不得修改 Node B origin；Shared Group 不抹掉各 origin。
 
-- Hub 将 originNodeId / assertion provenance 永久保留；
-- Node A 不能修改 Node B 的 origin replica；
-- Conditional Shared 只建立 Group Membership，不抹掉各 origin；
-- Hub 重算 Shared Identity 是防止协议/key 算法不一致，不是 Repository Ownership Attestation；
-- Shared Merge Conflict / impossible ownership change 必须拒绝或 diagnostics；
-- 用户撤销被怀疑的 Node 后，历史是否删除由独立 Delete/Purge 操作决定。
+## 19. 资源滥用保护
 
-如果未来要证明真实设备、TPM、Git provider ownership 或远程运行环境完整性，属于 Remote Attestation / Provider Verification 新安全能力，不在 Alpha Hub 范围。
+即使已配对 Node 也必须限制：
 
-## 22. 资源滥用保护
+- HTTP Body；
+- 单 Entity 大小；
+- Batch Entity 数量；
+- 每 Node rate / concurrency；
+- Pairing 尝试；
+- Hub disk low-water mark。
 
-已配对 Node 也没有无限资源预算。限制 HTTP Body、单 Entity、Batch Entity Count、并发、Pairing 尝试、每 Node rate、Hub disk low-water mark。
+资源压力只暂停 / 降速 Replication，不影响 Node Local Pipeline。
 
-资源压力使用 BATCH_TOO_LARGE / ENTITY_TOO_LARGE / SERVER_BUSY / SERVER_STORAGE_PRESSURE，不影响 Node Local Pipeline。
+## 20. Alpha 安全冻结不变量
 
-## 23. 安全验收不变量
-
-- Secret 过期/消费后不可复用；
+- Pair Secret 过期 / 消费后不可复用；
 - nodeProof 无效不能注册 Key；
-- Receipt / serverProof 不能被错误 Hub Key 伪造；
-- 未配对/已撤销不能上传；
-- SPKI mismatch 失败；
-- Discovery 伪造不能建立信任；
-- Replay / Header/Body 篡改失败；
-- Clock Skew 有明确诊断；
-- 非授权新 Node Key 不能替旧 Key；
-- metadata/IP 变化不能单独 Clone Freeze；
-- 真并发 clone 进入 conflict；
-- Private Key / Secret 不进入普通数据链；
-- Replication Credential 不能访问 Local Web；
-- TLS 配置失败不降级；
-- 超大恶意 Batch 不 OOM；
-- Hub Identity 丢失不会被 endpoint 掩盖；
-- Hub 重算 SharedKey mismatch 时拒绝 Membership；
-- 一个已认证 Node 的 Shared Identity assertion 不被描述为 Git/Asset 所有权密码学证明；
-- origin provenance 在 Shared Group 中仍可追溯。
+- Pairing Receipt / serverProof 可验证；
+- 未配对 / 已撤销 Node 不能上传；
+- SPKI / Hub Identity mismatch 阻断；
+- Discovery 不能直接建立信任；
+- Replay / Header / Body 篡改失败；
+- TLS 错误不降级 HTTP；
+- metadata / IP 变化不能单独 Clone Freeze；
+- 真并发 clone 进入 hard conflict；
+- Secret / Private Key 不进入普通数据链；
+- metadata-only 不宣传匿名；
+- Hub 重算 SharedKey mismatch 时拒绝；
+- trusted-node 不被描述成 Remote Attestation；
+- Local Web 继续 loopback；
+- 不提供 Remote Execution。
 
-## 24. 当前非目标
+## 21. 当前非目标
 
-用户账号/Team/RBAC、OAuth/SSO、Remote Browser Login、多 Hub 信任网、无感 Hub Identity Rotation、HSM/TPM 强依赖、公有云控制面、数据库透明加密、Remote Attestation / Repository Ownership Proof。
+用户账号 / Team / RBAC、OAuth / SSO、Remote Browser Login、多 Hub 信任网、无感 Hub Identity Rotation、HSM / TPM 强依赖、公有云控制面、数据库透明加密、Remote Attestation、Repository Ownership Proof。
