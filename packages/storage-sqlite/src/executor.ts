@@ -37,6 +37,11 @@ export class SqliteExecutor {
     })
   }
 
+  async close(): Promise<void> {
+    await this.tail
+    this.db.close()
+  }
+
   private enqueue<T>(operation: () => T | Promise<T>): Promise<T> {
     const result = this.tail.then(operation, operation)
     this.tail = result.then(
