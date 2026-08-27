@@ -14,12 +14,6 @@ test('普通成功命令允许追加被动更新提示', () => {
   assert.equal(cliEntryInternals.shouldOfferPassiveUpdate(['status'], 1), false)
 })
 
-test('setup 命令在进入核心 CLI 前初始化 Node Identity', () => {
-  assert.equal(cliEntryInternals.shouldInitializeNodeIdentity(['setup']), true)
-  assert.equal(cliEntryInternals.shouldInitializeNodeIdentity(['--json', 'setup']), true)
-  assert.equal(cliEntryInternals.shouldInitializeNodeIdentity(['status']), false)
-})
-
 test('update 命令兼容 --json 前后位置', () => {
   assert.deepEqual(cliEntryInternals.updateArgs(['update', '--check', '--json']), ['--check', '--json'])
   assert.deepEqual(cliEntryInternals.updateArgs(['--json', 'update', '--check']), ['--json', '--check'])
