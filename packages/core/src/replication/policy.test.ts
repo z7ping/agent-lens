@@ -57,6 +57,24 @@ test('full still redacts recognized credentials', () => {
   })
 })
 
+test('explicit secret fields stay redacted even under full policy', () => {
+  assert.deepEqual(
+    applyReplicationFieldPolicy({ value: 'never-send-me', fieldClass: 'secret', policy: full }),
+    { state: 'redacted' },
+  )
+})
+
+test('redacted policy removes local home identity from path fields', () => {
+  assert.deepEqual(
+    applyReplicationFieldPolicy({ value: '/Users/alice/work/agent-lens', fieldClass: 'path', policy: redacted }),
+    { state: 'value', value: '/Users/[USER]/work/agent-lens' },
+  )
+  assert.deepEqual(
+    applyReplicationFieldPolicy({ value: 'C:\\Users\\alice\\work\\agent-lens', fieldClass: 'path', policy: redacted }),
+    { state: 'value', value: 'C:\\Users\\[USER]\\work\\agent-lens' },
+  )
+})
+
 test('from-now blocks old history in bootstrap and reconciliation alike', () => {
   for (const phase of ['bootstrap', 'reconcile'] as const) {
     assert.deepEqual(
