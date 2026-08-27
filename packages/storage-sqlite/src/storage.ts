@@ -18,6 +18,7 @@ import { SqliteReplicationStateRepository } from './replication-state'
 import { SqliteSessionRelationshipCandidateRepository } from './relationship-candidates'
 import { SqliteRuntimeProfileRepository } from './runtime-profiles'
 import { SqliteSourceRuntimeStatusRepository } from './runtime-status'
+import { withSqliteSessionRuntimeProfiles } from './session-runtime-profile'
 import { SqliteSessionSummaryReader } from './session-summaries'
 import { SqliteToolUsageObservationReader } from './tool-usage-observations'
 
@@ -65,6 +66,7 @@ export class SqliteStorageService implements StorageService {
     const repositories = createSqliteRepositories(this.executor)
     this.repositories = {
       ...repositories,
+      sessions: withSqliteSessionRuntimeProfiles(this.executor, repositories.sessions),
       observations: withSqliteObservationPagination(this.executor, repositories.observations),
     }
     this.checkpoints = new SqliteCheckpointRepository(this.executor)
