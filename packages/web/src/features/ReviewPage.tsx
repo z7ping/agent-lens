@@ -677,7 +677,7 @@ function Interaction({
     expansionStore.set(interaction.id, open)
   }
 
-  return <details className={`interaction-block ${stats.errorCount ? 'interaction-has-error' : ''}`} open={expanded} onToggle={event => onToggle(event.currentTarget.open)}>
+  return <details className={`interaction-block ${stats.errorCount ? 'interaction-has-error' : ''}`} data-interaction-id={interaction.id} open={expanded} onToggle={event => onToggle(event.currentTarget.open)}>
     <summary className="interaction-summary">
       <span className="interaction-chevron">›</span>
       <span className="interaction-title">{interaction.trigger === 'background' ? '后台活动' : `第 ${interaction.ordinal} 轮`}</span>
@@ -704,6 +704,30 @@ function Metric({ value, label, tone = '' }: { value: string | number; label: st
 
 type RoundFilter = ReviewDetailFilter
 
+interface ReviewReaderPosition {
+  interactionId: string
+  offset: number
+  scrollTop: number
+}
+
+function captureReviewReaderPosition(pane: HTMLElement): ReviewReaderPosition {
+  const paneTop = pane.getBoundingClientRect().top
+  let anchor: HTMLElement | null = null
+  for (const element of pane.querySelectorAll<HTMLElement>('.interaction-block[data-interaction-id]')) {
+    const top = element.getBoundingClientRect().top
+    if (top <= paneTop + 56) anchor = element
+    else if (!anchor) {
+      anchor = element
+      break
+    } else break
+  }
+  return {
+    interactionId: anchor?.dataset.interactionId ?? '',
+    offset: anchor ? anchor.getBoundingClientRect().top - paneTop : 0,
+    scrollTop: pane.scrollTop,
+  }
+}
+
 function highLatencyThreshold(interactions: ReviewInteractionDto[]): number | null {
   const values = interactions.map(item => elapsed(item.startedAt, item.endedAt)).filter(value => value > 0).sort((a, b) => a - b)
   if (values.length < 2) return null
@@ -727,6 +751,7 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
   const sessionLoadSentinelRef = useRef<HTMLButtonElement>(null)
   const detailLoadSentinelRef = useRef<HTMLDivElement>(null)
   const readerPaneRef = useRef<HTMLElement>(null)
+  const readerPositionsRef = useRef(new Map<string, ReviewReaderPosition>())
   const followingTailRef = useRef(false)
   const roundExpansionRef = useRef(new Map<string, boolean>())
   const review = snapshot.review
@@ -759,6 +784,37 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
   useEffect(() => {
     if (detail?.page.filter) setRoundFilter(detail.page.filter)
   }, [detail?.page.filter])
+
+  useEffect(() => {
+    const id = detail?.id
+    if (!id || review.detailLoading) return
+    const saved = readerPositionsRef.current.get(id)
+    if (!saved || saved.scrollTop <= 0) return
+    let cancelled = false
+    const nextFrame = () => new Promise<void>(resolve => window.requestAnimationFrame(() => resolve()))
+    const restore = async () => {
+      await nextFrame()
+      for (let attempt = 0; attempt < 25 && !cancelled; attempt += 1) {
+        const pane = readerPaneRef.current
+        if (!pane) return
+        const anchor = saved.interactionId
+          ? [...pane.querySelectorAll<HTMLElement>('.interaction-block[data-interaction-id]')].find(element => element.dataset.interactionId === saved.interactionId)
+          : undefined
+        if (anchor) {
+          const paneTop = pane.getBoundingClientRect().top
+          pane.scrollTop += anchor.getBoundingClientRect().top - paneTop - saved.offset
+          return
+        }
+        const current = model.getSnapshot().review
+        if (!saved.interactionId || current.selectedId !== id || !current.detail?.page.hasMore || current.detail.page.direction !== 'forward' || current.detail.page.filter !== 'all') break
+        await model.loadMoreReviewDetail()
+        await nextFrame()
+      }
+      if (!cancelled && readerPaneRef.current) readerPaneRef.current.scrollTop = saved.scrollTop
+    }
+    void restore()
+    return () => { cancelled = true }
+  }, [detail?.id, review.detailLoading, model])
 
   useEffect(() => {
     const sentinel = sessionLoadSentinelRef.current
@@ -798,7 +854,12 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
     return () => window.cancelAnimationFrame(frame)
   }, [review.detailHasNewData, lastInteractionKey, detail?.page.direction, detail?.page.hasMore, detail?.page.filter, model])
 
-  const select = (id: string) => { void model.selectReviewSession(id); navigate(`/review/${encodeURIComponent(id)}`) }
+  const select = (id: string) => {
+    const pane = readerPaneRef.current
+    if (detail?.id && pane) readerPositionsRef.current.set(detail.id, captureReviewReaderPosition(pane))
+    void model.selectReviewSession(id)
+    navigate(`/review/${encodeURIComponent(id)}`)
+  }
   const scrollTop = () => window.requestAnimationFrame(() => { if (readerPaneRef.current) readerPaneRef.current.scrollTop = 0 })
   const scrollBottom = () => window.requestAnimationFrame(() => {
     const pane = readerPaneRef.current
@@ -899,6 +960,14 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
   const onReaderScroll = () => {
     const pane = readerPaneRef.current
     if (!pane) return
+    if (detail?.id) {
+      const previous = readerPositionsRef.current.get(detail.id)
+      readerPositionsRef.current.set(detail.id, {
+        interactionId: previous?.interactionId ?? '',
+        offset: previous?.offset ?? 0,
+        scrollTop: pane.scrollTop,
+      })
+    }
     followingTailRef.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 180
     if (followingTailRef.current && review.detailHasNewData && detail?.page.filter === 'all') {
       const includesTail = detail.page.direction === 'backward' || !detail.page.hasMore

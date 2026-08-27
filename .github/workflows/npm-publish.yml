@@ -128,4 +128,11 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         shell: bash
-        run: npm publish "./release/$(basename "$(ls release/*.tgz)")" --tag "$NPM_TAG" --access public --provenance
+        run: |
+          shopt -s nullglob
+          tarballs=(release/*.tgz)
+          if [[ ${#tarballs[@]} -ne 1 ]]; then
+            echo "Expected exactly one npm tarball, found ${#tarballs[@]}" >&2
+            exit 1
+          fi
+          npm publish "./${tarballs[0]}" --tag "$NPM_TAG" --access public --provenance

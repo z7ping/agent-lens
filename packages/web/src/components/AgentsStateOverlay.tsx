@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { AgentOverviewDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel, ClientSnapshot } from '../client/model'
 import { agentLabel } from './AgentScope'
@@ -174,6 +174,9 @@ function AgentDiagnosticsPanel({ snapshot, sourceId }: { snapshot: ClientSnapsho
   const unknown = diagnostics?.unknownCount ?? 0
   const hasIssue = failed > 0 || unknown > 0
   const [open, setOpen] = useState(hasIssue)
+  useEffect(() => {
+    if (hasIssue) setOpen(true)
+  }, [selectedSourceId, hasIssue])
   if (!selectedAgent || !diagnostics || !snapshot.health) return null
   return <details className="agent-diagnostics-dock" open={open} onToggle={event => setOpen(event.currentTarget.open)}>
     <summary>
