@@ -21,7 +21,7 @@ export type ReplicationAvailability<T extends JsonValue = JsonValue> =
   | { state: 'redacted' }
   | { state: 'omitted'; reason: 'policy' | 'not-captured' | 'history-boundary' | 'dependency-minimized' }
 
-export type ReplicationFieldClass = 'metadata' | 'content' | 'path' | 'raw-content'
+export type ReplicationFieldClass = 'metadata' | 'content' | 'path' | 'raw-content' | 'secret'
 
 export interface ReplicationEntityFieldContract {
   field: string
@@ -128,9 +128,17 @@ export function getReplicationEntityContract(entityType: KnownReplicationEntityT
 
 const CREDENTIAL_KEY = /^(?:api[-_]?key|token|access[-_]?token|refresh[-_]?token|password|passwd|authorization|cookie|secret|private[-_]?key)$/i
 const CREDENTIAL_TEXT = /\b(?:bearer\s+[a-z0-9._~+\/-]+=*|gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{16,})\b/gi
+const WINDOWS_HOME = /([A-Za-z]:\\Users\\)[^\\/]+/g
+const POSIX_HOME = /\/(Users|home)\/[^/]+/g
 
 function redactCredentialText(value: string): string {
   return value.replace(CREDENTIAL_TEXT, '[REDACTED]')
+}
+
+function redactLocalHome(value: string): string {
+  return redactCredentialText(value)
+    .replace(WINDOWS_HOME, '$1[USER]')
+    .replace(POSIX_HOME, '/$1/[USER]')
 }
 
 export function sanitizeReplicationValue(value: JsonValue): JsonValue {
@@ -141,6 +149,18 @@ export function sanitizeReplicationValue(value: JsonValue): JsonValue {
   const output: Record<string, JsonValue> = {}
   for (const [key, item] of Object.entries(value)) {
     output[key] = CREDENTIAL_KEY.test(key) ? '[REDACTED]' : sanitizeReplicationValue(item)
+  }
+  return output
+}
+
+export function sanitizeReplicationPath(value: JsonValue): JsonValue {
+  if (typeof value === 'string') return redactLocalHome(value)
+  if (value === null || typeof value === 'number' || typeof value === 'boolean') return value
+  if (Array.isArray(value)) return value.map(item => sanitizeReplicationPath(item))
+
+  const output: Record<string, JsonValue> = {}
+  for (const [key, item] of Object.entries(value)) {
+    output[key] = CREDENTIAL_KEY.test(key) ? '[REDACTED]' : sanitizeReplicationPath(item)
   }
   return output
 }
@@ -162,13 +182,14 @@ export function applyReplicationFieldPolicy(input: {
   if (input.policy.mode === 'metadata-only' && input.fieldClass !== 'metadata') {
     return { state: 'omitted', reason: 'policy' }
   }
+  if (input.fieldClass === 'secret') return { state: 'redacted' }
   if (input.fieldClass === 'raw-content') {
     return input.policy.mode === 'full'
       ? { state: 'value', value: sanitizeReplicationValue(input.value) }
       : { state: 'omitted', reason: 'policy' }
   }
-  if (input.policy.mode === 'redacted' && (input.fieldClass === 'content' || input.fieldClass === 'path')) {
-    return { state: 'value', value: sanitizeReplicationValue(input.value) }
+  if (input.policy.mode === 'redacted' && input.fieldClass === 'path') {
+    return { state: 'value', value: sanitizeReplicationPath(input.value) }
   }
   return { state: 'value', value: sanitizeReplicationValue(input.value) }
 }
