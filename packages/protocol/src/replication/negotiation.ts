@@ -29,14 +29,7 @@ export function negotiateProtocolVersion(remote: ProtocolVersion): ProtocolVersi
 }
 
 export function negotiateIdentityAlgorithms(remote: readonly string[]): readonly string[] {
-  const selected = SUPPORTED_IDENTITY_ALGORITHMS.filter(algorithm => remote.includes(algorithm))
-  if (selected.length === 0) {
-    throw new ReplicationProtocolError(
-      'IDENTITY_ALGORITHM_UNSUPPORTED',
-      'No common shared identity algorithm',
-    )
-  }
-  return selected
+  return SUPPORTED_IDENTITY_ALGORITHMS.filter(algorithm => remote.includes(algorithm))
 }
 
 export function negotiateEntityVersions(remote: readonly EntityVersionSupport[]): readonly EntityVersionSupport[] {
@@ -45,28 +38,40 @@ export function negotiateEntityVersions(remote: readonly EntityVersionSupport[])
     const local = SUPPORTED_ENTITY_VERSIONS[remoteSupport.entityType]
     if (!local) continue
     const common = remoteSupport.versions.filter(version => local.includes(version)).sort((a, b) => b - a)
-    if (common.length) {
-      selected.push({ entityType: remoteSupport.entityType, versions: [common[0]!] })
-    }
+    if (common.length) selected.push({ entityType: remoteSupport.entityType, versions: [common[0]!] })
   }
-  selected.sort((a, b) => a.entityType.localeCompare(b.entityType))
-  if (selected.length === 0) {
-    throw new ReplicationProtocolError(
-      'ENTITY_VERSION_UNSUPPORTED',
-      'No common replication entity version',
-    )
-  }
-  return selected
+  return selected.sort((a, b) => a.entityType.localeCompare(b.entityType))
 }
 
 export function negotiateCompatibility(input: {
   protocol: ProtocolVersion
   identityAlgorithms: readonly string[]
   entityVersions: readonly EntityVersionSupport[]
+  requiredIdentityAlgorithms?: readonly string[]
+  requiredEntityTypes?: readonly string[]
 }): NegotiatedCompatibility {
-  return {
-    protocol: negotiateProtocolVersion(input.protocol),
-    identityAlgorithms: negotiateIdentityAlgorithms(input.identityAlgorithms),
-    entityVersions: negotiateEntityVersions(input.entityVersions),
+  const protocol = negotiateProtocolVersion(input.protocol)
+  const identityAlgorithms = negotiateIdentityAlgorithms(input.identityAlgorithms)
+  const entityVersions = negotiateEntityVersions(input.entityVersions)
+
+  for (const required of input.requiredIdentityAlgorithms ?? []) {
+    if (!identityAlgorithms.includes(required)) {
+      throw new ReplicationProtocolError(
+        'IDENTITY_ALGORITHM_UNSUPPORTED',
+        `Required identity algorithm is not supported: ${required}`,
+      )
+    }
   }
+
+  const negotiatedEntityTypes = new Set(entityVersions.map(item => item.entityType))
+  for (const required of input.requiredEntityTypes ?? []) {
+    if (!negotiatedEntityTypes.has(required)) {
+      throw new ReplicationProtocolError(
+        'ENTITY_VERSION_UNSUPPORTED',
+        `Required entity type has no common version: ${required}`,
+      )
+    }
+  }
+
+  return { protocol, identityAlgorithms, entityVersions }
 }
