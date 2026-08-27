@@ -1,0 +1,17 @@
+{
+  "name": "@agent-lens/replication-node",
+  "version": "1.0.0-alpha.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "tsx --test \"src/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@agent-lens/core": "1.0.0-alpha.1",
+    "@agent-lens/protocol": "1.0.0-alpha.1"
+  }
+}
