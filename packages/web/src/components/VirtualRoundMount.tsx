@@ -4,10 +4,12 @@ export function VirtualRoundMount({
   children,
   eager = false,
   estimate = 220,
+  interactionId,
 }: {
   children: ReactNode
   eager?: boolean
   estimate?: number
+  interactionId?: string
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const [mounted, setMounted] = useState(eager)
@@ -53,6 +55,7 @@ export function VirtualRoundMount({
     ref={ref}
     className="virtual-round-shell"
     data-mounted={mounted ? 'true' : 'false'}
+    data-interaction-id={interactionId || undefined}
     style={mounted ? undefined : { height: `${height}px` }}
   >
     {mounted ? children : null}
