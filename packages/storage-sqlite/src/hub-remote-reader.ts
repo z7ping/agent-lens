@@ -2,6 +2,13 @@ import type { JsonValue } from '@agent-lens/core'
 import type { KnownReplicationEntityType } from '@agent-lens/core/replication'
 import type { SqliteExecutor } from './executor'
 
+export interface HubRemoteReadSharedIdentity {
+  stateKind: 'shared-root' | 'conditional-membership'
+  identityAlgorithm: string
+  normalizedIdentity?: string
+  sharedKey: string
+}
+
 export interface HubRemoteReadEntity {
   /** Opaque public id for one remote origin. */
   publicId: string
@@ -14,7 +21,8 @@ export interface HubRemoteReadEntity {
   contentHash: string
   body: JsonValue
   references?: unknown
-  sharedIdentity?: unknown
+  /** Hub-recomputed identity state, never the Node-claimed assertion JSON. */
+  sharedIdentity?: HubRemoteReadSharedIdentity
   updatedSequence: number
   updatedAt: string
 }
@@ -22,6 +30,7 @@ export interface HubRemoteReadEntity {
 export interface HubRemoteReadQuery {
   originNodeId?: string
   entityType?: KnownReplicationEntityType
+  sharedKey?: string
   limit?: number
 }
 
@@ -36,12 +45,24 @@ interface RemoteRow {
   contentHash: string
   bodyJson: string
   referencesJson: string | null
-  sharedIdentityJson: string | null
+  sharedStateKind: 'shared-root' | 'conditional-membership' | null
+  sharedIdentityAlgorithm: string | null
+  sharedNormalizedIdentity: string | null
+  sharedKey: string | null
   updatedSequence: number
   updatedAt: string
 }
 
 function mapRow(row: RemoteRow): HubRemoteReadEntity {
+  const sharedIdentity = row.sharedStateKind && row.sharedIdentityAlgorithm && row.sharedKey
+    ? {
+        stateKind: row.sharedStateKind,
+        identityAlgorithm: row.sharedIdentityAlgorithm,
+        ...(row.sharedNormalizedIdentity ? { normalizedIdentity: row.sharedNormalizedIdentity } : {}),
+        sharedKey: row.sharedKey,
+      }
+    : undefined
+
   return {
     publicId: row.publicId,
     originNodeId: row.originNodeId,
@@ -53,7 +74,7 @@ function mapRow(row: RemoteRow): HubRemoteReadEntity {
     contentHash: row.contentHash,
     body: JSON.parse(row.bodyJson) as JsonValue,
     ...(row.referencesJson ? { references: JSON.parse(row.referencesJson) } : {}),
-    ...(row.sharedIdentityJson ? { sharedIdentity: JSON.parse(row.sharedIdentityJson) } : {}),
+    ...(sharedIdentity ? { sharedIdentity } : {}),
     updatedSequence: Number(row.updatedSequence),
     updatedAt: row.updatedAt,
   }
@@ -70,13 +91,21 @@ const ACTIVE_REMOTE_SELECT = `
          e.content_hash AS contentHash,
          e.body_json AS bodyJson,
          e.references_json AS referencesJson,
-         e.shared_identity_json AS sharedIdentityJson,
+         s.state_kind AS sharedStateKind,
+         s.identity_algorithm AS sharedIdentityAlgorithm,
+         s.normalized_identity AS sharedNormalizedIdentity,
+         s.shared_key AS sharedKey,
          e.updated_sequence AS updatedSequence,
          e.updated_at AS updatedAt
   FROM hub_remote_replica_entities e
   JOIN hub_replica_generations g
     ON g.origin_node_id = e.origin_node_id
    AND g.generation_id = e.generation_id
+  LEFT JOIN hub_remote_shared_identity_state s
+    ON s.origin_node_id = e.origin_node_id
+   AND s.generation_id = e.generation_id
+   AND s.entity_type = e.entity_type
+   AND s.origin_entity_id = e.origin_entity_id
   WHERE g.status = 'active'
 `
 
@@ -108,6 +137,10 @@ export class SqliteHubRemoteReadRepository {
     if (query.entityType) {
       conditions.push('e.entity_type = ?')
       params.push(query.entityType)
+    }
+    if (query.sharedKey) {
+      conditions.push('s.shared_key = ?')
+      params.push(query.sharedKey)
     }
     const extraWhere = conditions.length ? ` AND ${conditions.join(' AND ')}` : ''
     const limit = Math.max(1, Math.min(query.limit ?? 500, 5000))
