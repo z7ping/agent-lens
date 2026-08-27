@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { sha256Hex } from './hash'
 import type {
   ConditionalSharedEntityType,
   OriginEntityRef,
@@ -19,9 +19,7 @@ function required(name: string, value: string): string {
 }
 
 function digest(parts: readonly string[]): string {
-  return createHash('sha256')
-    .update(JSON.stringify(parts))
-    .digest('hex')
+  return sha256Hex(JSON.stringify(parts))
 }
 
 export function createOriginEntityRef<T extends string>(
