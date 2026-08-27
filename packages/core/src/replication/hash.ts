@@ -90,7 +90,7 @@ export function sha256Hex(value: string): string {
   padded[tail + 6] = (low >>> 8) & 0xff
   padded[tail + 7] = low & 0xff
 
-  const state = [...SHA256_INITIAL]
+  const state: number[] = [...SHA256_INITIAL]
   const words = new Uint32Array(64)
 
   for (let offset = 0; offset < padded.length; offset += 64) {
