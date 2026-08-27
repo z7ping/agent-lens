@@ -13,6 +13,7 @@ import { SqliteExecutor } from './executor'
 import { migrateDatabase } from './migrations'
 import { withSqliteObservationPagination } from './observation-pagination'
 import { createSqliteRepositories } from './repositories'
+import { SqliteReplicationCanonicalChangeReader } from './replication-canonical-changes'
 import { SqliteReplicationStateRepository } from './replication-state'
 import { SqliteSessionRelationshipCandidateRepository } from './relationship-candidates'
 import { SqliteRuntimeProfileRepository } from './runtime-profiles'
@@ -46,6 +47,7 @@ export class SqliteStorageService implements StorageService {
   readonly sourceRuntimeStatus: SqliteSourceRuntimeStatusRepository
   readonly sessionRelationshipCandidates: SqliteSessionRelationshipCandidateRepository
   readonly replication: SqliteReplicationStateRepository
+  readonly replicationCanonicalChanges: SqliteReplicationCanonicalChangeReader
   readonly executor: SqliteExecutor
 
   constructor(options: SqliteStorageOptions) {
@@ -75,6 +77,7 @@ export class SqliteStorageService implements StorageService {
     this.sourceRuntimeStatus = new SqliteSourceRuntimeStatusRepository(this.executor)
     this.sessionRelationshipCandidates = new SqliteSessionRelationshipCandidateRepository(this.executor)
     this.replication = new SqliteReplicationStateRepository(this.executor)
+    this.replicationCanonicalChanges = new SqliteReplicationCanonicalChangeReader(this.executor)
   }
 
   async transaction<T>(fn: (tx: StorageTransaction) => Promise<T>): Promise<T> {
@@ -226,7 +229,7 @@ export class SqliteStorageService implements StorageService {
     })
   }
 
-  close(): void {
-    if (this.db.open) this.db.close()
+  async close(): Promise<void> {
+    await this.executor.close()
   }
 }
