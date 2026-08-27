@@ -1,6 +1,6 @@
 CREATE TABLE replication_streams (
   stream_id TEXT PRIMARY KEY,
-  relationship_id TEXT NOT NULL UNIQUE,
+  relationship_id TEXT NOT NULL,
   hub_id TEXT NOT NULL,
   generation_id TEXT NOT NULL,
   status TEXT NOT NULL CHECK (status IN ('active', 'paused', 'rollover-required')),
@@ -12,6 +12,9 @@ CREATE TABLE replication_streams (
   updated_at TEXT NOT NULL,
   CHECK (next_sequence > ack_sequence)
 );
+
+CREATE INDEX idx_replication_stream_relationship
+  ON replication_streams(relationship_id, created_at, stream_id);
 
 CREATE TABLE replication_entity_state (
   stream_id TEXT NOT NULL,
