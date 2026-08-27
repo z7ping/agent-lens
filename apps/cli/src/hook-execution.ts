@@ -99,7 +99,7 @@ function distributionContext(
 }
 
 export function resolveHookExecutionProfile(options: ResolveHookExecutionOptions = {}): HookExecutionProfile {
-  const version = options.version ?? process.env.AGENT_LENS_VERSION ?? '1.0.0-alpha.0'
+  const version = options.version ?? process.env.AGENT_LENS_VERSION ?? '1.0.0-alpha.1'
   const moduleUrl = options.moduleUrl ?? import.meta.url
   const platform = options.platform ?? process.platform
   const nodePath = options.nodePath ?? process.execPath

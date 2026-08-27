@@ -1,21 +1,23 @@
 {
   "name": "@agent-lens/projection-overview",
-  "version": "1.0.0-alpha.0",
+  "version": "1.0.0-alpha.1",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "test": "tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
-    "@agent-lens/core": "1.0.0-alpha.0",
-    "@agent-lens/projection-timeline": "1.0.0-alpha.0",
-    "@agent-lens/projection-usage": "1.0.0-alpha.0",
-    "@agent-lens/protocol": "1.0.0-alpha.0"
+    "@agent-lens/core": "1.0.0-alpha.1",
+    "@agent-lens/projection-timeline": "1.0.0-alpha.1",
+    "@agent-lens/projection-usage": "1.0.0-alpha.1",
+    "@agent-lens/protocol": "1.0.0-alpha.1"
   },
   "devDependencies": {
-    "@agent-lens/core-services": "1.0.0-alpha.0",
-    "@agent-lens/storage-sqlite": "1.0.0-alpha.0"
+    "@agent-lens/core-services": "1.0.0-alpha.1",
+    "@agent-lens/storage-sqlite": "1.0.0-alpha.1"
   }
 }

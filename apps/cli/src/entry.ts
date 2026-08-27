@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 import { maybePrintUpdateHint, runUpdateCommand } from './update'
 
-const VERSION = '1.0.0-alpha.0'
+const VERSION = '1.0.0-alpha.1'
 
 function isHelp(args: string[]): boolean {
   const command = args.find(arg => arg !== '--json')

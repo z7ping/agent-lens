@@ -954,7 +954,7 @@ export async function declareClaudeCapabilities(
 
 export const claudeManifest: SourcePluginManifest = {
   pluginId: '@agent-lens/source-claude',
-  pluginVersion: '1.0.0-alpha.0',
+  pluginVersion: '1.0.0-alpha.1',
   apiVersion: '1.0',
   pluginType: 'source',
   displayName: 'Claude Code Source',

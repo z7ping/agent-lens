@@ -1,6 +1,6 @@
 {
   "name": "@z7ping/agent-lens",
-  "version": "1.0.0-alpha.0",
+  "version": "1.0.0-alpha.1",
   "description": "Local observability and replay for AI coding agents, rebuilt around a canonical evidence model.",
   "private": false,
   "type": "module",
@@ -48,6 +48,8 @@
     "perf:web-live-visibility": "tsx scripts/performance/web-live-visibility-benchmark.ts",
     "perf:daemon-idle-cpu": "tsx scripts/performance/daemon-idle-cpu-benchmark.ts",
     "release:check": "npm run check:web-presentation && npm run check:brand-assets && npm run check:desktop-shell && npm run typecheck && npm test && npm run build:dist && npm run smoke:dist && npm pack --dry-run",
+    "release:version": "node scripts/bump-version.mjs",
+    "release:prepare": "pwsh -NoLogo -NoProfile -File scripts/release.ps1",
     "prepack": "npm run check:web-presentation && npm run check:brand-assets && npm run check:desktop-shell && npm run build:dist"
   },
   "repository": {

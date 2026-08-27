@@ -128,4 +128,4 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         shell: bash
-        run: npm publish "$(ls release/*.tgz)" --tag "$NPM_TAG" --access public --provenance
+        run: npm publish "./release/$(basename "$(ls release/*.tgz)")" --tag "$NPM_TAG" --access public --provenance

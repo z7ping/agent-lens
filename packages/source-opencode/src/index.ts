@@ -487,7 +487,7 @@ export async function declareOpenCodeCapabilities(
 
 export const openCodeManifest: SourcePluginManifest = {
   pluginId: '@agent-lens/source-opencode',
-  pluginVersion: '1.0.0-alpha.0',
+  pluginVersion: '1.0.0-alpha.1',
   apiVersion: '1.0',
   pluginType: 'source',
   displayName: 'OpenCode Source',

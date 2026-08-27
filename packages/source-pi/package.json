@@ -1,6 +1,6 @@
 {
   "name": "@agent-lens/source-pi",
-  "version": "1.0.0-alpha.0",
+  "version": "1.0.0-alpha.1",
   "private": true,
   "type": "module",
   "exports": {
@@ -11,11 +11,11 @@
     "test": "tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
-    "@agent-lens/core": "1.0.0-alpha.0",
-    "@agent-lens/runtime-cordis": "1.0.0-alpha.0"
+    "@agent-lens/core": "1.0.0-alpha.1",
+    "@agent-lens/runtime-cordis": "1.0.0-alpha.1"
   },
   "devDependencies": {
-    "@agent-lens/core-services": "1.0.0-alpha.0",
-    "@agent-lens/storage-sqlite": "1.0.0-alpha.0"
+    "@agent-lens/core-services": "1.0.0-alpha.1",
+    "@agent-lens/storage-sqlite": "1.0.0-alpha.1"
   }
 }
