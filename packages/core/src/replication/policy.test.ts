@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  ReplicationPolicyError,
   applyReplicationFieldPolicy,
   authorizeHistory,
   decideHistoryScopeTransition,
@@ -72,6 +73,33 @@ test('redacted policy removes local home identity from path fields', () => {
   assert.deepEqual(
     applyReplicationFieldPolicy({ value: 'C:\\Users\\alice\\work\\agent-lens', fieldClass: 'path', policy: redacted }),
     { state: 'value', value: 'C:\\Users\\[USER]\\work\\agent-lens' },
+  )
+})
+
+test('unclassified future fields fail closed instead of becoming metadata', () => {
+  const result = transformReplicationEntity({
+    entityType: 'LogicalSession',
+    body: { installationId: 'install-1', futureSensitiveField: 'must-not-leak' },
+    capturedAt: '2026-08-28T00:01:00Z',
+    phase: 'incremental',
+    policy: full,
+    history: includeExisting,
+  })
+  assert.deepEqual(result.body.installationId, { state: 'value', value: 'install-1' })
+  assert.deepEqual(result.body.futureSensitiveField, { state: 'omitted', reason: 'policy' })
+})
+
+test('not-replicated entities cannot enter outbound transform', () => {
+  assert.throws(
+    () => transformReplicationEntity({
+      entityType: 'Interaction',
+      body: { id: 'interaction-1' },
+      capturedAt: '2026-08-28T00:01:00Z',
+      phase: 'incremental',
+      policy: full,
+      history: includeExisting,
+    }),
+    (error: unknown) => error instanceof ReplicationPolicyError && error.code === 'ENTITY_NOT_REPLICATED',
   )
 })
 
