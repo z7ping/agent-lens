@@ -24,7 +24,8 @@
 13. 不恢复 PID 文件、旧 Service Manager、Hook Runner 或第二套 Runtime；
 14. Windows Desktop 的 Runtime、生产依赖和原生图标资源必须从 `app.asar.unpacked` 真实文件路径执行 / 读取；
 15. “Windows 安装包生成成功”不等于“客户端可用”，打包后 EXE 必须真实启动并提供兼容 Health；
-16. Windows Desktop 只要 Electron 主进程启动过，就必须默认写 `%APPDATA%\AgentLens\logs\desktop.log`；Daemon 输出继续写同日志目录下的 `daemon.log`。
+16. Windows Desktop 只要 Electron 主进程启动过，就必须写 `desktop.log`；打包版优先使用 `<安装目录>\logs`，显式 `AGENT_LENS_LOG_DIR` 可以覆盖，目录不可写时才回退 `%APPDATA%\AgentLens\logs`；Daemon 输出继续写同目录下的 `daemon.log`。
+17. Windows 交互安装完成后默认运行 AgentLens；普通双击必须立即出现可见启动窗口，较慢的首次同步不得因短 Health 超时被误判为失败。
 
 ## 2. 自动回归矩阵
 
@@ -40,7 +41,7 @@
 | Windows npm 后台服务 | 结构测试 | Windows | Task Scheduler 注册、隐藏窗口、`owner=service`、doctor 一致 |
 | Windows 登录自启 | 结构测试 | Windows | 登录触发与后台任务状态一致 |
 | Windows 打包客户端启动 | — | Windows | `win-unpacked/AgentLens.exe` 无参数启动，Health 可用且 `owner=desktop` |
-| Windows 安装器首次安装 | — | 安装器工作流 | 安装后真实 EXE 可启动，Health 可用 |
+| Windows 安装器首次安装 | 结构门禁 | 安装器工作流 | 交互安装默认运行 AgentLens；安装后真实 EXE 可见且 Health 可用 |
 | Windows 安装器覆盖已有安装 | — | 安装器工作流 | 不手工卸载即可再次运行安装器并成功启动新版 / 重装后的 EXE |
 | Windows 同版本覆盖重装 | — | 安装器工作流 | alpha 狗粮中版本号不变、构建变化时仍能覆盖已有安装 |
 | Windows 升级数据保留 | — | 安装器工作流 | 覆盖安装前写入 `~/.agent-lens/1.0` 的标记在升级后仍存在 |
@@ -88,6 +89,8 @@ electron-builder --win dir
     ↓
 无参数启动 win-unpacked/AgentLens.exe
     ↓
+15 秒内出现可见窗口句柄
+    ↓
 等待 /api/v1/health
     ├─ protocolVersion = 1.0
     └─ runtime.owner = desktop
@@ -114,6 +117,8 @@ Windows Installer 工作流还必须覆盖真实升级语义：
 ```
 
 这里故意允许“同一个版本号重复安装”，因为 1.0 alpha 狗粮期间经常出现版本号未变、构建内容已更新的情况。CI 必须证明用户不需要先手工卸载旧客户端。
+
+交互安装器必须显式保持 `runAfterFinish=true`，让安装完成页默认运行 AgentLens。静默安装仍由 CI 手工启动 EXE；二者都要进入同一条“即时启动窗口 → Health / Protocol → 单一 Daemon”验收链。
 
 桌面 Runtime、CLI、Hook、Web、迁移资源和生产依赖在打包后都必须位于真实可执行文件路径范围内。Windows 原生应用图标也使用构建时从正式 Logo 派生的多尺寸资源。
 
@@ -170,15 +175,19 @@ Windows Desktop 的交互卸载增加一层用户选择：
 
 ## 7. Windows 日志与启动故障诊断
 
-桌面端日志目录：
+打包桌面端首选日志目录：
 
 ```text
-%APPDATA%\AgentLens\logs\
+<安装目录>\logs\
 ├── desktop.log   # Electron 主进程启动、未处理异常、Renderer/GPU 子进程退出
 └── daemon.log    # Daemon stdout/stderr、启动/复用/恢复记录
 ```
 
+`AGENT_LENS_LOG_DIR` 可以显式覆盖该目录；安装目录不可写时回退 `%APPDATA%\AgentLens\logs`。
+
 `desktop.log` 不依赖 Daemon、窗口或托盘成功创建。只要 Electron bootstrap 被执行，就应留下启动阶段记录，用于定位“安装后双击完全没有反应”的早期崩溃。
+
+两份日志必须来自同一目录。应用包名 `@agent-lens/desktop` 不得导致 `daemon.log` 落到另一套 `%APPDATA%` 路径。
 
 ## 8. 仍需实机验收
 

@@ -21,6 +21,9 @@ const DAEMON_FAST_HEALTH_TIMEOUT_MS = 250
 const DAEMON_HEALTH_TIMEOUT_MS = 900
 const DAEMON_BUSY_PROBE_ATTEMPTS = 3
 const DAEMON_PORT_TIMEOUT_MS = 180
+const DAEMON_STARTUP_HEALTH_TIMEOUT_MS = 10_000
+const DAEMON_STARTUP_TIMEOUT_MS = 10 * 60_000
+const DAEMON_STARTUP_RETRY_DELAY_MS = 500
 const port = process.env.AGENT_LENS_PORT ? Number(process.env.AGENT_LENS_PORT) : DEFAULT_PORT
 const daemonUrl = `http://127.0.0.1:${port}`
 const desktopSmokeMode = process.env.AGENT_LENS_DESKTOP_SMOKE === '1'
@@ -30,7 +33,7 @@ const startupPage = `data:text/html;charset=UTF-8,${encodeURIComponent(`<!doctyp
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>AgentLens</title>
+<title>AgentLens · 智能体透镜</title>
 <style>
   html,body{height:100%;margin:0;background:#0b0d10;color:#f1f4f8;font-family:"Segoe UI","Microsoft YaHei",sans-serif}
   body{display:grid;place-items:center}
@@ -40,7 +43,7 @@ const startupPage = `data:text/html;charset=UTF-8,${encodeURIComponent(`<!doctyp
   i{width:10px;height:10px;border-radius:50%;background:#8eb8ff;box-shadow:0 0 0 5px rgba(142,184,255,.12)}
 </style>
 </head>
-<body><main><i></i><div><strong>AgentLens</strong><span>正在启动本地运行时…</span></div></main></body>
+<body><main><i></i><div><strong>AgentLens · 智能体透镜</strong><span>正在启动本地运行时；首次启动或数据较多时可能需要几分钟…</span></div></main></body>
 </html>`)} `
 
 let mainWindow = null
@@ -57,6 +60,10 @@ let quitStopPromise = null
 let daemonOwnership = 'none'
 let externalDaemonOwner = null
 let pendingShowRequest = false
+
+function bootStage(stage) {
+  globalThis.__agentLensBootStage?.(`main:${stage}`)
+}
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
@@ -145,8 +152,8 @@ async function probeExistingDaemon() {
   throw new Error(`端口 ${port} 已被占用，但没有得到兼容的 AgentLens Health 响应。为避免启动第二个默认运行时，桌面端不会继续接管。`)
 }
 
-async function daemonReady() {
-  const health = await readDaemonHealth()
+async function daemonReady(timeoutMs = DAEMON_HEALTH_TIMEOUT_MS) {
+  const health = await readDaemonHealth(timeoutMs)
   if (!health) return false
   assertCompatibleDaemon(health)
   return true
@@ -160,10 +167,17 @@ function runtimeOwnerLabel(owner) {
 }
 
 async function waitForDaemon() {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    if (await daemonReady()) return true
+  const deadline = Date.now() + DAEMON_STARTUP_TIMEOUT_MS
+  let nextProgressLogAt = Date.now() + 30_000
+  while (Date.now() < deadline) {
+    const remaining = deadline - Date.now()
+    if (await daemonReady(Math.min(DAEMON_STARTUP_HEALTH_TIMEOUT_MS, remaining))) return true
     if (daemonOwnership === 'desktop' && (!daemon || daemon.exitCode !== null)) return false
-    await sleep(150)
+    if (Date.now() >= nextProgressLogAt) {
+      writeDaemonLog(`--- waiting for Health; daemon is still running ${new Date().toISOString()} ---`)
+      nextProgressLogAt = Date.now() + 30_000
+    }
+    await sleep(Math.min(DAEMON_STARTUP_RETRY_DELAY_MS, Math.max(0, deadline - Date.now())))
   }
   return false
 }
@@ -384,7 +398,9 @@ function createWindow() {
     height: 840,
     minWidth: 900,
     minHeight: 600,
-    show: false,
+    // 普通双击和安装完成后的首次启动必须立刻显示启动反馈；只有明确
+    // 带 --hidden 的登录自启才从托盘静默启动。
+    show: !startHidden,
     backgroundColor: '#0b0d10',
     icon: desktopIconPath(),
     webPreferences: {
@@ -394,9 +410,6 @@ function createWindow() {
     },
   })
   mainWindow.removeMenu()
-  mainWindow.once('ready-to-show', () => {
-    if (!startHidden) mainWindow?.show()
-  })
   mainWindow.on('close', event => {
     if (quitting) return
     event.preventDefault()
@@ -414,7 +427,7 @@ function createWindow() {
 
 async function createTray() {
   tray = new Tray(await trayIcon())
-  tray.setToolTip('AgentLens')
+  tray.setToolTip('AgentLens · 智能体透镜')
   const template = [
     { label: '打开 AgentLens', click: showWindow },
     { label: '重启运行时', click: () => void restartDaemon() },
@@ -448,6 +461,7 @@ async function createTray() {
 }
 
 const singleInstance = app.requestSingleInstanceLock()
+bootStage(`single-instance-lock=${singleInstance}`)
 if (!singleInstance) {
   app.quit()
 } else {
@@ -471,14 +485,21 @@ if (!singleInstance) {
 
   // 动态导入的主模块必须立即完成求值。这里不能顶层 await app.whenReady()：
   // Electron 要等入口模块返回事件循环后才会发出 ready，否则打包应用会无窗口卡住。
+  bootStage('startup-continuation-scheduled')
   void (async () => {
+    bootStage('before-when-ready')
     await app.whenReady()
+    bootStage('after-when-ready')
     if (process.platform === 'win32') app.setAppUserModelId('dev.z7ping.agentlens')
+    await ensureDaemonLog()
+    writeDaemonLog('\n--- AgentLens desktop ready ' + new Date().toISOString() + ' packaged=' + app.isPackaged + ' pid=' + process.pid + ' ---')
 
     createWindow()
+    writeDaemonLog('--- startup window created ---')
 
     try {
       await createTray()
+      writeDaemonLog('--- tray created ---')
     } catch (error) {
       tray = null
       writeDaemonLog('--- tray creation failed: ' + (error instanceof Error ? error.stack ?? error.message : String(error)) + ' ---')
@@ -491,11 +512,13 @@ if (!singleInstance) {
     }
 
     try {
-      await ensureDaemonLog()
       writeDaemonLog('\n--- AgentLens desktop start ' + new Date().toISOString() + ' packaged=' + app.isPackaged + ' pid=' + process.pid + ' ---')
       await startDaemon()
       if (!await waitForDaemon()) {
-        throw new Error('AgentLens 后台服务未能正常启动。请查看日志：' + join(app.getPath('logs'), 'daemon.log'))
+        const state = daemonOwnership === 'desktop' && daemon && daemon.exitCode === null
+          ? '后台服务仍在运行，但在 10 分钟内没有完成 Health 响应。'
+          : '后台服务已在 Health 就绪前退出。'
+        throw new Error(`${state} 请查看日志：${join(app.getPath('logs'), 'daemon.log')}`)
       }
       markDaemonStable()
       await mainWindow.loadURL(daemonUrl)

@@ -81,18 +81,22 @@ macOS   -> LaunchAgent / launchd
 
 Desktop：
 
+- Windows 交互安装完成后默认启动 AgentLens，并立即显示启动窗口；只有明确带 `--hidden` 的登录自启才从托盘静默进入；
 - 登录 Windows 后可自动进入托盘；
 - 启动前探测已有兼容 Daemon；
 - 探测使用短重试窗口，避免高负载时把“响应稍慢”误判成“没有 Daemon”而启动第二套运行时；
 - npm Daemon 已存在时直接复用；
 - 只有没有兼容 Daemon 时才启动自己拥有的 Daemon；
 - 等待 Daemon 就绪时仍校验 Protocol 版本，不把不兼容运行时误判为启动成功；
+- 首次 History / Asset 同步较慢时保持启动窗口和 Daemon 运行，不因短 Health 超时提前杀死有效进程；并发 Health 请求复用同一个 Storage 探测，避免轮询放大 SQLite 队列；
 - 退出时只停止自己拥有的 Daemon；
 - 启动后登记自身为可用 Hook Provider；
 - 只对本机实际检测到的 Codex / Claude Code 修复 AgentLens Hook；
 - Pi 不安装 Hook。
 
 Desktop 的 Hook 文件在正式安装包中解包到外部进程可访问路径，避免 PowerShell / Electron-as-Node 无法直接读取 `app.asar` 内部 Hook 文件。
+
+Windows Desktop 的 Electron bootstrap 与 Daemon 日志必须使用同一目录。打包版优先写入 `<安装目录>\logs`，可通过 `AGENT_LENS_LOG_DIR` 显式覆盖；安装目录不可写时才回退 `%APPDATA%\AgentLens\logs`。不得再由 npm 包名派生出另一套日志目录。
 
 Windows 登录自启以系统真实状态为准：
 

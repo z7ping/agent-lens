@@ -47,6 +47,7 @@ export const AGENT_LENS_HTTP_HOST = '127.0.0.1' as const
 export const DEFAULT_AGENT_LENS_HTTP_PORT = 56789
 const MAX_JSON_BODY_BYTES = 1024 * 1024
 const MAX_BACKUP_BODY_BYTES = 256 * 1024 * 1024
+const HEALTH_CACHE_TTL_MS = 1_000
 const RUNTIME_STARTED_AT = new Date().toISOString()
 const BACKUP_KINDS = new Set<BackupAssetKind>([
   'skill', 'mcp', 'plugin', 'extension', 'hook', 'memory', 'rule', 'session', 'config', 'other',
@@ -472,6 +473,29 @@ export async function startHttpSurface(
   const agents = new AgentOverviewProjection(storage, options.sources, options.capabilities, options.capturePolicy)
   const relationships = new SessionRelationshipProjection(storage)
   const staticMounts = new Map<string, HttpStaticMount>()
+  type StorageHealth = Awaited<ReturnType<StorageService['health']>>
+  let cachedStorageHealth: StorageHealth | null = null
+  let cachedStorageHealthAt = 0
+  let storageHealthProbe: Promise<StorageHealth> | null = null
+
+  const readStorageHealth = async (): Promise<StorageHealth> => {
+    if (cachedStorageHealth && Date.now() - cachedStorageHealthAt < HEALTH_CACHE_TTL_MS) {
+      return cachedStorageHealth
+    }
+    if (!storageHealthProbe) {
+      storageHealthProbe = storage.health()
+        .then(health => {
+          cachedStorageHealth = health
+          cachedStorageHealthAt = Date.now()
+          return health
+        })
+        .finally(() => {
+          storageHealthProbe = null
+        })
+    }
+    return storageHealthProbe
+  }
+
   if (options.staticDir) {
     staticMounts.set('legacy-static-dir', {
       id: 'legacy-static-dir',
@@ -503,7 +527,10 @@ export async function startHttpSurface(
         return
       }
       if (url.pathname === '/api/v1/health') {
-        const health = await storage.health()
+        // Storage diagnostics can be slower while the first history import owns
+        // the serialized SQLite executor. Coalesce concurrent probes so desktop
+        // startup polling cannot amplify one slow Health check into a backlog.
+        const health = await readStorageHealth()
         const details = health.details
           ? Object.fromEntries(Object.entries(health.details).map(([key, value]) => [key, jsonValue(value)]))
           : undefined

@@ -145,14 +145,6 @@ function Draw-AppIcon([System.Drawing.Graphics]$graphics) {
     $centerNode.Dispose()
   }
 
-  $outline = New-RoundedRectPath 1 1 1252 1252 249
-  $outlinePen = [System.Drawing.Pen]::new([System.Drawing.ColorTranslator]::FromHtml('#153747'), 2)
-  try {
-    $graphics.DrawPath($outlinePen, $outline)
-  } finally {
-    $outlinePen.Dispose()
-    $outline.Dispose()
-  }
 }
 
 function Draw-SmallIcon([System.Drawing.Graphics]$graphics) {

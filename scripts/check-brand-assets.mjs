@@ -24,6 +24,8 @@ requireText(!canonicalSvg.includes('Narratica'), '主母版仍残留 Narratica �
 requireText(canonicalSvg.includes('#005DFF') && canonicalSvg.includes('#00DDE4'), '新品牌蓝青渐变缺失')
 requireText(canonicalSvg.includes('#FFB10F') && canonicalSvg.includes('#FF7B20'), '新品牌橙色焦点缺失')
 requireText(canonicalSvg.includes('viewBox="0 0 1254 1254"'), '主母版 viewBox 规格不正确')
+requireText(!canonicalSvg.includes('fill="#000000"'), '主母版裁剪层外仍有纯黑底，透明圆角会变成黑角')
+requireText(!canonicalSvg.includes('#153747'), '主母版仍有深色外描边')
 
 for (const path of [fullSvgPath, smallSvgPath, archiveFullPath, archiveSmallPath, desktopBuildSvgPath]) {
   requireText(read(path) === canonicalSvg, `品牌派生 SVG 未与主母版逐字同步：${path}`)
@@ -84,6 +86,7 @@ requireText(windowsGenerator.includes('@(16, 20, 24, 32, 40, 48)'), '托盘 ICO 
 requireText(windowsGenerator.includes('#005DFF') && windowsGenerator.includes('#00DDE4'), 'Windows 派生器仍使用旧品牌底色')
 requireText(windowsGenerator.includes('#FFB10F') && windowsGenerator.includes('#FF7B20'), 'Windows 派生器缺少新橙色焦点')
 requireText(windowsGenerator.includes('1254'), 'Windows 派生器未按新 1254 主母版坐标系同步')
+requireText(!windowsGenerator.includes('#153747'), 'Windows 派生器仍在图标边缘绘制深色描边')
 
 const macGenerator = read('scripts/prepare-macos-icon.sh')
 for (const size of [16, 32, 64, 128, 256, 512, 1024]) {

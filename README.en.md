@@ -1,327 +1,227 @@
 <p align="center">
-  <img src="docs/brand/logo/agentlens-logo.svg" width="128" alt="AgentLens Logo" />
+  <img src="https://raw.githubusercontent.com/z7ping/agent-lens/main/docs/brand/logo/agentlens-logo.svg" width="128" alt="AgentLens Logo" />
 </p>
 
-<h1 align="center">AgentLens</h1>
+<h1 align="center">AgentLens | The Lens for AI Agents</h1>
 
-<p align="center"><strong>Local observability and trajectory replay for AI coding agents.</strong></p>
+<p align="center"><strong>See every observable action taken by your AI coding agents.</strong></p>
+
+<p align="center">A local-first tool for AI coding agent observability, evidence tracing, and task review.</p>
 
 <p align="center">
   <a href="README.md">简体中文</a> ·
   <a href="README.en.md"><strong>English</strong></a>
 </p>
 
-> **1.0 alpha:** AgentLens 1.0 is a clean rebuild around Canonical Observation + Evidence. The 0.x runtime is reference material only and is not part of the 1.0 execution path.
+<p align="center">
+  <a href="https://www.npmjs.com/package/@z7ping/agent-lens"><img alt="npm version" src="https://img.shields.io/npm/v/@z7ping/agent-lens?logo=npm&color=cb3837" /></a>
+  <img alt="Node.js version" src="https://img.shields.io/node/v/@z7ping/agent-lens?logo=node.js&logoColor=white" />
+  <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/npm/l/@z7ping/agent-lens" /></a>
+  <img alt="Local first" src="https://img.shields.io/badge/data-local--first-005DFF" />
+  <img alt="Status alpha" src="https://img.shields.io/badge/status-alpha-FF8A1F" />
+</p>
 
-## What AgentLens does
+> [!IMPORTANT]
+> AgentLens 1.0 is currently in alpha. It is a clean rebuild centered on Canonical Observation + Evidence. The 0.x line is retained only as a source of validated behavior and design references; its runtime does not carry into 1.0.
 
-AgentLens observes what local AI coding agents expose and turns those native records into one evidence-backed model.
+## Why AgentLens
 
-It answers:
+Codex, Claude Code, Pi, Hermes, OpenCode, and similar tools scatter sessions, tool calls, and capability configuration across JSONL, SQLite, Hooks, and local configuration. AgentLens turns those **observable facts** into a consistent, traceable view that helps you answer:
 
-- what happened during a task/session;
-- which native source proves it happened;
-- how history and runtime observations reconcile;
-- which tools were called and which calls failed;
-- which Skills/MCP assets are installed or configured, and which can be defensibly attributed to actual usage.
+- What did the agent just do, and where did it fail?
+- Which turns, tool calls, and lifecycle events made up a long-running task?
+- Did a fact come from history, a native tail, or a Runtime Hook?
+- Which Skills, MCP servers, and Plugins are installed, and which were actually invoked?
+- Which data is complete, partial, unavailable at the source, or unknown?
 
-AgentLens does **not** execute the agent and does not claim access to hidden chain-of-thought.
+AgentLens shows only what its Sources can support with evidence. It does not claim access to hidden reasoning or present inference as fact.
 
-## 1.0 source support
+## Start in 30 seconds
 
-| Source | History | Runtime | Assets |
-| --- | --- | --- | --- |
-| Codex | Native session JSONL | Runtime Hooks + durable inbox | Skills, MCP, Plugins, Hooks, Rules |
-| Claude Code | Project/session JSONL | Runtime Hooks + durable inbox | Skills, MCP, Plugins, Hooks, Commands |
-| Pi | Native Session JSONL | Continuous native JSONL tail | Skills, Extensions, MCP, Memory-related assets |
-| Hermes | Native SQLite session history | Native SQLite tail + optional Runtime Hook | Skills, MCP, Plugins, Memory-related assets |
-| OpenCode | Native session/runtime data | Incremental native runtime collection | Assets recognized through the 1.0 Source Contract |
-| DeepSeek Harness | Profile Session JSONL / JSONL.ZST with Turn, Step, Tool, Usage, Request Header, and session lineage | Watches changed session files and tails by event sequence | Profile Bundles, external Plugins, profile configuration overrides |
+### Desktop
 
-DeepSeek Harness maps `SessionHeader.cwd` to an AgentLens Workspace and preserves `parentSessionId` as native lineage evidence. AgentLens does not infer `subagent` merely because a parent session exists.
+Visit [GitHub Releases](https://github.com/z7ping/agent-lens/releases) and download the package matching your platform and architecture:
 
-DSH Bundle/Plugin discovery follows the profile's own `package.json`, including `dsh.profile.bundles` and dependency declarations. `cordis.patch.yml` is recorded as a profile configuration override. Compressed reasoning chunks are not expanded, and hidden reasoning, permission events, or asset-usage attribution are not inferred without reliable native evidence.
+- Windows x64: `AgentLens-<version>-Setup-x64.exe`
+- macOS: DMG for Apple Silicon or Intel
+- Linux: AppImage or DEB for x64 or arm64
 
-## Quick start
+Desktop and npm distributions share the same Runtime, default data root, and data model. Installing both does not create a second database.
 
-Requires Node.js **22.23+**.
+### npm / CLI
 
-### npm
+Node.js 22.23.0 or newer is required:
 
 ```bash
 npm install -g @z7ping/agent-lens
-
 agent-lens setup
-```
-
-`agent-lens setup` performs one-time initialization: it validates Node.js and the data directory, detects supported local Sources, and installs or repairs only AgentLens-owned Hooks for Sources that require Hooks. Native history/runtime-tail Sources are not modified just to integrate with AgentLens.
-
-After setup, choose foreground or managed background operation:
-
-```bash
-# Foreground, useful for debugging
-agent-lens start
-
-# Managed background runtime
 agent-lens service start
-
-# Optional: start automatically after user login
-agent-lens autostart enable
 ```
 
-Check state with:
+Open <http://127.0.0.1:56789>.
+
+`setup` performs one-time initialization only. It does not start a long-running Daemon or enable login autostart. Use `agent-lens start` for foreground debugging.
+
+Check the runtime:
 
 ```bash
 agent-lens status
-agent-lens service status
-agent-lens autostart status
 agent-lens doctor
 ```
 
-`setup` only initializes integration. It does not automatically enable background operation or login autostart. `service` controls whether AgentLens is running in the background now; `autostart` controls whether it starts after the next user login.
+## What you will see
 
-The npm distribution maps background lifecycle directly to native user-level operating-system facilities:
+| View | Purpose |
+| --- | --- |
+| **Task Review** | Reconstruct user messages, agent messages, tool execution, errors, Evidence, and lifecycle events by session and turn. Long sessions retain a turn rail. |
+| **Tool Analysis** | Inspect call volume, success and failure, Source distribution, and reliably attributed capability usage. |
+| **Usage Insights** | Review usage by time, Source, and activity trend without treating missing data as zero. |
+| **Agent Overview** | See local agent detection, capture modes, installation details, asset inventory, and proven usage. |
+| **Asset Backup** | Manage local backup and restore boundaries for recognized assets. |
 
-- Windows: current-user Task Scheduler;
-- Linux: `systemd --user`;
-- macOS: user-level `launchd`.
+The product UI defaults to Simplified Chinese and keeps agent-specific information such as Evidence, coverage, errors, and Source health visible. Live updates use SSE. Task Review favors incremental coordination so a refresh does not destroy the current reading position.
 
-AgentLens does not restore the 0.x PID/service-manager architecture and does not create a second runtime or database for managed mode.
+## Supported Sources
 
-Open:
+| Source | History | Runtime | Assets |
+| --- | --- | --- | --- |
+| Codex | Native Session JSONL | Runtime Hook + Durable Inbox | Skills, MCP, Plugins, Hooks, Rules |
+| Claude Code | Project / Session JSONL | Runtime Hook + Durable Inbox | Skills, MCP, Plugins, Hooks, Commands |
+| Pi | Native Session JSONL | Continuous native JSONL tail | Skills, Extensions, MCP, Memory-related assets |
+| Hermes | Native SQLite session history | Native SQLite tail + optional Runtime Hook | Skills, MCP, Plugins, Memory-related assets |
+| OpenCode | Native session / runtime data | Incremental native runtime collection | Assets recognized through the 1.0 Source Contract |
+| DeepSeek Harness | Profile Session JSONL / JSONL.ZST | Incremental collection by event sequence | Profile Bundles, out-of-tree Plugins, configuration overrides |
 
-```text
-http://127.0.0.1:56789/
-```
+Sources expose different facts. AgentLens explicitly distinguishes complete, partial, source-unavailable, and unknown coverage instead of filling gaps with synthetic data.
 
-`agent-lens start` intentionally runs the daemon in the foreground. It probes the default AgentLens endpoint first and reuses a compatible existing daemon instead of starting a second one. npm and Windows Desktop may coexist while sharing the same default data root and runtime.
+## Evidence: every fact should be explainable
 
-### Source checkout
-
-```bash
-npm install
-npm run typecheck
-npm test
-npm run build:web
-npm run dev
-```
-
-For the CLI from a checkout:
-
-```bash
-npm run cli -- setup
-npm run cli -- doctor
-npm run cli -- start
-```
-
-Before testing `service` / `autostart` from a source checkout, build the formal distribution entrypoint so a temporary `tsx` command is never registered with the operating system:
-
-```bash
-npm run build:dist
-npm run cli -- service status
-npm run cli -- autostart status
-```
-
-## Windows desktop
-
-The Windows release workflow builds an x64 NSIS installer:
+The AgentLens 1.0 canonical data flow is:
 
 ```text
-AgentLens-<version>-Setup-x64.exe
-```
-
-Building the Windows installer from source requires Windows x64, Node.js **22.23+**, PowerShell 7 (`pwsh`), and installed npm dependencies.
-
-The Electron application is only a desktop shell. It owns:
-
-- single-instance behavior;
-- BrowserWindow;
-- system tray;
-- starting/reusing/stopping only the daemon it owns;
-- Windows login autostart;
-- log/data-folder access.
-
-On startup Desktop probes `127.0.0.1:56789`: it reuses a compatible daemon already owned by npm/service, and starts its own daemon only when no compatible runtime exists. Exiting Desktop does not kill an externally managed daemon.
-
-The daemon and HTTP/SSE architecture remain the same as the CLI/npm distribution.
-
-Uninstalling the desktop application does not automatically delete `~/.agent-lens/1.0` observation data.
-
-## Web 1.0
-
-The Web UI is itself a Cordis Surface Plugin: `@agent-lens/web`. It mounts the React SPA through `ctx.http.mountStatic()`, so the HTTP/API surface can run without the Web plugin. Web consumes only `@agent-lens/protocol` DTOs and does not directly depend on Core, SQLite, or Source implementations.
-
-Current stack: React 19 + Vite + Tailwind CSS. Product state lives outside React in `AgentLensClientModel`; React subscribes with `useSyncExternalStore`, keeping live event processing independent from component-local state.
-
-The shell uses a two-level top layout: primary product navigation, then Agent shortcuts plus page-specific filters. Agent shortcuts are initialized from detected local agents and can be pinned by the user. Pinning only changes UI visibility; it does not enable or disable Sources.
-
-### Task Review
-
-Task Review uses a `Session List | Session Detail` split layout and treats Session / Interaction as the main reading structure:
-
-- user and Agent messages are rendered conversationally;
-- consecutive tool calls are grouped as an execution process with results, errors, and duration;
-- permission, subagent, context, model, and lifecycle events remain interleaved in the execution stream;
-- Codex, Claude Code, Pi, Hermes, OpenCode, and DeepSeek Harness retain source-specific native facts where they matter;
-- Pi and DeepSeek Harness can preserve native parent/session relationships;
-- Evidence and Raw Payload live in a temporary Inspector instead of dominating the main reading flow.
-
-Filtering is by Agent, project, time range, error state, and search text. Users no longer need to type installationId or logicalSessionId manually.
-
-### Tool Analysis
-
-Tool Analysis derives factual usage metrics from Canonical Observations: call count, affected Sessions, success/failure, total duration, and average duration, with Agent/project/time filters.
-
-The 1.0 baseline favors evidence-backed facts. The old 0.x value scores, risk scores, and workflow candidates are not copied back without a redesigned analyzer contract.
-
-### Agent Overview
-
-Agent Overview exposes:
-
-- detected state and installation metadata;
-- Source-declared observation capabilities;
-- statically discovered Skills, MCP, Plugins, Extensions, Hooks, and related assets;
-- asset binding path/version plus installed/configured/enabled/discoverable state observations;
-- Skill/MCP usage that can be defensibly attributed from Evidence.
-
-“Installed/configured” and “actually used” remain separate concepts in both the model and the UI.
-
-### Live updates
-
-Web receives Observation, Source Detection, and Asset changes over SSE. The SSE connection is established before the initial snapshot requests so startup scans do not fall into an API-to-SSE blind window.
-
-`AgentLensClientModel` batches high-frequency updates over short windows for Task Review, usage analytics, and Agent inventory separately. React renders stable snapshots rather than replacing the full page DOM on every event. The client closes the SSE connection when the page exits.
-
-## CLI
-
-```text
-agent-lens setup [--json]
-agent-lens start
-agent-lens status [--json]
-agent-lens doctor [--json]
-agent-lens service start|stop|restart|status [--json]
-agent-lens autostart enable|disable|status [--json]
-agent-lens hook status [codex|claude|all] [--json]
-agent-lens hook install [codex|claude|all]
-agent-lens hook uninstall [codex|claude|all]
-```
-
-`setup` is the recommended first-run entrypoint. Hook installation remains idempotent: AgentLens removes/replaces only its own handlers and preserves third-party handlers in the same configuration.
-
-Managed background lifecycle is owned by native user-level OS facilities rather than AgentLens PID files. `service restart` also refuses to seize a runtime currently owned by Windows Desktop or a foreground CLI process.
-
-## Architecture in one picture
-
-```text
-Native source
-  -> SourceRecord
+SourceRecord
   -> SourceDefinition.normalize()
   -> ObservationCandidate + EvidenceCandidate
   -> IdentityService
   -> ObservationService.commit()
   -> CanonicalObservation + Evidence
-  -> SQLite repositories
-  -> Projections
-  -> @agent-lens/protocol
-  -> HTTP / SSE
-  -> @agent-lens/web / Desktop
+  -> Projection
+  -> Protocol DTO
+  -> Web / Surface
 ```
 
-Cordis is the sole plugin runtime and is pinned to `@deepseek-ai/cordis@4.0.1`. AgentLens Core remains framework-independent; runtime extension entrypoints such as Source, Storage, and Surface are Cordis-native plugins. `packages/runtime-cordis` owns shared Context typing, metadata helpers, and compatibility tests rather than wrapping runtime extensions behind a second AgentLens plugin runtime.
+A second capture path for the same fact strengthens Evidence instead of creating a duplicate Observation. Native IDs, event types, sequence numbers, timestamps, and file or table locations are retained whenever the Source can provide them.
 
-See:
+## Installed does not mean used
+
+AgentLens separates asset state from proven usage:
+
+```text
+installed / configured / enabled / discoverable
+                      !=
+              evidence-backed usage
+```
+
+For example, discovering an MCP configuration proves only that the asset exists. It counts as MCP Usage only after AgentLens observes an attributable `mcp__server__tool` call. A generic Bash, Read, or Write call is not attributed to an installed Skill without explicit Evidence.
+
+## Local-first privacy boundaries
+
+- Default data root: `~/.agent-lens/1.0/`
+- Default database: `~/.agent-lens/1.0/agent-lens.db`
+- Default HTTP listener: `127.0.0.1:56789`
+- Hooks only perform lightweight cleanup, redaction, and atomic Durable Inbox writes
+- Canonical persistence belongs to the Daemon; Inbox entries are acknowledged only after successful ingestion
+- Prompt, Tool, Config, and Environment use independent capture levels; sensitive fields are redacted before persistence
+
+AgentLens does not silently enable the optional third-party Hermes Plugin, and static discovery is never treated as actual invocation.
+
+## Common commands
+
+```bash
+# One-time initialization
+agent-lens setup [--json]
+
+# Foreground runtime
+agent-lens start
+
+# Status and diagnostics
+agent-lens status [--json]
+agent-lens doctor [--json]
+
+# System-managed background runtime
+agent-lens service start|stop|restart|status [--json]
+
+# Login autostart
+agent-lens autostart enable|disable|status [--json]
+
+# AgentLens-owned Native Hooks
+agent-lens hook status [codex|claude|all] [--json]
+agent-lens hook install [codex|claude|all]
+agent-lens hook uninstall [codex|claude|all]
+```
+
+Background management maps to the current user's Task Scheduler on Windows, `systemd --user` on Linux, and user-level `launchd` on macOS. AgentLens does not maintain PID files or restore the 0.x Service Manager.
+
+## FAQ
+
+<details>
+<summary><strong>Why did collection not start after installation?</strong></summary>
+
+`agent-lens setup` initializes the installation only. For npm, run `agent-lens service start`, or use `agent-lens start` for foreground debugging. Desktop probes for and reuses an existing compatible Daemon when it starts.
+
+</details>
+
+<details>
+<summary><strong>Can the npm and Desktop distributions coexist?</strong></summary>
+
+Yes. They share the default data root and endpoint, with only one active Daemon at a time. Desktop stops only a Daemon that it owns and will not terminate an external npm or service-managed runtime.
+
+</details>
+
+<details>
+<summary><strong>Why is an asset installed but showing no usage?</strong></summary>
+
+Presence is not usage. AgentLens records usage only when an invocation is supported by explicit Evidence.
+
+</details>
+
+<details>
+<summary><strong>Why does a Source show only partial data?</strong></summary>
+
+Tools expose different native facts, and capture policy may further limit coverage. AgentLens reports the real coverage state instead of guessing missing content.
+
+</details>
+
+<details>
+<summary><strong>What should I do if the Windows app shows no window after installation?</strong></summary>
+
+Check the system tray first and inspect `<installation directory>\logs\desktop.log`. If the installation directory is not writable, logs fall back to `%APPDATA%\AgentLens\logs`; `AGENT_LENS_LOG_DIR` can explicitly select another location. If npm / CLI is also installed, run `agent-lens status` and `agent-lens doctor` to inspect the Daemon, storage, and managed-service state. If the issue remains, open a [GitHub Issue](https://github.com/z7ping/agent-lens/issues) with the AgentLens version, Windows version, and relevant redacted log lines.
+
+</details>
+
+## Architecture and development
+
+AgentLens 1.0 is a Cordis Application and pins `@deepseek-ai/cordis@4.0.1` as its only Plugin Runtime. Core remains framework-agnostic. Sources, Storage, and Surfaces compose through the Cordis lifecycle but may not bypass the Canonical Data Flow.
+
+Read more:
 
 - [Architecture](ARCHITECTURE.md)
-- [Core Contract](docs/1.0/CORE-CONTRACT.md)
-- [ADR-0001: Clean Rebuild and Cordis Runtime Ownership](docs/adr/0001-agentlens-1.0-clean-rebuild-and-cordis-runtime.md)
-- [ADR-0002: Web Plugin and Client State Model](docs/adr/0002-web-plugin-and-client-state-model.md)
-- [ADR-0004: Dual distribution, single runtime, and lifecycle ownership](docs/adr/0004-dual-distribution-single-runtime-lifecycle.md)
-- [ADR-0005: Runtime Profile, Session Relationships, and Asset Topology](docs/adr/0005-runtime-profile-session-relationship-and-asset-topology.md)
+- [1.0 Core Contract](docs/1.0/CORE-CONTRACT.md)
+- [Distribution operations](docs/1.0/DISTRIBUTION-OPERATIONS.md)
+- [Desktop release matrix](docs/1.0/DESKTOP-RELEASES.md)
+- [Contributing](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
 
-## Evidence model
-
-A Canonical Observation states what AgentLens believes happened. Evidence states why.
-
-Evidence preserves capture method and derivation, for example:
-
-```text
-runtime-hook + observed
-native-log  + reported
-static-scan + observed
-```
-
-If one native tool call is seen by both a runtime Hook and history JSONL, AgentLens should produce one canonical `tool.call` with two Evidence records rather than two facts.
-
-## Assets are not usage
-
-Static discovery can prove that a Skill/MCP/Plugin/Hook is installed or configured. It does not prove it ran.
-
-Asset usage is emitted only when attribution is defensible. Current examples include:
-
-- `mcp__server__tool` -> MCP server usage;
-- explicit Claude `Skill` tool input -> Skill usage.
-
-Generic Bash/Read/Write calls are not forced into an Asset category.
-
-## Local data
-
-Default 1.0 data root:
-
-```text
-~/.agent-lens/1.0/
-├── agent-lens.db
-└── inbox/
-    ├── codex/
-    └── claude/
-```
-
-The HTTP server binds to `127.0.0.1` only by design. Default port: `56789`.
-
-Runtime Hook processes sanitize sensitive-key fields before writing durable inbox records. The daemon owns canonical persistence.
-
-## Development
-
-Useful commands:
+Local development:
 
 ```bash
 npm install
+npm run check:web-presentation
 npm run typecheck
 npm test
 npm run build:dist
-npm pack --dry-run
-npm run desktop:win        # Windows runner
 ```
-
-Repository layout:
-
-```text
-apps/
-  cli/ daemon/ desktop/ hook-codex/ hook-claude/
-packages/
-  core/ core-services/ runtime-cordis/ protocol/
-  storage-sqlite/
-  source-codex/ source-claude/ source-pi/ source-hermes/ source-opencode/
-  projection-timeline/ projection-session/ projection-usage/
-  projection-review/ projection-overview/
-  surface-http/ web/ hook-manager/
-```
-
-DeepSeek Harness Source currently lives in `apps/daemon/src/sources/dsh.ts` while its behavior and lockfile changes settle. It will only be extracted into `packages/source-dsh` when that can happen without duplicating a second implementation.
-
-## Release model
-
-A GitHub Release triggers:
-
-1. Linux + Windows + macOS verification;
-2. typecheck/tests/distribution build;
-3. exact npm tarball packing;
-4. SBOM + SHA-256 checksums;
-5. GitHub Release artifact upload;
-6. publish of that exact prerelease tarball to the npm `alpha` dist-tag;
-7. a separate Windows workflow that builds and attaches the NSIS installer.
-
-The release tag must match `package.json` exactly (`v` prefix is allowed).
 
 ## License
 
-MIT
+[MIT](LICENSE)

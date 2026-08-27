@@ -18,6 +18,11 @@
 - npm 后台生命周期直接使用 Windows 当前用户计划任务、Linux `systemd --user`、macOS 用户级 `launchd`，不恢复 PID / Service Manager 体系。
 - npm 预发布通过 GitHub Release 发布同一个已验证 tarball，并固定使用 npm `alpha` dist-tag，不占用 `latest`。
 
+### Fixed
+- 移除品牌 SVG 裁剪层外的纯黑底和 Windows 派生图标的深色外描边；应用 ICO、窗口 PNG 与托盘 ICO 保持透明圆角，并增加黑角 / 黑边回归门禁。
+- Windows 交互安装完成后默认运行 AgentLens，普通双击立即显示“AgentLens · 智能体透镜”启动窗口；首次历史同步期间合并并发 Health 探测并延长就绪等待，避免把仍在工作的 Daemon 误判为失败后强制终止。
+- Electron bootstrap 与 Daemon 日志统一到同一目录；打包版优先写入 `<安装目录>\logs`，支持 `AGENT_LENS_LOG_DIR` 覆盖，只在目录不可写时回退 `%APPDATA%\AgentLens\logs`。
+
 ### Security
 - HTTP 默认仅监听 `127.0.0.1`；敏感键在 SourceRecord、Normalize Output、Raw Payload 与 Evidence 持久化前统一脱敏。
 - DSH request/header、MCP 配置、环境变量、API Key / Token 等新增端到端隐私回归，默认不把凭据写入观测数据库。
@@ -67,7 +72,7 @@
 
 ### Changed
 - 任务复盘中的用户与 AI 对话气泡统一在超过 5 行时默认折叠，并支持展开后再次折叠；Markdown 渲染、源码视图和窄屏换行会按实际高度重新判断。
-- 产品标题更新为“AgentLens | AI 智能体透镜”，采用“看清智能体的每一次行动”作为 Slogan；README 改为默认英文并提供完整简体中文版本。
+- 产品标题更新为“AgentLens | 智能体透镜”，采用“看清智能体的每一次行动”作为 Slogan；README 默认简体中文，并提供英文版本。
 
 ### Fixed
 - Windows 升级切换程序目录时会阻止 Hook 自动拉起服务，并清理仍从已安装目录运行的服务与 Hook 进程；短暂文件占用会有限重试，避免 `EBUSY` 导致安装失败。

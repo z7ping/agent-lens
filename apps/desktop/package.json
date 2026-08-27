@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "main": "src/bootstrap.mjs",
-  "description": "AgentLens 跨平台桌面壳。",
+  "description": "AgentLens 智能体透镜跨平台桌面客户端。",
   "author": "7ping <z7ping@outlook.com>",
   "scripts": {
     "start": "electron .",
@@ -75,6 +75,7 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "AgentLens",
+      "runAfterFinish": true,
       "deleteAppDataOnUninstall": false,
       "include": "build/installer.nsh"
     }

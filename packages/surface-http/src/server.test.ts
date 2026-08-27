@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
+import type { StorageService } from '@agent-lens/core'
 import {
   DefaultIdentityService,
   DefaultObservationService,
@@ -14,6 +15,42 @@ import type {
 } from '@agent-lens/protocol'
 import { SqliteStorageService } from '@agent-lens/storage-sqlite'
 import { startHttpSurface } from './server'
+
+test('concurrent Health requests share one storage probe', async () => {
+  let probes = 0
+  let releaseProbe: () => void = () => undefined
+  const probeGate = new Promise<void>(resolve => { releaseProbe = resolve })
+  const storage = {
+    async health() {
+      probes += 1
+      await probeGate
+      return { ok: true, schemaVersion: 6 }
+    },
+  } as unknown as StorageService
+  const surface = await startHttpSurface(storage, { port: 0 })
+
+  try {
+    const base = `http://${surface.host}:${surface.port}`
+    const requests = Array.from({ length: 6 }, () => fetch(`${base}/api/v1/health`))
+    const deadline = Date.now() + 2_000
+    while (probes === 0 && Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 10))
+    }
+    assert.equal(probes, 1)
+    releaseProbe()
+
+    const responses = await Promise.all(requests)
+    assert.deepEqual(responses.map(response => response.status), [200, 200, 200, 200, 200, 200])
+    assert.equal(probes, 1)
+
+    const cachedResponse = await fetch(`${base}/api/v1/health`)
+    assert.equal(cachedResponse.status, 200)
+    assert.equal(probes, 1)
+  } finally {
+    releaseProbe()
+    await surface.dispose()
+  }
+})
 
 test('HTTP surface exposes v1 API and production web assets on loopback', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })

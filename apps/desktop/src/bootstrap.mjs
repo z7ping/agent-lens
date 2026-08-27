@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 import { app } from 'electron'
 
-function defaultBootLogPath() {
+function fallbackBootLogPath() {
   if (process.platform === 'win32') {
     const appData = process.env.APPDATA || join(homedir(), 'AppData', 'Roaming')
     return join(appData, 'AgentLens', 'logs', 'desktop.log')
@@ -11,7 +11,37 @@ function defaultBootLogPath() {
   return join(homedir(), '.agent-lens', 'desktop.log')
 }
 
-const bootLogPath = process.env.AGENT_LENS_DESKTOP_BOOT_LOG || defaultBootLogPath()
+function selectBootLogPath() {
+  const candidates = [
+    process.env.AGENT_LENS_DESKTOP_BOOT_LOG,
+    process.env.AGENT_LENS_LOG_DIR?.trim()
+      ? join(process.env.AGENT_LENS_LOG_DIR.trim(), 'desktop.log')
+      : null,
+    app.isPackaged ? join(dirname(process.execPath), 'logs', 'desktop.log') : null,
+    fallbackBootLogPath(),
+  ].filter((value, index, values) => value && values.indexOf(value) === index)
+
+  for (const candidate of candidates) {
+    try {
+      mkdirSync(dirname(candidate), { recursive: true })
+      appendFileSync(candidate, '', 'utf8')
+      return candidate
+    } catch {
+      // Try the next writable location. Early startup must retain a fallback.
+    }
+  }
+  return fallbackBootLogPath()
+}
+
+const bootLogPath = selectBootLogPath()
+
+try {
+  app.setName('AgentLens')
+  mkdirSync(dirname(bootLogPath), { recursive: true })
+  app.setPath('logs', dirname(bootLogPath))
+} catch {
+  // Product naming and log routing must not prevent early diagnostic logging.
+}
 
 function bootStage(stage) {
   try {
@@ -21,6 +51,8 @@ function bootStage(stage) {
     // Diagnostic logging must never change desktop startup semantics.
   }
 }
+
+globalThis.__agentLensBootStage = bootStage
 
 bootStage(`entered ready=${app.isReady()} packaged=${app.isPackaged} log=${bootLogPath}`)
 for (const event of ['will-finish-launching', 'ready', 'browser-window-created', 'before-quit', 'will-quit', 'quit']) {
