@@ -229,6 +229,8 @@ Host
 
 跨 Session 语义通过显式关系表达（`resume`、`continuation`、`fork`、`subagent`、`import-copy`、`related`），而不是继续把语义塞进某个字符串 session key。
 
+多机 Hub 引入的 `NodeIdentity` 属于 Replication 实例身份，不替代 Canonical `Host`。当前 Host / Installation / Workspace 等本机 Canonical ID 规则在 Hub Alpha 中暂不强制迁移；跨机器唯一性由 Replication Namespace / Replica Key 解决，详见 ADR-0007。
+
 ## 9. Observation 与 Evidence
 
 `CanonicalObservation` 表达 AgentLens 认为“发生了什么”。
@@ -560,45 +562,60 @@ Windows 无窗口后台任务与 Hook Runner 都只是运维 / 执行包装。�
 
 ## 22. 多机 Hub 架构
 
-状态：**架构已接受，Alpha 实现尚未开始。** 完整决策见 `docs/adr/0007-multi-machine-hub-local-first-canonical-replication.md`。
+状态：**架构已接受并完成实现前复核，Alpha 实现尚未开始。** 完整决策见 `docs/adr/0007-multi-machine-hub-local-first-canonical-replication.md`。
 
-AgentLens 的多机能力继续遵守 Local-first：Node 与 Hub 不是两套程序，而是同一个 `AgentLensApplication` 的不同 Cordis Plugin Composition。Standalone 没有 Hub 也必须完整可用；Hub 默认可以同时采集本机，也允许关闭本机采集成为 Pure Hub。
-
-目标角色组合：
+每个 AgentLens 实例都是一个持久 Node。Standalone、普通接入节点、Hub、Pure Hub 只是同一个 `AgentLensApplication` 的能力组合，不是四套程序，也不在 Core 中维护互斥角色：
 
 ```text
-Standalone
-  = common runtime + local sources
-
-Node
-  = common runtime + local sources + replication-client
-
-Hub
-  = common runtime + local sources + replication-server + node-registry
-
-Pure Hub
-  = common runtime + replication-server + node-registry
+AgentLens Node
+  localCapture        true | false
+  replicationUpstream true | false
+  hubAccept           true | false
 ```
 
-Node 在本机完成 Source -> Canonical Pipeline -> Local Storage 后，通过独立 Replication Protocol 把 Canonical Entity State 同步给 Hub。Hub 是 Canonical Replica + Aggregator，不重新解释原生 Source，不重新生成一套 Canonical ID，不同步 SQLite 文件或 Projection。
+Hub 继续遵守 Local-first。本机 Source 先形成 Local Canonical Store；只有经过独立 Replication Policy 允许的数据才进入 Hub：
 
 ```text
-Node A Canonical Store --+
-                         |
-Node B Canonical Store --+--> Hub Unified Canonical Store --> Projection --> Unified Web
-                         |
-Hub Local Sources -------+
+Native Source
+  -> Capture Policy
+  -> Local Canonical Store
+  -> Replication Policy
+  -> Bootstrap / Incremental Replication
+  -> Hub Unified Canonical Store
+  -> Projection
+  -> Unified Web
 ```
 
-Hub 使用统一 Canonical Store，不按 Node 分数据库。Node / Host Identity 使用持久 UUID；Replication 的 Node Registry、Cursor、Entity Source 与 Conflict 属于独立 Control Plane，不混入被观测 Agent 的 Canonical Observation。
+当前本机 Canonical ID 不被直接提升为跨机全局主键。现有 `Host.id` 仍有单机身份算法约束，因此机器作用域实体通过确定性的 Replication Namespace 映射：
 
-网络安全边界保持分离：
+```text
+ReplicaKey = stable(nodeId, entityType, originEntityId)
+```
+
+Hub 保存 `originNodeId` / `originEntityId` 用于追溯，但不重新运行 Source Parser 或 `IdentityService` 来猜测远程事实。Project、AgentProduct、AssetDefinition 等 Shared Entity 使用各自的 Shared Identity + 字段级确定性 Merge Contract 汇聚；禁止通用 last-write-wins。
+
+Alpha 固定单 Hub 星型拓扑：一个 Node 最多一个 upstream Hub，不支持 Hub Federation、级联 Hub 或一个 Node 同时同步多个 Hub。
+
+首次连接不是只同步“从现在开始”的新数据，而是：
+
+```text
+Pair
+  -> Bootstrap Sync（可恢复）
+  -> Incremental Sync
+```
+
+Cordis `observation/committed` 等事件只用于低延迟 fast path；Durable Replication 还必须通过 Canonical Reconciliation 查漏补缺。删除必须使用持久 Tombstone，不能因为一次扫描“没看到”就推断删除。
+
+Hub 使用统一 Canonical Store，不按 Node 分数据库；Node Registry、Cursor、Replica Source、Conflict、Tombstone 等属于 Replication Control Plane，不混入 Agent 行为 Observation。
+
+安全边界保持分离：
 
 - 现有 `surface-http` 继续只监听 `127.0.0.1:56789`；
-- 新增独立 `surface-replication` 作为 Hub HTTPS 网络入口；
-- Node 只主动向 Hub 建立出站连接，Hub 不反向访问 Node；
+- 新增独立 Hub HTTPS Replication Surface；
+- Node 只主动连接 Hub，Hub 不反向访问 Node；
 - Pairing 使用短期一次性凭证，长期 Node 身份使用持久非对称密钥；
 - Hub 支持 TLS 与 Hub Identity Fingerprint 绑定；
-- Alpha 默认不开放远程 Web，也不提供远程执行 Agent / Shell / Hook / Skill 管理能力。
+- Capture Policy 与 Replication Policy 分离，Alpha 至少支持 `metadata-only / redacted / full`；复制策略只能进一步收紧本机数据，不能恢复已关闭 / 脱敏内容；
+- Alpha 默认不开放远程 Web，也不提供远程 Agent / Shell / Hook / Skill 管理能力。
 
-产品版本、Replication Protocol 与 Storage Schema 独立演进。协议不兼容时只暂停 Replication，Node 本机采集、Canonical Commit、SQLite 与 Web 必须继续工作；未同步数据由 Durable Outbox 保留。推荐升级顺序为先 Hub、后 Node，支持滚动升级。
+产品版本、Replication Protocol 与 Storage Schema 独立演进。协议不兼容时只暂停 Replication，本机采集、Canonical Commit、SQLite 与 Web 必须继续工作。推荐升级顺序为先 Hub、后 Node，支持滚动升级。
