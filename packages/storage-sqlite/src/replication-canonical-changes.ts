@@ -31,6 +31,7 @@ export class SqliteReplicationCanonicalChangeReader {
   async scan(input: {
     afterRevision?: number
     throughRevision: number
+    entityType?: KnownReplicationEntityType
     limit?: number
   }): Promise<CanonicalChangePage> {
     const afterRevision = input.afterRevision ?? 0
@@ -43,6 +44,11 @@ export class SqliteReplicationCanonicalChangeReader {
     const limit = Math.max(1, Math.min(input.limit ?? 100, 5000))
 
     return this.executor.run(() => {
+      const params: unknown[] = [afterRevision, input.throughRevision]
+      const entityFilter = input.entityType ? 'AND entity_type = ?' : ''
+      if (input.entityType) params.push(input.entityType)
+      params.push(limit)
+
       const rows = this.executor.db.prepare(`
         SELECT revision,
                entity_type AS entityType,
@@ -50,15 +56,19 @@ export class SqliteReplicationCanonicalChangeReader {
                changed_at AS changedAt
         FROM replication_canonical_changes
         WHERE revision > ? AND revision <= ?
+        ${entityFilter}
         ORDER BY revision ASC
         LIMIT ?
-      `).all(afterRevision, input.throughRevision, limit) as CanonicalChangeEntry[]
+      `).all(...params) as CanonicalChangeEntry[]
 
       const nextRevision = rows.at(-1)?.revision ?? afterRevision
       return {
         items: rows,
         nextRevision,
-        done: nextRevision >= input.throughRevision || rows.length === 0,
+        // With an entity filter the global high-water can be greater than the
+        // last matching revision. Fewer than limit means all matching rows in
+        // this bounded interval have been consumed.
+        done: rows.length < limit,
       }
     })
   }
