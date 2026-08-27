@@ -9,6 +9,7 @@
     "test": "tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
-    "@agent-lens/hook-manager": "1.0.0-alpha.1"
+    "@agent-lens/hook-manager": "1.0.0-alpha.1",
+    "@agent-lens/node-identity": "1.0.0-alpha.1"
   }
 }
