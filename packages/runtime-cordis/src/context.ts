@@ -14,9 +14,11 @@ import type {
   StorageService,
   ToolService,
 } from '@agent-lens/core'
+import type { AgentLensNodeRuntime } from './node-identity'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
+    node: AgentLensNodeRuntime
     storage: StorageService
     sources: SourceService
     identity: IdentityService
