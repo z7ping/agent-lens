@@ -103,7 +103,7 @@ test('pending enqueue is idempotent and mutable only before freeze', async () =>
       streamId: 'stream-1',
       generationId: 'gen-1',
       sequence: 1,
-      batchId: 'ignored-on-exact-retry',
+      batchId: 'batch-1',
       contentHash: 'batch-hash-1',
       phase: 'incremental',
       policyRevision: 'different',
@@ -120,7 +120,23 @@ test('pending enqueue is idempotent and mutable only before freeze', async () =>
         streamId: 'stream-1',
         generationId: 'gen-1',
         sequence: 1,
-        batchId: 'batch-conflict',
+        batchId: 'batch-renamed',
+        contentHash: 'batch-hash-1',
+        phase: 'incremental',
+        policyRevision: 'policy-2',
+        historyRevision: 'history-1',
+        payload: { batch: 1 },
+        pendingItemIds: ['pending-1'],
+      }),
+      (error: unknown) => error instanceof DurableReplicationError && error.code === 'SEQUENCE_REUSE_CONFLICT',
+    )
+
+    await assert.rejects(
+      () => storage.replication.freezeBatch({
+        streamId: 'stream-1',
+        generationId: 'gen-1',
+        sequence: 1,
+        batchId: 'batch-1',
         contentHash: 'different-hash',
         phase: 'incremental',
         policyRevision: 'policy-2',
