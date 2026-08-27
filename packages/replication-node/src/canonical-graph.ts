@@ -167,9 +167,12 @@ export async function generateObservationReplicaGraph(
 
   const entities: WireEntityEnvelope[] = []
   const emitted = new Set<string>()
+  const visitingActors = new Set<string>()
+
+  const entityKey = (entityType: string, originEntityId: string): string => `${entityType}\u0000${originEntityId}`
 
   const emit = (entity: WireEntityEnvelope): void => {
-    const key = `${entity.entityType}\u0000${entity.originEntityId}`
+    const key = entityKey(entity.entityType, entity.originEntityId)
     if (emitted.has(key)) return
     emitted.add(key)
     entities.push(entity)
@@ -222,13 +225,14 @@ export async function generateObservationReplicaGraph(
 
   const emitProject = async (projectId: string): Promise<void> => {
     const project = await required('Project', projectId, () => input.reader.getProject(projectId))
+    const sharedIdentity = projectAssertion(project)
     emit(generateDependency({
       ...common,
       entityType: 'Project',
       originEntityId: project.id,
       capturedAt: dependencyTimestamp(project.createdAt),
       body: body(project as unknown as Readonly<Record<string, unknown>>),
-      sharedIdentity: projectAssertion(project),
+      ...(sharedIdentity === undefined ? {} : { sharedIdentity }),
     }))
   }
 
@@ -302,26 +306,6 @@ export async function generateObservationReplicaGraph(
     }))
   }
 
-  const emitActor = async (actorId: string): Promise<void> => {
-    const actor = await required('AgentActor', actorId, () => input.reader.getActor(actorId))
-    await emitInstallation(actor.installationId)
-    if (actor.logicalSessionId) await emitLogicalSession(actor.logicalSessionId)
-    if (actor.parentActorId) await emitActor(actor.parentActorId)
-    emit(generateDependency({
-      ...common,
-      entityType: 'AgentActor',
-      originEntityId: actor.id,
-      capturedAt: OLDEST_DEPENDENCY_TIMESTAMP,
-      body: body(actor as unknown as Readonly<Record<string, unknown>>),
-      references: refs({
-        installation: nodeEntityRef('AgentInstallation', actor.installationId),
-        logicalSession: actor.logicalSessionId ? nodeEntityRef('LogicalSession', actor.logicalSessionId) : undefined,
-        parentActor: actor.parentActorId ? nodeEntityRef('AgentActor', actor.parentActorId) : undefined,
-        evidence: actor.evidenceRefs.map(id => nodeEntityRef('Evidence', id)),
-      }),
-    }))
-  }
-
   const emitSourceRecord = async (sourceRecordId: string): Promise<void> => {
     const record = await required('SourceRecord', sourceRecordId, () => input.reader.getSourceRecord(sourceRecordId))
     await emitInstallation(record.installationId)
@@ -348,6 +332,38 @@ export async function generateObservationReplicaGraph(
         sourceRecord: evidence.sourceRecordId ? nodeEntityRef('SourceRecord', evidence.sourceRecordId) : undefined,
       }),
     }))
+  }
+
+  const emitActor = async (actorId: string): Promise<void> => {
+    const key = entityKey('AgentActor', actorId)
+    if (emitted.has(key)) return
+    if (visitingActors.has(actorId)) {
+      throw new Error(`Replication dependency cycle: AgentActor:${actorId}`)
+    }
+
+    visitingActors.add(actorId)
+    try {
+      const actor = await required('AgentActor', actorId, () => input.reader.getActor(actorId))
+      await emitInstallation(actor.installationId)
+      if (actor.logicalSessionId) await emitLogicalSession(actor.logicalSessionId)
+      if (actor.parentActorId) await emitActor(actor.parentActorId)
+      for (const evidenceId of actor.evidenceRefs) await emitEvidence(evidenceId)
+      emit(generateDependency({
+        ...common,
+        entityType: 'AgentActor',
+        originEntityId: actor.id,
+        capturedAt: OLDEST_DEPENDENCY_TIMESTAMP,
+        body: body(actor as unknown as Readonly<Record<string, unknown>>),
+        references: refs({
+          installation: nodeEntityRef('AgentInstallation', actor.installationId),
+          logicalSession: actor.logicalSessionId ? nodeEntityRef('LogicalSession', actor.logicalSessionId) : undefined,
+          parentActor: actor.parentActorId ? nodeEntityRef('AgentActor', actor.parentActorId) : undefined,
+          evidence: actor.evidenceRefs.map(id => nodeEntityRef('Evidence', id)),
+        }),
+      }))
+    } finally {
+      visitingActors.delete(actorId)
+    }
   }
 
   await emitHost(input.observation.hostId)
