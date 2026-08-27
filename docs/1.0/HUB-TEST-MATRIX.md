@@ -1,225 +1,428 @@
 # AgentLens 1.0 Hub Alpha 测试矩阵
 
 更新日期：2026-08-27  
-状态：测试设计，尚未实现  
-目的：把 ADR 与 Hub Contract 中的架构不变量转成可执行验收清单，避免实现后只验证 happy path。
+状态：设计冻结，尚未实现  
+目的：把 ADR / Contract 转成实现门禁，避免只验证 happy path。
 
-相关文档：
-- `docs/adr/0007-multi-machine-hub-local-first-canonical-replication.md`
-- `docs/1.0/HUB-REPLICATION-CONTRACT.md`
-- `docs/1.0/HUB-REPLICATION-STATE-CONTRACT.md`
-- `docs/1.0/HUB-REPLICATION-PROTOCOL.md`
-- `docs/1.0/HUB-PAIRING-SECURITY.md`
-- `docs/1.0/HUB-DATA-EXPOSURE-MATRIX.md`
-- `docs/1.0/HUB-OPERATIONS.md`
-- `docs/1.0/HUB-UX-CONTRACT.md`
+相关入口：`docs/1.0/HUB-DESIGN-INDEX.md`
 
 ## 1. 测试层级
 
-L1 Unit / L2 Contract / L3 Storage Integration / L4 In-process E2E / L5 HTTPS Pairing E2E / L6 Cross-platform / L7 Failure Injection / L8 Performance / L9 Real-machine Dogfood。
+```text
+L1 Unit
+L2 Contract
+L3 Storage Integration
+L4 In-process Replication E2E
+L5 HTTPS / Pairing E2E
+L6 Cross-platform
+L7 Failure Injection
+L8 Performance / Soak
+L9 Real-machine Dogfood
+```
 
-核心身份 / Shared Group / Protocol / History / Policy 语义必须在 L1-L4 可稳定验证。
+Identity、Policy、History、Replica Storage、Shared Group、Protocol 的核心语义必须在 L1-L4 自动验证。
 
 ## 2. Standalone 回归
 
-- 无 Hub 配置与当前 1.0 一致；
+- 无 Hub 配置行为与当前 1.0 一致；
 - replication plugin inactive 时 Source / Canonical / Web 正常；
-- Hub 配置损坏但相关 capability=false 不影响启动；
+- Hub 配置损坏但 capability 未启用不影响启动；
 - Replication 网络错误不影响 Observation Commit；
-- Desktop / npm 共用一个 Daemon / 数据根 / Node Identity。
+- npm / Desktop 仍只使用一个默认 Daemon / 数据根 / Node Identity。
 
-## 3. Node Identity / Runtime Instance
+## 3. Node Identity / Capability
 
-nodeId 首次生成后重启、hostname 变化、AgentLens 升级均不变；runtimeInstanceId 每次 Daemon 启动变化；显式 reset 产生新 nodeId；同 hostname 两台机器 nodeId 不同；克隆数据根并发时 Hub 不静默合并。
+- 首次初始化生成 nodeId；
+- 重启 nodeId 不变，runtimeInstanceId 改变；
+- hostname / AgentLens 升级不改变 nodeId；
+- reset identity 生成新 nodeId；
+- 两台同 hostname/platform/arch Node nodeId 不同；
+- 克隆数据根并发使用时不静默合并；
+- 只允许 Standalone / Node / Hub / Pure Hub 四个 Profile；
+- `hubAccept && replicationUpstream`、纯转发、全 false 被拒绝；
+- Pure Hub 不运行 Source。
 
-## 4. Capability Composition
+## 4. ReplicaKey / Public ID Namespace
 
-合法：Standalone / Node / Hub / Pure Hub。拒绝 hubAccept+replicationUpstream、localCapture=false+replicationUpstream、全 false。
+- same nodeId + entityType + originId -> same ReplicaKey；
+- different nodeId + same originId -> different ReplicaKey；
+- different entityType + same originId -> different ReplicaKey；
+- ReplicaKey 使用 `agentlens-replica-r1` domain separator；
+- 编码后的 Remote ID namespace 与现有 `host-* / project-* / session-* / observation-*` Local ID 域可区分；
+- Hub 重算 ReplicaKey 与 Node claimed value 不一致 -> reject；
+- Hub 本机 Session ID 与 Remote Session ReplicaKey 可同时通过 `/review/:logicalSessionId` 正确定位；
+- Web 把 ID 当 opaque string，不通过前缀做业务判断。
 
-## 5. Replica Key Namespace
-
-- same Node + type + originId -> same ReplicaKey；
-- different Node / type -> different ReplicaKey；
-- `agentlens-replica-r1` domain separator 参与算法；
-- ReplicaKey 不使用本机 Project/Session/Host Identity 的生成域；
-- 三平台相同输入得到相同 ReplicaKey；
-- Node 自报 ReplicaKey 与 Hub 重算不一致 -> reject；
-- 不通过字符串格式猜 Scope。
-
-## 6. Entity Scope / Physical Model
+## 5. Entity Scope / Conditional Shared Physical Model
 
 ### Shared Root / AgentProduct
 
-same productId -> one Shared Canonical Root；metadata deterministic merge；arrival-order independent。
+- same productId -> 一个逻辑 Shared Root；
+- metadata deterministic merge；
+- arrival-order independent；
+- Remote assertion 不静默覆盖 Local Canonical metadata。
+
+### Project
+
+- `D:\foo` 与 `/home/foo` 不自动合并；
+- HTTPS / SSH 同 Git Remote -> same Shared Project Group；
+- userinfo / credential / query / fragment 不参与 identity；
+- different repository path -> different group；
+- 每个 Node 保留自己的 Project Origin Row / Remote Replica；
+- Workspace.projectId 始终指 origin，不指 SharedProjectKey；
+- Hub Local + Remote 同 Portable Project -> same Group / multiple members。
+
+### AssetDefinition
+
+- 同名 asset 无 Portable Identity 不合并；
+- same Portable Identity -> Shared Asset Group；
+- AssetBinding.assetDefinitionId 指 origin；
+- invariant conflict -> Replication Conflict。
+
+### ToolDefinition
+
+- 两 Node 同名 Read 仍 Node-scoped；
+- schemaHash 不同不提前合并。
+
+## 6. Shared Identity Algorithm
+
+- `project-repository-v1` 的 HTTPS / SSH Normalize 结果一致；
+- `asset-upstream-v1` 只接受合法 Portable Identity；
+- Identity Algorithm Version 进入 hash / negotiation；
+- Node claimedSharedKey 与 Hub 重算一致 -> accept；
+- 不一致 -> `SHARED_IDENTITY_MISMATCH`；
+- unsupported algorithm -> `IDENTITY_ALGORITHM_UNSUPPORTED`；
+- credential 不进入 normalizedIdentity / SharedKey / log；
+- 若 Portable Identity 不允许出站，则该 origin 不建立 Shared Membership。
+
+## 7. Typed EntityRef / Dependency DAG
+
+- node ref -> origin ReplicaKey；
+- shared ref -> Shared Root；
+- Project / AssetDefinition 有 Membership 时 Domain Ref 仍为 node ref；
+- Conditional Shared 以 `scope=shared` 作为 Domain FK target -> reject；
+- cross-node direct ref -> Alpha reject；
+- 缺必须依赖 -> whole Batch rollback；
+- Actor cycle / missing Relationship / missing Evidence -> rollback；
+- payload 中恰好出现 ID 字符串不被改写；
+- DTO 数组随机顺序不改变 Import 结果。
+
+## 8. Identity Promotion / Membership
+
+- path-only Project 后发现稳定 Git Remote -> Membership Promotion；
+- Promotion 不修改 Workspace / Session / Observation origin FK；
+- origin row 不因 Promotion 删除；
+- duplicate Promotion 幂等；
+- same origin -> Shared A 后再 Shared B -> conflict；
+- Hub 不根据 name/path 相似度自行 Promotion；
+- 同 Node old/new Project origin IDs 有强证据时可进入同 Group；
+- Member withdrawal 不影响其他 Node / Hub Local member；
+- Group GC 不删除仍存在 origin rows。
+
+## 9. Remote Replica Storage：Local / Remote 分层
+
+必须证明一个 Hub SQLite / Storage Boundary 中：
+
+```text
+Local Canonical
+Remote Replica
+Shared Identity State
+Replication Control Plane
+```
+
+可以共存，但 Remote Replica 不被强塞 Local Canonical Row。
+
+场景：
+
+- metadata-only Workspace.path omitted，不需要写 `'' / [hidden]`；
+- omitted SourceRecord.payload 不写 `{}` 冒充原 Payload；
+- Local Canonical Schema 不因 Hub 全局改 nullable；
+- full / redacted / metadata-only 全走同一 Remote Replica Storage Contract；
+- Policy 切换不把同 origin Entity 迁到另一套表造成重复；
+- Local Project ID 与 Remote Project ReplicaKey 同库不碰撞；
+- Batch transaction failure 不推进 ACK。
+
+## 10. ReplicatedValue / Availability
+
+Hub 必须区分：
 
-### Project Conditional Shared
+```text
+value
+real null
+redacted
+omitted(policy)
+omitted(not-captured)
+omitted(history-boundary)
+omitted(dependency-minimized)
+retained prior value
+```
+
+验证：
 
-- D:\foo 与 /home/foo 不自动合并；
-- HTTPS / SSH 同 Git remote -> same Shared Project Group；
-- credentials/query/fragment 不参与 identity；
-- different repo path -> different group；
-- 每个 Node 保留 Project Origin Row / ReplicaKey；
-- Workspace.projectId 指 origin row，不指 SharedProjectKey；
-- Hub Local + Remote 同 Portable Project -> 同 Group、多个 origin members。
+- null 不等于 omitted；
+- omitted 不显示成空字符串；
+- redacted 不显示成原文不存在；
+- Projection 不把 omitted Tool Result 算成“结果为空”；
+- policy 收紧后的 retained prior value 不被标成当前 Revision 刚确认；
+- Policy 放宽能在同 ReplicaKey 补齐先前 omitted 字段。
 
-### AssetDefinition Conditional Shared
+## 11. Replication Policy
 
-- 同名无 Portable Identity 不 Group；
-- 同 Portable Identity -> same Group；
-- 每个 origin row 保留；
-- AssetBinding 指 origin row；
-- invariant conflict -> diagnostics/conflict。
+### metadata-only
 
-ToolDefinition 同名仍 Node-scoped。
+- Prompt / Tool body 不出站；
+- SourceRecord payload 不出站；
+- Workspace 完整路径默认 omitted；
+- executable/configRoot/dataRoot 默认 omitted；
+- cleaned Repository Identity 可以发送；
+- UI 不声称匿名。
 
-## 7. Shared Identity Algorithm
+### redacted
 
-### project-repository-v1
+- Windows / macOS / Linux 路径脱敏一致；
+- credential 强制遮蔽；
+- 长度限制有效。
 
-- SSH / HTTPS 同 repo 归一一致；
-- hostname case、`.git`、尾 `/` 按 Contract 处理；
-- Provider path case 只有明确规则时才折叠；
-- SharedProjectKey 使用 `agentlens-shared-project-v1` 独立 domain；
-- Node assertion 的 normalizedIdentity / sharedKey 与 Hub 重算一致才接受；
-- 篡改 sharedKey -> `SHARED_IDENTITY_MISMATCH`；
-- 未协商 algorithm -> `IDENTITY_ALGORITHM_UNSUPPORTED`。
+### full
 
-### asset-upstream-v1
+- 只发送 Local Capture 已允许内容；
+- Capture off 无法恢复；
+- 明确凭据仍遮蔽。
 
-- 只有 Portable Upstream Identity 才允许 Group；
-- SharedAssetKey 使用独立 `agentlens-shared-asset-v1` domain；
-- Hub 按类型专用 Resolver 重算；
-- 本机 path / 临时 ID 不能伪装 Portable Identity。
+## 12. History Scope / Dependency-Minimized Closure
 
-### Version compatibility
+### include-existing
 
-- Hub Local / Remote 使用同一 Algorithm Version；
-- v1 与未来不兼容 v2 不允许静默共用同一 SharedKey；
-- normalization 语义改变必须有明确 version/migration gate。
+- 既有授权历史进入 Bootstrap；
+- Policy 仍限制字段。
 
-## 8. Typed EntityRef
+### from-now
 
-node ref 正确解析 ReplicaKey；shared ref 只解析 Shared Root；Conditional Shared 有 Membership 时仍 node ref；Project/AssetDefinition 以 scope=shared -> reject；非法跨 Node ref / 缺依赖 -> rollback；payload 内 ID 字符串不改写。
+- Boundary 前旧 Observation 不普通补传；
+- Reconcile 不绕过 Boundary；
+- Boundary 后新 Observation 正常发送；
+- 必需旧 Host / Installation / Project / Workspace / Session 可作为 dependency；
+- dependency 不携带旧 Session title、非必要 time、旧 Workspace full path、Prompt/Tool body、SourceRecord payload；
+- 这些字段正确标记 history-boundary / dependency-minimized；
+- Source 配对后才发现的旧原生历史不能仅凭 capturedAt 新而越界。
 
-## 9. Dependency DAG
+## 13. Policy / History Revision
 
-随机 DTO 顺序结果相同；Shared Root -> Host -> Installation -> Conditional Origin -> Membership -> Workspace/Session -> Observation 依赖完整；Promotion 只有 origin + algorithm + identity 校验成功后落 Membership；cycle/missing ref -> whole batch rollback。
+- Policy Revision 单调；
+- History Revision 单调；
+- Batch / Status 可追溯；
+- Hub 不通过 Revision 修改 Node 设置；
+- Policy 放宽但选择 from-now 不补旧正文；
+- 用户明确 include-existing 才扩大历史授权。
+
+## 14. Policy 收紧 / retained prior
 
-## 10. Shared Group / Assertion Merge
+`full -> metadata-only`：
 
-验证 commutative / associative（定义范围）/ idempotent / arrival-order independent。
+- 新请求立即遵守 metadata-only；
+- 未序列化 pending state 按新 Policy；
+- ambiguous old-policy Batch 不换 Body 复用 sequence；
+- 不为补 gap 继续发送已禁止正文；
+- Stream Rollover 后按新 Policy Reconcile；
+- Hub 已有 full 内容不会被错误声称已自动清除；
+- retained prior full value 与当前 omitted(policy) 同时可解释。
+
+## 15. Handshake / Hub Proof / Identity Algorithm Negotiation
+
+- R1 minor 协商；
+- no common major -> PROTOCOL_UNSUPPORTED；
+- no required identity algorithm -> blocked；
+- Pairing Receipt 可验证；
+- serverProof 绑定 clientNonce / Hub / Node / Stream / protocol / ACK；
+- same endpoint + changed Hub Identity -> blocked；
+- Hub ACK 是恢复基准。
+
+## 16. Request Signature / Replay
+
+修改 body / method / path / Hub-Id / Node-Id / Stream-Id / Key-Id 任一项 -> signature fail。
+
+Nonce replay、timestamp 超窗、revoked key 均拒绝。
+
+## 17. Sequence / ACK / Commit Ambiguity
+
+| 输入 | 期望 |
+| --- | --- |
+| seq=ack+1 | commit |
+| seq<=ack + same hash | existing ACK |
+| seq<=ack + different hash | SEQUENCE_REUSE_CONFLICT |
+| seq>ack+1 | SEQUENCE_GAP |
+| commit 后 ACK response 丢失 | exact immutable retry |
+| timeout 不确定 | 不允许 same seq 新 Body |
+| committed=false BATCH_TOO_LARGE | 可重切 expected seq |
+| transaction rollback | ACK 不推进 |
 
-A/B 同 Project -> 2 Origin Rows + 1 Group + 2 memberships；Hub Local 可成为第三 member；withdraw A 不影响 B/Hub Local；全部 membership 撤回后 Group 才可 GC；Group GC 不删除仍存在 origin rows。
+## 18. Deterministic Hash
 
-## 11. Identity Promotion
+- 三平台同 DTO hash 一致；
+- JSON key 顺序不影响 hash；
+- entityVersion / Typed Ref / SharedIdentity / availability 改变会改变 hash；
+- 非 JSON Wire 值 reject；
+- Raw Body Hash 与 Entity JCS Hash 不混淆。
 
-path-only Project 后发现 Git Remote -> Membership Promotion；不修改 Workspace/Session/Observation projectId；不删 origin row；重复幂等；同 origin A->B conflict；不按 name/path 猜；同 Node old/new origin IDs 有强证据时可加入同 Group；Asset 无强证据不 Promotion。
+## 19. Bootstrap / Reconciliation
 
-禁止把批量 FK Rewrite 成 SharedKey 当作 Alpha 正确行为。
+Bootstrap：空 Node、10万+历史、期间继续采集、断网、Node/Hub restart、resume、Complete 后 mandatory Reconcile。
 
-## 12. Replication Policy / Exposure
+Reconcile 故障窗口：
 
-metadata-only：不出 Prompt / Tool body / Raw SourceRecord payload / 完整 Workspace 路径 / executable configRoot dataRoot；Repository Identity 等结构元数据仍可发送，UI 不声称匿名。
+```text
+Canonical COMMIT success
+ -> crash before fast path
+ -> restart
+ -> reconciliation repairs pending state
+```
 
-redacted：三平台路径脱敏、credential 强制遮蔽、限长。
+稳定数据周期校准不产生大量重复写。
 
-full：只复制本机已允许保存内容，Capture off 无法恢复，凭据仍遮蔽。
+## 20. Replica Generation / Re-bootstrap
 
-Hub 可区分 real null / omitted / not-captured / redacted。
+- G1 active / G2 staged；
+- G2 未完成正式 Query 仍读 G1；
+- G2 failure 不污染 G1；
+- complete + reconcile + validate 才 activate；
+- Remote Conditional Shared Membership 也 staged 到 G2；
+- G2 activate 只切换该 Node memberships；
+- Hub Local / 其他 Node membership 不受影响；
+- 普通 Reconcile absence 仍不 delete。
 
-## 13. Repository Identity 安全
+## 21. Unified Read Repository / Projection
 
-URL credential 不进入 normalized identity / SharedKey / Wire log / diagnostics；metadata-only 明确披露 repo identity 可能同步。
+验证：
 
-## 14. History Scope
+- Local Canonical + active Remote Replica 能形成统一 Session List；
+- staged / retired Generation 不进入正式 Query；
+- Remote session 使用 ReplicaKey，Hub Local session 保持 Local ID；
+- Review route 能正确区分两者；
+- Node / Host / Shared Project filter 正确；
+- Project Group 展示多个 Workspace；
+- availability-aware Projection 不要求把 Remote Replica 强转成完整 Core Entity；
+- Web 不直查 Replica 私表；
+- `replicatedAt` 不覆盖 occurredAt/capturedAt。
 
-include-existing -> 既有历史 Bootstrap。
+## 22. Tombstone / Delete / Retention
 
-from-now -> Boundary 前旧 Observation 不补传；Reconcile 不绕过；新 Observation 可发送必要旧依赖；依赖闭包不带出旧 Session 全正文；配对后才发现的旧原生历史不能只因 capturedAt 较新越过 Boundary。
+- duplicate Tombstone 幂等；
+- Origin delete 依赖安全；
+- Conditional Origin delete 撤回自己的 Membership；
+- Member withdrawal 不删其他 Member；
+- Revocation 不等于 Delete；
+- Tombstone 未 ACK / consistency checkpoint 前不 GC；
+- Generation retire 后 stale Replica 安全清理；
+- Policy Purge 与 Revocation / Policy Setting Change 分离。
 
-## 15. Policy / History Revision
+## 23. Pairing / TLS / Clone Detection
 
-revision 单调；Batch/Status 可追溯；Hub 不通过 revision 改 Node 设置。
+- Pair Secret 过期 / 已消费；
+- nodeProof；
+- self-managed TLS + SPKI；
+- public CA；
+- cert renewal same key；
+- TLS config invalid 不降级 HTTP；
+- Re-pair new stream、不重复 origin ReplicaKey；
+- Stream Rollover 不要求 Re-pair；
+- IP / hostname / sleep-wake 单独不 freeze；
+- 真正并发 runtime + sequence divergence -> hard conflict。
 
-## 16. Policy 收紧 / 放宽
+## 24. Trusted-node Security Boundary
 
-收紧：ambiguous old-policy Batch 不换内容复用 sequence，不为了 gap 继续发已禁止正文，必要时 Stream Rollover，新 Policy Reconcile。
+验证安全声明没有越界：
 
-放宽：选择仅未来时不补历史；明确授权才扩大 History Revision。
+- Node Signature 证明请求来自已配对 Node；
+- SharedKey 重算证明算法一致；
+- 系统不声称能证明 Node 现实中拥有 Repository / Asset；
+- 已攻陷 Node 可以提交格式合法但虚假 origin fact，这属于 trusted-node 模型限制；
+- Node A 不能修改 Node B origin；
+- Resource Limits 限制失陷 Node 的影响面。
 
-## 17. Protocol Handshake / Hub Proof
+## 25. Cross-node Time
 
-R1 minor 协商；no common major -> blocked；unsupported shared identity algorithm -> reject；stream/hub ownership 校验；Hub ACK 恢复；Pairing Receipt / serverProof 可验证；same endpoint changed Hub Identity -> blocked。
+- serverTime 只做 skew / security；
+- replicatedAt 不覆盖业务时间；
+- 不声称跨 Node 毫秒全序；
+- stable tie-break 保证相同数据集分页确定。
 
-## 18. Request Signature
+## 26. Cross-platform / Distribution
 
-修改 body/method/path/Hub-Id/Node-Id/Stream-Id/Key-Id 任一项 -> fail；Nonce replay / timestamp 超窗 / revoked key reject。
+Windows / macOS / Linux 覆盖：key 权限、path redaction、Git remote normalization、identity hash、service / desktop coexistence、npm/Desktop 切 owner 不改变 nodeId / relationship。
 
-## 19. Sequence / ACK / Commit Ambiguity
+## 27. Resource Protection
 
-- seq=ack+1 -> commit；
-- <=ack same hash -> existing ACK；
-- <=ack different hash -> conflict；
-- >ack+1 -> gap；
-- Commit 后 ACK 丢失 -> exact immutable retry；
-- ambiguous timeout -> 不允许 same seq new body；
-- committed=false oversized batch -> 可重切 expected seq；
-- rollback -> ACK 不推进。
+- maxBatchBytes pre-parse；
+- maxEntityBytes / maxEntitiesPerBatch；
+- per-node rate / concurrency；
+- Hub storage low-water；
+- malicious body 不 OOM；
+- ENTITY_TOO_LARGE 不无限重试；
+- SERVER_STORAGE_PRESSURE 只影响同步。
 
-## 20. Deterministic Hash
+## 28. 性能基线
 
-三平台同 Wire DTO hash 一致；JSON key 顺序无关；entityVersion / SharedIdentity Algorithm/normalizedIdentity/sharedKey / omitted/redacted 改变会改变 hash；非 JSON 值 reject；Raw Body Hash 与 Entity JCS Hash 不混淆。
+```text
+Nodes: 1 / 2 / 5 / 10
+Observations: 100k / 1m / 5m+
+```
 
-## 21. Bootstrap / Reconciliation
+至少测：Bootstrap throughput、steady-state p50/p95 delay、Remote Import transaction、Reconcile、backlog disk、Generation staging amplification、Unified Session latency、Shared Group resolve、Usage aggregation、SQLite busy、memory peak。
 
-覆盖空 Node、10万+历史、Bootstrap 期间继续采集、断网/restart/resume/mandatory reconcile。Fast Path 丢失窗口由 Reconciliation 补齐。History Boundary / Membership / Tombstone 生效，稳定状态不产生大量重复写。
+## 29. Soak / Dogfood
 
-## 22. Replica Generation / Re-bootstrap
+至少一次：
 
-G1 active / G2 staged；G2 未完成仍读 G1；失败不污染；complete+reconcile+validate 才 activate；该 Remote Node Conditional Shared Membership 随 G2 staged；激活只切该 Node origin/membership set，不影响其他 Node/Hub Local；普通 reconcile absence 不 delete。
+```text
+1 Hub
+2+ Nodes
+24h+
+真实来源
+network disconnect/recover
+sleep/wake
+Hub restart
+Node restart
+```
 
-## 23. Tombstone / Retention
+验收：无重复爆炸、backlog 收敛、Shared Group 不漂移、availability 不被假值污染、clone conflict 无误报、Hub Web 可查、Local Node 独立使用正常。
 
-Origin delete 安全；duplicate idempotent；Conditional origin delete 撤自己的 membership；withdraw 不影响其他 members；Revocation 不自动 withdrawal；Tombstone 未 ACK/checkpoint 不 GC；frozen stream receipt 保留；Membership/Promotion provenance 长期保留；不依赖 Conditional Shared PK Alias。
+## 30. 五个极端场景纸面与自动化门禁
 
-## 24. Pairing / TLS / Clone
+### A. metadata-only + from-now
 
-Pair Secret 生命周期、nodeProof、SPKI/public CA、cert renewal、invalid TLS no downgrade、Re-pair new stream/no duplicate Replica、Rollover no Re-pair。
+新 Observation 引用旧 Session 时，只补最小 dependency；不泄露旧 path/title/body；Hub 无需伪造必填 Local Row。
 
-Clone：真正并发 runtime + sequence divergence -> freeze；IP/hostname/sleep-wake 单独不 freeze；metadata 只 diagnostics；reset 后新 Node。
+### B. Hub Local + Remote 同 Project
 
-## 25. Operational UX
+Local Project Row、Remote Project Replica 各自保留；同 Portable Identity -> same Shared Group；所有 Workspace FK 仍指 origin。
 
-Local-first 状态、Policy/History Scope、危险操作分离、Delete Preview、Pure Hub、本机标识、Project Group 多 Workspace、无 Remote Control。
+### C. Re-bootstrap
 
-## 26. Cross-node Time
+G2 staged 不影响 G1 Query；G2 memberships 也 staged；完整校准后原子切换。
 
-serverTime only skew；replicatedAt 不覆盖业务时间；不声称跨 Node 毫秒全序；stable tie-break 保证分页确定。
+### D. full -> metadata-only
 
-## 27. Cross-platform / Distribution
+新正文停止出站；ambiguous old Batch 安全 Rollover；Hub old full value retained 但不冒充当前 Policy fresh value。
 
-Key 权限、path redaction、Git remote normalization、service/desktop 共存、npm/Desktop 切 owner 不改变 nodeId/relationship、卸载一种发行不删共享 Hub state。
+### E. Node Identity Reset
 
-## 28. Resource Protection
+新 nodeId -> 新 Replica Namespace；旧 Hub history 默认保留；同一 Local DB 再 include-existing 可能出现 old/new Node 两套 origin history，产品必须提示，不能自动跨 nodeId 去重；Portable Project 仍可聚合到同 Shared Group。
 
-maxBatchBytes pre-parse、maxEntityBytes/entities、per-node rate/concurrency、storage pressure、malicious body no OOM；若未来压缩限制 decompressed size。
+## 31. Alpha Release Gate
 
-## 29. Performance / Soak
-
-2/5/10 Nodes，100k/1m/5m+ Observations。测 Bootstrap、delay、transaction、reconcile、backlog disk、generation staging、Shared Group membership resolve、unified query、SQLite busy、memory。
-
-至少 1 Hub + 2 Nodes + 24h+ dogfood，覆盖网络恢复、sleep/wake、Hub/Node restart；无重复事实爆炸、backlog 收敛、Shared Group 不漂移、clone 无误报。
-
-## 30. Release Gate
+进入 Hub Alpha Dogfood 前至少满足：
 
 - L1-L5 主链；
-- 三平台 ReplicaKey / Shared Identity Algorithm / Protocol / Policy；
+- Standalone regression；
+- Replica Storage availability；
+- Remote ID namespace；
+- Shared Identity Algorithm / Hub recompute；
+- Policy / History / Dependency-Minimized tests；
 - Security；
-- History Boundary / Bootstrap / Reconcile failure injection；
 - Stream Rollover / Generation；
-- Conditional Shared Origin + Group Membership；
-- Shared Identity mismatch / algorithm compatibility；
-- Resource pressure；
-- 真实 2+ Node dogfood；
+- Unified Read / Projection；
+- Resource Pressure；
+- 三平台关键 Contract；
+- 真实 2+ Node Dogfood；
 - 文档 / 实现状态同步；
-- 未实现能力明确不可用。
+- 未实现能力 UI 明确不可用。
