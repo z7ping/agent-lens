@@ -2,57 +2,65 @@ schema_version: "0.1"
 status: active
 
 goal:
-  summary: "完成 AgentLens 1.0 Alpha Hub 文档收口与架构冻结，为下一阶段 H1 实现准备"
+  summary: "按已冻结的 AgentLens 1.0 Alpha Hub 设计进入 H1：Node Identity + Capability Composition"
 
 phase:
-  type: verification
-  summary: "Hub 长期架构已确定，当前只做文档减法治理、一致性检查与实现前冻结"
+  type: implementation
+  summary: "Hub 文档治理与架构冻结已完成；下一次实现只从 H1 身份与 Cordis 组合根开始"
 
 scope:
   include:
-    - "Hub 长期设计、R1 协议、安全与运维文档收口"
-    - "删除重复的 Hub Contract / Index / UX / Test / Plan 文档"
-    - "同步 ARCHITECTURE、IMPLEMENTATION-STATUS、AGENTS 与当前工作状态"
+    - "持久 Node Identity 的最小实现"
+    - "localCapture / replicationUpstream / hubAccept 合法能力组合"
+    - "Daemon Composition Root 按能力装配"
+    - "H1 对 Standalone、npm / Desktop 共用数据根的回归验证"
   exclude:
-    - "实现 Hub 功能代码"
-    - "新增 Hub 架构概念或继续过度设计"
-    - "HA、多 Hub、Federation、Remote Web、Remote Control 等 Alpha 外能力"
+    - "R1 网络协议、Pairing、TLS、Hub HTTP Surface"
+    - "Remote Replica Store、Bootstrap、Outbox、Reconciliation"
+    - "Hub Web / CLI 多机交互"
+    - "HA、多 Hub、Federation、Remote Web、Remote Control"
+    - "继续扩 Hub 架构文档"
 
 constraints:
   required:
-    - "同一长期事实只保留一个主要权威来源，其他位置只做链接或摘要"
-    - "精确 Wire / Schema 在实现后迁移到代码或标准 Schema 作为权威来源"
+    - "实现前读取 ARCHITECTURE.md、ADR-0007 与 docs/1.0/HUB-DESIGN.md"
     - "写入前重新确认 main 最新状态"
+    - "保持无 Hub 配置时当前 Standalone 行为不变"
+    - "精确 Wire / Schema 在未来实现阶段由代码或标准 Schema 成为权威来源"
   forbidden:
     - "未经明确要求发布 npm 或创建 Release"
-    - "今天开始 Hub 功能实现"
-    - "为文档完整性继续机械增加 Markdown 文件"
+    - "在 H1 提前实现网络同步"
+    - "重新拆分已收敛的 Hub 长期文档"
   frozen:
-    - "ADR-0007 的 Local-first、单 Hub 星型拓扑、Node Identity、Replica/Shared Identity、Policy/History、Replica Storage、Security 核心边界"
-    - "Hub 与 Node 使用同一 AgentLens Runtime / Cordis 组合根"
-    - "Remote Replica 不伪造 Local Canonical Fact，不提供 Remote Control"
+    - "Local-first、单 Hub 星型拓扑"
+    - "Node 与 Hub 共用同一个 AgentLens Runtime / Cordis 组合根"
+    - "本机 Canonical Identity 与跨机 Replication Identity 分离"
+    - "Remote Replica 不伪造 Local Canonical Fact"
+    - "不提供 Remote Control"
   deferred:
-    - action: "H1 Node Identity + Capability Composition 实现"
-      until: "Hub 文档减法治理和最终一致性检查完成"
+    - action: "H2+ Replication Core / R1 / Storage / Security / Unified Read"
+      until: "H1 Node Identity + Capability Composition 完成并验证"
 
 acceptance:
-  - "Hub 长期专项文档收敛为少量单一职责权威来源"
-  - "不存在指向已删除 Hub 文档的有效引用"
-  - "ARCHITECTURE、IMPLEMENTATION-STATUS、AGENTS 与 Hub 冻结边界一致"
-  - "Hermes / OpenCode 当前 Runtime 状态不再被旧架构说明误写为未实现"
-  - "本轮不包含任何 Hub 功能代码"
+  - "首次初始化生成持久 nodeId，重启保持不变"
+  - "npm / Desktop 默认数据根共享同一 Node Identity"
+  - "四种 Alpha Capability Profile 可表达，非法组合明确拒绝"
+  - "Pure Hub Profile 不装配本机 Source"
+  - "Standalone 无功能回归"
+  - "H1 不引入任何 Replication 网络行为"
 
 progress:
   current:
-    - "正在把 11 份 Hub 专项 Markdown 收敛为 HUB-DESIGN / HUB-REPLICATION-PROTOCOL / HUB-PAIRING-SECURITY / HUB-OPERATIONS + ADR-0007"
+    - "Hub Alpha 长期文档已收敛为 HUB-DESIGN / HUB-REPLICATION-PROTOCOL / HUB-PAIRING-SECURITY / HUB-OPERATIONS + ADR-0007"
+    - "重复 Contract / Plan / Test Matrix / UX / Index 文档已删除，架构冻结完成"
   next:
-    - "删除已被合并的旧 Hub 文档并修正引用"
-    - "完成全仓文档一致性检查"
-    - "下一阶段从 H1 Node Identity + Capability Composition 开始实现"
+    - "下一次实现从 H1 Node Identity + Capability Composition 开始"
+    - "先检查现有数据根初始化、AgentLensApplication 与 Daemon Composition Root，再做最小改动"
 
 decisions:
-  - "Hub Alpha 不再继续扩设计，新增结构性问题才重新发起 ADR / Contract Review"
-  - "实施计划与测试清单不再作为长期 Markdown；当前下一步进入 Work State，质量门禁最终进入实际测试代码"
+  - "Hub Alpha 不再继续过度设计；只有新发现会改变长期不变量时才发起 ADR / Contract Review"
+  - "短期阶段计划进入 Work State，长期文档不维护重复 H1-H10 清单"
+  - "测试门禁随实现进入实际测试代码，不长期维护独立 Hub Test Matrix Markdown"
 
 repository:
   provider: github
