@@ -1,15 +1,8 @@
 # AgentLens 1.0 Hub UX Contract
 
 更新日期：2026-08-27  
-状态：Alpha 产品交互设计约束，尚未实现  
-相关文档：
-- `docs/adr/0007-multi-machine-hub-local-first-canonical-replication.md`
-- `docs/1.0/HUB-REPLICATION-CONTRACT.md`
-- `docs/1.0/HUB-REPLICATION-STATE-CONTRACT.md`
-- `docs/1.0/HUB-OPERATIONS.md`
-- `docs/1.0/HUB-PAIRING-SECURITY.md`
-- `docs/1.0/HUB-DATA-EXPOSURE-MATRIX.md`
-- `docs/1.0/CAPTURE-POLICY.md`
+状态：Alpha 产品交互设计冻结，尚未实现  
+相关入口：`docs/1.0/HUB-DESIGN-INDEX.md`
 
 本文定义 Hub 在 Web / Desktop / CLI 中必须表达清楚的产品语义，不锁死具体页面布局。
 
@@ -17,7 +10,7 @@
 
 面向用户优先：设备、Hub（多机聚合中心）、本机、远程设备、同步、同步策略、历史范围、首次同步、同步校准、同步暂停、撤销连接、删除历史。
 
-内部可以使用 Node、Replication Stream、Replica Generation、Replica Key、Shared Group / Membership、Identity Promotion、Reconciliation。普通页面不暴露这些实现术语。
+内部可以使用 Node、Replication Stream、Replica Generation、ReplicaKey、Shared Group / Membership、Identity Promotion、Reconciliation。普通页面不暴露这些实现术语。
 
 不要把 Hub 称为“云端”“服务器账户”。
 
@@ -38,8 +31,6 @@ Alpha 不允许同一实例同时连接上游 Hub并接收下游 Node；从“�
 Hub 本机采集开启时说明“本机数据也会显示在这个 Hub 中”。Pure Hub 用“采集本机数据”开关表达。
 
 ## 5. 连接 Hub
-
-流程至少包括 Hub 地址、Hub 身份确认、配对信息、同步策略、历史范围：
 
 ```text
 1. 输入 / 扫描 Hub 配对信息
@@ -80,23 +71,17 @@ Alpha 默认建议 metadata-only 或 redacted，不默认 full。
 历史范围：是否补已有历史
 ```
 
-### 从现在开始
-
-不主动补传 Boundary 建立前的旧任务正文；之后的新事实正常同步，并可能携带项目、会话等结构依赖。
-
-### 包含已有历史
-
-按当前 Policy 补传本机既有历史。
+“从现在开始”不主动补传 Boundary 前旧任务正文；之后新事实正常同步，并可能携带最小结构依赖。“包含已有历史”按当前 Policy 补传本机既有历史。
 
 from-now 是持久边界；Reconciliation 不能绕过。
 
 ## 8. 历史补传单独确认
 
-首次连接尽量显示已有会话 / 数据量估算，并让用户明确选择“从现在开始 / 同步已有历史”。Policy 放宽时也再次区分“仅未来 / 补传既有历史”。
+首次连接尽量显示已有会话 / 数据量估算，并明确选择“从现在开始 / 同步已有历史”。Policy 放宽时也再次区分“仅未来 / 补传既有历史”。
 
 ## 9. Policy 收紧立即生效
 
-full -> metadata-only 保存后，产品语义是“不再继续发新的 full 内容”。如果旧 Batch 可能已提交但 ACK 丢失，不能偷偷重发旧正文维持 sequence。
+full -> metadata-only 保存后，产品语义是“不再继续发新的 full 内容”。若旧 Batch 可能已提交但 ACK 丢失，不能偷偷重发旧正文维持 sequence。
 
 UI 可显示：
 
@@ -134,26 +119,17 @@ agent-lens
 └─ Linux · /home/me/agent-lens
 ```
 
-Policy 隐藏路径时改成“工作区路径已隐藏”。
-
-产品语义：
-
-```text
-项目 = 可靠 Portable Identity 汇聚出的跨设备逻辑项目
-工作区 = 某台设备的具体环境
-```
-
-必须保留设备 / Workspace 差异。普通 UI 不显示 SharedGroupKey。
+Policy 隐藏路径时改成“工作区路径已隐藏”。项目 = 跨设备逻辑项目；工作区 = 某台设备的具体环境。
 
 ## 14. Identity Promotion 不打扰普通用户
 
-某个本地 Project 后来发现可靠 Git Remote 时，内部只是让该 origin Project **加入对应 Shared Project Group**。成功无需弹“合并主键 / Alias”之类实现提示，也不会让用户看到 Workspace 路径归属突然改变。
+本地 Project 后来发现可靠 Git Remote 时，内部只是让该 origin Project 加入 Shared Group。成功无需弹“合并主键 / Alias”，也不会让 Workspace 归属突然改变。
 
-只有身份冲突才显示“项目身份冲突，需要处理”。Alpha 不提供按名字/路径强制合并。
+只有冲突才显示“项目身份冲突，需要处理”。Alpha 不提供按名字/路径强制合并。
 
 ## 15. Bootstrap 进度
 
-不编造精确百分比。优先显示已确认批次、已发送字节、最近成功、是否仍有历史待处理；只有可靠估算总量后才显示百分比。
+不编造精确百分比。优先显示已确认批次、已发送字节、最近成功、是否仍有历史待处理；可靠估算总量后才显示百分比。
 
 ## 16. Re-bootstrap 不暴露半成品
 
@@ -162,19 +138,33 @@ Policy 隐藏路径时改成“工作区路径已隐藏”。
 正在构建新的同步副本
 ```
 
-新 Generation 完成 + 校准前不替换现有查询。失败显示“现有 Hub 历史未受影响”。
+新 Generation 完成 + 校准前不替换现有查询。Remote Shared Root assertion / Project Membership 也必须跟 Generation 一起激活，不出现项目/产品信息提前漂移。
 
-对 Shared Project / Asset 也同样：新 Generation 的 Membership 未激活前，用户继续看到旧 active Group 结果，不出现项目成员忽隐忽现。
+## 17. Backlog / 延迟 / 本机同步状态空间不足
 
-## 17. Backlog / 延迟
+网络断开显示：
 
-网络断开显示“Hub 同步延迟 / 本机采集正常 / 待同步数据 / 上次成功”，不是“AgentLens 异常”。
+```text
+Hub 同步延迟
+本机采集正常
+待同步数据：xx
+上次成功：xx
+```
+
+如果 Replication 本地状态达到磁盘上限：
+
+```text
+Hub 同步已暂停
+同步状态占用空间不足
+本机采集仍正常
+释放空间后可继续校准同步
+```
+
+不能显示成“AgentLens 数据库损坏”，也不能为腾同步空间删除本机 Canonical 历史。
 
 ## 18. Paused / Blocked
 
-Paused = 用户/安全策略主动暂停；Blocked = 需要升级、身份冲突、Hub 身份变化、数据冲突、撤销、Clock Skew、Hub 存储不足等不可重试问题。
-
-普通 UI 给中文动作，诊断再显示错误码。
+Paused = 用户/安全/资源策略主动暂停；Blocked = 需要升级、身份冲突、Hub 身份变化、数据冲突、撤销、Clock Skew 等不可重试问题。普通 UI 给中文动作，诊断再显示错误码。
 
 ## 19. 跨机器时间
 
@@ -183,30 +173,81 @@ Paused = 用户/安全策略主动暂停；Blocked = 需要升级、身份冲突
 ## 20. 危险操作分开
 
 - 撤销连接：阻止未来同步，保留历史；
-- 删除设备历史：删除该设备 origin replica，并撤回该设备 Shared Membership / Assertions，必须预演；
+- 删除设备历史：删除该设备 Remote Replica，并撤回该设备 Shared assertions/memberships，必须预演；
 - 重置本机设备身份：生成新 Node Identity，本机历史保留，需要 Re-pair；
 - 同步校准：查漏补缺，不删库；
-- 重新构建 Hub 数据：建立 staged Replica Generation，完成前保留现有查询。
+- 重新构建 Hub 数据：建立 staged Replica Generation，完成前保留现有查询；
+- 清理旧完整内容：独立 Policy Purge，不与 Policy 设置本身混在一起。
 
 不能一个“重置”按钮包办。
 
 ## 21. 删除历史预演
 
-至少显示：将删除多少 Session / Observation / Evidence / 本机资产绑定；将撤回多少 Shared Project / Asset Membership；哪些 Shared Group 会重新计算；不会删除其他设备 origin 数据或仍有其他 members 的 Shared Group。
+至少显示将删除多少 Session / Observation / Evidence / 远程资产副本；将撤回多少 Shared Project / Asset assertion；哪些 Group 会重新计算；不会删除其他设备 origin 数据或仍有其他 members 的 Shared Group。
 
 ## 22. Hub Identity 变化
 
 同 endpoint 但 Hub Identity / serverProof 改变时暂停同步，明确提示“Hub 身份发生变化”。IP/hostname 变化但 Hub Identity 不变只视为连接信息变化。
 
-## 23. Headless Pure Hub
+## 23. Pure Hub 不等于清空本机历史
+
+关闭“采集本机数据”后，用户必须看到准确说明：
+
+```text
+停止采集新的本机数据
+已存在的本机历史仍保留并可查看
+```
+
+不能把既有 Hub Local Session / Project / Asset 自动隐藏或删除。
+
+## 24. 关闭 Hub 不等于删除 Hub 数据
+
+`关闭 Hub` 的用户语义：
+
+```text
+停止接收远程设备同步
+保留已同步历史和设备信任关系
+本机 AgentLens 继续使用
+```
+
+如果用户要撤销设备、删除远程历史、重置 Hub Identity，需要分别执行对应操作并确认。
+
+重新启用 Hub 后可以在关系仍有效时恢复同步。
+
+## 25. Remote Asset 与资产备份
+
+多机 Hub 的资产页面可以显示：
+
+```text
+本机资产
+远程设备资产
+Shared Asset Group
+```
+
+但必须区分：
+
+> “Hub 看到了远程资产” ≠ “Hub 本机能读取这个资产文件”。
+
+现有资产备份按钮只允许对**本机实际可访问资产**执行文件级 Snapshot。
+
+Remote Asset：
+
+- 可以查看状态 / 来源设备 / Shared 聚合；
+- 默认不能直接执行“备份这个远程文件”；
+- Remote `AssetBinding.path` 即使可见，也不能当 Hub 本机路径使用；
+- 未来若做 Remote File Pull / Export，要单独设计权限、网络和失败语义。
+
+UI 不能让远程资产出现一个实际会去读 Hub 本地同路径的误导性备份按钮。
+
+## 26. Headless Pure Hub
 
 Alpha Local Web 仍 loopback，不内建 Remote Web Login。Linux/NAS 用 SSH CLI、OS 远程会话或用户自建可信 tunnel 管理。
 
-## 24. 不提供远程控制
+## 27. 不提供远程控制
 
 设备详情不出现 Shell、启动 Agent、安装 Skill、修改 Hook、重启远程 Agent 等操作。
 
-## 25. CLI 语义建议
+## 28. CLI 语义建议
 
 ```text
 agent-lens hub enable|disable|status
@@ -227,23 +268,25 @@ agent-lens node reset-identity
 
 Stream Rollover 默认由安全状态机处理，可放 advanced diagnostics，不作为普通命令。
 
-## 26. UI 信息架构暂不锁死
+## 29. UI 信息架构暂不锁死
 
 需要 Hub Identity/开关、设备列表、Pairing、Policy/History Scope、同步状态、Node/Host 筛选、危险操作，但不强制新增第六个一级导航。
 
-## 27. Alpha UX 验收
+## 30. Alpha UX 验收
 
 - 用户理解 Hub 离线不影响本机采集；
 - Policy / History Scope 分开；
 - metadata-only 不宣传匿名；
 - 用户明确选择是否补历史；
 - Policy 收紧立即停止新的旧策略出站；
-- offline/degraded/paused/blocked 可区分；
-- Project = 跨设备逻辑 Group，Workspace = origin 环境；
-- Promotion 不造成可见 FK / Workspace 归属跳变；
+- backlog storage pressure 明确显示“同步暂停、本机正常”；
+- Project = Shared Group，Workspace = origin 环境；
+- Promotion 不造成可见 FK 归属跳变；
 - Re-bootstrap 失败不让现有历史 / Shared Group 消失；
+- Pure Hub 不删除既有 Hub Local 历史；
+- Disable Hub 不隐式删除远程历史 / Trust State；
+- Remote Asset 不被误当 Hub 本机文件做资产备份；
 - revoke / delete / reconcile / rebootstrap / reset identity 分开；
-- 删除历史有 Membership 影响预演；
 - Hub Identity 变化阻止继续发送；
 - Clock Skew 不解释为精确因果；
 - 普通页面不暴露 ReplicaKey / StreamId / SharedGroupKey；
