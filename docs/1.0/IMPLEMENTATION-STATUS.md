@@ -20,17 +20,22 @@
 - Asset Inventory 通过 Core Contract 暴露；
 - `@agent-lens/capture-policy` 统一 Source allowlist 与持久化隐私门禁；
 - Hub H1 Node Runtime 基础：默认数据根首次启动创建持久 `node.json` UUID，损坏身份文件不静默重置；
-- Node Runtime 通过 Cordis `ctx.node` 统一暴露 `dataRoot / identity / profile / capabilities`，后续 Runtime Plugin 不自行重复读取身份文件；
-- `AGENT_LENS_PROFILE` 当前支持 `standalone / node / hub / pure-hub` 四种 Alpha Profile，默认保持 `standalone`；
-- Daemon Composition Root 按 `localCapture` 决定是否注册本机 Source；`pure-hub` 不注册本机 Source，但仍保留 Storage / Projection / Local Web；
-- Hub H2 Replication Core 通过 `@agent-lens/core/replication` 子路径暴露，不进入默认 Core Domain 导出；
-- H2 已实现 Replication Entity Scope Registry，未知实体默认 `node-scoped`；
-- H2 已实现 `agentlens-replica-r1` ReplicaKey、SharedRootKey / SharedGroupKey 的确定性纯函数；
-- H2 已实现 `project-repository-v1` / `asset-upstream-v1` Portable Identity 规范化；只有可靠跨机身份才能建立 Conditional Shared Membership；
-- H2 已实现 AgentProduct Shared Root、Project / AssetDefinition Shared Group / Membership 的内存级确定性聚合与冲突拒绝；Origin Identity / ReplicaKey 保持独立，不改写本机领域引用；
-- H2 确定性哈希为纯 TypeScript SHA-256，不依赖 Cordis、SQLite、Transport 或 Node `crypto`。
+- Node Runtime 通过 Cordis `ctx.node` 统一暴露 `dataRoot / identity / profile / capabilities`；
+- `AGENT_LENS_PROFILE` 支持 `standalone / node / hub / pure-hub` 四种 Alpha Profile；
+- Daemon Composition Root 按 `localCapture` 决定是否注册本机 Source；
+- Hub H2 Replication Core 通过 `@agent-lens/core/replication` 子路径暴露；
+- H2 已实现 Entity Scope Registry、`agentlens-replica-r1` ReplicaKey、SharedRootKey / SharedGroupKey；
+- H2 已实现 `project-repository-v1` / `asset-upstream-v1` Portable Identity；
+- H2 已实现 AgentProduct Shared Root、Project / AssetDefinition Shared Group / Membership；
+- H2 Origin Identity / ReplicaKey 保持独立，不改写本机 Canonical ID 或领域 FK；
+- H3 R1 Protocol Core 通过 `@agent-lens/protocol/replication` 子路径暴露，与现有 Local Read Protocol 保持命名空间隔离；
+- H3 已实现 Protocol R1.0、Handshake DTO、Entity Envelope、Batch、Tombstone、Node Ref / Shared Ref、Availability 与稳定错误码；
+- H3 已实现 Protocol / Identity Algorithm / Entity Version 的纯兼容协商，可选能力取交集，required 能力缺失时 fail-closed；
+- H3 已实现 Canonical JSON + 纯 TypeScript SHA-256 的 Entity / Batch / Tombstone 语义 Hash；
+- H3 已实现 Sequence / ACK 的 next / exact retry / reuse conflict / gap 纯决策；
+- H3 已将 Project / AssetDefinition Wire Scope 固定为 Node Origin，将 Alpha Shared Ref 限定为 AgentProduct Shared Root。
 
-H1/H2 只建立 Node Runtime 与 Replication Identity 基础，`node / hub / pure-hub` 当前**不会**启动 Replication 网络行为，也没有 Remote Replica Store。
+H1/H2/H3 目前仍只是 Node Runtime、Replication Identity 与 Wire Protocol 基础。`node / hub / pure-hub` **不会**启动真实 Replication 网络行为，也没有 Remote Replica Store。
 
 禁止恢复 0.x Adapter / Importer Runtime、旧 `timeline / overview_*` 规范表、旧 Service Manager / PID 架构。
 
@@ -44,13 +49,7 @@ H1/H2 只建立 Node Runtime 与 Replication Identity 基础，`node / hub / pur
 - Hermes；
 - OpenCode。
 
-默认只启用 Claude Code。其他来源必须显式加入：
-
-```text
-AGENT_LENS_ENABLED_SOURCES
-```
-
-`none` 可以关闭全部来源。
+默认只启用 Claude Code。其他来源必须显式加入 `AGENT_LENS_ENABLED_SOURCES`；`none` 可以关闭全部来源。
 
 ### Claude Code
 
@@ -78,7 +77,7 @@ AGENT_LENS_ENABLED_SOURCES
 - `state.db` History；
 - Native DB Tail；
 - Skills / Plugins / MCP / Toolsets / Memories Asset Discovery；
-- 可选 `agent-lens-observer` 只写 Durable Inbox，形成额外 Runtime Evidence；
+- 可选 `agent-lens-observer` 只写 Durable Inbox；
 - 默认关闭。
 
 ### OpenCode
@@ -103,7 +102,8 @@ Hermes / OpenCode 详细边界见 `docs/1.0/HERMES-OPENCODE-SOURCES.md`。
 - Tool / Asset Usage Projection；
 - Agent Overview / Facet / Session Relationship Projection；
 - 使用洞察 Projection；
-- 带版本的 `@agent-lens/protocol` DTO。
+- 带版本的 `@agent-lens/protocol` Local Read DTO；
+- 独立子路径 `@agent-lens/protocol/replication` 的 R1 Wire Protocol Core。
 
 当前 Local HTTP / SSE 包括：
 
@@ -120,7 +120,7 @@ Hermes / OpenCode 详细边界见 `docs/1.0/HERMES-OPENCODE-SOURCES.md`。
 /api/v1/events
 ```
 
-Local Surface 继续只监听 loopback。
+Local Surface 继续只监听 loopback。H3 没有新增 Replication HTTP / HTTPS Route。
 
 SSE 当前支持 Observation / Source Detection / Asset 变化通知、15 秒心跳、断线重连与快照校准；幂等 unchanged replay 不制造刷新噪声。
 
@@ -139,13 +139,7 @@ SSE 当前支持 Observation / Source Detection / Asset 变化通知、15 秒心
 - 运行时 Design Token 与 `docs/design/mockups/v2` 高保真基线校验；
 - 关键文字/背景 4.5 对比度门禁。
 
-当前主视图：
-
-- 任务复盘；
-- 工具分析；
-- 使用洞察；
-- 智能体概览；
-- 资产备份。
+当前主视图：任务复盘、工具分析、使用洞察、智能体概览、资产备份。
 
 ## 5. 资产备份
 
@@ -159,9 +153,7 @@ SSE 当前支持 Observation / Source Detection / Asset 变化通知、15 秒心
 - 恢复差异预演；
 - 敏感字段、凭据、私钥、符号链接、越界路径默认排除。
 
-当前仍只做到恢复预演，不直接写回用户环境。
-
-Hub 未来即使能看到 Remote Asset metadata，也不代表当前资产备份可以访问远程文件。
+当前仍只做到恢复预演，不直接写回用户环境。Hub 未来即使能看到 Remote Asset metadata，也不代表当前资产备份可以访问远程文件。
 
 ## 6. npm / Windows Desktop 双发行
 
@@ -201,9 +193,7 @@ Native Hook
 
 Hermes Observer 使用同一被动语义。
 
-Hook / Observer 不直接写 SQLite、不加载 Cordis/Core、不依赖 HTTP、不阻断上游 Agent。
-
-Pi / OpenCode 使用原生 Runtime Tail，不额外安装 Native Hook。
+Hook / Observer 不直接写 SQLite、不加载 Cordis/Core、不依赖 HTTP、不阻断上游 Agent。Pi / OpenCode 使用原生 Runtime Tail，不额外安装 Native Hook。
 
 ## 8. 当前自动验收基线
 
@@ -225,18 +215,21 @@ npm run build:dist
 - Codex Hook 默认关闭门禁；
 - OpenCode History / Runtime Tail / Replay；
 - Hermes History / Normalize / Assets / Runtime Inbox / Replay；
-- Web Design Token 一致性；
-- Web 关键前景/背景对比度；
-- Node Identity 首次创建与重启稳定性；
-- 损坏 Node Identity fail-closed；
-- 四种 Alpha Profile 与非法 Capability 组合；
-- `ctx.node` Runtime Service 注入；
+- Web Design Token 一致性与关键对比度；
+- Node Identity 首次创建、重启稳定性、损坏身份 fail-closed；
+- 四种 Alpha Profile、非法 Capability 组合、`ctx.node` 注入；
 - H2 Entity Scope Registry 与未知实体默认 Node-scoped；
 - ReplicaKey 同源稳定性与跨 Node 隔离；
-- SHA-256 标准向量；
 - Git Repository Portable Identity 规范化与本机路径拒绝；
 - Project / AssetDefinition Conditional Shared Membership；
-- Shared Identity 聚合输入顺序无关、同一 Origin 多 Group 冲突 fail-closed。
+- Shared Identity 聚合输入顺序无关、同一 Origin 多 Group 冲突 fail-closed；
+- H3 SHA-256 标准向量与 Canonical JSON 对象键顺序稳定；
+- H3 Protocol Major / Entity Version fail-closed；
+- H3 Handshake Protocol / Identity Algorithm / Entity Version 兼容协商；
+- H3 Availability 的真实 null / redacted / omitted 原因区分；
+- H3 Project / AssetDefinition Node Wire Scope 与 AgentProduct Shared Ref 约束；
+- H3 Entity / Batch / Tombstone semantic hash 防篡改；
+- H3 Sequence next / exact retry / reuse conflict / gap。
 
 本文不把未重新核验的 CI 状态写成“已通过”。
 
@@ -257,7 +250,7 @@ npm run build:dist
 
 ## 10. 多机 Hub
 
-状态：**长期设计已冻结；H1 Node Runtime 与 H2 Replication Core / Shared Identity 已实现，H3+ 尚未实现。**
+状态：**长期设计已冻结；H1 Node Runtime、H2 Replication Core / Shared Identity、H3 R1 Protocol Core 已实现，H4+ 尚未实现。**
 
 当前已实现基础：
 
@@ -273,25 +266,32 @@ npm run build:dist
  -> ReplicaKey / SharedKey
  -> Portable Identity
  -> Shared Root / Shared Group / Membership
+
+@agent-lens/protocol/replication
+ -> R1 Wire DTO
+ -> Typed EntityRef / Availability
+ -> Handshake compatibility negotiation
+ -> Entity / Batch / Tombstone semantic hash
+ -> Sequence / ACK pure validation
+ -> stable Protocol Core error codes
 ```
 
-H2 仍只是纯内存 / 纯函数 Replication Domain 基础，不表示 Hub 已能接收或保存远端数据。
+H3 仍只是纯协议代码，不表示 Hub 已能通过网络接收或持久化远端数据。
 
 当前仍**没有**实现：
 
 ```text
 Node long-term key material
-R1 Wire DTO / Schema / protocol negotiation
-Replication Policy / History Boundary
+Replication Policy / History Boundary transform
 Durable Replication state / Outbox / Reconciliation
-R1 network endpoints
-Pairing / TLS / signatures
+R1 HTTP / HTTPS endpoints
+Pairing / TLS / request signatures / serverProof
 Remote Replica Store / migrations / transactional import
-Shared Identity persistence / import integration
-Replica Generation
+Shared Identity persistence / H2 recompute import integration
+Replica Generation runtime / staged activation
 Unified Read Repository
 Hub-aware Projection / Web / CLI
-Tombstone / Purge / recovery operations
+Tombstone generation / persistence / purge / recovery operations
 ```
 
 长期设计只维护在以下文档：
@@ -302,7 +302,7 @@ Tombstone / Purge / recovery operations
 - `docs/1.0/HUB-OPERATIONS.md`：用户 / 运维生命周期；
 - `docs/adr/0007-multi-machine-hub-local-first-canonical-replication.md`：关键选择及原因。
 
-当前下一步不在本文维护阶段清单；跨会话工作状态以 `agent-swe/work-state.yaml` 为准，真实完成情况以代码和测试为准。
+跨会话工作状态以 `agent-swe/work-state.yaml` 为准，真实完成情况以代码和测试为准。
 
 ## 11. 关键实现不变量
 
@@ -318,5 +318,8 @@ Tombstone / Purge / recovery operations
 - `pure-hub` 只停止新本机 Source，不删除现有本机历史；
 - Replication Identity 不替换本机 Canonical ID；
 - Conditional Shared Group 不成为 Project / AssetDefinition 的领域 FK target；
+- Wire Entity 不等于 Core Interface 或 SQLite Row；
+- Project / AssetDefinition 在 R1 Wire 始终保持 Node Origin；
+- Protocol 不兼容只阻塞 Replication，不阻塞本机采集；
 - Hub Remote Replica 不伪造 Local Canonical Fact；
 - Hub 不开放 Remote Control。
