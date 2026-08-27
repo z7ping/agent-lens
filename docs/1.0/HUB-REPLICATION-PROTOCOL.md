@@ -1,11 +1,11 @@
 # AgentLens 1.0 Hub Replication Protocol
 
 更新日期：2026-08-27  
-状态：**Alpha R1 协议语义冻结，尚未实现**  
+状态：**Alpha R1 协议语义冻结；Protocol Core 已实现，Transport / Pairing / Remote Import 尚未实现**  
 上位设计：`docs/1.0/HUB-DESIGN.md`  
 安全边界：`docs/1.0/HUB-PAIRING-SECURITY.md`
 
-本文只记录 R1 的**长期协议语义与兼容边界**。实现开始后，精确 DTO / JSON 结构应由 `packages/replication-protocol` 中的类型、Schema 与测试成为主要权威来源；本文不再手工复制每个字段，避免形成第二份 Wire 事实源。
+本文只记录 R1 的**长期协议语义与兼容边界**。当前精确 Wire DTO、Validator、Canonical Hash、Compatibility 与 Sequence 语义以 `packages/protocol/src/replication/`（`@agent-lens/protocol/replication`）中的类型和测试为主要权威来源；本文不再手工复制每个字段，避免形成第二份 Wire 事实源。未来若出现独立发行/依赖需求，可再抽成独立 workspace，但不得改变这里冻结的协议语义。
 
 ## 1. 协议目标
 
@@ -82,7 +82,7 @@ serverTime
 
 `serverProof` 绑定本次 client nonce、Hub/Node/Stream、选定 Protocol、Hub ACK 与 serverTime，防止仅凭 endpoint 或 TLS 连接误认 Hub。
 
-精确字段以后以 protocol package 的 Schema 为准。
+H3 已实现 Protocol / Identity Algorithm / Entity Version 的纯兼容协商：可选能力取交集，只有调用方声明的 required Identity Algorithm / Entity Type 缺少共同版本时才拒绝。Pairing Receipt、serverProof 与真实网络 Handshake 仍属于后续安全/Transport 实现。
 
 ## 5. Batch
 
@@ -122,7 +122,9 @@ availability state
 policy/history transform 后的 body
 ```
 
-Request Signature 的 Body Hash 对 Raw HTTP Body Bytes 计算，与 Entity JCS Hash 分开。
+H3 已实现对象键确定性排序、有限 JSON 数值门禁、Entity / Batch / Tombstone 语义 SHA-256；`contentHash` 本身不参与自身计算。
+
+Request Signature 的 Body Hash 对 Raw HTTP Body Bytes 计算，与 Entity JCS Hash 分开，仍属于后续 Transport / Security 边界。
 
 ## 7. Sequence / ACK / Commit Ambiguity
 
@@ -140,6 +142,8 @@ ackSequence = Hub 已事务提交的最高连续 sequence
 Timeout / connection reset / response lost 造成提交不确定时，只能 exact retry 或查询 Hub ACK。
 
 只有 Hub 明确 `committed=false` 时，Node 才能重切当前 expected sequence。
+
+H3 已实现上述 Sequence / ACK 纯决策语义；持久 ACK、Stream 状态与网络恢复尚未实现。
 
 ## 8. Policy 收紧与 Stream Rollover
 
@@ -182,6 +186,8 @@ optional SharedIdentityAssertion
 - 未支持 `entityVersion` -> `ENTITY_VERSION_UNSUPPORTED`；
 - 不允许看不懂字段却静默丢弃后返回同步成功。
 
+H3 已将上述 Scope / Entity Version 规则编码为 Wire DTO 与 fail-closed Validator。
+
 ## 10. Shared Identity Assertion
 
 Assertion 至少包含：
@@ -203,6 +209,8 @@ IDENTITY_PROMOTION_CONFLICT
 SHARED_MERGE_CONFLICT
 ```
 
+H3 已定义 Assertion Wire 结构并校验算法/必需字段；真正使用 H2 Normalize / SharedKey 对 claimed 值进行重算属于后续 Import 集成。
+
 Node Signature 只能证明“哪个已配对 Node 发出了声明”，不证明 Repository / Asset 在现实世界中的所有权。
 
 ## 11. Typed EntityRef
@@ -216,7 +224,7 @@ shared ref -> Shared Root entityType + sharedKey
 
 Project / AssetDefinition 即使已经加入 Shared Group，领域 Ref 仍然是 Node Ref。
 
-Alpha 禁止跨 Node direct Ref。
+Alpha 禁止跨 Node direct Ref。H3 类型系统和运行时 Validator 当前都只允许 Shared Ref 指向 `AgentProduct` Shared Root。
 
 ## 12. Availability
 
@@ -233,6 +241,8 @@ omitted(dependency-minimized)
 ```
 
 不得用 `null / '' / {} / [hidden]` 混淆这些状态。
+
+H3 已将这些状态编码为显式判别联合类型和 Validator；真正由 Replication Policy / History Boundary 产生何种状态属于 H4。
 
 `from-now` 的 Boundary 前依赖使用同一个 Entity Version，但只发送对应 Entity 的 Minimum Dependency Shape。
 
@@ -270,6 +280,8 @@ Node-scoped / Conditional Origin 删除通过 Tombstone 表达。
 普通 scan absence 不能制造 Tombstone。
 
 Conditional Origin 删除同时撤回自己的 Membership；一个 Node 的删除不能删除其他 Node / Hub Local origin。
+
+H3 已定义 Tombstone Wire 结构与内容哈希校验；Tombstone 的产生、持久化和导入仍属于后续阶段。
 
 ## 15. Hub 公开 ID
 
@@ -317,7 +329,7 @@ SERVER_STORAGE_PRESSURE
 INTERNAL_ERROR
 ```
 
-具体 Error Enum 以后由 protocol package 成为权威来源。
+H3 已实现当前 Protocol Core 会产生的稳定错误码子集；后续 Transport / Storage / Security 实现再按本节类别扩展，不重用现有码表达不同语义。
 
 ## 18. Runtime Invalidation
 
@@ -346,7 +358,7 @@ batch ingest
 status / ack recovery
 ```
 
-精确 URL / Request / Response 在实现后应由正式 Route + Schema / OpenAPI 或项目采用的等价标准工件表达，不再在本文维护第二份完整接口表。
+H3 **没有**实现这些网络 Route。精确 URL / Request / Response 在 Transport 实现后应由正式 Route + Schema / OpenAPI 或项目采用的等价标准工件表达，不再在本文维护第二份完整接口表。
 
 ## 20. R1 冻结不变量
 
