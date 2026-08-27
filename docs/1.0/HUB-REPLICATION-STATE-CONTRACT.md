@@ -9,11 +9,11 @@
 - `docs/1.0/HUB-PAIRING-SECURITY.md`
 - `docs/1.0/HUB-OPERATIONS.md`
 
-本文补齐多机 Hub 在实现前复核中发现的状态语义缺口：能力组合合法性、历史同步边界、Policy 变更、Batch 不确定提交、Replication Stream Rollover、Replica Generation、Control Plane 保留规则、Hub 本机参与 Shared Identity、跨机时钟与发行共存。本文不表示这些能力已经实现。
+本文补齐多机 Hub 的状态语义：能力组合合法性、历史同步边界、Policy 变更、Batch 不确定提交、Replication Stream Rollover、Replica Generation、Control Plane 保留规则、Conditional Shared Group、Hub 本机参与 Shared Identity、跨机时钟与发行共存。本文不表示这些能力已经实现。
 
 ## 1. 能力组合不是任意布尔组合
 
-底层仍使用：
+底层使用：
 
 ```text
 localCapture
@@ -21,9 +21,7 @@ replicationUpstream
 hubAccept
 ```
 
-表达能力，而不是建立四套 Runtime Role；但 Alpha 并不允许任意组合。
-
-合法 Profile：
+表达能力，而不是建立四套 Runtime Role；Alpha 只允许：
 
 | Profile | localCapture | replicationUpstream | hubAccept |
 | --- | --- | --- | --- |
@@ -32,38 +30,36 @@ hubAccept
 | Hub | true | false | true |
 | Pure Hub | false | false | true |
 
-Alpha 明确拒绝：
+拒绝：
 
-- `replicationUpstream=true && hubAccept=true`：会形成 Hub 级联 / Federation 语义；
-- `localCapture=false && replicationUpstream=true`：没有定义“纯转发节点”的数据所有权；
-- 三项全部为 `false`：没有实际产品能力，配置应提示而不是静默启动一个空运行时。
+- `replicationUpstream=true && hubAccept=true`：形成 Hub 级联 / Federation；
+- `localCapture=false && replicationUpstream=true`：未定义纯转发 ownership；
+- 全 false：空运行时。
 
-从“接入上游 Hub”切换为“作为 Hub”时，必须先明确断开 / 冻结 upstream relationship，再启用 `hubAccept`；不能通过两个布尔值同时为 true 偷偷形成 Hub 链路。
+从接入节点切换为 Hub，必须先冻结 / 断开 upstream relationship。
 
 ## 2. 四种不同身份 / 状态键
-
-实现不得把下面几个概念混为一个 ID：
 
 ```text
 nodeId
   = AgentLens 数据根 / 实例身份
 
 hubId
-  = upstream Hub 长期信任身份
+  = Hub 长期信任身份
 
 replicationStreamId
-  = 某次 Node <-> Hub 同步顺序流 / ACK 命名空间
+  = sequence / ACK 命名空间
 
 replicaGenerationId
-  = Hub 中某个 Node Replica 数据集的一代可激活状态
+  = Hub 中某个 Remote Node Replica 数据集的一代状态
 ```
 
 关系：
 
 ```text
 Node Identity
-  -> Pairing Relationship to Hub Identity
-      -> active Replication Stream
+  -> Pairing Relationship
+      -> active Stream
           -> active Replica Generation
 ```
 
@@ -71,29 +67,18 @@ Node Identity
 
 - 换 Stream 不等于换 Node；
 - 换 TLS Certificate 不等于换 Hub；
-- Re-bootstrap 可以换 Replica Generation，但不必换 Stream；
-- Re-pair 默认换 Stream，但如果 Node Identity 和 Hub Identity 都未变，可以继续复用已有 Replica Generation；
-- Node Identity Reset 必须形成新的 Replica Namespace，不复用旧 Node 的 Replica Generation。
+- Re-bootstrap 可以换 Generation，不必换 Stream；
+- Re-pair 默认换 Stream；
+- Node Identity Reset 形成新的 Replica Namespace；
+- Shared Project / Asset Group Key 不属于上述四种状态键，它描述跨 origin 聚合身份。
 
 ## 3. History Scope 与 Replication Policy 是两个维度
 
-Replication Policy 回答：
+Replication Policy：允许传哪些字段 / 内容。
 
-> 允许传哪些字段 / 内容？
+History Scope：允许补传哪些既有历史事实。
 
-History Scope 回答：
-
-> 允许把哪个时间边界之前已经存在的历史事实补传？
-
-不能只靠：
-
-```text
-metadata-only | redacted | full
-```
-
-表达“从现在开始”或“包含已有历史”。
-
-Alpha 至少支持：
+Alpha：
 
 ```text
 historyMode = from-now | include-existing
@@ -101,30 +86,23 @@ historyMode = from-now | include-existing
 
 首次 Pairing 与后续 Policy 放宽都必须明确 History Scope。
 
-## 4. `from-now` 不是简单按 occurredAt 过滤
+## 4. `from-now` 不是按 occurredAt 简单过滤
 
-不能用：
+不能只用：
 
 ```text
 occurredAt >= pairingTime
 ```
 
-作为唯一规则，因为：
+因为来源时间质量不同、新发现的 History 可能发生在更早时间、新事实又可能依赖旧身份实体。
 
-- 不同 Agent 原生时间质量不同；
-- 某些事件没有可靠 `occurredAt`；
-- Source History 可能在配对之后才发现更早发生的事实；
-- 新事件可能引用配对前已存在的 Installation / Project / Session。
+正式语义：
 
-因此 `from-now` 的正式语义是：
-
-> 不对“建立 History Boundary 时已经存在于 Local Canonical Store 的历史事实集合”执行普通历史补传；但为了复制边界之后的新事实，允许发送其所需的身份 / 关系依赖。
-
-实现可以使用 Replication Control Plane 的 baseline / high-water / per-entity suppression 等方式优化，但必须达到上述语义，不能把本机事件时钟当作唯一事实边界。
+> 不对建立 History Boundary 时已经存在于 Local Canonical Store 的普通历史事实集合执行补传；但为了复制边界之后的新事实，允许发送必要依赖闭包。
 
 ### 4.1 Dependency Closure
 
-即使用户选择“从现在开始”，如果新的 Observation 引用一个配对前已经存在的：
+新 Observation 可以携带配对前已有的：
 
 ```text
 Host
@@ -137,13 +115,13 @@ AgentActor
 AssetDefinition / AssetBinding
 ```
 
-对应依赖仍允许按当前 Replication Policy 发送，否则 Hub 无法形成合法 FK 图。
+但这不授权补传该 Session 过去的全部 Observation / Prompt / Tool 正文。
 
-这不等于补传该 Session 过去的所有 Observation / Prompt / Tool 正文。
+对于 Conditional Shared Project / AssetDefinition，发送依赖时仍发送 origin entity；Shared Membership 只描述聚合身份。
 
 ## 5. History Boundary 必须持久化
 
-Node 必须在本地 Replication Control Plane 保存 History Boundary，至少包含：
+本地 Control Plane 至少保存：
 
 ```text
 relationship / hubId
@@ -153,19 +131,19 @@ revision
 implementation-specific baseline state
 ```
 
-Reconciliation 必须遵守该 Boundary，不能因为“全量扫描 Canonical Store”就把用户明确排除的旧历史重新补传。
+Reconciliation 必须遵守 Boundary。
 
-如果用户以后明确选择“补传已有历史”，创建新的 History Revision，并把原先 suppressed 的历史事实重新纳入 Bootstrap / Reconciliation。
+用户后来明确补传历史时创建新的 History Revision。
 
 ## 6. Policy Revision
 
-Node 为每次 Replication Policy 变更维护单调递增的：
+每次 Replication Policy 变更维护单调：
 
 ```text
 replicationPolicyRevision
 ```
 
-Batch / Status 必须能够关联：
+Batch / Status 关联：
 
 ```text
 policy
@@ -173,15 +151,11 @@ policyRevision
 historyRevision
 ```
 
-这样 diagnostics 能回答：
+Hub 只能验证 / 审计，不能远程改变 Node Policy。
 
-> 这批数据是在什么授权边界下序列化 / 发送的？
+## 7. Batch 第一次可能发送前冻结内容
 
-Hub 不根据 `policyRevision` 获得修改 Node Policy 的能力；它只是验证与审计同步边界。
-
-## 7. Batch 在首次可能发送前必须冻结内容
-
-Node 可以先维护“待同步 Entity Candidate”，但真正分配：
+真正分配：
 
 ```text
 batchSequence
@@ -189,61 +163,33 @@ batchId
 contentHash
 ```
 
-并准备发网后，该 Batch Body 必须视为 immutable，直到得到明确结果。
+后，Batch Body 必须 immutable，直到得到明确提交结果。
 
-原因：如果请求已经到达 Hub 并完成事务，但 ACK Response 丢失，Node 无法知道 Hub 是否提交。
+ACK 丢失时只能重发完全相同 sequence + content hash。
 
-此时只能：
-
-```text
-resend same sequence + same content hash
-```
-
-不能把同一个 sequence 重新序列化成另一份内容。
-
-## 8. 明确失败与提交不确定必须区分
+## 8. 明确失败与提交不确定分离
 
 ### 明确未提交
 
-例如 Hub 在进入事务前返回：
-
-```text
-BATCH_TOO_LARGE
-PROTOCOL_CAPABILITY_REQUIRED
-BATCH_POLICY_INVALID
-```
-
-且响应明确声明：
+Hub 明确返回：
 
 ```text
 committed = false
 ```
 
-Node 可以在不跳过 expected sequence 的前提下重新切批 / 修正请求。
+Node 才能修正 / 重切当前 expected sequence 的待同步内容。
 
-### 提交结果不确定
-
-例如：
+### 提交不确定
 
 ```text
-request timeout
-connection reset after upload
+timeout
+connection reset
 Hub crash / response lost
 ```
 
-Node 必须假设“可能已提交”。
+必须认为“可能已提交”，只能 exact retry 或查询 Hub ACK。
 
-处理：
-
-```text
-retry exact immutable batch
-or
-query / handshake Hub ACK
-```
-
-不能用同一 sequence 发送新内容。
-
-## 9. Policy 收紧必须立即停止旧策略继续出站
+## 9. Policy 收紧立即阻止旧策略出站
 
 例如：
 
@@ -251,132 +197,109 @@ query / handshake Hub ACK
 full -> metadata-only
 ```
 
-用户保存新策略后：
+规则：
 
-1. 立即阻止产生新的旧 Policy 网络请求；
-2. 未序列化 Candidate 按新 Policy 重新计算；
-3. 已 ACK 的旧数据不会自动从 Hub 删除；需要独立 Purge；
-4. 已明确未提交的旧 Batch 可以废弃并按新 Policy 重建；
-5. 对“是否已经提交不确定”的旧 Batch，不能为了补 sequence gap 再继续发送已被新 Policy 禁止的正文。
+1. 停止新的旧 Policy 网络请求；
+2. 未序列化 Candidate 按新 Policy 重算；
+3. 已 ACK 的旧正文不会自动 Purge；
+4. 明确未提交 Batch 可按新 Policy 重建；
+5. ambiguous 旧 Batch 不能为了 sequence 连续性继续发送已经禁止的正文。
 
-第 5 种情况必须进入安全暂停，并通过 Stream Rollover 恢复，而不是牺牲用户刚刚收紧的隐私边界。
+第 5 类进入安全暂停并执行 Stream Rollover。
 
 ## 10. Replication Stream Rollover
 
-除 Re-pair 外，Alpha 允许由已认证 Node 与 Hub 显式执行 Stream Rollover：
-
 ```text
 old stream -> freeze
-new stream -> sequence starts at 1
-nodeId / hubId / trust relationship unchanged
-existing Replica Generation preserved
+new stream -> sequence=1
+nodeId / hubId / trust unchanged
+active Replica Generation preserved
 ```
 
 适用：
 
-- Policy 收紧遇到旧策略 ambiguous in-flight Batch；
-- Stream Cursor / receipt 状态需要安全重建；
-- 明确的协议恢复流程要求重新建立 sequence namespace。
+- Policy 收紧遇到 ambiguous Batch；
+- Cursor / receipt 需要安全重建；
+- 协议恢复明确需要新的 sequence namespace。
 
-Rollover 必须由当前 Node Key 签名并由 Hub 接受，不等于重新 Pair，也不允许改变 upstream Hub Identity。
-
-新 Stream 通过 Reconciliation 与已有 Replica Generation 收敛。
+Rollover 必须由当前 Node Key 签名并由 Hub 接受。
 
 ## 11. Policy 放宽不能自动扩大历史授权
-
-例如：
 
 ```text
 metadata-only -> full
 ```
 
-用户必须分别选择：
+用户选择：
 
 ```text
-A. 仅未来新事实按 full
-B. 未来 + 既有历史都按 full 补传
+A. 仅未来按 full
+B. 未来 + 既有历史按 full
 ```
 
-A 只增加 Policy Revision，不扩大 History Boundary。
+A 只增加 Policy Revision。
 
-B 同时增加 History Revision，并触发受控 Bootstrap / Reconciliation。
+B 同时增加 History Revision，并触发 Bootstrap / Reconciliation。
 
-## 12. Replica Generation 解决 Re-bootstrap 的“缺失是否等于删除”问题
+## 12. Replica Generation 解决 Re-bootstrap 缺失语义
 
-普通 Reconciliation 永远不能把：
-
-```text
-这次扫描没看到 Entity X
-```
-
-解释成删除。
-
-但是显式 Re-bootstrap 的目的就是重建某个 Node 在 Hub 的完整 Replica。如果不定义新的 Replica Generation，Hub 可能永久留下早已不再存在、但 Tombstone 已丢失的陈旧 Replica。
-
-因此 Re-bootstrap 使用新的：
-
-```text
-replicaGenerationId
-```
-
-概念流程：
-
-```text
-active generation G1
-  -> create staged generation G2
-  -> bootstrap current authorized state into G2
-  -> mandatory reconciliation into G2
-  -> validate completeness
-  -> atomically activate G2
-  -> retire G1
-  -> GC retired generation later
-```
-
-Local Capture 在此期间继续运行。
-
-具体 SQLite 可以使用 staging metadata、shadow namespace 或其他实现；Contract 只要求“旧 generation 在新 generation 完成之前仍可查询，不把半成品当 active”。
-
-## 13. Absence 只有在完整 Generation 激活时才有权威语义
-
-普通扫描：
+普通 Reconciliation：
 
 ```text
 absence != delete
 ```
 
-显式 Re-bootstrap Generation 完整激活时：
+显式 Re-bootstrap：
 
 ```text
-old generation 中存在
-new complete generation 中不存在
+G1 active
+  -> G2 staged
+  -> bootstrap current authorized state into G2
+  -> mandatory reconciliation
+  -> validate complete
+  -> atomic activate G2
+  -> retire G1
 ```
 
-可以作为“新 Replica 数据集不再包含该 origin entity”的重建结果处理。
+G2 完成前 G1 仍可查询。
 
-这是一个严格限定的例外，不得让普通 Reconciliation 靠 absence 制造 Tombstone。
+Generation 主要描述 **Remote Node Origin Replica 数据集**。Conditional Shared Group Membership 必须与对应 origin generation 一起 staged / activated，不能让新 generation 尚未完成时先改变正式 Shared Group 结果。
 
-Shared Assertion 也必须按新 Generation 的完整来源集合重新计算，避免旧 generation 的来源 assertion 永久残留。
+## 13. Absence 只有完整 Generation 激活时有权威语义
+
+普通 scan：
+
+```text
+absence != delete
+```
+
+新完整 generation 激活时：
+
+```text
+old generation 有 origin X
+new complete generation 无 origin X
+```
+
+可作为“新 Replica 集不再包含 X”的重建结果。
+
+对应 Conditional Shared Membership / Assertion 也按新 generation 的完整 origin 集重新计算。
+
+注意：这仍然只影响该 Node 的 origin / membership，不允许因一个 Node generation 缺失而删除其他 Node 或 Hub Local 的 Shared Group 成员。
 
 ## 14. Tombstone 保留
 
-Node-side Tombstone 是不可仅靠 Canonical Scan 重建的 Durable Replication State。
+Node-side Tombstone 不可仅靠 Canonical Scan 重建。
 
-至少在以下条件满足前不得 GC：
+至少满足以下条件前不得 GC：
 
-- 对应 Tombstone 已被 Hub ACK；
-- 当前 relationship 的 active Replica Generation 已包含该删除结果；
-- Tombstone ACK 后至少完成一次成功 Reconciliation / consistency checkpoint；
-- 没有需要复用旧 generation / stream 恢复的未决状态。
-
-实现可以采用更保守保留策略。
-
-不得仅因为“发送过一次”就删除 Tombstone。
+- Hub 已 ACK；
+- active Replica Generation 已包含删除结果；
+- ACK 后至少完成一次成功 Reconciliation / consistency checkpoint；
+- 无仍需旧 stream / generation 恢复的未决状态。
 
 ## 15. Control Plane Retention 分类
 
-### 短期状态
-
-可以按时间窗口 GC：
+### 短期
 
 ```text
 nonce replay cache
@@ -384,9 +307,7 @@ transient retry logs
 temporary pairing offers
 ```
 
-### Stream 级状态
-
-至少保留到 Stream 被明确 retired 且不再需要处理重试：
+### Stream 级
 
 ```text
 sequence receipt hash
@@ -394,35 +315,30 @@ ack cursor
 batch diagnostic receipt
 ```
 
-冻结 Stream 的 receipt 不能在仍可能收到旧重放请求时立即清空。
+冻结 Stream 在仍可能收到合法旧重试时不能立刻清空 receipt。
 
-### Node / Replica 长期状态
-
-只允许显式清理或安全 GC：
+### Node / Replica 长期
 
 ```text
 Replica Entity Map
-Permanent Alias
 Shared Identity Assertion provenance
+Shared Group Membership
+Promotion provenance
 Replica Generation metadata
-Tombstone（按上一节）
+Tombstone
 ```
 
-Permanent Alias 不能因为旧 Replica Row 已移除就立即删除，否则旧 Batch 重放可能重新制造重复实体。
+Conditional Shared 不再依赖 `ReplicaKey -> SharedKey` 的永久主键 Alias 来维持 FK；origin ReplicaKey 长期保持自己的身份。
+
+如果未来为旧 wire/provenance 建立辅助 alias，它只能是 Control Plane lookup，不得改变 Conditional Shared 的 origin-FK 模型。
 
 ### Diagnostics
 
-Conflict / Security Event 的保留可以有运维期限，但清理 Diagnostics 不能改变 Canonical / Replica 实际状态。
+Conflict / Security Event 可按期限清理，但不能改变 Canonical / Replica / Membership 状态。
 
-## 16. Sequence Receipt 不要求永久保留每个完整 Batch Body
+## 16. Sequence Receipt 不要求永久保存完整 Batch Body
 
-Hub 为防止：
-
-```text
-same sequence + different body
-```
-
-至少要保留稳定 receipt：
+Hub 至少保留：
 
 ```text
 nodeId
@@ -432,116 +348,153 @@ contentHash
 committedAt
 ```
 
-不要求为了重试校验永久保存原始 Batch Body。
+用于验证 same sequence + same content。
 
-Stream retire 后 receipt 可按明确 retention / checkpoint 策略压缩或清理，但不得导致 frozen stream 被错误重新激活。
+## 17. Conditional Shared Group 是唯一 Alpha 物理模型
 
-## 17. Hub 本机参与 Shared Identity
-
-Hub 默认也可以 `localCapture=true`。本机 Project / AssetDefinition 不经过网络 Replication Client，但不能因此被排除在跨机器 Shared Identity 汇聚之外。
-
-因此 Hub 的 Shared Identity Resolver 必须把本机 Node 视为一个合法 origin：
+`Project`、`AssetDefinition` 的跨 Node 汇聚固定使用：
 
 ```text
-originNodeId = Hub 自己的 nodeId
-originEntityId = 本机 Canonical Entity ID
+Origin Row
+  -> Shared Identity Assertion
+  -> Shared Group Membership
 ```
 
-当本机 Project / AssetDefinition 获得可靠 Portable Identity 时，可以产生本地 Shared Assertion / Membership。
+Alpha **不允许**一部分路径采用：
 
-关键要求：
+```text
+origin row + membership
+```
 
-- 不为了“自我同步”走 HTTPS；
-- 不把本机 Canonical ID 假装成天然跨机全局 ID；
-- Shared Projection / Group Resolver 必须同时考虑 Hub-local assertion 与 Remote assertions；
-- Hub 本机引用无需为了网络复制强制改写 payload；
-- 如果实现选择对本机 Canonical FK 做 Shared Promotion，必须保证 IdentityService / Alias 长期可重入，不能下一次本机 Source 扫描又重新制造旧 Project；
-- Alpha 更保守的实现可以让 Hub-local origin row 保持原 ID，通过 Shared Identity Membership 在 Projection 层统一聚合。
+另一部分路径采用：
 
-这一节优先保证本机与远程在产品聚合语义上对等，不强制某一种 SQLite 物理表示。
+```text
+rewrite origin FK -> shared primary key
+```
 
-## 18. 跨机器时钟不是一个可信全序
+否则会产生两种 Repository / Tombstone / Generation / IdentityService 语义。
 
-Replication Security 使用 Timestamp 防重放，但这不等于不同机器的业务事件时钟完全同步。
+固定要求：
 
-Node / Hub 必须保留原始：
+- Conditional Shared Origin Row 永久保留自己的 Canonical / Replica ID，除非该 origin 本身被删除；
+- 领域 FK 永远指 origin row；
+- SharedKey 只标识 Shared Group；
+- Promotion 只创建 / 更新 Membership，不批量改 FK；
+- 同一 Node 的多个 origin row 可以在强证据下加入同一 Group；
+- Group merged metadata 可由 active assertions 重建。
+
+真正 `shared` 的 `AgentProduct` 不受此规则限制，可以使用一个 Shared Canonical Root。
+
+## 18. Hub 本机参与 Shared Identity
+
+Hub 默认可 `localCapture=true`。本机 Project / AssetDefinition 不走 HTTPS，但必须与 Remote 使用同一个 Shared Group Contract：
+
+```text
+originNodeId = Hub nodeId
+originEntityId = local Canonical ID
+```
+
+当本机获得 Portable Identity：
+
+```text
+Hub Local Origin Row
+  -> local Shared Assertion
+  -> Shared Group Membership
+```
+
+要求：
+
+- 不走自我 HTTPS；
+- 本机 FK 不改写为 SharedKey；
+- Remote FK 也不改写为 SharedKey；
+- Shared Group Resolver 同时考虑 Hub Local / Remote memberships；
+- 删除 Hub Local origin 只撤回自己的 membership，不影响 Remote members。
+
+这使本机与远程在物理与产品语义上完全一致。
+
+## 19. Shared Group 与 Replica Generation 的关系
+
+Remote Node Re-bootstrap G2 时，其 membership 也属于 G2 staged state：
+
+```text
+G1 origin memberships active
+G2 origin memberships staged
+```
+
+G2 未激活前：
+
+- 正式 Projection 继续使用 G1 memberships；
+- 不因 G2 尚未扫描到某 Project 就撤回 G1 membership；
+- G2 complete + activate 后再原子切换该 Node 的 active membership set。
+
+Hub Local membership 不属于 Remote Replica Generation；它随本机 Canonical / Identity 状态独立维护。
+
+## 20. 跨机器时钟不是可信全序
+
+Replication Security 使用 Timestamp 防重放，但业务事件保留：
 
 ```text
 occurredAt
 capturedAt
 ```
 
-Hub 不使用 `replicatedAt` 覆盖业务事件时间。
+Hub 不使用 `replicatedAt` 覆盖业务时间。
 
-Handshake / Status 应允许 Hub 返回：
+Handshake / Status 提供 `serverTime` 仅用于 Clock Skew diagnostics / security。
 
-```text
-serverTime
-```
+## 21. Hub Projection 跨机排序
 
-Node 可以估算 clock skew 并做 diagnostics。
+- 优先当前 Canonical Projection 业务时间；
+- 跨 Node 只提供 best-effort 排序；
+- 不从时间戳推断跨 Node 因果；
+- 相同 / 不可靠时间使用稳定 tie-breaker，例如 `originNodeId + replicaKey`；
+- Shared Group `createdAt=min()` / `lastSeenAt=max()` 只是聚合元数据，保留各 assertion 原始时间。
 
-如果安全签名时间超过允许窗口，Replication 可以被阻塞；如果仍在允许窗口内，也不能据此声称跨 Node 事件具有毫秒级全局先后关系。
+## 22. Hub 配置属于共享 AgentLens 数据根
 
-## 19. Hub Projection 的跨机排序语义
-
-跨 Node Unified Timeline / Session List：
-
-- 优先使用当前 Canonical Projection 已定义的业务时间；
-- 在不同 Node 之间只提供 best-effort 时间排序；
-- 不从时间戳自动推断跨 Node 因果关系；
-- clock skew 明显时可在 Diagnostics / UI 给出提示；
-- 相同时间或无法可靠比较时使用稳定 tie-breaker，例如 `originNodeId + canonicalSequence / replicaKey`，保证分页结果确定，而不是依赖 SQLite 插入顺序。
-
-Shared Merge 中 `createdAt=min()` / `lastSeenAt=max()` 仍是确定性聚合元数据，但各 Node assertion 的原始时间必须保留；这些字段不能被解释为外部仓库真实创建时间。
-
-## 20. Hub 配置属于共享 AgentLens 数据根
-
-npm / Desktop 是双发行、单运行时、共享数据。
-
-因此以下内容不能分别存在“npm 一份 / Desktop 一份”：
+npm / Desktop 共享：
 
 ```text
 nodeId
 Hub capability config
-upstream Hub relationship
+upstream relationship
 Replication Policy / History Boundary
 Hub Identity metadata
 Node Registry / Stream metadata
+Shared Group / Membership state
 ```
 
-它们属于同一个默认数据根 / Daemon Runtime。
+不能分别存在 npm / Desktop 两份。
 
-平台壳可以提供不同设置入口，但最终必须落到同一配置 / Control Plane。
+卸载其中一种发行不能删除另一发行依赖的 Hub / Node / Replication State。
 
-卸载 npm 或 Desktop 其中一种发行方式，不能顺带删除另一发行仍依赖的 Hub Identity / Node Identity / Replication State。
+## 23. Headless Pure Hub 管理边界
 
-## 21. Headless Pure Hub 的管理边界
+Alpha 不开放 Remote Web。
 
-Alpha 不开放带账号认证的 Remote Web。
-
-因此 Pure Hub 跑在 NAS / Linux Server 时，正式管理方式是：
+Pure Hub 管理方式：
 
 - 本机 CLI；
-- SSH 后在服务器上执行 CLI；
-- 用户自己建立可信的本机端口转发 / OS 远程会话访问 loopback Web（AgentLens 不把该隧道当成内建 Remote Web）。
+- SSH 后执行 CLI；
+- 用户自己建立可信 loopback tunnel / OS 远程会话。
 
-AgentLens 不为了方便 Headless 部署把 `127.0.0.1:56789` 改成无认证网络监听。
+AgentLens 不因此把 `127.0.0.1:56789` 改成无认证网络监听。
 
-## 22. 验收不变量
+## 24. 验收不变量
 
-实现前至少把以下场景纳入 Test Matrix：
+至少纳入测试：
 
-- `hubAccept=true && replicationUpstream=true` 被配置层拒绝；
-- “从现在开始”不会在后续 Reconciliation 中偷偷补传既有旧 Observation；
-- 新 Observation 可以携带配对前的 Session / Project 等依赖闭包；
-- Policy 收紧后不再发送新的旧 Policy Batch；
-- ambiguous in-flight Batch 不能用同 sequence 改内容；
-- Stream Rollover 后 existing Replica 不重复；
-- Re-bootstrap 失败时 active Generation 仍保持可查询；
-- staged Generation 完成前不能成为 active；
-- new complete Generation 激活后可以清除旧 generation 的 stale replica / assertion；
-- Tombstone 未达到安全条件不能 GC；
-- Hub 本机与远程 Node 的同一 Portable Project 可以出现在同一个 Shared Project 聚合中；
-- clock skew 不会把 `replicatedAt` 错当业务事件时间；
-- npm / Desktop 切换 Runtime owner 不改变 nodeId / Hub relationship。
+- 非法 capability 组合被拒绝；
+- `from-now` 不被 Reconciliation 绕过；
+- 新事实允许旧依赖闭包；
+- Policy 收紧不继续发送旧敏感 ambiguous Batch；
+- Stream Rollover 不重复 Replica；
+- Re-bootstrap staged Generation 未完成不影响 active 查询；
+- G2 激活时只切换该 Node origin/membership set；
+- Tombstone 未满足安全条件不能 GC；
+- Project Promotion 不修改 Workspace / Session / Observation 的 origin FK；
+- Hub Local 与 Remote 同 Portable Project 进入同一 Shared Group；
+- 删除一个 member 不删除其他 members；
+- Remote Re-bootstrap 不改变 Hub Local membership；
+- clock skew 不把 replicatedAt 变成业务时间；
+- npm / Desktop 切换 owner 不改变 nodeId / relationship。
