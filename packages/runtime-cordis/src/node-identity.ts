@@ -66,14 +66,6 @@ export function defaultAgentLensDataRoot(home = homedir()): string {
   return join(home, '.agent-lens', '1.0')
 }
 
-export function resolveAgentLensDataRoot(
-  env: Readonly<Record<string, string | undefined>> = process.env,
-  home = homedir(),
-): string {
-  const configured = env.AGENT_LENS_DATA_ROOT?.trim()
-  return configured || defaultAgentLensDataRoot(home)
-}
-
 export function nodeIdentityPath(dataRoot: string): string {
   return join(dataRoot, 'node.json')
 }
@@ -189,7 +181,7 @@ export function loadOrCreateNodeIdentity(
 export function resolveAgentLensNodeRuntime(
   options: ResolveAgentLensNodeRuntimeOptions = {},
 ): AgentLensNodeRuntime {
-  const dataRoot = options.dataRoot ?? resolveAgentLensDataRoot()
+  const dataRoot = options.dataRoot ?? defaultAgentLensDataRoot()
   const profile = options.profile ?? resolveAgentLensRuntimeProfile()
   return {
     dataRoot,
