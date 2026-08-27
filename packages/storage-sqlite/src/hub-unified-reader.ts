@@ -1,12 +1,17 @@
 import type {
+  CanonicalObservation,
   JsonValue,
   LogicalSession,
+  ObservationRepository,
   SessionRepository,
 } from '@agent-lens/core'
 import type {
   ReplicationAvailability,
 } from '@agent-lens/core/replication'
-import type { HubRemoteReadEntity } from './hub-remote-reader'
+import type {
+  HubRemoteObservationQuery,
+  HubRemoteReadEntity,
+} from './hub-remote-reader'
 
 export type HubUnifiedReadOrigin =
   | {
@@ -28,8 +33,18 @@ export interface HubUnifiedLogicalSession {
   body: Readonly<Record<string, ReplicationAvailability>>
 }
 
+export interface HubUnifiedCanonicalObservation {
+  publicId: string
+  entityType: 'CanonicalObservation'
+  origin: HubUnifiedReadOrigin
+  body: Readonly<Record<string, ReplicationAvailability>>
+}
+
 export interface HubRemoteReadPort {
   get(publicId: string): Promise<HubRemoteReadEntity | undefined>
+  listCanonicalObservationsForLogicalSession(
+    query: HubRemoteObservationQuery,
+  ): Promise<readonly HubRemoteReadEntity[]>
 }
 
 function availability(value: JsonValue | undefined): ReplicationAvailability {
@@ -51,9 +66,36 @@ function localSessionBody(session: LogicalSession): Readonly<Record<string, Repl
   }
 }
 
-function remoteSessionBody(entity: HubRemoteReadEntity): Readonly<Record<string, ReplicationAvailability>> {
+function localObservationBody(observation: CanonicalObservation): Readonly<Record<string, ReplicationAvailability>> {
+  return {
+    id: availability(observation.id),
+    hostId: availability(observation.hostId),
+    installationId: availability(observation.installationId),
+    projectId: availability(observation.projectId),
+    workspaceId: availability(observation.workspaceId),
+    logicalSessionId: availability(observation.logicalSessionId),
+    sourceSessionId: availability(observation.sourceSessionId),
+    interactionId: availability(observation.interactionId),
+    actorId: availability(observation.actorId),
+    kind: availability(observation.kind),
+    sourceSequence: availability(observation.sourceSequence),
+    canonicalSequence: availability(observation.canonicalSequence),
+    occurredAt: availability(observation.occurredAt),
+    capturedAt: availability(observation.capturedAt),
+    payload: availability(observation.payload),
+    evidenceRefs: availability(observation.evidenceRefs),
+  }
+}
+
+function remoteAvailabilityBody(
+  entity: HubRemoteReadEntity,
+  expectedType: 'LogicalSession' | 'CanonicalObservation',
+): Readonly<Record<string, ReplicationAvailability>> {
+  if (entity.entityType !== expectedType) {
+    throw new TypeError(`Remote entity type mismatch: expected ${expectedType}, got ${entity.entityType}`)
+  }
   if (!entity.body || Array.isArray(entity.body) || typeof entity.body !== 'object') {
-    throw new TypeError('Remote LogicalSession body must be an availability object')
+    throw new TypeError(`Remote ${expectedType} body must be an availability object`)
   }
   return entity.body as unknown as Readonly<Record<string, ReplicationAvailability>>
 }
@@ -99,7 +141,65 @@ export class HubUnifiedLogicalSessionReader {
         entityId: remote.originEntityId,
         generationId: remote.generationId,
       },
-      body: remoteSessionBody(remote),
+      body: remoteAvailabilityBody(remote, 'LogicalSession'),
     }
+  }
+}
+
+/**
+ * Availability-aware observation reader for one Unified LogicalSession.
+ * It deliberately does not cast remote bodies into CanonicalObservation,
+ * because metadata-only/history policy may omit fields that Local Core expects.
+ */
+export class HubUnifiedObservationReader {
+  constructor(
+    private readonly localNodeId: string,
+    private readonly localObservations: ObservationRepository,
+    private readonly sessions: HubUnifiedLogicalSessionReader,
+    private readonly remote: HubRemoteReadPort,
+  ) {}
+
+  async queryForLogicalSession(
+    logicalSessionPublicId: string,
+    limit = 500,
+  ): Promise<readonly HubUnifiedCanonicalObservation[]> {
+    const session = await this.sessions.get(logicalSessionPublicId)
+    if (!session) return []
+    const boundedLimit = Math.max(1, Math.min(limit, 5000))
+
+    if (session.origin.kind === 'local') {
+      const observations = await this.localObservations.query({
+        logicalSessionId: session.origin.entityId,
+        limit: boundedLimit,
+      })
+      return observations.map(observation => ({
+        publicId: observation.id,
+        entityType: 'CanonicalObservation' as const,
+        origin: {
+          kind: 'local' as const,
+          nodeId: this.localNodeId,
+          entityId: observation.id,
+        },
+        body: localObservationBody(observation),
+      }))
+    }
+
+    const observations = await this.remote.listCanonicalObservationsForLogicalSession({
+      originNodeId: session.origin.nodeId,
+      generationId: session.origin.generationId,
+      logicalSessionOriginId: session.origin.entityId,
+      limit: boundedLimit,
+    })
+    return observations.map(observation => ({
+      publicId: observation.publicId,
+      entityType: 'CanonicalObservation' as const,
+      origin: {
+        kind: 'remote' as const,
+        nodeId: observation.originNodeId,
+        entityId: observation.originEntityId,
+        generationId: observation.generationId,
+      },
+      body: remoteAvailabilityBody(observation, 'CanonicalObservation'),
+    }))
   }
 }
