@@ -1,6 +1,6 @@
 import type { JsonValue } from '../domain/common'
 import type { KnownReplicationEntityType } from './types'
-import { authorizeHistory, type ReplicationHistoryPhase } from './history'
+import { authorizeHistory, type HistoryAuthorizationInput, type ReplicationHistoryPhase } from './history'
 import {
   applyReplicationFieldPolicy,
   getReplicationEntityContract,
@@ -28,12 +28,14 @@ export interface ReplicationEntityTransformResult {
 }
 
 export function transformReplicationEntity(input: ReplicationEntityTransformInput): ReplicationEntityTransformResult {
-  const history = authorizeHistory({
+  const historyInput: HistoryAuthorizationInput = {
     boundary: input.history,
-    entityCapturedAt: input.capturedAt,
-    dependencyRequired: input.dependencyRequired,
     phase: input.phase,
-  })
+  }
+  if (input.capturedAt !== undefined) historyInput.entityCapturedAt = input.capturedAt
+  if (input.dependencyRequired !== undefined) historyInput.dependencyRequired = input.dependencyRequired
+
+  const history = authorizeHistory(historyInput)
   const contract = getReplicationEntityContract(input.entityType)
   const fieldContracts = new Map(contract.fields.map(field => [field.field, field]))
   const body: Record<string, ReplicationAvailability> = {}
