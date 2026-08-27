@@ -7,7 +7,7 @@
 - `docs/1.0/HUB-REPLICATION-CONTRACT.md`
 - `docs/1.0/HUB-REPLICATION-STATE-CONTRACT.md`
 
-本文定义 AgentLens Node 与 Hub 之间的线上协议边界：Handshake、Replication Stream、Batch Envelope、Sequence / ACK、Bootstrap、Reconciliation、History / Policy Revision、Replica Generation、Shared Group Assertion、错误模型、Capability Negotiation 与请求 / Hub 身份证明。本文不绑定 SQLite Schema，也不表示协议已经实现。
+本文定义 AgentLens Node 与 Hub 之间的线上协议边界：Handshake、Replication Stream、Batch Envelope、Sequence / ACK、Bootstrap、Reconciliation、History / Policy Revision、Replica Generation、Shared Identity Assertion、错误模型、Capability Negotiation 与请求 / Hub 身份证明。本文不绑定 SQLite Schema，也不表示协议已经实现。
 
 ## 1. 协议目标
 
@@ -27,6 +27,15 @@ Storage Schema          migration N
 - Minor：向后兼容可选扩展；
 - Capability：语义兼容的可选能力，不能代替 Major。
 
+Shared Identity Algorithm 也有独立版本，例如：
+
+```text
+project-repository-v1
+asset-upstream-v1
+```
+
+如果 normalization / key derivation 的改变会让既有实体得到不同 SharedKey，不能只当普通实现优化；必须升级 Identity Algorithm Version，并评估 Protocol Major / Migration。
+
 连接建立后固定使用协商版本。
 
 ## 3. Relationship / Stream / Generation
@@ -45,17 +54,7 @@ replicaGenerationId
 - streamId：sequence / ACK namespace；
 - generationId：某 Remote Node Replica 数据集的一代状态。
 
-规则：
-
-- stream UUID；一个 Node Alpha 最多一个 active stream；
-- sequence 从 1 单调递增；
-- Re-pair 默认新 stream；
-- 已认证 relationship 可 Stream Rollover；
-- Cursor 以 nodeId + streamId 为键；
-- Node Identity Reset 生成新 nodeId / stream；
-- stream 不跨 hubId；
-- 换 stream 不自动换 generation；
-- Re-bootstrap 可创建 staged generation。
+规则：stream UUID；一个 Node Alpha 最多一个 active stream；sequence 从 1 单调递增；Re-pair 默认新 stream；已认证 relationship 可 Stream Rollover；Cursor 以 nodeId + streamId 为键；Node Identity Reset 生成新 nodeId / stream；stream 不跨 hubId；换 stream 不自动换 generation；Re-bootstrap 可创建 staged generation。
 
 ## 4. Pairing Receipt 与 Hub Identity Proof
 
@@ -71,9 +70,7 @@ issuedAt
 protocol major range
 ```
 
-Node 保存 Hub Identity Public Key + Pairing Receipt。
-
-TLS Certificate 生命周期与 Hub Identity 分离。
+Node 保存 Hub Identity Public Key + Pairing Receipt。TLS Certificate 生命周期与 Hub Identity 分离。
 
 ## 5. Handshake
 
@@ -94,7 +91,7 @@ interface ReplicationHandshakeRequest {
 }
 ```
 
-`runtimeInstanceId` 是当前 Daemon 启动实例的临时随机标识，只用于连接 / Clone Diagnostics。
+`runtimeInstanceId` 是当前 Daemon 启动实例临时随机标识，只用于连接 / Clone Diagnostics。
 
 ```ts
 interface ReplicationHandshakeResponse {
@@ -104,6 +101,7 @@ interface ReplicationHandshakeResponse {
   agentLensVersion: string
   selectedProtocol: { major: number; minor: number }
   capabilities: string[]
+  sharedIdentityAlgorithms: string[]
   acceptedStreamId: string
   activeReplicaGenerationId?: string
   hubAckSequence: number
@@ -112,21 +110,9 @@ interface ReplicationHandshakeResponse {
 }
 ```
 
-serverProof 至少签名：
+`sharedIdentityAlgorithms` 声明当前连接双方允许使用的 Shared Identity Algorithm。Node 不得发送 Hub 未支持的算法。
 
-```text
-clientNonce
-hubId
-nodeId
-replicationStreamId
-selectedProtocol
-hubAckSequence
-serverTime
-```
-
-Node 用已配对 Hub Public Key 验证。
-
-Hub 验证 Node / Hub / Stream ownership、协议交集、Request Signature 与 ACK 状态。协议不兼容只拒绝 Replication。
+serverProof 至少签名 clientNonce、hubId、nodeId、streamId、selectedProtocol、hubAckSequence、serverTime。Node 用已配对 Hub Public Key 验证。
 
 ## 6. History Scope / Policy Revision
 
@@ -163,14 +149,7 @@ interface ReplicationBatch {
 }
 ```
 
-规则：
-
-- batchId 仅诊断辅助，sequence 是顺序事实；
-- hubId / stream / generation 必须属于当前 relationship；
-- 单 Batch 完整事务提交 / 回滚，不部分 ACK；
-- 数组顺序不决定导入顺序；
-- Domain Ref 使用 Typed EntityRef；
-- payload 只做 Policy transform，不做 ID 字符串替换。
+单 Batch 完整事务提交 / 回滚，不部分 ACK；数组顺序不决定导入顺序；Domain Ref 使用 Typed EntityRef；payload 只做 Policy transform。
 
 ## 8. Deterministic Hash
 
@@ -180,11 +159,7 @@ R1 使用 RFC 8785 / JCS 兼容 Canonical JSON：
 SHA-256(canonical JSON bytes)
 ```
 
-- 只允许合法 JSON 值；
-- Batch hash 排除自身 contentHash；
-- Entity hash 在 Policy transform 之后；
-- entityVersion、Typed Ref、Shared Identity Assertion、omitted/redacted 都参与 hash；
-- Request Signature 的 body hash 对实际 Raw HTTP Body Bytes 计算。
+只允许合法 JSON 值；Batch hash 排除自身 contentHash；Entity hash 在 Policy transform 之后；entityVersion、Typed Ref、Shared Identity Assertion、omitted/redacted 都参与 hash；Request Signature 的 Body Hash 对实际 Raw HTTP Body Bytes 计算。
 
 ## 9. Sequence 与 ACK
 
@@ -193,47 +168,26 @@ ackSequence = 已事务提交的最高连续 batchSequence
 ```
 
 - seq == ack+1：正常处理；
-- seq <= ack：hash 相同返回已有 ACK，不同则 `SEQUENCE_REUSE_CONFLICT`；
+- seq <= ack：hash 相同返回已有 ACK，不同 `SEQUENCE_REUSE_CONFLICT`；
 - seq > ack+1：`SEQUENCE_GAP`，Hub 不缓存未来 Batch。
 
 ## 10. Batch Commit Ambiguity
 
-Batch 第一次可能发网前冻结：
-
-```text
-sequence
-batchId
-body
-contentHash
-```
-
-超时、连接断开、Hub crash / response lost 时，只能 exact retry 或查询 ACK。
-
-只有 Hub 明确返回 `committed=false` 才能修正当前 expected sequence 内容。
+Batch 第一次可能发网前冻结 sequence / batchId / body / contentHash。超时、连接断开、Hub crash / response lost 时只能 exact retry 或查询 ACK。只有 Hub 明确返回 `committed=false` 才能修正当前 expected sequence 内容。
 
 ## 11. Policy 收紧与 Stream Rollover
 
-旧 Policy ambiguous Batch 若包含新 Policy 已禁止正文：
-
-- 不继续重发敏感正文；
-- 旧 stream 安全暂停；
-- authenticated rollover 建新 stream；
-- generation 保留；
-- 新 stream 按新 Policy Reconcile。
+旧 Policy ambiguous Batch 若包含新 Policy 已禁止正文，不继续重发；旧 stream 暂停；authenticated rollover 建新 stream；generation 保留；新 stream 按新 Policy Reconcile。
 
 ## 12. Bootstrap
 
 只有 History Scope 需要已有历史时执行：
 
 ```text
-Pair
- -> Bootstrap Scan
- -> Complete Marker
- -> Mandatory Reconciliation
- -> Incremental
+Pair -> Bootstrap Scan -> Complete -> Reconciliation -> Incremental
 ```
 
-不冻结 Local Capture；中断按 ACK 恢复；`from-now` 遵守持久 History Boundary。
+不冻结 Local Capture；中断按 ACK 恢复；from-now 遵守持久 History Boundary。
 
 ## 13. Replica Generation / Re-bootstrap
 
@@ -246,54 +200,31 @@ G1 active
  -> retire G1
 ```
 
-G2 未激活前不能进入正式 Projection。
-
-Generation 还必须包含该 Remote Node 对 Conditional Shared Group 的 staged Membership 集；只有 G2 激活时才原子切换该 Node 的 active memberships。
+G2 未激活前不进入正式 Projection。Generation 还必须包含该 Remote Node 的 Conditional Shared Membership staged set；只有 G2 激活时才原子切换该 Node memberships。
 
 ## 14. Incremental 与 Reconciliation
 
-Fast Path：
+Fast Path：Canonical Change -> Cordis Event -> pending candidate。
 
-```text
-Canonical Change -> Cordis Event -> pending candidate
-```
+Durable Repair：Canonical Store -> History Boundary -> Replication Policy -> Wire Serialization -> Hash -> Compare ACK State -> Repair。
 
-Durable Repair：
-
-```text
-Canonical Store
- -> History Boundary
- -> Replication Policy
- -> Wire serialization
- -> entity hash
- -> compare acknowledged state
- -> repair
-```
-
-触发包括 Bootstrap 后、异常退出、ACK 不一致、扩大历史授权、Stream Rollover、显式 repair、周期校准。
-
-语义：
-
-```text
-at-least-once
-+ deterministic identity
-+ idempotent import
-+ reconciliation
-```
+正式语义：at-least-once + deterministic identity + idempotent import + reconciliation。
 
 ## 15. Replication Entity DTO
 
-Wire Entity 不等于 Core Interface / SQLite Row。
-
 ```ts
+interface SharedIdentityAssertion {
+  algorithm: 'project-repository-v1' | 'asset-upstream-v1' | string
+  normalizedIdentity: string
+  sharedKey: string
+}
+
 interface ReplicationEntityEnvelope {
   entityType: ReplicationEntityType
   scope: 'node' | 'shared'
   originEntityId: string
   sharedKey?: string
-  sharedIdentity?: {
-    sharedKey: string
-  }
+  sharedIdentity?: SharedIdentityAssertion
   entityVersion: number
   contentHash: string
   body: unknown
@@ -302,56 +233,36 @@ interface ReplicationEntityEnvelope {
 
 ### Node-scoped
 
-- originEntityId 必填；
-- Hub 计算 ReplicaKey。
+originEntityId 必填；Hub 按独立 `agentlens-replica-r1` domain 重算 ReplicaKey。
 
 ### Shared Root
 
-- `scope='shared'`；
-- sharedKey 必填；
-- Alpha 主要用于 `AgentProduct`；
-- Hub 按 Shared Root Merge Contract 处理。
+scope=shared；sharedKey 必填；Alpha 主要用于 AgentProduct；Hub 按 Shared Root Contract 验证 / Merge。
 
 ### Conditional Shared
 
-`Project` / `AssetDefinition` **始终以 `scope='node'` 发送 origin entity**。
+Project / AssetDefinition **始终 scope=node**。
 
-如果当前已有可靠 Portable Identity，可附带：
+有 Portable Identity 时可以附 `sharedIdentity`，但它只是 assertion。Hub 必须：
 
-```text
-sharedIdentity.sharedKey
-```
+1. 检查 `algorithm` 已在 Handshake 协商；
+2. 从当前 Entity Wire Body 中允许参与身份计算的字段重新运行对应 Replication Identity Resolver；
+3. 得到自己的 normalized identity；
+4. 按该算法的独立 shared-group domain separator 重新计算 SharedKey；
+5. 与 Node 提供的 `normalizedIdentity / sharedKey` 比较；
+6. 任一不一致都拒绝 Membership，不得直接信客户端 SharedKey。
 
-含义只是：
-
-> 这个 origin entity 是某 Shared Group 的 member。
-
-它不改变该 Entity 的 Hub 主键，也不改变引用它的 FK target。
-
-因此 R1 不允许把 Project / AssetDefinition 以 `scope='shared'` 发送后让 Workspace / AssetBinding 直接引用 SharedKey。
+R1 不允许 Project / AssetDefinition 以 scope=shared 发送，也不允许 Workspace / AssetBinding 直接引用 Shared Group Key。
 
 ## 16. Typed EntityRef
 
 ```ts
 type EntityRef =
-  | {
-      scope: 'node'
-      entityType: ReplicationEntityType
-      originEntityId: string
-    }
-  | {
-      scope: 'shared'
-      entityType: SharedRootEntityType
-      sharedKey: string
-    }
+  | { scope: 'node'; entityType: ReplicationEntityType; originEntityId: string }
+  | { scope: 'shared'; entityType: SharedRootEntityType; sharedKey: string }
 ```
 
-规则：
-
-- Conditional Shared Project / AssetDefinition 的 Domain Ref 始终是 node ref；
-- shared ref 只用于真正 Shared Root；
-- Shared Group Membership 不作为领域 FK target；
-- Alpha 不允许跨 Node direct Ref。
+Conditional Shared Domain Ref 始终 node ref；shared ref 只用于 Shared Root；Alpha 不允许跨 Node direct Ref。
 
 ## 17. Omitted / Redacted
 
@@ -362,52 +273,17 @@ type ReplicatedValue<T> =
   | { state: 'redacted'; value?: T }
 ```
 
-Hub 必须区分真实 null、未采集、Policy omitted、redacted。
-
-字段边界见 `HUB-DATA-EXPOSURE-MATRIX.md`。
+Hub 区分真实 null、未采集、Policy omitted、redacted。
 
 ## 18. Identity Promotion = Membership Promotion
 
-Promotion 可以与普通 Entity 同 Batch出现，但语义固定为：
+Promotion = Conditional origin 无 Membership -> 加入 target Shared Group。
 
-```text
-conditional origin without Shared Membership
- -> origin joins target Shared Group
-```
-
-必须：
-
-- 幂等；
-- 单向；
-- provenance 可追溯；
-- 同 origin 不得静默改到另一 SharedKey；
-- **不得批量改写 Workspace / Observation / AssetBinding 等 Canonical FK**；
-- 旧 Batch 重试不会产生重复 Membership。
-
-Promotion 详细规则见 Replication Contract。
+DTO 必须携带 Identity Algorithm。Hub 按同算法重算 SharedKey。Promotion 幂等、单向、可追溯；同 origin 不静默改 Group；不得批量改写 Canonical FK。
 
 ## 19. Tombstone / Membership Withdrawal
 
-```ts
-interface ReplicationTombstone {
-  entityType: ReplicationEntityType
-  scope: 'node' | 'shared-assertion'
-  originEntityId: string
-  sharedKey?: string
-  deletedAt: string
-  reason?: string
-}
-```
-
-规则：
-
-- node tombstone 删除 origin entity；
-- Conditional Shared origin 删除时同时撤回该 origin membership；
-- `shared-assertion` 可表达 Shared Root assertion / 明确 Membership withdrawal；
-- 一个 member 撤回不删除其他 members；
-- Tombstone 持久化并参与 Reconciliation；
-- GC 遵守 State Contract；
-- 普通扫描缺失不能制造 tombstone。
+Origin tombstone 删除 origin entity；Conditional origin 删除时撤回自己的 Membership；Shared assertion withdrawal 不影响其他 members；普通扫描缺失不能制造 Tombstone。
 
 ## 20. 错误模型
 
@@ -442,6 +318,8 @@ Alpha 至少：
 | `BATCH_INVALID_REFERENCE` | 否 | Typed Ref / 依赖非法 |
 | `BATCH_POLICY_INVALID` | 否 | Wire 内容违反 Policy |
 | `IDENTITY_NODE_CONFLICT` | 否 | 同 nodeId 强冲突 |
+| `IDENTITY_ALGORITHM_UNSUPPORTED` | 否 | Shared Identity Algorithm 未协商 |
+| `SHARED_IDENTITY_MISMATCH` | 否 | Hub 重算 normalized identity / sharedKey 与 Node assertion 不一致 |
 | `IDENTITY_PROMOTION_CONFLICT` | 否 | Membership Promotion 冲突 |
 | `SHARED_MERGE_CONFLICT` | 否 | Shared invariant 无法合并 |
 | `SERVER_BUSY` | 是 | Hub 暂忙 |
@@ -451,8 +329,6 @@ Alpha 至少：
 本地 TLS / Hub Identity / 网络失败使用 Local Diagnostic，不伪装为 Hub 返回错误。
 
 ## 21. 请求签名
-
-R1：
 
 ```text
 agentlens-r1\n
@@ -467,15 +343,11 @@ agentlens-r1\n
 <SHA256_RAW_BODY>
 ```
 
-Header：Hub-Id、Node-Id、Replication-Stream-Id、Key-Id、Timestamp、Nonce、Signature。
-
-Hub 验证身份、时钟、nonce、body hash 和 ownership。
+Hub 验证身份、时钟、nonce、body hash、stream ownership。
 
 ## 22. Pairing Request Key Possession
 
-Pair Request 必须有 `nodeProof`，证明提交者持有 nodePublicKey 对应 Private Key。
-
-Pairing Secret = 用户授权；nodeProof = Key possession。
+Pair Request 必须有 nodeProof。Pairing Secret = 用户授权；nodeProof = Key possession。
 
 ## 23. Transport Surface
 
@@ -487,29 +359,15 @@ POST /replication/v1/batches
 GET  /replication/v1/status
 ```
 
-/pair 使用 Pair Secret + nodeProof；其他路由使用长期 Node Signature。
-
-Local Web 继续 `127.0.0.1:56789`。
+/pair 用 Pair Secret + nodeProof；其他路由用长期 Node Signature。Local Web 继续 127.0.0.1:56789。
 
 ## 24. Batch 大小 / 流控
 
-Handshake / Status 可返回：
-
-```text
-maxBatchBytes
-maxEntityBytes
-maxEntitiesPerBatch
-recommendedBatchBytes
-retryAfterMs
-```
-
-Surface 必须在完整 parse 前限 Body Size。R1 不要求压缩。
+Handshake / Status 可返回 maxBatchBytes / maxEntityBytes / maxEntitiesPerBatch / recommendedBatchBytes / retryAfterMs。Surface 必须在完整 parse 前限 Body Size。R1 不要求压缩。
 
 ## 25. Clock Skew
 
-serverTime 用于安全与 diagnostics，不构成跨机器业务全序。
-
-Hub 不用 replicatedAt 覆盖 occurredAt / capturedAt。
+serverTime 只用于安全与 diagnostics，不构成跨机器业务全序。Hub 不用 replicatedAt 覆盖 occurredAt / capturedAt。
 
 ## 26. Node Replication 状态机
 
@@ -530,35 +388,30 @@ revoked
 
 ## 27. Sequence / Identity State Retention
 
-Hub 不永久保存 Batch Body，但为可重放 Stream 至少保存：
+Hub 不永久保存 Batch Body，但为可重放 Stream 保存 nodeId / streamId / sequence / contentHash / committedAt。
 
-```text
-nodeId
-streamId
-sequence
-contentHash
-committedAt
-```
-
-长期 Identity 状态包括 Replica Entity Map、Shared Assertions / Membership、Promotion provenance、Generation、Tombstone；不再依赖 Conditional Shared 主键 Alias 维持 FK。
+长期 Identity State 包括 Replica Entity Map、Shared Assertions / Membership、Identity Algorithm Version、Promotion Provenance、Generation、Tombstone；不依赖 Conditional Shared 主键 Alias。
 
 ## 28. R1 验收不变量
 
-- Pairing Receipt / Handshake serverProof 可验证；
-- Header 身份被修改会导致 Signature 失败；
+- Pairing Receipt / serverProof 可验证；
+- Signature 身份绑定有效；
 - Sequence retry / gap / ambiguity 正确；
-- Policy 收紧可安全 rollover；
-- Bootstrap + Reconcile 收敛且 from-now 不被绕过；
-- staged Generation 未完成不替换 active；
-- Conditional Shared Project / AssetDefinition 以 node origin entity 传输；
-- Conditional Shared Domain Ref 不允许指 Shared Group Key；
-- Promotion 只新增 Membership，不改 origin FK；
-- Hub Local / Remote Membership 最终进入同一 Group；
-- Remote Generation 切换只替换该 Node memberships；
-- Shared member withdrawal 不影响其他 member；
+- Policy 收紧可 rollover；
+- Bootstrap / Reconcile / from-now 正确；
+- staged Generation 正确；
+- ReplicaKey domain 与本机 ID domain 分离；
+- Conditional Shared 始终以 origin node entity 传输；
+- Hub 必须按协商 Identity Algorithm 重算 normalized identity / sharedKey；
+- Shared Identity mismatch 被拒绝；
+- Algorithm Version 不兼容不能静默混用；
+- Conditional Shared Ref 不指 Group Key；
+- Promotion 只改 Membership；
+- Hub Local / Remote 用同一 Identity Algorithm；
+- member withdrawal 不影响其他 member；
 - omitted / null / redacted 可区分；
-- Nonce、Clock Skew、ownership 校验有效；
-- 协议不兼容不影响本地采集。
+- Nonce / Clock Skew / ownership 校验有效；
+- Protocol 不兼容不影响本地采集。
 
 ## 29. 当前非目标
 
@@ -570,4 +423,4 @@ committedAt
 - Server push 控制 Node；
 - SQLite / PostgreSQL Schema 传输；
 - 基础协议强制压缩；
-- 把 Conditional Shared Group Key 变成 Project / AssetDefinition 的统一物理主键。
+- Conditional Shared Group Key 成为 Project / AssetDefinition 物理主键。
