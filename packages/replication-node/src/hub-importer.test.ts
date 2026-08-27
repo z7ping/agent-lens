@@ -185,3 +185,48 @@ test('H7 rejects sequence gaps without leaving an empty stream or any Remote Rep
     await storage.close()
   }
 })
+
+test('H7 atomically retires G1 only when staged G2 is explicitly activated', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  try {
+    await storage.migrate()
+    const store = new SqliteHubReplicaStore(storage.executor)
+    await store.putGeneration({
+      originNodeId: 'node-a',
+      generationId: 'gen-1',
+      status: 'staged',
+      createdAt: '2026-08-28T00:00:00.000Z',
+    })
+    await activateReplicaGeneration({
+      store,
+      originNodeId: 'node-a',
+      generationId: 'gen-1',
+      now: '2026-08-28T00:01:00.000Z',
+    })
+    await store.putGeneration({
+      originNodeId: 'node-a',
+      generationId: 'gen-2',
+      status: 'staged',
+      createdAt: '2026-08-28T00:02:00.000Z',
+    })
+
+    assert.equal((await store.getGeneration('node-a', 'gen-1'))?.status, 'active')
+    assert.equal((await store.getGeneration('node-a', 'gen-2'))?.status, 'staged')
+
+    await activateReplicaGeneration({
+      store,
+      originNodeId: 'node-a',
+      generationId: 'gen-2',
+      now: '2026-08-28T00:03:00.000Z',
+    })
+
+    const first = await store.getGeneration('node-a', 'gen-1')
+    const second = await store.getGeneration('node-a', 'gen-2')
+    assert.equal(first?.status, 'retired')
+    assert.equal(first?.retiredAt, '2026-08-28T00:03:00.000Z')
+    assert.equal(second?.status, 'active')
+    assert.equal(second?.activatedAt, '2026-08-28T00:03:00.000Z')
+  } finally {
+    await storage.close()
+  }
+})
