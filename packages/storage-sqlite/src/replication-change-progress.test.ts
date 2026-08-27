@@ -1,13 +1,18 @@
 import assert from 'node:assert/strict'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import test from 'node:test'
 import { SqliteStorageService } from './storage'
 import { SqliteReplicationChangeProgressRepository } from './replication-change-progress'
 
 test('replication change progress persists across storage reopen', async () => {
-  const storage = new SqliteStorageService({ path: ':memory:' })
+  const dir = await mkdtemp(join(tmpdir(), 'agent-lens-replication-progress-'))
+  const path = join(dir, 'agent-lens.db')
   try {
-    await storage.migrate()
-    await storage.replication.ensureStream({
+    const first = new SqliteStorageService({ path })
+    await first.migrate()
+    await first.replication.ensureStream({
       relationshipId: 'rel-1',
       hubId: 'hub-1',
       streamId: 'stream-1',
@@ -15,9 +20,8 @@ test('replication change progress persists across storage reopen', async () => {
       policyRevision: 'policy-1',
       historyRevision: 'history-1',
     })
-
-    const progress = new SqliteReplicationChangeProgressRepository(storage.executor)
-    await progress.put({
+    const firstProgress = new SqliteReplicationChangeProgressRepository(first.executor)
+    await firstProgress.put({
       streamId: 'stream-1',
       generationId: 'gen-1',
       phase: 'bootstrap',
@@ -26,8 +30,11 @@ test('replication change progress persists across storage reopen', async () => {
       throughRevision: 100,
       updatedAt: '2026-08-28T00:00:00.000Z',
     })
+    first.close()
 
-    assert.deepEqual(await progress.get({
+    const reopened = new SqliteStorageService({ path })
+    const reopenedProgress = new SqliteReplicationChangeProgressRepository(reopened.executor)
+    assert.deepEqual(await reopenedProgress.get({
       streamId: 'stream-1',
       generationId: 'gen-1',
       phase: 'bootstrap',
@@ -41,8 +48,9 @@ test('replication change progress persists across storage reopen', async () => {
       throughRevision: 100,
       updatedAt: '2026-08-28T00:00:00.000Z',
     })
+    reopened.close()
   } finally {
-    storage.close()
+    await rm(dir, { recursive: true, force: true })
   }
 })
 
