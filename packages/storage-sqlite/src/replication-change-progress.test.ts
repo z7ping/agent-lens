@@ -30,7 +30,7 @@ test('replication change progress persists across storage reopen', async () => {
       throughRevision: 100,
       updatedAt: '2026-08-28T00:00:00.000Z',
     })
-    first.close()
+    await first.close()
 
     const reopened = new SqliteStorageService({ path })
     const reopenedProgress = new SqliteReplicationChangeProgressRepository(reopened.executor)
@@ -48,7 +48,7 @@ test('replication change progress persists across storage reopen', async () => {
       throughRevision: 100,
       updatedAt: '2026-08-28T00:00:00.000Z',
     })
-    reopened.close()
+    await reopened.close()
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
@@ -69,6 +69,6 @@ test('replication change progress rejects cursor beyond fixed high-water', async
       updatedAt: '2026-08-28T00:00:00.000Z',
     }), /throughRevision must be >= revision/)
   } finally {
-    storage.close()
+    await storage.close()
   }
 })
