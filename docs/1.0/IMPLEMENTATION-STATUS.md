@@ -39,9 +39,14 @@
 - H4 已实现 Capture State -> Replication Availability 的单调变换，不能恢复 Capture 阶段已关闭或已脱敏的数据；
 - H4 已实现显式 Entity Field Contract、Minimum Dependency Shape、`from-now` 对 Bootstrap / Incremental / Reconcile 的统一授权语义；
 - H4 已实现凭据永久保护、redacted 路径用户目录遮蔽、策略收紧 / 放宽与 History Scope 变更的纯决策；
-- H4 出站字段默认 fail-closed：未登记新字段统一 `omitted(policy)`，H2 标记 `not-replicated` 的实体不能进入出站 Transform。
+- H4 出站字段默认 fail-closed：未登记新字段统一 `omitted(policy)`，H2 标记 `not-replicated` 的实体不能进入出站 Transform；
+- H5 Durable Replication State 已实现 Core 状态机：Relationship / Stream / Generation、Pending Entity、Frozen Batch、ACK、Reconciliation Cursor；
+- H5 Frozen Batch 的 `sequence + batchId + contentHash` 在冻结后不可变，exact retry 只能返回同一冻结批次；
+- H5 SQLite Schema 已升级到 v7，新增独立 Replication Control Plane 表，不向 Canonical Fact 表写入复制状态；
+- H5 已实现 Pending 幂等去重 / 冻结前替换、连续 ACK、重启恢复、Relationship Stream Rollover；
+- H5 已实现 framework-agnostic Reconciliation Source / Sink 契约和 SQLite Durable Sink：fast-path 漏入队时可以通过 Canonical Reconciliation 补回 Pending，游标仅在整页成功后推进。
 
-H1-H4 目前仍只是 Node Runtime、Replication Identity、Wire Protocol 与出站策略基础。`node / hub / pure-hub` **不会**启动真实 Replication 网络行为，也没有 Remote Replica Store。
+H1-H5 目前仍是本机 Node Runtime、Replication Identity、Wire Protocol、出站策略与 Durable State 基础。`node / hub / pure-hub` **不会**启动真实 Replication 网络行为，也没有 Hub Remote Replica Store；H5 也尚未把具体 Canonical Entity 全量枚举与 Daemon 周期调度接入运行时。
 
 禁止恢复 0.x Adapter / Importer Runtime、旧 `timeline / overview_*` 规范表、旧 Service Manager / PID 架构。
 
@@ -126,7 +131,7 @@ Hermes / OpenCode 详细边界见 `docs/1.0/HERMES-OPENCODE-SOURCES.md`。
 /api/v1/events
 ```
 
-Local Surface 继续只监听 loopback。H3/H4 没有新增 Replication HTTP / HTTPS Route。
+Local Surface 继续只监听 loopback。H3-H5 没有新增 Replication HTTP / HTTPS Route。
 
 SSE 当前支持 Observation / Source Detection / Asset 变化通知、15 秒心跳、断线重连与快照校准；幂等 unchanged replay 不制造刷新噪声。
 
@@ -242,9 +247,15 @@ npm run build:dist
 - H4 from-now 在 Bootstrap / Reconcile 上一致阻断旧历史；
 - H4 Minimum Dependency Shape；
 - H4 Policy / History Scope transition 不自动回填历史；
-- H4 未登记新字段默认拒绝与 not-replicated Entity fail-closed。
+- H4 未登记新字段默认拒绝与 not-replicated Entity fail-closed；
+- H5 SQLite schema v7 Durable Replication Control Plane 表与 Storage 健康版本；
+- H5 Pending 同一 dedup/candidateHash 幂等、冻结前候选替换、冻结后新候选新建；
+- H5 Frozen Batch `sequence + batchId + contentHash` exact retry 与 reuse conflict；
+- H5 ACK 连续推进、跨 gap 拒绝与文件数据库重启恢复；
+- H5 Reconciliation 在 fast-path 漏失时补 Pending 并持久化 page cursor；
+- H5 同一 Relationship 保留旧 Stream 并创建 rollover Stream。
 
-H4 最终候选已通过 Linux / macOS / Windows 三平台主 CI，其中 Windows 还覆盖 Desktop package、Smoke、共享 Hook Dispatcher 与 npm lifecycle。
+H5 最终候选 `908a512c05aeb4ffc084c34cac29a4abd58ccd46` 已通过 Linux / macOS / Windows 三平台主 CI，其中 Windows 同时通过 Desktop package、Smoke、共享 Hook Dispatcher 与 npm lifecycle。
 
 ## 9. 仍需实机验收
 
@@ -263,7 +274,7 @@ H4 最终候选已通过 Linux / macOS / Windows 三平台主 CI，其中 Window
 
 ## 10. 多机 Hub
 
-状态：**长期设计已冻结；H1 Node Runtime、H2 Replication Core / Shared Identity、H3 R1 Protocol Core、H4 Replication Policy / History Boundary 已实现；持久复制、网络和 Hub Remote Store 尚未实现。**
+状态：**长期设计已冻结；H1 Node Runtime、H2 Replication Core / Shared Identity、H3 R1 Protocol Core、H4 Replication Policy / History Boundary、H5 Durable Replication State / Reconciliation 已实现；真实 Replica Generation、网络和 Hub Remote Store 尚未实现。**
 
 当前已实现基础：
 
@@ -283,6 +294,8 @@ H4 最终候选已通过 Linux / macOS / Windows 三平台主 CI，其中 Window
  -> explicit Entity Field Contract
  -> Minimum Dependency Shape
  -> fail-closed outbound transform
+ -> Durable Stream / Pending / Frozen Batch / ACK state machine
+ -> Reconciliation Source / Sink contract
 
 @agent-lens/protocol/replication
  -> R1 Wire DTO
@@ -291,20 +304,26 @@ H4 最终候选已通过 Linux / macOS / Windows 三平台主 CI，其中 Window
  -> Entity / Batch / Tombstone semantic hash
  -> Sequence / ACK pure validation
  -> stable Protocol Core error codes
+
+@agent-lens/storage-sqlite
+ -> SQLite schema v7 Replication Control Plane
+ -> Stream / Generation / Pending / Frozen Batch / ACK persistence
+ -> Reconciliation Cursor + Durable Sink
+ -> restart recovery + stream rollover
 ```
 
-H4 仍是纯策略 / 纯变换代码，不表示 Hub 已能通过网络接收或持久化远端数据。
+H5 仍然只建立本机 durable replication 基础；当前没有真实 Replication HTTP Client/Server，也还没有按 H2/H4/H3 契约把全部 Canonical Entity 枚举并生成冻结 R1 Batch。
 
 当前仍**没有**实现：
 
 ```text
 Node long-term key material
-Durable Replication state / Outbox / Reconciliation
+Canonical Entity enumeration / Replica Generation runtime
+Bootstrap high-water / staged activation
 R1 HTTP / HTTPS endpoints
 Pairing / TLS / request signatures / serverProof
 Remote Replica Store / migrations / transactional import
 Shared Identity persistence / H2 recompute import integration
-Replica Generation runtime / staged activation
 Unified Read Repository
 Hub-aware Projection / Web / CLI
 Tombstone generation / persistence / purge / recovery operations
@@ -340,5 +359,8 @@ Tombstone generation / persistence / purge / recovery operations
 - Capture Policy 与 Replication Policy 分离，Replication 不能恢复本机未采集 / 已脱敏内容；
 - Replication 新字段默认不出站，必须先进入显式 Field Contract；
 - `from-now` History Boundary 对 Reconciliation 同样有效；
+- Replication Control Plane 不进入 Canonical Observation，也不成为第二事实源；
+- Frozen Batch 的 sequence / batchId / contentHash 不得就地改写；
+- Reconciliation 游标只能在整页 Durable Pending 入队成功后推进；
 - Hub Remote Replica 不伪造 Local Canonical Fact；
 - Hub 不开放 Remote Control。
