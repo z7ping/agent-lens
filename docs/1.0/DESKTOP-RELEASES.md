@@ -62,14 +62,25 @@ docs/design/brand/agentlens-icon-master.svg
 - 手动运行；
 - GitHub Release 发布。
 
-当前签名策略按 GitHub Release 是否标记为 prerelease 区分：
+当前签名策略按 GitHub Release 是否标记为 prerelease 区分，同时 `scripts/check-release-version.mjs` 会强制校验 Release Tag、`package.json` 版本和 prerelease 标记三者一致，防止 Stable 因错误勾选预发布而绕过签名门禁，也防止 Alpha / Beta / RC 被误当作 Stable。
 
 - Alpha / Beta / RC 等预发布版允许 Windows/macOS 生成并公开上传未签名产物，用于狗粮和早期测试；
 - Stable Release 继续强制 Windows 代码签名，以及 macOS Developer ID 签名 + Apple 公证；
 - 未签名预发布包仍必须通过完整源码检查、打包 Runtime 冒烟、安装/升级验证和 SHA256 校验；
 - 未签名 Windows/macOS 包可能触发 SmartScreen / Gatekeeper 警告，这属于预发布阶段已知限制。
 
-Release 发布时，各平台产物自动附加到同一个 Release Assets。
+Release 发布时，各平台产物自动附加到同一个 Release Assets；npm 发布同样只由 `release.published` 触发，不允许普通 `main` push 自动发布。
+
+npm dist-tag 按版本通道自动选择：
+
+```text
+1.0.0-alpha.* -> alpha
+1.0.0-beta.*  -> beta
+1.0.0-rc.*    -> rc
+1.0.0         -> latest
+```
+
+不认识的预发布通道直接失败，避免把实验版本误推到 `latest`。
 
 校验文件按发行面拆分：
 
