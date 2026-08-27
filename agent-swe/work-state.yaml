@@ -58,7 +58,7 @@ progress:
   current:
     - "H1 已实现：持久 Node Identity、四种 Capability Profile、ctx.node Runtime Service、Daemon capability-driven Source composition"
     - "H1 自动测试覆盖身份稳定性、损坏身份 fail-closed、Profile/非法组合、ctx.node 注入"
-    - "H1 Linux/macOS 自动验证已通过；Windows 同代码路径已有完整三平台绿灯，最终精简版继续由 main CI 验证"
+    - "H1 未引入 Replication 网络、Remote Store 或本机 Canonical Identity 迁移"
   next:
     - "下一次从 H2 Replication Entity Scope Registry 与 ReplicaKey 纯函数开始"
     - "随后实现 Shared Identity normalization / Shared Group Membership 的纯模型与测试"
