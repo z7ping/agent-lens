@@ -24,6 +24,7 @@ ADR
 - Node / Hub 同一 Runtime；
 - 单 Hub 星型拓扑；
 - Canonical / Replication Control Plane 分离；
+- Shared Root vs Conditional Shared Group；
 - 独立 Replication Surface；
 - Protocol / Product / Storage Schema 解耦；
 - 不做 Remote Execution / Federation / Hub 唯一事实源。
@@ -37,16 +38,17 @@ ADR 不承载具体 DTO 字段与运维状态机。
 负责：
 
 - Entity Scope 四分类；
-- Replica Key；
-- Shared / Conditional Shared Identity；
+- Replica Key 与独立 Replication Namespace；
+- Shared Root；
+- Conditional Shared Origin Row + Group Membership；
+- Shared Identity Algorithm Version；
 - Shared Merge；
 - Typed EntityRef；
-- Reference Rewrite；
+- Domain Ref Mapping；
 - Dependency DAG；
-- Shared Assertions；
-- Identity Promotion；
-- Alias；
-- Tombstone / Assertion Withdrawal。
+- Shared Assertions / Membership；
+- Membership Promotion；
+- Tombstone / Assertion Withdrawal / Group GC。
 
 这是 Canonical Replication 数据语义核心。
 
@@ -54,7 +56,7 @@ ADR 不承载具体 DTO 字段与运维状态机。
 
 文件：`docs/1.0/HUB-REPLICATION-STATE-CONTRACT.md`
 
-负责此前容易遗漏的长期状态：
+负责：
 
 - 合法 Capability Profile；
 - nodeId / hubId / streamId / generationId 分离；
@@ -63,8 +65,10 @@ ADR 不承载具体 DTO 字段与运维状态机。
 - immutable Batch / Commit Ambiguity；
 - Stream Rollover；
 - staged Replica Generation / Re-bootstrap；
-- Tombstone / Receipt / Alias Retention；
-- Hub 本机参与 Shared Identity；
+- Tombstone / Receipt / Membership Retention；
+- Conditional Shared 唯一物理模型；
+- Hub 本机参与 Shared Group；
+- Remote Generation 与 Membership 原子切换；
 - Cross-node Clock / Ordering；
 - npm / Desktop 共用 Hub 状态；
 - Headless Pure Hub 管理边界。
@@ -78,10 +82,12 @@ ADR 不承载具体 DTO 字段与运维状态机。
 负责：
 
 - R1 Major / Minor；
+- Shared Identity Algorithm Negotiation；
 - Pairing Receipt wire binding；
 - Handshake + Hub `serverProof`；
 - replicationStreamId / replicaGenerationId；
 - Batch Envelope；
+- Conditional Shared Identity Assertion；
 - Policy / History Revision；
 - Deterministic Hash；
 - Sequence / ACK / Sequence Receipt；
@@ -151,7 +157,7 @@ Protocol 不绑定 SQLite Row。
 - Reconcile / staged Re-bootstrap；
 - Re-pair / Reset Identity；
 - Revocation / Delete History；
-- Tombstone / Receipt Retention；
+- Tombstone / Receipt / Membership Retention；
 - Upgrade；
 - Hub / Node 数据丢失；
 - Endpoint / Identity 变化；
@@ -172,7 +178,7 @@ Protocol 不绑定 SQLite Row。
 - metadata-only 准确隐私文案；
 - Device Status；
 - Node Filter；
-- Project / Workspace 跨机表达；
+- Shared Project Group / Workspace 跨机表达；
 - Bootstrap / Backlog / Paused；
 - Re-bootstrap 不中断现有查询；
 - Clock Skew 用户语义；
@@ -190,7 +196,7 @@ Protocol 不绑定 SQLite Row。
 
 ```text
 H1 Node Identity / Composition
-H2 Replication Core
+H2 Replication Core / Shared Group
 H3 R1 Protocol / Identity Proof
 H4 Policy / History / Outbox / Reconcile
 H5 Hub Import / Replica Generation
@@ -207,36 +213,15 @@ H10 Performance / Hardening
 
 文件：`docs/1.0/HUB-TEST-MATRIX.md`
 
-覆盖：
-
-- Standalone 回归；
-- Capability / Node Identity；
-- Entity Scope / Replica / Shared；
-- Policy / History Boundary；
-- Pairing Receipt / Hub Proof / Signature；
-- Sequence / ACK / Commit Ambiguity；
-- Stream Rollover；
-- Bootstrap / Reconcile / Replica Generation；
-- Tombstone / Retention；
-- Cross-node Clock；
-- Cross-platform / Distribution；
-- Resource Pressure；
-- Failure Injection；
-- Performance / Dogfood；
-- Release Gate。
+覆盖：Standalone 回归、Capability / Node Identity、Replica Namespace、Shared Root / Conditional Shared Group、Identity Algorithm、Policy / History Boundary、Pairing / Proof / Signature、Sequence / ACK / Ambiguity、Stream Rollover、Bootstrap / Reconcile / Generation、Tombstone / Membership Retention、Cross-node Clock、Cross-platform、Resource Pressure、Performance / Dogfood、Release Gate。
 
 ## 11. CAPTURE-POLICY：本机最多能保存什么
 
 文件：`docs/1.0/CAPTURE-POLICY.md`
 
-核心关系：
-
 ```text
-Capture Policy
-  -> Local Canonical 上限
-
-Replication Policy
-  -> 在这个上限内继续收紧出站数据
+Capture Policy -> Local Canonical 上限
+Replication Policy -> 在这个上限内继续收紧出站数据
 ```
 
 具体 Hub 字段暴露以 `HUB-DATA-EXPOSURE-MATRIX.md` 为准。
@@ -245,9 +230,7 @@ Replication Policy
 
 文件：`SECURITY.md`
 
-负责仓库级安全说明与漏洞报告方式。
-
-Hub 专项密码学 / 配对细节由 `HUB-PAIRING-SECURITY.md` 定义；两者不能互相覆盖 Local Surface loopback 边界。
+负责仓库级安全说明与漏洞报告方式。Hub 专项密码学 / 配对细节由 `HUB-PAIRING-SECURITY.md` 定义。
 
 ## 13. ARCHITECTURE.md：总架构摘要
 
@@ -263,33 +246,16 @@ Hub 专项密码学 / 配对细节由 `HUB-PAIRING-SECURITY.md` 定义；两者�
 
 > Hub 架构 / Contract / Protocol / UX / Test 文档已完成实现前收口，但功能尚未实现。
 
-不能因为 DTO / Pairing / Test 文档存在就写成“Hub 已支持”。
+不能因为文档存在就写成“Hub 已支持”。
 
 ## 15. 文档修改规则
 
-### 长期架构边界变化
-
-例如单 Hub -> 多 Hub、增加 Remote Control、变双向同步：新 ADR 或正式修订 ADR-0007。
-
-### Canonical Replication / State 语义变化
-
-例如 Entity Scope、Shared Identity、History Boundary、Replica Generation、Stream Rollover：修改对应 Contract，并评估 Protocol Major。
-
-### Wire 兼容变化
-
-修改 Replication Protocol，按 Major / Minor 处理。
-
-### Trust / Security 变化
-
-修改 Pairing / Security，并进行安全 Review。
-
-### Field Exposure 变化
-
-修改 Data Exposure Matrix 与 UX / Capture 说明，不能只改页面文案。
-
-### UI 排布变化
-
-不影响上面 Contract 时，只改 UX / 高保真，不升级 ADR。
+- 长期架构边界变化：修订 / 新增 ADR；
+- Entity Scope、Shared Root/Group、Identity Algorithm、History Boundary、Generation 等变化：修改 Contract，并评估 Protocol Major；
+- Wire 变化：修改 Protocol，按 Major / Minor；
+- Trust / Security：修改 Pairing / Security 并 Review；
+- Field Exposure：修改 Data Exposure Matrix + UX / Capture；
+- UI 排布：不改变 Contract 时只改 UX / 高保真。
 
 ## 16. 当前冻结边界
 
@@ -297,21 +263,24 @@ Hub 专项密码学 / 配对细节由 `HUB-PAIRING-SECURITY.md` 定义；两者�
 
 当前已冻结：
 
-- Local-first 与单 Hub 星型拓扑；
+- Local-first / 单 Hub 星型；
 - Node Identity + Capability Profile；
-- Replica / Shared / Conditional Shared；
+- Replica Namespace；
+- AgentProduct Shared Root；
+- Project / AssetDefinition Origin Row + Shared Group Membership；
+- Shared Identity Algorithm Version / Hub Recompute；
 - Typed EntityRef；
-- Shared Merge / Assertions / Promotion；
-- Replication Policy + 字段暴露矩阵；
-- History Scope / History Boundary；
+- Membership Promotion / Assertions / Group GC；
+- Replication Policy + Data Exposure；
+- History Scope / Boundary；
 - Bootstrap + Incremental + Reconciliation；
-- Stream / Sequence / ACK / Commit Ambiguity / Rollover；
+- Stream / Sequence / ACK / Ambiguity / Rollover；
 - Replica Generation / staged Re-bootstrap；
-- Pairing Secret / Node Key / Pairing Receipt / Hub Identity Proof；
-- TLS / SPKI / Request Signature / Revocation；
+- Pairing / Node Key / Hub Identity Proof；
+- TLS / SPKI / Signature / Revocation；
 - Control Plane Retention；
 - Cross-node Clock / Ordering；
-- Hub 本机 Shared Identity 参与；
+- Hub Local Shared Group participation；
 - Headless / 双发行运维边界；
 - Alpha 实施顺序与测试门禁。
 
@@ -326,6 +295,7 @@ Wire endpoints
 History Boundary / Policy State
 Bootstrap / Outbox / Reconcile
 Hub Import / Replica Generation
+Shared Group / Membership Resolver
 Web / CLI Hub UI
 Tombstone / Purge
 ```
