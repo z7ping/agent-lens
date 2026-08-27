@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   sync-lock:
-    if: github.event.head_commit.message != 'chore: sync h6 package lock'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
