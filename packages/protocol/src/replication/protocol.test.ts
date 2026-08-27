@@ -3,15 +3,19 @@ import test from 'node:test'
 import {
   REPLICATION_PROTOCOL,
   ReplicationProtocolError,
+  assertAvailability,
   assertEntityEnvelope,
   assertEntityVersionSupported,
   assertProtocolCompatible,
+  assertTombstone,
   assertWireEntityRef,
   canonicalHash,
   canonicalJson,
   computeBatchContentHash,
   computeEntityContentHash,
+  computeTombstoneContentHash,
   evaluateSequence,
+  negotiateCompatibility,
   sha256Hex,
   type ReplicationBatch,
   type WireEntityEnvelope,
@@ -49,6 +53,64 @@ test('protocol and entity versions fail closed', () => {
   assert.throws(() => assertEntityVersionSupported('Project', 2), (error: unknown) => error instanceof ReplicationProtocolError && error.code === 'ENTITY_VERSION_UNSUPPORTED')
 })
 
+test('handshake negotiation selects common optional capabilities and rejects only missing required ones', () => {
+  const negotiated = negotiateCompatibility({
+    protocol: { major: 1, minor: 5 },
+    identityAlgorithms: ['project-repository-v1', 'future-identity-v9'],
+    entityVersions: [
+      { entityType: 'Project', versions: [2, 1] },
+      { entityType: 'Host', versions: [2] },
+    ],
+    requiredIdentityAlgorithms: ['project-repository-v1'],
+    requiredEntityTypes: ['Project'],
+  })
+  assert.deepEqual(negotiated.protocol, { major: 1, minor: 0 })
+  assert.deepEqual(negotiated.identityAlgorithms, ['project-repository-v1'])
+  assert.deepEqual(negotiated.entityVersions, [{ entityType: 'Project', versions: [1] }])
+
+  const nodeOnly = negotiateCompatibility({
+    protocol: { major: 1, minor: 0 },
+    identityAlgorithms: ['future-identity-v9'],
+    entityVersions: [{ entityType: 'Host', versions: [1] }],
+  })
+  assert.deepEqual(nodeOnly.identityAlgorithms, [])
+
+  assert.throws(
+    () => negotiateCompatibility({
+      protocol: { major: 2, minor: 0 },
+      identityAlgorithms: [],
+      entityVersions: [],
+    }),
+    (error: unknown) => error instanceof ReplicationProtocolError && error.code === 'PROTOCOL_VERSION_UNSUPPORTED',
+  )
+  assert.throws(
+    () => negotiateCompatibility({
+      protocol: { major: 1, minor: 0 },
+      identityAlgorithms: [],
+      entityVersions: [{ entityType: 'Project', versions: [1] }],
+      requiredIdentityAlgorithms: ['project-repository-v1'],
+    }),
+    (error: unknown) => error instanceof ReplicationProtocolError && error.code === 'IDENTITY_ALGORITHM_UNSUPPORTED',
+  )
+  assert.throws(
+    () => negotiateCompatibility({
+      protocol: { major: 1, minor: 0 },
+      identityAlgorithms: [],
+      entityVersions: [{ entityType: 'Project', versions: [2] }],
+      requiredEntityTypes: ['Project'],
+    }),
+    (error: unknown) => error instanceof ReplicationProtocolError && error.code === 'ENTITY_VERSION_UNSUPPORTED',
+  )
+})
+
+test('Availability distinguishes real null, redacted and omission reasons', () => {
+  assert.doesNotThrow(() => assertAvailability({ state: 'value', value: 'body' }))
+  assert.doesNotThrow(() => assertAvailability({ state: 'null' }))
+  assert.doesNotThrow(() => assertAvailability({ state: 'redacted' }))
+  assert.doesNotThrow(() => assertAvailability({ state: 'omitted', reason: 'policy' }))
+  assert.doesNotThrow(() => assertAvailability({ state: 'omitted', reason: 'history-boundary' }))
+})
+
 test('Project and AssetDefinition stay node scoped on R1 wire', () => {
   const project = projectEntity()
   assert.doesNotThrow(() => assertEntityEnvelope(project))
@@ -71,6 +133,20 @@ test('entity hash detects semantic mutation', () => {
   assert.doesNotThrow(() => assertEntityEnvelope(entity))
   const tampered = { ...entity, body: { name: 'Other' } }
   assert.throws(() => assertEntityEnvelope(tampered), (error: unknown) => error instanceof ReplicationProtocolError && error.code === 'ENTITY_HASH_MISMATCH')
+})
+
+test('tombstone hash binds deletion identity and timestamp', () => {
+  const base = {
+    entityType: 'Project',
+    originEntityId: 'project-local-1',
+    deletedAt: '2026-08-27T00:00:00.000Z',
+  }
+  const tombstone = { ...base, contentHash: computeTombstoneContentHash(base) }
+  assert.doesNotThrow(() => assertTombstone(tombstone))
+  assert.throws(
+    () => assertTombstone({ ...tombstone, deletedAt: '2026-08-28T00:00:00.000Z' }),
+    (error: unknown) => error instanceof ReplicationProtocolError && error.code === 'ENTITY_HASH_MISMATCH',
+  )
 })
 
 test('sequence semantics distinguish next, retry, reuse conflict and gap', () => {
