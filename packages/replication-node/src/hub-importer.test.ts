@@ -169,7 +169,7 @@ test('H7 rolls back entities, shared identity, committed batch and ACK when one 
   }
 })
 
-test('H7 rejects sequence gaps before mutating Remote Replica state', async () => {
+test('H7 rejects sequence gaps without leaving an empty stream or any Remote Replica state', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   try {
     await storage.migrate()
@@ -178,7 +178,8 @@ test('H7 rejects sequence gaps before mutating Remote Replica state', async () =
       importReplicationBatch({ store, batch: baseBatch(2, [product()]) }),
       (error: any) => error?.code === 'SEQUENCE_GAP',
     )
-    assert.equal((await store.getStream('stream-a'))?.ackSequence, 0)
+    assert.equal(await store.getStream('stream-a'), undefined)
+    assert.equal(await store.getGeneration('node-a', 'gen-a'), undefined)
     assert.equal(await store.getCommittedBatch('stream-a', 2), undefined)
   } finally {
     await storage.close()
