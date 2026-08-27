@@ -1,39 +1,42 @@
 # AgentLens 1.0 Hub 数据暴露矩阵
 
 更新日期：2026-08-27  
-状态：Alpha 隐私设计，尚未实现  
+状态：Alpha 隐私设计冻结，尚未实现  
 相关文档：
 - `docs/1.0/CAPTURE-POLICY.md`
 - `docs/1.0/HUB-REPLICATION-CONTRACT.md`
 - `docs/1.0/HUB-REPLICATION-STATE-CONTRACT.md`
+- `docs/1.0/HUB-REPLICA-STORAGE-CONTRACT.md`
+- `docs/1.0/HUB-REPLICATION-PROTOCOL.md`
 - `docs/1.0/HUB-PAIRING-SECURITY.md`
 
-本文补齐 `metadata-only / redacted / full` 三档 Replication Policy 在字段级别的暴露边界。三档名称不能只停留在 Prompt / Tool 正文层面，因为路径、仓库标识、Source Locator、资产名等元数据本身也可能敏感。
+本文定义 `metadata-only / redacted / full` 三档 Replication Policy 的字段级暴露边界，并定义 `from-now` Dependency Closure 的最小化规则。
 
 ## 1. 总原则
 
 ```text
 Capture Policy
-  -> 决定本机最多拥有什么
+  -> 本机最多拥有什么
 
 Replication Policy
-  -> 决定本机已有信息中，什么允许离开本机
+  -> 本机已有信息中什么允许离开本机
+
+History Scope
+  -> Boundary 前已有历史是否允许补传
 ```
 
-Replication 永远不能恢复 Capture 已经删除 / 脱敏的信息。
+Replication 不能恢复 Capture 已删除 / 未采集的内容，也不能通过 Dependency Closure 绕过 History Boundary。
 
-无论哪一档：
+无论哪档：
 
-- 已识别 Token / API Key / Password / Authorization / Cookie 等明确凭据都禁止出站；
+- Token / API Key / Password / Authorization / Cookie 等明确凭据禁止出站；
 - Pairing Secret、Node / Hub Private Key、TLS Private Key 永不属于 Replication Data；
-- 诊断内部字段不得因为 `full` 自动进入 Canonical Batch；
-- Hub 中汇聚的数据应按“多台机器敏感信息集合”看待，风险高于单机数据库。
+- Runtime diagnostics / retry internals 不进入 Canonical Replication Batch；
+- Hub 汇聚数据按“多设备敏感信息集合”处理。
 
-## 2. 字段敏感度分类
+## 2. 字段敏感度
 
 ### A. 结构身份
-
-用于维持 Canonical Graph / Replica Graph：
 
 ```text
 node / entity identity
@@ -42,31 +45,24 @@ productId
 entity type
 session / observation / evidence refs
 tool canonical name
-status / kind / timing / duration
+kind / status / timing / duration
 ```
 
-这些通常必须复制，否则 Hub 无法完成聚合。
+通常是 Hub 形成可解释图所必需。
 
-### B. 可移植项目 / 资产身份
-
-例如：
+### B. Portable Identity
 
 ```text
 normalized repository identity
 portable asset upstream identity
+identity algorithm version
 ```
 
-它们是跨机聚合的重要依据，但也可能泄露：
+用于 Shared Group，但可能泄露私有 Git Host、Organization、Repository 或资产包名。
 
-- 私有 Git host；
-- organization / repository name；
-- 私有资产包名。
+因此 metadata-only 仍可能发送，UI 必须明确披露。
 
-因此 `metadata-only` 仍可能包含此类标识，UI 必须明确披露“仅元数据仍会同步项目 / 仓库 / 工具等身份信息”。
-
-### C. 本机路径
-
-例如：
+### C. 本机路径 / 环境
 
 ```text
 Workspace.path
@@ -76,16 +72,14 @@ AssetBinding.path
 SourceLocator.path
 ```
 
-路径可能包含用户名、项目名、客户名或目录结构，不能因为它不是 Prompt 就默认视为无敏感性。
+可能泄露用户名、客户名、项目名和目录结构。
 
 ### D. 业务正文
-
-例如：
 
 ```text
 Prompt
 Assistant message
-Reasoning fragment（来源可观察部分）
+来源可观察的 Reasoning fragment
 Tool input / output
 SourceRecord payload
 Context summary
@@ -94,62 +88,82 @@ Artifact content fragments
 
 ### E. 运维 / 安全状态
 
-例如：
-
 ```text
 private keys
 pair secret
 nonce cache
 raw signature
-runtime diagnostics
 replication retry internals
 ```
 
 不属于 Canonical Replication Data。
 
-## 3. Alpha 字段策略矩阵
+## 3. Alpha Policy 矩阵
 
 | 数据 | metadata-only | redacted | full |
 | --- | --- | --- | --- |
-| Node / Entity ID 与 Typed Ref | 发送 | 发送 | 发送 |
+| Node / Entity identity / Typed Ref | 发送 | 发送 | 发送 |
 | Agent Product / Source / Kind | 发送 | 发送 | 发送 |
 | 时间、状态、耗时、序列 | 发送 | 发送 | 发送 |
 | Tool canonicalName / sourceType | 发送 | 发送 | 发送 |
-| Shared Project Repository Identity | 发送规范化身份 | 发送规范化身份 | 发送规范化身份 |
-| Portable Asset Identity | 发送规范化身份 | 发送规范化身份 | 发送规范化身份 |
-| Workspace 本机完整路径 | 默认 omitted | 脱敏 / 归一化后发送 | 允许发送本机已保存普通路径 |
-| executable / configRoot / dataRoot | omitted | 脱敏后按必要性发送 | 允许按必要性发送 |
-| AssetBinding.path | 默认 omitted | 脱敏后发送 | 允许发送 |
+| Shared Project Repository Identity | 发送规范化且去凭据身份 | 同左 | 同左 |
+| Portable Asset Identity | 发送规范化身份 | 同左 | 同左 |
+| Workspace 完整本机路径 | 默认 omitted(policy) | 脱敏 / 归一化后按必要性发送 | 允许发送本机已保存普通路径 |
+| executable / configRoot / dataRoot | omitted(policy) | 脱敏后按必要性发送 | 允许按必要性发送 |
+| AssetBinding.path | 默认 omitted(policy) | 脱敏后发送 | 允许发送 |
 | SourceLocator.kind | 发送 | 发送 | 发送 |
-| SourceLocator.path | omitted | 脱敏后按必要性发送 | 允许发送 |
-| SourceLocator offset / rowId | 仅在不泄露正文且有诊断价值时发送 | 发送 | 发送 |
-| Prompt / Message 正文 | omitted | 脱敏后发送 | 发送本机已允许正文 |
-| Tool input / output 正文 | omitted | 脱敏后发送 | 发送本机已允许正文 |
-| SourceRecord.payload | omitted | 脱敏 / 限长后发送 | 发送本机已允许 payload |
-| Evidence missingReason / parser details | 保留最小结构；可能含路径的文本需清洗 | 清洗后发送 | 普通文本可发送，凭据仍遮蔽 |
-| Runtime Diagnostics / retry stack | 不进入 Canonical Batch | 不进入 Canonical Batch | 不进入 Canonical Batch |
+| SourceLocator.path | omitted(policy) | 脱敏后按必要性发送 | 允许发送 |
+| Prompt / Message 正文 | omitted(policy) | 脱敏后发送 | 发送本机已允许正文 |
+| Tool input / output 正文 | omitted(policy) | 脱敏后发送 | 发送本机已允许正文 |
+| SourceRecord.payload | omitted(policy) | 脱敏 / 限长后发送 | 发送本机已允许 payload |
+| Evidence 文本 / parser detail | 最小结构，敏感文本清洗 | 清洗后发送 | 普通文本可发送，凭据仍遮蔽 |
+| Runtime Diagnostics / Retry Stack | 不进 Canonical Batch | 不进 Canonical Batch | 不进 Canonical Batch |
 | Private Key / Pair Secret / Raw Signature | 永不发送 | 永不发送 | 永不发送 |
 
-## 4. `metadata-only` 不是匿名模式
+## 4. Availability 是正式数据语义
 
-`metadata-only` 的目标是：
+Wire / Remote Replica 必须区分：
 
-> 不上传 Prompt / Tool 等业务正文和不必要本机路径，同时保留 Hub 的 Session、Agent、Tool、Usage、Project 聚合能力。
+```text
+value
+redacted
+omitted(policy)
+omitted(not-captured)
+omitted(history-boundary)
+omitted(dependency-minimized)
+real null
+```
 
-它不是：
+真实 null 必须表达成 `value(null)`，不能与 omitted 混用。
 
-- 匿名化所有项目名称；
-- 隐藏所有仓库身份；
-- 隐藏 Agent / Tool 使用模式；
-- 隐藏时间与会话结构。
+Remote Replica Storage 不得用：
 
-用户界面必须避免把它写成“不会上传任何敏感信息”。
+```text
+''
+{}
+[hidden]
+null
+```
 
-更准确的说明应包含：
+作为“没有获得这个字段”的假 Canonical 值。
 
-> 不同步提示词和工具正文；仍会同步会话结构、智能体 / 工具、时间以及用于项目聚合的项目 / 仓库标识等元数据。
+## 5. metadata-only 不是匿名模式
 
-## 5. Repository Identity 规范化前必须去凭据
+它的目标是：
+
+> 不上传 Prompt / Tool 等业务正文和不必要本机路径，同时保留 Session、Agent、Tool、Usage、Project 聚合能力。
+
+它仍可能暴露：
+
+- Repository / Project identity；
+- Agent / Tool 使用模式；
+- 时间结构；
+- Session 结构；
+- 私有 Git Host / Organization 名称。
+
+UI 禁止写“不会上传敏感信息”。
+
+## 6. Repository Identity 规范化前先去凭据
 
 Git Remote 可能包含：
 
@@ -158,147 +172,140 @@ https://user:token@example.com/org/repo.git
 https://token@example.com/org/repo.git
 ```
 
-Shared Identity Normalizer 在计算 / 发送 Repository Identity 之前必须：
+Shared Identity Normalizer 在计算、发送和记录前必须：
 
-- 移除 userinfo；
-- 移除 query / fragment；
-- 不把 credential 参与 Shared Key；
-- 不在 diagnostics 中打印原始带凭据 URL。
+- 去掉 userinfo；
+- 去掉 query / fragment；
+- 不让 credential 参与 SharedKey；
+- 不在普通 log / diagnostics 打印原始带凭据 URL。
 
-这是 Identity Contract 之前的安全门禁，不依赖用户选择 `redacted`。
+这是所有 Policy 的强制门禁。
 
-## 6. 本机路径的 Alpha 处理
+## 7. Shared Identity 可验证性要求
+
+Hub 要重算 `project-repository-v1 / asset-upstream-v1` SharedKey，因此当 Node 提交 Shared Identity Assertion 时，必须发送：
+
+```text
+identityAlgorithm
+normalized portable identity
+claimedSharedKey
+```
+
+Portable Identity 经过凭据清洗后，在三档 Policy 中均允许出站；否则 Hub 不允许建立“只信 sharedKey、不见 identity”的盲 Membership。
+
+若用户未来要求完全隐藏 Repository Identity，则该 Entity 不能进入 Shared Project Group，只能保留 Node-scoped Origin；这是能力降级，不允许伪造不可验证 SharedKey。
+
+## 8. 本机路径
 
 ### metadata-only
 
-默认不上传完整本机路径。
-
-Hub 仍可以通过：
-
-```text
-Workspace Replica ID
-Project Shared Identity
-Device / Node
-```
-
-区分工作区，而不需要知道 `C:\Users\name\...`。
-
-如 UI 需要展示工作区，可显示：
-
-```text
-设备：主力 Windows
-工作区：已隐藏本机路径
-```
+完整路径默认 omitted(policy)。Hub 可依靠 Workspace Replica ID + Project Group + Node 区分工作区。
 
 ### redacted
 
-允许发送统一脱敏后的路径，例如：
+统一脱敏，例如：
 
 ```text
-C:\Users\alice\code\agent-lens
--> ~\code\agent-lens
-
-/home/alice/code/agent-lens
--> ~/code/agent-lens
+C:\Users\alice\code\agent-lens -> ~\code\agent-lens
+/home/alice/code/agent-lens -> ~/code/agent-lens
 ```
 
-具体跨平台规范由 Replication Policy Serializer 实现，不能由 Web 自己临时遮蔽。
+脱敏必须在 Replication Serializer 完成，不由 Web 临时遮挡。
 
 ### full
 
-可发送 Capture Policy 已允许保存的普通本机路径；显式凭据与 URI userinfo 仍必须遮蔽。
+可以发送 Capture Policy 已允许的普通路径；明确凭据仍强制清洗。
 
-## 7. Omitted 必须保持结构可解释
+## 9. `from-now` Dependency Closure 字段最小化
 
-当字段因为 Replication Policy 不发送时，Wire DTO 使用：
+`from-now` 允许 Boundary 后的新事实引用 Boundary 前已存在的身份实体，但不授权“顺便补一遍旧 Metadata”。
 
-```text
-state = omitted
-reason = policy
-```
+例如新 Observation 引用旧 LogicalSession：
 
-不能简单写：
+允许：
 
 ```text
-path = null
+origin identity
+必要 Installation / Project / Workspace refs
+形成 FK 图所需最小结构字段
 ```
 
-否则 Hub 无法区分：
-
-- 原事实确实没有路径；
-- 本机没采集；
-- Node 有路径但不允许上传。
-
-Projection / Web 也不能把 omitted 显示成“来源没有提供”。
-
-## 8. Policy 收紧与既有 Hub 数据
-
-从：
+默认不允许因此补：
 
 ```text
-full -> metadata-only
+旧 Session title
+非必要 startedAt / endedAt
+旧 Workspace full path
+旧 Prompt / Tool body
+旧 SourceRecord payload
 ```
 
-之后，新的出站 Batch 必须立即遵守新规则。
-
-但已经在 Hub 中存在的：
+这些字段使用：
 
 ```text
-Prompt
-Tool body
-完整路径
+omitted(history-boundary)
+omitted(dependency-minimized)
 ```
 
-不会因为 Policy 设置变化自动删除。
+具体 Minimum Dependency Shape 按 Entity Type 在 Replication Serializer Contract 中固定并测试。
 
-需要独立：
+## 10. Policy 收紧与 retained prior value
+
+`full -> metadata-only` 后，新 Batch 必须立即遵守新规则，但 Hub 之前已经保存的 full 内容不会自动删除。
+
+Storage / Read Model 必须区分：
 
 ```text
-Purge / delete-history / policy cleanup preview
+current availability = omitted(policy)
+retained prior value = 旧授权时期获得
 ```
 
-UI 必须明确这一点。
+旧值不能被标记成“当前 Policy 下刚重新确认”。
 
-## 9. Hub 数据落盘安全
+普通 UI 可以继续展示已同步历史，但必须在需要时能够解释其来源和 freshness；清理旧 full 内容需要独立 Purge / Delete 操作。
 
-Hub SQLite 可能汇聚多台机器的：
+## 11. Policy 放宽
 
-- 项目身份；
-- Session；
-- Prompt；
-- Tool 数据；
-- 路径；
-- 资产信息。
+用户明确放宽 Policy / History Scope 后：
 
-因此 Alpha 至少要求：
+```text
+omitted -> redacted/value
+```
 
-- 默认数据根权限只允许当前用户；
-- Hub DB / backup / diagnostics 视为高敏感本地数据；
-- 不把数据库自动上传到云服务；
-- 不把 Hub 数据目录提交 Git；
-- 建议用户在承载 `full` 数据时使用系统磁盘加密 / 受保护账户；
-- Alpha 不宣称提供 SQLite 内建透明加密。
+允许在同一个 ReplicaKey 上补齐字段，不创建第二个 Remote Entity。
 
-如果未来提供 Hub Recovery Bundle，安全密钥与 Canonical Replica 的备份策略必须单独设计，不能把私钥塞进普通资产备份。
+Policy 放宽不自动意味着允许 Boundary 前历史，是否补旧内容仍由 History Scope 决定。
 
-## 10. 资源限制也是数据安全边界
+## 12. Hub 落盘安全
 
-已配对但被攻陷的 Node 仍可能发送超大 Payload 造成 Hub 资源耗尽。
+Hub SQLite 可能汇聚多台设备的项目、Session、Prompt、Tool、路径和资产信息。
 
-Replication Surface 必须：
+Alpha 至少要求：
 
-- 在完整解析前限制 HTTP Body 最大字节数；
-- 限制 `maxEntitiesPerBatch`；
-- 限制单 Entity Wire Body；
-- 对 Hub 磁盘低水位提供明确保护；
-- 不让一个 Node 无限占用内存 / SQLite 写锁；
-- rate limit / backpressure 属于 Replication Control Plane。
+- 默认数据根仅当前 OS 用户可访问；
+- DB / Backup / Diagnostics 按高敏感本地数据处理；
+- 不自动上传云服务；
+- 不提交 Git；
+- full 数据建议使用系统磁盘加密 / 受保护账户；
+- 不宣称 SQLite 自带透明加密；
+- 普通资产备份不包含 Hub / Node Private Key。
 
-R1 基础协议不要求压缩。未来若增加压缩 Capability，大小限制必须同时应用于压缩前后的解压后字节数，防止压缩炸弹。
+## 13. 资源限制也是数据安全边界
 
-## 11. 建议新增稳定错误语义
+Replication Surface 至少限制：
 
-资源保护至少需要区分：
+- HTTP Body bytes；
+- maxEntitiesPerBatch；
+- 单 Entity bytes；
+- 每 Node 速率；
+- 并发；
+- Hub 磁盘低水位。
+
+R1 基础协议不要求压缩；未来若支持压缩必须同时限制解压后大小。
+
+## 14. 稳定资源错误
+
+至少：
 
 ```text
 BATCH_TOO_LARGE
@@ -307,27 +314,22 @@ SERVER_BUSY
 SERVER_STORAGE_PRESSURE
 ```
 
-其中：
+这些只影响 Replication，不影响 Node 本机 Canonical Pipeline。
 
-- `BATCH_TOO_LARGE`：Node 可重新切批；
-- `ENTITY_TOO_LARGE`：单 Entity 无法靠切批解决，需要更严格序列化 / Policy / Contract 处理；
-- `SERVER_BUSY`：临时退避；
-- `SERVER_STORAGE_PRESSURE`：Hub 需要释放空间 / 调整容量后再继续。
+## 15. 验收不变量
 
-这些都不能影响 Node 本机 Canonical Pipeline。
-
-## 12. 验收不变量
-
-至少验证：
-
-- `metadata-only` 不发送 Prompt / Tool 正文；
-- `metadata-only` 默认不发送 Workspace 完整本机路径；
-- `metadata-only` 仍能完成 Session / Tool / Project 聚合；
-- Repository Identity 带 credential 时，credential 不参与 Shared Key / Wire / Log；
-- `redacted` 的路径脱敏在 Windows / macOS / Linux 一致；
-- `full` 仍不会发送已识别凭据；
-- omitted / null / not-captured 在 Hub 可区分；
-- `full -> metadata-only` 后不再生成新的 full 出站请求；
-- Hub 磁盘压力不会导致 Node 本地采集中断；
-- 超大 Batch / Entity 在网络入口被安全拒绝，不导致 Hub 进程 OOM；
+- metadata-only 不发送 Prompt / Tool 正文；
+- metadata-only 默认不发送 Workspace 完整路径；
+- metadata-only 仍可完成 Session / Tool / Project 聚合；
+- credential 不进入 SharedKey / Wire / Log；
+- Shared Identity Assertion 可以被 Hub 重算验证；
+- 如果 Portable Identity 不允许出站，则不建立 Shared Group；
+- redacted 路径在 Windows / macOS / Linux 规则一致；
+- full 仍不会发送明确凭据；
+- real null / omitted / not-captured / history-boundary / dependency-minimized / redacted 可区分；
+- from-now Dependency Closure 不泄露旧非必要字段；
+- full -> metadata-only 后不生成新的 full 请求；
+- retained prior value 不冒充当前重新确认值；
+- Hub 存储压力不导致 Node Local Capture 中断；
+- 超大 Batch / Entity 在网络入口安全拒绝；
 - 普通 Backup 不包含 Hub / Node Private Key。
