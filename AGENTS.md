@@ -1,142 +1,118 @@
 # AGENTS.md
 
-本文定义 AI 编码 Agent 修改 AgentLens 1.0 时必须遵守的工作规则。
+本文定义 AI 编码 Agent 修改 AgentLens 1.0 时必须遵守的项目级执行规则。
 
 ## 1. 当前项目状态
 
 AgentLens 1.0 是一次 **Clean Rebuild（彻底重建）**。
 
-当前 `main` 已进入 **v2.1 表现层收敛 + 1.0 稳定化** 阶段。默认目标是整理现有实现、修复缺陷、提高数据与运行稳定性，不继续无边界扩功能，不重新设计已经确定的 1.0 架构。
+当前 `main` 处于 1.0 Alpha 稳定化阶段；Hub Alpha 长期设计已冻结，但功能尚未实现。默认原则是优先验证和实现已经确定的边界，不继续无边界扩功能，也不重新设计已经冻结的 1.0 架构。
 
-0.x 的旧 Runtime / UI / Test 已从 1.0 工作树移除，不再作为可直接复用的实现存在。需要参考 0.x 的解析行为、fixture、UI 思路或迁移逻辑时，请通过 Git 历史 / Tag 查阅，并重新按 1.0 Contract 验证后再选择性迁移。
-
-禁止为了“兼容旧实现”重新恢复以下架构：
+0.x 的旧 Runtime / UI / Test 只通过 Git 历史 / Tag 作为参考。禁止恢复：
 
 - 旧 Adapter / Importer Runtime；
 - 旧 `timeline` / `overview_*` 规范表；
-- 旧 service manager / PID 架构；
+- 旧 Service Manager / PID 架构；
 - 旧 HTTP Response Shape；
 - 根目录 `server/`、`src/`、`test/` 作为 1.0 Runtime / UI / Test 入口。
 
-## 2. 修改架构前必须阅读
+## 2. 修改前阅读入口
 
-依次阅读：
+基础修改先读：
 
 1. `ARCHITECTURE.md`
 2. `docs/1.0/CORE-CONTRACT.md`
 3. `docs/adr/0001-agentlens-1.0-clean-rebuild-and-cordis-runtime.md`
-4. 涉及 npm / Desktop 生命周期时阅读 `docs/adr/0004-dual-distribution-single-runtime-lifecycle.md`
-5. 涉及安装、卸载、后台、自启、Hook Provider 切换时同时阅读 `docs/1.0/DISTRIBUTION-OPERATIONS.md`
-6. 涉及 Hermes / OpenCode 采集边界时阅读 `docs/1.0/HERMES-OPENCODE-SOURCES.md`
 
-如果实现与这些文档冲突，不要静默绕过 Contract。要么修复实现 Bug，要么明确发起 Contract Review / ADR。
+按任务补读：
 
-## 3. 架构规则
+- npm / Desktop 生命周期：`docs/adr/0004-dual-distribution-single-runtime-lifecycle.md`
+- 安装 / 卸载 / 后台 / 自启 / Hook Provider：`docs/1.0/DISTRIBUTION-OPERATIONS.md`
+- Hermes / OpenCode：`docs/1.0/HERMES-OPENCODE-SOURCES.md`
+- Capture / Source 隐私：`docs/1.0/CAPTURE-POLICY.md`
+- Hub 关键决策原因：`docs/adr/0007-multi-machine-hub-local-first-canonical-replication.md`
+- Hub 当前有效设计：`docs/1.0/HUB-DESIGN.md`
+- Hub R1：`docs/1.0/HUB-REPLICATION-PROTOCOL.md`
+- Hub 配对 / 安全 / 出站数据：`docs/1.0/HUB-PAIRING-SECURITY.md`
+- Hub 用户 / 运维生命周期：`docs/1.0/HUB-OPERATIONS.md`
+- 当前跨会话任务：`agent-swe/work-state.yaml`
 
-### Cordis
+实现与长期文档冲突时，不静默绕过；先判断是实现 Bug，还是确实需要 Contract Review / ADR。
 
-- 精确锁定 `@deepseek-ai/cordis@4.0.1`。
-- Cordis 是唯一的 Plugin Runtime；AgentLens 1.0 本身是 Cordis Application。
-- **Core is framework-agnostic; runtime extensions are Cordis-native.**
-- Core Domain / Core Services、Repository Contract、Parser / Normalizer、Protocol DTO 必须保持与 Cordis 无关。
-- Source / Storage / Surface 等需要运行时生命周期的插件入口可以直接依赖 Cordis / `runtime-cordis` Context typing，并使用 `ctx`、`inject`、dispose 生命周期。
-- 不得再引入 `defineSourcePlugin()`、`defineStoragePlugin()`、`defineSurfacePlugin()` 之类通用适配层，把 Cordis Plugin 再包装成第二套 AgentLens Runtime Model。
-- `defineAgentLensPlugin()` 仅允许作为 metadata / API-version compatibility helper，不得扩展成第二套 Lifecycle / DI / Plugin Loader。
-- 不得再引入第二套 DI Container、Plugin Loader 或 Lifecycle Runtime。
+## 3. 文档与知识治理
 
-### Canonical Data Flow
+遵守 `agent-swe` 的知识分层：
+
+- 同一长期事实只保留一个主要权威来源，其他文档只做摘要或链接；
+- ADR 只记录关键决定为什么形成、候选方案和长期影响，不承担完整实现 Contract；
+- `agent-swe/work-state.yaml` 只保存小时 / 天 / 周级当前工作，不作为长期计划、开发日志或 ADR；
+- 精确 DTO、Schema、Route、Migration 等在实现后优先由代码、Schema、OpenAPI / JSON Schema 或项目实际采用的等价标准工件成为权威来源；
+- 不为“知识完整”机械新增 Markdown；没有独立长期语义时不要拆新文档；
+- Hub Alpha 已冻结，不要重新创建 `HUB-*-CONTRACT / PLAN / TEST-MATRIX / DESIGN-INDEX` 一类重复长期文档；只有出现新的结构性边界才判断是否修改 `HUB-DESIGN.md` 或新增 ADR。
+
+## 4. Cordis 与 Canonical Data Flow
+
+Cordis 是唯一 Plugin Runtime；AgentLens 1.0 是 Cordis Application。
+
+- 精确锁定 `@deepseek-ai/cordis@4.0.1`；
+- **Core is framework-agnostic; runtime extensions are Cordis-native**；
+- Core Domain / Core Services / Repository / Parser / Normalizer / Protocol DTO 不依赖 Cordis；
+- Source / Storage / Surface 等运行时入口可以使用 Cordis Context / inject / lifecycle；
+- 不再引入第二套 DI、Plugin Loader、Lifecycle 或通用 Plugin Adapter。
+
+Canonical Data Flow：
 
 ```text
 SourceRecord
--> SourceDefinition.normalize()
--> ObservationCandidate + EvidenceCandidate
--> IdentityService
--> ObservationService.commit()
--> CanonicalObservation + Evidence
--> Projection
--> Protocol DTO
--> Surface/Web
+ -> SourceDefinition.normalize()
+ -> ObservationCandidate + EvidenceCandidate
+ -> IdentityService
+ -> ObservationService.commit()
+ -> CanonicalObservation + Evidence
+ -> Projection
+ -> Protocol DTO
+ -> Surface / Web
 ```
 
-Cordis-native 不意味着插件可以绕过这条链路。Source 不得直接写 Canonical Repository 或展示表；Storage / Surface 也不得反向拥有 Canonical Domain。
+Source 不得绕过这条链直接写 Canonical Repository 或展示表。Projection 是可重建读模型，不是第二事实源。
 
-### Evidence
+每条规范事实必须能由 Evidence 解释；同一事实的第二条采集路径应增强 Evidence，而不是制造重复 Observation。
 
-每一条规范事实都必须能由 Evidence 解释。
+## 5. Source 规则
 
-同一事实的第二条采集路径应该增强 Evidence，而不是创建重复 Observation。
+普通新增 Source 应只新增 `packages/source-<name>/` 并在 Daemon Composition Root 注册 Cordis Plugin。
 
-### Projections
-
-Projection 是可重建的读模型，不是额外的规范写入路径。
-
-### Protocol
-
-Web / Surface 消费 `@agent-lens/protocol` DTO。浏览器代码不得直接 import Core、SQLite 或 Source package。
-
-## 4. 新增 Source
-
-正常情况下，一个 Source 只需要新增：
-
-```text
-packages/source-<name>/
-```
-
-并在 Daemon Composition Root 中注册它导出的 Cordis Plugin。
-
-推荐结构：
-
-```text
-packages/source-<name>/
-  parser / history / normalize / assets   # 纯 TypeScript / Core Contract
-  plugin entry                            # Cordis-native
-```
-
-它仍应实现稳定的 `SourceDefinition` Contract：
+稳定 `SourceDefinition`：
 
 ```text
 detect
 declareCapabilities
-ingestHistory? / startCapture? / discoverAssets?
+ingestHistory?
+startCapture?
+discoverAssets?
 normalize
 ```
 
-插件入口负责把 `SourceDefinition` 注册到 `ctx.sources`，不得自行复制 History / Runtime Runner、Identity、Observation Commit 或 Dedup 流程。
+Parser / History / Normalize / Assets 尽量保持纯 TypeScript / Core Contract。通用 Source Runner 中不得出现 `if (sourceId === ...)` 一类来源业务分支。
 
-通用 Source Runner 中不得出现 `if (sourceId === ...)` 之类的来源分支。
+当前已经实现并注册：
 
-如果某个新 Source 无法在不歪曲事实的前提下适配现有 Contract，应停止普通接入流程，按 Contract Review 处理。
-
-## 5. 当前 1.0 Source
-
-已实现并注册到 Cordis Runtime：
-
-- Codex
 - Claude Code
+- Codex
 - Pi
 - Hermes
 - OpenCode
 
-其中：
+Hermes：`state.db` History / Native Tail + Assets；可选 Observer 只写 Durable Inbox。  
+OpenCode：`opencode.db` History + Native DB Tail，不额外安装 Hook。
 
-- Hermes：`state.db` History / Native Tail + Assets；可选 `agent-lens-observer` Hermes Plugin 只写 Durable Inbox，形成额外 Runtime Hook Evidence；
-- OpenCode：`opencode.db` History + 数据库变化驱动 Native Tail，不额外安装 Hook。
+Cursor / OpenClaw 等只有正式按 1.0 Source Contract 实现后才属于当前 Runtime。
 
-不能因为 0.x 曾经支持过，就视为已经属于 1.0 Runtime：
+## 6. Hook / Observer 规则
 
-- Cursor
-- OpenClaw
+Hook / Observer 只是被动采集 Shim。
 
-## 6. Hook 规则
-
-Hook 子进程 / 宿主观察插件只是被动采集 Shim。
-
-允许做：
-
-- 读取 stdin / 原生事件数据；
-- 清洗 / 截断敏感字段；
-- 原子写入 durable inbox；
-- 返回中性结果或不返回行为指令。
+允许：读取原生事件、清洗 / 截断、原子写 Durable Inbox、返回中性结果。
 
 不得依赖：
 
@@ -146,121 +122,84 @@ Hook 子进程 / 宿主观察插件只是被动采集 Shim。
 - HTTP；
 - Daemon 生命周期。
 
-Inbox 条目只有在成功完成 Canonical Ingestion 后才能确认并删除。
+只有成功完成 Canonical Ingestion 后才确认 / 删除 Inbox。
 
-Hermes 的 `agent-lens-observer` 同样受以上规则约束，并遵守 Hermes 自身的显式启用模型：AgentLens 可以随发行包提供插件文件，但不得在用户没有明确动作时静默启用第三方 Hermes Plugin。
+Codex / Claude Hook、Hermes Observer 都必须遵守 Source allowlist 并保持 fail-open。
 
-Windows 正式发行使用用户级共享 Hook 分发器，但它只能负责 Provider 选择和进程启动包装：
-
-- Native Hook 固定指向 `~/.agent-lens/1.0/runtime/windows-hook-dispatcher.ps1`；
-- 每次调用验证 `installations/desktop.json` / `npm.json` 对应真实文件；
-- Desktop 有效时优先 Desktop，否则回退 npm；
-- 使用隐藏 PowerShell 和 `CreateNoWindow` 启动真实 Hook；
-- 保持原 stdin / stdout 语义路径；
-- 不解析业务事件；
-- 不访问 Core、SQLite、HTTP 或 Daemon；
-- 任何失败都不得阻断上游 Agent Hook 流程。
-
-共享 Hook 分发器不是新的 Runtime，不得扩展成 0.x Hook Runner / Service Manager 的复刻。源码 `tsx` 调试入口不得登记为正式 npm Hook Provider。
+Windows 共享 Hook Dispatcher 只做 Provider 选择与无窗口进程启动，不解析业务事件，不访问 Core / SQLite / HTTP，不扩展成第二套 Runtime。
 
 ## 7. Asset 规则
 
-绝不能把“静态发现”直接等同于“实际调用”。
+静态发现不等于实际使用：
 
-例如：
+- 已安装 Skill / 已配置 MCP -> Asset state；
+- 有可靠 Evidence 的 Tool Call -> 才可归因 Usage；
+- 普通 Bash / Read / Write 不强行归到某个 Asset。
 
-- 已安装 Skill -> Asset state；
-- 已配置 MCP -> Asset state；
-- 调用 `mcp__server__tool` -> 可归因的 MCP Usage；
-- 普通 Bash 调用 -> 仅算 Tool Usage，除非有明确 Evidence 能证明对应 Asset。
+Hub 中的 Remote Asset metadata 不表示文件存在于 Hub 本机；现有资产备份不得读取 Remote `AssetBinding.path`。
 
-## 8. Storage 规则
+## 8. Storage / Projection / Protocol
 
-使用 Core Repository Interface。
+- 使用 Core Repository Interface；业务代码不得绕过 Repository 写功能专用 SQL；
+- SQLite Repository 保持 Cordis-independent；
+- 不恢复旧 `timeline / overview` 事实表；
+- Web / Surface 消费 `@agent-lens/protocol` DTO，浏览器不得直接 import Core / SQLite / Source；
+- Hub Remote Replica 通过正式 Unified Read 给 Projection，不允许 Projection 直查 Replica 私表或用假空值填 Remote omitted 字段。
 
-除了 storage package 自己在实现 Repository，不得绕过 `StorageService` 在业务代码里直接写功能专用 SQL。
+## 9. Hub Alpha 实现护栏
 
-Storage Plugin 可以直接使用 Cordis 生命周期提供 `ctx.storage`，但 SQLite Repository 实现本身不应依赖 Cordis。
+Hub 长期边界以 `HUB-DESIGN.md` 和 ADR-0007 为准。实现必须保持：
 
-不得重新引入旧 `timeline` / `overview` 表作为 1.0 规范事实。
+- Local Node 是事实 Primary，Hub 是 Replica + Aggregator；
+- Hub 故障不阻塞本机 Source / Canonical Commit / SQLite / Web；
+- Node / Hub 共用同一 AgentLensApplication，不拆第二套程序；
+- Alpha 单 Hub 星型拓扑；
+- 本机 Canonical ID 与跨机 ReplicaKey 分离；
+- Project / AssetDefinition 保留 Origin + Shared Group Membership，不批量 Rewrite FK；
+- Capture Policy / Replication Policy / History Scope 分离；
+- Remote omitted / redacted 不伪造成 Local Canonical 值；
+- Local HTTP 保持 loopback，Replication 使用独立 authenticated HTTPS；
+- 不提供 Remote Control / Remote Web Login；
+- Remote Import 压力不能饿死 Hub 本机 Canonical Commit。
 
-## 9. UI 规则
+实现过程中如果问题不改变这些长期边界，优先采用最简单实现，不再扩大设计。
+
+## 10. UI 规则
 
 1.0 Web 使用 Vite + React + TypeScript，只消费 `/api/v1/*`。
 
-当前面向用户的主视图使用简体中文：
+长期方向：
 
-- 执行轨迹；
-- 会话；
-- 工具与能力。
+- 任务复盘保持高信息密度，目标是降噪而不是隐藏；
+- 用户消息右、智能体左；
+- 保留 Evidence、生命周期、工具执行、轮次和长会话 `turn-rail`；
+- 工具正式图标使用 SVG；
+- 普通界面文字不低于 12px；
+- 会话列表与详情保持独立滚动上下文；
+- 不用新增叠层补丁长期解决视觉冲突；
+- `packages/web/src/tokens.css` 与 `docs/design/mockups/v2/assets/tokens.css` 基础 Token 保持一致；
+- 关键前景 / 背景必须通过 `check:web-presentation` 对比度门禁；
+- SSE 不得驱动整页高频重绘。
 
-当前表现层收敛遵循以下固定方向：
+## 11. CLI / Desktop 规则
 
-- 任务复盘保持高信息密度，目标是降低视觉噪音，不是隐藏信息；
-- 用户消息气泡在右侧，智能体消息气泡在左侧；
-- 保留长会话 `turn-rail`，不得为了“简化”删除；
-- 工具类型使用 SVG 徽章，不使用字符占位作为正式图标；
-- Evidence、生命周期、工具执行、轮次等 Agent 特有信息必须保留；
-- 字体与字号统一由正式语义字号系统收口，普通界面文字不得回退到 12px 以下；
-- 会话列表与会话详情在桌面端必须保持独立滚动上下文；
-- 不通过新增叠层补丁长期解决视觉冲突；新增样式前先确认现有收口层职责和加载顺序；
-- `packages/web/src/tokens.css` 是正式运行时最终基础设计令牌层，必须与 `docs/design/mockups/v2/assets/tokens.css` 的基础色值保持一致；
-- 页面样式不得依赖旧色板覆盖顺序制造最终颜色；关键前景/背景组合必须通过 `check:web-presentation` 对比度门禁。
+当前 CLI 包含 setup / start / status / doctor / service / autostart / hook 等入口。
 
-实时更新使用 SSE，但 SSE 事件不得直接触发整页 / 整个内容区反复重绘。
+`setup` 是一次性初始化，不自动启动长期 Daemon，也不默认开启登录自启。
 
-- 执行轨迹应优先做增量 DOM 协调，保留滚动位置、Evidence 展开状态和当前阅读上下文；
-- 会话 / 工具与能力如果暂时无法安全增量更新，应只提示“有新数据”，由用户显式刷新；
-- 除非有明确性能数据和正式决策，不要改回短间隔轮询。
+后台生命周期属于发行 / 运维层：
 
-## 10. CLI / Desktop 规则
-
-CLI：
-
-```text
-agent-lens setup
-agent-lens start
-agent-lens status
-agent-lens doctor
-agent-lens service start|stop|restart|status
-agent-lens autostart enable|disable|status
-agent-lens hook ...
-```
-
-`setup` 是一次性初始化入口：检查 Node.js 与数据目录，并报告本机 Source / Hook 状态；Codex / Claude Code 的 Native Hook 仍只补齐 AgentLens 自己缺失的配置。Pi / OpenCode 使用原生 History / Runtime Tail，不安装 Native Hook。Hermes 默认使用 `state.db` History / Native Tail；Hermes Observer 属于显式启用的可选增强，不得在 `setup` 中静默启用。
-
-`setup` 不自动启动长期 Daemon，也不默认打开 npm 登录自启；后台生命周期通过独立 `service` / `autostart` 命令管理。不得把 `setup` 扩展成 0.x service manager 的新包装。
-
-`start` 明确以前台方式运行。启动前必须先探测默认运行时；已有兼容 Daemon 时直接复用，不启动第二套。
-
-npm 后台生命周期只属于发行 / 运维层：
-
-- Windows：当前用户计划任务；
+- Windows：当前用户 Task Scheduler；
 - Linux：`systemd --user`；
 - macOS：用户级 `launchd`；
-- 不维护 PID 文件，不恢复 0.x Service Manager；
-- 系统托管入口统一执行 `service run`，由 Daemon Health 报告 `owner=service`、`mode=managed`；
-- `service restart` 遇到 Desktop / 前台 CLI 所有的现有运行时不得强行接管；
-- `autostart` 只控制登录后是否自动启动，不等同于“当前是否运行”；
-- Windows 计划任务必须使用隐藏窗口定义，不直接用可见 `node.exe` 作为正式后台任务动作；
-- `status / doctor` 必须同时报告 Daemon 与系统托管状态，不能只看端口是否在线；
-- Windows 旧任务定义如果未确认隐藏窗口，`doctor` 应警告而不是误报正常。
+- 不维护 PID 文件；
+- 不恢复 0.x Service Manager。
 
-双发行安装登记规则：
+npm 与 Windows Desktop 可以同时安装，但同一默认数据根 / 默认端口同一时刻只允许一个有效 Daemon；Desktop 只停止自己启动的 Daemon。
 
-- `~/.agent-lens/1.0/installations/npm.json` 与 `desktop.json` 只记录候选 Provider；
-- 登记有效性必须由 executable、HookRoot、Codex/Claude Hook 文件真实存在性决定；
-- 直接卸载一种发行后，陈旧 JSON 不得阻塞另一种发行；
-- 不依赖 npm uninstall lifecycle 维护安装事实；
-- Windows Native Hook 配置保持稳定共享分发入口，不因 npm/Desktop 切换反复重写。
+源码模式注册系统托管前必须生成正式 `dist/cli.mjs`，不能登记临时 `tsx` 入口。
 
-源码模式注册 `service` / `autostart` 前必须先生成正式 `dist/cli.mjs`，不要把临时 `tsx` 开发入口注册到系统启动项；源码 CLI 也不得登记为正式 npm 安装。
-
-npm 与 Windows Desktop 可以同时安装，但同一默认数据根 / 默认端口同一时刻只允许一个有效 Daemon。Desktop 只能停止自己启动的 Daemon，不得误杀 npm / service 管理的外部运行时。
-
-Electron 只负责 Windows Desktop Lifecycle 与发行集成。不要把 Core / Source 逻辑搬进 `apps/desktop`。
-
-## 11. 常用开发命令
+## 12. 常用开发命令
 
 ```bash
 npm install
