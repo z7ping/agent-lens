@@ -3,21 +3,19 @@
 更新日期：2026-08-27  
 状态：Alpha 设计收口索引，功能尚未实现
 
-本文是多机 Hub 的文档导航，不重复定义架构事实。出现冲突时，按下列优先级理解：
+本文只做 Hub 文档导航，不重复定义架构事实。出现冲突时按以下优先级理解：
 
 ```text
 ADR
- -> Contract
- -> Protocol / Security / Operations
+ -> Replication Contract / State Contract
+ -> Protocol / Security / Data Exposure / Operations
  -> UX / Implementation Plan / Test Matrix
- -> Implementation Status
+ -> Architecture Summary / Implementation Status
 ```
 
 ## 1. ADR-0007：为什么这样设计
 
-文件：
-
-`docs/adr/0007-multi-machine-hub-local-first-canonical-replication.md`
+文件：`docs/adr/0007-multi-machine-hub-local-first-canonical-replication.md`
 
 负责：
 
@@ -28,21 +26,19 @@ ADR
 - Canonical / Replication Control Plane 分离；
 - 独立 Replication Surface；
 - Protocol / Product / Storage Schema 解耦；
-- 不做远程执行 / Federation / 唯一 Hub 事实源。
+- 不做 Remote Execution / Federation / Hub 唯一事实源。
 
-ADR 只记录长期架构决策，不承载每个 DTO 的字段细节。
+ADR 不承载具体 DTO 字段与运维状态机。
 
-## 2. HUB-REPLICATION-CONTRACT：复制什么、身份怎么处理
+## 2. HUB-REPLICATION-CONTRACT：复制什么、身份怎么映射
 
-文件：
-
-`docs/1.0/HUB-REPLICATION-CONTRACT.md`
+文件：`docs/1.0/HUB-REPLICATION-CONTRACT.md`
 
 负责：
 
 - Entity Scope 四分类；
 - Replica Key；
-- Shared Identity；
+- Shared / Conditional Shared Identity；
 - Shared Merge；
 - Typed EntityRef；
 - Reference Rewrite；
@@ -52,256 +48,271 @@ ADR 只记录长期架构决策，不承载每个 DTO 的字段细节。
 - Alias；
 - Tombstone / Assertion Withdrawal。
 
-这是 Hub 数据语义实现的核心 Contract。
+这是 Canonical Replication 数据语义核心。
 
-## 3. HUB-REPLICATION-PROTOCOL：线上怎么说话
+## 3. HUB-REPLICATION-STATE-CONTRACT：同步状态如何长期保持正确
 
-文件：
+文件：`docs/1.0/HUB-REPLICATION-STATE-CONTRACT.md`
 
-`docs/1.0/HUB-REPLICATION-PROTOCOL.md`
+负责此前容易遗漏的长期状态：
+
+- 合法 Capability Profile；
+- nodeId / hubId / streamId / generationId 分离；
+- History Scope / History Boundary；
+- Policy / History Revision；
+- immutable Batch / Commit Ambiguity；
+- Stream Rollover；
+- staged Replica Generation / Re-bootstrap；
+- Tombstone / Receipt / Alias Retention；
+- Hub 本机参与 Shared Identity；
+- Cross-node Clock / Ordering；
+- npm / Desktop 共用 Hub 状态；
+- Headless Pure Hub 管理边界。
+
+它与 Replication Contract 同属实现前核心 Contract。
+
+## 4. HUB-REPLICATION-PROTOCOL：线上怎么说话
+
+文件：`docs/1.0/HUB-REPLICATION-PROTOCOL.md`
 
 负责：
 
-- Replication Protocol R1；
-- Handshake；
-- replicationStreamId；
+- R1 Major / Minor；
+- Pairing Receipt wire binding；
+- Handshake + Hub `serverProof`；
+- replicationStreamId / replicaGenerationId；
 - Batch Envelope；
-- Sequence / ACK；
-- Bootstrap / Reconciliation 线上状态；
-- Wire Entity Envelope；
-- omitted / redacted 值语义；
-- Stable Error Code；
+- Policy / History Revision；
+- Deterministic Hash；
+- Sequence / ACK / Sequence Receipt；
+- Commit Ambiguity；
+- Stream Rollover；
+- Bootstrap / Reconciliation；
+- omitted / redacted；
+- Stable Remote Error / Local Diagnostic；
 - Capability Negotiation；
 - Request Signature Input；
 - Transport Route；
-- Batch 流控。
+- Batch / Entity / Resource Limits；
+- Clock Skew。
 
 Protocol 不绑定 SQLite Row。
 
-## 4. HUB-PAIRING-SECURITY：谁可以连、怎么建立信任
+## 5. HUB-PAIRING-SECURITY：谁可以连、如何证明信任
 
-文件：
-
-`docs/1.0/HUB-PAIRING-SECURITY.md`
+文件：`docs/1.0/HUB-PAIRING-SECURITY.md`
 
 负责：
 
-- Node Identity / Hub Identity / TLS Identity 分离；
+- Node / Hub / TLS Identity 分离；
 - Pairing Secret；
-- Node Key；
-- Hub Key；
-- TLS / SPKI Pinning；
+- Node Key Possession；
+- Pairing Receipt；
+- Hub Identity `serverProof`；
+- TLS / SPKI；
 - Request Signature；
-- Nonce / Timestamp 重放保护；
-- Node Revocation；
-- Key Rotation；
-- Clone Detection；
-- 私钥 / 日志 / Backup 安全边界。
+- Nonce / Timestamp；
+- Node Revocation / Key Rotation；
+- Clone Detection / runtimeInstanceId；
+- 日志 / Backup / At-rest 边界；
+- Resource Abuse Protection。
 
-现有 `127.0.0.1:56789` Local Web 安全边界仍以 `SECURITY.md` 为准。
+现有 `127.0.0.1:56789` Local Web 总安全边界仍以 `SECURITY.md` 为准。
 
-## 5. HUB-OPERATIONS：真实使用生命周期
+## 6. HUB-DATA-EXPOSURE-MATRIX：三档 Policy 到底会发哪些字段
 
-文件：
+文件：`docs/1.0/HUB-DATA-EXPOSURE-MATRIX.md`
 
-`docs/1.0/HUB-OPERATIONS.md`
+负责：
+
+- metadata-only / redacted / full 字段级定义；
+- Repository Identity 的敏感性；
+- Workspace / executable / configRoot / SourceLocator Path 边界；
+- Prompt / Tool / SourceRecord Payload；
+- omitted / redacted / null 语义；
+- Hub 聚合数据的 At-rest 风险；
+- Batch / Entity / Storage Pressure 安全边界。
+
+重要：`metadata-only` 不是匿名模式。
+
+## 7. HUB-OPERATIONS：真实使用生命周期
+
+文件：`docs/1.0/HUB-OPERATIONS.md`
 
 负责：
 
 - 开启 Hub / Pure Hub；
-- Pair / Bootstrap / Incremental；
-- offline / degraded / blocked；
+- Capability 切换；
+- Pair / Bootstrap / from-now Boundary；
+- offline / degraded / paused / blocked；
 - backlog；
-- Reconcile / Re-bootstrap；
-- Re-pair；
-- Node Identity Reset；
-- Revocation；
-- 删除 Node 历史；
-- Policy 变更；
-- Upgrade 顺序；
+- Policy 收紧 / 放宽；
+- Stream Rollover；
+- Reconcile / staged Re-bootstrap；
+- Re-pair / Reset Identity；
+- Revocation / Delete History；
+- Tombstone / Receipt Retention；
+- Upgrade；
 - Hub / Node 数据丢失；
-- Endpoint / Identity 变化。
+- Endpoint / Identity 变化；
+- Headless Hub；
+- npm / Desktop 共存。
 
-## 6. HUB-UX-CONTRACT：用户应该看到什么
+## 8. HUB-UX-CONTRACT：用户应该看到什么
 
-文件：
-
-`docs/1.0/HUB-UX-CONTRACT.md`
+文件：`docs/1.0/HUB-UX-CONTRACT.md`
 
 负责：
 
 - 中文用户术语；
-- 不拆 Node 版 / Hub 版；
+- 不拆 Node / Hub 发行版；
 - Hub 开关；
-- Pairing 交互；
-- Replication Policy 文案；
-- 设备状态；
-- Task Review Node Filter；
+- Pairing；
+- Policy + History Scope；
+- metadata-only 准确隐私文案；
+- Device Status；
+- Node Filter；
 - Project / Workspace 跨机表达；
-- Bootstrap / backlog 显示；
+- Bootstrap / Backlog / Paused；
+- Re-bootstrap 不中断现有查询；
+- Clock Skew 用户语义；
 - 危险操作分离；
-- 删除历史预演；
-- 不提供远程控制。
+- Headless / Remote Web 边界；
+- 不提供 Remote Control。
 
-本文不锁死是否新增一级导航，具体布局留给高保真阶段。
+具体页面布局留给高保真阶段。
 
-## 7. HUB-ALPHA-IMPLEMENTATION-PLAN：以后按什么顺序开工
+## 9. HUB-ALPHA-IMPLEMENTATION-PLAN：以后按什么顺序开工
 
-文件：
+文件：`docs/1.0/HUB-ALPHA-IMPLEMENTATION-PLAN.md`
 
-`docs/1.0/HUB-ALPHA-IMPLEMENTATION-PLAN.md`
-
-负责：
+阶段：
 
 ```text
 H1 Node Identity / Composition
 H2 Replication Core
-H3 Wire Protocol
-H4 Policy / Outbox / Reconcile
-H5 Hub Import
+H3 R1 Protocol / Identity Proof
+H4 Policy / History / Outbox / Reconcile
+H5 Hub Import / Replica Generation
 H6 Security / Surface
 H7 E2E Sync
 H8 Web / CLI
-H9 Delete / Identity Ops
+H9 Delete / Identity / Recovery Ops
 H10 Performance / Hardening
 ```
 
-计划文档不是实现状态，不能把某个 H 阶段写在这里就当作已完成。
+计划文档不是实现状态。
 
-## 8. HUB-TEST-MATRIX：如何证明实现没有偏离设计
+## 10. HUB-TEST-MATRIX：如何证明实现没有偏离设计
 
-文件：
+文件：`docs/1.0/HUB-TEST-MATRIX.md`
 
-`docs/1.0/HUB-TEST-MATRIX.md`
-
-负责：
+覆盖：
 
 - Standalone 回归；
-- Node Identity；
-- Entity Scope / Replica Key；
-- Shared Merge / Promotion；
-- Policy；
-- Protocol / ACK；
-- Bootstrap / Reconcile；
-- Pairing / TLS / Signature；
-- Revocation / Reset；
-- Cross-platform；
+- Capability / Node Identity；
+- Entity Scope / Replica / Shared；
+- Policy / History Boundary；
+- Pairing Receipt / Hub Proof / Signature；
+- Sequence / ACK / Commit Ambiguity；
+- Stream Rollover；
+- Bootstrap / Reconcile / Replica Generation；
+- Tombstone / Retention；
+- Cross-node Clock；
+- Cross-platform / Distribution；
+- Resource Pressure；
 - Failure Injection；
-- Performance；
-- Real-machine Dogfood；
+- Performance / Dogfood；
 - Release Gate。
 
-## 9. CAPTURE-POLICY：本机能保存什么、Hub 能发什么
+## 11. CAPTURE-POLICY：本机最多能保存什么
 
-文件：
+文件：`docs/1.0/CAPTURE-POLICY.md`
 
-`docs/1.0/CAPTURE-POLICY.md`
-
-负责：
+核心关系：
 
 ```text
 Capture Policy
-  -> 哪些数据能进入本机 Canonical Store
+  -> Local Canonical 上限
 
 Replication Policy
-  -> 本机已有数据中哪些能离开本机
+  -> 在这个上限内继续收紧出站数据
 ```
 
-Hub 不能恢复 Capture 已经 off / redacted 的信息。
+具体 Hub 字段暴露以 `HUB-DATA-EXPOSURE-MATRIX.md` 为准。
 
-## 10. SECURITY.md：仓库总安全边界
+## 12. SECURITY.md：仓库总安全边界
 
-文件：
+文件：`SECURITY.md`
 
-`SECURITY.md`
+负责仓库级安全说明与漏洞报告方式。
 
-负责仓库级安全说明和漏洞报告方式。
+Hub 专项密码学 / 配对细节由 `HUB-PAIRING-SECURITY.md` 定义；两者不能互相覆盖 Local Surface loopback 边界。
 
-Hub 实现后需要确保这里持续说明：
+## 13. ARCHITECTURE.md：总架构摘要
 
-- Local Surface 仍 loopback；
-- Replication Surface 独立 authenticated HTTPS；
-- 私钥 / Pairing Secret 不进入 Canonical / 普通日志 / Backup；
-- Remote Web 不是 Replication Surface 的副作用。
+文件：`ARCHITECTURE.md`
 
-## 11. ARCHITECTURE.md：总架构摘要
+只保留 Hub 高层摘要与正式文档链接，不复制全部协议细节。
 
-文件：
+## 14. IMPLEMENTATION-STATUS：现在到底做了没有
 
-`ARCHITECTURE.md`
-
-只保留 Hub 的高层架构摘要并链接 ADR / Contract，不应复制所有协议细节。
-
-如果某个实施细节与 ADR / Contract 冲突，应修实现或修正式决策文档，而不是在 ARCHITECTURE.md 单独创造第三种说法。
-
-## 12. IMPLEMENTATION-STATUS：现在到底做了没有
-
-文件：
-
-`docs/1.0/IMPLEMENTATION-STATUS.md`
+文件：`docs/1.0/IMPLEMENTATION-STATUS.md`
 
 当前必须继续写：
 
-> Hub 架构与 Contract 已确定，但功能尚未实现。
+> Hub 架构 / Contract / Protocol / UX / Test 文档已完成实现前收口，但功能尚未实现。
 
-未来每完成一个阶段再按事实更新。
+不能因为 DTO / Pairing / Test 文档存在就写成“Hub 已支持”。
 
-不要因为已经存在 Wire DTO 文档、Pairing 文档或测试矩阵就写成“Hub 已支持”。
+## 15. 文档修改规则
 
-## 13. 文档修改规则
+### 长期架构边界变化
 
-后续若改变：
+例如单 Hub -> 多 Hub、增加 Remote Control、变双向同步：新 ADR 或正式修订 ADR-0007。
 
-### 长期架构边界
+### Canonical Replication / State 语义变化
 
-例如：
-
-- 从单 Hub 改多 Hub；
-- 改成 Hub 唯一事实源；
-- 增加远程控制；
-- 改双向同步；
-
-必须新 ADR 或正式修订 ADR-0007。
-
-### Canonical Replication 语义
-
-例如：
-
-- 某 Entity 从 Node-scoped 改 Shared；
-- Shared Identity / Merge 改变；
-- Promotion / Tombstone 语义改变；
-
-修改 Replication Contract，并评估 Protocol Major。
+例如 Entity Scope、Shared Identity、History Boundary、Replica Generation、Stream Rollover：修改对应 Contract，并评估 Protocol Major。
 
 ### Wire 兼容变化
 
-修改 Replication Protocol，并按 Major / Minor 规则处理。
+修改 Replication Protocol，按 Major / Minor 处理。
 
-### 配对 / 信任变化
+### Trust / Security 变化
 
-修改 Pairing / Security，并做安全 Review。
+修改 Pairing / Security，并进行安全 Review。
 
-### UI 排布
+### Field Exposure 变化
 
-不影响上述 Contract 时，只需修改 UX / 高保真，不升级 ADR。
+修改 Data Exposure Matrix 与 UX / Capture 说明，不能只改页面文案。
 
-## 14. 当前冻结边界
+### UI 排布变化
 
-截至 2026-08-27，今天只完成设计 / 文档收口，不开始 Hub 功能实现。
+不影响上面 Contract 时，只改 UX / 高保真，不升级 ADR。
 
-已经冻结：
+## 16. 当前冻结边界
 
-- Local-first；
-- Node 身份与 Hub capability 模型；
-- 单 Hub 星型拓扑；
+截至 2026-08-27，只完成设计 / 文档，不开始 Hub 功能实现。
+
+当前已冻结：
+
+- Local-first 与单 Hub 星型拓扑；
+- Node Identity + Capability Profile；
 - Replica / Shared / Conditional Shared；
 - Typed EntityRef；
-- Shared Merge / Promotion / Assertions；
+- Shared Merge / Assertions / Promotion；
+- Replication Policy + 字段暴露矩阵；
+- History Scope / History Boundary；
 - Bootstrap + Incremental + Reconciliation；
-- R1 Sequence / ACK 基本模型；
-- Pairing / TLS / Key / Revocation 安全边界；
-- Replication Policy；
-- 运维生命周期；
+- Stream / Sequence / ACK / Commit Ambiguity / Rollover；
+- Replica Generation / staged Re-bootstrap；
+- Pairing Secret / Node Key / Pairing Receipt / Hub Identity Proof；
+- TLS / SPKI / Request Signature / Revocation；
+- Control Plane Retention；
+- Cross-node Clock / Ordering；
+- Hub 本机 Shared Identity 参与；
+- Headless / 双发行运维边界；
 - Alpha 实施顺序与测试门禁。
 
 尚未实现：
@@ -312,10 +323,11 @@ Replication packages
 Storage migrations
 Pairing / TLS
 Wire endpoints
-Bootstrap / Outbox
-Hub Import
+History Boundary / Policy State
+Bootstrap / Outbox / Reconcile
+Hub Import / Replica Generation
 Web / CLI Hub UI
 Tombstone / Purge
 ```
 
-这份索引用于下一次接手时快速恢复上下文，避免重新讨论已经确定的问题。
+这份索引用于下一次接手快速恢复上下文，避免重新讨论已确定问题。
