@@ -1,10 +1,6 @@
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
-import {
-  loadOrCreateNodeIdentity,
-  resolveAgentLensDataRoot,
-} from '@agent-lens/node-identity'
 import { maybePrintUpdateHint, runUpdateCommand } from './update'
 
 const VERSION = '1.0.0-alpha.1'
@@ -17,10 +13,6 @@ function isHelp(args: string[]): boolean {
 function isVersion(args: string[]): boolean {
   const command = args.find(arg => arg !== '--json')
   return command === '--version' || command === '-v' || command === 'version'
-}
-
-function shouldInitializeNodeIdentity(args: string[]): boolean {
-  return args.find(arg => arg !== '--json') === 'setup'
 }
 
 function shouldOfferPassiveUpdate(args: string[], code: number): boolean {
@@ -63,10 +55,6 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
   const update = updateArgs(argv)
   if (update) return runUpdateCommand(VERSION, update)
 
-  if (shouldInitializeNodeIdentity(argv)) {
-    loadOrCreateNodeIdentity(resolveAgentLensDataRoot())
-  }
-
   const code = await runCore(argv)
   if (isHelp(argv)) printUpdateHelp()
   else if (shouldOfferPassiveUpdate(argv, code)) await maybePrintUpdateHint(VERSION)
@@ -84,7 +72,6 @@ if (invokedPath && fileURLToPath(import.meta.url) === invokedPath) {
 export const cliEntryInternals = {
   isHelp,
   isVersion,
-  shouldInitializeNodeIdentity,
   shouldOfferPassiveUpdate,
   updateArgs,
 }
