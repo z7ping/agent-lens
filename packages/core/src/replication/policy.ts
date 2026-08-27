@@ -21,11 +21,11 @@ export type ReplicationAvailability<T extends JsonValue = JsonValue> =
   | { state: 'redacted' }
   | { state: 'omitted'; reason: 'policy' | 'not-captured' | 'history-boundary' | 'dependency-minimized' }
 
-export type ReplicationFieldClass = 'metadata' | 'content' | 'path' | 'raw-content' | 'secret'
+export type ReplicationFieldClass = 'metadata' | 'content' | 'path' | 'raw-content' | 'secret' | 'unclassified'
 
 export interface ReplicationEntityFieldContract {
   field: string
-  class: ReplicationFieldClass
+  class: Exclude<ReplicationFieldClass, 'unclassified'>
   minimumDependency?: boolean
 }
 
@@ -35,34 +35,69 @@ export interface ReplicationEntityContract {
 }
 
 const CONTRACTS: Partial<Record<KnownReplicationEntityType, ReplicationEntityContract>> = {
-  AgentProduct: { entityType: 'AgentProduct', fields: [] },
-  Host: { entityType: 'Host', fields: [] },
+  AgentProduct: {
+    entityType: 'AgentProduct',
+    fields: [
+      { field: 'id', class: 'metadata' },
+      { field: 'name', class: 'metadata' },
+      { field: 'vendor', class: 'metadata' },
+      { field: 'homepage', class: 'metadata' },
+    ],
+  },
+  Host: {
+    entityType: 'Host',
+    fields: [
+      { field: 'id', class: 'metadata' },
+      { field: 'name', class: 'metadata' },
+      { field: 'platform', class: 'metadata' },
+      { field: 'arch', class: 'metadata' },
+      { field: 'createdAt', class: 'metadata' },
+      { field: 'lastSeenAt', class: 'metadata' },
+    ],
+  },
   AgentInstallation: {
     entityType: 'AgentInstallation',
     fields: [
+      { field: 'id', class: 'metadata' },
+      { field: 'hostId', class: 'metadata' },
+      { field: 'productId', class: 'metadata' },
+      { field: 'version', class: 'metadata' },
       { field: 'executable', class: 'path' },
       { field: 'configRoot', class: 'path' },
       { field: 'dataRoot', class: 'path' },
+      { field: 'firstSeenAt', class: 'metadata' },
+      { field: 'lastSeenAt', class: 'metadata' },
     ],
   },
   RuntimeProfile: {
     entityType: 'RuntimeProfile',
     fields: [
+      { field: 'id', class: 'metadata' },
+      { field: 'installationId', class: 'metadata' },
+      { field: 'nativeProfileId', class: 'metadata' },
       { field: 'name', class: 'content' },
       { field: 'configRoot', class: 'path' },
       { field: 'dataRoot', class: 'path' },
+      { field: 'firstSeenAt', class: 'metadata' },
+      { field: 'lastSeenAt', class: 'metadata' },
     ],
   },
   Project: {
     entityType: 'Project',
     fields: [
+      { field: 'id', class: 'metadata', minimumDependency: true },
       { field: 'name', class: 'content' },
       { field: 'repositoryIdentity', class: 'metadata', minimumDependency: true },
+      { field: 'createdAt', class: 'metadata' },
+      { field: 'lastSeenAt', class: 'metadata' },
     ],
   },
   Workspace: {
     entityType: 'Workspace',
     fields: [
+      { field: 'id', class: 'metadata', minimumDependency: true },
+      { field: 'hostId', class: 'metadata', minimumDependency: true },
+      { field: 'projectId', class: 'metadata', minimumDependency: true },
       { field: 'path', class: 'path' },
       { field: 'repositoryId', class: 'metadata', minimumDependency: true },
       { field: 'worktreeId', class: 'metadata', minimumDependency: true },
@@ -71,39 +106,125 @@ const CONTRACTS: Partial<Record<KnownReplicationEntityType, ReplicationEntityCon
   LogicalSession: {
     entityType: 'LogicalSession',
     fields: [
+      { field: 'id', class: 'metadata', minimumDependency: true },
+      { field: 'installationId', class: 'metadata', minimumDependency: true },
+      { field: 'runtimeProfileId', class: 'metadata', minimumDependency: true },
+      { field: 'projectId', class: 'metadata', minimumDependency: true },
+      { field: 'workspaceId', class: 'metadata', minimumDependency: true },
       { field: 'title', class: 'content' },
       { field: 'startedAt', class: 'metadata' },
       { field: 'endedAt', class: 'metadata' },
     ],
   },
-  SourceSession: { entityType: 'SourceSession', fields: [] },
-  SessionRelationship: { entityType: 'SessionRelationship', fields: [] },
-  AgentActor: { entityType: 'AgentActor', fields: [] },
+  SourceSession: {
+    entityType: 'SourceSession',
+    fields: [
+      { field: 'id', class: 'metadata' },
+      { field: 'sourceId', class: 'metadata' },
+      { field: 'installationId', class: 'metadata' },
+      { field: 'runtimeProfileId', class: 'metadata' },
+      { field: 'nativeSessionId', class: 'metadata' },
+      { field: 'logicalSessionId', class: 'metadata' },
+      { field: 'nativeParentSessionId', class: 'metadata' },
+    ],
+  },
+  SessionRelationship: {
+    entityType: 'SessionRelationship',
+    fields: [
+      { field: 'id', class: 'metadata' },
+      { field: 'fromSessionId', class: 'metadata' },
+      { field: 'toSessionId', class: 'metadata' },
+      { field: 'type', class: 'metadata' },
+      { field: 'evidenceRefs', class: 'metadata' },
+      { field: 'confidence', class: 'metadata' },
+    ],
+  },
+  AgentActor: {
+    entityType: 'AgentActor',
+    fields: [
+      { field: 'id', class: 'metadata' },
+      { field: 'installationId', class: 'metadata' },
+      { field: 'logicalSessionId', class: 'metadata' },
+      { field: 'parentActorId', class: 'metadata' },
+      { field: 'role', class: 'metadata' },
+      { field: 'nativeActorId', class: 'metadata' },
+      { field: 'evidenceRefs', class: 'metadata' },
+    ],
+  },
   SourceRecord: {
     entityType: 'SourceRecord',
     fields: [
-      { field: 'payload', class: 'raw-content' },
+      { field: 'id', class: 'metadata' },
+      { field: 'sourceId', class: 'metadata' },
+      { field: 'installationId', class: 'metadata' },
+      { field: 'sourceSessionNativeId', class: 'metadata' },
+      { field: 'nativeType', class: 'metadata' },
+      { field: 'nativeId', class: 'metadata' },
+      { field: 'sourceSequence', class: 'metadata' },
+      { field: 'occurredAt', class: 'metadata' },
+      { field: 'capturedAt', class: 'metadata' },
       { field: 'locator', class: 'path' },
+      { field: 'fingerprint', class: 'metadata' },
+      { field: 'payload', class: 'raw-content' },
+      { field: 'parserVersion', class: 'metadata' },
     ],
   },
   Evidence: {
     entityType: 'Evidence',
     fields: [
+      { field: 'id', class: 'metadata' },
+      { field: 'captureMethod', class: 'metadata' },
+      { field: 'derivation', class: 'metadata' },
+      { field: 'confidence', class: 'metadata' },
+      { field: 'sourceRecordId', class: 'metadata' },
       { field: 'sourceLocator', class: 'path' },
+      { field: 'parserVersion', class: 'metadata' },
+      { field: 'eventTime', class: 'metadata' },
+      { field: 'capturedAt', class: 'metadata' },
       { field: 'missingReason', class: 'content' },
     ],
   },
   CanonicalObservation: {
     entityType: 'CanonicalObservation',
-    fields: [{ field: 'payload', class: 'content' }],
+    fields: [
+      { field: 'id', class: 'metadata' },
+      { field: 'hostId', class: 'metadata' },
+      { field: 'installationId', class: 'metadata' },
+      { field: 'projectId', class: 'metadata' },
+      { field: 'workspaceId', class: 'metadata' },
+      { field: 'logicalSessionId', class: 'metadata' },
+      { field: 'sourceSessionId', class: 'metadata' },
+      { field: 'interactionId', class: 'metadata' },
+      { field: 'actorId', class: 'metadata' },
+      { field: 'kind', class: 'metadata' },
+      { field: 'sourceSequence', class: 'metadata' },
+      { field: 'canonicalSequence', class: 'metadata' },
+      { field: 'occurredAt', class: 'metadata' },
+      { field: 'capturedAt', class: 'metadata' },
+      { field: 'payload', class: 'content' },
+      { field: 'evidenceRefs', class: 'metadata' },
+    ],
   },
   Coverage: {
     entityType: 'Coverage',
-    fields: [{ field: 'reason', class: 'content' }],
+    fields: [
+      { field: 'id', class: 'metadata' },
+      { field: 'subjectType', class: 'metadata' },
+      { field: 'subjectId', class: 'metadata' },
+      { field: 'capability', class: 'metadata' },
+      { field: 'from', class: 'metadata' },
+      { field: 'to', class: 'metadata' },
+      { field: 'status', class: 'metadata' },
+      { field: 'reason', class: 'content' },
+      { field: 'evidenceRefs', class: 'metadata' },
+    ],
   },
   AssetDefinition: {
     entityType: 'AssetDefinition',
     fields: [
+      { field: 'id', class: 'metadata', minimumDependency: true },
+      { field: 'type', class: 'metadata', minimumDependency: true },
+      { field: 'canonicalName', class: 'metadata', minimumDependency: true },
       { field: 'displayName', class: 'content' },
       { field: 'upstreamIdentity', class: 'metadata', minimumDependency: true },
     ],
@@ -111,19 +232,42 @@ const CONTRACTS: Partial<Record<KnownReplicationEntityType, ReplicationEntityCon
   AssetBinding: {
     entityType: 'AssetBinding',
     fields: [
+      { field: 'id', class: 'metadata' },
+      { field: 'assetId', class: 'metadata' },
+      { field: 'installationId', class: 'metadata' },
+      { field: 'runtimeProfileId', class: 'metadata' },
       { field: 'path', class: 'path' },
       { field: 'source', class: 'content' },
+      { field: 'version', class: 'metadata' },
     ],
   },
-  AssetStateObservation: { entityType: 'AssetStateObservation', fields: [] },
+  AssetStateObservation: {
+    entityType: 'AssetStateObservation',
+    fields: [
+      { field: 'id', class: 'metadata' },
+      { field: 'assetBindingId', class: 'metadata' },
+      { field: 'state', class: 'metadata' },
+      { field: 'value', class: 'metadata' },
+      { field: 'observedAt', class: 'metadata' },
+      { field: 'evidenceRefs', class: 'metadata' },
+    ],
+  },
   ToolDefinition: {
     entityType: 'ToolDefinition',
-    fields: [{ field: 'displayName', class: 'content' }],
+    fields: [
+      { field: 'id', class: 'metadata' },
+      { field: 'canonicalName', class: 'metadata' },
+      { field: 'displayName', class: 'content' },
+      { field: 'sourceType', class: 'metadata' },
+      { field: 'assetDefinitionId', class: 'metadata' },
+      { field: 'installationId', class: 'metadata' },
+      { field: 'schemaHash', class: 'metadata' },
+    ],
   },
 }
 
-export function getReplicationEntityContract(entityType: KnownReplicationEntityType): ReplicationEntityContract {
-  return CONTRACTS[entityType] ?? { entityType, fields: [] }
+export function getReplicationEntityContract(entityType: KnownReplicationEntityType): ReplicationEntityContract | undefined {
+  return CONTRACTS[entityType]
 }
 
 const CREDENTIAL_KEY = /^(?:api[-_]?key|token|access[-_]?token|refresh[-_]?token|password|passwd|authorization|cookie|secret|private[-_]?key)$/i
@@ -178,6 +322,7 @@ export function applyReplicationFieldPolicy(input: {
   if (input.historyState === 'dependency-minimized') return { state: 'omitted', reason: 'dependency-minimized' }
   if (input.value === undefined) return { state: 'omitted', reason: 'not-captured' }
   if (input.value === null) return { state: 'null' }
+  if (input.fieldClass === 'unclassified') return { state: 'omitted', reason: 'policy' }
 
   if (input.policy.mode === 'metadata-only' && input.fieldClass !== 'metadata') {
     return { state: 'omitted', reason: 'policy' }
