@@ -230,3 +230,35 @@ test('H7 atomically retires G1 only when staged G2 is explicitly activated', asy
     await storage.close()
   }
 })
+
+test('H7 rejects a node-scoped Host that claims shared Wire scope before persisting state', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  try {
+    await storage.migrate()
+    const store = new SqliteHubReplicaStore(storage.executor)
+    const forgedHost = entity({
+      entityType: 'Host',
+      scope: 'shared',
+      originEntityId: 'host-forged-scope',
+      entityVersion: 1,
+      body: { name: 'forged' },
+      replicaKey: replicaKeyFor(createOriginEntityRef('node-a', 'Host', 'host-forged-scope')),
+    })
+
+    await assert.rejects(
+      importReplicationBatch({ store, batch: baseBatch(1, [forgedHost]) }),
+      (error: any) => error?.code === 'ENTITY_SCOPE_INVALID',
+    )
+
+    assert.equal(await store.getStream('stream-a'), undefined)
+    assert.equal(await store.getGeneration('node-a', 'gen-a'), undefined)
+    assert.equal(await store.hasEntity({
+      originNodeId: 'node-a',
+      generationId: 'gen-a',
+      entityType: 'Host',
+      originEntityId: 'host-forged-scope',
+    }), false)
+  } finally {
+    await storage.close()
+  }
+})
