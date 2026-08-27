@@ -53,6 +53,11 @@ const migrations: readonly Migration[] = [
     name: 'replication-change-progress',
     fileName: '009-replication-change-progress.sql',
   },
+  {
+    version: 10,
+    name: 'hub-remote-replica-store',
+    fileName: '010-hub-remote-replica-store.sql',
+  },
 ]
 
 async function readMigrationSql(fileName: string): Promise<string> {
