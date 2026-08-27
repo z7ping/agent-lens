@@ -4,6 +4,7 @@ import {
   SHARED_ROOT_KEY_ALGORITHM,
   createOriginEntityRef,
   replicaKeyFor,
+  replicationEntityScope,
   sharedGroupKeyFor,
   sharedRootKeyFor,
   type ConditionalSharedEntityType,
@@ -136,6 +137,12 @@ function conditionalSharedType(entityType: string): ConditionalSharedEntityType 
 
 function expectedConditionalAlgorithm(entityType: ConditionalSharedEntityType): PortableIdentity['algorithm'] {
   return entityType === 'Project' ? 'project-repository-v1' : 'asset-upstream-v1'
+}
+
+function expectedWireScope(entityType: string): WireEntityEnvelope['scope'] {
+  const scope = replicationEntityScope(entityType)
+  if (scope === 'not-replicated') protocolError(`${entityType} is not replicated on R1`)
+  return scope === 'shared' ? 'shared' : 'node'
 }
 
 function validateAndBuildIdentityState(input: {
@@ -298,6 +305,10 @@ export async function importReplicationBatch(input: {
     }
 
     for (const entity of input.batch.entities) {
+      const expectedScope = expectedWireScope(entity.entityType)
+      if (entity.scope !== expectedScope) {
+        throw new ReplicationProtocolError('ENTITY_SCOPE_INVALID', `${entity.entityType} scope mismatch: expected ${expectedScope}`)
+      }
       const origin = createOriginEntityRef(input.batch.nodeId, entity.entityType, entity.originEntityId)
       const expectedReplicaKey = replicaKeyFor(origin)
       if (entity.replicaKey && entity.replicaKey !== expectedReplicaKey) {
@@ -317,7 +328,7 @@ export async function importReplicationBatch(input: {
         entityType: entity.entityType as KnownReplicationEntityType,
         originEntityId: entity.originEntityId,
         replicaKey: expectedReplicaKey,
-        scope: entity.scope,
+        scope: expectedScope,
         entityVersion: entity.entityVersion,
         contentHash: entity.contentHash,
         body: entity.body,
