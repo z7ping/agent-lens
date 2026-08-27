@@ -2,81 +2,79 @@ schema_version: "0.1"
 status: active
 
 goal:
-  summary: "继续 AgentLens 1.0 Alpha Hub，下一阶段实现 H3 R1 Protocol Core / Wire Contract"
+  summary: "继续 AgentLens 1.0 Alpha Hub，下一阶段实现 H4 Replication Policy / History Boundary"
 
 phase:
   type: implementation
-  summary: "H1 Node Runtime 与 H2 Replication Core / Shared Identity 已完成；下一步把冻结的 R1 长期协议语义落成可执行 DTO、Schema、Hash 与纯校验，不启动网络"
+  summary: "H1 Node Runtime、H2 Replication Identity、H3 R1 Protocol Core 已完成；下一步只实现出站复制策略与历史边界的纯变换，不联网、不落 Remote Store"
 
 scope:
   include:
-    - "建立独立 Replication Protocol R1.x 代码边界与版本常量"
-    - "Handshake / Batch / Entity Envelope 的版本化 DTO 与运行时 Schema / Validator"
-    - "Node Ref / Shared Ref 两类 Typed EntityRef Wire 模型"
-    - "Availability 的 value / real-null / redacted / 各类 omitted 显式状态"
-    - "Shared Identity Assertion Wire 模型，并复用 H2 Identity Algorithm / SharedKey 语义"
-    - "RFC 8785 / JCS 兼容 Canonical JSON + SHA-256 Entity / Batch content hash"
-    - "Protocol / Entity Version compatibility、Sequence / ACK / Gap / Reuse 的纯校验与稳定错误码"
-    - "R1 DTO / Schema / Hash / compatibility / sequence 语义测试"
+    - "Replication Policy 的 metadata-only / redacted / full 三种模式及持久 Revision 模型"
+    - "History Scope 的 include-existing / from-now 边界模型与 Revision"
+    - "Canonical Entity State -> R1 Wire Entity body / Availability 的确定性纯变换"
+    - "字段级 policy allow / redact / omit 规则，以及 credential / secret 永久保护门禁"
+    - "from-now History Boundary 对普通历史、依赖最小形态与 Reconciliation 的授权判定"
+    - "Policy 收紧/放宽的 revision 语义与是否允许历史 backfill 的纯决策"
+    - "Minimum Dependency Shape 契约与 policy/history transform 测试"
   exclude:
-    - "真实 HTTP / HTTPS Route、Socket、Pairing、TLS、Request Signature"
-    - "Replication Policy 内容变换与 History Boundary 执行"
+    - "真实 HTTP / HTTPS、Pairing、TLS、Request Signature"
     - "Remote Replica SQLite Schema / Migration / transactional import"
-    - "Bootstrap / Outbox / Reconciliation / Replica Generation Runtime"
+    - "Durable Outbox / ACK Store / Reconciliation Runtime"
+    - "Bootstrap Runtime / Replica Generation staged activation"
     - "Hub Unified Read / Projection / Web / CLI"
     - "HA、多 Hub、Federation、Remote Web、Remote Control"
-    - "继续扩写长期 Hub 设计文档"
 
 constraints:
   required:
-    - "实现前读取 docs/1.0/HUB-REPLICATION-PROTOCOL.md，并以其冻结语义为边界"
-    - "写入前重新确认 main 最新状态"
-    - "H3 Protocol 与 Product SemVer / SQLite Migration 保持独立版本概念"
-    - "Wire Entity 不直接等同 Core Interface 或 SQLite Row"
-    - "Project / AssetDefinition 在 Wire 上保持 Node-scoped Origin，只允许附 Shared Identity Assertion"
-    - "所有 Validator 对未知必需语义 fail-closed，不静默丢字段后返回成功"
-    - "H3 保持 framework-agnostic，不依赖 Cordis、SQLite 或具体 HTTP 框架"
+    - "实现前读取 docs/1.0/CAPTURE-POLICY.md、HUB-DESIGN.md 与 HUB-REPLICATION-PROTOCOL.md"
+    - "Capture Policy 与 Replication Policy 严格分离：本机可存不等于允许出站"
+    - "Replication Policy 只能减少本机已有内容，不能恢复 Capture 阶段已关闭或已脱敏的数据"
+    - "所有省略必须映射到 H3 Availability 的明确原因，不用 null / 空串 / hidden 占位"
+    - "from-now 必须有持久、可比较的 History Boundary 语义，Reconcile 不得绕过"
+    - "H4 保持 framework-agnostic，不依赖 Cordis、SQLite 或 Transport"
   forbidden:
     - "未经明确要求发布 npm 或创建 Release"
-    - "在 H3 提前实现真实网络同步、Pairing 或 Remote Store"
-    - "通过字符串批量替换实现 Typed Ref 映射"
-    - "把 null / 空串 / hidden 占位符当作 Availability 状态"
-    - "修改 H2 ReplicaKey / Shared Identity 算法而不触发 Contract Review"
+    - "在 H4 提前实现网络、Pairing、Remote Store 或 Outbox Runtime"
+    - "Policy 放宽后自动补传此前未授权的历史正文"
+    - "Policy 收紧后为了填 Sequence gap 继续生成已禁止内容"
+    - "把 Replication Policy 状态写入 Canonical Observation"
   frozen:
     - "H1 persistent nodeId + capability-driven Composition"
-    - "H2 Entity Scope Registry、agentlens-replica-r1、Shared Root / Conditional Shared 语义"
-    - "AgentProduct Shared Root；Project / AssetDefinition Conditional Shared 但 Wire Origin 仍为 Node scope"
-    - "R1 Node Ref 与 Shared Ref 只有两类，Alpha 禁止跨 Node direct Ref"
-    - "R1 使用 Canonical JSON + SHA-256 语义 Hash；Raw HTTP Body Hash 属于后续 Request Signature 边界"
+    - "H2 Entity Scope Registry、ReplicaKey / Shared Identity 算法"
+    - "H3 R1 Wire DTO、Typed Ref、Availability、Compatibility、Semantic Hash、Sequence 语义"
+    - "Project / AssetDefinition Wire Origin 始终为 Node scope"
     - "Local-first、单 Hub 星型拓扑、不提供 Remote Control"
   deferred:
-    - action: "H4+ Replication Policy / History Boundary / Storage / Security / E2E / Unified Read"
-      until: "H3 R1 Protocol Core / Wire Contract 完成并验证"
+    - action: "H5+ durable replication state / bootstrap-outbox / remote storage / security / unified read"
+      until: "H4 Replication Policy / History Boundary 完成并验证"
 
 acceptance:
-  - "R1 Protocol Version、Identity Algorithm、Entity Version 可以独立协商 / 拒绝"
-  - "未知 Entity Type / 未支持 Entity Version 明确返回稳定错误，不静默忽略"
-  - "Project / AssetDefinition Entity Envelope 始终使用 Node Origin Ref，可选附 Shared Identity Assertion"
-  - "Typed Ref 只允许 Node Ref / Shared Root Ref，无法构造 Alpha 跨 Node direct Ref"
-  - "Availability 能无歧义区分真实 null、redacted 与各类 omitted 原因"
-  - "Canonical JSON 对对象键顺序稳定，SHA-256 content hash 确定"
-  - "Sequence exact retry / reuse conflict / gap / next sequence 语义有纯测试覆盖"
-  - "H3 不引入 HTTP Server、SQLite Migration、Pairing/TLS 或 Replication Runtime 生命周期"
+  - "metadata-only 不产生 Prompt / Tool 正文，只保留允许的结构元数据"
+  - "redacted 对明确敏感字段输出 redacted Availability，并保持结构可解释"
+  - "full 也不能复制凭据、私钥、token 等永久禁止内容"
+  - "Capture 阶段未保存的数据不能被 Replication Policy 恢复"
+  - "from-now 边界前普通实体正文返回 omitted(history-boundary)，必要依赖只能生成 minimum dependency shape"
+  - "Reconciliation 使用同一 History Boundary，不会把旧历史绕过授权补回"
+  - "Policy 放宽默认不触发未授权历史 backfill，必须有显式授权决策"
+  - "Policy 收紧能给出需要 stream rollover / reconcile 的纯决策，不生成已禁止 payload"
+  - "H4 不引入网络、SQLite Migration 或 Replication Runtime 生命周期"
 
 progress:
   current:
     - "H1 已实现 persistent Node Identity、四种 Capability Profile、ctx.node Runtime Service 与 capability-driven Source composition"
     - "H2 已实现 Entity Scope Registry、ReplicaKey / SharedKey、Portable Identity、Shared Root / Shared Group / Membership"
-    - "H2 Shared Identity 保留 Origin Identity / ReplicaKey，不改写本机 Canonical ID 或领域 FK"
-    - "H2 Replication Core 通过 @agent-lens/core/replication 子路径暴露，生产代码不依赖 Cordis、SQLite、Transport 或 Node crypto"
+    - "H3 已实现 @agent-lens/protocol/replication：R1 DTO、Typed Ref、Availability、Handshake compatibility、Entity/Batch/Tombstone hash、Sequence/ACK 校验"
+    - "H3 Protocol Core 与 Local Read Protocol 共用现有 @agent-lens/protocol workspace，但通过 ./replication 子路径隔离；未引入新 workspace / lockfile 噪音"
   next:
-    - "先建立 R1 Protocol DTO / Schema / stable error code 的最小闭环"
-    - "再实现 Canonical JSON / content hash 与 Sequence / ACK compatibility 纯校验"
+    - "先定义 Replication Policy / History Boundary 的纯模型与 revision 规则"
+    - "再实现 Canonical-to-Wire field transform、Availability 与 minimum dependency shape 测试"
 
 decisions:
-  - "H2 暂不新增 replication-core workspace；在没有独立 Runtime/Storage 消费者前保留 @agent-lens/core/replication 子路径，避免无价值 lockfile 噪音"
-  - "H2 Portable Identity 采用保守合并：未知 Provider 宁可产生假阴性，也不猜测大小写等语义制造误合并"
-  - "H3 开始后精确 Wire DTO / Schema / Error Enum 由代码与测试成为权威来源，不在长期 Markdown 手工复制第二份字段表"
+  - "H2 暂不新增 replication-core workspace；保留 @agent-lens/core/replication 子路径"
+  - "H3 不新增 replication-protocol workspace；当前由 @agent-lens/protocol/replication 作为 Wire 权威实现，未来出现独立发行/依赖需求时再抽包"
+  - "Handshake 可选 Identity / Entity 能力只取交集；只有明确 required 的算法或实体类型缺少共同版本才拒绝"
+  - "H3 Semantic Hash 与未来 Raw HTTP Body Signature Hash 保持分离"
   - "只有改变冻结长期不变量时才发起 ADR / Contract Review"
 
 repository:
