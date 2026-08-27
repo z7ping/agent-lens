@@ -53,6 +53,26 @@ function availability(value: JsonValue | undefined): ReplicationAvailability {
   return { state: 'value', value }
 }
 
+function localJsonValue(value: unknown, depth = 0): JsonValue {
+  if (depth > 32) return '[max-depth]'
+  if (value === null) return null
+  if (typeof value === 'string' || typeof value === 'boolean') return value
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  if (typeof value === 'bigint') return value.toString()
+  if (Array.isArray(value)) {
+    return value.map(item => item === undefined ? null : localJsonValue(item, depth + 1))
+  }
+  if (typeof value === 'object') {
+    const output: Record<string, JsonValue> = {}
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+      if (item === undefined || typeof item === 'function' || typeof item === 'symbol') continue
+      output[key] = localJsonValue(item, depth + 1)
+    }
+    return output
+  }
+  return null
+}
+
 function localSessionBody(session: LogicalSession): Readonly<Record<string, ReplicationAvailability>> {
   return {
     id: availability(session.id),
@@ -82,7 +102,7 @@ function localObservationBody(observation: CanonicalObservation): Readonly<Recor
     canonicalSequence: availability(observation.canonicalSequence),
     occurredAt: availability(observation.occurredAt),
     capturedAt: availability(observation.capturedAt),
-    payload: availability(observation.payload),
+    payload: availability(localJsonValue(observation.payload)),
     evidenceRefs: availability(observation.evidenceRefs),
   }
 }
