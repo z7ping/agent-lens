@@ -9,30 +9,20 @@ import {
   type SharedIdentityAssertion,
   type WireEntityEnvelope,
   type WireEntityRef,
+  type WireTombstone,
 } from './types'
-import { computeBatchContentHash, computeEntityContentHash } from './canonical-json'
+import {
+  computeBatchContentHash,
+  computeEntityContentHash,
+  computeTombstoneContentHash,
+} from './canonical-json'
 
 export const SUPPORTED_ENTITY_VERSIONS: Readonly<Record<string, readonly number[]>> = Object.freeze({
-  AgentProduct: [1],
-  Host: [1],
-  AgentInstallation: [1],
-  RuntimeProfile: [1],
-  Project: [1],
-  Workspace: [1],
-  LogicalSession: [1],
-  SourceSession: [1],
-  SessionRelationship: [1],
-  AgentActor: [1],
-  SourceRecord: [1],
-  CanonicalObservation: [1],
-  Evidence: [1],
-  ObservationEvidence: [1],
-  Coverage: [1],
-  CapabilityDeclaration: [1],
-  AssetDefinition: [1],
-  AssetBinding: [1],
-  AssetStateObservation: [1],
-  ToolDefinition: [1],
+  AgentProduct: [1], Host: [1], AgentInstallation: [1], RuntimeProfile: [1], Project: [1],
+  Workspace: [1], LogicalSession: [1], SourceSession: [1], SessionRelationship: [1],
+  AgentActor: [1], SourceRecord: [1], CanonicalObservation: [1], Evidence: [1],
+  ObservationEvidence: [1], Coverage: [1], CapabilityDeclaration: [1], AssetDefinition: [1],
+  AssetBinding: [1], AssetStateObservation: [1], ToolDefinition: [1],
 })
 
 export const SUPPORTED_IDENTITY_ALGORITHMS = Object.freeze([
@@ -51,10 +41,7 @@ export function assertProtocolCompatible(version: ProtocolVersion): void {
 
 export function assertIdentityAlgorithmSupported(algorithm: string): void {
   if (!(SUPPORTED_IDENTITY_ALGORITHMS as readonly string[]).includes(algorithm)) {
-    throw new ReplicationProtocolError(
-      'IDENTITY_ALGORITHM_UNSUPPORTED',
-      `Unsupported identity algorithm: ${algorithm}`,
-    )
+    throw new ReplicationProtocolError('IDENTITY_ALGORITHM_UNSUPPORTED', `Unsupported identity algorithm: ${algorithm}`)
   }
 }
 
@@ -67,32 +54,20 @@ export function assertSharedIdentityAssertion(assertion: SharedIdentityAssertion
 
 export function assertEntityVersionSupported(entityType: string, version: number): void {
   const supported = SUPPORTED_ENTITY_VERSIONS[entityType]
-  if (!supported) {
-    throw new ReplicationProtocolError('ENTITY_TYPE_UNSUPPORTED', `Unsupported entity type: ${entityType}`)
-  }
+  if (!supported) throw new ReplicationProtocolError('ENTITY_TYPE_UNSUPPORTED', `Unsupported entity type: ${entityType}`)
   if (!supported.includes(version)) {
-    throw new ReplicationProtocolError(
-      'ENTITY_VERSION_UNSUPPORTED',
-      `Unsupported ${entityType} entity version: ${version}`,
-    )
+    throw new ReplicationProtocolError('ENTITY_VERSION_UNSUPPORTED', `Unsupported ${entityType} entity version: ${version}`)
   }
 }
 
 export function assertWireEntityRef(ref: WireEntityRef): void {
-  if (!ref.entityType.trim()) {
-    throw new ReplicationProtocolError('ENTITY_REFERENCE_INVALID', 'Entity reference type must not be empty')
-  }
+  if (!ref.entityType.trim()) throw new ReplicationProtocolError('ENTITY_REFERENCE_INVALID', 'Entity reference type must not be empty')
   if (ref.kind === 'node') {
-    if (!ref.originEntityId.trim()) {
-      throw new ReplicationProtocolError('ENTITY_REFERENCE_INVALID', 'Node reference originEntityId must not be empty')
-    }
+    if (!ref.originEntityId.trim()) throw new ReplicationProtocolError('ENTITY_REFERENCE_INVALID', 'Node reference originEntityId must not be empty')
     return
   }
   if (ref.entityType !== 'AgentProduct' || !ref.sharedKey.trim()) {
-    throw new ReplicationProtocolError(
-      'ENTITY_REFERENCE_INVALID',
-      'R1 shared references may target AgentProduct Shared Root only',
-    )
+    throw new ReplicationProtocolError('ENTITY_REFERENCE_INVALID', 'R1 shared references may target AgentProduct Shared Root only')
   }
 }
 
@@ -104,9 +79,7 @@ export function assertAvailability(value: Availability): void {
 
 export function assertEntityEnvelope(entity: WireEntityEnvelope): void {
   assertEntityVersionSupported(entity.entityType, entity.entityVersion)
-  if (!entity.originEntityId.trim()) {
-    throw new ReplicationProtocolError('BATCH_INVALID', 'originEntityId must not be empty')
-  }
+  if (!entity.originEntityId.trim()) throw new ReplicationProtocolError('BATCH_INVALID', 'originEntityId must not be empty')
   if ((entity.entityType === 'Project' || entity.entityType === 'AssetDefinition') && entity.scope !== 'node') {
     throw new ReplicationProtocolError('ENTITY_SCOPE_INVALID', `${entity.entityType} must remain node scoped on R1 wire`)
   }
@@ -124,6 +97,17 @@ export function assertEntityEnvelope(entity: WireEntityEnvelope): void {
   }
 }
 
+export function assertTombstone(tombstone: WireTombstone): void {
+  if (!SUPPORTED_ENTITY_VERSIONS[tombstone.entityType]) {
+    throw new ReplicationProtocolError('ENTITY_TYPE_UNSUPPORTED', `Unsupported tombstone entity type: ${tombstone.entityType}`)
+  }
+  if (!tombstone.originEntityId.trim()) throw new ReplicationProtocolError('BATCH_INVALID', 'Tombstone originEntityId must not be empty')
+  const { contentHash: _contentHash, ...withoutHash } = tombstone
+  if (tombstone.contentHash !== computeTombstoneContentHash(withoutHash)) {
+    throw new ReplicationProtocolError('ENTITY_HASH_MISMATCH', `${tombstone.entityType} tombstone contentHash mismatch`)
+  }
+}
+
 export function assertReplicationBatch(batch: ReplicationBatch): void {
   assertProtocolCompatible(batch.protocol)
   if (!Number.isInteger(batch.sequence) || batch.sequence < 1) {
@@ -131,6 +115,7 @@ export function assertReplicationBatch(batch: ReplicationBatch): void {
   }
   for (const entity of batch.entities) assertEntityEnvelope(entity)
   for (const assertion of batch.identityPromotions) assertSharedIdentityAssertion(assertion)
+  for (const tombstone of batch.tombstones ?? []) assertTombstone(tombstone)
   const { contentHash: _contentHash, ...withoutHash } = batch
   if (batch.contentHash !== computeBatchContentHash(withoutHash)) {
     throw new ReplicationProtocolError('BATCH_HASH_MISMATCH', 'Batch contentHash mismatch')
