@@ -1,9 +1,14 @@
 import { existsSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { backupLocalPlugin } from '@agent-lens/backup-local'
 import { capturePolicyPlugin } from '@agent-lens/capture-policy'
+import {
+  capabilitiesForProfile,
+  loadOrCreateNodeIdentity,
+  resolveAgentLensDataRoot,
+  resolveAgentLensRuntimeProfile,
+} from '@agent-lens/node-identity'
 import {
   SESSION_SUMMARY_PROJECTION_ID,
   sessionSummaryProjectionPlugin,
@@ -34,10 +39,14 @@ import {
 } from './projection-readiness.js'
 import { profiledDshSourcePlugin } from './sources/dsh-profiled.js'
 
+const dataRoot = resolveAgentLensDataRoot()
+const nodeIdentity = loadOrCreateNodeIdentity(dataRoot)
+const runtimeProfile = resolveAgentLensRuntimeProfile()
+const capabilities = capabilitiesForProfile(runtimeProfile)
 const dbPath = process.env.AGENT_LENS_DB_PATH
-  ?? join(homedir(), '.agent-lens', '1.0', 'agent-lens.db')
+  ?? join(dataRoot, 'agent-lens.db')
 const vaultPath = process.env.AGENT_LENS_VAULT_PATH
-  ?? join(homedir(), '.agent-lens', '1.0', 'vault')
+  ?? join(dataRoot, 'vault')
 const configuredPort = process.env.AGENT_LENS_PORT
   ? Number(process.env.AGENT_LENS_PORT)
   : DEFAULT_AGENT_LENS_HTTP_PORT
@@ -55,12 +64,14 @@ app.use(sqliteStoragePlugin, { path: dbPath })
 app.useRuntime(coreServicesPlugin)
 app.useRuntime(sessionSummaryProjectionPlugin)
 app.useRuntime(capturePolicyPlugin)
-app.use(codexSourcePlugin)
-app.use(claudeSourcePlugin)
-app.use(piSourcePlugin)
-app.use(hermesSourcePlugin)
-app.use(openCodeSourcePlugin)
-app.use(profiledDshSourcePlugin)
+if (capabilities.localCapture) {
+  app.use(codexSourcePlugin)
+  app.use(claudeSourcePlugin)
+  app.use(piSourcePlugin)
+  app.use(hermesSourcePlugin)
+  app.use(openCodeSourcePlugin)
+  app.use(profiledDshSourcePlugin)
+}
 app.useRuntime(backupLocalPlugin, { vaultPath })
 app.use(httpSurfacePlugin, { port: configuredPort })
 app.use(webPlugin, { staticDir: webRoot })
@@ -75,6 +86,10 @@ let sessionSummaryProjectionReady = false
 function runtimeAge(): string {
   const seconds = Math.max(0, Math.round((Date.now() - startedAt) / 1000))
   return `${seconds}s`
+}
+
+function capabilitySummary(): string {
+  return `localCapture=${capabilities.localCapture} replicationUpstream=${capabilities.replicationUpstream} hubAccept=${capabilities.hubAccept}`
 }
 
 function logSourceFailures(failures: RegisteredSourceFailure[]): void {
@@ -137,10 +152,14 @@ try {
   console.info(
     `[AgentLens] 1.0 runtime started (db: ${dbPath}, mode=${daemonMode}, interactive=${interactiveTerminal}, pid=${process.pid}, ppid=${process.ppid})`,
   )
+  console.info(`[AgentLens] node: ${nodeIdentity.nodeId} profile=${runtimeProfile} ${capabilitySummary()}`)
   console.info(`[AgentLens] Web/UI: http://127.0.0.1:${configuredPort} (root: ${webRoot})`)
   console.info(`[AgentLens] backup vault: ${vaultPath}`)
   console.info(`[AgentLens] capture policy: prompt=${app.context.capturePolicy.modeFor('prompt')} tool=${app.context.capturePolicy.modeFor('tool')} config=${app.context.capturePolicy.modeFor('config')} environment=${app.context.capturePolicy.modeFor('environment')}`)
   console.info(`[AgentLens] enabled sources: ${app.context.capturePolicy.settings.enabledSources.join(', ') || '(none)'}`)
+  if (!capabilities.localCapture) {
+    console.info('[AgentLens] local source capture disabled by runtime profile')
+  }
 
   reuseSessionSummaryProjection = await beginSessionSummaryProjectionRun(app.context.storage)
   sessionSummaryProjectionReady = reuseSessionSummaryProjection
