@@ -299,6 +299,8 @@ SQLite Repository 实现本身保持 Cordis-independent；`storage-sqlite` 的�
 
 Storage 可以暴露只读的 Projection 优化 Reader。当前 SQLite 提供会话摘要聚合 Reader，避免任务列表为每个会话重复加载全部 Observation；它不保存第二份事实，结果仍完全由 Canonical 表重建。
 
+Hub Alpha 的 Remote Replica 不改变以上 Local Canonical 语义。Hub 使用一个默认 Storage Boundary / SQLite，但 Remote Replica 可以使用独立持久化表示来原生保存 `omitted / redacted`，再通过 Unified Read Repository 与本机 Canonical 数据共同提供给 Projection；详见 `docs/1.0/HUB-REPLICA-STORAGE-CONTRACT.md`。
+
 ## 12. Projections
 
 Projection 是派生读模型，不是第二份事实来源。
@@ -323,6 +325,8 @@ Tool Usage 直接从 `tool.call` / `tool.result` Observation 派生。
 - Claude `Skill` Tool 中明确给出的 Skill 参数。
 
 普通 Bash / Read / Write 调用不会被强行归入某种 Asset。
+
+Hub Alpha 进入 H8 后，Projection 必须通过正式 Unified Read Contract 读取 Local Canonical + Active Remote Replica，并显式处理字段 availability；不得把 Remote omitted 字段伪造成空值，也不得直接读取 Replica 私表。
 
 ## 13. Protocol 与 HTTP Surface
 
@@ -350,6 +354,8 @@ API 路由优先于 SPA / 静态资源 fallback。
 `/api/v1/health` 除 Protocol 与 Storage 状态外，新版 Daemon 还报告运行时管理来源、运行模式、PID 与启动时间。该 `runtime` 字段在 1.0 协议中按向后兼容方式扩展：新版 Daemon 必须返回，新版客户端仍需容忍较早的 1.0 Daemon 未返回该字段。
 
 `surface-http` 的 Server / DTO 处理逻辑保持普通 TypeScript；其插件入口直接作为 Cordis Plugin 订阅 `observation/committed` 并管理 Surface 生命周期。
+
+Hub 统一读模型中，本机 Entity 保持现有 Local Canonical ID，远程 Entity 使用保留 namespace 的 ReplicaKey；SharedGroupKey 只用于聚合身份。Web 必须把 ID 当 opaque string，不靠前缀解析业务语义。
 
 ## 14. 实时更新
 
@@ -562,80 +568,95 @@ Windows 无窗口后台任务与 Hook Runner 都只是运维 / 执行包装。�
 
 ## 22. 多机 Hub 架构
 
-状态：**架构与实现前 Contract 已收口，Alpha 功能尚未实现。** 入口见 `docs/1.0/HUB-DESIGN-INDEX.md`，长期决策见 `docs/adr/0007-multi-machine-hub-local-first-canonical-replication.md`。
+状态：**Alpha 设计已冻结，功能尚未实现。** 入口见 `docs/1.0/HUB-DESIGN-INDEX.md`，长期决策见 ADR-0007。
 
-每个 AgentLens 实例都是一个持久 Node。Standalone、普通接入节点、Hub、Pure Hub 是同一个 `AgentLensApplication` 的能力组合，不是四套程序；Alpha 只允许四个已定义 Profile，不允许 `replicationUpstream + hubAccept` 形成隐藏级联 Hub。
+每个 AgentLens 实例都是持久 Node。Standalone、普通接入节点、Hub、Pure Hub 是同一 `AgentLensApplication` 的能力组合；Alpha 不允许 `replicationUpstream + hubAccept` 形成隐藏级联 Hub。
 
-Hub 继续 Local-first：
+Hub 保持 Local-first：
 
 ```text
-Native Source
-  -> Capture Policy
-  -> Local Canonical Store
-  -> Replication Policy
-  -> History Scope
-  -> Replication
-  -> Hub Unified Store
+Node Local Canonical
+  -> Replication Policy / History Scope
+  -> R1 Wire
+  -> Hub Remote Replica Store
+  -> Unified Read Repository
   -> Projection
   -> Unified Web
 ```
 
-Replication Policy 回答“哪些字段允许离开本机”；History Scope 独立回答“是否允许补传建立边界前已经存在的历史”。首次接入根据用户选择分支：
+Hub Storage 的正式含义：
 
 ```text
-Pair + choose Policy / History Scope
-  |
-  +-- include-existing
-  |     -> resumable Bootstrap
-  |     -> mandatory Reconciliation
-  |
-  +-- from-now
-        -> persist History Boundary
-        -> send only later facts + required dependency closure
-        -> Reconciliation still respects the boundary
-
-then -> Incremental
+one Hub Storage Boundary / one default SQLite
+├─ Local Canonical Store
+├─ Remote Replica Store
+├─ Shared Identity State
+├─ Replication Control Plane
+└─ Unified Read Repository
 ```
 
-因此“首次连接”不等于强制全历史 Bootstrap，也不能靠后续 Reconciliation 绕过 `from-now` 的授权边界。
+因此：
 
-当前本机 Canonical ID 不直接提升为跨机全局主键。现有 `Host.id` 仍有单机身份算法约束，机器作用域实体通过：
+- 不按 Node 分数据库；
+- 也不要求 Remote Replica 直接写进现有 Local Canonical SQL Row；
+- Local Canonical 继续保持现有必填不变量；
+- Remote Replica 原生保存 `value / redacted / omitted`；
+- `metadata-only / redacted / full` 共用同一 Replica Storage Contract；
+- Projection 通过 Unified Read 获取 Local + active Remote，不直接访问 Replica 私表。
+
+首次接入独立选择：
 
 ```text
-ReplicaKey = stable(nodeId, entityType, originEntityId)
+Policy: metadata-only | redacted | full
+History: from-now | include-existing
 ```
 
-形成确定性跨机命名空间。Hub 保存 origin provenance，但不重新运行 Source Parser / `IdentityService` 猜测远程事实。Shared / Conditional Shared Entity 使用显式 Shared Identity、deterministic Merge 与来源 Assertion；未知 Entity 默认 Node-scoped。
+`from-now` 是持久 Boundary。Boundary 后新事实可以携带必要旧 dependency，但只允许 Minimum Dependency Shape；旧 title/path/body 等非必要历史字段继续 `omitted(history-boundary|dependency-minimized)`。
 
-Hub 本机不通过 HTTPS 自我复制，但它自己的 Node origin 仍必须参与 Shared Project / Asset 聚合。Project / Workspace 继续区分跨机器逻辑身份与具体设备路径。
-
-Durable Replication 使用：
+Remote Entity 使用独立 Replica namespace：
 
 ```text
-at-least-once transport
-+ immutable in-flight batch
-+ contiguous sequence / ACK
-+ deterministic hash / idempotent import
+ReplicaKey = stable('agentlens-replica-r1', nodeId, entityType, originEntityId)
+```
+
+Hub Local Entity 保持现有 Local ID；Remote Entity 对统一 API 使用 ReplicaKey；SharedGroupKey 只用于跨设备 Group / Filter / Aggregation。Web 把所有 ID 当 opaque string。
+
+Shared Identity：
+
+- AgentProduct：Shared Root；
+- Project / AssetDefinition：Origin Row + Shared Group Membership；
+- Promotion 只建立 Membership，不 Rewrite Workspace / Session / Observation / AssetBinding FK；
+- Shared Identity Algorithm 版本化，例如 `project-repository-v1 / asset-upstream-v1`；
+- Hub 必须根据 normalized portable identity 重算 SharedKey，不能只信 Node claimed value。
+
+Durable Replication：
+
+```text
+at-least-once
++ immutable in-flight Batch
++ contiguous Sequence / ACK
++ deterministic hash
++ idempotent Import
 + Canonical Reconciliation
 ```
 
-Cordis `observation/committed` 等事件只是低延迟 fast path，不是 Durable Replication Fact。普通 scan absence 不表示删除；删除使用 Tombstone。显式 Re-bootstrap 采用 staged Replica Generation，旧 active Generation 在新 Generation 完整校准和原子切换前继续可查询。
+Cordis Event 只做 fast path。普通 scan absence 不表示 delete；删除用 Tombstone。显式 Re-bootstrap 使用 staged Replica Generation，完成 Bootstrap + Reconcile + Validate 后才原子切换 active Generation。
 
-Policy 收紧必须立即阻止新的旧 Policy 出站。如果旧 Policy Batch 的提交结果不确定，不允许为了填 sequence gap 继续发送用户已经禁止的正文；通过 authenticated Stream Rollover + Reconciliation 恢复。
-
-Hub 使用统一 Canonical Store，不按 Node 分数据库。Node Registry、Stream / Cursor、Sequence Receipt、Replica Generation、Alias、Shared Assertion、Conflict、Tombstone 等属于 Replication Control Plane，不混入 Agent 行为 Observation。
+Policy 收紧立即停止新的旧 Policy 请求。Hub 已有旧 full 内容不自动 Purge；Remote Replica 必须能区分 current omitted 与 retained prior value，不能把旧值冒充当前 Revision fresh value。
 
 安全边界：
 
-- 现有 `surface-http` 继续只监听 `127.0.0.1:56789`；
-- Hub Replication 使用独立 authenticated HTTPS Surface；
-- Node 只主动连接 Hub，Hub 不反向访问 Node；
-- Pairing 使用短期一次性 Secret + Node Key Possession；
-- Hub Identity、Node Identity、TLS Identity 分离；Hub Identity 必须签名 Pairing Receipt / Handshake Proof；
-- 长期请求签名绑定 Hub / Node / Stream / Key / Method / Path / Timestamp / Nonce / Raw Body Hash；
-- `metadata-only` 不同步 Prompt / Tool 正文并默认隐藏完整本机路径，但仍会同步项目 / 仓库、Agent / Tool、时间等必要元数据，因此不是匿名模式；
-- Alpha 不内建 Remote Web 登录，也不提供远程 Agent / Shell / Hook / Skill 管理能力。
+- Local `surface-http` 继续只监听 `127.0.0.1:56789`；
+- Replication 使用独立 authenticated HTTPS Surface；
+- Node 只主动连接 Hub；
+- Pairing Secret + Node Key Possession；
+- Hub Identity / Node Identity / TLS Identity 分离；
+- Hub Identity 签 Pairing Receipt / Handshake Proof；
+- 长期 Request Signature 绑定 Hub / Node / Stream / Key / Method / Path / Timestamp / Nonce / Raw Body Hash；
+- Alpha 是 trusted-node 模型，不声称 Remote Attestation；
+- metadata-only 不是匿名模式；
+- Alpha 不内建 Remote Web Login，也不提供远程 Agent / Shell / Hook / Skill 管理。
 
-跨机器时间只做 best-effort 排序：Hub 保留 origin `occurredAt / capturedAt`，不以 `replicatedAt` 覆盖业务时间，也不因机器时钟相差毫秒就推断跨 Node 因果关系。
+跨 Node 时间只做 deterministic best-effort 排序。Hub 保留 origin `occurredAt / capturedAt`，不以 `replicatedAt` 覆盖业务时间。
 
-AgentLens Version、Replication Protocol 与 Storage Schema 独立演进。协议不兼容只暂停 Replication，本机采集、Canonical Commit、SQLite 与 Web 继续工作；推荐先升级 Hub，再滚动升级 Nodes。
+AgentLens Version、Replication Protocol、Identity Algorithm 与 Storage Schema 独立演进。协议 / 算法不兼容只暂停 Replication，本机采集、Canonical Commit、SQLite 与 Web 继续工作；推荐先升级 Hub，再滚动升级 Node。
