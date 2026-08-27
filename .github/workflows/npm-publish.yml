@@ -78,7 +78,7 @@ jobs:
       - name: Resolve npm dist-tag
         shell: bash
         run: |
-          NPM_TAG="$(node -e "const fs=require('node:fs'); const version=JSON.parse(fs.readFileSync('package.json','utf8')).version; const prerelease=(version.split('-')[1] || '').split('.')[0].toLowerCase(); const tags={alpha:'alpha',beta:'beta',rc:'rc'}; const tag=prerelease ? tags[prerelease] : 'latest'; if (!tag) { console.error('Unsupported prerelease channel: '+prerelease); process.exit(1) } process.stdout.write(tag)")"
+          NPM_TAG="$(node scripts/resolve-npm-dist-tag.mjs)"
           echo "NPM_TAG=$NPM_TAG" >> "$GITHUB_ENV"
           echo "npm dist-tag: $NPM_TAG"
 
