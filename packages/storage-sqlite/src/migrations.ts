@@ -43,6 +43,11 @@ const migrations: readonly Migration[] = [
     name: 'durable-replication-state',
     fileName: '007-durable-replication-state.sql',
   },
+  {
+    version: 8,
+    name: 'replication-canonical-change-journal',
+    fileName: '008-replication-canonical-change-journal.sql',
+  },
 ]
 
 async function readMigrationSql(fileName: string): Promise<string> {
