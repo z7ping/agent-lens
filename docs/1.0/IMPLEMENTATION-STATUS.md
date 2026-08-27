@@ -1,6 +1,6 @@
 # AgentLens 1.0 Alpha 实现状态
 
-更新日期：2026-08-27
+更新日期：2026-08-28
 
 本文只记录**当前真实已实现能力**与仍未实现的大项，不复制完整架构、协议或运维规则。
 
@@ -33,9 +33,15 @@
 - H3 已实现 Protocol / Identity Algorithm / Entity Version 的纯兼容协商，可选能力取交集，required 能力缺失时 fail-closed；
 - H3 已实现 Canonical JSON + 纯 TypeScript SHA-256 的 Entity / Batch / Tombstone 语义 Hash；
 - H3 已实现 Sequence / ACK 的 next / exact retry / reuse conflict / gap 纯决策；
-- H3 已将 Project / AssetDefinition Wire Scope 固定为 Node Origin，将 Alpha Shared Ref 限定为 AgentProduct Shared Root。
+- H3 已将 Project / AssetDefinition Wire Scope 固定为 Node Origin，将 Alpha Shared Ref 限定为 AgentProduct Shared Root；
+- H4 Replication Policy / History Boundary 通过 `@agent-lens/core/replication` 暴露，保持 framework-agnostic；
+- H4 已实现 `metadata-only / redacted / full` 三档出站策略及 Revision、`include-existing / from-now` History Boundary 及 Revision；
+- H4 已实现 Capture State -> Replication Availability 的单调变换，不能恢复 Capture 阶段已关闭或已脱敏的数据；
+- H4 已实现显式 Entity Field Contract、Minimum Dependency Shape、`from-now` 对 Bootstrap / Incremental / Reconcile 的统一授权语义；
+- H4 已实现凭据永久保护、redacted 路径用户目录遮蔽、策略收紧 / 放宽与 History Scope 变更的纯决策；
+- H4 出站字段默认 fail-closed：未登记新字段统一 `omitted(policy)`，H2 标记 `not-replicated` 的实体不能进入出站 Transform。
 
-H1/H2/H3 目前仍只是 Node Runtime、Replication Identity 与 Wire Protocol 基础。`node / hub / pure-hub` **不会**启动真实 Replication 网络行为，也没有 Remote Replica Store。
+H1-H4 目前仍只是 Node Runtime、Replication Identity、Wire Protocol 与出站策略基础。`node / hub / pure-hub` **不会**启动真实 Replication 网络行为，也没有 Remote Replica Store。
 
 禁止恢复 0.x Adapter / Importer Runtime、旧 `timeline / overview_*` 规范表、旧 Service Manager / PID 架构。
 
@@ -120,7 +126,7 @@ Hermes / OpenCode 详细边界见 `docs/1.0/HERMES-OPENCODE-SOURCES.md`。
 /api/v1/events
 ```
 
-Local Surface 继续只监听 loopback。H3 没有新增 Replication HTTP / HTTPS Route。
+Local Surface 继续只监听 loopback。H3/H4 没有新增 Replication HTTP / HTTPS Route。
 
 SSE 当前支持 Observation / Source Detection / Asset 变化通知、15 秒心跳、断线重连与快照校准；幂等 unchanged replay 不制造刷新噪声。
 
@@ -229,9 +235,16 @@ npm run build:dist
 - H3 Availability 的真实 null / redacted / omitted 原因区分；
 - H3 Project / AssetDefinition Node Wire Scope 与 AgentProduct Shared Ref 约束；
 - H3 Entity / Batch / Tombstone semantic hash 防篡改；
-- H3 Sequence next / exact retry / reuse conflict / gap。
+- H3 Sequence next / exact retry / reuse conflict / gap；
+- H4 metadata-only / redacted / full 字段变换；
+- H4 Capture State 单调约束与 full 模式凭据保护；
+- H4 redacted Windows/macOS/Linux 用户目录遮蔽；
+- H4 from-now 在 Bootstrap / Reconcile 上一致阻断旧历史；
+- H4 Minimum Dependency Shape；
+- H4 Policy / History Scope transition 不自动回填历史；
+- H4 未登记新字段默认拒绝与 not-replicated Entity fail-closed。
 
-本文不把未重新核验的 CI 状态写成“已通过”。
+H4 最终候选已通过 Linux / macOS / Windows 三平台主 CI，其中 Windows 还覆盖 Desktop package、Smoke、共享 Hook Dispatcher 与 npm lifecycle。
 
 ## 9. 仍需实机验收
 
@@ -250,7 +263,7 @@ npm run build:dist
 
 ## 10. 多机 Hub
 
-状态：**长期设计已冻结；H1 Node Runtime、H2 Replication Core / Shared Identity、H3 R1 Protocol Core 已实现，H4+ 尚未实现。**
+状态：**长期设计已冻结；H1 Node Runtime、H2 Replication Core / Shared Identity、H3 R1 Protocol Core、H4 Replication Policy / History Boundary 已实现；持久复制、网络和 Hub Remote Store 尚未实现。**
 
 当前已实现基础：
 
@@ -266,6 +279,10 @@ npm run build:dist
  -> ReplicaKey / SharedKey
  -> Portable Identity
  -> Shared Root / Shared Group / Membership
+ -> Replication Policy / History Boundary
+ -> explicit Entity Field Contract
+ -> Minimum Dependency Shape
+ -> fail-closed outbound transform
 
 @agent-lens/protocol/replication
  -> R1 Wire DTO
@@ -276,13 +293,12 @@ npm run build:dist
  -> stable Protocol Core error codes
 ```
 
-H3 仍只是纯协议代码，不表示 Hub 已能通过网络接收或持久化远端数据。
+H4 仍是纯策略 / 纯变换代码，不表示 Hub 已能通过网络接收或持久化远端数据。
 
 当前仍**没有**实现：
 
 ```text
 Node long-term key material
-Replication Policy / History Boundary transform
 Durable Replication state / Outbox / Reconciliation
 R1 HTTP / HTTPS endpoints
 Pairing / TLS / request signatures / serverProof
@@ -321,5 +337,8 @@ Tombstone generation / persistence / purge / recovery operations
 - Wire Entity 不等于 Core Interface 或 SQLite Row；
 - Project / AssetDefinition 在 R1 Wire 始终保持 Node Origin；
 - Protocol 不兼容只阻塞 Replication，不阻塞本机采集；
+- Capture Policy 与 Replication Policy 分离，Replication 不能恢复本机未采集 / 已脱敏内容；
+- Replication 新字段默认不出站，必须先进入显式 Field Contract；
+- `from-now` History Boundary 对 Reconciliation 同样有效；
 - Hub Remote Replica 不伪造 Local Canonical Fact；
 - Hub 不开放 Remote Control。
