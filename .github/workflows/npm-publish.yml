@@ -75,10 +75,12 @@ jobs:
       - name: Verify release tag matches package version
         run: node scripts/check-release-version.mjs
 
-      - name: Verify release is prerelease
+      - name: Resolve npm dist-tag
         shell: bash
         run: |
-          node -e "const p=require('./package.json'); if (!/-/.test(p.version)) { console.error('alpha workflow requires a prerelease version'); process.exit(1) }"
+          NPM_TAG="$(node -e "const fs=require('node:fs'); const version=JSON.parse(fs.readFileSync('package.json','utf8')).version; const prerelease=(version.split('-')[1] || '').split('.')[0].toLowerCase(); const tags={alpha:'alpha',beta:'beta',rc:'rc'}; const tag=prerelease ? tags[prerelease] : 'latest'; if (!tag) { console.error('Unsupported prerelease channel: '+prerelease); process.exit(1) } process.stdout.write(tag)")"
+          echo "NPM_TAG=$NPM_TAG" >> "$GITHUB_ENV"
+          echo "npm dist-tag: $NPM_TAG"
 
       - name: Verify Web presentation convergence
         run: npm run check:web-presentation
@@ -122,8 +124,8 @@ jobs:
         shell: bash
         run: gh release upload "$GITHUB_REF_NAME" release/*.tgz release/SHA256SUMS-npm.txt release/sbom.cdx.json --clobber
 
-      - name: Publish exact tarball to npm alpha tag
+      - name: Publish exact tarball to npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         shell: bash
-        run: npm publish "$(ls release/*.tgz)" --tag alpha --access public --provenance
+        run: npm publish "$(ls release/*.tgz)" --tag "$NPM_TAG" --access public --provenance
