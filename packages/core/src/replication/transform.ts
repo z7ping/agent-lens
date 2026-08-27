@@ -1,4 +1,5 @@
 import type { JsonValue } from '../domain/common'
+import { isReplicatedEntityType } from './scope'
 import type { KnownReplicationEntityType } from './types'
 import { authorizeHistory, type HistoryAuthorizationInput, type ReplicationHistoryPhase } from './history'
 import {
@@ -27,7 +28,32 @@ export interface ReplicationEntityTransformResult {
   historyAuthorization: 'full' | 'minimum-dependency' | 'blocked'
 }
 
+export class ReplicationPolicyError extends Error {
+  readonly code: 'ENTITY_NOT_REPLICATED' | 'ENTITY_CONTRACT_MISSING'
+
+  constructor(code: 'ENTITY_NOT_REPLICATED' | 'ENTITY_CONTRACT_MISSING', message: string) {
+    super(message)
+    this.name = 'ReplicationPolicyError'
+    this.code = code
+  }
+}
+
 export function transformReplicationEntity(input: ReplicationEntityTransformInput): ReplicationEntityTransformResult {
+  if (!isReplicatedEntityType(input.entityType)) {
+    throw new ReplicationPolicyError(
+      'ENTITY_NOT_REPLICATED',
+      `${input.entityType} is not part of the replication entity set`,
+    )
+  }
+
+  const contract = getReplicationEntityContract(input.entityType)
+  if (!contract) {
+    throw new ReplicationPolicyError(
+      'ENTITY_CONTRACT_MISSING',
+      `Replication field contract is missing for ${input.entityType}`,
+    )
+  }
+
   const historyInput: HistoryAuthorizationInput = {
     boundary: input.history,
     phase: input.phase,
@@ -36,13 +62,12 @@ export function transformReplicationEntity(input: ReplicationEntityTransformInpu
   if (input.dependencyRequired !== undefined) historyInput.dependencyRequired = input.dependencyRequired
 
   const history = authorizeHistory(historyInput)
-  const contract = getReplicationEntityContract(input.entityType)
   const fieldContracts = new Map(contract.fields.map(field => [field.field, field]))
   const body: Record<string, ReplicationAvailability> = {}
 
   for (const [field, value] of Object.entries(input.body)) {
     const contractField = fieldContracts.get(field)
-    const fieldClass: ReplicationFieldClass = contractField?.class ?? 'metadata'
+    const fieldClass: ReplicationFieldClass = contractField?.class ?? 'unclassified'
     let historyState: 'allowed' | 'history-boundary' | 'dependency-minimized' = 'allowed'
 
     if (history.kind === 'blocked') historyState = 'history-boundary'
