@@ -4,20 +4,18 @@ import { fileURLToPath } from 'node:url'
 import { backupLocalPlugin } from '@agent-lens/backup-local'
 import { capturePolicyPlugin } from '@agent-lens/capture-policy'
 import {
-  capabilitiesForProfile,
-  loadOrCreateNodeIdentity,
-  resolveAgentLensDataRoot,
-  resolveAgentLensRuntimeProfile,
-} from '@agent-lens/node-identity'
-import {
   SESSION_SUMMARY_PROJECTION_ID,
   sessionSummaryProjectionPlugin,
 } from '@agent-lens/projection-session'
 import {
   AgentLensApplication,
+  capabilitiesForProfile,
   coreServicesPlugin,
   discoverRegisteredSourceAssets,
+  loadOrCreateNodeIdentity,
   prepareRegisteredSources,
+  resolveAgentLensDataRoot,
+  resolveAgentLensRuntimeProfile,
   startRegisteredSourceCapture,
   syncRegisteredSourceHistory,
   type RegisteredSourceFailure,
