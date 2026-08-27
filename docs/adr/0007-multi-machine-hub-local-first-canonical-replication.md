@@ -1,38 +1,37 @@
 # ADR-0007：多机 Hub、Local-first 与 Canonical Replication
 
-状态：Accepted（2026-08-27 三次实现前复核）  
+状态：Accepted（2026-08-27 四次实现前复核，设计冻结）  
 日期：2026-08-27  
 范围：AgentLens 1.0 Alpha / Hub / Node Identity / Replication / Security / Protocol / Storage
 
 ## 背景
 
-AgentLens 1.0 是本地优先的 AI 编码 Agent 可观测工具：每台机器独立完成 Source 采集、Canonical Pipeline、SQLite 持久化、Projection 与 Web / Desktop 展示。多机能力目标是让多台 Windows / macOS / Linux 机器的数据可以在一个 Hub 中统一查看和聚合，同时不破坏 Local-first、Canonical Observation、Evidence、Cordis Runtime、Projection 和双发行边界。
+AgentLens 1.0 是本地优先的 AI 编码 Agent 可观测工具。每台机器独立完成 Source 采集、Canonical Pipeline、本地 SQLite 持久化、Projection 与 Web / Desktop 展示。
 
-本 ADR 接受后进行了多轮实现前复核。主方向不变，但修正了以下关键边界：
+多机 Hub 的目标，是让多台 Windows / macOS / Linux 机器的数据可以在一个 Hub 中统一查看与聚合，同时不破坏以下边界：
 
-1. `Node` 是 AgentLens 实例身份，不是与 Hub 互斥的 Runtime Role；
-2. 本机 Canonical ID 不保证跨机器全局唯一，不能直接当 Hub 全局主键；
-3. Shared Identity 需要确定性 Merge；
-4. Durable Outbox 不能只依赖 Cordis Event，必须有 Canonical Reconciliation；
-5. Replication Policy 与 History Scope 分离；
-6. Stream / ACK 与 Replica Generation 是不同状态维度；
-7. Hub Identity 必须真正参与 Pairing / Handshake 密码学证明；
-8. `Project` / `AssetDefinition` 这类 Conditional Shared 不能一部分走 Shared 主键 + FK Rewrite、一部分又保留本机 Origin Row；Alpha 固定采用 Origin Row + Shared Group Membership。
+- Local-first；
+- Canonical Observation / Evidence 仍由本机形成；
+- Cordis 仍是唯一 Runtime Plugin System；
+- Projection 仍是可重建读模型；
+- npm / Desktop 仍共用单一 Runtime / 数据根；
+- Hub 不成为远程控制平台。
 
-具体 Entity / Wire / Security / State 细节由 `docs/1.0/HUB-DESIGN-INDEX.md` 指向的下位 Contract 承载。
+本 ADR 经多轮实现前复核后冻结。具体 Entity、Wire、State、Storage、Security、Operations、UX 与测试细节由 `docs/1.0/HUB-DESIGN-INDEX.md` 指向的下位 Contract 承载。
 
 ## 决策
 
 ### 1. 每个 AgentLens 实例都是 Node；产品形态是能力组合
 
+底层能力：
+
 ```text
-AgentLens Node
-  localCapture        true | false
-  replicationUpstream true | false
-  hubAccept           true | false
+localCapture        true | false
+replicationUpstream true | false
+hubAccept           true | false
 ```
 
-Alpha 只允许：
+Alpha 只允许四个正式 Profile：
 
 ```text
 Standalone  true  false false
@@ -41,69 +40,101 @@ Hub         true  false true
 Pure Hub    false false true
 ```
 
-拒绝 `replicationUpstream && hubAccept`、纯转发节点和全 false 空运行时。
+拒绝：
 
-Node / Hub 不拆两套程序；能力切换允许要求重启 Daemon。
+- `replicationUpstream && hubAccept`；
+- `localCapture=false && replicationUpstream=true`；
+- 全 false 空运行时。
 
-### 2. Hub 是可选 Local-first 聚合层
+Node / Hub 不拆成两套程序或两套领域模型。能力切换 Alpha 可以要求重启 Daemon。
 
-每个启用本机采集的 Node 始终独立完成：
+### 2. Hub 是可选的 Local-first Replica + Aggregator
+
+本机采集链始终独立：
 
 ```text
 Native Source
  -> Normalize / Identity
  -> Canonical Observation / Evidence
- -> Local Storage
+ -> Local Canonical Store
  -> Local Projection / Web
 ```
 
-Hub / 网络 / 配对 / TLS / Protocol 失败不得阻塞本地 Pipeline。Hub 不是启动前置条件，也不是唯一事实库。
+Hub 不在线、网络中断、协议不兼容、配对撤销、TLS / Identity 失败，都不得阻塞本地 Source、Canonical Commit、SQLite 与 Web。
 
-### 3. Hub 是 Canonical Replica + Aggregator，不是第二个 Source Parser
+Hub 是 Replica + Aggregator，不是唯一事实库，也不是第二个 Source Parser。
+
+### 3. Node 形成事实，Hub 不重新解释远程 Source
+
+远程链路：
 
 ```text
-Node Native Source
- -> Node Canonical Store
+Node Canonical Store
  -> Replication Policy
  -> History Scope
- -> Replication
- -> Hub Unified Store
- -> Hub Projection
+ -> Versioned Wire DTO
+ -> Hub Remote Import
+ -> Remote Replica Store
+ -> Unified Read Repository
+ -> Projection
 ```
 
-Hub 不重新解析 Claude / Codex / Pi / Hermes / OpenCode，不重新调用普通 `ObservationService.commit()` 猜远程事实。
+Hub 不重新读取 Claude / Codex / Pi / Hermes / OpenCode 原生数据，不重新运行 Source Parser / Normalizer，也不通过普通 `ObservationService.commit()` 重新猜事实。
 
-### 4. 同步正式 Wire DTO，不同步 SQLite 或 Projection
+### 4. 同步 Wire DTO，不同步 SQLite 文件、SQLite Row 或 Projection
 
-Wire 至少覆盖形成完整事实图所需的持久 Canonical Entity State：Host、AgentProduct/Installation、RuntimeProfile、Project/Workspace、Session/Relationship、AgentActor、SourceRecord、Observation、Evidence、Coverage、Asset、ToolDefinition 等。
+Replication Wire 表达经过策略授权后的 Canonical Entity State，而不是 Storage Row。
 
-运行时 Capability、SourceRuntimeStatus、Checkpoint、Candidate、Projection/Summary/Usage/Overview 不作为 Canonical Replication Entity。
+禁止：
 
-禁止数据库文件 / Row 同步、Projection 事实化、Hub 重新依赖 Source Parser。
+- rsync / 复制 `agent-lens.db`；
+- 把 SQLite Row 直接定义成线上协议；
+- 同步 Projection / Summary / Usage / Overview 作为事实源；
+- 为 Hub 重新依赖具体 Source Parser。
+
+运行时 Capability、Checkpoint、Runtime Status、Candidate、Projection 等不进入 Canonical Replication Graph；需要时走 Control Plane。
 
 ### 5. 本机 Canonical ID 与跨机 ReplicaKey 分离
 
-当前 Host ID 只满足单机稳定性，因此 Node-scoped 与 Conditional Shared 的 Origin Entity 使用：
+现有本机 ID 只保证本机稳定性，不能证明跨机器全局唯一。
+
+Node-scoped 与 Conditional Shared Origin 使用确定性 Replica Namespace：
 
 ```text
-ReplicaKey = stable(nodeId, entityType, originEntityId)
+ReplicaKey = stable(
+  'agentlens-replica-r1',
+  nodeId,
+  entityType,
+  originEntityId
+)
 ```
 
-Hub 保留 originNodeId / originEntityId；发送端可提供 replicaKey 诊断值，但 Hub 必须自行重算验证。
+实现编码必须使用保留的 Replica 前缀 / 命名空间，与现有 `host-* / project-* / session-* / observation-*` 等 Local Canonical ID 域可区分。
 
-这只是 Replication Namespace，不是重新 Identity 推断。
-
-未来若要迁移本机 Host / Canonical Identity，必须独立 Contract Review / Migration。
-
-### 6. nodeId 使用持久 UUID；Host 与 Node Identity 分离
-
-每个数据根初始化持久随机 nodeId，例如：
+Hub 保留：
 
 ```text
-~/.agent-lens/1.0/node.json
+originNodeId
+originEntityId
 ```
 
-hostname/platform/arch 是可变元数据。Clone Detection 只有并发 runtime / sequence 分叉等强证据才可冻结；IP、hostname、sleep/wake 只能作为弱 diagnostics。
+Node 可发送 replicaKey 用于诊断，但 Hub 必须自行重算并验证。
+
+Hub Web / Protocol 中：
+
+- Hub 本机 Entity 可以继续暴露现有 Local Canonical ID；
+- Remote Entity 使用 ReplicaKey 作为统一查询 ID；
+- Shared Group Key 只标识聚合身份，不替代 Conditional Shared 的领域 FK。
+
+因此 `/review/:logicalSessionId` 等统一查询仍能用一个不碰撞的 opaque ID 定位本机或远程会话。
+
+### 6. nodeId 使用持久 UUID；Host Identity 不因 Hub 强制迁移
+
+每个 AgentLens 数据根首次初始化持久随机 `nodeId`。
+
+`nodeId` 表示 AgentLens 实例 / 数据根；hostname、platform、arch 只是可变元数据。
+
+当前 Host / Installation / Workspace 等 Canonical ID 规则不因 Hub 强制整库迁移。未来若要改变本机 Canonical Identity，必须单独 Contract Review / Migration。
 
 ### 7. Alpha 固定单 Hub 星型拓扑
 
@@ -114,48 +145,88 @@ hostname/platform/arch 是可变元数据。Clone Detection 只有并发 runtime
       Node A Node B Node C
 ```
 
-一个 Node 最多一个 upstream Hub；不支持 Hub Federation、级联 Hub、多 upstream 或循环 Replication。
+一个 Node 最多一个 upstream Hub；不支持 Hub Federation、级联 Hub、多 upstream、循环 Replication。
 
-### 8. Hub 使用统一 Store，不按 Node 分数据库
+### 8. “统一 Hub Store”指统一 Storage Boundary，不代表同一物理表
 
-Hub 多 Node 数据进入同一个 Storage / Repository，不采用 node-a.db / node-b.db。
-
-Alpha 继续 SQLite；是否增加 PostgreSQL 由真实规模决定。
-
-### 9. Canonical Layer 与 Replication Control Plane 分离
-
-Replication Control Plane 维护：
+这是实现前最终修订后的固定语义。
 
 ```text
-nodes / pairing relationships
-streams / cursors / receipts
-replica generations
-replica entity maps
-shared assertions / memberships / groups
-promotion provenance
-conflicts / tombstones
-policy / history state
+Hub Storage Boundary / one default SQLite
+│
+├─ Local Canonical Store
+├─ Remote Replica Store
+├─ Shared Identity State
+├─ Replication Control Plane
+└─ Unified Read Repository
 ```
 
-这些不是 Agent 行为 Observation。
-
-### 10. Shared Identity 有两种固定物理语义
-
-Shared 不能笼统理解成“所有 Node 最后都必须共用一个 Canonical 主键”。Alpha 分两种：
-
-#### 10.1 Shared Root
-
-适合天然拥有稳定全局身份的实体。Alpha 只有：
+仍然拒绝：
 
 ```text
-AgentProduct
+node-a.db
+node-b.db
 ```
 
-它可以使用一个 Shared Canonical Row，并保留各 Node assertion provenance，按 deterministic Merge Contract 合并描述元数据。
+但也拒绝：
 
-#### 10.2 Conditional Shared Group
+```text
+Remote Replica -> 强塞现有 Local Canonical Row
+```
 
-适合：
+原因：当前 Local Canonical Schema 有真实必填不变量，而 Replication Policy / History Scope 合法允许字段 `omitted / redacted`。Hub 不得使用空串、`{}`、`[hidden]` 等假值骗过 Local Schema。
+
+Alpha 可以全部放在同一个 SQLite 文件中；“统一”指 Storage Boundary、事务与 Read Surface，而不是要求 Local / Remote 共用完全相同的 SQL Row Contract。
+
+### 9. Local Canonical 与 Remote Replica 的语义不同，但都不是 Projection
+
+Local Canonical Store 表达本机实际持久化事实，保持现有 Core Domain 不变量。
+
+Remote Replica Store 表达：
+
+> Remote Node 已形成的 Canonical State，在经过 History Scope 与 Replication Policy 后，Hub 实际获授权获得的持久副本。
+
+Remote Replica 是 Replication Data Plane，不是 Projection、Cache 或第二次 Normalize 的结果。
+
+受策略控制字段必须原生保留可见性：
+
+```text
+value
+redacted
+omitted(policy)
+omitted(not-captured)
+omitted(history-boundary)
+omitted(dependency-minimized)
+```
+
+真实 `null` 与这些状态必须可区分。
+
+### 10. `from-now` Dependency Closure 必须字段最小化
+
+`from-now` 不授权补传旧历史，但 Boundary 后的新事实可能需要 Boundary 前的 Host / Installation / Project / Workspace / Session 等引用闭包。
+
+允许补必要 identity / FK 结构，不允许因此顺带补传旧：
+
+- Session title；
+- 非必要 startedAt / endedAt；
+- Workspace 完整路径；
+- Prompt / Tool 正文；
+- SourceRecord payload；
+- 其他不为新事实引用完整性所必需的历史元数据。
+
+这些继续使用 `history-boundary / dependency-minimized` 表达缺失原因。
+
+### 11. Shared Identity 分 Shared Root 与 Conditional Shared Group
+
+#### Shared Root
+
+Alpha 只有 `AgentProduct`。
+
+它拥有稳定跨机器身份，可以逻辑上形成一个 Shared Root，并保留各 Node assertion provenance 与 deterministic metadata merge。
+
+#### Conditional Shared Group
+
+Alpha：
 
 ```text
 Project
@@ -165,147 +236,198 @@ AssetDefinition
 固定模型：
 
 ```text
-Origin Row A ----\
-Origin Row B -----+-> Shared Identity Group
-Hub Local Row ---/
+Origin A ----\
+Origin B -----+-> Shared Identity Group
+Hub Local ---/
 ```
 
 要求：
 
-- 每个 origin 保留自己的 Canonical / Replica Row；
-- Workspace / Session / AssetBinding 等领域 FK 继续指各自 origin row；
-- SharedKey 标识逻辑 Group，不作为 Project / AssetDefinition 的统一物理主键；
-- Shared Group / Membership 由 assertions 重算；
-- Hub Local 与 Remote 使用同一 Membership Contract；
-- Promotion 只建立 Membership，不批量 Rewrite Canonical FK。
+- 每个 origin 永远保持自己的 Local Row / Remote Replica；
+- Workspace / Session / AssetBinding 等 FK 继续指 origin；
+- SharedGroupKey 不是 Project / AssetDefinition 的领域主键；
+- Promotion 只增加 Membership，不批量 Rewrite FK；
+- Hub Local 与 Remote 使用同一 Membership Contract。
 
-这样既保留 provenance，也避免本机 IdentityService 被迫理解 Hub Shared 主键。
+### 12. Shared Identity 算法必须版本化并由 Hub 重算
 
-### 11. Shared Merge 必须显式、确定性
-
-每种 Shared Root / Group 定义：Identity Fields、Mergeable Metadata、Node-local Metadata、Conflict Fields。
-
-禁止通用 last-write-wins。Merge 与 Batch 到达顺序无关。
-
-### 12. Replication Batch 事务性、幂等，并区分提交不确定性
-
-Hub 单 Batch完整校验、事务写入、成功后推进 ACK；失败整体 rollback。
-
-Batch 第一次可能发网后 sequence/body/contentHash immutable。ACK 丢失只能 exact retry 或查询 Hub ACK，不能同 sequence 换 Body。
-
-### 13. Durable Replication = Fast Path + Reconciliation
-
-Cordis Event 只降低延迟：
+Alpha 至少定义：
 
 ```text
-Canonical Event -> fast enqueue
-Canonical Store -> History Boundary -> Policy -> reconcile -> repair
+project-repository-v1
+asset-upstream-v1
 ```
 
-正式语义：at-least-once + deterministic identity/hash + idempotent import + reconciliation。
+SharedKey 的算法版本属于 Wire Identity Contract。Normalization 规则改变到会影响 identity 时必须升级算法版本 / Protocol 兼容边界，不能让新旧 Node 静默算出不同 Group。
 
-删除依赖 Tombstone；普通 scan absence 不能推断删除。
+Node 自报 SharedKey 只能作为 assertion；Hub 必须基于协议允许出站的 normalized portable identity 自行重算并验证。
 
-### 14. 首次接入明确 History Scope
+### 13. Shared Merge 必须显式、确定性
 
-连接 Hub 不等于授权全部历史。
+每种 Shared Root / Group 必须定义：
+
+- Identity Fields；
+- Mergeable Metadata；
+- Origin-local Metadata；
+- Conflict Fields。
+
+禁止通用 last-write-wins。Merge 结果必须与 Batch 到达顺序无关。
+
+### 14. Replication Batch 事务性、幂等，并区分提交不确定性
+
+单 Batch 的 Remote Replica mutations、Shared Identity mutations、Generation、Sequence Receipt / Cursor、Tombstone / Conflict 必须在同一 Storage Transaction Boundary 中。
+
+只有事务提交后 ACK 才推进。
+
+Batch 第一次可能发网后 sequence / body / contentHash immutable。ACK 丢失时只能 exact retry 或查询 Hub ACK，不能同 sequence 换 Body。
+
+### 15. Durable Replication = Fast Path + Reconciliation
+
+Cordis Event 只用于低延迟 fast path，不是 Durable Replication Fact。
 
 ```text
-from-now
-include-existing
+Canonical Event -> fast pending
+Canonical Store -> History Boundary -> Policy -> hash -> Reconciliation
 ```
 
-- include-existing：resumable Bootstrap -> mandatory Reconciliation；
-- from-now：持久 History Boundary，不做普通历史补传，但新事实可带必要 dependency closure。
+正式语义：
 
-`from-now` 不只靠 occurredAt 判断。
+```text
+at-least-once
++ deterministic identity/hash
++ idempotent import
++ reconciliation
+```
 
-### 15. Capture Policy / Replication Policy / History Scope 分离
+删除使用持久 Tombstone；普通 scan absence 不能推断删除。
+
+### 16. Replication Policy 与 History Scope 分离
 
 ```text
 Capture Policy     -> 什么能进入 Local Store
-Replication Policy -> 哪些字段能离开本机
-History Scope      -> Boundary 前历史是否允许补传
+Replication Policy -> 本机已有内容哪些字段允许离开本机
+History Scope      -> Boundary 前已有历史是否允许补传
 ```
 
-Alpha Policy：metadata-only / redacted / full。
+Alpha：
 
-metadata-only 不传 Prompt / Tool body，也默认不传完整本机路径，但仍可能包含 Repository Identity、Agent / Tool、时间与结构元数据，因此不是匿名模式。
+```text
+Policy: metadata-only | redacted | full
+History: from-now | include-existing
+```
 
-Policy 放宽不自动扩大历史授权；Policy 收紧必须立即停止新的旧 Policy 出站请求。
+`metadata-only` 不传 Prompt / Tool body，也默认不传完整本机路径，但仍可能发送项目 / Repository Identity、Agent / Tool、时间与结构元数据，因此不是匿名模式。
 
-### 16. Ownership、Shared Membership 与删除分离
+Policy 放宽不自动扩大历史授权；Policy 收紧必须立即停止新的旧 Policy 出站。
 
-Node-scoped / Conditional Origin ownership 由 originNodeId 决定，其他 Node 不得修改。
+### 17. Policy 收紧不等于自动 Purge
 
-Conditional Shared Membership 不改变 origin ownership。
+`full -> metadata-only` 后，新出站数据立即遵守新 Policy。
 
-删除：
+Hub 已经保存的旧 full 值不会自动删除；如需清理必须是独立 Purge / Delete 操作。
 
-- Origin Entity -> Tombstone；若有 membership，同时撤回自己的 membership；
-- Shared Root / Group assertion withdrawal -> 只影响该来源；
-- 一个来源撤回不能删除其他来源；
-- Revocation 不自动等于 Delete / Withdrawal。
+Remote Replica Store 必须能区分：
 
-### 17. Re-bootstrap 使用 staged Replica Generation
+```text
+当前 Policy 未再授权刷新
+vs
+旧授权值仍被保留
+```
 
-普通 Reconciliation：absence != delete。
+retained prior value 不能冒充“刚按新 Policy 重新确认的最新事实”。
+
+### 18. Replica Generation 解决完整 Re-bootstrap
+
+普通 Reconciliation：
+
+```text
+absence != delete
+```
 
 显式 Re-bootstrap：
 
 ```text
 G1 active
- -> G2 staged bootstrap
- -> G2 reconcile + validate
+ -> G2 staged
+ -> bootstrap
+ -> reconcile
+ -> validate
  -> atomic activate G2
  -> retire G1
 ```
 
-G2 还必须 staged 保存该 Remote Node 的 Conditional Shared Membership 集；激活只切换该 Node origin/membership，不影响其他 Node / Hub Local membership。
+Remote Conditional Shared Membership 也随 Generation staged / activated；Hub Local membership 不属于 Remote Generation。
 
-### 18. Node 永远主动连接 Hub
+### 19. Unified Read Repository 是 Hub Projection 的正式入口
+
+Projection / Web 不直接读取 Remote Replica 私表，也不假设 Remote Replica 等于 Local Core Entity。
+
+统一读边界负责：
+
+- Local Canonical + active Remote Replica；
+- ReplicaKey / origin provenance；
+- Shared Root / Shared Group Resolver；
+- 字段 availability；
+- Node / Host / Shared Project filter；
+- staged / retired Generation 隔离。
+
+Hub Projection 必须显式理解“字段未同步 / 已脱敏”，不能把 omitted 转成空字符串或“来源没有提供”。
+
+### 20. Node 主动连接，Local Surface 与 Replication Surface 分离
+
+Node 只主动出站：
 
 ```text
-Node -> outbound HTTPS -> Hub Replication Surface
+Node -> HTTPS -> Hub Replication Surface
 ```
 
-Hub 不反向访问 / 控制 Node。
-
-### 19. Local HTTP 与 Replication Surface 完全分离
-
-Local Web / API：
+现有本机 Web / API 保持：
 
 ```text
 127.0.0.1:56789
 ```
 
-Replication：独立 authenticated HTTPS Surface。
+禁止为 Hub 把 Local Surface 改成网络监听。Alpha 不内建 Remote Web Login，也不提供 Remote Control。
 
-禁止为 Hub 把现有 Local Surface 直接暴露网络。Alpha Remote Web 是非目标。
+### 21. Pairing、TLS、Node Identity、Hub Identity 分离
 
-### 20. Pairing 与长期认证分离；双方都有密码学身份
+Pairing Secret 只负责短期用户授权。
 
-Pairing Secret 是短期用户授权。
+Node / Hub 各有长期非对称身份。Node Pair Request 要证明 Node Key Possession；Hub Identity Key 签名 Pairing Receipt 与 Handshake `serverProof`。
 
-Node 使用长期非对称 Key，并在 Pair Request 证明 Key Possession；Hub 保存 Public Key。
+TLS Identity 负责传输端点；Hub Identity 负责长期产品信任。
 
-Hub 也有长期 Hub Identity Key，并签名 Pairing Receipt / Handshake serverProof。
+长期 Request Signature 至少绑定：
 
-Node Request Signature 至少绑定 hubId、nodeId、streamId、keyId、method、path、timestamp、nonce、raw body hash。
+```text
+hubId
+nodeId
+replicationStreamId
+keyId
+method
+path
+timestamp
+nonce
+raw body hash
+```
 
-### 21. TLS Identity 与 Hub Identity 分离
+### 22. Alpha 是 trusted-node 模型，不是远程证明系统
 
-TLS 保证传输端点；Hub Identity 保证长期产品信任身份。
+Node Signature 证明“这份声明来自哪一个已配对 Node”；Hub 重算 SharedKey 证明“Identity 算法一致”。
 
-自管理 TLS 使用 SPKI Pinning；公共 CA 场景正常验证 CA/hostname。证书续期不等于 Hub 身份变化。
+它们不能密码学证明：
 
-### 22. mDNS 只发现，不建立信任
+- Node 真的拥有它声明的 Git Repository；
+- Node 没有伪造本机 Canonical Observation；
+- 已完全攻陷的 Node OS 仍可信。
 
-Discovery 不可信。信任依赖 TLS/SPKI、Hub Identity、Pairing Secret、Receipt/Proof。Alpha 可不实现 mDNS。
+Hub 通过 origin namespace、ownership、merge invariant、resource limits 与 conflicts 限制影响范围，但 Alpha 不声称提供 Remote Attestation。
 
-### 23. Control Plane 不提供远程执行
+### 23. Clone Detection 只用强证据冻结
 
-只管理 Pair / Revoke / Status / Protocol / Replication State / Diagnostics；不提供 Shell、Agent 启动、Skill 安装、Hook 修改或远程系统命令。
+IP、hostname、sleep/wake 是弱信号，只用于 diagnostics。
+
+真正并发 runtime instance、同 Stream sequence 分叉、不同 immutable Batch 竞争同 sequence 等强冲突才冻结关系。
 
 ### 24. 产品版本、Replication Protocol、Storage Schema 独立
 
@@ -315,23 +437,11 @@ Replication Protocol R1.x
 Storage Schema migration N
 ```
 
-网络兼容性由 Replication Protocol 决定。
+网络兼容由 Replication Protocol 协商决定。
 
-### 25. Wire Protocol 版本化并先 Handshake
+协议不兼容只暂停 Replication，不影响本地 Pipeline。
 
-Major 用于破坏 Identity / Reference / History / Delete / Signature / Entity 语义的变化；Minor 仅兼容扩展。
-
-连接前交换版本、Capability、Node/Hub Identity、Stream/ACK、Policy/History Revision、Generation、Hub Proof、serverTime。
-
-没有共同协议只暂停 Replication。
-
-### 26. 协议不兼容不得影响 Local-first
-
-本地 Source、Commit、SQLite、Web 全部继续。未同步 Upsert / Tombstone 保留并等待恢复。
-
-### 27. 推荐先升级 Hub，再滚动升级 Node
-
-Hub 在支持窗口兼容旧 Protocol，允许逐台升级 Node。
+推荐先升级 Hub，再滚动升级 Node。
 
 ## Cordis 组合边界
 
@@ -357,99 +467,96 @@ hubAccept=true
   + node-registry
 ```
 
-Replication Runtime Extension 仍是 Cordis-native，不增加第二套 DI / Plugin Loader。
+Hub 能力继续作为 Cordis-native Runtime Extension，不建立第二套 DI / Lifecycle / Plugin Loader。
 
 ## Alpha 实施顺序
 
-以 `HUB-ALPHA-IMPLEMENTATION-PLAN.md` 为准：
-
 ```text
-H1 Identity / Composition
- -> H2 Replication Core / Shared Group
+H1 Node Identity / Composition
+ -> H2 Replication Core / Shared Identity
  -> H3 R1 Protocol / Identity Proof
  -> H4 Policy / History / Outbox / Reconcile
- -> H5 Hub Import / Generation
- -> H6 Security / Surface
- -> H7 E2E
- -> H8 Web / CLI
+ -> H5 Remote Replica Storage / Hub Import / Generation
+ -> H6 Security / Replication Surface
+ -> H7 E2E Sync
+ -> H8 Unified Read / Projection / Web / CLI
  -> H9 Delete / Recovery
- -> H10 Hardening
+ -> H10 Performance / Hardening
 ```
 
 ## 被拒绝的方案
 
-- Node / Hub 两套程序 / Runtime：拒绝；
-- 四个互斥领域 Role：拒绝；
-- Hub 唯一事实库：拒绝；
-- Hub 只联邦查询不存 Replica：拒绝；
-- SQLite 文件 / Row 同步：拒绝；
-- 当前本机 Canonical ID 直接当跨机主键：拒绝；
-- 为 Hub 强制重写整库 Canonical ID：拒绝；
-- Hub 重新解析 Source / Remote Candidate：拒绝；
-- 同步 Projection DTO：拒绝；
-- 按 Node 分数据库：拒绝；
-- 只依赖 Cordis Event 写 Outbox：拒绝；
-- 普通 scan absence 推断删除：拒绝；
-- 通用 last-write-wins：拒绝；
-- 一个 Node 多 Hub / Federation：Alpha 拒绝；
-- Local `/api/v1/*` 直接暴露网络：拒绝；
-- Hub 反向控制 Node：拒绝；
-- Alpha 先上 PostgreSQL / Redis / Kafka：拒绝；
-- **Conditional Shared 通过 SharedKey 替换 Project / AssetDefinition 主键并批量 Rewrite FK：拒绝。** Shared Group 是聚合身份，不是本机/Replica Domain FK 的替代主键。
+- Node / Hub 拆成两套程序或两套 Runtime；
+- Hub 作为唯一事实库；
+- Hub 只做联邦查询、不保存 Replica；
+- 同步 SQLite 文件 / Row；
+- 直接把本机 Canonical ID 当跨机全局 ID；
+- 为 Hub 强制迁移整库 Canonical Identity；
+- Hub 重新解析 Source / Commit Remote Candidate；
+- 同步 Projection 作为事实源；
+- 每个 Node 一份数据库；
+- 把 Remote omitted 字段用空值 / 占位符强塞 Local Canonical 表；
+- full Policy 走 Local Canonical 表、metadata-only 走 Replica 表的双物理路径；
+- Conditional Shared 改主键并批量 FK Rewrite；
+- 只靠 Cordis Event 写 Outbox；
+- 普通扫描 absence 推断删除；
+- 通用 last-write-wins；
+- 一个 Node 多 upstream Hub / Hub Federation；
+- 把 Local `/api/v1/*` 直接暴露网络；
+- Hub 反向控制 Node；
+- 为 Alpha 先引入 PostgreSQL / Redis / Kafka。
 
 ## 后果
 
 正向：
 
-- Local-first / Offline 保持；
-- 单 Runtime / Cordis 组合保持；
-- 不立即迁移本机 Canonical ID；
-- Replica Namespace 解决跨机碰撞；
-- Conditional Shared 保留 origin provenance，Hub Local / Remote 物理语义统一；
-- Project / Asset 跨设备聚合不要求改写已有 FK；
-- 用户可选择 from-now / include-existing；
-- Reconciliation 修复 Fast Path 漏同步；
-- staged Generation 保护 Re-bootstrap；
-- Pairing / Handshake 双方密码学身份证明；
-- 单 Hub 星型保持实现可控。
+- Local-first、离线和单机使用不受 Hub 影响；
+- 不强制迁移现有 Canonical Identity；
+- Remote Policy omission 不污染本机 Core Domain；
+- Project / Asset 跨设备可聚合但仍保留 origin provenance；
+- `from-now` 不会通过依赖闭包偷偷变成历史 Metadata Bootstrap；
+- Hub Web 可以统一查询本机与远程数据，同时保持 ID 不碰撞；
+- Protocol、Storage 与 Product Version 可独立演进。
 
 代价：
 
-- Hub 保存远程副本；
-- Shared Project / Asset 查询需要正式 Shared Group Resolver / Membership；
-- Group metadata / Membership 是新的可重建分布式 identity state；
-- 仍需要 Stream、Receipt、Generation、Tombstone、History Boundary、Security 等控制面；
-- 多机测试面扩大。
+- Hub Storage 需要 Local Canonical / Remote Replica / Shared Identity / Control Plane / Unified Read 多层边界；
+- Projection 需要处理字段 availability；
+- 需要 Bootstrap、Reconciliation、Generation、Tombstone、Policy / History Revision、Stream / ACK 与冲突状态；
+- Hub 聚合数据安全半径显著增加；
+- 多机、跨平台与故障注入测试面扩大。
 
-## 验证标准
+## 设计冻结验收标准
 
-- Standalone 无回归；
-- nodeId 稳定；
-- 非法 capability 拒绝；
-- Hub 不可达时本地正常；
-- ReplicaKey 不跨 Node 碰撞；
-- AgentProduct Shared Root deterministic；
-- Project / AssetDefinition 保留每个 origin row；
-- 同 Portable Identity 的 origin rows 进入同 Shared Group；
-- Promotion 不修改 Workspace / Observation / AssetBinding 等 origin FK；
-- Hub Local + Remote 同 Project 可聚合；
-- 一个 member withdrawal 不影响其他 members；
-- include-existing Bootstrap 可恢复；
-- from-now 不被 Reconcile 绕过；
-- Fast Path 丢失可补齐；
-- Policy / History 权限边界可证明；
-- ambiguous Batch / Rollover 正确；
-- staged Generation 只原子切换对应 Remote Node origin/membership；
-- Local HTTP 继续 loopback；
-- Pairing / Proof / Signature / Revoke 安全闭环；
-- Protocol 不兼容只暂停同步；
-- 跨 Node 排序不把 replicatedAt 当业务时间；
-- Web 不把 Replication Control Plane 当 Agent 行为事实。
+实现前必须能够从下位 Contract 明确回答：
 
-## 相关决策与下位 Contract
+- Node / Hub 角色与 Cordis 组合；
+- ReplicaKey / SharedGroupKey 如何生成并版本化；
+- Remote ID 如何进入统一 API 而不碰撞；
+- Project / AssetDefinition 为何保留 Origin + Membership；
+- metadata-only / redacted / full 如何物理持久化；
+- `from-now` Dependency Closure 最多能带哪些字段；
+- omitted / redacted / retained prior value 如何区分；
+- Bootstrap / Incremental / Reconciliation / Re-bootstrap 如何收敛；
+- Policy 收紧、ACK 丢失、Stream Rollover 如何保证隐私；
+- Pairing / TLS / Hub Proof / Request Signature 如何闭环；
+- Clone、Revoke、Delete History、Node Reset 的差异；
+- Unified Read / Projection 如何读取 Local + Remote；
+- 版本不兼容时为何不影响本机。
 
-- ADR-0001：Clean Rebuild 与 Cordis Runtime；
-- ADR-0004：双发行、单运行时生命周期；
-- ADR-0005：Runtime Profile / Session Relationship / Asset Topology；
-- ADR-0006：性能治理与架构护栏；
-- `docs/1.0/HUB-DESIGN-INDEX.md`：Hub 下位 Contract / Protocol / Security / Operations / UX / Test 入口。
+上述问题当前均已有对应 Contract / Protocol / Test 入口。Hub Alpha 架构到此冻结；后续若出现新的结构性矛盾，先修文档再继续实现。
+
+## 相关文档
+
+- `ARCHITECTURE.md`
+- `docs/1.0/HUB-DESIGN-INDEX.md`
+- `docs/1.0/HUB-REPLICATION-CONTRACT.md`
+- `docs/1.0/HUB-REPLICATION-STATE-CONTRACT.md`
+- `docs/1.0/HUB-REPLICA-STORAGE-CONTRACT.md`
+- `docs/1.0/HUB-REPLICATION-PROTOCOL.md`
+- `docs/1.0/HUB-PAIRING-SECURITY.md`
+- `docs/1.0/HUB-DATA-EXPOSURE-MATRIX.md`
+- `docs/1.0/HUB-OPERATIONS.md`
+- `docs/1.0/HUB-UX-CONTRACT.md`
+- `docs/1.0/HUB-ALPHA-IMPLEMENTATION-PLAN.md`
+- `docs/1.0/HUB-TEST-MATRIX.md`
