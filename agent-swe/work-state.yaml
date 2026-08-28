@@ -2,73 +2,76 @@ schema_version: "0.1"
 status: active
 
 goal:
-  summary: "继续 AgentLens 1.0 Alpha Hub，完成 H10 loopback Surface + Web 多机任务复盘"
+  summary: "继续 AgentLens 1.0 Alpha Hub，完成 H11 active-generation 远程会话发现与列表"
 
 phase:
   type: implementation
-  summary: "H1-H9 已完成；当前把 H9 Availability-aware Hub Review 接到既有本机 HTTP/Web，不引入 Replication 网络或 HTTPS"
+  summary: "H1-H10 已完成；当前让 H10 的远程复盘入口可被用户发现，先补 active-generation Remote LogicalSession 列表，不扩其他多机 Projection"
 
 scope:
   include:
-    - "在现有 127.0.0.1 Local Surface 增加独立 Hub Review 只读入口"
-    - "旧 /api/v1/review 与 Standalone/Local Review 行为保持不变"
-    - "Web 任务复盘支持识别 Local Canonical ID 与 Remote ReplicaKey opaque publicId"
-    - "Remote payload redacted / omitted(policy/history-boundary/dependency-minimized) 显式显示不可用原因"
-    - "Remote 会话/Observation 只读取 active Generation"
-    - "为 Hub Review 增加最小 Surface/Web 回归门禁"
+    - "扩展 Core Unified Read LogicalSession Reader，支持 active-generation 会话列表读取"
+    - "远程会话列表继续使用 ReplicaKey opaque publicId，不暴露 originEntityId"
+    - "定义最小 availability-aware Hub Review Session Summary DTO"
+    - "在现有 127.0.0.1 Local Surface 增加 Hub Review 会话列表 GET"
+    - "Web 任务复盘提供明确的远程会话列表入口，可跳转 /review/hub/:ReplicaKey"
+    - "Local /api/v1/review、Local Review 左侧列表与现有交互保持不变"
   exclude:
+    - "把 Local/Remote 两套 Review DTO 强行统一"
+    - "Overview / Usage / Facet / Agent Overview 全面多机化"
     - "Node -> Hub HTTP/HTTPS Replication Transport"
     - "Pairing Secret、TLS、Node/Hub signature、serverProof"
-    - "Node Sender / retry/backoff 网络调度"
-    - "Remote Web Login / Remote Control"
-    - "Remote File Backup / Pull"
+    - "Remote Web Login / Remote Control / Remote File Pull"
     - "HA、多 Hub、Federation"
-    - "一次性把全部 Overview/Usage/Facet Projection 改成多机"
 
 constraints:
   required:
+    - "只读取 active Generation，staged/retired Generation 不得出现在列表"
+    - "Session title/time 等字段继续保留 Availability，不用假默认值补齐"
+    - "列表排序必须确定性；缺失时间不能被伪造成当前时间"
+    - "Remote publicId 继续保持 opaque ReplicaKey"
+    - "Projection / Surface 不直接读取 hub_remote_replica_* 私表"
     - "Surface 继续只绑定 127.0.0.1"
-    - "Hub Review Surface 只能消费 H9 HubReviewProjection / Core Unified Read，不直接查询 Hub Replica 私表"
-    - "Web 不得把 redacted / omitted 转成空正文"
-    - "Remote publicId / references 继续保持 opaque，不把 originEntityId 作为路由 ID"
-    - "Local 任务复盘现有契约与 UI 不回归"
   forbidden:
     - "未经明确要求发布 npm 或创建 Release"
-    - "开放任何外网/LAN Replication 监听"
-    - "修改 AGENT_LENS_HTTP_HOST 为非 loopback"
-    - "把 Hub Review 强行塞进旧 Local Review DTO"
-    - "用 origin ID 作为 Remote 对外标识"
+    - "开放任何 LAN/公网监听"
+    - "把 omitted/redacted 映射为空字符串、空对象或假时间"
+    - "用 originEntityId 作为 Remote 路由 ID"
+    - "为了列表重写现有 57K Local ReviewPage"
   frozen:
-    - "H1-H8 Hub Runtime/Replication/Replica/Unified Read 基础"
+    - "H1-H8 Hub Runtime / Replication / Replica / Unified Read 基础"
     - "H9 Availability-aware Hub Review DTO + Projection + Runtime Service"
+    - "H10 loopback Hub Review detail API + /review/hub/:ReplicaKey Web Reader"
     - "Local-first、单 Hub 星型拓扑、不提供 Remote Control"
   deferred:
     - action: "Replication 网络 Surface / Pairing Security"
       until: "用户重新明确要求考虑 HTTPS / 网络接入"
 
 acceptance:
-  - "本机 loopback API 可通过 ReplicaKey 获取 Remote Hub Review detail"
-  - "metadata-only Remote message 显示正文未同步而不是空消息"
-  - "redacted 与 omitted 的 UI 状态可区分"
+  - "Unified Read 可列出 Hub local + active Remote LogicalSession，且不泄漏 staged/retired generation"
+  - "Remote Session Summary 的 title/time Availability 保真"
+  - "loopback Hub Review list API 返回 opaque publicId，可直接进入 H10 detail"
+  - "Web 可从任务复盘明确进入远程会话列表并打开远程会话"
   - "旧 Local Review API/UI 无行为回归"
-  - "H10 不增加新的网络可达面"
+  - "H11 不增加新的网络可达面"
 
 progress:
   current:
-    - "H9 新增独立 HubReadAvailability / HubReviewDetail DTO，不修改旧 Local Review DTO"
-    - "H9 HubReviewProjection 只消费 Core Unified Read Contract，保留 value/null/redacted/omitted 语义"
-    - "SQLite Storage 已提供 ctx.unifiedRead，HTTP Runtime 已装配 ctx.hubReview"
-    - "H9 已锁定 omitted(policy) 不得伪造成空字符串/空对象，Remote references 仅使用 opaque publicId"
-    - "H9 Runtime 装配已通过 Linux / macOS / Windows 三平台主 CI，包括 Windows Desktop package、Smoke、Hook Dispatcher 与 npm lifecycle"
+    - "H10 已增加 GET /api/v1/hub/review/:opaquePublicId?limit=，仍运行于既有 127.0.0.1 Local Surface"
+    - "H10 Surface 测试锁定 200/404/503、limit 门禁及 redacted/omitted DTO 原样透传"
+    - "H10 Web 已增加 /review/hub/:ReplicaKey 独立远程复盘阅读页，不修改旧 Local Review DTO/页面"
+    - "Remote payload redacted / omitted / null 均有明确中文状态，不伪造成空正文"
+    - "H10 候选 db8b8082c45f04e65e6e58699f3b6e8f0bf2c0bf 已通过 Linux/macOS 全部主 CI；Windows Typecheck/Test/Build/Desktop package/Smoke/Hook Dispatcher/npm lifecycle/npm contents 均已通过，只剩 Actions 清理步骤"
   next:
-    - "新增独立 loopback Hub Review GET 路由，不修改旧 /api/v1/review"
-    - "给 Web ClientModel 增加 Hub Review detail 读取"
-    - "任务复盘渲染 Availability 状态"
-    - "跑 Surface/Web/三平台主 CI 后再进入其他多机 Projection"
+    - "给 UnifiedLogicalSessionReader 增加最小 list/query contract"
+    - "SQLite Unified Read 实现 active-generation Remote LogicalSession 列表"
+    - "增加 Hub Review Session Summary DTO/Projection/loopback list API"
+    - "Web 增加远程会话列表入口，不重写 Local ReviewPage"
 
 decisions:
-  - "H10 复用现有 loopback Local HTTP，不把它视为 Replication Transport"
-  - "Hub Review 使用独立协议路径，先不统一旧 Local Review DTO"
+  - "H11 只解决远程会话可发现性，不趁机扩 Overview/Usage/Facet"
+  - "H10 Web 使用独立轻量 Hub Review client/page，而不是膨胀 Local ClientModel"
+  - "Local 和 Remote Review 暂时保持兼容增量双路径"
   - "HTTPS / Pairing / TLS 继续延期"
   - "只有改变冻结长期不变量时才发起 ADR / Contract Review"
 
