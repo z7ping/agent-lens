@@ -3,6 +3,7 @@ name: macOS and Linux Desktop
 on:
   push:
     branches: [main]
+    tags: ['v*']
     paths:
       - 'apps/desktop/**'
       - 'apps/cli/src/hook-execution*'
@@ -10,13 +11,12 @@ on:
       - 'scripts/prepare-macos-icon.sh'
       - 'scripts/check-brand-assets.mjs'
       - 'scripts/check-release-signing.mjs'
+      - 'scripts/check-release-candidate.mjs'
       - 'scripts/smoke-desktop-runtime.mjs'
       - 'package.json'
       - 'package-lock.json'
       - 'docs/design/brand/agentlens-icon-master.svg'
       - '.github/workflows/desktop-macos-linux.yml'
-  release:
-    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -47,17 +47,22 @@ jobs:
         run: npm ci --no-audit --no-fund
 
       - name: Verify release tag matches package version
-        if: github.event_name == 'release'
+        if: startsWith(github.ref, 'refs/tags/')
         run: node scripts/check-release-version.mjs
 
+      - name: Wait for Draft Release candidate
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/check-release-candidate.mjs --wait-seconds 120
+
       - name: Note unsigned prerelease
-        if: github.event_name == 'release' && github.event.release.prerelease == true
+        if: startsWith(github.ref, 'refs/tags/') && contains(github.ref_name, '-')
         shell: bash
-        run: |
-          echo 'AgentLens prerelease: macOS DMG/ZIP may be published unsigned and without notarization for alpha/beta/rc dogfood.'
+        run: echo 'AgentLens prerelease candidate: macOS DMG/ZIP may remain unsigned and without notarization for alpha/beta/rc dogfood.'
 
       - name: Materialize App Store Connect API key
-        if: github.event_name == 'release' && github.event.release.prerelease == false
+        if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-')
         shell: bash
         env:
           APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
@@ -70,7 +75,7 @@ jobs:
           fi
 
       - name: Require macOS release signing and notarization credentials
-        if: github.event_name == 'release' && github.event.release.prerelease == false
+        if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-')
         env:
           CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.MACOS_CSC_KEY_PASSWORD }}
@@ -90,13 +95,13 @@ jobs:
           npm test
 
       - name: Build unsigned macOS desktop
-        if: github.event_name != 'release' || github.event.release.prerelease == true
+        if: ${{ !startsWith(github.ref, 'refs/tags/') || contains(github.ref_name, '-') }}
         run: npm run desktop:mac
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
       - name: Build signed and notarized macOS desktop
-        if: github.event_name == 'release' && github.event.release.prerelease == false
+        if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-')
         run: npm run desktop:mac:release
         env:
           CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}
@@ -108,7 +113,7 @@ jobs:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
 
       - name: Verify macOS signature and notarization
-        if: github.event_name == 'release' && github.event.release.prerelease == false
+        if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-')
         shell: bash
         run: |
           APP="$(find release/macos -type d -path '*/AgentLens.app' -print -quit)"
@@ -152,8 +157,8 @@ jobs:
             release/macos/SHA256SUMS-macos-${{ matrix.arch }}.txt
           if-no-files-found: error
 
-      - name: Attach macOS artifacts to GitHub Release
-        if: github.event_name == 'release'
+      - name: Attach macOS artifacts to Draft Release
+        if: startsWith(github.ref, 'refs/tags/')
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -183,8 +188,14 @@ jobs:
         run: npm ci --no-audit --no-fund
 
       - name: Verify release tag matches package version
-        if: github.event_name == 'release'
+        if: startsWith(github.ref, 'refs/tags/')
         run: node scripts/check-release-version.mjs
+
+      - name: Wait for Draft Release candidate
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/check-release-candidate.mjs --wait-seconds 120
 
       - name: Verify source
         run: |
@@ -229,8 +240,8 @@ jobs:
             release/linux/SHA256SUMS-linux-${{ matrix.arch }}.txt
           if-no-files-found: error
 
-      - name: Attach Linux artifacts to GitHub Release
-        if: github.event_name == 'release'
+      - name: Attach Linux artifacts to Draft Release
+        if: startsWith(github.ref, 'refs/tags/')
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
