@@ -71,6 +71,9 @@ const sessions: UnifiedLogicalSessionReader = {
   async get(publicId) {
     return publicId === session.publicId ? session : undefined
   },
+  async list() {
+    return [session]
+  },
 }
 
 const observationReader: UnifiedObservationReader = {
