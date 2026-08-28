@@ -12,6 +12,17 @@ requireText(desktopPackage.build?.productName === 'AgentLens', '桌面产品名�
 requireText(desktopPackage.description.includes('智能体透镜'), '桌面描述缺少正式中文名“智能体透镜”')
 requireText(desktopPackage.build?.nsis?.runAfterFinish === true, 'Windows 交互安装完成后必须默认运行 AgentLens')
 
+const installer = read('apps/desktop/build/installer.nsh')
+const desktopCli = read('apps/desktop/build/agent-lens.cmd')
+const cliPathHelper = read('apps/desktop/build/agent-lens-cli-path.ps1')
+requireText(installer.includes('File /oname=agent-lens.cmd'), 'Windows 安装器没有安装 Desktop CLI shim')
+requireText(installer.includes('-Action install -InstallDir "$INSTDIR"'), 'Windows 安装器没有登记 Desktop CLI PATH')
+requireText(installer.includes('-Action uninstall -InstallDir "$INSTDIR"'), 'Windows 卸载器没有清理 Desktop CLI PATH')
+requireText(desktopCli.includes('ELECTRON_RUN_AS_NODE=1'), 'Desktop CLI shim 没有复用 Electron-as-Node')
+requireText(desktopCli.includes('runtime\\cli.mjs'), 'Desktop CLI shim 没有指向正式 cli.mjs')
+requireText(cliPathHelper.includes("RegistryValueKind]::ExpandString"), 'Desktop CLI PATH helper 没有保留可展开用户 PATH')
+requireText(cliPathHelper.includes("ValidateSet('install', 'uninstall')"), 'Desktop CLI PATH helper 缺少安装/卸载双向操作')
+
 const bootstrap = read('apps/desktop/src/bootstrap.mjs')
 requireText(bootstrap.includes("app.setName('AgentLens')"), 'Electron bootstrap 未固定产品名 AgentLens')
 requireText(bootstrap.includes("app.setPath('logs', dirname(bootLogPath))"), 'Desktop 与 Daemon 日志未统一到正式日志目录')
@@ -31,4 +42,4 @@ const windowsSmoke = read('scripts/smoke-windows-desktop.ps1')
 requireText(windowsSmoke.includes('$process.MainWindowHandle -eq 0'), 'Windows 冒烟没有验证普通双击后的可见窗口')
 requireText(windowsSmoke.includes('内嵌图标仍有深色外边缘'), 'Windows 冒烟没有阻止深色图标外边缘回归')
 
-console.log('AgentLens 桌面契约检查通过：产品名、安装后启动、即时窗口、Health 合并、日志目录与图标边缘均已锁定。')
+console.log('AgentLens 桌面契约检查通过：产品名、Desktop CLI/PATH、安装后启动、即时窗口、Health 合并、日志目录与图标边缘均已锁定。')
