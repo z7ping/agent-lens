@@ -2,21 +2,20 @@ schema_version: "0.1"
 status: active
 
 goal:
-  summary: "继续 AgentLens 1.0 Alpha Hub，完成 H8 Unified Read 基础"
+  summary: "继续 AgentLens 1.0 Alpha Hub，完成 H9 availability-aware Timeline / Review"
 
 phase:
   type: implementation
-  summary: "H1-H7 已完成并通过主 CI；当前只建立 Local Canonical + active Remote Replica 的正式只读边界，不引入 HTTPS"
+  summary: "H1-H8 已完成并通过主 CI；当前让 Remote Replica 通过 Unified Read 进入任务复盘，同时保留 Availability 语义，不引入 HTTPS"
 
 scope:
   include:
-    - "Remote Read 只读取每个 originNode 当前 active Generation，staged / retired 不可见"
-    - "Remote Read 保留 Replication Availability，不把 omitted/redacted 转成 Local 假值"
-    - "Remote Shared Identity 只暴露 Hub 重算后的状态，不信任 Node 原始 assertion"
-    - "建立 Local Canonical + Remote Replica Unified Read Contract"
-    - "先覆盖 LogicalSession detail 读取，Local 使用原 Canonical ID，Remote 使用 ReplicaKey"
-    - "锁定 Local/Remote originEntityId 相同仍可通过 opaque publicId 唯一定位"
-    - "后续在同一 Contract 上逐步补 Node / Host / Shared Project 过滤与 Projection 接入"
+    - "为 Timeline / Review 定义可表达 value / redacted / omitted 的读模型语义"
+    - "Remote message/tool/event 不得把 omitted/redacted payload 伪造成空正文或空对象"
+    - "Projection 只依赖 Core Unified Read Contract，不直接依赖 SQLite Remote Replica 私表"
+    - "Local Review 现有 DTO / 行为保持兼容"
+    - "Remote publicId 与 public references 始终使用 H8 opaque public ID"
+    - "优先打通 LogicalSession detail + Observation timeline，再接 Review detail"
   exclude:
     - "HTTP / HTTPS Replication Surface"
     - "Pairing Secret、TLS、Node/Hub signature、serverProof"
@@ -24,22 +23,21 @@ scope:
     - "Remote Web Login / Remote Control"
     - "Remote File Backup / Pull"
     - "HA、多 Hub、Federation"
-    - "为了 Unified Read 改写 Local Canonical Schema 或建立第二事实源"
+    - "一次性重写全部 Projection / Web 页面"
 
 constraints:
   required:
-    - "Unified Read 是 Projection / Surface 访问 Remote Replica 的正式边界；上层不得直接查 Hub replica 私表"
-    - "Local Canonical Entity 保持现有 ID 与 Repository 语义"
-    - "Remote Entity publicId 使用 H2 ReplicaKey"
-    - "SharedGroupKey 只用于 Group / Filter / Aggregation，不成为 Conditional Shared 领域 FK"
-    - "Remote Generation activation 前数据不得泄漏到 Unified Read"
-    - "Availability 的 value/null/redacted/omitted 原因必须保留到读模型"
+    - "Availability 的 value/null/redacted/omitted 原因必须保留到 Timeline / Review 读模型"
+    - "正文缺失时界面/DTO 表达真实不可用原因，不生成假内容"
+    - "Remote Evidence / SourceSession / Installation 等依赖只通过 opaque public references 解析"
+    - "Standalone / Local Review 行为保持不变"
+    - "Projection / Surface 不得直接访问 hub_remote_replica_* 表"
   forbidden:
     - "未经明确要求发布 npm 或创建 Release"
-    - "在 H8 开放任何网络监听"
-    - "Projection / Web 直接访问 hub_remote_replica_* 表"
-    - "把 Remote Replica cast 成完整 Local Core Entity"
-    - "用字符串前缀推断 Local/Remote scope"
+    - "开放任何 Replication 网络监听"
+    - "把 Remote Replica cast 成完整 Local CanonicalObservation"
+    - "把 omitted(policy) 映射成空字符串、空对象或 null"
+    - "用 origin ID 作为 Remote 对外引用"
   frozen:
     - "H1 Node Identity + Capability Composition"
     - "H2 ReplicaKey / Shared Identity / Entity Scope"
@@ -48,38 +46,35 @@ constraints:
     - "H5 Durable Pending / Frozen Batch / Reconciliation"
     - "H6 Canonical Change Journal / deterministic Frozen Batch"
     - "H7 Remote Replica Store / Transactional Ingest / Generation activation"
+    - "H8 active-generation Unified Read + opaque public references"
     - "Local-first、单 Hub 星型拓扑、不提供 Remote Control"
   deferred:
     - action: "Replication 网络 Surface / Pairing Security"
       until: "用户重新明确要求考虑 HTTPS / 网络接入"
 
 acceptance:
-  - "Remote Read 永远排除 staged / retired Generation"
-  - "Local LogicalSession 继续以原 Canonical ID 读取"
-  - "Remote LogicalSession 只以 ReplicaKey 读取"
-  - "Local 与 Remote 即使 originEntityId 相同也不会碰撞"
-  - "Local runtimeProfileId 等 Canonical 字段通过既有 Repository 语义进入 Unified Read"
-  - "Remote Availability 原样进入 Unified Read"
-  - "H8 不新增网络可达面"
+  - "Remote metadata-only message 在 Review 中明确表示正文未同步，而不是显示空正文"
+  - "Remote redacted content 可区分于 omitted(policy/history-boundary)"
+  - "Remote Timeline/Review 不泄漏 origin ID"
+  - "Local Review 现有测试与行为无回归"
+  - "H9 不新增网络可达面"
 
 progress:
   current:
-    - "H7 schema v10 已实现 Hub Remote Replica / Generation / Stream / Committed Batch / Shared Identity State"
-    - "H7 Importer 已实现 Batch 单事务、contiguous ACK、exact retry、ReplicaKey/SharedKey/Scope/Typed Ref/Availability Hub 端重算校验"
-    - "H7 G1 active -> G2 staged -> atomic activate 已有真实 SQLite 测试"
-    - "H7 最终提交 e5710f006223469fec30bea59a6c4f26942e198a 已通过 AgentLens 1.0 CI 与 Windows Installer Compile"
-    - "H8 已实现 active-generation Remote Read Repository，并只暴露 Hub 重算 Shared Identity State"
-    - "H8 已新增 LogicalSession Unified Reader，组合 Local Canonical 与 Remote Replica publicId"
-    - "已确认 Session RuntimeProfile 由 withSqliteSessionRuntimeProfiles 装饰器完整 round-trip，无需重写基础 Repository"
+    - "H8 active-generation Remote Read、LogicalSession / CanonicalObservation Unified Reader 已实现"
+    - "H8 Unified Read Contract 已上移到 @agent-lens/core/replication，SQLite 只保留实现"
+    - "H8 Remote Availability 原样保留，Remote Node Ref 已统一解析为 ReplicaKey public references"
+    - "H8 最终提交 61bb93b8b91f485b99dfeba5d39fe01ca33f69c5 已通过 Linux / macOS / Windows 三平台主 CI"
   next:
-    - "先让 H8 LogicalSession Unified Read 三平台 CI 收绿"
-    - "再补 Unified Read 的最小 query/filter 能力，优先 Node 与 LogicalSession"
-    - "最后接入一个现有 Projection 作为真实消费方，验证上层不直接依赖 Replica 私表"
+    - "定义 availability-aware Timeline / Review 最小 DTO，不破坏现有 Local DTO"
+    - "实现基于 UnifiedObservationReader 的 Remote Timeline mapper"
+    - "接 Review detail，锁定 metadata-only / redacted / omitted 显示语义"
+    - "三平台 CI 收绿后再考虑 Surface/Web 接入"
 
 decisions:
-  - "H8 不建立新的全局 Canonical 表；Local 继续走既有 Repository，Remote 走 active-generation Remote Read"
-  - "H8 先按真实 Surface 需求扩 Entity slice，不一次性机械复制全部 17 类 Entity Reader"
-  - "HTTPS / Pairing / TLS 当前明确延期，不作为 H8 前置条件"
+  - "H9 采用兼容增量路径，不直接修改现有 Local TimelineItemDto / ReviewNodeDto 的必填字段语义"
+  - "Remote Timeline/Review 先走独立 availability-aware DTO，再评估是否统一协议"
+  - "HTTPS / Pairing / TLS 继续延期"
   - "只有改变冻结长期不变量时才发起 ADR / Contract Review"
 
 repository:
