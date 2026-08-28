@@ -36,3 +36,18 @@ jobs:
 
       - name: Pack, install and run npm artifact
         run: npm run smoke:npm-package
+
+  registry-auth:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Node.js with npm registry
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.23.0
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Verify npm publish credential
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm whoami --registry=https://registry.npmjs.org
