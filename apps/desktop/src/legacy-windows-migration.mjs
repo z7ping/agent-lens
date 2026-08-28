@@ -21,6 +21,7 @@ export function legacyWindowsPaths({
   return {
     legacyRoot,
     legacyInstallDir,
+    legacyPackagePath: win32.join(legacyInstallDir, 'package.json'),
     legacyServerPath: win32.join(legacyInstallDir, 'server.js'),
     legacyPidFile: win32.join(legacyRoot, 'run', 'server.pid'),
     legacyStartupFile: win32.join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup', LEGACY_STARTUP_FILE),
@@ -88,6 +89,15 @@ async function readLegacyAppInfo(port, fetchImpl = fetch) {
     })
     if (!response.ok) return null
     const info = await response.json()
+    return isLegacyAppInfo(info) ? info : null
+  } catch {
+    return null
+  }
+}
+
+async function readLegacyInstalledPackage(paths) {
+  try {
+    const info = JSON.parse(await readFile(paths.legacyPackagePath, 'utf8'))
     return isLegacyAppInfo(info) ? info : null
   } catch {
     return null
@@ -184,7 +194,12 @@ export async function migrateLegacyWindowsRuntime({
   const startupRemovedBeforeProbe = await removeOwnedLegacyStartup(paths)
   if (startupRemovedBeforeProbe) logger(`--- retired legacy Windows startup ${paths.legacyStartupFile} ---`)
 
-  const legacyInfo = await readLegacyAppInfo(Number(port), fetchImpl)
+  const [httpInfo, installedInfo] = await Promise.all([
+    readLegacyAppInfo(Number(port), fetchImpl),
+    readLegacyInstalledPackage(paths),
+  ])
+  const legacyInfo = httpInfo ?? installedInfo
+
   if (!legacyInfo) {
     if (startupRemovedBeforeProbe) {
       const result = {
@@ -193,6 +208,7 @@ export async function migrateLegacyWindowsRuntime({
         stoppedPids: [],
         removedStartup: true,
         legacyInstallDir: paths.legacyInstallDir,
+        identitySource: 'startup-only',
       }
       await writeMigrationMarker(paths, result)
       return result
@@ -200,13 +216,30 @@ export async function migrateLegacyWindowsRuntime({
     return { changed: false, legacyVersion: null, stoppedPids: [], removedStartup: false }
   }
 
-  logger(`--- detected legacy AgentLens ${legacyInfo.version} on port ${port} ---`)
   const processes = await listListeningProcesses(Number(port), runPowerShellImpl)
   const owned = processes.filter(item => looksLikeLegacyProcess(item, paths.legacyInstallDir))
+  const identitySource = httpInfo ? (installedInfo ? 'http+install' : 'http') : 'install'
+
   if (owned.length === 0) {
-    throw new Error(`检测到 AgentLens ${legacyInfo.version} 正占用端口 ${port}，但无法确认其 Windows 进程归属。为避免误杀其他进程，已停止自动迁移。`)
+    if (httpInfo) {
+      throw new Error(`检测到 AgentLens ${httpInfo.version} 正占用端口 ${port}，但无法确认其 Windows 进程归属。为避免误杀其他进程，已停止自动迁移。`)
+    }
+    if (startupRemovedBeforeProbe) {
+      const result = {
+        changed: true,
+        legacyVersion: installedInfo?.version ?? null,
+        stoppedPids: [],
+        removedStartup: true,
+        legacyInstallDir: paths.legacyInstallDir,
+        identitySource,
+      }
+      await writeMigrationMarker(paths, result)
+      return result
+    }
+    return { changed: false, legacyVersion: installedInfo?.version ?? null, stoppedPids: [], removedStartup: false }
   }
 
+  logger(`--- detected legacy AgentLens ${legacyInfo.version} on port ${port} identity=${identitySource} ---`)
   const stoppedPids = []
   for (const processInfo of owned) {
     const processId = Number(processInfo.processId)
@@ -227,14 +260,16 @@ export async function migrateLegacyWindowsRuntime({
     stoppedPids,
     removedStartup: startupRemovedBeforeProbe || startupRemovedAfterStop,
     legacyInstallDir: paths.legacyInstallDir,
+    identitySource,
   }
   await writeMigrationMarker(paths, result)
-  logger(`--- legacy Windows migration completed version=${legacyInfo.version} stopped=${stoppedPids.join(',') || 'none'} startupRemoved=${result.removedStartup} ---`)
+  logger(`--- legacy Windows migration completed version=${legacyInfo.version} stopped=${stoppedPids.join(',') || 'none'} startupRemoved=${result.removedStartup} identity=${identitySource} ---`)
   return result
 }
 
 export const legacyWindowsMigrationInternals = {
   readLegacyAppInfo,
+  readLegacyInstalledPackage,
   listListeningProcesses,
   removeOwnedLegacyStartup,
   runPowerShell,
