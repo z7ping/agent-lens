@@ -2,77 +2,81 @@ schema_version: "0.1"
 status: active
 
 goal:
-  summary: "继续 AgentLens 1.0 Alpha Hub，完成 H11 active-generation 远程会话发现与列表"
+  summary: "继续 AgentLens 1.0 Alpha Hub，进入 H12 Tombstone 删除生命周期"
 
 phase:
   type: implementation
-  summary: "H1-H10 已完成；当前让 H10 的远程复盘入口可被用户发现，先补 active-generation Remote LogicalSession 列表，不扩其他多机 Projection"
+  summary: "H1-H11 已完成；下一阶段补齐复制删除语义，只做 Node/Hub 本地状态链，不引入 HTTP/HTTPS、TLS 或 Pairing"
 
 scope:
   include:
-    - "扩展 Core Unified Read LogicalSession Reader，支持 active-generation 会话列表读取"
-    - "远程会话列表继续使用 ReplicaKey opaque publicId，不暴露 originEntityId"
-    - "定义最小 availability-aware Hub Review Session Summary DTO"
-    - "在现有 127.0.0.1 Local Surface 增加 Hub Review 会话列表 GET"
-    - "Web 任务复盘提供明确的远程会话列表入口，可跳转 /review/hub/:ReplicaKey"
-    - "Local /api/v1/review、Local Review 左侧列表与现有交互保持不变"
+    - "为已复制 Canonical Entity 建立明确 Tombstone 生成语义"
+    - "Canonical Change Journal 能表达需要复制的删除变化，不把删除伪造成缺失读取"
+    - "H5 Pending/Frozen Batch 支持 H3 Tombstone Wire State，并保持 exact retry"
+    - "Hub Transactional Ingest 支持 Tombstone 原子导入、幂等与 Generation 隔离"
+    - "active Remote Read 在 Tombstone 生效后不再返回已删除实体"
+    - "补齐重启恢复、重复 Tombstone、删除/重建冲突的最小回归门禁"
   exclude:
-    - "把 Local/Remote 两套 Review DTO 强行统一"
-    - "Overview / Usage / Facet / Agent Overview 全面多机化"
     - "Node -> Hub HTTP/HTTPS Replication Transport"
     - "Pairing Secret、TLS、Node/Hub signature、serverProof"
     - "Remote Web Login / Remote Control / Remote File Pull"
+    - "Overview / Usage / Facet / Agent Overview 全面多机化"
     - "HA、多 Hub、Federation"
+    - "物理立即清理已 retired Generation 的历史副本"
 
 constraints:
   required:
-    - "只读取 active Generation，staged/retired Generation 不得出现在列表"
-    - "Session title/time 等字段继续保留 Availability，不用假默认值补齐"
-    - "列表排序必须确定性；缺失时间不能被伪造成当前时间"
-    - "Remote publicId 继续保持 opaque ReplicaKey"
-    - "Projection / Surface 不直接读取 hub_remote_replica_* 私表"
-    - "Surface 继续只绑定 127.0.0.1"
+    - "Tombstone 是复制控制语义，不成为第二套 Canonical Fact"
+    - "删除变化必须使用单调 Change Journal revision，不使用 occurredAt/capturedAt 作为 watermark"
+    - "可能已发送的 Frozen Tombstone Batch 必须保持 sequence/batchId/contentHash 不可变"
+    - "Hub Tombstone 导入与 ACK/Committed Batch/Remote Entity 状态必须保持事务一致"
+    - "staged/retired Generation 继续不可通过 Unified Read 泄漏"
+    - "Local-first：任何复制删除失败都不得阻塞本机数据路径"
   forbidden:
     - "未经明确要求发布 npm 或创建 Release"
     - "开放任何 LAN/公网监听"
-    - "把 omitted/redacted 映射为空字符串、空对象或假时间"
-    - "用 originEntityId 作为 Remote 路由 ID"
-    - "为了列表重写现有 57K Local ReviewPage"
+    - "用 missing Canonical row 静默猜测删除"
+    - "把 Tombstone 当作空 body Entity"
+    - "物理删除 Replication 审计状态导致 exact retry 无法验证"
   frozen:
-    - "H1-H8 Hub Runtime / Replication / Replica / Unified Read 基础"
-    - "H9 Availability-aware Hub Review DTO + Projection + Runtime Service"
-    - "H10 loopback Hub Review detail API + /review/hub/:ReplicaKey Web Reader"
+    - "H1-H6 Node Runtime / Replication Generation / Durable State"
+    - "H7 Remote Replica Store / Transactional Ingest"
+    - "H8 Unified Read"
+    - "H9 Availability-aware Hub Review"
+    - "H10 loopback Hub Review detail"
+    - "H11 active-generation 会话发现、列表 API 与任务复盘 Local/Remote 混排"
     - "Local-first、单 Hub 星型拓扑、不提供 Remote Control"
   deferred:
     - action: "Replication 网络 Surface / Pairing Security"
       until: "用户重新明确要求考虑 HTTPS / 网络接入"
 
 acceptance:
-  - "Unified Read 可列出 Hub local + active Remote LogicalSession，且不泄漏 staged/retired generation"
-  - "Remote Session Summary 的 title/time Availability 保真"
-  - "loopback Hub Review list API 返回 opaque publicId，可直接进入 H10 detail"
-  - "Web 可从任务复盘明确进入远程会话列表并打开远程会话"
-  - "旧 Local Review API/UI 无行为回归"
-  - "H11 不增加新的网络可达面"
+  - "Node 能确定性生成并冻结 Tombstone，而不是因 Canonical row 缺失直接失败或猜测"
+  - "Hub 能事务化、幂等地应用 Tombstone，并返回正确连续 ACK"
+  - "Unified Read 不再返回 active Generation 中已 Tombstone 的 Remote Entity"
+  - "重复发送 Tombstone 与进程重启不会破坏 exact retry / ACK 语义"
+  - "H12 不增加新的网络可达面"
 
 progress:
   current:
-    - "H10 已增加 GET /api/v1/hub/review/:opaquePublicId?limit=，仍运行于既有 127.0.0.1 Local Surface"
-    - "H10 Surface 测试锁定 200/404/503、limit 门禁及 redacted/omitted DTO 原样透传"
-    - "H10 Web 已增加 /review/hub/:ReplicaKey 独立远程复盘阅读页，不修改旧 Local Review DTO/页面"
-    - "Remote payload redacted / omitted / null 均有明确中文状态，不伪造成空正文"
-    - "H10 候选 db8b8082c45f04e65e6e58699f3b6e8f0bf2c0bf 已通过 Linux/macOS 全部主 CI；Windows Typecheck/Test/Build/Desktop package/Smoke/Hook Dispatcher/npm lifecycle/npm contents 均已通过，只剩 Actions 清理步骤"
+    - "H11 UnifiedLogicalSessionReader 已支持 Local + active Remote Session 列表，Remote 继续使用 ReplicaKey opaque publicId"
+    - "H11 HubReviewSessionSummaryDto / HubReviewProjection.query() / GET /api/v1/hub/review 已完成，title/time Availability 保真"
+    - "普通 /review 左侧会话列表已直接混排本机与远程会话，仍按今天/昨天/更早和真实会话时间排序"
+    - "远程会话仅增加轻量“远程 · Node”来源标识；redacted/omitted 显式显示，不伪造成空标题或假时间"
+    - "远程摘要缺失 source/project/status 维度时，对应本地筛选 fail-closed 隐藏远程项；时间范围和标题/Node 搜索使用可证明字段"
+    - "远程项点击进入 /review/hub/:ReplicaKey，本地项继续走原 Local Review，不污染 Local selectedId"
+    - "H11 最终代码候选 26e567c00b9c750548327d3eeb9cbb757a05b001 已通过 Linux/macOS/Windows Typecheck、Test、Build；Windows Desktop package、Smoke、Hook Dispatcher、npm lifecycle、npm contents 也通过"
   next:
-    - "给 UnifiedLogicalSessionReader 增加最小 list/query contract"
-    - "SQLite Unified Read 实现 active-generation Remote LogicalSession 列表"
-    - "增加 Hub Review Session Summary DTO/Projection/loopback list API"
-    - "Web 增加远程会话列表入口，不重写 Local ReviewPage"
+    - "盘点当前 Canonical 删除入口与 Change Journal DELETE 缺口"
+    - "定义 Node Tombstone 生成输入，复用 H3 Tombstone hash/validation"
+    - "接 H5 Pending/Frozen durable state，不改变已有 Entity candidate 幂等语义"
+    - "扩 H7 Hub Transactional Ingest 应用 Tombstone，并锁定 rollback/exact retry"
+    - "验证 Unified Read 对 Tombstone 的不可见性"
 
 decisions:
-  - "H11 只解决远程会话可发现性，不趁机扩 Overview/Usage/Facet"
-  - "H10 Web 使用独立轻量 Hub Review client/page，而不是膨胀 Local ClientModel"
-  - "Local 和 Remote Review 暂时保持兼容增量双路径"
-  - "HTTPS / Pairing / TLS 继续延期"
+  - "H11 不创建独立远程会话产品区，直接融入现有任务复盘会话列表"
+  - "Local/Remote 详情 DTO 继续兼容增量双路径，不为了列表重写成熟 Local Review"
+  - "H12 先完成删除语义，Replication Transport / HTTPS / Pairing / TLS 继续延期"
   - "只有改变冻结长期不变量时才发起 ADR / Contract Review"
 
 repository:
