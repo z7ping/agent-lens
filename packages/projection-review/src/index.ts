@@ -8,6 +8,8 @@ import {
   reviewProjectionInternals as baseReviewProjectionInternals,
 } from './projection'
 
+export { HubReviewProjection, hubReviewProjectionInternals } from './hub'
+
 function asRecord(value: JsonValue | unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
