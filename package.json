@@ -31,6 +31,7 @@
     "build:dist": "node scripts/build-distribution.mjs",
     "build": "npm run build:dist",
     "smoke:dist": "node scripts/smoke-distribution.mjs",
+    "smoke:npm-package": "node scripts/smoke-npm-package.mjs",
     "desktop:prepare": "node scripts/prepare-desktop.mjs",
     "desktop:win": "npm run check:web-presentation && npm run check:brand-assets && npm run check:desktop-shell && npm run build:dist && npm run desktop:prepare && npm run dist:win --workspace @agent-lens/desktop",
     "desktop:mac": "npm run check:web-presentation && npm run check:brand-assets && npm run check:desktop-shell && npm run build:dist && npm run desktop:prepare && npm run dist:mac --workspace @agent-lens/desktop",
@@ -47,7 +48,7 @@
     "perf:daemon-startup": "tsx scripts/performance/daemon-startup-benchmark.ts",
     "perf:web-live-visibility": "tsx scripts/performance/web-live-visibility-benchmark.ts",
     "perf:daemon-idle-cpu": "tsx scripts/performance/daemon-idle-cpu-benchmark.ts",
-    "release:check": "npm run check:web-presentation && npm run check:brand-assets && npm run check:desktop-shell && npm run typecheck && npm test && npm run build:dist && npm run smoke:dist && npm pack --dry-run",
+    "release:check": "npm run check:web-presentation && npm run check:brand-assets && npm run check:desktop-shell && npm run typecheck && npm test && npm run build:dist && npm run smoke:dist && npm run smoke:npm-package",
     "release:version": "node scripts/bump-version.mjs",
     "release:prepare": "pwsh -NoLogo -NoProfile -File scripts/release.ps1",
     "prepack": "npm run check:web-presentation && npm run check:brand-assets && npm run check:desktop-shell && npm run build:dist"
