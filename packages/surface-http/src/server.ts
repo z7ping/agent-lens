@@ -13,7 +13,7 @@ import type {
 } from '@agent-lens/core'
 import { UsageInsightsProjection } from '@agent-lens/projection-insights'
 import { AgentOverviewProjection, FacetProjection, SessionRelationshipProjection } from '@agent-lens/projection-overview'
-import { ReviewProjection } from '@agent-lens/projection-review'
+import { ReviewProjection, type HubReviewProjection } from '@agent-lens/projection-review'
 import { SessionProjection } from '@agent-lens/projection-session'
 import { TimelineProjection } from '@agent-lens/projection-timeline'
 import { ToolAssetUsageProjection } from '@agent-lens/projection-usage'
@@ -67,6 +67,7 @@ export interface HttpSurfaceOptions {
   capabilities?: CapabilityService
   capturePolicy?: CapturePolicyService
   backup?: BackupService
+  hubReview?: Pick<HubReviewProjection, 'get'>
 }
 
 export interface RunningHttpSurface {
@@ -558,6 +559,21 @@ export async function startHttpSurface(
       }
       if (url.pathname === '/api/v1/agents') {
         writeJson(response, 200, await agents.query())
+        return
+      }
+      if (url.pathname.startsWith('/api/v1/hub/review/')) {
+        if (!options.hubReview) {
+          writeJson(response, 503, { error: 'hub_review_unavailable' })
+          return
+        }
+        const id = decodeURIComponent(url.pathname.slice('/api/v1/hub/review/'.length))
+        if (!id) {
+          writeJson(response, 404, { error: 'not_found' })
+          return
+        }
+        const limit = parseLimit(url.searchParams, 500) ?? 500
+        const detail = await options.hubReview.get(id, limit)
+        writeJson(response, detail ? 200 : 404, detail ?? { error: 'not_found' })
         return
       }
       if (url.pathname === '/api/v1/review') {
