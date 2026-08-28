@@ -1,3 +1,4 @@
+import { HubReviewProjection } from '@agent-lens/projection-review'
 import { defineAgentLensPlugin, type AgentLensContext } from '@agent-lens/runtime-cordis'
 import { HttpEventHub } from './events'
 import {
@@ -9,6 +10,7 @@ import {
 declare module '@deepseek-ai/cordis' {
   interface Context {
     http: RunningHttpSurface
+    hubReview: HubReviewProjection
   }
 }
 
@@ -27,6 +29,10 @@ const manifest = {
 const applyHttpSurface = Object.assign(
   async (ctx: AgentLensContext, config: HttpSurfacePluginConfig = {}) => {
     const eventHub = new HttpEventHub()
+    const hubReview = new HubReviewProjection(
+      ctx.unifiedRead.logicalSessions,
+      ctx.unifiedRead.observations,
+    )
 
     ctx.on('observation/committed', event => {
       void (async () => {
@@ -83,14 +89,16 @@ const applyHttpSurface = Object.assign(
       capturePolicy: ctx.capturePolicy,
       backup: ctx.backup,
     })
-    const unprovide = ctx.provide('http', surface)
+    const unprovideHubReview = ctx.provide('hubReview', hubReview)
+    const unprovideHttp = ctx.provide('http', surface)
     return async () => {
-      unprovide()
+      unprovideHttp()
+      unprovideHubReview()
       eventHub.close()
       await surface.dispose()
     }
   },
-  { inject: ['storage', 'sources', 'capabilities', 'capturePolicy', 'backup'] },
+  { inject: ['storage', 'unifiedRead', 'sources', 'capabilities', 'capturePolicy', 'backup'] },
 )
 
 export const httpSurfacePlugin = defineAgentLensPlugin(manifest, applyHttpSurface)
