@@ -1,9 +1,9 @@
 # AgentLens 1.0 双发行运维与共存规则
 
-更新日期：2026-08-24  
+更新日期：2026-08-29  
 状态：1.0 稳定化实现基线
 
-本文记录 npm / CLI 与 Windows Desktop 同时作为一等发行方式时的实际运维规则。架构决策以 `docs/adr/0004-dual-distribution-single-runtime-lifecycle.md` 为准。
+本文记录 npm / CLI 与 Windows Desktop 同时作为一等发行方式时的实际运维规则。
 
 ## 1. 总原则
 
@@ -95,6 +95,36 @@ Desktop：
 - Pi 不安装 Hook。
 
 Desktop 的 Hook 文件在正式安装包中解包到外部进程可访问路径，避免 PowerShell / Electron-as-Node 无法直接读取 `app.asar` 内部 Hook 文件。
+
+### 3.1 Desktop CLI
+
+Windows Desktop 作为一等发行方式，安装后必须同时提供可直接执行的：
+
+```powershell
+agent-lens -h
+agent-lens status
+agent-lens doctor
+```
+
+Desktop CLI 不是第二套 CLI 实现。安装器只安装一个薄 `agent-lens.cmd` shim：
+
+```text
+agent-lens.cmd
+  -> AgentLens.exe + ELECTRON_RUN_AS_NODE=1
+  -> resources/app.asar.unpacked/runtime/cli.mjs
+  -> 同一套 CLI / Runtime / ~/.agent-lens/1.0
+```
+
+Windows 安装器将当前 Desktop 安装目录幂等加入当前用户 `PATH`。规则如下：
+
+- 不使用 `setx`，避免长 PATH 被截断；
+- 不覆盖整个用户 PATH；
+- 不静默安装、卸载或修改全局 npm 包；
+- 覆盖升级时先移除旧安装目录 PATH，再由新安装阶段重新登记，避免改变安装目录后残留陈旧 PATH；
+- 正常卸载时只移除 Desktop 自己的安装目录 PATH；
+- Desktop 与 npm CLI 同时存在时，本轮不强行决定最终命令优先级，但无论从哪种入口启动，都必须进入同一个 1.x Runtime / 数据目录。
+
+修改 PATH 后，已经打开的 PowerShell / CMD 不会自动刷新自身环境；用户应重新打开终端再验证 `agent-lens -h`。
 
 Windows Desktop 的 Electron bootstrap 与 Daemon 日志必须使用同一目录。打包版优先写入 `<安装目录>\logs`，可通过 `AGENT_LENS_LOG_DIR` 显式覆盖；安装目录不可写时才回退 `%APPDATA%\AgentLens\logs`。不得再由 npm 包名派生出另一套日志目录。
 
@@ -194,6 +224,8 @@ npm.json 可能仍存在
 ```text
 AgentLens.exe / Desktop HookRoot 消失
   ↓
+Desktop 安装目录从用户 PATH 移除
+  ↓
 desktop.json 可能仍存在
   ↓
 共享分发器验证失败
@@ -201,7 +233,7 @@ desktop.json 可能仍存在
 自动回退 npm
 ```
 
-不需要重写 Codex / Claude Hook 配置。
+不需要重写 Codex / Claude Hook 配置，也不得删除 npm 全局命令或 npm PATH。
 
 ### 6.3 两种发行都不存在
 
@@ -243,6 +275,15 @@ Task Scheduler
   -> node dist/cli.mjs service run
 ```
 
+Desktop CLI：
+
+```text
+PowerShell / CMD
+  -> agent-lens.cmd
+  -> AgentLens.exe (ELECTRON_RUN_AS_NODE=1)
+  -> runtime/cli.mjs
+```
+
 Hook：
 
 ```text
@@ -253,7 +294,7 @@ Native Hook
   -> Node / Electron-as-Node Hook
 ```
 
-这两套 PowerShell 都只是 Windows 执行包装，不属于 AgentLens Runtime。
+这些包装只解决发行与 Windows 进程启动问题，不属于第二套 AgentLens Runtime。
 
 ## 9. 当前自动验收
 
@@ -273,12 +314,18 @@ Windows 额外验证：
 - `owner=service` Health；
 - `doctor` 生命周期一致性；
 - 共享 Hook 分发器 stdin -> Durable Inbox；
-- 陈旧 Desktop 登记存在时自动回退有效 npm Provider。
+- 陈旧 Desktop 登记存在时自动回退有效 npm Provider；
+- Installer 安装后必须存在 `agent-lens.cmd`，安装目录存在于当前用户 PATH；
+- `Get-Command agent-lens` 必须解析到 Desktop shim，`agent-lens -h` 必须成功；
+- 覆盖升级后 CLI/PATH 仍可用且不得重复堆叠 PATH；
+- 卸载 Desktop 后必须清掉自己的 PATH 项。
 
 ## 10. 仍需人工实机验收
 
 自动化不能替代以下体验检查：
 
+- Windows 安装完成后重新打开 PowerShell，`agent-lens -h` 可直接运行；
+- Desktop 与 npm CLI 同时安装时，不会静默删除、覆盖 npm；卸载 Desktop 后 npm CLI（若存在）仍可工作；
 - Windows 登录后的肉眼无黑框；
 - Desktop 登录自启开关与 Windows 系统实际状态一致；
 - 真实 Codex / Claude Code Hook 是否完全无闪窗；
