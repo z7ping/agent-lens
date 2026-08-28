@@ -6,6 +6,7 @@
 - 已安装 Node.js 22、GitHub CLI，并完成 `gh auth status` 登录。
 - 当前仓库的 GitHub Actions Secrets 已配置：预发布可以不配置签名凭据；正式版需要 Windows 和 macOS 签名/公证凭据。
 - 版本号使用 SemVer，例如 `1.0.0-alpha.1`、`1.0.0-beta.1`、`1.0.0`。
+- 发布修复建议从目标基线切 `release/<version>` 分支；该分支只接收本次发版修复，不混入下一阶段功能开发。
 
 ## 2. 一键准备版本
 
@@ -44,7 +45,9 @@ pwsh -NoLogo -NoProfile -File .\scripts\release.ps1 -Version 1.0.0-alpha.1
 pwsh -NoLogo -NoProfile -File .\scripts\release.ps1 -Version 1.0.0-alpha.1 -Publish
 ```
 
-脚本会依次推送 `main`、推送 Tag，并创建 GitHub Release。带 `alpha` / `beta` / `rc` 的版本自动标记为 Pre-release；GitHub Release 发布后，Windows、macOS/Linux 和 npm 工作流会自动运行。
+脚本会推送当前 `HEAD` 所在发布分支、推送 Tag，并创建 GitHub Release；不会强制切换或推送 `main`。带 `alpha` / `beta` / `rc` 的版本自动标记为 Pre-release；GitHub Release 发布后，Windows、macOS/Linux 和 npm 工作流会自动运行。
+
+发布分支上的通用修复在发版完成后必须同步回 `main`，避免后续开发重新引入已经修复的问题。
 
 ## 5. 发布后核对
 
