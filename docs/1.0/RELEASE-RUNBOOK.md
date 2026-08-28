@@ -7,50 +7,68 @@
 - 当前仓库的 GitHub Actions Secrets 已配置：预发布可以不配置签名凭据；正式版需要 Windows 和 macOS 签名/公证凭据。
 - 版本号使用 SemVer，例如 `1.0.0-alpha.1`、`1.0.0-beta.1`、`1.0.0`。
 
-## 2. 一键准备版本
+## 2. 日常一键发布
 
-先预览将会修改的文件：
+日常发布只执行：
 
 ```powershell
-npm run release:version -- 1.0.0-alpha.1 --dry-run
+pwsh -NoLogo -NoProfile -File .\scripts\release.ps1 -Publish
 ```
 
-确认后执行同步：
+该命令自动计算下一个版本、同步所有版本文件、更新 CHANGELOG、运行完整发行检查、创建提交和 Tag、原子推送，并创建 GitHub Release。日常发布不需要手工填写版本号，也不需要先执行预览或准备命令。
+
+默认的 `Auto` 规则是：
+
+- 当前为预发布版时递增末尾序号，例如 `1.0.0-alpha.1 -> 1.0.0-alpha.2`；
+- 当前为正式版时递增 patch，例如 `1.0.0 -> 1.0.1`。
+
+如果只想确认自动计算结果而不修改任何文件，可以执行可选预览：
 
 ```powershell
-npm run release:version -- 1.0.0-alpha.1
+pwsh -NoLogo -NoProfile -File .\scripts\release.ps1 -Preview
 ```
 
-该命令会同步根包、所有 workspace 包、内部依赖锁定版本、CLI/插件运行时版本、发行冒烟断言和 CHANGELOG，并保留旧版本章节。
-
-## 3. 本地检查并创建提交/Tag
+需要结束预发布或明确升 minor / major 时，才直接使用高级入口：
 
 ```powershell
-pwsh -NoLogo -NoProfile -File .\scripts\release.ps1 -Version 1.0.0-alpha.1
+pwsh -NoLogo -NoProfile -File .\scripts\release.ps1 -ReleaseType Stable -Publish
+pwsh -NoLogo -NoProfile -File .\scripts\release.ps1 -ReleaseType Minor -Publish
+pwsh -NoLogo -NoProfile -File .\scripts\release.ps1 -ReleaseType Major -Publish
+```
+
+高级场景仍可用 `-Version 1.0.0-beta.1 -Publish` 显式指定版本；脚本会拒绝降级和非法 SemVer。
+
+## 3. 可选：只在本地准备
+
+```powershell
+pwsh -NoLogo -NoProfile -File .\scripts\release.ps1
 ```
 
 默认会执行完整 `release:check`，然后创建：
 
-- 提交：`发布 AgentLens 1.0.0-alpha.1`
-- Tag：`v1.0.0-alpha.1`
+- 提交：`发布 AgentLens <自动计算出的版本>`
+- Tag：`v<自动计算出的版本>`
 
 该模式不会推送远端，适合先检查提交和 Tag。
 
-## 4. 推送并创建 GitHub Release
+## 4. 发布已经在一键命令中完成
 
-确认本地提交和 Tag 无误后执行：
+如果第 3 节选择了只在本地准备，确认后执行：
 
 ```powershell
-pwsh -NoLogo -NoProfile -File .\scripts\release.ps1 -Version 1.0.0-alpha.1 -Publish
+pwsh -NoLogo -NoProfile -File .\scripts\release.ps1 -Publish
 ```
 
-脚本会依次推送 `main`、推送 Tag，并创建 GitHub Release。带 `alpha` / `beta` / `rc` 的版本自动标记为 Pre-release；GitHub Release 发布后，Windows、macOS/Linux 和 npm 工作流会自动运行。
+脚本会自动计算并同步版本，完成检查和提交，然后以原子推送同时上传当前提交与 Tag，并创建 GitHub Release。带 `alpha` / `beta` / `rc` 的版本自动标记为 Pre-release；GitHub Release 发布后，Windows、macOS/Linux 和 npm 工作流会自动运行。
+
+如果先执行了第 3 节的本地准备，脚本会打印带确定版本号的发布命令。再次执行该命令时，只会复用“指向当前提交”的本地 Tag；同名 Tag 指向其他提交或远端已经存在时会停止发布。
 
 ## 5. 发布后核对
 
 ```powershell
+$version = (Get-Content -LiteralPath package.json -Raw | ConvertFrom-Json).version
 gh run list --repo z7ping/agent-lens --limit 10
-gh release view v1.0.0-alpha.1 --repo z7ping/agent-lens
+gh release view "v$version" --repo z7ping/agent-lens
 npm view @z7ping/agent-lens versions --json
 ```
 
