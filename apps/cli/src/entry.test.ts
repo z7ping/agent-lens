@@ -19,3 +19,20 @@ test('update 命令兼容 --json 前后位置', () => {
   assert.deepEqual(cliEntryInternals.updateArgs(['--json', 'update', '--check']), ['--json', '--check'])
   assert.equal(cliEntryInternals.updateArgs(['status', '--json']), null)
 })
+
+test('npm bin 符号链接解析到真实 CLI 时仍视为直接执行', () => {
+  const canonicalize = (path: string) => path.endsWith('/node_modules/.bin/agent-lens')
+    ? '/consumer/node_modules/@z7ping/agent-lens/dist/cli.mjs'
+    : path
+
+  assert.equal(cliEntryInternals.isDirectInvocation(
+    'file:///consumer/node_modules/@z7ping/agent-lens/dist/cli.mjs',
+    '/consumer/node_modules/.bin/agent-lens',
+    canonicalize,
+  ), true)
+  assert.equal(cliEntryInternals.isDirectInvocation(
+    'file:///consumer/node_modules/@z7ping/agent-lens/dist/cli.mjs',
+    '/consumer/other-cli.mjs',
+    canonicalize,
+  ), false)
+})
