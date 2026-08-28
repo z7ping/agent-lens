@@ -5,12 +5,15 @@ import type {
   ObservationRepository,
   SessionRepository,
 } from '@agent-lens/core'
-import type {
-  ReplicationAvailability,
-  UnifiedCanonicalObservation,
-  UnifiedLogicalSession,
-  UnifiedLogicalSessionReader,
-  UnifiedObservationReader,
+import {
+  createOriginEntityRef,
+  replicaKeyFor,
+  type ReplicationAvailability,
+  type UnifiedCanonicalObservation,
+  type UnifiedLogicalSession,
+  type UnifiedLogicalSessionReader,
+  type UnifiedObservationReader,
+  type UnifiedReadReferences,
 } from '@agent-lens/core/replication'
 import type {
   HubRemoteObservationQuery,
@@ -63,6 +66,21 @@ function localSessionBody(session: LogicalSession): Readonly<Record<string, Repl
   }
 }
 
+function localSessionReferences(session: LogicalSession): UnifiedReadReferences {
+  return {
+    installation: { entityType: 'AgentInstallation', publicId: session.installationId },
+    ...(session.runtimeProfileId
+      ? { runtimeProfile: { entityType: 'RuntimeProfile', publicId: session.runtimeProfileId } }
+      : {}),
+    ...(session.projectId
+      ? { project: { entityType: 'Project', publicId: session.projectId } }
+      : {}),
+    ...(session.workspaceId
+      ? { workspace: { entityType: 'Workspace', publicId: session.workspaceId } }
+      : {}),
+  }
+}
+
 function localObservationBody(observation: CanonicalObservation): Readonly<Record<string, ReplicationAvailability>> {
   return {
     id: availability(observation.id),
@@ -84,6 +102,19 @@ function localObservationBody(observation: CanonicalObservation): Readonly<Recor
   }
 }
 
+function localObservationReferences(observation: CanonicalObservation): UnifiedReadReferences {
+  return {
+    host: { entityType: 'Host', publicId: observation.hostId },
+    installation: { entityType: 'AgentInstallation', publicId: observation.installationId },
+    ...(observation.projectId ? { project: { entityType: 'Project', publicId: observation.projectId } } : {}),
+    ...(observation.workspaceId ? { workspace: { entityType: 'Workspace', publicId: observation.workspaceId } } : {}),
+    logicalSession: { entityType: 'LogicalSession', publicId: observation.logicalSessionId },
+    sourceSession: { entityType: 'SourceSession', publicId: observation.sourceSessionId },
+    ...(observation.actorId ? { actor: { entityType: 'AgentActor', publicId: observation.actorId } } : {}),
+    evidence: observation.evidenceRefs.map(publicId => ({ entityType: 'Evidence', publicId })),
+  }
+}
+
 function remoteAvailabilityBody(
   entity: HubRemoteReadEntity,
   expectedType: 'LogicalSession' | 'CanonicalObservation',
@@ -97,10 +128,37 @@ function remoteAvailabilityBody(
   return entity.body as unknown as Readonly<Record<string, ReplicationAvailability>>
 }
 
-/**
- * SQLite implementation of the Core Unified LogicalSession read contract.
- * Local Canonical IDs stay unchanged; remote entities are addressed by ReplicaKey.
- */
+function remoteReferences(entity: HubRemoteReadEntity): UnifiedReadReferences {
+  if (!entity.references || Array.isArray(entity.references) || typeof entity.references !== 'object') return {}
+  const output: Record<string, any> = {}
+  const mapRef = (value: unknown): { entityType: string; publicId: string } | undefined => {
+    if (!value || Array.isArray(value) || typeof value !== 'object') return undefined
+    const record = value as Record<string, unknown>
+    if (record.kind === 'node' && typeof record.entityType === 'string' && typeof record.originEntityId === 'string') {
+      return {
+        entityType: record.entityType,
+        publicId: replicaKeyFor(createOriginEntityRef(entity.originNodeId, record.entityType, record.originEntityId)),
+      }
+    }
+    if (record.kind === 'shared' && typeof record.entityType === 'string' && typeof record.sharedKey === 'string') {
+      return { entityType: record.entityType, publicId: record.sharedKey }
+    }
+    return undefined
+  }
+
+  for (const [name, raw] of Object.entries(entity.references as Record<string, unknown>)) {
+    if (Array.isArray(raw)) {
+      const refs = raw.map(mapRef).filter((item): item is { entityType: string; publicId: string } => Boolean(item))
+      if (refs.length) output[name] = refs
+      continue
+    }
+    const ref = mapRef(raw)
+    if (ref) output[name] = ref
+  }
+  return output as UnifiedReadReferences
+}
+
+/** SQLite implementation of the Core Unified LogicalSession read contract. */
 export class HubUnifiedLogicalSessionReader implements UnifiedLogicalSessionReader {
   constructor(
     private readonly localNodeId: string,
@@ -114,12 +172,9 @@ export class HubUnifiedLogicalSessionReader implements UnifiedLogicalSessionRead
       return {
         publicId: local.id,
         entityType: 'LogicalSession',
-        origin: {
-          kind: 'local',
-          nodeId: this.localNodeId,
-          entityId: local.id,
-        },
+        origin: { kind: 'local', nodeId: this.localNodeId, entityId: local.id },
         body: localSessionBody(local),
+        references: localSessionReferences(local),
       }
     }
 
@@ -135,14 +190,12 @@ export class HubUnifiedLogicalSessionReader implements UnifiedLogicalSessionRead
         generationId: remote.generationId,
       },
       body: remoteAvailabilityBody(remote, 'LogicalSession'),
+      references: remoteReferences(remote),
     }
   }
 }
 
-/**
- * SQLite implementation of the Core availability-aware observation contract.
- * Remote bodies are never cast into CanonicalObservation.
- */
+/** SQLite implementation of the Core availability-aware observation contract. */
 export class HubUnifiedObservationReader implements UnifiedObservationReader {
   constructor(
     private readonly localNodeId: string,
@@ -167,12 +220,9 @@ export class HubUnifiedObservationReader implements UnifiedObservationReader {
       return observations.map(observation => ({
         publicId: observation.id,
         entityType: 'CanonicalObservation' as const,
-        origin: {
-          kind: 'local' as const,
-          nodeId: this.localNodeId,
-          entityId: observation.id,
-        },
+        origin: { kind: 'local' as const, nodeId: this.localNodeId, entityId: observation.id },
         body: localObservationBody(observation),
+        references: localObservationReferences(observation),
       }))
     }
 
@@ -192,6 +242,7 @@ export class HubUnifiedObservationReader implements UnifiedObservationReader {
         generationId: observation.generationId,
       },
       body: remoteAvailabilityBody(observation, 'CanonicalObservation'),
+      references: remoteReferences(observation),
     }))
   }
 }
