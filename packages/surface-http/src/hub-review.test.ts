@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { HubReviewDetailDto } from '@agent-lens/protocol'
+import type { HubReviewDetailDto, HubReviewSessionListDto } from '@agent-lens/protocol'
 import { SqliteStorageService } from '@agent-lens/storage-sqlite'
 import { startHttpSurface } from './server'
 
@@ -38,11 +38,30 @@ const remoteDetail: HubReviewDetailDto = {
   },
 }
 
-test('Hub Review route stays on loopback and preserves availability-aware DTO', async () => {
+const sessionList: HubReviewSessionListDto = {
+  items: [{
+    id: remoteDetail.logicalSessionId,
+    origin: remoteDetail.origin,
+    title: { state: 'omitted', reason: 'policy' },
+    startedAt: { state: 'value', value: '2026-08-28T00:00:00.000Z' },
+    endedAt: { state: 'omitted', reason: 'not-captured' },
+  }],
+  meta: {
+    count: 1,
+    generatedAt: '2026-08-28T00:00:02.000Z',
+  },
+}
+
+test('Hub Review routes stay on loopback and preserve availability-aware DTOs', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   await storage.migrate()
   const requested: Array<{ id: string; limit: number | undefined }> = []
+  const queried: number[] = []
   const hubReview = {
+    async query(limit?: number) {
+      queried.push(limit ?? 0)
+      return sessionList
+    },
     async get(id: string, limit?: number) {
       requested.push({ id, limit })
       return id === remoteDetail.logicalSessionId ? remoteDetail : null
@@ -55,6 +74,11 @@ test('Hub Review route stays on loopback and preserves availability-aware DTO', 
     const base = `http://${surface.host}:${surface.port}`
     const id = encodeURIComponent(remoteDetail.logicalSessionId)
 
+    const listResponse = await fetch(`${base}/api/v1/hub/review?limit=25`)
+    assert.equal(listResponse.status, 200)
+    assert.deepEqual(await listResponse.json(), sessionList)
+    assert.deepEqual(queried, [25])
+
     const response = await fetch(`${base}/api/v1/hub/review/${id}?limit=25`)
     assert.equal(response.status, 200)
     assert.deepEqual(await response.json(), remoteDetail)
@@ -64,28 +88,32 @@ test('Hub Review route stays on loopback and preserves availability-aware DTO', 
     assert.equal(missing.status, 404)
     assert.deepEqual(await missing.json(), { error: 'not_found' })
 
-    const badLimit = await fetch(`${base}/api/v1/hub/review/${id}?limit=501`)
-    assert.equal(badLimit.status, 400)
-    assert.deepEqual(await badLimit.json(), {
-      error: 'bad_request',
-      message: 'Limit must be an integer between 1 and 500',
-    })
+    for (const path of [`/api/v1/hub/review?limit=501`, `/api/v1/hub/review/${id}?limit=501`]) {
+      const badLimit = await fetch(`${base}${path}`)
+      assert.equal(badLimit.status, 400)
+      assert.deepEqual(await badLimit.json(), {
+        error: 'bad_request',
+        message: 'Limit must be an integer between 1 and 500',
+      })
+    }
   } finally {
     await surface.dispose()
     storage.close()
   }
 })
 
-test('Hub Review route reports unavailable when projection is not mounted', async () => {
+test('Hub Review routes report unavailable when projection is not mounted', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   await storage.migrate()
   const surface = await startHttpSurface(storage, { port: 0 })
 
   try {
     const base = `http://${surface.host}:${surface.port}`
-    const response = await fetch(`${base}/api/v1/hub/review/${encodeURIComponent('replica/session')}`)
-    assert.equal(response.status, 503)
-    assert.deepEqual(await response.json(), { error: 'hub_review_unavailable' })
+    for (const path of ['/api/v1/hub/review', `/api/v1/hub/review/${encodeURIComponent('replica/session')}`]) {
+      const response = await fetch(`${base}${path}`)
+      assert.equal(response.status, 503)
+      assert.deepEqual(await response.json(), { error: 'hub_review_unavailable' })
+    }
   } finally {
     await surface.dispose()
     storage.close()
