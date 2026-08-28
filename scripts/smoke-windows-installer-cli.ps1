@@ -151,7 +151,11 @@ exit /b 0
   # 恢复假的 npm 文件，验证卸载 Desktop 绝不会动 npm 自己的目录或 PATH。
   New-Item -ItemType Directory -Force -Path (Join-Path $fakeNpmPrefix 'node_modules\@z7ping\agent-lens') | Out-Null
   '{"name":"@z7ping/agent-lens","version":"1.0.0-alpha.2"}' | Set-Content -Encoding UTF8 (Join-Path $fakeNpmPrefix 'node_modules\@z7ping\agent-lens\package.json')
-  '@echo off`r`necho npm-agent-lens-ci`r`nexit /b 0' | Set-Content -Encoding ASCII (Join-Path $fakeNpmPrefix 'agent-lens.cmd')
+  @"
+@echo off
+echo npm-agent-lens-ci
+exit /b 0
+"@ | Set-Content -Encoding ASCII (Join-Path $fakeNpmPrefix 'agent-lens.cmd')
 
   $uninstaller = Get-ChildItem $installDir -Filter 'Uninstall*.exe' | Select-Object -First 1
   if ($null -eq $uninstaller) { throw '覆盖升级后没有找到卸载器' }
