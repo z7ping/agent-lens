@@ -14,12 +14,14 @@ import type {
   StorageService,
   ToolService,
 } from '@agent-lens/core'
+import type { UnifiedReadService } from '@agent-lens/core/replication'
 import type { AgentLensNodeRuntime } from './node-identity'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
     node: AgentLensNodeRuntime
     storage: StorageService
+    unifiedRead: UnifiedReadService
     sources: SourceService
     identity: IdentityService
     observations: ObservationService
