@@ -60,7 +60,7 @@ const changelogHeading = `## ${requested}`
 const date = new Date().toISOString().slice(0, 10)
 const nextChangelog = changelog.includes(changelogHeading)
   ? changelog
-  : `${changelogHeading}（${date}）\n\n### Changed\n- 版本更新至 ${requested}，详见本次发布说明。\n\n${changelog}`
+  : `${changelogHeading}（${date}）\n\n### Added\n\n### Changed\n- 版本更新至 ${requested}，详见本次发布说明。\n\n### Fixed\n\n### Known limitations\n\n${changelog}`
 
 const changes = new Map()
 for (const { path, value } of packages) {
@@ -97,7 +97,7 @@ changes.set(changelogPath, nextChangelog)
 console.log(`${dryRun ? '[dry-run] ' : ''}准备将 ${oldVersion} 升级为 ${requested}，涉及 ${changes.size} 个文件。`)
 if (!dryRun) {
   for (const [path, content] of changes) await writeFile(path, content, 'utf8')
-  console.log('版本同步完成。下一步运行：npm run release:check')
+  console.log('版本同步完成。下一步完善 CHANGELOG，再进入 Draft Release 候选阶段。')
 }
 
 function file(relativePath) {
