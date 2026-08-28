@@ -9,7 +9,6 @@ AgentLens 1.0 是一次 Clean Rebuild。当前工作树只保留 1.0 实现；0.
 1. `ARCHITECTURE.md`
 2. `docs/1.0/CORE-CONTRACT.md`
 3. `docs/adr/0001-agentlens-1.0-clean-rebuild-and-cordis-runtime.md`
-4. `AGENTS.md`
 
 Issue、Milestone、Project 和 Pull Request 以 GitHub 为准。安全问题请按 `SECURITY.md` 私密报告。
 
