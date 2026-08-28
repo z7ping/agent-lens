@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   isLegacyAppInfo,
   isLegacyStartupContent,
+  legacyWindowsMigrationInternals,
   legacyWindowsPaths,
   looksLikeLegacyProcess,
 } from './legacy-windows-migration.mjs'
@@ -14,6 +15,7 @@ test('legacyWindowsPaths matches the 0.x Windows installed layout', () => {
   })
 
   assert.equal(paths.legacyInstallDir, 'C:\\Users\\tester\\.agent-lens\\app')
+  assert.equal(paths.legacyPackagePath, 'C:\\Users\\tester\\.agent-lens\\app\\package.json')
   assert.equal(paths.legacyPidFile, 'C:\\Users\\tester\\.agent-lens\\run\\server.pid')
   assert.equal(
     paths.legacyStartupFile,
@@ -29,11 +31,32 @@ test('isLegacyAppInfo only accepts AgentLens 0.x app-info responses', () => {
   assert.equal(isLegacyAppInfo(null), false)
 })
 
+test('readLegacyAppInfo rejects non-AgentLens and 1.x HTTP identities', async () => {
+  const response = info => async () => ({ ok: true, json: async () => info })
+  assert.deepEqual(
+    await legacyWindowsMigrationInternals.readLegacyAppInfo(56789, response({ name: '@z7ping/agent-lens', version: '0.7.0' })),
+    { name: '@z7ping/agent-lens', version: '0.7.0' },
+  )
+  assert.equal(
+    await legacyWindowsMigrationInternals.readLegacyAppInfo(56789, response({ name: '@z7ping/agent-lens', version: '1.0.0-alpha.1' })),
+    null,
+  )
+  assert.equal(
+    await legacyWindowsMigrationInternals.readLegacyAppInfo(56789, response({ name: 'other-service', version: '0.7.0' })),
+    null,
+  )
+})
+
 test('looksLikeLegacyProcess requires the known 0.x install directory and server entry', () => {
   const legacyInstallDir = 'C:\\Users\\tester\\.agent-lens\\app'
   assert.equal(looksLikeLegacyProcess({
     processId: 1234,
     commandLine: '"C:\\Program Files\\nodejs\\node.exe" "C:\\Users\\tester\\.agent-lens\\app\\server.js" 56789 --daemon',
+  }, legacyInstallDir), true)
+
+  assert.equal(looksLikeLegacyProcess({
+    processId: 1235,
+    commandLine: '"C:/Program Files/nodejs/node.exe" "C:/Users/tester/.agent-lens/app/server.js" 56789 --daemon',
   }, legacyInstallDir), true)
 
   assert.equal(looksLikeLegacyProcess({
