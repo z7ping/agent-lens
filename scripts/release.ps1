@@ -95,7 +95,6 @@ $reusePreparedVersion = $false
 if ($Version) {
   $Version = (& node scripts/resolve-release-version.mjs $currentVersion explicit $Version)
 } elseif ($Candidate -and -not (Test-RemoteTag "v$currentVersion")) {
-  # 当前版本尚未有远端 Tag，视为已经完成版本准备，可直接进入候选阶段。
   $Version = $currentVersion
   $reusePreparedVersion = $true
   Write-Host "检测到已准备但尚未打 Tag 的版本：$Version"
@@ -132,7 +131,7 @@ if (-not $reusePreparedVersion -and $Version -ne $currentVersion) {
 
   $pending = @(git status --porcelain)
   if ($pending.Count -gt 0) {
-    git add package.json package-lock.json apps packages CHANGELOG.md
+    git add package.json package-lock.json apps packages CHANGELOG.md scripts/smoke-distribution.mjs
     git commit -m "发布准备 AgentLens $Version"
     if ($LASTEXITCODE -ne 0) { throw '无法提交版本准备修改。' }
   }
@@ -152,9 +151,9 @@ Assert-CleanWorktree
 Assert-GhReady
 
 $previousTag = $null
-$releaseListJson = gh release list --repo $Repo --limit 1 --json tagName
+$releaseListJson = gh release list --repo $Repo --exclude-drafts --limit 1 --json tagName
 if ($LASTEXITCODE -eq 0 -and $releaseListJson) {
-  $releaseList = $releaseListJson | ConvertFrom-Json
+  $releaseList = @($releaseListJson | ConvertFrom-Json)
   if ($releaseList.Count -gt 0) { $previousTag = $releaseList[0].tagName }
 }
 
@@ -198,11 +197,15 @@ if ($LASTEXITCODE -eq 0 -and $existingReleaseJson) {
   if (-not $existingRelease.isDraft) {
     throw "Release $tag 已经不是 Draft，不能作为候选重新准备。"
   }
-  $editArgs = @('release', 'edit', $tag, '--repo', $Repo, '--title', "AgentLens $tag", '--notes-file', $notesPath)
+  $expectedPrerelease = $Version.Contains('-')
+  if ($existingRelease.isPrerelease -ne $expectedPrerelease) {
+    throw "Draft Release 的 prerelease 标记与版本通道不一致：$tag"
+  }
+  $editArgs = @('release', 'edit', $tag, '--repo', $Repo, '--verify-tag', '--title', "AgentLens $tag", '--notes-file', $notesPath)
   gh @editArgs
   if ($LASTEXITCODE -ne 0) { throw "无法更新 Draft Release：$tag" }
 } else {
-  $releaseArgs = @('release', 'create', $tag, '--repo', $Repo, '--draft', '--title', "AgentLens $tag", '--notes-file', $notesPath)
+  $releaseArgs = @('release', 'create', $tag, '--repo', $Repo, '--verify-tag', '--draft', '--title', "AgentLens $tag", '--notes-file', $notesPath)
   if ($Version.Contains('-')) { $releaseArgs += '--prerelease' }
   gh @releaseArgs
   if ($LASTEXITCODE -ne 0) { throw "无法创建 Draft Release：$tag" }
