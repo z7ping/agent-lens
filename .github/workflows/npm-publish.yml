@@ -198,9 +198,7 @@ jobs:
       - name: Verify alpha.1 release artifact
         if: steps.published.outputs.exists != 'true'
         shell: bash
-        run: |
-          cd release
-          grep 'z7ping-agent-lens-1.0.0-alpha.1.tgz' SHA256SUMS-npm.txt | sha256sum -c -
+        run: grep 'z7ping-agent-lens-1.0.0-alpha.1.tgz' release/SHA256SUMS-npm.txt | sha256sum -c -
 
       - name: Publish alpha.1 with Trusted Publishing
         if: steps.published.outputs.exists != 'true'
