@@ -21,7 +21,11 @@ try {
 }
 if (!rejected) throw new Error('未知预发布通道必须拒绝发布')
 
-const publishWorkflow = readFileSync('.github/workflows/npm-publish.yml', 'utf8')
+function readWorkflow(path) {
+  return readFileSync(path, 'utf8').replace(/\r\n/g, '\n')
+}
+
+const publishWorkflow = readWorkflow('.github/workflows/npm-publish.yml')
 if (publishWorkflow.includes('npm pack')) {
   throw new Error('正式 npm 发布阶段不得重新 npm pack；只能发布 Draft 阶段验证过的 tgz')
 }
@@ -33,7 +37,7 @@ if (!publishWorkflow.includes('gh release download "$GITHUB_REF_NAME"')
   throw new Error('正式 npm 发布必须下载 Release 候选、校验 SHA256，并使用唯一 ./ 本地 tgz 发布')
 }
 
-const candidateWorkflow = readFileSync('.github/workflows/npm-release-candidate.yml', 'utf8')
+const candidateWorkflow = readWorkflow('.github/workflows/npm-release-candidate.yml')
 if (!candidateWorkflow.includes("tags:\n      - 'v*'")
   || !candidateWorkflow.includes('check-release-candidate.mjs --wait-seconds 120')
   || !candidateWorkflow.includes('npm pack --pack-destination release')
