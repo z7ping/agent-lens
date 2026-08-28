@@ -6,6 +6,7 @@ on:
       - main
       - refactor/1.0-foundation
       - feature/asset-backup-insights
+      - 'release/**'
   pull_request:
     branches:
       - main
