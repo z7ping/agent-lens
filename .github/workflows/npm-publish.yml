@@ -52,8 +52,8 @@ jobs:
       - name: Smoke distributable
         run: npm run smoke:dist
 
-      - name: Verify npm package contents
-        run: npm pack --dry-run
+      - name: Pack, install and run npm artifact
+        run: npm run smoke:npm-package
 
   publish:
     runs-on: ubuntu-latest
@@ -110,6 +110,17 @@ jobs:
           npm sbom --sbom-format cyclonedx > release/sbom.cdx.json
           cp package-lock.json release/package-lock.json
           sha256sum release/*.tgz release/package-lock.json release/sbom.cdx.json > release/SHA256SUMS-npm.txt
+
+      - name: Smoke exact npm artifact
+        shell: bash
+        run: |
+          shopt -s nullglob
+          tarballs=(release/*.tgz)
+          if [[ ${#tarballs[@]} -ne 1 ]]; then
+            echo "Expected exactly one npm tarball, found ${#tarballs[@]}" >&2
+            exit 1
+          fi
+          node scripts/smoke-npm-package.mjs "./${tarballs[0]}"
 
       - name: Upload verification artifact
         uses: actions/upload-artifact@v4
