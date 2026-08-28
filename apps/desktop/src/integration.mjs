@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { spawn } from 'node:child_process'
 import { app, dialog, Notification, shell } from 'electron'
 import {
@@ -24,6 +24,30 @@ function runCli(args, env) {
         ...env,
         ELECTRON_RUN_AS_NODE: '1',
       },
+      windowsHide: true,
+      stdio: 'ignore',
+    })
+    child.once('error', () => resolve(false))
+    child.once('exit', code => resolve(code === 0))
+  })
+}
+
+function refreshDesktopCliPath() {
+  if (!app.isPackaged || process.platform !== 'win32') return Promise.resolve(false)
+  const installDir = dirname(process.execPath)
+  const helper = join(installDir, 'agent-lens-cli-path.ps1')
+  if (!existsSync(helper)) return Promise.resolve(false)
+
+  return new Promise(resolve => {
+    const child = spawn('powershell.exe', [
+      '-NoLogo',
+      '-NoProfile',
+      '-NonInteractive',
+      '-ExecutionPolicy', 'Bypass',
+      '-File', helper,
+      '-Action', 'install',
+      '-InstallDir', installDir,
+    ], {
       windowsHide: true,
       stdio: 'ignore',
     })
@@ -157,6 +181,7 @@ async function startDesktopUpdateChecks() {
 
 app.whenReady().then(async () => {
   if (process.env.AGENT_LENS_DESKTOP_SMOKE === '1') return
+  await refreshDesktopCliPath()
   await refreshDesktopIntegration()
   await startDesktopUpdateChecks()
 }).catch(() => undefined)

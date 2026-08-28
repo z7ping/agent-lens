@@ -96,9 +96,9 @@ Desktop：
 
 Desktop 的 Hook 文件在正式安装包中解包到外部进程可访问路径，避免 PowerShell / Electron-as-Node 无法直接读取 `app.asar` 内部 Hook 文件。
 
-### 3.1 Desktop CLI
+### 3.1 Desktop CLI 与 npm CLI
 
-Windows Desktop 作为一等发行方式，安装后必须同时提供可直接执行的：
+Windows Desktop 作为一等发行方式，必须在**没有可用 1.x npm CLI**时独立提供：
 
 ```powershell
 agent-lens -h
@@ -106,7 +106,13 @@ agent-lens status
 agent-lens doctor
 ```
 
-Desktop CLI 不是第二套 CLI 实现。安装器只安装一个薄 `agent-lens.cmd` shim：
+Desktop 不会为了获得 CLI 自动执行：
+
+```bash
+npm install -g @z7ping/agent-lens
+```
+
+也不会要求用户为了安装 Desktop 预先安装 Node.js / npm。Desktop 安装包本身已经包含同一份 `runtime/cli.mjs`，因此只需要提供一个薄 `agent-lens.cmd` shim：
 
 ```text
 agent-lens.cmd
@@ -115,16 +121,33 @@ agent-lens.cmd
   -> 同一套 CLI / Runtime / ~/.agent-lens/1.0
 ```
 
-Windows 安装器将当前 Desktop 安装目录幂等加入当前用户 `PATH`。规则如下：
+CLI 所有权与 Runtime 所有权必须分开判断：
+
+```text
+CLI 所有权
+  -> 看本机是否存在有效的 1.x npm AgentLens
+
+Runtime 所有权
+  -> 看 127.0.0.1:56789 是否已有兼容 Daemon，以及谁启动了它
+```
+
+Windows PATH 采用确定性规则，而不是依赖偶然顺序：
+
+1. 检测 `npm prefix -g`；
+2. 只有同时存在全局 `@z7ping/agent-lens/package.json`、`agent-lens.cmd`，且版本主版本号 `>= 1`，才视为有效 npm CLI；
+3. 有效 1.x npm CLI 存在时：npm 全局目录排在 Desktop 安装目录之前，npm CLI 是主入口；Desktop CLI 仍保留在后方作为 npm 被卸载后的兜底；
+4. 没有有效 1.x npm CLI，或只存在 0.x npm CLI 时：Desktop 安装目录排在前方，避免旧 0.x CLI 重新获得 1.x 默认命令所有权；
+5. Desktop 每次启动都会重新执行同一套 PATH 协调逻辑，因此用户后续安装 1.x npm 包后，下一次启动 Desktop 会自动把 npm CLI 调整为主入口；
+6. npm AgentLens 后续被卸载时，不需要重新安装 Desktop：npm wrapper 消失后，PATH 中后置的 Desktop shim 自动接替；
+7. 卸载 Desktop 时只移除 Desktop 自己的 PATH 项，不删除 npm 全局目录、npm 包或 npm wrapper。
+
+实现约束：
 
 - 不使用 `setx`，避免长 PATH 被截断；
 - 不覆盖整个用户 PATH；
 - 不静默安装、卸载或修改全局 npm 包；
-- 覆盖升级时先移除旧安装目录 PATH，再由新安装阶段重新登记，避免改变安装目录后残留陈旧 PATH；
-- 正常卸载时只移除 Desktop 自己的安装目录 PATH；
-- Desktop 与 npm CLI 同时存在时，本轮不强行决定最终命令优先级，但无论从哪种入口启动，都必须进入同一个 1.x Runtime / 数据目录。
-
-修改 PATH 后，已经打开的 PowerShell / CMD 不会自动刷新自身环境；用户应重新打开终端再验证 `agent-lens -h`。
+- 覆盖升级时先移除旧 Desktop PATH，再按当前 npm/Desktop 状态重新排序；
+- 修改 PATH 后，已经打开的 PowerShell / CMD 不会自动刷新自身环境，用户应重新打开终端再验证。
 
 Windows Desktop 的 Electron bootstrap 与 Daemon 日志必须使用同一目录。打包版优先写入 `<安装目录>\logs`，可通过 `AGENT_LENS_LOG_DIR` 显式覆盖；安装目录不可写时才回退 `%APPDATA%\AgentLens\logs`。不得再由 npm 包名派生出另一套日志目录。
 
@@ -206,18 +229,20 @@ Durable Inbox
 ### 6.1 npm + Desktop 都存在，卸载 npm
 
 ```text
-npm 文件消失
+npm agent-lens.cmd / package 消失
   ↓
-npm.json 可能仍存在
+PATH 中 Desktop shim 仍存在
   ↓
-共享分发器验证 hookRoot 失败
+agent-lens 命令自动回退 Desktop
   ↓
-跳过 npm
+npm.json 可能仍存在，但共享分发器验证 hookRoot 失败
+  ↓
+跳过 npm Provider
   ↓
 继续使用 Desktop
 ```
 
-不要求 npm uninstall 回调。
+不要求 npm uninstall 回调，也不要求重新安装 Desktop。
 
 ### 6.2 npm + Desktop 都存在，卸载 Desktop
 
@@ -226,11 +251,11 @@ AgentLens.exe / Desktop HookRoot 消失
   ↓
 Desktop 安装目录从用户 PATH 移除
   ↓
-desktop.json 可能仍存在
+npm 全局目录与 npm agent-lens.cmd 保持不变
   ↓
-共享分发器验证失败
+desktop.json 即使残留也因真实文件验证失败而失效
   ↓
-自动回退 npm
+共享分发器继续使用 npm Provider
 ```
 
 不需要重写 Codex / Claude Hook 配置，也不得删除 npm 全局命令或 npm PATH。
@@ -315,17 +340,22 @@ Windows 额外验证：
 - `doctor` 生命周期一致性；
 - 共享 Hook 分发器 stdin -> Durable Inbox；
 - 陈旧 Desktop 登记存在时自动回退有效 npm Provider；
-- Installer 安装后必须存在 `agent-lens.cmd`，安装目录存在于当前用户 PATH；
-- `Get-Command agent-lens` 必须解析到 Desktop shim，`agent-lens -h` 必须成功；
-- 覆盖升级后 CLI/PATH 仍可用且不得重复堆叠 PATH；
-- 卸载 Desktop 后必须清掉自己的 PATH 项。
+- 无有效 1.x npm 时，Installer 安装后 `agent-lens` 必须解析到 Desktop shim，`agent-lens -h` 必须成功；
+- 模拟有效 1.x npm 后，npm PATH 必须排在 Desktop PATH 前，`agent-lens` 必须优先解析到 npm；
+- 覆盖升级后 npm/Desktop 优先级不能反转，本地数据不能丢失；
+- 模拟卸载 npm 后，不重装 Desktop 即可自动回退 Desktop CLI；
+- 卸载 Desktop 后必须清掉自己的 PATH 项，同时保留 npm PATH、npm CLI 和 npm package。
 
 ## 10. 仍需人工实机验收
 
 自动化不能替代以下体验检查：
 
-- Windows 安装完成后重新打开 PowerShell，`agent-lens -h` 可直接运行；
-- Desktop 与 npm CLI 同时安装时，不会静默删除、覆盖 npm；卸载 Desktop 后 npm CLI（若存在）仍可工作；
+- 只安装 Windows Desktop：重新打开 PowerShell 后 `agent-lens -h` 可直接运行；
+- 先安装 npm 1.x、再安装 Desktop：`Get-Command agent-lens -All` 中 npm 入口优先，Desktop 入口仅作兜底；
+- 先安装 Desktop、后安装 npm 1.x：再次启动 Desktop 后 npm CLI 自动成为主入口；
+- 同时存在 npm + Desktop 时卸载 npm：无需重装 Desktop，`agent-lens -h` 自动回退 Desktop；
+- 同时存在 npm + Desktop 时卸载 Desktop：npm CLI 与 npm PATH 完全不受影响；
+- 机器上仍有 0.x npm CLI 时安装 alpha.2：`agent-lens` 不得继续解析到 0.x；
 - Windows 登录后的肉眼无黑框；
 - Desktop 登录自启开关与 Windows 系统实际状态一致；
 - 真实 Codex / Claude Code Hook 是否完全无闪窗；

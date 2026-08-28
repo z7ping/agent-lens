@@ -75,77 +75,13 @@ jobs:
         shell: pwsh
         run: ./scripts/smoke-windows-desktop.ps1
 
-      - name: Install, upgrade and smoke Windows desktop
+      - name: Install, upgrade and verify Desktop/npm CLI coexistence
         shell: pwsh
         run: |
           $installer = Get-ChildItem 'release/windows/AgentLens-*-Setup-x64.exe' | Select-Object -First 1
           if ($null -eq $installer) { throw '没有找到 Windows 安装器' }
-
-          $installDir = Join-Path $env:RUNNER_TEMP 'agent-lens-installed-smoke'
-          Remove-Item -Recurse -Force $installDir -ErrorAction SilentlyContinue
-
-          # 第一次安装。
-          $install = Start-Process -FilePath $installer.FullName -ArgumentList @('/S', "/D=$installDir") -Wait -PassThru
-          if ($install.ExitCode -ne 0) { throw "Windows 安装器静默安装失败：$($install.ExitCode)" }
-
-          $installedExe = Join-Path $installDir 'AgentLens.exe'
-          if (-not (Test-Path $installedExe)) { throw "安装完成后没有找到 AgentLens.exe：$installedExe" }
-          $installedCli = Join-Path $installDir 'agent-lens.cmd'
-          if (-not (Test-Path $installedCli)) { throw "安装完成后没有找到 Desktop CLI：$installedCli" }
-
-          # Desktop 安装必须把自身安装目录登记到当前用户 PATH；新开的终端应可直接执行 agent-lens。
-          $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-          $normalizedInstallDir = $installDir.TrimEnd('\')
-          $pathEntries = @($userPath -split ';' | ForEach-Object { $_.Trim().Trim('"').TrimEnd('\') })
-          if (-not ($pathEntries | Where-Object { $_ -ieq $normalizedInstallDir })) {
-            throw "Desktop 安装后当前用户 PATH 未包含安装目录：$installDir"
-          }
-          $env:Path = "$installDir;$env:Path"
-          $resolvedCli = Get-Command agent-lens -ErrorAction Stop
-          if ($resolvedCli.Source -ine $installedCli) {
-            throw "agent-lens 命令没有解析到 Desktop CLI：$($resolvedCli.Source)"
-          }
-          $cliHelp = (& agent-lens -h 2>&1 | Out-String)
-          if ($LASTEXITCODE -ne 0) { throw "Desktop CLI 执行 agent-lens -h 失败：$LASTEXITCODE`n$cliHelp" }
-          if ($cliHelp -notmatch 'AgentLens|agent-lens|用法|Usage') { throw "Desktop CLI 帮助输出异常：$cliHelp" }
-
           $requireSignature = '${{ github.event_name == 'release' && github.event.release.prerelease == false }}' -eq 'true'
-          if ($requireSignature) {
-            $installedSignature = Get-AuthenticodeSignature $installedExe
-            if ($installedSignature.Status -ne 'Valid') { throw "安装后的 AgentLens.exe 签名无效：$($installedSignature.Status)" }
-          }
-          ./scripts/smoke-windows-desktop.ps1 -ExecutablePath $installedExe
-
-          # 模拟真实用户数据。覆盖升级和普通卸载默认都必须保留它。
-          $dataDir = Join-Path $HOME '.agent-lens/1.0'
-          New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
-          $preserveMarker = Join-Path $dataDir 'windows-installer-preserve-ci.txt'
-          'preserve-me' | Set-Content -Encoding UTF8 $preserveMarker
-
-          # 不手工卸载，直接再次运行安装器。当前 alpha 狗粮经常是同版本号、不同构建，
-          # 因此这里故意使用同一个安装器验证“重装/覆盖升级”路径。
-          $upgrade = Start-Process -FilePath $installer.FullName -ArgumentList @('/S', "/D=$installDir") -Wait -PassThru
-          if ($upgrade.ExitCode -ne 0) { throw "Windows 安装器不能直接覆盖已有安装：$($upgrade.ExitCode)" }
-          if (-not (Test-Path $installedExe)) { throw '覆盖升级后 AgentLens.exe 丢失' }
-          if (-not (Test-Path $installedCli)) { throw '覆盖升级后 agent-lens.cmd 丢失' }
-          if (-not (Test-Path $preserveMarker)) { throw '覆盖升级错误删除了 ~/.agent-lens/1.0 数据' }
-          ./scripts/smoke-windows-desktop.ps1 -ExecutablePath $installedExe
-
-          $uninstaller = Get-ChildItem $installDir -Filter 'Uninstall*.exe' | Select-Object -First 1
-          if ($null -eq $uninstaller) { throw '覆盖升级后没有找到卸载器' }
-
-          # 静默卸载等价于用户使用默认选项：保留本地数据。
-          $uninstall = Start-Process -FilePath $uninstaller.FullName -ArgumentList '/S' -Wait -PassThru
-          if ($uninstall.ExitCode -ne 0) { throw "Windows 静默卸载失败：$($uninstall.ExitCode)" }
-          if (-not (Test-Path $preserveMarker)) { throw '普通卸载错误删除了 ~/.agent-lens/1.0 数据' }
-
-          $userPathAfterUninstall = [Environment]::GetEnvironmentVariable('Path', 'User')
-          $remainingEntries = @($userPathAfterUninstall -split ';' | ForEach-Object { $_.Trim().Trim('"').TrimEnd('\') })
-          if ($remainingEntries | Where-Object { $_ -ieq $normalizedInstallDir }) {
-            throw "卸载后仍残留 Desktop PATH：$installDir"
-          }
-
-          Remove-Item -Force $preserveMarker -ErrorAction SilentlyContinue
+          ./scripts/smoke-windows-installer-cli.ps1 -InstallerPath $installer.FullName -RequireSignature $requireSignature
 
       - name: Create checksums
         shell: pwsh
