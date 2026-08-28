@@ -21,6 +21,22 @@ export interface HubReviewReferenceDto {
   publicId: string
 }
 
+export interface HubReviewSessionSummaryDto {
+  id: string
+  origin: HubReviewOriginDto
+  title: HubReadAvailability
+  startedAt: HubReadAvailability
+  endedAt: HubReadAvailability
+}
+
+export interface HubReviewSessionListDto {
+  items: HubReviewSessionSummaryDto[]
+  meta: {
+    count: number
+    generatedAt: string
+  }
+}
+
 export interface HubReviewTimelineItemDto {
   id: string
   origin: HubReviewOriginDto
