@@ -31,11 +31,11 @@ if (/\{[^{}]*&&\s*<button[^>]*className="round-nav-(?:from-start|latest)"/s.test
   throw new Error('从头查看和跳到最新必须常驻渲染；无意义状态使用 disabled，不得条件移除')
 }
 
-const selectSessionBody = clientModel.match(/async selectReviewSession\(id: string\): Promise<void> \{([\s\S]*?)\n  \}\n\n  async refreshUsage/)?.[1] ?? ''
+const selectSessionBody = clientModel.match(/async selectReviewSession\(id: string\): Promise<void> \{([\s\S]*?)\r?\n  \}\r?\n\r?\n  async refreshUsage/)?.[1] ?? ''
 if (!selectSessionBody.includes("this.api.reviewDetail(id, { direction: 'backward', limit: REVIEW_DETAIL_PAGE_SIZE })")) {
   throw new Error('默认选择会话必须直接请求 backward 最新窗口，禁止退回从头加载长会话')
 }
-const fromStartBody = clientModel.match(/async showReviewFromStart\(\): Promise<void> \{([\s\S]*?)\n  \}\n\n  acknowledgeReviewNewData/)?.[1] ?? ''
+const fromStartBody = clientModel.match(/async showReviewFromStart\(\): Promise<void> \{([\s\S]*?)\r?\n  \}\r?\n\r?\n  acknowledgeReviewNewData/)?.[1] ?? ''
 if (!fromStartBody.includes("direction: 'forward'")) {
   throw new Error('“从头查看”必须显式请求 forward 窗口，不能复用默认最新窗口语义')
 }
