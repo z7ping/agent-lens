@@ -4,6 +4,7 @@ import type {
   LogicalSession,
   ObservationRepository,
   SessionRepository,
+  SessionSummaryReader,
 } from '@agent-lens/core'
 import {
   createOriginEntityRef,
@@ -22,6 +23,7 @@ import type {
 
 export interface HubRemoteReadPort {
   get(publicId: string): Promise<HubRemoteReadEntity | undefined>
+  listLogicalSessions(limit?: number): Promise<readonly HubRemoteReadEntity[]>
   listCanonicalObservationsForLogicalSession(
     query: HubRemoteObservationQuery,
   ): Promise<readonly HubRemoteReadEntity[]>
@@ -158,11 +160,46 @@ function remoteReferences(entity: HubRemoteReadEntity): UnifiedReadReferences {
   return output as UnifiedReadReferences
 }
 
+function unifiedRemoteSession(entity: HubRemoteReadEntity): UnifiedLogicalSession {
+  return {
+    publicId: entity.publicId,
+    entityType: 'LogicalSession',
+    origin: {
+      kind: 'remote',
+      nodeId: entity.originNodeId,
+      entityId: entity.originEntityId,
+      generationId: entity.generationId,
+    },
+    body: remoteAvailabilityBody(entity, 'LogicalSession'),
+    references: remoteReferences(entity),
+  }
+}
+
+function sessionSortTime(session: UnifiedLogicalSession): string | null {
+  for (const key of ['endedAt', 'startedAt'] as const) {
+    const field = session.body[key]
+    if (field?.state === 'value' && typeof field.value === 'string' && Number.isFinite(Date.parse(field.value))) {
+      return field.value
+    }
+  }
+  return null
+}
+
+function compareSessions(left: UnifiedLogicalSession, right: UnifiedLogicalSession): number {
+  const leftTime = sessionSortTime(left)
+  const rightTime = sessionSortTime(right)
+  if (leftTime && rightTime && leftTime !== rightTime) return rightTime.localeCompare(leftTime)
+  if (leftTime && !rightTime) return -1
+  if (!leftTime && rightTime) return 1
+  return left.publicId.localeCompare(right.publicId)
+}
+
 /** SQLite implementation of the Core Unified LogicalSession read contract. */
 export class HubUnifiedLogicalSessionReader implements UnifiedLogicalSessionReader {
   constructor(
     private readonly localNodeId: string,
     private readonly localSessions: SessionRepository,
+    private readonly localSummaries: SessionSummaryReader,
     private readonly remote: HubRemoteReadPort,
   ) {}
 
@@ -180,18 +217,28 @@ export class HubUnifiedLogicalSessionReader implements UnifiedLogicalSessionRead
 
     const remote = await this.remote.get(publicId)
     if (!remote || remote.entityType !== 'LogicalSession') return undefined
-    return {
-      publicId: remote.publicId,
-      entityType: 'LogicalSession',
-      origin: {
-        kind: 'remote',
-        nodeId: remote.originNodeId,
-        entityId: remote.originEntityId,
-        generationId: remote.generationId,
-      },
-      body: remoteAvailabilityBody(remote, 'LogicalSession'),
-      references: remoteReferences(remote),
-    }
+    return unifiedRemoteSession(remote)
+  }
+
+  async list(limit = 100): Promise<readonly UnifiedLogicalSession[]> {
+    const boundedLimit = Math.max(1, Math.min(limit, 500))
+    const [localPage, remoteEntities] = await Promise.all([
+      this.localSummaries.query({ limit: boundedLimit }),
+      this.remote.listLogicalSessions(boundedLimit),
+    ])
+    const local = (await Promise.all(
+      localPage.items.map(item => this.localSessions.getLogicalSession(item.logicalSessionId)),
+    )).filter((item): item is LogicalSession => Boolean(item)).map(session => ({
+      publicId: session.id,
+      entityType: 'LogicalSession' as const,
+      origin: { kind: 'local' as const, nodeId: this.localNodeId, entityId: session.id },
+      body: localSessionBody(session),
+      references: localSessionReferences(session),
+    }))
+    const remote = remoteEntities
+      .filter(entity => entity.entityType === 'LogicalSession')
+      .map(unifiedRemoteSession)
+    return [...local, ...remote].sort(compareSessions).slice(0, boundedLimit)
   }
 }
 
