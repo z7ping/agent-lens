@@ -182,7 +182,7 @@ export function HubReviewPage() {
     ]).then(([local, remote]) => {
       if (cancelled) return
       if (local.status === 'fulfilled') setLocalSessions(local.value.items)
-      if (remote.status === 'fulfilled') setRemoteSessions(remote.value.items)
+      if (remote.status === 'fulfilled') setRemoteSessions(remote.value.items.filter(item => item.origin.kind === 'remote'))
       const failures = [local, remote].filter(result => result.status === 'rejected') as PromiseRejectedResult[]
       if (failures.length === 2) setListError('会话列表读取失败')
       else if (failures.length === 1) setListError('部分会话暂不可用')
