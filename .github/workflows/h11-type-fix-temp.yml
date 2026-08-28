@@ -1,0 +1,39 @@
+name: H11 Type Fix Temp
+
+on:
+  push:
+    branches: [chore/h11-type-fix-temp]
+    paths: [.github/workflows/h11-type-fix-temp.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: chore/h11-type-fix-temp
+      - name: Apply exact type fix
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('packages/web/src/features/ReviewPage.tsx')
+          text = p.read_text()
+          old = "if (!Number.isFinite(at)) return review.filters.range === 'all'"
+          new = "if (!Number.isFinite(at)) return false"
+          if text.count(old) != 1:
+              raise SystemExit(f'expected one match, got {text.count(old)}')
+          p.write_text(text.replace(old, new, 1))
+          PY
+          git diff --check
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name 7ping
+          git config user.email ne_lucifer@163.com
+          git add packages/web/src/features/ReviewPage.tsx
+          git commit -m "fix: 修正 H11 会话时间筛选类型收窄"
+          git push origin HEAD:chore/h11-type-fix-temp
