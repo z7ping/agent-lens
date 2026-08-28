@@ -10,6 +10,7 @@ import { ReviewStateOverlay } from './components/ReviewStateOverlay'
 import { ReviewTurnRail } from './components/ReviewTurnRail'
 import { AgentsPage } from './features/AgentsPage'
 import { BackupPage } from './features/BackupPage'
+import { HubReviewPage } from './features/HubReviewPage'
 import { InsightsPage } from './features/InsightsPage'
 import { ReviewPage } from './features/ReviewPage'
 import { ToolsPage } from './features/ToolsPage'
@@ -165,14 +166,16 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     coverageSummary ? `覆盖范围：完整 ${coverageComplete} · 部分 ${coveragePartial} · 来源不可用 ${coverageUnavailable} · 未知 ${coverageUnknown}` : null,
   ].filter((item): item is string => Boolean(item)).join('\n')
   const onReview = location.pathname.startsWith('/review')
+  const onHubReview = location.pathname.startsWith('/review/hub/')
+  const onLocalReview = onReview && !onHubReview
   const onTools = location.pathname.startsWith('/tools')
   const onAgents = location.pathname.startsWith('/agents')
   const hasSseBanner = Boolean(snapshot.health && !snapshot.liveConnected)
-  const showTurnRail = onReview && snapshot.review.detail
+  const showTurnRail = onLocalReview && snapshot.review.detail
   const navigationHasNewData = (to: string) => to === '/tools' ? snapshot.usage.hasNewData : to === '/agents' ? snapshot.agentsHasNewData : false
 
   useEffect(() => {
-    if (!onReview) {
+    if (!onLocalReview) {
       reviewUrlReadyRef.current = false
       skipReviewUrlWriteRef.current = false
       return
@@ -184,10 +187,10 @@ function Shell({ model }: { model: AgentLensClientModel }) {
       skipReviewUrlWriteRef.current = true
       model.setReviewFilters(filters)
     }
-  }, [location.search, model, onReview])
+  }, [location.search, model, onLocalReview])
 
   useEffect(() => {
-    if (!onReview || !reviewUrlReadyRef.current) return
+    if (!onLocalReview || !reviewUrlReadyRef.current) return
     if (skipReviewUrlWriteRef.current) {
       skipReviewUrlWriteRef.current = false
       return
@@ -195,7 +198,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     const search = reviewSearchFromFilters(snapshot.review.filters)
     if (location.search === search) return
     navigate({ pathname: location.pathname, search }, { replace: true })
-  }, [location.pathname, location.search, navigate, onReview, snapshot.review.filters])
+  }, [location.pathname, location.search, navigate, onLocalReview, snapshot.review.filters])
 
   return <PinnedProvider agents={agents}>
     <div className="app-shell">
@@ -231,6 +234,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
       </div>}
       <Routes>
         <Route path="/review" element={<ReviewPage model={model} />} />
+        <Route path="/review/hub/:sessionId" element={<HubReviewPage />} />
         <Route path="/review/:sessionId" element={<ReviewPage model={model} />} />
         <Route path="/tools" element={<ToolsPage model={model} />} />
         <Route path="/insights" element={<InsightsPage model={model} />} />
@@ -238,7 +242,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
         <Route path="/backup" element={<BackupPage />} />
         <Route path="*" element={<Navigate to="/review" replace />} />
       </Routes>
-      {onReview && <ReviewStateOverlay model={model} snapshot={snapshot}/>} 
+      {onLocalReview && <ReviewStateOverlay model={model} snapshot={snapshot}/>} 
       {onAgents && <AgentsStateOverlay model={model} snapshot={snapshot} sourceId={agentOverviewSourceId}/>} 
       {onTools && snapshot.usage.hasNewData && <BackgroundDataNotice label="工具分析" hasSseBanner={hasSseBanner} onRefresh={() => model.refreshUsage()}/>} 
       {onAgents && snapshot.agentsHasNewData && <BackgroundDataNotice label="智能体概览" hasSseBanner={hasSseBanner} onRefresh={() => model.refreshFacetsAndAgents()}/>} 
