@@ -3,6 +3,7 @@ import type {
   UnifiedLogicalSessionReader,
   UnifiedObservationReader,
   UnifiedReadOrigin,
+  UnifiedReadReference,
   UnifiedReadReferences,
 } from '@agent-lens/core/replication'
 import type {
@@ -52,12 +53,16 @@ function origin(value: UnifiedReadOrigin): HubReviewOriginDto {
       }
 }
 
+function isSingleReference(value: UnifiedReadReference | readonly UnifiedReadReference[]): value is UnifiedReadReference {
+  return !Array.isArray(value)
+}
+
 function references(value: UnifiedReadReferences): Record<string, HubReviewReferenceDto | HubReviewReferenceDto[]> {
   const output: Record<string, HubReviewReferenceDto | HubReviewReferenceDto[]> = {}
   for (const [key, item] of Object.entries(value)) {
-    output[key] = Array.isArray(item)
-      ? item.map(ref => ({ entityType: ref.entityType, publicId: ref.publicId }))
-      : { entityType: item.entityType, publicId: item.publicId }
+    output[key] = isSingleReference(item)
+      ? { entityType: item.entityType, publicId: item.publicId }
+      : item.map(ref => ({ entityType: ref.entityType, publicId: ref.publicId }))
   }
   return output
 }
