@@ -28,10 +28,14 @@ export function expectedReleaseAssets(version) {
   ]
 }
 
-export function validateReleaseAssets({ release, version, tag }) {
+export function validateReleaseAssets({ release, version, tag, expectedDraft = true }) {
   const failures = []
   if (release.tagName !== tag) failures.push(`Release tag=${release.tagName}, expected=${tag}`)
-  if (release.isDraft !== true) failures.push('只有 Draft Release 可以执行候选晋升检查')
+  if (release.isDraft !== expectedDraft) {
+    failures.push(expectedDraft
+      ? '只有 Draft Release 可以执行候选晋升检查'
+      : 'npm 正式发布只能处理已经晋升的 Release')
+  }
   const expectedPrerelease = version.includes('-')
   if (release.isPrerelease !== expectedPrerelease) {
     failures.push(`prerelease=${release.isPrerelease}, expected=${expectedPrerelease}`)
@@ -53,18 +57,37 @@ function readRelease(tag) {
   return JSON.parse(output)
 }
 
+function parseArgs(argv) {
+  let tag = null
+  let expectedDraft = true
+  for (const arg of argv) {
+    if (arg === '--published') expectedDraft = false
+    else if (!arg.startsWith('-') && !tag) tag = arg
+    else throw new Error(`未知参数：${arg}`)
+  }
+  return { tag, expectedDraft }
+}
+
 async function main() {
   const packageJson = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
-  const tag = process.argv[2] ?? `v${packageJson.version}`
+  const options = parseArgs(process.argv.slice(2))
+  const tag = options.tag ?? `v${packageJson.version}`
   const expectedTag = `v${packageJson.version}`
-  if (tag !== expectedTag) throw new Error(`待晋升 Tag ${tag} 与 package.json ${expectedTag} 不一致`)
+  if (tag !== expectedTag) throw new Error(`待检查 Tag ${tag} 与 package.json ${expectedTag} 不一致`)
 
   const release = readRelease(tag)
-  const failures = validateReleaseAssets({ release, version: packageJson.version, tag })
+  const failures = validateReleaseAssets({
+    release,
+    version: packageJson.version,
+    tag,
+    expectedDraft: options.expectedDraft,
+  })
   if (failures.length) {
-    throw new Error(`Release 候选尚未满足晋升条件：\n- ${failures.join('\n- ')}`)
+    throw new Error(`Release 资产检查失败：\n- ${failures.join('\n- ')}`)
   }
-  console.log(`Release 候选产物齐全，可以晋升：${tag}`)
+  console.log(options.expectedDraft
+    ? `Release 候选产物齐全，可以晋升：${tag}`
+    : `已发布 Release 仍保持完整候选资产：${tag}`)
 }
 
 const invoked = process.argv[1] ? resolve(process.argv[1]) : null
