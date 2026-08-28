@@ -2,78 +2,73 @@ schema_version: "0.1"
 status: active
 
 goal:
-  summary: "继续 AgentLens 1.0 Alpha Hub，完成 H9 availability-aware Timeline / Review"
+  summary: "继续 AgentLens 1.0 Alpha Hub，完成 H10 loopback Surface + Web 多机任务复盘"
 
 phase:
   type: implementation
-  summary: "H1-H8 已完成并通过主 CI；当前让 Remote Replica 通过 Unified Read 进入任务复盘，同时保留 Availability 语义，不引入 HTTPS"
+  summary: "H1-H9 已完成；当前把 H9 Availability-aware Hub Review 接到既有本机 HTTP/Web，不引入 Replication 网络或 HTTPS"
 
 scope:
   include:
-    - "为 Timeline / Review 定义可表达 value / redacted / omitted 的读模型语义"
-    - "Remote message/tool/event 不得把 omitted/redacted payload 伪造成空正文或空对象"
-    - "Projection 只依赖 Core Unified Read Contract，不直接依赖 SQLite Remote Replica 私表"
-    - "Local Review 现有 DTO / 行为保持兼容"
-    - "Remote publicId 与 public references 始终使用 H8 opaque public ID"
-    - "优先打通 LogicalSession detail + Observation timeline，再接 Review detail"
+    - "在现有 127.0.0.1 Local Surface 增加独立 Hub Review 只读入口"
+    - "旧 /api/v1/review 与 Standalone/Local Review 行为保持不变"
+    - "Web 任务复盘支持识别 Local Canonical ID 与 Remote ReplicaKey opaque publicId"
+    - "Remote payload redacted / omitted(policy/history-boundary/dependency-minimized) 显式显示不可用原因"
+    - "Remote 会话/Observation 只读取 active Generation"
+    - "为 Hub Review 增加最小 Surface/Web 回归门禁"
   exclude:
-    - "HTTP / HTTPS Replication Surface"
+    - "Node -> Hub HTTP/HTTPS Replication Transport"
     - "Pairing Secret、TLS、Node/Hub signature、serverProof"
-    - "Node 网络 Sender / retry/backoff"
+    - "Node Sender / retry/backoff 网络调度"
     - "Remote Web Login / Remote Control"
     - "Remote File Backup / Pull"
     - "HA、多 Hub、Federation"
-    - "一次性重写全部 Projection / Web 页面"
+    - "一次性把全部 Overview/Usage/Facet Projection 改成多机"
 
 constraints:
   required:
-    - "Availability 的 value/null/redacted/omitted 原因必须保留到 Timeline / Review 读模型"
-    - "正文缺失时界面/DTO 表达真实不可用原因，不生成假内容"
-    - "Remote Evidence / SourceSession / Installation 等依赖只通过 opaque public references 解析"
-    - "Standalone / Local Review 行为保持不变"
-    - "Projection / Surface 不得直接访问 hub_remote_replica_* 表"
+    - "Surface 继续只绑定 127.0.0.1"
+    - "Hub Review Surface 只能消费 H9 HubReviewProjection / Core Unified Read，不直接查询 Hub Replica 私表"
+    - "Web 不得把 redacted / omitted 转成空正文"
+    - "Remote publicId / references 继续保持 opaque，不把 originEntityId 作为路由 ID"
+    - "Local 任务复盘现有契约与 UI 不回归"
   forbidden:
     - "未经明确要求发布 npm 或创建 Release"
-    - "开放任何 Replication 网络监听"
-    - "把 Remote Replica cast 成完整 Local CanonicalObservation"
-    - "把 omitted(policy) 映射成空字符串、空对象或 null"
-    - "用 origin ID 作为 Remote 对外引用"
+    - "开放任何外网/LAN Replication 监听"
+    - "修改 AGENT_LENS_HTTP_HOST 为非 loopback"
+    - "把 Hub Review 强行塞进旧 Local Review DTO"
+    - "用 origin ID 作为 Remote 对外标识"
   frozen:
-    - "H1 Node Identity + Capability Composition"
-    - "H2 ReplicaKey / Shared Identity / Entity Scope"
-    - "H3 R1 Wire DTO / Semantic Hash / Sequence / ACK"
-    - "H4 Replication Policy / History Boundary / Availability"
-    - "H5 Durable Pending / Frozen Batch / Reconciliation"
-    - "H6 Canonical Change Journal / deterministic Frozen Batch"
-    - "H7 Remote Replica Store / Transactional Ingest / Generation activation"
-    - "H8 active-generation Unified Read + opaque public references"
+    - "H1-H8 Hub Runtime/Replication/Replica/Unified Read 基础"
+    - "H9 Availability-aware Hub Review DTO + Projection + Runtime Service"
     - "Local-first、单 Hub 星型拓扑、不提供 Remote Control"
   deferred:
     - action: "Replication 网络 Surface / Pairing Security"
       until: "用户重新明确要求考虑 HTTPS / 网络接入"
 
 acceptance:
-  - "Remote metadata-only message 在 Review 中明确表示正文未同步，而不是显示空正文"
-  - "Remote redacted content 可区分于 omitted(policy/history-boundary)"
-  - "Remote Timeline/Review 不泄漏 origin ID"
-  - "Local Review 现有测试与行为无回归"
-  - "H9 不新增网络可达面"
+  - "本机 loopback API 可通过 ReplicaKey 获取 Remote Hub Review detail"
+  - "metadata-only Remote message 显示正文未同步而不是空消息"
+  - "redacted 与 omitted 的 UI 状态可区分"
+  - "旧 Local Review API/UI 无行为回归"
+  - "H10 不增加新的网络可达面"
 
 progress:
   current:
-    - "H8 active-generation Remote Read、LogicalSession / CanonicalObservation Unified Reader 已实现"
-    - "H8 Unified Read Contract 已上移到 @agent-lens/core/replication，SQLite 只保留实现"
-    - "H8 Remote Availability 原样保留，Remote Node Ref 已统一解析为 ReplicaKey public references"
-    - "H8 最终提交 61bb93b8b91f485b99dfeba5d39fe01ca33f69c5 已通过 Linux / macOS / Windows 三平台主 CI"
+    - "H9 新增独立 HubReadAvailability / HubReviewDetail DTO，不修改旧 Local Review DTO"
+    - "H9 HubReviewProjection 只消费 Core Unified Read Contract，保留 value/null/redacted/omitted 语义"
+    - "SQLite Storage 已提供 ctx.unifiedRead，HTTP Runtime 已装配 ctx.hubReview"
+    - "H9 已锁定 omitted(policy) 不得伪造成空字符串/空对象，Remote references 仅使用 opaque publicId"
+    - "H9 Runtime 装配已通过 Linux / macOS / Windows 三平台主 CI，包括 Windows Desktop package、Smoke、Hook Dispatcher 与 npm lifecycle"
   next:
-    - "定义 availability-aware Timeline / Review 最小 DTO，不破坏现有 Local DTO"
-    - "实现基于 UnifiedObservationReader 的 Remote Timeline mapper"
-    - "接 Review detail，锁定 metadata-only / redacted / omitted 显示语义"
-    - "三平台 CI 收绿后再考虑 Surface/Web 接入"
+    - "新增独立 loopback Hub Review GET 路由，不修改旧 /api/v1/review"
+    - "给 Web ClientModel 增加 Hub Review detail 读取"
+    - "任务复盘渲染 Availability 状态"
+    - "跑 Surface/Web/三平台主 CI 后再进入其他多机 Projection"
 
 decisions:
-  - "H9 采用兼容增量路径，不直接修改现有 Local TimelineItemDto / ReviewNodeDto 的必填字段语义"
-  - "Remote Timeline/Review 先走独立 availability-aware DTO，再评估是否统一协议"
+  - "H10 复用现有 loopback Local HTTP，不把它视为 Replication Transport"
+  - "Hub Review 使用独立协议路径，先不统一旧 Local Review DTO"
   - "HTTPS / Pairing / TLS 继续延期"
   - "只有改变冻结长期不变量时才发起 ADR / Contract Review"
 
