@@ -165,6 +165,27 @@ export class SqliteHubRemoteReadRepository {
     })
   }
 
+  /** Active-generation LogicalSessions ordered by real replicated session time. */
+  async listLogicalSessions(limit?: number): Promise<readonly HubRemoteReadEntity[]> {
+    return this.executor.run(() => {
+      const rows = this.executor.db.prepare(`${ACTIVE_REMOTE_SELECT}
+        AND e.entity_type = 'LogicalSession'
+        ORDER BY
+          CASE
+            WHEN json_extract(e.body_json, '$.endedAt.state') = 'value'
+              THEN json_extract(e.body_json, '$.endedAt.value')
+            WHEN json_extract(e.body_json, '$.startedAt.state') = 'value'
+              THEN json_extract(e.body_json, '$.startedAt.value')
+            ELSE NULL
+          END DESC,
+          e.origin_node_id ASC,
+          e.replica_key ASC
+        LIMIT ?
+      `).all(boundedLimit(limit)) as RemoteRow[]
+      return rows.map(mapRow)
+    })
+  }
+
   /**
    * Resolve the typed LogicalSession node reference inside one active remote
    * generation's CanonicalObservation envelopes. The private JSON storage
