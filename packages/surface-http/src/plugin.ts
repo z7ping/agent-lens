@@ -88,6 +88,7 @@ const applyHttpSurface = Object.assign(
       capabilities: ctx.capabilities,
       capturePolicy: ctx.capturePolicy,
       backup: ctx.backup,
+      hubReview,
     })
     const unprovideHubReview = ctx.provide('hubReview', hubReview)
     const unprovideHttp = ctx.provide('http', surface)
