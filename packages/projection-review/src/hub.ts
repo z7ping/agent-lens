@@ -11,6 +11,7 @@ import type {
   HubReviewDetailDto,
   HubReviewOriginDto,
   HubReviewReferenceDto,
+  HubReviewSessionListDto,
   JsonValue,
 } from '@agent-lens/protocol'
 
@@ -67,18 +68,29 @@ function references(value: UnifiedReadReferences): Record<string, HubReviewRefer
   return output
 }
 
-/**
- * H9 read projection for Hub task review.
- *
- * It consumes only the H8 Core Unified Read contract. Remote Replica rows,
- * generations and origin ids stay behind the Unified Read boundary. Content
- * availability is preserved instead of being coerced into Local Review DTOs.
- */
+/** Availability-aware Hub task review over the Core Unified Read boundary. */
 export class HubReviewProjection {
   constructor(
     private readonly sessions: UnifiedLogicalSessionReader,
     private readonly observations: UnifiedObservationReader,
   ) {}
+
+  async query(limit = 100): Promise<HubReviewSessionListDto> {
+    const sessions = await this.sessions.list(limit)
+    return {
+      items: sessions.map(session => ({
+        id: session.publicId,
+        origin: origin(session.origin),
+        title: availability(session.body.title),
+        startedAt: availability(session.body.startedAt),
+        endedAt: availability(session.body.endedAt),
+      })),
+      meta: {
+        count: sessions.length,
+        generatedAt: new Date().toISOString(),
+      },
+    }
+  }
 
   async get(logicalSessionPublicId: string, limit = 500): Promise<HubReviewDetailDto | null> {
     const session = await this.sessions.get(logicalSessionPublicId)
