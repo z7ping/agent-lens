@@ -1,0 +1,61 @@
+name: Release Pipeline Check
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/*release*.yml'
+      - '.github/workflows/windows-installer.yml'
+      - '.github/workflows/desktop-macos-linux.yml'
+      - 'scripts/release.ps1'
+      - 'scripts/*release*.mjs'
+      - 'scripts/smoke-npm-package.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'docs/1.0/RELEASE-RUNBOOK.md'
+      - 'docs/adr/*release*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-pipeline:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.23.0
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Parse release PowerShell
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'scripts/release.ps1'),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            throw "release.ps1 存在 $($errors.Count) 个 PowerShell 语法错误"
+          }
+          Write-Host 'release.ps1 PowerShell 语法检查通过'
+
+      - name: Verify release architecture gates
+        run: |
+          node scripts/check-version-consistency.mjs
+          node scripts/check-release-channel.mjs
+          node scripts/check-release-pipeline.mjs
+
+      - name: Test release helpers
+        run: node --test scripts/resolve-release-version.test.mjs scripts/render-release-notes.test.mjs scripts/check-release-candidate.test.mjs scripts/check-release-assets.test.mjs
