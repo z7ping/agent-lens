@@ -24,6 +24,7 @@ import './agents.css'
 import './agent-diagnostics.css'
 import './review.css'
 import './review-long-session.css'
+import './desktop-responsive.css'
 
 writeTheme(readTheme())
 const disposeLiveRecovery = installLiveRecovery(clientModel)
