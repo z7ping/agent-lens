@@ -37,9 +37,39 @@ pwsh -NoLogo -NoProfile -File .\scripts\release.ps1 -Version 1.0.0-alpha.1
 
 该模式不会推送远端，适合先检查提交和 Tag。
 
-## 4. 推送并创建 GitHub Release
+## 4. 发布前升级回归
 
-确认本地提交和 Tag 无误后执行：
+预发布也必须至少验证上一已发布版本到当前候选版本的真实升级路径，不只验证“同一个安装包覆盖自己”。
+
+### Windows Desktop
+
+从 GitHub Release 安装上一版本（例如 `v1.0.0-alpha.0`），制造少量真实 AgentLens 数据并确认 Daemon / Web / Hooks 正常，再直接安装当前候选安装包。升级后检查：
+
+- `~/.agent-lens/1.0` 数据目录仍保留，数据库可以正常读取；
+- Daemon 能正常启动，`status` / `doctor` 无生命周期异常；
+- 已安装 Hooks 仍指向有效的共享分发器；
+- 登录自启设置不因覆盖升级丢失；
+- Desktop 能打开正式 Web，任务复盘、智能体概览和资产备份可正常读取旧数据；
+- 日志仍写入当前约定目录，没有重新产生旧版目录。
+
+### npm / CLI
+
+在上一版本已安装并已有数据的环境中升级到当前候选版本，至少检查：
+
+```powershell
+npm install -g @z7ping/agent-lens@alpha
+agent-lens status
+agent-lens doctor
+agent-lens hook status all --json
+```
+
+确认 npm / Desktop 仍共享同一个 1.0 数据根和单实例 Daemon，不产生第二套数据或陈旧 Hook Provider。
+
+真实升级回归未完成时，不创建最终 Release。
+
+## 5. 推送并创建 GitHub Release
+
+确认本地提交、Tag、三平台 CI 和升级回归无误后执行：
 
 ```powershell
 pwsh -NoLogo -NoProfile -File .\scripts\release.ps1 -Version 1.0.0-alpha.1 -Publish
@@ -49,7 +79,7 @@ pwsh -NoLogo -NoProfile -File .\scripts\release.ps1 -Version 1.0.0-alpha.1 -Publ
 
 发布分支上的通用修复在发版完成后必须同步回 `main`，避免后续开发重新引入已经修复的问题。
 
-## 5. 发布后核对
+## 6. 发布后核对
 
 ```powershell
 gh run list --repo z7ping/agent-lens --limit 10
@@ -59,7 +89,7 @@ npm view @z7ping/agent-lens versions --json
 
 预发布版本发布到 npm 的 `alpha` / `beta` / `rc` dist-tag；稳定版发布到 `latest`。不要重复使用已经存在的版本号或 Tag。
 
-## 6. 常见失败
+## 7. 常见失败
 
 - `Release tag ... does not match package version ...`：Tag、根 `package.json` 和锁文件版本没有同步，重新运行版本同步命令。
 - `git@github.com: Permission denied` 且路径包含 `release/*.tgz`：必须使用工作流中的 `./release/...tgz` 文件路径，不能让 npm 将它当作 Git 依赖解析。
