@@ -136,6 +136,11 @@ test('H8 Unified Read keeps Local Canonical id and Remote ReplicaKey distinct ev
           entityType: 'LogicalSession',
           originEntityId: 'session-1',
         },
+        sourceSession: {
+          kind: 'node',
+          entityType: 'SourceSession',
+          originEntityId: 'source-session-remote',
+        },
       },
       updatedSequence: 1,
       updatedAt: '2026-08-28T00:03:00.000Z',
@@ -150,6 +155,10 @@ test('H8 Unified Read keeps Local Canonical id and Remote ReplicaKey distinct ev
     })
     assert.deepEqual(local?.body.runtimeProfileId, { state: 'value', value: profile.id })
     assert.deepEqual(local?.body.title, { state: 'value', value: '本机会话' })
+    assert.deepEqual(local?.references.installation, {
+      entityType: 'AgentInstallation',
+      publicId: 'install-local',
+    })
 
     const localObservations = await unifiedObservations.queryForLogicalSession('session-1')
     assert.equal(localObservations.length, 1)
@@ -157,6 +166,10 @@ test('H8 Unified Read keeps Local Canonical id and Remote ReplicaKey distinct ev
     assert.deepEqual(localObservations[0]?.body.payload, {
       state: 'value',
       value: { text: '本机正文' },
+    })
+    assert.deepEqual(localObservations[0]?.references.logicalSession, {
+      entityType: 'LogicalSession',
+      publicId: 'session-1',
     })
 
     assert.equal(await unifiedSessions.get(remotePublicId), undefined)
@@ -186,6 +199,14 @@ test('H8 Unified Read keeps Local Canonical id and Remote ReplicaKey distinct ev
     assert.deepEqual(remoteObservations[0]?.body.payload, {
       state: 'omitted',
       reason: 'policy',
+    })
+    assert.deepEqual(remoteObservations[0]?.references.logicalSession, {
+      entityType: 'LogicalSession',
+      publicId: remotePublicId,
+    })
+    assert.deepEqual(remoteObservations[0]?.references.sourceSession, {
+      entityType: 'SourceSession',
+      publicId: replicaKeyFor(createOriginEntityRef('node-a', 'SourceSession', 'source-session-remote')),
     })
     assert.notEqual(localObservations[0]?.publicId, remoteObservations[0]?.publicId)
   } finally {
