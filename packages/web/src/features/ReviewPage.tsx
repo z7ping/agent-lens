@@ -2,6 +2,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import ReactMarkdown from 'react-markdown'
 import { useNavigate, useParams } from 'react-router-dom'
 import type {
+  HubReadAvailability,
+  HubReviewSessionSummaryDto,
   JsonValue,
   ReviewDetailFilter,
   ReviewEventNodeDto,
@@ -13,6 +15,7 @@ import type {
   TimelineEvidenceDto,
 } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
+import { fetchHubReviewSessions } from '../client/hub-review'
 import { useClientSnapshot } from '../App'
 import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
 import { ToolKindIcon } from '../components/ToolKindIcon'
@@ -118,6 +121,42 @@ function sessionTitle(candidates: Array<string | undefined>, fallback: string, m
   const value = candidates.find(candidate => cleanSessionTitle(candidate))
   return compactTitle(value, max, fallback)
 }
+
+function hubAvailabilityString(value: HubReadAvailability): string | undefined {
+  return value.state === 'value' && typeof value.value === 'string' && value.value.trim()
+    ? value.value.trim()
+    : undefined
+}
+
+function hubSessionTime(item: HubReviewSessionSummaryDto): string {
+  return hubAvailabilityString(item.endedAt) ?? hubAvailabilityString(item.startedAt) ?? ''
+}
+
+function hubSessionTitle(item: HubReviewSessionSummaryDto): string {
+  const value = hubAvailabilityString(item.title)
+  if (value) return compactTitle(value, 74, '远程会话')
+  if (item.title.state === 'redacted') return '标题已脱敏'
+  if (item.title.state === 'omitted') return item.title.reason === 'policy' ? '标题未同步' : '远程会话'
+  return '远程会话'
+}
+
+function hubSessionVisibility(item: HubReviewSessionSummaryDto, review: ReturnType<AgentLensClientModel['getSnapshot']>['review']): boolean {
+  if (review.filters.sourceId || review.filters.projectId || review.filters.status !== 'all') return false
+  const search = review.filters.search.trim().toLowerCase()
+  if (search && !hubSessionTitle(item).toLowerCase().includes(search) && !item.origin.nodeId.toLowerCase().includes(search)) return false
+  const time = hubSessionTime(item)
+  if (!time || review.filters.range === 'all') return true
+  const at = Date.parse(time)
+  if (!Number.isFinite(at)) return review.filters.range === 'all'
+  const now = Date.now()
+  if (review.filters.range === 'today') return localDayStart(new Date(at)) === localDayStart(new Date(now))
+  const days = review.filters.range === '7d' ? 7 : 30
+  return at >= now - days * 86_400_000
+}
+
+type UnifiedReviewSessionListEntry =
+  | { origin: 'local'; id: string; endedAt: string; local: ReviewSessionSummaryDto }
+  | { origin: 'remote'; id: string; endedAt: string; remote: HubReviewSessionSummaryDto }
 
 function payloadRecord(value: unknown): Record<string, JsonValue> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, JsonValue> : {}
@@ -748,6 +787,7 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
   const [expandAllRounds, setExpandAllRounds] = useState(false)
   const [roundExpansionRevision, setRoundExpansionRevision] = useState(0)
   const [showRawRecords, setShowRawRecords] = useState(false)
+  const [hubSessions, setHubSessions] = useState<HubReviewSessionSummaryDto[]>([])
   const sessionLoadSentinelRef = useRef<HTMLButtonElement>(null)
   const detailLoadSentinelRef = useRef<HTMLDivElement>(null)
   const readerPaneRef = useRef<HTMLElement>(null)
@@ -758,17 +798,38 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
   const agents = snapshot.facets?.agents ?? []
   const projects = snapshot.facets?.projects ?? []
   const detail = review.detail
+  const visibleHubSessions = useMemo(() => hubSessions.filter(item => hubSessionVisibility(item, review)), [hubSessions, review.filters])
   const sessionGroups = useMemo(() => {
-    const groups = new Map<'今天' | '昨天' | '更早', ReviewSessionSummaryDto[]>()
+    const groups = new Map<'今天' | '昨天' | '更早', UnifiedReviewSessionListEntry[]>()
     const now = new Date()
-    for (const item of review.response?.items ?? []) {
+    const combined: UnifiedReviewSessionListEntry[] = [
+      ...(review.response?.items ?? []).map(item => ({ origin: 'local' as const, id: item.id, endedAt: item.endedAt, local: item })),
+      ...visibleHubSessions.map(item => ({ origin: 'remote' as const, id: item.id, endedAt: hubSessionTime(item), remote: item })),
+    ].sort((left, right) => {
+      const leftAt = Date.parse(left.endedAt)
+      const rightAt = Date.parse(right.endedAt)
+      if (Number.isFinite(leftAt) && Number.isFinite(rightAt) && leftAt != rightAt) return rightAt - leftAt
+      if (Number.isFinite(leftAt) && !Number.isFinite(rightAt)) return -1
+      if (!Number.isFinite(leftAt) && Number.isFinite(rightAt)) return 1
+      return left.id.localeCompare(right.id)
+    })
+    for (const item of combined) {
       const label = sessionDayLabel(item.endedAt, now)
       const items = groups.get(label) ?? []
       items.push(item)
       groups.set(label, items)
     }
     return [...groups.entries()].map(([label, items]) => ({ label, items }))
-  }, [review.response?.items])
+  }, [review.response?.items, visibleHubSessions])
+
+  useEffect(() => {
+    let cancelled = false
+    void fetchHubReviewSessions(200).then(
+      value => { if (!cancelled) setHubSessions(value.items.filter(item => item.origin.kind === 'remote')) },
+      () => { if (!cancelled) setHubSessions([]) },
+    )
+    return () => { cancelled = true }
+  }, [review.response?.meta.generatedAt])
 
   useEffect(() => { if (sessionId && sessionId !== review.selectedId) void model.selectReviewSession(sessionId) }, [sessionId, review.selectedId, model])
   useEffect(() => {
@@ -999,20 +1060,31 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
 
     <div className="review-layout">
       <aside className="session-panel">
-        <div className="session-panel-head"><div><b>会话</b><span>按时间倒序</span></div><span className="count-badge">{review.response?.items.length ?? 0}{review.response?.meta.hasMore ? '+' : ''}</span></div>
+        <div className="session-panel-head"><div><b>会话</b><span>本机 + 远程 · 按时间倒序</span></div><span className="count-badge">{(review.response?.items.length ?? 0) + visibleHubSessions.length}{review.response?.meta.hasMore ? '+' : ''}</span></div>
         <div className="session-scroll">
           {review.loading && !review.response && <div className="empty-state">加载会话…</div>}
           {sessionGroups.map(group => <section className="session-group-block" key={group.label}>
             <div className="session-group">{group.label}</div>
-            {group.items.map(item => <button key={item.id} className={`session-item ${review.selectedId === item.id ? 'session-item-active' : ''}`} onClick={() => select(item.id)}>
-              <div className="session-item-meta"><span className={`source-dot ${sourceDot(item.sourceIds[0] ?? '')}`}/><span>{agentLabel(item.sourceIds[0] ?? '', item.productId)}</span><time title={formatTime(item.endedAt)}>{sessionRelativeTime(item.endedAt)}</time></div>
-              <div className="session-item-title">{sessionTitle([item.title, item.preview], item.projectName ? `${item.projectName} 会话` : `${agentLabel(item.sourceIds[0] ?? '', item.productId)} 会话`, 74)}</div>
-              <div className="session-item-foot"><span>{item.projectName ?? item.workspacePath?.split(/[\\/]/).pop() ?? '无项目'}</span><span>{item.toolCount} 调用{item.errorCount > 0 ? ` · ${item.errorCount} 错误` : ''}</span></div>
-            </button>)}
+            {group.items.map(entry => entry.origin === 'local' ? (() => {
+              const item = entry.local
+              return <button key={`local:${item.id}`} className={`session-item ${review.selectedId === item.id ? 'session-item-active' : ''}`} onClick={() => select(item.id)}>
+                <div className="session-item-meta"><span className={`source-dot ${sourceDot(item.sourceIds[0] ?? '')}`}/><span>{agentLabel(item.sourceIds[0] ?? '', item.productId)}</span><time title={formatTime(item.endedAt)}>{sessionRelativeTime(item.endedAt)}</time></div>
+                <div className="session-item-title">{sessionTitle([item.title, item.preview], item.projectName ? `${item.projectName} 会话` : `${agentLabel(item.sourceIds[0] ?? '', item.productId)} 会话`, 74)}</div>
+                <div className="session-item-foot"><span>{item.projectName ?? item.workspacePath?.split(/[\\/]/).pop() ?? '无项目'}</span><span>{item.toolCount} 调用{item.errorCount > 0 ? ` · ${item.errorCount} 错误` : ''}</span></div>
+              </button>
+            })() : (() => {
+              const item = entry.remote
+              const time = hubSessionTime(item)
+              return <button key={`remote:${item.id}`} className="session-item" onClick={() => navigate(`/review/hub/${encodeURIComponent(item.id)}`)}>
+                <div className="session-item-meta"><span className="hub-session-source remote">远程 · {item.origin.nodeId}</span><time title={time || '时间未同步'}>{time ? sessionRelativeTime(time) : '时间未同步'}</time></div>
+                <div className="session-item-title">{hubSessionTitle(item)}</div>
+                <div className="session-item-foot"><span>{item.title.state === 'redacted' ? '标题已脱敏' : item.title.state === 'omitted' ? '部分字段未同步' : 'Hub 会话'}</span><span>{item.origin.nodeId}</span></div>
+              </button>
+            })())}
           </section>)}
           {review.response?.meta.hasMore && <button ref={sessionLoadSentinelRef} className="session-load-more" disabled={review.loadingMore} onClick={() => void model.loadMoreReview()}>{review.loadingMore ? '正在加载更多会话…' : review.error ? '加载失败 · 点击重试' : '继续向下滚动，自动加载更多会话'}</button>}
           {review.response && !review.response.meta.hasMore && review.response.items.length > 0 && <div className="session-load-more" aria-live="polite">已加载全部会话</div>}
-          {!review.loading && !review.response?.items.length && <div className="empty-state">当前筛选范围没有会话</div>}
+          {!review.loading && !review.response?.items.length && !visibleHubSessions.length && <div className="empty-state">当前筛选范围没有会话</div>}
         </div>
       </aside>
 
