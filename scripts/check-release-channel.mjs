@@ -21,14 +21,25 @@ try {
 }
 if (!rejected) throw new Error('未知预发布通道必须拒绝发布')
 
-const workflow = readFileSync('.github/workflows/npm-publish.yml', 'utf8')
-if (workflow.includes('npm publish "$(ls release/*.tgz)"')) {
-  throw new Error('npm publish 不得直接使用 release/*.tgz 相对路径，否则 npm 可能把它解析为 Git package spec')
+const publishWorkflow = readFileSync('.github/workflows/npm-publish.yml', 'utf8')
+if (publishWorkflow.includes('npm pack')) {
+  throw new Error('正式 npm 发布阶段不得重新 npm pack；只能发布 Draft 阶段验证过的 tgz')
 }
-if (!workflow.includes('tarballs=(release/*.tgz)')
-  || !workflow.includes('[[ ${#tarballs[@]} -ne 1 ]]')
-  || !workflow.includes('npm publish "./${tarballs[0]}"')) {
-  throw new Error('npm 发布必须校验唯一 tarball，并使用 ./ 开头的明确本地文件路径')
+if (!publishWorkflow.includes('gh release download "$GITHUB_REF_NAME"')
+  || !publishWorkflow.includes('sha256sum -c SHA256SUMS-npm.txt')
+  || !publishWorkflow.includes('tarballs=(release/*.tgz)')
+  || !publishWorkflow.includes('[[ ${#tarballs[@]} -ne 1 ]]')
+  || !publishWorkflow.includes('npm publish "./${tarballs[0]}"')) {
+  throw new Error('正式 npm 发布必须下载 Release 候选、校验 SHA256，并使用唯一 ./ 本地 tgz 发布')
 }
 
-console.log('npm 发行通道与本地 tarball 发布路径检查通过')
+const candidateWorkflow = readFileSync('.github/workflows/npm-release-candidate.yml', 'utf8')
+if (!candidateWorkflow.includes("tags:\n      - 'v*'")
+  || !candidateWorkflow.includes('check-release-candidate.mjs --wait-seconds 120')
+  || !candidateWorkflow.includes('npm pack --pack-destination release')
+  || !candidateWorkflow.includes('node scripts/smoke-npm-package.mjs "./${tarballs[0]}"')
+  || !candidateWorkflow.includes('Attach npm candidate to Draft Release')) {
+  throw new Error('npm 候选流水线必须由 Tag 触发，经过 Draft 门禁、真实成品冒烟并挂载到 Draft Release')
+}
+
+console.log('npm 候选构建与正式发布边界检查通过')
