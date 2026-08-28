@@ -39,6 +39,12 @@ export interface UnifiedCanonicalObservation {
 
 export interface UnifiedLogicalSessionReader {
   get(publicId: string): Promise<UnifiedLogicalSession | undefined>
+  /**
+   * Deterministic local + active-generation remote session discovery.
+   * Availability remains attached to fields; callers must not invent values
+   * for omitted/redacted timestamps or titles.
+   */
+  list(limit?: number): Promise<readonly UnifiedLogicalSession[]>
 }
 
 export interface UnifiedObservationReader {
