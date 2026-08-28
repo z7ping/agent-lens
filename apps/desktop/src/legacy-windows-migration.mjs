@@ -1,30 +1,30 @@
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { dirname, join, normalize } from 'node:path'
+import { win32 } from 'node:path'
 import { spawn } from 'node:child_process'
 import { connect } from 'node:net'
 
 const LEGACY_PACKAGE_NAME = '@z7ping/agent-lens'
 const LEGACY_STARTUP_FILE = 'AgentLens.vbs'
 
-function normalizedPath(value) {
-  return normalize(String(value ?? '')).replace(/\//g, '\\').toLowerCase()
+function normalizedWindowsText(value) {
+  return String(value ?? '').replace(/\//g, '\\').toLowerCase()
 }
 
 export function legacyWindowsPaths({
   homeDir = homedir(),
-  appData = process.env.APPDATA || join(homeDir, 'AppData', 'Roaming'),
+  appData = process.env.APPDATA || win32.join(homeDir, 'AppData', 'Roaming'),
 } = {}) {
-  const legacyRoot = join(homeDir, '.agent-lens')
-  const legacyInstallDir = join(legacyRoot, 'app')
+  const legacyRoot = win32.join(homeDir, '.agent-lens')
+  const legacyInstallDir = win32.join(legacyRoot, 'app')
   return {
     legacyRoot,
     legacyInstallDir,
-    legacyServerPath: join(legacyInstallDir, 'server.js'),
-    legacyPidFile: join(legacyRoot, 'run', 'server.pid'),
-    legacyStartupFile: join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup', LEGACY_STARTUP_FILE),
-    markerFile: join(legacyRoot, '1.0', 'runtime', 'migrations', 'legacy-windows-0x.json'),
+    legacyServerPath: win32.join(legacyInstallDir, 'server.js'),
+    legacyPidFile: win32.join(legacyRoot, 'run', 'server.pid'),
+    legacyStartupFile: win32.join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup', LEGACY_STARTUP_FILE),
+    markerFile: win32.join(legacyRoot, '1.0', 'runtime', 'migrations', 'legacy-windows-0x.json'),
   }
 }
 
@@ -36,16 +36,16 @@ export function isLegacyAppInfo(info) {
 }
 
 export function looksLikeLegacyProcess(processInfo, legacyInstallDir) {
-  const commandLine = normalizedPath(processInfo?.commandLine)
-  const installDir = normalizedPath(legacyInstallDir)
+  const commandLine = normalizedWindowsText(processInfo?.commandLine)
+  const installDir = normalizedWindowsText(win32.normalize(legacyInstallDir))
   if (!commandLine || !installDir) return false
   if (!commandLine.includes(installDir)) return false
   return commandLine.includes('server.js') || commandLine.includes('cli.js')
 }
 
 export function isLegacyStartupContent(content, legacyInstallDir) {
-  const source = normalizedPath(content)
-  const installDir = normalizedPath(legacyInstallDir)
+  const source = normalizedWindowsText(content)
+  const installDir = normalizedWindowsText(win32.normalize(legacyInstallDir))
   return Boolean(source && installDir && source.includes(installDir) && source.includes('server.js'))
 }
 
@@ -160,7 +160,7 @@ async function removeOwnedLegacyStartup(paths) {
 }
 
 async function writeMigrationMarker(paths, result) {
-  await mkdir(dirname(paths.markerFile), { recursive: true })
+  await mkdir(win32.dirname(paths.markerFile), { recursive: true })
   await writeFile(paths.markerFile, `${JSON.stringify({
     version: 1,
     migratedAt: new Date().toISOString(),
