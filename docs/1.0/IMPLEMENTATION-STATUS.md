@@ -274,60 +274,38 @@ H5 最终候选 `908a512c05aeb4ffc084c34cac29a4abd58ccd46` 已通过 Linux / mac
 
 ## 10. 多机 Hub
 
-状态：**长期设计已冻结；H1 Node Runtime、H2 Replication Core / Shared Identity、H3 R1 Protocol Core、H4 Replication Policy / History Boundary、H5 Durable Replication State / Reconciliation 已实现；真实 Replica Generation、网络和 Hub Remote Store 尚未实现。**
+状态：**H1-H11 已实现；当前进入 H12 Tombstone 删除生命周期。Replication Transport、HTTPS、TLS、Pairing 仍未实现且继续延期。**
 
-当前已实现基础：
+当前已实现：
 
-```text
-~/.agent-lens/1.0/node.json
- -> persistent random nodeId
- -> runtime profile / capabilities
- -> Cordis ctx.node
- -> Daemon capability-driven Source composition
+- H1 Node Runtime：持久 Node Identity、`standalone / node / hub / pure-hub` Profile 与 capability-driven composition；
+- H2 Replication Core：Entity Scope、ReplicaKey、SharedRoot/SharedGroup、Portable Identity；
+- H3 R1 Protocol：Handshake、Entity/Batch/Tombstone Wire DTO、Typed Ref、Availability、确定性 Hash、Sequence/ACK 决策；
+- H4 Replication Policy / History Boundary：`metadata-only / redacted / full`、`include-existing / from-now`、字段白名单与最小依赖；
+- H5 Durable Replication State：Pending、Frozen Batch、ACK、Stream/Generation、Reconciliation 与重启恢复；
+- H6 Node Replica Generation：Canonical Change Journal 单调 revision、固定 Bootstrap high-water、持久进度、Canonical -> Wire -> Pending/Frozen、Typed Ref DAG 与跨页依赖闭包；
+- H7 Hub Remote Replica Store：SQLite schema v10、staged/active/retired Generation、事务化 R1 Batch Import、Hub 重算 ReplicaKey/SharedKey/Scope、exact retry、连续 ACK 与整批 rollback；
+- H8 Unified Read：Local Canonical + active Remote Replica，Remote 使用 opaque ReplicaKey，staged/retired 不可见，Availability 与 public references 保真；
+- H9 Availability-aware Hub Review：独立 Hub Review DTO/Projection，`value/null/redacted/omitted` 不强转为 Local 完整 Observation；
+- H10 loopback Surface / Remote Review detail：`GET /api/v1/hub/review/:opaquePublicId` 与 `/review/hub/:ReplicaKey`，仍只监听 `127.0.0.1`；
+- H11 Remote Session Discovery：`GET /api/v1/hub/review`、Local + active Remote LogicalSession 列表、现有任务复盘左栏直接混排本机/远程会话，并使用轻量 Node 来源标识。
 
-@agent-lens/core/replication
- -> Entity Scope Registry
- -> ReplicaKey / SharedKey
- -> Portable Identity
- -> Shared Root / Shared Group / Membership
- -> Replication Policy / History Boundary
- -> explicit Entity Field Contract
- -> Minimum Dependency Shape
- -> fail-closed outbound transform
- -> Durable Stream / Pending / Frozen Batch / ACK state machine
- -> Reconciliation Source / Sink contract
-
-@agent-lens/protocol/replication
- -> R1 Wire DTO
- -> Typed EntityRef / Availability
- -> Handshake compatibility negotiation
- -> Entity / Batch / Tombstone semantic hash
- -> Sequence / ACK pure validation
- -> stable Protocol Core error codes
-
-@agent-lens/storage-sqlite
- -> SQLite schema v7 Replication Control Plane
- -> Stream / Generation / Pending / Frozen Batch / ACK persistence
- -> Reconciliation Cursor + Durable Sink
- -> restart recovery + stream rollover
-```
-
-H5 仍然只建立本机 durable replication 基础；当前没有真实 Replication HTTP Client/Server，也还没有按 H2/H4/H3 契约把全部 Canonical Entity 枚举并生成冻结 R1 Batch。
+H11 列表筛选保持 fail-closed：Remote Summary 当前没有可靠 source/project/error-status 维度时，不伪造这些筛选结果；时间范围、标题和 Node 搜索只使用已同步且可证明的数据。Remote `redacted/omitted` 继续显式显示，不映射为空字符串、空对象或假时间。
 
 当前仍**没有**实现：
 
 ```text
-Node long-term key material
-Canonical Entity enumeration / Replica Generation runtime
-Bootstrap high-water / staged activation
-R1 HTTP / HTTPS endpoints
+Node -> Hub HTTP/HTTPS Replication Transport
 Pairing / TLS / request signatures / serverProof
-Remote Replica Store / migrations / transactional import
-Shared Identity persistence / H2 recompute import integration
-Unified Read Repository
-Hub-aware Projection / Web / CLI
-Tombstone generation / persistence / purge / recovery operations
+Remote Web Login / Remote Control
+Tombstone Node generation + Hub application lifecycle
+Remote file backup / pull
+HA / Multi-Hub / Federation
 ```
+
+H11 最终代码候选 `26e567c00b9c750548327d3eeb9cbb757a05b001` 已通过 Linux / macOS / Windows 主 CI 的 Typecheck、Test 与 Build；Windows 同时通过 Desktop package、Smoke、共享 Hook Dispatcher、npm lifecycle 与 npm package contents。
+
+下一阶段 H12 只补 Tombstone 删除语义和本地 durable/import/read 生命周期，继续不增加新的网络可达面。
 
 长期设计只维护在以下文档：
 

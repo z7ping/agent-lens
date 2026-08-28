@@ -32,6 +32,35 @@
   margin: 0 auto;
 }
 
+.hub-session-source {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 58%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.hub-session-source.remote {
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  padding: 1px 6px;
+  color: var(--text-secondary);
+}
+
+.hub-session-list-warning {
+  margin: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  padding: 7px 9px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
 .hub-review-origin {
   display: inline-flex;
   align-items: center;
