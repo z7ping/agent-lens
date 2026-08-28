@@ -1,3 +1,4 @@
+import { realpathSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
@@ -51,6 +52,23 @@ function updateArgs(argv: string[]): string[] | null {
   return [...argv.slice(0, index), ...argv.slice(index + 1)]
 }
 
+function canonicalPath(path: string): string {
+  try {
+    return realpathSync.native(path)
+  } catch {
+    return resolve(path)
+  }
+}
+
+function isDirectInvocation(
+  moduleUrl: string,
+  invokedPath: string | undefined,
+  canonicalize: (path: string) => string = canonicalPath,
+): boolean {
+  if (!invokedPath) return false
+  return canonicalize(fileURLToPath(moduleUrl)) === canonicalize(resolve(invokedPath))
+}
+
 export async function main(argv = process.argv.slice(2)): Promise<number> {
   const update = updateArgs(argv)
   if (update) return runUpdateCommand(VERSION, update)
@@ -61,8 +79,7 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
   return code
 }
 
-const invokedPath = process.argv[1] ? resolve(process.argv[1]) : null
-if (invokedPath && fileURLToPath(import.meta.url) === invokedPath) {
+if (isDirectInvocation(import.meta.url, process.argv[1])) {
   main().then(code => { process.exitCode = code }).catch(error => {
     console.error(error instanceof Error ? error.message : String(error))
     process.exitCode = 1
@@ -74,4 +91,5 @@ export const cliEntryInternals = {
   isVersion,
   shouldOfferPassiveUpdate,
   updateArgs,
+  isDirectInvocation,
 }
