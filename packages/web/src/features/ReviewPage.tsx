@@ -147,7 +147,7 @@ function hubSessionVisibility(item: HubReviewSessionSummaryDto, review: ReturnTy
   const time = hubSessionTime(item)
   if (!time || review.filters.range === 'all') return true
   const at = Date.parse(time)
-  if (!Number.isFinite(at)) return review.filters.range === 'all'
+  if (!Number.isFinite(at)) return false
   const now = Date.now()
   if (review.filters.range === 'today') return localDayStart(new Date(at)) === localDayStart(new Date(now))
   const days = review.filters.range === '7d' ? 7 : 30
