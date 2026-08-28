@@ -5,59 +5,12 @@ on:
     types: [published]
 
 permissions:
-  contents: write
+  contents: read
   id-token: write
 
 jobs:
-  verify:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest, macos-15-intel]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: 22.23.0
-          package-manager-cache: false
-
-      - name: Install dependencies
-        run: npm ci --no-audit --no-fund
-
-      - name: Verify release tag matches package version
-        run: node scripts/check-release-version.mjs
-
-      - name: Verify Web presentation convergence
-        run: npm run check:web-presentation
-
-      - name: Verify brand assets
-        run: npm run check:brand-assets
-
-      - name: Verify desktop shell syntax
-        run: npm run check:desktop-shell
-
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Test
-        run: npm test
-
-      - name: Build distributable
-        run: npm run build:dist
-
-      - name: Smoke distributable
-        run: npm run smoke:dist
-
-      - name: Pack, install and run npm artifact
-        run: npm run smoke:npm-package
-
   publish:
     runs-on: ubuntu-latest
-    needs: verify
     steps:
       - name: Checkout release tag
         uses: actions/checkout@v7
@@ -69,9 +22,6 @@ jobs:
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
 
-      - name: Install dependencies
-        run: npm ci --no-audit --no-fund
-
       - name: Verify release tag matches package version
         run: node scripts/check-release-version.mjs
 
@@ -82,38 +32,38 @@ jobs:
           echo "NPM_TAG=$NPM_TAG" >> "$GITHUB_ENV"
           echo "npm dist-tag: $NPM_TAG"
 
-      - name: Verify Web presentation convergence
-        run: npm run check:web-presentation
-
-      - name: Verify brand assets
-        run: npm run check:brand-assets
-
-      - name: Verify desktop shell syntax
-        run: npm run check:desktop-shell
-
-      - name: Verify source
-        run: |
-          npm run typecheck
-          npm test
-
-      - name: Build distributable
-        run: npm run build:dist
-
-      - name: Smoke distributable
-        run: npm run smoke:dist
-
-      - name: Pack exact npm artifact
+      - name: Download verified npm candidate from GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
+          set -euo pipefail
           mkdir -p release
-          npm pack --pack-destination release
-          npm sbom --sbom-format cyclonedx > release/sbom.cdx.json
-          cp package-lock.json release/package-lock.json
-          sha256sum release/*.tgz release/package-lock.json release/sbom.cdx.json > release/SHA256SUMS-npm.txt
+          gh release download "$GITHUB_REF_NAME" \
+            --pattern '*.tgz' \
+            --pattern 'SHA256SUMS-npm.txt' \
+            --pattern 'sbom.cdx.json' \
+            --pattern 'package-lock.json' \
+            --dir release \
+            --clobber
 
-      - name: Smoke exact npm artifact
+      - name: Verify candidate checksums
         shell: bash
         run: |
+          set -euo pipefail
+          cd release
+          sha256sum -c SHA256SUMS-npm.txt
+          shopt -s nullglob
+          tarballs=(*.tgz)
+          if [[ ${#tarballs[@]} -ne 1 ]]; then
+            echo "Expected exactly one npm tarball, found ${#tarballs[@]}" >&2
+            exit 1
+          fi
+
+      - name: Smoke exact published candidate once more
+        shell: bash
+        run: |
+          set -euo pipefail
           shopt -s nullglob
           tarballs=(release/*.tgz)
           if [[ ${#tarballs[@]} -ne 1 ]]; then
@@ -122,24 +72,17 @@ jobs:
           fi
           node scripts/smoke-npm-package.mjs "./${tarballs[0]}"
 
-      - name: Upload verification artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: agent-lens-${{ github.ref_name }}
-          path: release/
-          if-no-files-found: error
-
-      - name: Attach artifacts to GitHub Release
+      - name: Verify npm publish credential
         env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: gh release upload "$GITHUB_REF_NAME" release/*.tgz release/SHA256SUMS-npm.txt release/sbom.cdx.json --clobber
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm whoami --registry=https://registry.npmjs.org
 
-      - name: Publish exact tarball to npm
+      - name: Publish exact verified tarball to npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         shell: bash
         run: |
+          set -euo pipefail
           shopt -s nullglob
           tarballs=(release/*.tgz)
           if [[ ${#tarballs[@]} -ne 1 ]]; then
