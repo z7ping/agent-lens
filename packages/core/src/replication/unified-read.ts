@@ -47,3 +47,8 @@ export interface UnifiedObservationReader {
     limit?: number,
   ): Promise<readonly UnifiedCanonicalObservation[]>
 }
+
+export interface UnifiedReadService {
+  logicalSessions: UnifiedLogicalSessionReader
+  observations: UnifiedObservationReader
+}
