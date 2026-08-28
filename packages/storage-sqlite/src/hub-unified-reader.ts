@@ -199,8 +199,8 @@ export class HubUnifiedLogicalSessionReader implements UnifiedLogicalSessionRead
   constructor(
     private readonly localNodeId: string,
     private readonly localSessions: SessionRepository,
-    private readonly localSummaries: SessionSummaryReader,
     private readonly remote: HubRemoteReadPort,
+    private readonly localSummaries?: SessionSummaryReader,
   ) {}
 
   async get(publicId: string): Promise<UnifiedLogicalSession | undefined> {
@@ -223,7 +223,7 @@ export class HubUnifiedLogicalSessionReader implements UnifiedLogicalSessionRead
   async list(limit = 100): Promise<readonly UnifiedLogicalSession[]> {
     const boundedLimit = Math.max(1, Math.min(limit, 500))
     const [localPage, remoteEntities] = await Promise.all([
-      this.localSummaries.query({ limit: boundedLimit }),
+      this.localSummaries?.query({ limit: boundedLimit }) ?? Promise.resolve({ items: [], hasMore: false }),
       this.remote.listLogicalSessions(boundedLimit),
     ])
     const local = (await Promise.all(
