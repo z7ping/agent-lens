@@ -43,6 +43,7 @@ const applyStorage = Object.assign(
       const logicalSessions = new HubUnifiedLogicalSessionReader(
         ctx.node.identity.nodeId,
         storage.repositories.sessions,
+        storage.sessionSummaries,
         remote,
       )
       const observations = new HubUnifiedObservationReader(
