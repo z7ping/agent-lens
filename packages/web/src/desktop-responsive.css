@@ -1,0 +1,194 @@
+/*
+ * 桌面中等视口适配。
+ *
+ * 这里按可用 CSS viewport 收口，而不是按 Electron / Windows 打补丁：
+ * 浏览器、Windows Desktop 与高 DPI 下的等效窄视口共享同一套规则。
+ */
+
+@media (max-width: 1366px) {
+  .app-header-inner {
+    gap: 14px;
+    padding-inline: 14px;
+  }
+
+  .app-header .nav-item {
+    padding-inline: 9px;
+  }
+
+  .app-header .nav-group-start {
+    margin-left: 7px;
+  }
+
+  .app-header .nav-group-start::before {
+    left: -4px;
+  }
+
+  .workspace-toolbar,
+  .review-page .workspace-toolbar {
+    gap: 6px;
+    padding-inline: 12px;
+  }
+
+  .workspace-toolbar .filter,
+  .review-page .filter {
+    min-width: 84px;
+    padding-inline: 8px;
+  }
+
+  .workspace-toolbar .search-filter,
+  .review-page .search-filter {
+    width: 168px;
+    min-width: 124px;
+  }
+
+  .review-page {
+    --review-session-width: 286px;
+  }
+
+  .review-reader {
+    padding-right: 20px;
+    padding-left: 20px;
+  }
+
+  .review-metric {
+    min-width: 76px;
+    padding-inline: 11px;
+  }
+}
+
+@media (max-width: 1180px) and (min-width: 901px) {
+  .app-header-inner {
+    gap: 10px;
+    padding-inline: 10px;
+  }
+
+  .brand {
+    gap: 7px;
+  }
+
+  .brand-name {
+    font-size: 14px;
+  }
+
+  .app-header .nav-item {
+    padding-inline: 7px;
+  }
+
+  .app-status {
+    gap: 4px;
+  }
+
+  .app-status .status-pill {
+    padding-inline: 7px;
+  }
+
+  .workspace-toolbar,
+  .review-page .workspace-toolbar {
+    height: auto;
+    min-height: 46px;
+    flex-wrap: wrap;
+    align-content: center;
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+
+  .workspace-toolbar .agent-scope,
+  .review-page .workspace-toolbar .agent-scope {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .workspace-toolbar .search-filter,
+  .review-page .search-filter {
+    width: min(170px, 20vw);
+    min-width: 118px;
+  }
+
+  .review-page {
+    --review-session-width: 260px;
+  }
+
+  .session-panel-head {
+    padding-inline: 10px;
+  }
+
+  .session-panel-head > div > span {
+    display: none;
+  }
+
+  .session-item {
+    padding-inline: 8px;
+  }
+
+  .review-reader {
+    max-width: none;
+    padding: 14px 16px 84px;
+  }
+
+  .review-session-title {
+    font-size: 20px;
+  }
+
+  .review-metric {
+    min-width: 68px;
+    padding: 7px 9px;
+  }
+
+  .round-nav {
+    scrollbar-width: thin;
+  }
+
+  .chat-row-user,
+  .chat-row-agent {
+    padding-inline: 0;
+  }
+
+  .chat-bubble-user,
+  .chat-bubble-agent {
+    max-width: 92%;
+  }
+}
+
+@media (max-width: 1024px) and (min-width: 901px) {
+  .brand-name {
+    display: none;
+  }
+
+  .review-page {
+    --review-session-width: 244px;
+  }
+
+  .session-item-foot span:last-child {
+    display: none;
+  }
+
+  .review-session-submeta code {
+    flex-basis: 100%;
+  }
+
+  .review-audit-controls > span {
+    display: none;
+  }
+
+  .review-metrics {
+    overflow-x: auto;
+  }
+}
+
+/* 横向溢出必须留在具体数据容器内，不能把整个 Desktop 页面撑宽。 */
+.workspace-page,
+.review-page,
+.review-layout,
+.review-reader-pane,
+.review-reader,
+.page-content {
+  min-width: 0;
+  max-width: 100%;
+}
+
+pre,
+code,
+.tool-detail-code,
+.raw-json {
+  max-width: 100%;
+}
