@@ -42,51 +42,8 @@ jobs:
           npm run build:dist
           npm run smoke:dist
 
-  smoke:
+  pack:
     needs: gate
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-          - windows-latest
-          - macos-latest
-          - macos-15-intel
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: Checkout candidate tag
-        uses: actions/checkout@v7
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: 22.23.0
-          package-manager-cache: false
-
-      - name: Install repository dependencies
-        run: npm ci --no-audit --no-fund
-
-      - name: Pack, install and run npm artifact
-        run: npm run smoke:npm-package
-
-  registry-auth:
-    needs: gate
-    runs-on: ubuntu-latest
-    steps:
-      - name: Setup Node.js with npm registry
-        uses: actions/setup-node@v7
-        with:
-          node-version: 22.23.0
-          registry-url: https://registry.npmjs.org
-          package-manager-cache: false
-
-      - name: Verify npm publish credential
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm whoami --registry=https://registry.npmjs.org
-
-  package:
-    needs: [smoke, registry-auth]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout candidate tag
@@ -106,10 +63,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/check-release-candidate.mjs
 
-      - name: Build distributable
-        run: npm run build:dist
-
-      - name: Pack exact npm candidate
+      - name: Pack candidate exactly once
         shell: bash
         run: |
           set -euo pipefail
@@ -126,7 +80,48 @@ jobs:
           fi
           sha256sum "${tarballs[0]}" package-lock.json sbom.cdx.json > SHA256SUMS-npm.txt
 
-      - name: Smoke exact npm candidate
+      - name: Upload single npm candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-lens-npm-candidate-${{ github.ref_name }}
+          path: release/
+          if-no-files-found: error
+
+  smoke:
+    needs: pack
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macos-latest
+          - macos-15-intel
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout candidate tag
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.23.0
+          package-manager-cache: false
+
+      - name: Download the exact npm candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: agent-lens-npm-candidate-${{ github.ref_name }}
+          path: release
+
+      - name: Verify candidate checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd release
+          sha256sum -c SHA256SUMS-npm.txt
+
+      - name: Install and run the exact candidate
         shell: bash
         run: |
           set -euo pipefail
@@ -138,14 +133,54 @@ jobs:
           fi
           node scripts/smoke-npm-package.mjs "./${tarballs[0]}"
 
-      - name: Upload candidate artifact
-        uses: actions/upload-artifact@v4
+  registry-auth:
+    needs: gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Node.js with npm registry
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.23.0
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Verify npm publish credential
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm whoami --registry=https://registry.npmjs.org
+
+  attach:
+    needs: [pack, smoke, registry-auth]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout candidate tag
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.23.0
+          package-manager-cache: false
+
+      - name: Verify Draft Release is still eligible
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/check-release-candidate.mjs
+
+      - name: Download verified npm candidate
+        uses: actions/download-artifact@v4
         with:
           name: agent-lens-npm-candidate-${{ github.ref_name }}
-          path: release/
-          if-no-files-found: error
+          path: release
 
-      - name: Attach npm candidate to Draft Release
+      - name: Verify candidate checksum before attach
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd release
+          sha256sum -c SHA256SUMS-npm.txt
+
+      - name: Attach verified npm candidate to Draft Release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
