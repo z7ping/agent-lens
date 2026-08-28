@@ -13,11 +13,20 @@ export type UnifiedReadOrigin =
       generationId: string
     }
 
+export interface UnifiedReadReference {
+  entityType: string
+  publicId: string
+}
+
+export type UnifiedReadReferenceValue = UnifiedReadReference | readonly UnifiedReadReference[]
+export type UnifiedReadReferences = Readonly<Record<string, UnifiedReadReferenceValue>>
+
 export interface UnifiedLogicalSession {
   publicId: string
   entityType: 'LogicalSession'
   origin: UnifiedReadOrigin
   body: Readonly<Record<string, ReplicationAvailability>>
+  references: UnifiedReadReferences
 }
 
 export interface UnifiedCanonicalObservation {
@@ -25,6 +34,7 @@ export interface UnifiedCanonicalObservation {
   entityType: 'CanonicalObservation'
   origin: UnifiedReadOrigin
   body: Readonly<Record<string, ReplicationAvailability>>
+  references: UnifiedReadReferences
 }
 
 export interface UnifiedLogicalSessionReader {
