@@ -16,7 +16,7 @@ import { startCodexRuntimeCapture } from './runtime'
 
 export const codexManifest: SourcePluginManifest = {
   pluginId: '@agent-lens/source-codex',
-  pluginVersion: '1.0.0-alpha.1',
+  pluginVersion: '1.0.0-alpha.2',
   apiVersion: '1.0',
   pluginType: 'source',
   displayName: 'Codex Source',

@@ -1,6 +1,6 @@
 {
   "name": "@z7ping/agent-lens",
-  "version": "1.0.0-alpha.1",
+  "version": "1.0.0-alpha.2",
   "description": "Local observability and replay for AI coding agents, rebuilt around a canonical evidence model.",
   "private": false,
   "type": "module",
