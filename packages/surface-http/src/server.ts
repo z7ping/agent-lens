@@ -67,7 +67,7 @@ export interface HttpSurfaceOptions {
   capabilities?: CapabilityService
   capturePolicy?: CapturePolicyService
   backup?: BackupService
-  hubReview?: Pick<HubReviewProjection, 'get'>
+  hubReview?: Pick<HubReviewProjection, 'get' | 'query'>
 }
 
 export interface RunningHttpSurface {
@@ -528,9 +528,6 @@ export async function startHttpSurface(
         return
       }
       if (url.pathname === '/api/v1/health') {
-        // Storage diagnostics can be slower while the first history import owns
-        // the serialized SQLite executor. Coalesce concurrent probes so desktop
-        // startup polling cannot amplify one slow Health check into a backlog.
         const health = await readStorageHealth()
         const details = health.details
           ? Object.fromEntries(Object.entries(health.details).map(([key, value]) => [key, jsonValue(value)]))
@@ -559,6 +556,15 @@ export async function startHttpSurface(
       }
       if (url.pathname === '/api/v1/agents') {
         writeJson(response, 200, await agents.query())
+        return
+      }
+      if (url.pathname === '/api/v1/hub/review') {
+        if (!options.hubReview) {
+          writeJson(response, 503, { error: 'hub_review_unavailable' })
+          return
+        }
+        const limit = parseLimit(url.searchParams, 500) ?? 100
+        writeJson(response, 200, await options.hubReview.query(limit))
         return
       }
       if (url.pathname.startsWith('/api/v1/hub/review/')) {
