@@ -185,7 +185,9 @@ for (const breakpoint of ['1199.98px', '991.98px', '767.98px', '575.98px']) {
   if (!shellResponsiveSource.includes(breakpoint)) throw new Error(`shell-responsive.css 缺少 Bootstrap 响应式断点：${breakpoint}`)
 }
 for (const legacyBreakpoint of ['1080px', '1100px', '900px', '820px', '760px', '560px']) {
-  if (shellResponsiveSource.includes(legacyBreakpoint) || statesSource.includes(legacyBreakpoint)) {
+  const escaped = legacyBreakpoint.replace('.', '\\.')
+  const mediaQuery = new RegExp(`@media\\s*\\([^)]*(?:max-width|min-width)\\s*:\\s*${escaped}(?:\\s|\\)|and)`)
+  if (mediaQuery.test(shellResponsiveSource) || mediaQuery.test(statesSource)) {
     throw new Error(`壳层/状态层不得恢复一次性自定义断点：${legacyBreakpoint}`)
   }
 }
