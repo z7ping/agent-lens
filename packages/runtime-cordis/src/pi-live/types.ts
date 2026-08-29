@@ -52,6 +52,7 @@ export type PiLiveRuntimeListener = (event: PiLiveRuntimeEvent) => void
 
 export interface PiLiveService {
   availability(): Promise<PiLiveAvailability>
+  list(): Promise<PiLiveRuntimeState[]>
   start(input: PiLiveStartInput): Promise<PiLiveRuntimeState>
   state(runtimeSessionId: string): Promise<PiLiveRuntimeState>
   snapshot(runtimeSessionId: string, since?: string): Promise<PiLiveSnapshot>
