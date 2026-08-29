@@ -5,6 +5,8 @@ import type {
   PiLiveAbortRequestDto,
   PiLiveExtensionResponseRequestDto,
   PiLivePromptRequestDto,
+  PiLiveSetModelRequestDto,
+  PiLiveSetThinkingLevelRequestDto,
   PiLiveStartRequestDto,
 } from '@agent-lens/protocol'
 
@@ -171,7 +173,7 @@ export async function handlePiLiveRequest(
       return true
     }
 
-    const match = url.pathname.match(/^\/api\/v1\/pi-live\/([^/]+)(?:\/(state|snapshot|events|prompt|steer|follow-up|abort|extension-response))?$/)
+    const match = url.pathname.match(/^\/api\/v1\/pi-live\/([^/]+)(?:\/(state|snapshot|events|controls|model|thinking-level|prompt|steer|follow-up|abort|extension-response))?$/)
     if (!match) {
       writeJson(response, 404, { error: 'not_found' })
       return true
@@ -195,6 +197,22 @@ export async function handlePiLiveRequest(
     }
     if (action === 'events' && request.method === 'GET') {
       await connectEvents(request, response, service, runtimeSessionId)
+      return true
+    }
+    if (action === 'controls' && request.method === 'GET') {
+      writeJson(response, 200, jsonValue(await service.controls(runtimeSessionId)))
+      return true
+    }
+    if (action === 'model' && request.method === 'POST') {
+      const body = await readJson<PiLiveSetModelRequestDto>(request)
+      const provider = nonEmpty(body.provider, 'provider')
+      const modelId = nonEmpty(body.modelId, 'modelId')
+      writeJson(response, 200, jsonValue(await service.setModel(runtimeSessionId, provider, modelId)))
+      return true
+    }
+    if (action === 'thinking-level' && request.method === 'POST') {
+      const body = await readJson<PiLiveSetThinkingLevelRequestDto>(request)
+      writeJson(response, 200, jsonValue(await service.setThinkingLevel(runtimeSessionId, nonEmpty(body.level, 'level'))))
       return true
     }
     if (action === 'prompt' && request.method === 'POST') {
