@@ -41,6 +41,7 @@
     "test": "node --test scripts/dev-runtime.test.mjs && npm run test --workspaces --if-present",
     "perf:session-summary": "tsx scripts/performance/session-summary-benchmark.ts",
     "perf:review-detail": "tsx scripts/performance/review-detail-benchmark.ts",
+    "perf:review-virtualization": "tsx scripts/performance/review-virtualization-benchmark.ts",
     "perf:tool-overview": "tsx scripts/performance/tool-overview-benchmark.ts",
     "perf:pi-history-idle": "tsx scripts/performance/pi-history-idle-benchmark.ts",
     "perf:dsh-history-idle": "tsx scripts/performance/dsh-history-idle-benchmark.ts",
