@@ -66,8 +66,7 @@ jobs:
 
       - name: Smoke packaged Windows desktop
         if: runner.os == 'Windows'
-        shell: pwsh
-        run: pwsh -NoLogo -NoProfile -File scripts/smoke-packaged-desktop.ps1
+        run: node scripts/smoke-desktop-runtime.mjs release/windows/win-unpacked/AgentLens.exe
 
       - name: Verify Windows shared Hook dispatcher
         if: runner.os == 'Windows'
