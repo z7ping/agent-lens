@@ -75,8 +75,23 @@ export function buildDevEnvironment(baseEnv, repoRoot, port) {
   }
 }
 
-function npmExecutable() {
-  return process.platform === 'win32' ? 'npm.cmd' : 'npm'
+export function npmInvocation(env = process.env) {
+  if (env.npm_execpath) {
+    return {
+      command: process.execPath,
+      args: [env.npm_execpath, 'run', 'dev', '--workspace', '@agent-lens/daemon'],
+    }
+  }
+  if (process.platform === 'win32') {
+    return {
+      command: env.ComSpec || 'cmd.exe',
+      args: ['/d', '/s', '/c', 'npm run dev --workspace @agent-lens/daemon'],
+    }
+  }
+  return {
+    command: 'npm',
+    args: ['run', 'dev', '--workspace', '@agent-lens/daemon'],
+  }
 }
 
 export async function runDevRuntime() {
@@ -96,16 +111,13 @@ export async function runDevRuntime() {
   console.info(`[AgentLens] 开发数据目录：${paths.dataRoot}`)
   console.info(`[AgentLens] 开发 Web/UI：http://127.0.0.1:${port}`)
 
-  const child = spawn(
-    npmExecutable(),
-    ['run', 'dev', '--workspace', '@agent-lens/daemon'],
-    {
-      cwd: repoRoot,
-      env: buildDevEnvironment(process.env, repoRoot, port),
-      stdio: 'inherit',
-      windowsHide: false,
-    },
-  )
+  const invocation = npmInvocation(process.env)
+  const child = spawn(invocation.command, invocation.args, {
+    cwd: repoRoot,
+    env: buildDevEnvironment(process.env, repoRoot, port),
+    stdio: 'inherit',
+    windowsHide: false,
+  })
 
   child.once('error', error => {
     console.error('[AgentLens] 开发运行时启动失败', error)
