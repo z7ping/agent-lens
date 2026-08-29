@@ -2,6 +2,7 @@ import { isValidElement, type CSSProperties, type ReactNode, useEffect, useLayou
 
 export const REVIEW_ROUND_ROOT_MARGIN_PX = 1400
 export const REVIEW_ROUND_UNMOUNT_DELAY_MS = 320
+export const VIRTUAL_MOUNT_OBSERVER_STRATEGY = 'shared-per-root' as const
 
 interface SharedVirtualObserver {
   observer: IntersectionObserver
