@@ -759,6 +759,10 @@ export async function normalizePiRecord(
       provider: stringField(entry, 'provider') ?? 'unknown',
       model: stringField(entry, 'modelId', 'model') ?? 'unknown',
     }))
+  } else if (type === 'thinking_level_change') {
+    observations.push(candidate(record, envelope, 'thinking.level.changed', {
+      level: stringField(entry, 'thinkingLevel', 'level') ?? 'unknown',
+    }))
   } else if (type === 'compaction') {
     observations.push(candidate(record, envelope, 'context.compaction', {
       phase: 'end',
@@ -796,6 +800,7 @@ export async function declarePiCapabilities(
     { sourceId: SOURCE_ID, name: 'tool-result', status: 'available', captureModes: ['history', 'native-tail'] },
     { sourceId: SOURCE_ID, name: 'context', status: 'available', captureModes: ['history', 'native-tail'] },
     { sourceId: SOURCE_ID, name: 'model-change', status: 'available', captureModes: ['history', 'native-tail'] },
+    { sourceId: SOURCE_ID, name: 'thinking-level-change', status: 'available', captureModes: ['history', 'native-tail'] },
     { sourceId: SOURCE_ID, name: 'asset-discovery', status: 'available', captureModes: ['static-scan'] },
     { sourceId: SOURCE_ID, name: 'permission', status: 'unavailable', captureModes: [], reason: 'No stable permission event is proven in the native session log' },
     { sourceId: SOURCE_ID, name: 'subagent', status: 'partial', captureModes: ['history'], reason: 'Parent session links are retained; explicit subagent lifecycle is not proven' },
