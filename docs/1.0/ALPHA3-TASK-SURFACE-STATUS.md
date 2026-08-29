@@ -10,6 +10,8 @@
 
 不改变 `docs/1.0/IMPLEMENTATION-STATUS.md` 中其他 1.0 / Hub 能力的既有状态。
 
+> 当前 HEAD、ahead/behind、某次 GitHub Actions Run 与具体性能数字属于 **Repository Reality**，必须从 GitHub / Actions 实时读取。本文只记录已经进入正式实现的能力、尚未完成的门禁和稳定架构边界，避免下一次提交后状态文档立即漂移。
+
 ## 1. Task Review 长会话
 
 已实现：
@@ -28,15 +30,7 @@ root margin    = 1400px
 unmount delay  = 320ms
 ```
 
-自动化 1000 轮虚拟窗口门禁：
-
-```text
-rounds                 = 1000
-viewport               = 800px
-average round height   = 312.1px
-max mounted heavy tree = 14
-budget                  = 40
-```
+自动化已建立 1000 轮虚拟窗口预算门禁，用于限制同时挂载的 Review 重子树数量。
 
 该门禁验证的是正式参数驱动的**重子树挂载窗口预算**，不等同于真实浏览器 DOM / React 节点数量实测。真实浏览器滚动流畅度、DOM 数量和内存趋势仍属于实机验收。
 
@@ -113,7 +107,7 @@ AgentLens 解析受信任本机 npm shim 指向的 JS CLI entry，并使用当�
 - `.cmd` 直接 spawn 的兼容问题；
 - 只杀 wrapper 后遗留 Pi 子进程。
 
-当前已通过 Windows Typecheck / Test / Desktop package / Installer 编译链；仍需在真实安装了 Pi、具有真实模型认证的 Windows 环境做端到端运行验证。
+自动化已覆盖 Windows Typecheck / Test / Desktop package / Installer 编译链；仍需在真实安装了 Pi、具有真实模型认证的 Windows 环境做端到端运行验证。
 
 ## 4. Local HTTP / SSE
 
@@ -170,14 +164,25 @@ Pi Live 是任务复盘域的实时状态：
 - Queue 状态；
 - Steer / Follow-up 两种发送方式；
 - Stop 当前任务；
-- Stop 前清空 Queue，并把未执行 Steer / Follow-up 恢复为可编辑草稿；
+- Stop 后把未执行 Steer / Follow-up 恢复为可编辑草稿；
 - 显式 Terminate Runtime；
 - Extension UI confirm / select / input / editor；
 - IME `compositionstart` / `isComposing` / keyCode 229 防误发送；
 - Enter / Alt+Enter / Shift+Enter 输入语义；
 - 用户不在底部时不抢滚动，只提示“有新记录”；
 - SSE reconnect + Snapshot recovery；
-- 调度诊断信息。
+- 调度诊断信息；
+- View Dispose 不再交付排队中的旧视图事件；
+- Runtime 切换后，旧 Snapshot / event 异步结果不得回写新视图；
+- Follow Latest 已把 Composer / Queue / Restored Draft / Extension 高度变化纳入重新贴底逻辑。
+
+仍需在正式实现中收口：
+
+- Snapshot 历史当前只投影 user / assistant 文本，历史 Tool / Tool Result / Thinking / Extension / Compaction / Retry / Model Change / Thinking Level Change 事实尚未完整进入时间线；
+- Composer 尚未提供已确认设计中的 Model / Thinking Level 真实 Runtime 控制；
+- Pi Live 历史正文尚未建立与 Review 同等级的有界挂载策略；
+- 大 Markdown / JSON / Diff / Tool Payload 仍需按需 / 分块 / 上限治理；
+- Extension UI 请求响应后的事实沉淀仍需在不制造第二事实源的前提下收口。
 
 ## 6. Streaming Scheduler / Page Visibility
 
@@ -190,7 +195,8 @@ Pi Live Web 不允许每个 Pi delta 都直接触发一次 React 提交。
 - text / thinking / tool-call delta 按 message epoch + content index 合并；
 - bash delta 合并；
 - `tool_execution_update.partialResult` 为累计值，使用最新 Progress 替换旧值；
-- Extension UI、Queue、Agent Settled、Tool Start/End、Compaction、Retry、Runtime Exit 等高优事件快速刷新。
+- Extension UI、Queue、Agent Settled、Tool Start/End、Compaction、Retry、Runtime Exit 等高优事件快速刷新；
+- Surface Dispose 后丢弃仍未提交的 presentation queue，不把旧视图事件交付给已销毁页面。
 
 当前诊断指标：
 
@@ -205,64 +211,19 @@ lastFlushLatencyMs
 hidden
 ```
 
-## 7. 自动验收结果
+## 7. 自动验收状态
 
-当前 alpha.3 候选 HEAD `92d462f5b603c871adcc4414fa09ad21eff17119` 已通过：
+alpha.3 当前已有以下自动门禁：
 
-### AgentLens 1.0 CI
+- `AgentLens 1.0 CI`：Linux / macOS / Windows；
+- Windows Desktop / npm lifecycle / package contents / shared Hook Dispatcher 等既有发行链测试；
+- `Windows Installer Compile`：NSIS、安装包存在性、checksum、Artifact；
+- `Alpha.3 Interaction Performance`：Pi Live Scheduler + Review 1000-round virtualization；
+- Pi Live Scheduler Dispose stale-event 防回归。
 
-Linux / macOS / Windows 全绿。
+**每次提交后的具体结论必须从 GitHub Actions 读取。文档中的“已建立门禁”不等于“未来任意 HEAD 自动通过”。**
 
-Windows 同时通过：
-
-- Web presentation contract；
-- Typecheck；
-- Test；
-- Build distributable；
-- Desktop package；
-- packaged Desktop Smoke；
-- shared Hook Dispatcher；
-- npm lifecycle；
-- dist Smoke；
-- npm package contents。
-
-### Windows Installer Compile
-
-全绿：
-
-- desktop shell check；
-- build distributable；
-- prepare desktop runtime；
-- NSIS compile；
-- installer existence；
-- checksum；
-- unsigned installer artifact upload。
-
-### Alpha.3 Interaction Performance
-
-Pi Live Scheduler smoke：
-
-```text
-ingress events     = 15,441
-delivered events   = 64
-coalesced events   = 15,377
-max queue depth    = 63
-push time          = 46.34ms
-push budget        = 500ms
-delivered ratio    = 0.41%
-ratio budget       = 3%
-```
-
-Review 1000-round virtualization：
-
-```text
-rounds             = 1000
-viewport           = 800px
-root margin        = 1400px
-unmount delay      = 320ms
-max mounted        = 14
-mounted budget     = 40
-```
+更重要的是：这些自动门禁均不得冒充真实 Pi、真实浏览器或长时间狗粮。
 
 ## 8. 自动契约护栏
 
@@ -284,19 +245,22 @@ mounted budget     = 40
 - 不使用毛玻璃 / blur；
 - 不新增 576px 响应式断点。
 
-## 9. 仍未完成的实机门禁
+## 9. 仍未完成的真实门禁
 
-以下项目**不得因为自动化通过而视为完成**：
+以下项目**当前均视为未执行 / 待验证，绝不能因为自动化通过而视为完成**：
 
 - 真实 Pi 认证 / 模型环境下：`Prompt -> Streaming -> Tool -> Steer/Follow-up -> Abort -> Reconnect`；
 - 真实 Pi Extension UI 与实际 Extension / 模型交互；
-- Windows 实机真实 npm `pi.cmd` 启动与进程生命周期；
+- Windows 实机真实 npm `pi.cmd/.bat` 启动与进程生命周期；
 - 正式浏览器 1000 轮真实 DOM / React 挂载数；
 - 1000 轮滚动位置、展开/收起、Turn Rail、抽屉返回位置的实际交互流畅度；
+- 100 次会话切换后的 Listener / Observer 资源趋势；
+- 后台持续 Streaming 30 分钟时历史阅读位置稳定性；
 - 1 小时连续 Streaming；
-- 8 小时 CPU / Heap / RSS / DOM / Listener 趋势；
-- 1280x800、1366x768 等目标视口的最终视觉验收；
-- alpha.3 最终交互体验确认。
+- 8 小时 CPU / Heap / RSS / DOM / Listener 趋势与任务结束后的资源回落；
+- 断网、睡眠、Daemon 重启、Pi Runtime 异常、UI Reload 恢复矩阵；
+- 1280x800、1366x768 等目标视口与目标缩放下的最终视觉验收；
+- alpha.3 最终 8 小时交互体验确认。
 
 ## 10. 发布状态
 
