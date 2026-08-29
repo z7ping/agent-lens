@@ -1,0 +1,77 @@
+/*
+ * AgentLens 1.0 资产备份响应式正式样式。
+ *
+ * 负责 1280×800 / 1366×768 等 xl 桌面视口的保护范围与操作区收口；
+ * 不改变备份业务结构，只调整已有信息的布局密度和按钮稳定性。
+ */
+
+/* 操作按钮必须保持图标 + 文案横向排列，不能在空间收紧时碎成两行。 */
+.workspace-page > .workspace-toolbar:has(.backup-toolbar-note) .backup-toolbar-note ~ .btn,
+.backup-page > .future-heading > .btn {
+  display: inline-flex;
+  min-width: max-content;
+  flex: 0 0 auto;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.workspace-page > .workspace-toolbar:has(.backup-toolbar-note) .backup-toolbar-note ~ .btn > svg,
+.backup-page > .future-heading > .btn > svg {
+  flex: 0 0 auto;
+}
+
+/* xl：1280 / 1366 是主设计基线。优先保证右侧操作完整，再让来源筛选横向滚动兜底。 */
+@media (min-width: 1200px) and (max-width: 1399.98px) {
+  .workspace-page > .workspace-toolbar:has(.backup-toolbar-note) .agent-scope {
+    min-width: 0;
+    flex: 0 1 auto;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .workspace-page > .workspace-toolbar:has(.backup-toolbar-note) .agent-scope::-webkit-scrollbar {
+    display: none;
+  }
+
+  .workspace-page > .workspace-toolbar:has(.backup-toolbar-note) .backup-toolbar-note {
+    min-width: 0;
+    max-width: 156px;
+    flex: 0 1 156px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /*
+   * 主内容仍与右侧“创建快照”并排时，可用宽度不足以稳定承载三大横向信息块。
+   * 改为“来源 + 指标”第一行、“关键构成 + 详情”第二行，保持行式清单但避免硬挤。
+   */
+  .backup-page .protection-grid > .protection-card {
+    grid-template-columns: minmax(200px, .85fr) minmax(0, 1.65fr);
+    gap: 8px 18px;
+    padding: 12px 14px;
+  }
+
+  .backup-page .protection-grid > .protection-card > .protection-card-head {
+    grid-column: 1;
+  }
+
+  .backup-page .protection-grid > .protection-card > .protection-counts {
+    grid-column: 2;
+  }
+
+  .backup-page .protection-grid > .protection-card > .protection-meta {
+    grid-column: 1 / -1;
+    margin-top: 0;
+    padding-top: 2px;
+  }
+
+  .backup-page .protection-grid > .protection-card > .protection-meta > span {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    line-height: 1.45;
+  }
+}
