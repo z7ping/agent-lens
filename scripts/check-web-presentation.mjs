@@ -2,14 +2,20 @@ import { existsSync, readFileSync } from 'node:fs'
 
 const mainPath = 'packages/web/src/main.tsx'
 const stylesPath = 'packages/web/src/styles.css'
-const typographyPath = 'packages/web/src/typography.css'
 const tokenPath = 'packages/web/src/tokens.css'
+const themePath = 'packages/web/src/theme.css'
+const typographyPath = 'packages/web/src/typography.css'
+const readabilityPath = 'packages/web/src/readability.css'
 const semanticColorPath = 'packages/web/src/semantic-colors.css'
 const shellPath = 'packages/web/src/shell.css'
+const shellResponsivePath = 'packages/web/src/shell-responsive.css'
+const statesPath = 'packages/web/src/states.css'
+const desktopResponsivePath = 'packages/web/src/desktop-responsive.css'
 const toolsPath = 'packages/web/src/tools.css'
 const insightsPath = 'packages/web/src/insights.css'
 const agentsPath = 'packages/web/src/agents.css'
 const backupPath = 'packages/web/src/backup.css'
+const backupResponsivePath = 'packages/web/src/backup-responsive.css'
 const reviewPath = 'packages/web/src/review.css'
 const reviewLongPath = 'packages/web/src/review-long-session.css'
 
@@ -38,15 +44,21 @@ for (const path of retiredLayers) {
 const requiredImports = [
   './styles.css',
   './tokens.css',
+  './theme.css',
   './typography.css',
+  './readability.css',
   './semantic-colors.css',
   './shell.css',
+  './shell-responsive.css',
+  './states.css',
   './backup.css',
+  './backup-responsive.css',
   './insights.css',
   './tools.css',
   './agents.css',
   './review.css',
   './review-long-session.css',
+  './desktop-responsive.css',
 ]
 for (const path of requiredImports) {
   if (indexOf(path) < 0) throw new Error(`正式 Web 缺少样式职责入口：${path}`)
@@ -59,7 +71,10 @@ if (!(indexOf('./styles.css') < indexOf('./tokens.css')
   && indexOf('./tools.css') < indexOf('./agents.css')
   && indexOf('./agents.css') < indexOf('./review.css')
   && indexOf('./review.css') + 1 === indexOf('./review-long-session.css'))) {
-  throw new Error('正式样式顺序必须保持：全局基础 → 设计令牌 → 共享语义色 → 壳层 → 页面所有者；长会话性能层紧随 review.css')
+  throw new Error('正式样式顺序必须保持：全局基础 → 设计令牌/主题 → 共享语义色 → 壳层 → 页面所有者；长会话性能层紧随 review.css')
+}
+if (!(indexOf('./desktop-responsive.css') < indexOf('./backup-responsive.css'))) {
+  throw new Error('资产备份响应式所有者必须在通用 Desktop 响应式基线之后加载')
 }
 
 const typography = readFileSync(typographyPath, 'utf8')
@@ -75,16 +90,21 @@ function declaredPixelFontSizes(source) {
 
 const semanticPresentationPaths = [
   stylesPath,
+  themePath,
   typographyPath,
+  readabilityPath,
   semanticColorPath,
   shellPath,
+  shellResponsivePath,
+  statesPath,
+  desktopResponsivePath,
   toolsPath,
   insightsPath,
   agentsPath,
   backupPath,
+  backupResponsivePath,
   reviewPath,
   reviewLongPath,
-  'packages/web/src/shell-responsive.css',
 ]
 for (const path of semanticPresentationPaths) {
   const source = readFileSync(path, 'utf8')
@@ -95,23 +115,33 @@ for (const path of semanticPresentationPaths) {
 }
 
 const stylesSource = readFileSync(stylesPath, 'utf8')
+const tokenSource = readFileSync(tokenPath, 'utf8')
+const themeSource = readFileSync(themePath, 'utf8')
 const shellSource = readFileSync(shellPath, 'utf8')
+const shellResponsiveSource = readFileSync(shellResponsivePath, 'utf8')
+const statesSource = readFileSync(statesPath, 'utf8')
+const desktopResponsiveSource = readFileSync(desktopResponsivePath, 'utf8')
 const toolsSource = readFileSync(toolsPath, 'utf8')
 const insightsSource = readFileSync(insightsPath, 'utf8')
 const agentsSource = readFileSync(agentsPath, 'utf8')
 const backupSource = readFileSync(backupPath, 'utf8')
+const backupResponsiveSource = readFileSync(backupResponsivePath, 'utf8')
 const reviewSource = readFileSync(reviewPath, 'utf8')
 const reviewLongSource = readFileSync(reviewLongPath, 'utf8')
 const semanticColorSource = readFileSync(semanticColorPath, 'utf8')
-const tokenSource = readFileSync(tokenPath, 'utf8')
 
 for (const [name, source] of [
+  ['theme.css', themeSource],
   ['shell.css', shellSource],
+  ['shell-responsive.css', shellResponsiveSource],
+  ['states.css', statesSource],
+  ['desktop-responsive.css', desktopResponsiveSource],
   ['semantic-colors.css', semanticColorSource],
   ['tools.css', toolsSource],
   ['insights.css', insightsSource],
   ['agents.css', agentsSource],
   ['backup.css', backupSource],
+  ['backup-responsive.css', backupResponsiveSource],
   ['review.css', reviewSource],
 ]) {
   if (/!important\b/.test(source)) throw new Error(`${name} 作为正式所有者文件不得依赖 !important 争夺优先级`)
@@ -121,6 +151,16 @@ if (!stylesSource.includes('AgentLens 1.0 全局基础样式')) throw new Error(
 if (/\.app-header\b|\.tool-summary-grid\b|\.agent-card\b|\.review-page\b/.test(stylesSource)) {
   throw new Error('styles.css 不得重新承载壳层或一级页面专属规则')
 }
+if (!/\.btn\s*\{[\s\S]*?display:\s*inline-flex;[\s\S]*?height:\s*30px;[\s\S]*?font-size:\s*12px;[\s\S]*?white-space:\s*nowrap;/m.test(stylesSource)) {
+  throw new Error('共享按钮必须保持 v2.1 契约：inline-flex、30px 高、12px 字号且图文不换行')
+}
+
+const duplicatedCoreTokens = [
+  '--al-canvas', '--al-surface', '--al-soft', '--al-line', '--al-ink', '--al-accent',
+].filter(token => new RegExp(`${token.replaceAll('-', '\\-')}\\s*:`).test(themeSource))
+if (duplicatedCoreTokens.length) {
+  throw new Error(`theme.css 不得重新声明基础设计令牌：${duplicatedCoreTokens.join(', ')}`)
+}
 
 if (!/\.app-header\s*\{[\s\S]*?backdrop-filter\s*:\s*none/m.test(shellSource)) {
   throw new Error('正式 Header 必须由 shell.css 关闭背景模糊')
@@ -128,8 +168,36 @@ if (!/\.app-header\s*\{[\s\S]*?backdrop-filter\s*:\s*none/m.test(shellSource)) {
 if (!shellSource.includes('.status-tip::after') || !shellSource.includes('white-space: pre-line')) {
   throw new Error('正式顶部运行状态提示卡必须支持多行事实说明')
 }
-if (!/@media \(max-width: 560px\)[\s\S]*?\.app-header \.brand\s*\{\s*display:\s*flex/m.test(shellSource)) {
-  throw new Error('窄窗口必须保留 AgentLens Logo，不能隐藏整个品牌区')
+if (!/\.workspace-toolbar\s*\{[\s\S]*?height:\s*50px;[\s\S]*?min-height:\s*50px;/m.test(shellSource)) {
+  throw new Error('工作区工具栏必须保持 50px 正式基线')
+}
+if (!/\.filter\s*\{[\s\S]*?height:\s*34px;[\s\S]*?font-size:\s*13px;/m.test(shellSource)) {
+  throw new Error('筛选控件必须保持 34px / 13px 正式基线')
+}
+if (!/\.scope-chip\s*\{[\s\S]*?height:\s*32px;[\s\S]*?font-size:\s*13px;/m.test(shellSource)) {
+  throw new Error('智能体筛选 Chip 必须保持 32px / 13px 正式基线')
+}
+if (!/@media \(max-width: 575\.98px\)[\s\S]*?\.app-header \.brand\s*\{[\s\S]*?display:\s*flex/m.test(shellResponsiveSource)) {
+  throw new Error('xs 窄窗口必须保留 AgentLens Logo，不能隐藏整个品牌区')
+}
+
+for (const breakpoint of ['1199.98px', '991.98px', '767.98px', '575.98px']) {
+  if (!shellResponsiveSource.includes(breakpoint)) throw new Error(`shell-responsive.css 缺少 Bootstrap 响应式断点：${breakpoint}`)
+}
+for (const legacyBreakpoint of ['1080px', '1100px', '900px', '820px', '760px', '560px']) {
+  if (shellResponsiveSource.includes(legacyBreakpoint) || statesSource.includes(legacyBreakpoint)) {
+    throw new Error(`壳层/状态层不得恢复一次性自定义断点：${legacyBreakpoint}`)
+  }
+}
+if (!desktopResponsiveSource.includes('1280×800 / 1366×768')
+  || !desktopResponsiveSource.includes('md 768 / lg 992 / xl 1200 / xxl 1400')) {
+  throw new Error('Desktop 响应式基线必须明确 1280/1366 主设计尺寸和 Bootstrap 5 断点')
+}
+if (!backupResponsiveSource.includes('1280×800 / 1366×768')
+  || !backupResponsiveSource.includes('@media (min-width: 1200px) and (max-width: 1399.98px)')
+  || !backupResponsiveSource.includes('white-space: nowrap')
+  || !backupResponsiveSource.includes('grid-column: 1 / -1')) {
+  throw new Error('资产备份必须保留 xl 主桌面布局和操作按钮不换行契约')
 }
 
 if (!toolsSource.includes('工具分析正式样式')
@@ -221,4 +289,4 @@ for (const [label, foreground, background] of [
   assertContrast(label, foreground, background)
 }
 
-console.log('AgentLens 正式 Web 表现检查通过：样式职责、字号、关键页面契约和运行时对比度均已锁定。')
+console.log('AgentLens 正式 Web 表现检查通过：设计令牌、控件契约、Bootstrap 响应式、桌面主基线、字号与关键页面能力均已锁定。')
