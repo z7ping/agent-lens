@@ -3,7 +3,6 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { backupLocalPlugin } from '@agent-lens/backup-local'
 import { capturePolicyPlugin } from '@agent-lens/capture-policy'
-import { piLiveRuntimePlugin } from '@agent-lens/pi-live-runtime'
 import {
   SESSION_SUMMARY_PROJECTION_ID,
   sessionSummaryProjectionPlugin,
@@ -13,6 +12,7 @@ import {
   coreServicesPlugin,
   discoverRegisteredSourceAssets,
   nodeRuntimePlugin,
+  piLiveRuntimePlugin,
   prepareRegisteredSources,
   resolveAgentLensNodeRuntime,
   startRegisteredSourceCapture,
