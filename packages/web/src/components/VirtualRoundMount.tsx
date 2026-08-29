@@ -1,4 +1,4 @@
-import { isValidElement, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { isValidElement, type CSSProperties, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 export const REVIEW_ROUND_ROOT_MARGIN_PX = 1400
 export const REVIEW_ROUND_UNMOUNT_DELAY_MS = 320
@@ -9,12 +9,14 @@ export function VirtualRoundMount({
   estimate = 220,
   interactionId,
   rootSelector = '.review-reader-pane',
+  flowRoot = false,
 }: {
   children: ReactNode
   eager?: boolean
   estimate?: number
   interactionId?: string
   rootSelector?: string
+  flowRoot?: boolean
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const unmountTimerRef = useRef<number | null>(null)
@@ -85,12 +87,16 @@ export function VirtualRoundMount({
     }
   }, [mounted])
 
+  const style: CSSProperties | undefined = mounted
+    ? flowRoot ? { display: 'flow-root' } : undefined
+    : { height: `${height}px`, position: 'relative', ...(flowRoot ? { display: 'flow-root' } : {}) }
+
   return <div
     ref={ref}
     className="virtual-round-shell"
     data-mounted={mounted ? 'true' : 'false'}
     data-interaction-id={stableInteractionId || undefined}
-    style={mounted ? undefined : { height: `${height}px`, position: 'relative' }}
+    style={style}
   >
     {!mounted && stableInteractionId && <span
       className="interaction-block virtual-round-anchor"
