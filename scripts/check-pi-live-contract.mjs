@@ -20,6 +20,7 @@ if (topLevelLinks !== 5) failures.push(`一级导航必须保持 5 个，当前�
 requireText(app, /path="\/review\/live"/, '缺少 /review/live 路由')
 requireText(app, /path="\/review\/live\/:runtimeSessionId"/, '缺少 Pi Live runtime 路由')
 requireText(app, /onPiLive[\s\S]*!onPiLive/, 'Pi Live 必须从普通 Review overlay/turn rail 语义中分离')
+requireText(app, /onLocalReview\s*&&\s*<NavLink[^>]*to="\/review\/live"[^>]*>Pi 实时<\/NavLink>/, '任务复盘域必须提供 Pi 实时可发现入口')
 
 requireText(page, /onCompositionStart/, 'Pi Live 输入框缺少 compositionstart 保护')
 requireText(page, /nativeEvent\.isComposing/, 'Pi Live 输入框缺少 isComposing 保护')
@@ -56,4 +57,4 @@ if (failures.length) {
   process.exit(1)
 }
 
-console.log('Pi Live Task Surface 契约检查通过：五页导航、Live/Review 边界、IME、Stop/Terminate、滚动跟随、Extension UI、背压与性能诊断已锁定。')
+console.log('Pi Live Task Surface 契约检查通过：五页导航、可发现入口、Live/Review 边界、IME、Stop/Terminate、滚动跟随、Extension UI、背压与性能诊断已锁定。')
