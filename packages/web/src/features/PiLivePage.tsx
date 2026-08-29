@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown'
 import { useNavigate, useParams } from 'react-router-dom'
 import type { JsonValue, PiLiveControlsDto, PiLiveEventDto, PiLiveQueueDto, PiLiveSnapshotDto, PiLiveStateDto } from '@agent-lens/protocol'
 import { piLiveApi, type PiLiveTransportDiagnostics } from '../client/pi-live'
+import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import { projectPiLiveHistory, type PiLiveHistoryItem } from './pi-live-history'
 
 type QueueMode = 'steer' | 'followUp'
@@ -23,6 +24,9 @@ interface ExtensionRequest {
   placeholder: string
   prefill: string
 }
+
+const PI_LIVE_HISTORY_CHUNK_SIZE = 8
+const PI_LIVE_EAGER_CHUNKS = 2
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -170,6 +174,16 @@ function PiLiveHistoryRow({ item }: { item: PiLiveHistoryItem }) {
     {item.detail && <span>{item.detail}</span>}
     {item.at && <time>{formatClock(item.at)}</time>}
   </div>
+}
+
+function historyEstimate(item: PiLiveHistoryItem): number {
+  if (item.kind === 'message') {
+    const lines = Math.max(1, Math.ceil(item.text.length / 72))
+    return Math.min(360, 72 + lines * 24)
+  }
+  if (item.kind === 'thinking') return 64
+  if (item.kind === 'tool') return item.output ? 92 : 58
+  return 38
 }
 
 function PiLiveStart({ known }: { known: PiLiveStateDto[] }) {
@@ -444,6 +458,13 @@ export function PiLivePage() {
   }, [runtimeId])
 
   const history = useMemo(() => projectPiLiveHistory(snapshot), [snapshot])
+  const historyChunks = useMemo(() => {
+    const chunks: PiLiveHistoryItem[][] = []
+    for (let index = 0; index < history.length; index += PI_LIVE_HISTORY_CHUNK_SIZE) {
+      chunks.push(history.slice(index, index + PI_LIVE_HISTORY_CHUNK_SIZE))
+    }
+    return chunks
+  }, [history])
 
   useEffect(() => {
     if (!followingRef.current) return
@@ -624,7 +645,15 @@ export function PiLivePage() {
 
       <div ref={readerRef} className="pi-live-reader" onScroll={onReaderScroll}>
         <div className="pi-live-document">
-          {history.map(item => <PiLiveHistoryRow key={item.id} item={item}/>)}
+          {historyChunks.map((chunk, index) => <VirtualRoundMount
+            key={chunk[0]?.id ?? `history-chunk-${index}`}
+            rootSelector=".pi-live-reader"
+            flowRoot
+            eager={index >= historyChunks.length - PI_LIVE_EAGER_CHUNKS}
+            estimate={chunk.reduce((total, item) => total + historyEstimate(item), 0)}
+          >
+            <div className="pi-live-history-chunk">{chunk.map(item => <PiLiveHistoryRow key={item.id} item={item}/>)}</div>
+          </VirtualRoundMount>)}
 
           {(thinkingText || tools.length > 0 || streamText) && <section className="pi-live-current-round">
             <div className="pi-live-round-head"><b>当前轮次</b><span>{state?.isStreaming ? '实时' : '已停止'}</span><span className="grow"/>{state?.pendingMessageCount ? <span>{state.pendingMessageCount} 条排队</span> : null}</div>
