@@ -11,6 +11,7 @@ import type {
   SourceService,
   StorageService,
 } from '@agent-lens/core'
+import type { PiLiveService } from '@agent-lens/pi-live-runtime'
 import { UsageInsightsProjection } from '@agent-lens/projection-insights'
 import { AgentOverviewProjection, FacetProjection, SessionRelationshipProjection } from '@agent-lens/projection-overview'
 import { ReviewProjection, type HubReviewProjection } from '@agent-lens/projection-review'
@@ -42,6 +43,7 @@ import {
   type ToolAssetUsageQueryDto,
 } from '@agent-lens/protocol'
 import type { HttpEventHub } from './events'
+import { handlePiLiveRequest } from './pi-live'
 
 export const AGENT_LENS_HTTP_HOST = '127.0.0.1' as const
 export const DEFAULT_AGENT_LENS_HTTP_PORT = 56789
@@ -67,6 +69,7 @@ export interface HttpSurfaceOptions {
   capabilities?: CapabilityService
   capturePolicy?: CapturePolicyService
   backup?: BackupService
+  piLive?: PiLiveService
   hubReview?: Pick<HubReviewProjection, 'get' | 'query'>
 }
 
@@ -513,6 +516,7 @@ export async function startHttpSurface(
   const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url ?? '/', `http://${AGENT_LENS_HTTP_HOST}`)
+      if (await handlePiLiveRequest(request, response, url, options.piLive)) return
       if (await handleBackupRequest(request, response, url, options.backup)) return
 
       if (request.method !== 'GET') {
