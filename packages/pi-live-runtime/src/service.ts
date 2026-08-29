@@ -180,10 +180,10 @@ export class DefaultPiLiveService implements PiLiveService {
 
   async respondToExtension(runtimeSessionId: string, requestId: string, response: unknown): Promise<void> {
     if (!requestId) throw new Error('Pi extension request id is required')
-    await this.requireRuntime(runtimeSessionId).client.command({
+    this.requireRuntime(runtimeSessionId).client.send({
       type: 'extension_ui_response',
-      requestId,
-      response,
+      id: requestId,
+      ...record(response),
     })
   }
 
