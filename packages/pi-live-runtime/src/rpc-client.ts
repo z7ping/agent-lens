@@ -108,11 +108,17 @@ export class PiRpcClient {
     })
   }
 
+  send(message: Record<string, unknown>): void {
+    const child = this.process
+    if (!child || !child.stdin.writable) throw new Error('Pi RPC process is not running')
+    child.stdin.write(`${JSON.stringify(message)}\n`)
+  }
+
   async command<T extends Record<string, unknown> = Record<string, unknown>>(
     command: Record<string, unknown>,
   ): Promise<T> {
     const child = this.process
-    if (!child || child.killed || !child.stdin.writable) throw new Error('Pi RPC process is not running')
+    if (!child || !child.stdin.writable) throw new Error('Pi RPC process is not running')
     const id = `agentlens-${this.nextRequestId++}`
     const timeoutMs = this.options.commandTimeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS
     const response = new Promise<Record<string, unknown>>((resolve, reject) => {
@@ -122,7 +128,7 @@ export class PiRpcClient {
       }, timeoutMs)
       this.pending.set(id, { resolve, reject, timer })
     })
-    child.stdin.write(`${JSON.stringify({ ...command, id })}\n`)
+    this.send({ ...command, id })
     return await response as T
   }
 
@@ -171,15 +177,22 @@ export class PiRpcClient {
     const child = this.process
     this.process = null
     this.failAll(new Error('Pi RPC client closed'))
-    if (!child || child.killed) return
+    if (!child || child.exitCode !== null || child.signalCode !== null) return
     child.stdin.end()
     child.kill('SIGTERM')
     await new Promise<void>(resolve => {
-      const timer = setTimeout(() => {
-        if (!child.killed) child.kill('SIGKILL')
+      let settled = false
+      const finish = () => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
         resolve()
+      }
+      const timer = setTimeout(() => {
+        if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
+        finish()
       }, 1500)
-      child.once('exit', () => { clearTimeout(timer); resolve() })
+      child.once('exit', finish)
     })
   }
 }
