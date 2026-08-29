@@ -85,19 +85,18 @@
 }
 .detail-load-sentinel button:hover { border-color: var(--al-line-strong); background: var(--al-soft); }
 
-/* 长会话轮次轨：只做导航刻度，不绘制贯穿阅读区的主线。 */
+/* 长会话轮次轨：一个轮次对应一条横线，整组在阅读区纵向居中。 */
 .turn-rail {
-  position: absolute;
-  top: 104px;
-  bottom: 84px;
-  left: -4px;
   z-index: 18;
   display: flex;
-  width: auto;
+  width: 24px;
+  max-height: calc(100vh - 150px);
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding-top: 0;
+  justify-content: center;
+  gap: 2px;
+  padding: 2px 0;
+  transform: translateY(-50%);
   opacity: .68;
   pointer-events: none;
 }
@@ -105,25 +104,26 @@
 .turn-rail::before { display: none; content: none; }
 .turn-tick {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: 4px 5px;
+  display: grid;
+  width: 24px;
+  height: 8px;
+  place-items: center;
+  padding: 0;
   border: 0;
-  border-radius: 5px;
+  border-radius: 4px;
   background: transparent;
   pointer-events: auto;
 }
-.turn-tick i,
-.turn-tick i:nth-child(2),
-.turn-tick i:nth-child(3) {
-  width: 10px;
+.turn-tick i {
+  display: block;
+  width: 12px;
   height: 2px;
   border-radius: 99px;
   background: var(--al-line-strong);
+  transition: width .14s, height .14s, background .14s;
 }
-.turn-tick.active i { width: 12px; height: 3px; background: var(--al-accent); }
+.turn-tick:hover i { width: 16px; }
+.turn-tick.active i { width: 20px; height: 2px; background: var(--al-accent); }
 .turn-tick.err i { background: color-mix(in srgb, var(--al-danger) 55%, var(--al-line)); }
 .turn-tick.err.active i { background: var(--al-danger); }
 .turn-tick::after {
@@ -151,6 +151,11 @@
 }
 .turn-tick:hover::after,
 .turn-tick:focus-visible::after { opacity: 1; }
+
+/* 导轨与会话正文保持明确留白；比后加载的通用桌面 padding 选择器更具体。 */
+@media (min-width: 1101px) {
+  .review-page .review-reader { padding-left: 52px; }
+}
 
 /*
  * 消息操作栏必须是一个视觉行：Markdown 的“查看源码/返回渲染”和气泡的“证据详情”
