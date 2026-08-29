@@ -11,7 +11,6 @@ import type {
   SourceService,
   StorageService,
 } from '@agent-lens/core'
-import type { PiLiveService } from '@agent-lens/pi-live-runtime'
 import { UsageInsightsProjection } from '@agent-lens/projection-insights'
 import { AgentOverviewProjection, FacetProjection, SessionRelationshipProjection } from '@agent-lens/projection-overview'
 import { ReviewProjection, type HubReviewProjection } from '@agent-lens/projection-review'
@@ -42,6 +41,7 @@ import {
   type TimelineQueryDto,
   type ToolAssetUsageQueryDto,
 } from '@agent-lens/protocol'
+import type { PiLiveService } from '@agent-lens/runtime-cordis'
 import type { HttpEventHub } from './events'
 import { handlePiLiveRequest } from './pi-live'
 
