@@ -40,7 +40,7 @@ requireText(page, /projectPiLiveHistory\(snapshot\)/, 'Pi Live 页面必须使�
 
 requireText(history, /entry\.type === 'model_change'/, 'Pi Live 历史投影缺少持久化 model_change')
 requireText(history, /entry\.type === 'thinking_level_change'/, 'Pi Live 历史投影缺少持久化 thinking_level_change')
-requireText(history, /role === 'toolResult' \|\| role === 'tool'/, 'Pi Live 历史投影缺少 Tool Result 事实')
+requireText(history, /message\.role !== 'tool' && message\.role !== 'toolResult'/, 'Pi Live 历史投影缺少 Tool Result 事实')
 requireText(coreObservation, /'thinking\.level\.changed'/, 'Core ObservationKind 缺少 thinking.level.changed')
 requireText(timelineProtocol, /'thinking\.level\.changed'/, 'Timeline Protocol 缺少 thinking.level.changed')
 
