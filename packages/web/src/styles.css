@@ -45,6 +45,11 @@ input {
 
 button { cursor: pointer; }
 
+/* 标准按钮内部不折行；空间不足时由按钮组整体换行。 */
+.btn { white-space: nowrap; }
+.btn > svg { flex: 0 0 auto; }
+.workspace-toolbar .btn { flex-shrink: 0; }
+
 button:focus-visible,
 select:focus-visible,
 input:focus-visible,

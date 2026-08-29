@@ -6,7 +6,7 @@ import test from 'node:test'
 import type { BackupOverview, BackupService } from '@agent-lens/core'
 import { ExplainableBackupService } from './explainability'
 
-test('从现有备份索引汇总大小、目录和时间分布，不把文件数冒充逻辑资产数', async () => {
+test('从现有备份索引汇总大小、目录树和时间分布，不把文件数冒充逻辑资产数', async () => {
   const root = await mkdtemp(join(tmpdir(), 'agent-lens-backup-explain-'))
   try {
     const configRoot = join(root, 'config')
@@ -26,12 +26,12 @@ test('从现有备份索引汇总大小、目录和时间分布，不把文件�
         },
         {
           sourceId: 'hermes', productId: 'hermes', installationId: 'one',
-          originalPath: join(dataRoot, 'sessions', 'recent.jsonl'), sourceScope: 'data', sourceRelativePath: 'sessions/recent.jsonl', archivePath: 'hermes/one/data/sessions/recent.jsonl',
+          originalPath: join(dataRoot, 'sessions', 'recent', 'recent.jsonl'), sourceScope: 'data', sourceRelativePath: 'sessions/recent/recent.jsonl', archivePath: 'hermes/one/data/sessions/recent/recent.jsonl',
           kinds: ['session'], size: 100, mtimeMs: now - 20 * 86_400_000, ctimeMs: now - 20 * 86_400_000,
         },
         {
           sourceId: 'hermes', productId: 'hermes', installationId: 'one',
-          originalPath: join(dataRoot, 'sessions', 'old.jsonl'), sourceScope: 'data', sourceRelativePath: 'sessions/old.jsonl', archivePath: 'hermes/one/data/sessions/old.jsonl',
+          originalPath: join(dataRoot, 'sessions', 'archive', 'old.jsonl'), sourceScope: 'data', sourceRelativePath: 'sessions/archive/old.jsonl', archivePath: 'hermes/one/data/sessions/archive/old.jsonl',
           kinds: ['session'], size: 200, mtimeMs: now - 220 * 86_400_000, ctimeMs: now - 220 * 86_400_000,
         },
       ],
@@ -66,7 +66,13 @@ test('从现有备份索引汇总大小、目录和时间分布，不把文件�
     assert.deepEqual(source.kindDetails?.session, { fileCount: 2, totalBytes: 300 })
     assert.equal(source.roots?.length, 2)
     assert.ok(source.roots?.some(item => item.scope === 'config' && item.path === configRoot && item.fileCount === 1))
-    assert.ok(source.roots?.some(item => item.scope === 'data' && item.path === dataRoot && item.fileCount === 2))
+    const data = source.roots?.find(item => item.scope === 'data')
+    assert.equal(data?.path, dataRoot)
+    assert.equal(data?.fileCount, 2)
+    assert.equal(data?.tree?.[0]?.name, 'sessions')
+    assert.equal(data?.tree?.[0]?.fileCount, 2)
+    assert.deepEqual(data?.tree?.[0]?.children?.map(item => item.name), ['archive', 'recent'])
+    assert.equal(data?.tree?.[0]?.children?.[0]?.fileCount, 1)
     assert.equal(source.ageBuckets?.recent30Days.fileCount, 2)
     assert.equal(source.ageBuckets?.olderThan180Days.fileCount, 1)
     assert.ok(source.oldestModifiedAt)

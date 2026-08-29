@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="AgentLens concept 02">
-  <rect width="256" height="256" rx="52" fill="#f8fafc"/>
-  <path d="M48 72 C88 72 104 112 132 128 C158 143 172 152 208 152" fill="none" stroke="#2563eb" stroke-width="11" stroke-linecap="round"/>
-  <path d="M48 184 C88 184 104 144 132 128" fill="none" stroke="#0ea5e9" stroke-width="11" stroke-linecap="round"/>
-  <circle cx="48" cy="72" r="11" fill="#14b8a6"/>
-  <circle cx="48" cy="184" r="11" fill="#6366f1"/>
-  <circle cx="132" cy="128" r="14" fill="#f59e0b"/>
-  <rect x="182" y="112" width="42" height="80" rx="21" fill="none" stroke="#0f172a" stroke-width="10"/>
-</svg>

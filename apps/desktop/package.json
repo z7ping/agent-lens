@@ -1,6 +1,6 @@
 {
   "name": "@agent-lens/desktop",
-  "version": "1.0.0-alpha.1",
+  "version": "1.0.0-alpha.2",
   "private": true,
   "type": "module",
   "main": "src/bootstrap.mjs",
@@ -8,7 +8,7 @@
   "author": "7ping <z7ping@outlook.com>",
   "scripts": {
     "start": "electron .",
-    "test": "node --test src/update-check.test.mjs src/login-autostart.test.mjs",
+    "test": "node --test src/update-check.test.mjs src/login-autostart.test.mjs src/legacy-windows-migration.test.mjs",
     "dist:win": "pwsh -NoLogo -NoProfile -File ../../scripts/prepare-windows-icon.ps1 && electron-builder --win nsis --config.electronDist=.electron-dist/electron-v43.4.0-win32-x64",
     "dist:win:dir": "pwsh -NoLogo -NoProfile -File ../../scripts/prepare-windows-icon.ps1 && electron-builder --win dir --config.electronDist=.electron-dist/electron-v43.4.0-win32-x64",
     "dist:mac": "bash ../../scripts/prepare-macos-icon.sh && electron-builder --mac dmg zip --config.directories.output=../../release/macos",

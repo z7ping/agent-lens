@@ -1,6 +1,6 @@
 {
   "name": "@z7ping/agent-lens",
-  "version": "1.0.0-alpha.1",
+  "version": "1.0.0-alpha.2",
   "description": "Local observability and replay for AI coding agents, rebuilt around a canonical evidence model.",
   "private": false,
   "type": "module",
@@ -21,13 +21,13 @@
     "LICENSE"
   ],
   "scripts": {
-    "dev": "npm run dev --workspace @agent-lens/daemon",
+    "dev": "node scripts/dev-runtime.mjs",
     "cli": "npm run start --workspace @agent-lens/cli --",
     "dev:web": "npm run dev --workspace @agent-lens/web",
     "build:web": "npm run build --workspace @agent-lens/web",
     "check:web-presentation": "node scripts/check-web-presentation.mjs && node scripts/check-release-info.mjs && node scripts/check-review-contract.mjs && node scripts/check-backup-overlays.mjs && node scripts/check-page-heading-contract.mjs && node scripts/check-interaction-closure.mjs",
     "check:brand-assets": "node scripts/check-brand-assets.mjs",
-    "check:desktop-shell": "node --check apps/desktop/src/bootstrap.mjs && node --check apps/desktop/src/external-links.mjs && node --check apps/desktop/src/integration.mjs && node --check apps/desktop/src/login-autostart.mjs && node --check apps/desktop/src/main.mjs && node --check apps/desktop/src/update-check.mjs && node --check scripts/check-release-signing.mjs && node --check scripts/check-release-version.mjs && node --check scripts/resolve-npm-dist-tag.mjs && node scripts/check-release-channel.mjs && node scripts/check-version-consistency.mjs && node --check scripts/smoke-desktop-runtime.mjs && node scripts/check-desktop-contract.mjs",
+    "check:desktop-shell": "node --check apps/desktop/src/bootstrap.mjs && node --check apps/desktop/src/external-links.mjs && node --check apps/desktop/src/integration.mjs && node --check apps/desktop/src/legacy-windows-migration.mjs && node --check apps/desktop/src/login-autostart.mjs && node --check apps/desktop/src/main.mjs && node --check apps/desktop/src/update-check.mjs && node --check scripts/check-release-signing.mjs && node --check scripts/check-release-version.mjs && node --check scripts/resolve-npm-dist-tag.mjs && node scripts/check-release-channel.mjs && node scripts/check-version-consistency.mjs && node --check scripts/smoke-desktop-runtime.mjs && node scripts/check-desktop-contract.mjs",
     "build:dist": "node scripts/build-distribution.mjs",
     "build": "npm run build:dist",
     "smoke:dist": "node scripts/smoke-distribution.mjs",
@@ -39,7 +39,7 @@
     "desktop:linux": "npm run check:web-presentation && npm run check:brand-assets && npm run check:desktop-shell && npm run build:dist && npm run desktop:prepare && npm run dist:linux --workspace @agent-lens/desktop",
     "start": "npm run start --workspace @agent-lens/daemon",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present",
+    "test": "node --test scripts/dev-runtime.test.mjs && npm run test --workspaces --if-present",
     "perf:session-summary": "tsx scripts/performance/session-summary-benchmark.ts",
     "perf:review-detail": "tsx scripts/performance/review-detail-benchmark.ts",
     "perf:tool-overview": "tsx scripts/performance/tool-overview-benchmark.ts",

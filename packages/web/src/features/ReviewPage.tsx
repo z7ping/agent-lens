@@ -278,7 +278,7 @@ function sourceEventSummary(node: ReviewEventNodeDto): string {
 
 function isGenericRawEvent(node: ReviewEventNodeDto): boolean {
   if (node.category !== 'unknown') return false
-  return /^(原始事件|raw event|event)$/i.test(sourceEventLabel(node).trim())
+  return /^(?:原始事件|raw event|event)$/i.test(sourceEventLabel(node).trim())
 }
 
 type ToolKind = 'shell' | 'read' | 'edit' | 'search' | 'mcp' | 'web' | 'tool'
@@ -770,7 +770,11 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
     return [...groups.entries()].map(([label, items]) => ({ label, items }))
   }, [review.response?.items])
 
-  useEffect(() => { if (sessionId && sessionId !== review.selectedId) void model.selectReviewSession(sessionId) }, [sessionId, review.selectedId, model])
+  useEffect(() => {
+    if (!sessionId || sessionId === review.selectedId) return
+    readerPositionsRef.current.delete(sessionId)
+    void model.selectReviewSession(sessionId)
+  }, [sessionId, review.selectedId, model])
   useEffect(() => {
     roundExpansionRef.current.clear()
     setRoundFilter('all')
@@ -784,6 +788,18 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
   useEffect(() => {
     if (detail?.page.filter) setRoundFilter(detail.page.filter)
   }, [detail?.page.filter])
+
+  useLayoutEffect(() => {
+    if (!detail || review.detailLoading || detail.page.filter !== 'all' || detail.page.direction !== 'backward') return
+    const frame = window.requestAnimationFrame(() => {
+      const pane = readerPaneRef.current
+      if (!pane) return
+      pane.scrollTop = pane.scrollHeight
+      followingTailRef.current = true
+      model.acknowledgeReviewNewData()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [detail?.id, detail?.page.direction, detail?.page.filter, review.detailLoading, model])
 
   useEffect(() => {
     const id = detail?.id
@@ -857,6 +873,7 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
   const select = (id: string) => {
     const pane = readerPaneRef.current
     if (detail?.id && pane) readerPositionsRef.current.set(detail.id, captureReviewReaderPosition(pane))
+    readerPositionsRef.current.delete(id)
     void model.selectReviewSession(id)
     navigate(`/review/${encodeURIComponent(id)}`)
   }
