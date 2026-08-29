@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { useNavigate, useParams } from 'react-router-dom'
-import type { JsonValue, PiLiveEventDto, PiLiveQueueDto, PiLiveSnapshotDto, PiLiveStateDto } from '@agent-lens/protocol'
+import type { JsonValue, PiLiveControlsDto, PiLiveEventDto, PiLiveQueueDto, PiLiveSnapshotDto, PiLiveStateDto } from '@agent-lens/protocol'
 import { piLiveApi, type PiLiveTransportDiagnostics } from '../client/pi-live'
 
 type QueueMode = 'steer' | 'followUp'
@@ -94,6 +94,26 @@ function modelLabel(state: PiLiveStateDto | null): string {
   const provider = stringValue(model.provider)
   const id = stringValue(model.id || model.modelId || model.name)
   return [provider, id].filter(Boolean).join(' / ') || 'Pi'
+}
+
+function modelSelection(state: PiLiveStateDto | null): string {
+  if (!state?.model) return ''
+  const model = record(state.model)
+  const provider = stringValue(model.provider)
+  const id = stringValue(model.id || model.modelId)
+  return provider && id ? JSON.stringify([provider, id]) : ''
+}
+
+function parseModelSelection(value: string): { provider: string; modelId: string } | null {
+  try {
+    const parsed = JSON.parse(value)
+    if (!Array.isArray(parsed) || parsed.length !== 2) return null
+    const provider = stringValue(parsed[0])
+    const modelId = stringValue(parsed[1])
+    return provider && modelId ? { provider, modelId } : null
+  } catch {
+    return null
+  }
 }
 
 function brief(value: unknown, max = 120): string {
@@ -251,6 +271,7 @@ export function PiLivePage() {
   const [known, setKnown] = useState<PiLiveStateDto[]>([])
   const [snapshot, setSnapshot] = useState<PiLiveSnapshotDto | null>(null)
   const [state, setState] = useState<PiLiveStateDto | null>(null)
+  const [controls, setControls] = useState<PiLiveControlsDto>({ models: [], thinkingLevels: [] })
   const [connected, setConnected] = useState(false)
   const [mode, setMode] = useState<QueueMode>('steer')
   const [input, setInput] = useState('')
@@ -262,6 +283,7 @@ export function PiLivePage() {
   const [restored, setRestored] = useState<RestoredDraft[]>([])
   const [extension, setExtension] = useState<ExtensionRequest | null>(null)
   const [extensionPending, setExtensionPending] = useState(false)
+  const [controlBusy, setControlBusy] = useState(false)
   const [diagnostics, setDiagnostics] = useState<PiLiveTransportDiagnostics | null>(null)
   const [newRecords, setNewRecords] = useState(false)
   const [error, setError] = useState('')
@@ -278,6 +300,7 @@ export function PiLivePage() {
     let active = true
     setSnapshot(null)
     setState(null)
+    setControls({ models: [], thinkingLevels: [] })
     setStreamText('')
     setThinkingText('')
     setTools([])
@@ -295,6 +318,15 @@ export function PiLivePage() {
       leafIdRef.current = value.leafId ?? undefined
     }
 
+    const refreshControls = async () => {
+      try {
+        const value = await piLiveApi.controls(runtimeId)
+        if (active) setControls(value)
+      } catch (reason) {
+        if (active) setError(reason instanceof Error ? reason.message : String(reason))
+      }
+    }
+
     const refreshAfterSettled = async () => {
       try {
         const value = await piLiveApi.snapshot(runtimeId, leafIdRef.current)
@@ -307,6 +339,7 @@ export function PiLivePage() {
       }
     }
 
+    void refreshControls()
     const dispose = piLiveApi.connect(runtimeId, {
       onConnection: value => { if (active) setConnected(value) },
       onSnapshot: acceptSnapshot,
@@ -314,6 +347,7 @@ export function PiLivePage() {
       onEvents(events, nextDiagnostics) {
         if (!active) return
         let settled = false
+        let controlsChanged = false
         let statePatch: Partial<PiLiveStateDto> = {}
         for (const wrapper of events) {
           const event = record(wrapper.event)
@@ -331,6 +365,8 @@ export function PiLivePage() {
             statePatch = { ...statePatch, isCompacting: true }
           } else if (type === 'compaction_end') {
             statePatch = { ...statePatch, isCompacting: false }
+          } else if (type === 'model_change' || type === 'thinking_level_change') {
+            controlsChanged = true
           } else if (type === 'message_update') {
             const update = record(event.assistantMessageEvent)
             const delta = stringValue(update.delta)
@@ -385,6 +421,10 @@ export function PiLivePage() {
         setDiagnostics(nextDiagnostics)
         if (!followingRef.current) setNewRecords(true)
         if (settled) void refreshAfterSettled()
+        if (controlsChanged) {
+          void piLiveApi.state(runtimeId).then(value => { if (active) setState(value) }, () => undefined)
+          void refreshControls()
+        }
       },
     })
     return () => {
@@ -430,6 +470,38 @@ export function PiLivePage() {
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
       setBusy(false)
+    }
+  }
+
+  const changeModel = async (selection: string) => {
+    const next = parseModelSelection(selection)
+    if (!next || controlBusy) return
+    setControlBusy(true)
+    setError('')
+    try {
+      const nextState = await piLiveApi.setModel(runtimeId, next.provider, next.modelId)
+      setState(nextState)
+      setControls(await piLiveApi.controls(runtimeId))
+      inputRef.current?.focus({ preventScroll: true })
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setControlBusy(false)
+    }
+  }
+
+  const changeThinkingLevel = async (level: string) => {
+    if (!level || controlBusy) return
+    setControlBusy(true)
+    setError('')
+    try {
+      const nextState = await piLiveApi.setThinkingLevel(runtimeId, level)
+      setState(nextState)
+      inputRef.current?.focus({ preventScroll: true })
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setControlBusy(false)
     }
   }
 
@@ -512,6 +584,7 @@ export function PiLivePage() {
     ...queue.followUp.map((text, index) => ({ id: `active-follow-${index}`, mode: 'followUp' as QueueMode, text, active: true })),
     ...restored.map(item => ({ ...item, active: false })),
   ]
+  const selectedModel = modelSelection(state)
 
   return <main className="pi-live-page">
     <aside className="pi-live-sessions">
@@ -534,8 +607,6 @@ export function PiLivePage() {
           <div className="pi-live-task-title">{state?.sessionName || 'Pi 实时任务'}</div>
         </div>
         <div className="pi-live-runtime">
-          <span className={`pi-live-runtime-chip ${state?.isStreaming ? 'running' : ''}`}>{modelLabel(state)}</span>
-          {state?.thinkingLevel && <span className="pi-live-runtime-chip">推理 {state.thinkingLevel}</span>}
           <button className="pi-live-stop" disabled={!state?.isStreaming || busy} onClick={() => void stop()}>停止当前任务</button>
           <button className="pi-live-menu" title="结束 Pi Runtime" aria-label="结束 Pi Runtime" disabled={busy} onClick={() => void terminate()}>×</button>
         </div>
@@ -596,6 +667,28 @@ export function PiLivePage() {
           />
           <div className="pi-live-compose-bar">
             <span className="pi-live-compose-runtime">{connected ? '实时已连接' : '正在重连'}</span>
+            <div className="pi-live-compose-settings">
+              <select
+                aria-label="Pi 模型"
+                title="Pi 模型"
+                value={selectedModel}
+                disabled={controlBusy || controls.models.length === 0}
+                onChange={event => void changeModel(event.target.value)}
+              >
+                {!selectedModel && <option value="">模型</option>}
+                {controls.models.map(item => <option key={`${item.provider}/${item.id}`} value={JSON.stringify([item.provider, item.id])}>{item.name || item.id} · {item.provider}</option>)}
+              </select>
+              <select
+                aria-label="Pi Thinking Level"
+                title="Pi Thinking Level"
+                value={state?.thinkingLevel ?? ''}
+                disabled={controlBusy || controls.thinkingLevels.length === 0}
+                onChange={event => void changeThinkingLevel(event.target.value)}
+              >
+                {!state?.thinkingLevel && <option value="">Thinking</option>}
+                {controls.thinkingLevels.map(level => <option key={level} value={level}>Thinking · {level}</option>)}
+              </select>
+            </div>
             <div className="pi-live-compose-mode" aria-label="发送方式">
               <button className={mode === 'steer' ? 'active' : ''} aria-pressed={mode === 'steer'} onClick={() => { setMode('steer'); inputRef.current?.focus({ preventScroll: true }) }}>立即介入</button>
               <button className={mode === 'followUp' ? 'active' : ''} aria-pressed={mode === 'followUp'} onClick={() => { setMode('followUp'); inputRef.current?.focus({ preventScroll: true }) }}>完成后继续</button>
