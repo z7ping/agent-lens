@@ -16,6 +16,18 @@ export interface PiLiveAvailability {
   reason?: string | undefined
 }
 
+export interface PiLiveModelOption {
+  provider: string
+  id: string
+  name?: string | undefined
+  reasoning?: boolean | undefined
+}
+
+export interface PiLiveControls {
+  models: PiLiveModelOption[]
+  thinkingLevels: string[]
+}
+
 export interface PiLiveRuntimeState {
   runtimeSessionId: string
   nativeSessionId?: string | undefined
@@ -55,6 +67,9 @@ export interface PiLiveService {
   start(input: PiLiveStartInput): Promise<PiLiveRuntimeState>
   state(runtimeSessionId: string): Promise<PiLiveRuntimeState>
   snapshot(runtimeSessionId: string, since?: string): Promise<PiLiveSnapshot>
+  controls(runtimeSessionId: string): Promise<PiLiveControls>
+  setModel(runtimeSessionId: string, provider: string, modelId: string): Promise<PiLiveRuntimeState>
+  setThinkingLevel(runtimeSessionId: string, level: string): Promise<PiLiveRuntimeState>
   prompt(runtimeSessionId: string, message: string, behavior?: PiLiveStreamingBehavior): Promise<void>
   steer(runtimeSessionId: string, message: string): Promise<void>
   followUp(runtimeSessionId: string, message: string): Promise<void>
