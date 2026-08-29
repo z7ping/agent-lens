@@ -81,8 +81,6 @@
 .pi-live-task-title { margin-top: 2px; overflow: hidden; color: var(--al-ink); font-size: 16px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .pi-live-disconnected { color: var(--al-warning); }
 .pi-live-runtime { display: flex; flex: 0 0 auto; align-items: center; gap: 7px; }
-.pi-live-runtime-chip { display: inline-flex; height: 28px; align-items: center; gap: 6px; padding: 0 9px; border: 1px solid var(--al-line); border-radius: 8px; background: var(--al-soft-2); color: var(--al-muted); font-size: 12px; }
-.pi-live-runtime-chip.running { border-color: color-mix(in srgb, var(--al-accent) 24%, var(--al-line)); background: color-mix(in srgb, var(--al-accent-soft) 62%, var(--al-surface)); color: var(--al-accent); }
 .pi-live-stop { height: 30px; padding: 0 11px; border: 1px solid color-mix(in srgb, var(--al-danger) 30%, var(--al-line)); border-radius: 8px; background: var(--al-surface); color: var(--al-danger); font-size: 12px; font-weight: 650; }
 .pi-live-stop:disabled { cursor: default; opacity: .45; }
 .pi-live-menu { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid var(--al-line); border-radius: 8px; background: var(--al-surface); color: var(--al-muted); font-size: 18px; line-height: 1; }
@@ -164,6 +162,10 @@
 .pi-live-input { display: block; width: 100%; min-height: 54px; max-height: 160px; resize: none; overflow: auto; padding: 10px 13px 5px; border: 0; outline: 0; background: transparent; color: var(--al-ink); font-size: 14px; line-height: 1.6; }
 .pi-live-compose-bar { display: flex; min-height: 40px; align-items: center; gap: 7px; padding: 5px 8px 7px 10px; }
 .pi-live-compose-runtime { color: var(--al-muted); font-size: 12px; }
+.pi-live-compose-settings { display: flex; min-width: 0; align-items: center; gap: 5px; }
+.pi-live-compose-settings select { height: 28px; max-width: 178px; min-width: 0; padding: 0 24px 0 8px; border: 1px solid var(--al-line); border-radius: 7px; background: var(--al-soft-2); color: var(--al-ink-2); font-size: 12px; }
+.pi-live-compose-settings select:last-child { max-width: 118px; }
+.pi-live-compose-settings select:disabled { color: var(--al-muted); opacity: .58; }
 .pi-live-compose-mode { display: flex; margin-left: auto; padding: 2px; border: 1px solid var(--al-line); border-radius: 8px; background: var(--al-soft-2); }
 .pi-live-compose-mode button { height: 26px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: var(--al-muted); font-size: 12px; }
 .pi-live-compose-mode button.active { background: var(--al-surface); box-shadow: 0 1px 2px rgb(16 24 40 / .05); color: var(--al-ink); font-weight: 650; }
@@ -206,7 +208,6 @@
 @media (max-width: 991.98px) {
   .pi-live-page { --pi-live-side: 236px; }
   .pi-live-taskbar { padding-right: 12px; padding-left: 12px; }
-  .pi-live-runtime-chip:nth-of-type(2) { display: none; }
   .pi-live-compose-wrap { padding-right: 12px; padding-left: 12px; }
   .pi-live-bubble.user { max-width: 84%; }
   .pi-live-start-page { grid-template-columns: minmax(0, 620px); }
@@ -218,7 +219,6 @@
   .pi-live-sessions { display: none; }
   .pi-live-taskbar { min-height: 52px; }
   .pi-live-task-title { font-size: 14px; }
-  .pi-live-runtime-chip { display: none; }
   .pi-live-stop { margin-left: auto; }
   .pi-live-document { padding: 12px 14px 18px; }
   .pi-live-chat-row.assistant { padding-left: 34px; }
@@ -228,6 +228,8 @@
   .pi-live-lane::before { left: -27px; width: 22px; height: 22px; }
   .pi-live-compose-wrap { padding: 7px 10px 6px; }
   .pi-live-compose-runtime { display: none; }
+  .pi-live-compose-settings select { max-width: 136px; }
+  .pi-live-compose-settings select:last-child { max-width: 96px; }
   .pi-live-compose-mode button { padding: 0 6px; }
   .pi-live-blocking { grid-template-columns: 1fr; }
   .pi-live-blocking-actions,
