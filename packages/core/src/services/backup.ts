@@ -111,6 +111,10 @@ export interface BackupSnapshotManifest {
 export interface BackupIndexStatus {
   generatedAt: string
   refreshing: boolean
+  /** false 只表示首份索引尚未生成；页面不得因此等待完整扫描的 HTTP 请求。 */
+  ready?: boolean
+  /** 旧索引仍可立即使用；true 时允许后台重新验证。 */
+  stale?: boolean
 }
 
 export interface BackupOverview {
