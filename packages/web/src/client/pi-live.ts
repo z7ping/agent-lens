@@ -2,10 +2,13 @@ import type {
   JsonValue,
   PiLiveAbortRequestDto,
   PiLiveAvailabilityDto,
+  PiLiveControlsDto,
   PiLiveEventDto,
   PiLiveExtensionResponseRequestDto,
   PiLivePromptRequestDto,
   PiLiveQueueDto,
+  PiLiveSetModelRequestDto,
+  PiLiveSetThinkingLevelRequestDto,
   PiLiveSnapshotDto,
   PiLiveStartRequestDto,
   PiLiveStateDto,
@@ -289,6 +292,20 @@ export class PiLiveApi {
   snapshot(runtimeSessionId: string, since?: string): Promise<PiLiveSnapshotDto> {
     const query = since ? `?since=${encodeURIComponent(since)}` : ''
     return requestJson(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/snapshot${query}`)
+  }
+
+  controls(runtimeSessionId: string): Promise<PiLiveControlsDto> {
+    return requestJson(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/controls`)
+  }
+
+  setModel(runtimeSessionId: string, provider: string, modelId: string): Promise<PiLiveStateDto> {
+    const body: PiLiveSetModelRequestDto = { provider, modelId }
+    return requestJson(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/model`, jsonRequest(body))
+  }
+
+  setThinkingLevel(runtimeSessionId: string, level: string): Promise<PiLiveStateDto> {
+    const body: PiLiveSetThinkingLevelRequestDto = { level }
+    return requestJson(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/thinking-level`, jsonRequest(body))
   }
 
   prompt(runtimeSessionId: string, message: string, behavior?: PiLiveStreamingBehaviorDto): Promise<{ ok: true }> {
