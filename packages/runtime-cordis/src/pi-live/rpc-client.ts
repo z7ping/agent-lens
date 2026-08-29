@@ -14,6 +14,7 @@ export interface PiRpcClientOptions {
   launchPrefixArgs?: string[]
   commandTimeoutMs?: number
   onEvent?: (event: Record<string, unknown>) => void
+  onExit?: (error: Error) => void
 }
 
 interface PendingRequest {
@@ -119,6 +120,7 @@ export class PiRpcClient {
   private nextRequestId = 1
   private stderrTail = ''
   private closed = false
+  private exitNotified = false
 
   constructor(private readonly options: PiRpcClientOptions) {}
 
@@ -147,18 +149,25 @@ export class PiRpcClient {
         const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
         for (const line of this.decoder.push(bytes)) this.handleLine(line)
       } catch (error) {
-        this.failAll(error instanceof Error ? error : new Error(String(error)))
+        const failure = error instanceof Error ? error : new Error(String(error))
+        this.failAll(failure)
+        this.notifyExit(failure)
         void this.close()
       }
     })
     child.stderr.on('data', chunk => {
       this.stderrTail = `${this.stderrTail}${String(chunk)}`.slice(-MAX_STDERR_BYTES)
     })
-    child.once('error', error => this.failAll(error))
+    child.once('error', error => {
+      this.failAll(error)
+      this.notifyExit(error)
+    })
     child.once('exit', (code, signal) => {
       const suffix = this.stderrTail.trim() ? `: ${this.stderrTail.trim()}` : ''
-      this.failAll(new Error(`Pi RPC exited code=${code ?? 'null'} signal=${signal ?? 'null'}${suffix}`))
+      const failure = new Error(`Pi RPC exited code=${code ?? 'null'} signal=${signal ?? 'null'}${suffix}`)
+      this.failAll(failure)
       this.process = null
+      this.notifyExit(failure)
     })
 
     await new Promise<void>((resolveStart, reject) => {
@@ -230,6 +239,12 @@ export class PiRpcClient {
     }
 
     this.options.onEvent?.(value)
+  }
+
+  private notifyExit(error: Error): void {
+    if (this.closed || this.exitNotified) return
+    this.exitNotified = true
+    this.options.onExit?.(error)
   }
 
   private failAll(error: Error): void {
