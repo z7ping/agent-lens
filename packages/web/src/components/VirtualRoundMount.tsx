@@ -1,5 +1,8 @@
 import { isValidElement, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
+const ROUND_ROOT_MARGIN_PX = 1400
+const ROUND_UNMOUNT_DELAY_MS = 320
+
 export function VirtualRoundMount({
   children,
   eager = false,
@@ -12,12 +15,19 @@ export function VirtualRoundMount({
   interactionId?: string
 }) {
   const ref = useRef<HTMLDivElement>(null)
+  const unmountTimerRef = useRef<number | null>(null)
   const [mounted, setMounted] = useState(eager)
   const [height, setHeight] = useState(estimate)
   const childInteractionId = isValidElement<{ interaction?: { id?: string } }>(children)
     ? children.props.interaction?.id
     : undefined
   const stableInteractionId = interactionId ?? childInteractionId
+
+  const cancelPendingUnmount = () => {
+    if (unmountTimerRef.current === null) return
+    window.clearTimeout(unmountTimerRef.current)
+    unmountTimerRef.current = null
+  }
 
   useEffect(() => {
     const element = ref.current
@@ -28,14 +38,32 @@ export function VirtualRoundMount({
     const root = element.closest('.review-reader-pane')
     const observer = new IntersectionObserver(entries => {
       const entry = entries[0]
-      if (entry?.isIntersecting) setMounted(true)
+      if (!entry) return
+      if (entry.isIntersecting) {
+        cancelPendingUnmount()
+        setMounted(true)
+        return
+      }
+
+      cancelPendingUnmount()
+      unmountTimerRef.current = window.setTimeout(() => {
+        unmountTimerRef.current = null
+        const current = ref.current
+        if (!current) return
+        const active = document.activeElement
+        if (active instanceof Node && current.contains(active)) return
+        setMounted(false)
+      }, ROUND_UNMOUNT_DELAY_MS)
     }, {
       root,
-      rootMargin: '1200px 0px',
+      rootMargin: `${ROUND_ROOT_MARGIN_PX}px 0px`,
       threshold: 0,
     })
     observer.observe(element)
-    return () => observer.disconnect()
+    return () => {
+      cancelPendingUnmount()
+      observer.disconnect()
+    }
   }, [])
 
   useLayoutEffect(() => {
