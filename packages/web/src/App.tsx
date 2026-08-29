@@ -224,6 +224,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
               <span className={`live-dot ${statusHealthy ? 'live-dot-online' : 'live-dot-waiting'}`} />
               <span>{healthLabel}</span>
             </span>
+            {onLocalReview && <NavLink className="header-link" to="/review/live">Pi 实时</NavLink>}
             <ReleaseInfo />
             <button className="theme-toggle" onClick={toggleTheme} title={theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'} aria-label={theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'}><ThemeGlyph dark={theme === 'dark'}/></button>
           </div>
