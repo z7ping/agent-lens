@@ -1,12 +1,15 @@
 import { readFile } from 'node:fs/promises'
 
-const [app, page, client, css, http, runtime] = await Promise.all([
+const [app, page, history, client, css, http, runtime, coreObservation, timelineProtocol] = await Promise.all([
   readFile(new URL('../packages/web/src/App.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/PiLivePage.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/web/src/features/pi-live-history.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/client/pi-live.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/pi-live.css', import.meta.url), 'utf8'),
   readFile(new URL('../packages/surface-http/src/pi-live.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/runtime-cordis/src/pi-live/service.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/core/src/domain/observation.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/protocol/src/timeline.ts', import.meta.url), 'utf8'),
 ])
 
 const failures = []
@@ -31,6 +34,15 @@ requireText(page, /followingRef/, 'Pi Live 缺少用户滚动跟随状态')
 requireText(page, /setNewRecords\(true\)/, '历史阅读时缺少“有新记录”提示')
 requireText(page, /extensionResponse/, 'Pi Live 缺少 Extension UI 回应链')
 requireText(page, /PiLiveTransportDiagnostics/, 'Pi Live 页面缺少传输性能诊断')
+requireText(page, /type === 'model_changed' \|\| type === 'thinking_level_changed'/, 'Pi Live Runtime Event 必须使用 Pi 实时协议命名')
+if (/type === 'model_change' \|\| type === 'thinking_level_change'/.test(page)) failures.push('Pi Live 不得把持久化 Entry 名称误当 Runtime Event 名称')
+requireText(page, /projectPiLiveHistory\(snapshot\)/, 'Pi Live 页面必须使用持久化历史事实投影')
+
+requireText(history, /entry\.type === 'model_change'/, 'Pi Live 历史投影缺少持久化 model_change')
+requireText(history, /entry\.type === 'thinking_level_change'/, 'Pi Live 历史投影缺少持久化 thinking_level_change')
+requireText(history, /role === 'toolResult' \|\| role === 'tool'/, 'Pi Live 历史投影缺少 Tool Result 事实')
+requireText(coreObservation, /'thinking\.level\.changed'/, 'Core ObservationKind 缺少 thinking.level.changed')
+requireText(timelineProtocol, /'thinking\.level\.changed'/, 'Timeline Protocol 缺少 thinking.level.changed')
 
 requireText(client, /HIDDEN_FLUSH_MS = 250/, '后台页面必须降低 Streaming UI 提交频率')
 requireText(client, /requestAnimationFrame/, '前台 Streaming 必须按动画帧批量提交')
@@ -57,4 +69,4 @@ if (failures.length) {
   process.exit(1)
 }
 
-console.log('Pi Live Task Surface 契约检查通过：五页导航、可发现入口、Live/Review 边界、IME、Stop/Terminate、滚动跟随、Extension UI、背压与性能诊断已锁定。')
+console.log('Pi Live Task Surface 契约检查通过：五页导航、事件层级、历史事实、IME、Stop/Terminate、滚动跟随、Extension UI、背压与性能诊断已锁定。')
