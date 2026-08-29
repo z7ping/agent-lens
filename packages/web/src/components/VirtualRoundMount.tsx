@@ -8,11 +8,13 @@ export function VirtualRoundMount({
   eager = false,
   estimate = 220,
   interactionId,
+  rootSelector = '.review-reader-pane',
 }: {
   children: ReactNode
   eager?: boolean
   estimate?: number
   interactionId?: string
+  rootSelector?: string
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const unmountTimerRef = useRef<number | null>(null)
@@ -35,7 +37,7 @@ export function VirtualRoundMount({
       setMounted(true)
       return
     }
-    const root = element.closest('.review-reader-pane')
+    const root = element.closest(rootSelector)
     const observer = new IntersectionObserver(entries => {
       const entry = entries[0]
       if (!entry) return
@@ -64,7 +66,7 @@ export function VirtualRoundMount({
       cancelPendingUnmount()
       observer.disconnect()
     }
-  }, [])
+  }, [rootSelector])
 
   useLayoutEffect(() => {
     if (!mounted) return
