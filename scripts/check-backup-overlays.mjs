@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 
 const main = readFileSync('packages/web/src/main.tsx', 'utf8')
 const page = readFileSync('packages/web/src/features/BackupPage.tsx', 'utf8')
+const tree = readFileSync('packages/web/src/components/BackupDirectoryTree.tsx', 'utf8')
 const css = readFileSync('packages/web/src/backup-overlays.css', 'utf8')
 
 const backupImport = main.indexOf("import './backup.css'")
@@ -23,6 +24,12 @@ if (!page.includes('aria-label="恢复预演"')) {
 if (!page.includes('backup-confirm-scrim')) {
   throw new Error('关键操作确认必须保留独立遮罩标识')
 }
+if (!page.includes('<BackupDataRootTree')) {
+  throw new Error('资产备份数据位置必须使用受控目录树展示')
+}
+if (!tree.includes('默认仅展开第 1 层') || !tree.includes('<details className="backup-tree-node">')) {
+  throw new Error('备份目录树必须默认只展示第一层，并由用户逐级展开')
+}
 
 for (const required of [
   "[aria-label$='数据详情']",
@@ -31,6 +38,8 @@ for (const required of [
   'z-index: 130',
   'overscroll-behavior: contain',
   '.backup-confirm-scrim',
+  '.backup-root-tree',
+  '.backup-tree-node',
   '@media (max-width: 640px)',
 ]) {
   if (!css.includes(required)) throw new Error(`资产备份覆盖层缺少正式交互约束：${required}`)
@@ -50,4 +59,4 @@ if (tooSmall.length) {
   throw new Error(`资产备份覆盖层出现小于 12px 的字号：${[...new Set(tooSmall)].join(', ')}px`)
 }
 
-console.log('资产备份详情/恢复预演覆盖层检查通过')
+console.log('资产备份详情/恢复预演/目录树检查通过')
