@@ -10,7 +10,7 @@ import { AgentLensApi } from '../client/api'
 import { agentLabel } from '../components/AgentScope'
 import { BackupDataRootTree } from '../components/BackupDirectoryTree'
 import { CompactPageHeading } from '../components/CompactPageHeading'
-import { WorkspaceSkeleton } from '../components/StateViews'
+import { PageLoadingState } from '../components/StateViews'
 import { UiIcon } from '../components/UiIcon'
 
 const RECOMMENDED_KINDS: BackupAssetKindDto[] = ['config', 'skill', 'mcp', 'plugin', 'extension', 'hook', 'rule']
@@ -330,10 +330,17 @@ export function BackupPage() {
     }
   }
 
-  if (loading && !overview) return <WorkspaceSkeleton />
+  if (loading && !overview) return <PageLoadingState
+    eyebrow="资产备份"
+    statusLabel="首次扫描"
+    title="正在扫描资产备份范围"
+    description="正在读取本机智能体的会话与资产目录。首次建立索引时文件较多，可能需要一些时间；完成后会自动展示可备份范围。"
+    facts={['只读取本地数据', '不会修改原始文件', '后续刷新保留当前页面']}
+  />
 
   const indexTime = overview?.index?.generatedAt
   const indexRefreshing = overview?.index?.refreshing ?? false
+  const refreshing = loading || indexRefreshing
   const detectedSourceCount = sources.filter(source => source.detected).length
   const allDetectedSelected = detectedSourceCount > 0 && selectedSources.length === detectedSourceCount
   const recommendedVisible = policyKinds(RECOMMENDED_KINDS, sources, selectedSources)
@@ -369,7 +376,7 @@ export function BackupPage() {
       <main className="future-content backup-page">
         <div className="future-heading">
           <CompactPageHeading title="资产备份" description="看清智能体真正有哪些数据、在哪里、占多少，再决定哪些值得进入本地不可变快照。恢复仍必须先经过差异预演。"><span className="prototype-flag live">本地真实数据</span></CompactPageHeading>
-          <button className="btn" disabled={loading || Boolean(busy)} onClick={() => void refresh(true)}>{loading ? '正在扫描…' : <><UiIcon name="refresh" size={14}/>{' 刷新扫描'}</>}</button>
+          <button className="btn" disabled={refreshing || Boolean(busy)} onClick={() => void refresh(true)}>{refreshing ? <><UiIcon name="refresh" size={14}/>{' 后台更新中'}</> : <><UiIcon name="refresh" size={14}/>{' 刷新扫描'}</>}</button>
         </div>
 
         {error && <div className="backup-error" role="alert"><b>操作失败</b><span>{error}</span><button className="link-btn" onClick={() => setError('')}>关闭</button></div>}
