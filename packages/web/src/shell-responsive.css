@@ -6,7 +6,7 @@
  * Windows 100% / 125% / 150% 缩放依赖实际 CSS viewport 自然进入对应断点，不写 DPI 专属规则。
  */
 
-/* lg：992–1199。高 DPI 或主动缩窄窗口时先压缩壳层间距。 */
+/* lg：992–1199。高 DPI 或主动缩窄窗口时压缩壳层并允许工具栏增高换行。 */
 @media (max-width: 1199.98px) {
   .app-header-inner {
     gap: 14px;
@@ -19,6 +19,16 @@
 
   .app-status {
     gap: 5px;
+  }
+
+  html body .workspace-toolbar,
+  html body .review-page .workspace-toolbar {
+    height: auto;
+    min-height: 50px;
+    flex-wrap: wrap;
+    align-content: center;
+    padding-top: 6px;
+    padding-bottom: 6px;
   }
 }
 
@@ -58,15 +68,6 @@
   .app-status .status-pill > span:last-child {
     display: none;
   }
-
-  .workspace-toolbar {
-    height: auto;
-    min-height: 50px;
-    flex-wrap: wrap;
-    align-content: center;
-    padding-top: 6px;
-    padding-bottom: 6px;
-  }
 }
 
 /* sm：576–767。进一步压缩导航和公共间距，但不缩小正文与控件字号。 */
@@ -81,7 +82,8 @@
     font-size: 13px;
   }
 
-  .workspace-toolbar {
+  html body .workspace-toolbar,
+  html body .review-page .workspace-toolbar {
     padding-inline: 10px;
   }
 }
