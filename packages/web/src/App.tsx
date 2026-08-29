@@ -8,7 +8,7 @@ import { BackgroundDataNotice } from './components/BackgroundDataNotice'
 import { BrandVersion, ReleaseInfo } from './components/ReleaseInfo'
 import { ReviewStateOverlay } from './components/ReviewStateOverlay'
 import { ReviewTurnRail } from './components/ReviewTurnRail'
-import { AgentsPage } from './features/AgentsPage'
+import { AgentsResponsivePage } from './features/AgentsResponsivePage'
 import { BackupPage } from './features/BackupPage'
 import { InsightsPage } from './features/InsightsPage'
 import { ReviewPage } from './features/ReviewPage'
@@ -234,7 +234,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
         <Route path="/review/:sessionId" element={<ReviewPage model={model} />} />
         <Route path="/tools" element={<ToolsPage model={model} />} />
         <Route path="/insights" element={<InsightsPage model={model} />} />
-        <Route path="/agents" element={<AgentsPage model={model} sourceId={agentOverviewSourceId} onSourceIdChange={setAgentOverviewSourceId} />} />
+        <Route path="/agents" element={<AgentsResponsivePage model={model} sourceId={agentOverviewSourceId} onSourceIdChange={setAgentOverviewSourceId} />} />
         <Route path="/backup" element={<BackupPage />} />
         <Route path="*" element={<Navigate to="/review" replace />} />
       </Routes>
