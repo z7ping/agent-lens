@@ -87,7 +87,8 @@ SDK 不作为 alpha.3 第二条正式实现，只保留未来替换 Transport �
 - Follow-up；
 - Clear Queue；
 - Abort；
-- Extension UI response。
+- Extension UI response；
+- Model / Thinking Level 查询与切换。
 
 生命周期明确分为：
 
@@ -119,6 +120,9 @@ Pi Live Local Surface 继续只监听 loopback。
 - start runtime；
 - state；
 - snapshot；
+- controls；
+- set model；
+- set thinking level；
 - prompt；
 - steer；
 - follow-up；
@@ -156,6 +160,7 @@ Pi Live 是任务复盘域的实时状态：
 
 - 工作目录启动；
 - 可选 Provider / Model；
+- Runtime 内 Model / Thinking Level 真实查询和切换，控制归 Composer；
 - 最近 Runtime ID 本地恢复索引；
 - 后台仍存活 Runtime 的重新发现与状态校验；
 - 实时消息；
@@ -174,15 +179,20 @@ Pi Live 是任务复盘域的实时状态：
 - 调度诊断信息；
 - View Dispose 不再交付排队中的旧视图事件；
 - Runtime 切换后，旧 Snapshot / event 异步结果不得回写新视图；
-- Follow Latest 已把 Composer / Queue / Restored Draft / Extension 高度变化纳入重新贴底逻辑。
+- Follow Latest 已把 Composer / Queue / Restored Draft / Extension 高度变化纳入重新贴底逻辑；
+- Snapshot 历史通过独立投影保留 User / Assistant / Thinking / Tool Call / Tool Result / Model Change / Thinking Level Change / Compaction / Branch Summary / Session Info 等可证明事实；
+- Assistant Thinking 不再混入正文；
+- 找不到对应 Tool Call 的原生 Tool Result 仍保留，不因投影不完整静默丢事实；
+- Runtime Event 使用 Pi 实时协议的 `model_changed` / `thinking_level_changed`，与持久化 Entry 的 `model_change` / `thinking_level_change` 分层处理；
+- `thinking_level_change` 已进入 Canonical Observation：`thinking.level.changed`，并同步 Timeline Protocol；
+- 历史事实按 8 条一块使用 `VirtualRoundMount` 有界挂载，最近 2 块 eager；远端重子树卸载后保留实测高度；
+- Pi Live 使用 `.pi-live-reader` 作为虚拟化观察根，不截断历史事实。
 
-仍需在正式实现中收口：
+仍需继续收口：
 
-- Snapshot 历史当前只投影 user / assistant 文本，历史 Tool / Tool Result / Thinking / Extension / Compaction / Retry / Model Change / Thinking Level Change 事实尚未完整进入时间线；
-- Composer 尚未提供已确认设计中的 Model / Thinking Level 真实 Runtime 控制；
-- Pi Live 历史正文尚未建立与 Review 同等级的有界挂载策略；
-- 大 Markdown / JSON / Diff / Tool Payload 仍需按需 / 分块 / 上限治理；
-- Extension UI 请求响应后的事实沉淀仍需在不制造第二事实源的前提下收口。
+- 大 Markdown / JSON / Diff / Tool Payload 的按需 / 分块 / 上限治理；
+- Extension UI 请求响应后的长期事实沉淀仍需在不制造第二事实源的前提下继续核对；
+- 历史生命周期行与 Tool / Thinking 的最终视觉层级仍需实机 UI 验收。
 
 ## 6. Streaming Scheduler / Page Visibility
 
@@ -218,10 +228,15 @@ alpha.3 当前已有以下自动门禁：
 - `AgentLens 1.0 CI`：Linux / macOS / Windows；
 - Windows Desktop / npm lifecycle / package contents / shared Hook Dispatcher 等既有发行链测试；
 - `Windows Installer Compile`：NSIS、安装包存在性、checksum、Artifact；
-- `Alpha.3 Interaction Performance`：Pi Live Scheduler + Review 1000-round virtualization；
-- Pi Live Scheduler Dispose stale-event 防回归。
+- `Alpha.3 Interaction Performance`：Pi Live Scheduler + Review 1000-round virtualization + Pi Live 4000-fact history virtualization budget；
+- Pi Live Scheduler Dispose stale-event 防回归；
+- Pi Live 持久化历史事实单元测试；
+- `source-pi` Thinking Level Canonical Observation E2E；
+- Pi Runtime Event / Persisted Entry / Core Observation / Timeline Protocol 的事件层级一致性契约。
 
 **每次提交后的具体结论必须从 GitHub Actions 读取。文档中的“已建立门禁”不等于“未来任意 HEAD 自动通过”。**
+
+Pi Live 4000-fact 门禁只验证虚拟挂载参数与重子树预算，不等同于真实浏览器 4000 条事实的 DOM / React / Heap 实测。
 
 更重要的是：这些自动门禁均不得冒充真实 Pi、真实浏览器或长时间狗粮。
 
@@ -241,6 +256,9 @@ alpha.3 当前已有以下自动门禁：
 - Streaming coalescing；
 - Tool Progress 累计替换；
 - View dispose 不得隐式 Terminate；
+- Runtime Event 与 Persisted Entry 名称不能混层；
+- `thinking.level.changed` 必须同时存在于 Core 与 Timeline Protocol；
+- Pi Live 历史投影必须保留 Tool Result / Model Change / Thinking Level Change；
 - Pi Live 可见字号不得低于 12px；
 - 不使用毛玻璃 / blur；
 - 不新增 576px 响应式断点。
@@ -250,9 +268,11 @@ alpha.3 当前已有以下自动门禁：
 以下项目**当前均视为未执行 / 待验证，绝不能因为自动化通过而视为完成**：
 
 - 真实 Pi 认证 / 模型环境下：`Prompt -> Streaming -> Tool -> Steer/Follow-up -> Abort -> Reconnect`；
+- 真实 Pi Model / Thinking Level 切换；
 - 真实 Pi Extension UI 与实际 Extension / 模型交互；
 - Windows 实机真实 npm `pi.cmd/.bat` 启动与进程生命周期；
 - 正式浏览器 1000 轮真实 DOM / React 挂载数；
+- Pi Live 4000 条历史事实真实 DOM / React / Heap 与滚动流畅度；
 - 1000 轮滚动位置、展开/收起、Turn Rail、抽屉返回位置的实际交互流畅度；
 - 100 次会话切换后的 Listener / Observer 资源趋势；
 - 后台持续 Streaming 30 分钟时历史阅读位置稳定性；
