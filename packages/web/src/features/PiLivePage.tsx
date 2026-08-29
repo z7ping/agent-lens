@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown'
 import { useNavigate, useParams } from 'react-router-dom'
 import type { JsonValue, PiLiveControlsDto, PiLiveEventDto, PiLiveQueueDto, PiLiveSnapshotDto, PiLiveStateDto } from '@agent-lens/protocol'
 import { piLiveApi, type PiLiveTransportDiagnostics } from '../client/pi-live'
+import { projectPiLiveHistory, type PiLiveHistoryItem } from './pi-live-history'
 
 type QueueMode = 'steer' | 'followUp'
 interface RestoredDraft { id: string; mode: QueueMode; text: string }
@@ -22,7 +23,6 @@ interface ExtensionRequest {
   placeholder: string
   prefill: string
 }
-interface SnapshotMessage { id: string; role: 'user' | 'assistant'; text: string; at: string }
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -32,38 +32,6 @@ function record(value: unknown): Record<string, unknown> {
 
 function stringValue(value: unknown): string {
   return typeof value === 'string' ? value : ''
-}
-
-function textFromContent(value: unknown): string {
-  if (typeof value === 'string') return value
-  if (!Array.isArray(value)) return ''
-  return value.map(item => {
-    const entry = record(item)
-    if (entry.type === 'text') return stringValue(entry.text)
-    if (entry.type === 'thinking') return stringValue(entry.thinking || entry.text)
-    return ''
-  }).filter(Boolean).join('\n\n')
-}
-
-function snapshotMessages(snapshot: PiLiveSnapshotDto | null): SnapshotMessage[] {
-  if (!snapshot) return []
-  const result: SnapshotMessage[] = []
-  for (const raw of snapshot.entries) {
-    const entry = record(raw)
-    if (entry.type !== 'message') continue
-    const message = record(entry.message)
-    const role = message.role
-    if (role !== 'user' && role !== 'assistant') continue
-    const text = textFromContent(message.content ?? message.text)
-    if (!text.trim()) continue
-    result.push({
-      id: stringValue(entry.id) || `${role}-${result.length}`,
-      role,
-      text,
-      at: stringValue(entry.timestamp || message.timestamp),
-    })
-  }
-  return result
 }
 
 function mergeSnapshot(previous: PiLiveSnapshotDto | null, next: PiLiveSnapshotDto): PiLiveSnapshotDto {
@@ -160,6 +128,48 @@ function statusLabel(state: PiLiveStateDto | null, connected: boolean): string {
   if (state.isCompacting) return '正在压缩上下文'
   if (state.isStreaming) return '正在工作'
   return '等待输入'
+}
+
+function PiLiveHistoryRow({ item }: { item: PiLiveHistoryItem }) {
+  if (item.kind === 'message') {
+    return <div className={`pi-live-chat-row ${item.role}`}>
+      <div className={`pi-live-bubble ${item.role}`}>
+        <div className="pi-live-message-meta"><b>{item.role === 'user' ? '你' : 'Pi'}</b>{item.at && <time>{formatClock(item.at)}</time>}</div>
+        {item.role === 'assistant' ? <div className="markdown"><ReactMarkdown>{item.text}</ReactMarkdown></div> : <div>{item.text}</div>}
+      </div>
+    </div>
+  }
+
+  if (item.kind === 'thinking') {
+    return <div className="pi-live-lane pi-live-history-lane">
+      <details className="pi-live-thinking">
+        <summary>可观察过程{item.at ? ` · ${formatClock(item.at)}` : ''}</summary>
+        <div>{item.text}</div>
+      </details>
+    </div>
+  }
+
+  if (item.kind === 'tool') {
+    return <div className="pi-live-lane pi-live-history-lane">
+      <div className="pi-live-trace-stack">
+        <div className={`pi-live-trace ${item.status}`}>
+          <div className="pi-live-trace-head">
+            <span className="pi-live-tool-icon">⌁</span>
+            <b>{item.name}</b>
+            <span>{item.summary}</span>
+            <em>{item.status === 'error' ? '失败' : item.status === 'success' ? '完成' : '已记录'}</em>
+          </div>
+          {item.output && <details><summary>查看输出</summary><pre>{item.output}</pre></details>}
+        </div>
+      </div>
+    </div>
+  }
+
+  return <div className="pi-live-history-lifecycle">
+    <b>{item.label}</b>
+    {item.detail && <span>{item.detail}</span>}
+    {item.at && <time>{formatClock(item.at)}</time>}
+  </div>
 }
 
 function PiLiveStart({ known }: { known: PiLiveStateDto[] }) {
@@ -365,7 +375,7 @@ export function PiLivePage() {
             statePatch = { ...statePatch, isCompacting: true }
           } else if (type === 'compaction_end') {
             statePatch = { ...statePatch, isCompacting: false }
-          } else if (type === 'model_change' || type === 'thinking_level_change') {
+          } else if (type === 'model_changed' || type === 'thinking_level_changed') {
             controlsChanged = true
           } else if (type === 'message_update') {
             const update = record(event.assistantMessageEvent)
@@ -433,7 +443,7 @@ export function PiLivePage() {
     }
   }, [runtimeId])
 
-  const messages = useMemo(() => snapshotMessages(snapshot), [snapshot])
+  const history = useMemo(() => projectPiLiveHistory(snapshot), [snapshot])
 
   useEffect(() => {
     if (!followingRef.current) return
@@ -442,7 +452,7 @@ export function PiLivePage() {
       if (reader) reader.scrollTop = reader.scrollHeight
     })
     return () => cancelAnimationFrame(frame)
-  }, [messages.length, streamText, thinkingText, tools, queue.steering.length, queue.followUp.length, restored.length, extension?.id])
+  }, [history.length, streamText, thinkingText, tools, queue.steering.length, queue.followUp.length, restored.length, extension?.id])
 
   useEffect(() => {
     const textarea = inputRef.current
@@ -614,12 +624,7 @@ export function PiLivePage() {
 
       <div ref={readerRef} className="pi-live-reader" onScroll={onReaderScroll}>
         <div className="pi-live-document">
-          {messages.map(message => <div key={message.id} className={`pi-live-chat-row ${message.role}`}>
-            <div className={`pi-live-bubble ${message.role}`}>
-              <div className="pi-live-message-meta"><b>{message.role === 'user' ? '你' : 'Pi'}</b>{message.at && <time>{formatClock(message.at)}</time>}</div>
-              {message.role === 'assistant' ? <div className="markdown"><ReactMarkdown>{message.text}</ReactMarkdown></div> : <div>{message.text}</div>}
-            </div>
-          </div>)}
+          {history.map(item => <PiLiveHistoryRow key={item.id} item={item}/>)}
 
           {(thinkingText || tools.length > 0 || streamText) && <section className="pi-live-current-round">
             <div className="pi-live-round-head"><b>当前轮次</b><span>{state?.isStreaming ? '实时' : '已停止'}</span><span className="grow"/>{state?.pendingMessageCount ? <span>{state.pendingMessageCount} 条排队</span> : null}</div>
@@ -633,7 +638,7 @@ export function PiLivePage() {
               {streamText && <div className="pi-live-stream-response"><div className="pi-live-message-meta"><b>Pi</b><span>{state?.isStreaming ? '生成中' : '输出'}</span></div><div className="markdown"><ReactMarkdown>{streamText}</ReactMarkdown></div>{state?.isStreaming && <span className="pi-live-caret" aria-hidden="true"/>}</div>}
             </div>
           </section>}
-          {!messages.length && !streamText && !thinkingText && !tools.length && <div className="pi-live-empty">这个 Pi Runtime 还没有消息。可以直接在下方输入开始任务。</div>}
+          {!history.length && !streamText && !thinkingText && !tools.length && <div className="pi-live-empty">这个 Pi Runtime 还没有消息。可以直接在下方输入开始任务。</div>}
           {error && <div className="pi-live-error pi-live-reader-error" role="alert">{error}</div>}
         </div>
       </div>
