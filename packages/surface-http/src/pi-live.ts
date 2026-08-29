@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import type { PiLiveService } from '@agent-lens/pi-live-runtime'
+import type { PiLiveService } from '@agent-lens/runtime-cordis'
 import type {
   JsonValue,
   PiLiveAbortRequestDto,
@@ -103,7 +103,6 @@ async function connectEvents(
   service: PiLiveService,
   runtimeSessionId: string,
 ): Promise<void> {
-  // Validate before sending SSE headers so an unknown runtime can still return JSON 404.
   await service.state(runtimeSessionId)
   response.statusCode = 200
   response.setHeader('content-type', 'text/event-stream; charset=utf-8')
@@ -120,7 +119,10 @@ async function connectEvents(
   })
   const heartbeat = setInterval(() => response.write(': heartbeat\n\n'), SSE_HEARTBEAT_MS)
   heartbeat.unref?.()
+  let cleaned = false
   const cleanup = () => {
+    if (cleaned) return
+    cleaned = true
     clearInterval(heartbeat)
     unsubscribe()
   }
