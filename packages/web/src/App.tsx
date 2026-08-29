@@ -12,6 +12,7 @@ import { AgentsResponsivePage } from './features/AgentsResponsivePage'
 import { BackupPage } from './features/BackupPage'
 import { HubReviewPage } from './features/HubReviewPage'
 import { InsightsPage } from './features/InsightsPage'
+import { PiLivePage } from './features/PiLivePage'
 import { ReviewPage } from './features/ReviewPage'
 import { ToolsPage } from './features/ToolsPage'
 
@@ -167,10 +168,11 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   ].filter((item): item is string => Boolean(item)).join('\n')
   const onReview = location.pathname.startsWith('/review')
   const onHubReview = location.pathname.startsWith('/review/hub/')
-  const onLocalReview = onReview && !onHubReview
+  const onPiLive = location.pathname === '/review/live' || location.pathname.startsWith('/review/live/')
+  const onLocalReview = onReview && !onHubReview && !onPiLive
   const onTools = location.pathname.startsWith('/tools')
   const onAgents = location.pathname.startsWith('/agents')
-  const hasSseBanner = Boolean(snapshot.health && !snapshot.liveConnected)
+  const hasSseBanner = Boolean(snapshot.health && !snapshot.liveConnected && !onPiLive)
   const showTurnRail = onLocalReview && snapshot.review.detail
   const navigationHasNewData = (to: string) => to === '/tools' ? snapshot.usage.hasNewData : to === '/agents' ? snapshot.agentsHasNewData : false
 
@@ -234,6 +236,8 @@ function Shell({ model }: { model: AgentLensClientModel }) {
       </div>}
       <Routes>
         <Route path="/review" element={<ReviewPage model={model} />} />
+        <Route path="/review/live" element={<PiLivePage />} />
+        <Route path="/review/live/:runtimeSessionId" element={<PiLivePage />} />
         <Route path="/review/hub/:sessionId" element={<HubReviewPage />} />
         <Route path="/review/:sessionId" element={<ReviewPage model={model} />} />
         <Route path="/tools" element={<ToolsPage model={model} />} />
