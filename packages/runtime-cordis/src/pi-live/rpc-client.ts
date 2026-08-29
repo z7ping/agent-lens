@@ -1,4 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { access, readFile } from 'node:fs/promises'
+import { dirname, extname, resolve, sep } from 'node:path'
 
 const MAX_RPC_LINE_BYTES = 8 * 1024 * 1024
 const MAX_STDERR_BYTES = 64 * 1024
@@ -18,6 +20,66 @@ interface PendingRequest {
   resolve(value: Record<string, unknown>): void
   reject(error: Error): void
   timer: ReturnType<typeof setTimeout>
+}
+
+export interface PiSpawnSpec {
+  command: string
+  args: string[]
+  kind: 'direct' | 'windows-npm-shim'
+}
+
+async function regularFile(path: string): Promise<boolean> {
+  try {
+    await access(path)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * npm exposes command shims as .cmd/.bat on Windows. Spawning those wrappers directly is
+ * unreliable and killing the wrapper can leave its Node child orphaned. Resolve the JS entry
+ * referenced by the trusted local shim and own that Node process directly instead.
+ */
+export async function resolveWindowsNpmShimNodeEntry(executable: string): Promise<string | undefined> {
+  let source: string
+  try {
+    source = await readFile(executable, 'utf8')
+  } catch {
+    return undefined
+  }
+
+  const pattern = /%(?:~dp0|dp0%)([^"\r\n]*?\.(?:mjs|cjs|js))/ig
+  for (const match of source.matchAll(pattern)) {
+    const suffix = match[1]
+    if (!suffix) continue
+    const normalized = suffix
+      .replace(/^[\\/]+/, '')
+      .replace(/[\\/]/g, sep)
+    const candidate = resolve(dirname(executable), normalized)
+    if (await regularFile(candidate)) return candidate
+  }
+  return undefined
+}
+
+export async function resolvePiSpawnSpec(
+  executable: string,
+  args: string[],
+  platform: NodeJS.Platform = process.platform,
+): Promise<PiSpawnSpec> {
+  const extension = extname(executable).toLowerCase()
+  if (platform === 'win32' && (extension === '.cmd' || extension === '.bat')) {
+    const entry = await resolveWindowsNpmShimNodeEntry(executable)
+    if (!entry) {
+      throw new Error(
+        `Unable to resolve the Node entry behind Pi Windows shim: ${executable}. `
+        + 'Set PI_BIN to pi.exe or to a standard npm-installed Pi shim.',
+      )
+    }
+    return { command: process.execPath, args: [entry, ...args], kind: 'windows-npm-shim' }
+  }
+  return { command: executable, args, kind: 'direct' }
 }
 
 export class StrictJsonlDecoder {
@@ -68,7 +130,11 @@ export class PiRpcClient {
     if (this.process) return
     if (this.closed) throw new Error('Pi RPC client is closed')
     const prefix = this.options.launchPrefixArgs ?? ['--mode', 'rpc']
-    const child = spawn(this.options.executable, [...prefix, ...(this.options.args ?? [])], {
+    const launch = await resolvePiSpawnSpec(
+      this.options.executable,
+      [...prefix, ...(this.options.args ?? [])],
+    )
+    const child = spawn(launch.command, launch.args, {
       cwd: this.options.cwd,
       env: process.env,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -95,12 +161,12 @@ export class PiRpcClient {
       this.process = null
     })
 
-    await new Promise<void>((resolve, reject) => {
+    await new Promise<void>((resolveStart, reject) => {
       if (child.pid) {
-        resolve()
+        resolveStart()
         return
       }
-      const onSpawn = () => { cleanup(); resolve() }
+      const onSpawn = () => { cleanup(); resolveStart() }
       const onError = (error: Error) => { cleanup(); reject(error) }
       const cleanup = () => {
         child.off('spawn', onSpawn)
@@ -124,12 +190,12 @@ export class PiRpcClient {
     if (!child || !child.stdin.writable) throw new Error('Pi RPC process is not running')
     const id = `agentlens-${this.nextRequestId++}`
     const timeoutMs = this.options.commandTimeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS
-    const response = new Promise<Record<string, unknown>>((resolve, reject) => {
+    const response = new Promise<Record<string, unknown>>((resolveResponse, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id)
         reject(new Error(`Pi RPC command timed out: ${String(command.type ?? 'unknown')}`))
       }, timeoutMs)
-      this.pending.set(id, { resolve, reject, timer })
+      this.pending.set(id, { resolve: resolveResponse, reject, timer })
     })
     this.send({ ...command, id })
     return await response as T
@@ -183,13 +249,13 @@ export class PiRpcClient {
     if (!child || child.exitCode !== null || child.signalCode !== null) return
     child.stdin.end()
     child.kill('SIGTERM')
-    await new Promise<void>(resolve => {
+    await new Promise<void>(resolveClose => {
       let settled = false
       const finish = () => {
         if (settled) return
         settled = true
         clearTimeout(timer)
-        resolve()
+        resolveClose()
       }
       const timer = setTimeout(() => {
         if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
