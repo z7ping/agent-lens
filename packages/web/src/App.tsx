@@ -239,7 +239,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
         <Route path="*" element={<Navigate to="/review" replace />} />
       </Routes>
       {onReview && <ReviewStateOverlay model={model} snapshot={snapshot}/>} 
-      {onAgents && <AgentsStateOverlay model={model} snapshot={snapshot} sourceId={agentOverviewSourceId}/>} 
+      {onAgents && <AgentsStateOverlay model={model} snapshot={snapshot}/>} 
       {onTools && snapshot.usage.hasNewData && <BackgroundDataNotice label="工具分析" hasSseBanner={hasSseBanner} onRefresh={() => model.refreshUsage()}/>} 
       {onAgents && snapshot.agentsHasNewData && <BackgroundDataNotice label="智能体概览" hasSseBanner={hasSseBanner} onRefresh={() => model.refreshFacetsAndAgents()}/>} 
       {showTurnRail && <ReviewTurnRail detail={snapshot.review.detail!}/>} 
