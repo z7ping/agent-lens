@@ -2,32 +2,32 @@ export type PiLiveStreamingBehavior = 'steer' | 'followUp'
 
 export interface PiLiveStartInput {
   cwd: string
-  executable?: string
-  provider?: string
-  model?: string
-  name?: string
-  sessionDir?: string
-  sessionPath?: string
+  executable?: string | undefined
+  provider?: string | undefined
+  model?: string | undefined
+  name?: string | undefined
+  sessionDir?: string | undefined
+  sessionPath?: string | undefined
 }
 
 export interface PiLiveAvailability {
   available: boolean
-  executable?: string
-  reason?: string
+  executable?: string | undefined
+  reason?: string | undefined
 }
 
 export interface PiLiveRuntimeState {
   runtimeSessionId: string
-  nativeSessionId?: string
-  sessionFile?: string
-  sessionName?: string
+  nativeSessionId?: string | undefined
+  sessionFile?: string | undefined
+  sessionName?: string | undefined
   model?: unknown
-  thinkingLevel?: string
+  thinkingLevel?: string | undefined
   isStreaming: boolean
   isCompacting: boolean
   pendingMessageCount: number
-  leafId?: string | null
-  processId?: number
+  leafId?: string | null | undefined
+  processId?: number | undefined
 }
 
 export interface PiLiveSnapshot {
