@@ -1,7 +1,7 @@
 import { isValidElement, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
-const ROUND_ROOT_MARGIN_PX = 1400
-const ROUND_UNMOUNT_DELAY_MS = 320
+export const REVIEW_ROUND_ROOT_MARGIN_PX = 1400
+export const REVIEW_ROUND_UNMOUNT_DELAY_MS = 320
 
 export function VirtualRoundMount({
   children,
@@ -53,10 +53,10 @@ export function VirtualRoundMount({
         const active = document.activeElement
         if (active instanceof Node && current.contains(active)) return
         setMounted(false)
-      }, ROUND_UNMOUNT_DELAY_MS)
+      }, REVIEW_ROUND_UNMOUNT_DELAY_MS)
     }, {
       root,
-      rootMargin: `${ROUND_ROOT_MARGIN_PX}px 0px`,
+      rootMargin: `${REVIEW_ROUND_ROOT_MARGIN_PX}px 0px`,
       threshold: 0,
     })
     observer.observe(element)
