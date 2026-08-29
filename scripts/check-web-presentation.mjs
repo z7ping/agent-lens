@@ -195,6 +195,10 @@ if (!desktopResponsiveSource.includes('1280×800 / 1366×768')
   || !desktopResponsiveSource.includes('md 768 / lg 992 / xl 1200 / xxl 1400')) {
   throw new Error('Desktop 响应式基线必须明确 1280/1366 主设计尺寸和 Bootstrap 5 断点')
 }
+if (!/@media \(min-width: 1400px\)[\s\S]*?\.agents-responsive-shell > \.workspace-page\s*\{[\s\S]*?grid-column:\s*1\s*\/\s*-1;[\s\S]*?width:\s*100%;/m.test(desktopResponsiveSource)
+  || !/@media \(min-width: 1400px\)[\s\S]*?\.agent-insights-rail\s*\{[\s\S]*?grid-column:\s*2;[\s\S]*?grid-row:\s*1;/m.test(desktopResponsiveSource)) {
+  throw new Error('智能体概览 xxl 必须保持页面级工具栏横跨整行，右侧洞察栏只能占正文第二列')
+}
 if (!backupResponsiveSource.includes('1280×800 / 1366×768')
   || !backupResponsiveSource.includes('@media (min-width: 1200px) and (max-width: 1399.98px)')
   || !backupResponsiveSource.includes('white-space: nowrap')
