@@ -3,7 +3,7 @@
 /*
  * AgentLens 1.0 全局基础样式。
  *
- * 这里只保留 Tailwind 语义映射、浏览器基础规则、通用空状态与 Markdown。
+ * 这里只保留 Tailwind 语义映射、浏览器基础规则、共享控件、通用空状态与 Markdown。
  * 设计令牌由 tokens.css 提供；壳层和各一级页面由各自所有者文件负责。
  */
 @theme {
@@ -45,9 +45,74 @@ input {
 
 button { cursor: pointer; }
 
-/* 标准按钮内部不折行；空间不足时由按钮组整体换行。 */
-.btn { white-space: nowrap; }
-.btn > svg { flex: 0 0 auto; }
+/*
+ * 共享按钮规范。
+ * - 默认 btn：次级操作；白底/描边，不与正文混淆。
+ * - primary：当前区域唯一主操作。
+ * - small：表格/卡片内紧凑操作。
+ * - 图标与文案永远同行，空间不足时由按钮组/工具栏处理，不允许按钮内部折行。
+ */
+.btn {
+  display: inline-flex;
+  min-width: max-content;
+  height: 32px;
+  flex: 0 0 auto;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 11px;
+  border: 1px solid var(--al-line-strong);
+  border-radius: 8px;
+  background: var(--al-surface);
+  color: var(--al-ink-2);
+  font-size: 13px;
+  font-weight: 620;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  vertical-align: middle;
+  transition: border-color .15s, background .15s, color .15s, box-shadow .15s;
+}
+
+.btn > svg {
+  display: block;
+  flex: 0 0 auto;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--al-line-strong);
+  background: var(--al-soft);
+  color: var(--al-ink);
+}
+
+.btn:active:not(:disabled) {
+  background: color-mix(in srgb, var(--al-soft) 72%, var(--al-surface));
+}
+
+.btn.primary {
+  border-color: var(--al-accent);
+  background: var(--al-accent);
+  color: var(--al-on-accent);
+}
+
+.btn.primary:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--al-accent) 88%, var(--al-ink));
+  background: color-mix(in srgb, var(--al-accent) 88%, var(--al-ink));
+  color: var(--al-on-accent);
+}
+
+.btn.small {
+  height: 28px;
+  padding-inline: 9px;
+  font-size: 12px;
+}
+
+.btn:disabled {
+  cursor: default;
+  opacity: .48;
+}
+
 .workspace-toolbar .btn { flex-shrink: 0; }
 
 button:focus-visible,
