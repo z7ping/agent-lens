@@ -8,6 +8,8 @@ export interface PiRpcClientOptions {
   executable: string
   cwd: string
   args?: string[]
+  /** Tests may replace the default `--mode rpc` prefix without changing production behavior. */
+  launchPrefixArgs?: string[]
   commandTimeoutMs?: number
   onEvent?: (event: Record<string, unknown>) => void
 }
@@ -65,7 +67,8 @@ export class PiRpcClient {
   async start(): Promise<void> {
     if (this.process) return
     if (this.closed) throw new Error('Pi RPC client is closed')
-    const child = spawn(this.options.executable, ['--mode', 'rpc', ...(this.options.args ?? [])], {
+    const prefix = this.options.launchPrefixArgs ?? ['--mode', 'rpc']
+    const child = spawn(this.options.executable, [...prefix, ...(this.options.args ?? [])], {
       cwd: this.options.cwd,
       env: process.env,
       stdio: ['pipe', 'pipe', 'pipe'],
