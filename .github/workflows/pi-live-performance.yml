@@ -1,4 +1,4 @@
-name: Pi Live Performance
+name: Alpha.3 Interaction Performance
 
 on:
   workflow_dispatch:
@@ -15,14 +15,16 @@ on:
   pull_request:
     paths:
       - 'packages/web/src/client/pi-live.ts'
+      - 'packages/web/src/components/VirtualRoundMount.tsx'
       - 'scripts/performance/pi-live-scheduler-benchmark.ts'
+      - 'scripts/performance/review-virtualization-benchmark.ts'
       - '.github/workflows/pi-live-performance.yml'
 
 permissions:
   contents: read
 
 jobs:
-  scheduler:
+  pi-live-scheduler:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -56,5 +58,30 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: agent-lens-pi-live-scheduler-${{ steps.profile.outputs.profile }}
+          path: performance-artifacts/
+          if-no-files-found: error
+
+  review-virtualization:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.23.0
+          package-manager-cache: false
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Run 1000-round Review virtualization budget
+        shell: bash
+        run: |
+          mkdir -p performance-artifacts
+          npm run perf:review-virtualization -- --rounds=1000 --viewport-height=800 --budget-mounted=40 | tee performance-artifacts/review-virtualization-1000.txt
+      - name: Upload benchmark report
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-lens-review-virtualization-1000
           path: performance-artifacts/
           if-no-files-found: error
