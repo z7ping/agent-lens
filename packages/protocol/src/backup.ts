@@ -18,11 +18,21 @@ export interface BackupKindSummaryDto {
   logicalAssetCount?: number
 }
 
+export interface BackupDirectoryNodeDto {
+  name: string
+  relativePath: string
+  fileCount: number
+  totalBytes?: number
+  children?: BackupDirectoryNodeDto[]
+  omittedChildren?: number
+}
+
 export interface BackupDataRootSummaryDto {
   scope: 'config' | 'data'
   path: string
   fileCount?: number
   totalBytes?: number
+  tree?: BackupDirectoryNodeDto[]
 }
 
 export interface BackupAgeBucketSummaryDto {
