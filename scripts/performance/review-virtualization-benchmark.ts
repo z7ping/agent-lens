@@ -1,6 +1,7 @@
 import {
   REVIEW_ROUND_ROOT_MARGIN_PX,
   REVIEW_ROUND_UNMOUNT_DELAY_MS,
+  VIRTUAL_MOUNT_OBSERVER_STRATEGY,
 } from '../../packages/web/src/components/VirtualRoundMount.js'
 
 function argNumber(name: string, fallback: number): number {
@@ -45,22 +46,27 @@ for (let scrollTop = 0; scrollTop <= Math.max(0, totalHeight - viewportHeight); 
 }
 
 const averageHeight = totalHeight / rounds
+const observerInstances = VIRTUAL_MOUNT_OBSERVER_STRATEGY === 'shared-per-root' ? 1 : rounds
 const result = {
   benchmark: 'review-virtualization-window',
   rounds,
   viewportHeight,
   rootMarginPx: REVIEW_ROUND_ROOT_MARGIN_PX,
   unmountDelayMs: REVIEW_ROUND_UNMOUNT_DELAY_MS,
+  observerStrategy: VIRTUAL_MOUNT_OBSERVER_STRATEGY,
+  observerInstances,
   averageRoundHeight: averageHeight,
   samples,
   maxMounted,
   budgetMounted,
 }
 
-console.log(`[AgentLens perf] Review 虚拟窗口 rounds=${rounds} viewport=${viewportHeight}px avgHeight=${averageHeight.toFixed(1)}px maxMounted=${maxMounted} budget=${budgetMounted} rootMargin=${REVIEW_ROUND_ROOT_MARGIN_PX}px unmountDelay=${REVIEW_ROUND_UNMOUNT_DELAY_MS}ms`)
+console.log(`[AgentLens perf] Review 虚拟窗口 rounds=${rounds} viewport=${viewportHeight}px avgHeight=${averageHeight.toFixed(1)}px maxMounted=${maxMounted} budget=${budgetMounted} observers=${observerInstances} strategy=${VIRTUAL_MOUNT_OBSERVER_STRATEGY} rootMargin=${REVIEW_ROUND_ROOT_MARGIN_PX}px unmountDelay=${REVIEW_ROUND_UNMOUNT_DELAY_MS}ms`)
 console.log(JSON.stringify(result))
 
 if (rounds < 1000) throw new Error('alpha.3 Review 虚拟化门禁至少需要 1000 轮')
+if (VIRTUAL_MOUNT_OBSERVER_STRATEGY !== 'shared-per-root') throw new Error(`Review IntersectionObserver 策略回退为 ${VIRTUAL_MOUNT_OBSERVER_STRATEGY}`)
+if (observerInstances > 1) throw new Error(`1000 轮 Review IntersectionObserver 实例数 ${observerInstances} 超过预算 1`)
 if (REVIEW_ROUND_ROOT_MARGIN_PX > 1800) throw new Error(`Review rootMargin ${REVIEW_ROUND_ROOT_MARGIN_PX}px 超过 alpha.3 预算 1800px`)
 if (REVIEW_ROUND_UNMOUNT_DELAY_MS > 500) throw new Error(`Review 远屏卸载延迟 ${REVIEW_ROUND_UNMOUNT_DELAY_MS}ms 超过 alpha.3 预算 500ms`)
 if (maxMounted > budgetMounted) throw new Error(`1000 轮 Review 最大重子树挂载数 ${maxMounted} 超过预算 ${budgetMounted}`)
