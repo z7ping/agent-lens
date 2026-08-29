@@ -4,32 +4,32 @@ export type PiLiveStreamingBehaviorDto = 'steer' | 'followUp'
 
 export interface PiLiveAvailabilityDto {
   available: boolean
-  executable?: string
-  reason?: string
+  executable?: string | undefined
+  reason?: string | undefined
 }
 
 export interface PiLiveStartRequestDto {
   cwd: string
-  executable?: string
-  provider?: string
-  model?: string
-  name?: string
-  sessionDir?: string
-  sessionPath?: string
+  executable?: string | undefined
+  provider?: string | undefined
+  model?: string | undefined
+  name?: string | undefined
+  sessionDir?: string | undefined
+  sessionPath?: string | undefined
 }
 
 export interface PiLiveStateDto {
   runtimeSessionId: string
-  nativeSessionId?: string
-  sessionFile?: string
-  sessionName?: string
-  model?: JsonValue
-  thinkingLevel?: string
+  nativeSessionId?: string | undefined
+  sessionFile?: string | undefined
+  sessionName?: string | undefined
+  model?: JsonValue | undefined
+  thinkingLevel?: string | undefined
   isStreaming: boolean
   isCompacting: boolean
   pendingMessageCount: number
-  leafId?: string | null
-  processId?: number
+  leafId?: string | null | undefined
+  processId?: number | undefined
 }
 
 export interface PiLiveSnapshotDto {
@@ -40,7 +40,7 @@ export interface PiLiveSnapshotDto {
 
 export interface PiLivePromptRequestDto {
   message: string
-  behavior?: PiLiveStreamingBehaviorDto
+  behavior?: PiLiveStreamingBehaviorDto | undefined
 }
 
 export interface PiLiveQueueDto {
@@ -49,7 +49,7 @@ export interface PiLiveQueueDto {
 }
 
 export interface PiLiveAbortRequestDto {
-  restoreQueue?: boolean
+  restoreQueue?: boolean | undefined
 }
 
 export interface PiLiveExtensionResponseRequestDto {
