@@ -24,13 +24,20 @@ npm run build:dist
 npm pack --dry-run
 ```
 
-开发运行：
+完整开发环境：
 
 ```bash
 npm run dev
 ```
 
-`npm run dev` 只影响源码开发运行时，不改变正式安装版的固定端口和数据目录。开发启动器默认从 `127.0.0.1:56789` 开始探测；端口已被占用时按 `56790 / 56791 / ...` 顺序自动退避，最多尝试 21 个端口。需要从其他端口开始时可设置 `AGENT_LENS_DEV_PORT`。
+`npm run dev` 会同时启动：
+
+1. 源码 Daemon；
+2. Vite 源码 Web / HMR。
+
+开发启动器默认从 `127.0.0.1:56789` 开始探测 Daemon 端口；端口已被占用时按 `56790 / 56791 / ...` 顺序自动退避，最多尝试 21 个端口。Vite 会自动把 `/api` 代理到本次实际选中的开发 Daemon，不再读取旧的 `packages/web/dist/` 作为开发页面。浏览器开发页面以 Vite 控制台打印的地址为准，默认是 `http://127.0.0.1:5173`。
+
+需要从其他 Daemon 端口开始时可设置 `AGENT_LENS_DEV_PORT`。
 
 开发 Daemon 不与正式运行时共用 SQLite / Backup Vault。每个实际开发端口使用仓库内独立目录：
 
@@ -41,13 +48,20 @@ npm run dev
 
 因此本机已安装并运行 AgentLens Desktop 时，也可以直接执行 `npm run dev`；正式运行时继续使用 `56789 + ~/.agent-lens/1.0/`，源码开发运行时会自动选择后续空闲端口并隔离数据。`.agent-lens/` 已被 Git 忽略，不得把开发数据库提交到仓库。
 
-Web：
+只开发 Web：
 
 ```bash
 npm run dev:web
 ```
 
-`dev:web` 仍是纯 Web 开发入口；需要直接验证正式运行时真实数据时，可以让 Web 开发服务器连接当前正式 Daemon，不必额外启动第二个完整运行时。
+`dev:web` 默认把 `/api` 代理到 `127.0.0.1:56789`。如果需要连接其他运行时，可设置 `AGENT_LENS_DEV_API_PORT`。例如 PowerShell：
+
+```powershell
+$env:AGENT_LENS_DEV_API_PORT="56790"
+npm run dev:web
+```
+
+注意：直接打开开发 Daemon 的 `http://127.0.0.1:<runtime-port>` 可能看到上一次构建留下的静态 `packages/web/dist/`；源码界面开发必须以 Vite 地址为准。
 
 CLI：
 
