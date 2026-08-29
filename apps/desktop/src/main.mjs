@@ -13,6 +13,7 @@ import {
   shell,
 } from 'electron'
 import { createLoginAutostartController } from './login-autostart.mjs'
+import { migrateLegacyWindowsRuntime } from './legacy-windows-migration.mjs'
 
 const DEFAULT_PORT = 56789
 const EXPECTED_PROTOCOL_VERSION = '1.0'
@@ -506,6 +507,28 @@ if (!singleInstance) {
     }
 
     try {
+      const migration = await migrateLegacyWindowsRuntime({
+        port,
+        logger: writeDaemonLog,
+      })
+      if (migration.changed) {
+        writeDaemonLog(`--- legacy runtime migration applied version=${migration.legacyVersion ?? 'unknown'} stopped=${migration.stoppedPids?.join(',') || 'none'} startupRemoved=${migration.removedStartup === true} ---`)
+      }
+    } catch (error) {
+      const diagnostic = error instanceof Error ? error.stack ?? error.message : String(error)
+      const detail = error instanceof Error ? error.message : String(error)
+      writeDaemonLog('--- legacy Windows migration failed: ' + diagnostic + ' ---')
+      await dialog.showMessageBox({
+        type: 'error',
+        title: 'AgentLens 升级迁移失败',
+        message: '检测到旧版 AgentLens 运行时，但无法安全完成 0.x → 1.x 接管。',
+        detail: detail + '\n\n日志：' + join(app.getPath('logs'), 'daemon.log'),
+      })
+      app.quit()
+      return
+    }
+
+    try {
       await ensureInitialLoginAutostart()
     } catch (error) {
       writeDaemonLog('--- initial login autostart failed: ' + (error instanceof Error ? error.message : String(error)) + ' ---')
@@ -523,8 +546,9 @@ if (!singleInstance) {
       markDaemonStable()
       await mainWindow.loadURL(daemonUrl)
     } catch (error) {
-      const detail = error instanceof Error ? error.stack ?? error.message : String(error)
-      writeDaemonLog('--- desktop runtime startup failed: ' + detail + ' ---')
+      const diagnostic = error instanceof Error ? error.stack ?? error.message : String(error)
+      const detail = error instanceof Error ? error.message : String(error)
+      writeDaemonLog('--- desktop runtime startup failed: ' + diagnostic + ' ---')
       await dialog.showMessageBox({
         type: 'error',
         title: 'AgentLens 启动失败',
@@ -534,8 +558,9 @@ if (!singleInstance) {
       app.quit()
     }
   })().catch(async error => {
-    const detail = error instanceof Error ? error.stack ?? error.message : String(error)
-    writeDaemonLog('--- desktop shell startup failed: ' + detail + ' ---')
+    const diagnostic = error instanceof Error ? error.stack ?? error.message : String(error)
+    const detail = error instanceof Error ? error.message : String(error)
+    writeDaemonLog('--- desktop shell startup failed: ' + diagnostic + ' ---')
     await app.whenReady()
     await dialog.showMessageBox({
       type: 'error',

@@ -1,9 +1,9 @@
 # AgentLens 1.0 双发行运维与共存规则
 
-更新日期：2026-08-24  
+更新日期：2026-08-29  
 状态：1.0 稳定化实现基线
 
-本文记录 npm / CLI 与 Windows Desktop 同时作为一等发行方式时的实际运维规则。架构决策以 `docs/adr/0004-dual-distribution-single-runtime-lifecycle.md` 为准。
+本文记录 npm / CLI 与 Windows Desktop 同时作为一等发行方式时的实际运维规则。
 
 ## 1. 总原则
 
@@ -96,6 +96,59 @@ Desktop：
 
 Desktop 的 Hook 文件在正式安装包中解包到外部进程可访问路径，避免 PowerShell / Electron-as-Node 无法直接读取 `app.asar` 内部 Hook 文件。
 
+### 3.1 Desktop CLI 与 npm CLI
+
+Windows Desktop 作为一等发行方式，必须在**没有可用 1.x npm CLI**时独立提供：
+
+```powershell
+agent-lens -h
+agent-lens status
+agent-lens doctor
+```
+
+Desktop 不会为了获得 CLI 自动执行：
+
+```bash
+npm install -g @z7ping/agent-lens
+```
+
+也不会要求用户为了安装 Desktop 预先安装 Node.js / npm。Desktop 安装包本身已经包含同一份 `runtime/cli.mjs`，因此只需要提供一个薄 `agent-lens.cmd` shim：
+
+```text
+agent-lens.cmd
+  -> AgentLens.exe + ELECTRON_RUN_AS_NODE=1
+  -> resources/app.asar.unpacked/runtime/cli.mjs
+  -> 同一套 CLI / Runtime / ~/.agent-lens/1.0
+```
+
+CLI 所有权与 Runtime 所有权必须分开判断：
+
+```text
+CLI 所有权
+  -> 看本机是否存在有效的 1.x npm AgentLens
+
+Runtime 所有权
+  -> 看 127.0.0.1:56789 是否已有兼容 Daemon，以及谁启动了它
+```
+
+Windows PATH 采用确定性规则，而不是依赖偶然顺序：
+
+1. 检测 `npm prefix -g`；
+2. 只有同时存在全局 `@z7ping/agent-lens/package.json`、`agent-lens.cmd`，且版本主版本号 `>= 1`，才视为有效 npm CLI；
+3. 有效 1.x npm CLI 存在时：npm 全局目录排在 Desktop 安装目录之前，npm CLI 是主入口；Desktop CLI 仍保留在后方作为 npm 被卸载后的兜底；
+4. 没有有效 1.x npm CLI，或只存在 0.x npm CLI 时：Desktop 安装目录排在前方，避免旧 0.x CLI 重新获得 1.x 默认命令所有权；
+5. Desktop 每次启动都会重新执行同一套 PATH 协调逻辑，因此用户后续安装 1.x npm 包后，下一次启动 Desktop 会自动把 npm CLI 调整为主入口；
+6. npm AgentLens 后续被卸载时，不需要重新安装 Desktop：npm wrapper 消失后，PATH 中后置的 Desktop shim 自动接替；
+7. 卸载 Desktop 时只移除 Desktop 自己的 PATH 项，不删除 npm 全局目录、npm 包或 npm wrapper。
+
+实现约束：
+
+- 不使用 `setx`，避免长 PATH 被截断；
+- 不覆盖整个用户 PATH；
+- 不静默安装、卸载或修改全局 npm 包；
+- 覆盖升级时先移除旧 Desktop PATH，再按当前 npm/Desktop 状态重新排序；
+- 修改 PATH 后，已经打开的 PowerShell / CMD 不会自动刷新自身环境，用户应重新打开终端再验证。
+
 Windows Desktop 的 Electron bootstrap 与 Daemon 日志必须使用同一目录。打包版优先写入 `<安装目录>\logs`，可通过 `AGENT_LENS_LOG_DIR` 显式覆盖；安装目录不可写时才回退 `%APPDATA%\AgentLens\logs`。不得再由 npm 包名派生出另一套日志目录。
 
 Windows 登录自启以系统真实状态为准：
@@ -176,32 +229,36 @@ Durable Inbox
 ### 6.1 npm + Desktop 都存在，卸载 npm
 
 ```text
-npm 文件消失
+npm agent-lens.cmd / package 消失
   ↓
-npm.json 可能仍存在
+PATH 中 Desktop shim 仍存在
   ↓
-共享分发器验证 hookRoot 失败
+agent-lens 命令自动回退 Desktop
   ↓
-跳过 npm
+npm.json 可能仍存在，但共享分发器验证 hookRoot 失败
+  ↓
+跳过 npm Provider
   ↓
 继续使用 Desktop
 ```
 
-不要求 npm uninstall 回调。
+不要求 npm uninstall 回调，也不要求重新安装 Desktop。
 
 ### 6.2 npm + Desktop 都存在，卸载 Desktop
 
 ```text
 AgentLens.exe / Desktop HookRoot 消失
   ↓
-desktop.json 可能仍存在
+Desktop 安装目录从用户 PATH 移除
   ↓
-共享分发器验证失败
+npm 全局目录与 npm agent-lens.cmd 保持不变
   ↓
-自动回退 npm
+desktop.json 即使残留也因真实文件验证失败而失效
+  ↓
+共享分发器继续使用 npm Provider
 ```
 
-不需要重写 Codex / Claude Hook 配置。
+不需要重写 Codex / Claude Hook 配置，也不得删除 npm 全局命令或 npm PATH。
 
 ### 6.3 两种发行都不存在
 
@@ -243,6 +300,15 @@ Task Scheduler
   -> node dist/cli.mjs service run
 ```
 
+Desktop CLI：
+
+```text
+PowerShell / CMD
+  -> agent-lens.cmd
+  -> AgentLens.exe (ELECTRON_RUN_AS_NODE=1)
+  -> runtime/cli.mjs
+```
+
 Hook：
 
 ```text
@@ -253,7 +319,7 @@ Native Hook
   -> Node / Electron-as-Node Hook
 ```
 
-这两套 PowerShell 都只是 Windows 执行包装，不属于 AgentLens Runtime。
+这些包装只解决发行与 Windows 进程启动问题，不属于第二套 AgentLens Runtime。
 
 ## 9. 当前自动验收
 
@@ -273,12 +339,23 @@ Windows 额外验证：
 - `owner=service` Health；
 - `doctor` 生命周期一致性；
 - 共享 Hook 分发器 stdin -> Durable Inbox；
-- 陈旧 Desktop 登记存在时自动回退有效 npm Provider。
+- 陈旧 Desktop 登记存在时自动回退有效 npm Provider；
+- 无有效 1.x npm 时，Installer 安装后 `agent-lens` 必须解析到 Desktop shim，`agent-lens -h` 必须成功；
+- 模拟有效 1.x npm 后，npm PATH 必须排在 Desktop PATH 前，`agent-lens` 必须优先解析到 npm；
+- 覆盖升级后 npm/Desktop 优先级不能反转，本地数据不能丢失；
+- 模拟卸载 npm 后，不重装 Desktop 即可自动回退 Desktop CLI；
+- 卸载 Desktop 后必须清掉自己的 PATH 项，同时保留 npm PATH、npm CLI 和 npm package。
 
 ## 10. 仍需人工实机验收
 
 自动化不能替代以下体验检查：
 
+- 只安装 Windows Desktop：重新打开 PowerShell 后 `agent-lens -h` 可直接运行；
+- 先安装 npm 1.x、再安装 Desktop：`Get-Command agent-lens -All` 中 npm 入口优先，Desktop 入口仅作兜底；
+- 先安装 Desktop、后安装 npm 1.x：再次启动 Desktop 后 npm CLI 自动成为主入口；
+- 同时存在 npm + Desktop 时卸载 npm：无需重装 Desktop，`agent-lens -h` 自动回退 Desktop；
+- 同时存在 npm + Desktop 时卸载 Desktop：npm CLI 与 npm PATH 完全不受影响；
+- 机器上仍有 0.x npm CLI 时安装 alpha.2：`agent-lens` 不得继续解析到 0.x；
 - Windows 登录后的肉眼无黑框；
 - Desktop 登录自启开关与 Windows 系统实际状态一致；
 - 真实 Codex / Claude Code Hook 是否完全无闪窗；

@@ -330,8 +330,32 @@ export class AgentLensClientModel {
   }
 
   async showReviewFromStart(): Promise<void> {
-    const id = this.snapshot.review.selectedId
-    if (id) await this.selectReviewSession(id)
+    const current = this.snapshot.review
+    if (!current.selectedId) return
+    const selectedId = current.selectedId
+    const generation = ++this.detailGeneration
+    this.publish({
+      ...this.snapshot,
+      review: { ...current, detailLoading: true, detailLoadingMore: false, error: '' },
+    })
+    try {
+      const detail = await this.api.reviewDetail(selectedId, { direction: 'forward', limit: REVIEW_DETAIL_PAGE_SIZE })
+      if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== selectedId) return
+      this.publish({
+        ...this.snapshot,
+        review: { ...this.snapshot.review, detail, detailLoading: false, detailHasNewData: false, error: '' },
+      })
+    } catch (error) {
+      if (generation !== this.detailGeneration) return
+      this.publish({
+        ...this.snapshot,
+        review: {
+          ...this.snapshot.review,
+          detailLoading: false,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      })
+    }
   }
 
   acknowledgeReviewNewData(): void {
@@ -416,7 +440,7 @@ export class AgentLensClientModel {
     })
     try {
       const [detail, relationships] = await Promise.all([
-        this.api.reviewDetail(id, { direction: 'forward', limit: REVIEW_DETAIL_PAGE_SIZE }),
+        this.api.reviewDetail(id, { direction: 'backward', limit: REVIEW_DETAIL_PAGE_SIZE }),
         this.api.relationships(id),
       ])
       if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== id) return

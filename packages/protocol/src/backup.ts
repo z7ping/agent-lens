@@ -18,11 +18,21 @@ export interface BackupKindSummaryDto {
   logicalAssetCount?: number
 }
 
+export interface BackupDirectoryNodeDto {
+  name: string
+  relativePath: string
+  fileCount: number
+  totalBytes?: number
+  children?: BackupDirectoryNodeDto[]
+  omittedChildren?: number
+}
+
 export interface BackupDataRootSummaryDto {
   scope: 'config' | 'data'
   path: string
   fileCount?: number
   totalBytes?: number
+  tree?: BackupDirectoryNodeDto[]
 }
 
 export interface BackupAgeBucketSummaryDto {
@@ -69,6 +79,8 @@ export interface BackupOverviewResponseDto {
   index?: {
     generatedAt: string
     refreshing: boolean
+    ready?: boolean
+    stale?: boolean
   }
   meta: {
     protocolVersion: typeof AGENT_LENS_PROTOCOL_VERSION

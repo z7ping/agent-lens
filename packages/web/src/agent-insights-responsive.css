@@ -1,0 +1,80 @@
+/*
+ * 智能体概览洞察区响应式所有者。
+ *
+ * 诊断卡在 1920×1080 等 xxl 浏览器视口下会进入右侧栏；这里保证侧栏拥有足够宽度，
+ * 同时让“尚未适配的原生事件”使用适合窄栏的紧凑行式布局，不复用大块覆盖卡片的视觉密度。
+ */
+
+.agent-diagnostic-unknown {
+  min-width: 0;
+}
+
+.agent-diagnostic-unknown > .agent-coverage-list,
+.agent-diagnostic-unknown > .disclosure-group {
+  width: 100%;
+  min-width: 0;
+}
+
+.agent-diagnostic-unknown > .agent-coverage-list {
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.agent-diagnostic-unknown .agent-coverage-row {
+  min-width: 0;
+  padding: 7px 8px;
+}
+
+.agent-diagnostic-unknown .agent-coverage-title {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+}
+
+.agent-diagnostic-unknown .agent-coverage-title b {
+  min-width: 0;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+}
+
+.agent-diagnostic-unknown .agent-coverage-title small {
+  margin-left: 0;
+  padding-top: 1px;
+  white-space: nowrap;
+}
+
+.agent-diagnostic-unknown > .disclosure-group {
+  margin-top: 3px;
+  border-top-color: color-mix(in srgb, var(--al-warning) 20%, var(--al-line));
+}
+
+.agent-diagnostic-unknown > .disclosure-group > summary {
+  min-height: 34px;
+  padding-inline: 4px;
+  gap: 8px;
+}
+
+.agent-diagnostic-unknown > .disclosure-group > .agent-coverage-list {
+  gap: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding-top: 4px;
+  padding-right: 2px;
+}
+
+/* xxl：在 1920×1080 浏览器中给诊断栏更多真实可读宽度；1440 仍保持高密度 360px。 */
+@media (min-width: 1400px) {
+  .agents-responsive-shell {
+    --agent-insights-width: clamp(360px, 22vw, 420px);
+    grid-template-columns: minmax(0, 1fr) var(--agent-insights-width);
+  }
+
+  .agents-responsive-shell .agents-content {
+    padding-right: calc(var(--agent-insights-width) + 28px);
+  }
+}

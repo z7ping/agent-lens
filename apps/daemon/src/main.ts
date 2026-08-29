@@ -49,6 +49,7 @@ const workspaceWebRoot = fileURLToPath(new URL('../../../packages/web/dist/', im
 const webRoot = process.env.AGENT_LENS_WEB_ROOT
   ?? (existsSync(fileURLToPath(new URL('./web/index.html', import.meta.url))) ? bundledWebRoot : workspaceWebRoot)
 const daemonMode = process.env.AGENT_LENS_DAEMON_MODE === 'managed' ? 'managed' : 'foreground'
+const developmentApiPort = process.env.AGENT_LENS_DEV_API_PORT
 const interactiveTerminal = Boolean(process.stdin.isTTY && process.stdout.isTTY)
 const startedAt = Date.now()
 const INITIAL_BACKGROUND_SYNC_DELAY_MS = 600
@@ -148,7 +149,12 @@ try {
     `[AgentLens] 1.0 runtime started (db: ${dbPath}, mode=${daemonMode}, interactive=${interactiveTerminal}, pid=${process.pid}, ppid=${process.ppid})`,
   )
   console.info(`[AgentLens] node: ${app.context.node.identity.nodeId} profile=${runtimeProfile} ${capabilitySummary()}`)
-  console.info(`[AgentLens] Web/UI: http://127.0.0.1:${configuredPort} (root: ${webRoot})`)
+  if (developmentApiPort) {
+    console.info(`[AgentLens] Runtime API: http://127.0.0.1:${configuredPort}`)
+    console.info(`[AgentLens] static Web fallback root: ${webRoot}（源码开发请使用 Vite 地址）`)
+  } else {
+    console.info(`[AgentLens] Web/UI: http://127.0.0.1:${configuredPort} (root: ${webRoot})`)
+  }
   console.info(`[AgentLens] backup vault: ${vaultPath}`)
   console.info(`[AgentLens] capture policy: prompt=${app.context.capturePolicy.modeFor('prompt')} tool=${app.context.capturePolicy.modeFor('tool')} config=${app.context.capturePolicy.modeFor('config')} environment=${app.context.capturePolicy.modeFor('environment')}`)
   console.info(`[AgentLens] enabled sources: ${app.context.capturePolicy.settings.enabledSources.join(', ') || '(none)'}`)

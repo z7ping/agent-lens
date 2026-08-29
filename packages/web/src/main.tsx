@@ -21,10 +21,12 @@ import './backup-overlays.css'
 import './insights.css'
 import './tools.css'
 import './agents.css'
-import './agent-diagnostics.css'
 import './review.css'
 import './review-long-session.css'
 import './hub-review.css'
+import './desktop-responsive.css'
+import './agent-insights-responsive.css'
+import './backup-responsive.css'
 
 writeTheme(readTheme())
 const disposeLiveRecovery = installLiveRecovery(clientModel)

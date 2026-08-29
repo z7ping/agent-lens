@@ -1,9 +1,11 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 
 const backup = readFileSync('packages/web/src/features/BackupPage.tsx', 'utf8')
 const review = readFileSync('packages/web/src/features/ReviewPage.tsx', 'utf8')
 const virtualRound = readFileSync('packages/web/src/components/VirtualRoundMount.tsx', 'utf8')
-const diagnostics = readFileSync('packages/web/src/components/AgentsStateOverlay.tsx', 'utf8')
+const diagnostics = readFileSync('packages/web/src/components/AgentInsightsRail.tsx', 'utf8')
+const responsive = readFileSync('packages/web/src/desktop-responsive.css', 'utf8')
+const main = readFileSync('packages/web/src/main.tsx', 'utf8')
 
 for (const required of [
   "const [success, setSuccess] = useState('')",
@@ -37,11 +39,27 @@ for (const required of [
 }
 
 for (const required of [
-  "import { useEffect, useState } from 'react'",
-  'if (hasIssue) setOpen(true)',
-  '}, [selectedSourceId, hasIssue])',
+  'aria-label="智能体洞察"',
+  '<h2>采集诊断</h2>',
+  '<h2>高频资产覆盖</h2>',
+  'const hasIssue = failedStages > 0 || unknownCount > 0',
+  'data-state={hasIssue ?',
 ]) {
-  if (!diagnostics.includes(required)) throw new Error(`采集诊断缺少异常来源自动展开约束：${required}`)
+  if (!diagnostics.includes(required)) throw new Error(`智能体洞察缺少正式诊断/覆盖约束：${required}`)
 }
 
-console.log('核心交互收口检查通过：快照结果可见、跨会话阅读位置可恢复、异常来源自动展开诊断')
+for (const required of [
+  'md 768 / lg 992 / xl 1200 / xxl 1400',
+  '.agents-responsive-shell',
+  '.agent-insights-rail',
+  '@media (min-width: 1400px)',
+  'position: sticky;',
+]) {
+  if (!responsive.includes(required)) throw new Error(`智能体洞察缺少桌面响应式约束：${required}`)
+}
+
+if (existsSync('packages/web/src/agent-diagnostics.css') || main.includes("'./agent-diagnostics.css'")) {
+  throw new Error('旧采集诊断 Dock 不得重新进入正式 Web 渲染/样式链')
+}
+
+console.log('核心交互收口检查通过：快照结果可见、跨会话阅读位置可恢复、智能体诊断与覆盖洞察已收口')

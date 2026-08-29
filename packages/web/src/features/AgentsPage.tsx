@@ -298,59 +298,6 @@ function AgentCard({ agent }: { agent: AgentOverviewDto }) {
   </article>
 }
 
-type MatrixStatus = 'used' | 'discoverable' | 'configured' | 'discovered' | 'unobserved'
-
-function matrixStatus(agent: AgentOverviewDto, type: 'skill' | 'mcp', canonicalName: string): MatrixStatus {
-  const used = agent.usedAssets.some(item => item.type === type && item.canonicalName === canonicalName && item.callCount > 0)
-  if (used) return 'used'
-  const asset = agent.assetInventory.find(item => item.type === type && item.canonicalName === canonicalName)
-  if (!asset) return 'unobserved'
-  if (stateValue(asset, 'discoverable') === true) return 'discoverable'
-  if (['installed', 'configured', 'enabled', 'exposed'].some(state => stateValue(asset, state) === true)) return 'configured'
-  return 'discovered'
-}
-
-const matrixStatusLabel: Record<MatrixStatus, string> = {
-  used: '已使用',
-  discoverable: '可发现',
-  configured: '已配置',
-  discovered: '已发现',
-  unobserved: '未观察到',
-}
-
-function CrossAgentMatrix({ agents }: { agents: AgentOverviewDto[] }) {
-  const rows = useMemo(() => {
-    const map = new Map<string, { type: 'skill' | 'mcp'; canonicalName: string; displayName: string; calls: number }>()
-    for (const agent of agents) {
-      for (const used of agent.usedAssets) {
-        const key = `${used.type}:${used.canonicalName}`
-        const asset = agent.assetInventory.find(item => item.type === used.type && item.canonicalName === used.canonicalName)
-        const current = map.get(key) ?? { type: used.type, canonicalName: used.canonicalName, displayName: asset?.displayName ?? used.canonicalName, calls: 0 }
-        current.calls += used.callCount
-        map.set(key, current)
-      }
-    }
-    return [...map.values()].sort((a, b) => b.calls - a.calls || a.displayName.localeCompare(b.displayName)).slice(0, 10)
-  }, [agents])
-
-  if (agents.length < 2 || !rows.length) return null
-  return <section className="cross-agent-matrix">
-    <div className="matrix-heading"><div><span className="eyebrow">跨智能体</span><h2>高频资产覆盖矩阵</h2><p>只拿真实用过的技能和 MCP（模型上下文协议）做横向对照；“未观察到”不等于一定缺失。</p></div></div>
-    <div className="matrix-scroll">
-      <div className="matrix-table" style={{ ['--matrix-agents' as string]: agents.length }}>
-        <div className="matrix-header"><span>资产</span>{agents.map(agent => <span key={agent.sourceId}><i className={`source-dot ${sourceDot(agent.sourceId)}`}/>{agentLabel(agent.sourceId, agent.displayName)}</span>)}</div>
-        {rows.map(row => <div className="matrix-row" key={`${row.type}:${row.canonicalName}`}>
-          <span className="matrix-asset"><b>{row.displayName}</b><small>{assetTypeLabel[row.type]} · {row.calls} 次真实调用</small></span>
-          {agents.map(agent => {
-            const status = matrixStatus(agent, row.type, row.canonicalName)
-            return <span key={agent.sourceId} className="matrix-cell" data-status={status}>{matrixStatusLabel[status]}</span>
-          })}
-        </div>)}
-      </div>
-    </div>
-  </section>
-}
-
 export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: AgentLensClientModel; sourceId: string; onSourceIdChange(sourceId: string): void }) {
   const snapshot = useClientSnapshot(model)
   const agents = snapshot.facets?.agents ?? []
@@ -381,7 +328,6 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
         </nav>
         <div className="agent-detail-pane">{selectedAgent && <AgentCard key={selectedAgent.sourceId} agent={selectedAgent}/>}</div>
       </div> : <div className="empty-state roomy">没有可显示的智能体</div>}
-      <CrossAgentMatrix agents={items}/>
     </div>
   </main>
 }

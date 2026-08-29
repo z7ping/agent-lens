@@ -269,7 +269,7 @@
 
 .asset-list-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   padding: 2px 18px 14px;
 }
@@ -352,6 +352,7 @@
 @media (max-width: 820px) {
   .agents-grid,
   .agents-browser { grid-template-columns: 1fr; }
+  .asset-list-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 760px) {
