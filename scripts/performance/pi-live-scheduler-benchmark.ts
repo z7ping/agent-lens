@@ -81,7 +81,13 @@ try {
   }
   scheduler.flush()
   const hiddenDiagnostics = scheduler.snapshot()
+
+  const deliveredBeforeDispose = delivered
+  scheduler.push(event(sequence++, 'message_update', {
+    assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'stale' },
+  }))
   scheduler.dispose()
+  const deliveredAfterDispose = delivered
 
   const deliveredRatio = hiddenDiagnostics.deliveredEvents / hiddenDiagnostics.ingressEvents
   const result = {
@@ -98,15 +104,17 @@ try {
     deliveredRatio,
     visibleHiddenFlag: visibleDiagnostics.hidden,
     hiddenHiddenFlag: hiddenDiagnostics.hidden,
+    staleDeliveriesOnDispose: deliveredAfterDispose - deliveredBeforeDispose,
     budgetPushMs,
     budgetDeliveredRatio,
   }
 
-  console.log(`[AgentLens perf] Pi Live Scheduler ingress=${result.ingressEvents} delivered=${result.deliveredEvents} coalesced=${result.coalescedEvents} maxQueue=${result.maxQueueDepth} push=${pushMs.toFixed(2)}ms ratio=${(deliveredRatio * 100).toFixed(2)}%`)
+  console.log(`[AgentLens perf] Pi Live Scheduler ingress=${result.ingressEvents} delivered=${result.deliveredEvents} coalesced=${result.coalescedEvents} maxQueue=${result.maxQueueDepth} push=${pushMs.toFixed(2)}ms ratio=${(deliveredRatio * 100).toFixed(2)}% disposeStale=${result.staleDeliveriesOnDispose}`)
   console.log(JSON.stringify(result))
 
   if (visibleDiagnostics.hidden) throw new Error('前台调度诊断错误地标记为后台')
   if (!hiddenDiagnostics.hidden) throw new Error('Page Visibility 切换后未进入后台降频状态')
+  if (result.staleDeliveriesOnDispose !== 0) throw new Error('Pi Live 调度器销毁时仍交付了已过期事件')
   if (pushMs > budgetPushMs) throw new Error(`Pi Live 高频事件入队 ${pushMs.toFixed(2)}ms 超过预算 ${budgetPushMs}ms`)
   if (deliveredRatio > budgetDeliveredRatio) throw new Error(`Pi Live 事件交付比 ${(deliveredRatio * 100).toFixed(2)}% 超过预算 ${(budgetDeliveredRatio * 100).toFixed(2)}%，背压合并不足`)
   if (hiddenDiagnostics.coalescedEvents <= deltaEvents) throw new Error('Pi Live 高频 delta 未形成足够合并')
