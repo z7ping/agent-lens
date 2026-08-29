@@ -17,7 +17,6 @@ import './release-info.css'
 import './states.css'
 import './live-notice.css'
 import './backup.css'
-import './backup-responsive.css'
 import './backup-overlays.css'
 import './insights.css'
 import './tools.css'
@@ -25,6 +24,7 @@ import './agents.css'
 import './review.css'
 import './review-long-session.css'
 import './desktop-responsive.css'
+import './backup-responsive.css'
 
 writeTheme(readTheme())
 const disposeLiveRecovery = installLiveRecovery(clientModel)
