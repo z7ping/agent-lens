@@ -18,6 +18,27 @@ export interface PiLiveStartRequestDto {
   sessionPath?: string | undefined
 }
 
+export interface PiLiveModelOptionDto {
+  provider: string
+  id: string
+  name?: string | undefined
+  reasoning?: boolean | undefined
+}
+
+export interface PiLiveControlsDto {
+  models: PiLiveModelOptionDto[]
+  thinkingLevels: string[]
+}
+
+export interface PiLiveSetModelRequestDto {
+  provider: string
+  modelId: string
+}
+
+export interface PiLiveSetThinkingLevelRequestDto {
+  level: string
+}
+
 export interface PiLiveStateDto {
   runtimeSessionId: string
   nativeSessionId?: string | undefined
