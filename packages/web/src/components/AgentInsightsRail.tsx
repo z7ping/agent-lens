@@ -148,9 +148,12 @@ export function AgentInsightsRail({ snapshot, sourceId }: { snapshot: ClientSnap
           <span><small>最近更新</small><b>{formatTime(stringValue(checkpoints?.lastUpdatedAt))}</b></span>
         </div>
         {runtime.length > 0 && <div className="agent-diagnostic-stage-list">
-          {runtime.map((item, index) => <span key={`${stringValue(item.stage)}-${stringValue(item.runtimeProfileId)}-${index}`} data-state={stringValue(item.state)} title={stringValue(item.lastErrorSummary)}>
-            {stageLabel[stringValue(item.stage)] ?? stringValue(item.stage) || '采集阶段'} · {stringValue(item.state) === 'healthy' ? '正常' : stringValue(item.state) === 'failed' ? '异常' : '运行中'}
-          </span>)}
+          {runtime.map((item, index) => {
+            const stage = stringValue(item.stage)
+            return <span key={`${stage}-${stringValue(item.runtimeProfileId)}-${index}`} data-state={stringValue(item.state)} title={stringValue(item.lastErrorSummary)}>
+              {(stageLabel[stage] ?? stage) || '采集阶段'} · {stringValue(item.state) === 'healthy' ? '正常' : stringValue(item.state) === 'failed' ? '异常' : '运行中'}
+            </span>
+          })}
         </div>}
         {unknownCount > 0 && <div className="agent-diagnostic-unknown"><b>尚未适配的原生事件</b><span>{unknown.slice(0, 3).map(item => `${stringValue(item.nativeType) || '未知类型'} × ${numberValue(item.count).toLocaleString()}`).join(' · ')}</span>{unknown.length > 3 && <small>另有 {unknown.length - 3} 类原生事件</small>}</div>}
         {!runtime.length && !growth && <div className="agent-insight-empty">当前健康信息尚未提供采集诊断明细。</div>}
