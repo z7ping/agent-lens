@@ -38,11 +38,6 @@ async function regularFile(path: string): Promise<boolean> {
   }
 }
 
-/**
- * npm exposes command shims as .cmd/.bat on Windows. Spawning those wrappers directly is
- * unreliable and killing the wrapper can leave its Node child orphaned. Resolve the JS entry
- * referenced by the trusted local shim and own that Node process directly instead.
- */
 export async function resolveWindowsNpmShimNodeEntry(executable: string): Promise<string | undefined> {
   let source: string
   try {
@@ -84,7 +79,7 @@ export async function resolvePiSpawnSpec(
 }
 
 export class StrictJsonlDecoder {
-  private carry = Buffer.alloc(0)
+  private carry: Buffer<ArrayBufferLike> = Buffer.alloc(0)
 
   push(chunk: Buffer): string[] {
     const data = this.carry.length ? Buffer.concat([this.carry, chunk]) : chunk
