@@ -19,6 +19,10 @@ class FakePiLiveService implements PiLiveService {
   followUps: string[] = []
   abortRestoreQueue: boolean | undefined
   extensionResponses: Array<{ requestId: string; response: unknown }> = []
+  modelChanges: Array<{ provider: string; modelId: string }> = []
+  thinkingChanges: string[] = []
+  model = { provider: 'test', id: 'model-1', name: 'Model One' }
+  thinkingLevel = 'medium'
   terminateCalls = 0
   listener: PiLiveRuntimeListener | null = null
 
@@ -38,8 +42,8 @@ class FakePiLiveService implements PiLiveService {
       nativeSessionId: 'pi-native-1',
       sessionFile: '/tmp/pi-session.jsonl',
       sessionName: 'AgentLens Pi Live',
-      model: { provider: 'test', id: 'model-1' },
-      thinkingLevel: 'medium',
+      model: this.model,
+      thinkingLevel: this.thinkingLevel,
       isStreaming: false,
       isCompacting: false,
       pendingMessageCount: 0,
@@ -56,6 +60,28 @@ class FakePiLiveService implements PiLiveService {
       entries: [{ type: 'message', id: 'entry-2', parentId: since ?? null }],
       leafId: 'entry-2',
     }
+  }
+
+  async controls(_runtimeSessionId: string) {
+    return {
+      models: [
+        { provider: 'test', id: 'model-1', name: 'Model One', reasoning: true },
+        { provider: 'test', id: 'model-2', name: 'Model Two', reasoning: true },
+      ],
+      thinkingLevels: ['off', 'low', 'medium', 'high'],
+    }
+  }
+
+  async setModel(runtimeSessionId: string, provider: string, modelId: string) {
+    this.modelChanges.push({ provider, modelId })
+    this.model = { provider, id: modelId, name: modelId === 'model-2' ? 'Model Two' : modelId }
+    return this.state(runtimeSessionId)
+  }
+
+  async setThinkingLevel(runtimeSessionId: string, level: string) {
+    this.thinkingChanges.push(level)
+    this.thinkingLevel = level
+    return this.state(runtimeSessionId)
   }
 
   async prompt(_runtimeSessionId: string, message: string, behavior?: PiLiveStreamingBehavior) {
@@ -150,6 +176,34 @@ test('Pi Live HTTP control surface preserves runtime ownership and validates com
     assert.equal(snapshot.status, 200)
     assert.equal(piLive.snapshotSince, 'entry-1')
     assert.equal((await json(snapshot)).leafId, 'entry-2')
+
+    const controls = await fetch(`${base}/api/v1/pi-live/${piLive.runtimeSessionId}/controls`)
+    assert.equal(controls.status, 200)
+    assert.deepEqual(await json(controls), {
+      models: [
+        { provider: 'test', id: 'model-1', name: 'Model One', reasoning: true },
+        { provider: 'test', id: 'model-2', name: 'Model Two', reasoning: true },
+      ],
+      thinkingLevels: ['off', 'low', 'medium', 'high'],
+    })
+
+    const changedModel = await fetch(`${base}/api/v1/pi-live/${piLive.runtimeSessionId}/model`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ provider: 'test', modelId: 'model-2' }),
+    })
+    assert.equal(changedModel.status, 200)
+    assert.deepEqual(piLive.modelChanges, [{ provider: 'test', modelId: 'model-2' }])
+    assert.deepEqual((await json(changedModel)).model, { provider: 'test', id: 'model-2', name: 'Model Two' })
+
+    const changedThinking = await fetch(`${base}/api/v1/pi-live/${piLive.runtimeSessionId}/thinking-level`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ level: 'high' }),
+    })
+    assert.equal(changedThinking.status, 200)
+    assert.deepEqual(piLive.thinkingChanges, ['high'])
+    assert.equal((await json(changedThinking)).thinkingLevel, 'high')
 
     const badBehavior = await fetch(`${base}/api/v1/pi-live/${piLive.runtimeSessionId}/prompt`, {
       method: 'POST',
