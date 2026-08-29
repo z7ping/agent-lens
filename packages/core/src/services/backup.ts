@@ -18,11 +18,21 @@ export interface BackupKindSummary {
   logicalAssetCount?: number
 }
 
+export interface BackupDirectoryNode {
+  name: string
+  relativePath: string
+  fileCount: number
+  totalBytes?: number
+  children?: BackupDirectoryNode[]
+  omittedChildren?: number
+}
+
 export interface BackupDataRootSummary {
   scope: BackupSourceScope
   path: string
   fileCount?: number
   totalBytes?: number
+  tree?: BackupDirectoryNode[]
 }
 
 export interface BackupAgeBucketSummary {
