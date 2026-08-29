@@ -199,26 +199,6 @@
 
 /* ── 智能体概览：诊断与覆盖合成正式洞察区 ── */
 
-/* 旧诊断 Dock 仍由状态组件保留作为兼容 DOM，但正常页面不再让它参与布局。 */
-.app-shell:has(> .agent-diagnostics-dock),
-.app-shell:has(> .agent-diagnostics-dock[open]) {
-  display: flex;
-  min-height: 100vh;
-  flex-direction: column;
-}
-
-.app-shell:has(> .agent-diagnostics-dock) > .app-header,
-.app-shell:has(> .agent-diagnostics-dock) > .sse-banner,
-.app-shell:has(> .agent-diagnostics-dock) > .workspace-page,
-.app-shell:has(> .agent-diagnostics-dock) > .agents-responsive-shell {
-  grid-column: auto;
-  grid-row: auto;
-}
-
-.agent-diagnostics-dock {
-  display: none !important;
-}
-
 .agents-responsive-shell {
   display: block;
   min-width: 0;
