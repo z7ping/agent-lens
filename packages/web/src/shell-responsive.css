@@ -1,17 +1,29 @@
-/* 应用外壳的窄屏响应式规则。只负责导航压缩，不承担页面级视觉补丁。 */
+/*
+ * AgentLens 应用外壳响应式规则。
+ *
+ * 只负责 Header / 导航 / 公共工具栏压缩，不承担页面级视觉补丁。
+ * 断点固定采用 Bootstrap 5：sm 576 / md 768 / lg 992 / xl 1200 / xxl 1400。
+ * Windows 100% / 125% / 150% 缩放依赖实际 CSS viewport 自然进入对应断点，不写 DPI 专属规则。
+ */
 
-@media (max-width: 1080px) {
+/* lg：992–1199。高 DPI 或主动缩窄窗口时先压缩壳层间距。 */
+@media (max-width: 1199.98px) {
   .app-header-inner {
-    gap: 16px;
+    gap: 14px;
     padding-inline: 14px;
   }
 
   .app-header .nav-item {
     padding-inline: 9px;
   }
+
+  .app-status {
+    gap: 5px;
+  }
 }
 
-@media (max-width: 820px) {
+/* md：768–991。保留 Logo 和全部一级导航，品牌文字让位。 */
+@media (max-width: 991.98px) {
   .app-header-inner {
     gap: 10px;
     padding-inline: 10px;
@@ -46,12 +58,43 @@
   .app-status .status-pill > span:last-child {
     display: none;
   }
+
+  .workspace-toolbar {
+    height: auto;
+    min-height: 50px;
+    flex-wrap: wrap;
+    align-content: center;
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
 }
 
-@media (max-width: 560px) {
+/* sm：576–767。进一步压缩导航和公共间距，但不缩小正文与控件字号。 */
+@media (max-width: 767.98px) {
+  .app-header-inner {
+    gap: 8px;
+    padding-inline: 8px;
+  }
+
+  .app-header .nav-item {
+    padding-inline: 7px;
+    font-size: 13px;
+  }
+
+  .workspace-toolbar {
+    padding-inline: 10px;
+  }
+}
+
+/* xs：<576。仅作紧凑桌面/极窄窗口兜底。 */
+@media (max-width: 575.98px) {
   .app-header-inner {
     gap: 6px;
     padding-inline: 7px;
+  }
+
+  .app-header .brand {
+    display: flex;
   }
 
   .brand-logo {
@@ -59,9 +102,13 @@
     height: 25px;
   }
 
+  .brand-name {
+    display: none;
+  }
+
   .app-header .nav-item {
     padding-inline: 6px;
-    font-size: var(--text-caption);
+    font-size: 12px;
   }
 
   .app-header .nav-item-active::after {
@@ -82,5 +129,18 @@
     width: 28px;
     min-width: 28px;
     height: 28px;
+  }
+
+  .status-tip::after {
+    right: -34px;
+  }
+
+  .page-content {
+    padding: 20px 14px 40px;
+  }
+
+  .heading-help::after {
+    left: auto;
+    right: 0;
   }
 }
