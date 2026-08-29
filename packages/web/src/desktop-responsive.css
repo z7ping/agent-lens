@@ -519,37 +519,41 @@
   line-height: 1.55;
 }
 
-/* xxl：1440 / 1920 宽屏增强。洞察区进入右侧纵向栏，与主详情同高起点。 */
+/* xxl：1440 / 1920 宽屏增强。洞察区进入右侧纵向栏，但与主详情共享同一个纵向滚动容器。 */
 @media (min-width: 1400px) {
   .agents-responsive-shell {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 360px;
+    align-items: start;
     gap: 0;
-    overflow: hidden;
+    overflow: auto;
   }
 
   .agents-responsive-shell > .workspace-page {
     min-width: 0;
-    min-height: 0;
-    flex: 1;
-    overflow: hidden;
+    min-height: auto;
+    align-self: start;
+    flex: none;
+    overflow: visible;
   }
 
   .agents-responsive-shell .agents-content {
-    overflow: auto;
+    overflow: visible;
     padding-bottom: 56px;
   }
 
   .agent-insights-rail {
+    position: sticky;
+    top: 10px;
     display: flex;
     min-width: 0;
-    min-height: 0;
     max-width: none;
     flex-direction: column;
     gap: 14px;
+    align-self: start;
     margin: 56px 18px 18px 0;
     padding: 0;
-    overflow: auto;
+    overflow: visible;
   }
 
   .agent-diagnostic-summary-grid {
