@@ -116,6 +116,106 @@
   white-space: nowrap;
 }
 
+/* 数据位置目录树：只展示目录层级，不把十几万文件直接铺进抽屉。 */
+.backup-root-tree {
+  overflow: hidden;
+  border: 1px solid var(--al-line);
+  border-radius: 9px;
+  background: var(--al-soft-2);
+}
+.backup-root-tree + .backup-root-tree { margin-top: 8px; }
+.backup-root-tree-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--al-line);
+  background: var(--al-surface);
+}
+.backup-root-tree-head code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--al-ink-2);
+  font: 12px/1.45 var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.backup-root-tree-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+  padding: 7px 10px;
+  color: var(--al-muted);
+  font-size: 12px;
+}
+.backup-tree {
+  padding: 4px 8px 9px;
+  border-top: 1px solid var(--al-line);
+}
+.backup-tree-node,
+.backup-tree-leaf { font-size: 12px; }
+.backup-tree-node > summary,
+.backup-tree-leaf {
+  position: relative;
+  display: grid;
+  min-height: 30px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 7px 4px 24px;
+  border-radius: 6px;
+  list-style: none;
+}
+.backup-tree-node > summary { cursor: pointer; }
+.backup-tree-node > summary::-webkit-details-marker { display: none; }
+.backup-tree-node > summary::before,
+.backup-tree-leaf::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid var(--al-muted-2);
+  border-bottom: 1.5px solid var(--al-muted-2);
+  transform: rotate(-45deg);
+  transition: transform .14s;
+}
+.backup-tree-leaf::before {
+  width: 5px;
+  height: 5px;
+  border: 0;
+  border-radius: 99px;
+  background: var(--al-line-strong);
+  transform: none;
+}
+.backup-tree-node[open] > summary::before { transform: rotate(45deg); }
+.backup-tree-node > summary:hover,
+.backup-tree-leaf:hover { background: var(--al-soft); }
+.backup-tree-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--al-ink-2);
+  font-family: var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.backup-tree-node small,
+.backup-tree-leaf small { color: var(--al-muted); font-size: 12px; white-space: nowrap; }
+.backup-tree-children {
+  margin-left: 15px;
+  padding-left: 7px;
+  border-left: 1px solid var(--al-line);
+}
+.backup-tree-omitted,
+.backup-tree-empty {
+  padding: 7px 10px;
+  color: var(--al-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.backup-tree-omitted { margin-left: 7px; border-left: 1px dashed var(--al-line-strong); }
+
 /* 关键操作确认遮罩原先只设置 z-index，这里补齐真正的模态遮罩。 */
 .backup-confirm-scrim {
   z-index: 139;
@@ -138,4 +238,7 @@
     padding-right: 14px;
     padding-left: 14px;
   }
+
+  .backup-root-tree-head { grid-template-columns: auto minmax(0, 1fr); }
+  .backup-root-tree-head .link-btn { grid-column: 1 / -1; justify-self: start; }
 }
