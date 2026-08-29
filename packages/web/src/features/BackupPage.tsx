@@ -8,6 +8,7 @@ import type {
 } from '@agent-lens/protocol'
 import { AgentLensApi } from '../client/api'
 import { agentLabel } from '../components/AgentScope'
+import { BackupDataRootTree } from '../components/BackupDirectoryTree'
 import { CompactPageHeading } from '../components/CompactPageHeading'
 import { WorkspaceSkeleton } from '../components/StateViews'
 import { UiIcon } from '../components/UiIcon'
@@ -466,7 +467,9 @@ export function BackupPage() {
           {ALL_KINDS.filter(kind => kindFiles(detailSource, kind) > 0).map(kind => <div key={kind} className="drawer-file preview-file"><span className={`badge ${recommendationTone(kind)}`}>{kindRecommendation(kind)}</span><b>{kindLabel(kind)}</b><code>{kindDetailText(detailSource, kind)}{kindBytes(detailSource, kind) === undefined ? '' : ` · ${formatBytes(kindBytes(detailSource, kind)!)}`}</code></div>)}
         </div></section>
 
-        <section className="drawer-section"><h3>数据位置</h3>{detailSource.roots?.length ? <div className="drawer-file-list">{detailSource.roots.map(root => <div key={`${root.scope}:${root.path}`} className="drawer-file"><span className="badge">{root.scope === 'config' ? '配置目录' : '数据目录'}</span><code>{root.path}</code><small>{root.fileCount === undefined ? '' : `${root.fileCount.toLocaleString()} 文件`}{root.totalBytes === undefined ? '' : ` · ${formatBytes(root.totalBytes)}`}</small><button className="link-btn" onClick={() => void copyPath(root.path)}>复制路径</button></div>)}</div> : <div className="future-note">当前索引版本只提供分类文件统计；刷新到包含目录统计的新版索引后，这里会显示真实配置目录和数据目录。</div>}</section>
+        <section className="drawer-section"><h3>数据位置</h3>{detailSource.roots?.length
+          ? <div>{detailSource.roots.map(root => <BackupDataRootTree key={`${root.scope}:${root.path}`} root={root} onCopy={path => void copyPath(path)}/>)}</div>
+          : <div className="future-note">当前索引版本只提供分类文件统计；刷新到包含目录统计的新版索引后，这里会显示真实配置目录和数据目录。</div>}</section>
 
         {(detailSource.oldestModifiedAt || detailSource.latestModifiedAt || detailSource.ageBuckets) && <section className="drawer-section"><h3>时间分布</h3>{detailSource.oldestModifiedAt || detailSource.latestModifiedAt ? <div className="integrity-strip"><span>最早 {detailSource.oldestModifiedAt ? formatTime(detailSource.oldestModifiedAt) : '—'}</span><span className="grow"/><span>最近 {detailSource.latestModifiedAt ? formatTime(detailSource.latestModifiedAt) : '—'}</span></div> : null}{detailSource.ageBuckets && <div className="preview-summary"><span><b>{detailSource.ageBuckets.recent30Days.fileCount.toLocaleString()}</b> 最近 30 天</span><span><b>{detailSource.ageBuckets.days31To90.fileCount.toLocaleString()}</b> 31–90 天</span><span><b>{detailSource.ageBuckets.days91To180.fileCount.toLocaleString()}</b> 91–180 天</span><span><b>{detailSource.ageBuckets.olderThan180Days.fileCount.toLocaleString()}</b> 180 天以前</span></div>}</section>}
 
