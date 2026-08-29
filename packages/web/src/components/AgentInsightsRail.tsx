@@ -115,6 +115,30 @@ function CoverageCard({ agents }: { agents: AgentOverviewDto[] }) {
   </section>
 }
 
+function NativeEventSummary({ groups, total }: { groups: JsonRecord[]; total: number }) {
+  const top = groups.slice(0, 3)
+  const rest = groups.slice(3)
+  const rows = (items: JsonRecord[]) => <div className="agent-coverage-list">
+    {items.map((item, index) => {
+      const nativeType = stringValue(item.nativeType) || '未知类型'
+      const count = numberValue(item.count)
+      return <div className="agent-coverage-row" key={`${nativeType}-${index}`}>
+        <div className="agent-coverage-title"><b title={nativeType}>{nativeType}</b><small>{count.toLocaleString()} 条</small></div>
+      </div>
+    })}
+  </div>
+
+  return <div className="agent-diagnostic-unknown">
+    <b>尚未适配的原生事件</b>
+    <span>{groups.length.toLocaleString()} 类 · 共 {total.toLocaleString()} 条；先展示数量最高的 3 类。</span>
+    {rows(top)}
+    {rest.length > 0 && <details className="disclosure-group">
+      <summary><span>查看其余 {rest.length} 类原生事件</span><span className="disclosure-count">{rest.length}</span></summary>
+      {rows(rest)}
+    </details>}
+  </div>
+}
+
 export function AgentInsightsRail({ snapshot, sourceId }: { snapshot: ClientSnapshot; sourceId: string }) {
   const agents = snapshot.agents?.items ?? []
   const fallbackSourceId = agents.find(agent => agent.detected)?.sourceId || agents[0]?.sourceId || ''
@@ -127,7 +151,9 @@ export function AgentInsightsRail({ snapshot, sourceId }: { snapshot: ClientSnap
   const sourceRuntime = recordValue(details?.sourceRuntime)
   const unknownRoot = recordValue(details?.unknownObservations)
   const runtime = arrayValue(sourceRuntime?.items).filter(item => stringValue(item.sourceId) === selectedSourceId)
-  const unknown = arrayValue(unknownRoot?.groups).filter(item => stringValue(item.sourceId) === selectedSourceId)
+  const unknown = arrayValue(unknownRoot?.groups)
+    .filter(item => stringValue(item.sourceId) === selectedSourceId)
+    .sort((a, b) => numberValue(b.count) - numberValue(a.count) || stringValue(a.nativeType).localeCompare(stringValue(b.nativeType)))
   const failedStages = runtime.filter(item => stringValue(item.state) === 'failed').length
   const unknownCount = unknown.reduce((sum, item) => sum + numberValue(item.count), 0)
   const hasIssue = failedStages > 0 || unknownCount > 0
@@ -155,7 +181,7 @@ export function AgentInsightsRail({ snapshot, sourceId }: { snapshot: ClientSnap
             </span>
           })}
         </div>}
-        {unknownCount > 0 && <div className="agent-diagnostic-unknown"><b>尚未适配的原生事件</b><span>{unknown.slice(0, 3).map(item => `${stringValue(item.nativeType) || '未知类型'} × ${numberValue(item.count).toLocaleString()}`).join(' · ')}</span>{unknown.length > 3 && <small>另有 {unknown.length - 3} 类原生事件</small>}</div>}
+        {unknownCount > 0 && <NativeEventSummary groups={unknown} total={unknownCount}/>} 
         {!runtime.length && !growth && <div className="agent-insight-empty">当前健康信息尚未提供采集诊断明细。</div>}
       </div>
     </section>
