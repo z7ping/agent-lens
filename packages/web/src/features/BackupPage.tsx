@@ -140,16 +140,19 @@ export function BackupPage() {
   const selectionInitialized = useRef(false)
   const importInput = useRef<HTMLInputElement>(null)
 
+  const applyOverview = (next: BackupOverviewResponseDto) => {
+    setOverview(next)
+    if (!selectionInitialized.current && next.index?.ready !== false) {
+      selectionInitialized.current = true
+      setSelectedSources(next.sources.filter(source => source.detected).map(source => source.sourceId))
+    }
+  }
+
   const refresh = async (force = false) => {
     setLoading(true)
     setError('')
     try {
-      const next = force ? await api.refreshBackupOverview() : await api.backupOverview()
-      setOverview(next)
-      if (!selectionInitialized.current) {
-        selectionInitialized.current = true
-        setSelectedSources(next.sources.filter(source => source.detected).map(source => source.sourceId))
-      }
+      applyOverview(force ? await api.refreshBackupOverview() : await api.backupOverview())
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
@@ -158,6 +161,24 @@ export function BackupPage() {
   }
 
   useEffect(() => { void refresh() }, [])
+  useEffect(() => {
+    if (!overview?.index?.refreshing) return
+    let disposed = false
+    const timer = window.setInterval(() => {
+      void api.backupOverview().then(next => {
+        if (disposed) return
+        applyOverview(next)
+        if (next.index?.refreshing === false) window.clearInterval(timer)
+      }).catch(reason => {
+        if (disposed) return
+        setError(reason instanceof Error ? reason.message : String(reason))
+      })
+    }, 1500)
+    return () => {
+      disposed = true
+      window.clearInterval(timer)
+    }
+  }, [api, overview?.index?.refreshing])
   useEffect(() => {
     if (!success) return
     const timer = window.setTimeout(() => setSuccess(''), 7000)
@@ -330,16 +351,16 @@ export function BackupPage() {
     }
   }
 
-  if (loading && !overview) return <PageLoadingState
+  if (!overview || overview.index?.ready === false) return <PageLoadingState
     eyebrow="资产备份"
-    statusLabel="首次扫描"
-    title="正在扫描资产备份范围"
-    description="正在读取本机智能体的会话与资产目录。首次建立索引时文件较多，可能需要一些时间；完成后会自动展示可备份范围。"
-    facts={['只读取本地数据', '不会修改原始文件', '后续刷新保留当前页面']}
+    statusLabel="首次建立索引"
+    title="正在准备资产备份范围"
+    description="后台正在建立首份本地备份索引。页面状态查询不会重复扫描；完成后会自动切换到资产列表。"
+    facts={['只读取本地数据', '不会修改原始文件', '完成后自动展示结果']}
   />
 
-  const indexTime = overview?.index?.generatedAt
-  const indexRefreshing = overview?.index?.refreshing ?? false
+  const indexTime = overview.index?.generatedAt
+  const indexRefreshing = overview.index?.refreshing ?? false
   const refreshing = loading || indexRefreshing
   const detectedSourceCount = sources.filter(source => source.detected).length
   const allDetectedSelected = detectedSourceCount > 0 && selectedSources.length === detectedSourceCount
