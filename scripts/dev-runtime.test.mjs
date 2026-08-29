@@ -5,6 +5,7 @@ import {
   buildDevEnvironment,
   devRuntimePaths,
   findAvailableDevPort,
+  npmInvocation,
   parseDevPort,
 } from './dev-runtime.mjs'
 
@@ -54,4 +55,17 @@ test('buildDevEnvironment 覆盖正式运行时路径和端口', () => {
   assert.equal(env.AGENT_LENS_VAULT_PATH, paths.vaultPath)
   assert.equal(env.AGENT_LENS_DAEMON_MODE, 'foreground')
   assert.equal(env.AGENT_LENS_RUNTIME_OWNER, 'cli')
+})
+
+test('npmInvocation 优先通过当前 Node 复用 npm_execpath', () => {
+  const invocation = npmInvocation({ npm_execpath: 'C:/node/npm-cli.js' })
+
+  assert.equal(invocation.command, process.execPath)
+  assert.deepEqual(invocation.args, [
+    'C:/node/npm-cli.js',
+    'run',
+    'dev',
+    '--workspace',
+    '@agent-lens/daemon',
+  ])
 })
