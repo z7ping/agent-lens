@@ -17,7 +17,7 @@ function hasError(detail: ReviewSessionDetailDto, index: number): boolean {
 
 export function ReviewTurnRail({ detail }: { detail: ReviewSessionDetailDto }) {
   const [activeIndex, setActiveIndex] = useState(0)
-  const [position, setPosition] = useState<{ left: number; top: number; bottom: number } | null>(null)
+  const [position, setPosition] = useState<{ left: number; top: number } | null>(null)
   const tips = useMemo(() => detail.interactions.map((_, index) => preview(detail, index)), [detail])
 
   useEffect(() => {
@@ -33,9 +33,8 @@ export function ReviewTurnRail({ detail }: { detail: ReviewSessionDetailDto }) {
       positionFrame = window.requestAnimationFrame(() => {
         const rect = pane.getBoundingClientRect()
         setPosition({
-          left: Math.max(0, rect.left + 4),
-          top: Math.max(8, rect.top + 8),
-          bottom: Math.max(18, window.innerHeight - rect.bottom + 18),
+          left: Math.max(4, rect.left + 8),
+          top: Math.max(72, Math.min(window.innerHeight - 72, rect.top + rect.height / 2)),
         })
       })
     }
@@ -88,6 +87,6 @@ export function ReviewTurnRail({ detail }: { detail: ReviewSessionDetailDto }) {
       data-tip={`${interaction.trigger === 'background' ? '后台活动' : `第 ${interaction.ordinal} 轮`} · ${tips[index]}`}
       aria-label={`跳到${interaction.trigger === 'background' ? '后台活动' : `第 ${interaction.ordinal} 轮`}`}
       onClick={() => jump(index)}
-    ><i/><i/><i/></button>)}
+    ><i/></button>)}
   </nav>
 }

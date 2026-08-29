@@ -2,7 +2,7 @@
  * AgentLens 1.0 正式 Web 壳层。
  *
  * 负责应用 Header、工作区工具栏、一级页面公共骨架与状态入口。
- * 页面内部视觉必须留在各页面所有者文件。
+ * 页面内部视觉必须留在各页面所有者文件；响应式只由 shell-responsive.css 承担。
  */
 
 /* 应用骨架 */
@@ -76,7 +76,7 @@
   align-items: center;
   padding: 0 12px;
   color: var(--al-muted);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   text-decoration: none;
   white-space: nowrap;
@@ -203,7 +203,7 @@
 .status-tip:hover::after,
 .status-tip:focus-within::after { opacity: 1; transform: none; }
 
-/* 工作区工具栏 */
+/* 工作区工具栏：v2.1 冻结契约为 50px；筛选 34px；智能体 Chip 32px。 */
 .workspace-page,
 .review-page {
   min-height: 0;
@@ -217,8 +217,8 @@
   position: relative;
   z-index: 35;
   display: flex;
-  height: 46px;
-  min-height: 46px;
+  height: 50px;
+  min-height: 50px;
   flex: 0 0 auto;
   align-items: center;
   gap: 8px;
@@ -239,7 +239,7 @@
 .toolbar-end { margin-left: auto; }
 
 .filter {
-  height: 30px;
+  height: 34px;
   min-width: 96px;
   padding: 0 10px;
   border: 1px solid transparent;
@@ -247,7 +247,7 @@
   outline: none;
   background: var(--al-soft-2);
   color: var(--al-ink-2);
-  font-size: 12px;
+  font-size: 13px;
   transition: .15s;
 }
 
@@ -266,7 +266,7 @@
 
 .scope-chip {
   display: inline-flex;
-  height: 28px;
+  height: 32px;
   align-items: center;
   gap: 6px;
   padding: 0 10px;
@@ -274,7 +274,7 @@
   border-radius: 7px;
   background: transparent;
   color: var(--al-muted);
-  font-size: 12px;
+  font-size: 13px;
   white-space: nowrap;
   transition: .15s;
 }
@@ -305,8 +305,8 @@
 
 .scope-manage-button {
   display: grid;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   place-items: center;
   border-radius: 7px;
   color: var(--al-muted);
@@ -320,7 +320,7 @@
 .workspace-toolbar .agent-scope-menu,
 .agent-scope-menu {
   position: absolute;
-  top: 34px;
+  top: 38px;
   left: 0;
   z-index: 120;
   width: 250px;
@@ -341,7 +341,7 @@
 
 .agent-scope-option {
   display: flex;
-  min-height: 34px;
+  min-height: 40px;
   align-items: center;
   gap: 8px;
   padding: 0 8px;
@@ -467,33 +467,4 @@
   background: var(--al-danger-soft);
   color: var(--al-danger);
   font-size: 13px;
-}
-
-@media (max-width: 820px) {
-  .app-header-inner { gap: 14px; padding: 0 14px; }
-  .brand-name { display: none; }
-  .app-nav { gap: 0; }
-  .nav-item { padding: 0 8px; font-size: 12px; }
-  .status-pill { display: none; }
-  .nav-group-start { margin-left: 8px; }
-  .nav-group-start::before { left: -5px; }
-}
-
-@media (max-width: 760px) {
-  .workspace-toolbar {
-    height: auto;
-    min-height: 46px;
-    flex-wrap: wrap;
-    padding-top: 6px;
-    padding-bottom: 6px;
-  }
-}
-
-@media (max-width: 560px) {
-  .app-header .brand { display: flex; }
-  .app-header .brand-name { display: none; }
-  .status-tip::after { right: -34px; }
-  .workspace-toolbar { padding-right: 10px; padding-left: 10px; }
-  .page-content { padding: 20px 14px 40px; }
-  .heading-help::after { left: auto; right: 0; }
 }

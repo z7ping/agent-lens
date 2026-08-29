@@ -3,6 +3,7 @@ import { dirname, resolve } from 'node:path'
 import type {
   BackupAssetKind,
   BackupCreateInput,
+  BackupDirectoryNode,
   BackupOverview,
   BackupProtectionSource,
   BackupService,
@@ -26,6 +27,16 @@ interface InventoryFile {
   version: 1
   files: IndexedFile[]
 }
+
+interface MutableDirectoryNode {
+  name: string
+  relativePath: string
+  fileCount: number
+  totalBytes: number
+  children: Map<string, MutableDirectoryNode>
+}
+
+const TREE_CHILD_LIMIT = 120
 
 function selectedSource(sourceId: string, input: BackupCreateInput): boolean {
   return !input.sourceIds?.length || input.sourceIds.includes(sourceId)
@@ -59,6 +70,49 @@ function emptyAgeBuckets() {
     days91To180: { fileCount: 0, totalBytes: 0 },
     olderThan180Days: { fileCount: 0, totalBytes: 0 },
   }
+}
+
+function directoryTree(files: IndexedFile[], rootPath: string): BackupDirectoryNode[] {
+  const root = new Map<string, MutableDirectoryNode>()
+  for (const file of files) {
+    if (sourceRoot(file) !== rootPath) continue
+    const directories = file.sourceRelativePath.split('/').filter(Boolean).slice(0, -1)
+    let children = root
+    const pathParts: string[] = []
+    for (const name of directories) {
+      pathParts.push(name)
+      const relativePath = pathParts.join('/')
+      const node = children.get(name) ?? {
+        name,
+        relativePath,
+        fileCount: 0,
+        totalBytes: 0,
+        children: new Map<string, MutableDirectoryNode>(),
+      }
+      node.fileCount += 1
+      node.totalBytes += file.size
+      children.set(name, node)
+      children = node.children
+    }
+  }
+
+  const serialize = (nodes: Map<string, MutableDirectoryNode>): BackupDirectoryNode[] => {
+    const all = [...nodes.values()].sort((a, b) => a.name.localeCompare(b.name))
+    return all.slice(0, TREE_CHILD_LIMIT).map(node => {
+      const childValues = serialize(node.children)
+      const omittedChildren = Math.max(0, node.children.size - childValues.length)
+      return {
+        name: node.name,
+        relativePath: node.relativePath,
+        fileCount: node.fileCount,
+        totalBytes: node.totalBytes,
+        ...(childValues.length ? { children: childValues } : {}),
+        ...(omittedChildren ? { omittedChildren } : {}),
+      }
+    })
+  }
+
+  return serialize(root)
 }
 
 function enrichSource(source: BackupProtectionSource, files: IndexedFile[]): BackupProtectionSource {
@@ -109,7 +163,9 @@ function enrichSource(source: BackupProtectionSource, files: IndexedFile[]): Bac
     ...source,
     totalBytes,
     kindDetails,
-    roots: [...roots.values()].sort((a, b) => a.scope.localeCompare(b.scope) || a.path.localeCompare(b.path)),
+    roots: [...roots.values()]
+      .sort((a, b) => a.scope.localeCompare(b.scope) || a.path.localeCompare(b.path))
+      .map(root => ({ ...root, tree: directoryTree(files, root.path) })),
     ...(oldestModifiedAt ? { oldestModifiedAt } : {}),
     ...(latestModifiedAt ? { latestModifiedAt } : {}),
     ageBuckets,

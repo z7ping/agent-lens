@@ -2,17 +2,14 @@ import { readFileSync } from 'node:fs'
 
 const mainSource = readFileSync('packages/web/src/main.tsx', 'utf8')
 const inspectorDismiss = readFileSync('packages/web/src/client/inspector-dismiss.ts', 'utf8')
+const clientModel = readFileSync('packages/web/src/client/model.ts', 'utf8')
 const reviewPage = readFileSync('packages/web/src/features/ReviewPage.tsx', 'utf8')
 const reviewCss = readFileSync('packages/web/src/review.css', 'utf8')
 const longCss = readFileSync('packages/web/src/review-long-session.css', 'utf8')
-const mockup = readFileSync('docs/design/mockups/v2/review.html', 'utf8')
 
-const requiredActions = ['从头查看', '跳到最新', '有新记录']
-for (const label of requiredActions) {
-  if (!mockup.includes(label)) throw new Error(`冻结任务复盘原型缺少关键长会话操作：${label}`)
-  if (!reviewPage.includes(label)) throw new Error(`正式任务复盘缺少冻结交互：${label}`)
+for (const label of ['从头查看', '跳到最新', '有新记录']) {
+  if (!reviewPage.includes(label)) throw new Error(`正式任务复盘缺少关键长会话操作：${label}`)
 }
-
 for (const label of ['查看源码', '证据详情']) {
   if (!reviewPage.includes(label)) throw new Error(`正式任务复盘缺少消息操作：${label}`)
 }
@@ -28,6 +25,23 @@ if (!reviewPage.includes('className="round-nav-from-start"')
 }
 if (/\{[^{}]*&&\s*<button[^>]*className="round-nav-(?:from-start|latest)"/s.test(reviewPage)) {
   throw new Error('从头查看和跳到最新必须常驻渲染；无意义状态使用 disabled，不得条件移除')
+}
+
+const selectSessionBody = clientModel.match(/async selectReviewSession\(id: string\): Promise<void> \{([\s\S]*?)\r?\n  \}\r?\n\r?\n  async refreshUsage/)?.[1] ?? ''
+if (!selectSessionBody.includes("this.api.reviewDetail(id, { direction: 'backward', limit: REVIEW_DETAIL_PAGE_SIZE })")) {
+  throw new Error('默认选择会话必须直接请求 backward 最新窗口，禁止退回从头加载长会话')
+}
+const fromStartBody = clientModel.match(/async showReviewFromStart\(\): Promise<void> \{([\s\S]*?)\r?\n  \}\r?\n\r?\n  acknowledgeReviewNewData/)?.[1] ?? ''
+if (!fromStartBody.includes("direction: 'forward'")) {
+  throw new Error('“从头查看”必须显式请求 forward 窗口，不能复用默认最新窗口语义')
+}
+if (!reviewPage.includes("detail.page.direction !== 'backward'")
+  || !reviewPage.includes('pane.scrollTop = pane.scrollHeight')
+  || !reviewPage.includes('followingTailRef.current = true')) {
+  throw new Error('默认最新窗口必须在渲染后定位到底部，并进入可自动跟随状态')
+}
+if (!reviewPage.includes('pane.scrollHeight - pane.scrollTop - pane.clientHeight < 180')) {
+  throw new Error('实时更新只能在用户位于底部附近时自动跟随，阅读历史时不得抢滚动位置')
 }
 
 if (!mainSource.includes('installInspectorOutsideDismiss')
@@ -63,4 +77,4 @@ if (!longCss.includes('消息操作栏必须是一个视觉行')
   throw new Error('用户/智能体消息的源码与证据操作必须保持同一视觉行')
 }
 
-console.log('任务复盘冻结交互契约检查通过：导航语义固定，抽屉支持外部点击关闭，性能 CSS 不得隐藏业务操作，消息操作保持单行')
+console.log('任务复盘正式交互契约检查通过：默认进入最新窗口，历史阅读不抢滚动，导航语义固定，抽屉支持外部点击关闭，性能 CSS 不得隐藏业务操作，消息操作保持单行')

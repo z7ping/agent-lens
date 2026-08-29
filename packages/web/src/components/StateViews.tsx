@@ -103,6 +103,47 @@ export function WorkspaceSkeleton({ kind = 'cards' }: { kind?: 'cards' | 'table'
   </div>
 }
 
+export function PageLoadingState({
+  eyebrow = '正在处理',
+  statusLabel = '进行中',
+  title,
+  description,
+  facts = [],
+}: {
+  eyebrow?: string
+  statusLabel?: string
+  title: string
+  description: string
+  facts?: string[]
+}) {
+  return <div className="page-loading-state" role="status" aria-live="polite" aria-label={title}>
+    <section className="page-loading-card">
+      <div className="page-loading-main">
+        <div className="page-loading-icon" aria-hidden="true"><UiIcon name="refresh" size={20}/></div>
+        <div className="page-loading-copy">
+          <div className="page-loading-kicker">
+            <span className="eyebrow">{eyebrow}</span>
+            <span className="page-loading-badge"><i/>{statusLabel}</span>
+          </div>
+          <h2>{title}</h2>
+          <p>{description}</p>
+          {facts.length > 0 && <div className="page-loading-facts">
+            {facts.map(fact => <span key={fact}><UiIcon name="check" size={13}/>{fact}</span>)}
+          </div>}
+        </div>
+      </div>
+      <div className="page-loading-progress" aria-hidden="true"><i/></div>
+      <div className="page-loading-preview" aria-hidden="true">
+        {[0, 1, 2].map(index => <div className="page-loading-preview-card" key={index}>
+          <SkeletonLine width={index === 0 ? '42%' : index === 1 ? '34%' : '38%'}/>
+          <SkeletonLine width={index === 0 ? '64%' : index === 1 ? '52%' : '58%'} height={21}/>
+          <SkeletonLine width={index === 0 ? '76%' : index === 1 ? '68%' : '72%'}/>
+        </div>)}
+      </div>
+    </section>
+  </div>
+}
+
 export function FirstRunGuide({
   detectedCount,
   enabledCount,

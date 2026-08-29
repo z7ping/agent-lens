@@ -8,8 +8,9 @@ import type {
 } from '@agent-lens/protocol'
 import { AgentLensApi } from '../client/api'
 import { agentLabel } from '../components/AgentScope'
+import { BackupDataRootTree } from '../components/BackupDirectoryTree'
 import { CompactPageHeading } from '../components/CompactPageHeading'
-import { WorkspaceSkeleton } from '../components/StateViews'
+import { PageLoadingState } from '../components/StateViews'
 import { UiIcon } from '../components/UiIcon'
 
 const RECOMMENDED_KINDS: BackupAssetKindDto[] = ['config', 'skill', 'mcp', 'plugin', 'extension', 'hook', 'rule']
@@ -139,16 +140,19 @@ export function BackupPage() {
   const selectionInitialized = useRef(false)
   const importInput = useRef<HTMLInputElement>(null)
 
+  const applyOverview = (next: BackupOverviewResponseDto) => {
+    setOverview(next)
+    if (!selectionInitialized.current && next.index?.ready !== false) {
+      selectionInitialized.current = true
+      setSelectedSources(next.sources.filter(source => source.detected).map(source => source.sourceId))
+    }
+  }
+
   const refresh = async (force = false) => {
     setLoading(true)
     setError('')
     try {
-      const next = force ? await api.refreshBackupOverview() : await api.backupOverview()
-      setOverview(next)
-      if (!selectionInitialized.current) {
-        selectionInitialized.current = true
-        setSelectedSources(next.sources.filter(source => source.detected).map(source => source.sourceId))
-      }
+      applyOverview(force ? await api.refreshBackupOverview() : await api.backupOverview())
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
@@ -157,6 +161,24 @@ export function BackupPage() {
   }
 
   useEffect(() => { void refresh() }, [])
+  useEffect(() => {
+    if (!overview?.index?.refreshing) return
+    let disposed = false
+    const timer = window.setInterval(() => {
+      void api.backupOverview().then(next => {
+        if (disposed) return
+        applyOverview(next)
+        if (next.index?.refreshing === false) window.clearInterval(timer)
+      }).catch(reason => {
+        if (disposed) return
+        setError(reason instanceof Error ? reason.message : String(reason))
+      })
+    }, 1500)
+    return () => {
+      disposed = true
+      window.clearInterval(timer)
+    }
+  }, [api, overview?.index?.refreshing])
   useEffect(() => {
     if (!success) return
     const timer = window.setTimeout(() => setSuccess(''), 7000)
@@ -329,10 +351,17 @@ export function BackupPage() {
     }
   }
 
-  if (loading && !overview) return <WorkspaceSkeleton />
+  if (!overview || overview.index?.ready === false) return <PageLoadingState
+    eyebrow="资产备份"
+    statusLabel="首次建立索引"
+    title="正在准备资产备份范围"
+    description="后台正在建立首份本地备份索引。页面状态查询不会重复扫描；完成后会自动切换到资产列表。"
+    facts={['只读取本地数据', '不会修改原始文件', '完成后自动展示结果']}
+  />
 
-  const indexTime = overview?.index?.generatedAt
-  const indexRefreshing = overview?.index?.refreshing ?? false
+  const indexTime = overview.index?.generatedAt
+  const indexRefreshing = overview.index?.refreshing ?? false
+  const refreshing = loading || indexRefreshing
   const detectedSourceCount = sources.filter(source => source.detected).length
   const allDetectedSelected = detectedSourceCount > 0 && selectedSources.length === detectedSourceCount
   const recommendedVisible = policyKinds(RECOMMENDED_KINDS, sources, selectedSources)
@@ -368,7 +397,7 @@ export function BackupPage() {
       <main className="future-content backup-page">
         <div className="future-heading">
           <CompactPageHeading title="资产备份" description="看清智能体真正有哪些数据、在哪里、占多少，再决定哪些值得进入本地不可变快照。恢复仍必须先经过差异预演。"><span className="prototype-flag live">本地真实数据</span></CompactPageHeading>
-          <button className="btn" disabled={loading || Boolean(busy)} onClick={() => void refresh(true)}>{loading ? '正在扫描…' : <><UiIcon name="refresh" size={14}/>{' 刷新扫描'}</>}</button>
+          <button className="btn" disabled={refreshing || Boolean(busy)} onClick={() => void refresh(true)}>{refreshing ? <><UiIcon name="refresh" size={14}/>{' 后台更新中'}</> : <><UiIcon name="refresh" size={14}/>{' 刷新扫描'}</>}</button>
         </div>
 
         {error && <div className="backup-error" role="alert"><b>操作失败</b><span>{error}</span><button className="link-btn" onClick={() => setError('')}>关闭</button></div>}
@@ -466,7 +495,9 @@ export function BackupPage() {
           {ALL_KINDS.filter(kind => kindFiles(detailSource, kind) > 0).map(kind => <div key={kind} className="drawer-file preview-file"><span className={`badge ${recommendationTone(kind)}`}>{kindRecommendation(kind)}</span><b>{kindLabel(kind)}</b><code>{kindDetailText(detailSource, kind)}{kindBytes(detailSource, kind) === undefined ? '' : ` · ${formatBytes(kindBytes(detailSource, kind)!)}`}</code></div>)}
         </div></section>
 
-        <section className="drawer-section"><h3>数据位置</h3>{detailSource.roots?.length ? <div className="drawer-file-list">{detailSource.roots.map(root => <div key={`${root.scope}:${root.path}`} className="drawer-file"><span className="badge">{root.scope === 'config' ? '配置目录' : '数据目录'}</span><code>{root.path}</code><small>{root.fileCount === undefined ? '' : `${root.fileCount.toLocaleString()} 文件`}{root.totalBytes === undefined ? '' : ` · ${formatBytes(root.totalBytes)}`}</small><button className="link-btn" onClick={() => void copyPath(root.path)}>复制路径</button></div>)}</div> : <div className="future-note">当前索引版本只提供分类文件统计；刷新到包含目录统计的新版索引后，这里会显示真实配置目录和数据目录。</div>}</section>
+        <section className="drawer-section"><h3>数据位置</h3>{detailSource.roots?.length
+          ? <div>{detailSource.roots.map(root => <BackupDataRootTree key={`${root.scope}:${root.path}`} root={root} onCopy={path => void copyPath(path)}/>)}</div>
+          : <div className="future-note">当前索引版本只提供分类文件统计；刷新到包含目录统计的新版索引后，这里会显示真实配置目录和数据目录。</div>}</section>
 
         {(detailSource.oldestModifiedAt || detailSource.latestModifiedAt || detailSource.ageBuckets) && <section className="drawer-section"><h3>时间分布</h3>{detailSource.oldestModifiedAt || detailSource.latestModifiedAt ? <div className="integrity-strip"><span>最早 {detailSource.oldestModifiedAt ? formatTime(detailSource.oldestModifiedAt) : '—'}</span><span className="grow"/><span>最近 {detailSource.latestModifiedAt ? formatTime(detailSource.latestModifiedAt) : '—'}</span></div> : null}{detailSource.ageBuckets && <div className="preview-summary"><span><b>{detailSource.ageBuckets.recent30Days.fileCount.toLocaleString()}</b> 最近 30 天</span><span><b>{detailSource.ageBuckets.days31To90.fileCount.toLocaleString()}</b> 31–90 天</span><span><b>{detailSource.ageBuckets.days91To180.fileCount.toLocaleString()}</b> 91–180 天</span><span><b>{detailSource.ageBuckets.olderThan180Days.fileCount.toLocaleString()}</b> 180 天以前</span></div>}</section>}
 

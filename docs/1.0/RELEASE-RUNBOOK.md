@@ -80,3 +80,12 @@ npm view @z7ping/agent-lens versions --json
 - `git@github.com: Permission denied` 且路径包含 `release/*.tgz`：必须使用工作流中的 `./release/...tgz` 文件路径，不能让 npm 将它当作 Git 依赖解析。
 - Windows/macOS 正式版签名门禁失败：配置对应的 Actions Secrets；Alpha/Beta/RC 可以生成未签名狗粮包。
 - Release 页面已有同名 Tag：不要删除历史 Release，升级 patch 或 prerelease 序号后重新发版。
+
+## 发布修复分支与升级回归
+
+- 发布修复建议从目标稳定基线切出 `release/<version>`；该分支只接收本次发版修复，不混入下一阶段功能开发。
+- 预发布也必须验证上一已发布版本到当前候选版本的真实升级路径，不能只验证同一安装包覆盖自己。
+- Windows Desktop 升级至少检查：`~/.agent-lens/1.0` 数据保留、Daemon/`status`/`doctor` 正常、Hooks 仍有效、登录自启不丢失、正式 Web 可读取旧数据。
+- npm / CLI 升级至少检查 `agent-lens status`、`agent-lens doctor`、`agent-lens hook status all --json`，并确认 npm 与 Desktop 仍共享同一数据根和单实例 Daemon。
+- `scripts/release.ps1 -Publish` 在发布修复场景应推送当前发布分支与 Tag，不应为了发版强制覆盖 `main`。
+- 发布分支上的通用修复在发版完成后必须同步回 `main`；发生冲突时保留 `main` 的新架构能力，同时保留已验证的修复语义。

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { SqliteStorageService } from './storage'
 
-test('storage migrations include durable replication state, canonical changes, progress, and Hub remote replica state', async () => {
+test('storage migrations include replication, Hub replica state, and workspace project fallback', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   try {
     await storage.migrate()
@@ -10,8 +10,8 @@ test('storage migrations include durable replication state, canonical changes, p
     const migrations = storage.db.prepare(
       'SELECT version, name FROM schema_migrations ORDER BY version',
     ).all() as Array<{ version: number; name: string }>
-    assert.equal(migrations.at(-1)?.version, 10)
-    assert.equal(migrations.at(-1)?.name, 'hub-remote-replica-store')
+    assert.equal(migrations.at(-1)?.version, 11)
+    assert.equal(migrations.at(-1)?.name, 'workspace-project-fallback')
 
     const indexes = storage.db.prepare("PRAGMA index_list('observations')").all() as Array<{ name: string }>
     const names = new Set(indexes.map(item => item.name))
@@ -53,6 +53,14 @@ test('storage migrations include durable replication state, canonical changes, p
       ORDER BY name
     `).all() as Array<{ name: string }>
     assert.equal(triggers.length, 36)
+
+    const projectTriggers = storage.db.prepare(`
+      SELECT name FROM sqlite_master
+      WHERE type = 'trigger' AND name LIKE 'trg_%project_%'
+      ORDER BY name
+    `).all() as Array<{ name: string }>
+    assert.ok(projectTriggers.some(item => item.name === 'trg_workspace_project_fallback_insert'))
+    assert.ok(projectTriggers.some(item => item.name === 'trg_observation_project_fallback_insert'))
   } finally {
     storage.close()
   }

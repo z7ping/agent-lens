@@ -1,115 +1,34 @@
 /*
- * AgentLens 视觉配色系统。
+ * AgentLens 视觉主题细节。
  *
  * 约束：
- * - 正式 Web 与 docs/design/mockups/assets/tokens.css 使用同一套值；
- * - 文本只使用 primary / secondary / muted / subtle 四级语义；
+ * - tokens.css 是基础设计令牌唯一真源，本文件不得重新声明 --al-* 基础色板；
+ * - 文本只消费 primary / secondary / muted / subtle 四级语义；
  * - 实色状态背景必须使用对应的 --al-on-* 前景色；
  * - 来源色只用于小面积标记，不承担正文可读性。
  */
 
-:root {
-  --al-canvas:#F7F7F5;
-  --al-surface:#FFFFFF;
-  --al-surface-raised:#FFFFFF;
-  --al-soft:#F1F1EE;
-  --al-soft-2:#FAFAF8;
-  --al-line:#E7E7E2;
-  --al-line-strong:#D7D8D2;
-  --al-ink:#171816;
-  --al-ink-2:#383A36;
-  --al-muted:#5D6258;
-  --al-muted-2:#66707C;
-  --al-accent:#5B5BD6;
-  --al-accent-soft:#EEEEFF;
-  --al-success:#157A55;
-  --al-success-soft:#E9F6EF;
-  --al-warning:#925F10;
-  --al-warning-soft:#FFF5DD;
-  --al-danger:#C13F4D;
-  --al-danger-soft:#FFF0F2;
-
-  --al-text-primary:var(--al-ink);
-  --al-text-secondary:var(--al-ink-2);
-  --al-text-muted:var(--al-muted);
-  --al-text-subtle:var(--al-muted-2);
-
-  --al-on-accent:#FFFFFF;
-  --al-on-success:#FFFFFF;
-  --al-on-warning:#FFFFFF;
-  --al-on-danger:#FFFFFF;
-
-  --al-user-bubble:#262824;
-  --al-user-bubble-text:#F8F9F6;
-  --al-user-bubble-muted:#C3C9BE;
-  --al-user-bubble-code:#353831;
-  --al-user-bubble-link:#C8C7FF;
-
-  --al-shadow:0 1px 2px rgb(22 24 20 / .04),0 10px 28px rgb(22 24 20 / .05);
-  --al-shadow-lg:0 22px 70px rgb(22 24 20 / .16);
-}
-
-:root[data-theme='dark'] {
-  --al-canvas:#111210;
-  --al-surface:#181A17;
-  --al-surface-raised:#1D1F1C;
-  --al-soft:#22241F;
-  --al-soft-2:#151613;
-  --al-line:#2C2E29;
-  --al-line-strong:#3A3D36;
-  --al-ink:#F4F5F2;
-  --al-ink-2:#D4D7D0;
-  --al-muted:#A6AC9F;
-  --al-muted-2:#98A2AE;
-  --al-accent:#8A88FF;
-  --al-accent-soft:#29284B;
-  --al-success:#5BC995;
-  --al-success-soft:#173328;
-  --al-warning:#E0B25A;
-  --al-warning-soft:#352A16;
-  --al-danger:#EF7A87;
-  --al-danger-soft:#351E22;
-
-  --al-on-accent:#171816;
-  --al-on-success:#171816;
-  --al-on-warning:#171816;
-  --al-on-danger:#171816;
-
-  --al-user-bubble:#E7E9E4;
-  --al-user-bubble-text:#171816;
-  --al-user-bubble-muted:#555B52;
-  --al-user-bubble-code:#D8DBD4;
-  --al-user-bubble-link:#4D4DB8;
-
-  --al-shadow:0 1px 2px rgb(0 0 0 / .18),0 12px 30px rgb(0 0 0 / .16);
-  --al-shadow-lg:0 24px 72px rgb(0 0 0 / .44);
-}
-
 /* 主导航与工作区保持安静。 */
-.app-header{
-  background:color-mix(in srgb,var(--al-surface) 96%,transparent);
+.app-header {
+  background: color-mix(in srgb, var(--al-surface) 96%, transparent);
 }
-.workspace-toolbar{
-  background:color-mix(in srgb,var(--al-surface) 98%,var(--al-canvas));
+.workspace-toolbar {
+  background: color-mix(in srgb, var(--al-surface) 98%, var(--al-canvas));
 }
 
 /* 选中态只小面积使用强调色。 */
 .scope-chip-active,
-.session-item-active{
-  background:color-mix(in srgb,var(--al-accent-soft) 72%,var(--al-surface));
+.session-item-active {
+  background: color-mix(in srgb, var(--al-accent-soft) 72%, var(--al-surface));
 }
-.session-item-active{
-  box-shadow:inset 2px 0 0 var(--al-accent);
+.session-item-active {
+  box-shadow: inset 2px 0 0 var(--al-accent);
 }
 
-/* 对话表面。 */
-.chat-bubble-user{
-  border-color:color-mix(in srgb,var(--al-accent) 16%,var(--al-line));
-  background:var(--al-accent-soft);
-}
-.chat-bubble-agent{
-  background:var(--al-surface);
-  box-shadow:0 1px 0 color-mix(in srgb,var(--al-line) 78%,transparent);
+/* 对话表面。最终气泡语义仍由 review.css 所有。 */
+.chat-bubble-agent {
+  background: var(--al-surface);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--al-line) 78%, transparent);
 }
 
 /* 执行与概览卡片依赖表面区分，不使用重边框。 */
@@ -118,17 +37,16 @@
 .tool-summary-card,
 .tool-table-card,
 .pi-session-tree,
-.evidence-card{
-  border-color:color-mix(in srgb,var(--al-line) 78%,transparent);
+.evidence-card {
+  border-color: color-mix(in srgb, var(--al-line) 78%, transparent);
 }
 
-/* 来源色只作为语义标记。 */
-.agent-card[data-source='codex']{--agent-accent:#16866D}
-.agent-card[data-source='claude-code']{--agent-accent:#C96E4D}
-.agent-card[data-source='pi']{--agent-accent:#756FDC}
-:root[data-theme='dark'] .agent-card[data-source='codex']{--agent-accent:#4DC7A2}
-:root[data-theme='dark'] .agent-card[data-source='claude-code']{--agent-accent:#E59675}
-:root[data-theme='dark'] .agent-card[data-source='pi']{--agent-accent:#9B96FF}
+/* 来源色只作为语义标记，并统一消费正式来源 Token。 */
+.agent-card[data-source='codex'] { --agent-accent: var(--src-codex); }
+.agent-card[data-source='claude-code'] { --agent-accent: var(--src-claude); }
+.agent-card[data-source='pi'] { --agent-accent: var(--src-pi); }
+.agent-card[data-source='hermes'] { --agent-accent: var(--src-hermes); }
+.agent-card[data-source='opencode'] { --agent-accent: var(--src-opencode); }
 
 /* 次要文字统一使用可读的 muted，不用透明度降低对比度。 */
 .review-session-submeta,
@@ -140,33 +58,33 @@
 .frequent-rank,
 .frequent-main span,
 .asset-path code,
-.assembly-list span{
-  color:var(--al-text-muted);
+.assembly-list span {
+  color: var(--al-text-muted);
 }
 
 /* 状态色只用于状态。 */
-.event-permission{
-  background:color-mix(in srgb,var(--al-warning-soft) 72%,var(--al-surface));
+.event-permission {
+  background: color-mix(in srgb, var(--al-warning-soft) 72%, var(--al-surface));
 }
-.event-subagent{
-  background:color-mix(in srgb,var(--al-accent-soft) 64%,var(--al-surface));
+.event-subagent {
+  background: color-mix(in srgb, var(--al-accent-soft) 64%, var(--al-surface));
 }
-.asset-state{
-  background:color-mix(in srgb,var(--al-success-soft) 78%,var(--al-surface));
+.asset-state {
+  background: color-mix(in srgb, var(--al-success-soft) 78%, var(--al-surface));
 }
-.asset-state[data-value='false']{
-  background:color-mix(in srgb,var(--al-danger-soft) 78%,var(--al-surface));
+.asset-state[data-value='false'] {
+  background: color-mix(in srgb, var(--al-danger-soft) 78%, var(--al-surface));
 }
 
-/* 暗色主题保持炭黑表面，避免蓝黑偏色。 */
+/* 暗色主题保持正式 Token 定义的表面层级。 */
 :root[data-theme='dark'] .review-reader-pane,
-:root[data-theme='dark'] .app-shell{
-  background:var(--al-canvas);
+:root[data-theme='dark'] .app-shell {
+  background: var(--al-canvas);
 }
 :root[data-theme='dark'] .chat-avatar-agent,
 :root[data-theme='dark'] .execution-group,
 :root[data-theme='dark'] .agent-card,
 :root[data-theme='dark'] .tool-summary-card,
-:root[data-theme='dark'] .tool-table-card{
-  box-shadow:none;
+:root[data-theme='dark'] .tool-table-card {
+  box-shadow: none;
 }
