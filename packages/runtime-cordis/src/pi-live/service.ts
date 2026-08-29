@@ -3,6 +3,8 @@ import { access } from 'node:fs/promises'
 import { delimiter, join } from 'node:path'
 import type {
   PiLiveAvailability,
+  PiLiveControls,
+  PiLiveModelOption,
   PiLiveQueueState,
   PiLiveRuntimeEvent,
   PiLiveRuntimeListener,
@@ -34,6 +36,22 @@ function stringValue(value: unknown): string | undefined {
 
 function numberValue(value: unknown, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+function modelOptions(value: unknown): PiLiveModelOption[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap(item => {
+    const model = record(item)
+    const provider = stringValue(model.provider)
+    const id = stringValue(model.id)
+    if (!provider || !id) return []
+    return [{
+      provider,
+      id,
+      ...(stringValue(model.name) ? { name: stringValue(model.name) } : {}),
+      ...(typeof model.reasoning === 'boolean' ? { reasoning: model.reasoning } : {}),
+    }]
+  })
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -140,6 +158,36 @@ export class DefaultPiLiveService implements PiLiveService {
     const entries = Array.isArray(data.entries) ? data.entries : []
     const leafId = typeof data.leafId === 'string' ? data.leafId : null
     return { state: { ...state, leafId }, entries, leafId }
+  }
+
+  async controls(runtimeSessionId: string): Promise<PiLiveControls> {
+    const runtime = this.requireRuntime(runtimeSessionId)
+    const [modelsResponse, thinkingResponse] = await Promise.all([
+      runtime.client.command({ type: 'get_available_models' }),
+      runtime.client.command({ type: 'get_available_thinking_levels' }),
+    ])
+    const modelsData = record(modelsResponse.data)
+    const thinkingData = record(thinkingResponse.data)
+    return {
+      models: modelOptions(modelsData.models),
+      thinkingLevels: Array.isArray(thinkingData.levels)
+        ? thinkingData.levels.filter((item): item is string => typeof item === 'string' && Boolean(item))
+        : [],
+    }
+  }
+
+  async setModel(runtimeSessionId: string, provider: string, modelId: string): Promise<PiLiveRuntimeState> {
+    if (!provider.trim() || !modelId.trim()) throw new Error('Pi model provider and modelId are required')
+    const runtime = this.requireRuntime(runtimeSessionId)
+    await runtime.client.command({ type: 'set_model', provider: provider.trim(), modelId: modelId.trim() })
+    return await this.state(runtimeSessionId)
+  }
+
+  async setThinkingLevel(runtimeSessionId: string, level: string): Promise<PiLiveRuntimeState> {
+    if (!level.trim()) throw new Error('Pi thinking level is required')
+    const runtime = this.requireRuntime(runtimeSessionId)
+    await runtime.client.command({ type: 'set_thinking_level', level: level.trim() })
+    return await this.state(runtimeSessionId)
   }
 
   async prompt(runtimeSessionId: string, message: string, behavior?: PiLiveStreamingBehavior): Promise<void> {
