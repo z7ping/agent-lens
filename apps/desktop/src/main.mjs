@@ -8,6 +8,7 @@ import {
   app,
   BrowserWindow,
   Menu,
+  screen,
   Tray,
   dialog,
   shell,
@@ -394,9 +395,12 @@ function showWindow() {
 
 function createWindow() {
   const startHidden = loginAutostart.shouldStartHidden(process.argv) && !pendingShowRequest
+  const workArea = screen.getPrimaryDisplay().workAreaSize
+  const defaultWidth = Math.min(1440, Math.max(900, workArea.width - 32))
+  const defaultHeight = Math.min(900, Math.max(600, workArea.height - 32))
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 840,
+    width: defaultWidth,
+    height: defaultHeight,
     minWidth: 900,
     minHeight: 600,
     // 普通双击和安装完成后的首次启动必须立刻显示启动反馈；只有明确

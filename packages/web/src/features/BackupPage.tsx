@@ -8,7 +8,6 @@ import type {
 } from '@agent-lens/protocol'
 import { AgentLensApi } from '../client/api'
 import { agentLabel } from '../components/AgentScope'
-import { CompactPageHeading } from '../components/CompactPageHeading'
 import { WorkspaceSkeleton } from '../components/StateViews'
 import { UiIcon } from '../components/UiIcon'
 
@@ -334,7 +333,6 @@ export function BackupPage() {
   const indexTime = overview?.index?.generatedAt
   const indexRefreshing = overview?.index?.refreshing ?? false
   const detectedSourceCount = sources.filter(source => source.detected).length
-  const allDetectedSelected = detectedSourceCount > 0 && selectedSources.length === detectedSourceCount
   const recommendedVisible = policyKinds(RECOMMENDED_KINDS, sources, selectedSources)
   const optionalVisible = policyKinds(OPTIONAL_KINDS, sources, selectedSources)
   const otherVisible = policyKinds(OTHER_KINDS, sources, selectedSources)
@@ -351,26 +349,16 @@ export function BackupPage() {
 
   return <>
     <div className="workspace-toolbar">
-      <div className="agent-scope">
-        <button className={`scope-chip ${allDetectedSelected ? 'scope-chip-active' : ''}`} onClick={() => setSelectedSources(sources.filter(source => source.detected).map(source => source.sourceId))}>全部智能体</button>
-        {sources.map(source => <button key={source.sourceId} disabled={!source.detected} className={`scope-chip ${selectedSources.includes(source.sourceId) ? 'scope-chip-active' : ''}`} onClick={() => toggleSource(source.sourceId)}>
-          <span className={`src-dot ${sourceDotClass(source.sourceId)}`}/>{sourceLabel(source.sourceId, source.displayName)}
-        </button>)}
-      </div>
-      <span className="toolbar-divider"/>
+      <span className="prototype-flag live">本地真实数据</span>
       <span className="backup-toolbar-note">默认排除凭据、令牌与私钥</span>
-      <button className="btn toolbar-end" disabled={Boolean(busy)} onClick={() => importInput.current?.click()}>{busy === 'import' ? '正在导入…' : <><UiIcon name="upload" size={14}/>{' 导入备份包'}</>}</button>
+      <button className="btn toolbar-end" disabled={loading || Boolean(busy)} onClick={() => void refresh(true)}>{loading ? '正在扫描…' : <><UiIcon name="refresh" size={14}/>{' 刷新扫描'}</>}</button>
+      <button className="btn" disabled={Boolean(busy)} onClick={() => importInput.current?.click()}>{busy === 'import' ? '正在导入…' : <><UiIcon name="upload" size={14}/>{' 导入备份包'}</>}</button>
       <button className="btn primary" disabled={Boolean(busy) || !selectedSources.length || !selectedKinds.length} onClick={requestCreateSnapshot}>{busy === 'create' ? '正在创建…' : <><UiIcon name="plus" size={14}/>{' 创建快照'}</>}</button>
       <input ref={importInput} className="backup-file-input" type="file" accept=".agentlens-backup,application/vnd.agentlens.backup" onChange={selectImportBackup}/>
     </div>
 
     <div className="page-scroll">
       <main className="future-content backup-page">
-        <div className="future-heading">
-          <CompactPageHeading title="资产备份" description="看清智能体真正有哪些数据、在哪里、占多少，再决定哪些值得进入本地不可变快照。恢复仍必须先经过差异预演。"><span className="prototype-flag live">本地真实数据</span></CompactPageHeading>
-          <button className="btn" disabled={loading || Boolean(busy)} onClick={() => void refresh(true)}>{loading ? '正在扫描…' : <><UiIcon name="refresh" size={14}/>{' 刷新扫描'}</>}</button>
-        </div>
-
         {error && <div className="backup-error" role="alert"><b>操作失败</b><span>{error}</span><button className="link-btn" onClick={() => setError('')}>关闭</button></div>}
         {success && <div className="future-note" role="status"><b>操作完成</b> · {success}</div>}
 

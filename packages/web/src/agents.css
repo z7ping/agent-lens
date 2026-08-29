@@ -33,11 +33,12 @@
 }
 
 .agent-source-nav-head {
-  display: flex;
-  height: 34px;
+  display: grid;
+  min-height: 38px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 8px;
+  gap: 6px;
+  padding: 0 6px 0 8px;
   color: var(--al-muted);
 }
 .agent-source-nav-head b { font-size: 12px; font-weight: 680; }
@@ -51,6 +52,7 @@
   background: var(--al-soft);
   font-size: 12px;
 }
+.agent-source-nav-head .icon-button { width: 28px; height: 28px; }
 
 .agent-source-option {
   display: grid;

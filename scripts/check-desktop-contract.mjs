@@ -23,6 +23,9 @@ const main = read('apps/desktop/src/main.mjs')
 requireText(main.includes('AgentLens · 智能体透镜'), '桌面窗口或托盘缺少正式中文名“智能体透镜”')
 requireText(main.includes('show: !startHidden'), '普通双击启动没有立即显示窗口反馈')
 requireText(main.includes('DAEMON_STARTUP_TIMEOUT_MS = 10 * 60_000'), '首次同步等待窗口没有覆盖大数据量冷启动')
+requireText(main.includes('screen.getPrimaryDisplay().workAreaSize'), '桌面默认窗口没有按 Windows 工作区自适应')
+requireText(main.includes('Math.min(1440, Math.max(900, workArea.width - 32))'), '桌面默认宽度没有收口到 1440px 舒适布局')
+requireText(main.includes('Math.min(900, Math.max(600, workArea.height - 32))'), '桌面默认高度没有收口到 900px 舒适布局')
 
 const integration = read('apps/desktop/src/integration.mjs')
 requireText(integration.includes('refreshDesktopCliPath'), 'Desktop 启动没有重新协调 npm/Desktop CLI PATH 优先级')
@@ -50,4 +53,4 @@ requireText(installerCliSmoke.includes('npm-agent-lens-ci'), 'Windows Installer 
 requireText(installerCliSmoke.includes('npm 卸载后 Desktop CLI 没有自动兜底'), 'Windows Installer 冒烟没有覆盖 npm 卸载后的 Desktop CLI 回退')
 requireText(installerCliSmoke.includes('卸载 Desktop 错误删除了 npm CLI'), 'Windows Installer 冒烟没有覆盖 Desktop 卸载保护 npm')
 
-console.log('AgentLens 桌面契约检查通过：产品名、安装后启动、CLI 双发行优先级、即时窗口、Health 合并、日志目录与图标边缘均已锁定。')
+console.log('AgentLens 桌面契约检查通过：产品名、安装后启动、自适应窗口、CLI 双发行优先级、Health 合并、日志目录与图标边缘均已锁定。')

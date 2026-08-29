@@ -2,8 +2,7 @@ import { useMemo, useState } from 'react'
 import type { AgentAssetInventoryDto, AgentOverviewDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
-import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
-import { CompactPageHeading } from '../components/CompactPageHeading'
+import { agentLabel, sourceDot } from '../components/AgentScope'
 import { UiIcon } from '../components/UiIcon'
 import { copyText } from '../client/clipboard'
 
@@ -300,22 +299,20 @@ function AgentCard({ agent }: { agent: AgentOverviewDto }) {
 
 export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: AgentLensClientModel; sourceId: string; onSourceIdChange(sourceId: string): void }) {
   const snapshot = useClientSnapshot(model)
-  const agents = snapshot.facets?.agents ?? []
   const items = snapshot.agents?.items ?? []
   const fallbackSourceId = items.find(item => item.detected)?.sourceId || items[0]?.sourceId || ''
   const selectedSourceId = items.some(item => item.sourceId === sourceId) ? sourceId : fallbackSourceId
   const selectedAgent = items.find(item => item.sourceId === selectedSourceId)
 
-  return <main className="workspace-page">
-    <div className="workspace-toolbar">
-      <AgentScope agents={agents} value={selectedSourceId} onChange={onSourceIdChange} allLabel={false}/>
-      <button className="icon-button toolbar-end" onClick={() => void model.refreshFacetsAndAgents()} title="刷新智能体概览" aria-label="刷新智能体概览"><UiIcon name="refresh" size={15}/></button>
-    </div>
+  return <main className="workspace-page agents-page">
     <div className="page-content agents-content">
-      <CompactPageHeading title="智能体概览" description="集中查看本机智能体、用户资产、真实使用情况和技能生命周期。已检测只表示发现了智能体，不等于已经启用采集。"/>
       {items.length ? <div className="agents-browser">
         <nav className="agent-source-nav" aria-label="智能体列表">
-          <div className="agent-source-nav-head"><b>本机智能体</b><span>{items.length}</span></div>
+          <div className="agent-source-nav-head">
+            <b>本机智能体</b>
+            <span>{items.length}</span>
+            <button className="icon-button" onClick={() => void model.refreshFacetsAndAgents()} title="刷新智能体概览" aria-label="刷新智能体概览"><UiIcon name="refresh" size={14}/></button>
+          </div>
           {items.map(agent => {
             const assetCount = agent.assetInventory.filter(asset => asset.type !== 'builtin').length
             const status = captureState(agent)

@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 
 const backup = readFileSync('packages/web/src/features/BackupPage.tsx', 'utf8')
+const agents = readFileSync('packages/web/src/features/AgentsPage.tsx', 'utf8')
 const review = readFileSync('packages/web/src/features/ReviewPage.tsx', 'utf8')
 const virtualRound = readFileSync('packages/web/src/components/VirtualRoundMount.tsx', 'utf8')
 const diagnostics = readFileSync('packages/web/src/components/AgentInsightsRail.tsx', 'utf8')
@@ -17,6 +18,16 @@ for (const required of [
 ]) {
   if (!backup.includes(required)) throw new Error(`资产备份缺少创建结果反馈约束：${required}`)
 }
+
+if (backup.includes('scope-chip')) throw new Error('资产备份不得同时在顶部工具栏和快照构建器重复选择智能体')
+for (const required of ['本地真实数据', '刷新扫描', '导入备份包', '创建快照']) {
+  if (!backup.includes(required)) throw new Error(`资产备份工具栏缺少核心状态或操作：${required}`)
+}
+
+for (const required of ['className="agent-source-nav-head"', '刷新智能体概览']) {
+  if (!agents.includes(required)) throw new Error(`智能体来源列表缺少就地刷新入口：${required}`)
+}
+if (agents.includes('<AgentScope')) throw new Error('智能体概览不得同时保留顶部来源切换与左侧来源列表')
 
 for (const required of [
   'interface ReviewReaderPosition',
