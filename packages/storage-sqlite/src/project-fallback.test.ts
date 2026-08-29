@@ -75,12 +75,34 @@ test('workspace path supplies a fallback project and propagates it to sessions a
       UPDATE workspaces SET project_id = 'project-explicit' WHERE id = 'workspace-demo'
     `).run()
 
-    const upgradedSession = storage.db.prepare(`
+    let upgradedWorkspace = storage.db.prepare(`
+      SELECT project_id FROM workspaces WHERE id = 'workspace-demo'
+    `).get() as { project_id: string | null }
+    let upgradedSession = storage.db.prepare(`
       SELECT project_id FROM logical_sessions WHERE id = 'logical-demo'
     `).get() as { project_id: string | null }
-    const upgradedObservation = storage.db.prepare(`
+    let upgradedObservation = storage.db.prepare(`
       SELECT project_id FROM observations WHERE id = 'observation-demo'
     `).get() as { project_id: string | null }
+    assert.equal(upgradedWorkspace.project_id, 'project-explicit')
+    assert.equal(upgradedSession.project_id, 'project-explicit')
+    assert.equal(upgradedObservation.project_id, 'project-explicit')
+
+    // 模拟后续来源只再次报告 workspacePath，而没有 repositoryRoot/gitRemote。
+    storage.db.prepare(`
+      UPDATE workspaces SET project_id = NULL WHERE id = 'workspace-demo'
+    `).run()
+
+    upgradedWorkspace = storage.db.prepare(`
+      SELECT project_id FROM workspaces WHERE id = 'workspace-demo'
+    `).get() as { project_id: string | null }
+    upgradedSession = storage.db.prepare(`
+      SELECT project_id FROM logical_sessions WHERE id = 'logical-demo'
+    `).get() as { project_id: string | null }
+    upgradedObservation = storage.db.prepare(`
+      SELECT project_id FROM observations WHERE id = 'observation-demo'
+    `).get() as { project_id: string | null }
+    assert.equal(upgradedWorkspace.project_id, 'project-explicit')
     assert.equal(upgradedSession.project_id, 'project-explicit')
     assert.equal(upgradedObservation.project_id, 'project-explicit')
   } finally {
