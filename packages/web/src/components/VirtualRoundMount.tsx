@@ -3,6 +3,44 @@ import { isValidElement, type CSSProperties, type ReactNode, useEffect, useLayou
 export const REVIEW_ROUND_ROOT_MARGIN_PX = 1400
 export const REVIEW_ROUND_UNMOUNT_DELAY_MS = 320
 
+interface SharedVirtualObserver {
+  observer: IntersectionObserver
+  listeners: Map<Element, (entry: IntersectionObserverEntry) => void>
+}
+
+const sharedVirtualObservers = new WeakMap<Element, SharedVirtualObserver>()
+
+function observeWithSharedVirtualObserver(
+  root: Element,
+  element: Element,
+  listener: (entry: IntersectionObserverEntry) => void,
+): () => void {
+  let shared = sharedVirtualObservers.get(root)
+  if (!shared) {
+    const listeners = new Map<Element, (entry: IntersectionObserverEntry) => void>()
+    const observer = new IntersectionObserver(entries => {
+      for (const entry of entries) listeners.get(entry.target)?.(entry)
+    }, {
+      root,
+      rootMargin: `${REVIEW_ROUND_ROOT_MARGIN_PX}px 0px`,
+      threshold: 0,
+    })
+    shared = { observer, listeners }
+    sharedVirtualObservers.set(root, shared)
+  }
+
+  shared.listeners.set(element, listener)
+  shared.observer.observe(element)
+  return () => {
+    shared?.listeners.delete(element)
+    shared?.observer.unobserve(element)
+    if (shared?.listeners.size === 0) {
+      shared.observer.disconnect()
+      sharedVirtualObservers.delete(root)
+    }
+  }
+}
+
 export function VirtualRoundMount({
   children,
   eager = false,
@@ -39,10 +77,8 @@ export function VirtualRoundMount({
       setMounted(true)
       return
     }
-    const root = element.closest(rootSelector)
-    const observer = new IntersectionObserver(entries => {
-      const entry = entries[0]
-      if (!entry) return
+
+    const onIntersection = (entry: IntersectionObserverEntry) => {
       if (entry.isIntersecting) {
         cancelPendingUnmount()
         setMounted(true)
@@ -58,15 +94,28 @@ export function VirtualRoundMount({
         if (active instanceof Node && current.contains(active)) return
         setMounted(false)
       }, REVIEW_ROUND_UNMOUNT_DELAY_MS)
-    }, {
-      root,
-      rootMargin: `${REVIEW_ROUND_ROOT_MARGIN_PX}px 0px`,
-      threshold: 0,
-    })
-    observer.observe(element)
+    }
+
+    const root = element.closest(rootSelector)
+    let cleanup: () => void
+    if (root) {
+      cleanup = observeWithSharedVirtualObserver(root, element, onIntersection)
+    } else {
+      const observer = new IntersectionObserver(entries => {
+        const entry = entries[0]
+        if (entry) onIntersection(entry)
+      }, {
+        root: null,
+        rootMargin: `${REVIEW_ROUND_ROOT_MARGIN_PX}px 0px`,
+        threshold: 0,
+      })
+      observer.observe(element)
+      cleanup = () => observer.disconnect()
+    }
+
     return () => {
       cancelPendingUnmount()
-      observer.disconnect()
+      cleanup()
     }
   }, [rootSelector])
 
