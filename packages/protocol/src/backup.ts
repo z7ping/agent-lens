@@ -79,6 +79,8 @@ export interface BackupOverviewResponseDto {
   index?: {
     generatedAt: string
     refreshing: boolean
+    ready?: boolean
+    stale?: boolean
   }
   meta: {
     protocolVersion: typeof AGENT_LENS_PROTOCOL_VERSION
