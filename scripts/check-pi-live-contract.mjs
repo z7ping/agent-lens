@@ -38,8 +38,8 @@ requireText(page, /type === 'model_changed' \|\| type === 'thinking_level_change
 if (/type === 'model_change' \|\| type === 'thinking_level_change'/.test(page)) failures.push('Pi Live 不得把持久化 Entry 名称误当 Runtime Event 名称')
 requireText(page, /projectPiLiveHistory\(snapshot\)/, 'Pi Live 页面必须使用持久化历史事实投影')
 
-requireText(history, /entry\.type === 'model_change'/, 'Pi Live 历史投影缺少持久化 model_change')
-requireText(history, /entry\.type === 'thinking_level_change'/, 'Pi Live 历史投影缺少持久化 thinking_level_change')
+requireText(history, /type === 'model_change'/, 'Pi Live 历史投影缺少持久化 model_change')
+requireText(history, /type === 'thinking_level_change'/, 'Pi Live 历史投影缺少持久化 thinking_level_change')
 requireText(history, /message\.role !== 'tool' && message\.role !== 'toolResult'/, 'Pi Live 历史投影缺少 Tool Result 事实')
 requireText(coreObservation, /'thinking\.level\.changed'/, 'Core ObservationKind 缺少 thinking.level.changed')
 requireText(timelineProtocol, /'thinking\.level\.changed'/, 'Timeline Protocol 缺少 thinking.level.changed')
