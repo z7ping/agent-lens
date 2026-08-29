@@ -275,6 +275,7 @@ export function PiLivePage() {
 
   useEffect(() => {
     if (!runtimeId) return
+    let active = true
     setSnapshot(null)
     setState(null)
     setStreamText('')
@@ -288,6 +289,7 @@ export function PiLivePage() {
     leafIdRef.current = undefined
 
     const acceptSnapshot = (value: PiLiveSnapshotDto) => {
+      if (!active || value.state.runtimeSessionId !== runtimeId) return
       setSnapshot(current => mergeSnapshot(current, value))
       setState(value.state)
       leafIdRef.current = value.leafId ?? undefined
@@ -296,19 +298,21 @@ export function PiLivePage() {
     const refreshAfterSettled = async () => {
       try {
         const value = await piLiveApi.snapshot(runtimeId, leafIdRef.current)
+        if (!active) return
         acceptSnapshot(value)
         setStreamText('')
         setThinkingText('')
       } catch (reason) {
-        setError(reason instanceof Error ? reason.message : String(reason))
+        if (active) setError(reason instanceof Error ? reason.message : String(reason))
       }
     }
 
     const dispose = piLiveApi.connect(runtimeId, {
-      onConnection: setConnected,
+      onConnection: value => { if (active) setConnected(value) },
       onSnapshot: acceptSnapshot,
-      onError: reason => setError(reason.message),
+      onError: reason => { if (active) setError(reason.message) },
       onEvents(events, nextDiagnostics) {
+        if (!active) return
         let settled = false
         let statePatch: Partial<PiLiveStateDto> = {}
         for (const wrapper of events) {
@@ -383,7 +387,10 @@ export function PiLivePage() {
         if (settled) void refreshAfterSettled()
       },
     })
-    return dispose
+    return () => {
+      active = false
+      dispose()
+    }
   }, [runtimeId])
 
   const messages = useMemo(() => snapshotMessages(snapshot), [snapshot])
@@ -395,7 +402,7 @@ export function PiLivePage() {
       if (reader) reader.scrollTop = reader.scrollHeight
     })
     return () => cancelAnimationFrame(frame)
-  }, [messages.length, streamText, thinkingText, tools, restored.length, extension?.id])
+  }, [messages.length, streamText, thinkingText, tools, queue.steering.length, queue.followUp.length, restored.length, extension?.id])
 
   useEffect(() => {
     const textarea = inputRef.current
