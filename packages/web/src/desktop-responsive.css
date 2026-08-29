@@ -499,7 +499,7 @@
   line-height: 1.55;
 }
 
-/* xxl：1440 / 1920 宽屏增强。洞察区进入右侧纵向栏，但与主详情共享同一个纵向滚动容器。 */
+/* xxl：1440 / 1920 宽屏增强。工具栏横跨整行，只有正文进入“主详情 + 右侧洞察”两栏。 */
 @media (min-width: 1400px) {
   .agents-responsive-shell {
     display: grid;
@@ -510,6 +510,9 @@
   }
 
   .agents-responsive-shell > .workspace-page {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    width: 100%;
     min-width: 0;
     min-height: auto;
     align-self: start;
@@ -518,13 +521,18 @@
   }
 
   .agents-responsive-shell .agents-content {
+    max-width: none;
+    margin: 0;
     overflow: visible;
+    padding-right: 388px;
     padding-bottom: 56px;
   }
 
   .agent-insights-rail {
     position: sticky;
     top: 10px;
+    grid-column: 2;
+    grid-row: 1;
     display: flex;
     min-width: 0;
     max-width: none;
