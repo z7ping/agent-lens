@@ -1,6 +1,5 @@
 import { HubReviewProjection } from '@agent-lens/projection-review'
 import { defineAgentLensPlugin, type AgentLensContext } from '@agent-lens/runtime-cordis'
-import '@agent-lens/pi-live-runtime'
 import { HttpEventHub } from './events'
 import {
   DEFAULT_AGENT_LENS_HTTP_PORT,
