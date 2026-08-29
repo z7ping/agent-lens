@@ -1,5 +1,6 @@
 import { HubReviewProjection } from '@agent-lens/projection-review'
 import { defineAgentLensPlugin, type AgentLensContext } from '@agent-lens/runtime-cordis'
+import '@agent-lens/pi-live-runtime'
 import { HttpEventHub } from './events'
 import {
   DEFAULT_AGENT_LENS_HTTP_PORT,
@@ -88,6 +89,7 @@ const applyHttpSurface = Object.assign(
       capabilities: ctx.capabilities,
       capturePolicy: ctx.capturePolicy,
       backup: ctx.backup,
+      piLive: ctx.piLive,
       hubReview,
     })
     const unprovideHubReview = ctx.provide('hubReview', hubReview)
@@ -99,7 +101,7 @@ const applyHttpSurface = Object.assign(
       await surface.dispose()
     }
   },
-  { inject: ['storage', 'unifiedRead', 'sources', 'capabilities', 'capturePolicy', 'backup'] },
+  { inject: ['storage', 'unifiedRead', 'sources', 'capabilities', 'capturePolicy', 'backup', 'piLive'] },
 )
 
 export const httpSurfacePlugin = defineAgentLensPlugin(manifest, applyHttpSurface)
