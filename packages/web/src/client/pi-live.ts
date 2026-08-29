@@ -219,9 +219,11 @@ export class PiLiveEventScheduler {
 
   dispose(): void {
     if (this.disposed) return
-    this.flush()
     this.disposed = true
     this.cancelSchedule()
+    this.queue = []
+    this.indexes.clear()
+    this.oldestQueuedAt = 0
   }
 
   private schedule(priority: boolean): void {
