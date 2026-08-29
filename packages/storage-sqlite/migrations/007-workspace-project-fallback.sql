@@ -2,7 +2,8 @@
 --
 -- 1. 先修复升级前已经落库的 projectless workspace/session/observation；
 -- 2. 再用触发器守住后续写入，直到来源拿到更强的 repositoryRoot / gitRemote 身份；
--- 3. 如果后续 workspace 被升级为显式项目，项目身份会继续向 session/observation 传播。
+-- 3. 如果后续 workspace 被升级为显式项目，项目身份会继续向 session/observation 传播；
+-- 4. 后续只有 workspacePath 的弱提示不能把已经解析出的显式项目降级回 fallback project。
 
 INSERT OR IGNORE INTO projects(id, name, repository_identity, created_at, last_seen_at)
 SELECT
@@ -73,7 +74,7 @@ AFTER UPDATE OF project_id, path ON workspaces
 WHEN NEW.project_id IS NULL AND trim(NEW.path) <> ''
 BEGIN
   INSERT OR IGNORE INTO projects(id, name, repository_identity, created_at, last_seen_at)
-  VALUES (
+  SELECT
     CASE
       WHEN NEW.id LIKE 'workspace-%' THEN 'project-' || substr(NEW.id, 11)
       ELSE 'project-workspace-' || NEW.id
@@ -82,13 +83,16 @@ BEGIN
     NEW.path,
     strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
     strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-  );
+  WHERE OLD.project_id IS NULL;
 
   UPDATE workspaces
-  SET project_id = CASE
-    WHEN NEW.id LIKE 'workspace-%' THEN 'project-' || substr(NEW.id, 11)
-    ELSE 'project-workspace-' || NEW.id
-  END
+  SET project_id = COALESCE(
+    OLD.project_id,
+    CASE
+      WHEN NEW.id LIKE 'workspace-%' THEN 'project-' || substr(NEW.id, 11)
+      ELSE 'project-workspace-' || NEW.id
+    END
+  )
   WHERE id = NEW.id AND project_id IS NULL;
 END;
 
