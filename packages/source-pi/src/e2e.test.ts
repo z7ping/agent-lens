@@ -94,9 +94,15 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
       modelId: 'test-model-2',
     },
     {
+      type: 'thinking_level_change',
+      id: 'pi-thinking-level-1',
+      timestamp: '2026-08-20T11:00:05.000Z',
+      level: 'high',
+    },
+    {
       type: 'compaction',
       id: 'pi-compact-1',
-      timestamp: '2026-08-20T11:00:05.000Z',
+      timestamp: '2026-08-20T11:00:06.000Z',
       summary: 'compact summary',
       tokensBefore: 1234,
     },
@@ -129,16 +135,17 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
       detected,
       abortSignal: new AbortController().signal,
     })
-    assert.equal(historyResult.records, 6)
+    assert.equal(historyResult.records, 7)
 
     let facts = await storage.repositories.observations.query({
       installationId: historyResult.installationId,
       limit: 100,
     })
-    assert.equal(facts.length, 7)
+    assert.equal(facts.length, 8)
     assert.equal(facts.filter(item => item.kind === 'tool.call').length, 1)
     assert.equal(facts.filter(item => item.kind === 'tool.result').length, 1)
     assert.equal(facts.filter(item => item.kind === 'model.changed').length, 1)
+    assert.equal(facts.filter(item => item.kind === 'thinking.level.changed').length, 1)
     assert.equal(facts.filter(item => item.kind === 'context.compaction').length, 1)
 
     const assetResult = await assetRunner.scan({
@@ -161,7 +168,7 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
         type: 'message',
         id: 'pi-user-2',
         parentId: 'pi-result-1',
-        timestamp: '2026-08-20T11:00:06.000Z',
+        timestamp: '2026-08-20T11:00:07.000Z',
         message: { role: 'user', content: [{ type: 'text', text: 'continue' }] },
       })}\n`, 'utf8')
 
