@@ -45,12 +45,13 @@ test('开发数据按端口隔离且不复用正式数据目录', () => {
   assert.notEqual(first.vaultPath, second.vaultPath)
 })
 
-test('buildDevEnvironment 覆盖正式运行时路径和端口', () => {
+test('buildDevEnvironment 同时配置 Daemon 与 Vite 代理端口', () => {
   const repoRoot = join('workspace', 'agent-lens')
   const env = buildDevEnvironment({ AGENT_LENS_PORT: '56789' }, repoRoot, 56790)
   const paths = devRuntimePaths(repoRoot, 56790)
 
   assert.equal(env.AGENT_LENS_PORT, '56790')
+  assert.equal(env.AGENT_LENS_DEV_API_PORT, '56790')
   assert.equal(env.AGENT_LENS_DB_PATH, paths.dbPath)
   assert.equal(env.AGENT_LENS_VAULT_PATH, paths.vaultPath)
   assert.equal(env.AGENT_LENS_DAEMON_MODE, 'foreground')
@@ -67,5 +68,18 @@ test('npmInvocation 优先通过当前 Node 复用 npm_execpath', () => {
     'dev',
     '--workspace',
     '@agent-lens/daemon',
+  ])
+})
+
+test('npmInvocation 可启动源码 Web workspace', () => {
+  const invocation = npmInvocation({ npm_execpath: 'C:/node/npm-cli.js' }, '@agent-lens/web')
+
+  assert.equal(invocation.command, process.execPath)
+  assert.deepEqual(invocation.args, [
+    'C:/node/npm-cli.js',
+    'run',
+    'dev',
+    '--workspace',
+    '@agent-lens/web',
   ])
 })
