@@ -246,7 +246,7 @@ export function PiLivePage() {
   const readerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const followingRef = useRef(true)
-  const leafIdRef = useRef<string | undefined>()
+  const leafIdRef = useRef<string | undefined>(undefined)
   const toolsRef = useRef(new Map<string, LiveTool>())
   const [known, setKnown] = useState<PiLiveStateDto[]>([])
   const [snapshot, setSnapshot] = useState<PiLiveSnapshotDto | null>(null)
@@ -539,7 +539,7 @@ export function PiLivePage() {
           {messages.map(message => <div key={message.id} className={`pi-live-chat-row ${message.role}`}>
             <div className={`pi-live-bubble ${message.role}`}>
               <div className="pi-live-message-meta"><b>{message.role === 'user' ? '你' : 'Pi'}</b>{message.at && <time>{formatClock(message.at)}</time>}</div>
-              {message.role === 'assistant' ? <ReactMarkdown className="markdown">{message.text}</ReactMarkdown> : <div>{message.text}</div>}
+              {message.role === 'assistant' ? <div className="markdown"><ReactMarkdown>{message.text}</ReactMarkdown></div> : <div>{message.text}</div>}
             </div>
           </div>)}
 
@@ -552,7 +552,7 @@ export function PiLivePage() {
                 <div className="pi-live-trace-head"><span className="pi-live-tool-icon">⌁</span><b>{tool.name}</b><span>{tool.summary}</span><em>{tool.status === 'running' ? '执行中' : tool.status === 'error' ? '失败' : '完成'}</em></div>
                 {tool.output && <details><summary>查看输出</summary><pre>{tool.output}</pre></details>}
               </div>)}</div>}
-              {streamText && <div className="pi-live-stream-response"><div className="pi-live-message-meta"><b>Pi</b><span>{state?.isStreaming ? '生成中' : '输出'}</span></div><ReactMarkdown className="markdown">{streamText}</ReactMarkdown>{state?.isStreaming && <span className="pi-live-caret" aria-hidden="true"/>}</div>}
+              {streamText && <div className="pi-live-stream-response"><div className="pi-live-message-meta"><b>Pi</b><span>{state?.isStreaming ? '生成中' : '输出'}</span></div><div className="markdown"><ReactMarkdown>{streamText}</ReactMarkdown></div>{state?.isStreaming && <span className="pi-live-caret" aria-hidden="true"/>}</div>}
             </div>
           </section>}
           {!messages.length && !streamText && !thinkingText && !tools.length && <div className="pi-live-empty">这个 Pi Runtime 还没有消息。可以直接在下方输入开始任务。</div>}
