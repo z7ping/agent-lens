@@ -155,6 +155,10 @@ export async function handlePiLiveRequest(
     }
 
     if (url.pathname === '/api/v1/pi-live') {
+      if (request.method === 'GET') {
+        writeJson(response, 200, jsonValue(await service.list()))
+        return true
+      }
       if (request.method !== 'POST') {
         writeJson(response, 405, { error: 'method_not_allowed' })
         return true
