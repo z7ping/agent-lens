@@ -4,6 +4,7 @@ const appPath = 'packages/web/src/App.tsx'
 const mainPath = 'packages/web/src/main.tsx'
 const releaseInfoPath = 'packages/web/src/components/ReleaseInfo.tsx'
 const releaseCssPath = 'packages/web/src/release-info.css'
+const webUpdatePath = 'packages/web/src/client/update.ts'
 const packagePath = 'packages/web/package.json'
 const changelogPath = 'CHANGELOG.md'
 
@@ -11,6 +12,7 @@ const app = readFileSync(appPath, 'utf8')
 const main = readFileSync(mainPath, 'utf8')
 const releaseInfo = readFileSync(releaseInfoPath, 'utf8')
 const css = readFileSync(releaseCssPath, 'utf8')
+const webUpdate = readFileSync(webUpdatePath, 'utf8')
 const packageJson = JSON.parse(readFileSync(packagePath, 'utf8'))
 const changelog = readFileSync(changelogPath, 'utf8')
 
@@ -34,6 +36,20 @@ for (const required of ['GitHub', '更新日志', '发布记录', '完整更新�
 }
 for (const label of ['新增', '调整', '修复', '安全', '已知限制']) {
   if (!releaseInfo.includes(`'${label}'`)) throw new Error(`发行信息组件缺少中文日志分类：${label}`)
+}
+if (!releaseInfo.includes('checkWebUpdate') || !releaseInfo.includes('新版本 v')) {
+  throw new Error('正式 Web Header 必须接入低打扰的新版本提示')
+}
+for (const required of [
+  "owner !== 'desktop'",
+  'WEB_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000',
+  "installCommand: 'agent-lens update'",
+  'npm install -g @z7ping/agent-lens@',
+]) {
+  if (!webUpdate.includes(required)) throw new Error(`Web 更新检查缺少契约：${required}`)
+}
+if (!webUpdate.includes("fetchImpl('/api/v1/health'")) {
+  throw new Error('Web 更新检查必须先读取本地运行时归属，避免 Desktop 重复提醒')
 }
 if (!changelog.includes(`## ${packageJson.version}`)) {
   throw new Error(`CHANGELOG.md 缺少当前 Web 版本 ${packageJson.version} 的章节`)
