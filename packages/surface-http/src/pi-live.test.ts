@@ -250,7 +250,7 @@ test('Pi Live HTTP control surface preserves runtime ownership and validates com
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ requestId: 'ui-1', response: { confirmed: true } }),
     })
     assert.equal(extensionResponse.status, 202)
-    assert.deepEqual(piLive.extensionResponses, [{ requestId: 'ui-1', response: { confirmed: true }])
+    assert.deepEqual(piLive.extensionResponses, [{ requestId: 'ui-1', response: { confirmed: true } }])
 
     const controller = new AbortController()
     const events = await fetch(`${base}/api/v1/pi-live/${piLive.runtimeSessionId}/events`, { signal: controller.signal })
