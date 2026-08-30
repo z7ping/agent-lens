@@ -10,10 +10,8 @@ import { ReviewStateOverlay } from './components/ReviewStateOverlay'
 import { ReviewTurnRail } from './components/ReviewTurnRail'
 import { AgentsResponsivePage } from './features/AgentsResponsivePage'
 import { BackupPage } from './features/BackupPage'
-import { HubReviewPage } from './features/HubReviewPage'
 import { InsightsPage } from './features/InsightsPage'
-import { PiLivePage } from './features/PiLivePage'
-import { ReviewPage } from './features/ReviewPage'
+import { TaskCenterPage } from './features/TaskCenterPage'
 import { ToolsPage } from './features/ToolsPage'
 
 export function useClientSnapshot(model: AgentLensClientModel): ClientSnapshot {
@@ -53,7 +51,7 @@ function PinnedProvider({ agents, children }: PropsWithChildren<{ agents: AgentF
 }
 
 const navigation = [
-  { to: '/review', label: '任务复盘' },
+  { to: '/review', label: '任务中心' },
   { to: '/tools', label: '工具分析', startsGroup: true },
   { to: '/insights', label: '使用洞察' },
   { to: '/agents', label: '智能体概览', startsGroup: true },
@@ -169,7 +167,8 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const onReview = location.pathname.startsWith('/review')
   const onHubReview = location.pathname.startsWith('/review/hub/')
   const onPiLive = location.pathname === '/review/live' || location.pathname.startsWith('/review/live/')
-  const onLocalReview = onReview && !onHubReview && !onPiLive
+  const onNewTask = location.pathname === '/review/new'
+  const onLocalReview = onReview && !onHubReview && !onPiLive && !onNewTask
   const onTools = location.pathname.startsWith('/tools')
   const onAgents = location.pathname.startsWith('/agents')
   const hasSseBanner = Boolean(snapshot.health && !snapshot.liveConnected && !onPiLive)
@@ -224,7 +223,6 @@ function Shell({ model }: { model: AgentLensClientModel }) {
               <span className={`live-dot ${statusHealthy ? 'live-dot-online' : 'live-dot-waiting'}`} />
               <span>{healthLabel}</span>
             </span>
-            {onLocalReview && <NavLink className="header-link" to="/review/live">Pi 实时</NavLink>}
             <ReleaseInfo />
             <button className="theme-toggle" onClick={toggleTheme} title={theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'} aria-label={theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'}><ThemeGlyph dark={theme === 'dark'}/></button>
           </div>
@@ -236,11 +234,12 @@ function Shell({ model }: { model: AgentLensClientModel }) {
         <small>页面保留当前内容；重新连接后会继续接收新数据。</small>
       </div>}
       <Routes>
-        <Route path="/review" element={<ReviewPage model={model} />} />
-        <Route path="/review/live" element={<PiLivePage />} />
-        <Route path="/review/live/:runtimeSessionId" element={<PiLivePage />} />
-        <Route path="/review/hub/:sessionId" element={<HubReviewPage />} />
-        <Route path="/review/:sessionId" element={<ReviewPage model={model} />} />
+        <Route path="/review" element={<TaskCenterPage model={model} mode="history" />} />
+        <Route path="/review/new" element={<TaskCenterPage model={model} mode="new" />} />
+        <Route path="/review/live" element={<Navigate to="/review/new" replace />} />
+        <Route path="/review/live/:runtimeSessionId" element={<TaskCenterPage model={model} mode="live" />} />
+        <Route path="/review/hub/:sessionId" element={<TaskCenterPage model={model} mode="hub" />} />
+        <Route path="/review/:sessionId" element={<TaskCenterPage model={model} mode="history" />} />
         <Route path="/tools" element={<ToolsPage model={model} />} />
         <Route path="/insights" element={<InsightsPage model={model} />} />
         <Route path="/agents" element={<AgentsResponsivePage model={model} sourceId={agentOverviewSourceId} onSourceIdChange={setAgentOverviewSourceId} />} />
