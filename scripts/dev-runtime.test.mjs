@@ -10,10 +10,14 @@ import {
 } from './dev-runtime.mjs'
 
 test('parseDevPort 使用默认端口并拒绝非法值', () => {
-  assert.equal(parseDevPort(undefined), 56789)
+  assert.equal(parseDevPort(undefined), 56800)
   assert.equal(parseDevPort('56820'), 56820)
   assert.throws(() => parseDevPort('0'), /1-65535/)
   assert.throws(() => parseDevPort('abc'), /1-65535/)
+})
+
+test('源码开发默认端口与安装态 56789 保持隔离', () => {
+  assert.notEqual(parseDevPort(undefined), 56789)
 })
 
 test('findAvailableDevPort 从起始端口逐个 +1', async () => {

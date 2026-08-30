@@ -4,7 +4,9 @@ import { createServer } from 'node:net'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-export const DEFAULT_DEV_PORT = 56789
+// 正式安装态固定使用 56789；源码开发使用独立端口，避免已安装桌面端
+// 将开发 Runtime 误识别为可复用的正式 Runtime。
+export const DEFAULT_DEV_PORT = 56800
 export const DEV_PORT_ATTEMPTS = 21
 
 export function parseDevPort(value, fallback = DEFAULT_DEV_PORT) {
