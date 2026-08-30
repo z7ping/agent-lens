@@ -44,8 +44,8 @@ function legacyQuerySql(observationFilter: string, summaryFilter: string): strin
     WITH session_aggregates AS (
       SELECT
         logical_session_id,
-        MIN(COALESCE(occurred_at, captured_at)) AS started_at,
-        MAX(COALESCE(occurred_at, captured_at)) AS ended_at,
+        COALESCE(MIN(occurred_at), MIN(captured_at)) AS started_at,
+        COALESCE(MAX(occurred_at), MAX(captured_at)) AS ended_at,
         COUNT(*) AS observation_count,
         SUM(CASE WHEN kind = 'message.user' THEN 1 ELSE 0 END) AS user_message_count,
         SUM(CASE WHEN kind = 'tool.call' THEN 1 ELSE 0 END) AS tool_count,
@@ -109,7 +109,7 @@ function legacyQuerySql(observationFilter: string, summaryFilter: string): strin
     SELECT *
     FROM legacy_summary AS summary
     ${summaryFilter}
-    ORDER BY summary.ended_at DESC, summary.logical_session_id ASC
+    ORDER BY summary.started_at DESC, summary.logical_session_id ASC
     LIMIT ?
   `
 }
@@ -143,7 +143,7 @@ export function sessionSummaryProjectionSelectSql(summaryFilter: string): string
       LEFT JOIN workspaces AS workspace ON workspace.id = logical.workspace_id
     ) AS summary
     ${summaryFilter}
-    ORDER BY summary.ended_at DESC, summary.logical_session_id ASC
+    ORDER BY summary.started_at DESC, summary.logical_session_id ASC
     LIMIT ?
   `
 }
@@ -210,8 +210,8 @@ function rebuildInsertSql(sessionFilter: string): string {
     FROM (
       SELECT
         logical_session_id,
-        MIN(COALESCE(occurred_at, captured_at)) AS started_at,
-        MAX(COALESCE(occurred_at, captured_at)) AS ended_at,
+        COALESCE(MIN(occurred_at), MIN(captured_at)) AS started_at,
+        COALESCE(MAX(occurred_at), MAX(captured_at)) AS ended_at,
         COUNT(*) AS observation_count,
         SUM(CASE WHEN kind = 'message.user' THEN 1 ELSE 0 END) AS user_message_count,
         SUM(CASE WHEN kind = 'tool.call' THEN 1 ELSE 0 END) AS tool_count,
@@ -263,7 +263,7 @@ function summaryQueryWhere(input: SessionSummaryQuery): { sql: string; params: u
     params.push(input.projectId)
   }
   if (input.from) {
-    conditions.push('summary.ended_at >= ?')
+    conditions.push('summary.started_at >= ?')
     params.push(input.from)
   }
   if (input.to) {
@@ -284,8 +284,8 @@ function summaryQueryWhere(input: SessionSummaryQuery): { sql: string; params: u
     params.push(`%${search}%`)
   }
   if (input.after) {
-    conditions.push('(summary.ended_at < ? OR (summary.ended_at = ? AND summary.logical_session_id > ?))')
-    params.push(input.after.endedAt, input.after.endedAt, input.after.logicalSessionId)
+    conditions.push('(summary.started_at < ? OR (summary.started_at = ? AND summary.logical_session_id > ?))')
+    params.push(input.after.startedAt, input.after.startedAt, input.after.logicalSessionId)
   }
   return { sql: whereClause(conditions), params }
 }
