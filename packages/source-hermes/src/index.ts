@@ -35,7 +35,7 @@ import {
 } from '@agent-lens/runtime-cordis'
 
 const SOURCE_ID = 'hermes'
-const PARSER_VERSION = '1'
+const PARSER_VERSION = '2'
 const DB_NAME = 'state.db'
 const HISTORY_BATCH = 1000
 const RUNTIME_RECENT_ROWS = 500
@@ -55,11 +55,12 @@ interface HermesRow {
   tool_call_id: string | null
   tool_name: string | null
   cwd: string | null
+  session_title: string | null
 }
 
 interface HermesDbEnvelope {
   message: Record<string, unknown>
-  session: { nativeSessionId: string; cwd?: string }
+  session: { nativeSessionId: string; cwd?: string; title?: string }
   captureChannel: 'history' | 'native-tail'
 }
 
@@ -201,10 +202,11 @@ function messageQuery(db: Database.Database, tail: boolean): Database.Statement<
     columnExpr(messageColumns, 'm', 'tool_call_id'),
     columnExpr(messageColumns, 'm', 'tool_name'),
     sessionColumns.has('cwd') ? 's.cwd AS cwd' : 'NULL AS cwd',
+    sessionColumns.has('title') ? 's.title AS session_title' : 'NULL AS session_title',
   ]
   const joinSession = sessionColumns.has('id')
     ? 'LEFT JOIN sessions s ON m.session_id = s.id'
-    : 'LEFT JOIN (SELECT NULL AS id, NULL AS cwd) s ON 1 = 0'
+    : 'LEFT JOIN (SELECT NULL AS id, NULL AS cwd, NULL AS title) s ON 1 = 0'
   const order = tail ? 'DESC' : 'ASC'
   const where = tail ? '' : 'WHERE m.rowid > ?'
   const sql = `SELECT ${fields.join(', ')} FROM messages m ${joinSession} ${where} ORDER BY m.rowid ${order} LIMIT ?`
@@ -223,7 +225,7 @@ function recentRows(db: Database.Database, limit: number): HermesRow[] {
 function rowFingerprint(row: HermesRow): string {
   return sha256(JSON.stringify([
     row.id, row.session_id, row.role, row.content, row.timestamp,
-    row.tool_calls, row.tool_call_id, row.tool_name, row.cwd,
+    row.tool_calls, row.tool_call_id, row.tool_name, row.cwd, row.session_title,
   ]))
 }
 
@@ -236,8 +238,9 @@ function dbRecord(
   const fingerprint = rowFingerprint(row)
   const nativeId = row.id == null ? `row-${row.row_id}` : String(row.id)
   const capturedAt = new Date().toISOString()
-  const occurredAt = normalizeTimestamp(row.timestamp) ?? capturedAt
+  const occurredAt = normalizeTimestamp(row.timestamp)
   const dbPath = join(ctx.installation.dataRoot ?? '', DB_NAME)
+  const title = row.session_title?.trim() || undefined
   const message = asRecord(sanitize({
     id: row.id,
     session_id: row.session_id,
@@ -258,13 +261,17 @@ function dbRecord(
     nativeType: `message/${row.role ?? 'unknown'}`,
     nativeId,
     sourceSequence: row.row_id * 10,
-    occurredAt,
+    ...(occurredAt ? { occurredAt } : {}),
     capturedAt,
     locator: { kind: 'database', path: dbPath, table: 'messages', rowId: String(row.row_id) },
     fingerprint,
     payload: {
       message,
-      session: { nativeSessionId, ...(row.cwd ? { cwd: row.cwd } : {}) },
+      session: {
+        nativeSessionId,
+        ...(row.cwd ? { cwd: row.cwd } : {}),
+        ...(title ? { title } : {}),
+      },
       captureChannel,
     } satisfies HermesDbEnvelope,
     parserVersion: PARSER_VERSION,
@@ -276,7 +283,8 @@ export async function* ingestHermesHistory(ctx: SourceExecutionContext): AsyncIt
   if (!root || ctx.abortSignal.aborted || !await exists(join(root, DB_NAME))) return
   const db = openDatabase(root)
   try {
-    let rowId = await ctx.checkpoint.get<number>('history-rowid') ?? 0
+    // v2 会一次性重放历史消息，让旧会话也获得原生标题。
+    let rowId = await ctx.checkpoint.get<number>('history-rowid:v2-session-title') ?? 0
     while (!ctx.abortSignal.aborted) {
       const rows = selectRows(db, rowId, HISTORY_BATCH)
       if (!rows.length) break
@@ -284,7 +292,7 @@ export async function* ingestHermesHistory(ctx: SourceExecutionContext): AsyncIt
         if (ctx.abortSignal.aborted) return
         yield dbRecord(row, ctx, 'history')
         rowId = row.row_id
-        await ctx.checkpoint.set('history-rowid', rowId)
+        await ctx.checkpoint.set('history-rowid:v2-session-title', rowId)
       }
       if (rows.length < HISTORY_BATCH) break
     }
@@ -620,6 +628,9 @@ function identity(record: SourceRecord, envelope: HermesEnvelope): ObservationId
   return {
     nativeSessionId: envelope.session.nativeSessionId || record.sourceSessionNativeId || 'unknown',
     ...(envelope.session.cwd ? { workspacePath: envelope.session.cwd } : {}),
+    ...('title' in envelope.session && envelope.session.title?.trim()
+      ? { sessionTitle: envelope.session.title.trim() }
+      : {}),
   }
 }
 
