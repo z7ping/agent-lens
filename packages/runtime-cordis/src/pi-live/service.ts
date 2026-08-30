@@ -89,6 +89,11 @@ export class DefaultPiLiveService implements PiLiveService {
       : { available: false, reason: 'Pi executable was not found in PATH or PI_BIN' }
   }
 
+  async list(): Promise<PiLiveRuntimeState[]> {
+    const states = await Promise.allSettled([...this.runtimes.keys()].map(id => this.state(id)))
+    return states.flatMap(result => result.status === 'fulfilled' ? [result.value] : [])
+  }
+
   async start(input: PiLiveStartInput): Promise<PiLiveRuntimeState> {
     if (this.disposed) throw new Error('Pi Live service is disposed')
     const executable = await findPiExecutable(input.executable)
