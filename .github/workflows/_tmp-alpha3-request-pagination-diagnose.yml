@@ -1,0 +1,31 @@
+name: 临时定位 alpha.3 分页类型错误
+
+on:
+  push:
+    branches: [feature/alpha3-task-center]
+    paths:
+      - '.github/workflows/_tmp-alpha3-request-pagination-diagnose.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feature/alpha3-task-center
+      - name: 应用补丁并输出错误附近
+        shell: bash
+        run: |
+          python <<'RUN'
+          from pathlib import Path
+          import textwrap
+          workflow = Path('.github/workflows/_tmp-alpha3-request-pagination-fix.yml').read_text(encoding='utf-8')
+          marker = "          python <<'PY'\n"
+          start = workflow.index(marker) + len(marker)
+          end = workflow.index("\n          PY\n", start)
+          exec(compile(textwrap.dedent(workflow[start:end]), '<patch>', 'exec'), {})
+          RUN
+          nl -ba packages/storage-sqlite/src/session-summaries.ts | sed -n '250,270p'
