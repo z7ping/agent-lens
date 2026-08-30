@@ -1,7 +1,9 @@
 import { readFile } from 'node:fs/promises'
 
-const [app, page, history, client, css, http, runtime, coreObservation, timelineProtocol] = await Promise.all([
+const [app, taskCenter, taskCenterCss, page, history, client, css, http, runtime, coreObservation, timelineProtocol] = await Promise.all([
   readFile(new URL('../packages/web/src/App.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/web/src/features/TaskCenterPage.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/web/src/task-center.css', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/PiLivePage.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/pi-live-history.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/client/pi-live.ts', import.meta.url), 'utf8'),
@@ -20,10 +22,24 @@ const requireText = (source, pattern, label) => {
 const navigationBlock = app.match(/const navigation = \[([\s\S]*?)\] as const/)?.[1] ?? ''
 const topLevelLinks = [...navigationBlock.matchAll(/to:\s*'\/(review|tools|insights|agents|backup)'/g)].length
 if (topLevelLinks !== 5) failures.push(`一级导航必须保持 5 个，当前检测到 ${topLevelLinks}`)
-requireText(app, /path="\/review\/live"/, '缺少 /review/live 路由')
+requireText(navigationBlock, /to:\s*'\/review',\s*label:\s*'任务中心'/, 'Pi Live 并入实时任务后，一级任务入口必须命名为“任务中心”')
+requireText(app, /path="\/review\/new"/, '任务中心缺少新建任务路由')
+requireText(app, /path="\/review\/live"[^>]*element=\{<Navigate to="\/review\/new" replace\/>\}/, '旧 /review/live 入口必须重定向到任务中心新建任务')
 requireText(app, /path="\/review\/live\/:runtimeSessionId"/, '缺少 Pi Live runtime 路由')
 requireText(app, /onPiLive[\s\S]*!onPiLive/, 'Pi Live 必须从普通 Review overlay/turn rail 语义中分离')
-requireText(app, /onLocalReview\s*&&\s*<NavLink[^>]*to="\/review\/live"[^>]*>Pi 实时<\/NavLink>/, '任务复盘域必须提供 Pi 实时可发现入口')
+if (/to="\/review\/live"[^>]*>Pi 实时<\/NavLink>/.test(app)) failures.push('顶部 Header 不得继续保留独立“Pi 实时”产品入口')
+
+requireText(taskCenter, /\+ 新建任务/, '任务中心左侧必须提供统一“新建任务”入口')
+requireText(taskCenter, /进行中 \+ 历史/, '任务中心必须明确统一进行中与历史任务')
+requireText(taskCenter, /piLiveApi\.knownRuntimes\(\)/, '任务中心必须发现当前浏览器已知 Pi Runtime')
+requireText(taskCenter, /<ReviewPage model=\{model\}\/>/, '任务中心必须复用既有历史任务详情')
+requireText(taskCenter, /<PiLivePage\/>/, '任务中心必须复用 Pi Live 实时详情')
+requireText(taskCenter, /<HubReviewPage\/>/, '任务中心必须保留 Hub 远程详情')
+requireText(taskCenter, /deriveTaskProjectOptions/, '新建任务必须从已观测项目上下文推导工作目录')
+requireText(taskCenter, /cwd:\s*selected\.cwd/, 'Pi Runtime cwd 必须来自已选择的真实项目上下文')
+if (/setCwd|工作目录\s*<input|placeholder=.*workspace/.test(taskCenter)) failures.push('任务中心新建主流程不得要求用户手输 cwd')
+requireText(taskCenterCss, /\.task-center-main \.pi-live-page > \.pi-live-sessions\s*\{\s*display:\s*none;/m, '任务中心必须隐藏 Pi Live 自带第二套会话侧栏')
+requireText(taskCenterCss, /\.task-center-main \.review-layout > \.session-panel\s*\{\s*display:\s*none;/m, '任务中心必须隐藏 Review 自带第二套会话侧栏')
 
 requireText(page, /onCompositionStart/, 'Pi Live 输入框缺少 compositionstart 保护')
 requireText(page, /nativeEvent\.isComposing/, 'Pi Live 输入框缺少 isComposing 保护')
@@ -56,17 +72,18 @@ requireText(http, /service\.terminate\(runtimeSessionId\)/, 'Pi Runtime 必须�
 requireText(runtime, /clearQueue\(runtimeSessionId\)/, 'Abort 必须支持队列取回')
 requireText(runtime, /type: 'extension_ui_response'[\s\S]*id: requestId/, 'Extension UI 必须原样回传 Pi request id')
 
-if (/font-size:\s*(?:[0-9]|1[01])px/.test(css)) failures.push('Pi Live 可见文字不得小于 12px')
-if (/backdrop-filter|filter:\s*blur\(/.test(css)) failures.push('Pi Live 不得使用模糊/毛玻璃')
-if (/max-width:\s*575|max-width:\s*576|min-width:\s*576/.test(css)) failures.push('Pi Live 不得新增 576px 响应式断点')
+if (/font-size:\s*(?:[0-9]|1[01])px/.test(css) || /font-size:\s*(?:[0-9]|1[01])px/.test(taskCenterCss)) failures.push('Pi Live / 任务中心可见文字不得小于 12px')
+if (/backdrop-filter|filter:\s*blur\(/.test(css) || /backdrop-filter|filter:\s*blur\(/.test(taskCenterCss)) failures.push('Pi Live / 任务中心不得使用模糊/毛玻璃')
+if (/max-width:\s*575|max-width:\s*576|min-width:\s*576/.test(css) || /max-width:\s*575|max-width:\s*576|min-width:\s*576/.test(taskCenterCss)) failures.push('Pi Live / 任务中心不得新增 576px 响应式断点')
 for (const expected of ['1199.98px', '991.98px', '767.98px']) {
   if (!css.includes(expected)) failures.push(`Pi Live CSS 缺少现有响应式基线 ${expected}`)
+  if (!taskCenterCss.includes(expected)) failures.push(`任务中心 CSS 缺少现有响应式基线 ${expected}`)
 }
 
 if (failures.length) {
-  console.error('Pi Live Task Surface 契约检查失败：')
+  console.error('Pi Live / 任务中心契约检查失败：')
   for (const failure of failures) console.error(`- ${failure}`)
   process.exit(1)
 }
 
-console.log('Pi Live Task Surface 契约检查通过：五页导航、事件层级、历史事实、IME、Stop/Terminate、滚动跟随、Extension UI、背压与性能诊断已锁定。')
+console.log('Pi Live / 任务中心契约检查通过：统一任务入口、项目上下文启动、事件层级、历史事实、IME、Stop/Terminate、滚动跟随、Extension UI、背压与性能诊断已锁定。')
