@@ -78,8 +78,6 @@ async function refreshDesktopIntegration() {
   if (existsSync(join(home, '.claude'))) targets.push('claude')
 
   if (!targets.length) {
-    // 即使当前没有检测到 Agent，也登记 Desktop 为可用 Hook Provider，
-    // 以后安装 Codex / Claude Code 时无需重新安装客户端。
     await runCli(['hook', 'status', 'all', '--json'], env)
     return
   }
@@ -165,23 +163,25 @@ async function showUpdateActions(update) {
 }
 
 async function notifyUpdate(update) {
+  if (!Notification.isSupported()) {
+    // 自动更新检查必须保持非阻塞。系统通知不可用时静默降级，
+    // 不在启动后弹出模态对话框抢占当前任务焦点。
+    return false
+  }
+
   const title = `AgentLens ${update.version} 可用`
   const body = update.prerelease
     ? '发现新的预发布版本。点击查看详情、跳过或稍后处理。'
     : '发现新的正式版本。点击查看详情、跳过或稍后处理。'
 
-  if (Notification.isSupported()) {
-    updateNotification?.close()
-    updateNotification = new Notification({ title, body })
-    updateNotification.once('click', () => {
-      void showUpdateActions(update).catch(() => undefined)
-    })
-    updateNotification.once('close', () => { updateNotification = null })
-    updateNotification.show()
-    return
-  }
-
-  await showUpdateActions(update)
+  updateNotification?.close()
+  updateNotification = new Notification({ title, body })
+  updateNotification.once('click', () => {
+    void showUpdateActions(update).catch(() => undefined)
+  })
+  updateNotification.once('close', () => { updateNotification = null })
+  updateNotification.show()
+  return true
 }
 
 async function checkDesktopUpdate() {
@@ -190,7 +190,6 @@ async function checkDesktopUpdate() {
   const state = await readUpdateState()
   if (!shouldCheckForUpdate(state.lastCheckedAt)) return
 
-  // 先记录本次自动检查尝试。即使网络失败，也不会在每次启动时反复请求 GitHub。
   try {
     await writeUpdateState({ ...state, lastCheckedAt: new Date().toISOString() })
   } catch {
@@ -204,7 +203,6 @@ async function checkDesktopUpdate() {
       arch: process.arch,
     })
   } catch {
-    // 自动检查更新绝不能改变启动、运行时或离线使用语义。
     return
   }
 
