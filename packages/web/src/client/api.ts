@@ -120,13 +120,14 @@ export class AgentLensApi {
   facets(): Promise<FacetResponseDto> { return requestJson('/api/v1/facets') }
   agents(): Promise<AgentOverviewResponseDto> { return requestJson('/api/v1/agents') }
 
-  review(filters: ReviewFilters, limit = 40): Promise<ReviewResponseDto> {
+  review(filters: ReviewFilters, limit = 40, cursor?: string, signal?: AbortSignal): Promise<ReviewResponseDto> {
     const params = new URLSearchParams()
     appendFilters(params, filters)
     if (filters.status !== 'all') params.set('status', filters.status)
     if (filters.search.trim()) params.set('search', filters.search.trim())
+    if (cursor) params.set('cursor', cursor)
     params.set('limit', String(Math.max(1, Math.min(limit, 500))))
-    return requestJson(`/api/v1/review?${params}`)
+    return requestJson(`/api/v1/review?${params}`, signal ? { signal } : {})
   }
 
   reviewDetail(

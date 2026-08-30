@@ -61,6 +61,20 @@ test('session summary projection preserves ordering and can rebuild one session'
     })
     assert.deepEqual(exactProjected.items.map(item => item.logicalSessionId), [newer.observation.logicalSessionId])
 
+    const firstPage = await storage.sessionSummaries.query({ limit: 1 })
+    assert.equal(firstPage.hasMore, true)
+    assert.equal(firstPage.items.length, 1)
+    const first = firstPage.items[0]!
+    const secondPage = await storage.sessionSummaries.query({
+      limit: 1,
+      after: { endedAt: first.endedAt, logicalSessionId: first.logicalSessionId },
+    })
+    assert.deepEqual(secondPage.items.map(item => item.logicalSessionId), [older.observation.logicalSessionId])
+    assert.equal(secondPage.hasMore, false)
+
+    const searched = await storage.sessionSummaries.query({ limit: 10, search: '较早会话' })
+    assert.deepEqual(searched.items.map(item => item.logicalSessionId), [older.observation.logicalSessionId])
+
     const pending = await commitMessage('session-pending', '2026-08-25T10:07:00.000Z', '尚在刷新窗口中的新会话')
     const exactPending = await storage.sessionSummaries.query({
       logicalSessionId: pending.observation.logicalSessionId,

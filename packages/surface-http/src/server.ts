@@ -249,6 +249,7 @@ function parseReviewQuery(params: URLSearchParams): ReviewQueryDto {
     throw badRequest(`Unknown review status: ${statusValue}`)
   }
   return {
+    ...(params.get('cursor') ? { cursor: params.get('cursor')! } : {}),
     ...(params.get('sourceId') ? { sourceId: params.get('sourceId')! } : {}),
     ...(params.get('projectId') ? { projectId: params.get('projectId')! } : {}),
     ...(from ? { from } : {}),
@@ -628,7 +629,9 @@ export async function startHttpSurface(
       writeJson(response, 404, { error: 'not_found' })
     } catch (error) {
       const cursorError = error instanceof Error
-        && (error.message === 'Invalid timeline cursor' || error.message === 'Invalid review cursor')
+        && (error.message === 'Invalid timeline cursor'
+          || error.message === 'Invalid review cursor'
+          || error.message === 'Invalid review list cursor')
       const statusCode = cursorError
         ? 400
         : error && typeof error === 'object' && 'statusCode' in error

@@ -181,12 +181,26 @@ export interface SessionSummaryRecord {
   errorCount: number
 }
 
+export interface SessionSummaryCursor {
+  endedAt: string
+  logicalSessionId: LogicalSessionId
+}
+
+export interface SessionSummaryQuery {
+  limit: number
+  installationId?: AgentInstallationId
+  logicalSessionId?: LogicalSessionId
+  sourceId?: string
+  projectId?: ProjectId
+  from?: string
+  to?: string
+  hasErrors?: boolean
+  search?: string
+  after?: SessionSummaryCursor
+}
+
 export interface SessionSummaryReader {
-  query(input: {
-    limit: number
-    installationId?: AgentInstallationId
-    logicalSessionId?: LogicalSessionId
-  }): Promise<{ items: SessionSummaryRecord[]; hasMore: boolean }>
+  query(input: SessionSummaryQuery): Promise<{ items: SessionSummaryRecord[]; hasMore: boolean }>
 }
 
 /**

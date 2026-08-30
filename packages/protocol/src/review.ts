@@ -104,6 +104,7 @@ export interface ReviewDetailQueryDto {
 }
 
 export interface ReviewQueryDto {
+  cursor?: string
   sourceId?: string
   projectId?: string
   from?: string
@@ -119,6 +120,7 @@ export interface ReviewResponseDto {
     protocolVersion: typeof AGENT_LENS_PROTOCOL_VERSION
     count: number
     hasMore: boolean
+    nextCursor?: string
     generatedAt: string
   }
 }

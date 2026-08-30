@@ -45,7 +45,6 @@ type Listener = () => void
 const initialQuery: QueryFilters = { sourceId: '', projectId: '', range: '7d' }
 const INITIAL_REVIEW_LIMIT = 40
 const REVIEW_PAGE_SIZE = 40
-const MAX_REVIEW_LIMIT = 500
 const REVIEW_DETAIL_PAGE_SIZE = 20
 const REVIEW_SEARCH_DEBOUNCE_MS = 250
 
@@ -111,6 +110,11 @@ export class AgentLensClientModel {
   private refreshTimer: ReturnType<typeof setTimeout> | null = null
   private detailTimer: ReturnType<typeof setTimeout> | null = null
   private reviewSearchTimer: ReturnType<typeof setTimeout> | null = null
+  private reviewInFlight: Promise<void> | null = null
+  private reviewRequestDirty = false
+  private reviewLiveDirty = false
+  private reviewActive = false
+  private visibilityListener: (() => void) | null = null
   private unsubscribeLive: (() => void) | null = null
   private reviewGeneration = 0
   private detailGeneration = 0
@@ -149,14 +153,18 @@ export class AgentLensClientModel {
         connected => this.patch({ liveConnected: connected }),
       )
     }
+    if (!this.visibilityListener && typeof document !== 'undefined') {
+      this.visibilityListener = () => {
+        if (!document.hidden && this.reviewActive && this.reviewLiveDirty) this.scheduleReviewRefresh(0)
+      }
+      document.addEventListener('visibilitychange', this.visibilityListener)
+    }
 
-    const health = await this.api.health().catch(() => null)
-    if (health) this.patch({ health })
-    await Promise.all([
-      this.refreshFacetsAndAgents(),
-      this.refreshReview(),
-      this.refreshUsage(),
+    const [health] = await Promise.all([
+      this.api.health().catch(() => null),
+      this.refreshFacets(),
     ])
+    if (health) this.patch({ health })
   }
 
   stop(): void {
@@ -165,25 +173,73 @@ export class AgentLensClientModel {
     if (this.refreshTimer) clearTimeout(this.refreshTimer)
     if (this.detailTimer) clearTimeout(this.detailTimer)
     if (this.reviewSearchTimer) clearTimeout(this.reviewSearchTimer)
+    if (this.visibilityListener && typeof document !== 'undefined') document.removeEventListener('visibilitychange', this.visibilityListener)
     this.refreshTimer = null
     this.detailTimer = null
     this.reviewSearchTimer = null
+    this.visibilityListener = null
+    this.reviewActive = false
+  }
+
+  async refreshFacets(): Promise<void> {
+    try {
+      const facets = await this.api.facets()
+      this.patch({ facets })
+    } catch {
+      // Facets are shared navigation metadata; route data can still load independently.
+    }
+  }
+
+  async refreshAgents(): Promise<void> {
+    const generation = ++this.agentsGeneration
+    const invalidation = this.agentsInvalidation
+    try {
+      const agents = await this.api.agents()
+      if (generation !== this.agentsGeneration) return
+      this.patch({ agents, agentsHasNewData: this.agentsInvalidation !== invalidation })
+    } catch {
+      // Existing data remains visible on refresh failure.
+    }
   }
 
   async refreshFacetsAndAgents(): Promise<void> {
-    const generation = ++this.agentsGeneration
-    const invalidation = this.agentsInvalidation
-    const [facets, agents] = await Promise.allSettled([
-      this.api.facets(),
-      this.api.agents(),
-    ])
-    if (generation !== this.agentsGeneration) return
-    this.patch({
-      ...(facets.status === 'fulfilled' ? { facets: facets.value } : {}),
-      ...(agents.status === 'fulfilled'
-        ? { agents: agents.value, agentsHasNewData: this.agentsInvalidation !== invalidation }
-        : {}),
-    })
+    await Promise.all([this.refreshFacets(), this.refreshAgents()])
+  }
+
+  ensureReview(): Promise<void> {
+    return this.snapshot.review.response ? Promise.resolve() : this.refreshReview()
+  }
+
+  ensureUsage(): Promise<void> {
+    return this.snapshot.usage.response ? Promise.resolve() : this.refreshUsage()
+  }
+
+  ensureAgents(): Promise<void> {
+    return this.snapshot.agents ? Promise.resolve() : this.refreshAgents()
+  }
+
+  setReviewActive(active: boolean): void {
+    this.reviewActive = active
+    if (!active) {
+      if (this.refreshTimer) clearTimeout(this.refreshTimer)
+      this.refreshTimer = null
+      return
+    }
+    if (this.reviewLiveDirty) this.scheduleReviewRefresh(0)
+  }
+
+  private scheduleReviewRefresh(delay?: number): void {
+    this.reviewLiveDirty = true
+    if (!this.reviewActive) return
+    if (typeof document !== 'undefined' && document.hidden) return
+    if (this.refreshTimer) clearTimeout(this.refreshTimer)
+    const wait = delay ?? 800
+    this.refreshTimer = setTimeout(() => {
+      this.refreshTimer = null
+      if (!this.reviewActive || !this.reviewLiveDirty) return
+      this.reviewLiveDirty = false
+      void this.refreshReview({ preserveDetail: true })
+    }, wait)
   }
 
   setReviewFilters(patch: Partial<ReviewFilters>): void {
@@ -219,14 +275,37 @@ export class AgentLensClientModel {
 
   async loadMoreReview(): Promise<void> {
     const current = this.snapshot.review
-    if (current.loading || current.loadingMore || !current.response?.meta.hasMore) return
-    const nextLimit = Math.min(current.limit + REVIEW_PAGE_SIZE, MAX_REVIEW_LIMIT)
-    if (nextLimit === current.limit) return
+    const cursor = current.response?.meta.nextCursor
+    if (current.loading || current.loadingMore || !current.response?.meta.hasMore || !cursor) return
+    const generation = ++this.reviewGeneration
     this.publish({
       ...this.snapshot,
-      review: { ...current, limit: nextLimit, loadingMore: true, error: '' },
+      review: { ...current, loadingMore: true, error: '' },
     })
-    await this.refreshReview({ preserveDetail: true, loadingMore: true })
+    try {
+      const next = await this.api.review(current.filters, REVIEW_PAGE_SIZE, cursor)
+      if (generation !== this.reviewGeneration) return
+      const latest = this.snapshot.review
+      const items = new Map(latest.response?.items.map(item => [item.id, item]) ?? [])
+      for (const item of next.items) items.set(item.id, item)
+      const merged = [...items.values()]
+      this.publish({
+        ...this.snapshot,
+        review: {
+          ...latest,
+          response: { ...next, items: merged, meta: { ...next.meta, count: merged.length } },
+          limit: merged.length,
+          loadingMore: false,
+          error: '',
+        },
+      })
+    } catch (error) {
+      if (generation !== this.reviewGeneration) return
+      this.publish({
+        ...this.snapshot,
+        review: { ...this.snapshot.review, loadingMore: false, error: error instanceof Error ? error.message : String(error) },
+      })
+    }
   }
 
   async loadMoreReviewDetail(): Promise<void> {
@@ -367,46 +446,61 @@ export class AgentLensClientModel {
     })
   }
 
-  async refreshReview(options: { preserveDetail?: boolean; loadingMore?: boolean } = {}): Promise<void> {
-    const generation = ++this.reviewGeneration
+  async refreshReview(options: { preserveDetail?: boolean } = {}): Promise<void> {
+    if (this.refreshTimer) clearTimeout(this.refreshTimer)
+    this.refreshTimer = null
+    this.reviewLiveDirty = false
+    this.reviewGeneration += 1
+    if (this.reviewInFlight) {
+      this.reviewRequestDirty = true
+      return this.reviewInFlight
+    }
+
+    let preserveDetail = options.preserveDetail === true
+    const run = async () => {
+      do {
+        this.reviewRequestDirty = false
+        const generation = this.reviewGeneration
+        await this.executeReviewRefresh(generation, preserveDetail)
+        preserveDetail = true
+      } while (this.reviewRequestDirty)
+    }
+    const pending = run().finally(() => {
+      if (this.reviewInFlight === pending) this.reviewInFlight = null
+    })
+    this.reviewInFlight = pending
+    return pending
+  }
+
+  private async executeReviewRefresh(generation: number, preserveDetail: boolean): Promise<void> {
     const current = this.snapshot.review
     this.publish({
       ...this.snapshot,
-      review: {
-        ...current,
-        loading: options.loadingMore ? current.loading : true,
-        loadingMore: options.loadingMore ?? false,
-        error: '',
-      },
+      review: { ...current, loading: true, loadingMore: false, error: '' },
     })
     try {
-      const response = await this.api.review(current.filters, current.limit)
+      const response = await this.api.review(current.filters, INITIAL_REVIEW_LIMIT)
       if (generation !== this.reviewGeneration) return
       let selectedId = this.snapshot.review.selectedId
-      if (!selectedId || !response.items.some(item => item.id === selectedId)) {
-        selectedId = response.items[0]?.id ?? ''
-      }
+      if (!selectedId || !response.items.some(item => item.id === selectedId)) selectedId = response.items[0]?.id ?? ''
       this.publish({
         ...this.snapshot,
         review: {
           ...this.snapshot.review,
           response,
           selectedId,
+          limit: INITIAL_REVIEW_LIMIT,
           loading: false,
           loadingMore: false,
           error: '',
         },
       })
-      if (selectedId && (!options.preserveDetail || this.snapshot.review.detail?.id !== selectedId)) {
+      if (selectedId && (!preserveDetail || this.snapshot.review.detail?.id !== selectedId)) {
         await this.selectReviewSession(selectedId)
       } else if (!selectedId) {
         this.publish({
           ...this.snapshot,
-          review: {
-            ...this.snapshot.review,
-            detail: null,
-            relationships: null,
-          },
+          review: { ...this.snapshot.review, detail: null, relationships: null },
         })
       }
     } catch (error) {
@@ -544,18 +638,14 @@ export class AgentLensClientModel {
   private onLiveEvent(event: LiveUpdateEventDto): void {
     const affected: readonly LiveUpdateArea[] = event.affected
     if (affected.includes('review')) {
-      if (event.type === 'observation.committed' && event.logicalSessionId && event.logicalSessionId === this.snapshot.review.selectedId) {
+      if (this.reviewActive && event.type === 'observation.committed' && event.logicalSessionId && event.logicalSessionId === this.snapshot.review.selectedId) {
         if (this.detailTimer) clearTimeout(this.detailTimer)
         this.detailTimer = setTimeout(() => {
           this.detailTimer = null
-          void this.refreshSelectedTailIncremental()
+          if (this.reviewActive) void this.refreshSelectedTailIncremental()
         }, 160)
       }
-      if (this.refreshTimer) clearTimeout(this.refreshTimer)
-      this.refreshTimer = setTimeout(() => {
-        this.refreshTimer = null
-        void this.refreshReview({ preserveDetail: true })
-      }, 220)
+      this.scheduleReviewRefresh()
     }
     if (affected.includes('usage')) {
       this.usageInvalidation += 1

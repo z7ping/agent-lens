@@ -232,6 +232,31 @@ type FilterReviewCursor = {
 
 type ReviewCursorPayload = TimelineReviewCursor | FilterReviewCursor
 
+interface ReviewListCursor {
+  endedAt: string
+  logicalSessionId: string
+}
+
+function encodeReviewListCursor(value: ReviewListCursor): string {
+  return JSON.stringify(value)
+}
+
+function decodeReviewListCursor(value: string): ReviewListCursor {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(value)
+  } catch {
+    throw new Error('Invalid review list cursor')
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Invalid review list cursor')
+  const record = parsed as Record<string, unknown>
+  if (typeof record.endedAt !== 'string' || !record.endedAt
+    || typeof record.logicalSessionId !== 'string' || !record.logicalSessionId) {
+    throw new Error('Invalid review list cursor')
+  }
+  return { endedAt: record.endedAt, logicalSessionId: record.logicalSessionId }
+}
+
 function encodeReviewCursor(value: ReviewCursorPayload): string {
   return JSON.stringify(value)
 }
@@ -348,28 +373,65 @@ export class ReviewProjection {
 
   async query(query: ReviewQueryDto = {}): Promise<ReviewResponseDto> {
     const requestedLimit = Math.max(1, Math.min(query.limit ?? DEFAULT_LIMIT, MAX_SESSIONS))
-    const summaries = this.storage.sessionSummaries
-      ? (await this.storage.sessionSummaries.query({ limit: MAX_SESSIONS })).items.map(item => this.summaryFromRecord(item))
-      : await this.fallbackSummaries()
-    const search = query.search?.trim().toLowerCase()
+    const cursor = query.cursor ? decodeReviewListCursor(query.cursor) : undefined
+    const search = query.search?.trim()
+
+    if (this.storage.sessionSummaries) {
+      const page = await this.storage.sessionSummaries.query({
+        limit: requestedLimit,
+        ...(query.sourceId ? { sourceId: query.sourceId } : {}),
+        ...(query.projectId ? { projectId: query.projectId } : {}),
+        ...(query.from ? { from: query.from } : {}),
+        ...(query.to ? { to: query.to } : {}),
+        ...(query.status === 'with-errors' ? { hasErrors: true } : {}),
+        ...(query.status === 'clean' ? { hasErrors: false } : {}),
+        ...(search ? { search } : {}),
+        ...(cursor ? { after: cursor } : {}),
+      })
+      const items = page.items.map(item => this.summaryFromRecord(item))
+      const last = items.at(-1)
+      return {
+        items,
+        meta: {
+          protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
+          count: items.length,
+          hasMore: page.hasMore,
+          ...(page.hasMore && last ? { nextCursor: encodeReviewListCursor({ endedAt: last.endedAt, logicalSessionId: last.id }) } : {}),
+          generatedAt: new Date().toISOString(),
+        },
+      }
+    }
+
+    const summaries = await this.fallbackSummaries()
+    const normalizedSearch = search?.toLowerCase()
     const filtered = summaries.filter(item => {
+      if (cursor && !(item.endedAt < cursor.endedAt
+        || (item.endedAt === cursor.endedAt && item.id > cursor.logicalSessionId))) return false
       if (query.sourceId && !item.sourceIds.includes(query.sourceId)) return false
       if (query.projectId && item.projectId !== query.projectId) return false
       if (query.from && item.endedAt < query.from) return false
       if (query.to && item.startedAt > query.to) return false
       if (query.status === 'with-errors' && !item.hasErrors) return false
       if (query.status === 'clean' && item.hasErrors) return false
-      if (search) {
+      if (normalizedSearch) {
         const haystack = [item.title, item.preview, item.projectName, item.workspacePath, ...item.sourceIds].filter(Boolean).join('\n').toLowerCase()
-        if (!haystack.includes(search)) return false
+        if (!haystack.includes(normalizedSearch)) return false
       }
       return true
     })
     filtered.sort((a, b) => b.endedAt.localeCompare(a.endedAt) || a.id.localeCompare(b.id))
     const hasMore = filtered.length > requestedLimit
+    const items = filtered.slice(0, requestedLimit)
+    const last = items.at(-1)
     return {
-      items: filtered.slice(0, requestedLimit),
-      meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION, count: Math.min(filtered.length, requestedLimit), hasMore, generatedAt: new Date().toISOString() },
+      items,
+      meta: {
+        protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
+        count: items.length,
+        hasMore,
+        ...(hasMore && last ? { nextCursor: encodeReviewListCursor({ endedAt: last.endedAt, logicalSessionId: last.id }) } : {}),
+        generatedAt: new Date().toISOString(),
+      },
     }
   }
 

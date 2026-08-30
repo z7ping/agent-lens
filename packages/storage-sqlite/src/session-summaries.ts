@@ -1,6 +1,7 @@
 import type {
   JsonValue,
   SessionSummaryProjectionStore,
+  SessionSummaryQuery,
   SessionSummaryRecord,
 } from '@agent-lens/core'
 import type { SqliteExecutor } from './executor'
@@ -38,7 +39,7 @@ function mapSummary(row: any): SessionSummaryRecord {
   }
 }
 
-function legacyQuerySql(observationFilter: string): string {
+function legacyQuerySql(observationFilter: string, summaryFilter: string): string {
   return `
     WITH session_aggregates AS (
       SELECT
@@ -55,85 +56,92 @@ function legacyQuerySql(observationFilter: string): string {
       FROM observations
       ${observationFilter}
       GROUP BY logical_session_id
-      ORDER BY ended_at DESC, logical_session_id ASC
-      LIMIT ?
+    ),
+    legacy_summary AS (
+      SELECT
+        aggregate.*,
+        logical.installation_id,
+        installation.product_id,
+        logical.project_id,
+        project.name AS project_name,
+        logical.workspace_id,
+        workspace.path AS workspace_path,
+        logical.title,
+        (
+          SELECT payload_json
+          FROM observations AS first_user
+          WHERE first_user.logical_session_id = aggregate.logical_session_id
+            AND first_user.kind = 'message.user'
+          ORDER BY
+            COALESCE(first_user.occurred_at, first_user.captured_at) ASC,
+            COALESCE(first_user.canonical_sequence, first_user.source_sequence, ${MAX_SEQUENCE}) ASC,
+            first_user.id ASC
+          LIMIT 1
+        ) AS first_user_payload,
+        (
+          SELECT kind
+          FROM observations AS first_content
+          WHERE first_content.logical_session_id = aggregate.logical_session_id
+            AND first_content.kind <> 'session.lifecycle'
+          ORDER BY
+            COALESCE(first_content.occurred_at, first_content.captured_at) ASC,
+            COALESCE(first_content.canonical_sequence, first_content.source_sequence, ${MAX_SEQUENCE}) ASC,
+            first_content.id ASC
+          LIMIT 1
+        ) AS leading_kind,
+        (
+          SELECT json_group_array(source_id)
+          FROM (
+            SELECT DISTINCT source_session.source_id
+            FROM observations AS source_observation
+            JOIN source_sessions AS source_session
+              ON source_session.id = source_observation.source_session_id
+            WHERE source_observation.logical_session_id = aggregate.logical_session_id
+            ORDER BY source_session.source_id
+          )
+        ) AS source_ids_json
+      FROM session_aggregates AS aggregate
+      JOIN logical_sessions AS logical ON logical.id = aggregate.logical_session_id
+      JOIN agent_installations AS installation ON installation.id = logical.installation_id
+      LEFT JOIN projects AS project ON project.id = logical.project_id
+      LEFT JOIN workspaces AS workspace ON workspace.id = logical.workspace_id
     )
-    SELECT
-      aggregate.*,
-      logical.installation_id,
-      installation.product_id,
-      logical.project_id,
-      project.name AS project_name,
-      logical.workspace_id,
-      workspace.path AS workspace_path,
-      logical.title,
-      (
-        SELECT payload_json
-        FROM observations AS first_user
-        WHERE first_user.logical_session_id = aggregate.logical_session_id
-          AND first_user.kind = 'message.user'
-        ORDER BY
-          COALESCE(first_user.occurred_at, first_user.captured_at) ASC,
-          COALESCE(first_user.canonical_sequence, first_user.source_sequence, ${MAX_SEQUENCE}) ASC,
-          first_user.id ASC
-        LIMIT 1
-      ) AS first_user_payload,
-      (
-        SELECT kind
-        FROM observations AS first_content
-        WHERE first_content.logical_session_id = aggregate.logical_session_id
-          AND first_content.kind <> 'session.lifecycle'
-        ORDER BY
-          COALESCE(first_content.occurred_at, first_content.captured_at) ASC,
-          COALESCE(first_content.canonical_sequence, first_content.source_sequence, ${MAX_SEQUENCE}) ASC,
-          first_content.id ASC
-        LIMIT 1
-      ) AS leading_kind,
-      (
-        SELECT json_group_array(source_id)
-        FROM (
-          SELECT DISTINCT source_session.source_id
-          FROM observations AS source_observation
-          JOIN source_sessions AS source_session
-            ON source_session.id = source_observation.source_session_id
-          WHERE source_observation.logical_session_id = aggregate.logical_session_id
-          ORDER BY source_session.source_id
-        )
-      ) AS source_ids_json
-    FROM session_aggregates AS aggregate
-    JOIN logical_sessions AS logical ON logical.id = aggregate.logical_session_id
-    JOIN agent_installations AS installation ON installation.id = logical.installation_id
-    LEFT JOIN projects AS project ON project.id = logical.project_id
-    LEFT JOIN workspaces AS workspace ON workspace.id = logical.workspace_id
-    ORDER BY aggregate.ended_at DESC, aggregate.logical_session_id ASC
+    SELECT *
+    FROM legacy_summary AS summary
+    ${summaryFilter}
+    ORDER BY summary.ended_at DESC, summary.logical_session_id ASC
+    LIMIT ?
   `
 }
 
 export function sessionSummaryProjectionSelectSql(summaryFilter: string): string {
   return `
-    SELECT
-      summary.logical_session_id,
-      summary.installation_id,
-      summary.started_at,
-      summary.ended_at,
-      summary.observation_count,
-      summary.user_message_count,
-      summary.tool_count,
-      summary.error_count,
-      summary.first_user_payload,
-      summary.leading_kind,
-      summary.source_ids_json,
-      installation.product_id,
-      logical.project_id,
-      project.name AS project_name,
-      logical.workspace_id,
-      workspace.path AS workspace_path,
-      logical.title
-    FROM session_summary_projection AS summary
-    JOIN logical_sessions AS logical ON logical.id = summary.logical_session_id
-    JOIN agent_installations AS installation ON installation.id = summary.installation_id
-    LEFT JOIN projects AS project ON project.id = logical.project_id
-    LEFT JOIN workspaces AS workspace ON workspace.id = logical.workspace_id
+    SELECT *
+    FROM (
+      SELECT
+        summary.logical_session_id,
+        summary.installation_id,
+        summary.started_at,
+        summary.ended_at,
+        summary.observation_count,
+        summary.user_message_count,
+        summary.tool_count,
+        summary.error_count,
+        summary.first_user_payload,
+        summary.leading_kind,
+        summary.source_ids_json,
+        installation.product_id,
+        logical.project_id,
+        project.name AS project_name,
+        logical.workspace_id,
+        workspace.path AS workspace_path,
+        logical.title
+      FROM session_summary_projection AS summary
+      JOIN logical_sessions AS logical ON logical.id = summary.logical_session_id
+      JOIN agent_installations AS installation ON installation.id = summary.installation_id
+      LEFT JOIN projects AS project ON project.id = logical.project_id
+      LEFT JOIN workspaces AS workspace ON workspace.id = logical.workspace_id
+    ) AS summary
     ${summaryFilter}
     ORDER BY summary.ended_at DESC, summary.logical_session_id ASC
     LIMIT ?
@@ -235,14 +243,57 @@ function whereClause(conditions: string[]): string {
   return conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
 }
 
+function summaryQueryWhere(input: SessionSummaryQuery): { sql: string; params: unknown[] } {
+  const conditions: string[] = []
+  const params: unknown[] = []
+  if (input.logicalSessionId) {
+    conditions.push('summary.logical_session_id = ?')
+    params.push(input.logicalSessionId)
+  }
+  if (input.installationId) {
+    conditions.push('summary.installation_id = ?')
+    params.push(input.installationId)
+  }
+  if (input.sourceId) {
+    conditions.push("EXISTS (SELECT 1 FROM json_each(COALESCE(summary.source_ids_json, '[]')) AS source WHERE source.value = ?)")
+    params.push(input.sourceId)
+  }
+  if (input.projectId) {
+    conditions.push('summary.project_id = ?')
+    params.push(input.projectId)
+  }
+  if (input.from) {
+    conditions.push('summary.ended_at >= ?')
+    params.push(input.from)
+  }
+  if (input.to) {
+    conditions.push('summary.started_at <= ?')
+    params.push(input.to)
+  }
+  if (input.hasErrors === true) conditions.push('summary.error_count > 0')
+  if (input.hasErrors === false) conditions.push('summary.error_count = 0')
+  const search = input.search?.trim().toLowerCase()
+  if (search) {
+    conditions.push(`LOWER(
+      COALESCE(summary.title, '') || '\n' ||
+      COALESCE(summary.project_name, '') || '\n' ||
+      COALESCE(summary.workspace_path, '') || '\n' ||
+      COALESCE(summary.first_user_payload, '') || '\n' ||
+      COALESCE(summary.source_ids_json, '')
+    ) LIKE ?`)
+    params.push(`%${search}%`)
+  }
+  if (input.after) {
+    conditions.push('(summary.ended_at < ? OR (summary.ended_at = ? AND summary.logical_session_id > ?))')
+    params.push(input.after.endedAt, input.after.endedAt, input.after.logicalSessionId)
+  }
+  return { sql: whereClause(conditions), params }
+}
+
 export class SqliteSessionSummaryReader implements SessionSummaryProjectionStore {
   constructor(private readonly executor: SqliteExecutor) {}
 
-  query(input: {
-    limit: number
-    installationId?: string
-    logicalSessionId?: string
-  }): Promise<{ items: SessionSummaryRecord[]; hasMore: boolean }> {
+  query(input: SessionSummaryQuery): Promise<{ items: SessionSummaryRecord[]; hasMore: boolean }> {
     const limit = Math.max(1, Math.min(input.limit, MAX_LIMIT))
     return this.executor.run(() => {
       const projectionExists = Boolean(this.executor.db.prepare(
@@ -252,21 +303,11 @@ export class SqliteSessionSummaryReader implements SessionSummaryProjectionStore
         ? true
         : Boolean(this.executor.db.prepare('SELECT 1 FROM observations LIMIT 1').get())
 
+      const summaryWhere = summaryQueryWhere(input)
       if (projectionExists || !observationExists) {
-        const conditions: string[] = []
-        const params: unknown[] = []
-        if (input.logicalSessionId) {
-          conditions.push('summary.logical_session_id = ?')
-          params.push(input.logicalSessionId)
-        }
-        if (input.installationId) {
-          conditions.push('summary.installation_id = ?')
-          params.push(input.installationId)
-        }
-        params.push(limit + 1)
         const rows = this.executor.db.prepare(
-          sessionSummaryProjectionSelectSql(whereClause(conditions)),
-        ).all(...params)
+          sessionSummaryProjectionSelectSql(summaryWhere.sql),
+        ).all(...summaryWhere.params, limit + 1)
 
         if (rows.length || !input.logicalSessionId || !projectionExists) {
           return {
@@ -286,18 +327,19 @@ export class SqliteSessionSummaryReader implements SessionSummaryProjectionStore
         // query for correctness; the steady-state path above remains indexed.
       }
 
-      const conditions: string[] = []
-      const params: unknown[] = []
+      const observationConditions: string[] = []
+      const observationParams: unknown[] = []
       if (input.logicalSessionId) {
-        conditions.push('logical_session_id = ?')
-        params.push(input.logicalSessionId)
+        observationConditions.push('logical_session_id = ?')
+        observationParams.push(input.logicalSessionId)
       }
       if (input.installationId) {
-        conditions.push('installation_id = ?')
-        params.push(input.installationId)
+        observationConditions.push('installation_id = ?')
+        observationParams.push(input.installationId)
       }
-      params.push(limit + 1)
-      const rows = this.executor.db.prepare(legacyQuerySql(whereClause(conditions))).all(...params)
+      const rows = this.executor.db.prepare(
+        legacyQuerySql(whereClause(observationConditions), summaryWhere.sql),
+      ).all(...observationParams, ...summaryWhere.params, limit + 1)
       return {
         items: rows.slice(0, limit).map(mapSummary),
         hasMore: rows.length > limit,

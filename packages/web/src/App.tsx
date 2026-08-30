@@ -125,6 +125,14 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const navigationHasNewData = (to: string) => to === '/tools' ? snapshot.usage.hasNewData : to === '/agents' ? snapshot.agentsHasNewData : false
 
   useEffect(() => {
+    model.setReviewActive(onLocalReview)
+    if (onLocalReview) void model.ensureReview()
+    if (onTools) void model.ensureUsage()
+    if (onAgents) void model.ensureAgents()
+    return () => { if (onLocalReview) model.setReviewActive(false) }
+  }, [model, onLocalReview, onTools, onAgents])
+
+  useEffect(() => {
     if (!onLocalReview) {
       reviewUrlReadyRef.current = false
       skipReviewUrlWriteRef.current = false
@@ -169,7 +177,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
           </nav>
           <div className="app-status">
             <RuntimeStatus health={snapshot.health} liveConnected={snapshot.liveConnected} />
-            <ReleaseInfo />
+            <ReleaseInfo runtimeOwner={snapshot.health?.runtime?.owner ?? null} runtimeReady={snapshot.health !== null} />
             <button className="theme-toggle" onClick={toggleTheme} title={theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'} aria-label={theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'}><ThemeGlyph dark={theme === 'dark'}/></button>
           </div>
         </div>

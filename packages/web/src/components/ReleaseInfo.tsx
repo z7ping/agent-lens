@@ -115,7 +115,7 @@ function UpdateDialog({ update, onClose }: { update: WebUpdateInfo; onClose(): v
   </div>
 }
 
-export function ReleaseInfo() {
+export function ReleaseInfo({ runtimeOwner, runtimeReady }: { runtimeOwner: string | null; runtimeReady: boolean }) {
   const [open, setOpen] = useState(false)
   const [updateOpen, setUpdateOpen] = useState(false)
   const [update, setUpdate] = useState<WebUpdateInfo | null>(null)
@@ -125,12 +125,13 @@ export function ReleaseInfo() {
   )
 
   useEffect(() => {
+    if (!runtimeReady) return
     let active = true
-    void checkWebUpdate(packageMetadata.version).then(result => {
+    void checkWebUpdate(packageMetadata.version, { runtimeOwner }).then(result => {
       if (active) setUpdate(result)
     }).catch(() => undefined)
     return () => { active = false }
-  }, [])
+  }, [runtimeOwner, runtimeReady])
 
   useEffect(() => {
     if (!open && !updateOpen) return
