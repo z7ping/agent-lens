@@ -31,7 +31,7 @@ if (/to="\/review\/live"[^>]*>Pi 实时<\/NavLink>/.test(app)) failures.push('�
 
 requireText(taskCenter, /\+ 新建任务/, '任务中心左侧必须提供统一“新建任务”入口')
 requireText(taskCenter, /进行中 \+ 历史/, '任务中心必须明确统一进行中与历史任务')
-requireText(taskCenter, /piLiveApi\.knownRuntimes\(\)/, '任务中心必须发现当前浏览器已知 Pi Runtime')
+requireText(taskCenter, /piLiveApi\.knownRuntimes\(\)/, '任务中心必须发现当前 AgentLens Runtime 持有的 Pi Runtime')
 requireText(taskCenter, /<ReviewPage model=\{model\}\/>/, '任务中心必须复用既有历史任务详情')
 requireText(taskCenter, /<PiLivePage\/>/, '任务中心必须复用 Pi Live 实时详情')
 requireText(taskCenter, /<HubReviewPage\/>/, '任务中心必须保留 Hub 远程详情')
@@ -60,6 +60,8 @@ requireText(history, /message\.role !== 'tool' && message\.role !== 'toolResult'
 requireText(coreObservation, /'thinking\.level\.changed'/, 'Core ObservationKind 缺少 thinking.level.changed')
 requireText(timelineProtocol, /'thinking\.level\.changed'/, 'Timeline Protocol 缺少 thinking.level.changed')
 
+requireText(client, /requestJson<PiLiveStateDto\[]>\('\/api\/v1\/pi-live'\)/, 'Pi 活跃任务必须优先从 Runtime 服务端列举，不能只依赖浏览器 localStorage')
+requireText(client, /Compatibility fallback[\s\S]*readKnownRuntimeIds\(\)/, 'Pi 活跃任务需要保留新 Web 对旧 Runtime 的兼容回退')
 requireText(client, /HIDDEN_FLUSH_MS = 250/, '后台页面必须降低 Streaming UI 提交频率')
 requireText(client, /requestAnimationFrame/, '前台 Streaming 必须按动画帧批量提交')
 requireText(client, /coalescedEvents/, 'Streaming Scheduler 缺少事件合并诊断')
@@ -67,8 +69,10 @@ requireText(client, /tool_execution_update[\s\S]*latest value replaces earlier p
 requireText(client, /source\.close\(\)/, '关闭 Pi Live View 必须只关闭 EventSource')
 if (/terminate\([^)]*\)[\s\S]{0,120}source\.close/.test(client)) failures.push('View dispose 不得隐式 terminate Pi Runtime')
 
+requireText(http, /url\.pathname === '\/api\/v1\/pi-live'[\s\S]*request\.method === 'GET'[\s\S]*service\.list\(\)/, 'Pi Live HTTP Surface 必须允许 GET 根路径列举 Runtime 持有的活跃任务')
 requireText(http, /request\.once\('close', cleanup\)/, 'Pi Live SSE 断开必须释放订阅')
 requireText(http, /service\.terminate\(runtimeSessionId\)/, 'Pi Runtime 必须只有显式 DELETE 终止路径')
+requireText(runtime, /async list\(\): Promise<PiLiveRuntimeState\[]>/, 'Pi Runtime Service 必须提供当前 generation 活跃 Runtime 列举')
 requireText(runtime, /clearQueue\(runtimeSessionId\)/, 'Abort 必须支持队列取回')
 requireText(runtime, /type: 'extension_ui_response'[\s\S]*id: requestId/, 'Extension UI 必须原样回传 Pi request id')
 
@@ -86,4 +90,4 @@ if (failures.length) {
   process.exit(1)
 }
 
-console.log('Pi Live / 任务中心契约检查通过：统一任务入口、项目上下文启动、事件层级、历史事实、IME、Stop/Terminate、滚动跟随、Extension UI、背压与性能诊断已锁定。')
+console.log('Pi Live / 任务中心契约检查通过：统一任务入口、Runtime 活跃任务列举、项目上下文启动、事件层级、历史事实、IME、Stop/Terminate、滚动跟随、Extension UI、背压与性能诊断已锁定。')
