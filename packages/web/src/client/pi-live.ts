@@ -272,11 +272,18 @@ export class PiLiveApi {
   }
 
   async knownRuntimes(): Promise<PiLiveStateDto[]> {
-    const ids = readKnownRuntimeIds()
-    const results = await Promise.allSettled(ids.map(id => this.state(id)))
-    const values = results.flatMap(result => result.status === 'fulfilled' ? [result.value] : [])
-    writeKnownRuntimeIds(values.map(item => item.runtimeSessionId))
-    return values
+    try {
+      const values = await requestJson<PiLiveStateDto[]>('/api/v1/pi-live')
+      writeKnownRuntimeIds(values.map(item => item.runtimeSessionId))
+      return values
+    } catch {
+      // Compatibility fallback for a newer Web talking to an older AgentLens runtime.
+      const ids = readKnownRuntimeIds()
+      const results = await Promise.allSettled(ids.map(id => this.state(id)))
+      const values = results.flatMap(result => result.status === 'fulfilled' ? [result.value] : [])
+      writeKnownRuntimeIds(values.map(item => item.runtimeSessionId))
+      return values
+    }
   }
 
   async start(input: PiLiveStartRequestDto): Promise<PiLiveStateDto> {
