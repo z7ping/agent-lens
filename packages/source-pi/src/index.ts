@@ -786,10 +786,11 @@ export async function normalizePiRecord(
       ...(stringField(entry, 'fromId') ? { branchFromEntryId: stringField(entry, 'fromId') } : {}),
     }))
   } else if (type === 'session_info') {
+    const name = stringField(entry, 'name')?.trim()
     observations.push(candidate(record, envelope, 'session.lifecycle', {
       event: 'session.info',
-      ...(stringField(entry, 'name') ? { name: stringField(entry, 'name') } : {}),
-    }))
+      ...(name ? { name } : {}),
+    }, { identity: name ? { sessionTitle: name } : {} }))
   } else {
     observations.push(candidate(record, envelope, 'unknown', {
       rawType: record.nativeType,
