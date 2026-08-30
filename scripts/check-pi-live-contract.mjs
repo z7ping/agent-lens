@@ -24,7 +24,7 @@ const topLevelLinks = [...navigationBlock.matchAll(/to:\s*'\/(review|tools|insig
 if (topLevelLinks !== 5) failures.push(`一级导航必须保持 5 个，当前检测到 ${topLevelLinks}`)
 requireText(navigationBlock, /to:\s*'\/review',\s*label:\s*'任务中心'/, 'Pi Live 并入实时任务后，一级任务入口必须命名为“任务中心”')
 requireText(app, /path="\/review\/new"/, '任务中心缺少新建任务路由')
-requireText(app, /path="\/review\/live"[^>]*element=\{<Navigate to="\/review\/new" replace\/>\}/, '旧 /review/live 入口必须重定向到任务中心新建任务')
+requireText(app, /path="\/review\/live"[^>]*element=\{<Navigate\s+to="\/review\/new"\s+replace\s*\/?>\}/, '旧 /review/live 入口必须重定向到任务中心新建任务')
 requireText(app, /path="\/review\/live\/:runtimeSessionId"/, '缺少 Pi Live runtime 路由')
 requireText(app, /onPiLive[\s\S]*!onPiLive/, 'Pi Live 必须从普通 Review overlay/turn rail 语义中分离')
 if (/to="\/review\/live"[^>]*>Pi 实时<\/NavLink>/.test(app)) failures.push('顶部 Header 不得继续保留独立“Pi 实时”产品入口')
