@@ -191,7 +191,7 @@ export class DefaultIdentityService implements IdentityService {
       installationId: hint.installationId,
       ...(hint.projectId ?? existing?.projectId ? { projectId: hint.projectId ?? existing!.projectId } : {}),
       ...(hint.workspaceId ?? existing?.workspaceId ? { workspaceId: hint.workspaceId ?? existing!.workspaceId } : {}),
-      ...(existing?.title ? { title: existing.title } : {}),
+      ...(hint.title ?? existing?.title ? { title: hint.title ?? existing!.title } : {}),
       ...(existing?.startedAt ? { startedAt: existing.startedAt } : {}),
       ...(existing?.endedAt ? { endedAt: existing.endedAt } : {}),
     }
@@ -333,6 +333,7 @@ export class DefaultObservationService implements ObservationService {
       nativeSessionId: hints.nativeSessionId,
       ...(workspace?.projectId ? { projectId: workspace.projectId } : {}),
       ...(workspace ? { workspaceId: workspace.id } : {}),
+      ...(hints.sessionTitle ? { title: hints.sessionTitle } : {}),
     })
     const sourceSession = await this.identity.resolveSourceSession({
       sourceId: input.sourceId,
@@ -452,7 +453,7 @@ export class DefaultCapabilityService implements CapabilityService {
   registerSourceCapabilities(sourceId: string, capabilities: ObservationCapability[]): Disposable {
     const next = new Map(capabilities.map(item => [item.name, item]))
     this.values.set(sourceId, next)
-    return { dispose: () => { if (this.values.get(sourceId) === next) this.values.delete(sourceId) } }
+    return { dispose: () => { if (this.values.get(sourceId) === next) this.values.delete(id) } }
   }
 
   listForSource(sourceId: string): ObservationCapability[] {
