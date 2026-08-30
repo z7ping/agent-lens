@@ -25,6 +25,8 @@ const required = [
   [server.includes("params.get('cursor')"), 'HTTP Surface 必须解析 Review 列表游标'],
   [releaseInfo.includes('runtimeReady') && releaseInfo.includes('{ runtimeOwner }'), '版本检查必须复用已有 runtime health 结果'],
   [app.includes('runtimeOwner={snapshot.health?.runtime?.owner ?? null}'), 'Shell 必须把已有 health 传给版本检查'],
+  [api.includes('preferUserSessionTitle') && api.includes('response.items.map(preferUserSessionTitle)'), '本地任务列表必须默认以首条真实用户消息表达任务意图'],
+  [api.includes('.then(preferUserSessionTitle)'), '会话详情标题必须与任务列表保持同一用户意图语义'],
 ]
 
 const failed = required.filter(([ok]) => !ok)

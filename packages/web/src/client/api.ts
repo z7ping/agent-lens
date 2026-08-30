@@ -35,6 +35,37 @@ let backupOverviewInFlight: Promise<BackupOverviewResponseDto> | null = null
 let backupOverviewCache: BackupOverviewResponseDto | null = null
 let reuseBackupOverviewOnce = false
 
+const injectedSessionTextPatterns = [
+  /<recommended_plugins>[\s\S]*?<\/recommended_plugins>/gi,
+  /# AGENTS\.md instructions[^\n]*[\s\S]*?<\/INSTRUCTIONS>/gi,
+  /<environment_context>[\s\S]*?<\/environment_context>/gi,
+  /<app-context>[\s\S]*?<\/app-context>/gi,
+  /<skills_instructions>[\s\S]*?<\/skills_instructions>/gi,
+  /<permissions instructions>[\s\S]*?<\/permissions instructions>/gi,
+  /<collaboration_mode>[\s\S]*?<\/collaboration_mode>/gi,
+]
+
+function cleanSessionIntent(value: string | undefined): string {
+  let text = value?.trim() ?? ''
+  for (const pattern of injectedSessionTextPatterns) text = text.replace(pattern, ' ')
+  return text.replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * 本地 Review 列表默认表达用户真正发起的任务。
+ * 目前协议还没有区分“原生会话摘要”和普通 title 的来源，因此先用首条用户消息作为稳定默认；
+ * 当 preview 缺失时保留 Source/历史数据提供的 title。Hub 远端仍按其同步 title 展示。
+ */
+export function preferUserSessionTitle<T extends { title?: string; preview?: string }>(item: T): T {
+  const preview = cleanSessionIntent(item.preview)
+  if (!preview) return item
+  return {
+    ...item,
+    title: preview,
+    preview,
+  }
+}
+
 function rangeStart(range: QueryFilters['range']): string | undefined {
   if (range === 'all') return undefined
   const date = new Date()
@@ -127,7 +158,10 @@ export class AgentLensApi {
     if (filters.search.trim()) params.set('search', filters.search.trim())
     if (cursor) params.set('cursor', cursor)
     params.set('limit', String(Math.max(1, Math.min(limit, 500))))
-    return requestJson(`/api/v1/review?${params}`, signal ? { signal } : {})
+    return requestJson<ReviewResponseDto>(`/api/v1/review?${params}`, signal ? { signal } : {}).then(response => ({
+      ...response,
+      items: response.items.map(preferUserSessionTitle),
+    }))
   }
 
   reviewDetail(
@@ -145,7 +179,8 @@ export class AgentLensApi {
     if (options.filter && options.filter !== 'all') params.set('filter', options.filter)
     if (options.limit !== undefined) params.set('limit', String(Math.max(1, Math.min(options.limit, 100))))
     const query = params.toString()
-    return requestJson(`/api/v1/review/${encodeURIComponent(id)}${query ? `?${query}` : ''}`)
+    return requestJson<ReviewSessionDetailDto>(`/api/v1/review/${encodeURIComponent(id)}${query ? `?${query}` : ''}`)
+      .then(preferUserSessionTitle)
   }
 
   relationships(id: string): Promise<SessionRelationshipResponseDto> {

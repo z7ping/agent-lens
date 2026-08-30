@@ -4,6 +4,7 @@ const main = readFileSync('packages/web/src/main.tsx', 'utf8')
 const page = readFileSync('packages/web/src/features/BackupPage.tsx', 'utf8')
 const tree = readFileSync('packages/web/src/components/BackupDirectoryTree.tsx', 'utf8')
 const css = readFileSync('packages/web/src/backup-overlays.css', 'utf8')
+const explainability = readFileSync('packages/backup-local/src/explainability.ts', 'utf8')
 
 const backupImport = main.indexOf("import './backup.css'")
 const overlayImport = main.indexOf("import './backup-overlays.css'")
@@ -59,4 +60,14 @@ if (tooSmall.length) {
   throw new Error(`资产备份覆盖层出现小于 12px 的字号：${[...new Set(tooSmall)].join(', ')}px`)
 }
 
-console.log('资产备份详情/恢复预演/目录树检查通过')
+if (!explainability.includes('inventoryCache') || !explainability.includes('inventoryReadInFlight')) {
+  throw new Error('资产备份解释层必须按索引 generation 复用 inventory，避免页面重复读盘和 JSON 解析')
+}
+if (!explainability.includes('appendDirectoryPath(root.tree, file)') || !explainability.includes('serializeDirectoryTree(root.tree)')) {
+  throw new Error('资产备份目录统计必须单次归档文件并按 root 一次序列化')
+}
+if (explainability.includes('directoryTree(files, root.path)')) {
+  throw new Error('资产备份不得恢复为每个 root 重扫整批 files 的目录树实现')
+}
+
+console.log('资产备份详情/恢复预演/目录树/解释层性能检查通过')
