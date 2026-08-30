@@ -183,9 +183,19 @@ async function* walkJsonlFiles(root: string): AsyncIterable<string> {
 }
 
 async function listJsonlFiles(root: string): Promise<string[]> {
-  const files: string[] = []
-  for await (const file of walkJsonlFiles(root)) files.push(file)
-  return files.sort((a, b) => a.localeCompare(b))
+  const paths: string[] = []
+  for await (const file of walkJsonlFiles(root)) paths.push(file)
+  const candidates = (await Promise.all(paths.map(async path => {
+    try {
+      return { path, mtimeMs: (await stat(path)).mtimeMs }
+    } catch {
+      return null
+    }
+  }))).filter((candidate): candidate is { path: string; mtimeMs: number } => candidate !== null)
+
+  return candidates
+    .sort((a, b) => b.mtimeMs - a.mtimeMs || b.path.localeCompare(a.path))
+    .map(candidate => candidate.path)
 }
 
 async function* readJsonlLines(filePath: string, startOffset: number): AsyncIterable<JsonlLine> {
@@ -841,3 +851,7 @@ const applyPiSource = Object.assign(
 )
 
 export const piSourcePlugin = defineAgentLensPlugin(piManifest, applyPiSource)
+
+export const piInternals = {
+  listJsonlFiles,
+}

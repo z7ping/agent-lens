@@ -10,7 +10,7 @@ import type {
   SourceDefinition,
   SourceRecord,
 } from '@agent-lens/core'
-import { SourceHistoryRunner } from './source-runner'
+import { SourceHistoryRunner, sourceRunnerInternals } from './source-runner'
 
 const host: Host = {
   id: 'host-1',
@@ -71,6 +71,25 @@ const capturePolicy = {
   sanitizeNormalizedOutput(value: NormalizedSourceOutput) { return value },
 } as unknown as CapturePolicyService
 
+test('后台来源处理达到时间预算后主动让出事件循环', async () => {
+  let currentTime = 0
+  let yields = 0
+  const schedule = sourceRunnerInternals.createCooperativeScheduler({
+    budgetMs: 8,
+    now: () => currentTime,
+    yieldControl: async () => { yields += 1 },
+  })
+
+  assert.equal(await schedule(), false)
+  currentTime = 8
+  assert.equal(await schedule(), true)
+  currentTime = 15
+  assert.equal(await schedule(), false)
+  currentTime = 16
+  assert.equal(await schedule(), true)
+  assert.equal(yields, 2)
+})
+
 test('History Coverage 只覆盖 history 能力并引用首尾 Source Evidence', async () => {
   const first = record('first', '2026-08-24T01:00:00.000Z')
   const last = record('last', '2026-08-24T03:00:00.000Z')
@@ -123,6 +142,7 @@ test('History Coverage 只覆盖 history 能力并引用首尾 Source Evidence',
       repositories: {
         sourceRecords: { async put(value: SourceRecord) { persisted.push(value.id) } },
       },
+      async transaction(operation: () => Promise<unknown>) { return operation() },
       checkpoints: {
         async get() { return null },
         async set() {},

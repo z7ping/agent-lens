@@ -53,7 +53,9 @@ const daemonMode = process.env.AGENT_LENS_DAEMON_MODE === 'managed' ? 'managed' 
 const developmentApiPort = process.env.AGENT_LENS_DEV_API_PORT
 const interactiveTerminal = Boolean(process.stdin.isTTY && process.stdout.isTTY)
 const startedAt = Date.now()
-const INITIAL_BACKGROUND_SYNC_DELAY_MS = 600
+// 为 Web Shell 的首轮 Health / Facet / Review 查询保留短暂宽限期；
+// 历史和资产同步随后继续增量执行。
+const INITIAL_BACKGROUND_SYNC_DELAY_MS = 2_000
 
 const app = new AgentLensApplication()
 app.useRuntime(nodeRuntimePlugin, nodeRuntime)
@@ -200,16 +202,27 @@ try {
 
     if (runtimeController.signal.aborted) return
 
-    const [history, assets] = await Promise.all([
-      syncRegisteredSourceHistory(app.context, runtimeController.signal, prepared.targets),
-      discoverRegisteredSourceAssets(app.context, runtimeController.signal, prepared.targets),
-    ])
-    logSourceFailures([...history.failures, ...assets.failures])
+    // 历史任务是首要界面数据。先完成历史同步，再扫描静态资产，避免两个
+    // 冷扫描器同时争用同一个 SQLite 执行器和磁盘。
+    const history = await syncRegisteredSourceHistory(
+      app.context,
+      runtimeController.signal,
+      prepared.targets,
+    )
+    logSourceFailures(history.failures)
     for (const result of history.results) {
       console.info(
         `[AgentLens] history synced: ${result.sourceId} records=${result.records} created=${result.observationsCreated} merged=${result.observationsMerged} unchanged=${result.observationsUnchanged}`,
       )
     }
+    if (runtimeController.signal.aborted) return
+
+    const assets = await discoverRegisteredSourceAssets(
+      app.context,
+      runtimeController.signal,
+      prepared.targets,
+    )
+    logSourceFailures(assets.failures)
     for (const result of assets.results) {
       console.info(
         `[AgentLens] assets scanned: ${result.sourceId} assets=${result.assetsDiscovered} states=${result.statesRecorded}`,

@@ -25,6 +25,8 @@ interface JsonlLine {
   endOffset: number
 }
 
+const CHECKPOINT_BATCH_SIZE = 100
+
 function sha256(value: string | Buffer): string {
   return createHash('sha256').update(value).digest('hex')
 }
@@ -48,9 +50,23 @@ async function* walkJsonlFiles(root: string): AsyncIterable<string> {
 }
 
 async function listJsonlFiles(root: string): Promise<string[]> {
-  const files: string[] = []
-  for await (const file of walkJsonlFiles(root)) files.push(file)
-  return files.sort((a, b) => a.localeCompare(b))
+  const paths: string[] = []
+  for await (const file of walkJsonlFiles(root)) paths.push(file)
+
+  const candidates = (await Promise.all(paths.map(async path => {
+    try {
+      return { path, mtimeMs: (await stat(path)).mtimeMs }
+    } catch {
+      // 文件可能在目录遍历后被宿主清理，跳过即可。
+      return null
+    }
+  }))).filter((candidate): candidate is { path: string; mtimeMs: number } => candidate !== null)
+
+  // 冷启动首先导入最近有活动的会话；恢复旧会话时 mtime 比目录日期更可靠。
+  // 路径降序只用于相同时间戳下的稳定排序，旧历史仍会在后续完整回填。
+  return candidates
+    .sort((a, b) => b.mtimeMs - a.mtimeMs || b.path.localeCompare(a.path))
+    .map(candidate => candidate.path)
 }
 
 function sessionIdFromFilename(filePath: string): string {
@@ -159,21 +175,28 @@ export async function* ingestCodexHistory(ctx: SourceExecutionContext): AsyncIte
     const reset = !previous || previous.path !== filePath || fileStat.size < previous.offset
     let offset = reset ? 0 : previous.offset
     let sequence = reset ? 0 : previous.sequence
+    let pendingCheckpointLines = 0
     const session = await readSessionMetadata(filePath)
 
+    const persistCheckpoint = async () => {
+      await ctx.checkpoint.set(key, {
+        path: filePath,
+        offset,
+        sequence,
+        size: fileStat.size,
+        mtimeMs: fileStat.mtimeMs,
+      })
+      pendingCheckpointLines = 0
+    }
+
     for await (const line of readJsonlLines(filePath, offset)) {
-      if (ctx.abortSignal.aborted) return
+      if (ctx.abortSignal.aborted) break
       sequence += 1
       offset = line.endOffset
 
       if (!line.text.trim()) {
-        await ctx.checkpoint.set(key, {
-          path: filePath,
-          offset,
-          sequence,
-          size: fileStat.size,
-          mtimeMs: fileStat.mtimeMs,
-        })
+        pendingCheckpointLines += 1
+        if (pendingCheckpointLines >= CHECKPOINT_BATCH_SIZE) await persistCheckpoint()
         continue
       }
 
@@ -204,14 +227,18 @@ export async function* ingestCodexHistory(ctx: SourceExecutionContext): AsyncIte
       }
 
       yield record
-
-      await ctx.checkpoint.set(key, {
-        path: filePath,
-        offset,
-        sequence,
-        size: fileStat.size,
-        mtimeMs: fileStat.mtimeMs,
-      })
+      // 生成器只会在消费端持久化当前记录后继续执行。批量推进游标可以避免
+      // 冷导入为每行 JSONL 增加一次 SQLite 事务；崩溃时最多幂等重放一批。
+      pendingCheckpointLines += 1
+      if (pendingCheckpointLines >= CHECKPOINT_BATCH_SIZE) await persistCheckpoint()
     }
+
+    if (pendingCheckpointLines > 0) await persistCheckpoint()
+    if (ctx.abortSignal.aborted) return
   }
+}
+
+export const codexHistoryInternals = {
+  CHECKPOINT_BATCH_SIZE,
+  listJsonlFiles,
 }

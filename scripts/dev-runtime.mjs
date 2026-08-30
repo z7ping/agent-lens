@@ -8,6 +8,8 @@ import { fileURLToPath } from 'node:url'
 // 将开发 Runtime 误识别为可复用的正式 Runtime。
 export const DEFAULT_DEV_PORT = 56800
 export const DEV_PORT_ATTEMPTS = 21
+export const DEV_RUNTIME_READY_TIMEOUT_MS = 30_000
+export const DEV_RUNTIME_READY_INTERVAL_MS = 100
 
 export function parseDevPort(value, fallback = DEFAULT_DEV_PORT) {
   if (value === undefined || value === null || value === '') return fallback
@@ -63,6 +65,40 @@ export async function findAvailableDevPort(
 
   const endPort = Math.min(65535, startPort + attempts - 1)
   throw new Error(`开发端口 ${startPort}-${endPort} 均不可用，请释放端口或设置 AGENT_LENS_DEV_PORT 指定新的起始端口。`)
+}
+
+export async function waitForRuntimeReady(
+  url,
+  {
+    fetchImpl = globalThis.fetch,
+    timeoutMs = DEV_RUNTIME_READY_TIMEOUT_MS,
+    intervalMs = DEV_RUNTIME_READY_INTERVAL_MS,
+    signal,
+  } = {},
+) {
+  if (typeof fetchImpl !== 'function') throw new Error('当前 Node.js 运行时不支持 fetch')
+  const deadline = Date.now() + timeoutMs
+  let lastError
+
+  while (!signal?.aborted && Date.now() < deadline) {
+    try {
+      const remainingMs = Math.max(1, deadline - Date.now())
+      const requestTimeout = AbortSignal.timeout(Math.min(5_000, remainingMs))
+      const response = await fetchImpl(url, {
+        signal: signal ? AbortSignal.any([signal, requestTimeout]) : requestTimeout,
+      })
+      if (response.ok) return
+      lastError = new Error(`HTTP ${response.status}`)
+    } catch (error) {
+      lastError = error
+    }
+
+    await new Promise(resolveDelay => setTimeout(resolveDelay, intervalMs))
+  }
+
+  if (signal?.aborted) throw new Error('开发 Runtime 就绪等待已取消')
+  const detail = lastError instanceof Error ? `：${lastError.message}` : ''
+  throw new Error(`开发 Runtime 在 ${timeoutMs}ms 内未就绪${detail}`)
 }
 
 export function buildDevEnvironment(baseEnv, repoRoot, port) {
@@ -133,17 +169,18 @@ export async function runDevRuntime() {
   }
   console.info(`[AgentLens] 开发数据目录：${paths.dataRoot}`)
   console.info(`[AgentLens] 开发 API：http://127.0.0.1:${port}`)
-  console.info('[AgentLens] 开发 Web：启动 Vite 源码服务器（默认 http://127.0.0.1:5173）')
+  console.info('[AgentLens] 开发 Web：Runtime 就绪后启动 Vite（默认 http://127.0.0.1:5173）')
   console.info(`[AgentLens] Vite /api 代理：http://127.0.0.1:${port}`)
 
   const daemon = startWorkspaceDev(repoRoot, devEnv, '@agent-lens/daemon')
-  const web = startWorkspaceDev(repoRoot, devEnv, '@agent-lens/web')
-  const children = [daemon, web]
+  const children = [daemon]
+  const startupController = new AbortController()
   let shuttingDown = false
 
   const stopAll = () => {
     if (shuttingDown) return
     shuttingDown = true
+    startupController.abort()
     children.forEach(stopChild)
   }
 
@@ -154,8 +191,7 @@ export async function runDevRuntime() {
   process.once('SIGINT', () => onSignal('SIGINT'))
   process.once('SIGTERM', () => onSignal('SIGTERM'))
 
-  for (const [index, child] of children.entries()) {
-    const label = index === 0 ? 'Daemon' : 'Web'
+  const monitorChild = (child, label) => {
     child.once('error', error => {
       console.error(`[AgentLens] 开发 ${label} 启动失败`, error)
       process.exitCode = 1
@@ -170,15 +206,28 @@ export async function runDevRuntime() {
     })
   }
 
-  await new Promise(resolveDone => {
-    let exited = 0
-    for (const child of children) {
-      child.once('exit', () => {
-        exited += 1
-        if (exited === children.length) resolveDone(undefined)
-      })
-    }
-  })
+  monitorChild(daemon, 'Daemon')
+
+  try {
+    await waitForRuntimeReady(`http://127.0.0.1:${port}/api/v1/health`, {
+      signal: startupController.signal,
+    })
+  } catch (error) {
+    if (shuttingDown) return
+    stopAll()
+    throw error
+  }
+
+  console.info('[AgentLens] Runtime API 已就绪，正在启动 Vite')
+  const web = startWorkspaceDev(repoRoot, devEnv, '@agent-lens/web')
+  children.push(web)
+  monitorChild(web, 'Web')
+
+  await Promise.all(children.map(child => (
+    child.exitCode !== null
+      ? Promise.resolve()
+      : new Promise(resolveDone => child.once('exit', resolveDone))
+  )))
 }
 
 const invokedPath = process.argv[1] ? resolve(process.argv[1]) : null

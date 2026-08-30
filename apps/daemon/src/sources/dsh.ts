@@ -170,7 +170,17 @@ async function sessionFiles(profileRoot: string): Promise<string[]> {
     }
   }
   await walk(root)
-  return result.sort()
+  const candidates = (await Promise.all(result.map(async path => {
+    try {
+      return { path, mtimeMs: (await stat(path)).mtimeMs }
+    } catch {
+      return null
+    }
+  }))).filter((candidate): candidate is { path: string; mtimeMs: number } => candidate !== null)
+
+  return candidates
+    .sort((a, b) => b.mtimeMs - a.mtimeMs || b.path.localeCompare(a.path))
+    .map(candidate => candidate.path)
 }
 
 function isSessionFile(path: string): boolean {
