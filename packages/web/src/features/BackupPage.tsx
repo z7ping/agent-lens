@@ -142,7 +142,8 @@ export function BackupPage() {
 
   const applyOverview = (next: BackupOverviewResponseDto) => {
     setOverview(next)
-    if (!selectionInitialized.current && next.index?.ready !== false) {
+    // 渐进扫描期间只展示已完成 Source，不提前把默认备份范围锁成第一个智能体。
+    if (!selectionInitialized.current && next.index?.ready !== false && next.index?.refreshing !== true) {
       selectionInitialized.current = true
       setSelectedSources(next.sources.filter(source => source.detected).map(source => source.sourceId))
     }
@@ -355,8 +356,8 @@ export function BackupPage() {
     eyebrow="资产备份"
     statusLabel="首次建立索引"
     title="正在准备资产备份范围"
-    description="后台正在建立首份本地备份索引。页面状态查询不会重复扫描；完成后会自动切换到资产列表。"
-    facts={['只读取本地数据', '不会修改原始文件', '完成后自动展示结果']}
+    description="后台正在按已配置智能体顺序建立首份本地备份索引。首个智能体完成后会立即展示，后续结果继续渐进补齐。"
+    facts={['按智能体顺序加载', '不会修改原始文件', '完成一个立即展示一个']}
   />
 
   const indexTime = overview.index?.generatedAt
