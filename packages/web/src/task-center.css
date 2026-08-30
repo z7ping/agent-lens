@@ -50,6 +50,7 @@
 .task-center-main .pi-live-page { grid-template-columns: minmax(0, 1fr); }
 .task-center-main .pi-live-page > .pi-live-sessions { display: none; }
 .task-center-main .pi-live-taskbar { min-height: 46px; }
+.task-center-main .hub-review-toolbar { display: none; }
 
 .task-center-new {
   display: grid;
