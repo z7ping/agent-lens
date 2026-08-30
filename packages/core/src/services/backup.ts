@@ -161,6 +161,8 @@ export interface BackupRestorePreview {
 
 export interface BackupService {
   overview(input?: BackupCreateInput): Promise<BackupOverview>
+  /** 只读取已持久化索引；不存在时返回 null，不得触发第三方目录扫描。 */
+  peekOverview?(input?: BackupCreateInput): Promise<BackupOverview | null>
   refreshIndex?(input?: BackupCreateInput): Promise<BackupOverview>
   listSnapshots(): Promise<BackupSnapshotSummary[]>
   getSnapshot(id: string): Promise<BackupSnapshotManifest | null>
