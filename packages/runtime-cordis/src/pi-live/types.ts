@@ -64,6 +64,8 @@ export type PiLiveRuntimeListener = (event: PiLiveRuntimeEvent) => void
 
 export interface PiLiveService {
   availability(): Promise<PiLiveAvailability>
+  /** List Pi runtimes currently owned by this AgentLens runtime generation. */
+  list(): Promise<PiLiveRuntimeState[]>
   start(input: PiLiveStartInput): Promise<PiLiveRuntimeState>
   state(runtimeSessionId: string): Promise<PiLiveRuntimeState>
   snapshot(runtimeSessionId: string, since?: string): Promise<PiLiveSnapshot>
