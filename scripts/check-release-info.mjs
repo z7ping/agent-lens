@@ -19,8 +19,9 @@ const changelog = readFileSync(changelogPath, 'utf8')
 if (!app.includes("import { BrandVersion, ReleaseInfo } from './components/ReleaseInfo'")) {
   throw new Error('正式 Web Header 必须接入统一发行信息组件')
 }
-if (!app.includes('<BrandVersion />') || !app.includes('<ReleaseInfo />')) {
-  throw new Error('正式 Web Header 必须展示版本，并提供 GitHub / 更新日志入口')
+if (!app.includes('<BrandVersion />')
+  || !app.includes('<ReleaseInfo runtimeOwner={snapshot.health?.runtime?.owner ?? null} runtimeReady={snapshot.health !== null} />')) {
+  throw new Error('正式 Web Header 必须展示版本、复用运行时健康状态，并提供 GitHub / 更新日志入口')
 }
 if (!main.includes("import './release-info.css'")) {
   throw new Error('正式 Web 必须加载发行信息组件样式')
@@ -40,6 +41,10 @@ for (const label of ['新增', '调整', '修复', '安全', '已知限制']) {
 if (!releaseInfo.includes('checkWebUpdate') || !releaseInfo.includes('新版本 v')) {
   throw new Error('正式 Web Header 必须接入低打扰的新版本提示')
 }
+if (!releaseInfo.includes('checkWebUpdate(packageMetadata.version, { runtimeOwner })')
+  || !releaseInfo.includes('if (!runtimeReady) return')) {
+  throw new Error('版本检查必须等待 ClientModel health，并复用已有 runtime owner，禁止 Header 重复请求 health')
+}
 for (const required of [
   "owner !== 'desktop'",
   'WEB_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000',
@@ -48,8 +53,9 @@ for (const required of [
 ]) {
   if (!webUpdate.includes(required)) throw new Error(`Web 更新检查缺少契约：${required}`)
 }
-if (!webUpdate.includes("fetchImpl('/api/v1/health'")) {
-  throw new Error('Web 更新检查必须先读取本地运行时归属，避免 Desktop 重复提醒')
+if (!webUpdate.includes("fetchImpl('/api/v1/health'")
+  || !webUpdate.includes('options.runtimeOwner === undefined ? await fetchRuntimeOwner(fetchImpl) : options.runtimeOwner')) {
+  throw new Error('Web 更新检查必须保留独立调用时的 health 回退，同时允许 Header 注入已有运行时归属')
 }
 if (!changelog.includes(`## ${packageJson.version}`)) {
   throw new Error(`CHANGELOG.md 缺少当前 Web 版本 ${packageJson.version} 的章节`)

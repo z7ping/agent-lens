@@ -229,7 +229,7 @@
 }
 
 .runtime-status-head > div { display: grid; gap: 3px; }
-.runtime-status-head small { color: var(--al-muted-2); font-size: 11px; }
+.runtime-status-head small { color: var(--al-muted-2); font-size: 12px; }
 .runtime-status-head strong { color: var(--al-ink); font-size: 15px; }
 
 .runtime-status-state {
@@ -251,9 +251,9 @@
 }
 
 .runtime-status-grid > div { min-width: 0; }
-.runtime-status-grid dt { margin-bottom: 3px; color: var(--al-muted-2); font-size: 11px; }
+.runtime-status-grid dt { margin-bottom: 3px; color: var(--al-muted-2); font-size: 12px; }
 .runtime-status-grid dd { margin: 0; color: var(--al-ink-2); font-weight: 620; overflow-wrap: anywhere; }
-.runtime-status-grid code { font-family: var(--font-mono); font-size: 11px; font-weight: 560; }
+.runtime-status-grid code { font-family: var(--font-mono); font-size: 12px; font-weight: 560; }
 .runtime-status-grid > div:first-child,
 .runtime-status-wide { grid-column: 1 / -1; }
 
@@ -263,7 +263,7 @@
   border-top: 1px solid var(--al-line);
 }
 
-.runtime-status-section h3 { margin: 0; color: var(--al-muted); font-size: 11px; font-weight: 700; letter-spacing: .03em; }
+.runtime-status-section h3 { margin: 0; color: var(--al-muted); font-size: 12px; font-weight: 700; letter-spacing: .03em; }
 .runtime-status-grid-compact { margin-top: 9px; }
 .runtime-status-grid-compact > div:first-child:not(.runtime-status-wide) { grid-column: auto; }
 
