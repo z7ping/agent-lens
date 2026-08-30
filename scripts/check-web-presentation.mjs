@@ -165,8 +165,10 @@ if (duplicatedCoreTokens.length) {
 if (!/\.app-header\s*\{[\s\S]*?backdrop-filter\s*:\s*none/m.test(shellSource)) {
   throw new Error('正式 Header 必须由 shell.css 关闭背景模糊')
 }
-if (!shellSource.includes('.status-tip::after') || !shellSource.includes('white-space: pre-line')) {
-  throw new Error('正式顶部运行状态提示卡必须支持多行事实说明')
+if (!shellSource.includes('.runtime-status-popover')
+  || !shellSource.includes('.runtime-status-grid')
+  || !shellSource.includes('.runtime-status-wide')) {
+  throw new Error('正式顶部运行状态必须保留可展开的事实 Popover、网格信息与宽行能力')
 }
 if (!/\.workspace-toolbar\s*\{[\s\S]*?height:\s*50px;[\s\S]*?min-height:\s*50px;/m.test(shellSource)) {
   throw new Error('工作区工具栏必须保持 50px 正式基线')
