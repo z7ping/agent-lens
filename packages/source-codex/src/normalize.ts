@@ -45,6 +45,7 @@ function identityHints(record: SourceRecord, envelope: CodexStoredEnvelope): Obs
   return {
     nativeSessionId: envelope.session.nativeSessionId || record.sourceSessionNativeId || 'unknown',
     ...(envelope.session.cwd ? { workspacePath: envelope.session.cwd } : {}),
+    ...(envelope.session.title?.trim() ? { sessionTitle: envelope.session.title.trim() } : {}),
   }
 }
 
@@ -245,7 +246,19 @@ export async function normalizeCodexRecord(
   const innerType = typeof payload.type === 'string' ? payload.type : undefined
   let observation: ObservationCandidate
 
-  if (topType === 'session_meta') {
+  if (topType === 'session_start') {
+    observation = candidate(record, envelope, 'session.lifecycle', {
+      event: 'session.started',
+      nativeSessionId: envelope.session.nativeSessionId,
+      ...(stringField(payload, 'startedAt') ? { startedAt: stringField(payload, 'startedAt') } : {}),
+    })
+  } else if (topType === 'session_title') {
+    observation = candidate(record, envelope, 'session.lifecycle', {
+      event: 'session.title',
+      ...(stringField(payload, 'title') ? { title: stringField(payload, 'title') } : {}),
+      ...(stringField(payload, 'updatedAt') ? { updatedAt: stringField(payload, 'updatedAt') } : {}),
+    })
+  } else if (topType === 'session_meta') {
     observation = candidate(record, envelope, 'session.lifecycle', {
       event: 'session.discovered',
       nativeSessionId: envelope.session.nativeSessionId,
