@@ -30,6 +30,10 @@ class FakePiLiveService implements PiLiveService {
     return { available: true, executable: '/usr/local/bin/pi' }
   }
 
+  async list() {
+    return [await this.state(this.runtimeSessionId)]
+  }
+
   async start(input: PiLiveStartInput) {
     this.startInput = input
     return this.state(this.runtimeSessionId)
@@ -152,6 +156,12 @@ test('Pi Live HTTP control surface preserves runtime ownership and validates com
     assert.equal(availability.status, 200)
     assert.deepEqual(await json(availability), { available: true, executable: '/usr/local/bin/pi' })
 
+    const runtimes = await fetch(`${base}/api/v1/pi-live`)
+    assert.equal(runtimes.status, 200)
+    const runtimeList = await runtimes.json() as Array<Record<string, unknown>>
+    assert.equal(runtimeList.length, 1)
+    assert.equal(runtimeList[0]?.runtimeSessionId, piLive.runtimeSessionId)
+
     const wrongContentType = await fetch(`${base}/api/v1/pi-live`, {
       method: 'POST',
       body: JSON.stringify({ cwd: '/workspace' }),
@@ -240,13 +250,13 @@ test('Pi Live HTTP control surface preserves runtime ownership and validates com
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ requestId: 'ui-1', response: { confirmed: true } }),
     })
     assert.equal(extensionResponse.status, 202)
-    assert.deepEqual(piLive.extensionResponses, [{ requestId: 'ui-1', response: { confirmed: true } }])
+    assert.deepEqual(piLive.extensionResponses, [{ requestId: 'ui-1', response: { confirmed: true }])
 
     const controller = new AbortController()
     const events = await fetch(`${base}/api/v1/pi-live/${piLive.runtimeSessionId}/events`, { signal: controller.signal })
     assert.equal(events.status, 200)
     const reader = events.body!.getReader()
-    await reader.read() // initial SSE comment
+    await reader.read()
     piLive.emit({ type: 'agent_start' })
     const streamed = new TextDecoder().decode((await reader.read()).value)
     assert.match(streamed, /event: pi-live/)
