@@ -2,8 +2,12 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { preferUserSessionTitle } from './api'
 
+function sessionText(input: { title?: string; preview?: string }): { title?: string; preview?: string } {
+  return preferUserSessionTitle(input)
+}
+
 test('会话列表默认使用首条用户消息表达任务意图', () => {
-  const result = preferUserSessionTitle({
+  const result = sessionText({
     title: '来源提供的旧标题',
     preview: '请检查 Windows 安装器图标问题',
   })
@@ -12,7 +16,7 @@ test('会话列表默认使用首条用户消息表达任务意图', () => {
 })
 
 test('首条用户消息缺失时保留工具或历史数据提供的标题', () => {
-  const result = preferUserSessionTitle({
+  const result = sessionText({
     title: 'OpenCode 原生会话摘要',
     preview: '   ',
   })
@@ -20,7 +24,7 @@ test('首条用户消息缺失时保留工具或历史数据提供的标题', ()
 })
 
 test('会话标题会剔除注入上下文，只保留真实用户内容', () => {
-  const result = preferUserSessionTitle({
+  const result = sessionText({
     preview: '<environment_context>cwd=/tmp</environment_context> 继续处理 AgentLens 的性能问题',
   })
   assert.equal(result.title, '继续处理 AgentLens 的性能问题')
