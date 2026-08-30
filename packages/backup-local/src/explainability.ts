@@ -240,6 +240,13 @@ export class ExplainableBackupService implements BackupService {
     return enrichOverview(overview, await this.inventoryFor(overview), input)
   }
 
+  async peekOverview(input: BackupCreateInput = {}): Promise<BackupOverview | null> {
+    if (!this.base.peekOverview) return null
+    const overview = await this.base.peekOverview(input)
+    if (!overview) return null
+    return enrichOverview(overview, await this.inventoryFor(overview), input)
+  }
+
   async refreshIndex(input: BackupCreateInput = {}): Promise<BackupOverview> {
     const overview = this.base.refreshIndex
       ? await this.base.refreshIndex(input)
