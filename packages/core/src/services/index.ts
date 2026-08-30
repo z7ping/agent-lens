@@ -182,7 +182,7 @@ export interface SessionSummaryRecord {
 }
 
 export interface SessionSummaryCursor {
-  endedAt: string
+  startedAt: string
   logicalSessionId: LogicalSessionId
 }
 
