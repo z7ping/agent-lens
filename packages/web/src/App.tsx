@@ -8,6 +8,7 @@ import { BackgroundDataNotice } from './components/BackgroundDataNotice'
 import { BrandVersion, ReleaseInfo } from './components/ReleaseInfo'
 import { ReviewStateOverlay } from './components/ReviewStateOverlay'
 import { ReviewTurnRail } from './components/ReviewTurnRail'
+import { RuntimeStatus } from './components/RuntimeStatus'
 import { AgentsResponsivePage } from './features/AgentsResponsivePage'
 import { BackupPage } from './features/BackupPage'
 import { HubReviewPage } from './features/HubReviewPage'
@@ -93,28 +94,6 @@ function sameReviewFilters(left: ReviewFilters, right: ReviewFilters): boolean {
     && left.search === right.search
 }
 
-const runtimeOwnerLabel: Record<string, string> = {
-  cli: '命令行',
-  service: '后台服务',
-  desktop: '桌面端',
-  unknown: '未知来源',
-}
-
-const runtimeModeLabel: Record<string, string> = {
-  foreground: '前台',
-  managed: '托管',
-}
-
-function recordValue(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null
-}
-
-function numberValue(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : 0
-}
-
 function ThemeGlyph({ dark }: { dark: boolean }) {
   return dark
     ? <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="3.4"/><path d="M10 1.8v2M10 16.2v2M1.8 10h2M16.2 10h2M4.2 4.2l1.4 1.4M14.4 14.4l1.4 1.4M15.8 4.2l-1.4 1.4M5.6 14.4l-1.4 1.4"/></svg>
@@ -136,36 +115,6 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     writeTheme(next)
   }
 
-  const storageDetails = recordValue(snapshot.health?.storage.details)
-  const sourceRuntime = recordValue(storageDetails?.sourceRuntime)
-  const unknownObservations = recordValue(storageDetails?.unknownObservations)
-  const coverage = recordValue(storageDetails?.coverage)
-  const coverageSummary = recordValue(coverage?.summary)
-  const failedSourceStages = numberValue(sourceRuntime?.failed)
-  const unknownTotal = numberValue(unknownObservations?.total)
-  const coverageComplete = numberValue(coverageSummary?.complete)
-  const coveragePartial = numberValue(coverageSummary?.partial)
-  const coverageUnavailable = numberValue(coverageSummary?.unavailable)
-  const coverageUnknown = numberValue(coverageSummary?.unknown)
-
-  const statusHealthy = snapshot.health?.status === 'ok' && snapshot.liveConnected && failedSourceStages === 0
-  const healthLabel = !snapshot.health
-    ? '连接中'
-    : snapshot.health.status !== 'ok'
-      ? '运行降级'
-      : failedSourceStages > 0
-        ? '来源异常'
-        : snapshot.liveConnected ? '运行正常' : '实时断开'
-  const runtime = snapshot.health?.runtime
-  const healthTitle = [
-    snapshot.health ? `后台服务：${snapshot.health.status === 'ok' ? '正常' : '降级'}` : '后台服务：连接中',
-    runtime ? `归属：${runtimeOwnerLabel[runtime.owner] ?? runtime.owner} · PID ${runtime.pid} · ${runtimeModeLabel[runtime.mode] ?? runtime.mode}` : null,
-    snapshot.health ? `存储：${snapshot.health.storage.ok ? '正常' : '异常'}${snapshot.health.storage.schemaVersion === undefined ? '' : ` · Schema ${snapshot.health.storage.schemaVersion}`}` : null,
-    `实时通道：${snapshot.liveConnected ? '已连接' : '未连接'}`,
-    sourceRuntime ? `来源异常阶段：${failedSourceStages}` : null,
-    unknownObservations ? `待适配原生事件：${unknownTotal}` : null,
-    coverageSummary ? `覆盖范围：完整 ${coverageComplete} · 部分 ${coveragePartial} · 来源不可用 ${coverageUnavailable} · 未知 ${coverageUnknown}` : null,
-  ].filter((item): item is string => Boolean(item)).join('\n')
   const onReview = location.pathname.startsWith('/review')
   const onHubReview = location.pathname.startsWith('/review/hub/')
   const onPiLive = location.pathname === '/review/live' || location.pathname.startsWith('/review/live/')
@@ -220,10 +169,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
             })}
           </nav>
           <div className="app-status">
-            <span className={`status-pill status-tip ${statusHealthy ? 'status-pill-online' : snapshot.health ? 'status-pill-warn' : ''}`} data-tip={healthTitle} aria-label={healthTitle}>
-              <span className={`live-dot ${statusHealthy ? 'live-dot-online' : 'live-dot-waiting'}`} />
-              <span>{healthLabel}</span>
-            </span>
+            <RuntimeStatus health={snapshot.health} liveConnected={snapshot.liveConnected} />
             {onLocalReview && <NavLink className="header-link" to="/review/live">Pi 实时</NavLink>}
             <ReleaseInfo />
             <button className="theme-toggle" onClick={toggleTheme} title={theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'} aria-label={theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'}><ThemeGlyph dark={theme === 'dark'}/></button>
