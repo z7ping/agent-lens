@@ -453,7 +453,7 @@ export class DefaultCapabilityService implements CapabilityService {
   registerSourceCapabilities(sourceId: string, capabilities: ObservationCapability[]): Disposable {
     const next = new Map(capabilities.map(item => [item.name, item]))
     this.values.set(sourceId, next)
-    return { dispose: () => { if (this.values.get(sourceId) === next) this.values.delete(id) } }
+    return { dispose: () => { if (this.values.get(sourceId) === next) this.values.delete(sourceId) } }
   }
 
   listForSource(sourceId: string): ObservationCapability[] {
