@@ -192,6 +192,7 @@ export interface LogicalSessionIdentityHint {
   nativeSessionId: string
   projectId?: ProjectId
   workspaceId?: WorkspaceId
+  title?: string
 }
 
 export interface SourceSessionIdentityHint {
@@ -220,4 +221,5 @@ export interface ObservationIdentityHints {
   actorRole?: AgentActorRole
   interactionNativeId?: string
   modelName?: string
+  sessionTitle?: string
 }
