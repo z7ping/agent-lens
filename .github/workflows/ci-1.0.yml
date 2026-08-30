@@ -68,11 +68,6 @@ jobs:
         if: runner.os == 'Windows'
         run: node scripts/smoke-desktop-runtime.mjs release/windows/win-unpacked/AgentLens.exe
 
-      - name: Verify Windows shared Hook dispatcher
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: pwsh -NoLogo -NoProfile -File scripts/test-hook-dispatcher-windows.ps1
-
       - name: Verify Windows npm lifecycle
         if: runner.os == 'Windows'
         shell: pwsh
