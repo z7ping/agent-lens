@@ -175,33 +175,97 @@
   stroke-linejoin: round;
 }
 
-.status-tip { position: relative; cursor: help; }
-.status-tip::after {
-  content: attr(data-tip);
+.runtime-status { position: relative; }
+
+.runtime-status-trigger {
+  border: 0;
+  color: var(--al-muted);
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+
+.runtime-status-trigger:hover,
+.runtime-status-trigger[aria-expanded='true'] { background: var(--al-soft-2); color: var(--al-ink-2); }
+.runtime-status-trigger:focus-visible { outline: 2px solid var(--al-accent); outline-offset: 2px; }
+.runtime-status-trigger.status-pill-online { color: var(--al-success); }
+.runtime-status-trigger.status-pill-warn { color: var(--al-warning); }
+
+.runtime-status-chevron {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.4;
+  transition: transform .15s;
+}
+
+.runtime-status-trigger[aria-expanded='true'] .runtime-status-chevron { transform: rotate(180deg); }
+
+.runtime-status-popover {
   position: absolute;
   top: calc(100% + 7px);
   right: 0;
   z-index: 95;
-  width: max-content;
-  max-width: min(320px, calc(100vw - 24px));
-  padding: 8px 11px;
+  width: min(390px, calc(100vw - 24px));
+  padding: 14px;
   border: 1px solid var(--al-line);
-  border-radius: 9px;
+  border-radius: 12px;
   background: var(--al-surface-raised);
   box-shadow: var(--al-shadow-lg);
-  color: var(--al-ink-2);
+  color: var(--al-ink);
   font-size: 12px;
-  line-height: 1.6;
   text-align: left;
-  white-space: pre-line;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(-3px);
-  transition: opacity .14s, transform .14s;
 }
 
-.status-tip:hover::after,
-.status-tip:focus-within::after { opacity: 1; transform: none; }
+.runtime-status-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--al-line);
+}
+
+.runtime-status-head > div { display: grid; gap: 3px; }
+.runtime-status-head small { color: var(--al-muted-2); font-size: 11px; }
+.runtime-status-head strong { color: var(--al-ink); font-size: 15px; }
+
+.runtime-status-state {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--al-soft);
+  color: var(--al-muted);
+  font-weight: 650;
+}
+
+.runtime-status-state-healthy { background: var(--al-success-soft); color: var(--al-success); }
+.runtime-status-state-warning { background: var(--al-warning-soft); color: var(--al-warning); }
+
+.runtime-status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 14px;
+  margin: 12px 0 0;
+}
+
+.runtime-status-grid > div { min-width: 0; }
+.runtime-status-grid dt { margin-bottom: 3px; color: var(--al-muted-2); font-size: 11px; }
+.runtime-status-grid dd { margin: 0; color: var(--al-ink-2); font-weight: 620; overflow-wrap: anywhere; }
+.runtime-status-grid code { font-family: var(--font-mono); font-size: 11px; font-weight: 560; }
+.runtime-status-grid > div:first-child,
+.runtime-status-wide { grid-column: 1 / -1; }
+
+.runtime-status-section {
+  margin-top: 13px;
+  padding-top: 12px;
+  border-top: 1px solid var(--al-line);
+}
+
+.runtime-status-section h3 { margin: 0; color: var(--al-muted); font-size: 11px; font-weight: 700; letter-spacing: .03em; }
+.runtime-status-grid-compact { margin-top: 9px; }
+.runtime-status-grid-compact > div:first-child:not(.runtime-status-wide) { grid-column: auto; }
 
 /* 工作区工具栏：v2.1 冻结契约为 50px；筛选 34px；智能体 Chip 32px。 */
 .workspace-page,

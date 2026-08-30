@@ -10,6 +10,9 @@ if (!Number.isInteger(runtimePort) || runtimePort < 1 || runtimePort > 65535) {
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  define: {
+    __AGENT_LENS_RUNTIME_PORT__: JSON.stringify(runtimePort),
+  },
   build: {
     chunkSizeWarningLimit: 700,
   },

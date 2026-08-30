@@ -65,7 +65,8 @@
     justify-content: center;
   }
 
-  .app-status .status-pill > span:last-child {
+  .app-status .runtime-status-summary,
+  .app-status .runtime-status-chevron {
     display: none;
   }
 }
@@ -133,7 +134,7 @@
     height: 28px;
   }
 
-  .status-tip::after {
+  .runtime-status-popover {
     right: -34px;
   }
 
