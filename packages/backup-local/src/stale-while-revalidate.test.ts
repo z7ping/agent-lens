@@ -18,25 +18,56 @@ function deferred<T>() {
   return { promise, resolve, reject }
 }
 
-function overview(generatedAt: string, fileCount: number): BackupOverview {
+function sourceOverview(sourceId: string, generatedAt: string, fileCount: number): BackupOverview {
   return {
     vaultPath: 'vault',
     sources: [{
-      sourceId: 'pi', productId: 'pi', displayName: 'Pi', detected: true,
-      fileCount, excludedCount: 0, kinds: { session: fileCount },
+      sourceId,
+      productId: sourceId,
+      displayName: sourceId === 'pi' ? 'Pi' : 'Codex',
+      detected: true,
+      fileCount,
+      excludedCount: 0,
+      kinds: { session: fileCount },
     }],
     snapshots: [],
     index: { generatedAt, refreshing: false },
   }
 }
 
-function fakeService(
-  first: Promise<BackupOverview>,
-  refresh: () => Promise<BackupOverview>,
-): BackupService {
+function combinedOverview(generatedAt: string, counts: Record<string, number>): BackupOverview {
   return {
-    overview(_input?: BackupCreateInput) { return first },
-    refreshIndex() { return refresh() },
+    vaultPath: 'vault',
+    sources: Object.entries(counts).map(([sourceId, fileCount]) => ({
+      sourceId,
+      productId: sourceId,
+      displayName: sourceId,
+      detected: true,
+      fileCount,
+      excludedCount: 0,
+      kinds: { session: fileCount },
+    })),
+    snapshots: [],
+    index: { generatedAt, refreshing: false },
+  }
+}
+
+function fakeService(options: {
+  cached?: BackupOverview | null
+  refresh(sourceId: string): Promise<BackupOverview>
+  refreshCalls: string[]
+}): BackupService {
+  return {
+    async overview(_input?: BackupCreateInput) {
+      throw new Error('progressive SWR should not call blocking overview for cold cache loading')
+    },
+    async peekOverview() { return options.cached ?? null },
+    refreshIndex(input: BackupCreateInput = {}) {
+      const sourceId = input.sourceIds?.[0]
+      if (!sourceId) throw new Error('expected one source per progressive refresh')
+      options.refreshCalls.push(sourceId)
+      return options.refresh(sourceId)
+    },
     async listSnapshots(): Promise<BackupSnapshotSummary[]> { return [] },
     async getSnapshot(): Promise<BackupSnapshotManifest | null> { return null },
     async createSnapshot(): Promise<BackupSnapshotManifest> { throw new Error('not used') },
@@ -51,52 +82,93 @@ async function nextTurn(): Promise<void> {
   await new Promise(resolve => setImmediate(resolve))
 }
 
-test('首次索引生成不阻塞 overview，完成后自动切到 ready', async () => {
-  const first = deferred<BackupOverview>()
+test('冷启动按用户配置顺序逐个扫描，前一个完成后立即可见', async () => {
+  const pi = deferred<BackupOverview>()
+  const codex = deferred<BackupOverview>()
+  const refreshCalls: string[] = []
   const service = new StaleWhileRevalidateBackupService(
-    fakeService(first.promise, () => Promise.resolve(overview(new Date().toISOString(), 2))),
-    { vaultPath: 'vault', accessStaleMs: 60_000, safetyRefreshMs: 0 },
+    fakeService({
+      refreshCalls,
+      refresh(sourceId) {
+        if (sourceId === 'pi') return pi.promise
+        if (sourceId === 'codex') return codex.promise
+        throw new Error(`unexpected source ${sourceId}`)
+      },
+    }),
+    { vaultPath: 'vault', sourceOrder: ['pi', 'codex'], accessStaleMs: 60_000, safetyRefreshMs: 0 },
   )
 
   const pending = await service.overview()
   assert.equal(pending.index?.ready, false)
   assert.equal(pending.index?.refreshing, true)
-  assert.deepEqual(pending.sources, [])
+  assert.deepEqual(refreshCalls, ['pi'])
 
-  first.resolve(overview(new Date().toISOString(), 3))
+  pi.resolve(sourceOverview('pi', '2026-08-31T00:00:00.000Z', 3))
   await nextTurn()
+  assert.deepEqual(refreshCalls, ['pi', 'codex'])
 
-  const ready = await service.overview()
-  assert.equal(ready.index?.ready, true)
-  assert.equal(ready.index?.refreshing, false)
-  assert.equal(ready.sources[0]?.fileCount, 3)
+  const partial = await service.overview()
+  assert.equal(partial.index?.ready, true)
+  assert.equal(partial.index?.refreshing, true)
+  assert.deepEqual(partial.sources.map(item => item.sourceId), ['pi'])
+  assert.equal(partial.sources[0]?.fileCount, 3)
+
+  codex.resolve(sourceOverview('codex', '2026-08-31T00:00:01.000Z', 5))
+  await nextTurn()
+  const complete = await service.overview()
+  assert.equal(complete.index?.ready, true)
+  assert.equal(complete.index?.refreshing, false)
+  assert.deepEqual(complete.sources.map(item => item.sourceId), ['pi', 'codex'])
+  assert.deepEqual(complete.sources.map(item => item.fileCount), [3, 5])
 })
 
-test('旧索引立即返回，同时后台刷新，不等待完整扫描', async () => {
+test('旧索引立即可用，后台仍按配置顺序渐进替换各智能体', async () => {
   const staleTime = new Date(Date.now() - 10 * 60_000).toISOString()
-  const first = Promise.resolve(overview(staleTime, 5))
-  const refresh = deferred<BackupOverview>()
+  const pi = deferred<BackupOverview>()
+  const codex = deferred<BackupOverview>()
+  const refreshCalls: string[] = []
   const service = new StaleWhileRevalidateBackupService(
-    fakeService(first, () => refresh.promise),
-    { vaultPath: 'vault', accessStaleMs: 1_000, safetyRefreshMs: 0 },
+    fakeService({
+      cached: combinedOverview(staleTime, { pi: 2, codex: 4 }),
+      refreshCalls,
+      refresh(sourceId) { return sourceId === 'pi' ? pi.promise : codex.promise },
+    }),
+    { vaultPath: 'vault', sourceOrder: ['pi', 'codex'], accessStaleMs: 1_000, safetyRefreshMs: 0 },
   )
-
-  service.start()
-  await nextTurn()
 
   const stale = await service.overview()
   assert.equal(stale.index?.ready, true)
   assert.equal(stale.index?.stale, true)
   assert.equal(stale.index?.refreshing, true)
-  assert.equal(stale.sources[0]?.fileCount, 5)
+  assert.deepEqual(stale.sources.map(item => item.fileCount), [2, 4])
+  assert.deepEqual(refreshCalls, ['pi'])
 
-  refresh.resolve(overview(new Date().toISOString(), 8))
+  pi.resolve(sourceOverview('pi', new Date().toISOString(), 7))
   await nextTurn()
+  const partial = await service.overview()
+  assert.deepEqual(partial.sources.map(item => item.fileCount), [7, 4])
+  assert.equal(partial.index?.refreshing, true)
 
+  codex.resolve(sourceOverview('codex', new Date().toISOString(), 9))
+  await nextTurn()
   const fresh = await service.overview()
-  assert.equal(fresh.index?.ready, true)
+  assert.deepEqual(fresh.sources.map(item => item.fileCount), [7, 9])
   assert.equal(fresh.index?.refreshing, false)
-  assert.equal(fresh.index?.stale, false)
-  assert.equal(fresh.sources[0]?.fileCount, 8)
+})
+
+test('服务启动只读取本地缓存，不主动触发冷目录扫描', async () => {
+  const refreshCalls: string[] = []
+  const service = new StaleWhileRevalidateBackupService(
+    fakeService({
+      cached: null,
+      refreshCalls,
+      refresh(sourceId) { return Promise.resolve(sourceOverview(sourceId, new Date().toISOString(), 1)) },
+    }),
+    { vaultPath: 'vault', sourceOrder: ['pi', 'codex'], safetyRefreshMs: 0 },
+  )
+
+  service.start()
+  await nextTurn()
+  assert.deepEqual(refreshCalls, [])
   service.stop()
 })
