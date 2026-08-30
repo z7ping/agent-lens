@@ -141,7 +141,7 @@ class ScopedCheckpointService implements SourceCheckpointService {
   }
 
   set<T>(key: string, value: T): Promise<void> {
-    return this.storage.checkpoints.set(this.scope, key, value)
+    return this.storage.checkpoints.set<T>(this.scope, key, value)
   }
 
   clear(key: string): Promise<void> {
@@ -394,12 +394,15 @@ function parseInventory(value: unknown): BackupInventory | null {
 
 export interface LocalBackupServiceOptions {
   vaultPath: string
+  /** 用户配置顺序优先，其余已注册 Source 按注册顺序追加。 */
+  sourceOrder?: string[]
 }
 
 export class LocalBackupService implements BackupService {
   private readonly snapshotsPath: string
   private readonly blobsPath: string
   private readonly inventoryPath: string
+  private readonly sourceOrderIndex: ReadonlyMap<string, number>
   private inventory: BackupInventory | null = null
   private inventoryLoadInFlight: Promise<BackupInventory> | null = null
   private refreshInFlight: Promise<BackupInventory> | null = null
@@ -414,6 +417,8 @@ export class LocalBackupService implements BackupService {
     this.snapshotsPath = join(options.vaultPath, 'snapshots')
     this.blobsPath = join(options.vaultPath, 'blobs')
     this.inventoryPath = join(options.vaultPath, 'inventory-v1.json')
+    const sourceOrder = [...new Set((options.sourceOrder ?? []).map(item => item.trim()).filter(Boolean))]
+    this.sourceOrderIndex = new Map(sourceOrder.map((sourceId, index) => [sourceId, index]))
   }
 
   start(): void {
@@ -439,6 +444,26 @@ export class LocalBackupService implements BackupService {
     this.refreshTimer = null
   }
 
+  private sourceRank(sourceId: string): number {
+    return this.sourceOrderIndex.get(sourceId) ?? Number.MAX_SAFE_INTEGER
+  }
+
+  private orderedSources(): SourceDefinition[] {
+    const sources = this.sources.list()
+    const registrationOrder = new Map(sources.map((source, index) => [source.manifest.sourceId, index]))
+    return [...sources].sort((left, right) => {
+      const rank = this.sourceRank(left.manifest.sourceId) - this.sourceRank(right.manifest.sourceId)
+      if (rank !== 0) return rank
+      return (registrationOrder.get(left.manifest.sourceId) ?? 0) - (registrationOrder.get(right.manifest.sourceId) ?? 0)
+    })
+  }
+
+  private compareSourceIds(left: string, right: string): number {
+    const rank = this.sourceRank(left) - this.sourceRank(right)
+    if (rank !== 0) return rank
+    return left.localeCompare(right)
+  }
+
   private async targets(input: BackupCreateInput = {}): Promise<BackupTarget[]> {
     const host = await this.identity.resolveHost({
       name: hostname(),
@@ -447,7 +472,7 @@ export class LocalBackupService implements BackupService {
     })
     const selected = new Set(input.sourceIds ?? [])
     const targets: BackupTarget[] = []
-    for (const source of this.sources.list()) {
+    for (const source of this.orderedSources()) {
       if (selected.size && !selected.has(source.manifest.sourceId)) continue
       let detected: DetectedSource[] = []
       try {
@@ -518,8 +543,8 @@ export class LocalBackupService implements BackupService {
     return { roots: [...roots.values()], excluded }
   }
 
-  private async plan(): Promise<BackupPlan> {
-    const targets = await this.targets()
+  private async plan(input: BackupCreateInput = {}): Promise<BackupPlan> {
+    const targets = await this.targets(input)
     const files = new Map<string, CandidateFile>()
     const excluded: BackupExcludedEntry[] = []
 
@@ -587,9 +612,10 @@ export class LocalBackupService implements BackupService {
     }
   }
 
-  private protectionSources(plan: BackupPlan): BackupProtectionSource[] {
+  private protectionSources(plan: BackupPlan, input: BackupCreateInput = {}): BackupProtectionSource[] {
     const bySource = new Map<string, BackupProtectionSource>()
-    for (const source of this.sources.list()) {
+    for (const source of this.orderedSources()) {
+      if (!selectedSource(source.manifest.sourceId, input)) continue
       bySource.set(source.manifest.sourceId, {
         sourceId: source.manifest.sourceId,
         productId: source.manifest.productId,
@@ -614,14 +640,14 @@ export class LocalBackupService implements BackupService {
       const item = bySource.get(excluded.sourceId)
       if (item) item.excludedCount += 1
     }
-    return [...bySource.values()].sort((a, b) => a.displayName.localeCompare(b.displayName))
+    return [...bySource.values()].sort((a, b) => this.compareSourceIds(a.sourceId, b.sourceId))
   }
 
-  private inventoryFromPlan(plan: BackupPlan): BackupInventory {
+  private inventoryFromPlan(plan: BackupPlan, input: BackupCreateInput = {}): BackupInventory {
     const previous = new Map(
       (this.inventory?.files ?? []).map(file => [inventoryFileKey(file), file]),
     )
-    const files: BackupIndexedFile[] = plan.files.map(file => {
+    const refreshedFiles: BackupIndexedFile[] = plan.files.map(file => {
       const indexed: BackupIndexedFile = {
         sourceId: file.sourceId,
         productId: file.productId,
@@ -644,14 +670,38 @@ export class LocalBackupService implements BackupService {
       }
       return indexed
     })
+
+    const selectedIds = new Set(input.sourceIds ?? [])
+    const partial = selectedIds.size > 0
+    const refreshedSources = this.protectionSources(plan, input)
+    const sources = (partial
+      ? [
+          ...(this.inventory?.sources ?? []).filter(source => !selectedIds.has(source.sourceId)),
+          ...refreshedSources,
+        ]
+      : refreshedSources)
+      .sort((a, b) => this.compareSourceIds(a.sourceId, b.sourceId))
+    const files = (partial
+      ? [
+          ...(this.inventory?.files ?? []).filter(file => !selectedIds.has(file.sourceId)),
+          ...refreshedFiles,
+        ]
+      : refreshedFiles)
+      .sort((a, b) => a.archivePath.localeCompare(b.archivePath))
+    const excluded = (partial
+      ? [
+          ...(this.inventory?.excluded ?? []).filter(item => !selectedIds.has(item.sourceId)),
+          ...plan.excluded,
+        ]
+      : [...plan.excluded])
+      .sort((a, b) => this.compareSourceIds(a.sourceId, b.sourceId) || a.originalPath.localeCompare(b.originalPath))
+
     return {
       version: INVENTORY_VERSION,
       generatedAt: new Date().toISOString(),
-      sources: this.protectionSources(plan),
+      sources,
       files,
-      excluded: [...plan.excluded].sort(
-        (a, b) => a.sourceId.localeCompare(b.sourceId) || a.originalPath.localeCompare(b.originalPath),
-      ),
+      excluded,
     }
   }
 
@@ -695,11 +745,15 @@ export class LocalBackupService implements BackupService {
     }
   }
 
-  private async rebuildInventory(): Promise<BackupInventory> {
+  private async rebuildInventory(input: BackupCreateInput = {}): Promise<BackupInventory> {
     if (this.refreshInFlight) return this.refreshInFlight
     const promise = (async () => {
-      const plan = await this.plan()
-      const inventory = this.inventoryFromPlan(plan)
+      // 局部刷新时必须先读入已有索引，后续才能只替换当前 Source 的切片。
+      if (input.sourceIds?.length && !this.inventory) {
+        this.inventory = await this.readInventory()
+      }
+      const plan = await this.plan(input)
+      const inventory = this.inventoryFromPlan(plan, input)
       await this.writeInventory(inventory)
       return inventory
     })()
@@ -740,7 +794,7 @@ export class LocalBackupService implements BackupService {
       const source = bySource.get(excluded.sourceId)
       if (source) source.excludedCount += 1
     }
-    return [...bySource.values()].sort((a, b) => a.displayName.localeCompare(b.displayName))
+    return [...bySource.values()].sort((a, b) => this.compareSourceIds(a.sourceId, b.sourceId))
   }
 
   private async overviewFromInventory(inventory: BackupInventory, input: BackupCreateInput = {}): Promise<BackupOverview> {
@@ -759,8 +813,16 @@ export class LocalBackupService implements BackupService {
     return this.overviewFromInventory(await this.ensureInventory(), input)
   }
 
+  async peekOverview(input: BackupCreateInput = {}): Promise<BackupOverview | null> {
+    if (!this.inventory) {
+      this.inventory = await this.readInventory()
+    }
+    if (!this.inventory) return null
+    return this.overviewFromInventory(this.inventory, input)
+  }
+
   async refreshIndex(input: BackupCreateInput = {}): Promise<BackupOverview> {
-    return this.overviewFromInventory(await this.rebuildInventory(), input)
+    return this.overviewFromInventory(await this.rebuildInventory(input), input)
   }
 
   async listSnapshots(): Promise<BackupSnapshotSummary[]> {
