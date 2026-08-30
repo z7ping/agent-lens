@@ -1,0 +1,290 @@
+name: 临时执行 alpha.3 请求与分页性能收口
+
+on:
+  push:
+    branches: [feature/alpha3-task-center]
+    paths:
+      - '.github/workflows/_tmp-alpha3-request-pagination-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feature/alpha3-task-center
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22.23.0'
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 收口请求调度与游标分页
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          import re
+
+          def read(path):
+              return Path(path).read_text(encoding='utf-8')
+
+          def write(path, text):
+              Path(path).write_text(text, encoding='utf-8')
+
+          def replace_once(path, old, new):
+              text = read(path)
+              if old not in text:
+                  raise SystemExit(f'target not found in {path}: {old[:120]!r}')
+              write(path, text.replace(old, new, 1))
+
+          # 1) Core Session Summary Reader：增加稳定游标与列表筛选。
+          replace_once(
+              'packages/core/src/services/index.ts',
+              '''export interface SessionSummaryReader {\n  query(input: {\n    limit: number\n    installationId?: AgentInstallationId\n    logicalSessionId?: LogicalSessionId\n  }): Promise<{ items: SessionSummaryRecord[]; hasMore: boolean }>\n}\n''',
+              '''export interface SessionSummaryCursor {\n  endedAt: string\n  logicalSessionId: LogicalSessionId\n}\n\nexport interface SessionSummaryQuery {\n  limit: number\n  installationId?: AgentInstallationId\n  logicalSessionId?: LogicalSessionId\n  sourceId?: string\n  projectId?: ProjectId\n  from?: string\n  to?: string\n  hasErrors?: boolean\n  search?: string\n  after?: SessionSummaryCursor\n}\n\nexport interface SessionSummaryReader {\n  query(input: SessionSummaryQuery): Promise<{ items: SessionSummaryRecord[]; hasMore: boolean }>\n}\n''',
+          )
+
+          # 2) Protocol：列表分页也使用 nextCursor，不再靠 limit 递增重下前 N 条。
+          replace_once(
+              'packages/protocol/src/review.ts',
+              '''export interface ReviewQueryDto {\n  sourceId?: string\n''',
+              '''export interface ReviewQueryDto {\n  cursor?: string\n  sourceId?: string\n''',
+          )
+          replace_once(
+              'packages/protocol/src/review.ts',
+              '''    count: number\n    hasMore: boolean\n    generatedAt: string\n''',
+              '''    count: number\n    hasMore: boolean\n    nextCursor?: string\n    generatedAt: string\n''',
+          )
+
+          # 3) SQLite Session Summary Reader：筛选、排序、稳定游标直接下推 SQLite。
+          path = 'packages/storage-sqlite/src/session-summaries.ts'
+          text = read(path)
+          text = text.replace(
+              '''  SessionSummaryProjectionStore,\n  SessionSummaryRecord,\n''',
+              '''  SessionSummaryProjectionStore,\n  SessionSummaryQuery,\n  SessionSummaryRecord,\n''',
+              1,
+          )
+          text = text.replace(
+              'function legacyQuerySql(observationFilter: string): string {',
+              'function legacyQuerySql(observationFilter: string, summaryFilter: string): string {',
+              1,
+          )
+          old_legacy_tail = '''    SELECT\n      aggregate.*,\n      logical.installation_id,\n      installation.product_id,\n      logical.project_id,\n      project.name AS project_name,\n      logical.workspace_id,\n      workspace.path AS workspace_path,\n      logical.title,\n      (\n        SELECT payload_json\n        FROM observations AS first_user\n        WHERE first_user.logical_session_id = aggregate.logical_session_id\n          AND first_user.kind = 'message.user'\n        ORDER BY\n          COALESCE(first_user.occurred_at, first_user.captured_at) ASC,\n          COALESCE(first_user.canonical_sequence, first_user.source_sequence, ${MAX_SEQUENCE}) ASC,\n          first_user.id ASC\n        LIMIT 1\n      ) AS first_user_payload,\n      (\n        SELECT kind\n        FROM observations AS first_content\n        WHERE first_content.logical_session_id = aggregate.logical_session_id\n          AND first_content.kind <> 'session.lifecycle'\n        ORDER BY\n          COALESCE(first_content.occurred_at, first_content.captured_at) ASC,\n          COALESCE(first_content.canonical_sequence, first_content.source_sequence, ${MAX_SEQUENCE}) ASC,\n          first_content.id ASC\n        LIMIT 1\n      ) AS leading_kind,\n      (\n        SELECT json_group_array(source_id)\n        FROM (\n          SELECT DISTINCT source_session.source_id\n          FROM observations AS source_observation\n          JOIN source_sessions AS source_session\n            ON source_session.id = source_observation.source_session_id\n          WHERE source_observation.logical_session_id = aggregate.logical_session_id\n          ORDER BY source_session.source_id\n        )\n      ) AS source_ids_json\n    FROM session_aggregates AS aggregate\n    JOIN logical_sessions AS logical ON logical.id = aggregate.logical_session_id\n    JOIN agent_installations AS installation ON installation.id = logical.installation_id\n    LEFT JOIN projects AS project ON project.id = logical.project_id\n    LEFT JOIN workspaces AS workspace ON workspace.id = logical.workspace_id\n    ORDER BY aggregate.ended_at DESC, aggregate.logical_session_id ASC\n  `\n}\n'''
+          new_legacy_tail = '''    , legacy_summary AS (\n      SELECT\n        aggregate.*,\n        logical.installation_id,\n        installation.product_id,\n        logical.project_id,\n        project.name AS project_name,\n        logical.workspace_id,\n        workspace.path AS workspace_path,\n        logical.title,\n        (\n          SELECT payload_json\n          FROM observations AS first_user\n          WHERE first_user.logical_session_id = aggregate.logical_session_id\n            AND first_user.kind = 'message.user'\n          ORDER BY\n            COALESCE(first_user.occurred_at, first_user.captured_at) ASC,\n            COALESCE(first_user.canonical_sequence, first_user.source_sequence, ${MAX_SEQUENCE}) ASC,\n            first_user.id ASC\n          LIMIT 1\n        ) AS first_user_payload,\n        (\n          SELECT kind\n          FROM observations AS first_content\n          WHERE first_content.logical_session_id = aggregate.logical_session_id\n            AND first_content.kind <> 'session.lifecycle'\n          ORDER BY\n            COALESCE(first_content.occurred_at, first_content.captured_at) ASC,\n            COALESCE(first_content.canonical_sequence, first_content.source_sequence, ${MAX_SEQUENCE}) ASC,\n            first_content.id ASC\n          LIMIT 1\n        ) AS leading_kind,\n        (\n          SELECT json_group_array(source_id)\n          FROM (\n            SELECT DISTINCT source_session.source_id\n            FROM observations AS source_observation\n            JOIN source_sessions AS source_session\n              ON source_session.id = source_observation.source_session_id\n            WHERE source_observation.logical_session_id = aggregate.logical_session_id\n            ORDER BY source_session.source_id\n          )\n        ) AS source_ids_json\n      FROM session_aggregates AS aggregate\n      JOIN logical_sessions AS logical ON logical.id = aggregate.logical_session_id\n      JOIN agent_installations AS installation ON installation.id = logical.installation_id\n      LEFT JOIN projects AS project ON project.id = logical.project_id\n      LEFT JOIN workspaces AS workspace ON workspace.id = logical.workspace_id\n    )\n    SELECT *\n    FROM legacy_summary AS summary\n    ${summaryFilter}\n    ORDER BY summary.ended_at DESC, summary.logical_session_id ASC\n    LIMIT ?\n  `\n}\n'''
+          if old_legacy_tail not in text:
+              raise SystemExit('legacy query tail not found')
+          text = text.replace(old_legacy_tail, new_legacy_tail, 1)
+
+          projection_pattern = re.compile(r'''export function sessionSummaryProjectionSelectSql\(summaryFilter: string\): string \{\n  return `\n    SELECT[\s\S]*?    LIMIT \?\n  `\n\}\n''')
+          projection_replacement = '''export function sessionSummaryProjectionSelectSql(summaryFilter: string): string {\n  return `\n    SELECT *\n    FROM (\n      SELECT\n        summary.logical_session_id,\n        summary.installation_id,\n        summary.started_at,\n        summary.ended_at,\n        summary.observation_count,\n        summary.user_message_count,\n        summary.tool_count,\n        summary.error_count,\n        summary.first_user_payload,\n        summary.leading_kind,\n        summary.source_ids_json,\n        installation.product_id,\n        logical.project_id,\n        project.name AS project_name,\n        logical.workspace_id,\n        workspace.path AS workspace_path,\n        logical.title\n      FROM session_summary_projection AS summary\n      JOIN logical_sessions AS logical ON logical.id = summary.logical_session_id\n      JOIN agent_installations AS installation ON installation.id = summary.installation_id\n      LEFT JOIN projects AS project ON project.id = logical.project_id\n      LEFT JOIN workspaces AS workspace ON workspace.id = logical.workspace_id\n    ) AS summary\n    ${summaryFilter}\n    ORDER BY summary.ended_at DESC, summary.logical_session_id ASC\n    LIMIT ?\n  `\n}\n'''
+          text, count = projection_pattern.subn(projection_replacement, text, count=1)
+          if count != 1:
+              raise SystemExit('projection select function not replaced')
+
+          marker = '''function whereClause(conditions: string[]): string {\n  return conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''\n}\n\n'''
+          helper = '''function whereClause(conditions: string[]): string {\n  return conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''\n}\n\nfunction summaryQueryWhere(input: SessionSummaryQuery): { sql: string; params: unknown[] } {\n  const conditions: string[] = []\n  const params: unknown[] = []\n  if (input.logicalSessionId) {\n    conditions.push('summary.logical_session_id = ?')\n    params.push(input.logicalSessionId)\n  }\n  if (input.installationId) {\n    conditions.push('summary.installation_id = ?')\n    params.push(input.installationId)\n  }\n  if (input.sourceId) {\n    conditions.push('EXISTS (SELECT 1 FROM json_each(COALESCE(summary.source_ids_json, \'[]\')) AS source WHERE source.value = ?)')\n    params.push(input.sourceId)\n  }\n  if (input.projectId) {\n    conditions.push('summary.project_id = ?')\n    params.push(input.projectId)\n  }\n  if (input.from) {\n    conditions.push('summary.ended_at >= ?')\n    params.push(input.from)\n  }\n  if (input.to) {\n    conditions.push('summary.started_at <= ?')\n    params.push(input.to)\n  }\n  if (input.hasErrors === true) conditions.push('summary.error_count > 0')\n  if (input.hasErrors === false) conditions.push('summary.error_count = 0')\n  const search = input.search?.trim().toLowerCase()\n  if (search) {\n    conditions.push(`LOWER(\n      COALESCE(summary.title, '') || '\\n' ||\n      COALESCE(summary.project_name, '') || '\\n' ||\n      COALESCE(summary.workspace_path, '') || '\\n' ||\n      COALESCE(summary.first_user_payload, '') || '\\n' ||\n      COALESCE(summary.source_ids_json, '')\n    ) LIKE ?`)\n    params.push(`%${search}%`)\n  }\n  if (input.after) {\n    conditions.push('(summary.ended_at < ? OR (summary.ended_at = ? AND summary.logical_session_id > ?))')\n    params.push(input.after.endedAt, input.after.endedAt, input.after.logicalSessionId)\n  }\n  return { sql: whereClause(conditions), params }\n}\n\n'''
+          if marker not in text:
+              raise SystemExit('whereClause marker not found')
+          text = text.replace(marker, helper, 1)
+
+          query_pattern = re.compile(r'''  query\(input: \{\n    limit: number\n    installationId\?: string\n    logicalSessionId\?: string\n  \}\): Promise<\{ items: SessionSummaryRecord\[\]; hasMore: boolean \}> \{[\s\S]*?\n  \}\n\n  async isMaterialized''')
+          query_replacement = '''  query(input: SessionSummaryQuery): Promise<{ items: SessionSummaryRecord[]; hasMore: boolean }> {\n    const limit = Math.max(1, Math.min(input.limit, MAX_LIMIT))\n    return this.executor.run(() => {\n      const projectionExists = Boolean(this.executor.db.prepare(\n        'SELECT 1 FROM session_summary_projection LIMIT 1',\n      ).get())\n      const observationExists = projectionExists\n        ? true\n        : Boolean(this.executor.db.prepare('SELECT 1 FROM observations LIMIT 1').get())\n\n      const summaryWhere = summaryQueryWhere(input)\n      if (projectionExists || !observationExists) {\n        const rows = this.executor.db.prepare(\n          sessionSummaryProjectionSelectSql(summaryWhere.sql),\n        ).all(...summaryWhere.params, limit + 1)\n\n        if (rows.length || !input.logicalSessionId || !projectionExists) {\n          return {\n            items: rows.slice(0, limit).map(mapSummary),\n            hasMore: rows.length > limit,\n          }\n        }\n\n        const targetObservationExists = Boolean(this.executor.db.prepare(\n          'SELECT 1 FROM observations WHERE logical_session_id = ? LIMIT 1',\n        ).get(input.logicalSessionId))\n        if (!targetObservationExists) {\n          return { items: [], hasMore: false }\n        }\n        // The projection is globally available but this exact session can still be\n        // inside the debounced refresh window. Fall through to an exact canonical\n        // query for correctness; the steady-state path above remains indexed.\n      }\n\n      const observationConditions: string[] = []\n      const observationParams: unknown[] = []\n      if (input.logicalSessionId) {\n        observationConditions.push('logical_session_id = ?')\n        observationParams.push(input.logicalSessionId)\n      }\n      if (input.installationId) {\n        observationConditions.push('installation_id = ?')\n        observationParams.push(input.installationId)\n      }\n      const rows = this.executor.db.prepare(\n        legacyQuerySql(whereClause(observationConditions), summaryWhere.sql),\n      ).all(...observationParams, ...summaryWhere.params, limit + 1)\n      return {\n        items: rows.slice(0, limit).map(mapSummary),\n        hasMore: rows.length > limit,\n      }\n    })\n  }\n\n  async isMaterialized'''
+          text, count = query_pattern.subn(query_replacement, text, count=1)
+          if count != 1:
+              raise SystemExit('session summary query method not replaced')
+          write(path, text)
+
+          # 4) Review Projection：列表 cursor 解码/编码；Storage 直接返回一页。
+          path = 'packages/projection-review/src/projection.ts'
+          text = read(path)
+          cursor_marker = '''type ReviewCursorPayload = TimelineReviewCursor | FilterReviewCursor\n\n'''
+          cursor_add = '''type ReviewCursorPayload = TimelineReviewCursor | FilterReviewCursor\n\ninterface ReviewListCursor {\n  endedAt: string\n  logicalSessionId: string\n}\n\nfunction encodeReviewListCursor(value: ReviewListCursor): string {\n  return JSON.stringify(value)\n}\n\nfunction decodeReviewListCursor(value: string): ReviewListCursor {\n  let parsed: unknown\n  try { parsed = JSON.parse(value) } catch { throw new Error('Invalid review list cursor') }\n  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Invalid review list cursor')\n  const record = parsed as Record<string, unknown>\n  if (typeof record.endedAt !== 'string' || !record.endedAt || typeof record.logicalSessionId !== 'string' || !record.logicalSessionId) {\n    throw new Error('Invalid review list cursor')\n  }\n  return { endedAt: record.endedAt, logicalSessionId: record.logicalSessionId }\n}\n\n'''
+          if cursor_marker not in text:
+              raise SystemExit('review cursor marker not found')
+          text = text.replace(cursor_marker, cursor_add, 1)
+
+          query_start = text.index('  async query(query: ReviewQueryDto = {}): Promise<ReviewResponseDto> {')
+          query_end = text.index('\n  private async fallbackSummaries()', query_start)
+          old_query = text[query_start:query_end]
+          new_query = '''  async query(query: ReviewQueryDto = {}): Promise<ReviewResponseDto> {\n    const requestedLimit = Math.max(1, Math.min(query.limit ?? DEFAULT_LIMIT, MAX_SESSIONS))\n    const cursor = query.cursor ? decodeReviewListCursor(query.cursor) : undefined\n    const search = query.search?.trim()\n\n    if (this.storage.sessionSummaries) {\n      const page = await this.storage.sessionSummaries.query({\n        limit: requestedLimit,\n        ...(query.sourceId ? { sourceId: query.sourceId } : {}),\n        ...(query.projectId ? { projectId: query.projectId } : {}),\n        ...(query.from ? { from: query.from } : {}),\n        ...(query.to ? { to: query.to } : {}),\n        ...(query.status === 'with-errors' ? { hasErrors: true } : {}),\n        ...(query.status === 'clean' ? { hasErrors: false } : {}),\n        ...(search ? { search } : {}),\n        ...(cursor ? { after: cursor } : {}),\n      })\n      const items = page.items.map(item => this.summaryFromRecord(item))\n      const last = items.at(-1)\n      return {\n        items,\n        meta: {\n          protocolVersion: AGENT_LENS_PROTOCOL_VERSION,\n          count: items.length,\n          hasMore: page.hasMore,\n          ...(page.hasMore && last ? { nextCursor: encodeReviewListCursor({ endedAt: last.endedAt, logicalSessionId: last.id }) } : {}),\n          generatedAt: new Date().toISOString(),\n        },\n      }\n    }\n\n    const summaries = await this.fallbackSummaries()\n    const normalizedSearch = search?.toLowerCase()\n    const filtered = summaries.filter(item => {\n      if (cursor && !(item.endedAt < cursor.endedAt || (item.endedAt === cursor.endedAt && item.id > cursor.logicalSessionId))) return false\n      if (query.sourceId && !item.sourceIds.includes(query.sourceId)) return false\n      if (query.projectId && item.projectId !== query.projectId) return false\n      if (query.from && item.endedAt < query.from) return false\n      if (query.to && item.startedAt > query.to) return false\n      if (query.status === 'with-errors' && !item.hasErrors) return false\n      if (query.status === 'clean' && item.hasErrors) return false\n      if (normalizedSearch) {\n        const haystack = [item.title, item.preview, item.projectName, item.workspacePath, ...item.sourceIds].filter(Boolean).join('\\n').toLowerCase()\n        if (!haystack.includes(normalizedSearch)) return false\n      }\n      return true\n    })\n    filtered.sort((a, b) => b.endedAt.localeCompare(a.endedAt) || a.id.localeCompare(b.id))\n    const hasMore = filtered.length > requestedLimit\n    const items = filtered.slice(0, requestedLimit)\n    const last = items.at(-1)\n    return {\n      items,\n      meta: {\n        protocolVersion: AGENT_LENS_PROTOCOL_VERSION,\n        count: items.length,\n        hasMore,\n        ...(hasMore && last ? { nextCursor: encodeReviewListCursor({ endedAt: last.endedAt, logicalSessionId: last.id }) } : {}),\n        generatedAt: new Date().toISOString(),\n      },\n    }\n  }\n'''
+          text = text[:query_start] + new_query + text[query_end:]
+          write(path, text)
+
+          # 5) HTTP Surface：透传列表 cursor。
+          replace_once(
+              'packages/surface-http/src/server.ts',
+              '''  return {\n    ...(params.get('sourceId') ? { sourceId: params.get('sourceId')! } : {}),\n''',
+              '''  return {\n    ...(params.get('cursor') ? { cursor: params.get('cursor')! } : {}),\n    ...(params.get('sourceId') ? { sourceId: params.get('sourceId')! } : {}),\n''',
+          )
+
+          # 6) Web API：列表 page cursor + 可选 AbortSignal。
+          replace_once(
+              'packages/web/src/client/api.ts',
+              '''  review(filters: ReviewFilters, limit = 40): Promise<ReviewResponseDto> {\n    const params = new URLSearchParams()\n    appendFilters(params, filters)\n    if (filters.status !== 'all') params.set('status', filters.status)\n    if (filters.search.trim()) params.set('search', filters.search.trim())\n    params.set('limit', String(Math.max(1, Math.min(limit, 500))))\n    return requestJson(`/api/v1/review?${params}`)\n  }\n''',
+              '''  review(filters: ReviewFilters, limit = 40, cursor?: string, signal?: AbortSignal): Promise<ReviewResponseDto> {\n    const params = new URLSearchParams()\n    appendFilters(params, filters)\n    if (filters.status !== 'all') params.set('status', filters.status)\n    if (filters.search.trim()) params.set('search', filters.search.trim())\n    if (cursor) params.set('cursor', cursor)\n    params.set('limit', String(Math.max(1, Math.min(limit, 500))))\n    return requestJson(`/api/v1/review?${params}`, signal ? { signal } : {})\n  }\n''',
+          )
+
+          # 7) Hub 列表：共享短缓存 + 单飞，避免 TaskCenter/Review 重复网络请求。
+          path = 'packages/web/src/client/hub-review.ts'
+          text = read(path)
+          marker = '''async function responseError(response: Response, label: string): Promise<Error> {\n'''
+          cache = '''const HUB_SESSION_CACHE_MS = 10_000\nconst hubSessionCache = new Map<number, { at: number; value: HubReviewSessionListDto }>()\nconst hubSessionInFlight = new Map<number, Promise<HubReviewSessionListDto>>()\n\nasync function responseError(response: Response, label: string): Promise<Error> {\n'''
+          if marker not in text:
+              raise SystemExit('hub responseError marker not found')
+          text = text.replace(marker, cache, 1)
+          old_fn_start = text.index('export async function fetchHubReviewSessions(')
+          old_fn_end = text.index('\nexport async function fetchLocalReviewSessions', old_fn_start)
+          new_fn = '''export async function fetchHubReviewSessions(limit = 200, force = false): Promise<HubReviewSessionListDto> {\n  const normalizedLimit = Math.max(1, Math.min(limit, 500))\n  const cached = hubSessionCache.get(normalizedLimit)\n  if (!force && cached && Date.now() - cached.at < HUB_SESSION_CACHE_MS) return cached.value\n  const pending = hubSessionInFlight.get(normalizedLimit)\n  if (pending) return pending\n\n  const request = (async () => {\n    try {\n      const response = await fetch(\n        `/api/v1/hub/review?limit=${normalizedLimit}`,\n        { headers: { accept: 'application/json' } },\n      )\n      if (!response.ok) throw await responseError(response, 'Hub 会话列表读取失败')\n      const value = await response.json() as HubReviewSessionListDto\n      hubSessionCache.set(normalizedLimit, { at: Date.now(), value })\n      return value\n    } catch (error) {\n      if (error instanceof Error && error.message.startsWith('Hub 会话列表读取失败')) throw error\n      throw new Error('Hub 会话列表读取失败，请检查 AgentLens 运行状态。')\n    } finally {\n      hubSessionInFlight.delete(normalizedLimit)\n    }\n  })()\n  hubSessionInFlight.set(normalizedLimit, request)\n  return request\n}\n'''
+          text = text[:old_fn_start] + new_fn + text[old_fn_end:]
+          write(path, text)
+
+          # 8) ReviewPage：嵌入 TaskCenter 后不再拥有 Hub 列表。
+          replace_once(
+              'packages/web/src/features/ReviewPage.tsx',
+              '''export function ReviewPage({ model }: { model: AgentLensClientModel }) {\n''',
+              '''export function ReviewPage({ model, includeHubSessions = true }: { model: AgentLensClientModel; includeHubSessions?: boolean }) {\n''',
+          )
+          replace_once(
+              'packages/web/src/features/ReviewPage.tsx',
+              '''  useEffect(() => {\n    let cancelled = false\n    void fetchHubReviewSessions(200).then(\n      value => { if (!cancelled) setHubSessions(value.items.filter(item => item.origin.kind === 'remote')) },\n      () => { if (!cancelled) setHubSessions([]) },\n    )\n    return () => { cancelled = true }\n  }, [review.response?.meta.generatedAt])\n''',
+              '''  useEffect(() => {\n    if (!includeHubSessions) {\n      setHubSessions([])\n      return\n    }\n    let cancelled = false\n    void fetchHubReviewSessions(200).then(\n      value => { if (!cancelled) setHubSessions(value.items.filter(item => item.origin.kind === 'remote')) },\n      () => { if (!cancelled) setHubSessions([]) },\n    )\n    return () => { cancelled = true }\n  }, [includeHubSessions, review.response?.meta.generatedAt])\n''',
+          )
+          replace_once(
+              'packages/web/src/features/TaskCenterPage.tsx',
+              '''      {mode === 'history' && <ReviewPage model={model}/>} ''',
+              '''      {mode === 'history' && <ReviewPage model={model} includeHubSessions={false}/>} ''',
+          )
+
+          # 9) ClientModel：请求单飞 + dirty、可见性调度、真实追加分页、按需加载页面数据。
+          path = 'packages/web/src/client/model.ts'
+          text = read(path)
+          text = text.replace('const MAX_REVIEW_LIMIT = 500\n', '', 1)
+          fields_old = '''  private notifyQueued = false\n  private refreshTimer: ReturnType<typeof setTimeout> | null = null\n  private detailTimer: ReturnType<typeof setTimeout> | null = null\n'''
+          fields_new = '''  private notifyQueued = false\n  private refreshTimer: ReturnType<typeof setTimeout> | null = null\n  private detailTimer: ReturnType<typeof setTimeout> | null = null\n  private reviewInFlight: Promise<void> | null = null\n  private reviewRequestDirty = false\n  private reviewLiveDirty = false\n  private reviewActive = false\n  private visibilityListener: (() => void) | null = null\n'''
+          if fields_old not in text:
+              raise SystemExit('model field marker not found')
+          text = text.replace(fields_old, fields_new, 1)
+
+          old_start = '''  async start(): Promise<void> {\n    if (!this.unsubscribeLive) {\n      this.unsubscribeLive = this.api.subscribe(\n        event => this.onLiveEvent(event),\n        connected => this.patch({ liveConnected: connected }),\n      )\n    }\n\n    const health = await this.api.health().catch(() => null)\n    if (health) this.patch({ health })\n    await Promise.all([\n      this.refreshFacetsAndAgents(),\n      this.refreshReview(),\n      this.refreshUsage(),\n    ])\n  }\n'''
+          new_start = '''  async start(): Promise<void> {\n    if (!this.unsubscribeLive) {\n      this.unsubscribeLive = this.api.subscribe(\n        event => this.onLiveEvent(event),\n        connected => this.patch({ liveConnected: connected }),\n      )\n    }\n    if (!this.visibilityListener && typeof document !== 'undefined') {\n      this.visibilityListener = () => {\n        if (!document.hidden && this.reviewActive && this.reviewLiveDirty) this.scheduleReviewRefresh(0)\n      }\n      document.addEventListener('visibilitychange', this.visibilityListener)\n    }\n\n    const [health] = await Promise.all([\n      this.api.health().catch(() => null),\n      this.refreshFacets(),\n    ])\n    if (health) this.patch({ health })\n  }\n'''
+          if old_start not in text:
+              raise SystemExit('model start block not found')
+          text = text.replace(old_start, new_start, 1)
+
+          stop_old = '''    if (this.reviewSearchTimer) clearTimeout(this.reviewSearchTimer)\n    this.refreshTimer = null\n    this.detailTimer = null\n    this.reviewSearchTimer = null\n  }\n\n  async refreshFacetsAndAgents(): Promise<void> {\n'''
+          stop_new = '''    if (this.reviewSearchTimer) clearTimeout(this.reviewSearchTimer)\n    if (this.visibilityListener && typeof document !== 'undefined') document.removeEventListener('visibilitychange', this.visibilityListener)\n    this.refreshTimer = null\n    this.detailTimer = null\n    this.reviewSearchTimer = null\n    this.visibilityListener = null\n    this.reviewActive = false\n  }\n\n  async refreshFacets(): Promise<void> {\n    try {\n      const facets = await this.api.facets()\n      this.patch({ facets })\n    } catch {\n      // Facets failure is non-fatal; route data can still load independently.\n    }\n  }\n\n  async refreshAgents(): Promise<void> {\n    const generation = ++this.agentsGeneration\n    const invalidation = this.agentsInvalidation\n    try {\n      const agents = await this.api.agents()\n      if (generation !== this.agentsGeneration) return\n      this.patch({ agents, agentsHasNewData: this.agentsInvalidation !== invalidation })\n    } catch {\n      // Existing data remains visible on refresh failure.\n    }\n  }\n\n  async refreshFacetsAndAgents(): Promise<void> {\n'''
+          if stop_old not in text:
+              raise SystemExit('model stop/facets marker not found')
+          text = text.replace(stop_old, stop_new, 1)
+
+          old_refresh_fa = '''  async refreshFacetsAndAgents(): Promise<void> {\n    const generation = ++this.agentsGeneration\n    const invalidation = this.agentsInvalidation\n    const [facets, agents] = await Promise.allSettled([\n      this.api.facets(),\n      this.api.agents(),\n    ])\n    if (generation !== this.agentsGeneration) return\n    this.patch({\n      ...(facets.status === 'fulfilled' ? { facets: facets.value } : {}),\n      ...(agents.status === 'fulfilled'\n        ? { agents: agents.value, agentsHasNewData: this.agentsInvalidation !== invalidation }\n        : {}),\n    })\n  }\n\n'''
+          new_refresh_fa = '''  async refreshFacetsAndAgents(): Promise<void> {\n    await Promise.all([this.refreshFacets(), this.refreshAgents()])\n  }\n\n  ensureReview(): Promise<void> {\n    return this.snapshot.review.response ? Promise.resolve() : this.refreshReview()\n  }\n\n  ensureUsage(): Promise<void> {\n    return this.snapshot.usage.response ? Promise.resolve() : this.refreshUsage()\n  }\n\n  ensureAgents(): Promise<void> {\n    return this.snapshot.agents ? Promise.resolve() : this.refreshAgents()\n  }\n\n  setReviewActive(active: boolean): void {\n    this.reviewActive = active\n    if (active && this.reviewLiveDirty) this.scheduleReviewRefresh(0)\n  }\n\n  private scheduleReviewRefresh(delay?: number): void {\n    this.reviewLiveDirty = true\n    if (!this.reviewActive) return\n    if (this.refreshTimer) clearTimeout(this.refreshTimer)\n    const hidden = typeof document !== 'undefined' && document.hidden\n    const wait = delay ?? (hidden ? 5_000 : 800)\n    this.refreshTimer = setTimeout(() => {\n      this.refreshTimer = null\n      if (!this.reviewActive || !this.reviewLiveDirty) return\n      this.reviewLiveDirty = false\n      void this.refreshReview({ preserveDetail: true })\n    }, wait)\n  }\n\n'''
+          if old_refresh_fa not in text:
+              raise SystemExit('model refreshFacetsAndAgents block not found')
+          text = text.replace(old_refresh_fa, new_refresh_fa, 1)
+
+          load_start = text.index('  async loadMoreReview(): Promise<void> {')
+          load_end = text.index('\n  async loadMoreReviewDetail()', load_start)
+          new_load = '''  async loadMoreReview(): Promise<void> {\n    const current = this.snapshot.review\n    const cursor = current.response?.meta.nextCursor\n    if (current.loading || current.loadingMore || !current.response?.meta.hasMore || !cursor) return\n    const generation = ++this.reviewGeneration\n    this.publish({\n      ...this.snapshot,\n      review: { ...current, loadingMore: true, error: '' },\n    })\n    try {\n      const next = await this.api.review(current.filters, REVIEW_PAGE_SIZE, cursor)\n      if (generation !== this.reviewGeneration) return\n      const latest = this.snapshot.review\n      const items = new Map(latest.response?.items.map(item => [item.id, item]) ?? [])\n      for (const item of next.items) items.set(item.id, item)\n      const merged = [...items.values()]\n      this.publish({\n        ...this.snapshot,\n        review: {\n          ...latest,\n          response: { ...next, items: merged, meta: { ...next.meta, count: merged.length } },\n          loadingMore: false,\n          error: '',\n        },\n      })\n    } catch (error) {\n      if (generation !== this.reviewGeneration) return\n      this.publish({\n        ...this.snapshot,\n        review: { ...this.snapshot.review, loadingMore: false, error: error instanceof Error ? error.message : String(error) },\n      })\n    }\n  }\n'''
+          text = text[:load_start] + new_load + text[load_end:]
+
+          refresh_start = text.index('  async refreshReview(options: { preserveDetail?: boolean; loadingMore?: boolean } = {}): Promise<void> {')
+          refresh_end = text.index('\n  async selectReviewSession', refresh_start)
+          new_refresh = '''  async refreshReview(options: { preserveDetail?: boolean } = {}): Promise<void> {\n    if (this.refreshTimer) clearTimeout(this.refreshTimer)\n    this.refreshTimer = null\n    this.reviewLiveDirty = false\n    this.reviewGeneration += 1\n    if (this.reviewInFlight) {\n      this.reviewRequestDirty = true\n      return this.reviewInFlight\n    }\n\n    let preserveDetail = options.preserveDetail === true\n    const run = async () => {\n      do {\n        this.reviewRequestDirty = false\n        const generation = this.reviewGeneration\n        await this.executeReviewRefresh(generation, preserveDetail)\n        preserveDetail = true\n      } while (this.reviewRequestDirty)\n    }\n    const pending = run().finally(() => {\n      if (this.reviewInFlight === pending) this.reviewInFlight = null\n    })\n    this.reviewInFlight = pending\n    return pending\n  }\n\n  private async executeReviewRefresh(generation: number, preserveDetail: boolean): Promise<void> {\n    const current = this.snapshot.review\n    this.publish({\n      ...this.snapshot,\n      review: { ...current, loading: true, loadingMore: false, error: '' },\n    })\n    try {\n      const response = await this.api.review(current.filters, INITIAL_REVIEW_LIMIT)\n      if (generation !== this.reviewGeneration) return\n      let selectedId = this.snapshot.review.selectedId\n      if (!selectedId || !response.items.some(item => item.id === selectedId)) selectedId = response.items[0]?.id ?? ''\n      this.publish({\n        ...this.snapshot,\n        review: { ...this.snapshot.review, response, selectedId, limit: INITIAL_REVIEW_LIMIT, loading: false, loadingMore: false, error: '' },\n      })\n      if (selectedId && (!preserveDetail || this.snapshot.review.detail?.id !== selectedId)) {\n        await this.selectReviewSession(selectedId)\n      } else if (!selectedId) {\n        this.publish({\n          ...this.snapshot,\n          review: { ...this.snapshot.review, detail: null, relationships: null },\n        })\n      }\n    } catch (error) {\n      if (generation !== this.reviewGeneration) return\n      this.publish({\n        ...this.snapshot,\n        review: {\n          ...this.snapshot.review,\n          loading: false,\n          loadingMore: false,\n          error: error instanceof Error ? error.message : String(error),\n        },\n      })\n    }\n  }\n'''
+          text = text[:refresh_start] + new_refresh + text[refresh_end:]
+
+          old_live = '''      if (this.refreshTimer) clearTimeout(this.refreshTimer)\n      this.refreshTimer = setTimeout(() => {\n        this.refreshTimer = null\n        void this.refreshReview({ preserveDetail: true })\n      }, 220)\n'''
+          new_live = '''      this.scheduleReviewRefresh()\n'''
+          if old_live not in text:
+              raise SystemExit('model SSE review refresh block not found')
+          text = text.replace(old_live, new_live, 1)
+          write(path, text)
+
+          # 10) App：路由驱动按需数据加载；ReleaseInfo 复用 ClientModel health。
+          path = 'packages/web/src/App.tsx'
+          text = read(path)
+          marker = '''  const navigationHasNewData = (to: string) => to === '/tools' ? snapshot.usage.hasNewData : to === '/agents' ? snapshot.agentsHasNewData : false\n\n'''
+          effect = '''  const navigationHasNewData = (to: string) => to === '/tools' ? snapshot.usage.hasNewData : to === '/agents' ? snapshot.agentsHasNewData : false\n\n  useEffect(() => {\n    model.setReviewActive(onReview)\n    if (onReview) void model.ensureReview()\n    if (onTools) void model.ensureUsage()\n    if (onAgents) void model.ensureAgents()\n    return () => { if (onReview) model.setReviewActive(false) }\n  }, [model, onReview, onTools, onAgents])\n\n'''
+          if marker not in text:
+              raise SystemExit('App route loading marker not found')
+          text = text.replace(marker, effect, 1)
+          text = text.replace(
+              '<ReleaseInfo />',
+              '<ReleaseInfo runtimeOwner={snapshot.health?.runtime?.owner ?? null} runtimeReady={snapshot.health !== null} />',
+              1,
+          )
+          write(path, text)
+
+          # 11) ReleaseInfo：不再自行重复 GET /health。
+          path = 'packages/web/src/components/ReleaseInfo.tsx'
+          text = read(path)
+          text = text.replace(
+              'export function ReleaseInfo() {',
+              "export function ReleaseInfo({ runtimeOwner, runtimeReady }: { runtimeOwner: string | null; runtimeReady: boolean }) {",
+              1,
+          )
+          old_effect = '''  useEffect(() => {\n    let active = true\n    void checkWebUpdate(packageMetadata.version).then(result => {\n      if (active) setUpdate(result)\n    }).catch(() => undefined)\n    return () => { active = false }\n  }, [])\n'''
+          new_effect = '''  useEffect(() => {\n    if (!runtimeReady) return\n    let active = true\n    void checkWebUpdate(packageMetadata.version, { runtimeOwner }).then(result => {\n      if (active) setUpdate(result)\n    }).catch(() => undefined)\n    return () => { active = false }\n  }, [runtimeOwner, runtimeReady])\n'''
+          if old_effect not in text:
+              raise SystemExit('ReleaseInfo update effect not found')
+          text = text.replace(old_effect, new_effect, 1)
+          write(path, text)
+
+          # 12) Storage 回归测试：游标第二页只返回新增页，搜索下推保持语义。
+          path = 'packages/storage-sqlite/src/session-summaries-order.test.ts'
+          text = read(path)
+          marker = '''    const exactProjected = await storage.sessionSummaries.query({\n      logicalSessionId: newer.observation.logicalSessionId,\n      limit: 1,\n    })\n    assert.deepEqual(exactProjected.items.map(item => item.logicalSessionId), [newer.observation.logicalSessionId])\n\n'''
+          addition = '''    const exactProjected = await storage.sessionSummaries.query({\n      logicalSessionId: newer.observation.logicalSessionId,\n      limit: 1,\n    })\n    assert.deepEqual(exactProjected.items.map(item => item.logicalSessionId), [newer.observation.logicalSessionId])\n\n    const firstPage = await storage.sessionSummaries.query({ limit: 1 })\n    assert.equal(firstPage.hasMore, true)\n    assert.equal(firstPage.items.length, 1)\n    const first = firstPage.items[0]!\n    const secondPage = await storage.sessionSummaries.query({\n      limit: 1,\n      after: { endedAt: first.endedAt, logicalSessionId: first.logicalSessionId },\n    })\n    assert.deepEqual(secondPage.items.map(item => item.logicalSessionId), [older.observation.logicalSessionId])\n    assert.equal(secondPage.hasMore, false)\n\n    const searched = await storage.sessionSummaries.query({ limit: 10, search: '较早会话' })\n    assert.deepEqual(searched.items.map(item => item.logicalSessionId), [older.observation.logicalSessionId])\n\n'''
+          if marker not in text:
+              raise SystemExit('storage test marker not found')
+          text = text.replace(marker, addition, 1)
+          write(path, text)
+
+          # 13) Web 表现契约：防止回退到累计 limit / 220ms SSE 全量刷新 / 嵌套 Hub 重取。
+          contract = Path('scripts/check-task-center-performance-contract.mjs')
+          contract.write_text('''import fs from 'node:fs'\n\nconst model = fs.readFileSync('packages/web/src/client/model.ts', 'utf8')\nconst taskCenter = fs.readFileSync('packages/web/src/features/TaskCenterPage.tsx', 'utf8')\nconst review = fs.readFileSync('packages/web/src/features/ReviewPage.tsx', 'utf8')\nconst app = fs.readFileSync('packages/web/src/App.tsx', 'utf8')\n\nconst required = [\n  [model.includes('reviewInFlight'), 'Review 列表必须保持单飞请求'],\n  [model.includes('reviewRequestDirty'), 'Review 列表必须保留 dirty 补刷语义'],\n  [model.includes('scheduleReviewRefresh()'), 'SSE 必须通过调度器刷新列表'],\n  [model.includes('meta.nextCursor'), '任务列表加载更多必须消费 nextCursor'],\n  [!model.includes('current.limit + REVIEW_PAGE_SIZE'), '不得恢复累计 limit 假分页'],\n  [taskCenter.includes('includeHubSessions={false}'), 'TaskCenter 嵌入 Review 时必须关闭重复 Hub 所有权'],\n  [review.includes('includeHubSessions = true'), 'ReviewPage 必须支持由宿主关闭 Hub 列表加载'],\n  [app.includes('model.ensureUsage()'), 'usage 必须按路由加载'],\n  [app.includes('model.ensureAgents()'), 'agents 必须按路由加载'],\n]\n\nconst failed = required.filter(([ok]) => !ok)\nif (failed.length) {\n  for (const [, message] of failed) console.error(`性能契约失败：${message}`)\n  process.exit(1)\n}\nconsole.log('Task Center performance contract passed')\n''', encoding='utf-8')
+
+          package = read('package.json')
+          package = package.replace(
+              '"check:web-presentation": "node scripts/check-web-presentation.mjs &&',
+              '"check:web-presentation": "node scripts/check-task-center-performance-contract.mjs && node scripts/check-web-presentation.mjs &&',
+              1,
+          )
+          write('package.json', package)
+          PY
+
+      - name: 检查差异
+        run: |
+          git diff --check
+          node scripts/check-task-center-performance-contract.mjs
+
+      - name: 类型检查
+        run: npm run typecheck
+
+      - name: 关键测试
+        run: |
+          npm run test --workspace @agent-lens/storage-sqlite
+          npm run test --workspace @agent-lens/projection-review
+          npm run test --workspace @agent-lens/surface-http
+          npm run test --workspace @agent-lens/web
+          npm run check:web-presentation
+
+      - name: 提交修复
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git rm .github/workflows/_tmp-alpha3-request-pagination-fix.yml
+          git add packages scripts package.json
+          git diff --cached --check
+          git commit -m 'perf: 收口任务中心请求与列表分页'
+          git push origin HEAD:feature/alpha3-task-center
