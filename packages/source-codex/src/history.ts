@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
-import { open, opendir, stat } from 'node:fs/promises'
+import { open, opendir, readFile, stat } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 import type { SourceExecutionContext, SourceRecord } from '@agent-lens/core'
 import {
@@ -23,6 +23,11 @@ interface JsonlLine {
   text: string
   startOffset: number
   endOffset: number
+}
+
+interface CodexThreadName {
+  title: string
+  updatedAt?: string
 }
 
 const CHECKPOINT_BATCH_SIZE = 100
@@ -74,8 +79,44 @@ function sessionIdFromFilename(filePath: string): string {
   return match?.[1] ?? basename(filePath, extname(filePath))
 }
 
-async function readSessionMetadata(filePath: string): Promise<CodexSessionMetadata> {
-  const fallback: CodexSessionMetadata = { nativeSessionId: sessionIdFromFilename(filePath) }
+function normalizeTimestamp(value: unknown): string | undefined {
+  if (typeof value !== 'string' || !value.trim()) return undefined
+  const parsed = Date.parse(value)
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : undefined
+}
+
+async function readThreadNames(codexHome: string | undefined): Promise<Map<string, CodexThreadName>> {
+  const result = new Map<string, CodexThreadName>()
+  if (!codexHome) return result
+  try {
+    const text = await readFile(join(codexHome, 'session_index.jsonl'), 'utf8')
+    for (const line of text.split(/\r?\n/)) {
+      if (!line.trim()) continue
+      try {
+        const entry = JSON.parse(line) as Record<string, unknown>
+        const id = typeof entry.id === 'string' ? entry.id.trim() : ''
+        const title = typeof entry.thread_name === 'string' ? entry.thread_name.trim() : ''
+        if (!id || !title) continue
+        const updatedAt = normalizeTimestamp(entry.updated_at)
+        result.set(id, { title, ...(updatedAt ? { updatedAt } : {}) })
+      } catch {
+        // session_index.jsonl 是 append-only；坏行不应阻断其他会话标题读取。
+      }
+    }
+  } catch {
+    // 旧版 Codex 可能不存在 session_index.jsonl，保持首条用户消息兜底。
+  }
+  return result
+}
+
+async function readSessionMetadata(
+  filePath: string,
+  indexedTitle?: CodexThreadName,
+): Promise<CodexSessionMetadata> {
+  const fallback: CodexSessionMetadata = {
+    nativeSessionId: sessionIdFromFilename(filePath),
+    ...(indexedTitle ? { title: indexedTitle.title } : {}),
+  }
   const handle = await open(filePath, 'r')
   try {
     const buffer = Buffer.alloc(256 * 1024)
@@ -86,10 +127,13 @@ async function readSessionMetadata(filePath: string): Promise<CodexSessionMetada
       try {
         const entry = JSON.parse(line) as Record<string, any>
         if (entry.type !== 'session_meta' || !entry.payload) continue
+        const startedAt = normalizeTimestamp(entry.payload.timestamp)
         return {
           nativeSessionId: String(entry.payload.id || fallback.nativeSessionId),
           ...(typeof entry.payload.cwd === 'string' ? { cwd: entry.payload.cwd } : {}),
           ...(typeof entry.payload.cli_version === 'string' ? { cliVersion: entry.payload.cli_version } : {}),
+          ...(indexedTitle ? { title: indexedTitle.title } : {}),
+          ...(startedAt ? { startedAt } : {}),
         }
       } catch {
         // Continue scanning; malformed records are preserved by the normal ingest path.
@@ -153,11 +197,52 @@ function checkpointKey(filePath: string): string {
   return `codex:history:${sha256(filePath)}`
 }
 
+function metadataRecord(
+  ctx: SourceExecutionContext,
+  filePath: string,
+  session: CodexSessionMetadata,
+  kind: 'session_start' | 'session_title',
+  indexedTitle?: CodexThreadName,
+): SourceRecord | null {
+  const title = session.title?.trim()
+  if (kind === 'session_start' && !session.startedAt) return null
+  if (kind === 'session_title' && !title) return null
+  const nativeId = kind === 'session_start'
+    ? `session-start:${session.nativeSessionId}`
+    : `session-title:${session.nativeSessionId}:${sha256(title!).slice(0, 16)}`
+  const payload = kind === 'session_start'
+    ? { startedAt: session.startedAt }
+    : { title, ...(indexedTitle?.updatedAt ? { updatedAt: indexedTitle.updatedAt } : {}) }
+  return {
+    id: `codex-metadata-${sha256(nativeId).slice(0, 32)}`,
+    sourceId: 'codex',
+    installationId: ctx.installation.id,
+    sourceSessionNativeId: session.nativeSessionId,
+    nativeType: `metadata/${kind}`,
+    nativeId,
+    ...(kind === 'session_start' && session.startedAt ? { occurredAt: session.startedAt } : {}),
+    capturedAt: new Date().toISOString(),
+    locator: {
+      kind: 'file',
+      path: kind === 'session_title' && ctx.installation.configRoot
+        ? join(ctx.installation.configRoot, 'session_index.jsonl')
+        : filePath,
+    },
+    fingerprint: sha256(JSON.stringify(payload)),
+    payload: {
+      entry: { type: kind, payload },
+      session,
+    } satisfies CodexStoredEnvelope,
+    parserVersion: '2',
+  }
+}
+
 export async function* ingestCodexHistory(ctx: SourceExecutionContext): AsyncIterable<SourceRecord> {
   const sessionsDir = ctx.installation.dataRoot
     ?? (ctx.installation.configRoot ? join(ctx.installation.configRoot, 'sessions') : undefined)
   if (!sessionsDir) return
 
+  const threadNames = await readThreadNames(ctx.installation.configRoot)
   const files = await listJsonlFiles(sessionsDir)
   for (const filePath of files) {
     if (ctx.abortSignal.aborted) return
@@ -165,6 +250,16 @@ export async function* ingestCodexHistory(ctx: SourceExecutionContext): AsyncIte
     const fileStat = await stat(filePath)
     const key = checkpointKey(filePath)
     const previous = await ctx.checkpoint.get<HistoryCheckpoint>(key)
+    const fallbackId = sessionIdFromFilename(filePath)
+    const session = await readSessionMetadata(filePath, threadNames.get(fallbackId))
+    const indexedTitle = threadNames.get(session.nativeSessionId) ?? threadNames.get(fallbackId)
+    if (indexedTitle && session.title !== indexedTitle.title) session.title = indexedTitle.title
+
+    const startRecord = metadataRecord(ctx, filePath, session, 'session_start', indexedTitle)
+    if (startRecord) yield startRecord
+    const titleRecord = metadataRecord(ctx, filePath, session, 'session_title', indexedTitle)
+    if (titleRecord) yield titleRecord
+
     const unchanged = previous
       && previous.path === filePath
       && previous.offset === fileStat.size
@@ -176,7 +271,6 @@ export async function* ingestCodexHistory(ctx: SourceExecutionContext): AsyncIte
     let offset = reset ? 0 : previous.offset
     let sequence = reset ? 0 : previous.sequence
     let pendingCheckpointLines = 0
-    const session = await readSessionMetadata(filePath)
 
     const persistCheckpoint = async () => {
       await ctx.checkpoint.set(key, {
@@ -205,6 +299,10 @@ export async function* ingestCodexHistory(ctx: SourceExecutionContext): AsyncIte
       const fingerprint = sha256(line.text)
       const envelope: CodexStoredEnvelope = { entry, session }
       const nativeId = nativeIdForEntry(entry)
+      const entryType = typeof entry.type === 'string' ? entry.type : ''
+      const occurredAt = entryType === 'session_meta'
+        ? session.startedAt ?? (typeof entry.timestamp === 'string' ? entry.timestamp : undefined)
+        : typeof entry.timestamp === 'string' ? entry.timestamp : undefined
 
       const record: SourceRecord = {
         id: `codex-record-${sha256(`${session.nativeSessionId}|${sequence}|${fingerprint}`).slice(0, 32)}`,
@@ -214,7 +312,7 @@ export async function* ingestCodexHistory(ctx: SourceExecutionContext): AsyncIte
         nativeType: nativeTypeForEntry(entry),
         ...(nativeId ? { nativeId } : {}),
         sourceSequence: sequence,
-        ...(typeof entry.timestamp === 'string' ? { occurredAt: entry.timestamp } : {}),
+        ...(occurredAt ? { occurredAt } : {}),
         capturedAt: new Date().toISOString(),
         locator: {
           kind: 'file',
@@ -223,7 +321,7 @@ export async function* ingestCodexHistory(ctx: SourceExecutionContext): AsyncIte
         },
         fingerprint,
         payload: envelope,
-        parserVersion: '1',
+        parserVersion: '2',
       }
 
       yield record
@@ -241,4 +339,6 @@ export async function* ingestCodexHistory(ctx: SourceExecutionContext): AsyncIte
 export const codexHistoryInternals = {
   CHECKPOINT_BATCH_SIZE,
   listJsonlFiles,
+  readThreadNames,
+  readSessionMetadata,
 }
