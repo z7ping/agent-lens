@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import type { HubReadAvailability, HubReviewSessionSummaryDto, PiLiveStateDto, ReviewSessionSummaryDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
-import { fetchHubReviewSessions } from '../client/hub-review'
+import { fetchHubReviewSessions, fetchLocalReviewSessions } from '../client/hub-review'
 import { piLiveApi } from '../client/pi-live'
 import { useClientSnapshot } from '../App'
 import { agentLabel, sourceDot } from '../components/AgentScope'
@@ -88,8 +88,8 @@ function NewTaskPanel({
   onStarted,
 }: {
   options: TaskProjectOption[]
-  preferredProjectId?: string
-  onStarted(runtimeSessionId: string): void
+  preferredProjectId?: string | undefined
+  onStarted(runtimeSessionId: string): void | Promise<void>
 }) {
   const [selectedKey, setSelectedKey] = useState('')
   const [prompt, setPrompt] = useState('')
@@ -129,7 +129,7 @@ function NewTaskPanel({
         name: cleanTitle(task, `${selected.label} · Pi`),
       })
       await piLiveApi.prompt(state.runtimeSessionId, task)
-      onStarted(state.runtimeSessionId)
+      await onStarted(state.runtimeSessionId)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
@@ -189,6 +189,7 @@ export function TaskCenterPage({ model, mode }: { model: AgentLensClientModel; m
   const navigate = useNavigate()
   const [runtimes, setRuntimes] = useState<PiLiveStateDto[]>([])
   const [hubSessions, setHubSessions] = useState<HubReviewSessionSummaryDto[]>([])
+  const [projectHistory, setProjectHistory] = useState<ReviewSessionSummaryDto[]>([])
   const review = snapshot.review
 
   const refreshRuntimes = useCallback(() => {
@@ -211,12 +212,23 @@ export function TaskCenterPage({ model, mode }: { model: AgentLensClientModel; m
     return () => { cancelled = true }
   }, [review.response?.meta.generatedAt])
 
+  useEffect(() => {
+    if (mode !== 'new') return
+    let cancelled = false
+    void fetchLocalReviewSessions(500).then(
+      value => { if (!cancelled) setProjectHistory(value.items) },
+      () => { if (!cancelled) setProjectHistory([]) },
+    )
+    return () => { cancelled = true }
+  }, [mode])
+
   const localSessions = review.response?.items ?? []
   const projectSessions = useMemo(() => {
-    const items = [...localSessions]
-    if (review.detail && !items.some(item => item.id === review.detail?.id)) items.push(review.detail)
-    return items
-  }, [localSessions, review.detail])
+    const byId = new Map<string, ReviewSessionSummaryDto>()
+    for (const item of [...projectHistory, ...localSessions]) byId.set(item.id, item)
+    if (review.detail) byId.set(review.detail.id, review.detail)
+    return [...byId.values()]
+  }, [projectHistory, localSessions, review.detail])
   const projectOptions = useMemo(() => deriveTaskProjectOptions(snapshot.facets?.projects ?? [], projectSessions), [snapshot.facets?.projects, projectSessions])
   const visibleHub = useMemo(() => hubSessions.filter(item => remoteVisible(item, review)), [hubSessions, review])
   const preferredProjectId = new URLSearchParams(location.search).get('project') || review.detail?.projectId || review.filters.projectId || undefined
@@ -225,7 +237,8 @@ export function TaskCenterPage({ model, mode }: { model: AgentLensClientModel; m
     const params = new URLSearchParams()
     const projectId = review.detail?.projectId || review.filters.projectId
     if (projectId) params.set('project', projectId)
-    navigate(`/review/new${params.size ? `?${params.toString()}` : ''}`)
+    const search = params.toString()
+    navigate(`/review/new${search ? `?${search}` : ''}`)
   }
 
   const selectedRuntimeId = location.pathname.startsWith('/review/live/')
