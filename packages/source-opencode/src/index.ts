@@ -26,7 +26,7 @@ import {
 } from '@agent-lens/runtime-cordis'
 
 const SOURCE_ID = 'opencode'
-const PARSER_VERSION = '1'
+const PARSER_VERSION = '2'
 const DB_NAME = 'opencode.db'
 const HISTORY_BATCH = 1000
 const RUNTIME_RECENT_ROWS = 500
@@ -43,6 +43,7 @@ interface OpenCodeRow {
   data: string | null
   message_data: string | null
   directory: string | null
+  session_title: string | null
 }
 
 interface OpenCodeEnvelope {
@@ -51,6 +52,7 @@ interface OpenCodeEnvelope {
   session: {
     nativeSessionId: string
     cwd?: string
+    title?: string
   }
   captureChannel: 'history' | 'native-tail'
 }
@@ -159,7 +161,8 @@ function selectRows(db: Database.Database, afterRowId: number, limit: number): O
            p.time_created AS time_created,
            p.data AS data,
            m.data AS message_data,
-           s.directory AS directory
+           s.directory AS directory,
+           s.title AS session_title
       FROM part p
       LEFT JOIN message m ON p.message_id = m.id
       LEFT JOIN session s ON p.session_id = s.id
@@ -178,7 +181,8 @@ function recentRows(db: Database.Database, limit: number): OpenCodeRow[] {
            p.time_created AS time_created,
            p.data AS data,
            m.data AS message_data,
-           s.directory AS directory
+           s.directory AS directory,
+           s.title AS session_title
       FROM part p
       LEFT JOIN message m ON p.message_id = m.id
       LEFT JOIN session s ON p.session_id = s.id
@@ -191,7 +195,7 @@ function recentRows(db: Database.Database, limit: number): OpenCodeRow[] {
 function rowFingerprint(row: OpenCodeRow): string {
   return sha256(JSON.stringify([
     row.id, row.message_id, row.session_id, row.time_created,
-    row.data, row.message_data, row.directory,
+    row.data, row.message_data, row.directory, row.session_title,
   ]))
 }
 
@@ -206,9 +210,10 @@ function recordFromRow(
   const nativeType = stringField(part, 'type') ?? 'unknown'
   const fingerprint = rowFingerprint(row)
   const capturedAt = new Date().toISOString()
-  const occurredAt = normalizeTimestamp(row.time_created) ?? capturedAt
+  const occurredAt = normalizeTimestamp(row.time_created)
   const nativeId = row.id || `row-${row.row_id}`
   const dbPath = join(ctx.installation.dataRoot ?? ctx.installation.configRoot ?? '', DB_NAME)
+  const title = row.session_title?.trim() || undefined
 
   return {
     id: `opencode-${sha256(`${nativeId}:${fingerprint}`).slice(0, 32)}`,
@@ -218,7 +223,7 @@ function recordFromRow(
     nativeType: `part/${nativeType}`,
     nativeId,
     sourceSequence: row.row_id * 10,
-    occurredAt,
+    ...(occurredAt ? { occurredAt } : {}),
     capturedAt,
     locator: {
       kind: 'database',
@@ -233,6 +238,7 @@ function recordFromRow(
       session: {
         nativeSessionId,
         ...(row.directory ? { cwd: row.directory } : {}),
+        ...(title ? { title } : {}),
       },
       captureChannel,
     } satisfies OpenCodeEnvelope,
@@ -247,7 +253,8 @@ export async function* ingestOpenCodeHistory(
   if (!root || ctx.abortSignal.aborted) return
   const db = openDatabase(root)
   try {
-    let rowId = await ctx.checkpoint.get<number>('history-rowid') ?? 0
+    // v2 会一次性重放旧记录，让已经导入的会话也获得原生标题。
+    let rowId = await ctx.checkpoint.get<number>('history-rowid:v2-session-title') ?? 0
     while (!ctx.abortSignal.aborted) {
       const rows = selectRows(db, rowId, HISTORY_BATCH)
       if (!rows.length) break
@@ -255,7 +262,7 @@ export async function* ingestOpenCodeHistory(
         if (ctx.abortSignal.aborted) return
         yield recordFromRow(row, ctx, 'history')
         rowId = row.row_id
-        await ctx.checkpoint.set('history-rowid', rowId)
+        await ctx.checkpoint.set('history-rowid:v2-session-title', rowId)
       }
       if (rows.length < HISTORY_BATCH) break
     }
@@ -368,6 +375,7 @@ function identity(record: SourceRecord, envelope: OpenCodeEnvelope): Observation
   return {
     nativeSessionId: envelope.session.nativeSessionId || record.sourceSessionNativeId || 'unknown',
     ...(envelope.session.cwd ? { workspacePath: envelope.session.cwd } : {}),
+    ...(envelope.session.title?.trim() ? { sessionTitle: envelope.session.title.trim() } : {}),
   }
 }
 
