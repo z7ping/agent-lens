@@ -8,6 +8,8 @@ export interface CodexSessionMetadata {
   nativeSessionId: string
   cwd?: string
   cliVersion?: string
+  title?: string
+  startedAt?: string
 }
 
 export interface CodexStoredEnvelope {
@@ -70,6 +72,7 @@ export function sanitizeCodexEntry(raw: unknown): Record<string, unknown> {
   if (type === 'session_meta') {
     safePayload = {
       id: payload.id,
+      timestamp: payload.timestamp,
       cwd: payload.cwd,
       originator: payload.originator,
       cli_version: payload.cli_version,
