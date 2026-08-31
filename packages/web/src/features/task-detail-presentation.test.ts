@@ -44,12 +44,12 @@ const runningRound: TaskRoundModel = {
   highLatency: false,
 }
 
-test('Tool Group 只做摘要，Tool Call 永远逐条可见', () => {
+test('Tool Group 按高保真原型默认展开，Tool Call 初始逐条可见', () => {
   const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: toolGroup }))
-  assert.match(html, /<section[^>]*data-task-tool-group="true"/)
-  assert.doesNotMatch(html, /<details[^>]*class="task-tool-group/)
+  assert.match(html, /<details[^>]*data-task-tool-group="true"[^>]*open=""|<details[^>]*open=""[^>]*data-task-tool-group="true"/)
   assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 4)
-  assert.match(html, /class="tool-group-summary"/)
+  assert.match(html, /class="tool-title"/)
+  assert.match(html, /class="node-preview"/)
   assert.match(html, /读取 → 搜索 → 测试 → 工具/)
   assert.match(html, /4 次/)
 })
@@ -83,7 +83,7 @@ test('Message 保持用户右 / Agent 左的单一正文结构', () => {
   assert.match(assistant, /chat-bubble-agent/)
 })
 
-test('Pi Running Tool 在主事实行下展示有限高度实时输出', () => {
+test('Pi Running Tool Group 默认展开，并在事实行下展示有限高度实时输出', () => {
   const html = renderToStaticMarkup(createElement(PiLiveRunningTaskRound, {
     model: runningRound,
     thinkingText: '检查文件后继续执行。',
@@ -96,7 +96,7 @@ test('Pi Running Tool 在主事实行下展示有限高度实时输出', () => {
   assert.match(html, /data-tool-fact="true"/)
   assert.match(html, /class="tool-live-output"/)
   assert.match(html, /line 1/)
-  assert.match(html, /<section[^>]*data-task-tool-group="true"/)
+  assert.match(html, /<details[^>]*data-task-tool-group="true"[^>]*open=""|<details[^>]*open=""[^>]*data-task-tool-group="true"/)
 })
 
 test('Pi settled 成功输出折叠在 Tool Call 事实行之下', () => {
