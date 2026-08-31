@@ -55,6 +55,19 @@ function semanticRounds(history: PiLiveHistoryItem[]): SemanticRound[] {
   return rounds.filter(round => round.items.length > 0)
 }
 
+export function piLiveTaskRoundEstimate(projection: PiLiveTaskRoundProjection): number {
+  const factHeight = projection.items.reduce((total, item) => {
+    if (item.kind === 'message') {
+      const lines = Math.max(1, Math.ceil(item.text.length / 72))
+      return total + Math.min(360, 72 + lines * 24)
+    }
+    if (item.kind === 'thinking') return total + 64
+    if (item.kind === 'tool') return total + (item.output ? 92 : 58)
+    return total + 38
+  }, 0)
+  return 42 + factHeight
+}
+
 export function projectPiLiveTaskRounds(history: PiLiveHistoryItem[]): PiLiveTaskRoundProjection[] {
   const result: PiLiveTaskRoundProjection[] = []
 
