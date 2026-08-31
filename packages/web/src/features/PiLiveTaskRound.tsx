@@ -105,6 +105,7 @@ function HistoryToolGroup({ id, items }: { id: string; items: HistoryTool[] }) {
   )))
   return <TaskToolGroup
     model={model}
+    defaultExpanded
     renderDetails={tool => tool.output ? <details><summary>查看输出</summary><pre>{tool.output}</pre></details> : null}
   />
 }
