@@ -35,6 +35,7 @@ async function inspect(win, viewport, theme) {
     const all = selector => [...document.querySelectorAll(selector)]
     const rect = element => element ? (() => { const r = element.getBoundingClientRect(); return { left:r.left, top:r.top, right:r.right, bottom:r.bottom, width:r.width, height:r.height } })() : null
     const fontPx = element => element ? Number.parseFloat(getComputedStyle(element).fontSize) || 0 : 0
+    const visible = element => Boolean(element && element.getClientRects().length && getComputedStyle(element).visibility !== 'hidden' && getComputedStyle(element).display !== 'none')
     const page = pick('.task-center-page')
     const toolbar = pick('.task-center-toolbar')
     const rail = pick('.task-center-rail')
@@ -48,6 +49,7 @@ async function inspect(win, viewport, theme) {
     const detailStyle = detailScroll ? getComputedStyle(detailScroll) : null
     const root = document.scrollingElement
     const toolGroups = all('[data-task-tool-group="true"]')
+    const toolFacts = all('[data-tool-fact="true"]')
     const toolRows = all('[data-tool-fact="true"] .tool-row')
     const firstTool = toolRows[0] || null
     const firstToolAction = firstTool?.querySelector('.tool-action') || null
@@ -76,7 +78,9 @@ async function inspect(win, viewport, theme) {
       taskButtonCount: all('.task-center-rail button.session-item').length,
       presentation: {
         toolGroupCount: toolGroups.length,
-        closedToolGroupCount: toolGroups.filter(group => !group.open).length,
+        collapsibleToolGroupCount: toolGroups.filter(group => group.tagName === 'DETAILS').length,
+        toolFactCount: toolFacts.length,
+        hiddenToolFactCount: toolFacts.filter(item => !visible(item)).length,
         toolGridColumns: toolStyle?.gridTemplateColumns || '',
         toolGridColumnCount: toolStyle?.gridTemplateColumns?.trim().split(/\\s+/).filter(Boolean).length || 0,
         toolRow: rect(firstTool),
@@ -114,7 +118,8 @@ async function inspect(win, viewport, theme) {
   if (value.detailScroll && !['auto', 'scroll'].includes(value.overflow.detailY)) errors.push(`右侧详情不是独立滚动根：overflow-y=${value.overflow.detailY}`)
 
   const p = value.presentation
-  if (p.toolGroupCount > 0 && p.closedToolGroupCount > 0) errors.push(`初始 Tool Group 有 ${p.closedToolGroupCount}/${p.toolGroupCount} 个被默认折叠`)
+  if (p.collapsibleToolGroupCount > 0) errors.push(`Tool Group 仍有 ${p.collapsibleToolGroupCount} 个使用组级折叠，会隐藏 Tool Call 事实`)
+  if (p.hiddenToolFactCount > 0) errors.push(`存在 ${p.hiddenToolFactCount}/${p.toolFactCount} 条 Tool Call 事实不可见`)
   if (p.toolGridColumnCount > 0 && viewport.width >= 1200 && p.toolGridColumnCount !== 4) errors.push(`Tool Row 桌面主基线不是四列：${p.toolGridColumns}`)
   if (p.toolFont > 0 && p.toolFont < 13) errors.push(`Tool Call 主体字号过小：${p.toolFont}px`)
   if (p.toolActionFont > 0 && p.toolActionFont < 13) errors.push(`Tool 操作名称字号过小：${p.toolActionFont}px`)
@@ -124,6 +129,7 @@ async function inspect(win, viewport, theme) {
   if (p.agentMessageFont > 0 && p.agentMessageFont < 14) errors.push(`Agent 消息字号过小：${p.agentMessageFont}px`)
   if (p.thinkingFont > 0 && p.thinkingFont < 13) errors.push(`Thinking 正文字号过小：${p.thinkingFont}px`)
   if (p.toolRow && value.main && p.toolRow.right > value.main.right + 2) errors.push('Tool Row 超出详情主区')
+  if (p.toolRowScrollWidth > p.toolRowClientWidth + 2) errors.push(`Tool Row 内部横向溢出：${p.toolRowScrollWidth} > ${p.toolRowClientWidth}`)
   if (p.liveOutputCount > 0 && !['auto', 'scroll'].includes(p.liveOutputOverflowY)) errors.push(`Pi Running 输出不是局部滚动：overflow-y=${p.liveOutputOverflowY}`)
   if (p.errorOutputCount > 0 && p.closedErrorOutputCount > 0) errors.push(`错误 Tool 输出有 ${p.closedErrorOutputCount} 个未默认展开`)
 
