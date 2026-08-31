@@ -52,8 +52,11 @@ export function TaskToolRow({ model, meta, details, onClick, className = '' }: T
   const elapsedLabel = model.durationLabel
     ?? (model.durationMs !== undefined ? durationLabel(model.durationMs) : undefined)
     ?? (model.status === 'running' && model.startedAtMs !== undefined ? durationLabel(now - model.startedAtMs) : undefined)
+  const icon = model.kind === 'tool'
+    ? <ToolKindIcon kind={visualKind}/>
+    : <ToolKindIcon kind={model.kind}/>
   const content = <>
-    <span className={`tool-kind tool-kind-${visualKind}`}><ToolKindIcon kind={visualKind}/><span>{toolVisualLabel(visualKind)}</span></span>
+    <span className={`tool-kind tool-kind-${visualKind}`}>{icon}<span>{toolVisualLabel(visualKind)}</span></span>
     <b className="tool-action" title={model.name}>{model.name}</b>
     <span className="tool-target">
       <span className="tool-target-text" title={target}>{target}</span>
