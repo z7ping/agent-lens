@@ -47,6 +47,8 @@ jobs:
           $env:AGENT_LENS_PORT = '${{ env.ACCEPTANCE_PORT }}'
           $env:AGENT_LENS_DB_PATH = Join-Path $root 'agent-lens.db'
           $env:AGENT_LENS_VAULT_PATH = Join-Path $root 'vault'
+          $env:AGENT_LENS_CAPTURE_POLICY_PATH = Join-Path $root 'capture-policy.json'
+          $env:AGENT_LENS_ENABLED_SOURCES = 'codex'
           $env:AGENT_LENS_DAEMON_MODE = 'foreground'
           $env:AGENT_LENS_RUNTIME_OWNER = 'ci'
           $env:AGENT_LENS_ACCEPTANCE_URL = "http://127.0.0.1:${{ env.ACCEPTANCE_PORT }}"
@@ -58,6 +60,7 @@ jobs:
 
           # 使用项目自身 Codex Source + Canonical Observation + Review Projection 跑真实组件链路，
           # 不在 Renderer 中注入假 DOM。两条确定性 session 同时让 100 次任务切换门禁真正执行。
+          # 显式把 Capture Policy 收敛到 Codex，避免默认仅启用 claude-code 导致 fixture 被策略层过滤。
           $fixture = Get-Content -Raw -Path 'packages/source-codex/src/__fixtures__/codex-sample.jsonl'
           $sessionDirA = Join-Path $env:CODEX_HOME 'sessions/2026/07/02'
           $sessionDirB = Join-Path $env:CODEX_HOME 'sessions/2026/07/03'
