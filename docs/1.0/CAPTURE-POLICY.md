@@ -32,11 +32,13 @@ SQLite / Projection / Surface
 
 ## 2. 按来源控制是否采集
 
-来源开关使用一个完整允许列表：
+来源开关使用一个完整允许列表。正式持久化入口是 AgentLens 用户级配置：
 
 ```text
-AGENT_LENS_ENABLED_SOURCES
+~/.agent-lens/1.0/config/capture-policy.json
 ```
+
+用户通过“智能体概览”的“用户级采集”开关，或 `agent-lens capture sources status|enable|disable|set` 管理该文件，不需要手工编辑文件或系统环境变量。
 
 默认值只启用 Claude Code：
 
@@ -54,7 +56,7 @@ claude-code
 | Hermes | `hermes` | 否 |
 | OpenCode | `opencode` | 否 |
 
-显式启用多个来源时使用逗号分隔，例如：
+`AGENT_LENS_ENABLED_SOURCES` 作为兼容覆盖保留，优先级高于 AgentLens 用户配置。存在该变量时，界面与 CLI 的来源开关只读。显式覆盖多个来源时使用逗号分隔，例如：
 
 ```text
 AGENT_LENS_ENABLED_SOURCES=claude-code,codex,pi,hermes,opencode
@@ -92,16 +94,16 @@ Registered Source
 
 ### 2.2 Hook / Observer 也必须遵守同一开关
 
-Codex、Claude Code 的被动 Hook，以及 Hermes 可选 Observer，都必须在写 Durable Inbox 前遵守 `AGENT_LENS_ENABLED_SOURCES`：
+Codex、Claude Code 的被动 Hook，以及 Hermes 可选 Observer，都必须在写 Durable Inbox 前遵守 AgentLens 用户级来源配置；存在 `AGENT_LENS_ENABLED_SOURCES` 兼容覆盖时优先使用覆盖值：
 
 - Claude Code 默认允许写 Inbox；
 - Codex 默认不写 Inbox，只有显式启用 `codex` 后才写；
 - Hermes Observer 即使已经由用户显式安装 / 启用，默认仍不写 Inbox，只有显式启用 `hermes` 后才采集；
 - Hook / Observer 继续保持 fail-open，来源关闭或策略读取失败不得阻断上游 Agent。
 
-Hook / Observer 不加载 Core、Cordis 或 SQLite；它们只复用相同的环境变量语义，不引入第二套运行时。
+Hook / Observer 不加载 Core、Cordis 或 SQLite；它们只读取同一份小型用户配置和兼容环境变量语义，不引入第二套运行时。
 
-修改来源允许列表后，需要重启 AgentLens Daemon；对于 Hook / Observer，还应重启对应 Agent 进程，使其继承同一环境变量。来源关闭不会自动删除此前数据库或 Inbox 中已经存在的数据；历史清理仍属于独立动作。
+通过 AgentLens 修改来源允许列表后，Hook / Observer 会在下一次调用时重新读取用户配置，不要求对应 Agent 进程继承新环境变量；AgentLens Daemon 仍需重启，才能完全应用 Detect、History、Runtime Capture 与 Asset Discovery 的启停。使用兼容环境变量覆盖时，Daemon 与对应 Agent 进程仍需重启以继承新值。来源关闭不会自动删除此前数据库或 Inbox 中已经存在的数据；历史清理仍属于独立动作。
 
 ## 3. 四类内容采集范围
 
@@ -180,7 +182,7 @@ raw SourceRecord（内存）
 
 它**不会**关闭 Source Detection、History 或 Runtime Capture；AgentLens 仍需要最小安装/数据根信息来定位原生数据源并保持 Installation 身份稳定。这些运行所需路径不应与“读取配置正文 / 枚举静态能力资产”混为一谈。
 
-如果要关闭整个来源，应使用 `AGENT_LENS_ENABLED_SOURCES`，而不是把四类内容档位全部设为 `off`。
+如果要关闭整个来源，应使用 AgentLens 用户级来源开关，而不是把四类内容档位全部设为 `off`；`AGENT_LENS_ENABLED_SOURCES` 只作为兼容覆盖。
 
 ## 7. 环境信息
 
@@ -203,7 +205,7 @@ CapturePolicy             = 来源启用 + 统一持久化门禁
 
 ## 9. 生效时机与历史数据
 
-采集策略是**新采集 / 新写入数据的策略**，不是历史数据清理器。修改环境变量后需要重启 AgentLens Daemon 才会按新配置运行；Hook / Observer 所在 Agent 进程也需要重新继承相关环境变量。
+采集策略是**新采集 / 新写入数据的策略**，不是历史数据清理器。修改 AgentLens 用户级来源配置后，Hook / Observer 从下一次调用起读取新值，Daemon 重启后完全应用；修改兼容环境变量后，Daemon 与 Hook / Observer 所在 Agent 进程都需要重新继承相关环境变量。
 
 如果数据库里已经存在此前按 `full` / `redacted` 写入的正文，把档位改成 `off` **不会静默改写或删除旧记录**；同理，`config=off` 会阻止新的静态资产扫描，但不会自动删除此前已经入库的资产库存。关闭某个 Source 也不会删除它过去的 Observation、Evidence、Asset 或 Checkpoint。
 

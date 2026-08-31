@@ -68,6 +68,24 @@ test('source allowlist is explicit, case-insensitive and supports none', () => {
   assert.equal(policy.isSourceEnabled('pi'), false)
 })
 
+test('AgentLens 用户配置可保存待重启来源状态并拒绝只读覆盖', async () => {
+  let written: readonly string[] = []
+  const policy = new DefaultCapturePolicyService(settings({ enabledSources: ['claude-code'] }), {
+    source: 'file',
+    editable: true,
+    configuredEnabledSources: ['claude-code'],
+    writeEnabledSources: async values => { written = values },
+  })
+  const updated = await policy.setEnabledSources(['claude-code', 'Codex'])
+  assert.deepEqual(written, ['claude-code', 'codex'])
+  assert.deepEqual(updated.effectiveEnabledSources, ['claude-code'])
+  assert.deepEqual(updated.configuredEnabledSources, ['claude-code', 'codex'])
+  assert.equal(updated.restartRequired, true)
+
+  const readOnly = new DefaultCapturePolicyService(settings(), { source: 'environment', editable: false })
+  await assert.rejects(() => readOnly.setEnabledSources(['codex']), /不能从 AgentLens 界面修改/)
+})
+
 test('redacted masks credentials and local user path', () => {
   const policy = new DefaultCapturePolicyService(settings())
   const result = policy.capture('tool', {

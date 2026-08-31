@@ -129,6 +129,56 @@
 .agent-installation b { color: var(--al-ink-2); font-weight: 620; }
 .agent-installation code { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 
+.source-capture-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 13px 18px;
+  border-top: 1px solid var(--al-line);
+  background: var(--al-soft-2);
+}
+.source-capture-control > div { min-width: 0; }
+.source-capture-control h3 { margin: 0; font-size: 13px; font-weight: 680; }
+.source-capture-control p { margin: 4px 0 0; color: var(--al-muted); font-size: 12px; line-height: 1.55; }
+.source-capture-control .source-capture-note { color: var(--al-warning, var(--al-muted)); }
+.source-capture-control .source-capture-error { color: var(--al-danger); }
+.source-capture-switch {
+  display: flex;
+  min-width: 92px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  border: 1px solid var(--al-line-strong);
+  border-radius: 999px;
+  background: var(--al-surface);
+  color: var(--al-muted);
+  font-size: 12px;
+}
+.source-capture-switch > span {
+  position: relative;
+  width: 28px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--al-line-strong);
+}
+.source-capture-switch > span::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--al-surface);
+  transition: transform .14s ease;
+}
+.source-capture-switch[data-enabled] { border-color: color-mix(in srgb, var(--al-success) 38%, var(--al-line)); color: var(--al-success); }
+.source-capture-switch[data-enabled] > span { background: var(--al-success); }
+.source-capture-switch[data-enabled] > span::after { transform: translateX(12px); }
+.source-capture-switch:disabled { cursor: not-allowed; opacity: .62; }
+
 .agent-primary-section,
 .skill-lifecycle {
   padding: 13px 18px;
@@ -366,4 +416,5 @@
   .agent-source-nav-head { display: none; }
   .agent-source-option { min-width: 176px; }
   .asset-list-grid { grid-template-columns: 1fr; }
+  .source-capture-control { align-items: flex-start; flex-direction: column; }
 }

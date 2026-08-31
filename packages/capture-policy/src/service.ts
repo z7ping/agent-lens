@@ -2,6 +2,7 @@ import type {
   CapturePolicyMode,
   CapturePolicyScope,
   CapturePolicyService,
+  CapturePolicySourceConfiguration,
   CapturePolicySettings,
   CaptureValueOptions,
   CaptureValueResult,
@@ -202,11 +203,21 @@ function structuralValue(value: unknown, maxText = 4_000): unknown {
 export class DefaultCapturePolicyService implements CapturePolicyService {
   readonly settings: Readonly<CapturePolicySettings>
   private readonly enabledSourceIds: ReadonlySet<string>
+  private configuredEnabledSources: readonly string[]
 
-  constructor(settings: CapturePolicySettings) {
+  constructor(
+    settings: CapturePolicySettings,
+    private readonly sourceConfiguration: Omit<CapturePolicySourceConfiguration, 'effectiveEnabledSources' | 'configuredEnabledSources' | 'restartRequired'> & {
+      configuredEnabledSources?: readonly string[]
+      writeEnabledSources?: (enabledSources: readonly string[]) => Promise<void>
+    } = { source: 'runtime', editable: false },
+  ) {
     const enabledSources = Object.freeze(normalizeEnabledSources(settings.enabledSources))
     this.settings = Object.freeze({ ...settings, enabledSources })
     this.enabledSourceIds = new Set(enabledSources)
+    this.configuredEnabledSources = Object.freeze(normalizeEnabledSources(
+      sourceConfiguration.configuredEnabledSources ?? enabledSources,
+    ))
   }
 
   modeFor(scope: CapturePolicyScope): CapturePolicyMode {
@@ -296,6 +307,31 @@ export class DefaultCapturePolicyService implements CapturePolicyService {
     if (!this.isEnabled('config')) return null
     const captured = this.capture('config', asset)
     return captured.value as DiscoveredAsset | null
+  }
+
+  getSourceConfiguration(): CapturePolicySourceConfiguration {
+    const effectiveEnabledSources = this.settings.enabledSources
+    const configuredEnabledSources = this.configuredEnabledSources
+    return {
+      effectiveEnabledSources,
+      configuredEnabledSources,
+      source: this.sourceConfiguration.source,
+      editable: this.sourceConfiguration.editable,
+      restartRequired: effectiveEnabledSources.join('\u0000') !== configuredEnabledSources.join('\u0000'),
+      ...(this.sourceConfiguration.configurationPath
+        ? { configurationPath: this.sourceConfiguration.configurationPath }
+        : {}),
+    }
+  }
+
+  async setEnabledSources(enabledSources: readonly string[]): Promise<CapturePolicySourceConfiguration> {
+    if (!this.sourceConfiguration.editable || !this.sourceConfiguration.writeEnabledSources) {
+      throw new Error('当前来源采集策略由环境变量或运行时配置管理，不能从 AgentLens 界面修改')
+    }
+    const normalized = normalizeEnabledSources(enabledSources)
+    await this.sourceConfiguration.writeEnabledSources(normalized)
+    this.configuredEnabledSources = Object.freeze(normalized)
+    return this.getSourceConfiguration()
   }
 }
 

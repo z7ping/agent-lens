@@ -1,5 +1,6 @@
 import type {
   AgentOverviewResponseDto,
+  CapturePolicyResponseDto,
   FacetResponseDto,
   HealthResponseDto,
   LiveUpdateArea,
@@ -16,6 +17,7 @@ export interface ClientSnapshot {
   health: HealthResponseDto | null
   facets: FacetResponseDto | null
   agents: AgentOverviewResponseDto | null
+  capturePolicy: CapturePolicyResponseDto | null
   agentsHasNewData: boolean
   liveConnected: boolean
   review: {
@@ -81,6 +83,7 @@ export class AgentLensClientModel {
     health: null,
     facets: null,
     agents: null,
+    capturePolicy: null,
     agentsHasNewData: false,
     liveConnected: false,
     review: {
@@ -194,12 +197,25 @@ export class AgentLensClientModel {
     const generation = ++this.agentsGeneration
     const invalidation = this.agentsInvalidation
     try {
-      const agents = await this.api.agents()
+      const [agents, capturePolicy] = await Promise.all([
+        this.api.agents(),
+        this.api.capturePolicy().catch(() => null),
+      ])
       if (generation !== this.agentsGeneration) return
-      this.patch({ agents, agentsHasNewData: this.agentsInvalidation !== invalidation })
+      this.patch({ agents, capturePolicy, agentsHasNewData: this.agentsInvalidation !== invalidation })
     } catch {
       // Existing data remains visible on refresh failure.
     }
+  }
+
+  async setSourceEnabled(sourceId: string, enabled: boolean): Promise<void> {
+    const current = this.snapshot.capturePolicy
+    if (!current) throw new Error('采集策略状态尚未加载')
+    const next = new Set(current.settings.configuredEnabledSources)
+    if (enabled) next.add(sourceId)
+    else next.delete(sourceId)
+    const capturePolicy = await this.api.updateCaptureSources([...next])
+    this.patch({ capturePolicy })
   }
 
   async refreshFacetsAndAgents(): Promise<void> {

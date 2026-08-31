@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import type { AgentAssetInventoryDto, AgentOverviewDto } from '@agent-lens/protocol'
+import type { AgentAssetInventoryDto, AgentOverviewDto, CapturePolicyResponseDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
 import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
@@ -212,7 +212,64 @@ function SkillLifecycle({ agent, skills }: { agent: AgentOverviewDto; skills: Ag
   </section>
 }
 
-function AgentCard({ agent }: { agent: AgentOverviewDto }) {
+function SourceCaptureControl({
+  agent,
+  policy,
+  onChange,
+}: {
+  agent: AgentOverviewDto
+  policy: CapturePolicyResponseDto | null
+  onChange(sourceId: string, enabled: boolean): Promise<void>
+}) {
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const settings = policy?.settings
+  const configured = settings?.configuredEnabledSources.includes(agent.sourceId) ?? agent.enabled
+  const effective = settings?.effectiveEnabledSources.includes(agent.sourceId) ?? agent.enabled
+  const pending = configured !== effective
+  const editable = settings?.editable ?? false
+
+  const toggle = async () => {
+    if (!editable || saving) return
+    setSaving(true)
+    setError('')
+    try {
+      await onChange(agent.sourceId, !configured)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return <section className="source-capture-control">
+    <div>
+      <h3>用户级采集</h3>
+      <p>{pending
+        ? `已保存为${configured ? '开启' : '关闭'}；重启 AgentLens 运行时后完全生效。Hook 会从下一次调用起读取新设置。`
+        : configured
+          ? '允许 AgentLens 采集此来源的新任务、工具事件与资产；正文仍受独立隐私档位保护。'
+          : 'AgentLens 不会启动此来源的历史、运行时或资产采集。已有数据不会自动删除。'}</p>
+      {!editable && settings && <p className="source-capture-note">当前由{settings.managedBy === 'environment' ? '兼容环境变量' : '运行时配置'}管理，界面只读。</p>}
+      {error && <p className="source-capture-error">{error}</p>}
+    </div>
+    <button
+      type="button"
+      role="switch"
+      aria-checked={configured}
+      className="source-capture-switch"
+      data-enabled={configured || undefined}
+      disabled={!editable || saving}
+      onClick={() => void toggle()}
+    ><span aria-hidden="true"/><b>{saving ? '保存中' : configured ? '已开启' : '已关闭'}</b></button>
+  </section>
+}
+
+function AgentCard({ agent, policy, onCaptureChange }: {
+  agent: AgentOverviewDto
+  policy: CapturePolicyResponseDto | null
+  onCaptureChange(sourceId: string, enabled: boolean): Promise<void>
+}) {
   const [showAllBindings, setShowAllBindings] = useState(false)
   const installation = agent.installations[0]
   const grouped = useMemo(() => {
@@ -254,6 +311,8 @@ function AgentCard({ agent }: { agent: AgentOverviewDto }) {
       <span><small>版本</small><b>{installation?.version ?? (agent.detected ? '版本未取得' : '未检测')}</b></span>
       <span className="agent-config"><small>配置目录</small><code title={installation?.configRoot}>{installation?.configRoot ? shortPath(installation.configRoot, 52) : agent.detected ? '路径未取得' : '未检测'}</code></span>
     </div>
+
+    <SourceCaptureControl agent={agent} policy={policy} onChange={onCaptureChange}/>
 
     <section className="agent-primary-section">
       <div className="section-heading-row"><div><h3>我的资产</h3><p>用户安装、配置或维护的能力；内建工具单独放在后面。</p></div><span className="section-total">{userAssetCount}</span></div>
@@ -326,7 +385,7 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
             </button>
           })}
         </nav>
-        <div className="agent-detail-pane">{selectedAgent && <AgentCard key={selectedAgent.sourceId} agent={selectedAgent}/>}</div>
+        <div className="agent-detail-pane">{selectedAgent && <AgentCard key={selectedAgent.sourceId} agent={selectedAgent} policy={snapshot.capturePolicy} onCaptureChange={(id, enabled) => model.setSourceEnabled(id, enabled)}/>}</div>
       </div> : <div className="empty-state roomy">没有可显示的智能体</div>}
     </div>
   </main>

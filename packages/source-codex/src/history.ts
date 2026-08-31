@@ -17,6 +17,7 @@ interface HistoryCheckpoint {
   sequence: number
   size: number
   mtimeMs: number
+  parserVersion?: string
 }
 
 interface MetadataCheckpoint {
@@ -36,6 +37,7 @@ interface CodexThreadName {
 }
 
 const CHECKPOINT_BATCH_SIZE = 100
+const PARSER_VERSION = '3'
 
 function sha256(value: string | Buffer): string {
   return createHash('sha256').update(value).digest('hex')
@@ -150,8 +152,16 @@ async function readSessionMetadata(
   }
 }
 
-async function* readJsonlLines(filePath: string, startOffset: number): AsyncIterable<JsonlLine> {
-  const stream = createReadStream(filePath, { start: startOffset })
+async function* readJsonlLines(
+  filePath: string,
+  startOffset: number,
+  endOffset?: number,
+): AsyncIterable<JsonlLine> {
+  if (endOffset !== undefined && endOffset <= startOffset) return
+  const stream = createReadStream(filePath, {
+    start: startOffset,
+    ...(endOffset === undefined ? {} : { end: endOffset - 1 }),
+  })
   let carry = Buffer.alloc(0)
   let carryOffset = startOffset
 
@@ -202,6 +212,52 @@ function checkpointKey(filePath: string): string {
   return `codex:history:${sha256(filePath)}`
 }
 
+function isCustomToolEntry(entry: Record<string, unknown>): boolean {
+  if (entry.type !== 'response_item') return false
+  const payload = entry.payload && typeof entry.payload === 'object'
+    ? entry.payload as Record<string, unknown>
+    : {}
+  return payload.type === 'custom_tool_call' || payload.type === 'custom_tool_call_output'
+}
+
+function sourceRecordForLine(
+  ctx: SourceExecutionContext,
+  filePath: string,
+  session: CodexSessionMetadata,
+  line: JsonlLine,
+  sequence: number,
+): SourceRecord {
+  const rawEntry = parseLine(line.text)
+  const entry = sanitizeCodexEntry(rawEntry)
+  const fingerprint = sha256(line.text)
+  const envelope: CodexStoredEnvelope = { entry, session }
+  const nativeId = nativeIdForEntry(entry)
+  const entryType = typeof entry.type === 'string' ? entry.type : ''
+  const occurredAt = entryType === 'session_meta'
+    ? session.startedAt ?? (typeof entry.timestamp === 'string' ? entry.timestamp : undefined)
+    : typeof entry.timestamp === 'string' ? entry.timestamp : undefined
+
+  return {
+    id: `codex-record-${sha256(`${session.nativeSessionId}|${sequence}|${fingerprint}`).slice(0, 32)}`,
+    sourceId: 'codex',
+    installationId: ctx.installation.id,
+    sourceSessionNativeId: session.nativeSessionId,
+    nativeType: nativeTypeForEntry(entry),
+    ...(nativeId ? { nativeId } : {}),
+    sourceSequence: sequence,
+    ...(occurredAt ? { occurredAt } : {}),
+    capturedAt: new Date().toISOString(),
+    locator: {
+      kind: 'file',
+      path: filePath,
+      offset: line.startOffset,
+    },
+    fingerprint,
+    payload: envelope,
+    parserVersion: PARSER_VERSION,
+  }
+}
+
 function metadataCheckpointKey(filePath: string): string {
   return `codex:metadata:v2-session-summary:${sha256(filePath)}`
 }
@@ -242,7 +298,7 @@ function metadataRecord(
       entry: { type: kind, payload },
       session,
     } satisfies CodexStoredEnvelope,
-    parserVersion: '2',
+    parserVersion: PARSER_VERSION,
   }
 }
 
@@ -281,6 +337,21 @@ export async function* ingestCodexHistory(ctx: SourceExecutionContext): AsyncIte
       await ctx.checkpoint.set(metadataKey, previousMetadata)
     }
 
+    // v2 已经把新版 Codex 的 custom_tool_call 记录推进了历史游标，却归类成 unknown。
+    // 升级时只重放旧游标覆盖范围内的两类受影响事件，避免把全部会话重新写入 SQLite。
+    if (previous && previous.parserVersion !== PARSER_VERSION) {
+      let legacySequence = 0
+      for await (const line of readJsonlLines(filePath, 0, previous.offset)) {
+        if (ctx.abortSignal.aborted) return
+        legacySequence += 1
+        if (!line.text.trim()) continue
+        const entry = sanitizeCodexEntry(parseLine(line.text))
+        if (!isCustomToolEntry(entry)) continue
+        yield sourceRecordForLine(ctx, filePath, session, line, legacySequence)
+      }
+      await ctx.checkpoint.set(key, { ...previous, parserVersion: PARSER_VERSION })
+    }
+
     const unchanged = previous
       && previous.path === filePath
       && previous.offset === fileStat.size
@@ -300,6 +371,7 @@ export async function* ingestCodexHistory(ctx: SourceExecutionContext): AsyncIte
         sequence,
         size: fileStat.size,
         mtimeMs: fileStat.mtimeMs,
+        parserVersion: PARSER_VERSION,
       })
       pendingCheckpointLines = 0
     }
@@ -315,37 +387,7 @@ export async function* ingestCodexHistory(ctx: SourceExecutionContext): AsyncIte
         continue
       }
 
-      const rawEntry = parseLine(line.text)
-      const entry = sanitizeCodexEntry(rawEntry)
-      const fingerprint = sha256(line.text)
-      const envelope: CodexStoredEnvelope = { entry, session }
-      const nativeId = nativeIdForEntry(entry)
-      const entryType = typeof entry.type === 'string' ? entry.type : ''
-      const occurredAt = entryType === 'session_meta'
-        ? session.startedAt ?? (typeof entry.timestamp === 'string' ? entry.timestamp : undefined)
-        : typeof entry.timestamp === 'string' ? entry.timestamp : undefined
-
-      const record: SourceRecord = {
-        id: `codex-record-${sha256(`${session.nativeSessionId}|${sequence}|${fingerprint}`).slice(0, 32)}`,
-        sourceId: 'codex',
-        installationId: ctx.installation.id,
-        sourceSessionNativeId: session.nativeSessionId,
-        nativeType: nativeTypeForEntry(entry),
-        ...(nativeId ? { nativeId } : {}),
-        sourceSequence: sequence,
-        ...(occurredAt ? { occurredAt } : {}),
-        capturedAt: new Date().toISOString(),
-        locator: {
-          kind: 'file',
-          path: filePath,
-          offset: line.startOffset,
-        },
-        fingerprint,
-        payload: envelope,
-        parserVersion: '2',
-      }
-
-      yield record
+      yield sourceRecordForLine(ctx, filePath, session, line, sequence)
       // 生成器只会在消费端持久化当前记录后继续执行。批量推进游标可以避免
       // 冷导入为每行 JSONL 增加一次 SQLite 事务；崩溃时最多幂等重放一批。
       pendingCheckpointLines += 1
@@ -359,6 +401,7 @@ export async function* ingestCodexHistory(ctx: SourceExecutionContext): AsyncIte
 
 export const codexHistoryInternals = {
   CHECKPOINT_BATCH_SIZE,
+  checkpointKey,
   listJsonlFiles,
   readThreadNames,
   readSessionMetadata,

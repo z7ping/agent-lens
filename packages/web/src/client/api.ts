@@ -6,6 +6,7 @@ import type {
   BackupSnapshotResponseDto,
   BackupSnapshotSummaryDto,
   BackupVerifyResponseDto,
+  CapturePolicyResponseDto,
   FacetResponseDto,
   HealthResponseDto,
   InsightsResponseDto,
@@ -119,6 +120,15 @@ export class AgentLensApi {
   health(): Promise<HealthResponseDto> { return requestJson('/api/v1/health') }
   facets(): Promise<FacetResponseDto> { return requestJson('/api/v1/facets') }
   agents(): Promise<AgentOverviewResponseDto> { return requestJson('/api/v1/agents') }
+  capturePolicy(): Promise<CapturePolicyResponseDto> { return requestJson('/api/v1/capture-policy/sources') }
+
+  updateCaptureSources(enabledSources: readonly string[]): Promise<CapturePolicyResponseDto> {
+    return requestJson('/api/v1/capture-policy/sources', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ enabledSources }),
+    })
+  }
 
   review(filters: ReviewFilters, limit = 40, cursor?: string, signal?: AbortSignal): Promise<ReviewResponseDto> {
     const params = new URLSearchParams()

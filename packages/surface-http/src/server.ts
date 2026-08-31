@@ -25,6 +25,8 @@ import {
   type BackupRestorePreviewResponseDto,
   type BackupSnapshotResponseDto,
   type BackupVerifyResponseDto,
+  type CapturePolicyResponseDto,
+  type CapturePolicySourceUpdateRequestDto,
   type HealthResponseDto,
   type InsightsQueryDto,
   type JsonValue,
@@ -364,6 +366,73 @@ function backupMeta() {
   return { protocolVersion: AGENT_LENS_PROTOCOL_VERSION, generatedAt: new Date().toISOString() }
 }
 
+function capturePolicyResponse(policy: CapturePolicyService): CapturePolicyResponseDto {
+  const configuration = policy.getSourceConfiguration?.() ?? {
+    effectiveEnabledSources: policy.settings.enabledSources,
+    configuredEnabledSources: policy.settings.enabledSources,
+    source: 'runtime' as const,
+    editable: false,
+    restartRequired: false,
+  }
+  return {
+    settings: {
+      effectiveEnabledSources: [...configuration.effectiveEnabledSources],
+      configuredEnabledSources: [...configuration.configuredEnabledSources],
+      managedBy: configuration.source,
+      editable: configuration.editable,
+      restartRequired: configuration.restartRequired,
+    },
+    meta: {
+      protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
+      generatedAt: new Date().toISOString(),
+    },
+  }
+}
+
+async function handleCapturePolicyRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+  url: URL,
+  policy: CapturePolicyService | undefined,
+): Promise<boolean> {
+  if (url.pathname !== '/api/v1/capture-policy/sources') return false
+  if (!policy) {
+    writeJson(response, 503, { error: 'capture_policy_unavailable' })
+    return true
+  }
+  if (request.method === 'GET') {
+    writeJson(response, 200, capturePolicyResponse(policy))
+    return true
+  }
+  if (request.method !== 'PUT') {
+    writeJson(response, 405, { error: 'method_not_allowed' })
+    return true
+  }
+  if (!String(request.headers['content-type'] ?? '').toLowerCase().startsWith('application/json')) {
+    throw httpError(415, 'Capture policy updates require application/json')
+  }
+  if (!policy.setEnabledSources) {
+    writeJson(response, 409, { error: 'capture_policy_read_only' })
+    return true
+  }
+  const body = await readJsonBody<CapturePolicySourceUpdateRequestDto>(request)
+  if (!Array.isArray(body.enabledSources) || body.enabledSources.length > 100
+    || body.enabledSources.some(item => typeof item !== 'string' || !/^[a-z0-9][a-z0-9._-]{0,63}$/i.test(item.trim()))) {
+    throw badRequest('enabledSources must contain at most 100 valid source IDs')
+  }
+  try {
+    await policy.setEnabledSources(body.enabledSources)
+  } catch (error) {
+    writeJson(response, 409, {
+      error: 'capture_policy_read_only',
+      message: error instanceof Error ? error.message : String(error),
+    })
+    return true
+  }
+  writeJson(response, 200, capturePolicyResponse(policy))
+  return true
+}
+
 async function handleBackupRequest(
   request: IncomingMessage,
   response: ServerResponse,
@@ -519,6 +588,7 @@ export async function startHttpSurface(
       const url = new URL(request.url ?? '/', `http://${AGENT_LENS_HTTP_HOST}`)
       if (await handlePiLiveRequest(request, response, url, options.piLive)) return
       if (await handleBackupRequest(request, response, url, options.backup)) return
+      if (await handleCapturePolicyRequest(request, response, url, options.capturePolicy)) return
 
       if (request.method !== 'GET') {
         writeJson(response, 405, { error: 'method_not_allowed' })

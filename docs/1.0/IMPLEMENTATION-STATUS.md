@@ -60,7 +60,7 @@ H1-H5 目前仍是本机 Node Runtime、Replication Identity、Wire Protocol、�
 - Hermes；
 - OpenCode。
 
-默认只启用 Claude Code。其他来源必须显式加入 `AGENT_LENS_ENABLED_SOURCES`；`none` 可以关闭全部来源。
+默认只启用 Claude Code。其他来源通过 AgentLens“智能体概览”的用户级采集开关或 `agent-lens capture sources` 显式管理；`AGENT_LENS_ENABLED_SOURCES` 仅保留为高优先级兼容覆盖。
 
 ### Claude Code
 
@@ -72,6 +72,7 @@ H1-H5 目前仍是本机 Node Runtime、Replication Identity、Wire Protocol、�
 ### Codex
 
 - History；
+- History Parser v3 识别当前 Codex 的 `custom_tool_call` / `custom_tool_call_output`，并在升级时只回填 v2 已漏判的工具事件；
 - Runtime Hook -> Durable Inbox；
 - Assets；
 - 默认关闭。
@@ -319,7 +320,7 @@ H11 最终代码候选 `26e567c00b9c750548327d3eeb9cbb757a05b001` 已通过 Linu
 
 ## 11. 关键实现不变量
 
-- 默认只启用 Claude Code；其他 Source 显式允许；
+- 默认只启用 Claude Code；其他 Source 通过 AgentLens 用户级采集开关显式允许；
 - Source 不绕过 Canonical Pipeline；
 - Core / Repository / Parser / Normalizer 不依赖 Cordis；
 - Projection 不成为第二事实源；

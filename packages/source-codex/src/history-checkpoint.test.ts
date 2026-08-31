@@ -131,3 +131,49 @@ test('中断消费时只推进到最后一个完整批次', async () => {
     await rm(input.root, { recursive: true, force: true })
   }
 })
+
+test('v2 历史游标只回填新版 Codex 自定义工具事件', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-codex-v3-backfill-'))
+  const sessions = join(root, 'sessions')
+  const path = join(sessions, 'rollout-v3-backfill.jsonl')
+  await mkdir(sessions, { recursive: true })
+  const lines = [
+    JSON.stringify({
+      timestamp: '2026-08-31T12:00:00.000Z',
+      type: 'response_item',
+      payload: { type: 'message', role: 'assistant', content: [{ type: 'text', text: '准备执行' }] },
+    }),
+    JSON.stringify({
+      timestamp: '2026-08-31T12:00:01.000Z',
+      type: 'response_item',
+      payload: { type: 'custom_tool_call', name: 'exec', input: '{"cmd":"npm test"}', call_id: 'custom-1' },
+    }),
+    JSON.stringify({
+      timestamp: '2026-08-31T12:00:02.000Z',
+      type: 'response_item',
+      payload: { type: 'custom_tool_call_output', call_id: 'custom-1', output: [{ type: 'text', text: 'Exit code: 0' }] },
+    }),
+  ]
+  await writeFile(path, `${lines.join('\n')}\n`, 'utf8')
+  const file = await stat(path)
+  const checkpoints = new Map<string, unknown>([[
+    codexHistoryInternals.checkpointKey(path),
+    { path, offset: file.size, sequence: 3, size: file.size, mtimeMs: file.mtimeMs, parserVersion: '2' },
+  ]])
+  const writes: unknown[] = []
+
+  try {
+    const records = []
+    for await (const record of ingestCodexHistory(context(sessions, checkpoints, writes))) records.push(record)
+
+    assert.deepEqual(records.map(record => record.nativeType), [
+      'response_item/custom_tool_call',
+      'response_item/custom_tool_call_output',
+    ])
+    assert.deepEqual(records.map(record => record.sourceSequence), [2, 3])
+    assert.equal(records.every(record => record.parserVersion === '3'), true)
+    assert.equal((checkpoints.get(codexHistoryInternals.checkpointKey(path)) as { parserVersion: string }).parserVersion, '3')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})

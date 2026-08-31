@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import type { StorageService } from '@agent-lens/core'
+import type { CapturePolicyService, StorageService } from '@agent-lens/core'
 import {
   DefaultIdentityService,
   DefaultObservationService,
@@ -49,6 +49,54 @@ test('concurrent Health requests share one storage probe', async () => {
   } finally {
     releaseProbe()
     await surface.dispose()
+  }
+})
+
+test('HTTP surface reads and updates AgentLens-managed user source authorization', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  let configured = ['claude-code']
+  const capturePolicy = {
+    settings: {
+      prompt: 'redacted',
+      tool: 'redacted',
+      config: 'redacted',
+      environment: 'off',
+      enabledSources: ['claude-code'],
+    },
+    getSourceConfiguration() {
+      return {
+        effectiveEnabledSources: ['claude-code'],
+        configuredEnabledSources: configured,
+        source: 'file' as const,
+        editable: true,
+        restartRequired: configured.includes('codex'),
+      }
+    },
+    async setEnabledSources(values: readonly string[]) { configured = [...values] },
+  } as unknown as CapturePolicyService
+  const surface = await startHttpSurface(storage, { port: 0, capturePolicy })
+  try {
+    const url = `http://${surface.host}:${surface.port}/api/v1/capture-policy/sources`
+    const initial = await fetch(url)
+    assert.equal(initial.status, 200)
+    assert.deepEqual((await initial.json() as { settings: { configuredEnabledSources: string[] } }).settings.configuredEnabledSources, ['claude-code'])
+
+    const updated = await fetch(url, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ enabledSources: ['claude-code', 'codex'] }),
+    })
+    assert.equal(updated.status, 200)
+    const body = await updated.json() as { settings: { configuredEnabledSources: string[]; restartRequired: boolean } }
+    assert.deepEqual(body.settings.configuredEnabledSources, ['claude-code', 'codex'])
+    assert.equal(body.settings.restartRequired, true)
+
+    const invalidType = await fetch(url, { method: 'PUT', body: JSON.stringify({ enabledSources: [] }) })
+    assert.equal(invalidType.status, 415)
+  } finally {
+    await surface.dispose()
+    storage.close()
   }
 })
 

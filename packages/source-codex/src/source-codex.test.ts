@@ -8,6 +8,7 @@ import type {
   Host,
   SourceCheckpointService,
   SourceExecutionContext,
+  SourceRecord,
 } from '@agent-lens/core'
 import {
   codexSourceDefinition,
@@ -194,4 +195,65 @@ test('normalizer maps known facts and preserves unknown native events', async ()
   } finally {
     await rm(root, { recursive: true, force: true })
   }
+})
+
+test('normalizer maps current Codex custom tool calls and structured outputs', async () => {
+  const base: Omit<SourceRecord, 'id' | 'nativeType' | 'nativeId' | 'payload'> = {
+    sourceId: 'codex',
+    installationId: 'codex-install-1',
+    sourceSessionNativeId: 'codex-custom-tools',
+    capturedAt: '2026-08-31T12:00:00.000Z',
+    locator: { kind: 'file', path: 'C:\\Users\\test\\.codex\\sessions\\rollout.jsonl' },
+    fingerprint: 'custom-tools-fingerprint',
+    parserVersion: '3',
+  }
+  const session = { nativeSessionId: 'codex-custom-tools', cwd: 'F:\\proj' }
+  const call = await codexSourceDefinition.normalize({
+    ...base,
+    id: 'codex-custom-call',
+    nativeType: 'response_item/custom_tool_call',
+    nativeId: 'call_custom_1',
+    payload: {
+      entry: {
+        type: 'response_item',
+        payload: {
+          type: 'custom_tool_call',
+          name: 'exec',
+          input: '{"cmd":"npm run test:unit"}',
+          call_id: 'call_custom_1',
+          status: 'completed',
+        },
+      },
+      session,
+    },
+  }, { host, installation: installation('C:\\codex', 'C:\\codex\\sessions') })
+  const result = await codexSourceDefinition.normalize({
+    ...base,
+    id: 'codex-custom-result',
+    nativeType: 'response_item/custom_tool_call_output',
+    nativeId: 'call_custom_1',
+    payload: {
+      entry: {
+        type: 'response_item',
+        payload: {
+          type: 'custom_tool_call_output',
+          call_id: 'call_custom_1',
+          output: [{ type: 'text', text: 'Exit code: 0\nWall time: 0.4 seconds\nOutput:\n12 tests passed' }],
+        },
+      },
+      session,
+    },
+  }, { host, installation: installation('C:\\codex', 'C:\\codex\\sessions') })
+
+  assert.deepEqual(call.observations[0]?.payload, {
+    callId: 'call_custom_1',
+    nativeToolName: 'exec',
+    input: { cmd: 'npm run test:unit' },
+  })
+  assert.deepEqual(result.observations[0]?.payload, {
+    callId: 'call_custom_1',
+    success: true,
+    exitCode: 0,
+    output: '12 tests passed',
+  })
 })

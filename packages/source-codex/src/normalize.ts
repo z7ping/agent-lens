@@ -8,6 +8,7 @@ import type {
   SourceRecord,
 } from '@agent-lens/core'
 import {
+  messageText,
   parseFunctionOutput,
   type CodexStoredEnvelope,
 } from './format'
@@ -302,6 +303,35 @@ export async function normalizeCodexRecord(
       ? payload.call_id
       : `codex-call-${record.sourceSequence ?? record.id}`
     const result = parseFunctionOutput(payload.output)
+    observation = candidate(record, envelope, 'tool.result', {
+      callId,
+      success: result.success,
+      ...(result.exitCode === undefined ? {} : { exitCode: result.exitCode }),
+      ...(result.output ? { output: result.output } : {}),
+    }, { nativeCallId: callId })
+  } else if (topType === 'response_item' && innerType === 'custom_tool_call') {
+    const callId = typeof payload.call_id === 'string'
+      ? payload.call_id
+      : `codex-custom-call-${record.sourceSequence ?? record.id}`
+    const name = typeof payload.name === 'string' ? payload.name : 'unknown'
+    let input: unknown = payload.input ?? null
+    if (typeof payload.input === 'string') {
+      try {
+        input = JSON.parse(payload.input)
+      } catch {
+        input = payload.input
+      }
+    }
+    observation = candidate(record, envelope, 'tool.call', {
+      callId,
+      nativeToolName: name,
+      input,
+    }, { nativeCallId: callId })
+  } else if (topType === 'response_item' && innerType === 'custom_tool_call_output') {
+    const callId = typeof payload.call_id === 'string'
+      ? payload.call_id
+      : `codex-custom-call-${record.sourceSequence ?? record.id}`
+    const result = parseFunctionOutput(messageText(payload.output))
     observation = candidate(record, envelope, 'tool.result', {
       callId,
       success: result.success,

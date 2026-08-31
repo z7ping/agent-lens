@@ -22,7 +22,7 @@ export const codexManifest: SourcePluginManifest = {
   displayName: 'Codex Source',
   sourceId: 'codex',
   productId: 'codex',
-  parserVersion: '2',
+  parserVersion: '3',
 }
 
 export async function declareCodexCapabilities(

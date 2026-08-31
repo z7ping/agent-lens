@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { createHash, randomUUID } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import { appendFile, mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -8,10 +9,23 @@ const MAX_STRING = 32 * 1024
 const SENSITIVE_KEY = /(password|passwd|secret|token|api[_-]?key|authorization|cookie)/i
 const DEFAULT_ENABLED_SOURCES = ['claude-code']
 
+function configuredSources(env = process.env) {
+  const path = env.AGENT_LENS_CAPTURE_POLICY_PATH
+    || join(homedir(), '.agent-lens', '1.0', 'config', 'capture-policy.json')
+  try {
+    const value = JSON.parse(readFileSync(path, 'utf8'))
+    if (value?.version !== 1 || !Array.isArray(value.enabledSources)
+      || value.enabledSources.some(item => typeof item !== 'string')) return null
+    return [...new Set(value.enabledSources.map(item => item.trim().toLowerCase()).filter(Boolean))]
+  } catch {
+    return null
+  }
+}
+
 function sourceCaptureEnabled(sourceId, env = process.env) {
   const raw = String(env.AGENT_LENS_ENABLED_SOURCES || '').trim()
   const normalizedSourceId = String(sourceId || '').trim().toLowerCase()
-  if (!raw) return DEFAULT_ENABLED_SOURCES.includes(normalizedSourceId)
+  if (!raw) return (configuredSources(env) ?? DEFAULT_ENABLED_SOURCES).includes(normalizedSourceId)
   if (raw.toLowerCase() === 'none') return false
   return raw.split(',').some(value => value.trim().toLowerCase() === normalizedSourceId)
 }

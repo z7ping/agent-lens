@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./configuration": "./src/configuration.ts",
+    "./service": "./src/service.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
