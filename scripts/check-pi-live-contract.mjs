@@ -56,6 +56,8 @@ requireText(taskMessage, /export function TaskMessage/, '统一 Task Message 组
 requireText(taskMessage, />查看源码</, '统一 Task Message 必须保留“查看源码”')
 requireText(taskMessage, /返回渲染/, '统一 Task Message 必须保留“返回渲染”')
 requireText(taskMessage, /Streaming Tail 不使用本组件/, '统一 Task Message 必须明确排除 Streaming Tail')
+requireText(reviewPage, /import \{ TaskMessage \} from '\.\/TaskMessage'/, 'Review 已完成消息必须接入统一 TaskMessage')
+requireText(reviewPage, /function MessageBubble[\s\S]{0,1200}<TaskMessage/, 'Review 用户/AI 消息必须通过 TaskMessage 渲染')
 requireText(page, /import \{ TaskMessage \} from '\.\/TaskMessage'/, 'Pi Live 已完成消息必须接入统一 TaskMessage')
 requireText(page, /item\.kind === 'message'[\s\S]{0,320}<TaskMessage/, 'Pi Live 持久化消息必须通过 TaskMessage 渲染')
 requireText(page, /streamText && <div className="pi-live-stream-response"/, 'Pi Live Streaming Tail 必须保留独立实时渲染，不得误接源码切换')
