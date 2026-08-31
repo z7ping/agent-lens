@@ -5,6 +5,7 @@ import type { JsonValue, PiLiveControlsDto, PiLiveEventDto, PiLiveQueueDto, PiLi
 import { piLiveApi, type PiLiveTransportDiagnostics } from '../client/pi-live'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import { projectPiLiveHistory, type PiLiveHistoryItem } from './pi-live-history'
+import { TaskMessage } from './TaskMessage'
 import { TaskSurface } from './TaskSurface'
 
 type QueueMode = 'steer' | 'followUp'
@@ -137,12 +138,13 @@ function statusLabel(state: PiLiveStateDto | null, connected: boolean): string {
 
 function PiLiveHistoryRow({ item }: { item: PiLiveHistoryItem }) {
   if (item.kind === 'message') {
-    return <div className={`pi-live-chat-row ${item.role}`}>
-      <div className={`pi-live-bubble ${item.role}`}>
-        <div className="pi-live-message-meta"><b>{item.role === 'user' ? '你' : 'Pi'}</b>{item.at && <time>{formatClock(item.at)}</time>}</div>
-        {item.role === 'assistant' ? <div className="markdown"><ReactMarkdown>{item.text}</ReactMarkdown></div> : <div>{item.text}</div>}
-      </div>
-    </div>
+    return <TaskMessage
+      role={item.role}
+      text={item.text}
+      author={item.role === 'user' ? '你' : 'Pi'}
+      time={item.at ? formatClock(item.at) : undefined}
+      className="pi-live-task-message"
+    />
   }
 
   if (item.kind === 'thinking') {
