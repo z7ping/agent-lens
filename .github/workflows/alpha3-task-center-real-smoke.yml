@@ -50,6 +50,7 @@ jobs:
           $env:AGENT_LENS_DAEMON_MODE = 'foreground'
           $env:AGENT_LENS_RUNTIME_OWNER = 'ci'
           $env:AGENT_LENS_ACCEPTANCE_URL = "http://127.0.0.1:${{ env.ACCEPTANCE_PORT }}"
+          $env:AGENT_LENS_ACCEPTANCE_PATH = '/review?range=all&status=all'
           $env:AGENT_LENS_ACCEPTANCE_OUTPUT = Join-Path $root 'acceptance'
           $env:CODEX_HOME = Join-Path $root 'codex-home'
           $env:ELECTRON_ENABLE_LOGGING = '1'
