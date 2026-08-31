@@ -10,7 +10,7 @@ const viewports = [
   { width: 1366, height: 768 },
 ]
 const themes = ['light', 'dark']
-const report = { kind: 'task-center-desktop', baseUrl, path, startedAt: new Date().toISOString(), cases: [], ok: true }
+const report = { kind: 'task-center-desktop', baseUrl, path, startedAt: new Date().toISOString(), cases: [], switchStability: null, ok: true }
 
 function fail(message) {
   throw new Error(message)
@@ -58,6 +58,7 @@ async function inspect(win, viewport, theme) {
       roundCount: document.querySelectorAll('[data-task-round-state]').length,
       thinkingCount: document.querySelectorAll('.thinking-block').length,
       toolCount: document.querySelectorAll('.execution-row').length,
+      taskButtonCount: document.querySelectorAll('.task-center-rail button.session-item').length,
       theme: document.documentElement.dataset.theme || 'light',
     }
   })()`)
@@ -77,6 +78,52 @@ async function inspect(win, viewport, theme) {
   if (value.detailScroll && !['auto', 'scroll'].includes(value.overflow.detailY)) errors.push(`右侧详情不是独立滚动根：overflow-y=${value.overflow.detailY}`)
 
   return { viewport, theme, value, errors, ok: errors.length === 0 }
+}
+
+async function clickTaskSequence(win, count) {
+  return win.webContents.executeJavaScript(`(async () => {
+    const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
+    for (let index = 0; index < ${count}; index += 1) {
+      const buttons = [...document.querySelectorAll('.task-center-rail button.session-item')]
+      if (buttons.length < 2) return { completed: index, available: buttons.length }
+      const target = buttons[index % 2]
+      target.click()
+      await delay(80)
+    }
+    return { completed: ${count}, available: document.querySelectorAll('.task-center-rail button.session-item').length }
+  })()`)
+}
+
+async function runSwitchStability(win) {
+  if (!win.webContents.debugger.isAttached()) win.webContents.debugger.attach('1.3')
+  const initialCount = await win.webContents.executeJavaScript(`document.querySelectorAll('.task-center-rail button.session-item').length`)
+  if (initialCount < 2) {
+    return { skipped: true, reason: `真实任务不足 2 条（当前 ${initialCount} 条）`, requiredSwitches: 100, ok: true }
+  }
+
+  await clickTaskSequence(win, 4)
+  await new Promise(resolveDelay => setTimeout(resolveDelay, 500))
+  const before = await win.webContents.debugger.sendCommand('Memory.getDOMCounters')
+  const switched = await clickTaskSequence(win, 100)
+  await new Promise(resolveDelay => setTimeout(resolveDelay, 1000))
+  const after = await win.webContents.debugger.sendCommand('Memory.getDOMCounters')
+  const listenerGrowth = after.jsEventListeners - before.jsEventListeners
+  const nodeGrowth = after.nodes - before.nodes
+  const maxNodeGrowth = Math.max(100, Math.ceil(before.nodes * 0.25))
+  const errors = []
+  if (switched.completed !== 100) errors.push(`仅完成 ${switched.completed}/100 次切换`)
+  if (listenerGrowth > 20) errors.push(`Listener 增长 ${listenerGrowth}，超过 +20`) 
+  if (nodeGrowth > maxNodeGrowth) errors.push(`DOM Node 增长 ${nodeGrowth}，超过允许 ${maxNodeGrowth}`)
+  return {
+    skipped: false,
+    requiredSwitches: 100,
+    completedSwitches: switched.completed,
+    before: { nodes: before.nodes, documents: before.documents, jsEventListeners: before.jsEventListeners },
+    after: { nodes: after.nodes, documents: after.documents, jsEventListeners: after.jsEventListeners },
+    growth: { nodes: nodeGrowth, jsEventListeners: listenerGrowth },
+    errors,
+    ok: errors.length === 0,
+  }
 }
 
 await app.whenReady()
@@ -106,7 +153,14 @@ try {
         console.log(`${result.ok ? '✓' : '✗'} ${viewport.width}×${viewport.height} ${theme} · rail=${Math.round(result.value.rail?.width || 0)}px · rounds=${result.value.roundCount} · tools=${result.value.toolCount}`)
         for (const error of result.errors) console.error(`  - ${error}`)
       }
+      if (viewport.width === 1280) {
+        report.switchStability = await runSwitchStability(win)
+        if (!report.switchStability.ok) report.ok = false
+        if (report.switchStability.skipped) console.log(`• 100 次任务切换验收 skipped：${report.switchStability.reason}`)
+        else console.log(`${report.switchStability.ok ? '✓' : '✗'} 100 次任务切换 · listeners ${report.switchStability.growth.jsEventListeners >= 0 ? '+' : ''}${report.switchStability.growth.jsEventListeners} · nodes ${report.switchStability.growth.nodes >= 0 ? '+' : ''}${report.switchStability.growth.nodes}`)
+      }
     } finally {
+      if (win.webContents.debugger.isAttached()) win.webContents.debugger.detach()
       win.destroy()
     }
   }
