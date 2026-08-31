@@ -1,12 +1,15 @@
 import { readFile } from 'node:fs/promises'
 
-const [app, taskCenter, taskSurface, taskHeader, taskMessage, taskRound, taskDetailModel, taskCenterCss, taskHeaderCss, reviewPage, page, hubPage, history, client, css, http, runtime, sdkLoader, sdkAdapter, runtimePackage, coreObservation, timelineProtocol] = await Promise.all([
+const [app, taskCenter, taskSurface, taskHeader, taskMessage, taskRound, taskThinking, taskToolGroup, taskToolRow, taskDetailModel, taskCenterCss, taskHeaderCss, reviewPage, page, hubPage, history, client, css, http, runtime, sdkLoader, sdkAdapter, runtimePackage, coreObservation, timelineProtocol] = await Promise.all([
   readFile(new URL('../packages/web/src/App.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/TaskCenterPage.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/TaskSurface.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/TaskHeader.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/TaskMessage.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/TaskRound.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/web/src/features/TaskThinking.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/web/src/features/TaskToolGroup.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/web/src/features/TaskToolRow.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/task-detail-model.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/task-center.css', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/task-header.css', import.meta.url), 'utf8'),
@@ -84,6 +87,21 @@ requireText(reviewPage, /useMemo<TaskDetailModel \| null>/, 'Review 必须投影
 requireText(reviewPage, /const \[expandAllRounds, setExpandAllRounds\] = useState\(true\)/, '历史轮次必须默认展开')
 if (/function Interaction\(/.test(reviewPage)) failures.push('Review 不得继续保留旧 Interaction 轮次外壳；应由 TaskRound 承载')
 
+requireText(taskDetailModel, /export interface TaskThinkingModel/, '统一 TaskThinkingModel 缺失')
+requireText(taskDetailModel, /export interface TaskToolGroupModel/, '统一 TaskToolGroupModel 缺失')
+requireText(taskDetailModel, /export interface TaskToolModel/, '统一 TaskToolModel 缺失')
+requireText(taskThinking, /export function TaskThinking/, '统一 TaskThinking 组件缺失')
+requireText(taskThinking, /thinking-block/, 'TaskThinking 必须保持执行轨 Thinking 视觉语义')
+requireText(taskToolGroup, /export function TaskToolGroup/, '统一 TaskToolGroup 组件缺失')
+requireText(taskToolGroup, /<TaskToolRow/, 'TaskToolGroup 必须统一通过 TaskToolRow 渲染单工具')
+requireText(taskToolRow, /export function TaskToolRow/, '统一 TaskToolRow 组件缺失')
+requireText(taskToolRow, /<ToolKindIcon kind=\{model\.kind\}/, 'TaskToolRow 必须使用语义 ToolKindIcon，不得退回通用占位图标')
+requireText(reviewPage, /import \{ TaskThinking \} from '\.\/TaskThinking'/, 'Review Reasoning 必须接入 TaskThinking')
+requireText(reviewPage, /return <TaskThinking[\s\S]{0,900}<MarkdownSurface/, 'Review Reasoning 必须由 TaskThinking 承载并保留 Markdown')
+requireText(reviewPage, /import \{ TaskToolGroup \} from '\.\/TaskToolGroup'/, 'Review Tool Group 必须接入 TaskToolGroup')
+requireText(reviewPage, /function ReviewToolGroupAdapter[\s\S]{0,1800}<TaskToolGroup/, 'Review Tool 必须经 Adapter 投影到 TaskToolGroup')
+if (/function ToolRow\(/.test(reviewPage) || /function ToolRunGroup\(/.test(reviewPage)) failures.push('Review 不得继续维护旧 ToolRow / ToolRunGroup 组件副本')
+
 requireText(taskMessage, /export function TaskMessage/, '统一 Task Message 组件缺失')
 requireText(taskMessage, />查看源码</, '统一 Task Message 必须保留“查看源码”')
 requireText(taskMessage, /返回渲染/, '统一 Task Message 必须保留“返回渲染”')
@@ -160,4 +178,4 @@ if (failures.length) {
   process.exit(1)
 }
 
-console.log('Pi Live / 任务中心契约检查通过：统一 TaskSurface、TaskHeader、TaskMessage、TaskDetailModel、TaskRound、任务中心历史筛选栏、嵌入态详情、官方 Pi SDK 类型适配与 capability 校验、活跃任务列举、项目上下文启动、事件层级、历史事实、IME、Stop/Terminate、滚动跟随、Extension UI、背压与性能诊断已锁定。')
+console.log('Pi Live / 任务中心契约检查通过：统一 TaskSurface、TaskHeader、TaskMessage、TaskDetailModel、TaskRound、TaskThinking、TaskToolGroup、TaskToolRow、任务中心历史筛选栏、嵌入态详情、官方 Pi SDK 类型适配与 capability 校验、活跃任务列举、项目上下文启动、事件层级、历史事实、IME、Stop/Terminate、滚动跟随、Extension UI、背压与性能诊断已锁定。')
