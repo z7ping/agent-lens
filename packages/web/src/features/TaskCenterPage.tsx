@@ -132,6 +132,14 @@ function NewTaskPanel({
   }, [])
 
   const selected = options.find(option => option.key === selectedKey)
+  const agentStateLabel = !availability.checked ? '检测中' : availability.available ? '已就绪' : '不可用'
+  const composerStateLabel = !availability.checked
+    ? '正在检测 Pi…'
+    : !availability.available
+      ? availability.label
+      : selected
+        ? '工作目录来自已观测项目'
+        : '等待可启动项目'
   const start = async () => {
     const task = prompt.trim()
     if (!selected || !task || starting || !availability.available) return
@@ -155,7 +163,6 @@ function NewTaskPanel({
     <section className="task-center-new-card">
       <div className="task-center-new-kicker">新建任务</div>
       <h1>让 Pi 开始一个任务</h1>
-      <p>选择项目并描述要做的事情。工作目录由 AgentLens 根据已观测到的项目会话自动确定，不需要手动输入路径。</p>
 
       <div className="task-center-new-fields">
         <label>
@@ -164,20 +171,19 @@ function NewTaskPanel({
             {!options.length && <option value="">暂无可启动项目</option>}
             {options.map(option => <option key={option.key} value={option.key}>{option.label}</option>)}
           </select>
-          <small>{options.length ? '目录来自最近一次已观测任务。' : '当前还没有从真实会话中识别到可靠项目目录。'}</small>
         </label>
         <label>
           <span>智能体</span>
-          <div className="task-center-agent-fixed"><span className="pi-live-pulse"/><b>Pi</b><small>alpha.3 当前可主动启动的智能体</small></div>
+          <div className="task-center-agent-fixed"><span className="pi-live-pulse"/><b>Pi</b><small>{agentStateLabel}</small></div>
         </label>
       </div>
 
       <label className="task-center-prompt">
         <span>任务</span>
-        <textarea value={prompt} onChange={event => setPrompt(event.target.value)} placeholder="例如：检查当前项目的 CI 失败原因并给出修复方案" autoFocus/>
+        <textarea value={prompt} onChange={event => setPrompt(event.target.value)} placeholder="描述要完成的任务，例如：检查任务中心长会话性能，并只处理已确认范围。" autoFocus/>
       </label>
 
-      <div className="task-center-new-status">{availability.label}</div>
+      <div className="task-center-new-status">{composerStateLabel}</div>
       {error && <div className="pi-live-error" role="alert">{error}</div>}
       {!options.length && <div className="task-center-project-hint">先让 AgentLens 采集到一次带工作目录的项目会话，再从这里新建任务；本页面不会要求你手填 cwd。</div>}
       <div className="task-center-new-actions">
