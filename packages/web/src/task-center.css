@@ -43,8 +43,16 @@
 .task-live-item .session-item-meta time { color: var(--al-accent); font-weight: 650; }
 
 .task-center-main { min-width: 0; min-height: 0; overflow: hidden; background: var(--al-surface); }
-.task-center-main > .review-page,
-.task-center-main > .pi-live-page { height: 100%; }
+.task-center-main > .task-surface {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.task-center-main .task-surface > .review-page,
+.task-center-main .task-surface > .pi-live-page,
+.task-center-main .task-surface > .task-center-new { height: 100%; }
 .task-center-main .review-layout { grid-template-columns: minmax(0, 1fr); }
 .task-center-main .review-layout > .session-panel { display: none; }
 .task-center-main .pi-live-page { grid-template-columns: minmax(0, 1fr); }
