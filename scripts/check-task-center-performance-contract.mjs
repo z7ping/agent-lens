@@ -2,6 +2,7 @@ import fs from 'node:fs'
 
 const model = fs.readFileSync('packages/web/src/client/model.ts', 'utf8')
 const api = fs.readFileSync('packages/web/src/client/api.ts', 'utf8')
+const reviewPage = fs.readFileSync('packages/web/src/features/ReviewPage.tsx', 'utf8')
 const hubReview = fs.readFileSync('packages/web/src/client/hub-review.ts', 'utf8')
 const app = fs.readFileSync('packages/web/src/App.tsx', 'utf8')
 const releaseInfo = fs.readFileSync('packages/web/src/components/ReleaseInfo.tsx', 'utf8')
@@ -25,8 +26,8 @@ const required = [
   [server.includes("params.get('cursor')"), 'HTTP Surface 必须解析 Review 列表游标'],
   [releaseInfo.includes('runtimeReady') && releaseInfo.includes('{ runtimeOwner }'), '版本检查必须复用已有 runtime health 结果'],
   [app.includes('runtimeOwner={snapshot.health?.runtime?.owner ?? null}'), 'Shell 必须把已有 health 传给版本检查'],
-  [api.includes('preferUserSessionTitle') && api.includes('response.items.map(preferUserSessionTitle)'), '本地任务列表必须默认以首条真实用户消息表达任务意图'],
-  [api.includes('.then(preferUserSessionTitle)'), '会话详情标题必须与任务列表保持同一用户意图语义'],
+  [!api.includes('preferUserSessionTitle'), 'Web API 不得用首条用户消息覆盖 Source/Core 提供的原生会话标题'],
+  [reviewPage.includes('sessionTitle([item.title, item.preview]') && reviewPage.includes('sessionTitle([detail.title, detail.preview]'), '任务列表与会话详情必须统一使用“原生标题 → 首条用户消息 → 通用兜底”语义'],
 ]
 
 const failed = required.filter(([ok]) => !ok)
