@@ -1,0 +1,40 @@
+name: Temp Alpha3 TaskRound Codemod V3
+
+on:
+  push:
+    branches:
+      - bugfix/alpha3-task-round-codemod
+    paths:
+      - .github/workflows/tmp-alpha3-task-round-codemod-v3.yml
+
+permissions:
+  contents: write
+
+jobs:
+  codemod:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: bugfix/alpha3-task-round-codemod
+      - name: Reuse V2 codemod
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('.github/workflows/tmp-alpha3-task-round-codemod-v2.yml').read_text()
+          body = text.split("          node <<'NODE'\n", 1)[1].split("\n          NODE", 1)[0]
+          lines = [line[10:] if line.startswith('          ') else line for line in body.splitlines()]
+          Path('/tmp/task-round-codemod.js').write_text('\n'.join(lines) + '\n')
+          PY
+          node /tmp/task-round-codemod.js
+          sed -i 's/[[:space:]]\+$//' packages/web/src/features/ReviewPage.tsx
+      - name: Commit codemod result
+        shell: bash
+        run: |
+          git config user.name "7ping"
+          git config user.email "z7ping@outlook.com"
+          git add packages/web/src/features/ReviewPage.tsx
+          git diff --cached --check
+          git commit -m "refactor: Review 接入 TaskDetailModel 与 TaskRound"
+          git push origin HEAD:bugfix/alpha3-task-round-codemod
