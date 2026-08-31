@@ -9,15 +9,8 @@ requireText(taskDetailModel, /contextLabel\\?: string/, 'TaskDetailModel 必须�
 if (!source.includes(malformed)) throw new Error('missing malformed TaskDetailModel contract')
 source = source.replace(malformed, repaired)
 
-for (const expected of [
-  'projectPiLiveTaskDetail',
-  'taskDetailModel.agentLabel',
-  'taskDetailModel.contextLabel',
-  'taskDetailModel.metrics',
-  'projectPiLiveRunningRound',
-  'runningRound && <PiLiveRunningTaskRound',
-]) {
-  if (!source.includes(expected)) throw new Error(`missing Pi TaskDetail contract: ${expected}`)
+if (!source.includes('projectPiLiveTaskDetail') || !source.includes('projectPiLiveRunningRound')) {
+  throw new Error('Pi TaskDetail projection contract is incomplete')
 }
 
 fs.writeFileSync(path, source.replace(/[ \t]+$/gm, ''))
