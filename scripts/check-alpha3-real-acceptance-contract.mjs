@@ -110,12 +110,13 @@ const explicitPiExpanded = piTaskRound.match(/defaultExpanded/g) ?? []
 if (explicitPiExpanded.length < 4) failures.push('Pi History / Running 的 Thinking 与 Tool Group 必须显式保持原型默认展开')
 
 /* 09–12 · Round / Message / Execution 三层视觉与明暗响应式基线。 */
-requireText(round, /className={`task-round interaction-block/, 'Round 必须使用原型 task-round 轻边界结构')
+requireText(round, /task-round interaction-block/, 'Round 必须使用原型 task-round 轻边界结构')
 requireText(round, /round-label/, 'Round 必须保留原型 label 结构')
 requireText(round, /round-preview/, 'Round 必须保留原型 preview 结构')
 requireText(round, /round-meta/, 'Round 必须保留原型 meta 结构')
-requireText(message, /message-row .*user/, '用户消息必须保留原型右侧 message-row 结构')
-requireText(message, /message-row .*agent/, 'Agent 消息必须保留原型左侧 message-row 结构')
+requireText(message, /message-row/, '消息必须使用原型 message-row 主结构')
+requireText(message, /chat-row-user user/, '用户消息必须保留原型右侧结构')
+requireText(message, /chat-row-agent agent/, 'Agent 消息必须保留原型左侧结构')
 requireText(message, /task-message-agent-mark/, 'Agent 消息必须使用弱引导标记而不是抢视觉头像')
 
 requireText(toolCss, /grid-template-columns:\s*76px\s+minmax\(94px,\s*auto\)\s+minmax\(0,\s*1fr\)\s+auto/, '桌面 Tool Row 必须保持原型四列：类型 / 操作 / 目标 / 状态耗时')
