@@ -82,7 +82,32 @@ async function applyViewport(win, viewport) {
     3_000,
     `设置 ${viewport.width}×${viewport.height} 可见区域`,
   ).catch(() => undefined)
-  await delay(60)
+
+  // Windows hosted runner 的隐藏 BrowserWindow 会让 dvh / media query 比 innerWidth/innerHeight
+  // 晚一拍稳定。像素验收必须等 Task Center 外壳也收敛到目标 viewport，不能截到过渡帧。
+  const expectedRail = viewport.width >= 1200 ? 316 : viewport.width >= 992 ? 286 : viewport.width >= 768 ? 252 : viewport.width
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const geometry = await withTimeout(win.webContents.executeJavaScript(`(() => {
+      const page = document.querySelector('.task-center-page')
+      const rail = document.querySelector('.task-center-rail')
+      const pageRect = page?.getBoundingClientRect()
+      const railRect = rail?.getBoundingClientRect()
+      return {
+        width: window.innerWidth,
+        height: window.innerHeight,
+        pageBottom: pageRect?.bottom || 0,
+        railWidth: railRect?.width || 0,
+      }
+    })()`), 2_000, '等待 viewport 几何稳定')
+    if (
+      Math.abs(geometry.width - viewport.width) <= 1
+      && Math.abs(geometry.height - viewport.height) <= 1
+      && Math.abs(geometry.pageBottom - viewport.height) <= 2
+      && Math.abs(geometry.railWidth - expectedRail) <= 2
+    ) return
+    await delay(50)
+  }
+  fail(`${viewport.width}×${viewport.height} viewport 几何未稳定到原型基线`)
 }
 
 async function captureViewport(win, viewport, theme) {
@@ -205,7 +230,7 @@ async function inspect(win, viewport, theme) {
         toolFactCount: toolFacts.length,
         hiddenToolFactCount: toolFacts.filter(item => !visible(item)).length,
         toolGridColumns: toolStyle?.gridTemplateColumns || '',
-        toolGridColumnCount: toolStyle?.gridTemplateColumns?.trim().split(/\s+/).filter(Boolean).length || 0,
+        toolGridColumnCount: toolStyle?.gridTemplateColumns?.trim().split(/\\s+/).filter(Boolean).length || 0,
         toolRow: rect(firstTool),
         toolRowClientWidth: firstTool?.clientWidth || 0,
         toolRowScrollWidth: firstTool?.scrollWidth || 0,
@@ -238,7 +263,7 @@ async function inspect(win, viewport, theme) {
   if (value.documentScrollHeight > value.innerHeight + 2) errors.push(`出现全局纵向滚动：${value.documentScrollHeight} > ${value.innerHeight}`)
   if (value.rail && value.main && value.rail.right > value.main.left + 2) errors.push('任务列表与详情发生重叠')
   if (value.toolbar && value.toolbar.height > 54) errors.push(`Toolbar 过高：${value.toolbar.height}px`)
-  if (value.rail && (value.rail.width < 250 || value.rail.width > 330)) errors.push(`任务 Rail 宽度异常：${value.rail.width}px`)
+  if (value.rail && !within(value.rail.width, viewport.width >= 1200 ? 316 : viewport.width >= 992 ? 286 : 252)) errors.push(`任务 Rail 宽度偏离原型：${value.rail.width}px`)
   if (!['auto', 'scroll'].includes(value.overflow.railY)) errors.push(`左侧任务列表不是独立滚动根：overflow-y=${value.overflow.railY}`)
   if (value.overflow.main !== 'hidden') errors.push(`Task Center 主区应隔离全局滚动：overflow=${value.overflow.main}`)
   if (value.detailScroll && !['auto', 'scroll'].includes(value.overflow.detailY)) errors.push(`右侧详情不是独立滚动根：overflow-y=${value.overflow.detailY}`)
