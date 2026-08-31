@@ -1,11 +1,13 @@
 import { readFile } from 'node:fs/promises'
 
-const [app, taskCenter, taskSurface, taskHeader, taskMessage, taskCenterCss, taskHeaderCss, reviewPage, page, hubPage, history, client, css, http, runtime, sdkLoader, sdkAdapter, runtimePackage, coreObservation, timelineProtocol] = await Promise.all([
+const [app, taskCenter, taskSurface, taskHeader, taskMessage, taskRound, taskDetailModel, taskCenterCss, taskHeaderCss, reviewPage, page, hubPage, history, client, css, http, runtime, sdkLoader, sdkAdapter, runtimePackage, coreObservation, timelineProtocol] = await Promise.all([
   readFile(new URL('../packages/web/src/App.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/TaskCenterPage.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/TaskSurface.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/TaskHeader.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/TaskMessage.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/web/src/features/TaskRound.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/web/src/features/task-detail-model.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/task-center.css', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/task-header.css', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/ReviewPage.tsx', import.meta.url), 'utf8'),
@@ -64,11 +66,23 @@ requireText(taskHeader, /export function TaskHeader/, '统一 Task Header 组件
 requireText(taskHeader, /task-header-metrics/, '统一 Task Header 必须提供共享指标区域')
 requireText(taskHeader, /task-header-actions/, '统一 Task Header 必须提供共享操作区域')
 requireText(reviewPage, /import \{ TaskHeader \} from '\.\/TaskHeader'/, 'Review 必须接入统一 TaskHeader')
-requireText(reviewPage, /<TaskHeader[\s\S]{0,1800}interactionCount/, 'Review 详情头必须通过 TaskHeader 渲染轮次等指标')
+requireText(reviewPage, /<TaskHeader[\s\S]{0,1800}metrics=\{taskDetailModel\?\.metrics/, 'Review 详情头必须通过 TaskDetailModel 向 TaskHeader 投影指标')
 requireText(page, /import \{ TaskHeader \} from '\.\/TaskHeader'/, 'Pi Live 必须接入统一 TaskHeader')
 requireText(page, /<TaskHeader[\s\S]{0,1800}停止当前任务/, 'Pi Live 运行态标题和控制必须通过 TaskHeader 渲染')
 if (/review-session-head/.test(reviewPage)) failures.push('Review 不得继续保留旧 review-session-head 详情头结构')
 if (/pi-live-taskbar/.test(page)) failures.push('Pi Live 不得继续保留旧 pi-live-taskbar 详情头结构')
+
+requireText(taskDetailModel, /export interface TaskDetailModel/, '统一 TaskDetailModel 缺失')
+requireText(taskDetailModel, /export interface TaskRoundModel/, '统一 TaskRoundModel 缺失')
+if (/from ['"]@agent-lens\/protocol['"]|Review(?:Session|Interaction|Node)|PiLive/.test(taskDetailModel)) failures.push('TaskDetailModel 必须保持来源无关，不得依赖 Review / Pi DTO')
+requireText(taskRound, /export function TaskRound/, '统一 TaskRound 组件缺失')
+requireText(taskRound, /defaultExpanded = true/, 'TaskRound 必须默认展开')
+requireText(taskRound, /data-task-round-state=\{model\.state\}/, 'TaskRound 必须暴露 settled / running / stopped 状态边界')
+requireText(reviewPage, /import \{ TaskRound \} from '\.\/TaskRound'/, 'Review 必须接入统一 TaskRound')
+requireText(reviewPage, /function ReviewRoundAdapter[\s\S]{0,2200}<TaskRound/, 'Review 轮次必须通过 Review Adapter 投影到 TaskRound')
+requireText(reviewPage, /useMemo<TaskDetailModel \| null>/, 'Review 必须投影统一 TaskDetailModel')
+requireText(reviewPage, /const \[expandAllRounds, setExpandAllRounds\] = useState\(true\)/, '历史轮次必须默认展开')
+if (/function Interaction\(/.test(reviewPage)) failures.push('Review 不得继续保留旧 Interaction 轮次外壳；应由 TaskRound 承载')
 
 requireText(taskMessage, /export function TaskMessage/, '统一 Task Message 组件缺失')
 requireText(taskMessage, />查看源码</, '统一 Task Message 必须保留“查看源码”')
@@ -146,4 +160,4 @@ if (failures.length) {
   process.exit(1)
 }
 
-console.log('Pi Live / 任务中心契约检查通过：统一 TaskSurface、TaskHeader、TaskMessage、任务中心历史筛选栏、嵌入态详情、官方 Pi SDK 类型适配与 capability 校验、活跃任务列举、项目上下文启动、事件层级、历史事实、IME、Stop/Terminate、滚动跟随、Extension UI、背压与性能诊断已锁定。')
+console.log('Pi Live / 任务中心契约检查通过：统一 TaskSurface、TaskHeader、TaskMessage、TaskDetailModel、TaskRound、任务中心历史筛选栏、嵌入态详情、官方 Pi SDK 类型适配与 capability 校验、活跃任务列举、项目上下文启动、事件层级、历史事实、IME、Stop/Terminate、滚动跟随、Extension UI、背压与性能诊断已锁定。')
