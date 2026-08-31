@@ -24,7 +24,9 @@ import { TaskHeader } from './TaskHeader'
 import { TaskMessage } from './TaskMessage'
 import { TaskRound } from './TaskRound'
 import { TaskSurface } from './TaskSurface'
-import type { TaskDetailModel, TaskRoundModel } from './task-detail-model'
+import { TaskThinking } from './TaskThinking'
+import { TaskToolGroup } from './TaskToolGroup'
+import type { TaskDetailModel, TaskRoundModel, TaskThinkingModel, TaskToolGroupModel, TaskToolModel } from './task-detail-model'
 
 function formatTime(value: string): string {
   return new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(value))
@@ -542,16 +544,21 @@ function MarkdownSurface({ text }: { text: string }) {
 
 function MessageBubble({ node, inspect }: { node: ReviewMessageNodeDto; inspect(node: ReviewNodeDto): void }) {
   if (node.role === 'reasoning') {
-    return <details className="thinking-block">
-      <summary>
-        <span className="thinking-label">可观察过程片段</span>
-        <span className="thinking-preview">{brief(node.text, 78)}</span>
-        <EvidenceBadges evidence={node.evidence} compact/>
-        <time>{formatClock(node.at)}</time>
-      </summary>
-      <div className="thinking-content"><MarkdownSurface text={node.text}/></div>
-      {node.evidence.length > 0 && <button className="evidence-link" onClick={() => inspect(node)}>查看全部证据 · {node.evidence.length}</button>}
-    </details>
+    const thinking: TaskThinkingModel = {
+      id: node.id,
+      label: '可观察过程片段',
+      text: node.text,
+      preview: brief(node.text, 78),
+      time: formatClock(node.at),
+      state: 'settled',
+    }
+    return <TaskThinking
+      model={thinking}
+      meta={<EvidenceBadges evidence={node.evidence} compact/>}
+      actions={node.evidence.length > 0 ? <button className="evidence-link" onClick={() => inspect(node)}>查看全部证据 · {node.evidence.length}</button> : undefined}
+    >
+      <MarkdownSurface text={node.text}/>
+    </TaskThinking>
   }
 
   return <TaskMessage
@@ -564,52 +571,53 @@ function MessageBubble({ node, inspect }: { node: ReviewMessageNodeDto; inspect(
   />
 }
 
-function ToolRow({ node, inspect, last }: { node: ReviewToolNodeDto; inspect(node: ReviewNodeDto): void; last: boolean }) {
-  const status = node.status === 'error' ? 'error' : node.status === 'success' ? 'success' : node.status === 'running' ? 'running' : 'unknown'
-  const info = toolPresentation(node)
-  return <button className="execution-row" data-status={status} data-kind={info.kind} onClick={() => inspect(node)}>
-    <span className="execution-rail" aria-hidden="true"><span className="execution-dot"/>{!last && <span className="execution-line"/>}</span>
-    <span className={`execution-tool-icon tool-kind-${info.kind}`}><ToolKindIcon kind={info.kind}/></span>
-    <span className="execution-main">
-      <span className="execution-name"><b>{node.name}</b><span className="tool-kind-label">{info.label}</span><span className="tool-status-label">{node.status === 'error' ? '失败' : node.status === 'success' ? '完成' : node.status === 'running' ? '执行中' : '未知'}</span><EvidenceBadges evidence={node.evidence} compact/></span>
-      {info.primary && <span className="execution-preview execution-primary">{info.primary}</span>}
-      {info.secondary && <span className={`execution-preview ${node.status === 'error' ? 'execution-preview-error' : ''}`}>{info.secondary}</span>}
-    </span>
-    <span className="execution-duration">{node.durationMs !== undefined && node.durationMs > 0 ? duration(node.durationMs) : formatClock(node.at)}</span>
-  </button>
-}
-
-function ToolRunGroup({ items, inspect }: { items: ReviewToolNodeDto[]; inspect(node: ReviewNodeDto): void }) {
-  const errors = items.filter(item => item.status === 'error').length
-  const [expanded, setExpanded] = useState(errors > 0)
-  const [errorsOnly, setErrorsOnly] = useState(false)
-  const totalDuration = items.reduce((sum, item) => sum + (item.durationMs ?? 0), 0)
-  const typeCounts = useMemo(() => {
-    const counts = new Map<ToolKind, number>()
-    for (const item of items) {
-      const kind = detectToolKind(item.name)
-      counts.set(kind, (counts.get(kind) ?? 0) + 1)
+function reviewToolModel(node: ReviewToolNodeDto): TaskToolModel {
+    const info = toolPresentation(node)
+    const status = node.status === 'error' ? 'error' : node.status === 'success' ? 'success' : node.status === 'running' ? 'running' : 'unknown'
+    return {
+      id: node.id,
+      name: node.name,
+      kind: info.kind,
+      kindLabel: info.label,
+      status,
+      primary: info.primary || undefined,
+      secondary: info.secondary || undefined,
+      durationLabel: node.durationMs !== undefined && node.durationMs > 0 ? duration(node.durationMs) : formatClock(node.at),
     }
-    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4)
-  }, [items])
-  const visible = errorsOnly ? items.filter(item => item.status === 'error') : items
-  return <details className={`execution-group ${errors ? 'execution-group-error' : ''}`} open={expanded} onToggle={event => setExpanded(event.currentTarget.open)}>
-    <summary>
-      <span className="execution-group-icon" aria-hidden="true"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v4a3 3 0 0 0 3 3h6"/><path d="m9 7 3 3-3 3"/></svg></span>
-      <span className="execution-group-copy"><b>工具执行</b><small>{items.length} 次调用</small></span>
-      <span className="execution-kind-counts">{typeCounts.map(([kind, count]) => <span key={kind}>{toolKindLabel(kind)} {count}</span>)}</span>
-      <span className={`execution-summary-status ${errors ? 'is-error' : 'is-ok'}`}>{errors ? `${errors} 个错误` : '全部完成'}</span>
-      {totalDuration > 0 && <span className="execution-total">{duration(totalDuration)}</span>}
-    </summary>
-    <div className="execution-group-toolbar">
-      <span>共 {items.length} 次 · {errors} 次失败</span>
-      {errors > 0 && <label><input type="checkbox" checked={errorsOnly} onChange={event => setErrorsOnly(event.target.checked)}/> 只看错误</label>}
-    </div>
-    <div className="execution-list">{visible.map((node, index) => <ToolRow key={node.id} node={node} inspect={inspect} last={index === visible.length - 1}/>)}</div>
-  </details>
-}
+  }
 
-function EventRow({ event, inspect }: { event: ReviewEventNodeDto; inspect(node: ReviewNodeDto): void }) {
+  function ReviewToolGroupAdapter({ items, inspect }: { items: ReviewToolNodeDto[]; inspect(node: ReviewNodeDto): void }) {
+    const model = useMemo<TaskToolGroupModel>(() => {
+      const tools = items.map(reviewToolModel)
+      const errorCount = tools.filter(tool => tool.status === 'error').length
+      const totalDuration = items.reduce((sum, item) => sum + (item.durationMs ?? 0), 0)
+      const counts = new Map<ToolKind, number>()
+      for (const tool of tools) counts.set(tool.kind, (counts.get(tool.kind) ?? 0) + 1)
+      return {
+        id: `tools:${items.map(item => item.id).join(':')}`,
+        label: '工具执行',
+        itemCount: tools.length,
+        errorCount,
+        totalDurationLabel: totalDuration > 0 ? duration(totalDuration) : undefined,
+        kindCounts: [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([kind, count]) => ({ kind, label: toolKindLabel(kind), count })),
+        tools,
+      }
+    }, [items])
+    const nodes = useMemo(() => new Map(items.map(node => [node.id, node] as const)), [items])
+    return <TaskToolGroup
+      model={model}
+      renderMeta={tool => {
+        const node = nodes.get(tool.id)
+        return node ? <EvidenceBadges evidence={node.evidence} compact/> : null
+      }}
+      onToolClick={tool => {
+        const node = nodes.get(tool.id)
+        if (node) inspect(node)
+      }}
+    />
+  }
+
+  function EventRow({ event, inspect }: { event: ReviewEventNodeDto; inspect(node: ReviewNodeDto): void }) {
   const summary = sourceEventSummary(event)
   return <button className={`event-row event-${event.category}`} onClick={() => inspect(event)}>
     <span className="event-mark" />
@@ -703,7 +711,7 @@ function ReviewRoundAdapter({
       forceRevision={forceRevision}
     >
       {groups.map((entry, index) => {
-        if (entry.type === 'tool-group') return <ToolRunGroup key={`tools-${index}`} items={entry.items} inspect={inspect}/>
+        if (entry.type === 'tool-group') return <ReviewToolGroupAdapter key={`tools-${index}`} items={entry.items} inspect={inspect}/>
         if (entry.type === 'raw-event-group') return showRawRecords ? <RawEventGroup key={`raw-${index}`} items={entry.items} inspect={inspect}/> : null
         if (entry.type === 'message') return <MessageBubble key={entry.id} node={entry} inspect={inspect}/>
         return <EventRow key={entry.id} event={entry as ReviewEventNodeDto} inspect={inspect}/>
