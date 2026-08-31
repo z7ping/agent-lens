@@ -115,7 +115,7 @@ export function assertPiSdkModule(value: unknown, sdkEntry: string, version?: st
       `Installed Pi SDK${suffix} is missing required capabilities: ${missing.join(', ')}. Entry: ${sdkEntry}`,
     )
   }
-  return module as PiSdkModule
+  return module as unknown as PiSdkModule
 }
 
 export function assertPiSdkSession(value: unknown, sdkEntry: string, version?: string): asserts value is PiSdkSession {
