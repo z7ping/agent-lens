@@ -15,19 +15,18 @@ export function TaskThinking({
   meta,
   actions,
   children,
-  defaultExpanded = false,
+  defaultExpanded = true,
   className = '',
 }: TaskThinkingProps) {
   return <details
-    className={`task-thinking thinking-block ${className}`.trim()}
+    className={`task-thinking thinking-block thinking-node agent-lane-node ${className}`.trim()}
     data-task-thinking-state={model.state ?? 'settled'}
     open={defaultExpanded}
   >
     <summary>
       <span className="thinking-label">{model.label}</span>
-      {model.preview && <span className="thinking-preview">{model.preview}</span>}
-      {meta}
-      {model.time && <time>{model.time}</time>}
+      {model.preview && <span className="thinking-preview node-preview">{model.preview}</span>}
+      <span className="thinking-summary-meta">{meta}{model.time && <time>{model.time}</time>}</span>
     </summary>
     <div className="thinking-content">{children}</div>
     {actions && <div className="task-thinking-actions">{actions}</div>}
