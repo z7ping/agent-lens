@@ -9,6 +9,7 @@ import { agentLabel, sourceDot } from '../components/AgentScope'
 import { HubReviewPage } from './HubReviewPage'
 import { PiLivePage } from './PiLivePage'
 import { ReviewPage } from './ReviewPage'
+import { TaskSurface } from './TaskSurface'
 import { deriveTaskProjectOptions, pickTaskProject, type TaskProjectOption } from './task-center'
 
 export type TaskCenterMode = 'history' | 'live' | 'new' | 'hub'
@@ -244,6 +245,7 @@ export function TaskCenterPage({ model, mode }: { model: AgentLensClientModel; m
   const selectedRuntimeId = location.pathname.startsWith('/review/live/')
     ? decodeURIComponent(location.pathname.slice('/review/live/'.length))
     : ''
+  const surfaceMode = mode === 'history' ? 'review' : mode
 
   return <div className="task-center-page">
     <aside className="task-center-rail">
@@ -280,10 +282,12 @@ export function TaskCenterPage({ model, mode }: { model: AgentLensClientModel; m
     </aside>
 
     <section className="task-center-main">
-      {mode === 'history' && <ReviewPage model={model}/>} 
-      {mode === 'live' && <PiLivePage/>} 
-      {mode === 'hub' && <HubReviewPage/>} 
-      {mode === 'new' && <NewTaskPanel options={projectOptions} preferredProjectId={preferredProjectId} onStarted={runtimeSessionId => navigate(`/review/live/${encodeURIComponent(runtimeSessionId)}`)}/>} 
+      <TaskSurface mode={surfaceMode}>
+        {mode === 'history' && <ReviewPage model={model}/>} 
+        {mode === 'live' && <PiLivePage/>} 
+        {mode === 'hub' && <HubReviewPage/>} 
+        {mode === 'new' && <NewTaskPanel options={projectOptions} preferredProjectId={preferredProjectId} onStarted={runtimeSessionId => navigate(`/review/live/${encodeURIComponent(runtimeSessionId)}`)}/>} 
+      </TaskSurface>
     </section>
   </div>
 }
