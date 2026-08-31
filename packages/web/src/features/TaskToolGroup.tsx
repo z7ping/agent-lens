@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { toolVisualKind, toolVisualLabel } from '../components/ToolKindIcon'
 import type { TaskToolGroupModel, TaskToolModel } from './task-detail-model'
 import { TaskToolRow } from './TaskToolRow'
 
@@ -20,7 +21,10 @@ export function TaskToolGroup({
   className = '',
 }: TaskToolGroupProps) {
   const [expanded, setExpanded] = useState(defaultExpanded)
-  const sequence = model.kindCounts.map(item => item.label).join(' → ')
+  const sequence = model.tools.map(tool => {
+    const visualKind = tool.kind === 'tool' ? toolVisualKind(tool.name) : tool.kind
+    return toolVisualLabel(visualKind)
+  }).join(' → ')
 
   return <details
     className={`task-tool-group execution-group agent-lane-node ${model.errorCount ? 'execution-group-error' : ''} ${className}`.trim()}
