@@ -42,7 +42,7 @@ requireText(pi, /source-pi \/ Review 可看到同一真实会话历史/, '真实
 requireText(pi, /runSoak/, '真实 Pi 验收必须提供长时 Streaming soak')
 requireText(pi, /soak round .* settled/, '真实 Pi soak 必须逐轮确认 settled')
 
-/* 11–13 · 真实桌面：两个主视口、明暗主题、独立滚动、事实可见、字号与局部输出。 */
+/* 11–13 · 真实桌面：两个主视口、明暗主题、独立滚动、初始事实可见、字号与局部输出。 */
 requireText(desktop, /width: 1280, height: 800/, '桌面验收必须覆盖 1280×800')
 requireText(desktop, /width: 1366, height: 768/, '桌面验收必须覆盖 1366×768')
 requireText(desktop, /themes = \['light', 'dark'\]/, '桌面验收必须覆盖明暗主题')
@@ -51,8 +51,8 @@ requireText(desktop, /\.review-reader-pane/, '桌面验收必须检查 Review �
 requireText(desktop, /\.pi-live-document/, '桌面验收必须检查 Pi Live 详情滚动根')
 requireText(desktop, /documentScrollHeight > value\.innerHeight/, '桌面验收必须拒绝全局纵向滚动')
 requireText(desktop, /任务列表与详情发生重叠/, '桌面验收必须检查左右区域重叠')
-requireText(desktop, /collapsibleToolGroupCount/, '桌面验收必须拒绝组级折叠 Tool Call')
-requireText(desktop, /hiddenToolFactCount/, '桌面验收必须拒绝不可见 Tool Call 事实')
+requireText(desktop, /closedToolGroupCount/, '桌面验收必须检查 Tool Group 初始默认展开')
+requireText(desktop, /hiddenToolFactCount/, '桌面验收必须检查初始 Tool Call 事实可见')
 requireText(desktop, /toolGridColumnCount/, '桌面验收必须检查 Tool Row 桌面四列')
 requireText(desktop, /toolRowScrollWidth/, '桌面验收必须拒绝 Tool Row 横向溢出')
 requireText(desktop, /toolActionFont/, '桌面验收必须检查 Tool 核心事实字号')
@@ -79,18 +79,19 @@ requireText(thinking, /thinking-node agent-lane-node/, 'Thinking 必须保持执
 requireText(thinking, /thinking-preview node-preview/, 'Thinking 必须保留弱预览层级')
 requireText(thinking, /thinking-content/, 'Thinking 正文必须保持执行轨结构')
 
-/* 01–07 · Tool：Tool Call 永远可见；组摘要不得成为折叠器；Payload 单独下钻。 */
-requireText(toolGroup, /<section[\s\S]*data-task-tool-group="true"/, 'Tool Group 必须使用非折叠语义容器')
-requireText(toolGroup, /className="tool-group-summary"/, 'Tool Group 必须保留轻量执行序列摘要')
+/* 01–07 · Tool：按高保真原型默认展开；成功调用初始直接可见；用户可主动折叠整个组。 */
+requireText(toolGroup, /defaultExpanded\s*=\s*true/, 'Tool Group 必须按原型默认展开')
+requireText(toolGroup, /useState\(defaultExpanded\)/, 'Tool Group 必须保存用户主动折叠状态')
+requireText(toolGroup, /<details[\s\S]*data-task-tool-group="true"/, 'Tool Group 必须使用原型 details 交互结构')
+requireText(toolGroup, /open=\{expanded\}/, 'Tool Group 展开状态必须直接控制原型 details')
 requireText(toolGroup, /className="tool-title"/, 'Tool Group 必须保留 tool-title')
 requireText(toolGroup, /className="node-preview"/, 'Tool Group 必须保留执行序列摘要')
 requireText(toolGroup, /className="tool-counts"/, 'Tool Group 必须保留调用计数')
-requireText(toolGroup, /model\.tools\.map/, 'Tool Group 必须逐条渲染每一次 Tool Call')
+requireText(toolGroup, /model\.tools\.map/, 'Tool Group 展开后必须逐条渲染每一次 Tool Call')
 requireText(toolGroup, /executionSequence/, 'Tool Group 摘要必须从真实 Tool Call 序列生成')
-if (/useState|defaultExpanded|<details/.test(toolGroup)) failures.push('Tool Group 不得再拥有会隐藏 Tool Call 的组级折叠状态')
 if (/errorsOnly|execution-group-toolbar/.test(toolGroup)) failures.push('Tool Group 不得恢复“只看错误/汇总工具栏”替代主执行轨')
 
-requireText(toolRow, /data-tool-fact="true"/, '每一条 Tool Row 必须标记为可见事实')
+requireText(toolRow, /data-tool-fact="true"/, '每一条 Tool Row 必须标记为 Tool Call 事实')
 requireText(toolRow, /tool-kind tool-kind-\$\{visualKind\}/, 'Tool Row 必须使用最终语义类型徽章')
 requireText(toolRow, /className="tool-action"/, 'Tool Row 必须保留操作名称列')
 requireText(toolRow, /className="tool-target"/, 'Tool Row 必须保留目标/路径/命令列')
@@ -107,7 +108,7 @@ requireText(piHistory, /elapsedMs\(at, paired\.at\)/, 'Pi History 必须用 Tool
 requireText(piTaskRound, /className="tool-live-output"/, 'Pi Running 必须显示有限高度实时输出预览')
 requireText(piTaskRound, /open=\{tool\.status === 'error'\}/, '错误 Tool 输出必须默认展开')
 requireText(piTaskRound, /startedAtMs/, 'Pi Running Tool 必须保留本轮起始时间以显示持续耗时')
-if (/<TaskToolGroup[\s\S]{0,180}defaultExpanded/.test(piTaskRound)) failures.push('Pi History / Running 不得重新给 Tool Group 增加组级折叠状态')
+if (/<TaskToolGroup[\s\S]{0,180}defaultExpanded=\{false\}/.test(piTaskRound)) failures.push('Pi History / Running 不得覆盖共享 Tool Group 的默认展开语义')
 const explicitThinkingExpanded = piTaskRound.match(/<TaskThinking[^>]*defaultExpanded/g) ?? []
 if (explicitThinkingExpanded.length < 2) failures.push('Pi History / Running Thinking 必须显式保持默认展开')
 
@@ -121,6 +122,8 @@ requireText(message, /chat-row-user user/, '用户消息必须保留右侧结构
 requireText(message, /chat-row-agent agent/, 'Agent 消息必须保留左侧结构')
 requireText(message, /task-message-agent-mark/, 'Agent 消息必须保留弱引导标记')
 
+requireText(toolCss, /execution-group\s*>\s*summary/, 'Tool Group 必须保留原型摘要折叠结构')
+requireText(toolCss, /execution-group\[open\]\s*>\s*summary::before/, 'Tool Group 展开时必须保留原型箭头状态')
 requireText(toolCss, /grid-template-columns:\s*76px\s+minmax\(94px,\s*auto\)\s+minmax\(0,\s*1fr\)\s+auto/, '桌面 Tool Row 必须保持四列：类型 / 操作 / 目标 / 状态耗时')
 requireText(toolCss, /font:\s*650 13px\/1\.4/, 'Tool 操作名称必须至少 13px')
 requireText(toolCss, /tool-target[\s\S]*font-size:\s*13px/, 'Tool 目标必须保持 13px 主阅读字号')
@@ -163,4 +166,4 @@ if (failures.length) {
   for (const failure of failures) console.error(`- ${failure}`)
   process.exit(1)
 }
-console.log('alpha.3 Checklist 01–14 实现契约已锁定：Tool Call 永久可见、Payload 下钻、Round/Message/Execution 三层视觉、1280/1366 明暗桌面、独立滚动、真实 Pi、Running 局部输出、100 次任务切换与 1h/8h 资源趋势均有对应验收入口。')
+console.log('alpha.3 Checklist 01–14 实现契约已锁定：Tool Group 按原型默认展开、成功 Tool Call 初始可见、用户可主动折叠、Payload 下钻、Round/Message/Execution 三层视觉、1280/1366 明暗桌面、独立滚动、真实 Pi、Running 局部输出、100 次任务切换与 1h/8h 资源趋势均有对应验收入口。')
