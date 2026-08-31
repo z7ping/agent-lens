@@ -1,77 +1,30 @@
 import { access, readFile, realpath } from 'node:fs/promises'
 import { delimiter, dirname, extname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import {
+  PI_SDK_PACKAGE_NAME,
+  assertPiSdkModule,
+  inspectPiSdkCompatibility,
+  type PiSdkCompatibility,
+  type PiSdkModule,
+} from './pi-sdk-adapter'
 
-const PI_PACKAGE_NAME = '@earendil-works/pi-coding-agent'
-
-export interface PiSdkModel {
-  provider: string
-  id: string
-  name?: string | undefined
-  reasoning?: boolean | undefined
-}
-
-export interface PiSdkSessionManager {
-  getSessionId(): string
-  getSessionFile(): string | undefined
-  getSessionName(): string | undefined
-  getLeafId(): string | null
-  getEntries(): unknown[]
-}
-
-export interface PiSdkModelRuntime {
-  getAvailableSnapshot(): readonly PiSdkModel[]
-  getAvailable(providerId?: string): Promise<readonly PiSdkModel[]>
-}
-
-export interface PiSdkPromptOptions {
-  streamingBehavior?: 'steer' | 'followUp' | undefined
-  source?: string | undefined
-  preflightResult?: ((success: boolean) => void) | undefined
-}
-
-export interface PiSdkSession {
-  readonly sessionManager: PiSdkSessionManager
-  readonly sessionId: string
-  readonly sessionFile: string | undefined
-  readonly sessionName: string | undefined
-  readonly model: PiSdkModel | undefined
-  readonly thinkingLevel: string
-  readonly isStreaming: boolean
-  readonly isCompacting: boolean
-  readonly pendingMessageCount: number
-  readonly modelRuntime: PiSdkModelRuntime
-  bindExtensions(bindings: Record<string, unknown>): Promise<void>
-  subscribe(listener: (event: Record<string, unknown>) => void): () => void
-  setSessionName(name: string): void
-  setModel(model: PiSdkModel): Promise<void>
-  setThinkingLevel(level: string): void
-  getAvailableThinkingLevels(): string[]
-  prompt(message: string, options?: PiSdkPromptOptions): Promise<void>
-  steer(message: string): Promise<void>
-  followUp(message: string): Promise<void>
-  clearQueue(): { steering: string[]; followUp: string[] }
-  abort(): Promise<void>
-  waitForIdle(): Promise<void>
-  dispose(): void
-}
-
-export interface PiSdkModule {
-  createAgentSession(options: {
-    cwd: string
-    sessionManager: PiSdkSessionManager
-  }): Promise<{ session: PiSdkSession }>
-  SessionManager: {
-    create(cwd: string, sessionDir?: string): PiSdkSessionManager
-    open(path: string, sessionDir?: string, cwdOverride?: string): PiSdkSessionManager
-  }
-}
+export type {
+  PiSdkModel,
+  PiSdkModelRuntime,
+  PiSdkModule,
+  PiSdkPromptOptions,
+  PiSdkSession,
+  PiSdkSessionManager,
+  PiSdkThinkingLevel,
+} from './pi-sdk-adapter'
 
 export interface InstalledPiSdk {
   executable: string
   packageRoot: string
   sdkEntry: string
   version?: string | undefined
+  compatibility: PiSdkCompatibility
   module: PiSdkModule
 }
 
@@ -132,7 +85,7 @@ async function packageFromEntry(entry: string): Promise<{
     const manifestPath = join(cursor, 'package.json')
     try {
       const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as Record<string, unknown>
-      if (manifest.name === PI_PACKAGE_NAME) {
+      if (manifest.name === PI_SDK_PACKAGE_NAME) {
         const main = typeof manifest.main === 'string' && manifest.main.trim()
           ? manifest.main
           : './dist/index.js'
@@ -172,26 +125,11 @@ export async function resolveInstalledPiSdk(
 
   const found = await packageFromEntry(entry)
   if (!found) return undefined
-  return { executable, ...found }
-}
-
-function assertSdkModule(value: unknown, sdkEntry: string): PiSdkModule {
-  const module = value && typeof value === 'object'
-    ? value as Record<string, unknown>
-    : {}
-  const sessionManager = module.SessionManager && typeof module.SessionManager === 'function'
-    ? module.SessionManager as unknown as Record<string, unknown>
-    : module.SessionManager && typeof module.SessionManager === 'object'
-      ? module.SessionManager as Record<string, unknown>
-      : {}
-  if (
-    typeof module.createAgentSession !== 'function'
-    || typeof sessionManager.create !== 'function'
-    || typeof sessionManager.open !== 'function'
-  ) {
-    throw new Error(`Installed Pi package does not expose the expected official SDK API: ${sdkEntry}`)
+  return {
+    executable,
+    ...found,
+    compatibility: inspectPiSdkCompatibility(found.version),
   }
-  return module as unknown as PiSdkModule
 }
 
 export const loadInstalledPiSdk: PiSdkLoader = async explicitExecutable => {
@@ -200,13 +138,13 @@ export const loadInstalledPiSdk: PiSdkLoader = async explicitExecutable => {
   const discovery = await resolveInstalledPiSdk(executable)
   if (!discovery) {
     throw new Error(
-      `Pi was found at ${executable}, but the official ${PI_PACKAGE_NAME} SDK could not be located. `
+      `Pi was found at ${executable}, but the official ${PI_SDK_PACKAGE_NAME} SDK could not be located. `
       + 'Install Pi from its official npm package instead of using the removed AgentLens RPC fallback.',
     )
   }
   const imported = await import(pathToFileURL(discovery.sdkEntry).href)
   return {
     ...discovery,
-    module: assertSdkModule(imported, discovery.sdkEntry),
+    module: assertPiSdkModule(imported, discovery.sdkEntry, discovery.version),
   }
 }
