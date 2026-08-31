@@ -20,6 +20,7 @@ import { useClientSnapshot } from '../App'
 import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
 import { ToolKindIcon } from '../components/ToolKindIcon'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
+import { TaskMessage } from './TaskMessage'
 import { TaskSurface } from './TaskSurface'
 
 function formatTime(value: string): string {
@@ -550,15 +551,14 @@ function MessageBubble({ node, inspect }: { node: ReviewMessageNodeDto; inspect(
     </details>
   }
 
-  const user = node.role === 'user'
-  return <div className={`chat-row ${user ? 'chat-row-user' : 'chat-row-agent'}`}>
-    <div className={`chat-avatar ${user ? 'chat-avatar-user' : 'chat-avatar-agent'}`}>{user ? '你' : '智'}</div>
-    <div className={`chat-bubble ${user ? 'chat-bubble-user' : 'chat-bubble-agent'}`}>
-      <div className="chat-meta"><span>{user ? '你' : '智能体'}</span><EvidenceBadges evidence={node.evidence}/><time>{formatClock(node.at)}</time></div>
-      <MarkdownSurface text={node.text}/>
-      {node.evidence.length > 0 && <div className="chat-actions"><button onClick={() => inspect(node)}>证据详情 · {node.evidence.length}</button></div>}
-    </div>
-  </div>
+  return <TaskMessage
+    role={node.role === 'user' ? 'user' : 'assistant'}
+    text={node.text}
+    author={node.role === 'user' ? '你' : '智能体'}
+    time={formatClock(node.at)}
+    meta={<EvidenceBadges evidence={node.evidence}/>}
+    actions={node.evidence.length > 0 ? <button onClick={() => inspect(node)}>证据详情 · {node.evidence.length}</button> : undefined}
+  />
 }
 
 function ToolRow({ node, inspect, last }: { node: ReviewToolNodeDto; inspect(node: ReviewNodeDto): void; last: boolean }) {
