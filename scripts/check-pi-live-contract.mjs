@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 
-const [app, taskCenter, taskCenterCss, page, history, client, css, http, runtime, coreObservation, timelineProtocol] = await Promise.all([
+const [app, taskCenter, taskCenterCss, page, history, client, css, http, runtime, sdkLoader, coreObservation, timelineProtocol] = await Promise.all([
   readFile(new URL('../packages/web/src/App.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/TaskCenterPage.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/task-center.css', import.meta.url), 'utf8'),
@@ -10,6 +10,7 @@ const [app, taskCenter, taskCenterCss, page, history, client, css, http, runtime
   readFile(new URL('../packages/web/src/pi-live.css', import.meta.url), 'utf8'),
   readFile(new URL('../packages/surface-http/src/pi-live.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/runtime-cordis/src/pi-live/service.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/runtime-cordis/src/pi-live/sdk-loader.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/core/src/domain/observation.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/protocol/src/timeline.ts', import.meta.url), 'utf8'),
 ])
@@ -74,7 +75,12 @@ requireText(http, /request\.once\('close', cleanup\)/, 'Pi Live SSE 断开必须
 requireText(http, /service\.terminate\(runtimeSessionId\)/, 'Pi Runtime 必须只有显式 DELETE 终止路径')
 requireText(runtime, /async list\(\): Promise<PiLiveRuntimeState\[]>/, 'Pi Runtime Service 必须提供当前 generation 活跃 Runtime 列举')
 requireText(runtime, /clearQueue\(runtimeSessionId\)/, 'Abort 必须支持队列取回')
-requireText(runtime, /type: 'extension_ui_response'[\s\S]*id: requestId/, 'Extension UI 必须原样回传 Pi request id')
+requireText(runtime, /session\.bindExtensions\(/, 'Pi Live 必须通过官方 AgentSession 绑定 Extension Runtime')
+requireText(runtime, /extensionUi\.respond\(requestId, response\)/, 'Extension UI 必须原样关联 Pi SDK request id')
+requireText(sdkLoader, /@earendil-works\/pi-coding-agent/, 'Pi Live 必须从官方 npm 包定位 SDK')
+requireText(sdkLoader, /createAgentSession/, 'Pi Live SDK Loader 必须校验官方 createAgentSession API')
+requireText(sdkLoader, /await import\(pathToFileURL\(discovery\.sdkEntry\)\.href\)/, 'Pi Live 必须进程内加载官方 SDK，不得重新 spawn RPC')
+if (/PiRpcClient|--mode['"\s,]+rpc|child_process/.test(`${runtime}\n${sdkLoader}`)) failures.push('Pi Live Runtime 不得重新引入自维护 RPC 子进程协议')
 
 if (/font-size:\s*(?:[0-9]|1[01])px/.test(css) || /font-size:\s*(?:[0-9]|1[01])px/.test(taskCenterCss)) failures.push('Pi Live / 任务中心可见文字不得小于 12px')
 if (/backdrop-filter|filter:\s*blur\(/.test(css) || /backdrop-filter|filter:\s*blur\(/.test(taskCenterCss)) failures.push('Pi Live / 任务中心不得使用模糊/毛玻璃')
@@ -90,4 +96,4 @@ if (failures.length) {
   process.exit(1)
 }
 
-console.log('Pi Live / 任务中心契约检查通过：统一任务入口、Runtime 活跃任务列举、项目上下文启动、事件层级、历史事实、IME、Stop/Terminate、滚动跟随、Extension UI、背压与性能诊断已锁定。')
+console.log('Pi Live / 任务中心契约检查通过：统一任务入口、官方 Pi SDK Runtime、活跃任务列举、项目上下文启动、事件层级、历史事实、IME、Stop/Terminate、滚动跟随、Extension UI、背压与性能诊断已锁定。')

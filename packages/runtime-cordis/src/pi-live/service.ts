@@ -1,6 +1,13 @@
 import { randomUUID } from 'node:crypto'
-import { access } from 'node:fs/promises'
-import { delimiter, join } from 'node:path'
+import { PiExtensionUiBridge } from './extension-ui-bridge'
+import {
+  findPiExecutable,
+  loadInstalledPiSdk,
+  resolveInstalledPiSdk,
+  type PiSdkLoader,
+  type PiSdkModel,
+  type PiSdkSession,
+} from './sdk-loader'
 import type {
   PiLiveAvailability,
   PiLiveControls,
@@ -14,14 +21,15 @@ import type {
   PiLiveStartInput,
   PiLiveStreamingBehavior,
 } from './types'
-import { PiRpcClient } from './rpc-client'
 
 interface OwnedRuntime {
   id: string
-  client: PiRpcClient
+  session: PiSdkSession
   listeners: Set<PiLiveRuntimeListener>
   sequence: number
   input: PiLiveStartInput
+  unsubscribe: () => void
+  extensionUi: PiExtensionUiBridge
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -30,63 +38,40 @@ function record(value: unknown): Record<string, unknown> {
     : {}
 }
 
-function stringValue(value: unknown): string | undefined {
-  return typeof value === 'string' && value ? value : undefined
-}
-
-function numberValue(value: unknown, fallback = 0): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
-}
-
-function modelOptions(value: unknown): PiLiveModelOption[] {
-  if (!Array.isArray(value)) return []
-  return value.flatMap(item => {
-    const model = record(item)
-    const provider = stringValue(model.provider)
-    const id = stringValue(model.id)
-    if (!provider || !id) return []
-    return [{
-      provider,
-      id,
-      ...(stringValue(model.name) ? { name: stringValue(model.name) } : {}),
-      ...(typeof model.reasoning === 'boolean' ? { reasoning: model.reasoning } : {}),
-    }]
-  })
-}
-
-async function exists(path: string): Promise<boolean> {
-  try {
-    await access(path)
-    return true
-  } catch {
-    return false
+function modelOption(model: PiSdkModel): PiLiveModelOption {
+  return {
+    provider: model.provider,
+    id: model.id,
+    ...(model.name ? { name: model.name } : {}),
+    ...(typeof model.reasoning === 'boolean' ? { reasoning: model.reasoning } : {}),
   }
-}
-
-export async function findPiExecutable(explicit?: string): Promise<string | undefined> {
-  if (explicit && await exists(explicit)) return explicit
-  const configured = process.env.PI_BIN?.trim()
-  if (configured && await exists(configured)) return configured
-  const names = process.platform === 'win32' ? ['pi.exe', 'pi.cmd', 'pi.bat'] : ['pi']
-  const pathValue = process.env.PATH ?? ''
-  for (const root of pathValue.split(delimiter).filter(Boolean)) {
-    for (const name of names) {
-      const candidate = join(root, name)
-      if (await exists(candidate)) return candidate
-    }
-  }
-  return undefined
 }
 
 export class DefaultPiLiveService implements PiLiveService {
   private readonly runtimes = new Map<string, OwnedRuntime>()
   private disposed = false
 
+  constructor(private readonly loadSdk: PiSdkLoader = loadInstalledPiSdk) {}
+
   async availability(): Promise<PiLiveAvailability> {
     const executable = await findPiExecutable()
-    return executable
-      ? { available: true, executable }
-      : { available: false, reason: 'Pi executable was not found in PATH or PI_BIN' }
+    if (!executable) return { available: false, reason: 'Pi executable was not found in PATH or PI_BIN' }
+    try {
+      const sdk = await resolveInstalledPiSdk(executable)
+      return sdk
+        ? { available: true, executable }
+        : {
+            available: false,
+            executable,
+            reason: 'Pi was found, but its official @earendil-works/pi-coding-agent SDK could not be located',
+          }
+    } catch (error) {
+      return {
+        available: false,
+        executable,
+        reason: error instanceof Error ? error.message : String(error),
+      }
+    }
   }
 
   async list(): Promise<PiLiveRuntimeState[]> {
@@ -96,145 +81,155 @@ export class DefaultPiLiveService implements PiLiveService {
 
   async start(input: PiLiveStartInput): Promise<PiLiveRuntimeState> {
     if (this.disposed) throw new Error('Pi Live service is disposed')
-    const executable = await findPiExecutable(input.executable)
-    if (!executable) throw new Error('Pi executable was not found')
     if (!input.cwd) throw new Error('Pi Live requires a working directory')
 
+    const installed = await this.loadSdk(input.executable)
+    const sdk = installed.module
+    const sessionManager = input.sessionPath
+      ? sdk.SessionManager.open(input.sessionPath, input.sessionDir, input.cwd)
+      : sdk.SessionManager.create(input.cwd, input.sessionDir)
+    const { session } = await sdk.createAgentSession({ cwd: input.cwd, sessionManager })
     const runtimeSessionId = randomUUID()
-    const args: string[] = []
-    if (input.provider) args.push('--provider', input.provider)
-    if (input.model) args.push('--model', input.model)
-    if (input.name) args.push('--name', input.name)
-    if (input.sessionDir) args.push('--session-dir', input.sessionDir)
-
     const listeners = new Set<PiLiveRuntimeListener>()
+    const extensionUi = new PiExtensionUiBridge({
+      publish: event => {
+        const runtime = this.runtimes.get(runtimeSessionId)
+        if (runtime) this.publish(runtime, event)
+      },
+    })
     const runtime: OwnedRuntime = {
       id: runtimeSessionId,
-      client: null as unknown as PiRpcClient,
+      session,
       listeners,
       sequence: 0,
       input,
+      unsubscribe: () => {},
+      extensionUi,
     }
-    const client = new PiRpcClient({
-      executable,
-      cwd: input.cwd,
-      args,
-      onEvent: event => this.publish(runtime, event),
-    })
-    runtime.client = client
     this.runtimes.set(runtimeSessionId, runtime)
 
     try {
-      await client.start()
-      if (input.sessionPath) await client.command({ type: 'switch_session', sessionPath: input.sessionPath })
+      runtime.unsubscribe = session.subscribe(event => this.publish(runtime, record(event)))
+      await session.bindExtensions({
+        uiContext: extensionUi.context,
+        mode: 'rpc',
+        abortHandler: () => { void session.abort() },
+        onError: (value: unknown) => {
+          const error = record(value)
+          this.publish(runtime, {
+            type: 'extension_error',
+            ...(typeof error.extensionPath === 'string' ? { extensionPath: error.extensionPath } : {}),
+            ...(typeof error.event === 'string' ? { event: error.event } : {}),
+            error: error.error instanceof Error ? error.error.message : String(error.error ?? 'Unknown extension error'),
+          })
+        },
+      })
+      if (input.name) session.setSessionName(input.name)
+      if (input.provider || input.model) {
+        await this.selectInitialModel(session, input.provider, input.model)
+      }
       return await this.state(runtimeSessionId)
     } catch (error) {
       this.runtimes.delete(runtimeSessionId)
-      await client.close().catch(() => undefined)
+      runtime.unsubscribe()
+      extensionUi.dispose()
+      session.dispose()
       throw error
     }
   }
 
   async state(runtimeSessionId: string): Promise<PiLiveRuntimeState> {
     const runtime = this.requireRuntime(runtimeSessionId)
-    const response = await runtime.client.command({ type: 'get_state' })
-    const data = record(response.data)
+    const session = runtime.session
     return {
       runtimeSessionId,
-      ...(stringValue(data.sessionId) ? { nativeSessionId: stringValue(data.sessionId) } : {}),
-      ...(stringValue(data.sessionFile) ? { sessionFile: stringValue(data.sessionFile) } : {}),
-      ...(stringValue(data.sessionName) ? { sessionName: stringValue(data.sessionName) } : {}),
-      ...(data.model === undefined ? {} : { model: data.model }),
-      ...(stringValue(data.thinkingLevel) ? { thinkingLevel: stringValue(data.thinkingLevel) } : {}),
-      isStreaming: data.isStreaming === true,
-      isCompacting: data.isCompacting === true,
-      pendingMessageCount: numberValue(data.pendingMessageCount),
-      processId: runtime.client.pid,
+      nativeSessionId: session.sessionId,
+      ...(session.sessionFile ? { sessionFile: session.sessionFile } : {}),
+      ...(session.sessionName ? { sessionName: session.sessionName } : {}),
+      ...(session.model ? { model: session.model } : {}),
+      thinkingLevel: session.thinkingLevel,
+      isStreaming: session.isStreaming,
+      isCompacting: session.isCompacting,
+      pendingMessageCount: session.pendingMessageCount,
+      leafId: session.sessionManager.getLeafId(),
     }
   }
 
   async snapshot(runtimeSessionId: string, since?: string): Promise<PiLiveSnapshot> {
     const runtime = this.requireRuntime(runtimeSessionId)
-    const [state, entriesResponse] = await Promise.all([
-      this.state(runtimeSessionId),
-      runtime.client.command({ type: 'get_entries', ...(since ? { since } : {}) }),
-    ])
-    const data = record(entriesResponse.data)
-    const entries = Array.isArray(data.entries) ? data.entries : []
-    const leafId = typeof data.leafId === 'string' ? data.leafId : null
+    const manager = runtime.session.sessionManager
+    const allEntries = manager.getEntries()
+    const entries = since
+      ? (() => {
+          const index = allEntries.findIndex(entry => record(entry).id === since)
+          return index >= 0 ? allEntries.slice(index + 1) : allEntries
+        })()
+      : allEntries
+    const leafId = manager.getLeafId()
+    const state = await this.state(runtimeSessionId)
     return { state: { ...state, leafId }, entries, leafId }
   }
 
   async controls(runtimeSessionId: string): Promise<PiLiveControls> {
-    const runtime = this.requireRuntime(runtimeSessionId)
-    const [modelsResponse, thinkingResponse] = await Promise.all([
-      runtime.client.command({ type: 'get_available_models' }),
-      runtime.client.command({ type: 'get_available_thinking_levels' }),
-    ])
-    const modelsData = record(modelsResponse.data)
-    const thinkingData = record(thinkingResponse.data)
+    const session = this.requireRuntime(runtimeSessionId).session
+    const models = await this.availableModels(session)
     return {
-      models: modelOptions(modelsData.models),
-      thinkingLevels: Array.isArray(thinkingData.levels)
-        ? thinkingData.levels.filter((item): item is string => typeof item === 'string' && Boolean(item))
-        : [],
+      models: models.map(modelOption),
+      thinkingLevels: session.getAvailableThinkingLevels(),
     }
   }
 
   async setModel(runtimeSessionId: string, provider: string, modelId: string): Promise<PiLiveRuntimeState> {
     if (!provider.trim() || !modelId.trim()) throw new Error('Pi model provider and modelId are required')
-    const runtime = this.requireRuntime(runtimeSessionId)
-    await runtime.client.command({ type: 'set_model', provider: provider.trim(), modelId: modelId.trim() })
+    const session = this.requireRuntime(runtimeSessionId).session
+    const models = await this.availableModels(session, provider.trim())
+    const model = models.find(item => item.provider === provider.trim() && item.id === modelId.trim())
+    if (!model) throw new Error(`Pi model is not available: ${provider.trim()}/${modelId.trim()}`)
+    await session.setModel(model)
     return await this.state(runtimeSessionId)
   }
 
   async setThinkingLevel(runtimeSessionId: string, level: string): Promise<PiLiveRuntimeState> {
     if (!level.trim()) throw new Error('Pi thinking level is required')
-    const runtime = this.requireRuntime(runtimeSessionId)
-    await runtime.client.command({ type: 'set_thinking_level', level: level.trim() })
+    const session = this.requireRuntime(runtimeSessionId).session
+    session.setThinkingLevel(level.trim())
     return await this.state(runtimeSessionId)
   }
 
   async prompt(runtimeSessionId: string, message: string, behavior?: PiLiveStreamingBehavior): Promise<void> {
     if (!message.trim()) return
-    await this.requireRuntime(runtimeSessionId).client.command({
-      type: 'prompt',
+    await this.requireRuntime(runtimeSessionId).session.prompt(
       message,
-      ...(behavior ? { streamingBehavior: behavior } : {}),
-    })
+      behavior ? { streamingBehavior: behavior } : undefined,
+    )
   }
 
   async steer(runtimeSessionId: string, message: string): Promise<void> {
     if (!message.trim()) return
-    await this.requireRuntime(runtimeSessionId).client.command({ type: 'steer', message })
+    await this.requireRuntime(runtimeSessionId).session.steer(message)
   }
 
   async followUp(runtimeSessionId: string, message: string): Promise<void> {
     if (!message.trim()) return
-    await this.requireRuntime(runtimeSessionId).client.command({ type: 'follow_up', message })
+    await this.requireRuntime(runtimeSessionId).session.followUp(message)
   }
 
   async clearQueue(runtimeSessionId: string): Promise<PiLiveQueueState> {
-    const response = await this.requireRuntime(runtimeSessionId).client.command({ type: 'clear_queue' })
-    return this.queueFromResponse(response)
+    return this.requireRuntime(runtimeSessionId).session.clearQueue()
   }
 
   async abort(runtimeSessionId: string, options: { restoreQueue?: boolean } = {}): Promise<PiLiveQueueState> {
-    const runtime = this.requireRuntime(runtimeSessionId)
+    const session = this.requireRuntime(runtimeSessionId).session
     const queue = options.restoreQueue === false
       ? { steering: [], followUp: [] }
-      : await this.clearQueue(runtimeSessionId)
-    await runtime.client.command({ type: 'abort' })
+      : session.clearQueue()
+    await session.abort()
     return queue
   }
 
   async respondToExtension(runtimeSessionId: string, requestId: string, response: unknown): Promise<void> {
     if (!requestId) throw new Error('Pi extension request id is required')
-    this.requireRuntime(runtimeSessionId).client.send({
-      type: 'extension_ui_response',
-      id: requestId,
-      ...record(response),
-    })
+    this.requireRuntime(runtimeSessionId).extensionUi.respond(requestId, response)
   }
 
   subscribe(runtimeSessionId: string, listener: PiLiveRuntimeListener): () => void {
@@ -248,7 +243,10 @@ export class DefaultPiLiveService implements PiLiveService {
     if (!runtime) return
     this.runtimes.delete(runtimeSessionId)
     runtime.listeners.clear()
-    await runtime.client.close()
+    runtime.unsubscribe()
+    runtime.extensionUi.dispose()
+    if (runtime.session.isStreaming) await runtime.session.abort().catch(() => undefined)
+    runtime.session.dispose()
   }
 
   async dispose(): Promise<void> {
@@ -275,11 +273,28 @@ export class DefaultPiLiveService implements PiLiveService {
     for (const listener of runtime.listeners) listener(value)
   }
 
-  private queueFromResponse(response: Record<string, unknown>): PiLiveQueueState {
-    const data = record(response.data)
-    return {
-      steering: Array.isArray(data.steering) ? data.steering.filter((item): item is string => typeof item === 'string') : [],
-      followUp: Array.isArray(data.followUp) ? data.followUp.filter((item): item is string => typeof item === 'string') : [],
+  private async availableModels(session: PiSdkSession, provider?: string): Promise<readonly PiSdkModel[]> {
+    const snapshot = session.modelRuntime.getAvailableSnapshot()
+    const filtered = provider ? snapshot.filter(model => model.provider === provider) : snapshot
+    if (filtered.length) return filtered
+    return await session.modelRuntime.getAvailable(provider)
+  }
+
+  private async selectInitialModel(
+    session: PiSdkSession,
+    provider?: string,
+    modelId?: string,
+  ): Promise<void> {
+    const models = await this.availableModels(session, provider)
+    const model = models.find(item => {
+      if (provider && item.provider !== provider) return false
+      if (!modelId) return true
+      return item.id === modelId || item.name === modelId
+    })
+    if (!model) {
+      const target = [provider, modelId].filter(Boolean).join('/') || 'requested model'
+      throw new Error(`Pi model is not available: ${target}`)
     }
+    await session.setModel(model)
   }
 }
