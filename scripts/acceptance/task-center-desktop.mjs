@@ -117,7 +117,5 @@ try {
 } finally {
   report.finishedAt = new Date().toISOString()
   await writeFile(resolve(outputDir, 'task-center-desktop-report.json'), `${JSON.stringify(report, null, 2)}\n`)
-  app.quit()
+  app.exit(report.ok ? 0 : 1)
 }
-
-if (!report.ok) process.exitCode = 1
