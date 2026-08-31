@@ -44,16 +44,17 @@ const runningRound: TaskRoundModel = {
   highLatency: false,
 }
 
-test('成功 Tool Group 默认展开并逐条保留 Tool Call 事实', () => {
+test('Tool Group 只做摘要，Tool Call 永远逐条可见', () => {
   const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: toolGroup }))
-  assert.match(html, /<details[^>]*open=""/)
-  assert.match(html, /data-task-tool-group="true"/)
+  assert.match(html, /<section[^>]*data-task-tool-group="true"/)
+  assert.doesNotMatch(html, /<details[^>]*class="task-tool-group/)
   assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 4)
+  assert.match(html, /class="tool-group-summary"/)
   assert.match(html, /读取 → 搜索 → 测试 → 工具/)
   assert.match(html, /4 次/)
 })
 
-test('测试类和未知 Tool 使用稳定语义降级而不是通用突兀占位', () => {
+test('测试类和未知 Tool 使用稳定语义降级', () => {
   const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: toolGroup }))
   assert.match(html, /data-kind="test"/)
   assert.match(html, />测试</)
@@ -61,8 +62,8 @@ test('测试类和未知 Tool 使用稳定语义降级而不是通用突兀占�
   assert.match(html, />工具</)
 })
 
-test('Round 保持原型轻量摘要结构并默认展开', () => {
-  const html = renderToStaticMarkup(createElement(TaskRound, { model: round }, 'content'))
+test('Round 保持轻量摘要结构并默认展开', () => {
+  const html = renderToStaticMarkup(createElement(TaskRound, { model: round, children: 'content' }))
   assert.match(html, /class="task-round interaction-block/)
   assert.match(html, /<details[^>]*open=""/)
   assert.match(html, /round-label/)
@@ -82,7 +83,7 @@ test('Message 保持用户右 / Agent 左的单一正文结构', () => {
   assert.match(assistant, /chat-bubble-agent/)
 })
 
-test('Pi Running Tool 在主事实行下展示有限高度实时输出入口', () => {
+test('Pi Running Tool 在主事实行下展示有限高度实时输出', () => {
   const html = renderToStaticMarkup(createElement(PiLiveRunningTaskRound, {
     model: runningRound,
     thinkingText: '检查文件后继续执行。',
@@ -95,7 +96,22 @@ test('Pi Running Tool 在主事实行下展示有限高度实时输出入口', (
   assert.match(html, /data-tool-fact="true"/)
   assert.match(html, /class="tool-live-output"/)
   assert.match(html, /line 1/)
-  assert.match(html, /<details[^>]*class="task-tool-group[^>]*open=""|<details[^>]*open=""[^>]*class="task-tool-group/)
+  assert.match(html, /<section[^>]*data-task-tool-group="true"/)
+})
+
+test('Pi settled 成功输出折叠在 Tool Call 事实行之下', () => {
+  const html = renderToStaticMarkup(createElement(PiLiveRunningTaskRound, {
+    model: { ...runningRound, state: 'settled' },
+    thinkingText: '',
+    tools: [{ id: 'success-tool', name: 'read_file', status: 'success', summary: 'very/long/path/to/source.ts', output: 'file content' }],
+    streamText: '',
+    isStreaming: false,
+    pendingMessageCount: 0,
+  }))
+  assert.match(html, /data-status="success"/)
+  assert.match(html, /very\/long\/path\/to\/source\.ts/)
+  assert.match(html, /class="tool-output-details"/)
+  assert.doesNotMatch(html, /class="tool-output-details"[^>]*open=""/)
 })
 
 test('Pi Running 失败 Tool 保留事实行并默认展开错误输出', () => {
@@ -108,6 +124,7 @@ test('Pi Running 失败 Tool 保留事实行并默认展开错误输出', () => 
     pendingMessageCount: 0,
   }))
   assert.match(html, /data-status="error"/)
+  assert.match(html, /data-kind="test"/)
   assert.match(html, /class="tool-output-details"[^>]*open=""|open=""[^>]*class="tool-output-details"/)
   assert.match(html, /1 assertion failed/)
 })
