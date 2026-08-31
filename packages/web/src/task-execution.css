@@ -1,10 +1,11 @@
 @reference "./styles.css";
 
 /*
- * alpha.3 Task Tool 原型契约。
- * Tool Group 默认展开；Tool Call 是主轨可见事实；详情只承载 Payload / 输出。
+ * alpha.3 Task 执行轨原型契约。
+ * Thinking / Tool Group 默认展开；Tool Call 是主轨可见事实；详情只承载 Payload / 输出。
  * Review / Pi History / Pi Running 共用这一套表现。
  */
+.task-center-main .thinking-block,
 .task-center-main .execution-group {
   position: relative;
   z-index: 2;
@@ -16,6 +17,7 @@
   box-shadow: none;
 }
 
+.task-center-main .thinking-block::before,
 .task-center-main .execution-group::before {
   content: "";
   position: absolute;
@@ -26,6 +28,7 @@
   background: var(--al-line);
 }
 
+.task-center-main .thinking-block > summary,
 .task-center-main .execution-group > summary {
   display: grid;
   min-height: 34px;
@@ -40,9 +43,12 @@
   list-style: none;
 }
 
+.task-center-main .thinking-block > summary::-webkit-details-marker,
 .task-center-main .execution-group > summary::-webkit-details-marker { display: none; }
+.task-center-main .thinking-block > summary:hover,
 .task-center-main .execution-group > summary:hover { background: transparent; }
 
+.task-center-main .thinking-block > summary::before,
 .task-center-main .execution-group > summary::before {
   content: "›";
   display: block;
@@ -52,9 +58,30 @@
   transition: transform .12s;
 }
 
+.task-center-main .thinking-block[open] > summary::before,
 .task-center-main .execution-group[open] > summary::before { transform: rotate(90deg); }
-.task-center-main .tool-title { color: var(--al-muted); font-size: 12px; font-weight: 650; white-space: nowrap; }
+
+.task-center-main .thinking-label {
+  color: color-mix(in srgb, var(--al-accent) 68%, var(--al-muted));
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.task-center-main .thinking-preview,
 .task-center-main .node-preview { min-width: 0; overflow: hidden; color: var(--al-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.task-center-main .thinking-summary-meta { display: inline-flex; align-items: center; gap: 6px; color: var(--al-muted); font-size: 12px; white-space: nowrap; }
+.task-center-main .thinking-summary-meta time { color: var(--al-muted); font-size: 12px; }
+.task-center-main .thinking-content {
+  margin: 0 8px 7px 21px;
+  padding: 2px 0 2px 10px;
+  border-left: 1px solid color-mix(in srgb, var(--al-accent) 20%, var(--al-line));
+  color: var(--al-muted);
+  font-size: 13px;
+  line-height: 1.62;
+}
+.task-center-main .task-thinking-actions { margin: 0 8px 7px 21px; }
+
+.task-center-main .tool-title { color: var(--al-muted); font-size: 12px; font-weight: 650; white-space: nowrap; }
 .task-center-main .tool-counts { display: flex; gap: 4px; }
 .task-center-main .tool-counts span { color: var(--al-muted); font-size: 12px; white-space: nowrap; }
 
@@ -190,6 +217,7 @@
 }
 
 @media (max-width: 767.98px) {
+  .task-center-main .thinking-block,
   .task-center-main .execution-group { margin-right: 6px; margin-left: 24px; }
   .task-center-main .execution-row.tool-row { grid-template-columns: 68px minmax(0, 1fr); }
   .task-center-main .tool-status { grid-column: 2; }
