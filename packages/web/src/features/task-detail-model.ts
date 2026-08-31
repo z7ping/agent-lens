@@ -26,6 +26,8 @@ export interface TaskToolModel {
   primary?: string | undefined
   secondary?: string | undefined
   durationLabel?: string | undefined
+  durationMs?: number | undefined
+  startedAtMs?: number | undefined
   output?: string | undefined
 }
 
