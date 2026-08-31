@@ -1,6 +1,5 @@
 {
   "name": "agent-lens-task-center-desktop-acceptance",
   "private": true,
-  "type": "module",
-  "main": "main.mjs"
+  "main": "main.cjs"
 }
