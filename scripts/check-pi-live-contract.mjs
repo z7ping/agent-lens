@@ -77,8 +77,8 @@ requireText(page, /<TaskHeader[\s\S]{0,1800}停止当前任务/, 'Pi Live 运行
 if (/review-session-head/.test(reviewPage)) failures.push('Review 不得继续保留旧 review-session-head 详情头结构')
 if (/pi-live-taskbar/.test(page)) failures.push('Pi Live 不得继续保留旧 pi-live-taskbar 详情头结构')
 
-requireText(taskDetailModel, /export interface TaskDetailModel/
-requireText(taskDetailModel, /contextLabel\?: string/, 'TaskDetailModel 必须提供来源无关的二级上下文字段'), '统一 TaskDetailModel 缺失')
+requireText(taskDetailModel, /export interface TaskDetailModel/, '统一 TaskDetailModel 缺失')
+requireText(taskDetailModel, /contextLabel\?: string/, 'TaskDetailModel 必须提供来源无关的二级上下文字段')
 requireText(taskDetailModel, /export interface TaskRoundModel/, '统一 TaskRoundModel 缺失')
 if (/from ['"]@agent-lens\/protocol['"]|Review(?:Session|Interaction|Node)|PiLive/.test(taskDetailModel)) failures.push('TaskDetailModel 必须保持来源无关，不得依赖 Review / Pi DTO')
 requireText(taskRound, /export function TaskRound/, '统一 TaskRound 组件缺失')
