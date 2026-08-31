@@ -1,0 +1,90 @@
+@reference "../styles.css";
+
+.task-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  padding: 16px 34px 12px 48px;
+  border-bottom: 1px solid var(--al-line);
+  background: var(--al-surface);
+}
+.task-header-copy { min-width: 0; }
+.task-header-meta {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  color: var(--al-muted);
+  font-size: 12px;
+}
+.task-header-meta b { color: var(--al-ink-2); font-size: 13px; font-weight: 680; }
+.task-header-marker { display: inline-flex; flex: 0 0 auto; align-items: center; }
+.task-header-status { color: var(--al-muted); }
+.task-header-title {
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+  color: var(--al-ink);
+  font-size: 21px;
+  font-weight: 760;
+  line-height: 1.38;
+  letter-spacing: -.01em;
+}
+.task-header-submeta {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin-top: 5px;
+  color: var(--al-muted);
+  font-size: 12px;
+}
+.task-header-submeta code {
+  max-width: min(720px, 100%);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-header-side {
+  display: flex;
+  align-self: end;
+  align-items: center;
+  gap: 10px;
+}
+.task-header-metrics {
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  border-top: 1px solid var(--al-line);
+  border-bottom: 1px solid var(--al-line);
+}
+.task-header-metric {
+  min-width: 76px;
+  padding: 7px 12px;
+  border-right: 1px solid var(--al-line);
+  text-align: left;
+}
+.task-header-metric:last-child { border-right: 0; }
+.task-header-metric b { display: block; color: var(--al-ink); font-size: 13px; font-weight: 720; }
+.task-header-metric span { display: block; margin-top: 1px; color: var(--al-muted); font-size: 12px; }
+.task-header-metric[data-tone="danger"] b { color: var(--al-danger); }
+.task-header-metric[data-tone="accent"] b { color: var(--al-accent); }
+.task-header-actions { display: flex; align-items: center; gap: 6px; }
+.task-header-actions button { flex: 0 0 auto; }
+
+@media (max-width: 1199.98px) {
+  .task-header { padding-right: 22px; padding-left: 34px; }
+}
+
+@media (max-width: 991.98px) {
+  .task-header { grid-template-columns: minmax(0, 1fr); }
+  .task-header-side { justify-content: space-between; }
+}
+
+@media (max-width: 767.98px) {
+  .task-header { padding: 14px; }
+  .task-header-side { align-items: flex-start; flex-direction: column; }
+  .task-header-metrics { max-width: 100%; overflow-x: auto; }
+}
