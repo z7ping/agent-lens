@@ -53,19 +53,19 @@ export function TaskRound({
     onToggle={event => onToggle(event.currentTarget.open)}
   >
     <summary className="interaction-summary task-round-summary">
-      <span className="interaction-chevron">›</span>
-      <span className="interaction-title">{model.label}</span>
-      {model.preview && <span className="interaction-preview">{model.preview}</span>}
-      <span className="interaction-summary-meta">
+      <span className="interaction-chevron" aria-hidden="true">›</span>
+      <span className="interaction-title round-label">{model.label}</span>
+      {model.preview && <span className="interaction-preview round-preview">{model.preview}</span>}
+      <span className="interaction-summary-meta round-meta">
         {model.state === 'running' && <span className="is-live">进行中</span>}
         {model.state === 'stopped' && <span>已停止</span>}
-        {model.toolCount > 0 && <span>{model.toolCount} 工具</span>}
-        {model.errorCount > 0 && <span className="is-error">{model.errorCount} 错误</span>}
+        {model.toolCount > 0 && <span>{model.toolCount} 调用</span>}
+        {model.errorCount > 0 && <span className="is-error error">{model.errorCount} 错误</span>}
         {model.highLatency && <span className="is-latency">耗时较高</span>}
         {model.durationMs > 0 && <span>{taskDurationLabel(model.durationMs)}</span>}
         {summaryMeta}
       </span>
     </summary>
-    <div className="interaction-flow task-round-flow">{children}</div>
+    <div className="interaction-flow task-round-flow round-flow">{children}</div>
   </details>
 }
