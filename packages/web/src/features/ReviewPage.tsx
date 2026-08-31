@@ -1070,7 +1070,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
   }
 
   return <main className={`review-page ${embedded ? 'review-page-embedded' : ''}`}>
-    <div className="workspace-toolbar">
+    {!embedded && <div className="workspace-toolbar">
       <AgentScope agents={agents} value={review.filters.sourceId} onChange={sourceId => model.setReviewFilters({ sourceId })}/>
       <span className="toolbar-divider" />
       <select className="filter" value={review.filters.projectId} onChange={e => model.setReviewFilters({ projectId: e.target.value })}><option value="">全部项目</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name ?? p.repositoryIdentity ?? p.id}</option>)}</select>
@@ -1078,7 +1078,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
       <select className="filter" value={review.filters.status} onChange={e => model.setReviewFilters({ status: e.target.value as typeof review.filters.status })}><option value="all">全部状态</option><option value="clean">无错误</option><option value="with-errors">有错误</option></select>
       <input className="filter search-filter" placeholder="搜索会话…" value={review.filters.search} onChange={e => model.setReviewFilters({ search: e.target.value })}/>
       <button className="icon-button" onClick={() => void model.refreshReview()} title="刷新" aria-label="刷新"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M13 3v4H9"/><path d="M12.2 6A5 5 0 1 0 13 9"/></svg></button>
-    </div>
+    </div>}
 
     <div className="review-layout">
       {!embedded && <aside className="session-panel">
