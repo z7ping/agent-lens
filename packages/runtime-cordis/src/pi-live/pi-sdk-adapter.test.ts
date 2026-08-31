@@ -53,6 +53,18 @@ test('模块能力缺失时给出明确 capability 错误', () => {
   )
 })
 
+test('模块校验识别 class 上的 SessionManager 静态方法', () => {
+  class SessionManager {
+    static create() {}
+    static open() {}
+  }
+  assert.doesNotThrow(() => assertPiSdkModule(
+    { createAgentSession() {}, SessionManager },
+    '/pi/dist/index.js',
+    '0.84.4',
+  ))
+})
+
 test('Session 能力完整时允许未验证 minor 版本继续运行', () => {
   assert.doesNotThrow(() => assertPiSdkSession(fakeSession(), '/pi/dist/index.js', '0.85.0'))
 })

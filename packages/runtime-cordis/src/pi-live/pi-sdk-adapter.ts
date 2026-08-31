@@ -81,6 +81,12 @@ function record(value: unknown): Record<string, unknown> {
     : {}
 }
 
+function capabilityTarget(value: unknown): Record<string, unknown> {
+  return value && (typeof value === 'object' || typeof value === 'function')
+    ? value as Record<string, unknown>
+    : {}
+}
+
 function functionValue(value: unknown): value is (...args: never[]) => unknown {
   return typeof value === 'function'
 }
@@ -104,7 +110,8 @@ function missingCapabilities(target: Record<string, unknown>, names: readonly st
 
 export function assertPiSdkModule(value: unknown, sdkEntry: string, version?: string): PiSdkModule {
   const module = record(value)
-  const sessionManager = record(module.SessionManager)
+  // JavaScript class 的运行时类型是 function；静态方法挂在 class 本身上。
+  const sessionManager = capabilityTarget(module.SessionManager)
   const missing = [
     ...missingCapabilities(module, ['createAgentSession']),
     ...missingCapabilities(sessionManager, ['create', 'open']).map(name => `SessionManager.${name}`),
