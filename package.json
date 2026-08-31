@@ -52,6 +52,7 @@
     "perf:pi-live-history": "tsx scripts/performance/pi-live-history-virtualization-benchmark.ts",
     "perf:daemon-idle-cpu": "tsx scripts/performance/daemon-idle-cpu-benchmark.ts",
     "accept:pi-live-real": "node scripts/acceptance/pi-live-real.mjs",
+    "accept:pi-live:1h": "node scripts/acceptance/pi-live-real.mjs --soak=3600000 --soak-interval=60000",
     "accept:task-center-desktop": "npm exec --workspace @agent-lens/desktop -- electron ../../scripts/acceptance/task-center-desktop.mjs",
     "accept:task-center:1h": "npm exec --workspace @agent-lens/desktop -- electron ../../scripts/acceptance/task-center-resource-soak.mjs --duration=3600000 --sample=60000",
     "accept:task-center:8h": "npm exec --workspace @agent-lens/desktop -- electron ../../scripts/acceptance/task-center-resource-soak.mjs --duration=28800000 --sample=60000",
