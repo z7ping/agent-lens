@@ -77,7 +77,9 @@ export function TaskMessage({
         </div>
         <div className="markdown-message-actions">
           {canCollapse && <button type="button" onClick={() => setExpanded(value => !value)}>{expanded ? '收起到 5 行' : '展开全文'}</button>}
-          <button type="button" onClick={() => setView(value => value === 'rendered' ? 'source' : 'rendered')}>{view === 'rendered' ? '查看源码' : '返回渲染'}</button>
+          <button type="button" onClick={() => setView(value => value === 'rendered' ? 'source' : 'rendered')}>
+            {view === 'rendered' ? <span>查看源码</span> : <span>返回渲染</span>}
+          </button>
         </div>
       </div>
       {actions && <div className="chat-actions task-message-actions">{actions}</div>}
