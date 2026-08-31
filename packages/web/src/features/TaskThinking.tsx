@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { TaskThinkingModel } from './task-detail-model'
 
 export interface TaskThinkingProps {
@@ -18,10 +18,13 @@ export function TaskThinking({
   defaultExpanded = true,
   className = '',
 }: TaskThinkingProps) {
+  const [expanded, setExpanded] = useState(defaultExpanded)
+
   return <details
     className={`task-thinking thinking-block thinking-node agent-lane-node ${className}`.trim()}
     data-task-thinking-state={model.state ?? 'settled'}
-    open={defaultExpanded}
+    open={expanded}
+    onToggle={event => setExpanded(event.currentTarget.open)}
   >
     <summary>
       <span className="thinking-label">{model.label}</span>
