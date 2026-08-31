@@ -13,6 +13,10 @@ import { TaskSurface } from './TaskSurface'
 import { deriveTaskProjectOptions, pickTaskProject, type TaskProjectOption } from './task-center'
 
 export type TaskCenterMode = 'history' | 'live' | 'new' | 'hub'
+type TaskDayGroup = '今天' | '昨天' | '更早'
+type HistoryTaskEntry =
+  | { kind: 'local'; id: string; at: string; local: ReviewSessionSummaryDto }
+  | { kind: 'remote'; id: string; at: string; remote: HubReviewSessionSummaryDto }
 
 function formatTime(value: string): string {
   const date = new Date(value)
@@ -30,6 +34,15 @@ function formatTime(value: string): string {
     return `昨天 ${new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(date)}`
   }
   return new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(date)
+}
+
+function taskDayGroup(value: string, now = new Date()): TaskDayGroup {
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) return '更早'
+  if (date.toDateString() === now.toDateString()) return '今天'
+  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
+  if (date.toDateString() === yesterday.toDateString()) return '昨天'
+  return '更早'
 }
 
 function cleanTitle(value: string | undefined, fallback: string): string {
@@ -54,7 +67,7 @@ function availabilityString(value: HubReadAvailability): string | undefined {
 }
 
 function remoteTime(item: HubReviewSessionSummaryDto): string {
-  return availabilityString(item.endedAt) ?? availabilityString(item.startedAt) ?? ''
+  return availabilityString(item.startedAt) ?? availabilityString(item.endedAt) ?? ''
 }
 
 function remoteTitle(item: HubReviewSessionSummaryDto): string {
@@ -178,9 +191,18 @@ function HistoryTaskItem({ item, active, onClick }: { item: ReviewSessionSummary
   const sourceId = item.sourceIds[0] ?? ''
   const fallback = item.projectName ? `${item.projectName} 任务` : `${agentLabel(sourceId, item.productId)} 任务`
   return <button className={`session-item ${active ? 'session-item-active' : ''}`} onClick={onClick}>
-    <div className="session-item-meta"><span className={`source-dot ${sourceDot(sourceId)}`}/><span>{agentLabel(sourceId, item.productId)}</span><time>{formatTime(item.endedAt)}</time></div>
+    <div className="session-item-meta"><span className={`source-dot ${sourceDot(sourceId)}`}/><span>{agentLabel(sourceId, item.productId)}</span><time>{formatTime(item.startedAt)}</time></div>
     <div className="session-item-title">{cleanTitle(item.title || item.preview, fallback)}</div>
     <div className="session-item-foot"><span>{item.projectName ?? item.workspacePath?.split(/[\\/]/).filter(Boolean).at(-1) ?? '无项目'}</span><span>{item.toolCount} 调用{item.errorCount ? ` · ${item.errorCount} 错误` : ''}</span></div>
+  </button>
+}
+
+function RemoteTaskItem({ item, active, onClick }: { item: HubReviewSessionSummaryDto; active: boolean; onClick(): void }) {
+  const time = remoteTime(item)
+  return <button className={`session-item ${active ? 'session-item-active' : ''}`} onClick={onClick}>
+    <div className="session-item-meta"><span className="hub-session-source remote">远程 · {item.origin.nodeId}</span><time>{time ? formatTime(time) : '时间未同步'}</time></div>
+    <div className="session-item-title">{remoteTitle(item)}</div>
+    <div className="session-item-foot"><span>Hub 任务</span><span>{item.origin.nodeId}</span></div>
   </button>
 }
 
@@ -232,6 +254,25 @@ export function TaskCenterPage({ model, mode }: { model: AgentLensClientModel; m
   }, [projectHistory, localSessions, review.detail])
   const projectOptions = useMemo(() => deriveTaskProjectOptions(snapshot.facets?.projects ?? [], projectSessions), [snapshot.facets?.projects, projectSessions])
   const visibleHub = useMemo(() => hubSessions.filter(item => remoteVisible(item, review)), [hubSessions, review])
+  const historyGroups = useMemo(() => {
+    const combined: HistoryTaskEntry[] = [
+      ...localSessions.map(item => ({ kind: 'local' as const, id: item.id, at: item.startedAt, local: item })),
+      ...visibleHub.map(item => ({ kind: 'remote' as const, id: item.id, at: remoteTime(item), remote: item })),
+    ].sort((left, right) => {
+      const leftAt = Date.parse(left.at)
+      const rightAt = Date.parse(right.at)
+      if (Number.isFinite(leftAt) && Number.isFinite(rightAt) && leftAt !== rightAt) return rightAt - leftAt
+      if (Number.isFinite(leftAt) && !Number.isFinite(rightAt)) return -1
+      if (!Number.isFinite(leftAt) && Number.isFinite(rightAt)) return 1
+      return left.id.localeCompare(right.id)
+    })
+    const groups = new Map<TaskDayGroup, HistoryTaskEntry[]>([['今天', []], ['昨天', []], ['更早', []]])
+    const now = new Date()
+    for (const item of combined) groups.get(taskDayGroup(item.at, now))!.push(item)
+    return (['今天', '昨天', '更早'] as const)
+      .map(label => ({ label, items: groups.get(label)! }))
+      .filter(group => group.items.length > 0)
+  }, [localSessions, visibleHub])
   const preferredProjectId = new URLSearchParams(location.search).get('project') || review.detail?.projectId || review.filters.projectId || undefined
 
   const newTask = () => {
@@ -246,6 +287,7 @@ export function TaskCenterPage({ model, mode }: { model: AgentLensClientModel; m
     ? decodeURIComponent(location.pathname.slice('/review/live/'.length))
     : ''
   const surfaceMode = mode === 'history' ? 'review' : mode
+  const historyCount = localSessions.length + visibleHub.length
 
   return <div className="task-center-page">
     <aside className="task-center-rail">
@@ -254,7 +296,7 @@ export function TaskCenterPage({ model, mode }: { model: AgentLensClientModel; m
         <button className="btn small primary" onClick={newTask}>+ 新建任务</button>
       </div>
       <div className="task-center-scroll">
-        {runtimes.length > 0 && <section className="task-center-group">
+        {runtimes.length > 0 && <section className="task-center-group task-center-live-group">
           <div className="task-center-group-title"><span>进行中</span><span>{runtimes.length}</span></div>
           {runtimes.map(item => <button key={item.runtimeSessionId} className={`session-item task-live-item ${selectedRuntimeId === item.runtimeSessionId ? 'session-item-active' : ''}`} onClick={() => navigate(`/review/live/${encodeURIComponent(item.runtimeSessionId)}`)}>
             <div className="session-item-meta"><span className={item.isStreaming ? 'pi-live-pulse' : 'pi-live-idle-dot'}/><span>Pi</span><time>{item.isStreaming ? '实时' : '等待输入'}</time></div>
@@ -263,30 +305,24 @@ export function TaskCenterPage({ model, mode }: { model: AgentLensClientModel; m
           </button>)}
         </section>}
 
-        <section className="task-center-group">
-          <div className="task-center-group-title"><span>历史任务</span><span>{localSessions.length + visibleHub.length}{review.response?.meta.hasMore ? '+' : ''}</span></div>
-          {localSessions.map(item => <HistoryTaskItem key={item.id} item={item} active={mode === 'history' && review.selectedId === item.id} onClick={() => navigate(`/review/${encodeURIComponent(item.id)}`)}/>)}
-          {visibleHub.map(item => {
-            const time = remoteTime(item)
-            const active = mode === 'hub' && location.pathname === `/review/hub/${encodeURIComponent(item.id)}`
-            return <button key={`remote:${item.id}`} className={`session-item ${active ? 'session-item-active' : ''}`} onClick={() => navigate(`/review/hub/${encodeURIComponent(item.id)}`)}>
-              <div className="session-item-meta"><span className="hub-session-source remote">远程 · {item.origin.nodeId}</span><time>{time ? formatTime(time) : '时间未同步'}</time></div>
-              <div className="session-item-title">{remoteTitle(item)}</div>
-              <div className="session-item-foot"><span>Hub 任务</span><span>{item.origin.nodeId}</span></div>
-            </button>
-          })}
-          {!localSessions.length && !visibleHub.length && !review.loading && <div className="task-center-empty">当前筛选范围没有历史任务。</div>}
-          {review.response?.meta.hasMore && <button className="session-load-more" disabled={review.loadingMore} onClick={() => void model.loadMoreReview()}>{review.loadingMore ? '正在加载…' : '加载更多历史任务'}</button>}
-        </section>
+        {historyGroups.map(group => <section className="task-center-group task-center-history-group" key={group.label}>
+          <div className="task-center-group-title"><span>{group.label}</span><span>{group.items.length}{group.label === '更早' && review.response?.meta.hasMore ? '+' : ''}</span></div>
+          {group.items.map(entry => entry.kind === 'local'
+            ? <HistoryTaskItem key={`local:${entry.id}`} item={entry.local} active={mode === 'history' && review.selectedId === entry.id} onClick={() => navigate(`/review/${encodeURIComponent(entry.id)}`)}/>
+            : <RemoteTaskItem key={`remote:${entry.id}`} item={entry.remote} active={mode === 'hub' && location.pathname === `/review/hub/${encodeURIComponent(entry.id)}`} onClick={() => navigate(`/review/hub/${encodeURIComponent(entry.id)}`)}/>)}
+        </section>)}
+
+        {!historyCount && !review.loading && <div className="task-center-empty">当前筛选范围没有历史任务。</div>}
+        {review.response?.meta.hasMore && <button className="session-load-more" disabled={review.loadingMore} onClick={() => void model.loadMoreReview()}>{review.loadingMore ? '正在加载…' : '加载更多历史任务'}</button>}
       </div>
     </aside>
 
     <section className="task-center-main">
       <TaskSurface mode={surfaceMode}>
-        {mode === 'history' && <ReviewPage model={model} embedded/>} 
-        {mode === 'live' && <PiLivePage embedded/>} 
-        {mode === 'hub' && <HubReviewPage embedded/>} 
-        {mode === 'new' && <NewTaskPanel options={projectOptions} preferredProjectId={preferredProjectId} onStarted={runtimeSessionId => navigate(`/review/live/${encodeURIComponent(runtimeSessionId)}`)}/>} 
+        {mode === 'history' && <ReviewPage model={model} embedded/>}
+        {mode === 'live' && <PiLivePage embedded/>}
+        {mode === 'hub' && <HubReviewPage embedded/>}
+        {mode === 'new' && <NewTaskPanel options={projectOptions} preferredProjectId={preferredProjectId} onStarted={runtimeSessionId => navigate(`/review/live/${encodeURIComponent(runtimeSessionId)}`)}/>}
       </TaskSurface>
     </section>
   </div>
