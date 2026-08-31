@@ -7,7 +7,7 @@ export interface TaskMessageProps {
   role: TaskMessageRole
   text: string
   author?: string
-  time?: string
+  time?: string | undefined
   meta?: ReactNode
   actions?: ReactNode
   collapsible?: boolean
