@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 const pi = readFileSync('scripts/acceptance/pi-live-real.mjs', 'utf8')
 const desktop = readFileSync('scripts/acceptance/task-center-desktop.mjs', 'utf8')
 const soak = readFileSync('scripts/acceptance/task-center-resource-soak.mjs', 'utf8')
+const toolGroup = readFileSync('packages/web/src/features/TaskToolGroup.tsx', 'utf8')
 const pkg = readFileSync('package.json', 'utf8')
 const failures = []
 
@@ -50,6 +51,12 @@ requireText(soak, /JSHeapUsedSize/, '长时验收必须采集 JS Heap')
 requireText(soak, /residentSet/, '长时验收必须采集 Renderer RSS')
 requireText(soak, /percentCPUUsage/, '长时验收必须采集 Renderer CPU')
 
+requireText(
+  toolGroup,
+  /defaultExpanded\s*=\s*true/,
+  'Tool Call 是执行轨事实：工具组必须默认展开，只允许用户主动折叠，不能因成功状态默认隐藏具体调用',
+)
+
 for (const script of [
   'accept:pi-live-real',
   'accept:pi-live:1h',
@@ -65,4 +72,4 @@ if (failures.length) {
   for (const failure of failures) console.error(`- ${failure}`)
   process.exit(1)
 }
-console.log('alpha.3 真实验收入口检查通过：真实 Pi 全链路/1h soak、1280/1366 明暗桌面、独立滚动、100 次任务切换、1h/8h 资源趋势均已锁定。')
+console.log('alpha.3 真实验收入口检查通过：真实 Pi 全链路/1h soak、1280/1366 明暗桌面、独立滚动、Tool Call 默认可见、100 次任务切换、1h/8h 资源趋势均已锁定。')
