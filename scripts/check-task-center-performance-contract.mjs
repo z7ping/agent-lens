@@ -27,7 +27,12 @@ const required = [
   [releaseInfo.includes('runtimeReady') && releaseInfo.includes('{ runtimeOwner }'), '版本检查必须复用已有 runtime health 结果'],
   [app.includes('runtimeOwner={snapshot.health?.runtime?.owner ?? null}'), 'Shell 必须把已有 health 传给版本检查'],
   [!api.includes('preferUserSessionTitle'), 'Web API 不得用首条用户消息覆盖 Source/Core 提供的原生会话标题'],
-  [reviewPage.includes('sessionTitle([item.title, item.preview]') && reviewPage.includes('sessionTitle([detail.title, detail.preview]'), '任务列表与会话详情必须统一使用“原生标题 → 首条用户消息 → 通用兜底”语义'],
+  [
+    reviewPage.includes('sessionTitle([item.title, item.preview]')
+      && reviewPage.includes('[detail.title, detail.preview]')
+      && reviewPage.includes('const taskDetailModel = useMemo<TaskDetailModel | null>'),
+    '任务列表与 TaskDetailModel 详情投影必须统一使用“原生标题 → 首条用户消息 → 通用兜底”语义',
+  ],
 ]
 
 const failed = required.filter(([ok]) => !ok)
