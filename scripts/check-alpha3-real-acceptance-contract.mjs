@@ -4,6 +4,9 @@ const pi = readFileSync('scripts/acceptance/pi-live-real.mjs', 'utf8')
 const desktop = readFileSync('scripts/acceptance/task-center-desktop.mjs', 'utf8')
 const soak = readFileSync('scripts/acceptance/task-center-resource-soak.mjs', 'utf8')
 const toolGroup = readFileSync('packages/web/src/features/TaskToolGroup.tsx', 'utf8')
+const toolRow = readFileSync('packages/web/src/features/TaskToolRow.tsx', 'utf8')
+const toolCss = readFileSync('packages/web/src/task-execution.css', 'utf8')
+const piTaskRound = readFileSync('packages/web/src/features/PiLiveTaskRound.tsx', 'utf8')
 const pkg = readFileSync('package.json', 'utf8')
 const failures = []
 
@@ -51,11 +54,36 @@ requireText(soak, /JSHeapUsedSize/, '长时验收必须采集 JS Heap')
 requireText(soak, /residentSet/, '长时验收必须采集 Renderer RSS')
 requireText(soak, /percentCPUUsage/, '长时验收必须采集 Renderer CPU')
 
+/* Tool Call 高保真契约：原型不改，正式实现不能再把成功调用退化成摘要。 */
 requireText(
   toolGroup,
   /defaultExpanded\s*=\s*true/,
   'Tool Call 是执行轨事实：工具组必须默认展开，只允许用户主动折叠，不能因成功状态默认隐藏具体调用',
 )
+requireText(toolGroup, /className="tool-title"/, 'Tool Group 标题必须保持原型 tool-title 结构')
+requireText(toolGroup, /className="node-preview"/, 'Tool Group 必须保留原型执行序列摘要')
+requireText(toolGroup, /className="tool-counts"/, 'Tool Group 必须保留原型调用计数')
+requireText(toolGroup, /model\.tools\.map/, 'Tool Group 必须直接渲染每一次具体 Tool Call')
+if (/errorsOnly|execution-group-toolbar/.test(toolGroup)) failures.push('Tool Group 不得恢复“只看错误/汇总工具栏”来替代原型执行轨')
+
+requireText(toolRow, /tool-kind tool-kind-\$\{model\.kind\}/, 'Tool Row 必须保留语义类型徽章')
+requireText(toolRow, /className="tool-action"/, 'Tool Row 必须保留操作名称列')
+requireText(toolRow, /className="tool-target"/, 'Tool Row 必须保留目标/路径/命令列')
+requireText(toolRow, /tool-status/, 'Tool Row 必须保留状态与耗时列')
+requireText(toolRow, /className="tool-payload"/, 'Tool Payload 必须下钻到 Tool Call 主行之外')
+
+requireText(
+  toolCss,
+  /grid-template-columns:\s*76px\s+minmax\(94px,\s*auto\)\s+minmax\(0,\s*1fr\)\s+auto/,
+  '桌面 Tool Row 必须保持原型四列：类型 / 操作 / 目标 / 状态耗时',
+)
+requireText(toolCss, /min-height:\s*38px/, 'Tool Row 必须保持原型 38px 紧凑行高')
+requireText(toolCss, /@media \(max-width: 1199\.98px\)/, 'Tool Row 必须覆盖 1280/1366 主桌面基线的响应式收敛')
+requireText(toolCss, /@media \(max-width: 991\.98px\)/, 'Tool Row 必须覆盖紧凑桌面降级')
+requireText(toolCss, /@media \(max-width: 767\.98px\)/, 'Tool Row 必须覆盖窄视口降级')
+
+const explicitPiExpanded = piTaskRound.match(/defaultExpanded/g) ?? []
+if (explicitPiExpanded.length < 2) failures.push('Pi History 与 Pi Running 必须都显式锁定 Tool Group 默认展开')
 
 for (const script of [
   'accept:pi-live-real',
@@ -72,4 +100,4 @@ if (failures.length) {
   for (const failure of failures) console.error(`- ${failure}`)
   process.exit(1)
 }
-console.log('alpha.3 真实验收入口检查通过：真实 Pi 全链路/1h soak、1280/1366 明暗桌面、独立滚动、Tool Call 默认可见、100 次任务切换、1h/8h 资源趋势均已锁定。')
+console.log('alpha.3 真实验收入口检查通过：真实 Pi 全链路/1h soak、1280/1366 明暗桌面、独立滚动、Tool Call 默认可见与四列执行轨、Review/Pi 共用行为、100 次任务切换、1h/8h 资源趋势均已锁定。')
