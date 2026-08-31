@@ -61,6 +61,8 @@ export interface TaskDetailModel {
   id: string
   title: string
   agentLabel: string
+  /** Generic secondary context shown beside the agent, e.g. project or runtime model. */
+  contextLabel?: string | undefined
   projectLabel?: string | undefined
   statusLabel?: string | undefined
   startedAt?: string | undefined
