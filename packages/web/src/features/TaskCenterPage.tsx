@@ -283,9 +283,9 @@ export function TaskCenterPage({ model, mode }: { model: AgentLensClientModel; m
 
     <section className="task-center-main">
       <TaskSurface mode={surfaceMode}>
-        {mode === 'history' && <ReviewPage model={model}/>} 
-        {mode === 'live' && <PiLivePage/>} 
-        {mode === 'hub' && <HubReviewPage/>} 
+        {mode === 'history' && <ReviewPage model={model} embedded/>} 
+        {mode === 'live' && <PiLivePage embedded/>} 
+        {mode === 'hub' && <HubReviewPage embedded/>} 
         {mode === 'new' && <NewTaskPanel options={projectOptions} preferredProjectId={preferredProjectId} onStarted={runtimeSessionId => navigate(`/review/live/${encodeURIComponent(runtimeSessionId)}`)}/>} 
       </TaskSurface>
     </section>
