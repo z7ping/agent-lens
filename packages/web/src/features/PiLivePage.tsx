@@ -5,6 +5,7 @@ import type { JsonValue, PiLiveControlsDto, PiLiveEventDto, PiLiveQueueDto, PiLi
 import { piLiveApi, type PiLiveTransportDiagnostics } from '../client/pi-live'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import { projectPiLiveHistory, type PiLiveHistoryItem } from './pi-live-history'
+import { TaskHeader } from './TaskHeader'
 import { TaskMessage } from './TaskMessage'
 import { TaskSurface } from './TaskSurface'
 
@@ -635,16 +636,21 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     </aside>}
 
     <TaskSurface mode="live" className="pi-live-workspace">
-      <header className="pi-live-taskbar">
-        <div className="pi-live-task-main">
-          <div className="pi-live-task-kicker"><span className={state?.isStreaming ? 'pi-live-pulse' : 'pi-live-idle-dot'}/><span>Pi · {statusLabel(state, connected)}</span>{!connected && <span className="pi-live-disconnected">任务仍由后台服务持有</span>}</div>
-          <div className="pi-live-task-title">{state?.sessionName || 'Pi 实时任务'}</div>
-        </div>
-        <div className="pi-live-runtime">
+      <TaskHeader
+        marker={<span className={state?.isStreaming ? 'pi-live-pulse' : 'pi-live-idle-dot'}/>} 
+        agent="Pi"
+        context={modelLabel(state)}
+        status={<>{statusLabel(state, connected)}{!connected && <span className="pi-live-disconnected"> · 后台服务仍持有任务</span>}</>}
+        title={state?.sessionName || 'Pi 实时任务'}
+        metrics={[
+          { value: state?.pendingMessageCount ?? 0, label: '排队', tone: state?.pendingMessageCount ? 'accent' : undefined },
+          { value: state?.processId ?? '—', label: 'PID' },
+        ]}
+        actions={<>
           <button className="pi-live-stop" disabled={!state?.isStreaming || busy} onClick={() => void stop()}>停止当前任务</button>
           <button className="pi-live-menu" title="结束 Pi Runtime" aria-label="结束 Pi Runtime" disabled={busy} onClick={() => void terminate()}>×</button>
-        </div>
-      </header>
+        </>}
+      />
 
       <div ref={readerRef} className="pi-live-reader" onScroll={onReaderScroll}>
         <div className="pi-live-document">
