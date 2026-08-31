@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { asPiSdkExtensionUiContext, type PiSdkExtensionUiContext } from './pi-sdk-adapter'
 
 interface PendingRequest {
   resolve(response: Record<string, unknown>): void
@@ -40,11 +41,11 @@ export class PiExtensionUiBridge {
   private readonly pending = new Map<string, PendingRequest>()
   private editorText = ''
   private disposed = false
-  readonly context: Record<string, unknown>
+  readonly context: PiSdkExtensionUiContext
 
   constructor(private readonly options: PiExtensionUiBridgeOptions) {
     const theme = fallbackTheme()
-    this.context = {
+    const context: Record<string, unknown> = {
       select: (title: string, choices: string[], dialog?: DialogOptions) => this.dialog(
         'select',
         { title, options: choices, timeout: dialog?.timeout },
@@ -121,6 +122,7 @@ export class PiExtensionUiBridge {
       getToolsExpanded: () => false,
       setToolsExpanded: () => {},
     }
+    this.context = asPiSdkExtensionUiContext(context)
   }
 
   respond(requestId: string, response: unknown): boolean {
