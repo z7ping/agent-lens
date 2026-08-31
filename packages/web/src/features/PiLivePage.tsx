@@ -5,6 +5,7 @@ import type { JsonValue, PiLiveControlsDto, PiLiveEventDto, PiLiveQueueDto, PiLi
 import { piLiveApi, type PiLiveTransportDiagnostics } from '../client/pi-live'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import { projectPiLiveHistory, type PiLiveHistoryItem } from './pi-live-history'
+import { TaskSurface } from './TaskSurface'
 
 type QueueMode = 'steer' | 'followUp'
 interface RestoredDraft { id: string; mode: QueueMode; text: string }
@@ -283,7 +284,7 @@ function ExtensionPrompt({ request, onAnswer }: { request: ExtensionRequest; onA
   </div>
 }
 
-export function PiLivePage() {
+export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate()
   const { runtimeSessionId } = useParams()
   const runtimeId = runtimeSessionId ? decodeURIComponent(runtimeSessionId) : ''
@@ -617,8 +618,8 @@ export function PiLivePage() {
   ]
   const selectedModel = modelSelection(state)
 
-  return <main className="pi-live-page">
-    <aside className="pi-live-sessions">
+  return <main className={`pi-live-page ${embedded ? 'pi-live-page-embedded' : ''}`}>
+    {!embedded && <aside className="pi-live-sessions">
       <div className="pi-live-sessions-head"><div><b>Pi 实时任务</b><small>关闭视图不结束任务</small></div><button className="btn small" onClick={() => navigate('/review/live')}>新建</button></div>
       <div className="pi-live-session-scroll">
         {known.map(item => <button key={item.runtimeSessionId} className={`pi-live-session ${item.runtimeSessionId === runtimeId ? 'active' : ''}`} onClick={() => navigate(`/review/live/${encodeURIComponent(item.runtimeSessionId)}`)}>
@@ -629,9 +630,9 @@ export function PiLivePage() {
         {!known.length && <div className="pi-live-side-empty">当前浏览器没有记录到其他后台 Pi 任务。</div>}
         <button className="pi-live-review-link" onClick={() => navigate('/review?source=pi')}>查看 Pi 历史复盘 →</button>
       </div>
-    </aside>
+    </aside>}
 
-    <section className="pi-live-workspace">
+    <TaskSurface mode="live" className="pi-live-workspace">
       <header className="pi-live-taskbar">
         <div className="pi-live-task-main">
           <div className="pi-live-task-kicker"><span className={state?.isStreaming ? 'pi-live-pulse' : 'pi-live-idle-dot'}/><span>Pi · {statusLabel(state, connected)}</span>{!connected && <span className="pi-live-disconnected">任务仍由后台服务持有</span>}</div>
@@ -733,6 +734,6 @@ export function PiLivePage() {
         </div>
         {diagnostics && <div className="pi-live-diagnostics" title="Pi Live Web 调度诊断">事件 {diagnostics.ingressEvents} · 合并 {diagnostics.coalescedEvents} · 峰值队列 {diagnostics.maxQueueDepth} · 最近提交 {diagnostics.lastFlushLatencyMs.toFixed(1)}ms{diagnostics.hidden ? ' · 后台降频' : ''}</div>}
       </div>
-    </section>
+    </TaskSurface>
   </main>
 }
