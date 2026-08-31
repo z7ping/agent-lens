@@ -79,6 +79,7 @@ test('Pi Live persisted history preserves message, thinking, tool and lifecycle 
   assert.equal(tool.name, 'bash')
   assert.equal(tool.status, 'success')
   assert.equal(tool.output, 'clean')
+  assert.equal(tool.durationMs, 1000)
 
   assert.ok(items.some(item => item.kind === 'lifecycle' && item.event === 'model.changed'))
   assert.ok(items.some(item => item.kind === 'lifecycle' && item.event === 'thinking.level.changed'))
