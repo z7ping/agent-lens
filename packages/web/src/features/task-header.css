@@ -74,8 +74,16 @@
 .task-header-actions { display: flex; align-items: center; gap: 6px; }
 .task-header-actions button { flex: 0 0 auto; }
 
+/* Review reader 自身已有正文左右留白，Header 在该容器里只负责纵向节奏。 */
+.review-page .review-reader > .task-header {
+  width: 100%;
+  padding-right: 0;
+  padding-left: 0;
+}
+
 @media (max-width: 1199.98px) {
   .task-header { padding-right: 22px; padding-left: 34px; }
+  .review-page .review-reader > .task-header { padding-right: 0; padding-left: 0; }
 }
 
 @media (max-width: 991.98px) {
@@ -85,6 +93,7 @@
 
 @media (max-width: 767.98px) {
   .task-header { padding: 14px; }
+  .review-page .review-reader > .task-header { padding: 14px 0; }
   .task-header-side { align-items: flex-start; flex-direction: column; }
   .task-header-metrics { max-width: 100%; overflow-x: auto; }
 }
