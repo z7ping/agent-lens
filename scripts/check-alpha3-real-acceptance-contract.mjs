@@ -139,7 +139,7 @@ requireText(message, /task-message-agent-mark/, 'Agent 消息必须保留弱引�
 requireText(toolCss, /execution-group\s*>\s*summary/, 'Tool Group 必须保留原型摘要折叠结构')
 requireText(toolCss, /execution-group\[open\]\s*>\s*summary::before/, 'Tool Group 展开时必须保留原型箭头状态')
 requireText(toolCss, /grid-template-columns:\s*76px\s+minmax\(94px,\s*auto\)\s+minmax\(0,\s*1fr\)\s+auto/, '桌面 Tool Row 必须保持四列：类型 / 操作 / 目标 / 状态耗时')
-requireText(toolCss, /font:\s*650 13px\/1\.4/, 'Tool 操作名称必须至少 13px')
+requireText(toolCss, /font:\s*650 12px\/1\.4/, 'Tool 操作名称必须保持高保真原型 12px 辅助事实字号')
 requireText(toolCss, /tool-target[\s\S]*font-size:\s*13px/, 'Tool 目标必须保持 13px 主阅读字号')
 requireText(toolCss, /task-message-content[\s\S]*font-size:\s*14px/, '对话正文必须保持 14px 基线')
 requireText(toolCss, /thinking-content[\s\S]*font-size:\s*13px/, 'Thinking 正文必须保持 13px 基线')
