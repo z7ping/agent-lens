@@ -1,6 +1,8 @@
 @reference "./styles.css";
 
-/* 任务中心统一承载：历史任务、远程任务、进行中 Pi 与新建任务。 */
+/* Task Center 只负责壳层、Rail、Header 容器与页面布局。
+ * Round / Message / Thinking / Tool 的最终表现统一由 task-execution.css 持有，避免旧样式再次覆盖高保真契约。
+ */
 .task-center-page {
   --task-center-rail: 316px;
   display: grid;
@@ -91,7 +93,7 @@
 .task-live-item { --session-source: var(--al-accent); }
 .task-live-item .session-item-meta time { color: var(--al-accent); font-weight: 650; }
 
-/* 左侧不做卡片墙：标题最强，元信息退后，选中态只给轻背景 + 左侧强调。 */
+/* 左侧保持平面高密度列表，不做卡片墙。 */
 .task-center-rail .session-item {
   position: relative;
   width: 100%;
@@ -122,67 +124,22 @@
 .task-center-rail .session-item-foot { margin-top: 4px; }
 .task-center-rail .session-load-more { width: 100%; margin-top: 8px; border: 0; background: transparent; box-shadow: none; }
 
+/* 左右滚动根完全隔离。 */
 .task-center-main { grid-column: 2; grid-row: 2; min-width: 0; min-height: 0; overflow: hidden; background: var(--al-surface); }
-.task-center-main > .task-surface {
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-}
+.task-center-main > .task-surface { width: 100%; height: 100%; min-width: 0; min-height: 0; overflow: hidden; }
 .task-center-main .task-surface > .review-page,
 .task-center-main .task-surface > .pi-live-page,
 .task-center-main .task-surface > .task-center-new { height: 100%; }
 .task-center-main .review-layout { grid-template-columns: minmax(0, 1fr); }
 .task-center-main .pi-live-page { grid-template-columns: minmax(0, 1fr); }
-
-/* Review 正式详情向 alpha.3 原型收敛：标题信息集中、正文成为第一视觉层。 */
 .task-center-main .review-reader-pane { background: var(--al-surface); }
 .task-center-main .review-reader {
   width: min(1180px, 100%);
   margin: 0 auto;
   padding: 0 34px 88px 48px;
 }
-.task-center-main .review-session-head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 18px;
-  padding: 16px 0 12px;
-  border-bottom: 1px solid var(--al-line);
-  background: transparent;
-  box-shadow: none;
-}
-.task-center-main .review-session-copy { min-width: 0; }
-.task-center-main .review-session-meta { gap: 7px; color: var(--al-muted); font-size: 12px; }
-.task-center-main .review-session-meta b { color: var(--al-ink-2); font-size: 13px; }
-.task-center-main .review-session-title {
-  margin: 6px 0 0;
-  color: var(--al-ink);
-  font-size: 21px;
-  font-weight: 760;
-  line-height: 1.38;
-  letter-spacing: -.01em;
-}
-.task-center-main .review-session-submeta { margin-top: 5px; color: var(--al-muted); font-size: 12px; }
-.task-center-main .review-session-submeta code { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.task-center-main .review-audit-controls { margin-top: 7px; }
-.task-center-main .review-audit-controls span { display: none; }
-.task-center-main .review-audit-toggle { border-color: transparent; background: transparent; color: var(--al-muted); }
-.task-center-main .review-audit-toggle:hover { border-color: var(--al-line); background: var(--al-soft-2); color: var(--al-ink-2); }
-.task-center-main .review-metrics {
-  align-self: end;
-  display: flex;
-  align-items: stretch;
-  overflow: hidden;
-  border-top: 1px solid var(--al-line);
-  border-bottom: 1px solid var(--al-line);
-}
-.task-center-main .review-metric { min-width: 76px; padding: 7px 12px; border-right: 1px solid var(--al-line); text-align: left; }
-.task-center-main .review-metric:last-child { border-right: 0; }
-.task-center-main .review-metric b { font-size: 13px; }
-.task-center-main .review-metric span { margin-top: 1px; color: var(--al-muted); font-size: 12px; }
 
-/* Round 导航保留能力但去掉持续教学文字。 */
+/* Round 导航保留能力但不抢正文层级。 */
 .task-center-main .round-nav {
   position: sticky;
   top: 0;
@@ -190,183 +147,28 @@
   margin: 0;
   padding: 7px 0;
   border-bottom: 1px solid var(--al-line);
-  background: var(--al-surface);
+  background: color-mix(in srgb, var(--al-surface) 96%, transparent);
   box-shadow: none;
+  backdrop-filter: blur(8px);
 }
 .task-center-main .round-nav small { display: none; }
 .task-center-main .round-nav button { min-height: 26px; border-radius: 6px; font-size: 12px; }
 
-/* Round 本身退到第二视觉层：细边界、弱标题，不再是厚重卡片。 */
-.task-center-main .interaction-block {
-  margin: 11px 0 0;
-  border: 0;
-  border-top: 1px solid color-mix(in srgb, var(--al-line-strong) 78%, transparent);
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
-.task-center-main .interaction-summary {
-  min-height: 36px;
-  padding: 0 4px;
-  border: 0;
-  background: transparent;
-  color: var(--al-muted);
-}
-.task-center-main .interaction-title { color: var(--al-muted); font-size: 12px; font-weight: 650; }
-.task-center-main .interaction-preview,
-.task-center-main .interaction-summary-meta { color: var(--al-muted); font-size: 12px; }
-.task-center-main .interaction-flow { position: relative; padding: 6px 8px 18px; }
-.task-center-main .interaction-flow::before {
-  content: "";
-  position: absolute;
-  left: 31px;
-  top: 42px;
-  bottom: 26px;
-  width: 1px;
-  background: linear-gradient(to bottom, color-mix(in srgb, var(--al-accent) 17%, var(--al-line)), var(--al-line), transparent);
-  pointer-events: none;
-}
-
-/* 对话第一视觉层：用户右、智能体左，执行信息明显弱于消息。 */
-.task-center-main .task-message-row { position: relative; z-index: 3; margin: 15px 0; }
-.task-center-main .chat-row-user { justify-content: flex-end; }
-.task-center-main .chat-row-user .chat-avatar { display: none; }
-.task-center-main .chat-row-agent .chat-avatar {
-  position: relative;
-  z-index: 4;
-  width: 26px;
-  height: 26px;
-  margin: 10px 9px 0 0;
-  border: 1px solid color-mix(in srgb, var(--al-accent) 28%, var(--al-line));
-  border-radius: 50%;
-  background: var(--al-surface);
-  color: var(--al-accent);
-  box-shadow: 0 0 0 4px var(--al-surface);
-  font-size: 12px;
-}
-.task-center-main .task-message-bubble {
+/* Pi Live 与 Review 共用正文宽度；仅保留 Live 控制与输入区差异。 */
+.task-center-main .pi-live-document { width: min(1180px, 100%); margin: 0 auto; padding: 6px 34px 92px 48px; }
+.task-center-main .pi-live-stream-response {
   max-width: min(74%, 860px);
-  padding: 11px 14px 12px;
-  border-radius: 17px;
+  margin: 14px 0;
+  border-color: color-mix(in srgb, var(--al-accent) 17%, var(--al-line));
+  border-radius: 17px 17px 17px 6px;
+  background: color-mix(in srgb, var(--al-accent-soft) 45%, var(--al-surface));
+  box-shadow: 0 2px 8px rgb(16 24 40 / .035);
   font-size: 14px;
   line-height: 1.68;
 }
-.task-center-main .chat-bubble-user {
-  border: 1px solid color-mix(in srgb, var(--al-user-bubble-text) 11%, transparent);
-  border-bottom-right-radius: 6px;
-  background: var(--al-user-bubble);
-  color: var(--al-user-bubble-text);
-  box-shadow: 0 2px 8px rgb(16 24 40 / .07);
-}
-.task-center-main .chat-bubble-agent {
-  border: 1px solid color-mix(in srgb, var(--al-accent) 17%, var(--al-line));
-  border-bottom-left-radius: 6px;
-  background: color-mix(in srgb, var(--al-accent-soft) 45%, var(--al-surface));
-  color: var(--al-ink);
-  box-shadow: 0 2px 8px rgb(16 24 40 / .035);
-}
-.task-center-main .task-message-meta { color: var(--al-muted); font-size: 12px; }
-.task-center-main .chat-bubble-user .task-message-meta { color: var(--al-user-bubble-muted); }
-.task-center-main .evidence-inline { min-height: 19px; padding-inline: 6px; border-radius: 999px; font-size: 12px; }
-
-/* Review Thinking / Tool：统一成 AI 执行轨的弱层级。 */
-.task-center-main .thinking-block,
-.task-center-main .execution-group {
-  position: relative;
-  z-index: 2;
-  margin: 2px 42px 4px 40px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
-.task-center-main .thinking-block::before,
-.task-center-main .execution-group::before {
-  content: "";
-  position: absolute;
-  left: -10px;
-  top: 17px;
-  width: 10px;
-  height: 1px;
-  background: var(--al-line);
-}
-.task-center-main .thinking-block > summary,
-.task-center-main .execution-group > summary {
-  min-height: 34px;
-  padding: 0 5px;
-  border: 0;
-  background: transparent;
-  color: var(--al-muted);
-  font-size: 12px;
-}
-.task-center-main .thinking-label { color: color-mix(in srgb, var(--al-accent) 68%, var(--al-muted)); font-size: 12px; font-weight: 650; }
-.task-center-main .thinking-preview { color: var(--al-muted); font-size: 12px; }
-.task-center-main .thinking-content { margin: 0 8px 7px 21px; padding: 2px 0 2px 10px; border-left: 1px solid color-mix(in srgb, var(--al-accent) 20%, var(--al-line)); color: var(--al-muted); }
-.task-center-main .execution-group-toolbar { margin-left: 21px; border-left: 1px solid var(--al-line); background: transparent; color: var(--al-muted); font-size: 12px; }
-.task-center-main .execution-list { margin: 0 6px 6px 21px; border-left: 1px solid var(--al-line); }
-.task-center-main .execution-row {
-  min-height: 38px;
-  padding: 5px 7px 5px 10px;
-  border: 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--al-line) 68%, transparent);
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
-.task-center-main .execution-row:hover { background: var(--al-soft-2); }
-.task-center-main .execution-row[data-status="error"] {
-  box-shadow: inset 2px 0 0 var(--al-danger);
-  background: color-mix(in srgb, var(--al-danger-soft) 55%, transparent);
-}
-.task-center-main .execution-tool-icon { border-radius: 6px; }
-.task-center-main .execution-name,
-.task-center-main .execution-preview,
-.task-center-main .execution-duration { font-size: 12px; }
-.task-center-main .execution-name b { font-size: 13px; }
-
-/* Pi Live 使用相同的标题和文档宽度；Live 只额外保留 Runtime 控制与输入区。 */
-.task-center-main .pi-live-taskbar {
-  width: min(1180px, 100%);
-  min-height: 0;
-  margin: 0 auto;
-  padding: 16px 34px 12px 48px;
-  border-bottom: 1px solid var(--al-line);
-  background: var(--al-surface);
-  box-shadow: none;
-}
-.task-center-main .pi-live-task-kicker { color: var(--al-muted); font-size: 12px; }
-.task-center-main .pi-live-task-title { margin-top: 6px; color: var(--al-ink); font-size: 21px; font-weight: 760; line-height: 1.38; letter-spacing: -.01em; }
-.task-center-main .pi-live-document { width: min(1180px, 100%); margin: 0 auto; padding: 6px 34px 92px 48px; }
-.task-center-main .pi-live-current-round {
-  margin-top: 11px;
-  border: 0;
-  border-top: 1px solid color-mix(in srgb, var(--al-line-strong) 78%, transparent);
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
-.task-center-main .pi-live-round-head { min-height: 36px; padding: 0 4px; background: transparent; color: var(--al-muted); font-size: 12px; }
-.task-center-main .pi-live-round-head b { color: var(--al-muted); font-size: 12px; }
-.task-center-main .pi-live-lane,
-.task-center-main .pi-live-history-lane { position: relative; margin: 2px 42px 4px 40px; padding-left: 16px; }
-.task-center-main .pi-live-lane::before,
-.task-center-main .pi-live-history-lane::before { content: ""; position: absolute; left: 4px; top: 4px; bottom: 5px; width: 1px; background: var(--al-line); }
-.task-center-main .pi-live-thinking { border: 0; background: transparent; color: var(--al-muted); }
-.task-center-main .pi-live-thinking > summary { min-height: 34px; padding: 0 5px; color: color-mix(in srgb, var(--al-accent) 68%, var(--al-muted)); font-size: 12px; font-weight: 650; }
-.task-center-main .pi-live-trace-stack { margin-left: 16px; border-left: 1px solid var(--al-line); }
-.task-center-main .pi-live-trace {
-  margin: 0;
-  padding: 7px 8px 7px 10px;
-  border: 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--al-line) 68%, transparent);
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
-.task-center-main .pi-live-trace.error { box-shadow: inset 2px 0 0 var(--al-danger); background: color-mix(in srgb, var(--al-danger-soft) 55%, transparent); }
-.task-center-main .pi-live-stream-response { max-width: min(74%, 860px); margin: 14px 0 14px 0; border-radius: 17px 17px 17px 6px; border-color: color-mix(in srgb, var(--al-accent) 17%, var(--al-line)); background: color-mix(in srgb, var(--al-accent-soft) 45%, var(--al-surface)); box-shadow: 0 2px 8px rgb(16 24 40 / .035); }
 .task-center-main .pi-live-compose-wrap { border-top: 1px solid var(--al-line); background: var(--al-surface); }
 
+/* 新建任务继续复用壳层。 */
 .task-center-new {
   display: grid;
   height: 100%;
@@ -422,6 +224,7 @@
 .task-center-project-hint { margin-top: 10px; padding: 9px 10px; border: 1px solid var(--al-line); border-radius: 8px; background: var(--al-soft-2); color: var(--al-muted); font-size: 12px; line-height: 1.55; }
 .task-center-new-actions { display: flex; justify-content: flex-end; margin-top: 18px; }
 
+/* 1280×800 / 1366×768 主基线。 */
 @media (max-width: 1199.98px) {
   .task-center-page { --task-center-rail: 288px; }
   .task-center-toolbar { gap: 5px; padding-inline: 9px; }
@@ -429,21 +232,16 @@
   .task-center-toolbar .search-filter { min-width: 120px; }
   .task-center-main .review-reader,
   .task-center-main .pi-live-document { padding-right: 22px; padding-left: 34px; }
-  .task-center-main .pi-live-taskbar { padding-right: 22px; padding-left: 34px; }
   .task-center-new { padding-inline: 20px; }
 }
-
 @media (max-width: 991.98px) {
   .task-center-page { --task-center-rail: 264px; }
   .task-center-toolbar { overflow-x: auto; }
   .task-center-toolbar .search-filter { flex: 0 0 150px; }
-  .task-center-main .review-session-head { grid-template-columns: minmax(0, 1fr); }
-  .task-center-main .review-metrics { justify-self: start; }
   .task-center-main .task-message-bubble { max-width: 84%; }
   .task-center-new-fields { grid-template-columns: 1fr; }
   .task-center-agent-fixed small { margin-left: 0; }
 }
-
 @media (max-width: 767.98px) {
   .task-center-page { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 220px minmax(0, 1fr); }
   .task-center-toolbar { grid-column: 1; grid-row: 1; }
@@ -451,12 +249,7 @@
   .task-center-main { grid-column: 1; grid-row: 3; }
   .task-center-main .review-reader,
   .task-center-main .pi-live-document { padding: 0 14px 76px; }
-  .task-center-main .pi-live-taskbar { padding: 14px; }
   .task-center-main .task-message-bubble { max-width: 92%; }
-  .task-center-main .thinking-block,
-  .task-center-main .execution-group,
-  .task-center-main .pi-live-lane,
-  .task-center-main .pi-live-history-lane { margin-right: 4px; margin-left: 22px; }
   .task-center-new { padding: 20px 12px 56px; }
   .task-center-new-card { padding: 20px 16px; border-radius: 10px; }
 }
