@@ -1,10 +1,13 @@
 import { readFile } from 'node:fs/promises'
 
-const [app, taskCenter, taskCenterCss, page, history, client, css, http, runtime, sdkLoader, coreObservation, timelineProtocol] = await Promise.all([
+const [app, taskCenter, taskSurface, taskCenterCss, reviewPage, page, hubPage, history, client, css, http, runtime, sdkLoader, coreObservation, timelineProtocol] = await Promise.all([
   readFile(new URL('../packages/web/src/App.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/TaskCenterPage.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/web/src/features/TaskSurface.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/task-center.css', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/web/src/features/ReviewPage.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/PiLivePage.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/web/src/features/HubReviewPage.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/pi-live-history.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/client/pi-live.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/pi-live.css', import.meta.url), 'utf8'),
@@ -33,14 +36,20 @@ if (/to="\/review\/live"[^>]*>Pi 实时<\/NavLink>/.test(app)) failures.push('�
 requireText(taskCenter, /\+ 新建任务/, '任务中心左侧必须提供统一“新建任务”入口')
 requireText(taskCenter, /进行中 \+ 历史/, '任务中心必须明确统一进行中与历史任务')
 requireText(taskCenter, /piLiveApi\.knownRuntimes\(\)/, '任务中心必须发现当前 AgentLens Runtime 持有的 Pi Runtime')
-requireText(taskCenter, /<ReviewPage model=\{model\}\/>/, '任务中心必须复用既有历史任务详情')
-requireText(taskCenter, /<PiLivePage\/>/, '任务中心必须复用 Pi Live 实时详情')
-requireText(taskCenter, /<HubReviewPage\/>/, '任务中心必须保留 Hub 远程详情')
+requireText(taskCenter, /<TaskSurface\s+mode=\{surfaceMode\}>/, '任务中心历史、实时与 Hub 详情必须统一经过 TaskSurface 宿主')
+requireText(taskCenter, /<ReviewPage\s+model=\{model\}\s+embedded\s*\/>/, '任务中心历史详情必须以嵌入态进入 TaskSurface')
+requireText(taskCenter, /<PiLivePage\s+embedded\s*\/>/, '任务中心 Pi Live 必须以嵌入态进入 TaskSurface')
+requireText(taskCenter, /<HubReviewPage\s+embedded\s*\/>/, '任务中心 Hub 详情必须以嵌入态进入 TaskSurface')
+requireText(taskSurface, /data-task-surface-mode=\{mode\}/, 'TaskSurface 必须暴露稳定的详情状态边界')
+requireText(reviewPage, /ReviewPage\(\{ model, embedded = false \}/, 'ReviewPage 必须支持不生成自身会话侧栏的嵌入态')
+requireText(page, /PiLivePage\(\{ embedded = false \}/, 'PiLivePage 必须支持不生成自身实时任务侧栏的嵌入态')
+requireText(hubPage, /HubReviewPage\(\{ embedded = false \}/, 'HubReviewPage 必须支持不生成自身会话侧栏/工具栏的嵌入态')
 requireText(taskCenter, /deriveTaskProjectOptions/, '新建任务必须从已观测项目上下文推导工作目录')
 requireText(taskCenter, /cwd:\s*selected\.cwd/, 'Pi Runtime cwd 必须来自已选择的真实项目上下文')
 if (/setCwd|工作目录\s*<input|placeholder=.*workspace/.test(taskCenter)) failures.push('任务中心新建主流程不得要求用户手输 cwd')
-requireText(taskCenterCss, /\.task-center-main \.pi-live-page > \.pi-live-sessions\s*\{\s*display:\s*none;/m, '任务中心必须隐藏 Pi Live 自带第二套会话侧栏')
-requireText(taskCenterCss, /\.task-center-main \.review-layout > \.session-panel\s*\{\s*display:\s*none;/m, '任务中心必须隐藏 Review 自带第二套会话侧栏')
+if (/\.task-center-main \.pi-live-page > \.pi-live-sessions\s*\{\s*display:\s*none;/m.test(taskCenterCss)) failures.push('任务中心不得继续依赖 CSS 隐藏 Pi Live 第二套侧栏')
+if (/\.task-center-main \.review-layout > \.session-panel\s*\{\s*display:\s*none;/m.test(taskCenterCss)) failures.push('任务中心不得继续依赖 CSS 隐藏 Review 第二套侧栏')
+if (/\.task-center-main \.hub-review-toolbar\s*\{\s*display:\s*none;/m.test(taskCenterCss)) failures.push('任务中心不得继续依赖 CSS 隐藏 Hub 工具栏')
 
 requireText(page, /onCompositionStart/, 'Pi Live 输入框缺少 compositionstart 保护')
 requireText(page, /nativeEvent\.isComposing/, 'Pi Live 输入框缺少 isComposing 保护')
@@ -96,4 +105,4 @@ if (failures.length) {
   process.exit(1)
 }
 
-console.log('Pi Live / 任务中心契约检查通过：统一任务入口、官方 Pi SDK Runtime、活跃任务列举、项目上下文启动、事件层级、历史事实、IME、Stop/Terminate、滚动跟随、Extension UI、背压与性能诊断已锁定。')
+console.log('Pi Live / 任务中心契约检查通过：统一 TaskSurface、嵌入态详情、官方 Pi SDK Runtime、活跃任务列举、项目上下文启动、事件层级、历史事实、IME、Stop/Terminate、滚动跟随、Extension UI、背压与性能诊断已锁定。')
