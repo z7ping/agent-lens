@@ -48,7 +48,9 @@ jobs:
           $env:AGENT_LENS_RUNTIME_OWNER = 'ci'
           $env:AGENT_LENS_ACCEPTANCE_URL = "http://127.0.0.1:${{ env.ACCEPTANCE_PORT }}"
           $env:AGENT_LENS_ACCEPTANCE_OUTPUT = Join-Path $root 'acceptance'
+          $reportPath = Join-Path $env:AGENT_LENS_ACCEPTANCE_OUTPUT 'task-center-desktop-report.json'
           $daemon = Start-Process -FilePath node -ArgumentList 'dist/daemon.mjs' -PassThru -NoNewWindow
+          $acceptance = $null
           try {
             $ready = $false
             for ($i = 0; $i -lt 120; $i++) {
@@ -59,8 +61,24 @@ jobs:
               Start-Sleep -Milliseconds 250
             }
             if (-not $ready) { throw 'AgentLens Daemon 未在 30 秒内就绪' }
-            npm run accept:task-center-desktop
+
+            $acceptance = Start-Process -FilePath npm.cmd -ArgumentList 'run','accept:task-center-desktop' -PassThru -NoNewWindow
+            $exited = $acceptance.WaitForExit(90000)
+            if (-not $exited) {
+              Write-Host 'Electron 主进程 90 秒内未自然退出，清理进程树并使用已落盘报告判定结果。'
+              & taskkill.exe /PID $acceptance.Id /T /F 2>$null | Out-Null
+            }
+            if (-not (Test-Path $reportPath)) { throw '桌面验收未生成 task-center-desktop-report.json' }
+            $report = Get-Content -Raw -Path $reportPath | ConvertFrom-Json
+            if (-not $report.ok) {
+              $summary = ($report.cases | ForEach-Object { $_.errors } | Where-Object { $_ }) -join '; '
+              throw "桌面验收失败：$summary"
+            }
+            Write-Host "桌面验收通过：$($report.cases.Count) 个 viewport/theme case"
           } finally {
+            if ($acceptance -and -not $acceptance.HasExited) {
+              & taskkill.exe /PID $acceptance.Id /T /F 2>$null | Out-Null
+            }
             if ($daemon -and -not $daemon.HasExited) { Stop-Process -Id $daemon.Id -Force }
           }
       - name: Upload viewport evidence
