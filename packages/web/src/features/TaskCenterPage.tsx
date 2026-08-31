@@ -5,7 +5,7 @@ import type { AgentLensClientModel } from '../client/model'
 import { fetchHubReviewSessions, fetchLocalReviewSessions } from '../client/hub-review'
 import { piLiveApi } from '../client/pi-live'
 import { useClientSnapshot } from '../App'
-import { agentLabel, sourceDot } from '../components/AgentScope'
+import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
 import { HubReviewPage } from './HubReviewPage'
 import { PiLivePage } from './PiLivePage'
 import { ReviewPage } from './ReviewPage'
@@ -214,6 +214,8 @@ export function TaskCenterPage({ model, mode }: { model: AgentLensClientModel; m
   const [hubSessions, setHubSessions] = useState<HubReviewSessionSummaryDto[]>([])
   const [projectHistory, setProjectHistory] = useState<ReviewSessionSummaryDto[]>([])
   const review = snapshot.review
+  const agents = snapshot.facets?.agents ?? []
+  const projects = snapshot.facets?.projects ?? []
 
   const refreshRuntimes = useCallback(() => {
     void piLiveApi.knownRuntimes().then(setRuntimes, () => setRuntimes([]))
@@ -252,7 +254,7 @@ export function TaskCenterPage({ model, mode }: { model: AgentLensClientModel; m
     if (review.detail) byId.set(review.detail.id, review.detail)
     return [...byId.values()]
   }, [projectHistory, localSessions, review.detail])
-  const projectOptions = useMemo(() => deriveTaskProjectOptions(snapshot.facets?.projects ?? [], projectSessions), [snapshot.facets?.projects, projectSessions])
+  const projectOptions = useMemo(() => deriveTaskProjectOptions(projects, projectSessions), [projects, projectSessions])
   const visibleHub = useMemo(() => hubSessions.filter(item => remoteVisible(item, review)), [hubSessions, review])
   const historyGroups = useMemo(() => {
     const combined: HistoryTaskEntry[] = [
@@ -290,6 +292,24 @@ export function TaskCenterPage({ model, mode }: { model: AgentLensClientModel; m
   const historyCount = localSessions.length + visibleHub.length
 
   return <div className="task-center-page">
+    <div className="task-center-toolbar" aria-label="筛选历史任务">
+      <span className="task-center-toolbar-label">筛选历史任务</span>
+      <AgentScope agents={agents} value={review.filters.sourceId} onChange={sourceId => model.setReviewFilters({ sourceId })}/>
+      <span className="toolbar-divider" />
+      <select className="filter" value={review.filters.projectId} onChange={event => model.setReviewFilters({ projectId: event.target.value })} aria-label="筛选项目">
+        <option value="">全部项目</option>
+        {projects.map(project => <option key={project.id} value={project.id}>{project.name ?? project.repositoryIdentity ?? project.id}</option>)}
+      </select>
+      <select className="filter" value={review.filters.range} onChange={event => model.setReviewFilters({ range: event.target.value as typeof review.filters.range })} aria-label="筛选时间范围">
+        <option value="today">今天</option><option value="7d">最近 7 天</option><option value="30d">最近 30 天</option><option value="all">全部时间</option>
+      </select>
+      <select className="filter" value={review.filters.status} onChange={event => model.setReviewFilters({ status: event.target.value as typeof review.filters.status })} aria-label="筛选状态">
+        <option value="all">全部状态</option><option value="clean">无错误</option><option value="with-errors">有错误</option>
+      </select>
+      <input className="filter search-filter" placeholder="搜索历史任务…" value={review.filters.search} onChange={event => model.setReviewFilters({ search: event.target.value })} aria-label="搜索历史任务"/>
+      <button className="icon-button" onClick={() => void model.refreshReview()} title="刷新历史任务" aria-label="刷新历史任务"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M13 3v4H9"/><path d="M12.2 6A5 5 0 1 0 13 9"/></svg></button>
+    </div>
+
     <aside className="task-center-rail">
       <div className="task-center-rail-head">
         <div><b>任务</b><span>进行中 + 历史</span></div>
