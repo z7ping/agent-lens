@@ -17,6 +17,8 @@ on:
       - 'packages/web/src/client/pi-live.ts'
       - 'packages/web/src/components/VirtualRoundMount.tsx'
       - 'packages/web/src/features/PiLivePage.tsx'
+      - 'packages/web/src/features/PiLiveTaskRound.tsx'
+      - 'packages/web/src/features/pi-live-task-projection.ts'
       - 'scripts/performance/pi-live-scheduler-benchmark.ts'
       - 'scripts/performance/pi-live-history-virtualization-benchmark.ts'
       - 'scripts/performance/review-virtualization-benchmark.ts'
