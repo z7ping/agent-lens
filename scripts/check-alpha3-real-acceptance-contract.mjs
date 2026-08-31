@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 const pi = readFileSync('scripts/acceptance/pi-live-real.mjs', 'utf8')
 const desktop = readFileSync('scripts/acceptance/task-center-desktop.mjs', 'utf8')
 const soak = readFileSync('scripts/acceptance/task-center-resource-soak.mjs', 'utf8')
+const thinking = readFileSync('packages/web/src/features/TaskThinking.tsx', 'utf8')
 const toolGroup = readFileSync('packages/web/src/features/TaskToolGroup.tsx', 'utf8')
 const toolRow = readFileSync('packages/web/src/features/TaskToolRow.tsx', 'utf8')
 const toolCss = readFileSync('packages/web/src/task-execution.css', 'utf8')
@@ -54,7 +55,11 @@ requireText(soak, /JSHeapUsedSize/, '长时验收必须采集 JS Heap')
 requireText(soak, /residentSet/, '长时验收必须采集 Renderer RSS')
 requireText(soak, /percentCPUUsage/, '长时验收必须采集 Renderer CPU')
 
-/* Tool Call 高保真契约：原型不改，正式实现不能再把成功调用退化成摘要。 */
+/* Thinking / Tool 高保真契约：原型不改，正式实现不能再把执行事实默认藏起来。 */
+requireText(thinking, /defaultExpanded\s*=\s*true/, 'Thinking 必须按原型默认展开，用户可主动折叠')
+requireText(thinking, /thinking-node agent-lane-node/, 'Thinking 必须保持原型执行轨节点层级')
+requireText(thinking, /thinking-preview node-preview/, 'Thinking 必须保留原型弱预览层级')
+
 requireText(
   toolGroup,
   /defaultExpanded\s*=\s*true/,
@@ -77,6 +82,7 @@ requireText(
   /grid-template-columns:\s*76px\s+minmax\(94px,\s*auto\)\s+minmax\(0,\s*1fr\)\s+auto/,
   '桌面 Tool Row 必须保持原型四列：类型 / 操作 / 目标 / 状态耗时',
 )
+requireText(toolCss, /thinking-block\[open\][\s\S]*summary::before/, 'Thinking 展开态必须保留原型折叠箭头反馈')
 requireText(toolCss, /min-height:\s*38px/, 'Tool Row 必须保持原型 38px 紧凑行高')
 requireText(toolCss, /@media \(max-width: 1199\.98px\)/, 'Tool Row 必须覆盖 1280/1366 主桌面基线的响应式收敛')
 requireText(toolCss, /@media \(max-width: 991\.98px\)/, 'Tool Row 必须覆盖紧凑桌面降级')
@@ -100,4 +106,4 @@ if (failures.length) {
   for (const failure of failures) console.error(`- ${failure}`)
   process.exit(1)
 }
-console.log('alpha.3 真实验收入口检查通过：真实 Pi 全链路/1h soak、1280/1366 明暗桌面、独立滚动、Tool Call 默认可见与四列执行轨、Review/Pi 共用行为、100 次任务切换、1h/8h 资源趋势均已锁定。')
+console.log('alpha.3 真实验收入口检查通过：真实 Pi 全链路/1h soak、1280/1366 明暗桌面、独立滚动、Thinking/Tool 默认展开与四列执行轨、Review/Pi 共用行为、100 次任务切换、1h/8h 资源趋势均已锁定。')
