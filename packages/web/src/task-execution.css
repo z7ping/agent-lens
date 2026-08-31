@@ -3,7 +3,7 @@
 /*
  * alpha.3 Task Detail 最终表现层。
  * Message = 第一视觉层；Round = 弱结构边界；Thinking / Tool = 第二视觉层；Payload = 第三层下钻。
- * Tool Call 本身永远可见，只有 Payload / 长输出允许折叠。
+ * Tool Group 按原型默认展开，具体 Tool Call 初始直接可见；用户可主动折叠整个组。
  */
 
 /* 09 · Round：轻边界、轻摘要，不做卡片墙。 */
@@ -134,7 +134,8 @@
   height: 1px;
   background: var(--al-line);
 }
-.task-center-main .thinking-block > summary {
+.task-center-main .thinking-block > summary,
+.task-center-main .execution-group > summary {
   display: grid;
   min-height: 34px;
   grid-template-columns: 14px auto minmax(0, 1fr) auto;
@@ -147,8 +148,10 @@
   cursor: pointer;
   list-style: none;
 }
-.task-center-main .thinking-block > summary::-webkit-details-marker { display: none; }
-.task-center-main .thinking-block > summary::before {
+.task-center-main .thinking-block > summary::-webkit-details-marker,
+.task-center-main .execution-group > summary::-webkit-details-marker { display: none; }
+.task-center-main .thinking-block > summary::before,
+.task-center-main .execution-group > summary::before {
   content: "›";
   display: block;
   color: var(--al-muted);
@@ -156,18 +159,8 @@
   line-height: 1;
   transition: transform .12s;
 }
-.task-center-main .thinking-block[open] > summary::before { transform: rotate(90deg); }
-
-/* Tool Group 只有摘要，不是折叠器；Tool Row 永远渲染。 */
-.task-center-main .tool-group-summary {
-  display: grid;
-  min-height: 34px;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 7px;
-  padding: 0 5px 0 26px;
-  color: var(--al-muted);
-}
+.task-center-main .thinking-block[open] > summary::before,
+.task-center-main .execution-group[open] > summary::before { transform: rotate(90deg); }
 .task-center-main .thinking-label,
 .task-center-main .tool-title { font-size: 12px; font-weight: 650; white-space: nowrap; }
 .task-center-main .thinking-label { color: color-mix(in srgb, var(--al-accent) 68%, var(--al-muted)); }
@@ -321,7 +314,6 @@
   .task-center-main .task-message-bubble { max-width: 94%; }
   .task-center-main .thinking-block,
   .task-center-main .execution-group { margin-right: 6px; margin-left: 24px; }
-  .task-center-main .tool-group-summary { padding-left: 22px; }
   .task-center-main .execution-row.tool-row { grid-template-columns: 68px minmax(0, 1fr); }
   .task-center-main .tool-status { grid-column: 2; }
   .task-center-main .tool-payload { margin-left: 68px; }
@@ -332,5 +324,6 @@
 :root[data-theme='dark'] .task-center-main .tool-live-output { background: color-mix(in srgb, var(--al-accent-soft) 12%, var(--al-soft-2)); }
 @media (prefers-reduced-motion: reduce) {
   .task-center-main .interaction-chevron,
-  .task-center-main .thinking-block > summary::before { transition: none; }
+  .task-center-main .thinking-block > summary::before,
+  .task-center-main .execution-group > summary::before { transition: none; }
 }
