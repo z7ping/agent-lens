@@ -11,6 +11,7 @@ import type {
   ReviewMessageNodeDto,
   ReviewNodeDto,
   ReviewSessionSummaryDto,
+  SourceRecordResponseDto,
   ReviewToolNodeDto,
   TimelineEvidenceDto,
 } from '@agent-lens/protocol'
@@ -20,6 +21,7 @@ import { useClientSnapshot } from '../App'
 import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
 import { ToolKindIcon } from '../components/ToolKindIcon'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
+import { TaskEvent } from './TaskEvent'
 import { TaskHeader } from './TaskHeader'
 import { TaskMessage } from './TaskMessage'
 import { TaskRound } from './TaskRound'
@@ -347,9 +349,8 @@ function sourceEventSummary(node: ReviewEventNodeDto): string {
   return action || brief(payload, 100)
 }
 
-function isGenericRawEvent(node: ReviewEventNodeDto): boolean {
-  if (node.category !== 'unknown') return false
-  return /^(?:原始事件|raw event|event)$/i.test(sourceEventLabel(node).trim())
+function isAdditionalEvent(node: ReviewEventNodeDto): boolean {
+  return node.category === 'unknown'
 }
 
 type ToolKind = 'shell' | 'read' | 'edit' | 'search' | 'mcp' | 'web' | 'tool'
@@ -442,13 +443,75 @@ function roleLabel(role: ReviewMessageNodeDto['role']): string {
 
 type InspectorTab = 'detail' | 'evidence' | 'raw'
 
-function Inspector({ node, onClose }: { node: ReviewNodeDto; onClose(): void }) {
+
+function RawInspectorContent({
+  node,
+  records,
+  loading,
+  error,
+}: {
+  node: ReviewNodeDto
+  records: SourceRecordResponseDto[]
+  loading: boolean
+  error: string
+}) {
+  return <section className="inspector-section">
+    <h3 className="section-label">Raw Inspector</h3>
+    <div className="evidence-card">
+      <div className="evidence-meta"><b>Source</b><span>{node.sourceId}</span><span>{node.type}</span></div>
+      <div className="evidence-path">Observation {node.id}</div>
+      {node.nativeEventId && <div className="evidence-path">Native ID：{node.nativeEventId}</div>}
+      {node.nativeParentEventId && <div className="evidence-path">Native Parent Event ID：{node.nativeParentEventId}</div>}
+      {node.parentObservationId && <div className="evidence-path">Parent Observation：{node.parentObservationId}</div>}
+      {node.occurredAt && <div className="evidence-path">occurredAt：{node.occurredAt}</div>}
+      <div className="evidence-path">capturedAt：{node.capturedAt}</div>
+    </div>
+    {loading && <div className="muted-empty compact">正在读取来源原始记录…</div>}
+    {error && <div className="evidence-missing">{error}</div>}
+    {!loading && !error && records.map(record => {
+      const evidence = node.evidence.find(item => item.sourceRecordId === record.id)
+      return <div key={record.id} className="evidence-card raw-source-record">
+        <div className="evidence-meta"><b>{record.nativeType}</b><span>Parser {record.parserVersion}</span>{evidence && <span>{evidence.captureMethod} · {evidence.confidence}</span>}</div>
+        <div className="evidence-path">SourceRecord {record.id}</div>
+        {record.nativeId && <div className="evidence-path">Native ID：{record.nativeId}</div>}
+        {record.occurredAt && <div className="evidence-path">occurredAt：{record.occurredAt}</div>}
+        <div className="evidence-path">capturedAt：{record.capturedAt}</div>
+        <div className="evidence-path">Locator：{JSON.stringify(record.locator)}</div>
+        <pre className="raw-json">{JSON.stringify(record.payload, null, 2)}</pre>
+      </div>
+    })}
+    {!loading && !error && records.length === 0 && <>
+      <div className="evidence-empty-detail">当前 Observation 没有关联可读取的 SourceRecord；以下为标准化 Payload。</div>
+      <pre className="raw-json">{JSON.stringify(node.payload, null, 2)}</pre>
+    </>}
+  </section>
+}
+
+function Inspector({ node, onClose, loadSourceRecord }: { node: ReviewNodeDto; onClose(): void; loadSourceRecord(id: string): Promise<SourceRecordResponseDto> }) {
   const [tab, setTab] = useState<InspectorTab>('detail')
   const panelRef = useRef<HTMLElement>(null)
   const firstTabRef = useRef<HTMLButtonElement>(null)
   const returnFocusRef = useRef<HTMLElement | null>(null)
   const closeRef = useRef(onClose)
   closeRef.current = onClose
+  const sourceRecordIds = useMemo(() => [...new Set(node.evidence.map(item => item.sourceRecordId).filter((id): id is string => Boolean(id)))], [node.evidence])
+  const [rawRecords, setRawRecords] = useState<SourceRecordResponseDto[]>([])
+  const [rawLoading, setRawLoading] = useState(false)
+  const [rawError, setRawError] = useState('')
+
+  useEffect(() => {
+    if (tab !== 'raw') return
+    let active = true
+    setRawRecords([])
+    setRawError('')
+    if (!sourceRecordIds.length) return () => { active = false }
+    setRawLoading(true)
+    void Promise.all(sourceRecordIds.map(id => loadSourceRecord(id))).then(
+      records => { if (active) { setRawRecords(records); setRawLoading(false) } },
+      reason => { if (active) { setRawError(reason instanceof Error ? reason.message : String(reason)); setRawLoading(false) } },
+    )
+    return () => { active = false }
+  }, [loadSourceRecord, node.id, sourceRecordIds, tab])
 
   useEffect(() => {
     returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
@@ -516,7 +579,7 @@ function Inspector({ node, onClose }: { node: ReviewNodeDto; onClose(): void }) 
         {item.missingReason && <div className="evidence-missing">证据信息不完整</div>}
       </div>) : <div className="muted-empty">无证据</div>}
     </section>}
-    {tab === 'raw' && <section className="inspector-section"><h3 className="section-label">来源原始记录</h3><pre className="raw-json">{JSON.stringify(node.payload, null, 2)}</pre></section>}
+    {tab === 'raw' && <RawInspectorContent node={node} records={rawRecords} loading={rawLoading} error={rawError}/>}
   </aside>
 }
 
@@ -642,20 +705,26 @@ function reviewToolModel(node: ReviewToolNodeDto): TaskToolModel {
     />
   }
 
-  function EventRow({ event, inspect }: { event: ReviewEventNodeDto; inspect(node: ReviewNodeDto): void }) {
-  const summary = sourceEventSummary(event)
-  return <button className={`event-row event-${event.category}`} onClick={() => inspect(event)}>
-    <span className="event-mark" />
-    <span className="event-copy"><b>{sourceEventLabel(event)}</b>{summary && <small>{summary}</small>}</span>
-    <EvidenceBadges evidence={event.evidence} compact/>
-    <span className="event-source">{agentLabel(event.sourceId)}</span>
-    <time>{formatClock(event.at)}</time>
-  </button>
+function EventRow({ event, inspect }: { event: ReviewEventNodeDto; inspect(node: ReviewNodeDto): void }) {
+  return <TaskEvent
+    model={{
+      id: event.id,
+      label: sourceEventLabel(event),
+      category: event.category,
+      summary: sourceEventSummary(event),
+      sourceLabel: agentLabel(event.sourceId),
+      time: formatClock(event.at),
+      nativeId: event.nativeEventId,
+      parentId: event.nativeParentEventId ?? event.parentObservationId,
+    }}
+    meta={<EvidenceBadges evidence={event.evidence} compact/>}
+    onInspect={() => inspect(event)}
+  />
 }
 
 function RawEventGroup({ items, inspect }: { items: ReviewEventNodeDto[]; inspect(node: ReviewNodeDto): void }) {
   return <details className="raw-event-group">
-    <summary><span>原始事件 · {items.length}</span><time>{formatClock(items[items.length - 1]?.at ?? '')}</time></summary>
+    <summary><span>附加原生事件 · {items.length}</span><time>{formatClock(items[items.length - 1]?.at ?? '')}</time></summary>
     <div>{items.map(item => <EventRow key={item.id} event={item} inspect={inspect}/>)}</div>
   </details>
 }
@@ -690,7 +759,7 @@ function ReviewRoundAdapter({
     expansionStore,
     forceExpanded,
     forceRevision,
-    showRawRecords,
+    showAllEvents,
   }: {
     interaction: ReviewInteractionDto
     round: TaskRoundModel
@@ -699,7 +768,7 @@ function ReviewRoundAdapter({
     expansionStore: Map<string, boolean>
     forceExpanded: boolean
     forceRevision: number
-    showRawRecords: boolean
+    showAllEvents: boolean
   }) {
     const groups = useMemo(() => {
       const result: InteractionEntry[] = []
@@ -714,7 +783,7 @@ function ReviewRoundAdapter({
           tools.push(node)
           continue
         }
-        if (node.type === 'event' && isGenericRawEvent(node)) {
+        if (node.type === 'event' && isAdditionalEvent(node)) {
           flushTools()
           rawEvents.push(node)
           continue
@@ -737,7 +806,7 @@ function ReviewRoundAdapter({
     >
       {groups.map((entry, index) => {
         if (entry.type === 'tool-group') return <ReviewToolGroupAdapter key={`tools-${index}`} items={entry.items} inspect={inspect}/>
-        if (entry.type === 'raw-event-group') return showRawRecords ? <RawEventGroup key={`raw-${index}`} items={entry.items} inspect={inspect}/> : null
+        if (entry.type === 'raw-event-group') return showAllEvents ? <RawEventGroup key={`raw-${index}`} items={entry.items} inspect={inspect}/> : null
         if (entry.type === 'message') return <MessageBubble key={entry.id} node={entry} inspect={inspect}/>
         return <EventRow key={entry.id} event={entry as ReviewEventNodeDto} inspect={inspect}/>
       })}
@@ -789,7 +858,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
   const [roundFilterLoading, setRoundFilterLoading] = useState(false)
   const [expandAllRounds, setExpandAllRounds] = useState(true)
   const [roundExpansionRevision, setRoundExpansionRevision] = useState(0)
-  const [showRawRecords, setShowRawRecords] = useState(false)
+  const [showAllEvents, setShowAllEvents] = useState(false)
   const [hubSessions, setHubSessions] = useState<HubReviewSessionSummaryDto[]>([])
   const sessionLoadSentinelRef = useRef<HTMLButtonElement>(null)
   const detailLoadSentinelRef = useRef<HTMLDivElement>(null)
@@ -849,7 +918,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
     setRoundFilterLoading(false)
     setExpandAllRounds(true)
     setRoundExpansionRevision(0)
-    setShowRawRecords(false)
+    setShowAllEvents(false)
     setInspect(null)
     followingTailRef.current = false
   }, [detail?.id])
@@ -1161,7 +1230,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
     title={<span title={taskDetailModel?.title}>{taskDetailModel?.title}</span>}
     submeta={taskDetailModel?.startedAt && taskDetailModel.endedAt ? <><span>{formatRange(taskDetailModel.startedAt, taskDetailModel.endedAt)}</span>{taskDetailModel.workspacePath && <code title={taskDetailModel.workspacePath}>{taskDetailModel.workspacePath}</code>}</> : undefined}
     metrics={taskDetailModel?.metrics ?? []}
-    actions={<button className="review-audit-toggle" aria-pressed={showRawRecords} onClick={() => setShowRawRecords(value => !value)}>{showRawRecords ? '隐藏原始记录' : '显示原始记录'}</button>}
+    actions={<button className="review-audit-toggle" aria-pressed={showAllEvents} onClick={() => setShowAllEvents(value => !value)}>{showAllEvents ? '视图：全部事件' : '视图：核心事件'}</button>}
   />
 
           {detail.sourceIds.includes('pi') && review.relationships?.items.length ? <details className="pi-session-tree">
@@ -1201,7 +1270,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
       expansionStore={roundExpansionRef.current}
       forceExpanded={expandAllRounds}
       forceRevision={roundExpansionRevision}
-      showRawRecords={showRawRecords}
+      showAllEvents={showAllEvents}
       inspect={setInspect}
     />
   </VirtualRoundMount>)}
@@ -1221,6 +1290,6 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
         </div>}
       </TaskSurface>
     </div>
-    {inspect && <Inspector node={inspect} onClose={() => setInspect(null)}/>}
+    {inspect && <Inspector node={inspect} loadSourceRecord={model.sourceRecord} onClose={() => setInspect(null)}/>}
   </main>
 }

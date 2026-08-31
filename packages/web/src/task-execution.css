@@ -341,3 +341,10 @@
   .task-center-main .thinking-block > summary::before,
   .task-center-main .execution-group > summary::before { transition: none; }
 }
+
+
+/* Shared TaskEvent raw disclosure: collapsed by default, used by settled Pi facts. */
+.task-event-raw { margin: -2px 0 8px 34px; border-left: 1px solid var(--al-line); padding-left: 10px; }
+.task-event-raw summary { min-height: 28px; cursor: pointer; color: var(--al-muted-2); font-size: 12px; line-height: 28px; }
+.task-event-raw-meta { margin: 2px 0 6px; color: var(--al-muted-2); font-size: 12px; overflow-wrap: anywhere; }
+.task-event-raw .raw-json { margin-top: 4px; }

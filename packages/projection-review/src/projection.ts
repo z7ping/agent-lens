@@ -21,6 +21,7 @@ import {
   type ReviewInteractionDto,
   type ReviewMessageNodeDto,
   type ReviewNodeDto,
+  type ReviewNodeSourceDto,
   type ReviewQueryDto,
   type ReviewResponseDto,
   type ReviewSessionDetailDto,
@@ -101,6 +102,16 @@ function eventLabel(kind: TimelineItemDto['kind']): string {
   return labels[kind] ?? kind
 }
 
+function reviewNodeSource(item: TimelineItemDto): ReviewNodeSourceDto {
+  return {
+    ...(item.nativeEventId ? { nativeEventId: item.nativeEventId } : {}),
+    ...(item.nativeParentEventId ? { nativeParentEventId: item.nativeParentEventId } : {}),
+    ...(item.parentObservationId ? { parentObservationId: item.parentObservationId } : {}),
+    ...(item.occurredAt ? { occurredAt: item.occurredAt } : {}),
+    capturedAt: item.capturedAt,
+  }
+}
+
 function buildNodes(items: TimelineItemDto[]): ReviewNodeDto[] {
   const nodes: ReviewNodeDto[] = []
   const toolsByCallId = new Map<string, ReviewToolNodeDto>()
@@ -110,7 +121,7 @@ function buildNodes(items: TimelineItemDto[]): ReviewNodeDto[] {
       const node: ReviewMessageNodeDto = {
         type: 'message', id: item.id,
         role: item.kind === 'message.user' ? 'user' : item.kind === 'message.assistant' ? 'assistant' : 'reasoning',
-        at: item.effectiveAt, sourceId: item.sourceId,
+        at: item.effectiveAt, sourceId: item.sourceId, ...reviewNodeSource(item),
         text: textFromPayload(item.payload) ?? '（无可显示文本）', payload: item.payload,
         evidence: item.evidence, observationIds: [item.id],
       }
@@ -122,7 +133,7 @@ function buildNodes(items: TimelineItemDto[]): ReviewNodeDto[] {
       const payload = asRecord(item.payload)
       const id = toolCallId(item)
       const node: ReviewToolNodeDto = {
-        type: 'tool', id: item.id, at: item.effectiveAt, sourceId: item.sourceId,
+        type: 'tool', id: item.id, at: item.effectiveAt, sourceId: item.sourceId, ...reviewNodeSource(item),
         name: toolName(item), ...(id ? { callId: id } : {}), status: 'running',
         startedAt: item.effectiveAt,
         ...(payload.input !== undefined ? { input: payload.input as JsonValue } : {}),
@@ -152,7 +163,7 @@ function buildNodes(items: TimelineItemDto[]): ReviewNodeDto[] {
     }
 
     const node: ReviewEventNodeDto = {
-      type: 'event', id: item.id, at: item.effectiveAt, sourceId: item.sourceId,
+      type: 'event', id: item.id, at: item.effectiveAt, sourceId: item.sourceId, ...reviewNodeSource(item),
       kind: item.kind, category: eventCategory(item.kind), label: eventLabel(item.kind),
       payload: item.payload, evidence: item.evidence, observationIds: [item.id],
     }

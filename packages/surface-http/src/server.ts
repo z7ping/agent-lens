@@ -37,6 +37,7 @@ import {
   type ReviewStatusFilter,
   type RuntimeModeDto,
   type RuntimeOwnerDto,
+  type SourceRecordResponseDto,
   type SessionQueryDto,
   type TimelineDirection,
   type TimelineObservationKind,
@@ -655,6 +656,32 @@ export async function startHttpSurface(
         const limit = parseLimit(url.searchParams, 500) ?? 500
         const detail = await options.hubReview.get(id, limit)
         writeJson(response, detail ? 200 : 404, detail ?? { error: 'not_found' })
+        return
+      }
+      if (url.pathname.startsWith('/api/v1/source-records/')) {
+        const id = decodeURIComponent(url.pathname.slice('/api/v1/source-records/'.length))
+        if (!id) throw badRequest('sourceRecordId is required')
+        const record = await storage.repositories.sourceRecords.get(id)
+        if (!record) {
+          writeJson(response, 404, { error: 'not_found' })
+          return
+        }
+        const body: SourceRecordResponseDto = {
+          id: record.id,
+          sourceId: record.sourceId,
+          installationId: record.installationId,
+          ...(record.sourceSessionNativeId ? { sourceSessionNativeId: record.sourceSessionNativeId } : {}),
+          nativeType: record.nativeType,
+          ...(record.nativeId ? { nativeId: record.nativeId } : {}),
+          ...(record.sourceSequence === undefined ? {} : { sourceSequence: record.sourceSequence }),
+          ...(record.occurredAt ? { occurredAt: record.occurredAt } : {}),
+          capturedAt: record.capturedAt,
+          locator: { ...record.locator },
+          ...(record.fingerprint ? { fingerprint: record.fingerprint } : {}),
+          payload: jsonValue(record.payload),
+          parserVersion: record.parserVersion,
+        }
+        writeJson(response, 200, body)
         return
       }
       if (url.pathname === '/api/v1/review') {

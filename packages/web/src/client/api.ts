@@ -16,6 +16,7 @@ import type {
   ReviewResponseDto,
   ReviewSessionDetailDto,
   SessionRelationshipResponseDto,
+  SourceRecordResponseDto,
   ToolAssetUsageResponseDto,
 } from '@agent-lens/protocol'
 
@@ -160,6 +161,10 @@ export class AgentLensApi {
 
   relationships(id: string): Promise<SessionRelationshipResponseDto> {
     return requestJson(`/api/v1/relationships?logicalSessionId=${encodeURIComponent(id)}`)
+  }
+
+  sourceRecord(id: string): Promise<SourceRecordResponseDto> {
+    return requestJson(`/api/v1/source-records/${encodeURIComponent(id)}`)
   }
 
   usage(filters: QueryFilters): Promise<ToolAssetUsageResponseDto> {

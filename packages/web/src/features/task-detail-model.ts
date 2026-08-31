@@ -8,6 +8,20 @@ export interface TaskMetricModel {
   tone?: 'danger' | 'accent' | undefined
 }
 
+export type TaskEventCategory = 'permission' | 'subagent' | 'context' | 'model' | 'lifecycle' | 'artifact' | 'usage' | 'unknown'
+
+export interface TaskEventModel {
+  id: string
+  label: string
+  category: TaskEventCategory
+  summary?: string | undefined
+  sourceLabel?: string | undefined
+  time?: string | undefined
+  nativeType?: string | undefined
+  nativeId?: string | undefined
+  parentId?: string | undefined
+}
+
 export interface TaskThinkingModel {
   id: string
   label: string

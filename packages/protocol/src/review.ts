@@ -7,6 +7,14 @@ export type ReviewEventCategory = 'permission' | 'subagent' | 'context' | 'model
 export type ReviewDetailFilter = 'all' | 'errors' | 'latency' | 'latest'
 export type ReviewDetailDirection = 'forward' | 'backward'
 
+export interface ReviewNodeSourceDto {
+  nativeEventId?: string
+  nativeParentEventId?: string
+  parentObservationId?: string
+  occurredAt?: string
+  capturedAt: string
+}
+
 export interface ReviewSessionSummaryDto {
   id: string
   installationId: string
@@ -28,7 +36,7 @@ export interface ReviewSessionSummaryDto {
   hasErrors: boolean
 }
 
-export interface ReviewMessageNodeDto {
+export interface ReviewMessageNodeDto extends ReviewNodeSourceDto {
   type: 'message'
   id: string
   role: ReviewMessageRole
@@ -40,7 +48,7 @@ export interface ReviewMessageNodeDto {
   observationIds: string[]
 }
 
-export interface ReviewToolNodeDto {
+export interface ReviewToolNodeDto extends ReviewNodeSourceDto {
   type: 'tool'
   id: string
   at: string
@@ -58,7 +66,7 @@ export interface ReviewToolNodeDto {
   observationIds: string[]
 }
 
-export interface ReviewEventNodeDto {
+export interface ReviewEventNodeDto extends ReviewNodeSourceDto {
   type: 'event'
   id: string
   at: string

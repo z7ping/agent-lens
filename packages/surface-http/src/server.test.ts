@@ -11,6 +11,7 @@ import {
 import type {
   HealthResponseDto,
   InsightsResponseDto,
+  SourceRecordResponseDto,
   TimelineResponseDto,
 } from '@agent-lens/protocol'
 import { SqliteStorageService } from '@agent-lens/storage-sqlite'
@@ -215,5 +216,44 @@ test('HTTP surface exposes v1 API and production web assets on loopback', async 
     await surface.dispose()
     storage.close()
     await rm(webRoot, { recursive: true, force: true })
+  }
+})
+
+
+test('HTTP surface lazily exposes one safe SourceRecord for Raw Inspector', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  const identity = new DefaultIdentityService(storage)
+  const host = await identity.resolveHost({ name: 'raw-inspector-host' })
+  const installation = await identity.resolveInstallation({ hostId: host.id, productId: 'codex' })
+  await storage.repositories.sourceRecords.put({
+    id: 'raw-source-record-1',
+    sourceId: 'codex',
+    installationId: installation.id,
+    sourceSessionNativeId: 'thread-raw-1',
+    nativeType: 'event_msg/token_count',
+    nativeId: 'native-raw-1',
+    sourceSequence: 7,
+    occurredAt: '2026-08-31T10:00:00.000Z',
+    capturedAt: '2026-08-31T10:00:01.000Z',
+    locator: { kind: 'file', path: '/tmp/rollout.jsonl', offset: 128 },
+    fingerprint: 'safe-fingerprint',
+    payload: { type: 'event_msg', payload: { type: 'token_count', input_tokens: 12 } },
+    parserVersion: '5',
+  })
+  const surface = await startHttpSurface(storage, { port: 0 })
+  try {
+    const response = await fetch(`http://${surface.host}:${surface.port}/api/v1/source-records/raw-source-record-1`)
+    assert.equal(response.status, 200)
+    const body = await response.json() as SourceRecordResponseDto
+    assert.equal(body.nativeType, 'event_msg/token_count')
+    assert.equal(body.nativeId, 'native-raw-1')
+    assert.equal(body.parserVersion, '5')
+    assert.equal(body.locator.path, '/tmp/rollout.jsonl')
+    assert.equal(body.locator.offset, 128)
+    assert.deepEqual(body.payload, { type: 'event_msg', payload: { type: 'token_count', input_tokens: 12 } })
+  } finally {
+    await surface.dispose()
+    storage.close()
   }
 })

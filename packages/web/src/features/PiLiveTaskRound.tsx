@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { toolVisualKind, toolVisualLabel } from '../components/ToolKindIcon'
+import { TaskEvent } from './TaskEvent'
 import { TaskMessage } from './TaskMessage'
 import { TaskRound } from './TaskRound'
 import { TaskThinking } from './TaskThinking'
@@ -141,7 +142,7 @@ function HistoryToolGroup({ id, items }: { id: string; items: HistoryTool[] }) {
   />
 }
 
-export function PiLiveHistoryTaskRound({ projection }: { projection: PiLiveTaskRoundProjection }) {
+export function PiLiveHistoryTaskRound({ projection, showAllEvents = false }: { projection: PiLiveTaskRoundProjection; showAllEvents?: boolean }) {
   const entries = historyEntries(projection.items)
   return <TaskRound model={projection.model} className="pi-live-history-round">
     {entries.map(entry => {
@@ -159,19 +160,12 @@ export function PiLiveHistoryTaskRound({ projection }: { projection: PiLiveTaskR
       if (entry.kind === 'tool-group') return <HistoryToolGroup key={entry.id} id={entry.id} items={entry.items}/>
       if (entry.kind === 'usage') {
         const cost = entry.usage.cost?.total
-        return <div key={entry.id} className="pi-live-history-lifecycle pi-live-history-usage">
-          <b>用量</b>
-          <span>输入 {entry.usage.inputTokens.toLocaleString()} · 输出 {entry.usage.outputTokens.toLocaleString()} · 缓存读 {entry.usage.cacheReadTokens.toLocaleString()} · 缓存写 {entry.usage.cacheWriteTokens.toLocaleString()} · 共 {entry.usage.totalTokens.toLocaleString()} 词元</span>
-          {cost !== undefined && <small>成本 ${cost.toFixed(4)}</small>}
-          {entry.at && <time>{formatClock(entry.at)}</time>}
-        </div>
+        const summary = `输入 ${entry.usage.inputTokens.toLocaleString()} · 输出 ${entry.usage.outputTokens.toLocaleString()} · 缓存读 ${entry.usage.cacheReadTokens.toLocaleString()} · 缓存写 ${entry.usage.cacheWriteTokens.toLocaleString()} · 共 ${entry.usage.totalTokens.toLocaleString()} 词元${cost !== undefined ? ` · $${cost.toFixed(4)}` : ''}`
+        return <TaskEvent key={entry.id} model={{ id: entry.id, label: '用量', category: 'usage', summary, sourceLabel: 'Pi', time: entry.at ? formatClock(entry.at) : undefined, nativeType: entry.nativeType, parentId: entry.parentId }} raw={entry.raw}/>
       }
       if (entry.kind === 'lifecycle') {
-        return <div key={entry.id} className="pi-live-history-lifecycle">
-          <b>{entry.label}</b>
-          {entry.detail && <span>{entry.detail}</span>}
-          {entry.at && <time>{formatClock(entry.at)}</time>}
-        </div>
+        if (entry.event === 'native.unknown' && !showAllEvents) return null
+        return <TaskEvent key={entry.id} model={{ id: entry.id, label: entry.label, category: entry.event === 'native.unknown' ? 'unknown' : 'lifecycle', summary: entry.detail || undefined, sourceLabel: 'Pi', time: entry.at ? formatClock(entry.at) : undefined, nativeType: entry.nativeType, parentId: entry.parentId }} raw={entry.raw}/>
       }
       return null
     })}

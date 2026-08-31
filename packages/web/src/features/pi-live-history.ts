@@ -4,8 +4,8 @@ export type PiLiveHistoryItem =
   | { id: string; kind: 'message'; role: 'user' | 'assistant'; text: string; at: string }
   | { id: string; kind: 'thinking'; text: string; at: string }
   | { id: string; kind: 'tool'; callId: string; name: string; summary: string; output: string; status: 'success' | 'error' | 'unknown'; at: string; durationMs?: number | undefined }
-  | { id: string; kind: 'usage'; usage: PiNativeUsage; at: string }
-  | { id: string; kind: 'lifecycle'; event: string; label: string; detail: string; at: string; nativeType?: string | undefined }
+  | { id: string; kind: 'usage'; usage: PiNativeUsage; at: string; nativeType?: string | undefined; parentId?: string | undefined; raw?: unknown }
+  | { id: string; kind: 'lifecycle'; event: string; label: string; detail: string; at: string; nativeType?: string | undefined; parentId?: string | undefined; raw?: unknown }
 
 function elapsedMs(start: string, end: string): number | undefined {
   const startMs = Date.parse(start)
@@ -58,10 +58,12 @@ export function projectPiLiveHistory(snapshot: PiLiveSnapshotDto | null): PiLive
             detail: [fact.stopReason, fact.errorMessage].filter(Boolean).join(' · '),
             at: fact.at,
             nativeType: fact.nativeType,
+            parentId: fact.parentId,
+            raw: fact.raw,
           })
         }
       } else {
-        items.push({ id: fact.id, kind: 'lifecycle', event: 'pi.message.other', label: 'Pi 特殊消息', detail: compact(fact.raw), at: fact.at, nativeType: fact.nativeType })
+        items.push({ id: fact.id, kind: 'lifecycle', event: 'pi.message.other', label: 'Pi 特殊消息', detail: compact(fact.raw), at: fact.at, nativeType: fact.nativeType, parentId: fact.parentId, raw: fact.raw })
       }
       continue
     }
@@ -100,14 +102,14 @@ export function projectPiLiveHistory(snapshot: PiLiveSnapshotDto | null): PiLive
       continue
     }
     if (fact.kind === 'usage') {
-      items.push({ id: fact.id, kind: 'usage', usage: fact.usage, at: fact.at })
+      items.push({ id: fact.id, kind: 'usage', usage: fact.usage, at: fact.at, nativeType: fact.nativeType, parentId: fact.parentId, raw: fact.raw })
       continue
     }
     if (fact.kind === 'event') {
-      items.push({ id: fact.id, kind: 'lifecycle', event: fact.event, label: fact.label, detail: fact.detail, at: fact.at, nativeType: fact.nativeType })
+      items.push({ id: fact.id, kind: 'lifecycle', event: fact.event, label: fact.label, detail: fact.detail, at: fact.at, nativeType: fact.nativeType, parentId: fact.parentId, raw: fact.raw })
       continue
     }
-    items.push({ id: fact.id, kind: 'lifecycle', event: 'native.unknown', label: 'Pi 原生事件', detail: fact.nativeType, at: fact.at, nativeType: fact.nativeType })
+    items.push({ id: fact.id, kind: 'lifecycle', event: 'native.unknown', label: 'Pi 原生事件', detail: fact.nativeType, at: fact.at, nativeType: fact.nativeType, parentId: fact.parentId, raw: fact.raw })
   }
   return items
 }

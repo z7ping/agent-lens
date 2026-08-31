@@ -9,6 +9,7 @@ import type {
   ReviewResponseDto,
   ReviewSessionDetailDto,
   SessionRelationshipResponseDto,
+  SourceRecordResponseDto,
   ToolAssetUsageResponseDto,
 } from '@agent-lens/protocol'
 import { AgentLensApi, type QueryFilters, type ReviewFilters } from './api'
@@ -129,6 +130,8 @@ export class AgentLensClientModel {
   constructor(private readonly api = new AgentLensApi()) {}
 
   getSnapshot = (): ClientSnapshot => this.snapshot
+
+  sourceRecord = (id: string): Promise<SourceRecordResponseDto> => this.api.sourceRecord(id)
 
   subscribe = (listener: Listener): (() => void) => {
     this.listeners.add(listener)

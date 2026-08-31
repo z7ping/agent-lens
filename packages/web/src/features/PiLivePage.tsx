@@ -254,6 +254,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const [controlBusy, setControlBusy] = useState(false)
   const [diagnostics, setDiagnostics] = useState<PiLiveTransportDiagnostics | null>(null)
   const [newRecords, setNewRecords] = useState(false)
+  const [showAllEvents, setShowAllEvents] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -277,6 +278,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     setRestored([])
     setExtension(null)
     setError('')
+    setShowAllEvents(false)
     leafIdRef.current = undefined
 
     const acceptSnapshot = (value: PiLiveSnapshotDto) => {
@@ -588,6 +590,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
         title={taskDetailModel.title}
         metrics={taskDetailModel.metrics}
         actions={<>
+          <button className="review-audit-toggle" aria-pressed={showAllEvents} onClick={() => setShowAllEvents(value => !value)}>{showAllEvents ? '视图：全部事件' : '视图：核心事件'}</button>
           <button className="pi-live-stop" disabled={!state?.isStreaming || busy} onClick={() => void stop()}>停止当前任务</button>
           <button className="pi-live-menu" title="结束 Pi Runtime" aria-label="结束 Pi Runtime" disabled={busy} onClick={() => void terminate()}>×</button>
         </>}
@@ -602,7 +605,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             eager={index >= historyRounds.length - PI_LIVE_EAGER_CHUNKS}
             estimate={piLiveTaskRoundEstimate(projection)}
           >
-            <PiLiveHistoryTaskRound projection={projection}/>
+            <PiLiveHistoryTaskRound projection={projection} showAllEvents={showAllEvents}/>
           </VirtualRoundMount>)}
 
           {runningRound && <PiLiveRunningTaskRound
