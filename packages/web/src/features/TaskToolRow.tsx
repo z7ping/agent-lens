@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { ToolKindIcon } from '../components/ToolKindIcon'
+import { ToolKindIcon, toolVisualKind, toolVisualLabel } from '../components/ToolKindIcon'
 import type { TaskToolModel } from './task-detail-model'
 
 export interface TaskToolRowProps {
@@ -27,9 +27,10 @@ function statusClass(status: TaskToolModel['status']): string {
 
 export function TaskToolRow({ model, meta, details, onClick, className = '' }: TaskToolRowProps) {
   const target = model.primary ?? model.secondary ?? ''
+  const visualKind = model.kind === 'tool' ? toolVisualKind(model.name) : model.kind
   const rowClass = `task-tool-row execution-row tool-row ${model.status === 'error' ? 'error' : ''} ${className}`.trim()
   const content = <>
-    <span className={`tool-kind tool-kind-${model.kind}`}><ToolKindIcon kind={model.kind}/><span>{model.kindLabel}</span></span>
+    <span className={`tool-kind tool-kind-${visualKind}`}><ToolKindIcon kind={visualKind}/><span>{toolVisualLabel(visualKind)}</span></span>
     <b className="tool-action">{model.name}</b>
     <span className="tool-target">
       <span className="tool-target-text" title={target}>{target}</span>
@@ -40,8 +41,8 @@ export function TaskToolRow({ model, meta, details, onClick, className = '' }: T
 
   return <div className={`task-tool-row-shell ${details ? 'has-details' : ''}`.trim()}>
     {onClick
-      ? <button className={rowClass} data-status={model.status} data-kind={model.kind} onClick={onClick}>{content}</button>
-      : <div className={rowClass} data-status={model.status} data-kind={model.kind}>{content}</div>}
+      ? <button className={rowClass} data-status={model.status} data-kind={visualKind} onClick={onClick}>{content}</button>
+      : <div className={rowClass} data-status={model.status} data-kind={visualKind}>{content}</div>}
     {details && <div className="tool-payload">{details}</div>}
   </div>
 }
