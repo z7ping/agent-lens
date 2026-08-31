@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { inspectPiSdkCompatibility } from './pi-sdk-adapter'
 import { DefaultPiLiveService } from './service'
 import type {
   InstalledPiSdk,
@@ -17,11 +18,22 @@ class FakeSessionManager implements PiSdkSessionManager {
   getEntries(): unknown[] { return [...this.entries] }
 }
 
+type PiSdkEventListener = Parameters<PiSdkSession['subscribe']>[0]
+type PiSdkEvent = Parameters<PiSdkEventListener>[0]
+
+function emit(listener: PiSdkEventListener | undefined, event: Record<string, unknown>): void {
+  listener?.(event as PiSdkEvent)
+}
+
+function compatibility(version = '0.84.4') {
+  return inspectPiSdkCompatibility(version)
+}
+
 test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extension UI Contract', async () => {
   const manager = new FakeSessionManager()
   const models: PiSdkModel[] = [{ provider: 'openai', id: 'gpt-test', name: 'GPT Test', reasoning: true }]
-  let agentListener: ((event: Record<string, unknown>) => void) | undefined
-  let bindings: Record<string, unknown> | undefined
+  let agentListener: PiSdkEventListener | undefined
+  let bindings: Parameters<PiSdkSession['bindExtensions']>[0] | undefined
   const calls: string[] = []
   let currentModel: PiSdkModel | undefined = models[0]
   let name = 'SDK task'
@@ -70,7 +82,8 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
     executable: '/bin/pi',
     packageRoot: '/node_modules/@earendil-works/pi-coding-agent',
     sdkEntry: '/node_modules/@earendil-works/pi-coding-agent/dist/index.js',
-    version: 'test',
+    version: '0.84.4',
+    compatibility: compatibility(),
     module: {
       createAgentSession: async () => ({ session }),
       SessionManager: {
@@ -89,10 +102,10 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
 
   const events: Record<string, unknown>[] = []
   const unsubscribe = service.subscribe(state.runtimeSessionId, event => events.push(event.event))
-  agentListener?.({ type: 'tool_execution_start', toolCallId: 'tool-1', toolName: 'read' })
+  emit(agentListener, { type: 'tool_execution_start', toolCallId: 'tool-1', toolName: 'read' })
   assert.equal(events.some(event => event.type === 'tool_execution_start'), true)
 
-  agentListener?.({
+  emit(agentListener, {
     type: 'message_update',
     message: { role: 'assistant', usage: { output: 7 } },
     assistantMessageEvent: {
@@ -109,7 +122,7 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
     assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'hello' },
   })
 
-  agentListener?.({
+  emit(agentListener, {
     type: 'message_update',
     message: { role: 'assistant', usage: { output: 8 } },
     assistantMessageEvent: {
@@ -148,7 +161,7 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
   assert.equal(calls.includes('steer:change direction'), true)
   assert.equal(calls.includes('follow:afterwards'), true)
 
-  const ui = bindings?.uiContext as Record<string, unknown> | undefined
+  const ui = bindings?.uiContext as unknown as Record<string, unknown> | undefined
   assert.ok(ui)
   const confirm = ui.confirm as ((title: string, message: string) => Promise<boolean>) | undefined
   assert.ok(confirm)
@@ -200,6 +213,8 @@ test('Pi Live SDK prompt 在预检失败时向 HTTP 调用方返回错误', asyn
     executable: '/bin/pi',
     packageRoot: '/pi',
     sdkEntry: '/pi/dist/index.js',
+    version: '0.84.4',
+    compatibility: compatibility(),
     module: {
       createAgentSession: async () => ({ session }),
       SessionManager: { create: () => manager, open: () => manager },
