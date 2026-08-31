@@ -41,7 +41,7 @@ import {
 } from '@agent-lens/runtime-cordis'
 
 const SOURCE_ID = 'pi'
-const PARSER_VERSION = '1'
+const PARSER_VERSION = '2'
 const RUNTIME_FALLBACK_POLL_MS = 5000
 const RUNTIME_DEBOUNCE_MS = 180
 const MAX_STRING = 64 * 1024
@@ -271,7 +271,7 @@ async function sessionMetadata(filePath: string): Promise<PiSessionMetadata> {
 }
 
 function historyCheckpointKey(filePath: string): string {
-  return `pi:history:${sha256(filePath)}`
+  return `pi:history:v2-session-title:${sha256(filePath)}`
 }
 
 function parseLine(text: string): Record<string, unknown> {
