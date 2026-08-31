@@ -91,9 +91,10 @@ test('history ingest is incremental and preserves every native record', async ()
   try {
     const first = []
     for await (const record of codexSourceDefinition.ingestHistory!(sourceContext)) first.push(record)
-    assert.equal(first.length, 8)
+    assert.equal(first.length, 9)
+    assert.equal(first[0]?.nativeType, 'metadata/session_start')
     assert.equal(first[0]?.sourceSessionNativeId, 'codex-test-1')
-    assert.equal(first[1]?.nativeType, 'event_msg/task_started')
+    assert.equal(first[2]?.nativeType, 'event_msg/task_started')
 
     const second = []
     for await (const record of codexSourceDefinition.ingestHistory!(sourceContext)) second.push(record)
@@ -136,6 +137,7 @@ test('normalizer maps known facts and preserves unknown native events', async ()
 
     assert.deepEqual(kinds, [
       'session.lifecycle',
+      'session.lifecycle',
       'unknown',
       'message.user',
       'message.assistant',
@@ -145,18 +147,18 @@ test('normalizer maps known facts and preserves unknown native events', async ()
       'unknown',
     ])
 
-    assert.deepEqual(outputs[4]?.payload, {
+    assert.deepEqual(outputs[5]?.payload, {
       callId: 'call_c1',
       nativeToolName: 'shell_command',
       input: { command: 'npm test' },
     })
-    assert.deepEqual(outputs[5]?.payload, {
+    assert.deepEqual(outputs[6]?.payload, {
       callId: 'call_c1',
       success: false,
       exitCode: 1,
       output: 'failed 1 test',
     })
-    assert.equal((outputs[1]?.payload as any).rawType, 'event_msg/task_started')
+    assert.equal((outputs[2]?.payload as any).rawType, 'event_msg/task_started')
   } finally {
     await rm(root, { recursive: true, force: true })
   }
