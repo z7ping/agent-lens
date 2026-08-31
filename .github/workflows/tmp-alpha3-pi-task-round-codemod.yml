@@ -1,0 +1,144 @@
+name: Temp Alpha3 Pi TaskRound Codemod
+
+on:
+  push:
+    branches:
+      - bugfix/alpha3-pi-task-round-codemod
+    paths:
+      - '.github/workflows/tmp-alpha3-pi-task-round-codemod.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  codemod:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Migrate Pi Live to shared task rounds
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          page_path = Path('packages/web/src/features/PiLivePage.tsx')
+          page = page_path.read_text()
+
+          page = page.replace("import ReactMarkdown from 'react-markdown'\n", '')
+          page = page.replace("import { TaskMessage } from './TaskMessage'\n", '')
+          page = page.replace(
+              "import { projectPiLiveHistory, type PiLiveHistoryItem } from './pi-live-history'\n",
+              "import { projectPiLiveHistory, type PiLiveHistoryItem } from './pi-live-history'\n"
+              "import { PiLiveHistoryTaskRound, PiLiveRunningTaskRound } from './PiLiveTaskRound'\n"
+              "import { projectPiLiveTaskRounds } from './pi-live-task-projection'\n",
+          )
+          page = page.replace("const PI_LIVE_HISTORY_CHUNK_SIZE = 8\n", '')
+
+          page, count = re.subn(
+              r"\nfunction PiLiveHistoryRow\(\{ item \}: \{ item: PiLiveHistoryItem \}\) \{[\s\S]*?\n\}\n\nfunction historyEstimate",
+              "\nfunction historyEstimate",
+              page,
+              count=1,
+          )
+          assert count == 1, 'PiLiveHistoryRow block not found'
+
+          old_projection = """  const history = useMemo(() => projectPiLiveHistory(snapshot), [snapshot])
+  const historyChunks = useMemo(() => {
+    const chunks: PiLiveHistoryItem[][] = []
+    for (let index = 0; index < history.length; index += PI_LIVE_HISTORY_CHUNK_SIZE) {
+      chunks.push(history.slice(index, index + PI_LIVE_HISTORY_CHUNK_SIZE))
+    }
+    return chunks
+  }, [history])
+"""
+          new_projection = """  const history = useMemo(() => projectPiLiveHistory(snapshot), [snapshot])
+  const historyRounds = useMemo(() => projectPiLiveTaskRounds(history), [history])
+"""
+          assert old_projection in page, 'history chunk projection not found'
+          page = page.replace(old_projection, new_projection)
+
+          old_history_render = """          {historyChunks.map((chunk, index) => <VirtualRoundMount
+            key={chunk[0]?.id ?? `history-chunk-${index}`}
+            rootSelector=\".pi-live-reader\"
+            flowRoot
+            eager={index >= historyChunks.length - PI_LIVE_EAGER_CHUNKS}
+            estimate={chunk.reduce((total, item) => total + historyEstimate(item), 0)}
+          >
+            <div className=\"pi-live-history-chunk\">{chunk.map(item => <PiLiveHistoryRow key={item.id} item={item}/>)}</div>
+          </VirtualRoundMount>)}
+"""
+          new_history_render = """          {historyRounds.map((projection, index) => <VirtualRoundMount
+            key={projection.model.id}
+            rootSelector=\".pi-live-reader\"
+            flowRoot
+            eager={index >= historyRounds.length - PI_LIVE_EAGER_CHUNKS}
+            estimate={projection.items.reduce((total, item) => total + historyEstimate(item), 0) + 46}
+          >
+            <PiLiveHistoryTaskRound projection={projection}/>
+          </VirtualRoundMount>)}
+"""
+          assert old_history_render in page, 'history render block not found'
+          page = page.replace(old_history_render, new_history_render)
+
+          old_current = """          {(thinkingText || tools.length > 0 || streamText) && <section className=\"pi-live-current-round\">
+            <div className=\"pi-live-round-head\"><b>当前轮次</b><span>{state?.isStreaming ? '实时' : '已停止'}</span><span className=\"grow\"/>{state?.pendingMessageCount ? <span>{state.pendingMessageCount} 条排队</span> : null}</div>
+            <div className=\"pi-live-lane\">
+              <div className=\"pi-live-lane-head\"><b>Pi</b><span>{state?.isStreaming ? '正在工作' : '当前输出'}</span></div>
+              {thinkingText && <details className=\"pi-live-thinking\"><summary>可观察过程片段</summary><div>{thinkingText}</div></details>}
+              {tools.length > 0 && <div className=\"pi-live-trace-stack\">{tools.map(tool => <div key={tool.id} className={`pi-live-trace ${tool.status}`}>
+                <div className=\"pi-live-trace-head\"><span className=\"pi-live-tool-icon\">⌁</span><b>{tool.name}</b><span>{tool.summary}</span><em>{tool.status === 'running' ? '执行中' : tool.status === 'error' ? '失败' : '完成'}</em></div>
+                {tool.output && <details><summary>查看输出</summary><pre>{tool.output}</pre></details>}
+              </div>)}</div>}
+              {streamText && <div className=\"pi-live-stream-response\"><div className=\"pi-live-message-meta\"><b>Pi</b><span>{state?.isStreaming ? '生成中' : '输出'}</span></div><div className=\"markdown\"><ReactMarkdown>{streamText}</ReactMarkdown></div>{state?.isStreaming && <span className=\"pi-live-caret\" aria-hidden=\"true\"/>}</div>}
+            </div>
+          </section>}
+"""
+          new_current = """          {(thinkingText || tools.length > 0 || streamText) && <PiLiveRunningTaskRound
+            thinkingText={thinkingText}
+            tools={tools}
+            streamText={streamText}
+            isStreaming={state?.isStreaming ?? false}
+            pendingMessageCount={state?.pendingMessageCount ?? 0}
+          />}
+"""
+          assert old_current in page, 'current round block not found'
+          page = page.replace(old_current, new_current)
+
+          page_path.write_text(page)
+
+          perf_path = Path('scripts/performance/pi-live-history-virtualization-benchmark.ts')
+          perf = perf_path.read_text()
+          perf = perf.replace(
+              "  readFile(new URL('../../packages/web/src/features/PiLivePage.tsx', import.meta.url), 'utf8'),\n  readFile(new URL('../../packages/web/src/components/VirtualRoundMount.tsx', import.meta.url), 'utf8'),\n])",
+              "  readFile(new URL('../../packages/web/src/features/PiLivePage.tsx', import.meta.url), 'utf8'),\n  readFile(new URL('../../packages/web/src/components/VirtualRoundMount.tsx', import.meta.url), 'utf8'),\n  readFile(new URL('../../packages/web/src/features/pi-live-task-projection.ts', import.meta.url), 'utf8'),\n])",
+          )
+          perf = perf.replace("const [page, mount] = await Promise.all([", "const [page, mount, projection] = await Promise.all([")
+          perf = perf.replace(
+              "const chunkSize = Number(page.match(/PI_LIVE_HISTORY_CHUNK_SIZE\\s*=\\s*(\\d+)/)?.[1])",
+              "const chunkSize = Number(projection.match(/PI_LIVE_HISTORY_ROUND_FACT_LIMIT\\s*=\\s*(\\d+)/)?.[1])",
+          )
+          perf = perf.replace("if (!/historyChunks\\.map/.test(page) || !/VirtualRoundMount/.test(page)) throw new Error('Pi Live history chunk virtualization is missing')",
+                              "if (!/historyRounds\\.map/.test(page) || !/VirtualRoundMount/.test(page) || !/PiLiveHistoryTaskRound/.test(page)) throw new Error('Pi Live semantic round virtualization is missing')")
+          perf_path.write_text(perf)
+
+          workflow_path = Path('.github/workflows/pi-live-performance.yml')
+          workflow = workflow_path.read_text()
+          marker = "      - 'packages/web/src/features/PiLivePage.tsx'\n"
+          addition = marker + "      - 'packages/web/src/features/PiLiveTaskRound.tsx'\n      - 'packages/web/src/features/pi-live-task-projection.ts'\n"
+          if "PiLiveTaskRound.tsx" not in workflow:
+              assert marker in workflow, 'performance workflow PiLivePage path marker not found'
+              workflow = workflow.replace(marker, addition)
+          workflow_path.write_text(workflow)
+          PY
+          git diff --check
+      - name: Commit codemod result
+        shell: bash
+        run: |
+          git config user.name 7ping
+          git config user.email z7ping@outlook.com
+          git add packages/web/src/features/PiLivePage.tsx scripts/performance/pi-live-history-virtualization-benchmark.ts .github/workflows/pi-live-performance.yml
+          git commit -m "refactor: Pi Live 接入共享 TaskRound"
+          git push
