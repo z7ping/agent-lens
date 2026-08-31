@@ -1,9 +1,17 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
-const baseUrl = (process.env.AGENT_LENS_ACCEPTANCE_URL || 'http://127.0.0.1:56789').replace(/\/$/, '')
-const cwd = resolve(process.env.AGENT_LENS_ACCEPTANCE_CWD || process.cwd())
-const timeoutMs = Number(process.env.AGENT_LENS_ACCEPTANCE_TIMEOUT_MS || 180_000)
+function arg(name, fallback) {
+  const prefix = `--${name}=`
+  const found = process.argv.find(value => value.startsWith(prefix))
+  return found ? found.slice(prefix.length) : fallback
+}
+
+const baseUrl = (arg('url', process.env.AGENT_LENS_ACCEPTANCE_URL || 'http://127.0.0.1:56789')).replace(/\/$/, '')
+const cwd = resolve(arg('cwd', process.env.AGENT_LENS_ACCEPTANCE_CWD || process.cwd()))
+const timeoutMs = Number(arg('timeout', process.env.AGENT_LENS_ACCEPTANCE_TIMEOUT_MS || 180_000))
+const soakMs = Number(arg('soak', process.env.AGENT_LENS_ACCEPTANCE_SOAK_MS || 0))
+const soakIntervalMs = Number(arg('soak-interval', process.env.AGENT_LENS_ACCEPTANCE_SOAK_INTERVAL_MS || 60_000))
 const keepRuntime = process.env.AGENT_LENS_ACCEPTANCE_KEEP_RUNTIME === '1'
 const marker = `agentlens-alpha3-${Date.now()}`
 const outputDir = resolve(process.env.AGENT_LENS_ACCEPTANCE_OUTPUT || '.agent-lens/acceptance')
@@ -19,6 +27,7 @@ const report = {
   events: {},
   controls: {},
   history: null,
+  soak: { requestedMs: soakMs, intervalMs: soakIntervalMs, rounds: 0 },
 }
 
 function check(name, ok, detail = '') {
@@ -57,6 +66,13 @@ function createEventCollector(runtimeSessionId) {
   const events = []
   const waiters = new Set()
   let task
+  let connectedSettled = false
+  let resolveConnected
+  let rejectConnected
+  const connected = new Promise((resolveValue, rejectValue) => {
+    resolveConnected = resolveValue
+    rejectConnected = rejectValue
+  })
 
   const notify = value => {
     events.push(value)
@@ -87,30 +103,42 @@ function createEventCollector(runtimeSessionId) {
   })
 
   const start = async () => {
-    const response = await fetch(`${baseUrl}/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/events`, {
-      headers: { accept: 'text/event-stream' },
-      signal: controller.signal,
-    })
-    if (!response.ok || !response.body) throw new Error(`SSE 连接失败：HTTP ${response.status}`)
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-    while (!controller.signal.aborted) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n')
-      let boundary
-      while ((boundary = buffer.indexOf('\n\n')) >= 0) {
-        const frame = buffer.slice(0, boundary)
-        buffer = buffer.slice(boundary + 2)
-        const eventName = frame.split('\n').find(line => line.startsWith('event:'))?.slice(6).trim()
-        if (eventName && eventName !== 'pi-live') continue
-        const data = frame.split('\n').filter(line => line.startsWith('data:')).map(line => line.slice(5).trimStart()).join('\n')
-        if (!data) continue
-        try {
-          const parsed = JSON.parse(data)
-          if (parsed.runtimeSessionId === runtimeSessionId) notify(parsed)
-        } catch { /* ignore transport keepalive / malformed frame */ }
+    try {
+      const response = await fetch(`${baseUrl}/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/events`, {
+        headers: { accept: 'text/event-stream' },
+        signal: controller.signal,
+      })
+      if (!response.ok || !response.body) throw new Error(`SSE 连接失败：HTTP ${response.status}`)
+      connectedSettled = true
+      resolveConnected()
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      while (!controller.signal.aborted) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n')
+        let boundary
+        while ((boundary = buffer.indexOf('\n\n')) >= 0) {
+          const frame = buffer.slice(0, boundary)
+          buffer = buffer.slice(boundary + 2)
+          const eventName = frame.split('\n').find(line => line.startsWith('event:'))?.slice(6).trim()
+          if (eventName && eventName !== 'pi-live') continue
+          const data = frame.split('\n').filter(line => line.startsWith('data:')).map(line => line.slice(5).trimStart()).join('\n')
+          if (!data) continue
+          try {
+            const parsed = JSON.parse(data)
+            if (parsed.runtimeSessionId === runtimeSessionId) notify(parsed)
+          } catch { /* ignore transport keepalive / malformed frame */ }
+        }
+      }
+    } catch (error) {
+      if (!connectedSettled) {
+        connectedSettled = true
+        rejectConnected(error)
+      } else if (!controller.signal.aborted) {
+        report.sseError = error instanceof Error ? error.message : String(error)
+        console.error(`SSE 后台读取失败：${report.sseError}`)
       }
     }
   }
@@ -119,10 +147,8 @@ function createEventCollector(runtimeSessionId) {
     events,
     waitFor,
     connect() {
-      task = start().catch(error => {
-        if (!controller.signal.aborted) throw error
-      })
-      return task
+      if (!task) task = start()
+      return connected
     },
     async close() {
       controller.abort()
@@ -159,6 +185,32 @@ async function verifyHistory(markerText, sinceIso) {
   return null
 }
 
+async function runSoak(runtimeSessionId, collector) {
+  if (!(soakMs > 0)) return
+  const endAt = Date.now() + soakMs
+  let round = 0
+  let lastSequence = Math.max(0, ...collector.events.map(value => Number(value.sequence) || 0))
+  console.log(`• 开始 Pi Live soak：${Math.round(soakMs / 60_000)} 分钟，间隔 ${Math.round(soakIntervalMs / 1000)} 秒`)
+  while (Date.now() < endAt) {
+    round += 1
+    const roundStartedAt = Date.now()
+    const token = `${marker}-soak-${round}`
+    await post(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/prompt`, {
+      message: `长时验收 ${token}：请使用只读工具读取 package.json 的 name 与 version，然后只用一行回复结果和 ${token}。`,
+    })
+    await collector.waitFor(`soak round ${round} streaming`, value => (Number(value.sequence) || 0) > lastSequence && ['message_start', 'message_update'].includes(eventType(value)))
+    await collector.waitFor(`soak round ${round} settled`, value => (Number(value.sequence) || 0) > lastSequence && ['agent_settled', 'agent_end'].includes(eventType(value)))
+    lastSequence = Math.max(lastSequence, ...collector.events.map(value => Number(value.sequence) || 0))
+    report.soak.rounds = round
+    console.log(`✓ soak round ${round} settled`)
+    const remaining = endAt - Date.now()
+    if (remaining <= 0) break
+    const delay = Math.min(remaining, Math.max(0, soakIntervalMs - (Date.now() - roundStartedAt)))
+    if (delay > 0) await new Promise(resolveDelay => setTimeout(resolveDelay, delay))
+  }
+  check('Pi Live soak 完成', report.soak.rounds > 0, `${report.soak.rounds} rounds / ${Math.round(soakMs / 60_000)}min`)
+}
+
 let runtimeSessionId
 let collector
 try {
@@ -178,7 +230,6 @@ try {
 
   collector = createEventCollector(runtimeSessionId)
   await collector.connect()
-  await new Promise(resolveDelay => setTimeout(resolveDelay, 250))
   check('SSE 实时通道已连接', true)
 
   const controls = await json(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/controls`)
@@ -233,9 +284,12 @@ try {
   const recovered = await json(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/snapshot${leafId ? `?since=${encodeURIComponent(leafId)}` : ''}`)
   check('Reconnect + Snapshot 恢复', recovered?.state?.runtimeSessionId === runtimeSessionId, `leaf=${recovered?.leafId || 'none'}`)
 
+  const reconnectSequence = Math.max(0, ...collector.events.map(value => Number(value.sequence) || 0))
   await post(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/prompt`, { message: `只回复 ${marker}-reconnect。` })
-  await collector.waitFor('Reconnect 后 settled', value => ['agent_settled', 'agent_end'].includes(eventType(value)))
+  await collector.waitFor('Reconnect 后 settled', value => (Number(value.sequence) || 0) > reconnectSequence && ['agent_settled', 'agent_end'].includes(eventType(value)))
   check('Reconnect 后继续对话', true)
+
+  await runSoak(runtimeSessionId, collector)
 
   report.history = await verifyHistory(marker, startedAt)
   check('source-pi / Review 可看到同一真实会话历史', Boolean(report.history), report.history?.id || '')
