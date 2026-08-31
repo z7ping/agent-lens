@@ -1,0 +1,30 @@
+name: Temp Alpha3 Pi TaskDetail Codemod
+
+on:
+  push:
+    branches:
+      - bugfix/alpha3-pi-task-detail-codemod
+    paths:
+      - .github/workflows/tmp-alpha3-pi-task-detail-codemod.yml
+
+permissions:
+  contents: write
+
+jobs:
+  codemod:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: bugfix/alpha3-pi-task-detail-codemod
+      - name: Run codemod
+        run: node .github/tmp-alpha3-pi-task-detail-codemod.cjs
+      - name: Commit codemod result
+        shell: bash
+        run: |
+          git config user.name "7ping"
+          git config user.email "z7ping@outlook.com"
+          git add packages/web/src/features/PiLivePage.tsx
+          git diff --cached --check
+          git commit -m "refactor: Pi Live Header 接入 TaskDetailModel"
+          git push origin HEAD:bugfix/alpha3-pi-task-detail-codemod
