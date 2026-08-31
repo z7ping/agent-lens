@@ -137,7 +137,6 @@ function HistoryToolGroup({ id, items }: { id: string; items: HistoryTool[] }) {
   )))
   return <TaskToolGroup
     model={model}
-    defaultExpanded
     renderDetails={tool => <ToolOutput tool={tool}/>}
   />
 }
@@ -216,7 +215,6 @@ export function PiLiveRunningTaskRound({
     {thinkingText && <TaskThinking model={thinking} defaultExpanded><div>{thinkingText}</div></TaskThinking>}
     {toolModels.length > 0 && <TaskToolGroup
       model={toolGroup('pi-live-current-tools', toolModels)}
-      defaultExpanded
       renderDetails={tool => <ToolOutput tool={tool}/>}
     />}
     {streamText && <div className="pi-live-stream-response">
