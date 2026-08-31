@@ -12,6 +12,17 @@ export interface TaskToolGroupProps {
   className?: string
 }
 
+function executionSequence(model: TaskToolGroupModel): string {
+  const labels: string[] = []
+  for (const tool of model.tools) {
+    const visualKind = tool.kind === 'tool' ? toolVisualKind(tool.name) : tool.kind
+    const label = toolVisualLabel(visualKind)
+    if (labels[labels.length - 1] !== label) labels.push(label)
+  }
+  if (labels.length <= 5) return labels.join(' → ')
+  return `${labels.slice(0, 4).join(' → ')} → …`
+}
+
 export function TaskToolGroup({
   model,
   defaultExpanded = true,
@@ -21,14 +32,12 @@ export function TaskToolGroup({
   className = '',
 }: TaskToolGroupProps) {
   const [expanded, setExpanded] = useState(defaultExpanded)
-  const sequence = model.tools.map(tool => {
-    const visualKind = tool.kind === 'tool' ? toolVisualKind(tool.name) : tool.kind
-    return toolVisualLabel(visualKind)
-  }).join(' → ')
+  const sequence = executionSequence(model)
 
   return <details
-    className={`task-tool-group execution-group agent-lane-node ${model.errorCount ? 'execution-group-error' : ''} ${className}`.trim()}
+    className={`task-tool-group execution-group tool-group agent-lane-node ${model.errorCount ? 'execution-group-error' : ''} ${className}`.trim()}
     data-error-count={model.errorCount}
+    data-task-tool-group="true"
     open={expanded}
     onToggle={event => setExpanded(event.currentTarget.open)}
   >
