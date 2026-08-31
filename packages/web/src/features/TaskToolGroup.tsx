@@ -1,11 +1,10 @@
-import { useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { toolVisualKind, toolVisualLabel } from '../components/ToolKindIcon'
 import type { TaskToolGroupModel, TaskToolModel } from './task-detail-model'
 import { TaskToolRow } from './TaskToolRow'
 
 export interface TaskToolGroupProps {
   model: TaskToolGroupModel
-  defaultExpanded?: boolean
   renderMeta?: ((tool: TaskToolModel) => ReactNode) | undefined
   renderDetails?: ((tool: TaskToolModel) => ReactNode) | undefined
   onToolClick?: ((tool: TaskToolModel) => void) | undefined
@@ -23,29 +22,29 @@ function executionSequence(model: TaskToolGroupModel): string {
   return `${labels.slice(0, 4).join(' → ')} → …`
 }
 
+/**
+ * Tool Call 是执行轨一级事实：组级摘要只负责说明执行序列，绝不控制 Tool Row 可见性。
+ * 可折叠内容只能由单次 Tool Call 的 Payload / 长输出自己承载。
+ */
 export function TaskToolGroup({
   model,
-  defaultExpanded = true,
   renderMeta,
   renderDetails,
   onToolClick,
   className = '',
 }: TaskToolGroupProps) {
-  const [expanded, setExpanded] = useState(defaultExpanded)
   const sequence = executionSequence(model)
 
-  return <details
+  return <section
     className={`task-tool-group execution-group tool-group agent-lane-node ${model.errorCount ? 'execution-group-error' : ''} ${className}`.trim()}
     data-error-count={model.errorCount}
     data-task-tool-group="true"
-    open={expanded}
-    onToggle={event => setExpanded(event.currentTarget.open)}
   >
-    <summary>
+    <div className="tool-group-summary" aria-label={`${model.label}，${model.itemCount} 次调用`}>
       <span className="tool-title">{model.label}</span>
       <span className="node-preview">{sequence}</span>
       <span className="tool-counts"><span>{model.itemCount} 次</span></span>
-    </summary>
+    </div>
     <div className="execution-list tool-list">{model.tools.map((tool, index) => <TaskToolRow
       key={tool.id}
       model={tool}
@@ -54,5 +53,5 @@ export function TaskToolGroup({
       last={index === model.tools.length - 1}
       onClick={onToolClick ? () => onToolClick(tool) : undefined}
     />)}</div>
-  </details>
+  </section>
 }
