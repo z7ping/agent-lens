@@ -10,27 +10,57 @@ const viewports = [
   { width: 1366, height: 768 },
 ]
 const themes = ['light', 'dark']
-const report = { kind: 'task-center-desktop', baseUrl, path, startedAt: new Date().toISOString(), cases: [], switchStability: null, ok: true }
+const report = { kind: 'task-center-desktop', baseUrl, path, startedAt: new Date().toISOString(), cases: [], switchStability: null, diagnostics: [], ok: true }
 
 function fail(message) {
   throw new Error(message)
 }
 
-async function waitForTaskCenter(win) {
-  const deadline = Date.now() + 30_000
-  while (Date.now() < deadline) {
-    const ready = await win.webContents.executeJavaScript(`Boolean(document.querySelector('.task-center-page'))`).catch(() => false)
-    if (ready) return
-    await new Promise(resolveDelay => setTimeout(resolveDelay, 200))
+function delay(ms) {
+  return new Promise(resolveDelay => setTimeout(resolveDelay, ms))
+}
+
+async function withTimeout(promise, timeoutMs, label) {
+  let timer
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label} 超过 ${Math.round(timeoutMs / 1000)} 秒`)), timeoutMs)
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
   }
-  fail('30 秒内没有出现 .task-center-page；请确认 AgentLens 已运行且验收 URL 指向任务中心')
+}
+
+async function persistReport() {
+  await writeFile(resolve(outputDir, 'task-center-desktop-report.json'), `${JSON.stringify(report, null, 2)}\n`)
+}
+
+async function waitForTaskCenter(win) {
+  const deadline = Date.now() + 20_000
+  while (Date.now() < deadline) {
+    const ready = await withTimeout(
+      win.webContents.executeJavaScript(`Boolean(document.querySelector('.task-center-page'))`),
+      2_000,
+      '查询 .task-center-page',
+    ).catch(() => false)
+    if (ready) return
+    await delay(200)
+  }
+  fail('20 秒内没有出现 .task-center-page；请确认 AgentLens 已运行且验收 URL 指向任务中心')
 }
 
 async function inspect(win, viewport, theme) {
-  await win.webContents.executeJavaScript(`document.documentElement.dataset.theme = ${JSON.stringify(theme)}`)
-  await new Promise(resolveDelay => setTimeout(resolveDelay, 80))
+  await withTimeout(
+    win.webContents.executeJavaScript(`document.documentElement.dataset.theme = ${JSON.stringify(theme)}`),
+    3_000,
+    `切换 ${theme} 主题`,
+  )
+  await delay(80)
 
-  const value = await win.webContents.executeJavaScript(`(() => {
+  const value = await withTimeout(win.webContents.executeJavaScript(`(() => {
     const pick = selector => document.querySelector(selector)
     const all = selector => [...document.querySelectorAll(selector)]
     const rect = element => element ? (() => { const r = element.getBoundingClientRect(); return { left:r.left, top:r.top, right:r.right, bottom:r.bottom, width:r.width, height:r.height } })() : null
@@ -100,8 +130,10 @@ async function inspect(win, viewport, theme) {
         closedErrorOutputCount: errorOutputDetails.filter(item => !item.open).length,
       },
       theme: document.documentElement.dataset.theme || 'light',
+      href: location.href,
+      title: document.title,
     }
-  })()`)
+  })()`), 8_000, `读取 ${viewport.width}×${viewport.height} ${theme} 页面结构`)
 
   const errors = []
   const within = (actual, expected, tolerance = 2) => Math.abs(actual - expected) <= tolerance
@@ -137,7 +169,7 @@ async function inspect(win, viewport, theme) {
 }
 
 async function clickTaskSequence(win, count) {
-  return win.webContents.executeJavaScript(`(async () => {
+  return withTimeout(win.webContents.executeJavaScript(`(async () => {
     const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
     for (let index = 0; index < ${count}; index += 1) {
       const buttons = [...document.querySelectorAll('.task-center-rail button.session-item')]
@@ -147,22 +179,26 @@ async function clickTaskSequence(win, count) {
       await delay(80)
     }
     return { completed: ${count}, available: document.querySelectorAll('.task-center-rail button.session-item').length }
-  })()`)
+  })()`), Math.max(5_000, count * 120), `${count} 次任务切换`)
 }
 
 async function runSwitchStability(win) {
   if (!win.webContents.debugger.isAttached()) win.webContents.debugger.attach('1.3')
-  const initialCount = await win.webContents.executeJavaScript(`document.querySelectorAll('.task-center-rail button.session-item').length`)
+  const initialCount = await withTimeout(
+    win.webContents.executeJavaScript(`document.querySelectorAll('.task-center-rail button.session-item').length`),
+    3_000,
+    '读取任务数量',
+  )
   if (initialCount < 2) {
     return { skipped: true, reason: `真实任务不足 2 条（当前 ${initialCount} 条）`, requiredSwitches: 100, ok: true }
   }
 
   await clickTaskSequence(win, 4)
-  await new Promise(resolveDelay => setTimeout(resolveDelay, 500))
-  const before = await win.webContents.debugger.sendCommand('Memory.getDOMCounters')
+  await delay(500)
+  const before = await withTimeout(win.webContents.debugger.sendCommand('Memory.getDOMCounters'), 3_000, '读取切换前 DOM Counters')
   const switched = await clickTaskSequence(win, 100)
-  await new Promise(resolveDelay => setTimeout(resolveDelay, 1000))
-  const after = await win.webContents.debugger.sendCommand('Memory.getDOMCounters')
+  await delay(1000)
+  const after = await withTimeout(win.webContents.debugger.sendCommand('Memory.getDOMCounters'), 3_000, '读取切换后 DOM Counters')
   const listenerGrowth = after.jsEventListeners - before.jsEventListeners
   const nodeGrowth = after.nodes - before.nodes
   const maxNodeGrowth = Math.max(100, Math.ceil(before.nodes * 0.25))
@@ -182,8 +218,22 @@ async function runSwitchStability(win) {
   }
 }
 
+app.commandLine.appendSwitch('disable-gpu')
 await app.whenReady()
 await mkdir(outputDir, { recursive: true })
+await persistReport()
+
+let hardTimeout
+hardTimeout = setTimeout(async () => {
+  report.ok = false
+  report.error = report.error || '桌面验收超过 70 秒硬超时；报告已提前落盘以保留诊断信息'
+  report.finishedAt = new Date().toISOString()
+  try {
+    await persistReport()
+  } finally {
+    app.exit(1)
+  }
+}, 70_000)
 
 try {
   for (const viewport of viewports) {
@@ -195,29 +245,50 @@ try {
       backgroundColor: '#ffffff',
       webPreferences: { sandbox: true, contextIsolation: true },
     })
+    const diagnostic = { viewport, phase: 'created', consoleErrors: [], rendererGone: null }
+    report.diagnostics.push(diagnostic)
+    win.webContents.on('console-message', (_event, level, message) => {
+      if (level >= 2) diagnostic.consoleErrors.push(String(message).slice(0, 500))
+    })
+    win.webContents.on('render-process-gone', (_event, details) => {
+      diagnostic.rendererGone = { reason: details.reason, exitCode: details.exitCode }
+    })
     try {
-      await win.loadURL(`${baseUrl}${path}`)
+      diagnostic.phase = 'loading'
+      await withTimeout(win.loadURL(`${baseUrl}${path}`), 15_000, `${viewport.width}×${viewport.height} 页面加载`)
+      diagnostic.phase = 'waiting-task-center'
       await waitForTaskCenter(win)
+      diagnostic.phase = 'ready'
+      await persistReport()
+
       for (const theme of themes) {
+        diagnostic.phase = `inspect-${theme}`
         const result = await inspect(win, viewport, theme)
-        const image = await win.webContents.capturePage()
+        diagnostic.phase = `capture-${theme}`
+        const image = await withTimeout(win.webContents.capturePage(), 8_000, `${viewport.width}×${viewport.height} ${theme} 截图`)
         const prefix = `task-center-${viewport.width}x${viewport.height}-${theme}`
         await writeFile(resolve(outputDir, `${prefix}.png`), image.toPNG())
         await writeFile(resolve(outputDir, `${prefix}.json`), `${JSON.stringify(result, null, 2)}\n`)
         report.cases.push(result)
         if (!result.ok) report.ok = false
+        diagnostic.phase = `captured-${theme}`
+        await persistReport()
         console.log(`${result.ok ? '✓' : '✗'} ${viewport.width}×${viewport.height} ${theme} · rail=${Math.round(result.value.rail?.width || 0)}px · rounds=${result.value.roundCount} · tools=${result.value.toolCount}`)
         for (const error of result.errors) console.error(`  - ${error}`)
       }
       if (viewport.width === 1280) {
-        report.switchStability = await runSwitchStability(win)
+        diagnostic.phase = 'switch-stability'
+        report.switchStability = await withTimeout(runSwitchStability(win), 20_000, '100 次任务切换稳定性')
         if (!report.switchStability.ok) report.ok = false
+        await persistReport()
         if (report.switchStability.skipped) console.log(`• 100 次任务切换验收 skipped：${report.switchStability.reason}`)
         else console.log(`${report.switchStability.ok ? '✓' : '✗'} 100 次任务切换 · listeners ${report.switchStability.growth.jsEventListeners >= 0 ? '+' : ''}${report.switchStability.growth.jsEventListeners} · nodes ${report.switchStability.growth.nodes >= 0 ? '+' : ''}${report.switchStability.growth.nodes}`)
       }
+      diagnostic.phase = 'done'
+      await persistReport()
     } finally {
       if (win.webContents.debugger.isAttached()) win.webContents.debugger.detach()
-      win.destroy()
+      if (!win.isDestroyed()) win.destroy()
     }
   }
 } catch (error) {
@@ -225,7 +296,8 @@ try {
   report.error = error instanceof Error ? error.stack || error.message : String(error)
   console.error(report.error)
 } finally {
+  if (hardTimeout) clearTimeout(hardTimeout)
   report.finishedAt = new Date().toISOString()
-  await writeFile(resolve(outputDir, 'task-center-desktop-report.json'), `${JSON.stringify(report, null, 2)}\n`)
+  await persistReport()
   app.exit(report.ok ? 0 : 1)
 }
