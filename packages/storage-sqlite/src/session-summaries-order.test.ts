@@ -85,6 +85,10 @@ test('session summary projection sorts and paginates by session start time', asy
     assert.equal(exactPending.items[0]?.observationCount, 1)
 
     await commitMessage('session-older', '2026-08-25T10:10:00.000Z', '较早会话后来又有新消息')
+    // 前面的 exactPending 故意验证“全局 Projection 已存在但单会话仍在 debounce 窗口”时
+    // 能回退 Canonical Query。验证全局排序前要把 pending 与 older 都 materialize，
+    // 避免用一个刻意不完整的投影视图判断 startedAt 排序语义。
+    await storage.sessionSummaryProjection.rebuild({ logicalSessionId: pending.observation.logicalSessionId })
     await storage.sessionSummaryProjection.rebuild({ logicalSessionId: older.observation.logicalSessionId })
 
     const refreshed = await storage.sessionSummaries.query({ limit: 10 })
