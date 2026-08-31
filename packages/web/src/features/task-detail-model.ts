@@ -1,9 +1,48 @@
 export type TaskRoundState = 'settled' | 'running' | 'stopped'
+export type TaskToolKind = 'shell' | 'read' | 'edit' | 'search' | 'mcp' | 'web' | 'tool'
+export type TaskToolStatus = 'running' | 'success' | 'error' | 'unknown'
 
 export interface TaskMetricModel {
   label: string
   value: string | number
   tone?: 'danger' | 'accent' | undefined
+}
+
+export interface TaskThinkingModel {
+  id: string
+  label: string
+  text: string
+  preview?: string | undefined
+  time?: string | undefined
+  state?: TaskRoundState | undefined
+}
+
+export interface TaskToolModel {
+  id: string
+  name: string
+  kind: TaskToolKind
+  kindLabel: string
+  status: TaskToolStatus
+  primary?: string | undefined
+  secondary?: string | undefined
+  durationLabel?: string | undefined
+  output?: string | undefined
+}
+
+export interface TaskToolKindCountModel {
+  kind: TaskToolKind
+  label: string
+  count: number
+}
+
+export interface TaskToolGroupModel {
+  id: string
+  label: string
+  itemCount: number
+  errorCount: number
+  totalDurationLabel?: string | undefined
+  kindCounts: TaskToolKindCountModel[]
+  tools: TaskToolModel[]
 }
 
 export interface TaskRoundModel {
