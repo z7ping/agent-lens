@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import ReactMarkdown from 'react-markdown'
 import { useNavigate, useParams } from 'react-router-dom'
 import type { JsonValue, PiLiveControlsDto, PiLiveEventDto, PiLiveQueueDto, PiLiveSnapshotDto, PiLiveStateDto } from '@agent-lens/protocol'
 import { piLiveApi, type PiLiveTransportDiagnostics } from '../client/pi-live'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import { projectPiLiveHistory, type PiLiveHistoryItem } from './pi-live-history'
+import { PiLiveHistoryTaskRound, PiLiveRunningTaskRound } from './PiLiveTaskRound'
+import { projectPiLiveTaskRounds } from './pi-live-task-projection'
 import { TaskHeader } from './TaskHeader'
-import { TaskMessage } from './TaskMessage'
 import { TaskSurface } from './TaskSurface'
 
 type QueueMode = 'steer' | 'followUp'
@@ -28,7 +28,6 @@ interface ExtensionRequest {
   prefill: string
 }
 
-const PI_LIVE_HISTORY_CHUNK_SIZE = 8
 const PI_LIVE_EAGER_CHUNKS = 2
 
 function record(value: unknown): Record<string, unknown> {
@@ -137,49 +136,6 @@ function statusLabel(state: PiLiveStateDto | null, connected: boolean): string {
   return '等待输入'
 }
 
-function PiLiveHistoryRow({ item }: { item: PiLiveHistoryItem }) {
-  if (item.kind === 'message') {
-    return <TaskMessage
-      role={item.role}
-      text={item.text}
-      author={item.role === 'user' ? '你' : 'Pi'}
-      time={item.at ? formatClock(item.at) : undefined}
-      className="pi-live-task-message"
-    />
-  }
-
-  if (item.kind === 'thinking') {
-    return <div className="pi-live-lane pi-live-history-lane">
-      <details className="pi-live-thinking">
-        <summary>可观察过程{item.at ? ` · ${formatClock(item.at)}` : ''}</summary>
-        <div>{item.text}</div>
-      </details>
-    </div>
-  }
-
-  if (item.kind === 'tool') {
-    return <div className="pi-live-lane pi-live-history-lane">
-      <div className="pi-live-trace-stack">
-        <div className={`pi-live-trace ${item.status}`}>
-          <div className="pi-live-trace-head">
-            <span className="pi-live-tool-icon">⌁</span>
-            <b>{item.name}</b>
-            <span>{item.summary}</span>
-            <em>{item.status === 'error' ? '失败' : item.status === 'success' ? '完成' : '已记录'}</em>
-          </div>
-          {item.output && <details><summary>查看输出</summary><pre>{item.output}</pre></details>}
-        </div>
-      </div>
-    </div>
-  }
-
-  return <div className="pi-live-history-lifecycle">
-    <b>{item.label}</b>
-    {item.detail && <span>{item.detail}</span>}
-    {item.at && <time>{formatClock(item.at)}</time>}
-  </div>
-}
-
 function historyEstimate(item: PiLiveHistoryItem): number {
   if (item.kind === 'message') {
     const lines = Math.max(1, Math.ceil(item.text.length / 72))
@@ -282,7 +238,7 @@ function ExtensionPrompt({ request, onAnswer }: { request: ExtensionRequest; onA
     <div><b>{request.title}</b>{request.message && <span>{request.message}</span>}</div>
     {request.method === 'editor'
       ? <textarea value={value} onChange={event => setValue(event.target.value)} placeholder={request.placeholder}/>
-      : <input value={value} onChange={event => setValue(event.target.value)} placeholder={request.placeholder}/>} 
+      : <input value={value} onChange={event => setValue(event.target.value)} placeholder={request.placeholder}/>}
     <div className="pi-live-blocking-actions"><button onClick={() => onAnswer({ cancelled: true })}>取消</button><button className="allow" onClick={() => onAnswer({ value })}>提交</button></div>
   </div>
 }
@@ -462,13 +418,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   }, [runtimeId])
 
   const history = useMemo(() => projectPiLiveHistory(snapshot), [snapshot])
-  const historyChunks = useMemo(() => {
-    const chunks: PiLiveHistoryItem[][] = []
-    for (let index = 0; index < history.length; index += PI_LIVE_HISTORY_CHUNK_SIZE) {
-      chunks.push(history.slice(index, index + PI_LIVE_HISTORY_CHUNK_SIZE))
-    }
-    return chunks
-  }, [history])
+  const historyRounds = useMemo(() => projectPiLiveTaskRounds(history), [history])
 
   useEffect(() => {
     if (!followingRef.current) return
@@ -637,7 +587,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
 
     <TaskSurface mode="live" className="pi-live-workspace">
       <TaskHeader
-        marker={<span className={state?.isStreaming ? 'pi-live-pulse' : 'pi-live-idle-dot'}/>} 
+        marker={<span className={state?.isStreaming ? 'pi-live-pulse' : 'pi-live-idle-dot'}/>}
         agent="Pi"
         context={modelLabel(state)}
         status={<>{statusLabel(state, connected)}{!connected && <span className="pi-live-disconnected"> · 后台服务仍持有任务</span>}</>}
@@ -654,28 +604,23 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
 
       <div ref={readerRef} className="pi-live-reader" onScroll={onReaderScroll}>
         <div className="pi-live-document">
-          {historyChunks.map((chunk, index) => <VirtualRoundMount
-            key={chunk[0]?.id ?? `history-chunk-${index}`}
+          {historyRounds.map((projection, index) => <VirtualRoundMount
+            key={projection.model.id}
             rootSelector=".pi-live-reader"
             flowRoot
-            eager={index >= historyChunks.length - PI_LIVE_EAGER_CHUNKS}
-            estimate={chunk.reduce((total, item) => total + historyEstimate(item), 0)}
+            eager={index >= historyRounds.length - PI_LIVE_EAGER_CHUNKS}
+            estimate={projection.items.reduce((total, item) => total + historyEstimate(item), 0) + 46}
           >
-            <div className="pi-live-history-chunk">{chunk.map(item => <PiLiveHistoryRow key={item.id} item={item}/>)}</div>
+            <PiLiveHistoryTaskRound projection={projection}/>
           </VirtualRoundMount>)}
 
-          {(thinkingText || tools.length > 0 || streamText) && <section className="pi-live-current-round">
-            <div className="pi-live-round-head"><b>当前轮次</b><span>{state?.isStreaming ? '实时' : '已停止'}</span><span className="grow"/>{state?.pendingMessageCount ? <span>{state.pendingMessageCount} 条排队</span> : null}</div>
-            <div className="pi-live-lane">
-              <div className="pi-live-lane-head"><b>Pi</b><span>{state?.isStreaming ? '正在工作' : '当前输出'}</span></div>
-              {thinkingText && <details className="pi-live-thinking"><summary>可观察过程片段</summary><div>{thinkingText}</div></details>}
-              {tools.length > 0 && <div className="pi-live-trace-stack">{tools.map(tool => <div key={tool.id} className={`pi-live-trace ${tool.status}`}>
-                <div className="pi-live-trace-head"><span className="pi-live-tool-icon">⌁</span><b>{tool.name}</b><span>{tool.summary}</span><em>{tool.status === 'running' ? '执行中' : tool.status === 'error' ? '失败' : '完成'}</em></div>
-                {tool.output && <details><summary>查看输出</summary><pre>{tool.output}</pre></details>}
-              </div>)}</div>}
-              {streamText && <div className="pi-live-stream-response"><div className="pi-live-message-meta"><b>Pi</b><span>{state?.isStreaming ? '生成中' : '输出'}</span></div><div className="markdown"><ReactMarkdown>{streamText}</ReactMarkdown></div>{state?.isStreaming && <span className="pi-live-caret" aria-hidden="true"/>}</div>}
-            </div>
-          </section>}
+          {(thinkingText || tools.length > 0 || streamText) && <PiLiveRunningTaskRound
+            thinkingText={thinkingText}
+            tools={tools}
+            streamText={streamText}
+            isStreaming={state?.isStreaming ?? false}
+            pendingMessageCount={state?.pendingMessageCount ?? 0}
+          />}
           {!history.length && !streamText && !thinkingText && !tools.length && <div className="pi-live-empty">这个 Pi Runtime 还没有消息。可以直接在下方输入开始任务。</div>}
           {error && <div className="pi-live-error pi-live-reader-error" role="alert">{error}</div>}
         </div>
@@ -684,7 +629,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       <div className="pi-live-compose-wrap">
         <div className="pi-live-float-stack">
           {newRecords && <button className="pi-live-new-records" onClick={jumpLatest}>有新记录 ↓</button>}
-          {extension && <ExtensionPrompt request={extension} onAnswer={value => { if (!extensionPending) void answerExtension(value) }}/>} 
+          {extension && <ExtensionPrompt request={extension} onAnswer={value => { if (!extensionPending) void answerExtension(value) }}/>}
         </div>
         <div className="pi-live-composer">
           {queueItems.length > 0 && <div className="pi-live-queue">{queueItems.map(item => <div key={item.id} className={`pi-live-queue-item ${item.active ? 'active' : 'restored'}`}>

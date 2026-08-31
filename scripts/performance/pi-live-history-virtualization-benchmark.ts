@@ -14,12 +14,13 @@ const minimumFactHeight = numberArg('minimum-fact-height', 38)
 const budgetMountedFacts = Math.floor(numberArg('budget-mounted-facts', 160))
 const budgetObserverInstances = Math.floor(numberArg('budget-observer-instances', 1))
 
-const [page, mount] = await Promise.all([
+const [page, mount, projection] = await Promise.all([
   readFile(new URL('../../packages/web/src/features/PiLivePage.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../../packages/web/src/components/VirtualRoundMount.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../../packages/web/src/features/pi-live-task-projection.ts', import.meta.url), 'utf8'),
 ])
 
-const chunkSize = Number(page.match(/PI_LIVE_HISTORY_CHUNK_SIZE\s*=\s*(\d+)/)?.[1])
+const chunkSize = Number(projection.match(/PI_LIVE_HISTORY_ROUND_FACT_LIMIT\s*=\s*(\d+)/)?.[1])
 const eagerChunks = Number(page.match(/PI_LIVE_EAGER_CHUNKS\s*=\s*(\d+)/)?.[1])
 const rootMargin = Number(mount.match(/REVIEW_ROUND_ROOT_MARGIN_PX\s*=\s*(\d+)/)?.[1])
 
@@ -27,7 +28,7 @@ if (!Number.isFinite(chunkSize) || chunkSize <= 0) throw new Error('Cannot resol
 if (!Number.isFinite(eagerChunks) || eagerChunks < 0) throw new Error('Cannot resolve Pi Live eager chunk count')
 if (!Number.isFinite(rootMargin) || rootMargin < 0) throw new Error('Cannot resolve virtual mount root margin')
 if (!/rootSelector="\.pi-live-reader"/.test(page)) throw new Error('Pi Live history is not mounted against .pi-live-reader')
-if (!/historyChunks\.map/.test(page) || !/VirtualRoundMount/.test(page)) throw new Error('Pi Live history chunk virtualization is missing')
+if (!/historyRounds\.map/.test(page) || !/VirtualRoundMount/.test(page) || !/PiLiveHistoryTaskRound/.test(page)) throw new Error('Pi Live semantic round virtualization is missing')
 if (!/sharedVirtualObservers\s*=\s*new WeakMap/.test(mount)) throw new Error('VirtualRoundMount must share IntersectionObserver per scroll root')
 if (!/observer\.unobserve\(element\)/.test(mount)) throw new Error('Shared virtual observer must unobserve disposed targets')
 if (!/listeners\.size === 0[\s\S]*observer\.disconnect/.test(mount)) throw new Error('Shared virtual observer must disconnect when the last target leaves')
