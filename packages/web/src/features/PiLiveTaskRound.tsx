@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
-import { toolVisualKind } from '../components/ToolKindIcon'
+import { toolVisualKind, toolVisualLabel } from '../components/ToolKindIcon'
 import { TaskMessage } from './TaskMessage'
 import { TaskRound } from './TaskRound'
 import { TaskThinking } from './TaskThinking'
@@ -39,7 +39,6 @@ function toolKindLabel(kind: TaskToolKind): string {
   if (kind === 'read') return '读取'
   if (kind === 'edit') return '修改'
   if (kind === 'search') return '搜索'
-  if (kind === 'test') return '测试'
   if (kind === 'mcp') return 'MCP'
   if (kind === 'web') return '网络'
   return '工具'
@@ -53,12 +52,13 @@ function taskTool(
   output: string,
   timing?: { durationMs?: number | undefined; startedAtMs?: number | undefined },
 ): TaskToolModel {
-  const kind = toolVisualKind(name)
+  const visualKind = toolVisualKind(name)
+  const kind: TaskToolKind = visualKind === 'test' ? 'tool' : visualKind
   return {
     id,
     name,
     kind,
-    kindLabel: toolKindLabel(kind),
+    kindLabel: toolVisualLabel(visualKind),
     status,
     primary: summary || undefined,
     output: output || undefined,
