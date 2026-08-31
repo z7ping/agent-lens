@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { PiExtensionUiBridge } from './extension-ui-bridge'
+import { assertPiSdkSession } from './pi-sdk-adapter'
 import { toPiLiveWireEvent } from './sdk-event'
 import {
   findPiExecutable,
@@ -8,6 +9,7 @@ import {
   type PiSdkLoader,
   type PiSdkModel,
   type PiSdkSession,
+  type PiSdkThinkingLevel,
 } from './sdk-loader'
 import type {
   PiLiveAvailability,
@@ -89,7 +91,9 @@ export class DefaultPiLiveService implements PiLiveService {
     const sessionManager = input.sessionPath
       ? sdk.SessionManager.open(input.sessionPath, input.sessionDir, input.cwd)
       : sdk.SessionManager.create(input.cwd, input.sessionDir)
-    const { session } = await sdk.createAgentSession({ cwd: input.cwd, sessionManager })
+    const created = await sdk.createAgentSession({ cwd: input.cwd, sessionManager })
+    assertPiSdkSession(created.session, installed.sdkEntry, installed.version)
+    const session = created.session
     const runtimeSessionId = randomUUID()
     const listeners = new Set<PiLiveRuntimeListener>()
     const extensionUi = new PiExtensionUiBridge({
@@ -193,7 +197,7 @@ export class DefaultPiLiveService implements PiLiveService {
   async setThinkingLevel(runtimeSessionId: string, level: string): Promise<PiLiveRuntimeState> {
     if (!level.trim()) throw new Error('Pi thinking level is required')
     const session = this.requireRuntime(runtimeSessionId).session
-    session.setThinkingLevel(level.trim())
+    session.setThinkingLevel(level.trim() as PiSdkThinkingLevel)
     return await this.state(runtimeSessionId)
   }
 
