@@ -24,7 +24,7 @@ jobs:
         run: |
           git config user.name "7ping"
           git config user.email "z7ping@outlook.com"
-          git add packages/web/src/features/PiLivePage.tsx scripts/performance/pi-live-history-virtualization-benchmark.ts .github/workflows/pi-live-performance.yml
+          git add packages/web/src/features/PiLivePage.tsx scripts/performance/pi-live-history-virtualization-benchmark.ts
           git diff --cached --check
           git commit -m "refactor: Pi Live 接入共享 TaskRound"
           git push origin HEAD:bugfix/alpha3-pi-task-round-codemod
