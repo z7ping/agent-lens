@@ -30,6 +30,7 @@
 .task-header-marker { display: inline-flex; flex: 0 0 auto; align-items: center; }
 .task-header-status { display: inline-flex; min-width: 0; align-items: center; color: var(--al-muted); }
 .task-header-status::before { content: "·"; margin-right: 7px; color: var(--al-muted-2); }
+.task-header-status .session-status-error { color: inherit; }
 .task-header-title {
   grid-column: 1 / -1;
   grid-row: 2;
@@ -60,6 +61,12 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.task-header-submeta code::before {
+  content: "·";
+  margin-right: 7px;
+  color: var(--al-muted-2);
+  font-family: var(--font-ui);
+}
 .task-header-side { align-self: auto; }
 .task-header-actions {
   grid-column: 2;
@@ -83,12 +90,17 @@
   background: var(--al-soft-2);
   color: var(--al-ink-2);
 }
+.task-header-actions .pi-live-stop,
 .task-header-actions .pi-live-danger,
 .task-header-actions .danger,
 .task-header-actions [data-tone="danger"] {
   border-color: color-mix(in srgb, var(--al-danger) 28%, var(--al-line));
   color: var(--al-danger);
 }
+.task-header-actions .pi-live-menu { width: 28px; padding: 0; }
+/* Review 原型在 Kicker 只保留轻量“详情”入口；实际按钮仍保持原始记录开关语义。 */
+.task-header-actions .review-audit-toggle { font-size: 0; }
+.task-header-actions .review-audit-toggle::after { content: "详情"; font-size: 12px; }
 .task-header-metrics {
   grid-column: 1 / -1;
   grid-row: 4;
