@@ -1,0 +1,66 @@
+name: Temp Alpha3 TaskRound Contract
+
+on:
+  push:
+    branches:
+      - bugfix/alpha3-task-round-contract
+    paths:
+      - .github/workflows/tmp-alpha3-task-round-contract.yml
+
+permissions:
+  contents: write
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: bugfix/alpha3-task-round-contract
+      - name: Update TaskRound contract
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs')
+          const path = 'scripts/check-pi-live-contract.mjs'
+          let source = fs.readFileSync(path, 'utf8')
+          function replace(before, after, label) {
+            if (!source.includes(before)) throw new Error(`missing ${label}`)
+            source = source.replace(before, after)
+          }
+          replace(
+            'const [app, taskCenter, taskSurface, taskHeader, taskMessage, taskCenterCss, taskHeaderCss, reviewPage, page, hubPage, history, client, css, http, runtime, sdkLoader, sdkAdapter, runtimePackage, coreObservation, timelineProtocol] = await Promise.all([',
+            'const [app, taskCenter, taskSurface, taskHeader, taskMessage, taskRound, taskDetailModel, taskCenterCss, taskHeaderCss, reviewPage, page, hubPage, history, client, css, http, runtime, sdkLoader, sdkAdapter, runtimePackage, coreObservation, timelineProtocol] = await Promise.all([',
+            'contract inputs',
+          )
+          replace(
+            "  readFile(new URL('../packages/web/src/features/TaskMessage.tsx', import.meta.url), 'utf8'),\n  readFile(new URL('../packages/web/src/task-center.css', import.meta.url), 'utf8'),",
+            "  readFile(new URL('../packages/web/src/features/TaskMessage.tsx', import.meta.url), 'utf8'),\n  readFile(new URL('../packages/web/src/features/TaskRound.tsx', import.meta.url), 'utf8'),\n  readFile(new URL('../packages/web/src/features/task-detail-model.ts', import.meta.url), 'utf8'),\n  readFile(new URL('../packages/web/src/task-center.css', import.meta.url), 'utf8'),",
+            'contract reads',
+          )
+          replace(
+            "requireText(reviewPage, /<TaskHeader[\\s\\S]{0,1800}interactionCount/, 'Review 详情头必须通过 TaskHeader 渲染轮次等指标')",
+            "requireText(reviewPage, /<TaskHeader[\\s\\S]{0,1800}metrics=\\{taskDetailModel\\?\\.metrics/, 'Review 详情头必须通过 TaskDetailModel 向 TaskHeader 投影指标')",
+            'TaskHeader projection check',
+          )
+          replace(
+            "if (/pi-live-taskbar/.test(page)) failures.push('Pi Live 不得继续保留旧 pi-live-taskbar 详情头结构')\n\nrequireText(taskMessage,",
+            "if (/pi-live-taskbar/.test(page)) failures.push('Pi Live 不得继续保留旧 pi-live-taskbar 详情头结构')\n\nrequireText(taskDetailModel, /export interface TaskDetailModel/, '统一 TaskDetailModel 缺失')\nrequireText(taskDetailModel, /export interface TaskRoundModel/, '统一 TaskRoundModel 缺失')\nif (/from ['\"]@agent-lens\\/protocol['\"]|Review(?:Session|Interaction|Node)|PiLive/.test(taskDetailModel)) failures.push('TaskDetailModel 必须保持来源无关，不得依赖 Review / Pi DTO')\nrequireText(taskRound, /export function TaskRound/, '统一 TaskRound 组件缺失')\nrequireText(taskRound, /defaultExpanded = true/, 'TaskRound 必须默认展开')\nrequireText(taskRound, /data-task-round-state=\\{model\\.state\\}/, 'TaskRound 必须暴露 settled / running / stopped 状态边界')\nrequireText(reviewPage, /import \\{ TaskRound \\} from '\\.\\/TaskRound'/, 'Review 必须接入统一 TaskRound')\nrequireText(reviewPage, /function ReviewRoundAdapter[\\s\\S]{0,2200}<TaskRound/, 'Review 轮次必须通过 Review Adapter 投影到 TaskRound')\nrequireText(reviewPage, /useMemo<TaskDetailModel \\| null>/, 'Review 必须投影统一 TaskDetailModel')\nrequireText(reviewPage, /const \\[expandAllRounds, setExpandAllRounds\\] = useState\\(true\\)/, '历史轮次必须默认展开')\nif (/function Interaction\\(/.test(reviewPage)) failures.push('Review 不得继续保留旧 Interaction 轮次外壳；应由 TaskRound 承载')\n\nrequireText(taskMessage,",
+            'TaskRound contract checks',
+          )
+          replace(
+            "console.log('Pi Live / 任务中心契约检查通过：统一 TaskSurface、TaskHeader、TaskMessage、任务中心历史筛选栏、嵌入态详情、官方 Pi SDK 类型适配与 capability 校验、活跃任务列举、项目上下文启动、事件层级、历史事实、IME、Stop/Terminate、滚动跟随、Extension UI、背压与性能诊断已锁定。')",
+            "console.log('Pi Live / 任务中心契约检查通过：统一 TaskSurface、TaskHeader、TaskMessage、TaskDetailModel、TaskRound、任务中心历史筛选栏、嵌入态详情、官方 Pi SDK 类型适配与 capability 校验、活跃任务列举、项目上下文启动、事件层级、历史事实、IME、Stop/Terminate、滚动跟随、Extension UI、背压与性能诊断已锁定。')",
+            'contract summary',
+          )
+          fs.writeFileSync(path, source)
+          NODE
+      - name: Commit contract
+        shell: bash
+        run: |
+          git config user.name "7ping"
+          git config user.email "z7ping@outlook.com"
+          git add scripts/check-pi-live-contract.mjs
+          git diff --cached --check
+          git commit -m "test: 锁定 TaskDetailModel 与 TaskRound 边界"
+          git push origin HEAD:bugfix/alpha3-task-round-contract
