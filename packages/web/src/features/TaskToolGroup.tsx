@@ -13,13 +13,13 @@ export interface TaskToolGroupProps {
 
 export function TaskToolGroup({
   model,
-  defaultExpanded,
+  defaultExpanded = true,
   renderMeta,
   renderDetails,
   onToolClick,
   className = '',
 }: TaskToolGroupProps) {
-  const [expanded, setExpanded] = useState(defaultExpanded ?? model.errorCount > 0)
+  const [expanded, setExpanded] = useState(defaultExpanded)
   const [errorsOnly, setErrorsOnly] = useState(false)
   const visible = useMemo(
     () => errorsOnly ? model.tools.filter(tool => tool.status === 'error') : model.tools,
