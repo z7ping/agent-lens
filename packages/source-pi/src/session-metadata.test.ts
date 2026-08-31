@@ -18,7 +18,7 @@ function sessionInfoRecord(): SourceRecord {
     capturedAt: '2026-08-31T00:30:00.000Z',
     locator: { kind: 'file', path: '/tmp/.pi/agent/sessions/demo/session.jsonl', offset: 128 },
     fingerprint: 'pi-session-info-fingerprint',
-    parserVersion: '1',
+    parserVersion: '2',
     payload: {
       entry: {
         type: 'session_info',
@@ -57,7 +57,9 @@ test('Pi native title is persisted on LogicalSession without replacing source ti
       host,
       installation,
       candidate,
-      evidenceCandidates: normalized.evidenceCandidates,
+      // 这里只验证 Identity/Observation 持久化。Source Evidence 的外键完整性
+      // 已由 SourceHistoryRunner/E2E 覆盖，避免用未落库的合成 SourceRecord 制造假外键。
+      evidenceCandidates: [],
     })
 
     const logical = await storage.repositories.sessions.getLogicalSession(result.observation.logicalSessionId)
