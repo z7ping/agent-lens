@@ -1,17 +1,24 @@
 @reference "../styles.css";
 
+/* Task Header 与 alpha.3 高保真 detail-head 保持同一纵向结构：
+ * Kicker / Actions → Title → Submeta → Facts。
+ * 不把指标挤到标题右侧，避免 Task Detail 首屏结构漂移。
+ */
 .task-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 18px;
+  grid-template-rows: auto auto auto auto;
   width: min(1180px, 100%);
   margin: 0 auto;
-  padding: 16px 34px 12px 48px;
+  padding: 18px 34px 12px 48px;
   border-bottom: 1px solid var(--al-line);
   background: var(--al-surface);
 }
-.task-header-copy { min-width: 0; }
+.task-header-copy,
+.task-header-side { display: contents; }
 .task-header-meta {
+  grid-column: 1;
+  grid-row: 1;
   display: flex;
   min-width: 0;
   align-items: center;
@@ -19,10 +26,13 @@
   color: var(--al-muted);
   font-size: 12px;
 }
-.task-header-meta b { color: var(--al-ink-2); font-size: 13px; font-weight: 680; }
+.task-header-meta b { color: var(--al-ink-2); font-size: 13px; font-weight: 700; }
 .task-header-marker { display: inline-flex; flex: 0 0 auto; align-items: center; }
-.task-header-status { color: var(--al-muted); }
+.task-header-status { display: inline-flex; min-width: 0; align-items: center; color: var(--al-muted); }
+.task-header-status::before { content: "·"; margin-right: 7px; color: var(--al-muted-2); }
 .task-header-title {
+  grid-column: 1 / -1;
+  grid-row: 2;
   margin: 6px 0 0;
   overflow-wrap: anywhere;
   color: var(--al-ink);
@@ -32,49 +42,76 @@
   letter-spacing: -.01em;
 }
 .task-header-submeta {
+  grid-column: 1 / -1;
+  grid-row: 3;
   display: flex;
   min-width: 0;
   flex-wrap: wrap;
   align-items: center;
   gap: 7px;
   margin-top: 5px;
-  color: var(--al-muted);
+  color: var(--al-muted-2);
   font-size: 12px;
 }
 .task-header-submeta code {
-  max-width: min(720px, 100%);
+  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.task-header-side {
+.task-header-side { align-self: auto; }
+.task-header-actions {
+  grid-column: 2;
+  grid-row: 1;
   display: flex;
-  align-self: end;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
+  margin-left: auto;
+}
+.task-header-actions button {
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--al-muted);
+  font-size: 12px;
+}
+.task-header-actions button:hover {
+  border-color: var(--al-line);
+  background: var(--al-soft-2);
+  color: var(--al-ink-2);
+}
+.task-header-actions .pi-live-danger,
+.task-header-actions .danger,
+.task-header-actions [data-tone="danger"] {
+  border-color: color-mix(in srgb, var(--al-danger) 28%, var(--al-line));
+  color: var(--al-danger);
 }
 .task-header-metrics {
+  grid-column: 1 / -1;
+  grid-row: 4;
   display: flex;
   align-items: stretch;
-  overflow: hidden;
+  margin-top: 10px;
+  overflow: auto;
   border-top: 1px solid var(--al-line);
   border-bottom: 1px solid var(--al-line);
 }
 .task-header-metric {
-  min-width: 76px;
-  padding: 7px 12px;
+  min-width: 90px;
+  padding: 7px 14px;
   border-right: 1px solid var(--al-line);
   text-align: left;
 }
-.task-header-metric:last-child { border-right: 0; }
-.task-header-metric b { display: block; color: var(--al-ink); font-size: 13px; font-weight: 720; }
-.task-header-metric span { display: block; margin-top: 1px; color: var(--al-muted); font-size: 12px; }
+.task-header-metric:first-child { padding-left: 2px; }
+.task-header-metric b { display: block; color: var(--al-ink-2); font-size: 13px; font-weight: 700; }
+.task-header-metric span { display: block; margin-top: 1px; color: var(--al-muted-2); font-size: 12px; }
 .task-header-metric[data-tone="danger"] b { color: var(--al-danger); }
 .task-header-metric[data-tone="accent"] b { color: var(--al-accent); }
-.task-header-actions { display: flex; align-items: center; gap: 6px; }
-.task-header-actions button { flex: 0 0 auto; }
 
-/* Review reader 自身已有正文左右留白，Header 在该容器里只负责纵向节奏。 */
+/* Review reader 已持有正文左右留白，Header 只补足原型的 18px 首屏上边距。 */
 .review-page .review-reader > .task-header {
   width: 100%;
   padding-right: 0;
@@ -82,18 +119,18 @@
 }
 
 @media (max-width: 1199.98px) {
-  .task-header { padding-right: 22px; padding-left: 34px; }
+  .task-header { padding-right: 22px; padding-left: 44px; }
   .review-page .review-reader > .task-header { padding-right: 0; padding-left: 0; }
 }
 
 @media (max-width: 991.98px) {
-  .task-header { grid-template-columns: minmax(0, 1fr); }
-  .task-header-side { justify-content: space-between; }
+  .task-header { padding-right: 18px; padding-left: 40px; }
+  .review-page .review-reader > .task-header { padding-right: 0; padding-left: 0; }
+  .task-header-metric:nth-child(n+5) { display: none; }
 }
 
 @media (max-width: 767.98px) {
-  .task-header { padding: 14px; }
-  .review-page .review-reader > .task-header { padding: 14px 0; }
-  .task-header-side { align-items: flex-start; flex-direction: column; }
+  .task-header { padding: 15px 14px 12px; }
+  .review-page .review-reader > .task-header { padding: 2px 0 12px; }
   .task-header-metrics { max-width: 100%; overflow-x: auto; }
 }
