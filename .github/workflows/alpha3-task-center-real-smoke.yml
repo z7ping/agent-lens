@@ -1,0 +1,73 @@
+name: Alpha.3 Task Center Real Smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/alpha3-task-center
+    paths:
+      - packages/web/src/**
+      - apps/desktop/**
+      - scripts/acceptance/**
+      - scripts/check-alpha3-real-acceptance-contract.mjs
+      - package.json
+      - .github/workflows/alpha3-task-center-real-smoke.yml
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: 22.23.0
+  ACCEPTANCE_PORT: 56821
+
+jobs:
+  windows-task-center:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify acceptance harness
+        run: npm run check:alpha3-real-acceptance
+      - name: Build distributable
+        run: npm run build:dist
+      - name: Run 1280/1366 Chromium acceptance
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'agentlens-alpha3-smoke'
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          $env:AGENT_LENS_PORT = '${{ env.ACCEPTANCE_PORT }}'
+          $env:AGENT_LENS_DB_PATH = Join-Path $root 'agent-lens.db'
+          $env:AGENT_LENS_VAULT_PATH = Join-Path $root 'vault'
+          $env:AGENT_LENS_DAEMON_MODE = 'foreground'
+          $env:AGENT_LENS_RUNTIME_OWNER = 'ci'
+          $env:AGENT_LENS_ACCEPTANCE_URL = "http://127.0.0.1:${{ env.ACCEPTANCE_PORT }}"
+          $env:AGENT_LENS_ACCEPTANCE_OUTPUT = Join-Path $root 'acceptance'
+          $daemon = Start-Process -FilePath node -ArgumentList 'dist/daemon.mjs' -PassThru -NoNewWindow
+          try {
+            $ready = $false
+            for ($i = 0; $i -lt 120; $i++) {
+              try {
+                $response = Invoke-WebRequest -UseBasicParsing -Uri "$env:AGENT_LENS_ACCEPTANCE_URL/api/v1/health" -TimeoutSec 2
+                if ($response.StatusCode -eq 200) { $ready = $true; break }
+              } catch {}
+              Start-Sleep -Milliseconds 250
+            }
+            if (-not $ready) { throw 'AgentLens Daemon 未在 30 秒内就绪' }
+            npm run accept:task-center-desktop
+          } finally {
+            if ($daemon -and -not $daemon.HasExited) { Stop-Process -Id $daemon.Id -Force }
+          }
+      - name: Upload viewport evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: alpha3-task-center-viewport-evidence
+          path: ${{ runner.temp }}/agentlens-alpha3-smoke/acceptance
+          if-no-files-found: warn
+          retention-days: 14
