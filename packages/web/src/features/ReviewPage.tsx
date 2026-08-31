@@ -258,6 +258,11 @@ function sourceEventLabel(node: ReviewEventNodeDto): string {
   const payload = payloadRecord(node.payload)
   const action = stringValue(payload, 'action', 'event', 'type', 'status').toLowerCase()
   if (node.sourceId === 'codex') {
+    if (node.kind === 'session.lifecycle' && action === 'turn.context') return 'Codex 轮次上下文'
+    if (node.kind === 'session.lifecycle' && action === 'turn.started') return 'Codex 轮次开始'
+    if (node.kind === 'session.lifecycle' && action === 'turn.completed') return 'Codex 轮次完成'
+    if (node.kind === 'session.lifecycle' && action === 'turn.aborted') return 'Codex 轮次中止'
+    if (node.kind === 'session.lifecycle' && action === 'turn.error') return 'Codex 轮次错误'
     if (node.kind === 'context.compaction') return '上下文压缩'
     if (node.kind === 'subagent.spawn') return '启动子智能体'
     if (node.kind === 'subagent.end') return '子智能体完成'
@@ -305,6 +310,22 @@ function sourceEventSummary(node: ReviewEventNodeDto): string {
     return brief(payload.summary ?? payload.text ?? payload.content ?? payload, 120)
   }
   if (node.kind === 'session.lifecycle') {
+    if (action === 'turn.context') {
+      const model = stringValue(payload, 'model')
+      const cwd = stringValue(payload, 'cwd')
+      const sandbox = brief(payload.sandbox_policy ?? payload.sandboxPolicy, 80)
+      const approval = brief(payload.approval_policy ?? payload.approvalPolicy, 80)
+      const reasoning = brief(payload.reasoning_effort ?? payload.reasoningEffort, 80)
+      const collaboration = brief(payload.collaboration_mode ?? payload.collaborationMode, 80)
+      return [model, cwd, sandbox ? `沙箱 ${sandbox}` : '', approval ? `审批 ${approval}` : '', reasoning ? `推理 ${reasoning}` : '', collaboration ? `协作 ${collaboration}` : ''].filter(Boolean).join(' · ') || brief(payload, 140)
+    }
+    if (action === 'session.discovered') {
+      const parent = stringValue(payload, 'forked_from_id', 'parent_thread_id')
+      const agent = stringValue(payload, 'agent_nickname', 'agent_path')
+      const role = stringValue(payload, 'agent_role')
+      const source = stringValue(payload, 'thread_source', 'source')
+      return [parent ? `父线程 ${parent}` : '', agent ? `Agent ${agent}` : '', role, source].filter(Boolean).join(' · ') || brief(payload, 140)
+    }
     const startSource = stringValue(payload, 'startSource', 'start_source', 'source')
     const reason = stringValue(payload, 'reason', 'lifecycleReason', 'lifecycle_reason', 'stopReason', 'stop_reason')
     const model = stringValue(payload, 'model')
@@ -313,7 +334,11 @@ function sourceEventSummary(node: ReviewEventNodeDto): string {
   if (node.kind === 'usage') {
     const input = numberValue(payload, 'inputTokens', 'input_tokens')
     const output = numberValue(payload, 'outputTokens', 'output_tokens')
-    if (input !== undefined || output !== undefined) return `输入 ${input ?? 0} · 输出 ${output ?? 0} 个词元`
+    const cacheRead = numberValue(payload, 'cacheReadTokens', 'cached_input_tokens', 'cache_read_tokens')
+    const total = numberValue(payload, 'totalTokens', 'total_tokens')
+    if (input !== undefined || output !== undefined || cacheRead !== undefined || total !== undefined) {
+      return [`输入 ${input ?? 0}`, `输出 ${output ?? 0}`, cacheRead ? `缓存读 ${cacheRead}` : '', total !== undefined ? `共 ${total}` : ''].filter(Boolean).join(' · ') + ' 个词元'
+    }
   }
   if (node.kind === 'artifact.action') {
     const path = stringValue(payload, 'path', 'filePath', 'file_path')

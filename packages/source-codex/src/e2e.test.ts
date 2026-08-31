@@ -81,7 +81,7 @@ test('Codex fixture enters canonical facts and remains idempotent', async () => 
       limit: 100,
     })
     assert.equal(facts.length, 9)
-    assert.equal(facts.filter(item => item.kind === 'unknown').length, 3)
+    assert.equal(facts.filter(item => item.kind === 'unknown').length, 2)
     assert.equal(facts.filter(item => item.kind === 'tool.call').length, 1)
     assert.equal(facts.filter(item => item.kind === 'tool.result').length, 1)
     assert.equal(facts.every(item => item.evidenceRefs.length >= 1), true)

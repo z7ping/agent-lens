@@ -36,7 +36,7 @@ interface CodexThreadName {
 }
 
 const CHECKPOINT_BATCH_SIZE = 100
-const PARSER_VERSION = '4'
+const PARSER_VERSION = '5'
 
 function sha256(value: string | Buffer): string {
   return createHash('sha256').update(value).digest('hex')

@@ -172,8 +172,8 @@ test('旧 Parser 游标完整重放已消费区间以恢复曾被裁剪的原生
       'response_item/custom_tool_call_output',
     ])
     assert.deepEqual(records.map(record => record.sourceSequence), [1, 2, 3])
-    assert.equal(records.every(record => record.parserVersion === '4'), true)
-    assert.equal((checkpoints.get(codexHistoryInternals.checkpointKey(path)) as { parserVersion: string }).parserVersion, '4')
+    assert.equal(records.every(record => record.parserVersion === '5'), true)
+    assert.equal((checkpoints.get(codexHistoryInternals.checkpointKey(path)) as { parserVersion: string }).parserVersion, '5')
   } finally {
     await rm(root, { recursive: true, force: true })
   }

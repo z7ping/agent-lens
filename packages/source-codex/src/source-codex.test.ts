@@ -173,7 +173,7 @@ test('normalizer maps known facts and preserves unknown native events', async ()
     assert.deepEqual(kinds, [
       'session.lifecycle',
       'session.lifecycle',
-      'unknown',
+      'session.lifecycle',
       'message.user',
       'message.assistant',
       'tool.call',
@@ -193,7 +193,7 @@ test('normalizer maps known facts and preserves unknown native events', async ()
       exitCode: 1,
       output: 'failed 1 test',
     })
-    assert.equal((outputs[2]?.payload as any).rawType, 'event_msg/task_started')
+    assert.equal((outputs[2]?.payload as any).event, 'turn.started')
   } finally {
     await rm(root, { recursive: true, force: true })
   }
