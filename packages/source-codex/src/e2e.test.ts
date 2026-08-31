@@ -70,8 +70,9 @@ test('Codex fixture enters canonical facts and remains idempotent', async () => 
       abortSignal: new AbortController().signal,
     })
 
-    assert.equal(first.records, 8)
-    assert.equal(first.observationsCreated, 8)
+    // 8 条原生 rollout 记录 + 1 条稳定的 session_start 元数据。
+    assert.equal(first.records, 9)
+    assert.equal(first.observationsCreated, 9)
     assert.equal(first.observationsMerged, 0)
     assert.equal(first.observationsUnchanged, 0)
 
@@ -79,7 +80,7 @@ test('Codex fixture enters canonical facts and remains idempotent', async () => 
       installationId: first.installationId,
       limit: 100,
     })
-    assert.equal(facts.length, 8)
+    assert.equal(facts.length, 9)
     assert.equal(facts.filter(item => item.kind === 'unknown').length, 3)
     assert.equal(facts.filter(item => item.kind === 'tool.call').length, 1)
     assert.equal(facts.filter(item => item.kind === 'tool.result').length, 1)
@@ -88,7 +89,7 @@ test('Codex fixture enters canonical facts and remains idempotent', async () => 
     const evidenceCount = storage.db.prepare(
       'SELECT COUNT(*) AS count FROM evidence',
     ).get() as { count: number }
-    assert.equal(evidenceCount.count, 8)
+    assert.equal(evidenceCount.count, 9)
 
     const toolCoverage = await storage.repositories.coverage.query({
       subjectType: 'AgentInstallation',
@@ -113,7 +114,7 @@ test('Codex fixture enters canonical facts and remains idempotent', async () => 
       installationId: first.installationId,
       limit: 100,
     })
-    assert.equal(factsAfterReplay.length, 8)
+    assert.equal(factsAfterReplay.length, 9)
   } finally {
     storage.close()
     await rm(fixture.root, { recursive: true, force: true })
