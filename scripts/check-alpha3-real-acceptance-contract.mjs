@@ -27,6 +27,8 @@ for (const token of [
 requireText(pi, /Abort \+ Queue Restore/, '真实 Pi 验收必须覆盖 Abort + Queue Restore')
 requireText(pi, /Reconnect \+ Snapshot 恢复/, '真实 Pi 验收必须覆盖 Reconnect + Snapshot')
 requireText(pi, /source-pi \/ Review 可看到同一真实会话历史/, '真实 Pi 验收必须核对历史事实回流')
+requireText(pi, /runSoak/, '真实 Pi 验收必须提供长时 Streaming soak')
+requireText(pi, /soak round .* settled/, '真实 Pi soak 必须逐轮确认 settled')
 
 requireText(desktop, /width: 1280, height: 800/, '桌面验收必须覆盖 1280×800')
 requireText(desktop, /width: 1366, height: 768/, '桌面验收必须覆盖 1366×768')
@@ -47,6 +49,7 @@ requireText(soak, /percentCPUUsage/, '长时验收必须采集 Renderer CPU')
 
 for (const script of [
   'accept:pi-live-real',
+  'accept:pi-live:1h',
   'accept:task-center-desktop',
   'accept:task-center:1h',
   'accept:task-center:8h',
@@ -59,4 +62,4 @@ if (failures.length) {
   for (const failure of failures) console.error(`- ${failure}`)
   process.exit(1)
 }
-console.log('alpha.3 真实验收入口检查通过：真实 Pi、1280/1366 明暗桌面、独立滚动、1h/8h 资源趋势均已锁定。')
+console.log('alpha.3 真实验收入口检查通过：真实 Pi 全链路/1h soak、1280/1366 明暗桌面、独立滚动、1h/8h 资源趋势均已锁定。')
