@@ -1,11 +1,13 @@
 import { readFile } from 'node:fs/promises'
 
-const [app, taskCenter, taskSurface, taskMessage, taskCenterCss, reviewPage, page, hubPage, history, client, css, http, runtime, sdkLoader, sdkAdapter, runtimePackage, coreObservation, timelineProtocol] = await Promise.all([
+const [app, taskCenter, taskSurface, taskHeader, taskMessage, taskCenterCss, taskHeaderCss, reviewPage, page, hubPage, history, client, css, http, runtime, sdkLoader, sdkAdapter, runtimePackage, coreObservation, timelineProtocol] = await Promise.all([
   readFile(new URL('../packages/web/src/App.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/TaskCenterPage.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/TaskSurface.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/web/src/features/TaskHeader.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/TaskMessage.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/task-center.css', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/web/src/features/task-header.css', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/ReviewPage.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/PiLivePage.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/HubReviewPage.tsx', import.meta.url), 'utf8'),
@@ -57,6 +59,16 @@ if (/setCwd|工作目录\s*<input|placeholder=.*workspace/.test(taskCenter)) fai
 if (/\.task-center-main \.pi-live-page > \.pi-live-sessions\s*\{\s*display:\s*none;/m.test(taskCenterCss)) failures.push('任务中心不得继续依赖 CSS 隐藏 Pi Live 第二套侧栏')
 if (/\.task-center-main \.review-layout > \.session-panel\s*\{\s*display:\s*none;/m.test(taskCenterCss)) failures.push('任务中心不得继续依赖 CSS 隐藏 Review 第二套侧栏')
 if (/\.task-center-main \.hub-review-toolbar\s*\{\s*display:\s*none;/m.test(taskCenterCss)) failures.push('任务中心不得继续依赖 CSS 隐藏 Hub 工具栏')
+
+requireText(taskHeader, /export function TaskHeader/, '统一 Task Header 组件缺失')
+requireText(taskHeader, /task-header-metrics/, '统一 Task Header 必须提供共享指标区域')
+requireText(taskHeader, /task-header-actions/, '统一 Task Header 必须提供共享操作区域')
+requireText(reviewPage, /import \{ TaskHeader \} from '\.\/TaskHeader'/, 'Review 必须接入统一 TaskHeader')
+requireText(reviewPage, /<TaskHeader[\s\S]{0,1800}interactionCount/, 'Review 详情头必须通过 TaskHeader 渲染轮次等指标')
+requireText(page, /import \{ TaskHeader \} from '\.\/TaskHeader'/, 'Pi Live 必须接入统一 TaskHeader')
+requireText(page, /<TaskHeader[\s\S]{0,1800}停止当前任务/, 'Pi Live 运行态标题和控制必须通过 TaskHeader 渲染')
+if (/review-session-head/.test(reviewPage)) failures.push('Review 不得继续保留旧 review-session-head 详情头结构')
+if (/pi-live-taskbar/.test(page)) failures.push('Pi Live 不得继续保留旧 pi-live-taskbar 详情头结构')
 
 requireText(taskMessage, /export function TaskMessage/, '统一 Task Message 组件缺失')
 requireText(taskMessage, />查看源码</, '统一 Task Message 必须保留“查看源码”')
@@ -118,12 +130,14 @@ requireText(sdkLoader, /assertPiSdkModule\(imported, discovery\.sdkEntry, discov
 if (/export interface PiSdk(?:Session|Module|Model)/.test(sdkLoader)) failures.push('Pi SDK Loader 不得重新维护手写 SDK 接口镜像；类型边界必须收敛到 PiSdkAdapter')
 if (/PiRpcClient|--mode['"\s,]+rpc|child_process/.test(`${runtime}\n${sdkLoader}`)) failures.push('Pi Live Runtime 不得重新引入自维护 RPC 子进程协议')
 
-if (/font-size:\s*(?:[0-9]|1[01])px/.test(css) || /font-size:\s*(?:[0-9]|1[01])px/.test(taskCenterCss)) failures.push('Pi Live / 任务中心可见文字不得小于 12px')
-if (/backdrop-filter|filter:\s*blur\(/.test(css) || /backdrop-filter|filter:\s*blur\(/.test(taskCenterCss)) failures.push('Pi Live / 任务中心不得使用模糊/毛玻璃')
-if (/max-width:\s*575|max-width:\s*576|min-width:\s*576/.test(css) || /max-width:\s*575|max-width:\s*576|min-width:\s*576/.test(taskCenterCss)) failures.push('Pi Live / 任务中心不得新增 576px 响应式断点')
+const visibleCss = `${css}\n${taskCenterCss}\n${taskHeaderCss}`
+if (/font-size:\s*(?:[0-9]|1[01])px/.test(visibleCss)) failures.push('Pi Live / 任务中心可见文字不得小于 12px')
+if (/backdrop-filter|filter:\s*blur\(/.test(visibleCss)) failures.push('Pi Live / 任务中心不得使用模糊/毛玻璃')
+if (/max-width:\s*575|max-width:\s*576|min-width:\s*576/.test(visibleCss)) failures.push('Pi Live / 任务中心不得新增 576px 响应式断点')
 for (const expected of ['1199.98px', '991.98px', '767.98px']) {
   if (!css.includes(expected)) failures.push(`Pi Live CSS 缺少现有响应式基线 ${expected}`)
   if (!taskCenterCss.includes(expected)) failures.push(`任务中心 CSS 缺少现有响应式基线 ${expected}`)
+  if (!taskHeaderCss.includes(expected)) failures.push(`TaskHeader CSS 缺少现有响应式基线 ${expected}`)
 }
 
 if (failures.length) {
@@ -132,4 +146,4 @@ if (failures.length) {
   process.exit(1)
 }
 
-console.log('Pi Live / 任务中心契约检查通过：统一 TaskSurface、TaskMessage、任务中心历史筛选栏、嵌入态详情、官方 Pi SDK 类型适配与 capability 校验、活跃任务列举、项目上下文启动、事件层级、历史事实、IME、Stop/Terminate、滚动跟随、Extension UI、背压与性能诊断已锁定。')
+console.log('Pi Live / 任务中心契约检查通过：统一 TaskSurface、TaskHeader、TaskMessage、任务中心历史筛选栏、嵌入态详情、官方 Pi SDK 类型适配与 capability 校验、活跃任务列举、项目上下文启动、事件层级、历史事实、IME、Stop/Terminate、滚动跟随、Extension UI、背压与性能诊断已锁定。')
