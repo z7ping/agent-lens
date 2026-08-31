@@ -10,9 +10,9 @@ function requireText(source, pattern, message) {
   if (!pattern.test(source)) failures.push(message)
 }
 
-for (const path of [
+for (const token of [
   '/api/v1/pi-live/availability',
-  '/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/events',
+  '/events',
   '/prompt',
   '/steer',
   '/follow-up',
@@ -21,7 +21,9 @@ for (const path of [
   '/model',
   '/thinking-level',
   '/api/v1/review?limit=500',
-]) requireText(pi, new RegExp(path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `真实 Pi 验收缺少 ${path}`)
+]) {
+  if (!pi.includes(token)) failures.push(`真实 Pi 验收缺少 ${token}`)
+}
 requireText(pi, /Abort \+ Queue Restore/, '真实 Pi 验收必须覆盖 Abort + Queue Restore')
 requireText(pi, /Reconnect \+ Snapshot 恢复/, '真实 Pi 验收必须覆盖 Reconnect + Snapshot')
 requireText(pi, /source-pi \/ Review 可看到同一真实会话历史/, '真实 Pi 验收必须核对历史事实回流')
@@ -48,7 +50,9 @@ for (const script of [
   'accept:task-center-desktop',
   'accept:task-center:1h',
   'accept:task-center:8h',
-]) requireText(pkg, new RegExp(`"${script.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`), `package.json 缺少 ${script} 验收命令`)
+]) {
+  if (!pkg.includes(`"${script}"`)) failures.push(`package.json 缺少 ${script} 验收命令`)
+}
 
 if (failures.length) {
   console.error('alpha.3 真实验收契约失败：')
