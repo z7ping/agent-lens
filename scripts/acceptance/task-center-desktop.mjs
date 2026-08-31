@@ -32,7 +32,9 @@ async function inspect(win, viewport, theme) {
 
   const value = await win.webContents.executeJavaScript(`(() => {
     const pick = selector => document.querySelector(selector)
+    const all = selector => [...document.querySelectorAll(selector)]
     const rect = element => element ? (() => { const r = element.getBoundingClientRect(); return { left:r.left, top:r.top, right:r.right, bottom:r.bottom, width:r.width, height:r.height } })() : null
+    const fontPx = element => element ? Number.parseFloat(getComputedStyle(element).fontSize) || 0 : 0
     const page = pick('.task-center-page')
     const toolbar = pick('.task-center-toolbar')
     const rail = pick('.task-center-rail')
@@ -45,6 +47,19 @@ async function inspect(win, viewport, theme) {
     const mainStyle = main ? getComputedStyle(main) : null
     const detailStyle = detailScroll ? getComputedStyle(detailScroll) : null
     const root = document.scrollingElement
+    const toolGroups = all('[data-task-tool-group="true"]')
+    const toolRows = all('[data-tool-fact="true"] .tool-row')
+    const firstTool = toolRows[0] || null
+    const firstToolAction = firstTool?.querySelector('.tool-action') || null
+    const firstToolTarget = firstTool?.querySelector('.tool-target') || null
+    const firstToolStatus = firstTool?.querySelector('.tool-status') || null
+    const firstUserBubble = pick('[data-task-message-role="user"] .task-message-bubble')
+    const firstAgentBubble = pick('[data-task-message-role="assistant"] .task-message-bubble')
+    const firstThinkingContent = pick('.thinking-content')
+    const liveOutputs = all('.tool-live-output')
+    const errorOutputDetails = all('.task-tool-row-shell:has(.tool-row[data-status="error"]) .tool-output-details')
+    const toolStyle = firstTool ? getComputedStyle(firstTool) : null
+    const liveStyle = liveOutputs[0] ? getComputedStyle(liveOutputs[0]) : null
     return {
       innerWidth: window.innerWidth,
       innerHeight: window.innerHeight,
@@ -54,11 +69,32 @@ async function inspect(win, viewport, theme) {
       overflow: {
         page: pageStyle?.overflow || '', rail: railStyle?.overflow || '', railY: railScrollStyle?.overflowY || '', main: mainStyle?.overflow || '', detailY: detailStyle?.overflowY || '',
       },
-      messageCount: document.querySelectorAll('.task-message-row').length,
-      roundCount: document.querySelectorAll('[data-task-round-state]').length,
-      thinkingCount: document.querySelectorAll('.thinking-block').length,
-      toolCount: document.querySelectorAll('.execution-row').length,
-      taskButtonCount: document.querySelectorAll('.task-center-rail button.session-item').length,
+      messageCount: all('.task-message-row').length,
+      roundCount: all('[data-task-round-state]').length,
+      thinkingCount: all('.thinking-block').length,
+      toolCount: toolRows.length,
+      taskButtonCount: all('.task-center-rail button.session-item').length,
+      presentation: {
+        toolGroupCount: toolGroups.length,
+        closedToolGroupCount: toolGroups.filter(group => !group.open).length,
+        toolGridColumns: toolStyle?.gridTemplateColumns || '',
+        toolGridColumnCount: toolStyle?.gridTemplateColumns?.trim().split(/\\s+/).filter(Boolean).length || 0,
+        toolRow: rect(firstTool),
+        toolRowClientWidth: firstTool?.clientWidth || 0,
+        toolRowScrollWidth: firstTool?.scrollWidth || 0,
+        toolFont: fontPx(firstTool),
+        toolActionFont: fontPx(firstToolAction),
+        toolTargetFont: fontPx(firstToolTarget),
+        toolStatusFont: fontPx(firstToolStatus),
+        userMessageFont: fontPx(firstUserBubble),
+        agentMessageFont: fontPx(firstAgentBubble),
+        thinkingFont: fontPx(firstThinkingContent),
+        liveOutputCount: liveOutputs.length,
+        liveOutputOverflowY: liveStyle?.overflowY || '',
+        liveOutputMaxHeight: liveStyle?.maxHeight || '',
+        errorOutputCount: errorOutputDetails.length,
+        closedErrorOutputCount: errorOutputDetails.filter(item => !item.open).length,
+      },
       theme: document.documentElement.dataset.theme || 'light',
     }
   })()`)
@@ -76,6 +112,20 @@ async function inspect(win, viewport, theme) {
   if (!['auto', 'scroll'].includes(value.overflow.railY)) errors.push(`左侧任务列表不是独立滚动根：overflow-y=${value.overflow.railY}`)
   if (value.overflow.main !== 'hidden') errors.push(`Task Center 主区应隔离全局滚动：overflow=${value.overflow.main}`)
   if (value.detailScroll && !['auto', 'scroll'].includes(value.overflow.detailY)) errors.push(`右侧详情不是独立滚动根：overflow-y=${value.overflow.detailY}`)
+
+  const p = value.presentation
+  if (p.toolGroupCount > 0 && p.closedToolGroupCount > 0) errors.push(`初始 Tool Group 有 ${p.closedToolGroupCount}/${p.toolGroupCount} 个被默认折叠`)
+  if (p.toolGridColumnCount > 0 && viewport.width >= 1200 && p.toolGridColumnCount !== 4) errors.push(`Tool Row 桌面主基线不是四列：${p.toolGridColumns}`)
+  if (p.toolFont > 0 && p.toolFont < 13) errors.push(`Tool Call 主体字号过小：${p.toolFont}px`)
+  if (p.toolActionFont > 0 && p.toolActionFont < 13) errors.push(`Tool 操作名称字号过小：${p.toolActionFont}px`)
+  if (p.toolTargetFont > 0 && p.toolTargetFont < 13) errors.push(`Tool 目标字号过小：${p.toolTargetFont}px`)
+  if (p.toolStatusFont > 0 && p.toolStatusFont < 12) errors.push(`Tool 状态字号过小：${p.toolStatusFont}px`)
+  if (p.userMessageFont > 0 && p.userMessageFont < 14) errors.push(`用户消息字号过小：${p.userMessageFont}px`)
+  if (p.agentMessageFont > 0 && p.agentMessageFont < 14) errors.push(`Agent 消息字号过小：${p.agentMessageFont}px`)
+  if (p.thinkingFont > 0 && p.thinkingFont < 13) errors.push(`Thinking 正文字号过小：${p.thinkingFont}px`)
+  if (p.toolRow && value.main && p.toolRow.right > value.main.right + 2) errors.push('Tool Row 超出详情主区')
+  if (p.liveOutputCount > 0 && !['auto', 'scroll'].includes(p.liveOutputOverflowY)) errors.push(`Pi Running 输出不是局部滚动：overflow-y=${p.liveOutputOverflowY}`)
+  if (p.errorOutputCount > 0 && p.closedErrorOutputCount > 0) errors.push(`错误 Tool 输出有 ${p.closedErrorOutputCount} 个未默认展开`)
 
   return { viewport, theme, value, errors, ok: errors.length === 0 }
 }
@@ -112,7 +162,7 @@ async function runSwitchStability(win) {
   const maxNodeGrowth = Math.max(100, Math.ceil(before.nodes * 0.25))
   const errors = []
   if (switched.completed !== 100) errors.push(`仅完成 ${switched.completed}/100 次切换`)
-  if (listenerGrowth > 20) errors.push(`Listener 增长 ${listenerGrowth}，超过 +20`) 
+  if (listenerGrowth > 20) errors.push(`Listener 增长 ${listenerGrowth}，超过 +20`)
   if (nodeGrowth > maxNodeGrowth) errors.push(`DOM Node 增长 ${nodeGrowth}，超过允许 ${maxNodeGrowth}`)
   return {
     skipped: false,
