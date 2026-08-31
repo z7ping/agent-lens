@@ -11,21 +11,37 @@ export interface TaskToolRowProps {
   className?: string
 }
 
-export function TaskToolRow({ model, meta, details, last = false, onClick, className = '' }: TaskToolRowProps) {
+function statusLabel(status: TaskToolModel['status']): string {
+  if (status === 'error') return '失败'
+  if (status === 'success') return '完成'
+  if (status === 'running') return '执行中'
+  return '未知'
+}
+
+function statusClass(status: TaskToolModel['status']): string {
+  if (status === 'error') return 'error'
+  if (status === 'success') return 'ok'
+  if (status === 'running') return 'run'
+  return ''
+}
+
+export function TaskToolRow({ model, meta, details, onClick, className = '' }: TaskToolRowProps) {
+  const target = model.primary ?? model.secondary ?? ''
+  const rowClass = `task-tool-row execution-row tool-row ${model.status === 'error' ? 'error' : ''} ${className}`.trim()
   const content = <>
-    <span className="execution-rail" aria-hidden="true"><span className="execution-dot"/>{!last && <span className="execution-line"/>}</span>
-    <span className={`execution-tool-icon tool-kind-${model.kind}`}><ToolKindIcon kind={model.kind}/></span>
-    <span className="execution-main">
-      <span className="execution-name"><b>{model.name}</b><span className="tool-kind-label">{model.kindLabel}</span><span className="tool-status-label">{model.status === 'error' ? '失败' : model.status === 'success' ? '完成' : model.status === 'running' ? '执行中' : '未知'}</span>{meta}</span>
-      {model.primary && <span className="execution-preview execution-primary">{model.primary}</span>}
-      {model.secondary && <span className={`execution-preview ${model.status === 'error' ? 'execution-preview-error' : ''}`}>{model.secondary}</span>}
-      {details}
+    <span className={`tool-kind tool-kind-${model.kind}`}><ToolKindIcon kind={model.kind}/><span>{model.kindLabel}</span></span>
+    <b className="tool-action">{model.name}</b>
+    <span className="tool-target">
+      <span className="tool-target-text" title={target}>{target}</span>
+      {meta && <span className="tool-meta">{meta}</span>}
     </span>
-    {model.durationLabel && <span className="execution-duration">{model.durationLabel}</span>}
+    <span className={`tool-status ${statusClass(model.status)}`.trim()}>{statusLabel(model.status)}{model.durationLabel ? ` · ${model.durationLabel}` : ''}</span>
   </>
 
-  if (onClick) {
-    return <button className={`task-tool-row execution-row ${className}`.trim()} data-status={model.status} data-kind={model.kind} onClick={onClick}>{content}</button>
-  }
-  return <div className={`task-tool-row execution-row ${className}`.trim()} data-status={model.status} data-kind={model.kind}>{content}</div>
+  return <div className={`task-tool-row-shell ${details ? 'has-details' : ''}`.trim()}>
+    {onClick
+      ? <button className={rowClass} data-status={model.status} data-kind={model.kind} onClick={onClick}>{content}</button>
+      : <div className={rowClass} data-status={model.status} data-kind={model.kind}>{content}</div>}
+    {details && <div className="tool-payload">{details}</div>}
+  </div>
 }
