@@ -1,12 +1,12 @@
 @reference "./styles.css";
 
 /*
- * alpha.3 Task Detail 高保真契约。
- * 本文件是 Round / Message / Thinking / Tool 执行轨的最终表现层：
- * 对话第一视觉层；Round 只给轻边界；Thinking / Tool 为第二视觉层；Payload 为第三层下钻。
+ * alpha.3 Task Detail 最终表现层。
+ * Message = 第一视觉层；Round = 弱结构边界；Thinking / Tool = 第二视觉层；Payload = 第三层下钻。
+ * Tool Call 本身永远可见，只有 Payload / 长输出允许折叠。
  */
 
-/* 09 · Round：默认展开，只有轻边界与事实摘要。 */
+/* 09 · Round：轻边界、轻摘要，不做卡片墙。 */
 .task-center-main .task-round {
   scroll-margin-top: 44px;
   margin-top: 11px;
@@ -16,7 +16,6 @@
   background: transparent;
   box-shadow: none;
 }
-
 .task-center-main .task-round > summary {
   display: grid;
   min-height: 36px;
@@ -57,7 +56,7 @@
   pointer-events: none;
 }
 
-/* 09/10 · Message：正文第一视觉层，用户右 / Agent 左，正文 14px。 */
+/* 09/10 · Message：用户右、Agent 左，正文固定 14px 第一视觉层。 */
 .task-center-main .message-row,
 .task-center-main .task-message-row {
   position: relative;
@@ -113,7 +112,7 @@
 .task-center-main .chat-bubble-user .task-message-meta { color: var(--al-user-bubble-muted); }
 .task-center-main .evidence-inline { min-height: 19px; padding-inline: 6px; border-radius: 999px; font-size: 12px; }
 
-/* 06/08 · Agent 执行轨：弱于消息，但父子、折叠和连续引导线必须清楚。 */
+/* 06/08/09 · Agent Lane：Thinking / Tool 弱于消息，但缩进和引导线明确。 */
 .task-center-main .thinking-block,
 .task-center-main .execution-group {
   position: relative;
@@ -135,8 +134,7 @@
   height: 1px;
   background: var(--al-line);
 }
-.task-center-main .thinking-block > summary,
-.task-center-main .execution-group > summary {
+.task-center-main .thinking-block > summary {
   display: grid;
   min-height: 34px;
   grid-template-columns: 14px auto minmax(0, 1fr) auto;
@@ -149,12 +147,8 @@
   cursor: pointer;
   list-style: none;
 }
-.task-center-main .thinking-block > summary::-webkit-details-marker,
-.task-center-main .execution-group > summary::-webkit-details-marker { display: none; }
-.task-center-main .thinking-block > summary:hover,
-.task-center-main .execution-group > summary:hover { background: transparent; }
-.task-center-main .thinking-block > summary::before,
-.task-center-main .execution-group > summary::before {
+.task-center-main .thinking-block > summary::-webkit-details-marker { display: none; }
+.task-center-main .thinking-block > summary::before {
   content: "›";
   display: block;
   color: var(--al-muted);
@@ -162,8 +156,18 @@
   line-height: 1;
   transition: transform .12s;
 }
-.task-center-main .thinking-block[open] > summary::before,
-.task-center-main .execution-group[open] > summary::before { transform: rotate(90deg); }
+.task-center-main .thinking-block[open] > summary::before { transform: rotate(90deg); }
+
+/* Tool Group 只有摘要，不是折叠器；Tool Row 永远渲染。 */
+.task-center-main .tool-group-summary {
+  display: grid;
+  min-height: 34px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  padding: 0 5px 0 26px;
+  color: var(--al-muted);
+}
 .task-center-main .thinking-label,
 .task-center-main .tool-title { font-size: 12px; font-weight: 650; white-space: nowrap; }
 .task-center-main .thinking-label { color: color-mix(in srgb, var(--al-accent) 68%, var(--al-muted)); }
@@ -183,7 +187,7 @@
 .task-center-main .tool-counts { display: flex; gap: 4px; }
 .task-center-main .tool-counts span { color: var(--al-muted); font-size: 12px; white-space: nowrap; }
 
-/* 01–07 · Tool Call：默认可见，四列事实行；只有 Payload / 输出下钻。 */
+/* 01–07/10 · Tool Call：四列事实行；核心事实 13px，辅助状态 12px。 */
 .task-center-main .execution-list,
 .task-center-main .tool-list {
   margin: 0 6px 6px 21px;
@@ -278,7 +282,7 @@
 .task-center-main .tool-status.run { color: var(--al-accent); }
 .task-center-main .tool-status.error { color: var(--al-danger); }
 
-/* 05 · Payload / 长输出：局部展示，不替代 Tool Call 主行。 */
+/* 05/13 · Payload：完成态默认折叠；错误可自动展开；Running 只显示有限高度实时预览。 */
 .task-center-main .tool-payload {
   margin: 0 7px 6px 76px;
   padding: 4px 0 0 8px;
@@ -301,7 +305,7 @@
 .task-center-main .tool-output-details[open] { padding-bottom: 2px; }
 .task-center-main .task-tool-row-shell:has(.tool-status.error) .tool-output-details > summary { color: var(--al-danger); }
 
-/* 11 · 主桌面四列稳定；只在既定窄断点按固定顺序降级。 */
+/* 11 · 1280×800 / 1366×768 均保持四列；只在既定窄断点固定降级。 */
 @media (max-width: 1199.98px) {
   .task-center-main .execution-row.tool-row { grid-template-columns: 72px 92px minmax(0, 1fr) auto; }
 }
@@ -317,14 +321,16 @@
   .task-center-main .task-message-bubble { max-width: 94%; }
   .task-center-main .thinking-block,
   .task-center-main .execution-group { margin-right: 6px; margin-left: 24px; }
+  .task-center-main .tool-group-summary { padding-left: 22px; }
   .task-center-main .execution-row.tool-row { grid-template-columns: 68px minmax(0, 1fr); }
   .task-center-main .tool-status { grid-column: 2; }
   .task-center-main .tool-payload { margin-left: 68px; }
 }
 
-/* 12 · 减少非必要动效。 */
+/* 12 · 主题与交互：依赖 Token，不引入大面积高亮；减少非必要动效。 */
+:root[data-theme='dark'] .task-center-main .execution-row.tool-row:hover { background: color-mix(in srgb, var(--al-soft-2) 72%, transparent); }
+:root[data-theme='dark'] .task-center-main .tool-live-output { background: color-mix(in srgb, var(--al-accent-soft) 12%, var(--al-soft-2)); }
 @media (prefers-reduced-motion: reduce) {
   .task-center-main .interaction-chevron,
-  .task-center-main .thinking-block > summary::before,
-  .task-center-main .execution-group > summary::before { transition: none; }
+  .task-center-main .thinking-block > summary::before { transition: none; }
 }
