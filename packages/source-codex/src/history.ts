@@ -267,15 +267,17 @@ export async function* ingestCodexHistory(ctx: SourceExecutionContext): AsyncIte
     if (indexedTitle && session.title !== indexedTitle.title) session.title = indexedTitle.title
 
     const startRecord = metadataRecord(ctx, filePath, session, 'session_start', indexedTitle)
-    if (startRecord && previousMetadata.startFingerprint !== startRecord.fingerprint) {
+    const startFingerprint = startRecord?.fingerprint
+    if (startRecord && startFingerprint && previousMetadata.startFingerprint !== startFingerprint) {
       yield startRecord
-      previousMetadata.startFingerprint = startRecord.fingerprint
+      previousMetadata.startFingerprint = startFingerprint
       await ctx.checkpoint.set(metadataKey, previousMetadata)
     }
     const titleRecord = metadataRecord(ctx, filePath, session, 'session_title', indexedTitle)
-    if (titleRecord && previousMetadata.titleFingerprint !== titleRecord.fingerprint) {
+    const titleFingerprint = titleRecord?.fingerprint
+    if (titleRecord && titleFingerprint && previousMetadata.titleFingerprint !== titleFingerprint) {
       yield titleRecord
-      previousMetadata.titleFingerprint = titleRecord.fingerprint
+      previousMetadata.titleFingerprint = titleFingerprint
       await ctx.checkpoint.set(metadataKey, previousMetadata)
     }
 
