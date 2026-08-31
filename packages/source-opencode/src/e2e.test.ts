@@ -25,7 +25,7 @@ async function waitFor(predicate: () => Promise<boolean>, timeoutMs = 3000): Pro
   throw new Error('Timed out waiting for OpenCode native-tail capture')
 }
 
-test('OpenCode Source reads native SQLite history and observes in-place part updates', async () => {
+test('OpenCode Source reads native SQLite title/history and observes in-place part updates', async () => {
   const root = await mkdtemp(join(tmpdir(), 'agent-lens-opencode-'))
   const sourceRoot = join(root, 'opencode')
   const workspace = join(root, 'workspace')
@@ -36,7 +36,7 @@ test('OpenCode Source reads native SQLite history and observes in-place part upd
 
   const nativeDb = new Database(dbPath)
   nativeDb.exec(`
-    CREATE TABLE session (id TEXT PRIMARY KEY, directory TEXT);
+    CREATE TABLE session (id TEXT PRIMARY KEY, directory TEXT, title TEXT);
     CREATE TABLE message (id TEXT PRIMARY KEY, data TEXT);
     CREATE TABLE part (
       id TEXT PRIMARY KEY,
@@ -46,7 +46,7 @@ test('OpenCode Source reads native SQLite history and observes in-place part upd
       data TEXT
     );
   `)
-  nativeDb.prepare('INSERT INTO session (id, directory) VALUES (?, ?)').run('ses_1', workspace)
+  nativeDb.prepare('INSERT INTO session (id, directory, title) VALUES (?, ?, ?)').run('ses_1', workspace, 'OpenCode 原生会话标题')
   nativeDb.prepare('INSERT INTO message (id, data) VALUES (?, ?)').run('msg_u', JSON.stringify({ role: 'user' }))
   nativeDb.prepare('INSERT INTO message (id, data) VALUES (?, ?)').run('msg_a', JSON.stringify({ role: 'assistant', modelID: 'test-model' }))
   nativeDb.prepare('INSERT INTO part (id, message_id, session_id, time_created, data) VALUES (?, ?, ?, ?, ?)').run(
@@ -84,6 +84,9 @@ test('OpenCode Source reads native SQLite history and observes in-place part upd
     assert.equal(facts.filter(item => item.kind === 'message.user').length, 1)
     assert.equal(facts.filter(item => item.kind === 'tool.call').length, 1)
     assert.equal(facts.filter(item => item.kind === 'tool.result').length, 0)
+
+    const logical = await storage.repositories.sessions.getLogicalSession(facts[0]!.logicalSessionId)
+    assert.equal(logical?.title, 'OpenCode 原生会话标题')
 
     const controller = new AbortController()
     const handle = await runtime.start({ source: openCodeSourceDefinition, host, detected, abortSignal: controller.signal })
