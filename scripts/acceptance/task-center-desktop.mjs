@@ -108,7 +108,7 @@ async function inspect(win, viewport, theme) {
       taskButtonCount: all('.task-center-rail button.session-item').length,
       presentation: {
         toolGroupCount: toolGroups.length,
-        collapsibleToolGroupCount: toolGroups.filter(group => group.tagName === 'DETAILS').length,
+        closedToolGroupCount: toolGroups.filter(group => group.tagName === 'DETAILS' && !group.open).length,
         toolFactCount: toolFacts.length,
         hiddenToolFactCount: toolFacts.filter(item => !visible(item)).length,
         toolGridColumns: toolStyle?.gridTemplateColumns || '',
@@ -150,8 +150,8 @@ async function inspect(win, viewport, theme) {
   if (value.detailScroll && !['auto', 'scroll'].includes(value.overflow.detailY)) errors.push(`右侧详情不是独立滚动根：overflow-y=${value.overflow.detailY}`)
 
   const p = value.presentation
-  if (p.collapsibleToolGroupCount > 0) errors.push(`Tool Group 仍有 ${p.collapsibleToolGroupCount} 个使用组级折叠，会隐藏 Tool Call 事实`)
-  if (p.hiddenToolFactCount > 0) errors.push(`存在 ${p.hiddenToolFactCount}/${p.toolFactCount} 条 Tool Call 事实不可见`)
+  if (p.toolGroupCount > 0 && p.closedToolGroupCount > 0) errors.push(`初始 Tool Group 有 ${p.closedToolGroupCount}/${p.toolGroupCount} 个未按原型默认展开`)
+  if (p.toolFactCount > 0 && p.hiddenToolFactCount > 0) errors.push(`初始状态存在 ${p.hiddenToolFactCount}/${p.toolFactCount} 条 Tool Call 事实不可见`)
   if (p.toolGridColumnCount > 0 && viewport.width >= 1200 && p.toolGridColumnCount !== 4) errors.push(`Tool Row 桌面主基线不是四列：${p.toolGridColumns}`)
   if (p.toolFont > 0 && p.toolFont < 13) errors.push(`Tool Call 主体字号过小：${p.toolFont}px`)
   if (p.toolActionFont > 0 && p.toolActionFont < 13) errors.push(`Tool 操作名称字号过小：${p.toolActionFont}px`)
