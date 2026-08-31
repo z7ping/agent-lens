@@ -1,9 +1,10 @@
 import { readFile } from 'node:fs/promises'
 
-const [app, taskCenter, taskSurface, taskCenterCss, reviewPage, page, hubPage, history, client, css, http, runtime, sdkLoader, coreObservation, timelineProtocol] = await Promise.all([
+const [app, taskCenter, taskSurface, taskMessage, taskCenterCss, reviewPage, page, hubPage, history, client, css, http, runtime, sdkLoader, coreObservation, timelineProtocol] = await Promise.all([
   readFile(new URL('../packages/web/src/App.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/TaskCenterPage.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/TaskSurface.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/web/src/features/TaskMessage.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/task-center.css', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/ReviewPage.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/PiLivePage.tsx', import.meta.url), 'utf8'),
@@ -50,6 +51,14 @@ if (/setCwd|工作目录\s*<input|placeholder=.*workspace/.test(taskCenter)) fai
 if (/\.task-center-main \.pi-live-page > \.pi-live-sessions\s*\{\s*display:\s*none;/m.test(taskCenterCss)) failures.push('任务中心不得继续依赖 CSS 隐藏 Pi Live 第二套侧栏')
 if (/\.task-center-main \.review-layout > \.session-panel\s*\{\s*display:\s*none;/m.test(taskCenterCss)) failures.push('任务中心不得继续依赖 CSS 隐藏 Review 第二套侧栏')
 if (/\.task-center-main \.hub-review-toolbar\s*\{\s*display:\s*none;/m.test(taskCenterCss)) failures.push('任务中心不得继续依赖 CSS 隐藏 Hub 工具栏')
+
+requireText(taskMessage, /export function TaskMessage/, '统一 Task Message 组件缺失')
+requireText(taskMessage, />查看源码</, '统一 Task Message 必须保留“查看源码”')
+requireText(taskMessage, /返回渲染/, '统一 Task Message 必须保留“返回渲染”')
+requireText(taskMessage, /Streaming Tail 不使用本组件/, '统一 Task Message 必须明确排除 Streaming Tail')
+requireText(page, /import \{ TaskMessage \} from '\.\/TaskMessage'/, 'Pi Live 已完成消息必须接入统一 TaskMessage')
+requireText(page, /item\.kind === 'message'[\s\S]{0,320}<TaskMessage/, 'Pi Live 持久化消息必须通过 TaskMessage 渲染')
+requireText(page, /streamText && <div className="pi-live-stream-response"/, 'Pi Live Streaming Tail 必须保留独立实时渲染，不得误接源码切换')
 
 requireText(page, /onCompositionStart/, 'Pi Live 输入框缺少 compositionstart 保护')
 requireText(page, /nativeEvent\.isComposing/, 'Pi Live 输入框缺少 isComposing 保护')
@@ -105,4 +114,4 @@ if (failures.length) {
   process.exit(1)
 }
 
-console.log('Pi Live / 任务中心契约检查通过：统一 TaskSurface、嵌入态详情、官方 Pi SDK Runtime、活跃任务列举、项目上下文启动、事件层级、历史事实、IME、Stop/Terminate、滚动跟随、Extension UI、背压与性能诊断已锁定。')
+console.log('Pi Live / 任务中心契约检查通过：统一 TaskSurface、TaskMessage、嵌入态详情、官方 Pi SDK Runtime、活跃任务列举、项目上下文启动、事件层级、历史事实、IME、Stop/Terminate、滚动跟随、Extension UI、背压与性能诊断已锁定。')
