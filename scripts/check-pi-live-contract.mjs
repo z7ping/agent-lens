@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 
-const [app, taskCenter, taskSurface, taskMessage, taskCenterCss, reviewPage, page, hubPage, history, client, css, http, runtime, sdkLoader, coreObservation, timelineProtocol] = await Promise.all([
+const [app, taskCenter, taskSurface, taskMessage, taskCenterCss, reviewPage, page, hubPage, history, client, css, http, runtime, sdkLoader, sdkAdapter, runtimePackage, coreObservation, timelineProtocol] = await Promise.all([
   readFile(new URL('../packages/web/src/App.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/TaskCenterPage.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/TaskSurface.tsx', import.meta.url), 'utf8'),
@@ -15,6 +15,8 @@ const [app, taskCenter, taskSurface, taskMessage, taskCenterCss, reviewPage, pag
   readFile(new URL('../packages/surface-http/src/pi-live.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/runtime-cordis/src/pi-live/service.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/runtime-cordis/src/pi-live/sdk-loader.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/runtime-cordis/src/pi-live/pi-sdk-adapter.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/runtime-cordis/package.json', import.meta.url), 'utf8'),
   readFile(new URL('../packages/core/src/domain/observation.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/protocol/src/timeline.ts', import.meta.url), 'utf8'),
 ])
@@ -96,10 +98,20 @@ requireText(http, /service\.terminate\(runtimeSessionId\)/, 'Pi Runtime 必须�
 requireText(runtime, /async list\(\): Promise<PiLiveRuntimeState\[]>/, 'Pi Runtime Service 必须提供当前 generation 活跃 Runtime 列举')
 requireText(runtime, /async clearQueue\(runtimeSessionId: string\)[\s\S]{0,180}\.session\.clearQueue\(\)/, 'Abort 必须支持队列取回')
 requireText(runtime, /session\.bindExtensions\(/, 'Pi Live 必须通过官方 AgentSession 绑定 Extension Runtime')
+requireText(runtime, /assertPiSdkSession\(created\.session, installed\.sdkEntry, installed\.version\)/, 'Pi Live 启动前必须校验实际 AgentSession capability')
 requireText(runtime, /extensionUi\.respond\(requestId, response\)/, 'Extension UI 必须原样关联 Pi SDK request id')
-requireText(sdkLoader, /@earendil-works\/pi-coding-agent/, 'Pi Live 必须从官方 npm 包定位 SDK')
-requireText(sdkLoader, /createAgentSession/, 'Pi Live SDK Loader 必须校验官方 createAgentSession API')
-requireText(sdkLoader, /await import\(pathToFileURL\(discovery\.sdkEntry\)\.href\)/, 'Pi Live 必须进程内加载官方 SDK，不得重新 spawn RPC')
+
+requireText(sdkAdapter, /from '@earendil-works\/pi-coding-agent'/, 'Pi SDK Adapter 必须直接从官方包派生开发期类型')
+requireText(sdkAdapter, /PI_SDK_TYPE_BASELINE = '0\.84\.4'/, 'Pi SDK Adapter 必须记录当前官方类型基线 0.84.4')
+requireText(sdkAdapter, /type PiSdkModel = Pick<OfficialPiModel/, 'Pi SDK Adapter 应只暴露 AgentLens 实际需要的官方类型能力，不得泄漏整个 Pi 内部类')
+requireText(sdkAdapter, /export function assertPiSdkModule/, 'Pi SDK Adapter 缺少 Module capability 校验')
+requireText(sdkAdapter, /export function assertPiSdkSession/, 'Pi SDK Adapter 缺少 Session capability 校验')
+requireText(sdkAdapter, /export function asPiSdkExtensionUiContext/, 'Pi SDK Adapter 缺少 Extension UI capability 校验')
+requireText(runtimePackage, /"@earendil-works\/pi-coding-agent":\s*"0\.84\.4"/, 'runtime-cordis 必须以官方 Pi SDK 0.84.4 作为开发/CI 类型基线')
+requireText(sdkLoader, /PI_SDK_PACKAGE_NAME/, 'Pi Live Loader 必须只定位官方 Pi npm 包')
+requireText(sdkLoader, /await import\(pathToFileURL\(discovery\.sdkEntry\)\.href\)/, 'Pi Live 必须进程内加载用户实际安装的官方 SDK，不得捆绑第二份 Runtime')
+requireText(sdkLoader, /assertPiSdkModule\(imported, discovery\.sdkEntry, discovery\.version\)/, 'Pi Live Loader 必须执行官方 SDK Module capability 校验')
+if (/export interface PiSdk(?:Session|Module|Model)/.test(sdkLoader)) failures.push('Pi SDK Loader 不得重新维护手写 SDK 接口镜像；类型边界必须收敛到 PiSdkAdapter')
 if (/PiRpcClient|--mode['"\s,]+rpc|child_process/.test(`${runtime}\n${sdkLoader}`)) failures.push('Pi Live Runtime 不得重新引入自维护 RPC 子进程协议')
 
 if (/font-size:\s*(?:[0-9]|1[01])px/.test(css) || /font-size:\s*(?:[0-9]|1[01])px/.test(taskCenterCss)) failures.push('Pi Live / 任务中心可见文字不得小于 12px')
@@ -116,4 +128,4 @@ if (failures.length) {
   process.exit(1)
 }
 
-console.log('Pi Live / 任务中心契约检查通过：统一 TaskSurface、TaskMessage、嵌入态详情、官方 Pi SDK Runtime、活跃任务列举、项目上下文启动、事件层级、历史事实、IME、Stop/Terminate、滚动跟随、Extension UI、背压与性能诊断已锁定。')
+console.log('Pi Live / 任务中心契约检查通过：统一 TaskSurface、TaskMessage、嵌入态详情、官方 Pi SDK 类型适配与 capability 校验、活跃任务列举、项目上下文启动、事件层级、历史事实、IME、Stop/Terminate、滚动跟随、Extension UI、背压与性能诊断已锁定。')
