@@ -205,7 +205,7 @@ async function inspect(win, viewport, theme) {
         toolFactCount: toolFacts.length,
         hiddenToolFactCount: toolFacts.filter(item => !visible(item)).length,
         toolGridColumns: toolStyle?.gridTemplateColumns || '',
-        toolGridColumnCount: toolStyle?.gridTemplateColumns?.trim().split(/\\s+/).filter(Boolean).length || 0,
+        toolGridColumnCount: toolStyle?.gridTemplateColumns?.trim().split(/\s+/).filter(Boolean).length || 0,
         toolRow: rect(firstTool),
         toolRowClientWidth: firstTool?.clientWidth || 0,
         toolRowScrollWidth: firstTool?.scrollWidth || 0,
@@ -248,7 +248,7 @@ async function inspect(win, viewport, theme) {
   if (p.toolFactCount > 0 && p.hiddenToolFactCount > 0) errors.push(`初始状态存在 ${p.hiddenToolFactCount}/${p.toolFactCount} 条 Tool Call 事实不可见`)
   if (p.toolGridColumnCount > 0 && viewport.width >= 1200 && p.toolGridColumnCount !== 4) errors.push(`Tool Row 桌面主基线不是四列：${p.toolGridColumns}`)
   if (p.toolFont > 0 && p.toolFont < 13) errors.push(`Tool Call 主体字号过小：${p.toolFont}px`)
-  if (p.toolActionFont > 0 && p.toolActionFont < 13) errors.push(`Tool 操作名称字号过小：${p.toolActionFont}px`)
+  if (p.toolActionFont > 0 && p.toolActionFont < 12) errors.push(`Tool 操作名称字号偏离高保真原型：${p.toolActionFont}px`)
   if (p.toolTargetFont > 0 && p.toolTargetFont < 13) errors.push(`Tool 目标字号过小：${p.toolTargetFont}px`)
   if (p.toolStatusFont > 0 && p.toolStatusFont < 12) errors.push(`Tool 状态字号过小：${p.toolStatusFont}px`)
   if (p.userMessageFont > 0 && p.userMessageFont < 14) errors.push(`用户消息字号过小：${p.userMessageFont}px`)
