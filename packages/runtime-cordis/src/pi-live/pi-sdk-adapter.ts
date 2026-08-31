@@ -11,17 +11,20 @@ export const PI_SDK_TESTED_MINOR = '0.84'
 type OfficialPiModule = typeof import('@earendil-works/pi-coding-agent')
 type OfficialPiModel = NonNullable<AgentSession['model']>
 type OfficialCreateAgentSessionOptions = NonNullable<Parameters<OfficialPiModule['createAgentSession']>[0]>
+type OfficialExtensionBindings = Parameters<AgentSession['bindExtensions']>[0]
 
 export type PiSdkModel = Pick<OfficialPiModel, 'provider' | 'id' | 'name' | 'reasoning'>
 export type PiSdkPromptOptions = Pick<PromptOptions, 'streamingBehavior' | 'source' | 'preflightResult'>
 export type PiSdkThinkingLevel = Parameters<AgentSession['setThinkingLevel']>[0]
+export type PiSdkExtensionBindings = OfficialExtensionBindings
+export type PiSdkExtensionUiContext = NonNullable<OfficialExtensionBindings['uiContext']>
 
 export interface PiSdkSessionManager {
   getSessionId(): ReturnType<SessionManager['getSessionId']>
   getSessionFile(): ReturnType<SessionManager['getSessionFile']>
   getSessionName(): ReturnType<SessionManager['getSessionName']>
   getLeafId(): ReturnType<SessionManager['getLeafId']>
-  getEntries(): ReturnType<SessionManager['getEntries']>
+  getEntries(): unknown[]
 }
 
 export interface PiSdkModelRuntime {
@@ -40,7 +43,7 @@ export interface PiSdkSession {
   readonly isCompacting: AgentSession['isCompacting']
   readonly pendingMessageCount: AgentSession['pendingMessageCount']
   readonly modelRuntime: PiSdkModelRuntime
-  bindExtensions(bindings: Parameters<AgentSession['bindExtensions']>[0]): ReturnType<AgentSession['bindExtensions']>
+  bindExtensions(bindings: PiSdkExtensionBindings): ReturnType<AgentSession['bindExtensions']>
   subscribe(listener: Parameters<AgentSession['subscribe']>[0]): ReturnType<AgentSession['subscribe']>
   setSessionName(name: Parameters<AgentSession['setSessionName']>[0]): ReturnType<AgentSession['setSessionName']>
   setModel(model: PiSdkModel): Promise<void>
@@ -145,4 +148,43 @@ export function assertPiSdkSession(value: unknown, sdkEntry: string, version?: s
       `Installed Pi SDK session${suffix} is missing required capabilities: ${missing.join(', ')}. Entry: ${sdkEntry}`,
     )
   }
+}
+
+const PI_EXTENSION_UI_METHODS = [
+  'select',
+  'confirm',
+  'input',
+  'notify',
+  'onTerminalInput',
+  'setStatus',
+  'setWorkingMessage',
+  'setWorkingVisible',
+  'setWorkingIndicator',
+  'setHiddenThinkingLabel',
+  'setWidget',
+  'setFooter',
+  'setHeader',
+  'setTitle',
+  'custom',
+  'pasteToEditor',
+  'setEditorText',
+  'getEditorText',
+  'editor',
+  'addAutocompleteProvider',
+  'setEditorComponent',
+  'getEditorComponent',
+  'getAllThemes',
+  'getTheme',
+  'setTheme',
+  'getToolsExpanded',
+  'setToolsExpanded',
+] as const
+
+export function asPiSdkExtensionUiContext(value: Record<string, unknown>): PiSdkExtensionUiContext {
+  const missing = missingCapabilities(value, PI_EXTENSION_UI_METHODS)
+  if (!value.theme || typeof value.theme !== 'object') missing.push('theme')
+  if (missing.length) {
+    throw new Error(`AgentLens Pi Extension UI bridge is missing required capabilities: ${missing.join(', ')}`)
+  }
+  return value as unknown as PiSdkExtensionUiContext
 }
