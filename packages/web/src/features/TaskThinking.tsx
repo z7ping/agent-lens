@@ -27,11 +27,11 @@ export function TaskThinking({
     onToggle={event => setExpanded(event.currentTarget.open)}
   >
     <summary>
-      <span className="thinking-label">{model.label}</span>
+      <span className="thinking-label thinking-title">{model.label}</span>
       {model.preview && <span className="thinking-preview node-preview">{model.preview}</span>}
       <span className="thinking-summary-meta">{meta}{model.time && <time>{model.time}</time>}</span>
     </summary>
-    <div className="thinking-content">{children}</div>
+    <div className="thinking-content thinking-body">{children}</div>
     {actions && <div className="task-thinking-actions">{actions}</div>}
   </details>
 }
