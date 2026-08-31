@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { PiLiveRunningTaskRound } from './PiLiveTaskRound'
 import { TaskMessage } from './TaskMessage'
 import { TaskRound } from './TaskRound'
 import { TaskToolGroup } from './TaskToolGroup'
@@ -29,6 +30,17 @@ const round: TaskRoundModel = {
   toolCount: 4,
   errorCount: 0,
   durationMs: 108_000,
+  highLatency: false,
+}
+
+const runningRound: TaskRoundModel = {
+  id: 'round:running',
+  label: '第 6 轮',
+  state: 'running',
+  preview: '当前执行',
+  toolCount: 1,
+  errorCount: 0,
+  durationMs: 0,
   highLatency: false,
 }
 
@@ -68,4 +80,34 @@ test('Message 保持用户右 / Agent 左的单一正文结构', () => {
   assert.match(assistant, /message-row[^\"]*agent/)
   assert.match(assistant, /task-message-agent-mark/)
   assert.match(assistant, /chat-bubble-agent/)
+})
+
+test('Pi Running Tool 在主事实行下展示有限高度实时输出入口', () => {
+  const html = renderToStaticMarkup(createElement(PiLiveRunningTaskRound, {
+    model: runningRound,
+    thinkingText: '检查文件后继续执行。',
+    tools: [{ id: 'running-tool', name: 'bash', status: 'running', summary: 'npm test', output: 'line 1\nline 2' }],
+    streamText: '',
+    isStreaming: true,
+    pendingMessageCount: 0,
+  }))
+  assert.match(html, /data-status="running"/)
+  assert.match(html, /data-tool-fact="true"/)
+  assert.match(html, /class="tool-live-output"/)
+  assert.match(html, /line 1/)
+  assert.match(html, /<details[^>]*class="task-tool-group[^>]*open=""|<details[^>]*open=""[^>]*class="task-tool-group/)
+})
+
+test('Pi Running 失败 Tool 保留事实行并默认展开错误输出', () => {
+  const html = renderToStaticMarkup(createElement(PiLiveRunningTaskRound, {
+    model: { ...runningRound, state: 'settled', errorCount: 1 },
+    thinkingText: '',
+    tools: [{ id: 'error-tool', name: 'npm test', status: 'error', summary: 'web tests', output: '1 assertion failed' }],
+    streamText: '',
+    isStreaming: false,
+    pendingMessageCount: 0,
+  }))
+  assert.match(html, /data-status="error"/)
+  assert.match(html, /class="tool-output-details"[^>]*open=""|open=""[^>]*class="tool-output-details"/)
+  assert.match(html, /1 assertion failed/)
 })
