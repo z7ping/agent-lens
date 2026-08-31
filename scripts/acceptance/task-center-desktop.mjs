@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, rename, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { app, BrowserWindow } from 'electron'
 
@@ -10,7 +10,17 @@ const viewports = [
   { width: 1366, height: 768 },
 ]
 const themes = ['light', 'dark']
-const report = { kind: 'task-center-desktop', baseUrl, path, startedAt: new Date().toISOString(), cases: [], switchStability: null, diagnostics: [], ok: true }
+const report = {
+  kind: 'task-center-desktop',
+  baseUrl,
+  path,
+  startedAt: new Date().toISOString(),
+  cases: [],
+  inspectorReturn: null,
+  switchStability: null,
+  diagnostics: [],
+  ok: true,
+}
 
 function fail(message) {
   throw new Error(message)
@@ -99,7 +109,10 @@ function safeDetachDebugger(win) {
 }
 
 async function persistReport() {
-  await writeFile(resolve(outputDir, 'task-center-desktop-report.json'), `${JSON.stringify(report, null, 2)}\n`)
+  const target = resolve(outputDir, 'task-center-desktop-report.json')
+  const temporary = resolve(outputDir, `task-center-desktop-report.${process.pid}.tmp`)
+  await writeFile(temporary, `${JSON.stringify(report, null, 2)}\n`)
+  await rename(temporary, target)
 }
 
 async function waitForTaskCenter(win) {
@@ -114,6 +127,21 @@ async function waitForTaskCenter(win) {
     await delay(200)
   }
   fail('20 秒内没有出现 .task-center-page；请确认 AgentLens 已运行且验收 URL 指向任务中心')
+}
+
+async function loadTaskCenter(win, label) {
+  let lastError
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      await withTimeout(win.loadURL(`${baseUrl}${path}`), 15_000, `${label} 页面加载`)
+      await waitForTaskCenter(win)
+      return
+    } catch (error) {
+      lastError = error
+      if (attempt < 3) await delay(250 * attempt)
+    }
+  }
+  throw lastError
 }
 
 async function inspect(win, viewport, theme) {
@@ -234,6 +262,58 @@ async function inspect(win, viewport, theme) {
   return { viewport, theme, value, errors, ok: errors.length === 0 }
 }
 
+async function runInspectorReturn(win) {
+  const setup = await withTimeout(win.webContents.executeJavaScript(`(async () => {
+    const pane = document.querySelector('.review-reader-pane')
+    const trigger = document.querySelector('[data-tool-fact="true"] .tool-row')
+    if (!(pane instanceof HTMLElement) || !(trigger instanceof HTMLElement)) return { skipped: true, reason: '缺少 Review Reader 或 Tool Row' }
+    trigger.dataset.acceptanceInspectorTrigger = 'true'
+    trigger.scrollIntoView({ block: 'center' })
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    const maxScroll = Math.max(0, pane.scrollHeight - pane.clientHeight)
+    const beforeScrollTop = pane.scrollTop
+    trigger.focus({ preventScroll: true })
+    trigger.click()
+    return { skipped: false, beforeScrollTop, maxScroll }
+  })()`), 5_000, '打开 Tool Inspector')
+  if (setup.skipped) return { ...setup, ok: false, errors: [setup.reason] }
+
+  const opened = await withTimeout(win.webContents.executeJavaScript(`(async () => {
+    for (let i = 0; i < 40; i += 1) {
+      const panel = document.querySelector('.inspector-panel[role="dialog"]')
+      if (panel) {
+        const firstTab = panel.querySelector('[role="tab"]')
+        return { open: true, focusInside: panel.contains(document.activeElement), firstTabFocused: document.activeElement === firstTab }
+      }
+      await new Promise(resolve => setTimeout(resolve, 25))
+    }
+    return { open: false, focusInside: false, firstTabFocused: false }
+  })()`), 3_000, '等待 Tool Inspector')
+
+  await withTimeout(win.webContents.executeJavaScript(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))`), 2_000, 'Esc 关闭 Tool Inspector')
+  await delay(120)
+  const after = await withTimeout(win.webContents.executeJavaScript(`(() => {
+    const pane = document.querySelector('.review-reader-pane')
+    const trigger = document.querySelector('[data-acceptance-inspector-trigger="true"]')
+    const value = {
+      closed: !document.querySelector('.inspector-panel[role="dialog"]'),
+      afterScrollTop: pane instanceof HTMLElement ? pane.scrollTop : -1,
+      focusReturned: trigger instanceof HTMLElement && document.activeElement === trigger,
+    }
+    if (trigger instanceof HTMLElement) delete trigger.dataset.acceptanceInspectorTrigger
+    return value
+  })()`), 3_000, '核对 Tool Inspector 返回状态')
+
+  const errors = []
+  if (!opened.open) errors.push('Tool Inspector 未打开')
+  if (!opened.focusInside || !opened.firstTabFocused) errors.push('Tool Inspector 打开后焦点未进入首个 Tab')
+  if (!after.closed) errors.push('Esc 未关闭 Tool Inspector')
+  if (!after.focusReturned) errors.push('关闭 Tool Inspector 后焦点未返回原 Tool Call')
+  if (Math.abs(after.afterScrollTop - setup.beforeScrollTop) > 2) errors.push(`关闭 Tool Inspector 后滚动位置漂移：${setup.beforeScrollTop} → ${after.afterScrollTop}`)
+  if (setup.maxScroll > 0 && setup.beforeScrollTop <= 0) errors.push('Review Reader 可滚动但 Inspector 验收未建立非零阅读位置')
+  return { skipped: false, ...setup, ...opened, ...after, errors, ok: errors.length === 0 }
+}
+
 async function clickTaskSequence(win, count) {
   return withTimeout(win.webContents.executeJavaScript(`(async () => {
     const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
@@ -248,6 +328,15 @@ async function clickTaskSequence(win, count) {
   })()`), Math.max(5_000, count * 120), `${count} 次任务切换`)
 }
 
+async function collectDomCounters(win, label) {
+  ensureDebugger(win)
+  await withTimeout(win.webContents.debugger.sendCommand('HeapProfiler.collectGarbage'), 3_000, `${label} 第一次 GC`)
+  await delay(120)
+  await withTimeout(win.webContents.debugger.sendCommand('HeapProfiler.collectGarbage'), 3_000, `${label} 第二次 GC`)
+  await delay(120)
+  return withTimeout(win.webContents.debugger.sendCommand('Memory.getDOMCounters'), 3_000, `${label} DOM Counters`)
+}
+
 async function runSwitchStability(win) {
   ensureDebugger(win)
   const initialCount = await withTimeout(
@@ -260,18 +349,18 @@ async function runSwitchStability(win) {
   }
 
   await clickTaskSequence(win, 4)
-  await delay(500)
-  const before = await withTimeout(win.webContents.debugger.sendCommand('Memory.getDOMCounters'), 3_000, '读取切换前 DOM Counters')
+  await delay(750)
+  const before = await collectDomCounters(win, '切换前')
   const switched = await clickTaskSequence(win, 100)
-  await delay(1000)
-  const after = await withTimeout(win.webContents.debugger.sendCommand('Memory.getDOMCounters'), 3_000, '读取切换后 DOM Counters')
+  await delay(1500)
+  const after = await collectDomCounters(win, '切换后')
   const listenerGrowth = after.jsEventListeners - before.jsEventListeners
   const nodeGrowth = after.nodes - before.nodes
   const maxNodeGrowth = Math.max(100, Math.ceil(before.nodes * 0.25))
   const errors = []
   if (switched.completed !== 100) errors.push(`仅完成 ${switched.completed}/100 次切换`)
-  if (listenerGrowth > 20) errors.push(`Listener 增长 ${listenerGrowth}，超过 +20`)
-  if (nodeGrowth > maxNodeGrowth) errors.push(`DOM Node 增长 ${nodeGrowth}，超过允许 ${maxNodeGrowth}`)
+  if (listenerGrowth > 20) errors.push(`GC 后 Listener 增长 ${listenerGrowth}，超过 +20`)
+  if (nodeGrowth > maxNodeGrowth) errors.push(`GC 后 DOM Node 增长 ${nodeGrowth}，超过允许 ${maxNodeGrowth}`)
   return {
     skipped: false,
     requiredSwitches: 100,
@@ -282,6 +371,16 @@ async function runSwitchStability(win) {
     errors,
     ok: errors.length === 0,
   }
+}
+
+function createAcceptanceWindow() {
+  return new BrowserWindow({
+    width: 1024,
+    height: 700,
+    show: false,
+    backgroundColor: '#ffffff',
+    webPreferences: { sandbox: true, contextIsolation: true },
+  })
 }
 
 app.commandLine.appendSwitch('disable-gpu')
@@ -303,13 +402,7 @@ hardTimeout = setTimeout(async () => {
 
 try {
   for (const viewport of viewports) {
-    const win = new BrowserWindow({
-      width: 1024,
-      height: 700,
-      show: false,
-      backgroundColor: '#ffffff',
-      webPreferences: { sandbox: true, contextIsolation: true },
-    })
+    const win = createAcceptanceWindow()
     const diagnostic = { viewport, phase: 'created', consoleErrors: [], rendererGone: null }
     report.diagnostics.push(diagnostic)
     win.webContents.on('console-message', (_event, level, message) => {
@@ -320,11 +413,9 @@ try {
     })
     try {
       diagnostic.phase = 'loading'
-      await withTimeout(win.loadURL(`${baseUrl}${path}`), 15_000, `${viewport.width}×${viewport.height} 页面加载`)
+      await loadTaskCenter(win, `${viewport.width}×${viewport.height}`)
       diagnostic.phase = 'emulate-viewport'
       await applyViewport(win, viewport)
-      diagnostic.phase = 'waiting-task-center'
-      await waitForTaskCenter(win)
       diagnostic.phase = 'ready'
       await persistReport()
 
@@ -343,20 +434,48 @@ try {
         console.log(`${result.ok ? '✓' : '✗'} ${viewport.width}×${viewport.height} ${theme} · rail=${Math.round(result.value.rail?.width || 0)}px · rounds=${result.value.roundCount} · tools=${result.value.toolCount}`)
         for (const error of result.errors) console.error(`  - ${error}`)
       }
+
       if (viewport.width === 1280) {
-        diagnostic.phase = 'switch-stability'
-        report.switchStability = await withTimeout(runSwitchStability(win), 20_000, '100 次任务切换稳定性')
-        if (!report.switchStability.ok) report.ok = false
+        diagnostic.phase = 'inspector-return'
+        report.inspectorReturn = await withTimeout(runInspectorReturn(win), 10_000, 'Inspector 返回位置与焦点验收')
+        if (!report.inspectorReturn.ok) report.ok = false
         await persistReport()
-        if (report.switchStability.skipped) console.log(`• 100 次任务切换验收 skipped：${report.switchStability.reason}`)
-        else console.log(`${report.switchStability.ok ? '✓' : '✗'} 100 次任务切换 · listeners ${report.switchStability.growth.jsEventListeners >= 0 ? '+' : ''}${report.switchStability.growth.jsEventListeners} · nodes ${report.switchStability.growth.nodes >= 0 ? '+' : ''}${report.switchStability.growth.nodes}`)
+        console.log(`${report.inspectorReturn.ok ? '✓' : '✗'} Inspector 返回 · scroll ${report.inspectorReturn.beforeScrollTop ?? '-'} → ${report.inspectorReturn.afterScrollTop ?? '-'} · focus=${report.inspectorReturn.focusReturned ? 'returned' : 'lost'}`)
+        for (const error of report.inspectorReturn.errors ?? []) console.error(`  - ${error}`)
       }
+
       diagnostic.phase = 'done'
       await persistReport()
     } finally {
       safeDetachDebugger(win)
       if (!win.isDestroyed()) win.destroy()
+      await delay(120)
     }
+  }
+
+  const switchWin = createAcceptanceWindow()
+  const switchDiagnostic = { viewport: viewports[0], phase: 'switch-created', consoleErrors: [], rendererGone: null }
+  report.diagnostics.push(switchDiagnostic)
+  switchWin.webContents.on('console-message', (_event, level, message) => {
+    if (level >= 2) switchDiagnostic.consoleErrors.push(String(message).slice(0, 500))
+  })
+  switchWin.webContents.on('render-process-gone', (_event, details) => {
+    switchDiagnostic.rendererGone = { reason: details.reason, exitCode: details.exitCode }
+  })
+  try {
+    switchDiagnostic.phase = 'switch-loading'
+    await loadTaskCenter(switchWin, '100 次任务切换')
+    await applyViewport(switchWin, viewports[0])
+    switchDiagnostic.phase = 'switch-stability'
+    report.switchStability = await withTimeout(runSwitchStability(switchWin), 25_000, '100 次任务切换稳定性')
+    if (!report.switchStability.ok) report.ok = false
+    await persistReport()
+    if (report.switchStability.skipped) console.log(`• 100 次任务切换验收 skipped：${report.switchStability.reason}`)
+    else console.log(`${report.switchStability.ok ? '✓' : '✗'} 100 次任务切换（GC 后）· listeners ${report.switchStability.growth.jsEventListeners >= 0 ? '+' : ''}${report.switchStability.growth.jsEventListeners} · nodes ${report.switchStability.growth.nodes >= 0 ? '+' : ''}${report.switchStability.growth.nodes}`)
+    switchDiagnostic.phase = 'switch-done'
+  } finally {
+    safeDetachDebugger(switchWin)
+    if (!switchWin.isDestroyed()) switchWin.destroy()
   }
 } catch (error) {
   report.ok = false
