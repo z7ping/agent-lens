@@ -47,6 +47,10 @@ requireText(taskSurface, /data-task-surface-mode=\{mode\}/, 'TaskSurface 必须�
 requireText(reviewPage, /ReviewPage\(\{ model, embedded = false \}/, 'ReviewPage 必须支持不生成自身会话侧栏的嵌入态')
 requireText(page, /PiLivePage\(\{ embedded = false \}/, 'PiLivePage 必须支持不生成自身实时任务侧栏的嵌入态')
 requireText(hubPage, /HubReviewPage\(\{ embedded = false \}/, 'HubReviewPage 必须支持不生成自身会话侧栏\/工具栏的嵌入态')
+requireText(taskCenter, /className="task-center-toolbar"/, '历史任务筛选栏必须由 TaskCenterPage 统一持有')
+requireText(taskCenter, /筛选历史任务/, '任务中心统一筛选栏必须明确筛选历史任务')
+requireText(reviewPage, /!embedded && <div className="workspace-toolbar">/, '嵌入态 Review 不得继续生成重复筛选栏')
+requireText(taskCenterCss, /\.task-center-toolbar\s*\{[\s\S]{0,260}grid-column:\s*1\s*\/\s*-1/, '任务中心统一筛选栏必须横跨任务列表与详情区域')
 requireText(taskCenter, /deriveTaskProjectOptions/, '新建任务必须从已观测项目上下文推导工作目录')
 requireText(taskCenter, /cwd:\s*selected\.cwd/, 'Pi Runtime cwd 必须来自已选择的真实项目上下文')
 if (/setCwd|工作目录\s*<input|placeholder=.*workspace/.test(taskCenter)) failures.push('任务中心新建主流程不得要求用户手输 cwd')
@@ -128,4 +132,4 @@ if (failures.length) {
   process.exit(1)
 }
 
-console.log('Pi Live / 任务中心契约检查通过：统一 TaskSurface、TaskMessage、嵌入态详情、官方 Pi SDK 类型适配与 capability 校验、活跃任务列举、项目上下文启动、事件层级、历史事实、IME、Stop/Terminate、滚动跟随、Extension UI、背压与性能诊断已锁定。')
+console.log('Pi Live / 任务中心契约检查通过：统一 TaskSurface、TaskMessage、任务中心历史筛选栏、嵌入态详情、官方 Pi SDK 类型适配与 capability 校验、活跃任务列举、项目上下文启动、事件层级、历史事实、IME、Stop/Terminate、滚动跟随、Extension UI、背压与性能诊断已锁定。')
