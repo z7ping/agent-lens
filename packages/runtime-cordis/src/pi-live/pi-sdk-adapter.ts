@@ -8,16 +8,63 @@ export const PI_SDK_PACKAGE_NAME = '@earendil-works/pi-coding-agent'
 export const PI_SDK_TYPE_BASELINE = '0.84.4'
 export const PI_SDK_TESTED_MINOR = '0.84'
 
-export type PiSdkSession = AgentSession
-export type PiSdkSessionManager = SessionManager
-export type PiSdkPromptOptions = PromptOptions
-export type PiSdkModel = NonNullable<AgentSession['model']>
-export type PiSdkModelRuntime = AgentSession['modelRuntime']
+type OfficialPiModule = typeof import('@earendil-works/pi-coding-agent')
+type OfficialPiModel = NonNullable<AgentSession['model']>
+type OfficialCreateAgentSessionOptions = NonNullable<Parameters<OfficialPiModule['createAgentSession']>[0]>
+
+export type PiSdkModel = Pick<OfficialPiModel, 'provider' | 'id' | 'name' | 'reasoning'>
+export type PiSdkPromptOptions = Pick<PromptOptions, 'streamingBehavior' | 'source' | 'preflightResult'>
 export type PiSdkThinkingLevel = Parameters<AgentSession['setThinkingLevel']>[0]
-export type PiSdkModule = Pick<
-  typeof import('@earendil-works/pi-coding-agent'),
-  'createAgentSession' | 'SessionManager'
->
+
+export interface PiSdkSessionManager {
+  getSessionId(): ReturnType<SessionManager['getSessionId']>
+  getSessionFile(): ReturnType<SessionManager['getSessionFile']>
+  getSessionName(): ReturnType<SessionManager['getSessionName']>
+  getLeafId(): ReturnType<SessionManager['getLeafId']>
+  getEntries(): ReturnType<SessionManager['getEntries']>
+}
+
+export interface PiSdkModelRuntime {
+  getAvailableSnapshot(): readonly PiSdkModel[]
+  getAvailable(providerId?: Parameters<AgentSession['modelRuntime']['getAvailable']>[0]): Promise<readonly PiSdkModel[]>
+}
+
+export interface PiSdkSession {
+  readonly sessionManager: PiSdkSessionManager
+  readonly sessionId: AgentSession['sessionId']
+  readonly sessionFile: AgentSession['sessionFile']
+  readonly sessionName: AgentSession['sessionName']
+  readonly model: PiSdkModel | undefined
+  readonly thinkingLevel: AgentSession['thinkingLevel']
+  readonly isStreaming: AgentSession['isStreaming']
+  readonly isCompacting: AgentSession['isCompacting']
+  readonly pendingMessageCount: AgentSession['pendingMessageCount']
+  readonly modelRuntime: PiSdkModelRuntime
+  bindExtensions(bindings: Parameters<AgentSession['bindExtensions']>[0]): ReturnType<AgentSession['bindExtensions']>
+  subscribe(listener: Parameters<AgentSession['subscribe']>[0]): ReturnType<AgentSession['subscribe']>
+  setSessionName(name: Parameters<AgentSession['setSessionName']>[0]): ReturnType<AgentSession['setSessionName']>
+  setModel(model: PiSdkModel): Promise<void>
+  setThinkingLevel(level: PiSdkThinkingLevel): ReturnType<AgentSession['setThinkingLevel']>
+  getAvailableThinkingLevels(): ReturnType<AgentSession['getAvailableThinkingLevels']>
+  prompt(message: Parameters<AgentSession['prompt']>[0], options?: PiSdkPromptOptions): Promise<void>
+  steer(message: Parameters<AgentSession['steer']>[0]): ReturnType<AgentSession['steer']>
+  followUp(message: Parameters<AgentSession['followUp']>[0]): ReturnType<AgentSession['followUp']>
+  clearQueue(): ReturnType<AgentSession['clearQueue']>
+  abort(): ReturnType<AgentSession['abort']>
+  waitForIdle(): ReturnType<AgentSession['waitForIdle']>
+  dispose(): ReturnType<AgentSession['dispose']>
+}
+
+export interface PiSdkModule {
+  createAgentSession(options: {
+    cwd: OfficialCreateAgentSessionOptions['cwd']
+    sessionManager: PiSdkSessionManager
+  }): Promise<{ session: PiSdkSession }>
+  SessionManager: {
+    create(...args: Parameters<OfficialPiModule['SessionManager']['create']>): PiSdkSessionManager
+    open(...args: Parameters<OfficialPiModule['SessionManager']['open']>): PiSdkSessionManager
+  }
+}
 
 export interface PiSdkCompatibility {
   packageVersion?: string | undefined
