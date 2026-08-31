@@ -10,6 +10,7 @@ import type {
 import {
   messageText,
   parseFunctionOutput,
+  sanitizeCodexEntry,
   type CodexStoredEnvelope,
 } from './format'
 
@@ -241,7 +242,7 @@ export async function normalizeCodexRecord(
   }
 
   const envelope = asRecord(record.payload) as unknown as CodexStoredEnvelope
-  const entry = asRecord(envelope.entry)
+  const entry = sanitizeCodexEntry(envelope.entry)
   const payload = asRecord(entry.payload)
   const topType = typeof entry.type === 'string' ? entry.type : 'unknown'
   const innerType = typeof payload.type === 'string' ? payload.type : undefined

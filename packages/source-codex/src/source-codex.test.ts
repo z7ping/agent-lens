@@ -104,9 +104,11 @@ test('history ingest is incremental and preserves every native record', async ()
     assert.equal(second.length, 0)
 
     const serialized = JSON.stringify(first)
-    assert.equal(serialized.includes('<permissions instructions>sandbox'), false)
-    assert.equal(serialized.includes('<environment_context>'), false)
-    assert.equal(serialized.includes('[redacted:injected-context]'), true)
+    const sessionMeta = first.find(record => record.nativeType === 'session_meta')
+    assert.equal((sessionMeta?.payload as any).entry.payload.future_field.nested, 'survives')
+    assert.equal(serialized.includes('<permissions instructions>sandbox'), true)
+    assert.equal(serialized.includes('<environment_context>'), true)
+    assert.equal(serialized.includes('[redacted:injected-context]'), false)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -205,7 +207,7 @@ test('normalizer maps current Codex custom tool calls and structured outputs', a
     capturedAt: '2026-08-31T12:00:00.000Z',
     locator: { kind: 'file', path: 'C:\\Users\\test\\.codex\\sessions\\rollout.jsonl' },
     fingerprint: 'custom-tools-fingerprint',
-    parserVersion: '3',
+    parserVersion: '4',
   }
   const session = { nativeSessionId: 'codex-custom-tools', cwd: 'F:\\proj' }
   const call = await codexSourceDefinition.normalize({

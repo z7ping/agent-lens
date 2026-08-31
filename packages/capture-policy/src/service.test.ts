@@ -150,3 +150,30 @@ test('config off strips normalized asset hints as well as static discovery', () 
   }
   assert.deepEqual(policy.sanitizeNormalizedOutput(output).assetHints, [])
 })
+
+
+test('SourceRecord safety boundary preserves unknown structure while redacting and bounding', () => {
+  const policy = new DefaultCapturePolicyService(settings({ prompt: 'full', tool: 'full' }))
+  const source = record({
+    futureField: { nested: 'survives' },
+    apiToken: 'opaque-native-secret',
+    huge: 'x'.repeat(100_000),
+    many: Array.from({ length: 150 }, (_, index) => ({ index })),
+  })
+  const output: NormalizedSourceOutput = {
+    observations: [{
+      kind: 'unknown',
+      capturedAt: source.capturedAt,
+      payload: { rawType: 'future/native-event', rawPayload: source.payload },
+      identityHints: { nativeSessionId: 'session-1' },
+    }],
+    evidenceCandidates: [],
+  }
+  const safe = policy.sanitizeSourceRecord(source, output)
+  const payload = safe.payload as Record<string, any>
+  assert.equal(payload.futureField.nested, 'survives')
+  assert.equal(payload.apiToken, REDACTED)
+  assert.ok(String(payload.huge).length < 100_000)
+  assert.equal(payload.many.length, 100)
+})
+

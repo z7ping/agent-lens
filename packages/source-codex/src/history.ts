@@ -6,7 +6,6 @@ import type { SourceExecutionContext, SourceRecord } from '@agent-lens/core'
 import {
   nativeIdForEntry,
   nativeTypeForEntry,
-  sanitizeCodexEntry,
   type CodexSessionMetadata,
   type CodexStoredEnvelope,
 } from './format'
@@ -37,7 +36,7 @@ interface CodexThreadName {
 }
 
 const CHECKPOINT_BATCH_SIZE = 100
-const PARSER_VERSION = '3'
+const PARSER_VERSION = '4'
 
 function sha256(value: string | Buffer): string {
   return createHash('sha256').update(value).digest('hex')
@@ -212,14 +211,6 @@ function checkpointKey(filePath: string): string {
   return `codex:history:${sha256(filePath)}`
 }
 
-function isCustomToolEntry(entry: Record<string, unknown>): boolean {
-  if (entry.type !== 'response_item') return false
-  const payload = entry.payload && typeof entry.payload === 'object'
-    ? entry.payload as Record<string, unknown>
-    : {}
-  return payload.type === 'custom_tool_call' || payload.type === 'custom_tool_call_output'
-}
-
 function sourceRecordForLine(
   ctx: SourceExecutionContext,
   filePath: string,
@@ -227,8 +218,7 @@ function sourceRecordForLine(
   line: JsonlLine,
   sequence: number,
 ): SourceRecord {
-  const rawEntry = parseLine(line.text)
-  const entry = sanitizeCodexEntry(rawEntry)
+  const entry = parseLine(line.text)
   const fingerprint = sha256(line.text)
   const envelope: CodexStoredEnvelope = { entry, session }
   const nativeId = nativeIdForEntry(entry)
@@ -337,16 +327,15 @@ export async function* ingestCodexHistory(ctx: SourceExecutionContext): AsyncIte
       await ctx.checkpoint.set(metadataKey, previousMetadata)
     }
 
-    // v2 已经把新版 Codex 的 custom_tool_call 记录推进了历史游标，却归类成 unknown。
-    // 升级时只重放旧游标覆盖范围内的两类受影响事件，避免把全部会话重新写入 SQLite。
+    // Parser v4 changes the persisted SourceRecord contract: native JSON is no longer
+    // field-pruned inside the Codex adapter. Replay the already-consumed prefix once so
+    // deterministic SourceRecord ids are upserted with the safe, complete native payload.
     if (previous && previous.parserVersion !== PARSER_VERSION) {
       let legacySequence = 0
       for await (const line of readJsonlLines(filePath, 0, previous.offset)) {
         if (ctx.abortSignal.aborted) return
         legacySequence += 1
         if (!line.text.trim()) continue
-        const entry = sanitizeCodexEntry(parseLine(line.text))
-        if (!isCustomToolEntry(entry)) continue
         yield sourceRecordForLine(ctx, filePath, session, line, legacySequence)
       }
       await ctx.checkpoint.set(key, { ...previous, parserVersion: PARSER_VERSION })

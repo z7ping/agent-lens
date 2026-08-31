@@ -41,12 +41,11 @@ import {
 } from '@agent-lens/runtime-cordis'
 
 const SOURCE_ID = 'pi'
-const PARSER_VERSION = '2'
+const PARSER_VERSION = '3'
 const RUNTIME_FALLBACK_POLL_MS = 5000
 const RUNTIME_DEBOUNCE_MS = 180
 const MAX_STRING = 64 * 1024
 const SESSION_HEADER_BYTES = 64 * 1024
-const SENSITIVE_KEY = /(password|passwd|secret|token|api[_-]?key|authorization|cookie)/i
 
 interface PiSessionMetadata {
   nativeSessionId: string
@@ -80,19 +79,6 @@ function sha256(value: string | Buffer): string {
 
 function truncate(value: string, limit = MAX_STRING): string {
   return value.length <= limit ? value : `${value.slice(0, limit)}…[truncated]`
-}
-
-function sanitize(value: unknown, depth = 0): unknown {
-  if (depth > 8) return '[max-depth]'
-  if (typeof value === 'string') return truncate(value)
-  if (value == null || typeof value === 'number' || typeof value === 'boolean') return value
-  if (Array.isArray(value)) return value.slice(0, 200).map(item => sanitize(item, depth + 1))
-  if (typeof value !== 'object') return String(value)
-  const result: Record<string, unknown> = {}
-  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
-    result[key] = SENSITIVE_KEY.test(key) ? '[redacted]' : sanitize(item, depth + 1)
-  }
-  return result
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -271,14 +257,14 @@ async function sessionMetadata(filePath: string): Promise<PiSessionMetadata> {
 }
 
 function historyCheckpointKey(filePath: string): string {
-  return `pi:history:v2-session-title:${sha256(filePath)}`
+  return `pi:history:v3-source-integrity:${sha256(filePath)}`
 }
 
 function parseLine(text: string): Record<string, unknown> {
   try {
-    return asRecord(sanitize(JSON.parse(text)))
+    return asRecord(JSON.parse(text))
   } catch {
-    return { type: 'malformed-json', raw: truncate(text, 16 * 1024) }
+    return { type: 'malformed-json', raw: text }
   }
 }
 
