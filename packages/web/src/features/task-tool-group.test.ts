@@ -13,12 +13,12 @@ const model: TaskToolGroupModel = {
   kindCounts: [
     { kind: 'read', label: '读取', count: 1 },
     { kind: 'search', label: '搜索', count: 1 },
-    { kind: 'shell', label: '命令', count: 1 },
+    { kind: 'shell', label: 'Shell', count: 1 },
   ],
   tools: [
     { id: 'read-1', name: '读取文件', kind: 'read', kindLabel: '读取', status: 'success', primary: 'src/review.ts', durationLabel: '42ms' },
     { id: 'search-1', name: '代码搜索', kind: 'search', kindLabel: '搜索', status: 'success', primary: 'TaskToolGroup', durationLabel: '51ms' },
-    { id: 'shell-1', name: '执行命令', kind: 'shell', kindLabel: '命令', status: 'success', primary: 'pnpm test', durationLabel: '38s' },
+    { id: 'shell-1', name: '执行命令', kind: 'shell', kindLabel: 'Shell', status: 'success', primary: 'pnpm test', durationLabel: '38s' },
   ],
 }
 
@@ -26,11 +26,11 @@ function render(defaultExpanded?: boolean): string {
   return renderToStaticMarkup(createElement(TaskToolGroup, defaultExpanded === undefined ? { model } : { model, defaultExpanded }))
 }
 
-test('TaskToolGroup 默认展开并保留每一次具体 Tool Call', () => {
+test('TaskToolGroup 按原型默认展开并保留每一次具体 Tool Call', () => {
   const html = render()
   assert.match(html, /<details[^>]*open=""/)
   assert.match(html, /工具执行/)
-  assert.match(html, /读取 → 搜索 → 命令/)
+  assert.match(html, /读取 → 搜索 → Shell/)
   assert.equal((html.match(/task-tool-row execution-row tool-row/g) ?? []).length, 3)
   assert.match(html, /读取文件/)
   assert.match(html, /src\/review\.ts/)
@@ -55,8 +55,8 @@ test('错误 Tool Call 仍以具体行出现并保留错误语义', () => {
     ...model,
     itemCount: 1,
     errorCount: 1,
-    kindCounts: [{ kind: 'shell', label: '命令', count: 1 }],
-    tools: [{ id: 'shell-error', name: '运行测试', kind: 'shell', kindLabel: '命令', status: 'error', primary: 'pnpm test', durationLabel: '1.2s' }],
+    kindCounts: [{ kind: 'shell', label: 'Shell', count: 1 }],
+    tools: [{ id: 'shell-error', name: '运行测试', kind: 'shell', kindLabel: 'Shell', status: 'error', primary: 'pnpm test', durationLabel: '1.2s' }],
   }
   const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: errorModel }))
   assert.match(html, /task-tool-row execution-row tool-row error/)
