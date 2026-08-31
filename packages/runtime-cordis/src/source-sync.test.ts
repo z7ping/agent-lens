@@ -131,7 +131,13 @@ test('history synchronization continues after one source fails', async () => {
     { source: healthy, host, detected: detected('healthy') },
   ]
   const ctx = {
-    storage: {},
+    storage: {
+      repositories: {
+        sourceRecords: {
+          async listForParserReplay() { return [] },
+        },
+      },
+    },
     identity: { async resolveInstallation() { return installation } },
     observations: {},
     capabilities: {

@@ -363,6 +363,41 @@ export class SourceHistoryRunner {
         observationsUnchanged: 0,
       }
 
+      const replay = this.storage.repositories.sourceRecords.listForParserReplay
+      if (replay) {
+        let after: { capturedAt: string; id: string } | undefined
+        while (!abortSignal.aborted) {
+          const records = await replay(
+            source.manifest.sourceId,
+            installation.id,
+            source.manifest.parserVersion,
+            after,
+            500,
+          )
+          if (!records.length) break
+          for (const stored of records) {
+            if (abortSignal.aborted) break
+            const processed = await processSourceRecord(
+              this.storage,
+              this.observations,
+              this.coverage,
+              this.capturePolicy,
+              source,
+              host,
+              installation,
+              runtimeProfile,
+              { ...stored, parserVersion: source.manifest.parserVersion },
+            )
+            result.observationsCreated += processed.observationsCreated
+            result.observationsMerged += processed.observationsMerged
+            result.observationsUnchanged += processed.observationsUnchanged
+          }
+          const last = records.at(-1)!
+          after = { capturedAt: last.capturedAt, id: last.id }
+          if (records.length < 500) break
+        }
+      }
+
       if (!source.ingestHistory) {
         await markHealthy(this.storage, runtimeStatus)
         return result

@@ -279,8 +279,20 @@ export interface SessionRepository {
   putInteraction(interaction: Interaction): Promise<void>
 }
 
+export interface SourceRecordReplayCursor {
+  capturedAt: string
+  id: SourceRecordId
+}
+
 export interface SourceRecordRepository {
   get(id: SourceRecordId): Promise<SourceRecord | null>
+  listForParserReplay?(
+    sourceId: string,
+    installationId: AgentInstallationId,
+    currentParserVersion: string,
+    after?: SourceRecordReplayCursor,
+    limit?: number,
+  ): Promise<SourceRecord[]>
   findByNativeId(
     sourceId: string,
     installationId: AgentInstallationId,

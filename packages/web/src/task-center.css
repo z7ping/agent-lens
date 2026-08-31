@@ -167,7 +167,6 @@
   border-bottom: 1px solid var(--al-line);
   background: color-mix(in srgb, var(--al-surface) 96%, transparent);
   box-shadow: none;
-  backdrop-filter: blur(8px);
 }
 .task-center-main .round-nav small { display: none; }
 .task-center-main .round-nav button { min-height: 26px; border-radius: 6px; font-size: 12px; }

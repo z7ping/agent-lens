@@ -157,6 +157,15 @@ export function PiLiveHistoryTaskRound({ projection }: { projection: PiLiveTaskR
       }
       if (entry.kind === 'thinking') return <HistoryThinking key={entry.id} item={entry}/>
       if (entry.kind === 'tool-group') return <HistoryToolGroup key={entry.id} id={entry.id} items={entry.items}/>
+      if (entry.kind === 'usage') {
+        const cost = entry.usage.cost?.total
+        return <div key={entry.id} className="pi-live-history-lifecycle pi-live-history-usage">
+          <b>用量</b>
+          <span>输入 {entry.usage.inputTokens.toLocaleString()} · 输出 {entry.usage.outputTokens.toLocaleString()} · 缓存读 {entry.usage.cacheReadTokens.toLocaleString()} · 缓存写 {entry.usage.cacheWriteTokens.toLocaleString()} · 共 {entry.usage.totalTokens.toLocaleString()} 词元</span>
+          {cost !== undefined && <small>成本 ${cost.toFixed(4)}</small>}
+          {entry.at && <time>{formatClock(entry.at)}</time>}
+        </div>
+      }
       if (entry.kind === 'lifecycle') {
         return <div key={entry.id} className="pi-live-history-lifecycle">
           <b>{entry.label}</b>

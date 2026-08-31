@@ -39,9 +39,10 @@ import {
   defineAgentLensPlugin,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
+import { normalizePiSessionEntry, type PiNativeFact } from '@agent-lens/protocol'
 
 const SOURCE_ID = 'pi'
-const PARSER_VERSION = '4'
+const PARSER_VERSION = '5'
 const RUNTIME_FALLBACK_POLL_MS = 5000
 const RUNTIME_DEBOUNCE_MS = 180
 const MAX_STRING = 64 * 1024
@@ -678,120 +679,124 @@ function candidate(
   }
 }
 
+function piFactCandidate(
+  record: SourceRecord,
+  envelope: PiStoredEnvelope,
+  fact: PiNativeFact,
+  kind: ObservationCandidate['kind'],
+  payload: unknown,
+  sequenceOffset: number,
+  options: { nativeCallId?: string; identity?: Partial<ObservationIdentityHints> } = {},
+): ObservationCandidate {
+  return candidate(record, envelope, kind, payload, {
+    nativeEventId: fact.id,
+    nativeParentEventId: fact.parentId,
+    ...(options.nativeCallId ? { nativeCallId: options.nativeCallId } : {}),
+    sequenceOffset,
+    ...(options.identity ? { identity: options.identity } : {}),
+  })
+}
+
 export async function normalizePiRecord(
   record: SourceRecord,
   _ctx: SourceNormalizationContext,
 ): Promise<NormalizedSourceOutput> {
   const envelope = asRecord(record.payload) as unknown as PiStoredEnvelope
   const entry = asRecord(envelope.entry)
-  const type = stringField(entry, 'type') ?? 'unknown'
+  const facts = normalizePiSessionEntry(entry, {
+    ...(record.nativeId ? { nativeEventId: record.nativeId } : {}),
+    fallbackId: record.id,
+  })
   const observations: ObservationCandidate[] = []
 
-  if (type === 'session') {
-    observations.push(candidate(record, envelope, 'session.lifecycle', {
-      event: 'session.started',
-      nativeSessionId: envelope.session.nativeSessionId,
-      ...(envelope.session.version ? { version: envelope.session.version } : {}),
-      ...(envelope.session.nativeParentSessionId
-        ? { nativeParentSessionId: envelope.session.nativeParentSessionId }
-        : {}),
-    }))
-  } else if (type === 'message') {
-    const message = asRecord(entry.message)
-    const role = stringField(message, 'role') ?? 'unknown'
-    const content = message.content
-    if (role === 'user') {
-      observations.push(candidate(record, envelope, 'message.user', {
-        text: truncate(textFromContent(content)),
-      }))
-    } else if (role === 'assistant') {
-      const blocks = Array.isArray(content) ? content : []
-      const text = textFromContent(content)
-      const model = stringField(message, 'model')
-      const provider = stringField(message, 'provider')
-      let offset = 1
-      const stopReason = stringField(message, 'stopReason', 'stop_reason')
-      observations.push(candidate(record, envelope, 'message.assistant', {
-        text: truncate(text),
-        ...(model ? { model } : {}),
-        ...(provider ? { provider } : {}),
-        ...(stopReason ? { stopReason } : {}),
-      }, { sequenceOffset: offset++, identity: model ? { modelName: model } : {} }))
-      const reasoning = blocks
-        .map(raw => asRecord(raw))
-        .filter(block => block.type === 'thinking')
-        .map(block => stringField(block, 'thinking', 'text') ?? '')
-        .filter(Boolean)
-      if (reasoning.length) {
-        observations.push(candidate(record, envelope, 'message.reasoning', {
-          text: truncate(reasoning.join('\n\n')),
-        }, {
-          nativeEventId: record.nativeId ? `${record.nativeId}:reasoning` : undefined,
-          nativeParentEventId: record.nativeId,
-          sequenceOffset: offset++,
-        }))
+  facts.forEach((fact, index) => {
+    const offset = index + 1
+    if (fact.kind === 'message') {
+      if (fact.role === 'user') {
+        observations.push(piFactCandidate(record, envelope, fact, 'message.user', {
+          text: truncate(fact.text),
+          ...(fact.nonTextContent.length ? { nonTextContent: fact.nonTextContent } : {}),
+        }, offset))
+        return
       }
-      for (const block of blocks.map(asRecord).filter(item => item.type === 'toolCall')) {
-        const callId = stringField(block, 'id')
-        if (!callId) continue
-        observations.push(candidate(record, envelope, 'tool.call', {
-          callId,
-          nativeToolName: stringField(block, 'name') ?? 'unknown',
-          input: block.arguments ?? {},
-        }, {
-          nativeCallId: callId,
-          nativeEventId: record.nativeId ? `${record.nativeId}:tool:${callId}` : undefined,
-          nativeParentEventId: record.nativeId,
-          sequenceOffset: offset++,
-        }))
+      if (fact.role === 'assistant') {
+        observations.push(piFactCandidate(record, envelope, fact, 'message.assistant', {
+          text: truncate(fact.text),
+          ...(fact.content === undefined ? {} : { content: fact.content }),
+          ...(fact.nonTextContent.length ? { nonTextContent: fact.nonTextContent } : {}),
+          ...(fact.model ? { model: fact.model } : {}),
+          ...(fact.provider ? { provider: fact.provider } : {}),
+          ...(fact.stopReason ? { stopReason: fact.stopReason } : {}),
+          ...(fact.errorMessage ? { errorMessage: fact.errorMessage } : {}),
+        }, offset, { identity: fact.model ? { modelName: fact.model } : {} }))
+        return
       }
-    } else if (role === 'tool' || role === 'toolResult') {
-      const callId = stringField(message, 'toolCallId') ?? `pi-result-${record.id}`
-      observations.push(candidate(record, envelope, 'tool.result', {
-        callId,
-        nativeToolName: stringField(message, 'toolName') ?? 'unknown',
-        success: message.isError !== true,
-        output: truncate(textFromContent(content)),
-      }, { nativeCallId: callId }))
-    } else {
-      observations.push(candidate(record, envelope, 'unknown', {
-        rawType: `message/${role}`,
-        rawPayload: entry,
-      }))
+      observations.push(piFactCandidate(record, envelope, fact, 'unknown', {
+        rawType: `message/${fact.role}`,
+        rawPayload: fact.raw,
+      }, offset))
+      return
     }
-  } else if (type === 'model_change') {
-    observations.push(candidate(record, envelope, 'model.changed', {
-      provider: stringField(entry, 'provider') ?? 'unknown',
-      model: stringField(entry, 'modelId', 'model') ?? 'unknown',
-    }))
-  } else if (type === 'thinking_level_change') {
-    observations.push(candidate(record, envelope, 'thinking.level.changed', {
-      level: stringField(entry, 'thinkingLevel', 'level') ?? 'unknown',
-    }))
-  } else if (type === 'compaction') {
-    observations.push(candidate(record, envelope, 'context.compaction', {
-      phase: 'end',
-      ...(typeof entry.tokensBefore === 'number' ? { tokensBefore: entry.tokensBefore } : {}),
-      ...(stringField(entry, 'summary') ? { summary: stringField(entry, 'summary') } : {}),
-      ...(stringField(entry, 'firstKeptEntryId') ? { firstKeptEntryId: stringField(entry, 'firstKeptEntryId') } : {}),
-    }))
-  } else if (type === 'branch_summary') {
-    observations.push(candidate(record, envelope, 'context.summary', {
-      text: stringField(entry, 'summary') ?? '',
-      ...(stringField(entry, 'fromId') ? { branchFromEntryId: stringField(entry, 'fromId') } : {}),
-    }))
-  } else if (type === 'session_info') {
-    const name = stringField(entry, 'name')?.trim()
-    observations.push(candidate(record, envelope, 'session.lifecycle', {
-      event: 'session.info',
-      ...(name ? { name } : {}),
-    }, { identity: name ? { sessionTitle: name } : {} }))
-  } else {
-    observations.push(candidate(record, envelope, 'unknown', {
-      rawType: record.nativeType,
-      rawPayload: entry,
-    }))
-  }
+    if (fact.kind === 'thinking') {
+      observations.push(piFactCandidate(record, envelope, fact, 'message.reasoning', { text: truncate(fact.text) }, offset))
+      return
+    }
+    if (fact.kind === 'tool-call') {
+      observations.push(piFactCandidate(record, envelope, fact, 'tool.call', {
+        callId: fact.callId,
+        nativeToolName: fact.name,
+        input: fact.input,
+      }, offset, { nativeCallId: fact.callId }))
+      return
+    }
+    if (fact.kind === 'tool-result') {
+      observations.push(piFactCandidate(record, envelope, fact, 'tool.result', {
+        callId: fact.callId,
+        nativeToolName: fact.name,
+        success: fact.success,
+        output: truncate(fact.output),
+        ...(fact.details === undefined ? {} : { details: fact.details }),
+      }, offset, { nativeCallId: fact.callId }))
+      return
+    }
+    if (fact.kind === 'usage') {
+      observations.push(piFactCandidate(record, envelope, fact, 'usage', fact.usage, offset))
+      return
+    }
+    if (fact.kind === 'event') {
+      const kind: ObservationCandidate['kind'] = fact.event === 'model.changed'
+        ? 'model.changed'
+        : fact.event === 'thinking.level.changed'
+          ? 'thinking.level.changed'
+          : fact.event === 'context.compaction'
+            ? 'context.compaction'
+            : fact.event === 'context.summary'
+              ? 'context.summary'
+              : fact.event === 'session.started' || fact.event === 'session.info'
+                ? 'session.lifecycle'
+                : 'unknown'
+      const name = fact.event === 'session.info' ? stringField(asRecord(fact.payload), 'name')?.trim() : undefined
+      const payload = kind === 'unknown'
+        ? { event: fact.event, label: fact.label, detail: fact.detail, rawPayload: fact.payload }
+        : kind === 'session.lifecycle'
+          ? { event: fact.event, ...asRecord(fact.payload) }
+          : fact.payload
+      observations.push(piFactCandidate(
+        record,
+        envelope,
+        fact,
+        kind,
+        payload,
+        offset,
+        { ...(name ? { identity: { sessionTitle: name } } : {}) },
+      ))
+      return
+    }
+    observations.push(piFactCandidate(record, envelope, fact, 'unknown', {
+      rawType: fact.nativeType,
+      rawPayload: fact.payload,
+    }, offset))
+  })
 
   return { observations, evidenceCandidates: [evidenceFor(record)] }
 }
@@ -812,7 +817,7 @@ export async function declarePiCapabilities(
     { sourceId: SOURCE_ID, name: 'subagent', status: 'partial', captureModes: ['history'], reason: 'Parent session links are retained; explicit subagent lifecycle is not proven' },
     { sourceId: SOURCE_ID, name: 'thinking', status: 'partial', captureModes: ['history'], reason: 'Only source-visible thinking blocks are captured' },
     { sourceId: SOURCE_ID, name: 'asset-invocation', status: 'unavailable', captureModes: [], reason: 'Invocation attribution is handled by later usage projections' },
-    { sourceId: SOURCE_ID, name: 'usage', status: 'unavailable', captureModes: [], reason: 'Stable token usage mapping is not implemented' },
+    { sourceId: SOURCE_ID, name: 'usage', status: 'available', captureModes: ['history', 'native-tail'] },
     { sourceId: SOURCE_ID, name: 'artifact-action', status: 'unavailable', captureModes: [], reason: 'Artifact attribution is not implemented' },
   ]
 }

@@ -162,6 +162,9 @@ export function projectPiLiveTaskDetail(input: {
   runningRound?: TaskRoundModel | undefined
 }): TaskDetailModel {
   const state = input.state
+  const usageItems = input.historyRounds.flatMap(round => round.items).filter((item): item is Extract<PiLiveHistoryItem, { kind: 'usage' }> => item.kind === 'usage')
+  const totalTokens = usageItems.reduce((sum, item) => sum + item.usage.totalTokens, 0)
+  const totalCost = usageItems.reduce((sum, item) => sum + (item.usage.cost?.total ?? 0), 0)
   return {
     id: state?.runtimeSessionId ?? 'pi-live-pending',
     title: state?.sessionName || 'Pi 实时任务',
@@ -169,6 +172,8 @@ export function projectPiLiveTaskDetail(input: {
     contextLabel: runtimeModelLabel(state),
     statusLabel: runtimeStatusLabel(state, input.connected),
     metrics: [
+      ...(totalTokens > 0 ? [{ value: totalTokens.toLocaleString(), label: '词元' }] : []),
+      ...(totalCost > 0 ? [{ value: `$${totalCost.toFixed(4)}`, label: '成本' }] : []),
       { value: state?.pendingMessageCount ?? 0, label: '排队', tone: state?.pendingMessageCount ? 'accent' : undefined },
       { value: state?.processId ?? '—', label: 'PID' },
     ],

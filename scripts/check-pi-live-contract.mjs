@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 
-const [app, taskCenter, taskSurface, taskHeader, taskMessage, taskRound, taskThinking, taskToolGroup, taskToolRow, taskDetailModel, taskCenterCss, taskHeaderCss, reviewPage, page, piTaskRound, piTaskProjection, hubPage, history, client, css, http, runtime, sdkLoader, sdkAdapter, runtimePackage, coreObservation, timelineProtocol] = await Promise.all([
+const [app, taskCenter, taskSurface, taskHeader, taskMessage, taskRound, taskThinking, taskToolGroup, taskToolRow, taskDetailModel, taskCenterCss, taskHeaderCss, reviewPage, page, piTaskRound, piTaskProjection, hubPage, history, piNative, client, css, http, runtime, sdkLoader, sdkAdapter, runtimePackage, coreObservation, timelineProtocol] = await Promise.all([
   readFile(new URL('../packages/web/src/App.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/TaskCenterPage.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/TaskSurface.tsx', import.meta.url), 'utf8'),
@@ -19,6 +19,7 @@ const [app, taskCenter, taskSurface, taskHeader, taskMessage, taskRound, taskThi
   readFile(new URL('../packages/web/src/features/pi-live-task-projection.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/HubReviewPage.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/pi-live-history.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/protocol/src/pi-native.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/client/pi-live.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/pi-live.css', import.meta.url), 'utf8'),
   readFile(new URL('../packages/surface-http/src/pi-live.ts', import.meta.url), 'utf8'),
@@ -126,7 +127,7 @@ requireText(page, /historyRounds\.map[\s\S]{0,720}<PiLiveHistoryTaskRound/, 'Pi 
 requireText(page, /<PiLiveRunningTaskRound[\s\S]{0,520}thinkingText=\{thinkingText\}[\s\S]{0,520}streamText=\{streamText\}/, 'Pi Live 当前轮次必须通过共享 Running TaskRound Adapter 渲染')
 requireText(piTaskRound, /import \{ TaskMessage \} from '\.\/TaskMessage'/, 'Pi Live 已完成消息必须在 TaskRound Adapter 中接入统一 TaskMessage')
 requireText(piTaskRound, /export function PiLiveHistoryTaskRound[\s\S]{0,2600}<TaskMessage/, 'Pi Live 持久化消息必须通过 TaskMessage 渲染')
-requireText(piTaskRound, /export function PiLiveHistoryTaskRound[\s\S]{0,2600}<TaskThinking/, 'Pi Live 历史 Thinking 必须通过 TaskThinking 渲染')
+requireText(piTaskRound, /function HistoryThinking[\s\S]{0,900}<TaskThinking/, 'Pi Live 历史 Thinking 必须通过 TaskThinking 渲染')
 requireText(piTaskRound, /export function PiLiveHistoryTaskRound[\s\S]{0,3200}<TaskToolGroup/, 'Pi Live 历史 Tool 必须通过 TaskToolGroup 渲染')
 requireText(piTaskRound, /export function PiLiveRunningTaskRound[\s\S]{0,3200}<TaskRound/, 'Pi Live Running 状态必须复用 TaskRound')
 requireText(piTaskRound, /streamText && <div className="pi-live-stream-response"/, 'Pi Live Streaming Tail 必须保留独立实时渲染，不得误接源码切换')
@@ -147,9 +148,11 @@ requireText(page, /type === 'model_changed' \|\| type === 'thinking_level_change
 if (/type === 'model_change' \|\| type === 'thinking_level_change'/.test(page)) failures.push('Pi Live 不得把持久化 Entry 名称误当 Runtime Event 名称')
 requireText(page, /projectPiLiveHistory\(snapshot\)/, 'Pi Live 页面必须使用持久化历史事实投影')
 
-requireText(history, /type === 'model_change'/, 'Pi Live 历史投影缺少持久化 model_change')
-requireText(history, /type === 'thinking_level_change'/, 'Pi Live 历史投影缺少持久化 thinking_level_change')
-requireText(history, /message\.role !== 'tool' && message\.role !== 'toolResult'/, 'Pi Live 历史投影缺少 Tool Result 事实')
+requireText(history, /normalizePiSessionEntry/, 'Pi Live 历史投影必须复用共享 Pi Native Normalizer')
+requireText(piNative, /type === 'model_change'/, '共享 Pi Native Normalizer 缺少持久化 model_change')
+requireText(piNative, /type === 'thinking_level_change'/, '共享 Pi Native Normalizer 缺少持久化 thinking_level_change')
+requireText(piNative, /role === 'tool' \|\| role === 'toolResult'/, '共享 Pi Native Normalizer 缺少 Tool Result 事实')
+if (/function\s+(?:messageItems|lifecycleItem|toolResultFacts)\b/.test(history)) failures.push('Pi Live Web 不得重新维护重复的 Session Entry Parser')
 requireText(coreObservation, /'thinking\.level\.changed'/, 'Core ObservationKind 缺少 thinking.level.changed')
 requireText(timelineProtocol, /'thinking\.level\.changed'/, 'Timeline Protocol 缺少 thinking.level.changed')
 

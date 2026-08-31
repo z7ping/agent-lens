@@ -68,6 +68,7 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
         provider: 'test',
         model: 'test-model',
         stopReason: 'toolUse',
+        usage: { input: 100, output: 20, cacheRead: 30, cacheWrite: 5, totalTokens: 155, cost: { total: 0.01 } },
         content: [
           { type: 'text', text: 'I will inspect it.' },
           { type: 'toolCall', id: 'pi-tool-1', name: 'bash', arguments: { command: 'git status' } },
@@ -142,12 +143,16 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
       installationId: historyResult.installationId,
       limit: 100,
     })
-    assert.equal(facts.length, 8)
+    assert.equal(facts.length, 9)
     assert.equal(facts.filter(item => item.kind === 'tool.call').length, 1)
     assert.equal(facts.filter(item => item.kind === 'tool.result').length, 1)
     assert.equal(facts.filter(item => item.kind === 'model.changed').length, 1)
     assert.equal(facts.filter(item => item.kind === 'thinking.level.changed').length, 1)
     assert.equal(facts.filter(item => item.kind === 'context.compaction').length, 1)
+    const usage = facts.find(item => item.kind === 'usage')
+    assert.ok(usage)
+    assert.equal((usage.payload as any).totalTokens, 155)
+    assert.equal((usage.payload as any).cost.total, 0.01)
     const user = facts.find(item => item.nativeEventId === 'pi-user-1')
     const assistant = facts.find(item => item.nativeEventId === 'pi-assistant-1')
     const result = facts.find(item => item.nativeEventId === 'pi-result-1')
@@ -206,6 +211,7 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
     assert.equal(continued?.nativeParentEventId, 'pi-result-1')
     assert.equal(continued?.parentObservationId, result.id)
 
+    storage.db.prepare(`UPDATE source_records SET parser_version = '4' WHERE source_id = 'pi'`).run()
     const replay = await history.sync({
       source: piSourceDefinition,
       host,
@@ -213,6 +219,8 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
       abortSignal: new AbortController().signal,
     })
     assert.equal(replay.records, 0)
+    const staleParsers = storage.db.prepare(`SELECT COUNT(*) AS count FROM source_records WHERE source_id = 'pi' AND parser_version != '5'`).get() as { count: number }
+    assert.equal(staleParsers.count, 0)
   } finally {
     storage.close()
     await rm(root, { recursive: true, force: true })

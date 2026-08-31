@@ -30,6 +30,10 @@ test('Pi Live persisted history preserves message, thinking, tool and lifecycle 
       timestamp: '2026-08-30T00:00:01.000Z',
       message: {
         role: 'assistant',
+        provider: 'test',
+        model: 'model-1',
+        stopReason: 'toolUse',
+        usage: { input: 10, output: 5, cacheRead: 2, cacheWrite: 1, totalTokens: 18, cost: { total: 0.002 } },
         content: [
           { type: 'thinking', thinking: '先确认状态' },
           { type: 'text', text: '我先检查。' },
@@ -56,9 +60,11 @@ test('Pi Live persisted history preserves message, thinking, tool and lifecycle 
 
   assert.deepEqual(items.map(item => item.kind), [
     'message',
-    'thinking',
     'message',
+    'lifecycle',
+    'thinking',
     'tool',
+    'usage',
     'lifecycle',
     'lifecycle',
     'lifecycle',
@@ -84,6 +90,11 @@ test('Pi Live persisted history preserves message, thinking, tool and lifecycle 
   assert.ok(items.some(item => item.kind === 'lifecycle' && item.event === 'model.changed'))
   assert.ok(items.some(item => item.kind === 'lifecycle' && item.event === 'thinking.level.changed'))
   assert.ok(items.some(item => item.kind === 'lifecycle' && item.event === 'context.compaction'))
+  assert.ok(items.some(item => item.kind === 'lifecycle' && item.event === 'assistant.stop'))
+  const usage = items.find(item => item.kind === 'usage')
+  assert.ok(usage && usage.kind === 'usage')
+  assert.equal(usage.usage.totalTokens, 18)
+  assert.equal(usage.usage.cost?.total, 0.002)
 })
 
 test('Pi Live persisted history keeps orphan tool results instead of dropping facts', () => {

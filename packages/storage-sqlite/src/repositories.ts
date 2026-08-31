@@ -552,6 +552,22 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
         return row ? mapSourceRecord(row) : null
       })
     },
+    async listForParserReplay(sourceId, installationId, currentParserVersion, after, limit = 500) {
+      return executor.run(() => {
+        const params: unknown[] = [sourceId, installationId, currentParserVersion]
+        const cursor = after ? `AND (captured_at > ? OR (captured_at = ? AND id > ?))` : ''
+        if (after) params.push(after.capturedAt, after.capturedAt, after.id)
+        params.push(Math.max(1, Math.min(limit, 2000)))
+        const rows = db.prepare(`
+          SELECT * FROM source_records
+          WHERE source_id = ? AND installation_id = ? AND parser_version != ?
+          ${cursor}
+          ORDER BY captured_at ASC, id ASC
+          LIMIT ?
+        `).all(...params)
+        return rows.map(mapSourceRecord)
+      })
+    },
     async findByNativeId(sourceId, installationId, nativeId) {
       return executor.run(() => {
         const row = db.prepare(`
