@@ -25,22 +25,22 @@
   padding: 0 4px;
   border: 0;
   background: transparent;
-  color: var(--al-muted);
+  color: var(--al-muted-2);
   cursor: pointer;
   list-style: none;
 }
 .task-center-main .task-round > summary::-webkit-details-marker { display: none; }
 .task-center-main .interaction-chevron {
   display: block;
-  color: var(--al-muted);
+  color: var(--al-muted-2);
   font-size: 16px;
   line-height: 1;
   transition: transform .12s;
 }
 .task-center-main .task-round[open] > summary .interaction-chevron { transform: rotate(90deg); }
 .task-center-main .round-label { color: var(--al-muted); font-size: 12px; font-weight: 650; white-space: nowrap; }
-.task-center-main .round-preview { min-width: 0; overflow: hidden; color: var(--al-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.task-center-main .round-meta { display: flex; align-items: center; gap: 9px; color: var(--al-muted); font-size: 12px; white-space: nowrap; }
+.task-center-main .round-preview { min-width: 0; overflow: hidden; color: var(--al-muted-2); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.task-center-main .round-meta { display: flex; align-items: center; gap: 9px; color: var(--al-muted-2); font-size: 12px; white-space: nowrap; }
 .task-center-main .round-meta .error,
 .task-center-main .round-meta .is-error { color: var(--al-danger); }
 .task-center-main .round-meta .is-live { color: var(--al-success); }
@@ -106,13 +106,15 @@
 .task-center-main .task-message-content,
 .task-center-main .task-message-content .markdown,
 .task-center-main .task-message-content .markdown-surface { font-size: 14px; }
-.task-center-main .task-message-meta { display: flex; align-items: center; gap: 7px; margin-bottom: 4px; color: var(--al-muted); font-size: 12px; }
+.task-center-main .task-message-meta { display: flex; align-items: center; gap: 7px; margin-bottom: 4px; color: var(--al-muted-2); font-size: 12px; }
 .task-center-main .task-message-meta time { margin-left: auto; }
 .task-center-main .chat-bubble-agent .task-message-meta b { color: var(--al-accent); }
 .task-center-main .chat-bubble-user .task-message-meta { color: var(--al-user-bubble-muted); }
 .task-center-main .evidence-inline { min-height: 19px; padding-inline: 6px; border-radius: 999px; font-size: 12px; }
 
-/* 06/08/09 · Agent Lane：Thinking / Tool 弱于消息，但缩进和引导线明确。 */
+/* 06/08/09 · Agent Lane：Thinking / Tool 弱于消息，但缩进和引导线明确。
+ * 原型的 lane 内容起点为 40px（18 + 22），内层竖线为 27px，横向连接线 12px。
+ */
 .task-center-main .thinking-block,
 .task-center-main .execution-group {
   position: relative;
@@ -128,11 +130,22 @@
 .task-center-main .execution-group::before {
   content: "";
   position: absolute;
-  left: -10px;
+  left: -13px;
   top: 17px;
-  width: 10px;
+  width: 12px;
   height: 1px;
   background: var(--al-line);
+}
+.task-center-main .thinking-block::after,
+.task-center-main .execution-group::after {
+  content: "";
+  position: absolute;
+  left: -13px;
+  top: 5px;
+  bottom: 6px;
+  width: 1px;
+  background: var(--al-line);
+  pointer-events: none;
 }
 .task-center-main .thinking-block > summary,
 .task-center-main .execution-group > summary {
@@ -154,7 +167,7 @@
 .task-center-main .execution-group > summary::before {
   content: "›";
   display: block;
-  color: var(--al-muted);
+  color: var(--al-muted-2);
   font-size: 16px;
   line-height: 1;
   transition: transform .12s;
@@ -166,8 +179,8 @@
 .task-center-main .thinking-label { color: color-mix(in srgb, var(--al-accent) 68%, var(--al-muted)); }
 .task-center-main .tool-title { color: var(--al-muted); }
 .task-center-main .thinking-preview,
-.task-center-main .node-preview { min-width: 0; overflow: hidden; color: var(--al-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.task-center-main .thinking-summary-meta { display: inline-flex; align-items: center; gap: 6px; color: var(--al-muted); font-size: 12px; white-space: nowrap; }
+.task-center-main .node-preview { min-width: 0; overflow: hidden; color: var(--al-muted-2); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.task-center-main .thinking-summary-meta { display: inline-flex; align-items: center; gap: 6px; color: var(--al-muted-2); font-size: 12px; white-space: nowrap; }
 .task-center-main .thinking-content {
   margin: 0 8px 7px 21px;
   padding: 2px 0 2px 10px;
@@ -178,9 +191,9 @@
 }
 .task-center-main .task-thinking-actions { margin: 0 8px 7px 21px; }
 .task-center-main .tool-counts { display: flex; gap: 4px; }
-.task-center-main .tool-counts span { color: var(--al-muted); font-size: 12px; white-space: nowrap; }
+.task-center-main .tool-counts span { color: var(--al-muted-2); font-size: 12px; white-space: nowrap; }
 
-/* 01–07/10 · Tool Call：四列事实行；核心事实 13px，辅助状态 12px。 */
+/* 01–07/10 · Tool Call：四列事实行；目标字段 13px，操作名/状态 12px。 */
 .task-center-main .execution-list,
 .task-center-main .tool-list {
   margin: 0 6px 6px 21px;
@@ -255,7 +268,7 @@
   min-width: 0;
   overflow: hidden;
   color: var(--al-ink-2);
-  font: 650 13px/1.4 var(--font-ui);
+  font: 650 12px/1.4 var(--font-ui);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -270,7 +283,7 @@
 }
 .task-center-main .tool-target-text { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-center-main .tool-meta { display: inline-flex; min-width: 0; max-width: 42%; flex: 0 1 auto; align-items: center; gap: 4px; overflow: hidden; }
-.task-center-main .tool-status { color: var(--al-muted); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.task-center-main .tool-status { color: var(--al-muted-2); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .task-center-main .tool-status.ok { color: var(--al-success); }
 .task-center-main .tool-status.run { color: var(--al-accent); }
 .task-center-main .tool-status.error { color: var(--al-danger); }
@@ -284,7 +297,7 @@
   font-size: 12px;
 }
 .task-center-main .tool-payload:empty { display: none; }
-.task-center-main .tool-payload > details > summary { min-height: 24px; cursor: pointer; color: var(--al-muted); font-size: 12px; }
+.task-center-main .tool-payload > details > summary { min-height: 24px; cursor: pointer; color: var(--al-muted-2); font-size: 12px; }
 .task-center-main .tool-payload pre { max-height: 160px; margin: 4px 0 0; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 .task-center-main .tool-live-output {
   max-height: 112px;
@@ -312,8 +325,9 @@
   .task-center-main .round-preview { display: none; }
   .task-center-main .round-meta { grid-column: 2 / -1; }
   .task-center-main .task-message-bubble { max-width: 94%; }
+  .task-center-main .task-message-agent-mark { margin-left: -5px; }
   .task-center-main .thinking-block,
-  .task-center-main .execution-group { margin-right: 6px; margin-left: 24px; }
+  .task-center-main .execution-group { margin-right: 6px; margin-left: 30px; }
   .task-center-main .execution-row.tool-row { grid-template-columns: 68px minmax(0, 1fr); }
   .task-center-main .tool-status { grid-column: 2; }
   .task-center-main .tool-payload { margin-left: 68px; }
