@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -58,8 +58,8 @@ test('直接位于官方 Pi 包内的 CLI 入口可回溯到 SDK 主入口', asy
   try {
     const pkg = await createFakeOfficialPiPackage(root)
     const resolved = await resolveInstalledPiSdk(pkg.cliEntry, process.platform)
-    assert.equal(resolved?.packageRoot, pkg.packageRoot)
-    assert.equal(resolved?.sdkEntry, pkg.sdkEntry)
+    assert.equal(resolved?.packageRoot, await realpath(pkg.packageRoot))
+    assert.equal(resolved?.sdkEntry, await realpath(pkg.sdkEntry))
   } finally {
     await rm(root, { recursive: true, force: true })
   }
