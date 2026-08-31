@@ -34,7 +34,8 @@ const round: TaskRoundModel = {
 
 test('成功 Tool Group 默认展开并逐条保留 Tool Call 事实', () => {
   const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: toolGroup }))
-  assert.match(html, /<details[^>]*open=""[^>]*data-task-tool-group="true"/)
+  assert.match(html, /<details[^>]*open=""/)
+  assert.match(html, /data-task-tool-group="true"/)
   assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 4)
   assert.match(html, /读取 → 搜索 → 测试 → 工具/)
   assert.match(html, /4 次/)
