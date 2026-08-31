@@ -52,6 +52,7 @@ requireText(desktop, /deviceScaleFactor:\s*1/, '桌面验收必须锁定 deviceS
 requireText(desktop, /Page\.captureScreenshot/, '桌面验收必须按 emulated viewport 保存真实 Chromium 截图')
 requireText(desktop, /captureBeyondViewport:\s*false/, '桌面截图不得越过当前目标 viewport')
 requireText(desktop, /safeDetachDebugger/, '桌面验收必须处理 Window teardown 与 debugger detach 竞态')
+requireText(desktop, /viewport 几何未稳定到原型基线/, '桌面截图前必须等待 viewport / dvh / Rail 几何稳定')
 requireText(desktop, /\.task-center-scroll/, '桌面验收必须检查左侧任务列表滚动根')
 requireText(desktop, /\.review-reader-pane/, '桌面验收必须检查 Review 详情滚动根')
 requireText(desktop, /\.pi-live-document/, '桌面验收必须检查 Pi Live 详情滚动根')
@@ -72,6 +73,7 @@ requireText(desktop, /listenerGrowth > 20/, '百次切换必须限制 Listener �
 
 /* Real Smoke 不能用空 DB 或假 DOM 冒充真实组件链路：必须经 Source → Observation → Review Projection 注入确定性样本。 */
 requireText(realSmokeWorkflow, /CODEX_HOME/, 'Real Smoke 必须隔离并注入确定性 Codex Home')
+requireText(realSmokeWorkflow, /AGENT_LENS_ENABLED_SOURCES = 'codex'/, 'Real Smoke 必须显式启用 Codex Capture Policy，不能让默认 claude-code 策略吞掉 fixture')
 requireText(realSmokeWorkflow, /codex-sample\.jsonl/, 'Real Smoke 必须复用项目自身 Codex fixture')
 requireText(realSmokeWorkflow, /api\/v1\/review\?limit=10/, 'Real Smoke 必须等待正式 Review Projection 数据就绪')
 requireText(realSmokeWorkflow, /Count -ge 2/, 'Real Smoke 至少需要两条正式投影任务，确保百次切换不跳过')
@@ -132,9 +134,9 @@ requireText(round, /round-label/, 'Round 必须保留 label')
 requireText(round, /round-preview/, 'Round 必须保留 preview')
 requireText(round, /round-meta/, 'Round 必须保留 meta')
 requireText(message, /message-row/, '消息必须使用 message-row 主结构')
-requireText(message, /chat-row-user user/, '用户消息必须保留右侧结构')
-requireText(message, /chat-row-agent agent/, 'Agent 消息必须保留左侧结构')
+requireText(message, /message-row \$\{user \? 'user' : 'agent'\} task-message-row/, '消息必须用 TaskMessage 自有 user / agent 结构表达左右方向')
 requireText(message, /task-message-agent-mark/, 'Agent 消息必须保留弱引导标记')
+if (/chat-row message-row|chat-avatar chat-avatar-agent/.test(message)) failures.push('TaskMessage 不得重新挂载会污染 flex 方向或隐藏 Agent 节点的旧 Review 表现类')
 
 requireText(toolCss, /execution-group\s*>\s*summary/, 'Tool Group 必须保留原型摘要折叠结构')
 requireText(toolCss, /execution-group\[open\]\s*>\s*summary::before/, 'Tool Group 展开时必须保留原型箭头状态')
