@@ -5,7 +5,7 @@ import { piLiveApi, type PiLiveTransportDiagnostics } from '../client/pi-live'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import { projectPiLiveHistory, type PiLiveHistoryItem } from './pi-live-history'
 import { PiLiveHistoryTaskRound, PiLiveRunningTaskRound } from './PiLiveTaskRound'
-import { projectPiLiveTaskRounds } from './pi-live-task-projection'
+import { piLiveTaskRoundEstimate, projectPiLiveRunningRound, projectPiLiveTaskDetail, projectPiLiveTaskRounds } from './pi-live-task-projection'
 import { TaskHeader } from './TaskHeader'
 import { TaskSurface } from './TaskSurface'
 
@@ -128,23 +128,7 @@ function extensionRequest(event: Record<string, unknown>): ExtensionRequest | nu
   }
 }
 
-function statusLabel(state: PiLiveStateDto | null, connected: boolean): string {
-  if (!connected) return '实时通道断开'
-  if (!state) return '正在连接'
-  if (state.isCompacting) return '正在压缩上下文'
-  if (state.isStreaming) return '正在工作'
-  return '等待输入'
-}
 
-function historyEstimate(item: PiLiveHistoryItem): number {
-  if (item.kind === 'message') {
-    const lines = Math.max(1, Math.ceil(item.text.length / 72))
-    return Math.min(360, 72 + lines * 24)
-  }
-  if (item.kind === 'thinking') return 64
-  if (item.kind === 'tool') return item.output ? 92 : 58
-  return 38
-}
 
 function PiLiveStart({ known }: { known: PiLiveStateDto[] }) {
   const navigate = useNavigate()
@@ -419,6 +403,16 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
 
   const history = useMemo(() => projectPiLiveHistory(snapshot), [snapshot])
   const historyRounds = useMemo(() => projectPiLiveTaskRounds(history), [history])
+  const runningRound = useMemo(() => {
+    if (!thinkingText && tools.length === 0 && !streamText) return undefined
+    return projectPiLiveRunningRound({ tools, isStreaming: state?.isStreaming ?? false })
+  }, [state?.isStreaming, streamText, thinkingText, tools])
+  const taskDetailModel = useMemo(() => projectPiLiveTaskDetail({
+    state,
+    connected,
+    historyRounds,
+    runningRound,
+  }), [connected, historyRounds, runningRound, state])
 
   useEffect(() => {
     if (!followingRef.current) return
@@ -588,14 +582,11 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     <TaskSurface mode="live" className="pi-live-workspace">
       <TaskHeader
         marker={<span className={state?.isStreaming ? 'pi-live-pulse' : 'pi-live-idle-dot'}/>}
-        agent="Pi"
-        context={modelLabel(state)}
-        status={<>{statusLabel(state, connected)}{!connected && <span className="pi-live-disconnected"> · 后台服务仍持有任务</span>}</>}
-        title={state?.sessionName || 'Pi 实时任务'}
-        metrics={[
-          { value: state?.pendingMessageCount ?? 0, label: '排队', tone: state?.pendingMessageCount ? 'accent' : undefined },
-          { value: state?.processId ?? '—', label: 'PID' },
-        ]}
+        agent={taskDetailModel.agentLabel}
+        context={taskDetailModel.contextLabel}
+        status={<span className={!connected ? 'pi-live-disconnected' : undefined}>{taskDetailModel.statusLabel}</span>}
+        title={taskDetailModel.title}
+        metrics={taskDetailModel.metrics}
         actions={<>
           <button className="pi-live-stop" disabled={!state?.isStreaming || busy} onClick={() => void stop()}>停止当前任务</button>
           <button className="pi-live-menu" title="结束 Pi Runtime" aria-label="结束 Pi Runtime" disabled={busy} onClick={() => void terminate()}>×</button>
@@ -609,12 +600,13 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             rootSelector=".pi-live-reader"
             flowRoot
             eager={index >= historyRounds.length - PI_LIVE_EAGER_CHUNKS}
-            estimate={projection.items.reduce((total, item) => total + historyEstimate(item), 0) + 46}
+            estimate={piLiveTaskRoundEstimate(projection)}
           >
             <PiLiveHistoryTaskRound projection={projection}/>
           </VirtualRoundMount>)}
 
-          {(thinkingText || tools.length > 0 || streamText) && <PiLiveRunningTaskRound
+          {runningRound && <PiLiveRunningTaskRound
+            model={runningRound}
             thinkingText={thinkingText}
             tools={tools}
             streamText={streamText}
