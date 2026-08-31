@@ -67,6 +67,7 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
         role: 'assistant',
         provider: 'test',
         model: 'test-model',
+        stopReason: 'toolUse',
         content: [
           { type: 'text', text: 'I will inspect it.' },
           { type: 'toolCall', id: 'pi-tool-1', name: 'bash', arguments: { command: 'git status' } },
@@ -147,6 +148,17 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
     assert.equal(facts.filter(item => item.kind === 'model.changed').length, 1)
     assert.equal(facts.filter(item => item.kind === 'thinking.level.changed').length, 1)
     assert.equal(facts.filter(item => item.kind === 'context.compaction').length, 1)
+    const user = facts.find(item => item.nativeEventId === 'pi-user-1')
+    const assistant = facts.find(item => item.nativeEventId === 'pi-assistant-1')
+    const result = facts.find(item => item.nativeEventId === 'pi-result-1')
+    const tool = facts.find(item => item.kind === 'tool.call')
+    assert.ok(user && assistant && result && tool)
+    assert.equal(assistant.nativeParentEventId, 'pi-user-1')
+    assert.equal(assistant.parentObservationId, user.id)
+    assert.equal(result.nativeParentEventId, 'pi-assistant-1')
+    assert.equal(result.parentObservationId, assistant.id)
+    assert.equal(tool.parentObservationId, assistant.id)
+    assert.equal((assistant.payload as any).stopReason, 'toolUse')
 
     const assetResult = await assetRunner.scan({
       source: piSourceDefinition,
@@ -190,6 +202,9 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
       limit: 100,
     })
     assert.equal(facts.filter(item => item.kind === 'message.user').length, 2)
+    const continued = facts.find(item => item.nativeEventId === 'pi-user-2')
+    assert.equal(continued?.nativeParentEventId, 'pi-result-1')
+    assert.equal(continued?.parentObservationId, result.id)
 
     const replay = await history.sync({
       source: piSourceDefinition,

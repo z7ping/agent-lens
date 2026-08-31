@@ -162,17 +162,43 @@ function buildNodes(items: TimelineItemDto[]): ReviewNodeDto[] {
 }
 
 function splitInteractionGroups(items: TimelineItemDto[]): TimelineItemDto[][] {
+  const byId = new Map(items.map(item => [item.id, item]))
   const groups: TimelineItemDto[][] = []
-  let current: TimelineItemDto[] = []
-  for (const item of items) {
-    if (item.kind === 'message.user' && current.length) {
-      groups.push(current)
-      current = []
+  const groupByRoot = new Map<string, TimelineItemDto[]>()
+  let linearRoot: string | undefined
+
+  const rootUser = (item: TimelineItemDto): string | undefined => {
+    if (item.kind === 'message.user') return item.id
+    let current: TimelineItemDto | undefined = item
+    const seen = new Set<string>()
+    while (current?.parentObservationId && !seen.has(current.parentObservationId)) {
+      seen.add(current.parentObservationId)
+      current = byId.get(current.parentObservationId)
+      if (!current) return undefined
+      if (current.kind === 'message.user') return current.id
     }
-    if (!current.length && item.kind === 'session.lifecycle') continue
-    current.push(item)
+    return undefined
   }
-  if (current.length) groups.push(current)
+
+  for (const item of items) {
+    if (item.kind === 'message.user') linearRoot = item.id
+    const root = rootUser(item) ?? linearRoot
+    if (!root) {
+      if (item.kind === 'session.lifecycle') continue
+      const background = `background:${item.id}`
+      const group = [item]
+      groups.push(group)
+      groupByRoot.set(background, group)
+      continue
+    }
+    let group = groupByRoot.get(root)
+    if (!group) {
+      group = []
+      groups.push(group)
+      groupByRoot.set(root, group)
+    }
+    group.push(item)
+  }
   return groups
 }
 

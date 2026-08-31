@@ -354,23 +354,10 @@ export class DefaultObservationService implements ObservationService {
       const createdEvidence = input.evidenceCandidates.map(materializeEvidence)
       for (const evidence of createdEvidence) await tx.evidence.put(evidence)
 
-      const existing = await tx.observations.get(observationId)
-      if (existing) {
-        const existingIds = new Set(existing.evidenceRefs)
-        const added = createdEvidence.map(item => item.id).filter(id => !existingIds.has(id))
-        if (!added.length) {
-          return { observation: existing, status: 'unchanged', mergedEvidenceIds: [] }
-        }
-        const merged: CanonicalObservation = {
-          ...existing,
-          evidenceRefs: [...existing.evidenceRefs, ...added],
-        }
-        await tx.observations.put(merged)
-        return { observation: merged, status: 'merged', mergedEvidenceIds: added }
-      }
-
-      const observation: CanonicalObservation = {
-        id: observationId,
+      const parentObservationId = input.candidate.nativeParentEventId && tx.observations.findIdByNativeEventId
+        ? await tx.observations.findIdByNativeEventId(sourceSession.id, input.candidate.nativeParentEventId)
+        : null
+      const semantic: Omit<CanonicalObservation, 'id' | 'evidenceRefs'> = {
         hostId: input.host.id,
         installationId: input.installation.id,
         ...(workspace?.projectId ? { projectId: workspace.projectId } : {}),
@@ -378,15 +365,53 @@ export class DefaultObservationService implements ObservationService {
         logicalSessionId: logicalSession.id,
         sourceSessionId: sourceSession.id,
         ...(actor ? { actorId: actor.id } : {}),
+        ...(input.candidate.nativeEventId ? { nativeEventId: input.candidate.nativeEventId } : {}),
+        ...(input.candidate.nativeParentEventId ? { nativeParentEventId: input.candidate.nativeParentEventId } : {}),
+        ...(parentObservationId ? { parentObservationId } : {}),
         kind: input.candidate.kind,
         ...(input.candidate.sourceSequence === undefined ? {} : { sourceSequence: input.candidate.sourceSequence }),
         ...(input.candidate.sourceSequence === undefined ? {} : { canonicalSequence: input.candidate.sourceSequence }),
         ...(input.candidate.occurredAt ? { occurredAt: input.candidate.occurredAt } : {}),
         capturedAt: input.candidate.capturedAt,
         payload: input.candidate.payload,
+      }
+
+      const repairChildren = async () => {
+        if (input.candidate.nativeEventId && tx.observations.linkChildrenToParent) {
+          await tx.observations.linkChildrenToParent(
+            sourceSession.id,
+            input.candidate.nativeEventId,
+            observationId,
+          )
+        }
+      }
+
+      const existing = await tx.observations.get(observationId)
+      if (existing) {
+        const existingIds = new Set(existing.evidenceRefs)
+        const added = createdEvidence.map(item => item.id).filter(id => !existingIds.has(id))
+        const merged: CanonicalObservation = {
+          id: existing.id,
+          ...semantic,
+          evidenceRefs: [...existing.evidenceRefs, ...added],
+        }
+        const semanticChanged = JSON.stringify({ ...existing, evidenceRefs: [] })
+          !== JSON.stringify({ ...merged, evidenceRefs: [] })
+        if (semanticChanged || added.length) await tx.observations.put(merged)
+        await repairChildren()
+        if (!semanticChanged && !added.length) {
+          return { observation: existing, status: 'unchanged', mergedEvidenceIds: [] }
+        }
+        return { observation: merged, status: 'merged', mergedEvidenceIds: added }
+      }
+
+      const observation: CanonicalObservation = {
+        id: observationId,
+        ...semantic,
         evidenceRefs: createdEvidence.map(item => item.id),
       }
       await tx.observations.put(observation)
+      await repairChildren()
       return {
         observation,
         status: 'created',

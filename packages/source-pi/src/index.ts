@@ -41,7 +41,7 @@ import {
 } from '@agent-lens/runtime-cordis'
 
 const SOURCE_ID = 'pi'
-const PARSER_VERSION = '3'
+const PARSER_VERSION = '4'
 const RUNTIME_FALLBACK_POLL_MS = 5000
 const RUNTIME_DEBOUNCE_MS = 180
 const MAX_STRING = 64 * 1024
@@ -257,7 +257,7 @@ async function sessionMetadata(filePath: string): Promise<PiSessionMetadata> {
 }
 
 function historyCheckpointKey(filePath: string): string {
-  return `pi:history:v3-source-integrity:${sha256(filePath)}`
+  return `pi:history:v4-entry-tree:${sha256(filePath)}`
 }
 
 function parseLine(text: string): Record<string, unknown> {
@@ -646,20 +646,23 @@ function candidate(
   kind: ObservationCandidate['kind'],
   payload: unknown,
   options: {
-    nativeCallId?: string
-    nativeEventId?: string
+    nativeCallId?: string | undefined
+    nativeEventId?: string | undefined
+    nativeParentEventId?: string | undefined
     sequenceOffset?: number
     identity?: Partial<ObservationIdentityHints>
   } = {},
 ): ObservationCandidate {
   const nativeCallId = options.nativeCallId
-  const eventId = options.nativeEventId ?? (!nativeCallId ? record.nativeId : undefined)
+  const eventId = options.nativeEventId ?? record.nativeId
   const sourceSequence = record.sourceSequence === undefined
     ? undefined
     : record.sourceSequence + (options.sequenceOffset ?? 0)
+  const nativeParentEventId = options.nativeParentEventId ?? stringField(envelope.entry, 'parentId')
   return {
     kind,
     ...(eventId ? { nativeEventId: eventId } : {}),
+    ...(nativeParentEventId ? { nativeParentEventId } : {}),
     ...(nativeCallId ? { nativeCallId } : {}),
     ...(sourceSequence === undefined ? {} : { sourceSequence }),
     ...(record.occurredAt ? { occurredAt: record.occurredAt } : {}),
@@ -707,13 +710,13 @@ export async function normalizePiRecord(
       const model = stringField(message, 'model')
       const provider = stringField(message, 'provider')
       let offset = 1
-      if (text) {
-        observations.push(candidate(record, envelope, 'message.assistant', {
-          text: truncate(text),
-          ...(model ? { model } : {}),
-          ...(provider ? { provider } : {}),
-        }, { sequenceOffset: offset++, identity: model ? { modelName: model } : {} }))
-      }
+      const stopReason = stringField(message, 'stopReason', 'stop_reason')
+      observations.push(candidate(record, envelope, 'message.assistant', {
+        text: truncate(text),
+        ...(model ? { model } : {}),
+        ...(provider ? { provider } : {}),
+        ...(stopReason ? { stopReason } : {}),
+      }, { sequenceOffset: offset++, identity: model ? { modelName: model } : {} }))
       const reasoning = blocks
         .map(raw => asRecord(raw))
         .filter(block => block.type === 'thinking')
@@ -722,7 +725,11 @@ export async function normalizePiRecord(
       if (reasoning.length) {
         observations.push(candidate(record, envelope, 'message.reasoning', {
           text: truncate(reasoning.join('\n\n')),
-        }, { sequenceOffset: offset++ }))
+        }, {
+          nativeEventId: record.nativeId ? `${record.nativeId}:reasoning` : undefined,
+          nativeParentEventId: record.nativeId,
+          sequenceOffset: offset++,
+        }))
       }
       for (const block of blocks.map(asRecord).filter(item => item.type === 'toolCall')) {
         const callId = stringField(block, 'id')
@@ -731,10 +738,12 @@ export async function normalizePiRecord(
           callId,
           nativeToolName: stringField(block, 'name') ?? 'unknown',
           input: block.arguments ?? {},
-        }, { nativeCallId: callId, sequenceOffset: offset++ }))
-      }
-      if (!observations.length) {
-        observations.push(candidate(record, envelope, 'message.assistant', { text: '' }))
+        }, {
+          nativeCallId: callId,
+          nativeEventId: record.nativeId ? `${record.nativeId}:tool:${callId}` : undefined,
+          nativeParentEventId: record.nativeId,
+          sequenceOffset: offset++,
+        }))
       }
     } else if (role === 'tool' || role === 'toolResult') {
       const callId = stringField(message, 'toolCallId') ?? `pi-result-${record.id}`

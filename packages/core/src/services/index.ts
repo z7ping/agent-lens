@@ -292,6 +292,15 @@ export interface SourceRecordRepository {
 export interface ObservationRepository {
   get(id: ObservationId): Promise<CanonicalObservation | null>
   query(query: ObservationQuery): Promise<CanonicalObservation[]>
+  findIdByNativeEventId?(
+    sourceSessionId: SourceSessionId,
+    nativeEventId: string,
+  ): Promise<ObservationId | null>
+  linkChildrenToParent?(
+    sourceSessionId: SourceSessionId,
+    nativeParentEventId: string,
+    parentObservationId: ObservationId,
+  ): Promise<void>
   put(observation: CanonicalObservation): Promise<void>
 }
 

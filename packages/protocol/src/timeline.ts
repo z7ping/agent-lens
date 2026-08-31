@@ -78,6 +78,9 @@ export interface TimelineItemDto {
   sourceSessionId: string
   interactionId?: string
   actorId?: string
+  nativeEventId?: string
+  nativeParentEventId?: string
+  parentObservationId?: string
   sourceSequence?: number
   canonicalSequence?: number
   occurredAt?: string

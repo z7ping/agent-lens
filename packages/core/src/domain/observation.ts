@@ -100,6 +100,9 @@ export interface CanonicalObservation {
   sourceSessionId: SourceSessionId
   interactionId?: InteractionId
   actorId?: AgentActorId
+  nativeEventId?: string
+  nativeParentEventId?: string
+  parentObservationId?: ObservationId
   kind: ObservationKind
   sourceSequence?: number
   canonicalSequence?: number
@@ -112,6 +115,7 @@ export interface CanonicalObservation {
 export interface ObservationCandidate {
   kind: ObservationKind
   nativeEventId?: string
+  nativeParentEventId?: string
   nativeCallId?: string
   sourceSequence?: number
   occurredAt?: string
