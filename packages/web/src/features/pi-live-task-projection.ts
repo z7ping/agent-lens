@@ -1,4 +1,5 @@
-import type { TaskRoundModel } from './task-detail-model'
+import type { PiLiveStateDto } from '@agent-lens/protocol'
+import type { TaskDetailModel, TaskRoundModel } from './task-detail-model'
 import type { PiLiveHistoryItem } from './pi-live-history'
 
 export const PI_LIVE_HISTORY_ROUND_FACT_LIMIT = 8
@@ -9,10 +10,49 @@ export interface PiLiveTaskRoundProjection {
   continuation: boolean
 }
 
+export interface PiLiveRunningToolProjectionInput {
+  id: string
+  name: string
+  status: 'running' | 'success' | 'error'
+  summary: string
+  output: string
+}
+
+export interface PiLiveRunningRoundProjectionInput {
+  tools: PiLiveRunningToolProjectionInput[]
+  isStreaming: boolean
+}
+
 interface SemanticRound {
   ordinal: number
   items: PiLiveHistoryItem[]
   background: boolean
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === 'string' ? value : ''
+}
+
+function runtimeModelLabel(state: PiLiveStateDto | null): string {
+  if (!state?.model) return 'Pi'
+  const model = record(state.model)
+  const provider = stringValue(model.provider)
+  const id = stringValue(model.id || model.modelId || model.name)
+  return [provider, id].filter(Boolean).join(' / ') || 'Pi'
+}
+
+function runtimeStatusLabel(state: PiLiveStateDto | null, connected: boolean): string {
+  if (!connected) return '实时通道断开 · 后台服务仍持有任务'
+  if (!state) return '正在连接'
+  if (state.isCompacting) return '正在压缩上下文'
+  if (state.isStreaming) return '正在工作'
+  return '等待输入'
 }
 
 function factTime(item: PiLiveHistoryItem): number | null {
@@ -101,4 +141,40 @@ export function projectPiLiveTaskRounds(history: PiLiveHistoryItem[]): PiLiveTas
   }
 
   return result
+}
+
+export function projectPiLiveRunningRound(input: PiLiveRunningRoundProjectionInput): TaskRoundModel {
+  return {
+    id: 'pi-live-current-round',
+    label: '当前轮次',
+    state: input.isStreaming ? 'running' : 'stopped',
+    toolCount: input.tools.length,
+    errorCount: input.tools.filter(tool => tool.status === 'error').length,
+    durationMs: 0,
+    highLatency: false,
+  }
+}
+
+export function projectPiLiveTaskDetail(input: {
+  state: PiLiveStateDto | null
+  connected: boolean
+  historyRounds: PiLiveTaskRoundProjection[]
+  runningRound?: TaskRoundModel | undefined
+}): TaskDetailModel {
+  const state = input.state
+  return {
+    id: state?.runtimeSessionId ?? 'pi-live-pending',
+    title: state?.sessionName || 'Pi 实时任务',
+    agentLabel: 'Pi',
+    contextLabel: runtimeModelLabel(state),
+    statusLabel: runtimeStatusLabel(state, input.connected),
+    metrics: [
+      { value: state?.pendingMessageCount ?? 0, label: '排队', tone: state?.pendingMessageCount ? 'accent' : undefined },
+      { value: state?.processId ?? '—', label: 'PID' },
+    ],
+    rounds: [
+      ...input.historyRounds.map(round => round.model),
+      ...(input.runningRound ? [input.runningRound] : []),
+    ],
+  }
 }
