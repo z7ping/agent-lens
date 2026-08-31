@@ -34,6 +34,70 @@ async function withTimeout(promise, timeoutMs, label) {
   }
 }
 
+function webContentsAlive(win) {
+  try {
+    return Boolean(win && !win.isDestroyed() && win.webContents && !win.webContents.isDestroyed())
+  } catch {
+    return false
+  }
+}
+
+function ensureDebugger(win) {
+  if (!webContentsAlive(win)) fail('Electron WebContents 已销毁，无法继续桌面验收')
+  if (!win.webContents.debugger.isAttached()) win.webContents.debugger.attach('1.3')
+}
+
+async function applyViewport(win, viewport) {
+  ensureDebugger(win)
+  await withTimeout(
+    win.webContents.debugger.sendCommand('Emulation.setDeviceMetricsOverride', {
+      width: viewport.width,
+      height: viewport.height,
+      deviceScaleFactor: 1,
+      mobile: false,
+      screenWidth: viewport.width,
+      screenHeight: viewport.height,
+      positionX: 0,
+      positionY: 0,
+      dontSetVisibleSize: false,
+    }),
+    3_000,
+    `设置 ${viewport.width}×${viewport.height} CSS viewport`,
+  )
+  await withTimeout(
+    win.webContents.debugger.sendCommand('Emulation.setVisibleSize', {
+      width: viewport.width,
+      height: viewport.height,
+    }),
+    3_000,
+    `设置 ${viewport.width}×${viewport.height} 可见区域`,
+  ).catch(() => undefined)
+  await delay(60)
+}
+
+async function captureViewport(win, viewport, theme) {
+  ensureDebugger(win)
+  const result = await withTimeout(
+    win.webContents.debugger.sendCommand('Page.captureScreenshot', {
+      format: 'png',
+      fromSurface: true,
+      captureBeyondViewport: false,
+    }),
+    8_000,
+    `${viewport.width}×${viewport.height} ${theme} 截图`,
+  )
+  if (!result?.data) fail(`${viewport.width}×${viewport.height} ${theme} 截图数据为空`)
+  return Buffer.from(result.data, 'base64')
+}
+
+function safeDetachDebugger(win) {
+  try {
+    if (webContentsAlive(win) && win.webContents.debugger.isAttached()) win.webContents.debugger.detach()
+  } catch {
+    // Window teardown may race with Electron renderer destruction on CI; cleanup must be idempotent.
+  }
+}
+
 async function persistReport() {
   await writeFile(resolve(outputDir, 'task-center-desktop-report.json'), `${JSON.stringify(report, null, 2)}\n`)
 }
@@ -95,6 +159,7 @@ async function inspect(win, viewport, theme) {
     return {
       innerWidth: window.innerWidth,
       innerHeight: window.innerHeight,
+      devicePixelRatio: window.devicePixelRatio,
       documentScrollWidth: root?.scrollWidth || 0,
       documentScrollHeight: root?.scrollHeight || 0,
       page: rect(page), toolbar: rect(toolbar), rail: rect(rail), railScroll: rect(railScroll), main: rect(main), detailScroll: rect(detailScroll),
@@ -139,6 +204,7 @@ async function inspect(win, viewport, theme) {
   const within = (actual, expected, tolerance = 2) => Math.abs(actual - expected) <= tolerance
   if (!within(value.innerWidth, viewport.width)) errors.push(`内容宽度 ${value.innerWidth} != ${viewport.width}`)
   if (!within(value.innerHeight, viewport.height)) errors.push(`内容高度 ${value.innerHeight} != ${viewport.height}`)
+  if (!within(value.devicePixelRatio, 1, 0.01)) errors.push(`devicePixelRatio ${value.devicePixelRatio} != 1`)
   if (!value.page || !value.toolbar || !value.rail || !value.main) errors.push('Task Center 核心区域缺失')
   if (value.documentScrollWidth > value.innerWidth + 2) errors.push(`出现全局横向滚动：${value.documentScrollWidth} > ${value.innerWidth}`)
   if (value.documentScrollHeight > value.innerHeight + 2) errors.push(`出现全局纵向滚动：${value.documentScrollHeight} > ${value.innerHeight}`)
@@ -183,7 +249,7 @@ async function clickTaskSequence(win, count) {
 }
 
 async function runSwitchStability(win) {
-  if (!win.webContents.debugger.isAttached()) win.webContents.debugger.attach('1.3')
+  ensureDebugger(win)
   const initialCount = await withTimeout(
     win.webContents.executeJavaScript(`document.querySelectorAll('.task-center-rail button.session-item').length`),
     3_000,
@@ -238,9 +304,8 @@ hardTimeout = setTimeout(async () => {
 try {
   for (const viewport of viewports) {
     const win = new BrowserWindow({
-      width: viewport.width,
-      height: viewport.height,
-      useContentSize: true,
+      width: 1024,
+      height: 700,
       show: false,
       backgroundColor: '#ffffff',
       webPreferences: { sandbox: true, contextIsolation: true },
@@ -256,6 +321,8 @@ try {
     try {
       diagnostic.phase = 'loading'
       await withTimeout(win.loadURL(`${baseUrl}${path}`), 15_000, `${viewport.width}×${viewport.height} 页面加载`)
+      diagnostic.phase = 'emulate-viewport'
+      await applyViewport(win, viewport)
       diagnostic.phase = 'waiting-task-center'
       await waitForTaskCenter(win)
       diagnostic.phase = 'ready'
@@ -265,9 +332,9 @@ try {
         diagnostic.phase = `inspect-${theme}`
         const result = await inspect(win, viewport, theme)
         diagnostic.phase = `capture-${theme}`
-        const image = await withTimeout(win.webContents.capturePage(), 8_000, `${viewport.width}×${viewport.height} ${theme} 截图`)
+        const image = await captureViewport(win, viewport, theme)
         const prefix = `task-center-${viewport.width}x${viewport.height}-${theme}`
-        await writeFile(resolve(outputDir, `${prefix}.png`), image.toPNG())
+        await writeFile(resolve(outputDir, `${prefix}.png`), image)
         await writeFile(resolve(outputDir, `${prefix}.json`), `${JSON.stringify(result, null, 2)}\n`)
         report.cases.push(result)
         if (!result.ok) report.ok = false
@@ -287,7 +354,7 @@ try {
       diagnostic.phase = 'done'
       await persistReport()
     } finally {
-      if (win.webContents.debugger.isAttached()) win.webContents.debugger.detach()
+      safeDetachDebugger(win)
       if (!win.isDestroyed()) win.destroy()
     }
   }
