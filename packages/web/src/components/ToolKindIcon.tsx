@@ -12,6 +12,17 @@ export function toolVisualKind(name: string): ToolVisualKind {
   return 'tool'
 }
 
+export function toolVisualLabel(kind: ToolVisualKind): string {
+  if (kind === 'shell') return 'Shell'
+  if (kind === 'read') return '读取'
+  if (kind === 'edit') return '修改'
+  if (kind === 'search') return '搜索'
+  if (kind === 'test') return '测试'
+  if (kind === 'mcp') return 'MCP'
+  if (kind === 'web') return '网络'
+  return '工具'
+}
+
 export function ToolKindIcon({ kind, className = '' }: { kind: ToolVisualKind; className?: string }) {
   const common = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
   return <span className={`tool-kind-svg tool-kind-${kind} ${className}`.trim()} aria-hidden="true">
