@@ -20,6 +20,7 @@ import { useClientSnapshot } from '../App'
 import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
 import { ToolKindIcon } from '../components/ToolKindIcon'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
+import { TaskHeader } from './TaskHeader'
 import { TaskMessage } from './TaskMessage'
 import { TaskSurface } from './TaskSurface'
 
@@ -738,10 +739,6 @@ function Interaction({
   </details>
 }
 
-function Metric({ value, label, tone = '' }: { value: string | number; label: string; tone?: 'danger' | '' }) {
-  return <div className="review-metric" data-tone={tone}><b>{value}</b><span>{label}</span></div>
-}
-
 type RoundFilter = ReviewDetailFilter
 
 interface ReviewReaderPosition {
@@ -1113,26 +1110,21 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
       <TaskSurface ref={readerPaneRef} mode="review" className="review-reader-pane" onScroll={onReaderScroll}>
         {review.error && <div className="page-error">{review.error}</div>}
         {!detail ? <div className="empty-state fill">{review.selectedId && review.detailLoading ? '加载会话详情…' : '选择一个会话开始复盘'}</div> : <div className="review-reader">
-          <header className="review-session-head">
-            <div className="review-session-copy">
-              <div className="review-session-meta"><span className={`source-dot ${sourceDot(detail.sourceIds[0] ?? '')}`}/><b>{detail.sourceIds.map(id => agentLabel(id)).join(' / ')}</b><span>{detail.projectName ?? '无项目'}</span>{detail.errorCount > 0 && <span className="session-status-error">有错误</span>}</div>
-              <h1 className="review-session-title" title={sessionTitle([detail.title, detail.preview], detail.projectName ? `${detail.projectName} 会话` : `${agentLabel(detail.sourceIds[0] ?? '')} 会话`)}>{sessionTitle([detail.title, detail.preview], detail.projectName ? `${detail.projectName} 会话` : `${agentLabel(detail.sourceIds[0] ?? '')} 会话`)}</h1>
-              <div className="review-session-submeta">
-                <span>{formatRange(detail.startedAt, detail.endedAt)}</span>
-                {detail.workspacePath && <code title={detail.workspacePath}>{detail.workspacePath}</code>}
-              </div>
-              <div className="review-audit-controls">
-                <button className="review-audit-toggle" aria-pressed={showRawRecords} onClick={() => setShowRawRecords(value => !value)}>{showRawRecords ? '隐藏原始记录' : '显示原始记录'}</button>
-                {showRawRecords && <span>原始记录视图：补充来源原始事件与载荷；Evidence（证据）始终保持可见。</span>}
-              </div>
-            </div>
-            <div className="review-metrics">
-              <Metric value={detail.interactionCount} label="轮次"/>
-              <Metric value={detail.toolCount} label="调用"/>
-              {detail.errorCount > 0 && <Metric value={detail.errorCount} label="错误" tone="danger"/>}
-              <Metric value={duration(detail.durationMs)} label="跨度"/>
-            </div>
-          </header>
+          <TaskHeader
+            marker={<span className={`source-dot ${sourceDot(detail.sourceIds[0] ?? '')}`}/>} 
+            agent={detail.sourceIds.map(id => agentLabel(id)).join(' / ')}
+            context={detail.projectName ?? '无项目'}
+            status={detail.errorCount > 0 ? <span className="session-status-error">有错误</span> : undefined}
+            title={<span title={sessionTitle([detail.title, detail.preview], detail.projectName ? `${detail.projectName} 会话` : `${agentLabel(detail.sourceIds[0] ?? '')} 会话`)}>{sessionTitle([detail.title, detail.preview], detail.projectName ? `${detail.projectName} 会话` : `${agentLabel(detail.sourceIds[0] ?? '')} 会话`)}</span>}
+            submeta={<><span>{formatRange(detail.startedAt, detail.endedAt)}</span>{detail.workspacePath && <code title={detail.workspacePath}>{detail.workspacePath}</code>}</>}
+            metrics={[
+              { value: detail.interactionCount, label: '轮次' },
+              { value: detail.toolCount, label: '调用' },
+              ...(detail.errorCount > 0 ? [{ value: detail.errorCount, label: '错误', tone: 'danger' as const }] : []),
+              { value: duration(detail.durationMs), label: '跨度' },
+            ]}
+            actions={<button className="review-audit-toggle" aria-pressed={showRawRecords} onClick={() => setShowRawRecords(value => !value)}>{showRawRecords ? '隐藏原始记录' : '显示原始记录'}</button>}
+          />
 
           {detail.sourceIds.includes('pi') && review.relationships?.items.length ? <details className="pi-session-tree">
             <summary>Pi 会话树 · {review.relationships.items.length} 条关系</summary>
