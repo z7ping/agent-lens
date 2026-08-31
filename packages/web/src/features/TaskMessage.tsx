@@ -62,8 +62,8 @@ export function TaskMessage({
     }
   }, [measure, text, view])
 
-  return <div className={`chat-row message-row ${user ? 'chat-row-user user' : 'chat-row-agent agent'} task-message-row ${className}`.trim()} data-task-message-role={role}>
-    {!user && <span className="chat-avatar chat-avatar-agent task-message-agent-mark" aria-hidden="true"/>}
+  return <div className={`message-row ${user ? 'user' : 'agent'} task-message-row ${className}`.trim()} data-task-message-role={role}>
+    {!user && <span className="chat-avatar-agent task-message-agent-mark" aria-hidden="true"/>}
     <div className={`chat-bubble ${user ? 'chat-bubble-user' : 'chat-bubble-agent'} task-message-bubble`}>
       <div className="chat-meta task-message-meta"><b>{author}</b>{meta}{time && <time>{time}</time>}</div>
       <div className="markdown-message task-message-content" data-view={view}>
