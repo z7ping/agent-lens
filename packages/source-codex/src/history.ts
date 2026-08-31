@@ -19,6 +19,11 @@ interface HistoryCheckpoint {
   mtimeMs: number
 }
 
+interface MetadataCheckpoint {
+  startFingerprint?: string
+  titleFingerprint?: string
+}
+
 interface JsonlLine {
   text: string
   startOffset: number
@@ -197,6 +202,10 @@ function checkpointKey(filePath: string): string {
   return `codex:history:${sha256(filePath)}`
 }
 
+function metadataCheckpointKey(filePath: string): string {
+  return `codex:metadata:v2-session-summary:${sha256(filePath)}`
+}
+
 function metadataRecord(
   ctx: SourceExecutionContext,
   filePath: string,
@@ -249,16 +258,26 @@ export async function* ingestCodexHistory(ctx: SourceExecutionContext): AsyncIte
 
     const fileStat = await stat(filePath)
     const key = checkpointKey(filePath)
+    const metadataKey = metadataCheckpointKey(filePath)
     const previous = await ctx.checkpoint.get<HistoryCheckpoint>(key)
+    const previousMetadata = await ctx.checkpoint.get<MetadataCheckpoint>(metadataKey) ?? {}
     const fallbackId = sessionIdFromFilename(filePath)
     const session = await readSessionMetadata(filePath, threadNames.get(fallbackId))
     const indexedTitle = threadNames.get(session.nativeSessionId) ?? threadNames.get(fallbackId)
     if (indexedTitle && session.title !== indexedTitle.title) session.title = indexedTitle.title
 
     const startRecord = metadataRecord(ctx, filePath, session, 'session_start', indexedTitle)
-    if (startRecord) yield startRecord
+    if (startRecord && previousMetadata.startFingerprint !== startRecord.fingerprint) {
+      yield startRecord
+      previousMetadata.startFingerprint = startRecord.fingerprint
+      await ctx.checkpoint.set(metadataKey, previousMetadata)
+    }
     const titleRecord = metadataRecord(ctx, filePath, session, 'session_title', indexedTitle)
-    if (titleRecord) yield titleRecord
+    if (titleRecord && previousMetadata.titleFingerprint !== titleRecord.fingerprint) {
+      yield titleRecord
+      previousMetadata.titleFingerprint = titleRecord.fingerprint
+      await ctx.checkpoint.set(metadataKey, previousMetadata)
+    }
 
     const unchanged = previous
       && previous.path === filePath
