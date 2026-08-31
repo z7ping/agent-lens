@@ -23,6 +23,7 @@ export type PiLiveHistoryItem =
       output: string
       status: 'success' | 'error' | 'unknown'
       at: string
+      durationMs?: number | undefined
     }
   | {
       id: string
@@ -55,6 +56,13 @@ function stringValue(value: unknown): string {
 function timestamp(entry: Record<string, unknown>, message?: Record<string, unknown>): string {
   const value = entry.timestamp ?? message?.timestamp
   return typeof value === 'string' || typeof value === 'number' ? String(value) : ''
+}
+
+function elapsedMs(start: string, end: string): number | undefined {
+  const startMs = Date.parse(start)
+  const endMs = Date.parse(end)
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) return undefined
+  return endMs - startMs
 }
 
 function contentText(value: unknown): string {
@@ -148,6 +156,7 @@ function messageItems(
           output: paired?.output ?? '',
           status: paired?.status ?? 'unknown',
           at,
+          durationMs: paired ? elapsedMs(at, paired.at) : undefined,
         })
       }
     }
