@@ -1,0 +1,130 @@
+name: Temp Alpha3 Task Execution Codemod
+
+on:
+  push:
+    branches:
+      - bugfix/alpha3-task-execution-codemod
+    paths:
+      - .github/workflows/tmp-alpha3-task-execution-codemod.yml
+
+permissions:
+  contents: write
+
+jobs:
+  codemod:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: bugfix/alpha3-task-execution-codemod
+      - name: Migrate Review thinking and tools
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs')
+          const path = 'packages/web/src/features/ReviewPage.tsx'
+          let source = fs.readFileSync(path, 'utf8')
+          function replace(pattern, after, label) {
+            if (!pattern.test(source)) throw new Error(`missing ${label}`)
+            source = source.replace(pattern, after)
+          }
+
+          replace(
+            /import \{ TaskRound \} from '\.\/TaskRound'\nimport \{ TaskSurface \} from '\.\/TaskSurface'\nimport type \{ TaskDetailModel, TaskRoundModel \} from '\.\/task-detail-model'/,
+            "import { TaskRound } from './TaskRound'\nimport { TaskSurface } from './TaskSurface'\nimport { TaskThinking } from './TaskThinking'\nimport { TaskToolGroup } from './TaskToolGroup'\nimport type { TaskDetailModel, TaskRoundModel, TaskThinkingModel, TaskToolGroupModel, TaskToolModel } from './task-detail-model'",
+            'shared execution imports',
+          )
+
+          replace(
+            /  if \(node\.role === 'reasoning'\) \{[\s\S]*?\n  \}\n\n  return <TaskMessage/,
+            `  if (node.role === 'reasoning') {
+              const thinking: TaskThinkingModel = {
+                id: node.id,
+                label: '可观察过程片段',
+                text: node.text,
+                preview: brief(node.text, 78),
+                time: formatClock(node.at),
+                state: 'settled',
+              }
+              return <TaskThinking
+                model={thinking}
+                meta={<EvidenceBadges evidence={node.evidence} compact/>}
+                actions={node.evidence.length > 0 ? <button className="evidence-link" onClick={() => inspect(node)}>查看全部证据 · {node.evidence.length}</button> : undefined}
+              >
+                <MarkdownSurface text={node.text}/>
+              </TaskThinking>
+            }
+
+            return <TaskMessage`,
+            'reasoning message',
+          )
+
+          replace(
+            /function ToolRow\(\{[\s\S]*?\n\}\n\nfunction EventRow/,
+            `function reviewToolModel(node: ReviewToolNodeDto): TaskToolModel {
+              const info = toolPresentation(node)
+              const status = node.status === 'error' ? 'error' : node.status === 'success' ? 'success' : node.status === 'running' ? 'running' : 'unknown'
+              return {
+                id: node.id,
+                name: node.name,
+                kind: info.kind,
+                kindLabel: info.label,
+                status,
+                primary: info.primary || undefined,
+                secondary: info.secondary || undefined,
+                durationLabel: node.durationMs !== undefined && node.durationMs > 0 ? duration(node.durationMs) : formatClock(node.at),
+              }
+            }
+
+            function ReviewToolGroupAdapter({ items, inspect }: { items: ReviewToolNodeDto[]; inspect(node: ReviewNodeDto): void }) {
+              const model = useMemo<TaskToolGroupModel>(() => {
+                const tools = items.map(reviewToolModel)
+                const errorCount = tools.filter(tool => tool.status === 'error').length
+                const totalDuration = items.reduce((sum, item) => sum + (item.durationMs ?? 0), 0)
+                const counts = new Map<ToolKind, number>()
+                for (const tool of tools) counts.set(tool.kind, (counts.get(tool.kind) ?? 0) + 1)
+                return {
+                  id: \`tools:\${items.map(item => item.id).join(':')}\`,
+                  label: '工具执行',
+                  itemCount: tools.length,
+                  errorCount,
+                  totalDurationLabel: totalDuration > 0 ? duration(totalDuration) : undefined,
+                  kindCounts: [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([kind, count]) => ({ kind, label: toolKindLabel(kind), count })),
+                  tools,
+                }
+              }, [items])
+              const nodes = useMemo(() => new Map(items.map(node => [node.id, node] as const)), [items])
+              return <TaskToolGroup
+                model={model}
+                renderMeta={tool => {
+                  const node = nodes.get(tool.id)
+                  return node ? <EvidenceBadges evidence={node.evidence} compact/> : null
+                }}
+                onToolClick={tool => {
+                  const node = nodes.get(tool.id)
+                  if (node) inspect(node)
+                }}
+              />
+            }
+
+            function EventRow`,
+            'tool components',
+          )
+
+          replace(
+            /if \(entry\.type === 'tool-group'\) return <ToolRunGroup key=\{`tools-\$\{index\}`\} items=\{entry\.items\} inspect=\{inspect\}\/>/,
+            "if (entry.type === 'tool-group') return <ReviewToolGroupAdapter key={`tools-${index}`} items={entry.items} inspect={inspect}/>",
+            'tool group adapter call',
+          )
+
+          fs.writeFileSync(path, source.replace(/[ \t]+$/gm, ''))
+          NODE
+      - name: Commit codemod result
+        shell: bash
+        run: |
+          git config user.name "7ping"
+          git config user.email "z7ping@outlook.com"
+          git add packages/web/src/features/ReviewPage.tsx
+          git diff --cached --check
+          git commit -m "refactor: Review 复用 TaskThinking 与 TaskTool 组件"
+          git push origin HEAD:bugfix/alpha3-task-execution-codemod
