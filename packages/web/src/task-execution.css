@@ -1,10 +1,119 @@
 @reference "./styles.css";
 
 /*
- * alpha.3 Task 执行轨原型契约。
- * Thinking / Tool Group 默认展开；Tool Call 是主轨可见事实；详情只承载 Payload / 输出。
- * Review / Pi History / Pi Running 共用这一套表现。
+ * alpha.3 Task Detail 高保真契约。
+ * 本文件是 Round / Message / Thinking / Tool 执行轨的最终表现层：
+ * 对话第一视觉层；Round 只给轻边界；Thinking / Tool 为第二视觉层；Payload 为第三层下钻。
  */
+
+/* 09 · Round：默认展开，只有轻边界与事实摘要。 */
+.task-center-main .task-round {
+  scroll-margin-top: 44px;
+  margin-top: 11px;
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--al-line-strong) 78%, transparent);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.task-center-main .task-round > summary {
+  display: grid;
+  min-height: 36px;
+  grid-template-columns: 14px auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--al-muted);
+  cursor: pointer;
+  list-style: none;
+}
+.task-center-main .task-round > summary::-webkit-details-marker { display: none; }
+.task-center-main .interaction-chevron {
+  display: block;
+  color: var(--al-muted);
+  font-size: 16px;
+  line-height: 1;
+  transition: transform .12s;
+}
+.task-center-main .task-round[open] > summary .interaction-chevron { transform: rotate(90deg); }
+.task-center-main .round-label { color: var(--al-muted); font-size: 12px; font-weight: 650; white-space: nowrap; }
+.task-center-main .round-preview { min-width: 0; overflow: hidden; color: var(--al-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.task-center-main .round-meta { display: flex; align-items: center; gap: 9px; color: var(--al-muted); font-size: 12px; white-space: nowrap; }
+.task-center-main .round-meta .error,
+.task-center-main .round-meta .is-error { color: var(--al-danger); }
+.task-center-main .round-meta .is-live { color: var(--al-success); }
+.task-center-main .round-flow { position: relative; padding: 6px 8px 18px; }
+.task-center-main .round-flow::before {
+  content: "";
+  position: absolute;
+  left: 31px;
+  top: 42px;
+  bottom: 26px;
+  width: 1px;
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--al-accent) 17%, var(--al-line)), var(--al-line), transparent);
+  pointer-events: none;
+}
+
+/* 09/10 · Message：正文第一视觉层，用户右 / Agent 左，正文 14px。 */
+.task-center-main .message-row,
+.task-center-main .task-message-row {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  align-items: flex-start;
+  margin: 15px 0;
+}
+.task-center-main .message-row.user,
+.task-center-main .chat-row-user { justify-content: flex-end; }
+.task-center-main .task-message-agent-mark {
+  position: relative;
+  z-index: 4;
+  width: 25px;
+  height: 25px;
+  flex: 0 0 25px;
+  margin: 10px 10px 0 4px;
+  border: 1px solid color-mix(in srgb, var(--al-accent) 28%, var(--al-line));
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--al-accent) 0 3px, transparent 4px), var(--al-surface);
+  box-shadow: 0 0 0 4px var(--al-surface);
+}
+.task-center-main .task-message-bubble,
+.task-center-main .message-row .chat-bubble {
+  position: relative;
+  max-width: min(74%, 860px);
+  padding: 11px 14px 12px;
+  border-radius: 17px;
+  font-size: 14px;
+  line-height: 1.68;
+}
+.task-center-main .chat-bubble-user {
+  border: 1px solid color-mix(in srgb, var(--al-user-bubble-text) 11%, transparent);
+  border-bottom-right-radius: 6px;
+  background: var(--al-user-bubble);
+  color: var(--al-user-bubble-text);
+  box-shadow: 0 2px 8px rgb(16 24 40 / .07);
+}
+.task-center-main .chat-bubble-agent {
+  margin-left: 0;
+  border: 1px solid color-mix(in srgb, var(--al-accent) 17%, var(--al-line));
+  border-bottom-left-radius: 6px;
+  background: color-mix(in srgb, var(--al-accent-soft) 45%, var(--al-surface));
+  color: var(--al-ink);
+  box-shadow: 0 2px 8px rgb(16 24 40 / .035);
+}
+.task-center-main .task-message-content,
+.task-center-main .task-message-content .markdown,
+.task-center-main .task-message-content .markdown-surface { font-size: 14px; }
+.task-center-main .task-message-meta { display: flex; align-items: center; gap: 7px; margin-bottom: 4px; color: var(--al-muted); font-size: 12px; }
+.task-center-main .task-message-meta time { margin-left: auto; }
+.task-center-main .chat-bubble-agent .task-message-meta b { color: var(--al-accent); }
+.task-center-main .chat-bubble-user .task-message-meta { color: var(--al-user-bubble-muted); }
+.task-center-main .evidence-inline { min-height: 19px; padding-inline: 6px; border-radius: 999px; font-size: 12px; }
+
+/* 06/08 · Agent 执行轨：弱于消息，但父子、折叠和连续引导线必须清楚。 */
 .task-center-main .thinking-block,
 .task-center-main .execution-group {
   position: relative;
@@ -16,7 +125,6 @@
   background: transparent;
   box-shadow: none;
 }
-
 .task-center-main .thinking-block::before,
 .task-center-main .execution-group::before {
   content: "";
@@ -27,7 +135,6 @@
   height: 1px;
   background: var(--al-line);
 }
-
 .task-center-main .thinking-block > summary,
 .task-center-main .execution-group > summary {
   display: grid;
@@ -42,12 +149,10 @@
   cursor: pointer;
   list-style: none;
 }
-
 .task-center-main .thinking-block > summary::-webkit-details-marker,
 .task-center-main .execution-group > summary::-webkit-details-marker { display: none; }
 .task-center-main .thinking-block > summary:hover,
 .task-center-main .execution-group > summary:hover { background: transparent; }
-
 .task-center-main .thinking-block > summary::before,
 .task-center-main .execution-group > summary::before {
   content: "›";
@@ -57,20 +162,15 @@
   line-height: 1;
   transition: transform .12s;
 }
-
 .task-center-main .thinking-block[open] > summary::before,
 .task-center-main .execution-group[open] > summary::before { transform: rotate(90deg); }
-
-.task-center-main .thinking-label {
-  color: color-mix(in srgb, var(--al-accent) 68%, var(--al-muted));
-  font-size: 12px;
-  font-weight: 650;
-  white-space: nowrap;
-}
+.task-center-main .thinking-label,
+.task-center-main .tool-title { font-size: 12px; font-weight: 650; white-space: nowrap; }
+.task-center-main .thinking-label { color: color-mix(in srgb, var(--al-accent) 68%, var(--al-muted)); }
+.task-center-main .tool-title { color: var(--al-muted); }
 .task-center-main .thinking-preview,
 .task-center-main .node-preview { min-width: 0; overflow: hidden; color: var(--al-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .task-center-main .thinking-summary-meta { display: inline-flex; align-items: center; gap: 6px; color: var(--al-muted); font-size: 12px; white-space: nowrap; }
-.task-center-main .thinking-summary-meta time { color: var(--al-muted); font-size: 12px; }
 .task-center-main .thinking-content {
   margin: 0 8px 7px 21px;
   padding: 2px 0 2px 10px;
@@ -80,11 +180,10 @@
   line-height: 1.62;
 }
 .task-center-main .task-thinking-actions { margin: 0 8px 7px 21px; }
-
-.task-center-main .tool-title { color: var(--al-muted); font-size: 12px; font-weight: 650; white-space: nowrap; }
 .task-center-main .tool-counts { display: flex; gap: 4px; }
 .task-center-main .tool-counts span { color: var(--al-muted); font-size: 12px; white-space: nowrap; }
 
+/* 01–07 · Tool Call：默认可见，四列事实行；只有 Payload / 输出下钻。 */
 .task-center-main .execution-list,
 .task-center-main .tool-list {
   margin: 0 6px 6px 21px;
@@ -92,10 +191,8 @@
   border-top: 0;
   border-left: 1px solid var(--al-line);
 }
-
 .task-center-main .task-tool-row-shell { min-width: 0; }
 .task-center-main .task-tool-row-shell:last-child .tool-row { border-bottom: 0; }
-
 .task-center-main .execution-row.tool-row {
   width: 100%;
   min-height: 38px;
@@ -104,6 +201,7 @@
   align-items: center;
   gap: 8px;
   padding: 5px 7px 5px 10px;
+  overflow: hidden;
   border: 0;
   border-bottom: 1px solid color-mix(in srgb, var(--al-line) 68%, transparent);
   border-radius: 0;
@@ -114,15 +212,14 @@
   font-size: 13px;
   text-align: left;
 }
-
 .task-center-main button.execution-row.tool-row { cursor: pointer; }
 .task-center-main .execution-row.tool-row:hover { background: var(--al-soft-2); }
+.task-center-main .execution-row.tool-row:focus-visible { outline: 2px solid color-mix(in srgb, var(--al-accent) 52%, transparent); outline-offset: -2px; }
 .task-center-main .execution-row.tool-row.error,
 .task-center-main .execution-row.tool-row[data-status="error"] {
   box-shadow: inset 2px 0 0 var(--al-danger);
   background: color-mix(in srgb, var(--al-danger-soft) 55%, transparent);
 }
-
 .task-center-main .tool-kind {
   display: inline-flex;
   align-items: center;
@@ -140,31 +237,23 @@
   line-height: 1;
   white-space: nowrap;
 }
-
 .task-center-main .tool-kind .tool-kind-svg,
-.task-center-main .tool-kind .tool-kind-svg > svg {
-  display: block;
-  width: 13px;
-  height: 13px;
-  flex: 0 0 auto;
-}
-
+.task-center-main .tool-kind .tool-kind-svg > svg { display: block; width: 13px; height: 13px; flex: 0 0 auto; }
 .task-center-main .tool-kind-read { --kind-fg: #2563EB; --kind-bg: #EAF1FE; --kind-line: #D4E2FB; }
 .task-center-main .tool-kind-search { --kind-fg: #0E7490; --kind-bg: #E5F6FA; --kind-line: #C8E9F1; }
 .task-center-main .tool-kind-edit { --kind-fg: #157A55; --kind-bg: #E9F6EF; --kind-line: #CDEADD; }
 .task-center-main .tool-kind-shell { --kind-fg: #B45309; --kind-bg: #FFF4E0; --kind-line: #F0DCBE; }
-.task-center-main .tool-kind-test { --kind-fg: #C2415D; --kind-bg: #FFF0F3; --kind-line: #F4D2DA; }
+.task-center-main .tool-kind-test { --kind-fg: #6D5BD0; --kind-bg: #F0EEFF; --kind-line: #DEDAFA; }
 .task-center-main .tool-kind-mcp { --kind-fg: #6D5BD0; --kind-bg: #F0EEFF; --kind-line: #DEDAFA; }
 .task-center-main .tool-kind-web { --kind-fg: #0F766E; --kind-bg: #E7F5F2; --kind-line: #CBE8E1; }
-
+.task-center-main .tool-kind-tool { --kind-fg: var(--al-muted); --kind-bg: var(--al-soft-2); --kind-line: var(--al-line); }
 :root[data-theme='dark'] .task-center-main .tool-kind-read { --kind-fg: #8FB3FF; --kind-bg: #1C2A49; --kind-line: #2C3D63; }
 :root[data-theme='dark'] .task-center-main .tool-kind-search { --kind-fg: #67D4E8; --kind-bg: #12333A; --kind-line: #1E4A54; }
 :root[data-theme='dark'] .task-center-main .tool-kind-edit { --kind-fg: #5BC995; --kind-bg: #173328; --kind-line: #24503B; }
 :root[data-theme='dark'] .task-center-main .tool-kind-shell { --kind-fg: #F5C36B; --kind-bg: #352A16; --kind-line: #4A3B1D; }
-:root[data-theme='dark'] .task-center-main .tool-kind-test { --kind-fg: #FF9AAF; --kind-bg: #3B2028; --kind-line: #5A2D39; }
+:root[data-theme='dark'] .task-center-main .tool-kind-test,
 :root[data-theme='dark'] .task-center-main .tool-kind-mcp { --kind-fg: #B5AEFF; --kind-bg: #29284B; --kind-line: #3B3A6B; }
 :root[data-theme='dark'] .task-center-main .tool-kind-web { --kind-fg: #72D7C5; --kind-bg: #14332E; --kind-line: #235047; }
-
 .task-center-main .tool-action {
   min-width: 0;
   overflow: hidden;
@@ -173,7 +262,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
 .task-center-main .tool-target {
   min-width: 0;
   display: flex;
@@ -181,23 +269,16 @@
   gap: 6px;
   overflow: hidden;
   color: var(--al-muted);
+  font-size: 13px;
 }
-
-.task-center-main .tool-target-text {
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.task-center-main .tool-meta { display: inline-flex; min-width: max-content; align-items: center; gap: 4px; }
+.task-center-main .tool-target-text { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-center-main .tool-meta { display: inline-flex; min-width: 0; max-width: 42%; flex: 0 1 auto; align-items: center; gap: 4px; overflow: hidden; }
 .task-center-main .tool-status { color: var(--al-muted); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .task-center-main .tool-status.ok { color: var(--al-success); }
 .task-center-main .tool-status.run { color: var(--al-accent); }
 .task-center-main .tool-status.error { color: var(--al-danger); }
 
-/* Payload / 长输出只在 Tool Call 下钻区出现，不替代 Tool Call 主行。 */
+/* 05 · Payload / 长输出：局部展示，不替代 Tool Call 主行。 */
 .task-center-main .tool-payload {
   margin: 0 7px 6px 76px;
   padding: 4px 0 0 8px;
@@ -205,23 +286,45 @@
   color: var(--al-muted);
   font-size: 12px;
 }
+.task-center-main .tool-payload:empty { display: none; }
 .task-center-main .tool-payload > details > summary { min-height: 24px; cursor: pointer; color: var(--al-muted); font-size: 12px; }
 .task-center-main .tool-payload pre { max-height: 160px; margin: 4px 0 0; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.task-center-main .tool-live-output {
+  max-height: 112px;
+  overflow: auto;
+  padding: 5px 8px;
+  border: 1px solid color-mix(in srgb, var(--al-accent) 16%, var(--al-line));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--al-accent-soft) 20%, var(--al-soft-2));
+}
+.task-center-main .tool-live-output pre { max-height: none; margin: 0; overflow: visible; }
+.task-center-main .tool-output-details[open] { padding-bottom: 2px; }
+.task-center-main .task-tool-row-shell:has(.tool-status.error) .tool-output-details > summary { color: var(--al-danger); }
 
+/* 11 · 主桌面四列稳定；只在既定窄断点按固定顺序降级。 */
 @media (max-width: 1199.98px) {
   .task-center-main .execution-row.tool-row { grid-template-columns: 72px 92px minmax(0, 1fr) auto; }
 }
-
 @media (max-width: 991.98px) {
   .task-center-main .execution-row.tool-row { grid-template-columns: 70px minmax(0, 1fr) auto; }
   .task-center-main .tool-action { display: none; }
   .task-center-main .tool-payload { margin-left: 70px; }
 }
-
 @media (max-width: 767.98px) {
+  .task-center-main .task-round > summary { grid-template-columns: 14px auto minmax(0, 1fr); }
+  .task-center-main .round-preview { display: none; }
+  .task-center-main .round-meta { grid-column: 2 / -1; }
+  .task-center-main .task-message-bubble { max-width: 94%; }
   .task-center-main .thinking-block,
   .task-center-main .execution-group { margin-right: 6px; margin-left: 24px; }
   .task-center-main .execution-row.tool-row { grid-template-columns: 68px minmax(0, 1fr); }
   .task-center-main .tool-status { grid-column: 2; }
   .task-center-main .tool-payload { margin-left: 68px; }
+}
+
+/* 12 · 减少非必要动效。 */
+@media (prefers-reduced-motion: reduce) {
+  .task-center-main .interaction-chevron,
+  .task-center-main .thinking-block > summary::before,
+  .task-center-main .execution-group > summary::before { transition: none; }
 }
