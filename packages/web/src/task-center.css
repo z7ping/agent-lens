@@ -54,11 +54,8 @@
 .task-center-main .task-surface > .pi-live-page,
 .task-center-main .task-surface > .task-center-new { height: 100%; }
 .task-center-main .review-layout { grid-template-columns: minmax(0, 1fr); }
-.task-center-main .review-layout > .session-panel { display: none; }
 .task-center-main .pi-live-page { grid-template-columns: minmax(0, 1fr); }
-.task-center-main .pi-live-page > .pi-live-sessions { display: none; }
 .task-center-main .pi-live-taskbar { min-height: 46px; }
-.task-center-main .hub-review-toolbar { display: none; }
 
 .task-center-new {
   display: grid;
