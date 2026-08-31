@@ -1,0 +1,211 @@
+name: Temp Alpha3 TaskRound Codemod V2
+
+on:
+  push:
+    branches:
+      - bugfix/alpha3-task-round-codemod
+    paths:
+      - .github/workflows/tmp-alpha3-task-round-codemod-v2.yml
+
+permissions:
+  contents: write
+
+jobs:
+  codemod:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: bugfix/alpha3-task-round-codemod
+      - name: Migrate Review to TaskDetailModel and TaskRound
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs')
+          const path = 'packages/web/src/features/ReviewPage.tsx'
+          let source = fs.readFileSync(path, 'utf8')
+
+          function replaceOnce(pattern, after, label) {
+            if (!pattern.test(source)) throw new Error(`missing ${label}`)
+            source = source.replace(pattern, after)
+          }
+
+          replaceOnce(
+            /import \{ TaskHeader \} from '\.\/TaskHeader'\nimport \{ TaskMessage \} from '\.\/TaskMessage'\nimport \{ TaskSurface \} from '\.\/TaskSurface'/,
+            "import { TaskHeader } from './TaskHeader'\nimport { TaskMessage } from './TaskMessage'\nimport { TaskRound } from './TaskRound'\nimport { TaskSurface } from './TaskSurface'\nimport type { TaskDetailModel, TaskRoundModel } from './task-detail-model'",
+            'TaskRound imports',
+          )
+
+          replaceOnce(
+            /function Interaction\(\{[\s\S]*?\n\}\n\ntype RoundFilter = ReviewDetailFilter/,
+            `function ReviewRoundAdapter({
+              interaction,
+              round,
+              inspect,
+              defaultExpanded,
+              expansionStore,
+              forceExpanded,
+              forceRevision,
+              showRawRecords,
+            }: {
+              interaction: ReviewInteractionDto
+              round: TaskRoundModel
+              inspect(node: ReviewNodeDto): void
+              defaultExpanded: boolean
+              expansionStore: Map<string, boolean>
+              forceExpanded: boolean
+              forceRevision: number
+              showRawRecords: boolean
+            }) {
+              const groups = useMemo(() => {
+                const result: InteractionEntry[] = []
+                let tools: ReviewToolNodeDto[] = []
+                let rawEvents: ReviewEventNodeDto[] = []
+                const flushTools = () => { if (tools.length) { result.push({ type: 'tool-group', items: tools }); tools = [] } }
+                const flushRawEvents = () => { if (rawEvents.length) { result.push({ type: 'raw-event-group', items: rawEvents }); rawEvents = [] } }
+
+                for (const node of interaction.nodes) {
+                  if (node.type === 'tool') {
+                    flushRawEvents()
+                    tools.push(node)
+                    continue
+                  }
+                  if (node.type === 'event' && isGenericRawEvent(node)) {
+                    flushTools()
+                    rawEvents.push(node)
+                    continue
+                  }
+                  flushTools()
+                  flushRawEvents()
+                  result.push(node)
+                }
+                flushTools()
+                flushRawEvents()
+                return result
+              }, [interaction.nodes])
+
+              return <TaskRound
+                model={round}
+                defaultExpanded={defaultExpanded}
+                expansionStore={expansionStore}
+                forceExpanded={forceExpanded}
+                forceRevision={forceRevision}
+              >
+                {groups.map((entry, index) => {
+                  if (entry.type === 'tool-group') return <ToolRunGroup key={\`tools-\${index}\`} items={entry.items} inspect={inspect}/>
+                  if (entry.type === 'raw-event-group') return showRawRecords ? <RawEventGroup key={\`raw-\${index}\`} items={entry.items} inspect={inspect}/> : null
+                  if (entry.type === 'message') return <MessageBubble key={entry.id} node={entry} inspect={inspect}/>
+                  return <EventRow key={entry.id} event={entry as ReviewEventNodeDto} inspect={inspect}/>
+                })}
+              </TaskRound>
+            }
+
+            type RoundFilter = ReviewDetailFilter`,
+            'Interaction block',
+          )
+
+          replaceOnce(
+            /const \[expandAllRounds, setExpandAllRounds\] = useState\(false\)/,
+            'const [expandAllRounds, setExpandAllRounds] = useState(true)',
+            'default round expansion',
+          )
+          replaceOnce(/setExpandAllRounds\(false\)/, 'setExpandAllRounds(true)', 'round expansion reset')
+
+          replaceOnce(
+            /  const annotatedInteractions = useMemo\(\(\) => \(detail\?\.interactions \?\? \[\]\)\.map\(interaction => \{[\s\S]*?\n  \}\), \[detail, threshold\]\)/,
+            `  const taskDetailModel = useMemo<TaskDetailModel | null>(() => {
+              if (!detail) return null
+              const rounds: TaskRoundModel[] = detail.interactions.map(interaction => {
+                const stats = interactionStats(interaction)
+                return {
+                  id: interaction.id,
+                  ordinal: interaction.ordinal,
+                  label: interaction.trigger === 'background' ? '后台活动' : \`第 \${interaction.ordinal} 轮\`,
+                  state: 'settled',
+                  preview: stats.preview || undefined,
+                  toolCount: stats.toolCount,
+                  errorCount: stats.errorCount,
+                  durationMs: stats.durationMs,
+                  highLatency: detail.page.filter === 'latency' || (threshold !== null && stats.durationMs >= threshold),
+                }
+              })
+              const title = sessionTitle(
+                [detail.title, detail.preview],
+                detail.projectName ? \`\${detail.projectName} 会话\` : \`\${agentLabel(detail.sourceIds[0] ?? '')} 会话\`,
+              )
+              return {
+                id: detail.id,
+                title,
+                agentLabel: detail.sourceIds.map(id => agentLabel(id)).join(' / '),
+                projectLabel: detail.projectName ?? '无项目',
+                statusLabel: detail.errorCount > 0 ? '有错误' : undefined,
+                startedAt: detail.startedAt,
+                endedAt: detail.endedAt,
+                workspacePath: detail.workspacePath,
+                metrics: [
+                  { value: detail.interactionCount, label: '轮次' },
+                  { value: detail.toolCount, label: '调用' },
+                  ...(detail.errorCount > 0 ? [{ value: detail.errorCount, label: '错误', tone: 'danger' as const }] : []),
+                  { value: duration(detail.durationMs), label: '跨度' },
+                ],
+                rounds,
+              }
+            }, [detail, threshold])
+            const annotatedInteractions = useMemo(() => {
+              if (!detail || !taskDetailModel) return []
+              const byId = new Map(detail.interactions.map(interaction => [interaction.id, interaction] as const))
+              return taskDetailModel.rounds.flatMap(round => {
+                const interaction = byId.get(round.id)
+                return interaction ? [{ interaction, round }] : []
+              })
+            }, [detail, taskDetailModel])`,
+            'annotatedInteractions block',
+          )
+
+          replaceOnce(
+            /          <TaskHeader\n[\s\S]*?\n          \/>/,
+            `          <TaskHeader
+              marker={<span className={\`source-dot \${sourceDot(detail.sourceIds[0] ?? '')}\`}/>} 
+              agent={taskDetailModel?.agentLabel ?? ''}
+              context={taskDetailModel?.projectLabel}
+              status={taskDetailModel?.statusLabel ? <span className="session-status-error">{taskDetailModel.statusLabel}</span> : undefined}
+              title={<span title={taskDetailModel?.title}>{taskDetailModel?.title}</span>}
+              submeta={taskDetailModel?.startedAt && taskDetailModel.endedAt ? <><span>{formatRange(taskDetailModel.startedAt, taskDetailModel.endedAt)}</span>{taskDetailModel.workspacePath && <code title={taskDetailModel.workspacePath}>{taskDetailModel.workspacePath}</code>}</> : undefined}
+              metrics={taskDetailModel?.metrics ?? []}
+              actions={<button className="review-audit-toggle" aria-pressed={showRawRecords} onClick={() => setShowRawRecords(value => !value)}>{showRawRecords ? '隐藏原始记录' : '显示原始记录'}</button>}
+            />`,
+            'TaskHeader block',
+          )
+
+          replaceOnce(
+            /            \{annotatedInteractions\.map\(\(item, index\) => <VirtualRoundMount[\s\S]*?            <\/VirtualRoundMount>\)\}/,
+            `            {annotatedInteractions.map((item, index) => <VirtualRoundMount
+              key={item.round.id}
+              eager={index < 6 || item.round.id === annotatedInteractions.at(-1)?.round.id}
+              estimate={item.round.toolCount > 12 ? 420 : item.round.toolCount > 4 ? 300 : 220}
+            >
+              <ReviewRoundAdapter
+                interaction={item.interaction}
+                round={item.round}
+                defaultExpanded
+                expansionStore={roundExpansionRef.current}
+                forceExpanded={expandAllRounds}
+                forceRevision={roundExpansionRevision}
+                showRawRecords={showRawRecords}
+                inspect={setInspect}
+              />
+            </VirtualRoundMount>)}`,
+            'TaskRound render',
+          )
+
+          fs.writeFileSync(path, source)
+          NODE
+      - name: Commit codemod result
+        shell: bash
+        run: |
+          git config user.name "7ping"
+          git config user.email "z7ping@outlook.com"
+          git add packages/web/src/features/ReviewPage.tsx
+          git diff --cached --check
+          git commit -m "refactor: Review 接入 TaskDetailModel 与 TaskRound"
+          git push origin HEAD:bugfix/alpha3-task-round-codemod
