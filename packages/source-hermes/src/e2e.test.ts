@@ -30,7 +30,7 @@ async function waitFor(predicate: () => Promise<boolean>, timeoutMs = 3000): Pro
   throw new Error('Timed out waiting for Hermes runtime capture')
 }
 
-test('Hermes Source combines state.db history, assets and optional runtime-hook inbox', async () => {
+test('Hermes Source combines native session title, state.db history, assets and optional runtime-hook inbox', async () => {
   const root = await mkdtemp(join(tmpdir(), 'agent-lens-hermes-'))
   const hermesRoot = join(root, 'hermes')
   const workspace = join(root, 'workspace')
@@ -43,7 +43,7 @@ test('Hermes Source combines state.db history, assets and optional runtime-hook 
 
   const nativeDb = new Database(join(hermesRoot, 'state.db'))
   nativeDb.exec(`
-    CREATE TABLE sessions (id TEXT PRIMARY KEY, cwd TEXT);
+    CREATE TABLE sessions (id TEXT PRIMARY KEY, cwd TEXT, title TEXT);
     CREATE TABLE messages (
       id INTEGER PRIMARY KEY,
       session_id TEXT,
@@ -55,7 +55,7 @@ test('Hermes Source combines state.db history, assets and optional runtime-hook 
       tool_name TEXT
     );
   `)
-  nativeDb.prepare('INSERT INTO sessions (id, cwd) VALUES (?, ?)').run('ses_1', workspace)
+  nativeDb.prepare('INSERT INTO sessions (id, cwd, title) VALUES (?, ?, ?)').run('ses_1', workspace, 'Hermes 原生会话标题')
   nativeDb.prepare('INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
     1, 'ses_1', 'user', '检查项目', 1_787_000_000, null, null, null,
   )
@@ -101,6 +101,9 @@ test('Hermes Source combines state.db history, assets and optional runtime-hook 
     assert.equal(facts.filter(item => item.kind === 'message.assistant').length, 1)
     assert.equal(facts.filter(item => item.kind === 'tool.call').length, 1)
     assert.equal(facts.filter(item => item.kind === 'tool.result').length, 1)
+
+    const logical = await storage.repositories.sessions.getLogicalSession(facts[0]!.logicalSessionId)
+    assert.equal(logical?.title, 'Hermes 原生会话标题')
 
     const assetResult = await assetRunner.scan({
       source: hermesSourceDefinition,
