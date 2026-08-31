@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { toolVisualKind } from '../components/ToolKindIcon'
 import { TaskMessage } from './TaskMessage'
@@ -16,6 +17,11 @@ export interface PiLiveRunningTool {
   output: string
 }
 
+interface ToolTiming {
+  startedAtMs: number
+  durationMs?: number | undefined
+}
+
 function formatClock(value: string): string {
   if (!value) return ''
   const date = new Date(value)
@@ -23,17 +29,30 @@ function formatClock(value: string): string {
   return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(date)
 }
 
+function compactPreview(value: string, max = 120): string {
+  const text = value.replace(/\s+/g, ' ').trim()
+  return text.length > max ? `${text.slice(0, max)}…` : text
+}
+
 function toolKindLabel(kind: TaskToolKind): string {
-  if (kind === 'shell') return '命令'
+  if (kind === 'shell') return 'Shell'
   if (kind === 'read') return '读取'
   if (kind === 'edit') return '修改'
   if (kind === 'search') return '搜索'
-  if (kind === 'mcp') return 'MCP（模型上下文协议）'
+  if (kind === 'test') return '测试'
+  if (kind === 'mcp') return 'MCP'
   if (kind === 'web') return '网络'
   return '工具'
 }
 
-function taskTool(name: string, id: string, status: TaskToolModel['status'], summary: string, output: string, time?: string): TaskToolModel {
+function taskTool(
+  name: string,
+  id: string,
+  status: TaskToolModel['status'],
+  summary: string,
+  output: string,
+  timing?: { durationMs?: number | undefined; startedAtMs?: number | undefined },
+): TaskToolModel {
   const kind = toolVisualKind(name)
   return {
     id,
@@ -43,7 +62,8 @@ function taskTool(name: string, id: string, status: TaskToolModel['status'], sum
     status,
     primary: summary || undefined,
     output: output || undefined,
-    durationLabel: time || undefined,
+    durationMs: timing?.durationMs,
+    startedAtMs: timing?.startedAtMs,
   }
 }
 
@@ -58,6 +78,17 @@ function toolGroup(id: string, tools: TaskToolModel[]): TaskToolGroupModel {
     kindCounts: [...counts.entries()].map(([kind, count]) => ({ kind, label: toolKindLabel(kind), count })),
     tools,
   }
+}
+
+function ToolOutput({ tool }: { tool: TaskToolModel }) {
+  if (!tool.output) return null
+  if (tool.status === 'running') {
+    return <div className="tool-live-output" role="status" aria-label={`${tool.name} 实时输出`}><pre>{tool.output}</pre></div>
+  }
+  return <details className="tool-output-details" open={tool.status === 'error'}>
+    <summary>{tool.status === 'error' ? '错误 / 输出' : '查看输出'}</summary>
+    <pre>{tool.output}</pre>
+  </details>
 }
 
 type HistoryTool = Extract<PiLiveHistoryItem, { kind: 'tool' }>
@@ -86,12 +117,13 @@ function historyEntries(items: PiLiveHistoryItem[]): HistoryRenderEntry[] {
 function HistoryThinking({ item }: { item: Extract<PiLiveHistoryItem, { kind: 'thinking' }> }) {
   const model: TaskThinkingModel = {
     id: item.id,
-    label: '可观察过程片段',
+    label: '思考',
     text: item.text,
+    preview: compactPreview(item.text),
     time: item.at ? formatClock(item.at) : undefined,
     state: 'settled',
   }
-  return <TaskThinking model={model}><div>{item.text}</div></TaskThinking>
+  return <TaskThinking model={model} defaultExpanded><div>{item.text}</div></TaskThinking>
 }
 
 function HistoryToolGroup({ id, items }: { id: string; items: HistoryTool[] }) {
@@ -101,12 +133,12 @@ function HistoryToolGroup({ id, items }: { id: string; items: HistoryTool[] }) {
     item.status,
     item.summary,
     item.output,
-    item.at ? formatClock(item.at) : undefined,
+    { durationMs: item.durationMs },
   )))
   return <TaskToolGroup
     model={model}
     defaultExpanded
-    renderDetails={tool => tool.output ? <details><summary>查看输出</summary><pre>{tool.output}</pre></details> : null}
+    renderDetails={tool => <ToolOutput tool={tool}/>}
   />
 }
 
@@ -153,11 +185,26 @@ export function PiLiveRunningTaskRound({
   isStreaming: boolean
   pendingMessageCount: number
 }) {
-  const toolModels = tools.map(tool => taskTool(tool.name, tool.id, tool.status, tool.summary, tool.output))
+  const timingRef = useRef(new Map<string, ToolTiming>())
+  const now = Date.now()
+  const currentIds = new Set(tools.map(tool => tool.id))
+  for (const id of timingRef.current.keys()) {
+    if (!currentIds.has(id)) timingRef.current.delete(id)
+  }
+  const toolModels = tools.map(tool => {
+    let timing = timingRef.current.get(tool.id)
+    if (!timing) {
+      timing = { startedAtMs: now }
+      timingRef.current.set(tool.id, timing)
+    }
+    if (tool.status !== 'running' && timing.durationMs === undefined) timing.durationMs = Math.max(0, now - timing.startedAtMs)
+    return taskTool(tool.name, tool.id, tool.status, tool.summary, tool.output, timing)
+  })
   const thinking: TaskThinkingModel = {
     id: 'pi-live-current-thinking',
-    label: '可观察过程片段',
+    label: '思考',
     text: thinkingText,
+    preview: compactPreview(thinkingText),
     state: model.state,
   }
 
@@ -166,11 +213,11 @@ export function PiLiveRunningTaskRound({
     className="pi-live-current-round"
     summaryMeta={pendingMessageCount > 0 ? <span>{pendingMessageCount} 条排队</span> : undefined}
   >
-    {thinkingText && <TaskThinking model={thinking}><div>{thinkingText}</div></TaskThinking>}
+    {thinkingText && <TaskThinking model={thinking} defaultExpanded><div>{thinkingText}</div></TaskThinking>}
     {toolModels.length > 0 && <TaskToolGroup
       model={toolGroup('pi-live-current-tools', toolModels)}
       defaultExpanded
-      renderDetails={tool => tool.output ? <details><summary>查看输出</summary><pre>{tool.output}</pre></details> : null}
+      renderDetails={tool => <ToolOutput tool={tool}/>}
     />}
     {streamText && <div className="pi-live-stream-response">
       <div className="pi-live-message-meta"><b>Pi</b><span>{isStreaming ? '生成中' : '输出'}</span></div>
