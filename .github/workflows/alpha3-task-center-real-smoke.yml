@@ -52,8 +52,9 @@ jobs:
           $env:AGENT_LENS_ACCEPTANCE_OUTPUT = Join-Path $root 'acceptance'
           $reportPath = Join-Path $env:AGENT_LENS_ACCEPTANCE_OUTPUT 'task-center-desktop-report.json'
           $electron = Join-Path $PWD 'apps/desktop/.electron-dist/electron-v43.4.0-win32-x64/electron.exe'
-          $acceptanceScript = Join-Path $PWD 'scripts/acceptance/task-center-desktop.mjs'
+          $acceptanceApp = Join-Path $PWD 'scripts/acceptance/task-center-desktop-app'
           if (-not (Test-Path $electron)) { throw "预下载 Electron 不存在：$electron" }
+          if (-not (Test-Path (Join-Path $acceptanceApp 'package.json'))) { throw "验收 Electron app 不存在：$acceptanceApp" }
           $daemon = Start-Process -FilePath node -ArgumentList 'dist/daemon.mjs' -PassThru -NoNewWindow
           $acceptance = $null
           try {
@@ -67,7 +68,7 @@ jobs:
             }
             if (-not $ready) { throw 'AgentLens Daemon 未在 30 秒内就绪' }
 
-            $acceptance = Start-Process -FilePath $electron -ArgumentList $acceptanceScript -PassThru -NoNewWindow
+            $acceptance = Start-Process -FilePath $electron -ArgumentList $acceptanceApp -PassThru -NoNewWindow
             $exited = $acceptance.WaitForExit(80000)
             if (-not $exited) {
               Write-Host 'Electron 验收进程 80 秒内未自然退出，清理进程树并使用已落盘报告判定结果。'
