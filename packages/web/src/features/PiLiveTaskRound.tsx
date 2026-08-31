@@ -4,7 +4,7 @@ import { TaskMessage } from './TaskMessage'
 import { TaskRound } from './TaskRound'
 import { TaskThinking } from './TaskThinking'
 import { TaskToolGroup } from './TaskToolGroup'
-import type { TaskThinkingModel, TaskToolGroupModel, TaskToolKind, TaskToolModel } from './task-detail-model'
+import type { TaskRoundModel, TaskThinkingModel, TaskToolGroupModel, TaskToolKind, TaskToolModel } from './task-detail-model'
 import type { PiLiveHistoryItem } from './pi-live-history'
 import type { PiLiveTaskRoundProjection } from './pi-live-task-projection'
 
@@ -138,12 +138,14 @@ export function PiLiveHistoryTaskRound({ projection }: { projection: PiLiveTaskR
 }
 
 export function PiLiveRunningTaskRound({
+  model,
   thinkingText,
   tools,
   streamText,
   isStreaming,
   pendingMessageCount,
 }: {
+  model: TaskRoundModel
   thinkingText: string
   tools: PiLiveRunningTool[]
   streamText: string
@@ -151,24 +153,15 @@ export function PiLiveRunningTaskRound({
   pendingMessageCount: number
 }) {
   const toolModels = tools.map(tool => taskTool(tool.name, tool.id, tool.status, tool.summary, tool.output))
-  const round = {
-    id: 'pi-live-current-round',
-    label: '当前轮次',
-    state: isStreaming ? 'running' as const : 'stopped' as const,
-    toolCount: tools.length,
-    errorCount: tools.filter(tool => tool.status === 'error').length,
-    durationMs: 0,
-    highLatency: false,
-  }
   const thinking: TaskThinkingModel = {
     id: 'pi-live-current-thinking',
     label: '可观察过程片段',
     text: thinkingText,
-    state: isStreaming ? 'running' : 'stopped',
+    state: model.state,
   }
 
   return <TaskRound
-    model={round}
+    model={model}
     className="pi-live-current-round"
     summaryMeta={pendingMessageCount > 0 ? <span>{pendingMessageCount} 条排队</span> : undefined}
   >
