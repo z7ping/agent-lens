@@ -83,15 +83,3 @@ perf = replace(
   'semantic round performance contract',
 )
 fs.writeFileSync(perfPath, perf.replace(/[ \t]+$/gm, ''))
-
-const workflowPath = '.github/workflows/pi-live-performance.yml'
-let workflow = fs.readFileSync(workflowPath, 'utf8')
-if (!workflow.includes('packages/web/src/features/PiLiveTaskRound.tsx')) {
-  workflow = replace(
-    workflow,
-    /      - 'packages\/web\/src\/features\/PiLivePage\.tsx'\n/,
-    "      - 'packages/web/src/features/PiLivePage.tsx'\n      - 'packages/web/src/features/PiLiveTaskRound.tsx'\n      - 'packages/web/src/features/pi-live-task-projection.ts'\n",
-    'performance workflow paths',
-  )
-}
-fs.writeFileSync(workflowPath, workflow.replace(/[ \t]+$/gm, ''))
