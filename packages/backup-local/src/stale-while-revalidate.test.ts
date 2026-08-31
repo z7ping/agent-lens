@@ -103,7 +103,8 @@ test('冷启动按用户配置顺序逐个扫描，前一个完成后立即可�
   assert.equal(pending.index?.refreshing, true)
   assert.deepEqual(refreshCalls, ['pi'])
 
-  pi.resolve(sourceOverview('pi', '2026-08-31T00:00:00.000Z', 3))
+  const piGeneratedAt = new Date().toISOString()
+  pi.resolve(sourceOverview('pi', piGeneratedAt, 3))
   await nextTurn()
   assert.deepEqual(refreshCalls, ['pi', 'codex'])
 
@@ -113,7 +114,9 @@ test('冷启动按用户配置顺序逐个扫描，前一个完成后立即可�
   assert.deepEqual(partial.sources.map(item => item.sourceId), ['pi'])
   assert.equal(partial.sources[0]?.fileCount, 3)
 
-  codex.resolve(sourceOverview('codex', '2026-08-31T00:00:01.000Z', 5))
+  // 用真实“刚刷新”时间，避免测试运行时间跨过 accessStaleMs 后把刚完成的索引
+  // 立即判定为 stale 并触发第二轮刷新，从而把时钟问题误判为渐进加载失败。
+  codex.resolve(sourceOverview('codex', new Date().toISOString(), 5))
   await nextTurn()
   const complete = await service.overview()
   assert.equal(complete.index?.ready, true)
