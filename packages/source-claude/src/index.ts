@@ -40,7 +40,7 @@ import {
 } from '@agent-lens/runtime-cordis'
 
 const SOURCE_ID = 'claude-code'
-const PARSER_VERSION = '1'
+const PARSER_VERSION = '2'
 const MAX_STRING = 64 * 1024
 const RUNTIME_POLL_MS = 250
 const SENSITIVE_KEY = /(password|passwd|secret|token|api[_-]?key|authorization|cookie)/i
@@ -252,7 +252,7 @@ function nativeEntryId(entry: Record<string, unknown>): string | undefined {
 }
 
 function historyCheckpointKey(filePath: string): string {
-  return `claude:history:${sha256(filePath)}`
+  return `claude:history:v2-session-title:${sha256(filePath)}`
 }
 
 export async function* ingestClaudeHistory(
@@ -928,6 +928,12 @@ export async function normalizeClaudeRecord(
       const text = textFromContent(content).trim()
       if (text) observations.push(candidate(record, envelope, 'message.assistant', { text: truncate(text) }))
     }
+  } else if (type === 'custom-title') {
+    const title = stringField(entry, 'customTitle', 'custom_title')?.trim()
+    observations.push(candidate(record, envelope, 'session.lifecycle', {
+      event: 'session.title',
+      ...(title ? { title } : {}),
+    }, { identity: title ? { sessionTitle: title } : {} }))
   } else if (type === 'summary') {
     observations.push(candidate(record, envelope, 'context.summary', {
       text: truncate(textFromContent(entry.summary ?? content)),
