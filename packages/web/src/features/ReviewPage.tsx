@@ -20,6 +20,7 @@ import { useClientSnapshot } from '../App'
 import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
 import { ToolKindIcon } from '../components/ToolKindIcon'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
+import { TaskSurface } from './TaskSurface'
 
 function formatTime(value: string): string {
   return new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(value))
@@ -777,7 +778,7 @@ function highLatencyThreshold(interactions: ReviewInteractionDto[]): number | nu
   return Math.max(upperQuartile, median * 1.75)
 }
 
-export function ReviewPage({ model }: { model: AgentLensClientModel }) {
+export function ReviewPage({ model, embedded = false }: { model: AgentLensClientModel; embedded?: boolean }) {
   const snapshot = useClientSnapshot(model)
   const { sessionId } = useParams()
   const navigate = useNavigate()
@@ -823,13 +824,17 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
   }, [review.response?.items, visibleHubSessions])
 
   useEffect(() => {
+    if (embedded) {
+      setHubSessions([])
+      return
+    }
     let cancelled = false
     void fetchHubReviewSessions(200).then(
       value => { if (!cancelled) setHubSessions(value.items.filter(item => item.origin.kind === 'remote')) },
       () => { if (!cancelled) setHubSessions([]) },
     )
     return () => { cancelled = true }
-  }, [review.response?.meta.generatedAt])
+  }, [embedded, review.response?.meta.generatedAt])
 
   useEffect(() => {
     if (!sessionId || sessionId === review.selectedId) return
@@ -1064,7 +1069,7 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
     setRoundExpansionRevision(value => value + 1)
   }
 
-  return <main className="review-page">
+  return <main className={`review-page ${embedded ? 'review-page-embedded' : ''}`}>
     <div className="workspace-toolbar">
       <AgentScope agents={agents} value={review.filters.sourceId} onChange={sourceId => model.setReviewFilters({ sourceId })}/>
       <span className="toolbar-divider" />
@@ -1076,7 +1081,7 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
     </div>
 
     <div className="review-layout">
-      <aside className="session-panel">
+      {!embedded && <aside className="session-panel">
         <div className="session-panel-head"><div><b>会话</b><span>本机 + 远程 · 按创建时间倒序</span></div><span className="count-badge">{(review.response?.items.length ?? 0) + visibleHubSessions.length}{review.response?.meta.hasMore ? '+' : ''}</span></div>
         <div className="session-scroll">
           {review.loading && !review.response && <div className="empty-state">加载会话…</div>}
@@ -1103,9 +1108,9 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
           {review.response && !review.response.meta.hasMore && review.response.items.length > 0 && <div className="session-load-more" aria-live="polite">已加载全部会话</div>}
           {!review.loading && !review.response?.items.length && !visibleHubSessions.length && <div className="empty-state">当前筛选范围没有会话</div>}
         </div>
-      </aside>
+      </aside>}
 
-      <section ref={readerPaneRef} className="review-reader-pane" onScroll={onReaderScroll}>
+      <TaskSurface ref={readerPaneRef} mode="review" className="review-reader-pane" onScroll={onReaderScroll}>
         {review.error && <div className="page-error">{review.error}</div>}
         {!detail ? <div className="empty-state fill">{review.selectedId && review.detailLoading ? '加载会话详情…' : '选择一个会话开始复盘'}</div> : <div className="review-reader">
           <header className="review-session-head">
@@ -1184,7 +1189,7 @@ export function ReviewPage({ model }: { model: AgentLensClientModel }) {
             </div>}
           </div>
         </div>}
-      </section>
+      </TaskSurface>
     </div>
     {inspect && <Inspector node={inspect} onClose={() => setInspect(null)}/>} 
   </main>
