@@ -4,6 +4,7 @@ import { taskDurationLabel, type TaskRoundModel } from './task-detail-model'
 export interface TaskRoundProps {
   model: TaskRoundModel
   children: ReactNode
+  summaryMeta?: ReactNode
   defaultExpanded?: boolean
   expansionStore?: Map<string, boolean> | undefined
   forceExpanded?: boolean | undefined
@@ -14,6 +15,7 @@ export interface TaskRoundProps {
 export function TaskRound({
   model,
   children,
+  summaryMeta,
   defaultExpanded = true,
   expansionStore,
   forceExpanded = true,
@@ -61,6 +63,7 @@ export function TaskRound({
         {model.errorCount > 0 && <span className="is-error">{model.errorCount} 错误</span>}
         {model.highLatency && <span className="is-latency">耗时较高</span>}
         {model.durationMs > 0 && <span>{taskDurationLabel(model.durationMs)}</span>}
+        {summaryMeta}
       </span>
     </summary>
     <div className="interaction-flow task-round-flow">{children}</div>
