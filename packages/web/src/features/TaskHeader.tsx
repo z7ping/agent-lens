@@ -19,17 +19,7 @@ export interface TaskHeaderProps {
   className?: string
 }
 
-export function TaskHeader({
-  marker,
-  agent,
-  context,
-  status,
-  title,
-  submeta,
-  metrics = [],
-  actions,
-  className = '',
-}: TaskHeaderProps) {
+export function TaskHeader({ marker, agent, context, status, title, submeta, metrics = [], actions, className = '' }: TaskHeaderProps) {
   return <header className={`task-header ${className}`.trim()}>
     <div className="task-header-copy">
       <div className="task-header-meta">
@@ -41,12 +31,10 @@ export function TaskHeader({
       <h1 className="task-header-title">{title}</h1>
       {submeta && <div className="task-header-submeta">{submeta}</div>}
     </div>
-
     {(metrics.length > 0 || actions) && <div className="task-header-side">
       {metrics.length > 0 && <div className="task-header-metrics">
         {metrics.map(metric => <div key={metric.label} className="task-header-metric" data-tone={metric.tone ?? ''}>
-          <b>{metric.value}</b>
-          <span>{metric.label}</span>
+          <b>{metric.value}</b><span>{metric.label}</span>
         </div>)}
       </div>}
       {actions && <div className="task-header-actions">{actions}</div>}
