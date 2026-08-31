@@ -50,7 +50,10 @@ jobs:
           $env:AGENT_LENS_RUNTIME_OWNER = 'ci'
           $env:AGENT_LENS_ACCEPTANCE_URL = "http://127.0.0.1:${{ env.ACCEPTANCE_PORT }}"
           $env:AGENT_LENS_ACCEPTANCE_OUTPUT = Join-Path $root 'acceptance'
+          $env:ELECTRON_ENABLE_LOGGING = '1'
+          Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
           $reportPath = Join-Path $env:AGENT_LENS_ACCEPTANCE_OUTPUT 'task-center-desktop-report.json'
+          $bootstrapPath = Join-Path $env:AGENT_LENS_ACCEPTANCE_OUTPUT 'electron-bootstrap.txt'
           $electron = Join-Path $PWD 'apps/desktop/.electron-dist/electron-v43.4.0-win32-x64/electron.exe'
           $acceptanceApp = Join-Path $PWD 'scripts/acceptance/task-center-desktop-app'
           if (-not (Test-Path $electron)) { throw "预下载 Electron 不存在：$electron" }
@@ -68,10 +71,16 @@ jobs:
             }
             if (-not $ready) { throw 'AgentLens Daemon 未在 30 秒内就绪' }
 
-            $acceptance = Start-Process -FilePath $electron -ArgumentList $acceptanceApp -PassThru -NoNewWindow
-            $exited = $acceptance.WaitForExit(80000)
+            $acceptance = Start-Process -FilePath $electron -ArgumentList '.' -WorkingDirectory $acceptanceApp -PassThru -NoNewWindow
+            for ($i = 0; $i -lt 40 -and -not $acceptance.HasExited -and -not (Test-Path $bootstrapPath); $i++) {
+              Start-Sleep -Milliseconds 250
+            }
+            if (-not (Test-Path $bootstrapPath)) {
+              throw 'Electron 已启动但 10 秒内未进入验收应用 main.cjs'
+            }
+            $exited = $acceptance.WaitForExit(70000)
             if (-not $exited) {
-              Write-Host 'Electron 验收进程 80 秒内未自然退出，清理进程树并使用已落盘报告判定结果。'
+              Write-Host 'Electron 验收进程 70 秒内未自然退出，清理进程树并使用已落盘报告判定结果。'
               & taskkill.exe /PID $acceptance.Id /T /F 2>$null | Out-Null
             }
             if (-not (Test-Path $reportPath)) { throw '桌面验收未生成 task-center-desktop-report.json' }
