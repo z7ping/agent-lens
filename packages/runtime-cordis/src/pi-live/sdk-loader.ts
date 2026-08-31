@@ -24,6 +24,12 @@ export interface PiSdkModelRuntime {
   getAvailable(providerId?: string): Promise<readonly PiSdkModel[]>
 }
 
+export interface PiSdkPromptOptions {
+  streamingBehavior?: 'steer' | 'followUp' | undefined
+  source?: string | undefined
+  preflightResult?: ((success: boolean) => void) | undefined
+}
+
 export interface PiSdkSession {
   readonly sessionManager: PiSdkSessionManager
   readonly sessionId: string
@@ -41,7 +47,7 @@ export interface PiSdkSession {
   setModel(model: PiSdkModel): Promise<void>
   setThinkingLevel(level: string): void
   getAvailableThinkingLevels(): string[]
-  prompt(message: string, options?: { streamingBehavior?: 'steer' | 'followUp' }): Promise<void>
+  prompt(message: string, options?: PiSdkPromptOptions): Promise<void>
   steer(message: string): Promise<void>
   followUp(message: string): Promise<void>
   clearQueue(): { steering: string[]; followUp: string[] }
@@ -142,6 +148,7 @@ async function packageFromEntry(entry: string): Promise<{
       }
     } catch (error) {
       if (error instanceof SyntaxError) throw error
+      if (error instanceof Error && error.message.startsWith('Pi SDK entry declared by ')) throw error
     }
     const parent = dirname(cursor)
     if (parent === cursor) return undefined

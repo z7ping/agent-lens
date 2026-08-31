@@ -26,6 +26,7 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
   let currentModel: PiSdkModel | undefined = models[0]
   let name = 'SDK task'
   let streaming = false
+  let releasePrompt: (() => void) | undefined
 
   const session: PiSdkSession = {
     sessionManager: manager,
@@ -50,13 +51,19 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
     setModel: async model => { currentModel = model; calls.push(`model:${model.provider}/${model.id}`) },
     setThinkingLevel: level => { calls.push(`thinking:${level}`) },
     getAvailableThinkingLevels: () => ['off', 'medium', 'high'],
-    prompt: async (message, options) => { calls.push(`prompt:${message}:${options?.streamingBehavior ?? 'direct'}`) },
+    prompt: async (message, options) => {
+      calls.push(`prompt:${message}:${options?.streamingBehavior ?? 'direct'}:${options?.source ?? 'none'}`)
+      streaming = true
+      options?.preflightResult?.(true)
+      await new Promise<void>(resolve => { releasePrompt = resolve })
+      streaming = false
+    },
     steer: async message => { calls.push(`steer:${message}`) },
     followUp: async message => { calls.push(`follow:${message}`) },
     clearQueue: () => ({ steering: ['queued-steer'], followUp: ['queued-follow'] }),
-    abort: async () => { streaming = false; calls.push('abort') },
+    abort: async () => { streaming = false; releasePrompt?.(); calls.push('abort') },
     waitForIdle: async () => {},
-    dispose: () => { calls.push('dispose') },
+    dispose: () => { releasePrompt?.(); calls.push('dispose') },
   }
 
   const installed: InstalledPiSdk = {
@@ -85,10 +92,59 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
   agentListener?.({ type: 'tool_execution_start', toolCallId: 'tool-1', toolName: 'read' })
   assert.equal(events.some(event => event.type === 'tool_execution_start'), true)
 
-  await service.prompt(state.runtimeSessionId, 'hello', 'followUp')
+  agentListener?.({
+    type: 'message_update',
+    message: { role: 'assistant', usage: { output: 7 } },
+    assistantMessageEvent: {
+      type: 'text_delta',
+      contentIndex: 0,
+      delta: 'hello',
+      partial: { role: 'assistant', content: [{ type: 'text', text: 'hello' }] },
+    },
+  })
+  const messageUpdate = events.find(event => event.type === 'message_update')
+  assert.deepEqual(messageUpdate, {
+    type: 'message_update',
+    usage: { output: 7 },
+    assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'hello' },
+  })
+
+  agentListener?.({
+    type: 'message_update',
+    message: { role: 'assistant', usage: { output: 8 } },
+    assistantMessageEvent: {
+      type: 'toolcall_start',
+      contentIndex: 1,
+      partial: {
+        role: 'assistant',
+        content: [
+          { type: 'text', text: 'checking' },
+          { type: 'toolCall', id: 'call-1', name: 'read', arguments: {} },
+        ],
+      },
+    },
+  })
+  const toolCallUpdate = events.find(event => {
+    const assistant = event.assistantMessageEvent
+    return event.type === 'message_update'
+      && assistant && typeof assistant === 'object'
+      && (assistant as Record<string, unknown>).type === 'toolcall_start'
+  })
+  assert.deepEqual(toolCallUpdate, {
+    type: 'message_update',
+    usage: { output: 8 },
+    assistantMessageEvent: { type: 'toolcall_start', contentIndex: 1, id: 'call-1', toolName: 'read' },
+  })
+
+  let promptFinished = false
+  const promptRequest = service.prompt(state.runtimeSessionId, 'hello', 'followUp').then(() => { promptFinished = true })
+  await promptRequest
+  assert.equal(promptFinished, true, 'HTTP-facing prompt should resolve after SDK preflight, before the agent turn completes')
+  assert.equal(streaming, true, 'agent turn should still be running after prompt acknowledgement')
+  assert.equal(calls.includes('prompt:hello:followUp:rpc'), true)
+
   await service.steer(state.runtimeSessionId, 'change direction')
   await service.followUp(state.runtimeSessionId, 'afterwards')
-  assert.equal(calls.includes('prompt:hello:followUp'), true)
   assert.equal(calls.includes('steer:change direction'), true)
   assert.equal(calls.includes('follow:afterwards'), true)
 
@@ -108,4 +164,49 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
   unsubscribe()
   await service.terminate(state.runtimeSessionId)
   assert.equal(calls.includes('dispose'), true)
+})
+
+test('Pi Live SDK prompt 在预检失败时向 HTTP 调用方返回错误', async () => {
+  const manager = new FakeSessionManager()
+  const session = {
+    sessionManager: manager,
+    sessionId: manager.getSessionId(),
+    sessionFile: manager.getSessionFile(),
+    sessionName: manager.getSessionName(),
+    model: undefined,
+    thinkingLevel: 'off',
+    isStreaming: false,
+    isCompacting: false,
+    pendingMessageCount: 0,
+    modelRuntime: { getAvailableSnapshot: () => [], getAvailable: async () => [] },
+    bindExtensions: async () => {},
+    subscribe: () => () => {},
+    setSessionName: () => {},
+    setModel: async () => {},
+    setThinkingLevel: () => {},
+    getAvailableThinkingLevels: () => ['off'],
+    prompt: async (_message: string, options?: { preflightResult?: (success: boolean) => void }) => {
+      options?.preflightResult?.(false)
+      throw new Error('No model selected')
+    },
+    steer: async () => {},
+    followUp: async () => {},
+    clearQueue: () => ({ steering: [], followUp: [] }),
+    abort: async () => {},
+    waitForIdle: async () => {},
+    dispose: () => {},
+  } satisfies PiSdkSession
+  const installed: InstalledPiSdk = {
+    executable: '/bin/pi',
+    packageRoot: '/pi',
+    sdkEntry: '/pi/dist/index.js',
+    module: {
+      createAgentSession: async () => ({ session }),
+      SessionManager: { create: () => manager, open: () => manager },
+    },
+  }
+  const service = new DefaultPiLiveService(async () => installed)
+  const state = await service.start({ cwd: '/workspace' })
+  await assert.rejects(() => service.prompt(state.runtimeSessionId, 'hello'), /No model selected/)
+  await service.dispose()
 })

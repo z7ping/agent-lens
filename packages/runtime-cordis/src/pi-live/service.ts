@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { PiExtensionUiBridge } from './extension-ui-bridge'
+import { toPiLiveWireEvent } from './sdk-event'
 import {
   findPiExecutable,
   loadInstalledPiSdk,
@@ -109,7 +110,7 @@ export class DefaultPiLiveService implements PiLiveService {
     this.runtimes.set(runtimeSessionId, runtime)
 
     try {
-      runtime.unsubscribe = session.subscribe(event => this.publish(runtime, record(event)))
+      runtime.unsubscribe = session.subscribe(event => this.publish(runtime, toPiLiveWireEvent(record(event))))
       await session.bindExtensions({
         uiContext: extensionUi.context,
         mode: 'rpc',
@@ -198,10 +199,25 @@ export class DefaultPiLiveService implements PiLiveService {
 
   async prompt(runtimeSessionId: string, message: string, behavior?: PiLiveStreamingBehavior): Promise<void> {
     if (!message.trim()) return
-    await this.requireRuntime(runtimeSessionId).session.prompt(
-      message,
-      behavior ? { streamingBehavior: behavior } : undefined,
-    )
+    const session = this.requireRuntime(runtimeSessionId).session
+    await new Promise<void>((resolveAccepted, rejectAccepted) => {
+      let accepted = false
+      const accept = () => {
+        if (accepted) return
+        accepted = true
+        resolveAccepted()
+      }
+      const run = session.prompt(message, {
+        ...(behavior ? { streamingBehavior: behavior } : {}),
+        source: 'rpc',
+        preflightResult: success => {
+          if (success) accept()
+        },
+      })
+      void run.then(accept, error => {
+        if (!accepted) rejectAccepted(error)
+      })
+    })
   }
 
   async steer(runtimeSessionId: string, message: string): Promise<void> {
