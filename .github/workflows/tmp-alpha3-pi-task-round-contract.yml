@@ -1,0 +1,30 @@
+name: Temp Alpha3 Pi TaskRound Contract
+
+on:
+  push:
+    branches:
+      - bugfix/alpha3-pi-task-round-contract
+    paths:
+      - .github/workflows/tmp-alpha3-pi-task-round-contract.yml
+
+permissions:
+  contents: write
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: bugfix/alpha3-pi-task-round-contract
+      - name: Update contract
+        run: node .github/tmp-alpha3-pi-task-round-contract.cjs
+      - name: Commit contract
+        shell: bash
+        run: |
+          git config user.name "7ping"
+          git config user.email "z7ping@outlook.com"
+          git add scripts/check-pi-live-contract.mjs
+          git diff --cached --check
+          git commit -m "test: 锁定 Pi Live 共享 TaskRound 边界"
+          git push origin HEAD:bugfix/alpha3-pi-task-round-contract
