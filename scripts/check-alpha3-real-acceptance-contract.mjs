@@ -39,6 +39,9 @@ requireText(desktop, /\.pi-live-document/, '桌面验收必须检查 Pi Live 详
 requireText(desktop, /documentScrollHeight > value\.innerHeight/, '桌面验收必须拒绝全局纵向滚动')
 requireText(desktop, /任务列表与详情发生重叠/, '桌面验收必须检查左右区域重叠')
 requireText(desktop, /capturePage\(\)/, '桌面验收必须保存真实 Chromium 截图')
+requireText(desktop, /clickTaskSequence\(win, 100\)/, '桌面验收必须覆盖 100 次真实任务切换')
+requireText(desktop, /Memory\.getDOMCounters/, '百次切换必须采集 DOM / Listener 前后趋势')
+requireText(desktop, /listenerGrowth > 20/, '百次切换必须限制 Listener 持续增长')
 
 requireText(soak, /Performance\.getMetrics/, '长时验收必须采集 Chromium Performance metrics')
 requireText(soak, /Memory\.getDOMCounters/, '长时验收必须采集 DOM counters')
@@ -62,4 +65,4 @@ if (failures.length) {
   for (const failure of failures) console.error(`- ${failure}`)
   process.exit(1)
 }
-console.log('alpha.3 真实验收入口检查通过：真实 Pi 全链路/1h soak、1280/1366 明暗桌面、独立滚动、1h/8h 资源趋势均已锁定。')
+console.log('alpha.3 真实验收入口检查通过：真实 Pi 全链路/1h soak、1280/1366 明暗桌面、独立滚动、100 次任务切换、1h/8h 资源趋势均已锁定。')
