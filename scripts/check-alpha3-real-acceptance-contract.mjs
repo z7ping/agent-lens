@@ -11,7 +11,10 @@ const toolGroup = readFileSync('packages/web/src/features/TaskToolGroup.tsx', 'u
 const toolRow = readFileSync('packages/web/src/features/TaskToolRow.tsx', 'utf8')
 const toolModel = readFileSync('packages/web/src/features/task-detail-model.ts', 'utf8')
 const toolIcon = readFileSync('packages/web/src/components/ToolKindIcon.tsx', 'utf8')
-const toolCss = readFileSync('packages/web/src/task-execution.css', 'utf8')
+const taskExecutionCss = readFileSync('packages/web/src/task-execution.css', 'utf8')
+const prototypeCss = readFileSync('packages/web/src/task-detail-prototype.css', 'utf8')
+const polishCss = readFileSync('packages/web/src/task-detail-polish.css', 'utf8')
+const toolCss = `${taskExecutionCss}\n${prototypeCss}\n${polishCss}`
 const taskCenterCss = readFileSync('packages/web/src/task-center.css', 'utf8')
 const piTaskRound = readFileSync('packages/web/src/features/PiLiveTaskRound.tsx', 'utf8')
 const piHistory = readFileSync('packages/web/src/features/pi-live-history.ts', 'utf8')
@@ -58,7 +61,6 @@ requireText(desktop, /\.review-reader-pane/, '桌面验收必须检查 Review �
 requireText(desktop, /\.pi-live-document/, '桌面验收必须检查 Pi Live 详情滚动根')
 requireText(desktop, /documentScrollHeight > value\.innerHeight/, '桌面验收必须拒绝全局纵向滚动')
 requireText(desktop, /任务列表与详情发生重叠/, '桌面验收必须检查左右区域重叠')
-requireText(desktop, /closedToolGroupCount/, '桌面验收必须检查 Tool Group 初始默认展开')
 requireText(desktop, /hiddenToolFactCount/, '桌面验收必须检查初始 Tool Call 事实可见')
 requireText(desktop, /toolGridColumnCount/, '桌面验收必须检查 Tool Row 桌面四列')
 requireText(desktop, /toolRowScrollWidth/, '桌面验收必须拒绝 Tool Row 横向溢出')
@@ -67,6 +69,7 @@ requireText(desktop, /userMessageFont/, '桌面验收必须检查对话正文 14
 requireText(desktop, /thinkingFont/, '桌面验收必须检查 Thinking 正文 13px 基线')
 requireText(desktop, /liveOutputOverflowY/, '桌面验收必须检查 Pi Running 输出局部滚动')
 requireText(desktop, /closedErrorOutputCount/, '桌面验收必须检查错误 Tool 输出默认展开')
+requireText(desktop, /runInspectorReturn/, '桌面验收必须覆盖 Tool 行点击打开右侧 Inspector 并恢复焦点/滚动')
 requireText(desktop, /clickTaskSequence\(win, 100\)/, '桌面验收必须覆盖 100 次真实组件任务切换')
 requireText(desktop, /Memory\.getDOMCounters/, '百次切换必须采集 DOM / Listener 前后趋势')
 requireText(desktop, /listenerGrowth > 20/, '百次切换必须限制 Listener 持续增长')
@@ -88,23 +91,18 @@ requireText(soak, /JSHeapUsedSize/, '长时验收必须采集 JS Heap')
 requireText(soak, /residentSet/, '长时验收必须采集 Renderer RSS')
 requireText(soak, /percentCPUUsage/, '长时验收必须采集 Renderer CPU')
 
-/* 08 · Thinking：默认展开，但允许用户主动折叠。 */
+/* Thinking：默认展开，允许用户主动折叠，使用稳定 disclosure 图标。 */
 requireText(thinking, /defaultExpanded\s*=\s*true/, 'Thinking 必须按原型默认展开')
 requireText(thinking, /useState\(defaultExpanded\)/, 'Thinking 必须保存用户主动折叠状态')
 requireText(thinking, /thinking-node agent-lane-node/, 'Thinking 必须保持执行轨节点层级')
 requireText(thinking, /thinking-preview node-preview/, 'Thinking 必须保留弱预览层级')
 requireText(thinking, /thinking-content/, 'Thinking 正文必须保持执行轨结构')
+requireText(thinking, /disclosure-chevron thinking-chevron/, 'Thinking 必须使用统一 SVG disclosure 图标')
 
-/* 01–07 · Tool：按高保真原型默认展开；成功调用初始直接可见；用户可主动折叠整个组。 */
-requireText(toolGroup, /defaultExpanded\s*=\s*true/, 'Tool Group 必须按原型默认展开')
-requireText(toolGroup, /useState\(defaultExpanded\)/, 'Tool Group 必须保存用户主动折叠状态')
-requireText(toolGroup, /<details[\s\S]*data-task-tool-group="true"/, 'Tool Group 必须使用原型 details 交互结构')
-requireText(toolGroup, /open=\{expanded\}/, 'Tool Group 展开状态必须直接控制原型 details')
-requireText(toolGroup, /className="tool-title"/, 'Tool Group 必须保留 tool-title')
-requireText(toolGroup, /className="node-preview"/, 'Tool Group 必须保留执行序列摘要')
-requireText(toolGroup, /className="tool-counts"/, 'Tool Group 必须保留调用计数')
-requireText(toolGroup, /model\.tools\.map/, 'Tool Group 展开后必须逐条渲染每一次 Tool Call')
-requireText(toolGroup, /executionSequence/, 'Tool Group 摘要必须从真实 Tool Call 序列生成')
+/* Tool：最终原型取消 Tool Group 自身折叠；事实行直接可见，真实父关系决定是否跟随 Thinking 折叠。 */
+requireText(toolGroup, /data-task-tool-group="true"/, 'Tool Group 必须保留稳定语义边界')
+requireText(toolGroup, /model\.tools\.map/, 'Tool Group 必须逐条渲染每一次 Tool Call')
+if (/<details[\s\S]*data-task-tool-group="true"/.test(toolGroup)) failures.push('Tool Group 不得恢复独立 details 折叠层；只允许跟随真实 Thinking 父级折叠')
 if (/errorsOnly|execution-group-toolbar/.test(toolGroup)) failures.push('Tool Group 不得恢复“只看错误/汇总工具栏”替代主执行轨')
 
 requireText(toolRow, /data-tool-fact="true"/, '每一条 Tool Row 必须标记为 Tool Call 事实')
@@ -120,32 +118,31 @@ requireText(toolIcon, /kind === 'test'/, '测试类 Tool 必须有稳定语义�
 requireText(toolIcon, /return 'tool'/, '未知 Tool 必须有中性降级语义')
 
 requireText(piHistory, /durationMs\?: number/, 'Pi History Tool 必须保留可推导耗时')
-requireText(piHistory, /elapsedMs\(at, paired\.at\)/, 'Pi History 必须用 Tool Call / Result 时间推导耗时')
+requireText(piHistory, /elapsedMs\(fact\.at, paired\.at\)/, 'Pi History 必须用 Tool Call / Result 时间推导耗时')
 requireText(piTaskRound, /className="tool-live-output"/, 'Pi Running 必须显示有限高度实时输出预览')
 requireText(piTaskRound, /open=\{tool\.status === 'error'\}/, '错误 Tool 输出必须默认展开')
 requireText(piTaskRound, /startedAtMs/, 'Pi Running Tool 必须保留本轮起始时间以显示持续耗时')
-if (/<TaskToolGroup[\s\S]{0,180}defaultExpanded=\{false\}/.test(piTaskRound)) failures.push('Pi History / Running 不得覆盖共享 Tool Group 的默认展开语义')
 const explicitThinkingExpanded = piTaskRound.match(/<TaskThinking[^>]*defaultExpanded/g) ?? []
 if (explicitThinkingExpanded.length < 2) failures.push('Pi History / Running Thinking 必须显式保持默认展开')
 
-/* 09–12 · 三层视觉、字体、响应式、主题。 */
+/* 三层视觉、字体、响应式、主题。 */
 requireText(round, /task-round interaction-block/, 'Round 必须使用轻边界结构')
 requireText(round, /round-label/, 'Round 必须保留 label')
 requireText(round, /round-preview/, 'Round 必须保留 preview')
 requireText(round, /round-meta/, 'Round 必须保留 meta')
+requireText(round, /disclosure-chevron interaction-chevron/, 'Round 必须使用统一 SVG disclosure 图标')
 requireText(message, /message-row/, '消息必须使用 message-row 主结构')
 requireText(message, /message-row \$\{user \? 'user' : 'agent'\} task-message-row/, '消息必须用 TaskMessage 自有 user / agent 结构表达左右方向')
-requireText(message, /task-message-agent-mark/, 'Agent 消息必须保留弱引导标记')
+if (/task-message-agent-mark/.test(message)) failures.push('Agent 正文不得恢复额外 AI 引导图标；完整智能体轮次由文档流表达')
 if (/chat-row message-row|chat-avatar chat-avatar-agent/.test(message)) failures.push('TaskMessage 不得重新挂载会污染 flex 方向或隐藏 Agent 节点的旧 Review 表现类')
 
-requireText(toolCss, /execution-group\s*>\s*summary/, 'Tool Group 必须保留原型摘要折叠结构')
-requireText(toolCss, /execution-group\[open\]\s*>\s*summary::before/, 'Tool Group 展开时必须保留原型箭头状态')
-requireText(toolCss, /grid-template-columns:\s*76px\s+minmax\(94px,\s*auto\)\s+minmax\(0,\s*1fr\)\s+auto/, '桌面 Tool Row 必须保持四列：类型 / 操作 / 目标 / 状态耗时')
-requireText(toolCss, /font:\s*650 12px\/1\.4/, 'Tool 操作名称必须保持高保真原型 12px 辅助事实字号')
+requireText(toolCss, /execution-group > summary,[\s\S]*tool-group > summary \{ display: none;/, 'Tool Group 标题必须在最终原型中隐藏')
+requireText(toolCss, /grid-template-columns:\s*66px\s+auto\s+minmax\(88px,\s*auto\)\s+minmax\(0,\s*1fr\)/, '桌面 Tool Row 必须保持四列紧凑事实布局')
+requireText(toolCss, /font:\s*650 13px\/1\.4/, 'Tool 操作名称必须保持 13px 主阅读字号')
 requireText(toolCss, /tool-target[\s\S]*font-size:\s*13px/, 'Tool 目标必须保持 13px 主阅读字号')
 requireText(toolCss, /task-message-content[\s\S]*font-size:\s*14px/, '对话正文必须保持 14px 基线')
 requireText(toolCss, /thinking-content[\s\S]*font-size:\s*13px/, 'Thinking 正文必须保持 13px 基线')
-requireText(toolCss, /min-height:\s*38px/, 'Tool Row 必须保持 38px 紧凑行高')
+requireText(toolCss, /min-height:\s*30px/, 'Tool Row 必须保持约 30px 紧凑行高')
 requireText(toolCss, /tool-kind-test/, '测试类 Tool 必须有语义色')
 requireText(toolCss, /tool-kind-tool/, '未知 Tool 必须有中性降级视觉')
 requireText(toolCss, /:root\[data-theme='dark'\][\s\S]*tool-kind-test/, 'Dark 主题必须保留 Tool 语义色')
@@ -155,16 +152,18 @@ requireText(toolCss, /@media \(max-width: 1199\.98px\)/, 'Tool Row 必须覆盖�
 requireText(toolCss, /@media \(max-width: 991\.98px\)/, 'Tool Row 必须覆盖紧凑桌面降级')
 requireText(toolCss, /@media \(max-width: 767\.98px\)/, 'Tool Row 必须覆盖窄视口降级')
 requireText(toolCss, /prefers-reduced-motion/, '非必要动效必须尊重 reduced motion')
-if (/!important/.test(toolCss)) failures.push('Task Detail 最终表现层不得新增 !important 层叠污染')
+if (/!important/.test(polishCss)) failures.push('Task Detail 最终收口层不得新增 !important 层叠污染')
 
-/* 14 · task-center.css 只持有壳层，不能再复制执行轨样式。 */
+/* task-center.css 只持有壳层；Task Detail 由 execution → prototype → polish 逐层收口。 */
 if (/\.task-center-main \.execution-row|\.task-center-main \.thinking-block|\.execution-group-toolbar/.test(taskCenterCss)) {
-  failures.push('task-center.css 不得继续复制 Thinking / Tool 执行轨样式；统一由 task-execution.css 持有')
+  failures.push('task-center.css 不得继续复制 Thinking / Tool 执行轨样式')
 }
 const taskCenterImport = mainEntry.indexOf("import './task-center.css'")
 const taskExecutionImport = mainEntry.indexOf("import './task-execution.css'")
-if (taskCenterImport < 0 || taskExecutionImport < 0 || taskExecutionImport <= taskCenterImport) {
-  failures.push('task-execution.css 必须作为 Task Detail 最终表现层加载在 task-center.css 之后')
+const prototypeImport = mainEntry.indexOf("import './task-detail-prototype.css'")
+const polishImport = mainEntry.indexOf("import './task-detail-polish.css'")
+if (taskCenterImport < 0 || taskExecutionImport <= taskCenterImport || prototypeImport <= taskExecutionImport || polishImport <= prototypeImport) {
+  failures.push('Task Detail 样式加载顺序必须保持 task-center → task-execution → task-detail-prototype → task-detail-polish')
 }
 
 for (const script of [
@@ -182,4 +181,4 @@ if (failures.length) {
   for (const failure of failures) console.error(`- ${failure}`)
   process.exit(1)
 }
-console.log('alpha.3 Checklist 01–14 实现契约已锁定：Tool Group 按原型默认展开、成功 Tool Call 初始可见、用户可主动折叠、Payload 下钻、Round/Message/Execution 三层视觉、1280/1366 明暗桌面、精确 Chromium viewport、确定性 Review 正式投影、独立滚动、真实 Pi、Running 局部输出、100 次任务切换与 1h/8h 资源趋势均有对应验收入口。')
+console.log('alpha.3 Checklist 实现契约已锁定：Thinking 自身折叠、Tool Call 直接可见并仅按真实父关系跟随 Thinking、Tool 行点击 Inspector、Agent 文档流、1280/1366 明暗桌面、精确 Chromium viewport、确定性 Review 正式投影、独立滚动、真实 Pi、Running 局部输出、100 次任务切换与 1h/8h 资源趋势均有对应验收入口。')
