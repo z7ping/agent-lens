@@ -6,7 +6,6 @@ import { installLiveRecovery } from './client/live-recovery'
 import { clientModel } from './client/model'
 import { installPiLiveKeyboard } from './client/pi-live-keyboard'
 import { readTheme, writeTheme } from './client/preferences'
-import { installTaskSurfaceDefaults } from './client/task-surface-defaults'
 import './styles.css'
 import './tokens.css'
 import './theme.css'
@@ -37,10 +36,8 @@ writeTheme(readTheme())
 const disposeLiveRecovery = installLiveRecovery(clientModel)
 const disposeInspectorOutsideDismiss = installInspectorOutsideDismiss()
 const disposePiLiveKeyboard = installPiLiveKeyboard()
-const disposeTaskSurfaceDefaults = installTaskSurfaceDefaults()
 void clientModel.start()
 window.addEventListener('pagehide', () => {
-  disposeTaskSurfaceDefaults()
   disposePiLiveKeyboard()
   disposeInspectorOutsideDismiss()
   disposeLiveRecovery()

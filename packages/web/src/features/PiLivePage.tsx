@@ -254,7 +254,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const [controlBusy, setControlBusy] = useState(false)
   const [diagnostics, setDiagnostics] = useState<PiLiveTransportDiagnostics | null>(null)
   const [newRecords, setNewRecords] = useState(false)
-  const [showAllEvents, setShowAllEvents] = useState(false)
+  const [showAllEvents, setShowAllEvents] = useState(true)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -278,7 +278,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     setRestored([])
     setExtension(null)
     setError('')
-    setShowAllEvents(false)
+    setShowAllEvents(true)
     leafIdRef.current = undefined
 
     const acceptSnapshot = (value: PiLiveSnapshotDto) => {
