@@ -21,6 +21,7 @@ import { useClientSnapshot } from '../App'
 import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
 import { ToolKindIcon } from '../components/ToolKindIcon'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
+import { projectReviewInteractionPresentation } from './review-interaction-presentation'
 import { TaskEvent } from './TaskEvent'
 import { TaskHeader } from './TaskHeader'
 import { TaskMessage } from './TaskMessage'
@@ -349,10 +350,6 @@ function sourceEventSummary(node: ReviewEventNodeDto): string {
   return action || brief(payload, 100)
 }
 
-function isAdditionalEvent(node: ReviewEventNodeDto): boolean {
-  return node.category === 'unknown'
-}
-
 type ToolKind = 'shell' | 'read' | 'edit' | 'search' | 'mcp' | 'web' | 'tool'
 
 function detectToolKind(name: string): ToolKind {
@@ -438,11 +435,10 @@ function StructuredToolDetail({ node }: { node: ReviewToolNodeDto }) {
 function roleLabel(role: ReviewMessageNodeDto['role']): string {
   if (role === 'user') return '用户'
   if (role === 'assistant') return '智能体'
-  return '可观察过程片段'
+  return '思考'
 }
 
 type InspectorTab = 'detail' | 'evidence' | 'raw'
-
 
 function RawInspectorContent({
   node,
@@ -625,16 +621,24 @@ function MarkdownSurface({ text }: { text: string }) {
     </div>
     <div className="markdown-message-actions">
       {collapsible && <button onClick={() => setExpanded(value => !value)}>{expanded ? '收起到 5 行' : '展开全文'}</button>}
-      <button onClick={() => setView(value => value === 'rendered' ? 'source' : 'rendered')}>{view === 'rendered' ? '查看源码' : '返回渲染'}</button>
+      <button title={view === 'rendered' ? '查看 Markdown 源码' : '返回渲染结果'} onClick={() => setView(value => value === 'rendered' ? 'source' : 'rendered')}>{view === 'rendered' ? '源码' : '渲染'}</button>
     </div>
   </div>
 }
 
-function MessageBubble({ node, inspect }: { node: ReviewMessageNodeDto; inspect(node: ReviewNodeDto): void }) {
+function MessageBubble({
+  node,
+  inspect,
+  nestedTools = [],
+}: {
+  node: ReviewMessageNodeDto
+  inspect(node: ReviewNodeDto): void
+  nestedTools?: ReviewToolNodeDto[]
+}) {
   if (node.role === 'reasoning') {
     const thinking: TaskThinkingModel = {
       id: node.id,
-      label: '可观察过程片段',
+      label: '思考',
       text: node.text,
       preview: brief(node.text, 78),
       time: formatClock(node.at),
@@ -646,6 +650,7 @@ function MessageBubble({ node, inspect }: { node: ReviewMessageNodeDto; inspect(
       actions={node.evidence.length > 0 ? <button className="evidence-link" onClick={() => inspect(node)}>查看全部证据 · {node.evidence.length}</button> : undefined}
     >
       <MarkdownSurface text={node.text}/>
+      {nestedTools.length > 0 && <ReviewToolGroupAdapter items={nestedTools} inspect={inspect}/>} 
     </TaskThinking>
   }
 
@@ -660,50 +665,50 @@ function MessageBubble({ node, inspect }: { node: ReviewMessageNodeDto; inspect(
 }
 
 function reviewToolModel(node: ReviewToolNodeDto): TaskToolModel {
-    const info = toolPresentation(node)
-    const status = node.status === 'error' ? 'error' : node.status === 'success' ? 'success' : node.status === 'running' ? 'running' : 'unknown'
-    return {
-      id: node.id,
-      name: node.name,
-      kind: info.kind,
-      kindLabel: info.label,
-      status,
-      primary: info.primary || undefined,
-      secondary: info.secondary || undefined,
-      durationLabel: node.durationMs !== undefined && node.durationMs > 0 ? duration(node.durationMs) : formatClock(node.at),
-    }
+  const info = toolPresentation(node)
+  const status = node.status === 'error' ? 'error' : node.status === 'success' ? 'success' : node.status === 'running' ? 'running' : 'unknown'
+  return {
+    id: node.id,
+    name: node.name,
+    kind: info.kind,
+    kindLabel: info.label,
+    status,
+    primary: info.primary || undefined,
+    secondary: info.secondary || undefined,
+    durationLabel: node.durationMs !== undefined && node.durationMs > 0 ? duration(node.durationMs) : formatClock(node.at),
   }
+}
 
-  function ReviewToolGroupAdapter({ items, inspect }: { items: ReviewToolNodeDto[]; inspect(node: ReviewNodeDto): void }) {
-    const model = useMemo<TaskToolGroupModel>(() => {
-      const tools = items.map(reviewToolModel)
-      const errorCount = tools.filter(tool => tool.status === 'error').length
-      const totalDuration = items.reduce((sum, item) => sum + (item.durationMs ?? 0), 0)
-      const counts = new Map<ToolKind, number>()
-      for (const tool of tools) counts.set(tool.kind, (counts.get(tool.kind) ?? 0) + 1)
-      return {
-        id: `tools:${items.map(item => item.id).join(':')}`,
-        label: '工具执行',
-        itemCount: tools.length,
-        errorCount,
-        totalDurationLabel: totalDuration > 0 ? duration(totalDuration) : undefined,
-        kindCounts: [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([kind, count]) => ({ kind, label: toolKindLabel(kind), count })),
-        tools,
-      }
-    }, [items])
-    const nodes = useMemo(() => new Map(items.map(node => [node.id, node] as const)), [items])
-    return <TaskToolGroup
-      model={model}
-      renderMeta={tool => {
-        const node = nodes.get(tool.id)
-        return node ? <EvidenceBadges evidence={node.evidence} compact/> : null
-      }}
-      onToolClick={tool => {
-        const node = nodes.get(tool.id)
-        if (node) inspect(node)
-      }}
-    />
-  }
+function ReviewToolGroupAdapter({ items, inspect }: { items: ReviewToolNodeDto[]; inspect(node: ReviewNodeDto): void }) {
+  const model = useMemo<TaskToolGroupModel>(() => {
+    const tools = items.map(reviewToolModel)
+    const errorCount = tools.filter(tool => tool.status === 'error').length
+    const totalDuration = items.reduce((sum, item) => sum + (item.durationMs ?? 0), 0)
+    const counts = new Map<ToolKind, number>()
+    for (const tool of tools) counts.set(tool.kind, (counts.get(tool.kind) ?? 0) + 1)
+    return {
+      id: `tools:${items.map(item => item.id).join(':')}`,
+      label: '工具执行',
+      itemCount: tools.length,
+      errorCount,
+      totalDurationLabel: totalDuration > 0 ? duration(totalDuration) : undefined,
+      kindCounts: [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([kind, count]) => ({ kind, label: toolKindLabel(kind), count })),
+      tools,
+    }
+  }, [items])
+  const nodes = useMemo(() => new Map(items.map(node => [node.id, node] as const)), [items])
+  return <TaskToolGroup
+    model={model}
+    renderMeta={tool => {
+      const node = nodes.get(tool.id)
+      return node ? <EvidenceBadges evidence={node.evidence} compact/> : null
+    }}
+    onToolClick={tool => {
+      const node = nodes.get(tool.id)
+      if (node) inspect(node)
+    }}
+  />
+}
 
 function EventRow({ event, inspect }: { event: ReviewEventNodeDto; inspect(node: ReviewNodeDto): void }) {
   return <TaskEvent
@@ -729,10 +734,6 @@ function RawEventGroup({ items, inspect }: { items: ReviewEventNodeDto[]; inspec
   </details>
 }
 
-type InteractionEntry = ReviewNodeDto
-  | { type: 'tool-group'; items: ReviewToolNodeDto[] }
-  | { type: 'raw-event-group'; items: ReviewEventNodeDto[] }
-
 interface InteractionStats {
   toolCount: number
   errorCount: number
@@ -752,68 +753,44 @@ function interactionStats(interaction: ReviewInteractionDto): InteractionStats {
 }
 
 function ReviewRoundAdapter({
-    interaction,
-    round,
-    inspect,
-    defaultExpanded,
-    expansionStore,
-    forceExpanded,
-    forceRevision,
-    showAllEvents,
-  }: {
-    interaction: ReviewInteractionDto
-    round: TaskRoundModel
-    inspect(node: ReviewNodeDto): void
-    defaultExpanded: boolean
-    expansionStore: Map<string, boolean>
-    forceExpanded: boolean
-    forceRevision: number
-    showAllEvents: boolean
-  }) {
-    const groups = useMemo(() => {
-      const result: InteractionEntry[] = []
-      let tools: ReviewToolNodeDto[] = []
-      let rawEvents: ReviewEventNodeDto[] = []
-      const flushTools = () => { if (tools.length) { result.push({ type: 'tool-group', items: tools }); tools = [] } }
-      const flushRawEvents = () => { if (rawEvents.length) { result.push({ type: 'raw-event-group', items: rawEvents }); rawEvents = [] } }
+  interaction,
+  round,
+  inspect,
+  defaultExpanded,
+  expansionStore,
+  forceExpanded,
+  forceRevision,
+  showAllEvents,
+}: {
+  interaction: ReviewInteractionDto
+  round: TaskRoundModel
+  inspect(node: ReviewNodeDto): void
+  defaultExpanded: boolean
+  expansionStore: Map<string, boolean>
+  forceExpanded: boolean
+  forceRevision: number
+  showAllEvents: boolean
+}) {
+  const groups = useMemo(() => projectReviewInteractionPresentation(interaction.nodes), [interaction.nodes])
 
-      for (const node of interaction.nodes) {
-        if (node.type === 'tool') {
-          flushRawEvents()
-          tools.push(node)
-          continue
-        }
-        if (node.type === 'event' && isAdditionalEvent(node)) {
-          flushTools()
-          rawEvents.push(node)
-          continue
-        }
-        flushTools()
-        flushRawEvents()
-        result.push(node)
-      }
-      flushTools()
-      flushRawEvents()
-      return result
-    }, [interaction.nodes])
+  return <TaskRound
+    model={round}
+    defaultExpanded={defaultExpanded}
+    expansionStore={expansionStore}
+    forceExpanded={forceExpanded}
+    forceRevision={forceRevision}
+  >
+    {groups.map((entry, index) => {
+      if (entry.type === 'tool-group') return <ReviewToolGroupAdapter key={`tools-${index}`} items={entry.items} inspect={inspect}/>
+      if (entry.type === 'raw-event-group') return showAllEvents ? <RawEventGroup key={`raw-${index}`} items={entry.items} inspect={inspect}/> : null
+      if (entry.type === 'reasoning') return <MessageBubble key={entry.node.id} node={entry.node} nestedTools={entry.tools} inspect={inspect}/>
+      if (entry.type === 'message') return <MessageBubble key={entry.node.id} node={entry.node} inspect={inspect}/>
+      return <EventRow key={entry.node.id} event={entry.node} inspect={inspect}/>
+    })}
+  </TaskRound>
+}
 
-    return <TaskRound
-      model={round}
-      defaultExpanded={defaultExpanded}
-      expansionStore={expansionStore}
-      forceExpanded={forceExpanded}
-      forceRevision={forceRevision}
-    >
-      {groups.map((entry, index) => {
-        if (entry.type === 'tool-group') return <ReviewToolGroupAdapter key={`tools-${index}`} items={entry.items} inspect={inspect}/>
-        if (entry.type === 'raw-event-group') return showAllEvents ? <RawEventGroup key={`raw-${index}`} items={entry.items} inspect={inspect}/> : null
-        if (entry.type === 'message') return <MessageBubble key={entry.id} node={entry} inspect={inspect}/>
-        return <EventRow key={entry.id} event={entry as ReviewEventNodeDto} inspect={inspect}/>
-      })}
-    </TaskRound>
-  }
-
-  type RoundFilter = ReviewDetailFilter
+type RoundFilter = ReviewDetailFilter
 
 interface ReviewReaderPosition {
   interactionId: string
@@ -1225,15 +1202,15 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
         {review.error && <div className="page-error">{review.error}</div>}
         {!detail ? <div className="empty-state fill">{review.selectedId && review.detailLoading ? '加载会话详情…' : '选择一个会话开始复盘'}</div> : <div className="review-reader">
           <TaskHeader
-    marker={<span className={`source-dot ${sourceDot(detail.sourceIds[0] ?? '')}`}/>}
-    agent={taskDetailModel?.agentLabel ?? ''}
-    context={taskDetailModel?.projectLabel}
-    status={taskDetailModel?.statusLabel ? <span className="session-status-error">{taskDetailModel.statusLabel}</span> : undefined}
-    title={<span title={taskDetailModel?.title}>{taskDetailModel?.title}</span>}
-    submeta={taskDetailModel?.startedAt && taskDetailModel.endedAt ? <><span>{formatRange(taskDetailModel.startedAt, taskDetailModel.endedAt)}</span>{taskDetailModel.workspacePath && <code title={taskDetailModel.workspacePath}>{taskDetailModel.workspacePath}</code>}</> : undefined}
-    metrics={taskDetailModel?.metrics ?? []}
-    actions={<button className="review-audit-toggle" aria-pressed={showAllEvents} onClick={() => setShowAllEvents(value => !value)}>{showAllEvents ? '视图：全部事件' : '视图：核心事件'}</button>}
-  />
+            marker={<span className={`source-dot ${sourceDot(detail.sourceIds[0] ?? '')}`}/>}
+            agent={taskDetailModel?.agentLabel ?? ''}
+            context={taskDetailModel?.projectLabel}
+            status={taskDetailModel?.statusLabel ? <span className="session-status-error">{taskDetailModel.statusLabel}</span> : undefined}
+            title={<span title={taskDetailModel?.title}>{taskDetailModel?.title}</span>}
+            submeta={taskDetailModel?.startedAt && taskDetailModel.endedAt ? <><span>{formatRange(taskDetailModel.startedAt, taskDetailModel.endedAt)}</span>{taskDetailModel.workspacePath && <code title={taskDetailModel.workspacePath}>{taskDetailModel.workspacePath}</code>}</> : undefined}
+            metrics={taskDetailModel?.metrics ?? []}
+            actions={<button className="review-audit-toggle" aria-pressed={showAllEvents} onClick={() => setShowAllEvents(value => !value)}>{showAllEvents ? '视图：全部事件' : '视图：核心事件'}</button>}
+          />
 
           {detail.sourceIds.includes('pi') && review.relationships?.items.length ? <details className="pi-session-tree">
             <summary>Pi 会话树 · {review.relationships.items.length} 条关系</summary>
@@ -1261,21 +1238,21 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
               {review.detailLoadingMore ? '正在加载更早轮次…' : review.error ? <button onClick={() => void loadOlder()}>加载失败 · 重试</button> : <button onClick={() => void loadOlder()}>加载更早轮次</button>}
             </div>}
             {annotatedInteractions.map((item, index) => <VirtualRoundMount
-    key={item.round.id}
-    eager={index < 6 || item.round.id === annotatedInteractions.at(-1)?.round.id}
-    estimate={item.round.toolCount > 12 ? 420 : item.round.toolCount > 4 ? 300 : 220}
-  >
-    <ReviewRoundAdapter
-      interaction={item.interaction}
-      round={item.round}
-      defaultExpanded
-      expansionStore={roundExpansionRef.current}
-      forceExpanded={expandAllRounds}
-      forceRevision={roundExpansionRevision}
-      showAllEvents={showAllEvents}
-      inspect={setInspect}
-    />
-  </VirtualRoundMount>)}
+              key={item.round.id}
+              eager={index < 6 || item.round.id === annotatedInteractions.at(-1)?.round.id}
+              estimate={item.round.toolCount > 12 ? 420 : item.round.toolCount > 4 ? 300 : 220}
+            >
+              <ReviewRoundAdapter
+                interaction={item.interaction}
+                round={item.round}
+                defaultExpanded
+                expansionStore={roundExpansionRef.current}
+                forceExpanded={expandAllRounds}
+                forceRevision={roundExpansionRevision}
+                showAllEvents={showAllEvents}
+                inspect={setInspect}
+              />
+            </VirtualRoundMount>)}
             {!annotatedInteractions.length && <div className="round-filter-empty">{emptyLabel}</div>}
             {!isBackward && roundFilter !== 'latest' && <div ref={detailLoadSentinelRef} className="detail-load-sentinel" aria-live="polite">
               {review.detailLoadingMore
