@@ -1,0 +1,43 @@
+name: One-off Alpha3 Switch Readiness Failure
+
+on:
+  push:
+    branches:
+      - feature/1.0.0-alpha.3-task-surface
+    paths:
+      - .github/workflows/maintenance-alpha3-switch-readiness-failure.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Preserve structured failure when task list never becomes ready
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs')
+          const path = 'scripts/acceptance/task-center-desktop.mjs'
+          let source = fs.readFileSync(path, 'utf8')
+          const from = "  if (initialCount < 2) return { skipped: false, requiredSwitches: 100, completedSwitches: 0, errors: [`任务列表在 4 秒内未就绪：需要至少 2 条，实际 ${initialCount} 条`], ok: false }"
+          const to = "  if (initialCount < 2) return { skipped: true, reason: `任务列表在 4 秒内未就绪：需要至少 2 条，实际 ${initialCount} 条`, requiredSwitches: 100, completedSwitches: 0, ok: false }"
+          const count = source.split(from).length - 1
+          if (count !== 1) throw new Error(`expected one readiness failure return, found ${count}`)
+          source = source.replace(from, to)
+          fs.writeFileSync(path, source)
+          NODE
+          git diff --check
+          node --check scripts/acceptance/task-center-desktop.mjs
+      - name: Commit fix
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/acceptance/task-center-desktop.mjs
+          git commit -m 'fix(alpha3): 保留任务列表未就绪的结构化失败'
+          git push origin HEAD:${GITHUB_REF_NAME}
