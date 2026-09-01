@@ -47,8 +47,12 @@ test('OpenCode Source reads native SQLite title/history and observes in-place pa
     );
   `)
   nativeDb.prepare('INSERT INTO session (id, directory, title) VALUES (?, ?, ?)').run('ses_1', workspace, 'OpenCode 原生会话标题')
+  nativeDb.prepare('INSERT INTO message (id, data) VALUES (?, ?)').run('msg_old', JSON.stringify({ role: 'user' }))
   nativeDb.prepare('INSERT INTO message (id, data) VALUES (?, ?)').run('msg_u', JSON.stringify({ role: 'user' }))
   nativeDb.prepare('INSERT INTO message (id, data) VALUES (?, ?)').run('msg_a', JSON.stringify({ role: 'assistant', modelID: 'test-model' }))
+  nativeDb.prepare('INSERT INTO part (id, message_id, session_id, time_created, data) VALUES (?, ?, ?, ?, ?)').run(
+    'prt_old', 'msg_old', 'ses_1', 1_700_000_000_000, JSON.stringify({ type: 'text', text: '旧历史' }),
+  )
   nativeDb.prepare('INSERT INTO part (id, message_id, session_id, time_created, data) VALUES (?, ?, ?, ?, ?)').run(
     'prt_text', 'msg_u', 'ses_1', 1_787_000_000_000, JSON.stringify({ type: 'text', text: '检查仓库' }),
   )
@@ -77,6 +81,7 @@ test('OpenCode Source reads native SQLite title/history and observes in-place pa
       host,
       detected,
       abortSignal: new AbortController().signal,
+      historyWindow: { activeSince: '2026-08-10T00:00:00.000Z' },
     })
     assert.equal(historyResult.records, 2)
 
@@ -115,6 +120,14 @@ test('OpenCode Source reads native SQLite title/history and observes in-place pa
     facts = await storage.repositories.observations.query({ installationId: historyResult.installationId, limit: 50 })
     assert.equal(facts.filter(item => item.kind === 'tool.call').length, 1)
     assert.equal(facts.filter(item => item.kind === 'tool.result').length, 1)
+
+    const coldHistory = await history.sync({
+      source: openCodeSourceDefinition,
+      host,
+      detected,
+      abortSignal: new AbortController().signal,
+    })
+    assert.equal(coldHistory.records, 3)
 
     const replay = await history.sync({
       source: openCodeSourceDefinition,

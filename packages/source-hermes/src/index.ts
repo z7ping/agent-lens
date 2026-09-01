@@ -24,6 +24,7 @@ import type {
   SourceDefinition,
   SourceDetectionContext,
   SourceExecutionContext,
+  SourceHistoryExecutionContext,
   SourceNormalizationContext,
   SourcePluginManifest,
   SourceRecord,
@@ -187,7 +188,17 @@ function columnExpr(columns: Set<string>, tableAlias: string, column: string, al
   return columns.has(column) ? `${tableAlias}."${column}" AS "${alias}"` : `NULL AS "${alias}"`
 }
 
-function messageQuery(db: Database.Database, tail: boolean): Database.Statement<[number, number]> {
+function timestampMillisSql(column: string): string {
+  return `CASE
+    WHEN typeof(${column}) IN ('integer', 'real') THEN
+      CASE WHEN CAST(${column} AS REAL) < 10000000000 THEN CAST(${column} AS REAL) * 1000 ELSE CAST(${column} AS REAL) END
+    WHEN trim(CAST(${column} AS TEXT)) <> '' AND trim(CAST(${column} AS TEXT)) NOT GLOB '*[^0-9.]*' THEN
+      CASE WHEN CAST(${column} AS REAL) < 10000000000 THEN CAST(${column} AS REAL) * 1000 ELSE CAST(${column} AS REAL) END
+    ELSE CAST(strftime('%s', ${column}) AS REAL) * 1000
+  END`
+}
+
+function messageQuery(db: Database.Database, tail: boolean, activeSinceMs?: number): Database.Statement {
   const messageColumns = tableColumns(db, 'messages')
   if (!messageColumns.has('session_id')) throw new Error('Hermes state.db messages table has no session_id column')
   const sessionColumns = tableColumns(db, 'sessions')
@@ -208,17 +219,23 @@ function messageQuery(db: Database.Database, tail: boolean): Database.Statement<
     ? 'LEFT JOIN sessions s ON m.session_id = s.id'
     : 'LEFT JOIN (SELECT NULL AS id, NULL AS cwd, NULL AS title) s ON 1 = 0'
   const order = tail ? 'DESC' : 'ASC'
-  const where = tail ? '' : 'WHERE m.rowid > ?'
+  const timeFilter = activeSinceMs === undefined
+    ? ''
+    : messageColumns.has('timestamp')
+      ? `AND ${timestampMillisSql('m.timestamp')} >= ?`
+      : 'AND 1 = 0'
+  const where = tail ? '' : `WHERE m.rowid > ? ${timeFilter}`
   const sql = `SELECT ${fields.join(', ')} FROM messages m ${joinSession} ${where} ORDER BY m.rowid ${order} LIMIT ?`
-  return db.prepare(sql) as Database.Statement<[number, number]>
+  return db.prepare(sql)
 }
 
-function selectRows(db: Database.Database, afterRowId: number, limit: number): HermesRow[] {
-  return messageQuery(db, false).all(afterRowId, limit) as HermesRow[]
+function selectRows(db: Database.Database, afterRowId: number, limit: number, activeSinceMs?: number): HermesRow[] {
+  const params = activeSinceMs === undefined ? [afterRowId, limit] : [afterRowId, activeSinceMs, limit]
+  return messageQuery(db, false, activeSinceMs).all(...params) as HermesRow[]
 }
 
 function recentRows(db: Database.Database, limit: number): HermesRow[] {
-  const statement = messageQuery(db, true) as unknown as Database.Statement<[number]>
+  const statement = messageQuery(db, true)
   return (statement.all(limit) as HermesRow[]).reverse()
 }
 
@@ -278,21 +295,26 @@ function dbRecord(
   }
 }
 
-export async function* ingestHermesHistory(ctx: SourceExecutionContext): AsyncIterable<SourceRecord> {
+export async function* ingestHermesHistory(ctx: SourceHistoryExecutionContext): AsyncIterable<SourceRecord> {
   const root = ctx.installation.dataRoot
   if (!root || ctx.abortSignal.aborted || !await exists(join(root, DB_NAME))) return
   const db = openDatabase(root)
   try {
     // v2 会一次性重放历史消息，让旧会话也获得原生标题。
-    let rowId = await ctx.checkpoint.get<number>('history-rowid:v2-session-title') ?? 0
+    const parsedActiveSince = ctx.historyWindow?.activeSince ? Date.parse(ctx.historyWindow.activeSince) : Number.NaN
+    const activeSinceMs = Number.isFinite(parsedActiveSince) ? parsedActiveSince : undefined
+    const checkpointKey = activeSinceMs === undefined
+      ? 'history-rowid:v2-session-title'
+      : 'history-hot-rowid:v1'
+    let rowId = await ctx.checkpoint.get<number>(checkpointKey) ?? 0
     while (!ctx.abortSignal.aborted) {
-      const rows = selectRows(db, rowId, HISTORY_BATCH)
+      const rows = selectRows(db, rowId, HISTORY_BATCH, activeSinceMs)
       if (!rows.length) break
       for (const row of rows) {
         if (ctx.abortSignal.aborted) return
         yield dbRecord(row, ctx, 'history')
         rowId = row.row_id
-        await ctx.checkpoint.set('history-rowid:v2-session-title', rowId)
+        await ctx.checkpoint.set(checkpointKey, rowId)
       }
       if (rows.length < HISTORY_BATCH) break
     }

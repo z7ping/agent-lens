@@ -15,6 +15,7 @@ import type {
   SourceDefinition,
   SourceDetectionContext,
   SourceExecutionContext,
+  SourceHistoryExecutionContext,
   SourceNormalizationContext,
   SourcePluginManifest,
   SourceRecord,
@@ -152,7 +153,19 @@ function openDatabase(root: string): Database.Database {
   return db
 }
 
-function selectRows(db: Database.Database, afterRowId: number, limit: number): OpenCodeRow[] {
+function timestampMillisSql(column: string): string {
+  return `CASE
+    WHEN typeof(${column}) IN ('integer', 'real') THEN
+      CASE WHEN CAST(${column} AS REAL) < 10000000000 THEN CAST(${column} AS REAL) * 1000 ELSE CAST(${column} AS REAL) END
+    WHEN trim(CAST(${column} AS TEXT)) <> '' AND trim(CAST(${column} AS TEXT)) NOT GLOB '*[^0-9.]*' THEN
+      CASE WHEN CAST(${column} AS REAL) < 10000000000 THEN CAST(${column} AS REAL) * 1000 ELSE CAST(${column} AS REAL) END
+    ELSE CAST(strftime('%s', ${column}) AS REAL) * 1000
+  END`
+}
+
+function selectRows(db: Database.Database, afterRowId: number, limit: number, activeSinceMs?: number): OpenCodeRow[] {
+  const timeFilter = activeSinceMs === undefined ? '' : `AND ${timestampMillisSql('p.time_created')} >= ?`
+  const params = activeSinceMs === undefined ? [afterRowId, limit] : [afterRowId, activeSinceMs, limit]
   return db.prepare(`
     SELECT p.rowid AS row_id,
            p.id AS id,
@@ -166,10 +179,10 @@ function selectRows(db: Database.Database, afterRowId: number, limit: number): O
       FROM part p
       LEFT JOIN message m ON p.message_id = m.id
       LEFT JOIN session s ON p.session_id = s.id
-     WHERE p.rowid > ?
+     WHERE p.rowid > ? ${timeFilter}
      ORDER BY p.rowid ASC
      LIMIT ?
-  `).all(afterRowId, limit) as OpenCodeRow[]
+  `).all(...params) as OpenCodeRow[]
 }
 
 function recentRows(db: Database.Database, limit: number): OpenCodeRow[] {
@@ -247,22 +260,27 @@ function recordFromRow(
 }
 
 export async function* ingestOpenCodeHistory(
-  ctx: SourceExecutionContext,
+  ctx: SourceHistoryExecutionContext,
 ): AsyncIterable<SourceRecord> {
   const root = ctx.installation.dataRoot ?? ctx.installation.configRoot
   if (!root || ctx.abortSignal.aborted) return
   const db = openDatabase(root)
   try {
     // v2 会一次性重放旧记录，让已经导入的会话也获得原生标题。
-    let rowId = await ctx.checkpoint.get<number>('history-rowid:v2-session-title') ?? 0
+    const parsedActiveSince = ctx.historyWindow?.activeSince ? Date.parse(ctx.historyWindow.activeSince) : Number.NaN
+    const activeSinceMs = Number.isFinite(parsedActiveSince) ? parsedActiveSince : undefined
+    const checkpointKey = activeSinceMs === undefined
+      ? 'history-rowid:v2-session-title'
+      : 'history-hot-rowid:v1'
+    let rowId = await ctx.checkpoint.get<number>(checkpointKey) ?? 0
     while (!ctx.abortSignal.aborted) {
-      const rows = selectRows(db, rowId, HISTORY_BATCH)
+      const rows = selectRows(db, rowId, HISTORY_BATCH, activeSinceMs)
       if (!rows.length) break
       for (const row of rows) {
         if (ctx.abortSignal.aborted) return
         yield recordFromRow(row, ctx, 'history')
         rowId = row.row_id
-        await ctx.checkpoint.set('history-rowid:v2-session-title', rowId)
+        await ctx.checkpoint.set(checkpointKey, rowId)
       }
       if (rows.length < HISTORY_BATCH) break
     }

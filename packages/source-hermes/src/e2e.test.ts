@@ -57,15 +57,18 @@ test('Hermes Source combines native session title, state.db history, assets and 
   `)
   nativeDb.prepare('INSERT INTO sessions (id, cwd, title) VALUES (?, ?, ?)').run('ses_1', workspace, 'Hermes 原生会话标题')
   nativeDb.prepare('INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
-    1, 'ses_1', 'user', '检查项目', 1_787_000_000, null, null, null,
+    1, 'ses_1', 'user', '旧历史', 1_700_000_000, null, null, null,
   )
   nativeDb.prepare('INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
-    2, 'ses_1', 'assistant', '开始检查', 1_787_000_001,
+    2, 'ses_1', 'user', '检查项目', 1_787_000_000, null, null, null,
+  )
+  nativeDb.prepare('INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
+    3, 'ses_1', 'assistant', '开始检查', 1_787_000_001,
     JSON.stringify([{ id: 'call_1', function: { name: 'terminal', arguments: JSON.stringify({ command: 'git status' }) } }]),
     null, null,
   )
   nativeDb.prepare('INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
-    3, 'ses_1', 'tool', JSON.stringify({ exit_code: 0, output: 'clean' }), 1_787_000_002,
+    4, 'ses_1', 'tool', JSON.stringify({ exit_code: 0, output: 'clean' }), 1_787_000_002,
     null, 'call_1', 'terminal',
   )
 
@@ -93,6 +96,7 @@ test('Hermes Source combines native session title, state.db history, assets and 
       host,
       detected,
       abortSignal: new AbortController().signal,
+      historyWindow: { activeSince: '2026-08-10T00:00:00.000Z' },
     })
     assert.equal(historyResult.records, 3)
 
@@ -145,6 +149,14 @@ test('Hermes Source combines native session title, state.db history, assets and 
 
     facts = await storage.repositories.observations.query({ installationId: historyResult.installationId, limit: 50 })
     assert.equal(facts.filter(item => item.kind === 'tool.call').length, 2)
+
+    const coldHistory = await history.sync({
+      source: hermesSourceDefinition,
+      host,
+      detected,
+      abortSignal: new AbortController().signal,
+    })
+    assert.equal(coldHistory.records, 4)
 
     const replay = await history.sync({
       source: hermesSourceDefinition,
