@@ -35,12 +35,52 @@
 .task-center-main .round-label::before { content: none; display: none; }
 .task-center-main .task-round[open] .round-label::before { content: none; }
 
+/* Thinking summary 现在由「标题组 + 右侧 meta」两列组成；避免旧四列规则把标题挤进箭头列。 */
 .task-center-main .thinking-block > summary {
-  grid-template-columns: 18px auto minmax(0, 1fr) auto;
-  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
 }
 .task-center-main .thinking-block > summary::before { content: none; display: none; }
 .task-center-main .thinking-block[open] > summary::before { content: none; display: none; }
+.task-center-main .thinking-summary-main {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+.task-center-main .thinking-summary-main .thinking-chevron {
+  flex: 0 0 18px;
+}
+.task-center-main .thinking-block[open] > summary .thinking-chevron { transform: rotate(90deg); }
+.task-center-main .thinking-block > summary:hover .thinking-chevron {
+  background: var(--al-soft-2);
+  color: var(--al-ink-2);
+}
+.task-center-main .thinking-label {
+  flex: 0 0 auto;
+  color: var(--al-muted);
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.task-center-main .thinking-label::after { content: none; }
+.task-center-main .thinking-preview {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.task-center-main .thinking-summary-meta {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+/* 正文与“思考”标题文字对齐；真实嵌套 Tool 再由原规则缩进一级。 */
+.task-center-main .thinking-content {
+  margin: 0 2px 4px 26px;
+  padding: 0;
+}
+.task-center-main .task-thinking-actions {
+  margin: 2px 2px 5px 26px;
+  padding: 0;
+}
 
 /* Pi Tool 输出 disclosure 与 Round / Thinking 同一视觉语言。 */
 .task-center-main .tool-output-details > summary {
