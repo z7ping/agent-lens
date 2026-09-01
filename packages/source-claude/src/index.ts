@@ -29,6 +29,8 @@ import type {
   SourceDefinition,
   SourceDetectionContext,
   SourceExecutionContext,
+  SourceHistoryExecutionContext,
+  SourceHistoryWindow,
   SourceNormalizationContext,
   SourcePluginManifest,
   SourceRecord,
@@ -181,7 +183,7 @@ async function* walkJsonlFiles(root: string): AsyncIterable<string> {
   }
 }
 
-async function listJsonlFiles(root: string): Promise<string[]> {
+async function listJsonlFiles(root: string, historyWindow?: SourceHistoryWindow): Promise<string[]> {
   const paths: string[] = []
   for await (const file of walkJsonlFiles(root)) paths.push(file)
   const candidates = (await Promise.all(paths.map(async path => {
@@ -192,8 +194,13 @@ async function listJsonlFiles(root: string): Promise<string[]> {
     }
   }))).filter((candidate): candidate is { path: string; mtimeMs: number } => candidate !== null)
 
-  return candidates
-    .sort((a, b) => b.mtimeMs - a.mtimeMs || b.path.localeCompare(a.path))
+  const activeSince = historyWindow?.activeSince ? Date.parse(historyWindow.activeSince) : Number.NaN
+  const filtered = Number.isFinite(activeSince)
+    ? candidates.filter(candidate => candidate.mtimeMs >= activeSince)
+    : candidates
+  const ordered = filtered.sort((a, b) => b.mtimeMs - a.mtimeMs || b.path.localeCompare(a.path))
+  const limit = historyWindow?.sessionLimit
+  return (limit === undefined ? ordered : ordered.slice(0, Math.max(0, Math.floor(limit))))
     .map(candidate => candidate.path)
 }
 
@@ -256,13 +263,13 @@ function historyCheckpointKey(filePath: string): string {
 }
 
 export async function* ingestClaudeHistory(
-  ctx: SourceExecutionContext,
+  ctx: SourceHistoryExecutionContext,
 ): AsyncIterable<SourceRecord> {
   const projectsDir = ctx.installation.dataRoot
     ?? (ctx.installation.configRoot ? join(ctx.installation.configRoot, 'projects') : undefined)
   if (!projectsDir) return
 
-  for (const filePath of await listJsonlFiles(projectsDir)) {
+  for (const filePath of await listJsonlFiles(projectsDir, ctx.historyWindow)) {
     if (ctx.abortSignal.aborted) return
     const fileStat = await stat(filePath)
     const key = historyCheckpointKey(filePath)

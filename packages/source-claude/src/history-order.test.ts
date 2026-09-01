@@ -29,6 +29,10 @@ test('Claude 冷导入按最近活动时间优先并稳定回填旧文件', asyn
       recentAPath,
       oldPath,
     ])
+    assert.deepEqual(await claudeInternals.listJsonlFiles(projects, {
+      activeSince: '2026-08-20T00:00:00.000Z',
+      sessionLimit: 1,
+    }), [recentBPath])
   } finally {
     await rm(root, { recursive: true, force: true })
   }

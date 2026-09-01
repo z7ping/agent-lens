@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { open, opendir, readFile, stat } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
-import type { SourceExecutionContext, SourceRecord } from '@agent-lens/core'
+import type { SourceExecutionContext, SourceHistoryExecutionContext, SourceHistoryWindow, SourceRecord } from '@agent-lens/core'
 import {
   nativeIdForEntry,
   nativeTypeForEntry,
@@ -60,7 +60,7 @@ async function* walkJsonlFiles(root: string): AsyncIterable<string> {
   }
 }
 
-async function listJsonlFiles(root: string): Promise<string[]> {
+async function listJsonlFiles(root: string, historyWindow?: SourceHistoryWindow): Promise<string[]> {
   const paths: string[] = []
   for await (const file of walkJsonlFiles(root)) paths.push(file)
 
@@ -75,8 +75,13 @@ async function listJsonlFiles(root: string): Promise<string[]> {
 
   // 冷启动首先导入最近有活动的会话；恢复旧会话时 mtime 比目录日期更可靠。
   // 路径降序只用于相同时间戳下的稳定排序，旧历史仍会在后续完整回填。
-  return candidates
-    .sort((a, b) => b.mtimeMs - a.mtimeMs || b.path.localeCompare(a.path))
+  const activeSince = historyWindow?.activeSince ? Date.parse(historyWindow.activeSince) : Number.NaN
+  const filtered = Number.isFinite(activeSince)
+    ? candidates.filter(candidate => candidate.mtimeMs >= activeSince)
+    : candidates
+  const ordered = filtered.sort((a, b) => b.mtimeMs - a.mtimeMs || b.path.localeCompare(a.path))
+  const limit = historyWindow?.sessionLimit
+  return (limit === undefined ? ordered : ordered.slice(0, Math.max(0, Math.floor(limit))))
     .map(candidate => candidate.path)
 }
 
@@ -292,13 +297,13 @@ function metadataRecord(
   }
 }
 
-export async function* ingestCodexHistory(ctx: SourceExecutionContext): AsyncIterable<SourceRecord> {
+export async function* ingestCodexHistory(ctx: SourceHistoryExecutionContext): AsyncIterable<SourceRecord> {
   const sessionsDir = ctx.installation.dataRoot
     ?? (ctx.installation.configRoot ? join(ctx.installation.configRoot, 'sessions') : undefined)
   if (!sessionsDir) return
 
   const threadNames = await readThreadNames(ctx.installation.configRoot)
-  const files = await listJsonlFiles(sessionsDir)
+  const files = await listJsonlFiles(sessionsDir, ctx.historyWindow)
   for (const filePath of files) {
     if (ctx.abortSignal.aborted) return
 
