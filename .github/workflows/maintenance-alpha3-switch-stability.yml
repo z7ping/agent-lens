@@ -24,109 +24,11 @@ jobs:
           const fs = require('node:fs')
           const path = 'scripts/acceptance/task-center-desktop.mjs'
           let source = fs.readFileSync(path, 'utf8')
-
-          const oldClick = `async function clickTaskSequence(win, count) {
-  return withTimeout(win.webContents.executeJavaScript(\`(async () => {
-    const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
-    for (let index = 0; index < \${count}; index += 1) {
-      const buttons = [...document.querySelectorAll('.task-center-rail button.session-item')]
-      if (buttons.length < 2) return { completed: index, available: buttons.length }
-      buttons[index % 2].click()
-      await delay(80)
-    }
-    return { completed: \${count}, available: document.querySelectorAll('.task-center-rail button.session-item').length }
-  })()\`), Math.max(5_000, count * 120), \`\${count} 次任务切换\`)
-}`
-
-          const newClick = `async function clickTaskSequence(win, count) {
-  return withTimeout(win.webContents.executeJavaScript(\`(async () => {
-    const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
-    const waitForButtons = async () => {
-      for (let attempt = 0; attempt < 40; attempt += 1) {
-        const buttons = [...document.querySelectorAll('.task-center-rail button.session-item')]
-        if (buttons.length >= 2) return buttons
-        await delay(25)
-      }
-      return [...document.querySelectorAll('.task-center-rail button.session-item')]
-    }
-    for (let index = 0; index < \${count}; index += 1) {
-      const buttons = await waitForButtons()
-      if (buttons.length < 2) return { completed: index, available: buttons.length }
-      buttons[index % 2].click()
-      await delay(80)
-    }
-    const buttons = await waitForButtons()
-    return { completed: \${count}, available: buttons.length }
-  })()\`), Math.max(7_000, count * 130), \`\${count} 次任务切换\`)
-}`
-
-          const oldRun = `async function runSwitchStability(win) {
-  ensureDebugger(win)
-  const initialCount = await withTimeout(win.webContents.executeJavaScript(\`document.querySelectorAll('.task-center-rail button.session-item').length\`), 3_000, '读取任务数量')
-  if (initialCount < 2) return { skipped: true, reason: \`真实任务不足 2 条（当前 \${initialCount} 条）\`, requiredSwitches: 100, ok: true }
-  await clickTaskSequence(win, 4)
-  await delay(750)
-  const before = await collectDomCounters(win, '切换前')
-  const switched = await clickTaskSequence(win, 100)
-  await delay(1500)
-  const after = await collectDomCounters(win, '切换后')
-  const listenerGrowth = after.jsEventListeners - before.jsEventListeners
-  const nodeGrowth = after.nodes - before.nodes
-  const maxNodeGrowth = Math.max(100, Math.ceil(before.nodes * 0.25))
-  const errors = []
-  if (switched.completed !== 100) errors.push(\`仅完成 \${switched.completed}/100 次切换\`)
-  if (listenerGrowth > 20) errors.push(\`GC 后 Listener 增长 \${listenerGrowth}，超过 +20\`)
-  if (nodeGrowth > maxNodeGrowth) errors.push(\`GC 后 DOM Node 增长 \${nodeGrowth}，超过允许 \${maxNodeGrowth}\`)
-  return { skipped: false, requiredSwitches: 100, completedSwitches: switched.completed, before: { nodes: before.nodes, documents: before.documents, jsEventListeners: before.jsEventListeners }, after: { nodes: after.nodes, documents: after.documents, jsEventListeners: after.jsEventListeners }, growth: { nodes: nodeGrowth, jsEventListeners: listenerGrowth }, errors, ok: errors.length === 0 }
-}`
-
-          const newRun = `async function runSwitchStability(win) {
-  ensureDebugger(win)
-  let initialCount = 0
-  for (let attempt = 0; attempt < 80; attempt += 1) {
-    initialCount = await withTimeout(win.webContents.executeJavaScript(\`document.querySelectorAll('.task-center-rail button.session-item').length\`), 2_000, '读取任务数量')
-    if (initialCount >= 2) break
-    await delay(50)
-  }
-  if (initialCount < 2) {
-    return {
-      skipped: false,
-      requiredSwitches: 100,
-      completedSwitches: 0,
-      errors: [\`任务列表在 4 秒内未就绪：需要至少 2 条，实际 \${initialCount} 条\`],
-      ok: false,
-    }
-  }
-  const warmup = await clickTaskSequence(win, 4)
-  if (warmup.completed !== 4) {
-    return {
-      skipped: false,
-      requiredSwitches: 100,
-      completedSwitches: 0,
-      errors: [\`预热切换仅完成 \${warmup.completed}/4；当前任务 \${warmup.available} 条\`],
-      ok: false,
-    }
-  }
-  await delay(750)
-  const before = await collectDomCounters(win, '切换前')
-  const switched = await clickTaskSequence(win, 100)
-  await delay(1500)
-  const after = await collectDomCounters(win, '切换后')
-  const listenerGrowth = after.jsEventListeners - before.jsEventListeners
-  const nodeGrowth = after.nodes - before.nodes
-  const maxNodeGrowth = Math.max(100, Math.ceil(before.nodes * 0.25))
-  const errors = []
-  if (switched.completed !== 100) errors.push(\`仅完成 \${switched.completed}/100 次切换；当前任务 \${switched.available} 条\`)
-  if (listenerGrowth > 20) errors.push(\`GC 后 Listener 增长 \${listenerGrowth}，超过 +20\`)
-  if (nodeGrowth > maxNodeGrowth) errors.push(\`GC 后 DOM Node 增长 \${nodeGrowth}，超过允许 \${maxNodeGrowth}\`)
-  return { skipped: false, requiredSwitches: 100, completedSwitches: switched.completed, before: { nodes: before.nodes, documents: before.documents, jsEventListeners: before.jsEventListeners }, after: { nodes: after.nodes, documents: after.documents, jsEventListeners: after.jsEventListeners }, growth: { nodes: nodeGrowth, jsEventListeners: listenerGrowth }, errors, ok: errors.length === 0 }
-}`
-
-          for (const [from, to, label] of [[oldClick, newClick, 'clickTaskSequence'], [oldRun, newRun, 'runSwitchStability']]) {
-            const count = source.split(from).length - 1
-            if (count !== 1) throw new Error(`${label}: expected 1 occurrence, found ${count}`)
-            source = source.replace(from, to)
-          }
+          const from = "  const initialCount = await withTimeout(win.webContents.executeJavaScript(`document.querySelectorAll('.task-center-rail button.session-item').length`), 3_000, '读取任务数量')\n  if (initialCount < 2) return { skipped: true, reason: `真实任务不足 2 条（当前 ${initialCount} 条）`, requiredSwitches: 100, ok: true }"
+          const to = "  let initialCount = 0\n  for (let attempt = 0; attempt < 80; attempt += 1) {\n    initialCount = await withTimeout(win.webContents.executeJavaScript(`document.querySelectorAll('.task-center-rail button.session-item').length`), 2_000, '读取任务数量')\n    if (initialCount >= 2) break\n    await delay(50)\n  }\n  if (initialCount < 2) return { skipped: false, requiredSwitches: 100, completedSwitches: 0, errors: [`任务列表在 4 秒内未就绪：需要至少 2 条，实际 ${initialCount} 条`], ok: false }"
+          const count = source.split(from).length - 1
+          if (count !== 1) throw new Error(`expected one switch readiness block, found ${count}`)
+          source = source.replace(from, to)
           fs.writeFileSync(path, source)
           NODE
           git diff --check
