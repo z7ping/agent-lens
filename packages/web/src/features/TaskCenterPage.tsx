@@ -106,7 +106,6 @@ function NewTaskPanel({
   onStarted(runtimeSessionId: string): void | Promise<void>
 }) {
   const [selectedKey, setSelectedKey] = useState('')
-  const [prompt, setPrompt] = useState('')
   const [availability, setAvailability] = useState<{ checked: boolean; available: boolean; label: string }>({ checked: false, available: false, label: '正在检测 Pi…' })
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState('')
@@ -138,19 +137,17 @@ function NewTaskPanel({
     : !availability.available
       ? availability.label
       : selected
-        ? '工作目录来自已观测项目'
+        ? '打开后直接在 Pi 页面输入任务'
         : '等待可启动项目'
   const start = async () => {
-    const task = prompt.trim()
-    if (!selected || !task || starting || !availability.available) return
+    if (!selected || starting || !availability.available) return
     setStarting(true)
     setError('')
     try {
       const state = await piLiveApi.start({
         cwd: selected.cwd,
-        name: cleanTitle(task, `${selected.label} · Pi`),
+        name: `${selected.label} · Pi`,
       })
-      await piLiveApi.prompt(state.runtimeSessionId, task)
       await onStarted(state.runtimeSessionId)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
@@ -162,12 +159,12 @@ function NewTaskPanel({
   return <div className="task-center-new">
     <section className="task-center-new-card">
       <div className="task-center-new-kicker">新建任务</div>
-      <h1>让 Pi 开始一个任务</h1>
+      <h1>打开 Pi</h1>
 
       <div className="task-center-new-fields">
         <label>
           <span>项目</span>
-          <select value={selectedKey} onChange={event => setSelectedKey(event.target.value)} disabled={!options.length}>
+          <select value={selectedKey} onChange={event => setSelectedKey(event.target.value)} disabled={!options.length} autoFocus>
             {!options.length && <option value="">暂无可启动项目</option>}
             {options.map(option => <option key={option.key} value={option.key}>{option.label}</option>)}
           </select>
@@ -178,16 +175,11 @@ function NewTaskPanel({
         </label>
       </div>
 
-      <label className="task-center-prompt">
-        <span>任务</span>
-        <textarea value={prompt} onChange={event => setPrompt(event.target.value)} placeholder="描述要完成的任务，例如：检查任务中心长会话性能，并只处理已确认范围。" autoFocus/>
-      </label>
-
       <div className="task-center-new-status">{composerStateLabel}</div>
       {error && <div className="pi-live-error" role="alert">{error}</div>}
-      {!options.length && <div className="task-center-project-hint">先让 AgentLens 采集到一次带工作目录的项目会话，再从这里新建任务；本页面不会要求你手填 cwd。</div>}
+      {!options.length && <div className="task-center-project-hint">先让 AgentLens 采集到一次带工作目录的项目会话，再从这里打开 Pi；本页面不会要求你手填 cwd。</div>}
       <div className="task-center-new-actions">
-        <button className="btn primary" disabled={!selected || !prompt.trim() || starting || !availability.available} onClick={() => void start()}>{starting ? '正在启动…' : '开始任务'}</button>
+        <button className="btn primary" disabled={!selected || starting || !availability.available} onClick={() => void start()}>{starting ? '正在打开 Pi…' : '打开 Pi'}</button>
       </div>
     </section>
   </div>
