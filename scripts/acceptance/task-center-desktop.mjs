@@ -248,6 +248,7 @@ async function inspect(win, viewport, theme) {
   if (p.userMessageFont > 0 && p.userMessageFont < 14) errors.push(`用户消息字号过小：${p.userMessageFont}px`)
   if (p.agentMessageFont > 0 && p.agentMessageFont < 14) errors.push(`Agent 消息字号过小：${p.agentMessageFont}px`)
   if (p.thinkingFont > 0 && p.thinkingFont < 13) errors.push(`Thinking 正文字号过小：${p.thinkingFont}px`)
+  if (value.thinkingCount < 1) errors.push('Codex 可见 Thinking 未进入 Task Surface')
   if (p.toolRow && value.main && p.toolRow.right > value.main.right + 2) errors.push('Tool Row 超出详情主区')
   if (p.toolRowScrollWidth > p.toolRowClientWidth + 2) errors.push(`Tool Row 内部横向溢出：${p.toolRowScrollWidth} > ${p.toolRowClientWidth}`)
   if (p.liveOutputCount > 0 && !['auto', 'scroll'].includes(p.liveOutputOverflowY)) errors.push(`Pi Running 输出不是局部滚动：overflow-y=${p.liveOutputOverflowY}`)
