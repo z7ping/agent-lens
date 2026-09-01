@@ -219,7 +219,7 @@ export function PiLiveRunningTaskRound({
     className="pi-live-current-round"
     summaryMeta={pendingMessageCount > 0 ? <span>{pendingMessageCount} 条排队</span> : undefined}
   >
-    {thinkingText && <TaskThinking model={thinking} defaultExpanded><ThinkingMarkdown text={thinkingText}/></TaskThinking>}
+    {thinkingText && <TaskThinking model={thinking} defaultExpanded><div className="thinking-stream-text">{thinkingText}</div></TaskThinking>}
     {toolModels.length > 0 && <TaskToolGroup
       model={toolGroup('pi-live-current-tools', toolModels)}
       renderDetails={tool => <ToolOutput tool={tool}/>}
