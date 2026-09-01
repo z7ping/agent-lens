@@ -330,8 +330,13 @@ async function collectDomCounters(win, label) {
 
 async function runSwitchStability(win) {
   ensureDebugger(win)
-  const initialCount = await withTimeout(win.webContents.executeJavaScript(`document.querySelectorAll('.task-center-rail button.session-item').length`), 3_000, '读取任务数量')
-  if (initialCount < 2) return { skipped: true, reason: `真实任务不足 2 条（当前 ${initialCount} 条）`, requiredSwitches: 100, ok: true }
+  let initialCount = 0
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    initialCount = await withTimeout(win.webContents.executeJavaScript(`document.querySelectorAll('.task-center-rail button.session-item').length`), 2_000, '读取任务数量')
+    if (initialCount >= 2) break
+    await delay(50)
+  }
+  if (initialCount < 2) return { skipped: false, requiredSwitches: 100, completedSwitches: 0, errors: [`任务列表在 4 秒内未就绪：需要至少 2 条，实际 ${initialCount} 条`], ok: false }
   await clickTaskSequence(win, 4)
   await delay(750)
   const before = await collectDomCounters(win, '切换前')
