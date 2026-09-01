@@ -28,6 +28,7 @@ import './task-center.css'
 import './task-execution.css'
 import './hub-review.css'
 import './desktop-responsive.css'
+import './task-detail-prototype.css'
 import './agent-insights-responsive.css'
 import './backup-responsive.css'
 
