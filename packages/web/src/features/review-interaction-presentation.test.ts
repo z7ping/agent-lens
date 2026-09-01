@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { ReviewMessageNodeDto, ReviewToolNodeDto } from '@agent-lens/protocol'
+import type { ReviewEventNodeDto, ReviewMessageNodeDto, ReviewToolNodeDto } from '@agent-lens/protocol'
 import { projectReviewInteractionPresentation } from './review-interaction-presentation'
 
-function reasoning(id: string, nativeEventId = id): ReviewMessageNodeDto {
+function reasoning(id: string, nativeEventId = id, sourceRecordId?: string): ReviewMessageNodeDto {
   return {
-    type: 'message', id, role: 'reasoning', at: '2026-09-01T00:00:00.000Z', sourceId: 'codex', text: 'thinking', payload: {}, evidence: [], observationIds: [`obs:${id}`],
-    nativeEventId, capturedAt: '2026-09-01T00:00:00.000Z',
+    type: 'message', id, role: 'reasoning', at: '2026-09-01T00:00:00.000Z', sourceId: 'codex', text: 'thinking', payload: {},
+    evidence: sourceRecordId ? [{ id: `ev:${id}`, captureMethod: 'native-log', derivation: 'reported', confidence: 'high', capturedAt: '2026-09-01T00:00:00.000Z', sourceRecordId }] : [],
+    observationIds: [`obs:${id}`], nativeEventId, capturedAt: '2026-09-01T00:00:00.000Z',
   }
 }
 
@@ -17,6 +18,14 @@ function tool(id: string, parent?: { native?: string; observation?: string }): R
     ...(parent?.native ? { nativeParentEventId: parent.native } : {}),
     ...(parent?.observation ? { parentObservationId: parent.observation } : {}),
   }
+}
+
+function unknownEvent(id: string, sourceRecordId: string): ReviewEventNodeDto {
+  return {
+    type: 'event', id, at: '2026-09-01T00:00:00.000Z', sourceId: 'codex', label: '未知事件', category: 'unknown', payload: {},
+    evidence: [{ id: `ev:${id}`, captureMethod: 'native-log', derivation: 'reported', confidence: 'high', capturedAt: '2026-09-01T00:00:00.000Z', sourceRecordId }],
+    observationIds: [`obs:${id}`], capturedAt: '2026-09-01T00:00:00.000Z', kind: 'unknown',
+  } as ReviewEventNodeDto
 }
 
 test('Tool 只有显式指向 reasoning 时才进入 Thinking 子级', () => {
@@ -57,4 +66,20 @@ test('跨 source 或多重匹配有歧义时保持 Tool 平级', () => {
   const ambiguous = tool('tool-ambiguous', { native: 'same-parent' })
   const entries = projectReviewInteractionPresentation([left, right, ambiguous])
   assert.equal(entries.at(-1)?.type, 'tool-group')
+})
+
+test('parser replay 后同一 SourceRecord 的旧 unknown 不再与 Thinking 重复展示', () => {
+  const sourceRecordId = 'record:reasoning-1'
+  const legacy = unknownEvent('legacy-unknown', sourceRecordId)
+  const think = reasoning('think-replayed', 'native-think', sourceRecordId)
+  const entries = projectReviewInteractionPresentation([legacy, think])
+
+  assert.equal(entries.length, 1)
+  assert.equal(entries[0]?.type, 'reasoning')
+})
+
+test('无对应 reasoning 的 unknown 仍保留在全部事件视图', () => {
+  const entries = projectReviewInteractionPresentation([unknownEvent('unknown-real', 'record:other')])
+  assert.equal(entries.length, 1)
+  assert.equal(entries[0]?.type, 'raw-event-group')
 })
