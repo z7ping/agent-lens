@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { SourceRecord } from '@agent-lens/core'
-import { normalizeCodexRecordWithVisibleReasoning } from './normalize-visible-reasoning'
+import { normalizeCodexRecord } from './normalize'
 
 const ctx = {
   host: { id: 'host', name: 'host', platform: 'linux', arch: 'x64', createdAt: '2026-01-01T00:00:00.000Z', lastSeenAt: '2026-01-01T00:00:00.000Z' },
@@ -19,12 +19,12 @@ function record(entry: unknown): SourceRecord {
     capturedAt: '2026-09-01T00:00:00.000Z',
     locator: { kind: 'file', path: '/safe/rollout.jsonl', offset: 42 },
     payload: { entry, session: { nativeSessionId: 'thread-visible', cwd: '/safe/project' } },
-    parserVersion: '6',
+    parserVersion: '7',
   }
 }
 
-test('event_msg agent_reasoning is promoted to canonical message.reasoning', async () => {
-  const output = await normalizeCodexRecordWithVisibleReasoning(record({
+test('event_msg agent_reasoning is normalized to canonical message.reasoning', async () => {
+  const output = await normalizeCodexRecord(record({
     type: 'event_msg',
     payload: {
       type: 'agent_reasoning',
@@ -41,7 +41,7 @@ test('event_msg agent_reasoning is promoted to canonical message.reasoning', asy
 })
 
 test('reasoning_summary supports structured summary blocks', async () => {
-  const output = await normalizeCodexRecordWithVisibleReasoning(record({
+  const output = await normalizeCodexRecord(record({
     type: 'event_msg',
     payload: {
       type: 'reasoning_summary',
@@ -58,7 +58,7 @@ test('reasoning_summary supports structured summary blocks', async () => {
 })
 
 test('reasoning token statistics are not promoted to Thinking text', async () => {
-  const output = await normalizeCodexRecordWithVisibleReasoning(record({
+  const output = await normalizeCodexRecord(record({
     type: 'event_msg',
     payload: {
       type: 'token_count',
@@ -70,7 +70,7 @@ test('reasoning token statistics are not promoted to Thinking text', async () =>
 })
 
 test('non-reasoning event_msg keeps original normalization', async () => {
-  const output = await normalizeCodexRecordWithVisibleReasoning(record({
+  const output = await normalizeCodexRecord(record({
     type: 'event_msg',
     payload: { type: 'turn_started', turn_id: 'turn-1' },
   }), ctx)
