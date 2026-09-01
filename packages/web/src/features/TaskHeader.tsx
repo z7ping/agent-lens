@@ -20,13 +20,14 @@ export interface TaskHeaderProps {
 }
 
 export function TaskHeader({ marker, agent, context, status, title, submeta, metrics = [], actions, className = '' }: TaskHeaderProps) {
+  const resolvedStatus = status ?? '已完成'
   return <header className={`task-header ${className}`.trim()}>
     <div className="task-header-copy">
       <div className="task-header-meta">
         {marker && <span className="task-header-marker">{marker}</span>}
         <b>{agent}</b>
-        {context && <span>{context}</span>}
-        {status && <span className="task-header-status">{status}</span>}
+        {context && <span className="task-header-context">{context}</span>}
+        <span className="task-header-status" data-tone={status === undefined ? 'success' : ''}>{resolvedStatus}</span>
       </div>
       <h1 className="task-header-title">{title}</h1>
       {submeta && <div className="task-header-submeta">{submeta}</div>}
