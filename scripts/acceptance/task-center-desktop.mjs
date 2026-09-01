@@ -22,22 +22,15 @@ const report = {
   ok: true,
 }
 
-function fail(message) {
-  throw new Error(message)
-}
-
-function delay(ms) {
-  return new Promise(resolveDelay => setTimeout(resolveDelay, ms))
-}
+function fail(message) { throw new Error(message) }
+function delay(ms) { return new Promise(resolveDelay => setTimeout(resolveDelay, ms)) }
 
 async function withTimeout(promise, timeoutMs, label) {
   let timer
   try {
     return await Promise.race([
       promise,
-      new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new Error(`${label} 超过 ${Math.round(timeoutMs / 1000)} 秒`)), timeoutMs)
-      }),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`${label} 超过 ${Math.round(timeoutMs / 1000)} 秒`)), timeoutMs) }),
     ])
   } finally {
     if (timer) clearTimeout(timer)
@@ -45,46 +38,34 @@ async function withTimeout(promise, timeoutMs, label) {
 }
 
 function webContentsAlive(win) {
-  try {
-    return Boolean(win && !win.isDestroyed() && win.webContents && !win.webContents.isDestroyed())
-  } catch {
-    return false
-  }
+  try { return Boolean(win && !win.isDestroyed() && win.webContents && !win.webContents.isDestroyed()) } catch { return false }
 }
-
 function ensureDebugger(win) {
   if (!webContentsAlive(win)) fail('Electron WebContents 已销毁，无法继续桌面验收')
   if (!win.webContents.debugger.isAttached()) win.webContents.debugger.attach('1.3')
 }
+function safeDetachDebugger(win) {
+  try { if (webContentsAlive(win) && win.webContents.debugger.isAttached()) win.webContents.debugger.detach() } catch { /* teardown race */ }
+}
 
 async function applyViewport(win, viewport) {
   ensureDebugger(win)
-  await withTimeout(
-    win.webContents.debugger.sendCommand('Emulation.setDeviceMetricsOverride', {
-      width: viewport.width,
-      height: viewport.height,
-      deviceScaleFactor: 1,
-      mobile: false,
-      screenWidth: viewport.width,
-      screenHeight: viewport.height,
-      positionX: 0,
-      positionY: 0,
-      dontSetVisibleSize: false,
-    }),
-    3_000,
-    `设置 ${viewport.width}×${viewport.height} CSS viewport`,
-  )
-  await withTimeout(
-    win.webContents.debugger.sendCommand('Emulation.setVisibleSize', {
-      width: viewport.width,
-      height: viewport.height,
-    }),
-    3_000,
-    `设置 ${viewport.width}×${viewport.height} 可见区域`,
-  ).catch(() => undefined)
+  await withTimeout(win.webContents.debugger.sendCommand('Emulation.setDeviceMetricsOverride', {
+    width: viewport.width,
+    height: viewport.height,
+    deviceScaleFactor: 1,
+    mobile: false,
+    screenWidth: viewport.width,
+    screenHeight: viewport.height,
+    positionX: 0,
+    positionY: 0,
+    dontSetVisibleSize: false,
+  }), 3_000, `设置 ${viewport.width}×${viewport.height} CSS viewport`)
+  await withTimeout(win.webContents.debugger.sendCommand('Emulation.setVisibleSize', {
+    width: viewport.width,
+    height: viewport.height,
+  }), 3_000, `设置 ${viewport.width}×${viewport.height} 可见区域`).catch(() => undefined)
 
-  // Windows hosted runner 的隐藏 BrowserWindow 会让 dvh / media query 比 innerWidth/innerHeight
-  // 晚一拍稳定。像素验收必须等 Task Center 外壳也收敛到目标 viewport，不能截到过渡帧。
   const expectedRail = viewport.width >= 1200 ? 316 : viewport.width >= 992 ? 286 : viewport.width >= 768 ? 252 : viewport.width
   for (let attempt = 0; attempt < 30; attempt += 1) {
     const geometry = await withTimeout(win.webContents.executeJavaScript(`(() => {
@@ -92,19 +73,12 @@ async function applyViewport(win, viewport) {
       const rail = document.querySelector('.task-center-rail')
       const pageRect = page?.getBoundingClientRect()
       const railRect = rail?.getBoundingClientRect()
-      return {
-        width: window.innerWidth,
-        height: window.innerHeight,
-        pageBottom: pageRect?.bottom || 0,
-        railWidth: railRect?.width || 0,
-      }
+      return { width: window.innerWidth, height: window.innerHeight, pageBottom: pageRect?.bottom || 0, railWidth: railRect?.width || 0 }
     })()`), 2_000, '等待 viewport 几何稳定')
-    if (
-      Math.abs(geometry.width - viewport.width) <= 1
+    if (Math.abs(geometry.width - viewport.width) <= 1
       && Math.abs(geometry.height - viewport.height) <= 1
       && Math.abs(geometry.pageBottom - viewport.height) <= 2
-      && Math.abs(geometry.railWidth - expectedRail) <= 2
-    ) return
+      && Math.abs(geometry.railWidth - expectedRail) <= 2) return
     await delay(50)
   }
   fail(`${viewport.width}×${viewport.height} viewport 几何未稳定到原型基线`)
@@ -112,25 +86,13 @@ async function applyViewport(win, viewport) {
 
 async function captureViewport(win, viewport, theme) {
   ensureDebugger(win)
-  const result = await withTimeout(
-    win.webContents.debugger.sendCommand('Page.captureScreenshot', {
-      format: 'png',
-      fromSurface: true,
-      captureBeyondViewport: false,
-    }),
-    8_000,
-    `${viewport.width}×${viewport.height} ${theme} 截图`,
-  )
+  const result = await withTimeout(win.webContents.debugger.sendCommand('Page.captureScreenshot', {
+    format: 'png',
+    fromSurface: true,
+    captureBeyondViewport: false,
+  }), 8_000, `${viewport.width}×${viewport.height} ${theme} 截图`)
   if (!result?.data) fail(`${viewport.width}×${viewport.height} ${theme} 截图数据为空`)
   return Buffer.from(result.data, 'base64')
-}
-
-function safeDetachDebugger(win) {
-  try {
-    if (webContentsAlive(win) && win.webContents.debugger.isAttached()) win.webContents.debugger.detach()
-  } catch {
-    // Window teardown may race with Electron renderer destruction on CI; cleanup must be idempotent.
-  }
 }
 
 async function persistReport() {
@@ -143,11 +105,7 @@ async function persistReport() {
 async function waitForTaskCenter(win) {
   const deadline = Date.now() + 20_000
   while (Date.now() < deadline) {
-    const ready = await withTimeout(
-      win.webContents.executeJavaScript(`Boolean(document.querySelector('.task-center-page'))`),
-      2_000,
-      '查询 .task-center-page',
-    ).catch(() => false)
+    const ready = await withTimeout(win.webContents.executeJavaScript(`Boolean(document.querySelector('.task-center-page'))`), 2_000, '查询 .task-center-page').catch(() => false)
     if (ready) return
     await delay(200)
   }
@@ -170,11 +128,7 @@ async function loadTaskCenter(win, label) {
 }
 
 async function inspect(win, viewport, theme) {
-  await withTimeout(
-    win.webContents.executeJavaScript(`document.documentElement.dataset.theme = ${JSON.stringify(theme)}`),
-    3_000,
-    `切换 ${theme} 主题`,
-  )
+  await withTimeout(win.webContents.executeJavaScript(`document.documentElement.dataset.theme = ${JSON.stringify(theme)}`), 3_000, `切换 ${theme} 主题`)
   await delay(80)
 
   const value = await withTimeout(win.webContents.executeJavaScript(`(() => {
@@ -188,7 +142,7 @@ async function inspect(win, viewport, theme) {
     const rail = pick('.task-center-rail')
     const railScroll = pick('.task-center-scroll')
     const main = pick('.task-center-main')
-    const detailScroll = pick('.review-reader-pane') || pick('.pi-live-document') || pick('.pi-live-page') || pick('.task-center-new')
+    const detailScroll = pick('.review-reader-pane') || pick('.pi-live-reader') || pick('.task-center-new')
     const pageStyle = page ? getComputedStyle(page) : null
     const railStyle = rail ? getComputedStyle(rail) : null
     const railScrollStyle = railScroll ? getComputedStyle(railScroll) : null
@@ -197,16 +151,16 @@ async function inspect(win, viewport, theme) {
     const root = document.scrollingElement
     const toolGroups = all('[data-task-tool-group="true"]')
     const toolFacts = all('[data-tool-fact="true"]')
-    const toolRows = all('[data-tool-fact="true"] .tool-row')
+    const toolRows = all('[data-tool-fact="true"] .task-tool-row')
     const firstTool = toolRows[0] || null
-    const firstToolAction = firstTool?.querySelector('.tool-action') || null
-    const firstToolTarget = firstTool?.querySelector('.tool-target') || null
-    const firstToolStatus = firstTool?.querySelector('.tool-status') || null
+    const firstToolAction = firstTool?.querySelector('.task-tool-action') || null
+    const firstToolTarget = firstTool?.querySelector('.task-tool-target') || null
+    const firstToolStatus = firstTool?.querySelector('.task-tool-status') || null
     const firstUserBubble = pick('[data-task-message-role="user"] .task-message-bubble')
     const firstAgentBubble = pick('[data-task-message-role="assistant"] .task-message-bubble')
-    const firstThinkingContent = pick('.thinking-content')
-    const liveOutputs = all('.tool-live-output')
-    const errorOutputDetails = all('.task-tool-row-shell:has(.tool-row[data-status="error"]) .tool-output-details')
+    const firstThinkingContent = pick('.task-thinking-content')
+    const liveOutputs = all('.task-tool-live-output pre')
+    const errorOutputDetails = all('.task-tool-row-shell:has(.task-tool-row[data-status="error"]) .task-tool-output-details')
     const toolStyle = firstTool ? getComputedStyle(firstTool) : null
     const liveStyle = liveOutputs[0] ? getComputedStyle(liveOutputs[0]) : null
     return {
@@ -216,12 +170,10 @@ async function inspect(win, viewport, theme) {
       documentScrollWidth: root?.scrollWidth || 0,
       documentScrollHeight: root?.scrollHeight || 0,
       page: rect(page), toolbar: rect(toolbar), rail: rect(rail), railScroll: rect(railScroll), main: rect(main), detailScroll: rect(detailScroll),
-      overflow: {
-        page: pageStyle?.overflow || '', rail: railStyle?.overflow || '', railY: railScrollStyle?.overflowY || '', main: mainStyle?.overflow || '', detailY: detailStyle?.overflowY || '',
-      },
+      overflow: { page: pageStyle?.overflow || '', rail: railStyle?.overflow || '', railY: railScrollStyle?.overflowY || '', main: mainStyle?.overflow || '', detailY: detailStyle?.overflowY || '' },
       messageCount: all('.task-message-row').length,
       roundCount: all('[data-task-round-state]').length,
-      thinkingCount: all('.thinking-block').length,
+      thinkingCount: all('.task-thinking').length,
       toolCount: toolRows.length,
       taskButtonCount: all('.task-center-rail button.session-item').length,
       presentation: {
@@ -269,11 +221,11 @@ async function inspect(win, viewport, theme) {
   if (value.detailScroll && !['auto', 'scroll'].includes(value.overflow.detailY)) errors.push(`右侧详情不是独立滚动根：overflow-y=${value.overflow.detailY}`)
 
   const p = value.presentation
-  if (p.toolGroupCount > 0 && p.closedToolGroupCount > 0) errors.push(`初始 Tool Group 有 ${p.closedToolGroupCount}/${p.toolGroupCount} 个未按原型默认展开`)
+  if (p.toolGroupCount > 0 && p.closedToolGroupCount > 0) errors.push(`初始 Tool Group 有 ${p.closedToolGroupCount}/${p.toolGroupCount} 个被额外折叠`)
   if (p.toolFactCount > 0 && p.hiddenToolFactCount > 0) errors.push(`初始状态存在 ${p.hiddenToolFactCount}/${p.toolFactCount} 条 Tool Call 事实不可见`)
   if (p.toolGridColumnCount > 0 && viewport.width >= 1200 && p.toolGridColumnCount !== 4) errors.push(`Tool Row 桌面主基线不是四列：${p.toolGridColumns}`)
   if (p.toolFont > 0 && p.toolFont < 13) errors.push(`Tool Call 主体字号过小：${p.toolFont}px`)
-  if (p.toolActionFont > 0 && p.toolActionFont < 12) errors.push(`Tool 操作名称字号偏离高保真原型：${p.toolActionFont}px`)
+  if (p.toolActionFont > 0 && p.toolActionFont < 13) errors.push(`Tool 操作名称字号过小：${p.toolActionFont}px`)
   if (p.toolTargetFont > 0 && p.toolTargetFont < 13) errors.push(`Tool 目标字号过小：${p.toolTargetFont}px`)
   if (p.toolStatusFont > 0 && p.toolStatusFont < 12) errors.push(`Tool 状态字号过小：${p.toolStatusFont}px`)
   if (p.userMessageFont > 0 && p.userMessageFont < 14) errors.push(`用户消息字号过小：${p.userMessageFont}px`)
@@ -282,16 +234,17 @@ async function inspect(win, viewport, theme) {
   if (p.toolRow && value.main && p.toolRow.right > value.main.right + 2) errors.push('Tool Row 超出详情主区')
   if (p.toolRowScrollWidth > p.toolRowClientWidth + 2) errors.push(`Tool Row 内部横向溢出：${p.toolRowScrollWidth} > ${p.toolRowClientWidth}`)
   if (p.liveOutputCount > 0 && !['auto', 'scroll'].includes(p.liveOutputOverflowY)) errors.push(`Pi Running 输出不是局部滚动：overflow-y=${p.liveOutputOverflowY}`)
+  const liveMax = Number.parseFloat(p.liveOutputMaxHeight)
+  if (p.liveOutputCount > 0 && Number.isFinite(liveMax) && liveMax > 200) errors.push(`Pi Running 输出局部高度过高：${p.liveOutputMaxHeight}`)
   if (p.errorOutputCount > 0 && p.closedErrorOutputCount > 0) errors.push(`错误 Tool 输出有 ${p.closedErrorOutputCount} 个未默认展开`)
-
   return { viewport, theme, value, errors, ok: errors.length === 0 }
 }
 
 async function runInspectorReturn(win) {
   const setup = await withTimeout(win.webContents.executeJavaScript(`(async () => {
     const pane = document.querySelector('.review-reader-pane')
-    const trigger = document.querySelector('[data-tool-fact="true"] .tool-row')
-    if (!(pane instanceof HTMLElement) || !(trigger instanceof HTMLElement)) return { skipped: true, reason: '缺少 Review Reader 或 Tool Row' }
+    const trigger = document.querySelector('[data-tool-fact="true"] button.task-tool-row')
+    if (!(pane instanceof HTMLElement) || !(trigger instanceof HTMLElement)) return { skipped: true, reason: '缺少 Review Reader 或可点击 Tool Row' }
     trigger.dataset.acceptanceInspectorTrigger = 'true'
     trigger.scrollIntoView({ block: 'center' })
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
@@ -320,11 +273,7 @@ async function runInspectorReturn(win) {
   const after = await withTimeout(win.webContents.executeJavaScript(`(() => {
     const pane = document.querySelector('.review-reader-pane')
     const trigger = document.querySelector('[data-acceptance-inspector-trigger="true"]')
-    const value = {
-      closed: !document.querySelector('.inspector-panel[role="dialog"]'),
-      afterScrollTop: pane instanceof HTMLElement ? pane.scrollTop : -1,
-      focusReturned: trigger instanceof HTMLElement && document.activeElement === trigger,
-    }
+    const value = { closed: !document.querySelector('.inspector-panel[role="dialog"]'), afterScrollTop: pane instanceof HTMLElement ? pane.scrollTop : -1, focusReturned: trigger instanceof HTMLElement && document.activeElement === trigger }
     if (trigger instanceof HTMLElement) delete trigger.dataset.acceptanceInspectorTrigger
     return value
   })()`), 3_000, '核对 Tool Inspector 返回状态')
@@ -345,8 +294,7 @@ async function clickTaskSequence(win, count) {
     for (let index = 0; index < ${count}; index += 1) {
       const buttons = [...document.querySelectorAll('.task-center-rail button.session-item')]
       if (buttons.length < 2) return { completed: index, available: buttons.length }
-      const target = buttons[index % 2]
-      target.click()
+      buttons[index % 2].click()
       await delay(80)
     }
     return { completed: ${count}, available: document.querySelectorAll('.task-center-rail button.session-item').length }
@@ -364,15 +312,8 @@ async function collectDomCounters(win, label) {
 
 async function runSwitchStability(win) {
   ensureDebugger(win)
-  const initialCount = await withTimeout(
-    win.webContents.executeJavaScript(`document.querySelectorAll('.task-center-rail button.session-item').length`),
-    3_000,
-    '读取任务数量',
-  )
-  if (initialCount < 2) {
-    return { skipped: true, reason: `真实任务不足 2 条（当前 ${initialCount} 条）`, requiredSwitches: 100, ok: true }
-  }
-
+  const initialCount = await withTimeout(win.webContents.executeJavaScript(`document.querySelectorAll('.task-center-rail button.session-item').length`), 3_000, '读取任务数量')
+  if (initialCount < 2) return { skipped: true, reason: `真实任务不足 2 条（当前 ${initialCount} 条）`, requiredSwitches: 100, ok: true }
   await clickTaskSequence(win, 4)
   await delay(750)
   const before = await collectDomCounters(win, '切换前')
@@ -386,26 +327,11 @@ async function runSwitchStability(win) {
   if (switched.completed !== 100) errors.push(`仅完成 ${switched.completed}/100 次切换`)
   if (listenerGrowth > 20) errors.push(`GC 后 Listener 增长 ${listenerGrowth}，超过 +20`)
   if (nodeGrowth > maxNodeGrowth) errors.push(`GC 后 DOM Node 增长 ${nodeGrowth}，超过允许 ${maxNodeGrowth}`)
-  return {
-    skipped: false,
-    requiredSwitches: 100,
-    completedSwitches: switched.completed,
-    before: { nodes: before.nodes, documents: before.documents, jsEventListeners: before.jsEventListeners },
-    after: { nodes: after.nodes, documents: after.documents, jsEventListeners: after.jsEventListeners },
-    growth: { nodes: nodeGrowth, jsEventListeners: listenerGrowth },
-    errors,
-    ok: errors.length === 0,
-  }
+  return { skipped: false, requiredSwitches: 100, completedSwitches: switched.completed, before: { nodes: before.nodes, documents: before.documents, jsEventListeners: before.jsEventListeners }, after: { nodes: after.nodes, documents: after.documents, jsEventListeners: after.jsEventListeners }, growth: { nodes: nodeGrowth, jsEventListeners: listenerGrowth }, errors, ok: errors.length === 0 }
 }
 
 function createAcceptanceWindow() {
-  return new BrowserWindow({
-    width: 1024,
-    height: 700,
-    show: false,
-    backgroundColor: '#ffffff',
-    webPreferences: { sandbox: true, contextIsolation: true },
-  })
+  return new BrowserWindow({ width: 1024, height: 700, show: false, backgroundColor: '#ffffff', webPreferences: { sandbox: true, contextIsolation: true } })
 }
 
 app.commandLine.appendSwitch('disable-gpu')
@@ -413,29 +339,20 @@ await app.whenReady()
 await mkdir(outputDir, { recursive: true })
 await persistReport()
 
-let hardTimeout
-hardTimeout = setTimeout(async () => {
+const hardTimeout = setTimeout(async () => {
   report.ok = false
-  report.error = report.error || '桌面验收超过 70 秒硬超时；报告已提前落盘以保留诊断信息'
+  report.error = report.error || '桌面验收超过 75 秒硬超时；报告已提前落盘以保留诊断信息'
   report.finishedAt = new Date().toISOString()
-  try {
-    await persistReport()
-  } finally {
-    app.exit(1)
-  }
-}, 70_000)
+  try { await persistReport() } finally { app.exit(1) }
+}, 75_000)
 
 try {
   for (const viewport of viewports) {
     const win = createAcceptanceWindow()
     const diagnostic = { viewport, phase: 'created', consoleErrors: [], rendererGone: null }
     report.diagnostics.push(diagnostic)
-    win.webContents.on('console-message', (_event, level, message) => {
-      if (level >= 2) diagnostic.consoleErrors.push(String(message).slice(0, 500))
-    })
-    win.webContents.on('render-process-gone', (_event, details) => {
-      diagnostic.rendererGone = { reason: details.reason, exitCode: details.exitCode }
-    })
+    win.webContents.on('console-message', (_event, level, message) => { if (level >= 2) diagnostic.consoleErrors.push(String(message).slice(0, 500)) })
+    win.webContents.on('render-process-gone', (_event, details) => { diagnostic.rendererGone = { reason: details.reason, exitCode: details.exitCode } })
     try {
       diagnostic.phase = 'loading'
       await loadTaskCenter(win, `${viewport.width}×${viewport.height}`)
@@ -443,7 +360,6 @@ try {
       await applyViewport(win, viewport)
       diagnostic.phase = 'ready'
       await persistReport()
-
       for (const theme of themes) {
         diagnostic.phase = `inspect-${theme}`
         const result = await inspect(win, viewport, theme)
@@ -454,23 +370,18 @@ try {
         await writeFile(resolve(outputDir, `${prefix}.json`), `${JSON.stringify(result, null, 2)}\n`)
         report.cases.push(result)
         if (!result.ok) report.ok = false
-        diagnostic.phase = `captured-${theme}`
         await persistReport()
         console.log(`${result.ok ? '✓' : '✗'} ${viewport.width}×${viewport.height} ${theme} · rail=${Math.round(result.value.rail?.width || 0)}px · rounds=${result.value.roundCount} · tools=${result.value.toolCount}`)
         for (const error of result.errors) console.error(`  - ${error}`)
       }
-
       if (viewport.width === 1280) {
         diagnostic.phase = 'inspector-return'
         report.inspectorReturn = await withTimeout(runInspectorReturn(win), 10_000, 'Inspector 返回位置与焦点验收')
         if (!report.inspectorReturn.ok) report.ok = false
         await persistReport()
-        console.log(`${report.inspectorReturn.ok ? '✓' : '✗'} Inspector 返回 · scroll ${report.inspectorReturn.beforeScrollTop ?? '-'} → ${report.inspectorReturn.afterScrollTop ?? '-'} · focus=${report.inspectorReturn.focusReturned ? 'returned' : 'lost'}`)
         for (const error of report.inspectorReturn.errors ?? []) console.error(`  - ${error}`)
       }
-
       diagnostic.phase = 'done'
-      await persistReport()
     } finally {
       safeDetachDebugger(win)
       if (!win.isDestroyed()) win.destroy()
@@ -479,25 +390,14 @@ try {
   }
 
   const switchWin = createAcceptanceWindow()
-  const switchDiagnostic = { viewport: viewports[0], phase: 'switch-created', consoleErrors: [], rendererGone: null }
-  report.diagnostics.push(switchDiagnostic)
-  switchWin.webContents.on('console-message', (_event, level, message) => {
-    if (level >= 2) switchDiagnostic.consoleErrors.push(String(message).slice(0, 500))
-  })
-  switchWin.webContents.on('render-process-gone', (_event, details) => {
-    switchDiagnostic.rendererGone = { reason: details.reason, exitCode: details.exitCode }
-  })
   try {
-    switchDiagnostic.phase = 'switch-loading'
     await loadTaskCenter(switchWin, '100 次任务切换')
     await applyViewport(switchWin, viewports[0])
-    switchDiagnostic.phase = 'switch-stability'
     report.switchStability = await withTimeout(runSwitchStability(switchWin), 25_000, '100 次任务切换稳定性')
     if (!report.switchStability.ok) report.ok = false
     await persistReport()
     if (report.switchStability.skipped) console.log(`• 100 次任务切换验收 skipped：${report.switchStability.reason}`)
     else console.log(`${report.switchStability.ok ? '✓' : '✗'} 100 次任务切换（GC 后）· listeners ${report.switchStability.growth.jsEventListeners >= 0 ? '+' : ''}${report.switchStability.growth.jsEventListeners} · nodes ${report.switchStability.growth.nodes >= 0 ? '+' : ''}${report.switchStability.growth.nodes}`)
-    switchDiagnostic.phase = 'switch-done'
   } finally {
     safeDetachDebugger(switchWin)
     if (!switchWin.isDestroyed()) switchWin.destroy()
@@ -507,7 +407,7 @@ try {
   report.error = error instanceof Error ? error.stack || error.message : String(error)
   console.error(report.error)
 } finally {
-  if (hardTimeout) clearTimeout(hardTimeout)
+  clearTimeout(hardTimeout)
   report.finishedAt = new Date().toISOString()
   await persistReport()
   app.exit(report.ok ? 0 : 1)
