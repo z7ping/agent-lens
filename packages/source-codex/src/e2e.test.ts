@@ -70,9 +70,9 @@ test('Codex fixture enters canonical facts and remains idempotent', async () => 
       abortSignal: new AbortController().signal,
     })
 
-    // 8 条原生 rollout 记录 + 1 条稳定的 session_start 元数据。
-    assert.equal(first.records, 9)
-    assert.equal(first.observationsCreated, 9)
+    // 9 条原生 rollout 记录 + 1 条稳定的 session_start 元数据。
+    assert.equal(first.records, 10)
+    assert.equal(first.observationsCreated, 10)
     assert.equal(first.observationsMerged, 0)
     assert.equal(first.observationsUnchanged, 0)
 
@@ -80,16 +80,20 @@ test('Codex fixture enters canonical facts and remains idempotent', async () => 
       installationId: first.installationId,
       limit: 100,
     })
-    assert.equal(facts.length, 9)
+    assert.equal(facts.length, 10)
     assert.equal(facts.filter(item => item.kind === 'unknown').length, 2)
+    assert.equal(facts.filter(item => item.kind === 'message.reasoning').length, 1)
     assert.equal(facts.filter(item => item.kind === 'tool.call').length, 1)
     assert.equal(facts.filter(item => item.kind === 'tool.result').length, 1)
     assert.equal(facts.every(item => item.evidenceRefs.length >= 1), true)
 
+    const reasoning = facts.find(item => item.kind === 'message.reasoning')
+    assert.equal((reasoning?.payload as { text?: string } | undefined)?.text, '先确认失败测试，再检查相关实现。')
+
     const evidenceCount = storage.db.prepare(
       'SELECT COUNT(*) AS count FROM evidence',
     ).get() as { count: number }
-    assert.equal(evidenceCount.count, 9)
+    assert.equal(evidenceCount.count, 10)
 
     const toolCoverage = await storage.repositories.coverage.query({
       subjectType: 'AgentInstallation',
@@ -114,7 +118,7 @@ test('Codex fixture enters canonical facts and remains idempotent', async () => 
       installationId: first.installationId,
       limit: 100,
     })
-    assert.equal(factsAfterReplay.length, 9)
+    assert.equal(factsAfterReplay.length, 10)
   } finally {
     storage.close()
     await rm(fixture.root, { recursive: true, force: true })
