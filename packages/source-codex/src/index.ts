@@ -11,7 +11,7 @@ import {
 import { discoverCodexAssets } from './assets'
 import { detectCodex } from './detect'
 import { ingestCodexHistory } from './history'
-import { normalizeCodexRecordWithVisibleReasoning } from './normalize-visible-reasoning'
+import { normalizeCodexRecord } from './normalize'
 import { startCodexRuntimeCapture } from './runtime'
 
 export const codexManifest: SourcePluginManifest = {
@@ -51,7 +51,7 @@ export const codexSourceDefinition: SourceDefinition = {
   discoverAssets: discoverCodexAssets,
   ingestHistory: ingestCodexHistory,
   startCapture: startCodexRuntimeCapture,
-  normalize: normalizeCodexRecordWithVisibleReasoning,
+  normalize: normalizeCodexRecord,
 }
 
 const applyCodexSource = Object.assign(
@@ -69,5 +69,4 @@ export * from './detect'
 export * from './format'
 export * from './history'
 export * from './normalize'
-export * from './normalize-visible-reasoning'
 export * from './runtime'
