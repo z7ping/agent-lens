@@ -82,6 +82,21 @@
   padding: 0;
 }
 
+/* Thinking 自己已经是 disclosure，正文内部不再叠一层“5 行展开/收起”。 */
+.task-center-main .thinking-content .markdown-surface {
+  max-height: none !important;
+}
+.task-center-main .thinking-content .markdown-fade {
+  display: none;
+}
+.task-center-main .thinking-content .markdown-message-actions button:first-child:not(:last-child) {
+  display: none;
+}
+/* 证据操作已经进入右侧 Inspector；只有隐藏证据按钮时，不保留一个空操作行。 */
+.task-center-main .task-thinking-actions:has(> .evidence-link:only-child) {
+  display: none;
+}
+
 /* Pi Tool 输出 disclosure 与 Round / Thinking 同一视觉语言。 */
 .task-center-main .tool-output-details > summary {
   display: flex;
