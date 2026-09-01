@@ -66,6 +66,26 @@ function tokenUsage(payload: Record<string, unknown>): Record<string, unknown> {
   }
 }
 
+const visibleReasoningTypes = new Set([
+  'agent_reasoning',
+  'reasoning',
+  'reasoning_summary',
+])
+
+function visibleReasoningText(payload: Record<string, unknown>): string {
+  for (const value of [
+    payload.text,
+    payload.message,
+    payload.reasoning,
+    payload.summary,
+    payload.content,
+  ]) {
+    const text = messageText(value).trim()
+    if (text) return text
+  }
+  return ''
+}
+
 function relationType(payload: Record<string, unknown>): 'fork' | 'subagent' | 'related' {
   if (stringField(payload, 'forked_from_id')) return 'fork'
   const role = actorRole(payload.agent_role)
@@ -344,6 +364,11 @@ export async function normalizeCodexRecord(
   } else if (topType === 'event_msg') {
     if (innerType === 'token_count') {
       push(candidate(record, envelope, 'usage', tokenUsage(payload)))
+    } else if (innerType && visibleReasoningTypes.has(innerType)) {
+      const text = visibleReasoningText(payload)
+      push(text
+        ? candidate(record, envelope, 'message.reasoning', { text, raw: payload })
+        : unknownCandidate(record, envelope, entry as JsonValue))
     } else if (innerType === 'task_started' || innerType === 'turn_started') {
       push(candidate(record, envelope, 'session.lifecycle', { event: 'turn.started', ...payload }))
     } else if (innerType === 'task_complete' || innerType === 'turn_complete') {
