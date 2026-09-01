@@ -26,6 +26,10 @@ function render(defaultExpanded?: boolean): string {
   return renderToStaticMarkup(createElement(TaskToolGroup, defaultExpanded === undefined ? { model } : { model, defaultExpanded }))
 }
 
+function classTokens(html: string): string[] {
+  return [...html.matchAll(/class="([^"]+)"/g)].flatMap(match => (match[1] ?? '').split(/\s+/).filter(Boolean))
+}
+
 test('TaskToolGroup 不再创建“工具执行”折叠父层，具体调用直接可见', () => {
   const html = render()
   assert.match(html, /data-task-tool-group="true"/)
@@ -33,7 +37,10 @@ test('TaskToolGroup 不再创建“工具执行”折叠父层，具体调用直
   assert.doesNotMatch(html, />工具执行</)
   assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 3)
   assert.equal((html.match(/class="task-tool-row"/g) ?? []).length, 3)
-  assert.doesNotMatch(html, /execution-row|tool-row(?!-)|execution-group|tool-group|agent-lane-node/)
+  const tokens = classTokens(html)
+  for (const legacyClass of ['execution-row', 'tool-row', 'execution-group', 'tool-group', 'agent-lane-node']) {
+    assert.ok(!tokens.includes(legacyClass), `不应恢复旧类名 ${legacyClass}`)
+  }
   assert.match(html, /读取文件/)
   assert.match(html, /src\/review\.ts/)
   assert.match(html, /完成 · 42ms/)
