@@ -4,14 +4,41 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - feature/alpha3-task-center
+      - feature/1.0.0-alpha.3-task-surface
     paths:
       - packages/web/src/**
       - apps/desktop/**
+      - apps/daemon/**
+      - packages/source-codex/src/**
+      - packages/core-services/src/**
+      - packages/projection-review/src/**
+      - packages/protocol/src/**
+      - packages/storage-sqlite/src/**
+      - packages/surface-http/src/**
       - scripts/acceptance/**
       - scripts/check-alpha3-real-acceptance-contract.mjs
-      - packages/source-codex/src/__fixtures__/codex-sample.jsonl
+      - scripts/prepare-desktop.mjs
       - package.json
+      - package-lock.json
+      - .github/workflows/alpha3-task-center-real-smoke.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - packages/web/src/**
+      - apps/desktop/**
+      - apps/daemon/**
+      - packages/source-codex/src/**
+      - packages/core-services/src/**
+      - packages/projection-review/src/**
+      - packages/protocol/src/**
+      - packages/storage-sqlite/src/**
+      - packages/surface-http/src/**
+      - scripts/acceptance/**
+      - scripts/check-alpha3-real-acceptance-contract.mjs
+      - scripts/prepare-desktop.mjs
+      - package.json
+      - package-lock.json
       - .github/workflows/alpha3-task-center-real-smoke.yml
 
 permissions:
