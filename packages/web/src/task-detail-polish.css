@@ -81,6 +81,10 @@
   margin: 2px 2px 5px 26px;
   padding: 0;
 }
+.task-center-main .thinking-stream-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 
 /* Thinking 自己已经是 disclosure，正文内部不再叠一层“5 行展开/收起”。 */
 .task-center-main .thinking-content .markdown-surface {
