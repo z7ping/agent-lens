@@ -558,16 +558,28 @@ export async function startHttpSurface(
       return cachedStorageHealth
     }
     if (!storageHealthProbe) {
-      storageHealthProbe = storage.health()
+      const deferRefresh = cachedStorageHealth
+        ? new Promise<void>(resolve => setImmediate(resolve))
+        : Promise.resolve()
+      storageHealthProbe = deferRefresh
+        .then(() => storage.health())
         .then(health => {
           cachedStorageHealth = health
           cachedStorageHealthAt = Date.now()
           return health
         })
+        .catch(error => {
+          if (cachedStorageHealth) return cachedStorageHealth
+          throw error
+        })
         .finally(() => {
           storageHealthProbe = null
         })
     }
+    // 首次启动仍等待真实探测；已有结果过期后则立即返回最近状态，耗时的
+    // 诊断刷新留在后台。这样历史摄取占用 SQLite 单写队列时也不会拖死
+    // Runtime readiness。
+    if (cachedStorageHealth) return cachedStorageHealth
     return storageHealthProbe
   }
 

@@ -184,3 +184,53 @@ test('History Coverage 只覆盖 history 能力并引用首尾 Source Evidence',
     ['first', 'last'],
   )
 })
+
+test('渐进历史窗口不会在最新 Session 前触发全库 parser replay', async () => {
+  let replayReads = 0
+  const source: SourceDefinition = {
+    manifest: {
+      pluginId: 'test-source-plugin',
+      pluginVersion: '1.0.0',
+      apiVersion: '1.0',
+      pluginType: 'source',
+      displayName: 'Test Source',
+      sourceId: 'test-source',
+      productId: 'test-product',
+      parserVersion: '2',
+    },
+    async detect() { return [detected] },
+    async declareCapabilities() { return [] },
+    async *ingestHistory() {},
+    async normalize(value) { return normalized(value) },
+  }
+  const runner = new SourceHistoryRunner(
+    {
+      repositories: {
+        sourceRecords: {
+          async put() {},
+          async listForParserReplay() {
+            replayReads += 1
+            return []
+          },
+        },
+      },
+      async transaction(operation: () => Promise<unknown>) { return operation() },
+      checkpoints: { async get() { return null }, async set() {}, async clear() {} },
+    } as any,
+    { async resolveInstallation() { return installation } } as any,
+    { async commit() { throw new Error('No observations expected') } } as any,
+    { registerSourceCapabilities() { return { dispose() {} } } } as any,
+    { async declare() { return {} as any } } as any,
+    capturePolicy,
+  )
+
+  await runner.sync({
+    source,
+    host,
+    detected,
+    abortSignal: new AbortController().signal,
+    historyWindow: { sessionLimit: 1 },
+  })
+
+  assert.equal(replayReads, 0)
+})

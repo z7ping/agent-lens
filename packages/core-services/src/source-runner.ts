@@ -364,9 +364,12 @@ export class SourceHistoryRunner {
         observationsMerged: 0,
         observationsUnchanged: 0,
       }
+      const yieldForInteractivity = createCooperativeScheduler()
 
       const replay = this.storage.repositories.sourceRecords.listForParserReplay
-      if (replay) {
+      // 渐进启动窗口优先处理最新真实 Session，不能在“最新 1 个”之前先
+      // 全库重放旧 parser 记录。无窗口的显式完整同步仍保留修复能力。
+      if (replay && !input.historyWindow) {
         let after: { capturedAt: string; id: string } | undefined
         while (!abortSignal.aborted) {
           const records = await replay(
@@ -393,6 +396,7 @@ export class SourceHistoryRunner {
             result.observationsCreated += processed.observationsCreated
             result.observationsMerged += processed.observationsMerged
             result.observationsUnchanged += processed.observationsUnchanged
+            await yieldForInteractivity()
           }
           const last = records.at(-1)!
           after = { capturedAt: last.capturedAt, id: last.id }
@@ -413,7 +417,6 @@ export class SourceHistoryRunner {
       let coverageTo: string | undefined
       let coverageFromEvidence: EvidenceCandidate[] = []
       let coverageToEvidence: EvidenceCandidate[] = []
-      const yieldForInteractivity = createCooperativeScheduler()
 
       for await (const record of source.ingestHistory({
         host,

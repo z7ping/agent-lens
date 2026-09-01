@@ -53,6 +53,42 @@ test('concurrent Health requests share one storage probe', async () => {
   }
 })
 
+test('expired Health cache returns immediately while storage diagnostics refresh in background', async () => {
+  let probes = 0
+  let releaseRefresh: () => void = () => undefined
+  const refreshGate = new Promise<void>(resolve => { releaseRefresh = resolve })
+  const storage = {
+    async health() {
+      probes += 1
+      if (probes > 1) await refreshGate
+      return { ok: true, schemaVersion: 6, details: { probes } }
+    },
+  } as unknown as StorageService
+  const surface = await startHttpSurface(storage, { port: 0 })
+
+  try {
+    const base = `http://${surface.host}:${surface.port}`
+    assert.equal((await fetch(`${base}/api/v1/health`)).status, 200)
+    assert.equal(probes, 1)
+
+    await new Promise(resolve => setTimeout(resolve, 1_050))
+    const response = await Promise.race([
+      fetch(`${base}/api/v1/health`),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('health blocked on refresh')), 250)),
+    ])
+    assert.equal(response.status, 200)
+
+    const deadline = Date.now() + 2_000
+    while (probes < 2 && Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 10))
+    }
+    assert.equal(probes, 2)
+  } finally {
+    releaseRefresh()
+    await surface.dispose()
+  }
+})
+
 test('HTTP surface reads and updates AgentLens-managed user source authorization', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   await storage.migrate()

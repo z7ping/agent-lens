@@ -224,7 +224,8 @@ try {
     const plannedHistoryStages = createProgressiveHistoryStages(startedAt)
     const historyStages = stagesAllowedByCapacity(plannedHistoryStages, capacityState)
     if (historyStages.length < plannedHistoryStages.length) {
-      console.warn(`[AgentLens] 7-day history backfill paused: storage capacity=${capacityState}`)
+      const scope = historyStages.length ? '7-day history backfill' : 'all batch history sync'
+      console.warn(`[AgentLens] ${scope} paused: storage capacity=${capacityState}`)
     }
     for (const stage of historyStages) {
       if (runtimeController.signal.aborted) return

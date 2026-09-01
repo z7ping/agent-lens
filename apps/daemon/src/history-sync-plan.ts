@@ -32,9 +32,9 @@ export function stagesAllowedByCapacity(
   stages: readonly ProgressiveHistoryStage[],
   state: StorageCapacityState,
 ): ProgressiveHistoryStage[] {
-  return state === 'approaching' || state === 'exceeded'
-    ? stages.filter(stage => stage.id !== 'hot-window')
-    : [...stages]
+  if (state === 'exceeded') return []
+  if (state === 'approaching') return stages.filter(stage => stage.id !== 'hot-window')
+  return [...stages]
 }
 
 export function yieldToForeground(signal: AbortSignal): Promise<void> {
