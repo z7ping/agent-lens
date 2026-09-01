@@ -175,22 +175,27 @@ try {
   reuseSessionSummaryProjection = await beginSessionSummaryProjectionRun(app.context.storage)
   sessionSummaryProjectionReady = reuseSessionSummaryProjection
 
-  const prepared = await prepareRegisteredSources(app.context, runtimeController.signal)
-  logSourceFailures(prepared.failures)
-
-  const capture = await startRegisteredSourceCapture(
-    app.context,
-    runtimeController.signal,
-    prepared.targets,
-  )
-  captureHandles = capture.results
-  logSourceFailures(capture.failures)
-  for (const handle of captureHandles) {
-    console.info(`[AgentLens] runtime capture started: ${handle.sourceId}`)
-  }
-
   syncPromise = (async () => {
     await new Promise(resolve => setTimeout(resolve, INITIAL_BACKGROUND_SYNC_DELAY_MS))
+    if (runtimeController.signal.aborted) return
+
+    // Runtime Ready 只依赖已启动的 HTTP Surface 与基础存储。来源探测和
+    // Capture 初始化可能触发 SQLite 写入或宿主 I/O，不能阻塞开发入口的
+    // health 探测和 Vite 启动。
+    const prepared = await prepareRegisteredSources(app.context, runtimeController.signal)
+    logSourceFailures(prepared.failures)
+    if (runtimeController.signal.aborted) return
+
+    const capture = await startRegisteredSourceCapture(
+      app.context,
+      runtimeController.signal,
+      prepared.targets,
+    )
+    captureHandles = capture.results
+    logSourceFailures(capture.failures)
+    for (const handle of captureHandles) {
+      console.info(`[AgentLens] runtime capture started: ${handle.sourceId}`)
+    }
     if (runtimeController.signal.aborted) return
 
     if (reuseSessionSummaryProjection) {
