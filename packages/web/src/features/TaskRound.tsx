@@ -12,6 +12,12 @@ export interface TaskRoundProps {
   className?: string | undefined
 }
 
+function DisclosureChevron() {
+  return <span className="disclosure-chevron interaction-chevron" aria-hidden="true">
+    <svg viewBox="0 0 16 16" fill="none"><path d="m6 4 4 4-4 4"/></svg>
+  </span>
+}
+
 export function TaskRound({
   model,
   children,
@@ -53,7 +59,7 @@ export function TaskRound({
     onToggle={event => onToggle(event.currentTarget.open)}
   >
     <summary className="interaction-summary task-round-summary">
-      <span className="interaction-chevron" aria-hidden="true">›</span>
+      <DisclosureChevron/>
       <span className="interaction-title round-label">{model.label}</span>
       {model.preview && <span className="interaction-preview round-preview">{model.preview}</span>}
       <span className="interaction-summary-meta round-meta">
