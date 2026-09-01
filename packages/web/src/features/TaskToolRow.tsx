@@ -57,12 +57,12 @@ export function TaskToolRow({ model, meta, details, onClick, className = '' }: T
     : <ToolKindIcon kind={model.kind}/>
   const content = <>
     <span className={`tool-kind tool-kind-${visualKind}`}>{icon}<span>{toolVisualLabel(visualKind)}</span></span>
+    <span className={`tool-status ${statusClass(model.status)}`.trim()}>{statusLabel(model.status)}{elapsedLabel ? ` · ${elapsedLabel}` : ''}</span>
     <b className="tool-action" title={model.name}>{model.name}</b>
     <span className="tool-target">
       <span className="tool-target-text" title={target}>{target}</span>
       {meta && <span className="tool-meta">{meta}</span>}
     </span>
-    <span className={`tool-status ${statusClass(model.status)}`.trim()}>{statusLabel(model.status)}{elapsedLabel ? ` · ${elapsedLabel}` : ''}</span>
   </>
 
   return <div className={`task-tool-row-shell ${details ? 'has-details' : ''}`.trim()} data-tool-fact="true">
