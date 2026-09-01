@@ -10,6 +10,12 @@ export interface TaskThinkingProps {
   className?: string
 }
 
+function DisclosureChevron() {
+  return <span className="disclosure-chevron thinking-chevron" aria-hidden="true">
+    <svg viewBox="0 0 16 16" fill="none"><path d="m6 4 4 4-4 4"/></svg>
+  </span>
+}
+
 export function TaskThinking({
   model,
   meta,
@@ -27,6 +33,7 @@ export function TaskThinking({
     onToggle={event => setExpanded(event.currentTarget.open)}
   >
     <summary>
+      <DisclosureChevron/>
       <span className="thinking-label thinking-title">{model.label}</span>
       {model.preview && <span className="thinking-preview node-preview">{model.preview}</span>}
       <span className="thinking-summary-meta">{meta}{model.time && <time>{model.time}</time>}</span>
