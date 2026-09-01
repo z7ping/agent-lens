@@ -15,6 +15,10 @@ function reasoningIds(node: ReviewMessageNodeDto): Set<string> {
   ].filter((value): value is string => Boolean(value)))
 }
 
+function sourceRecordIds(node: ReviewMessageNodeDto | ReviewEventNodeDto): Set<string> {
+  return new Set(node.evidence.map(item => item.sourceRecordId).filter((value): value is string => Boolean(value)))
+}
+
 function explicitParentIds(node: ReviewToolNodeDto): string[] {
   return [node.nativeParentEventId, node.parentObservationId].filter((value): value is string => Boolean(value))
 }
@@ -24,11 +28,13 @@ function explicitParentIds(node: ReviewToolNodeDto): string[] {
  *
  * - Tool 的 nativeParentEventId / parentObservationId 明确指向 reasoning 时，才归到该 Thinking 下；
  * - 没有明确父关系，或者出现歧义时，Tool 继续保持 Agent Turn 一级；
- * - 同一 sourceId 内匹配，避免不同来源的原生 ID 碰撞。
+ * - 同一 sourceId 内匹配，避免不同来源的原生 ID 碰撞；
+ * - parser replay 将旧 unknown 提升为 reasoning 后，若两者证据指向同一 SourceRecord，表现层只展示 reasoning。
  */
 export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): ReviewInteractionPresentationEntry[] {
   const reasoning = nodes.filter((node): node is ReviewMessageNodeDto => node.type === 'message' && node.role === 'reasoning')
   const identities = reasoning.map(node => ({ node, ids: reasoningIds(node) }))
+  const reasoningSourceRecords = new Set(reasoning.flatMap(node => [...sourceRecordIds(node)]))
   const children = new Map<string, ReviewToolNodeDto[]>()
   const nestedToolIds = new Set<string>()
 
@@ -67,6 +73,8 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
       continue
     }
     if (node.type === 'event' && node.category === 'unknown') {
+      const duplicateOfReasoning = [...sourceRecordIds(node)].some(id => reasoningSourceRecords.has(id))
+      if (duplicateOfReasoning) continue
       flushTools()
       rawEvents.push(node)
       continue
