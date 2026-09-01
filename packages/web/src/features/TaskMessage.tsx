@@ -63,7 +63,6 @@ export function TaskMessage({
   }, [measure, text, view])
 
   return <div className={`message-row ${user ? 'user' : 'agent'} task-message-row ${className}`.trim()} data-task-message-role={role}>
-    {!user && <span className="chat-avatar-agent task-message-agent-mark" aria-hidden="true"/>}
     <div className={`chat-bubble ${user ? 'chat-bubble-user' : 'chat-bubble-agent'} task-message-bubble`}>
       <div className="chat-meta task-message-meta"><b>{author}</b>{meta}{time && <time>{time}</time>}</div>
       <div className="markdown-message task-message-content" data-view={view}>
@@ -75,12 +74,12 @@ export function TaskMessage({
           {view === 'rendered' ? <div className="markdown"><ReactMarkdown>{text}</ReactMarkdown></div> : <pre className="markdown-source">{text}</pre>}
           {canCollapse && !expanded && <span className="markdown-fade" aria-hidden="true"/>}
         </div>
-        <div className="markdown-message-actions">
+        {(canCollapse || !user) && <div className="markdown-message-actions">
           {canCollapse && <button type="button" onClick={() => setExpanded(value => !value)}>{expanded ? '收起到 5 行' : '展开全文'}</button>}
-          <button type="button" onClick={() => setView(value => value === 'rendered' ? 'source' : 'rendered')}>
-            {view === 'rendered' ? <span>查看源码</span> : <span>返回渲染</span>}
-          </button>
-        </div>
+          {!user && <button type="button" title={view === 'rendered' ? '查看 Markdown 源码' : '返回渲染结果'} onClick={() => setView(value => value === 'rendered' ? 'source' : 'rendered')}>
+            {view === 'rendered' ? <span>源码</span> : <span>渲染</span>}
+          </button>}
+        </div>}
       </div>
       {actions && <div className="chat-actions task-message-actions">{actions}</div>}
     </div>
