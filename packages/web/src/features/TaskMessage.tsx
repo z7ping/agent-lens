@@ -28,12 +28,12 @@ export function TaskMessage({
   collapsible = true,
   className = '',
 }: TaskMessageProps) {
+  const user = role === 'user'
   const [view, setView] = useState<'rendered' | 'source'>('rendered')
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(() => !user)
   const [canCollapse, setCanCollapse] = useState(false)
   const [collapsedHeight, setCollapsedHeight] = useState<number>()
   const surfaceRef = useRef<HTMLDivElement>(null)
-  const user = role === 'user'
 
   const measure = useCallback(() => {
     const element = surfaceRef.current
@@ -50,7 +50,8 @@ export function TaskMessage({
   }, [collapsible])
 
   useLayoutEffect(() => {
-    setExpanded(false)
+    // Agent 正文默认完整展开；用户长消息继续沿用紧凑折叠策略。
+    setExpanded(!user)
     const element = surfaceRef.current
     if (!element) return
     const frame = window.requestAnimationFrame(measure)
@@ -60,7 +61,7 @@ export function TaskMessage({
       window.cancelAnimationFrame(frame)
       observer?.disconnect()
     }
-  }, [measure, text, view])
+  }, [measure, text, user, view])
 
   return <div className={`message-row ${user ? 'user' : 'agent'} task-message-row ${className}`.trim()} data-task-message-role={role}>
     <div className={`chat-bubble ${user ? 'chat-bubble-user' : 'chat-bubble-agent'} task-message-bubble`}>
