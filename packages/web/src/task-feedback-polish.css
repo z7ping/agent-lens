@@ -81,6 +81,33 @@
 .task-surface-live .task-header-submeta {
   display: none;
 }
+.task-surface-live .task-header-metric {
+  display: inline-flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  color: var(--al-muted-2);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.task-surface-live .task-header-metric:not(:first-child)::before {
+  content: "·";
+  margin: 0 6px;
+  color: var(--al-line-strong);
+}
+.task-surface-live .task-header-metric b,
+.task-surface-live .task-header-metric span {
+  display: inline;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1;
+}
+.task-surface-live .task-header-metric b {
+  color: var(--al-ink-2);
+  font-weight: 650;
+}
 
 /* Pi TUI 风格输入：提示浮在输入区内部，不参与布局，因此 focus 不再改变高度。 */
 .pi-live-composer {
@@ -145,12 +172,12 @@
 
 @media (max-width: 991.98px) {
   .pi-live-compose-settings select:first-child {
-    width: clamp(170px, 22vw, 220px);
-    max-width: 220px;
+    width: clamp(180px, 24vw, 230px);
+    max-width: 230px;
   }
   .pi-live-compose-settings select:last-child {
-    width: clamp(122px, 14vw, 150px);
-    max-width: 150px;
+    width: clamp(132px, 16vw, 160px);
+    max-width: 160px;
   }
 }
 
@@ -161,10 +188,13 @@
     grid-template-rows: 30px 22px;
   }
   .task-center-main .task-surface-live .task-header-meta,
-  .task-surface-live .task-header-meta,
+  .task-surface-live .task-header-meta {
+    display: none;
+  }
   .task-center-main .task-surface-live .task-header-title,
   .task-surface-live .task-header-title {
     grid-column: 1;
+    grid-row: 1;
   }
   .task-center-main .task-surface-live .task-header-metrics,
   .task-surface-live .task-header-metrics {
