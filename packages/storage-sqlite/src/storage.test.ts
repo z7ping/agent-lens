@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { SqliteStorageService } from './storage'
+import { describeStorageCapacity, SqliteStorageService } from './storage'
+
+test('存储容量按 512 MiB 软阈值区分正常、接近和超限', () => {
+  const mib = 1024 * 1024
+  assert.equal(describeStorageCapacity(400 * mib).state, 'healthy')
+  assert.equal(describeStorageCapacity(410 * mib).state, 'approaching')
+  assert.equal(describeStorageCapacity(512 * mib).state, 'exceeded')
+})
 
 async function createStorage() {
   const storage = new SqliteStorageService({ path: ':memory:' })
@@ -14,6 +21,10 @@ test('SQLite storage migrates to schema version 12 and exposes required tables',
     const health = await storage.health()
     assert.equal(health.ok, true)
     assert.equal(health.schemaVersion, 12)
+    const growth = (health.details as any)?.dataGrowth
+    assert.equal(growth.capacity.softLimitBytes, 512 * 1024 * 1024)
+    assert.equal(growth.capacity.state, 'healthy')
+    assert.equal(typeof growth.reclaimableBytes, 'number')
 
     const rows = storage.db.prepare(`
       SELECT name FROM sqlite_master

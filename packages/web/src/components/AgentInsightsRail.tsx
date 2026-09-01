@@ -147,6 +147,7 @@ export function AgentInsightsRail({ snapshot, sourceId }: { snapshot: ClientSnap
 
   const details = recordValue(snapshot.health?.storage.details)
   const growth = recordValue(details?.dataGrowth)
+  const capacity = recordValue(growth?.capacity)
   const checkpoints = recordValue(details?.checkpoints)
   const sourceRuntime = recordValue(details?.sourceRuntime)
   const unknownRoot = recordValue(details?.unknownObservations)
@@ -156,7 +157,8 @@ export function AgentInsightsRail({ snapshot, sourceId }: { snapshot: ClientSnap
     .sort((a, b) => numberValue(b.count) - numberValue(a.count) || stringValue(a.nativeType).localeCompare(stringValue(b.nativeType)))
   const failedStages = runtime.filter(item => stringValue(item.state) === 'failed').length
   const unknownCount = unknown.reduce((sum, item) => sum + numberValue(item.count), 0)
-  const hasIssue = failedStages > 0 || unknownCount > 0
+  const capacityState = stringValue(capacity?.state)
+  const hasIssue = failedStages > 0 || unknownCount > 0 || capacityState === 'approaching' || capacityState === 'exceeded'
 
   if (!selectedAgent) return null
 
@@ -170,6 +172,9 @@ export function AgentInsightsRail({ snapshot, sourceId }: { snapshot: ClientSnap
         <div className="agent-diagnostic-summary-grid">
           <span><small>主数据库</small><b>{formatBytes(numberValue(growth?.databaseBytes))}</b></span>
           <span><small>WAL</small><b>{formatBytes(numberValue(growth?.walBytes))}</b></span>
+          <span><small>数据库总占用</small><b>{formatBytes(numberValue(capacity?.footprintBytes))}</b></span>
+          <span><small>容量软阈值</small><b>{capacityState === 'exceeded' ? '已超限' : capacityState === 'approaching' ? '接近上限' : formatBytes(numberValue(capacity?.softLimitBytes))}</b></span>
+          <span><small>可回收页</small><b>{formatBytes(numberValue(growth?.reclaimableBytes))}</b></span>
           <span><small>检查点</small><b>{numberValue(checkpoints?.count).toLocaleString()}</b></span>
           <span><small>最近更新</small><b>{formatTime(stringValue(checkpoints?.lastUpdatedAt))}</b></span>
         </div>
