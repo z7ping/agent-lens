@@ -191,10 +191,14 @@ try {
       console.info('[AgentLens] session summary projection reused from clean shutdown')
     } else {
       try {
-        await app.context.projections.rebuild(SESSION_SUMMARY_PROJECTION_ID)
+        console.info('[AgentLens] session summary projection cooperative rebuild started')
+        await app.context.projections.rebuild(SESSION_SUMMARY_PROJECTION_ID, {
+          signal: runtimeController.signal,
+        })
         sessionSummaryProjectionReady = true
         console.info('[AgentLens] session summary projection rebuilt')
       } catch (error) {
+        if (runtimeController.signal.aborted) return
         sessionSummaryProjectionReady = false
         console.error('[AgentLens] session summary projection rebuild failed', error)
       }

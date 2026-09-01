@@ -1,7 +1,89 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { DefaultIdentityService, DefaultObservationService } from '@agent-lens/core-services'
+import { SqliteSessionSummaryReader } from './session-summaries'
 import { SqliteStorageService } from './storage'
+
+async function seedSummarySessions(storage: SqliteStorageService, count: number): Promise<void> {
+  const identity = new DefaultIdentityService(storage)
+  const observations = new DefaultObservationService(storage, identity)
+  const host = await identity.resolveHost({ name: 'projection-rebuild-host', platform: 'win32', arch: 'x64' })
+  const installation = await identity.resolveInstallation({ hostId: host.id, productId: 'codex' })
+
+  for (let index = 0; index < count; index += 1) {
+    const nativeSessionId = `projection-session-${index}`
+    const occurredAt = `2026-08-25T10:${String(index).padStart(2, '0')}:00.000Z`
+    await observations.commit({
+      sourceId: 'codex',
+      host,
+      installation,
+      candidate: {
+        kind: 'message.user',
+        nativeEventId: `${nativeSessionId}:message`,
+        occurredAt,
+        capturedAt: occurredAt,
+        payload: { text: `会话 ${index}` },
+        identityHints: { nativeSessionId },
+        dedupHints: { nativeEventId: `${nativeSessionId}:message` },
+      },
+      evidenceCandidates: [],
+    })
+  }
+}
+
+test('cooperative session summary rebuild yields between transactions while the previous projection remains readable', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+
+  try {
+    await seedSummarySessions(storage, 3)
+    await storage.sessionSummaryProjection.rebuild()
+
+    let yields = 0
+    const reader = new SqliteSessionSummaryReader(storage.executor, {
+      rebuildBatchSize: 1,
+      async yieldControl() {
+        yields += 1
+        const visible = await storage.sessionSummaries.query({ limit: 10 })
+        assert.equal(visible.items.length, 3)
+        await new Promise<void>(resolve => setImmediate(resolve))
+      },
+    })
+
+    await reader.rebuild({ strategy: 'cooperative' })
+    assert.equal(yields, 2)
+    assert.equal((await storage.sessionSummaries.query({ limit: 10 })).items.length, 3)
+  } finally {
+    await storage.close()
+  }
+})
+
+test('cooperative session summary rebuild stops after the active batch when cancelled', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+
+  try {
+    await seedSummarySessions(storage, 3)
+    const controller = new AbortController()
+    const reader = new SqliteSessionSummaryReader(storage.executor, {
+      rebuildBatchSize: 1,
+      async yieldControl() {
+        controller.abort()
+      },
+    })
+
+    await assert.rejects(
+      reader.rebuild({ strategy: 'cooperative', signal: controller.signal }),
+      error => error instanceof Error && error.name === 'AbortError',
+    )
+    const projected = storage.db.prepare(
+      'SELECT COUNT(*) AS count FROM session_summary_projection',
+    ).get() as { count: number }
+    assert.equal(Number(projected.count), 1)
+  } finally {
+    await storage.close()
+  }
+})
 
 test('session summary projection sorts and paginates by session start time', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })

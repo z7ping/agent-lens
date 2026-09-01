@@ -212,6 +212,8 @@ export interface SessionSummaryProjectionStore extends SessionSummaryReader {
   isMaterialized(): Promise<boolean>
   rebuild(input?: {
     logicalSessionId?: LogicalSessionId
+    strategy?: 'atomic' | 'cooperative'
+    signal?: AbortSignal
   }): Promise<void>
 }
 
@@ -223,6 +225,8 @@ export interface ToolService {
 export interface ProjectionScope {
   subjectType?: string
   subjectId?: string
+  /** Optional cancellation boundary for long-running rebuilds. */
+  signal?: AbortSignal
 }
 
 export interface ProjectionInvalidation extends ProjectionScope {

@@ -980,16 +980,31 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
     return () => observer.disconnect()
   }, [review.response?.items.length, review.response?.meta.hasMore, review.loading, review.loadingMore, review.error, model])
 
+  const loadOlder = useCallback(async () => {
+    const pane = readerPaneRef.current
+    if (!pane || review.detailLoadingMore) return
+    const beforeHeight = pane.scrollHeight
+    const beforeTop = pane.scrollTop
+    await model.loadMoreReviewDetail()
+    window.requestAnimationFrame(() => {
+      const current = readerPaneRef.current
+      if (!current) return
+      current.scrollTop = beforeTop + (current.scrollHeight - beforeHeight)
+    })
+  }, [model, review.detailLoadingMore])
+
   useEffect(() => {
     const sentinel = detailLoadSentinelRef.current
-    if (!sentinel || !detail?.page.hasMore || detail.page.direction !== 'forward' || review.detailLoadingMore || review.error) return
+    if (!sentinel || !detail?.page.hasMore || review.detailLoadingMore || review.error) return
     const root = sentinel.closest('.review-reader-pane')
     const observer = new IntersectionObserver(entries => {
-      if (entries.some(entry => entry.isIntersecting)) void model.loadMoreReviewDetail()
-    }, { root, rootMargin: '800px 0px' })
+      if (!entries.some(entry => entry.isIntersecting)) return
+      if (detail.page.direction === 'backward') void loadOlder()
+      else void model.loadMoreReviewDetail()
+    }, { root, rootMargin: detail.page.direction === 'backward' ? '120px 0px 0px' : '800px 0px' })
     observer.observe(sentinel)
     return () => observer.disconnect()
-  }, [detail?.id, detail?.page.hasMore, detail?.page.nextCursor, detail?.page.direction, review.detailLoadingMore, review.error, model])
+  }, [detail?.id, detail?.page.hasMore, detail?.page.nextCursor, detail?.page.direction, review.detailLoadingMore, review.error, loadOlder, model])
 
   const lastInteractionKey = detail?.interactions.at(-1)
     ? `${detail.interactions.at(-1)!.id}:${detail.interactions.at(-1)!.endedAt}:${detail.interactions.at(-1)!.nodes.length}`
@@ -1074,19 +1089,6 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
     } finally {
       if (model.getSnapshot().review.selectedId === selectedId) setRoundFilterLoading(false)
     }
-  }
-
-  const loadOlder = async () => {
-    const pane = readerPaneRef.current
-    if (!pane || review.detailLoadingMore) return
-    const beforeHeight = pane.scrollHeight
-    const beforeTop = pane.scrollTop
-    await model.loadMoreReviewDetail()
-    window.requestAnimationFrame(() => {
-      const current = readerPaneRef.current
-      if (!current) return
-      current.scrollTop = beforeTop + (current.scrollHeight - beforeHeight)
-    })
   }
 
   const threshold = useMemo(() => {
@@ -1255,7 +1257,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
           </div>
 
           <div className="review-flow">
-            {isBackward && roundFilter === 'all' && pageIncomplete && <div className="detail-load-sentinel detail-load-sentinel-top" aria-live="polite">
+            {isBackward && roundFilter === 'all' && pageIncomplete && <div ref={detailLoadSentinelRef} className="detail-load-sentinel detail-load-sentinel-top" aria-live="polite">
               {review.detailLoadingMore ? '正在加载更早轮次…' : review.error ? <button onClick={() => void loadOlder()}>加载失败 · 重试</button> : <button onClick={() => void loadOlder()}>加载更早轮次</button>}
             </div>}
             {annotatedInteractions.map((item, index) => <VirtualRoundMount

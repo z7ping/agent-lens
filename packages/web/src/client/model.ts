@@ -46,9 +46,10 @@ export interface ClientSnapshot {
 
 type Listener = () => void
 const initialQuery: QueryFilters = { sourceId: '', projectId: '', range: '7d' }
-const INITIAL_REVIEW_LIMIT = 40
+const INITIAL_REVIEW_LIMIT = 1
+const PROGRESSIVE_REVIEW_LIMIT = 10
 const REVIEW_PAGE_SIZE = 40
-const REVIEW_DETAIL_PAGE_SIZE = 20
+const REVIEW_DETAIL_PAGE_SIZE = 3
 const REVIEW_SEARCH_DEBOUNCE_MS = 250
 
 function mergeReviewDetail(current: ReviewSessionDetailDto, next: ReviewSessionDetailDto): ReviewSessionDetailDto {
@@ -522,6 +523,7 @@ export class AgentLensClientModel {
           review: { ...this.snapshot.review, detail: null, relationships: null },
         })
       }
+      await this.expandInitialReview(generation, response)
     } catch (error) {
       if (generation !== this.reviewGeneration) return
       this.publish({
@@ -533,6 +535,25 @@ export class AgentLensClientModel {
           error: error instanceof Error ? error.message : String(error),
         },
       })
+    }
+  }
+
+  private async expandInitialReview(generation: number, initial: ReviewResponseDto): Promise<void> {
+    if (!initial.meta.hasMore || generation !== this.reviewGeneration) return
+    try {
+      const expanded = await this.api.review(this.snapshot.review.filters, PROGRESSIVE_REVIEW_LIMIT)
+      if (generation !== this.reviewGeneration) return
+      const current = this.snapshot.review
+      this.publish({
+        ...this.snapshot,
+        review: {
+          ...current,
+          response: expanded,
+          limit: expanded.items.length,
+        },
+      })
+    } catch {
+      // 首屏数据已经可用；渐进补载失败时保留首屏，后续刷新或滚动可重试。
     }
   }
 

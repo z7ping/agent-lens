@@ -8,6 +8,12 @@ import type { SqliteExecutor } from './executor'
 
 const MAX_LIMIT = 500
 const MAX_SEQUENCE = Number.MAX_SAFE_INTEGER
+const DEFAULT_REBUILD_BATCH_SIZE = 25
+
+export interface SqliteSessionSummaryReaderOptions {
+  rebuildBatchSize?: number
+  yieldControl?: () => Promise<void>
+}
 
 function decodeJson<T>(value: unknown, fallback: T): T {
   if (typeof value !== 'string' || value.length === 0) return fallback
@@ -291,7 +297,19 @@ function summaryQueryWhere(input: SessionSummaryQuery): { sql: string; params: u
 }
 
 export class SqliteSessionSummaryReader implements SessionSummaryProjectionStore {
-  constructor(private readonly executor: SqliteExecutor) {}
+  private readonly rebuildBatchSize: number
+  private readonly yieldControl: () => Promise<void>
+
+  constructor(
+    private readonly executor: SqliteExecutor,
+    options: SqliteSessionSummaryReaderOptions = {},
+  ) {
+    this.rebuildBatchSize = Math.max(1, Math.floor(
+      options.rebuildBatchSize ?? DEFAULT_REBUILD_BATCH_SIZE,
+    ))
+    this.yieldControl = options.yieldControl
+      ?? (() => new Promise<void>(resolve => setImmediate(resolve)))
+  }
 
   query(input: SessionSummaryQuery): Promise<{ items: SessionSummaryRecord[]; hasMore: boolean }> {
     const limit = Math.max(1, Math.min(input.limit, MAX_LIMIT))
@@ -359,7 +377,17 @@ export class SqliteSessionSummaryReader implements SessionSummaryProjectionStore
     })
   }
 
-  async rebuild(input: { logicalSessionId?: string } = {}): Promise<void> {
+  async rebuild(input: {
+    logicalSessionId?: string
+    strategy?: 'atomic' | 'cooperative'
+    signal?: AbortSignal
+  } = {}): Promise<void> {
+    input.signal?.throwIfAborted()
+    if (!input.logicalSessionId && input.strategy === 'cooperative') {
+      await this.rebuildCooperatively(input.signal)
+      return
+    }
+
     await this.executor.transaction(async () => {
       const rebuiltAt = new Date().toISOString()
       if (input.logicalSessionId) {
@@ -375,4 +403,51 @@ export class SqliteSessionSummaryReader implements SessionSummaryProjectionStore
       this.executor.db.prepare(rebuildInsertSql('')).run(rebuiltAt)
     })
   }
+
+  private async rebuildCooperatively(signal?: AbortSignal): Promise<void> {
+    const logicalSessionIds = await this.executor.run(() => (
+      this.executor.db.prepare(`
+        SELECT id
+        FROM logical_sessions
+        ORDER BY COALESCE(ended_at, started_at, '') DESC, id ASC
+      `).all() as Array<{ id: string }>
+    ).map(row => row.id))
+
+    signal?.throwIfAborted()
+    for (let offset = 0; offset < logicalSessionIds.length; offset += this.rebuildBatchSize) {
+      const batch = logicalSessionIds.slice(offset, offset + this.rebuildBatchSize)
+      await this.executor.transaction(async () => {
+        const rebuiltAt = new Date().toISOString()
+        const remove = this.executor.db.prepare(
+          'DELETE FROM session_summary_projection WHERE logical_session_id = ?',
+        )
+        const insert = this.executor.db.prepare(rebuildInsertSql('WHERE logical_session_id = ?'))
+        for (const logicalSessionId of batch) {
+          remove.run(logicalSessionId)
+          insert.run(rebuiltAt, logicalSessionId)
+        }
+      })
+
+      signal?.throwIfAborted()
+      if (offset + batch.length < logicalSessionIds.length) {
+        await this.yieldControl()
+        signal?.throwIfAborted()
+      }
+    }
+
+    await this.executor.run(() => {
+      this.executor.db.prepare(`
+        DELETE FROM session_summary_projection
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM logical_sessions
+          WHERE logical_sessions.id = session_summary_projection.logical_session_id
+        )
+      `).run()
+    })
+  }
+}
+
+export const sessionSummaryInternals = {
+  DEFAULT_REBUILD_BATCH_SIZE,
 }
