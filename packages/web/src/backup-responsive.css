@@ -1,11 +1,8 @@
 /*
- * AgentLens 1.0 资产备份响应式正式样式。
- *
- * 负责 1280×800 / 1366×768 等 xl 主桌面视口的保护范围与操作区收口。
- * 本文件是资产备份响应式最终所有者，必须在通用 desktop-responsive.css 之后加载。
+ * AgentLens 1.0 资产备份响应式唯一所有者。
+ * 负责保护范围、摘要区与工具栏在 xl/xxl/md/sm 的布局，不再依赖 desktop-responsive.css 二次覆盖。
  */
 
-/* 操作按钮必须保持图标 + 文案横向排列；刷新扫描也使用同一标准按钮视觉。 */
 .workspace-page > .workspace-toolbar:has(.backup-toolbar-note) .backup-toolbar-note ~ .btn,
 .backup-page > .future-heading > .btn {
   display: inline-flex;
@@ -17,27 +14,53 @@
   gap: 6px;
   white-space: nowrap;
 }
-
 .workspace-page > .workspace-toolbar:has(.backup-toolbar-note) .backup-toolbar-note ~ .btn > svg,
-.backup-page > .future-heading > .btn > svg {
-  display: block;
-  flex: 0 0 auto;
+.backup-page > .future-heading > .btn > svg { display: block; flex: 0 0 auto; }
+
+.backup-page .future-grid { grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; }
+.backup-page .future-grid > aside.future-stack { position: sticky; top: 16px; }
+.backup-page .future-kpi { padding: 14px 15px; }
+.backup-page .future-kpi strong { font-size: 22px; }
+.backup-page .protection-grid { display: grid; grid-template-columns: 1fr; gap: 0; overflow: hidden; border: 1px solid var(--al-line); border-radius: 10px; }
+.backup-page .protection-card {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.2fr) minmax(250px, 1fr) minmax(220px, 1.15fr);
+  align-items: center;
+  gap: 12px;
+  padding: 11px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--al-line);
+  border-radius: 0;
+  background: transparent;
+}
+.backup-page .protection-card:last-child { border-bottom: 0; }
+.backup-page .protection-card:hover { background: var(--al-soft-2); }
+.backup-page .protection-card.is-muted { border-style: solid; opacity: .68; }
+.backup-page .protection-card-head { min-width: 0; }
+.backup-page .protection-card-head b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.backup-page .protection-counts { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 0; }
+.backup-page .protection-count { min-width: 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
+.backup-page .protection-count strong { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.backup-page .protection-count span { margin-top: 3px; font-size: 12px; }
+.backup-page .protection-meta { min-width: 0; align-items: center; margin-top: 0; }
+.backup-page .protection-meta > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (min-width: 1400px) {
+  .backup-page .future-grid { grid-template-columns: minmax(0, 1fr) 390px; gap: 16px; }
+  .backup-page .future-kpi { padding: 16px 17px; }
+  .backup-page .future-kpi strong { font-size: 24px; }
+  .backup-page .protection-card { grid-template-columns: minmax(210px, 1.35fr) minmax(290px, 1fr) minmax(250px, 1.15fr); }
 }
 
-/* xl：1200–1399。1280×800 / 1366×768 是正式主设计基线。 */
+/* xl：1280×800 / 1366×768 主设计基线。 */
 @media (min-width: 1200px) and (max-width: 1399.98px) {
-  /* 先保证导入 / 创建两个操作完整；筛选区可收缩并内部横向滚动。 */
   .workspace-page > .workspace-toolbar:has(.backup-toolbar-note) .agent-scope {
     min-width: 0;
     flex: 0 1 auto;
     overflow-x: auto;
     scrollbar-width: none;
   }
-
-  .workspace-page > .workspace-toolbar:has(.backup-toolbar-note) .agent-scope::-webkit-scrollbar {
-    display: none;
-  }
-
+  .workspace-page > .workspace-toolbar:has(.backup-toolbar-note) .agent-scope::-webkit-scrollbar { display: none; }
   .workspace-page > .workspace-toolbar:has(.backup-toolbar-note) .backup-toolbar-note {
     min-width: 0;
     max-width: 150px;
@@ -46,32 +69,14 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-
-  /*
-   * 保护范围保持高密度行式清单，但不把“来源 / 三指标 / 构成 / 详情”硬塞成一行：
-   * 第一行 = 来源 + 三指标；第二行 = 关键构成 + 数据详情。
-   */
   .backup-page .protection-grid > .protection-card {
     grid-template-columns: minmax(190px, .82fr) minmax(0, 1.68fr);
     gap: 8px 18px;
     padding: 12px 14px;
   }
-
-  .backup-page .protection-grid > .protection-card > .protection-card-head {
-    grid-column: 1;
-  }
-
-  .backup-page .protection-grid > .protection-card > .protection-card-head > b {
-    overflow: visible;
-    text-overflow: clip;
-    white-space: normal;
-  }
-
-  .backup-page .protection-grid > .protection-card > .protection-counts {
-    grid-column: 2;
-    margin-top: 0;
-  }
-
+  .backup-page .protection-grid > .protection-card > .protection-card-head { grid-column: 1; }
+  .backup-page .protection-grid > .protection-card > .protection-card-head > b { overflow: visible; text-overflow: clip; white-space: normal; }
+  .backup-page .protection-grid > .protection-card > .protection-counts { grid-column: 2; margin-top: 0; }
   .backup-page .protection-grid > .protection-card > .protection-meta {
     display: grid;
     grid-column: 1 / -1;
@@ -81,17 +86,35 @@
     margin-top: 0;
     padding-top: 1px;
   }
+  .backup-page .protection-grid > .protection-card > .protection-meta > span { min-width: 0; overflow: visible; text-overflow: clip; white-space: normal; line-height: 1.45; }
+  .backup-page .protection-grid > .protection-card > .protection-meta > .link-btn { justify-self: end; white-space: nowrap; }
+}
 
-  .backup-page .protection-grid > .protection-card > .protection-meta > span {
-    min-width: 0;
-    overflow: visible;
-    text-overflow: clip;
-    white-space: normal;
-    line-height: 1.45;
-  }
-
-  .backup-page .protection-grid > .protection-card > .protection-meta > .link-btn {
-    justify-self: end;
-    white-space: nowrap;
-  }
+@media (max-width: 1199.98px) {
+  .backup-page .future-grid { grid-template-columns: 1fr; }
+  .backup-page .future-grid > aside.future-stack { position: static; }
+  .backup-page .future-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .backup-page .protection-card { grid-template-columns: minmax(170px, 1.1fr) minmax(240px, 1fr) minmax(210px, 1fr); }
+}
+@media (max-width: 991.98px) {
+  .backup-page { padding-inline: 18px; }
+  .backup-page .protection-card { grid-template-columns: minmax(0, 1fr) auto; gap: 9px 12px; padding: 12px 14px; }
+  .backup-page .protection-card-head { grid-column: 1; }
+  .backup-page .protection-counts,
+  .backup-page .protection-meta { grid-column: 1 / -1; }
+  .backup-page .protection-meta { margin-top: 2px; }
+}
+@media (max-width: 767.98px) {
+  .backup-page { padding-inline: 14px; }
+  .backup-page .future-kpis { grid-template-columns: 1fr; }
+  .backup-page .protection-card { grid-template-columns: 1fr; }
+  .backup-page .protection-card-head,
+  .backup-page .protection-counts,
+  .backup-page .protection-meta { grid-column: 1; }
+  .backup-page .protection-counts { grid-template-columns: 1fr; }
+  .backup-page .protection-count { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--al-line); }
+  .backup-page .protection-count:last-child { border-bottom: 0; }
+  .backup-page .protection-count span { order: -1; margin-top: 0; }
+  .backup-page .integrity-strip { flex-wrap: wrap; }
+  .backup-page .integrity-strip code { width: 100%; order: 3; }
 }

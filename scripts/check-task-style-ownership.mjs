@@ -1,46 +1,62 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 
-const mainPath = 'packages/web/src/main.tsx'
-const canonicalPath = 'packages/web/src/task-detail.css'
+const webRoot = 'packages/web/src'
+const mainPath = `${webRoot}/main.tsx`
+const canonicalPath = `${webRoot}/task-detail.css`
 const retiredPaths = [
-  'packages/web/src/task-detail-prototype.css',
-  'packages/web/src/task-detail-polish.css',
-  'packages/web/src/task-feedback-polish.css',
+  `${webRoot}/task-detail-prototype.css`,
+  `${webRoot}/task-detail-polish.css`,
+  `${webRoot}/task-feedback-polish.css`,
+  `${webRoot}/task-execution.css`,
+  `${webRoot}/desktop-responsive.css`,
+  `${webRoot}/features/task-header.css`,
 ]
 
 for (const path of retiredPaths) {
-  if (existsSync(path)) throw new Error(`Task Surface 不允许恢复临时覆盖层：${path}`)
+  if (existsSync(path)) throw new Error(`已退役的 Task / Desktop 覆盖层不应重新出现：${path}`)
 }
-
-if (!existsSync(canonicalPath)) {
-  throw new Error(`Task Surface 缺少唯一正式样式所有者：${canonicalPath}`)
-}
+if (!existsSync(canonicalPath)) throw new Error(`Task Surface 缺少共享样式所有者：${canonicalPath}`)
 
 const main = readFileSync(mainPath, 'utf8')
-const imports = [...main.matchAll(/import\s+['"](.+?\.css)['"]/g)].map(match => match[1])
-const taskDetailImports = imports.filter(path => path.includes('task-detail'))
-if (taskDetailImports.length !== 1 || taskDetailImports[0] !== './task-detail.css') {
-  throw new Error(`Task Surface 必须且只能加载 ./task-detail.css；当前：${taskDetailImports.join(', ') || '无'}`)
+const imports = [...main.matchAll(/import\s+['\"](.+?\.css)['\"]/g)].map(match => match[1])
+if (imports.filter(path => path === './task-detail.css').length !== 1) {
+  throw new Error('main.tsx 必须且只能加载一次 ./task-detail.css')
 }
-
-for (const retired of ['./task-detail-prototype.css', './task-detail-polish.css', './task-feedback-polish.css']) {
-  if (imports.includes(retired)) throw new Error(`main.tsx 不得重新加载临时样式层：${retired}`)
+for (const retired of ['./task-detail-prototype.css', './task-detail-polish.css', './task-feedback-polish.css', './task-execution.css', './desktop-responsive.css']) {
+  if (imports.includes(retired)) throw new Error(`main.tsx 不得加载已退役样式层：${retired}`)
 }
 
 const canonical = readFileSync(canonicalPath, 'utf8')
 for (const marker of [
-  'Task Detail / Task Surface 唯一样式所有者',
-  '.task-center-main .task-header',
-  '.task-center-main .task-round',
-  '.task-center-main .thinking-block',
-  '.task-center-main .execution-group',
+  'Task Surface 共享详情组件的唯一样式所有者',
+  '.task-surface .task-header',
+  '.task-surface .task-round',
+  '.task-surface .task-message-row',
+  '.task-surface .task-thinking',
+  '.task-surface .task-tool-row',
+  '.task-surface .task-event-row',
 ]) {
-  if (!canonical.includes(marker)) throw new Error(`task-detail.css 缺少正式所有权契约：${marker}`)
+  if (!canonical.includes(marker)) throw new Error(`task-detail.css 缺少共享表现契约：${marker}`)
 }
 
-const forbiddenTaskLayerPattern = /task-detail-(?:prototype|polish)|task-feedback-polish/
-if (forbiddenTaskLayerPattern.test(main)) {
-  throw new Error('main.tsx 检测到 Task Surface 临时覆盖层引用')
+const sharedSelector = /\.(?:task-header(?:\b|-)|task-round(?:\b|-)|task-message(?:\b|-)|task-thinking(?:\b|-)|task-tool(?:\b|-)|task-event(?:\b|-)|task-disclosure(?:\b|-))/g
+const allowedOwner = 'task-detail.css'
+const cssFiles = readdirSync(webRoot, { withFileTypes: true })
+  .filter(entry => entry.isFile() && entry.name.endsWith('.css'))
+  .map(entry => entry.name)
+for (const file of cssFiles) {
+  if (file === allowedOwner) continue
+  const source = readFileSync(`${webRoot}/${file}`, 'utf8')
+  const selectors = [...new Set(source.match(sharedSelector) ?? [])]
+  if (selectors.length) throw new Error(`${file} 越权定义 Task Surface 共享选择器：${selectors.slice(0, 8).join(', ')}`)
 }
 
-console.log('Task Surface 样式所有权检查通过：共享表现只由 task-detail.css 持有，临时覆盖层已退役。')
+for (const component of ['TaskHeader.tsx', 'TaskRound.tsx', 'TaskMessage.tsx', 'TaskThinking.tsx', 'TaskToolGroup.tsx', 'TaskToolRow.tsx', 'TaskEvent.tsx']) {
+  const path = `${webRoot}/features/${component}`
+  const source = readFileSync(path, 'utf8')
+  if (/import\s+['\"][^'\"]+\.css['\"]/.test(source)) {
+    throw new Error(`${component} 不得私有导入 CSS；共享表现统一由 task-detail.css 持有`)
+  }
+}
+
+console.log('Task Surface 样式所有权检查通过：共享组件单一所有者，旧覆盖层与跨页面越权规则均已退役。')

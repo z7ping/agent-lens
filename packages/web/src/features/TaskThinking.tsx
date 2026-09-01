@@ -11,7 +11,7 @@ export interface TaskThinkingProps {
 }
 
 function DisclosureChevron() {
-  return <span className="disclosure-chevron thinking-chevron" aria-hidden="true">
+  return <span className="task-disclosure-chevron task-thinking-chevron" aria-hidden="true">
     <svg viewBox="0 0 16 16" fill="none"><path d="m6 4 4 4-4 4"/></svg>
   </span>
 }
@@ -31,20 +31,20 @@ export function TaskThinking({
   }, [defaultExpanded, model.id])
 
   return <details
-    className={`task-thinking thinking-block thinking-node agent-lane-node ${className}`.trim()}
+    className={`task-thinking ${className}`.trim()}
     data-task-thinking-state={model.state ?? 'settled'}
     open={expanded}
     onToggle={event => setExpanded(event.currentTarget.open)}
   >
-    <summary>
-      <span className="thinking-summary-main">
+    <summary className="task-thinking-summary">
+      <span className="task-thinking-summary-main">
         <DisclosureChevron/>
-        <span className="thinking-label thinking-title">{model.label}</span>
-        {model.preview && !expanded && <span className="thinking-preview node-preview">{model.preview}</span>}
+        <span className="task-thinking-label">{model.label}</span>
+        {model.preview && !expanded && <span className="task-thinking-preview">{model.preview}</span>}
       </span>
-      <span className="thinking-summary-meta">{meta}{model.time && <time>{model.time}</time>}</span>
+      <span className="task-thinking-summary-meta">{meta}{model.time && <time>{model.time}</time>}</span>
     </summary>
-    <div className="thinking-content thinking-body">{children}</div>
+    <div className="task-thinking-content">{children}</div>
     {actions && <div className="task-thinking-actions">{actions}</div>}
   </details>
 }

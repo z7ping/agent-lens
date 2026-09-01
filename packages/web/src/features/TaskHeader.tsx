@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react'
-import './task-header.css'
 
 export interface TaskHeaderMetric {
   label: string

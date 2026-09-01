@@ -84,9 +84,9 @@ function toolGroup(id: string, tools: TaskToolModel[]): TaskToolGroupModel {
 function ToolOutput({ tool }: { tool: TaskToolModel }) {
   if (!tool.output) return null
   if (tool.status === 'running') {
-    return <div className="tool-live-output" role="status" aria-label={`${tool.name} 实时输出`}><pre>{tool.output}</pre></div>
+    return <div className="task-tool-live-output" role="status" aria-label={`${tool.name} 实时输出`}><pre>{tool.output}</pre></div>
   }
-  return <details className="tool-output-details" open={tool.status === 'error'}>
+  return <details className="task-tool-output-details" open={tool.status === 'error'}>
     <summary>{tool.status === 'error' ? '错误 / 输出' : '查看输出'}</summary>
     <pre>{tool.output}</pre>
   </details>
@@ -219,7 +219,7 @@ export function PiLiveRunningTaskRound({
     className="pi-live-current-round"
     summaryMeta={pendingMessageCount > 0 ? <span>{pendingMessageCount} 条排队</span> : undefined}
   >
-    {thinkingText && <TaskThinking model={thinking} defaultExpanded><div className="thinking-stream-text">{thinkingText}</div></TaskThinking>}
+    {thinkingText && <TaskThinking model={thinking} defaultExpanded><div className="task-thinking-stream-text">{thinkingText}</div></TaskThinking>}
     {toolModels.length > 0 && <TaskToolGroup
       model={toolGroup('pi-live-current-tools', toolModels)}
       renderDetails={tool => <ToolOutput tool={tool}/>}

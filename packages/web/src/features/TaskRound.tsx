@@ -13,7 +13,7 @@ export interface TaskRoundProps {
 }
 
 function DisclosureChevron() {
-  return <span className="disclosure-chevron interaction-chevron" aria-hidden="true">
+  return <span className="task-disclosure-chevron task-round-chevron" aria-hidden="true">
     <svg viewBox="0 0 16 16" fill="none"><path d="m6 4 4 4-4 4"/></svg>
   </span>
 }
@@ -52,26 +52,26 @@ export function TaskRound({
   }
 
   return <details
-    className={`task-round interaction-block ${model.errorCount ? 'interaction-has-error' : ''} ${className}`.trim()}
+    className={`task-round interaction-block ${model.errorCount ? 'task-round-has-error' : ''} ${className}`.trim()}
     data-interaction-id={model.id}
     data-task-round-state={model.state}
     open={expanded}
     onToggle={event => onToggle(event.currentTarget.open)}
   >
-    <summary className="interaction-summary task-round-summary">
+    <summary className="task-round-summary">
       <DisclosureChevron/>
-      <span className="interaction-title round-label">{model.label}</span>
-      {model.preview && <span className="interaction-preview round-preview">{model.preview}</span>}
-      <span className="interaction-summary-meta round-meta">
-        {model.state === 'running' && <span className="is-live">进行中</span>}
+      <span className="task-round-label">{model.label}</span>
+      {model.preview && <span className="task-round-preview">{model.preview}</span>}
+      <span className="task-round-meta">
+        {model.state === 'running' && <span className="task-round-live">进行中</span>}
         {model.state === 'stopped' && <span>已停止</span>}
         {model.toolCount > 0 && <span>{model.toolCount} 调用</span>}
-        {model.errorCount > 0 && <span className="is-error error">{model.errorCount} 错误</span>}
-        {model.highLatency && <span className="is-latency">耗时较高</span>}
+        {model.errorCount > 0 && <span className="task-round-error">{model.errorCount} 错误</span>}
+        {model.highLatency && <span className="task-round-latency">耗时较高</span>}
         {model.durationMs > 0 && <span>{taskDurationLabel(model.durationMs)}</span>}
         {summaryMeta}
       </span>
     </summary>
-    <div className="interaction-flow task-round-flow round-flow">{children}</div>
+    <div className="task-round-flow">{children}</div>
   </details>
 }

@@ -63,9 +63,12 @@ export function TaskMessage({
     }
   }, [measure, text, user, view])
 
-  return <div className={`message-row ${user ? 'user' : 'agent'} task-message-row ${className}`.trim()} data-task-message-role={role}>
-    <div className={`chat-bubble ${user ? 'chat-bubble-user' : 'chat-bubble-agent'} task-message-bubble`}>
-      <div className="chat-meta task-message-meta"><b>{author}</b>{meta}{time && <time>{time}</time>}</div>
+  const roleClass = user ? 'task-message-user' : 'task-message-assistant'
+  const bubbleClass = user ? 'task-message-bubble-user' : 'task-message-bubble-assistant'
+
+  return <div className={`task-message-row ${roleClass} ${className}`.trim()} data-task-message-role={role}>
+    <div className={`task-message-bubble ${bubbleClass}`}>
+      <div className="task-message-meta"><b>{author}</b>{meta}{time && <time>{time}</time>}</div>
       <div className="markdown-message task-message-content" data-view={view}>
         <div
           ref={surfaceRef}
@@ -82,7 +85,7 @@ export function TaskMessage({
           </button>}
         </div>}
       </div>
-      {actions && <div className="chat-actions task-message-actions">{actions}</div>}
+      {actions && <div className="task-message-actions">{actions}</div>}
     </div>
   </div>
 }

@@ -30,9 +30,9 @@ test('TaskToolGroup 不再创建“工具执行”折叠父层，具体调用直
   const html = render()
   assert.match(html, /data-task-tool-group="true"/)
   assert.doesNotMatch(html, /<details[^>]*data-task-tool-group/)
-  assert.doesNotMatch(html, /class="tool-title"/)
   assert.doesNotMatch(html, />工具执行</)
-  assert.equal((html.match(/task-tool-row execution-row tool-row/g) ?? []).length, 3)
+  assert.equal((html.match(/class="task-tool-row/g) ?? []).length, 3)
+  assert.doesNotMatch(html, /execution-row|tool-row|execution-group|tool-group|agent-lane-node/)
   assert.match(html, /读取文件/)
   assert.match(html, /src\/review\.ts/)
   assert.match(html, /完成 · 42ms/)
@@ -68,7 +68,7 @@ test('错误 Tool Call 仍以具体行出现并保留错误语义', () => {
     tools: [{ id: 'shell-error', name: '运行测试', kind: 'shell', kindLabel: 'Shell', status: 'error', primary: 'pnpm test', durationLabel: '1.2s' }],
   }
   const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: errorModel }))
-  assert.match(html, /task-tool-row execution-row tool-row error/)
+  assert.match(html, /task-tool-row task-tool-row-error/)
   assert.match(html, /运行测试/)
   assert.match(html, /失败 · 1\.2s/)
 })

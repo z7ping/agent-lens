@@ -23,12 +23,12 @@ export function TaskToolGroup({
   className = '',
 }: TaskToolGroupProps) {
   return <div
-    className={`task-tool-group execution-group tool-group agent-lane-node ${model.errorCount ? 'execution-group-error' : ''} ${className}`.trim()}
+    className={`task-tool-group ${model.errorCount ? 'task-tool-group-error' : ''} ${className}`.trim()}
     data-error-count={model.errorCount}
     data-task-tool-group="true"
     aria-label={`${model.itemCount} 次工具调用`}
   >
-    <div className="execution-list tool-list">{model.tools.map((tool, index) => <TaskToolRow
+    <div className="task-tool-list">{model.tools.map((tool, index) => <TaskToolRow
       key={tool.id}
       model={tool}
       meta={renderMeta?.(tool)}

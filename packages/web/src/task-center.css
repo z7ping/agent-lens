@@ -1,7 +1,9 @@
 @reference "./styles.css";
 
-/* Task Center 只负责壳层、Rail、Header 容器与页面布局。
- * Round / Message / Thinking / Tool 的最终表现统一由 task-execution.css 持有，避免旧样式再次覆盖高保真契约。
+/*
+ * Task Center 页面壳层唯一所有者。
+ * 只负责工具栏、任务 Rail、详情容器与新建任务布局；
+ * Task 详情组件归 task-detail.css，长会话导航归 review-long-session.css，Pi Live 专属 UI 归 pi-live.css。
  */
 .task-center-page {
   --task-center-rail: 316px;
@@ -17,9 +19,9 @@
 .task-center-toolbar {
   grid-column: 1 / -1;
   grid-row: 1;
+  display: flex;
   min-width: 0;
   height: 50px;
-  display: flex;
   align-items: center;
   gap: 7px;
   padding: 0 12px;
@@ -29,9 +31,9 @@
 }
 .task-center-toolbar-label {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 6px;
-  flex: 0 0 auto;
   margin-right: 2px;
   color: var(--al-muted-2);
   font-size: 12px;
@@ -67,16 +69,10 @@
   border-bottom: 1px solid var(--al-line);
   background: var(--al-surface);
 }
-.task-center-rail-head > div { min-width: 0; display: flex; align-items: baseline; gap: 7px; }
+.task-center-rail-head > div { display: flex; min-width: 0; align-items: baseline; gap: 7px; }
 .task-center-rail-head b { color: var(--al-ink); font-size: 13px; font-weight: 700; }
 .task-center-rail-head span { color: var(--al-muted-2); font-size: 12px; }
-.task-center-rail-head .btn {
-  height: 28px;
-  padding: 0 10px;
-  border-radius: 7px;
-  font-size: 12px;
-  font-weight: 650;
-}
+.task-center-rail-head .btn { height: 28px; padding: 0 10px; border-radius: 7px; font-size: 12px; font-weight: 650; }
 .task-center-scroll { min-height: 0; flex: 1; overflow: auto; padding: 4px 10px 12px; }
 .task-center-group + .task-center-group { margin-top: 0; padding-top: 0; border-top: 0; }
 .task-center-group-title {
@@ -100,7 +96,7 @@
 .task-live-item { --session-source: var(--al-accent); }
 .task-live-item .session-item-meta time { color: var(--al-muted-2); font-weight: 400; }
 
-/* 左侧保持平面高密度列表，不做卡片墙。 */
+/* Rail 是平面高密度列表；session-item 基础语义来自 Review 数据模型，视觉仅在 Rail 上下文内生效。 */
 .task-center-rail .session-item {
   position: relative;
   width: 100%;
@@ -118,9 +114,9 @@
 .task-center-rail .session-item-active::before {
   content: "";
   position: absolute;
-  left: 0;
   top: 9px;
   bottom: 9px;
+  left: 0;
   width: 2px;
   border-radius: 2px;
   background: var(--al-accent);
@@ -143,7 +139,14 @@
 .task-center-rail .session-load-more:hover { background: var(--al-surface); color: var(--al-ink-2); }
 
 /* 左右滚动根完全隔离。 */
-.task-center-main { grid-column: 2; grid-row: 2; min-width: 0; min-height: 0; overflow: hidden; background: var(--al-surface); }
+.task-center-main {
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--al-surface);
+}
 .task-center-main > .task-surface { width: 100%; height: 100%; min-width: 0; min-height: 0; overflow: hidden; }
 .task-center-main .task-surface > .review-page,
 .task-center-main .task-surface > .pi-live-page,
@@ -151,61 +154,29 @@
 .task-center-main .review-layout { grid-template-columns: minmax(0, 1fr); }
 .task-center-main .pi-live-page { grid-template-columns: minmax(0, 1fr); }
 .task-center-main .review-reader-pane { background: var(--al-surface); }
-.task-center-main .review-reader {
+.task-center-main .review-reader,
+.task-center-main .pi-live-document {
   width: min(1180px, 100%);
   margin: 0 auto;
   padding: 0 34px 88px 48px;
 }
 
-/* Round 导航保留能力但不抢正文层级。 */
-.task-center-main .round-nav {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  margin: 0;
-  padding: 7px 0;
-  border-bottom: 1px solid var(--al-line);
-  background: color-mix(in srgb, var(--al-surface) 96%, transparent);
-  box-shadow: none;
-}
-.task-center-main .round-nav small { display: none; }
-.task-center-main .round-nav button { min-height: 26px; border-radius: 6px; font-size: 12px; }
-
-/* Pi Live 与 Review 共用正文宽度；仅保留 Live 控制与输入区差异。 */
-.task-center-main .pi-live-document { width: min(1180px, 100%); margin: 0 auto; padding: 0 34px 92px 48px; }
-.task-center-main .pi-live-stream-response {
-  max-width: min(74%, 860px);
-  margin: 14px 0;
-  border-color: color-mix(in srgb, var(--al-accent) 17%, var(--al-line));
-  border-radius: 17px 17px 17px 6px;
-  background: color-mix(in srgb, var(--al-accent-soft) 45%, var(--al-surface));
-  box-shadow: 0 2px 8px rgb(16 24 40 / .035);
-  font-size: 14px;
-  line-height: 1.68;
-}
-.task-center-main .pi-live-compose-wrap { border-top: 1px solid var(--al-line); background: var(--al-surface); }
-
-/* 新建任务严格回到原型的“文档 + 配置条 + Composer”，不做大卡片。 */
+/* 新建任务：文档 + 配置条。 */
 .task-center-new {
   display: block;
   height: 100%;
   min-height: 0;
   overflow: auto;
-  padding: 0;
   background: var(--al-canvas);
 }
 .task-center-new-card {
   width: min(860px, 100%);
   margin: 0 auto;
   padding: 42px 34px 90px;
-  border: 0;
-  border-radius: 0;
   background: transparent;
-  box-shadow: none;
 }
 .task-center-new-kicker { color: var(--al-accent); font-size: 12px; font-weight: 700; }
 .task-center-new-card h1 { margin: 6px 0 8px; color: var(--al-ink); font-size: 22px; font-weight: 700; line-height: 1.35; letter-spacing: -.02em; }
-.task-center-new-card > p { display: none; }
 .task-center-new-fields {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 220px;
@@ -215,8 +186,7 @@
   border-top: 1px solid var(--al-line);
   border-bottom: 1px solid var(--al-line);
 }
-.task-center-new-fields label,
-.task-center-prompt { display: grid; gap: 6px; color: var(--al-muted); font-size: 12px; font-weight: 650; }
+.task-center-new-fields label { display: grid; gap: 6px; color: var(--al-muted); font-size: 12px; font-weight: 650; }
 .task-center-new-fields select {
   width: 100%;
   height: 34px;
@@ -227,7 +197,7 @@
   color: var(--al-ink);
   font-size: 13px;
 }
-.task-center-new-fields label > small { display: none; }
+.task-center-new-fields select:focus { border-color: color-mix(in srgb, var(--al-accent) 58%, var(--al-line)); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--al-accent) 10%, transparent); }
 .task-center-agent-fixed {
   display: flex;
   height: 34px;
@@ -241,50 +211,22 @@
 }
 .task-center-agent-fixed b { color: var(--al-ink); font-size: 13px; }
 .task-center-agent-fixed small { margin-left: auto; overflow: hidden; color: var(--al-muted-2); font-size: 12px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
-.task-center-prompt {
-  display: block;
-  margin-top: 18px;
-  overflow: hidden;
-  border: 1px solid var(--al-line-strong);
-  border-bottom: 0;
-  border-radius: 12px 12px 0 0;
-  background: var(--al-surface);
-  box-shadow: 0 2px 8px rgb(16 24 40 / .04);
-}
-.task-center-prompt > span { display: none; }
-.task-center-prompt textarea {
-  width: 100%;
-  min-height: 150px;
-  resize: vertical;
-  padding: 13px 14px;
-  border: 0;
-  border-radius: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--al-ink);
-  font: 14px/1.65 var(--font-sans);
-}
-.task-center-prompt textarea:focus,
-.task-center-new-fields select:focus { border-color: color-mix(in srgb, var(--al-accent) 58%, var(--al-line)); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--al-accent) 10%, transparent); }
 .task-center-new-status {
   min-height: 44px;
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-top: 0;
-  padding: 0 116px 0 12px;
-  border: 1px solid var(--al-line-strong);
-  border-top-color: var(--al-line);
-  border-radius: 0 0 12px 12px;
+  margin-top: 14px;
+  padding: 0 12px;
+  border: 1px solid var(--al-line);
+  border-radius: 8px;
   color: var(--al-muted-2);
   font-size: 12px;
 }
 .task-center-new-status::before { content: ""; width: 6px; height: 6px; flex: 0 0 6px; border-radius: 50%; background: var(--al-success); }
 .task-center-project-hint { margin-top: 10px; padding: 9px 10px; border: 1px solid var(--al-line); border-radius: 8px; background: var(--al-soft-2); color: var(--al-muted); font-size: 12px; line-height: 1.55; }
-.task-center-new-actions { position: relative; z-index: 2; display: flex; height: 44px; align-items: center; justify-content: flex-end; margin-top: -44px; padding: 0 8px; pointer-events: none; }
-.task-center-new-actions .btn { pointer-events: auto; }
+.task-center-new-actions { display: flex; justify-content: flex-end; margin-top: 14px; }
 
-/* 1280×800 / 1366×768 主基线。 */
 @media (max-width: 1199.98px) {
   .task-center-page { --task-center-rail: 286px; }
   .task-center-main .review-reader,
@@ -296,7 +238,6 @@
   .task-center-toolbar .agent-scope .scope-chip:nth-of-type(n+4) { display: none; }
   .task-center-main .review-reader,
   .task-center-main .pi-live-document { padding-right: 18px; padding-left: 40px; }
-  .task-center-main .task-message-bubble { max-width: 84%; }
   .task-center-new-fields { grid-template-columns: 1fr; }
 }
 @media (max-width: 767.98px) {
@@ -306,6 +247,5 @@
   .task-center-main { grid-column: 1; grid-row: 2; }
   .task-center-main .review-reader,
   .task-center-main .pi-live-document { padding: 13px 14px 74px; }
-  .task-center-main .task-message-bubble { max-width: 94%; }
   .task-center-new-card { padding: 26px 14px 70px; }
 }

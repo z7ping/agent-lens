@@ -20,19 +20,18 @@ import './states.css'
 import './live-notice.css'
 import './backup.css'
 import './backup-overlays.css'
+import './backup-responsive.css'
 import './insights.css'
 import './tools.css'
 import './agents.css'
+import './agent-insights-responsive.css'
 import './review.css'
 import './review-long-session.css'
 import './pi-live.css'
 import './task-center.css'
-import './task-execution.css'
 import './hub-review.css'
-import './desktop-responsive.css'
+// Task Surface 共享详情组件最后加载；页面所有者不得再定义这些共享选择器。
 import './task-detail.css'
-import './agent-insights-responsive.css'
-import './backup-responsive.css'
 
 writeTheme(readTheme())
 const disposeLiveRecovery = installLiveRecovery(clientModel)
