@@ -13,6 +13,26 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {}
 }
 
+const visibleReasoningTypes = new Set([
+  'agent_reasoning',
+  'reasoning',
+  'reasoning_summary',
+])
+
+function firstVisibleText(payload: Record<string, unknown>): string {
+  for (const value of [
+    payload.text,
+    payload.message,
+    payload.reasoning,
+    payload.summary,
+    payload.content,
+  ]) {
+    const text = messageText(value).trim()
+    if (text) return text
+  }
+  return ''
+}
+
 function sourceVisibleReasoning(record: SourceRecord): { text: string; raw: JsonValue } | null {
   if (record.locator.kind === 'runtime-hook') return null
 
@@ -22,34 +42,27 @@ function sourceVisibleReasoning(record: SourceRecord): { text: string; raw: Json
 
   const payload = asRecord(entry.payload)
   const type = typeof payload.type === 'string' ? payload.type : ''
-  if (type !== 'agent_reasoning' && type !== 'reasoning') return null
+  if (!visibleReasoningTypes.has(type)) return null
 
-  const text = messageText(
-    payload.text
-      ?? payload.message
-      ?? payload.reasoning
-      ?? payload.summary
-      ?? payload.content
-      ?? '',
-  ).trim()
+  const text = firstVisibleText(payload)
   if (!text) return null
-
   return { text, raw: payload as JsonValue }
 }
 
 /**
- * Codex rollout 在不同版本里有两条 source-visible Thinking 记录路径：
- * - response_item / reasoning（原 normalizer 已支持）
- * - event_msg / agent_reasoning（近期 Codex CLI 常见）
+ * Codex rollout 的 source-visible Thinking 目前至少有两条历史路径：
+ * - response_item / reasoning：基础 normalizer 直接处理；
+ * - event_msg / agent_reasoning|reasoning|reasoning_summary：这里兼容不同 CLI 版本。
  *
- * 后者此前会落成 unknown，导致 Review 投影虽然支持 message.reasoning，UI 仍看不到 Thinking。
- * 这里在保持原 evidence / identity / dedup 的前提下，把该 unknown 提升为 message.reasoning。
+ * 只提升来源明确暴露的 reasoning，不猜测隐藏 CoT，也不把 reasoning token 统计误当正文。
  */
 export async function normalizeCodexRecordWithVisibleReasoning(
   record: SourceRecord,
   ctx: SourceNormalizationContext,
 ): Promise<NormalizedSourceOutput> {
   const normalized = await normalizeCodexRecord(record, ctx)
+  if (normalized.observations.some(observation => observation.kind === 'message.reasoning')) return normalized
+
   const reasoning = sourceVisibleReasoning(record)
   if (!reasoning) return normalized
 
