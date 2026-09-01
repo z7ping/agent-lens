@@ -15,6 +15,7 @@ import type {
   SessionRelationshipCandidate,
   SourceCheckpointService,
   SourceDefinition,
+  SourceHistoryWindow,
   SourceRecord,
   SourceRuntimeStatus,
   StorageService,
@@ -49,6 +50,7 @@ export interface SourceHistorySyncInput {
   host: Host
   detected: DetectedSource
   abortSignal: AbortSignal
+  historyWindow?: SourceHistoryWindow
 }
 
 export interface SourceHistorySyncResult {
@@ -419,6 +421,7 @@ export class SourceHistoryRunner {
         ...(runtimeProfile ? { runtimeProfile } : {}),
         abortSignal,
         checkpoint,
+        ...(input.historyWindow ? { historyWindow: input.historyWindow } : {}),
       })) {
         if (abortSignal.aborted) break
         result.records += 1

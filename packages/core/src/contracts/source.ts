@@ -56,6 +56,17 @@ export interface SourceExecutionContext {
   checkpoint: SourceCheckpointService
 }
 
+export interface SourceHistoryWindow {
+  /** 只调度最后活动时间不早于该时刻的历史单元。 */
+  activeSince?: string
+  /** 按最后活动时间倒序处理的最大历史会话数。 */
+  sessionLimit?: number
+}
+
+export interface SourceHistoryExecutionContext extends SourceExecutionContext {
+  historyWindow?: SourceHistoryWindow
+}
+
 export interface SourceNormalizationContext {
   host: Host
   installation: AgentInstallation
@@ -91,7 +102,7 @@ export interface SourceDefinition {
   detect(ctx: SourceDetectionContext): Promise<DetectedSource[]>
   declareCapabilities(detected: DetectedSource): Promise<ObservationCapability[]>
   discoverAssets?(ctx: SourceExecutionContext): AsyncIterable<DiscoveredAsset>
-  ingestHistory?(ctx: SourceExecutionContext): AsyncIterable<SourceRecord>
+  ingestHistory?(ctx: SourceHistoryExecutionContext): AsyncIterable<SourceRecord>
   startCapture?(ctx: SourceExecutionContext, emit: SourceRecordEmitter): Promise<Disposable>
   normalize(record: SourceRecord, ctx: SourceNormalizationContext): Promise<NormalizedSourceOutput>
 }

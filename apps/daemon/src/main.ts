@@ -56,6 +56,7 @@ const startedAt = Date.now()
 // 为 Web Shell 的首轮 Health / Facet / Review 查询保留短暂宽限期；
 // 历史和资产同步随后继续增量执行。
 const INITIAL_BACKGROUND_SYNC_DELAY_MS = 2_000
+const HOT_HISTORY_WINDOW_MS = 7 * 24 * 60 * 60 * 1_000
 
 const app = new AgentLensApplication()
 app.useRuntime(nodeRuntimePlugin, nodeRuntime)
@@ -212,6 +213,7 @@ try {
       app.context,
       runtimeController.signal,
       prepared.targets,
+      { activeSince: new Date(startedAt - HOT_HISTORY_WINDOW_MS).toISOString() },
     )
     logSourceFailures(history.failures)
     for (const result of history.results) {

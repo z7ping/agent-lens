@@ -95,6 +95,7 @@ test('History Coverage 只覆盖 history 能力并引用首尾 Source Evidence',
   const last = record('last', '2026-08-24T03:00:00.000Z')
   const declarations: CoverageDeclaration[] = []
   const persisted: string[] = []
+  let receivedActiveSince: string | undefined
 
   const source: SourceDefinition = {
     manifest: {
@@ -130,7 +131,8 @@ test('History Coverage 只覆盖 history 能力并引用首尾 Source Evidence',
         },
       ]
     },
-    async *ingestHistory() {
+    async *ingestHistory(ctx) {
+      receivedActiveSince = ctx.historyWindow?.activeSince
       yield last
       yield first
     },
@@ -166,9 +168,11 @@ test('History Coverage 只覆盖 history 能力并引用首尾 Source Evidence',
     host,
     detected,
     abortSignal: new AbortController().signal,
+    historyWindow: { activeSince: '2026-08-18T00:00:00.000Z' },
   })
 
   assert.equal(result.records, 2)
+  assert.equal(receivedActiveSince, '2026-08-18T00:00:00.000Z')
   assert.deepEqual(persisted, ['last', 'first'])
   assert.equal(declarations.length, 1)
   assert.equal(declarations[0]?.capability, 'transcript')
