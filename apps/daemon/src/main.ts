@@ -34,7 +34,12 @@ import {
   beginSessionSummaryProjectionRun,
   markSessionSummaryProjectionClean,
 } from './projection-readiness.js'
-import { createProgressiveHistoryStages, yieldToForeground } from './history-sync-plan.js'
+import {
+  createProgressiveHistoryStages,
+  stagesAllowedByCapacity,
+  storageCapacityState,
+  yieldToForeground,
+} from './history-sync-plan.js'
 import { profiledDshSourcePlugin } from './sources/dsh-profiled.js'
 
 const nodeRuntime = resolveAgentLensNodeRuntime()
@@ -209,7 +214,14 @@ try {
 
     // 历史任务是首要界面数据。先完成历史同步，再扫描静态资产，避免两个
     // 冷扫描器同时争用同一个 SQLite 执行器和磁盘。
-    for (const stage of createProgressiveHistoryStages(startedAt)) {
+    const storageHealth = await app.context.storage.health()
+    const capacityState = storageCapacityState(storageHealth.details)
+    const plannedHistoryStages = createProgressiveHistoryStages(startedAt)
+    const historyStages = stagesAllowedByCapacity(plannedHistoryStages, capacityState)
+    if (historyStages.length < plannedHistoryStages.length) {
+      console.warn(`[AgentLens] 7-day history backfill paused: storage capacity=${capacityState}`)
+    }
+    for (const stage of historyStages) {
       if (runtimeController.signal.aborted) return
       console.info(`[AgentLens] history sync stage started: ${stage.label}`)
       const history = await syncRegisteredSourceHistory(

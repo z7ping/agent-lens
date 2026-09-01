@@ -17,6 +17,26 @@ export function createProgressiveHistoryStages(startedAt: number): ProgressiveHi
   ]
 }
 
+export type StorageCapacityState = 'healthy' | 'approaching' | 'exceeded' | 'unknown'
+
+export function storageCapacityState(details: Readonly<Record<string, unknown>> | undefined): StorageCapacityState {
+  const dataGrowth = details?.dataGrowth
+  if (!dataGrowth || typeof dataGrowth !== 'object' || Array.isArray(dataGrowth)) return 'unknown'
+  const capacity = (dataGrowth as Record<string, unknown>).capacity
+  if (!capacity || typeof capacity !== 'object' || Array.isArray(capacity)) return 'unknown'
+  const state = (capacity as Record<string, unknown>).state
+  return state === 'healthy' || state === 'approaching' || state === 'exceeded' ? state : 'unknown'
+}
+
+export function stagesAllowedByCapacity(
+  stages: readonly ProgressiveHistoryStage[],
+  state: StorageCapacityState,
+): ProgressiveHistoryStage[] {
+  return state === 'approaching' || state === 'exceeded'
+    ? stages.filter(stage => stage.id !== 'hot-window')
+    : [...stages]
+}
+
 export function yieldToForeground(signal: AbortSignal): Promise<void> {
   if (signal.aborted) return Promise.resolve()
   return new Promise(resolve => setImmediate(resolve))
