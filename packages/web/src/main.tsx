@@ -30,11 +30,9 @@ import './task-center.css'
 import './task-execution.css'
 import './hub-review.css'
 import './desktop-responsive.css'
-import './task-detail-prototype.css'
+import './task-detail.css'
 import './agent-insights-responsive.css'
 import './backup-responsive.css'
-import './task-detail-polish.css'
-import './task-feedback-polish.css'
 
 writeTheme(readTheme())
 const disposeLiveRecovery = installLiveRecovery(clientModel)

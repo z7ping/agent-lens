@@ -1,17 +1,16 @@
 @reference "./styles.css";
 
 /*
- * alpha.3 Task Detail 高保真收口。
+ * Task Detail / Task Surface 唯一样式所有者。
  *
- * 原则：
- * - 高密度来自删除重复结构、边框和留白，不靠缩小字体；
- * - 用户消息保留右侧紧凑气泡，Agent 输出回归连续文档流；
- * - 不制造“执行过程 / 工具执行”父层；Thinking 与 Tool 只表达真实数据层级；
- * - 状态看起来像状态，按钮看起来能点击；
- * - Review / Pi Live 共用同一套 Task Surface 视觉规则。
+ * 边界：
+ * - 这里只负责 TaskHeader / TaskRound / TaskMessage / TaskThinking / TaskToolGroup 的共享表现；
+ * - Review 长会话导航与虚拟化反馈归 review-long-session.css；
+ * - Pi Live 输入器、队列、实时页专属布局归 pi-live.css；
+ * - 禁止再新增 prototype / polish / feedback 覆盖层。
  */
 
-/* ── Header：两行摘要，不再使用大号指标带 ── */
+/* ── Header ── */
 .task-center-main .task-header {
   display: grid;
   width: 100%;
@@ -40,11 +39,7 @@
   font-size: 12px;
   white-space: nowrap;
 }
-.task-center-main .task-header-meta b {
-  color: var(--al-ink-2);
-  font-size: 13px;
-  font-weight: 700;
-}
+.task-center-main .task-header-meta b { color: var(--al-ink-2); font-size: 13px; font-weight: 700; }
 .task-center-main .task-header-context { color: var(--al-muted-2); }
 .task-center-main .task-header-status {
   display: inline-flex;
@@ -88,7 +83,6 @@
   font-size: 16px;
   font-weight: 740;
   line-height: 1.4;
-  letter-spacing: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -172,32 +166,54 @@
   font-size: 12px;
   text-align: left;
 }
-.task-center-main .task-header-metric:not(:first-child)::before {
-  content: "·";
-  margin: 0 7px;
-  color: var(--al-line-strong);
-}
+.task-center-main .task-header-metric:not(:first-child)::before { content: "·"; margin: 0 7px; color: var(--al-line-strong); }
 .task-center-main .task-header-metric b,
-.task-center-main .task-header-metric span {
-  display: inline;
-  margin: 0;
-  font-size: 12px;
-  line-height: 1;
-}
+.task-center-main .task-header-metric span { display: inline; margin: 0; font-size: 12px; line-height: 1; }
 .task-center-main .task-header-metric b { color: var(--al-ink-2); font-weight: 650; }
 .task-center-main .task-header-metric[data-tone='danger'] b,
 .task-center-main .task-header-metric[data-tone='danger'] span { color: var(--al-danger); }
 .task-center-main .task-header-metric[data-tone='accent'] b { color: var(--al-accent); }
 
-/* ── Round：—— 第 n 轮：摘要 —— ── */
-.task-center-main .task-round {
+/* ── Disclosure ── */
+.task-center-main .disclosure-chevron {
+  display: inline-grid;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  place-items: center;
+  border-radius: 5px;
+  color: var(--al-muted-2);
+  transform: rotate(0deg);
+  transform-origin: 50% 50%;
+  transition: transform .18s cubic-bezier(.2,.8,.2,1), background .18s ease, color .18s ease;
+}
+.task-center-main .disclosure-chevron svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+  overflow: visible;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.task-center-main details[open] > summary > .disclosure-chevron { transform: rotate(90deg); }
+.task-center-main details > summary:hover > .disclosure-chevron { background: var(--al-soft-2); color: var(--al-ink-2); }
+
+/* ── Round ── */
+.task-center-main .task-round,
+.task-surface .task-round {
   scroll-margin-top: 44px;
   margin-top: 10px;
   border: 0;
+  border-top: 0;
   background: transparent;
   box-shadow: none;
 }
-.task-center-main .task-round > summary {
+.task-center-main .task-round + .task-round,
+.task-surface .task-round + .task-round { margin-top: 6px; }
+.task-center-main .task-round > summary,
+.task-surface .task-round > summary {
   display: flex;
   min-height: 34px;
   align-items: center;
@@ -209,17 +225,24 @@
   cursor: pointer;
   list-style: none;
 }
-.task-center-main .task-round > summary::-webkit-details-marker { display: none; }
+.task-center-main .task-round > summary::marker,
+.task-surface .task-round > summary::marker { content: ""; font-size: 0; }
+.task-center-main .task-round > summary::-webkit-details-marker,
+.task-surface .task-round > summary::-webkit-details-marker { display: none; }
 .task-center-main .task-round > summary::before,
-.task-center-main .task-round > summary::after {
+.task-surface .task-round > summary::before { content: none; display: none; }
+.task-center-main .task-round > summary::after,
+.task-surface .task-round > summary::after {
   content: "";
   display: block;
-  min-width: 24px;
+  min-width: 0;
+  max-width: 56px;
   height: 1px;
-  flex: 1 1 36px;
+  flex: 0 1 56px;
   background: color-mix(in srgb, var(--al-line-strong) 72%, transparent);
+  opacity: .72;
 }
-.task-center-main .interaction-chevron { display: none; }
+.task-center-main .interaction-chevron { display: inline-grid; }
 .task-center-main .round-label {
   display: inline-flex;
   flex: 0 0 auto;
@@ -230,14 +253,8 @@
   font-weight: 650;
   white-space: nowrap;
 }
-.task-center-main .round-label::before {
-  content: "›";
-  color: var(--al-muted-2);
-  font-size: 15px;
-  font-weight: 400;
-  line-height: 1;
-}
-.task-center-main .task-round[open] .round-label::before { content: "⌄"; }
+.task-center-main .round-label::before,
+.task-center-main .task-round[open] .round-label::before { content: none; display: none; }
 .task-center-main .round-label::after { content: "："; margin-left: -3px; }
 .task-center-main .round-preview {
   max-width: 52%;
@@ -259,13 +276,10 @@
   font-size: 12px;
   white-space: nowrap;
 }
-.task-center-main .round-flow {
-  position: relative;
-  padding: 5px 8px 13px;
-}
+.task-center-main .round-flow { position: relative; padding: 5px 8px 13px; }
 .task-center-main .round-flow::before { display: none; }
 
-/* ── Message：用户气泡；Agent 连续文档流；不显示 AI 图标 ── */
+/* ── Message ── */
 .task-center-main .message-row,
 .task-center-main .task-message-row {
   position: relative;
@@ -279,11 +293,7 @@
 .task-center-main .task-message-agent-mark,
 .task-center-main .chat-avatar-agent { display: none !important; }
 .task-center-main .task-message-bubble,
-.task-center-main .message-row .chat-bubble {
-  position: relative;
-  font-size: 14px;
-  line-height: 1.62;
-}
+.task-center-main .message-row .chat-bubble { position: relative; font-size: 14px; line-height: 1.62; }
 .task-center-main .chat-bubble-user {
   max-width: min(64%, 760px);
   padding: 6px 10px 7px;
@@ -297,12 +307,14 @@
 .task-center-main .message-row.agent,
 .task-center-main .task-message-row[data-task-message-role='assistant'] {
   display: block;
+  width: 100%;
+  min-width: 0;
   margin: 6px 0;
 }
 .task-center-main .chat-bubble-agent {
   display: block;
-  width: auto;
-  max-width: 900px;
+  width: 100%;
+  max-width: none;
   margin: 0;
   padding: 0;
   border: 0;
@@ -316,7 +328,7 @@
 .task-center-main .task-message-content .markdown-surface { font-size: 14px; }
 .task-center-main .task-message-meta { display: none; }
 .task-center-main .task-message-content { position: relative; }
-.task-center-main .message-row.agent .markdown-surface { padding-right: 48px; }
+.task-center-main .message-row.agent .markdown-surface { width: 100%; max-width: none; padding-right: 48px; }
 .task-center-main .message-row.agent .markdown-message-actions {
   position: absolute;
   top: -1px;
@@ -343,10 +355,10 @@
   font-size: 12px;
 }
 .task-center-main .message-row.agent .markdown-message-actions button:hover { background: var(--al-soft-2); }
-/* 用户没有源码按钮；长输入仍可保留展开全文。 */
 .task-center-main .message-row.user .markdown-message-actions { margin-top: 4px; padding: 0; border: 0; }
+.task-center-main .message-row .task-message-actions { display: none; }
 
-/* ── Thinking：自身折叠；Tool 是否在其内部完全由真实 DOM / 数据关系决定 ── */
+/* ── Thinking ── */
 .task-center-main .thinking-block {
   position: relative;
   z-index: 1;
@@ -362,9 +374,9 @@
 .task-center-main .thinking-block > summary {
   display: grid;
   min-height: 30px;
-  grid-template-columns: 13px auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   padding: 0 2px;
   border: 0;
   background: transparent;
@@ -373,21 +385,25 @@
   list-style: none;
 }
 .task-center-main .thinking-block > summary::-webkit-details-marker { display: none; }
-.task-center-main .thinking-block > summary::before {
-  content: "›";
-  color: var(--al-muted-2);
-  font-size: 15px;
-  line-height: 1;
+.task-center-main .thinking-block > summary::before,
+.task-center-main .thinking-block[open] > summary::before { content: none; display: none; }
+.task-center-main .thinking-summary-main {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
 }
-.task-center-main .thinking-block[open] > summary::before { content: "⌄"; }
-/* 所有可观察 reasoning 在表现层统一叫“思考”，避免再造其他过程层级。 */
+.task-center-main .thinking-summary-main .thinking-chevron { flex: 0 0 18px; }
+.task-center-main .thinking-block[open] > summary .thinking-chevron { transform: rotate(90deg); }
+.task-center-main .thinking-block > summary:hover .thinking-chevron { background: var(--al-soft-2); color: var(--al-ink-2); }
 .task-center-main .thinking-label {
+  flex: 0 0 auto;
   color: var(--al-muted);
-  font-size: 0;
+  font-size: 13px;
   font-weight: 650;
   white-space: nowrap;
 }
-.task-center-main .thinking-label::after { content: "思考"; font-size: 13px; }
+.task-center-main .thinking-label::after { content: none; }
 .task-center-main .thinking-preview,
 .task-center-main .node-preview {
   min-width: 0;
@@ -397,8 +413,10 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.task-center-main .thinking-preview { flex: 1 1 auto; }
 .task-center-main .thinking-summary-meta {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 6px;
   color: var(--al-muted-2);
@@ -407,17 +425,18 @@
 }
 .task-center-main .thinking-content {
   position: relative;
-  margin: 0 2px 4px 20px;
+  margin: 0 2px 4px 26px;
   padding: 0;
   border: 0;
   color: var(--al-muted);
   font-size: 13px;
   line-height: 1.55;
 }
-.task-center-main .task-thinking-actions { margin: 2px 2px 5px 20px; }
-/* Thinking 内 Markdown 的源码切换也悬浮，不额外占一行。 */
+.task-center-main .task-thinking-actions { margin: 2px 2px 5px 26px; padding: 0; }
+.task-center-main .thinking-stream-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .task-center-main .thinking-content .markdown-message { position: relative; }
-.task-center-main .thinking-content .markdown-surface { padding-right: 48px; }
+.task-center-main .thinking-content .markdown-surface { max-height: none !important; padding-right: 48px; }
+.task-center-main .thinking-content .markdown-fade { display: none; }
 .task-center-main .thinking-content .markdown-message-actions {
   position: absolute;
   top: 0;
@@ -431,8 +450,11 @@
 }
 .task-center-main .thinking-content .markdown-message:hover .markdown-message-actions { opacity: .8; }
 .task-center-main .thinking-content .markdown-message-actions button { height: 22px; padding: 0 5px; font-size: 12px; }
+.task-center-main .thinking-content .markdown-message-actions button:first-child:not(:last-child) { display: none; }
+.task-center-main .task-thinking-actions > .evidence-link { display: none; }
+.task-center-main .task-thinking-actions:has(> .evidence-link:only-child) { display: none; }
 
-/* ── Tool：没有 Tool Group 标题；只保留轻量左侧引导线 ── */
+/* ── Tool ── */
 .task-center-main .execution-group,
 .task-center-main .tool-group {
   position: relative;
@@ -458,7 +480,6 @@
   border: 0;
   border-left: 2px solid color-mix(in srgb, var(--al-accent) 58%, var(--al-line));
 }
-/* 真正嵌套在 Thinking 内的 Tool 再缩进一级；平级 Tool 不会被强行挂进去。 */
 .task-center-main .thinking-content .execution-group,
 .task-center-main .thinking-content .tool-group { margin-left: 12px; }
 .task-center-main .execution-row.tool-row {
@@ -524,24 +545,31 @@
   font-size: 13px;
 }
 .task-center-main .tool-target-text { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.task-center-main .tool-status {
-  color: var(--al-muted-2);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
+.task-center-main .tool-status { color: var(--al-muted-2); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .task-center-main .tool-status.ok { color: var(--al-muted-2); }
 .task-center-main .tool-status.run { color: var(--al-accent); }
 .task-center-main .tool-status.error { color: var(--al-danger); }
-.task-center-main .tool-payload {
-  margin: 0 7px 6px 20px;
-  padding: 4px 0 0 8px;
-  border-left: 1px solid color-mix(in srgb, var(--al-line-strong) 72%, transparent);
+.task-center-main .tool-payload { margin: 0 7px 6px 20px; padding: 4px 0 0 8px; border-left: 1px solid color-mix(in srgb, var(--al-line-strong) 72%, transparent); }
+.task-center-main .tool-output-details > summary {
+  display: flex;
+  min-height: 26px;
+  align-items: center;
+  gap: 5px;
+  list-style: none;
 }
-
-/* Round 导航保留正常字号，只减少无效留白。 */
-.task-center-main .round-nav { padding-block: 5px; gap: 4px; }
-.task-center-main .round-nav button { min-height: 28px; padding-inline: 8px; font-size: 12px; }
+.task-center-main .tool-output-details > summary::-webkit-details-marker { display: none; }
+.task-center-main .tool-output-details > summary::before {
+  content: "";
+  display: block;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 4 4 4-4 4'/%3E%3C/svg%3E") center/14px 14px no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 4 4 4-4 4'/%3E%3C/svg%3E") center/14px 14px no-repeat;
+  transition: transform .18s cubic-bezier(.2,.8,.2,1);
+}
+.task-center-main .tool-output-details[open] > summary::before { transform: rotate(90deg); }
 
 @media (max-width: 1199.98px) {
   .task-center-main .execution-row.tool-row { grid-template-columns: 64px auto minmax(84px, auto) minmax(0, 1fr); }
@@ -572,5 +600,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .task-center-main .disclosure-chevron,
+  .task-center-main .tool-output-details > summary::before,
   .task-center-main .message-row.agent .markdown-message-actions { transition: none; }
 }

@@ -1,6 +1,10 @@
 .virtual-round-shell { min-width: 0; }
 .virtual-round-shell + .virtual-round-shell { border-top: 1px solid var(--al-line); }
-.virtual-round-shell[data-mounted="false"] { overflow: hidden; contain: layout paint style; }
+.virtual-round-shell[data-mounted="false"] {
+  overflow: hidden;
+  contain: layout paint style;
+  background: transparent;
+}
 
 /* 长会话性能层同时负责桌面阅读区的独立滚动上下文。 */
 .interaction-block {
@@ -21,6 +25,7 @@
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
 }
+.review-page .review-reader-pane { overflow-anchor: none; }
 
 .review-page .session-group-block + .session-group-block { margin-top: 2px; }
 .review-page .session-group {
@@ -38,10 +43,7 @@
 }
 .review-page .session-group-block:first-child .session-group { margin-top: 0; }
 
-/*
- * 长会话性能层不决定导航功能是否存在，只维护语义组的布局。
- * 筛选和操作组必须由 ReviewPage 明确标记，禁止再依赖按钮序号。
- */
+/* 长会话导航功能由 ReviewPage 提供，本文件只负责布局和性能反馈。 */
 .round-nav-filters,
 .round-nav-actions {
   display: flex;
@@ -64,6 +66,30 @@
 .round-nav-actions .round-nav-live { color: var(--al-accent); }
 .round-nav-status { margin-left: 8px; color: var(--al-muted); font-size: 12px; }
 
+/* 顶部轮次导航：悬浮与选中不产生布局跳动。 */
+.round-nav {
+  padding-block: 6px;
+  gap: 5px;
+  border-bottom-color: color-mix(in srgb, var(--al-line-strong) 78%, transparent);
+  box-shadow: 0 4px 12px rgb(16 24 40 / .035);
+}
+.round-nav button {
+  min-height: 30px;
+  padding-inline: 11px;
+  border-radius: 7px;
+  transition: background .18s ease, color .18s ease, box-shadow .18s ease;
+}
+.round-nav button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--al-accent-soft) 42%, var(--al-soft));
+  color: var(--al-ink);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--al-accent) 14%, transparent);
+}
+.round-nav button.active {
+  background: color-mix(in srgb, var(--al-accent-soft) 62%, var(--al-soft-2));
+  color: var(--al-accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--al-accent) 22%, transparent);
+}
+
 .detail-load-sentinel {
   min-height: 44px;
   display: grid;
@@ -85,11 +111,11 @@
 }
 .detail-load-sentinel button:hover { border-color: var(--al-line-strong); background: var(--al-soft); }
 
-/* 长会话轮次轨：一个轮次对应一条横线，整组在阅读区纵向居中。 */
+/* 长会话轮次轨。 */
 .turn-rail {
   z-index: 18;
   display: flex;
-  width: 24px;
+  width: 30px;
   max-height: calc(100vh - 150px);
   flex-direction: column;
   align-items: center;
@@ -97,16 +123,17 @@
   gap: 2px;
   padding: 2px 0;
   transform: translateY(-50%);
-  opacity: .68;
+  opacity: .76;
   pointer-events: none;
+  transition: opacity .18s ease;
 }
 .turn-rail:hover { opacity: 1; }
 .turn-rail::before { display: none; content: none; }
 .turn-tick {
   position: relative;
   display: grid;
-  width: 24px;
-  height: 8px;
+  width: 30px;
+  height: 9px;
   place-items: center;
   padding: 0;
   border: 0;
@@ -116,14 +143,22 @@
 }
 .turn-tick i {
   display: block;
-  width: 12px;
+  width: 13px;
   height: 2px;
   border-radius: 99px;
   background: var(--al-line-strong);
-  transition: width .14s, height .14s, background .14s;
+  transition: width .2s cubic-bezier(.2,.8,.2,1), height .2s ease, background .2s ease, box-shadow .2s ease;
 }
-.turn-tick:hover i { width: 16px; }
-.turn-tick.active i { width: 20px; height: 2px; background: var(--al-accent); }
+.turn-tick:hover i {
+  width: 21px;
+  background: color-mix(in srgb, var(--al-accent) 42%, var(--al-line-strong));
+}
+.turn-tick.active i {
+  width: 25px;
+  height: 3px;
+  background: var(--al-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--al-accent-soft) 50%, transparent);
+}
 .turn-tick.err i { background: color-mix(in srgb, var(--al-danger) 55%, var(--al-line)); }
 .turn-tick.err.active i { background: var(--al-danger); }
 .turn-tick::after {
@@ -152,29 +187,19 @@
 .turn-tick:hover::after,
 .turn-tick:focus-visible::after { opacity: 1; }
 
-/* 导轨与会话正文保持明确留白；比后加载的通用桌面 padding 选择器更具体。 */
 @media (min-width: 1101px) {
   .review-page .review-reader { padding-left: 52px; }
 }
 
-/*
- * 消息操作栏必须是一个视觉行：Markdown 的“查看源码/返回渲染”和气泡的“证据详情”
- * 虽然来自两个组件，但统一进入气泡的 flex 排版上下文，禁止因宽度和响应式变化重新断行。
- */
+/* 消息操作栏保持单一视觉行。 */
 .chat-bubble {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
 }
-.chat-bubble > .chat-meta {
-  width: 100%;
-  flex: 0 0 100%;
-}
+.chat-bubble > .chat-meta { width: 100%; flex: 0 0 100%; }
 .chat-bubble > .markdown-message { display: contents; }
-.chat-bubble .markdown-surface {
-  width: 100%;
-  flex: 0 0 100%;
-}
+.chat-bubble .markdown-surface { width: 100%; flex: 0 0 100%; }
 .chat-bubble .markdown-message-actions,
 .chat-bubble > .chat-actions {
   flex: 0 0 auto;
@@ -182,10 +207,7 @@
   white-space: nowrap;
 }
 .chat-bubble-user .markdown-message-actions { margin-left: auto; }
-.chat-bubble-user > .chat-actions {
-  margin-left: 0;
-  margin-right: 0;
-}
+.chat-bubble-user > .chat-actions { margin-left: 0; margin-right: 0; }
 .chat-bubble .markdown-message-actions button,
 .chat-bubble > .chat-actions button { white-space: nowrap; }
 
@@ -204,4 +226,10 @@
   .review-page .search-filter { width: 150px; min-width: 130px; }
   .round-nav { align-items: flex-start; }
   .round-nav-actions { margin-left: 8px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .round-nav button,
+  .turn-rail,
+  .turn-tick i { transition: none; }
 }

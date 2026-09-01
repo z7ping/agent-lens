@@ -1,6 +1,6 @@
 @reference "./styles.css";
 
-/* Pi Live：任务复盘的实时态。对话是主舞台，工具/过程是第二层观测轨迹。 */
+/* Pi Live 唯一样式所有者：页面壳、实时区、输入器、队列与 Live 专属 TaskHeader。 */
 .pi-live-page {
   --pi-live-side: 288px;
   display: grid;
@@ -86,6 +86,56 @@
 .pi-live-menu { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid var(--al-line); border-radius: 8px; background: var(--al-surface); color: var(--al-muted); font-size: 18px; line-height: 1; }
 .pi-live-menu:hover:not(:disabled) { border-color: var(--al-danger); color: var(--al-danger); }
 
+/* Live 专属 TaskHeader：排队 / PID 与操作按钮同一行。 */
+.task-center-main .task-surface-live .task-header,
+.task-surface-live .task-header {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-rows: 30px;
+  column-gap: 9px;
+  align-items: center;
+}
+.task-center-main .task-surface-live .task-header-meta,
+.task-surface-live .task-header-meta { grid-column: 1; grid-row: 1; }
+.task-center-main .task-surface-live .task-header-title,
+.task-surface-live .task-header-title { grid-column: 2; grid-row: 1; }
+.task-center-main .task-surface-live .task-header-metrics,
+.task-surface-live .task-header-metrics {
+  grid-column: 3;
+  grid-row: 1;
+  align-self: center;
+  justify-self: end;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  white-space: nowrap;
+}
+.task-center-main .task-surface-live .task-header-actions,
+.task-surface-live .task-header-actions {
+  grid-column: 4;
+  grid-row: 1;
+  align-self: center;
+  justify-self: end;
+  margin: 0;
+}
+.task-center-main .task-surface-live .task-header-submeta,
+.task-surface-live .task-header-submeta { display: none; }
+.task-surface-live .task-header-metric {
+  display: inline-flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  color: var(--al-muted-2);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.task-surface-live .task-header-metric:not(:first-child)::before { content: "·"; margin: 0 6px; color: var(--al-line-strong); }
+.task-surface-live .task-header-metric b,
+.task-surface-live .task-header-metric span { display: inline; margin: 0; font-size: 12px; line-height: 1; }
+.task-surface-live .task-header-metric b { color: var(--al-ink-2); font-weight: 650; }
+
 .pi-live-reader { position: relative; min-height: 0; overflow: auto; overflow-anchor: auto; background: var(--al-surface); }
 .pi-live-document { width: 100%; max-width: 1040px; margin: 0 auto; padding: 18px 38px 36px 30px; }
 .pi-live-chat-row { display: flex; width: 100%; min-width: 0; margin: 13px 0 18px; }
@@ -149,30 +199,71 @@
 .pi-live-blocking-input textarea { width: 100%; min-height: 32px; padding: 6px 8px; border: 1px solid var(--al-line-strong); border-radius: 7px; background: var(--al-surface); color: var(--al-ink); font-size: 13px; }
 .pi-live-blocking-input textarea { min-height: 74px; resize: vertical; }
 
-.pi-live-composer { max-width: 980px; margin: 0 auto; overflow: hidden; border: 1px solid var(--al-line-strong); border-radius: 14px; background: var(--al-surface); box-shadow: 0 4px 14px rgb(16 24 40 / .07); }
+.pi-live-composer {
+  position: relative;
+  max-width: 980px;
+  margin: 0 auto;
+  overflow: hidden;
+  border: 1px solid var(--al-line-strong);
+  border-radius: 14px;
+  background: var(--al-surface);
+  box-shadow: 0 4px 14px rgb(16 24 40 / .07);
+}
 .pi-live-queue { max-height: 112px; overflow: auto; padding: 0 11px; }
 .pi-live-queue-item { display: grid; min-height: 38px; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; margin-top: 8px; padding: 6px 9px; border: 1px solid var(--al-line); border-radius: 8px; background: var(--al-soft-2); color: var(--al-muted); font-size: 12px; }
 .pi-live-queue-item > span { color: var(--al-accent); font-weight: 700; white-space: nowrap; }
 .pi-live-queue-item > b { min-width: 0; overflow: hidden; color: var(--al-ink-2); font-size: 13px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 .pi-live-queue-item > small { font-size: 12px; }
 .pi-live-queue-item.restored { border-style: dashed; }
+.pi-live-queue-item.active {
+  border-color: color-mix(in srgb, var(--al-accent) 24%, var(--al-line));
+  background: color-mix(in srgb, var(--al-accent-soft) 34%, var(--al-soft-2));
+}
+.pi-live-queue-item.active > small { color: var(--al-accent); }
 .pi-live-queue-item > div { display: flex; gap: 4px; }
 .pi-live-queue-item button { height: 24px; padding: 0 7px; border: 0; border-radius: 6px; background: transparent; color: var(--al-muted); font-size: 12px; }
 .pi-live-queue-item button:hover { background: var(--al-soft); color: var(--al-ink-2); }
 .pi-live-input { display: block; width: 100%; min-height: 54px; max-height: 160px; resize: none; overflow: auto; padding: 10px 13px 5px; border: 0; outline: 0; background: transparent; color: var(--al-ink); font-size: 14px; line-height: 1.6; }
 .pi-live-compose-bar { display: flex; min-height: 40px; align-items: center; gap: 7px; padding: 5px 8px 7px 10px; }
 .pi-live-compose-runtime { color: var(--al-muted); font-size: 12px; }
-.pi-live-compose-settings { display: flex; min-width: 0; align-items: center; gap: 5px; }
-.pi-live-compose-settings select { height: 28px; max-width: 178px; min-width: 0; padding: 0 24px 0 8px; border: 1px solid var(--al-line); border-radius: 7px; background: var(--al-soft-2); color: var(--al-ink-2); font-size: 12px; }
-.pi-live-compose-settings select:last-child { max-width: 118px; }
+.pi-live-compose-settings { display: flex; min-width: 0; flex: 0 1 auto; flex-wrap: nowrap; align-items: center; gap: 5px; }
+.pi-live-compose-settings select { height: 28px; min-width: 0; padding: 0 24px 0 8px; border: 1px solid var(--al-line); border-radius: 7px; background: var(--al-soft-2); color: var(--al-ink-2); font-size: 12px; }
+.pi-live-compose-settings select:first-child { width: clamp(210px, 22vw, 270px); max-width: 270px; }
+.pi-live-compose-settings select:last-child { width: clamp(145px, 14vw, 180px); max-width: 180px; }
 .pi-live-compose-settings select:disabled { color: var(--al-muted); opacity: .58; }
 .pi-live-compose-mode { display: flex; margin-left: auto; padding: 2px; border: 1px solid var(--al-line); border-radius: 8px; background: var(--al-soft-2); }
 .pi-live-compose-mode button { height: 26px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: var(--al-muted); font-size: 12px; }
 .pi-live-compose-mode button.active { background: var(--al-surface); box-shadow: 0 1px 2px rgb(16 24 40 / .05); color: var(--al-ink); font-weight: 650; }
 .pi-live-send { display: grid; width: 32px; height: 32px; place-items: center; border: 0; border-radius: 9px; background: var(--al-accent); color: var(--al-on-accent); font-size: 17px; }
 .pi-live-send:disabled { cursor: default; opacity: .42; }
-.pi-live-compose-hint { display: none; padding: 0 12px 8px; color: var(--al-muted); font-size: 12px; }
-.pi-live-composer:focus-within .pi-live-compose-hint { display: block; }
+
+/* TUI 风格快捷键提示：浮层，不参与输入器高度计算。 */
+.pi-live-compose-hint,
+.pi-live-composer:focus-within .pi-live-compose-hint {
+  position: absolute;
+  right: 10px;
+  bottom: 47px;
+  z-index: 2;
+  display: block;
+  max-width: calc(100% - 20px);
+  padding: 3px 6px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--al-surface) 92%, transparent);
+  color: var(--al-muted-2);
+  font-size: 0;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(2px);
+  pointer-events: none;
+  transition: opacity .15s ease, transform .15s ease;
+}
+.pi-live-compose-hint::after { content: "Enter 发送 · Alt+Enter 完成后继续 · Shift+Enter 换行"; font-size: 11px; }
+.pi-live-composer:focus-within .pi-live-compose-hint { opacity: .82; transform: translateY(0); }
+.pi-live-page:has(.pi-live-stop:not(:disabled)) .pi-live-compose-hint::after { content: "Enter 按当前模式排队 · Alt+Enter 完成后继续 · Shift+Enter 换行 · Esc 中断"; }
+
 .pi-live-diagnostics { max-width: 980px; margin: 5px auto 0; overflow: hidden; color: var(--al-muted); font-size: 12px; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
 .pi-live-error { padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--al-danger) 24%, var(--al-line)); border-radius: 8px; background: var(--al-danger-soft); color: var(--al-danger); font-size: 12px; line-height: 1.5; }
 
@@ -212,6 +303,8 @@
   .pi-live-bubble.user { max-width: 84%; }
   .pi-live-start-page { grid-template-columns: minmax(0, 620px); }
   .pi-live-known-card { width: 100%; }
+  .pi-live-compose-settings select:first-child { width: clamp(180px, 24vw, 230px); max-width: 230px; }
+  .pi-live-compose-settings select:last-child { width: clamp(132px, 16vw, 160px); max-width: 160px; }
 }
 
 @media (max-width: 767.98px) {
@@ -228,8 +321,8 @@
   .pi-live-lane::before { left: -27px; width: 22px; height: 22px; }
   .pi-live-compose-wrap { padding: 7px 10px 6px; }
   .pi-live-compose-runtime { display: none; }
-  .pi-live-compose-settings select { max-width: 136px; }
-  .pi-live-compose-settings select:last-child { max-width: 96px; }
+  .pi-live-compose-settings select:first-child { width: 132px; max-width: 132px; }
+  .pi-live-compose-settings select:last-child { width: 104px; max-width: 104px; }
   .pi-live-compose-mode button { padding: 0 6px; }
   .pi-live-blocking { grid-template-columns: 1fr; }
   .pi-live-blocking-actions,
@@ -238,8 +331,24 @@
   .pi-live-start-page { display: block; padding: 20px 12px; }
   .pi-live-known-card { margin-top: 12px; }
   .pi-live-start-grid { grid-template-columns: 1fr; }
+
+  .task-center-main .task-surface-live .task-header,
+  .task-surface-live .task-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: 30px 22px;
+  }
+  .task-center-main .task-surface-live .task-header-meta,
+  .task-surface-live .task-header-meta { display: none; }
+  .task-center-main .task-surface-live .task-header-title,
+  .task-surface-live .task-header-title { grid-column: 1; grid-row: 1; }
+  .task-center-main .task-surface-live .task-header-metrics,
+  .task-surface-live .task-header-metrics { grid-column: 1; grid-row: 2; justify-self: start; }
+  .task-center-main .task-surface-live .task-header-actions,
+  .task-surface-live .task-header-actions { grid-column: 2; grid-row: 1 / 3; }
+  .pi-live-compose-hint { display: none !important; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .pi-live-caret { animation: none; }
+  .pi-live-compose-hint { transition: none; }
 }
