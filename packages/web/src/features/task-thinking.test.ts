@@ -19,13 +19,14 @@ test('TaskThinking 默认展开并只暴露 Task Surface 规范类名', () => {
   assert.match(html, /<details[^>]*open=""/)
   assert.match(html, /class="task-thinking"/)
   assert.match(html, /task-thinking-summary/)
-  assert.match(html, /task-thinking-preview/)
-  assert.match(html, /核对原型与正式实现/)
+  assert.doesNotMatch(html, /task-thinking-preview/)
+  assert.match(html, /task-thinking-content">核对原型与正式实现/)
   assert.doesNotMatch(html, /thinking-block|thinking-node|agent-lane-node|node-preview/)
 })
 
-test('TaskThinking 仍允许调用方显式默认折叠', () => {
+test('TaskThinking 折叠时显示弱预览且仍允许调用方显式默认折叠', () => {
   const html = renderToStaticMarkup(createElement(TaskThinking, { model, defaultExpanded: false, children: '核对原型与正式实现。' }))
   assert.doesNotMatch(html, /<details[^>]*open=""/)
   assert.match(html, /class="task-thinking"/)
+  assert.match(html, /task-thinking-preview/)
 })
