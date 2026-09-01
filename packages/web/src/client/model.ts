@@ -62,24 +62,6 @@ function mergeReviewDetail(current: ReviewSessionDetailDto, next: ReviewSessionD
   }
 }
 
-function mergeReviewTail(current: ReviewSessionDetailDto, tail: ReviewSessionDetailDto): ReviewSessionDetailDto {
-  const interactions = new Map(current.interactions.map(item => [item.id, item]))
-  for (const interaction of tail.interactions) interactions.set(interaction.id, interaction)
-  const lastOrdinal = Math.max(0, ...tail.interactions.map(item => item.ordinal))
-  return {
-    ...current,
-    endedAt: tail.endedAt > current.endedAt ? tail.endedAt : current.endedAt,
-    durationMs: Math.max(current.durationMs, tail.durationMs),
-    observationCount: Math.max(current.observationCount, tail.observationCount),
-    interactionCount: Math.max(current.interactionCount, tail.interactionCount, lastOrdinal),
-    toolCount: Math.max(current.toolCount, tail.toolCount),
-    errorCount: Math.max(current.errorCount, tail.errorCount),
-    hasErrors: current.hasErrors || tail.hasErrors,
-    interactions: [...interactions.values()].sort((a, b) => a.ordinal - b.ordinal),
-    page: current.page,
-  }
-}
-
 export class AgentLensClientModel {
   private snapshot: ClientSnapshot = {
     health: null,
@@ -637,42 +619,13 @@ export class AgentLensClientModel {
 
   private async refreshSelectedTailIncremental(): Promise<void> {
     const current = this.snapshot.review
-    const detail = current.detail
-    if (!current.selectedId || !detail || detail.page.filter !== 'all') {
-      if (current.selectedId) {
-        this.publish({ ...this.snapshot, review: { ...current, detailHasNewData: true } })
-      }
-      return
-    }
-
-    const includesTail = detail.page.direction === 'backward' || !detail.page.hasMore
-    if (!includesTail) {
-      this.publish({ ...this.snapshot, review: { ...current, detailHasNewData: true } })
-      return
-    }
-
-    const selectedId = current.selectedId
-    const generation = this.detailGeneration
-    try {
-      const tail = await this.api.reviewDetail(selectedId, { direction: 'backward', limit: 2 })
-      if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== selectedId) return
-      const latest = this.snapshot.review
-      if (!latest.detail || latest.detail.page.filter !== 'all') return
-      this.publish({
-        ...this.snapshot,
-        review: {
-          ...latest,
-          detail: mergeReviewTail(latest.detail, tail),
-          detailHasNewData: true,
-        },
-      })
-    } catch {
-      if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== selectedId) return
-      this.publish({
-        ...this.snapshot,
-        review: { ...this.snapshot.review, detailHasNewData: true },
-      })
-    }
+    if (!current.selectedId || current.detailHasNewData) return
+    // Review 是复盘阅读面，不在用户观看过程中持续改写已渲染正文。
+    // 新 Observation 只标记为“有新记录”；用户点击“跳到最新 / 有新记录”后再主动取最新窗口。
+    this.publish({
+      ...this.snapshot,
+      review: { ...current, detailHasNewData: true },
+    })
   }
 
   private onLiveEvent(event: LiveUpdateEventDto): void {
