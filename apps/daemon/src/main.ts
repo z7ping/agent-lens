@@ -34,6 +34,7 @@ import {
   beginSessionSummaryProjectionRun,
   markSessionSummaryProjectionClean,
 } from './projection-readiness.js'
+import { createProgressiveHistoryStages, yieldToForeground } from './history-sync-plan.js'
 import { profiledDshSourcePlugin } from './sources/dsh-profiled.js'
 
 const nodeRuntime = resolveAgentLensNodeRuntime()
@@ -56,7 +57,6 @@ const startedAt = Date.now()
 // 为 Web Shell 的首轮 Health / Facet / Review 查询保留短暂宽限期；
 // 历史和资产同步随后继续增量执行。
 const INITIAL_BACKGROUND_SYNC_DELAY_MS = 2_000
-const HOT_HISTORY_WINDOW_MS = 7 * 24 * 60 * 60 * 1_000
 
 const app = new AgentLensApplication()
 app.useRuntime(nodeRuntimePlugin, nodeRuntime)
@@ -209,17 +209,22 @@ try {
 
     // 历史任务是首要界面数据。先完成历史同步，再扫描静态资产，避免两个
     // 冷扫描器同时争用同一个 SQLite 执行器和磁盘。
-    const history = await syncRegisteredSourceHistory(
-      app.context,
-      runtimeController.signal,
-      prepared.targets,
-      { activeSince: new Date(startedAt - HOT_HISTORY_WINDOW_MS).toISOString() },
-    )
-    logSourceFailures(history.failures)
-    for (const result of history.results) {
-      console.info(
-        `[AgentLens] history synced: ${result.sourceId} records=${result.records} created=${result.observationsCreated} merged=${result.observationsMerged} unchanged=${result.observationsUnchanged}`,
+    for (const stage of createProgressiveHistoryStages(startedAt)) {
+      if (runtimeController.signal.aborted) return
+      console.info(`[AgentLens] history sync stage started: ${stage.label}`)
+      const history = await syncRegisteredSourceHistory(
+        app.context,
+        runtimeController.signal,
+        prepared.targets,
+        stage.window,
       )
+      logSourceFailures(history.failures)
+      for (const result of history.results) {
+        console.info(
+          `[AgentLens] history synced: stage=${stage.id} source=${result.sourceId} records=${result.records} created=${result.observationsCreated} merged=${result.observationsMerged} unchanged=${result.observationsUnchanged}`,
+        )
+      }
+      await yieldToForeground(runtimeController.signal)
     }
     if (runtimeController.signal.aborted) return
 
