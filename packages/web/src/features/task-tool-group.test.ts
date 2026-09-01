@@ -26,11 +26,12 @@ function render(defaultExpanded?: boolean): string {
   return renderToStaticMarkup(createElement(TaskToolGroup, defaultExpanded === undefined ? { model } : { model, defaultExpanded }))
 }
 
-test('TaskToolGroup 按原型默认展开并保留每一次具体 Tool Call', () => {
+test('TaskToolGroup 不再创建“工具执行”折叠父层，具体调用直接可见', () => {
   const html = render()
-  assert.match(html, /<details[^>]*open=""/)
-  assert.match(html, /工具执行/)
-  assert.match(html, /读取 → 搜索 → Shell/)
+  assert.match(html, /data-task-tool-group="true"/)
+  assert.doesNotMatch(html, /<details[^>]*data-task-tool-group/)
+  assert.doesNotMatch(html, /class="tool-title"/)
+  assert.doesNotMatch(html, />工具执行</)
   assert.equal((html.match(/task-tool-row execution-row tool-row/g) ?? []).length, 3)
   assert.match(html, /读取文件/)
   assert.match(html, /src\/review\.ts/)
@@ -41,13 +42,21 @@ test('TaskToolGroup 按原型默认展开并保留每一次具体 Tool Call', ()
   assert.match(html, /pnpm test/)
 })
 
-test('用户主动折叠 Tool Group 时只改变 details 状态，不把具体调用替换为汇总数据', () => {
-  const html = render(false)
-  assert.doesNotMatch(html, /<details[^>]*open=""/)
-  assert.equal((html.match(/task-tool-row execution-row tool-row/g) ?? []).length, 3)
-  assert.match(html, /读取文件/)
-  assert.match(html, /代码搜索/)
-  assert.match(html, /执行命令/)
+test('Tool 是否折叠由真实父级控制，defaultExpanded 不再制造独立层级', () => {
+  const expanded = render(true)
+  const collapsed = render(false)
+  assert.doesNotMatch(expanded, /<details[^>]*data-task-tool-group/)
+  assert.doesNotMatch(collapsed, /<details[^>]*data-task-tool-group/)
+  assert.equal((collapsed.match(/data-tool-fact="true"/g) ?? []).length, 3)
+})
+
+test('工具类型后紧跟状态和耗时，再展示动作与目标', () => {
+  const html = render()
+  const kind = html.indexOf('>读取</span>')
+  const status = html.indexOf('完成 · 42ms')
+  const action = html.indexOf('读取文件')
+  const target = html.indexOf('src/review.ts')
+  assert.ok(kind >= 0 && status > kind && action > status && target > action)
 })
 
 test('错误 Tool Call 仍以具体行出现并保留错误语义', () => {
