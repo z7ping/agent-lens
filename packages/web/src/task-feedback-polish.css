@@ -1,0 +1,197 @@
+@reference "./styles.css";
+
+/* 2026-09 实机反馈收口：减少过度分隔、Pi Live 保持单行状态与稳定输入高度。 */
+
+/* Round 已有自绘 disclosure，禁止浏览器再绘制原生 details marker。 */
+.task-center-main .task-round > summary,
+.task-surface .task-round > summary {
+  list-style: none;
+}
+.task-center-main .task-round > summary::marker,
+.task-surface .task-round > summary::marker {
+  content: "";
+  font-size: 0;
+}
+.task-center-main .task-round > summary::-webkit-details-marker,
+.task-surface .task-round > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* 带标题的分隔只保留短引导线，不再把上下内容切成独立区块。 */
+.task-center-main .task-round,
+.task-surface .task-round {
+  border-top: 0;
+}
+.task-center-main .task-round > summary::before,
+.task-surface .task-round > summary::before {
+  content: none;
+  display: none;
+}
+.task-center-main .task-round > summary::after,
+.task-surface .task-round > summary::after {
+  min-width: 0;
+  max-width: 56px;
+  flex: 0 1 56px;
+  opacity: .72;
+}
+.task-center-main .task-round + .task-round,
+.task-surface .task-round + .task-round {
+  margin-top: 6px;
+}
+
+/* Pi Live Header：排队 / PID 与操作按钮保持同一行，避免多撑一行。 */
+.task-center-main .task-surface-live .task-header,
+.task-surface-live .task-header {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-rows: 30px;
+  column-gap: 9px;
+  align-items: center;
+}
+.task-center-main .task-surface-live .task-header-meta,
+.task-surface-live .task-header-meta {
+  grid-column: 1;
+  grid-row: 1;
+}
+.task-center-main .task-surface-live .task-header-title,
+.task-surface-live .task-header-title {
+  grid-column: 2;
+  grid-row: 1;
+}
+.task-center-main .task-surface-live .task-header-metrics,
+.task-surface-live .task-header-metrics {
+  grid-column: 3;
+  grid-row: 1;
+  align-self: center;
+  justify-self: end;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  white-space: nowrap;
+}
+.task-center-main .task-surface-live .task-header-actions,
+.task-surface-live .task-header-actions {
+  grid-column: 4;
+  grid-row: 1;
+  align-self: center;
+  justify-self: end;
+  margin: 0;
+}
+.task-center-main .task-surface-live .task-header-submeta,
+.task-surface-live .task-header-submeta {
+  display: none;
+}
+
+/* Pi TUI 风格输入：提示浮在输入区内部，不参与布局，因此 focus 不再改变高度。 */
+.pi-live-composer {
+  position: relative;
+}
+.pi-live-compose-hint,
+.pi-live-composer:focus-within .pi-live-compose-hint {
+  position: absolute;
+  right: 10px;
+  bottom: 47px;
+  z-index: 2;
+  display: block;
+  max-width: calc(100% - 20px);
+  padding: 3px 6px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--al-surface) 92%, transparent);
+  color: var(--al-muted-2);
+  font-size: 0;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(2px);
+  pointer-events: none;
+  transition: opacity .15s ease, transform .15s ease;
+}
+.pi-live-compose-hint::after {
+  content: "Enter 发送 · Alt+Enter 完成后继续 · Shift+Enter 换行";
+  font-size: 11px;
+}
+.pi-live-composer:focus-within .pi-live-compose-hint {
+  opacity: .82;
+  transform: translateY(0);
+}
+.pi-live-page:has(.pi-live-stop:not(:disabled)) .pi-live-compose-hint::after {
+  content: "Enter 按当前模式排队 · Alt+Enter 完成后继续 · Shift+Enter 换行 · Esc 中断";
+}
+
+/* 模型 / Thinking 不再用过窄 max-width 截掉关键信息。 */
+.pi-live-compose-settings {
+  flex: 0 1 auto;
+  flex-wrap: nowrap;
+}
+.pi-live-compose-settings select:first-child {
+  width: clamp(210px, 22vw, 270px);
+  max-width: 270px;
+}
+.pi-live-compose-settings select:last-child {
+  width: clamp(145px, 14vw, 180px);
+  max-width: 180px;
+}
+
+/* 排队状态和当前执行区分更清楚，但不增加额外高度。 */
+.pi-live-queue-item.active {
+  border-color: color-mix(in srgb, var(--al-accent) 24%, var(--al-line));
+  background: color-mix(in srgb, var(--al-accent-soft) 34%, var(--al-soft-2));
+}
+.pi-live-queue-item.active > small {
+  color: var(--al-accent);
+}
+
+@media (max-width: 991.98px) {
+  .pi-live-compose-settings select:first-child {
+    width: clamp(170px, 22vw, 220px);
+    max-width: 220px;
+  }
+  .pi-live-compose-settings select:last-child {
+    width: clamp(122px, 14vw, 150px);
+    max-width: 150px;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .task-center-main .task-surface-live .task-header,
+  .task-surface-live .task-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: 30px 22px;
+  }
+  .task-center-main .task-surface-live .task-header-meta,
+  .task-surface-live .task-header-meta,
+  .task-center-main .task-surface-live .task-header-title,
+  .task-surface-live .task-header-title {
+    grid-column: 1;
+  }
+  .task-center-main .task-surface-live .task-header-metrics,
+  .task-surface-live .task-header-metrics {
+    grid-column: 1;
+    grid-row: 2;
+    justify-self: start;
+  }
+  .task-center-main .task-surface-live .task-header-actions,
+  .task-surface-live .task-header-actions {
+    grid-column: 2;
+    grid-row: 1 / 3;
+  }
+  .pi-live-compose-settings select:first-child {
+    width: 132px;
+    max-width: 132px;
+  }
+  .pi-live-compose-settings select:last-child {
+    width: 104px;
+    max-width: 104px;
+  }
+  .pi-live-compose-hint {
+    display: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pi-live-compose-hint {
+    transition: none;
+  }
+}
