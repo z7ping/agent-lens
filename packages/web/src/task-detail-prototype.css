@@ -1,0 +1,576 @@
+@reference "./styles.css";
+
+/*
+ * alpha.3 Task Detail 高保真收口。
+ *
+ * 原则：
+ * - 高密度来自删除重复结构、边框和留白，不靠缩小字体；
+ * - 用户消息保留右侧紧凑气泡，Agent 输出回归连续文档流；
+ * - 不制造“执行过程 / 工具执行”父层；Thinking 与 Tool 只表达真实数据层级；
+ * - 状态看起来像状态，按钮看起来能点击；
+ * - Review / Pi Live 共用同一套 Task Surface 视觉规则。
+ */
+
+/* ── Header：两行摘要，不再使用大号指标带 ── */
+.task-center-main .task-header {
+  display: grid;
+  width: 100%;
+  max-width: none;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: 30px 24px;
+  align-items: center;
+  column-gap: 9px;
+  row-gap: 1px;
+  margin: 0;
+  padding: 9px 0 8px;
+  border-bottom: 1px solid var(--al-line);
+  background: var(--al-surface);
+}
+.task-center-main .task-header-copy,
+.task-center-main .task-header-side { display: contents; }
+.task-center-main .task-header-meta {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--al-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.task-center-main .task-header-meta b {
+  color: var(--al-ink-2);
+  font-size: 13px;
+  font-weight: 700;
+}
+.task-center-main .task-header-context { color: var(--al-muted-2); }
+.task-center-main .task-header-status {
+  display: inline-flex;
+  min-width: 0;
+  height: 24px;
+  align-items: center;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--al-accent) 20%, var(--al-line));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--al-accent-soft) 36%, transparent);
+  color: var(--al-accent);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: default;
+  pointer-events: none;
+  user-select: none;
+}
+.task-center-main .task-header-status::before { content: none; }
+.task-center-main .task-header-status[data-tone='success'] {
+  border-color: color-mix(in srgb, var(--al-success) 24%, var(--al-line));
+  background: color-mix(in srgb, var(--al-success-soft) 66%, transparent);
+  color: var(--al-success);
+}
+.task-center-main .task-header-status:has(.session-status-error),
+.task-center-main .task-header-status:has(.pi-live-disconnected) {
+  border-color: color-mix(in srgb, var(--al-danger) 24%, var(--al-line));
+  background: color-mix(in srgb, var(--al-danger-soft) 58%, transparent);
+  color: var(--al-danger);
+}
+.task-center-main .task-header-status .session-status-error,
+.task-center-main .task-header-status .pi-live-disconnected { color: inherit; }
+.task-center-main .task-header-title {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--al-ink);
+  font-size: 16px;
+  font-weight: 740;
+  line-height: 1.4;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-center-main .task-header-submeta {
+  grid-column: 1 / 3;
+  grid-row: 2;
+  display: flex;
+  min-width: 0;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  overflow: hidden;
+  color: var(--al-muted-2);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.task-center-main .task-header-submeta code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-center-main .task-header-submeta code::before { content: "·"; margin-right: 6px; }
+.task-center-main .task-header-actions {
+  grid-column: 3;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  justify-self: end;
+  gap: 6px;
+  margin: 0;
+}
+.task-center-main .task-header-actions button {
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--al-line-strong);
+  border-radius: 7px;
+  background: var(--al-surface);
+  color: var(--al-ink-2);
+  box-shadow: 0 1px 2px rgb(16 24 40 / .04);
+  font-size: 12px;
+  font-weight: 560;
+  cursor: pointer;
+}
+.task-center-main .task-header-actions button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--al-accent) 40%, var(--al-line-strong));
+  background: var(--al-soft-2);
+  color: var(--al-accent);
+}
+.task-center-main .task-header-actions button:disabled { cursor: not-allowed; opacity: .45; }
+.task-center-main .task-header-actions .pi-live-stop,
+.task-center-main .task-header-actions .pi-live-danger,
+.task-center-main .task-header-actions .danger,
+.task-center-main .task-header-actions [data-tone='danger'] {
+  border-color: color-mix(in srgb, var(--al-danger) 34%, var(--al-line));
+  background: color-mix(in srgb, var(--al-danger-soft) 44%, var(--al-surface));
+  color: var(--al-danger);
+}
+.task-center-main .task-header-metrics {
+  grid-column: 3;
+  grid-row: 2;
+  display: flex;
+  align-items: center;
+  justify-self: end;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  white-space: nowrap;
+}
+.task-center-main .task-header-metric {
+  display: inline-flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  color: var(--al-muted-2);
+  font-size: 12px;
+  text-align: left;
+}
+.task-center-main .task-header-metric:not(:first-child)::before {
+  content: "·";
+  margin: 0 7px;
+  color: var(--al-line-strong);
+}
+.task-center-main .task-header-metric b,
+.task-center-main .task-header-metric span {
+  display: inline;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1;
+}
+.task-center-main .task-header-metric b { color: var(--al-ink-2); font-weight: 650; }
+.task-center-main .task-header-metric[data-tone='danger'] b,
+.task-center-main .task-header-metric[data-tone='danger'] span { color: var(--al-danger); }
+.task-center-main .task-header-metric[data-tone='accent'] b { color: var(--al-accent); }
+
+/* ── Round：—— 第 n 轮：摘要 —— ── */
+.task-center-main .task-round {
+  scroll-margin-top: 44px;
+  margin-top: 10px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.task-center-main .task-round > summary {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--al-muted-2);
+  cursor: pointer;
+  list-style: none;
+}
+.task-center-main .task-round > summary::-webkit-details-marker { display: none; }
+.task-center-main .task-round > summary::before,
+.task-center-main .task-round > summary::after {
+  content: "";
+  display: block;
+  min-width: 24px;
+  height: 1px;
+  flex: 1 1 36px;
+  background: color-mix(in srgb, var(--al-line-strong) 72%, transparent);
+}
+.task-center-main .interaction-chevron { display: none; }
+.task-center-main .round-label {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  color: var(--al-muted);
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.task-center-main .round-label::before {
+  content: "›";
+  color: var(--al-muted-2);
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1;
+}
+.task-center-main .task-round[open] .round-label::before { content: "⌄"; }
+.task-center-main .round-label::after { content: "："; margin-left: -3px; }
+.task-center-main .round-preview {
+  max-width: 52%;
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  color: var(--al-muted-2);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-center-main .round-meta {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  margin-left: 2px;
+  color: var(--al-muted-2);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.task-center-main .round-flow {
+  position: relative;
+  padding: 5px 8px 13px;
+}
+.task-center-main .round-flow::before { display: none; }
+
+/* ── Message：用户气泡；Agent 连续文档流；不显示 AI 图标 ── */
+.task-center-main .message-row,
+.task-center-main .task-message-row {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  margin: 7px 0;
+}
+.task-center-main .message-row.user,
+.task-center-main .chat-row-user { justify-content: flex-end; }
+.task-center-main .task-message-agent-mark,
+.task-center-main .chat-avatar-agent { display: none !important; }
+.task-center-main .task-message-bubble,
+.task-center-main .message-row .chat-bubble {
+  position: relative;
+  font-size: 14px;
+  line-height: 1.62;
+}
+.task-center-main .chat-bubble-user {
+  max-width: min(64%, 760px);
+  padding: 6px 10px 7px;
+  border: 1px solid color-mix(in srgb, var(--al-user-bubble-text) 9%, transparent);
+  border-radius: 12px;
+  border-bottom-right-radius: 5px;
+  background: var(--al-user-bubble);
+  color: var(--al-user-bubble-text);
+  box-shadow: none;
+}
+.task-center-main .message-row.agent,
+.task-center-main .task-message-row[data-task-message-role='assistant'] {
+  display: block;
+  margin: 6px 0;
+}
+.task-center-main .chat-bubble-agent {
+  display: block;
+  width: auto;
+  max-width: 900px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--al-ink);
+  box-shadow: none;
+}
+.task-center-main .task-message-content,
+.task-center-main .task-message-content .markdown,
+.task-center-main .task-message-content .markdown-surface { font-size: 14px; }
+.task-center-main .task-message-meta { display: none; }
+.task-center-main .task-message-content { position: relative; }
+.task-center-main .message-row.agent .markdown-surface { padding-right: 48px; }
+.task-center-main .message-row.agent .markdown-message-actions {
+  position: absolute;
+  top: -1px;
+  right: 0;
+  z-index: 3;
+  display: flex;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: color-mix(in srgb, var(--al-surface) 92%, transparent);
+  opacity: 0;
+  transition: opacity .12s;
+}
+.task-center-main .message-row.agent:hover .markdown-message-actions,
+.task-center-main .message-row.agent .task-message-content[data-view='source'] .markdown-message-actions { opacity: .82; }
+.task-center-main .message-row.agent .markdown-message-actions button {
+  height: 22px;
+  padding: 0 5px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--al-accent);
+  font-size: 12px;
+}
+.task-center-main .message-row.agent .markdown-message-actions button:hover { background: var(--al-soft-2); }
+/* 用户没有源码按钮；长输入仍可保留展开全文。 */
+.task-center-main .message-row.user .markdown-message-actions { margin-top: 4px; padding: 0; border: 0; }
+
+/* ── Thinking：自身折叠；Tool 是否在其内部完全由真实 DOM / 数据关系决定 ── */
+.task-center-main .thinking-block {
+  position: relative;
+  z-index: 1;
+  margin: 2px 0 4px;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.task-center-main .thinking-block::before,
+.task-center-main .thinking-block::after { display: none; }
+.task-center-main .thinking-block > summary {
+  display: grid;
+  min-height: 30px;
+  grid-template-columns: 13px auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--al-muted);
+  cursor: pointer;
+  list-style: none;
+}
+.task-center-main .thinking-block > summary::-webkit-details-marker { display: none; }
+.task-center-main .thinking-block > summary::before {
+  content: "›";
+  color: var(--al-muted-2);
+  font-size: 15px;
+  line-height: 1;
+}
+.task-center-main .thinking-block[open] > summary::before { content: "⌄"; }
+/* 所有可观察 reasoning 在表现层统一叫“思考”，避免再造其他过程层级。 */
+.task-center-main .thinking-label {
+  color: var(--al-muted);
+  font-size: 0;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.task-center-main .thinking-label::after { content: "思考"; font-size: 13px; }
+.task-center-main .thinking-preview,
+.task-center-main .node-preview {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--al-muted-2);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-center-main .thinking-summary-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--al-muted-2);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.task-center-main .thinking-content {
+  position: relative;
+  margin: 0 2px 4px 20px;
+  padding: 0;
+  border: 0;
+  color: var(--al-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.task-center-main .task-thinking-actions { margin: 2px 2px 5px 20px; }
+/* Thinking 内 Markdown 的源码切换也悬浮，不额外占一行。 */
+.task-center-main .thinking-content .markdown-message { position: relative; }
+.task-center-main .thinking-content .markdown-surface { padding-right: 48px; }
+.task-center-main .thinking-content .markdown-message-actions {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: .28;
+}
+.task-center-main .thinking-content .markdown-message:hover .markdown-message-actions { opacity: .8; }
+.task-center-main .thinking-content .markdown-message-actions button { height: 22px; padding: 0 5px; font-size: 12px; }
+
+/* ── Tool：没有 Tool Group 标题；只保留轻量左侧引导线 ── */
+.task-center-main .execution-group,
+.task-center-main .tool-group {
+  position: relative;
+  z-index: 1;
+  margin: 3px 0 5px 13px;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.task-center-main .execution-group::before,
+.task-center-main .execution-group::after,
+.task-center-main .tool-group::before,
+.task-center-main .tool-group::after { display: none; }
+.task-center-main .execution-group > summary,
+.task-center-main .tool-group > summary { display: none; }
+.task-center-main .execution-list,
+.task-center-main .tool-list {
+  margin: 0;
+  padding-left: 9px;
+  overflow: visible;
+  border: 0;
+  border-left: 2px solid color-mix(in srgb, var(--al-accent) 58%, var(--al-line));
+}
+/* 真正嵌套在 Thinking 内的 Tool 再缩进一级；平级 Tool 不会被强行挂进去。 */
+.task-center-main .thinking-content .execution-group,
+.task-center-main .thinking-content .tool-group { margin-left: 12px; }
+.task-center-main .execution-row.tool-row {
+  display: grid;
+  width: 100%;
+  min-height: 30px;
+  grid-template-columns: 66px auto minmax(88px, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  padding: 3px 2px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--al-ink-2);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: left;
+}
+.task-center-main button.execution-row.tool-row { cursor: pointer; }
+.task-center-main .execution-row.tool-row:hover { background: color-mix(in srgb, var(--al-soft-2) 72%, transparent); }
+.task-center-main .execution-row.tool-row.error,
+.task-center-main .execution-row.tool-row[data-status='error'] {
+  background: color-mix(in srgb, var(--al-danger-soft) 30%, transparent);
+  box-shadow: inset 2px 0 0 var(--al-danger);
+}
+.task-center-main .tool-kind {
+  display: inline-flex;
+  width: max-content;
+  min-width: 61px;
+  height: 22px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--kind-fg, var(--al-muted));
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+}
+.task-center-main .tool-kind .tool-kind-svg,
+.task-center-main .tool-kind .tool-kind-svg > svg { width: 13px; height: 13px; }
+.task-center-main .tool-action {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--al-ink-2);
+  font: 650 13px/1.4 var(--font-ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-center-main .tool-target {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  color: var(--al-muted);
+  font-size: 13px;
+}
+.task-center-main .tool-target-text { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-center-main .tool-status {
+  color: var(--al-muted-2);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.task-center-main .tool-status.ok { color: var(--al-muted-2); }
+.task-center-main .tool-status.run { color: var(--al-accent); }
+.task-center-main .tool-status.error { color: var(--al-danger); }
+.task-center-main .tool-payload {
+  margin: 0 7px 6px 20px;
+  padding: 4px 0 0 8px;
+  border-left: 1px solid color-mix(in srgb, var(--al-line-strong) 72%, transparent);
+}
+
+/* Round 导航保留正常字号，只减少无效留白。 */
+.task-center-main .round-nav { padding-block: 5px; gap: 4px; }
+.task-center-main .round-nav button { min-height: 28px; padding-inline: 8px; font-size: 12px; }
+
+@media (max-width: 1199.98px) {
+  .task-center-main .execution-row.tool-row { grid-template-columns: 64px auto minmax(84px, auto) minmax(0, 1fr); }
+}
+
+@media (max-width: 991.98px) {
+  .task-center-main .execution-row.tool-row { grid-template-columns: 64px auto minmax(0, 1fr); }
+  .task-center-main .tool-action { display: none; }
+  .task-center-main .task-header-metric:nth-child(n+5) { display: none; }
+}
+
+@media (max-width: 767.98px) {
+  .task-center-main .task-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    padding: 7px 0 8px;
+  }
+  .task-center-main .task-header-meta { display: none; }
+  .task-center-main .task-header-title { grid-column: 1; grid-row: 1; font-size: 15px; }
+  .task-center-main .task-header-actions { grid-column: 2; grid-row: 1; }
+  .task-center-main .task-header-submeta { grid-column: 1 / 3; grid-row: 2; }
+  .task-center-main .task-header-metrics { display: none; }
+  .task-center-main .round-preview { max-width: 48%; }
+  .task-center-main .round-meta { display: none; }
+  .task-center-main .chat-bubble-user { max-width: 88%; }
+  .task-center-main .execution-row.tool-row { grid-template-columns: 62px auto minmax(0, 1fr); }
+  .task-center-main .tool-target { min-width: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-center-main .message-row.agent .markdown-message-actions { transition: none; }
+}
