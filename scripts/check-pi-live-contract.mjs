@@ -107,8 +107,9 @@ requireText(reviewPage, /function ReviewToolGroupAdapter[\s\S]{0,1800}<TaskToolG
 if (/function ToolRow\(/.test(reviewPage) || /function ToolRunGroup\(/.test(reviewPage)) failures.push('Review 不得继续维护旧 ToolRow / ToolRunGroup 组件副本')
 
 requireText(taskMessage, /export function TaskMessage/, '统一 Task Message 组件缺失')
-requireText(taskMessage, />查看源码</, '统一 Task Message 必须保留“查看源码”')
-requireText(taskMessage, /返回渲染/, '统一 Task Message 必须保留“返回渲染”')
+requireText(taskMessage, /\{!user && <button/, '统一 Task Message 的源码切换必须只属于 Agent Markdown')
+requireText(taskMessage, /<span>源码<\/span>/, '统一 Task Message 必须保留紧凑“源码”操作')
+requireText(taskMessage, /<span>渲染<\/span>/, '统一 Task Message 必须保留紧凑“渲染”操作')
 requireText(taskMessage, /Streaming Tail 不使用本组件/, '统一 Task Message 必须明确排除 Streaming Tail')
 requireText(reviewPage, /import \{ TaskMessage \} from '\.\/TaskMessage'/, 'Review 已完成消息必须接入统一 TaskMessage')
 requireText(reviewPage, /function MessageBubble[\s\S]{0,1200}<TaskMessage/, 'Review 用户/AI 消息必须通过 TaskMessage 渲染')
