@@ -83,7 +83,7 @@ if (!mainSource.includes("import './task-detail-prototype.css'")) {
 if (taskMessage.includes('task-message-agent-mark') || taskMessage.includes('chat-avatar-agent')) {
   throw new Error('任务详情不得恢复 AI 图标；Agent 输出应保持连续文档流')
 }
-if (!taskMessage.includes('!user && <button') || !taskMessage.includes("'源码'")) {
+if (!taskMessage.includes('{!user && <button') || !taskMessage.includes('<span>源码</span>')) {
   throw new Error('源码切换只属于 Agent Markdown，用户消息不得生成源码入口')
 }
 if (!/\.message-row\.agent \.markdown-message-actions\s*\{[\s\S]*?position:\s*absolute;/m.test(taskDetailCss)) {
