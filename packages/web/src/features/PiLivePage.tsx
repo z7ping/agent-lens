@@ -653,7 +653,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             <div className="pi-live-compose-settings">
               <select
                 aria-label="Pi 模型"
-                title="Pi 模型"
+                title={state?.model ? `Pi 模型 · ${modelLabel(state)}` : 'Pi 模型'}
                 value={selectedModel}
                 disabled={controlBusy || controls.models.length === 0}
                 onChange={event => void changeModel(event.target.value)}
@@ -663,7 +663,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
               </select>
               <select
                 aria-label="Pi Thinking Level"
-                title="Pi Thinking Level"
+                title={`Pi Thinking Level · ${state?.thinkingLevel || '未设置'}`}
                 value={state?.thinkingLevel ?? ''}
                 disabled={controlBusy || controls.thinkingLevels.length === 0}
                 onChange={event => void changeThinkingLevel(event.target.value)}
@@ -678,7 +678,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             </div>
             <button className="pi-live-send" disabled={!input.trim() || busy || Boolean(extension)} onClick={() => void send()} aria-label="发送">↑</button>
           </div>
-          <div className="pi-live-compose-hint">Enter {state?.isStreaming ? (mode === 'steer' ? '立即介入' : '按当前模式发送') : '开始新一轮'} · Alt+Enter 完成后继续 · Shift+Enter 换行</div>
+          <div className="pi-live-compose-hint">Enter {state?.isStreaming ? (mode === 'steer' ? '立即介入' : '按当前模式发送') : '开始新一轮'} · Alt+Enter 完成后继续 · Shift+Enter 换行{state?.isStreaming ? ' · Esc 中断并恢复排队' : ''}</div>
         </div>
         {diagnostics && <div className="pi-live-diagnostics" title="Pi Live Web 调度诊断">事件 {diagnostics.ingressEvents} · 合并 {diagnostics.coalescedEvents} · 峰值队列 {diagnostics.maxQueueDepth} · 最近提交 {diagnostics.lastFlushLatencyMs.toFixed(1)}ms{diagnostics.hidden ? ' · 后台降频' : ''}</div>}
       </div>
