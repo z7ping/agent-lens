@@ -3,7 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="light dark" />
+    <script>
+      (() => {
+        const key = 'agent-lens.theme.v1'
+        let theme = ''
+        try { theme = localStorage.getItem(key) || '' } catch {}
+        if (theme !== 'light' && theme !== 'dark') {
+          theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+        }
+        document.documentElement.dataset.theme = theme
+        document.documentElement.style.colorScheme = theme
+      })()
+    </script>
+    <style>
+      html, body, #root { min-height: 100%; margin: 0; }
+      html, body, #root { background: #f6f7f9; }
+      html[data-theme='dark'], html[data-theme='dark'] body, html[data-theme='dark'] #root { background: #101216; }
+    </style>
     <link rel="icon" type="image/svg+xml" sizes="any" href="/agentlens-icon-small.svg" />
     <title>AgentLens</title>
   </head>
