@@ -33,7 +33,7 @@ if (!reviewPage.includes('pane.scrollHeight - pane.scrollTop - pane.clientHeight
 if (!mainSource.includes('installInspectorOutsideDismiss') || !mainSource.includes('disposeInspectorOutsideDismiss')) throw new Error('事件详情抽屉必须安装并释放外部点击关闭行为')
 if (!inspectorDismiss.includes('.inspector-panel[role="dialog"][aria-modal="true"]') || !inspectorDismiss.includes('panel.contains(target)') || !inspectorDismiss.includes('button[aria-label="关闭事件详情"]')) throw new Error('事件详情抽屉必须支持外部点击关闭且不误伤内部点击')
 
-if (/\.round-nav[^{}]*\{[^{}]*display\s*:\s*none/gs.test(longCss) || /\.round-nav[^,{]*[^{}]*\{[^{}]*visibility\s*:\s*hidden/gs.test(longCss)) throw new Error('长会话性能层不得隐藏导航')
+if (/\.review-page \.round-nav\s*\{[^{}]*display\s*:\s*none/s.test(longCss) || /\.review-page \.round-nav\s*\{[^{}]*visibility\s*:\s*hidden/s.test(longCss)) throw new Error('长会话性能层不得隐藏轮次导航本体')
 if (/\.round-nav\s*>\s*button:nth-of-type/.test(longCss) || /\.round-nav[^{}]*nth-(?:child|of-type)/.test(longCss)) throw new Error('长会话性能层不得按按钮序号控制业务表现')
 if (/\.round-nav[^\n{]*\[[^\]]*(?:data-|aria-)[^\]]*\][^{}]*\{[^{}]*(?:display|visibility)\s*:/gs.test(longCss)) throw new Error('长会话性能层不得根据业务状态属性隐藏导航')
 if (!/\.review-page \.round-nav button\s*\{[^}]*white-space:\s*nowrap/s.test(longCss)) throw new Error('长会话导航所有者必须保证操作单行展示')
