@@ -983,22 +983,6 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
     return () => observer.disconnect()
   }, [detail?.id, detail?.page.hasMore, detail?.page.nextCursor, detail?.page.direction, review.detailLoadingMore, review.error, loadOlder, model])
 
-  const lastInteractionKey = detail?.interactions.at(-1)
-    ? `${detail.interactions.at(-1)!.id}:${detail.interactions.at(-1)!.endedAt}:${detail.interactions.at(-1)!.nodes.length}`
-    : ''
-  useEffect(() => {
-    if (!review.detailHasNewData || !detail || detail.page.filter !== 'all') return
-    const includesTail = detail.page.direction === 'backward' || !detail.page.hasMore
-    if (!includesTail || !followingTailRef.current) return
-    const frame = window.requestAnimationFrame(() => {
-      const pane = readerPaneRef.current
-      if (!pane) return
-      pane.scrollTop = pane.scrollHeight
-      model.acknowledgeReviewNewData()
-    })
-    return () => window.cancelAnimationFrame(frame)
-  }, [review.detailHasNewData, lastInteractionKey, detail?.page.direction, detail?.page.hasMore, detail?.page.filter, model])
-
   const select = (id: string) => {
     const pane = readerPaneRef.current
     if (detail?.id && pane) readerPositionsRef.current.set(detail.id, captureReviewReaderPosition(pane))
@@ -1126,7 +1110,6 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
   const isBackward = detail?.page.direction === 'backward'
   const isFiltered = roundFilter !== 'all'
   const atStart = roundFilter === 'all' && !isBackward
-  const atLatest = roundFilter === 'all' && isBackward && !review.detailHasNewData
 
   const onReaderScroll = () => {
     const pane = readerPaneRef.current
@@ -1140,10 +1123,6 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
       })
     }
     followingTailRef.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 180
-    if (followingTailRef.current && review.detailHasNewData && detail?.page.filter === 'all') {
-      const includesTail = detail.page.direction === 'backward' || !detail.page.hasMore
-      if (includesTail) model.acknowledgeReviewNewData()
-    }
   }
 
   const emptyLabel = roundFilter === 'errors'
@@ -1226,7 +1205,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
             <div className="round-nav-actions" aria-label="轮次操作">
               <button className="round-nav-expand" disabled={roundFilterLoading} onClick={toggleRoundExpansion}>{expandAllRounds ? '收起当前页' : '展开当前页'}</button>
               <button className="round-nav-from-start" disabled={roundFilterLoading || atStart} onClick={() => void showFromStart()}>从头查看 ↑</button>
-              <button className="round-nav-latest" disabled={roundFilterLoading || atLatest} onClick={() => void jumpToLatest()}>跳到最新 ↓</button>
+              <button className="round-nav-latest" disabled={roundFilterLoading} onClick={() => void jumpToLatest()}>跳到最新 ↓</button>
               {review.detailHasNewData && <button className="round-nav-live" onClick={() => void jumpToLatest()}>有新记录 ↓</button>}
             </div>
             {roundFilterLoading && <span className="round-nav-status">正在查询完整会话…</span>}
