@@ -1,0 +1,84 @@
+name: One-off Task Surface Native Defaults
+
+on:
+  push:
+    branches:
+      - feature/1.0.0-alpha.3-task-surface
+    paths:
+      - .github/workflows/maintenance-native-task-defaults.yml
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.23.0
+          package-manager-cache: false
+      - name: Move full-event default into React state
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs')
+
+          function replaceExact(path, from, to, expected = 1) {
+            const source = fs.readFileSync(path, 'utf8')
+            const count = source.split(from).length - 1
+            if (count !== expected) throw new Error(`${path}: expected ${expected} occurrence(s), found ${count}: ${from}`)
+            fs.writeFileSync(path, source.replaceAll(from, to))
+          }
+
+          replaceExact(
+            'packages/web/src/features/ReviewPage.tsx',
+            'const [showAllEvents, setShowAllEvents] = useState(false)',
+            'const [showAllEvents, setShowAllEvents] = useState(true)',
+          )
+
+          replaceExact(
+            'packages/web/src/features/PiLivePage.tsx',
+            'const [showAllEvents, setShowAllEvents] = useState(false)',
+            'const [showAllEvents, setShowAllEvents] = useState(true)',
+          )
+          replaceExact(
+            'packages/web/src/features/PiLivePage.tsx',
+            'setShowAllEvents(false)',
+            'setShowAllEvents(true)',
+          )
+
+          replaceExact(
+            'packages/web/src/main.tsx',
+            "import { installTaskSurfaceDefaults } from './client/task-surface-defaults'\n",
+            '',
+          )
+          replaceExact(
+            'packages/web/src/main.tsx',
+            'const disposeTaskSurfaceDefaults = installTaskSurfaceDefaults()\n',
+            '',
+          )
+          replaceExact(
+            'packages/web/src/main.tsx',
+            '  disposeTaskSurfaceDefaults()\n',
+            '',
+          )
+          NODE
+
+          git rm packages/web/src/client/task-surface-defaults.ts
+          git diff --check
+      - name: Commit native defaults
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo 'No changes required.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add packages/web/src/features/ReviewPage.tsx packages/web/src/features/PiLivePage.tsx packages/web/src/main.tsx
+          git commit -m 'refactor(web): 原生化全部事件默认状态'
+          git push origin HEAD:${GITHUB_REF_NAME}
