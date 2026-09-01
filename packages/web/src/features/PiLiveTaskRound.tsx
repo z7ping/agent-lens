@@ -115,6 +115,10 @@ function historyEntries(items: PiLiveHistoryItem[]): HistoryRenderEntry[] {
   return result
 }
 
+function ThinkingMarkdown({ text }: { text: string }) {
+  return <div className="markdown"><ReactMarkdown>{text}</ReactMarkdown></div>
+}
+
 function HistoryThinking({ item }: { item: Extract<PiLiveHistoryItem, { kind: 'thinking' }> }) {
   const model: TaskThinkingModel = {
     id: item.id,
@@ -124,7 +128,7 @@ function HistoryThinking({ item }: { item: Extract<PiLiveHistoryItem, { kind: 't
     time: item.at ? formatClock(item.at) : undefined,
     state: 'settled',
   }
-  return <TaskThinking model={model} defaultExpanded><div>{item.text}</div></TaskThinking>
+  return <TaskThinking model={model} defaultExpanded><ThinkingMarkdown text={item.text}/></TaskThinking>
 }
 
 function HistoryToolGroup({ id, items }: { id: string; items: HistoryTool[] }) {
@@ -203,7 +207,7 @@ export function PiLiveRunningTaskRound({
     return taskTool(tool.name, tool.id, tool.status, tool.summary, tool.output, timing)
   })
   const thinking: TaskThinkingModel = {
-    id: 'pi-live-current-thinking',
+    id: `${model.id}:thinking`,
     label: '思考',
     text: thinkingText,
     preview: compactPreview(thinkingText),
@@ -215,7 +219,7 @@ export function PiLiveRunningTaskRound({
     className="pi-live-current-round"
     summaryMeta={pendingMessageCount > 0 ? <span>{pendingMessageCount} 条排队</span> : undefined}
   >
-    {thinkingText && <TaskThinking model={thinking} defaultExpanded><div>{thinkingText}</div></TaskThinking>}
+    {thinkingText && <TaskThinking model={thinking} defaultExpanded><ThinkingMarkdown text={thinkingText}/></TaskThinking>}
     {toolModels.length > 0 && <TaskToolGroup
       model={toolGroup('pi-live-current-tools', toolModels)}
       renderDetails={tool => <ToolOutput tool={tool}/>}
