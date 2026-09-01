@@ -21,7 +21,7 @@ async function detectProfiledDsh(ctx: Parameters<SourceDefinition['detect']>[0])
   })
 }
 
-function profileContext(ctx: SourceExecutionContext): SourceExecutionContext {
+function profileContext<T extends SourceExecutionContext>(ctx: T): T {
   const profile = ctx.runtimeProfile
   if (!profile) return ctx
   return {
@@ -31,7 +31,7 @@ function profileContext(ctx: SourceExecutionContext): SourceExecutionContext {
       ...(profile.configRoot ? { configRoot: profile.configRoot } : {}),
       ...(profile.dataRoot ? { dataRoot: profile.dataRoot } : {}),
     },
-  }
+  } as T
 }
 
 export const profiledDshSourceDefinition: SourceDefinition = {

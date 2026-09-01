@@ -16,6 +16,8 @@ import type {
   SourceDefinition,
   SourceDetectionContext,
   SourceExecutionContext,
+  SourceHistoryExecutionContext,
+  SourceHistoryWindow,
   SourceNormalizationContext,
   SourcePluginManifest,
   SourceRecord,
@@ -156,7 +158,7 @@ async function profileRoots(env: Readonly<Record<string, string | undefined>>): 
   return entries.filter(entry => entry.isDirectory()).map(entry => ({ profile: entry.name, root: join(root, entry.name) }))
 }
 
-async function sessionFiles(profileRoot: string): Promise<string[]> {
+async function sessionFiles(profileRoot: string, historyWindow?: SourceHistoryWindow): Promise<string[]> {
   const root = join(profileRoot, 'sessions')
   if (!await exists(root)) return []
   const result: string[] = []
@@ -178,8 +180,13 @@ async function sessionFiles(profileRoot: string): Promise<string[]> {
     }
   }))).filter((candidate): candidate is { path: string; mtimeMs: number } => candidate !== null)
 
-  return candidates
-    .sort((a, b) => b.mtimeMs - a.mtimeMs || b.path.localeCompare(a.path))
+  const activeSince = historyWindow?.activeSince ? Date.parse(historyWindow.activeSince) : Number.NaN
+  const filtered = Number.isFinite(activeSince)
+    ? candidates.filter(candidate => candidate.mtimeMs >= activeSince)
+    : candidates
+  const ordered = filtered.sort((a, b) => b.mtimeMs - a.mtimeMs || b.path.localeCompare(a.path))
+  const limit = historyWindow?.sessionLimit
+  return (limit === undefined ? ordered : ordered.slice(0, Math.max(0, Math.floor(limit))))
     .map(candidate => candidate.path)
 }
 
@@ -294,10 +301,10 @@ function eventRecord(
   }
 }
 
-export async function* ingestDshHistory(ctx: SourceExecutionContext): AsyncIterable<SourceRecord> {
+export async function* ingestDshHistory(ctx: SourceHistoryExecutionContext): AsyncIterable<SourceRecord> {
   const root = ctx.installation.dataRoot
   if (!root || ctx.abortSignal.aborted) return
-  for (const path of await sessionFiles(root)) {
+  for (const path of await sessionFiles(root, ctx.historyWindow)) {
     if (ctx.abortSignal.aborted) return
     const meta = await stat(path).catch(() => null)
     if (!meta) continue
