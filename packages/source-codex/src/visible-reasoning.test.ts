@@ -40,6 +40,35 @@ test('event_msg agent_reasoning is promoted to canonical message.reasoning', asy
   assert.equal(fact.sourceSequence, 7)
 })
 
+test('reasoning_summary supports structured summary blocks', async () => {
+  const output = await normalizeCodexRecordWithVisibleReasoning(record({
+    type: 'event_msg',
+    payload: {
+      type: 'reasoning_summary',
+      summary: [
+        { type: 'summary_text', text: 'Check parser state.' },
+        { type: 'summary_text', text: 'Then inspect projection.' },
+      ],
+    },
+  }), ctx)
+
+  const fact = output.observations[0]!
+  assert.equal(fact.kind, 'message.reasoning')
+  assert.equal((fact.payload as any).text, 'Check parser state.\n\nThen inspect projection.')
+})
+
+test('reasoning token statistics are not promoted to Thinking text', async () => {
+  const output = await normalizeCodexRecordWithVisibleReasoning(record({
+    type: 'event_msg',
+    payload: {
+      type: 'token_count',
+      info: { total_token_usage: { output_tokens: 20, reasoning_output_tokens: 12 } },
+    },
+  }), ctx)
+
+  assert.equal(output.observations[0]?.kind, 'usage')
+})
+
 test('non-reasoning event_msg keeps original normalization', async () => {
   const output = await normalizeCodexRecordWithVisibleReasoning(record({
     type: 'event_msg',
