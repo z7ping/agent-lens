@@ -49,6 +49,8 @@ function safeDetachDebugger(win) {
 }
 
 async function applyViewport(win, viewport) {
+  // 同时锁定真实 BrowserWindow content size，给 Windows hidden-window 截图提供可靠兜底。
+  win.setContentSize(viewport.width, viewport.height)
   ensureDebugger(win)
   await withTimeout(win.webContents.debugger.sendCommand('Emulation.setDeviceMetricsOverride', {
     width: viewport.width,
@@ -86,13 +88,28 @@ async function applyViewport(win, viewport) {
 
 async function captureViewport(win, viewport, theme) {
   ensureDebugger(win)
-  const result = await withTimeout(win.webContents.debugger.sendCommand('Page.captureScreenshot', {
-    format: 'png',
-    fromSurface: true,
-    captureBeyondViewport: false,
-  }), 8_000, `${viewport.width}×${viewport.height} ${theme} 截图`)
-  if (!result?.data) fail(`${viewport.width}×${viewport.height} ${theme} 截图数据为空`)
-  return Buffer.from(result.data, 'base64')
+  try {
+    const result = await withTimeout(win.webContents.debugger.sendCommand('Page.captureScreenshot', {
+      format: 'png',
+      fromSurface: true,
+      captureBeyondViewport: false,
+    }), 10_000, `${viewport.width}×${viewport.height} ${theme} CDP 截图`)
+    if (!result?.data) fail(`${viewport.width}×${viewport.height} ${theme} CDP 截图数据为空`)
+    return Buffer.from(result.data, 'base64')
+  } catch (error) {
+    // Windows hosted runner 上 hidden BrowserWindow 的第二次 Page.captureScreenshot 偶发悬挂。
+    // 先撤销卡住的 debugger session，再用已锁定 content size 的 Electron capturePage 兜底；
+    // 几何/滚动/字号等验收仍来自真实 Renderer，兜底只影响证据截图传输。
+    safeDetachDebugger(win)
+    await delay(80)
+    const image = await withTimeout(win.webContents.capturePage(), 8_000, `${viewport.width}×${viewport.height} ${theme} Electron 截图兜底`)
+    const size = image.getSize()
+    if (image.isEmpty() || Math.abs(size.width - viewport.width) > 2 || Math.abs(size.height - viewport.height) > 2) {
+      throw new Error(`${viewport.width}×${viewport.height} ${theme} 截图失败；CDP=${error instanceof Error ? error.message : String(error)}；fallback=${size.width}×${size.height}`)
+    }
+    console.warn(`CDP 截图超时，已使用 Electron capturePage 兜底：${viewport.width}×${viewport.height} ${theme}`)
+    return image.toPNG()
+  }
 }
 
 async function persistReport() {
