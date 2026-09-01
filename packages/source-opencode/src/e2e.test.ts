@@ -14,7 +14,7 @@ import {
 import { SourceHistoryRunner, SourceRuntimeRunner } from '@agent-lens/core-services/source-runner'
 import { createTestCapturePolicy } from '@agent-lens/core-services/test-support'
 import { SqliteStorageService } from '@agent-lens/storage-sqlite'
-import { detectOpenCode, openCodeSourceDefinition } from './index'
+import { detectOpenCode, openCodeSourceDefinition, openCodeSourceInternals } from './index'
 
 async function waitFor(predicate: () => Promise<boolean>, timeoutMs = 3000): Promise<void> {
   const deadline = Date.now() + timeoutMs
@@ -53,6 +53,19 @@ test('OpenCode Source reads native SQLite title/history and observes in-place pa
   nativeDb.prepare('INSERT INTO part (id, message_id, session_id, time_created, data) VALUES (?, ?, ?, ?, ?)').run(
     'prt_old', 'msg_old', 'ses_1', 1_700_000_000_000, JSON.stringify({ type: 'text', text: '旧历史' }),
   )
+  nativeDb.prepare('INSERT INTO session (id, directory, title) VALUES (?, ?, ?)').run('ses_latest', workspace, '最新会话')
+  nativeDb.prepare('INSERT INTO message (id, data) VALUES (?, ?)').run('msg_latest', JSON.stringify({ role: 'user' }))
+  nativeDb.prepare('INSERT INTO part (id, message_id, session_id, time_created, data) VALUES (?, ?, ?, ?, ?)').run(
+    'prt_latest', 'msg_latest', 'ses_latest', 1_788_000_000_000, JSON.stringify({ type: 'text', text: '最新历史' }),
+  )
+  assert.deepEqual(
+    openCodeSourceInternals.selectRows(nativeDb, 0, 100, Date.parse('2026-08-10T00:00:00.000Z'), 1)
+      .map(row => row.session_id),
+    ['ses_latest'],
+  )
+  nativeDb.prepare('DELETE FROM part WHERE session_id = ?').run('ses_latest')
+  nativeDb.prepare('DELETE FROM message WHERE id = ?').run('msg_latest')
+  nativeDb.prepare('DELETE FROM session WHERE id = ?').run('ses_latest')
   nativeDb.prepare('INSERT INTO part (id, message_id, session_id, time_created, data) VALUES (?, ?, ?, ?, ?)').run(
     'prt_text', 'msg_u', 'ses_1', 1_787_000_000_000, JSON.stringify({ type: 'text', text: '检查仓库' }),
   )

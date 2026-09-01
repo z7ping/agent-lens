@@ -198,7 +198,12 @@ function timestampMillisSql(column: string): string {
   END`
 }
 
-function messageQuery(db: Database.Database, tail: boolean, activeSinceMs?: number): Database.Statement {
+function messageQuery(
+  db: Database.Database,
+  tail: boolean,
+  activeSinceMs?: number,
+  sessionLimit?: number,
+): Database.Statement {
   const messageColumns = tableColumns(db, 'messages')
   if (!messageColumns.has('session_id')) throw new Error('Hermes state.db messages table has no session_id column')
   const sessionColumns = tableColumns(db, 'sessions')
@@ -219,19 +224,49 @@ function messageQuery(db: Database.Database, tail: boolean, activeSinceMs?: numb
     ? 'LEFT JOIN sessions s ON m.session_id = s.id'
     : 'LEFT JOIN (SELECT NULL AS id, NULL AS cwd, NULL AS title) s ON 1 = 0'
   const order = tail ? 'DESC' : 'ASC'
-  const timeFilter = activeSinceMs === undefined
-    ? ''
-    : messageColumns.has('timestamp')
-      ? `AND ${timestampMillisSql('m.timestamp')} >= ?`
-      : 'AND 1 = 0'
-  const where = tail ? '' : `WHERE m.rowid > ? ${timeFilter}`
+  const filters: string[] = []
+  if (!tail) {
+    filters.push('m.rowid > ?')
+    if (activeSinceMs !== undefined) {
+      filters.push(messageColumns.has('timestamp') ? `${timestampMillisSql('m.timestamp')} >= ?` : '1 = 0')
+    }
+    if (sessionLimit !== undefined) {
+      const recentTimeFilter = activeSinceMs === undefined
+        ? ''
+        : messageColumns.has('timestamp')
+          ? `WHERE ${timestampMillisSql('recent.timestamp')} >= ?`
+          : 'WHERE 1 = 0'
+      filters.push(`m.session_id IN (
+        SELECT recent.session_id FROM messages recent
+        ${recentTimeFilter}
+        GROUP BY recent.session_id
+        ORDER BY MAX(${messageColumns.has('timestamp') ? timestampMillisSql('recent.timestamp') : 'recent.rowid'}) DESC,
+                 recent.session_id ASC
+        LIMIT ?
+      )`)
+    }
+  }
+  const where = filters.length ? `WHERE ${filters.join(' AND ')}` : ''
   const sql = `SELECT ${fields.join(', ')} FROM messages m ${joinSession} ${where} ORDER BY m.rowid ${order} LIMIT ?`
   return db.prepare(sql)
 }
 
-function selectRows(db: Database.Database, afterRowId: number, limit: number, activeSinceMs?: number): HermesRow[] {
-  const params = activeSinceMs === undefined ? [afterRowId, limit] : [afterRowId, activeSinceMs, limit]
-  return messageQuery(db, false, activeSinceMs).all(...params) as HermesRow[]
+function selectRows(
+  db: Database.Database,
+  afterRowId: number,
+  limit: number,
+  activeSinceMs?: number,
+  sessionLimit?: number,
+): HermesRow[] {
+  const statement = messageQuery(db, false, activeSinceMs, sessionLimit)
+  const params: unknown[] = [afterRowId]
+  if (activeSinceMs !== undefined) params.push(activeSinceMs)
+  if (sessionLimit !== undefined) {
+    if (activeSinceMs !== undefined) params.push(activeSinceMs)
+    params.push(Math.max(0, Math.floor(sessionLimit)))
+  }
+  params.push(limit)
+  return statement.all(...params) as HermesRow[]
 }
 
 function recentRows(db: Database.Database, limit: number): HermesRow[] {
@@ -303,12 +338,15 @@ export async function* ingestHermesHistory(ctx: SourceHistoryExecutionContext): 
     // v2 会一次性重放历史消息，让旧会话也获得原生标题。
     const parsedActiveSince = ctx.historyWindow?.activeSince ? Date.parse(ctx.historyWindow.activeSince) : Number.NaN
     const activeSinceMs = Number.isFinite(parsedActiveSince) ? parsedActiveSince : undefined
+    const sessionLimit = ctx.historyWindow?.sessionLimit
     const checkpointKey = activeSinceMs === undefined
       ? 'history-rowid:v2-session-title'
-      : 'history-hot-rowid:v1'
+      : sessionLimit === undefined
+        ? 'history-hot-rowid:v1'
+        : `history-hot-limit-${Math.max(0, Math.floor(sessionLimit))}-rowid:v1`
     let rowId = await ctx.checkpoint.get<number>(checkpointKey) ?? 0
     while (!ctx.abortSignal.aborted) {
-      const rows = selectRows(db, rowId, HISTORY_BATCH, activeSinceMs)
+      const rows = selectRows(db, rowId, HISTORY_BATCH, activeSinceMs, sessionLimit)
       if (!rows.length) break
       for (const row of rows) {
         if (ctx.abortSignal.aborted) return
@@ -862,4 +900,5 @@ export const hermesSourceInternals = {
   hookRecord,
   yamlSectionNames,
   yamlListValues,
+  selectRows,
 }

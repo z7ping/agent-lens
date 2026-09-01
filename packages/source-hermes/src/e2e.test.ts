@@ -19,7 +19,7 @@ import {
 } from '@agent-lens/core-services/source-runner'
 import { createTestCapturePolicy } from '@agent-lens/core-services/test-support'
 import { SqliteStorageService } from '@agent-lens/storage-sqlite'
-import { detectHermes, hermesSourceDefinition } from './index'
+import { detectHermes, hermesSourceDefinition, hermesSourceInternals } from './index'
 
 async function waitFor(predicate: () => Promise<boolean>, timeoutMs = 3000): Promise<void> {
   const deadline = Date.now() + timeoutMs
@@ -59,6 +59,17 @@ test('Hermes Source combines native session title, state.db history, assets and 
   nativeDb.prepare('INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
     1, 'ses_1', 'user', '旧历史', 1_700_000_000, null, null, null,
   )
+  nativeDb.prepare('INSERT INTO sessions (id, cwd, title) VALUES (?, ?, ?)').run('ses_latest', workspace, '最新会话')
+  nativeDb.prepare('INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
+    5, 'ses_latest', 'user', '最新历史', 1_788_000_000, null, null, null,
+  )
+  assert.deepEqual(
+    hermesSourceInternals.selectRows(nativeDb, 0, 100, Date.parse('2026-08-10T00:00:00.000Z'), 1)
+      .map(row => row.session_id),
+    ['ses_latest'],
+  )
+  nativeDb.prepare('DELETE FROM messages WHERE session_id = ?').run('ses_latest')
+  nativeDb.prepare('DELETE FROM sessions WHERE id = ?').run('ses_latest')
   nativeDb.prepare('INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
     2, 'ses_1', 'user', '检查项目', 1_787_000_000, null, null, null,
   )

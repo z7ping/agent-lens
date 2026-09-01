@@ -163,9 +163,35 @@ function timestampMillisSql(column: string): string {
   END`
 }
 
-function selectRows(db: Database.Database, afterRowId: number, limit: number, activeSinceMs?: number): OpenCodeRow[] {
-  const timeFilter = activeSinceMs === undefined ? '' : `AND ${timestampMillisSql('p.time_created')} >= ?`
-  const params = activeSinceMs === undefined ? [afterRowId, limit] : [afterRowId, activeSinceMs, limit]
+function selectRows(
+  db: Database.Database,
+  afterRowId: number,
+  limit: number,
+  activeSinceMs?: number,
+  sessionLimit?: number,
+): OpenCodeRow[] {
+  const params: unknown[] = [afterRowId]
+  const filters: string[] = []
+  if (activeSinceMs !== undefined) {
+    filters.push(`${timestampMillisSql('p.time_created')} >= ?`)
+    params.push(activeSinceMs)
+  }
+  if (sessionLimit !== undefined) {
+    const recentFilters = activeSinceMs === undefined
+      ? ''
+      : `WHERE ${timestampMillisSql('recent.time_created')} >= ?`
+    filters.push(`p.session_id IN (
+      SELECT recent.session_id FROM part recent
+      ${recentFilters}
+      GROUP BY recent.session_id
+      ORDER BY MAX(${timestampMillisSql('recent.time_created')}) DESC, recent.session_id ASC
+      LIMIT ?
+    )`)
+    if (activeSinceMs !== undefined) params.push(activeSinceMs)
+    params.push(Math.max(0, Math.floor(sessionLimit)))
+  }
+  params.push(limit)
+  const historyFilter = filters.length ? `AND ${filters.join(' AND ')}` : ''
   return db.prepare(`
     SELECT p.rowid AS row_id,
            p.id AS id,
@@ -179,7 +205,7 @@ function selectRows(db: Database.Database, afterRowId: number, limit: number, ac
       FROM part p
       LEFT JOIN message m ON p.message_id = m.id
       LEFT JOIN session s ON p.session_id = s.id
-     WHERE p.rowid > ? ${timeFilter}
+     WHERE p.rowid > ? ${historyFilter}
      ORDER BY p.rowid ASC
      LIMIT ?
   `).all(...params) as OpenCodeRow[]
@@ -269,12 +295,15 @@ export async function* ingestOpenCodeHistory(
     // v2 会一次性重放旧记录，让已经导入的会话也获得原生标题。
     const parsedActiveSince = ctx.historyWindow?.activeSince ? Date.parse(ctx.historyWindow.activeSince) : Number.NaN
     const activeSinceMs = Number.isFinite(parsedActiveSince) ? parsedActiveSince : undefined
+    const sessionLimit = ctx.historyWindow?.sessionLimit
     const checkpointKey = activeSinceMs === undefined
       ? 'history-rowid:v2-session-title'
-      : 'history-hot-rowid:v1'
+      : sessionLimit === undefined
+        ? 'history-hot-rowid:v1'
+        : `history-hot-limit-${Math.max(0, Math.floor(sessionLimit))}-rowid:v1`
     let rowId = await ctx.checkpoint.get<number>(checkpointKey) ?? 0
     while (!ctx.abortSignal.aborted) {
-      const rows = selectRows(db, rowId, HISTORY_BATCH, activeSinceMs)
+      const rows = selectRows(db, rowId, HISTORY_BATCH, activeSinceMs, sessionLimit)
       if (!rows.length) break
       for (const row of rows) {
         if (ctx.abortSignal.aborted) return
@@ -546,4 +575,5 @@ export const openCodeSourceInternals = {
   normalizeTimestamp,
   rowFingerprint,
   recordFromRow,
+  selectRows,
 }
