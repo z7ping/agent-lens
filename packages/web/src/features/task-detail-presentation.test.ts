@@ -44,14 +44,12 @@ const runningRound: TaskRoundModel = {
   highLatency: false,
 }
 
-test('Tool Group 按高保真原型默认展开，Tool Call 初始逐条可见', () => {
+test('Tool Group 不再生成独立“执行过程 / 工具执行”父层', () => {
   const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: toolGroup }))
-  assert.match(html, /<details[^>]*data-task-tool-group="true"[^>]*open=""|<details[^>]*open=""[^>]*data-task-tool-group="true"/)
+  assert.match(html, /data-task-tool-group="true"/)
+  assert.doesNotMatch(html, /<details[^>]*data-task-tool-group/)
+  assert.doesNotMatch(html, /class="tool-title"/)
   assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 4)
-  assert.match(html, /class="tool-title"/)
-  assert.match(html, /class="node-preview"/)
-  assert.match(html, /读取 → 搜索 → 测试 → 工具/)
-  assert.match(html, /4 次/)
 })
 
 test('测试类和未知 Tool 使用稳定语义降级', () => {
@@ -72,18 +70,29 @@ test('Round 保持轻量摘要结构并默认展开', () => {
   assert.match(html, /4 调用/)
 })
 
-test('Message 保持用户右 / Agent 左的单一正文结构', () => {
+test('用户保留右侧气泡，Agent 无图标且用户不提供源码入口', () => {
   const user = renderToStaticMarkup(createElement(TaskMessage, { role: 'user', text: '用户消息', collapsible: false }))
   const assistant = renderToStaticMarkup(createElement(TaskMessage, { role: 'assistant', text: '智能体回复', collapsible: false }))
   assert.match(user, /message-row[^\"]*user/)
   assert.match(user, /chat-bubble-user/)
   assert.doesNotMatch(user, /task-message-agent-mark/)
+  assert.doesNotMatch(user, />源码</)
   assert.match(assistant, /message-row[^\"]*agent/)
-  assert.match(assistant, /task-message-agent-mark/)
   assert.match(assistant, /chat-bubble-agent/)
+  assert.doesNotMatch(assistant, /task-message-agent-mark/)
+  assert.match(assistant, />源码</)
 })
 
-test('Pi Running Tool Group 默认展开，并在事实行下展示有限高度实时输出', () => {
+test('工具状态和耗时紧跟工具类型，而不是放到最右侧', () => {
+  const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: toolGroup }))
+  const kind = html.indexOf('>读取</span>')
+  const status = html.indexOf('完成 · 42ms')
+  const action = html.indexOf('读取文件')
+  const target = html.indexOf('packages/web/src/App.tsx')
+  assert.ok(kind >= 0 && status > kind && action > status && target > action)
+})
+
+test('Pi Running Tool 直接展示事实行，并在行下展示有限高度实时输出', () => {
   const html = renderToStaticMarkup(createElement(PiLiveRunningTaskRound, {
     model: runningRound,
     thinkingText: '检查文件后继续执行。',
@@ -96,7 +105,8 @@ test('Pi Running Tool Group 默认展开，并在事实行下展示有限高度�
   assert.match(html, /data-tool-fact="true"/)
   assert.match(html, /class="tool-live-output"/)
   assert.match(html, /line 1/)
-  assert.match(html, /<details[^>]*data-task-tool-group="true"[^>]*open=""|<details[^>]*open=""[^>]*data-task-tool-group="true"/)
+  assert.match(html, /data-task-tool-group="true"/)
+  assert.doesNotMatch(html, /<details[^>]*data-task-tool-group/)
 })
 
 test('Pi settled 成功输出折叠在 Tool Call 事实行之下', () => {
