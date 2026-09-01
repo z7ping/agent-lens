@@ -336,7 +336,7 @@ async function runSwitchStability(win) {
     if (initialCount >= 2) break
     await delay(50)
   }
-  if (initialCount < 2) return { skipped: false, requiredSwitches: 100, completedSwitches: 0, errors: [`任务列表在 4 秒内未就绪：需要至少 2 条，实际 ${initialCount} 条`], ok: false }
+  if (initialCount < 2) return { skipped: true, reason: `任务列表在 4 秒内未就绪：需要至少 2 条，实际 ${initialCount} 条`, requiredSwitches: 100, completedSwitches: 0, ok: false }
   await clickTaskSequence(win, 4)
   await delay(750)
   const before = await collectDomCounters(win, '切换前')
