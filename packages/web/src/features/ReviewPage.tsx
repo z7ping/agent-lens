@@ -267,6 +267,7 @@ function sourceEventLabel(node: ReviewEventNodeDto): string {
     if (node.kind === 'session.lifecycle' && action === 'turn.aborted') return 'Codex 轮次中止'
     if (node.kind === 'session.lifecycle' && action === 'turn.error') return 'Codex 轮次错误'
     if (node.kind === 'context.compaction') return '上下文压缩'
+    if (node.kind === 'context.injected') return '系统注入上下文'
     if (node.kind === 'subagent.spawn') return '启动子智能体'
     if (node.kind === 'subagent.end') return '子智能体完成'
     if (node.kind === 'permission.request') return '权限请求'
@@ -732,6 +733,10 @@ function ReviewProcessGroup({
     preview: brief(first?.text ?? `${toolCount} 次工具调用`, 78),
     time: first ? formatClock(first.at) : undefined,
     state: 'settled',
+  }
+  if (node.kind === 'context.injected') {
+    const role = stringValue(payload, 'role')
+    return role ? `${role} 注入内容已隐藏` : '注入内容已隐藏'
   }
   return <TaskThinking model={model} defaultExpanded={false}>
     <div className="task-process-sequence">

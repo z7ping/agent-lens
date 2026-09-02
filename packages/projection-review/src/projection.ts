@@ -95,6 +95,7 @@ function eventLabel(kind: TimelineItemDto['kind']): string {
     'subagent.end': '子 Agent 结束',
     'context.compaction': '上下文压缩',
     'context.summary': '上下文摘要',
+    'context.injected': '系统注入上下文',
     'artifact.action': '产物操作',
     usage: '用量',
     unknown: '原始事件',
