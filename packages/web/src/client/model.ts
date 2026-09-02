@@ -439,6 +439,17 @@ export class AgentLensClientModel {
     }
   }
 
+  async jumpToReviewInteraction(ordinal: number): Promise<void> {
+    const current = this.snapshot.review
+    if (!current.selectedId || ordinal < 1) return
+    if (current.detail?.interactions.some(item => item.ordinal === ordinal)) return
+    await this.showReviewFromStart()
+    while (this.snapshot.review.detail?.page.hasMore
+      && !this.snapshot.review.detail.interactions.some(item => item.ordinal === ordinal)) {
+      await this.loadMoreReviewDetail()
+    }
+  }
+
   acknowledgeReviewNewData(): void {
     const current = this.snapshot.review
     if (!current.detailHasNewData) return

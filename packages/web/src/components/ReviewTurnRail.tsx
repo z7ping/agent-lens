@@ -15,14 +15,14 @@ function hasError(detail: ReviewSessionDetailDto, index: number): boolean {
   return interaction?.nodes.some((node): node is ReviewToolNodeDto => node.type === 'tool' && node.status === 'error') ?? false
 }
 
-export function ReviewTurnRail({ detail }: { detail: ReviewSessionDetailDto }) {
+export function ReviewTurnRail({ detail, onLoadInteraction }: { detail: ReviewSessionDetailDto; onLoadInteraction?: (ordinal: number) => Promise<void> }) {
   const [activeIndex, setActiveIndex] = useState(0)
   const [position, setPosition] = useState<{ left: number; top: number } | null>(null)
-  const index = detail.interactionIndex ?? detail.interactions.map((interaction, ordinal) => ({
+  const entries = detail.interactionIndex ?? detail.interactions.map((interaction, ordinal) => ({
     id: interaction.id, ordinal: ordinal + 1, trigger: interaction.trigger, startedAt: interaction.startedAt,
     endedAt: interaction.endedAt, hasError: hasError(detail, ordinal), preview: preview(detail, ordinal),
   }))
-  const tips = useMemo(() => index.map(item => item.preview ?? `第 ${item.ordinal} 轮`), [index])
+  const tips = useMemo(() => entries.map(item => item.preview ?? `第 ${item.ordinal} 轮`), [entries])
 
   useEffect(() => {
     let observer: IntersectionObserver | undefined
@@ -75,22 +75,26 @@ export function ReviewTurnRail({ detail }: { detail: ReviewSessionDetailDto }) {
     }
   }, [detail.id, detail.interactions.length, detail.page.filter, detail.page.direction])
 
-  const jump = (index: number) => {
+  const jump = async (index: number) => {
     const shells = document.querySelectorAll<HTMLElement>('.review-reader-pane .virtual-round-shell')
     const target = shells[index]
-    if (!target) return
+    if (!target) {
+      const ordinal = entries[index]?.ordinal
+      if (ordinal && onLoadInteraction) await onLoadInteraction(ordinal)
+      return
+    }
     setActiveIndex(index)
     target.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
-  if (index.length < 2 || !position) return null
+  if (entries.length < 2 || !position) return null
   return <nav className="turn-rail" style={{ position: 'fixed', ...position }} aria-label="轮次导航">
-    {index.map((interaction, index) => <button
+    {entries.map((interaction, index) => <button
       key={interaction.id}
       className={`turn-tick ${activeIndex === index ? 'active' : ''} ${interaction.hasError ? 'err' : ''}`}
       data-tip={`${interaction.trigger === 'background' ? '后台活动' : `第 ${interaction.ordinal} 轮`} · ${tips[index]}`}
       aria-label={`跳到${interaction.trigger === 'background' ? '后台活动' : `第 ${interaction.ordinal} 轮`}`}
-      onClick={() => jump(index)}
+      onClick={() => void jump(index)}
     ><i/></button>)}
   </nav>
 }

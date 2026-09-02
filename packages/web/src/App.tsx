@@ -204,7 +204,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
       {onAgents && <AgentsStateOverlay model={model} snapshot={snapshot}/>} 
       {onTools && snapshot.usage.hasNewData && <BackgroundDataNotice label="工具分析" hasSseBanner={hasSseBanner} onRefresh={() => model.refreshUsage()}/>} 
       {onAgents && snapshot.agentsHasNewData && <BackgroundDataNotice label="智能体概览" hasSseBanner={hasSseBanner} onRefresh={() => model.refreshFacetsAndAgents()}/>} 
-      {showTurnRail && <ReviewTurnRail detail={snapshot.review.detail!}/>} 
+      {showTurnRail && <ReviewTurnRail detail={snapshot.review.detail!} onLoadInteraction={ordinal => model.jumpToReviewInteraction(ordinal)}/>} 
     </div>
   </PinnedProvider>
 }
