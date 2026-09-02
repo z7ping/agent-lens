@@ -58,6 +58,13 @@ test('ReviewProjection paginates only on complete interaction boundaries', async
     assert.ok(third)
     assert.equal(third.interactions[0]?.ordinal, 3)
     assert.equal(third.page.hasMore, false)
+
+    const jumped = await projection.get(logicalSessionId, { ordinal: 2 })
+    assert.ok(jumped)
+    assert.deepEqual(jumped.interactions.map(item => item.ordinal), [2])
+    assert.equal(jumped.page.count, 1)
+    assert.equal(jumped.page.hasMore, false)
+    assert.deepEqual(jumped.interactionIndex.map(item => item.ordinal), [1, 2, 3])
   } finally {
     storage.close()
   }

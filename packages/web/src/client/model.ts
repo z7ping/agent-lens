@@ -443,10 +443,16 @@ export class AgentLensClientModel {
     const current = this.snapshot.review
     if (!current.selectedId || ordinal < 1) return
     if (current.detail?.interactions.some(item => item.ordinal === ordinal)) return
-    await this.showReviewFromStart()
-    while (this.snapshot.review.detail?.page.hasMore
-      && !this.snapshot.review.detail.interactions.some(item => item.ordinal === ordinal)) {
-      await this.loadMoreReviewDetail()
+    const selectedId = current.selectedId
+    const generation = ++this.detailGeneration
+    this.publish({ ...this.snapshot, review: { ...current, detailLoading: true, detailLoadingMore: false, error: '' } })
+    try {
+      const detail = await this.api.reviewDetail(selectedId, { ordinal })
+      if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== selectedId) return
+      this.publish({ ...this.snapshot, review: { ...this.snapshot.review, detail, detailLoading: false, error: '' } })
+    } catch (error) {
+      if (generation !== this.detailGeneration) return
+      this.publish({ ...this.snapshot, review: { ...this.snapshot.review, detailLoading: false, error: error instanceof Error ? error.message : String(error) } })
     }
   }
 

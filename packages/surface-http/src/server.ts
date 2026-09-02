@@ -265,6 +265,11 @@ function parseReviewQuery(params: URLSearchParams): ReviewQueryDto {
 
 function parseReviewDetailQuery(params: URLSearchParams): ReviewDetailQueryDto {
   const limit = parseLimit(params, 100)
+  const ordinalValue = params.get('ordinal')
+  const ordinal = ordinalValue === null ? undefined : Number(ordinalValue)
+  if (ordinal !== undefined && (!Number.isSafeInteger(ordinal) || ordinal < 1)) {
+    throw badRequest(`Invalid review ordinal: ${ordinalValue}`)
+  }
   const directionValue = params.get('direction')
   if (directionValue && !['forward', 'backward'].includes(directionValue)) {
     throw badRequest(`Unknown review direction: ${directionValue}`)
@@ -275,6 +280,7 @@ function parseReviewDetailQuery(params: URLSearchParams): ReviewDetailQueryDto {
   }
   return {
     ...(params.get('cursor') ? { cursor: params.get('cursor')! } : {}),
+    ...(ordinal === undefined ? {} : { ordinal }),
     ...(directionValue ? { direction: directionValue as ReviewDetailDirection } : {}),
     ...(filterValue ? { filter: filterValue as ReviewDetailFilter } : {}),
     ...(limit === undefined ? {} : { limit }),

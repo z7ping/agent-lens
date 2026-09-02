@@ -812,7 +812,13 @@ export class ReviewProjection {
 
     const filter = query.filter ?? 'all'
     const direction = query.direction ?? 'forward'
-    const result = filter === 'errors' || filter === 'latency'
+    const target = query.ordinal === undefined ? undefined : descriptors.find(item => item.ordinal === query.ordinal)
+    const result = query.ordinal !== undefined
+      ? {
+          interactions: target ? [await this.materializeDescriptor(logicalSessionId, target)] : [],
+          page: { count: target ? 1 : 0, hasMore: false, direction: 'forward' as const, filter: 'all' as const },
+        }
+      : filter === 'errors' || filter === 'latency'
       ? await this.filteredInteractionPage(logicalSessionId, query, filter)
       : filter === 'latest'
         ? await this.backwardInteractionPage(logicalSessionId, { ...query, direction: 'backward' }, 'latest', summary.interactionCount)

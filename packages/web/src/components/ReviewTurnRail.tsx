@@ -23,6 +23,7 @@ export function ReviewTurnRail({ detail, onLoadInteraction }: { detail: ReviewSe
     endedAt: interaction.endedAt, hasError: hasError(detail, ordinal), preview: preview(detail, ordinal),
   }))
   const tips = useMemo(() => entries.map(item => item.preview ?? `第 ${item.ordinal} 轮`), [entries])
+  const loadedOrdinalKey = detail.interactions.map(interaction => interaction.ordinal).join(',')
 
   useEffect(() => {
     let observer: IntersectionObserver | undefined
@@ -60,7 +61,9 @@ export function ReviewTurnRail({ detail, onLoadInteraction }: { detail: ReviewSe
           .filter(entry => entry.isIntersecting)
           .sort((a, b) => Math.abs(a.boundingClientRect.top - pane.getBoundingClientRect().top) - Math.abs(b.boundingClientRect.top - pane.getBoundingClientRect().top))[0]
         if (!visible) return
-        const index = shells.indexOf(visible.target as HTMLElement)
+        const loadedIndex = shells.indexOf(visible.target as HTMLElement)
+        const ordinal = detail.interactions[loadedIndex]?.ordinal
+        const index = entries.findIndex(entry => entry.ordinal === ordinal)
         if (index >= 0) setActiveIndex(index)
       }, { root: pane, rootMargin: '-12% 0px -68% 0px', threshold: 0 })
       shells.forEach(shell => observer?.observe(shell))
@@ -73,14 +76,21 @@ export function ReviewTurnRail({ detail, onLoadInteraction }: { detail: ReviewSe
       resizeObserver?.disconnect()
       observer?.disconnect()
     }
-  }, [detail.id, detail.interactions.length, detail.page.filter, detail.page.direction])
+  }, [detail.id, loadedOrdinalKey, detail.page.filter, detail.page.direction])
 
   const jump = async (index: number) => {
+    const ordinal = entries[index]?.ordinal
+    if (!ordinal) return
+    const loadedIndex = detail.interactions.findIndex(interaction => interaction.ordinal === ordinal)
     const shells = document.querySelectorAll<HTMLElement>('.review-reader-pane .virtual-round-shell')
-    const target = shells[index]
+    const target = loadedIndex >= 0 ? shells[loadedIndex] : undefined
     if (!target) {
-      const ordinal = entries[index]?.ordinal
-      if (ordinal && onLoadInteraction) await onLoadInteraction(ordinal)
+      if (onLoadInteraction) {
+        await onLoadInteraction(ordinal)
+        await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+        document.querySelector<HTMLElement>('.review-reader-pane .virtual-round-shell')?.scrollIntoView({ block: 'start' })
+        setActiveIndex(index)
+      }
       return
     }
     setActiveIndex(index)
