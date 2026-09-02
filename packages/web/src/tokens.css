@@ -101,6 +101,7 @@
   --src-pi:#9B96FF;
   --src-hermes:#B69CFF;
   --src-opencode:#67D4E8;
+  --src-dsh:#F0B66C;
   color-scheme:dark;
 }
 
@@ -114,6 +115,8 @@
 .src-dot.dot-hermes{background:var(--src-hermes)!important}
 .source-dot.source-opencode,
 .src-dot.dot-opencode{background:var(--src-opencode)!important}
+.source-dot.source-dsh,
+.src-dot.dot-dsh{background:var(--src-dsh)!important}
 .source-dot.source-unknown,
 .src-dot.dot-none{background:var(--al-muted-2)!important}
 .agent-card[data-source='hermes']{--agent-accent:var(--src-hermes)}

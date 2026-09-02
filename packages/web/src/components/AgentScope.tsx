@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent }
 import { createPortal } from 'react-dom'
 import type { AgentFacetDto } from '@agent-lens/protocol'
 import { usePinnedAgents } from '../App'
+import { UiIcon } from './UiIcon'
 
 export function agentLabel(sourceId: string, fallback?: string): string {
   if (sourceId === 'claude-code') return 'Claude Code'
@@ -18,7 +19,21 @@ export function sourceDot(sourceId: string): string {
   if (sourceId === 'pi') return 'source-pi'
   if (sourceId === 'hermes') return 'source-hermes'
   if (sourceId === 'opencode') return 'source-opencode'
+  if (sourceId === 'dsh') return 'source-dsh'
   return 'source-unknown'
+}
+
+export function AgentIcon({ sourceId }: { sourceId: string }) {
+  const common = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.35, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
+  return <span className={`agent-icon ${sourceDot(sourceId)}`} aria-hidden="true"><svg viewBox="0 0 18 18" focusable="false">
+    {sourceId === 'codex' && <><path {...common} d="M9 2.2 11 6l4.2 1.1L12 9.5l.5 4.3L9 11.8l-3.5 2 .5-4.3-3.2-2.4L7 6z"/><circle {...common} cx="9" cy="8.5" r="1.2"/></>}
+    {sourceId === 'claude-code' && <><path {...common} d="M9 2.3 14.2 5v6L9 13.7 3.8 11V5z"/><path {...common} d="M6.2 6.2h5.6M6.2 8.6h3.7"/></>}
+    {sourceId === 'pi' && <><path {...common} d="M4 4.5v7M14 4.5v7M4 5.2c1.5-1.2 3.1-1.2 5 0v6.3M14 5.2c-1.5-1.2-3.1-1.2-5 0"/></>}
+    {sourceId === 'hermes' && <><path {...common} d="M3 12.8c2.3-3.8 4.1-5.7 6-7.6 1.9 1.9 3.7 3.8 6 7.6"/><path {...common} d="M5.2 10.3 9 12.8l3.8-2.5"/></>}
+    {sourceId === 'opencode' && <><path {...common} d="m7 4-4 5 4 5M11 4l4 5-4 5M10 3.5 8 14.5"/></>}
+    {sourceId === 'dsh' && <><path {...common} d="m9 2.5 6 6.5-6 6.5L3 9z"/><path {...common} d="M7 9h4M9 7v4"/></>}
+    {!['codex', 'claude-code', 'pi', 'hermes', 'opencode', 'dsh'].includes(sourceId) && <><circle {...common} cx="9" cy="9" r="5.5"/><path {...common} d="M6.5 9h5M9 6.5v5"/></>}
+  </svg></span>
 }
 
 interface ScopeMenuPosition {
@@ -130,13 +145,13 @@ export function AgentScope({ agents, value, onChange, allLabel = '全部智能�
       onDrop={event => { event.preventDefault(); if (draggedId) move(draggedId, agent.sourceId); setDraggedId('') }}
       onDragEnd={() => setDraggedId('')}
     >
-      <span className="agent-scope-drag" aria-hidden="true">⋮⋮</span>
+      <UiIcon name="drag" size={15} className="agent-scope-drag" />
       <input type="checkbox" aria-label={`${agentLabel(agent.sourceId, agent.displayName)}显示在工具栏`} checked={pinned.includes(agent.sourceId)} onChange={() => toggle(agent.sourceId)} />
-      <span className={`source-dot ${sourceDot(agent.sourceId)}`} />
+      <AgentIcon sourceId={agent.sourceId} />
       <span className="agent-scope-option-name">{agentLabel(agent.sourceId, agent.displayName)}</span>
       <span className="agent-scope-order-actions">
-        <button type="button" disabled={index === 0} onClick={() => moveBy(agent.sourceId, -1)} aria-label={`${agentLabel(agent.sourceId, agent.displayName)}上移`}>↑</button>
-        <button type="button" disabled={index === orderedAgents.length - 1} onClick={() => moveBy(agent.sourceId, 1)} aria-label={`${agentLabel(agent.sourceId, agent.displayName)}下移`}>↓</button>
+        <button type="button" disabled={index === 0} onClick={() => moveBy(agent.sourceId, -1)} aria-label={`${agentLabel(agent.sourceId, agent.displayName)}上移`}><UiIcon name="sort-up" size={14}/></button>
+        <button type="button" disabled={index === orderedAgents.length - 1} onClick={() => moveBy(agent.sourceId, 1)} aria-label={`${agentLabel(agent.sourceId, agent.displayName)}下移`}><UiIcon name="sort-down" size={14}/></button>
       </span>
       <span className={`agent-scope-option-state ${agent.detected ? 'is-detected' : ''}`}>{agent.detected ? '已检测' : '未检测'}</span>
     </div>) : <div className="agent-scope-empty">暂未发现智能体</div>}
@@ -145,12 +160,12 @@ export function AgentScope({ agents, value, onChange, allLabel = '全部智能�
   return <div className="agent-scope">
     {allLabel && <button className={`scope-chip ${value === '' ? 'scope-chip-active' : ''}`} onClick={() => onChange('')}>{allLabel}</button>}
     {shown.map(agent => <button key={agent.sourceId} className={`scope-chip ${value === agent.sourceId ? 'scope-chip-active' : ''}`} onClick={() => onChange(agent.sourceId)}>
-      <span className={`source-dot ${sourceDot(agent.sourceId)}`} />
+      <AgentIcon sourceId={agent.sourceId} />
       <span>{agentLabel(agent.sourceId, agent.displayName)}</span>
     </button>)}
     {allLabel !== false && <details ref={detailsRef} className="agent-scope-manage" onToggle={event => setMenuOpen(event.currentTarget.open)}>
       <summary ref={summaryRef} className="scope-manage-button" title="查看更多并管理智能体" aria-label={`查看更多并管理智能体${moreCount ? `，另有 ${moreCount} 个` : ''}`}>
-        <span>更多{moreCount ? ` ${moreCount}` : ''}</span><span aria-hidden="true">⌄</span>
+        <span>更多{moreCount ? ` ${moreCount}` : ''}</span><UiIcon name="chevron-down" size={14}/>
       </summary>
       {menuOpen && typeof document !== 'undefined' ? createPortal(menu, document.body) : null}
     </details>}

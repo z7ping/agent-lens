@@ -1,4 +1,4 @@
-export type UiIconName = 'refresh' | 'close' | 'search' | 'sort-up' | 'sort-down' | 'arrow-right' | 'plus' | 'trend' | 'check' | 'upload' | 'alert' | 'dot'
+export type UiIconName = 'refresh' | 'close' | 'search' | 'sort-up' | 'sort-down' | 'arrow-right' | 'plus' | 'trend' | 'check' | 'upload' | 'alert' | 'dot' | 'drag' | 'chevron-down'
 
 export function UiIcon({ name, size = 16, className }: { name: UiIconName; size?: number; className?: string }) {
   const path = (() => {
@@ -13,6 +13,8 @@ export function UiIcon({ name, size = 16, className }: { name: UiIconName; size?
     if (name === 'upload') return <><path d="M8 11V3"/><path d="m5 6 3-3 3 3"/><path d="M3 11v2h10v-2"/></>
     if (name === 'alert') return <><path d="M8 2.5 14 13H2L8 2.5Z"/><path d="M8 6v3.2"/><path d="M8 11.3h.01"/></>
     if (name === 'dot') return <circle cx="8" cy="8" r="2" fill="currentColor" stroke="none"/>
+    if (name === 'drag') return <><circle cx="5.5" cy="4" r=".8" fill="currentColor" stroke="none"/><circle cx="10.5" cy="4" r=".8" fill="currentColor" stroke="none"/><circle cx="5.5" cy="8" r=".8" fill="currentColor" stroke="none"/><circle cx="10.5" cy="8" r=".8" fill="currentColor" stroke="none"/><circle cx="5.5" cy="12" r=".8" fill="currentColor" stroke="none"/><circle cx="10.5" cy="12" r=".8" fill="currentColor" stroke="none"/></>
+    if (name === 'chevron-down') return <path d="m4.5 6 3.5 3.5L11.5 6"/>
     return <path d="M8 3v10M3 8h10"/>
   })()
 

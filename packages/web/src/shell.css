@@ -430,6 +430,14 @@
 .agent-scope-option:hover { background: var(--al-soft); }
 .agent-scope-option.is-dragging { opacity: .45; }
 .agent-scope-drag { color: var(--al-muted-2); font-size: 13px; letter-spacing: -3px; cursor: grab; }
+.agent-icon { display: inline-grid; width: 18px; height: 18px; flex: 0 0 18px; place-items: center; border: 1px solid currentColor; border-radius: 5px; color: var(--al-muted); background: color-mix(in srgb, currentColor 9%, transparent); }
+.agent-icon svg { width: 14px; height: 14px; }
+.agent-icon.source-codex { color: var(--src-codex); }
+.agent-icon.source-claude { color: var(--src-claude); }
+.agent-icon.source-pi { color: var(--src-pi); }
+.agent-icon.source-hermes { color: var(--src-hermes); }
+.agent-icon.source-opencode { color: var(--src-opencode); }
+.agent-icon.source-dsh { color: var(--src-dsh); }
 .agent-scope-option input { width: 13px; height: 13px; accent-color: var(--al-accent); }
 .agent-scope-option-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agent-scope-order-actions { display: inline-flex; margin-left: auto; gap: 1px; }
