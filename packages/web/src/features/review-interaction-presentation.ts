@@ -1,9 +1,14 @@
 import type { ReviewEventNodeDto, ReviewMessageNodeDto, ReviewNodeDto, ReviewToolNodeDto } from '@agent-lens/protocol'
 
+export type ReviewProcessPresentationItem =
+  | { type: 'message'; node: ReviewMessageNodeDto }
+  | { type: 'tool-group'; items: ReviewToolNodeDto[] }
+
 export type ReviewInteractionPresentationEntry =
   | { type: 'message'; node: ReviewMessageNodeDto }
   | { type: 'reasoning'; node: ReviewMessageNodeDto; tools: ReviewToolNodeDto[] }
   | { type: 'tool-group'; items: ReviewToolNodeDto[] }
+  | { type: 'process'; id: string; items: ReviewProcessPresentationItem[] }
   | { type: 'event'; node: ReviewEventNodeDto }
   | { type: 'raw-event-group'; items: ReviewEventNodeDto[] }
 
@@ -33,8 +38,10 @@ function explicitParentIds(node: ReviewToolNodeDto): string[] {
  */
 export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): ReviewInteractionPresentationEntry[] {
   const reasoning = nodes.filter((node): node is ReviewMessageNodeDto => node.type === 'message' && node.role === 'reasoning')
+  const commentary = nodes.filter((node): node is ReviewMessageNodeDto => node.type === 'message' && node.role === 'commentary')
   const identities = reasoning.map(node => ({ node, ids: reasoningIds(node) }))
   const reasoningSourceRecords = new Set(reasoning.flatMap(node => [...sourceRecordIds(node)]))
+  const commentarySourceRecords = new Set(commentary.flatMap(node => [...sourceRecordIds(node)]))
   const children = new Map<string, ReviewToolNodeDto[]>()
   const nestedToolIds = new Set<string>()
 
@@ -83,6 +90,7 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
     flushTools()
     flushRawEvents()
     if (node.type === 'message') {
+      if (node.role === 'assistant' && [...sourceRecordIds(node)].some(id => commentarySourceRecords.has(id))) continue
       if (node.role === 'reasoning') result.push({ type: 'reasoning', node, tools: children.get(node.id) ?? [] })
       else result.push({ type: 'message', node })
     } else {
@@ -91,5 +99,29 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
   }
   flushTools()
   flushRawEvents()
-  return result
+
+  const grouped: ReviewInteractionPresentationEntry[] = []
+  let processItems: ReviewProcessPresentationItem[] = []
+  const flushProcess = () => {
+    if (!processItems.length) return
+    const first = processItems[0]!
+    const id = first.type === 'message' ? first.node.id : first.items[0]?.id ?? 'process'
+    grouped.push({ type: 'process', id: `process:${id}`, items: processItems })
+    processItems = []
+  }
+  for (const entry of result) {
+    if (entry.type === 'reasoning') {
+      processItems.push({ type: 'message', node: entry.node })
+      if (entry.tools.length) processItems.push({ type: 'tool-group', items: entry.tools })
+      continue
+    }
+    if (entry.type === 'tool-group' || (entry.type === 'message' && entry.node.role === 'commentary')) {
+      processItems.push(entry)
+      continue
+    }
+    flushProcess()
+    grouped.push(entry)
+  }
+  flushProcess()
+  return grouped
 }

@@ -348,6 +348,10 @@
 .task-surface .task-tool-group { position: relative; z-index: 1; margin: 3px 0 5px 13px; overflow: visible; background: transparent; }
 .task-surface .task-tool-list { margin: 0; padding-left: 9px; overflow: visible; border-left: 2px solid color-mix(in srgb, var(--al-accent) 58%, var(--al-line)); }
 .task-surface .task-thinking-content .task-tool-group { margin-left: 12px; }
+.task-surface .task-process-sequence { display: grid; gap: 8px; }
+.task-surface .task-process-message { min-width: 0; }
+.task-surface .task-process-message-kind { margin-bottom: 2px; color: var(--al-muted-2); font-size: 12px; font-weight: 650; }
+.task-surface .task-process-message-meta { margin-top: 2px; }
 .task-surface .task-tool-row {
   display: grid;
   width: 100%;

@@ -15,9 +15,9 @@ test('Task Review 的历史 Thinking 默认折叠并保留 disclosure 交互', (
   assert.match(reviewPage, /<TaskThinking[\s\S]*?defaultExpanded=\{false\}/)
 })
 
-test('Task Review 将 Codex commentary 作为默认折叠的执行过程展示', () => {
-  assert.match(reviewPage, /node\.role === 'reasoning' \|\| node\.role === 'commentary'/)
-  assert.match(reviewPage, /node\.role === 'commentary' \? '执行过程' : '思考'/)
+test('Task Review 将 commentary、reasoning 与工具统一放入默认折叠的思考过程', () => {
+  assert.match(reviewPage, /label: '思考过程'/)
+  assert.match(reviewPage, /entry\.type === 'process'/)
 })
 
 test('Pi Live defaults and resets to full observable events natively', () => {

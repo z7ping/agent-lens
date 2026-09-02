@@ -713,6 +713,39 @@ function ReviewToolGroupAdapter({ items, inspect }: { items: ReviewToolNodeDto[]
   />
 }
 
+function ReviewProcessGroup({
+  id,
+  items,
+  inspect,
+}: {
+  id: string
+  items: import('./review-interaction-presentation').ReviewProcessPresentationItem[]
+  inspect(node: ReviewNodeDto): void
+}) {
+  const messages = items.filter((item): item is Extract<typeof item, { type: 'message' }> => item.type === 'message')
+  const first = messages[0]?.node
+  const toolCount = items.reduce((count, item) => count + (item.type === 'tool-group' ? item.items.length : 0), 0)
+  const model: TaskThinkingModel = {
+    id,
+    label: '思考过程',
+    text: first?.text ?? '',
+    preview: brief(first?.text ?? `${toolCount} 次工具调用`, 78),
+    time: first ? formatClock(first.at) : undefined,
+    state: 'settled',
+  }
+  return <TaskThinking model={model} defaultExpanded={false}>
+    <div className="task-process-sequence">
+      {items.map((item, index) => item.type === 'tool-group'
+        ? <ReviewToolGroupAdapter key={`tools-${index}`} items={item.items} inspect={inspect}/>
+        : <div className="task-process-message" data-message-role={item.node.role} key={item.node.id}>
+            {item.node.role === 'reasoning' && <div className="task-process-message-kind">思考</div>}
+            <MarkdownSurface text={item.node.text}/>
+            <div className="task-process-message-meta"><EvidenceBadges evidence={item.node.evidence} compact/></div>
+          </div>)}
+    </div>
+  </TaskThinking>
+}
+
 function EventRow({ event, inspect }: { event: ReviewEventNodeDto; inspect(node: ReviewNodeDto): void }) {
   return <TaskEvent
     model={{
@@ -784,6 +817,7 @@ function ReviewRoundAdapter({
     forceRevision={forceRevision}
   >
     {groups.map((entry, index) => {
+      if (entry.type === 'process') return <ReviewProcessGroup key={entry.id} id={entry.id} items={entry.items} inspect={inspect}/>
       if (entry.type === 'tool-group') return <ReviewToolGroupAdapter key={`tools-${index}`} items={entry.items} inspect={inspect}/>
       if (entry.type === 'raw-event-group') return showAllEvents ? <RawEventGroup key={`raw-${index}`} items={entry.items} inspect={inspect}/> : null
       if (entry.type === 'reasoning') return <MessageBubble key={entry.node.id} node={entry.node} nestedTools={entry.tools} inspect={inspect}/>
