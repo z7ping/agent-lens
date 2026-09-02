@@ -24,16 +24,7 @@ export function sourceDot(sourceId: string): string {
 }
 
 export function AgentIcon({ sourceId }: { sourceId: string }) {
-  const common = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.35, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
-  return <span className={`agent-icon ${sourceDot(sourceId)}`} aria-hidden="true"><svg viewBox="0 0 18 18" focusable="false">
-    {sourceId === 'codex' && <><path {...common} d="M9 2.2 11 6l4.2 1.1L12 9.5l.5 4.3L9 11.8l-3.5 2 .5-4.3-3.2-2.4L7 6z"/><circle {...common} cx="9" cy="8.5" r="1.2"/></>}
-    {sourceId === 'claude-code' && <><path {...common} d="M9 2.3 14.2 5v6L9 13.7 3.8 11V5z"/><path {...common} d="M6.2 6.2h5.6M6.2 8.6h3.7"/></>}
-    {sourceId === 'pi' && <><path {...common} d="M4 4.5v7M14 4.5v7M4 5.2c1.5-1.2 3.1-1.2 5 0v6.3M14 5.2c-1.5-1.2-3.1-1.2-5 0"/></>}
-    {sourceId === 'hermes' && <><path {...common} d="M3 12.8c2.3-3.8 4.1-5.7 6-7.6 1.9 1.9 3.7 3.8 6 7.6"/><path {...common} d="M5.2 10.3 9 12.8l3.8-2.5"/></>}
-    {sourceId === 'opencode' && <><path {...common} d="m7 4-4 5 4 5M11 4l4 5-4 5M10 3.5 8 14.5"/></>}
-    {sourceId === 'dsh' && <><path {...common} d="m9 2.5 6 6.5-6 6.5L3 9z"/><path {...common} d="M7 9h4M9 7v4"/></>}
-    {!['codex', 'claude-code', 'pi', 'hermes', 'opencode', 'dsh'].includes(sourceId) && <><circle {...common} cx="9" cy="9" r="5.5"/><path {...common} d="M6.5 9h5M9 6.5v5"/></>}
-  </svg></span>
+  return <span className={`agent-icon ${sourceDot(sourceId)}`} aria-hidden="true"><UiIcon name="agent" size={14}/></span>
 }
 
 interface ScopeMenuPosition {
