@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, useSyn
 import { BrowserRouter, NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import type { AgentFacetDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel, ClientSnapshot } from './client/model'
-import { readPinnedAgents, readTheme, writePinnedAgents, writeTheme } from './client/preferences'
+import { readAgentFilterPreference, readTheme, writeAgentFilterPreference, writeTheme } from './client/preferences'
 import { AgentsStateOverlay } from './components/AgentsStateOverlay'
 import { BackgroundDataNotice } from './components/BackgroundDataNotice'
 import { BrandVersion, ReleaseInfo } from './components/ReleaseInfo'
@@ -19,35 +19,76 @@ export function useClientSnapshot(model: AgentLensClientModel): ClientSnapshot {
   return useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot)
 }
 
-interface PinnedContextValue { pinned: string[]; toggle(id: string): void }
-const PinnedContext = createContext<PinnedContextValue>({ pinned: [], toggle: () => undefined })
+interface PinnedContextValue {
+  ordered: string[]
+  pinned: string[]
+  toggle(id: string): void
+  move(id: string, targetId: string): void
+  moveBy(id: string, offset: -1 | 1): void
+  reset(): void
+}
+const PinnedContext = createContext<PinnedContextValue>({ ordered: [], pinned: [], toggle: () => undefined, move: () => undefined, moveBy: () => undefined, reset: () => undefined })
 export function usePinnedAgents(): PinnedContextValue { return useContext(PinnedContext) }
 
 function PinnedProvider({ agents, children }: PropsWithChildren<{ agents: AgentFacetDto[] }>) {
-  const [pinned, setPinned] = useState<string[]>(() => readPinnedAgents() ?? [])
+  const [preference, setPreference] = useState(() => readAgentFilterPreference() ?? { orderedAgentIds: [], visibleAgentIds: [] })
   useEffect(() => {
-    const stored = readPinnedAgents()
-    if (stored !== null) {
-      const valid = stored.filter(id => agents.some(agent => agent.sourceId === id))
-      if (valid.join('\u0000') !== pinned.join('\u0000')) setPinned(valid)
-      return
-    }
-    if (agents.length) {
-      const initial = agents.filter(agent => agent.detected).map(agent => agent.sourceId)
-      setPinned(initial)
-      writePinnedAgents(initial)
-    }
+    if (!agents.length) return
+    setPreference(current => {
+      const available = agents.map(agent => agent.sourceId)
+      const known = current.orderedAgentIds.filter(id => available.includes(id))
+      const orderedAgentIds = [...known, ...available.filter(id => !known.includes(id))]
+      const visibleAgentIds = current.orderedAgentIds.length
+        ? current.visibleAgentIds.filter(id => available.includes(id))
+        : agents.filter(agent => agent.detected).map(agent => agent.sourceId)
+      const next = { orderedAgentIds, visibleAgentIds }
+      if (orderedAgentIds.join('\u0000') === current.orderedAgentIds.join('\u0000') && visibleAgentIds.join('\u0000') === current.visibleAgentIds.join('\u0000')) return current
+      writeAgentFilterPreference(next)
+      return next
+    })
   }, [agents])
   const value = useMemo<PinnedContextValue>(() => ({
-    pinned,
+    ordered: preference.orderedAgentIds,
+    pinned: preference.visibleAgentIds,
     toggle(id) {
-      setPinned(current => {
-        const next = current.includes(id) ? current.filter(item => item !== id) : [...current, id]
-        writePinnedAgents(next)
+      setPreference(current => {
+        const visibleAgentIds = current.visibleAgentIds.includes(id) ? current.visibleAgentIds.filter(item => item !== id) : [...current.visibleAgentIds, id]
+        const next = { ...current, visibleAgentIds }
+        writeAgentFilterPreference(next)
         return next
       })
     },
-  }), [pinned])
+    move(id, targetId) {
+      setPreference(current => {
+        const from = current.orderedAgentIds.indexOf(id)
+        const to = current.orderedAgentIds.indexOf(targetId)
+        if (from < 0 || to < 0 || from === to) return current
+        const orderedAgentIds = [...current.orderedAgentIds]
+        orderedAgentIds.splice(from, 1)
+        orderedAgentIds.splice(to, 0, id)
+        const next = { ...current, orderedAgentIds }
+        writeAgentFilterPreference(next)
+        return next
+      })
+    },
+    moveBy(id, offset) {
+      setPreference(current => {
+        const from = current.orderedAgentIds.indexOf(id)
+        const to = from + offset
+        if (from < 0 || to < 0 || to >= current.orderedAgentIds.length) return current
+        const orderedAgentIds = [...current.orderedAgentIds]
+        ;[orderedAgentIds[from], orderedAgentIds[to]] = [orderedAgentIds[to]!, orderedAgentIds[from]!]
+        const next = { ...current, orderedAgentIds }
+        writeAgentFilterPreference(next)
+        return next
+      })
+    },
+    reset() {
+      const next = { orderedAgentIds: agents.map(agent => agent.sourceId), visibleAgentIds: agents.filter(agent => agent.detected).map(agent => agent.sourceId) }
+      writeAgentFilterPreference(next)
+      setPreference(next)
+    },
+  }), [agents, preference])
   return <PinnedContext.Provider value={value}>{children}</PinnedContext.Provider>
 }
 

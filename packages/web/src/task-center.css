@@ -235,7 +235,7 @@
 @media (max-width: 991.98px) {
   .task-center-page { --task-center-rail: 252px; }
   .task-center-toolbar-label { display: none; }
-  .task-center-toolbar .agent-scope .scope-chip:nth-of-type(n+4) { display: none; }
+  .task-center-toolbar .agent-scope .scope-chip:nth-of-type(n+5) { display: none; }
   .task-center-main .review-reader,
   .task-center-main .pi-live-document { padding-right: 18px; padding-left: 40px; }
   .task-center-new-fields { grid-template-columns: 1fr; }

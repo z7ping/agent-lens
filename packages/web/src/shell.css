@@ -368,10 +368,13 @@
 .workspace-toolbar .agent-scope-manage[open] { z-index: 90; }
 
 .scope-manage-button {
-  display: grid;
-  width: 32px;
+  display: inline-flex;
+  min-width: 32px;
   height: 32px;
-  place-items: center;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 9px;
   border-radius: 7px;
   color: var(--al-muted);
   cursor: pointer;
@@ -387,7 +390,7 @@
   top: 38px;
   left: 0;
   z-index: 120;
-  width: 250px;
+  width: 310px;
   padding: 7px;
   border: 1px solid var(--al-line);
   border-radius: 12px;
@@ -395,12 +398,22 @@
   box-shadow: var(--al-shadow-lg);
 }
 
-.agent-scope-menu-title {
-  padding: 5px 8px 7px;
-  color: var(--al-muted);
-  font-size: 12px;
-  font-weight: 650;
-  letter-spacing: .06em;
+.agent-scope-menu-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 8px 9px;
+}
+.agent-scope-menu-head div { display: grid; gap: 2px; }
+.agent-scope-menu-head b { color: var(--al-ink); font-size: 13px; }
+.agent-scope-menu-head span { color: var(--al-muted-2); font-size: 11px; }
+.agent-scope-menu-head button {
+  border: 0;
+  background: transparent;
+  color: var(--al-accent);
+  font-size: 11px;
+  cursor: pointer;
 }
 
 .agent-scope-option {
@@ -415,8 +428,26 @@
 }
 
 .agent-scope-option:hover { background: var(--al-soft); }
+.agent-scope-option.is-dragging { opacity: .45; }
+.agent-scope-drag { color: var(--al-muted-2); font-size: 13px; letter-spacing: -3px; cursor: grab; }
 .agent-scope-option input { width: 13px; height: 13px; accent-color: var(--al-accent); }
+.agent-scope-option-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-scope-order-actions { display: inline-flex; margin-left: auto; gap: 1px; }
+.agent-scope-order-actions button {
+  display: grid;
+  width: 23px;
+  height: 23px;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--al-muted);
+  cursor: pointer;
+}
+.agent-scope-order-actions button:hover:not(:disabled) { background: var(--al-surface); color: var(--al-ink); }
+.agent-scope-order-actions button:disabled { opacity: .25; cursor: default; }
 .agent-scope-option-state { margin-left: auto; color: var(--al-muted-2); font-size: 12px; }
+.agent-scope-order-actions + .agent-scope-option-state { margin-left: 3px; }
 .agent-scope-option-state.is-detected { color: var(--al-success); }
 
 /* 一级页面公共骨架 */
