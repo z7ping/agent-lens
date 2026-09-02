@@ -313,6 +313,10 @@ function sourceEventSummary(node: ReviewEventNodeDto): string {
   if (node.kind === 'context.summary') {
     return brief(payload.summary ?? payload.text ?? payload.content ?? payload, 120)
   }
+  if (node.kind === 'context.injected') {
+    const role = stringValue(payload, 'role')
+    return role ? `${role} 注入内容已隐藏` : '注入内容已隐藏'
+  }
   if (node.kind === 'session.lifecycle') {
     if (action === 'turn.context') {
       const model = stringValue(payload, 'model')
@@ -733,10 +737,6 @@ function ReviewProcessGroup({
     preview: brief(first?.text ?? `${toolCount} 次工具调用`, 78),
     time: first ? formatClock(first.at) : undefined,
     state: 'settled',
-  }
-  if (node.kind === 'context.injected') {
-    const role = stringValue(payload, 'role')
-    return role ? `${role} 注入内容已隐藏` : '注入内容已隐藏'
   }
   return <TaskThinking model={model} defaultExpanded={false}>
     <div className="task-process-sequence">
