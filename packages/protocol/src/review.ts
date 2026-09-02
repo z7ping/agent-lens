@@ -90,6 +90,16 @@ export interface ReviewInteractionDto {
   nodes: ReviewNodeDto[]
 }
 
+export interface ReviewInteractionIndexDto {
+  id: string
+  ordinal: number
+  trigger: 'user' | 'background'
+  startedAt: string
+  endedAt: string
+  hasError: boolean
+  preview?: string
+}
+
 export interface ReviewDetailPageDto {
   count: number
   hasMore: boolean
@@ -101,6 +111,7 @@ export interface ReviewDetailPageDto {
 
 export interface ReviewSessionDetailDto extends ReviewSessionSummaryDto {
   interactions: ReviewInteractionDto[]
+  interactionIndex?: ReviewInteractionIndexDto[]
   page: ReviewDetailPageDto
 }
 

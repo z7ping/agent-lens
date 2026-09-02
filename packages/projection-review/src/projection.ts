@@ -19,6 +19,7 @@ import {
   type ReviewEventCategory,
   type ReviewEventNodeDto,
   type ReviewInteractionDto,
+  type ReviewInteractionIndexDto,
   type ReviewMessageNodeDto,
   type ReviewNodeDto,
   type ReviewNodeSourceDto,
@@ -345,6 +346,7 @@ interface InteractionDescriptor {
   startedAt: string
   endedAt: string
   hasError: boolean
+  preview?: string
 }
 
 function highLatencyThreshold(descriptors: InteractionDescriptor[]): number | null {
@@ -521,6 +523,10 @@ export class ReviewProjection {
             endedAt: cursor.effectiveAt,
             hasError: false,
           }
+        }
+        if (!current.preview && observation.kind === 'message.user') {
+          const preview = textFromPayload(observation.payload)?.replace(/\s+/g, ' ').trim()
+          if (preview) current.preview = preview.length > 120 ? `${preview.slice(0, 120)}…` : preview
         }
         current.end = observationCursor(observation)
         current.endedAt = observationEffectiveAt(observation)
@@ -802,6 +808,7 @@ export class ReviewProjection {
       if (session) summary = await this.summary(session)
     }
     if (!summary) return null
+    const descriptors = await this.scanInteractionDescriptors(logicalSessionId)
 
     const filter = query.filter ?? 'all'
     const direction = query.direction ?? 'forward'
@@ -816,6 +823,15 @@ export class ReviewProjection {
     return {
       ...summary,
       interactions: result.interactions,
+      interactionIndex: descriptors.map((item): ReviewInteractionIndexDto => ({
+        id: `${logicalSessionId}:interaction:${item.ordinal}`,
+        ordinal: item.ordinal,
+        trigger: item.trigger,
+        startedAt: item.startedAt,
+        endedAt: item.endedAt,
+        hasError: item.hasError,
+        ...(item.preview ? { preview: item.preview } : {}),
+      })),
       page: result.page,
     }
   }

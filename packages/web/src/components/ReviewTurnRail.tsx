@@ -18,7 +18,11 @@ function hasError(detail: ReviewSessionDetailDto, index: number): boolean {
 export function ReviewTurnRail({ detail }: { detail: ReviewSessionDetailDto }) {
   const [activeIndex, setActiveIndex] = useState(0)
   const [position, setPosition] = useState<{ left: number; top: number } | null>(null)
-  const tips = useMemo(() => detail.interactions.map((_, index) => preview(detail, index)), [detail])
+  const index = detail.interactionIndex ?? detail.interactions.map((interaction, ordinal) => ({
+    id: interaction.id, ordinal: ordinal + 1, trigger: interaction.trigger, startedAt: interaction.startedAt,
+    endedAt: interaction.endedAt, hasError: hasError(detail, ordinal), preview: preview(detail, ordinal),
+  }))
+  const tips = useMemo(() => index.map(item => item.preview ?? `第 ${item.ordinal} 轮`), [index])
 
   useEffect(() => {
     let observer: IntersectionObserver | undefined
@@ -79,11 +83,11 @@ export function ReviewTurnRail({ detail }: { detail: ReviewSessionDetailDto }) {
     target.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
-  if (detail.interactions.length < 2 || !position) return null
+  if (index.length < 2 || !position) return null
   return <nav className="turn-rail" style={{ position: 'fixed', ...position }} aria-label="轮次导航">
-    {detail.interactions.map((interaction, index) => <button
+    {index.map((interaction, index) => <button
       key={interaction.id}
-      className={`turn-tick ${activeIndex === index ? 'active' : ''} ${hasError(detail, index) ? 'err' : ''}`}
+      className={`turn-tick ${activeIndex === index ? 'active' : ''} ${interaction.hasError ? 'err' : ''}`}
       data-tip={`${interaction.trigger === 'background' ? '后台活动' : `第 ${interaction.ordinal} 轮`} · ${tips[index]}`}
       aria-label={`跳到${interaction.trigger === 'background' ? '后台活动' : `第 ${interaction.ordinal} 轮`}`}
       onClick={() => jump(index)}
