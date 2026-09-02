@@ -34,6 +34,10 @@ test('Task Review 用统一轮次锚点保护补载与大范围视图切换', ()
   assert.doesNotMatch(reviewPage, /beforeTop \+ \(current\.scrollHeight - beforeHeight\)/)
 })
 
+test('Task Review 已挂载轮次不会退回估算高度占位', () => {
+  assert.match(reviewPage, /<VirtualRoundMount[\s\S]*?retainMounted/)
+})
+
 test('Pi Live defaults and resets to full observable events natively', () => {
   assert.match(piLivePage, /const \[showAllEvents, setShowAllEvents\] = useState\(true\)/)
   assert.match(piLivePage, /setShowAllEvents\(true\)/)

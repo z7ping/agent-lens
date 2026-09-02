@@ -958,11 +958,12 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
   useLayoutEffect(() => {
     const pending = pendingReaderAnchorRef.current
     if (!pending) return
-    pendingReaderAnchorRef.current = null
     if (pending.userRevision !== readerUserRevisionRef.current) return
     const frame = window.requestAnimationFrame(() => {
       const pane = readerPaneRef.current
       if (!pane || pending.userRevision !== readerUserRevisionRef.current) return
+      if (pendingReaderAnchorRef.current !== pending) return
+      pendingReaderAnchorRef.current = null
       restoreReviewReaderPosition(pane, pending.position)
     })
     return () => window.cancelAnimationFrame(frame)
@@ -1307,6 +1308,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
             {annotatedInteractions.map((item, index) => <VirtualRoundMount
               key={item.round.id}
               eager={index < 6 || item.round.id === annotatedInteractions.at(-1)?.round.id}
+              retainMounted
               estimate={item.round.toolCount > 12 ? 420 : item.round.toolCount > 4 ? 300 : 220}
             >
               <ReviewRoundAdapter

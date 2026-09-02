@@ -173,3 +173,41 @@ test('正在阅读的会话持续写入时只提示新记录，不刷新任务�
   assert.equal(model.getSnapshot().review.detailHasNewData, true)
   model.stop()
 })
+
+test('后台刷新不会把摘要窗口外的当前阅读会话切回第一条', async () => {
+  let detailCalls = 0
+
+  class OutsideWindowApi extends AgentLensApi {
+    override review(_filters: ReviewFilters, limit = 40): Promise<ReviewResponseDto> {
+      return Promise.resolve(response(limit === 1 ? 1 : 10))
+    }
+
+    override reviewDetail(id: string): Promise<ReviewSessionDetailDto> {
+      detailCalls += 1
+      return Promise.resolve({
+        ...summary(id === 'outside-window' ? 99 : 1),
+        id,
+        interactions: [],
+        page: { count: 0, hasMore: false, direction: 'backward', filter: 'all' },
+      })
+    }
+
+    override relationships(): Promise<SessionRelationshipResponseDto> {
+      return Promise.resolve({
+        items: [],
+        meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION, generatedAt: '2026-09-01T00:00:00.000Z' },
+      })
+    }
+  }
+
+  const model = new AgentLensClientModel(new OutsideWindowApi())
+  await model.refreshReview()
+  await model.selectReviewSession('outside-window')
+  const callsBeforeRefresh = detailCalls
+
+  await model.refreshReview({ preserveDetail: true })
+
+  assert.equal(model.getSnapshot().review.selectedId, 'outside-window')
+  assert.equal(model.getSnapshot().review.detail?.id, 'outside-window')
+  assert.equal(detailCalls, callsBeforeRefresh)
+})

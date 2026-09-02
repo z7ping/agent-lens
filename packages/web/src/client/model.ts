@@ -490,7 +490,9 @@ export class AgentLensClientModel {
       const response = await this.api.review(current.filters, refreshLimit)
       if (generation !== this.reviewGeneration) return
       let selectedId = this.snapshot.review.selectedId
-      if (!selectedId || !response.items.some(item => item.id === selectedId)) selectedId = response.items[0]?.id ?? ''
+      if (!selectedId || (!preserveDetail && !response.items.some(item => item.id === selectedId))) {
+        selectedId = response.items[0]?.id ?? ''
+      }
       this.publish({
         ...this.snapshot,
         review: {

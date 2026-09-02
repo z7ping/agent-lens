@@ -45,6 +45,7 @@ function observeWithSharedVirtualObserver(
 export function VirtualRoundMount({
   children,
   eager = false,
+  retainMounted = false,
   estimate = 220,
   interactionId,
   rootSelector = '.review-reader-pane',
@@ -52,6 +53,7 @@ export function VirtualRoundMount({
 }: {
   children: ReactNode
   eager?: boolean
+  retainMounted?: boolean
   estimate?: number
   interactionId?: string
   rootSelector?: string
@@ -59,6 +61,7 @@ export function VirtualRoundMount({
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const unmountTimerRef = useRef<number | null>(null)
+  const everMountedRef = useRef(eager)
   const [mounted, setMounted] = useState(eager)
   const [height, setHeight] = useState(estimate)
   const childInteractionId = isValidElement<{ interaction?: { id?: string } }>(children)
@@ -74,7 +77,14 @@ export function VirtualRoundMount({
 
   useEffect(() => {
     const element = ref.current
+    if (eager || (retainMounted && everMountedRef.current)) {
+      cancelPendingUnmount()
+      everMountedRef.current = true
+      setMounted(true)
+      return
+    }
     if (!element || typeof IntersectionObserver === 'undefined') {
+      everMountedRef.current = true
       setMounted(true)
       return
     }
@@ -82,6 +92,7 @@ export function VirtualRoundMount({
     const onIntersection = (entry: IntersectionObserverEntry) => {
       if (entry.isIntersecting) {
         cancelPendingUnmount()
+        everMountedRef.current = true
         setMounted(true)
         return
       }
@@ -118,7 +129,7 @@ export function VirtualRoundMount({
       cancelPendingUnmount()
       cleanup()
     }
-  }, [rootSelector])
+  }, [eager, retainMounted, rootSelector])
 
   useLayoutEffect(() => {
     if (!mounted) return
