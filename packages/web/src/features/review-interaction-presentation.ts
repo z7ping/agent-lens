@@ -101,27 +101,26 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
   flushRawEvents()
 
   const grouped: ReviewInteractionPresentationEntry[] = []
-  let processItems: ReviewProcessPresentationItem[] = []
-  const flushProcess = () => {
-    if (!processItems.length) return
-    const first = processItems[0]!
-    const id = first.type === 'message' ? first.node.id : first.items[0]?.id ?? 'process'
-    grouped.push({ type: 'process', id: `process:${id}`, items: processItems })
-    processItems = []
-  }
+  const processItems: ReviewProcessPresentationItem[] = []
+  let processIndex: number | undefined
   for (const entry of result) {
     if (entry.type === 'reasoning') {
+      processIndex ??= grouped.length
       processItems.push({ type: 'message', node: entry.node })
       if (entry.tools.length) processItems.push({ type: 'tool-group', items: entry.tools })
       continue
     }
     if (entry.type === 'tool-group' || (entry.type === 'message' && entry.node.role === 'commentary')) {
+      processIndex ??= grouped.length
       processItems.push(entry)
       continue
     }
-    flushProcess()
     grouped.push(entry)
   }
-  flushProcess()
+  if (processItems.length) {
+    const first = processItems[0]!
+    const id = first.type === 'message' ? first.node.id : first.items[0]?.id ?? 'process'
+    grouped.splice(processIndex ?? 0, 0, { type: 'process', id: `process:${id}`, items: processItems })
+  }
   return grouped
 }

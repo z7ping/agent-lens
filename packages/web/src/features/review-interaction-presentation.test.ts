@@ -99,6 +99,25 @@ test('同一 SourceRecord 的旧 assistant 与新 commentary 只展示一次并�
   if (entries[0].items[0]?.type === 'message') assert.equal(entries[0].items[0].node.id, 'canonical-commentary')
 })
 
+test('Usage 等观测事件不会把同一轮思考过程切成多个父块', () => {
+  const usage: ReviewEventNodeDto = {
+    type: 'event', id: 'usage-1', at: '2026-09-01T00:00:02.000Z', sourceId: 'codex', label: '用量', category: 'usage', kind: 'usage', payload: {},
+    evidence: [], observationIds: ['obs:usage-1'], capturedAt: '2026-09-01T00:00:02.000Z',
+  }
+  const entries = projectReviewInteractionPresentation([
+    message('commentary-1', 'commentary', 'record:commentary-1'),
+    tool('tool-1'),
+    usage,
+    message('commentary-2', 'commentary', 'record:commentary-2'),
+    tool('tool-2'),
+  ])
+
+  assert.equal(entries.filter(entry => entry.type === 'process').length, 1)
+  const process = entries.find(entry => entry.type === 'process')
+  if (process?.type !== 'process') throw new Error('process entry missing')
+  assert.deepEqual(process.items.flatMap(item => item.type === 'tool-group' ? item.items.map(tool => tool.id) : []), ['tool-1', 'tool-2'])
+})
+
 test('无对应 reasoning 的 unknown 仍保留在全部事件视图', () => {
   const entries = projectReviewInteractionPresentation([unknownEvent('unknown-real', 'record:other')])
   assert.equal(entries.length, 1)
