@@ -43,7 +43,7 @@ function response(count: number): ReviewResponseDto {
   }
 }
 
-test('review 首屏先展示 1 个会话和最新 3 个轮次，再补载到 10 个会话', async () => {
+test('review 首屏先展示 1 个会话和最新 10 个轮次，再补载到 10 个会话', async () => {
   let releaseDetail!: (value: ReviewSessionDetailDto) => void
   const detailPending = new Promise<ReviewSessionDetailDto>(resolve => { releaseDetail = resolve })
   const reviewLimits: number[] = []
@@ -76,7 +76,7 @@ test('review 首屏先展示 1 个会话和最新 3 个轮次，再补载到 10 
   assert.equal(model.getSnapshot().review.response?.items.length, 1)
   assert.equal(model.getSnapshot().review.selectedId, 'session-1')
   assert.deepEqual(reviewLimits, [1])
-  assert.deepEqual(detailLimits, [3])
+  assert.deepEqual(detailLimits, [10])
 
   releaseDetail({
     ...summary(1),

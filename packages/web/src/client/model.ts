@@ -49,7 +49,7 @@ const initialQuery: QueryFilters = { sourceId: '', projectId: '', range: '7d' }
 const INITIAL_REVIEW_LIMIT = 1
 const PROGRESSIVE_REVIEW_LIMIT = 10
 const REVIEW_PAGE_SIZE = 40
-const REVIEW_DETAIL_PAGE_SIZE = 3
+const REVIEW_DETAIL_PAGE_SIZE = 10
 const REVIEW_SEARCH_DEBOUNCE_MS = 250
 
 function mergeReviewDetail(current: ReviewSessionDetailDto, next: ReviewSessionDetailDto): ReviewSessionDetailDto {
