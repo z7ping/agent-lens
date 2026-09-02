@@ -179,8 +179,8 @@ test('normalizer maps known facts and preserves unknown native events', async ()
       'message.assistant',
       'tool.call',
       'tool.result',
-      'unknown',
-      'unknown',
+      'context.injected',
+      'context.injected',
     ])
 
     assert.deepEqual(outputs[6]?.payload, {

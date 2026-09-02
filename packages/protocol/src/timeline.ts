@@ -21,6 +21,7 @@ export const TIMELINE_OBSERVATION_KINDS = [
   'subagent.end',
   'context.compaction',
   'context.summary',
+  'context.injected',
   'artifact.action',
   'usage',
   'unknown',

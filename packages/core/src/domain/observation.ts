@@ -87,6 +87,7 @@ export type ObservationKind =
   | 'subagent.end'
   | 'context.compaction'
   | 'context.summary'
+  | 'context.injected'
   | 'artifact.action'
   | 'usage'
   | 'unknown'

@@ -75,10 +75,11 @@ test('injected context is represented without exposing its raw protocol text', a
   }), ctx)
 
   assert.deepEqual(output.observations[0]?.payload, {
-    rawType: 'event_msg',
+    sourceType: 'event_msg',
     injectedContext: true,
     role: 'developer',
   })
+  assert.equal(output.observations[0]?.kind, 'context.injected')
 })
 
 test('event_msg agent_reasoning is normalized to canonical message.reasoning', async () => {

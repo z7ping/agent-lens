@@ -178,8 +178,8 @@ function injectedContextCandidate(
   envelope: CodexStoredEnvelope,
   role: string,
 ): ObservationCandidate {
-  return candidate(record, envelope, 'unknown', {
-    rawType: record.nativeType,
+  return candidate(record, envelope, 'context.injected', {
+    sourceType: record.nativeType,
     injectedContext: true,
     role,
   })
