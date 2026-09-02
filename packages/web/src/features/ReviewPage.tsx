@@ -769,9 +769,10 @@ function EventRow({ event, inspect }: { event: ReviewEventNodeDto; inspect(node:
 }
 
 function RawEventGroup({ items, inspect }: { items: ReviewEventNodeDto[]; inspect(node: ReviewNodeDto): void }) {
-  return <details className="raw-event-group">
+  const [expanded, setExpanded] = useState(false)
+  return <details className="raw-event-group" open={expanded} onToggle={event => setExpanded(event.currentTarget.open)}>
     <summary><span>附加原生事件 · {items.length}</span><time>{formatClock(items[items.length - 1]?.at ?? '')}</time></summary>
-    <div>{items.map(item => <EventRow key={item.id} event={item} inspect={inspect}/>)}</div>
+    {expanded && <div>{items.map(item => <EventRow key={item.id} event={item} inspect={inspect}/>)}</div>}
   </details>
 }
 

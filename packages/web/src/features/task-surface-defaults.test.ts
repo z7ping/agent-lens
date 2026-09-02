@@ -20,6 +20,11 @@ test('Task Review 将 commentary、reasoning 与工具统一放入默认折叠�
   assert.match(reviewPage, /entry\.type === 'process'/)
 })
 
+test('Task Review 的附加原生事件折叠时不挂载事件行', () => {
+  assert.match(reviewPage, /function RawEventGroup[\s\S]*?const \[expanded, setExpanded\] = useState\(false\)[\s\S]*?className="raw-event-group"/)
+  assert.match(reviewPage, /\{expanded && <div>\{items\.map\(item => <EventRow/)
+})
+
 test('Task Review 滚到顶部不会自动加载更早轮次并抢走滚动位置', () => {
   assert.match(reviewPage, /detail\.page\.direction !== 'forward'/)
   assert.doesNotMatch(reviewPage, /detail\.page\.direction === 'backward'\) void loadOlder/)
