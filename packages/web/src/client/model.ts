@@ -50,14 +50,21 @@ const INITIAL_REVIEW_LIMIT = 1
 const PROGRESSIVE_REVIEW_LIMIT = 10
 const REVIEW_PAGE_SIZE = 40
 const REVIEW_DETAIL_PAGE_SIZE = 10
+export const REVIEW_DETAIL_WINDOW_SIZE = 30
 const REVIEW_SEARCH_DEBOUNCE_MS = 250
 
 function mergeReviewDetail(current: ReviewSessionDetailDto, next: ReviewSessionDetailDto): ReviewSessionDetailDto {
   const interactions = new Map(current.interactions.map(item => [item.id, item]))
   for (const interaction of next.interactions) interactions.set(interaction.id, interaction)
+  const ordered = [...interactions.values()].sort((a, b) => a.ordinal - b.ordinal)
+  const windowed = ordered.length <= REVIEW_DETAIL_WINDOW_SIZE
+    ? ordered
+    : next.page.direction === 'backward'
+      ? ordered.slice(0, REVIEW_DETAIL_WINDOW_SIZE)
+      : ordered.slice(-REVIEW_DETAIL_WINDOW_SIZE)
   return {
     ...current,
-    interactions: [...interactions.values()].sort((a, b) => a.ordinal - b.ordinal),
+    interactions: windowed,
     page: next.page,
   }
 }

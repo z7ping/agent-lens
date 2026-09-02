@@ -3,13 +3,14 @@ import test from 'node:test'
 import {
   AGENT_LENS_PROTOCOL_VERSION,
   type LiveUpdateEventDto,
+  type ReviewInteractionDto,
   type ReviewResponseDto,
   type ReviewSessionDetailDto,
   type ReviewSessionSummaryDto,
   type SessionRelationshipResponseDto,
 } from '@agent-lens/protocol'
 import { AgentLensApi, type ReviewFilters } from './api'
-import { AgentLensClientModel } from './model'
+import { AgentLensClientModel, REVIEW_DETAIL_WINDOW_SIZE } from './model'
 
 function summary(index: number): ReviewSessionSummaryDto {
   const at = new Date(Date.UTC(2026, 8, 1, 0, 0, 10 - index)).toISOString()
@@ -40,6 +41,25 @@ function response(count: number): ReviewResponseDto {
       nextCursor: `cursor-${count}`,
       generatedAt: '2026-09-01T00:00:00.000Z',
     },
+  }
+}
+
+function interaction(ordinal: number): ReviewInteractionDto {
+  const at = new Date(Date.UTC(2026, 8, 1, 0, ordinal)).toISOString()
+  return { id: `interaction-${ordinal}`, ordinal, trigger: 'user', startedAt: at, endedAt: at, nodes: [] }
+}
+
+function detailPage(start: number, direction: 'forward' | 'backward', hasMore = true): ReviewSessionDetailDto {
+  const ordinals = Array.from({ length: 10 }, (_, index) => start + index)
+  return {
+    ...summary(1),
+    interactionCount: 80,
+    interactions: ordinals.map(interaction),
+    interactionIndex: Array.from({ length: 80 }, (_, index) => {
+      const item = interaction(index + 1)
+      return { ...item, hasError: false }
+    }),
+    page: { count: 10, hasMore, nextCursor: hasMore ? `cursor-${start}` : undefined, direction, filter: 'all' },
   }
 }
 
@@ -128,6 +148,31 @@ test('review 后台刷新保持已加载窗口且不重新进入首屏 loading',
   assert.equal(model.getSnapshot().review.response?.items.length, 10)
   assert.equal(model.getSnapshot().review.loading, false)
   assert.equal(loadingStates.includes(true), false)
+})
+
+test('review 连续补载时正文窗口保持固定上限，完整轻量索引不被截断', async () => {
+  let page = 0
+  class WindowedApi extends AgentLensApi {
+    override review(): Promise<ReviewResponseDto> { return Promise.resolve(response(1)) }
+    override reviewDetail(): Promise<ReviewSessionDetailDto> {
+      const result = detailPage(1 + page * 10, 'forward', page < 5)
+      page += 1
+      return Promise.resolve(result)
+    }
+    override relationships(): Promise<SessionRelationshipResponseDto> {
+      return Promise.resolve({ items: [], meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION, generatedAt: '2026-09-01T00:00:00.000Z' } })
+    }
+  }
+
+  const model = new AgentLensClientModel(new WindowedApi())
+  await model.refreshReview()
+  for (let index = 0; index < 4; index += 1) await model.loadMoreReviewDetail()
+
+  const detail = model.getSnapshot().review.detail
+  assert.ok(detail)
+  assert.equal(detail.interactions.length, REVIEW_DETAIL_WINDOW_SIZE)
+  assert.deepEqual(detail.interactions.map(item => item.ordinal), Array.from({ length: 30 }, (_, index) => index + 21))
+  assert.equal(detail.interactionIndex?.length, 80)
 })
 
 test('正在阅读的会话持续写入时只提示新记录，不刷新任务列表', async () => {

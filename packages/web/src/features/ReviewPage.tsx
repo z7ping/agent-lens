@@ -1034,6 +1034,19 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
     })
   }, [model, review.detailLoadingMore])
 
+  const loadFollowing = useCallback(async () => {
+    const pane = readerPaneRef.current
+    if (!pane || review.detailLoadingMore) return
+    const saved = captureReviewReaderPosition(pane)
+    const userRevision = readerUserRevisionRef.current
+    await model.loadMoreReviewDetail()
+    window.requestAnimationFrame(() => {
+      const current = readerPaneRef.current
+      if (!current || userRevision !== readerUserRevisionRef.current) return
+      restoreReviewReaderPosition(current, saved)
+    })
+  }, [model, review.detailLoadingMore])
+
   useEffect(() => {
     const sentinel = detailLoadSentinelRef.current
     // 向前翻历史会在内容顶部插入轮次。若用 IntersectionObserver 自动触发，
@@ -1043,11 +1056,11 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
     const root = sentinel.closest('.review-reader-pane')
     const observer = new IntersectionObserver(entries => {
       if (!entries.some(entry => entry.isIntersecting)) return
-      void model.loadMoreReviewDetail()
+      void loadFollowing()
     }, { root, rootMargin: '800px 0px' })
     observer.observe(sentinel)
     return () => observer.disconnect()
-  }, [detail?.id, detail?.page.hasMore, detail?.page.nextCursor, detail?.page.direction, review.detailLoadingMore, review.error, model])
+  }, [detail?.id, detail?.page.hasMore, detail?.page.nextCursor, detail?.page.direction, review.detailLoadingMore, review.error, loadFollowing])
 
   const select = (id: string) => {
     const pane = readerPaneRef.current
@@ -1333,7 +1346,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
                 ? `正在加载${isFiltered ? '后续匹配' : '后续'}轮次…`
                 : detail.page.hasMore
                   ? review.error
-                    ? <button onClick={() => void model.loadMoreReviewDetail()}>加载失败 · 重试</button>
+                    ? <button onClick={() => void loadFollowing()}>加载失败 · 重试</button>
                     : `继续向下滚动，${isFiltered ? '后续匹配' : '后续'}轮次会自动加载`
                   : isFiltered
                     ? `已加载全部 ${detail.interactions.length} 个匹配轮次`
