@@ -71,6 +71,24 @@
   grid-template-rows: auto minmax(0, 1fr) auto;
   background: var(--al-surface);
 }
+/*
+ * 只有生命周期/用量等后台事实时，按 Task Detail 的连续文档节奏收口：
+ * Reader 只占内容实际需要的高度，Composer 紧随其后，剩余空间留在页面底部。
+ * 一旦出现消息 / Thinking / Tool / Streaming Tail，立即恢复固定底部 Composer，
+ * 保证真实对话和流式生成期间输入区位置稳定。
+ */
+.pi-live-workspace:not(:has(.task-message-row, .task-thinking, .task-tool-group, .pi-live-stream-response)) {
+  display: flex;
+  flex-direction: column;
+}
+.pi-live-workspace:not(:has(.task-message-row, .task-thinking, .task-tool-group, .pi-live-stream-response)) .pi-live-reader {
+  flex: 0 1 auto;
+}
+.pi-live-workspace:not(:has(.task-message-row, .task-thinking, .task-tool-group, .pi-live-stream-response)) .pi-live-compose-wrap {
+  flex: 0 0 auto;
+  padding-top: 0;
+  border-top: 0;
+}
 .pi-live-disconnected { color: var(--al-warning); }
 .pi-live-stop:disabled { cursor: default; opacity: .45; }
 .pi-live-menu { display: grid; width: 30px; height: 30px; place-items: center; padding: 0; font-size: 18px; line-height: 1; }
@@ -83,7 +101,8 @@
   overflow-anchor: auto;
   background: var(--al-surface);
 }
-.pi-live-document { width: 100%; max-width: 1040px; margin: 0 auto; padding: 18px 38px 92px 30px; }
+.pi-live-document { width: 100%; max-width: 1040px; margin: 0 auto; padding: 16px 38px 28px 30px; }
+.pi-live-page.pi-live-page-embedded .pi-live-document { padding: 16px 34px 24px 48px; }
 .pi-live-current-round { margin-top: 8px; padding-top: 4px; }
 .pi-live-stream-response {
   position: relative;
@@ -104,12 +123,12 @@
 .pi-live-message-meta time { margin-left: auto; }
 .pi-live-caret { display: inline-block; width: 6px; height: 1.05em; margin-left: 2px; vertical-align: -2px; border-radius: 2px; background: var(--al-accent); animation: pi-live-caret 1.1s steps(1) infinite; }
 @keyframes pi-live-caret { 50% { opacity: .22; } }
-.pi-live-empty { padding: 72px 16px; color: var(--al-muted); font-size: 13px; text-align: center; }
+.pi-live-empty { padding: 42px 16px 34px; color: var(--al-muted); font-size: 13px; text-align: center; }
 .pi-live-reader-error { margin: 16px 0; }
 
 .pi-live-compose-wrap {
   z-index: 10;
-  padding: 8px 20px;
+  padding: 8px 20px 12px;
   border-top: 1px solid var(--al-line);
   background: var(--al-surface);
 }
@@ -192,18 +211,21 @@
   .pi-live-page { --pi-live-side: 260px; }
   .pi-live-compose-runtime { display: none; }
   .pi-live-document { padding-right: 28px; padding-left: 24px; }
+  .pi-live-page.pi-live-page-embedded .pi-live-document { padding-right: 22px; padding-left: 44px; }
 }
 @media (max-width: 991.98px) {
   .pi-live-page { --pi-live-side: 236px; }
   .pi-live-compose-wrap { padding-right: 12px; padding-left: 12px; }
   .pi-live-compose-settings select:first-child { width: clamp(180px, 24vw, 230px); max-width: 230px; }
   .pi-live-compose-settings select:last-child { width: clamp(132px, 16vw, 160px); max-width: 160px; }
+  .pi-live-page.pi-live-page-embedded .pi-live-document { padding-right: 18px; padding-left: 40px; }
 }
 @media (max-width: 767.98px) {
   .pi-live-page { grid-template-columns: 1fr; }
   .pi-live-sessions { display: none; }
-  .pi-live-document { padding: 12px 14px 74px; }
-  .pi-live-compose-wrap { padding: 7px 10px 6px; }
+  .pi-live-document { padding: 12px 14px 24px; }
+  .pi-live-page.pi-live-page-embedded .pi-live-document { padding: 13px 14px 20px; }
+  .pi-live-compose-wrap { padding: 7px 10px 8px; }
   .pi-live-compose-runtime { display: none; }
   .pi-live-compose-settings select:first-child { width: 132px; max-width: 132px; }
   .pi-live-compose-settings select:last-child { width: 104px; max-width: 104px; }
