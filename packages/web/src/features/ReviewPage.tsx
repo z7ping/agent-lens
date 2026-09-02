@@ -954,7 +954,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
     setRoundFilterLoading(false)
     setExpandAllRounds(true)
     setRoundExpansionRevision(0)
-    setShowAllEvents(false)
+    setShowAllEvents(true)
     setInspect(null)
     followingTailRef.current = false
     detailAutoLoadBaselineRef.current = readerUserRevisionRef.current

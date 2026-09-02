@@ -8,7 +8,9 @@ const mainEntry = readFileSync(new URL('../main.tsx', import.meta.url), 'utf8')
 
 test('Task Review defaults to full observable events without a DOM adapter', () => {
   assert.match(reviewPage, /const \[showAllEvents, setShowAllEvents\] = useState\(true\)/)
+  assert.match(reviewPage, /setShowAllEvents\(true\)/)
   assert.doesNotMatch(reviewPage, /const \[showAllEvents, setShowAllEvents\] = useState\(false\)/)
+  assert.doesNotMatch(reviewPage, /setShowAllEvents\(false\)/)
 })
 
 test('Task Review 的历史 Thinking 默认折叠并保留 disclosure 交互', () => {
