@@ -435,6 +435,7 @@ function StructuredToolDetail({ node }: { node: ReviewToolNodeDto }) {
 function roleLabel(role: ReviewMessageNodeDto['role']): string {
   if (role === 'user') return '用户'
   if (role === 'assistant') return '智能体'
+  if (role === 'commentary') return '执行过程'
   return '思考'
 }
 
@@ -635,10 +636,11 @@ function MessageBubble({
   inspect(node: ReviewNodeDto): void
   nestedTools?: ReviewToolNodeDto[]
 }) {
-  if (node.role === 'reasoning') {
+  if (node.role === 'reasoning' || node.role === 'commentary') {
+    const label = node.role === 'commentary' ? '执行过程' : '思考'
     const thinking: TaskThinkingModel = {
       id: node.id,
-      label: '思考',
+      label,
       text: node.text,
       preview: brief(node.text, 78),
       time: formatClock(node.at),
