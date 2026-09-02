@@ -15,20 +15,26 @@ import {
 } from './format'
 
 const TRAILING_MEMORY_CITATION = /(?:\r?\n){0,2}<oai-mem-citation>\s*<citation_entries>[\s\S]*?<\/citation_entries>\s*<rollout_ids>[\s\S]*?<\/rollout_ids>\s*<\/oai-mem-citation>\s*$/i
+const CLIENT_DIRECTIVE_LINE = /^::(?:created-thread|code-comment)\{[^\r\n]*\}\s*$/gm
 
 export function splitCodexVisibleAssistantText(text: string, phase?: string): {
   text: string
-  sourceMetadata?: Array<{ kind: 'memory.citation' }>
+  sourceMetadata?: Array<{ kind: 'memory.citation' | 'client.directive' }>
 } {
   if (phase !== 'final_answer') return { text }
   const match = TRAILING_MEMORY_CITATION.exec(text)
-  if (!match || match.index === undefined) return { text }
-  const prefix = text.slice(0, match.index)
+  const prefix = match && match.index !== undefined ? text.slice(0, match.index) : text
   const fenceCount = prefix.match(/```/g)?.length ?? 0
   if (fenceCount % 2 !== 0) return { text }
+  const withoutDirectives = prefix.replace(CLIENT_DIRECTIVE_LINE, '').replace(/\n{3,}/g, '\n\n').trimEnd()
+  const metadata = [
+    ...(match ? [{ kind: 'memory.citation' as const }] : []),
+    ...(withoutDirectives !== prefix ? [{ kind: 'client.directive' as const }] : []),
+  ]
+  if (!match && !metadata.length) return { text }
   return {
-    text: prefix.trimEnd(),
-    sourceMetadata: [{ kind: 'memory.citation' }],
+    text: withoutDirectives,
+    sourceMetadata: metadata,
   }
 }
 
