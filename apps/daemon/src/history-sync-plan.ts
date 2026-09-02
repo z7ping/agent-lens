@@ -32,7 +32,7 @@ export function stagesAllowedByCapacity(
   stages: readonly ProgressiveHistoryStage[],
   state: StorageCapacityState,
 ): ProgressiveHistoryStage[] {
-  if (state === 'exceeded') return []
+  if (state === 'exceeded') return stages.filter(stage => stage.id === 'latest')
   if (state === 'approaching') return stages.filter(stage => stage.id !== 'hot-window')
   return [...stages]
 }
