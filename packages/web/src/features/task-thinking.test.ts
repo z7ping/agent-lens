@@ -29,4 +29,6 @@ test('TaskThinking 折叠时显示弱预览且仍允许调用方显式默认折�
   assert.doesNotMatch(html, /<details[^>]*open=""/)
   assert.match(html, /class="task-thinking"/)
   assert.match(html, /task-thinking-preview/)
+  assert.doesNotMatch(html, /task-thinking-content/)
+  assert.doesNotMatch(html, /核对原型与正式实现。<\/div>/)
 })

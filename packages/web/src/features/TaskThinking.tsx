@@ -44,7 +44,7 @@ export function TaskThinking({
       </span>
       <span className="task-thinking-summary-meta">{meta}{model.time && <time>{model.time}</time>}</span>
     </summary>
-    <div className="task-thinking-content">{children}</div>
-    {actions && <div className="task-thinking-actions">{actions}</div>}
+    {expanded && <div className="task-thinking-content">{children}</div>}
+    {expanded && actions && <div className="task-thinking-actions">{actions}</div>}
   </details>
 }
