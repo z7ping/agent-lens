@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   AGENT_LENS_PROTOCOL_VERSION,
+  type LiveUpdateEventDto,
   type ReviewResponseDto,
   type ReviewSessionDetailDto,
   type ReviewSessionSummaryDto,
@@ -127,4 +128,48 @@ test('review 后台刷新保持已加载窗口且不重新进入首屏 loading',
   assert.equal(model.getSnapshot().review.response?.items.length, 10)
   assert.equal(model.getSnapshot().review.loading, false)
   assert.equal(loadingStates.includes(true), false)
+})
+
+test('正在阅读的会话持续写入时只提示新记录，不刷新任务列表', async () => {
+  let reviewCalls = 0
+
+  class LiveSelectedSessionApi extends AgentLensApi {
+    override review(_filters: ReviewFilters, limit = 40): Promise<ReviewResponseDto> {
+      reviewCalls += 1
+      return Promise.resolve(response(limit === 1 ? 1 : 10))
+    }
+
+    override reviewDetail(): Promise<ReviewSessionDetailDto> {
+      return Promise.resolve({
+        ...summary(1),
+        interactions: [],
+        page: { count: 0, hasMore: false, direction: 'backward', filter: 'all' },
+      })
+    }
+
+    override relationships(): Promise<SessionRelationshipResponseDto> {
+      return Promise.resolve({
+        items: [],
+        meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION, generatedAt: '2026-09-01T00:00:00.000Z' },
+      })
+    }
+  }
+
+  const model = new AgentLensClientModel(new LiveSelectedSessionApi())
+  await model.refreshReview()
+  model.setReviewActive(true)
+  const event: LiveUpdateEventDto = {
+    type: 'observation.committed',
+    observationId: 'observation-1',
+    logicalSessionId: 'session-1',
+    affected: ['review'],
+    emittedAt: '2026-09-01T00:00:01.000Z',
+  }
+
+  ;(model as unknown as { onLiveEvent(event: LiveUpdateEventDto): void }).onLiveEvent(event)
+  await new Promise(resolve => setTimeout(resolve, 900))
+
+  assert.equal(reviewCalls, 2)
+  assert.equal(model.getSnapshot().review.detailHasNewData, true)
+  model.stop()
 })

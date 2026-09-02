@@ -637,14 +637,19 @@ export class AgentLensClientModel {
   private onLiveEvent(event: LiveUpdateEventDto): void {
     const affected: readonly LiveUpdateArea[] = event.affected
     if (affected.includes('review')) {
-      if (this.reviewActive && event.type === 'observation.committed' && event.logicalSessionId && event.logicalSessionId === this.snapshot.review.selectedId) {
+      const updatesSelectedSession = this.reviewActive
+        && event.type === 'observation.committed'
+        && Boolean(event.logicalSessionId)
+        && event.logicalSessionId === this.snapshot.review.selectedId
+      if (updatesSelectedSession) {
         if (this.detailTimer) clearTimeout(this.detailTimer)
         this.detailTimer = setTimeout(() => {
           this.detailTimer = null
           if (this.reviewActive) void this.refreshSelectedTailIncremental()
         }, 160)
+      } else {
+        this.scheduleReviewRefresh()
       }
-      this.scheduleReviewRefresh()
     }
     if (affected.includes('usage')) {
       this.usageInvalidation += 1
