@@ -26,6 +26,14 @@ test('Task Review 滚到顶部不会自动加载更早轮次并抢走滚动位�
   assert.match(reviewPage, /加载更早轮次/)
 })
 
+test('Task Review 用统一轮次锚点保护补载与大范围视图切换', () => {
+  assert.match(reviewPage, /function restoreReviewReaderPosition/)
+  assert.match(reviewPage, /pendingReaderAnchorRef/)
+  assert.match(reviewPage, /readerUserRevisionRef/)
+  assert.match(reviewPage, /onWheelCapture=\{noteReaderUserIntent\}/)
+  assert.doesNotMatch(reviewPage, /beforeTop \+ \(current\.scrollHeight - beforeHeight\)/)
+})
+
 test('Pi Live defaults and resets to full observable events natively', () => {
   assert.match(piLivePage, /const \[showAllEvents, setShowAllEvents\] = useState\(true\)/)
   assert.match(piLivePage, /setShowAllEvents\(true\)/)

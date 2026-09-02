@@ -838,7 +838,7 @@ interface ReviewReaderPosition {
 function captureReviewReaderPosition(pane: HTMLElement): ReviewReaderPosition {
   const paneTop = pane.getBoundingClientRect().top
   let anchor: HTMLElement | null = null
-  for (const element of pane.querySelectorAll<HTMLElement>('.interaction-block[data-interaction-id]')) {
+  for (const element of pane.querySelectorAll<HTMLElement>('.virtual-round-shell[data-interaction-id]')) {
     const top = element.getBoundingClientRect().top
     if (top <= paneTop + 56) anchor = element
     else if (!anchor) {
@@ -851,6 +851,19 @@ function captureReviewReaderPosition(pane: HTMLElement): ReviewReaderPosition {
     offset: anchor ? anchor.getBoundingClientRect().top - paneTop : 0,
     scrollTop: pane.scrollTop,
   }
+}
+
+function restoreReviewReaderPosition(pane: HTMLElement, saved: ReviewReaderPosition): boolean {
+  if (!saved.interactionId) {
+    pane.scrollTop = saved.scrollTop
+    return true
+  }
+  const anchor = [...pane.querySelectorAll<HTMLElement>('.virtual-round-shell[data-interaction-id]')]
+    .find(element => element.dataset.interactionId === saved.interactionId)
+  if (!anchor) return false
+  const paneTop = pane.getBoundingClientRect().top
+  pane.scrollTop += anchor.getBoundingClientRect().top - paneTop - saved.offset
+  return true
 }
 
 function highLatencyThreshold(interactions: ReviewInteractionDto[]): number | null {
@@ -878,6 +891,8 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
   const detailLoadSentinelRef = useRef<HTMLDivElement>(null)
   const readerPaneRef = useRef<HTMLElement>(null)
   const readerPositionsRef = useRef(new Map<string, ReviewReaderPosition>())
+  const pendingReaderAnchorRef = useRef<{ position: ReviewReaderPosition; userRevision: number } | null>(null)
+  const readerUserRevisionRef = useRef(0)
   const followingTailRef = useRef(false)
   const roundExpansionRef = useRef(new Map<string, boolean>())
   const review = snapshot.review
@@ -941,6 +956,19 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
   }, [detail?.page.filter])
 
   useLayoutEffect(() => {
+    const pending = pendingReaderAnchorRef.current
+    if (!pending) return
+    pendingReaderAnchorRef.current = null
+    if (pending.userRevision !== readerUserRevisionRef.current) return
+    const frame = window.requestAnimationFrame(() => {
+      const pane = readerPaneRef.current
+      if (!pane || pending.userRevision !== readerUserRevisionRef.current) return
+      restoreReviewReaderPosition(pane, pending.position)
+    })
+    return () => window.cancelAnimationFrame(frame)
+  })
+
+  useLayoutEffect(() => {
     if (!detail || review.detailLoading || detail.page.filter !== 'all' || detail.page.direction !== 'backward') return
     const frame = window.requestAnimationFrame(() => {
       const pane = readerPaneRef.current
@@ -964,14 +992,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
       for (let attempt = 0; attempt < 25 && !cancelled; attempt += 1) {
         const pane = readerPaneRef.current
         if (!pane) return
-        const anchor = saved.interactionId
-          ? [...pane.querySelectorAll<HTMLElement>('.interaction-block[data-interaction-id]')].find(element => element.dataset.interactionId === saved.interactionId)
-          : undefined
-        if (anchor) {
-          const paneTop = pane.getBoundingClientRect().top
-          pane.scrollTop += anchor.getBoundingClientRect().top - paneTop - saved.offset
-          return
-        }
+        if (restoreReviewReaderPosition(pane, saved)) return
         const current = model.getSnapshot().review
         if (!saved.interactionId || current.selectedId !== id || !current.detail?.page.hasMore || current.detail.page.direction !== 'forward' || current.detail.page.filter !== 'all') break
         await model.loadMoreReviewDetail()
@@ -997,13 +1018,13 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
   const loadOlder = useCallback(async () => {
     const pane = readerPaneRef.current
     if (!pane || review.detailLoadingMore) return
-    const beforeHeight = pane.scrollHeight
-    const beforeTop = pane.scrollTop
+    const saved = captureReviewReaderPosition(pane)
+    const userRevision = readerUserRevisionRef.current
     await model.loadMoreReviewDetail()
     window.requestAnimationFrame(() => {
       const current = readerPaneRef.current
-      if (!current) return
-      current.scrollTop = beforeTop + (current.scrollHeight - beforeHeight)
+      if (!current || userRevision !== readerUserRevisionRef.current) return
+      restoreReviewReaderPosition(current, saved)
     })
   }, [model, review.detailLoadingMore])
 
@@ -1171,8 +1192,27 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
       : '当前筛选条件没有匹配的轮次。'
 
   const toggleRoundExpansion = () => {
+    const pane = readerPaneRef.current
+    if (pane) pendingReaderAnchorRef.current = {
+      position: captureReviewReaderPosition(pane),
+      userRevision: readerUserRevisionRef.current,
+    }
     setExpandAllRounds(value => !value)
     setRoundExpansionRevision(value => value + 1)
+  }
+
+  const toggleEventVisibility = () => {
+    const pane = readerPaneRef.current
+    if (pane) pendingReaderAnchorRef.current = {
+      position: captureReviewReaderPosition(pane),
+      userRevision: readerUserRevisionRef.current,
+    }
+    setShowAllEvents(value => !value)
+  }
+
+  const noteReaderUserIntent = () => {
+    readerUserRevisionRef.current += 1
+    pendingReaderAnchorRef.current = null
   }
 
   return <main className={`review-page ${embedded ? 'review-page-embedded' : ''}`}>
@@ -1216,7 +1256,16 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
         </div>
       </aside>}
 
-      <TaskSurface ref={readerPaneRef} mode="review" className="review-reader-pane" onScroll={onReaderScroll}>
+      <TaskSurface
+        ref={readerPaneRef}
+        mode="review"
+        className="review-reader-pane"
+        onScroll={onReaderScroll}
+        onWheelCapture={noteReaderUserIntent}
+        onTouchStartCapture={noteReaderUserIntent}
+        onPointerDownCapture={noteReaderUserIntent}
+        onKeyDownCapture={noteReaderUserIntent}
+      >
         {review.error && <div className="page-error">{review.error}</div>}
         {!detail ? <div className="empty-state fill">{review.selectedId && review.detailLoading ? '加载会话详情…' : '选择一个会话开始复盘'}</div> : <div className="review-reader">
           <TaskHeader
@@ -1227,7 +1276,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
             title={<span title={taskDetailModel?.title}>{taskDetailModel?.title}</span>}
             submeta={taskDetailModel?.startedAt && taskDetailModel.endedAt ? <><span>{formatRange(taskDetailModel.startedAt, taskDetailModel.endedAt)}</span>{taskDetailModel.workspacePath && <code title={taskDetailModel.workspacePath}>{taskDetailModel.workspacePath}</code>}</> : undefined}
             metrics={taskDetailModel?.metrics ?? []}
-            actions={<button className="review-audit-toggle" aria-pressed={showAllEvents} onClick={() => setShowAllEvents(value => !value)}>{showAllEvents ? '视图：全部事件' : '视图：核心事件'}</button>}
+            actions={<button className="review-audit-toggle" aria-pressed={showAllEvents} onClick={toggleEventVisibility}>{showAllEvents ? '视图：全部事件' : '视图：核心事件'}</button>}
           />
 
           {detail.sourceIds.includes('pi') && review.relationships?.items.length ? <details className="pi-session-tree">
