@@ -552,16 +552,34 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
         return row ? mapSourceRecord(row) : null
       })
     },
-    async listForParserReplay(sourceId, installationId, currentParserVersion, after, limit = 500) {
+    async listForParserReplay(sourceId, installationId, currentParserVersion, after, limit = 500, window) {
       return executor.run(() => {
         const params: unknown[] = [sourceId, installationId, currentParserVersion]
         const cursor = after ? `AND (captured_at > ? OR (captured_at = ? AND id > ?))` : ''
         if (after) params.push(after.capturedAt, after.capturedAt, after.id)
+        const activeSince = window?.activeSince
+        const sessionLimit = window?.sessionLimit
+        const windowClause = activeSince || sessionLimit
+          ? `AND source_session_native_id IN (
+              SELECT source_session_native_id FROM source_records
+              WHERE source_id = ? AND installation_id = ? AND source_session_native_id IS NOT NULL
+              ${activeSince ? 'AND captured_at >= ?' : ''}
+              GROUP BY source_session_native_id
+              ORDER BY MAX(captured_at) DESC
+              ${sessionLimit ? 'LIMIT ?' : ''}
+            )`
+          : ''
+        if (windowClause) {
+          params.push(sourceId, installationId)
+          if (activeSince) params.push(activeSince)
+          if (sessionLimit) params.push(sessionLimit)
+        }
         params.push(Math.max(1, Math.min(limit, 2000)))
         const rows = db.prepare(`
           SELECT * FROM source_records
           WHERE source_id = ? AND installation_id = ? AND parser_version != ?
           ${cursor}
+          ${windowClause}
           ORDER BY captured_at ASC, id ASC
           LIMIT ?
         `).all(...params)

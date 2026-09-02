@@ -332,17 +332,9 @@ export async function* ingestCodexHistory(ctx: SourceHistoryExecutionContext): A
       await ctx.checkpoint.set(metadataKey, previousMetadata)
     }
 
-    // Parser v4 changes the persisted SourceRecord contract: native JSON is no longer
-    // field-pruned inside the Codex adapter. Replay the already-consumed prefix once so
-    // deterministic SourceRecord ids are upserted with the safe, complete native payload.
+    // Parser 升级由 SourceHistoryRunner 直接重规范化数据库中的 SourceRecord；
+    // 检查点只升级版本，不再重新读取已消费的完整 JSONL 前缀。
     if (previous && previous.parserVersion !== CODEX_PARSER_VERSION) {
-      let legacySequence = 0
-      for await (const line of readJsonlLines(filePath, 0, previous.offset)) {
-        if (ctx.abortSignal.aborted) return
-        legacySequence += 1
-        if (!line.text.trim()) continue
-        yield sourceRecordForLine(ctx, filePath, session, line, legacySequence)
-      }
       await ctx.checkpoint.set(key, { ...previous, parserVersion: CODEX_PARSER_VERSION })
     }
 

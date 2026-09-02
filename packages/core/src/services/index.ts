@@ -296,6 +296,7 @@ export interface SourceRecordRepository {
     currentParserVersion: string,
     after?: SourceRecordReplayCursor,
     limit?: number,
+    window?: { activeSince?: string; sessionLimit?: number },
   ): Promise<SourceRecord[]>
   findByNativeId(
     sourceId: string,

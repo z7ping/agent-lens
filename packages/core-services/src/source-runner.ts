@@ -367,9 +367,9 @@ export class SourceHistoryRunner {
       const yieldForInteractivity = createCooperativeScheduler()
 
       const replay = this.storage.repositories.sourceRecords.listForParserReplay
-      // 渐进启动窗口优先处理最新真实 Session，不能在“最新 1 个”之前先
-      // 全库重放旧 parser 记录。无窗口的显式完整同步仍保留修复能力。
-      if (replay && !input.historyWindow) {
+      // Parser 升级直接重规范化已持久化的 SourceRecord。渐进窗口会把重放
+      // 限定到同一批 Session，避免为了修复语义重新读取完整原生日志前缀。
+      if (replay) {
         let after: { capturedAt: string; id: string } | undefined
         while (!abortSignal.aborted) {
           const records = await replay(
@@ -378,6 +378,7 @@ export class SourceHistoryRunner {
             source.manifest.parserVersion,
             after,
             500,
+            input.historyWindow,
           )
           if (!records.length) break
           for (const stored of records) {

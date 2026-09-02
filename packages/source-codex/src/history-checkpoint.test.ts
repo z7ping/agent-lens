@@ -136,7 +136,7 @@ test('中断消费时只推进到最后一个完整批次', async () => {
   }
 })
 
-test('旧 Parser 游标完整重放已消费区间以恢复曾被裁剪的原生字段', async () => {
+test('旧 Parser 游标只升级检查点且不重读已消费区间', async () => {
   const root = await mkdtemp(join(tmpdir(), 'agent-lens-codex-v4-source-replay-'))
   const sessions = join(root, 'sessions')
   const path = join(sessions, 'rollout-v3-backfill.jsonl')
@@ -170,13 +170,7 @@ test('旧 Parser 游标完整重放已消费区间以恢复曾被裁剪的原生
     const records = []
     for await (const record of ingestCodexHistory(context(sessions, checkpoints, writes))) records.push(record)
 
-    assert.deepEqual(records.map(record => record.nativeType), [
-      'response_item/message',
-      'response_item/custom_tool_call',
-      'response_item/custom_tool_call_output',
-    ])
-    assert.deepEqual(records.map(record => record.sourceSequence), [1, 2, 3])
-    assert.equal(records.every(record => record.parserVersion === '8'), true)
+    assert.deepEqual(records, [])
     assert.equal((checkpoints.get(codexHistoryInternals.checkpointKey(path)) as { parserVersion: string }).parserVersion, '8')
   } finally {
     await rm(root, { recursive: true, force: true })
