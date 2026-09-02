@@ -2,8 +2,8 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
-const page = readFileSync('packages/web/src/features/PiLivePage.tsx', 'utf8')
-const css = readFileSync('packages/web/src/pi-live.css', 'utf8')
+const page = readFileSync(new URL('./PiLivePage.tsx', import.meta.url), 'utf8')
+const css = readFileSync(new URL('../pi-live.css', import.meta.url), 'utf8')
 
 test('Pi Live model and thinking controls expose their complete current values', () => {
   assert.match(page, /title=\{state\?\.model \? `Pi 模型 · \$\{modelLabel\(state\)\}` : 'Pi 模型'\}/)

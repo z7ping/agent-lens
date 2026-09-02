@@ -646,6 +646,7 @@ function MessageBubble({
     }
     return <TaskThinking
       model={thinking}
+      defaultExpanded={false}
       meta={<EvidenceBadges evidence={node.evidence} compact/>}
       actions={node.evidence.length > 0 ? <button className="evidence-link" onClick={() => inspect(node)}>查看全部证据 · {node.evidence.length}</button> : undefined}
     >
