@@ -20,6 +20,12 @@ test('Task Review 将 commentary、reasoning 与工具统一放入默认折叠�
   assert.match(reviewPage, /entry\.type === 'process'/)
 })
 
+test('Task Review 滚到顶部不会自动加载更早轮次并抢走滚动位置', () => {
+  assert.match(reviewPage, /detail\.page\.direction !== 'forward'/)
+  assert.doesNotMatch(reviewPage, /detail\.page\.direction === 'backward'\) void loadOlder/)
+  assert.match(reviewPage, /加载更早轮次/)
+})
+
 test('Pi Live defaults and resets to full observable events natively', () => {
   assert.match(piLivePage, /const \[showAllEvents, setShowAllEvents\] = useState\(true\)/)
   assert.match(piLivePage, /setShowAllEvents\(true\)/)

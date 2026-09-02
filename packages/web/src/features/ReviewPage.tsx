@@ -1009,16 +1009,18 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
 
   useEffect(() => {
     const sentinel = detailLoadSentinelRef.current
-    if (!sentinel || !detail?.page.hasMore || review.detailLoadingMore || review.error) return
+    // 向前翻历史会在内容顶部插入轮次。若用 IntersectionObserver 自动触发，
+    // 锚点补偿会在用户滚到顶部时反复改写 scrollTop，形成“滚轮被抢走”的体验。
+    // backward 方向只保留显式按钮；forward 方向仍可在接近尾部时渐进补载。
+    if (!sentinel || !detail?.page.hasMore || detail.page.direction !== 'forward' || review.detailLoadingMore || review.error) return
     const root = sentinel.closest('.review-reader-pane')
     const observer = new IntersectionObserver(entries => {
       if (!entries.some(entry => entry.isIntersecting)) return
-      if (detail.page.direction === 'backward') void loadOlder()
-      else void model.loadMoreReviewDetail()
-    }, { root, rootMargin: detail.page.direction === 'backward' ? '120px 0px 0px' : '800px 0px' })
+      void model.loadMoreReviewDetail()
+    }, { root, rootMargin: '800px 0px' })
     observer.observe(sentinel)
     return () => observer.disconnect()
-  }, [detail?.id, detail?.page.hasMore, detail?.page.nextCursor, detail?.page.direction, review.detailLoadingMore, review.error, loadOlder, model])
+  }, [detail?.id, detail?.page.hasMore, detail?.page.nextCursor, detail?.page.direction, review.detailLoadingMore, review.error, model])
 
   const select = (id: string) => {
     const pane = readerPaneRef.current
