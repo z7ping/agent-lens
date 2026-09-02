@@ -64,6 +64,23 @@ test('memory citation text remains visible outside assistant final_answer', () =
   assert.equal(splitCodexVisibleAssistantText(`\`\`\`xml\n${quoted}\n\`\`\``, 'final_answer').text, `\`\`\`xml\n${quoted}\n\`\`\``)
 })
 
+test('injected context is represented without exposing its raw protocol text', async () => {
+  const output = await normalizeCodexRecord(record({
+    type: 'response_item',
+    payload: {
+      type: 'message',
+      role: 'developer',
+      content: [{ type: 'input_text', text: '<environment_context>secret setup</environment_context>' }],
+    },
+  }), ctx)
+
+  assert.deepEqual(output.observations[0]?.payload, {
+    rawType: 'event_msg',
+    injectedContext: true,
+    role: 'developer',
+  })
+})
+
 test('event_msg agent_reasoning is normalized to canonical message.reasoning', async () => {
   const output = await normalizeCodexRecord(record({
     type: 'event_msg',

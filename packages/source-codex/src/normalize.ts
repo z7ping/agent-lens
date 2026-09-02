@@ -173,6 +173,18 @@ function unknownCandidate(
   })
 }
 
+function injectedContextCandidate(
+  record: SourceRecord,
+  envelope: CodexStoredEnvelope,
+  role: string,
+): ObservationCandidate {
+  return candidate(record, envelope, 'unknown', {
+    rawType: record.nativeType,
+    injectedContext: true,
+    role,
+  })
+}
+
 function runtimeSuccess(response: unknown): { success: boolean; exitCode?: number } {
   const value = asRecord(response)
   const rawExitCode = value.exit_code ?? value.exitCode
@@ -410,7 +422,7 @@ export async function normalizeCodexRecord(
     const text = messageText(payload.content ?? payload.text ?? '')
     const injected = payload.injectedContext === true || isInjectedContext(role, text)
     if (injected || (role !== 'user' && role !== 'assistant')) {
-      push(unknownCandidate(record, envelope, entry as JsonValue))
+      push(injectedContextCandidate(record, envelope, role))
     } else {
       const kind = role === 'user'
         ? 'message.user'
