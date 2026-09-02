@@ -154,8 +154,8 @@ test('Codex runtime hook merges with history observation and adds runtime eviden
       const sourceRecordCount = storage.db.prepare(
         'SELECT COUNT(*) AS count FROM source_records',
       ).get() as { count: number }
-      // 8 条 rollout + 1 条 session_start metadata + 1 条 runtime hook。
-      assert.equal(sourceRecordCount.count, 10)
+      // 9 条 rollout + 1 条 session_start metadata + 1 条 runtime hook。
+      assert.equal(sourceRecordCount.count, 11)
     } finally {
       controller.abort()
       await handle.dispose()

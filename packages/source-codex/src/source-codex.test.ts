@@ -94,7 +94,7 @@ test('history ingest is incremental and preserves every native record', async ()
   try {
     const first = []
     for await (const record of codexSourceDefinition.ingestHistory!(source)) first.push(record)
-    assert.equal(first.length, 9)
+    assert.equal(first.length, 10)
     assert.equal(first[0]?.nativeType, 'metadata/session_start')
     assert.equal(first[0]?.sourceSessionNativeId, 'codex-test-1')
     assert.equal(first[2]?.nativeType, 'event_msg/task_started')
@@ -175,6 +175,7 @@ test('normalizer maps known facts and preserves unknown native events', async ()
       'session.lifecycle',
       'session.lifecycle',
       'message.user',
+      'message.reasoning',
       'message.assistant',
       'tool.call',
       'tool.result',
@@ -182,12 +183,12 @@ test('normalizer maps known facts and preserves unknown native events', async ()
       'unknown',
     ])
 
-    assert.deepEqual(outputs[5]?.payload, {
+    assert.deepEqual(outputs[6]?.payload, {
       callId: 'call_c1',
       nativeToolName: 'shell_command',
       input: { command: 'npm test' },
     })
-    assert.deepEqual(outputs[6]?.payload, {
+    assert.deepEqual(outputs[7]?.payload, {
       callId: 'call_c1',
       success: false,
       exitCode: 1,

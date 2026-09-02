@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { SourceRecord } from '@agent-lens/core'
-import { normalizeCodexRecord } from './normalize'
+import { normalizeCodexRecord, splitCodexVisibleAssistantText } from './normalize'
 
 const ctx = {
   host: { id: 'host', name: 'host', platform: 'linux', arch: 'x64', createdAt: '2026-01-01T00:00:00.000Z', lastSeenAt: '2026-01-01T00:00:00.000Z' },
@@ -38,6 +38,30 @@ test('assistant commentary keeps its visible execution phase', async () => {
   assert.equal(fact.kind, 'message.commentary')
   assert.equal((fact.payload as any).text, '先检查实际启动链路。')
   assert.equal((fact.payload as any).phase, 'commentary')
+})
+
+test('assistant final_answer separates trailing memory citation metadata', async () => {
+  const output = await normalizeCodexRecord(record({
+    type: 'response_item',
+    payload: {
+      type: 'message',
+      role: 'assistant',
+      phase: 'final_answer',
+      content: [{ type: 'output_text', text: '已完成。\n\n<oai-mem-citation>\n<citation_entries>\nMEMORY.md:1-2|note=[test]\n</citation_entries>\n<rollout_ids>\nrollout-1\n</rollout_ids>\n</oai-mem-citation>' }],
+    },
+  }), ctx)
+
+  const fact = output.observations[0]!
+  assert.equal(fact.kind, 'message.assistant')
+  assert.equal((fact.payload as any).text, '已完成。')
+  assert.deepEqual((fact.payload as any).sourceMetadata, [{ kind: 'memory.citation' }])
+  assert.equal('content' in fact.payload, false)
+})
+
+test('memory citation text remains visible outside assistant final_answer', () => {
+  const quoted = '<oai-mem-citation>\n<citation_entries>x</citation_entries>\n<rollout_ids>y</rollout_ids>\n</oai-mem-citation>'
+  assert.equal(splitCodexVisibleAssistantText(quoted, 'commentary').text, quoted)
+  assert.equal(splitCodexVisibleAssistantText(`\`\`\`xml\n${quoted}\n\`\`\``, 'final_answer').text, `\`\`\`xml\n${quoted}\n\`\`\``)
 })
 
 test('event_msg agent_reasoning is normalized to canonical message.reasoning', async () => {

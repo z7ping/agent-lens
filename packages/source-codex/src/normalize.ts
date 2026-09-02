@@ -14,6 +14,24 @@ import {
   type CodexStoredEnvelope,
 } from './format'
 
+const TRAILING_MEMORY_CITATION = /(?:\r?\n){0,2}<oai-mem-citation>\s*<citation_entries>[\s\S]*?<\/citation_entries>\s*<rollout_ids>[\s\S]*?<\/rollout_ids>\s*<\/oai-mem-citation>\s*$/i
+
+export function splitCodexVisibleAssistantText(text: string, phase?: string): {
+  text: string
+  sourceMetadata?: Array<{ kind: 'memory.citation' }>
+} {
+  if (phase !== 'final_answer') return { text }
+  const match = TRAILING_MEMORY_CITATION.exec(text)
+  if (!match || match.index === undefined) return { text }
+  const prefix = text.slice(0, match.index)
+  const fenceCount = prefix.match(/```/g)?.length ?? 0
+  if (fenceCount % 2 !== 0) return { text }
+  return {
+    text: prefix.trimEnd(),
+    sourceMetadata: [{ kind: 'memory.citation' }],
+  }
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -399,10 +417,14 @@ export async function normalizeCodexRecord(
         : phase === 'commentary'
           ? 'message.commentary'
           : 'message.assistant'
+      const visible = role === 'assistant'
+        ? splitCodexVisibleAssistantText(text, phase)
+        : { text }
       push(candidate(record, envelope, kind, {
-        text,
+        text: visible.text,
         ...(phase ? { phase } : {}),
-        ...(payload.content === undefined ? {} : { content: payload.content }),
+        ...(visible.sourceMetadata ? { sourceMetadata: visible.sourceMetadata } : {}),
+        ...(visible.sourceMetadata || payload.content === undefined ? {} : { content: payload.content }),
       }))
     }
   } else if (topType === 'response_item' && (innerType === 'function_call' || innerType === 'custom_tool_call')) {
