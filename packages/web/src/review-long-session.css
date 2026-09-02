@@ -151,14 +151,20 @@
 }
 .turn-tick i {
   display: block;
-  width: 8px;
+  width: 6px;
   height: 1.5px;
   border-radius: 99px;
   background: color-mix(in srgb, var(--al-muted) 58%, transparent);
   transition: width .16s cubic-bezier(.2,.8,.2,1), height .16s ease, background .16s ease;
 }
-.turn-tick:hover i { width: 14px; height: 2px; background: var(--al-ink-2); }
-.turn-tick.active i { width: 18px; height: 2px; background: var(--al-ink); }
+.turn-tick:hover i { width: 24px; height: 2px; background: var(--al-ink); }
+.turn-tick:has(+ .turn-tick:hover) i,
+.turn-tick:hover + .turn-tick i { width: 18px; }
+.turn-tick:has(+ .turn-tick + .turn-tick:hover) i,
+.turn-tick:hover + .turn-tick + .turn-tick i { width: 13px; }
+.turn-tick:has(+ .turn-tick + .turn-tick + .turn-tick:hover) i,
+.turn-tick:hover + .turn-tick + .turn-tick + .turn-tick i { width: 9px; }
+.turn-tick.active i { width: 24px; height: 2px; background: var(--al-ink); }
 .turn-tick.err i { background: color-mix(in srgb, var(--al-danger) 55%, var(--al-line)); }
 .turn-tick.err.active i { background: var(--al-danger); }
 .turn-tick::after {
