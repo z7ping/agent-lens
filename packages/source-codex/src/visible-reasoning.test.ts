@@ -23,6 +23,23 @@ function record(entry: unknown): SourceRecord {
   }
 }
 
+test('assistant commentary keeps its visible execution phase', async () => {
+  const output = await normalizeCodexRecord(record({
+    type: 'response_item',
+    payload: {
+      type: 'message',
+      role: 'assistant',
+      phase: 'commentary',
+      content: [{ type: 'output_text', text: '先检查实际启动链路。' }],
+    },
+  }), ctx)
+
+  const fact = output.observations[0]!
+  assert.equal(fact.kind, 'message.assistant')
+  assert.equal((fact.payload as any).text, '先检查实际启动链路。')
+  assert.equal((fact.payload as any).phase, 'commentary')
+})
+
 test('event_msg agent_reasoning is normalized to canonical message.reasoning', async () => {
   const output = await normalizeCodexRecord(record({
     type: 'event_msg',

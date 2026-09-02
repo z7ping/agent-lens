@@ -388,6 +388,7 @@ export async function normalizeCodexRecord(
     push(candidate(record, envelope, 'usage', tokenUsage(payload)))
   } else if (topType === 'response_item' && innerType === 'message') {
     const role = typeof payload.role === 'string' ? payload.role : 'unknown'
+    const phase = typeof payload.phase === 'string' ? payload.phase : undefined
     const text = messageText(payload.content ?? payload.text ?? '')
     const injected = payload.injectedContext === true || isInjectedContext(role, text)
     if (injected || (role !== 'user' && role !== 'assistant')) {
@@ -395,6 +396,7 @@ export async function normalizeCodexRecord(
     } else {
       push(candidate(record, envelope, role === 'user' ? 'message.user' : 'message.assistant', {
         text,
+        ...(phase ? { phase } : {}),
         ...(payload.content === undefined ? {} : { content: payload.content }),
       }))
     }

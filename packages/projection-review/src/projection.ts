@@ -118,9 +118,16 @@ function buildNodes(items: TimelineItemDto[]): ReviewNodeDto[] {
 
   for (const item of items) {
     if (item.kind === 'message.user' || item.kind === 'message.assistant' || item.kind === 'message.reasoning') {
+      const payload = asRecord(item.payload)
       const node: ReviewMessageNodeDto = {
         type: 'message', id: item.id,
-        role: item.kind === 'message.user' ? 'user' : item.kind === 'message.assistant' ? 'assistant' : 'reasoning',
+        role: item.kind === 'message.user'
+          ? 'user'
+          : item.kind === 'message.reasoning'
+            ? 'reasoning'
+            : payload.phase === 'commentary'
+              ? 'commentary'
+              : 'assistant',
         at: item.effectiveAt, sourceId: item.sourceId, ...reviewNodeSource(item),
         text: textFromPayload(item.payload) ?? '（无可显示文本）', payload: item.payload,
         evidence: item.evidence, observationIds: [item.id],

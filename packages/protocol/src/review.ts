@@ -2,7 +2,7 @@ import type { JsonValue, TimelineEvidenceDto, TimelineObservationKind } from './
 import { AGENT_LENS_PROTOCOL_VERSION } from './timeline'
 
 export type ReviewStatusFilter = 'all' | 'with-errors' | 'clean'
-export type ReviewMessageRole = 'user' | 'assistant' | 'reasoning'
+export type ReviewMessageRole = 'user' | 'assistant' | 'commentary' | 'reasoning'
 export type ReviewEventCategory = 'permission' | 'subagent' | 'context' | 'model' | 'lifecycle' | 'artifact' | 'usage' | 'unknown'
 export type ReviewDetailFilter = 'all' | 'errors' | 'latency' | 'latest'
 export type ReviewDetailDirection = 'forward' | 'backward'
