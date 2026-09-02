@@ -11,6 +11,11 @@ export const DEV_PORT_ATTEMPTS = 21
 export const DEV_RUNTIME_READY_TIMEOUT_MS = 30_000
 export const DEV_RUNTIME_READY_INTERVAL_MS = 100
 
+function devLog(message, ...details) {
+  const stamp = new Date().toISOString()
+  console.info(`[AgentLens][dev][${stamp}] ${message}`, ...details)
+}
+
 export function parseDevPort(value, fallback = DEFAULT_DEV_PORT) {
   if (value === undefined || value === null || value === '') return fallback
   const port = Number(value)
@@ -79,15 +84,20 @@ export async function waitForRuntimeReady(
   if (typeof fetchImpl !== 'function') throw new Error('当前 Node.js 运行时不支持 fetch')
   const deadline = Date.now() + timeoutMs
   let lastError
+  let attempts = 0
 
   while (!signal?.aborted && Date.now() < deadline) {
+    attempts += 1
     try {
       const remainingMs = Math.max(1, deadline - Date.now())
       const requestTimeout = AbortSignal.timeout(Math.min(5_000, remainingMs))
       const response = await fetchImpl(url, {
         signal: signal ? AbortSignal.any([signal, requestTimeout]) : requestTimeout,
       })
-      if (response.ok) return
+      if (response.ok) {
+        devLog(`Runtime 就绪探测成功（第 ${attempts} 次，耗时 ${timeoutMs - Math.max(0, deadline - Date.now())}ms）`)
+        return
+      }
       lastError = new Error(`HTTP ${response.status}`)
     } catch (error) {
       lastError = error
@@ -98,6 +108,7 @@ export async function waitForRuntimeReady(
 
   if (signal?.aborted) throw new Error('开发 Runtime 就绪等待已取消')
   const detail = lastError instanceof Error ? `：${lastError.message}` : ''
+  devLog(`Runtime 就绪探测超时（${attempts} 次，最后错误${detail || '未知'}）`)
   throw new Error(`开发 Runtime 在 ${timeoutMs}ms 内未就绪${detail}`)
 }
 
@@ -153,6 +164,8 @@ function stopChild(child) {
 }
 
 export async function runDevRuntime() {
+  const startedAt = Date.now()
+  devLog('启动流程开始')
   const currentFile = fileURLToPath(import.meta.url)
   const repoRoot = resolve(dirname(currentFile), '..')
   const startPort = parseDevPort(process.env.AGENT_LENS_DEV_PORT)
@@ -173,6 +186,7 @@ export async function runDevRuntime() {
   console.info(`[AgentLens] Vite /api 代理：http://127.0.0.1:${port}`)
 
   const daemon = startWorkspaceDev(repoRoot, devEnv, '@agent-lens/daemon')
+  devLog(`Daemon 子进程已创建（pid=${daemon.pid ?? 'unknown'}）`)
   const children = [daemon]
   const startupController = new AbortController()
   let shuttingDown = false
@@ -209,7 +223,7 @@ export async function runDevRuntime() {
   monitorChild(daemon, 'Daemon')
 
   try {
-    await waitForRuntimeReady(`http://127.0.0.1:${port}/api/v1/health`, {
+    await waitForRuntimeReady(`http://127.0.0.1:${port}/api/v1/ready`, {
       signal: startupController.signal,
     })
   } catch (error) {
@@ -220,6 +234,7 @@ export async function runDevRuntime() {
 
   console.info('[AgentLens] Runtime API 已就绪，正在启动 Vite')
   const web = startWorkspaceDev(repoRoot, devEnv, '@agent-lens/web')
+  devLog(`Vite 子进程已创建（pid=${web.pid ?? 'unknown'}，Runtime 就绪耗时 ${Date.now() - startedAt}ms）`)
   children.push(web)
   monitorChild(web, 'Web')
 

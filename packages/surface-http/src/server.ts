@@ -613,6 +613,19 @@ export async function startHttpSurface(
         writeJson(response, 405, { error: 'method_not_allowed' })
         return
       }
+      if (url.pathname === '/api/v1/ready') {
+        writeJson(response, 200, {
+          status: 'ok',
+          protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
+          runtime: {
+            owner: currentRuntimeOwner(),
+            mode: currentRuntimeMode(),
+            pid: process.pid,
+            startedAt: RUNTIME_STARTED_AT,
+          },
+        })
+        return
+      }
       if (url.pathname === '/api/v1/events') {
         if (!options.eventHub) {
           writeJson(response, 503, { error: 'events_unavailable' })

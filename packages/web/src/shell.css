@@ -462,9 +462,12 @@
 .page-content {
   width: 100%;
   max-width: 1500px;
+  min-height: 0;
+  flex: 1;
   margin: 0 auto;
   padding: 28px 28px 56px;
   overflow: auto;
+  scrollbar-gutter: stable;
 }
 
 .compact-page-heading,

@@ -71,24 +71,6 @@
   grid-template-rows: auto minmax(0, 1fr) auto;
   background: var(--al-surface);
 }
-/*
- * 只有生命周期/用量等后台事实时，按 Task Detail 的连续文档节奏收口：
- * Reader 只占内容实际需要的高度，Composer 紧随其后，剩余空间留在页面底部。
- * 一旦出现消息 / Thinking / Tool / Streaming Tail，立即恢复固定底部 Composer，
- * 保证真实对话和流式生成期间输入区位置稳定。
- */
-.pi-live-workspace:not(:has(.task-message-row, .task-thinking, .task-tool-group, .pi-live-stream-response)) {
-  display: flex;
-  flex-direction: column;
-}
-.pi-live-workspace:not(:has(.task-message-row, .task-thinking, .task-tool-group, .pi-live-stream-response)) .pi-live-reader {
-  flex: 0 1 auto;
-}
-.pi-live-workspace:not(:has(.task-message-row, .task-thinking, .task-tool-group, .pi-live-stream-response)) .pi-live-compose-wrap {
-  flex: 0 0 auto;
-  padding-top: 0;
-  border-top: 0;
-}
 .pi-live-disconnected { color: var(--al-warning); }
 .pi-live-stop:disabled { cursor: default; opacity: .45; }
 .pi-live-menu { display: grid; width: 30px; height: 30px; place-items: center; padding: 0; font-size: 18px; line-height: 1; }

@@ -5,11 +5,11 @@ import { toPiLiveWireEvent } from './sdk-event'
 import {
   findPiExecutable,
   loadInstalledPiSdk,
-  resolveInstalledPiSdk,
   type PiSdkLoader,
   type PiSdkModel,
   type PiSdkSession,
   type PiSdkThinkingLevel,
+  type InstalledPiSdk,
 } from './sdk-loader'
 import type {
   PiLiveAvailability,
@@ -52,23 +52,27 @@ function modelOption(model: PiSdkModel): PiLiveModelOption {
 
 export class DefaultPiLiveService implements PiLiveService {
   private readonly runtimes = new Map<string, OwnedRuntime>()
+  private availabilityPromise: Promise<PiLiveAvailability> | null = null
+  private installedSdkPromise: Promise<InstalledPiSdk> | null = null
   private disposed = false
 
   constructor(private readonly loadSdk: PiSdkLoader = loadInstalledPiSdk) {}
 
   async availability(): Promise<PiLiveAvailability> {
-    const executable = await findPiExecutable()
-    if (!executable) return { available: false, reason: 'Pi executable was not found in PATH or PI_BIN' }
+    if (this.availabilityPromise) return this.availabilityPromise
+    this.availabilityPromise = this.resolveAvailability().catch(error => {
+      this.availabilityPromise = null
+      throw error
+    })
+    return this.availabilityPromise
+  }
+
+  private async resolveAvailability(): Promise<PiLiveAvailability> {
     try {
-      const sdk = await resolveInstalledPiSdk(executable)
-      return sdk
-        ? { available: true, executable }
-        : {
-            available: false,
-            executable,
-            reason: 'Pi was found, but its official @earendil-works/pi-coding-agent SDK could not be located',
-          }
+      const sdk = await this.getInstalledSdk()
+      return { available: true, executable: sdk.executable }
     } catch (error) {
+      const executable = await findPiExecutable().catch(() => undefined)
       return {
         available: false,
         executable,
@@ -77,21 +81,41 @@ export class DefaultPiLiveService implements PiLiveService {
     }
   }
 
+  /** Warm the official SDK after Runtime startup so opening Pi stays interactive. */
+  async preload(): Promise<void> {
+    await this.getInstalledSdk()
+  }
+
+  private getInstalledSdk(): Promise<InstalledPiSdk> {
+    if (!this.installedSdkPromise) {
+      this.installedSdkPromise = this.loadSdk().catch(error => {
+        this.installedSdkPromise = null
+        throw error
+      })
+    }
+    return this.installedSdkPromise
+  }
+
   async list(): Promise<PiLiveRuntimeState[]> {
     const states = await Promise.allSettled([...this.runtimes.keys()].map(id => this.state(id)))
     return states.flatMap(result => result.status === 'fulfilled' ? [result.value] : [])
   }
 
   async start(input: PiLiveStartInput): Promise<PiLiveRuntimeState> {
+    const startedAt = Date.now()
     if (this.disposed) throw new Error('Pi Live service is disposed')
     if (!input.cwd) throw new Error('Pi Live requires a working directory')
 
-    const installed = await this.loadSdk(input.executable)
+    const installed = input.executable
+      ? await this.loadSdk(input.executable)
+      : await this.getInstalledSdk()
+    this.devLog(`SDK 就绪（${Date.now() - startedAt}ms）`)
     const sdk = installed.module
     const sessionManager = input.sessionPath
       ? sdk.SessionManager.open(input.sessionPath, input.sessionDir, input.cwd)
       : sdk.SessionManager.create(input.cwd, input.sessionDir)
     const created = await sdk.createAgentSession({ cwd: input.cwd, sessionManager })
+    this.devLog(`AgentSession 创建完成（${Date.now() - startedAt}ms）`)
     assertPiSdkSession(created.session, installed.sdkEntry, installed.version)
     const session = created.session
     const runtimeSessionId = randomUUID()
@@ -129,6 +153,7 @@ export class DefaultPiLiveService implements PiLiveService {
           })
         },
       })
+      this.devLog(`扩展绑定完成（${Date.now() - startedAt}ms）`)
       if (input.name) session.setSessionName(input.name)
       if (input.provider || input.model) {
         await this.selectInitialModel(session, input.provider, input.model)
@@ -140,6 +165,12 @@ export class DefaultPiLiveService implements PiLiveService {
       extensionUi.dispose()
       session.dispose()
       throw error
+    }
+  }
+
+  private devLog(message: string): void {
+    if (process.env.AGENT_LENS_DEV_API_PORT) {
+      console.info(`[AgentLens][dev][pi] ${message}`)
     }
   }
 

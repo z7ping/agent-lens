@@ -55,7 +55,7 @@
   overflow: hidden;
   background: var(--al-canvas);
 }
-.review-reader-pane { min-width: 0; min-height: 0; overflow: auto; background: var(--al-surface); }
+.review-reader-pane { min-width: 0; min-height: 0; overflow: auto; scrollbar-gutter: stable; background: var(--al-surface); }
 .review-reader { width: 100%; max-width: var(--review-reader-max); margin: 0 auto; padding: 16px 28px 96px; }
 .review-flow { display: flex; flex-direction: column; gap: 0; padding-top: 6px; }
 .round-filter-empty { padding: 34px 12px; color: var(--al-muted); font-size: 13px; text-align: center; }
@@ -84,7 +84,7 @@
 .review-page:not(.review-page-embedded) .session-panel-head > div { display: flex; align-items: baseline; gap: 7px; }
 .review-page:not(.review-page-embedded) .session-panel-head b { color: var(--al-ink); font-size: 13px; font-weight: 700; }
 .review-page:not(.review-page-embedded) .session-panel-head span { color: var(--al-muted); font-size: 12px; }
-.review-page:not(.review-page-embedded) .session-scroll { min-height: 0; flex: 1; padding: 6px 7px 14px; overflow: auto; }
+.review-page:not(.review-page-embedded) .session-scroll { min-height: 0; flex: 1; padding: 6px 7px 14px; overflow: auto; scrollbar-gutter: stable; }
 .review-page:not(.review-page-embedded) .session-item {
   --session-source: var(--al-accent);
   display: block;

@@ -91,7 +91,7 @@ test('npmInvocation 可启动源码 Web workspace', () => {
 
 test('开发 Web 等待 Runtime Health 成功后再继续启动', async () => {
   let attempts = 0
-  await waitForRuntimeReady('http://127.0.0.1:56800/api/v1/health', {
+  await waitForRuntimeReady('http://127.0.0.1:56800/api/v1/ready', {
     intervalMs: 0,
     timeoutMs: 1_000,
     async fetchImpl() {
@@ -106,7 +106,7 @@ test('开发 Web 等待 Runtime Health 成功后再继续启动', async () => {
 
 test('Runtime Health 持续失败时给出明确超时', async () => {
   await assert.rejects(
-    waitForRuntimeReady('http://127.0.0.1:56800/api/v1/health', {
+    waitForRuntimeReady('http://127.0.0.1:56800/api/v1/ready', {
       intervalMs: 0,
       timeoutMs: 10,
       async fetchImpl() { throw new Error('ECONNREFUSED') },
