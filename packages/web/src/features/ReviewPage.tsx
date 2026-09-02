@@ -899,6 +899,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
   const readerPositionsRef = useRef(new Map<string, ReviewReaderPosition>())
   const pendingReaderAnchorRef = useRef<{ position: ReviewReaderPosition; userRevision: number } | null>(null)
   const readerUserRevisionRef = useRef(0)
+  const detailAutoLoadBaselineRef = useRef(0)
   const followingTailRef = useRef(false)
   const roundExpansionRef = useRef(new Map<string, boolean>())
   const review = snapshot.review
@@ -956,6 +957,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
     setShowAllEvents(false)
     setInspect(null)
     followingTailRef.current = false
+    detailAutoLoadBaselineRef.current = readerUserRevisionRef.current
   }, [detail?.id])
   useEffect(() => {
     if (detail?.page.filter) setRoundFilter(detail.page.filter)
@@ -1057,6 +1059,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
     const root = sentinel.closest('.review-reader-pane')
     const observer = new IntersectionObserver(entries => {
       if (!entries.some(entry => entry.isIntersecting)) return
+      if (readerUserRevisionRef.current <= detailAutoLoadBaselineRef.current) return
       void loadFollowing()
     }, { root, rootMargin: '800px 0px' })
     observer.observe(sentinel)
@@ -1070,18 +1073,41 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
     void model.selectReviewSession(id)
     navigate(`/review/${encodeURIComponent(id)}`)
   }
-  const scrollTop = () => window.requestAnimationFrame(() => { if (readerPaneRef.current) readerPaneRef.current.scrollTop = 0 })
-  const scrollBottom = () => window.requestAnimationFrame(() => {
+  const scrollToBoundary = (boundary: 'top' | 'bottom') => {
     const pane = readerPaneRef.current
     if (!pane) return
-    pane.scrollTop = pane.scrollHeight
-    followingTailRef.current = true
-    model.acknowledgeReviewNewData()
-  })
+    pane.style.setProperty('overflow-anchor', 'none')
+    const apply = () => { pane.scrollTop = boundary === 'top' ? 0 : pane.scrollHeight }
+    let remainingFrames = 30
+    let stableFrames = 0
+    let previousHeight = -1
+    const settle = () => {
+      apply()
+      const height = pane.scrollHeight
+      stableFrames = height === previousHeight ? stableFrames + 1 : 0
+      previousHeight = height
+      remainingFrames -= 1
+      if (stableFrames >= 3 || remainingFrames <= 0) {
+        pane.style.removeProperty('overflow-anchor')
+        return
+      }
+      window.requestAnimationFrame(settle)
+    }
+    apply()
+    window.requestAnimationFrame(settle)
+    if (boundary === 'bottom') {
+      followingTailRef.current = true
+      model.acknowledgeReviewNewData()
+    }
+  }
+  const scrollTop = () => scrollToBoundary('top')
+  const scrollBottom = () => scrollToBoundary('bottom')
 
   const selectRoundFilter = async (filter: RoundFilter) => {
     if (!detail || roundFilterLoading) return
     const selectedId = detail.id
+    pendingReaderAnchorRef.current = null
+    detailAutoLoadBaselineRef.current = readerUserRevisionRef.current
     setRoundFilterLoading(true)
     try {
       if (filter === 'all') {
@@ -1105,6 +1131,8 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
   const jumpToLatest = async () => {
     if (!detail || roundFilterLoading) return
     const selectedId = detail.id
+    pendingReaderAnchorRef.current = null
+    detailAutoLoadBaselineRef.current = readerUserRevisionRef.current
     setRoundFilterLoading(true)
     try {
       await model.jumpToLatestReviewDetail()
@@ -1120,6 +1148,8 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
   const showFromStart = async () => {
     if (!detail || roundFilterLoading) return
     const selectedId = detail.id
+    pendingReaderAnchorRef.current = null
+    detailAutoLoadBaselineRef.current = readerUserRevisionRef.current
     setRoundFilterLoading(true)
     try {
       await model.showReviewFromStart()
@@ -1333,7 +1363,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
               <ReviewRoundAdapter
                 interaction={item.interaction}
                 round={item.round}
-                defaultExpanded
+                defaultExpanded={expandAllRounds}
                 expansionStore={roundExpansionRef.current}
                 forceExpanded={expandAllRounds}
                 forceRevision={roundExpansionRevision}

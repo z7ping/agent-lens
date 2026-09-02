@@ -31,6 +31,15 @@ test('Task Review 滚到顶部不会自动加载更早轮次并抢走滚动位�
   assert.match(reviewPage, /加载更早轮次/)
 })
 
+test('Task Review 大范围跳转后等待用户滚动再继续自动补载', () => {
+  assert.match(reviewPage, /detailAutoLoadBaselineRef/)
+  assert.match(reviewPage, /readerUserRevisionRef\.current <= detailAutoLoadBaselineRef\.current/)
+  assert.match(reviewPage, /pendingReaderAnchorRef\.current = null/)
+  assert.match(reviewPage, /overflow-anchor', 'none'/)
+  assert.match(reviewPage, /scrollToBoundary\('top'\)/)
+  assert.match(reviewPage, /scrollToBoundary\('bottom'\)/)
+})
+
 test('Task Review 用统一轮次锚点保护补载与大范围视图切换', () => {
   assert.match(reviewPage, /function restoreReviewReaderPosition/)
   assert.match(reviewPage, /pendingReaderAnchorRef/)

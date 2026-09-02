@@ -46,6 +46,13 @@ test('Round 保持轻量摘要结构并默认展开', () => {
   assert.match(html, /4 调用/)
 })
 
+test('Round 折叠时不挂载轮次正文', () => {
+  const html = renderToStaticMarkup(createElement(TaskRound, { model: round, defaultExpanded: false, children: 'content' }))
+  assert.doesNotMatch(html, /<details[^>]*open=""/)
+  assert.doesNotMatch(html, /task-round-flow/)
+  assert.doesNotMatch(html, />content</)
+})
+
 test('用户保留右侧气泡，Agent 无头像且不恢复历史视觉别名', () => {
   const user = renderToStaticMarkup(createElement(TaskMessage, { role: 'user', text: '用户消息', collapsible: false }))
   const assistant = renderToStaticMarkup(createElement(TaskMessage, { role: 'assistant', text: '智能体回复', collapsible: false }))

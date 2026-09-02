@@ -72,6 +72,6 @@ export function TaskRound({
         {summaryMeta}
       </span>
     </summary>
-    <div className="task-round-flow">{children}</div>
+    {expanded && <div className="task-round-flow">{children}</div>}
   </details>
 }
