@@ -476,12 +476,18 @@ export class AgentLensClientModel {
 
   private async executeReviewRefresh(generation: number, preserveDetail: boolean): Promise<void> {
     const current = this.snapshot.review
-    this.publish({
-      ...this.snapshot,
-      review: { ...current, loading: true, loadingMore: false, error: '' },
-    })
+    const backgroundRefresh = preserveDetail && current.response !== null
+    if (!backgroundRefresh) {
+      this.publish({
+        ...this.snapshot,
+        review: { ...current, loading: true, loadingMore: false, error: '' },
+      })
+    }
     try {
-      const response = await this.api.review(current.filters, INITIAL_REVIEW_LIMIT)
+      const refreshLimit = backgroundRefresh
+        ? Math.max(INITIAL_REVIEW_LIMIT, current.limit, current.response?.items.length ?? 0)
+        : INITIAL_REVIEW_LIMIT
+      const response = await this.api.review(current.filters, refreshLimit)
       if (generation !== this.reviewGeneration) return
       let selectedId = this.snapshot.review.selectedId
       if (!selectedId || !response.items.some(item => item.id === selectedId)) selectedId = response.items[0]?.id ?? ''
@@ -491,7 +497,7 @@ export class AgentLensClientModel {
           ...this.snapshot.review,
           response,
           selectedId,
-          limit: INITIAL_REVIEW_LIMIT,
+          limit: refreshLimit,
           loading: false,
           loadingMore: false,
           error: '',
@@ -505,7 +511,7 @@ export class AgentLensClientModel {
           review: { ...this.snapshot.review, detail: null, relationships: null },
         })
       }
-      await this.expandInitialReview(generation, response)
+      if (!backgroundRefresh) await this.expandInitialReview(generation, response)
     } catch (error) {
       if (generation !== this.reviewGeneration) return
       this.publish({

@@ -88,3 +88,43 @@ test('review 首屏先展示 1 个会话和最新 3 个轮次，再补载到 10 
   assert.equal(model.getSnapshot().review.response?.items.length, 10)
   assert.equal(model.getSnapshot().review.selectedId, 'session-1')
 })
+
+test('review 后台刷新保持已加载窗口且不重新进入首屏 loading', async () => {
+  const reviewLimits: number[] = []
+
+  class BackgroundRefreshApi extends AgentLensApi {
+    override review(_filters: ReviewFilters, limit = 40): Promise<ReviewResponseDto> {
+      reviewLimits.push(limit)
+      return Promise.resolve(response(limit === 1 ? 1 : 10))
+    }
+
+    override reviewDetail(): Promise<ReviewSessionDetailDto> {
+      return Promise.resolve({
+        ...summary(1),
+        interactions: [],
+        page: { count: 0, hasMore: false, direction: 'backward', filter: 'all' },
+      })
+    }
+
+    override relationships(): Promise<SessionRelationshipResponseDto> {
+      return Promise.resolve({
+        items: [],
+        meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION, generatedAt: '2026-09-01T00:00:00.000Z' },
+      })
+    }
+  }
+
+  const model = new AgentLensClientModel(new BackgroundRefreshApi())
+  await model.refreshReview()
+  const loadingStates: boolean[] = []
+  const unsubscribe = model.subscribe(() => loadingStates.push(model.getSnapshot().review.loading))
+
+  await model.refreshReview({ preserveDetail: true })
+  await Promise.resolve()
+  unsubscribe()
+
+  assert.deepEqual(reviewLimits, [1, 10, 10])
+  assert.equal(model.getSnapshot().review.response?.items.length, 10)
+  assert.equal(model.getSnapshot().review.loading, false)
+  assert.equal(loadingStates.includes(true), false)
+})
