@@ -119,29 +119,29 @@
 }
 .detail-load-sentinel button:hover { border-color: var(--al-line-strong); background: var(--al-soft); }
 
-/* Turn Rail：一个轮次对应一条横线，整组在阅读区纵向居中。 */
+/* Turn Rail：贴近 ChatGPT 的轻量轮次刻度；完整索引不承担正文布局。 */
 .turn-rail {
   z-index: 18;
   display: flex;
-  width: 30px;
-  max-height: calc(100vh - 150px);
+  width: 24px;
+  max-height: calc(100vh - 128px);
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  padding: 2px 0;
+  gap: 1px;
+  padding: 6px 0;
   transform: translateY(-50%);
-  opacity: .76;
+  opacity: .62;
   pointer-events: none;
-  transition: opacity .18s ease;
+  transition: opacity .16s ease;
 }
 .turn-rail:hover { opacity: 1; }
 .turn-rail::before { display: none; content: none; }
 .turn-tick {
   position: relative;
   display: grid;
-  width: 30px;
-  height: 9px;
+  width: 24px;
+  height: 7px;
   place-items: center;
   padding: 0;
   border: 0;
@@ -151,38 +151,38 @@
 }
 .turn-tick i {
   display: block;
-  width: 13px;
-  height: 2px;
+  width: 8px;
+  height: 1.5px;
   border-radius: 99px;
-  background: var(--al-line-strong);
-  transition: width .2s cubic-bezier(.2,.8,.2,1), height .2s ease, background .2s ease, box-shadow .2s ease;
+  background: color-mix(in srgb, var(--al-muted) 58%, transparent);
+  transition: width .16s cubic-bezier(.2,.8,.2,1), height .16s ease, background .16s ease;
 }
-.turn-tick:hover i { width: 21px; background: color-mix(in srgb, var(--al-accent) 42%, var(--al-line-strong)); }
-.turn-tick.active i { width: 25px; height: 3px; background: var(--al-accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--al-accent-soft) 50%, transparent); }
+.turn-tick:hover i { width: 14px; height: 2px; background: var(--al-ink-2); }
+.turn-tick.active i { width: 18px; height: 2px; background: var(--al-ink); }
 .turn-tick.err i { background: color-mix(in srgb, var(--al-danger) 55%, var(--al-line)); }
 .turn-tick.err.active i { background: var(--al-danger); }
 .turn-tick::after {
   content: attr(data-tip);
   position: absolute;
   top: 50%;
-  left: calc(100% + 8px);
+  left: calc(100% + 6px);
   z-index: 90;
   width: max-content;
-  max-width: 320px;
-  padding: 7px 10px;
+  max-width: 300px;
+  padding: 6px 9px;
   transform: translateY(-50%);
   border: 1px solid var(--al-line);
-  border-radius: 8px;
-  background: var(--al-surface-raised);
-  box-shadow: var(--al-shadow-lg);
-  color: var(--al-ink-2);
+  border-radius: 7px;
+  background: var(--al-ink);
+  box-shadow: 0 6px 20px rgb(0 0 0 / .18);
+  color: var(--al-surface);
   font-size: 12px;
   line-height: 1.5;
   text-align: left;
   white-space: normal;
   opacity: 0;
   pointer-events: none;
-  transition: opacity .14s;
+  transition: opacity .1s ease;
 }
 .turn-tick:hover::after,
 .turn-tick:focus-visible::after { opacity: 1; }
