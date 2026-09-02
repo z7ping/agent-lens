@@ -162,7 +162,7 @@ function sanitizeValue(
 }
 
 function observationScopes(kind: ObservationKind): CapturePolicyScope[] {
-  if (kind === 'message.user' || kind === 'message.assistant' || kind === 'message.reasoning' || kind === 'context.summary') {
+  if (kind === 'message.user' || kind === 'message.assistant' || kind === 'message.commentary' || kind === 'message.reasoning' || kind === 'context.summary') {
     return ['prompt']
   }
   if (kind === 'tool.call' || kind === 'tool.progress' || kind === 'tool.result'

@@ -7,6 +7,7 @@ export const TIMELINE_OBSERVATION_KINDS = [
   'session.lifecycle',
   'message.user',
   'message.assistant',
+  'message.commentary',
   'message.reasoning',
   'model.call',
   'model.changed',

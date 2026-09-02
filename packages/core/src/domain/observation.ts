@@ -73,6 +73,7 @@ export type ObservationKind =
   | 'session.lifecycle'
   | 'message.user'
   | 'message.assistant'
+  | 'message.commentary'
   | 'message.reasoning'
   | 'model.call'
   | 'model.changed'

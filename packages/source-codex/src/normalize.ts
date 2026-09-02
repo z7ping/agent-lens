@@ -394,7 +394,12 @@ export async function normalizeCodexRecord(
     if (injected || (role !== 'user' && role !== 'assistant')) {
       push(unknownCandidate(record, envelope, entry as JsonValue))
     } else {
-      push(candidate(record, envelope, role === 'user' ? 'message.user' : 'message.assistant', {
+      const kind = role === 'user'
+        ? 'message.user'
+        : phase === 'commentary'
+          ? 'message.commentary'
+          : 'message.assistant'
+      push(candidate(record, envelope, kind, {
         text,
         ...(phase ? { phase } : {}),
         ...(payload.content === undefined ? {} : { content: payload.content }),

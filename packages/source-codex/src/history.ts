@@ -36,7 +36,7 @@ interface CodexThreadName {
 }
 
 const CHECKPOINT_BATCH_SIZE = 100
-const PARSER_VERSION = '6'
+export const CODEX_PARSER_VERSION = '8'
 
 function sha256(value: string | Buffer): string {
   return createHash('sha256').update(value).digest('hex')
@@ -249,7 +249,7 @@ function sourceRecordForLine(
     },
     fingerprint,
     payload: envelope,
-    parserVersion: PARSER_VERSION,
+    parserVersion: CODEX_PARSER_VERSION,
   }
 }
 
@@ -293,7 +293,7 @@ function metadataRecord(
       entry: { type: kind, payload },
       session,
     } satisfies CodexStoredEnvelope,
-    parserVersion: PARSER_VERSION,
+    parserVersion: CODEX_PARSER_VERSION,
   }
 }
 
@@ -335,7 +335,7 @@ export async function* ingestCodexHistory(ctx: SourceHistoryExecutionContext): A
     // Parser v4 changes the persisted SourceRecord contract: native JSON is no longer
     // field-pruned inside the Codex adapter. Replay the already-consumed prefix once so
     // deterministic SourceRecord ids are upserted with the safe, complete native payload.
-    if (previous && previous.parserVersion !== PARSER_VERSION) {
+    if (previous && previous.parserVersion !== CODEX_PARSER_VERSION) {
       let legacySequence = 0
       for await (const line of readJsonlLines(filePath, 0, previous.offset)) {
         if (ctx.abortSignal.aborted) return
@@ -343,7 +343,7 @@ export async function* ingestCodexHistory(ctx: SourceHistoryExecutionContext): A
         if (!line.text.trim()) continue
         yield sourceRecordForLine(ctx, filePath, session, line, legacySequence)
       }
-      await ctx.checkpoint.set(key, { ...previous, parserVersion: PARSER_VERSION })
+      await ctx.checkpoint.set(key, { ...previous, parserVersion: CODEX_PARSER_VERSION })
     }
 
     const unchanged = previous
@@ -365,7 +365,7 @@ export async function* ingestCodexHistory(ctx: SourceHistoryExecutionContext): A
         sequence,
         size: fileStat.size,
         mtimeMs: fileStat.mtimeMs,
-        parserVersion: PARSER_VERSION,
+        parserVersion: CODEX_PARSER_VERSION,
       })
       pendingCheckpointLines = 0
     }

@@ -10,7 +10,7 @@ import {
 } from '@agent-lens/runtime-cordis'
 import { discoverCodexAssets } from './assets'
 import { detectCodex } from './detect'
-import { ingestCodexHistory } from './history'
+import { CODEX_PARSER_VERSION, ingestCodexHistory } from './history'
 import { normalizeCodexRecord } from './normalize'
 import { startCodexRuntimeCapture } from './runtime'
 
@@ -22,7 +22,7 @@ export const codexManifest: SourcePluginManifest = {
   displayName: 'Codex Source',
   sourceId: 'codex',
   productId: 'codex',
-  parserVersion: '7',
+  parserVersion: CODEX_PARSER_VERSION,
 }
 
 export async function declareCodexCapabilities(

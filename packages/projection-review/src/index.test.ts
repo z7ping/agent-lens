@@ -20,7 +20,7 @@ test('ReviewProjection builds task summaries and interaction tool status from ca
     })
 
     const add = async (
-      kind: 'message.user' | 'message.assistant' | 'tool.call' | 'tool.result',
+      kind: 'message.user' | 'message.assistant' | 'message.commentary' | 'tool.call' | 'tool.result',
       nativeEventId: string,
       at: string,
       payload: unknown,
@@ -49,7 +49,7 @@ test('ReviewProjection builds task summaries and interaction tool status from ca
     })
 
     const user = await add('message.user', 'user-1', '2026-08-21T01:00:00.000Z', { text: '修复登录问题' })
-    await add('message.assistant', 'assistant-1', '2026-08-21T01:00:01.000Z', { text: '开始检查', phase: 'commentary' })
+    await add('message.commentary', 'assistant-1', '2026-08-21T01:00:01.000Z', { text: '开始检查', phase: 'commentary' })
     await add('tool.call', 'call-1', '2026-08-21T01:00:02.000Z', {
       callId: 'tool-call-1', nativeToolName: 'bash', input: { command: 'npm test' },
     })

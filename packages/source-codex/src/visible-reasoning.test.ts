@@ -35,7 +35,7 @@ test('assistant commentary keeps its visible execution phase', async () => {
   }), ctx)
 
   const fact = output.observations[0]!
-  assert.equal(fact.kind, 'message.assistant')
+  assert.equal(fact.kind, 'message.commentary')
   assert.equal((fact.payload as any).text, '先检查实际启动链路。')
   assert.equal((fact.payload as any).phase, 'commentary')
 })
