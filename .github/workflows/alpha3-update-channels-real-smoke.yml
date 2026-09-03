@@ -1,0 +1,67 @@
+name: Alpha.3 Update Channels Real Smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/1.0.0-alpha.3-task-surface
+    paths:
+      - apps/desktop/src/update-check.mjs
+      - apps/desktop/src/update-check.test.mjs
+      - apps/desktop/src/update-integration-contract.test.mjs
+      - apps/desktop/src/integration.mjs
+      - apps/desktop/package.json
+      - apps/cli/src/update.ts
+      - apps/cli/src/update.test.ts
+      - apps/cli/src/update-lifecycle-contract.test.ts
+      - packages/web/src/client/update.ts
+      - packages/web/src/client/update.test.ts
+      - packages/web/src/components/ReleaseInfo.tsx
+      - scripts/acceptance/update-channels-real.ts
+      - scripts/check-release-info.mjs
+      - .github/workflows/alpha3-update-channels-real-smoke.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - apps/desktop/src/update-check.mjs
+      - apps/desktop/src/update-check.test.mjs
+      - apps/desktop/src/update-integration-contract.test.mjs
+      - apps/desktop/src/integration.mjs
+      - apps/desktop/package.json
+      - apps/cli/src/update.ts
+      - apps/cli/src/update.test.ts
+      - apps/cli/src/update-lifecycle-contract.test.ts
+      - packages/web/src/client/update.ts
+      - packages/web/src/client/update.test.ts
+      - packages/web/src/components/ReleaseInfo.tsx
+      - scripts/acceptance/update-channels-real.ts
+      - scripts/check-release-info.mjs
+      - .github/workflows/alpha3-update-channels-real-smoke.yml
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: 22.23.0
+
+jobs:
+  windows-update-channels:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify Desktop update integration
+        run: node --test apps/desktop/src/update-check.test.mjs apps/desktop/src/update-integration-contract.test.mjs
+      - name: Verify CLI and Web update contracts
+        run: npx tsx --test apps/cli/src/update.test.ts apps/cli/src/update-lifecycle-contract.test.ts packages/web/src/client/update.test.ts
+      - name: Verify release presentation contract
+        run: node scripts/check-release-info.mjs
+      - name: Verify real GitHub Release and npm channels
+        run: npx tsx scripts/acceptance/update-channels-real.ts

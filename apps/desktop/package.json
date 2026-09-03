@@ -8,7 +8,7 @@
   "author": "7ping <z7ping@outlook.com>",
   "scripts": {
     "start": "electron .",
-    "test": "node --test src/update-check.test.mjs src/login-autostart.test.mjs src/legacy-windows-migration.test.mjs",
+    "test": "node --test src/update-check.test.mjs src/update-integration-contract.test.mjs src/login-autostart.test.mjs src/legacy-windows-migration.test.mjs",
     "accept:task-center-desktop": "electron ../../scripts/acceptance/task-center-desktop.mjs",
     "accept:task-center:1h": "electron ../../scripts/acceptance/task-center-resource-soak.mjs --duration=3600000 --sample=60000",
     "accept:task-center:8h": "electron ../../scripts/acceptance/task-center-resource-soak.mjs --duration=28800000 --sample=60000",

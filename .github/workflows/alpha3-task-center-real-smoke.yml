@@ -61,7 +61,9 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
       - name: Verify acceptance harness
-        run: npm run check:alpha3-real-acceptance
+        run: |
+          npm run check:alpha3-real-acceptance
+          node --check scripts/acceptance/codex-semantics-real.mjs
       - name: Build distributable
         run: npm run build:dist
       - name: Prepare Windows Electron runtime
@@ -81,29 +83,44 @@ jobs:
           $env:AGENT_LENS_ACCEPTANCE_URL = "http://127.0.0.1:${{ env.ACCEPTANCE_PORT }}"
           $env:AGENT_LENS_ACCEPTANCE_PATH = '/review?range=all&status=all'
           $env:AGENT_LENS_ACCEPTANCE_OUTPUT = Join-Path $root 'acceptance'
+          $env:AGENT_LENS_ACCEPTANCE_LATEST_TITLE = 'Alpha3 原生标题 B'
+          $env:AGENT_LENS_ACCEPTANCE_OLDER_TITLE = 'Alpha3 原生标题 A'
           $env:CODEX_HOME = Join-Path $root 'codex-home'
           $env:ELECTRON_ENABLE_LOGGING = '1'
           Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
 
           # 使用项目自身 Codex Source + Canonical Observation + Review Projection 跑真实组件链路，
-          # 不在 Renderer 中注入假 DOM。两条确定性 session 同时让 100 次任务切换门禁真正执行。
-          # 显式把 Capture Policy 收敛到 Codex，避免默认仅启用 claude-code 导致 fixture 被策略层过滤。
+          # 不在 Renderer 中注入假 DOM。两条确定性 session 同时验证：旧时间语义、原生标题、
+          # memory citation 可见边界、具体 Tool 行、Inspector 与 100 次任务切换。
           $fixture = Get-Content -Raw -Path 'packages/source-codex/src/__fixtures__/codex-sample.jsonl'
+          $memoryLineA = '{"timestamp":"2026-07-02T05:51:33.000Z","type":"response_item","payload":{"type":"message","role":"assistant","phase":"final_answer","content":[{"type":"output_text","text":"最终可见回答\n<oai-mem-citation><citation_entries>mem-1</citation_entries><rollout_ids>rollout-1</rollout_ids></oai-mem-citation>"}]}}'
+          $fixtureA = $fixture.TrimEnd() + "`n" + $memoryLineA
           $sessionDirA = Join-Path $env:CODEX_HOME 'sessions/2026/07/02'
           $sessionDirB = Join-Path $env:CODEX_HOME 'sessions/2026/07/03'
           New-Item -ItemType Directory -Force -Path $sessionDirA, $sessionDirB | Out-Null
-          Set-Content -NoNewline -Encoding UTF8 -Path (Join-Path $sessionDirA 'rollout-alpha3-a.jsonl') -Value $fixture
-          $fixtureB = $fixture.Replace('codex-test-1', 'codex-test-2').Replace('2026-07-02', '2026-07-03').Replace('turn-1', 'turn-2').Replace('call_c1', 'call_c2').Replace('npm test', 'npm run test -- --runInBand --reporter=verbose --long-alpha3-target').Replace('Exit code: 1', 'Exit code: 0').Replace('failed 1 test', 'passed 42 tests')
+          Set-Content -NoNewline -Encoding UTF8 -Path (Join-Path $sessionDirA 'rollout-alpha3-a.jsonl') -Value $fixtureA
+          $fixtureB = $fixtureA.Replace('codex-test-1', 'codex-test-2').Replace('2026-07-02', '2026-07-03').Replace('turn-1', 'turn-2').Replace('call_c1', 'call_c2').Replace('npm test', 'npm run test -- --runInBand --reporter=verbose --long-alpha3-target').Replace('Exit code: 1', 'Exit code: 0').Replace('failed 1 test', 'passed 42 tests').Replace('mem-1', 'mem-2').Replace('rollout-1', 'rollout-2')
           Set-Content -NoNewline -Encoding UTF8 -Path (Join-Path $sessionDirB 'rollout-alpha3-b.jsonl') -Value $fixtureB
+          $sessionIndex = @(
+            '{"id":"codex-test-1","thread_name":"Alpha3 原生标题 A","updated_at":"2026-07-02T06:00:00.000Z"}',
+            '{"id":"codex-test-2","thread_name":"Alpha3 原生标题 B","updated_at":"2026-07-03T06:00:00.000Z"}'
+          ) -join "`n"
+          New-Item -ItemType Directory -Force -Path $env:CODEX_HOME | Out-Null
+          Set-Content -NoNewline -Encoding UTF8 -Path (Join-Path $env:CODEX_HOME 'session_index.jsonl') -Value $sessionIndex
 
           $reportPath = Join-Path $env:AGENT_LENS_ACCEPTANCE_OUTPUT 'task-center-desktop-report.json'
           $bootstrapPath = Join-Path $env:AGENT_LENS_ACCEPTANCE_OUTPUT 'electron-bootstrap.txt'
+          $semanticReportPath = Join-Path $env:AGENT_LENS_ACCEPTANCE_OUTPUT 'codex-semantics-report.json'
+          $semanticBootstrapPath = Join-Path $env:AGENT_LENS_ACCEPTANCE_OUTPUT 'codex-semantics-bootstrap.txt'
           $electron = Join-Path $PWD 'apps/desktop/.electron-dist/electron-v43.4.0-win32-x64/electron.exe'
           $acceptanceApp = Join-Path $PWD 'scripts/acceptance/task-center-desktop-app'
+          $semanticApp = Join-Path $PWD 'scripts/acceptance/codex-semantics-desktop-app'
           if (-not (Test-Path $electron)) { throw "预下载 Electron 不存在：$electron" }
           if (-not (Test-Path (Join-Path $acceptanceApp 'package.json'))) { throw "验收 Electron app 不存在：$acceptanceApp" }
+          if (-not (Test-Path (Join-Path $semanticApp 'package.json'))) { throw "Codex 语义验收 Electron app 不存在：$semanticApp" }
           $daemon = Start-Process -FilePath node -ArgumentList 'dist/daemon.mjs' -PassThru -NoNewWindow
           $acceptance = $null
+          $semantics = $null
           try {
             $ready = $false
             for ($i = 0; $i -lt 120; $i++) {
@@ -119,23 +136,34 @@ jobs:
             for ($i = 0; $i -lt 120; $i++) {
               try {
                 $review = Invoke-RestMethod -Uri "$env:AGENT_LENS_ACCEPTANCE_URL/api/v1/review?limit=10" -TimeoutSec 2
-                if (@($review.items).Count -ge 2) {
+                $items = @($review.items)
+                if ($items.Count -ge 2 -and $items[0].title -eq 'Alpha3 原生标题 B' -and $items[1].title -eq 'Alpha3 原生标题 A') {
                   $reviewReady = $true
-                  Write-Host "Review fixture 已进入正式投影：$(@($review.items).Count) 条任务"
+                  Write-Host "Review fixture 已进入正式投影：$($items.Count) 条任务；原生标题和创建时间排序正确"
                   break
                 }
               } catch {}
               Start-Sleep -Milliseconds 250
             }
-            if (-not $reviewReady) { throw '确定性 Codex fixture 未在 30 秒内进入 Review Projection' }
+            if (-not $reviewReady) { throw '确定性 Codex fixture 未在 30 秒内按原生标题/真实时间进入 Review Projection' }
+            $items = @($review.items)
+            if ([DateTimeOffset]::Parse($items[0].startedAt) -ge [DateTimeOffset]::Parse('2026-08-01T00:00:00Z')) { throw "旧会话 B 被导入时间污染：$($items[0].startedAt)" }
+            if ([DateTimeOffset]::Parse($items[1].startedAt) -ge [DateTimeOffset]::Parse('2026-08-01T00:00:00Z')) { throw "旧会话 A 被导入时间污染：$($items[1].startedAt)" }
+            if ([DateTimeOffset]::Parse($items[0].startedAt) -le [DateTimeOffset]::Parse($items[1].startedAt)) { throw 'Review 列表没有按真实创建时间倒序' }
+
+            $page1 = Invoke-RestMethod -Uri "$env:AGENT_LENS_ACCEPTANCE_URL/api/v1/review?limit=1" -TimeoutSec 2
+            if (@($page1.items).Count -ne 1 -or -not $page1.meta.nextCursor) { throw 'Review cursor 第一页未返回单条结果与 nextCursor' }
+            $cursor = [Uri]::EscapeDataString([string]$page1.meta.nextCursor)
+            $page2 = Invoke-RestMethod -Uri "$env:AGENT_LENS_ACCEPTANCE_URL/api/v1/review?limit=1&cursor=$cursor" -TimeoutSec 2
+            if (@($page2.items).Count -ne 1) { throw 'Review cursor 第二页未返回单条结果' }
+            if ($page1.items[0].id -eq $page2.items[0].id) { throw 'Review cursor 分页出现重复会话' }
+            if ($page1.items[0].title -ne 'Alpha3 原生标题 B' -or $page2.items[0].title -ne 'Alpha3 原生标题 A') { throw 'Review cursor 分页顺序与列表排序不一致' }
 
             $acceptance = Start-Process -FilePath $electron -ArgumentList '.' -WorkingDirectory $acceptanceApp -PassThru -NoNewWindow
             for ($i = 0; $i -lt 40 -and -not $acceptance.HasExited -and -not (Test-Path $bootstrapPath); $i++) {
               Start-Sleep -Milliseconds 250
             }
-            if (-not (Test-Path $bootstrapPath)) {
-              throw 'Electron 已启动但 10 秒内未进入验收应用 main.cjs'
-            }
+            if (-not (Test-Path $bootstrapPath)) { throw 'Electron 已启动但 10 秒内未进入验收应用 main.cjs' }
             $exited = $acceptance.WaitForExit(70000)
             if (-not $exited) {
               Write-Host 'Electron 验收进程 70 秒内未自然退出，清理进程树并使用已落盘报告判定结果。'
@@ -145,7 +173,7 @@ jobs:
             $report = Get-Content -Raw -Path $reportPath | ConvertFrom-Json
             if (-not $report.ok) {
               $caseErrors = ($report.cases | ForEach-Object { $_.errors } | Where-Object { $_ }) -join '; '
-              $summary = @($report.error, $caseErrors) | Where-Object { $_ } | Select-Object -Unique
+              $summary = @($report.error, $caseErrors, $report.inspectorReturn.errors) | Where-Object { $_ } | Select-Object -Unique
               throw "桌面验收失败：$($summary -join '; ')"
             }
             if ($report.cases.Count -ne 4) { throw "桌面验收 case 数量异常：$($report.cases.Count) != 4" }
@@ -153,10 +181,25 @@ jobs:
             if ($report.switchStability.skipped) { throw "100 次任务切换不允许跳过：$($report.switchStability.reason)" }
             if ($report.switchStability.completedSwitches -ne 100) { throw "100 次任务切换未完整执行：$($report.switchStability.completedSwitches)" }
             Write-Host "桌面验收通过：$($report.cases.Count) 个 viewport/theme case；100 次任务切换已执行"
-          } finally {
-            if ($acceptance -and -not $acceptance.HasExited) {
-              & taskkill.exe /PID $acceptance.Id /T /F 2>$null | Out-Null
+
+            Remove-Item $semanticReportPath, $semanticBootstrapPath -Force -ErrorAction SilentlyContinue
+            $semantics = Start-Process -FilePath $electron -ArgumentList '.' -WorkingDirectory $semanticApp -PassThru -NoNewWindow
+            for ($i = 0; $i -lt 40 -and -not $semantics.HasExited -and -not (Test-Path $semanticBootstrapPath); $i++) {
+              Start-Sleep -Milliseconds 250
             }
+            if (-not (Test-Path $semanticBootstrapPath)) { throw 'Codex 语义 Electron 验收 10 秒内未进入 main.cjs' }
+            $semanticExited = $semantics.WaitForExit(30000)
+            if (-not $semanticExited) {
+              & taskkill.exe /PID $semantics.Id /T /F 2>$null | Out-Null
+              throw 'Codex 语义 Electron 验收 30 秒内未完成'
+            }
+            if (-not (Test-Path $semanticReportPath)) { throw 'Codex 语义验收未生成报告' }
+            $semanticReport = Get-Content -Raw -Path $semanticReportPath | ConvertFrom-Json
+            if (-not $semanticReport.ok) { throw "Codex 语义验收失败：$(@($semanticReport.errors) -join '; ')" }
+            Write-Host 'Codex 语义验收通过：旧时间、原生标题、machine metadata、Tool / Inspector 均正确'
+          } finally {
+            if ($acceptance -and -not $acceptance.HasExited) { & taskkill.exe /PID $acceptance.Id /T /F 2>$null | Out-Null }
+            if ($semantics -and -not $semantics.HasExited) { & taskkill.exe /PID $semantics.Id /T /F 2>$null | Out-Null }
             if ($daemon -and -not $daemon.HasExited) { Stop-Process -Id $daemon.Id -Force }
           }
       - name: Upload viewport evidence

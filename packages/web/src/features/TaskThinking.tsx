@@ -16,6 +16,13 @@ function DisclosureChevron() {
   </span>
 }
 
+function initiallyExpanded(model: TaskThinkingModel, defaultExpanded: boolean) {
+  // 聚合“思考过程”承载 commentary/reasoning 与具体工具调用。
+  // 默认展开保证 Task Center 首屏不会把工具事实藏在第二层 disclosure 中；
+  // 独立 Thinking / reasoning 仍尊重调用方的默认折叠设置。
+  return defaultExpanded || model.label === '思考过程'
+}
+
 export function TaskThinking({
   model,
   meta,
@@ -24,11 +31,11 @@ export function TaskThinking({
   defaultExpanded = true,
   className = '',
 }: TaskThinkingProps) {
-  const [expanded, setExpanded] = useState(defaultExpanded)
+  const [expanded, setExpanded] = useState(() => initiallyExpanded(model, defaultExpanded))
 
   useEffect(() => {
-    setExpanded(defaultExpanded)
-  }, [defaultExpanded, model.id])
+    setExpanded(initiallyExpanded(model, defaultExpanded))
+  }, [defaultExpanded, model.id, model.label])
 
   return <details
     className={`task-thinking ${className}`.trim()}
