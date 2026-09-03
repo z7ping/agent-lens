@@ -59,7 +59,7 @@ function detailPage(start: number, direction: 'forward' | 'backward', hasMore = 
       const item = interaction(index + 1)
       return { ...item, hasError: false }
     }),
-    page: { count: 10, hasMore, nextCursor: hasMore ? `cursor-${start}` : undefined, direction, filter: 'all' },
+    page: { count: 10, hasMore, ...(hasMore ? { nextCursor: `cursor-${start}` } : {}), direction, filter: 'all' },
   }
 }
 
