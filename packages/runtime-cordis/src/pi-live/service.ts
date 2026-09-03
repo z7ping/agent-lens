@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { findPiExecutable, type PiSdkLoader } from './sdk-loader'
 import { InProcessPiRuntimeHost } from './in-process-host'
 import { WorkerPiRuntimeHost, type PiRuntimeHandle, type PiRuntimeHost } from './worker-host'
-import type { PiLiveAvailability, PiLiveControls, PiLiveInitializationStage, PiLiveQueueState, PiLiveRuntimeEvent, PiLiveRuntimeListener, PiLiveRuntimeState, PiLiveService, PiLiveSnapshot, PiLiveStartInput, PiLiveStreamingBehavior } from './types'
+import type { PiLiveAvailability, PiLiveControls, PiLiveInitializationStage, PiLiveInitializationTiming, PiLiveQueueState, PiLiveRuntimeCapabilities, PiLiveRuntimeEvent, PiLiveRuntimeListener, PiLiveRuntimeState, PiLiveService, PiLiveSnapshot, PiLiveStartInput, PiLiveStreamingBehavior } from './types'
 
 interface OwnedRuntime {
   id: string
@@ -16,6 +16,11 @@ interface OwnedRuntime {
   sequence: number
   generation: number
   initialization: AbortController
+  initializationStartedAt: number
+  stageStartedAt: number
+  initializationElapsedMs: number
+  initializationTimings: PiLiveInitializationTiming[]
+  capabilities?: PiLiveRuntimeCapabilities | undefined
 }
 
 function safeError(error: unknown): string {
@@ -23,6 +28,28 @@ function safeError(error: unknown): string {
     .replace(/(?:api[_-]?key|token|authorization|password)\s*[:=]\s*\S+/gi, '[redacted]')
     .replace(/[\r\n]+/g, ' ')
     .slice(0, 2_000)
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function formatElapsed(elapsedMs: number): string {
+  return elapsedMs < 1_000 ? `${elapsedMs}ms` : `${(elapsedMs / 1_000).toFixed(1)}s`
+}
+
+function runtimeCapabilities(value: unknown): PiLiveRuntimeCapabilities | undefined {
+  const capabilities = record(value)
+  if (typeof capabilities.protocolVersion !== 'number') return undefined
+  if (typeof capabilities.sessionRuntime !== 'boolean' || typeof capabilities.modelSwitching !== 'boolean' || typeof capabilities.thinkingLevelControl !== 'boolean' || typeof capabilities.extensionUi !== 'boolean') return undefined
+  return {
+    protocolVersion: capabilities.protocolVersion,
+    ...(typeof capabilities.sdkVersion === 'string' ? { sdkVersion: capabilities.sdkVersion.slice(0, 80) } : {}),
+    sessionRuntime: capabilities.sessionRuntime,
+    modelSwitching: capabilities.modelSwitching,
+    thinkingLevelControl: capabilities.thinkingLevelControl,
+    extensionUi: capabilities.extensionUi,
+  }
 }
 
 export class DefaultPiLiveService implements PiLiveService {
@@ -53,7 +80,22 @@ export class DefaultPiLiveService implements PiLiveService {
     if (this.disposed) throw new Error('Pi Live service is disposed')
     if (!input.cwd.trim()) throw new Error('Pi Live requires a working directory')
     const id = randomUUID()
-    const runtime: OwnedRuntime = { id, input, status: 'initializing', stage: 'starting_worker', message: '正在启动独立 Pi Runtime Worker', listeners: new Set(), sequence: 0, generation: 1, initialization: new AbortController() }
+    const now = Date.now()
+    const runtime: OwnedRuntime = {
+      id,
+      input,
+      status: 'initializing',
+      stage: 'starting_worker',
+      message: '正在启动独立 Pi Runtime Worker',
+      listeners: new Set(),
+      sequence: 0,
+      generation: 1,
+      initialization: new AbortController(),
+      initializationStartedAt: now,
+      stageStartedAt: now,
+      initializationElapsedMs: 0,
+      initializationTimings: [],
+    }
     this.runtimes.set(id, runtime)
     void this.initialize(runtime, runtime.generation)
     return this.runtimeState(runtime)
@@ -62,15 +104,33 @@ export class DefaultPiLiveService implements PiLiveService {
   async retry(runtimeSessionId: string): Promise<PiLiveRuntimeState> {
     const runtime = this.requireRuntime(runtimeSessionId)
     if (runtime.status !== 'failed') throw this.conflict('Pi Live runtime can only retry after initialization failed')
+    const now = Date.now()
     runtime.generation += 1
     runtime.initialization = new AbortController()
     runtime.status = 'initializing'
     runtime.stage = 'starting_worker'
     runtime.message = '正在重新启动独立 Pi Runtime Worker'
     runtime.error = undefined
+    runtime.handle = undefined
+    runtime.initializationStartedAt = now
+    runtime.stageStartedAt = now
+    runtime.initializationElapsedMs = 0
+    runtime.initializationTimings = []
+    runtime.capabilities = undefined
     this.publish(runtime, { type: 'runtime_status', status: runtime.status, stage: runtime.stage, message: runtime.message })
     void this.initialize(runtime, runtime.generation)
     return this.runtimeState(runtime)
+  }
+
+  private advanceInitialization(runtime: OwnedRuntime, stage: PiLiveInitializationStage, now = Date.now()): void {
+    if (runtime.stage !== stage) {
+      if (runtime.stage !== 'ready') {
+        runtime.initializationTimings.push({ stage: runtime.stage, durationMs: Math.max(0, now - runtime.stageStartedAt) })
+      }
+      runtime.stage = stage
+      runtime.stageStartedAt = now
+    }
+    runtime.initializationElapsedMs = Math.max(0, now - runtime.initializationStartedAt)
   }
 
   private async initialize(runtime: OwnedRuntime, generation: number): Promise<void> {
@@ -79,33 +139,49 @@ export class DefaultPiLiveService implements PiLiveService {
         if (runtime.generation !== generation || runtime.status === 'terminating' || runtime.status === 'terminated') return
         if (event.type === 'runtime_initialization') {
           const stage = event.stage
-          if (typeof stage === 'string' && ['starting_worker', 'loading_sdk', 'loading_resources', 'creating_session', 'binding_extensions', 'ready'].includes(stage)) runtime.stage = stage as PiLiveInitializationStage
+          if (typeof stage === 'string' && ['starting_worker', 'loading_sdk', 'loading_resources', 'creating_session', 'binding_extensions', 'ready'].includes(stage)) {
+            this.advanceInitialization(runtime, stage as PiLiveInitializationStage)
+          }
           if (typeof event.message === 'string') runtime.message = event.message.slice(0, 500)
+        } else if (event.type === 'runtime_capabilities') {
+          runtime.capabilities = runtimeCapabilities(event.capabilities) ?? runtime.capabilities
         }
         this.publish(runtime, event)
       }, error => this.workerExited(runtime, generation, error))
       if (runtime.generation !== generation || runtime.status !== 'initializing') { await handle.terminate(); return }
       runtime.handle = handle
+      runtime.capabilities = handle.capabilities ?? runtime.capabilities
+      if (!runtime.initializationTimings.length && handle.initializationTimings?.length) runtime.initializationTimings = [...handle.initializationTimings]
+      this.advanceInitialization(runtime, 'ready')
       runtime.status = 'ready'
-      runtime.stage = 'ready'
-      runtime.message = 'Pi Runtime 已就绪'
-      this.publish(runtime, { type: 'runtime_status', status: 'ready', stage: 'ready', message: runtime.message })
+      runtime.message = `Pi Runtime 已就绪 · ${formatElapsed(runtime.initializationElapsedMs)}`
+      this.publish(runtime, {
+        type: 'runtime_status',
+        status: 'ready',
+        stage: 'ready',
+        message: runtime.message,
+        initializationElapsedMs: runtime.initializationElapsedMs,
+        initializationTimings: runtime.initializationTimings,
+        ...(runtime.capabilities ? { capabilities: runtime.capabilities } : {}),
+      })
     } catch (error) {
       if (runtime.generation !== generation || runtime.status === 'terminating' || runtime.status === 'terminated') return
+      runtime.initializationElapsedMs = Math.max(0, Date.now() - runtime.initializationStartedAt)
       runtime.status = 'failed'
       runtime.error = safeError(error)
-      runtime.message = 'Pi Runtime 初始化失败'
-      this.publish(runtime, { type: 'runtime_status', status: 'failed', stage: runtime.stage, message: runtime.message, error: runtime.error })
+      runtime.message = `Pi Runtime 初始化失败 · ${formatElapsed(runtime.initializationElapsedMs)}`
+      this.publish(runtime, { type: 'runtime_status', status: 'failed', stage: runtime.stage, message: runtime.message, error: runtime.error, initializationElapsedMs: runtime.initializationElapsedMs, initializationTimings: runtime.initializationTimings })
     }
   }
 
   private workerExited(runtime: OwnedRuntime, generation: number, error: Error): void {
     if (runtime.generation !== generation || runtime.status === 'terminating' || runtime.status === 'terminated') return
     runtime.handle = undefined
+    runtime.initializationElapsedMs = Math.max(runtime.initializationElapsedMs, Date.now() - runtime.initializationStartedAt)
     runtime.status = 'failed'
     runtime.error = safeError(error)
     runtime.message = 'Pi Runtime Worker 已退出'
-    this.publish(runtime, { type: 'runtime_status', status: 'failed', stage: runtime.stage, message: runtime.message, error: runtime.error })
+    this.publish(runtime, { type: 'runtime_status', status: 'failed', stage: runtime.stage, message: runtime.message, error: runtime.error, initializationElapsedMs: runtime.initializationElapsedMs, initializationTimings: runtime.initializationTimings })
   }
 
   async state(id: string): Promise<PiLiveRuntimeState> { return this.runtimeState(this.requireRuntime(id)) }
@@ -144,7 +220,37 @@ export class DefaultPiLiveService implements PiLiveService {
   private conflict(message: string): Error { const error = new Error(message) as Error & { statusCode?: number }; error.statusCode = 409; return error }
   private requireRuntime(id: string): OwnedRuntime { const runtime = this.runtimes.get(id); if (!runtime) throw new Error(`Unknown Pi Live runtime session: ${id}`); return runtime }
   private requireReady(id: string): OwnedRuntime { const runtime = this.requireRuntime(id); if (runtime.status !== 'ready' || !runtime.handle) throw this.conflict(`Pi Live runtime is not ready: ${runtime.status}`); return runtime }
-  private async runtimeState(runtime: OwnedRuntime): Promise<PiLiveRuntimeState> { if (runtime.status === 'ready' && runtime.handle) return this.decorateReadyState(runtime, await runtime.handle.state()); return { runtimeSessionId: runtime.id, status: runtime.status, initializationStage: runtime.stage, initializationMessage: runtime.message, ...(runtime.error ? { error: runtime.error } : {}), ...(runtime.input.name ? { sessionName: runtime.input.name } : {}), isStreaming: false, isCompacting: false, pendingMessageCount: 0, ...(runtime.handle?.processId ? { processId: runtime.handle.processId } : {}) } }
-  private decorateReadyState(runtime: OwnedRuntime, state: PiLiveRuntimeState): PiLiveRuntimeState { return { ...state, runtimeSessionId: runtime.id, status: 'ready', initializationStage: 'ready', initializationMessage: runtime.message, ...(runtime.handle?.processId ? { processId: runtime.handle.processId } : {}) } }
+  private async runtimeState(runtime: OwnedRuntime): Promise<PiLiveRuntimeState> {
+    if (runtime.status === 'initializing') runtime.initializationElapsedMs = Math.max(0, Date.now() - runtime.initializationStartedAt)
+    if (runtime.status === 'ready' && runtime.handle) return this.decorateReadyState(runtime, await runtime.handle.state())
+    return {
+      runtimeSessionId: runtime.id,
+      status: runtime.status,
+      initializationStage: runtime.stage,
+      initializationMessage: runtime.message,
+      initializationElapsedMs: runtime.initializationElapsedMs,
+      initializationTimings: runtime.initializationTimings,
+      ...(runtime.capabilities ? { capabilities: runtime.capabilities } : {}),
+      ...(runtime.error ? { error: runtime.error } : {}),
+      ...(runtime.input.name ? { sessionName: runtime.input.name } : {}),
+      isStreaming: false,
+      isCompacting: false,
+      pendingMessageCount: 0,
+      ...(runtime.handle?.processId ? { processId: runtime.handle.processId } : {}),
+    }
+  }
+  private decorateReadyState(runtime: OwnedRuntime, state: PiLiveRuntimeState): PiLiveRuntimeState {
+    return {
+      ...state,
+      runtimeSessionId: runtime.id,
+      status: 'ready',
+      initializationStage: 'ready',
+      initializationMessage: runtime.message,
+      initializationElapsedMs: runtime.initializationElapsedMs,
+      initializationTimings: runtime.initializationTimings,
+      ...(runtime.capabilities ? { capabilities: runtime.capabilities } : {}),
+      ...(runtime.handle?.processId ? { processId: runtime.handle.processId } : {}),
+    }
+  }
   private publish(runtime: OwnedRuntime, event: Record<string, unknown>): void { runtime.sequence += 1; const value: PiLiveRuntimeEvent = { runtimeSessionId: runtime.id, sequence: runtime.sequence, receivedAt: new Date().toISOString(), event }; for (const listener of runtime.listeners) listener(value) }
 }
