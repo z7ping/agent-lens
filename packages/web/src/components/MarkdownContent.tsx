@@ -1,7 +1,6 @@
 import type { Components } from 'react-markdown'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import './markdown-content.css'
 
 export interface MarkdownContentProps {
   text: string

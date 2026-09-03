@@ -53,6 +53,3 @@
 .markdown .markdown-table-scroll th > p,
 .markdown .markdown-table-scroll td > p { margin: 0; white-space: normal; }
 
-/* Pi 输入框直接接受 Markdown 源文本，不再暴露“编辑/预览”二段式入口。 */
-.pi-live-editor-toolbar > button[aria-label='预览 Markdown'],
-.pi-live-editor-toolbar > button[aria-label='继续编辑 Markdown'] { display: none; }
