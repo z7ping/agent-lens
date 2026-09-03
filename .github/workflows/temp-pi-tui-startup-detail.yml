@@ -1,0 +1,63 @@
+name: Temporary Pi TUI Startup Detail
+
+on:
+  push:
+    branches:
+      - automation/pi-tui-startup-detail-20260903
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: automation/pi-tui-startup-detail-20260903
+      - name: Preserve patch script
+        run: cp .github/scripts/apply-pi-tui-startup-detail.py /tmp/apply-pi-tui-startup-detail.py
+      - name: Checkout latest feature branch
+        run: |
+          git fetch origin feature/1.0.0-alpha.3-task-surface
+          git checkout -B feature/1.0.0-alpha.3-task-surface origin/feature/1.0.0-alpha.3-task-surface
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.23.0
+          package-manager-cache: false
+      - name: Apply Pi TUI startup detail
+        run: python /tmp/apply-pi-tui-startup-detail.py
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify Protocol
+        run: |
+          npm run typecheck --workspace @agent-lens/protocol
+          npm test --workspace @agent-lens/protocol
+      - name: Verify Runtime
+        run: |
+          npm run typecheck --workspace @agent-lens/runtime-cordis
+          npm test --workspace @agent-lens/runtime-cordis
+      - name: Verify Web presentation
+        run: npm run check:web-presentation
+      - name: Verify Web
+        run: |
+          npm run typecheck --workspace @agent-lens/web
+          npm test --workspace @agent-lens/web
+          npm run build:web
+      - name: Commit verified change
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            packages/protocol/src/pi-live.ts \
+            packages/runtime-cordis/src/pi-live/types.ts \
+            packages/runtime-cordis/src/pi-live/worker-host.ts \
+            packages/runtime-cordis/src/pi-live/worker-entry.mjs \
+            packages/runtime-cordis/src/pi-live/service.ts \
+            packages/web/src/features/PiLivePage.tsx \
+            packages/web/src/components/PiStartupDisclosure.tsx \
+            packages/web/src/components/pi-startup-disclosure.css \
+            packages/web/src/features/pi-startup-observability.test.ts
+          git diff --cached --quiet && { echo "No changes to commit"; exit 1; }
+          git commit -m "feat(pi): 展示 TUI 对齐的启动资源与扩展输出"
+          git push origin HEAD:feature/1.0.0-alpha.3-task-surface
