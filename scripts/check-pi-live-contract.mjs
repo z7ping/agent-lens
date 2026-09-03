@@ -61,7 +61,7 @@ requireText(page, /PiLivePage\(\{ embedded = false \}/, 'PiLivePage 必须支持
 requireText(hubPage, /HubReviewPage\(\{ embedded = false \}/, 'HubReviewPage 必须支持 embedded')
 requireText(taskCenter, /className="task-center-toolbar"/, '历史筛选栏必须由 TaskCenterPage 持有')
 requireText(taskCenter, /筛选历史任务/, '统一筛选栏必须明确筛选历史任务')
-requireText(reviewPage, /!embedded && <div className="workspace-toolbar">/, '嵌入 Review 不得生成重复筛选栏')
+requireText(reviewPage, /!embedded && <Toolbar className="workspace-toolbar"/, '嵌入 Review 不得生成重复筛选栏')
 requireText(taskCenterCss, /\.task-center-toolbar\s*\{[\s\S]{0,260}grid-column:\s*1\s*\/\s*-1/, '任务中心筛选栏必须横跨列表和详情')
 requireText(taskCenter, /deriveTaskProjectOptions/, '新建任务必须从已观测项目推导 cwd')
 requireText(taskCenter, /cwd:\s*selected\.cwd/, 'Pi Runtime cwd 必须来自真实项目上下文')
