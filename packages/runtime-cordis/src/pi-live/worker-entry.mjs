@@ -390,7 +390,7 @@ async function command(name, value = {}) {
   if (name === 'clearQueue') return session.clearQueue()
   if (name === 'abort') { const queue = value.restoreQueue === false ? { steering: [], followUp: [] } : session.clearQueue(); await session.abort(); return queue }
   if (name === 'extensionResponse') {
-    if (!extensionUi?.respond(value.requestId, value.response)) throw new Error(`Unknown or already settled Pi Extension request id: ${value.requestId ?? 'missing'}`)
+    if (!extensionUi || !extensionUi.respond(value.requestId, value.response)) throw new Error(`Unknown or already settled Pi Extension request id: ${value.requestId ?? 'missing'}`)
     return
   }
   if (name === 'terminate') { await dispose(); return }
