@@ -258,7 +258,7 @@ function PiLiveStart({ known }: { known: PiLiveStateDto[] }) {
       <div><b>仍在后台的 Pi 任务</b><span>来自本浏览器最近启动的运行时</span></div>
       {known.map(item => <button key={item.runtimeSessionId} onClick={() => navigate(`/review/live/${encodeURIComponent(item.runtimeSessionId)}`)}>
         <span>{item.sessionName || 'Pi 实时任务'}</span>
-        <small>{modelLabel(item)} · {item.status === 'initializing' ? '启动中' : item.status === 'failed' ? '启动失败' : item.isStreaming ? '正在工作' : '等待输入'}</small>
+        <small>{modelLabel(item)} · {item.status === 'initializing' ? '正在初始化' : item.status === 'failed' ? '启动失败' : item.isStreaming ? '正在工作' : '等待输入'}</small>
       </button>)}
     </section>}
   </main>
@@ -300,6 +300,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const leafIdRef = useRef<string | undefined>(undefined)
   const toolsRef = useRef(new Map<string, LiveTool>())
   const startupSendingRef = useRef(false)
+  const activePromptRef = useRef('')
   const [known, setKnown] = useState<PiLiveStateDto[]>([])
   const [snapshot, setSnapshot] = useState<PiLiveSnapshotDto | null>(null)
   const [state, setState] = useState<PiLiveStateDto | null>(null)
@@ -310,6 +311,8 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const [composerExpanded, setComposerExpanded] = useState(false)
   const [startupQueued, setStartupQueued] = useState('')
   const [optimisticPrompt, setOptimisticPrompt] = useState('')
+  const [settledCurrentOrdinal, setSettledCurrentOrdinal] = useState<number | null>(null)
+  const [settledCurrentItems, setSettledCurrentItems] = useState<PiLiveHistoryItem[]>([])
   const [streamText, setStreamText] = useState('')
   const [thinkingText, setThinkingText] = useState('')
   const [tools, setTools] = useState<LiveTool[]>([])
@@ -341,6 +344,8 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     setState(null)
     setControls({ models: [], thinkingLevels: [] })
     setOptimisticPrompt('')
+    setSettledCurrentOrdinal(null)
+    setSettledCurrentItems([])
     setStreamText('')
     setThinkingText('')
     setTools([])
@@ -353,6 +358,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     setStartupQueued('')
     setComposerExpanded(false)
     startupSendingRef.current = false
+    activePromptRef.current = ''
     leafIdRef.current = undefined
 
     const acceptSnapshot = (value: PiLiveSnapshotDto) => {
@@ -377,8 +383,27 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       try {
         const value = await piLiveApi.snapshot(runtimeId, leafIdRef.current)
         if (!active) return
+        const prompt = activePromptRef.current.trim()
+        const freshHistory = projectPiLiveHistory(value)
+        const freshRounds = projectPiLiveTaskRounds(freshHistory)
+        const matchedRound = prompt
+          ? [...freshRounds].reverse().find(round => round.model.ordinal !== undefined && round.items.some(item => item.kind === 'message' && item.role === 'user' && item.text.trim() === prompt))
+          : undefined
+        const ordinal = matchedRound?.model.ordinal ?? null
+        const settledItems = ordinal === null
+          ? []
+          : freshRounds.filter(round => round.model.ordinal === ordinal).flatMap(round => round.items)
         acceptSnapshot(value)
-        setOptimisticPrompt('')
+        if (ordinal !== null && settledItems.length > 0) {
+          setSettledCurrentOrdinal(ordinal)
+          setSettledCurrentItems(settledItems)
+          setOptimisticPrompt(prompt)
+        } else {
+          setSettledCurrentOrdinal(null)
+          setSettledCurrentItems([])
+          setOptimisticPrompt('')
+        }
+        activePromptRef.current = ''
         setStreamText('')
         setThinkingText('')
         toolsRef.current.clear()
@@ -517,11 +542,18 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
 
   const history = useMemo(() => projectPiLiveHistory(snapshot), [snapshot])
   const historyRounds = useMemo(() => projectPiLiveTaskRounds(history), [history])
-  const optimisticStreaming = Boolean(optimisticPrompt) || (state?.isStreaming ?? false)
+  const visibleHistoryRounds = useMemo(() => settledCurrentOrdinal === null
+    ? historyRounds
+    : historyRounds.filter(round => round.model.ordinal !== settledCurrentOrdinal), [historyRounds, settledCurrentOrdinal])
+  const optimisticStreaming = ((Boolean(optimisticPrompt) && settledCurrentOrdinal === null) || (state?.isStreaming ?? false))
   const runningRound = useMemo(() => {
+    if (settledCurrentOrdinal !== null) {
+      const settledProjection = historyRounds.find(round => round.model.ordinal === settledCurrentOrdinal && !round.continuation)
+      if (settledProjection) return { ...settledProjection.model, id: 'pi-live-current-round' }
+    }
     if (!optimisticPrompt && !state?.isStreaming && !thinkingText && tools.length === 0 && !streamText) return undefined
     return projectPiLiveRunningRound({ tools, isStreaming: optimisticStreaming })
-  }, [optimisticPrompt, optimisticStreaming, state?.isStreaming, streamText, thinkingText, tools])
+  }, [historyRounds, optimisticPrompt, optimisticStreaming, settledCurrentOrdinal, state?.isStreaming, streamText, thinkingText, tools])
   const taskDetailModel = useMemo(() => projectPiLiveTaskDetail({
     state,
     connected,
@@ -538,7 +570,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       const target = Math.max(0, reader.scrollHeight - reader.clientHeight)
       if (Math.abs(reader.scrollTop - target) > 1) reader.scrollTop = target
     })
-  }, [history.length, streamText.length, thinkingText.length, tools.length, optimisticPrompt, queue.steering.length, queue.followUp.length, restored.length, extension?.id])
+  }, [visibleHistoryRounds.length, streamText.length, thinkingText.length, tools.length, optimisticPrompt, settledCurrentItems.length, queue.steering.length, queue.followUp.length, restored.length, extension?.id])
 
   // 初始化阶段先接住第一条任务；Worker ready 后只发送一次，失败则还原为可编辑草稿。
   useEffect(() => {
@@ -582,6 +614,9 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     setError('')
     setInput('')
     if (!wasStreaming) {
+      setSettledCurrentOrdinal(null)
+      setSettledCurrentItems([])
+      activePromptRef.current = text
       setOptimisticPrompt(text)
       setState(current => current ? { ...current, isStreaming: true } : current)
     }
@@ -591,6 +626,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     } catch (reason) {
       setInput(current => current || text)
       if (!wasStreaming) {
+        activePromptRef.current = ''
         setOptimisticPrompt('')
         setState(current => current ? { ...current, isStreaming: false } : current)
       }
@@ -755,7 +791,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     : state?.isStreaming ? '继续指导 Pi…' : '输入任务…'
   const startupState = state && ['initializing', 'ready', 'failed'].includes(state.status) ? state : null
   const startupMeta = startupState ? piStartupSummary(startupState) : null
-  const hasBackgroundRound = historyRounds.some(projection => projection.model.id === 'background:0')
+  const hasBackgroundRound = visibleHistoryRounds.some(projection => projection.model.id === 'background:0')
   const startupSummaryMeta = startupMeta ? <span>{startupMeta.label} · {startupMeta.duration}</span> : undefined
   const startupContent = startupState ? <PiStartupDisclosure
     state={startupState}
@@ -804,13 +840,13 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             beforeContent={startupContent}
             summaryMeta={startupSummaryMeta}
           />}
-          {historyRounds.map((projection, index) => {
+          {visibleHistoryRounds.map((projection, index) => {
             const carriesStartup = Boolean(startupState && projection.model.id === 'background:0')
             return <VirtualRoundMount
               key={projection.model.id}
               rootSelector=".pi-live-reader"
               flowRoot
-              eager={carriesStartup || index >= historyRounds.length - PI_LIVE_EAGER_CHUNKS}
+              eager={carriesStartup || index >= visibleHistoryRounds.length - PI_LIVE_EAGER_CHUNKS}
               estimate={piLiveTaskRoundEstimate(projection) + (carriesStartup ? 230 : 0)}
             >
               <PiLiveHistoryTaskRound
@@ -825,6 +861,8 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
           {runningRound && <PiLiveRunningTaskRound
             model={runningRound}
             promptText={optimisticPrompt || undefined}
+            settledItems={settledCurrentItems.length ? settledCurrentItems : undefined}
+            showAllEvents={showAllEvents}
             thinkingText={thinkingText}
             tools={tools}
             streamText={streamText}
