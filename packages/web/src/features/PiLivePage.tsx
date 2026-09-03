@@ -6,6 +6,8 @@ import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import { ComposerPillSelect } from '../components/ComposerPillSelect'
 import { PiMarkdownComposer, type PiMarkdownComposerHandle } from '../components/PiMarkdownComposer'
 import { PiStartupDisclosure, piStartupSummary } from '../components/PiStartupDisclosure'
+import { Button, IconButton, Input, Textarea } from '../components/ui'
+import { UiIcon } from '../components/UiIcon'
 import { projectPiLiveHistory, type PiLiveHistoryItem } from './pi-live-history'
 import { PiLiveHistoryTaskRound, PiLiveRunningTaskRound } from './PiLiveTaskRound'
 import { piLiveTaskRoundEstimate, projectPiLiveRunningRound, projectPiLiveTaskDetail, projectPiLiveTaskRounds } from './pi-live-task-projection'
@@ -190,14 +192,6 @@ function extensionRequest(event: Record<string, unknown>): ExtensionRequest | nu
   }
 }
 
-function ComposerExpandIcon({ expanded }: { expanded: boolean }) {
-  return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-    {expanded
-      ? <><path d="M6.2 2.5v3.7H2.5"/><path d="m2.8 6 3.4-3.4"/><path d="M9.8 13.5V9.8h3.7"/><path d="m13.2 10-3.4 3.4"/></>
-      : <><path d="M6.2 2.5H2.5v3.7"/><path d="m2.8 2.8 3.4 3.4"/><path d="M9.8 13.5h3.7V9.8"/><path d="m13.2 13.2-3.4-3.4"/></>}
-  </svg>
-}
-
 function PiLiveStart({ known }: { known: PiLiveStateDto[] }) {
   const navigate = useNavigate()
   const [cwd, setCwd] = useState(() => {
@@ -245,19 +239,19 @@ function PiLiveStart({ known }: { known: PiLiveStateDto[] }) {
       <div className="pi-live-start-kicker">任务复盘 · Pi 实时任务</div>
       <h1>开始一个 Pi 任务</h1>
       <p>Pi 由 AgentLens 后台服务持有。关闭页面、刷新浏览器或切去任务复盘，不会自动结束正在执行的任务。</p>
-      <label>工作目录<input value={cwd} onChange={event => setCwd(event.target.value)} placeholder="例如 F:\\workspace\\agent-lens 或 /workspace/agent-lens" autoFocus/></label>
+      <label>工作目录<Input value={cwd} onChange={event => setCwd(event.target.value)} placeholder="例如 F:\\workspace\\agent-lens 或 /workspace/agent-lens" autoFocus/></label>
       <details>
         <summary>模型设置（可选）</summary>
         <div className="pi-live-start-grid">
-          <label>Provider<input value={provider} onChange={event => setProvider(event.target.value)} placeholder="留空使用 Pi 默认"/></label>
-          <label>Model<input value={model} onChange={event => setModel(event.target.value)} placeholder="留空使用 Pi 默认"/></label>
+          <label>Provider<Input value={provider} onChange={event => setProvider(event.target.value)} placeholder="留空使用 Pi 默认"/></label>
+          <label>Model<Input value={model} onChange={event => setModel(event.target.value)} placeholder="留空使用 Pi 默认"/></label>
         </div>
       </details>
       <div className="pi-live-start-status">{availability}</div>
       {error && <div className="pi-live-error" role="alert">{error}</div>}
       <div className="pi-live-start-actions">
-        <button className="btn" onClick={() => navigate('/review')}>返回任务复盘</button>
-        <button className="btn primary" disabled={!cwd.trim() || starting} onClick={() => void start()}>{starting ? '正在启动…' : '启动 Pi'}</button>
+        <Button onClick={() => navigate('/review')}>返回任务复盘</Button>
+        <Button variant="primary" loading={starting} disabled={!cwd.trim()} onClick={() => void start()}>启动 Pi</Button>
       </div>
     </section>
     {known.length > 0 && <section className="pi-live-known-card">
@@ -277,21 +271,21 @@ function ExtensionPrompt({ request, onAnswer }: { request: ExtensionRequest; onA
   if (request.method === 'confirm') {
     return <div className="pi-live-blocking" role="dialog" aria-label={request.title}>
       <div><b>{request.title}</b>{request.message && <span>{request.message}</span>}</div>
-      <div className="pi-live-blocking-actions"><button onClick={() => onAnswer({ confirmed: false })}>拒绝</button><button className="allow" onClick={() => onAnswer({ confirmed: true })}>允许</button></div>
+      <div className="pi-live-blocking-actions"><Button size="small" onClick={() => onAnswer({ confirmed: false })}>拒绝</Button><Button size="small" variant="primary" onClick={() => onAnswer({ confirmed: true })}>允许</Button></div>
     </div>
   }
   if (request.method === 'select') {
     return <div className="pi-live-blocking" role="dialog" aria-label={request.title}>
       <div><b>{request.title}</b>{request.message && <span>{request.message}</span>}</div>
-      <div className="pi-live-blocking-options">{request.options.map(option => <button key={option} onClick={() => onAnswer({ value: option })}>{option}</button>)}<button onClick={() => onAnswer({ cancelled: true })}>取消</button></div>
+      <div className="pi-live-blocking-options">{request.options.map(option => <Button size="small" key={option} onClick={() => onAnswer({ value: option })}>{option}</Button>)}<Button size="small" onClick={() => onAnswer({ cancelled: true })}>取消</Button></div>
     </div>
   }
   return <div className="pi-live-blocking pi-live-blocking-input" role="dialog" aria-label={request.title}>
     <div><b>{request.title}</b>{request.message && <span>{request.message}</span>}</div>
     {request.method === 'editor'
-      ? <textarea value={value} onChange={event => setValue(event.target.value)} placeholder={request.placeholder}/>
-      : <input value={value} onChange={event => setValue(event.target.value)} placeholder={request.placeholder}/>}
-    <div className="pi-live-blocking-actions"><button onClick={() => onAnswer({ cancelled: true })}>取消</button><button className="allow" onClick={() => onAnswer({ value })}>提交</button></div>
+      ? <Textarea className="pi-live-blocking-field" value={value} onChange={event => setValue(event.target.value)} placeholder={request.placeholder}/>
+      : <Input className="pi-live-blocking-field" value={value} onChange={event => setValue(event.target.value)} placeholder={request.placeholder}/>}
+    <div className="pi-live-blocking-actions"><Button size="small" onClick={() => onAnswer({ cancelled: true })}>取消</Button><Button size="small" variant="primary" onClick={() => onAnswer({ value })}>提交</Button></div>
   </div>
 }
 
@@ -748,7 +742,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
 
   return <main className={`pi-live-page ${embedded ? 'pi-live-page-embedded' : ''}`}>
     {!embedded && <aside className="pi-live-sessions">
-      <div className="pi-live-sessions-head"><div><b>Pi 实时任务</b><small>关闭视图不结束任务</small></div><button className="btn small" onClick={() => navigate('/review/live')}>新建</button></div>
+      <div className="pi-live-sessions-head"><div><b>Pi 实时任务</b><small>关闭视图不结束任务</small></div><Button size="small" onClick={() => navigate('/review/live')}>新建</Button></div>
       <div className="pi-live-session-scroll">
         {known.map(item => <button key={item.runtimeSessionId} className={`pi-live-session ${item.runtimeSessionId === runtimeId ? 'active' : ''}`} onClick={() => navigate(`/review/live/${encodeURIComponent(item.runtimeSessionId)}`)}>
           <div className="pi-live-session-top"><span className={item.isStreaming || item.status === 'initializing' ? 'pi-live-pulse' : 'pi-live-idle-dot'}/><span>Pi</span><span>{item.status === 'initializing' ? '启动中' : item.status === 'failed' ? '失败' : item.isStreaming ? '实时' : '空闲'}</span></div>
@@ -769,9 +763,9 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
         title={taskDetailModel.title}
         metrics={taskDetailModel.metrics}
         actions={<>
-          <button className="review-audit-toggle" aria-pressed={showAllEvents} onClick={() => setShowAllEvents(value => !value)}>{showAllEvents ? '视图：全部事件' : '视图：核心事件'}</button>
-          <button className="pi-live-stop" disabled={!state?.isStreaming || busy} onClick={() => void stop()}>停止当前任务</button>
-          <button className="pi-live-menu" title="结束 Pi Runtime" aria-label="结束 Pi Runtime" disabled={busy} onClick={() => void terminate()}>×</button>
+          <Button size="small" className="review-audit-toggle" aria-pressed={showAllEvents} onClick={() => setShowAllEvents(value => !value)}>{showAllEvents ? '视图：全部事件' : '视图：核心事件'}</Button>
+          <Button size="small" className="pi-live-stop" disabled={!state?.isStreaming || busy} onClick={() => void stop()}>停止当前任务</Button>
+          <IconButton size="small" variant="danger" className="pi-live-menu" title="结束 Pi Runtime" aria-label="结束 Pi Runtime" disabled={busy} onClick={() => void terminate()}><UiIcon name="close" size={14}/></IconButton>
         </>}
       />
 
@@ -816,25 +810,26 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
 
       <div className="pi-live-compose-wrap">
         <div className="pi-live-float-stack">
-          {newRecords && <button className="pi-live-new-records" onClick={jumpLatest}>有新记录 ↓</button>}
+          {newRecords && <Button size="small" className="pi-live-new-records" onClick={jumpLatest}>有新记录 ↓</Button>}
           {startupQueued && <div className="pi-live-startup-queue" role="status">
-            <span>等待 Pi 就绪</span><b>{startupQueued}</b><div><button onClick={editStartupQueued}>编辑</button><button onClick={removeStartupQueued}>撤回</button></div>
+            <span>等待 Pi 就绪</span><b>{startupQueued}</b><div><Button size="small" className="pi-live-queue-action" onClick={editStartupQueued}>编辑</Button><Button size="small" className="pi-live-queue-action" onClick={removeStartupQueued}>撤回</Button></div>
           </div>}
           {queueItems.length > 0 && <div className="pi-live-queue">{queueItems.map(item => <div key={item.id} className={`pi-live-queue-item ${item.active ? 'active' : 'restored'}`}>
             <span>{item.mode === 'steer' ? '待介入' : '完成后继续'}</span><b>{item.text}</b>
-            {item.active ? <small>已在 Pi 队列</small> : <div><button onClick={() => editRestored(item)}>编辑</button><button onClick={() => removeRestored(item.id)}>撤回</button></div>}
+            {item.active ? <small>已在 Pi 队列</small> : <div><Button size="small" className="pi-live-queue-action" onClick={() => editRestored(item)}>编辑</Button><Button size="small" className="pi-live-queue-action" onClick={() => removeRestored(item.id)}>撤回</Button></div>}
           </div>)}</div>}
-          {extension && <ExtensionPrompt request={extension} onAnswer={value => { if (!extensionPending) void answerExtension(value) }}/>}
+          {extension && <ExtensionPrompt request={extension} onAnswer={value => { if (!extensionPending) void answerExtension(value) }}/>} 
         </div>
         <div className={`pi-live-composer ${composerExpanded ? 'is-expanded' : ''}`}>
           <div className="pi-live-editor">
             <div className="pi-live-editor-toolbar" aria-label="输入区工具">
-              <button
-                type="button"
+              <IconButton
+                size="small"
+                className="pi-live-editor-action"
                 title={composerExpanded ? '缩小输入区' : '放大输入区'}
                 aria-label={composerExpanded ? '缩小输入区' : '放大输入区'}
                 onClick={() => setComposerExpanded(value => !value)}
-              ><ComposerExpandIcon expanded={composerExpanded}/></button>
+              ><UiIcon name={composerExpanded ? 'collapse' : 'expand'} size={15}/></IconButton>
             </div>
             <PiMarkdownComposer
               ref={inputRef}
@@ -883,10 +878,10 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
               />
             </div>
             <div className="pi-live-compose-mode" aria-label="发送方式">
-              <button title="立即介入当前生成（Enter）" className={mode === 'steer' ? 'active' : ''} aria-pressed={mode === 'steer'} onClick={() => { setMode('steer'); requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true })) }}>介入</button>
-              <button title="当前轮次完成后继续（Alt+Enter）" className={mode === 'followUp' ? 'active' : ''} aria-pressed={mode === 'followUp'} onClick={() => { setMode('followUp'); requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true })) }}>继续</button>
+              <Button size="small" className={`pi-live-mode-action ${mode === 'steer' ? 'active' : ''}`} title="立即介入当前生成（Enter）" aria-pressed={mode === 'steer'} onClick={() => { setMode('steer'); requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true })) }}>介入</Button>
+              <Button size="small" className={`pi-live-mode-action ${mode === 'followUp' ? 'active' : ''}`} title="当前轮次完成后继续（Alt+Enter）" aria-pressed={mode === 'followUp'} onClick={() => { setMode('followUp'); requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true })) }}>继续</Button>
             </div>
-            <button className="pi-live-send" disabled={!canSend} onClick={() => void send()} aria-label={runtimeReady ? '发送' : 'Pi 就绪后发送'}>↑</button>
+            <IconButton variant="primary" className="pi-live-send" disabled={!canSend} onClick={() => void send()} aria-label={runtimeReady ? '发送' : 'Pi 就绪后发送'}><UiIcon name="send" size={18}/></IconButton>
           </div>
         </div>
       </div>
