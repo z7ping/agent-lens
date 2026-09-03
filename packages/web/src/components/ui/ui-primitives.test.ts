@@ -11,6 +11,8 @@ const piStartup = readFileSync(new URL('../PiStartupDisclosure.tsx', import.meta
 const piStartupCss = readFileSync(new URL('../pi-startup-disclosure.css', import.meta.url), 'utf8')
 const composerPill = readFileSync(new URL('../ComposerPillSelect.tsx', import.meta.url), 'utf8')
 const stateViews = readFileSync(new URL('../StateViews.tsx', import.meta.url), 'utf8')
+const piLivePage = readFileSync(new URL('../../features/PiLivePage.tsx', import.meta.url), 'utf8')
+const piLiveCss = readFileSync(new URL('../../pi-live.css', import.meta.url), 'utf8')
 const agentRules = readFileSync(new URL('../../../../../AGENTS.md', import.meta.url), 'utf8')
 
 test('shared UI primitives expose the first unified component set', () => {
@@ -60,6 +62,26 @@ test('existing shared composites route common controls through the UI layer', ()
   assert.match(stateViews, /import \{ Button \} from '\.\/ui'/)
   assert.match(stateViews, /<Button variant="primary"/)
   assert.doesNotMatch(stateViews, /className="state-button/)
+})
+
+test('Pi Live routes common actions and fields through the UI layer', () => {
+  assert.match(piLivePage, /import \{ Button, IconButton, Input, Textarea \} from '\.\.\/components\/ui'/)
+  assert.match(piLivePage, /<Button size="small" variant="primary" onClick=\{\(\) => onAnswer/)
+  assert.match(piLivePage, /<Textarea className="pi-live-blocking-field"/)
+  assert.match(piLivePage, /<Input className="pi-live-blocking-field"/)
+  assert.match(piLivePage, /<IconButton[\s\S]*?className="pi-live-editor-action"/)
+  assert.match(piLivePage, /<IconButton variant="primary" className="pi-live-send"/)
+  assert.match(piLivePage, /className="pi-live-queue-action"/)
+
+  for (const obsolete of [
+    /\.pi-live-blocking button\s*\{/,
+    /\.pi-live-startup-queue button\s*\{/,
+    /\.pi-live-queue-item button\s*\{/,
+    /\.pi-live-editor-toolbar button\s*\{/,
+    /\.pi-live-compose-settings select\s*\{/,
+  ]) assert.doesNotMatch(piLiveCss, obsolete)
+  assert.match(piLiveCss, /\.pi-live-model-picker \{[\s\S]*?width:\s*clamp/)
+  assert.match(piLiveCss, /\.pi-live-thinking-picker \{[\s\S]*?width:\s*clamp/)
 })
 
 test('repository agent rules require reuse of shared primitives', () => {
