@@ -164,7 +164,8 @@ test('Asset Backup consumes shared controls and Overlay primitives', () => {
 })
 
 test('Tools, Insights and Agent Overview consume shared toolbar and overlay primitives', () => {
-  assert.match(toolsPage, /import \{ Drawer, IconButton, SelectMenu, Toolbar \} from '\.\.\/components\/ui'/)
+  assert.match(toolsPage, /import \{ Drawer, IconButton, SelectMenu, Toolbar, UiIcon \} from '\.\.\/components\/ui'/)
+  assert.doesNotMatch(toolsPage, /from '\.\.\/components\/UiIcon'/)
   assert.match(toolsPage, /<Toolbar className="workspace-toolbar" aria-label="工具分析筛选">/)
   assert.match(toolsPage, /<Drawer[\s\S]*?className="tool-drill-overlay"/)
   assert.doesNotMatch(toolsPage, /tool-drawer-scrim|tool-drill-drawer|window\.addEventListener\('keydown'/)
