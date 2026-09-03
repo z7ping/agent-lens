@@ -73,6 +73,20 @@ function record(value: unknown): Record<string, unknown> {
     : {}
 }
 
+function mergeSnapshot(previous: PiLiveSnapshotDto, next: PiLiveSnapshotDto): PiLiveSnapshotDto {
+  const entries = new Map<string, JsonValue>()
+  let anonymous = 0
+  for (const value of [...previous.entries, ...next.entries]) {
+    const id = typeof record(value).id === 'string' ? String(record(value).id) : ''
+    entries.set(id || `anonymous-${anonymous++}`, value)
+  }
+  return {
+    state: next.state,
+    entries: [...entries.values()],
+    leafId: next.leafId,
+  }
+}
+
 function eventType(value: PiLiveEventDto): string {
   return typeof value.event.type === 'string' ? value.event.type : ''
 }
@@ -267,6 +281,8 @@ export interface PiLiveConnectionHandlers {
 }
 
 export class PiLiveApi {
+  private readonly snapshots = new Map<string, PiLiveSnapshotDto>()
+
   availability(): Promise<PiLiveAvailabilityDto> {
     return requestJson('/api/v1/pi-live/availability')
   }
@@ -296,13 +312,19 @@ export class PiLiveApi {
     return requestJson(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/state`)
   }
 
-  retry(runtimeSessionId: string): Promise<PiLiveStateDto> {
+  async retry(runtimeSessionId: string): Promise<PiLiveStateDto> {
+    this.snapshots.delete(runtimeSessionId)
     return requestJson(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/retry`, { method: 'POST' })
   }
 
-  snapshot(runtimeSessionId: string, since?: string): Promise<PiLiveSnapshotDto> {
-    const query = since ? `?since=${encodeURIComponent(since)}` : ''
-    return requestJson(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/snapshot${query}`)
+  async snapshot(runtimeSessionId: string, since?: string): Promise<PiLiveSnapshotDto> {
+    const previous = this.snapshots.get(runtimeSessionId)
+    const incrementalSince = since && previous ? since : undefined
+    const query = incrementalSince ? `?since=${encodeURIComponent(incrementalSince)}` : ''
+    const next = await requestJson<PiLiveSnapshotDto>(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/snapshot${query}`)
+    const snapshot = incrementalSince && previous ? mergeSnapshot(previous, next) : next
+    this.snapshots.set(runtimeSessionId, snapshot)
+    return snapshot
   }
 
   controls(runtimeSessionId: string): Promise<PiLiveControlsDto> {
@@ -344,6 +366,7 @@ export class PiLiveApi {
 
   async terminate(runtimeSessionId: string): Promise<void> {
     await requestJson(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}`, { method: 'DELETE' })
+    this.snapshots.delete(runtimeSessionId)
     forgetRuntime(runtimeSessionId)
   }
 
