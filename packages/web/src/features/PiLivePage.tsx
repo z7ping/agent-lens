@@ -981,7 +981,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             {item.active
               ? ('pending' in item && item.pending
                   ? <small>正在加入 Pi 队列</small>
-                  : <div><small>已在 Pi 队列</small>{'queueIndex' in item && typeof item.queueIndex === 'number' && <Button size="small" className="pi-live-queue-action" disabled={queueMutationPending} onClick={() => void removeQueued(item.mode, item.queueIndex, item.text)}>撤回</Button>}</div>)
+                  : <div><small>已在 Pi 队列</small>{'queueIndex' in item && typeof item.queueIndex === 'number' && <Button size="small" className="pi-live-queue-action" disabled={queueMutationPending} onClick={() => void removeQueued(item.mode, Number(item.queueIndex), item.text)}>撤回</Button>}</div>)
               : <div><Button size="small" className="pi-live-queue-action" onClick={() => editRestored(item)}>编辑</Button><Button size="small" className="pi-live-queue-action" onClick={() => removeRestored(item.id)}>撤回</Button></div>}
           </div>)}</div>}
           {extension && <ExtensionPrompt request={extension} onAnswer={value => { if (!extensionPending) void answerExtension(value) }}/>} 
