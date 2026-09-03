@@ -19,11 +19,8 @@
 .task-center-toolbar {
   grid-column: 1 / -1;
   grid-row: 1;
-  display: flex;
   min-width: 0;
   height: 50px;
-  align-items: center;
-  gap: 7px;
   padding: 0 12px;
   overflow: visible;
   border-bottom: 1px solid var(--al-line);
@@ -44,7 +41,7 @@
 .task-center-toolbar .agent-scope { min-width: 0; flex: 0 0 auto; }
 .task-center-toolbar .filter { flex: 0 0 auto; }
 .task-center-toolbar .search-filter { width: 210px; min-width: 150px; max-width: none; flex: 0 1 210px; margin-left: auto; }
-.task-center-toolbar .icon-button { flex: 0 0 auto; }
+.task-center-toolbar .ui-icon-button { flex: 0 0 auto; }
 
 .task-center-rail {
   grid-column: 1;
@@ -72,7 +69,6 @@
 .task-center-rail-head > div { display: flex; min-width: 0; align-items: baseline; gap: 7px; }
 .task-center-rail-head b { color: var(--al-ink); font-size: 13px; font-weight: 700; }
 .task-center-rail-head span { color: var(--al-muted-2); font-size: 12px; }
-.task-center-rail-head .btn { height: 28px; padding: 0 10px; border-radius: 7px; font-size: 12px; font-weight: 650; }
 .task-center-scroll { min-height: 0; flex: 1; overflow: auto; padding: 4px 10px 12px; }
 .task-center-group + .task-center-group { margin-top: 0; padding-top: 0; border-top: 0; }
 .task-center-group-title {
@@ -152,16 +148,13 @@
 .task-center-rail .session-item-foot { margin-top: 4px; gap: 12px; }
 .task-center-rail .session-load-more {
   width: 100%;
-  height: 32px;
   margin-top: 9px;
-  border: 0;
-  border-radius: 7px;
+  border-color: transparent;
   background: transparent;
   box-shadow: none;
   color: var(--al-muted-2);
-  font-size: 12px;
 }
-.task-center-rail .session-load-more:hover { background: var(--al-surface); color: var(--al-ink-2); }
+.task-center-rail .session-load-more:hover:not(:disabled) { border-color: transparent; background: var(--al-surface); color: var(--al-ink-2); }
 
 /* 左右滚动根完全隔离。 */
 .task-center-main {
@@ -231,7 +224,6 @@
 .task-center-new-status span { color: var(--al-muted); font-size: 12px; }
 .task-center-project-hint { margin-top: 10px; padding: 9px 10px; border: 1px solid var(--al-line); border-radius: 8px; background: var(--al-soft-2); color: var(--al-muted); font-size: 12px; line-height: 1.55; }
 .task-center-new-actions { display: flex; justify-content: flex-end; margin-top: 18px; }
-.task-center-new-actions .btn { min-height: 38px; padding-inline: 16px; border-radius: 9px; }
 
 @media (max-width: 1199.98px) {
   .task-center-page { --task-center-rail: 286px; }
