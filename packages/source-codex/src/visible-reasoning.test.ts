@@ -55,7 +55,7 @@ test('assistant final_answer separates trailing memory citation metadata', async
   assert.equal(fact.kind, 'message.assistant')
   assert.equal((fact.payload as any).text, '已完成。')
   assert.deepEqual((fact.payload as any).sourceMetadata, [{ kind: 'memory.citation' }])
-  assert.equal('content' in fact.payload, false)
+  assert.equal('content' in (fact.payload as Record<string, unknown>), false)
 })
 
 test('memory citation text remains visible outside assistant final_answer', () => {
