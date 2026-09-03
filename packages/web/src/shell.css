@@ -407,12 +407,12 @@
 }
 .agent-scope-menu-head div { display: grid; gap: 2px; }
 .agent-scope-menu-head b { color: var(--al-ink); font-size: 13px; }
-.agent-scope-menu-head span { color: var(--al-muted-2); font-size: 11px; }
+.agent-scope-menu-head span { color: var(--al-muted-2); font-size: 12px; }
 .agent-scope-menu-head button {
   border: 0;
   background: transparent;
   color: var(--al-accent);
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
 }
 
@@ -517,7 +517,6 @@
   font-weight: 700;
   cursor: help;
 }
-
 .heading-help:hover,
 .heading-help:focus-visible { background: var(--al-soft); color: var(--al-ink); outline: none; }
 
