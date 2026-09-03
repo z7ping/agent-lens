@@ -1,6 +1,7 @@
 import type { Components } from 'react-markdown'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { CopyableCodeBlock } from './CopyableCodeBlock'
 
 export interface MarkdownContentProps {
   text: string
@@ -9,6 +10,7 @@ export interface MarkdownContentProps {
 
 const markdownComponents: Components = {
   table: ({ node: _node, ...props }) => <div className="markdown-table-scroll"><table {...props}/></div>,
+  pre: ({ node: _node, ...props }) => <CopyableCodeBlock {...props}/>,
 }
 
 /**

@@ -1,5 +1,6 @@
 import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { MarkdownContent } from '../components/MarkdownContent'
+import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 
 export type TaskMessageRole = 'user' | 'assistant'
 
@@ -75,7 +76,7 @@ export function TaskMessage({
           className={`markdown-surface ${canCollapse && !expanded ? 'is-collapsed' : ''}`}
           style={canCollapse && !expanded && collapsedHeight ? { maxHeight: `${collapsedHeight}px` } : undefined}
         >
-          {view === 'rendered' ? <MarkdownContent text={text}/> : <pre className="markdown-source">{text}</pre>}
+          {view === 'rendered' ? <MarkdownContent text={text}/> : <CopyableCodeBlock className="markdown-source" copyValue={text}>{text}</CopyableCodeBlock>}
           {canCollapse && !expanded && <span className="markdown-fade" aria-hidden="true"/>}
         </div>
         {(canCollapse || !user) && <div className="markdown-message-actions">

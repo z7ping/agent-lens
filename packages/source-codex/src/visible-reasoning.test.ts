@@ -64,7 +64,7 @@ test('memory citation text remains visible outside assistant final_answer', () =
   assert.equal(splitCodexVisibleAssistantText(`\`\`\`xml\n${quoted}\n\`\`\``, 'final_answer').text, `\`\`\`xml\n${quoted}\n\`\`\``)
 })
 
-test('injected context is represented without exposing its raw protocol text', async () => {
+test('injected context keeps its visible text in the dedicated canonical event', async () => {
   const output = await normalizeCodexRecord(record({
     type: 'response_item',
     payload: {
@@ -78,6 +78,7 @@ test('injected context is represented without exposing its raw protocol text', a
     sourceType: 'event_msg',
     injectedContext: true,
     role: 'developer',
+    text: '<environment_context>secret setup</environment_context>',
   })
   assert.equal(output.observations[0]?.kind, 'context.injected')
 })

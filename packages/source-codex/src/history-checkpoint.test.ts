@@ -171,7 +171,7 @@ test('旧 Parser 游标只升级检查点且不重读已消费区间', async () 
     for await (const record of ingestCodexHistory(context(sessions, checkpoints, writes))) records.push(record)
 
     assert.deepEqual(records, [])
-    assert.equal((checkpoints.get(codexHistoryInternals.checkpointKey(path)) as { parserVersion: string }).parserVersion, '9')
+    assert.equal((checkpoints.get(codexHistoryInternals.checkpointKey(path)) as { parserVersion: string }).parserVersion, '10')
   } finally {
     await rm(root, { recursive: true, force: true })
   }

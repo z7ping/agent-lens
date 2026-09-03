@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PiLiveInitializationStageDto, PiLiveStateDto } from '@agent-lens/protocol'
+import { CopyableCodeBlock } from './CopyableCodeBlock'
 
 const STAGES: Array<{ stage: PiLiveInitializationStageDto; label: string; detail: string }> = [
   { stage: 'starting_worker', label: '启动 Runtime Worker', detail: '创建独立 Pi 运行进程' },
@@ -122,7 +123,7 @@ export function PiStartupDisclosure({
         </div>)}
       </div>}
       {startupOutput.length > 0 && <div className="pi-startup-output">
-        <b>[启动输出]</b><pre>{startupOutput.join('\n')}</pre>
+        <b>[启动输出]</b><CopyableCodeBlock copyValue={startupOutput.join('\n')}>{startupOutput.join('\n')}</CopyableCodeBlock>
       </div>}
       {(resources?.diagnostics.length ?? 0) > 0 && <div className="pi-startup-diagnostics">
         <b>[资源诊断]</b>{resources!.diagnostics.map((message, index) => <span key={`${index}-${message}`}>{message}</span>)}

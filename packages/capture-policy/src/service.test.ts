@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { NormalizedSourceOutput, SourceRecord } from '@agent-lens/core'
+import type { NormalizedSourceOutput, ObservationKind, SourceRecord } from '@agent-lens/core'
 import {
   DEFAULT_ENABLED_SOURCES,
   DefaultCapturePolicyService,
@@ -34,7 +34,7 @@ function record(payload: unknown): SourceRecord {
   }
 }
 
-function normalized(kind: 'message.user' | 'tool.call', payload: unknown): NormalizedSourceOutput {
+function normalized(kind: ObservationKind, payload: unknown): NormalizedSourceOutput {
   return {
     observations: [{
       kind,
@@ -115,6 +115,19 @@ test('prompt off persists event shape without source text', () => {
   assert.equal(policy.sanitizeSourceRecord(source, output).payload, null)
   const safe = policy.sanitizeNormalizedOutput(output)
   assert.deepEqual(safe.observations[0]?.payload, { capturePolicy: 'off', text: NOT_CAPTURED })
+})
+
+test('injected context follows prompt capture policy instead of being unconditionally hidden', () => {
+  const policy = new DefaultCapturePolicyService(settings({ prompt: 'redacted' }))
+  const output = normalized('context.injected', {
+    role: 'developer',
+    text: 'workspace C:\\Users\\alice\\project; token=ghp_abcdefghijklmnopqrstuvwxyz',
+  })
+  const safe = policy.sanitizeNormalizedOutput(output)
+  assert.deepEqual(safe.observations[0]?.payload, {
+    role: 'developer',
+    text: `workspace C:\\Users\\[用户]\\project; token=${REDACTED}`,
+  })
 })
 
 test('tool off keeps aggregation metadata and drops arguments', () => {

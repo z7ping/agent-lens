@@ -155,6 +155,7 @@
 .raw-event-summary-copy small { overflow: hidden; color: var(--al-muted-2); font-size: 12px; font-weight: 400; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
 .raw-event-group > summary time { flex: 0 0 auto; color: var(--al-muted-2); font-variant-numeric: tabular-nums; }
 .raw-event-group > div { padding: 0 2px 2px; }
+.injected-context-content { margin: 0; padding: 10px 12px; overflow: auto; border: 1px solid var(--al-line); border-radius: 8px; background: var(--al-soft-2); color: var(--al-ink-2); font-family: var(--font-mono); font-size: 12px; line-height: 1.55; overflow-wrap: anywhere; white-space: pre-wrap; }
 
 /* 详情 Inspector。 */
 .inspector-panel {

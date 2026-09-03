@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import ReactMarkdown from 'react-markdown'
 import { useNavigate, useParams } from 'react-router-dom'
 import type {
   HubReadAvailability,
@@ -19,6 +18,8 @@ import type { AgentLensClientModel } from '../client/model'
 import { fetchHubReviewSessions } from '../client/hub-review'
 import { useClientSnapshot } from '../App'
 import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
+import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
+import { MarkdownContent } from '../components/MarkdownContent'
 import { ToolKindIcon } from '../components/ToolKindIcon'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import { projectReviewInteractionPresentation } from './review-interaction-presentation'
@@ -315,7 +316,9 @@ function sourceEventSummary(node: ReviewEventNodeDto): string {
   }
   if (node.kind === 'context.injected') {
     const role = stringValue(payload, 'role')
-    return role ? `${role} 注入内容已隐藏` : '注入内容已隐藏'
+    const text = stringValue(payload, 'text')
+    if (text) return [role, brief(text, 180)].filter(Boolean).join(' · ')
+    return role ? `${role} · 当前记录未包含正文` : '当前记录未包含正文'
   }
   if (node.kind === 'session.lifecycle') {
     if (action === 'turn.context') {
@@ -417,8 +420,9 @@ function toolPresentation(node: ReviewToolNodeDto): { kind: ToolKind; label: str
 
 function PrettyJson({ value }: { value: unknown }) {
   if (value === undefined) return <div className="muted-empty compact">无数据</div>
-  if (typeof value === 'string') return <pre className="tool-detail-code">{value}</pre>
-  return <pre className="tool-detail-code">{JSON.stringify(value, null, 2)}</pre>
+  if (typeof value === 'string') return <CopyableCodeBlock className="tool-detail-code" copyValue={value}>{value}</CopyableCodeBlock>
+  const text = JSON.stringify(value, null, 2)
+  return <CopyableCodeBlock className="tool-detail-code" copyValue={text}>{text}</CopyableCodeBlock>
 }
 
 function StructuredToolDetail({ node }: { node: ReviewToolNodeDto }) {
@@ -431,7 +435,7 @@ function StructuredToolDetail({ node }: { node: ReviewToolNodeDto }) {
       <span className={`tool-detail-icon tool-kind-${info.kind}`}><ToolKindIcon kind={info.kind}/></span>
       <div><b>{node.name}</b><span>{info.label} · {status}{node.durationMs !== undefined && node.durationMs > 0 ? ` · ${duration(node.durationMs)}` : ''}</span></div>
     </div>
-    {info.primary && <div className="tool-detail-section"><h4>{primaryLabel}</h4><pre className="tool-detail-code">{info.primary}</pre></div>}
+    {info.primary && <div className="tool-detail-section"><h4>{primaryLabel}</h4><CopyableCodeBlock className="tool-detail-code" copyValue={info.primary}>{info.primary}</CopyableCodeBlock></div>}
     {Object.keys(input).length > 0 && <div className="tool-detail-section"><h4>结构化输入</h4><PrettyJson value={node.input}/></div>}
     {node.output !== undefined && <div className={`tool-detail-section ${node.status === 'error' ? 'is-error' : ''}`}><h4>{node.status === 'error' ? '错误 / 输出' : '输出'}</h4><PrettyJson value={node.output}/></div>}
   </section>
@@ -479,12 +483,12 @@ function RawInspectorContent({
         {record.occurredAt && <div className="evidence-path">occurredAt：{record.occurredAt}</div>}
         <div className="evidence-path">capturedAt：{record.capturedAt}</div>
         <div className="evidence-path">Locator：{JSON.stringify(record.locator)}</div>
-        <pre className="raw-json">{JSON.stringify(record.payload, null, 2)}</pre>
+        <CopyableCodeBlock className="raw-json" copyValue={JSON.stringify(record.payload, null, 2)}>{JSON.stringify(record.payload, null, 2)}</CopyableCodeBlock>
       </div>
     })}
     {!loading && !error && records.length === 0 && <>
       <div className="evidence-empty-detail">当前 Observation 没有关联可读取的 SourceRecord；以下为标准化 Payload。</div>
-      <pre className="raw-json">{JSON.stringify(node.payload, null, 2)}</pre>
+      <CopyableCodeBlock className="raw-json" copyValue={JSON.stringify(node.payload, null, 2)}>{JSON.stringify(node.payload, null, 2)}</CopyableCodeBlock>
     </>}
   </section>
 }
@@ -570,7 +574,9 @@ function Inspector({ node, onClose, loadSourceRecord }: { node: ReviewNodeDto; o
     {tab === 'detail' && <>
       {node.type === 'tool' ? <StructuredToolDetail node={node}/> : <section className="inspector-section">
         <h3 className="section-label">摘要</h3>
-        <div className="evidence-empty-detail">{detailSummary || '当前事件没有额外的结构化详情；可继续查看证据或来源原始记录。'}</div>
+        {node.type === 'event' && node.kind === 'context.injected' && stringValue(payloadRecord(node.payload), 'text')
+          ? <CopyableCodeBlock className="injected-context-content" copyValue={stringValue(payloadRecord(node.payload), 'text')}>{stringValue(payloadRecord(node.payload), 'text')}</CopyableCodeBlock>
+          : <div className="evidence-empty-detail">{detailSummary || '当前事件没有额外的结构化详情；可继续查看证据或来源原始记录。'}</div>}
       </section>}
     </>}
     {tab === 'evidence' && <section className="inspector-section">
@@ -622,7 +628,7 @@ function MarkdownSurface({ text }: { text: string }) {
       className={`markdown-surface ${collapsible && !expanded ? 'is-collapsed' : ''}`}
       style={collapsible && !expanded && collapsedHeight ? { maxHeight: `${collapsedHeight}px` } : undefined}
     >
-      {view === 'rendered' ? <div className="markdown"><ReactMarkdown>{text}</ReactMarkdown></div> : <pre className="markdown-source">{text}</pre>}
+      {view === 'rendered' ? <MarkdownContent text={text}/> : <CopyableCodeBlock className="markdown-source" copyValue={text}>{text}</CopyableCodeBlock>}
       {collapsible && !expanded && <span className="markdown-fade" aria-hidden="true"/>}
     </div>
     <div className="markdown-message-actions">

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import packageMetadata from '../../package.json'
 import changelogMarkdown from '../../../../CHANGELOG.md?raw'
 import { checkWebUpdate, type WebUpdateInfo } from '../client/update'
+import { CopyableCodeBlock } from './CopyableCodeBlock'
 
 const REPOSITORY_URL = 'https://github.com/z7ping/agent-lens'
 const CHANGELOG_URL = `${REPOSITORY_URL}/blob/main/CHANGELOG.md`
@@ -95,13 +96,13 @@ function UpdateDialog({ update, onClose }: { update: WebUpdateInfo; onClose(): v
         <section className="release-section">
           <h3>npm / CLI 更新</h3>
           <p>推荐使用 AgentLens 已有更新命令；它会按当前运行时归属处理 npm 后台服务，不接管 Windows Desktop。</p>
-          <code className="web-update-command">{update.installCommand}</code>
+          <CopyableCodeBlock className="web-update-command" copyValue={update.installCommand}>{update.installCommand}</CopyableCodeBlock>
           <p className="web-update-fallback">也可以直接执行：</p>
-          <code className="web-update-command">{update.fallbackInstallCommand}</code>
+          <CopyableCodeBlock className="web-update-command" copyValue={update.fallbackInstallCommand}>{update.fallbackInstallCommand}</CopyableCodeBlock>
         </section>
         {update.releaseNotes && <section className="release-section">
           <h3>版本说明</h3>
-          <pre className="web-update-notes">{update.releaseNotes}</pre>
+          <CopyableCodeBlock className="web-update-notes" copyValue={update.releaseNotes}>{update.releaseNotes}</CopyableCodeBlock>
         </section>}
       </div>
       <footer className="release-dialog-footer">

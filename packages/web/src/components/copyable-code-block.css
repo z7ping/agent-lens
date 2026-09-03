@@ -1,0 +1,48 @@
+@reference "../styles.css";
+
+.copyable-code-block { position: relative; min-width: 0; }
+.copyable-code-block.copyable-code-block > pre { margin: 0; padding-right: 70px; }
+
+.code-block-copy {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  z-index: 2;
+  display: inline-flex;
+  min-width: 54px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 7px;
+  border: 1px solid color-mix(in srgb, var(--al-line-strong) 78%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--al-surface) 92%, transparent);
+  box-shadow: 0 1px 3px rgb(16 24 40 / .08);
+  color: var(--al-muted);
+  font: 600 11px/1 var(--font-ui);
+  cursor: pointer;
+  opacity: .82;
+  transition: color .15s ease, background-color .15s ease, border-color .15s ease, opacity .15s ease;
+}
+.code-block-copy:hover,
+.code-block-copy:focus-visible { border-color: var(--al-line-strong); background: var(--al-surface); color: var(--al-ink-2); opacity: 1; }
+.code-block-copy:focus-visible { outline: 2px solid color-mix(in srgb, var(--al-accent) 46%, transparent); outline-offset: 2px; }
+.code-block-copy svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.45; stroke-linecap: round; stroke-linejoin: round; }
+.copyable-code-block[data-copy-state='copied'] .code-block-copy { color: var(--al-success); }
+.copyable-code-block[data-copy-state='error'] .code-block-copy { color: var(--al-danger); }
+
+.markdown .copyable-code-block { margin: 9px 0; }
+.task-surface .markdown-surface > .copyable-code-block { margin: 9px 0; }
+.pi-live-markdown-preview .copyable-code-block { margin: 0 0 8px; }
+.task-surface .task-tool-live-output .copyable-code-block,
+.task-surface .task-tool-output-details .copyable-code-block { margin: 4px 0 0; }
+.task-message-bubble-user .code-block-copy { border-color: color-mix(in srgb, var(--al-user-bubble-text) 25%, transparent); background: color-mix(in srgb, var(--al-user-bubble-code) 86%, transparent); color: var(--al-user-bubble-muted); box-shadow: none; }
+.task-message-bubble-user .code-block-copy:hover,
+.task-message-bubble-user .code-block-copy:focus-visible { color: var(--al-user-bubble-text); }
+
+@media (max-width: 767.98px) {
+  .copyable-code-block.copyable-code-block > pre { padding-right: 62px; }
+  .code-block-copy { top: 6px; right: 6px; min-width: 48px; height: 24px; padding-inline: 6px; }
+}
+@media (prefers-reduced-motion: reduce) { .code-block-copy { transition: none; } }

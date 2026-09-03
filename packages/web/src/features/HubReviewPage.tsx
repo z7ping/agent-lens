@@ -13,6 +13,7 @@ import {
   fetchHubReviewSessions,
   fetchLocalReviewSessions,
 } from '../client/hub-review'
+import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { TaskSurface } from './TaskSurface'
 
 const omittedReasonLabel: Record<Extract<HubReadAvailability, { state: 'omitted' }>['reason'], string> = {
@@ -121,7 +122,7 @@ function TimelineItem({ item }: { item: HubReviewTimelineItemDto }) {
     </header>
     <div className="hub-review-payload" data-state={availabilityTone(item.payload)}>
       {item.payload.state === 'value'
-        ? <pre>{formatValue(item.payload.value)}</pre>
+        ? <CopyableCodeBlock copyValue={formatValue(item.payload.value)}>{formatValue(item.payload.value)}</CopyableCodeBlock>
         : <div className="hub-review-unavailable"><AvailabilityBadge value={item.payload}/><small>AgentLens 不会用空字符串或空对象代替未同步内容。</small></div>}
     </div>
     {Object.keys(item.references).length > 0 && <details className="hub-review-refs">

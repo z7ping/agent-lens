@@ -1,5 +1,6 @@
 import { useRef } from 'react'
 import { MarkdownContent } from '../components/MarkdownContent'
+import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { toolVisualKind, toolVisualLabel } from '../components/ToolKindIcon'
 import { TaskEvent } from './TaskEvent'
 import { TaskMessage } from './TaskMessage'
@@ -84,11 +85,11 @@ function toolGroup(id: string, tools: TaskToolModel[]): TaskToolGroupModel {
 function ToolOutput({ tool }: { tool: TaskToolModel }) {
   if (!tool.output) return null
   if (tool.status === 'running') {
-    return <div className="task-tool-live-output" role="status" aria-label={`${tool.name} 实时输出`}><pre>{tool.output}</pre></div>
+    return <div className="task-tool-live-output" role="status" aria-label={`${tool.name} 实时输出`}><CopyableCodeBlock copyValue={tool.output}>{tool.output}</CopyableCodeBlock></div>
   }
   return <details className="task-tool-output-details" open={tool.status === 'error'}>
     <summary>{tool.status === 'error' ? '错误 / 输出' : '查看输出'}</summary>
-    <pre>{tool.output}</pre>
+    <CopyableCodeBlock copyValue={tool.output}>{tool.output}</CopyableCodeBlock>
   </details>
 }
 

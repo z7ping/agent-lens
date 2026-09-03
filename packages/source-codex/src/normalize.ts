@@ -183,11 +183,13 @@ function injectedContextCandidate(
   record: SourceRecord,
   envelope: CodexStoredEnvelope,
   role: string,
+  text: string,
 ): ObservationCandidate {
   return candidate(record, envelope, 'context.injected', {
     sourceType: record.nativeType,
     injectedContext: true,
     role,
+    text,
   })
 }
 
@@ -428,7 +430,7 @@ export async function normalizeCodexRecord(
     const text = messageText(payload.content ?? payload.text ?? '')
     const injected = payload.injectedContext === true || isInjectedContext(role, text)
     if (injected || (role !== 'user' && role !== 'assistant')) {
-      push(injectedContextCandidate(record, envelope, role))
+      push(injectedContextCandidate(record, envelope, role, text))
     } else {
       const kind = role === 'user'
         ? 'message.user'

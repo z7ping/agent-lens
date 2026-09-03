@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { useTaskSurfaceView } from './TaskSurface'
 import type { TaskEventModel } from './task-detail-model'
 
@@ -31,7 +32,7 @@ export function TaskEvent({
     {raw !== undefined && !onInspect && <details className="task-event-raw">
       <summary>查看原始数据{model.nativeType ? ` · ${model.nativeType}` : ''}</summary>
       {(model.nativeId || model.parentId) && <div className="task-event-raw-meta">{model.nativeId ? `Native ID ${model.nativeId}` : ''}{model.nativeId && model.parentId ? ' · ' : ''}{model.parentId ? `Parent ${model.parentId}` : ''}</div>}
-      <pre className="task-event-raw-json">{JSON.stringify(raw, null, 2)}</pre>
+      <CopyableCodeBlock className="task-event-raw-json" copyValue={JSON.stringify(raw, null, 2)}>{JSON.stringify(raw, null, 2)}</CopyableCodeBlock>
     </details>}
   </>
 }

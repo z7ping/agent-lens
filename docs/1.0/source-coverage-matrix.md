@@ -14,7 +14,7 @@
 | Pi | custom/custom_message/label/extension/其他新增类型 | 完整 | unknown/raw | 待 #47 | Snapshot 原始 | 待 #47 | 不因未知而丢弃 |
 | Codex | session_meta | 完整 | session.lifecycle | 部分 | — | 待 #47 | parent/thread/agent/provider 等待 #46 |
 | Codex | metadata/session_start、session_title | 完整 | session.lifecycle | 是 | — | 待 #47 | AgentLens 稳定元数据记录 |
-| Codex | response_item/message | 完整 | message.user/assistant 或 unknown | 是 | — | 待 #47 | injected context 仅语义层过滤，不裁 SourceRecord |
+| Codex | response_item/message | 完整 | message.user/assistant 或 context.injected | 是 | — | 待 #47 | injected context 保留独立语义和可见正文，正文遵守提示词采集策略与凭据硬脱敏 |
 | Codex | response_item/function_call/output | 完整 | tool.call/result | 是 | — | 待 #47 |  |
 | Codex | response_item/custom_tool_call/output | 完整 | tool.call/result | 是 | — | 待 #47 |  |
 | Codex | response_item/web_search_call / reasoning | 完整 | tool.call / message.reasoning | 部分 | — | 待 #47 | 完整 action/status 待 #46 |
