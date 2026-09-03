@@ -1,6 +1,7 @@
 import type {
   ButtonHTMLAttributes,
   DetailsHTMLAttributes,
+  HTMLAttributes,
   InputHTMLAttributes,
   ReactNode,
   SelectHTMLAttributes,
@@ -113,18 +114,24 @@ export function Disclosure({ summary, summaryMeta, children, className, ...props
   </details>
 }
 
-export function Toolbar({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={classes('ui-toolbar', className)}>{children}</div>
+export interface ToolbarProps extends HTMLAttributes<HTMLDivElement> {
+  children: ReactNode
+}
+
+export function Toolbar({ children, className, role = 'toolbar', ...props }: ToolbarProps) {
+  return <div role={role} className={classes('ui-toolbar', className)} {...props}>{children}</div>
+}
+
+export interface ToolbarGroupProps extends HTMLAttributes<HTMLDivElement> {
+  children: ReactNode
+  align?: 'start' | 'end'
 }
 
 export function ToolbarGroup({
   children,
   className,
   align = 'start',
-}: {
-  children: ReactNode
-  className?: string
-  align?: 'start' | 'end'
-}) {
-  return <div className={classes('ui-toolbar-group', align === 'end' && 'is-end', className)}>{children}</div>
+  ...props
+}: ToolbarGroupProps) {
+  return <div className={classes('ui-toolbar-group', align === 'end' && 'is-end', className)} {...props}>{children}</div>
 }
