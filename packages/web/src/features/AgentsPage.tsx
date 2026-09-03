@@ -4,7 +4,7 @@ import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
 import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
 import { CompactPageHeading } from '../components/CompactPageHeading'
-import { IconButton, UiIcon } from '../components/ui'
+import { IconButton, Toolbar, UiIcon } from '../components/ui'
 import { copyText } from '../client/clipboard'
 
 const capabilityLabel: Record<string, string> = {
@@ -366,10 +366,10 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
   const selectedAgent = items.find(item => item.sourceId === selectedSourceId)
 
   return <main className="workspace-page">
-    <div className="workspace-toolbar">
+    <Toolbar className="workspace-toolbar" aria-label="智能体概览筛选">
       <AgentScope agents={agents} value={selectedSourceId} onChange={onSourceIdChange} allLabel={false}/>
-      <IconButton className="icon-button toolbar-end" onClick={() => void model.refreshFacetsAndAgents()} title="刷新智能体概览" aria-label="刷新智能体概览"><UiIcon name="refresh" size={16}/></IconButton>
-    </div>
+      <IconButton className="toolbar-end" onClick={() => void model.refreshFacetsAndAgents()} title="刷新智能体概览" aria-label="刷新智能体概览"><UiIcon name="refresh" size={16}/></IconButton>
+    </Toolbar>
     <div className="page-content agents-content">
       <CompactPageHeading title="智能体概览" description="集中查看本机智能体、用户资产、真实使用情况和技能生命周期。已检测只表示发现了智能体，不等于已经启用采集。"/>
       {items.length ? <div className="agents-browser">
