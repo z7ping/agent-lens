@@ -72,6 +72,16 @@ function modelLabel(state: PiLiveStateDto | null): string {
   return [provider, id].filter(Boolean).join(' / ') || 'Pi'
 }
 
+function thinkingLevelLabel(level: string): string {
+  const normalized = level.trim().toLowerCase()
+  if (normalized === 'minimal' || normalized === 'none' || normalized === 'off') return '极简'
+  if (normalized === 'low') return '低'
+  if (normalized === 'medium') return '中'
+  if (normalized === 'high') return '高'
+  if (normalized === 'xhigh' || normalized === 'max' || normalized === 'maximum') return '极高'
+  return level
+}
+
 function modelSelection(state: PiLiveStateDto | null): string {
   if (!state?.model) return ''
   const model = record(state.model)
@@ -654,15 +664,20 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const selectedModel = modelSelection(state)
   const canSend = Boolean(input.trim()) && !busy && !extension && !runtimeTerminating && (runtimeReady ? !startupQueued : canStageStartup)
   const composerStatus = startupQueued
-    ? '等待 Pi 就绪后发送'
+    ? { label: '待发送', color: 'var(--al-accent)', title: '等待 Pi 就绪后自动发送' }
     : runtimeInitializing
-      ? 'Pi 正在初始化 · 可先输入'
+      ? { label: '初始化', color: 'var(--al-accent)', title: state?.initializationMessage || 'Pi Runtime 正在初始化' }
       : state?.status === 'failed'
-        ? 'Pi 启动失败 · 草稿保留'
-        : connected ? '实时已连接' : '正在重连'
+        ? { label: '失败', color: 'var(--al-danger)', title: state.error || error || 'Pi Runtime 初始化失败' }
+        : connected
+          ? { label: '已连接', color: 'var(--al-success)', title: 'Pi 实时通道已连接' }
+          : { label: '重连', color: 'var(--al-warning)', title: 'Pi 实时通道正在重新连接' }
+  const diagnosticsTitle = diagnostics
+    ? `事件 ${diagnostics.ingressEvents} · 合并 ${diagnostics.coalescedEvents} · 峰值队列 ${diagnostics.maxQueueDepth} · 最近提交 ${diagnostics.lastFlushLatencyMs.toFixed(1)}ms${diagnostics.hidden ? ' · 后台降频' : ''}`
+    : ''
   const inputPlaceholder = runtimeInitializing
-    ? 'Pi 正在初始化，可以先输入 Markdown 任务…'
-    : state?.isStreaming ? '继续指导 Pi…（支持 Markdown）' : '输入任务，让 Pi 开始工作…（支持 Markdown）'
+    ? 'Pi 正在初始化，可以先输入任务…'
+    : state?.isStreaming ? '继续指导 Pi…' : '输入任务…'
 
   return <main className={`pi-live-page ${embedded ? 'pi-live-page-embedded' : ''}`}>
     {!embedded && <aside className="pi-live-sessions">
@@ -713,7 +728,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             isStreaming={state?.isStreaming ?? false}
             pendingMessageCount={state?.pendingMessageCount ?? 0}
           />}
-          {!history.length && !streamText && !thinkingText && !tools.length && state?.status === 'initializing' && <div className="pi-live-initializing" role="status"><span className="pi-live-stage-dot"/><b>{state.initializationMessage || '正在初始化 Pi Runtime'}</b><small>可以直接在下方输入 Markdown 任务；Pi 就绪后会自动发送已经排队的首条任务。</small><button onClick={() => void terminate()} disabled={busy}>取消启动</button></div>}
+          {!history.length && !streamText && !thinkingText && !tools.length && state?.status === 'initializing' && <div className="pi-live-initializing" role="status"><span className="pi-live-stage-dot"/><b>{state.initializationMessage || '正在初始化 Pi Runtime'}</b><small>可以直接在下方输入任务；Pi 就绪后会自动发送已经排队的首条任务。</small><button onClick={() => void terminate()} disabled={busy}>取消启动</button></div>}
           {!history.length && !streamText && !thinkingText && !tools.length && state?.status === 'failed' && <div className="pi-live-initializing pi-live-initializing-failed" role="alert"><b>Pi Runtime 初始化失败</b><small>{state.error || error || 'Worker 未能完成初始化。'} 输入草稿会继续保留。</small><div><button onClick={() => void retry()} disabled={busy}>重试</button><button onClick={() => void terminate()} disabled={busy}>结束 Runtime</button></div></div>}
           {!history.length && !streamText && !thinkingText && !tools.length && runtimeReady && <div className="pi-live-empty">这个 Pi Runtime 还没有消息。可以直接在下方输入开始任务。</div>}
           {error && <div className="pi-live-error pi-live-reader-error" role="alert">{error}</div>}
@@ -776,12 +791,16 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
                     }
                   }}
                   placeholder={inputPlaceholder}
+                  title="Enter 发送 · Alt+Enter 完成后继续 · Shift+Enter 换行 · 生成中 Esc 中断"
                   aria-label="Pi Markdown 输入"
                   disabled={runtimeTerminating}
                 />}
           </div>
           <div className="pi-live-compose-bar">
-            <span className="pi-live-compose-runtime">{composerStatus}</span>
+            <span className="pi-live-compose-runtime" title={[composerStatus.title, diagnosticsTitle].filter(Boolean).join(' · ')}>
+              <span className="pi-live-idle-dot" aria-hidden="true" style={{ background: composerStatus.color, borderColor: composerStatus.color }}/>
+              {composerStatus.label}
+            </span>
             <div className="pi-live-compose-settings">
               <select
                 aria-label="Pi 模型"
@@ -791,28 +810,26 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
                 onChange={event => void changeModel(event.target.value)}
               >
                 {!selectedModel && <option value="">模型</option>}
-                {controls.models.map(item => <option key={`${item.provider}/${item.id}`} value={JSON.stringify([item.provider, item.id])}>{item.name || item.id} · {item.provider}</option>)}
+                {controls.models.map(item => <option key={`${item.provider}/${item.id}`} value={JSON.stringify([item.provider, item.id])}>{item.name || item.id}</option>)}
               </select>
               <select
-                aria-label="Pi Thinking Level"
-                title={`Pi Thinking Level · ${state?.thinkingLevel || '未设置'}`}
+                aria-label="Pi 推理强度"
+                title={`Pi 推理强度 · ${state?.thinkingLevel || '未设置'}`}
                 value={state?.thinkingLevel ?? ''}
                 disabled={!runtimeReady || controlBusy || controls.thinkingLevels.length === 0}
                 onChange={event => void changeThinkingLevel(event.target.value)}
               >
-                {!state?.thinkingLevel && <option value="">Thinking</option>}
-                {controls.thinkingLevels.map(level => <option key={level} value={level}>Thinking · {level}</option>)}
+                {!state?.thinkingLevel && <option value="">推理</option>}
+                {controls.thinkingLevels.map(level => <option key={level} value={level}>{thinkingLevelLabel(level)}</option>)}
               </select>
             </div>
             <div className="pi-live-compose-mode" aria-label="发送方式">
-              <button className={mode === 'steer' ? 'active' : ''} aria-pressed={mode === 'steer'} onClick={() => { setMode('steer'); setComposerView('edit'); requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true })) }}>立即介入</button>
-              <button className={mode === 'followUp' ? 'active' : ''} aria-pressed={mode === 'followUp'} onClick={() => { setMode('followUp'); setComposerView('edit'); requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true })) }}>完成后继续</button>
+              <button title="立即介入当前生成（Enter）" className={mode === 'steer' ? 'active' : ''} aria-pressed={mode === 'steer'} onClick={() => { setMode('steer'); setComposerView('edit'); requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true })) }}>介入</button>
+              <button title="当前轮次完成后继续（Alt+Enter）" className={mode === 'followUp' ? 'active' : ''} aria-pressed={mode === 'followUp'} onClick={() => { setMode('followUp'); setComposerView('edit'); requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true })) }}>继续</button>
             </div>
             <button className="pi-live-send" disabled={!canSend} onClick={() => void send()} aria-label={runtimeReady ? '发送' : 'Pi 就绪后发送'}>↑</button>
           </div>
-          <div className="pi-live-compose-hint">Markdown · Enter {runtimeReady ? (state?.isStreaming ? (mode === 'steer' ? '立即介入' : '按当前模式发送') : '开始新一轮') : '等待 Pi 就绪后发送'} · Alt+Enter 完成后继续 · Shift+Enter 换行{state?.isStreaming ? ' · Esc 中断并恢复排队' : ''}</div>
         </div>
-        {diagnostics && <div className="pi-live-diagnostics" title="Pi Live Web 调度诊断">事件 {diagnostics.ingressEvents} · 合并 {diagnostics.coalescedEvents} · 峰值队列 {diagnostics.maxQueueDepth} · 最近提交 {diagnostics.lastFlushLatencyMs.toFixed(1)}ms{diagnostics.hidden ? ' · 后台降频' : ''}</div>}
       </div>
     </TaskSurface>
   </main>
