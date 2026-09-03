@@ -13,14 +13,19 @@ const composerPill = readFileSync(new URL('../ComposerPillSelect.tsx', import.me
 const stateViews = readFileSync(new URL('../StateViews.tsx', import.meta.url), 'utf8')
 const piLivePage = readFileSync(new URL('../../features/PiLivePage.tsx', import.meta.url), 'utf8')
 const piLiveCss = readFileSync(new URL('../../pi-live.css', import.meta.url), 'utf8')
+const taskCenterPage = readFileSync(new URL('../../features/TaskCenterPage.tsx', import.meta.url), 'utf8')
+const taskCenterCss = readFileSync(new URL('../../task-center.css', import.meta.url), 'utf8')
 const agentRules = readFileSync(new URL('../../../../../AGENTS.md', import.meta.url), 'utf8')
 
 test('shared UI primitives expose the first unified component set', () => {
   for (const name of ['Button', 'IconButton', 'Input', 'Textarea', 'Select', 'StatusBadge', 'Disclosure', 'Toolbar', 'ToolbarGroup']) {
     assert.match(source, new RegExp(`export function ${name}\\b`))
   }
+  assert.match(source, /role = 'toolbar'/)
   assert.match(index, /export \{ Dialog, Drawer \} from '\.\/Overlay'/)
   assert.match(index, /export \{ SelectMenu \} from '\.\.\/SelectMenu'/)
+  assert.match(index, /ToolbarGroupProps/)
+  assert.match(index, /ToolbarProps/)
 })
 
 test('shared controls keep the frozen size and typography contracts', () => {
@@ -82,6 +87,20 @@ test('Pi Live routes common actions and fields through the UI layer', () => {
   ]) assert.doesNotMatch(piLiveCss, obsolete)
   assert.match(piLiveCss, /\.pi-live-model-picker \{[\s\S]*?width:\s*clamp/)
   assert.match(piLiveCss, /\.pi-live-thinking-picker \{[\s\S]*?width:\s*clamp/)
+})
+
+test('Task Center toolbar and common actions consume the UI layer', () => {
+  assert.match(taskCenterPage, /import \{ Button, IconButton, Input, SelectMenu, Toolbar \} from '\.\.\/components\/ui'/)
+  assert.doesNotMatch(taskCenterPage, /from '\.\.\/components\/SelectMenu'/)
+  assert.match(taskCenterPage, /<Toolbar className="task-center-toolbar" aria-label="筛选历史任务">/)
+  assert.match(taskCenterPage, /<Input className="filter search-filter"/)
+  assert.match(taskCenterPage, /<IconButton onClick=\{\(\) => void model\.refreshReview\(\)\}/)
+  assert.match(taskCenterPage, /<Button size="small" variant="primary" onClick=\{newTask\}>/)
+  assert.match(taskCenterPage, /<Button variant="primary" loading=\{starting\}/)
+  assert.doesNotMatch(taskCenterCss, /\.task-center-toolbar \.icon-button/)
+  assert.doesNotMatch(taskCenterCss, /\.task-center-rail-head \.btn\s*\{/)
+  assert.doesNotMatch(taskCenterCss, /\.task-center-new-actions \.btn\s*\{[^}]*min-height:/s)
+  assert.match(taskCenterCss, /\.task-center-toolbar \.ui-icon-button/)
 })
 
 test('repository agent rules require reuse of shared primitives', () => {
