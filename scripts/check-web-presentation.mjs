@@ -92,9 +92,11 @@ if (!/\.filter\s*\{[\s\S]*?height:\s*34px;[\s\S]*?font-size:\s*13px;/m.test(css.
 if (!/\.scope-chip\s*\{[\s\S]*?height:\s*32px;[\s\S]*?font-size:\s*13px;/m.test(css.shell)) throw new Error('Agent 筛选 Chip 必须保持 32px / 13px')
 for (const breakpoint of ['1199.98px', '991.98px', '767.98px', '575.98px']) if (!css.shellResponsive.includes(breakpoint)) throw new Error(`shell-responsive.css 缺少断点 ${breakpoint}`)
 if (!/@media \(max-width: 575\.98px\)[\s\S]*?\.app-header \.brand\s*\{[\s\S]*?display:\s*flex/m.test(css.shellResponsive)) throw new Error('xs 窄窗口必须保留 Logo')
-for (const legacy of ['1080px', '1100px', '900px', '820px', '760px', '560px']) {
+for (const legacy of ['1180px', '1100px', '1080px', '900px', '820px', '760px', '640px', '560px']) {
   const re = new RegExp(`@media\\s*\\([^)]*(?:max-width|min-width)\\s*:\\s*${legacy.replace('.', '\\.')}\\b`)
-  if (re.test(css.shellResponsive) || re.test(css.states) || re.test(css.uiPrimitives) || re.test(css.uiOverlay)) throw new Error(`壳层/状态/统一组件不得恢复一次性断点：${legacy}`)
+  if (re.test(css.shellResponsive) || re.test(css.states) || re.test(css.backup) || re.test(css.pi) || re.test(css.taskCenter) || re.test(css.uiPrimitives) || re.test(css.uiOverlay)) {
+    throw new Error(`壳层/核心页面/统一组件不得恢复一次性断点：${legacy}`)
+  }
 }
 
 if (!css.tools.includes('工具分析正式样式') || !css.tools.includes('.tool-summary-grid') || !css.tools.includes('.tool-table-card') || !css.tools.includes('.tool-attention-row') || !css.tools.includes('.tool-session-link') || !css.tools.includes('.tool-kind-svg')) throw new Error('工具分析关键能力样式缺失')
@@ -103,6 +105,20 @@ if (!css.agents.includes('智能体概览正式样式') || !css.agents.includes(
 if (!css.agentResponsive.includes('@media (min-width: 1400px)') || !css.agentResponsive.includes('.agents-responsive-shell') || !css.agentResponsive.includes('.agent-insights-rail')) throw new Error('Agents xxl 响应式必须由 agent-insights-responsive.css 持有')
 if (!css.backup.includes('AgentLens 1.0 资产备份正式样式') || !css.backup.includes('正在扫描资产备份范围') || !css.backup.includes('.snapshot-builder') || !css.backup.includes('.preview-summary')) throw new Error('资产备份关键能力样式缺失')
 if (!css.backupResponsive.includes('1280×800 / 1366×768') || !css.backupResponsive.includes('@media (min-width: 1200px) and (max-width: 1399.98px)') || !css.backupResponsive.includes('white-space: nowrap') || !css.backupResponsive.includes('grid-column: 1 / -1')) throw new Error('资产备份 xl 主桌面响应式契约缺失')
+const backupPage = readFileSync(p('features/BackupPage.tsx'), 'utf8')
+for (const required of [
+  "import { Button, Dialog, Drawer, Toolbar } from '../components/ui'",
+  '<Toolbar className="workspace-toolbar"',
+  '<Drawer',
+  '<Dialog',
+]) {
+  if (!backupPage.includes(required)) throw new Error(`资产备份必须消费统一 UI 契约：${required}`)
+}
+for (const forbidden of ['className="scrim show', 'className="drawer show', 'backup-confirm-dialog', "window.addEventListener('keydown', closeOnEscape)"]) {
+  if (backupPage.includes(forbidden)) throw new Error(`资产备份不得恢复页面自建 Overlay：${forbidden}`)
+}
+if (/\.backup-confirm-dialog\b|\.backup-confirm-scrim\b/.test(css.backup)) throw new Error('资产备份确认流程必须由统一 Dialog 持有外壳')
+if (/\.snapshot-create-button\s*\{[^}]*height\s*:/s.test(css.backup)) throw new Error('资产备份不得覆盖统一 Button 高度')
 
 if (!css.review.includes('AgentLens 1.0 Review 页面所有者') || !css.review.includes('.evidence-inline') || !css.review.includes('.raw-event-group') || !css.review.includes('.pi-session-tree') || !css.review.includes('.inspector-panel')) throw new Error('review.css 必须只持有 Review 页面/证据/Inspector 能力')
 if (!css.reviewLong.includes('.round-nav') || !css.reviewLong.includes('.turn-rail') || !css.reviewLong.includes('.turn-tick') || !css.reviewLong.includes('.virtual-round-shell')) throw new Error('review-long-session.css 必须持有长会话/轮次导航能力')
