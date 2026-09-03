@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs'
 
 const mainSource = readFileSync('packages/web/src/main.tsx', 'utf8')
-const inspectorDismiss = readFileSync('packages/web/src/client/inspector-dismiss.ts', 'utf8')
 const clientModel = readFileSync('packages/web/src/client/model.ts', 'utf8')
 const reviewPage = readFileSync('packages/web/src/features/ReviewPage.tsx', 'utf8')
 const taskMessage = readFileSync('packages/web/src/features/TaskMessage.tsx', 'utf8')
@@ -30,8 +29,9 @@ if (!fromStartBody.includes("direction: 'forward'")) throw new Error('从头查�
 if (!reviewPage.includes("detail.page.direction !== 'backward'") || !reviewPage.includes('pane.scrollTop = pane.scrollHeight') || !reviewPage.includes('followingTailRef.current = true')) throw new Error('默认最新窗口必须渲染后定位到底部并进入跟随状态')
 if (!reviewPage.includes('pane.scrollHeight - pane.scrollTop - pane.clientHeight < 180')) throw new Error('阅读历史时不得抢滚动位置')
 
-if (!mainSource.includes('installInspectorOutsideDismiss') || !mainSource.includes('disposeInspectorOutsideDismiss')) throw new Error('事件详情抽屉必须安装并释放外部点击关闭行为')
-if (!inspectorDismiss.includes('.inspector-panel[role="dialog"][aria-modal="true"]') || !inspectorDismiss.includes('panel.contains(target)') || !inspectorDismiss.includes('button[aria-label="关闭事件详情"]')) throw new Error('事件详情抽屉必须支持外部点击关闭且不误伤内部点击')
+if (!reviewPage.includes('<Drawer') || !reviewPage.includes('className="review-inspector-overlay"') || !reviewPage.includes('onClose={onClose}')) throw new Error('事件详情必须消费统一 Drawer')
+if (reviewPage.includes("document.addEventListener('keydown'") || reviewPage.includes('className="inspector-panel"')) throw new Error('事件详情不得恢复页面自建键盘/抽屉生命周期')
+if (mainSource.includes('installInspectorOutsideDismiss') || mainSource.includes('disposeInspectorOutsideDismiss')) throw new Error('统一 Drawer 已持有外部点击关闭，不得恢复全局 Inspector dismiss')
 
 if (/\.review-page \.round-nav\s*\{[^{}]*display\s*:\s*none/s.test(longCss) || /\.review-page \.round-nav\s*\{[^{}]*visibility\s*:\s*hidden/s.test(longCss)) throw new Error('长会话性能层不得隐藏轮次导航本体')
 if (/\.round-nav\s*>\s*button:nth-of-type/.test(longCss) || /\.round-nav[^{}]*nth-(?:child|of-type)/.test(longCss)) throw new Error('长会话性能层不得按按钮序号控制业务表现')
@@ -50,6 +50,6 @@ if (!reviewPage.includes('projectReviewInteractionPresentation(interaction.nodes
 
 if (!taskDetailCss.includes('.task-round-summary::after') || !taskDetailCss.includes('max-width: 56px') || /\.task-round-summary::before\s*\{[^}]*background:/s.test(taskDetailCss)) throw new Error('轮次标题只允许短右分隔线，不得恢复左右贯穿式分割线')
 if (!taskDetailCss.includes('.task-header-status') || !taskDetailCss.includes('pointer-events: none') || !taskDetailCss.includes('.task-header-actions button')) throw new Error('任务详情头必须明确区分状态与可点击操作')
-if (!reviewCss.includes('.evidence-inline') || !reviewCss.includes('.inspector-panel')) throw new Error('Review 页面所有者必须保留证据与 Inspector')
+if (!reviewCss.includes('.evidence-inline') || !reviewCss.includes('.review-inspector-overlay') || /\.inspector-panel\b/.test(reviewCss)) throw new Error('Review 页面所有者必须保留证据/Inspector 业务内容，抽屉外壳统一由 Drawer 持有')
 
-console.log('任务复盘交互契约检查通过：默认最新窗口、历史阅读不抢滚动、单一短分隔线、显式 Thinking/Tool 层级、Agent 源码入口悬浮与 Task Surface 单一样式所有权均已锁定。')
+console.log('任务复盘交互契约检查通过：默认最新窗口、历史阅读不抢滚动、统一 Drawer、单一短分隔线、显式 Thinking/Tool 层级、Agent 源码入口悬浮与 Task Surface 单一样式所有权均已锁定。')
