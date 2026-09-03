@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 const page = readFileSync(new URL('./PiLivePage.tsx', import.meta.url), 'utf8')
+const round = readFileSync(new URL('./PiLiveTaskRound.tsx', import.meta.url), 'utf8')
 const disclosure = readFileSync(new URL('../components/PiStartupDisclosure.tsx', import.meta.url), 'utf8')
 const css = readFileSync(new URL('../components/pi-startup-disclosure.css', import.meta.url), 'utf8')
 
@@ -43,4 +44,17 @@ test('ready startup summary stays on one compact line', () => {
   assert.match(disclosure, /state\.status !== 'ready' && <small>/)
   assert.match(css, /\.pi-startup-summary-copy \{[^}]*display:\s*flex;/)
   assert.match(css, /\.pi-startup-disclosure\.is-ready:not\(\[open\]\) > summary \{[^}]*min-height:\s*34px;/)
+})
+
+test('Pi startup status is merged into the background activity round', () => {
+  assert.match(page, /id: 'background:startup'/)
+  assert.match(page, /label: '后台活动'/)
+  assert.match(page, /projection\.model\.id === 'background:0'/)
+  assert.match(page, /beforeContent=\{carriesStartup \? startupContent : undefined\}/)
+  assert.match(page, /summaryMeta=\{carriesStartup \? startupSummaryMeta : undefined\}/)
+  assert.match(page, /<PiStartupDisclosure[\s\S]*?embedded/)
+  assert.match(round, /beforeContent\?: ReactNode/)
+  assert.match(round, /summaryMeta\?: ReactNode/)
+  assert.match(round, /\{beforeContent\}/)
+  assert.match(disclosure, /if \(embedded\) return <div className=\{`pi-startup-inline is-\$\{state\.status\}`\}>/)
 })
