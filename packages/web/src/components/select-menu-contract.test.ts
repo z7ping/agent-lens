@@ -29,6 +29,15 @@ test('SelectMenu 提供键盘、搜索、选中态与窗口安全定位', () => 
   assert.match(selectSource, /createPortal\(/)
 })
 
+test('路径型项目选项第一行收敛为项目名，第二行保留路径并提供 tooltip', () => {
+  assert.match(selectSource, /export function selectMenuDisplayLabel/)
+  assert.match(selectSource, /normalizedPath\(option\.label\) === normalizedPath\(option\.description\)/)
+  assert.match(selectSource, /pathBasename\(option\.description\)/)
+  assert.match(selectSource, /title=\{selectedTooltip\}/)
+  assert.match(selectSource, /title=\{selectMenuTooltip\(option\)\}/)
+  assert.match(selectSource, /<b>\{displayLabel\}<\/b>\{option\.description && <small>\{option\.description\}<\/small>\}/)
+})
+
 test('新建 Pi 任务使用聚焦启动卡片并移除自动聚焦原生下拉', () => {
   assert.match(taskCenterSource, /新建 Pi 任务/)
   assert.match(taskCenterSource, /创建 Pi 任务 <UiIcon name="arrow-right" size=\{14\}/)
