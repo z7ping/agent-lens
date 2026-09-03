@@ -7,10 +7,53 @@ export type PiLiveHistoryItem =
   | { id: string; kind: 'usage'; usage: PiNativeUsage; at: string; nativeType?: string | undefined; parentId?: string | undefined; raw?: unknown }
   | { id: string; kind: 'lifecycle'; event: string; label: string; detail: string; at: string; nativeType?: string | undefined; parentId?: string | undefined; raw?: unknown }
 
+export interface PiLiveObservedThinking {
+  ordinal: number
+  text: string
+  at: string
+}
+
 export function omitPiLivePromptMessages(items: PiLiveHistoryItem[], promptText?: string): PiLiveHistoryItem[] {
   if (!promptText) return items
   const normalized = promptText.trim()
   return items.filter(item => !(item.kind === 'message' && item.role === 'user' && item.text.trim() === normalized))
+}
+
+export function mergePiLiveObservedThinking(
+  items: PiLiveHistoryItem[],
+  observed: PiLiveObservedThinking[],
+): PiLiveHistoryItem[] {
+  if (!observed.length) return items
+  const byOrdinal = new Map(observed.map(item => [item.ordinal, item]))
+  const result: PiLiveHistoryItem[] = []
+  let ordinal = 0
+  let insertionIndex = -1
+  let hasThinking = false
+
+  const flush = () => {
+    const fallback = byOrdinal.get(ordinal)
+    if (!fallback || hasThinking || insertionIndex < 0 || !fallback.text.trim()) return
+    result.splice(insertionIndex, 0, {
+      id: `observed-thinking:${ordinal}`,
+      kind: 'thinking',
+      text: fallback.text,
+      at: fallback.at,
+    })
+  }
+
+  for (const item of items) {
+    if (item.kind === 'message' && item.role === 'user') {
+      flush()
+      ordinal += 1
+      insertionIndex = result.length + 1
+      hasThinking = false
+    } else if (item.kind === 'thinking') {
+      hasThinking = true
+    }
+    result.push(item)
+  }
+  flush()
+  return result
 }
 
 function elapsedMs(start: string, end: string): number | undefined {

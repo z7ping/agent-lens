@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { PiLiveSnapshotDto } from '@agent-lens/protocol'
-import { omitPiLivePromptMessages, projectPiLiveHistory, type PiLiveHistoryItem } from './pi-live-history'
+import { mergePiLiveObservedThinking, omitPiLivePromptMessages, projectPiLiveHistory, type PiLiveHistoryItem } from './pi-live-history'
 
 function snapshot(entries: PiLiveSnapshotDto['entries']): PiLiveSnapshotDto {
   return {
@@ -26,6 +26,18 @@ test('Pi Live 完成态只保留乐观用户消息并移除分片中的所有重
 
   assert.deepEqual(omitPiLivePromptMessages(items, '执行检查').map(item => item.id), ['assistant-1', 'tool-1'])
   assert.equal(omitPiLivePromptMessages(items).length, items.length)
+})
+
+test('Pi Live 用实时观察补齐完成态缺失的思考且不覆盖原生思考', () => {
+  const base: PiLiveHistoryItem[] = [
+    { id: 'user-1', kind: 'message', role: 'user', text: '检查', at: '' },
+    { id: 'assistant-1', kind: 'message', role: 'assistant', text: '完成', at: '' },
+  ]
+  const observed = [{ ordinal: 1, text: '实时思考', at: '2026-09-03T00:00:00.000Z' }]
+  assert.deepEqual(mergePiLiveObservedThinking(base, observed).map(item => item.kind), ['message', 'thinking', 'message'])
+
+  const native = [base[0]!, { id: 'native-thinking', kind: 'thinking' as const, text: '原生思考', at: '' }, base[1]!]
+  assert.equal(mergePiLiveObservedThinking(native, observed).filter(item => item.kind === 'thinking').length, 1)
 })
 
 test('Pi Live persisted history preserves message, thinking, tool and lifecycle facts', () => {

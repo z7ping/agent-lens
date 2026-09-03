@@ -82,13 +82,35 @@ test('Pi Live auto-follow is coalesced to one animation frame', () => {
 test('Pi Live settle reconciles snapshot facts into the same current round shell', () => {
   assert.match(page, /const \[settledCurrentOrdinal, setSettledCurrentOrdinal\] = useState<number \| null>\(null\)/)
   assert.match(page, /const \[settledCurrentItems, setSettledCurrentItems\] = useState<PiLiveHistoryItem\[]>\(\[\]\)/)
-  assert.match(page, /const freshHistory = projectPiLiveHistory\(value\)[\s\S]*?const freshRounds = projectPiLiveTaskRounds\(freshHistory\)/)
+  assert.match(page, /const freshHistory = mergePiLiveObservedThinking\(projectPiLiveHistory\(value\), observedThinkingRef\.current\)[\s\S]*?const freshRounds = projectPiLiveTaskRounds\(freshHistory\)/)
   assert.match(page, /setSettledCurrentOrdinal\(ordinal\)[\s\S]*?setSettledCurrentItems\(settledItems\)[\s\S]*?setOptimisticPrompt\(prompt\)/)
   assert.match(page, /historyRounds\.filter\(round => round\.model\.ordinal !== settledCurrentOrdinal\)/)
   assert.match(page, /return \{ \.\.\.settledProjection\.model, id: 'pi-live-current-round' \}/)
   assert.match(page, /\.\.\.\(settledCurrentItems\.length \? \{ settledItems: settledCurrentItems \} : \{\}\)/)
   assert.match(taskRound, /hasSettledItems[\s\S]*?\? <HistoryEntries items=\{omitPiLivePromptMessages\(settledItems \?\? \[\], promptText\)\} showAllEvents=\{showAllEvents\}\/>/)
   assert.match(taskRound, /model=\{model\}[\s\S]*?className="pi-live-current-round"/)
+})
+
+test('Pi Live 生成中使用专用介入和继续通道并即时展示队列', () => {
+  assert.match(page, /if \(selectedMode === 'steer'\) await piLiveApi\.steer\(runtimeId, text\)/)
+  assert.match(page, /else await piLiveApi\.followUp\(runtimeId, text\)/)
+  assert.match(page, /setPendingQueue\(current => \[\.\.\.current, pending\]\)/)
+  assert.match(page, /正在加入 Pi 队列/)
+  assert.match(page, /pendingMessageCount=\{visiblePendingCount\}/)
+})
+
+test('Pi Live Escape 和停止操作不受发送请求锁影响', () => {
+  assert.match(page, /window\.addEventListener\('keydown', onKeyDown\)/)
+  assert.match(page, /event\.key !== 'Escape'/)
+  assert.match(page, /disabled=\{!optimisticStreaming \|\| abortPending\}/)
+  assert.match(page, /onEscape=\{optimisticStreaming \? \(\) => void stop\(\) : undefined\}/)
+})
+
+test('Pi Live 完成后保留流式观察到的思考', () => {
+  assert.match(page, /thinkingTextRef\.current \+= delta/)
+  assert.match(page, /type === 'message_end'/)
+  assert.match(page, /setObservedThinking\(current =>/)
+  assert.match(page, /mergePiLiveObservedThinking\(projectPiLiveHistory\(snapshot\), observedThinking\)/)
 })
 
 test('medium desktop viewports reclaim space instead of forcing connection text into another row', () => {

@@ -8,13 +8,14 @@ import { PiMarkdownComposer, type PiMarkdownComposerHandle } from '../components
 import { PiStartupDisclosure, piStartupSummary } from '../components/PiStartupDisclosure'
 import { Button, IconButton, Input, Textarea } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
-import { projectPiLiveHistory, type PiLiveHistoryItem } from './pi-live-history'
+import { mergePiLiveObservedThinking, projectPiLiveHistory, type PiLiveHistoryItem, type PiLiveObservedThinking } from './pi-live-history'
 import { PiLiveHistoryTaskRound, PiLiveRunningTaskRound } from './PiLiveTaskRound'
 import { piLiveTaskRoundEstimate, projectPiLiveRunningRound, projectPiLiveTaskDetail, projectPiLiveTaskRounds } from './pi-live-task-projection'
 import { TaskHeader } from './TaskHeader'
 import { TaskSurface } from './TaskSurface'
 
 type QueueMode = 'steer' | 'followUp'
+type PendingQueueSubmission = { id: string; mode: QueueMode; text: string }
 interface RestoredDraft { id: string; mode: QueueMode; text: string }
 interface LiveTool {
   id: string
@@ -299,6 +300,8 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const followFrameRef = useRef<number | null>(null)
   const leafIdRef = useRef<string | undefined>(undefined)
   const toolsRef = useRef(new Map<string, LiveTool>())
+  const thinkingTextRef = useRef('')
+  const observedThinkingRef = useRef<PiLiveObservedThinking[]>([])
   const startupSendingRef = useRef(false)
   const activePromptRef = useRef('')
   const [known, setKnown] = useState<PiLiveStateDto[]>([])
@@ -317,6 +320,8 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const [thinkingText, setThinkingText] = useState('')
   const [tools, setTools] = useState<LiveTool[]>([])
   const [queue, setQueue] = useState<PiLiveQueueDto>({ steering: [], followUp: [] })
+  const [pendingQueue, setPendingQueue] = useState<PendingQueueSubmission[]>([])
+  const [observedThinking, setObservedThinking] = useState<PiLiveObservedThinking[]>([])
   const [restored, setRestored] = useState<RestoredDraft[]>([])
   const [extension, setExtension] = useState<ExtensionRequest | null>(null)
   const [extensionPending, setExtensionPending] = useState(false)
@@ -326,6 +331,8 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const [showAllEvents, setShowAllEvents] = useState(true)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [sendPending, setSendPending] = useState(false)
+  const [abortPending, setAbortPending] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -348,9 +355,13 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     setSettledCurrentItems([])
     setStreamText('')
     setThinkingText('')
+    thinkingTextRef.current = ''
     setTools([])
     toolsRef.current.clear()
     setQueue({ steering: [], followUp: [] })
+    setPendingQueue([])
+    setObservedThinking([])
+    observedThinkingRef.current = []
     setRestored([])
     setExtension(null)
     setError('')
@@ -384,15 +395,25 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
         const value = await piLiveApi.snapshot(runtimeId, leafIdRef.current)
         if (!active) return
         const prompt = activePromptRef.current.trim()
-        const freshHistory = projectPiLiveHistory(value)
+        const freshHistory = mergePiLiveObservedThinking(projectPiLiveHistory(value), observedThinkingRef.current)
         const freshRounds = projectPiLiveTaskRounds(freshHistory)
         const matchedRound = prompt
           ? [...freshRounds].reverse().find(round => round.model.ordinal !== undefined && round.items.some(item => item.kind === 'message' && item.role === 'user' && item.text.trim() === prompt))
           : undefined
         const ordinal = matchedRound?.model.ordinal ?? null
-        const settledItems = ordinal === null
+        let settledItems = ordinal === null
           ? []
           : freshRounds.filter(round => round.model.ordinal === ordinal).flatMap(round => round.items)
+        const finalThinking = thinkingTextRef.current.trim()
+        if (ordinal !== null && finalThinking) {
+          const fallback = { ordinal, text: finalThinking, at: new Date().toISOString() }
+          setObservedThinking(current => {
+            const next = [...current.filter(item => item.ordinal !== ordinal), fallback]
+            observedThinkingRef.current = next
+            return next
+          })
+          settledItems = mergePiLiveObservedThinking(settledItems, [{ ...fallback, ordinal: 1 }])
+        }
         acceptSnapshot(value)
         if (ordinal !== null && settledItems.length > 0) {
           setSettledCurrentOrdinal(ordinal)
@@ -406,6 +427,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
         activePromptRef.current = ''
         setStreamText('')
         setThinkingText('')
+        thinkingTextRef.current = ''
         toolsRef.current.clear()
         setTools([])
       } catch (reason) {
@@ -429,6 +451,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             statePatch = { ...statePatch, isStreaming: true }
             setStreamText('')
             setThinkingText('')
+            thinkingTextRef.current = ''
             toolsRef.current.clear()
             setTools([])
           } else if (type === 'agent_settled') {
@@ -444,7 +467,22 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             const update = record(event.assistantMessageEvent)
             const delta = stringValue(update.delta)
             if (update.type === 'text_delta' && delta) setStreamText(value => value + delta)
-            if (update.type === 'thinking_delta' && delta) setThinkingText(value => value + delta)
+            if (update.type === 'thinking_delta' && delta) {
+              thinkingTextRef.current += delta
+              setThinkingText(thinkingTextRef.current)
+            }
+          } else if (type === 'message_end') {
+            const message = record(event.message)
+            const content = Array.isArray(message.content) ? message.content.map(record) : []
+            const finalThinking = content
+              .filter(block => block.type === 'thinking')
+              .map(block => stringValue(block.thinking || block.text))
+              .filter(Boolean)
+              .join('\n\n')
+            if (finalThinking) {
+              thinkingTextRef.current = finalThinking
+              setThinkingText(finalThinking)
+            }
           } else if (type === 'tool_execution_start') {
             const id = stringValue(event.toolCallId)
             if (id) {
@@ -479,6 +517,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             const steering = Array.isArray(event.steering) ? event.steering.filter((item): item is string => typeof item === 'string') : []
             const followUp = Array.isArray(event.followUp) ? event.followUp.filter((item): item is string => typeof item === 'string') : []
             setQueue({ steering, followUp })
+            setPendingQueue(current => current.filter(item => !(item.mode === 'steer' ? steering : followUp).includes(item.text)))
             statePatch = { ...statePatch, pendingMessageCount: steering.length + followUp.length }
           } else if (type === 'runtime_resources') {
             const startupResources = parseStartupResources(event.resources)
@@ -540,12 +579,13 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     }
   }, [runtimeId])
 
-  const history = useMemo(() => projectPiLiveHistory(snapshot), [snapshot])
+  const history = useMemo(() => mergePiLiveObservedThinking(projectPiLiveHistory(snapshot), observedThinking), [observedThinking, snapshot])
   const historyRounds = useMemo(() => projectPiLiveTaskRounds(history), [history])
   const visibleHistoryRounds = useMemo(() => settledCurrentOrdinal === null
     ? historyRounds
     : historyRounds.filter(round => round.model.ordinal !== settledCurrentOrdinal), [historyRounds, settledCurrentOrdinal])
   const optimisticStreaming = ((Boolean(optimisticPrompt) && settledCurrentOrdinal === null) || (state?.isStreaming ?? false))
+  const visiblePendingCount = queue.steering.length + queue.followUp.length + pendingQueue.length
   const runningRound = useMemo(() => {
     if (settledCurrentOrdinal !== null) {
       const settledProjection = historyRounds.find(round => round.model.ordinal === settledCurrentOrdinal && !round.continuation)
@@ -555,11 +595,11 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     return projectPiLiveRunningRound({ tools, isStreaming: optimisticStreaming })
   }, [historyRounds, optimisticPrompt, optimisticStreaming, settledCurrentOrdinal, state?.isStreaming, streamText, thinkingText, tools])
   const taskDetailModel = useMemo(() => projectPiLiveTaskDetail({
-    state,
+    state: state ? { ...state, pendingMessageCount: visiblePendingCount } : state,
     connected,
     historyRounds,
     runningRound,
-  }), [connected, historyRounds, runningRound, state])
+  }), [connected, historyRounds, runningRound, state, visiblePendingCount])
 
   const beginOptimisticPrompt = useCallback((text: string) => {
     setSettledCurrentOrdinal(null)
@@ -618,7 +658,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
 
   const send = async (forcedMode?: QueueMode) => {
     const text = input.trim()
-    if (!text || busy || extension) return
+    if (!text || sendPending || extension) return
     if (!runtimeReady) {
       if (!canStageStartup) return
       setStartupQueued(text)
@@ -629,19 +669,27 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     if (startupQueued) return
     const wasStreaming = state?.isStreaming ?? false
     const selectedMode = forcedMode ?? mode
-    setBusy(true)
+    setSendPending(true)
     setError('')
     setInput('')
     if (!wasStreaming) beginOptimisticPrompt(text)
+    const pending = wasStreaming ? { id: `pending-${Date.now()}`, mode: selectedMode, text } : null
+    if (pending) setPendingQueue(current => [...current, pending])
     inputRef.current?.focus({ preventScroll: true })
     try {
-      await piLiveApi.prompt(runtimeId, text, wasStreaming ? selectedMode : undefined)
+      if (wasStreaming) {
+        if (selectedMode === 'steer') await piLiveApi.steer(runtimeId, text)
+        else await piLiveApi.followUp(runtimeId, text)
+      } else {
+        await piLiveApi.prompt(runtimeId, text)
+      }
     } catch (reason) {
       setInput(current => current || text)
       if (!wasStreaming) rollbackOptimisticPrompt(text)
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
-      setBusy(false)
+      if (pending) setPendingQueue(current => current.filter(item => item.id !== pending.id))
+      setSendPending(false)
     }
   }
 
@@ -677,9 +725,9 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     }
   }
 
-  const stop = async () => {
-    if (!state?.isStreaming || busy) return
-    setBusy(true)
+  const stop = useCallback(async () => {
+    if (!optimisticStreaming || abortPending) return
+    setAbortPending(true)
     setError('')
     try {
       const pending = await piLiveApi.abort(runtimeId, true)
@@ -689,14 +737,26 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       ]
       setRestored(drafts)
       setQueue({ steering: [], followUp: [] })
+      setPendingQueue([])
       setState(current => current ? { ...current, isStreaming: false, pendingMessageCount: 0 } : current)
       inputRef.current?.focus({ preventScroll: true })
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
-      setBusy(false)
+      setAbortPending(false)
     }
-  }
+  }, [abortPending, optimisticStreaming, runtimeId])
+
+  useEffect(() => {
+    if (!optimisticStreaming) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing) return
+      event.preventDefault()
+      void stop()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [optimisticStreaming, stop])
 
   const answerExtension = async (value: JsonValue) => {
     if (!extension || extensionPending) return
@@ -777,12 +837,13 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   }
 
   const queueItems = [
+    ...pendingQueue.map(item => ({ ...item, active: true, pending: true })),
     ...queue.steering.map((text, index) => ({ id: `active-steer-${index}`, mode: 'steer' as QueueMode, text, active: true })),
     ...queue.followUp.map((text, index) => ({ id: `active-follow-${index}`, mode: 'followUp' as QueueMode, text, active: true })),
     ...restored.map(item => ({ ...item, active: false })),
   ]
   const selectedModel = modelSelection(state)
-  const canSend = Boolean(input.trim()) && !busy && !extension && !runtimeTerminating && (runtimeReady ? !startupQueued : canStageStartup)
+  const canSend = Boolean(input.trim()) && !sendPending && !extension && !runtimeTerminating && (runtimeReady ? !startupQueued : canStageStartup)
   const composerStatus = startupQueued
     ? { label: '待发送', color: 'var(--al-accent)', title: '等待 Pi 就绪后自动发送' }
     : runtimeInitializing
@@ -836,7 +897,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
         metrics={taskDetailModel.metrics}
         actions={<>
           <Button size="small" className="review-audit-toggle" aria-pressed={showAllEvents} onClick={() => setShowAllEvents(value => !value)}>{showAllEvents ? '视图：全部事件' : '视图：核心事件'}</Button>
-          <Button size="small" className="pi-live-stop" disabled={!state?.isStreaming || busy} onClick={() => void stop()}>停止当前任务</Button>
+          <Button size="small" className="pi-live-stop" disabled={!optimisticStreaming || abortPending} onClick={() => void stop()}>停止当前任务</Button>
           <IconButton size="small" variant="danger" className="pi-live-menu" title="结束 Pi Runtime" aria-label="结束 Pi Runtime" disabled={busy} onClick={() => void terminate()}><UiIcon name="close" size={14}/></IconButton>
         </>}
       />
@@ -876,7 +937,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             tools={tools}
             streamText={streamText}
             isStreaming={optimisticStreaming}
-            pendingMessageCount={state?.pendingMessageCount ?? 0}
+            pendingMessageCount={visiblePendingCount}
           />}
           {!history.length && !optimisticPrompt && !streamText && !thinkingText && !tools.length && runtimeReady && <div className="pi-live-empty">这个 Pi Runtime 还没有消息。可以直接在下方输入开始任务。</div>}
           {error && <div className="pi-live-error pi-live-reader-error" role="alert">{error}</div>}
@@ -889,9 +950,9 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
           {startupQueued && <div className="pi-live-startup-queue" role="status">
             <span>等待 Pi 就绪</span><b>{startupQueued}</b><div><Button size="small" className="pi-live-queue-action" onClick={editStartupQueued}>编辑</Button><Button size="small" className="pi-live-queue-action" onClick={removeStartupQueued}>撤回</Button></div>
           </div>}
-          {queueItems.length > 0 && <div className="pi-live-queue">{queueItems.map(item => <div key={item.id} className={`pi-live-queue-item ${item.active ? 'active' : 'restored'}`}>
+          {queueItems.length > 0 && <div className="pi-live-queue" role="status" aria-live="polite">{queueItems.map(item => <div key={item.id} className={`pi-live-queue-item ${item.active ? 'active' : 'restored'}`}>
             <span>{item.mode === 'steer' ? '待介入' : '完成后继续'}</span><b>{item.text}</b>
-            {item.active ? <small>已在 Pi 队列</small> : <div><Button size="small" className="pi-live-queue-action" onClick={() => editRestored(item)}>编辑</Button><Button size="small" className="pi-live-queue-action" onClick={() => removeRestored(item.id)}>撤回</Button></div>}
+            {item.active ? <small>{'pending' in item && item.pending ? '正在加入 Pi 队列' : '已在 Pi 队列'}</small> : <div><Button size="small" className="pi-live-queue-action" onClick={() => editRestored(item)}>编辑</Button><Button size="small" className="pi-live-queue-action" onClick={() => removeRestored(item.id)}>撤回</Button></div>}
           </div>)}</div>}
           {extension && <ExtensionPrompt request={extension} onAnswer={value => { if (!extensionPending) void answerExtension(value) }}/>} 
         </div>
@@ -912,7 +973,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
               onChange={setInput}
               canSubmit={canSend}
               onSubmit={submitMode => void send(submitMode === 'followUp' ? 'followUp' : undefined)}
-              onEscape={state?.isStreaming ? () => void stop() : undefined}
+              onEscape={optimisticStreaming ? () => void stop() : undefined}
               placeholder={inputPlaceholder}
               title="输入 Markdown 会自动格式化 · Enter 发送 · Alt+Enter 完成后继续 · Shift+Enter 换行 · 生成中 Esc 中断"
               ariaLabel="Pi Markdown 富文本输入"
