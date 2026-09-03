@@ -8,6 +8,8 @@ const files = {
   states: p('states.css'), tools: p('tools.css'), insights: p('insights.css'), agents: p('agents.css'), agentResponsive: p('agent-insights-responsive.css'),
   backup: p('backup.css'), backupResponsive: p('backup-responsive.css'), review: p('review.css'), reviewLong: p('review-long-session.css'),
   pi: p('pi-live.css'), taskCenter: p('task-center.css'), taskDetail: p('task-detail.css'),
+  uiPrimitives: p('components/ui/ui-primitives.css'), uiOverlay: p('components/ui/overlay.css'),
+  selectMenu: p('components/select-menu.css'), piStartup: p('components/pi-startup-disclosure.css'),
 }
 
 const retired = [
@@ -17,6 +19,15 @@ const retired = [
   'features/task-header.css',
 ].map(p)
 for (const file of retired) if (existsSync(file)) throw new Error(`已退役表现层不应重新出现：${file}`)
+
+if (!existsSync('AGENTS.md')) throw new Error('正式仓库必须保留根 AGENTS.md，确保所有编码 Agent 接手时读取统一约束')
+const agentRules = readFileSync('AGENTS.md', 'utf8')
+for (const required of ['UI / 组件契约（强制）', '已有对应 Primitive 时，页面不得自行重新实现', 'TaskSurface', '正常可见文字不得低于 `12px`']) {
+  if (!agentRules.includes(required)) throw new Error(`AGENTS.md 缺少统一 UI 强制约束：${required}`)
+}
+for (const required of [p('components/ui/Primitives.tsx'), p('components/ui/Overlay.tsx'), p('components/ui/index.ts')]) {
+  if (!existsSync(required)) throw new Error(`统一 UI 组件入口缺失：${required}`)
+}
 
 const main = readFileSync(files.main, 'utf8')
 const imports = [...main.matchAll(/import\s+['\"](.+?\.css)['\"]/g)].map(match => match[1])
@@ -44,11 +55,19 @@ if (!/--font-size-xs:\s*12px\s*;/.test(css.typography)) throw new Error('正式�
 function pixelFonts(source) {
   return [...source.matchAll(/\{([^{}]*)\}/gs)].flatMap(block => [...block[1].matchAll(/font-size\s*:\s*(\d+(?:\.\d+)?)px\b/g)]).map(match => Number(match[1]))
 }
-for (const key of ['styles', 'theme', 'typography', 'readability', 'semantic', 'shell', 'shellResponsive', 'states', 'tools', 'insights', 'agents', 'agentResponsive', 'backup', 'backupResponsive', 'review', 'reviewLong', 'taskCenter', 'taskDetail']) {
-  const tooSmall = pixelFonts(css[key]).filter(value => value > 0 && value < 12)
+function shorthandFonts(source) {
+  return [...source.matchAll(/\{([^{}]*)\}/gs)].flatMap(block => [...block[1].matchAll(/(?:^|;)\s*font\s*:\s*[^;]*?(\d+(?:\.\d+)?)px(?:\s*\/|\s)/g)]).map(match => Number(match[1]))
+}
+function assertMinFont(key, includeShorthand = false) {
+  const values = includeShorthand ? [...pixelFonts(css[key]), ...shorthandFonts(css[key])] : pixelFonts(css[key])
+  const tooSmall = values.filter(value => value > 0 && value < 12)
   if (tooSmall.length) throw new Error(`${files[key]} 出现小于 12px 的有效字号：${[...new Set(tooSmall)].join(', ')}px`)
 }
-for (const key of ['theme', 'semantic', 'shell', 'shellResponsive', 'states', 'tools', 'insights', 'agents', 'agentResponsive', 'backup', 'backupResponsive', 'review', 'reviewLong', 'pi', 'taskCenter', 'taskDetail']) {
+for (const key of ['styles', 'theme', 'typography', 'readability', 'semantic', 'shell', 'shellResponsive', 'states', 'tools', 'insights', 'agents', 'agentResponsive', 'backup', 'backupResponsive', 'review', 'reviewLong', 'pi', 'taskCenter', 'taskDetail']) {
+  assertMinFont(key)
+}
+for (const key of ['uiPrimitives', 'uiOverlay', 'selectMenu', 'piStartup']) assertMinFont(key, true)
+for (const key of ['theme', 'semantic', 'shell', 'shellResponsive', 'states', 'tools', 'insights', 'agents', 'agentResponsive', 'backup', 'backupResponsive', 'review', 'reviewLong', 'pi', 'taskCenter', 'taskDetail', 'uiPrimitives', 'uiOverlay', 'selectMenu', 'piStartup']) {
   if (/!important\b/.test(css[key])) throw new Error(`${files[key]} 不得用 !important 争夺表现所有权`)
 }
 
@@ -57,6 +76,11 @@ if (/\.app-header\b|\.tool-summary-grid\b|\.agent-card\b|\.review-page\b/.test(c
 if (!/\.btn\s*\{[\s\S]*?display:\s*inline-flex;[\s\S]*?height:\s*30px;[\s\S]*?font-size:\s*12px;[\s\S]*?white-space:\s*nowrap;/m.test(css.styles)) {
   throw new Error('共享按钮必须保持 inline-flex / 30px / 12px / 不换行')
 }
+if (!/export function Button\b/.test(readFileSync(p('components/ui/Primitives.tsx'), 'utf8'))) throw new Error('统一 UI Primitive 必须保留 Button')
+if (!/export function Dialog\b/.test(readFileSync(p('components/ui/Overlay.tsx'), 'utf8')) || !/export function Drawer\b/.test(readFileSync(p('components/ui/Overlay.tsx'), 'utf8'))) {
+  throw new Error('统一 Overlay 必须保留 Dialog / Drawer')
+}
+if (!/export \{ SelectMenu \} from '\.\.\/SelectMenu'/.test(readFileSync(p('components/ui/index.ts'), 'utf8'))) throw new Error('高级 SelectMenu 必须经统一 UI 出口导出')
 const duplicated = ['--al-canvas', '--al-surface', '--al-soft', '--al-line', '--al-ink', '--al-accent']
   .filter(token => new RegExp(`${token.replaceAll('-', '\\-')}\\s*:`).test(css.theme))
 if (duplicated.length) throw new Error(`theme.css 不得重复声明基础 Token：${duplicated.join(', ')}`)
@@ -70,7 +94,7 @@ for (const breakpoint of ['1199.98px', '991.98px', '767.98px', '575.98px']) if (
 if (!/@media \(max-width: 575\.98px\)[\s\S]*?\.app-header \.brand\s*\{[\s\S]*?display:\s*flex/m.test(css.shellResponsive)) throw new Error('xs 窄窗口必须保留 Logo')
 for (const legacy of ['1080px', '1100px', '900px', '820px', '760px', '560px']) {
   const re = new RegExp(`@media\\s*\\([^)]*(?:max-width|min-width)\\s*:\\s*${legacy.replace('.', '\\.')}\\b`)
-  if (re.test(css.shellResponsive) || re.test(css.states)) throw new Error(`壳层/状态层不得恢复一次性断点：${legacy}`)
+  if (re.test(css.shellResponsive) || re.test(css.states) || re.test(css.uiPrimitives) || re.test(css.uiOverlay)) throw new Error(`壳层/状态/统一组件不得恢复一次性断点：${legacy}`)
 }
 
 if (!css.tools.includes('工具分析正式样式') || !css.tools.includes('.tool-summary-grid') || !css.tools.includes('.tool-table-card') || !css.tools.includes('.tool-attention-row') || !css.tools.includes('.tool-session-link') || !css.tools.includes('.tool-kind-svg')) throw new Error('工具分析关键能力样式缺失')
@@ -114,4 +138,4 @@ for (const [label, fg, bg] of [
   if (ratio < 4.5) throw new Error(`${label} 对比度不足：${ratio.toFixed(2)}`)
 }
 
-console.log('AgentLens 正式 Web 表现检查通过：单一样式所有权、响应式、字号、对比度与关键页面能力均已锁定。')
+console.log('AgentLens 正式 Web 表现检查通过：单一样式所有权、统一组件、响应式、字号、对比度与关键页面能力均已锁定。')
