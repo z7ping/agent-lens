@@ -8,7 +8,12 @@
 .markdown li { display: list-item; }
 .markdown li::marker { color: var(--al-muted); }
 
-/* GFM 管道表格由 MarkdownContent 投影，滚动容器避免宽表撑破会话详情。 */
+/* GFM 任务列表由 remark-gfm 解析；checkbox 属于正文语义，不恢复普通列表 marker。 */
+.markdown .contains-task-list { list-style: none; padding-left: 0; }
+.markdown .task-list-item { list-style: none; }
+.markdown .task-list-item > input[type='checkbox'] { margin: 0 7px 0 0; vertical-align: -1px; }
+
+/* GFM 表格由 remark-gfm 解析，滚动容器避免宽表撑破会话详情。 */
 .markdown-table-scroll {
   width: 100%;
   max-width: 100%;
