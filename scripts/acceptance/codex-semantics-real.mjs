@@ -75,7 +75,7 @@ try {
   })()`)
 
   await delay(150)
-  const inspectorOpen = await win.webContents.executeJavaScript(`Boolean(document.querySelector('.inspector-panel[role="dialog"]'))`)
+  const inspectorOpen = await win.webContents.executeJavaScript(`Boolean(document.querySelector('.review-inspector-overlay .ui-drawer[role="dialog"]'))`)
   if (inspectorOpen) {
     await win.webContents.executeJavaScript(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))`)
     await delay(80)
