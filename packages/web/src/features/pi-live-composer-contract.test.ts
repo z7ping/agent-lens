@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 const page = readFileSync(new URL('./PiLivePage.tsx', import.meta.url), 'utf8')
+const taskRound = readFileSync(new URL('./PiLiveTaskRound.tsx', import.meta.url), 'utf8')
 const css = readFileSync(new URL('../pi-live.css', import.meta.url), 'utf8')
 const pill = readFileSync(new URL('../components/ComposerPillSelect.tsx', import.meta.url), 'utf8')
 const selectMenu = readFileSync(new URL('../components/SelectMenu.tsx', import.meta.url), 'utf8')
@@ -47,6 +48,14 @@ test('Pi Live composer keeps status labels and adjacent controls visually separa
   assert.match(css, /\.pi-live-startup-queue > div \{[^}]*gap:\s*6px;/)
   assert.match(css, /\.pi-live-queue-item > div \{[^}]*gap:\s*6px;/)
   assert.match(css, /\.pi-live-review-link \{[^}]*display:\s*flex;[^}]*gap:\s*8px;/)
+})
+
+test('Pi Live streaming tail keeps layout stable while tokens arrive', () => {
+  assert.match(taskRound, /<div className="pi-live-stream-text">\{streamText\}<\/div>/)
+  assert.doesNotMatch(taskRound, /<MarkdownContent text=\{streamText\}\s*\/>/)
+  assert.match(css, /\.pi-live-reader \{[\s\S]*?scrollbar-gutter:\s*stable;/)
+  assert.match(css, /\.pi-live-reader \{[\s\S]*?overflow-anchor:\s*none;/)
+  assert.match(css, /\.pi-live-stream-text \{[^}]*white-space:\s*pre-wrap;[^}]*overflow-wrap:\s*anywhere;/)
 })
 
 test('medium desktop viewports reclaim space instead of forcing connection text into another row', () => {
