@@ -39,6 +39,13 @@ test('Pi Live 初始化期间仍允许输入并可暂存首条任务', () => {
   assert.match(page, /disabled=\{runtimeTerminating\}/)
 })
 
+test('Pi Live composer keeps status labels and adjacent controls visually separated', () => {
+  assert.match(css, /\.pi-live-compose-bar \{[^}]*gap:\s*12px;/)
+  assert.match(css, /\.pi-live-compose-runtime \{[^}]*display:\s*inline-flex;[^}]*gap:\s*6px;/)
+  assert.match(css, /\.pi-live-compose-settings \{[^}]*gap:\s*8px;/)
+  assert.match(css, /\.pi-live-compose-mode \{[^}]*gap:\s*2px;/)
+})
+
 test('medium desktop viewports reclaim space instead of forcing connection text into another row', () => {
   assert.match(css, /@media \(max-width: 1199\.98px\) \{[\s\S]*?\.pi-live-compose-runtime \{ display: none; \}/)
 })
