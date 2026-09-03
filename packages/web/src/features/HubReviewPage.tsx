@@ -14,6 +14,7 @@ import {
   fetchLocalReviewSessions,
 } from '../client/hub-review'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
+import { IconButton, UiIcon } from '../components/ui'
 import { TaskSurface } from './TaskSurface'
 
 const omittedReasonLabel: Record<Extract<HubReadAvailability, { state: 'omitted' }>['reason'], string> = {
@@ -246,7 +247,7 @@ export function HubReviewPage({ embedded = false }: { embedded?: boolean }) {
 
   return <main className={`review-page hub-review-page ${embedded ? 'hub-review-page-embedded' : ''}`}>
     {!embedded && <div className="workspace-toolbar hub-review-toolbar">
-      <button className="icon-button hub-review-back" onClick={() => navigate('/review')} aria-label="返回任务复盘">←</button>
+      <IconButton className="icon-button hub-review-back" onClick={() => navigate('/review')} aria-label="返回任务复盘"><UiIcon name="arrow-left" size={16}/></IconButton>
       <div>
         <b>任务复盘</b>
         <span>本机与 Hub 当前 active Generation 会话统一浏览。</span>

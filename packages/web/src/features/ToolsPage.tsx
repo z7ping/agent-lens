@@ -126,7 +126,7 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
       <SelectMenu className="filter" value={usage.filters.range} onChange={range => model.setUsageFilters({ range: range as typeof usage.filters.range })} ariaLabel="筛选时间范围" menuWidth={156} options={[
         { value: 'today', label: '今天' }, { value: '7d', label: '最近 7 天' }, { value: '30d', label: '最近 30 天' }, { value: 'all', label: '全部时间' },
       ]}/>
-      <IconButton className="toolbar-end" onClick={() => void model.refreshUsage()} title="刷新工具分析" aria-label="刷新工具分析"><UiIcon name="refresh" size={15}/></IconButton>
+      <IconButton className="toolbar-end" onClick={() => void model.refreshUsage()} title="刷新工具分析" aria-label="刷新工具分析"><UiIcon name="refresh" size={16}/></IconButton>
     </Toolbar>
 
     <div className="page-content tools-content">
@@ -167,7 +167,7 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
                 </tr>
               })}</tbody>
             </table> : <div className="tools-empty-state"><EmptyStatePanel
-              icon="⌕"
+              icon={<UiIcon name="search" size={20}/>}
               title="当前筛选范围没有工具调用"
               description="试试放宽时间范围或清除项目、智能体筛选。新的工具调用进入 AgentLens 后会出现在这里。"
               action={canRelaxFilters ? { label: '放宽筛选条件', onClick: relaxFilters } : { label: '刷新', onClick: () => void model.refreshUsage() }}
@@ -225,7 +225,7 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
               return <button key={session.logicalSessionId} className="tool-session-link" onClick={() => openReviewSession(session.logicalSessionId)} title={label}>
                 <span className="tool-session-copy"><b>{label}</b><small>{sourceLabels(summary?.sourceIds ?? selectedTool.sourceIds)} · {session.callCount} 次调用</small></span>
                 <span className="metric-bar" aria-hidden="true"><i style={{ width: `${Math.max(5, session.callCount / max * 100)}%` }}/></span>
-                <span className="tool-session-open">打开 <UiIcon name="arrow-right" size={13}/></span>
+                <span className="tool-session-open">打开 <UiIcon name="arrow-right" size={14}/></span>
               </button>
             })}
             {!selectedTool.sessions.length && <div className="tool-drill-note">当前范围没有可定位的会话记录。</div>}

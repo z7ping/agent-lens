@@ -32,9 +32,8 @@ export function EmptyStatePanel({
   children?: ReactNode
   compact?: boolean
 }) {
-  const renderedIcon = icon === '⌕' ? <UiIcon name="search" size={20}/> : icon
   return <div className={`state-empty ${compact ? 'is-compact' : ''}`}>
-    <div className="state-empty-icon" aria-hidden="true">{renderedIcon}</div>
+    <div className="state-empty-icon" aria-hidden="true">{icon}</div>
     <h3>{title}</h3>
     <p>{description}</p>
     {(action || children) && <div className="state-actions">
@@ -129,7 +128,7 @@ export function PageLoadingState({
           <h2>{title}</h2>
           <p>{description}</p>
           {facts.length > 0 && <div className="page-loading-facts">
-            {facts.map(fact => <span key={fact}><UiIcon name="check" size={13}/>{fact}</span>)}
+            {facts.map(fact => <span key={fact}><UiIcon name="check" size={12}/>{fact}</span>)}
           </div>}
         </div>
       </div>

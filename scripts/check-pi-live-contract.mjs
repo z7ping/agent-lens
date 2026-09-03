@@ -48,7 +48,7 @@ requireText(app, /path="\/review\/live\/:runtimeSessionId"/, '缺少 Pi Live run
 requireText(app, /onPiLive[\s\S]*!onPiLive/, 'Pi Live 必须从普通 Review overlay/turn rail 语义分离')
 if (/to="\/review\/live"[^>]*>Pi 实时<\/NavLink>/.test(app)) failures.push('顶部不得保留独立 Pi 实时入口')
 
-requireText(taskCenter, /\+ 新建任务/, '任务中心左侧必须提供新建任务入口')
+requireText(taskCenter, /<UiIcon name="plus"[^>]*\/>\s*新建任务/, '任务中心左侧必须通过统一图标提供新建任务入口')
 requireText(taskCenter, /进行中 \+ 历史/, '任务中心必须统一进行中与历史任务')
 requireText(taskCenter, /piLiveApi\.knownRuntimes\(\)/, '任务中心必须发现 Runtime 持有的 Pi Runtime')
 requireText(taskCenter, /<TaskSurface\s+mode=\{surfaceMode\}>/, '历史、实时与 Hub 详情必须统一经过 TaskSurface')

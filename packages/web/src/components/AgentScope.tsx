@@ -136,7 +136,7 @@ export function AgentScope({ agents, value, onChange, allLabel = '全部智能�
       onDrop={event => { event.preventDefault(); if (draggedId) move(draggedId, agent.sourceId); setDraggedId('') }}
       onDragEnd={() => setDraggedId('')}
     >
-      <UiIcon name="drag" size={15} className="agent-scope-drag" />
+      <UiIcon name="drag" size={16} className="agent-scope-drag" />
       <input type="checkbox" aria-label={`${agentLabel(agent.sourceId, agent.displayName)}显示在工具栏`} checked={pinned.includes(agent.sourceId)} onChange={() => toggle(agent.sourceId)} />
       <AgentIcon sourceId={agent.sourceId} />
       <span className="agent-scope-option-name">{agentLabel(agent.sourceId, agent.displayName)}</span>

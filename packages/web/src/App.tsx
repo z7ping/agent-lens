@@ -9,7 +9,7 @@ import { BrandVersion, ReleaseInfo } from './components/ReleaseInfo'
 import { ReviewStateOverlay } from './components/ReviewStateOverlay'
 import { ReviewTurnRail } from './components/ReviewTurnRail'
 import { RuntimeStatus } from './components/RuntimeStatus'
-import { UiIcon } from './components/UiIcon'
+import { IconButton, UiIcon } from './components/ui'
 import { AgentsResponsivePage } from './features/AgentsResponsivePage'
 import { BackupPage } from './features/BackupPage'
 import { InsightsPage } from './features/InsightsPage'
@@ -214,7 +214,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
           <div className="app-status">
             <RuntimeStatus health={snapshot.health} liveConnected={snapshot.liveConnected} />
             <ReleaseInfo runtimeOwner={snapshot.health?.runtime?.owner ?? null} runtimeReady={snapshot.health !== null} />
-            <button className="theme-toggle" onClick={toggleTheme} title={theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'} aria-label={theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'}><UiIcon name={theme === 'dark' ? 'sun' : 'moon'} size={18}/></button>
+            <IconButton className="theme-toggle" onClick={toggleTheme} title={theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'} aria-label={theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'}><UiIcon name={theme === 'dark' ? 'sun' : 'moon'} size={16}/></IconButton>
           </div>
         </div>
       </header>

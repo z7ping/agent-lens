@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import type { TaskThinkingModel } from './task-detail-model'
+import { UiIcon } from '../components/UiIcon'
 
 export interface TaskThinkingProps {
   model: TaskThinkingModel
@@ -12,7 +13,7 @@ export interface TaskThinkingProps {
 
 function DisclosureChevron() {
   return <span className="task-disclosure-chevron task-thinking-chevron" aria-hidden="true">
-    <svg viewBox="0 0 16 16" fill="none"><path d="m6 4 4 4-4 4"/></svg>
+    <UiIcon name="chevron-right" size={16}/>
   </span>
 }
 

@@ -51,6 +51,15 @@ tokens
 - Dialog / Drawer
 - Empty / Error / Loading State
 
+### 图标规范
+
+- 通用界面图标统一使用 `components/ui` 导出的 `UiIcon`，页面和领域组件不得重复绘制同义 SVG。
+- 工具类型只使用专用 `ToolKindIcon`；正式品牌标识只使用品牌资源，不用字符或 Emoji 代替。
+- 禁止用 `× / ← / → / ↑ / ↓ / ✓ / ⌄ / ⌕` 等文本字符充当按钮、状态、导航或展开图标。
+- 图标尺寸只使用 `12 / 14 / 16 / 20` 四档；默认 `16px`，随文字使用 `14px`，紧凑状态使用 `12px`，空态与强调状态使用 `20px`。
+- 图标继承当前文字或语义状态颜色，不在页面内声明独立色值；描边、端点和视框由 `UiIcon` 统一维护。
+- 纯图标操作必须使用 `IconButton` 并提供准确的 `aria-label`；图标与文字组合时由 `Button` 或对应 Primitive 负责间距和命中区。
+
 Task Center / Review / Pi Live 的任务内容继续复用现有：
 
 - `TaskSurface`

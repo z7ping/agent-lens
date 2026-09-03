@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { taskDurationLabel, type TaskRoundModel } from './task-detail-model'
+import { UiIcon } from '../components/UiIcon'
 
 export interface TaskRoundProps {
   model: TaskRoundModel
@@ -14,7 +15,7 @@ export interface TaskRoundProps {
 
 function DisclosureChevron() {
   return <span className="task-disclosure-chevron task-round-chevron" aria-hidden="true">
-    <svg viewBox="0 0 16 16" fill="none"><path d="m6 4 4 4-4 4"/></svg>
+    <UiIcon name="chevron-right" size={16}/>
   </span>
 }
 

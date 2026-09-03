@@ -195,7 +195,7 @@ function NewTaskPanel({
       {error && <div className="pi-live-error" role="alert">{error}</div>}
       {!options.length && <div className="task-center-project-hint">先让 AgentLens 采集到一次带工作目录的项目会话，再从这里打开 Pi；本页面不会要求你手填 cwd。</div>}
       <div className="task-center-new-actions">
-        <Button variant="primary" loading={starting} disabled={!selected || !availability.available} onClick={() => void start()}>创建 Pi 任务 →</Button>
+        <Button variant="primary" loading={starting} disabled={!selected || !availability.available} onClick={() => void start()}>创建 Pi 任务 <UiIcon name="arrow-right" size={14}/></Button>
       </div>
     </section>
   </div>
@@ -364,13 +364,13 @@ export function TaskCenterPage({ model, mode }: { model: AgentLensClientModel; m
         { value: 'all', label: '全部状态' }, { value: 'clean', label: '无错误' }, { value: 'with-errors', label: '有错误' },
       ]}/>
       <Input className="filter search-filter" placeholder="搜索历史任务…" value={review.filters.search} onChange={event => model.setReviewFilters({ search: event.target.value })} aria-label="搜索历史任务"/>
-      <IconButton onClick={() => void model.refreshReview()} title="刷新历史任务" aria-label="刷新历史任务"><UiIcon name="refresh" size={15}/></IconButton>
+      <IconButton onClick={() => void model.refreshReview()} title="刷新历史任务" aria-label="刷新历史任务"><UiIcon name="refresh" size={16}/></IconButton>
     </Toolbar>}
 
     <aside className="task-center-rail">
       <div className="task-center-rail-head">
         <div><b>任务</b><span>进行中 + 历史</span></div>
-        <Button size="small" variant="primary" onClick={newTask}>+ 新建任务</Button>
+        <Button size="small" variant="primary" onClick={newTask}><UiIcon name="plus" size={14}/> 新建任务</Button>
       </div>
       <div className="task-center-scroll">
         {runtimes.length > 0 && <section className="task-center-group task-center-live-group">

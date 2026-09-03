@@ -1,4 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 const root = 'packages/web/src'
 const p = name => `${root}/${name}`
@@ -22,7 +23,7 @@ for (const file of retired) if (existsSync(file)) throw new Error(`已退役表�
 
 if (!existsSync('AGENTS.md')) throw new Error('正式仓库必须保留根 AGENTS.md，确保所有编码 Agent 接手时读取统一约束')
 const agentRules = readFileSync('AGENTS.md', 'utf8')
-for (const required of ['UI / 组件契约（强制）', '已有对应 Primitive 时，页面不得自行重新实现', 'TaskSurface', '正常可见文字不得低于 `12px`']) {
+for (const required of ['UI / 组件契约（强制）', '已有对应 Primitive 时，页面不得自行重新实现', 'TaskSurface', '正常可见文字不得低于 `12px`', '### 图标规范']) {
   if (!agentRules.includes(required)) throw new Error(`AGENTS.md 缺少统一 UI 强制约束：${required}`)
 }
 for (const required of [p('components/ui/Primitives.tsx'), p('components/ui/Overlay.tsx'), p('components/ui/index.ts')]) {
@@ -81,6 +82,24 @@ if (!/export function Dialog\b/.test(readFileSync(p('components/ui/Overlay.tsx')
   throw new Error('统一 Overlay 必须保留 Dialog / Drawer')
 }
 if (!/export \{ SelectMenu \} from '\.\.\/SelectMenu'/.test(readFileSync(p('components/ui/index.ts'), 'utf8'))) throw new Error('高级 SelectMenu 必须经统一 UI 出口导出')
+if (!/export \{ UiIcon \} from '\.\.\/UiIcon'/.test(readFileSync(p('components/ui/index.ts'), 'utf8'))) throw new Error('UiIcon 必须经统一 UI 出口导出')
+
+function tsxFiles(directory) {
+  return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+    const path = join(directory, entry.name)
+    return entry.isDirectory() ? tsxFiles(path) : entry.isFile() && entry.name.endsWith('.tsx') ? [path] : []
+  })
+}
+for (const file of tsxFiles(root)) {
+  const source = readFileSync(file, 'utf8')
+  if (/[×←→↑↓⌄⌕✓]/.test(source)) throw new Error(`${file} 不得使用字符充当正式界面图标`)
+  if (/>(?:\s*)\+(?:\s+)[^<{]+</.test(source)) throw new Error(`${file} 不得使用加号字符充当新增图标`)
+  if (!/(?:UiIcon|ToolKindIcon)\.tsx$/.test(file) && /<svg\b/.test(source)) throw new Error(`${file} 的通用图标必须复用 UiIcon`)
+  for (const match of source.matchAll(/<UiIcon\b[^>]*\bsize=\{(\d+)\}/g)) {
+    if (!['12', '14', '16', '20'].includes(match[1])) throw new Error(`${file} 的 UiIcon 尺寸 ${match[1]} 不在统一档位内`)
+  }
+  if (/<button[^>]+className="[^"]*(?:icon-button|theme-toggle|pi-live-menu|pi-live-send)/.test(source)) throw new Error(`${file} 的纯图标操作必须复用 IconButton`)
+}
 const duplicated = ['--al-canvas', '--al-surface', '--al-soft', '--al-line', '--al-ink', '--al-accent']
   .filter(token => new RegExp(`${token.replaceAll('-', '\\-')}\\s*:`).test(css.theme))
 if (duplicated.length) throw new Error(`theme.css 不得重复声明基础 Token：${duplicated.join(', ')}`)

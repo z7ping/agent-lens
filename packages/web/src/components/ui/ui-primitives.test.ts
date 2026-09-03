@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 
 const source = readFileSync(new URL('./Primitives.tsx', import.meta.url), 'utf8')
@@ -9,6 +11,7 @@ const overlay = readFileSync(new URL('./Overlay.tsx', import.meta.url), 'utf8')
 const overlayCss = readFileSync(new URL('./overlay.css', import.meta.url), 'utf8')
 const piStartup = readFileSync(new URL('../PiStartupDisclosure.tsx', import.meta.url), 'utf8')
 const piStartupCss = readFileSync(new URL('../pi-startup-disclosure.css', import.meta.url), 'utf8')
+const taskViewCss = readFileSync(new URL('../../task-view-options.css', import.meta.url), 'utf8')
 const composerPill = readFileSync(new URL('../ComposerPillSelect.tsx', import.meta.url), 'utf8')
 const stateViews = readFileSync(new URL('../StateViews.tsx', import.meta.url), 'utf8')
 const piLivePage = readFileSync(new URL('../../features/PiLivePage.tsx', import.meta.url), 'utf8')
@@ -19,6 +22,13 @@ const backupPage = readFileSync(new URL('../../features/BackupPage.tsx', import.
 const backupCss = readFileSync(new URL('../../backup.css', import.meta.url), 'utf8')
 const agentRules = readFileSync(new URL('../../../../../AGENTS.md', import.meta.url), 'utf8')
 
+function tsxFiles(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+    const path = join(directory, entry.name)
+    return entry.isDirectory() ? tsxFiles(path) : entry.isFile() && entry.name.endsWith('.tsx') ? [path] : []
+  })
+}
+
 test('shared UI primitives expose the first unified component set', () => {
   for (const name of ['Button', 'IconButton', 'Input', 'Textarea', 'Select', 'StatusBadge', 'Disclosure', 'Toolbar', 'ToolbarGroup']) {
     assert.match(source, new RegExp(`export function ${name}\\b`))
@@ -28,6 +38,26 @@ test('shared UI primitives expose the first unified component set', () => {
   assert.match(index, /export \{ SelectMenu \} from '\.\.\/SelectMenu'/)
   assert.match(index, /ToolbarGroupProps/)
   assert.match(index, /ToolbarProps/)
+  assert.match(index, /export \{ UiIcon \} from '\.\.\/UiIcon'/)
+})
+
+test('界面图标统一走 UiIcon，页面不再保留字符占位或重复 SVG', () => {
+  const webSource = fileURLToPath(new URL('../..', import.meta.url))
+  const files = tsxFiles(webSource)
+  const allowedSvgOwners = new Set(['UiIcon.tsx', 'ToolKindIcon.tsx'])
+  for (const file of files) {
+    const fileSource = readFileSync(file, 'utf8')
+    assert.doesNotMatch(fileSource, /[×←→↑↓⌄⌕✓]/, `${file} 不得使用字符充当界面图标`)
+    assert.doesNotMatch(fileSource, />\s*\+\s+[^<{]+</, `${file} 不得使用加号字符充当新增图标`)
+    if (!allowedSvgOwners.has(file.split(/[\\/]/).at(-1)!)) {
+      assert.doesNotMatch(fileSource, /<svg\b/, `${file} 的通用图标应复用 UiIcon`)
+    }
+    for (const match of fileSource.matchAll(/<UiIcon\b[^>]*\bsize=\{(\d+)\}/g)) {
+      assert.ok(['12', '14', '16', '20'].includes(match[1]), `${file} 的 UiIcon 尺寸 ${match[1]} 不在统一档位内`)
+    }
+    assert.doesNotMatch(fileSource, /<button[^>]+className="[^"]*(?:icon-button|theme-toggle|pi-live-menu|pi-live-send)/, `${file} 的纯图标操作应复用 IconButton`)
+  }
+  assert.doesNotMatch(`${piStartupCss}\n${taskViewCss}`, /content:\s*['"][^'"]*[›⌄×←→↑↓⌕✓][^'"]*['"]/, 'CSS 不得通过 content 注入字符图标')
 })
 
 test('shared controls keep the frozen size and typography contracts', () => {
@@ -131,4 +161,6 @@ test('repository agent rules require reuse of shared primitives', () => {
   assert.match(agentRules, /已有对应 Primitive 时，页面不得自行重新实现/)
   assert.match(agentRules, /TaskSurface/)
   assert.match(agentRules, /正常可见文字不得低于 `12px`/)
+  assert.match(agentRules, /### 图标规范/)
+  assert.match(agentRules, /禁止用 `× \/ ← \/ → \/ ↑ \/ ↓ \/ ✓ \/ ⌄ \/ ⌕`/)
 })

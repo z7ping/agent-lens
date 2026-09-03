@@ -750,7 +750,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
           <div className="pi-live-session-foot"><span>{modelLabel(item)}</span><span>PID {item.processId ?? '—'}</span></div>
         </button>)}
         {!known.length && <div className="pi-live-side-empty">当前浏览器没有记录到其他后台 Pi 任务。</div>}
-        <button className="pi-live-review-link" onClick={() => navigate('/review?source=pi')}>查看 Pi 历史复盘 →</button>
+        <button className="pi-live-review-link" onClick={() => navigate('/review?source=pi')}>查看 Pi 历史复盘 <UiIcon name="arrow-right" size={14}/></button>
       </div>
     </aside>}
 
@@ -810,7 +810,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
 
       <div className="pi-live-compose-wrap">
         <div className="pi-live-float-stack">
-          {newRecords && <Button size="small" className="pi-live-new-records" onClick={jumpLatest}>有新记录 ↓</Button>}
+          {newRecords && <Button size="small" className="pi-live-new-records" onClick={jumpLatest}>有新记录 <UiIcon name="arrow-down" size={14}/></Button>}
           {startupQueued && <div className="pi-live-startup-queue" role="status">
             <span>等待 Pi 就绪</span><b>{startupQueued}</b><div><Button size="small" className="pi-live-queue-action" onClick={editStartupQueued}>编辑</Button><Button size="small" className="pi-live-queue-action" onClick={removeStartupQueued}>撤回</Button></div>
           </div>}
@@ -829,7 +829,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
                 title={composerExpanded ? '缩小输入区' : '放大输入区'}
                 aria-label={composerExpanded ? '缩小输入区' : '放大输入区'}
                 onClick={() => setComposerExpanded(value => !value)}
-              ><UiIcon name={composerExpanded ? 'collapse' : 'expand'} size={15}/></IconButton>
+              ><UiIcon name={composerExpanded ? 'collapse' : 'expand'} size={16}/></IconButton>
             </div>
             <PiMarkdownComposer
               ref={inputRef}
@@ -881,7 +881,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
               <Button size="small" className={`pi-live-mode-action ${mode === 'steer' ? 'active' : ''}`} title="立即介入当前生成（Enter）" aria-pressed={mode === 'steer'} onClick={() => { setMode('steer'); requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true })) }}>介入</Button>
               <Button size="small" className={`pi-live-mode-action ${mode === 'followUp' ? 'active' : ''}`} title="当前轮次完成后继续（Alt+Enter）" aria-pressed={mode === 'followUp'} onClick={() => { setMode('followUp'); requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true })) }}>继续</Button>
             </div>
-            <IconButton variant="primary" className="pi-live-send" disabled={!canSend} onClick={() => void send()} aria-label={runtimeReady ? '发送' : 'Pi 就绪后发送'}><UiIcon name="send" size={18}/></IconButton>
+            <IconButton variant="primary" className="pi-live-send" disabled={!canSend} onClick={() => void send()} aria-label={runtimeReady ? '发送' : 'Pi 就绪后发送'}><UiIcon name="send" size={20}/></IconButton>
           </div>
         </div>
       </div>

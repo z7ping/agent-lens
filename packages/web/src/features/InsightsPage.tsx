@@ -8,7 +8,7 @@ import { BackgroundDataNotice } from '../components/BackgroundDataNotice'
 import { CompactPageHeading } from '../components/CompactPageHeading'
 import { SelectMenu } from '../components/SelectMenu'
 import { EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from '../components/StateViews'
-import { UiIcon } from '../components/UiIcon'
+import { IconButton, UiIcon } from '../components/ui'
 
 function duration(ms: number): string {
   if (ms < 1000) return `${ms} 毫秒`
@@ -82,7 +82,7 @@ export function InsightsPage({ model }: { model: AgentLensClientModel }) {
       <SelectMenu className="filter" value={insights.filters.range} onChange={range => insightsModel.setFilters({ range: range as typeof insights.filters.range })} ariaLabel="筛选时间范围" menuWidth={156} options={[
         { value: 'today', label: '今天' }, { value: '7d', label: '最近 7 天' }, { value: '30d', label: '最近 30 天' }, { value: 'all', label: '全部时间' },
       ]}/>
-      <button className="icon-button toolbar-end" onClick={() => void insightsModel.refresh()} title="刷新使用洞察" aria-label="刷新使用洞察"><UiIcon name="refresh" size={15}/></button>
+      <IconButton className="icon-button toolbar-end" onClick={() => void insightsModel.refresh()} title="刷新使用洞察" aria-label="刷新使用洞察"><UiIcon name="refresh" size={16}/></IconButton>
     </div>
 
     <div className="page-content insights-content">
@@ -149,7 +149,7 @@ export function InsightsPage({ model }: { model: AgentLensClientModel }) {
           <article className="insight-card">
             <div className="insight-card-head"><div><h2>重复工作流模式</h2><p>连续工具类别序列至少出现在 {data.meta.workflowPatternMinimumSessions} 个不同会话后才显示。</p></div></div>
             {data.workflowPatterns.length ? <div className="insight-pattern-list">{data.workflowPatterns.map(pattern => <div className="insight-pattern" key={pattern.key}>
-              <div className="insight-pattern-steps">{pattern.steps.map((step, index) => <span key={`${pattern.key}:${index}`}><b>{step}</b>{index < pattern.steps.length - 1 && <i>→</i>}</span>)}</div>
+              <div className="insight-pattern-steps">{pattern.steps.map((step, index) => <span key={`${pattern.key}:${index}`}><b>{step}</b>{index < pattern.steps.length - 1 && <i><UiIcon name="arrow-right" size={14}/></i>}</span>)}</div>
               <div className="insight-pattern-meta"><strong>{pattern.sessionCount} 个会话</strong><span>{pattern.occurrenceCount} 次出现</span><span>{pattern.observationIds.length} 条样本观测</span></div>
             </div>)}</div> : <div className="insight-inline-empty">还没有任何连续工具类别序列跨越至少 {data.meta.workflowPatternMinimumSessions} 个会话。样本不足时保持空白，不提前下结论。</div>}
           </article>

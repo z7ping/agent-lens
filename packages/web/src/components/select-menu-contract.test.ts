@@ -16,7 +16,7 @@ function sourceFiles(directory: string): string[] {
 
 test('Web 下拉入口统一使用 SelectMenu，而不是页面级原生 select', () => {
   const nativeSelectOwners = sourceFiles(sourceRoot).filter(path => /<select(?:\s|>)/.test(readFileSync(path, 'utf8')))
-  assert.deepEqual(nativeSelectOwners, [])
+  assert.deepEqual(nativeSelectOwners.map(path => path.replace(sourceRoot, '').replaceAll('\\', '/').replace(/^\/+/, '')), ['components/ui/Primitives.tsx'])
   assert.match(taskCenterSource, /<SelectMenu[\s\S]*?variant="field"[\s\S]*?searchable/)
 })
 
@@ -31,7 +31,7 @@ test('SelectMenu 提供键盘、搜索、选中态与窗口安全定位', () => 
 
 test('新建 Pi 任务使用聚焦启动卡片并移除自动聚焦原生下拉', () => {
   assert.match(taskCenterSource, /新建 Pi 任务/)
-  assert.match(taskCenterSource, /创建 Pi 任务 →/)
+  assert.match(taskCenterSource, /创建 Pi 任务 <UiIcon name="arrow-right" size=\{14\}/)
   assert.match(taskCenterSource, /mode === 'new' \? 'is-new-task' : ''/)
   assert.doesNotMatch(taskCenterSource, /autoFocus|task-center-agent-fixed/)
 })

@@ -208,7 +208,7 @@ export function SelectMenu({
               onClick={() => choose(option.value)}
             >
               <span><b>{option.label}</b>{option.description && <small>{option.description}</small>}</span>
-              <span className="select-menu-check" aria-hidden="true">{checked && <UiIcon name="check" size={15}/>}</span>
+              <span className="select-menu-check" aria-hidden="true">{checked && <UiIcon name="check" size={16}/>}</span>
             </button>
           })}
           {!filteredOptions.length && <div className="select-menu-empty">没有匹配项</div>}

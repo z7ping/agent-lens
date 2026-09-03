@@ -111,7 +111,7 @@ export function PiStartupDisclosure({
         const status = failed ? 'failed' : active ? 'active' : done ? 'done' : 'pending'
         const duration = recorded ?? ((active || failed) ? currentDuration : undefined)
         return <div key={item.stage} className={`pi-startup-step is-${status}`}>
-          <span className="pi-startup-step-dot" aria-hidden="true">{done ? <UiIcon name="check" size={10}/> : failed ? <UiIcon name="exclamation" size={10}/> : null}</span>
+          <span className="pi-startup-step-dot" aria-hidden="true">{done ? <UiIcon name="check" size={12}/> : failed ? <UiIcon name="exclamation" size={12}/> : null}</span>
           <span className="pi-startup-step-copy"><b>{item.label}</b><small>{item.detail}</small></span>
           <span className="pi-startup-step-time">{status === 'pending' ? '等待' : active ? `${formatPiStartupDuration(duration)}+` : formatPiStartupDuration(duration)}</span>
         </div>
@@ -123,7 +123,7 @@ export function PiStartupDisclosure({
       {state.processId && <span>Worker PID {state.processId}</span>}
     </div>}
     {resourceGroups.length > 0 && <details className="pi-startup-resource-details">
-      <summary>{resourceSummary}</summary>
+      <summary>{resourceSummary}<UiIcon className="pi-startup-resource-chevron" name="chevron-right" size={12}/></summary>
       <div className="pi-startup-resources" aria-label="Pi 已加载资源">
         {resourceGroups.map(group => <div className="pi-startup-resource-row" key={group.label}>
           <b>[{group.label}]</b><span>{group.values.join(', ')}</span>

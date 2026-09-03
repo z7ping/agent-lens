@@ -25,7 +25,8 @@
 }
 
 .task-view-menu > summary::-webkit-details-marker { display: none; }
-.task-view-menu > summary::after { content: "⌄"; color: var(--al-muted-2); font-size: 11px; transform: translateY(-1px); }
+.task-view-menu > summary svg { color: var(--al-muted-2); transition: transform .15s ease; }
+.task-view-menu[open] > summary svg { transform: rotate(180deg); }
 .task-view-menu[open] > summary { border-color: color-mix(in srgb, var(--al-accent) 34%, var(--al-line-strong)); color: var(--al-accent); }
 
 .task-view-menu-popover {

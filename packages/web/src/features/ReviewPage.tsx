@@ -23,6 +23,7 @@ import { MarkdownContent } from '../components/MarkdownContent'
 import { SelectMenu } from '../components/SelectMenu'
 import { ToolKindIcon } from '../components/ToolKindIcon'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
+import { IconButton, UiIcon } from '../components/ui'
 import { projectReviewInteractionPresentation } from './review-interaction-presentation'
 import { TaskEvent } from './TaskEvent'
 import { TaskHeader } from './TaskHeader'
@@ -563,9 +564,9 @@ function Inspector({ node, onClose, loadSourceRecord }: { node: ReviewNodeDto; o
         <div className="eyebrow">事件详情</div>
         <div className="inspector-title">{title}</div>
       </div>
-      <button className="icon-button" onClick={onClose} aria-label="关闭事件详情">
-        <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
-      </button>
+      <IconButton className="icon-button" onClick={onClose} aria-label="关闭事件详情">
+        <UiIcon name="close" size={16}/>
+      </IconButton>
     </div>
     <div className="agent-scope" role="tablist" aria-label="事件详情分类">
       <button ref={firstTabRef} className={`scope-chip ${tab === 'detail' ? 'scope-chip-active' : ''}`} role="tab" aria-selected={tab === 'detail'} onClick={() => setTab('detail')}>详情</button>
@@ -1293,7 +1294,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
         { value: 'all', label: '全部状态' }, { value: 'clean', label: '无错误' }, { value: 'with-errors', label: '有错误' },
       ]}/>
       <input className="filter search-filter" placeholder="搜索会话…" value={review.filters.search} onChange={e => model.setReviewFilters({ search: e.target.value })}/>
-      <button className="icon-button" onClick={() => void model.refreshReview()} title="刷新" aria-label="刷新"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M13 3v4H9"/><path d="M12.2 6A5 5 0 1 0 13 9"/></svg></button>
+      <IconButton className="icon-button" onClick={() => void model.refreshReview()} title="刷新" aria-label="刷新"><UiIcon name="refresh" size={16}/></IconButton>
     </div>}
 
     <div className="review-layout">
@@ -1351,7 +1352,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
 
           {detail.sourceIds.includes('pi') && review.relationships?.items.length ? <details className="pi-session-tree">
             <summary>Pi 会话树 · {review.relationships.items.length} 条关系</summary>
-            <div>{review.relationships.items.map(item => <div key={item.id}>{item.fromNativeSessionId ?? item.fromSessionId} <span>→</span> {item.toNativeSessionId ?? item.toSessionId}</div>)}</div>
+            <div>{review.relationships.items.map(item => <div key={item.id}>{item.fromNativeSessionId ?? item.fromSessionId} <span><UiIcon name="arrow-right" size={14}/></span> {item.toNativeSessionId ?? item.toSessionId}</div>)}</div>
           </details> : null}
 
           <div className="round-nav" aria-label="轮次快速导航">
@@ -1362,9 +1363,9 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
             </div>
             <div className="round-nav-actions" aria-label="轮次操作">
               <button className="round-nav-expand" disabled={roundFilterLoading} onClick={toggleRoundExpansion}>{expandAllRounds ? '收起当前页' : '展开当前页'}</button>
-              <button className="round-nav-from-start" disabled={roundFilterLoading || atStart} onClick={() => void showFromStart()}>从头查看 ↑</button>
-              <button className="round-nav-latest" disabled={roundFilterLoading} onClick={() => void jumpToLatest()}>跳到最新 ↓</button>
-              {review.detailHasNewData && <button className="round-nav-live" onClick={() => void jumpToLatest()}>有新记录 ↓</button>}
+              <button className="round-nav-from-start" disabled={roundFilterLoading || atStart} onClick={() => void showFromStart()}>从头查看 <UiIcon name="arrow-up" size={14}/></button>
+              <button className="round-nav-latest" disabled={roundFilterLoading} onClick={() => void jumpToLatest()}>跳到最新 <UiIcon name="arrow-down" size={14}/></button>
+              {review.detailHasNewData && <button className="round-nav-live" onClick={() => void jumpToLatest()}>有新记录 <UiIcon name="arrow-down" size={14}/></button>}
             </div>
             {roundFilterLoading && <span className="round-nav-status">正在查询完整会话…</span>}
             <small>“耗时较高”由服务器基于完整会话的轮次耗时分布计算。</small>
