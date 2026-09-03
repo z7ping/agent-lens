@@ -333,6 +333,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const [busy, setBusy] = useState(false)
   const [sendPending, setSendPending] = useState(false)
   const [abortPending, setAbortPending] = useState(false)
+  const [queueMutationPending, setQueueMutationPending] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -368,6 +369,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     setShowAllEvents(true)
     setStartupQueued('')
     setComposerExpanded(false)
+    setQueueMutationPending(false)
     startupSendingRef.current = false
     activePromptRef.current = ''
     leafIdRef.current = undefined
@@ -658,7 +660,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
 
   const send = async (forcedMode?: QueueMode) => {
     const text = input.trim()
-    if (!text || sendPending || extension) return
+    if (!text || sendPending || queueMutationPending || extension) return
     if (!runtimeReady) {
       if (!canStageStartup) return
       setStartupQueued(text)
@@ -726,7 +728,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   }
 
   const stop = useCallback(async () => {
-    if (!optimisticStreaming || abortPending) return
+    if (!optimisticStreaming || abortPending || queueMutationPending) return
     setAbortPending(true)
     setError('')
     try {
@@ -745,7 +747,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     } finally {
       setAbortPending(false)
     }
-  }, [abortPending, optimisticStreaming, runtimeId])
+  }, [abortPending, optimisticStreaming, queueMutationPending, runtimeId])
 
   useEffect(() => {
     if (!optimisticStreaming) return
@@ -757,6 +759,30 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [optimisticStreaming, stop])
+
+  const removeQueued = async (queueMode: QueueMode, queueIndex: number, text: string) => {
+    if (queueMutationPending) return
+    setQueueMutationPending(true)
+    setError('')
+    try {
+      const cleared = await piLiveApi.clearQueue(runtimeId)
+      const steering = [...cleared.steering]
+      const followUp = [...cleared.followUp]
+      const target = queueMode === 'steer' ? steering : followUp
+      const resolvedIndex = target[queueIndex] === text ? queueIndex : target.indexOf(text)
+      if (resolvedIndex >= 0) target.splice(resolvedIndex, 1)
+
+      setQueue({ steering: [], followUp: [] })
+      for (const message of steering) await piLiveApi.steer(runtimeId, message)
+      for (const message of followUp) await piLiveApi.followUp(runtimeId, message)
+      setQueue({ steering, followUp })
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setQueueMutationPending(false)
+      inputRef.current?.focus({ preventScroll: true })
+    }
+  }
 
   const answerExtension = async (value: JsonValue) => {
     if (!extension || extensionPending) return
@@ -838,12 +864,12 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
 
   const queueItems = [
     ...pendingQueue.map(item => ({ ...item, active: true, pending: true })),
-    ...queue.steering.map((text, index) => ({ id: `active-steer-${index}`, mode: 'steer' as QueueMode, text, active: true })),
-    ...queue.followUp.map((text, index) => ({ id: `active-follow-${index}`, mode: 'followUp' as QueueMode, text, active: true })),
+    ...queue.steering.map((text, index) => ({ id: `active-steer-${index}`, mode: 'steer' as QueueMode, text, active: true, queueIndex: index })),
+    ...queue.followUp.map((text, index) => ({ id: `active-follow-${index}`, mode: 'followUp' as QueueMode, text, active: true, queueIndex: index })),
     ...restored.map(item => ({ ...item, active: false })),
   ]
   const selectedModel = modelSelection(state)
-  const canSend = Boolean(input.trim()) && !sendPending && !extension && !runtimeTerminating && (runtimeReady ? !startupQueued : canStageStartup)
+  const canSend = Boolean(input.trim()) && !sendPending && !queueMutationPending && !extension && !runtimeTerminating && (runtimeReady ? !startupQueued : canStageStartup)
   const composerStatus = startupQueued
     ? { label: '待发送', color: 'var(--al-accent)', title: '等待 Pi 就绪后自动发送' }
     : runtimeInitializing
@@ -897,7 +923,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
         metrics={taskDetailModel.metrics}
         actions={<>
           <Button size="small" className="review-audit-toggle" aria-pressed={showAllEvents} onClick={() => setShowAllEvents(value => !value)}>{showAllEvents ? '视图：全部事件' : '视图：核心事件'}</Button>
-          <Button size="small" className="pi-live-stop" disabled={!optimisticStreaming || abortPending} onClick={() => void stop()}>停止当前任务</Button>
+          <Button size="small" className="pi-live-stop" disabled={!optimisticStreaming || abortPending || queueMutationPending} onClick={() => void stop()}>停止当前任务</Button>
           <IconButton size="small" variant="danger" className="pi-live-menu" title="结束 Pi Runtime" aria-label="结束 Pi Runtime" disabled={busy} onClick={() => void terminate()}><UiIcon name="close" size={14}/></IconButton>
         </>}
       />
@@ -952,7 +978,11 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
           </div>}
           {queueItems.length > 0 && <div className="pi-live-queue" role="status" aria-live="polite">{queueItems.map(item => <div key={item.id} className={`pi-live-queue-item ${item.active ? 'active' : 'restored'}`}>
             <span>{item.mode === 'steer' ? '待介入' : '完成后继续'}</span><b>{item.text}</b>
-            {item.active ? <small>{'pending' in item && item.pending ? '正在加入 Pi 队列' : '已在 Pi 队列'}</small> : <div><Button size="small" className="pi-live-queue-action" onClick={() => editRestored(item)}>编辑</Button><Button size="small" className="pi-live-queue-action" onClick={() => removeRestored(item.id)}>撤回</Button></div>}
+            {item.active
+              ? ('pending' in item && item.pending
+                  ? <small>正在加入 Pi 队列</small>
+                  : <div><small>已在 Pi 队列</small>{'queueIndex' in item && typeof item.queueIndex === 'number' && <Button size="small" className="pi-live-queue-action" disabled={queueMutationPending} onClick={() => void removeQueued(item.mode, item.queueIndex, item.text)}>撤回</Button>}</div>)
+              : <div><Button size="small" className="pi-live-queue-action" onClick={() => editRestored(item)}>编辑</Button><Button size="small" className="pi-live-queue-action" onClick={() => removeRestored(item.id)}>撤回</Button></div>}
           </div>)}</div>}
           {extension && <ExtensionPrompt request={extension} onAnswer={value => { if (!extensionPending) void answerExtension(value) }}/>} 
         </div>
@@ -1009,7 +1039,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
                 className="pi-live-thinking-picker"
                 menuWidth={168}
                 disabled={!runtimeReady || controlBusy || controls.thinkingLevels.length === 0}
-                options={controls.thinkingLevels.map(level => ({ value: level, label: thinkingLevelLabel(level) }))}
+                options={controls.thinkingLevels.map(level => ({ value: level, label: thinkingLevelLabel(level) }))
                 onChange={level => void changeThinkingLevel(level)}
               />
             </div>
