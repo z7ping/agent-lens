@@ -6,9 +6,8 @@ import { useClientSnapshot } from '../App'
 import { AgentScope, agentLabel } from '../components/AgentScope'
 import { BackgroundDataNotice } from '../components/BackgroundDataNotice'
 import { CompactPageHeading } from '../components/CompactPageHeading'
-import { SelectMenu } from '../components/SelectMenu'
 import { EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from '../components/StateViews'
-import { IconButton, UiIcon } from '../components/ui'
+import { IconButton, SelectMenu, Toolbar, UiIcon } from '../components/ui'
 
 function duration(ms: number): string {
   if (ms < 1000) return `${ms} 毫秒`
@@ -72,7 +71,7 @@ export function InsightsPage({ model }: { model: AgentLensClientModel }) {
   const relaxFilters = () => insightsModel.setFilters({ sourceId: '', projectId: '', range: 'all' })
 
   return <main className="workspace-page insights-page">
-    <div className="workspace-toolbar">
+    <Toolbar className="workspace-toolbar" aria-label="使用洞察筛选">
       <AgentScope agents={agents} value={insights.filters.sourceId} onChange={sourceId => insightsModel.setFilters({ sourceId })}/>
       <span className="toolbar-divider" />
       <SelectMenu className="filter" value={insights.filters.projectId} onChange={projectId => insightsModel.setFilters({ projectId })} ariaLabel="筛选项目" placeholder="全部项目" menuWidth={280} searchable searchPlaceholder="搜索项目" options={[
@@ -82,8 +81,8 @@ export function InsightsPage({ model }: { model: AgentLensClientModel }) {
       <SelectMenu className="filter" value={insights.filters.range} onChange={range => insightsModel.setFilters({ range: range as typeof insights.filters.range })} ariaLabel="筛选时间范围" menuWidth={156} options={[
         { value: 'today', label: '今天' }, { value: '7d', label: '最近 7 天' }, { value: '30d', label: '最近 30 天' }, { value: 'all', label: '全部时间' },
       ]}/>
-      <IconButton className="icon-button toolbar-end" onClick={() => void insightsModel.refresh()} title="刷新使用洞察" aria-label="刷新使用洞察"><UiIcon name="refresh" size={16}/></IconButton>
-    </div>
+      <IconButton className="toolbar-end" onClick={() => void insightsModel.refresh()} title="刷新使用洞察" aria-label="刷新使用洞察"><UiIcon name="refresh" size={16}/></IconButton>
+    </Toolbar>
 
     <div className="page-content insights-content">
       <CompactPageHeading title="使用洞察" description="聚合已采集的会话、工具和能力资产事实，观察趋势与重复模式。这里只呈现可验证事实，不做智能体综合评分，也不把共同出现解释成因果关系。"/>
