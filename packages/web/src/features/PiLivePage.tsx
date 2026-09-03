@@ -743,6 +743,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     onRetry={() => void retry()}
     onTerminate={() => void terminate()}
     embedded
+    showAllEvents={showAllEvents}
   /> : undefined
 
   return <main className={`pi-live-page ${embedded ? 'pi-live-page-embedded' : ''}`}>
