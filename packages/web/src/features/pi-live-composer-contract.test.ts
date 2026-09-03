@@ -58,6 +58,23 @@ test('Pi Live streaming tail keeps layout stable while tokens arrive', () => {
   assert.match(css, /\.pi-live-stream-text \{[^}]*white-space:\s*pre-wrap;[^}]*overflow-wrap:\s*anywhere;/)
 })
 
+test('Pi Live sends optimistically into one stable current round before the first token', () => {
+  assert.match(page, /const \[optimisticPrompt, setOptimisticPrompt\] = useState\(''\)/)
+  assert.match(page, /setInput\(''\)[\s\S]*?if \(!wasStreaming\) \{[\s\S]*?setOptimisticPrompt\(text\)[\s\S]*?isStreaming: true/)
+  assert.match(page, /if \(!optimisticPrompt && !state\?\.isStreaming && !thinkingText && tools\.length === 0 && !streamText\) return undefined/)
+  assert.match(page, /promptText=\{optimisticPrompt \|\| undefined\}/)
+  assert.match(taskRound, /promptText && <TaskMessage role="user"/)
+  assert.match(taskRound, /waiting && <div className="pi-live-empty" role="status">等待 Pi 响应…<\/div>/)
+})
+
+test('Pi Live auto-follow is coalesced to one animation frame and settle clears the temporary round atomically', () => {
+  assert.match(page, /const followFrameRef = useRef<number \| null>\(null\)/)
+  assert.match(page, /if \(!followingRef\.current \|\| followFrameRef\.current !== null\) return/)
+  assert.match(page, /followFrameRef\.current = requestAnimationFrame\(\(\) => \{[\s\S]*?followFrameRef\.current = null[\s\S]*?reader\.scrollTop = target/)
+  assert.doesNotMatch(page, /return \(\) => cancelAnimationFrame\(frame\)/)
+  assert.match(page, /acceptSnapshot\(value\)[\s\S]*?setOptimisticPrompt\(''\)[\s\S]*?setStreamText\(''\)[\s\S]*?setThinkingText\(''\)[\s\S]*?toolsRef\.current\.clear\(\)[\s\S]*?setTools\(\[\]\)/)
+})
+
 test('medium desktop viewports reclaim space instead of forcing connection text into another row', () => {
   assert.match(css, /@media \(max-width: 1199\.98px\) \{[\s\S]*?\.pi-live-compose-runtime \{ display: none; \}/)
 })
