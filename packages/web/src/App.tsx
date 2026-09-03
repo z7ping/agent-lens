@@ -203,11 +203,11 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     <div className="app-shell">
       <header className="app-header">
         <div className="app-header-inner">
-          <div className="brand" aria-label="AgentLens 智能体透镜">
+          <NavLink to="/review" className="brand" aria-label="AgentLens 智能体透镜，返回任务中心" title="返回任务中心" style={{ color: 'inherit', textDecoration: 'none' }}>
             <img className="brand-logo" src="/agentlens-icon.svg" alt="" aria-hidden="true"/>
             <span className="brand-name">AgentLens · 智能体透镜</span>
             <BrandVersion />
-          </div>
+          </NavLink>
           <nav className="app-nav" aria-label="主导航">
             {navigation.map(item => {
               const hasNewData = navigationHasNewData(item.to)
