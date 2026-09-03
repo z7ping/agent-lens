@@ -116,6 +116,14 @@ function historyEntries(items: PiLiveHistoryItem[]): HistoryRenderEntry[] {
   return result
 }
 
+function withoutPromptMessage(items: PiLiveHistoryItem[], promptText?: string): PiLiveHistoryItem[] {
+  if (!promptText) return items
+  const normalized = promptText.trim()
+  const index = items.findIndex(item => item.kind === 'message' && item.role === 'user' && item.text.trim() === normalized)
+  if (index < 0) return items
+  return items.filter((_, itemIndex) => itemIndex !== index)
+}
+
 function ThinkingMarkdown({ text }: { text: string }) {
   return <MarkdownContent text={text}/>
 }
@@ -147,6 +155,34 @@ function HistoryToolGroup({ id, items }: { id: string; items: HistoryTool[] }) {
   />
 }
 
+function HistoryEntries({ items, showAllEvents = false }: { items: PiLiveHistoryItem[]; showAllEvents?: boolean }) {
+  const entries = historyEntries(items)
+  return <>{entries.map(entry => {
+    if (entry.kind === 'message') {
+      return <TaskMessage
+        key={entry.id}
+        role={entry.role}
+        text={entry.text}
+        author={entry.role === 'user' ? '你' : 'Pi'}
+        time={entry.at ? formatClock(entry.at) : undefined}
+        className="pi-live-task-message"
+      />
+    }
+    if (entry.kind === 'thinking') return <HistoryThinking key={entry.id} item={entry}/>
+    if (entry.kind === 'tool-group') return <HistoryToolGroup key={entry.id} id={entry.id} items={entry.items}/>
+    if (entry.kind === 'usage') {
+      const cost = entry.usage.cost?.total
+      const summary = `输入 ${entry.usage.inputTokens.toLocaleString()} · 输出 ${entry.usage.outputTokens.toLocaleString()} · 缓存读 ${entry.usage.cacheReadTokens.toLocaleString()} · 缓存写 ${entry.usage.cacheWriteTokens.toLocaleString()} · 共 ${entry.usage.totalTokens.toLocaleString()} 词元${cost !== undefined ? ` · $${cost.toFixed(4)}` : ''}`
+      return <TaskEvent key={entry.id} model={{ id: entry.id, label: '用量', category: 'usage', summary, sourceLabel: 'Pi', time: entry.at ? formatClock(entry.at) : undefined, nativeType: entry.nativeType, parentId: entry.parentId }} raw={entry.raw}/>
+    }
+    if (entry.kind === 'lifecycle') {
+      if (entry.event === 'native.unknown' && !showAllEvents) return null
+      return <TaskEvent key={entry.id} model={{ id: entry.id, label: entry.label, category: entry.event === 'native.unknown' ? 'unknown' : 'lifecycle', summary: entry.detail || undefined, sourceLabel: 'Pi', time: entry.at ? formatClock(entry.at) : undefined, nativeType: entry.nativeType, parentId: entry.parentId }} raw={entry.raw}/>
+    }
+    return null
+  })}</>
+}
+
 export function PiLiveHistoryTaskRound({
   projection,
   showAllEvents = false,
@@ -158,39 +194,17 @@ export function PiLiveHistoryTaskRound({
   beforeContent?: ReactNode
   summaryMeta?: ReactNode
 }) {
-  const entries = historyEntries(projection.items)
   return <TaskRound model={projection.model} className="pi-live-history-round" summaryMeta={summaryMeta}>
     {beforeContent}
-    {entries.map(entry => {
-      if (entry.kind === 'message') {
-        return <TaskMessage
-          key={entry.id}
-          role={entry.role}
-          text={entry.text}
-          author={entry.role === 'user' ? '你' : 'Pi'}
-          time={entry.at ? formatClock(entry.at) : undefined}
-          className="pi-live-task-message"
-        />
-      }
-      if (entry.kind === 'thinking') return <HistoryThinking key={entry.id} item={entry}/>
-      if (entry.kind === 'tool-group') return <HistoryToolGroup key={entry.id} id={entry.id} items={entry.items}/>
-      if (entry.kind === 'usage') {
-        const cost = entry.usage.cost?.total
-        const summary = `输入 ${entry.usage.inputTokens.toLocaleString()} · 输出 ${entry.usage.outputTokens.toLocaleString()} · 缓存读 ${entry.usage.cacheReadTokens.toLocaleString()} · 缓存写 ${entry.usage.cacheWriteTokens.toLocaleString()} · 共 ${entry.usage.totalTokens.toLocaleString()} 词元${cost !== undefined ? ` · $${cost.toFixed(4)}` : ''}`
-        return <TaskEvent key={entry.id} model={{ id: entry.id, label: '用量', category: 'usage', summary, sourceLabel: 'Pi', time: entry.at ? formatClock(entry.at) : undefined, nativeType: entry.nativeType, parentId: entry.parentId }} raw={entry.raw}/>
-      }
-      if (entry.kind === 'lifecycle') {
-        if (entry.event === 'native.unknown' && !showAllEvents) return null
-        return <TaskEvent key={entry.id} model={{ id: entry.id, label: entry.label, category: entry.event === 'native.unknown' ? 'unknown' : 'lifecycle', summary: entry.detail || undefined, sourceLabel: 'Pi', time: entry.at ? formatClock(entry.at) : undefined, nativeType: entry.nativeType, parentId: entry.parentId }} raw={entry.raw}/>
-      }
-      return null
-    })}
+    <HistoryEntries items={projection.items} showAllEvents={showAllEvents}/>
   </TaskRound>
 }
 
 export function PiLiveRunningTaskRound({
   model,
   promptText,
+  settledItems,
+  showAllEvents = false,
   thinkingText,
   tools,
   streamText,
@@ -199,6 +213,8 @@ export function PiLiveRunningTaskRound({
 }: {
   model: TaskRoundModel
   promptText?: string
+  settledItems?: PiLiveHistoryItem[]
+  showAllEvents?: boolean
   thinkingText: string
   tools: PiLiveRunningTool[]
   streamText: string
@@ -227,7 +243,8 @@ export function PiLiveRunningTaskRound({
     preview: compactPreview(thinkingText),
     state: model.state,
   }
-  const waiting = isStreaming && !thinkingText && toolModels.length === 0 && !streamText
+  const hasSettledItems = Boolean(settledItems?.length)
+  const waiting = isStreaming && !hasSettledItems && !thinkingText && toolModels.length === 0 && !streamText
 
   return <TaskRound
     model={model}
@@ -235,16 +252,20 @@ export function PiLiveRunningTaskRound({
     summaryMeta={pendingMessageCount > 0 ? <span>{pendingMessageCount} 条排队</span> : undefined}
   >
     {promptText && <TaskMessage role="user" text={promptText} author="你" className="pi-live-task-message pi-live-optimistic-message"/>}
-    {waiting && <div className="pi-live-empty" role="status">等待 Pi 响应…</div>}
-    {thinkingText && <TaskThinking model={thinking} defaultExpanded><div className="task-thinking-stream-text">{thinkingText}</div></TaskThinking>}
-    {toolModels.length > 0 && <TaskToolGroup
-      model={toolGroup('pi-live-current-tools', toolModels)}
-      renderDetails={tool => <ToolOutput tool={tool}/>}
-    />}
-    {streamText && <div className="pi-live-stream-response">
-      <div className="pi-live-message-meta"><b>Pi</b><span>{isStreaming ? '生成中' : '输出'}</span></div>
-      <div className="pi-live-stream-text">{streamText}</div>
-      {isStreaming && <span className="pi-live-caret" aria-hidden="true"/>}
-    </div>}
+    {hasSettledItems
+      ? <HistoryEntries items={withoutPromptMessage(settledItems ?? [], promptText)} showAllEvents={showAllEvents}/>
+      : <>
+        {waiting && <div className="pi-live-empty" role="status">等待 Pi 响应…</div>}
+        {thinkingText && <TaskThinking model={thinking} defaultExpanded><div className="task-thinking-stream-text">{thinkingText}</div></TaskThinking>}
+        {toolModels.length > 0 && <TaskToolGroup
+          model={toolGroup('pi-live-current-tools', toolModels)}
+          renderDetails={tool => <ToolOutput tool={tool}/>}
+        />}
+        {streamText && <div className="pi-live-stream-response">
+          <div className="pi-live-message-meta"><b>Pi</b><span>{isStreaming ? '生成中' : '输出'}</span></div>
+          <div className="pi-live-stream-text">{streamText}</div>
+          {isStreaming && <span className="pi-live-caret" aria-hidden="true"/>}
+        </div>}
+      </>}
   </TaskRound>
 }
