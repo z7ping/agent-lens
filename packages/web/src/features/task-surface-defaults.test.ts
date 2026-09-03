@@ -17,6 +17,7 @@ test('Task Review defaults to full observable events without a DOM adapter', () 
 test('Task Review 的独立 Thinking 仍可折叠，聚合思考过程默认展开以露出工具明细', () => {
   assert.match(reviewPage, /<TaskThinking[\s\S]*?defaultExpanded=\{false\}/)
   assert.match(taskThinking, /return defaultExpanded \|\| model\.label === '思考过程'/)
+  assert.match(taskThinking, /useState\(defaultExpanded\)/)
 })
 
 test('Task Review 将 commentary、reasoning 与工具统一放入思考过程', () => {
