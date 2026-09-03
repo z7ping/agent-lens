@@ -105,7 +105,7 @@ test('Pi Live 已入队消息可单项撤回并恢复其余队列', () => {
   assert.match(page, /if \(resolvedIndex >= 0\) target\.splice\(resolvedIndex, 1\)/)
   assert.match(page, /for \(const message of steering\) await piLiveApi\.steer\(runtimeId, message\)/)
   assert.match(page, /for \(const message of followUp\) await piLiveApi\.followUp\(runtimeId, message\)/)
-  assert.match(page, /onClick=\{\(\) => void removeQueued\(item\.mode, item\.queueIndex, item\.text\)\}>撤回<\/Button>/)
+  assert.match(page, /onClick=\{\(\) => void removeQueued\(item\.mode, Number\(item\.queueIndex\), item\.text\)\}>撤回<\/Button>/)
 })
 
 test('Pi Live Escape 和停止操作不受发送请求锁影响', () => {
