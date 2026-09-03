@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import ReactMarkdown from 'react-markdown'
 import { useNavigate, useParams } from 'react-router-dom'
 import type { JsonValue, PiLiveControlsDto, PiLiveEventDto, PiLiveQueueDto, PiLiveSnapshotDto, PiLiveStateDto } from '@agent-lens/protocol'
 import { piLiveApi, type PiLiveTransportDiagnostics } from '../client/pi-live'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import { ComposerPillSelect } from '../components/ComposerPillSelect'
+import { PiMarkdownComposer, type PiMarkdownComposerHandle } from '../components/PiMarkdownComposer'
 import { projectPiLiveHistory, type PiLiveHistoryItem } from './pi-live-history'
 import { PiLiveHistoryTaskRound, PiLiveRunningTaskRound } from './PiLiveTaskRound'
 import { piLiveTaskRoundEstimate, projectPiLiveRunningRound, projectPiLiveTaskDetail, projectPiLiveTaskRounds } from './pi-live-task-projection'
@@ -12,7 +12,6 @@ import { TaskHeader } from './TaskHeader'
 import { TaskSurface } from './TaskSurface'
 
 type QueueMode = 'steer' | 'followUp'
-type ComposerView = 'edit' | 'preview'
 interface RestoredDraft { id: string; mode: QueueMode; text: string }
 interface LiveTool {
   id: string
@@ -257,7 +256,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const { runtimeSessionId } = useParams()
   const runtimeId = runtimeSessionId ? decodeURIComponent(runtimeSessionId) : ''
   const readerRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const inputRef = useRef<PiMarkdownComposerHandle>(null)
   const followingRef = useRef(true)
   const leafIdRef = useRef<string | undefined>(undefined)
   const toolsRef = useRef(new Map<string, LiveTool>())
@@ -269,10 +268,8 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const [connected, setConnected] = useState(false)
   const [mode, setMode] = useState<QueueMode>('steer')
   const [input, setInput] = useState('')
-  const [composerView, setComposerView] = useState<ComposerView>('edit')
   const [composerExpanded, setComposerExpanded] = useState(false)
   const [startupQueued, setStartupQueued] = useState('')
-  const [composing, setComposing] = useState(false)
   const [streamText, setStreamText] = useState('')
   const [thinkingText, setThinkingText] = useState('')
   const [tools, setTools] = useState<LiveTool[]>([])
@@ -309,7 +306,6 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     setError('')
     setShowAllEvents(true)
     setStartupQueued('')
-    setComposerView('edit')
     setComposerExpanded(false)
     startupSendingRef.current = false
     leafIdRef.current = undefined
@@ -489,8 +485,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     }, reason => {
       setStartupQueued(current => current === text ? '' : current)
       setInput(current => current || text)
-      setComposerView('edit')
-      setError(reason instanceof Error ? reason.message : String(reason))
+        setError(reason instanceof Error ? reason.message : String(reason))
     }).finally(() => {
       startupSendingRef.current = false
     })
@@ -510,8 +505,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       if (!canStageStartup) return
       setStartupQueued(text)
       setInput('')
-      setComposerView('edit')
-      inputRef.current?.focus({ preventScroll: true })
+        inputRef.current?.focus({ preventScroll: true })
       return
     }
     if (startupQueued) return
@@ -521,8 +515,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       const selectedMode = forcedMode ?? mode
       await piLiveApi.prompt(runtimeId, text, state?.isStreaming ? selectedMode : undefined)
       setInput('')
-      setComposerView('edit')
-      inputRef.current?.focus({ preventScroll: true })
+        inputRef.current?.focus({ preventScroll: true })
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
@@ -601,7 +594,6 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     setInput(draft.text)
     setMode(draft.mode)
     setRestored(items => items.filter(item => item.id !== draft.id))
-    setComposerView('edit')
     requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true }))
   }
 
@@ -614,7 +606,6 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     if (!startupQueued) return
     setInput(startupQueued)
     setStartupQueued('')
-    setComposerView('edit')
     requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true }))
   }
 
@@ -756,17 +747,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
         </div>
         <div className={`pi-live-composer ${composerExpanded ? 'is-expanded' : ''}`}>
           <div className="pi-live-editor">
-            <div className="pi-live-editor-toolbar" aria-label="Markdown 输入工具">
-              <button
-                type="button"
-                className={composerView === 'preview' ? 'active' : ''}
-                title={composerView === 'preview' ? '继续编辑 Markdown' : '预览 Markdown'}
-                aria-label={composerView === 'preview' ? '继续编辑 Markdown' : '预览 Markdown'}
-                onClick={() => {
-                  setComposerView(value => value === 'edit' ? 'preview' : 'edit')
-                  if (composerView === 'preview') requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true }))
-                }}
-              >{composerView === 'preview' ? '编辑' : '预览'}</button>
+            <div className="pi-live-editor-toolbar" aria-label="输入区工具">
               <button
                 type="button"
                 title={composerExpanded ? '缩小输入区' : '放大输入区'}
@@ -774,34 +755,18 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
                 onClick={() => setComposerExpanded(value => !value)}
               ><ComposerExpandIcon expanded={composerExpanded}/></button>
             </div>
-            {composerView === 'preview'
-              ? <div className="pi-live-markdown-preview markdown" role="region" aria-label="Markdown 预览">
-                  {input.trim() ? <ReactMarkdown>{input}</ReactMarkdown> : <span className="pi-live-preview-empty">暂无可预览内容</span>}
-                </div>
-              : <textarea
-                  ref={inputRef}
-                  className="pi-live-input"
-                  value={input}
-                  onChange={event => setInput(event.target.value)}
-                  onCompositionStart={() => setComposing(true)}
-                  onCompositionEnd={() => setComposing(false)}
-                  onKeyDown={event => {
-                    if (composing || event.nativeEvent.isComposing || event.keyCode === 229) return
-                    if (event.key === 'Escape' && state?.isStreaming) {
-                      event.preventDefault()
-                      void stop()
-                      return
-                    }
-                    if (event.key === 'Enter' && !event.shiftKey) {
-                      event.preventDefault()
-                      void send(event.altKey ? 'followUp' : undefined)
-                    }
-                  }}
-                  placeholder={inputPlaceholder}
-                  title="Enter 发送 · Alt+Enter 完成后继续 · Shift+Enter 换行 · 生成中 Esc 中断"
-                  aria-label="Pi Markdown 输入"
-                  disabled={runtimeTerminating}
-                />}
+            <PiMarkdownComposer
+              ref={inputRef}
+              value={input}
+              onChange={setInput}
+              canSubmit={canSend}
+              onSubmit={submitMode => void send(submitMode === 'followUp' ? 'followUp' : undefined)}
+              onEscape={state?.isStreaming ? () => void stop() : undefined}
+              placeholder={inputPlaceholder}
+              title="输入 Markdown 会自动格式化 · Enter 发送 · Alt+Enter 完成后继续 · Shift+Enter 换行 · 生成中 Esc 中断"
+              ariaLabel="Pi Markdown 富文本输入"
+              disabled={runtimeTerminating}
+            />
           </div>
           <div className="pi-live-compose-bar">
             <span className="pi-live-compose-runtime" title={[composerStatus.title, diagnosticsTitle].filter(Boolean).join(' · ')}>
@@ -837,8 +802,8 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
               />
             </div>
             <div className="pi-live-compose-mode" aria-label="发送方式">
-              <button title="立即介入当前生成（Enter）" className={mode === 'steer' ? 'active' : ''} aria-pressed={mode === 'steer'} onClick={() => { setMode('steer'); setComposerView('edit'); requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true })) }}>介入</button>
-              <button title="当前轮次完成后继续（Alt+Enter）" className={mode === 'followUp' ? 'active' : ''} aria-pressed={mode === 'followUp'} onClick={() => { setMode('followUp'); setComposerView('edit'); requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true })) }}>继续</button>
+              <button title="立即介入当前生成（Enter）" className={mode === 'steer' ? 'active' : ''} aria-pressed={mode === 'steer'} onClick={() => { setMode('steer'); requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true })) }}>介入</button>
+              <button title="当前轮次完成后继续（Alt+Enter）" className={mode === 'followUp' ? 'active' : ''} aria-pressed={mode === 'followUp'} onClick={() => { setMode('followUp'); requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true })) }}>继续</button>
             </div>
             <button className="pi-live-send" disabled={!canSend} onClick={() => void send()} aria-label={runtimeReady ? '发送' : 'Pi 就绪后发送'}>↑</button>
           </div>

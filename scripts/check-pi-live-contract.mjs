@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 
-const [app, taskCenter, taskSurface, taskHeader, taskMessage, taskRound, taskThinking, taskToolGroup, taskToolRow, taskDetailModel, taskCenterCss, taskDetailCss, reviewPage, page, piTaskRound, piTaskProjection, hubPage, history, piNative, client, css, http, runtime, workerHost, workerEntry, inProcessHost, sdkLoader, sdkAdapter, runtimePackage, coreObservation, timelineProtocol] = await Promise.all([
+const [app, taskCenter, taskSurface, taskHeader, taskMessage, taskRound, taskThinking, taskToolGroup, taskToolRow, taskDetailModel, taskCenterCss, taskDetailCss, reviewPage, page, piComposer, piTaskRound, piTaskProjection, hubPage, history, piNative, client, css, http, runtime, workerHost, workerEntry, inProcessHost, sdkLoader, sdkAdapter, runtimePackage, coreObservation, timelineProtocol] = await Promise.all([
   readFile(new URL('../packages/web/src/App.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/TaskCenterPage.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/TaskSurface.tsx', import.meta.url), 'utf8'),
@@ -15,6 +15,7 @@ const [app, taskCenter, taskSurface, taskHeader, taskMessage, taskRound, taskThi
   readFile(new URL('../packages/web/src/task-detail.css', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/ReviewPage.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/PiLivePage.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/web/src/components/PiMarkdownComposer.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/PiLiveTaskRound.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/pi-live-task-projection.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/HubReviewPage.tsx', import.meta.url), 'utf8'),
@@ -128,9 +129,9 @@ requireText(piTaskProjection, /export const PI_LIVE_HISTORY_ROUND_FACT_LIMIT = 8
 requireText(piTaskProjection, /export function projectPiLiveTaskRounds/, '缺少 History -> TaskRoundModel 投影')
 if (/⌁/.test(`${page}\n${piTaskRound}`)) failures.push('Tool 不得恢复通用占位图标')
 
-requireText(page, /onCompositionStart/, '输入框缺少 compositionstart 保护')
-requireText(page, /nativeEvent\.isComposing/, '输入框缺少 isComposing 保护')
-requireText(page, /keyCode === 229/, '输入框缺少 IME 229 兼容')
+requireText(piComposer, /KEY_ENTER_COMMAND/, 'Lexical 输入框缺少 Enter 命令边界')
+requireText(piComposer, /event\.isComposing/, 'Lexical 输入框缺少 isComposing 保护')
+requireText(piComposer, /keyCode === 229/, 'Lexical 输入框缺少 IME 229 兼容')
 requireText(page, /piLiveApi\.abort\(runtimeId, true\)/, '停止任务必须取回队列再 Abort')
 requireText(page, /piLiveApi\.terminate\(runtimeId\)/, '结束 Runtime 必须是独立显式操作')
 requireText(page, /followingRef/, '缺少用户滚动跟随状态')

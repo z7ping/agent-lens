@@ -6,7 +6,7 @@ const page = readFileSync(new URL('./PiLivePage.tsx', import.meta.url), 'utf8')
 const css = readFileSync(new URL('../pi-live.css', import.meta.url), 'utf8')
 const pill = readFileSync(new URL('../components/ComposerPillSelect.tsx', import.meta.url), 'utf8')
 const pillCss = readFileSync(new URL('../components/composer-pill-select.css', import.meta.url), 'utf8')
-const markdownCss = readFileSync(new URL('../components/markdown-content.css', import.meta.url), 'utf8')
+const composer = readFileSync(new URL('../components/PiMarkdownComposer.tsx', import.meta.url), 'utf8')
 
 test('Pi Live model and thinking controls use custom pill menus instead of native selects', () => {
   assert.match(page, /<ComposerPillSelect[\s\S]*?ariaLabel="Pi 模型"/)
@@ -17,10 +17,16 @@ test('Pi Live model and thinking controls use custom pill menus instead of nativ
   assert.match(pillCss, /\.composer-pill-menu\s*\{[\s\S]*?position:\s*fixed;/)
 })
 
-test('Pi Live composer accepts Markdown source directly without exposing a preview toggle', () => {
-  assert.match(page, /aria-label="Pi Markdown 输入"/)
-  assert.match(page, /title="Enter 发送 · Alt\+Enter 完成后继续 · Shift\+Enter 换行 · 生成中 Esc 中断"/)
-  assert.match(markdownCss, /button\[aria-label='预览 Markdown'\],[\s\S]*?display:\s*none;/)
+test('Pi Live composer uses Lexical Markdown shortcuts and keeps Markdown as the runtime value', () => {
+  assert.match(page, /<PiMarkdownComposer/)
+  assert.match(page, /ariaLabel="Pi Markdown 富文本输入"/)
+  assert.doesNotMatch(page, /composerView|ReactMarkdown|<textarea[^>]*className="pi-live-input"/)
+  assert.match(composer, /MarkdownShortcutPlugin transformers=\{TRANSFORMERS\}/)
+  assert.match(composer, /\$convertToMarkdownString\(TRANSFORMERS/)
+  assert.match(composer, /\$convertFromMarkdownString\(value, TRANSFORMERS/)
+  assert.match(composer, /KEY_ENTER_COMMAND/)
+  assert.match(composer, /event\.isComposing/)
+  assert.match(composer, /event\.altKey \? 'followUp' : 'default'/)
 })
 
 test('Pi Live 初始化期间仍允许输入并可暂存首条任务', () => {
