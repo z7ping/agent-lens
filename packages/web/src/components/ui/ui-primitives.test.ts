@@ -25,6 +25,8 @@ const toolsCss = readFileSync(new URL('../../tools.css', import.meta.url), 'utf8
 const insightsPage = readFileSync(new URL('../../features/InsightsPage.tsx', import.meta.url), 'utf8')
 const insightsCss = readFileSync(new URL('../../insights.css', import.meta.url), 'utf8')
 const agentsPage = readFileSync(new URL('../../features/AgentsPage.tsx', import.meta.url), 'utf8')
+const agentsCss = readFileSync(new URL('../../agents.css', import.meta.url), 'utf8')
+const agentsResponsiveCss = readFileSync(new URL('../../agent-insights-responsive.css', import.meta.url), 'utf8')
 const agentRules = readFileSync(new URL('../../../../../AGENTS.md', import.meta.url), 'utf8')
 
 function tsxFiles(directory: string): string[] {
@@ -185,6 +187,15 @@ test('Tools, Insights and Agent Overview consume shared toolbar and overlay prim
   assert.match(agentsPage, /<Toolbar className="workspace-toolbar" aria-label="智能体概览筛选">/)
   assert.match(agentsPage, /<IconButton className="toolbar-end"/)
   assert.doesNotMatch(agentsPage, /className="icon-button toolbar-end"/)
+  assert.doesNotMatch(agentsCss, /@media \(max-width: (?:820|760|560)px\)/)
+  assert.match(agentsCss, /@media \(max-width: 991\.98px\)/)
+  assert.match(agentsCss, /@media \(max-width: 767\.98px\)/)
+  assert.match(agentsCss, /@media \(max-width: 575\.98px\)/)
+  const agentsResponsiveTail = agentsCss.slice(agentsCss.indexOf('/* 详情内部响应式'))
+  assert.doesNotMatch(agentsResponsiveTail, /\.agents-browser|\.agent-source-nav|\.agent-source-option/)
+  assert.match(agentsResponsiveCss, /@media \(max-width: 991\.98px\)[\s\S]*?\.agents-responsive-shell \.agents-browser/)
+  assert.match(agentsResponsiveCss, /@media \(max-width: 991\.98px\)[\s\S]*?\.agents-responsive-shell \.agent-source-nav/)
+  assert.doesNotMatch(agentsCss, /#[0-9a-fA-F]{3,8}\b/)
 })
 
 test('repository agent rules require reuse of shared primitives', () => {
