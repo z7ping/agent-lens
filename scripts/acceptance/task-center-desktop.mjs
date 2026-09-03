@@ -199,7 +199,7 @@ async function inspect(win, viewport, theme) {
         toolFactCount: toolFacts.length,
         hiddenToolFactCount: toolFacts.filter(item => !visible(item)).length,
         toolGridColumns: toolStyle?.gridTemplateColumns || '',
-        toolGridColumnCount: toolStyle?.gridTemplateColumns?.trim().split(/\s+/).filter(Boolean).length || 0,
+        toolGridColumnCount: toolStyle?.gridTemplateColumns?.trim().split(/\\s+/).filter(Boolean).length || 0,
         toolRow: rect(firstTool),
         toolRowClientWidth: firstTool?.clientWidth || 0,
         toolRowScrollWidth: firstTool?.scrollWidth || 0,
