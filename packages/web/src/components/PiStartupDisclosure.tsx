@@ -74,6 +74,15 @@ export function PiStartupDisclosure({
   const currentStage = state.initializationStage
   const sdkVersion = state.sdkVersion || state.capabilities?.sdkVersion
   const mode = runtimeModeLabel(state)
+  const resources = state.startupResources
+  const resourceGroups = [
+    { label: 'Context', values: resources?.contexts ?? [] },
+    { label: 'Skills', values: resources?.skills ?? [] },
+    { label: 'Prompts', values: resources?.prompts ?? [] },
+    { label: 'Extensions', values: resources?.extensions ?? [] },
+    { label: 'Themes', values: resources?.themes ?? [] },
+  ].filter(group => group.values.length)
+  const startupOutput = state.startupOutput ?? []
 
   return <details
     className={`pi-startup-disclosure is-${state.status}`}
@@ -82,7 +91,7 @@ export function PiStartupDisclosure({
   >
     <summary>
       <span className="pi-startup-summary-state" aria-hidden="true"/>
-      <span className="pi-startup-summary-copy"><b>{title}</b><small>{state.initializationMessage || '准备 Pi Runtime'}</small></span>
+      <span className="pi-startup-summary-copy"><b>{title}</b>{state.status !== 'ready' && <small>{state.initializationMessage || '准备 Pi Runtime'}</small>}</span>
       <span className="pi-startup-summary-time">{formatDuration(elapsed)}</span>
       <span className="pi-startup-chevron" aria-hidden="true">⌄</span>
     </summary>
@@ -103,9 +112,20 @@ export function PiStartupDisclosure({
         })}
       </div>
       {(sdkVersion || mode || state.processId) && <div className="pi-startup-meta">
-        {sdkVersion && <span>Pi SDK {sdkVersion}</span>}
+        {sdkVersion && <span>Pi v{sdkVersion}</span>}
         {mode && <span>{mode}</span>}
         {state.processId && <span>Worker PID {state.processId}</span>}
+      </div>}
+      {resourceGroups.length > 0 && <div className="pi-startup-resources" aria-label="Pi 已加载资源">
+        {resourceGroups.map(group => <div className="pi-startup-resource-row" key={group.label}>
+          <b>[{group.label}]</b><span>{group.values.join(', ')}</span>
+        </div>)}
+      </div>}
+      {startupOutput.length > 0 && <div className="pi-startup-output">
+        <b>[启动输出]</b><pre>{startupOutput.join('\n')}</pre>
+      </div>}
+      {(resources?.diagnostics.length ?? 0) > 0 && <div className="pi-startup-diagnostics">
+        <b>[资源诊断]</b>{resources!.diagnostics.map((message, index) => <span key={`${index}-${message}`}>{message}</span>)}
       </div>}
       {state.status === 'failed' && <div className="pi-startup-failure" role="alert">
         <b>卡在：{STAGES.find(item => item.stage === currentStage)?.label || state.initializationMessage || '初始化'}</b>

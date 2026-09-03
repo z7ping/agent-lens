@@ -7,6 +7,15 @@ export interface PiLiveInitializationTiming {
   durationMs: number
 }
 
+export interface PiLiveStartupResources {
+  contexts: string[]
+  skills: string[]
+  prompts: string[]
+  extensions: string[]
+  themes: string[]
+  diagnostics: string[]
+}
+
 export interface PiLiveRuntimeCapabilities {
   protocolVersion: number
   sdkVersion?: string | undefined
@@ -52,6 +61,8 @@ export interface PiLiveRuntimeState {
   initializationMessage?: string | undefined
   initializationElapsedMs?: number | undefined
   initializationTimings?: PiLiveInitializationTiming[] | undefined
+  startupResources?: PiLiveStartupResources | undefined
+  startupOutput?: string[] | undefined
   capabilities?: PiLiveRuntimeCapabilities | undefined
   error?: string | undefined
   sdkVersion?: string | undefined

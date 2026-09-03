@@ -58,6 +58,22 @@ function parseInitializationTimings(value: unknown): NonNullable<PiLiveStateDto[
   return parsed.length ? parsed : undefined
 }
 
+function parseStartupResources(value: unknown): NonNullable<PiLiveStateDto['startupResources']> | undefined {
+  const row = record(value)
+  const list = (item: unknown, limit = 240) => Array.isArray(item)
+    ? [...new Set(item.filter((entry): entry is string => typeof entry === 'string').map(entry => entry.trim()).filter(Boolean))].slice(0, limit)
+    : []
+  const resources: NonNullable<PiLiveStateDto['startupResources']> = {
+    contexts: list(row.contexts),
+    skills: list(row.skills),
+    prompts: list(row.prompts),
+    extensions: list(row.extensions),
+    themes: list(row.themes),
+    diagnostics: list(row.diagnostics, 80),
+  }
+  return Object.values(resources).some(items => items.length) ? resources : undefined
+}
+
 function mergeSnapshot(previous: PiLiveSnapshotDto | null, next: PiLiveSnapshotDto): PiLiveSnapshotDto {
   if (!previous) return next
   const entries = new Map<string, JsonValue>()
@@ -423,6 +439,14 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             const followUp = Array.isArray(event.followUp) ? event.followUp.filter((item): item is string => typeof item === 'string') : []
             setQueue({ steering, followUp })
             statePatch = { ...statePatch, pendingMessageCount: steering.length + followUp.length }
+          } else if (type === 'runtime_resources') {
+            const startupResources = parseStartupResources(event.resources)
+            if (startupResources) statePatch = { ...statePatch, startupResources }
+          } else if (type === 'runtime_output') {
+            const message = stringValue(event.message).trim()
+            if (message) {
+              setState(current => current ? { ...current, startupOutput: [...(current.startupOutput ?? []), message].slice(-80) } : current)
+            }
           } else if (type === 'runtime_initialization' || type === 'runtime_status') {
             const status = stringValue(event.status)
             const initializationStage = stringValue(event.stage)

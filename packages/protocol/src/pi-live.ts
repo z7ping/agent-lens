@@ -9,6 +9,15 @@ export interface PiLiveInitializationTimingDto {
   durationMs: number
 }
 
+export interface PiLiveStartupResourcesDto {
+  contexts: string[]
+  skills: string[]
+  prompts: string[]
+  extensions: string[]
+  themes: string[]
+  diagnostics: string[]
+}
+
 export interface PiLiveRuntimeCapabilitiesDto {
   protocolVersion: number
   sdkVersion?: string | undefined
@@ -62,6 +71,8 @@ export interface PiLiveStateDto {
   initializationMessage?: string | undefined
   initializationElapsedMs?: number | undefined
   initializationTimings?: PiLiveInitializationTimingDto[] | undefined
+  startupResources?: PiLiveStartupResourcesDto | undefined
+  startupOutput?: string[] | undefined
   capabilities?: PiLiveRuntimeCapabilitiesDto | undefined
   error?: string | undefined
   sdkVersion?: string | undefined

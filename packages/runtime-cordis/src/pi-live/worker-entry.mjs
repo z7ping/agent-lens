@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { access, readFile, realpath } from 'node:fs/promises'
-import { delimiter, dirname, extname, join, resolve } from 'node:path'
+import { basename, delimiter, dirname, extname, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { serialize } from 'node:v8'
 
@@ -33,8 +33,107 @@ function record(value) {
 function diagnostic(value) {
   return String(value ?? '')
     .replace(/(?:api[_-]?key|token|authorization|password)\s*[:=]\s*\S+/gi, '[redacted]')
+    .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, '')
     .replace(/[\r\n]+/g, ' ')
     .slice(0, 1_000)
+}
+
+function uniqueStrings(values, limit = 240) {
+  const seen = new Set()
+  const result = []
+  for (const raw of values) {
+    const value = diagnostic(raw).trim()
+    if (!value || seen.has(value)) continue
+    seen.add(value)
+    result.push(value)
+    if (result.length >= limit) break
+  }
+  return result
+}
+
+function resultItems(value, key) {
+  if (Array.isArray(value)) return value
+  const row = record(value)
+  return Array.isArray(row[key]) ? row[key] : []
+}
+
+function resourceName(value) {
+  const row = record(value)
+  return typeof row.name === 'string' && row.name.trim()
+    ? row.name.trim()
+    : typeof row.path === 'string' && row.path.trim()
+      ? basename(row.path)
+      : ''
+}
+
+function displayContextPath(value, cwd) {
+  const row = record(value)
+  const path = typeof row.path === 'string' ? row.path : typeof value === 'string' ? value : ''
+  if (!path) return ''
+  const inside = relative(cwd, path)
+  return inside && !inside.startsWith('..') && !resolve(inside).startsWith('..')
+    ? inside.replace(/\\/g, '/')
+    : basename(path)
+}
+
+function extensionLabel(value) {
+  const row = record(value)
+  const path = [row.path, row.resolvedPath, row.sourcePath].find(item => typeof item === 'string' && item.trim())
+  if (typeof path !== 'string') return resourceName(value)
+  const normalized = path.replace(/\\/g, '/')
+  const marker = '/node_modules/'
+  const markerIndex = normalized.lastIndexOf(marker)
+  if (markerIndex < 0) return basename(path)
+  const tail = normalized.slice(markerIndex + marker.length).split('/').filter(Boolean)
+  if (!tail.length) return basename(path)
+  const packageParts = tail[0].startsWith('@') ? tail.slice(0, 2) : tail.slice(0, 1)
+  const packageName = packageParts.join('/')
+  let rest = tail.slice(packageParts.length).join('/').replace(/\.(?:mjs|cjs|js|ts)$/, '')
+  rest = rest.replace(/\/index$/, '')
+  if (rest === 'dist' || rest === 'src') return `${packageName}:${rest}`
+  return rest && rest !== 'index' ? `${packageName}:${rest}` : packageName
+}
+
+function diagnosticMessages(value) {
+  if (!value) return []
+  if (Array.isArray(value)) return value.flatMap(diagnosticMessages)
+  if (typeof value === 'string' || value instanceof Error) return [diagnostic(value instanceof Error ? value.message : value)]
+  const row = record(value)
+  const nested = [row.diagnostics, row.errors].flatMap(diagnosticMessages)
+  const own = row.message ?? row.error ?? row.reason
+  return own ? [...nested, diagnostic(typeof own === 'string' ? own : JSON.stringify(own))] : nested
+}
+
+function callResourceLoader(loader, method) {
+  try {
+    return loader && typeof loader[method] === 'function' ? loader[method]() : undefined
+  } catch (error) {
+    return { diagnostics: [error instanceof Error ? error.message : String(error)] }
+  }
+}
+
+function startupResourceSnapshot(resourceLoader, cwd, extraDiagnostics, fallbackExtensions) {
+  const loader = resourceLoader && typeof resourceLoader === 'object' ? resourceLoader : undefined
+  const extensionsResult = callResourceLoader(loader, 'getExtensions') ?? fallbackExtensions
+  const skillsResult = callResourceLoader(loader, 'getSkills')
+  const promptsResult = callResourceLoader(loader, 'getPrompts')
+  const themesResult = callResourceLoader(loader, 'getThemes')
+  const agentsResult = callResourceLoader(loader, 'getAgentsFiles')
+  return {
+    contexts: uniqueStrings(resultItems(agentsResult, 'agentsFiles').map(item => displayContextPath(item, cwd))),
+    skills: uniqueStrings(resultItems(skillsResult, 'skills').map(resourceName)),
+    prompts: uniqueStrings(resultItems(promptsResult, 'prompts').map(resourceName)),
+    extensions: uniqueStrings(resultItems(extensionsResult, 'extensions').map(extensionLabel)),
+    themes: uniqueStrings(resultItems(themesResult, 'themes').map(resourceName)),
+    diagnostics: uniqueStrings([
+      ...diagnosticMessages(extraDiagnostics),
+      ...diagnosticMessages(extensionsResult),
+      ...diagnosticMessages(skillsResult),
+      ...diagnosticMessages(promptsResult),
+      ...diagnosticMessages(themesResult),
+      ...diagnosticMessages(agentsResult),
+    ], 80),
+  }
 }
 
 function isCoalescibleEnvelope(envelope) {
@@ -312,6 +411,7 @@ async function initialize(input) {
     const createRuntime = async options => {
       progress('loading_resources', '正在加载配置、扩展与上下文')
       const services = await sdk.createAgentSessionServices({ cwd: options.cwd, agentDir: options.agentDir, modelRuntimeSignal: AbortSignal.timeout(15_000) })
+      send('event', { type: 'runtime_resources', resources: startupResourceSnapshot(services.resourceLoader, input.cwd, services.diagnostics) })
       progress('creating_session', '正在创建 Pi Session')
       const created = await sdk.createAgentSessionFromServices({ services, sessionManager: options.sessionManager, sessionStartEvent: options.sessionStartEvent })
       return { ...created, services, diagnostics: services.diagnostics }
@@ -322,6 +422,11 @@ async function initialize(input) {
     progress('loading_resources', '正在使用兼容模式加载 Pi 配置与扩展')
     progress('creating_session', '正在创建 Pi Session')
     const created = await sdk.createAgentSession({ cwd: input.cwd, sessionManager })
+    const compatibilityLoader = record(created).resourceLoader ?? record(record(created).services).resourceLoader
+    const compatibilityResources = startupResourceSnapshot(compatibilityLoader, input.cwd, record(created).diagnostics, record(created).extensionsResult)
+    if (Object.values(compatibilityResources).some(value => Array.isArray(value) && value.length)) {
+      send('event', { type: 'runtime_resources', resources: compatibilityResources })
+    }
     session = created.session
     runtime = { dispose: async () => session.dispose() }
   }

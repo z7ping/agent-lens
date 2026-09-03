@@ -15,6 +15,7 @@ import type {
 const PROTOCOL_VERSION = 1
 const MAX_PENDING_REQUESTS = 128
 const MAX_STDERR_TAIL = 64 * 1024
+const MAX_STARTUP_OUTPUT_LINES = 80
 
 type WorkerCommand =
   | 'state' | 'snapshot' | 'controls' | 'setModel' | 'setThinkingLevel'
@@ -87,6 +88,9 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
   private requestSequence = 0
   private exited = false
   private stderrTail = ''
+  private startupOutputActive = true
+  private startupOutputCount = 0
+  private startupOutputBuffers: Record<'stdout' | 'stderr', string> = { stdout: '', stderr: '' }
   private handshakeCapabilities?: PiLiveRuntimeCapabilities | undefined
   private handshakeElapsedMs?: number | undefined
   private handshakeTimings?: PiLiveInitializationTiming[] | undefined
@@ -98,9 +102,13 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
     private readonly onExit: (error: Error) => void,
   ) {
     child.on('message', value => this.receive(value))
+    child.stdout?.setEncoding('utf8')
+    child.stdout?.on('data', value => this.captureStartupOutput('stdout', String(value)))
     child.stderr?.setEncoding('utf8')
     child.stderr?.on('data', value => {
-      this.stderrTail = `${this.stderrTail}${String(value)}`.slice(-MAX_STDERR_TAIL)
+      const text = String(value)
+      this.stderrTail = `${this.stderrTail}${text}`.slice(-MAX_STDERR_TAIL)
+      this.captureStartupOutput('stderr', text)
     })
     child.once('error', error => this.fail(error))
     child.once('close', (code, signal) => {
@@ -109,6 +117,31 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
       const suffix = detail ? `: ${detail}` : ''
       this.fail(new Error(`Pi Runtime Worker exited (code=${code ?? 'null'}, signal=${signal ?? 'none'})${suffix}`))
     })
+  }
+
+  private captureStartupOutput(stream: 'stdout' | 'stderr', chunk: string): void {
+    if (!this.startupOutputActive) return
+    const parts = `${this.startupOutputBuffers[stream]}${chunk}`.split(/\r?\n/)
+    this.startupOutputBuffers[stream] = parts.pop() ?? ''
+    for (const line of parts) this.emitStartupOutput(stream, line)
+  }
+
+  private emitStartupOutput(stream: 'stdout' | 'stderr', line: string): void {
+    if (this.startupOutputCount >= MAX_STARTUP_OUTPUT_LINES) return
+    const message = sanitizeDiagnostic(line).replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, '')
+    if (!message) return
+    this.startupOutputCount += 1
+    this.onEvent({ type: 'runtime_output', stream, message })
+  }
+
+  private finishStartupOutput(): void {
+    if (!this.startupOutputActive) return
+    for (const stream of ['stdout', 'stderr'] as const) {
+      const pending = this.startupOutputBuffers[stream]
+      this.startupOutputBuffers[stream] = ''
+      if (pending) this.emitStartupOutput(stream, pending)
+    }
+    this.startupOutputActive = false
   }
 
   get processId(): number | undefined { return this.child.pid }
@@ -133,6 +166,7 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
           : []
       })
     }
+    this.finishStartupOutput()
   }
 
   private receive(value: unknown): void {
@@ -245,7 +279,7 @@ export class WorkerPiRuntimeHost implements PiRuntimeHost {
       // Worker 入口是纯 ESM，不继承 Daemon 的 tsx/inspect/input-type 参数。
       execArgv: [],
       serialization: 'advanced',
-      stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
+      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
       windowsHide: true,
     } as Parameters<typeof fork>[2] & { windowsHide: boolean }
     const child = fork(entry, [], forkOptions)

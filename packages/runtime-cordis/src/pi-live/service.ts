@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { findPiExecutable, type PiSdkLoader } from './sdk-loader'
 import { InProcessPiRuntimeHost } from './in-process-host'
 import { WorkerPiRuntimeHost, type PiRuntimeHandle, type PiRuntimeHost } from './worker-host'
-import type { PiLiveAvailability, PiLiveControls, PiLiveInitializationStage, PiLiveInitializationTiming, PiLiveQueueState, PiLiveRuntimeCapabilities, PiLiveRuntimeEvent, PiLiveRuntimeListener, PiLiveRuntimeState, PiLiveService, PiLiveSnapshot, PiLiveStartInput, PiLiveStreamingBehavior } from './types'
+import type { PiLiveAvailability, PiLiveControls, PiLiveInitializationStage, PiLiveInitializationTiming, PiLiveQueueState, PiLiveRuntimeCapabilities, PiLiveRuntimeEvent, PiLiveRuntimeListener, PiLiveRuntimeState, PiLiveService, PiLiveSnapshot, PiLiveStartInput, PiLiveStartupResources, PiLiveStreamingBehavior } from './types'
 
 interface OwnedRuntime {
   id: string
@@ -20,6 +20,8 @@ interface OwnedRuntime {
   stageStartedAt: number
   initializationElapsedMs: number
   initializationTimings: PiLiveInitializationTiming[]
+  startupResources?: PiLiveStartupResources | undefined
+  startupOutput: string[]
   capabilities?: PiLiveRuntimeCapabilities | undefined
 }
 
@@ -36,6 +38,24 @@ function record(value: unknown): Record<string, unknown> {
 
 function formatElapsed(elapsedMs: number): string {
   return elapsedMs < 1_000 ? `${elapsedMs}ms` : `${(elapsedMs / 1_000).toFixed(1)}s`
+}
+
+function textList(value: unknown, limit = 240): string[] {
+  if (!Array.isArray(value)) return []
+  return [...new Set(value.filter((item): item is string => typeof item === 'string').map(item => item.trim()).filter(Boolean))].slice(0, limit)
+}
+
+function startupResources(value: unknown): PiLiveStartupResources | undefined {
+  const resources = record(value)
+  const result: PiLiveStartupResources = {
+    contexts: textList(resources.contexts),
+    skills: textList(resources.skills),
+    prompts: textList(resources.prompts),
+    extensions: textList(resources.extensions),
+    themes: textList(resources.themes),
+    diagnostics: textList(resources.diagnostics, 80),
+  }
+  return Object.values(result).some(items => items.length) ? result : undefined
 }
 
 function runtimeCapabilities(value: unknown): PiLiveRuntimeCapabilities | undefined {
@@ -95,6 +115,7 @@ export class DefaultPiLiveService implements PiLiveService {
       stageStartedAt: now,
       initializationElapsedMs: 0,
       initializationTimings: [],
+      startupOutput: [],
     }
     this.runtimes.set(id, runtime)
     void this.initialize(runtime, runtime.generation)
@@ -116,6 +137,8 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.stageStartedAt = now
     runtime.initializationElapsedMs = 0
     runtime.initializationTimings = []
+    runtime.startupResources = undefined
+    runtime.startupOutput = []
     runtime.capabilities = undefined
     this.publish(runtime, { type: 'runtime_status', status: runtime.status, stage: runtime.stage, message: runtime.message })
     void this.initialize(runtime, runtime.generation)
@@ -143,6 +166,12 @@ export class DefaultPiLiveService implements PiLiveService {
             this.advanceInitialization(runtime, stage as PiLiveInitializationStage)
           }
           if (typeof event.message === 'string') runtime.message = event.message.slice(0, 500)
+        } else if (event.type === 'runtime_resources') {
+          runtime.startupResources = startupResources(event.resources) ?? runtime.startupResources
+        } else if (event.type === 'runtime_output') {
+          if (typeof event.message === 'string' && event.message.trim()) {
+            runtime.startupOutput = [...runtime.startupOutput, event.message.trim()].slice(-80)
+          }
         } else if (event.type === 'runtime_capabilities') {
           runtime.capabilities = runtimeCapabilities(event.capabilities) ?? runtime.capabilities
         }
@@ -230,6 +259,8 @@ export class DefaultPiLiveService implements PiLiveService {
       initializationMessage: runtime.message,
       initializationElapsedMs: runtime.initializationElapsedMs,
       initializationTimings: runtime.initializationTimings,
+      ...(runtime.startupResources ? { startupResources: runtime.startupResources } : {}),
+      ...(runtime.startupOutput.length ? { startupOutput: runtime.startupOutput } : {}),
       ...(runtime.capabilities ? { capabilities: runtime.capabilities } : {}),
       ...(runtime.error ? { error: runtime.error } : {}),
       ...(runtime.input.name ? { sessionName: runtime.input.name } : {}),
@@ -248,6 +279,8 @@ export class DefaultPiLiveService implements PiLiveService {
       initializationMessage: runtime.message,
       initializationElapsedMs: runtime.initializationElapsedMs,
       initializationTimings: runtime.initializationTimings,
+      ...(runtime.startupResources ? { startupResources: runtime.startupResources } : {}),
+      ...(runtime.startupOutput.length ? { startupOutput: runtime.startupOutput } : {}),
       ...(runtime.capabilities ? { capabilities: runtime.capabilities } : {}),
       ...(runtime.handle?.processId ? { processId: runtime.handle.processId } : {}),
     }
