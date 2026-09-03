@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, type ReactNode } from 'react'
 import { MarkdownContent } from '../components/MarkdownContent'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { toolVisualKind, toolVisualLabel } from '../components/ToolKindIcon'
@@ -147,9 +147,20 @@ function HistoryToolGroup({ id, items }: { id: string; items: HistoryTool[] }) {
   />
 }
 
-export function PiLiveHistoryTaskRound({ projection, showAllEvents = false }: { projection: PiLiveTaskRoundProjection; showAllEvents?: boolean }) {
+export function PiLiveHistoryTaskRound({
+  projection,
+  showAllEvents = false,
+  beforeContent,
+  summaryMeta,
+}: {
+  projection: PiLiveTaskRoundProjection
+  showAllEvents?: boolean
+  beforeContent?: ReactNode
+  summaryMeta?: ReactNode
+}) {
   const entries = historyEntries(projection.items)
-  return <TaskRound model={projection.model} className="pi-live-history-round">
+  return <TaskRound model={projection.model} className="pi-live-history-round" summaryMeta={summaryMeta}>
+    {beforeContent}
     {entries.map(entry => {
       if (entry.kind === 'message') {
         return <TaskMessage
