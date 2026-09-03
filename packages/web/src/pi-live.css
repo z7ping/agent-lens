@@ -60,7 +60,7 @@
 .pi-live-pulse { background: var(--al-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--al-accent) 11%, transparent); }
 .pi-live-idle-dot { border: 1px solid var(--al-line-strong); background: var(--al-surface); }
 .pi-live-side-empty { padding: 16px 10px; color: var(--al-muted); font-size: 12px; line-height: 1.55; }
-.pi-live-review-link { width: 100%; margin-top: 8px; padding: 8px 10px; border: 0; border-top: 1px solid var(--al-line); background: transparent; color: var(--al-muted); font-size: 12px; text-align: left; }
+.pi-live-review-link { display: flex; width: 100%; margin-top: 8px; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border: 0; border-top: 1px solid var(--al-line); background: transparent; color: var(--al-muted); font-size: 12px; text-align: left; }
 .pi-live-review-link:hover { color: var(--al-accent); }
 
 /*
@@ -187,7 +187,7 @@ textarea.pi-live-blocking-field { min-height: 74px; }
 }
 .pi-live-startup-queue > span { color: var(--al-accent); font-size: 12px; font-weight: 700; white-space: nowrap; }
 .pi-live-startup-queue > b { min-width: 0; overflow: hidden; color: var(--al-ink-2); font-size: 13px; font-weight: 540; text-overflow: ellipsis; white-space: nowrap; }
-.pi-live-startup-queue > div { display: flex; gap: 4px; }
+.pi-live-startup-queue > div { display: flex; gap: 6px; }
 .pi-live-queue-action { border-color: transparent; background: transparent; color: var(--al-muted); }
 .pi-live-queue-action:hover:not(:disabled) { border-color: transparent; background: var(--al-soft); color: var(--al-ink-2); }
 
@@ -199,7 +199,7 @@ textarea.pi-live-blocking-field { min-height: 74px; }
 .pi-live-queue-item > b { min-width: 0; overflow: hidden; color: var(--al-ink-2); font-size: 13px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 .pi-live-queue-item > small { color: var(--al-accent); font-size: 12px; }
 .pi-live-queue-item.restored { border-style: dashed; }
-.pi-live-queue-item > div { display: flex; gap: 4px; }
+.pi-live-queue-item > div { display: flex; gap: 6px; }
 
 .pi-live-composer {
   position: relative;
