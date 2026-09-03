@@ -199,7 +199,7 @@ async function inspect(win, viewport, theme) {
         toolFactCount: toolFacts.length,
         hiddenToolFactCount: toolFacts.filter(item => !visible(item)).length,
         toolGridColumns: toolStyle?.gridTemplateColumns || '',
-        toolGridColumnCount: toolStyle?.gridTemplateColumns?.trim().split(/\\s+/).filter(Boolean).length || 0,
+        toolGridColumnCount: toolStyle?.gridTemplateColumns?.trim().split(/\s+/).filter(Boolean).length || 0,
         toolRow: rect(firstTool),
         toolRowClientWidth: firstTool?.clientWidth || 0,
         toolRowScrollWidth: firstTool?.scrollWidth || 0,
@@ -276,14 +276,14 @@ async function runInspectorReturn(win) {
 
   const opened = await withTimeout(win.webContents.executeJavaScript(`(async () => {
     for (let i = 0; i < 40; i += 1) {
-      const panel = document.querySelector('.inspector-panel[role="dialog"]')
+      const panel = document.querySelector('.review-inspector-overlay .ui-drawer[role="dialog"]')
       if (panel) {
-        const firstTab = panel.querySelector('[role="tab"]')
-        return { open: true, focusInside: panel.contains(document.activeElement), firstTabFocused: document.activeElement === firstTab }
+        const firstFocusable = panel.querySelector('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')
+        return { open: true, focusInside: panel.contains(document.activeElement), firstFocusableFocused: document.activeElement === firstFocusable }
       }
       await new Promise(resolve => setTimeout(resolve, 25))
     }
-    return { open: false, focusInside: false, firstTabFocused: false }
+    return { open: false, focusInside: false, firstFocusableFocused: false }
   })()`), 3_000, '等待 Tool Inspector')
 
   await withTimeout(win.webContents.executeJavaScript(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))`), 2_000, 'Esc 关闭 Tool Inspector')
@@ -291,14 +291,14 @@ async function runInspectorReturn(win) {
   const after = await withTimeout(win.webContents.executeJavaScript(`(() => {
     const pane = document.querySelector('.review-reader-pane')
     const trigger = document.querySelector('[data-acceptance-inspector-trigger="true"]')
-    const value = { closed: !document.querySelector('.inspector-panel[role="dialog"]'), afterScrollTop: pane instanceof HTMLElement ? pane.scrollTop : -1, focusReturned: trigger instanceof HTMLElement && document.activeElement === trigger }
+    const value = { closed: !document.querySelector('.review-inspector-overlay .ui-drawer[role="dialog"]'), afterScrollTop: pane instanceof HTMLElement ? pane.scrollTop : -1, focusReturned: trigger instanceof HTMLElement && document.activeElement === trigger }
     if (trigger instanceof HTMLElement) delete trigger.dataset.acceptanceInspectorTrigger
     return value
   })()`), 3_000, '核对 Tool Inspector 返回状态')
 
   const errors = []
   if (!opened.open) errors.push('Tool Inspector 未打开')
-  if (!opened.focusInside || !opened.firstTabFocused) errors.push('Tool Inspector 打开后焦点未进入首个 Tab')
+  if (!opened.focusInside || !opened.firstFocusableFocused) errors.push('Tool Inspector 打开后焦点未进入首个可聚焦控件')
   if (!after.closed) errors.push('Esc 未关闭 Tool Inspector')
   if (!after.focusReturned) errors.push('关闭 Tool Inspector 后焦点未返回原 Tool Call')
   if (Math.abs(after.afterScrollTop - setup.beforeScrollTop) > 2) errors.push(`关闭 Tool Inspector 后滚动位置漂移：${setup.beforeScrollTop} → ${after.afterScrollTop}`)
