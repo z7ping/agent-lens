@@ -40,6 +40,7 @@ export function PiStartupDisclosure({
   onRetry,
   onTerminate,
   embedded = false,
+  showAllEvents = true,
 }: {
   state: PiLiveStateDto
   busy: boolean
@@ -47,6 +48,7 @@ export function PiStartupDisclosure({
   onRetry(): void
   onTerminate(): void
   embedded?: boolean
+  showAllEvents?: boolean
 }) {
   const [expanded, setExpanded] = useState(state.status !== 'ready')
   const [clock, setClock] = useState(() => Date.now())
@@ -94,6 +96,7 @@ export function PiStartupDisclosure({
     { label: 'Extensions', values: resources?.extensions ?? [] },
     { label: 'Themes', values: resources?.themes ?? [] },
   ].filter(group => group.values.length)
+  const resourceSummary = resourceGroups.map(group => `${group.values.length} ${group.label}`).join(' · ')
   const startupOutput = state.startupOutput ?? []
 
   const body = <div className="pi-startup-body">
@@ -117,15 +120,18 @@ export function PiStartupDisclosure({
       {mode && <span>{mode}</span>}
       {state.processId && <span>Worker PID {state.processId}</span>}
     </div>}
-    {resourceGroups.length > 0 && <div className="pi-startup-resources" aria-label="Pi 已加载资源">
-      {resourceGroups.map(group => <div className="pi-startup-resource-row" key={group.label}>
-        <b>[{group.label}]</b><span>{group.values.join(', ')}</span>
-      </div>)}
-    </div>}
-    {startupOutput.length > 0 && <div className="pi-startup-output">
+    {resourceGroups.length > 0 && <details className="pi-startup-resource-details">
+      <summary>{resourceSummary}</summary>
+      <div className="pi-startup-resources" aria-label="Pi 已加载资源">
+        {resourceGroups.map(group => <div className="pi-startup-resource-row" key={group.label}>
+          <b>[{group.label}]</b><span>{group.values.join(', ')}</span>
+        </div>)}
+      </div>
+    </details>}
+    {showAllEvents && startupOutput.length > 0 && <div className="pi-startup-output">
       <b>[启动输出]</b><CopyableCodeBlock copyValue={startupOutput.join('\n')}>{startupOutput.join('\n')}</CopyableCodeBlock>
     </div>}
-    {(resources?.diagnostics.length ?? 0) > 0 && <div className="pi-startup-diagnostics">
+    {showAllEvents && (resources?.diagnostics.length ?? 0) > 0 && <div className="pi-startup-diagnostics">
       <b>[资源诊断]</b>{resources!.diagnostics.map((message, index) => <span key={`${index}-${message}`}>{message}</span>)}
     </div>}
     {state.status === 'failed' && <div className="pi-startup-failure" role="alert">
