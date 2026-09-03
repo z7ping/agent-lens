@@ -22,6 +22,11 @@ function useOverlayFocus({
   onClose(): void
   panelRef: RefObject<HTMLDivElement | null>
 }) {
+  const closeRef = useRef(onClose)
+  useEffect(() => {
+    closeRef.current = onClose
+  }, [onClose])
+
   useEffect(() => {
     if (!open) return
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null
@@ -34,7 +39,7 @@ function useOverlayFocus({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault()
-        onClose()
+        closeRef.current()
         return
       }
       if (event.key !== 'Tab' || !panelRef.current) return
@@ -62,7 +67,7 @@ function useOverlayFocus({
       document.removeEventListener('keydown', onKeyDown, true)
       requestAnimationFrame(() => previous?.focus({ preventScroll: true }))
     }
-  }, [onClose, open, panelRef])
+  }, [open, panelRef])
 }
 
 interface OverlayFrameProps {
