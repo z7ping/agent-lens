@@ -1,9 +1,29 @@
-import { forwardRef, type HTMLAttributes } from 'react'
+import { createContext, forwardRef, useContext, useMemo, useState, type HTMLAttributes, type PropsWithChildren } from 'react'
 
 export type TaskSurfaceMode = 'review' | 'live' | 'hub' | 'new'
 
 export interface TaskSurfaceProps extends HTMLAttributes<HTMLElement> {
   mode: TaskSurfaceMode
+}
+
+interface TaskSurfaceViewValue {
+  showUsageDetails: boolean
+  setShowUsageDetails(value: boolean): void
+}
+
+const TaskSurfaceViewContext = createContext<TaskSurfaceViewValue>({
+  showUsageDetails: false,
+  setShowUsageDetails: () => undefined,
+})
+
+export function useTaskSurfaceView(): TaskSurfaceViewValue {
+  return useContext(TaskSurfaceViewContext)
+}
+
+function TaskSurfaceViewProvider({ children }: PropsWithChildren) {
+  const [showUsageDetails, setShowUsageDetails] = useState(false)
+  const value = useMemo(() => ({ showUsageDetails, setShowUsageDetails }), [showUsageDetails])
+  return <TaskSurfaceViewContext.Provider value={value}>{children}</TaskSurfaceViewContext.Provider>
 }
 
 /**
@@ -18,5 +38,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
   ref,
 ) {
   const classes = ['task-surface', `task-surface-${mode}`, className].filter(Boolean).join(' ')
-  return <section ref={ref} className={classes} data-task-surface-mode={mode} {...props}>{children}</section>
+  return <TaskSurfaceViewProvider>
+    <section ref={ref} className={classes} data-task-surface-mode={mode} {...props}>{children}</section>
+  </TaskSurfaceViewProvider>
 })

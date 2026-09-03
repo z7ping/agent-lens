@@ -29,6 +29,7 @@ import './review-long-session.css'
 import './pi-live.css'
 import './task-center.css'
 import './hub-review.css'
+import './task-view-options.css'
 // Task Surface 共享详情组件最后加载；页面所有者不得再定义这些共享选择器。
 import './task-detail.css'
 

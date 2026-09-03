@@ -1,0 +1,63 @@
+@reference "./styles.css";
+
+/* Task Surface 的低频视图选项。共享详情组件样式仍由 task-detail.css 持有。 */
+.task-view-menu {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.task-view-menu > summary {
+  display: inline-flex;
+  height: 28px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 9px;
+  border: 1px solid var(--al-line-strong);
+  border-radius: 7px;
+  background: var(--al-surface);
+  color: var(--al-ink-2);
+  box-shadow: 0 1px 2px rgb(16 24 40 / .04);
+  font-size: 12px;
+  font-weight: 560;
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+}
+
+.task-view-menu > summary::-webkit-details-marker { display: none; }
+.task-view-menu > summary::after { content: "⌄"; color: var(--al-muted-2); font-size: 11px; transform: translateY(-1px); }
+.task-view-menu[open] > summary { border-color: color-mix(in srgb, var(--al-accent) 34%, var(--al-line-strong)); color: var(--al-accent); }
+
+.task-view-menu-popover {
+  position: absolute;
+  top: calc(100% + 5px);
+  right: 0;
+  z-index: 40;
+  width: 156px;
+  padding: 5px;
+  border: 1px solid var(--al-line);
+  border-radius: 9px;
+  background: var(--al-surface);
+  box-shadow: 0 10px 28px rgb(16 24 40 / .13);
+}
+
+.task-view-menu-popover button {
+  display: flex;
+  width: 100%;
+  height: 30px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--al-ink-2);
+  font-size: 12px;
+  text-align: left;
+}
+
+.task-view-menu-popover button:hover { background: var(--al-soft-2); }
+.task-view-menu-popover button b { min-width: 14px; color: var(--al-accent); font-size: 12px; text-align: right; }
+
+/* 原按钮保留为状态/行为源，但交互入口统一收进“视图”菜单。 */
+.review-audit-toggle { display: none !important; }

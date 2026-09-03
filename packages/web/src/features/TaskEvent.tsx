@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useTaskSurfaceView } from './TaskSurface'
 import type { TaskEventModel } from './task-detail-model'
 
 export function TaskEvent({
@@ -12,6 +13,9 @@ export function TaskEvent({
   onInspect?: (() => void) | undefined
   raw?: unknown
 }) {
+  const { showUsageDetails } = useTaskSurfaceView()
+  if (model.category === 'usage' && !showUsageDetails) return null
+
   const content = <>
     <span className="task-event-mark" />
     <span className="task-event-copy"><b>{model.label}</b>{model.summary && <small>{model.summary}</small>}</span>
