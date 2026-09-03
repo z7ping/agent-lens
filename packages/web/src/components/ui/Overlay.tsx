@@ -78,6 +78,7 @@ interface OverlayFrameProps {
   footer?: ReactNode
   onClose(): void
   closeOnBackdrop?: boolean
+  closeDisabled?: boolean
   className?: string
   kind: 'dialog' | 'drawer'
   side?: 'left' | 'right'
@@ -91,6 +92,7 @@ function OverlayFrame({
   footer,
   onClose,
   closeOnBackdrop = true,
+  closeDisabled = false,
   className,
   kind,
   side = 'right',
@@ -106,7 +108,7 @@ function OverlayFrame({
       className={`ui-overlay ui-overlay-${kind} ${kind === 'drawer' ? `is-${side}` : ''} ${className ?? ''}`.trim()}
       role="presentation"
       onMouseDown={event => {
-        if (closeOnBackdrop && event.target === event.currentTarget) onClose()
+        if (!closeDisabled && closeOnBackdrop && event.target === event.currentTarget) onClose()
       }}
     >
       <div
@@ -123,7 +125,7 @@ function OverlayFrame({
             <h2 id={titleId}>{title}</h2>
             {description && <p id={descriptionId}>{description}</p>}
           </div>
-          <IconButton aria-label="关闭" onClick={onClose}><UiIcon name="close" size={16}/></IconButton>
+          <IconButton aria-label="关闭" disabled={closeDisabled} onClick={onClose}><UiIcon name="close" size={16}/></IconButton>
         </header>
         <div className="ui-overlay-body">{children}</div>
         {footer && <footer className="ui-overlay-footer">{footer}</footer>}
