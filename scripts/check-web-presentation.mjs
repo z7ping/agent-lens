@@ -139,7 +139,8 @@ for (const forbidden of ['className="scrim show', 'className="drawer show', 'bac
 if (/\.backup-confirm-dialog\b|\.backup-confirm-scrim\b/.test(css.backup)) throw new Error('资产备份确认流程必须由统一 Dialog 持有外壳')
 if (/\.snapshot-create-button\s*\{[^}]*height\s*:/s.test(css.backup)) throw new Error('资产备份不得覆盖统一 Button 高度')
 
-if (!css.review.includes('AgentLens 1.0 Review 页面所有者') || !css.review.includes('.evidence-inline') || !css.review.includes('.raw-event-group') || !css.review.includes('.pi-session-tree') || !css.review.includes('.inspector-panel')) throw new Error('review.css 必须只持有 Review 页面/证据/Inspector 能力')
+if (!css.review.includes('AgentLens 1.0 Review 页面所有者') || !css.review.includes('.evidence-inline') || !css.review.includes('.raw-event-group') || !css.review.includes('.pi-session-tree') || !css.review.includes('.review-inspector-overlay')) throw new Error('review.css 必须只持有 Review 页面/证据/Inspector 业务内容')
+if (/\.inspector-panel\b|\.inspector-head\b|\.inspector-title\b/.test(css.review)) throw new Error('Review Inspector 外壳必须由统一 Drawer 持有，不得恢复页面自建抽屉')
 if (!css.reviewLong.includes('.round-nav') || !css.reviewLong.includes('.turn-rail') || !css.reviewLong.includes('.turn-tick') || !css.reviewLong.includes('.virtual-round-shell')) throw new Error('review-long-session.css 必须持有长会话/轮次导航能力')
 if (!css.pi.includes('Pi Live 专属样式所有者') || !css.pi.includes('.pi-live-composer') || !css.pi.includes('.pi-live-queue') || !/\.pi-live-compose-hint[\s\S]*?position:\s*absolute/m.test(css.pi)) throw new Error('pi-live.css 必须持有 Runtime/Composer/Queue，且快捷提示不得参与布局高度')
 if (!css.taskCenter.includes('Task Center 页面壳层唯一所有者') || !css.taskCenter.includes('.task-center-rail') || !css.taskCenter.includes('.task-center-main') || !css.taskCenter.includes('左右滚动根完全隔离')) throw new Error('task-center.css 必须持有 Rail/详情壳层和独立滚动')
