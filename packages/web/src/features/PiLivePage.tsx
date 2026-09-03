@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import type { JsonValue, PiLiveControlsDto, PiLiveEventDto, PiLiveQueueDto, PiLiveSnapshotDto, PiLiveStateDto } from '@agent-lens/protocol'
 import { piLiveApi, type PiLiveTransportDiagnostics } from '../client/pi-live'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
+import { ComposerPillSelect } from '../components/ComposerPillSelect'
 import { projectPiLiveHistory, type PiLiveHistoryItem } from './pi-live-history'
 import { PiLiveHistoryTaskRound, PiLiveRunningTaskRound } from './PiLiveTaskRound'
 import { piLiveTaskRoundEstimate, projectPiLiveRunningRound, projectPiLiveTaskDetail, projectPiLiveTaskRounds } from './pi-live-task-projection'
@@ -70,6 +71,12 @@ function modelLabel(state: PiLiveStateDto | null): string {
   const provider = stringValue(model.provider)
   const id = stringValue(model.id || model.modelId || model.name)
   return [provider, id].filter(Boolean).join(' / ') || 'Pi'
+}
+
+function modelCompactLabel(state: PiLiveStateDto | null): string {
+  if (!state?.model) return '模型'
+  const model = record(state.model)
+  return stringValue(model.name || model.id || model.modelId) || '模型'
 }
 
 function thinkingLevelLabel(level: string): string {
@@ -802,26 +809,32 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
               {composerStatus.label}
             </span>
             <div className="pi-live-compose-settings">
-              <select
-                aria-label="Pi 模型"
+              <ComposerPillSelect
+                ariaLabel="Pi 模型"
                 title={state?.model ? `Pi 模型 · ${modelLabel(state)}` : 'Pi 模型'}
                 value={selectedModel}
+                placeholder={modelCompactLabel(state)}
+                className="pi-live-model-picker"
+                menuWidth={280}
                 disabled={!runtimeReady || controlBusy || controls.models.length === 0}
-                onChange={event => void changeModel(event.target.value)}
-              >
-                {!selectedModel && <option value="">模型</option>}
-                {controls.models.map(item => <option key={`${item.provider}/${item.id}`} value={JSON.stringify([item.provider, item.id])}>{item.name || item.id}</option>)}
-              </select>
-              <select
-                aria-label="Pi 推理强度"
+                options={controls.models.map(item => ({
+                  value: JSON.stringify([item.provider, item.id]),
+                  label: item.name || item.id,
+                  description: item.name && item.name !== item.id ? `${item.provider} · ${item.id}` : item.provider,
+                }))}
+                onChange={selection => void changeModel(selection)}
+              />
+              <ComposerPillSelect
+                ariaLabel="Pi 推理强度"
                 title={`Pi 推理强度 · ${state?.thinkingLevel || '未设置'}`}
                 value={state?.thinkingLevel ?? ''}
+                placeholder={state?.thinkingLevel ? thinkingLevelLabel(state.thinkingLevel) : '推理'}
+                className="pi-live-thinking-picker"
+                menuWidth={168}
                 disabled={!runtimeReady || controlBusy || controls.thinkingLevels.length === 0}
-                onChange={event => void changeThinkingLevel(event.target.value)}
-              >
-                {!state?.thinkingLevel && <option value="">推理</option>}
-                {controls.thinkingLevels.map(level => <option key={level} value={level}>{thinkingLevelLabel(level)}</option>)}
-              </select>
+                options={controls.thinkingLevels.map(level => ({ value: level, label: thinkingLevelLabel(level) }))}
+                onChange={level => void changeThinkingLevel(level)}
+              />
             </div>
             <div className="pi-live-compose-mode" aria-label="发送方式">
               <button title="立即介入当前生成（Enter）" className={mode === 'steer' ? 'active' : ''} aria-pressed={mode === 'steer'} onClick={() => { setMode('steer'); setComposerView('edit'); requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true })) }}>介入</button>

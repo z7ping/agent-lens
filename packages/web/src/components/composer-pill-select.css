@@ -1,0 +1,94 @@
+@reference "../styles.css";
+
+.composer-pill-trigger {
+  display: inline-flex;
+  min-width: 0;
+  height: 32px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--al-soft-2);
+  color: var(--al-ink-2);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.composer-pill-trigger:hover:not(:disabled),
+.composer-pill-trigger.is-open { background: var(--al-soft); color: var(--al-ink); }
+.composer-pill-trigger:focus-visible { outline: 2px solid color-mix(in srgb, var(--al-accent) 42%, transparent); outline-offset: 2px; }
+.composer-pill-trigger:disabled { color: var(--al-muted); cursor: default; opacity: .52; }
+.composer-pill-trigger-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.composer-pill-chevron { flex: 0 0 auto; color: var(--al-muted-2); font-size: 13px; transform: translateY(-1px); transition: transform .12s ease; }
+.composer-pill-trigger.is-open .composer-pill-chevron { transform: translateY(1px) rotate(180deg); }
+
+.composer-pill-menu {
+  position: fixed;
+  z-index: 1200;
+  max-height: min(300px, calc(100vh - 16px));
+  padding: 6px;
+  overflow: auto;
+  border: 1px solid color-mix(in srgb, var(--al-line-strong) 88%, transparent);
+  border-radius: 18px;
+  outline: 0;
+  background: var(--al-surface-raised);
+  box-shadow: var(--al-shadow-lg);
+}
+.composer-pill-option {
+  display: flex;
+  width: 100%;
+  min-height: 40px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--al-ink-2);
+  text-align: left;
+  cursor: pointer;
+}
+.composer-pill-option:hover,
+.composer-pill-option.is-active { background: var(--al-soft-2); }
+.composer-pill-option.is-selected { color: var(--al-ink); }
+.composer-pill-option-copy { min-width: 0; }
+.composer-pill-option-copy b {
+  display: block;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 560;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.composer-pill-option-copy small {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--al-muted);
+  font-size: 12px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.composer-pill-check {
+  width: 18px;
+  flex: 0 0 18px;
+  color: var(--al-ink);
+  font-size: 14px;
+  font-weight: 650;
+  text-align: center;
+}
+
+@media (max-width: 767.98px) {
+  .composer-pill-menu { border-radius: 16px; }
+  .composer-pill-trigger { max-width: 148px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer-pill-chevron { transition: none; }
+}
