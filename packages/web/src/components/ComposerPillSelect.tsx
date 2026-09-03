@@ -1,4 +1,4 @@
-import { SelectMenu, type SelectMenuOption } from './SelectMenu'
+import { SelectMenu, type SelectMenuOption } from './ui'
 
 export type ComposerPillOption = SelectMenuOption
 
