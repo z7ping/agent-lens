@@ -46,13 +46,13 @@ function normalized(kind: ObservationKind, payload: unknown): NormalizedSourceOu
   }
 }
 
-test('uses conservative defaults with only Claude Code source enabled', () => {
+test('默认启用当前支持的全部本机智能体来源', () => {
   assert.deepEqual(capturePolicySettingsFromEnv({}), {
     prompt: 'redacted',
     tool: 'redacted',
     config: 'redacted',
     environment: 'off',
-    enabledSources: ['claude-code'],
+    enabledSources: ['claude-code', 'codex', 'pi', 'hermes', 'opencode'],
   })
 })
 
