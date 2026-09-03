@@ -267,12 +267,12 @@ textarea.pi-live-blocking-field { min-height: 74px; }
 .pi-live-markdown-preview pre { padding: 7px 9px; overflow: auto; border: 1px solid var(--al-line); border-radius: 7px; background: var(--al-soft-2); font: 12px/1.55 var(--font-mono); white-space: pre-wrap; }
 .pi-live-markdown-preview :not(pre) > code { padding: 1px 4px; border-radius: 4px; background: var(--al-soft-2); font-family: var(--font-mono); font-size: .9em; }
 .pi-live-preview-empty { color: var(--al-muted-2); font-size: 13px; }
-.pi-live-compose-bar { display: flex; min-height: 48px; align-items: center; gap: 7px; padding: 4px 10px 9px 14px; border-top: 0; }
-.pi-live-compose-runtime { width: 132px; min-width: 132px; overflow: hidden; color: var(--al-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.pi-live-compose-settings { display: flex; min-width: 0; flex: 0 1 auto; flex-wrap: nowrap; align-items: center; gap: 4px; }
+.pi-live-compose-bar { display: flex; min-height: 48px; align-items: center; gap: 12px; padding: 4px 10px 9px 14px; border-top: 0; }
+.pi-live-compose-runtime { display: inline-flex; width: 132px; min-width: 132px; align-items: center; gap: 6px; overflow: hidden; color: var(--al-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.pi-live-compose-settings { display: flex; min-width: 0; flex: 0 1 auto; flex-wrap: nowrap; align-items: center; gap: 8px; }
 .pi-live-model-picker { width: clamp(210px, 22vw, 300px); max-width: 300px; }
 .pi-live-thinking-picker { width: clamp(140px, 15vw, 180px); max-width: 180px; }
-.pi-live-compose-mode { display: flex; margin-left: auto; padding: 2px; border-radius: 999px; background: var(--al-soft-2); }
+.pi-live-compose-mode { display: flex; margin-left: auto; gap: 2px; padding: 2px; border-radius: 999px; background: var(--al-soft-2); }
 .pi-live-mode-action { border-color: transparent; border-radius: 999px; background: transparent; color: var(--al-muted); white-space: nowrap; }
 .pi-live-mode-action:hover:not(:disabled) { border-color: transparent; }
 .pi-live-mode-action.active { border-color: transparent; background: var(--al-surface); box-shadow: 0 1px 2px rgb(16 24 40 / .06); color: var(--al-ink); font-weight: 650; }
