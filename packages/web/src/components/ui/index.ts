@@ -18,5 +18,8 @@ export type {
   StatusTone,
 } from './Primitives'
 
+export { Dialog, Drawer } from './Overlay'
+export type { DialogProps, DrawerProps } from './Overlay'
+
 export { SelectMenu } from '../SelectMenu'
 export type { SelectMenuOption, SelectMenuVariant } from '../SelectMenu'
