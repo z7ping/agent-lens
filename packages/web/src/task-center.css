@@ -123,8 +123,30 @@
 }
 .task-center-rail .session-item-title { margin-top: 4px; color: var(--al-ink); font-size: 13px; font-weight: 660; line-height: 1.45; }
 .task-center-rail .session-item-meta,
-.task-center-rail .session-item-foot { color: var(--al-muted-2); font-size: 12px; line-height: 1.35; }
-.task-center-rail .session-item-foot { margin-top: 4px; }
+.task-center-rail .session-item-foot {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  color: var(--al-muted-2);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.task-center-rail .session-item-meta > span:not(.source-dot):not(.pi-live-pulse):not(.pi-live-idle-dot),
+.task-center-rail .session-item-foot > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-center-rail .session-item-meta time,
+.task-center-rail .session-item-foot > span:last-child {
+  margin-left: auto;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.task-center-rail .session-item-meta time { font-variant-numeric: tabular-nums; }
+.task-center-rail .session-item-foot { margin-top: 4px; gap: 12px; }
 .task-center-rail .session-load-more {
   width: 100%;
   height: 32px;

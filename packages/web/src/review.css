@@ -147,8 +147,13 @@
 .evidence-link:hover { background: var(--al-soft); color: var(--al-ink-2); }
 
 .raw-event-group { margin: 7px 0 7px 26px; overflow: hidden; border: 1px dashed var(--al-line-strong); border-radius: 8px; background: var(--al-soft-2); color: var(--al-muted); }
-.raw-event-group > summary { display: flex; min-height: 36px; align-items: center; justify-content: space-between; gap: 8px; padding: 0 10px; cursor: pointer; list-style: none; font-size: 12px; }
+.raw-event-group > summary { display: flex; min-height: 48px; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 10px; cursor: pointer; list-style: none; font-size: 12px; }
 .raw-event-group > summary::-webkit-details-marker { display: none; }
+.raw-event-summary-copy { display: grid; min-width: 0; gap: 2px; }
+.raw-event-summary-title { display: flex; min-width: 0; align-items: center; gap: 7px; color: var(--al-ink-2); font-weight: 650; }
+.raw-event-summary-count { display: inline-flex; min-width: 20px; height: 18px; align-items: center; justify-content: center; padding: 0 5px; border: 1px solid var(--al-line); border-radius: 999px; color: var(--al-muted); font-size: 12px; font-variant-numeric: tabular-nums; font-weight: 550; }
+.raw-event-summary-copy small { overflow: hidden; color: var(--al-muted-2); font-size: 12px; font-weight: 400; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.raw-event-group > summary time { flex: 0 0 auto; color: var(--al-muted-2); font-variant-numeric: tabular-nums; }
 .raw-event-group > div { padding: 0 2px 2px; }
 
 /* 详情 Inspector。 */

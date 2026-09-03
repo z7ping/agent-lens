@@ -25,8 +25,10 @@ test('Task Review 将 commentary、reasoning 与工具统一放入思考过程',
   assert.match(reviewPage, /entry\.type === 'process'/)
 })
 
-test('Task Review 的附加原生事件折叠时不挂载事件行', () => {
+test('Task Review 的其他运行记录会解释用途，折叠时不挂载事件行', () => {
   assert.match(reviewPage, /function RawEventGroup[\s\S]*?const \[expanded, setExpanded\] = useState\(false\)[\s\S]*?className="raw-event-group"/)
+  assert.match(reviewPage, /其他运行记录/)
+  assert.match(reviewPage, /Agent 原始日志中的状态、用量等辅助记录，不属于对话正文/)
   assert.match(reviewPage, /\{expanded && <div>\{items\.map\(item => <EventRow/)
 })
 

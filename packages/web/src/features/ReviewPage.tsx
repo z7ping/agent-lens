@@ -771,7 +771,13 @@ function EventRow({ event, inspect }: { event: ReviewEventNodeDto; inspect(node:
 function RawEventGroup({ items, inspect }: { items: ReviewEventNodeDto[]; inspect(node: ReviewNodeDto): void }) {
   const [expanded, setExpanded] = useState(false)
   return <details className="raw-event-group" open={expanded} onToggle={event => setExpanded(event.currentTarget.open)}>
-    <summary><span>附加原生事件 · {items.length}</span><time>{formatClock(items[items.length - 1]?.at ?? '')}</time></summary>
+    <summary>
+      <span className="raw-event-summary-copy">
+        <span className="raw-event-summary-title">其他运行记录 <span className="raw-event-summary-count">{items.length}</span></span>
+        <small>Agent 原始日志中的状态、用量等辅助记录，不属于对话正文</small>
+      </span>
+      <time>{formatClock(items[items.length - 1]?.at ?? '')}</time>
+    </summary>
     {expanded && <div>{items.map(item => <EventRow key={item.id} event={item} inspect={inspect}/>)}</div>}
   </details>
 }
