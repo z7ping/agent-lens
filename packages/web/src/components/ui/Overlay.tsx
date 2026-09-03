@@ -72,8 +72,8 @@ function useOverlayFocus({
 
 interface OverlayFrameProps {
   open: boolean
-  title: string
-  description?: string
+  title: ReactNode
+  description?: ReactNode
   children: ReactNode
   footer?: ReactNode
   onClose(): void
