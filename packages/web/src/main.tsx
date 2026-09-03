@@ -1,7 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
-import { installInspectorOutsideDismiss } from './client/inspector-dismiss'
 import { installLiveRecovery } from './client/live-recovery'
 import { clientModel } from './client/model'
 import { installPiLiveKeyboard } from './client/pi-live-keyboard'
@@ -39,12 +38,10 @@ import './task-detail.css'
 
 writeTheme(readTheme())
 const disposeLiveRecovery = installLiveRecovery(clientModel)
-const disposeInspectorOutsideDismiss = installInspectorOutsideDismiss()
 const disposePiLiveKeyboard = installPiLiveKeyboard()
 void clientModel.start()
 window.addEventListener('pagehide', () => {
   disposePiLiveKeyboard()
-  disposeInspectorOutsideDismiss()
   disposeLiveRecovery()
   clientModel.stop()
 }, { once: true })
