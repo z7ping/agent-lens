@@ -8,6 +8,7 @@ export interface SelectMenuOption {
   label: string
   description?: string | undefined
   keywords?: string | undefined
+  tooltip?: string | undefined
   disabled?: boolean | undefined
 }
 
@@ -18,6 +19,40 @@ interface MenuPosition {
   top?: number | undefined
   bottom?: number | undefined
   width: number
+}
+
+function pathLike(value: string | undefined): value is string {
+  if (!value) return false
+  return /[\\/]/.test(value) || /^[A-Za-z]:/.test(value)
+}
+
+function normalizedPath(value: string): string {
+  const normalized = value.trim().replace(/\\/g, '/').replace(/\/+$/, '')
+  return /^[A-Za-z]:\//.test(normalized) ? normalized.toLocaleLowerCase() : normalized
+}
+
+function pathBasename(value: string): string {
+  const trimmed = value.trim().replace(/[\\/]+$/, '')
+  const parts = trimmed.split(/[\\/]/).filter(Boolean)
+  return parts.at(-1) ?? value
+}
+
+/**
+ * 项目类下拉常见的 fallback 数据会把同一个工作目录同时放进 label / description。
+ * 这种情况下只在展示层把第一行收敛为目录名，第二行继续保留完整路径；
+ * 原始值仍用于搜索和选择，不改变任何项目身份语义。
+ */
+export function selectMenuDisplayLabel(option: Pick<SelectMenuOption, 'label' | 'description'>): string {
+  if (!pathLike(option.label) || !pathLike(option.description)) return option.label
+  return normalizedPath(option.label) === normalizedPath(option.description)
+    ? pathBasename(option.description)
+    : option.label
+}
+
+function selectMenuTooltip(option: SelectMenuOption | undefined): string | undefined {
+  if (!option) return undefined
+  if (option.tooltip?.trim()) return option.tooltip.trim()
+  return pathLike(option.description) ? option.description : undefined
 }
 
 export function SelectMenu({
@@ -56,6 +91,8 @@ export function SelectMenu({
   const [activeValue, setActiveValue] = useState('')
   const [position, setPosition] = useState<MenuPosition | null>(null)
   const selected = options.find(option => option.value === value)
+  const selectedLabel = selected ? selectMenuDisplayLabel(selected) : placeholder
+  const selectedTooltip = title ?? selectMenuTooltip(selected)
   const filteredOptions = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase()
     if (!needle) return options
@@ -161,7 +198,7 @@ export function SelectMenu({
       aria-haspopup="listbox"
       aria-expanded={open}
       aria-controls={open ? listboxId : undefined}
-      title={title}
+      title={selectedTooltip}
       onClick={() => setOpen(current => !current)}
       onKeyDown={event => {
         if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -171,7 +208,7 @@ export function SelectMenu({
       }}
     >
       <span className="select-menu-trigger-copy">
-        <span className="select-menu-trigger-label">{selected?.label ?? placeholder}</span>
+        <span className="select-menu-trigger-label">{selectedLabel}</span>
         {variant === 'field' && selected?.description && <small>{selected.description}</small>}
       </span>
       <UiIcon className="select-menu-chevron" name="chevron-down" size={14}/>
@@ -195,6 +232,7 @@ export function SelectMenu({
           {filteredOptions.map(option => {
             const checked = option.value === value
             const active = option.value === activeValue
+            const displayLabel = selectMenuDisplayLabel(option)
             return <button
               id={`${listboxId}-${option.value}`}
               key={option.value}
@@ -203,11 +241,12 @@ export function SelectMenu({
               aria-selected={checked}
               tabIndex={-1}
               disabled={option.disabled}
+              title={selectMenuTooltip(option)}
               className={`select-menu-option ${checked ? 'is-selected' : ''} ${active ? 'is-active' : ''}`.trim()}
               onMouseEnter={() => { if (!option.disabled) setActiveValue(option.value) }}
               onClick={() => choose(option.value)}
             >
-              <span><b>{option.label}</b>{option.description && <small>{option.description}</small>}</span>
+              <span><b>{displayLabel}</b>{option.description && <small>{option.description}</small>}</span>
               <span className="select-menu-check" aria-hidden="true">{checked && <UiIcon name="check" size={16}/>}</span>
             </button>
           })}
