@@ -15,26 +15,16 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: automation/pi-tui-startup-detail-20260903
-      - name: Preserve and fix patch script
-        shell: bash
+      - name: Preserve patch scripts
         run: |
           cp .github/scripts/apply-pi-tui-startup-detail.py /tmp/apply-pi-tui-startup-detail.py
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('/tmp/apply-pi-tui-startup-detail.py')
-          text = path.read_text(encoding='utf-8')
-          old = '''def replace_once(path: str, old: str, new: str) -> None:\n    source = read(path)\n    count = source.count(old)\n    if count != 1:\n        raise SystemExit(f"{path}: expected exactly one match, got {count}: {old[:120]!r}")\n    write(path, source.replace(old, new, 1))\n'''
-          new = '''def replace_once(path: str, old: str, new: str) -> None:\n    source = read(path)\n    count = source.count(old)\n    if count < 1:\n        raise SystemExit(f"{path}: expected at least one match, got {count}: {old[:120]!r}")\n    duplicate_ready_state = old.startswith("      initializationTimings: runtime.initializationTimings,")\n    if count > 1 and not duplicate_ready_state:\n        raise SystemExit(f"{path}: ambiguous patch target, got {count}: {old[:120]!r}")\n    write(path, source.replace(old, new, 1))\n'''
-          if old not in text:
-              raise SystemExit('replace_once protection block not found')
-          path.write_text(text.replace(old, new, 1), encoding='utf-8')
-          PY
+          cp .github/scripts/run-pi-tui-startup-detail.py /tmp/run-pi-tui-startup-detail.py
       - name: Checkout latest feature branch
         run: |
           git fetch origin feature/1.0.0-alpha.3-task-surface
           git checkout -B feature/1.0.0-alpha.3-task-surface origin/feature/1.0.0-alpha.3-task-surface
       - name: Apply Pi TUI startup detail
-        run: python /tmp/apply-pi-tui-startup-detail.py
+        run: python /tmp/run-pi-tui-startup-detail.py
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
