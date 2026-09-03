@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
 import { useNavigate, useParams } from 'react-router-dom'
 import type { JsonValue, PiLiveControlsDto, PiLiveEventDto, PiLiveQueueDto, PiLiveSnapshotDto, PiLiveStateDto } from '@agent-lens/protocol'
 import { piLiveApi, type PiLiveTransportDiagnostics } from '../client/pi-live'
@@ -10,6 +11,7 @@ import { TaskHeader } from './TaskHeader'
 import { TaskSurface } from './TaskSurface'
 
 type QueueMode = 'steer' | 'followUp'
+type ComposerView = 'edit' | 'preview'
 interface RestoredDraft { id: string; mode: QueueMode; text: string }
 interface LiveTool {
   id: string
@@ -128,7 +130,13 @@ function extensionRequest(event: Record<string, unknown>): ExtensionRequest | nu
   }
 }
 
-
+function ComposerExpandIcon({ expanded }: { expanded: boolean }) {
+  return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+    {expanded
+      ? <><path d="M6.2 2.5v3.7H2.5"/><path d="m2.8 6 3.4-3.4"/><path d="M9.8 13.5V9.8h3.7"/><path d="m13.2 10-3.4 3.4"/></>
+      : <><path d="M6.2 2.5H2.5v3.7"/><path d="m2.8 2.8 3.4 3.4"/><path d="M9.8 13.5h3.7V9.8"/><path d="m13.2 13.2-3.4-3.4"/></>}
+  </svg>
+}
 
 function PiLiveStart({ known }: { known: PiLiveStateDto[] }) {
   const navigate = useNavigate()
@@ -236,6 +244,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const followingRef = useRef(true)
   const leafIdRef = useRef<string | undefined>(undefined)
   const toolsRef = useRef(new Map<string, LiveTool>())
+  const startupSendingRef = useRef(false)
   const [known, setKnown] = useState<PiLiveStateDto[]>([])
   const [snapshot, setSnapshot] = useState<PiLiveSnapshotDto | null>(null)
   const [state, setState] = useState<PiLiveStateDto | null>(null)
@@ -243,6 +252,9 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const [connected, setConnected] = useState(false)
   const [mode, setMode] = useState<QueueMode>('steer')
   const [input, setInput] = useState('')
+  const [composerView, setComposerView] = useState<ComposerView>('edit')
+  const [composerExpanded, setComposerExpanded] = useState(false)
+  const [startupQueued, setStartupQueued] = useState('')
   const [composing, setComposing] = useState(false)
   const [streamText, setStreamText] = useState('')
   const [thinkingText, setThinkingText] = useState('')
@@ -279,6 +291,10 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     setExtension(null)
     setError('')
     setShowAllEvents(true)
+    setStartupQueued('')
+    setComposerView('edit')
+    setComposerExpanded(false)
+    startupSendingRef.current = false
     leafIdRef.current = undefined
 
     const acceptSnapshot = (value: PiLiveSnapshotDto) => {
@@ -444,27 +460,51 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     return () => cancelAnimationFrame(frame)
   }, [history.length, streamText, thinkingText, tools, queue.steering.length, queue.followUp.length, restored.length, extension?.id])
 
+  // 初始化阶段先接住第一条任务；Worker ready 后只发送一次，失败则还原为可编辑草稿。
   useEffect(() => {
-    const textarea = inputRef.current
-    if (!textarea) return
-    const reader = readerRef.current
-    const wasFollowing = followingRef.current
-    textarea.style.height = 'auto'
-    textarea.style.height = `${Math.max(54, Math.min(textarea.scrollHeight, 160))}px`
-    if (wasFollowing) requestAnimationFrame(() => { if (reader) reader.scrollTop = reader.scrollHeight })
-  }, [input])
+    if (!runtimeId || state?.status !== 'ready' || !startupQueued || startupSendingRef.current) return
+    const text = startupQueued
+    startupSendingRef.current = true
+    setError('')
+    void piLiveApi.prompt(runtimeId, text).then(() => {
+      setStartupQueued(current => current === text ? '' : current)
+      inputRef.current?.focus({ preventScroll: true })
+    }, reason => {
+      setStartupQueued(current => current === text ? '' : current)
+      setInput(current => current || text)
+      setComposerView('edit')
+      setError(reason instanceof Error ? reason.message : String(reason))
+    }).finally(() => {
+      startupSendingRef.current = false
+    })
+  }, [runtimeId, startupQueued, state?.status])
 
   if (!runtimeId) return <PiLiveStart known={known}/>
 
+  const runtimeReady = state?.status === 'ready'
+  const runtimeInitializing = !state || state.status === 'initializing'
+  const runtimeTerminating = state?.status === 'terminating'
+  const canStageStartup = runtimeInitializing && !startupQueued
+
   const send = async (forcedMode?: QueueMode) => {
     const text = input.trim()
-    if (!text || busy) return
+    if (!text || busy || extension) return
+    if (!runtimeReady) {
+      if (!canStageStartup) return
+      setStartupQueued(text)
+      setInput('')
+      setComposerView('edit')
+      inputRef.current?.focus({ preventScroll: true })
+      return
+    }
+    if (startupQueued) return
     setBusy(true)
     setError('')
     try {
       const selectedMode = forcedMode ?? mode
       await piLiveApi.prompt(runtimeId, text, state?.isStreaming ? selectedMode : undefined)
       setInput('')
+      setComposerView('edit')
       inputRef.current?.focus({ preventScroll: true })
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
@@ -544,11 +584,25 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     setInput(draft.text)
     setMode(draft.mode)
     setRestored(items => items.filter(item => item.id !== draft.id))
+    setComposerView('edit')
     requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true }))
   }
 
   const removeRestored = (id: string) => {
     setRestored(items => items.filter(item => item.id !== id))
+    inputRef.current?.focus({ preventScroll: true })
+  }
+
+  const editStartupQueued = () => {
+    if (!startupQueued) return
+    setInput(startupQueued)
+    setStartupQueued('')
+    setComposerView('edit')
+    requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true }))
+  }
+
+  const removeStartupQueued = () => {
+    setStartupQueued('')
     inputRef.current?.focus({ preventScroll: true })
   }
 
@@ -598,7 +652,17 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     ...restored.map(item => ({ ...item, active: false })),
   ]
   const selectedModel = modelSelection(state)
-  const runtimeReady = state?.status === 'ready'
+  const canSend = Boolean(input.trim()) && !busy && !extension && !runtimeTerminating && (runtimeReady ? !startupQueued : canStageStartup)
+  const composerStatus = startupQueued
+    ? '等待 Pi 就绪后发送'
+    : runtimeInitializing
+      ? 'Pi 正在初始化 · 可先输入'
+      : state?.status === 'failed'
+        ? 'Pi 启动失败 · 草稿保留'
+        : connected ? '实时已连接' : '正在重连'
+  const inputPlaceholder = runtimeInitializing
+    ? 'Pi 正在初始化，可以先输入 Markdown 任务…'
+    : state?.isStreaming ? '继续指导 Pi…（支持 Markdown）' : '输入任务，让 Pi 开始工作…（支持 Markdown）'
 
   return <main className={`pi-live-page ${embedded ? 'pi-live-page-embedded' : ''}`}>
     {!embedded && <aside className="pi-live-sessions">
@@ -649,8 +713,8 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             isStreaming={state?.isStreaming ?? false}
             pendingMessageCount={state?.pendingMessageCount ?? 0}
           />}
-          {!history.length && !streamText && !thinkingText && !tools.length && state?.status === 'initializing' && <div className="pi-live-initializing" role="status"><span className="pi-live-stage-dot"/><b>{state.initializationMessage || '正在初始化 Pi Runtime'}</b><small>页面已经打开，Pi 的配置、扩展和 Session 正在独立 Worker 中加载。</small><button onClick={() => void terminate()} disabled={busy}>取消启动</button></div>}
-          {!history.length && !streamText && !thinkingText && !tools.length && state?.status === 'failed' && <div className="pi-live-initializing pi-live-initializing-failed" role="alert"><b>Pi Runtime 初始化失败</b><small>{state.error || error || 'Worker 未能完成初始化。'}</small><div><button onClick={() => void retry()} disabled={busy}>重试</button><button onClick={() => void terminate()} disabled={busy}>结束 Runtime</button></div></div>}
+          {!history.length && !streamText && !thinkingText && !tools.length && state?.status === 'initializing' && <div className="pi-live-initializing" role="status"><span className="pi-live-stage-dot"/><b>{state.initializationMessage || '正在初始化 Pi Runtime'}</b><small>可以直接在下方输入 Markdown 任务；Pi 就绪后会自动发送已经排队的首条任务。</small><button onClick={() => void terminate()} disabled={busy}>取消启动</button></div>}
+          {!history.length && !streamText && !thinkingText && !tools.length && state?.status === 'failed' && <div className="pi-live-initializing pi-live-initializing-failed" role="alert"><b>Pi Runtime 初始化失败</b><small>{state.error || error || 'Worker 未能完成初始化。'} 输入草稿会继续保留。</small><div><button onClick={() => void retry()} disabled={busy}>重试</button><button onClick={() => void terminate()} disabled={busy}>结束 Runtime</button></div></div>}
           {!history.length && !streamText && !thinkingText && !tools.length && runtimeReady && <div className="pi-live-empty">这个 Pi Runtime 还没有消息。可以直接在下方输入开始任务。</div>}
           {error && <div className="pi-live-error pi-live-reader-error" role="alert">{error}</div>}
         </div>
@@ -659,33 +723,65 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       <div className="pi-live-compose-wrap">
         <div className="pi-live-float-stack">
           {newRecords && <button className="pi-live-new-records" onClick={jumpLatest}>有新记录 ↓</button>}
-          {extension && <ExtensionPrompt request={extension} onAnswer={value => { if (!extensionPending) void answerExtension(value) }}/>}
-        </div>
-        <div className="pi-live-composer">
+          {startupQueued && <div className="pi-live-startup-queue" role="status">
+            <span>等待 Pi 就绪</span><b>{startupQueued}</b><div><button onClick={editStartupQueued}>编辑</button><button onClick={removeStartupQueued}>撤回</button></div>
+          </div>}
           {queueItems.length > 0 && <div className="pi-live-queue">{queueItems.map(item => <div key={item.id} className={`pi-live-queue-item ${item.active ? 'active' : 'restored'}`}>
             <span>{item.mode === 'steer' ? '待介入' : '完成后继续'}</span><b>{item.text}</b>
             {item.active ? <small>已在 Pi 队列</small> : <div><button onClick={() => editRestored(item)}>编辑</button><button onClick={() => removeRestored(item.id)}>撤回</button></div>}
           </div>)}</div>}
-          <textarea
-            ref={inputRef}
-            className="pi-live-input"
-            value={input}
-            onChange={event => setInput(event.target.value)}
-            onCompositionStart={() => setComposing(true)}
-            onCompositionEnd={() => setComposing(false)}
-            onKeyDown={event => {
-              if (composing || event.nativeEvent.isComposing || event.keyCode === 229) return
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault()
-                void send(event.altKey ? 'followUp' : undefined)
-              }
-            }}
-            placeholder={state?.isStreaming ? '继续指导 Pi…' : '输入任务，让 Pi 开始工作…'}
-            aria-label="Pi 输入"
-            disabled={!runtimeReady}
-          />
+          {extension && <ExtensionPrompt request={extension} onAnswer={value => { if (!extensionPending) void answerExtension(value) }}/>}
+        </div>
+        <div className={`pi-live-composer ${composerExpanded ? 'is-expanded' : ''}`}>
+          <div className="pi-live-editor">
+            <div className="pi-live-editor-toolbar" aria-label="Markdown 输入工具">
+              <button
+                type="button"
+                className={composerView === 'preview' ? 'active' : ''}
+                title={composerView === 'preview' ? '继续编辑 Markdown' : '预览 Markdown'}
+                aria-label={composerView === 'preview' ? '继续编辑 Markdown' : '预览 Markdown'}
+                onClick={() => {
+                  setComposerView(value => value === 'edit' ? 'preview' : 'edit')
+                  if (composerView === 'preview') requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true }))
+                }}
+              >{composerView === 'preview' ? '编辑' : '预览'}</button>
+              <button
+                type="button"
+                title={composerExpanded ? '缩小输入区' : '放大输入区'}
+                aria-label={composerExpanded ? '缩小输入区' : '放大输入区'}
+                onClick={() => setComposerExpanded(value => !value)}
+              ><ComposerExpandIcon expanded={composerExpanded}/></button>
+            </div>
+            {composerView === 'preview'
+              ? <div className="pi-live-markdown-preview markdown" role="region" aria-label="Markdown 预览">
+                  {input.trim() ? <ReactMarkdown>{input}</ReactMarkdown> : <span className="pi-live-preview-empty">暂无可预览内容</span>}
+                </div>
+              : <textarea
+                  ref={inputRef}
+                  className="pi-live-input"
+                  value={input}
+                  onChange={event => setInput(event.target.value)}
+                  onCompositionStart={() => setComposing(true)}
+                  onCompositionEnd={() => setComposing(false)}
+                  onKeyDown={event => {
+                    if (composing || event.nativeEvent.isComposing || event.keyCode === 229) return
+                    if (event.key === 'Escape' && state?.isStreaming) {
+                      event.preventDefault()
+                      void stop()
+                      return
+                    }
+                    if (event.key === 'Enter' && !event.shiftKey) {
+                      event.preventDefault()
+                      void send(event.altKey ? 'followUp' : undefined)
+                    }
+                  }}
+                  placeholder={inputPlaceholder}
+                  aria-label="Pi Markdown 输入"
+                  disabled={runtimeTerminating}
+                />}
+          </div>
           <div className="pi-live-compose-bar">
-            <span className="pi-live-compose-runtime">{connected ? '实时已连接' : '正在重连'}</span>
+            <span className="pi-live-compose-runtime">{composerStatus}</span>
             <div className="pi-live-compose-settings">
               <select
                 aria-label="Pi 模型"
@@ -709,12 +805,12 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
               </select>
             </div>
             <div className="pi-live-compose-mode" aria-label="发送方式">
-              <button className={mode === 'steer' ? 'active' : ''} aria-pressed={mode === 'steer'} onClick={() => { setMode('steer'); inputRef.current?.focus({ preventScroll: true }) }}>立即介入</button>
-              <button className={mode === 'followUp' ? 'active' : ''} aria-pressed={mode === 'followUp'} onClick={() => { setMode('followUp'); inputRef.current?.focus({ preventScroll: true }) }}>完成后继续</button>
+              <button className={mode === 'steer' ? 'active' : ''} aria-pressed={mode === 'steer'} onClick={() => { setMode('steer'); setComposerView('edit'); requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true })) }}>立即介入</button>
+              <button className={mode === 'followUp' ? 'active' : ''} aria-pressed={mode === 'followUp'} onClick={() => { setMode('followUp'); setComposerView('edit'); requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true })) }}>完成后继续</button>
             </div>
-            <button className="pi-live-send" disabled={!runtimeReady || !input.trim() || busy || Boolean(extension)} onClick={() => void send()} aria-label="发送">↑</button>
+            <button className="pi-live-send" disabled={!canSend} onClick={() => void send()} aria-label={runtimeReady ? '发送' : 'Pi 就绪后发送'}>↑</button>
           </div>
-          <div className="pi-live-compose-hint">Enter {state?.isStreaming ? (mode === 'steer' ? '立即介入' : '按当前模式发送') : '开始新一轮'} · Alt+Enter 完成后继续 · Shift+Enter 换行{state?.isStreaming ? ' · Esc 中断并恢复排队' : ''}</div>
+          <div className="pi-live-compose-hint">Markdown · Enter {runtimeReady ? (state?.isStreaming ? (mode === 'steer' ? '立即介入' : '按当前模式发送') : '开始新一轮') : '等待 Pi 就绪后发送'} · Alt+Enter 完成后继续 · Shift+Enter 换行{state?.isStreaming ? ' · Esc 中断并恢复排队' : ''}</div>
         </div>
         {diagnostics && <div className="pi-live-diagnostics" title="Pi Live Web 调度诊断">事件 {diagnostics.ingressEvents} · 合并 {diagnostics.coalescedEvents} · 峰值队列 {diagnostics.maxQueueDepth} · 最近提交 {diagnostics.lastFlushLatencyMs.toFixed(1)}ms{diagnostics.hidden ? ' · 后台降频' : ''}</div>}
       </div>
