@@ -18,9 +18,9 @@
 
 .pi-markdown-placeholder {
   position: absolute;
-  top: 8px;
-  left: 0;
-  right: 0;
+  top: 15px;
+  right: 98px;
+  left: 18px;
   overflow: hidden;
   color: var(--al-muted);
   font-size: 15px;
