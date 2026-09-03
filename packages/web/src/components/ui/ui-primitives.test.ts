@@ -15,6 +15,8 @@ const piLivePage = readFileSync(new URL('../../features/PiLivePage.tsx', import.
 const piLiveCss = readFileSync(new URL('../../pi-live.css', import.meta.url), 'utf8')
 const taskCenterPage = readFileSync(new URL('../../features/TaskCenterPage.tsx', import.meta.url), 'utf8')
 const taskCenterCss = readFileSync(new URL('../../task-center.css', import.meta.url), 'utf8')
+const backupPage = readFileSync(new URL('../../features/BackupPage.tsx', import.meta.url), 'utf8')
+const backupCss = readFileSync(new URL('../../backup.css', import.meta.url), 'utf8')
 const agentRules = readFileSync(new URL('../../../../../AGENTS.md', import.meta.url), 'utf8')
 
 test('shared UI primitives expose the first unified component set', () => {
@@ -49,6 +51,9 @@ test('Dialog and Drawer own the common accessibility behavior', () => {
   assert.match(overlay, /event\.key !== 'Tab'/)
   assert.match(overlay, /aria-modal="true"/)
   assert.match(overlay, /previous\?\.focus/)
+  assert.match(overlay, /title: ReactNode/)
+  assert.match(overlay, /closeDisabled\?: boolean/)
+  assert.match(overlay, /disabled=\{closeDisabled\}/)
   assert.match(overlay, /export function Dialog/)
   assert.match(overlay, /export function Drawer/)
 })
@@ -101,6 +106,24 @@ test('Task Center toolbar and common actions consume the UI layer', () => {
   assert.doesNotMatch(taskCenterCss, /\.task-center-rail-head \.btn\s*\{/)
   assert.doesNotMatch(taskCenterCss, /\.task-center-new-actions \.btn\s*\{[^}]*min-height:/s)
   assert.match(taskCenterCss, /\.task-center-toolbar \.ui-icon-button/)
+})
+
+test('Asset Backup consumes shared controls and Overlay primitives', () => {
+  assert.match(backupPage, /import \{ Button, Dialog, Drawer, Toolbar \} from '\.\.\/components\/ui'/)
+  assert.match(backupPage, /<Toolbar className="workspace-toolbar" aria-label="资产备份工具栏">/)
+  assert.match(backupPage, /<Button className="toolbar-end" loading=\{busy === 'import'\}/)
+  assert.match(backupPage, /<Button variant="primary" loading=\{busy === 'create'\}/)
+  assert.match(backupPage, /<Drawer[\s\S]*?className="backup-data-drawer"/)
+  assert.match(backupPage, /<Drawer[\s\S]*?className="backup-preview-drawer"/)
+  assert.match(backupPage, /<Dialog[\s\S]*?className="backup-confirm-overlay"/)
+  assert.doesNotMatch(backupPage, /className="scrim show/)
+  assert.doesNotMatch(backupPage, /className="drawer show/)
+  assert.doesNotMatch(backupPage, /backup-confirm-dialog/)
+  assert.doesNotMatch(backupPage, /window\.addEventListener\('keydown', closeOnEscape\)/)
+  assert.doesNotMatch(backupCss, /\.backup-confirm-dialog\b/)
+  assert.doesNotMatch(backupCss, /\.backup-confirm-scrim\b/)
+  assert.doesNotMatch(backupCss, /@media \(max-width: (?:1180|820|640)px\)/)
+  assert.doesNotMatch(backupCss, /\.snapshot-create-button\s*\{[^}]*height\s*:/s)
 })
 
 test('repository agent rules require reuse of shared primitives', () => {
