@@ -6,6 +6,7 @@ import { fetchHubReviewSessions, fetchLocalReviewSessions } from '../client/hub-
 import { piLiveApi } from '../client/pi-live'
 import { useClientSnapshot } from '../App'
 import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
+import { SelectMenu } from '../components/SelectMenu'
 import { HubReviewPage } from './HubReviewPage'
 import { PiLivePage } from './PiLivePage'
 import { ReviewPage } from './ReviewPage'
@@ -131,7 +132,9 @@ function NewTaskPanel({
   }, [])
 
   const selected = options.find(option => option.key === selectedKey)
+  const projectOptions = useMemo(() => options.map(option => ({ value: option.key, label: option.label, description: option.cwd, keywords: option.cwd })), [options])
   const agentStateLabel = !availability.checked ? '检测中' : availability.available ? '已就绪' : '不可用'
+  const availabilityState = !availability.checked ? 'checking' : availability.available ? 'ready' : 'unavailable'
   const composerStateLabel = !availability.checked
     ? '正在检测 Pi…'
     : !availability.available
@@ -158,28 +161,40 @@ function NewTaskPanel({
 
   return <div className="task-center-new">
     <section className="task-center-new-card">
-      <div className="task-center-new-kicker">新建任务</div>
-      <h1>打开 Pi</h1>
+      <header className="task-center-new-head">
+        <div className="task-center-new-agent-mark" aria-hidden="true">Pi</div>
+        <div>
+          <div className="task-center-new-kicker">新建任务</div>
+          <h1>新建 Pi 任务</h1>
+          <p>选择工作项目，进入 Pi 实时任务工作区。</p>
+        </div>
+        <span className="task-center-new-readiness" data-state={availabilityState}><i/>{agentStateLabel}</span>
+      </header>
 
       <div className="task-center-new-fields">
-        <label>
+        <label className="task-center-new-project-field">
           <span>项目</span>
-          <select value={selectedKey} onChange={event => setSelectedKey(event.target.value)} disabled={!options.length} autoFocus>
-            {!options.length && <option value="">暂无可启动项目</option>}
-            {options.map(option => <option key={option.key} value={option.key}>{option.label}</option>)}
-          </select>
-        </label>
-        <label>
-          <span>智能体</span>
-          <div className="task-center-agent-fixed"><span className="pi-live-pulse"/><b>Pi</b><small>{agentStateLabel}</small></div>
+          <SelectMenu
+            value={selectedKey}
+            options={projectOptions}
+            onChange={setSelectedKey}
+            ariaLabel="选择 Pi 任务项目"
+            placeholder={options.length ? '选择项目' : '暂无可启动项目'}
+            variant="field"
+            className="task-center-new-project-select"
+            menuWidth={420}
+            searchable
+            searchPlaceholder="搜索项目或工作目录"
+            disabled={!options.length}
+          />
         </label>
       </div>
 
-      <div className="task-center-new-status">{composerStateLabel}</div>
+      <div className="task-center-new-status"><b>{selected ? `在 ${selected.label} 中启动` : '等待选择项目'}</b><span>{composerStateLabel}</span></div>
       {error && <div className="pi-live-error" role="alert">{error}</div>}
       {!options.length && <div className="task-center-project-hint">先让 AgentLens 采集到一次带工作目录的项目会话，再从这里打开 Pi；本页面不会要求你手填 cwd。</div>}
       <div className="task-center-new-actions">
-        <button className="btn primary" disabled={!selected || starting || !availability.available} onClick={() => void start()}>{starting ? '正在打开 Pi…' : '打开 Pi'}</button>
+        <button className="btn primary" disabled={!selected || starting || !availability.available} onClick={() => void start()}>{starting ? '正在创建 Pi 任务…' : '创建 Pi 任务 →'}</button>
       </div>
     </section>
   </div>
@@ -332,24 +347,24 @@ export function TaskCenterPage({ model, mode }: { model: AgentLensClientModel; m
   const surfaceMode = mode === 'history' ? 'review' : mode
   const historyCount = localSessions.length + visibleHub.length
 
-  return <div className="task-center-page">
-    <div className="task-center-toolbar" aria-label="筛选历史任务">
+  return <div className={`task-center-page ${mode === 'new' ? 'is-new-task' : ''}`}>
+    {mode !== 'new' && <div className="task-center-toolbar" aria-label="筛选历史任务">
       <span className="task-center-toolbar-label">筛选历史任务</span>
       <AgentScope agents={agents} value={review.filters.sourceId} onChange={sourceId => model.setReviewFilters({ sourceId })}/>
       <span className="toolbar-divider" />
-      <select className="filter" value={review.filters.projectId} onChange={event => model.setReviewFilters({ projectId: event.target.value })} aria-label="筛选项目">
-        <option value="">全部项目</option>
-        {projects.map(project => <option key={project.id} value={project.id}>{project.name ?? project.repositoryIdentity ?? project.id}</option>)}
-      </select>
-      <select className="filter" value={review.filters.range} onChange={event => model.setReviewFilters({ range: event.target.value as typeof review.filters.range })} aria-label="筛选时间范围">
-        <option value="today">今天</option><option value="7d">最近 7 天</option><option value="30d">最近 30 天</option><option value="all">全部时间</option>
-      </select>
-      <select className="filter" value={review.filters.status} onChange={event => model.setReviewFilters({ status: event.target.value as typeof review.filters.status })} aria-label="筛选状态">
-        <option value="all">全部状态</option><option value="clean">无错误</option><option value="with-errors">有错误</option>
-      </select>
+      <SelectMenu className="filter" value={review.filters.projectId} onChange={projectId => model.setReviewFilters({ projectId })} ariaLabel="筛选项目" placeholder="全部项目" menuWidth={280} searchable searchPlaceholder="搜索项目" options={[
+        { value: '', label: '全部项目' },
+        ...projects.map(project => ({ value: project.id, label: project.name ?? project.repositoryIdentity ?? project.id, description: project.repositoryIdentity ?? undefined })),
+      ]}/>
+      <SelectMenu className="filter" value={review.filters.range} onChange={range => model.setReviewFilters({ range: range as typeof review.filters.range })} ariaLabel="筛选时间范围" menuWidth={156} options={[
+        { value: 'today', label: '今天' }, { value: '7d', label: '最近 7 天' }, { value: '30d', label: '最近 30 天' }, { value: 'all', label: '全部时间' },
+      ]}/>
+      <SelectMenu className="filter" value={review.filters.status} onChange={status => model.setReviewFilters({ status: status as typeof review.filters.status })} ariaLabel="筛选状态" menuWidth={150} options={[
+        { value: 'all', label: '全部状态' }, { value: 'clean', label: '无错误' }, { value: 'with-errors', label: '有错误' },
+      ]}/>
       <input className="filter search-filter" placeholder="搜索历史任务…" value={review.filters.search} onChange={event => model.setReviewFilters({ search: event.target.value })} aria-label="搜索历史任务"/>
       <button className="icon-button" onClick={() => void model.refreshReview()} title="刷新历史任务" aria-label="刷新历史任务"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M13 3v4H9"/><path d="M12.2 6A5 5 0 1 0 13 9"/></svg></button>
-    </div>
+    </div>}
 
     <aside className="task-center-rail">
       <div className="task-center-rail-head">

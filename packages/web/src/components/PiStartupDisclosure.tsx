@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PiLiveInitializationStageDto, PiLiveStateDto } from '@agent-lens/protocol'
 import { CopyableCodeBlock } from './CopyableCodeBlock'
+import { UiIcon } from './UiIcon'
 
 const STAGES: Array<{ stage: PiLiveInitializationStageDto; label: string; detail: string }> = [
   { stage: 'starting_worker', label: '启动 Runtime Worker', detail: '创建独立 Pi 运行进程' },
@@ -109,7 +110,7 @@ export function PiStartupDisclosure({
         const status = failed ? 'failed' : active ? 'active' : done ? 'done' : 'pending'
         const duration = recorded ?? ((active || failed) ? currentDuration : undefined)
         return <div key={item.stage} className={`pi-startup-step is-${status}`}>
-          <span className="pi-startup-step-dot" aria-hidden="true">{done ? '✓' : failed ? '!' : ''}</span>
+          <span className="pi-startup-step-dot" aria-hidden="true">{done ? <UiIcon name="check" size={10}/> : failed ? <UiIcon name="exclamation" size={10}/> : null}</span>
           <span className="pi-startup-step-copy"><b>{item.label}</b><small>{item.detail}</small></span>
           <span className="pi-startup-step-time">{status === 'pending' ? '等待' : active ? `${formatPiStartupDuration(duration)}+` : formatPiStartupDuration(duration)}</span>
         </div>
@@ -155,7 +156,7 @@ export function PiStartupDisclosure({
       <span className="pi-startup-summary-state" aria-hidden="true"/>
       <span className="pi-startup-summary-copy"><b>{title}</b>{state.status !== 'ready' && <small>{state.initializationMessage || '准备 Pi Runtime'}</small>}</span>
       <span className="pi-startup-summary-time">{formatPiStartupDuration(elapsed)}</span>
-      <span className="pi-startup-chevron" aria-hidden="true">⌄</span>
+      <UiIcon className="pi-startup-chevron" name="chevron-down" size={14}/>
     </summary>
     {body}
   </details>

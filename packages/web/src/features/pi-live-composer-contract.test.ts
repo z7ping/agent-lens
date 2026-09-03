@@ -5,7 +5,8 @@ import test from 'node:test'
 const page = readFileSync(new URL('./PiLivePage.tsx', import.meta.url), 'utf8')
 const css = readFileSync(new URL('../pi-live.css', import.meta.url), 'utf8')
 const pill = readFileSync(new URL('../components/ComposerPillSelect.tsx', import.meta.url), 'utf8')
-const pillCss = readFileSync(new URL('../components/composer-pill-select.css', import.meta.url), 'utf8')
+const selectMenu = readFileSync(new URL('../components/SelectMenu.tsx', import.meta.url), 'utf8')
+const selectCss = readFileSync(new URL('../components/select-menu.css', import.meta.url), 'utf8')
 const composer = readFileSync(new URL('../components/PiMarkdownComposer.tsx', import.meta.url), 'utf8')
 
 test('Pi Live model and thinking controls use custom pill menus instead of native selects', () => {
@@ -13,8 +14,9 @@ test('Pi Live model and thinking controls use custom pill menus instead of nativ
   assert.match(page, /<ComposerPillSelect[\s\S]*?ariaLabel="Pi 推理强度"/)
   assert.match(page, /title=\{state\?\.model \? `Pi 模型 · \$\{modelLabel\(state\)\}` : 'Pi 模型'\}/)
   assert.match(page, /title=\{`Pi 推理强度 · \$\{state\?\.thinkingLevel \|\| '未设置'\}`\}/)
-  assert.match(pill, /createPortal\(/)
-  assert.match(pillCss, /\.composer-pill-menu\s*\{[\s\S]*?position:\s*fixed;/)
+  assert.match(pill, /<SelectMenu[\s\S]*?variant="pill"/)
+  assert.match(selectMenu, /createPortal\(/)
+  assert.match(selectCss, /\.select-menu-popover\s*\{[\s\S]*?position:\s*fixed;/)
 })
 
 test('Pi Live composer uses Lexical Markdown shortcuts and keeps Markdown as the runtime value', () => {

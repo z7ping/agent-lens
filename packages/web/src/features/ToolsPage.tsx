@@ -5,6 +5,7 @@ import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
 import { AgentScope, agentLabel } from '../components/AgentScope'
 import { CompactPageHeading } from '../components/CompactPageHeading'
+import { SelectMenu } from '../components/SelectMenu'
 import { EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from '../components/StateViews'
 import { ToolKindIcon, toolVisualKind } from '../components/ToolKindIcon'
 import { UiIcon } from '../components/UiIcon'
@@ -127,8 +128,13 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
     <div className="workspace-toolbar">
       <AgentScope agents={agents} value={usage.filters.sourceId} onChange={sourceId => model.setUsageFilters({ sourceId })}/>
       <span className="toolbar-divider" />
-      <select className="filter" value={usage.filters.projectId} onChange={e => model.setUsageFilters({ projectId: e.target.value })}><option value="">全部项目</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name ?? p.repositoryIdentity ?? p.id}</option>)}</select>
-      <select className="filter" value={usage.filters.range} onChange={e => model.setUsageFilters({ range: e.target.value as typeof usage.filters.range })}><option value="today">今天</option><option value="7d">最近 7 天</option><option value="30d">最近 30 天</option><option value="all">全部时间</option></select>
+      <SelectMenu className="filter" value={usage.filters.projectId} onChange={projectId => model.setUsageFilters({ projectId })} ariaLabel="筛选项目" placeholder="全部项目" menuWidth={280} searchable searchPlaceholder="搜索项目" options={[
+        { value: '', label: '全部项目' },
+        ...projects.map(project => ({ value: project.id, label: project.name ?? project.repositoryIdentity ?? project.id, description: project.repositoryIdentity ?? undefined })),
+      ]}/>
+      <SelectMenu className="filter" value={usage.filters.range} onChange={range => model.setUsageFilters({ range: range as typeof usage.filters.range })} ariaLabel="筛选时间范围" menuWidth={156} options={[
+        { value: 'today', label: '今天' }, { value: '7d', label: '最近 7 天' }, { value: '30d', label: '最近 30 天' }, { value: 'all', label: '全部时间' },
+      ]}/>
       <button className="icon-button toolbar-end" onClick={() => void model.refreshUsage()} title="刷新工具分析" aria-label="刷新工具分析"><UiIcon name="refresh" size={15}/></button>
     </div>
 

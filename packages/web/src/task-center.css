@@ -132,6 +132,9 @@
   font-size: 12px;
   line-height: 1.35;
 }
+.task-center-page.is-new-task { grid-template-rows: minmax(0, 1fr); }
+.task-center-page.is-new-task .task-center-rail,
+.task-center-page.is-new-task .task-center-main { grid-row: 1; }
 .task-center-rail .session-item-meta > span:not(.source-dot):not(.pi-live-pulse):not(.pi-live-idle-dot),
 .task-center-rail .session-item-foot > span:first-child {
   min-width: 0;
@@ -183,71 +186,52 @@
   padding: 0 34px 88px 48px;
 }
 
-/* 新建任务：文档 + 配置条。 */
+/* 新建任务：聚焦的 Pi 启动卡片。 */
 .task-center-new {
-  display: block;
+  display: grid;
   height: 100%;
   min-height: 0;
+  place-items: start center;
   overflow: auto;
+  padding: clamp(42px, 8vh, 82px) 24px 80px;
   background: var(--al-canvas);
 }
 .task-center-new-card {
-  width: min(860px, 100%);
-  margin: 0 auto;
-  padding: 42px 34px 90px;
-  background: transparent;
+  width: min(620px, 100%);
+  padding: 26px;
+  border: 1px solid var(--al-line);
+  border-radius: 16px;
+  background: var(--al-surface);
+  box-shadow: 0 10px 34px rgb(16 24 40 / .055);
 }
+.task-center-new-head { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: start; gap: 12px; }
+.task-center-new-agent-mark { display: grid; width: 44px; height: 44px; place-items: center; border-radius: 12px; background: color-mix(in srgb, var(--al-accent) 13%, var(--al-surface)); color: var(--al-accent); font-size: 14px; font-weight: 760; }
 .task-center-new-kicker { color: var(--al-accent); font-size: 12px; font-weight: 700; }
-.task-center-new-card h1 { margin: 6px 0 8px; color: var(--al-ink); font-size: 22px; font-weight: 700; line-height: 1.35; letter-spacing: -.02em; }
+.task-center-new-card h1 { margin: 3px 0 0; color: var(--al-ink); font-size: 22px; font-weight: 720; line-height: 1.35; letter-spacing: -.02em; }
+.task-center-new-head p { margin: 5px 0 0; color: var(--al-muted); font-size: 12px; line-height: 1.5; }
+.task-center-new-readiness { display: inline-flex; height: 25px; align-items: center; gap: 6px; padding: 0 8px; border: 1px solid var(--al-line); border-radius: 999px; color: var(--al-muted); font-size: 12px; white-space: nowrap; }
+.task-center-new-readiness i { width: 6px; height: 6px; border-radius: 50%; background: var(--al-muted-2); }
+.task-center-new-readiness[data-state='ready'] { border-color: color-mix(in srgb, var(--al-success) 24%, var(--al-line)); color: var(--al-success); }
+.task-center-new-readiness[data-state='ready'] i { background: var(--al-success); }
+.task-center-new-readiness[data-state='unavailable'] { border-color: color-mix(in srgb, var(--al-danger) 24%, var(--al-line)); color: var(--al-danger); }
+.task-center-new-readiness[data-state='unavailable'] i { background: var(--al-danger); }
 .task-center-new-fields {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 220px;
-  gap: 12px;
-  margin-top: 22px;
-  padding: 12px 0;
-  border-top: 1px solid var(--al-line);
-  border-bottom: 1px solid var(--al-line);
+  margin-top: 24px;
 }
 .task-center-new-fields label { display: grid; gap: 6px; color: var(--al-muted); font-size: 12px; font-weight: 650; }
-.task-center-new-fields select {
-  width: 100%;
-  height: 34px;
-  padding: 0 10px;
-  border: 1px solid var(--al-line-strong);
-  border-radius: 8px;
-  background: var(--al-surface);
-  color: var(--al-ink);
-  font-size: 13px;
-}
-.task-center-new-fields select:focus { border-color: color-mix(in srgb, var(--al-accent) 58%, var(--al-line)); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--al-accent) 10%, transparent); }
-.task-center-agent-fixed {
-  display: flex;
-  height: 34px;
-  min-height: 34px;
-  align-items: center;
-  gap: 8px;
-  padding: 0 10px;
-  border: 1px solid var(--al-line);
-  border-radius: 8px;
-  background: var(--al-surface);
-}
-.task-center-agent-fixed b { color: var(--al-ink); font-size: 13px; }
-.task-center-agent-fixed small { margin-left: auto; overflow: hidden; color: var(--al-muted-2); font-size: 12px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
 .task-center-new-status {
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 14px;
-  padding: 0 12px;
-  border: 1px solid var(--al-line);
-  border-radius: 8px;
-  color: var(--al-muted-2);
-  font-size: 12px;
+  display: grid;
+  gap: 2px;
+  margin-top: 16px;
+  padding: 12px 13px;
+  border-radius: 10px;
+  background: var(--al-soft-2);
 }
-.task-center-new-status::before { content: ""; width: 6px; height: 6px; flex: 0 0 6px; border-radius: 50%; background: var(--al-success); }
+.task-center-new-status b { color: var(--al-ink-2); font-size: 12px; font-weight: 650; }
+.task-center-new-status span { color: var(--al-muted); font-size: 12px; }
 .task-center-project-hint { margin-top: 10px; padding: 9px 10px; border: 1px solid var(--al-line); border-radius: 8px; background: var(--al-soft-2); color: var(--al-muted); font-size: 12px; line-height: 1.55; }
-.task-center-new-actions { display: flex; justify-content: flex-end; margin-top: 14px; }
+.task-center-new-actions { display: flex; justify-content: flex-end; margin-top: 18px; }
+.task-center-new-actions .btn { min-height: 38px; padding-inline: 16px; border-radius: 9px; }
 
 @media (max-width: 1199.98px) {
   .task-center-page { --task-center-rail: 286px; }
@@ -260,7 +244,6 @@
   .task-center-toolbar .agent-scope .scope-chip:nth-of-type(n+5) { display: none; }
   .task-center-main .review-reader,
   .task-center-main .pi-live-document { padding-right: 18px; padding-left: 40px; }
-  .task-center-new-fields { grid-template-columns: 1fr; }
 }
 @media (max-width: 767.98px) {
   .task-center-page { grid-template-columns: minmax(0, 1fr); grid-template-rows: 205px minmax(0, 1fr); }
@@ -269,5 +252,14 @@
   .task-center-main { grid-column: 1; grid-row: 2; }
   .task-center-main .review-reader,
   .task-center-main .pi-live-document { padding: 13px 14px 74px; }
-  .task-center-new-card { padding: 26px 14px 70px; }
+  .task-center-page.is-new-task { display: block; height: calc(100dvh - 52px); }
+  .task-center-page.is-new-task .task-center-rail { display: none; }
+  .task-center-page.is-new-task .task-center-main { width: 100%; height: 100%; }
+  .task-center-new { padding: 22px 14px 56px; }
+  .task-center-new-card { padding: 20px 16px; border-radius: 14px; }
+  .task-center-new-head { grid-template-columns: 40px minmax(0, 1fr); }
+  .task-center-new-agent-mark { width: 40px; height: 40px; border-radius: 11px; }
+  .task-center-new-readiness { grid-column: 2; justify-self: start; margin-top: 2px; }
+  .task-center-new-fields { margin-top: 20px; }
+  .task-center-new-actions .btn { width: 100%; }
 }

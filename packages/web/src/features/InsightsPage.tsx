@@ -6,6 +6,7 @@ import { useClientSnapshot } from '../App'
 import { AgentScope, agentLabel } from '../components/AgentScope'
 import { BackgroundDataNotice } from '../components/BackgroundDataNotice'
 import { CompactPageHeading } from '../components/CompactPageHeading'
+import { SelectMenu } from '../components/SelectMenu'
 import { EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from '../components/StateViews'
 import { UiIcon } from '../components/UiIcon'
 
@@ -74,16 +75,13 @@ export function InsightsPage({ model }: { model: AgentLensClientModel }) {
     <div className="workspace-toolbar">
       <AgentScope agents={agents} value={insights.filters.sourceId} onChange={sourceId => insightsModel.setFilters({ sourceId })}/>
       <span className="toolbar-divider" />
-      <select className="filter" value={insights.filters.projectId} onChange={event => insightsModel.setFilters({ projectId: event.target.value })}>
-        <option value="">全部项目</option>
-        {projects.map(project => <option key={project.id} value={project.id}>{project.name ?? project.repositoryIdentity ?? project.id}</option>)}
-      </select>
-      <select className="filter" value={insights.filters.range} onChange={event => insightsModel.setFilters({ range: event.target.value as typeof insights.filters.range })}>
-        <option value="today">今天</option>
-        <option value="7d">最近 7 天</option>
-        <option value="30d">最近 30 天</option>
-        <option value="all">全部时间</option>
-      </select>
+      <SelectMenu className="filter" value={insights.filters.projectId} onChange={projectId => insightsModel.setFilters({ projectId })} ariaLabel="筛选项目" placeholder="全部项目" menuWidth={280} searchable searchPlaceholder="搜索项目" options={[
+        { value: '', label: '全部项目' },
+        ...projects.map(project => ({ value: project.id, label: project.name ?? project.repositoryIdentity ?? project.id, description: project.repositoryIdentity ?? undefined })),
+      ]}/>
+      <SelectMenu className="filter" value={insights.filters.range} onChange={range => insightsModel.setFilters({ range: range as typeof insights.filters.range })} ariaLabel="筛选时间范围" menuWidth={156} options={[
+        { value: 'today', label: '今天' }, { value: '7d', label: '最近 7 天' }, { value: '30d', label: '最近 30 天' }, { value: 'all', label: '全部时间' },
+      ]}/>
       <button className="icon-button toolbar-end" onClick={() => void insightsModel.refresh()} title="刷新使用洞察" aria-label="刷新使用洞察"><UiIcon name="refresh" size={15}/></button>
     </div>
 

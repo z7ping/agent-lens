@@ -34,7 +34,7 @@
 .pi-startup-summary-copy b { flex: 0 0 auto; color: var(--al-ink); font-size: 12.5px; font-weight: 680; }
 .pi-startup-summary-copy small { min-width: 0; overflow: hidden; color: var(--al-muted); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
 .pi-startup-summary-time { color: var(--al-muted); font: 11.5px/1 var(--font-mono); white-space: nowrap; }
-.pi-startup-chevron { color: var(--al-muted); font-size: 14px; text-align: center; transition: transform .15s ease; }
+.pi-startup-chevron { color: var(--al-muted); flex: 0 0 14px; transition: transform .15s ease; }
 .pi-startup-disclosure[open] .pi-startup-chevron { transform: rotate(180deg); }
 .pi-startup-body { padding: 0 10px 9px 27px; }
 .pi-startup-inline .pi-startup-body { padding: 1px 0 5px; }
@@ -60,6 +60,7 @@
   font-size: 9px;
   font-weight: 800;
 }
+.pi-startup-step-dot svg { display: block; }
 .pi-startup-step.is-done .pi-startup-step-dot { border-color: color-mix(in srgb, var(--al-success) 65%, var(--al-line)); background: var(--al-success); color: var(--al-on-accent); }
 .pi-startup-step.is-active .pi-startup-step-dot { border-color: var(--al-accent); background: color-mix(in srgb, var(--al-accent) 18%, transparent); box-shadow: inset 0 0 0 4px var(--al-surface); }
 .pi-startup-step.is-failed .pi-startup-step-dot { border-color: var(--al-danger); background: var(--al-danger); color: var(--al-on-accent); }

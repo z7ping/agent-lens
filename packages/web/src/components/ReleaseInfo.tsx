@@ -3,6 +3,7 @@ import packageMetadata from '../../package.json'
 import changelogMarkdown from '../../../../CHANGELOG.md?raw'
 import { checkWebUpdate, type WebUpdateInfo } from '../client/update'
 import { CopyableCodeBlock } from './CopyableCodeBlock'
+import { UiIcon } from './UiIcon'
 
 const REPOSITORY_URL = 'https://github.com/z7ping/agent-lens'
 const CHANGELOG_URL = `${REPOSITORY_URL}/blob/main/CHANGELOG.md`
@@ -90,7 +91,7 @@ function UpdateDialog({ update, onClose }: { update: WebUpdateInfo; onClose(): v
           <h2 id="web-update-dialog-title">发现新版本</h2>
           <p>当前 v{update.currentVersion} · 最新 v{update.latestVersion}{publishedAt ? ` · ${publishedAt}` : ''}</p>
         </div>
-        <button className="release-dialog-close" type="button" onClick={onClose} aria-label="关闭新版本提示">×</button>
+        <button className="release-dialog-close" type="button" onClick={onClose} aria-label="关闭新版本提示"><UiIcon name="close" size={16}/></button>
       </header>
       <div className="release-dialog-content web-update-content">
         <section className="release-section">
@@ -175,7 +176,7 @@ export function ReleaseInfo({ runtimeOwner, runtimeReady }: { runtimeOwner: stri
             <h2 id="release-dialog-title">更新日志</h2>
             <p>{changelog.heading || `v${packageMetadata.version}`}</p>
           </div>
-          <button className="release-dialog-close" type="button" onClick={() => setOpen(false)} aria-label="关闭更新日志">×</button>
+          <button className="release-dialog-close" type="button" onClick={() => setOpen(false)} aria-label="关闭更新日志"><UiIcon name="close" size={16}/></button>
         </header>
         <div className="release-dialog-content">
           {changelog.sections.length ? changelog.sections.map(section => <section className="release-section" key={section.title}>

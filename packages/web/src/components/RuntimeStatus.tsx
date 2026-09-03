@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import type { ClientSnapshot } from '../client/model'
 import packageMetadata from '../../package.json'
 import { projectRuntimeStatus, resolveRuntimeEndpoint } from './runtime-status'
+import { UiIcon } from './UiIcon'
 
 function formatStartedAt(value: string | null): string {
   if (!value) return '—'
@@ -55,7 +56,7 @@ export function RuntimeStatus({ health, liveConnected }: Pick<ClientSnapshot, 'h
     >
       <span className={`live-dot ${status.tone === 'healthy' ? 'live-dot-online' : 'live-dot-waiting'}`} aria-hidden="true" />
       <span className="runtime-status-summary">{status.summary}</span>
-      <svg className="runtime-status-chevron" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3"/></svg>
+      <UiIcon className="runtime-status-chevron" name="chevron-down" size={12}/>
     </button>
     {open && <section id={detailsId} className="runtime-status-popover" role="region" aria-label="Runtime 连接详情">
       <div className="runtime-status-head">

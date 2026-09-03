@@ -1,0 +1,67 @@
+@reference "../styles.css";
+
+.select-menu-trigger {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid transparent;
+  color: var(--al-ink-2);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .15s ease, background-color .15s ease, box-shadow .15s ease, color .15s ease;
+}
+.select-menu-trigger:hover:not(:disabled),
+.select-menu-trigger.is-open { border-color: var(--al-line-strong); background: var(--al-surface); color: var(--al-ink); }
+.select-menu-trigger:focus-visible { outline: 2px solid color-mix(in srgb, var(--al-accent) 42%, transparent); outline-offset: 2px; }
+.select-menu-trigger:disabled { cursor: default; opacity: .5; }
+.select-menu-trigger-toolbar { height: 34px; min-width: 104px; padding: 0 9px 0 11px; border-radius: 8px; background: var(--al-soft-2); font-size: 13px; }
+.select-menu-trigger-field { width: 100%; min-height: 46px; padding: 7px 10px 7px 12px; border-color: var(--al-line); border-radius: 10px; background: var(--al-surface); }
+.select-menu-trigger-pill { height: 32px; padding: 0 9px 0 10px; border: 0; border-radius: 999px; background: var(--al-soft-2); font-size: 12px; }
+.select-menu-trigger-copy { min-width: 0; }
+.select-menu-trigger-label { display: block; overflow: hidden; font-size: 13px; font-weight: 560; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.select-menu-trigger-field small { display: block; margin-top: 3px; overflow: hidden; color: var(--al-muted); font: 12px/1.25 var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
+.select-menu-trigger-pill .select-menu-trigger-label { font-size: 12px; font-weight: 500; }
+.select-menu-chevron { width: 14px; height: 14px; flex: 0 0 14px; fill: none; stroke: var(--al-muted-2); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; transition: transform .15s ease; }
+.select-menu-trigger.is-open .select-menu-chevron { transform: rotate(180deg); }
+
+.select-menu-popover {
+  position: fixed;
+  z-index: 1200;
+  max-height: min(360px, calc(100vh - 16px));
+  padding: 6px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--al-line-strong) 86%, transparent);
+  border-radius: 12px;
+  outline: 0;
+  background: var(--al-surface-raised);
+  box-shadow: var(--al-shadow-lg);
+}
+.select-menu-popover-pill { border-radius: 16px; }
+.select-menu-search-wrap { display: flex; height: 36px; align-items: center; gap: 7px; margin-bottom: 5px; padding: 0 9px; border: 1px solid var(--al-line); border-radius: 8px; background: var(--al-soft-2); }
+.select-menu-search-wrap:focus-within { border-color: color-mix(in srgb, var(--al-accent) 48%, var(--al-line)); background: var(--al-surface); }
+.select-menu-search-wrap svg { width: 14px; height: 14px; flex: 0 0 14px; fill: none; stroke: var(--al-muted); stroke-width: 1.5; stroke-linecap: round; }
+.select-menu-search-wrap input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--al-ink); font-size: 12px; }
+.select-menu-options { max-height: 296px; overflow: auto; outline: 0; }
+.select-menu-option { display: flex; width: 100%; min-height: 38px; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 9px; border: 0; border-radius: 8px; background: transparent; color: var(--al-ink-2); text-align: left; cursor: pointer; }
+.select-menu-option:hover,
+.select-menu-option.is-active { background: var(--al-soft-2); }
+.select-menu-option.is-selected { color: var(--al-ink); }
+.select-menu-option:disabled { cursor: default; opacity: .46; }
+.select-menu-option > span:first-child { min-width: 0; }
+.select-menu-option b { display: block; overflow: hidden; font-size: 13px; font-weight: 560; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.select-menu-option small { display: block; margin-top: 2px; overflow: hidden; color: var(--al-muted); font: 12px/1.35 var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
+.select-menu-check { width: 18px; flex: 0 0 18px; color: var(--al-accent); font-size: 14px; font-weight: 700; text-align: center; }
+.select-menu-empty { padding: 18px 10px; color: var(--al-muted); font-size: 12px; text-align: center; }
+
+@media (max-width: 767.98px) {
+  .select-menu-popover { border-radius: 11px; }
+  .select-menu-trigger-toolbar { min-width: 92px; }
+  .select-menu-trigger-pill { max-width: 148px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .select-menu-trigger,
+  .select-menu-chevron { transition: none; }
+}

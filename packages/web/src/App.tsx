@@ -9,6 +9,7 @@ import { BrandVersion, ReleaseInfo } from './components/ReleaseInfo'
 import { ReviewStateOverlay } from './components/ReviewStateOverlay'
 import { ReviewTurnRail } from './components/ReviewTurnRail'
 import { RuntimeStatus } from './components/RuntimeStatus'
+import { UiIcon } from './components/UiIcon'
 import { AgentsResponsivePage } from './features/AgentsResponsivePage'
 import { BackupPage } from './features/BackupPage'
 import { InsightsPage } from './features/InsightsPage'
@@ -133,12 +134,6 @@ function sameReviewFilters(left: ReviewFilters, right: ReviewFilters): boolean {
     && left.search === right.search
 }
 
-function ThemeGlyph({ dark }: { dark: boolean }) {
-  return dark
-    ? <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="3.4"/><path d="M10 1.8v2M10 16.2v2M1.8 10h2M16.2 10h2M4.2 4.2l1.4 1.4M14.4 14.4l1.4 1.4M15.8 4.2l-1.4 1.4M5.6 14.4l-1.4 1.4"/></svg>
-    : <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M15.8 12.8A6.7 6.7 0 0 1 7.2 4.2 6.8 6.8 0 1 0 15.8 12.8Z"/></svg>
-}
-
 function Shell({ model }: { model: AgentLensClientModel }) {
   const snapshot = useClientSnapshot(model)
   const location = useLocation()
@@ -219,7 +214,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
           <div className="app-status">
             <RuntimeStatus health={snapshot.health} liveConnected={snapshot.liveConnected} />
             <ReleaseInfo runtimeOwner={snapshot.health?.runtime?.owner ?? null} runtimeReady={snapshot.health !== null} />
-            <button className="theme-toggle" onClick={toggleTheme} title={theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'} aria-label={theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'}><ThemeGlyph dark={theme === 'dark'}/></button>
+            <button className="theme-toggle" onClick={toggleTheme} title={theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'} aria-label={theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'}><UiIcon name={theme === 'dark' ? 'sun' : 'moon'} size={18}/></button>
           </div>
         </div>
       </header>

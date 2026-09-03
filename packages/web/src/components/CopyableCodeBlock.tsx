@@ -1,5 +1,6 @@
 import { isValidElement, useEffect, useRef, useState, type ComponentPropsWithoutRef, type ReactNode } from 'react'
 import { copyText } from '../client/clipboard'
+import { UiIcon } from './UiIcon'
 
 type CopyState = 'idle' | 'copied' | 'error'
 
@@ -36,9 +37,7 @@ export function CopyableCodeBlock({ children, copyValue, containerClassName = ''
   return <div className={`copyable-code-block ${containerClassName}`.trim()} data-copy-state={state}>
     <pre {...preProps}>{children}</pre>
     <button type="button" className="code-block-copy" onClick={() => void copy()} aria-label={`${label}代码块`} title={label}>
-      {state === 'copied'
-        ? <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3.5 8.4 2.7 2.7 6.3-6.3"/></svg>
-        : <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5.2" y="5.2" width="7.3" height="7.3" rx="1.2"/><path d="M10.5 5.2V4.7A1.2 1.2 0 0 0 9.3 3.5H4.7a1.2 1.2 0 0 0-1.2 1.2v4.6a1.2 1.2 0 0 0 1.2 1.2h.5"/></svg>}
+      <UiIcon name={state === 'copied' ? 'check' : 'copy'} size={16}/>
       <span>{label}</span>
     </button>
   </div>
