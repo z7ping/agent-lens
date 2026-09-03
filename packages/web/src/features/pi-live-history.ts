@@ -7,6 +7,12 @@ export type PiLiveHistoryItem =
   | { id: string; kind: 'usage'; usage: PiNativeUsage; at: string; nativeType?: string | undefined; parentId?: string | undefined; raw?: unknown }
   | { id: string; kind: 'lifecycle'; event: string; label: string; detail: string; at: string; nativeType?: string | undefined; parentId?: string | undefined; raw?: unknown }
 
+export function omitPiLivePromptMessages(items: PiLiveHistoryItem[], promptText?: string): PiLiveHistoryItem[] {
+  if (!promptText) return items
+  const normalized = promptText.trim()
+  return items.filter(item => !(item.kind === 'message' && item.role === 'user' && item.text.trim() === normalized))
+}
+
 function elapsedMs(start: string, end: string): number | undefined {
   const startMs = Date.parse(start)
   const endMs = Date.parse(end)

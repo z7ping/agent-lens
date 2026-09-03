@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { PiLiveSnapshotDto } from '@agent-lens/protocol'
-import { projectPiLiveHistory } from './pi-live-history'
+import { omitPiLivePromptMessages, projectPiLiveHistory, type PiLiveHistoryItem } from './pi-live-history'
 
 function snapshot(entries: PiLiveSnapshotDto['entries']): PiLiveSnapshotDto {
   return {
@@ -15,6 +15,18 @@ function snapshot(entries: PiLiveSnapshotDto['entries']): PiLiveSnapshotDto {
     leafId: null,
   }
 }
+
+test('Pi Live 完成态只保留乐观用户消息并移除分片中的所有重复副本', () => {
+  const items: PiLiveHistoryItem[] = [
+    { id: 'user-1', kind: 'message', role: 'user', text: '执行检查', at: '' },
+    { id: 'assistant-1', kind: 'message', role: 'assistant', text: '执行检查', at: '' },
+    { id: 'user-2', kind: 'message', role: 'user', text: ' 执行检查 ', at: '' },
+    { id: 'tool-1', kind: 'tool', callId: 'call-1', name: 'bash', summary: '', output: '', status: 'success', at: '' },
+  ]
+
+  assert.deepEqual(omitPiLivePromptMessages(items, '执行检查').map(item => item.id), ['assistant-1', 'tool-1'])
+  assert.equal(omitPiLivePromptMessages(items).length, items.length)
+})
 
 test('Pi Live persisted history preserves message, thinking, tool and lifecycle facts', () => {
   const items = projectPiLiveHistory(snapshot([

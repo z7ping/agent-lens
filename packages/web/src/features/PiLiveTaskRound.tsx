@@ -8,7 +8,7 @@ import { TaskRound } from './TaskRound'
 import { TaskThinking } from './TaskThinking'
 import { TaskToolGroup } from './TaskToolGroup'
 import type { TaskRoundModel, TaskThinkingModel, TaskToolGroupModel, TaskToolKind, TaskToolModel } from './task-detail-model'
-import type { PiLiveHistoryItem } from './pi-live-history'
+import { omitPiLivePromptMessages, type PiLiveHistoryItem } from './pi-live-history'
 import type { PiLiveTaskRoundProjection } from './pi-live-task-projection'
 
 export interface PiLiveRunningTool {
@@ -114,14 +114,6 @@ function historyEntries(items: PiLiveHistoryItem[]): HistoryRenderEntry[] {
   }
   flushTools()
   return result
-}
-
-function withoutPromptMessage(items: PiLiveHistoryItem[], promptText?: string): PiLiveHistoryItem[] {
-  if (!promptText) return items
-  const normalized = promptText.trim()
-  const index = items.findIndex(item => item.kind === 'message' && item.role === 'user' && item.text.trim() === normalized)
-  if (index < 0) return items
-  return items.filter((_, itemIndex) => itemIndex !== index)
 }
 
 function ThinkingMarkdown({ text }: { text: string }) {
@@ -253,17 +245,16 @@ export function PiLiveRunningTaskRound({
   >
     {promptText && <TaskMessage role="user" text={promptText} author="你" className="pi-live-task-message pi-live-optimistic-message"/>}
     {hasSettledItems
-      ? <HistoryEntries items={withoutPromptMessage(settledItems ?? [], promptText)} showAllEvents={showAllEvents}/>
+      ? <HistoryEntries items={omitPiLivePromptMessages(settledItems ?? [], promptText)} showAllEvents={showAllEvents}/>
       : <>
-        {waiting && <div className="pi-live-empty" role="status">等待 Pi 响应…</div>}
         {thinkingText && <TaskThinking model={thinking} defaultExpanded><div className="task-thinking-stream-text">{thinkingText}</div></TaskThinking>}
         {toolModels.length > 0 && <TaskToolGroup
           model={toolGroup('pi-live-current-tools', toolModels)}
           renderDetails={tool => <ToolOutput tool={tool}/>}
         />}
-        {streamText && <div className="pi-live-stream-response">
-          <div className="pi-live-message-meta"><b>Pi</b><span>{isStreaming ? '生成中' : '输出'}</span></div>
-          <div className="pi-live-stream-text">{streamText}</div>
+        {(waiting || streamText) && <div className={`pi-live-stream-response${waiting ? ' is-waiting' : ''}`} role={waiting ? 'status' : undefined}>
+          <div className="pi-live-message-meta"><b>Pi</b><span>{waiting ? '等待响应' : isStreaming ? '生成中' : '输出'}</span></div>
+          <div className="pi-live-stream-text">{waiting ? '等待 Pi 响应…' : streamText}</div>
           {isStreaming && <span className="pi-live-caret" aria-hidden="true"/>}
         </div>}
       </>}

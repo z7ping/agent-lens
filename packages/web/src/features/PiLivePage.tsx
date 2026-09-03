@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import type { JsonValue, PiLiveControlsDto, PiLiveEventDto, PiLiveQueueDto, PiLiveSnapshotDto, PiLiveStateDto } from '@agent-lens/protocol'
 import { piLiveApi, type PiLiveTransportDiagnostics } from '../client/pi-live'
@@ -561,6 +561,21 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     runningRound,
   }), [connected, historyRounds, runningRound, state])
 
+  const beginOptimisticPrompt = useCallback((text: string) => {
+    setSettledCurrentOrdinal(null)
+    setSettledCurrentItems([])
+    activePromptRef.current = text
+    setOptimisticPrompt(text)
+    setState(current => current ? { ...current, isStreaming: true } : current)
+  }, [])
+
+  const rollbackOptimisticPrompt = useCallback((text: string) => {
+    if (activePromptRef.current !== text) return
+    activePromptRef.current = ''
+    setOptimisticPrompt('')
+    setState(current => current ? { ...current, isStreaming: false } : current)
+  }, [])
+
   useEffect(() => {
     if (!followingRef.current || followFrameRef.current !== null) return
     followFrameRef.current = requestAnimationFrame(() => {
@@ -570,25 +585,29 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       const target = Math.max(0, reader.scrollHeight - reader.clientHeight)
       if (Math.abs(reader.scrollTop - target) > 1) reader.scrollTop = target
     })
-  }, [visibleHistoryRounds.length, streamText.length, thinkingText.length, tools.length, optimisticPrompt, settledCurrentItems.length, queue.steering.length, queue.followUp.length, restored.length, extension?.id])
+  }, [visibleHistoryRounds, streamText, thinkingText, tools, optimisticPrompt, settledCurrentItems, queue.steering.length, queue.followUp.length, restored, extension?.id])
 
   // 初始化阶段先接住第一条任务；Worker ready 后只发送一次，失败则还原为可编辑草稿。
   useEffect(() => {
     if (!runtimeId || state?.status !== 'ready' || !startupQueued || startupSendingRef.current) return
     const text = startupQueued
     startupSendingRef.current = true
+    setBusy(true)
     setError('')
+    setStartupQueued(current => current === text ? '' : current)
+    beginOptimisticPrompt(text)
+    inputRef.current?.focus({ preventScroll: true })
     void piLiveApi.prompt(runtimeId, text).then(() => {
-      setStartupQueued(current => current === text ? '' : current)
       inputRef.current?.focus({ preventScroll: true })
     }, reason => {
-      setStartupQueued(current => current === text ? '' : current)
+      rollbackOptimisticPrompt(text)
       setInput(current => current || text)
       setError(reason instanceof Error ? reason.message : String(reason))
     }).finally(() => {
       startupSendingRef.current = false
+      setBusy(false)
     })
-  }, [runtimeId, startupQueued, state?.status])
+  }, [beginOptimisticPrompt, rollbackOptimisticPrompt, runtimeId, startupQueued, state?.status])
 
   if (!runtimeId) return <PiLiveStart known={known}/>
 
@@ -613,23 +632,13 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     setBusy(true)
     setError('')
     setInput('')
-    if (!wasStreaming) {
-      setSettledCurrentOrdinal(null)
-      setSettledCurrentItems([])
-      activePromptRef.current = text
-      setOptimisticPrompt(text)
-      setState(current => current ? { ...current, isStreaming: true } : current)
-    }
+    if (!wasStreaming) beginOptimisticPrompt(text)
     inputRef.current?.focus({ preventScroll: true })
     try {
       await piLiveApi.prompt(runtimeId, text, wasStreaming ? selectedMode : undefined)
     } catch (reason) {
       setInput(current => current || text)
-      if (!wasStreaming) {
-        activePromptRef.current = ''
-        setOptimisticPrompt('')
-        setState(current => current ? { ...current, isStreaming: false } : current)
-      }
+      if (!wasStreaming) rollbackOptimisticPrompt(text)
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
       setBusy(false)
@@ -860,8 +869,8 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
 
           {runningRound && <PiLiveRunningTaskRound
             model={runningRound}
-            promptText={optimisticPrompt || undefined}
-            settledItems={settledCurrentItems.length ? settledCurrentItems : undefined}
+            {...(optimisticPrompt ? { promptText: optimisticPrompt } : {})}
+            {...(settledCurrentItems.length ? { settledItems: settledCurrentItems } : {})}
             showAllEvents={showAllEvents}
             thinkingText={thinkingText}
             tools={tools}
