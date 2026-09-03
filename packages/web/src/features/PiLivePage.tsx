@@ -258,7 +258,7 @@ function PiLiveStart({ known }: { known: PiLiveStateDto[] }) {
       <div><b>仍在后台的 Pi 任务</b><span>来自本浏览器最近启动的运行时</span></div>
       {known.map(item => <button key={item.runtimeSessionId} onClick={() => navigate(`/review/live/${encodeURIComponent(item.runtimeSessionId)}`)}>
         <span>{item.sessionName || 'Pi 实时任务'}</span>
-        <small>{modelLabel(item)} · {item.status === 'initializing' ? '正在初始化' : item.status === 'failed' ? '启动失败' : item.isStreaming ? '正在工作' : '等待输入'}</small>
+        <small>{modelLabel(item)} · {item.status === 'initializing' ? '启动中' : item.status === 'failed' ? '启动失败' : item.isStreaming ? '正在工作' : '等待输入'}</small>
       </button>)}
     </section>}
   </main>
@@ -296,6 +296,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const readerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<PiMarkdownComposerHandle>(null)
   const followingRef = useRef(true)
+  const followFrameRef = useRef<number | null>(null)
   const leafIdRef = useRef<string | undefined>(undefined)
   const toolsRef = useRef(new Map<string, LiveTool>())
   const startupSendingRef = useRef(false)
@@ -308,6 +309,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const [input, setInput] = useState('')
   const [composerExpanded, setComposerExpanded] = useState(false)
   const [startupQueued, setStartupQueued] = useState('')
+  const [optimisticPrompt, setOptimisticPrompt] = useState('')
   const [streamText, setStreamText] = useState('')
   const [thinkingText, setThinkingText] = useState('')
   const [tools, setTools] = useState<LiveTool[]>([])
@@ -331,9 +333,14 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   useEffect(() => {
     if (!runtimeId) return
     let active = true
+    if (followFrameRef.current !== null) {
+      cancelAnimationFrame(followFrameRef.current)
+      followFrameRef.current = null
+    }
     setSnapshot(null)
     setState(null)
     setControls({ models: [], thinkingLevels: [] })
+    setOptimisticPrompt('')
     setStreamText('')
     setThinkingText('')
     setTools([])
@@ -371,8 +378,11 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
         const value = await piLiveApi.snapshot(runtimeId, leafIdRef.current)
         if (!active) return
         acceptSnapshot(value)
+        setOptimisticPrompt('')
         setStreamText('')
         setThinkingText('')
+        toolsRef.current.clear()
+        setTools([])
       } catch (reason) {
         if (active) setError(reason instanceof Error ? reason.message : String(reason))
       }
@@ -498,15 +508,20 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     return () => {
       active = false
       dispose()
+      if (followFrameRef.current !== null) {
+        cancelAnimationFrame(followFrameRef.current)
+        followFrameRef.current = null
+      }
     }
   }, [runtimeId])
 
   const history = useMemo(() => projectPiLiveHistory(snapshot), [snapshot])
   const historyRounds = useMemo(() => projectPiLiveTaskRounds(history), [history])
+  const optimisticStreaming = Boolean(optimisticPrompt) || (state?.isStreaming ?? false)
   const runningRound = useMemo(() => {
-    if (!thinkingText && tools.length === 0 && !streamText) return undefined
-    return projectPiLiveRunningRound({ tools, isStreaming: state?.isStreaming ?? false })
-  }, [state?.isStreaming, streamText, thinkingText, tools])
+    if (!optimisticPrompt && !state?.isStreaming && !thinkingText && tools.length === 0 && !streamText) return undefined
+    return projectPiLiveRunningRound({ tools, isStreaming: optimisticStreaming })
+  }, [optimisticPrompt, optimisticStreaming, state?.isStreaming, streamText, thinkingText, tools])
   const taskDetailModel = useMemo(() => projectPiLiveTaskDetail({
     state,
     connected,
@@ -515,13 +530,15 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   }), [connected, historyRounds, runningRound, state])
 
   useEffect(() => {
-    if (!followingRef.current) return
-    const frame = requestAnimationFrame(() => {
+    if (!followingRef.current || followFrameRef.current !== null) return
+    followFrameRef.current = requestAnimationFrame(() => {
+      followFrameRef.current = null
       const reader = readerRef.current
-      if (reader) reader.scrollTop = reader.scrollHeight
+      if (!reader || !followingRef.current) return
+      const target = Math.max(0, reader.scrollHeight - reader.clientHeight)
+      if (Math.abs(reader.scrollTop - target) > 1) reader.scrollTop = target
     })
-    return () => cancelAnimationFrame(frame)
-  }, [history.length, streamText, thinkingText, tools, queue.steering.length, queue.followUp.length, restored.length, extension?.id])
+  }, [history.length, streamText.length, thinkingText.length, tools.length, optimisticPrompt, queue.steering.length, queue.followUp.length, restored.length, extension?.id])
 
   // 初始化阶段先接住第一条任务；Worker ready 后只发送一次，失败则还原为可编辑草稿。
   useEffect(() => {
@@ -559,14 +576,24 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       return
     }
     if (startupQueued) return
+    const wasStreaming = state?.isStreaming ?? false
+    const selectedMode = forcedMode ?? mode
     setBusy(true)
     setError('')
+    setInput('')
+    if (!wasStreaming) {
+      setOptimisticPrompt(text)
+      setState(current => current ? { ...current, isStreaming: true } : current)
+    }
+    inputRef.current?.focus({ preventScroll: true })
     try {
-      const selectedMode = forcedMode ?? mode
-      await piLiveApi.prompt(runtimeId, text, state?.isStreaming ? selectedMode : undefined)
-      setInput('')
-      inputRef.current?.focus({ preventScroll: true })
+      await piLiveApi.prompt(runtimeId, text, wasStreaming ? selectedMode : undefined)
     } catch (reason) {
+      setInput(current => current || text)
+      if (!wasStreaming) {
+        setOptimisticPrompt('')
+        setState(current => current ? { ...current, isStreaming: false } : current)
+      }
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
       setBusy(false)
@@ -797,13 +824,14 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
 
           {runningRound && <PiLiveRunningTaskRound
             model={runningRound}
+            promptText={optimisticPrompt || undefined}
             thinkingText={thinkingText}
             tools={tools}
             streamText={streamText}
-            isStreaming={state?.isStreaming ?? false}
+            isStreaming={optimisticStreaming}
             pendingMessageCount={state?.pendingMessageCount ?? 0}
           />}
-          {!history.length && !streamText && !thinkingText && !tools.length && runtimeReady && <div className="pi-live-empty">这个 Pi Runtime 还没有消息。可以直接在下方输入开始任务。</div>}
+          {!history.length && !optimisticPrompt && !streamText && !thinkingText && !tools.length && runtimeReady && <div className="pi-live-empty">这个 Pi Runtime 还没有消息。可以直接在下方输入开始任务。</div>}
           {error && <div className="pi-live-error pi-live-reader-error" role="alert">{error}</div>}
         </div>
       </div>
