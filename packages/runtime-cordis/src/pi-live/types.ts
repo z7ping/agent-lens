@@ -2,6 +2,20 @@ export type PiLiveStreamingBehavior = 'steer' | 'followUp'
 export type PiLiveRuntimeStatus = 'initializing' | 'ready' | 'failed' | 'terminating' | 'terminated'
 export type PiLiveInitializationStage = 'starting_worker' | 'loading_sdk' | 'loading_resources' | 'creating_session' | 'binding_extensions' | 'ready'
 
+export interface PiLiveInitializationTiming {
+  stage: PiLiveInitializationStage
+  durationMs: number
+}
+
+export interface PiLiveRuntimeCapabilities {
+  protocolVersion: number
+  sdkVersion?: string | undefined
+  sessionRuntime: boolean
+  modelSwitching: boolean
+  thinkingLevelControl: boolean
+  extensionUi: boolean
+}
+
 export interface PiLiveStartInput {
   cwd: string
   /** Optional installed Pi CLI path used only to locate the matching official SDK package. */
@@ -36,6 +50,9 @@ export interface PiLiveRuntimeState {
   status: PiLiveRuntimeStatus
   initializationStage?: PiLiveInitializationStage | undefined
   initializationMessage?: string | undefined
+  initializationElapsedMs?: number | undefined
+  initializationTimings?: PiLiveInitializationTiming[] | undefined
+  capabilities?: PiLiveRuntimeCapabilities | undefined
   error?: string | undefined
   sdkVersion?: string | undefined
   runtimeMode?: 'session_runtime' | 'compatibility' | undefined
@@ -48,7 +65,7 @@ export interface PiLiveRuntimeState {
   isCompacting: boolean
   pendingMessageCount: number
   leafId?: string | null | undefined
-  /** Legacy transport compatibility. Official in-process Pi SDK runtimes do not own a child process. */
+  /** Legacy transport compatibility. Worker-backed Pi runtimes expose the Worker PID here. */
   processId?: number | undefined
 }
 
@@ -90,7 +107,7 @@ export interface PiLiveService {
   abort(runtimeSessionId: string, options?: { restoreQueue?: boolean }): Promise<PiLiveQueueState>
   respondToExtension(runtimeSessionId: string, requestId: string, response: unknown): Promise<void>
   subscribe(runtimeSessionId: string, listener: PiLiveRuntimeListener): () => void
-  /** Dispose the owned in-process Pi AgentSession. This is intentionally different from aborting one task run. */
+  /** Dispose the owned Pi Runtime Worker. This is intentionally different from aborting one task run. */
   terminate(runtimeSessionId: string): Promise<void>
   dispose(): Promise<void>
 }
