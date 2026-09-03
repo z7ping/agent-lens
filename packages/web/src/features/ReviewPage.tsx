@@ -20,10 +20,9 @@ import { useClientSnapshot } from '../App'
 import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { MarkdownContent } from '../components/MarkdownContent'
-import { SelectMenu } from '../components/SelectMenu'
 import { ToolKindIcon } from '../components/ToolKindIcon'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
-import { IconButton, UiIcon } from '../components/ui'
+import { Drawer, IconButton, Input, SelectMenu, Toolbar, UiIcon } from '../components/ui'
 import { projectReviewInteractionPresentation } from './review-interaction-presentation'
 import { TaskEvent } from './TaskEvent'
 import { TaskHeader } from './TaskHeader'
@@ -497,11 +496,6 @@ function RawInspectorContent({
 
 function Inspector({ node, onClose, loadSourceRecord }: { node: ReviewNodeDto; onClose(): void; loadSourceRecord(id: string): Promise<SourceRecordResponseDto> }) {
   const [tab, setTab] = useState<InspectorTab>('detail')
-  const panelRef = useRef<HTMLElement>(null)
-  const firstTabRef = useRef<HTMLButtonElement>(null)
-  const returnFocusRef = useRef<HTMLElement | null>(null)
-  const closeRef = useRef(onClose)
-  closeRef.current = onClose
   const sourceRecordIds = useMemo(() => [...new Set(node.evidence.map(item => item.sourceRecordId).filter((id): id is string => Boolean(id)))], [node.evidence])
   const [rawRecords, setRawRecords] = useState<SourceRecordResponseDto[]>([])
   const [rawLoading, setRawLoading] = useState(false)
@@ -521,36 +515,6 @@ function Inspector({ node, onClose, loadSourceRecord }: { node: ReviewNodeDto; o
     return () => { active = false }
   }, [loadSourceRecord, node.id, sourceRecordIds, tab])
 
-  useEffect(() => {
-    returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    firstTabRef.current?.focus()
-    const panel = panelRef.current
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        closeRef.current()
-        return
-      }
-      if (event.key !== 'Tab' || !panel) return
-      const focusable = [...panel.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
-      if (!focusable.length) return
-      const first = focusable[0]!
-      const last = focusable[focusable.length - 1]!
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault()
-        last.focus()
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault()
-        first.focus()
-      }
-    }
-    document.addEventListener('keydown', onKeyDown)
-    return () => {
-      document.removeEventListener('keydown', onKeyDown)
-      window.requestAnimationFrame(() => returnFocusRef.current?.focus())
-    }
-  }, [])
-
   const title = node.type === 'tool' ? node.name : node.type === 'event' ? sourceEventLabel(node) : roleLabel(node.role)
   const detailSummary = node.type === 'event'
     ? sourceEventSummary(node)
@@ -558,18 +522,15 @@ function Inspector({ node, onClose, loadSourceRecord }: { node: ReviewNodeDto; o
       ? brief(node.text, 280)
       : ''
 
-  return <aside ref={panelRef} className="inspector-panel" role="dialog" aria-modal="true" aria-label={`${title}详情`}>
-    <div className="inspector-head">
-      <div>
-        <div className="eyebrow">事件详情</div>
-        <div className="inspector-title">{title}</div>
-      </div>
-      <IconButton className="icon-button" onClick={onClose} aria-label="关闭事件详情">
-        <UiIcon name="close" size={16}/>
-      </IconButton>
-    </div>
+  return <Drawer
+    open
+    className="review-inspector-overlay"
+    title={title}
+    description="事件详情"
+    onClose={onClose}
+  >
     <div className="agent-scope" role="tablist" aria-label="事件详情分类">
-      <button ref={firstTabRef} className={`scope-chip ${tab === 'detail' ? 'scope-chip-active' : ''}`} role="tab" aria-selected={tab === 'detail'} onClick={() => setTab('detail')}>详情</button>
+      <button className={`scope-chip ${tab === 'detail' ? 'scope-chip-active' : ''}`} role="tab" aria-selected={tab === 'detail'} onClick={() => setTab('detail')}>详情</button>
       <button className={`scope-chip ${tab === 'evidence' ? 'scope-chip-active' : ''}`} role="tab" aria-selected={tab === 'evidence'} onClick={() => setTab('evidence')}>证据 · {node.evidence.length}</button>
       <button className={`scope-chip ${tab === 'raw' ? 'scope-chip-active' : ''}`} role="tab" aria-selected={tab === 'raw'} onClick={() => setTab('raw')}>原始数据</button>
     </div>
@@ -589,8 +550,8 @@ function Inspector({ node, onClose, loadSourceRecord }: { node: ReviewNodeDto; o
         {item.missingReason && <div className="evidence-missing">证据信息不完整</div>}
       </div>) : <div className="muted-empty">无证据</div>}
     </section>}
-    {tab === 'raw' && <RawInspectorContent node={node} records={rawRecords} loading={rawLoading} error={rawError}/>}
-  </aside>
+    {tab === 'raw' && <RawInspectorContent node={node} records={rawRecords} loading={rawLoading} error={rawError}/>} 
+  </Drawer>
 }
 
 function MarkdownSurface({ text }: { text: string }) {
@@ -1280,7 +1241,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
   }
 
   return <main className={`review-page ${embedded ? 'review-page-embedded' : ''}`}>
-    {!embedded && <div className="workspace-toolbar">
+    {!embedded && <Toolbar className="workspace-toolbar" aria-label="任务复盘筛选">
       <AgentScope agents={agents} value={review.filters.sourceId} onChange={sourceId => model.setReviewFilters({ sourceId })}/>
       <span className="toolbar-divider" />
       <SelectMenu className="filter" value={review.filters.projectId} onChange={projectId => model.setReviewFilters({ projectId })} ariaLabel="筛选项目" placeholder="全部项目" menuWidth={280} searchable searchPlaceholder="搜索项目" options={[
@@ -1293,9 +1254,9 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
       <SelectMenu className="filter" value={review.filters.status} onChange={status => model.setReviewFilters({ status: status as typeof review.filters.status })} ariaLabel="筛选状态" menuWidth={150} options={[
         { value: 'all', label: '全部状态' }, { value: 'clean', label: '无错误' }, { value: 'with-errors', label: '有错误' },
       ]}/>
-      <input className="filter search-filter" placeholder="搜索会话…" value={review.filters.search} onChange={e => model.setReviewFilters({ search: e.target.value })}/>
-      <IconButton className="icon-button" onClick={() => void model.refreshReview()} title="刷新" aria-label="刷新"><UiIcon name="refresh" size={16}/></IconButton>
-    </div>}
+      <Input className="filter search-filter" placeholder="搜索会话…" value={review.filters.search} onChange={e => model.setReviewFilters({ search: e.target.value })}/>
+      <IconButton onClick={() => void model.refreshReview()} title="刷新" aria-label="刷新"><UiIcon name="refresh" size={16}/></IconButton>
+    </Toolbar>}
 
     <div className="review-layout">
       {!embedded && <aside className="session-panel">
@@ -1408,6 +1369,6 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
         </div>}
       </TaskSurface>
     </div>
-    {inspect && <Inspector node={inspect} loadSourceRecord={model.sourceRecord} onClose={() => setInspect(null)}/>}
+    {inspect && <Inspector node={inspect} loadSourceRecord={model.sourceRecord} onClose={() => setInspect(null)}/>} 
   </main>
 }
