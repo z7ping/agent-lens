@@ -7,8 +7,7 @@ import { AgentScope, agentLabel } from '../components/AgentScope'
 import { CompactPageHeading } from '../components/CompactPageHeading'
 import { EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from '../components/StateViews'
 import { ToolKindIcon, toolVisualKind } from '../components/ToolKindIcon'
-import { Drawer, IconButton, SelectMenu, Toolbar } from '../components/ui'
-import { UiIcon } from '../components/UiIcon'
+import { Drawer, IconButton, SelectMenu, Toolbar, UiIcon } from '../components/ui'
 
 function duration(ms: number): string {
   if (ms <= 0) return '未观察到'
