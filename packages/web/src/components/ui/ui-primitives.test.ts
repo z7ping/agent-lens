@@ -4,6 +4,8 @@ import test from 'node:test'
 
 const source = readFileSync(new URL('./Primitives.tsx', import.meta.url), 'utf8')
 const css = readFileSync(new URL('./ui-primitives.css', import.meta.url), 'utf8')
+const piStartup = readFileSync(new URL('../PiStartupDisclosure.tsx', import.meta.url), 'utf8')
+const piStartupCss = readFileSync(new URL('../pi-startup-disclosure.css', import.meta.url), 'utf8')
 const agentRules = readFileSync(new URL('../../../../../AGENTS.md', import.meta.url), 'utf8')
 
 test('shared UI primitives expose the first unified component set', () => {
@@ -24,6 +26,15 @@ test('shared primitives consume semantic tokens instead of page palettes', () =>
   assert.match(css, /var\(--al-accent\)/)
   assert.match(css, /var\(--al-danger\)/)
   assert.match(css, /var\(--al-line-strong\)/)
+})
+
+test('Pi startup actions consume the shared Button contract', () => {
+  assert.match(piStartup, /import \{ Button \} from '\.\/ui'/)
+  assert.match(piStartup, /<Button size="small"/)
+  assert.match(piStartup, /variant="primary"/)
+  assert.match(piStartup, /variant="danger"/)
+  assert.doesNotMatch(piStartupCss, /\.pi-startup-actions button\s*\{/)
+  assert.doesNotMatch(piStartupCss, /font-size:\s*(?:10(?:\.5)?|11(?:\.5)?)px/)
 })
 
 test('repository agent rules require reuse of shared primitives', () => {
