@@ -22,7 +22,7 @@ for (const required of [
   'interface ReviewReaderPosition',
   'captureReviewReaderPosition',
   'readerPositionsRef',
-  "querySelectorAll<HTMLElement>('.interaction-block[data-interaction-id]')",
+  "querySelectorAll<HTMLElement>('.virtual-round-shell[data-interaction-id]')",
   'await model.loadMoreReviewDetail()',
   "current.detail.page.direction !== 'forward'",
   'pane.scrollTop += anchor.getBoundingClientRect().top - paneTop - saved.offset',
