@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom'
-import { useEffect, useId, useRef, type ReactNode, type RefObject } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, type ReactNode, type RefObject } from 'react'
 import { UiIcon } from '../UiIcon'
 import { IconButton } from './Primitives'
 import './overlay.css'
@@ -27,14 +27,12 @@ function useOverlayFocus({
     closeRef.current = onClose
   }, [onClose])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null
     const panel = panelRef.current
-    const frame = requestAnimationFrame(() => {
-      const first = panel?.querySelector<HTMLElement>(FOCUSABLE)
-      ;(first ?? panel)?.focus({ preventScroll: true })
-    })
+    const first = panel?.querySelector<HTMLElement>(FOCUSABLE)
+    ;(first ?? panel)?.focus({ preventScroll: true })
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -63,7 +61,6 @@ function useOverlayFocus({
 
     document.addEventListener('keydown', onKeyDown, true)
     return () => {
-      cancelAnimationFrame(frame)
       document.removeEventListener('keydown', onKeyDown, true)
       requestAnimationFrame(() => previous?.focus({ preventScroll: true }))
     }
