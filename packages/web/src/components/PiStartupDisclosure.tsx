@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PiLiveInitializationStageDto, PiLiveStateDto } from '@agent-lens/protocol'
 import { CopyableCodeBlock } from './CopyableCodeBlock'
 import { UiIcon } from './UiIcon'
+import { Button } from './ui'
 
 const STAGES: Array<{ stage: PiLiveInitializationStageDto; label: string; detail: string }> = [
   { stage: 'starting_worker', label: '启动 Runtime Worker', detail: '创建独立 Pi 运行进程' },
@@ -140,8 +141,8 @@ export function PiStartupDisclosure({
       <span>{state.error || fallbackError || 'Pi Runtime 未能完成初始化。'}</span>
     </div>}
     <div className="pi-startup-actions">
-      {state.status === 'initializing' && <button onClick={event => { event.preventDefault(); onTerminate() }} disabled={busy}>取消启动</button>}
-      {state.status === 'failed' && <><button className="primary" onClick={event => { event.preventDefault(); onRetry() }} disabled={busy}>重试</button><button onClick={event => { event.preventDefault(); onTerminate() }} disabled={busy}>结束 Runtime</button></>}
+      {state.status === 'initializing' && <Button size="small" onClick={event => { event.preventDefault(); onTerminate() }} disabled={busy}>取消启动</Button>}
+      {state.status === 'failed' && <><Button size="small" variant="primary" onClick={event => { event.preventDefault(); onRetry() }} disabled={busy}>重试</Button><Button size="small" variant="danger" onClick={event => { event.preventDefault(); onTerminate() }} disabled={busy}>结束 Runtime</Button></>}
     </div>
   </div>
 
