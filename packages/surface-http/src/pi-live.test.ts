@@ -17,6 +17,7 @@ class FakePiLiveService implements PiLiveService {
   prompts: Array<{ message: string; behavior?: PiLiveStreamingBehavior }> = []
   steering: string[] = []
   followUps: string[] = []
+  clearQueueCalls = 0
   abortRestoreQueue: boolean | undefined
   extensionResponses: Array<{ requestId: string; response: unknown }> = []
   modelChanges: Array<{ provider: string; modelId: string }> = []
@@ -107,6 +108,7 @@ class FakePiLiveService implements PiLiveService {
   }
 
   async clearQueue() {
+    this.clearQueueCalls += 1
     return { steering: ['queued-steer'], followUp: ['queued-follow-up'] }
   }
 
@@ -248,6 +250,11 @@ test('Pi Live HTTP control surface preserves runtime ownership and validates com
     })
     assert.deepEqual(piLive.steering, ['change direction'])
     assert.deepEqual(piLive.followUps, ['then summarize'])
+
+    const cleared = await fetch(`${base}/api/v1/pi-live/${piLive.runtimeSessionId}/clear-queue`, { method: 'POST' })
+    assert.equal(cleared.status, 200)
+    assert.deepEqual(await json(cleared), { steering: ['queued-steer'], followUp: ['queued-follow-up'] })
+    assert.equal(piLive.clearQueueCalls, 1)
 
     const aborted = await fetch(`${base}/api/v1/pi-live/${piLive.runtimeSessionId}/abort`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ restoreQueue: false }),
