@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom'
-import { useEffect, useId, useRef, type ReactNode } from 'react'
+import { useEffect, useId, useRef, type ReactNode, type RefObject } from 'react'
 import { UiIcon } from '../UiIcon'
 import { IconButton } from './Primitives'
 import './overlay.css'
@@ -20,7 +20,7 @@ function useOverlayFocus({
 }: {
   open: boolean
   onClose(): void
-  panelRef: React.RefObject<HTMLDivElement | null>
+  panelRef: RefObject<HTMLDivElement | null>
 }) {
   useEffect(() => {
     if (!open) return
