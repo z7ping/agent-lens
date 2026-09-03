@@ -16,6 +16,8 @@ export type {
   DisclosureProps,
   IconButtonProps,
   StatusTone,
+  ToolbarGroupProps,
+  ToolbarProps,
 } from './Primitives'
 
 export { Dialog, Drawer } from './Overlay'
