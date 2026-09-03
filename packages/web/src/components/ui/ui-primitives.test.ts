@@ -4,14 +4,18 @@ import test from 'node:test'
 
 const source = readFileSync(new URL('./Primitives.tsx', import.meta.url), 'utf8')
 const css = readFileSync(new URL('./ui-primitives.css', import.meta.url), 'utf8')
+const index = readFileSync(new URL('./index.ts', import.meta.url), 'utf8')
 const piStartup = readFileSync(new URL('../PiStartupDisclosure.tsx', import.meta.url), 'utf8')
 const piStartupCss = readFileSync(new URL('../pi-startup-disclosure.css', import.meta.url), 'utf8')
+const composerPill = readFileSync(new URL('../ComposerPillSelect.tsx', import.meta.url), 'utf8')
+const stateViews = readFileSync(new URL('../StateViews.tsx', import.meta.url), 'utf8')
 const agentRules = readFileSync(new URL('../../../../../AGENTS.md', import.meta.url), 'utf8')
 
 test('shared UI primitives expose the first unified component set', () => {
   for (const name of ['Button', 'IconButton', 'Input', 'Textarea', 'Select', 'StatusBadge', 'Disclosure', 'Toolbar', 'ToolbarGroup']) {
     assert.match(source, new RegExp(`export function ${name}\\b`))
   }
+  assert.match(index, /export \{ SelectMenu \} from '\.\.\/SelectMenu'/)
 })
 
 test('shared controls keep the frozen size and typography contracts', () => {
@@ -35,6 +39,13 @@ test('Pi startup actions consume the shared Button contract', () => {
   assert.match(piStartup, /variant="danger"/)
   assert.doesNotMatch(piStartupCss, /\.pi-startup-actions button\s*\{/)
   assert.doesNotMatch(piStartupCss, /font-size:\s*(?:10(?:\.5)?|11(?:\.5)?)px/)
+})
+
+test('existing shared composites route common controls through the UI layer', () => {
+  assert.match(composerPill, /import \{ SelectMenu, type SelectMenuOption \} from '\.\/ui'/)
+  assert.match(stateViews, /import \{ Button \} from '\.\/ui'/)
+  assert.match(stateViews, /<Button variant="primary"/)
+  assert.doesNotMatch(stateViews, /className="state-button/)
 })
 
 test('repository agent rules require reuse of shared primitives', () => {
