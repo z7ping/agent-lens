@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { ToolUsageDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
 import { AgentScope, agentLabel } from '../components/AgentScope'
 import { CompactPageHeading } from '../components/CompactPageHeading'
-import { SelectMenu } from '../components/SelectMenu'
 import { EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from '../components/StateViews'
 import { ToolKindIcon, toolVisualKind } from '../components/ToolKindIcon'
+import { Drawer, IconButton, SelectMenu, Toolbar } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
 
 function duration(ms: number): string {
@@ -91,15 +91,6 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
     return sort.direction === 'ascending' ? delta : -delta
   }), [tools, sort])
 
-  useEffect(() => {
-    if (!selectedTool) return
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setSelectedToolKey(null)
-    }
-    window.addEventListener('keydown', closeOnEscape)
-    return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [selectedTool])
-
   const toggleSort = (key: SortKey) => {
     setSort(current => current.key === key
       ? { key, direction: current.direction === 'descending' ? 'ascending' : 'descending' }
@@ -125,7 +116,7 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
   }
 
   return <main className="workspace-page">
-    <div className="workspace-toolbar">
+    <Toolbar className="workspace-toolbar" aria-label="工具分析筛选">
       <AgentScope agents={agents} value={usage.filters.sourceId} onChange={sourceId => model.setUsageFilters({ sourceId })}/>
       <span className="toolbar-divider" />
       <SelectMenu className="filter" value={usage.filters.projectId} onChange={projectId => model.setUsageFilters({ projectId })} ariaLabel="筛选项目" placeholder="全部项目" menuWidth={280} searchable searchPlaceholder="搜索项目" options={[
@@ -135,8 +126,8 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
       <SelectMenu className="filter" value={usage.filters.range} onChange={range => model.setUsageFilters({ range: range as typeof usage.filters.range })} ariaLabel="筛选时间范围" menuWidth={156} options={[
         { value: 'today', label: '今天' }, { value: '7d', label: '最近 7 天' }, { value: '30d', label: '最近 30 天' }, { value: 'all', label: '全部时间' },
       ]}/>
-      <button className="icon-button toolbar-end" onClick={() => void model.refreshUsage()} title="刷新工具分析" aria-label="刷新工具分析"><UiIcon name="refresh" size={15}/></button>
-    </div>
+      <IconButton className="toolbar-end" onClick={() => void model.refreshUsage()} title="刷新工具分析" aria-label="刷新工具分析"><UiIcon name="refresh" size={15}/></IconButton>
+    </Toolbar>
 
     <div className="page-content tools-content">
       <CompactPageHeading title="工具分析" description="只展示可验证的调用事实：用了什么、失败多少、耗时如何，以及有多少调用能够可靠归因到具体能力资产。"/>
@@ -208,42 +199,41 @@ export function ToolsPage({ model }: { model: AgentLensClientModel }) {
       </>}
     </div>
 
-    {selectedTool && <>
-      <button className="tool-drawer-scrim" onClick={() => setSelectedToolKey(null)} aria-label="关闭工具详情" />
-      <aside className="tool-drill-drawer" aria-label="工具详情">
-        <header className="tool-drill-head">
-          <div><span className="eyebrow">工具详情</span><h2 className="tool-drawer-title"><ToolKindIcon kind={toolVisualKind(selectedTool.nativeToolName)}/>{selectedTool.nativeToolName}</h2><span className="tool-source">{sourceLabels(selectedTool.sourceIds)}</span></div>
-          <button className="icon-button" onClick={() => setSelectedToolKey(null)} aria-label="关闭工具详情"><UiIcon name="close" size={15}/></button>
-        </header>
-        <div className="tool-drill-body">
-          <div className="tool-drill-grid">
-            <div className="tool-drill-stat"><b>{selectedTool.callCount}</b><span>调用次数</span></div>
-            <div className="tool-drill-stat"><b>{selectedTool.sessionCount}</b><span>涉及会话</span></div>
-            <div className="tool-drill-stat"><b>{rate(selectedTool.successCount, selectedTool.errorCount)}</b><span>成功率</span></div>
-            <div className="tool-drill-stat"><b className={selectedTool.errorCount ? 'cell-danger' : ''}>{selectedTool.errorCount}</b><span>失败次数</span></div>
-            <div className="tool-drill-stat"><b>{duration(selectedTool.totalDurationMs)}</b><span>总耗时</span></div>
-            <div className="tool-drill-stat"><b>{duration(selectedTool.averageDurationMs)}</b><span>平均耗时</span></div>
-          </div>
-          <section className="tool-session-section">
-            <div className="table-section-head"><div><h2>会话分布 · Top 3</h2><p>按该工具在会话中的调用次数排序 · 点击直接进入任务复盘</p></div></div>
-            <div className="tool-session-list">
-              {selectedTool.sessions.slice(0, 3).map(session => {
-                const summary = sessionSummaries.get(session.logicalSessionId)
-                const label = summary?.title ?? summary?.preview ?? `会话 ${shortSessionId(session.logicalSessionId)}`
-                const max = selectedTool.sessions[0]?.callCount ?? 1
-                return <button key={session.logicalSessionId} className="tool-session-link" onClick={() => openReviewSession(session.logicalSessionId)} title={label}>
-                  <span className="tool-session-copy"><b>{label}</b><small>{sourceLabels(summary?.sourceIds ?? selectedTool.sourceIds)} · {session.callCount} 次调用</small></span>
-                  <span className="metric-bar" aria-hidden="true"><i style={{ width: `${Math.max(5, session.callCount / max * 100)}%` }}/></span>
-                  <span className="tool-session-open">打开 <UiIcon name="arrow-right" size={13}/></span>
-                </button>
-              })}
-              {!selectedTool.sessions.length && <div className="tool-drill-note">当前范围没有可定位的会话记录。</div>}
-            </div>
-            {selectedTool.sessions.length > 3 && <div className="tool-drill-note">前 3 个会话 · 共 {selectedTool.sessions.length} 个。完整调用过程、输入输出和 Evidence（证据）在任务复盘中查看。</div>}
-          </section>
-          {selectedTool.errorCount > 0 && <div className="tool-drill-note">当前聚合接口只提供失败次数和相关会话，不包含可安全展示的逐次错误载荷；错误示例请进入上方相关会话查看，避免用推测内容冒充事实。</div>}
+    {selectedTool && <Drawer
+      open
+      className="tool-drill-overlay"
+      title={<span className="tool-drawer-title"><ToolKindIcon kind={toolVisualKind(selectedTool.nativeToolName)}/>{selectedTool.nativeToolName}</span>}
+      description={sourceLabels(selectedTool.sourceIds)}
+      onClose={() => setSelectedToolKey(null)}
+    >
+      <div className="tool-drill-body">
+        <div className="tool-drill-grid">
+          <div className="tool-drill-stat"><b>{selectedTool.callCount}</b><span>调用次数</span></div>
+          <div className="tool-drill-stat"><b>{selectedTool.sessionCount}</b><span>涉及会话</span></div>
+          <div className="tool-drill-stat"><b>{rate(selectedTool.successCount, selectedTool.errorCount)}</b><span>成功率</span></div>
+          <div className="tool-drill-stat"><b className={selectedTool.errorCount ? 'cell-danger' : ''}>{selectedTool.errorCount}</b><span>失败次数</span></div>
+          <div className="tool-drill-stat"><b>{duration(selectedTool.totalDurationMs)}</b><span>总耗时</span></div>
+          <div className="tool-drill-stat"><b>{duration(selectedTool.averageDurationMs)}</b><span>平均耗时</span></div>
         </div>
-      </aside>
-    </>}
+        <section className="tool-session-section">
+          <div className="table-section-head"><div><h2>会话分布 · Top 3</h2><p>按该工具在会话中的调用次数排序 · 点击直接进入任务复盘</p></div></div>
+          <div className="tool-session-list">
+            {selectedTool.sessions.slice(0, 3).map(session => {
+              const summary = sessionSummaries.get(session.logicalSessionId)
+              const label = summary?.title ?? summary?.preview ?? `会话 ${shortSessionId(session.logicalSessionId)}`
+              const max = selectedTool.sessions[0]?.callCount ?? 1
+              return <button key={session.logicalSessionId} className="tool-session-link" onClick={() => openReviewSession(session.logicalSessionId)} title={label}>
+                <span className="tool-session-copy"><b>{label}</b><small>{sourceLabels(summary?.sourceIds ?? selectedTool.sourceIds)} · {session.callCount} 次调用</small></span>
+                <span className="metric-bar" aria-hidden="true"><i style={{ width: `${Math.max(5, session.callCount / max * 100)}%` }}/></span>
+                <span className="tool-session-open">打开 <UiIcon name="arrow-right" size={13}/></span>
+              </button>
+            })}
+            {!selectedTool.sessions.length && <div className="tool-drill-note">当前范围没有可定位的会话记录。</div>}
+          </div>
+          {selectedTool.sessions.length > 3 && <div className="tool-drill-note">前 3 个会话 · 共 {selectedTool.sessions.length} 个。完整调用过程、输入输出和 Evidence（证据）在任务复盘中查看。</div>}
+        </section>
+        {selectedTool.errorCount > 0 && <div className="tool-drill-note">当前聚合接口只提供失败次数和相关会话，不包含可安全展示的逐次错误载荷；错误示例请进入上方相关会话查看，避免用推测内容冒充事实。</div>}
+      </div>
+    </Drawer>}
   </main>
 }
