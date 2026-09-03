@@ -30,9 +30,8 @@ test('Pi Live composer uses Lexical Markdown shortcuts and keeps Markdown as the
 })
 
 test('Pi Live 初始化期间仍允许输入并可暂存首条任务', () => {
-  assert.match(page, /state\?\.status === 'initializing'/)
-  assert.match(page, /取消启动/)
-  assert.match(page, /state\?\.status === 'failed'/)
+  assert.match(page, /const runtimeInitializing = !state \|\| state\.status === 'initializing'/)
+  assert.match(page, /<PiStartupDisclosure/)
   assert.match(page, /piLiveApi\.retry\(runtimeId\)/)
   assert.match(page, /const canStageStartup = runtimeInitializing && !startupQueued/)
   assert.match(page, /disabled=\{runtimeTerminating\}/)

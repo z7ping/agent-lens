@@ -1,0 +1,83 @@
+@reference "../styles.css";
+
+.pi-startup-disclosure {
+  margin: 8px 0 14px;
+  overflow: hidden;
+  border: 1px solid var(--al-line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--al-soft-2) 62%, var(--al-surface));
+}
+.pi-startup-disclosure > summary {
+  display: grid;
+  min-height: 50px;
+  grid-template-columns: 10px minmax(0, 1fr) auto 18px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.pi-startup-disclosure > summary::-webkit-details-marker { display: none; }
+.pi-startup-summary-state {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--al-muted-2);
+}
+.pi-startup-disclosure.is-initializing .pi-startup-summary-state { background: var(--al-accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--al-accent) 12%, transparent); }
+.pi-startup-disclosure.is-ready .pi-startup-summary-state { background: var(--al-success); }
+.pi-startup-disclosure.is-failed .pi-startup-summary-state { background: var(--al-danger); }
+.pi-startup-summary-copy { display: grid; min-width: 0; gap: 2px; }
+.pi-startup-summary-copy b { color: var(--al-ink); font-size: 13px; font-weight: 680; }
+.pi-startup-summary-copy small { overflow: hidden; color: var(--al-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.pi-startup-summary-time { color: var(--al-muted); font: 12px/1 var(--font-mono); }
+.pi-startup-chevron { color: var(--al-muted); font-size: 15px; text-align: center; transition: transform .15s ease; }
+.pi-startup-disclosure[open] .pi-startup-chevron { transform: rotate(180deg); }
+.pi-startup-body { padding: 0 12px 11px 32px; }
+.pi-startup-steps { display: grid; gap: 1px; border-top: 1px solid var(--al-line); padding-top: 7px; }
+.pi-startup-step {
+  display: grid;
+  min-height: 40px;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+.pi-startup-step-dot {
+  display: grid;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  border: 1px solid var(--al-line-strong);
+  border-radius: 50%;
+  color: transparent;
+  font-size: 10px;
+  font-weight: 800;
+}
+.pi-startup-step.is-done .pi-startup-step-dot { border-color: color-mix(in srgb, var(--al-success) 65%, var(--al-line)); background: var(--al-success); color: var(--al-on-accent); }
+.pi-startup-step.is-active .pi-startup-step-dot { border-color: var(--al-accent); background: color-mix(in srgb, var(--al-accent) 18%, transparent); box-shadow: inset 0 0 0 4px var(--al-surface); }
+.pi-startup-step.is-failed .pi-startup-step-dot { border-color: var(--al-danger); background: var(--al-danger); color: var(--al-on-accent); }
+.pi-startup-step-copy { display: grid; min-width: 0; gap: 1px; }
+.pi-startup-step-copy b { color: var(--al-ink-2); font-size: 12.5px; font-weight: 620; }
+.pi-startup-step-copy small { color: var(--al-muted); font-size: 11.5px; }
+.pi-startup-step.is-pending .pi-startup-step-copy,
+.pi-startup-step.is-pending .pi-startup-step-time { opacity: .48; }
+.pi-startup-step-time { color: var(--al-muted); font: 11.5px/1 var(--font-mono); white-space: nowrap; }
+.pi-startup-step.is-active .pi-startup-step-time { color: var(--al-accent); }
+.pi-startup-step.is-failed .pi-startup-step-time { color: var(--al-danger); }
+.pi-startup-meta { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.pi-startup-meta span { padding: 2px 6px; border-radius: 999px; background: var(--al-soft); color: var(--al-muted); font-size: 11px; }
+.pi-startup-failure { display: grid; gap: 3px; margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: var(--al-danger-soft); color: var(--al-danger); font-size: 12px; }
+.pi-startup-failure b { font-weight: 700; }
+.pi-startup-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 7px; }
+.pi-startup-actions:empty { display: none; }
+.pi-startup-actions button { height: 28px; padding: 0 9px; border: 1px solid var(--al-line); border-radius: 7px; background: var(--al-surface); color: var(--al-muted); font-size: 12px; }
+.pi-startup-actions button.primary { border-color: color-mix(in srgb, var(--al-accent) 32%, var(--al-line)); color: var(--al-accent); }
+.pi-startup-actions button:disabled { opacity: .5; }
+
+@media (max-width: 767.98px) {
+  .pi-startup-body { padding-left: 12px; }
+  .pi-startup-summary-copy small { display: none; }
+  .pi-startup-step-copy small { display: none; }
+}

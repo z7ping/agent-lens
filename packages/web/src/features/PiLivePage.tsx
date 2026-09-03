@@ -5,6 +5,7 @@ import { piLiveApi, type PiLiveTransportDiagnostics } from '../client/pi-live'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import { ComposerPillSelect } from '../components/ComposerPillSelect'
 import { PiMarkdownComposer, type PiMarkdownComposerHandle } from '../components/PiMarkdownComposer'
+import { PiStartupDisclosure } from '../components/PiStartupDisclosure'
 import { projectPiLiveHistory, type PiLiveHistoryItem } from './pi-live-history'
 import { PiLiveHistoryTaskRound, PiLiveRunningTaskRound } from './PiLiveTaskRound'
 import { piLiveTaskRoundEstimate, projectPiLiveRunningRound, projectPiLiveTaskDetail, projectPiLiveTaskRounds } from './pi-live-task-projection'
@@ -40,6 +41,21 @@ function record(value: unknown): Record<string, unknown> {
 
 function stringValue(value: unknown): string {
   return typeof value === 'string' ? value : ''
+}
+
+
+const PI_INITIALIZATION_STAGE_VALUES = new Set(['starting_worker', 'loading_sdk', 'loading_resources', 'creating_session', 'binding_extensions', 'ready'])
+
+function parseInitializationTimings(value: unknown): NonNullable<PiLiveStateDto['initializationTimings']> | undefined {
+  if (!Array.isArray(value)) return undefined
+  const parsed = value.flatMap(item => {
+    const row = record(item)
+    const stage = stringValue(row.stage)
+    const durationMs = typeof row.durationMs === 'number' ? row.durationMs : Number.NaN
+    if (!PI_INITIALIZATION_STAGE_VALUES.has(stage) || !Number.isFinite(durationMs)) return []
+    return [{ stage: stage as NonNullable<PiLiveStateDto['initializationStage']>, durationMs: Math.max(0, durationMs) }]
+  })
+  return parsed.length ? parsed : undefined
 }
 
 function mergeSnapshot(previous: PiLiveSnapshotDto | null, next: PiLiveSnapshotDto): PiLiveSnapshotDto {
@@ -412,11 +428,15 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             const initializationStage = stringValue(event.stage)
             const initializationMessage = stringValue(event.message)
             const runtimeError = stringValue(event.error)
+            const initializationElapsedMs = typeof event.elapsedMs === 'number' ? event.elapsedMs : typeof event.initializationElapsedMs === 'number' ? event.initializationElapsedMs : undefined
+            const initializationTimings = parseInitializationTimings(event.timings ?? event.initializationTimings)
             statePatch = {
               ...statePatch,
               ...(status ? { status: status as PiLiveStateDto['status'] } : {}),
               ...(initializationStage ? { initializationStage: initializationStage as PiLiveStateDto['initializationStage'] } : {}),
               ...(initializationMessage ? { initializationMessage } : {}),
+              ...(initializationElapsedMs !== undefined ? { initializationElapsedMs } : {}),
+              ...(initializationTimings ? { initializationTimings } : {}),
               ...(runtimeError ? { error: runtimeError } : {}),
             }
             if (runtimeError) setError(runtimeError)
@@ -726,8 +746,13 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             isStreaming={state?.isStreaming ?? false}
             pendingMessageCount={state?.pendingMessageCount ?? 0}
           />}
-          {!history.length && !streamText && !thinkingText && !tools.length && state?.status === 'initializing' && <div className="pi-live-initializing" role="status"><span className="pi-live-stage-dot"/><b>{state.initializationMessage || '正在初始化 Pi Runtime'}</b><small>可以直接在下方输入任务；Pi 就绪后会自动发送已经排队的首条任务。</small><button onClick={() => void terminate()} disabled={busy}>取消启动</button></div>}
-          {!history.length && !streamText && !thinkingText && !tools.length && state?.status === 'failed' && <div className="pi-live-initializing pi-live-initializing-failed" role="alert"><b>Pi Runtime 初始化失败</b><small>{state.error || error || 'Worker 未能完成初始化。'} 输入草稿会继续保留。</small><div><button onClick={() => void retry()} disabled={busy}>重试</button><button onClick={() => void terminate()} disabled={busy}>结束 Runtime</button></div></div>}
+          {state && ['initializing', 'ready', 'failed'].includes(state.status) && <PiStartupDisclosure
+            state={state}
+            busy={busy}
+            fallbackError={error}
+            onRetry={() => void retry()}
+            onTerminate={() => void terminate()}
+          />}
           {!history.length && !streamText && !thinkingText && !tools.length && runtimeReady && <div className="pi-live-empty">这个 Pi Runtime 还没有消息。可以直接在下方输入开始任务。</div>}
           {error && <div className="pi-live-error pi-live-reader-error" role="alert">{error}</div>}
         </div>

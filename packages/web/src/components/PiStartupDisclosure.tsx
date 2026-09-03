@@ -1,0 +1,120 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { PiLiveInitializationStageDto, PiLiveStateDto } from '@agent-lens/protocol'
+
+const STAGES: Array<{ stage: PiLiveInitializationStageDto; label: string; detail: string }> = [
+  { stage: 'starting_worker', label: '启动 Runtime Worker', detail: '创建独立 Pi 运行进程' },
+  { stage: 'loading_sdk', label: '加载 Pi SDK', detail: '定位并加载当前安装的官方 SDK' },
+  { stage: 'loading_resources', label: '加载资源', detail: '读取配置、扩展与上下文' },
+  { stage: 'creating_session', label: '创建 Pi Session', detail: '建立 Agent Session 与运行时服务' },
+  { stage: 'binding_extensions', label: '绑定扩展界面', detail: '连接 Extension UI 与交互通道' },
+]
+
+function formatDuration(value: number | undefined): string {
+  if (value === undefined || !Number.isFinite(value)) return '—'
+  const ms = Math.max(0, value)
+  if (ms < 1) return '<1ms'
+  if (ms < 1_000) return `${Math.round(ms)}ms`
+  return `${(ms / 1_000).toFixed(ms < 10_000 ? 1 : 0)}s`
+}
+
+function runtimeModeLabel(state: PiLiveStateDto): string {
+  if (state.runtimeMode === 'session_runtime') return 'Session Runtime'
+  if (state.runtimeMode === 'compatibility') return '兼容模式'
+  return ''
+}
+
+export function PiStartupDisclosure({
+  state,
+  busy,
+  fallbackError,
+  onRetry,
+  onTerminate,
+}: {
+  state: PiLiveStateDto
+  busy: boolean
+  fallbackError?: string
+  onRetry(): void
+  onTerminate(): void
+}) {
+  const [expanded, setExpanded] = useState(state.status !== 'ready')
+  const [clock, setClock] = useState(() => Date.now())
+  const baseline = useRef({
+    stage: state.initializationStage,
+    elapsed: state.initializationElapsedMs ?? 0,
+    at: Date.now(),
+  })
+
+  useEffect(() => {
+    baseline.current = {
+      stage: state.initializationStage,
+      elapsed: state.initializationElapsedMs ?? baseline.current.elapsed,
+      at: Date.now(),
+    }
+    setClock(Date.now())
+  }, [state.initializationElapsedMs, state.initializationStage, state.runtimeSessionId])
+
+  useEffect(() => {
+    if (state.status === 'ready') setExpanded(false)
+    else if (state.status === 'failed') setExpanded(true)
+  }, [state.status])
+
+  useEffect(() => {
+    if (state.status !== 'initializing') return
+    const timer = window.setInterval(() => setClock(Date.now()), 250)
+    return () => window.clearInterval(timer)
+  }, [state.status])
+
+  const timings = useMemo(() => new Map((state.initializationTimings ?? []).map(item => [item.stage, item.durationMs])), [state.initializationTimings])
+  const completedDuration = useMemo(() => [...timings.values()].reduce((sum, value) => sum + Math.max(0, value), 0), [timings])
+  const elapsed = state.status === 'initializing'
+    ? Math.max(state.initializationElapsedMs ?? 0, baseline.current.elapsed + Math.max(0, clock - baseline.current.at))
+    : state.initializationElapsedMs ?? completedDuration
+  const currentDuration = Math.max(0, elapsed - completedDuration)
+  const title = state.status === 'failed' ? 'Pi 启动失败' : state.status === 'ready' ? 'Pi 已就绪' : '正在准备 Pi'
+  const currentStage = state.initializationStage
+  const sdkVersion = state.sdkVersion || state.capabilities?.sdkVersion
+  const mode = runtimeModeLabel(state)
+
+  return <details
+    className={`pi-startup-disclosure is-${state.status}`}
+    open={expanded}
+    onToggle={event => setExpanded(event.currentTarget.open)}
+  >
+    <summary>
+      <span className="pi-startup-summary-state" aria-hidden="true"/>
+      <span className="pi-startup-summary-copy"><b>{title}</b><small>{state.initializationMessage || '准备 Pi Runtime'}</small></span>
+      <span className="pi-startup-summary-time">{formatDuration(elapsed)}</span>
+      <span className="pi-startup-chevron" aria-hidden="true">⌄</span>
+    </summary>
+    <div className="pi-startup-body">
+      <div className="pi-startup-steps" aria-label="Pi Runtime 启动步骤">
+        {STAGES.map(item => {
+          const recorded = timings.get(item.stage)
+          const failed = state.status === 'failed' && currentStage === item.stage
+          const active = state.status === 'initializing' && currentStage === item.stage
+          const done = recorded !== undefined || state.status === 'ready'
+          const status = failed ? 'failed' : active ? 'active' : done ? 'done' : 'pending'
+          const duration = recorded ?? ((active || failed) ? currentDuration : undefined)
+          return <div key={item.stage} className={`pi-startup-step is-${status}`}>
+            <span className="pi-startup-step-dot" aria-hidden="true">{done ? '✓' : failed ? '!' : ''}</span>
+            <span className="pi-startup-step-copy"><b>{item.label}</b><small>{item.detail}</small></span>
+            <span className="pi-startup-step-time">{status === 'pending' ? '等待' : active ? `${formatDuration(duration)}+` : formatDuration(duration)}</span>
+          </div>
+        })}
+      </div>
+      {(sdkVersion || mode || state.processId) && <div className="pi-startup-meta">
+        {sdkVersion && <span>Pi SDK {sdkVersion}</span>}
+        {mode && <span>{mode}</span>}
+        {state.processId && <span>Worker PID {state.processId}</span>}
+      </div>}
+      {state.status === 'failed' && <div className="pi-startup-failure" role="alert">
+        <b>卡在：{STAGES.find(item => item.stage === currentStage)?.label || state.initializationMessage || '初始化'}</b>
+        <span>{state.error || fallbackError || 'Pi Runtime 未能完成初始化。'}</span>
+      </div>}
+      <div className="pi-startup-actions">
+        {state.status === 'initializing' && <button onClick={event => { event.preventDefault(); onTerminate() }} disabled={busy}>取消启动</button>}
+        {state.status === 'failed' && <><button className="primary" onClick={event => { event.preventDefault(); onRetry() }} disabled={busy}>重试</button><button onClick={event => { event.preventDefault(); onTerminate() }} disabled={busy}>结束 Runtime</button></>}
+      </div>
+    </div>
+  </details>
+}
