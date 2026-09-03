@@ -3,7 +3,9 @@ import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import type {
   PiLiveControls,
+  PiLiveInitializationTiming,
   PiLiveQueueState,
+  PiLiveRuntimeCapabilities,
   PiLiveRuntimeState,
   PiLiveSnapshot,
   PiLiveStartInput,
@@ -32,8 +34,17 @@ interface PendingRequest {
   reject(error: Error): void
 }
 
+interface WorkerHandshakeDiagnostics {
+  capabilities?: PiLiveRuntimeCapabilities | undefined
+  initializationElapsedMs?: number | undefined
+  initializationTimings?: PiLiveInitializationTiming[] | undefined
+}
+
 export interface PiRuntimeHandle {
   readonly processId?: number | undefined
+  readonly capabilities?: PiLiveRuntimeCapabilities | undefined
+  readonly initializationElapsedMs?: number | undefined
+  readonly initializationTimings?: PiLiveInitializationTiming[] | undefined
   state(): Promise<PiLiveRuntimeState>
   snapshot(since?: string): Promise<PiLiveSnapshot>
   controls(): Promise<PiLiveControls>
@@ -67,11 +78,18 @@ function sanitizeDiagnostic(value: string): string {
     .trim()
 }
 
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
 class WorkerPiRuntimeHandle implements PiRuntimeHandle {
   private readonly pending = new Map<string, PendingRequest>()
   private requestSequence = 0
   private exited = false
   private stderrTail = ''
+  private handshakeCapabilities?: PiLiveRuntimeCapabilities | undefined
+  private handshakeElapsedMs?: number | undefined
+  private handshakeTimings?: PiLiveInitializationTiming[] | undefined
 
   constructor(
     private readonly child: ChildProcess,
@@ -94,23 +112,67 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
   }
 
   get processId(): number | undefined { return this.child.pid }
+  get capabilities(): PiLiveRuntimeCapabilities | undefined { return this.handshakeCapabilities }
+  get initializationElapsedMs(): number | undefined { return this.handshakeElapsedMs }
+  get initializationTimings(): PiLiveInitializationTiming[] | undefined { return this.handshakeTimings }
+
+  applyHandshake(value: unknown): void {
+    const payload = record(value)
+    const capabilityValue = record(payload.capabilities)
+    if (typeof capabilityValue.protocolVersion === 'number') {
+      this.handshakeCapabilities = capabilityValue as unknown as PiLiveRuntimeCapabilities
+    }
+    if (typeof payload.initializationElapsedMs === 'number' && Number.isFinite(payload.initializationElapsedMs)) {
+      this.handshakeElapsedMs = Math.max(0, payload.initializationElapsedMs)
+    }
+    if (Array.isArray(payload.initializationTimings)) {
+      this.handshakeTimings = payload.initializationTimings.flatMap(item => {
+        const timing = record(item)
+        return typeof timing.stage === 'string' && typeof timing.durationMs === 'number' && Number.isFinite(timing.durationMs)
+          ? [{ stage: timing.stage, durationMs: Math.max(0, timing.durationMs) } as PiLiveInitializationTiming]
+          : []
+      })
+    }
+  }
 
   private receive(value: unknown): void {
     if (!value || typeof value !== 'object') return
     const envelope = value as WorkerEnvelope & { ok?: boolean; error?: string }
-    if (envelope.version !== PROTOCOL_VERSION || envelope.runtimeSessionId !== this.runtimeSessionId) return
+    if (envelope.version !== PROTOCOL_VERSION) {
+      this.protocolViolation(`Pi Runtime Worker protocol version mismatch: ${String(envelope.version)}`)
+      return
+    }
+    if (envelope.runtimeSessionId !== this.runtimeSessionId) {
+      this.protocolViolation(`Pi Runtime Worker runtime id mismatch: ${envelope.runtimeSessionId}`)
+      return
+    }
     if (envelope.type === 'event') {
       if (envelope.payload && typeof envelope.payload === 'object') {
         this.onEvent(envelope.payload as Record<string, unknown>)
       }
       return
     }
-    if (envelope.type !== 'response' || !envelope.requestId) return
+    if (envelope.type !== 'response' || !envelope.requestId) {
+      this.protocolViolation(`Unexpected Pi Runtime Worker envelope: ${envelope.type || 'missing type'}`)
+      return
+    }
+    // initialize is correlated by WorkerPiRuntimeHost.start() before the handle is returned.
+    if (envelope.requestId === 'initialize') return
     const pending = this.pending.get(envelope.requestId)
-    if (!pending) return
+    if (!pending) {
+      this.protocolViolation(`Unknown or duplicate Pi Runtime Worker response id: ${envelope.requestId}`)
+      return
+    }
     this.pending.delete(envelope.requestId)
     if (envelope.ok) pending.resolve(envelope.payload)
     else pending.reject(new Error(envelope.error || 'Pi Runtime Worker request failed'))
+  }
+
+  private protocolViolation(message: string): void {
+    const error = new Error(message)
+    this.fail(error)
+    if (this.child.connected) this.child.disconnect()
+    if (this.child.exitCode === null && this.child.signalCode === null) this.child.kill()
   }
 
   private fail(error: Error): void {
@@ -136,8 +198,9 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
       this.pending.set(requestId, { resolve: value => resolve(value as T), reject })
       this.child.send(envelope, error => {
         if (!error) return
+        const pending = this.pending.get(requestId)
         this.pending.delete(requestId)
-        reject(error)
+        pending?.reject(error)
       })
     })
   }
@@ -157,8 +220,12 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
   async terminate(): Promise<void> {
     if (this.exited) return
     await this.request<void>('terminate').catch(() => undefined)
+    if (this.exited) return
     this.exited = true
-    this.child.disconnect()
+    const error = new Error('Pi Runtime Worker terminated')
+    for (const pending of this.pending.values()) pending.reject(error)
+    this.pending.clear()
+    if (this.child.connected) this.child.disconnect()
     if (this.child.exitCode === null && this.child.signalCode === null) this.child.kill()
   }
 }
@@ -185,7 +252,7 @@ export class WorkerPiRuntimeHost implements PiRuntimeHost {
     const handle = new WorkerPiRuntimeHandle(child, runtimeSessionId, onEvent, onExit)
     const abort = () => { if (child.exitCode === null && child.signalCode === null) child.kill() }
     signal.addEventListener('abort', abort, { once: true })
-    await new Promise<void>((resolve, reject) => {
+    const handshake = await new Promise<unknown>((resolve, reject) => {
       const requestId = 'initialize'
       const cleanup = () => {
         child.off('message', listener)
@@ -206,7 +273,7 @@ export class WorkerPiRuntimeHost implements PiRuntimeHost {
         const envelope = value as WorkerEnvelope & { ok?: boolean; error?: string }
         if (envelope.version !== PROTOCOL_VERSION || envelope.runtimeSessionId !== runtimeSessionId || envelope.requestId !== requestId) return
         cleanup()
-        if (envelope.ok) resolve()
+        if (envelope.ok) resolve(envelope.payload)
         else reject(new Error(envelope.error || 'Pi Runtime Worker initialization failed'))
       }
       child.on('message', listener)
@@ -227,6 +294,7 @@ export class WorkerPiRuntimeHost implements PiRuntimeHost {
       await handle.terminate()
       throw error
     })
+    handle.applyHandshake(handshake)
     signal.removeEventListener('abort', abort)
     return handle
   }
