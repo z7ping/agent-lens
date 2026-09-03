@@ -1039,7 +1039,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
                 className="pi-live-thinking-picker"
                 menuWidth={168}
                 disabled={!runtimeReady || controlBusy || controls.thinkingLevels.length === 0}
-                options={controls.thinkingLevels.map(level => ({ value: level, label: thinkingLevelLabel(level) }))
+                options={controls.thinkingLevels.map(level => ({ value: level, label: thinkingLevelLabel(level) }))}
                 onChange={level => void changeThinkingLevel(level)}
               />
             </div>
