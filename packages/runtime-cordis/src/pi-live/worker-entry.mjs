@@ -6,6 +6,8 @@ import { serialize } from 'node:v8'
 
 const VERSION = 1
 const MAX_MESSAGE_BYTES = 1024 * 1024
+const MAX_OUTBOUND_MESSAGES = 256
+const MAX_SEEN_REQUEST_IDS = 512
 let runtimeSessionId = ''
 let runtime
 let session
@@ -14,25 +16,145 @@ let extensionUi
 let terminating = false
 let sdkVersion
 let runtimeMode = 'compatibility'
+let capabilities
+let initializationStartedAt = 0
+let currentInitializationStage
+let currentStageStartedAt = 0
+let initializationTimings = []
+const seenRequestIds = new Set()
+const outboundQueue = []
+let outboundSending = false
+let exitAfterFlush = false
 
 function record(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
 }
 
-function send(type, payload, requestId, ok = true, error) {
-  if (!process.send || !runtimeSessionId) return
-  const envelope = { version: VERSION, runtimeSessionId, type, ...(requestId ? { requestId } : {}), ...(payload !== undefined ? { payload } : {}), ...(type === 'response' ? { ok } : {}), ...(error ? { error } : {}) }
-  let size
-  try { size = serialize(envelope).byteLength } catch { return }
-  if (size > MAX_MESSAGE_BYTES) {
-    if (type === 'response' && requestId) process.send({ version: VERSION, runtimeSessionId, type, requestId, ok: false, error: 'Pi Runtime Worker response exceeded size limit' })
+function diagnostic(value) {
+  return String(value ?? '')
+    .replace(/(?:api[_-]?key|token|authorization|password)\s*[:=]\s*\S+/gi, '[redacted]')
+    .replace(/[\r\n]+/g, ' ')
+    .slice(0, 1_000)
+}
+
+function isCoalescibleEnvelope(envelope) {
+  if (envelope.type !== 'event') return false
+  const payload = record(envelope.payload)
+  if (payload.type !== 'message_update') return false
+  const update = record(payload.assistantMessageEvent)
+  return (update.type === 'text_delta' || update.type === 'thinking_delta') && typeof update.delta === 'string'
+}
+
+function mergeCoalescibleEnvelope(target, incoming) {
+  if (!isCoalescibleEnvelope(target) || !isCoalescibleEnvelope(incoming)) return false
+  const targetPayload = record(target.payload)
+  const incomingPayload = record(incoming.payload)
+  const targetUpdate = record(targetPayload.assistantMessageEvent)
+  const incomingUpdate = record(incomingPayload.assistantMessageEvent)
+  if (targetUpdate.type !== incomingUpdate.type || targetUpdate.contentIndex !== incomingUpdate.contentIndex) return false
+  target.payload = {
+    ...targetPayload,
+    ...incomingPayload,
+    assistantMessageEvent: {
+      ...targetUpdate,
+      ...incomingUpdate,
+      delta: `${targetUpdate.delta ?? ''}${incomingUpdate.delta ?? ''}`,
+    },
+  }
+  return true
+}
+
+function failTransport(error) {
+  process.stderr.write(`[pi-worker-ipc] ${diagnostic(error instanceof Error ? error.message : error)}\n`)
+  void dispose().finally(() => process.exit(1))
+}
+
+function flushOutbound() {
+  if (outboundSending) return
+  if (!process.send || !process.connected) {
+    if (outboundQueue.length) failTransport(new Error('Pi Runtime Worker IPC disconnected with pending outbound messages'))
     return
   }
-  process.send(envelope)
+  const envelope = outboundQueue.shift()
+  if (!envelope) {
+    if (exitAfterFlush) process.exit(0)
+    return
+  }
+  outboundSending = true
+  process.send(envelope, error => {
+    outboundSending = false
+    if (error) {
+      failTransport(error)
+      return
+    }
+    flushOutbound()
+  })
+}
+
+function enqueueEnvelope(envelope) {
+  if (isCoalescibleEnvelope(envelope)) {
+    const tail = outboundQueue.at(-1)
+    if (tail && mergeCoalescibleEnvelope(tail, envelope)) return true
+  }
+  if (outboundQueue.length >= MAX_OUTBOUND_MESSAGES) {
+    const disposableIndex = outboundQueue.findIndex(isCoalescibleEnvelope)
+    if (disposableIndex >= 0) outboundQueue.splice(disposableIndex, 1)
+    else {
+      failTransport(new Error('Pi Runtime Worker critical IPC queue overflow'))
+      return false
+    }
+  }
+  outboundQueue.push(envelope)
+  flushOutbound()
+  return true
+}
+
+function send(type, payload, requestId, ok = true, error) {
+  if (!process.send || !runtimeSessionId) return false
+  const envelope = { version: VERSION, runtimeSessionId, type, ...(requestId ? { requestId } : {}), ...(payload !== undefined ? { payload } : {}), ...(type === 'response' ? { ok } : {}), ...(error ? { error: diagnostic(error) } : {}) }
+  let size
+  try { size = serialize(envelope).byteLength } catch { return false }
+  if (size > MAX_MESSAGE_BYTES) {
+    if (type === 'response' && requestId) return enqueueEnvelope({ version: VERSION, runtimeSessionId, type, requestId, ok: false, error: 'Pi Runtime Worker response exceeded size limit' })
+    return false
+  }
+  return enqueueEnvelope(envelope)
+}
+
+function formatElapsed(elapsedMs) {
+  return elapsedMs < 1_000 ? `${elapsedMs}ms` : `${(elapsedMs / 1_000).toFixed(1)}s`
 }
 
 function progress(stage, message) {
-  send('event', { type: 'runtime_initialization', stage, message })
+  const now = Date.now()
+  if (!initializationStartedAt) {
+    initializationStartedAt = now
+    currentInitializationStage = stage
+    currentStageStartedAt = now
+  } else if (currentInitializationStage && currentInitializationStage !== stage) {
+    initializationTimings = [...initializationTimings, { stage: currentInitializationStage, durationMs: Math.max(0, now - currentStageStartedAt) }]
+    currentInitializationStage = stage
+    currentStageStartedAt = now
+  }
+  const elapsedMs = Math.max(0, now - initializationStartedAt)
+  send('event', {
+    type: 'runtime_initialization',
+    stage,
+    message: stage === 'ready' ? `${message} · ${formatElapsed(elapsedMs)}` : message,
+    elapsedMs,
+    timings: initializationTimings,
+  })
+}
+
+function rememberRequestId(requestId) {
+  if (seenRequestIds.has(requestId)) return false
+  seenRequestIds.add(requestId)
+  while (seenRequestIds.size > MAX_SEEN_REQUEST_IDS) {
+    const oldest = seenRequestIds.values().next().value
+    if (oldest === undefined) break
+    seenRequestIds.delete(oldest)
+  }
+  return true
 }
 
 async function exists(path) {
@@ -142,12 +264,40 @@ function createExtensionUi() {
       setTheme: () => ({ success: false, error: 'Theme switching is not supported by AgentLens' }),
       getToolsExpanded: () => false, setToolsExpanded: () => {},
     },
-    respond(id, response) { const item = pending.get(id); if (item) item.finish(response) },
+    respond(id, response) {
+      const item = pending.get(id)
+      if (!item) return false
+      item.finish(response)
+      return true
+    },
     dispose() { for (const item of pending.values()) item.cancel(); pending.clear() },
   }
 }
 
+function runtimeCapabilities(hasSessionRuntime) {
+  return {
+    protocolVersion: VERSION,
+    ...(sdkVersion ? { sdkVersion } : {}),
+    sessionRuntime: hasSessionRuntime,
+    modelSwitching: typeof session?.setModel === 'function',
+    thinkingLevelControl: typeof session?.setThinkingLevel === 'function',
+    extensionUi: typeof session?.bindExtensions === 'function',
+  }
+}
+
+function handshakeDiagnostics() {
+  return {
+    ...(capabilities ? { capabilities } : {}),
+    initializationElapsedMs: initializationStartedAt ? Math.max(0, Date.now() - initializationStartedAt) : 0,
+    initializationTimings,
+  }
+}
+
 async function initialize(input) {
+  initializationStartedAt = Date.now()
+  currentInitializationStage = undefined
+  currentStageStartedAt = initializationStartedAt
+  initializationTimings = []
   progress('loading_sdk', '正在加载 Pi SDK')
   const executable = await findExecutable(input.executable)
   const discovery = await sdkEntryFor(executable)
@@ -175,6 +325,8 @@ async function initialize(input) {
     session = created.session
     runtime = { dispose: async () => session.dispose() }
   }
+  capabilities = runtimeCapabilities(hasSessionRuntime)
+  send('event', { type: 'runtime_capabilities', capabilities })
   extensionUi = createExtensionUi()
   unsubscribe = session.subscribe(event => send('event', wireEvent(event)))
   progress('binding_extensions', '正在绑定扩展界面')
@@ -182,7 +334,7 @@ async function initialize(input) {
     uiContext: extensionUi.context,
     mode: 'rpc',
     abortHandler: () => { void session.abort() },
-    onError: value => send('event', { type: 'extension_error', error: String(record(value).error ?? 'Unknown extension error') }),
+    onError: value => send('event', { type: 'extension_error', error: diagnostic(record(value).error ?? 'Unknown extension error') }),
   })
   if (input.name) session.setSessionName(input.name)
   if (input.provider || input.model) await selectModel(input.provider, input.model)
@@ -191,7 +343,8 @@ async function initialize(input) {
 
 function state() {
   return {
-    runtimeSessionId, status: 'ready', initializationStage: 'ready', initializationMessage: 'Pi Runtime 已就绪',
+    runtimeSessionId, status: 'ready', initializationStage: 'ready', initializationMessage: `Pi Runtime 已就绪 · ${formatElapsed(handshakeDiagnostics().initializationElapsedMs)}`,
+    ...handshakeDiagnostics(),
     sdkVersion, runtimeMode, nativeSessionId: session.sessionId, ...(session.sessionFile ? { sessionFile: session.sessionFile } : {}),
     ...(session.sessionName ? { sessionName: session.sessionName } : {}), ...(session.model ? { model: session.model } : {}),
     thinkingLevel: session.thinkingLevel, isStreaming: session.isStreaming, isCompacting: session.isCompacting,
@@ -236,7 +389,10 @@ async function command(name, value = {}) {
   if (name === 'followUp') return await session.followUp(value.message)
   if (name === 'clearQueue') return session.clearQueue()
   if (name === 'abort') { const queue = value.restoreQueue === false ? { steering: [], followUp: [] } : session.clearQueue(); await session.abort(); return queue }
-  if (name === 'extensionResponse') { extensionUi.respond(value.requestId, value.response); return }
+  if (name === 'extensionResponse') {
+    if (!extensionUi?.respond(value.requestId, value.response)) throw new Error(`Unknown or already settled Pi Extension request id: ${value.requestId ?? 'missing'}`)
+    return
+  }
   if (name === 'terminate') { await dispose(); return }
   throw new Error(`Unknown Pi Runtime Worker command: ${name}`)
 }
@@ -255,9 +411,21 @@ process.on('message', async value => {
   if (envelope.version !== VERSION || typeof envelope.runtimeSessionId !== 'string') return
   if (!runtimeSessionId) runtimeSessionId = envelope.runtimeSessionId
   if (envelope.runtimeSessionId !== runtimeSessionId) return
+  if ((envelope.type === 'initialize' || envelope.type === 'request') && typeof envelope.requestId === 'string') {
+    if (!rememberRequestId(envelope.requestId)) {
+      send('response', undefined, envelope.requestId, false, `Duplicate Pi Runtime Worker request id: ${envelope.requestId}`)
+      return
+    }
+  }
   if (envelope.type === 'initialize') {
-    try { await initialize(record(envelope.payload)); send('response', undefined, envelope.requestId, true) }
-    catch (error) { send('response', undefined, envelope.requestId, false, error instanceof Error ? error.message : String(error)); await dispose().catch(() => undefined) }
+    if (typeof envelope.requestId !== 'string') return
+    try {
+      await initialize(record(envelope.payload))
+      send('response', handshakeDiagnostics(), envelope.requestId, true)
+    } catch (error) {
+      send('response', undefined, envelope.requestId, false, error instanceof Error ? error.message : String(error))
+      await dispose().catch(() => undefined)
+    }
     return
   }
   if (envelope.type !== 'request' || typeof envelope.requestId !== 'string') return
@@ -265,7 +433,10 @@ process.on('message', async value => {
   try {
     const result = await command(payload.command, record(payload.value))
     send('response', result, envelope.requestId, true)
-    if (payload.command === 'terminate') setImmediate(() => process.exit(0))
+    if (payload.command === 'terminate') {
+      exitAfterFlush = true
+      flushOutbound()
+    }
   } catch (error) {
     send('response', undefined, envelope.requestId, false, error instanceof Error ? error.message : String(error))
   }
