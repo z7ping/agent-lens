@@ -15,7 +15,7 @@ import type {
 
 export const REDACTED = '[已脱敏]'
 export const NOT_CAPTURED = '[未采集：隐私策略关闭]'
-export const DEFAULT_ENABLED_SOURCES = ['claude-code'] as const
+export const DEFAULT_ENABLED_SOURCES = ['claude-code', 'codex', 'pi', 'hermes', 'opencode'] as const
 
 const DEFAULT_MAX_TEXT: Record<CapturePolicyScope, number> = {
   prompt: 20_000,
