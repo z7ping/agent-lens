@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import ReactMarkdown from 'react-markdown'
+import { MarkdownContent } from '../components/MarkdownContent'
 import { toolVisualKind, toolVisualLabel } from '../components/ToolKindIcon'
 import { TaskEvent } from './TaskEvent'
 import { TaskMessage } from './TaskMessage'
@@ -116,7 +116,7 @@ function historyEntries(items: PiLiveHistoryItem[]): HistoryRenderEntry[] {
 }
 
 function ThinkingMarkdown({ text }: { text: string }) {
-  return <div className="markdown"><ReactMarkdown>{text}</ReactMarkdown></div>
+  return <MarkdownContent text={text}/>
 }
 
 function HistoryThinking({ item }: { item: Extract<PiLiveHistoryItem, { kind: 'thinking' }> }) {
@@ -226,7 +226,7 @@ export function PiLiveRunningTaskRound({
     />}
     {streamText && <div className="pi-live-stream-response">
       <div className="pi-live-message-meta"><b>Pi</b><span>{isStreaming ? '生成中' : '输出'}</span></div>
-      <div className="markdown"><ReactMarkdown>{streamText}</ReactMarkdown></div>
+      <MarkdownContent text={streamText}/>
       {isStreaming && <span className="pi-live-caret" aria-hidden="true"/>}
     </div>}
   </TaskRound>

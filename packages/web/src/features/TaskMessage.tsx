@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import ReactMarkdown from 'react-markdown'
+import { MarkdownContent } from '../components/MarkdownContent'
 
 export type TaskMessageRole = 'user' | 'assistant'
 
@@ -75,7 +75,7 @@ export function TaskMessage({
           className={`markdown-surface ${canCollapse && !expanded ? 'is-collapsed' : ''}`}
           style={canCollapse && !expanded && collapsedHeight ? { maxHeight: `${collapsedHeight}px` } : undefined}
         >
-          {view === 'rendered' ? <div className="markdown"><ReactMarkdown>{text}</ReactMarkdown></div> : <pre className="markdown-source">{text}</pre>}
+          {view === 'rendered' ? <MarkdownContent text={text}/> : <pre className="markdown-source">{text}</pre>}
           {canCollapse && !expanded && <span className="markdown-fade" aria-hidden="true"/>}
         </div>
         {(canCollapse || !user) && <div className="markdown-message-actions">
