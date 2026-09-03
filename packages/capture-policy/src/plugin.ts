@@ -58,6 +58,8 @@ const applyCapturePolicy: Plugin.Function<CapturePolicyPluginConfig> = (
  *
  * Source authorization is resolved from the AgentLens user configuration.
  * AGENT_LENS_ENABLED_SOURCES remains a compatibility override with higher
- * priority; without either setting, the privacy baseline enables Claude Code only.
+ * priority. Without explicit user or environment configuration, all current
+ * first-party local agent sources are enabled; content still follows the
+ * independent prompt/tool/config privacy modes and can be narrowed manually.
  */
 export const capturePolicyPlugin = applyCapturePolicy
