@@ -84,7 +84,8 @@
   position: relative;
   min-height: 0;
   overflow: auto;
-  overflow-anchor: auto;
+  scrollbar-gutter: stable;
+  overflow-anchor: none;
   background: var(--al-surface);
 }
 .pi-live-document { width: 100%; max-width: 1040px; margin: 0 auto; padding: 8px 38px 8px 30px; }
@@ -104,6 +105,7 @@
   font-size: 14px;
   line-height: 1.62;
 }
+.pi-live-stream-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .pi-live-message-meta { display: flex; align-items: center; gap: 7px; margin-bottom: 4px; color: var(--al-muted); font-size: 12px; }
 .pi-live-message-meta b { color: var(--al-accent); font-weight: 720; }
 .pi-live-message-meta time { margin-left: auto; }
