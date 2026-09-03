@@ -4,6 +4,20 @@ export type PiLiveStreamingBehaviorDto = 'steer' | 'followUp'
 export type PiLiveRuntimeStatusDto = 'initializing' | 'ready' | 'failed' | 'terminating' | 'terminated'
 export type PiLiveInitializationStageDto = 'starting_worker' | 'loading_sdk' | 'loading_resources' | 'creating_session' | 'binding_extensions' | 'ready'
 
+export interface PiLiveInitializationTimingDto {
+  stage: PiLiveInitializationStageDto
+  durationMs: number
+}
+
+export interface PiLiveRuntimeCapabilitiesDto {
+  protocolVersion: number
+  sdkVersion?: string | undefined
+  sessionRuntime: boolean
+  modelSwitching: boolean
+  thinkingLevelControl: boolean
+  extensionUi: boolean
+}
+
 export interface PiLiveAvailabilityDto {
   available: boolean
   executable?: string | undefined
@@ -46,6 +60,9 @@ export interface PiLiveStateDto {
   status: PiLiveRuntimeStatusDto
   initializationStage?: PiLiveInitializationStageDto | undefined
   initializationMessage?: string | undefined
+  initializationElapsedMs?: number | undefined
+  initializationTimings?: PiLiveInitializationTimingDto[] | undefined
+  capabilities?: PiLiveRuntimeCapabilitiesDto | undefined
   error?: string | undefined
   sdkVersion?: string | undefined
   runtimeMode?: 'session_runtime' | 'compatibility' | undefined
