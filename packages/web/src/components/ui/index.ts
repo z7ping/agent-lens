@@ -17,3 +17,6 @@ export type {
   IconButtonProps,
   StatusTone,
 } from './Primitives'
+
+export { SelectMenu } from '../SelectMenu'
+export type { SelectMenuOption, SelectMenuVariant } from '../SelectMenu'
