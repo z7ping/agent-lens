@@ -5,7 +5,7 @@ import { piLiveApi, type PiLiveTransportDiagnostics } from '../client/pi-live'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import { ComposerPillSelect } from '../components/ComposerPillSelect'
 import { PiMarkdownComposer, type PiMarkdownComposerHandle } from '../components/PiMarkdownComposer'
-import { PiStartupDisclosure } from '../components/PiStartupDisclosure'
+import { PiStartupDisclosure, piStartupSummary } from '../components/PiStartupDisclosure'
 import { projectPiLiveHistory, type PiLiveHistoryItem } from './pi-live-history'
 import { PiLiveHistoryTaskRound, PiLiveRunningTaskRound } from './PiLiveTaskRound'
 import { piLiveTaskRoundEstimate, projectPiLiveRunningRound, projectPiLiveTaskDetail, projectPiLiveTaskRounds } from './pi-live-task-projection'
@@ -32,6 +32,19 @@ interface ExtensionRequest {
 }
 
 const PI_LIVE_EAGER_CHUNKS = 2
+const PI_LIVE_STARTUP_BACKGROUND = {
+  model: {
+    id: 'background:startup',
+    label: '后台活动',
+    state: 'settled' as const,
+    toolCount: 0,
+    errorCount: 0,
+    durationMs: 0,
+    highLatency: false,
+  },
+  items: [] as PiLiveHistoryItem[],
+  continuation: false,
+}
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -42,7 +55,6 @@ function record(value: unknown): Record<string, unknown> {
 function stringValue(value: unknown): string {
   return typeof value === 'string' ? value : ''
 }
-
 
 const PI_INITIALIZATION_STAGE_VALUES = new Set(['starting_worker', 'loading_sdk', 'loading_resources', 'creating_session', 'binding_extensions', 'ready'])
 
@@ -529,7 +541,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     }, reason => {
       setStartupQueued(current => current === text ? '' : current)
       setInput(current => current || text)
-        setError(reason instanceof Error ? reason.message : String(reason))
+      setError(reason instanceof Error ? reason.message : String(reason))
     }).finally(() => {
       startupSendingRef.current = false
     })
@@ -549,7 +561,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       if (!canStageStartup) return
       setStartupQueued(text)
       setInput('')
-        inputRef.current?.focus({ preventScroll: true })
+      inputRef.current?.focus({ preventScroll: true })
       return
     }
     if (startupQueued) return
@@ -559,7 +571,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       const selectedMode = forcedMode ?? mode
       await piLiveApi.prompt(runtimeId, text, state?.isStreaming ? selectedMode : undefined)
       setInput('')
-        inputRef.current?.focus({ preventScroll: true })
+      inputRef.current?.focus({ preventScroll: true })
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
@@ -720,6 +732,18 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const inputPlaceholder = runtimeInitializing
     ? 'Pi 正在初始化，可以先输入任务…'
     : state?.isStreaming ? '继续指导 Pi…' : '输入任务…'
+  const startupState = state && ['initializing', 'ready', 'failed'].includes(state.status) ? state : null
+  const startupMeta = startupState ? piStartupSummary(startupState) : null
+  const hasBackgroundRound = historyRounds.some(projection => projection.model.id === 'background:0')
+  const startupSummaryMeta = startupMeta ? <span>{startupMeta.label} · {startupMeta.duration}</span> : undefined
+  const startupContent = startupState ? <PiStartupDisclosure
+    state={startupState}
+    busy={busy}
+    fallbackError={error}
+    onRetry={() => void retry()}
+    onTerminate={() => void terminate()}
+    embedded
+  /> : undefined
 
   return <main className={`pi-live-page ${embedded ? 'pi-live-page-embedded' : ''}`}>
     {!embedded && <aside className="pi-live-sessions">
@@ -752,15 +776,29 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
 
       <div ref={readerRef} className="pi-live-reader" onScroll={onReaderScroll}>
         <div className="pi-live-document">
-          {historyRounds.map((projection, index) => <VirtualRoundMount
-            key={projection.model.id}
-            rootSelector=".pi-live-reader"
-            flowRoot
-            eager={index >= historyRounds.length - PI_LIVE_EAGER_CHUNKS}
-            estimate={piLiveTaskRoundEstimate(projection)}
-          >
-            <PiLiveHistoryTaskRound projection={projection} showAllEvents={showAllEvents}/>
-          </VirtualRoundMount>)}
+          {startupState && !hasBackgroundRound && <PiLiveHistoryTaskRound
+            projection={PI_LIVE_STARTUP_BACKGROUND}
+            showAllEvents={showAllEvents}
+            beforeContent={startupContent}
+            summaryMeta={startupSummaryMeta}
+          />}
+          {historyRounds.map((projection, index) => {
+            const carriesStartup = Boolean(startupState && projection.model.id === 'background:0')
+            return <VirtualRoundMount
+              key={projection.model.id}
+              rootSelector=".pi-live-reader"
+              flowRoot
+              eager={carriesStartup || index >= historyRounds.length - PI_LIVE_EAGER_CHUNKS}
+              estimate={piLiveTaskRoundEstimate(projection) + (carriesStartup ? 230 : 0)}
+            >
+              <PiLiveHistoryTaskRound
+                projection={projection}
+                showAllEvents={showAllEvents}
+                beforeContent={carriesStartup ? startupContent : undefined}
+                summaryMeta={carriesStartup ? startupSummaryMeta : undefined}
+              />
+            </VirtualRoundMount>
+          })}
 
           {runningRound && <PiLiveRunningTaskRound
             model={runningRound}
@@ -769,13 +807,6 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             streamText={streamText}
             isStreaming={state?.isStreaming ?? false}
             pendingMessageCount={state?.pendingMessageCount ?? 0}
-          />}
-          {state && ['initializing', 'ready', 'failed'].includes(state.status) && <PiStartupDisclosure
-            state={state}
-            busy={busy}
-            fallbackError={error}
-            onRetry={() => void retry()}
-            onTerminate={() => void terminate()}
           />}
           {!history.length && !streamText && !thinkingText && !tools.length && runtimeReady && <div className="pi-live-empty">这个 Pi Runtime 还没有消息。可以直接在下方输入开始任务。</div>}
           {error && <div className="pi-live-error pi-live-reader-error" role="alert">{error}</div>}
