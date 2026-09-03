@@ -113,7 +113,7 @@ function OverlayFrame({
     >
       <div
         ref={panelRef}
-        className="ui-overlay-panel"
+        className={`ui-overlay-panel ui-${kind}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
