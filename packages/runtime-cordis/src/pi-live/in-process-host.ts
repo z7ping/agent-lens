@@ -27,9 +27,9 @@ class InProcessHandle implements PiRuntimeHandle {
   async steer(message: string): Promise<void> { await this.session.steer(message) }
   async followUp(message: string): Promise<void> { await this.session.followUp(message) }
   async clearQueue(): Promise<PiLiveQueueState> { return this.session.clearQueue() }
-  async abort(restoreQueue = true): Promise<PiLiveQueueState> { const queue = restoreQueue ? this.session.clearQueue() : { steering: [], followUp: [] }; await this.session.abort(); return queue }
+  async abort(restoreQueue = true): Promise<PiLiveQueueState> { const queue = restoreQueue ? this.session.clearQueue() : { steering: [], followUp: [] }; this.session.abortBash?.(); await this.session.abort(); return queue }
   async respondToExtension(requestId: string, response: unknown): Promise<void> { this.extensionUi.respond(requestId, response) }
-  async terminate(): Promise<void> { this.unsubscribe(); this.extensionUi.dispose(); if (this.session.isStreaming) await this.session.abort().catch(() => undefined); this.session.dispose() }
+  async terminate(): Promise<void> { this.unsubscribe(); this.extensionUi.dispose(); if (this.session.isStreaming) { this.session.abortBash?.(); await this.session.abort().catch(() => undefined) } this.session.dispose() }
 }
 
 /** 仅用于 SDK 契约测试；生产默认使用独立 Worker。 */

@@ -53,6 +53,7 @@ export interface PiSdkSession {
   steer(message: Parameters<AgentSession['steer']>[0]): ReturnType<AgentSession['steer']>
   followUp(message: Parameters<AgentSession['followUp']>[0]): ReturnType<AgentSession['followUp']>
   clearQueue(): ReturnType<AgentSession['clearQueue']>
+  abortBash?: AgentSession['abortBash']
   abort(): ReturnType<AgentSession['abort']>
   waitForIdle(): ReturnType<AgentSession['waitForIdle']>
   dispose(): ReturnType<AgentSession['dispose']>

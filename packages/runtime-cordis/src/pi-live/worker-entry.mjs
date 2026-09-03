@@ -493,7 +493,7 @@ async function command(name, value = {}) {
   if (name === 'steer') return await session.steer(value.message)
   if (name === 'followUp') return await session.followUp(value.message)
   if (name === 'clearQueue') return session.clearQueue()
-  if (name === 'abort') { const queue = value.restoreQueue === false ? { steering: [], followUp: [] } : session.clearQueue(); await session.abort(); return queue }
+  if (name === 'abort') { const queue = value.restoreQueue === false ? { steering: [], followUp: [] } : session.clearQueue(); session.abortBash?.(); await session.abort(); return queue }
   if (name === 'extensionResponse') {
     if (!extensionUi || !extensionUi.respond(value.requestId, value.response)) throw new Error(`Unknown or already settled Pi Extension request id: ${value.requestId ?? 'missing'}`)
     return
@@ -507,7 +507,7 @@ async function dispose() {
   terminating = true
   unsubscribe()
   extensionUi?.dispose()
-  if (session?.isStreaming) await session.abort().catch(() => undefined)
+  if (session?.isStreaming) { session.abortBash?.(); await session.abort().catch(() => undefined) }
   await runtime?.dispose()
 }
 

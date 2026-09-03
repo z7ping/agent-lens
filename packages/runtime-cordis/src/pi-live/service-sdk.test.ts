@@ -83,6 +83,7 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
     steer: async message => { calls.push(`steer:${message}`) },
     followUp: async message => { calls.push(`follow:${message}`) },
     clearQueue: () => ({ steering: ['queued-steer'], followUp: ['queued-follow'] }),
+    abortBash: () => { calls.push('abort-bash') },
     abort: async () => { streaming = false; releasePrompt?.(); calls.push('abort') },
     waitForIdle: async () => {},
     dispose: () => { releasePrompt?.(); calls.push('dispose') },
@@ -184,6 +185,7 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
   assert.equal(await confirmedPromise, true)
 
   const queue = await service.abort(state.runtimeSessionId)
+  assert.ok(calls.includes('abort-bash'))
   assert.deepEqual(queue, { steering: ['queued-steer'], followUp: ['queued-follow'] })
 
   unsubscribe()
