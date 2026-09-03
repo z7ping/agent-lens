@@ -11,6 +11,7 @@ import { agentLabel } from '../components/AgentScope'
 import { BackupDataRootTree } from '../components/BackupDirectoryTree'
 import { CompactPageHeading } from '../components/CompactPageHeading'
 import { PageLoadingState } from '../components/StateViews'
+import { Button, Dialog, Drawer, Toolbar } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
 
 const RECOMMENDED_KINDS: BackupAssetKindDto[] = ['config', 'skill', 'mcp', 'plugin', 'extension', 'hook', 'rule']
@@ -185,17 +186,6 @@ export function BackupPage() {
     const timer = window.setTimeout(() => setSuccess(''), 7000)
     return () => window.clearTimeout(timer)
   }, [success])
-  useEffect(() => {
-    if (!preview && !confirmation && !detailSourceId) return
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || busy) return
-      if (confirmation) setConfirmation(null)
-      else if (preview) setPreview(null)
-      else setDetailSourceId(null)
-    }
-    window.addEventListener('keydown', closeOnEscape)
-    return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [preview, confirmation, detailSourceId, busy])
 
   const sources = overview?.sources ?? []
   const snapshots = overview?.snapshots ?? []
@@ -380,7 +370,7 @@ export function BackupPage() {
   }
 
   return <>
-    <div className="workspace-toolbar">
+    <Toolbar className="workspace-toolbar" aria-label="资产备份工具栏">
       <div className="agent-scope">
         <button className={`scope-chip ${allDetectedSelected ? 'scope-chip-active' : ''}`} onClick={() => setSelectedSources(sources.filter(source => source.detected).map(source => source.sourceId))}>全部智能体</button>
         {sources.map(source => <button key={source.sourceId} disabled={!source.detected} className={`scope-chip ${selectedSources.includes(source.sourceId) ? 'scope-chip-active' : ''}`} onClick={() => toggleSource(source.sourceId)}>
@@ -389,16 +379,16 @@ export function BackupPage() {
       </div>
       <span className="toolbar-divider"/>
       <span className="backup-toolbar-note">默认排除凭据、令牌与私钥</span>
-      <button className="btn toolbar-end" disabled={Boolean(busy)} onClick={() => importInput.current?.click()}>{busy === 'import' ? '正在导入…' : <><UiIcon name="upload" size={14}/>{' 导入备份包'}</>}</button>
-      <button className="btn primary" disabled={Boolean(busy) || !selectedSources.length || !selectedKinds.length} onClick={requestCreateSnapshot}>{busy === 'create' ? '正在创建…' : <><UiIcon name="plus" size={14}/>{' 创建快照'}</>}</button>
+      <Button className="toolbar-end" loading={busy === 'import'} disabled={Boolean(busy)} onClick={() => importInput.current?.click()}><UiIcon name="upload" size={14}/>导入备份包</Button>
+      <Button variant="primary" loading={busy === 'create'} disabled={Boolean(busy) || !selectedSources.length || !selectedKinds.length} onClick={requestCreateSnapshot}><UiIcon name="plus" size={14}/>创建快照</Button>
       <input ref={importInput} className="backup-file-input" type="file" accept=".agentlens-backup,application/vnd.agentlens.backup" onChange={selectImportBackup}/>
-    </div>
+    </Toolbar>
 
     <div className="page-scroll">
       <main className="future-content backup-page">
         <div className="future-heading">
           <CompactPageHeading title="资产备份" description="看清智能体真正有哪些数据、在哪里、占多少，再决定哪些值得进入本地不可变快照。恢复仍必须先经过差异预演。"><span className="prototype-flag live">本地真实数据</span></CompactPageHeading>
-          <button className="btn" disabled={refreshing || Boolean(busy)} onClick={() => void refresh(true)}>{refreshing ? <><UiIcon name="refresh" size={14}/>{' 后台更新中'}</> : <><UiIcon name="refresh" size={14}/>{' 刷新扫描'}</>}</button>
+          <Button loading={refreshing} disabled={refreshing || Boolean(busy)} onClick={() => void refresh(true)}><UiIcon name="refresh" size={14}/>刷新扫描</Button>
         </div>
 
         {error && <div className="backup-error" role="alert"><b>操作失败</b><span>{error}</span><button className="link-btn" onClick={() => setError('')}>关闭</button></div>}
@@ -433,7 +423,7 @@ export function BackupPage() {
             </section>
 
             <section className="future-card">
-              <div className="future-card-head"><div><h2>最近快照</h2><p>快照创建后清单不可变；相同内容只在本地内容库保存一份。</p></div><button className="btn small" disabled={Boolean(busy) || !snapshots.length} onClick={() => void verifyAll()}>{busy === 'verify-all' ? '校验中…' : '验证全部'}</button></div>
+              <div className="future-card-head"><div><h2>最近快照</h2><p>快照创建后清单不可变；相同内容只在本地内容库保存一份。</p></div><Button size="small" loading={busy === 'verify-all'} disabled={Boolean(busy) || !snapshots.length} onClick={() => void verifyAll()}>验证全部</Button></div>
               {snapshots.length ? <div className="future-table-scroll"><table className="snapshot-table"><thead><tr><th>快照</th><th>来源</th><th>大小</th><th>完整性</th><th>排除</th><th>哈希</th><th className="align-right">操作</th></tr></thead><tbody>
                 {snapshots.map(snapshot => {
                   const checked = verification[snapshot.id]
@@ -453,7 +443,7 @@ export function BackupPage() {
             <section className="future-card">
               <div className="future-card-head"><div><h2>导入与恢复</h2><p>导入只进入本地备份仓；正式写回前必须先计算当前机器上的差异。</p></div><span className="badge info">恢复预演优先</span></div>
               <div className="future-card-body"><div className="restore-grid">
-                <article className="restore-card"><h3>导入备份包</h3><p>先验证清单与文件哈希；同名快照只有内容完全一致才允许复用。选择后还会再次确认。</p><div className="restore-flow"><span className="restore-node">选择文件</span><span className="restore-arrow"><UiIcon name="arrow-right" size={13}/></span><span className="restore-node">二次确认</span><span className="restore-arrow"><UiIcon name="arrow-right" size={13}/></span><span className="restore-node">完整性校验</span></div><div className="restore-action"><button className="btn" disabled={Boolean(busy)} onClick={() => importInput.current?.click()}>选择备份包</button></div></article>
+                <article className="restore-card"><h3>导入备份包</h3><p>先验证清单与文件哈希；同名快照只有内容完全一致才允许复用。选择后还会再次确认。</p><div className="restore-flow"><span className="restore-node">选择文件</span><span className="restore-arrow"><UiIcon name="arrow-right" size={13}/></span><span className="restore-node">二次确认</span><span className="restore-arrow"><UiIcon name="arrow-right" size={13}/></span><span className="restore-node">完整性校验</span></div><div className="restore-action"><Button disabled={Boolean(busy)} onClick={() => importInput.current?.click()}>选择备份包</Button></div></article>
                 <article className="restore-card"><h3>恢复到原智能体</h3><p>目标路径由当前机器重新检测的配置/数据根目录和快照相对路径计算，不信任导入包里的绝对路径。</p><div className="restore-flow"><span className="restore-node">选择快照</span><span className="restore-arrow"><UiIcon name="arrow-right" size={13}/></span><span className="restore-node">对比当前</span><span className="restore-arrow"><UiIcon name="arrow-right" size={13}/></span><span className="restore-node">人工确认</span></div><div className="restore-action"><span className="badge warn">当前版本只开放预演，不直接写回</span></div></article>
               </div></div>
             </section>
@@ -473,7 +463,7 @@ export function BackupPage() {
 
                 <div className="safety-note"><span><UiIcon name="check" size={15}/></span><div><b>敏感信息保护强制开启</b><span>没有关闭入口。发现凭据文件名、私钥、常见令牌或配置中的秘密赋值时，整文件排除并只记录原因。</span></div></div>
                 <div className="builder-summary"><span>预计涉及约 <b>{estimatedSelected.toLocaleString()}</b> 条分类文件引用</span><span>{hasSelectedBytes ? `分类大小约 ${formatBytes(estimatedSelectedBytes)}` : '大小将在新版扫描索引补齐后显示'} · 重叠路径创建时自动去重</span></div>
-                <button className="btn primary snapshot-create-button" disabled={Boolean(busy) || !selectedSources.length || !selectedKinds.length} onClick={requestCreateSnapshot}>{busy === 'create' ? '正在创建快照…' : '创建并校验快照'}</button>
+                <Button variant="primary" className="snapshot-create-button" loading={busy === 'create'} disabled={Boolean(busy) || !selectedSources.length || !selectedKinds.length} onClick={requestCreateSnapshot}>创建并校验快照</Button>
               </div>
             </section>
 
@@ -487,8 +477,15 @@ export function BackupPage() {
       </main>
     </div>
 
-    {detailSource && <><div className="scrim show" onClick={() => setDetailSourceId(null)}/><aside className="drawer show" aria-label={`${sourceLabel(detailSource.sourceId, detailSource.displayName)} 数据详情`}>
-      <div className="dw-head"><div><div className="dw-eyebrow">数据详情</div><div className="dw-title"><span className={`src-dot lg ${sourceDotClass(detailSource.sourceId)}`}/>{sourceLabel(detailSource.sourceId, detailSource.displayName)}</div><div className="dw-sub">帮助判断这些数据是什么、在哪里，以及是否值得进入快照。</div></div><button className="icon-button" onClick={() => setDetailSourceId(null)} aria-label="关闭"><UiIcon name="close" size={15}/></button></div>
+    {detailSource && <Drawer
+      open
+      className="backup-data-drawer"
+      title={<span className="backup-overlay-title"><span className={`src-dot lg ${sourceDotClass(detailSource.sourceId)}`}/>{sourceLabel(detailSource.sourceId, detailSource.displayName)}</span>}
+      description="帮助判断这些数据是什么、在哪里，以及是否值得进入快照。"
+      onClose={() => { if (!busy) setDetailSourceId(null) }}
+      closeDisabled={Boolean(busy)}
+      closeOnBackdrop={!busy}
+    >
       <div className="future-drawer-body">
         <section className="drawer-section"><h3>数据规模</h3><div className="preview-summary"><span><b>{detailSource.logicalAssetCount === undefined ? '—' : detailSource.logicalAssetCount.toLocaleString()}</b> 逻辑资产</span><span><b>{detailSource.fileCount.toLocaleString()}</b> 物理文件</span><span><b>{formatOptionalBytes(detailSource.totalBytes)}</b> 数据大小</span><span><b>{detailSource.excludedCount.toLocaleString()}</b> 扫描排除</span></div>{detailSource.logicalAssetCount === undefined && <div className="future-note">当前索引还不能可靠计算全部逻辑资产数量，因此不会把文件数冒充为 MCP、技能或会话数量。</div>}</section>
 
@@ -504,35 +501,50 @@ export function BackupPage() {
 
         <section className="drawer-section"><div className="future-note"><b>这里只帮助你决定备什么。</b> AgentLens 1.0 不删除、不移动、不清理 {sourceLabel(detailSource.sourceId, detailSource.displayName)} 的原始数据。</div></section>
       </div>
-    </aside></>}
+    </Drawer>}
 
-    {preview && <><div className="scrim show" onClick={() => setPreview(null)}/><aside className="drawer show" aria-label="恢复预演">
-      <div className="dw-head"><div><div className="dw-eyebrow">恢复预演</div><div className="dw-title">快照差异 <span className={`badge ${preview.blocked ? 'warn' : 'ok'}`}>{preview.blocked ? `${preview.blocked} 项阻止` : '路径检查通过'}</span></div><div className="dw-sub">{preview.snapshotId}</div></div><button className="icon-button" onClick={() => setPreview(null)} aria-label="关闭"><UiIcon name="close" size={15}/></button></div>
+    {preview && <Drawer
+      open
+      className="backup-preview-drawer"
+      title={<span className="backup-overlay-title">快照差异 <span className={`badge ${preview.blocked ? 'warn' : 'ok'}`}>{preview.blocked ? `${preview.blocked} 项阻止` : '路径检查通过'}</span></span>}
+      description={preview.snapshotId}
+      onClose={() => { if (!busy) setPreview(null) }}
+      closeDisabled={Boolean(busy)}
+      closeOnBackdrop={!busy}
+    >
       <div className="future-drawer-body">
         <section className="drawer-section"><h3>差异摘要</h3><div className="preview-summary"><span><b>{preview.unchanged}</b> 一致</span><span><b>{preview.missing}</b> 缺失</span><span><b>{preview.modified}</b> 已修改</span><span><b>{preview.blocked}</b> 阻止</span></div></section>
         <section className="drawer-section"><h3>文件</h3><div className="drawer-file-list">{preview.items.map(item => <div key={`${item.sourceId}:${item.archivePath}`} className="drawer-file preview-file"><span className={`badge ${item.status === 'blocked' ? 'err' : item.status === 'modified' ? 'warn' : item.status === 'unchanged' ? 'ok' : 'info'}`}>{previewStatusLabel(item.status)}</span><code>{item.targetPath ?? item.archivePath}</code>{item.reason && <small>{item.reason}</small>}</div>)}</div></section>
         <section className="drawer-section"><div className="future-note"><b>这里只做预演。</b> 当前版本没有直接写回接口，因此查看差异不会修改任何已检测智能体的文件。</div></section>
       </div>
-    </aside></>}
+    </Drawer>}
 
-    {confirmation && <><div className="scrim show backup-confirm-scrim" onClick={() => !busy && setConfirmation(null)}/><section className="backup-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="backup-confirm-title">
-      <div className="backup-confirm-icon"><UiIcon name="alert" size={20}/></div>
-      <div className="backup-confirm-copy">
-        <span className="eyebrow">关键操作确认</span>
-        <h2 id="backup-confirm-title">{confirmation.type === 'create' ? '确认创建本地快照？' : '确认导入这个备份包？'}</h2>
-        {confirmation.type === 'create'
-          ? <p>将把当前选中的 {selectedSources.length} 个智能体、{selectedKinds.length} 类资产写入本地备份仓。敏感信息保护保持强制开启；已有相同内容会直接复用。</p>
-          : <p>文件 <b>{confirmation.file.name}</b>（{formatBytes(confirmation.file.size)}）将经过完整性校验后写入本地备份仓，不会覆盖当前智能体文件。</p>}
-        <div className="backup-confirm-facts">
+    {confirmation && <Dialog
+      open
+      className="backup-confirm-overlay"
+      title={confirmation.type === 'create' ? '确认创建本地快照？' : '确认导入这个备份包？'}
+      description="关键操作确认"
+      onClose={() => { if (!busy) setConfirmation(null) }}
+      closeDisabled={Boolean(busy)}
+      closeOnBackdrop={!busy}
+      footer={<>
+        <Button disabled={Boolean(busy)} onClick={() => setConfirmation(null)}>取消</Button>
+        <Button variant="primary" disabled={Boolean(busy)} onClick={() => void confirmCriticalOperation()}>{confirmation.type === 'create' ? '确认创建' : '确认导入'}</Button>
+      </>}
+    >
+      <div className="backup-confirm-content">
+        <div className="backup-confirm-icon"><UiIcon name="alert" size={20}/></div>
+        <div className="backup-confirm-copy">
           {confirmation.type === 'create'
-            ? <><span>约 {estimatedSelected.toLocaleString()} 条分类文件引用</span><span>{hasSelectedBytes ? `分类大小约 ${formatBytes(estimatedSelectedBytes)}` : `索引 ${indexTime ? formatTime(indexTime) : '准备中'}`}</span></>
-            : <><span>只导入到本地备份仓</span><span>恢复仍需单独预演</span></>}
-        </div>
-        <div className="backup-confirm-actions">
-          <button className="btn" disabled={Boolean(busy)} onClick={() => setConfirmation(null)}>取消</button>
-          <button className="btn primary" disabled={Boolean(busy)} onClick={() => void confirmCriticalOperation()}>{confirmation.type === 'create' ? '确认创建' : '确认导入'}</button>
+            ? <p>将把当前选中的 {selectedSources.length} 个智能体、{selectedKinds.length} 类资产写入本地备份仓。敏感信息保护保持强制开启；已有相同内容会直接复用。</p>
+            : <p>文件 <b>{confirmation.file.name}</b>（{formatBytes(confirmation.file.size)}）将经过完整性校验后写入本地备份仓，不会覆盖当前智能体文件。</p>}
+          <div className="backup-confirm-facts">
+            {confirmation.type === 'create'
+              ? <><span>约 {estimatedSelected.toLocaleString()} 条分类文件引用</span><span>{hasSelectedBytes ? `分类大小约 ${formatBytes(estimatedSelectedBytes)}` : `索引 ${indexTime ? formatTime(indexTime) : '准备中'}`}</span></>
+              : <><span>只导入到本地备份仓</span><span>恢复仍需单独预演</span></>}
+          </div>
         </div>
       </div>
-    </section></>}
+    </Dialog>}
   </>
 }
