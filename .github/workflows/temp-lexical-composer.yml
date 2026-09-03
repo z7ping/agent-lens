@@ -21,7 +21,9 @@ jobs:
       - name: Install Lexical
         run: npm install --workspace @agent-lens/web --save-exact --no-audit --no-fund lexical@0.49.0 @lexical/react@0.49.0 @lexical/markdown@0.49.0 @lexical/rich-text@0.49.0 @lexical/list@0.49.0 @lexical/code@0.49.0 @lexical/link@0.49.0
       - name: Apply migration
-        run: python .github/scripts/migrate_lexical_composer.py
+        run: |
+          python .github/scripts/migrate_lexical_composer.py
+          python .github/scripts/migrate_lexical_contract.py
       - name: Verify presentation
         run: npm run check:web-presentation
       - name: Typecheck Web
@@ -32,9 +34,9 @@ jobs:
         run: npm run build:web
       - name: Commit verified migration
         run: |
-          git rm .github/workflows/temp-lexical-composer.yml .github/scripts/migrate_lexical_composer.py
+          git rm .github/workflows/temp-lexical-composer.yml .github/scripts/migrate_lexical_composer.py .github/scripts/migrate_lexical_contract.py
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add packages/web/package.json package-lock.json packages/web/src/features/PiLivePage.tsx packages/web/src/features/pi-live-composer-contract.test.ts packages/web/src/components/markdown-content.css packages/web/src/components/PiMarkdownComposer.tsx packages/web/src/components/pi-markdown-composer.css
+          git add packages/web/package.json package-lock.json packages/web/src/features/PiLivePage.tsx packages/web/src/features/pi-live-composer-contract.test.ts packages/web/src/components/markdown-content.css packages/web/src/components/PiMarkdownComposer.tsx packages/web/src/components/pi-markdown-composer.css scripts/check-pi-live-contract.mjs
           git commit -m "feat(web): Pi 输入区支持 Markdown 即时渲染"
           git push origin HEAD:feature/1.0.0-alpha.3-task-surface
