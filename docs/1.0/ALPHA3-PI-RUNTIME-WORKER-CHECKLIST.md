@@ -17,6 +17,7 @@
 
 - [x] 使用 `PI_TIMING=1` 记录当前 Pi 0.83.0 与兼容目标版本的冷启动、热启动数据
 - [ ] 记录 `createAgentSession`、Resource Loader、每个 Extension、`bindExtensions` 的分段耗时
+  - 已进入代码：Worker 启动、SDK、Resource Loader 整体、Session 创建、Extension 绑定和总耗时；逐 Extension 名称/耗时仍缺少稳定 SDK 可观察点，暂不勾选。
 - [x] 固化 Start / State / Snapshot / SSE 的 initializing、ready、failed、terminating 状态契约
 - [x] 固化 Worker 请求、响应、事件、错误和版本协商协议
 - [x] 明确提示词、凭据、Extension UI 与 stderr 的脱敏和大小上限
@@ -51,11 +52,11 @@
 ## 阶段 3：本地 IPC 与背压
 
 - [x] IPC 消息包含协议版本、Runtime ID、Request ID 与消息类型
-- [ ] 请求与响应严格关联，未知或重复 ID 明确拒绝
+- [x] 请求与响应严格关联，未知或重复 ID 明确拒绝
 - [x] 消息大小、stderr tail 和待处理请求均有上限
-- [ ] Streaming delta 可以合并，但 Tool、Queue、Extension UI 和终态事件不得丢失
-- [ ] Daemon 消费变慢时不产生无界内存积压
-- [ ] Worker 启动握手与能力矩阵可诊断
+- [x] Streaming delta 可以合并，但 Tool、Queue、Extension UI 和终态事件不得丢失
+- [x] Daemon 消费变慢时不产生无界内存积压
+- [x] Worker 启动握手与能力矩阵可诊断
 - [x] IPC 断开后 Runtime 进入准确失败状态，不伪装为 settled
 
 ## 阶段 4：Web 初始化体验
@@ -100,8 +101,10 @@
 
 - 已完成 `initializing -> ready / failed` 状态机、初始化取消、显式重试和 HTTP / SSE / Web 契约贯通。
 - 已完成每 Runtime 独立 Node Worker；支持 Services API 时使用官方 AgentSessionRuntime 创建链，旧版兼容链也只在 Worker 内运行。
+- IPC 已增加严格响应关联、重复 Request ID 拒绝、有界 Worker 出站队列和 Streaming delta 合并；关键 Tool / Queue / Extension UI / 终态消息不以静默丢弃作为背压策略，关键队列无法继续承载时显式失败 Runtime。
+- Worker 初始化握手现在返回协议/SDK/Session Runtime/模型切换/Thinking/Extension UI 能力矩阵；State / Snapshot 可携带初始化总耗时和阶段耗时。
+- 初始化耗时已拆到 Worker/SDK/Resource Loader 整体/Session/Extension Binding 等阶段。逐 Extension 名称与耗时仍未获得稳定、安全的 SDK 观测点，因此没有伪造扩展级诊断。
 - 本机源码服务 Start 返回约 9–13ms；打包 Daemon 稳态 HTTP Start 为 81ms。Daemon 首轮历史同步并发期间测得 1687ms，因此 P95 门禁暂不勾选。
-- 本机 Pi 0.83.0 的独立 Worker 冷态约 7.5s 到 ready，阶段依次经过 SDK、资源、Session 与扩展绑定；Terminate 后已确认 Worker PID 回收。
-- 打包页面的真实浏览器验收已确认：initializing 阶段文案可见、Composer 禁用；ready 后 Composer 原位启用、左侧任务状态同步更新，且无错误 Overlay 或控制台错误。
-- 全量自动化测试通过，Web 生产构建与分发包 smoke 通过；仓库当前另有与本改动无关的 Web typecheck / presentation 基线失败，尚未计入完成门禁。
-- 仍待完成：IPC Streaming 背压、并行隔离与崩溃自动化、真实 Prompt / Tool / Extension UI / Reconnect、1 小时 Streaming 和 8 小时狗粮。
+- 本机 Pi 0.83.0 的独立 Worker 冷态约 7.5s 到 ready；Terminate 后已确认 Worker PID 回收。上述旧实机数据不代表本轮 IPC 改造已经完成集中回归。
+- `shell.css` 已移除 11px 有效字号；本轮新 CI 正在重新验证 Web presentation / Typecheck / 全量构建，未绿前不勾选总门禁。
+- 按当前计划，真实 Prompt / Tool / Extension UI / Reconnect、并发/崩溃自动化、1 小时 Streaming 和 8 小时狗粮统一留到后续集中测试阶段。
