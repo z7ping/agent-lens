@@ -296,6 +296,10 @@ export class PiLiveApi {
     return requestJson(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/state`)
   }
 
+  retry(runtimeSessionId: string): Promise<PiLiveStateDto> {
+    return requestJson(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/retry`, { method: 'POST' })
+  }
+
   snapshot(runtimeSessionId: string, since?: string): Promise<PiLiveSnapshotDto> {
     const query = since ? `?since=${encodeURIComponent(since)}` : ''
     return requestJson(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/snapshot${query}`)

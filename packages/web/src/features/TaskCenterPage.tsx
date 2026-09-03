@@ -222,8 +222,13 @@ export function TaskCenterPage({ model, mode }: { model: AgentLensClientModel; m
   useEffect(() => {
     refreshRuntimes()
     const onVisibility = () => { if (!document.hidden) refreshRuntimes() }
+    const onPiLiveStateChanged = () => refreshRuntimes()
     document.addEventListener('visibilitychange', onVisibility)
-    return () => document.removeEventListener('visibilitychange', onVisibility)
+    window.addEventListener('agent-lens:pi-live-state-changed', onPiLiveStateChanged)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('agent-lens:pi-live-state-changed', onPiLiveStateChanged)
+    }
   }, [location.pathname, refreshRuntimes])
 
   useEffect(() => {
@@ -317,9 +322,9 @@ export function TaskCenterPage({ model, mode }: { model: AgentLensClientModel; m
         {runtimes.length > 0 && <section className="task-center-group task-center-live-group">
           <div className="task-center-group-title"><span>进行中</span><span>{runtimes.length}</span></div>
           {runtimes.map(item => <button key={item.runtimeSessionId} className={`session-item task-live-item ${selectedRuntimeId === item.runtimeSessionId ? 'session-item-active' : ''}`} onClick={() => navigate(`/review/live/${encodeURIComponent(item.runtimeSessionId)}`)}>
-            <div className="session-item-meta"><span className={item.isStreaming ? 'pi-live-pulse' : 'pi-live-idle-dot'}/><span>Pi</span><time>{item.isStreaming ? '实时' : '等待输入'}</time></div>
+            <div className="session-item-meta"><span className={item.isStreaming || item.status === 'initializing' ? 'pi-live-pulse' : 'pi-live-idle-dot'}/><span>Pi</span><time>{runtimeActivityLabel(item)}</time></div>
             <div className="session-item-title">{item.sessionName || 'Pi 任务'}</div>
-            <div className="session-item-foot"><span>{modelLabel(item)}</span><span>{item.isStreaming ? '执行中' : '可继续'}</span></div>
+            <div className="session-item-foot"><span>{modelLabel(item)}</span><span>{item.status === 'failed' ? '需要处理' : item.status === 'initializing' ? item.initializationMessage || '正在初始化' : item.isStreaming ? '执行中' : '可继续'}</span></div>
           </button>)}
         </section>}
 
@@ -344,4 +349,10 @@ export function TaskCenterPage({ model, mode }: { model: AgentLensClientModel; m
       </TaskSurface>
     </section>
   </div>
+}
+
+function runtimeActivityLabel(state: PiLiveStateDto): string {
+  if (state.status === 'initializing') return '启动中'
+  if (state.status === 'failed') return '启动失败'
+  return state.isStreaming ? '实时' : '等待输入'
 }

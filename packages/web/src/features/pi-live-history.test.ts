@@ -6,7 +6,7 @@ import { projectPiLiveHistory } from './pi-live-history'
 function snapshot(entries: PiLiveSnapshotDto['entries']): PiLiveSnapshotDto {
   return {
     state: {
-      runtimeSessionId: 'runtime-1',
+    runtimeSessionId: 'runtime-1', status: 'ready',
       isStreaming: false,
       isCompacting: false,
       pendingMessageCount: 0,

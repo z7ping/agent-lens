@@ -1,8 +1,10 @@
 # ADR-0008：Pi Live 采用 RPC 子进程作为 Alpha.3 默认运行时边界
 
-状态：Accepted / Alpha.3 实现冻结  
-日期：2026-08-30  
+状态：Superseded by ADR-0009
+日期：2026-08-30
 范围：AgentLens 1.0.0-alpha.3 Pi Live / Task Surface
+
+> 2026-09-03 更新：后续实现曾从 RPC 改为 AgentLens Daemon 进程内直接加载 Pi SDK。真实启动测量表明，首次 `AgentSession` 的资源与扩展初始化会阻塞 Pi Live 进入任务界面，且第三方扩展与 Pi Runtime 的故障边界会进入主 Daemon。ADR-0009 已取代本决策，改为“独立 Pi Runtime Worker + 官方 AgentSessionRuntime + 异步初始化状态机”。本文保留为历史决策记录。
 
 ## 背景
 

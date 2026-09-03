@@ -50,6 +50,11 @@ await build({
   outfile: resolve(dist, 'daemon.mjs'),
 })
 
+await cp(
+  resolve(root, 'packages/runtime-cordis/src/pi-live/worker-entry.mjs'),
+  resolve(dist, 'worker-entry.mjs'),
+)
+
 await cp(resolve(root, 'packages/web/dist'), resolve(dist, 'web'), { recursive: true })
 await cp(
   resolve(root, 'packages/storage-sqlite/migrations'),

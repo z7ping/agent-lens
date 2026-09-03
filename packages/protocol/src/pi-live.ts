@@ -1,6 +1,8 @@
 import type { JsonValue } from './timeline'
 
 export type PiLiveStreamingBehaviorDto = 'steer' | 'followUp'
+export type PiLiveRuntimeStatusDto = 'initializing' | 'ready' | 'failed' | 'terminating' | 'terminated'
+export type PiLiveInitializationStageDto = 'starting_worker' | 'loading_sdk' | 'loading_resources' | 'creating_session' | 'binding_extensions' | 'ready'
 
 export interface PiLiveAvailabilityDto {
   available: boolean
@@ -41,6 +43,12 @@ export interface PiLiveSetThinkingLevelRequestDto {
 
 export interface PiLiveStateDto {
   runtimeSessionId: string
+  status: PiLiveRuntimeStatusDto
+  initializationStage?: PiLiveInitializationStageDto | undefined
+  initializationMessage?: string | undefined
+  error?: string | undefined
+  sdkVersion?: string | undefined
+  runtimeMode?: 'session_runtime' | 'compatibility' | undefined
   nativeSessionId?: string | undefined
   sessionFile?: string | undefined
   sessionName?: string | undefined

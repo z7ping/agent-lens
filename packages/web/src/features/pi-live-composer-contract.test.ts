@@ -18,6 +18,15 @@ test('Pi Live shortcut hint stays compact and advertises Escape abort semantics 
   assert.match(css, /\.pi-live-compose-hint,[\s\S]*?position: absolute;/)
 })
 
+test('Pi Live 初始化态禁用 Composer，并提供取消、失败重试入口', () => {
+  assert.match(page, /state\?\.status === 'initializing'/)
+  assert.match(page, /取消启动/)
+  assert.match(page, /state\?\.status === 'failed'/)
+  assert.match(page, /piLiveApi\.retry\(runtimeId\)/)
+  assert.match(page, /disabled=\{!runtimeReady\}/)
+  assert.match(page, /disabled=\{!runtimeReady \|\| !input\.trim\(\)/)
+})
+
 test('medium desktop viewports reclaim space instead of forcing connection text into another row', () => {
   assert.match(css, /@media \(max-width: 1199\.98px\) \{[\s\S]*?\.pi-live-compose-runtime \{ display: none; \}/)
 })

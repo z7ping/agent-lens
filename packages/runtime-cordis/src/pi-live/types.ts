@@ -1,4 +1,6 @@
 export type PiLiveStreamingBehavior = 'steer' | 'followUp'
+export type PiLiveRuntimeStatus = 'initializing' | 'ready' | 'failed' | 'terminating' | 'terminated'
+export type PiLiveInitializationStage = 'starting_worker' | 'loading_sdk' | 'loading_resources' | 'creating_session' | 'binding_extensions' | 'ready'
 
 export interface PiLiveStartInput {
   cwd: string
@@ -31,6 +33,12 @@ export interface PiLiveControls {
 
 export interface PiLiveRuntimeState {
   runtimeSessionId: string
+  status: PiLiveRuntimeStatus
+  initializationStage?: PiLiveInitializationStage | undefined
+  initializationMessage?: string | undefined
+  error?: string | undefined
+  sdkVersion?: string | undefined
+  runtimeMode?: 'session_runtime' | 'compatibility' | undefined
   nativeSessionId?: string | undefined
   sessionFile?: string | undefined
   sessionName?: string | undefined
@@ -69,6 +77,7 @@ export interface PiLiveService {
   /** List Pi runtimes currently owned by this AgentLens runtime generation. */
   list(): Promise<PiLiveRuntimeState[]>
   start(input: PiLiveStartInput): Promise<PiLiveRuntimeState>
+  retry(runtimeSessionId: string): Promise<PiLiveRuntimeState>
   state(runtimeSessionId: string): Promise<PiLiveRuntimeState>
   snapshot(runtimeSessionId: string, since?: string): Promise<PiLiveSnapshot>
   controls(runtimeSessionId: string): Promise<PiLiveControls>

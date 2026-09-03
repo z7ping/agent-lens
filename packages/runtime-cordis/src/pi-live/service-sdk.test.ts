@@ -29,6 +29,16 @@ function compatibility(version = '0.84.4') {
   return inspectPiSdkCompatibility(version)
 }
 
+async function waitUntilReady(service: DefaultPiLiveService, runtimeSessionId: string) {
+  for (let index = 0; index < 50; index += 1) {
+    const state = await service.state(runtimeSessionId)
+    if (state.status === 'ready') return state
+    if (state.status === 'failed') throw new Error(state.error || 'Pi Live initialization failed')
+    await new Promise(resolve => setTimeout(resolve, 0))
+  }
+  throw new Error('Pi Live initialization did not finish')
+}
+
 test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extension UI Contract', async () => {
   const manager = new FakeSessionManager()
   const models: PiSdkModel[] = [{ provider: 'openai', id: 'gpt-test', name: 'GPT Test', reasoning: true }]
@@ -94,7 +104,9 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
   }
 
   const service = new DefaultPiLiveService(async () => installed)
-  const state = await service.start({ cwd: '/workspace', provider: 'openai', model: 'gpt-test', name: 'AgentLens task' })
+  const initializing = await service.start({ cwd: '/workspace', provider: 'openai', model: 'gpt-test', name: 'AgentLens task' })
+  assert.equal(initializing.status, 'initializing')
+  const state = await waitUntilReady(service, initializing.runtimeSessionId)
   assert.equal(state.nativeSessionId, 'native-session-1')
   assert.equal(state.sessionName, 'AgentLens task')
   assert.equal(state.processId, undefined)
@@ -221,7 +233,8 @@ test('Pi Live SDK prompt 在预检失败时向 HTTP 调用方返回错误', asyn
     },
   }
   const service = new DefaultPiLiveService(async () => installed)
-  const state = await service.start({ cwd: '/workspace' })
+  const initializing = await service.start({ cwd: '/workspace' })
+  const state = await waitUntilReady(service, initializing.runtimeSessionId)
   await assert.rejects(() => service.prompt(state.runtimeSessionId, 'hello'), /No model selected/)
   await service.dispose()
 })

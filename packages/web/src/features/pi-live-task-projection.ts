@@ -50,6 +50,9 @@ function runtimeModelLabel(state: PiLiveStateDto | null): string {
 function runtimeStatusLabel(state: PiLiveStateDto | null, connected: boolean): string {
   if (!connected) return '实时通道断开 · 后台服务仍持有任务'
   if (!state) return '正在连接'
+  if (state.status === 'initializing') return state.initializationMessage || '正在初始化 Pi Runtime'
+  if (state.status === 'failed') return 'Pi Runtime 初始化失败'
+  if (state.status === 'terminating') return '正在结束 Pi Runtime'
   if (state.isCompacting) return '正在压缩上下文'
   if (state.isStreaming) return '正在工作'
   return '等待输入'

@@ -1,351 +1,150 @@
 import { randomUUID } from 'node:crypto'
-import { PiExtensionUiBridge } from './extension-ui-bridge'
-import { assertPiSdkSession } from './pi-sdk-adapter'
-import { toPiLiveWireEvent } from './sdk-event'
-import {
-  findPiExecutable,
-  loadInstalledPiSdk,
-  type PiSdkLoader,
-  type PiSdkModel,
-  type PiSdkSession,
-  type PiSdkThinkingLevel,
-  type InstalledPiSdk,
-} from './sdk-loader'
-import type {
-  PiLiveAvailability,
-  PiLiveControls,
-  PiLiveModelOption,
-  PiLiveQueueState,
-  PiLiveRuntimeEvent,
-  PiLiveRuntimeListener,
-  PiLiveRuntimeState,
-  PiLiveService,
-  PiLiveSnapshot,
-  PiLiveStartInput,
-  PiLiveStreamingBehavior,
-} from './types'
+import { findPiExecutable, type PiSdkLoader } from './sdk-loader'
+import { InProcessPiRuntimeHost } from './in-process-host'
+import { WorkerPiRuntimeHost, type PiRuntimeHandle, type PiRuntimeHost } from './worker-host'
+import type { PiLiveAvailability, PiLiveControls, PiLiveInitializationStage, PiLiveQueueState, PiLiveRuntimeEvent, PiLiveRuntimeListener, PiLiveRuntimeState, PiLiveService, PiLiveSnapshot, PiLiveStartInput, PiLiveStreamingBehavior } from './types'
 
 interface OwnedRuntime {
   id: string
-  session: PiSdkSession
+  input: PiLiveStartInput
+  status: PiLiveRuntimeState['status']
+  stage: PiLiveInitializationStage
+  message: string
+  error?: string | undefined
+  handle?: PiRuntimeHandle | undefined
   listeners: Set<PiLiveRuntimeListener>
   sequence: number
-  input: PiLiveStartInput
-  unsubscribe: () => void
-  extensionUi: PiExtensionUiBridge
+  generation: number
+  initialization: AbortController
 }
 
-function record(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {}
-}
-
-function modelOption(model: PiSdkModel): PiLiveModelOption {
-  return {
-    provider: model.provider,
-    id: model.id,
-    ...(model.name ? { name: model.name } : {}),
-    ...(typeof model.reasoning === 'boolean' ? { reasoning: model.reasoning } : {}),
-  }
+function safeError(error: unknown): string {
+  return (error instanceof Error ? error.message : String(error))
+    .replace(/(?:api[_-]?key|token|authorization|password)\s*[:=]\s*\S+/gi, '[redacted]')
+    .replace(/[\r\n]+/g, ' ')
+    .slice(0, 2_000)
 }
 
 export class DefaultPiLiveService implements PiLiveService {
   private readonly runtimes = new Map<string, OwnedRuntime>()
+  private readonly host: PiRuntimeHost
   private availabilityPromise: Promise<PiLiveAvailability> | null = null
-  private installedSdkPromise: Promise<InstalledPiSdk> | null = null
   private disposed = false
 
-  constructor(private readonly loadSdk: PiSdkLoader = loadInstalledPiSdk) {}
+  constructor(dependency?: PiSdkLoader | PiRuntimeHost) {
+    this.host = typeof dependency === 'function' ? new InProcessPiRuntimeHost(dependency) : dependency ?? new WorkerPiRuntimeHost()
+  }
 
   async availability(): Promise<PiLiveAvailability> {
-    if (this.availabilityPromise) return this.availabilityPromise
-    this.availabilityPromise = this.resolveAvailability().catch(error => {
-      this.availabilityPromise = null
-      throw error
-    })
+    if (!this.availabilityPromise) {
+      this.availabilityPromise = findPiExecutable().then(executable => executable
+        ? { available: true, executable }
+        : { available: false, reason: 'Pi executable was not found in PATH or PI_BIN' })
+    }
     return this.availabilityPromise
   }
 
-  private async resolveAvailability(): Promise<PiLiveAvailability> {
-    try {
-      const sdk = await this.getInstalledSdk()
-      return { available: true, executable: sdk.executable }
-    } catch (error) {
-      const executable = await findPiExecutable().catch(() => undefined)
-      return {
-        available: false,
-        executable,
-        reason: error instanceof Error ? error.message : String(error),
-      }
-    }
-  }
+  /** Worker 自己加载 SDK，Daemon 只预热可执行文件探测。 */
+  async preload(): Promise<void> { await this.availability() }
 
-  /** Warm the official SDK after Runtime startup so opening Pi stays interactive. */
-  async preload(): Promise<void> {
-    await this.getInstalledSdk()
-  }
-
-  private getInstalledSdk(): Promise<InstalledPiSdk> {
-    if (!this.installedSdkPromise) {
-      this.installedSdkPromise = this.loadSdk().catch(error => {
-        this.installedSdkPromise = null
-        throw error
-      })
-    }
-    return this.installedSdkPromise
-  }
-
-  async list(): Promise<PiLiveRuntimeState[]> {
-    const states = await Promise.allSettled([...this.runtimes.keys()].map(id => this.state(id)))
-    return states.flatMap(result => result.status === 'fulfilled' ? [result.value] : [])
-  }
+  async list(): Promise<PiLiveRuntimeState[]> { return Promise.all([...this.runtimes.values()].map(runtime => this.runtimeState(runtime))) }
 
   async start(input: PiLiveStartInput): Promise<PiLiveRuntimeState> {
-    const startedAt = Date.now()
     if (this.disposed) throw new Error('Pi Live service is disposed')
-    if (!input.cwd) throw new Error('Pi Live requires a working directory')
+    if (!input.cwd.trim()) throw new Error('Pi Live requires a working directory')
+    const id = randomUUID()
+    const runtime: OwnedRuntime = { id, input, status: 'initializing', stage: 'starting_worker', message: '正在启动独立 Pi Runtime Worker', listeners: new Set(), sequence: 0, generation: 1, initialization: new AbortController() }
+    this.runtimes.set(id, runtime)
+    void this.initialize(runtime, runtime.generation)
+    return this.runtimeState(runtime)
+  }
 
-    const installed = input.executable
-      ? await this.loadSdk(input.executable)
-      : await this.getInstalledSdk()
-    this.devLog(`SDK 就绪（${Date.now() - startedAt}ms）`)
-    const sdk = installed.module
-    const sessionManager = input.sessionPath
-      ? sdk.SessionManager.open(input.sessionPath, input.sessionDir, input.cwd)
-      : sdk.SessionManager.create(input.cwd, input.sessionDir)
-    const created = await sdk.createAgentSession({ cwd: input.cwd, sessionManager })
-    this.devLog(`AgentSession 创建完成（${Date.now() - startedAt}ms）`)
-    assertPiSdkSession(created.session, installed.sdkEntry, installed.version)
-    const session = created.session
-    const runtimeSessionId = randomUUID()
-    const listeners = new Set<PiLiveRuntimeListener>()
-    const extensionUi = new PiExtensionUiBridge({
-      publish: event => {
-        const runtime = this.runtimes.get(runtimeSessionId)
-        if (runtime) this.publish(runtime, event)
-      },
-    })
-    const runtime: OwnedRuntime = {
-      id: runtimeSessionId,
-      session,
-      listeners,
-      sequence: 0,
-      input,
-      unsubscribe: () => {},
-      extensionUi,
-    }
-    this.runtimes.set(runtimeSessionId, runtime)
+  async retry(runtimeSessionId: string): Promise<PiLiveRuntimeState> {
+    const runtime = this.requireRuntime(runtimeSessionId)
+    if (runtime.status !== 'failed') throw this.conflict('Pi Live runtime can only retry after initialization failed')
+    runtime.generation += 1
+    runtime.initialization = new AbortController()
+    runtime.status = 'initializing'
+    runtime.stage = 'starting_worker'
+    runtime.message = '正在重新启动独立 Pi Runtime Worker'
+    runtime.error = undefined
+    this.publish(runtime, { type: 'runtime_status', status: runtime.status, stage: runtime.stage, message: runtime.message })
+    void this.initialize(runtime, runtime.generation)
+    return this.runtimeState(runtime)
+  }
 
+  private async initialize(runtime: OwnedRuntime, generation: number): Promise<void> {
     try {
-      runtime.unsubscribe = session.subscribe(event => this.publish(runtime, toPiLiveWireEvent(record(event))))
-      await session.bindExtensions({
-        uiContext: extensionUi.context,
-        mode: 'rpc',
-        abortHandler: () => { void session.abort() },
-        onError: (value: unknown) => {
-          const error = record(value)
-          this.publish(runtime, {
-            type: 'extension_error',
-            ...(typeof error.extensionPath === 'string' ? { extensionPath: error.extensionPath } : {}),
-            ...(typeof error.event === 'string' ? { event: error.event } : {}),
-            error: error.error instanceof Error ? error.error.message : String(error.error ?? 'Unknown extension error'),
-          })
-        },
-      })
-      this.devLog(`扩展绑定完成（${Date.now() - startedAt}ms）`)
-      if (input.name) session.setSessionName(input.name)
-      if (input.provider || input.model) {
-        await this.selectInitialModel(session, input.provider, input.model)
-      }
-      return await this.state(runtimeSessionId)
+      const handle = await this.host.start(runtime.id, runtime.input, runtime.initialization.signal, event => {
+        if (runtime.generation !== generation || runtime.status === 'terminating' || runtime.status === 'terminated') return
+        if (event.type === 'runtime_initialization') {
+          const stage = event.stage
+          if (typeof stage === 'string' && ['starting_worker', 'loading_sdk', 'loading_resources', 'creating_session', 'binding_extensions', 'ready'].includes(stage)) runtime.stage = stage as PiLiveInitializationStage
+          if (typeof event.message === 'string') runtime.message = event.message.slice(0, 500)
+        }
+        this.publish(runtime, event)
+      }, error => this.workerExited(runtime, generation, error))
+      if (runtime.generation !== generation || runtime.status !== 'initializing') { await handle.terminate(); return }
+      runtime.handle = handle
+      runtime.status = 'ready'
+      runtime.stage = 'ready'
+      runtime.message = 'Pi Runtime 已就绪'
+      this.publish(runtime, { type: 'runtime_status', status: 'ready', stage: 'ready', message: runtime.message })
     } catch (error) {
-      this.runtimes.delete(runtimeSessionId)
-      runtime.unsubscribe()
-      extensionUi.dispose()
-      session.dispose()
-      throw error
+      if (runtime.generation !== generation || runtime.status === 'terminating' || runtime.status === 'terminated') return
+      runtime.status = 'failed'
+      runtime.error = safeError(error)
+      runtime.message = 'Pi Runtime 初始化失败'
+      this.publish(runtime, { type: 'runtime_status', status: 'failed', stage: runtime.stage, message: runtime.message, error: runtime.error })
     }
   }
 
-  private devLog(message: string): void {
-    if (process.env.AGENT_LENS_DEV_API_PORT) {
-      console.info(`[AgentLens][dev][pi] ${message}`)
-    }
+  private workerExited(runtime: OwnedRuntime, generation: number, error: Error): void {
+    if (runtime.generation !== generation || runtime.status === 'terminating' || runtime.status === 'terminated') return
+    runtime.handle = undefined
+    runtime.status = 'failed'
+    runtime.error = safeError(error)
+    runtime.message = 'Pi Runtime Worker 已退出'
+    this.publish(runtime, { type: 'runtime_status', status: 'failed', stage: runtime.stage, message: runtime.message, error: runtime.error })
   }
 
-  async state(runtimeSessionId: string): Promise<PiLiveRuntimeState> {
-    const runtime = this.requireRuntime(runtimeSessionId)
-    const session = runtime.session
-    return {
-      runtimeSessionId,
-      nativeSessionId: session.sessionId,
-      ...(session.sessionFile ? { sessionFile: session.sessionFile } : {}),
-      ...(session.sessionName ? { sessionName: session.sessionName } : {}),
-      ...(session.model ? { model: session.model } : {}),
-      thinkingLevel: session.thinkingLevel,
-      isStreaming: session.isStreaming,
-      isCompacting: session.isCompacting,
-      pendingMessageCount: session.pendingMessageCount,
-      leafId: session.sessionManager.getLeafId(),
-    }
-  }
+  async state(id: string): Promise<PiLiveRuntimeState> { return this.runtimeState(this.requireRuntime(id)) }
+  async snapshot(id: string, since?: string): Promise<PiLiveSnapshot> { const runtime = this.requireRuntime(id); if (!runtime.handle || runtime.status !== 'ready') return { state: await this.runtimeState(runtime), entries: [], leafId: null }; const snapshot = await runtime.handle.snapshot(since); return { ...snapshot, state: this.decorateReadyState(runtime, snapshot.state) } }
+  async controls(id: string): Promise<PiLiveControls> { return this.requireReady(id).handle!.controls() }
+  async setModel(id: string, provider: string, modelId: string): Promise<PiLiveRuntimeState> { const runtime = this.requireReady(id); return this.decorateReadyState(runtime, await runtime.handle!.setModel(provider, modelId)) }
+  async setThinkingLevel(id: string, level: string): Promise<PiLiveRuntimeState> { const runtime = this.requireReady(id); return this.decorateReadyState(runtime, await runtime.handle!.setThinkingLevel(level)) }
+  async prompt(id: string, message: string, behavior?: PiLiveStreamingBehavior): Promise<void> { if (message.trim()) await this.requireReady(id).handle!.prompt(message, behavior) }
+  async steer(id: string, message: string): Promise<void> { if (message.trim()) await this.requireReady(id).handle!.steer(message) }
+  async followUp(id: string, message: string): Promise<void> { if (message.trim()) await this.requireReady(id).handle!.followUp(message) }
+  async clearQueue(id: string): Promise<PiLiveQueueState> { return this.requireReady(id).handle!.clearQueue() }
+  async abort(id: string, options: { restoreQueue?: boolean } = {}): Promise<PiLiveQueueState> { return this.requireReady(id).handle!.abort(options.restoreQueue !== false) }
+  async respondToExtension(id: string, requestId: string, response: unknown): Promise<void> { if (!requestId) throw new Error('Pi extension request id is required'); await this.requireReady(id).handle!.respondToExtension(requestId, response) }
+  subscribe(id: string, listener: PiLiveRuntimeListener): () => void { const runtime = this.requireRuntime(id); runtime.listeners.add(listener); return () => runtime.listeners.delete(listener) }
 
-  async snapshot(runtimeSessionId: string, since?: string): Promise<PiLiveSnapshot> {
-    const runtime = this.requireRuntime(runtimeSessionId)
-    const manager = runtime.session.sessionManager
-    const allEntries = manager.getEntries()
-    const entries = since
-      ? (() => {
-          const index = allEntries.findIndex(entry => record(entry).id === since)
-          return index >= 0 ? allEntries.slice(index + 1) : allEntries
-        })()
-      : allEntries
-    const leafId = manager.getLeafId()
-    const state = await this.state(runtimeSessionId)
-    return { state: { ...state, leafId }, entries, leafId }
-  }
-
-  async controls(runtimeSessionId: string): Promise<PiLiveControls> {
-    const session = this.requireRuntime(runtimeSessionId).session
-    const models = await this.availableModels(session)
-    return {
-      models: models.map(modelOption),
-      thinkingLevels: session.getAvailableThinkingLevels(),
-    }
-  }
-
-  async setModel(runtimeSessionId: string, provider: string, modelId: string): Promise<PiLiveRuntimeState> {
-    if (!provider.trim() || !modelId.trim()) throw new Error('Pi model provider and modelId are required')
-    const session = this.requireRuntime(runtimeSessionId).session
-    const models = await this.availableModels(session, provider.trim())
-    const model = models.find(item => item.provider === provider.trim() && item.id === modelId.trim())
-    if (!model) throw new Error(`Pi model is not available: ${provider.trim()}/${modelId.trim()}`)
-    await session.setModel(model)
-    return await this.state(runtimeSessionId)
-  }
-
-  async setThinkingLevel(runtimeSessionId: string, level: string): Promise<PiLiveRuntimeState> {
-    if (!level.trim()) throw new Error('Pi thinking level is required')
-    const session = this.requireRuntime(runtimeSessionId).session
-    session.setThinkingLevel(level.trim() as PiSdkThinkingLevel)
-    return await this.state(runtimeSessionId)
-  }
-
-  async prompt(runtimeSessionId: string, message: string, behavior?: PiLiveStreamingBehavior): Promise<void> {
-    if (!message.trim()) return
-    const session = this.requireRuntime(runtimeSessionId).session
-    await new Promise<void>((resolveAccepted, rejectAccepted) => {
-      let accepted = false
-      const accept = () => {
-        if (accepted) return
-        accepted = true
-        resolveAccepted()
-      }
-      const run = session.prompt(message, {
-        ...(behavior ? { streamingBehavior: behavior } : {}),
-        source: 'rpc',
-        preflightResult: success => {
-          if (success) accept()
-        },
-      })
-      void run.then(accept, error => {
-        if (!accepted) rejectAccepted(error)
-      })
-    })
-  }
-
-  async steer(runtimeSessionId: string, message: string): Promise<void> {
-    if (!message.trim()) return
-    await this.requireRuntime(runtimeSessionId).session.steer(message)
-  }
-
-  async followUp(runtimeSessionId: string, message: string): Promise<void> {
-    if (!message.trim()) return
-    await this.requireRuntime(runtimeSessionId).session.followUp(message)
-  }
-
-  async clearQueue(runtimeSessionId: string): Promise<PiLiveQueueState> {
-    return this.requireRuntime(runtimeSessionId).session.clearQueue()
-  }
-
-  async abort(runtimeSessionId: string, options: { restoreQueue?: boolean } = {}): Promise<PiLiveQueueState> {
-    const session = this.requireRuntime(runtimeSessionId).session
-    const queue = options.restoreQueue === false
-      ? { steering: [], followUp: [] }
-      : session.clearQueue()
-    await session.abort()
-    return queue
-  }
-
-  async respondToExtension(runtimeSessionId: string, requestId: string, response: unknown): Promise<void> {
-    if (!requestId) throw new Error('Pi extension request id is required')
-    this.requireRuntime(runtimeSessionId).extensionUi.respond(requestId, response)
-  }
-
-  subscribe(runtimeSessionId: string, listener: PiLiveRuntimeListener): () => void {
-    const runtime = this.requireRuntime(runtimeSessionId)
-    runtime.listeners.add(listener)
-    return () => runtime.listeners.delete(listener)
-  }
-
-  async terminate(runtimeSessionId: string): Promise<void> {
-    const runtime = this.runtimes.get(runtimeSessionId)
+  async terminate(id: string): Promise<void> {
+    const runtime = this.runtimes.get(id)
     if (!runtime) return
-    this.runtimes.delete(runtimeSessionId)
+    runtime.generation += 1
+    runtime.initialization.abort()
+    runtime.status = 'terminating'
+    runtime.message = '正在结束 Pi Runtime'
+    this.publish(runtime, { type: 'runtime_status', status: 'terminating', stage: runtime.stage, message: runtime.message })
+    const handle = runtime.handle
+    runtime.handle = undefined
+    if (handle) await handle.terminate().catch(() => undefined)
+    runtime.status = 'terminated'
+    runtime.message = 'Pi Runtime 已结束'
+    this.publish(runtime, { type: 'runtime_status', status: 'terminated', stage: runtime.stage, message: runtime.message })
     runtime.listeners.clear()
-    runtime.unsubscribe()
-    runtime.extensionUi.dispose()
-    if (runtime.session.isStreaming) await runtime.session.abort().catch(() => undefined)
-    runtime.session.dispose()
+    this.runtimes.delete(id)
   }
 
-  async dispose(): Promise<void> {
-    if (this.disposed) return
-    this.disposed = true
-    const ids = [...this.runtimes.keys()]
-    await Promise.allSettled(ids.map(id => this.terminate(id)))
-  }
+  async dispose(): Promise<void> { if (this.disposed) return; this.disposed = true; await Promise.allSettled([...this.runtimes.keys()].map(id => this.terminate(id))) }
 
-  private requireRuntime(runtimeSessionId: string): OwnedRuntime {
-    const runtime = this.runtimes.get(runtimeSessionId)
-    if (!runtime) throw new Error(`Unknown Pi Live runtime session: ${runtimeSessionId}`)
-    return runtime
-  }
-
-  private publish(runtime: OwnedRuntime, event: Record<string, unknown>): void {
-    runtime.sequence += 1
-    const value: PiLiveRuntimeEvent = {
-      runtimeSessionId: runtime.id,
-      sequence: runtime.sequence,
-      receivedAt: new Date().toISOString(),
-      event,
-    }
-    for (const listener of runtime.listeners) listener(value)
-  }
-
-  private async availableModels(session: PiSdkSession, provider?: string): Promise<readonly PiSdkModel[]> {
-    const snapshot = session.modelRuntime.getAvailableSnapshot()
-    const filtered = provider ? snapshot.filter(model => model.provider === provider) : snapshot
-    if (filtered.length) return filtered
-    return await session.modelRuntime.getAvailable(provider)
-  }
-
-  private async selectInitialModel(
-    session: PiSdkSession,
-    provider?: string,
-    modelId?: string,
-  ): Promise<void> {
-    const models = await this.availableModels(session, provider)
-    const model = models.find(item => {
-      if (provider && item.provider !== provider) return false
-      if (!modelId) return true
-      return item.id === modelId || item.name === modelId
-    })
-    if (!model) {
-      const target = [provider, modelId].filter(Boolean).join('/') || 'requested model'
-      throw new Error(`Pi model is not available: ${target}`)
-    }
-    await session.setModel(model)
-  }
+  private conflict(message: string): Error { const error = new Error(message) as Error & { statusCode?: number }; error.statusCode = 409; return error }
+  private requireRuntime(id: string): OwnedRuntime { const runtime = this.runtimes.get(id); if (!runtime) throw new Error(`Unknown Pi Live runtime session: ${id}`); return runtime }
+  private requireReady(id: string): OwnedRuntime { const runtime = this.requireRuntime(id); if (runtime.status !== 'ready' || !runtime.handle) throw this.conflict(`Pi Live runtime is not ready: ${runtime.status}`); return runtime }
+  private async runtimeState(runtime: OwnedRuntime): Promise<PiLiveRuntimeState> { if (runtime.status === 'ready' && runtime.handle) return this.decorateReadyState(runtime, await runtime.handle.state()); return { runtimeSessionId: runtime.id, status: runtime.status, initializationStage: runtime.stage, initializationMessage: runtime.message, ...(runtime.error ? { error: runtime.error } : {}), ...(runtime.input.name ? { sessionName: runtime.input.name } : {}), isStreaming: false, isCompacting: false, pendingMessageCount: 0, ...(runtime.handle?.processId ? { processId: runtime.handle.processId } : {}) } }
+  private decorateReadyState(runtime: OwnedRuntime, state: PiLiveRuntimeState): PiLiveRuntimeState { return { ...state, runtimeSessionId: runtime.id, status: 'ready', initializationStage: 'ready', initializationMessage: runtime.message, ...(runtime.handle?.processId ? { processId: runtime.handle.processId } : {}) } }
+  private publish(runtime: OwnedRuntime, event: Record<string, unknown>): void { runtime.sequence += 1; const value: PiLiveRuntimeEvent = { runtimeSessionId: runtime.id, sequence: runtime.sequence, receivedAt: new Date().toISOString(), event }; for (const listener of runtime.listeners) listener(value) }
 }

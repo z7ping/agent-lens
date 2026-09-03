@@ -196,7 +196,7 @@ function PiLiveStart({ known }: { known: PiLiveStateDto[] }) {
       <div><b>仍在后台的 Pi 任务</b><span>来自本浏览器最近启动的运行时</span></div>
       {known.map(item => <button key={item.runtimeSessionId} onClick={() => navigate(`/review/live/${encodeURIComponent(item.runtimeSessionId)}`)}>
         <span>{item.sessionName || 'Pi 实时任务'}</span>
-        <small>{modelLabel(item)} · {item.isStreaming ? '正在工作' : '等待输入'}</small>
+        <small>{modelLabel(item)} · {item.status === 'initializing' ? '正在初始化' : item.status === 'failed' ? '启动失败' : item.isStreaming ? '正在工作' : '等待输入'}</small>
       </button>)}
     </section>}
   </main>
@@ -286,6 +286,8 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       setSnapshot(current => mergeSnapshot(current, value))
       setState(value.state)
       leafIdRef.current = value.leafId ?? undefined
+      window.dispatchEvent(new Event('agent-lens:pi-live-state-changed'))
+      if (value.state.status === 'ready') void refreshControls()
     }
 
     const refreshControls = async () => {
@@ -309,7 +311,6 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       }
     }
 
-    void refreshControls()
     const dispose = piLiveApi.connect(runtimeId, {
       onConnection: value => { if (active) setConnected(value) },
       onSnapshot: acceptSnapshot,
@@ -377,6 +378,24 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             const followUp = Array.isArray(event.followUp) ? event.followUp.filter((item): item is string => typeof item === 'string') : []
             setQueue({ steering, followUp })
             statePatch = { ...statePatch, pendingMessageCount: steering.length + followUp.length }
+          } else if (type === 'runtime_initialization' || type === 'runtime_status') {
+            const status = stringValue(event.status)
+            const initializationStage = stringValue(event.stage)
+            const initializationMessage = stringValue(event.message)
+            const runtimeError = stringValue(event.error)
+            statePatch = {
+              ...statePatch,
+              ...(status ? { status: status as PiLiveStateDto['status'] } : {}),
+              ...(initializationStage ? { initializationStage: initializationStage as PiLiveStateDto['initializationStage'] } : {}),
+              ...(initializationMessage ? { initializationMessage } : {}),
+              ...(runtimeError ? { error: runtimeError } : {}),
+            }
+            if (runtimeError) setError(runtimeError)
+            window.dispatchEvent(new Event('agent-lens:pi-live-state-changed'))
+            if (status === 'ready' || initializationStage === 'ready') {
+              void refreshAfterSettled()
+              void refreshControls()
+            }
           } else {
             const request = extensionRequest(event)
             if (request) setExtension(request)
@@ -560,19 +579,33 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     }
   }
 
+  const retry = async () => {
+    if (busy || state?.status !== 'failed') return
+    setBusy(true)
+    setError('')
+    try {
+      setState(await piLiveApi.retry(runtimeId))
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const queueItems = [
     ...queue.steering.map((text, index) => ({ id: `active-steer-${index}`, mode: 'steer' as QueueMode, text, active: true })),
     ...queue.followUp.map((text, index) => ({ id: `active-follow-${index}`, mode: 'followUp' as QueueMode, text, active: true })),
     ...restored.map(item => ({ ...item, active: false })),
   ]
   const selectedModel = modelSelection(state)
+  const runtimeReady = state?.status === 'ready'
 
   return <main className={`pi-live-page ${embedded ? 'pi-live-page-embedded' : ''}`}>
     {!embedded && <aside className="pi-live-sessions">
       <div className="pi-live-sessions-head"><div><b>Pi 实时任务</b><small>关闭视图不结束任务</small></div><button className="btn small" onClick={() => navigate('/review/live')}>新建</button></div>
       <div className="pi-live-session-scroll">
         {known.map(item => <button key={item.runtimeSessionId} className={`pi-live-session ${item.runtimeSessionId === runtimeId ? 'active' : ''}`} onClick={() => navigate(`/review/live/${encodeURIComponent(item.runtimeSessionId)}`)}>
-          <div className="pi-live-session-top"><span className={item.isStreaming ? 'pi-live-pulse' : 'pi-live-idle-dot'}/><span>Pi</span><span>{item.isStreaming ? '实时' : '空闲'}</span></div>
+          <div className="pi-live-session-top"><span className={item.isStreaming || item.status === 'initializing' ? 'pi-live-pulse' : 'pi-live-idle-dot'}/><span>Pi</span><span>{item.status === 'initializing' ? '启动中' : item.status === 'failed' ? '失败' : item.isStreaming ? '实时' : '空闲'}</span></div>
           <div className="pi-live-session-title">{item.sessionName || 'Pi 实时任务'}</div>
           <div className="pi-live-session-foot"><span>{modelLabel(item)}</span><span>PID {item.processId ?? '—'}</span></div>
         </button>)}
@@ -616,7 +649,9 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             isStreaming={state?.isStreaming ?? false}
             pendingMessageCount={state?.pendingMessageCount ?? 0}
           />}
-          {!history.length && !streamText && !thinkingText && !tools.length && <div className="pi-live-empty">这个 Pi Runtime 还没有消息。可以直接在下方输入开始任务。</div>}
+          {!history.length && !streamText && !thinkingText && !tools.length && state?.status === 'initializing' && <div className="pi-live-initializing" role="status"><span className="pi-live-stage-dot"/><b>{state.initializationMessage || '正在初始化 Pi Runtime'}</b><small>页面已经打开，Pi 的配置、扩展和 Session 正在独立 Worker 中加载。</small><button onClick={() => void terminate()} disabled={busy}>取消启动</button></div>}
+          {!history.length && !streamText && !thinkingText && !tools.length && state?.status === 'failed' && <div className="pi-live-initializing pi-live-initializing-failed" role="alert"><b>Pi Runtime 初始化失败</b><small>{state.error || error || 'Worker 未能完成初始化。'}</small><div><button onClick={() => void retry()} disabled={busy}>重试</button><button onClick={() => void terminate()} disabled={busy}>结束 Runtime</button></div></div>}
+          {!history.length && !streamText && !thinkingText && !tools.length && runtimeReady && <div className="pi-live-empty">这个 Pi Runtime 还没有消息。可以直接在下方输入开始任务。</div>}
           {error && <div className="pi-live-error pi-live-reader-error" role="alert">{error}</div>}
         </div>
       </div>
@@ -647,6 +682,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             }}
             placeholder={state?.isStreaming ? '继续指导 Pi…' : '输入任务，让 Pi 开始工作…'}
             aria-label="Pi 输入"
+            disabled={!runtimeReady}
           />
           <div className="pi-live-compose-bar">
             <span className="pi-live-compose-runtime">{connected ? '实时已连接' : '正在重连'}</span>
@@ -655,7 +691,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
                 aria-label="Pi 模型"
                 title={state?.model ? `Pi 模型 · ${modelLabel(state)}` : 'Pi 模型'}
                 value={selectedModel}
-                disabled={controlBusy || controls.models.length === 0}
+                disabled={!runtimeReady || controlBusy || controls.models.length === 0}
                 onChange={event => void changeModel(event.target.value)}
               >
                 {!selectedModel && <option value="">模型</option>}
@@ -665,7 +701,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
                 aria-label="Pi Thinking Level"
                 title={`Pi Thinking Level · ${state?.thinkingLevel || '未设置'}`}
                 value={state?.thinkingLevel ?? ''}
-                disabled={controlBusy || controls.thinkingLevels.length === 0}
+                disabled={!runtimeReady || controlBusy || controls.thinkingLevels.length === 0}
                 onChange={event => void changeThinkingLevel(event.target.value)}
               >
                 {!state?.thinkingLevel && <option value="">Thinking</option>}
@@ -676,7 +712,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
               <button className={mode === 'steer' ? 'active' : ''} aria-pressed={mode === 'steer'} onClick={() => { setMode('steer'); inputRef.current?.focus({ preventScroll: true }) }}>立即介入</button>
               <button className={mode === 'followUp' ? 'active' : ''} aria-pressed={mode === 'followUp'} onClick={() => { setMode('followUp'); inputRef.current?.focus({ preventScroll: true }) }}>完成后继续</button>
             </div>
-            <button className="pi-live-send" disabled={!input.trim() || busy || Boolean(extension)} onClick={() => void send()} aria-label="发送">↑</button>
+            <button className="pi-live-send" disabled={!runtimeReady || !input.trim() || busy || Boolean(extension)} onClick={() => void send()} aria-label="发送">↑</button>
           </div>
           <div className="pi-live-compose-hint">Enter {state?.isStreaming ? (mode === 'steer' ? '立即介入' : '按当前模式发送') : '开始新一轮'} · Alt+Enter 完成后继续 · Shift+Enter 换行{state?.isStreaming ? ' · Esc 中断并恢复排队' : ''}</div>
         </div>

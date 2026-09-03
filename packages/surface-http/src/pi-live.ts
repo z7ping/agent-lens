@@ -177,7 +177,7 @@ export async function handlePiLiveRequest(
       return true
     }
 
-    const match = url.pathname.match(/^\/api\/v1\/pi-live\/([^/]+)(?:\/(state|snapshot|events|controls|model|thinking-level|prompt|steer|follow-up|abort|extension-response))?$/)
+    const match = url.pathname.match(/^\/api\/v1\/pi-live\/([^/]+)(?:\/(state|snapshot|events|controls|model|thinking-level|prompt|steer|follow-up|abort|extension-response|retry))?$/)
     if (!match) {
       writeJson(response, 404, { error: 'not_found' })
       return true
@@ -192,6 +192,10 @@ export async function handlePiLiveRequest(
     }
     if (action === 'state' && request.method === 'GET') {
       writeJson(response, 200, jsonValue(await service.state(runtimeSessionId)))
+      return true
+    }
+    if (action === 'retry' && request.method === 'POST') {
+      writeJson(response, 202, jsonValue(await service.retry(runtimeSessionId)))
       return true
     }
     if (action === 'snapshot' && request.method === 'GET') {

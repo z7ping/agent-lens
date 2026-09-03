@@ -54,40 +54,45 @@ runtime-cordis / piLive
 
 Pi Live 不把控制状态写成 Canonical Observation，也不形成第二事实源。
 
-### 2.2 Transport 决策
+### 2.2 Runtime 决策
 
-ADR-0008 已冻结：alpha.3 默认采用 **Pi RPC 子进程边界**。
+ADR-0009 已取代 ADR-0008。alpha.3 的目标运行时边界为：
 
-原因包括：
+```text
+AgentLens Daemon
+  -> 独立 Pi Runtime Worker
+     -> 用户实际 Pi SDK
+     -> createAgentSessionServices()
+     -> createAgentSessionRuntime()
+```
 
-- 复用用户实际安装的 Pi；
-- AgentLens 与 Pi 版本不强绑定；
-- Pi 故障与 AgentLens Daemon 进程隔离；
+当前代码已进入 Worker 迁移阶段：Start 先返回 `initializing` Runtime，用户 Pi SDK、资源、Extension 与 `AgentSession` 在独立 Node Worker 内后台加载。支持 Services API 的 Pi 版本使用 `createAgentSessionServices()`、`createAgentSessionRuntime()` 与 `createAgentSessionFromServices()`；受支持的旧版本保留 Worker 内兼容创建链，不退回 Daemon 内执行。
+
+目标实现同时保持：
+
+- 使用用户实际 Pi 配置与资源；
+- Pi Runtime / Extension 与 AgentLens Daemon 进程隔离；
 - Browser View 生命周期不拥有任务生命周期；
-- Windows / macOS / Linux 可以保持同一 Service Contract。
+- 官方 `AgentSessionRuntime` 语义直接驱动 Session；
+- Start API 与完整 Session 初始化解耦。
 
-SDK 不作为 alpha.3 第二条正式实现，只保留未来替换 Transport 的架构可能。
+详细阶段和证据要求见 `ALPHA3-PI-RUNTIME-WORKER-CHECKLIST.md`，公开实施由 GitHub Issue #51 跟踪。
 
-## 3. Pi RPC Runtime
+## 3. Pi Live Runtime
 
-已实现：
+现有 Service Contract 已实现：
 
-- 严格 LF JSONL framing；
-- optional CRLF 输入兼容；
-- 不使用 Node `readline`，避免 U+2028 / U+2029 被错误分帧；
-- request-id correlation；
-- command timeout；
-- stderr tail；
-- Pi 子进程退出后的 pending request fail；
-- Runtime dispose / terminate 清理；
-- Pi 原生 `get_entries(since)` entry cursor；
-- Snapshot + reconnect 增量恢复；
+- 用户 Pi 可执行入口、npm 包与 SDK compatibility 定位；
+- SDK 动态导入 Promise 预热与复用；
+- `SessionManager.create/open`；
+- `AgentSession` 事件订阅与 Pi Live Wire Event 映射；
+- Session Entries / Leaf ID Snapshot；
 - Prompt；
 - Steer；
 - Follow-up；
 - Clear Queue；
 - Abort；
-- Extension UI response；
+- Extension UI Bridge 与原始 Request ID response；
 - Model / Thinking Level 查询与切换。
 
 生命周期明确分为：
@@ -96,19 +101,16 @@ SDK 不作为 alpha.3 第二条正式实现，只保留未来替换 Transport �
 Abort Task       != Terminate Runtime
 Close View       != Abort Task
 Close View       != Terminate Runtime
-Terminate Runtime = 显式结束 AgentLens 所持有的 Pi 进程
+Terminate Runtime = 显式释放 AgentLens 所持有的 Pi Session
+目标 Worker 完成后 = 同时结束对应 Worker 进程
 ```
 
-### Windows npm shim
+### 当前缺口
 
-Windows 下 npm 常见 `pi.cmd` / `pi.bat` 不直接作为长期进程 owner。
-
-AgentLens 解析受信任本机 npm shim 指向的 JS CLI entry，并使用当前 Node 直接持有真实 Pi Node 进程，避免：
-
-- `.cmd` 直接 spawn 的兼容问题；
-- 只杀 wrapper 后遗留 Pi 子进程。
-
-自动化已覆盖 Windows Typecheck / Test / Desktop package / Installer 编译链；仍需在真实安装了 Pi、具有真实模型认证的 Windows 环境做端到端运行验证。
+- Worker IPC 已具备版本、Runtime ID、Request ID、消息大小和待处理请求上限，但 Streaming 事件背压与能力矩阵诊断仍未完成；
+- initializing 阶段已可取消，failed 已可显式重试；并行 Runtime、崩溃与重试竞态仍需更完整自动化；
+- 旧 Pi SDK 的兼容创建链尚不具备完整 Session replacement 语义；
+- Windows 已完成创建/就绪/结束冒烟，但真实 Prompt、Tool、Extension UI、断线恢复与长时间运行仍需端到端验证。
 
 ## 4. Local HTTP / SSE
 
@@ -281,6 +283,8 @@ Pi Live 4000-fact 门禁只验证虚拟挂载参数与重子树预算，不等�
 - 断网、睡眠、Daemon 重启、Pi Runtime 异常、UI Reload 恢复矩阵；
 - 1280x800、1366x768 等目标视口与目标缩放下的最终视觉验收；
 - alpha.3 最终 8 小时交互体验确认。
+
+Pi Runtime Worker 与异步启动的逐阶段状态以 `ALPHA3-PI-RUNTIME-WORKER-CHECKLIST.md` 为准；Checklist 未完成前，不得把 SDK 已可启动表述为接近原生 Pi TUI 的完成体验。
 
 ## 10. 发布状态
 

@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 
-const [app, taskCenter, taskSurface, taskHeader, taskMessage, taskRound, taskThinking, taskToolGroup, taskToolRow, taskDetailModel, taskCenterCss, taskDetailCss, reviewPage, page, piTaskRound, piTaskProjection, hubPage, history, piNative, client, css, http, runtime, sdkLoader, sdkAdapter, runtimePackage, coreObservation, timelineProtocol] = await Promise.all([
+const [app, taskCenter, taskSurface, taskHeader, taskMessage, taskRound, taskThinking, taskToolGroup, taskToolRow, taskDetailModel, taskCenterCss, taskDetailCss, reviewPage, page, piTaskRound, piTaskProjection, hubPage, history, piNative, client, css, http, runtime, workerHost, workerEntry, inProcessHost, sdkLoader, sdkAdapter, runtimePackage, coreObservation, timelineProtocol] = await Promise.all([
   readFile(new URL('../packages/web/src/App.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/TaskCenterPage.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/TaskSurface.tsx', import.meta.url), 'utf8'),
@@ -24,6 +24,9 @@ const [app, taskCenter, taskSurface, taskHeader, taskMessage, taskRound, taskThi
   readFile(new URL('../packages/web/src/pi-live.css', import.meta.url), 'utf8'),
   readFile(new URL('../packages/surface-http/src/pi-live.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/runtime-cordis/src/pi-live/service.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/runtime-cordis/src/pi-live/worker-host.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/runtime-cordis/src/pi-live/worker-entry.mjs', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/runtime-cordis/src/pi-live/in-process-host.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/runtime-cordis/src/pi-live/sdk-loader.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/runtime-cordis/src/pi-live/pi-sdk-adapter.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/runtime-cordis/package.json', import.meta.url), 'utf8'),
@@ -159,10 +162,14 @@ requireText(http, /url\.pathname === '\/api\/v1\/pi-live'[\s\S]*request\.method 
 requireText(http, /request\.once\('close', cleanup\)/, 'SSE 断开必须释放订阅')
 requireText(http, /service\.terminate\(runtimeSessionId\)/, 'Runtime 只能显式 DELETE 终止')
 requireText(runtime, /async list\(\): Promise<PiLiveRuntimeState\[]>/, 'Runtime Service 必须提供活跃任务列举')
-requireText(runtime, /async clearQueue\(runtimeSessionId: string\)[\s\S]{0,180}\.session\.clearQueue\(\)/, 'Abort 必须支持队列取回')
-requireText(runtime, /session\.bindExtensions\(/, '必须通过官方 AgentSession 绑定 Extension Runtime')
-requireText(runtime, /assertPiSdkSession\(created\.session, installed\.sdkEntry, installed\.version\)/, '启动前必须校验 AgentSession capability')
-requireText(runtime, /extensionUi\.respond\(requestId, response\)/, 'Extension UI 必须关联 SDK request id')
+requireText(runtime, /status: 'initializing'/, 'Runtime Start 必须先返回 initializing')
+requireText(runtime, /runtime\.initialization\.abort\(\)/, 'initializing Terminate 必须取消 Worker 初始化')
+requireText(workerHost, /fork\(entry, \[\], forkOptions\)/, 'Pi SDK 必须由独立 Worker 承载')
+requireText(workerHost, /MAX_PENDING_REQUESTS/, 'Worker IPC 待处理请求必须有界')
+requireText(workerEntry, /const queue = value\.restoreQueue === false[\s\S]{0,180}session\.clearQueue\(\)/, 'Abort 必须支持队列取回')
+requireText(workerEntry, /session\.bindExtensions\(/, 'Worker 必须通过官方 AgentSession 绑定 Extension Runtime')
+requireText(inProcessHost, /assertPiSdkSession\(created\.session, installed\.sdkEntry, installed\.version\)/, 'SDK 契约夹具必须校验 AgentSession capability')
+requireText(workerEntry, /extensionUi\.respond\(value\.requestId, value\.response\)/, 'Extension UI 必须关联 Worker request id')
 
 requireText(sdkAdapter, /from '@earendil-works\/pi-coding-agent'/, 'SDK Adapter 必须从官方包派生类型')
 requireText(sdkAdapter, /PI_SDK_TYPE_BASELINE = '0\.84\.4'/, 'SDK Adapter 必须记录 0.84.4 类型基线')
@@ -172,7 +179,7 @@ requireText(sdkAdapter, /export function assertPiSdkSession/, '缺少 Session ca
 requireText(sdkAdapter, /export function asPiSdkExtensionUiContext/, '缺少 Extension UI capability 校验')
 requireText(runtimePackage, /"@earendil-works\/pi-coding-agent":\s*"0\.84\.4"/, 'runtime-cordis 必须以官方 Pi SDK 0.84.4 为类型基线')
 requireText(sdkLoader, /PI_SDK_PACKAGE_NAME/, 'Loader 必须只定位官方 Pi npm 包')
-requireText(sdkLoader, /await import\(pathToFileURL\(discovery\.sdkEntry\)\.href\)/, '必须进程内加载用户实际安装的官方 SDK')
+requireText(workerEntry, /await import\(pathToFileURL\(discovery\.sdkEntry\)\.href\)/, '必须在 Worker 内加载用户实际安装的官方 SDK')
 requireText(sdkLoader, /assertPiSdkModule\(imported, discovery\.sdkEntry, discovery\.version\)/, 'Loader 必须执行 Module capability 校验')
 if (/export interface PiSdk(?:Session|Module|Model)/.test(sdkLoader)) failures.push('Loader 不得维护手写 SDK 接口镜像')
 if (/PiRpcClient|--mode['"\s,]+rpc|child_process/.test(`${runtime}\n${sdkLoader}`)) failures.push('Runtime 不得重新引入自维护 RPC 子进程协议')
@@ -194,4 +201,4 @@ if (failures.length) {
   for (const failure of failures) console.error(`- ${failure}`)
   process.exit(1)
 }
-console.log('Pi Live / 任务中心契约检查通过：统一 TaskSurface 与单一样式所有权、官方 Pi SDK、队列/Abort、历史事实、IME、滚动跟随、Extension UI、背压与响应式布局已锁定。')
+console.log('Pi Live / 任务中心契约检查通过：统一 TaskSurface、独立 SDK Worker、异步状态机、有界 IPC、队列/Abort、历史事实、IME、滚动跟随与响应式布局已锁定。')

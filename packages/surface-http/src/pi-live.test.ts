@@ -43,6 +43,8 @@ class FakePiLiveService implements PiLiveService {
     if (runtimeSessionId !== this.runtimeSessionId) throw new Error(`Unknown Pi Live runtime session: ${runtimeSessionId}`)
     return {
       runtimeSessionId,
+      status: 'ready' as const,
+      initializationStage: 'ready' as const,
       nativeSessionId: 'pi-native-1',
       sessionFile: '/tmp/pi-session.jsonl',
       sessionName: 'AgentLens Pi Live',
@@ -54,6 +56,10 @@ class FakePiLiveService implements PiLiveService {
       leafId: 'entry-2',
       processId: 43210,
     }
+  }
+
+  async retry(runtimeSessionId: string) {
+    return this.state(runtimeSessionId)
   }
 
   async snapshot(runtimeSessionId: string, since?: string) {
@@ -181,6 +187,10 @@ test('Pi Live HTTP control surface preserves runtime ownership and validates com
       model: 'test-model',
       name: 'live-task',
     })
+
+    const retried = await fetch(`${base}/api/v1/pi-live/${piLive.runtimeSessionId}/retry`, { method: 'POST' })
+    assert.equal(retried.status, 202)
+    assert.equal((await json(retried)).status, 'ready')
 
     const snapshot = await fetch(`${base}/api/v1/pi-live/${piLive.runtimeSessionId}/snapshot?since=entry-1`)
     assert.equal(snapshot.status, 200)
