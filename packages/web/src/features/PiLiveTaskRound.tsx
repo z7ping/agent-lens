@@ -238,7 +238,7 @@ export function PiLiveRunningTaskRound({
     />}
     {streamText && <div className="pi-live-stream-response">
       <div className="pi-live-message-meta"><b>Pi</b><span>{isStreaming ? '生成中' : '输出'}</span></div>
-      <MarkdownContent text={streamText}/>
+      <div className="pi-live-stream-text">{streamText}</div>
       {isStreaming && <span className="pi-live-caret" aria-hidden="true"/>}
     </div>}
   </TaskRound>
