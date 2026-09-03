@@ -18,6 +18,8 @@ const piLivePage = readFileSync(new URL('../../features/PiLivePage.tsx', import.
 const piLiveCss = readFileSync(new URL('../../pi-live.css', import.meta.url), 'utf8')
 const taskCenterPage = readFileSync(new URL('../../features/TaskCenterPage.tsx', import.meta.url), 'utf8')
 const taskCenterCss = readFileSync(new URL('../../task-center.css', import.meta.url), 'utf8')
+const reviewPage = readFileSync(new URL('../../features/ReviewPage.tsx', import.meta.url), 'utf8')
+const reviewCss = readFileSync(new URL('../../review.css', import.meta.url), 'utf8')
 const backupPage = readFileSync(new URL('../../features/BackupPage.tsx', import.meta.url), 'utf8')
 const backupCss = readFileSync(new URL('../../backup.css', import.meta.url), 'utf8')
 const toolsPage = readFileSync(new URL('../../features/ToolsPage.tsx', import.meta.url), 'utf8')
@@ -143,6 +145,23 @@ test('Task Center toolbar and common actions consume the UI layer', () => {
   assert.doesNotMatch(taskCenterCss, /\.task-center-rail-head \.btn\s*\{/)
   assert.doesNotMatch(taskCenterCss, /\.task-center-new-actions \.btn\s*\{[^}]*min-height:/s)
   assert.match(taskCenterCss, /\.task-center-toolbar \.ui-icon-button/)
+})
+
+test('Review toolbar and Inspector consume shared UI primitives', () => {
+  assert.match(reviewPage, /import \{ Drawer, IconButton, Input, SelectMenu, Toolbar, UiIcon \} from '\.\.\/components\/ui'/)
+  assert.doesNotMatch(reviewPage, /from '\.\.\/components\/SelectMenu'/)
+  assert.match(reviewPage, /<Toolbar className="workspace-toolbar" aria-label="任务复盘筛选">/)
+  assert.match(reviewPage, /<Input className="filter search-filter"/)
+  assert.match(reviewPage, /<Drawer[\s\S]*?className="review-inspector-overlay"/)
+  assert.doesNotMatch(reviewPage, /document\.addEventListener\('keydown'/)
+  assert.doesNotMatch(reviewPage, /className="inspector-panel"|className="icon-button"/)
+  assert.doesNotMatch(reviewCss, /\.inspector-panel\b|\.inspector-head\b|\.inspector-title\b/)
+  assert.match(reviewCss, /\.review-inspector-overlay \.agent-scope/)
+  const reviewToolbarRule = reviewCss.match(/\.review-page:not\(\.review-page-embedded\) \.workspace-toolbar \{([^}]*)\}/)?.[1] ?? ''
+  assert.doesNotMatch(reviewToolbarRule, /\b(?:height|min-height|gap|align-items)\s*:/)
+  const reviewFilterRule = reviewCss.match(/\.review-page:not\(\.review-page-embedded\) \.filter \{([^}]*)\}/)?.[1] ?? ''
+  assert.doesNotMatch(reviewFilterRule, /\b(?:height|padding|border|border-radius|background|color|font-size)\s*:/)
+  assert.doesNotMatch(reviewCss, /@media \(max-width: (?:1180|900|640)px\)/)
 })
 
 test('Asset Backup consumes shared controls and Overlay primitives', () => {
