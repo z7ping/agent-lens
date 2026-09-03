@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import type { HubReadAvailability, HubReviewSessionSummaryDto, PiLiveStateDto, ReviewSessionSummaryDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
@@ -211,6 +211,7 @@ export function TaskCenterPage({ model, mode }: { model: AgentLensClientModel; m
   const [runtimes, setRuntimes] = useState<PiLiveStateDto[]>([])
   const [hubSessions, setHubSessions] = useState<HubReviewSessionSummaryDto[]>([])
   const [projectHistory, setProjectHistory] = useState<ReviewSessionSummaryDto[]>([])
+  const historyScrollTargetRef = useRef('')
   const review = snapshot.review
   const agents = snapshot.facets?.agents ?? []
   const projects = snapshot.facets?.projects ?? []
@@ -288,6 +289,43 @@ export function TaskCenterPage({ model, mode }: { model: AgentLensClientModel; m
     navigate(`/review/new${search ? `?${search}` : ''}`)
   }
 
+  const openHistoryTask = useCallback((id: string) => {
+    historyScrollTargetRef.current = id
+    navigate(`/review/${encodeURIComponent(id)}`)
+
+    let remainingFrames = 90
+    let stableFrames = 0
+    let previousHeight = -1
+    const settle = () => {
+      if (historyScrollTargetRef.current !== id) {
+        document.querySelector<HTMLElement>('.review-reader-pane')?.style.removeProperty('overflow-anchor')
+        return
+      }
+
+      const current = model.getSnapshot().review
+      const pane = document.querySelector<HTMLElement>('.review-reader-pane')
+      if (current.selectedId !== id || current.detailLoading || current.detail?.id !== id || !pane) {
+        remainingFrames -= 1
+        if (remainingFrames > 0) window.requestAnimationFrame(settle)
+        return
+      }
+
+      pane.style.setProperty('overflow-anchor', 'none')
+      pane.scrollTop = pane.scrollHeight
+      const height = pane.scrollHeight
+      stableFrames = height === previousHeight ? stableFrames + 1 : 0
+      previousHeight = height
+      remainingFrames -= 1
+      if (stableFrames >= 3 || remainingFrames <= 0) {
+        pane.style.removeProperty('overflow-anchor')
+        if (historyScrollTargetRef.current === id) historyScrollTargetRef.current = ''
+        return
+      }
+      window.requestAnimationFrame(settle)
+    }
+    window.requestAnimationFrame(settle)
+  }, [model, navigate])
+
   const selectedRuntimeId = location.pathname.startsWith('/review/live/')
     ? decodeURIComponent(location.pathname.slice('/review/live/'.length))
     : ''
@@ -331,7 +369,7 @@ export function TaskCenterPage({ model, mode }: { model: AgentLensClientModel; m
         {historyGroups.map(group => <section className="task-center-group task-center-history-group" key={group.label}>
           <div className="task-center-group-title"><span>{group.label}</span><span>{group.items.length}{group.label === '更早' && review.response?.meta.hasMore ? '+' : ''}</span></div>
           {group.items.map(entry => entry.kind === 'local'
-            ? <HistoryTaskItem key={`local:${entry.id}`} item={entry.local} active={mode === 'history' && review.selectedId === entry.id} onClick={() => navigate(`/review/${encodeURIComponent(entry.id)}`)}/>
+            ? <HistoryTaskItem key={`local:${entry.id}`} item={entry.local} active={mode === 'history' && review.selectedId === entry.id} onClick={() => openHistoryTask(entry.id)}/>
             : <RemoteTaskItem key={`remote:${entry.id}`} item={entry.remote} active={mode === 'hub' && location.pathname === `/review/hub/${encodeURIComponent(entry.id)}`} onClick={() => navigate(`/review/hub/${encodeURIComponent(entry.id)}`)}/>)}
         </section>)}
 
