@@ -44,6 +44,9 @@ test('Pi Live composer keeps status labels and adjacent controls visually separa
   assert.match(css, /\.pi-live-compose-runtime \{[^}]*display:\s*inline-flex;[^}]*gap:\s*6px;/)
   assert.match(css, /\.pi-live-compose-settings \{[^}]*gap:\s*8px;/)
   assert.match(css, /\.pi-live-compose-mode \{[^}]*gap:\s*2px;/)
+  assert.match(css, /\.pi-live-startup-queue > div \{[^}]*gap:\s*6px;/)
+  assert.match(css, /\.pi-live-queue-item > div \{[^}]*gap:\s*6px;/)
+  assert.match(css, /\.pi-live-review-link \{[^}]*display:\s*flex;[^}]*gap:\s*8px;/)
 })
 
 test('medium desktop viewports reclaim space instead of forcing connection text into another row', () => {
