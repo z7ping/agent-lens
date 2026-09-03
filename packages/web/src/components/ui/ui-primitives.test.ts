@@ -20,6 +20,9 @@ const taskCenterPage = readFileSync(new URL('../../features/TaskCenterPage.tsx',
 const taskCenterCss = readFileSync(new URL('../../task-center.css', import.meta.url), 'utf8')
 const backupPage = readFileSync(new URL('../../features/BackupPage.tsx', import.meta.url), 'utf8')
 const backupCss = readFileSync(new URL('../../backup.css', import.meta.url), 'utf8')
+const toolsPage = readFileSync(new URL('../../features/ToolsPage.tsx', import.meta.url), 'utf8')
+const toolsCss = readFileSync(new URL('../../tools.css', import.meta.url), 'utf8')
+const insightsPage = readFileSync(new URL('../../features/InsightsPage.tsx', import.meta.url), 'utf8')
 const agentRules = readFileSync(new URL('../../../../../AGENTS.md', import.meta.url), 'utf8')
 
 function tsxFiles(directory: string): string[] {
@@ -154,6 +157,23 @@ test('Asset Backup consumes shared controls and Overlay primitives', () => {
   assert.doesNotMatch(backupCss, /\.backup-confirm-scrim\b/)
   assert.doesNotMatch(backupCss, /@media \(max-width: (?:1180|820|640)px\)/)
   assert.doesNotMatch(backupCss, /\.snapshot-create-button\s*\{[^}]*height\s*:/s)
+})
+
+test('Tools and Insights consume shared toolbar and overlay primitives', () => {
+  assert.match(toolsPage, /import \{ Drawer, IconButton, SelectMenu, Toolbar \} from '\.\.\/components\/ui'/)
+  assert.match(toolsPage, /<Toolbar className="workspace-toolbar" aria-label="工具分析筛选">/)
+  assert.match(toolsPage, /<Drawer[\s\S]*?className="tool-drill-overlay"/)
+  assert.doesNotMatch(toolsPage, /tool-drawer-scrim|tool-drill-drawer|window\.addEventListener\('keydown'/)
+  assert.doesNotMatch(toolsCss, /\.tool-drawer-scrim\b|\.tool-drill-drawer\b|\.tool-drill-head\b/)
+  assert.doesNotMatch(toolsCss, /@media \(max-width: (?:1100|760|560)px\)/)
+  assert.match(toolsCss, /@media \(max-width: 991\.98px\)/)
+  assert.match(toolsCss, /@media \(max-width: 767\.98px\)/)
+  assert.match(toolsCss, /@media \(max-width: 575\.98px\)/)
+
+  assert.match(insightsPage, /import \{ IconButton, SelectMenu, Toolbar, UiIcon \} from '\.\.\/components\/ui'/)
+  assert.doesNotMatch(insightsPage, /from '\.\.\/components\/SelectMenu'/)
+  assert.match(insightsPage, /<Toolbar className="workspace-toolbar" aria-label="使用洞察筛选">/)
+  assert.match(insightsPage, /<IconButton className="toolbar-end"/)
 })
 
 test('repository agent rules require reuse of shared primitives', () => {
