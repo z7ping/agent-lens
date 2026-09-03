@@ -102,13 +102,15 @@ export function piLiveTaskRoundEstimate(projection: PiLiveTaskRoundProjection): 
   const factHeight = projection.items.reduce((total, item) => {
     if (item.kind === 'message') {
       const lines = Math.max(1, Math.ceil(item.text.length / 72))
-      return total + Math.min(360, 72 + lines * 24)
+      return total + Math.min(340, 60 + lines * 23)
     }
-    if (item.kind === 'thinking') return total + 64
-    if (item.kind === 'tool') return total + (item.output ? 92 : 58)
-    return total + 38
+    if (item.kind === 'thinking') return total + 52
+    if (item.kind === 'tool') return total + (item.output ? 82 : 48)
+    // TaskEvent 的主行和折叠原始数据入口都会占高度；与紧凑样式对齐，
+    // 避免虚拟轮次从估算高度切到实测高度时产生明显滚动跳动。
+    return total + 56
   }, 0)
-  return 42 + factHeight
+  return 34 + factHeight
 }
 
 export function projectPiLiveTaskRounds(history: PiLiveHistoryItem[]): PiLiveTaskRoundProjection[] {
