@@ -5,6 +5,8 @@ import test from 'node:test'
 const source = readFileSync(new URL('./Primitives.tsx', import.meta.url), 'utf8')
 const css = readFileSync(new URL('./ui-primitives.css', import.meta.url), 'utf8')
 const index = readFileSync(new URL('./index.ts', import.meta.url), 'utf8')
+const overlay = readFileSync(new URL('./Overlay.tsx', import.meta.url), 'utf8')
+const overlayCss = readFileSync(new URL('./overlay.css', import.meta.url), 'utf8')
 const piStartup = readFileSync(new URL('../PiStartupDisclosure.tsx', import.meta.url), 'utf8')
 const piStartupCss = readFileSync(new URL('../pi-startup-disclosure.css', import.meta.url), 'utf8')
 const composerPill = readFileSync(new URL('../ComposerPillSelect.tsx', import.meta.url), 'utf8')
@@ -15,6 +17,7 @@ test('shared UI primitives expose the first unified component set', () => {
   for (const name of ['Button', 'IconButton', 'Input', 'Textarea', 'Select', 'StatusBadge', 'Disclosure', 'Toolbar', 'ToolbarGroup']) {
     assert.match(source, new RegExp(`export function ${name}\\b`))
   }
+  assert.match(index, /export \{ Dialog, Drawer \} from '\.\/Overlay'/)
   assert.match(index, /export \{ SelectMenu \} from '\.\.\/SelectMenu'/)
 })
 
@@ -23,13 +26,24 @@ test('shared controls keep the frozen size and typography contracts', () => {
   assert.match(css, /\.ui-icon-button\.is-small \{[\s\S]*?width:\s*26px;[\s\S]*?height:\s*26px;/)
   assert.match(css, /\.ui-field \{[\s\S]*?height:\s*34px;[\s\S]*?font-size:\s*13px;/)
   assert.match(css, /\.ui-status-badge \{[\s\S]*?font-size:\s*12px;/)
+  assert.doesNotMatch(overlayCss, /font-size:\s*(?:10(?:\.5)?|11(?:\.5)?)px/)
 })
 
 test('shared primitives consume semantic tokens instead of page palettes', () => {
   assert.doesNotMatch(css, /#[0-9a-fA-F]{3,8}\b/)
+  assert.doesNotMatch(overlayCss, /#[0-9a-fA-F]{3,8}\b/)
   assert.match(css, /var\(--al-accent\)/)
   assert.match(css, /var\(--al-danger\)/)
   assert.match(css, /var\(--al-line-strong\)/)
+})
+
+test('Dialog and Drawer own the common accessibility behavior', () => {
+  assert.match(overlay, /event\.key === 'Escape'/)
+  assert.match(overlay, /event\.key !== 'Tab'/)
+  assert.match(overlay, /aria-modal="true"/)
+  assert.match(overlay, /previous\?\.focus/)
+  assert.match(overlay, /export function Dialog/)
+  assert.match(overlay, /export function Drawer/)
 })
 
 test('Pi startup actions consume the shared Button contract', () => {
