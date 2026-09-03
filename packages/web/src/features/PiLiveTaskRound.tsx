@@ -190,6 +190,7 @@ export function PiLiveHistoryTaskRound({
 
 export function PiLiveRunningTaskRound({
   model,
+  promptText,
   thinkingText,
   tools,
   streamText,
@@ -197,6 +198,7 @@ export function PiLiveRunningTaskRound({
   pendingMessageCount,
 }: {
   model: TaskRoundModel
+  promptText?: string
   thinkingText: string
   tools: PiLiveRunningTool[]
   streamText: string
@@ -225,12 +227,15 @@ export function PiLiveRunningTaskRound({
     preview: compactPreview(thinkingText),
     state: model.state,
   }
+  const waiting = isStreaming && !thinkingText && toolModels.length === 0 && !streamText
 
   return <TaskRound
     model={model}
     className="pi-live-current-round"
     summaryMeta={pendingMessageCount > 0 ? <span>{pendingMessageCount} 条排队</span> : undefined}
   >
+    {promptText && <TaskMessage role="user" text={promptText} author="你" className="pi-live-task-message pi-live-optimistic-message"/>}
+    {waiting && <div className="pi-live-empty" role="status">等待 Pi 响应…</div>}
     {thinkingText && <TaskThinking model={thinking} defaultExpanded><div className="task-thinking-stream-text">{thinkingText}</div></TaskThinking>}
     {toolModels.length > 0 && <TaskToolGroup
       model={toolGroup('pi-live-current-tools', toolModels)}
