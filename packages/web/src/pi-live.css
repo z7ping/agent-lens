@@ -64,21 +64,19 @@
 .pi-live-review-link:hover { color: var(--al-accent); }
 
 /*
- * Pi Live 采用“短内容连续流、长内容独立滚动”的纵向布局：
- * Reader 内容不足一屏时只占实际高度，Composer 紧随正文；剩余空间留在页面底部。
- * Reader 内容超出可用高度时允许自身收缩并滚动，Composer 自然停在可视区底部。
+ * Pi Live 固定为 Header / Reader / Composer 三段式布局。
+ * Reader 始终占满中间剩余空间，Composer 无论历史长短都稳定贴在可视区底部；
+ * Composer 主动放大时只压缩 Reader，不改变底部锚点。
  */
 .pi-live-workspace {
   position: relative;
-  display: flex;
+  display: grid;
   min-width: 0;
   min-height: 0;
-  flex-direction: column;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   overflow: hidden;
   background: var(--al-surface);
 }
-.pi-live-workspace > :first-child { flex: 0 0 auto; }
-.pi-live-workspace::after { content: ''; min-height: 0; flex: 1 1 0; }
 .pi-live-disconnected { color: var(--al-warning); }
 .pi-live-stop:disabled { cursor: default; opacity: .45; }
 .pi-live-menu { display: grid; width: 30px; height: 30px; place-items: center; padding: 0; font-size: 18px; line-height: 1; }
@@ -87,7 +85,6 @@
 .pi-live-reader {
   position: relative;
   min-height: 0;
-  flex: 0 1 auto;
   overflow: auto;
   overflow-anchor: auto;
   background: var(--al-surface);
@@ -148,7 +145,6 @@
 .pi-live-compose-wrap {
   position: relative;
   z-index: 10;
-  flex: 0 0 auto;
   padding: 3px 18px 10px;
   border-top: 0;
   background: var(--al-surface);
