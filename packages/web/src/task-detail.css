@@ -187,16 +187,16 @@
 .task-surface .task-round {
   min-width: 0;
   scroll-margin-top: 44px;
-  margin-top: 10px;
+  margin-top: 6px;
   border: 0;
   background: transparent;
   box-shadow: none;
 }
-.task-surface .task-round + .task-round { margin-top: 6px; }
+.task-surface .task-round + .task-round { margin-top: 3px; }
 .task-surface .task-round-has-error > .task-round-summary { color: var(--al-danger); }
 .task-surface .task-round-summary {
   display: flex;
-  min-height: 34px;
+  min-height: 30px;
   align-items: center;
   gap: 6px;
   padding: 0;
@@ -225,12 +225,12 @@
 .task-surface .task-round-live { color: var(--al-accent); }
 .task-surface .task-round-error { color: var(--al-danger); font-weight: 650; }
 .task-surface .task-round-latency { color: var(--al-warning); font-weight: 650; }
-.task-surface .task-round-flow { position: relative; display: flex; min-width: 0; flex-direction: column; gap: 7px; padding: 5px 8px 13px; }
+.task-surface .task-round-flow { position: relative; display: flex; min-width: 0; flex-direction: column; gap: 4px; padding: 2px 8px 8px; }
 
 /* ── Message / Markdown ── */
-.task-surface .task-message-row { position: relative; z-index: 2; display: flex; width: 100%; min-width: 0; align-items: flex-start; margin: 7px 0; }
+.task-surface .task-message-row { position: relative; z-index: 2; display: flex; width: 100%; min-width: 0; align-items: flex-start; margin: 4px 0; }
 .task-surface .task-message-user { justify-content: flex-end; }
-.task-surface .task-message-assistant { display: block; margin: 6px 0; }
+.task-surface .task-message-assistant { display: block; margin: 4px 0; }
 .task-surface .task-message-bubble { position: relative; min-width: 0; font-size: 14px; line-height: 1.62; }
 .task-surface .task-message-bubble-user {
   max-width: min(64%, 760px);
@@ -302,10 +302,10 @@
 .task-surface .task-message-actions { display: none; }
 
 /* ── Thinking ── */
-.task-surface .task-thinking { position: relative; z-index: 1; margin: 2px 0 4px; overflow: visible; border: 0; background: transparent; }
+.task-surface .task-thinking { position: relative; z-index: 1; margin: 1px 0 2px; overflow: visible; border: 0; background: transparent; }
 .task-surface .task-thinking-summary {
   display: grid;
-  min-height: 30px;
+  min-height: 28px;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
@@ -321,8 +321,8 @@
 .task-surface .task-thinking-label { flex: 0 0 auto; color: var(--al-muted); font-size: 13px; font-weight: 650; white-space: nowrap; }
 .task-surface .task-thinking-preview { min-width: 0; flex: 1 1 auto; overflow: hidden; color: var(--al-muted-2); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .task-surface .task-thinking-summary-meta { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; color: var(--al-muted-2); font-size: 12px; white-space: nowrap; }
-.task-surface .task-thinking-content { position: relative; margin: 0 2px 4px 26px; padding: 0; color: var(--al-muted); font-size: 13px; line-height: 1.55; }
-.task-surface .task-thinking-actions { margin: 2px 2px 5px 26px; padding: 0; }
+.task-surface .task-thinking-content { position: relative; margin: 0 2px 2px 26px; padding: 0; color: var(--al-muted); font-size: 13px; line-height: 1.55; }
+.task-surface .task-thinking-actions { margin: 1px 2px 3px 26px; padding: 0; }
 .task-surface .task-thinking-stream-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .task-surface .task-thinking-content .markdown-message { position: relative; }
 /* Thinking 本身就是 disclosure；内部 Markdown 不再拥有第二层 5 行折叠。 */
@@ -345,21 +345,21 @@
 .task-surface .task-thinking-actions:has(> .evidence-link:only-child) { display: none; }
 
 /* ── Tool ── */
-.task-surface .task-tool-group { position: relative; z-index: 1; margin: 3px 0 5px 13px; overflow: visible; background: transparent; }
+.task-surface .task-tool-group { position: relative; z-index: 1; margin: 1px 0 3px 13px; overflow: visible; background: transparent; }
 .task-surface .task-tool-list { margin: 0; padding-left: 9px; overflow: visible; border-left: 2px solid color-mix(in srgb, var(--al-accent) 58%, var(--al-line)); }
 .task-surface .task-thinking-content .task-tool-group { margin-left: 12px; }
-.task-surface .task-process-sequence { display: grid; gap: 8px; }
+.task-surface .task-process-sequence { display: grid; gap: 5px; }
 .task-surface .task-process-message { min-width: 0; }
 .task-surface .task-process-message-kind { margin-bottom: 2px; color: var(--al-muted-2); font-size: 12px; font-weight: 650; }
 .task-surface .task-process-message-meta { margin-top: 2px; }
 .task-surface .task-tool-row {
   display: grid;
   width: 100%;
-  min-height: 30px;
+  min-height: 28px;
   grid-template-columns: 66px auto minmax(88px, auto) minmax(0, 1fr);
   align-items: center;
-  gap: 7px;
-  padding: 3px 2px;
+  gap: 6px;
+  padding: 2px;
   overflow: hidden;
   border: 0;
   border-radius: 0;
@@ -405,7 +405,7 @@
 .task-surface .task-tool-target { display: flex; min-width: 0; align-items: center; gap: 6px; overflow: hidden; color: var(--al-muted); font-size: 13px; }
 .task-surface .task-tool-target-text { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-surface .task-tool-meta { flex: 0 0 auto; }
-.task-surface .task-tool-payload { margin: 0 7px 6px 20px; padding: 4px 0 0 8px; border-left: 1px solid color-mix(in srgb, var(--al-line-strong) 72%, transparent); }
+.task-surface .task-tool-payload { margin: 0 7px 3px 20px; padding: 3px 0 0 8px; border-left: 1px solid color-mix(in srgb, var(--al-line-strong) 72%, transparent); }
 .task-surface .task-tool-live-output pre,
 .task-surface .task-tool-output-details pre {
   max-height: 180px;
@@ -419,7 +419,7 @@
   font: 12px/1.55 var(--font-mono);
   white-space: pre-wrap;
 }
-.task-surface .task-tool-output-details > summary { display: flex; min-height: 26px; align-items: center; gap: 5px; color: var(--al-muted); font-size: 12px; cursor: pointer; list-style: none; }
+.task-surface .task-tool-output-details > summary { display: flex; min-height: 24px; align-items: center; gap: 5px; color: var(--al-muted); font-size: 12px; cursor: pointer; list-style: none; }
 .task-surface .task-tool-output-details > summary::-webkit-details-marker { display: none; }
 .task-surface .task-tool-output-details > summary::before {
   content: "";
@@ -438,14 +438,14 @@
 .task-surface .task-event-row {
   display: grid;
   width: 100%;
-  min-height: 38px;
+  min-height: 30px;
   grid-template-columns: 18px minmax(0, 1fr) auto minmax(72px, auto) 66px;
   align-items: center;
-  gap: 8px;
-  margin: 5px 0;
-  padding: 5px 8px;
+  gap: 6px;
+  margin: 1px 0;
+  padding: 2px 6px;
   border: 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--al-line) 58%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--al-line) 38%, transparent);
   background: transparent;
   color: var(--al-muted);
   text-align: left;
@@ -468,19 +468,19 @@
 .task-surface .task-event-context .task-event-mark,
 .task-surface .task-event-usage .task-event-mark { color: var(--al-tool-search-fg); }
 .task-surface .task-event-unknown .task-event-mark { color: var(--al-muted-2); }
-.task-surface .task-event-copy { display: flex; min-width: 0; align-items: center; gap: 8px; }
+.task-surface .task-event-copy { display: flex; min-width: 0; align-items: center; gap: 6px; }
 .task-surface .task-event-copy b { flex: 0 0 auto; color: var(--al-ink-2); font-size: 13px; font-weight: 680; }
 .task-surface .task-event-copy small { min-width: 0; overflow: hidden; color: var(--al-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .task-surface .task-event-row > .evidence-inline-list { justify-self: end; }
 .task-surface .task-event-source,
 .task-surface .task-event-row > time { color: var(--al-muted); font-size: 12px; white-space: nowrap; text-align: right; }
-.task-surface .task-event-raw { margin: -2px 0 7px 26px; padding: 0 8px 8px; border-left: 1px solid var(--al-line); color: var(--al-muted); font-size: 12px; }
-.task-surface .task-event-raw > summary { min-height: 28px; cursor: pointer; }
-.task-surface .task-event-raw-meta { margin-bottom: 5px; overflow-wrap: anywhere; font-family: var(--font-mono); }
+.task-surface .task-event-raw { margin: -1px 0 2px 24px; padding: 0 6px 4px; border-left: 1px solid color-mix(in srgb, var(--al-line) 72%, transparent); color: var(--al-muted); font-size: 12px; }
+.task-surface .task-event-raw > summary { min-height: 24px; cursor: pointer; }
+.task-surface .task-event-raw-meta { margin-bottom: 3px; overflow-wrap: anywhere; font-family: var(--font-mono); }
 .task-surface .task-event-raw-json {
   max-height: 320px;
   margin: 0;
-  padding: 9px;
+  padding: 8px;
   overflow: auto;
   border: 1px solid var(--al-line);
   border-radius: 8px;
