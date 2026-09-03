@@ -56,8 +56,8 @@ export function ReviewTurnRail({ detail, onLoadInteraction }: { detail: ReviewSe
     observerFrame = window.requestAnimationFrame(() => {
       const shells = [...document.querySelectorAll<HTMLElement>('.review-reader-pane .virtual-round-shell')]
       if (!shells.length || typeof IntersectionObserver === 'undefined') return
-      observer = new IntersectionObserver(entries => {
-        const visible = entries
+      observer = new IntersectionObserver(observedEntries => {
+        const visible = observedEntries
           .filter(entry => entry.isIntersecting)
           .sort((a, b) => Math.abs(a.boundingClientRect.top - pane.getBoundingClientRect().top) - Math.abs(b.boundingClientRect.top - pane.getBoundingClientRect().top))[0]
         if (!visible) return
