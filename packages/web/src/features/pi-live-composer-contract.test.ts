@@ -60,19 +60,31 @@ test('Pi Live streaming tail keeps layout stable while tokens arrive', () => {
 
 test('Pi Live sends optimistically into one stable current round before the first token', () => {
   assert.match(page, /const \[optimisticPrompt, setOptimisticPrompt\] = useState\(''\)/)
-  assert.match(page, /setInput\(''\)[\s\S]*?if \(!wasStreaming\) \{[\s\S]*?setOptimisticPrompt\(text\)[\s\S]*?isStreaming: true/)
+  assert.match(page, /const activePromptRef = useRef\(''\)/)
+  assert.match(page, /setInput\(''\)[\s\S]*?if \(!wasStreaming\) \{[\s\S]*?setSettledCurrentOrdinal\(null\)[\s\S]*?activePromptRef\.current = text[\s\S]*?setOptimisticPrompt\(text\)[\s\S]*?isStreaming: true/)
   assert.match(page, /if \(!optimisticPrompt && !state\?\.isStreaming && !thinkingText && tools\.length === 0 && !streamText\) return undefined/)
   assert.match(page, /promptText=\{optimisticPrompt \|\| undefined\}/)
   assert.match(taskRound, /promptText && <TaskMessage role="user"/)
   assert.match(taskRound, /waiting && <div className="pi-live-empty" role="status">等待 Pi 响应…<\/div>/)
 })
 
-test('Pi Live auto-follow is coalesced to one animation frame and settle clears the temporary round atomically', () => {
+test('Pi Live auto-follow is coalesced to one animation frame', () => {
   assert.match(page, /const followFrameRef = useRef<number \| null>\(null\)/)
   assert.match(page, /if \(!followingRef\.current \|\| followFrameRef\.current !== null\) return/)
   assert.match(page, /followFrameRef\.current = requestAnimationFrame\(\(\) => \{[\s\S]*?followFrameRef\.current = null[\s\S]*?reader\.scrollTop = target/)
   assert.doesNotMatch(page, /return \(\) => cancelAnimationFrame\(frame\)/)
-  assert.match(page, /acceptSnapshot\(value\)[\s\S]*?setOptimisticPrompt\(''\)[\s\S]*?setStreamText\(''\)[\s\S]*?setThinkingText\(''\)[\s\S]*?toolsRef\.current\.clear\(\)[\s\S]*?setTools\(\[\]\)/)
+})
+
+test('Pi Live settle reconciles snapshot facts into the same current round shell', () => {
+  assert.match(page, /const \[settledCurrentOrdinal, setSettledCurrentOrdinal\] = useState<number \| null>\(null\)/)
+  assert.match(page, /const \[settledCurrentItems, setSettledCurrentItems\] = useState<PiLiveHistoryItem\[]>\(\[\]\)/)
+  assert.match(page, /const freshHistory = projectPiLiveHistory\(value\)[\s\S]*?const freshRounds = projectPiLiveTaskRounds\(freshHistory\)/)
+  assert.match(page, /setSettledCurrentOrdinal\(ordinal\)[\s\S]*?setSettledCurrentItems\(settledItems\)[\s\S]*?setOptimisticPrompt\(prompt\)/)
+  assert.match(page, /historyRounds\.filter\(round => round\.model\.ordinal !== settledCurrentOrdinal\)/)
+  assert.match(page, /return \{ \.\.\.settledProjection\.model, id: 'pi-live-current-round' \}/)
+  assert.match(page, /settledItems=\{settledCurrentItems\.length \? settledCurrentItems : undefined\}/)
+  assert.match(taskRound, /hasSettledItems[\s\S]*?\? <HistoryEntries items=\{withoutPromptMessage\(settledItems \?\? \[\], promptText\)\} showAllEvents=\{showAllEvents\}\/>/)
+  assert.match(taskRound, /model=\{model\}[\s\S]*?className="pi-live-current-round"/)
 })
 
 test('medium desktop viewports reclaim space instead of forcing connection text into another row', () => {
