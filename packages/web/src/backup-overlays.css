@@ -1,122 +1,12 @@
+@reference "./styles.css";
+
 /*
- * AgentLens 1.0 资产备份覆盖层正式样式。
+ * AgentLens 1.0 资产备份目录树样式。
  *
- * 只负责资产备份的数据详情、恢复预演和关键操作确认遮罩。
- * 不恢复历史全局 .drawer / .scrim 规则，避免影响其他一级页面。
+ * Drawer / Dialog 的遮罩、层级、焦点与关闭行为统一由 components/ui/Overlay 持有；
+ * 本文件只保留资产备份数据位置目录树的业务展示，不再维护第二套 Overlay。
  */
 
-/* 数据详情 / 恢复预演遮罩 */
-.scrim.show:has(+ .drawer.show[aria-label$='数据详情']),
-.scrim.show:has(+ .drawer.show[aria-label='恢复预演']),
-.backup-confirm-scrim {
-  position: fixed;
-  inset: 0;
-  display: block;
-  background: rgb(10 12 10 / .32);
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.scrim.show:has(+ .drawer.show[aria-label$='数据详情']),
-.scrim.show:has(+ .drawer.show[aria-label='恢复预演']) {
-  z-index: 129;
-}
-
-/* 资产备份右侧抽屉 */
-.drawer.show[aria-label$='数据详情'],
-.drawer.show[aria-label='恢复预演'] {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 130;
-  display: flex;
-  width: min(560px, calc(100vw - 28px));
-  min-width: 0;
-  flex-direction: column;
-  overflow: hidden;
-  border-left: 1px solid var(--al-line);
-  background: var(--al-surface-raised);
-  box-shadow: -18px 0 48px rgb(10 12 10 / .16);
-  color: var(--al-ink);
-  overscroll-behavior: contain;
-}
-
-.drawer.show[aria-label$='数据详情'] .dw-head,
-.drawer.show[aria-label='恢复预演'] .dw-head {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 14px;
-  min-height: 82px;
-  padding: 18px 20px 15px;
-  border-bottom: 1px solid var(--al-line);
-  background: var(--al-surface-raised);
-}
-
-.drawer.show[aria-label$='数据详情'] .dw-head > div,
-.drawer.show[aria-label='恢复预演'] .dw-head > div {
-  min-width: 0;
-  flex: 1;
-}
-
-.drawer.show[aria-label$='数据详情'] .dw-eyebrow,
-.drawer.show[aria-label='恢复预演'] .dw-eyebrow {
-  color: var(--al-muted-2);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: .08em;
-}
-
-.drawer.show[aria-label$='数据详情'] .dw-title,
-.drawer.show[aria-label='恢复预演'] .dw-title {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 8px;
-  margin-top: 5px;
-  color: var(--al-ink);
-  font-size: 18px;
-  font-weight: 720;
-  letter-spacing: -.02em;
-}
-
-.drawer.show[aria-label$='数据详情'] .dw-sub,
-.drawer.show[aria-label='恢复预演'] .dw-sub {
-  margin-top: 5px;
-  overflow-wrap: anywhere;
-  color: var(--al-muted);
-  font-size: 12px;
-  line-height: 1.55;
-}
-
-.drawer.show[aria-label$='数据详情'] .future-drawer-body,
-.drawer.show[aria-label='恢复预演'] .future-drawer-body {
-  min-height: 0;
-  flex: 1;
-  overflow: auto;
-  scrollbar-gutter: stable;
-}
-
-.drawer.show[aria-label$='数据详情'] .preview-summary,
-.drawer.show[aria-label='恢复预演'] .preview-summary {
-  margin-top: 2px;
-}
-
-.drawer.show[aria-label$='数据详情'] .future-note,
-.drawer.show[aria-label='恢复预演'] .future-note {
-  margin-top: 10px;
-}
-
-.drawer.show[aria-label$='数据详情'] .drawer-file > b {
-  color: var(--al-ink-2);
-  font-size: 12px;
-  font-weight: 650;
-  white-space: nowrap;
-}
-
-/* 数据位置目录树：只展示目录层级，不把十几万文件直接铺进抽屉。 */
 .backup-root-tree {
   overflow: hidden;
   border: 1px solid var(--al-line);
@@ -216,29 +106,7 @@
 }
 .backup-tree-omitted { margin-left: 7px; border-left: 1px dashed var(--al-line-strong); }
 
-/* 关键操作确认遮罩原先只设置 z-index，这里补齐真正的模态遮罩。 */
-.backup-confirm-scrim {
-  z-index: 139;
-}
-
-@media (max-width: 640px) {
-  .drawer.show[aria-label$='数据详情'],
-  .drawer.show[aria-label='恢复预演'] {
-    width: 100vw;
-    border-left: 0;
-  }
-
-  .drawer.show[aria-label$='数据详情'] .dw-head,
-  .drawer.show[aria-label='恢复预演'] .dw-head {
-    padding: 16px 14px 13px;
-  }
-
-  .drawer.show[aria-label$='数据详情'] .future-drawer-body,
-  .drawer.show[aria-label='恢复预演'] .future-drawer-body {
-    padding-right: 14px;
-    padding-left: 14px;
-  }
-
+@media (max-width: 575.98px) {
   .backup-root-tree-head { grid-template-columns: auto minmax(0, 1fr); }
   .backup-root-tree-head .link-btn { grid-column: 1 / -1; justify-self: start; }
 }
