@@ -354,6 +354,10 @@ export class PiLiveApi {
     return requestJson(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/follow-up`, jsonRequest({ message }))
   }
 
+  clearQueue(runtimeSessionId: string): Promise<PiLiveQueueDto> {
+    return requestJson(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/clear-queue`, { method: 'POST' })
+  }
+
   abort(runtimeSessionId: string, restoreQueue = true): Promise<PiLiveQueueDto> {
     const body: PiLiveAbortRequestDto = { restoreQueue }
     return requestJson(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/abort`, jsonRequest(body))
