@@ -26,6 +26,7 @@ export type UiIconName =
   | 'sort-down'
   | 'sort-up'
   | 'sun'
+  | 'task'
   | 'trend'
   | 'upload'
 
@@ -47,6 +48,7 @@ export function UiIcon({ name, size = 16, className, ...props }: UiIconProps) {
     if (name === 'arrow-up') return <><path d="M8 13V4"/><path d="m5 7 3-3 3 3"/></>
     if (name === 'arrow-down') return <><path d="M8 3v9"/><path d="m5 9 3 3 3-3"/></>
     if (name === 'send') return <><path d="M8 13V4"/><path d="m4.5 7.5 3.5-3.5 3.5 3.5"/></>
+    if (name === 'task') return <><path d="M3 3.5h10v7H7l-3 2v-2H3Z"/><path d="M5.5 6h5M5.5 8h3.5"/></>
     if (name === 'trend') return <><path d="M3 11.5 6.2 8l2.3 2 4.5-5"/><path d="M10 5h3v3"/></>
     if (name === 'check') return <path d="m3.5 8.2 2.7 2.7 6.3-6.3"/>
     if (name === 'copy') return <><rect x="5.2" y="5.2" width="7.3" height="7.3" rx="1.2"/><path d="M10.5 5.2V4.7A1.2 1.2 0 0 0 9.3 3.5H4.7a1.2 1.2 0 0 0-1.2 1.2v4.6a1.2 1.2 0 0 0 1.2 1.2h.5"/></>

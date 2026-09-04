@@ -98,13 +98,14 @@ export function projectPiLiveHistory(snapshot: PiLiveSnapshotDto | null): PiLive
         const text = messageText(fact)
         if (text) items.push({ id: fact.id, kind: 'message', role: fact.role, text, at: fact.at })
         if (fact.role === 'assistant' && (fact.stopReason || fact.errorMessage)) {
-          const failed = fact.stopReason === 'error' || Boolean(fact.errorMessage)
+          const cancelledByUser = fact.stopReason === 'aborted'
+          const failed = !cancelledByUser && (fact.stopReason === 'error' || Boolean(fact.errorMessage))
           items.push({
             id: `${fact.id}:stop`,
             kind: 'lifecycle',
-            event: failed ? 'assistant.error' : 'assistant.stop',
-            label: failed ? 'Pi 响应错误' : 'Pi 响应结束',
-            detail: [fact.stopReason, fact.errorMessage].filter(Boolean).join(' · '),
+            event: cancelledByUser ? 'assistant.cancelled' : failed ? 'assistant.error' : 'assistant.stop',
+            label: cancelledByUser ? '用户已取消 Pi 响应' : failed ? 'Pi 响应错误' : 'Pi 响应结束',
+            detail: cancelledByUser ? '' : [fact.stopReason, fact.errorMessage].filter(Boolean).join(' · '),
             at: fact.at,
             nativeType: fact.nativeType,
             parentId: fact.parentId,

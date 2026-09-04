@@ -144,3 +144,47 @@ test('Pi Live persisted history keeps orphan tool results instead of dropping fa
   assert.equal(item.output, 'not found')
   assert.match(item.summary, /保留原生 Tool Result 事实/)
 })
+
+test('Pi Live 将用户中止明确显示为取消而不误报响应错误', () => {
+  const items = projectPiLiveHistory(snapshot([
+    {
+      type: 'message',
+      id: 'assistant-aborted',
+      timestamp: '2026-09-04T00:00:00.000Z',
+      message: {
+        role: 'assistant',
+        stopReason: 'aborted',
+        errorMessage: 'Request aborted',
+        content: [],
+      },
+    },
+  ]))
+
+  const lifecycle = items.find(item => item.kind === 'lifecycle')
+  assert.ok(lifecycle && lifecycle.kind === 'lifecycle')
+  assert.equal(lifecycle.event, 'assistant.cancelled')
+  assert.equal(lifecycle.label, '用户已取消 Pi 响应')
+  assert.equal(lifecycle.detail, '')
+})
+
+test('Pi Live 仍将真实 Pi 错误显示为响应错误', () => {
+  const items = projectPiLiveHistory(snapshot([
+    {
+      type: 'message',
+      id: 'assistant-error',
+      timestamp: '2026-09-04T00:00:00.000Z',
+      message: {
+        role: 'assistant',
+        stopReason: 'error',
+        errorMessage: 'Provider unavailable',
+        content: [],
+      },
+    },
+  ]))
+
+  const lifecycle = items.find(item => item.kind === 'lifecycle')
+  assert.ok(lifecycle && lifecycle.kind === 'lifecycle')
+  assert.equal(lifecycle.event, 'assistant.error')
+  assert.equal(lifecycle.label, 'Pi 响应错误')
+  assert.equal(lifecycle.detail, 'error · Provider unavailable')
+})
