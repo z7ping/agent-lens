@@ -45,7 +45,7 @@ test('shared UI primitives expose the unified component set', () => {
   for (const name of ['Button', 'IconButton', 'Input', 'Textarea', 'Select', 'StatusBadge', 'Disclosure', 'Toolbar', 'ToolbarGroup']) {
     assert.match(source, new RegExp(`export function ${name}\\b`))
   }
-  assert.match(index, /export \{ Dialog, Drawer \} from '\.\/Overlay'/)
+  assert.match(index, /export \{ Dialog, Drawer, Popover \} from '\.\/Overlay'/)
   assert.match(index, /export \{ SelectMenu \} from '\.\.\/SelectMenu'/)
   assert.match(index, /export \{ UiIcon \} from '\.\.\/UiIcon'/)
 })
@@ -102,9 +102,9 @@ test('shared composites and Pi surfaces reuse UI primitives', () => {
 })
 
 test('Workspace Shell owns three primary workspaces and one dynamic context host', () => {
-  assert.match(workspaceSidebar, />任务中心</)
-  assert.match(workspaceSidebar, />洞察</)
-  assert.match(workspaceSidebar, />智能体</)
+  assert.match(workspaceSidebar, /<span aria-label="任务中心">任务<\/span>/)
+  assert.match(workspaceSidebar, />洞察<\/span>/)
+  assert.match(workspaceSidebar, />智能体<\/span>/)
   assert.match(workspaceSidebar, /to="\/review"[^>]*>[\s\S]*?<UiIcon name="task" size=\{16\}/)
   assert.match(workspaceSidebar, /to="\/insights"[^>]*>[\s\S]*?<UiIcon name="trend" size=\{16\}/)
   assert.match(workspaceSidebar, /to="\/agents"[^>]*>[\s\S]*?<UiIcon name="agent" size=\{16\}/)
@@ -113,23 +113,28 @@ test('Workspace Shell owns three primary workspaces and one dynamic context host
   assert.match(workspaceSidebar, /workspace-sidebar-context" ref=\{onContextHost\}/)
   assert.match(workspaceSidebar, /workspace-insight-navigation/)
   assert.match(workspaceSidebarCss, /grid-template-columns:\s*316px minmax\(0, 1fr\)/)
-  assert.match(workspaceSidebarCss, /workspace-primary-link\.is-active\s*\{[\s\S]*?background:\s*var\(--al-surface\)/)
+  assert.match(workspaceSidebarCss, /workspace-primary-link\.is-active\s*\{[\s\S]*?background:\s*transparent;/)
   assert.doesNotMatch(workspaceSidebarCss, /workspace-primary-link\.is-active::before/)
   assert.match(workspaceSidebarCss, /workspace-insight-filter-disclosure/)
   assert.match(app, /<ToolsPage model=\{model\} sidebarHost=\{sidebarHost\}/)
   assert.match(app, /<InsightsPage model=\{model\} sidebarHost=\{sidebarHost\}/)
 })
 
-test('Task Center context owns search, collapsed filters and task list', () => {
+test('Task Center context owns search, controlled filters and task list', () => {
   assert.match(taskCenterPage, /createPortal\(taskRail, sidebarHost\)/)
-  assert.match(taskCenterPage, /<Input className="task-center-search-input"/)
-  assert.match(taskCenterPage, /<Disclosure className="task-center-filter-disclosure" summary="筛选"/)
+  assert.match(taskCenterPage, /<Input\s+autoFocus\s+className="task-center-search-input"/)
+  assert.match(taskCenterPage, /className="task-center-filter-popover"/)
+  assert.match(taskCenterPage, /aria-expanded=\{filterOpen\}/)
+  assert.match(taskCenterPage, /id="task-center-filter-panel"[\s\S]*?aria-label="筛选历史任务"/)
   assert.match(taskCenterPage, /aria-label="任务列表：进行中 \+ 历史"/)
   assert.match(taskCenterPage, /task-center-new-task-button/)
   assert.doesNotMatch(taskCenterPage, /className="filter search-filter"/)
   assert.doesNotMatch(taskCenterPage, /<AgentScope\b/)
   assert.match(taskCenterCss, /\.task-center-search-input\.ui-field \{[\s\S]*?height:\s*34px;[\s\S]*?font-size:\s*13px;/)
-  assert.match(taskCenterCss, /\.task-center-filter-disclosure\[open\]/)
+  assert.match(taskCenterCss, /\.task-center-page\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\);/)
+  assert.match(taskCenterCss, /\.task-center-main\s*\{[\s\S]*?grid-column:\s*1;/)
+  assert.doesNotMatch(taskCenterCss, /--task-center-rail/)
+  assert.doesNotMatch(app, /ReviewTurnRail/)
 })
 
 test('Tools and Insights own filters in the left context, never in a right-side toolbar', () => {
