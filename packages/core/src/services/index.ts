@@ -162,6 +162,8 @@ export interface AssetInventoryReader {
   listByInstallation(installationId: AgentInstallationId): Promise<AssetInventoryEntry[]>
 }
 
+export type SessionActivityKind = 'user-task' | 'branch-task' | 'subagent' | 'internal-review' | 'system-activity'
+
 export interface SessionSummaryRecord {
   logicalSessionId: LogicalSessionId
   installationId: AgentInstallationId
@@ -176,9 +178,17 @@ export interface SessionSummaryRecord {
   startedAt: string
   endedAt: string
   observationCount: number
+  /** Backward compatible name; now strictly means real human user turns. */
   interactionCount: number
+  userTurnCount?: number
+  systemContextCount?: number
+  internalReviewCount?: number
+  otherEventCount?: number
   toolCount: number
   errorCount: number
+  sessionActivity?: SessionActivityKind
+  activitySourceLabel?: string
+  parentSessionId?: LogicalSessionId
 }
 
 export interface SessionSummaryCursor {
@@ -318,6 +328,11 @@ export interface ObservationRepository {
     nativeParentEventId: string,
     parentObservationId: ObservationId,
   ): Promise<void>
+  /**
+   * Detach the canonical observations previously derived from one raw SourceRecord.
+   * Evidence rows and SourceRecord rows stay intact; observations with other evidence survive.
+   */
+  removeDerivationsForSourceRecord?(sourceRecordId: SourceRecordId): Promise<number>
   put(observation: CanonicalObservation): Promise<void>
 }
 
@@ -378,6 +393,5 @@ export interface StorageService {
   readonly sessionSummaries?: SessionSummaryReader
   readonly sessionSummaryProjection?: SessionSummaryProjectionStore
   transaction<T>(fn: (tx: StorageTransaction) => Promise<T>): Promise<T>
-  migrate(): Promise<void>
   health(): Promise<StorageHealth>
 }

@@ -94,7 +94,7 @@ test('history ingest is incremental and preserves every native record', async ()
   try {
     const first = []
     for await (const record of codexSourceDefinition.ingestHistory!(source)) first.push(record)
-    assert.equal(first.length, 10)
+    assert.equal(first.length, 11)
     assert.equal(first[0]?.nativeType, 'metadata/session_start')
     assert.equal(first[0]?.sourceSessionNativeId, 'codex-test-1')
     assert.equal(first[2]?.nativeType, 'event_msg/task_started')
@@ -150,7 +150,7 @@ test('history emits native title only on first discovery or thread_name change',
   }
 })
 
-test('normalizer maps known facts and preserves unknown native events', async () => {
+test('normalizer uses event_msg.user_message as the only authoritative user request', async () => {
   const { root, sessions } = await withFixture()
   const source = sourceContext(root, sessions)
 
@@ -174,6 +174,7 @@ test('normalizer maps known facts and preserves unknown native events', async ()
       'session.lifecycle',
       'session.lifecycle',
       'session.lifecycle',
+      'context.injected',
       'message.user',
       'message.reasoning',
       'message.assistant',
@@ -183,12 +184,15 @@ test('normalizer maps known facts and preserves unknown native events', async ()
       'context.injected',
     ])
 
-    assert.deepEqual(outputs[6]?.payload, {
+    assert.equal((outputs[3]?.payload as any).provenance.transportEcho, true)
+    assert.equal((outputs[4]?.payload as any).provenance.actualAuthor, 'human-user')
+    assert.equal((outputs[4]?.payload as any).text, '运行测试并修复')
+    assert.deepEqual(outputs[7]?.payload, {
       callId: 'call_c1',
       nativeToolName: 'shell_command',
       input: { command: 'npm test' },
     })
-    assert.deepEqual(outputs[7]?.payload, {
+    assert.deepEqual(outputs[8]?.payload, {
       callId: 'call_c1',
       success: false,
       exitCode: 1,

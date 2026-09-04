@@ -94,7 +94,11 @@ export type SessionRelationshipType =
   | 'resume'
   | 'continuation'
   | 'fork'
+  | 'branch-task'
   | 'subagent'
+  | 'internal-review'
+  /** Native metadata explicitly associates an internal session with its root user task. */
+  | 'task-root'
   | 'import-copy'
   | 'related'
 

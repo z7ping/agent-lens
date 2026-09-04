@@ -48,10 +48,28 @@ export class SqliteSessionRelationshipCandidateRepository {
       candidate.fromNativeSessionId,
       candidate.toNativeSessionId,
       candidate.nativeParentEventId ?? '',
-      candidate.type ?? '',
       candidate.nativeRelation ?? '',
     ])
     await this.executor.run(() => {
+      // 同一个原生关系信号只保留当前 Parser 判定，task-root 与直接父关系是不同信号，可同时存在。
+      this.executor.db.prepare(`
+        DELETE FROM session_relationship_candidates
+        WHERE source_id = ? AND installation_id = ?
+          AND COALESCE(runtime_profile_id, '') = ?
+          AND from_native_session_id = ? AND to_native_session_id = ?
+          AND COALESCE(native_parent_event_id, '') = ?
+          AND COALESCE(native_relation, '') = ?
+          AND id != ?
+      `).run(
+        candidate.sourceId,
+        candidate.installationId,
+        candidate.runtimeProfileId ?? '',
+        candidate.fromNativeSessionId,
+        candidate.toNativeSessionId,
+        candidate.nativeParentEventId ?? '',
+        candidate.nativeRelation ?? '',
+        id,
+      )
       this.executor.db.prepare(`
         INSERT INTO session_relationship_candidates(
           id, source_id, installation_id, runtime_profile_id,
@@ -101,6 +119,18 @@ export class SqliteSessionRelationshipCandidateRepository {
         type,
         evidenceRefs: candidate.evidenceRefs ?? [],
         confidence: candidate.confidence,
+      }
+      if (type === 'task-root') {
+        this.executor.db.prepare(`
+          DELETE FROM session_relationships
+          WHERE from_session_id = ? AND to_session_id = ? AND type = 'task-root' AND id != ?
+        `).run(relationship.fromSessionId, relationship.toSessionId, relationship.id)
+      } else {
+        this.executor.db.prepare(`
+          DELETE FROM session_relationships
+          WHERE from_session_id = ? AND to_session_id = ?
+            AND type != 'task-root' AND type != ?
+        `).run(relationship.fromSessionId, relationship.toSessionId, type)
       }
       this.executor.db.prepare(`
         INSERT INTO session_relationships(
