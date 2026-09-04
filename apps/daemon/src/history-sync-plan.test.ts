@@ -10,10 +10,17 @@ import {
 test('历史同步按最新 1 个、最近 10 个、最近 7 天渐进调度', () => {
   const stages = createProgressiveHistoryStages(Date.parse('2026-09-01T00:00:00.000Z'))
   assert.deepEqual(stages.map(stage => ({ id: stage.id, window: stage.window })), [
-    { id: 'latest', window: { activeSince: '2026-08-25T00:00:00.000Z', sessionLimit: 1 } },
-    { id: 'recent', window: { activeSince: '2026-08-25T00:00:00.000Z', sessionLimit: 10 } },
+    { id: 'latest', window: { sessionLimit: 1 } },
+    { id: 'recent', window: { sessionLimit: 10 } },
     { id: 'hot-window', window: { activeSince: '2026-08-25T00:00:00.000Z' } },
   ])
+})
+
+test('最新与最近会话不受热窗口限制', () => {
+  const stages = createProgressiveHistoryStages(Date.parse('2026-09-01T00:00:00.000Z'))
+  assert.equal(stages[0]?.window.activeSince, undefined)
+  assert.equal(stages[1]?.window.activeSince, undefined)
+  assert.equal(stages[2]?.window.activeSince, '2026-08-25T00:00:00.000Z')
 })
 
 test('数据库接近软阈值时暂停 7 天回填，超过预算时仍同步最新 1 个会话', () => {
