@@ -20,7 +20,7 @@ import { SqliteSessionRelationshipCandidateRepository } from './relationship-can
 import { SqliteRuntimeProfileRepository } from './runtime-profiles'
 import { SqliteSourceRuntimeStatusRepository } from './runtime-status'
 import { withSqliteSessionRuntimeProfiles } from './session-runtime-profile'
-import { SqliteSessionSummaryReader } from './session-summaries'
+import { SqliteSessionSummaryReader } from './session-summaries-v2'
 
 const STORAGE_SOFT_LIMIT_BYTES = 512 * 1024 * 1024
 const STORAGE_APPROACHING_RATIO = 0.8
