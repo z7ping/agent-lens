@@ -136,7 +136,7 @@ test('session activity is derived from canonical provenance instead of message t
   }
 })
 
-test('session summary projection sorts and paginates by session start time', async () => {
+test('session summary projection sorts and paginates by latest activity time', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   await storage.migrate()
 
@@ -201,7 +201,7 @@ test('session summary projection sorts and paginates by session start time', asy
     const first = firstPage.items[0]!
     const secondPage = await storage.sessionSummaries.query({
       limit: 1,
-      after: { startedAt: first.startedAt, logicalSessionId: first.logicalSessionId },
+      after: { activeAt: first.endedAt, logicalSessionId: first.logicalSessionId },
     })
     assert.deepEqual(secondPage.items.map(item => item.logicalSessionId), [older.observation.logicalSessionId])
     assert.equal(secondPage.hasMore, false)
@@ -220,17 +220,17 @@ test('session summary projection sorts and paginates by session start time', asy
     await commitMessage('session-older', '2026-08-25T10:10:00.000Z', '较早会话后来又有新消息')
     // 前面的 exactPending 故意验证“全局 Projection 已存在但单会话仍在 debounce 窗口”时
     // 能回退 Canonical Query。验证全局排序前要把 pending 与 older 都 materialize，
-    // 避免用一个刻意不完整的投影视图判断 startedAt 排序语义。
+    // 避免用一个刻意不完整的投影视图判断 endedAt 最近活动时间语义。
     await storage.sessionSummaryProjection.rebuild({ logicalSessionId: pending.observation.logicalSessionId })
     await storage.sessionSummaryProjection.rebuild({ logicalSessionId: older.observation.logicalSessionId })
 
     const refreshed = await storage.sessionSummaries.query({ limit: 10 })
-    assert.equal(refreshed.items[0]?.logicalSessionId, pending.observation.logicalSessionId)
-    assert.equal(refreshed.items[1]?.logicalSessionId, newer.observation.logicalSessionId)
-    assert.equal(refreshed.items[2]?.logicalSessionId, older.observation.logicalSessionId)
-    assert.equal(refreshed.items[2]?.startedAt, '2026-08-25T10:00:00.000Z')
-    assert.equal(refreshed.items[2]?.endedAt, '2026-08-25T10:10:00.000Z')
-    assert.equal(refreshed.items[2]?.observationCount, 2)
+    assert.equal(refreshed.items[0]?.logicalSessionId, older.observation.logicalSessionId)
+    assert.equal(refreshed.items[1]?.logicalSessionId, pending.observation.logicalSessionId)
+    assert.equal(refreshed.items[2]?.logicalSessionId, newer.observation.logicalSessionId)
+    assert.equal(refreshed.items[0]?.startedAt, '2026-08-25T10:00:00.000Z')
+    assert.equal(refreshed.items[0]?.endedAt, '2026-08-25T10:10:00.000Z')
+    assert.equal(refreshed.items[0]?.observationCount, 2)
   } finally {
     storage.close()
   }
