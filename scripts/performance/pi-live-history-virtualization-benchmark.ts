@@ -28,7 +28,7 @@ if (!Number.isFinite(chunkSize) || chunkSize <= 0) throw new Error('Cannot resol
 if (!Number.isFinite(eagerChunks) || eagerChunks < 0) throw new Error('Cannot resolve Pi Live eager chunk count')
 if (!Number.isFinite(rootMargin) || rootMargin < 0) throw new Error('Cannot resolve virtual mount root margin')
 if (!/rootSelector="\.pi-live-reader"/.test(page)) throw new Error('Pi Live history is not mounted against .pi-live-reader')
-if (!/historyRounds\.map/.test(page) || !/VirtualRoundMount/.test(page) || !/PiLiveHistoryTaskRound/.test(page)) throw new Error('Pi Live semantic round virtualization is missing')
+if (!/visibleHistoryRounds\.map/.test(page) || !/VirtualRoundMount/.test(page) || !/PiLiveHistoryTaskRound/.test(page)) throw new Error('Pi Live semantic round virtualization is missing')
 if (!/sharedVirtualObservers\s*=\s*new WeakMap/.test(mount)) throw new Error('VirtualRoundMount must share IntersectionObserver per scroll root')
 if (!/observer\.unobserve\(element\)/.test(mount)) throw new Error('Shared virtual observer must unobserve disposed targets')
 if (!/listeners\.size === 0[\s\S]*observer\.disconnect/.test(mount)) throw new Error('Shared virtual observer must disconnect when the last target leaves')
