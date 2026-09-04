@@ -6,6 +6,9 @@ on:
     branches:
       - feature/1.0.0-alpha.3-task-surface
     paths:
+      - packages/core/src/**
+      - packages/storage-sqlite/src/**
+      - packages/projection-review/src/**
       - packages/source-pi/src/**
       - packages/source-codex/src/**
       - packages/web/src/**
@@ -26,6 +29,16 @@ jobs:
           package-manager-cache: false
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
+      - name: Core typecheck
+        run: npm run typecheck --workspace @agent-lens/core
+      - name: Storage typecheck
+        run: npm run typecheck --workspace @agent-lens/storage-sqlite
+      - name: Storage tests
+        run: npm run test --workspace @agent-lens/storage-sqlite
+      - name: Review typecheck
+        run: npm run typecheck --workspace @agent-lens/projection-review
+      - name: Review tests
+        run: npm run test --workspace @agent-lens/projection-review
       - name: Pi typecheck
         run: npm run typecheck --workspace @agent-lens/source-pi
       - name: Pi tests
