@@ -105,11 +105,10 @@ function classifySession(payload: Record<string, unknown>): {
     || rawText.includes('subagent')
     || /worker|subagent|child/.test(role)
   if (isSubagent) {
-    return {
-      activity: 'subagent',
-      relationship: 'subagent',
-      ...(subagentLabel(payload) ? { sourceLabel: subagentLabel(payload) } : {}),
-    }
+    const sourceLabel = subagentLabel(payload)
+    return sourceLabel
+      ? { activity: 'subagent', relationship: 'subagent', sourceLabel }
+      : { activity: 'subagent', relationship: 'subagent' }
   }
 
   if (directParentId(payload) || rootTaskId(payload, stringField(payload, 'id') ?? '')) {
@@ -153,6 +152,7 @@ export function normalizeCodexSessionAttribution(
   const ownSessionId = meta.nativeSessionId
   const directParent = directParentId(meta.payload)
   const rootTask = rootTaskId(meta.payload, ownSessionId)
+  const parentSessionId = directParent ?? rootTask
   const classification = classifySession(meta.payload)
   const orphanInternalActivity = classification.activity !== 'user-task' && !directParent && !rootTask
 
@@ -171,10 +171,11 @@ export function normalizeCodexSessionAttribution(
         ...(directParent ? { parentSessionId: directParent } : {}),
         ...(orphanInternalActivity ? { orphanInternalActivity: true } : {}),
       },
-      identityHints: {
-        ...observation.identityHints,
-        ...(directParent || rootTask ? { nativeParentSessionId: directParent ?? rootTask } : {}),
-      },
+      ...(parentSessionId
+        ? { identityHints: { ...observation.identityHints, nativeParentSessionId: parentSessionId } }
+        : observation.identityHints
+          ? { identityHints: observation.identityHints }
+          : {}),
     }
   })
 
