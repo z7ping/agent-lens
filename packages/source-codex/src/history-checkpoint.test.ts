@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import type { SourceExecutionContext } from '@agent-lens/core'
-import { codexHistoryInternals, ingestCodexHistory } from './history'
+import { CODEX_PARSER_VERSION, codexHistoryInternals, ingestCodexHistory } from './history'
 
 async function fixture(lineCount: number) {
   const root = await mkdtemp(join(tmpdir(), 'agent-lens-codex-checkpoint-'))
@@ -171,7 +171,7 @@ test('旧 Parser 游标只升级检查点且不重读已消费区间', async () 
     for await (const record of ingestCodexHistory(context(sessions, checkpoints, writes))) records.push(record)
 
     assert.deepEqual(records, [])
-    assert.equal((checkpoints.get(codexHistoryInternals.checkpointKey(path)) as { parserVersion: string }).parserVersion, '10')
+    assert.equal((checkpoints.get(codexHistoryInternals.checkpointKey(path)) as { parserVersion: string }).parserVersion, CODEX_PARSER_VERSION)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
