@@ -6,11 +6,10 @@
  * Task 详情组件归 task-detail.css，长会话导航归 review-long-session.css，Pi Live 专属 UI 归 pi-live.css。
  */
 .task-center-page {
-  --task-center-rail: 316px;
   display: grid;
-  height: calc(100dvh - 52px);
+  height: 100%;
   min-height: 0;
-  grid-template-columns: var(--task-center-rail) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
   background: var(--al-canvas);
@@ -198,7 +197,6 @@
   line-height: 1.35;
 }
 .task-center-page.is-new-task { grid-template-rows: minmax(0, 1fr); }
-.task-center-page.is-new-task .task-center-rail,
 .task-center-page.is-new-task .task-center-main { grid-row: 1; }
 .task-center-rail .session-item-meta > span:not(.source-dot):not(.pi-live-pulse):not(.pi-live-idle-dot),
 .task-center-rail .session-item-foot > span:first-child {
@@ -229,9 +227,9 @@
 }
 .task-center-rail .session-load-more:hover:not(:disabled) { border-color: transparent; background: var(--al-surface); color: var(--al-ink-2); }
 
-/* 左右滚动根完全隔离。 */
+/* 左侧任务列表已 Portal 到 WorkspaceSidebar；页面自身只保留详情滚动根。 */
 .task-center-main {
-  grid-column: 2;
+  grid-column: 1;
   grid-row: 1;
   min-width: 0;
   min-height: 0;
@@ -297,12 +295,10 @@
 .task-center-new-actions { display: flex; justify-content: flex-end; margin-top: 18px; }
 
 @media (max-width: 1199.98px) {
-  .task-center-page { --task-center-rail: 286px; }
   .task-center-main .review-reader,
   .task-center-main .pi-live-document { padding-right: 22px; padding-left: 44px; }
 }
 @media (max-width: 991.98px) {
-  .task-center-page { --task-center-rail: 252px; }
   .task-center-filter-fields { grid-template-columns: minmax(0, 1fr); }
   .task-center-filter-fields label.is-wide { grid-column: auto; }
   .task-center-main .review-reader,
