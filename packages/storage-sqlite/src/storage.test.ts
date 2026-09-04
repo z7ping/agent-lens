@@ -15,12 +15,12 @@ async function createStorage() {
   return storage
 }
 
-test('SQLite storage migrates to schema version 12 and exposes required tables', async () => {
+test('SQLite storage migrates to schema version 13 and exposes required tables', async () => {
   const storage = await createStorage()
   try {
     const health = await storage.health()
     assert.equal(health.ok, true)
-    assert.equal(health.schemaVersion, 12)
+    assert.equal(health.schemaVersion, 13)
     const growth = (health.details as any)?.dataGrowth
     assert.equal(growth.capacity.softLimitBytes, 512 * 1024 * 1024)
     assert.equal(growth.capacity.state, 'healthy')
