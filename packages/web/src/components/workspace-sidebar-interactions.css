@@ -1,0 +1,169 @@
+/*
+ * WorkspaceSidebar 交互态与 Task Rail 浮层。
+ * 结构尺寸仍由 workspace-sidebar.css 持有；这里仅负责选中、搜索、筛选和设置菜单的交互视觉。
+ */
+
+/* 一级导航只用 Accent 标记当前位置；文字保持中性，避免整栏发紫。 */
+.workspace-primary-link.is-active::after {
+  background: var(--al-accent);
+}
+
+.workspace-insight-link.is-active {
+  background: color-mix(in srgb, var(--al-accent-soft) 56%, transparent);
+}
+
+.workspace-insight-link.is-active::before {
+  background: var(--al-accent);
+}
+
+.workspace-agent-link.is-active,
+.workspace-context-link.is-active {
+  background: color-mix(in srgb, var(--al-accent-soft) 48%, transparent);
+}
+
+.workspace-agent-link.is-active::before,
+.workspace-context-link.is-active::before {
+  content: "";
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 3px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--al-accent);
+}
+
+/* 页脚不再伪装成本机用户/账户区，只保留真实可操作的设置入口。 */
+.workspace-sidebar-footer {
+  justify-content: flex-end;
+  padding: 5px 10px;
+}
+
+/* Task Rail 的图标按钮：hover 中性，active 使用 Accent。 */
+.workspace-sidebar-context > .task-center-rail .task-center-toolbar > .ui-icon-button.is-active,
+.workspace-sidebar-context > .task-center-rail .task-center-filter-button.is-active {
+  border-color: transparent;
+  background: var(--al-accent-soft);
+  color: var(--al-accent);
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-search-input.ui-field {
+  padding-right: 36px;
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-search-clear {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 2;
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--al-muted-2);
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-search-clear:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--al-soft);
+  color: var(--al-ink);
+}
+
+/* 任务筛选使用受控 Popover，不再依赖原生 details 的展开语义。 */
+.workspace-sidebar-context > .task-center-rail .task-center-filter-popover {
+  position: relative;
+  width: 30px;
+  min-width: 30px;
+  flex: 0 0 30px;
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-filter-button {
+  position: relative;
+  width: 30px;
+  min-width: 30px;
+  height: 28px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  color: var(--al-muted-2);
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-filter-button:hover:not(:disabled) {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--al-surface) 62%, transparent);
+  color: var(--al-ink);
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-filter-button.is-active:hover:not(:disabled) {
+  background: var(--al-accent-soft);
+  color: var(--al-accent);
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-filter-badge {
+  position: absolute;
+  top: -4px;
+  right: -3px;
+  display: grid;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 3px;
+  place-items: center;
+  border: 1px solid var(--al-soft-2);
+  border-radius: 99px;
+  background: var(--al-accent);
+  color: var(--al-on-accent);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-filter-panel {
+  position: absolute;
+  top: 33px;
+  right: -32px;
+  z-index: 24;
+  width: 286px;
+}
+
+/* 当前任务与二级入口沿用同一 Accent 选中语义。 */
+.workspace-sidebar-context > .task-center-rail .session-item-active {
+  background: color-mix(in srgb, var(--al-accent-soft) 46%, transparent);
+}
+
+.workspace-sidebar-context > .task-center-rail .session-item-active::before {
+  display: block;
+}
+
+/* 设置菜单按用途分组，避免所有低频入口挤成一串。 */
+.workspace-settings-group {
+  display: grid;
+  gap: 3px;
+}
+
+.workspace-settings-group + .workspace-settings-group {
+  margin-top: 6px;
+  padding-top: 7px;
+  border-top: 1px solid var(--al-line);
+}
+
+.workspace-settings-group-title {
+  padding: 2px 10px 3px;
+  color: var(--al-muted-2);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: .035em;
+}
+
+.workspace-settings-version {
+  margin: 3px 4px 1px;
+  padding: 5px 6px 1px;
+  border-top: 0;
+}
+
+@media (max-width: 767.98px) {
+  .workspace-sidebar-context > .task-center-rail .task-center-filter-panel {
+    width: 178px;
+  }
+}
