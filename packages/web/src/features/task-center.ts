@@ -29,28 +29,44 @@ function cleanSessionTitle(value: string | undefined, fallback: string): string 
   return text.length > 74 ? `${text.slice(0, 74)}…` : text
 }
 
+function userTaskTitle(item: ReviewSessionSummaryDto): string | undefined {
+  // Codex 的 legacy session_index.thread_name 是来源原生会话标签，但当前格式无法证明
+  // 它一定来自显式 /rename；它也可能由应用注入上下文派生。真实 event_msg.user_message
+  // 已由 Source Adapter 归一为 preview，因此 Codex 用户任务优先使用该结构化用户请求。
+  // 这里按来源语义选择候选，不检查正文内容，也不做任何关键词/标签黑名单。
+  if (item.sourceIds.includes('codex') && item.preview?.trim()) return item.preview
+  return item.title || item.preview
+}
+
 /**
  * 会话列表保留所有活动，但不会把系统注入或内部审查正文伪装成用户任务标题。
- * 活动类型只消费 Canonical Pipeline 投影出的结构化字段，禁止根据正文猜来源。
+ * 活动类型和标题候选只消费 Canonical Pipeline 投影出的结构化字段，禁止根据正文猜来源。
  */
 export function historyTaskPresentation(
   item: ReviewSessionSummaryDto,
   fallback: string,
 ): HistoryTaskPresentation {
-  const rawTitle = item.title || item.preview || ''
   const activity = item.sessionActivity
-  if (!activity || activity === 'user-task') return { title: cleanSessionTitle(rawTitle, fallback) }
+  if (!activity || activity === 'user-task') {
+    return { title: cleanSessionTitle(userTaskTitle(item), fallback) }
+  }
 
   if (activity === 'internal-review') {
     return { title: '内部审查活动', activityLabel: item.activitySourceLabel || '内部审查' }
   }
   if (activity === 'system-activity') {
-    return { title: '系统注入上下文', activityLabel: item.activitySourceLabel || '系统活动' }
+    return { title: item.activitySourceLabel || '系统活动', activityLabel: '系统活动' }
   }
   if (activity === 'subagent') {
-    return { title: cleanSessionTitle(rawTitle, '子智能体运行记录'), activityLabel: item.activitySourceLabel || '子智能体' }
+    return {
+      title: cleanSessionTitle(item.activitySourceLabel || item.title || item.preview, '子智能体运行记录'),
+      activityLabel: '子智能体',
+    }
   }
-  return { title: cleanSessionTitle(rawTitle, '分支任务记录'), activityLabel: item.activitySourceLabel || '分支任务' }
+  return {
+    title: cleanSessionTitle(item.title || item.preview, '分支任务记录'),
+    activityLabel: item.activitySourceLabel || '分支任务',
+  }
 }
 
 /**
