@@ -6,6 +6,7 @@ import type {
   PiLiveEventDto,
   PiLiveExtensionResponseRequestDto,
   PiLivePromptRequestDto,
+  PiLiveResumeActionDto,
   PiLiveResumeRequestDto,
   PiLiveQueueDto,
   PiLiveSetModelRequestDto,
@@ -309,11 +310,19 @@ export class PiLiveApi {
     return state
   }
 
-  async resume(logicalSessionId: string): Promise<PiLiveStateDto> {
-    const body: PiLiveResumeRequestDto = { logicalSessionId }
+  private async resumeHistory(logicalSessionId: string, action: PiLiveResumeActionDto): Promise<PiLiveStateDto> {
+    const body: PiLiveResumeRequestDto = { logicalSessionId, action }
     const state = await requestJson<PiLiveStateDto>('/api/v1/pi-live/resume', jsonRequest(body))
     rememberRuntime(state.runtimeSessionId)
     return state
+  }
+
+  resume(logicalSessionId: string): Promise<PiLiveStateDto> {
+    return this.resumeHistory(logicalSessionId, 'continue')
+  }
+
+  fork(logicalSessionId: string): Promise<PiLiveStateDto> {
+    return this.resumeHistory(logicalSessionId, 'fork')
   }
 
   state(runtimeSessionId: string): Promise<PiLiveStateDto> {
