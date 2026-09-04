@@ -13,6 +13,7 @@ import { detectCodex } from './detect'
 import { CODEX_PARSER_VERSION, ingestCodexHistory } from './history'
 import { normalizeCodexRecord } from './normalize'
 import { startCodexRuntimeCapture } from './runtime'
+import { normalizeCodexSessionAttribution } from './session-attribution'
 
 export const codexManifest: SourcePluginManifest = {
   pluginId: '@agent-lens/source-codex',
@@ -51,7 +52,11 @@ export const codexSourceDefinition: SourceDefinition = {
   discoverAssets: discoverCodexAssets,
   ingestHistory: ingestCodexHistory,
   startCapture: startCodexRuntimeCapture,
-  normalize: normalizeCodexRecord,
+  normalize: async (record, ctx) => normalizeCodexSessionAttribution(
+    record,
+    ctx,
+    await normalizeCodexRecord(record, ctx),
+  ),
 }
 
 const applyCodexSource = Object.assign(
@@ -70,3 +75,4 @@ export * from './format'
 export * from './history'
 export * from './normalize'
 export * from './runtime'
+export * from './session-attribution'

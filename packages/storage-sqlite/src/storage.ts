@@ -12,6 +12,7 @@ import { SqliteCheckpointRepository } from './checkpoints'
 import { SqliteExecutor } from './executor'
 import { migrateDatabase } from './migrations'
 import { withSqliteObservationPagination } from './observation-pagination'
+import { withSqliteParserReplayReplacement } from './parser-replay-replacement'
 import { createSqliteRepositories } from './repositories'
 import { SqliteReplicationCanonicalChangeReader } from './replication-canonical-changes'
 import { SqliteReplicationStateRepository } from './replication-state'
@@ -19,7 +20,7 @@ import { SqliteSessionRelationshipCandidateRepository } from './relationship-can
 import { SqliteRuntimeProfileRepository } from './runtime-profiles'
 import { SqliteSourceRuntimeStatusRepository } from './runtime-status'
 import { withSqliteSessionRuntimeProfiles } from './session-runtime-profile'
-import { SqliteSessionSummaryReader } from './session-summaries'
+import { SqliteSessionSummaryReader } from './session-summaries-v2'
 
 const STORAGE_SOFT_LIMIT_BYTES = 512 * 1024 * 1024
 const STORAGE_APPROACHING_RATIO = 0.8
@@ -76,11 +77,17 @@ export class SqliteStorageService implements StorageService {
     }
 
     this.executor = new SqliteExecutor(this.db)
-    const repositories = createSqliteRepositories(this.executor)
+    const baseRepositories = createSqliteRepositories(this.executor)
+    const replayAware = withSqliteParserReplayReplacement(
+      this.executor,
+      baseRepositories.sourceRecords,
+      baseRepositories.observations,
+    )
     this.repositories = {
-      ...repositories,
-      sessions: withSqliteSessionRuntimeProfiles(this.executor, repositories.sessions),
-      observations: withSqliteObservationPagination(this.executor, repositories.observations),
+      ...baseRepositories,
+      sourceRecords: replayAware.sourceRecords,
+      sessions: withSqliteSessionRuntimeProfiles(this.executor, baseRepositories.sessions),
+      observations: withSqliteObservationPagination(this.executor, replayAware.observations),
     }
     this.checkpoints = new SqliteCheckpointRepository(this.executor)
     this.assetInventory = new SqliteAssetInventoryReader(this.executor)

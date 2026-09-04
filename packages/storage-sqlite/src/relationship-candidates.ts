@@ -51,7 +51,7 @@ export class SqliteSessionRelationshipCandidateRepository {
       candidate.nativeRelation ?? '',
     ])
     await this.executor.run(() => {
-      // 一对原生会话只保留当前 Parser 判定出的主关系，避免 replay 后同时残留 related/subagent/internal-review。
+      // 同一个原生关系信号只保留当前 Parser 判定，task-root 与直接父关系是不同信号，可同时存在。
       this.executor.db.prepare(`
         DELETE FROM session_relationship_candidates
         WHERE source_id = ? AND installation_id = ?
@@ -120,10 +120,18 @@ export class SqliteSessionRelationshipCandidateRepository {
         evidenceRefs: candidate.evidenceRefs ?? [],
         confidence: candidate.confidence,
       }
-      this.executor.db.prepare(`
-        DELETE FROM session_relationships
-        WHERE from_session_id = ? AND to_session_id = ? AND type != ?
-      `).run(relationship.fromSessionId, relationship.toSessionId, type)
+      if (type === 'task-root') {
+        this.executor.db.prepare(`
+          DELETE FROM session_relationships
+          WHERE from_session_id = ? AND to_session_id = ? AND type = 'task-root' AND id != ?
+        `).run(relationship.fromSessionId, relationship.toSessionId, relationship.id)
+      } else {
+        this.executor.db.prepare(`
+          DELETE FROM session_relationships
+          WHERE from_session_id = ? AND to_session_id = ?
+            AND type != 'task-root' AND type != ?
+        `).run(relationship.fromSessionId, relationship.toSessionId, type)
+      }
       this.executor.db.prepare(`
         INSERT INTO session_relationships(
           id, from_session_id, to_session_id, type, evidence_refs_json, confidence

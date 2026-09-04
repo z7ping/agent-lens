@@ -94,17 +94,20 @@ test('guardian subagent session is linked as internal-review', async () => {
     type: 'session_meta',
     payload: {
       id: 'guardian-child',
-      session_id: 'guardian-child',
+      session_id: 'parent-task',
       parent_thread_id: 'parent-task',
       thread_source: 'subagent',
-      source: { subagent: { other: 'guardian' } },
+      source: { subagent: { other: 'guardian_review' } },
       agent_role: 'reviewer',
     },
   }, 'guardian-meta', 'guardian-child'))
 
-  assert.equal((output.observations[0]?.payload as any).sessionActivity, 'internal-review')
+  const payload = output.observations[0]?.payload as any
+  assert.equal(payload.sessionActivity, 'internal-review')
+  assert.equal(payload.rootSessionId, 'parent-task')
+  assert.equal(payload.parentSessionId, 'parent-task')
   assert.equal(output.observations[0]?.identityHints.nativeParentSessionId, 'parent-task')
-  assert.equal(output.sessionRelationshipHints?.[0]?.type, 'internal-review')
+  assert.deepEqual(output.sessionRelationshipHints?.map(item => item.type).sort(), ['internal-review', 'task-root'])
 })
 
 test('normal subagent remains subagent and is not treated as guardian review', async () => {
@@ -112,7 +115,7 @@ test('normal subagent remains subagent and is not treated as guardian review', a
     type: 'session_meta',
     payload: {
       id: 'worker-child',
-      session_id: 'worker-child',
+      session_id: 'parent-task',
       parent_thread_id: 'parent-task',
       thread_source: 'subagent',
       source: { subagent: { other: 'worker' } },
@@ -121,5 +124,66 @@ test('normal subagent remains subagent and is not treated as guardian review', a
   }, 'subagent-meta', 'worker-child'))
 
   assert.equal((output.observations[0]?.payload as any).sessionActivity, 'subagent')
-  assert.equal(output.sessionRelationshipHints?.[0]?.type, 'subagent')
+  assert.deepEqual(output.sessionRelationshipHints?.map(item => item.type).sort(), ['subagent', 'task-root'])
+})
+
+test('nested thread_spawn keeps direct parent and root task as separate relationships', async () => {
+  const output = await normalize(record({
+    type: 'session_meta',
+    payload: {
+      id: 'nested-worker',
+      session_id: 'root-task',
+      source: {
+        subagent: {
+          thread_spawn: {
+            parent_thread_id: 'direct-parent',
+            depth: 2,
+            agent_nickname: 'Meitner',
+            agent_role: 'worker',
+          },
+        },
+      },
+    },
+  }, 'nested-subagent-meta', 'nested-worker'))
+
+  const payload = output.observations[0]?.payload as any
+  assert.equal(payload.sessionActivity, 'subagent')
+  assert.equal(payload.rootSessionId, 'root-task')
+  assert.equal(payload.parentSessionId, 'direct-parent')
+  assert.equal(payload.activitySourceLabel, 'Meitner')
+  assert.deepEqual(output.sessionRelationshipHints?.map(item => [item.fromNativeSessionId, item.type, item.nativeRelation]), [
+    ['root-task', 'task-root', 'session_id'],
+    ['direct-parent', 'subagent', 'source.subagent.thread_spawn.parent_thread_id'],
+  ])
+})
+
+test('native subagent source review is classified as internal review', async () => {
+  const output = await normalize(record({
+    type: 'session_meta',
+    payload: {
+      id: 'review-child',
+      session_id: 'root-task',
+      source: { subagent: 'review' },
+    },
+  }, 'native-review-meta', 'review-child'))
+
+  assert.equal((output.observations[0]?.payload as any).sessionActivity, 'internal-review')
+  assert.equal((output.observations[0]?.payload as any).activitySourceLabel, 'Guardian 审查')
+  assert.equal(output.sessionRelationshipHints?.[0]?.type, 'task-root')
+})
+
+test('unlinked internal activity is preserved and marked orphan for system activity grouping', async () => {
+  const output = await normalize(record({
+    type: 'session_meta',
+    payload: {
+      id: 'orphan-worker',
+      source: { subagent: { other: 'worker' } },
+      agent_role: 'worker',
+    },
+  }, 'orphan-subagent-meta', 'orphan-worker'))
+
+  const payload = output.observations[0]?.payload as any
+  assert.equal(payload.sessionActivity, 'subagent')
+  assert.equal(payload.orphanInternalActivity, true)
+  assert.deepEqual(output.sessionRelationshipHints, [])
 })
