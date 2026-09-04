@@ -37,17 +37,20 @@ jobs:
 
           projection = Path('packages/projection-review/src/projection.ts')
           text = projection.read_text(encoding='utf-8')
-          expected = 0
-          old = "await this.backwardInteractionPage(logicalSessionId, { ...query, direction: 'backward' }, 'latest', summary.interactionCount)"
-          if old in text:
-              text = text.replace(old, "await this.backwardInteractionPage(logicalSessionId, { ...query, direction: 'backward' }, 'latest', descriptors.length)", 1)
-              expected += 1
-          old = "await this.backwardInteractionPage(logicalSessionId, query, 'all', summary.interactionCount)"
-          if old in text:
-              text = text.replace(old, "await this.backwardInteractionPage(logicalSessionId, query, 'all', descriptors.length)", 1)
-              expected += 1
-          if expected != 2:
-              raise SystemExit(f'projection replacements={expected}, expected=2')
+          replacements = [
+            (
+              "await this.backwardInteractionPage(logicalSessionId, { ...query, direction: 'backward' }, 'latest', summary.interactionCount)",
+              "await this.backwardInteractionPage(logicalSessionId, { ...query, direction: 'backward' }, 'latest', descriptors.length)",
+            ),
+            (
+              "await this.backwardInteractionPage(logicalSessionId, query, 'all', summary.interactionCount)",
+              "await this.backwardInteractionPage(logicalSessionId, query, 'all', descriptors.length)",
+            ),
+          ]
+          for old, new in replacements:
+              if old not in text:
+                  raise SystemExit(f'projection replacement not found: {old}')
+              text = text.replace(old, new, 1)
           projection.write_text(text, encoding='utf-8')
 
           summary = Path('packages/storage-sqlite/src/session-summaries.ts')
@@ -121,12 +124,10 @@ jobs:
               raise SystemExit('context injected label line not found')
           text = text.replace(old_label, "if (node.kind === 'context.injected') return stringValue(payload, 'label') || '系统注入上下文'", 1)
 
-          summary_start = text.find('function sourceEventSummary')
-          if summary_start < 0:
-              raise SystemExit('sourceEventSummary not found')
-          context_start = text.find("  if (node.kind === 'context.injected') {", summary_start)
+          source_summary = text.find('function sourceEventSummary')
+          context_start = text.find("  if (node.kind === 'context.injected') {", source_summary)
           lifecycle_start = text.find("  if (node.kind === 'session.lifecycle') {", context_start)
-          if context_start < 0 or lifecycle_start < 0:
+          if source_summary < 0 or context_start < 0 or lifecycle_start < 0:
               raise SystemExit('context summary markers not found')
           context_replacement = '''  if (node.kind === 'context.injected') {
             const role = stringValue(payload, 'role')
@@ -151,6 +152,11 @@ jobs:
 
           '''
           text = replace_between(text, 'function MarkdownSurface', 'function MessageBubble', markdown_replacement + 'function MessageBubble')
+
+          task_message = "return <TaskMessage\n    role={node.role === 'user' ? 'user' : 'assistant'}"
+          if task_message not in text:
+              raise SystemExit('Review TaskMessage marker not found')
+          text = text.replace(task_message, task_message + "\n    collapsible={false}", 1)
 
           event_replacement = '''function systemEventExpansionKey(eventId: string): string {
             return `agent-lens:review:system-event:${eventId}:expanded`
