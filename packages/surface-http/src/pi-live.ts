@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { StorageService } from '@agent-lens/core'
-import type { PiLiveService } from '@agent-lens/runtime-cordis'
+import type { PiLiveHistoryAction, PiLiveService } from '@agent-lens/runtime-cordis'
 import type {
   JsonValue,
   PiLiveAbortRequestDto,
@@ -15,6 +15,7 @@ import { resolvePiLiveResumeInput } from './pi-live-resume'
 
 const MAX_PI_LIVE_JSON_BYTES = 1024 * 1024
 const SSE_HEARTBEAT_MS = 15_000
+const PRIVATE_PI_SESSION_KEYS = new Set(['sessionFile', 'sessionPath', 'sessionDir', 'previousSessionFile'])
 
 function jsonValue(value: unknown, depth = 0): JsonValue {
   if (depth > 20) return '[max-depth]'
@@ -26,6 +27,7 @@ function jsonValue(value: unknown, depth = 0): JsonValue {
   if (typeof value === 'object') {
     const result: Record<string, JsonValue> = {}
     for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+      if (PRIVATE_PI_SESSION_KEYS.has(key)) continue
       if (item === undefined || typeof item === 'function' || typeof item === 'symbol') continue
       result[key] = jsonValue(item, depth + 1)
     }
@@ -82,6 +84,13 @@ function nonEmpty(value: unknown, name: string): string {
 
 function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function historyAction(value: unknown): PiLiveHistoryAction {
+  if (value === 'continue' || value === 'fork') return value
+  const error = new Error('action must be continue or fork') as Error & { statusCode?: number }
+  error.statusCode = 400
+  throw error
 }
 
 function statusForError(error: unknown): number {
@@ -155,7 +164,11 @@ export async function handlePiLiveRequest(
         return true
       }
       const body = await readJson<PiLiveResumeRequestDto>(request)
-      const input = await resolvePiLiveResumeInput(storage, nonEmpty(body.logicalSessionId, 'logicalSessionId'))
+      const input = await resolvePiLiveResumeInput(
+        storage,
+        nonEmpty(body.logicalSessionId, 'logicalSessionId'),
+        historyAction(body.action),
+      )
       writeJson(response, 201, jsonValue(await service.start(input)))
       return true
     }
@@ -185,8 +198,6 @@ export async function handlePiLiveRequest(
         ...(optionalString(body.provider) ? { provider: optionalString(body.provider) } : {}),
         ...(optionalString(body.model) ? { model: optionalString(body.model) } : {}),
         ...(optionalString(body.name) ? { name: optionalString(body.name) } : {}),
-        ...(optionalString(body.sessionDir) ? { sessionDir: optionalString(body.sessionDir) } : {}),
-        ...(optionalString(body.sessionPath) ? { sessionPath: optionalString(body.sessionPath) } : {}),
       }
       writeJson(response, 201, jsonValue(await service.start(input)))
       return true
