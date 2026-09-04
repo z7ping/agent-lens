@@ -12,6 +12,7 @@ interface WorkspaceSidebarProps {
   agents: AgentFacetDto[]
   selectedAgentId: string
   onSelectAgent(id: string): void
+  onRefreshAgents(): void
   theme: 'light' | 'dark'
   onToggleTheme(): void
   onContextHost(node: HTMLDivElement | null): void
@@ -22,6 +23,7 @@ export function WorkspaceSidebar({
   agents,
   selectedAgentId,
   onSelectAgent,
+  onRefreshAgents,
   theme,
   onToggleTheme,
   onContextHost,
@@ -55,7 +57,7 @@ export function WorkspaceSidebar({
         </div>}
 
         {onAgents && <div className="workspace-context-menu workspace-agent-context">
-          <div className="workspace-context-heading"><b>本机智能体</b><span>{agents.length}</span></div>
+          <div className="workspace-context-heading"><b>本机智能体</b><span className="workspace-context-heading-actions"><span>{agents.length}</span><IconButton size="small" onClick={onRefreshAgents} title="刷新智能体" aria-label="刷新智能体"><UiIcon name="refresh" size={14}/></IconButton></span></div>
           {agents.map(agent => <button
             key={agent.sourceId}
             type="button"
