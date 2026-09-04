@@ -5,6 +5,7 @@ import type {
 } from '@agent-lens/core'
 import type {
   JsonValue,
+  ReviewActivityStatus,
   ReviewDetailQueryDto,
   ReviewEventNodeDto,
   ReviewQueryDto,
@@ -281,6 +282,55 @@ async function searchMatchSources(
   return [...matches]
 }
 
+function reviewStatus(value: string): ReviewActivityStatus {
+  const normalized = value.toLowerCase()
+  if (/deny|denied|reject|rejected|refuse|refused|block|blocked/.test(normalized)) return 'denied'
+  if (/allow|allowed|approve|approved|grant|granted|accept|accepted/.test(normalized)) return 'allowed'
+  if (/error|failed|exception|abort/.test(normalized)) return 'error'
+  return 'unknown'
+}
+
+async function internalActivityResult(
+  storage: StorageService,
+  item: ReviewSessionSummaryDto,
+): Promise<{ activityResult?: string; activityStatus?: ReviewActivityStatus }> {
+  if (item.sessionActivity !== 'internal-review') return {}
+  let after: ObservationCursor | undefined
+  let result = ''
+  while (true) {
+    const page = await storage.repositories.observations.query({
+      logicalSessionId: item.id,
+      ...(after ? { after } : {}),
+      limit: 1000,
+    })
+    if (!page.length) break
+    for (const observation of page) {
+      if (observation.kind !== 'permission.response') continue
+      const payload = asRecord(observation.payload)
+      result = stringField(payload, 'decision', 'result', 'status', 'permissionMode', 'permission_mode', 'message')
+        ?? textFromPayload(observation.payload)
+        ?? result
+    }
+    after = observationCursor(page[page.length - 1]!)
+    if (page.length < 1000) break
+  }
+  if (result) return { activityResult: result, activityStatus: reviewStatus(result) }
+  if (item.errorCount > 0) return { activityResult: '异常', activityStatus: 'error' }
+  return { activityResult: '未记录明确结论', activityStatus: 'unknown' }
+}
+
+async function enrichSummary(
+  storage: StorageService,
+  item: ReviewSessionSummaryDto,
+  search?: string,
+): Promise<void> {
+  Object.assign(item, await internalActivityResult(storage, item))
+  if (search?.trim()) {
+    const sources = await searchMatchSources(storage, item, search)
+    if (sources.length) item.searchMatchSources = sources
+  }
+}
+
 export class ReviewProjection extends BaseReviewProjection {
   constructor(private readonly storageV2: StorageService) {
     super(storageV2)
@@ -302,12 +352,7 @@ export class ReviewProjection extends BaseReviewProjection {
       ...(cursor ? { after: cursor } : {}),
     })
     const items = page.items.map(summaryFromRecord)
-    if (query.search?.trim()) {
-      await Promise.all(items.map(async item => {
-        const sources = await searchMatchSources(this.storageV2, item, query.search!)
-        if (sources.length) item.searchMatchSources = sources
-      }))
-    }
+    await Promise.all(items.map(item => enrichSummary(this.storageV2, item, query.search)))
     const last = items.at(-1)
     return {
       items,
@@ -331,6 +376,7 @@ export class ReviewProjection extends BaseReviewProjection {
     const page = await this.storageV2.sessionSummaries.query({ logicalSessionId, limit: 1 })
     const record = page.items.find(item => item.logicalSessionId === logicalSessionId)
     const summary = record ? summaryFromRecord(record) : detail
+    await enrichSummary(this.storageV2, summary)
     return localizeLifecycle({
       ...detail,
       ...summary,
@@ -348,4 +394,5 @@ export const reviewProjectionInternals = {
   contextEventLabel,
   summaryFromRecord,
   searchMatchSources,
+  internalActivityResult,
 }
