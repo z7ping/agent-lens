@@ -1,0 +1,110 @@
+.task-center-system-group {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 8px;
+}
+
+.task-system-activity-item .session-item-title {
+  font-weight: 600;
+}
+
+.task-system-activity-item .session-item-foot span:last-child {
+  text-align: right;
+}
+
+.task-center-search-hit {
+  margin-top: 5px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-tertiary);
+}
+
+.task-system-event-track {
+  margin: 10px 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--surface-subtle);
+  overflow: hidden;
+}
+
+.task-system-event-track[data-kind="system"],
+.task-system-event-track[data-kind="developer"],
+.task-system-event-track[data-kind="permissions"] {
+  border-inline-start-width: 3px;
+}
+
+.task-system-event-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 7px 10px;
+}
+
+.task-system-event-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.task-system-event-toggle > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-system-event-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.task-system-event-inspect {
+  padding: 2px 5px;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.task-system-event-body {
+  max-height: none !important;
+  overflow: visible !important;
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--border-subtle);
+  border-radius: 0;
+  padding: 10px 12px 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.task-system-event-empty {
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+/* 正文不再使用固定高度/五行截断；折叠只发生在显式的系统事件轨道或 TaskRound。 */
+.markdown-surface.is-collapsed {
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+.markdown-fade {
+  display: none !important;
+}
