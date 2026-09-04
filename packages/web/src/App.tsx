@@ -213,8 +213,8 @@ function Shell({ model }: { model: AgentLensClientModel }) {
           <Route path="/review/live/:runtimeSessionId" element={<TaskCenterPage model={model} mode="live" sidebarHost={sidebarHost}/>} />
           <Route path="/review/hub/:sessionId" element={<TaskCenterPage model={model} mode="hub" sidebarHost={sidebarHost}/>} />
           <Route path="/review/:sessionId" element={<TaskCenterPage model={model} mode="history" sidebarHost={sidebarHost}/>} />
-          <Route path="/tools" element={<ToolsPage model={model} />} />
-          <Route path="/insights" element={<InsightsPage model={model} />} />
+          <Route path="/tools" element={<ToolsPage model={model} sidebarHost={sidebarHost}/>} />
+          <Route path="/insights" element={<InsightsPage model={model} sidebarHost={sidebarHost}/>} />
           <Route path="/agents" element={<AgentsResponsivePage model={model} sourceId={agentOverviewSourceId} onSourceIdChange={setAgentOverviewSourceId} />} />
           <Route path="/backup" element={<BackupPage />} />
           <Route path="*" element={<Navigate to="/review" replace />} />
