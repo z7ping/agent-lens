@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import type { ToolUsageDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
-import { agentLabel } from '../components/AgentScope'
+import { agentLabel, useOrderedAgents } from '../components/AgentScope'
 import { CompactPageHeading } from '../components/CompactPageHeading'
 import { EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from '../components/StateViews'
 import { ToolKindIcon, toolVisualKind } from '../components/ToolKindIcon'
@@ -65,7 +65,7 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
   const navigate = useNavigate()
   const usage = snapshot.usage
   const data = usage.response
-  const agents = snapshot.facets?.agents ?? []
+  const agents = useOrderedAgents(snapshot.facets?.agents ?? [])
   const projects = snapshot.facets?.projects ?? []
   const tools = data?.tools ?? []
   const assets = data?.assets ?? []

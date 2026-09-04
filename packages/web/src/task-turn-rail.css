@@ -50,7 +50,7 @@
 .task-turn-rail .turn-tick:hover + .turn-tick + .turn-tick i { width: 13px; }
 .task-turn-rail .turn-tick:has(+ .turn-tick + .turn-tick + .turn-tick:hover) i,
 .task-turn-rail .turn-tick:hover + .turn-tick + .turn-tick + .turn-tick i { width: 9px; }
-.task-turn-rail .turn-tick.active i { width: 24px; height: 2px; background: var(--al-ink); }
+.task-turn-rail .turn-tick.active i { background: var(--al-ink); }
 .task-turn-rail .turn-tick.running i {
   width: 18px;
   height: 2px;

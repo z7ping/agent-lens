@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import type { AgentAssetInventoryDto, AgentOverviewDto, CapturePolicyResponseDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
-import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
+import { AgentScope, agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScope'
 import { CompactPageHeading } from '../components/CompactPageHeading'
 import { IconButton, Toolbar, UiIcon } from '../components/ui'
 import { copyText } from '../client/clipboard'
@@ -359,8 +359,8 @@ function AgentCard({ agent, policy, onCaptureChange }: {
 
 export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: AgentLensClientModel; sourceId: string; onSourceIdChange(sourceId: string): void }) {
   const snapshot = useClientSnapshot(model)
-  const agents = snapshot.facets?.agents ?? []
-  const items = snapshot.agents?.items ?? []
+  const agents = useOrderedAgents(snapshot.facets?.agents ?? [])
+  const items = useOrderedAgents(snapshot.agents?.items ?? [])
   const fallbackSourceId = items.find(item => item.detected)?.sourceId || items[0]?.sourceId || ''
   const selectedSourceId = items.some(item => item.sourceId === sourceId) ? sourceId : fallbackSourceId
   const selectedAgent = items.find(item => item.sourceId === selectedSourceId)

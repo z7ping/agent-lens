@@ -99,7 +99,7 @@
   }
   .agents-responsive-shell > .workspace-page { grid-column: 1 / -1; grid-row: 1; width: 100%; min-width: 0; align-self: start; overflow: visible; }
   .agents-responsive-shell .agents-content { max-width: none; margin: 0; overflow: visible; padding-right: calc(var(--agent-insights-width) + 28px); padding-bottom: 56px; }
-  .agent-insights-rail { position: sticky; top: 10px; grid-column: 2; grid-row: 1; display: flex; min-width: 0; max-width: none; flex-direction: column; gap: 14px; align-self: start; margin: 56px 18px 18px 0; padding: 0; overflow: visible; }
+  .agent-insights-rail { position: sticky; top: 10px; grid-column: 2; grid-row: 1; display: flex; min-width: 0; max-width: none; flex-direction: column; gap: 14px; align-self: start; margin: 18px 18px 18px 0; padding: 0; overflow: visible; }
   .agent-diagnostic-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 

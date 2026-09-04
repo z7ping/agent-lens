@@ -35,6 +35,8 @@ const [app, taskCenter, taskSurface, taskHeader, taskMessage, taskRound, taskThi
   readFile(new URL('../packages/protocol/src/timeline.ts', import.meta.url), 'utf8'),
 ])
 const workspaceSidebar = await readFile(new URL('../packages/web/src/components/WorkspaceSidebar.tsx', import.meta.url), 'utf8')
+const resumeResolver = await readFile(new URL('../packages/surface-http/src/pi-live-resume.ts', import.meta.url), 'utf8')
+const piLiveProtocol = await readFile(new URL('../packages/protocol/src/pi-live.ts', import.meta.url), 'utf8')
 
 const failures = []
 const requireText = (source, pattern, label) => { if (!pattern.test(source)) failures.push(label) }
@@ -57,11 +59,11 @@ requireText(taskCenter, /<UiIcon name="plus"[^>]*\/>\s*新建任务/, '任务中
 requireText(taskCenter, /进行中 \+ 历史/, '任务中心必须统一进行中与历史任务')
 requireText(taskCenter, /piLiveApi\.knownRuntimes\(\)/, '任务中心必须发现 Runtime 持有的 Pi Runtime')
 requireText(taskCenter, /<TaskSurface\s+mode=\{surfaceMode\}>/, '历史、实时与 Hub 详情必须统一经过 TaskSurface')
-requireText(taskCenter, /<ReviewPage\s+model=\{model\}\s+embedded\s*\/>/, 'Review 详情必须嵌入 TaskSurface')
+requireText(taskCenter, /<ReviewPage[\s\S]{0,420}model=\{model\}[\s\S]{0,420}embedded/, 'Review 详情必须嵌入 TaskSurface')
 requireText(taskCenter, /<PiLivePage\s+embedded\s*\/>/, 'Pi Live 必须嵌入 TaskSurface')
 requireText(taskCenter, /<HubReviewPage\s+embedded\s*\/>/, 'Hub 详情必须嵌入 TaskSurface')
 requireText(taskSurface, /data-task-surface-mode=\{mode\}/, 'TaskSurface 必须暴露稳定状态边界')
-requireText(reviewPage, /ReviewPage\(\{ model, embedded = false \}/, 'ReviewPage 必须支持 embedded')
+requireText(reviewPage, /ReviewPage\(\{[\s\S]{0,180}embedded = false/, 'ReviewPage 必须支持 embedded')
 requireText(page, /PiLivePage\(\{ embedded = false \}/, 'PiLivePage 必须支持 embedded')
 requireText(hubPage, /HubReviewPage\(\{ embedded = false \}/, 'HubReviewPage 必须支持 embedded')
 requireText(taskCenter, /className="task-center-toolbar"/, '历史筛选栏必须由 TaskCenterPage 持有')
@@ -164,16 +166,26 @@ requireText(client, /tool_execution_update[\s\S]*latest value replaces earlier p
 requireText(client, /source\.close\(\)/, '关闭 View 必须只关闭 EventSource')
 if (/terminate\([^)]*\)[\s\S]{0,120}source\.close/.test(client)) failures.push('View dispose 不得隐式 terminate Runtime')
 
+requireText(piLiveProtocol, /interface PiLiveResumeRequestDto[\s\S]{0,100}logicalSessionId:\s*string/, '协议缺少 Pi 历史会话恢复请求')
+requireText(taskCenter, /piLiveApi\.resume\(logicalSessionId\)/, '任务中心必须通过受控 API 恢复 Pi 历史会话')
+requireText(reviewPage, /detail\.sourceIds\.includes\('pi'\)[\s\S]{0,320}继续会话/, 'Pi 历史详情必须提供继续会话操作')
+requireText(client, /'\/api\/v1\/pi-live\/resume'[\s\S]{0,180}logicalSessionId/, 'Web Client 缺少 Pi 历史会话恢复端点')
+
 requireText(http, /url\.pathname === '\/api\/v1\/pi-live'[\s\S]*request\.method === 'GET'[\s\S]*service\.list\(\)/, 'HTTP Surface 必须支持列举活跃 Runtime')
+requireText(http, /url\.pathname === '\/api\/v1\/pi-live\/resume'[\s\S]{0,520}resolvePiLiveResumeInput[\s\S]{0,180}service\.start\(input\)/, 'HTTP Surface 必须从历史会话安全恢复 Pi Runtime')
+requireText(resumeResolver, /item\.sourceId === 'pi'[\s\S]{0,420}isAbsolute\(item\.locator\.path\)[\s\S]{0,220}\.jsonl/, '恢复解析器必须只接受 Pi 的绝对 JSONL 证据')
+requireText(resumeResolver, /await stat\(sessionPath\)[\s\S]{0,260}workspace\?\.path/, '恢复解析器必须验证文件并恢复原工作目录')
 requireText(http, /request\.once\('close', cleanup\)/, 'SSE 断开必须释放订阅')
 requireText(http, /service\.terminate\(runtimeSessionId\)/, 'Runtime 只能显式 DELETE 终止')
 requireText(runtime, /async list\(\): Promise<PiLiveRuntimeState\[]>/, 'Runtime Service 必须提供活跃任务列举')
 requireText(runtime, /status: 'initializing'/, 'Runtime Start 必须先返回 initializing')
 requireText(runtime, /runtime\.initialization\.abort\(\)/, 'initializing Terminate 必须取消 Worker 初始化')
+requireText(runtime, /sessionPathKey[\s\S]{0,900}该 Pi 历史会话已经在进行中/, 'Runtime 必须阻止同一原生 Pi 会话被重复打开')
 requireText(workerHost, /fork\(entry, \[\], forkOptions\)/, 'Pi SDK 必须由独立 Worker 承载')
 requireText(workerHost, /MAX_PENDING_REQUESTS/, 'Worker IPC 待处理请求必须有界')
 requireText(workerEntry, /const queue = value\.restoreQueue === false[\s\S]{0,180}session\.clearQueue\(\)/, 'Abort 必须支持队列取回')
 requireText(workerEntry, /session\.bindExtensions\(/, 'Worker 必须通过官方 AgentSession 绑定 Extension Runtime')
+requireText(workerEntry, /input\.sessionPath\s*\?[\s\S]{0,180}SessionManager\.open\(input\.sessionPath/, 'Worker 必须通过官方 SessionManager.open 恢复历史会话')
 requireText(inProcessHost, /assertPiSdkSession\(created\.session, installed\.sdkEntry, installed\.version\)/, 'SDK 契约夹具必须校验 AgentSession capability')
 requireText(workerEntry, /extensionUi\.respond\(value\.requestId, value\.response\)/, 'Extension UI 必须关联 Worker request id')
 

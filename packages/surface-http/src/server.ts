@@ -605,7 +605,7 @@ export async function startHttpSurface(
   const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url ?? '/', `http://${AGENT_LENS_HTTP_HOST}`)
-      if (await handlePiLiveRequest(request, response, url, options.piLive)) return
+      if (await handlePiLiveRequest(request, response, url, options.piLive, storage)) return
       if (await handleBackupRequest(request, response, url, options.backup)) return
       if (await handleCapturePolicyRequest(request, response, url, options.capturePolicy)) return
 

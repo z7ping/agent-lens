@@ -22,7 +22,7 @@ import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { MarkdownContent } from '../components/MarkdownContent'
 import { ToolKindIcon } from '../components/ToolKindIcon'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
-import { Drawer, IconButton, Input, SelectMenu, StatusBadge, Toolbar, UiIcon } from '../components/ui'
+import { Button, Drawer, IconButton, Input, SelectMenu, StatusBadge, Toolbar, UiIcon } from '../components/ui'
 import { historyTaskPresentation } from './task-center'
 import { projectReviewInteractionPresentation } from './review-interaction-presentation'
 import { TaskEvent } from './TaskEvent'
@@ -839,7 +839,19 @@ function highLatencyThreshold(interactions: ReviewInteractionDto[]): number | nu
   return Math.max(upperQuartile, median * 1.75)
 }
 
-export function ReviewPage({ model, embedded = false }: { model: AgentLensClientModel; embedded?: boolean }) {
+export function ReviewPage({
+  model,
+  embedded = false,
+  onResumePiSession,
+  resumingPiSession = false,
+  piResumeError = '',
+}: {
+  model: AgentLensClientModel
+  embedded?: boolean
+  onResumePiSession?(logicalSessionId: string): void | Promise<void>
+  resumingPiSession?: boolean
+  piResumeError?: string
+}) {
   const snapshot = useClientSnapshot(model)
   const { sessionId } = useParams()
   const navigate = useNavigate()
@@ -1294,8 +1306,13 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
             title={<span title={taskDetailModel?.title}>{taskDetailModel?.title}</span>}
             submeta={taskDetailModel?.startedAt && taskDetailModel.endedAt ? <><span>{formatRange(taskDetailModel.startedAt, taskDetailModel.endedAt)}</span>{taskDetailModel.workspacePath && <code title={taskDetailModel.workspacePath}>{taskDetailModel.workspacePath}</code>}</> : undefined}
             metrics={taskDetailModel?.metrics ?? []}
-            actions={<button className="review-audit-toggle" aria-pressed={showAllEvents} onClick={toggleEventVisibility}>{showAllEvents ? '视图：全部事件' : '视图：核心事件'}</button>}
+            actions={<>
+              {onResumePiSession && detail.sourceIds.includes('pi') ? <Button size="small" loading={resumingPiSession} disabled={resumingPiSession} onClick={() => void onResumePiSession(detail.id)}><UiIcon name="arrow-right" size={14}/>继续会话</Button> : null}
+              <button className="review-audit-toggle" aria-pressed={showAllEvents} onClick={toggleEventVisibility}>{showAllEvents ? '视图：全部事件' : '视图：核心事件'}</button>
+            </>}
           />
+
+          {piResumeError && <div className="page-error" role="alert">{piResumeError}</div>}
 
           {detail.sourceIds.includes('pi') && review.relationships?.items.length ? <details className="pi-session-tree">
             <summary>Pi 会话树 · {review.relationships.items.length} 条关系</summary>

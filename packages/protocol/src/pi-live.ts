@@ -43,6 +43,10 @@ export interface PiLiveStartRequestDto {
   sessionPath?: string | undefined
 }
 
+export interface PiLiveResumeRequestDto {
+  logicalSessionId: string
+}
+
 export interface PiLiveModelOptionDto {
   provider: string
   id: string

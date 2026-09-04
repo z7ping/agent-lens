@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import type { AgentAssetInventoryDto, AgentOverviewDto } from '@agent-lens/protocol'
 import type { ClientSnapshot } from '../client/model'
-import { agentLabel, sourceDot } from './AgentScope'
+import { agentLabel, sourceDot, useOrderedAgents } from './AgentScope'
 
 type JsonRecord = Record<string, unknown>
 type CoverageStatus = 'used' | 'discoverable' | 'configured' | 'discovered' | 'unobserved'
@@ -140,7 +140,7 @@ function NativeEventSummary({ groups, total }: { groups: JsonRecord[]; total: nu
 }
 
 export function AgentInsightsRail({ snapshot, sourceId }: { snapshot: ClientSnapshot; sourceId: string }) {
-  const agents = snapshot.agents?.items ?? []
+  const agents = useOrderedAgents(snapshot.agents?.items ?? [])
   const fallbackSourceId = agents.find(agent => agent.detected)?.sourceId || agents[0]?.sourceId || ''
   const selectedSourceId = agents.some(agent => agent.sourceId === sourceId) ? sourceId : fallbackSourceId
   const selectedAgent = agents.find(agent => agent.sourceId === selectedSourceId)

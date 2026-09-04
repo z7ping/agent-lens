@@ -6,6 +6,7 @@ import type {
   PiLiveEventDto,
   PiLiveExtensionResponseRequestDto,
   PiLivePromptRequestDto,
+  PiLiveResumeRequestDto,
   PiLiveQueueDto,
   PiLiveSetModelRequestDto,
   PiLiveSetThinkingLevelRequestDto,
@@ -304,6 +305,13 @@ export class PiLiveApi {
 
   async start(input: PiLiveStartRequestDto): Promise<PiLiveStateDto> {
     const state = await requestJson<PiLiveStateDto>('/api/v1/pi-live', jsonRequest(input))
+    rememberRuntime(state.runtimeSessionId)
+    return state
+  }
+
+  async resume(logicalSessionId: string): Promise<PiLiveStateDto> {
+    const body: PiLiveResumeRequestDto = { logicalSessionId }
+    const state = await requestJson<PiLiveStateDto>('/api/v1/pi-live/resume', jsonRequest(body))
     rememberRuntime(state.runtimeSessionId)
     return state
   }

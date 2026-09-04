@@ -6,7 +6,7 @@ import type { AgentLensClientModel } from '../client/model'
 import { fetchHubReviewSessions, fetchLocalReviewSessions } from '../client/hub-review'
 import { piLiveApi } from '../client/pi-live'
 import { useClientSnapshot } from '../App'
-import { agentLabel, sourceDot } from '../components/AgentScope'
+import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScope'
 import { Button, IconButton, Input, SelectMenu, StatusBadge, Toolbar } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
 import { HubReviewPage } from './HubReviewPage'
@@ -234,11 +234,14 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const [hubSessions, setHubSessions] = useState<HubReviewSessionSummaryDto[]>([])
   const [projectHistory, setProjectHistory] = useState<ReviewSessionSummaryDto[]>([])
   const historyScrollTargetRef = useRef('')
+  const resumeRequestRef = useRef('')
   const filterPopoverRef = useRef<HTMLDivElement>(null)
   const review = snapshot.review
   const [searchOpen, setSearchOpen] = useState(Boolean(review.filters.search))
   const [filterOpen, setFilterOpen] = useState(false)
-  const agents = snapshot.facets?.agents ?? []
+  const [resumingSessionId, setResumingSessionId] = useState('')
+  const [piResumeError, setPiResumeError] = useState<{ sessionId: string; message: string } | null>(null)
+  const agents = useOrderedAgents(snapshot.facets?.agents ?? [])
   const projects = snapshot.facets?.projects ?? []
 
   const refreshRuntimes = useCallback(() => {
@@ -379,6 +382,25 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     window.requestAnimationFrame(settle)
   }, [model, navigate])
 
+  const resumePiSession = useCallback(async (logicalSessionId: string) => {
+    if (resumeRequestRef.current) return
+    resumeRequestRef.current = logicalSessionId
+    setResumingSessionId(logicalSessionId)
+    setPiResumeError(null)
+    try {
+      const state = await piLiveApi.resume(logicalSessionId)
+      navigate(`/review/live/${encodeURIComponent(state.runtimeSessionId)}`)
+    } catch (reason) {
+      setPiResumeError({
+        sessionId: logicalSessionId,
+        message: reason instanceof Error ? reason.message : String(reason),
+      })
+    } finally {
+      resumeRequestRef.current = ''
+      setResumingSessionId('')
+    }
+  }, [navigate])
+
   const selectedRuntimeId = location.pathname.startsWith('/review/live/')
     ? decodeURIComponent(location.pathname.slice('/review/live/'.length))
     : ''
@@ -490,7 +512,13 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     <div className={`task-center-page ${mode === 'new' ? 'is-new-task' : ''}`}>
       <section className="task-center-main">
         <TaskSurface mode={surfaceMode}>
-          {mode === 'history' && <ReviewPage model={model} embedded/>}
+          {mode === 'history' && <ReviewPage
+            model={model}
+            embedded
+            onResumePiSession={resumePiSession}
+            resumingPiSession={resumingSessionId === review.detail?.id}
+            piResumeError={piResumeError?.sessionId === review.detail?.id ? piResumeError.message : ''}
+          />}
           {mode === 'live' && <PiLivePage embedded/>}
           {mode === 'hub' && <HubReviewPage embedded/>}
           {mode === 'new' && <NewTaskPanel options={projectOptions} preferredProjectId={preferredProjectId} onStarted={runtimeSessionId => navigate(`/review/live/${encodeURIComponent(runtimeSessionId)}`)}/>} 

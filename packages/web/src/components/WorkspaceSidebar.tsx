@@ -4,7 +4,7 @@ import type { AgentFacetDto } from '@agent-lens/protocol'
 import type { ClientSnapshot } from '../client/model'
 import { BrandVersion, ReleaseInfo } from './ReleaseInfo'
 import { RuntimeStatus } from './RuntimeStatus'
-import { agentLabel, sourceDot } from './AgentScope'
+import { agentLabel, sourceDot, useOrderedAgents } from './AgentScope'
 import { IconButton, UiIcon } from './ui'
 import './workspace-sidebar-menu.css'
 
@@ -33,6 +33,7 @@ export function WorkspaceSidebar({
   const navigate = useNavigate()
   const settingsAnchorRef = useRef<HTMLDivElement>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const orderedAgents = useOrderedAgents(agents)
   const onReview = location.pathname.startsWith('/review')
   const onInsights = location.pathname.startsWith('/insights') || location.pathname.startsWith('/tools')
   const onAgents = location.pathname.startsWith('/agents')
@@ -85,7 +86,7 @@ export function WorkspaceSidebar({
           <span>{agents.length} 个来源</span>
           <IconButton size="small" onClick={onRefreshAgents} title="刷新智能体" aria-label="刷新智能体"><UiIcon name="refresh" size={14}/></IconButton>
         </div>
-        {agents.map(agent => <button
+        {orderedAgents.map(agent => <button
           key={agent.sourceId}
           type="button"
           className={`workspace-agent-link ${selectedAgentId === agent.sourceId ? 'is-active' : ''}`}

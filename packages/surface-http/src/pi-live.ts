@@ -1,14 +1,17 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { StorageService } from '@agent-lens/core'
 import type { PiLiveService } from '@agent-lens/runtime-cordis'
 import type {
   JsonValue,
   PiLiveAbortRequestDto,
   PiLiveExtensionResponseRequestDto,
   PiLivePromptRequestDto,
+  PiLiveResumeRequestDto,
   PiLiveSetModelRequestDto,
   PiLiveSetThinkingLevelRequestDto,
   PiLiveStartRequestDto,
 } from '@agent-lens/protocol'
+import { resolvePiLiveResumeInput } from './pi-live-resume'
 
 const MAX_PI_LIVE_JSON_BYTES = 1024 * 1024
 const SSE_HEARTBEAT_MS = 15_000
@@ -137,6 +140,7 @@ export async function handlePiLiveRequest(
   response: ServerResponse,
   url: URL,
   service: PiLiveService | undefined,
+  storage: StorageService,
 ): Promise<boolean> {
   if (!url.pathname.startsWith('/api/v1/pi-live')) return false
   if (!service) {
@@ -145,6 +149,17 @@ export async function handlePiLiveRequest(
   }
 
   try {
+    if (url.pathname === '/api/v1/pi-live/resume') {
+      if (request.method !== 'POST') {
+        writeJson(response, 405, { error: 'method_not_allowed' })
+        return true
+      }
+      const body = await readJson<PiLiveResumeRequestDto>(request)
+      const input = await resolvePiLiveResumeInput(storage, nonEmpty(body.logicalSessionId, 'logicalSessionId'))
+      writeJson(response, 201, jsonValue(await service.start(input)))
+      return true
+    }
+
     if (url.pathname === '/api/v1/pi-live/availability') {
       if (request.method !== 'GET') {
         writeJson(response, 405, { error: 'method_not_allowed' })
