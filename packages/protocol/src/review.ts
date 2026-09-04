@@ -7,6 +7,8 @@ export type ReviewEventCategory = 'permission' | 'subagent' | 'context' | 'model
 export type ReviewDetailFilter = 'all' | 'errors' | 'latency' | 'latest'
 export type ReviewDetailDirection = 'forward' | 'backward'
 export type ReviewSessionActivity = 'user-task' | 'branch-task' | 'subagent' | 'internal-review' | 'system-activity'
+export type ReviewSearchMatchSource = 'title' | 'user' | 'system' | 'review' | 'tool' | 'other'
+export type ReviewActivityStatus = 'allowed' | 'denied' | 'error' | 'unknown'
 
 export interface ReviewNodeSourceDto {
   nativeEventId?: string
@@ -31,7 +33,7 @@ export interface ReviewSessionSummaryDto {
   endedAt: string
   durationMs: number
   observationCount: number
-  /** 兼容字段：严格等于真实用户轮次。 */
+  /** 兼容字段；语义固定为真实用户轮次。 */
   interactionCount: number
   userTurnCount?: number
   systemContextCount?: number
@@ -43,8 +45,9 @@ export interface ReviewSessionSummaryDto {
   sessionActivity?: ReviewSessionActivity
   activitySourceLabel?: string
   parentSessionId?: string
-  /** 搜索命中系统/工具/审查内容时由服务端返回来源。 */
-  searchMatchSources?: Array<'title' | 'user' | 'system' | 'review' | 'tool' | 'other'>
+  activityResult?: string
+  activityStatus?: ReviewActivityStatus
+  searchMatchSources?: ReviewSearchMatchSource[]
 }
 
 export interface ReviewMessageNodeDto extends ReviewNodeSourceDto {
