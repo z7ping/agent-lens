@@ -7,7 +7,7 @@ import { DefaultIdentityService, DefaultObservationService } from '@agent-lens/c
 import { SqliteStorageService } from '@agent-lens/storage-sqlite'
 import { resolvePiLiveResumeInput } from './pi-live-resume'
 
-test('从规范 Pi 会话证据解析原生 JSONL 和工作目录', async () => {
+test('从规范 Pi 会话证据解析原生 JSONL、工作目录和继续动作', async () => {
   const root = await mkdtemp(join(tmpdir(), 'agent-lens-pi-resume-'))
   const workspacePath = join(root, 'workspace')
   const sessionPath = join(root, 'session.jsonl')
@@ -69,7 +69,17 @@ test('从规范 Pi 会话证据解析原生 JSONL 和工作目录', async () => 
 
     assert.deepEqual(
       await resolvePiLiveResumeInput(storage, committed.observation.logicalSessionId),
-      { cwd: workspacePath, sessionPath },
+      { cwd: workspacePath, sessionPath, historyAction: 'continue' },
+    )
+    assert.deepEqual(
+      await resolvePiLiveResumeInput(storage, committed.observation.logicalSessionId, 'fork'),
+      { cwd: workspacePath, sessionPath, historyAction: 'fork' },
+    )
+
+    await writeFile(sessionPath, `${JSON.stringify({ type: 'session', id: 'different-pi-session', cwd: workspacePath })}\n`, 'utf8')
+    await assert.rejects(
+      () => resolvePiLiveResumeInput(storage, committed.observation.logicalSessionId),
+      /原生 JSONL 与该 Pi 历史会话不匹配/,
     )
   } finally {
     storage.close()
