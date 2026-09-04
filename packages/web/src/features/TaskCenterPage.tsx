@@ -363,9 +363,9 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     ...projects.map(project => ({ value: project.id, label: project.name ?? project.repositoryIdentity ?? project.id, description: project.repositoryIdentity ?? undefined })),
   ]
 
-  const taskRail = <aside className="task-center-rail">
+  const taskRail = <aside className="task-center-rail" aria-label="任务列表：进行中 + 历史">
     <div className="task-center-rail-head">
-      <Button size="small" variant="primary" className="task-center-new-task-button" onClick={newTask}><UiIcon name="plus" size={14}/>新任务</Button>
+      <Button size="small" variant="primary" className="task-center-new-task-button" onClick={newTask}><UiIcon name="plus" size={14}/> 新建任务</Button>
     </div>
 
     {mode !== 'new' && <Toolbar className="task-center-toolbar" aria-label="筛选历史任务">
