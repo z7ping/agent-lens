@@ -98,9 +98,90 @@ jobs:
           text = replace_between(text, 'function parentSessionSql', 'function legacyQuerySql', relationship_helpers + 'function legacyQuerySql')
           summary.write_text(text, encoding='utf-8')
 
+          review_index = Path('packages/projection-review/src/index.ts')
+          text = review_index.read_text(encoding='utf-8')
+          activity_result = '''async function internalActivityResult(
+            storage: StorageService,
+            item: ReviewSessionSummaryDto,
+          ): Promise<{ activityResult?: string; activityStatus?: ReviewActivityStatus }> {
+            if (item.sessionActivity !== 'internal-review') return {}
+            let after: ObservationCursor | undefined
+            let permissionResult = ''
+            let assistantResult = ''
+            while (true) {
+              const page = await storage.repositories.observations.query({
+                logicalSessionId: item.id,
+                ...(after ? { after } : {}),
+                limit: 1000,
+              })
+              if (!page.length) break
+              for (const observation of page) {
+                if (observation.kind === 'permission.response') {
+                  const payload = asRecord(observation.payload)
+                  permissionResult = stringField(payload, 'decision', 'result', 'status', 'permissionMode', 'permission_mode', 'message')
+                    ?? textFromPayload(observation.payload)
+                    ?? permissionResult
+                  continue
+                }
+                if (observation.kind === 'message.assistant') {
+                  assistantResult = textFromPayload(observation.payload) ?? assistantResult
+                }
+              }
+              after = observationCursor(page[page.length - 1]!)
+              if (page.length < 1000) break
+            }
+            const result = permissionResult || assistantResult
+            if (result) return { activityResult: result, activityStatus: reviewStatus(result) }
+            if (item.errorCount > 0) return { activityResult: '异常', activityStatus: 'error' }
+            return { activityResult: '未记录明确结论', activityStatus: 'unknown' }
+          }
+
+          '''
+          text = replace_between(text, 'async function internalActivityResult', 'async function enrichSummary', activity_result + 'async function enrichSummary')
+          review_index.write_text(text, encoding='utf-8')
+
+          task_center = Path('packages/web/src/features/TaskCenterPage.tsx')
+          text = task_center.read_text(encoding='utf-8')
+          marker = "function sessionActivityLabel(item: ReviewSessionSummaryDto): string {"
+          helper = '''function isUserTaskSummary(item: ReviewSessionSummaryDto): boolean {
+            if (item.sessionActivity) return item.sessionActivity === 'user-task'
+            return (item.userTurnCount ?? item.interactionCount) > 0
+          }
+
+          '''
+          if marker not in text:
+              raise SystemExit('TaskCenter sessionActivityLabel marker not found')
+          text = text.replace(marker, helper + marker, 1)
+          text = text.replace("const isSystemActivity = Boolean(item.sessionActivity && item.sessionActivity !== 'user-task')", "const isSystemActivity = !isUserTaskSummary(item)", 1)
+          text = text.replace("displayTitle(item.title || item.preview, fallback)", "displayTitle(item.preview || item.title, fallback)", 1)
+          text = text.replace("displayTitle(parent.title || parent.preview, parent.projectName ? `${parent.projectName} 任务` : '关联任务')", "displayTitle(parent.preview || parent.title, parent.projectName ? `${parent.projectName} 任务` : '关联任务')", 1)
+          old_user_tasks = '''  const userTaskSessions = useMemo(
+            () => localSessions.filter(item => !item.sessionActivity || item.sessionActivity === 'user-task'),
+            [localSessions],
+          )
+          const systemActivities = useMemo(
+            () => localSessions
+              .filter(item => Boolean(item.sessionActivity && item.sessionActivity !== 'user-task'))
+              .sort((left, right) => Date.parse(right.startedAt) - Date.parse(left.startedAt) || left.id.localeCompare(right.id)),
+            [localSessions],
+          )'''
+          new_user_tasks = '''  const userTaskSessions = useMemo(
+            () => localSessions.filter(isUserTaskSummary),
+            [localSessions],
+          )
+          const systemActivities = useMemo(
+            () => localSessions
+              .filter(item => !isUserTaskSummary(item))
+              .sort((left, right) => Date.parse(right.startedAt) - Date.parse(left.startedAt) || left.id.localeCompare(right.id)),
+            [localSessions],
+          )'''
+          if old_user_tasks not in text:
+              raise SystemExit('TaskCenter task/activity grouping block not found')
+          text = text.replace(old_user_tasks, new_user_tasks, 1)
+          task_center.write_text(text, encoding='utf-8')
+
           review = Path('packages/web/src/features/ReviewPage.tsx')
           text = review.read_text(encoding='utf-8')
-
           title_replacement = '''function normalizedSessionTitle(value: string | undefined): string {
             return value?.replace(/\\s+/g, ' ').trim() ?? ''
           }
@@ -118,12 +199,10 @@ jobs:
 
           '''
           text = replace_between(text, 'const injectedTitlePatterns = [', 'function hubAvailabilityString', title_replacement + 'function hubAvailabilityString')
-
           old_label = "if (node.kind === 'context.injected') return '系统注入上下文'"
           if old_label not in text:
               raise SystemExit('context injected label line not found')
           text = text.replace(old_label, "if (node.kind === 'context.injected') return stringValue(payload, 'label') || '系统注入上下文'", 1)
-
           source_summary = text.find('function sourceEventSummary')
           context_start = text.find("  if (node.kind === 'context.injected') {", source_summary)
           lifecycle_start = text.find("  if (node.kind === 'session.lifecycle') {", context_start)
@@ -137,7 +216,6 @@ jobs:
           }
           '''
           text = text[:context_start] + context_replacement + text[lifecycle_start:]
-
           markdown_replacement = '''function MarkdownSurface({ text }: { text: string }) {
             const [view, setView] = useState<'rendered' | 'source'>('rendered')
             return <div className="markdown-message" data-view={view}>
@@ -152,12 +230,10 @@ jobs:
 
           '''
           text = replace_between(text, 'function MarkdownSurface', 'function MessageBubble', markdown_replacement + 'function MessageBubble')
-
           task_message = "return <TaskMessage\n    role={node.role === 'user' ? 'user' : 'assistant'}"
           if task_message not in text:
               raise SystemExit('Review TaskMessage marker not found')
           text = text.replace(task_message, task_message + "\n    collapsible={false}", 1)
-
           event_replacement = '''function systemEventExpansionKey(eventId: string): string {
             return `agent-lens:review:system-event:${eventId}:expanded`
           }
@@ -212,6 +288,8 @@ jobs:
 
           '''
           text = replace_between(text, 'function EventRow', 'function RawEventGroup', event_replacement + 'function RawEventGroup')
+          text = text.replace('sessionTitle([detail.title, detail.preview],', 'sessionTitle([detail.preview, detail.title],')
+          text = text.replace('sessionTitle([item.title, item.preview],', 'sessionTitle([item.preview, item.title],')
           review.write_text(text, encoding='utf-8')
       - name: Install dependencies
         run: npm ci
@@ -230,7 +308,7 @@ jobs:
         run: |
           git config user.name "agent-lens-bot"
           git config user.email "agent-lens-bot@users.noreply.github.com"
-          git add packages/projection-review/src/projection.ts packages/storage-sqlite/src/session-summaries.ts packages/web/src/features/ReviewPage.tsx
+          git add packages/projection-review/src/projection.ts packages/projection-review/src/index.ts packages/storage-sqlite/src/session-summaries.ts packages/web/src/features/ReviewPage.tsx packages/web/src/features/TaskCenterPage.tsx
           git diff --cached --check
-          git commit -m "fix: 收口系统活动正文与根任务审查统计"
+          git commit -m "fix: 完成任务归属与内部活动表现层收口"
           git push origin HEAD:fix/alpha3-codex-provenance-activity
