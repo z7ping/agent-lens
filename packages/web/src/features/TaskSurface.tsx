@@ -109,6 +109,24 @@ function sameTurnRailItems(left: TaskTurnRailItem[], right: TaskTurnRailItem[]):
   })
 }
 
+function activeTurnRailItem(items: TaskTurnRailItem[], anchorY: number): TaskTurnRailItem {
+  let low = 0
+  let high = items.length - 1
+  let candidate = 0
+  while (low <= high) {
+    const middle = (low + high) >> 1
+    const item = items[middle]!
+    const top = item.element.getBoundingClientRect().top
+    if (top <= anchorY) {
+      candidate = middle
+      low = middle + 1
+    } else {
+      high = middle - 1
+    }
+  }
+  return items[candidate]!
+}
+
 /**
  * 任务详情的统一表现宿主。
  *
@@ -122,6 +140,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
 ) {
   const rootRef = useRef<HTMLElement>(null)
   const railItemsRef = useRef<TaskTurnRailItem[]>([])
+  const railViewportRef = useRef<HTMLElement | null>(null)
   const frameRef = useRef<number | null>(null)
   const [railItems, setRailItems] = useState<TaskTurnRailItem[]>([])
   const [activeRoundId, setActiveRoundId] = useState('')
@@ -141,7 +160,8 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
       return
     }
 
-    const viewport = scrollViewport(root, items[0]!.element)
+    const viewport = railViewportRef.current ?? scrollViewport(root, items[0]!.element)
+    railViewportRef.current = viewport
     const viewportRect = viewport.getBoundingClientRect()
     if (viewportRect.width <= 0 || viewportRect.height <= 0) {
       setRailPosition(null)
@@ -149,23 +169,9 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
     }
 
     const anchorY = viewportRect.top + Math.min(Math.max(viewportRect.height * .3, 72), 190)
-    let active = items[0]!
-    let nearestDistance = Number.POSITIVE_INFINITY
-    for (const item of items) {
-      const rect = item.element.getBoundingClientRect()
-      if (rect.top <= anchorY && rect.bottom >= anchorY) {
-        active = item
-        nearestDistance = 0
-        break
-      }
-      const distance = Math.abs(rect.top - anchorY)
-      if (distance < nearestDistance) {
-        nearestDistance = distance
-        active = item
-      }
-    }
-
+    const active = activeTurnRailItem(items, anchorY)
     setActiveRoundId(current => current === active.id ? current : active.id)
+
     const nextPosition = {
       left: viewportRect.left + 10,
       top: viewportRect.top + viewportRect.height / 2,
@@ -192,6 +198,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
     if (!root) return
     const next = collectTurnRailItems(root)
     railItemsRef.current = next
+    railViewportRef.current = next.length ? scrollViewport(root, next[0]!.element) : null
     setRailItems(current => sameTurnRailItems(current, next) ? current : next)
     scheduleRailViewport()
   }, [scheduleRailViewport])
@@ -206,7 +213,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ['data-interaction-id', 'data-round-label', 'data-round-error', 'data-round-state', 'data-mounted', 'open'],
+      attributeFilter: ['class', 'data-interaction-id', 'data-round-label', 'data-round-error', 'data-round-state', 'data-mounted', 'open'],
     })
     root.addEventListener('scroll', scheduleRailViewport, true)
     window.addEventListener('resize', scheduleRailViewport)
@@ -216,6 +223,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
       window.removeEventListener('resize', scheduleRailViewport)
       if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current)
       frameRef.current = null
+      railViewportRef.current = null
     }
   }, [scanRounds, scheduleRailViewport])
 
