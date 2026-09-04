@@ -7,7 +7,9 @@ on:
       - feature/1.0.0-alpha.3-task-surface
     paths:
       - packages/core/src/**
+      - packages/runtime-cordis/src/**
       - packages/storage-sqlite/src/**
+      - packages/projection-session/src/**
       - packages/projection-review/src/**
       - packages/source-pi/src/**
       - packages/source-codex/src/**
