@@ -1,0 +1,270 @@
+/*
+ * AgentLens 全局工作栏。
+ * 负责 #56 的 Logo / 一级导航 / 当前上下文 / 用户设置四区布局；
+ * 页面内容仍由各页面所有者文件负责。
+ */
+
+.app-shell {
+  display: grid;
+  width: 100%;
+  height: 100dvh;
+  min-height: 0;
+  grid-template-columns: 316px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
+  background: var(--al-canvas);
+}
+
+.workspace-sidebar {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: 64px 146px minmax(0, 1fr) 58px;
+  overflow: hidden;
+  border-right: 1px solid var(--al-line);
+  background: var(--al-soft-2);
+}
+
+.workspace-sidebar-brand {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--al-line) 74%, transparent);
+  color: var(--al-ink);
+  text-decoration: none;
+}
+
+.workspace-sidebar-logo {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border-radius: 7px;
+  object-fit: contain;
+}
+
+.workspace-sidebar-brand-copy {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.workspace-sidebar-brand-copy b {
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 720;
+  letter-spacing: -.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-primary-nav {
+  display: grid;
+  align-content: start;
+  gap: 3px;
+  padding: 14px 11px 18px;
+}
+
+.workspace-primary-link {
+  position: relative;
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border-radius: 8px;
+  color: var(--al-muted);
+  font-size: 13px;
+  font-weight: 590;
+  text-decoration: none;
+}
+
+.workspace-primary-link:hover { background: color-mix(in srgb, var(--al-surface) 62%, transparent); color: var(--al-ink); }
+.workspace-primary-link.is-active { background: var(--al-surface); color: var(--al-ink); font-weight: 680; }
+.workspace-primary-link.is-active::before {
+  content: '';
+  position: absolute;
+  top: 9px;
+  bottom: 9px;
+  left: 0;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--al-accent);
+}
+
+.workspace-nav-dot {
+  width: 6px;
+  height: 6px;
+  margin-left: auto;
+  flex: 0 0 6px;
+  border-radius: 50%;
+  background: var(--al-accent);
+}
+
+.workspace-sidebar-context {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-top: 1px solid color-mix(in srgb, var(--al-line) 74%, transparent);
+  background: var(--al-soft-2);
+}
+
+.workspace-context-menu {
+  height: 100%;
+  min-height: 0;
+  padding: 10px;
+  overflow: auto;
+}
+
+.workspace-context-heading {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 6px 5px;
+  color: var(--al-muted-2);
+}
+.workspace-context-heading b { color: var(--al-ink-2); font-size: 12px; font-weight: 680; }
+.workspace-context-heading span { font-size: 12px; }
+
+.workspace-context-link,
+.workspace-agent-link {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--al-muted);
+  font-size: 13px;
+  text-align: left;
+  text-decoration: none;
+}
+.workspace-context-link:hover,
+.workspace-agent-link:hover { background: color-mix(in srgb, var(--al-surface) 64%, transparent); color: var(--al-ink); }
+.workspace-context-link.is-active,
+.workspace-agent-link.is-active { background: var(--al-surface); color: var(--al-ink); font-weight: 650; }
+.workspace-context-link .workspace-nav-dot { margin-left: auto; }
+
+.workspace-agent-link > span:nth-child(2) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace-agent-link small { margin-left: auto; color: var(--al-muted-2); font-size: 12px; white-space: nowrap; }
+.workspace-agent-link.is-active small { color: var(--al-muted); }
+.workspace-context-empty { padding: 16px 8px; color: var(--al-muted-2); font-size: 12px; line-height: 1.55; }
+
+.workspace-sidebar-footer {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 11px 0 14px;
+  border-top: 1px solid var(--al-line);
+  background: var(--al-surface);
+}
+
+.workspace-user {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  color: var(--al-muted);
+  font-size: 12px;
+}
+.workspace-user-avatar {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  place-items: center;
+  border: 1px solid var(--al-line);
+  border-radius: 50%;
+  background: var(--al-soft);
+  color: var(--al-ink-2);
+}
+.workspace-user > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.app-main {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--al-canvas);
+}
+
+.app-main > .workspace-page,
+.app-main > .agents-responsive-shell,
+.app-main > .task-center-page {
+  min-height: 0;
+  flex: 1;
+}
+
+/* Task Center 的会话 Rail 通过 Portal 挂到全局上下文区，不再占正文第二列。 */
+.workspace-sidebar-context > .task-center-rail {
+  width: 100%;
+  height: 100%;
+  border-right: 0;
+}
+
+.app-shell .task-center-page {
+  height: auto;
+  grid-template-columns: minmax(0, 1fr);
+}
+.app-shell .task-center-toolbar { grid-column: 1; }
+.app-shell .task-center-main { grid-column: 1; }
+.app-shell .task-center-page.is-new-task { grid-template-columns: minmax(0, 1fr); }
+
+.workspace-settings-drawer .ui-drawer { width: min(420px, calc(100vw - 24px)); }
+.workspace-settings-section { display: grid; gap: 9px; }
+.workspace-settings-section + .workspace-settings-section { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--al-line); }
+.workspace-settings-section h3 { margin: 0; color: var(--al-muted); font-size: 12px; font-weight: 680; }
+.workspace-settings-actions { align-items: start; }
+.workspace-settings-actions .btn { justify-self: start; }
+.workspace-settings-drawer .runtime-status-popover { position: static; width: 100%; margin-top: 8px; box-shadow: none; }
+
+@media (max-width: 1199.98px) {
+  .app-shell { grid-template-columns: 286px minmax(0, 1fr); }
+}
+
+@media (max-width: 991.98px) {
+  .app-shell { grid-template-columns: 252px minmax(0, 1fr); }
+  .workspace-sidebar { grid-template-rows: 60px 136px minmax(0, 1fr) 56px; }
+  .workspace-sidebar-brand { padding-inline: 13px; }
+  .workspace-primary-nav { padding-inline: 9px; }
+}
+
+@media (max-width: 767.98px) {
+  .app-shell { grid-template-columns: 220px minmax(0, 1fr); }
+  .workspace-sidebar-brand-copy .release-version { display: none; }
+  .workspace-user > span:last-child { display: none; }
+  .app-shell .task-center-page { grid-template-rows: auto minmax(0, 1fr); }
+  .app-shell .task-center-main { grid-row: 2; }
+  .app-shell .task-center-page.is-new-task { grid-template-rows: minmax(0, 1fr); }
+  .app-shell .task-center-page.is-new-task .task-center-main { grid-row: 1; }
+}
+
+@media (max-width: 575.98px) {
+  .app-shell { grid-template-columns: 196px minmax(0, 1fr); }
+  .workspace-sidebar { grid-template-rows: 56px 126px minmax(0, 1fr) 54px; }
+  .workspace-sidebar-brand { padding-inline: 10px; }
+  .workspace-sidebar-logo { width: 25px; height: 25px; flex-basis: 25px; }
+  .workspace-sidebar-brand-copy b { font-size: 14px; }
+  .workspace-primary-nav { padding: 10px 7px 14px; }
+  .workspace-primary-link { min-height: 34px; padding-inline: 8px; font-size: 12px; }
+  .workspace-context-menu { padding: 7px; }
+  .workspace-context-link,
+  .workspace-agent-link { padding-inline: 7px; font-size: 12px; }
+  .workspace-agent-link small { display: none; }
+}
