@@ -7,13 +7,13 @@ import { fetchHubReviewSessions, fetchLocalReviewSessions } from '../client/hub-
 import { piLiveApi } from '../client/pi-live'
 import { useClientSnapshot } from '../App'
 import { agentLabel, sourceDot } from '../components/AgentScope'
-import { Button, IconButton, Input, SelectMenu, Toolbar } from '../components/ui'
+import { Button, IconButton, Input, SelectMenu, StatusBadge, Toolbar } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
 import { HubReviewPage } from './HubReviewPage'
 import { PiLivePage } from './PiLivePage'
 import { ReviewPage } from './ReviewPage'
 import { TaskSurface } from './TaskSurface'
-import { deriveTaskProjectOptions, pickTaskProject, type TaskProjectOption } from './task-center'
+import { deriveTaskProjectOptions, historyTaskPresentation, pickTaskProject, type TaskProjectOption } from './task-center'
 
 export type TaskCenterMode = 'history' | 'live' | 'new' | 'hub'
 type TaskDayGroup = '今天' | '昨天' | '更早'
@@ -205,9 +205,10 @@ function NewTaskPanel({
 function HistoryTaskItem({ item, active, onClick }: { item: ReviewSessionSummaryDto; active: boolean; onClick(): void }) {
   const sourceId = item.sourceIds[0] ?? ''
   const fallback = item.projectName ? `${item.projectName} 任务` : `${agentLabel(sourceId, item.productId)} 任务`
+  const presentation = historyTaskPresentation(item, fallback)
   return <button className={`session-item ${active ? 'session-item-active' : ''}`} onClick={onClick}>
-    <div className="session-item-meta"><span className={`source-dot ${sourceDot(sourceId)}`}/><span>{agentLabel(sourceId, item.productId)}</span><time>{formatTime(item.startedAt)}</time></div>
-    <div className="session-item-title">{cleanTitle(item.title || item.preview, fallback)}</div>
+    <div className="session-item-meta"><span className={`source-dot ${sourceDot(sourceId)}`}/><span>{agentLabel(sourceId, item.productId)}</span>{presentation.activityLabel && <StatusBadge className="session-activity-badge">{presentation.activityLabel}</StatusBadge>}<time>{formatTime(item.startedAt)}</time></div>
+    <div className="session-item-title">{presentation.title}</div>
     <div className="session-item-foot"><span>{item.projectName ?? item.workspacePath?.split(/[\\/]/).filter(Boolean).at(-1) ?? '无项目'}</span><span>{item.toolCount} 调用{item.errorCount ? ` · ${item.errorCount} 错误` : ''}</span></div>
   </button>
 }

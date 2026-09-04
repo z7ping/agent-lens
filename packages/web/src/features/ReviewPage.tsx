@@ -919,10 +919,10 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
   }, [embedded, review.response?.meta.generatedAt])
 
   useEffect(() => {
-    if (!sessionId || sessionId === review.selectedId) return
+    if (!sessionId || (sessionId === review.selectedId && (review.detailLoading || review.detail?.id === sessionId || review.error))) return
     readerPositionsRef.current.delete(sessionId)
     void model.selectReviewSession(sessionId)
-  }, [sessionId, review.selectedId, model])
+  }, [sessionId, review.selectedId, review.detail?.id, review.detailLoading, review.error, model])
   useEffect(() => {
     roundExpansionRef.current.clear()
     setRoundFilter('all')

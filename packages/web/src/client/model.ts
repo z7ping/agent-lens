@@ -587,8 +587,12 @@ export class AgentLensClientModel {
       },
     })
     try {
+      const detailRequest = this.api.reviewDetail(id, { direction: 'backward', limit: REVIEW_DETAIL_PAGE_SIZE })
+        .then(detail => detail.interactions.length > 0 || !detail.interactionIndex?.length
+          ? detail
+          : this.api.reviewDetail(id, { direction: 'forward', limit: REVIEW_DETAIL_PAGE_SIZE }))
       const [detail, relationships] = await Promise.all([
-        this.api.reviewDetail(id, { direction: 'backward', limit: REVIEW_DETAIL_PAGE_SIZE }),
+        detailRequest,
         this.api.relationships(id),
       ])
       if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== id) return

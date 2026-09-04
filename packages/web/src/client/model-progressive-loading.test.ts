@@ -256,3 +256,32 @@ test('后台刷新不会把摘要窗口外的当前阅读会话切回第一条',
   assert.equal(model.getSnapshot().review.detail?.id, 'outside-window')
   assert.equal(detailCalls, callsBeforeRefresh)
 })
+
+test('默认最新页为空但轻量索引仍有记录时自动从头加载', async () => {
+  const directions: Array<'forward' | 'backward' | undefined> = []
+
+  class SparseLatestApi extends AgentLensApi {
+    override reviewDetail(_id: string, options: { direction?: 'forward' | 'backward' } = {}): Promise<ReviewSessionDetailDto> {
+      directions.push(options.direction)
+      return Promise.resolve(options.direction === 'forward'
+        ? detailPage(1, 'forward', false)
+        : {
+            ...summary(1),
+            interactions: [],
+            interactionIndex: [interaction(1)],
+            page: { count: 0, hasMore: false, direction: 'backward', filter: 'all' },
+          })
+    }
+
+    override relationships(): Promise<SessionRelationshipResponseDto> {
+      return Promise.resolve({ items: [], meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION, generatedAt: '2026-09-01T00:00:00.000Z' } })
+    }
+  }
+
+  const model = new AgentLensClientModel(new SparseLatestApi())
+  await model.selectReviewSession('session-1')
+
+  assert.deepEqual(directions, ['backward', 'forward'])
+  assert.equal(model.getSnapshot().review.detail?.interactions.length, 10)
+  assert.equal(model.getSnapshot().review.detail?.page.direction, 'forward')
+})

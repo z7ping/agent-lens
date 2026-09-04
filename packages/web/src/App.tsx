@@ -142,10 +142,9 @@ function WorkspaceBreadcrumb({
   } else if (pathname.startsWith('/review/hub/')) {
     items = [{ label: '任务中心', to: '/review' }, { label: '远程任务' }]
   } else if (pathname.startsWith('/review/')) {
-    items = [{ label: '任务中心', to: '/review' }, { label: snapshot.review.detail?.title?.trim() || '任务详情' }]
+    items = [{ label: '任务中心', to: '/review' }, { label: '会话详情' }]
   } else if (pathname === '/review') {
-    const selectedTitle = snapshot.review.detail?.title?.trim()
-    items = selectedTitle ? [{ label: '任务中心' }, { label: selectedTitle }] : [{ label: '任务中心' }]
+    items = [{ label: '任务中心' }]
   } else if (pathname.startsWith('/tools')) {
     items = [{ label: '洞察', to: '/insights' }, { label: '工具分析' }]
   } else if (pathname.startsWith('/insights')) {

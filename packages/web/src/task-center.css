@@ -214,6 +214,10 @@
   white-space: nowrap;
 }
 .task-center-rail .session-item-meta time { font-variant-numeric: tabular-nums; }
+.task-center-rail .session-activity-badge {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+}
 .task-center-rail .session-item-foot { margin-top: 4px; gap: 12px; }
 .task-center-rail .session-load-more {
   width: 100%;
