@@ -36,7 +36,7 @@ interface CodexThreadName {
 }
 
 const CHECKPOINT_BATCH_SIZE = 100
-export const CODEX_PARSER_VERSION = '10'
+export const CODEX_PARSER_VERSION = '11'
 
 function sha256(value: string | Buffer): string {
   return createHash('sha256').update(value).digest('hex')
@@ -68,13 +68,10 @@ async function listJsonlFiles(root: string, historyWindow?: SourceHistoryWindow)
     try {
       return { path, mtimeMs: (await stat(path)).mtimeMs }
     } catch {
-      // 文件可能在目录遍历后被宿主清理，跳过即可。
       return null
     }
   }))).filter((candidate): candidate is { path: string; mtimeMs: number } => candidate !== null)
 
-  // 冷启动首先导入最近有活动的会话；恢复旧会话时 mtime 比目录日期更可靠。
-  // 路径降序只用于相同时间戳下的稳定排序，旧历史仍会在后续完整回填。
   const activeSince = historyWindow?.activeSince ? Date.parse(historyWindow.activeSince) : Number.NaN
   const filtered = Number.isFinite(activeSince)
     ? candidates.filter(candidate => candidate.mtimeMs >= activeSince)
@@ -374,8 +371,6 @@ export async function* ingestCodexHistory(ctx: SourceHistoryExecutionContext): A
       }
 
       yield sourceRecordForLine(ctx, filePath, session, line, sequence)
-      // 生成器只会在消费端持久化当前记录后继续执行。批量推进游标可以避免
-      // 冷导入为每行 JSONL 增加一次 SQLite 事务；崩溃时最多幂等重放一批。
       pendingCheckpointLines += 1
       if (pendingCheckpointLines >= CHECKPOINT_BATCH_SIZE) await persistCheckpoint()
     }
