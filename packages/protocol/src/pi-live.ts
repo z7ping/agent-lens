@@ -3,6 +3,7 @@ import type { JsonValue } from './timeline'
 export type PiLiveStreamingBehaviorDto = 'steer' | 'followUp'
 export type PiLiveRuntimeStatusDto = 'initializing' | 'ready' | 'failed' | 'terminating' | 'terminated'
 export type PiLiveInitializationStageDto = 'starting_worker' | 'loading_sdk' | 'loading_resources' | 'creating_session' | 'binding_extensions' | 'ready'
+export type PiLiveResumeActionDto = 'continue' | 'fork'
 
 export interface PiLiveInitializationTimingDto {
   stage: PiLiveInitializationStageDto
@@ -45,6 +46,7 @@ export interface PiLiveStartRequestDto {
 
 export interface PiLiveResumeRequestDto {
   logicalSessionId: string
+  action: PiLiveResumeActionDto
 }
 
 export interface PiLiveModelOptionDto {
