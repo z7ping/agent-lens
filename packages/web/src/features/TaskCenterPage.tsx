@@ -48,10 +48,39 @@ function taskDayGroup(value: string, now = new Date()): TaskDayGroup {
   return '更早'
 }
 
-function cleanTitle(value: string | undefined, fallback: string): string {
+/** 只负责空白规范化；标题来源和归属由 Session Summary 决定，页面不再识别/剥离系统文本。 */
+function displayTitle(value: string | undefined, fallback: string): string {
   const text = value?.replace(/\s+/g, ' ').trim() ?? ''
-  if (!text) return fallback
-  return text.length > 74 ? `${text.slice(0, 74)}…` : text
+  return text || fallback
+}
+
+function sessionActivityLabel(item: ReviewSessionSummaryDto): string {
+  if (item.activitySourceLabel) return item.activitySourceLabel
+  if (item.sessionActivity === 'internal-review') return '内部审查'
+  if (item.sessionActivity === 'subagent') return '子智能体'
+  if (item.sessionActivity === 'branch-task') return '分支任务'
+  if (item.sessionActivity === 'system-activity') return '系统活动'
+  return '用户任务'
+}
+
+function activityStatusLabel(item: ReviewSessionSummaryDto): string {
+  if (item.activityStatus === 'allowed') return item.activityResult ? `允许 · ${item.activityResult}` : '允许'
+  if (item.activityStatus === 'denied') return item.activityResult ? `拒绝 · ${item.activityResult}` : '拒绝'
+  if (item.activityStatus === 'error') return item.activityResult ? `异常 · ${item.activityResult}` : '异常'
+  return item.activityResult || '已记录'
+}
+
+function searchMatchLabel(item: ReviewSessionSummaryDto): string {
+  if (!item.searchMatchSources?.length) return ''
+  const labels = {
+    title: '标题',
+    user: '用户',
+    system: '系统',
+    review: '审查',
+    tool: '工具',
+    other: '其他',
+  } as const
+  return `命中：${item.searchMatchSources.map(source => labels[source]).join(' / ')}`
 }
 
 function modelLabel(state: PiLiveStateDto): string {
@@ -75,7 +104,7 @@ function remoteTime(item: HubReviewSessionSummaryDto): string {
 
 function remoteTitle(item: HubReviewSessionSummaryDto): string {
   const title = availabilityString(item.title)
-  if (title) return cleanTitle(title, '远程任务')
+  if (title) return displayTitle(title, '远程任务')
   if (item.title.state === 'redacted') return '标题已脱敏'
   if (item.title.state === 'omitted') return item.title.reason === 'policy' ? '标题未同步' : '远程任务'
   return '远程任务'
@@ -202,13 +231,43 @@ function NewTaskPanel({
   </div>
 }
 
-function HistoryTaskItem({ item, active, onClick }: { item: ReviewSessionSummaryDto; active: boolean; onClick(): void }) {
+function HistoryTaskItem({
+  item,
+  active,
+  onClick,
+  parent,
+}: {
+  item: ReviewSessionSummaryDto
+  active: boolean
+  onClick(): void
+  parent?: ReviewSessionSummaryDto
+}) {
   const sourceId = item.sourceIds[0] ?? ''
+  const isSystemActivity = Boolean(item.sessionActivity && item.sessionActivity !== 'user-task')
   const fallback = item.projectName ? `${item.projectName} 任务` : `${agentLabel(sourceId, item.productId)} 任务`
-  return <button className={`session-item ${active ? 'session-item-active' : ''}`} onClick={onClick}>
+  const title = isSystemActivity
+    ? sessionActivityLabel(item)
+    : displayTitle(item.title || item.preview, fallback)
+  const project = item.projectName ?? item.workspacePath?.split(/[\\/]/).filter(Boolean).at(-1) ?? '无项目'
+  const searchHit = searchMatchLabel(item)
+  const counts = [
+    item.systemContextCount ? `${item.systemContextCount} 系统` : '',
+    item.internalReviewCount ? `${item.internalReviewCount} 审查` : '',
+    `${item.toolCount} 调用`,
+    item.errorCount ? `${item.errorCount} 错误` : '',
+  ].filter(Boolean).join(' · ')
+  const parentFallback = parent
+    ? displayTitle(parent.title || parent.preview, parent.projectName ? `${parent.projectName} 任务` : '关联任务')
+    : ''
+
+  return <button className={`session-item ${isSystemActivity ? 'task-system-activity-item' : ''} ${active ? 'session-item-active' : ''}`} onClick={onClick}>
     <div className="session-item-meta"><span className={`source-dot ${sourceDot(sourceId)}`}/><span>{agentLabel(sourceId, item.productId)}</span><time>{formatTime(item.startedAt)}</time></div>
-    <div className="session-item-title">{cleanTitle(item.title || item.preview, fallback)}</div>
-    <div className="session-item-foot"><span>{item.projectName ?? item.workspacePath?.split(/[\\/]/).filter(Boolean).at(-1) ?? '无项目'}</span><span>{item.toolCount} 调用{item.errorCount ? ` · ${item.errorCount} 错误` : ''}</span></div>
+    <div className="session-item-title">{title}</div>
+    <div className="session-item-foot">
+      <span>{isSystemActivity ? (parentFallback ? `关联：${parentFallback}` : '未关联用户任务') : project}</span>
+      <span>{isSystemActivity ? activityStatusLabel(item) : counts}</span>
+    </div>
+    {searchHit && <div className="task-center-search-hit">{searchHit}</div>}
   </button>
 }
 
@@ -267,7 +326,6 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
 
   useEffect(() => {
     if (!filterOpen) return
-
     const closeOnOutsidePointer = (event: PointerEvent) => {
       const target = event.target
       if (!(target instanceof Node)) return
@@ -280,7 +338,6 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
       setFilterOpen(false)
       requestAnimationFrame(() => filterPopoverRef.current?.querySelector<HTMLButtonElement>('.task-center-filter-button')?.focus({ preventScroll: true }))
     }
-
     document.addEventListener('pointerdown', closeOnOutsidePointer, true)
     document.addEventListener('keydown', closeOnEscape)
     return () => {
@@ -300,6 +357,17 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   }, [mode])
 
   const localSessions = review.response?.items ?? []
+  const localById = useMemo(() => new Map(localSessions.map(item => [item.id, item] as const)), [localSessions])
+  const userTaskSessions = useMemo(
+    () => localSessions.filter(item => !item.sessionActivity || item.sessionActivity === 'user-task'),
+    [localSessions],
+  )
+  const systemActivities = useMemo(
+    () => localSessions
+      .filter(item => Boolean(item.sessionActivity && item.sessionActivity !== 'user-task'))
+      .sort((left, right) => Date.parse(right.startedAt) - Date.parse(left.startedAt) || left.id.localeCompare(right.id)),
+    [localSessions],
+  )
   const projectSessions = useMemo(() => {
     const byId = new Map<string, ReviewSessionSummaryDto>()
     for (const item of [...projectHistory, ...localSessions]) byId.set(item.id, item)
@@ -310,7 +378,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const visibleHub = useMemo(() => hubSessions.filter(item => remoteVisible(item, review)), [hubSessions, review])
   const historyGroups = useMemo(() => {
     const combined: HistoryTaskEntry[] = [
-      ...localSessions.map(item => ({ kind: 'local' as const, id: item.id, at: item.startedAt, local: item })),
+      ...userTaskSessions.map(item => ({ kind: 'local' as const, id: item.id, at: item.startedAt, local: item })),
       ...visibleHub.map(item => ({ kind: 'remote' as const, id: item.id, at: remoteTime(item), remote: item })),
     ].sort((left, right) => {
       const leftAt = Date.parse(left.at)
@@ -326,7 +394,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     return (['今天', '昨天', '更早'] as const)
       .map(label => ({ label, items: groups.get(label)! }))
       .filter(group => group.items.length > 0)
-  }, [localSessions, visibleHub])
+  }, [userTaskSessions, visibleHub])
   const preferredProjectId = new URLSearchParams(location.search).get('project') || review.detail?.projectId || review.filters.projectId || undefined
 
   const newTask = () => {
@@ -340,7 +408,6 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const openHistoryTask = useCallback((id: string) => {
     historyScrollTargetRef.current = id
     navigate(`/review/${encodeURIComponent(id)}`)
-
     let remainingFrames = 90
     let stableFrames = 0
     let previousHeight = -1
@@ -349,7 +416,6 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
         document.querySelector<HTMLElement>('.review-reader-pane')?.style.removeProperty('overflow-anchor')
         return
       }
-
       const current = model.getSnapshot().review
       const pane = document.querySelector<HTMLElement>('.review-reader-pane')
       if (current.selectedId !== id || current.detailLoading || current.detail?.id !== id || !pane) {
@@ -357,7 +423,6 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
         if (remainingFrames > 0) window.requestAnimationFrame(settle)
         return
       }
-
       pane.style.setProperty('overflow-anchor', 'none')
       pane.scrollTop = pane.scrollHeight
       const height = pane.scrollHeight
@@ -398,37 +463,17 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     <div className="task-center-rail-head">
       <Button size="small" variant="primary" className="task-center-new-task-button" onClick={newTask}><UiIcon name="plus" size={14}/> 新建任务</Button>
       {mode !== 'new' && <Toolbar className="task-center-toolbar" aria-label="筛选历史任务">
-        <IconButton
-          size="small"
-          className={searchOpen || review.filters.search ? 'is-active' : ''}
-          onClick={() => setSearchOpen(current => !current)}
-          title={searchOpen ? '收起搜索' : '搜索历史任务'}
-          aria-label={searchOpen ? '收起搜索' : '搜索历史任务'}
-          aria-pressed={searchOpen}
-        ><UiIcon name="search" size={14}/></IconButton>
+        <IconButton size="small" className={searchOpen || review.filters.search ? 'is-active' : ''} onClick={() => setSearchOpen(current => !current)} title={searchOpen ? '收起搜索' : '搜索历史任务'} aria-label={searchOpen ? '收起搜索' : '搜索历史任务'} aria-pressed={searchOpen}><UiIcon name="search" size={14}/></IconButton>
         <div className="task-center-filter-popover" ref={filterPopoverRef}>
-          <IconButton
-            size="small"
-            className={`task-center-filter-button ${filterOpen || activeFilterCount ? 'is-active' : ''}`}
-            onClick={() => setFilterOpen(current => !current)}
-            title="筛选历史任务"
-            aria-label="筛选历史任务"
-            aria-expanded={filterOpen}
-            aria-controls={filterOpen ? 'task-center-filter-panel' : undefined}
-          >
-            <UiIcon name="filter" size={14}/>
-            {activeFilterCount > 0 && <span className="task-center-filter-badge" aria-hidden="true">{activeFilterCount}</span>}
+          <IconButton size="small" className={`task-center-filter-button ${filterOpen || activeFilterCount ? 'is-active' : ''}`} onClick={() => setFilterOpen(current => !current)} title="筛选历史任务" aria-label="筛选历史任务" aria-expanded={filterOpen} aria-controls={filterOpen ? 'task-center-filter-panel' : undefined}>
+            <UiIcon name="filter" size={14}/>{activeFilterCount > 0 && <span className="task-center-filter-badge" aria-hidden="true">{activeFilterCount}</span>}
           </IconButton>
           {filterOpen && <div id="task-center-filter-panel" className="task-center-filter-panel" role="group" aria-label="筛选历史任务">
             <div className="task-center-filter-fields">
               <label className="is-wide"><span>智能体</span><SelectMenu variant="field" value={review.filters.sourceId} onChange={sourceId => model.setReviewFilters({ sourceId })} ariaLabel="筛选智能体" placeholder="全部智能体" menuWidth={260} options={agentFilterOptions}/></label>
               <label className="is-wide"><span>项目</span><SelectMenu variant="field" value={review.filters.projectId} onChange={projectId => model.setReviewFilters({ projectId })} ariaLabel="筛选项目" placeholder="全部项目" menuWidth={280} searchable searchPlaceholder="搜索项目" options={projectFilterOptions}/></label>
-              <label><span>时间</span><SelectMenu variant="field" value={review.filters.range} onChange={range => model.setReviewFilters({ range: range as typeof review.filters.range })} ariaLabel="筛选时间范围" menuWidth={156} options={[
-                { value: 'today', label: '今天' }, { value: '7d', label: '最近 7 天' }, { value: '30d', label: '最近 30 天' }, { value: 'all', label: '全部时间' },
-              ]}/></label>
-              <label><span>状态</span><SelectMenu variant="field" value={review.filters.status} onChange={status => model.setReviewFilters({ status: status as typeof review.filters.status })} ariaLabel="筛选状态" menuWidth={150} options={[
-                { value: 'all', label: '全部状态' }, { value: 'clean', label: '无错误' }, { value: 'with-errors', label: '有错误' },
-              ]}/></label>
+              <label><span>时间</span><SelectMenu variant="field" value={review.filters.range} onChange={range => model.setReviewFilters({ range: range as typeof review.filters.range })} ariaLabel="筛选时间范围" menuWidth={156} options={[{ value: 'today', label: '今天' }, { value: '7d', label: '最近 7 天' }, { value: '30d', label: '最近 30 天' }, { value: 'all', label: '全部时间' }]}/></label>
+              <label><span>状态</span><SelectMenu variant="field" value={review.filters.status} onChange={status => model.setReviewFilters({ status: status as typeof review.filters.status })} ariaLabel="筛选状态" menuWidth={150} options={[{ value: 'all', label: '全部状态' }, { value: 'clean', label: '无错误' }, { value: 'with-errors', label: '有错误' }]}/></label>
             </div>
           </div>}
         </div>
@@ -439,22 +484,8 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     {mode !== 'new' && searchOpen && <div className="task-center-search-panel">
       <div className="task-center-search-field">
         <UiIcon name="search" size={14}/>
-        <Input
-          autoFocus
-          className="task-center-search-input"
-          placeholder="搜索任务…"
-          value={review.filters.search}
-          onChange={event => model.setReviewFilters({ search: event.target.value })}
-          onKeyDown={event => { if (event.key === 'Escape') setSearchOpen(false) }}
-          aria-label="搜索历史任务"
-        />
-        {review.filters.search && <IconButton
-          size="small"
-          className="task-center-search-clear"
-          onClick={() => model.setReviewFilters({ search: '' })}
-          title="清除搜索"
-          aria-label="清除搜索"
-        ><UiIcon name="close" size={14}/></IconButton>}
+        <Input autoFocus className="task-center-search-input" placeholder="搜索任务…" value={review.filters.search} onChange={event => model.setReviewFilters({ search: event.target.value })} onKeyDown={event => { if (event.key === 'Escape') setSearchOpen(false) }} aria-label="搜索历史任务"/>
+        {review.filters.search && <IconButton size="small" className="task-center-search-clear" onClick={() => model.setReviewFilters({ search: '' })} title="清除搜索" aria-label="清除搜索"><UiIcon name="close" size={14}/></IconButton>}
       </div>
     </div>}
 
@@ -474,6 +505,17 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
           ? <HistoryTaskItem key={`local:${entry.id}`} item={entry.local} active={mode === 'history' && review.selectedId === entry.id} onClick={() => openHistoryTask(entry.id)}/>
           : <RemoteTaskItem key={`remote:${entry.id}`} item={entry.remote} active={mode === 'hub' && location.pathname === `/review/hub/${encodeURIComponent(entry.id)}`} onClick={() => navigate(`/review/hub/${encodeURIComponent(entry.id)}`)}/>)}
       </section>)}
+
+      {systemActivities.length > 0 && <section className="task-center-group task-center-system-group">
+        <div className="task-center-group-title"><span>系统活动</span><span>{systemActivities.length}</span></div>
+        {systemActivities.map(item => <HistoryTaskItem
+          key={`system:${item.id}`}
+          item={item}
+          parent={item.parentSessionId ? localById.get(item.parentSessionId) : undefined}
+          active={mode === 'history' && review.selectedId === item.id}
+          onClick={() => openHistoryTask(item.id)}
+        />)}
+      </section>}
 
       {!historyCount && !review.loading && <div className="task-center-empty">当前筛选范围没有历史任务。</div>}
       {review.response?.meta.hasMore && <Button size="small" className="session-load-more" loading={review.loadingMore} onClick={() => void model.loadMoreReview()}>加载更多历史任务</Button>}
