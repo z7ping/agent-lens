@@ -6,7 +6,6 @@ import { readAgentFilterPreference, readTheme, writeAgentFilterPreference, write
 import { AgentsStateOverlay } from './components/AgentsStateOverlay'
 import { BackgroundDataNotice } from './components/BackgroundDataNotice'
 import { ReviewStateOverlay } from './components/ReviewStateOverlay'
-import { ReviewTurnRail } from './components/ReviewTurnRail'
 import { WorkspaceSidebar } from './components/WorkspaceSidebar'
 import { Breadcrumb } from './components/ui'
 import { AgentsResponsivePage } from './features/AgentsResponsivePage'
@@ -190,7 +189,6 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const onTools = location.pathname.startsWith('/tools')
   const onAgents = location.pathname.startsWith('/agents')
   const hasSseBanner = Boolean(snapshot.health && !snapshot.liveConnected && !onPiLive)
-  const showTurnRail = onLocalReview && snapshot.review.detail
   const agentOverviewItems = snapshot.agents?.items ?? []
   const resolvedAgentOverviewSourceId = agentOverviewItems.some(item => item.sourceId === agentOverviewSourceId)
     ? agentOverviewSourceId
@@ -266,7 +264,6 @@ function Shell({ model }: { model: AgentLensClientModel }) {
         {onAgents && <AgentsStateOverlay model={model} snapshot={snapshot}/>} 
         {onTools && snapshot.usage.hasNewData && <BackgroundDataNotice label="工具分析" hasSseBanner={hasSseBanner} onRefresh={() => model.refreshUsage()}/>} 
         {onAgents && snapshot.agentsHasNewData && <BackgroundDataNotice label="智能体概览" hasSseBanner={hasSseBanner} onRefresh={() => model.refreshFacetsAndAgents()}/>} 
-        {showTurnRail && <ReviewTurnRail detail={snapshot.review.detail!} onLoadInteraction={ordinal => model.jumpToReviewInteraction(ordinal)}/>} 
       </div>
     </div>
   </PinnedProvider>
