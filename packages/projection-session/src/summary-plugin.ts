@@ -91,9 +91,8 @@ const applySessionSummaryProjection: Plugin.Function<void> = (ctx: AgentLensCont
   ctx.projections.register(definition)
 
   ctx.on('observation/committed', event => {
-    // Parser Replay 可能在稳定 observation id 上合并新 provenance / session metadata。
-    // 只跳过真正无变化的提交，避免摘要继续使用旧 Parser 的标题与活动分类。
-    if (event.status === 'unchanged') return
+    // EventingObservationService 已经过滤 unchanged；收到事件就说明 Canonical Observation
+    // 有创建或合并变化，需要刷新会话摘要，覆盖 replay 后的新 provenance / metadata。
     pending.add(event.logicalSessionId)
     schedule()
   })
