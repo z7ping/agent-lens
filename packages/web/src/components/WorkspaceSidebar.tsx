@@ -50,7 +50,7 @@ export function WorkspaceSidebar({
       </nav>
 
       <div className="workspace-sidebar-context" ref={onContextHost}>
-        {onInsights && <nav className="workspace-context-menu" aria-label="洞察视图">
+        {onInsights && <nav className="workspace-context-menu workspace-insight-navigation" aria-label="洞察视图">
           <NavLink to="/insights" className={({ isActive }) => `workspace-context-link ${isActive ? 'is-active' : ''}`} end>使用概览</NavLink>
           <NavLink to="/tools" className={({ isActive }) => `workspace-context-link ${isActive ? 'is-active' : ''}`}>工具分析{snapshot.usage.hasNewData && <i className="workspace-nav-dot" aria-hidden="true"/>}</NavLink>
         </nav>}
@@ -73,7 +73,7 @@ export function WorkspaceSidebar({
           {!agents.length && <div className="workspace-context-empty">暂未发现智能体</div>}
         </div>}
 
-        {onBackup && <nav className="workspace-context-menu" aria-label="维护">
+        {onBackup && <nav className="workspace-context-menu workspace-maintenance-context" aria-label="维护">
           <NavLink to="/backup" className="workspace-context-link is-active">资产备份</NavLink>
         </nav>}
       </div>
