@@ -7,10 +7,11 @@
   z-index: 48;
   display: flex;
   width: 24px;
+  height: 100vh;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1px;
+  gap: 0;
   padding: 6px 0;
   transform: translateY(-50%);
   opacity: .62;
@@ -24,6 +25,9 @@
   display: grid;
   width: 24px;
   height: 7px;
+  min-height: 2px;
+  max-height: 7px;
+  flex: 0 1 7px;
   place-items: center;
   padding: 0;
   border: 0;
