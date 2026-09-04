@@ -50,31 +50,32 @@ export function WorkspaceSidebar({
       </nav>
 
       <div className="workspace-sidebar-context" ref={onContextHost}>
-        {onInsights && <div className="workspace-context-menu">
-          <div className="workspace-context-heading"><b>洞察</b><span>聚合与分析</span></div>
+        {onInsights && <nav className="workspace-context-menu" aria-label="洞察视图">
           <NavLink to="/insights" className={({ isActive }) => `workspace-context-link ${isActive ? 'is-active' : ''}`} end>使用概览</NavLink>
           <NavLink to="/tools" className={({ isActive }) => `workspace-context-link ${isActive ? 'is-active' : ''}`}>工具分析{snapshot.usage.hasNewData && <i className="workspace-nav-dot" aria-hidden="true"/>}</NavLink>
-        </div>}
+        </nav>}
 
         {onAgents && <div className="workspace-context-menu workspace-agent-context">
-          <div className="workspace-context-heading"><b>本机智能体</b><span className="workspace-context-heading-actions"><span>{agents.length}</span><IconButton size="small" onClick={onRefreshAgents} title="刷新智能体" aria-label="刷新智能体"><UiIcon name="refresh" size={14}/></IconButton></span></div>
+          <div className="workspace-context-utility">
+            <span>{agents.length} 个来源</span>
+            <IconButton size="small" onClick={onRefreshAgents} title="刷新智能体" aria-label="刷新智能体"><UiIcon name="refresh" size={14}/></IconButton>
+          </div>
           {agents.map(agent => <button
             key={agent.sourceId}
             type="button"
             className={`workspace-agent-link ${selectedAgentId === agent.sourceId ? 'is-active' : ''}`}
             onClick={() => onSelectAgent(agent.sourceId)}
+            title={`${agentLabel(agent.sourceId, agent.displayName)} · ${agent.detected ? '已检测' : '未检测'}`}
           >
             <span className={`source-dot ${sourceDot(agent.sourceId)}`}/>
             <span>{agentLabel(agent.sourceId, agent.displayName)}</span>
-            <small>{agent.detected ? '已检测' : '未检测'}</small>
           </button>)}
           {!agents.length && <div className="workspace-context-empty">暂未发现智能体</div>}
         </div>}
 
-        {onBackup && <div className="workspace-context-menu">
-          <div className="workspace-context-heading"><b>维护</b><span>低频操作</span></div>
+        {onBackup && <nav className="workspace-context-menu" aria-label="维护">
           <NavLink to="/backup" className="workspace-context-link is-active">资产备份</NavLink>
-        </div>}
+        </nav>}
       </div>
 
       <div className="workspace-sidebar-footer">
