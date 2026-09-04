@@ -25,6 +25,8 @@ export interface PiSdkSessionManager {
   getSessionName(): ReturnType<SessionManager['getSessionName']>
   getLeafId(): ReturnType<SessionManager['getLeafId']>
   getEntries(): unknown[]
+  /** Available on Pi versions that support native session branching. Required only for “分叉继续”. */
+  createBranchedSession?: SessionManager['createBranchedSession']
 }
 
 export interface PiSdkModelRuntime {
