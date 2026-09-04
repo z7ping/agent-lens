@@ -1,3 +1,4 @@
+# rerun after restoring original session-summary projection behavior
 name: AgentLens attribution finalization
 
 on:
