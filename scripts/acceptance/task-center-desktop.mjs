@@ -8,6 +8,8 @@ const outputDir = resolve(process.env.AGENT_LENS_ACCEPTANCE_OUTPUT || '.agent-le
 const viewports = [
   { width: 1280, height: 800 },
   { width: 1366, height: 768 },
+  { width: 1440, height: 900 },
+  { width: 1920, height: 1080 },
 ]
 const themes = ['light', 'dark']
 const report = {
