@@ -38,7 +38,7 @@ test('session_meta preserves official thread and agent lineage', async () => {
   assert.equal(output.observations[0]?.identityHints.nativeParentSessionId, 'thread-root')
   assert.equal(output.observations[0]?.identityHints.nativeActorId, 'agent/reviewer')
   assert.equal(output.observations[0]?.identityHints.actorRole, 'subagent')
-  assert.equal(output.sessionRelationshipHints?.[0]?.type, 'fork')
+  assert.equal(output.sessionRelationshipHints?.[0]?.type, 'branch-task')
   assert.equal(output.sessionRelationshipHints?.[0]?.fromNativeSessionId, 'thread-root')
 })
 
