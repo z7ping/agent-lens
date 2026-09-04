@@ -212,7 +212,7 @@ function legacyQuerySql(observationFilter: string, summaryFilter: string): strin
     SELECT *
     FROM legacy_summary AS summary
     ${summaryFilter}
-    ORDER BY summary.started_at DESC, summary.logical_session_id ASC
+    ORDER BY summary.ended_at DESC, summary.logical_session_id ASC
     LIMIT ?
   `
 }
@@ -253,7 +253,7 @@ export function sessionSummaryProjectionSelectSql(summaryFilter: string): string
       LEFT JOIN workspaces AS workspace ON workspace.id = logical.workspace_id
     ) AS summary
     ${summaryFilter}
-    ORDER BY summary.started_at DESC, summary.logical_session_id ASC
+    ORDER BY summary.ended_at DESC, summary.logical_session_id ASC
     LIMIT ?
   `
 }
@@ -386,11 +386,11 @@ function summaryQueryWhere(input: SessionSummaryQuery): { sql: string; params: u
     params.push(input.projectId)
   }
   if (input.from) {
-    conditions.push('summary.started_at >= ?')
+    conditions.push('summary.ended_at >= ?')
     params.push(input.from)
   }
   if (input.to) {
-    conditions.push('summary.started_at <= ?')
+    conditions.push('summary.ended_at <= ?')
     params.push(input.to)
   }
   if (input.hasErrors === true) conditions.push('summary.error_count > 0')
@@ -414,9 +414,10 @@ function summaryQueryWhere(input: SessionSummaryQuery): { sql: string; params: u
     )`)
     params.push(`%${search}%`, `%${search}%`)
   }
-  if (input.after) {
-    conditions.push('(summary.started_at < ? OR (summary.started_at = ? AND summary.logical_session_id > ?))')
-    params.push(input.after.startedAt, input.after.startedAt, input.after.logicalSessionId)
+  const activeAt = input.after?.activeAt ?? input.after?.startedAt
+  if (input.after && activeAt) {
+    conditions.push('(summary.ended_at < ? OR (summary.ended_at = ? AND summary.logical_session_id > ?))')
+    params.push(activeAt, activeAt, input.after.logicalSessionId)
   }
   return { sql: whereClause(conditions), params }
 }
