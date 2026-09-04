@@ -34,14 +34,13 @@ export interface PiLiveAvailabilityDto {
   reason?: string | undefined
 }
 
+/** Public new-task input. Native session paths are intentionally server-only. */
 export interface PiLiveStartRequestDto {
   cwd: string
   executable?: string | undefined
   provider?: string | undefined
   model?: string | undefined
   name?: string | undefined
-  sessionDir?: string | undefined
-  sessionPath?: string | undefined
 }
 
 export interface PiLiveResumeRequestDto {
@@ -84,7 +83,6 @@ export interface PiLiveStateDto {
   sdkVersion?: string | undefined
   runtimeMode?: 'session_runtime' | 'compatibility' | undefined
   nativeSessionId?: string | undefined
-  sessionFile?: string | undefined
   sessionName?: string | undefined
   model?: JsonValue | undefined
   thinkingLevel?: string | undefined
