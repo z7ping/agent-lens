@@ -55,6 +55,9 @@ export function TaskRound({
   return <details
     className={`task-round interaction-block ${model.errorCount ? 'task-round-has-error' : ''} ${className}`.trim()}
     data-interaction-id={model.id}
+    data-round-label={model.label}
+    data-round-error={model.errorCount > 0 ? 'true' : undefined}
+    data-round-state={model.state}
     data-task-round-state={model.state}
     open={expanded}
     onToggle={event => onToggle(event.currentTarget.open)}
