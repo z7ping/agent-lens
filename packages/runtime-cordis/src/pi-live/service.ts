@@ -194,6 +194,15 @@ export class DefaultPiLiveService implements PiLiveService {
       runtime.handle = handle
       runtime.capabilities = handle.capabilities ?? runtime.capabilities
       if (!runtime.initializationTimings.length && handle.initializationTimings?.length) runtime.initializationTimings = [...handle.initializationTimings]
+      if (runtime.input.historyAction === 'fork' && runtime.input.sessionPath) {
+        const forkedState = await handle.state()
+        if (!forkedState.sessionFile || sessionPathKey(forkedState.sessionFile) === sessionPathKey(runtime.input.sessionPath)) {
+          await handle.terminate().catch(() => undefined)
+          runtime.handle = undefined
+          throw new Error('Pi 分叉 Runtime 未切换到新的 Session，已拒绝继续')
+        }
+        runtime.input = { ...runtime.input, sessionPath: forkedState.sessionFile, historyAction: 'continue' }
+      }
       this.advanceInitialization(runtime, 'ready')
       runtime.status = 'ready'
       runtime.message = `Pi Runtime 已就绪 · ${formatElapsed(runtime.initializationElapsedMs)}`
