@@ -49,7 +49,9 @@ export function WorkspaceSidebar({
       if (!settingsAnchorRef.current?.contains(event.target as Node)) setSettingsOpen(false)
     }
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setSettingsOpen(false)
+      if (event.key !== 'Escape' || event.defaultPrevented) return
+      setSettingsOpen(false)
+      requestAnimationFrame(() => settingsAnchorRef.current?.querySelector<HTMLButtonElement>('.workspace-settings-button')?.focus({ preventScroll: true }))
     }
 
     document.addEventListener('pointerdown', closeOnOutsidePointer)
@@ -102,7 +104,6 @@ export function WorkspaceSidebar({
     </div>
 
     <div className="workspace-sidebar-footer">
-      <span className="workspace-user-avatar" aria-label="本机用户" title="本机用户"><UiIcon name="agent" size={16}/></span>
       <div className="workspace-settings-anchor" ref={settingsAnchorRef}>
         <IconButton
           className={`workspace-settings-button ${settingsOpen || onBackup ? 'is-active' : ''}`}
@@ -113,45 +114,49 @@ export function WorkspaceSidebar({
         ><UiIcon name="settings" size={16}/></IconButton>
 
         {settingsOpen && <section className="workspace-settings-popover" aria-label="设置与维护">
-          <div className="workspace-settings-menu" role="menu" aria-label="维护操作">
-            <button
-              type="button"
-              role="menuitem"
-              className={`workspace-settings-menu-item ${onBackup ? 'is-active' : ''}`}
-              onClick={() => navigate('/backup')}
-            >
-              <UiIcon name="upload" size={14}/>
-              <span>资产备份</span>
-              <UiIcon className="workspace-settings-menu-tail" name="chevron-right" size={14}/>
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              className="workspace-settings-menu-item"
-              onClick={() => {
-                onToggleTheme()
-                setSettingsOpen(false)
-              }}
-            >
-              <UiIcon name={theme === 'dark' ? 'sun' : 'moon'} size={14}/>
-              <span>{theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'}</span>
-            </button>
-          </div>
+          <section className="workspace-settings-group" aria-labelledby="workspace-settings-maintenance-title">
+            <div id="workspace-settings-maintenance-title" className="workspace-settings-group-title">维护与外观</div>
+            <div className="workspace-settings-menu">
+              <button
+                type="button"
+                className={`workspace-settings-menu-item ${onBackup ? 'is-active' : ''}`}
+                onClick={() => navigate('/backup')}
+              >
+                <UiIcon name="upload" size={14}/>
+                <span>资产备份</span>
+                <UiIcon className="workspace-settings-menu-tail" name="chevron-right" size={14}/>
+              </button>
+              <button
+                type="button"
+                className="workspace-settings-menu-item"
+                onClick={() => {
+                  onToggleTheme()
+                  setSettingsOpen(false)
+                }}
+              >
+                <UiIcon name={theme === 'dark' ? 'sun' : 'moon'} size={14}/>
+                <span>{theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'}</span>
+              </button>
+            </div>
+          </section>
 
-          <div className="workspace-settings-separator"/>
+          <section className="workspace-settings-group" aria-labelledby="workspace-settings-runtime-title">
+            <div id="workspace-settings-runtime-title" className="workspace-settings-group-title">运行</div>
+            <div className="workspace-settings-runtime">
+              <RuntimeStatus health={snapshot.health} liveConnected={snapshot.liveConnected}/>
+            </div>
+          </section>
 
-          <div className="workspace-settings-runtime">
-            <RuntimeStatus health={snapshot.health} liveConnected={snapshot.liveConnected}/>
-          </div>
-
-          <div className="workspace-settings-release">
-            <ReleaseInfo runtimeOwner={snapshot.health?.runtime?.owner ?? null} runtimeReady={snapshot.health !== null}/>
-          </div>
-
-          <div className="workspace-settings-version">
-            <span>AgentLens</span>
-            <BrandVersion/>
-          </div>
+          <section className="workspace-settings-group" aria-labelledby="workspace-settings-release-title">
+            <div id="workspace-settings-release-title" className="workspace-settings-group-title">版本与更新</div>
+            <div className="workspace-settings-release">
+              <ReleaseInfo runtimeOwner={snapshot.health?.runtime?.owner ?? null} runtimeReady={snapshot.health !== null}/>
+            </div>
+            <div className="workspace-settings-version">
+              <span>AgentLens</span>
+              <BrandVersion/>
+            </div>
+          </section>
         </section>}
       </div>
     </div>
