@@ -42,6 +42,33 @@ function messageRecord(role: 'assistant' | 'user', text: string, phase?: string)
   }
 }
 
+function userMessageRecord(text: string): SourceRecord {
+  return {
+    id: 'record-user-authoritative',
+    sourceId: 'codex',
+    installationId: 'install',
+    sourceSessionNativeId: 'thread-visible-content',
+    nativeType: 'event_msg/user_message',
+    nativeId: 'user-message-authoritative',
+    sourceSequence: 2,
+    occurredAt: '2026-09-01T00:00:00.000Z',
+    capturedAt: '2026-09-03T00:00:00.000Z',
+    locator: { kind: 'file', path: 'C:\\Users\\test\\.codex\\sessions\\rollout.jsonl', offset: 2 },
+    parserVersion: '5',
+    payload: {
+      entry: {
+        type: 'event_msg',
+        payload: {
+          type: 'user_message',
+          message: text,
+          kind: 'plain',
+        },
+      },
+      session: { nativeSessionId: 'thread-visible-content', cwd: 'F:\\proj' },
+    },
+  }
+}
+
 const machineBlock = '<oai-mem-citation><citation_entries>mem-1</citation_entries><rollout_ids>rollout-1</rollout_ids></oai-mem-citation>'
 
 test('Codex final_answer strips trailing client memory metadata while preserving visible text', async () => {
@@ -54,9 +81,16 @@ test('Codex final_answer strips trailing client memory metadata while preserving
 })
 
 test('用户主动引用相同标签时原样保留', async () => {
-  const output = await normalizeCodexRecord(messageRecord('user', `请解释这个标签：${machineBlock}`), ctx)
+  const output = await normalizeCodexRecord(userMessageRecord(`请解释这个标签：${machineBlock}`), ctx)
   assert.equal(output.observations[0]?.kind, 'message.user')
   assert.equal((output.observations[0]?.payload as any).text, `请解释这个标签：${machineBlock}`)
+  assert.equal((output.observations[0]?.payload as any).provenance.actualAuthor, 'human-user')
+})
+
+test('response_item role=user remains transport context instead of a user request', async () => {
+  const output = await normalizeCodexRecord(messageRecord('user', 'transport echo'), ctx)
+  assert.equal(output.observations[0]?.kind, 'context.injected')
+  assert.equal((output.observations[0]?.payload as any).provenance.transportEcho, true)
 })
 
 test('代码块中的相同机器标签不会被误删', async () => {
