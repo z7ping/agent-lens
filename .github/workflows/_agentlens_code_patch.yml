@@ -1,0 +1,163 @@
+name: AgentLens temporary attribution patch
+
+on:
+  push:
+    branches:
+      - fix/alpha3-codex-provenance-activity
+    paths:
+      - .github/workflows/_agentlens_code_patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/alpha3-codex-provenance-activity
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Patch Review projection and presentation
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          projection = Path('packages/projection-review/src/projection.ts')
+          text = projection.read_text(encoding='utf-8')
+          before = text
+          text = text.replace("await this.backwardInteractionPage(logicalSessionId, { ...query, direction: 'backward' }, 'latest', summary.interactionCount)", "await this.backwardInteractionPage(logicalSessionId, { ...query, direction: 'backward' }, 'latest', descriptors.length)")
+          text = text.replace("await this.backwardInteractionPage(logicalSessionId, query, 'all', summary.interactionCount)", "await this.backwardInteractionPage(logicalSessionId, query, 'all', descriptors.length)")
+          if text == before:
+              raise SystemExit('projection.ts expected replacements not found')
+          projection.write_text(text, encoding='utf-8')
+
+          review = Path('packages/web/src/features/ReviewPage.tsx')
+          text = review.read_text(encoding='utf-8')
+
+          title_pattern = re.compile(r"const injectedTitlePatterns = \[[\s\S]*?function sessionTitle\(candidates: Array<string \| undefined>, fallback: string, max = 92\): string \{[\s\S]*?\n\}\n", re.M)
+          title_replacement = '''function normalizedSessionTitle(value: string | undefined): string {
+            return value?.replace(/\\s+/g, ' ').trim() ?? ''
+          }
+
+          function compactTitle(value: string | undefined, max = 92, fallback = '未命名会话'): string {
+            const text = normalizedSessionTitle(value)
+            if (!text) return fallback
+            return text.length > max ? `${text.slice(0, max)}…` : text
+          }
+
+          function sessionTitle(candidates: Array<string | undefined>, fallback: string, max = 92): string {
+            const value = candidates.map(normalizedSessionTitle).find(Boolean)
+            return compactTitle(value, max, fallback)
+          }
+          '''
+          text, count = title_pattern.subn(title_replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f'ReviewPage title cleanup replacement count={count}')
+
+          markdown_pattern = re.compile(r"function MarkdownSurface\(\{ text \}: \{ text: string \}\) \{[\s\S]*?\n\}\n\nfunction MessageBubble", re.M)
+          markdown_replacement = '''function MarkdownSurface({ text }: { text: string }) {
+            const [view, setView] = useState<'rendered' | 'source'>('rendered')
+            return <div className="markdown-message" data-view={view}>
+              <div className="markdown-surface">
+                {view === 'rendered' ? <MarkdownContent text={text}/> : <CopyableCodeBlock className="markdown-source" copyValue={text}>{text}</CopyableCodeBlock>}
+              </div>
+              <div className="markdown-message-actions">
+                <button title={view === 'rendered' ? '查看 Markdown 源码' : '返回渲染结果'} onClick={() => setView(value => value === 'rendered' ? 'source' : 'rendered')}>{view === 'rendered' ? '源码' : '渲染'}</button>
+              </div>
+            </div>
+          }
+
+          function MessageBubble'''
+          text, count = markdown_pattern.subn(markdown_replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f'ReviewPage MarkdownSurface replacement count={count}')
+
+          text = text.replace("if (node.kind === 'context.injected') return '系统注入上下文'", "if (node.kind === 'context.injected') return stringValue(payload, 'label') || '系统注入上下文'")
+
+          context_summary = '''  if (node.kind === 'context.injected') {
+            const role = stringValue(payload, 'role')
+            const text = stringValue(payload, 'text')
+            if (text) return [role, brief(text, 180)].filter(Boolean).join(' · ')
+            return role ? `${role} · 当前记录未包含正文` : '当前记录未包含正文'
+          }'''
+          context_summary_new = '''  if (node.kind === 'context.injected') {
+            const role = stringValue(payload, 'role')
+            const label = stringValue(payload, 'label')
+            const kind = stringValue(payload, 'injectedKind')
+            return [label || kind, role].filter(Boolean).join(' · ') || '系统注入'
+          }'''
+          if context_summary not in text:
+              raise SystemExit('ReviewPage context summary block not found')
+          text = text.replace(context_summary, context_summary_new, 1)
+
+          event_pattern = re.compile(r"function EventRow\(\{ event, inspect \}: \{ event: ReviewEventNodeDto; inspect\(node: ReviewNodeDto\): void \}\) \{[\s\S]*?\n\}\n\nfunction RawEventGroup", re.M)
+          event_replacement = '''function systemEventExpansionKey(eventId: string): string {
+            return `agent-lens:review:system-event:${eventId}:expanded`
+          }
+
+          function readSystemEventExpanded(eventId: string): boolean {
+            try { return window.localStorage.getItem(systemEventExpansionKey(eventId)) !== 'false' } catch { return true }
+          }
+
+          function SystemEventTrack({ event, inspect }: { event: ReviewEventNodeDto; inspect(node: ReviewNodeDto): void }) {
+            const payload = payloadRecord(event.payload)
+            const text = stringValue(payload, 'text')
+            const injectedKind = stringValue(payload, 'injectedKind') || 'application'
+            const [expanded, setExpanded] = useState(() => readSystemEventExpanded(event.id))
+            const toggle = () => setExpanded(value => {
+              const next = !value
+              try { window.localStorage.setItem(systemEventExpansionKey(event.id), String(next)) } catch {}
+              return next
+            })
+            return <section className="task-system-event-track" data-kind={injectedKind} data-expanded={expanded ? 'true' : 'false'}>
+              <header className="task-system-event-head">
+                <button className="task-system-event-toggle" aria-expanded={expanded} onClick={toggle}>
+                  <UiIcon name={expanded ? 'chevron-down' : 'chevron-right'} size={13}/>
+                  <span>{sourceEventLabel(event)}</span>
+                </button>
+                <EvidenceBadges evidence={event.evidence} compact/>
+                <span className="task-system-event-meta"><span>{agentLabel(event.sourceId)}</span><time>{formatClock(event.at)}</time></span>
+                <button className="task-system-event-inspect" onClick={() => inspect(event)}>源码 / Evidence</button>
+              </header>
+              {expanded && (text
+                ? <CopyableCodeBlock className="task-system-event-body" copyValue={text}>{text}</CopyableCodeBlock>
+                : <div className="task-system-event-empty">当前来源只记录了注入类型，没有可显示正文；可查看源码与 Evidence。</div>)}
+            </section>
+          }
+
+          function EventRow({ event, inspect }: { event: ReviewEventNodeDto; inspect(node: ReviewNodeDto): void }) {
+            if (event.kind === 'context.injected') return <SystemEventTrack event={event} inspect={inspect}/>
+            return <TaskEvent
+              model={{
+                id: event.id,
+                label: sourceEventLabel(event),
+                category: event.category,
+                summary: sourceEventSummary(event),
+                sourceLabel: agentLabel(event.sourceId),
+                time: formatClock(event.at),
+                nativeId: event.nativeEventId,
+                parentId: event.nativeParentEventId ?? event.parentObservationId,
+              }}
+              meta={<EvidenceBadges evidence={event.evidence} compact/>}
+              onInspect={() => inspect(event)}
+            />
+          }
+
+          function RawEventGroup'''
+          text, count = event_pattern.subn(event_replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f'ReviewPage EventRow replacement count={count}')
+
+          review.write_text(text, encoding='utf-8')
+      - name: Commit patch
+        run: |
+          git config user.name "agent-lens-bot"
+          git config user.email "agent-lens-bot@users.noreply.github.com"
+          git add packages/projection-review/src/projection.ts packages/web/src/features/ReviewPage.tsx
+          git diff --cached --check
+          git commit -m "fix: 收口系统活动正文与轮次语义"
+          git push origin HEAD:fix/alpha3-codex-provenance-activity
