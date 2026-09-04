@@ -1,0 +1,248 @@
+/*
+ * WorkspaceSidebar 内的二级导航与设置浮层。
+ * 只承载真实交互：洞察视图切换、低频维护入口、运行状态和版本信息。
+ */
+
+.workspace-insight-switcher {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 3px;
+  padding: 10px 10px 6px;
+}
+
+.workspace-insight-link {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px 0 12px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--al-muted);
+  font-size: 13px;
+  font-weight: 560;
+  text-decoration: none;
+  transition: background-color .14s ease, color .14s ease;
+}
+
+.workspace-insight-link::before {
+  content: "";
+  position: absolute;
+  top: 9px;
+  bottom: 9px;
+  left: 4px;
+  width: 2px;
+  border-radius: 2px;
+  background: transparent;
+}
+
+.workspace-insight-link:hover {
+  background: color-mix(in srgb, var(--al-surface) 54%, transparent);
+  color: var(--al-ink);
+}
+
+.workspace-insight-link.is-active {
+  background: color-mix(in srgb, var(--al-surface) 82%, transparent);
+  color: var(--al-ink);
+  font-weight: 680;
+}
+
+.workspace-insight-link.is-active::before {
+  background: var(--al-ink);
+}
+
+.workspace-insight-link .workspace-nav-dot {
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+}
+
+.workspace-settings-anchor {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.workspace-settings-anchor .workspace-settings-button {
+  border-color: transparent;
+  background: transparent;
+  color: var(--al-muted);
+}
+
+.workspace-settings-anchor .workspace-settings-button:hover:not(:disabled),
+.workspace-settings-anchor .workspace-settings-button.is-active {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--al-surface) 72%, transparent);
+  color: var(--al-ink);
+}
+
+.workspace-settings-popover {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 90;
+  width: 242px;
+  padding: 7px;
+  border: 1px solid var(--al-line);
+  border-radius: 12px;
+  background: var(--al-surface-raised);
+  box-shadow: var(--al-shadow-lg);
+  color: var(--al-ink);
+}
+
+.workspace-settings-menu,
+.workspace-settings-release {
+  display: grid;
+  gap: 2px;
+}
+
+.workspace-settings-menu-item,
+.workspace-settings-release .header-link {
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  align-items: center;
+  gap: 9px;
+  justify-content: flex-start;
+  margin: 0;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--al-ink-2);
+  font-size: 13px;
+  font-weight: 520;
+  line-height: 1.2;
+  text-align: left;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.workspace-settings-menu-item:hover,
+.workspace-settings-menu-item.is-active,
+.workspace-settings-release .header-link:hover {
+  background: var(--al-soft);
+  color: var(--al-ink);
+}
+
+.workspace-settings-menu-item > svg {
+  flex: 0 0 14px;
+  color: var(--al-muted);
+}
+
+.workspace-settings-menu-item:hover > svg,
+.workspace-settings-menu-item.is-active > svg {
+  color: currentColor;
+}
+
+.workspace-settings-menu-tail {
+  margin-left: auto;
+}
+
+.workspace-settings-separator {
+  height: 1px;
+  margin: 6px 4px;
+  background: var(--al-line);
+}
+
+.workspace-settings-runtime .runtime-status {
+  width: 100%;
+}
+
+.workspace-settings-runtime .runtime-status-trigger {
+  display: flex;
+  width: 100%;
+  height: 36px;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--al-ink-2);
+  font-size: 13px;
+  font-weight: 520;
+}
+
+.workspace-settings-runtime .runtime-status-trigger:hover,
+.workspace-settings-runtime .runtime-status-trigger[aria-expanded='true'] {
+  background: var(--al-soft);
+  color: var(--al-ink);
+}
+
+.workspace-settings-runtime .runtime-status-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-settings-runtime .runtime-status-chevron {
+  margin-left: auto;
+}
+
+.workspace-settings-runtime .runtime-status-popover {
+  top: auto;
+  right: auto;
+  bottom: 0;
+  left: calc(100% + 8px);
+  width: min(390px, calc(100vw - 24px));
+}
+
+.workspace-settings-release {
+  margin-top: 2px;
+}
+
+.workspace-settings-release .header-link {
+  height: 34px;
+  min-height: 34px;
+}
+
+.workspace-settings-release .header-update-link {
+  color: var(--al-accent);
+}
+
+.workspace-settings-version {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 6px 4px 1px;
+  padding: 7px 6px 1px;
+  border-top: 1px solid var(--al-line);
+  color: var(--al-muted-2);
+  font-size: 12px;
+}
+
+.workspace-settings-version .brand-version {
+  color: var(--al-muted-2);
+  font-size: 12px;
+}
+
+@media (max-width: 767.98px) {
+  .workspace-settings-popover {
+    right: auto;
+    left: 0;
+    width: min(232px, calc(100vw - 20px));
+  }
+
+  .workspace-settings-runtime .runtime-status-popover {
+    right: auto;
+    bottom: calc(100% + 8px);
+    left: 0;
+    width: min(360px, calc(100vw - 20px));
+  }
+}
+
+@media (max-width: 575.98px) {
+  .workspace-insight-switcher {
+    padding-inline: 7px;
+  }
+
+  .workspace-insight-link {
+    min-height: 34px;
+    padding-inline: 10px 7px;
+    font-size: 12px;
+  }
+}
