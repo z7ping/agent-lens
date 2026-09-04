@@ -278,7 +278,7 @@ type FilterReviewCursor = {
 type ReviewCursorPayload = TimelineReviewCursor | FilterReviewCursor
 
 interface ReviewListCursor {
-  startedAt: string
+  activeAt: string
   logicalSessionId: string
 }
 
@@ -295,15 +295,17 @@ function decodeReviewListCursor(value: string): ReviewListCursor {
   }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Invalid review list cursor')
   const record = parsed as Record<string, unknown>
-  const startedAt = typeof record.startedAt === 'string' && record.startedAt
-    ? record.startedAt
+  const activeAt = typeof record.activeAt === 'string' && record.activeAt
+    ? record.activeAt
     : typeof record.endedAt === 'string' && record.endedAt
       ? record.endedAt
-      : undefined
-  if (!startedAt || typeof record.logicalSessionId !== 'string' || !record.logicalSessionId) {
+      : typeof record.startedAt === 'string' && record.startedAt
+        ? record.startedAt
+        : undefined
+  if (!activeAt || typeof record.logicalSessionId !== 'string' || !record.logicalSessionId) {
     throw new Error('Invalid review list cursor')
   }
-  return { startedAt, logicalSessionId: record.logicalSessionId }
+  return { activeAt, logicalSessionId: record.logicalSessionId }
 }
 
 function encodeReviewCursor(value: ReviewCursorPayload): string {
@@ -498,7 +500,7 @@ export class ReviewProjection {
           protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
           count: items.length,
           hasMore: page.hasMore,
-          ...(page.hasMore && last ? { nextCursor: encodeReviewListCursor({ startedAt: last.startedAt, logicalSessionId: last.id }) } : {}),
+          ...(page.hasMore && last ? { nextCursor: encodeReviewListCursor({ activeAt: last.endedAt, logicalSessionId: last.id }) } : {}),
           generatedAt: new Date().toISOString(),
         },
       }
@@ -507,12 +509,12 @@ export class ReviewProjection {
     const summaries = await this.fallbackSummaries()
     const normalizedSearch = search?.toLowerCase()
     const filtered = summaries.filter(item => {
-      if (cursor && !(item.startedAt < cursor.startedAt
-        || (item.startedAt === cursor.startedAt && item.id > cursor.logicalSessionId))) return false
+      if (cursor && !(item.endedAt < cursor.activeAt
+        || (item.endedAt === cursor.activeAt && item.id > cursor.logicalSessionId))) return false
       if (query.sourceId && !item.sourceIds.includes(query.sourceId)) return false
       if (query.projectId && item.projectId !== query.projectId) return false
-      if (query.from && item.startedAt < query.from) return false
-      if (query.to && item.startedAt > query.to) return false
+      if (query.from && item.endedAt < query.from) return false
+      if (query.to && item.endedAt > query.to) return false
       if (query.status === 'with-errors' && !item.hasErrors) return false
       if (query.status === 'clean' && item.hasErrors) return false
       if (normalizedSearch) {
@@ -521,7 +523,7 @@ export class ReviewProjection {
       }
       return true
     })
-    filtered.sort((a, b) => b.startedAt.localeCompare(a.startedAt) || a.id.localeCompare(b.id))
+    filtered.sort((a, b) => b.endedAt.localeCompare(a.endedAt) || a.id.localeCompare(b.id))
     const hasMore = filtered.length > requestedLimit
     const items = filtered.slice(0, requestedLimit)
     const last = items.at(-1)
@@ -531,7 +533,7 @@ export class ReviewProjection {
         protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
         count: items.length,
         hasMore,
-        ...(hasMore && last ? { nextCursor: encodeReviewListCursor({ startedAt: last.startedAt, logicalSessionId: last.id }) } : {}),
+        ...(hasMore && last ? { nextCursor: encodeReviewListCursor({ activeAt: last.endedAt, logicalSessionId: last.id }) } : {}),
         generatedAt: new Date().toISOString(),
       },
     }
