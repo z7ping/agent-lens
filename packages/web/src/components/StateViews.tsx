@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { copyText } from '../client/clipboard'
 import { UiIcon } from './UiIcon'
+import { Button } from './ui'
 
 export function CommandRow({ command }: { command: string }) {
   const [copied, setCopied] = useState(false)
@@ -31,13 +32,12 @@ export function EmptyStatePanel({
   children?: ReactNode
   compact?: boolean
 }) {
-  const renderedIcon = icon === '⌕' ? <UiIcon name="search" size={20}/> : icon
   return <div className={`state-empty ${compact ? 'is-compact' : ''}`}>
-    <div className="state-empty-icon" aria-hidden="true">{renderedIcon}</div>
+    <div className="state-empty-icon" aria-hidden="true">{icon}</div>
     <h3>{title}</h3>
     <p>{description}</p>
     {(action || children) && <div className="state-actions">
-      {action && <button className="state-button state-button-primary" onClick={action.onClick}>{action.label}</button>}
+      {action && <Button variant="primary" onClick={action.onClick}>{action.label}</Button>}
       {children}
     </div>}
   </div>
@@ -57,7 +57,7 @@ export function ErrorStateBanner({
   return <div className="state-error" role="alert">
     <div className="state-error-copy"><b>加载失败</b><span>{message}</span></div>
     <div className="state-error-actions">
-      {onRetry && <button className="state-button state-button-primary" onClick={onRetry}>{retryLabel}</button>}
+      {onRetry && <Button variant="primary" onClick={onRetry}>{retryLabel}</Button>}
       {showDoctor && <CommandRow command="agent-lens doctor"/>}
     </div>
   </div>
@@ -128,7 +128,7 @@ export function PageLoadingState({
           <h2>{title}</h2>
           <p>{description}</p>
           {facts.length > 0 && <div className="page-loading-facts">
-            {facts.map(fact => <span key={fact}><UiIcon name="check" size={13}/>{fact}</span>)}
+            {facts.map(fact => <span key={fact}><UiIcon name="check" size={12}/>{fact}</span>)}
           </div>}
         </div>
       </div>

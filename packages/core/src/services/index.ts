@@ -181,12 +181,26 @@ export interface SessionSummaryRecord {
   errorCount: number
 }
 
+export interface SessionSummaryCursor {
+  startedAt: string
+  logicalSessionId: LogicalSessionId
+}
+
+export interface SessionSummaryQuery {
+  limit: number
+  installationId?: AgentInstallationId
+  logicalSessionId?: LogicalSessionId
+  sourceId?: string
+  projectId?: ProjectId
+  from?: string
+  to?: string
+  hasErrors?: boolean
+  search?: string
+  after?: SessionSummaryCursor
+}
+
 export interface SessionSummaryReader {
-  query(input: {
-    limit: number
-    installationId?: AgentInstallationId
-    logicalSessionId?: LogicalSessionId
-  }): Promise<{ items: SessionSummaryRecord[]; hasMore: boolean }>
+  query(input: SessionSummaryQuery): Promise<{ items: SessionSummaryRecord[]; hasMore: boolean }>
 }
 
 /**
@@ -198,6 +212,8 @@ export interface SessionSummaryProjectionStore extends SessionSummaryReader {
   isMaterialized(): Promise<boolean>
   rebuild(input?: {
     logicalSessionId?: LogicalSessionId
+    strategy?: 'atomic' | 'cooperative'
+    signal?: AbortSignal
   }): Promise<void>
 }
 
@@ -209,6 +225,8 @@ export interface ToolService {
 export interface ProjectionScope {
   subjectType?: string
   subjectId?: string
+  /** Optional cancellation boundary for long-running rebuilds. */
+  signal?: AbortSignal
 }
 
 export interface ProjectionInvalidation extends ProjectionScope {
@@ -265,8 +283,21 @@ export interface SessionRepository {
   putInteraction(interaction: Interaction): Promise<void>
 }
 
+export interface SourceRecordReplayCursor {
+  capturedAt: string
+  id: SourceRecordId
+}
+
 export interface SourceRecordRepository {
   get(id: SourceRecordId): Promise<SourceRecord | null>
+  listForParserReplay?(
+    sourceId: string,
+    installationId: AgentInstallationId,
+    currentParserVersion: string,
+    after?: SourceRecordReplayCursor,
+    limit?: number,
+    window?: { activeSince?: string; sessionLimit?: number },
+  ): Promise<SourceRecord[]>
   findByNativeId(
     sourceId: string,
     installationId: AgentInstallationId,
@@ -278,6 +309,15 @@ export interface SourceRecordRepository {
 export interface ObservationRepository {
   get(id: ObservationId): Promise<CanonicalObservation | null>
   query(query: ObservationQuery): Promise<CanonicalObservation[]>
+  findIdByNativeEventId?(
+    sourceSessionId: SourceSessionId,
+    nativeEventId: string,
+  ): Promise<ObservationId | null>
+  linkChildrenToParent?(
+    sourceSessionId: SourceSessionId,
+    nativeParentEventId: string,
+    parentObservationId: ObservationId,
+  ): Promise<void>
   put(observation: CanonicalObservation): Promise<void>
 }
 

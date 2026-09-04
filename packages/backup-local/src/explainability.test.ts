@@ -81,3 +81,60 @@ test('从现有备份索引汇总大小、目录树和时间分布，不把文�
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test('相同索引 generation 复用解释性汇总，generation 变化后重新读取 inventory', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-backup-explain-cache-'))
+  try {
+    const inventoryPath = join(root, 'inventory-v1.json')
+    const configRoot = join(root, 'config')
+    let generatedAt = '2026-08-31T00:00:00.000Z'
+
+    const writeInventory = async (size: number) => {
+      await writeFile(inventoryPath, JSON.stringify({
+        version: 1,
+        generatedAt,
+        sources: [],
+        excluded: [],
+        files: [{
+          sourceId: 'pi', productId: 'pi', installationId: 'one',
+          originalPath: join(configRoot, 'settings.json'), sourceScope: 'config', sourceRelativePath: 'settings.json', archivePath: 'pi/one/config/settings.json',
+          kinds: ['config'], size, mtimeMs: Date.parse(generatedAt), ctimeMs: Date.parse(generatedAt),
+        }],
+      }))
+    }
+    await writeInventory(10)
+
+    const overview = (): BackupOverview => ({
+      vaultPath: root,
+      sources: [{
+        sourceId: 'pi', productId: 'pi', displayName: 'Pi', detected: true,
+        fileCount: 1, excludedCount: 0, kinds: { config: 1 },
+      }],
+      snapshots: [],
+      index: { generatedAt, refreshing: false },
+    })
+    const base = {
+      async overview() { return overview() },
+      async refreshIndex() { return overview() },
+      async listSnapshots() { return [] },
+      async getSnapshot() { return null },
+      async createSnapshot() { throw new Error('not used') },
+      async verifySnapshot() { throw new Error('not used') },
+      async exportSnapshot() { throw new Error('not used') },
+      async importSnapshot() { throw new Error('not used') },
+      async previewRestore() { throw new Error('not used') },
+    } as BackupService
+
+    const service = new ExplainableBackupService(base, inventoryPath)
+    assert.equal((await service.overview()).sources[0]?.totalBytes, 10)
+
+    await writeInventory(20)
+    assert.equal((await service.overview()).sources[0]?.totalBytes, 10)
+
+    generatedAt = '2026-08-31T00:05:00.000Z'
+    await writeInventory(20)
+    assert.equal((await service.refreshIndex()).sources[0]?.totalBytes, 20)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})

@@ -5,30 +5,35 @@ AgentLens 会读取本地 AI 编码 Agent 暴露的 Session、Tool 调用、结�
 ## 1.0 当前安全边界
 
 - HTTP Surface 固定监听 `127.0.0.1`，默认端口 `56789`。
-- 当前 `/api/v1/*` 是本机只读 GET Surface；1.0 **没有网络认证层**，安全边界依赖 loopback。不要通过反向代理、端口转发或其他方式把它暴露到不可信网络。
+- 当前 `/api/v1/*` 主要是本机读取 Surface，并包含备份、Pi Live 与采集设置等明确的本机写接口；1.0 **没有网络认证层**，安全边界依赖 loopback。不要通过反向代理、端口转发或其他方式把它暴露到不可信网络。
 - 静态文件只从配置的 Web 构建目录读取，并通过真实目录边界检查阻止路径逃逸。
 - Codex / Claude Hook 与 Hermes Observer 只做被动采集、敏感字段清洗和 Durable Inbox 原子写入，不执行 AgentLens Core / SQLite / HTTP 逻辑。
 - 正式 Daemon 强制加载 `@agent-lens/capture-policy`；SourceRecord、Canonical Observation 和静态资产在持久化前统一经过隐私策略。
-- 默认只允许采集 Claude Code；Codex、Pi、Hermes、OpenCode 等需要显式加入 `AGENT_LENS_ENABLED_SOURCES`。
+- 默认只允许采集 Claude Code；Codex、Pi、Hermes、OpenCode 等需要由 AgentLens 用户级采集开关显式启用。
 - 默认数据目录 `~/.agent-lens/1.0/` 中的 SQLite、Inbox，以及未来 Hub Replication State，都应视为敏感本机数据。
 - Source 原生日志本身可能包含 Prompt、Tool 参数、Result 或路径，不要假设来源数据天然适合公开分享。
 - AgentLens 不声称获取来源未暴露的隐藏思维链。
 
 ## 来源采集开关
 
-默认：
+正式入口是 AgentLens“智能体概览”中的“用户级采集”开关，或 CLI：
 
 ```text
-AGENT_LENS_ENABLED_SOURCES=claude-code
+agent-lens capture sources status
+agent-lens capture sources enable codex
+agent-lens capture sources disable codex
+agent-lens capture sources set none
 ```
 
-多来源：
+设置原子写入 `~/.agent-lens/1.0/config/capture-policy.json`。Daemon、Codex / Claude Hook 与 Hermes Observer 读取同一份配置。Hook 从下一次调用起读取新值；Daemon 重启后完全应用来源 Detect、History、Runtime 与 Asset 启停。
+
+`AGENT_LENS_ENABLED_SOURCES` 仅保留为高优先级兼容覆盖；存在该覆盖时，AgentLens 界面与 CLI 的来源开关只读。多来源覆盖示例：
 
 ```text
 AGENT_LENS_ENABLED_SOURCES=claude-code,codex,pi,hermes,opencode
 ```
 
-关闭全部：
+兼容覆盖关闭全部：
 
 ```text
 AGENT_LENS_ENABLED_SOURCES=none
@@ -36,7 +41,7 @@ AGENT_LENS_ENABLED_SOURCES=none
 
 禁用来源必须在 `detect()` 之前过滤，也不能进入 History、Runtime、Asset Discovery。Codex / Claude Hook 与 Hermes Observer 也必须遵守同一允许列表。
 
-修改后需要重启 Daemon；Hook / Observer 还需对应 Agent 进程重新继承环境变量。关闭来源不会自动删除旧数据。
+通过 AgentLens 修改后，Hook / Observer 不需要重启对应 Agent 进程；Daemon 仍需重启才能完全应用。修改兼容环境变量时，Daemon 与对应 Agent 进程都需要重新继承。关闭来源不会自动删除旧数据。
 
 ## 采集隐私档位
 

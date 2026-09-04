@@ -15,17 +15,42 @@ import type {
   SessionRelationshipCandidate,
   SourceCheckpointService,
   SourceDefinition,
+  SourceHistoryWindow,
   SourceRecord,
   SourceRuntimeStatus,
   StorageService,
 } from '@agent-lens/core'
 import { deriveParentRelationshipCandidates } from './relationship-hints'
 
+const DEFAULT_COOPERATIVE_BUDGET_MS = 8
+
+interface CooperativeSchedulerOptions {
+  budgetMs?: number
+  now?: () => number
+  yieldControl?: () => Promise<void>
+}
+
+function createCooperativeScheduler(options: CooperativeSchedulerOptions = {}) {
+  const budgetMs = options.budgetMs ?? DEFAULT_COOPERATIVE_BUDGET_MS
+  const now = options.now ?? Date.now
+  const yieldControl = options.yieldControl
+    ?? (() => new Promise<void>(resolve => setImmediate(resolve)))
+  let deadline = now() + budgetMs
+
+  return async (): Promise<boolean> => {
+    if (now() < deadline) return false
+    await yieldControl()
+    deadline = now() + budgetMs
+    return true
+  }
+}
+
 export interface SourceHistorySyncInput {
   source: SourceDefinition
   host: Host
   detected: DetectedSource
   abortSignal: AbortSignal
+  historyWindow?: SourceHistoryWindow
 }
 
 export interface SourceHistorySyncResult {
@@ -254,7 +279,6 @@ async function processSourceRecord(
 
   const persistedRecord = capturePolicy.sanitizeSourceRecord(record, normalized)
   const persistedOutput = capturePolicy.sanitizeNormalizedOutput(normalized)
-  await storage.repositories.sourceRecords.put(persistedRecord)
 
   const result: ProcessResult = {
     observationsCreated: 0,
@@ -263,22 +287,28 @@ async function processSourceRecord(
     evidenceCandidates: persistedOutput.evidenceCandidates,
   }
 
-  for (const observation of persistedOutput.observations) {
-    if (runtimeProfile && !observation.identityHints.runtimeProfileNativeId) {
-      observation.identityHints.runtimeProfileNativeId = runtimeProfile.nativeProfileId
-    }
-    const committed = await observations.commit({
-      sourceId: source.manifest.sourceId,
-      host,
-      installation,
-      candidate: observation,
-      evidenceCandidates: persistedOutput.evidenceCandidates,
-    })
+  // 一条来源记录及其派生的 Canonical Observation 属于同一持久化单元。
+  // 除了保证原子性，也避免冷导入时每次仓储写入都单独开启 SQLite 事务。
+  await storage.transaction(async () => {
+    await storage.repositories.sourceRecords.put(persistedRecord)
 
-    if (committed.status === 'created') result.observationsCreated += 1
-    else if (committed.status === 'merged') result.observationsMerged += 1
-    else result.observationsUnchanged += 1
-  }
+    for (const observation of persistedOutput.observations) {
+      if (runtimeProfile && !observation.identityHints.runtimeProfileNativeId) {
+        observation.identityHints.runtimeProfileNativeId = runtimeProfile.nativeProfileId
+      }
+      const committed = await observations.commit({
+        sourceId: source.manifest.sourceId,
+        host,
+        installation,
+        candidate: observation,
+        evidenceCandidates: persistedOutput.evidenceCandidates,
+      })
+
+      if (committed.status === 'created') result.observationsCreated += 1
+      else if (committed.status === 'merged') result.observationsMerged += 1
+      else result.observationsUnchanged += 1
+    }
+  })
 
   const explicitRelationships = persistedOutput.sessionRelationshipHints ?? []
   const derivedRelationships = deriveParentRelationshipCandidates(
@@ -334,6 +364,46 @@ export class SourceHistoryRunner {
         observationsMerged: 0,
         observationsUnchanged: 0,
       }
+      const yieldForInteractivity = createCooperativeScheduler()
+
+      const replay = this.storage.repositories.sourceRecords.listForParserReplay
+      // Parser 升级直接重规范化已持久化的 SourceRecord。渐进窗口会把重放
+      // 限定到同一批 Session，避免为了修复语义重新读取完整原生日志前缀。
+      if (replay) {
+        let after: { capturedAt: string; id: string } | undefined
+        while (!abortSignal.aborted) {
+          const records = await replay(
+            source.manifest.sourceId,
+            installation.id,
+            source.manifest.parserVersion,
+            after,
+            500,
+            input.historyWindow,
+          )
+          if (!records.length) break
+          for (const stored of records) {
+            if (abortSignal.aborted) break
+            const processed = await processSourceRecord(
+              this.storage,
+              this.observations,
+              this.coverage,
+              this.capturePolicy,
+              source,
+              host,
+              installation,
+              runtimeProfile,
+              { ...stored, parserVersion: source.manifest.parserVersion },
+            )
+            result.observationsCreated += processed.observationsCreated
+            result.observationsMerged += processed.observationsMerged
+            result.observationsUnchanged += processed.observationsUnchanged
+            await yieldForInteractivity()
+          }
+          const last = records.at(-1)!
+          after = { capturedAt: last.capturedAt, id: last.id }
+          if (records.length < 500) break
+        }
+      }
 
       if (!source.ingestHistory) {
         await markHealthy(this.storage, runtimeStatus)
@@ -355,6 +425,7 @@ export class SourceHistoryRunner {
         ...(runtimeProfile ? { runtimeProfile } : {}),
         abortSignal,
         checkpoint,
+        ...(input.historyWindow ? { historyWindow: input.historyWindow } : {}),
       })) {
         if (abortSignal.aborted) break
         result.records += 1
@@ -384,6 +455,7 @@ export class SourceHistoryRunner {
           coverageTo = nextTo
           coverageToEvidence = processed.evidenceCandidates
         }
+        await yieldForInteractivity()
       }
 
       if (!abortSignal.aborted) {
@@ -574,6 +646,7 @@ export class SourceAssetRunner {
         this.storage,
         checkpointScope(source.manifest.sourceId, installation.id, runtimeProfile),
       )
+      const yieldForInteractivity = createCooperativeScheduler()
 
       for await (const discovered of source.discoverAssets({
         host,
@@ -613,6 +686,7 @@ export class SourceAssetRunner {
           })
           result.statesRecorded += 1
         }
+        await yieldForInteractivity()
       }
 
       await markHealthy(this.storage, runtimeStatus)
@@ -622,4 +696,9 @@ export class SourceAssetRunner {
       throw error
     }
   }
+}
+
+export const sourceRunnerInternals = {
+  createCooperativeScheduler,
+  DEFAULT_COOPERATIVE_BUDGET_MS,
 }

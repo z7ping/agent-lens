@@ -7,7 +7,7 @@ import {
   type SourceHistorySyncResult,
   type SourceRuntimeCaptureHandle,
 } from '@agent-lens/core-services/source-runner'
-import type { DetectedSource, Host, SourceDefinition } from '@agent-lens/core'
+import type { DetectedSource, Host, SourceDefinition, SourceHistoryWindow } from '@agent-lens/core'
 import type { AgentLensContext } from './context'
 
 export type RegisteredSourceStage = 'detect' | 'history' | 'assets' | 'capture'
@@ -107,6 +107,7 @@ export async function syncRegisteredSourceHistory(
   ctx: AgentLensContext,
   abortSignal: AbortSignal,
   targets: RegisteredSourceTarget[],
+  historyWindow?: SourceHistoryWindow,
 ): Promise<RegisteredSourceStageResult<SourceHistorySyncResult>> {
   const runner = new SourceHistoryRunner(
     ctx.storage,
@@ -123,7 +124,11 @@ export async function syncRegisteredSourceHistory(
     if (abortSignal.aborted) break
     if (!sourceEnabled(ctx, target.source)) continue
     try {
-      results.push(await runner.sync({ ...target, abortSignal }))
+      results.push(await runner.sync({
+        ...target,
+        abortSignal,
+        ...(historyWindow ? { historyWindow } : {}),
+      }))
     } catch (error) {
       failures.push({ sourceId: target.source.manifest.sourceId, stage: 'history', error })
     }

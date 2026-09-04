@@ -20,7 +20,7 @@ test('ReviewProjection builds task summaries and interaction tool status from ca
     })
 
     const add = async (
-      kind: 'message.user' | 'message.assistant' | 'tool.call' | 'tool.result',
+      kind: 'message.user' | 'message.assistant' | 'message.commentary' | 'tool.call' | 'tool.result',
       nativeEventId: string,
       at: string,
       payload: unknown,
@@ -49,7 +49,7 @@ test('ReviewProjection builds task summaries and interaction tool status from ca
     })
 
     const user = await add('message.user', 'user-1', '2026-08-21T01:00:00.000Z', { text: '修复登录问题' })
-    await add('message.assistant', 'assistant-1', '2026-08-21T01:00:01.000Z', { text: '开始检查' })
+    await add('message.commentary', 'assistant-1', '2026-08-21T01:00:01.000Z', { text: '开始检查', phase: 'commentary' })
     await add('tool.call', 'call-1', '2026-08-21T01:00:02.000Z', {
       callId: 'tool-call-1', nativeToolName: 'bash', input: { command: 'npm test' },
     })
@@ -70,6 +70,9 @@ test('ReviewProjection builds task summaries and interaction tool status from ca
     const detail = await projection.get(summary.id)
     assert.ok(detail)
     assert.equal(detail.interactions.length, 1)
+    const commentary = detail.interactions[0]?.nodes.find(node => node.type === 'message' && node.text === '开始检查')
+    assert.equal(commentary?.type, 'message')
+    if (commentary?.type === 'message') assert.equal(commentary.role, 'commentary')
     const tool = detail.interactions[0]?.nodes.find(node => node.type === 'tool')
     assert.equal(tool?.type, 'tool')
     if (tool?.type === 'tool') {

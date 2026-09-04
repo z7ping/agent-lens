@@ -4,6 +4,12 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
+import {
+  capturePolicyConfigurationPath,
+  readCapturePolicyConfiguration,
+  writeCapturePolicyConfiguration,
+} from '@agent-lens/capture-policy/configuration'
+import { enabledSourcesFromEnv } from '@agent-lens/capture-policy/service'
 import { setTimeout as delay } from 'node:timers/promises'
 import {
   getAllHookStatus,
@@ -63,6 +69,10 @@ function usage(): string {
     '  agent-lens doctor [--json]',
     '  agent-lens service start|stop|restart|status [--json]',
     '  agent-lens autostart enable|disable|status [--json]',
+    '  agent-lens capture sources status [--json]',
+    '  agent-lens capture sources enable <source...>',
+    '  agent-lens capture sources disable <source...>',
+    '  agent-lens capture sources set <source...|none>',
     '  agent-lens hook status [codex|claude|all] [--json]',
     '  agent-lens hook install [codex|claude|all]',
     '  agent-lens hook uninstall [codex|claude|all]',
@@ -615,6 +625,73 @@ async function doctor(json: boolean): Promise<number> {
   return result.ok ? 0 : 1
 }
 
+function validSourceId(value: string): boolean {
+  return /^[a-z0-9][a-z0-9._-]{0,63}$/i.test(value.trim())
+}
+
+async function runCaptureSources(action: string, values: string[], json: boolean): Promise<number> {
+  const path = capturePolicyConfigurationPath(process.env)
+  const persisted = await readCapturePolicyConfiguration(path)
+  const environmentOverride = process.env.AGENT_LENS_ENABLED_SOURCES !== undefined
+  const effective = environmentOverride
+    ? enabledSourcesFromEnv(process.env.AGENT_LENS_ENABLED_SOURCES)
+    : persisted?.enabledSources ?? enabledSourcesFromEnv(undefined)
+
+  if (action === 'status') {
+    const result = {
+      enabledSources: effective,
+      managedBy: environmentOverride ? 'environment' : persisted ? 'file' : 'default',
+      editable: !environmentOverride,
+      configurationPath: path,
+      updatedAt: persisted?.updatedAt ?? null,
+    }
+    if (json) console.log(JSON.stringify(result, null, 2))
+    else {
+      console.log(`用户级采集来源：${effective.join(', ') || '(none)'}`)
+      console.log(`管理方式：${environmentOverride ? '兼容环境变量（AgentLens 配置只读）' : persisted ? 'AgentLens 用户配置' : '默认隐私策略'}`)
+      console.log(`配置文件：${path}`)
+    }
+    return 0
+  }
+
+  if (environmentOverride) {
+    throw new Error('当前来源采集由 AGENT_LENS_ENABLED_SOURCES 兼容环境变量覆盖；请先移除该覆盖，再由 AgentLens 管理')
+  }
+  if (!['enable', 'disable', 'set'].includes(action)) {
+    throw new Error(`Unknown capture sources action: ${action}`)
+  }
+  if (!values.length) throw new Error(`capture sources ${action} 至少需要一个来源 ID，或使用 set none`)
+  if (values.some(value => value.toLowerCase() !== 'none' && !validSourceId(value))) {
+    throw new Error('来源 ID 只能包含字母、数字、点、下划线和连字符')
+  }
+
+  const current = new Set(effective)
+  if (action === 'set') current.clear()
+  if (!(action === 'set' && values.length === 1 && values[0]?.toLowerCase() === 'none')) {
+    for (const raw of values) {
+      const sourceId = raw.trim().toLowerCase()
+      if (sourceId === 'none') throw new Error('none 只能单独用于 capture sources set none')
+      if (action === 'disable') current.delete(sourceId)
+      else current.add(sourceId)
+    }
+  }
+  const saved = await writeCapturePolicyConfiguration(path, [...current])
+  const result = {
+    enabledSources: saved.enabledSources,
+    managedBy: 'file',
+    editable: true,
+    configurationPath: path,
+    updatedAt: saved.updatedAt,
+    restartRequired: true,
+  }
+  if (json) console.log(JSON.stringify(result, null, 2))
+  else {
+    console.log(`AgentLens 用户级采集来源已保存：${saved.enabledSources.join(', ') || '(none)'}`)
+    console.log('Hook 从下一次调用起读取新设置；AgentLens 运行时需要重启后完全应用来源启停。')
+  }
+  return 0
+}
+
 export async function main(argv = process.argv.slice(2)): Promise<number> {
   const json = argv.includes('--json')
   const args = argv.filter(arg => arg !== '--json')
@@ -633,6 +710,7 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
   if (command === 'doctor') return doctor(json)
   if (command === 'service') return runService(args[1] ?? 'status', json)
   if (command === 'autostart') return runAutostart(args[1] ?? 'status', json)
+  if (command === 'capture' && args[1] === 'sources') return runCaptureSources(args[2] ?? 'status', args.slice(3), json)
   if (command === 'hook') return runHook(args[1] ?? 'status', args[2], json)
   throw new Error(`Unknown command: ${command}\n\n${usage()}`)
 }

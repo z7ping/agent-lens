@@ -4,7 +4,7 @@ const backup = readFileSync('packages/web/src/features/BackupPage.tsx', 'utf8')
 const review = readFileSync('packages/web/src/features/ReviewPage.tsx', 'utf8')
 const virtualRound = readFileSync('packages/web/src/components/VirtualRoundMount.tsx', 'utf8')
 const diagnostics = readFileSync('packages/web/src/components/AgentInsightsRail.tsx', 'utf8')
-const responsive = readFileSync('packages/web/src/desktop-responsive.css', 'utf8')
+const responsive = readFileSync('packages/web/src/agent-insights-responsive.css', 'utf8')
 const main = readFileSync('packages/web/src/main.tsx', 'utf8')
 
 for (const required of [
@@ -22,7 +22,7 @@ for (const required of [
   'interface ReviewReaderPosition',
   'captureReviewReaderPosition',
   'readerPositionsRef',
-  "querySelectorAll<HTMLElement>('.interaction-block[data-interaction-id]')",
+  "querySelectorAll<HTMLElement>('.virtual-round-shell[data-interaction-id]')",
   'await model.loadMoreReviewDetail()',
   "current.detail.page.direction !== 'forward'",
   'pane.scrollTop += anchor.getBoundingClientRect().top - paneTop - saved.offset',
@@ -49,17 +49,22 @@ for (const required of [
 }
 
 for (const required of [
-  'md 768 / lg 992 / xl 1200 / xxl 1400',
+  '智能体概览洞察区布局/响应式所有者',
   '.agents-responsive-shell',
   '.agent-insights-rail',
   '@media (min-width: 1400px)',
+  '@media (max-width: 1199.98px)',
+  '@media (max-width: 991.98px)',
+  '@media (max-width: 767.98px)',
   'position: sticky;',
 ]) {
-  if (!responsive.includes(required)) throw new Error(`智能体洞察缺少桌面响应式约束：${required}`)
+  if (!responsive.includes(required)) throw new Error(`智能体洞察缺少独立响应式约束：${required}`)
 }
-
+if (existsSync('packages/web/src/desktop-responsive.css') || main.includes("'./desktop-responsive.css'")) {
+  throw new Error('desktop-responsive.css 已退役；智能体/备份/壳层响应式必须分别由各自所有者持有')
+}
 if (existsSync('packages/web/src/agent-diagnostics.css') || main.includes("'./agent-diagnostics.css'")) {
   throw new Error('旧采集诊断 Dock 不得重新进入正式 Web 渲染/样式链')
 }
 
-console.log('核心交互收口检查通过：快照结果可见、跨会话阅读位置可恢复、智能体诊断与覆盖洞察已收口')
+console.log('核心交互收口检查通过：快照结果可见、跨会话阅读位置可恢复、智能体诊断与覆盖洞察由独立响应式所有者承载')

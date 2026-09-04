@@ -1,0 +1,123 @@
+.ui-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  display: flex;
+  background: color-mix(in srgb, var(--al-ink) 28%, transparent);
+}
+
+.ui-overlay-dialog {
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.ui-overlay-drawer.is-right {
+  justify-content: flex-end;
+}
+
+.ui-overlay-drawer.is-left {
+  justify-content: flex-start;
+}
+
+.ui-overlay-panel {
+  min-width: 0;
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--al-line-strong);
+  background: var(--al-surface-raised);
+  color: var(--al-ink);
+  box-shadow: var(--al-shadow-lg);
+  outline: none;
+}
+
+.ui-overlay-dialog .ui-overlay-panel {
+  width: min(100%, 620px);
+  border-radius: 14px;
+}
+
+.ui-overlay-drawer .ui-overlay-panel {
+  width: min(92vw, 560px);
+  height: 100%;
+  max-height: 100vh;
+  border-top: 0;
+  border-bottom: 0;
+  border-radius: 0;
+}
+
+.ui-overlay-drawer.is-right .ui-overlay-panel {
+  border-right: 0;
+}
+
+.ui-overlay-drawer.is-left .ui-overlay-panel {
+  border-left: 0;
+}
+
+.ui-overlay-header {
+  min-height: 58px;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 13px 14px 12px 16px;
+  border-bottom: 1px solid var(--al-line);
+}
+
+.ui-overlay-heading {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.ui-overlay-heading h2 {
+  margin: 0;
+  color: var(--al-ink);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.ui-overlay-heading p {
+  margin: 4px 0 0;
+  color: var(--al-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ui-overlay-body {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: 16px;
+}
+
+.ui-overlay-footer {
+  min-height: 54px;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 11px 16px;
+  border-top: 1px solid var(--al-line);
+}
+
+@media (max-width: 767.98px) {
+  .ui-overlay-dialog {
+    align-items: flex-end;
+    padding: 12px;
+  }
+
+  .ui-overlay-dialog .ui-overlay-panel {
+    width: 100%;
+    max-height: calc(100vh - 24px);
+    border-radius: 12px;
+  }
+
+  .ui-overlay-drawer .ui-overlay-panel {
+    width: 100%;
+  }
+}

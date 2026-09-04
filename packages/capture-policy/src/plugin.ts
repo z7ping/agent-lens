@@ -2,6 +2,11 @@ import type { CapturePolicyMode, CapturePolicySettings } from '@agent-lens/core'
 import type { Plugin } from '@deepseek-ai/cordis'
 import type { AgentLensContext } from '@agent-lens/runtime-cordis'
 import { DefaultCapturePolicyService, capturePolicySettingsFromEnv } from './service'
+import {
+  capturePolicyConfigurationPath,
+  readCapturePolicyConfigurationSync,
+  writeCapturePolicyConfiguration,
+} from './configuration'
 
 export interface CapturePolicyPluginConfig {
   prompt?: CapturePolicyMode
@@ -11,24 +16,18 @@ export interface CapturePolicyPluginConfig {
   enabledSources?: readonly string[]
 }
 
-const FIRST_PARTY_SOURCE_IDS = [
-  'codex',
-  'claude-code',
-  'pi',
-  'hermes',
-  'opencode',
-  'dsh',
-] as const
-
 const applyCapturePolicy: Plugin.Function<CapturePolicyPluginConfig> = (
   ctx: AgentLensContext,
   config: CapturePolicyPluginConfig = {},
 ) => {
   const defaults = capturePolicySettingsFromEnv(process.env)
+  const configurationPath = capturePolicyConfigurationPath(process.env)
+  const persisted = readCapturePolicyConfigurationSync(configurationPath)
+  const environmentOverridesSources = process.env.AGENT_LENS_ENABLED_SOURCES !== undefined
   const enabledSources = config.enabledSources
-    ?? (process.env.AGENT_LENS_ENABLED_SOURCES === undefined
-      ? FIRST_PARTY_SOURCE_IDS
-      : defaults.enabledSources)
+    ?? (environmentOverridesSources
+      ? defaults.enabledSources
+      : persisted?.enabledSources ?? defaults.enabledSources)
   const settings: CapturePolicySettings = {
     prompt: config.prompt ?? defaults.prompt,
     tool: config.tool ?? defaults.tool,
@@ -36,14 +35,31 @@ const applyCapturePolicy: Plugin.Function<CapturePolicyPluginConfig> = (
     environment: config.environment ?? defaults.environment,
     enabledSources,
   }
-  ctx.provide('capturePolicy', new DefaultCapturePolicyService(settings))
+  const configurationSource = config.enabledSources
+    ? 'runtime' as const
+    : environmentOverridesSources
+      ? 'environment' as const
+      : persisted
+        ? 'file' as const
+        : 'default' as const
+  ctx.provide('capturePolicy', new DefaultCapturePolicyService(settings, {
+    source: configurationSource,
+    editable: !config.enabledSources && !environmentOverridesSources,
+    configurationPath,
+    configuredEnabledSources: enabledSources,
+    writeEnabledSources: async next => {
+      await writeCapturePolicyConfiguration(configurationPath, next)
+    },
+  }))
 }
 
 /**
  * First-party mandatory runtime privacy and collection boundary.
  *
- * The runtime allows all shipped first-party Sources by default, while each
- * Source still has to be detected locally before collection starts. Users can
- * explicitly narrow or disable the allowlist through AGENT_LENS_ENABLED_SOURCES.
+ * Source authorization is resolved from the AgentLens user configuration.
+ * AGENT_LENS_ENABLED_SOURCES remains a compatibility override with higher
+ * priority. Without explicit user or environment configuration, all current
+ * first-party local agent sources are enabled; content still follows the
+ * independent prompt/tool/config privacy modes and can be narrowed manually.
  */
 export const capturePolicyPlugin = applyCapturePolicy

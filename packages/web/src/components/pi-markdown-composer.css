@@ -1,0 +1,106 @@
+@reference "../styles.css";
+
+.pi-markdown-composer {
+  position: relative;
+  min-width: 0;
+}
+
+.pi-markdown-input {
+  cursor: text;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.pi-markdown-input[contenteditable='false'] {
+  cursor: default;
+  opacity: .68;
+}
+
+.pi-markdown-placeholder {
+  position: absolute;
+  top: 15px;
+  right: 98px;
+  left: 18px;
+  overflow: hidden;
+  color: var(--al-muted);
+  font-size: 15px;
+  line-height: 1.55;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+}
+
+.pi-md-paragraph { margin: 0 0 4px; }
+.pi-md-paragraph:last-child { margin-bottom: 0; }
+.pi-md-h1, .pi-md-h2, .pi-md-h3, .pi-md-h4, .pi-md-h5, .pi-md-h6 {
+  margin: 5px 0 3px;
+  color: var(--al-ink);
+  line-height: 1.35;
+  font-weight: 700;
+}
+.pi-md-h1 { font-size: 20px; }
+.pi-md-h2 { font-size: 18px; }
+.pi-md-h3 { font-size: 16px; }
+.pi-md-h4, .pi-md-h5, .pi-md-h6 { font-size: 15px; }
+
+.pi-md-ul, .pi-md-ol {
+  margin: 3px 0;
+  padding-left: 22px;
+}
+.pi-md-ul { list-style: disc outside; }
+.pi-md-ol { list-style: decimal outside; }
+.pi-md-listitem { margin: 1px 0; }
+.pi-md-listitem-nested { list-style: none; }
+.pi-md-checklist { list-style: none; padding-left: 20px; }
+.pi-md-listitem-checked,
+.pi-md-listitem-unchecked {
+  position: relative;
+  list-style: none;
+}
+.pi-md-listitem-checked::before,
+.pi-md-listitem-unchecked::before {
+  position: absolute;
+  left: -20px;
+  top: .15em;
+  width: 13px;
+  height: 13px;
+  border: 1px solid var(--al-line-strong);
+  border-radius: 3px;
+  content: '';
+}
+.pi-md-listitem-checked::before {
+  border-color: var(--al-accent);
+  background: var(--al-accent);
+  box-shadow: inset 0 0 0 3px var(--al-surface);
+}
+
+.pi-md-quote {
+  margin: 4px 0;
+  padding-left: 10px;
+  border-left: 3px solid var(--al-line-strong);
+  color: var(--al-muted-strong);
+}
+
+.pi-md-code-block {
+  display: block;
+  margin: 5px 0;
+  padding: 7px 9px;
+  overflow-x: auto;
+  border: 1px solid var(--al-line);
+  border-radius: 8px;
+  background: var(--al-soft-2);
+  font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre;
+}
+.pi-md-inline-code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--al-soft-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .9em;
+}
+.pi-md-link { color: var(--al-accent); text-decoration: underline; text-underline-offset: 2px; }
+.pi-md-bold { font-weight: 700; }
+.pi-md-italic { font-style: italic; }
+.pi-md-strikethrough { text-decoration: line-through; }

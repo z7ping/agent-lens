@@ -8,6 +8,7 @@ import type {
   Host,
   SourceCheckpointService,
   SourceExecutionContext,
+  SourceRecord,
 } from '@agent-lens/core'
 import {
   codexSourceDefinition,
@@ -61,6 +62,15 @@ function installation(root: string, sessions: string): AgentInstallation {
   }
 }
 
+function sourceContext(root: string, sessions: string, checkpoint = new MemoryCheckpoint()): SourceExecutionContext {
+  return {
+    host,
+    installation: installation(root, sessions),
+    abortSignal: new AbortController().signal,
+    checkpoint,
+  }
+}
+
 test('detect uses CODEX_HOME without importing Prototype path logic', async () => {
   const { root, sessions } = await withFixture()
   try {
@@ -79,30 +89,62 @@ test('detect uses CODEX_HOME without importing Prototype path logic', async () =
 
 test('history ingest is incremental and preserves every native record', async () => {
   const { root, sessions } = await withFixture()
-  const checkpoint = new MemoryCheckpoint()
-  const controller = new AbortController()
-  const sourceContext: SourceExecutionContext = {
-    host,
-    installation: installation(root, sessions),
-    abortSignal: controller.signal,
-    checkpoint,
-  }
+  const source = sourceContext(root, sessions)
 
   try {
     const first = []
-    for await (const record of codexSourceDefinition.ingestHistory!(sourceContext)) first.push(record)
-    assert.equal(first.length, 8)
+    for await (const record of codexSourceDefinition.ingestHistory!(source)) first.push(record)
+    assert.equal(first.length, 10)
+    assert.equal(first[0]?.nativeType, 'metadata/session_start')
     assert.equal(first[0]?.sourceSessionNativeId, 'codex-test-1')
-    assert.equal(first[1]?.nativeType, 'event_msg/task_started')
+    assert.equal(first[2]?.nativeType, 'event_msg/task_started')
 
     const second = []
-    for await (const record of codexSourceDefinition.ingestHistory!(sourceContext)) second.push(record)
+    for await (const record of codexSourceDefinition.ingestHistory!(source)) second.push(record)
     assert.equal(second.length, 0)
 
     const serialized = JSON.stringify(first)
-    assert.equal(serialized.includes('<permissions instructions>sandbox'), false)
-    assert.equal(serialized.includes('<environment_context>'), false)
-    assert.equal(serialized.includes('[redacted:injected-context]'), true)
+    const sessionMeta = first.find(record => record.nativeType === 'session_meta')
+    assert.equal((sessionMeta?.payload as any).entry.payload.future_field.nested, 'survives')
+    assert.equal(serialized.includes('<permissions instructions>sandbox'), true)
+    assert.equal(serialized.includes('<environment_context>'), true)
+    assert.equal(serialized.includes('[redacted:injected-context]'), false)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('history emits native title only on first discovery or thread_name change', async () => {
+  const { root, sessions } = await withFixture()
+  const source = sourceContext(root, sessions)
+  const indexPath = join(root, 'session_index.jsonl')
+
+  try {
+    await writeFile(indexPath, JSON.stringify({
+      id: 'codex-test-1',
+      thread_name: '第一次原生标题',
+      updated_at: '2026-08-20T01:00:00.000Z',
+    }) + '\n', 'utf8')
+
+    const first = []
+    for await (const record of codexSourceDefinition.ingestHistory!(source)) first.push(record)
+    assert.equal(first.filter(record => record.nativeType === 'metadata/session_title').length, 1)
+
+    const unchanged = []
+    for await (const record of codexSourceDefinition.ingestHistory!(source)) unchanged.push(record)
+    assert.equal(unchanged.length, 0)
+
+    await writeFile(indexPath, JSON.stringify({
+      id: 'codex-test-1',
+      thread_name: '第二次原生标题',
+      updated_at: '2026-08-20T02:00:00.000Z',
+    }) + '\n', 'utf8')
+
+    const changed = []
+    for await (const record of codexSourceDefinition.ingestHistory!(source)) changed.push(record)
+    assert.equal(changed.length, 1)
+    assert.equal(changed[0]?.nativeType, 'metadata/session_title')
+    assert.equal((changed[0]?.payload as any).entry.payload.title, '第二次原生标题')
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -110,24 +152,18 @@ test('history ingest is incremental and preserves every native record', async ()
 
 test('normalizer maps known facts and preserves unknown native events', async () => {
   const { root, sessions } = await withFixture()
-  const checkpoint = new MemoryCheckpoint()
-  const sourceContext: SourceExecutionContext = {
-    host,
-    installation: installation(root, sessions),
-    abortSignal: new AbortController().signal,
-    checkpoint,
-  }
+  const source = sourceContext(root, sessions)
 
   try {
     const records = []
-    for await (const record of codexSourceDefinition.ingestHistory!(sourceContext)) records.push(record)
+    for await (const record of codexSourceDefinition.ingestHistory!(source)) records.push(record)
 
     const kinds: string[] = []
     const outputs = []
     for (const record of records) {
       const normalized = await codexSourceDefinition.normalize(record, {
         host,
-        installation: sourceContext.installation,
+        installation: source.installation,
       })
       kinds.push(normalized.observations[0]!.kind)
       outputs.push(normalized.observations[0]!)
@@ -136,28 +172,91 @@ test('normalizer maps known facts and preserves unknown native events', async ()
 
     assert.deepEqual(kinds, [
       'session.lifecycle',
-      'unknown',
+      'session.lifecycle',
+      'session.lifecycle',
       'message.user',
+      'message.reasoning',
       'message.assistant',
       'tool.call',
       'tool.result',
-      'unknown',
-      'unknown',
+      'context.injected',
+      'context.injected',
     ])
 
-    assert.deepEqual(outputs[4]?.payload, {
+    assert.deepEqual(outputs[6]?.payload, {
       callId: 'call_c1',
       nativeToolName: 'shell_command',
       input: { command: 'npm test' },
     })
-    assert.deepEqual(outputs[5]?.payload, {
+    assert.deepEqual(outputs[7]?.payload, {
       callId: 'call_c1',
       success: false,
       exitCode: 1,
       output: 'failed 1 test',
     })
-    assert.equal((outputs[1]?.payload as any).rawType, 'event_msg/task_started')
+    assert.equal((outputs[2]?.payload as any).event, 'turn.started')
   } finally {
     await rm(root, { recursive: true, force: true })
   }
+})
+
+test('normalizer maps current Codex custom tool calls and structured outputs', async () => {
+  const base: Omit<SourceRecord, 'id' | 'nativeType' | 'nativeId' | 'payload'> = {
+    sourceId: 'codex',
+    installationId: 'codex-install-1',
+    sourceSessionNativeId: 'codex-custom-tools',
+    capturedAt: '2026-08-31T12:00:00.000Z',
+    locator: { kind: 'file', path: 'C:\\Users\\test\\.codex\\sessions\\rollout.jsonl' },
+    fingerprint: 'custom-tools-fingerprint',
+    parserVersion: '4',
+  }
+  const session = { nativeSessionId: 'codex-custom-tools', cwd: 'F:\\proj' }
+  const call = await codexSourceDefinition.normalize({
+    ...base,
+    id: 'codex-custom-call',
+    nativeType: 'response_item/custom_tool_call',
+    nativeId: 'call_custom_1',
+    payload: {
+      entry: {
+        type: 'response_item',
+        payload: {
+          type: 'custom_tool_call',
+          name: 'exec',
+          input: '{"cmd":"npm run test:unit"}',
+          call_id: 'call_custom_1',
+          status: 'completed',
+        },
+      },
+      session,
+    },
+  }, { host, installation: installation('C:\\codex', 'C:\\codex\\sessions') })
+  const result = await codexSourceDefinition.normalize({
+    ...base,
+    id: 'codex-custom-result',
+    nativeType: 'response_item/custom_tool_call_output',
+    nativeId: 'call_custom_1',
+    payload: {
+      entry: {
+        type: 'response_item',
+        payload: {
+          type: 'custom_tool_call_output',
+          call_id: 'call_custom_1',
+          output: [{ type: 'text', text: 'Exit code: 0\nWall time: 0.4 seconds\nOutput:\n12 tests passed' }],
+        },
+      },
+      session,
+    },
+  }, { host, installation: installation('C:\\codex', 'C:\\codex\\sessions') })
+
+  assert.deepEqual(call.observations[0]?.payload, {
+    callId: 'call_custom_1',
+    nativeToolName: 'exec',
+    input: { cmd: 'npm run test:unit' },
+  })
+  assert.deepEqual(result.observations[0]?.payload, {
+    callId: 'call_custom_1',
+    success: true,
+    exitCode: 0,
+    output: '12 tests passed',
+  })
 })

@@ -1,28 +1,14 @@
 /*
  * AgentLens 应用外壳响应式规则。
- *
- * 只负责 Header / 导航 / 公共工具栏压缩，不承担页面级视觉补丁。
+ * 只负责 Header / 导航 / 公共工具栏压缩，不承担一级页面专属视觉。
  * 断点固定采用 Bootstrap 5：sm 576 / md 768 / lg 992 / xl 1200 / xxl 1400。
- * Windows 100% / 125% / 150% 缩放依赖实际 CSS viewport 自然进入对应断点，不写 DPI 专属规则。
  */
 
-/* lg：992–1199。高 DPI 或主动缩窄窗口时压缩壳层并允许工具栏增高换行。 */
 @media (max-width: 1199.98px) {
-  .app-header-inner {
-    gap: 14px;
-    padding-inline: 14px;
-  }
-
-  .app-header .nav-item {
-    padding-inline: 9px;
-  }
-
-  .app-status {
-    gap: 5px;
-  }
-
-  html body .workspace-toolbar,
-  html body .review-page .workspace-toolbar {
+  .app-header-inner { gap: 14px; padding-inline: 14px; }
+  .app-header .nav-item { padding-inline: 9px; }
+  .app-status { gap: 5px; }
+  .workspace-toolbar {
     height: auto;
     min-height: 50px;
     flex-wrap: wrap;
@@ -32,117 +18,35 @@
   }
 }
 
-/* md：768–991。保留 Logo 和全部一级导航，品牌文字让位。 */
 @media (max-width: 991.98px) {
-  .app-header-inner {
-    gap: 10px;
-    padding-inline: 10px;
-  }
-
-  .brand-name {
-    display: none;
-  }
-
-  .app-nav {
-    min-width: 0;
-    flex: 1 1 auto;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .app-nav::-webkit-scrollbar {
-    display: none;
-  }
-
-  .app-status {
-    flex: 0 0 auto;
-    gap: 3px;
-  }
-
-  .app-status .status-pill {
-    min-width: 30px;
-    padding-inline: 8px;
-    justify-content: center;
-  }
-
-  .app-status .status-pill > span:last-child {
-    display: none;
-  }
+  .app-header-inner { gap: 10px; padding-inline: 10px; }
+  .brand-name { display: none; }
+  .app-nav { min-width: 0; flex: 1 1 auto; overflow-x: auto; scrollbar-width: none; }
+  .app-nav::-webkit-scrollbar { display: none; }
+  .app-status { flex: 0 0 auto; gap: 3px; }
+  .app-status .status-pill { min-width: 30px; padding-inline: 8px; justify-content: center; }
+  .app-status .runtime-status-summary,
+  .app-status .runtime-status-chevron { display: none; }
 }
 
-/* sm：576–767。进一步压缩导航和公共间距，但不缩小正文与控件字号。 */
 @media (max-width: 767.98px) {
-  .app-header-inner {
-    gap: 8px;
-    padding-inline: 8px;
-  }
-
-  .app-header .nav-item {
-    padding-inline: 7px;
-    font-size: 13px;
-  }
-
-  html body .workspace-toolbar,
-  html body .review-page .workspace-toolbar {
-    padding-inline: 10px;
-  }
+  .app-header-inner { gap: 8px; padding-inline: 8px; }
+  .app-header .nav-item { padding-inline: 7px; font-size: 13px; }
+  .workspace-toolbar { padding-inline: 10px; }
 }
 
-/* xs：<576。仅作紧凑桌面/极窄窗口兜底。 */
 @media (max-width: 575.98px) {
-  .app-header-inner {
-    gap: 6px;
-    padding-inline: 7px;
-  }
-
-  .app-header .brand {
-    display: flex;
-  }
-
-  .brand-logo {
-    width: 25px;
-    height: 25px;
-  }
-
-  .brand-name {
-    display: none;
-  }
-
-  .app-header .nav-item {
-    padding-inline: 6px;
-    font-size: 12px;
-  }
-
-  .app-header .nav-item-active::after {
-    left: 6px;
-    right: 6px;
-  }
-
-  .app-header .nav-group-start {
-    margin-left: 4px;
-  }
-
-  .app-header .nav-group-start::before {
-    left: -2px;
-  }
-
+  .app-header-inner { gap: 6px; padding-inline: 7px; }
+  .app-header .brand { display: flex; }
+  .brand-logo { width: 25px; height: 25px; }
+  .brand-name { display: none; }
+  .app-header .nav-item { padding-inline: 6px; font-size: 12px; }
+  .app-header .nav-item-active::after { left: 6px; right: 6px; }
+  .app-header .nav-group-start { margin-left: 4px; }
+  .app-header .nav-group-start::before { left: -2px; }
   .theme-toggle,
-  .app-status .status-pill {
-    width: 28px;
-    min-width: 28px;
-    height: 28px;
-  }
-
-  .status-tip::after {
-    right: -34px;
-  }
-
-  .page-content {
-    padding: 20px 14px 40px;
-  }
-
-  .heading-help::after {
-    left: auto;
-    right: 0;
-  }
+  .app-status .status-pill { width: 28px; min-width: 28px; height: 28px; }
+  .runtime-status-popover { right: -34px; }
+  .page-content { padding: 20px 14px 40px; }
+  .heading-help::after { left: auto; right: 0; }
 }

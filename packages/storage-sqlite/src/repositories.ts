@@ -190,6 +190,9 @@ function mapObservation(row: any, evidenceRefs: string[] = []): CanonicalObserva
     sourceSessionId: row.source_session_id,
     interactionId: row.interaction_id ?? undefined,
     actorId: row.actor_id ?? undefined,
+    nativeEventId: row.native_event_id ?? undefined,
+    nativeParentEventId: row.native_parent_event_id ?? undefined,
+    parentObservationId: row.parent_observation_id ?? undefined,
     kind: row.kind,
     sourceSequence: row.source_sequence == null ? undefined : Number(row.source_sequence),
     canonicalSequence: row.canonical_sequence == null ? undefined : Number(row.canonical_sequence),
@@ -549,6 +552,40 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
         return row ? mapSourceRecord(row) : null
       })
     },
+    async listForParserReplay(sourceId, installationId, currentParserVersion, after, limit = 500, window) {
+      return executor.run(() => {
+        const params: unknown[] = [sourceId, installationId, currentParserVersion]
+        const cursor = after ? `AND (captured_at > ? OR (captured_at = ? AND id > ?))` : ''
+        if (after) params.push(after.capturedAt, after.capturedAt, after.id)
+        const activeSince = window?.activeSince
+        const sessionLimit = window?.sessionLimit
+        const windowClause = activeSince || sessionLimit
+          ? `AND source_session_native_id IN (
+              SELECT source_session_native_id FROM source_records
+              WHERE source_id = ? AND installation_id = ? AND source_session_native_id IS NOT NULL
+              ${activeSince ? 'AND captured_at >= ?' : ''}
+              GROUP BY source_session_native_id
+              ORDER BY MAX(captured_at) DESC
+              ${sessionLimit ? 'LIMIT ?' : ''}
+            )`
+          : ''
+        if (windowClause) {
+          params.push(sourceId, installationId)
+          if (activeSince) params.push(activeSince)
+          if (sessionLimit) params.push(sessionLimit)
+        }
+        params.push(Math.max(1, Math.min(limit, 2000)))
+        const rows = db.prepare(`
+          SELECT * FROM source_records
+          WHERE source_id = ? AND installation_id = ? AND parser_version != ?
+          ${cursor}
+          ${windowClause}
+          ORDER BY captured_at ASC, id ASC
+          LIMIT ?
+        `).all(...params)
+        return rows.map(mapSourceRecord)
+      })
+    },
     async findByNativeId(sourceId, installationId, nativeId) {
       return executor.run(() => {
         const row = db.prepare(`
@@ -676,18 +713,43 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
         return rows.map(row => mapObservation(row, evidenceByObservation.get((row as any).id) ?? []))
       })
     },
+    async findIdByNativeEventId(sourceSessionId, nativeEventId) {
+      return executor.run(() => {
+        const row = db.prepare(`
+          SELECT id FROM observations
+          WHERE source_session_id = ? AND native_event_id = ?
+          ORDER BY id LIMIT 1
+        `).get(sourceSessionId, nativeEventId) as { id: string } | undefined
+        return row?.id ?? null
+      })
+    },
+    async linkChildrenToParent(sourceSessionId, nativeParentEventId, parentObservationId) {
+      await executor.run(() => {
+        db.prepare(`
+          UPDATE observations
+          SET parent_observation_id = ?
+          WHERE source_session_id = ?
+            AND native_parent_event_id = ?
+            AND (parent_observation_id IS NULL OR parent_observation_id != ?)
+        `).run(parentObservationId, sourceSessionId, nativeParentEventId, parentObservationId)
+      })
+    },
     async put(observation) {
       await executor.transaction(async () => {
         db.prepare(`
           INSERT INTO observations(
             id, host_id, installation_id, project_id, workspace_id, logical_session_id, source_session_id,
-            interaction_id, actor_id, kind, source_sequence, canonical_sequence, occurred_at, captured_at, payload_json
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            interaction_id, actor_id, native_event_id, native_parent_event_id, parent_observation_id,
+            kind, source_sequence, canonical_sequence, occurred_at, captured_at, payload_json
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(id) DO UPDATE SET
             project_id = excluded.project_id,
             workspace_id = excluded.workspace_id,
             interaction_id = excluded.interaction_id,
             actor_id = excluded.actor_id,
+            native_event_id = excluded.native_event_id,
+            native_parent_event_id = excluded.native_parent_event_id,
+            parent_observation_id = excluded.parent_observation_id,
             kind = excluded.kind,
             source_sequence = excluded.source_sequence,
             canonical_sequence = excluded.canonical_sequence,
@@ -704,6 +766,9 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
           observation.sourceSessionId,
           observation.interactionId ?? null,
           observation.actorId ?? null,
+          observation.nativeEventId ?? null,
+          observation.nativeParentEventId ?? null,
+          observation.parentObservationId ?? null,
           observation.kind,
           observation.sourceSequence ?? null,
           observation.canonicalSequence ?? null,

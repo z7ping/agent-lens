@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { NormalizedSourceOutput, SourceRecord } from '@agent-lens/core'
+import type { NormalizedSourceOutput, ObservationKind, SourceRecord } from '@agent-lens/core'
 import {
   DEFAULT_ENABLED_SOURCES,
   DefaultCapturePolicyService,
@@ -34,7 +34,7 @@ function record(payload: unknown): SourceRecord {
   }
 }
 
-function normalized(kind: 'message.user' | 'tool.call', payload: unknown): NormalizedSourceOutput {
+function normalized(kind: ObservationKind, payload: unknown): NormalizedSourceOutput {
   return {
     observations: [{
       kind,
@@ -46,13 +46,13 @@ function normalized(kind: 'message.user' | 'tool.call', payload: unknown): Norma
   }
 }
 
-test('uses conservative defaults with only Claude Code source enabled', () => {
+test('默认启用当前支持的全部本机智能体来源', () => {
   assert.deepEqual(capturePolicySettingsFromEnv({}), {
     prompt: 'redacted',
     tool: 'redacted',
     config: 'redacted',
     environment: 'off',
-    enabledSources: ['claude-code'],
+    enabledSources: ['claude-code', 'codex', 'pi', 'hermes', 'opencode'],
   })
 })
 
@@ -66,6 +66,24 @@ test('source allowlist is explicit, case-insensitive and supports none', () => {
   assert.equal(policy.isSourceEnabled('claude-code'), true)
   assert.equal(policy.isSourceEnabled('CODEX'), true)
   assert.equal(policy.isSourceEnabled('pi'), false)
+})
+
+test('AgentLens 用户配置可保存待重启来源状态并拒绝只读覆盖', async () => {
+  let written: readonly string[] = []
+  const policy = new DefaultCapturePolicyService(settings({ enabledSources: ['claude-code'] }), {
+    source: 'file',
+    editable: true,
+    configuredEnabledSources: ['claude-code'],
+    writeEnabledSources: async values => { written = values },
+  })
+  const updated = await policy.setEnabledSources(['claude-code', 'Codex'])
+  assert.deepEqual(written, ['claude-code', 'codex'])
+  assert.deepEqual(updated.effectiveEnabledSources, ['claude-code'])
+  assert.deepEqual(updated.configuredEnabledSources, ['claude-code', 'codex'])
+  assert.equal(updated.restartRequired, true)
+
+  const readOnly = new DefaultCapturePolicyService(settings(), { source: 'environment', editable: false })
+  await assert.rejects(() => readOnly.setEnabledSources(['codex']), /不能从 AgentLens 界面修改/)
 })
 
 test('redacted masks credentials and local user path', () => {
@@ -97,6 +115,19 @@ test('prompt off persists event shape without source text', () => {
   assert.equal(policy.sanitizeSourceRecord(source, output).payload, null)
   const safe = policy.sanitizeNormalizedOutput(output)
   assert.deepEqual(safe.observations[0]?.payload, { capturePolicy: 'off', text: NOT_CAPTURED })
+})
+
+test('injected context follows prompt capture policy instead of being unconditionally hidden', () => {
+  const policy = new DefaultCapturePolicyService(settings({ prompt: 'redacted' }))
+  const output = normalized('context.injected', {
+    role: 'developer',
+    text: 'workspace C:\\Users\\alice\\project; token=ghp_abcdefghijklmnopqrstuvwxyz',
+  })
+  const safe = policy.sanitizeNormalizedOutput(output)
+  assert.deepEqual(safe.observations[0]?.payload, {
+    role: 'developer',
+    text: `workspace C:\\Users\\[用户]\\project; token=${REDACTED}`,
+  })
 })
 
 test('tool off keeps aggregation metadata and drops arguments', () => {
@@ -132,3 +163,30 @@ test('config off strips normalized asset hints as well as static discovery', () 
   }
   assert.deepEqual(policy.sanitizeNormalizedOutput(output).assetHints, [])
 })
+
+
+test('SourceRecord safety boundary preserves unknown structure while redacting and bounding', () => {
+  const policy = new DefaultCapturePolicyService(settings({ prompt: 'full', tool: 'full' }))
+  const source = record({
+    futureField: { nested: 'survives' },
+    apiToken: 'opaque-native-secret',
+    huge: 'x'.repeat(100_000),
+    many: Array.from({ length: 150 }, (_, index) => ({ index })),
+  })
+  const output: NormalizedSourceOutput = {
+    observations: [{
+      kind: 'unknown',
+      capturedAt: source.capturedAt,
+      payload: { rawType: 'future/native-event', rawPayload: source.payload },
+      identityHints: { nativeSessionId: 'session-1' },
+    }],
+    evidenceCandidates: [],
+  }
+  const safe = policy.sanitizeSourceRecord(source, output)
+  const payload = safe.payload as Record<string, any>
+  assert.equal(payload.futureField.nested, 'survives')
+  assert.equal(payload.apiToken, REDACTED)
+  assert.ok(String(payload.huge).length < 100_000)
+  assert.equal(payload.many.length, 100)
+})
+

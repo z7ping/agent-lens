@@ -1,0 +1,828 @@
+/*
+ * AgentLens 全局工作栏。
+ * #56：保持连续、低噪音的左侧工作区；一级工作区横向平铺，
+ * 当前页面上下文直接占据其余空间，不再堆叠卡片式导航。
+ */
+
+.app-shell {
+  display: grid;
+  width: 100%;
+  height: 100dvh;
+  min-height: 0;
+  grid-template-columns: 316px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
+  background: var(--al-canvas);
+}
+
+.workspace-sidebar {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: 58px 44px minmax(0, 1fr) 52px;
+  overflow: hidden;
+  border-right: 1px solid var(--al-line);
+  background: var(--al-soft-2);
+}
+
+.workspace-sidebar-brand {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  padding: 0 15px;
+  color: var(--al-ink);
+  text-decoration: none;
+}
+
+.workspace-sidebar-logo {
+  width: 27px;
+  height: 27px;
+  flex: 0 0 27px;
+  border-radius: 7px;
+  object-fit: contain;
+}
+
+.workspace-sidebar-brand-copy {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.workspace-sidebar-brand-copy b {
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 720;
+  letter-spacing: -.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 一级工作区固定横向平铺。选中只靠文字权重 + 细下划线，不使用大面积色块。 */
+.workspace-primary-nav {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+  padding: 0 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--al-line) 72%, transparent);
+}
+
+.workspace-primary-link {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 43px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 5px;
+  border-radius: 0;
+  background: transparent;
+  color: var(--al-muted);
+  font-size: 13px;
+  font-weight: 560;
+  text-decoration: none;
+  transition: color .14s ease, background-color .14s ease;
+}
+
+.workspace-primary-link > svg {
+  flex: 0 0 16px;
+  color: currentColor;
+}
+
+.workspace-primary-link:hover {
+  color: var(--al-ink);
+  background: color-mix(in srgb, var(--al-surface) 34%, transparent);
+}
+
+.workspace-primary-link.is-active {
+  color: var(--al-ink);
+  background: transparent;
+  font-weight: 680;
+}
+
+.workspace-primary-link.is-active::after {
+  content: "";
+  position: absolute;
+  right: 15px;
+  bottom: -1px;
+  left: 15px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--al-ink);
+}
+
+.workspace-nav-dot {
+  position: absolute;
+  top: 9px;
+  right: 11px;
+  width: 5px;
+  height: 5px;
+  flex: 0 0 5px;
+  border-radius: 50%;
+  background: var(--al-accent);
+}
+
+.workspace-sidebar-context {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--al-soft-2);
+}
+
+.workspace-context-menu {
+  min-height: 0;
+  padding: 8px 10px 12px;
+  overflow: auto;
+}
+
+.workspace-insight-navigation {
+  flex: 0 0 auto;
+  overflow: visible;
+  padding-top: 7px;
+  padding-bottom: 4px;
+}
+
+.workspace-agent-context,
+.workspace-maintenance-context {
+  flex: 1 1 auto;
+}
+
+.workspace-context-utility {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 4px 4px 8px;
+  color: var(--al-muted-2);
+  font-size: 12px;
+}
+
+.workspace-context-utility .ui-icon-button,
+.workspace-sidebar-footer > .ui-icon-button {
+  border-color: transparent;
+  background: transparent;
+  color: var(--al-muted-2);
+}
+
+.workspace-context-utility .ui-icon-button:hover:not(:disabled),
+.workspace-sidebar-footer > .ui-icon-button:hover:not(:disabled) {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--al-surface) 64%, transparent);
+  color: var(--al-ink);
+}
+
+.workspace-context-link,
+.workspace-agent-link {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-height: 34px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--al-muted);
+  font-size: 13px;
+  text-align: left;
+  text-decoration: none;
+  transition: background-color .14s ease, color .14s ease;
+}
+
+.workspace-context-link:hover,
+.workspace-agent-link:hover {
+  background: color-mix(in srgb, var(--al-surface) 48%, transparent);
+  color: var(--al-ink);
+}
+
+.workspace-context-link.is-active,
+.workspace-agent-link.is-active {
+  background: color-mix(in srgb, var(--al-surface) 70%, transparent);
+  color: var(--al-ink);
+  font-weight: 640;
+}
+
+.workspace-context-link .workspace-nav-dot {
+  position: static;
+  margin-left: auto;
+}
+
+.workspace-agent-link > span:nth-child(2) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-context-empty {
+  padding: 16px 9px;
+  color: var(--al-muted-2);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.workspace-context-controls {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 8px;
+  padding: 8px 10px 10px;
+  overflow: visible;
+}
+
+.workspace-context-controls-head {
+  display: flex;
+  min-height: 28px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 4px;
+  color: var(--al-muted-2);
+  font-size: 12px;
+  font-weight: 620;
+}
+
+.workspace-context-controls-head .ui-icon-button {
+  border-color: transparent;
+  background: transparent;
+  color: var(--al-muted-2);
+}
+
+.workspace-context-control {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  color: var(--al-muted-2);
+  font-size: 12px;
+}
+
+.workspace-context-control > .select-menu,
+.workspace-context-control .select-menu-trigger {
+  width: 100%;
+  min-width: 0;
+}
+
+.workspace-context-control .select-menu-trigger {
+  background: color-mix(in srgb, var(--al-surface) 68%, transparent);
+}
+
+/* 洞察页：二级视图保持轻量，智能体 / 项目 / 时间统一折叠。 */
+.workspace-insight-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 26px;
+  flex: 0 0 auto;
+  align-items: start;
+  gap: 6px;
+  padding: 3px 10px 12px;
+  overflow: visible;
+}
+
+.workspace-insight-filters > .ui-icon-button {
+  margin-top: 4px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--al-muted-2);
+}
+
+.workspace-insight-filters > .ui-icon-button:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--al-surface);
+  color: var(--al-ink);
+}
+
+.workspace-insight-filter-disclosure {
+  min-width: 0;
+  border: 0;
+  background: transparent;
+}
+
+.workspace-insight-filter-disclosure > summary {
+  min-height: 32px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--al-muted);
+}
+
+.workspace-insight-filter-disclosure > summary:hover {
+  color: var(--al-ink);
+}
+
+.workspace-insight-filter-disclosure .ui-disclosure-body {
+  padding: 7px 0 0;
+}
+
+.workspace-insight-filter-fields {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+
+.workspace-insight-filter-fields label {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  color: var(--al-muted-2);
+  font-size: 12px;
+}
+
+.workspace-insight-filter-fields .select-menu,
+.workspace-insight-filter-fields .select-menu-trigger {
+  width: 100%;
+  min-width: 0;
+}
+
+.workspace-sidebar-footer {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 10px 5px 13px;
+  border-top: 1px solid color-mix(in srgb, var(--al-line) 66%, transparent);
+  background: var(--al-soft-2);
+}
+
+.workspace-user-avatar {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--al-muted-2);
+}
+
+.app-main {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--al-canvas);
+}
+
+.app-main > .workspace-page,
+.app-main > .agents-responsive-shell,
+.app-main > .task-center-page {
+  min-height: 0;
+  flex: 1;
+}
+
+/*
+ * Task Center Rail 通过 Portal 挂到 WorkspaceSidebar。
+ * 任务主路径是按时间倒序浏览，因此新建 + 搜索 / 筛选 / 刷新固定在同一操作带。
+ * 搜索输入只在用户点击搜索图标后临时出现。
+ */
+.workspace-sidebar-context > .task-center-rail {
+  width: 100%;
+  height: 100%;
+  flex: 1 1 auto;
+  border-right: 0;
+  background: var(--al-soft-2);
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-rail-head {
+  position: relative;
+  z-index: 14;
+  display: flex;
+  min-height: 40px;
+  flex-basis: 40px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px 5px 10px;
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-new-task-button {
+  height: 30px;
+  padding: 0 7px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--al-ink-2);
+  font-size: 13px;
+  font-weight: 590;
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-new-task-button:hover:not(:disabled) {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--al-surface) 58%, transparent);
+  color: var(--al-ink);
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-toolbar {
+  position: static;
+  z-index: 15;
+  display: flex;
+  width: auto;
+  min-width: 0;
+  min-height: 30px;
+  grid-template-columns: none;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 0;
+  overflow: visible;
+  background: transparent;
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-toolbar > .ui-icon-button {
+  width: 30px;
+  min-width: 30px;
+  height: 28px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--al-muted-2);
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-toolbar > .ui-icon-button:hover:not(:disabled),
+.workspace-sidebar-context > .task-center-rail .task-center-toolbar > .ui-icon-button.is-active {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--al-surface) 62%, transparent);
+  color: var(--al-ink);
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-search-panel {
+  position: relative;
+  z-index: 10;
+  flex: 0 0 auto;
+  padding: 1px 10px 6px;
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-search-field {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-search-field > svg {
+  position: absolute;
+  left: 9px;
+  z-index: 1;
+  color: var(--al-muted-2);
+  pointer-events: none;
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-search-input.ui-field {
+  width: 100%;
+  height: 34px;
+  padding: 0 9px 0 29px;
+  border-color: var(--al-line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--al-surface) 76%, transparent);
+  color: var(--al-ink);
+  font-size: 13px;
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-search-input.ui-field:hover,
+.workspace-sidebar-context > .task-center-rail .task-center-search-input.ui-field:focus {
+  border-color: var(--al-line-strong);
+  background: var(--al-surface);
+}
+
+/* 筛选 Disclosure 只显示统一 filter 图标，文字仅保留给可访问语义。 */
+.workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure {
+  position: relative;
+  width: 30px;
+  min-width: 30px;
+  flex: 0 0 30px;
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure > summary {
+  position: relative;
+  width: 30px;
+  height: 28px;
+  min-height: 28px;
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--al-muted-2);
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure > summary:hover,
+.workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure[open] > summary {
+  background: color-mix(in srgb, var(--al-surface) 62%, transparent);
+  color: var(--al-ink);
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure .ui-disclosure-chevron {
+  display: none;
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure .ui-disclosure-summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-filter-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure .ui-disclosure-meta {
+  position: absolute;
+  top: -4px;
+  right: -3px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  border: 1px solid var(--al-soft-2);
+  border-radius: 99px;
+  background: var(--al-ink);
+  color: var(--al-surface);
+  font-size: 12px;
+  line-height: 14px;
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure[open] {
+  grid-column: auto;
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure[open] + .ui-icon-button {
+  grid-row: auto;
+  grid-column: auto;
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure .ui-disclosure-body {
+  position: absolute;
+  top: 33px;
+  right: -32px;
+  z-index: 24;
+  width: 286px;
+  padding: 0;
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-filter-fields {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--al-line);
+  border-radius: 10px;
+  background: var(--al-surface);
+  box-shadow: 0 10px 28px rgb(15 23 42 / .08);
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-filter-fields label.is-wide {
+  grid-column: auto;
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-scroll {
+  padding: 1px 8px 12px;
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-group-title {
+  margin: 4px 0 0;
+  padding: 7px 5px 5px;
+  background: var(--al-soft-2);
+  color: var(--al-muted-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.workspace-sidebar-context > .task-center-rail .session-item {
+  width: 100%;
+  margin: 1px 0;
+  padding: 8px 8px 8px 9px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.workspace-sidebar-context > .task-center-rail .session-item:hover {
+  background: color-mix(in srgb, var(--al-surface) 48%, transparent);
+}
+
+.workspace-sidebar-context > .task-center-rail .session-item-active {
+  background: color-mix(in srgb, var(--al-surface) 72%, transparent);
+}
+
+.workspace-sidebar-context > .task-center-rail .session-item-active::before {
+  display: none;
+}
+
+.workspace-sidebar-context > .task-center-rail .session-item-title {
+  margin-top: 3px;
+  color: var(--al-ink);
+  font-size: 13px;
+  font-weight: 630;
+  line-height: 1.4;
+}
+
+.workspace-sidebar-context > .task-center-rail .session-item-meta,
+.workspace-sidebar-context > .task-center-rail .session-item-foot {
+  gap: 6px;
+  color: var(--al-muted-2);
+  font-size: 12px;
+  line-height: 1.32;
+}
+
+.workspace-sidebar-context > .task-center-rail .session-item-foot {
+  margin-top: 3px;
+  gap: 10px;
+}
+
+.app-shell .task-center-page {
+  height: auto;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.app-shell .task-center-main {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.app-shell .task-center-page.is-new-task {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* 智能体切换由全局上下文区持有，正文不重复第二套来源导航。 */
+.app-shell .agents-responsive-shell .workspace-toolbar {
+  display: none;
+}
+
+.app-shell .agents-responsive-shell .agents-browser {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  margin-top: 0;
+}
+
+.app-shell .agents-responsive-shell .agent-source-nav {
+  display: none;
+}
+
+.app-shell .agents-responsive-shell .agents-content {
+  padding-top: 18px;
+}
+
+.workspace-settings-drawer .ui-drawer {
+  width: min(420px, calc(100vw - 24px));
+}
+
+.workspace-settings-section {
+  display: grid;
+  gap: 9px;
+}
+
+.workspace-settings-section + .workspace-settings-section {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--al-line);
+}
+
+.workspace-settings-section h3 {
+  margin: 0;
+  color: var(--al-muted);
+  font-size: 12px;
+  font-weight: 680;
+}
+
+.workspace-settings-actions {
+  align-items: start;
+}
+
+.workspace-settings-actions .btn {
+  justify-self: start;
+}
+
+.workspace-settings-drawer .runtime-status-popover {
+  position: static;
+  width: 100%;
+  margin-top: 8px;
+  box-shadow: none;
+}
+
+@media (max-width: 1199.98px) {
+  .app-shell {
+    grid-template-columns: 286px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 991.98px) {
+  .app-shell {
+    grid-template-columns: 252px minmax(0, 1fr);
+  }
+
+  .workspace-sidebar {
+    grid-template-rows: 54px 42px minmax(0, 1fr) 50px;
+  }
+
+  .workspace-sidebar-brand {
+    padding-inline: 12px;
+  }
+
+  .workspace-primary-nav {
+    padding-inline: 7px;
+  }
+
+  .workspace-primary-link {
+    min-height: 41px;
+    gap: 4px;
+    font-size: 12px;
+  }
+
+  .workspace-primary-link.is-active::after {
+    right: 10px;
+    left: 10px;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .app-shell {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .workspace-primary-link > svg {
+    display: none;
+  }
+
+  .workspace-sidebar-context > .task-center-rail .task-center-toolbar {
+    gap: 0;
+  }
+
+  .workspace-sidebar-context > .task-center-rail .task-center-toolbar > .ui-icon-button,
+  .workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure,
+  .workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure > summary {
+    width: 28px;
+    min-width: 28px;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .app-shell {
+    grid-template-columns: 196px minmax(0, 1fr);
+  }
+
+  .workspace-sidebar {
+    grid-template-rows: 52px 40px minmax(0, 1fr) 48px;
+  }
+
+  .workspace-sidebar-brand {
+    padding-inline: 10px;
+  }
+
+  .workspace-sidebar-logo {
+    width: 25px;
+    height: 25px;
+    flex-basis: 25px;
+  }
+
+  .workspace-sidebar-brand-copy b {
+    font-size: 14px;
+  }
+
+  .workspace-primary-nav {
+    padding-inline: 5px;
+  }
+
+  .workspace-primary-link {
+    min-height: 39px;
+    padding-inline: 3px;
+  }
+
+  .workspace-context-menu,
+  .workspace-context-controls,
+  .workspace-insight-filters {
+    padding-inline: 7px;
+  }
+
+  .workspace-context-link,
+  .workspace-agent-link {
+    padding-inline: 7px;
+    font-size: 12px;
+  }
+
+  .workspace-sidebar-context > .task-center-rail .task-center-rail-head {
+    padding-inline: 6px;
+  }
+
+  .workspace-sidebar-context > .task-center-rail .task-center-new-task-button {
+    padding-inline: 5px;
+    font-size: 12px;
+  }
+
+  .workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure .ui-disclosure-body {
+    width: 178px;
+  }
+}

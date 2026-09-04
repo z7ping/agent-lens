@@ -28,6 +28,10 @@ body,
   margin: 0;
 }
 
+html {
+  scrollbar-gutter: stable;
+}
+
 body {
   background: var(--al-canvas);
   color: var(--al-ink);
@@ -148,25 +152,61 @@ a:focus-visible {
 
 .muted-empty.compact { padding: 12px 0; }
 
-/* 通用 Markdown；任务复盘可在 review.css 内做页面级布局。 */
+/*
+ * 统一 Markdown 基线。
+ * react-markdown 只负责 CommonMark -> React；这里统一 Review / Pi Live / Streaming
+ * 的可读性和高密度视觉，不允许各详情页再分别维护标题、列表、引用、表格等基础规则。
+ */
 .markdown {
   min-width: 0;
+  max-width: 100%;
   overflow-wrap: anywhere;
+  color: inherit;
+  line-height: 1.65;
 }
 
-.markdown p { margin: .3em 0; }
-.markdown p:first-child { margin-top: 0; }
-.markdown p:last-child { margin-bottom: 0; }
+.markdown > :first-child { margin-top: 0; }
+.markdown > :last-child { margin-bottom: 0; }
+
+.markdown p {
+  margin: .42em 0;
+  white-space: pre-wrap;
+}
+
+.markdown h1,
+.markdown h2,
+.markdown h3,
+.markdown h4,
+.markdown h5,
+.markdown h6 {
+  margin: .9em 0 .38em;
+  color: inherit;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.markdown h1 { font-size: 1.38em; }
+.markdown h2 { font-size: 1.25em; }
+.markdown h3 { font-size: 1.13em; }
+.markdown h4,
+.markdown h5,
+.markdown h6 { font-size: 1em; }
+
+.markdown strong { font-weight: 700; }
+.markdown del { color: var(--al-muted); }
 
 .markdown pre {
+  max-width: 100%;
   margin: 9px 0;
   padding: 11px 12px;
   overflow: auto;
   border: 1px solid var(--al-line);
   border-radius: 9px;
   background: var(--al-soft-2);
+  color: var(--al-ink-2);
   font-size: 12px;
   line-height: 1.55;
+  white-space: pre;
 }
 
 .markdown code {
@@ -183,15 +223,77 @@ a:focus-visible {
 
 .markdown ul,
 .markdown ol {
-  margin: 7px 0;
-  padding-left: 20px;
+  margin: .55em 0;
+  padding-left: 1.55em;
+}
+
+.markdown li { margin: .14em 0; }
+.markdown li > ul,
+.markdown li > ol { margin: .2em 0; }
+
+.markdown blockquote {
+  margin: .65em 0;
+  padding: .08em 0 .08em .85em;
+  border-left: 3px solid var(--al-line-strong);
+  color: var(--al-muted);
+}
+
+.markdown blockquote > :first-child { margin-top: 0; }
+.markdown blockquote > :last-child { margin-bottom: 0; }
+
+.markdown hr {
+  height: 1px;
+  margin: .9em 0;
+  border: 0;
+  background: var(--al-line);
+}
+
+.markdown table {
+  width: 100%;
+  margin: .7em 0;
+  border-collapse: collapse;
+  border-spacing: 0;
+  font-size: .94em;
+}
+
+.markdown th,
+.markdown td {
+  padding: 6px 8px;
+  border: 1px solid var(--al-line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.markdown th {
+  background: var(--al-soft-2);
+  color: var(--al-ink-2);
+  font-weight: 650;
+}
+
+.markdown tr:nth-child(even) td { background: color-mix(in srgb, var(--al-soft-2) 52%, transparent); }
+
+.markdown input[type='checkbox'] {
+  width: 14px;
+  height: 14px;
+  margin: 0 5px 0 0;
+  vertical-align: -2px;
+  accent-color: var(--al-accent);
+}
+
+.markdown img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
 }
 
 .markdown a {
   color: var(--al-accent);
   text-decoration: underline;
+  text-decoration-thickness: 1px;
   text-underline-offset: 2px;
 }
+
+.markdown a:hover { text-decoration-thickness: 2px; }
 
 @media (prefers-reduced-motion: reduce) {
   *,

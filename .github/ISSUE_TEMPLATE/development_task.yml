@@ -8,39 +8,30 @@ body:
       label: 上级 Issue 或 RFC
       placeholder: 例如 #123 或公开设计讨论链接
   - type: textarea
-    id: background
-    attributes:
-      label: 背景
-    validations:
-      required: true
-  - type: textarea
     id: goal
     attributes:
       label: 目标
-      description: 描述完成后能够观察到的结果。
+      description: 用几句话说明要解决的问题和完成后的结果。
     validations:
       required: true
   - type: textarea
     id: scope
     attributes:
       label: 实施范围
+      description: 只列本次需要完成的主要改动。
     validations:
       required: true
-  - type: textarea
-    id: non_goals
-    attributes:
-      label: 非目标
   - type: textarea
     id: acceptance
     attributes:
       label: 验收标准
+      description: 保留必要的可验证检查项即可。
       placeholder: |
-        - [ ] 自动化测试通过
-        - [ ] 兼容旧数据
-        - [ ] 文档已更新
+        - [ ] ……
     validations:
       required: true
   - type: textarea
-    id: risk
+    id: notes
     attributes:
-      label: 风险与依赖
+      label: 补充说明
+      description: 可选；仅填写必要的依赖、风险或链接。

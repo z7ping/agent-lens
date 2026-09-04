@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -6,6 +7,22 @@ import { join } from 'node:path'
 const MAX_STRING = 32 * 1024
 const SENSITIVE_KEY = /(password|passwd|secret|token|api[_-]?key|authorization|cookie)/i
 const DEFAULT_ENABLED_SOURCES = ['claude-code']
+
+function capturePolicyConfigurationPath(env = process.env) {
+  return env.AGENT_LENS_CAPTURE_POLICY_PATH
+    || join(homedir(), '.agent-lens', '1.0', 'config', 'capture-policy.json')
+}
+
+function configuredSources(env = process.env) {
+  try {
+    const value = JSON.parse(readFileSync(capturePolicyConfigurationPath(env), 'utf8'))
+    if (value?.version !== 1 || !Array.isArray(value.enabledSources)
+      || value.enabledSources.some(item => typeof item !== 'string')) return null
+    return [...new Set(value.enabledSources.map(item => item.trim().toLowerCase()).filter(Boolean))]
+  } catch {
+    return null
+  }
+}
 
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex')
@@ -31,7 +48,7 @@ function sanitize(value, depth = 0) {
 
 export function enabledSources(env = process.env) {
   const raw = String(env.AGENT_LENS_ENABLED_SOURCES || '').trim()
-  if (!raw) return [...DEFAULT_ENABLED_SOURCES]
+  if (!raw) return configuredSources(env) ?? [...DEFAULT_ENABLED_SOURCES]
   if (raw.toLowerCase() === 'none') return []
   return [...new Set(raw.split(',').map(value => value.trim().toLowerCase()).filter(Boolean))]
 }
@@ -88,4 +105,6 @@ export async function persistCodexHookEvent(rawEvent, options = {}) {
 
 export const hookInboxInternals = {
   sanitize,
+  configuredSources,
+  capturePolicyConfigurationPath,
 }

@@ -8,6 +8,8 @@ export interface CodexSessionMetadata {
   nativeSessionId: string
   cwd?: string
   cliVersion?: string
+  title?: string
+  startedAt?: string
 }
 
 export interface CodexStoredEnvelope {
@@ -70,6 +72,7 @@ export function sanitizeCodexEntry(raw: unknown): Record<string, unknown> {
   if (type === 'session_meta') {
     safePayload = {
       id: payload.id,
+      timestamp: payload.timestamp,
       cwd: payload.cwd,
       originator: payload.originator,
       cli_version: payload.cli_version,
@@ -94,9 +97,29 @@ export function sanitizeCodexEntry(raw: unknown): Record<string, unknown> {
         ? truncate(payload.arguments, MAX_TOOL_PAYLOAD)
         : sanitizeUnknown(payload.arguments),
     }
+  } else if (type === 'response_item' && payload.type === 'custom_tool_call') {
+    safePayload = {
+      type: 'custom_tool_call',
+      id: payload.id,
+      name: payload.name,
+      call_id: payload.call_id,
+      status: payload.status,
+      input: typeof payload.input === 'string'
+        ? truncate(payload.input, MAX_TOOL_PAYLOAD)
+        : sanitizeUnknown(payload.input),
+    }
   } else if (type === 'response_item' && payload.type === 'function_call_output') {
     safePayload = {
       type: 'function_call_output',
+      id: payload.id,
+      call_id: payload.call_id,
+      output: typeof payload.output === 'string'
+        ? truncate(payload.output, MAX_TOOL_PAYLOAD)
+        : sanitizeUnknown(payload.output),
+    }
+  } else if (type === 'response_item' && payload.type === 'custom_tool_call_output') {
+    safePayload = {
+      type: 'custom_tool_call_output',
       id: payload.id,
       call_id: payload.call_id,
       output: typeof payload.output === 'string'

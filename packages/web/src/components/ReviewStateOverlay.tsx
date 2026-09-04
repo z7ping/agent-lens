@@ -1,5 +1,6 @@
 import type { AgentLensClientModel, ClientSnapshot } from '../client/model'
 import { EmptyStatePanel, ErrorStateBanner, FirstRunGuide, ReviewDetailSkeleton, SessionListSkeleton } from './StateViews'
+import { UiIcon } from './ui'
 
 function broadReviewFilters(review: ClientSnapshot['review']): boolean {
   return !review.filters.sourceId
@@ -39,7 +40,7 @@ export function ReviewStateOverlay({ model, snapshot }: { model: AgentLensClient
       <div className="review-state-blocking-inner">
         {broad ? <FirstRunGuide detectedCount={detectedCount} enabledCount={enabledCount} serviceReady={serviceReady} liveConnected={snapshot.liveConnected}/>
           : <EmptyStatePanel
-            icon="⌕"
+            icon={<UiIcon name="search" size={20}/>}
             title="没有匹配的会话"
             description="当前筛选范围没有会话。可以先放宽时间、项目、智能体或状态筛选，再继续查找。"
             action={{

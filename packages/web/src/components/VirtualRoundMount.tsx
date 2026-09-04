@@ -1,17 +1,67 @@
-import { isValidElement, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { isValidElement, type CSSProperties, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react'
+
+export const REVIEW_ROUND_ROOT_MARGIN_PX = 1400
+export const REVIEW_ROUND_UNMOUNT_DELAY_MS = 320
+export const VIRTUAL_MOUNT_OBSERVER_STRATEGY = 'shared-per-root' as const
+
+interface SharedVirtualObserver {
+  observer: IntersectionObserver
+  listeners: Map<Element, (entry: IntersectionObserverEntry) => void>
+}
+
+const sharedVirtualObservers = new WeakMap<Element, SharedVirtualObserver>()
+
+function observeWithSharedVirtualObserver(
+  root: Element,
+  element: Element,
+  listener: (entry: IntersectionObserverEntry) => void,
+): () => void {
+  let shared = sharedVirtualObservers.get(root)
+  if (!shared) {
+    const listeners = new Map<Element, (entry: IntersectionObserverEntry) => void>()
+    const observer = new IntersectionObserver(entries => {
+      for (const entry of entries) listeners.get(entry.target)?.(entry)
+    }, {
+      root,
+      rootMargin: `${REVIEW_ROUND_ROOT_MARGIN_PX}px 0px`,
+      threshold: 0,
+    })
+    shared = { observer, listeners }
+    sharedVirtualObservers.set(root, shared)
+  }
+
+  shared.listeners.set(element, listener)
+  shared.observer.observe(element)
+  return () => {
+    shared?.listeners.delete(element)
+    shared?.observer.unobserve(element)
+    if (shared?.listeners.size === 0) {
+      shared.observer.disconnect()
+      sharedVirtualObservers.delete(root)
+    }
+  }
+}
 
 export function VirtualRoundMount({
   children,
   eager = false,
+  retainMounted = false,
   estimate = 220,
   interactionId,
+  rootSelector = '.review-reader-pane',
+  flowRoot = false,
 }: {
   children: ReactNode
   eager?: boolean
+  retainMounted?: boolean
   estimate?: number
   interactionId?: string
+  rootSelector?: string
+  flowRoot?: boolean
 }) {
   const ref = useRef<HTMLDivElement>(null)
+  const unmountTimerRef = useRef<number | null>(null)
+  const everMountedRef = useRef(eager)
   const [mounted, setMounted] = useState(eager)
   const [height, setHeight] = useState(estimate)
   const childInteractionId = isValidElement<{ interaction?: { id?: string } }>(children)
@@ -19,24 +69,67 @@ export function VirtualRoundMount({
     : undefined
   const stableInteractionId = interactionId ?? childInteractionId
 
+  const cancelPendingUnmount = () => {
+    if (unmountTimerRef.current === null) return
+    window.clearTimeout(unmountTimerRef.current)
+    unmountTimerRef.current = null
+  }
+
   useEffect(() => {
     const element = ref.current
-    if (!element || typeof IntersectionObserver === 'undefined') {
+    if (eager || (retainMounted && everMountedRef.current)) {
+      cancelPendingUnmount()
+      everMountedRef.current = true
       setMounted(true)
       return
     }
-    const root = element.closest('.review-reader-pane')
-    const observer = new IntersectionObserver(entries => {
-      const entry = entries[0]
-      if (entry?.isIntersecting) setMounted(true)
-    }, {
-      root,
-      rootMargin: '1200px 0px',
-      threshold: 0,
-    })
-    observer.observe(element)
-    return () => observer.disconnect()
-  }, [])
+    if (!element || typeof IntersectionObserver === 'undefined') {
+      everMountedRef.current = true
+      setMounted(true)
+      return
+    }
+
+    const onIntersection = (entry: IntersectionObserverEntry) => {
+      if (entry.isIntersecting) {
+        cancelPendingUnmount()
+        everMountedRef.current = true
+        setMounted(true)
+        return
+      }
+
+      cancelPendingUnmount()
+      unmountTimerRef.current = window.setTimeout(() => {
+        unmountTimerRef.current = null
+        const current = ref.current
+        if (!current) return
+        const active = document.activeElement
+        if (active instanceof Node && current.contains(active)) return
+        setMounted(false)
+      }, REVIEW_ROUND_UNMOUNT_DELAY_MS)
+    }
+
+    const root = element.closest(rootSelector)
+    let cleanup: () => void
+    if (root) {
+      cleanup = observeWithSharedVirtualObserver(root, element, onIntersection)
+    } else {
+      const observer = new IntersectionObserver(entries => {
+        const entry = entries[0]
+        if (entry) onIntersection(entry)
+      }, {
+        root: null,
+        rootMargin: `${REVIEW_ROUND_ROOT_MARGIN_PX}px 0px`,
+        threshold: 0,
+      })
+      observer.observe(element)
+      cleanup = () => observer.disconnect()
+    }
+
+    return () => {
+      cancelPendingUnmount()
+      cleanup()
+    }
+  }, [eager, retainMounted, rootSelector])
 
   useLayoutEffect(() => {
     if (!mounted) return
@@ -55,12 +148,16 @@ export function VirtualRoundMount({
     }
   }, [mounted])
 
+  const style: CSSProperties | undefined = mounted
+    ? flowRoot ? { display: 'flow-root' } : undefined
+    : { height: `${height}px`, position: 'relative', ...(flowRoot ? { display: 'flow-root' } : {}) }
+
   return <div
     ref={ref}
     className="virtual-round-shell"
     data-mounted={mounted ? 'true' : 'false'}
     data-interaction-id={stableInteractionId || undefined}
-    style={mounted ? undefined : { height: `${height}px`, position: 'relative' }}
+    style={style}
   >
     {!mounted && stableInteractionId && <span
       className="interaction-block virtual-round-anchor"

@@ -15,10 +15,15 @@ function hasError(detail: ReviewSessionDetailDto, index: number): boolean {
   return interaction?.nodes.some((node): node is ReviewToolNodeDto => node.type === 'tool' && node.status === 'error') ?? false
 }
 
-export function ReviewTurnRail({ detail }: { detail: ReviewSessionDetailDto }) {
+export function ReviewTurnRail({ detail, onLoadInteraction }: { detail: ReviewSessionDetailDto; onLoadInteraction?: (ordinal: number) => Promise<void> }) {
   const [activeIndex, setActiveIndex] = useState(0)
   const [position, setPosition] = useState<{ left: number; top: number } | null>(null)
-  const tips = useMemo(() => detail.interactions.map((_, index) => preview(detail, index)), [detail])
+  const entries = detail.interactionIndex ?? detail.interactions.map((interaction, ordinal) => ({
+    id: interaction.id, ordinal: ordinal + 1, trigger: interaction.trigger, startedAt: interaction.startedAt,
+    endedAt: interaction.endedAt, hasError: hasError(detail, ordinal), preview: preview(detail, ordinal),
+  }))
+  const tips = useMemo(() => entries.map(item => item.preview ?? `第 ${item.ordinal} 轮`), [entries])
+  const loadedOrdinalKey = detail.interactions.map(interaction => interaction.ordinal).join(',')
 
   useEffect(() => {
     let observer: IntersectionObserver | undefined
@@ -51,12 +56,14 @@ export function ReviewTurnRail({ detail }: { detail: ReviewSessionDetailDto }) {
     observerFrame = window.requestAnimationFrame(() => {
       const shells = [...document.querySelectorAll<HTMLElement>('.review-reader-pane .virtual-round-shell')]
       if (!shells.length || typeof IntersectionObserver === 'undefined') return
-      observer = new IntersectionObserver(entries => {
-        const visible = entries
+      observer = new IntersectionObserver(observedEntries => {
+        const visible = observedEntries
           .filter(entry => entry.isIntersecting)
           .sort((a, b) => Math.abs(a.boundingClientRect.top - pane.getBoundingClientRect().top) - Math.abs(b.boundingClientRect.top - pane.getBoundingClientRect().top))[0]
         if (!visible) return
-        const index = shells.indexOf(visible.target as HTMLElement)
+        const loadedIndex = shells.indexOf(visible.target as HTMLElement)
+        const ordinal = detail.interactions[loadedIndex]?.ordinal
+        const index = entries.findIndex(entry => entry.ordinal === ordinal)
         if (index >= 0) setActiveIndex(index)
       }, { root: pane, rootMargin: '-12% 0px -68% 0px', threshold: 0 })
       shells.forEach(shell => observer?.observe(shell))
@@ -69,24 +76,35 @@ export function ReviewTurnRail({ detail }: { detail: ReviewSessionDetailDto }) {
       resizeObserver?.disconnect()
       observer?.disconnect()
     }
-  }, [detail.id, detail.interactions.length, detail.page.filter, detail.page.direction])
+  }, [detail.id, loadedOrdinalKey, detail.page.filter, detail.page.direction])
 
-  const jump = (index: number) => {
+  const jump = async (index: number) => {
+    const ordinal = entries[index]?.ordinal
+    if (!ordinal) return
+    const loadedIndex = detail.interactions.findIndex(interaction => interaction.ordinal === ordinal)
     const shells = document.querySelectorAll<HTMLElement>('.review-reader-pane .virtual-round-shell')
-    const target = shells[index]
-    if (!target) return
+    const target = loadedIndex >= 0 ? shells[loadedIndex] : undefined
+    if (!target) {
+      if (onLoadInteraction) {
+        await onLoadInteraction(ordinal)
+        await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+        document.querySelector<HTMLElement>('.review-reader-pane .virtual-round-shell')?.scrollIntoView({ block: 'start' })
+        setActiveIndex(index)
+      }
+      return
+    }
     setActiveIndex(index)
     target.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
-  if (detail.interactions.length < 2 || !position) return null
+  if (entries.length < 2 || !position) return null
   return <nav className="turn-rail" style={{ position: 'fixed', ...position }} aria-label="轮次导航">
-    {detail.interactions.map((interaction, index) => <button
+    {entries.map((interaction, index) => <button
       key={interaction.id}
-      className={`turn-tick ${activeIndex === index ? 'active' : ''} ${hasError(detail, index) ? 'err' : ''}`}
+      className={`turn-tick ${activeIndex === index ? 'active' : ''} ${interaction.hasError ? 'err' : ''}`}
       data-tip={`${interaction.trigger === 'background' ? '后台活动' : `第 ${interaction.ordinal} 轮`} · ${tips[index]}`}
       aria-label={`跳到${interaction.trigger === 'background' ? '后台活动' : `第 ${interaction.ordinal} 轮`}`}
-      onClick={() => jump(index)}
+      onClick={() => void jump(index)}
     ><i/></button>)}
   </nav>
 }

@@ -10,7 +10,7 @@ import {
 } from '@agent-lens/runtime-cordis'
 import { discoverCodexAssets } from './assets'
 import { detectCodex } from './detect'
-import { ingestCodexHistory } from './history'
+import { CODEX_PARSER_VERSION, ingestCodexHistory } from './history'
 import { normalizeCodexRecord } from './normalize'
 import { startCodexRuntimeCapture } from './runtime'
 
@@ -22,7 +22,7 @@ export const codexManifest: SourcePluginManifest = {
   displayName: 'Codex Source',
   sourceId: 'codex',
   productId: 'codex',
-  parserVersion: '1',
+  parserVersion: CODEX_PARSER_VERSION,
 }
 
 export async function declareCodexCapabilities(
@@ -35,8 +35,8 @@ export async function declareCodexCapabilities(
     { sourceId: 'codex', name: 'tool-result', status: 'available', captureModes: ['history', 'runtime-hook'] },
     { sourceId: 'codex', name: 'permission', status: 'available', captureModes: ['runtime-hook'] },
     { sourceId: 'codex', name: 'subagent', status: 'available', captureModes: ['runtime-hook'] },
-    { sourceId: 'codex', name: 'usage', status: 'unavailable', captureModes: [], reason: 'No stable usage mapping is implemented yet' },
-    { sourceId: 'codex', name: 'context', status: 'partial', captureModes: ['runtime-hook'], reason: 'Compaction lifecycle is observable; full model context exposure is not proven' },
+    { sourceId: 'codex', name: 'usage', status: 'available', captureModes: ['history'] },
+    { sourceId: 'codex', name: 'context', status: 'available', captureModes: ['history', 'runtime-hook'] },
     { sourceId: 'codex', name: 'asset-discovery', status: 'available', captureModes: ['static-scan'] },
     { sourceId: 'codex', name: 'asset-invocation', status: 'unavailable', captureModes: [], reason: 'Asset invocation attribution is not yet implemented' },
     { sourceId: 'codex', name: 'thinking', status: 'partial', captureModes: ['history'], reason: 'Only source-visible reasoning records can be observed' },

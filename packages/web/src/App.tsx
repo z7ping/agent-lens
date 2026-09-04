@@ -1,63 +1,95 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PropsWithChildren } from 'react'
-import { BrowserRouter, NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import type { AgentFacetDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel, ClientSnapshot } from './client/model'
-import { readPinnedAgents, readTheme, writePinnedAgents, writeTheme } from './client/preferences'
+import { readAgentFilterPreference, readTheme, writeAgentFilterPreference, writeTheme } from './client/preferences'
 import { AgentsStateOverlay } from './components/AgentsStateOverlay'
 import { BackgroundDataNotice } from './components/BackgroundDataNotice'
-import { BrandVersion, ReleaseInfo } from './components/ReleaseInfo'
 import { ReviewStateOverlay } from './components/ReviewStateOverlay'
 import { ReviewTurnRail } from './components/ReviewTurnRail'
+import { WorkspaceSidebar } from './components/WorkspaceSidebar'
 import { AgentsResponsivePage } from './features/AgentsResponsivePage'
 import { BackupPage } from './features/BackupPage'
-import { HubReviewPage } from './features/HubReviewPage'
 import { InsightsPage } from './features/InsightsPage'
-import { ReviewPage } from './features/ReviewPage'
+import { TaskCenterPage } from './features/TaskCenterPage'
 import { ToolsPage } from './features/ToolsPage'
 
 export function useClientSnapshot(model: AgentLensClientModel): ClientSnapshot {
   return useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot)
 }
 
-interface PinnedContextValue { pinned: string[]; toggle(id: string): void }
-const PinnedContext = createContext<PinnedContextValue>({ pinned: [], toggle: () => undefined })
+interface PinnedContextValue {
+  ordered: string[]
+  pinned: string[]
+  toggle(id: string): void
+  move(id: string, targetId: string): void
+  moveBy(id: string, offset: -1 | 1): void
+  reset(): void
+}
+const PinnedContext = createContext<PinnedContextValue>({ ordered: [], pinned: [], toggle: () => undefined, move: () => undefined, moveBy: () => undefined, reset: () => undefined })
 export function usePinnedAgents(): PinnedContextValue { return useContext(PinnedContext) }
 
 function PinnedProvider({ agents, children }: PropsWithChildren<{ agents: AgentFacetDto[] }>) {
-  const [pinned, setPinned] = useState<string[]>(() => readPinnedAgents() ?? [])
+  const [preference, setPreference] = useState(() => readAgentFilterPreference() ?? { orderedAgentIds: [], visibleAgentIds: [] })
   useEffect(() => {
-    const stored = readPinnedAgents()
-    if (stored !== null) {
-      const valid = stored.filter(id => agents.some(agent => agent.sourceId === id))
-      if (valid.join('\u0000') !== pinned.join('\u0000')) setPinned(valid)
-      return
-    }
-    if (agents.length) {
-      const initial = agents.filter(agent => agent.detected).map(agent => agent.sourceId)
-      setPinned(initial)
-      writePinnedAgents(initial)
-    }
+    if (!agents.length) return
+    setPreference(current => {
+      const available = agents.map(agent => agent.sourceId)
+      const known = current.orderedAgentIds.filter(id => available.includes(id))
+      const orderedAgentIds = [...known, ...available.filter(id => !known.includes(id))]
+      const visibleAgentIds = current.orderedAgentIds.length
+        ? current.visibleAgentIds.filter(id => available.includes(id))
+        : agents.filter(agent => agent.detected).map(agent => agent.sourceId)
+      const next = { orderedAgentIds, visibleAgentIds }
+      if (orderedAgentIds.join('\u0000') === current.orderedAgentIds.join('\u0000') && visibleAgentIds.join('\u0000') === current.visibleAgentIds.join('\u0000')) return current
+      writeAgentFilterPreference(next)
+      return next
+    })
   }, [agents])
   const value = useMemo<PinnedContextValue>(() => ({
-    pinned,
+    ordered: preference.orderedAgentIds,
+    pinned: preference.visibleAgentIds,
     toggle(id) {
-      setPinned(current => {
-        const next = current.includes(id) ? current.filter(item => item !== id) : [...current, id]
-        writePinnedAgents(next)
+      setPreference(current => {
+        const visibleAgentIds = current.visibleAgentIds.includes(id) ? current.visibleAgentIds.filter(item => item !== id) : [...current.visibleAgentIds, id]
+        const next = { ...current, visibleAgentIds }
+        writeAgentFilterPreference(next)
         return next
       })
     },
-  }), [pinned])
+    move(id, targetId) {
+      setPreference(current => {
+        const from = current.orderedAgentIds.indexOf(id)
+        const to = current.orderedAgentIds.indexOf(targetId)
+        if (from < 0 || to < 0 || from === to) return current
+        const orderedAgentIds = [...current.orderedAgentIds]
+        orderedAgentIds.splice(from, 1)
+        orderedAgentIds.splice(to, 0, id)
+        const next = { ...current, orderedAgentIds }
+        writeAgentFilterPreference(next)
+        return next
+      })
+    },
+    moveBy(id, offset) {
+      setPreference(current => {
+        const from = current.orderedAgentIds.indexOf(id)
+        const to = from + offset
+        if (from < 0 || to < 0 || to >= current.orderedAgentIds.length) return current
+        const orderedAgentIds = [...current.orderedAgentIds]
+        ;[orderedAgentIds[from], orderedAgentIds[to]] = [orderedAgentIds[to]!, orderedAgentIds[from]!]
+        const next = { ...current, orderedAgentIds }
+        writeAgentFilterPreference(next)
+        return next
+      })
+    },
+    reset() {
+      const next = { orderedAgentIds: agents.map(agent => agent.sourceId), visibleAgentIds: agents.filter(agent => agent.detected).map(agent => agent.sourceId) }
+      writeAgentFilterPreference(next)
+      setPreference(next)
+    },
+  }), [agents, preference])
   return <PinnedContext.Provider value={value}>{children}</PinnedContext.Provider>
 }
-
-const navigation = [
-  { to: '/review', label: '任务复盘' },
-  { to: '/tools', label: '工具分析', startsGroup: true },
-  { to: '/insights', label: '使用洞察' },
-  { to: '/agents', label: '智能体概览', startsGroup: true },
-  { to: '/backup', label: '资产备份' },
-] as const
 
 type ReviewFilters = ClientSnapshot['review']['filters']
 
@@ -92,40 +124,13 @@ function sameReviewFilters(left: ReviewFilters, right: ReviewFilters): boolean {
     && left.search === right.search
 }
 
-const runtimeOwnerLabel: Record<string, string> = {
-  cli: '命令行',
-  service: '后台服务',
-  desktop: '桌面端',
-  unknown: '未知来源',
-}
-
-const runtimeModeLabel: Record<string, string> = {
-  foreground: '前台',
-  managed: '托管',
-}
-
-function recordValue(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null
-}
-
-function numberValue(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : 0
-}
-
-function ThemeGlyph({ dark }: { dark: boolean }) {
-  return dark
-    ? <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="3.4"/><path d="M10 1.8v2M10 16.2v2M1.8 10h2M16.2 10h2M4.2 4.2l1.4 1.4M14.4 14.4l1.4 1.4M15.8 4.2l-1.4 1.4M5.6 14.4l-1.4 1.4"/></svg>
-    : <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M15.8 12.8A6.7 6.7 0 0 1 7.2 4.2 6.8 6.8 0 1 0 15.8 12.8Z"/></svg>
-}
-
 function Shell({ model }: { model: AgentLensClientModel }) {
   const snapshot = useClientSnapshot(model)
   const location = useLocation()
   const navigate = useNavigate()
   const [theme, setTheme] = useState(readTheme)
   const [agentOverviewSourceId, setAgentOverviewSourceId] = useState('')
+  const [sidebarHost, setSidebarHost] = useState<HTMLDivElement | null>(null)
   const reviewUrlReadyRef = useRef(false)
   const skipReviewUrlWriteRef = useRef(false)
   const agents = snapshot.facets?.agents ?? []
@@ -135,44 +140,27 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     writeTheme(next)
   }
 
-  const storageDetails = recordValue(snapshot.health?.storage.details)
-  const sourceRuntime = recordValue(storageDetails?.sourceRuntime)
-  const unknownObservations = recordValue(storageDetails?.unknownObservations)
-  const coverage = recordValue(storageDetails?.coverage)
-  const coverageSummary = recordValue(coverage?.summary)
-  const failedSourceStages = numberValue(sourceRuntime?.failed)
-  const unknownTotal = numberValue(unknownObservations?.total)
-  const coverageComplete = numberValue(coverageSummary?.complete)
-  const coveragePartial = numberValue(coverageSummary?.partial)
-  const coverageUnavailable = numberValue(coverageSummary?.unavailable)
-  const coverageUnknown = numberValue(coverageSummary?.unknown)
-
-  const statusHealthy = snapshot.health?.status === 'ok' && snapshot.liveConnected && failedSourceStages === 0
-  const healthLabel = !snapshot.health
-    ? '连接中'
-    : snapshot.health.status !== 'ok'
-      ? '运行降级'
-      : failedSourceStages > 0
-        ? '来源异常'
-        : snapshot.liveConnected ? '运行正常' : '实时断开'
-  const runtime = snapshot.health?.runtime
-  const healthTitle = [
-    snapshot.health ? `后台服务：${snapshot.health.status === 'ok' ? '正常' : '降级'}` : '后台服务：连接中',
-    runtime ? `归属：${runtimeOwnerLabel[runtime.owner] ?? runtime.owner} · PID ${runtime.pid} · ${runtimeModeLabel[runtime.mode] ?? runtime.mode}` : null,
-    snapshot.health ? `存储：${snapshot.health.storage.ok ? '正常' : '异常'}${snapshot.health.storage.schemaVersion === undefined ? '' : ` · Schema ${snapshot.health.storage.schemaVersion}`}` : null,
-    `实时通道：${snapshot.liveConnected ? '已连接' : '未连接'}`,
-    sourceRuntime ? `来源异常阶段：${failedSourceStages}` : null,
-    unknownObservations ? `待适配原生事件：${unknownTotal}` : null,
-    coverageSummary ? `覆盖范围：完整 ${coverageComplete} · 部分 ${coveragePartial} · 来源不可用 ${coverageUnavailable} · 未知 ${coverageUnknown}` : null,
-  ].filter((item): item is string => Boolean(item)).join('\n')
   const onReview = location.pathname.startsWith('/review')
   const onHubReview = location.pathname.startsWith('/review/hub/')
-  const onLocalReview = onReview && !onHubReview
+  const onPiLive = location.pathname === '/review/live' || location.pathname.startsWith('/review/live/')
+  const onNewTask = location.pathname === '/review/new'
+  const onLocalReview = onReview && !onHubReview && !onPiLive && !onNewTask
   const onTools = location.pathname.startsWith('/tools')
   const onAgents = location.pathname.startsWith('/agents')
-  const hasSseBanner = Boolean(snapshot.health && !snapshot.liveConnected)
+  const hasSseBanner = Boolean(snapshot.health && !snapshot.liveConnected && !onPiLive)
   const showTurnRail = onLocalReview && snapshot.review.detail
-  const navigationHasNewData = (to: string) => to === '/tools' ? snapshot.usage.hasNewData : to === '/agents' ? snapshot.agentsHasNewData : false
+  const agentOverviewItems = snapshot.agents?.items ?? []
+  const resolvedAgentOverviewSourceId = agentOverviewItems.some(item => item.sourceId === agentOverviewSourceId)
+    ? agentOverviewSourceId
+    : agentOverviewItems.find(item => item.detected)?.sourceId ?? agentOverviewItems[0]?.sourceId ?? agents.find(agent => agent.detected)?.sourceId ?? agents[0]?.sourceId ?? ''
+
+  useEffect(() => {
+    model.setReviewActive(onLocalReview)
+    if (onReview) void model.ensureReview()
+    if (onTools) void model.ensureUsage()
+    if (onAgents) void model.ensureAgents()
+    return () => { if (onLocalReview) model.setReviewActive(false) }
+  }, [model, onReview, onLocalReview, onTools, onAgents])
 
   useEffect(() => {
     if (!onLocalReview) {
@@ -202,51 +190,41 @@ function Shell({ model }: { model: AgentLensClientModel }) {
 
   return <PinnedProvider agents={agents}>
     <div className="app-shell">
-      <header className="app-header">
-        <div className="app-header-inner">
-          <div className="brand" aria-label="AgentLens 智能体透镜">
-            <img className="brand-logo" src="/agentlens-icon.svg" alt="" aria-hidden="true"/>
-            <span className="brand-name">AgentLens · 智能体透镜</span>
-            <BrandVersion />
-          </div>
-          <nav className="app-nav" aria-label="主导航">
-            {navigation.map(item => {
-              const hasNewData = navigationHasNewData(item.to)
-              return <NavLink key={item.to} to={item.to} aria-label={hasNewData ? `${item.label}，有新数据` : item.label} className={({ isActive }) => `nav-item ${'startsGroup' in item ? 'nav-group-start ' : ''}${isActive ? 'nav-item-active' : ''}`}>
-                <span>{item.label}</span>{hasNewData && <span className="nav-new-dot" title="有新数据" aria-hidden="true"/>}
-              </NavLink>
-            })}
-          </nav>
-          <div className="app-status">
-            <span className={`status-pill status-tip ${statusHealthy ? 'status-pill-online' : snapshot.health ? 'status-pill-warn' : ''}`} data-tip={healthTitle} aria-label={healthTitle}>
-              <span className={`live-dot ${statusHealthy ? 'live-dot-online' : 'live-dot-waiting'}`} />
-              <span>{healthLabel}</span>
-            </span>
-            <ReleaseInfo />
-            <button className="theme-toggle" onClick={toggleTheme} title={theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'} aria-label={theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'}><ThemeGlyph dark={theme === 'dark'}/></button>
-          </div>
-        </div>
-      </header>
-      {hasSseBanner && <div className="sse-banner" role="status">
-        <span className="live-dot live-dot-waiting" />
-        <span>实时通道已断开</span>
-        <small>页面保留当前内容；重新连接后会继续接收新数据。</small>
-      </div>}
-      <Routes>
-        <Route path="/review" element={<ReviewPage model={model} />} />
-        <Route path="/review/hub/:sessionId" element={<HubReviewPage />} />
-        <Route path="/review/:sessionId" element={<ReviewPage model={model} />} />
-        <Route path="/tools" element={<ToolsPage model={model} />} />
-        <Route path="/insights" element={<InsightsPage model={model} />} />
-        <Route path="/agents" element={<AgentsResponsivePage model={model} sourceId={agentOverviewSourceId} onSourceIdChange={setAgentOverviewSourceId} />} />
-        <Route path="/backup" element={<BackupPage />} />
-        <Route path="*" element={<Navigate to="/review" replace />} />
-      </Routes>
-      {onLocalReview && <ReviewStateOverlay model={model} snapshot={snapshot}/>} 
-      {onAgents && <AgentsStateOverlay model={model} snapshot={snapshot}/>} 
-      {onTools && snapshot.usage.hasNewData && <BackgroundDataNotice label="工具分析" hasSseBanner={hasSseBanner} onRefresh={() => model.refreshUsage()}/>} 
-      {onAgents && snapshot.agentsHasNewData && <BackgroundDataNotice label="智能体概览" hasSseBanner={hasSseBanner} onRefresh={() => model.refreshFacetsAndAgents()}/>} 
-      {showTurnRail && <ReviewTurnRail detail={snapshot.review.detail!}/>} 
+      <WorkspaceSidebar
+        snapshot={snapshot}
+        agents={agents}
+        selectedAgentId={resolvedAgentOverviewSourceId}
+        onSelectAgent={setAgentOverviewSourceId}
+        onRefreshAgents={() => { void model.refreshFacetsAndAgents() }}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        onContextHost={setSidebarHost}
+      />
+      <div className="app-main">
+        {hasSseBanner && <div className="sse-banner" role="status">
+          <span className="live-dot live-dot-waiting" />
+          <span>实时通道已断开</span>
+          <small>页面保留当前内容；重新连接后会继续接收新数据。</small>
+        </div>}
+        <Routes>
+          <Route path="/review" element={<TaskCenterPage model={model} mode="history" sidebarHost={sidebarHost}/>} />
+          <Route path="/review/new" element={<TaskCenterPage model={model} mode="new" sidebarHost={sidebarHost}/>} />
+          <Route path="/review/live" element={<Navigate to="/review/new" replace />} />
+          <Route path="/review/live/:runtimeSessionId" element={<TaskCenterPage model={model} mode="live" sidebarHost={sidebarHost}/>} />
+          <Route path="/review/hub/:sessionId" element={<TaskCenterPage model={model} mode="hub" sidebarHost={sidebarHost}/>} />
+          <Route path="/review/:sessionId" element={<TaskCenterPage model={model} mode="history" sidebarHost={sidebarHost}/>} />
+          <Route path="/tools" element={<ToolsPage model={model} sidebarHost={sidebarHost}/>} />
+          <Route path="/insights" element={<InsightsPage model={model} sidebarHost={sidebarHost}/>} />
+          <Route path="/agents" element={<AgentsResponsivePage model={model} sourceId={agentOverviewSourceId} onSourceIdChange={setAgentOverviewSourceId} />} />
+          <Route path="/backup" element={<BackupPage />} />
+          <Route path="*" element={<Navigate to="/review" replace />} />
+        </Routes>
+        {onLocalReview && <ReviewStateOverlay model={model} snapshot={snapshot}/>} 
+        {onAgents && <AgentsStateOverlay model={model} snapshot={snapshot}/>} 
+        {onTools && snapshot.usage.hasNewData && <BackgroundDataNotice label="工具分析" hasSseBanner={hasSseBanner} onRefresh={() => model.refreshUsage()}/>} 
+        {onAgents && snapshot.agentsHasNewData && <BackgroundDataNotice label="智能体概览" hasSseBanner={hasSseBanner} onRefresh={() => model.refreshFacetsAndAgents()}/>} 
+        {showTurnRail && <ReviewTurnRail detail={snapshot.review.detail!} onLoadInteraction={ordinal => model.jumpToReviewInteraction(ordinal)}/>} 
+      </div>
     </div>
   </PinnedProvider>
 }

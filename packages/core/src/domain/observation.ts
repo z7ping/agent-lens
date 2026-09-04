@@ -73,9 +73,11 @@ export type ObservationKind =
   | 'session.lifecycle'
   | 'message.user'
   | 'message.assistant'
+  | 'message.commentary'
   | 'message.reasoning'
   | 'model.call'
   | 'model.changed'
+  | 'thinking.level.changed'
   | 'tool.call'
   | 'tool.progress'
   | 'tool.result'
@@ -85,6 +87,7 @@ export type ObservationKind =
   | 'subagent.end'
   | 'context.compaction'
   | 'context.summary'
+  | 'context.injected'
   | 'artifact.action'
   | 'usage'
   | 'unknown'
@@ -99,6 +102,9 @@ export interface CanonicalObservation {
   sourceSessionId: SourceSessionId
   interactionId?: InteractionId
   actorId?: AgentActorId
+  nativeEventId?: string
+  nativeParentEventId?: string
+  parentObservationId?: ObservationId
   kind: ObservationKind
   sourceSequence?: number
   canonicalSequence?: number
@@ -111,6 +117,7 @@ export interface CanonicalObservation {
 export interface ObservationCandidate {
   kind: ObservationKind
   nativeEventId?: string
+  nativeParentEventId?: string
   nativeCallId?: string
   sourceSequence?: number
   occurredAt?: string

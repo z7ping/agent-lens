@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import type { StorageService } from '@agent-lens/core'
+import type { CapturePolicyService, StorageService } from '@agent-lens/core'
 import {
   DefaultIdentityService,
   DefaultObservationService,
@@ -11,6 +11,7 @@ import {
 import type {
   HealthResponseDto,
   InsightsResponseDto,
+  SourceRecordResponseDto,
   TimelineResponseDto,
 } from '@agent-lens/protocol'
 import { SqliteStorageService } from '@agent-lens/storage-sqlite'
@@ -49,6 +50,90 @@ test('concurrent Health requests share one storage probe', async () => {
   } finally {
     releaseProbe()
     await surface.dispose()
+  }
+})
+
+test('expired Health cache returns immediately while storage diagnostics refresh in background', async () => {
+  let probes = 0
+  let releaseRefresh: () => void = () => undefined
+  const refreshGate = new Promise<void>(resolve => { releaseRefresh = resolve })
+  const storage = {
+    async health() {
+      probes += 1
+      if (probes > 1) await refreshGate
+      return { ok: true, schemaVersion: 6, details: { probes } }
+    },
+  } as unknown as StorageService
+  const surface = await startHttpSurface(storage, { port: 0 })
+
+  try {
+    const base = `http://${surface.host}:${surface.port}`
+    assert.equal((await fetch(`${base}/api/v1/health`)).status, 200)
+    assert.equal(probes, 1)
+
+    await new Promise(resolve => setTimeout(resolve, 1_050))
+    const response = await Promise.race([
+      fetch(`${base}/api/v1/health`),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('health blocked on refresh')), 250)),
+    ])
+    assert.equal(response.status, 200)
+
+    const deadline = Date.now() + 2_000
+    while (probes < 2 && Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 10))
+    }
+    assert.equal(probes, 2)
+  } finally {
+    releaseRefresh()
+    await surface.dispose()
+  }
+})
+
+test('HTTP surface reads and updates AgentLens-managed user source authorization', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  let configured = ['claude-code']
+  const capturePolicy = {
+    settings: {
+      prompt: 'redacted',
+      tool: 'redacted',
+      config: 'redacted',
+      environment: 'off',
+      enabledSources: ['claude-code'],
+    },
+    getSourceConfiguration() {
+      return {
+        effectiveEnabledSources: ['claude-code'],
+        configuredEnabledSources: configured,
+        source: 'file' as const,
+        editable: true,
+        restartRequired: configured.includes('codex'),
+      }
+    },
+    async setEnabledSources(values: readonly string[]) { configured = [...values] },
+  } as unknown as CapturePolicyService
+  const surface = await startHttpSurface(storage, { port: 0, capturePolicy })
+  try {
+    const url = `http://${surface.host}:${surface.port}/api/v1/capture-policy/sources`
+    const initial = await fetch(url)
+    assert.equal(initial.status, 200)
+    assert.deepEqual((await initial.json() as { settings: { configuredEnabledSources: string[] } }).settings.configuredEnabledSources, ['claude-code'])
+
+    const updated = await fetch(url, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ enabledSources: ['claude-code', 'codex'] }),
+    })
+    assert.equal(updated.status, 200)
+    const body = await updated.json() as { settings: { configuredEnabledSources: string[]; restartRequired: boolean } }
+    assert.deepEqual(body.settings.configuredEnabledSources, ['claude-code', 'codex'])
+    assert.equal(body.settings.restartRequired, true)
+
+    const invalidType = await fetch(url, { method: 'PUT', body: JSON.stringify({ enabledSources: [] }) })
+    assert.equal(invalidType.status, 415)
+  } finally {
+    await surface.dispose()
+    storage.close()
   }
 })
 
@@ -167,5 +252,44 @@ test('HTTP surface exposes v1 API and production web assets on loopback', async 
     await surface.dispose()
     storage.close()
     await rm(webRoot, { recursive: true, force: true })
+  }
+})
+
+
+test('HTTP surface lazily exposes one safe SourceRecord for Raw Inspector', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  const identity = new DefaultIdentityService(storage)
+  const host = await identity.resolveHost({ name: 'raw-inspector-host' })
+  const installation = await identity.resolveInstallation({ hostId: host.id, productId: 'codex' })
+  await storage.repositories.sourceRecords.put({
+    id: 'raw-source-record-1',
+    sourceId: 'codex',
+    installationId: installation.id,
+    sourceSessionNativeId: 'thread-raw-1',
+    nativeType: 'event_msg/token_count',
+    nativeId: 'native-raw-1',
+    sourceSequence: 7,
+    occurredAt: '2026-08-31T10:00:00.000Z',
+    capturedAt: '2026-08-31T10:00:01.000Z',
+    locator: { kind: 'file', path: '/tmp/rollout.jsonl', offset: 128 },
+    fingerprint: 'safe-fingerprint',
+    payload: { type: 'event_msg', payload: { type: 'token_count', input_tokens: 12 } },
+    parserVersion: '5',
+  })
+  const surface = await startHttpSurface(storage, { port: 0 })
+  try {
+    const response = await fetch(`http://${surface.host}:${surface.port}/api/v1/source-records/raw-source-record-1`)
+    assert.equal(response.status, 200)
+    const body = await response.json() as SourceRecordResponseDto
+    assert.equal(body.nativeType, 'event_msg/token_count')
+    assert.equal(body.nativeId, 'native-raw-1')
+    assert.equal(body.parserVersion, '5')
+    assert.equal(body.locator.path, '/tmp/rollout.jsonl')
+    assert.equal(body.locator.offset, 128)
+    assert.deepEqual(body.payload, { type: 'event_msg', payload: { type: 'token_count', input_tokens: 12 } })
+  } finally {
+    await surface.dispose()
+    storage.close()
   }
 })

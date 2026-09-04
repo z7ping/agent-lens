@@ -8,9 +8,35 @@ import type {
   SourceRecord,
 } from '@agent-lens/core'
 import {
+  isInjectedContext,
+  messageText,
   parseFunctionOutput,
   type CodexStoredEnvelope,
 } from './format'
+
+const TRAILING_MEMORY_CITATION = /(?:\r?\n){0,2}<oai-mem-citation>\s*<citation_entries>[\s\S]*?<\/citation_entries>\s*<rollout_ids>[\s\S]*?<\/rollout_ids>\s*<\/oai-mem-citation>\s*$/i
+const CLIENT_DIRECTIVE_LINE = /^::(?:created-thread|code-comment)\{[^\r\n]*\}\s*$/gm
+
+export function splitCodexVisibleAssistantText(text: string, phase?: string): {
+  text: string
+  sourceMetadata?: Array<{ kind: 'memory.citation' | 'client.directive' }>
+} {
+  if (phase !== 'final_answer') return { text }
+  const match = TRAILING_MEMORY_CITATION.exec(text)
+  const prefix = match && match.index !== undefined ? text.slice(0, match.index) : text
+  const fenceCount = prefix.match(/```/g)?.length ?? 0
+  if (fenceCount % 2 !== 0) return { text }
+  const withoutDirectives = prefix.replace(CLIENT_DIRECTIVE_LINE, '').replace(/\n{3,}/g, '\n\n').trimEnd()
+  const metadata = [
+    ...(match ? [{ kind: 'memory.citation' as const }] : []),
+    ...(withoutDirectives !== prefix ? [{ kind: 'client.directive' as const }] : []),
+  ]
+  if (!match && !metadata.length) return { text }
+  return {
+    text: withoutDirectives,
+    sourceMetadata: metadata,
+  }
+}
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -24,6 +50,70 @@ function stringField(record: Record<string, unknown>, ...names: string[]): strin
     if (typeof value === 'string' && value) return value
   }
   return undefined
+}
+
+function numberField(record: Record<string, unknown>, ...names: string[]): number | undefined {
+  for (const name of names) {
+    const value = record[name]
+    if (typeof value === 'number' && Number.isFinite(value)) return value
+    if (typeof value === 'string' && value.trim() && Number.isFinite(Number(value))) return Number(value)
+  }
+  return undefined
+}
+
+function actorRole(value: unknown): NonNullable<ObservationIdentityHints['actorRole']> {
+  const role = typeof value === 'string' ? value.toLowerCase() : ''
+  if (role.includes('worker')) return 'worker-agent'
+  if (role.includes('sub') || role.includes('child')) return 'subagent'
+  if (role.includes('main') || role.includes('root')) return 'main-agent'
+  return 'unknown'
+}
+
+function tokenUsage(payload: Record<string, unknown>): Record<string, unknown> {
+  const info = asRecord(payload.info)
+  const total = asRecord(info.total_token_usage ?? payload.total_token_usage ?? payload.usage ?? payload)
+  const last = asRecord(info.last_token_usage ?? payload.last_token_usage)
+  const inputTokens = numberField(total, 'input_tokens', 'inputTokens') ?? 0
+  const cacheReadTokens = numberField(total, 'cached_input_tokens', 'cache_read_tokens', 'cacheReadTokens') ?? 0
+  const outputTokens = numberField(total, 'output_tokens', 'outputTokens') ?? 0
+  const reasoningOutputTokens = numberField(total, 'reasoning_output_tokens', 'reasoningOutputTokens') ?? 0
+  const totalTokens = numberField(total, 'total_tokens', 'totalTokens') ?? inputTokens + outputTokens
+  return {
+    inputTokens,
+    outputTokens,
+    cacheReadTokens,
+    cacheWriteTokens: 0,
+    totalTokens,
+    ...(reasoningOutputTokens ? { reasoningOutputTokens } : {}),
+    ...(Object.keys(last).length ? { lastTokenUsage: last } : {}),
+    raw: payload,
+  }
+}
+
+const visibleReasoningTypes = new Set([
+  'agent_reasoning',
+  'reasoning',
+  'reasoning_summary',
+])
+
+function visibleReasoningText(payload: Record<string, unknown>): string {
+  for (const value of [
+    payload.text,
+    payload.message,
+    payload.reasoning,
+    payload.summary,
+    payload.content,
+  ]) {
+    const text = messageText(value).trim()
+    if (text) return text
+  }
+  return ''
+}
+
+function relationType(payload: Record<string, unknown>): 'fork' | 'subagent' | 'related' {
+  if (stringField(payload, 'forked_from_id')) return 'fork'
+  const role = actorRole(payload.agent_role)
+  return role === 'subagent' || role === 'worker-agent' ? 'subagent' : 'related'
 }
 
 function evidenceFor(record: SourceRecord): EvidenceCandidate {
@@ -45,6 +135,7 @@ function identityHints(record: SourceRecord, envelope: CodexStoredEnvelope): Obs
   return {
     nativeSessionId: envelope.session.nativeSessionId || record.sourceSessionNativeId || 'unknown',
     ...(envelope.session.cwd ? { workspacePath: envelope.session.cwd } : {}),
+    ...(envelope.session.title?.trim() ? { sessionTitle: envelope.session.title.trim() } : {}),
   }
 }
 
@@ -85,6 +176,20 @@ function unknownCandidate(
   return candidate(record, envelope, 'unknown', {
     rawType: record.nativeType,
     rawPayload,
+  })
+}
+
+function injectedContextCandidate(
+  record: SourceRecord,
+  envelope: CodexStoredEnvelope,
+  role: string,
+  text: string,
+): ObservationCandidate {
+  return candidate(record, envelope, 'context.injected', {
+    sourceType: record.nativeType,
+    injectedContext: true,
+    role,
+    text,
   })
 }
 
@@ -229,7 +334,7 @@ function normalizeRuntimeRecord(
 
 export async function normalizeCodexRecord(
   record: SourceRecord,
-  _ctx: SourceNormalizationContext,
+  ctx: SourceNormalizationContext,
 ): Promise<NormalizedSourceOutput> {
   if (record.locator.kind === 'runtime-hook') {
     return {
@@ -243,80 +348,151 @@ export async function normalizeCodexRecord(
   const payload = asRecord(entry.payload)
   const topType = typeof entry.type === 'string' ? entry.type : 'unknown'
   const innerType = typeof payload.type === 'string' ? payload.type : undefined
-  let observation: ObservationCandidate
+  const observations: ObservationCandidate[] = []
+  const relationships: NonNullable<NormalizedSourceOutput['sessionRelationshipHints']> = []
+  const push = (observation: ObservationCandidate) => { observations.push(observation) }
 
-  if (topType === 'session_meta') {
-    observation = candidate(record, envelope, 'session.lifecycle', {
-      event: 'session.discovered',
+  if (topType === 'session_start') {
+    push(candidate(record, envelope, 'session.lifecycle', {
+      event: 'session.started',
       nativeSessionId: envelope.session.nativeSessionId,
-      ...(envelope.session.cwd ? { cwd: envelope.session.cwd } : {}),
-      ...(envelope.session.cliVersion ? { cliVersion: envelope.session.cliVersion } : {}),
-    })
+      ...(stringField(payload, 'startedAt') ? { startedAt: stringField(payload, 'startedAt') } : {}),
+    }))
+  } else if (topType === 'session_title') {
+    push(candidate(record, envelope, 'session.lifecycle', {
+      event: 'session.title',
+      ...(stringField(payload, 'title') ? { title: stringField(payload, 'title') } : {}),
+      ...(stringField(payload, 'updatedAt') ? { updatedAt: stringField(payload, 'updatedAt') } : {}),
+    }))
+  } else if (topType === 'session_meta') {
+    const parentThreadId = stringField(payload, 'forked_from_id', 'parent_thread_id')
+    const nativeActorId = stringField(payload, 'agent_path', 'agent_nickname')
+    const role = actorRole(payload.agent_role)
+    const modelProvider = stringField(payload, 'model_provider')
+    push(candidate(record, envelope, 'session.lifecycle', {
+      event: 'session.discovered',
+      ...payload,
+    }, {}, {
+      ...(parentThreadId ? { nativeParentSessionId: parentThreadId } : {}),
+      ...(nativeActorId ? { nativeActorId, actorRole: role } : {}),
+      ...(modelProvider ? { modelName: modelProvider } : {}),
+    }))
+    if (parentThreadId) {
+      relationships.push({
+        sourceId: 'codex',
+        installationId: record.installationId,
+        ...(ctx.runtimeProfile?.id ? { runtimeProfileId: ctx.runtimeProfile.id } : {}),
+        fromNativeSessionId: parentThreadId,
+        toNativeSessionId: envelope.session.nativeSessionId,
+        type: relationType(payload),
+        nativeRelation: stringField(payload, 'forked_from_id') ? 'forked_from_id' : 'parent_thread_id',
+        confidence: 'exact',
+      })
+    }
+  } else if (topType === 'turn_context') {
+    const cwd = stringField(payload, 'cwd')
+    const model = stringField(payload, 'model')
+    push(candidate(record, envelope, 'session.lifecycle', {
+      event: 'turn.context',
+      ...payload,
+    }, {}, {
+      ...(cwd ? { workspacePath: cwd } : {}),
+      ...(model ? { modelName: model } : {}),
+    }))
+  } else if (topType === 'event_msg') {
+    if (innerType === 'token_count') {
+      push(candidate(record, envelope, 'usage', tokenUsage(payload)))
+    } else if (innerType && visibleReasoningTypes.has(innerType)) {
+      const text = visibleReasoningText(payload)
+      push(text
+        ? candidate(record, envelope, 'message.reasoning', { text, raw: payload })
+        : unknownCandidate(record, envelope, entry as JsonValue))
+    } else if (innerType === 'task_started' || innerType === 'turn_started') {
+      push(candidate(record, envelope, 'session.lifecycle', { event: 'turn.started', ...payload }))
+    } else if (innerType === 'task_complete' || innerType === 'turn_complete') {
+      push(candidate(record, envelope, 'session.lifecycle', { event: 'turn.completed', ...payload }))
+    } else if (innerType === 'turn_aborted') {
+      push(candidate(record, envelope, 'session.lifecycle', { event: 'turn.aborted', ...payload }))
+    } else if (innerType === 'context_compacted') {
+      push(candidate(record, envelope, 'context.compaction', { phase: 'end', ...payload }))
+    } else if (innerType === 'error') {
+      push(candidate(record, envelope, 'session.lifecycle', { event: 'turn.error', ...payload }))
+    } else {
+      push(unknownCandidate(record, envelope, entry as JsonValue))
+    }
+  } else if (topType === 'compacted') {
+    push(candidate(record, envelope, 'context.compaction', { phase: 'end', ...payload }))
+  } else if (topType === 'token_usage_record') {
+    push(candidate(record, envelope, 'usage', tokenUsage(payload)))
   } else if (topType === 'response_item' && innerType === 'message') {
     const role = typeof payload.role === 'string' ? payload.role : 'unknown'
-    const text = typeof payload.text === 'string' ? payload.text : ''
-    const injected = payload.injectedContext === true
+    const phase = typeof payload.phase === 'string' ? payload.phase : undefined
+    const text = messageText(payload.content ?? payload.text ?? '')
+    const injected = payload.injectedContext === true || isInjectedContext(role, text)
     if (injected || (role !== 'user' && role !== 'assistant')) {
-      observation = unknownCandidate(record, envelope)
+      push(injectedContextCandidate(record, envelope, role, text))
     } else {
-      observation = candidate(
-        record,
-        envelope,
-        role === 'user' ? 'message.user' : 'message.assistant',
-        { text },
-      )
+      const kind = role === 'user'
+        ? 'message.user'
+        : phase === 'commentary'
+          ? 'message.commentary'
+          : 'message.assistant'
+      const visible = role === 'assistant'
+        ? splitCodexVisibleAssistantText(text, phase)
+        : { text }
+      push(candidate(record, envelope, kind, {
+        text: visible.text,
+        ...(phase ? { phase } : {}),
+        ...(visible.sourceMetadata ? { sourceMetadata: visible.sourceMetadata } : {}),
+        ...(visible.sourceMetadata || payload.content === undefined ? {} : { content: payload.content }),
+      }))
     }
-  } else if (topType === 'response_item' && innerType === 'function_call') {
-    const callId = typeof payload.call_id === 'string'
-      ? payload.call_id
-      : `codex-call-${record.sourceSequence ?? record.id}`
-    const name = typeof payload.name === 'string' ? payload.name : 'unknown'
-    let input: unknown = payload.arguments ?? null
-    if (typeof payload.arguments === 'string') {
-      try {
-        input = JSON.parse(payload.arguments)
-      } catch {
-        input = payload.arguments
-      }
+  } else if (topType === 'response_item' && (innerType === 'function_call' || innerType === 'custom_tool_call')) {
+    const callId = stringField(payload, 'call_id') ?? `codex-call-${record.sourceSequence ?? record.id}`
+    const name = stringField(payload, 'name') ?? innerType
+    const rawInput = innerType === 'custom_tool_call' ? payload.input : payload.arguments
+    let input: unknown = rawInput ?? null
+    if (typeof rawInput === 'string') {
+      try { input = JSON.parse(rawInput) } catch { input = rawInput }
     }
-    observation = candidate(record, envelope, 'tool.call', {
+    push(candidate(record, envelope, 'tool.call', { callId, nativeToolName: name, input }, { nativeCallId: callId }))
+  } else if (topType === 'response_item' && (innerType === 'function_call_output' || innerType === 'custom_tool_call_output' || innerType === 'tool_search_output')) {
+    const callId = stringField(payload, 'call_id') ?? `codex-call-${record.sourceSequence ?? record.id}`
+    const outputValue = payload.output ?? payload.result ?? payload.content
+    const result = parseFunctionOutput(messageText(outputValue))
+    push(candidate(record, envelope, 'tool.result', {
       callId,
-      nativeToolName: name,
-      input,
-    }, { nativeCallId: callId })
-  } else if (topType === 'response_item' && innerType === 'function_call_output') {
-    const callId = typeof payload.call_id === 'string'
-      ? payload.call_id
-      : `codex-call-${record.sourceSequence ?? record.id}`
-    const result = parseFunctionOutput(payload.output)
-    observation = candidate(record, envelope, 'tool.result', {
-      callId,
+      ...(innerType === 'tool_search_output' ? { nativeToolName: 'tool_search' } : {}),
       success: result.success,
       ...(result.exitCode === undefined ? {} : { exitCode: result.exitCode }),
-      ...(result.output ? { output: result.output } : {}),
-    }, { nativeCallId: callId })
+      ...(result.output ? { output: result.output } : outputValue === undefined ? {} : { output: outputValue }),
+      ...(innerType === 'tool_search_output' ? { raw: payload } : {}),
+    }, { nativeCallId: callId }))
   } else if (topType === 'response_item' && innerType === 'web_search_call') {
-    const action = asRecord(payload.action)
-    const callId = typeof payload.call_id === 'string'
-      ? payload.call_id
-      : `web-search-${record.sourceSequence ?? record.id}`
-    observation = candidate(record, envelope, 'tool.call', {
+    const callId = stringField(payload, 'call_id') ?? `web-search-${record.sourceSequence ?? record.id}`
+    push(candidate(record, envelope, 'tool.call', {
       callId,
       nativeToolName: 'web_search',
       input: {
-        ...(typeof action.query === 'string' ? { query: action.query } : {}),
+        action: payload.action ?? null,
+        ...(payload.status === undefined ? {} : { status: payload.status }),
       },
-    }, { nativeCallId: callId })
-  } else if (topType === 'response_item' && innerType === 'reasoning' && typeof payload.text === 'string' && payload.text) {
-    observation = candidate(record, envelope, 'message.reasoning', {
-      text: payload.text,
-    })
+      raw: payload,
+    }, { nativeCallId: callId }))
+  } else if (topType === 'response_item' && innerType === 'reasoning') {
+    const text = messageText(payload.summary ?? payload.content ?? payload.text ?? '')
+    push(text
+      ? candidate(record, envelope, 'message.reasoning', { text, raw: payload })
+      : unknownCandidate(record, envelope, entry as JsonValue))
+  } else if (topType === 'world_state' || topType === 'inter_agent_communication' || topType === 'realtime_item' || topType === 'security_risk_score') {
+    push(unknownCandidate(record, envelope, entry as JsonValue))
   } else {
-    observation = unknownCandidate(record, envelope)
+    push(unknownCandidate(record, envelope, entry as JsonValue))
   }
 
   return {
-    observations: [observation],
+    observations,
     evidenceCandidates: [evidenceFor(record)],
+    ...(relationships.length ? { sessionRelationshipHints: relationships } : {}),
   }
 }

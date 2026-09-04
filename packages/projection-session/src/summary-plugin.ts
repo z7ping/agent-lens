@@ -75,7 +75,10 @@ const applySessionSummaryProjection: Plugin.Function<void> = (ctx: AgentLensCont
     id: SESSION_SUMMARY_PROJECTION_ID,
     async rebuild(scope) {
       const logicalSessionId = logicalSessionIdFromScope(scope)
-      await store.rebuild(logicalSessionId ? { logicalSessionId } : {})
+      const cancellation = scope?.signal ? { signal: scope.signal } : {}
+      await store.rebuild(logicalSessionId
+        ? { logicalSessionId, ...cancellation }
+        : { strategy: 'cooperative', ...cancellation })
       ctx.emit('projection/rebuilt', {
         projectionId: SESSION_SUMMARY_PROJECTION_ID,
         ...(scope?.subjectType ? { subjectType: scope.subjectType } : {}),

@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import packageMetadata from '../../package.json'
 import changelogMarkdown from '../../../../CHANGELOG.md?raw'
+import { checkWebUpdate, type WebUpdateInfo } from '../client/update'
+import { CopyableCodeBlock } from './CopyableCodeBlock'
+import { IconButton, UiIcon } from './ui'
 
 const REPOSITORY_URL = 'https://github.com/z7ping/agent-lens'
 const CHANGELOG_URL = `${REPOSITORY_URL}/blob/main/CHANGELOG.md`
@@ -38,6 +41,13 @@ function sectionLabel(value: string): string {
   return SECTION_LABELS[title] ?? title
 }
 
+function publishedAtLabel(value: string | null): string | null {
+  if (!value) return null
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) return null
+  return date.toLocaleString('zh-CN', { hour12: false })
+}
+
 export function parseCurrentChangelog(markdown: string, version: string): CurrentChangelog {
   const lines = markdown.split(/\r?\n/)
   const start = lines.findIndex(line => line.startsWith(`## ${version}`))
@@ -66,23 +76,83 @@ export function BrandVersion() {
   return <span className="brand-version" title={`当前版本 ${packageMetadata.version}`}>v{packageMetadata.version}</span>
 }
 
-export function ReleaseInfo() {
+function UpdateDialog({ update, onClose }: { update: WebUpdateInfo; onClose(): void }) {
+  const publishedAt = publishedAtLabel(update.publishedAt)
+  return <div
+    className="release-dialog-backdrop"
+    role="presentation"
+    onMouseDown={event => {
+      if (event.target === event.currentTarget) onClose()
+    }}
+  >
+    <section className="release-dialog" role="dialog" aria-modal="true" aria-labelledby="web-update-dialog-title">
+      <header className="release-dialog-header">
+        <div>
+          <h2 id="web-update-dialog-title">发现新版本</h2>
+          <p>当前 v{update.currentVersion} · 最新 v{update.latestVersion}{publishedAt ? ` · ${publishedAt}` : ''}</p>
+        </div>
+        <IconButton className="release-dialog-close" onClick={onClose} aria-label="关闭新版本提示"><UiIcon name="close" size={16}/></IconButton>
+      </header>
+      <div className="release-dialog-content web-update-content">
+        <section className="release-section">
+          <h3>npm / CLI 更新</h3>
+          <p>推荐使用 AgentLens 已有更新命令；它会按当前运行时归属处理 npm 后台服务，不接管 Windows Desktop。</p>
+          <CopyableCodeBlock className="web-update-command" copyValue={update.installCommand}>{update.installCommand}</CopyableCodeBlock>
+          <p className="web-update-fallback">也可以直接执行：</p>
+          <CopyableCodeBlock className="web-update-command" copyValue={update.fallbackInstallCommand}>{update.fallbackInstallCommand}</CopyableCodeBlock>
+        </section>
+        {update.releaseNotes && <section className="release-section">
+          <h3>版本说明</h3>
+          <CopyableCodeBlock className="web-update-notes" copyValue={update.releaseNotes}>{update.releaseNotes}</CopyableCodeBlock>
+        </section>}
+      </div>
+      <footer className="release-dialog-footer">
+        <span>不会自动安装或强制重启</span>
+        <div>
+          <a href={update.releasePageUrl} target="_blank" rel="noreferrer">查看版本</a>
+          <button className="release-footer-button" type="button" onClick={onClose}>稍后</button>
+        </div>
+      </footer>
+    </section>
+  </div>
+}
+
+export function ReleaseInfo({ runtimeOwner, runtimeReady }: { runtimeOwner: string | null; runtimeReady: boolean }) {
   const [open, setOpen] = useState(false)
+  const [updateOpen, setUpdateOpen] = useState(false)
+  const [update, setUpdate] = useState<WebUpdateInfo | null>(null)
   const changelog = useMemo(
     () => parseCurrentChangelog(changelogMarkdown, packageMetadata.version),
     [],
   )
 
   useEffect(() => {
-    if (!open) return
+    if (!runtimeReady) return
+    let active = true
+    void checkWebUpdate(packageMetadata.version, { runtimeOwner }).then(result => {
+      if (active) setUpdate(result)
+    }).catch(() => undefined)
+    return () => { active = false }
+  }, [runtimeOwner, runtimeReady])
+
+  useEffect(() => {
+    if (!open && !updateOpen) return
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false)
+      if (event.key !== 'Escape') return
+      setOpen(false)
+      setUpdateOpen(false)
     }
     window.addEventListener('keydown', closeOnEscape)
     return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [open])
+  }, [open, updateOpen])
 
   return <>
+    {update && <button
+      className="header-link header-update-link"
+      type="button"
+      title={`发现新版本 ${update.latestVersion}`}
+      onClick={() => setUpdateOpen(true)}
+    >新版本 v{update.latestVersion}</button>}
     <a
       className="header-link header-link-github"
       href={REPOSITORY_URL}
@@ -90,6 +160,8 @@ export function ReleaseInfo() {
       rel="noreferrer"
     >GitHub</a>
     <button className="header-link" type="button" onClick={() => setOpen(true)}>更新日志</button>
+
+    {update && updateOpen && <UpdateDialog update={update} onClose={() => setUpdateOpen(false)} />}
 
     {open && <div
       className="release-dialog-backdrop"
@@ -104,7 +176,7 @@ export function ReleaseInfo() {
             <h2 id="release-dialog-title">更新日志</h2>
             <p>{changelog.heading || `v${packageMetadata.version}`}</p>
           </div>
-          <button className="release-dialog-close" type="button" onClick={() => setOpen(false)} aria-label="关闭更新日志">×</button>
+          <IconButton className="release-dialog-close" onClick={() => setOpen(false)} aria-label="关闭更新日志"><UiIcon name="close" size={16}/></IconButton>
         </header>
         <div className="release-dialog-content">
           {changelog.sections.length ? changelog.sections.map(section => <section className="release-section" key={section.title}>

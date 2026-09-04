@@ -19,7 +19,7 @@ import {
 } from '@agent-lens/core-services/source-runner'
 import { createTestCapturePolicy } from '@agent-lens/core-services/test-support'
 import { SqliteStorageService } from '@agent-lens/storage-sqlite'
-import { detectHermes, hermesSourceDefinition } from './index'
+import { detectHermes, hermesSourceDefinition, hermesSourceInternals } from './index'
 
 async function waitFor(predicate: () => Promise<boolean>, timeoutMs = 3000): Promise<void> {
   const deadline = Date.now() + timeoutMs
@@ -30,7 +30,7 @@ async function waitFor(predicate: () => Promise<boolean>, timeoutMs = 3000): Pro
   throw new Error('Timed out waiting for Hermes runtime capture')
 }
 
-test('Hermes Source combines state.db history, assets and optional runtime-hook inbox', async () => {
+test('Hermes Source combines native session title, state.db history, assets and optional runtime-hook inbox', async () => {
   const root = await mkdtemp(join(tmpdir(), 'agent-lens-hermes-'))
   const hermesRoot = join(root, 'hermes')
   const workspace = join(root, 'workspace')
@@ -43,7 +43,7 @@ test('Hermes Source combines state.db history, assets and optional runtime-hook 
 
   const nativeDb = new Database(join(hermesRoot, 'state.db'))
   nativeDb.exec(`
-    CREATE TABLE sessions (id TEXT PRIMARY KEY, cwd TEXT);
+    CREATE TABLE sessions (id TEXT PRIMARY KEY, cwd TEXT, title TEXT);
     CREATE TABLE messages (
       id INTEGER PRIMARY KEY,
       session_id TEXT,
@@ -55,17 +55,31 @@ test('Hermes Source combines state.db history, assets and optional runtime-hook 
       tool_name TEXT
     );
   `)
-  nativeDb.prepare('INSERT INTO sessions (id, cwd) VALUES (?, ?)').run('ses_1', workspace)
+  nativeDb.prepare('INSERT INTO sessions (id, cwd, title) VALUES (?, ?, ?)').run('ses_1', workspace, 'Hermes 原生会话标题')
   nativeDb.prepare('INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
-    1, 'ses_1', 'user', '检查项目', 1_787_000_000, null, null, null,
+    1, 'ses_1', 'user', '旧历史', 1_700_000_000, null, null, null,
+  )
+  nativeDb.prepare('INSERT INTO sessions (id, cwd, title) VALUES (?, ?, ?)').run('ses_latest', workspace, '最新会话')
+  nativeDb.prepare('INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
+    5, 'ses_latest', 'user', '最新历史', 1_788_000_000, null, null, null,
+  )
+  assert.deepEqual(
+    hermesSourceInternals.selectRows(nativeDb, 0, 100, Date.parse('2026-08-10T00:00:00.000Z'), 1)
+      .map(row => row.session_id),
+    ['ses_latest'],
+  )
+  nativeDb.prepare('DELETE FROM messages WHERE session_id = ?').run('ses_latest')
+  nativeDb.prepare('DELETE FROM sessions WHERE id = ?').run('ses_latest')
+  nativeDb.prepare('INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
+    2, 'ses_1', 'user', '检查项目', 1_787_000_000, null, null, null,
   )
   nativeDb.prepare('INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
-    2, 'ses_1', 'assistant', '开始检查', 1_787_000_001,
+    3, 'ses_1', 'assistant', '开始检查', 1_787_000_001,
     JSON.stringify([{ id: 'call_1', function: { name: 'terminal', arguments: JSON.stringify({ command: 'git status' }) } }]),
     null, null,
   )
   nativeDb.prepare('INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
-    3, 'ses_1', 'tool', JSON.stringify({ exit_code: 0, output: 'clean' }), 1_787_000_002,
+    4, 'ses_1', 'tool', JSON.stringify({ exit_code: 0, output: 'clean' }), 1_787_000_002,
     null, 'call_1', 'terminal',
   )
 
@@ -93,6 +107,7 @@ test('Hermes Source combines state.db history, assets and optional runtime-hook 
       host,
       detected,
       abortSignal: new AbortController().signal,
+      historyWindow: { activeSince: '2026-08-10T00:00:00.000Z' },
     })
     assert.equal(historyResult.records, 3)
 
@@ -101,6 +116,9 @@ test('Hermes Source combines state.db history, assets and optional runtime-hook 
     assert.equal(facts.filter(item => item.kind === 'message.assistant').length, 1)
     assert.equal(facts.filter(item => item.kind === 'tool.call').length, 1)
     assert.equal(facts.filter(item => item.kind === 'tool.result').length, 1)
+
+    const logical = await storage.repositories.sessions.getLogicalSession(facts[0]!.logicalSessionId)
+    assert.equal(logical?.title, 'Hermes 原生会话标题')
 
     const assetResult = await assetRunner.scan({
       source: hermesSourceDefinition,
@@ -142,6 +160,14 @@ test('Hermes Source combines state.db history, assets and optional runtime-hook 
 
     facts = await storage.repositories.observations.query({ installationId: historyResult.installationId, limit: 50 })
     assert.equal(facts.filter(item => item.kind === 'tool.call').length, 2)
+
+    const coldHistory = await history.sync({
+      source: hermesSourceDefinition,
+      host,
+      detected,
+      abortSignal: new AbortController().signal,
+    })
+    assert.equal(coldHistory.records, 4)
 
     const replay = await history.sync({
       source: hermesSourceDefinition,

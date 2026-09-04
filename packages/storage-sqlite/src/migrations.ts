@@ -63,6 +63,11 @@ const migrations: readonly Migration[] = [
     name: 'workspace-project-fallback',
     fileName: '011-workspace-project-fallback.sql',
   },
+  {
+    version: 12,
+    name: 'observation-native-parent-tree',
+    fileName: '012-observation-native-parent-tree.sql',
+  },
 ]
 
 async function readMigrationSql(fileName: string): Promise<string> {

@@ -117,7 +117,9 @@ test('disabled sources are filtered before detect', async () => {
 
 test('history synchronization continues after one source fails', async () => {
   const failing = sourceDefinition('failing', async () => [])
-  failing.ingestHistory = async function* () {
+  let receivedActiveSince: string | undefined
+  failing.ingestHistory = async function* (ctx) {
+    receivedActiveSince = ctx.historyWindow?.activeSince
     throw new Error('broken history')
   }
   const healthy = sourceDefinition('healthy', async () => [])
@@ -131,7 +133,13 @@ test('history synchronization continues after one source fails', async () => {
     { source: healthy, host, detected: detected('healthy') },
   ]
   const ctx = {
-    storage: {},
+    storage: {
+      repositories: {
+        sourceRecords: {
+          async listForParserReplay() { return [] },
+        },
+      },
+    },
     identity: { async resolveInstallation() { return installation } },
     observations: {},
     capabilities: {
@@ -145,8 +153,10 @@ test('history synchronization continues after one source fails', async () => {
     ctx,
     new AbortController().signal,
     targets,
+    { activeSince: '2026-08-25T00:00:00.000Z' },
   )
 
+  assert.equal(receivedActiveSince, '2026-08-25T00:00:00.000Z')
   assert.equal(settled.failures.length, 1)
   assert.equal(settled.failures[0]?.sourceId, 'failing')
   assert.equal(settled.results.length, 1)

@@ -1,5 +1,6 @@
 const RELEASES_API = 'https://api.github.com/repos/z7ping/agent-lens/releases?per_page=20'
 export const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
+export const UPDATE_CHECK_STARTUP_DELAY_MS = 8_000
 
 export function parseSemver(value) {
   if (typeof value !== 'string') return null
@@ -91,6 +92,13 @@ function releaseDownloadUrl(release, options = {}) {
   return selected?.browser_download_url ?? release?.html_url ?? null
 }
 
+function releaseNotes(release) {
+  if (typeof release?.body !== 'string') return null
+  const value = release.body.trim()
+  if (!value) return null
+  return value.length > 1_200 ? `${value.slice(0, 1_197)}...` : value
+}
+
 export function selectUpdateRelease(releases, currentVersion, options = {}) {
   const current = parseSemver(currentVersion)
   if (!current || !Array.isArray(releases)) return null
@@ -119,6 +127,7 @@ export function selectUpdateRelease(releases, currentVersion, options = {}) {
     releasePageUrl: selected.html_url ?? downloadUrl,
     downloadUrl,
     publishedAt: selected.published_at ?? null,
+    releaseNotes: releaseNotes(selected),
   }
 }
 
@@ -127,6 +136,11 @@ export function shouldCheckForUpdate(lastCheckedAt, now = Date.now(), intervalMs
   const timestamp = Date.parse(lastCheckedAt)
   if (!Number.isFinite(timestamp)) return true
   return now - timestamp >= intervalMs
+}
+
+export function shouldNotifyUpdate(update, state = {}) {
+  if (!update?.version) return false
+  return state.skippedVersion !== update.version
 }
 
 export async function fetchAvailableUpdate(currentVersion, options = {}) {

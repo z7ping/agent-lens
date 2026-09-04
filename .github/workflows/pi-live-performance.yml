@@ -1,0 +1,116 @@
+name: Alpha.3 Interaction Performance
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Pi Live 调度压力规模
+        required: true
+        default: smoke
+        type: choice
+        options:
+          - smoke
+          - s
+          - m
+  pull_request:
+    paths:
+      - 'packages/web/src/client/pi-live.ts'
+      - 'packages/web/src/components/VirtualRoundMount.tsx'
+      - 'packages/web/src/features/PiLivePage.tsx'
+      - 'packages/web/src/features/PiLiveTaskRound.tsx'
+      - 'packages/web/src/features/pi-live-task-projection.ts'
+      - 'scripts/performance/pi-live-scheduler-benchmark.ts'
+      - 'scripts/performance/pi-live-history-virtualization-benchmark.ts'
+      - 'scripts/performance/review-virtualization-benchmark.ts'
+      - '.github/workflows/pi-live-performance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  pi-live-scheduler:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.23.0
+          package-manager-cache: false
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Resolve profile
+        id: profile
+        shell: bash
+        run: |
+          PROFILE="${{ github.event.inputs.profile || 'smoke' }}"
+          case "$PROFILE" in
+            smoke) echo 'args=--delta-events=10000 --tool-calls=20 --budget-push-ms=500 --budget-delivered-ratio=0.03' >> "$GITHUB_OUTPUT" ;;
+            s) echo 'args=--delta-events=50000 --tool-calls=100 --budget-push-ms=750 --budget-delivered-ratio=0.02' >> "$GITHUB_OUTPUT" ;;
+            m) echo 'args=--delta-events=200000 --tool-calls=400 --budget-push-ms=2000 --budget-delivered-ratio=0.02' >> "$GITHUB_OUTPUT" ;;
+            *) echo "Unknown profile: $PROFILE" >&2; exit 1 ;;
+          esac
+          echo "profile=$PROFILE" >> "$GITHUB_OUTPUT"
+      - name: Run Pi Live scheduler benchmark
+        shell: bash
+        run: |
+          mkdir -p performance-artifacts
+          npm run perf:pi-live-scheduler -- ${{ steps.profile.outputs.args }} | tee performance-artifacts/pi-live-scheduler-${{ steps.profile.outputs.profile }}.txt
+      - name: Upload benchmark report
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-lens-pi-live-scheduler-${{ steps.profile.outputs.profile }}
+          path: performance-artifacts/
+          if-no-files-found: error
+
+  pi-live-history-virtualization:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.23.0
+          package-manager-cache: false
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Run 4000-fact Pi Live history virtualization budget
+        shell: bash
+        run: |
+          mkdir -p performance-artifacts
+          npm run perf:pi-live-history -- --facts=4000 --viewport-height=800 --minimum-fact-height=38 --budget-mounted-facts=160 | tee performance-artifacts/pi-live-history-virtualization-4000.txt
+      - name: Upload benchmark report
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-lens-pi-live-history-virtualization-4000
+          path: performance-artifacts/
+          if-no-files-found: error
+
+  review-virtualization:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.23.0
+          package-manager-cache: false
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Run 1000-round Review virtualization budget
+        shell: bash
+        run: |
+          mkdir -p performance-artifacts
+          npm run perf:review-virtualization -- --rounds=1000 --viewport-height=800 --budget-mounted=40 | tee performance-artifacts/review-virtualization-1000.txt
+      - name: Upload benchmark report
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-lens-review-virtualization-1000
+          path: performance-artifacts/
+          if-no-files-found: error

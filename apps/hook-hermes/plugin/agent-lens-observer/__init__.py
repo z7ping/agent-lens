@@ -25,11 +25,25 @@ _PENDING_CALLS: dict[str, list[str]] = {}
 _DEFAULT_ENABLED_SOURCES = ("claude-code",)
 
 
+def _configured_sources() -> tuple[str, ...] | None:
+    override = os.environ.get("AGENT_LENS_CAPTURE_POLICY_PATH", "").strip()
+    path = Path(override).expanduser() if override else Path.home() / ".agent-lens" / "1.0" / "config" / "capture-policy.json"
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+        enabled_sources = value.get("enabledSources") if isinstance(value, dict) and value.get("version") == 1 else None
+        if not isinstance(enabled_sources, list) or any(not isinstance(item, str) for item in enabled_sources):
+            return None
+        return tuple(dict.fromkeys(item.strip().lower() for item in enabled_sources if item.strip()))
+    except Exception:
+        return None
+
+
 def _source_enabled(source_id: str) -> bool:
     raw = os.environ.get("AGENT_LENS_ENABLED_SOURCES", "").strip()
     normalized_source_id = source_id.strip().lower()
     if not raw:
-        return normalized_source_id in _DEFAULT_ENABLED_SOURCES
+        configured = _configured_sources()
+        return normalized_source_id in (configured if configured is not None else _DEFAULT_ENABLED_SOURCES)
     if raw.lower() == "none":
         return False
     return normalized_source_id in {

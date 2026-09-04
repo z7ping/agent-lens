@@ -1,0 +1,366 @@
+@reference "./styles.css";
+
+/*
+ * Pi Live 专属样式所有者。
+ * 只负责 Runtime 页面壳层、会话侧栏、Streaming Tail、Composer、队列和扩展交互。
+ * TaskHeader / Round / Message / Thinking / Tool / Event 统一由 task-detail.css 负责。
+ */
+.pi-live-page {
+  --pi-live-side: 288px;
+  display: grid;
+  height: calc(100vh - 52px);
+  min-height: 0;
+  grid-template-columns: var(--pi-live-side) minmax(0, 1fr);
+  overflow: hidden;
+  background: var(--al-canvas);
+}
+.pi-live-page-embedded { grid-template-columns: minmax(0, 1fr); }
+
+.pi-live-sessions {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--al-line);
+  background: var(--al-soft-2);
+}
+.pi-live-sessions-head {
+  display: flex;
+  min-height: 46px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 10px 0 12px;
+  border-bottom: 1px solid var(--al-line);
+  background: var(--al-surface);
+}
+.pi-live-sessions-head b { display: block; color: var(--al-ink); font-size: 13px; font-weight: 700; }
+.pi-live-sessions-head small { display: block; margin-top: 1px; color: var(--al-muted); font-size: 12px; }
+.pi-live-session-scroll { min-height: 0; flex: 1; overflow: auto; padding: 7px; }
+.pi-live-session {
+  display: block;
+  width: 100%;
+  margin-bottom: 3px;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+.pi-live-session:hover { border-color: var(--al-line); background: color-mix(in srgb, var(--al-surface) 74%, transparent); }
+.pi-live-session.active { border-color: var(--al-line); background: var(--al-surface); box-shadow: inset 2px 0 0 var(--al-accent); }
+.pi-live-session-top,
+.pi-live-session-foot { display: flex; min-width: 0; align-items: center; gap: 7px; color: var(--al-muted); font-size: 12px; }
+.pi-live-session-foot span:first-child { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pi-live-session-title { margin: 5px 0; overflow: hidden; color: var(--al-ink-2); font-size: 13px; font-weight: 650; line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }
+.pi-live-pulse,
+.pi-live-idle-dot { display: inline-block; width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; }
+.pi-live-pulse { background: var(--al-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--al-accent) 11%, transparent); }
+.pi-live-idle-dot { border: 1px solid var(--al-line-strong); background: var(--al-surface); }
+.pi-live-side-empty { padding: 16px 10px; color: var(--al-muted); font-size: 12px; line-height: 1.55; }
+.pi-live-review-link { display: flex; width: 100%; margin-top: 8px; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border: 0; border-top: 1px solid var(--al-line); background: transparent; color: var(--al-muted); font-size: 12px; text-align: left; }
+.pi-live-review-link:hover { color: var(--al-accent); }
+
+/*
+ * Pi Live 固定为 Header / Reader / Composer 三段式布局。
+ * Reader 始终占满中间剩余空间，Composer 无论历史长短都稳定贴在可视区底部；
+ * Composer 主动放大时只压缩 Reader，不改变底部锚点。
+ */
+.pi-live-workspace {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  background: var(--al-surface);
+}
+.pi-live-disconnected { color: var(--al-warning); }
+.pi-live-menu { border-radius: 8px; }
+
+.pi-live-reader {
+  position: relative;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  overflow-anchor: none;
+  background: var(--al-surface);
+}
+.pi-live-document { width: 100%; max-width: 1040px; margin: 0 auto; padding: 8px 38px 8px 30px; }
+.pi-live-page.pi-live-page-embedded .pi-live-document { padding: 8px 34px 8px 48px; }
+.pi-live-current-round { margin-top: 3px; padding-top: 1px; }
+.pi-live-stream-response {
+  position: relative;
+  max-width: min(74%, 860px);
+  margin: 7px 0 3px;
+  padding: 9px 12px 10px;
+  border: 1px solid color-mix(in srgb, var(--al-accent) 17%, var(--al-line));
+  border-left: 3px solid color-mix(in srgb, var(--al-accent) 48%, var(--al-line));
+  border-radius: 15px 15px 15px 6px;
+  background: color-mix(in srgb, var(--al-accent-soft) 45%, var(--al-surface));
+  box-shadow: 0 2px 8px rgb(16 24 40 / .035);
+  color: var(--al-ink);
+  font-size: 14px;
+  line-height: 1.62;
+}
+.pi-live-stream-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.pi-live-stream-response.is-waiting .pi-live-stream-text { color: var(--al-muted); }
+.pi-live-message-meta { display: flex; align-items: center; gap: 7px; margin-bottom: 4px; color: var(--al-muted); font-size: 12px; }
+.pi-live-message-meta b { color: var(--al-accent); font-weight: 720; }
+.pi-live-message-meta time { margin-left: auto; }
+.pi-live-caret { display: inline-block; width: 6px; height: 1.05em; margin-left: 2px; vertical-align: -2px; border-radius: 2px; background: var(--al-accent); animation: pi-live-caret 1.1s steps(1) infinite; }
+@keyframes pi-live-caret { 50% { opacity: .22; } }
+.pi-live-empty { padding: 7px 0 5px; color: var(--al-muted); font-size: 13px; text-align: left; }
+.pi-live-initializing {
+  display: grid;
+  width: 100%;
+  max-width: none;
+  margin: 2px 0 5px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 3px 9px;
+  padding: 8px 10px;
+  border: 1px solid var(--al-line);
+  border-radius: 9px;
+  background: var(--al-soft-2);
+  color: var(--al-ink-2);
+  text-align: left;
+}
+.pi-live-initializing b { grid-column: 2; grid-row: 1; font-size: 13px; }
+.pi-live-initializing small { grid-column: 2; grid-row: 2; max-width: none; color: var(--al-muted); line-height: 1.45; }
+.pi-live-initializing > button { grid-column: 3; grid-row: 1 / 3; min-height: 28px; padding: 0 10px; border: 1px solid var(--al-line-strong); border-radius: 999px; background: var(--al-surface); color: var(--al-ink-2); }
+.pi-live-initializing-failed { grid-template-columns: minmax(0, 1fr) auto; border-color: color-mix(in srgb, var(--al-danger) 24%, var(--al-line)); background: var(--al-danger-soft); }
+.pi-live-initializing-failed b,
+.pi-live-initializing-failed small { grid-column: 1; }
+.pi-live-initializing-failed > div { display: flex; grid-column: 2; grid-row: 1 / 3; align-items: center; gap: 7px; }
+.pi-live-initializing-failed button { min-height: 28px; padding: 0 10px; border: 1px solid var(--al-line-strong); border-radius: 999px; background: var(--al-surface); color: var(--al-ink-2); }
+.pi-live-stage-dot { width: 8px; height: 8px; grid-column: 1; grid-row: 1 / 3; align-self: start; margin-top: 5px; border-radius: 50%; background: var(--al-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--al-accent) 12%, transparent); animation: pi-live-caret 1.1s steps(1) infinite; }
+.pi-live-reader-error { margin: 6px 0; }
+
+/*
+ * Composer 对齐 ChatGPT 类输入交互：大圆角容器、正文编辑区 + 底部工具条、右上角显式放大/缩小。
+ * Queue、Extension UI、诊断和快捷提示继续浮动，不因流式事件到达改变 Composer 高度。
+ */
+.pi-live-compose-wrap {
+  position: relative;
+  z-index: 10;
+  padding: 3px 18px 10px;
+  border-top: 0;
+  background: var(--al-surface);
+}
+.pi-live-float-stack {
+  position: absolute;
+  right: 18px;
+  bottom: calc(100% - 1px);
+  left: 18px;
+  z-index: 12;
+  display: grid;
+  width: min(1040px, calc(100% - 36px));
+  max-height: min(44vh, 320px);
+  margin: 0 auto;
+  gap: 6px;
+  overflow: visible;
+  pointer-events: none;
+}
+.pi-live-float-stack > * { pointer-events: auto; }
+.pi-live-new-records { justify-self: end; border-radius: 999px; box-shadow: var(--al-shadow); color: var(--al-accent); }
+.pi-live-blocking { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 9px 10px; border: 1px solid color-mix(in srgb, var(--al-warning) 24%, var(--al-line)); border-radius: 9px; background: var(--al-warning-soft); box-shadow: var(--al-shadow); }
+.pi-live-blocking > div:first-child { min-width: 0; }
+.pi-live-blocking b { display: block; color: var(--al-warning); font-size: 12px; font-weight: 700; }
+.pi-live-blocking span { display: block; margin-top: 3px; color: var(--al-ink-2); font-size: 12px; line-height: 1.45; }
+.pi-live-blocking-actions,
+.pi-live-blocking-options { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.pi-live-blocking-input { grid-template-columns: 1fr; }
+.pi-live-blocking-field { width: 100%; }
+textarea.pi-live-blocking-field { min-height: 74px; }
+
+.pi-live-startup-queue {
+  display: grid;
+  min-height: 38px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 1px solid color-mix(in srgb, var(--al-accent) 26%, var(--al-line));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--al-accent-soft) 44%, var(--al-surface));
+  box-shadow: var(--al-shadow);
+}
+.pi-live-startup-queue > span { color: var(--al-accent); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.pi-live-startup-queue > b { min-width: 0; overflow: hidden; color: var(--al-ink-2); font-size: 13px; font-weight: 540; text-overflow: ellipsis; white-space: nowrap; }
+.pi-live-startup-queue > div { display: flex; gap: 6px; }
+.pi-live-queue-action { border-color: transparent; background: transparent; color: var(--al-muted); }
+.pi-live-queue-action:hover:not(:disabled) { border-color: transparent; background: var(--al-soft); color: var(--al-ink-2); }
+
+.pi-live-queue { max-height: 112px; overflow: auto; padding: 6px 8px 8px; border: 1px solid var(--al-line); border-radius: 10px; background: var(--al-surface); box-shadow: var(--al-shadow); }
+.pi-live-queue-item { display: grid; min-height: 34px; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; margin-top: 4px; padding: 5px 8px; border: 1px solid var(--al-line); border-radius: 8px; background: var(--al-soft-2); color: var(--al-muted); font-size: 12px; }
+.pi-live-queue-item:first-child { margin-top: 0; }
+.pi-live-queue-item.active { border-color: color-mix(in srgb, var(--al-accent) 24%, var(--al-line)); background: color-mix(in srgb, var(--al-accent-soft) 34%, var(--al-soft-2)); }
+.pi-live-queue-item > span { color: var(--al-accent); font-weight: 700; white-space: nowrap; }
+.pi-live-queue-item > b { min-width: 0; overflow: hidden; color: var(--al-ink-2); font-size: 13px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.pi-live-queue-item > small { color: var(--al-accent); font-size: 12px; }
+.pi-live-queue-item.restored { border-style: dashed; }
+.pi-live-queue-item > div { display: flex; gap: 6px; }
+
+.pi-live-composer {
+  position: relative;
+  width: 100%;
+  max-width: 1040px;
+  margin: 0 auto;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--al-line-strong) 82%, transparent);
+  border-radius: 28px;
+  background: var(--al-surface);
+  box-shadow: 0 2px 10px rgb(16 24 40 / .06), 0 8px 24px rgb(16 24 40 / .035);
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.pi-live-composer:focus-within { border-color: color-mix(in srgb, var(--al-accent) 26%, var(--al-line-strong)); box-shadow: 0 2px 10px rgb(16 24 40 / .07), 0 8px 28px rgb(16 24 40 / .045); }
+.pi-live-editor { position: relative; height: 82px; min-height: 82px; overflow: hidden; }
+.pi-live-composer.is-expanded .pi-live-editor { height: clamp(260px, 48vh, 520px); }
+.pi-live-editor-toolbar {
+  position: absolute;
+  top: 8px;
+  right: 11px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.pi-live-editor-action { border-color: transparent; border-radius: 999px; background: transparent; color: var(--al-muted); }
+.pi-live-editor-action:hover:not(:disabled) { border-color: transparent; background: var(--al-soft-2); color: var(--al-ink-2); }
+.pi-live-input {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  resize: none;
+  overflow: auto;
+  padding: 15px 98px 7px 18px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--al-ink);
+  font-size: 15px;
+  line-height: 1.55;
+}
+.pi-live-input:disabled { color: var(--al-muted); cursor: default; }
+.pi-live-markdown-preview {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  padding: 14px 98px 8px 18px;
+  color: var(--al-ink);
+  font-size: 15px;
+  line-height: 1.58;
+  overflow-wrap: anywhere;
+}
+.pi-live-markdown-preview > :first-child { margin-top: 0; }
+.pi-live-markdown-preview > :last-child { margin-bottom: 0; }
+.pi-live-markdown-preview p,
+.pi-live-markdown-preview ul,
+.pi-live-markdown-preview ol,
+.pi-live-markdown-preview blockquote,
+.pi-live-markdown-preview pre { margin: 0 0 8px; }
+.pi-live-markdown-preview ul,
+.pi-live-markdown-preview ol { padding-left: 22px; }
+.pi-live-markdown-preview blockquote { padding-left: 9px; border-left: 2px solid var(--al-line-strong); color: var(--al-muted); }
+.pi-live-markdown-preview pre { padding: 7px 9px; overflow: auto; border: 1px solid var(--al-line); border-radius: 7px; background: var(--al-soft-2); font: 12px/1.55 var(--font-mono); white-space: pre-wrap; }
+.pi-live-markdown-preview :not(pre) > code { padding: 1px 4px; border-radius: 4px; background: var(--al-soft-2); font-family: var(--font-mono); font-size: .9em; }
+.pi-live-preview-empty { color: var(--al-muted-2); font-size: 13px; }
+.pi-live-compose-bar { display: flex; min-height: 48px; align-items: center; gap: 12px; padding: 4px 10px 9px 14px; border-top: 0; }
+.pi-live-compose-runtime { display: inline-flex; width: 132px; min-width: 132px; align-items: center; gap: 6px; overflow: hidden; color: var(--al-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.pi-live-compose-settings { display: flex; min-width: 0; flex: 0 1 auto; flex-wrap: nowrap; align-items: center; gap: 8px; }
+.pi-live-model-picker { width: clamp(210px, 22vw, 300px); max-width: 300px; }
+.pi-live-thinking-picker { width: clamp(140px, 15vw, 180px); max-width: 180px; }
+.pi-live-compose-mode { display: flex; margin-left: auto; gap: 2px; padding: 2px; border-radius: 999px; background: var(--al-soft-2); }
+.pi-live-mode-action { border-color: transparent; border-radius: 999px; background: transparent; color: var(--al-muted); white-space: nowrap; }
+.pi-live-mode-action:hover:not(:disabled) { border-color: transparent; }
+.pi-live-mode-action.active { border-color: transparent; background: var(--al-surface); box-shadow: 0 1px 2px rgb(16 24 40 / .06); color: var(--al-ink); font-weight: 650; }
+.pi-live-send { width: 36px; height: 36px; flex: 0 0 36px; border-radius: 50%; }
+.pi-live-compose-hint,
+.pi-live-composer:focus-within .pi-live-compose-hint {
+  position: absolute;
+  right: 18px;
+  bottom: 54px;
+  z-index: 3;
+  display: block;
+  max-width: calc(100% - 36px);
+  padding: 3px 6px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--al-surface) 92%, transparent);
+  color: var(--al-muted-2);
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(2px);
+  pointer-events: none;
+  transition: opacity .15s ease, transform .15s ease;
+}
+.pi-live-composer:focus-within .pi-live-compose-hint { opacity: .82; transform: translateY(0); }
+.pi-live-diagnostics {
+  position: absolute;
+  right: 22px;
+  top: 0;
+  z-index: 9;
+  max-width: min(520px, 52%);
+  overflow: hidden;
+  color: var(--al-muted);
+  font-size: 12px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: .78;
+  transform: translateY(-100%);
+  pointer-events: none;
+}
+.pi-live-error { padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--al-danger) 24%, var(--al-line)); border-radius: 8px; background: var(--al-danger-soft); color: var(--al-danger); font-size: 12px; line-height: 1.5; }
+
+@media (max-width: 1199.98px) {
+  .pi-live-page { --pi-live-side: 260px; }
+  .pi-live-compose-runtime { display: none; }
+  .pi-live-document { padding-right: 28px; padding-left: 24px; }
+  .pi-live-page.pi-live-page-embedded .pi-live-document { padding-right: 22px; padding-left: 44px; }
+}
+@media (max-width: 991.98px) {
+  .pi-live-page { --pi-live-side: 236px; }
+  .pi-live-compose-wrap { padding-right: 12px; padding-left: 12px; }
+  .pi-live-float-stack { right: 12px; left: 12px; width: calc(100% - 24px); }
+  .pi-live-model-picker { width: clamp(180px, 24vw, 230px); max-width: 230px; }
+  .pi-live-thinking-picker { width: clamp(132px, 16vw, 160px); max-width: 160px; }
+  .pi-live-page.pi-live-page-embedded .pi-live-document { padding-right: 18px; padding-left: 40px; }
+  .pi-live-composer.is-expanded .pi-live-editor { height: clamp(220px, 44vh, 440px); }
+}
+@media (max-width: 767.98px) {
+  .pi-live-page { grid-template-columns: 1fr; }
+  .pi-live-sessions { display: none; }
+  .pi-live-document { padding: 7px 14px 8px; }
+  .pi-live-page.pi-live-page-embedded .pi-live-document { padding: 7px 14px 8px; }
+  .pi-live-compose-wrap { padding: 3px 10px 8px; }
+  .pi-live-float-stack { right: 10px; left: 10px; width: calc(100% - 20px); }
+  .pi-live-editor { height: 78px; min-height: 78px; }
+  .pi-live-composer.is-expanded .pi-live-editor { height: clamp(200px, 40vh, 360px); }
+  .pi-live-compose-runtime { display: none; }
+  .pi-live-model-picker { width: 132px; max-width: 132px; }
+  .pi-live-thinking-picker { width: 104px; max-width: 104px; }
+  .pi-live-mode-action { padding-inline: 6px; }
+  .pi-live-compose-hint { display: none; }
+  .pi-live-blocking { grid-template-columns: 1fr; }
+  .pi-live-blocking-actions,
+  .pi-live-blocking-options { justify-content: flex-end; }
+  .pi-live-diagnostics { display: none; }
+  .pi-live-startup-queue { grid-template-columns: 1fr auto; }
+  .pi-live-startup-queue > span { grid-column: 1; }
+  .pi-live-startup-queue > b { grid-column: 1 / 3; grid-row: 2; }
+  .pi-live-startup-queue > div { grid-column: 2; grid-row: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pi-live-caret { animation: none; }
+  .pi-live-compose-hint,
+  .pi-live-composer { transition: none; }
+}

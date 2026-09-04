@@ -29,6 +29,8 @@ import type {
   SourceDefinition,
   SourceDetectionContext,
   SourceExecutionContext,
+  SourceHistoryExecutionContext,
+  SourceHistoryWindow,
   SourceNormalizationContext,
   SourcePluginManifest,
   SourceRecord,
@@ -40,7 +42,7 @@ import {
 } from '@agent-lens/runtime-cordis'
 
 const SOURCE_ID = 'claude-code'
-const PARSER_VERSION = '1'
+const PARSER_VERSION = '2'
 const MAX_STRING = 64 * 1024
 const RUNTIME_POLL_MS = 250
 const SENSITIVE_KEY = /(password|passwd|secret|token|api[_-]?key|authorization|cookie)/i
@@ -181,10 +183,25 @@ async function* walkJsonlFiles(root: string): AsyncIterable<string> {
   }
 }
 
-async function listJsonlFiles(root: string): Promise<string[]> {
-  const files: string[] = []
-  for await (const file of walkJsonlFiles(root)) files.push(file)
-  return files.sort((a, b) => a.localeCompare(b))
+async function listJsonlFiles(root: string, historyWindow?: SourceHistoryWindow): Promise<string[]> {
+  const paths: string[] = []
+  for await (const file of walkJsonlFiles(root)) paths.push(file)
+  const candidates = (await Promise.all(paths.map(async path => {
+    try {
+      return { path, mtimeMs: (await stat(path)).mtimeMs }
+    } catch {
+      return null
+    }
+  }))).filter((candidate): candidate is { path: string; mtimeMs: number } => candidate !== null)
+
+  const activeSince = historyWindow?.activeSince ? Date.parse(historyWindow.activeSince) : Number.NaN
+  const filtered = Number.isFinite(activeSince)
+    ? candidates.filter(candidate => candidate.mtimeMs >= activeSince)
+    : candidates
+  const ordered = filtered.sort((a, b) => b.mtimeMs - a.mtimeMs || b.path.localeCompare(a.path))
+  const limit = historyWindow?.sessionLimit
+  return (limit === undefined ? ordered : ordered.slice(0, Math.max(0, Math.floor(limit))))
+    .map(candidate => candidate.path)
 }
 
 async function* readJsonlLines(filePath: string, startOffset: number): AsyncIterable<JsonlLine> {
@@ -242,17 +259,17 @@ function nativeEntryId(entry: Record<string, unknown>): string | undefined {
 }
 
 function historyCheckpointKey(filePath: string): string {
-  return `claude:history:${sha256(filePath)}`
+  return `claude:history:v2-session-title:${sha256(filePath)}`
 }
 
 export async function* ingestClaudeHistory(
-  ctx: SourceExecutionContext,
+  ctx: SourceHistoryExecutionContext,
 ): AsyncIterable<SourceRecord> {
   const projectsDir = ctx.installation.dataRoot
     ?? (ctx.installation.configRoot ? join(ctx.installation.configRoot, 'projects') : undefined)
   if (!projectsDir) return
 
-  for (const filePath of await listJsonlFiles(projectsDir)) {
+  for (const filePath of await listJsonlFiles(projectsDir, ctx.historyWindow)) {
     if (ctx.abortSignal.aborted) return
     const fileStat = await stat(filePath)
     const key = historyCheckpointKey(filePath)
@@ -918,6 +935,12 @@ export async function normalizeClaudeRecord(
       const text = textFromContent(content).trim()
       if (text) observations.push(candidate(record, envelope, 'message.assistant', { text: truncate(text) }))
     }
+  } else if (type === 'custom-title') {
+    const title = stringField(entry, 'customTitle', 'custom_title')?.trim()
+    observations.push(candidate(record, envelope, 'session.lifecycle', {
+      event: 'session.title',
+      ...(title ? { title } : {}),
+    }, { identity: title ? { sessionTitle: title } : {} }))
   } else if (type === 'summary') {
     observations.push(candidate(record, envelope, 'context.summary', {
       text: truncate(textFromContent(entry.summary ?? content)),
@@ -984,6 +1007,7 @@ const applyClaudeSource = Object.assign(
 export const claudeSourcePlugin = defineAgentLensPlugin(claudeManifest, applyClaudeSource)
 
 export const claudeInternals = {
+  listJsonlFiles,
   runtimeInboxDirectory,
   parseRuntimeEnvelope,
   runtimeRecord,

@@ -12,6 +12,7 @@ import {
   coreServicesPlugin,
   discoverRegisteredSourceAssets,
   nodeRuntimePlugin,
+  piLiveRuntimePlugin,
   prepareRegisteredSources,
   resolveAgentLensNodeRuntime,
   startRegisteredSourceCapture,
@@ -33,6 +34,12 @@ import {
   beginSessionSummaryProjectionRun,
   markSessionSummaryProjectionClean,
 } from './projection-readiness.js'
+import {
+  createProgressiveHistoryStages,
+  stagesAllowedByCapacity,
+  storageCapacityState,
+  yieldToForeground,
+} from './history-sync-plan.js'
 import { profiledDshSourcePlugin } from './sources/dsh-profiled.js'
 
 const nodeRuntime = resolveAgentLensNodeRuntime()
@@ -52,7 +59,9 @@ const daemonMode = process.env.AGENT_LENS_DAEMON_MODE === 'managed' ? 'managed' 
 const developmentApiPort = process.env.AGENT_LENS_DEV_API_PORT
 const interactiveTerminal = Boolean(process.stdin.isTTY && process.stdout.isTTY)
 const startedAt = Date.now()
-const INITIAL_BACKGROUND_SYNC_DELAY_MS = 600
+// 为 Web Shell 的首轮 Health / Facet / Review 查询保留短暂宽限期；
+// 历史和资产同步随后继续增量执行。
+const INITIAL_BACKGROUND_SYNC_DELAY_MS = 2_000
 
 const app = new AgentLensApplication()
 app.useRuntime(nodeRuntimePlugin, nodeRuntime)
@@ -60,6 +69,7 @@ app.use(sqliteStoragePlugin, { path: dbPath })
 app.useRuntime(coreServicesPlugin)
 app.useRuntime(sessionSummaryProjectionPlugin)
 app.useRuntime(capturePolicyPlugin)
+app.useRuntime(piLiveRuntimePlugin)
 if (capabilities.localCapture) {
   app.use(codexSourcePlugin)
   app.use(claudeSourcePlugin)
@@ -165,32 +175,41 @@ try {
   reuseSessionSummaryProjection = await beginSessionSummaryProjectionRun(app.context.storage)
   sessionSummaryProjectionReady = reuseSessionSummaryProjection
 
-  const prepared = await prepareRegisteredSources(app.context, runtimeController.signal)
-  logSourceFailures(prepared.failures)
-
-  const capture = await startRegisteredSourceCapture(
-    app.context,
-    runtimeController.signal,
-    prepared.targets,
-  )
-  captureHandles = capture.results
-  logSourceFailures(capture.failures)
-  for (const handle of captureHandles) {
-    console.info(`[AgentLens] runtime capture started: ${handle.sourceId}`)
-  }
-
   syncPromise = (async () => {
     await new Promise(resolve => setTimeout(resolve, INITIAL_BACKGROUND_SYNC_DELAY_MS))
+    if (runtimeController.signal.aborted) return
+
+    // Runtime Ready 只依赖已启动的 HTTP Surface 与基础存储。来源探测和
+    // Capture 初始化可能触发 SQLite 写入或宿主 I/O，不能阻塞开发入口的
+    // health 探测和 Vite 启动。
+    const prepared = await prepareRegisteredSources(app.context, runtimeController.signal)
+    logSourceFailures(prepared.failures)
+    if (runtimeController.signal.aborted) return
+
+    const capture = await startRegisteredSourceCapture(
+      app.context,
+      runtimeController.signal,
+      prepared.targets,
+    )
+    captureHandles = capture.results
+    logSourceFailures(capture.failures)
+    for (const handle of captureHandles) {
+      console.info(`[AgentLens] runtime capture started: ${handle.sourceId}`)
+    }
     if (runtimeController.signal.aborted) return
 
     if (reuseSessionSummaryProjection) {
       console.info('[AgentLens] session summary projection reused from clean shutdown')
     } else {
       try {
-        await app.context.projections.rebuild(SESSION_SUMMARY_PROJECTION_ID)
+        console.info('[AgentLens] session summary projection cooperative rebuild started')
+        await app.context.projections.rebuild(SESSION_SUMMARY_PROJECTION_ID, {
+          signal: runtimeController.signal,
+        })
         sessionSummaryProjectionReady = true
         console.info('[AgentLens] session summary projection rebuilt')
       } catch (error) {
+        if (runtimeController.signal.aborted) return
         sessionSummaryProjectionReady = false
         console.error('[AgentLens] session summary projection rebuild failed', error)
       }
@@ -198,16 +217,42 @@ try {
 
     if (runtimeController.signal.aborted) return
 
-    const [history, assets] = await Promise.all([
-      syncRegisteredSourceHistory(app.context, runtimeController.signal, prepared.targets),
-      discoverRegisteredSourceAssets(app.context, runtimeController.signal, prepared.targets),
-    ])
-    logSourceFailures([...history.failures, ...assets.failures])
-    for (const result of history.results) {
-      console.info(
-        `[AgentLens] history synced: ${result.sourceId} records=${result.records} created=${result.observationsCreated} merged=${result.observationsMerged} unchanged=${result.observationsUnchanged}`,
-      )
+    // 历史任务是首要界面数据。先完成历史同步，再扫描静态资产，避免两个
+    // 冷扫描器同时争用同一个 SQLite 执行器和磁盘。
+    const storageHealth = await app.context.storage.health()
+    const capacityState = storageCapacityState(storageHealth.details)
+    const plannedHistoryStages = createProgressiveHistoryStages(startedAt)
+    const historyStages = stagesAllowedByCapacity(plannedHistoryStages, capacityState)
+    if (historyStages.length < plannedHistoryStages.length) {
+      const allowed = new Set(historyStages.map(stage => stage.id))
+      const paused = plannedHistoryStages.filter(stage => !allowed.has(stage.id)).map(stage => stage.label)
+      console.warn(`[AgentLens] history stages paused: ${paused.join(', ')}; storage capacity=${capacityState}`)
     }
+    for (const stage of historyStages) {
+      if (runtimeController.signal.aborted) return
+      console.info(`[AgentLens] history sync stage started: ${stage.label}`)
+      const history = await syncRegisteredSourceHistory(
+        app.context,
+        runtimeController.signal,
+        prepared.targets,
+        stage.window,
+      )
+      logSourceFailures(history.failures)
+      for (const result of history.results) {
+        console.info(
+          `[AgentLens] history synced: stage=${stage.id} source=${result.sourceId} records=${result.records} created=${result.observationsCreated} merged=${result.observationsMerged} unchanged=${result.observationsUnchanged}`,
+        )
+      }
+      await yieldToForeground(runtimeController.signal)
+    }
+    if (runtimeController.signal.aborted) return
+
+    const assets = await discoverRegisteredSourceAssets(
+      app.context,
+      runtimeController.signal,
+      prepared.targets,
+    )
+    logSourceFailures(assets.failures)
     for (const result of assets.results) {
       console.info(
         `[AgentLens] assets scanned: ${result.sourceId} assets=${result.assetsDiscovered} states=${result.statesRecorded}`,

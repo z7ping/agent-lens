@@ -10,13 +10,16 @@ test('storage migrations include replication, Hub replica state, and workspace p
     const migrations = storage.db.prepare(
       'SELECT version, name FROM schema_migrations ORDER BY version',
     ).all() as Array<{ version: number; name: string }>
-    assert.equal(migrations.at(-1)?.version, 11)
-    assert.equal(migrations.at(-1)?.name, 'workspace-project-fallback')
+    assert.equal(migrations.at(-1)?.version, 12)
+    assert.equal(migrations.at(-1)?.name, 'observation-native-parent-tree')
 
     const indexes = storage.db.prepare("PRAGMA index_list('observations')").all() as Array<{ name: string }>
     const names = new Set(indexes.map(item => item.name))
     assert.ok(names.has('idx_observations_kind_timeline_order'))
     assert.ok(names.has('idx_observations_installation_kind_timeline_order'))
+    assert.ok(names.has('idx_observations_source_native_event'))
+    assert.ok(names.has('idx_observations_source_native_parent'))
+    assert.ok(names.has('idx_observations_parent'))
 
     const replicationTables = storage.db.prepare(`
       SELECT name FROM sqlite_master
@@ -65,3 +68,38 @@ test('storage migrations include replication, Hub replica state, and workspace p
     storage.close()
   }
 })
+
+
+test('late native parent can repair child relation without losing native parent id', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  try {
+    await storage.migrate()
+    const repo = storage.repositories.observations
+    assert.ok(repo.findIdByNativeEventId && repo.linkChildrenToParent)
+    storage.db.exec(`
+      INSERT INTO hosts (id, name, platform, arch, created_at, last_seen_at)
+      VALUES ('host-1', 'test', 'linux', 'x64', '2026-08-20T00:00:00.000Z', '2026-08-20T00:00:00.000Z');
+      INSERT INTO agent_products (id, name) VALUES ('product-1', 'test');
+      INSERT INTO agent_installations (id, host_id, product_id, first_seen_at, last_seen_at)
+      VALUES ('install-1', 'host-1', 'product-1', '2026-08-20T00:00:00.000Z', '2026-08-20T00:00:00.000Z');
+      INSERT INTO logical_sessions (id, installation_id) VALUES ('logical-1', 'install-1');
+      INSERT INTO source_sessions (id, source_id, installation_id, native_session_id, logical_session_id)
+      VALUES ('source-1', 'pi', 'install-1', 'native-session-1', 'logical-1');
+    `)
+    const common = {
+      hostId: 'host-1', installationId: 'install-1', logicalSessionId: 'logical-1',
+      sourceSessionId: 'source-1', kind: 'unknown' as const, capturedAt: '2026-08-20T00:00:00.000Z',
+      payload: {}, evidenceRefs: [],
+    }
+    await repo.put({ id: 'child-1', ...common, nativeEventId: 'C', nativeParentEventId: 'B' })
+    assert.equal((await repo.get('child-1'))?.parentObservationId, undefined)
+    await repo.put({ id: 'parent-1', ...common, nativeEventId: 'B' })
+    await repo.linkChildrenToParent('source-1', 'B', 'parent-1')
+    const child = await repo.get('child-1')
+    assert.equal(child?.nativeParentEventId, 'B')
+    assert.equal(child?.parentObservationId, 'parent-1')
+  } finally {
+    storage.close()
+  }
+})
+

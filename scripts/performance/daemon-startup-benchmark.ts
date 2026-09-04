@@ -109,6 +109,22 @@ async function waitForHealth(startedAt: number): Promise<number> {
   throw new Error(`health timeout after ${timeoutMs}ms`)
 }
 
+function percentile(values: number[], ratio: number): number | null {
+  if (values.length === 0) return null
+  const sorted = [...values].sort((left, right) => left - right)
+  return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * ratio))] ?? null
+}
+
+async function probeHealth(): Promise<number> {
+  const startedAt = performance.now()
+  const response = await fetch(`http://127.0.0.1:${port}/api/v1/health`, {
+    signal: AbortSignal.timeout(2_000),
+  })
+  if (!response.ok) throw new Error(`health probe returned HTTP ${response.status}`)
+  await response.json()
+  return performance.now() - startedAt
+}
+
 async function waitForExit(child: ChildProcess, timeout = 10_000): Promise<void> {
   if (child.exitCode != null) return
   await new Promise<void>((resolve, reject) => {
@@ -167,9 +183,25 @@ async function runStartup(action: 'rebuilt' | 'reused') {
       ? 'session summary projection rebuilt'
       : 'session summary projection reused from clean shutdown'
     const deadline = Date.now() + timeoutMs
+    const backgroundHealthSamples: number[] = []
+    let backgroundHealthFailures = 0
+    if (action === 'rebuilt') {
+      const startedMarker = 'session summary projection cooperative rebuild started'
+      while (!output.value.includes(startedMarker) && Date.now() < deadline) {
+        if (child.exitCode != null) throw new Error(`daemon exited early: ${child.exitCode}\n${output.value}`)
+        await new Promise(resolve => setTimeout(resolve, 25))
+      }
+    }
     while (!output.value.includes(expected) && Date.now() < deadline) {
       if (child.exitCode != null) throw new Error(`daemon exited early: ${child.exitCode}\n${output.value}`)
-      await new Promise(resolve => setTimeout(resolve, 25))
+      if (action === 'rebuilt') {
+        try {
+          backgroundHealthSamples.push(await probeHealth())
+        } catch {
+          backgroundHealthFailures += 1
+        }
+      }
+      await new Promise(resolve => setTimeout(resolve, 50))
     }
     if (!output.value.includes(expected)) {
       throw new Error(`${action} decision timeout after ${timeoutMs}ms\n${output.value}`)
@@ -180,6 +212,16 @@ async function runStartup(action: 'rebuilt' | 'reused') {
       healthReadyMs: Number(healthReadyMs.toFixed(2)),
       projectionDecisionReadyMs: Number(projectionDecisionReadyMs.toFixed(2)),
       backgroundMsAfterHealth: Number((projectionDecisionReadyMs - healthReadyMs).toFixed(2)),
+      backgroundHealth: {
+        samples: backgroundHealthSamples.length,
+        failures: backgroundHealthFailures,
+        p95Ms: percentile(backgroundHealthSamples, 0.95) == null
+          ? null
+          : Number(percentile(backgroundHealthSamples, 0.95)!.toFixed(2)),
+        maxMs: backgroundHealthSamples.length === 0
+          ? null
+          : Number(Math.max(...backgroundHealthSamples).toFixed(2)),
+      },
     }
   } finally {
     await stopDaemon(child)

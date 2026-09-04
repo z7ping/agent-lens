@@ -1,7 +1,7 @@
 /*
  * AgentLens 1.0 工具分析正式样式。
  *
- * 本文件完整负责指标、表格、关注项、资产归因、工具详情、抽屉与会话钻取。
+ * 本文件负责指标、表格、关注项、资产归因、工具详情内容与会话钻取；Drawer 外壳统一由 components/ui 持有。
  */
 
 .tools-content { overflow: auto; }
@@ -188,39 +188,11 @@
 .asset-usage-bar { width: 100%; min-width: 80px; height: 6px; overflow: hidden; border-radius: 999px; background: var(--al-soft); }
 .asset-usage-bar > i { display: block; height: 100%; border-radius: inherit; background: var(--al-accent); }
 
-/* 工具详情抽屉 */
-.tool-drawer-scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 70;
-  border: 0;
-  background: rgb(10 12 10 / .28);
-}
-
-.tool-drill-drawer {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 80;
-  display: flex;
-  width: min(520px, max(320px, 42vw));
-  flex-direction: column;
-  border-left: 1px solid var(--al-line);
-  background: var(--al-surface-raised);
-  box-shadow: var(--al-shadow-lg);
-}
-
-.tool-drill-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 18px 20px 14px;
-  border-bottom: 1px solid var(--al-line);
-}
-.tool-drill-head h2 { margin: 3px 0 0; font-family: var(--font-mono); font-size: 16px; }
-.tool-drill-body { padding: 16px 20px 28px; overflow: auto; }
+/* 工具详情：统一 Drawer 负责遮罩、层级、关闭与焦点；这里只保留业务内容。 */
+.tool-drill-overlay .ui-overlay-panel { width: min(92vw, 520px); }
+.tool-drill-overlay .ui-overlay-body { padding: 0; }
+.tool-drill-overlay .ui-overlay-heading h2 { font-family: var(--font-mono); }
+.tool-drill-body { padding: 16px 20px 28px; overflow: visible; }
 
 .tool-drill-grid {
   display: grid;
@@ -259,14 +231,13 @@
 .tool-session-copy small { display: block; margin-top: 2px; color: var(--al-muted-2); font-size: 12px; }
 .tool-session-open { color: var(--al-accent); font-size: 12px; font-weight: 650; white-space: nowrap; }
 
-@media (max-width: 1100px) {
-  .tool-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-
-@media (max-width: 760px) {
+@media (max-width: 991.98px) {
   .tool-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tool-summary-card:nth-child(2) { border-right: 0; }
   .tool-summary-card:nth-child(-n + 2) { border-bottom: 1px solid var(--al-line); }
+}
+
+@media (max-width: 767.98px) {
   .tool-drill-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tool-drill-stat,
   .tool-drill-stat:nth-child(3n) { border-right: 1px solid var(--al-line); }
@@ -278,7 +249,9 @@
   .attributed-asset { grid-template-columns: minmax(0, 1fr) auto auto; }
 }
 
-@media (max-width: 560px) {
+@media (max-width: 575.98px) {
   .tool-summary-grid { grid-template-columns: 1fr; }
-  .tool-drill-drawer { width: 100vw; }
+  .tool-summary-card { border-right: 0; border-bottom: 1px solid var(--al-line); }
+  .tool-summary-card:last-child { border-bottom: 0; }
+  .tool-drill-body { padding: 14px 14px 24px; }
 }

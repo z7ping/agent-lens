@@ -88,6 +88,7 @@ const applyHttpSurface = Object.assign(
       capabilities: ctx.capabilities,
       capturePolicy: ctx.capturePolicy,
       backup: ctx.backup,
+      piLive: ctx.piLive,
       hubReview,
     })
     const unprovideHubReview = ctx.provide('hubReview', hubReview)
@@ -99,7 +100,7 @@ const applyHttpSurface = Object.assign(
       await surface.dispose()
     }
   },
-  { inject: ['storage', 'unifiedRead', 'sources', 'capabilities', 'capturePolicy', 'backup'] },
+  { inject: ['storage', 'unifiedRead', 'sources', 'capabilities', 'capturePolicy', 'backup', 'piLive'] },
 )
 
 export const httpSurfacePlugin = defineAgentLensPlugin(manifest, applyHttpSurface)

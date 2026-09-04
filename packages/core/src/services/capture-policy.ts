@@ -22,6 +22,17 @@ export interface CaptureValueResult<T = unknown> {
   redactionApplied: boolean
 }
 
+export type CapturePolicyConfigurationSource = 'default' | 'file' | 'environment' | 'runtime'
+
+export interface CapturePolicySourceConfiguration {
+  effectiveEnabledSources: readonly string[]
+  configuredEnabledSources: readonly string[]
+  source: CapturePolicyConfigurationSource
+  editable: boolean
+  restartRequired: boolean
+  configurationPath?: string
+}
+
 /**
  * Capture policy contract shared by the runtime and Source runners.
  *
@@ -39,4 +50,6 @@ export interface CapturePolicyService {
   sanitizeSourceRecord(record: SourceRecord, normalized?: NormalizedSourceOutput): SourceRecord
   sanitizeNormalizedOutput(normalized: NormalizedSourceOutput): NormalizedSourceOutput
   sanitizeDiscoveredAsset(asset: DiscoveredAsset): DiscoveredAsset | null
+  getSourceConfiguration?(): CapturePolicySourceConfiguration
+  setEnabledSources?(enabledSources: readonly string[]): Promise<CapturePolicySourceConfiguration>
 }

@@ -13,6 +13,9 @@ import {
   fetchHubReviewSessions,
   fetchLocalReviewSessions,
 } from '../client/hub-review'
+import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
+import { IconButton, UiIcon } from '../components/ui'
+import { TaskSurface } from './TaskSurface'
 
 const omittedReasonLabel: Record<Extract<HubReadAvailability, { state: 'omitted' }>['reason'], string> = {
   policy: '复制策略未同步',
@@ -120,7 +123,7 @@ function TimelineItem({ item }: { item: HubReviewTimelineItemDto }) {
     </header>
     <div className="hub-review-payload" data-state={availabilityTone(item.payload)}>
       {item.payload.state === 'value'
-        ? <pre>{formatValue(item.payload.value)}</pre>
+        ? <CopyableCodeBlock copyValue={formatValue(item.payload.value)}>{formatValue(item.payload.value)}</CopyableCodeBlock>
         : <div className="hub-review-unavailable"><AvailabilityBadge value={item.payload}/><small>AgentLens 不会用空字符串或空对象代替未同步内容。</small></div>}
     </div>
     {Object.keys(item.references).length > 0 && <details className="hub-review-refs">
@@ -141,7 +144,7 @@ function mixedSessionTime(item: MixedSession): number {
   return item.time ? Date.parse(item.time) : Number.NEGATIVE_INFINITY
 }
 
-export function HubReviewPage() {
+export function HubReviewPage({ embedded = false }: { embedded?: boolean }) {
   const { sessionId = '' } = useParams()
   const navigate = useNavigate()
   const [detail, setDetail] = useState<HubReviewDetailDto | null>(null)
@@ -173,6 +176,13 @@ export function HubReviewPage() {
   }, [sessionId])
 
   useEffect(() => {
+    if (embedded) {
+      setLocalSessions([])
+      setRemoteSessions([])
+      setListLoading(false)
+      setListError('')
+      return
+    }
     let cancelled = false
     setListLoading(true)
     setListError('')
@@ -189,7 +199,7 @@ export function HubReviewPage() {
       setListLoading(false)
     })
     return () => { cancelled = true }
-  }, [])
+  }, [embedded])
 
   const title = useMemo(() => {
     if (!detail) return '远程会话'
@@ -235,16 +245,16 @@ export function HubReviewPage() {
       : `/review/${encodeURIComponent(item.id)}`)
   }
 
-  return <main className="review-page hub-review-page">
-    <div className="workspace-toolbar hub-review-toolbar">
-      <button className="icon-button hub-review-back" onClick={() => navigate('/review')} aria-label="返回任务复盘">←</button>
+  return <main className={`review-page hub-review-page ${embedded ? 'hub-review-page-embedded' : ''}`}>
+    {!embedded && <div className="workspace-toolbar hub-review-toolbar">
+      <IconButton className="icon-button hub-review-back" onClick={() => navigate('/review')} aria-label="返回任务复盘"><UiIcon name="arrow-left" size={16}/></IconButton>
       <div>
         <b>任务复盘</b>
         <span>本机与 Hub 当前 active Generation 会话统一浏览。</span>
       </div>
-    </div>
+    </div>}
     <div className="review-layout">
-      <aside className="session-panel">
+      {!embedded && <aside className="session-panel">
         <div className="session-panel-head"><div><b>会话</b><span>本机 + 远程 · 按时间倒序</span></div><span className="count-badge">{localSessions.length + remoteSessions.length}</span></div>
         <div className="session-scroll">
           {listLoading && <div className="empty-state">加载会话…</div>}
@@ -275,9 +285,9 @@ export function HubReviewPage() {
           </section>)}
           {!listLoading && !sessionGroups.length && <div className="empty-state">当前没有可读取的会话</div>}
         </div>
-      </aside>
+      </aside>}
 
-      <section className="review-reader-pane hub-review-reader-pane">
+      <TaskSurface mode="hub" className="review-reader-pane hub-review-reader-pane">
         {loading && <div className="empty-state fill">加载远程会话…</div>}
         {error && <div className="page-error">{error}</div>}
         {!loading && !error && detail && <div className="review-reader hub-review-reader">
@@ -309,7 +319,7 @@ export function HubReviewPage() {
             {!detail.items.length && <div className="empty-state">当前会话没有可读取的远程记录。</div>}
           </div>
         </div>}
-      </section>
+      </TaskSurface>
     </div>
   </main>
 }

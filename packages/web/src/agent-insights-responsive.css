@@ -1,80 +1,122 @@
 /*
- * 智能体概览洞察区响应式所有者。
- *
- * 诊断卡在 1920×1080 等 xxl 浏览器视口下会进入右侧栏；这里保证侧栏拥有足够宽度，
- * 同时让“尚未适配的原生事件”使用适合窄栏的紧凑行式布局，不复用大块覆盖卡片的视觉密度。
+ * 智能体概览洞察区布局/响应式所有者。
+ * 负责诊断、覆盖矩阵与右侧洞察栏在 xl/xxl/md 视口的组合；不再依赖 desktop-responsive.css 覆盖。
  */
 
-.agent-diagnostic-unknown {
+.agents-responsive-shell {
+  display: block;
   min-width: 0;
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
 }
-
-.agent-diagnostic-unknown > .agent-coverage-list,
-.agent-diagnostic-unknown > .disclosure-group {
-  width: 100%;
-  min-width: 0;
-}
-
-.agent-diagnostic-unknown > .agent-coverage-list {
-  gap: 6px;
-  margin-top: 4px;
-}
-
-.agent-diagnostic-unknown .agent-coverage-row {
-  min-width: 0;
-  padding: 7px 8px;
-}
-
-.agent-diagnostic-unknown .agent-coverage-title {
-  display: grid;
-  min-width: 0;
+.agents-responsive-shell > .workspace-page { min-height: auto; flex: none; }
+.agents-responsive-shell .agents-content { overflow: visible; padding-bottom: 0; }
+.agents-responsive-shell .cross-agent-matrix { display: none; }
+.agents-responsive-shell .agents-browser { grid-template-columns: 230px minmax(0, 1fr); }
+.agents-responsive-shell .agent-source-option { grid-template-columns: auto minmax(0, 1fr); align-items: start; }
+.agents-responsive-shell .agent-source-option > .source-dot { grid-row: 1 / 3; }
+.agents-responsive-shell .agent-source-copy b { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
+.agents-responsive-shell .agent-source-state { grid-column: 2; white-space: normal; }
+.agents-responsive-shell .skill-funnel { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.agents-responsive-shell .skill-funnel > .skill-funnel-row {
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 8px;
-}
-
-.agent-diagnostic-unknown .agent-coverage-title b {
-  min-width: 0;
-  overflow: visible;
-  text-overflow: clip;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  line-height: 1.4;
-}
-
-.agent-diagnostic-unknown .agent-coverage-title small {
-  margin-left: 0;
-  padding-top: 1px;
-  white-space: nowrap;
-}
-
-.agent-diagnostic-unknown > .disclosure-group {
-  margin-top: 3px;
-  border-top-color: color-mix(in srgb, var(--al-warning) 20%, var(--al-line));
-}
-
-.agent-diagnostic-unknown > .disclosure-group > summary {
-  min-height: 34px;
-  padding-inline: 4px;
-  gap: 8px;
-}
-
-.agent-diagnostic-unknown > .disclosure-group > .agent-coverage-list {
   gap: 6px;
-  max-height: 320px;
-  overflow-y: auto;
-  padding-top: 4px;
-  padding-right: 2px;
+  min-height: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--al-line);
+  border-radius: 8px;
+  background: var(--al-soft-2);
 }
+.agents-responsive-shell .skill-funnel > .skill-funnel-row[data-active] { border-color: color-mix(in srgb, var(--al-success) 26%, var(--al-line)); background: var(--al-success-soft); }
+.agents-responsive-shell .skill-funnel-row .skill-funnel-track { grid-column: 1 / -1; }
 
-/* xxl：在 1920×1080 浏览器中给诊断栏更多真实可读宽度；1440 仍保持高密度 360px。 */
+.agent-insights-rail {
+  display: grid;
+  width: 100%;
+  max-width: 1500px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 14px auto 64px;
+  padding: 0 20px;
+}
+.agent-insight-card { min-width: 0; overflow: hidden; border: 1px solid var(--al-line); border-radius: 12px; background: var(--al-surface); }
+.agent-insight-head { display: flex; min-height: 52px; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--al-line); }
+.agent-insight-head h2 { margin: 0; font-size: 14px; font-weight: 700; }
+.agent-insight-head p { margin: 4px 0 0; color: var(--al-muted); font-size: 12px; line-height: 1.45; }
+.agent-insight-head > span { flex: 0 0 auto; padding: 3px 7px; border-radius: 999px; background: var(--al-soft); color: var(--al-muted); font-size: 12px; font-weight: 680; white-space: nowrap; }
+.agent-insight-head > span[data-state='ok'] { background: var(--al-success-soft); color: var(--al-success); }
+.agent-insight-head > span[data-state='warn'] { background: var(--al-warning-soft); color: var(--al-warning); }
+.agent-insight-body { padding: 12px 14px 14px; }
+
+.agent-diagnostic-summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; }
+.agent-diagnostic-summary-grid > span { min-width: 0; padding: 8px 9px; border: 1px solid var(--al-line); border-radius: 8px; background: var(--al-soft-2); }
+.agent-diagnostic-summary-grid small,
+.agent-diagnostic-summary-grid b { display: block; }
+.agent-diagnostic-summary-grid small { color: var(--al-muted); font-size: 12px; }
+.agent-diagnostic-summary-grid b { overflow: hidden; margin-top: 3px; color: var(--al-ink); font-size: 13px; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+.agent-diagnostic-stage-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.agent-diagnostic-stage-list span { padding: 4px 7px; border: 1px solid var(--al-line); border-radius: 7px; background: var(--al-soft-2); color: var(--al-muted); font-size: 12px; }
+.agent-diagnostic-stage-list span[data-state='healthy'] { border-color: color-mix(in srgb, var(--al-success) 24%, var(--al-line)); color: var(--al-success); }
+.agent-diagnostic-stage-list span[data-state='failed'] { border-color: color-mix(in srgb, var(--al-danger) 24%, var(--al-line)); background: var(--al-danger-soft); color: var(--al-danger); }
+.agent-diagnostic-unknown { display: flex; min-width: 0; flex-direction: column; gap: 4px; margin-top: 10px; padding: 9px 10px; border: 1px solid color-mix(in srgb, var(--al-warning) 24%, var(--al-line)); border-radius: 8px; background: var(--al-warning-soft); }
+.agent-diagnostic-unknown b { color: var(--al-warning); font-size: 12px; }
+.agent-diagnostic-unknown span,
+.agent-diagnostic-unknown small { color: color-mix(in srgb, var(--al-warning) 70%, var(--al-ink)); font-size: 12px; line-height: 1.5; }
+.agent-diagnostic-unknown > .agent-coverage-list,
+.agent-diagnostic-unknown > .disclosure-group { width: 100%; min-width: 0; }
+.agent-diagnostic-unknown > .agent-coverage-list { gap: 6px; margin-top: 4px; }
+.agent-diagnostic-unknown .agent-coverage-row { min-width: 0; padding: 7px 8px; }
+.agent-diagnostic-unknown .agent-coverage-title { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 8px; }
+.agent-diagnostic-unknown .agent-coverage-title b { min-width: 0; overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; line-height: 1.4; }
+.agent-diagnostic-unknown .agent-coverage-title small { margin-left: 0; padding-top: 1px; white-space: nowrap; }
+.agent-diagnostic-unknown > .disclosure-group { margin-top: 3px; border-top-color: color-mix(in srgb, var(--al-warning) 20%, var(--al-line)); }
+.agent-diagnostic-unknown > .disclosure-group > summary { min-height: 34px; padding-inline: 4px; gap: 8px; }
+.agent-diagnostic-unknown > .disclosure-group > .agent-coverage-list { gap: 6px; max-height: 320px; overflow-y: auto; padding-top: 4px; padding-right: 2px; }
+
+.agent-coverage-list { display: grid; gap: 8px; }
+.agent-coverage-row { padding: 9px 10px; border: 1px solid var(--al-line); border-radius: 9px; background: var(--al-soft-2); }
+.agent-coverage-title { display: flex; align-items: baseline; gap: 8px; }
+.agent-coverage-title b { min-width: 0; overflow: hidden; color: var(--al-ink-2); font-family: var(--font-mono); font-size: 12px; font-weight: 640; text-overflow: ellipsis; white-space: nowrap; }
+.agent-coverage-title small { margin-left: auto; color: var(--al-muted); font-size: 12px; white-space: nowrap; }
+.agent-coverage-agents { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 6px; margin-top: 7px; }
+.agent-coverage-agents > span { display: flex; min-width: 0; align-items: center; gap: 5px; color: var(--al-muted); font-size: 12px; }
+.agent-coverage-agents em { overflow: hidden; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+.agent-coverage-agents > span[data-status='used'] em { color: var(--al-success); font-weight: 650; }
+.agent-coverage-agents > span[data-status='discoverable'] em,
+.agent-coverage-agents > span[data-status='configured'] em { color: var(--al-accent); }
+.agent-insight-empty { padding: 8px 0; color: var(--al-muted); font-size: 12px; line-height: 1.55; }
+
+/* xxl：工具栏横跨整行，正文进入“主详情 + 右侧洞察”。 */
 @media (min-width: 1400px) {
   .agents-responsive-shell {
     --agent-insights-width: clamp(360px, 22vw, 420px);
+    display: grid;
     grid-template-columns: minmax(0, 1fr) var(--agent-insights-width);
+    align-items: start;
+    gap: 0;
+    overflow: auto;
   }
+  .agents-responsive-shell > .workspace-page { grid-column: 1 / -1; grid-row: 1; width: 100%; min-width: 0; align-self: start; overflow: visible; }
+  .agents-responsive-shell .agents-content { max-width: none; margin: 0; overflow: visible; padding-right: calc(var(--agent-insights-width) + 28px); padding-bottom: 56px; }
+  .agent-insights-rail { position: sticky; top: 10px; grid-column: 2; grid-row: 1; display: flex; min-width: 0; max-width: none; flex-direction: column; gap: 14px; align-self: start; margin: 56px 18px 18px 0; padding: 0; overflow: visible; }
+  .agent-diagnostic-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 
-  .agents-responsive-shell .agents-content {
-    padding-right: calc(var(--agent-insights-width) + 28px);
-  }
+@media (max-width: 1199.98px) {
+  .agents-responsive-shell .agents-browser { grid-template-columns: 210px minmax(0, 1fr); gap: 12px; }
+  .agent-insights-rail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .agent-diagnostic-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 991.98px) {
+  .agents-responsive-shell .agents-browser { grid-template-columns: 1fr; }
+  .agents-responsive-shell .agent-source-nav { position: static; display: flex; overflow-x: auto; gap: 6px; }
+  .agents-responsive-shell .agent-source-nav-head { display: none; }
+  .agents-responsive-shell .agent-source-option { min-width: 190px; }
+  .agent-insights-rail { grid-template-columns: 1fr; padding-inline: 18px; }
+}
+@media (max-width: 767.98px) {
+  .agents-responsive-shell .skill-funnel { grid-template-columns: 1fr; }
+  .agent-insights-rail { padding-inline: 14px; }
+  .agent-diagnostic-summary-grid { grid-template-columns: 1fr; }
 }

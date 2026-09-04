@@ -7,9 +7,11 @@ export const TIMELINE_OBSERVATION_KINDS = [
   'session.lifecycle',
   'message.user',
   'message.assistant',
+  'message.commentary',
   'message.reasoning',
   'model.call',
   'model.changed',
+  'thinking.level.changed',
   'tool.call',
   'tool.progress',
   'tool.result',
@@ -19,6 +21,7 @@ export const TIMELINE_OBSERVATION_KINDS = [
   'subagent.end',
   'context.compaction',
   'context.summary',
+  'context.injected',
   'artifact.action',
   'usage',
   'unknown',
@@ -77,6 +80,9 @@ export interface TimelineItemDto {
   sourceSessionId: string
   interactionId?: string
   actorId?: string
+  nativeEventId?: string
+  nativeParentEventId?: string
+  parentObservationId?: string
   sourceSequence?: number
   canonicalSequence?: number
   occurredAt?: string

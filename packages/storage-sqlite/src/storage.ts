@@ -20,6 +20,19 @@ import { SqliteRuntimeProfileRepository } from './runtime-profiles'
 import { SqliteSourceRuntimeStatusRepository } from './runtime-status'
 import { withSqliteSessionRuntimeProfiles } from './session-runtime-profile'
 import { SqliteSessionSummaryReader } from './session-summaries'
+
+const STORAGE_SOFT_LIMIT_BYTES = 512 * 1024 * 1024
+const STORAGE_APPROACHING_RATIO = 0.8
+
+export function describeStorageCapacity(footprintBytes: number, softLimitBytes = STORAGE_SOFT_LIMIT_BYTES) {
+  const ratio = softLimitBytes > 0 ? footprintBytes / softLimitBytes : 0
+  return {
+    softLimitBytes,
+    footprintBytes,
+    ratio,
+    state: ratio >= 1 ? 'exceeded' : ratio >= STORAGE_APPROACHING_RATIO ? 'approaching' : 'healthy',
+  } as const
+}
 import { SqliteToolUsageObservationReader } from './tool-usage-observations'
 
 export interface SqliteStorageOptions {
@@ -166,8 +179,12 @@ export class SqliteStorageService implements StorageService {
       const recentCount = (table: string, column: string): number => Number((this.db.prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE ${column} >= ?`).get(cutoff) as { count: number }).count)
       const pageCount = Number(this.db.pragma('page_count', { simple: true }))
       const pageSize = Number(this.db.pragma('page_size', { simple: true }))
+      const freelistCount = Number(this.db.pragma('freelist_count', { simple: true }))
       const databaseBytes = fileSize(this.db.name)
       const walBytes = fileSize(`${this.db.name}-wal`)
+      const logicalBytes = pageCount * pageSize
+      const reclaimableBytes = freelistCount * pageSize
+      const capacity = describeStorageCapacity(Math.max(databaseBytes, logicalBytes) + walBytes)
       const checkpointTable = this.db.prepare(`
         SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'source_checkpoints'
       `).get()
@@ -181,7 +198,9 @@ export class SqliteStorageService implements StorageService {
       const dataGrowth = {
         databaseBytes,
         walBytes,
-        logicalBytes: pageCount * pageSize,
+        logicalBytes,
+        reclaimableBytes,
+        capacity,
         sevenDayCutoff: cutoff,
         totals: {
           sourceRecords: count('source_records'),

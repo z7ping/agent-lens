@@ -1,0 +1,5 @@
+{
+  "name": "agent-lens-task-center-desktop-acceptance",
+  "private": true,
+  "main": "main.cjs"
+}

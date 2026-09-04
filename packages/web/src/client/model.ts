@@ -1,5 +1,6 @@
 import type {
   AgentOverviewResponseDto,
+  CapturePolicyResponseDto,
   FacetResponseDto,
   HealthResponseDto,
   LiveUpdateArea,
@@ -8,6 +9,7 @@ import type {
   ReviewResponseDto,
   ReviewSessionDetailDto,
   SessionRelationshipResponseDto,
+  SourceRecordResponseDto,
   ToolAssetUsageResponseDto,
 } from '@agent-lens/protocol'
 import { AgentLensApi, type QueryFilters, type ReviewFilters } from './api'
@@ -16,6 +18,7 @@ export interface ClientSnapshot {
   health: HealthResponseDto | null
   facets: FacetResponseDto | null
   agents: AgentOverviewResponseDto | null
+  capturePolicy: CapturePolicyResponseDto | null
   agentsHasNewData: boolean
   liveConnected: boolean
   review: {
@@ -43,37 +46,26 @@ export interface ClientSnapshot {
 
 type Listener = () => void
 const initialQuery: QueryFilters = { sourceId: '', projectId: '', range: '7d' }
-const INITIAL_REVIEW_LIMIT = 40
+const INITIAL_REVIEW_LIMIT = 1
+const PROGRESSIVE_REVIEW_LIMIT = 10
 const REVIEW_PAGE_SIZE = 40
-const MAX_REVIEW_LIMIT = 500
-const REVIEW_DETAIL_PAGE_SIZE = 20
+const REVIEW_DETAIL_PAGE_SIZE = 10
+export const REVIEW_DETAIL_WINDOW_SIZE = 30
 const REVIEW_SEARCH_DEBOUNCE_MS = 250
 
 function mergeReviewDetail(current: ReviewSessionDetailDto, next: ReviewSessionDetailDto): ReviewSessionDetailDto {
   const interactions = new Map(current.interactions.map(item => [item.id, item]))
   for (const interaction of next.interactions) interactions.set(interaction.id, interaction)
+  const ordered = [...interactions.values()].sort((a, b) => a.ordinal - b.ordinal)
+  const windowed = ordered.length <= REVIEW_DETAIL_WINDOW_SIZE
+    ? ordered
+    : next.page.direction === 'backward'
+      ? ordered.slice(0, REVIEW_DETAIL_WINDOW_SIZE)
+      : ordered.slice(-REVIEW_DETAIL_WINDOW_SIZE)
   return {
     ...current,
-    interactions: [...interactions.values()].sort((a, b) => a.ordinal - b.ordinal),
+    interactions: windowed,
     page: next.page,
-  }
-}
-
-function mergeReviewTail(current: ReviewSessionDetailDto, tail: ReviewSessionDetailDto): ReviewSessionDetailDto {
-  const interactions = new Map(current.interactions.map(item => [item.id, item]))
-  for (const interaction of tail.interactions) interactions.set(interaction.id, interaction)
-  const lastOrdinal = Math.max(0, ...tail.interactions.map(item => item.ordinal))
-  return {
-    ...current,
-    endedAt: tail.endedAt > current.endedAt ? tail.endedAt : current.endedAt,
-    durationMs: Math.max(current.durationMs, tail.durationMs),
-    observationCount: Math.max(current.observationCount, tail.observationCount),
-    interactionCount: Math.max(current.interactionCount, tail.interactionCount, lastOrdinal),
-    toolCount: Math.max(current.toolCount, tail.toolCount),
-    errorCount: Math.max(current.errorCount, tail.errorCount),
-    hasErrors: current.hasErrors || tail.hasErrors,
-    interactions: [...interactions.values()].sort((a, b) => a.ordinal - b.ordinal),
-    page: current.page,
   }
 }
 
@@ -82,6 +74,7 @@ export class AgentLensClientModel {
     health: null,
     facets: null,
     agents: null,
+    capturePolicy: null,
     agentsHasNewData: false,
     liveConnected: false,
     review: {
@@ -111,6 +104,11 @@ export class AgentLensClientModel {
   private refreshTimer: ReturnType<typeof setTimeout> | null = null
   private detailTimer: ReturnType<typeof setTimeout> | null = null
   private reviewSearchTimer: ReturnType<typeof setTimeout> | null = null
+  private reviewInFlight: Promise<void> | null = null
+  private reviewRequestDirty = false
+  private reviewLiveDirty = false
+  private reviewActive = false
+  private visibilityListener: (() => void) | null = null
   private unsubscribeLive: (() => void) | null = null
   private reviewGeneration = 0
   private detailGeneration = 0
@@ -122,6 +120,8 @@ export class AgentLensClientModel {
   constructor(private readonly api = new AgentLensApi()) {}
 
   getSnapshot = (): ClientSnapshot => this.snapshot
+
+  sourceRecord = (id: string): Promise<SourceRecordResponseDto> => this.api.sourceRecord(id)
 
   subscribe = (listener: Listener): (() => void) => {
     this.listeners.add(listener)
@@ -149,14 +149,18 @@ export class AgentLensClientModel {
         connected => this.patch({ liveConnected: connected }),
       )
     }
+    if (!this.visibilityListener && typeof document !== 'undefined') {
+      this.visibilityListener = () => {
+        if (!document.hidden && this.reviewActive && this.reviewLiveDirty) this.scheduleReviewRefresh(0)
+      }
+      document.addEventListener('visibilitychange', this.visibilityListener)
+    }
 
-    const health = await this.api.health().catch(() => null)
-    if (health) this.patch({ health })
-    await Promise.all([
-      this.refreshFacetsAndAgents(),
-      this.refreshReview(),
-      this.refreshUsage(),
+    const [health] = await Promise.all([
+      this.api.health().catch(() => null),
+      this.refreshFacets(),
     ])
+    if (health) this.patch({ health })
   }
 
   stop(): void {
@@ -165,25 +169,86 @@ export class AgentLensClientModel {
     if (this.refreshTimer) clearTimeout(this.refreshTimer)
     if (this.detailTimer) clearTimeout(this.detailTimer)
     if (this.reviewSearchTimer) clearTimeout(this.reviewSearchTimer)
+    if (this.visibilityListener && typeof document !== 'undefined') document.removeEventListener('visibilitychange', this.visibilityListener)
     this.refreshTimer = null
     this.detailTimer = null
     this.reviewSearchTimer = null
+    this.visibilityListener = null
+    this.reviewActive = false
+  }
+
+  async refreshFacets(): Promise<void> {
+    try {
+      const facets = await this.api.facets()
+      this.patch({ facets })
+    } catch {
+      // Facets are shared navigation metadata; route data can still load independently.
+    }
+  }
+
+  async refreshAgents(): Promise<void> {
+    const generation = ++this.agentsGeneration
+    const invalidation = this.agentsInvalidation
+    try {
+      const [agents, capturePolicy] = await Promise.all([
+        this.api.agents(),
+        this.api.capturePolicy().catch(() => null),
+      ])
+      if (generation !== this.agentsGeneration) return
+      this.patch({ agents, capturePolicy, agentsHasNewData: this.agentsInvalidation !== invalidation })
+    } catch {
+      // Existing data remains visible on refresh failure.
+    }
+  }
+
+  async setSourceEnabled(sourceId: string, enabled: boolean): Promise<void> {
+    const current = this.snapshot.capturePolicy
+    if (!current) throw new Error('采集策略状态尚未加载')
+    const next = new Set(current.settings.configuredEnabledSources)
+    if (enabled) next.add(sourceId)
+    else next.delete(sourceId)
+    const capturePolicy = await this.api.updateCaptureSources([...next])
+    this.patch({ capturePolicy })
   }
 
   async refreshFacetsAndAgents(): Promise<void> {
-    const generation = ++this.agentsGeneration
-    const invalidation = this.agentsInvalidation
-    const [facets, agents] = await Promise.allSettled([
-      this.api.facets(),
-      this.api.agents(),
-    ])
-    if (generation !== this.agentsGeneration) return
-    this.patch({
-      ...(facets.status === 'fulfilled' ? { facets: facets.value } : {}),
-      ...(agents.status === 'fulfilled'
-        ? { agents: agents.value, agentsHasNewData: this.agentsInvalidation !== invalidation }
-        : {}),
-    })
+    await Promise.all([this.refreshFacets(), this.refreshAgents()])
+  }
+
+  ensureReview(): Promise<void> {
+    return this.snapshot.review.response ? Promise.resolve() : this.refreshReview()
+  }
+
+  ensureUsage(): Promise<void> {
+    return this.snapshot.usage.response ? Promise.resolve() : this.refreshUsage()
+  }
+
+  ensureAgents(): Promise<void> {
+    return this.snapshot.agents ? Promise.resolve() : this.refreshAgents()
+  }
+
+  setReviewActive(active: boolean): void {
+    this.reviewActive = active
+    if (!active) {
+      if (this.refreshTimer) clearTimeout(this.refreshTimer)
+      this.refreshTimer = null
+      return
+    }
+    if (this.reviewLiveDirty) this.scheduleReviewRefresh(0)
+  }
+
+  private scheduleReviewRefresh(delay?: number): void {
+    this.reviewLiveDirty = true
+    if (!this.reviewActive) return
+    if (typeof document !== 'undefined' && document.hidden) return
+    if (this.refreshTimer) clearTimeout(this.refreshTimer)
+    const wait = delay ?? 800
+    this.refreshTimer = setTimeout(() => {
+      this.refreshTimer = null
+      if (!this.reviewActive || !this.reviewLiveDirty) return
+      this.reviewLiveDirty = false
+      void this.refreshReview({ preserveDetail: true })
+    }, wait)
   }
 
   setReviewFilters(patch: Partial<ReviewFilters>): void {
@@ -219,14 +284,37 @@ export class AgentLensClientModel {
 
   async loadMoreReview(): Promise<void> {
     const current = this.snapshot.review
-    if (current.loading || current.loadingMore || !current.response?.meta.hasMore) return
-    const nextLimit = Math.min(current.limit + REVIEW_PAGE_SIZE, MAX_REVIEW_LIMIT)
-    if (nextLimit === current.limit) return
+    const cursor = current.response?.meta.nextCursor
+    if (current.loading || current.loadingMore || !current.response?.meta.hasMore || !cursor) return
+    const generation = ++this.reviewGeneration
     this.publish({
       ...this.snapshot,
-      review: { ...current, limit: nextLimit, loadingMore: true, error: '' },
+      review: { ...current, loadingMore: true, error: '' },
     })
-    await this.refreshReview({ preserveDetail: true, loadingMore: true })
+    try {
+      const next = await this.api.review(current.filters, REVIEW_PAGE_SIZE, cursor)
+      if (generation !== this.reviewGeneration) return
+      const latest = this.snapshot.review
+      const items = new Map(latest.response?.items.map(item => [item.id, item]) ?? [])
+      for (const item of next.items) items.set(item.id, item)
+      const merged = [...items.values()]
+      this.publish({
+        ...this.snapshot,
+        review: {
+          ...latest,
+          response: { ...next, items: merged, meta: { ...next.meta, count: merged.length } },
+          limit: merged.length,
+          loadingMore: false,
+          error: '',
+        },
+      })
+    } catch (error) {
+      if (generation !== this.reviewGeneration) return
+      this.publish({
+        ...this.snapshot,
+        review: { ...this.snapshot.review, loadingMore: false, error: error instanceof Error ? error.message : String(error) },
+      })
+    }
   }
 
   async loadMoreReviewDetail(): Promise<void> {
@@ -358,6 +446,23 @@ export class AgentLensClientModel {
     }
   }
 
+  async jumpToReviewInteraction(ordinal: number): Promise<void> {
+    const current = this.snapshot.review
+    if (!current.selectedId || ordinal < 1) return
+    if (current.detail?.interactions.some(item => item.ordinal === ordinal)) return
+    const selectedId = current.selectedId
+    const generation = ++this.detailGeneration
+    this.publish({ ...this.snapshot, review: { ...current, detailLoading: true, detailLoadingMore: false, error: '' } })
+    try {
+      const detail = await this.api.reviewDetail(selectedId, { ordinal })
+      if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== selectedId) return
+      this.publish({ ...this.snapshot, review: { ...this.snapshot.review, detail, detailLoading: false, error: '' } })
+    } catch (error) {
+      if (generation !== this.detailGeneration) return
+      this.publish({ ...this.snapshot, review: { ...this.snapshot.review, detailLoading: false, error: error instanceof Error ? error.message : String(error) } })
+    }
+  }
+
   acknowledgeReviewNewData(): void {
     const current = this.snapshot.review
     if (!current.detailHasNewData) return
@@ -367,23 +472,49 @@ export class AgentLensClientModel {
     })
   }
 
-  async refreshReview(options: { preserveDetail?: boolean; loadingMore?: boolean } = {}): Promise<void> {
-    const generation = ++this.reviewGeneration
-    const current = this.snapshot.review
-    this.publish({
-      ...this.snapshot,
-      review: {
-        ...current,
-        loading: options.loadingMore ? current.loading : true,
-        loadingMore: options.loadingMore ?? false,
-        error: '',
-      },
+  async refreshReview(options: { preserveDetail?: boolean } = {}): Promise<void> {
+    if (this.refreshTimer) clearTimeout(this.refreshTimer)
+    this.refreshTimer = null
+    this.reviewLiveDirty = false
+    this.reviewGeneration += 1
+    if (this.reviewInFlight) {
+      this.reviewRequestDirty = true
+      return this.reviewInFlight
+    }
+
+    let preserveDetail = options.preserveDetail === true
+    const run = async () => {
+      do {
+        this.reviewRequestDirty = false
+        const generation = this.reviewGeneration
+        await this.executeReviewRefresh(generation, preserveDetail)
+        preserveDetail = true
+      } while (this.reviewRequestDirty)
+    }
+    const pending = run().finally(() => {
+      if (this.reviewInFlight === pending) this.reviewInFlight = null
     })
+    this.reviewInFlight = pending
+    return pending
+  }
+
+  private async executeReviewRefresh(generation: number, preserveDetail: boolean): Promise<void> {
+    const current = this.snapshot.review
+    const backgroundRefresh = preserveDetail && current.response !== null
+    if (!backgroundRefresh) {
+      this.publish({
+        ...this.snapshot,
+        review: { ...current, loading: true, loadingMore: false, error: '' },
+      })
+    }
     try {
-      const response = await this.api.review(current.filters, current.limit)
+      const refreshLimit = backgroundRefresh
+        ? Math.max(INITIAL_REVIEW_LIMIT, current.limit, current.response?.items.length ?? 0)
+        : INITIAL_REVIEW_LIMIT
+      const response = await this.api.review(current.filters, refreshLimit)
       if (generation !== this.reviewGeneration) return
       let selectedId = this.snapshot.review.selectedId
-      if (!selectedId || !response.items.some(item => item.id === selectedId)) {
+      if (!selectedId || (!preserveDetail && !response.items.some(item => item.id === selectedId))) {
         selectedId = response.items[0]?.id ?? ''
       }
       this.publish({
@@ -392,23 +523,21 @@ export class AgentLensClientModel {
           ...this.snapshot.review,
           response,
           selectedId,
+          limit: refreshLimit,
           loading: false,
           loadingMore: false,
           error: '',
         },
       })
-      if (selectedId && (!options.preserveDetail || this.snapshot.review.detail?.id !== selectedId)) {
+      if (selectedId && (!preserveDetail || this.snapshot.review.detail?.id !== selectedId)) {
         await this.selectReviewSession(selectedId)
       } else if (!selectedId) {
         this.publish({
           ...this.snapshot,
-          review: {
-            ...this.snapshot.review,
-            detail: null,
-            relationships: null,
-          },
+          review: { ...this.snapshot.review, detail: null, relationships: null },
         })
       }
+      if (!backgroundRefresh) await this.expandInitialReview(generation, response)
     } catch (error) {
       if (generation !== this.reviewGeneration) return
       this.publish({
@@ -420,6 +549,25 @@ export class AgentLensClientModel {
           error: error instanceof Error ? error.message : String(error),
         },
       })
+    }
+  }
+
+  private async expandInitialReview(generation: number, initial: ReviewResponseDto): Promise<void> {
+    if (!initial.meta.hasMore || generation !== this.reviewGeneration) return
+    try {
+      const expanded = await this.api.review(this.snapshot.review.filters, PROGRESSIVE_REVIEW_LIMIT)
+      if (generation !== this.reviewGeneration) return
+      const current = this.snapshot.review
+      this.publish({
+        ...this.snapshot,
+        review: {
+          ...current,
+          response: expanded,
+          limit: expanded.items.length,
+        },
+      })
+    } catch {
+      // 首屏数据已经可用；渐进补载失败时保留首屏，后续刷新或滚动可重试。
     }
   }
 
@@ -503,59 +651,31 @@ export class AgentLensClientModel {
 
   private async refreshSelectedTailIncremental(): Promise<void> {
     const current = this.snapshot.review
-    const detail = current.detail
-    if (!current.selectedId || !detail || detail.page.filter !== 'all') {
-      if (current.selectedId) {
-        this.publish({ ...this.snapshot, review: { ...current, detailHasNewData: true } })
-      }
-      return
-    }
-
-    const includesTail = detail.page.direction === 'backward' || !detail.page.hasMore
-    if (!includesTail) {
-      this.publish({ ...this.snapshot, review: { ...current, detailHasNewData: true } })
-      return
-    }
-
-    const selectedId = current.selectedId
-    const generation = this.detailGeneration
-    try {
-      const tail = await this.api.reviewDetail(selectedId, { direction: 'backward', limit: 2 })
-      if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== selectedId) return
-      const latest = this.snapshot.review
-      if (!latest.detail || latest.detail.page.filter !== 'all') return
-      this.publish({
-        ...this.snapshot,
-        review: {
-          ...latest,
-          detail: mergeReviewTail(latest.detail, tail),
-          detailHasNewData: true,
-        },
-      })
-    } catch {
-      if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== selectedId) return
-      this.publish({
-        ...this.snapshot,
-        review: { ...this.snapshot.review, detailHasNewData: true },
-      })
-    }
+    if (!current.selectedId || current.detailHasNewData) return
+    // Review 是复盘阅读面，不在用户观看过程中持续改写已渲染正文。
+    // 新 Observation 只标记为“有新记录”；用户点击“跳到最新 / 有新记录”后再主动取最新窗口。
+    this.publish({
+      ...this.snapshot,
+      review: { ...current, detailHasNewData: true },
+    })
   }
 
   private onLiveEvent(event: LiveUpdateEventDto): void {
     const affected: readonly LiveUpdateArea[] = event.affected
     if (affected.includes('review')) {
-      if (event.type === 'observation.committed' && event.logicalSessionId && event.logicalSessionId === this.snapshot.review.selectedId) {
+      const updatesSelectedSession = this.reviewActive
+        && event.type === 'observation.committed'
+        && Boolean(event.logicalSessionId)
+        && event.logicalSessionId === this.snapshot.review.selectedId
+      if (updatesSelectedSession) {
         if (this.detailTimer) clearTimeout(this.detailTimer)
         this.detailTimer = setTimeout(() => {
           this.detailTimer = null
-          void this.refreshSelectedTailIncremental()
+          if (this.reviewActive) void this.refreshSelectedTailIncremental()
         }, 160)
+      } else {
+        this.scheduleReviewRefresh()
       }
-      if (this.refreshTimer) clearTimeout(this.refreshTimer)
-      this.refreshTimer = setTimeout(() => {
-        this.refreshTimer = null
-        void this.refreshReview({ preserveDetail: true })
-      }, 220)
     }
     if (affected.includes('usage')) {
       this.usageInvalidation += 1

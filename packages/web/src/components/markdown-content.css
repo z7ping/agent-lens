@@ -1,0 +1,55 @@
+@reference "../styles.css";
+
+/* Tailwind/preflight 会移除原生列表 marker；Markdown 正文必须显式恢复语义列表。 */
+.markdown ul { list-style: disc outside; }
+.markdown ol { list-style: decimal outside; }
+.markdown ul ul { list-style-type: circle; }
+.markdown ul ul ul { list-style-type: square; }
+.markdown li { display: list-item; }
+.markdown li::marker { color: var(--al-muted); }
+
+/* GFM 任务列表由 remark-gfm 解析；checkbox 属于正文语义，不恢复普通列表 marker。 */
+.markdown .contains-task-list { list-style: none; padding-left: 0; }
+.markdown .task-list-item { list-style: none; }
+.markdown .task-list-item > input[type='checkbox'] { margin: 0 7px 0 0; vertical-align: -1px; }
+
+/* GFM 表格由 remark-gfm 解析，滚动容器避免宽表撑破会话详情。 */
+.markdown-table-scroll {
+  width: 100%;
+  max-width: 100%;
+  margin: 9px 0;
+  overflow-x: auto;
+  border: 1px solid var(--al-line);
+  border-radius: 8px;
+  background: var(--al-surface);
+}
+.markdown .markdown-table-scroll > table {
+  display: table;
+  width: max-content;
+  min-width: 100%;
+  margin: 0;
+  overflow: visible;
+  border-collapse: collapse;
+  white-space: normal;
+}
+.markdown .markdown-table-scroll th,
+.markdown .markdown-table-scroll td {
+  min-width: 92px;
+  padding: 7px 9px;
+  border: 0;
+  border-right: 1px solid var(--al-line);
+  border-bottom: 1px solid var(--al-line);
+  vertical-align: top;
+  white-space: normal;
+}
+.markdown .markdown-table-scroll th:last-child,
+.markdown .markdown-table-scroll td:last-child { border-right: 0; }
+.markdown .markdown-table-scroll tbody tr:last-child td { border-bottom: 0; }
+.markdown .markdown-table-scroll th {
+  background: var(--al-soft-2);
+  color: var(--al-ink);
+  font-weight: 680;
+}
+.markdown .markdown-table-scroll th > p,
+.markdown .markdown-table-scroll td > p { margin: 0; white-space: normal; }
+

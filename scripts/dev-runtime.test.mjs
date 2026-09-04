@@ -7,13 +7,18 @@ import {
   findAvailableDevPort,
   npmInvocation,
   parseDevPort,
+  waitForRuntimeReady,
 } from './dev-runtime.mjs'
 
 test('parseDevPort 使用默认端口并拒绝非法值', () => {
-  assert.equal(parseDevPort(undefined), 56789)
+  assert.equal(parseDevPort(undefined), 56800)
   assert.equal(parseDevPort('56820'), 56820)
   assert.throws(() => parseDevPort('0'), /1-65535/)
   assert.throws(() => parseDevPort('abc'), /1-65535/)
+})
+
+test('源码开发默认端口与安装态 56789 保持隔离', () => {
+  assert.notEqual(parseDevPort(undefined), 56789)
 })
 
 test('findAvailableDevPort 从起始端口逐个 +1', async () => {
@@ -82,4 +87,30 @@ test('npmInvocation 可启动源码 Web workspace', () => {
     '--workspace',
     '@agent-lens/web',
   ])
+})
+
+test('开发 Web 等待 Runtime Health 成功后再继续启动', async () => {
+  let attempts = 0
+  await waitForRuntimeReady('http://127.0.0.1:56800/api/v1/ready', {
+    intervalMs: 0,
+    timeoutMs: 1_000,
+    async fetchImpl() {
+      attempts += 1
+      if (attempts < 3) throw new Error('ECONNREFUSED')
+      return { ok: true, status: 200 }
+    },
+  })
+
+  assert.equal(attempts, 3)
+})
+
+test('Runtime Health 持续失败时给出明确超时', async () => {
+  await assert.rejects(
+    waitForRuntimeReady('http://127.0.0.1:56800/api/v1/ready', {
+      intervalMs: 0,
+      timeoutMs: 10,
+      async fetchImpl() { throw new Error('ECONNREFUSED') },
+    }),
+    /Runtime 在 10ms 内未就绪：ECONNREFUSED/,
+  )
 })

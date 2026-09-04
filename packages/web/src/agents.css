@@ -1,7 +1,8 @@
 /*
  * AgentLens 1.0 智能体概览正式样式。
  *
- * 本文件完整负责来源列表、智能体详情、资产统计、技能漏斗、能力信息与跨智能体矩阵。
+ * 本文件负责来源列表、智能体详情、资产统计、技能漏斗、能力信息与跨智能体矩阵；
+ * 页面级组合与来源导航响应式由 agent-insights-responsive.css 独占。
  */
 
 .agents-content { overflow: auto; }
@@ -128,6 +129,56 @@
 .agent-installation small { font-size: 12px; }
 .agent-installation b { color: var(--al-ink-2); font-weight: 620; }
 .agent-installation code { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+
+.source-capture-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 13px 18px;
+  border-top: 1px solid var(--al-line);
+  background: var(--al-soft-2);
+}
+.source-capture-control > div { min-width: 0; }
+.source-capture-control h3 { margin: 0; font-size: 13px; font-weight: 680; }
+.source-capture-control p { margin: 4px 0 0; color: var(--al-muted); font-size: 12px; line-height: 1.55; }
+.source-capture-control .source-capture-note { color: var(--al-warning, var(--al-muted)); }
+.source-capture-control .source-capture-error { color: var(--al-danger); }
+.source-capture-switch {
+  display: flex;
+  min-width: 92px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  border: 1px solid var(--al-line-strong);
+  border-radius: 999px;
+  background: var(--al-surface);
+  color: var(--al-muted);
+  font-size: 12px;
+}
+.source-capture-switch > span {
+  position: relative;
+  width: 28px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--al-line-strong);
+}
+.source-capture-switch > span::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--al-surface);
+  transition: transform .14s ease;
+}
+.source-capture-switch[data-enabled] { border-color: color-mix(in srgb, var(--al-success) 38%, var(--al-line)); color: var(--al-success); }
+.source-capture-switch[data-enabled] > span { background: var(--al-success); }
+.source-capture-switch[data-enabled] > span::after { transform: translateX(12px); }
+.source-capture-switch:disabled { cursor: not-allowed; opacity: .62; }
 
 .agent-primary-section,
 .skill-lifecycle {
@@ -343,27 +394,24 @@
   font-size: 12px;
   font-weight: 640;
 }
-.matrix-cell[data-status='used'] { background: var(--al-success); color: var(--al-on-success, #fff); }
+.matrix-cell[data-status='used'] { background: var(--al-success); color: var(--al-on-success); }
 .matrix-cell[data-status='discoverable'] { border: 1.5px solid color-mix(in srgb, var(--al-success) 62%, transparent); color: var(--al-success); }
 .matrix-cell[data-status='configured'] { background: var(--al-accent-soft); color: var(--al-accent); }
 .matrix-cell[data-status='discovered'] { background: var(--al-soft); color: var(--al-muted); }
 .matrix-cell[data-status='unobserved'] { background: repeating-linear-gradient(45deg, var(--al-soft) 0 5px, transparent 5px 10px); color: var(--al-muted-2); }
 
-@media (max-width: 820px) {
-  .agents-grid,
-  .agents-browser { grid-template-columns: 1fr; }
+/* 详情内部响应式；页面级 agents-browser / 来源导航由 agent-insights-responsive.css 独占。 */
+@media (max-width: 991.98px) {
+  .agents-grid { grid-template-columns: 1fr; }
   .asset-list-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
-@media (max-width: 760px) {
+@media (max-width: 767.98px) {
   .frequent-usage-track { display: none; }
   .frequent-asset-row { grid-template-columns: 20px minmax(0, 1fr) 42px; }
 }
 
-@media (max-width: 560px) {
-  .agents-browser { grid-template-columns: 1fr; }
-  .agent-source-nav { position: static; display: flex; overflow-x: auto; gap: 6px; }
-  .agent-source-nav-head { display: none; }
-  .agent-source-option { min-width: 176px; }
+@media (max-width: 575.98px) {
   .asset-list-grid { grid-template-columns: 1fr; }
+  .source-capture-control { align-items: flex-start; flex-direction: column; }
 }

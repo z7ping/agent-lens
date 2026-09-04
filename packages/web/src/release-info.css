@@ -37,6 +37,19 @@
   color: var(--al-ink);
 }
 
+.header-update-link {
+  border: 1px solid color-mix(in srgb, var(--al-accent) 34%, var(--al-line));
+  background: color-mix(in srgb, var(--al-accent) 8%, transparent);
+  color: var(--al-accent);
+  font-weight: 650;
+}
+
+.header-update-link:hover,
+.header-update-link:focus-visible {
+  background: color-mix(in srgb, var(--al-accent) 14%, var(--al-surface-raised));
+  color: var(--al-accent);
+}
+
 .release-dialog-backdrop {
   position: fixed;
   inset: 0;
@@ -143,6 +156,42 @@
   font-size: 13px;
 }
 
+.web-update-content .release-section > p {
+  margin: 0 0 10px;
+  color: var(--al-ink-2);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.web-update-command {
+  display: block;
+  overflow-x: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--al-line);
+  border-radius: 8px;
+  background: var(--al-soft);
+  color: var(--al-ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.web-update-content .web-update-fallback {
+  margin-top: 13px;
+  color: var(--al-muted);
+}
+
+.web-update-notes {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  color: var(--al-ink-2);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
 .release-dialog-footer {
   display: flex;
   flex: 0 0 auto;
@@ -161,21 +210,31 @@
   gap: 12px;
 }
 
-.release-dialog-footer a {
+.release-dialog-footer a,
+.release-footer-button {
+  border: 0;
+  padding: 0;
+  background: transparent;
   color: var(--al-accent);
+  font: inherit;
+  font-size: 12px;
   font-weight: 600;
   text-decoration: none;
+  cursor: pointer;
 }
 
 .release-dialog-footer a:hover,
-.release-dialog-footer a:focus-visible { text-decoration: underline; }
-
-@media (max-width: 820px) {
-  .brand-version,
-  .header-link-github { display: none; }
+.release-dialog-footer a:focus-visible,
+.release-footer-button:hover,
+.release-footer-button:focus-visible {
+  outline: none;
+  text-decoration: underline;
 }
 
-@media (max-width: 560px) {
+@media (max-width: 767.98px) {
+  .brand-version,
+  .header-link-github { display: none; }
+
   .release-dialog-backdrop { padding: 10px; }
   .release-dialog {
     width: calc(100vw - 20px);

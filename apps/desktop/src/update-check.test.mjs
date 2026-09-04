@@ -6,6 +6,7 @@ import {
   parseSemver,
   selectUpdateRelease,
   shouldCheckForUpdate,
+  shouldNotifyUpdate,
 } from './update-check.mjs'
 
 test('parseSemver and compareSemver follow prerelease precedence', () => {
@@ -34,11 +35,16 @@ test('prerelease builds can advance through later prereleases into stable', () =
       prerelease: false,
       draft: false,
       html_url: 'https://example.test/stable',
+      body: '稳定版发布说明',
+      published_at: '2026-08-30T00:00:00Z',
       assets: [{ name: 'AgentLens-1.0.0-Setup-x64.exe', browser_download_url: 'https://example.test/setup.exe' }],
     },
   ], '1.0.0-alpha.0')
   assert.equal(update?.version, '1.0.0')
   assert.equal(update?.downloadUrl, 'https://example.test/setup.exe')
+  assert.equal(update?.releasePageUrl, 'https://example.test/stable')
+  assert.equal(update?.publishedAt, '2026-08-30T00:00:00Z')
+  assert.equal(update?.releaseNotes, '稳定版发布说明')
 })
 
 test('platform-specific desktop assets are preferred', () => {
@@ -93,6 +99,14 @@ test('daily check interval is persisted as a 24 hour gate', () => {
   assert.equal(shouldCheckForUpdate(null, now), true)
   assert.equal(shouldCheckForUpdate('2026-08-25T11:00:00Z', now), false)
   assert.equal(shouldCheckForUpdate('2026-08-25T10:00:00Z', now), true)
+})
+
+test('skipping one release suppresses only that version', () => {
+  const alpha3 = { version: '1.0.0-alpha.3' }
+  const alpha4 = { version: '1.0.0-alpha.4' }
+  assert.equal(shouldNotifyUpdate(alpha3, {}), true)
+  assert.equal(shouldNotifyUpdate(alpha3, { skippedVersion: '1.0.0-alpha.3' }), false)
+  assert.equal(shouldNotifyUpdate(alpha4, { skippedVersion: '1.0.0-alpha.3' }), true)
 })
 
 test('fetchAvailableUpdate uses release list and returns selected update', async () => {

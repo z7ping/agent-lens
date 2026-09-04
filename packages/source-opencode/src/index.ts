@@ -15,6 +15,7 @@ import type {
   SourceDefinition,
   SourceDetectionContext,
   SourceExecutionContext,
+  SourceHistoryExecutionContext,
   SourceNormalizationContext,
   SourcePluginManifest,
   SourceRecord,
@@ -26,7 +27,7 @@ import {
 } from '@agent-lens/runtime-cordis'
 
 const SOURCE_ID = 'opencode'
-const PARSER_VERSION = '1'
+const PARSER_VERSION = '2'
 const DB_NAME = 'opencode.db'
 const HISTORY_BATCH = 1000
 const RUNTIME_RECENT_ROWS = 500
@@ -43,6 +44,7 @@ interface OpenCodeRow {
   data: string | null
   message_data: string | null
   directory: string | null
+  session_title: string | null
 }
 
 interface OpenCodeEnvelope {
@@ -51,6 +53,7 @@ interface OpenCodeEnvelope {
   session: {
     nativeSessionId: string
     cwd?: string
+    title?: string
   }
   captureChannel: 'history' | 'native-tail'
 }
@@ -150,7 +153,45 @@ function openDatabase(root: string): Database.Database {
   return db
 }
 
-function selectRows(db: Database.Database, afterRowId: number, limit: number): OpenCodeRow[] {
+function timestampMillisSql(column: string): string {
+  return `CASE
+    WHEN typeof(${column}) IN ('integer', 'real') THEN
+      CASE WHEN CAST(${column} AS REAL) < 10000000000 THEN CAST(${column} AS REAL) * 1000 ELSE CAST(${column} AS REAL) END
+    WHEN trim(CAST(${column} AS TEXT)) <> '' AND trim(CAST(${column} AS TEXT)) NOT GLOB '*[^0-9.]*' THEN
+      CASE WHEN CAST(${column} AS REAL) < 10000000000 THEN CAST(${column} AS REAL) * 1000 ELSE CAST(${column} AS REAL) END
+    ELSE CAST(strftime('%s', ${column}) AS REAL) * 1000
+  END`
+}
+
+function selectRows(
+  db: Database.Database,
+  afterRowId: number,
+  limit: number,
+  activeSinceMs?: number,
+  sessionLimit?: number,
+): OpenCodeRow[] {
+  const params: unknown[] = [afterRowId]
+  const filters: string[] = []
+  if (activeSinceMs !== undefined) {
+    filters.push(`${timestampMillisSql('p.time_created')} >= ?`)
+    params.push(activeSinceMs)
+  }
+  if (sessionLimit !== undefined) {
+    const recentFilters = activeSinceMs === undefined
+      ? ''
+      : `WHERE ${timestampMillisSql('recent.time_created')} >= ?`
+    filters.push(`p.session_id IN (
+      SELECT recent.session_id FROM part recent
+      ${recentFilters}
+      GROUP BY recent.session_id
+      ORDER BY MAX(${timestampMillisSql('recent.time_created')}) DESC, recent.session_id ASC
+      LIMIT ?
+    )`)
+    if (activeSinceMs !== undefined) params.push(activeSinceMs)
+    params.push(Math.max(0, Math.floor(sessionLimit)))
+  }
+  params.push(limit)
+  const historyFilter = filters.length ? `AND ${filters.join(' AND ')}` : ''
   return db.prepare(`
     SELECT p.rowid AS row_id,
            p.id AS id,
@@ -159,14 +200,15 @@ function selectRows(db: Database.Database, afterRowId: number, limit: number): O
            p.time_created AS time_created,
            p.data AS data,
            m.data AS message_data,
-           s.directory AS directory
+           s.directory AS directory,
+           s.title AS session_title
       FROM part p
       LEFT JOIN message m ON p.message_id = m.id
       LEFT JOIN session s ON p.session_id = s.id
-     WHERE p.rowid > ?
+     WHERE p.rowid > ? ${historyFilter}
      ORDER BY p.rowid ASC
      LIMIT ?
-  `).all(afterRowId, limit) as OpenCodeRow[]
+  `).all(...params) as OpenCodeRow[]
 }
 
 function recentRows(db: Database.Database, limit: number): OpenCodeRow[] {
@@ -178,7 +220,8 @@ function recentRows(db: Database.Database, limit: number): OpenCodeRow[] {
            p.time_created AS time_created,
            p.data AS data,
            m.data AS message_data,
-           s.directory AS directory
+           s.directory AS directory,
+           s.title AS session_title
       FROM part p
       LEFT JOIN message m ON p.message_id = m.id
       LEFT JOIN session s ON p.session_id = s.id
@@ -191,7 +234,7 @@ function recentRows(db: Database.Database, limit: number): OpenCodeRow[] {
 function rowFingerprint(row: OpenCodeRow): string {
   return sha256(JSON.stringify([
     row.id, row.message_id, row.session_id, row.time_created,
-    row.data, row.message_data, row.directory,
+    row.data, row.message_data, row.directory, row.session_title,
   ]))
 }
 
@@ -206,9 +249,10 @@ function recordFromRow(
   const nativeType = stringField(part, 'type') ?? 'unknown'
   const fingerprint = rowFingerprint(row)
   const capturedAt = new Date().toISOString()
-  const occurredAt = normalizeTimestamp(row.time_created) ?? capturedAt
+  const occurredAt = normalizeTimestamp(row.time_created)
   const nativeId = row.id || `row-${row.row_id}`
   const dbPath = join(ctx.installation.dataRoot ?? ctx.installation.configRoot ?? '', DB_NAME)
+  const title = row.session_title?.trim() || undefined
 
   return {
     id: `opencode-${sha256(`${nativeId}:${fingerprint}`).slice(0, 32)}`,
@@ -218,7 +262,7 @@ function recordFromRow(
     nativeType: `part/${nativeType}`,
     nativeId,
     sourceSequence: row.row_id * 10,
-    occurredAt,
+    ...(occurredAt ? { occurredAt } : {}),
     capturedAt,
     locator: {
       kind: 'database',
@@ -233,6 +277,7 @@ function recordFromRow(
       session: {
         nativeSessionId,
         ...(row.directory ? { cwd: row.directory } : {}),
+        ...(title ? { title } : {}),
       },
       captureChannel,
     } satisfies OpenCodeEnvelope,
@@ -241,21 +286,30 @@ function recordFromRow(
 }
 
 export async function* ingestOpenCodeHistory(
-  ctx: SourceExecutionContext,
+  ctx: SourceHistoryExecutionContext,
 ): AsyncIterable<SourceRecord> {
   const root = ctx.installation.dataRoot ?? ctx.installation.configRoot
   if (!root || ctx.abortSignal.aborted) return
   const db = openDatabase(root)
   try {
-    let rowId = await ctx.checkpoint.get<number>('history-rowid') ?? 0
+    // v2 会一次性重放旧记录，让已经导入的会话也获得原生标题。
+    const parsedActiveSince = ctx.historyWindow?.activeSince ? Date.parse(ctx.historyWindow.activeSince) : Number.NaN
+    const activeSinceMs = Number.isFinite(parsedActiveSince) ? parsedActiveSince : undefined
+    const sessionLimit = ctx.historyWindow?.sessionLimit
+    const checkpointKey = activeSinceMs === undefined
+      ? 'history-rowid:v2-session-title'
+      : sessionLimit === undefined
+        ? 'history-hot-rowid:v1'
+        : `history-hot-limit-${Math.max(0, Math.floor(sessionLimit))}-rowid:v1`
+    let rowId = await ctx.checkpoint.get<number>(checkpointKey) ?? 0
     while (!ctx.abortSignal.aborted) {
-      const rows = selectRows(db, rowId, HISTORY_BATCH)
+      const rows = selectRows(db, rowId, HISTORY_BATCH, activeSinceMs, sessionLimit)
       if (!rows.length) break
       for (const row of rows) {
         if (ctx.abortSignal.aborted) return
         yield recordFromRow(row, ctx, 'history')
         rowId = row.row_id
-        await ctx.checkpoint.set('history-rowid', rowId)
+        await ctx.checkpoint.set(checkpointKey, rowId)
       }
       if (rows.length < HISTORY_BATCH) break
     }
@@ -368,6 +422,7 @@ function identity(record: SourceRecord, envelope: OpenCodeEnvelope): Observation
   return {
     nativeSessionId: envelope.session.nativeSessionId || record.sourceSessionNativeId || 'unknown',
     ...(envelope.session.cwd ? { workspacePath: envelope.session.cwd } : {}),
+    ...(envelope.session.title?.trim() ? { sessionTitle: envelope.session.title.trim() } : {}),
   }
 }
 
@@ -520,4 +575,5 @@ export const openCodeSourceInternals = {
   normalizeTimestamp,
   rowFingerprint,
   recordFromRow,
+  selectRows,
 }

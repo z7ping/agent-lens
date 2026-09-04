@@ -25,6 +25,8 @@ import {
   type BackupRestorePreviewResponseDto,
   type BackupSnapshotResponseDto,
   type BackupVerifyResponseDto,
+  type CapturePolicyResponseDto,
+  type CapturePolicySourceUpdateRequestDto,
   type HealthResponseDto,
   type InsightsQueryDto,
   type JsonValue,
@@ -35,13 +37,16 @@ import {
   type ReviewStatusFilter,
   type RuntimeModeDto,
   type RuntimeOwnerDto,
+  type SourceRecordResponseDto,
   type SessionQueryDto,
   type TimelineDirection,
   type TimelineObservationKind,
   type TimelineQueryDto,
   type ToolAssetUsageQueryDto,
 } from '@agent-lens/protocol'
+import type { PiLiveService } from '@agent-lens/runtime-cordis'
 import type { HttpEventHub } from './events'
+import { handlePiLiveRequest } from './pi-live'
 
 export const AGENT_LENS_HTTP_HOST = '127.0.0.1' as const
 export const DEFAULT_AGENT_LENS_HTTP_PORT = 56789
@@ -67,6 +72,7 @@ export interface HttpSurfaceOptions {
   capabilities?: CapabilityService
   capturePolicy?: CapturePolicyService
   backup?: BackupService
+  piLive?: PiLiveService
   hubReview?: Pick<HubReviewProjection, 'get' | 'query'>
 }
 
@@ -246,6 +252,7 @@ function parseReviewQuery(params: URLSearchParams): ReviewQueryDto {
     throw badRequest(`Unknown review status: ${statusValue}`)
   }
   return {
+    ...(params.get('cursor') ? { cursor: params.get('cursor')! } : {}),
     ...(params.get('sourceId') ? { sourceId: params.get('sourceId')! } : {}),
     ...(params.get('projectId') ? { projectId: params.get('projectId')! } : {}),
     ...(from ? { from } : {}),
@@ -258,6 +265,11 @@ function parseReviewQuery(params: URLSearchParams): ReviewQueryDto {
 
 function parseReviewDetailQuery(params: URLSearchParams): ReviewDetailQueryDto {
   const limit = parseLimit(params, 100)
+  const ordinalValue = params.get('ordinal')
+  const ordinal = ordinalValue === null ? undefined : Number(ordinalValue)
+  if (ordinal !== undefined && (!Number.isSafeInteger(ordinal) || ordinal < 1)) {
+    throw badRequest(`Invalid review ordinal: ${ordinalValue}`)
+  }
   const directionValue = params.get('direction')
   if (directionValue && !['forward', 'backward'].includes(directionValue)) {
     throw badRequest(`Unknown review direction: ${directionValue}`)
@@ -268,6 +280,7 @@ function parseReviewDetailQuery(params: URLSearchParams): ReviewDetailQueryDto {
   }
   return {
     ...(params.get('cursor') ? { cursor: params.get('cursor')! } : {}),
+    ...(ordinal === undefined ? {} : { ordinal }),
     ...(directionValue ? { direction: directionValue as ReviewDetailDirection } : {}),
     ...(filterValue ? { filter: filterValue as ReviewDetailFilter } : {}),
     ...(limit === undefined ? {} : { limit }),
@@ -358,6 +371,73 @@ async function serveStatic(
 
 function backupMeta() {
   return { protocolVersion: AGENT_LENS_PROTOCOL_VERSION, generatedAt: new Date().toISOString() }
+}
+
+function capturePolicyResponse(policy: CapturePolicyService): CapturePolicyResponseDto {
+  const configuration = policy.getSourceConfiguration?.() ?? {
+    effectiveEnabledSources: policy.settings.enabledSources,
+    configuredEnabledSources: policy.settings.enabledSources,
+    source: 'runtime' as const,
+    editable: false,
+    restartRequired: false,
+  }
+  return {
+    settings: {
+      effectiveEnabledSources: [...configuration.effectiveEnabledSources],
+      configuredEnabledSources: [...configuration.configuredEnabledSources],
+      managedBy: configuration.source,
+      editable: configuration.editable,
+      restartRequired: configuration.restartRequired,
+    },
+    meta: {
+      protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
+      generatedAt: new Date().toISOString(),
+    },
+  }
+}
+
+async function handleCapturePolicyRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+  url: URL,
+  policy: CapturePolicyService | undefined,
+): Promise<boolean> {
+  if (url.pathname !== '/api/v1/capture-policy/sources') return false
+  if (!policy) {
+    writeJson(response, 503, { error: 'capture_policy_unavailable' })
+    return true
+  }
+  if (request.method === 'GET') {
+    writeJson(response, 200, capturePolicyResponse(policy))
+    return true
+  }
+  if (request.method !== 'PUT') {
+    writeJson(response, 405, { error: 'method_not_allowed' })
+    return true
+  }
+  if (!String(request.headers['content-type'] ?? '').toLowerCase().startsWith('application/json')) {
+    throw httpError(415, 'Capture policy updates require application/json')
+  }
+  if (!policy.setEnabledSources) {
+    writeJson(response, 409, { error: 'capture_policy_read_only' })
+    return true
+  }
+  const body = await readJsonBody<CapturePolicySourceUpdateRequestDto>(request)
+  if (!Array.isArray(body.enabledSources) || body.enabledSources.length > 100
+    || body.enabledSources.some(item => typeof item !== 'string' || !/^[a-z0-9][a-z0-9._-]{0,63}$/i.test(item.trim()))) {
+    throw badRequest('enabledSources must contain at most 100 valid source IDs')
+  }
+  try {
+    await policy.setEnabledSources(body.enabledSources)
+  } catch (error) {
+    writeJson(response, 409, {
+      error: 'capture_policy_read_only',
+      message: error instanceof Error ? error.message : String(error),
+    })
+    return true
+  }
+  writeJson(response, 200, capturePolicyResponse(policy))
+  return true
 }
 
 async function handleBackupRequest(
@@ -484,16 +564,28 @@ export async function startHttpSurface(
       return cachedStorageHealth
     }
     if (!storageHealthProbe) {
-      storageHealthProbe = storage.health()
+      const deferRefresh = cachedStorageHealth
+        ? new Promise<void>(resolve => setImmediate(resolve))
+        : Promise.resolve()
+      storageHealthProbe = deferRefresh
+        .then(() => storage.health())
         .then(health => {
           cachedStorageHealth = health
           cachedStorageHealthAt = Date.now()
           return health
         })
+        .catch(error => {
+          if (cachedStorageHealth) return cachedStorageHealth
+          throw error
+        })
         .finally(() => {
           storageHealthProbe = null
         })
     }
+    // 首次启动仍等待真实探测；已有结果过期后则立即返回最近状态，耗时的
+    // 诊断刷新留在后台。这样历史摄取占用 SQLite 单写队列时也不会拖死
+    // Runtime readiness。
+    if (cachedStorageHealth) return cachedStorageHealth
     return storageHealthProbe
   }
 
@@ -513,10 +605,25 @@ export async function startHttpSurface(
   const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url ?? '/', `http://${AGENT_LENS_HTTP_HOST}`)
+      if (await handlePiLiveRequest(request, response, url, options.piLive)) return
       if (await handleBackupRequest(request, response, url, options.backup)) return
+      if (await handleCapturePolicyRequest(request, response, url, options.capturePolicy)) return
 
       if (request.method !== 'GET') {
         writeJson(response, 405, { error: 'method_not_allowed' })
+        return
+      }
+      if (url.pathname === '/api/v1/ready') {
+        writeJson(response, 200, {
+          status: 'ok',
+          protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
+          runtime: {
+            owner: currentRuntimeOwner(),
+            mode: currentRuntimeMode(),
+            pid: process.pid,
+            startedAt: RUNTIME_STARTED_AT,
+          },
+        })
         return
       }
       if (url.pathname === '/api/v1/events') {
@@ -582,6 +689,32 @@ export async function startHttpSurface(
         writeJson(response, detail ? 200 : 404, detail ?? { error: 'not_found' })
         return
       }
+      if (url.pathname.startsWith('/api/v1/source-records/')) {
+        const id = decodeURIComponent(url.pathname.slice('/api/v1/source-records/'.length))
+        if (!id) throw badRequest('sourceRecordId is required')
+        const record = await storage.repositories.sourceRecords.get(id)
+        if (!record) {
+          writeJson(response, 404, { error: 'not_found' })
+          return
+        }
+        const body: SourceRecordResponseDto = {
+          id: record.id,
+          sourceId: record.sourceId,
+          installationId: record.installationId,
+          ...(record.sourceSessionNativeId ? { sourceSessionNativeId: record.sourceSessionNativeId } : {}),
+          nativeType: record.nativeType,
+          ...(record.nativeId ? { nativeId: record.nativeId } : {}),
+          ...(record.sourceSequence === undefined ? {} : { sourceSequence: record.sourceSequence }),
+          ...(record.occurredAt ? { occurredAt: record.occurredAt } : {}),
+          capturedAt: record.capturedAt,
+          locator: { ...record.locator },
+          ...(record.fingerprint ? { fingerprint: record.fingerprint } : {}),
+          payload: jsonValue(record.payload),
+          parserVersion: record.parserVersion,
+        }
+        writeJson(response, 200, body)
+        return
+      }
       if (url.pathname === '/api/v1/review') {
         writeJson(response, 200, await review.query(parseReviewQuery(url.searchParams)))
         return
@@ -624,7 +757,9 @@ export async function startHttpSurface(
       writeJson(response, 404, { error: 'not_found' })
     } catch (error) {
       const cursorError = error instanceof Error
-        && (error.message === 'Invalid timeline cursor' || error.message === 'Invalid review cursor')
+        && (error.message === 'Invalid timeline cursor'
+          || error.message === 'Invalid review cursor'
+          || error.message === 'Invalid review list cursor')
       const statusCode = cursorError
         ? 400
         : error && typeof error === 'object' && 'statusCode' in error

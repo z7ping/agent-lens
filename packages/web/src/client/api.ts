@@ -6,6 +6,7 @@ import type {
   BackupSnapshotResponseDto,
   BackupSnapshotSummaryDto,
   BackupVerifyResponseDto,
+  CapturePolicyResponseDto,
   FacetResponseDto,
   HealthResponseDto,
   InsightsResponseDto,
@@ -15,6 +16,7 @@ import type {
   ReviewResponseDto,
   ReviewSessionDetailDto,
   SessionRelationshipResponseDto,
+  SourceRecordResponseDto,
   ToolAssetUsageResponseDto,
 } from '@agent-lens/protocol'
 
@@ -119,20 +121,31 @@ export class AgentLensApi {
   health(): Promise<HealthResponseDto> { return requestJson('/api/v1/health') }
   facets(): Promise<FacetResponseDto> { return requestJson('/api/v1/facets') }
   agents(): Promise<AgentOverviewResponseDto> { return requestJson('/api/v1/agents') }
+  capturePolicy(): Promise<CapturePolicyResponseDto> { return requestJson('/api/v1/capture-policy/sources') }
 
-  review(filters: ReviewFilters, limit = 40): Promise<ReviewResponseDto> {
+  updateCaptureSources(enabledSources: readonly string[]): Promise<CapturePolicyResponseDto> {
+    return requestJson('/api/v1/capture-policy/sources', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ enabledSources }),
+    })
+  }
+
+  review(filters: ReviewFilters, limit = 40, cursor?: string, signal?: AbortSignal): Promise<ReviewResponseDto> {
     const params = new URLSearchParams()
     appendFilters(params, filters)
     if (filters.status !== 'all') params.set('status', filters.status)
     if (filters.search.trim()) params.set('search', filters.search.trim())
+    if (cursor) params.set('cursor', cursor)
     params.set('limit', String(Math.max(1, Math.min(limit, 500))))
-    return requestJson(`/api/v1/review?${params}`)
+    return requestJson<ReviewResponseDto>(`/api/v1/review?${params}`, signal ? { signal } : {})
   }
 
   reviewDetail(
     id: string,
     options: {
       cursor?: string
+      ordinal?: number
       limit?: number
       direction?: ReviewDetailDirection
       filter?: ReviewDetailFilter
@@ -140,15 +153,20 @@ export class AgentLensApi {
   ): Promise<ReviewSessionDetailDto> {
     const params = new URLSearchParams()
     if (options.cursor) params.set('cursor', options.cursor)
+    if (options.ordinal !== undefined) params.set('ordinal', String(options.ordinal))
     if (options.direction) params.set('direction', options.direction)
     if (options.filter && options.filter !== 'all') params.set('filter', options.filter)
     if (options.limit !== undefined) params.set('limit', String(Math.max(1, Math.min(options.limit, 100))))
     const query = params.toString()
-    return requestJson(`/api/v1/review/${encodeURIComponent(id)}${query ? `?${query}` : ''}`)
+    return requestJson<ReviewSessionDetailDto>(`/api/v1/review/${encodeURIComponent(id)}${query ? `?${query}` : ''}`)
   }
 
   relationships(id: string): Promise<SessionRelationshipResponseDto> {
     return requestJson(`/api/v1/relationships?logicalSessionId=${encodeURIComponent(id)}`)
+  }
+
+  sourceRecord(id: string): Promise<SourceRecordResponseDto> {
+    return requestJson(`/api/v1/source-records/${encodeURIComponent(id)}`)
   }
 
   usage(filters: QueryFilters): Promise<ToolAssetUsageResponseDto> {

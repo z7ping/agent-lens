@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -10,12 +10,33 @@ import {
   sourceCaptureEnabled,
 } from './inbox.mjs'
 
+const unconfiguredEnv = {
+  AGENT_LENS_CAPTURE_POLICY_PATH: join(tmpdir(), `agent-lens-hook-policy-unconfigured-${process.pid}.json`),
+}
+
 test('source collection defaults to Claude Code only', () => {
-  assert.deepEqual(enabledSources({}), ['claude-code'])
-  assert.equal(sourceCaptureEnabled('claude-code', {}), true)
-  assert.equal(sourceCaptureEnabled('codex', {}), false)
+  assert.deepEqual(enabledSources(unconfiguredEnv), ['claude-code'])
+  assert.equal(sourceCaptureEnabled('claude-code', unconfiguredEnv), true)
+  assert.equal(sourceCaptureEnabled('codex', unconfiguredEnv), false)
   assert.equal(sourceCaptureEnabled('codex', { AGENT_LENS_ENABLED_SOURCES: 'claude-code,codex' }), true)
   assert.equal(sourceCaptureEnabled('claude-code', { AGENT_LENS_ENABLED_SOURCES: 'none' }), false)
+})
+
+test('Codex hook reads the AgentLens user-level source configuration', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-hook-policy-'))
+  const path = join(root, 'capture-policy.json')
+  try {
+    await writeFile(path, JSON.stringify({
+      version: 1,
+      enabledSources: ['claude-code', 'Codex'],
+      updatedAt: new Date().toISOString(),
+    }), 'utf8')
+    const env = { AGENT_LENS_CAPTURE_POLICY_PATH: path }
+    assert.deepEqual(enabledSources(env), ['claude-code', 'codex'])
+    assert.equal(sourceCaptureEnabled('codex', env), true)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
 })
 
 test('Codex hook does not write inbox while source is disabled', async () => {
@@ -23,7 +44,7 @@ test('Codex hook does not write inbox while source is disabled', async () => {
   try {
     const result = await persistCodexHookEvent({ hook_event_name: 'PreToolUse' }, {
       inboxDir: inbox,
-      env: {},
+      env: { AGENT_LENS_ENABLED_SOURCES: 'claude-code' },
     })
     assert.equal(result, null)
     assert.deepEqual(await readdir(inbox), [])

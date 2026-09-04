@@ -2,10 +2,18 @@ import type { JsonValue, TimelineEvidenceDto, TimelineObservationKind } from './
 import { AGENT_LENS_PROTOCOL_VERSION } from './timeline'
 
 export type ReviewStatusFilter = 'all' | 'with-errors' | 'clean'
-export type ReviewMessageRole = 'user' | 'assistant' | 'reasoning'
+export type ReviewMessageRole = 'user' | 'assistant' | 'commentary' | 'reasoning'
 export type ReviewEventCategory = 'permission' | 'subagent' | 'context' | 'model' | 'lifecycle' | 'artifact' | 'usage' | 'unknown'
 export type ReviewDetailFilter = 'all' | 'errors' | 'latency' | 'latest'
 export type ReviewDetailDirection = 'forward' | 'backward'
+
+export interface ReviewNodeSourceDto {
+  nativeEventId?: string
+  nativeParentEventId?: string
+  parentObservationId?: string
+  occurredAt?: string
+  capturedAt: string
+}
 
 export interface ReviewSessionSummaryDto {
   id: string
@@ -28,7 +36,7 @@ export interface ReviewSessionSummaryDto {
   hasErrors: boolean
 }
 
-export interface ReviewMessageNodeDto {
+export interface ReviewMessageNodeDto extends ReviewNodeSourceDto {
   type: 'message'
   id: string
   role: ReviewMessageRole
@@ -40,7 +48,7 @@ export interface ReviewMessageNodeDto {
   observationIds: string[]
 }
 
-export interface ReviewToolNodeDto {
+export interface ReviewToolNodeDto extends ReviewNodeSourceDto {
   type: 'tool'
   id: string
   at: string
@@ -58,7 +66,7 @@ export interface ReviewToolNodeDto {
   observationIds: string[]
 }
 
-export interface ReviewEventNodeDto {
+export interface ReviewEventNodeDto extends ReviewNodeSourceDto {
   type: 'event'
   id: string
   at: string
@@ -82,6 +90,16 @@ export interface ReviewInteractionDto {
   nodes: ReviewNodeDto[]
 }
 
+export interface ReviewInteractionIndexDto {
+  id: string
+  ordinal: number
+  trigger: 'user' | 'background'
+  startedAt: string
+  endedAt: string
+  hasError: boolean
+  preview?: string
+}
+
 export interface ReviewDetailPageDto {
   count: number
   hasMore: boolean
@@ -93,17 +111,20 @@ export interface ReviewDetailPageDto {
 
 export interface ReviewSessionDetailDto extends ReviewSessionSummaryDto {
   interactions: ReviewInteractionDto[]
+  interactionIndex?: ReviewInteractionIndexDto[]
   page: ReviewDetailPageDto
 }
 
 export interface ReviewDetailQueryDto {
   cursor?: string
+  ordinal?: number
   limit?: number
   direction?: ReviewDetailDirection
   filter?: ReviewDetailFilter
 }
 
 export interface ReviewQueryDto {
+  cursor?: string
   sourceId?: string
   projectId?: string
   from?: string
@@ -119,6 +140,7 @@ export interface ReviewResponseDto {
     protocolVersion: typeof AGENT_LENS_PROTOCOL_VERSION
     count: number
     hasMore: boolean
+    nextCursor?: string
     generatedAt: string
   }
 }

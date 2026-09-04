@@ -4,14 +4,11 @@ on:
   push:
     branches:
       - main
-      - refactor/1.0-foundation
-      - feature/asset-backup-insights
       - 'release/**'
       - 'bugfix/**'
   pull_request:
     branches:
       - main
-      - codex/fix-runtime-projection-stability
 
 permissions:
   contents: read
@@ -65,176 +62,24 @@ jobs:
 
       - name: Build Windows desktop package
         if: runner.os == 'Windows'
-        run: npm run dist:win:dir --workspace @agent-lens/desktop
+        run: npm run dist:win --workspace @agent-lens/desktop
 
       - name: Smoke packaged Windows desktop
         if: runner.os == 'Windows'
-        shell: pwsh
-        run: ./scripts/smoke-windows-desktop.ps1
+        run: node scripts/smoke-desktop-runtime.mjs release/windows/win-unpacked/AgentLens.exe
 
       - name: Verify Windows shared Hook dispatcher
         if: runner.os == 'Windows'
         shell: pwsh
-        run: |
-          $inbox = Join-Path $env:RUNNER_TEMP 'agent-lens-hook-inbox'
-          New-Item -ItemType Directory -Force -Path $inbox | Out-Null
-          $env:AGENT_LENS_CLAUDE_INBOX = $inbox
-          $dispatcherLog = Join-Path $env:RUNNER_TEMP 'agent-lens-hook-dispatcher.log'
-          Remove-Item -Force $dispatcherLog -ErrorAction SilentlyContinue
-          $env:AGENT_LENS_HOOK_DISPATCHER_LOG = $dispatcherLog
-
-          function Show-DispatcherDiagnostics {
-            Write-Host '--- 共享 Hook 分发器诊断 ---'
-            if (Test-Path $dispatcherLog) { Get-Content -Raw $dispatcherLog | Write-Host }
-            else { Write-Host '未生成分发器诊断日志' }
-            if (Test-Path $npmRecordPath) {
-              Write-Host '--- npm 安装登记 ---'
-              Get-Content -Raw $npmRecordPath | Write-Host
-            }
-            if (Test-Path $desktopRecordPath) {
-              Write-Host '--- Desktop 安装登记 ---'
-              Get-Content -Raw $desktopRecordPath | Write-Host
-            }
-          }
-
-          function Refresh-NpmHookRegistration {
-            # hook status also performs the formal npm-provider registration. CI has no
-            # native Codex/Claude configuration, so a non-zero status result is expected
-            # here and must not become the step's final native-process exit code.
-            $previousNativePreference = $PSNativeCommandUseErrorActionPreference
-            try {
-              $PSNativeCommandUseErrorActionPreference = $false
-              node dist/cli.mjs hook status all --json | Out-Null
-              $registrationExitCode = $LASTEXITCODE
-            } finally {
-              $PSNativeCommandUseErrorActionPreference = $previousNativePreference
-            }
-            Write-Host "[AgentLens] npm Hook 登记完成，status exit=$registrationExitCode（CI 无原生 Hook 配置时允许非零）"
-            $global:LASTEXITCODE = 0
-          }
-
-          Refresh-NpmHookRegistration
-
-          $agentLensRoot = Join-Path $HOME '.agent-lens/1.0'
-          $installations = Join-Path $agentLensRoot 'installations'
-          $dispatcher = Join-Path $agentLensRoot 'runtime/windows-hook-dispatcher.ps1'
-          $npmRecordPath = Join-Path $installations 'npm.json'
-          $desktopRecordPath = Join-Path $installations 'desktop.json'
-          if (-not (Test-Path $dispatcher)) { throw '共享 Windows Hook 分发器未安装' }
-          if (-not (Test-Path $npmRecordPath)) { throw 'npm 安装登记未生成' }
-
-          $now = (Get-Date).ToUniversalTime().ToString('o')
-          $staleDesktop = @{
-            schemaVersion = 1
-            kind = 'desktop'
-            version = 'stale-ci'
-            executable = 'C:\missing-agent-lens\AgentLens.exe'
-            hookRoot = 'C:\missing-agent-lens\hooks'
-            electronRunAsNode = $true
-            registeredAt = $now
-            updatedAt = $now
-          } | ConvertTo-Json
-          $staleDesktop | Set-Content -Encoding UTF8 $desktopRecordPath
-
-          # Desktop stale -> valid npm fallback.
-          $payload = '{"hook_event_name":"PreToolUse","hook_invocation_id":"ci-desktop-stale-npm-valid"}'
-          $payload | powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File $dispatcher agent-lens-hook-claude
-          if ($LASTEXITCODE -ne 0) { Show-DispatcherDiagnostics; throw '共享 Windows Hook 分发器执行失败' }
-
-          $files = @(Get-ChildItem -Path $inbox -Filter '*.json')
-          if ($files.Count -ne 1) { Show-DispatcherDiagnostics; throw "Desktop 陈旧时 npm 回退没有产生唯一 Inbox 事件，实际：$($files.Count)" }
-          $captured = Get-Content -Raw $files[0].FullName | ConvertFrom-Json
-          if ($captured.event.hook_invocation_id -ne 'ci-desktop-stale-npm-valid') { Show-DispatcherDiagnostics; throw 'npm 回退没有完整传递 stdin JSON' }
-
-          Remove-Item -Force (Join-Path $inbox '*.json') -ErrorAction SilentlyContinue
-
-          # npm stale -> valid Desktop fallback. Use the CI Node executable with the
-          # distributable hook root to exercise the same provider selection path;
-          # ELECTRON_RUN_AS_NODE is intentionally enabled to cover Desktop semantics.
-          $nodeExecutable = (Get-Command node).Source
-          $hookRoot = (Resolve-Path 'dist/hooks').Path
-          $validDesktop = @{
-            schemaVersion = 1
-            kind = 'desktop'
-            version = 'desktop-ci'
-            executable = $nodeExecutable
-            hookRoot = $hookRoot
-            electronRunAsNode = $true
-            registeredAt = $now
-            updatedAt = $now
-          } | ConvertTo-Json
-          $validDesktop | Set-Content -Encoding UTF8 $desktopRecordPath
-
-          $staleNpm = @{
-            schemaVersion = 1
-            kind = 'npm'
-            version = 'stale-ci'
-            executable = 'C:\missing-agent-lens\node.exe'
-            hookRoot = 'C:\missing-agent-lens\hooks'
-            electronRunAsNode = $false
-            registeredAt = $now
-            updatedAt = $now
-          } | ConvertTo-Json
-          $staleNpm | Set-Content -Encoding UTF8 $npmRecordPath
-
-          $payload = '{"hook_event_name":"PreToolUse","hook_invocation_id":"ci-npm-stale-desktop-valid"}'
-          $payload | powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File $dispatcher agent-lens-hook-claude
-          if ($LASTEXITCODE -ne 0) { Show-DispatcherDiagnostics; throw 'Desktop Provider 回退执行失败' }
-
-          $files = @(Get-ChildItem -Path $inbox -Filter '*.json')
-          if ($files.Count -ne 1) { Show-DispatcherDiagnostics; throw "npm 陈旧时 Desktop 回退没有产生唯一 Inbox 事件，实际：$($files.Count)" }
-          $captured = Get-Content -Raw $files[0].FullName | ConvertFrom-Json
-          if ($captured.event.hook_invocation_id -ne 'ci-npm-stale-desktop-valid') { Show-DispatcherDiagnostics; throw 'Desktop 回退没有完整传递 stdin JSON' }
-
-          Remove-Item -Force (Join-Path $inbox '*.json') -ErrorAction SilentlyContinue
-
-          # Both providers stale -> neutral exit, no Inbox event.
-          $staleDesktop | Set-Content -Encoding UTF8 $desktopRecordPath
-          $payload = '{"hook_event_name":"PreToolUse","hook_invocation_id":"ci-both-stale"}'
-          $payload | powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File $dispatcher agent-lens-hook-claude
-          if ($LASTEXITCODE -ne 0) { Show-DispatcherDiagnostics; throw 'Provider 全失效时共享分发器没有中性退出' }
-          $files = @(Get-ChildItem -Path $inbox -Filter '*.json')
-          if ($files.Count -ne 0) { Show-DispatcherDiagnostics; throw "Provider 全失效时仍产生 Inbox 事件，实际：$($files.Count)" }
-
-          # Restore the current npm registration so this destructive matrix does not
-          # leak stale-provider state into the following lifecycle integration test.
-          Refresh-NpmHookRegistration
-          if (-not (Test-Path $npmRecordPath)) { Show-DispatcherDiagnostics; throw '共享分发器矩阵结束后 npm 登记未恢复' }
+        run: pwsh -NoLogo -NoProfile -File scripts/test-hook-dispatcher-windows.ps1
 
       - name: Verify Windows npm lifecycle
         if: runner.os == 'Windows'
         shell: pwsh
-        run: |
-          try {
-            node dist/cli.mjs autostart enable
-            if ($LASTEXITCODE -ne 0) { throw '启用登录自启失败' }
-
-            node dist/cli.mjs service start
-            if ($LASTEXITCODE -ne 0) { throw '启动 npm 后台服务失败' }
-
-            $status = node dist/cli.mjs status --json | ConvertFrom-Json
-            if (-not $status.online) { throw '后台服务启动后 Health 仍离线' }
-            if ($status.owner -ne 'service') { throw "运行时所有者不是 service：$($status.owner)" }
-            if (-not $status.lifecycle.registered) { throw 'Windows 后台任务未注册' }
-            if (-not $status.lifecycle.active) { throw 'Windows 后台任务未运行' }
-            if (-not $status.lifecycle.autostart) { throw 'Windows 登录自启未保留' }
-            if (-not $status.lifecycle.hidden) { throw 'Windows 后台任务没有使用隐藏窗口定义' }
-
-            $doctor = node dist/cli.mjs doctor --json | ConvertFrom-Json
-            $lifecycleCheck = $doctor.checks | Where-Object { $_.id -eq 'lifecycle' }
-            if ($null -eq $lifecycleCheck) { throw 'doctor 缺少 lifecycle 检查' }
-            if ($lifecycleCheck.level -ne 'pass') { throw "doctor lifecycle 未通过：$($lifecycleCheck.detail)" }
-            $hookRunnerCheck = $doctor.checks | Where-Object { $_.id -eq 'windows-hook-runner' }
-            if ($null -eq $hookRunnerCheck) { throw 'doctor 缺少 Windows Hook 启动器检查' }
-            if ($hookRunnerCheck.level -ne 'pass') { throw "Windows Hook 启动器检查未通过：$($hookRunnerCheck.detail)" }
-          }
-          finally {
-            node dist/cli.mjs service stop
-            node dist/cli.mjs autostart disable
-          }
+        run: pwsh -NoLogo -NoProfile -File scripts/test-npm-lifecycle-windows.ps1
 
       - name: Smoke distributable
         run: npm run smoke:dist
 
       - name: Verify npm package contents
-        run: npm pack --dry-run
+        run: npm run smoke:npm-package

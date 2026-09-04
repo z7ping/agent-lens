@@ -9,16 +9,25 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5173",
     "build": "vite build",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
     "@agent-lens/protocol": "1.0.0-alpha.2",
     "@agent-lens/runtime-cordis": "1.0.0-alpha.2",
     "@agent-lens/surface-http": "1.0.0-alpha.2",
+    "@lexical/code": "0.49.0",
+    "@lexical/link": "0.49.0",
+    "@lexical/list": "0.49.0",
+    "@lexical/markdown": "0.49.0",
+    "@lexical/react": "0.49.0",
+    "@lexical/rich-text": "0.49.0",
+    "lexical": "0.49.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-markdown": "10.1.0",
-    "react-router-dom": "7.18.2"
+    "react-router-dom": "7.18.2",
+    "remark-gfm": "4.0.1"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.3.3",

@@ -14,5 +14,8 @@
     "@agent-lens/core": "1.0.0-alpha.2",
     "@agent-lens/core-services": "1.0.0-alpha.2",
     "@deepseek-ai/cordis": "4.0.1"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.4"
   }
 }
