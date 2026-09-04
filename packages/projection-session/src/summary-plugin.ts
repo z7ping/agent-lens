@@ -1,79 +1,70 @@
-import type { Plugin } from '@deepseek-ai/cordis'
-import type { ProjectionDefinition, ProjectionScope } from '@agent-lens/core'
-import type { AgentLensContext } from '@agent-lens/runtime-cordis'
+import type {
+  ObservationCursor,
+  SessionSummaryProjectionStore,
+  SessionSummaryRecord,
+  StorageService,
+} from '@agent-lens/core'
+import type { Context } from 'cordis'
+import { SESSION_SUMMARY_PROJECTION_ID } from './constants'
 
-export const SESSION_SUMMARY_PROJECTION_ID = 'session-summary'
-const REBUILD_DEBOUNCE_MS = 500
-
-function logicalSessionIdFromScope(scope?: ProjectionScope): string | undefined {
-  if (scope?.subjectType !== 'logical-session') return undefined
-  return scope.subjectId
+export interface SessionSummaryProjectionPluginServices {
+  storage: StorageService
+  projections: {
+    register(definition: {
+      id: string
+      rebuild(scope?: { subjectType?: string; subjectId?: string; signal?: AbortSignal }): Promise<void>
+      flush?(): Promise<void>
+    }): { dispose(): void }
+  }
 }
 
-const applySessionSummaryProjection: Plugin.Function<void> = (ctx: AgentLensContext) => {
-  const store = ctx.storage.sessionSummaryProjection
+function logicalSessionIdFromScope(scope?: { subjectType?: string; subjectId?: string }): string | undefined {
+  return scope?.subjectType === 'logical-session' && scope.subjectId ? scope.subjectId : undefined
+}
+
+export async function applySessionSummaryProjection(ctx: Context & SessionSummaryProjectionPluginServices): Promise<void> {
+  const store = ctx.storage.sessionSummaryProjection as SessionSummaryProjectionStore | undefined
   if (!store) return
 
   const pending = new Set<string>()
   let timer: ReturnType<typeof setTimeout> | undefined
-  let flushPromise: Promise<void> | undefined
+  let draining = false
 
-  const schedule = () => {
-    if (timer || flushPromise || pending.size === 0) return
-    timer = setTimeout(() => {
-      timer = undefined
-      void flush().catch(error => {
-        console.error('[AgentLens] session summary projection refresh failed', error)
-      })
-    }, REBUILD_DEBOUNCE_MS)
-  }
-
-  const runPending = async () => {
-    while (pending.size > 0) {
-      const ids = [...pending]
-      pending.clear()
-      for (let index = 0; index < ids.length; index += 1) {
-        const logicalSessionId = ids[index]!
-        const scope = { subjectType: 'logical-session', subjectId: logicalSessionId }
-        try {
-          ctx.emit('projection/invalidated', {
-            projectionId: SESSION_SUMMARY_PROJECTION_ID,
-            ...scope,
-          })
-          await ctx.projections.rebuild(SESSION_SUMMARY_PROJECTION_ID, scope)
-        } catch (error) {
-          for (const remaining of ids.slice(index)) pending.add(remaining)
-          throw error
+  const rebuildPending = async () => {
+    if (draining || !pending.size) return
+    draining = true
+    try {
+      while (pending.size) {
+        const batch = [...pending]
+        pending.clear()
+        for (const logicalSessionId of batch) {
+          await store.rebuild({ logicalSessionId })
         }
       }
+    } finally {
+      draining = false
     }
   }
 
-  async function flush(): Promise<void> {
+  const schedule = () => {
+    if (timer) return
+    timer = setTimeout(() => {
+      timer = undefined
+      void rebuildPending()
+    }, 25)
+  }
+
+  const flush = async () => {
     if (timer) {
       clearTimeout(timer)
       timer = undefined
     }
-    if (flushPromise) {
-      await flushPromise
-      if (pending.size > 0) await flush()
-      return
-    }
-    if (pending.size === 0) return
-
-    const current = runPending()
-    flushPromise = current
-    try {
-      await current
-    } finally {
-      if (flushPromise === current) flushPromise = undefined
-      schedule()
-    }
+    await rebuildPending()
   }
 
-  const definition: ProjectionDefinition = {
+  const definition = {
     id: SESSION_SUMMARY_PROJECTION_ID,
-    async rebuild(scope) {
+    async rebuild(scope?: { subjectType?: string; subjectId?: string; signal?: AbortSignal }) {
       const logicalSessionId = logicalSessionIdFromScope(scope)
       const cancellation = scope?.signal ? { signal: scope.signal } : {}
       await store.rebuild(logicalSessionId
@@ -91,9 +82,6 @@ const applySessionSummaryProjection: Plugin.Function<void> = (ctx: AgentLensCont
   ctx.projections.register(definition)
 
   ctx.on('observation/committed', event => {
-    // Parser Replay 可能在稳定 observation id 上合并新 provenance / session metadata。
-    // 只跳过真正无变化的提交，避免摘要继续使用旧 Parser 的标题与活动分类。
-    if (event.status === 'unchanged') return
     pending.add(event.logicalSessionId)
     schedule()
   })
