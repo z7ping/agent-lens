@@ -22,6 +22,7 @@ export type UiIconName =
   | 'refresh'
   | 'search'
   | 'send'
+  | 'settings'
   | 'sort-down'
   | 'sort-up'
   | 'sun'
@@ -56,6 +57,7 @@ export function UiIcon({ name, size = 16, className, ...props }: UiIconProps) {
     if (name === 'drag') return <><circle cx="5.5" cy="4" r=".8" fill="currentColor" stroke="none"/><circle cx="10.5" cy="4" r=".8" fill="currentColor" stroke="none"/><circle cx="5.5" cy="8" r=".8" fill="currentColor" stroke="none"/><circle cx="10.5" cy="8" r=".8" fill="currentColor" stroke="none"/><circle cx="5.5" cy="12" r=".8" fill="currentColor" stroke="none"/><circle cx="10.5" cy="12" r=".8" fill="currentColor" stroke="none"/></>
     if (name === 'chevron-down') return <path d="m4.5 6 3.5 3.5L11.5 6"/>
     if (name === 'agent') return <><rect x="3" y="4" width="10" height="9" rx="2"/><path d="M6 4V2.8M10 4V2.8M6.2 8h.01M9.8 8h.01M6.3 10.5h3.4"/></>
+    if (name === 'settings') return <><circle cx="8" cy="8" r="2.2"/><path d="M8 2.3v1.2M8 12.5v1.2M2.3 8h1.2M12.5 8h1.2M4 4l.9.9M11.1 11.1l.9.9M12 4l-.9.9M4.9 11.1l-.9.9"/></>
     if (name === 'sun') return <><circle cx="8" cy="8" r="2.5"/><path d="M8 1.5v1.3M8 13.2v1.3M1.5 8h1.3M13.2 8h1.3M3.4 3.4l.9.9M11.7 11.7l.9.9M12.6 3.4l-.9.9M4.3 11.7l-.9.9"/></>
     if (name === 'moon') return <path d="M12.6 10.2A5.2 5.2 0 0 1 5.8 3.4a5.3 5.3 0 1 0 6.8 6.8Z"/>
     if (name === 'expand') return <><path d="M6.2 2.5H2.5v3.7"/><path d="m2.8 2.8 3.4 3.4"/><path d="M9.8 13.5h3.7V9.8"/><path d="m13.2 13.2-3.4-3.4"/></>
