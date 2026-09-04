@@ -74,13 +74,8 @@ export function WorkspaceSidebar({
 
     <div className="workspace-sidebar-context" ref={onContextHost}>
       {onInsights && <nav className="workspace-insight-switcher" aria-label="洞察视图">
-        <NavLink to="/insights" className={({ isActive }) => `workspace-insight-link ${isActive ? 'is-active' : ''}`} end>
-          <span>使用概览</span>
-        </NavLink>
-        <NavLink to="/tools" className={({ isActive }) => `workspace-insight-link ${isActive ? 'is-active' : ''}`}>
-          <span>工具分析</span>
-          {snapshot.usage.hasNewData && <i className="workspace-nav-dot" aria-hidden="true"/>}
-        </NavLink>
+        <NavLink to="/insights" className={({ isActive }) => `workspace-insight-link ${isActive ? 'is-active' : ''}`} end>使用概览</NavLink>
+        <NavLink to="/tools" className={({ isActive }) => `workspace-insight-link ${isActive ? 'is-active' : ''}`}>工具分析{snapshot.usage.hasNewData && <i className="workspace-nav-dot" aria-hidden="true"/>}</NavLink>
       </nav>}
 
       {onAgents && <div className="workspace-context-menu workspace-agent-context">
