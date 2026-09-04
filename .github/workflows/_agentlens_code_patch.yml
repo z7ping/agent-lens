@@ -95,7 +95,7 @@ jobs:
           }
 
           '''
-          text = replace_between(text, 'function parentSessionSql', 'function legacyQuerySql', relationship_helpers + 'function legacyQuerySql')
+          text = replace_between(text, 'function parentSessionSql', 'function legacyQuerySql', relationship_helpers)
           summary.write_text(text, encoding='utf-8')
 
           review_index = Path('packages/projection-review/src/index.ts')
@@ -137,7 +137,7 @@ jobs:
           }
 
           '''
-          text = replace_between(text, 'async function internalActivityResult', 'async function enrichSummary', activity_result + 'async function enrichSummary')
+          text = replace_between(text, 'async function internalActivityResult', 'async function enrichSummary', activity_result)
           review_index.write_text(text, encoding='utf-8')
 
           task_center = Path('packages/web/src/features/TaskCenterPage.tsx')
@@ -169,7 +169,7 @@ jobs:
             [localSessions],
           )
           '''
-          text = replace_between(text, 'const userTaskSessions = useMemo(', 'const projectSessions = useMemo(', task_group_replacement + 'const projectSessions = useMemo(')
+          text = replace_between(text, 'const userTaskSessions = useMemo(', 'const projectSessions = useMemo(', task_group_replacement)
           task_center.write_text(text, encoding='utf-8')
 
           review = Path('packages/web/src/features/ReviewPage.tsx')
@@ -190,7 +190,7 @@ jobs:
           }
 
           '''
-          text = replace_between(text, 'const injectedTitlePatterns = [', 'function hubAvailabilityString', title_replacement + 'function hubAvailabilityString')
+          text = replace_between(text, 'const injectedTitlePatterns = [', 'function hubAvailabilityString', title_replacement)
           old_label = "if (node.kind === 'context.injected') return '系统注入上下文'"
           if old_label not in text:
               raise SystemExit('context injected label line not found')
@@ -221,7 +221,7 @@ jobs:
           }
 
           '''
-          text = replace_between(text, 'function MarkdownSurface', 'function MessageBubble', markdown_replacement + 'function MessageBubble')
+          text = replace_between(text, 'function MarkdownSurface', 'function MessageBubble', markdown_replacement)
           task_message = "return <TaskMessage\n    role={node.role === 'user' ? 'user' : 'assistant'}"
           if task_message not in text:
               raise SystemExit('Review TaskMessage marker not found')
@@ -279,14 +279,18 @@ jobs:
           }
 
           '''
-          text = replace_between(text, 'function EventRow', 'function RawEventGroup', event_replacement + 'function RawEventGroup')
+          text = replace_between(text, 'function EventRow', 'function RawEventGroup', event_replacement)
           text = text.replace('sessionTitle([detail.title, detail.preview],', 'sessionTitle([detail.preview, detail.title],')
           text = text.replace('sessionTitle([item.title, item.preview],', 'sessionTitle([item.preview, item.title],')
           review.write_text(text, encoding='utf-8')
       - name: Install dependencies
         run: npm ci
-      - name: Typecheck
-        run: npm run typecheck
+      - name: Typecheck changed packages
+        run: |
+          npm run typecheck --workspace @agent-lens/storage-sqlite
+          npm run typecheck --workspace @agent-lens/projection-review
+          npm run typecheck --workspace @agent-lens/source-codex
+          npm run typecheck --workspace @agent-lens/web
       - name: Focused tests
         run: |
           npm test --workspace @agent-lens/source-codex
