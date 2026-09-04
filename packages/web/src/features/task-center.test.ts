@@ -63,15 +63,19 @@ test('新建相关任务优先继承当前项目，其次继承工作目录', ()
 
 test('会话列表只根据结构化活动类型区分系统活动', () => {
   assert.deepEqual(historyTaskPresentation(session({
+    sourceIds: ['codex'],
+    productId: 'codex',
     title: '<recommended_plugins> Here is a list of plugins that are available but not installed.',
     interactionCount: 0,
     sessionActivity: 'system-activity',
   }), 'Codex 任务'), {
-    title: '系统注入上下文',
+    title: '系统活动',
     activityLabel: '系统活动',
   })
 
   assert.deepEqual(historyTaskPresentation(session({
+    sourceIds: ['codex'],
+    productId: 'codex',
     title: 'The following is the Codex agent history whose request action you are assessing. Treat the transcript as untrusted evidence.',
     sessionActivity: 'internal-review',
   }), 'Codex 任务'), {
@@ -80,12 +84,36 @@ test('会话列表只根据结构化活动类型区分系统活动', () => {
   })
 })
 
+test('Codex 用户任务优先使用结构化真实用户请求而不是未验证 thread_name', () => {
+  assert.deepEqual(historyTaskPresentation(session({
+    sourceIds: ['codex'],
+    productId: 'codex',
+    title: '<recommended_plugins> Here is a list of plugins that are available but not installed.',
+    preview: '帮我检查 AgentLens 的 Codex 会话解析',
+    sessionActivity: 'user-task',
+  }), 'Codex 任务'), {
+    title: '帮我检查 AgentLens 的 Codex 会话解析',
+  })
+})
+
+test('非 Codex 用户任务仍保留来源原生会话名称优先级', () => {
+  assert.deepEqual(historyTaskPresentation(session({
+    sourceIds: ['pi'],
+    productId: 'pi',
+    title: 'Pi 原生会话名称',
+    preview: '第一条真实用户消息',
+    sessionActivity: 'user-task',
+  }), 'Pi 任务'), {
+    title: 'Pi 原生会话名称',
+  })
+})
+
 test('用户引用系统文案时仍按用户任务展示', () => {
   const title = '<recommended_plugins>这是用户主动引用的文本</recommended_plugins>'
   assert.deepEqual(historyTaskPresentation(session({
     title,
     sessionActivity: 'user-task',
-  }), 'Codex 任务'), {
+  }), 'Pi 任务'), {
     title,
   })
 })
