@@ -21,13 +21,17 @@ const changelog = readFileSync(changelogPath, 'utf8')
 if (!app.includes("import { WorkspaceSidebar } from './components/WorkspaceSidebar'")) {
   throw new Error('正式 Web Shell 必须接入统一左侧工作栏')
 }
-if (!sidebar.includes("import { ReleaseInfo } from './ReleaseInfo'")) {
+if (!/import\s*\{[^}]*\bReleaseInfo\b[^}]*\}\s*from\s*['"]\.\/ReleaseInfo['"]/.test(sidebar)) {
   throw new Error('左侧工作栏设置必须接入统一发行信息组件')
 }
 if (!sidebar.includes('<ReleaseInfo runtimeOwner={snapshot.health?.runtime?.owner ?? null} runtimeReady={snapshot.health !== null}/>')) {
   throw new Error('正式 Web 设置必须复用运行时健康状态，并保留版本 / 发行信息入口')
 }
-if (sidebar.includes('<BrandVersion />')) {
+if (!/workspace-settings-popover[\s\S]*<ReleaseInfo/.test(sidebar)) {
+  throw new Error('发行信息必须位于低频设置浮层，不得重新占用一级工作区')
+}
+const brandBlock = sidebar.match(/<NavLink to="\/review" className="workspace-sidebar-brand"[\s\S]*?<\/NavLink>/)?.[0] ?? ''
+if (/BrandVersion/.test(brandBlock)) {
   throw new Error('版本号属于低频发行信息，不得重新常驻占用工作栏品牌区')
 }
 if (!main.includes("import './release-info.css'")) {
