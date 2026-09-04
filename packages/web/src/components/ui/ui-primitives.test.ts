@@ -111,7 +111,7 @@ test('Workspace Shell owns three primary workspaces and one dynamic context host
   assert.doesNotMatch(workspaceSidebar, />工具分析<\/NavLink>[\s\S]*workspace-primary-link/)
   assert.doesNotMatch(workspaceSidebar, />资产备份<\/NavLink>[\s\S]*workspace-primary-link/)
   assert.match(workspaceSidebar, /workspace-sidebar-context" ref=\{onContextHost\}/)
-  assert.match(workspaceSidebar, /workspace-insight-navigation/)
+  assert.match(workspaceSidebar, /workspace-insight-switcher/)
   assert.match(workspaceSidebarCss, /grid-template-columns:\s*316px minmax\(0, 1fr\)/)
   assert.match(workspaceSidebarCss, /workspace-primary-link\.is-active\s*\{[\s\S]*?background:\s*transparent;/)
   assert.doesNotMatch(workspaceSidebarCss, /workspace-primary-link\.is-active::before/)
