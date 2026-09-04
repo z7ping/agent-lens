@@ -1,15 +1,13 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PropsWithChildren } from 'react'
-import { BrowserRouter, NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import type { AgentFacetDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel, ClientSnapshot } from './client/model'
 import { readAgentFilterPreference, readTheme, writeAgentFilterPreference, writeTheme } from './client/preferences'
 import { AgentsStateOverlay } from './components/AgentsStateOverlay'
 import { BackgroundDataNotice } from './components/BackgroundDataNotice'
-import { BrandVersion, ReleaseInfo } from './components/ReleaseInfo'
 import { ReviewStateOverlay } from './components/ReviewStateOverlay'
 import { ReviewTurnRail } from './components/ReviewTurnRail'
-import { RuntimeStatus } from './components/RuntimeStatus'
-import { IconButton, UiIcon } from './components/ui'
+import { WorkspaceSidebar } from './components/WorkspaceSidebar'
 import { AgentsResponsivePage } from './features/AgentsResponsivePage'
 import { BackupPage } from './features/BackupPage'
 import { InsightsPage } from './features/InsightsPage'
@@ -93,14 +91,6 @@ function PinnedProvider({ agents, children }: PropsWithChildren<{ agents: AgentF
   return <PinnedContext.Provider value={value}>{children}</PinnedContext.Provider>
 }
 
-const navigation = [
-  { to: '/review', label: '任务中心' },
-  { to: '/tools', label: '工具分析', startsGroup: true },
-  { to: '/insights', label: '使用洞察' },
-  { to: '/agents', label: '智能体概览', startsGroup: true },
-  { to: '/backup', label: '资产备份' },
-] as const
-
 type ReviewFilters = ClientSnapshot['review']['filters']
 
 function reviewFiltersFromSearch(search: string): ReviewFilters {
@@ -140,6 +130,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const navigate = useNavigate()
   const [theme, setTheme] = useState(readTheme)
   const [agentOverviewSourceId, setAgentOverviewSourceId] = useState('')
+  const [sidebarHost, setSidebarHost] = useState<HTMLDivElement | null>(null)
   const reviewUrlReadyRef = useRef(false)
   const skipReviewUrlWriteRef = useRef(false)
   const agents = snapshot.facets?.agents ?? []
@@ -158,7 +149,10 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const onAgents = location.pathname.startsWith('/agents')
   const hasSseBanner = Boolean(snapshot.health && !snapshot.liveConnected && !onPiLive)
   const showTurnRail = onLocalReview && snapshot.review.detail
-  const navigationHasNewData = (to: string) => to === '/tools' ? snapshot.usage.hasNewData : to === '/agents' ? snapshot.agentsHasNewData : false
+  const agentOverviewItems = snapshot.agents?.items ?? []
+  const resolvedAgentOverviewSourceId = agentOverviewItems.some(item => item.sourceId === agentOverviewSourceId)
+    ? agentOverviewSourceId
+    : agentOverviewItems.find(item => item.detected)?.sourceId ?? agentOverviewItems[0]?.sourceId ?? agents.find(agent => agent.detected)?.sourceId ?? agents[0]?.sourceId ?? ''
 
   useEffect(() => {
     model.setReviewActive(onLocalReview)
@@ -196,51 +190,40 @@ function Shell({ model }: { model: AgentLensClientModel }) {
 
   return <PinnedProvider agents={agents}>
     <div className="app-shell">
-      <header className="app-header">
-        <div className="app-header-inner">
-          <NavLink to="/review" className="brand" aria-label="AgentLens 智能体透镜，返回任务中心" title="返回任务中心" style={{ color: 'inherit', textDecoration: 'none' }}>
-            <img className="brand-logo" src="/agentlens-icon.svg" alt="" aria-hidden="true"/>
-            <span className="brand-name">AgentLens · 智能体透镜</span>
-            <BrandVersion />
-          </NavLink>
-          <nav className="app-nav" aria-label="主导航">
-            {navigation.map(item => {
-              const hasNewData = navigationHasNewData(item.to)
-              return <NavLink key={item.to} to={item.to} aria-label={hasNewData ? `${item.label}，有新数据` : item.label} className={({ isActive }) => `nav-item ${'startsGroup' in item ? 'nav-group-start ' : ''}${isActive ? 'nav-item-active' : ''}`}>
-                <span>{item.label}</span>{hasNewData && <span className="nav-new-dot" title="有新数据" aria-hidden="true"/>}
-              </NavLink>
-            })}
-          </nav>
-          <div className="app-status">
-            <RuntimeStatus health={snapshot.health} liveConnected={snapshot.liveConnected} />
-            <ReleaseInfo runtimeOwner={snapshot.health?.runtime?.owner ?? null} runtimeReady={snapshot.health !== null} />
-            <IconButton className="theme-toggle" onClick={toggleTheme} title={theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'} aria-label={theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'}><UiIcon name={theme === 'dark' ? 'sun' : 'moon'} size={16}/></IconButton>
-          </div>
-        </div>
-      </header>
-      {hasSseBanner && <div className="sse-banner" role="status">
-        <span className="live-dot live-dot-waiting" />
-        <span>实时通道已断开</span>
-        <small>页面保留当前内容；重新连接后会继续接收新数据。</small>
-      </div>}
-      <Routes>
-        <Route path="/review" element={<TaskCenterPage model={model} mode="history" />} />
-        <Route path="/review/new" element={<TaskCenterPage model={model} mode="new" />} />
-        <Route path="/review/live" element={<Navigate to="/review/new" replace />} />
-        <Route path="/review/live/:runtimeSessionId" element={<TaskCenterPage model={model} mode="live" />} />
-        <Route path="/review/hub/:sessionId" element={<TaskCenterPage model={model} mode="hub" />} />
-        <Route path="/review/:sessionId" element={<TaskCenterPage model={model} mode="history" />} />
-        <Route path="/tools" element={<ToolsPage model={model} />} />
-        <Route path="/insights" element={<InsightsPage model={model} />} />
-        <Route path="/agents" element={<AgentsResponsivePage model={model} sourceId={agentOverviewSourceId} onSourceIdChange={setAgentOverviewSourceId} />} />
-        <Route path="/backup" element={<BackupPage />} />
-        <Route path="*" element={<Navigate to="/review" replace />} />
-      </Routes>
-      {onLocalReview && <ReviewStateOverlay model={model} snapshot={snapshot}/>} 
-      {onAgents && <AgentsStateOverlay model={model} snapshot={snapshot}/>} 
-      {onTools && snapshot.usage.hasNewData && <BackgroundDataNotice label="工具分析" hasSseBanner={hasSseBanner} onRefresh={() => model.refreshUsage()}/>} 
-      {onAgents && snapshot.agentsHasNewData && <BackgroundDataNotice label="智能体概览" hasSseBanner={hasSseBanner} onRefresh={() => model.refreshFacetsAndAgents()}/>} 
-      {showTurnRail && <ReviewTurnRail detail={snapshot.review.detail!} onLoadInteraction={ordinal => model.jumpToReviewInteraction(ordinal)}/>} 
+      <WorkspaceSidebar
+        snapshot={snapshot}
+        agents={agents}
+        selectedAgentId={resolvedAgentOverviewSourceId}
+        onSelectAgent={setAgentOverviewSourceId}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        onContextHost={setSidebarHost}
+      />
+      <div className="app-main">
+        {hasSseBanner && <div className="sse-banner" role="status">
+          <span className="live-dot live-dot-waiting" />
+          <span>实时通道已断开</span>
+          <small>页面保留当前内容；重新连接后会继续接收新数据。</small>
+        </div>}
+        <Routes>
+          <Route path="/review" element={<TaskCenterPage model={model} mode="history" sidebarHost={sidebarHost}/>} />
+          <Route path="/review/new" element={<TaskCenterPage model={model} mode="new" sidebarHost={sidebarHost}/>} />
+          <Route path="/review/live" element={<Navigate to="/review/new" replace />} />
+          <Route path="/review/live/:runtimeSessionId" element={<TaskCenterPage model={model} mode="live" sidebarHost={sidebarHost}/>} />
+          <Route path="/review/hub/:sessionId" element={<TaskCenterPage model={model} mode="hub" sidebarHost={sidebarHost}/>} />
+          <Route path="/review/:sessionId" element={<TaskCenterPage model={model} mode="history" sidebarHost={sidebarHost}/>} />
+          <Route path="/tools" element={<ToolsPage model={model} />} />
+          <Route path="/insights" element={<InsightsPage model={model} />} />
+          <Route path="/agents" element={<AgentsResponsivePage model={model} sourceId={agentOverviewSourceId} onSourceIdChange={setAgentOverviewSourceId} />} />
+          <Route path="/backup" element={<BackupPage />} />
+          <Route path="*" element={<Navigate to="/review" replace />} />
+        </Routes>
+        {onLocalReview && <ReviewStateOverlay model={model} snapshot={snapshot}/>} 
+        {onAgents && <AgentsStateOverlay model={model} snapshot={snapshot}/>} 
+        {onTools && snapshot.usage.hasNewData && <BackgroundDataNotice label="工具分析" hasSseBanner={hasSseBanner} onRefresh={() => model.refreshUsage()}/>} 
+        {onAgents && snapshot.agentsHasNewData && <BackgroundDataNotice label="智能体概览" hasSseBanner={hasSseBanner} onRefresh={() => model.refreshFacetsAndAgents()}/>} 
+        {showTurnRail && <ReviewTurnRail detail={snapshot.review.detail!} onLoadInteraction={ordinal => model.jumpToReviewInteraction(ordinal)}/>} 
+      </div>
     </div>
   </PinnedProvider>
 }
