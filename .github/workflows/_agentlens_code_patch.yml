@@ -54,7 +54,7 @@ jobs:
             return compactTitle(value, max, fallback)
           }
           '''
-          text, count = title_pattern.subn(title_replacement, text, count=1)
+          text, count = title_pattern.subn(lambda _: title_replacement, text, count=1)
           if count != 1:
               raise SystemExit(f'ReviewPage title cleanup replacement count={count}')
 
@@ -72,11 +72,14 @@ jobs:
           }
 
           function MessageBubble'''
-          text, count = markdown_pattern.subn(markdown_replacement, text, count=1)
+          text, count = markdown_pattern.subn(lambda _: markdown_replacement, text, count=1)
           if count != 1:
               raise SystemExit(f'ReviewPage MarkdownSurface replacement count={count}')
 
-          text = text.replace("if (node.kind === 'context.injected') return '系统注入上下文'", "if (node.kind === 'context.injected') return stringValue(payload, 'label') || '系统注入上下文'")
+          old_label = "if (node.kind === 'context.injected') return '系统注入上下文'"
+          if old_label not in text:
+              raise SystemExit('ReviewPage context label line not found')
+          text = text.replace(old_label, "if (node.kind === 'context.injected') return stringValue(payload, 'label') || '系统注入上下文'", 1)
 
           context_summary = '''  if (node.kind === 'context.injected') {
             const role = stringValue(payload, 'role')
@@ -148,7 +151,7 @@ jobs:
           }
 
           function RawEventGroup'''
-          text, count = event_pattern.subn(event_replacement, text, count=1)
+          text, count = event_pattern.subn(lambda _: event_replacement, text, count=1)
           if count != 1:
               raise SystemExit(f'ReviewPage EventRow replacement count={count}')
 
