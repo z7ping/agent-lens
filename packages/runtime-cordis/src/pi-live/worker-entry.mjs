@@ -260,6 +260,36 @@ async function exists(path) {
   try { await access(path); return true } catch { return false }
 }
 
+function samePath(left, right) {
+  const normalized = value => {
+    const path = resolve(value)
+    return process.platform === 'win32' ? path.toLowerCase() : path
+  }
+  return normalized(left) === normalized(right)
+}
+
+async function createSessionManager(sdk, input) {
+  if (!input.sessionPath) return sdk.SessionManager.create(input.cwd, input.sessionDir)
+  const manager = sdk.SessionManager.open(input.sessionPath, input.sessionDir, input.cwd)
+  if (input.historyAction !== 'fork') return manager
+  if (typeof manager.createBranchedSession !== 'function') {
+    throw new Error('Installed Pi SDK does not support createBranchedSession; cannot fork this history session')
+  }
+  const leafId = manager.getLeafId()
+  if (!leafId) throw new Error('该 Pi 历史会话没有可分叉的当前节点')
+  const forkedSessionPath = await Promise.resolve(manager.createBranchedSession(leafId))
+  if (typeof forkedSessionPath !== 'string' || !forkedSessionPath.trim()) {
+    throw new Error('Pi 未能从当前节点创建新的 Session')
+  }
+  if (samePath(forkedSessionPath, input.sessionPath)) {
+    throw new Error('Pi 分叉返回了原会话路径，已拒绝覆盖历史 Session')
+  }
+  if (!await exists(forkedSessionPath)) {
+    throw new Error('Pi 已返回分叉 Session 路径，但新 JSONL 尚未创建')
+  }
+  return manager
+}
+
 async function findExecutable(explicit) {
   if (explicit && await exists(explicit)) return explicit
   const configured = process.env.PI_BIN?.trim()
@@ -403,7 +433,7 @@ async function initialize(input) {
   sdkVersion = discovery.version
   const sdk = await import(pathToFileURL(discovery.sdkEntry).href)
   if (typeof sdk.createAgentSession !== 'function' || !sdk.SessionManager) throw new Error('Installed Pi SDK is missing required AgentSession capabilities')
-  const sessionManager = input.sessionPath ? sdk.SessionManager.open(input.sessionPath, input.sessionDir, input.cwd) : sdk.SessionManager.create(input.cwd, input.sessionDir)
+  const sessionManager = await createSessionManager(sdk, input)
   const hasSessionRuntime = ['createAgentSessionServices', 'createAgentSessionRuntime', 'createAgentSessionFromServices'].every(name => typeof sdk[name] === 'function')
   if (hasSessionRuntime) {
     runtimeMode = 'session_runtime'
