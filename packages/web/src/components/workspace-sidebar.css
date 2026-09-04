@@ -19,7 +19,7 @@
   display: grid;
   min-width: 0;
   min-height: 0;
-  grid-template-rows: 64px 146px minmax(0, 1fr) 58px;
+  grid-template-rows: 56px auto minmax(0, 1fr) 54px;
   overflow: hidden;
   border-right: 1px solid var(--al-line);
   background: var(--al-soft-2);
@@ -29,17 +29,16 @@
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 10px;
-  padding: 0 16px;
-  border-bottom: 1px solid color-mix(in srgb, var(--al-line) 74%, transparent);
+  gap: 9px;
+  padding: 0 15px;
   color: var(--al-ink);
   text-decoration: none;
 }
 
 .workspace-sidebar-logo {
-  width: 28px;
-  height: 28px;
-  flex: 0 0 28px;
+  width: 27px;
+  height: 27px;
+  flex: 0 0 27px;
   border-radius: 7px;
   object-fit: contain;
 }
@@ -63,36 +62,36 @@
 .workspace-primary-nav {
   display: grid;
   align-content: start;
-  gap: 3px;
-  padding: 14px 11px 18px;
+  gap: 1px;
+  padding: 5px 12px 14px;
 }
 
 .workspace-primary-link {
   position: relative;
   display: flex;
-  min-height: 36px;
+  min-height: 34px;
   align-items: center;
   gap: 8px;
-  padding: 0 10px;
-  border-radius: 8px;
+  padding: 0 9px 0 17px;
   color: var(--al-muted);
   font-size: 13px;
-  font-weight: 590;
+  font-weight: 570;
   text-decoration: none;
+  transition: color .14s ease;
 }
 
-.workspace-primary-link:hover { background: color-mix(in srgb, var(--al-surface) 62%, transparent); color: var(--al-ink); }
-.workspace-primary-link.is-active { background: var(--al-surface); color: var(--al-ink); font-weight: 680; }
-.workspace-primary-link.is-active::before {
+.workspace-primary-link:hover { color: var(--al-ink); }
+.workspace-primary-link.is-active { color: var(--al-ink); font-weight: 680; }
+.workspace-primary-link::before {
   content: '';
   position: absolute;
-  top: 9px;
-  bottom: 9px;
-  left: 0;
-  width: 2px;
-  border-radius: 2px;
-  background: var(--al-accent);
+  left: 4px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: transparent;
 }
+.workspace-primary-link.is-active::before { background: var(--al-accent); }
 
 .workspace-nav-dot {
   width: 6px;
@@ -107,52 +106,60 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border-top: 1px solid color-mix(in srgb, var(--al-line) 74%, transparent);
+  padding-top: 2px;
   background: var(--al-soft-2);
 }
 
 .workspace-context-menu {
   height: 100%;
   min-height: 0;
-  padding: 10px;
+  padding: 4px 10px 10px;
   overflow: auto;
 }
 
-.workspace-context-heading {
+.workspace-context-utility {
   display: flex;
   min-height: 34px;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 0 6px 5px;
+  padding: 0 5px 4px 9px;
+  color: var(--al-muted-2);
+  font-size: 12px;
+}
+.workspace-context-utility .ui-icon-button {
+  border-color: transparent;
+  background: transparent;
   color: var(--al-muted-2);
 }
-.workspace-context-heading b { color: var(--al-ink-2); font-size: 12px; font-weight: 680; }
-.workspace-context-heading span { font-size: 12px; }
-.workspace-context-heading-actions { display: inline-flex; align-items: center; gap: 5px; }
-.workspace-context-heading-actions .ui-icon-button { color: var(--al-muted-2); }
+.workspace-context-utility .ui-icon-button:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--al-surface);
+  color: var(--al-ink);
+}
 
 .workspace-context-link,
 .workspace-agent-link {
   position: relative;
   display: flex;
   width: 100%;
-  min-height: 36px;
+  min-height: 34px;
   align-items: center;
   gap: 8px;
   padding: 0 9px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 7px;
   background: transparent;
   color: var(--al-muted);
   font-size: 13px;
   text-align: left;
   text-decoration: none;
+  transition: background .14s ease, color .14s ease;
 }
 .workspace-context-link:hover,
-.workspace-agent-link:hover { background: color-mix(in srgb, var(--al-surface) 64%, transparent); color: var(--al-ink); }
+.workspace-agent-link:hover { background: color-mix(in srgb, var(--al-surface) 60%, transparent); color: var(--al-ink); }
 .workspace-context-link.is-active,
-.workspace-agent-link.is-active { background: var(--al-surface); color: var(--al-ink); font-weight: 650; }
+.workspace-agent-link.is-active { background: color-mix(in srgb, var(--al-surface) 74%, transparent); color: var(--al-ink); font-weight: 640; }
 .workspace-context-link .workspace-nav-dot { margin-left: auto; }
 
 .workspace-agent-link > span:nth-child(2) {
@@ -161,9 +168,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.workspace-agent-link small { margin-left: auto; color: var(--al-muted-2); font-size: 12px; white-space: nowrap; }
-.workspace-agent-link.is-active small { color: var(--al-muted); }
-.workspace-context-empty { padding: 16px 8px; color: var(--al-muted-2); font-size: 12px; line-height: 1.55; }
+.workspace-context-empty { padding: 16px 9px; color: var(--al-muted-2); font-size: 12px; line-height: 1.55; }
 
 .workspace-sidebar-footer {
   display: flex;
@@ -171,9 +176,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 0 11px 0 14px;
-  border-top: 1px solid var(--al-line);
-  background: var(--al-surface);
+  padding: 6px 11px 6px 14px;
+  background: var(--al-soft-2);
 }
 
 .workspace-user {
@@ -192,10 +196,20 @@
   place-items: center;
   border: 1px solid var(--al-line);
   border-radius: 50%;
-  background: var(--al-soft);
+  background: var(--al-surface);
   color: var(--al-ink-2);
 }
 .workspace-user > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-sidebar-footer > .ui-icon-button {
+  border-color: transparent;
+  background: transparent;
+  color: var(--al-muted);
+}
+.workspace-sidebar-footer > .ui-icon-button:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--al-surface);
+  color: var(--al-ink);
+}
 
 .app-main {
   display: flex;
@@ -213,7 +227,7 @@
   flex: 1;
 }
 
-/* Task Center 的会话 Rail 通过 Portal 挂到全局上下文区，不再占正文第二列。 */
+/* Task Center 的任务上下文通过 Portal 挂到全局工作栏，不再占正文第二列。 */
 .workspace-sidebar-context > .task-center-rail {
   width: 100%;
   height: 100%;
@@ -223,9 +237,9 @@
 .app-shell .task-center-page {
   height: auto;
   grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
 }
-.app-shell .task-center-toolbar { grid-column: 1; }
-.app-shell .task-center-main { grid-column: 1; }
+.app-shell .task-center-main { grid-column: 1; grid-row: 1; }
 .app-shell .task-center-page.is-new-task { grid-template-columns: minmax(0, 1fr); }
 
 /* 智能体切换已经由全局上下文区持有，正文不再重复第二套来源导航和顶部 AgentScope。 */
@@ -248,7 +262,7 @@
 
 @media (max-width: 991.98px) {
   .app-shell { grid-template-columns: 252px minmax(0, 1fr); }
-  .workspace-sidebar { grid-template-rows: 60px 136px minmax(0, 1fr) 56px; }
+  .workspace-sidebar { grid-template-rows: 54px auto minmax(0, 1fr) 52px; }
   .workspace-sidebar-brand { padding-inline: 13px; }
   .workspace-primary-nav { padding-inline: 9px; }
 }
@@ -257,22 +271,17 @@
   .app-shell { grid-template-columns: 220px minmax(0, 1fr); }
   .workspace-sidebar-brand-copy .release-version { display: none; }
   .workspace-user > span:last-child { display: none; }
-  .app-shell .task-center-page { grid-template-rows: auto minmax(0, 1fr); }
-  .app-shell .task-center-main { grid-row: 2; }
-  .app-shell .task-center-page.is-new-task { grid-template-rows: minmax(0, 1fr); }
-  .app-shell .task-center-page.is-new-task .task-center-main { grid-row: 1; }
 }
 
 @media (max-width: 575.98px) {
   .app-shell { grid-template-columns: 196px minmax(0, 1fr); }
-  .workspace-sidebar { grid-template-rows: 56px 126px minmax(0, 1fr) 54px; }
+  .workspace-sidebar { grid-template-rows: 52px auto minmax(0, 1fr) 50px; }
   .workspace-sidebar-brand { padding-inline: 10px; }
   .workspace-sidebar-logo { width: 25px; height: 25px; flex-basis: 25px; }
   .workspace-sidebar-brand-copy b { font-size: 14px; }
-  .workspace-primary-nav { padding: 10px 7px 14px; }
-  .workspace-primary-link { min-height: 34px; padding-inline: 8px; font-size: 12px; }
-  .workspace-context-menu { padding: 7px; }
+  .workspace-primary-nav { padding: 4px 7px 10px; }
+  .workspace-primary-link { min-height: 32px; padding-right: 7px; padding-left: 16px; font-size: 12px; }
+  .workspace-context-menu { padding-inline: 7px; }
   .workspace-context-link,
   .workspace-agent-link { padding-inline: 7px; font-size: 12px; }
-  .workspace-agent-link small { display: none; }
 }
