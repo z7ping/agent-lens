@@ -219,6 +219,59 @@
 .workspace-context-control .select-menu-trigger:hover,
 .workspace-context-control .select-menu-trigger[aria-expanded='true'] { background: var(--al-surface); }
 
+/* 洞察页只常驻二级视图；智能体 / 项目 / 时间统一收进低噪音 Disclosure。 */
+.workspace-insight-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 26px;
+  flex: 0 0 auto;
+  align-items: start;
+  gap: 6px;
+  padding: 4px 10px 12px;
+  overflow: visible;
+}
+.workspace-insight-filters > .ui-icon-button {
+  margin-top: 4px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--al-muted-2);
+}
+.workspace-insight-filters > .ui-icon-button:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--al-surface);
+  color: var(--al-ink);
+}
+.workspace-insight-filter-disclosure {
+  min-width: 0;
+  border: 0;
+  background: transparent;
+}
+.workspace-insight-filter-disclosure > summary {
+  min-height: 34px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--al-muted);
+}
+.workspace-insight-filter-disclosure > summary:hover { color: var(--al-ink); }
+.workspace-insight-filter-disclosure .ui-disclosure-body { padding: 7px 0 0; }
+.workspace-insight-filter-fields {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+.workspace-insight-filter-fields label {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  color: var(--al-muted-2);
+  font-size: 12px;
+}
+.workspace-insight-filter-fields .select-menu,
+.workspace-insight-filter-fields .select-menu-trigger { width: 100%; min-width: 0; }
+.workspace-insight-filter-fields .select-menu-trigger { background: color-mix(in srgb, var(--al-surface) 72%, transparent); }
+.workspace-insight-filter-fields .select-menu-trigger:hover,
+.workspace-insight-filter-fields .select-menu-trigger[aria-expanded='true'] { background: var(--al-surface); }
+
 .workspace-sidebar-footer {
   display: flex;
   min-width: 0;
@@ -321,7 +374,8 @@
   .workspace-primary-nav { padding: 4px 7px 10px; }
   .workspace-primary-link { min-height: 32px; padding-right: 7px; padding-left: 16px; font-size: 12px; }
   .workspace-context-menu,
-  .workspace-context-controls { padding-inline: 7px; }
+  .workspace-context-controls,
+  .workspace-insight-filters { padding-inline: 7px; }
   .workspace-context-link,
   .workspace-agent-link { padding-inline: 7px; font-size: 12px; }
 }
