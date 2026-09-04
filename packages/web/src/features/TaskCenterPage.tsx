@@ -454,7 +454,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
           onClick={() => model.setReviewFilters({ search: '' })}
           title="清除搜索"
           aria-label="清除搜索"
-        ><UiIcon name="close" size={13}/></IconButton>}
+        ><UiIcon name="close" size={14}/></IconButton>}
       </div>
     </div>}
 
