@@ -152,20 +152,13 @@ jobs:
           if marker not in text:
               raise SystemExit('TaskCenter sessionActivityLabel marker not found')
           text = text.replace(marker, helper + marker, 1)
-          text = text.replace("const isSystemActivity = Boolean(item.sessionActivity && item.sessionActivity !== 'user-task')", "const isSystemActivity = !isUserTaskSummary(item)", 1)
+          system_activity_old = "const isSystemActivity = Boolean(item.sessionActivity && item.sessionActivity !== 'user-task')"
+          if system_activity_old not in text:
+              raise SystemExit('TaskCenter isSystemActivity marker not found')
+          text = text.replace(system_activity_old, "const isSystemActivity = !isUserTaskSummary(item)", 1)
           text = text.replace("displayTitle(item.title || item.preview, fallback)", "displayTitle(item.preview || item.title, fallback)", 1)
           text = text.replace("displayTitle(parent.title || parent.preview, parent.projectName ? `${parent.projectName} 任务` : '关联任务')", "displayTitle(parent.preview || parent.title, parent.projectName ? `${parent.projectName} 任务` : '关联任务')", 1)
-          old_user_tasks = '''  const userTaskSessions = useMemo(
-            () => localSessions.filter(item => !item.sessionActivity || item.sessionActivity === 'user-task'),
-            [localSessions],
-          )
-          const systemActivities = useMemo(
-            () => localSessions
-              .filter(item => Boolean(item.sessionActivity && item.sessionActivity !== 'user-task'))
-              .sort((left, right) => Date.parse(right.startedAt) - Date.parse(left.startedAt) || left.id.localeCompare(right.id)),
-            [localSessions],
-          )'''
-          new_user_tasks = '''  const userTaskSessions = useMemo(
+          task_group_replacement = '''const userTaskSessions = useMemo(
             () => localSessions.filter(isUserTaskSummary),
             [localSessions],
           )
@@ -174,10 +167,9 @@ jobs:
               .filter(item => !isUserTaskSummary(item))
               .sort((left, right) => Date.parse(right.startedAt) - Date.parse(left.startedAt) || left.id.localeCompare(right.id)),
             [localSessions],
-          )'''
-          if old_user_tasks not in text:
-              raise SystemExit('TaskCenter task/activity grouping block not found')
-          text = text.replace(old_user_tasks, new_user_tasks, 1)
+          )
+          '''
+          text = replace_between(text, 'const userTaskSessions = useMemo(', 'const projectSessions = useMemo(', task_group_replacement + 'const projectSessions = useMemo(')
           task_center.write_text(text, encoding='utf-8')
 
           review = Path('packages/web/src/features/ReviewPage.tsx')
