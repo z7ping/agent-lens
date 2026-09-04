@@ -1,5 +1,5 @@
 import { PiExtensionUiBridge } from './extension-ui-bridge'
-import { assertPiSdkSession } from './pi-sdk-adapter'
+import { assertPiSdkSession, type PiSdkSessionManager } from './pi-sdk-adapter'
 import { toPiLiveWireEvent } from './sdk-event'
 import type { PiSdkLoader, PiSdkModel, PiSdkSession, PiSdkThinkingLevel } from './sdk-loader'
 import type { PiLiveControls, PiLiveQueueState, PiLiveRuntimeState, PiLiveSnapshot, PiLiveStartInput, PiLiveStreamingBehavior } from './types'
@@ -7,6 +7,17 @@ import type { PiRuntimeHandle, PiRuntimeHost } from './worker-host'
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function forkSessionManager(manager: PiSdkSessionManager): PiSdkSessionManager {
+  if (typeof manager.createBranchedSession !== 'function') {
+    throw new Error('Installed Pi SDK does not support createBranchedSession; cannot fork this history session')
+  }
+  const leafId = manager.getLeafId()
+  if (!leafId) throw new Error('该 Pi 历史会话没有可分叉的当前节点')
+  const forkedSessionPath = manager.createBranchedSession(leafId)
+  if (!forkedSessionPath) throw new Error('Pi 未能从当前节点创建新的 Session')
+  return manager
 }
 
 class InProcessHandle implements PiRuntimeHandle {
@@ -37,7 +48,8 @@ export class InProcessPiRuntimeHost implements PiRuntimeHost {
   constructor(private readonly loadSdk: PiSdkLoader) {}
   async start(id: string, input: PiLiveStartInput, _signal: AbortSignal, onEvent: (event: Record<string, unknown>) => void): Promise<PiRuntimeHandle> {
     const installed = await this.loadSdk(input.executable)
-    const manager = input.sessionPath ? installed.module.SessionManager.open(input.sessionPath, input.sessionDir, input.cwd) : installed.module.SessionManager.create(input.cwd, input.sessionDir)
+    let manager = input.sessionPath ? installed.module.SessionManager.open(input.sessionPath, input.sessionDir, input.cwd) : installed.module.SessionManager.create(input.cwd, input.sessionDir)
+    if (input.sessionPath && input.historyAction === 'fork') manager = forkSessionManager(manager)
     const created = await installed.module.createAgentSession({ cwd: input.cwd, sessionManager: manager })
     assertPiSdkSession(created.session, installed.sdkEntry, installed.version)
     const session = created.session
