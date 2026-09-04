@@ -1,4 +1,4 @@
-# rerun after restoring original session-summary projection behavior
+# rerun after Codex exact-optional attribution fix
 name: AgentLens attribution finalization
 
 on:
