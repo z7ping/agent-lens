@@ -123,7 +123,7 @@ function hubAvailabilityString(value: HubReadAvailability): string | undefined {
 }
 
 function hubSessionTime(item: HubReviewSessionSummaryDto): string {
-  return hubAvailabilityString(item.startedAt) ?? hubAvailabilityString(item.endedAt) ?? ''
+  return hubAvailabilityString(item.endedAt) ?? hubAvailabilityString(item.startedAt) ?? ''
 }
 
 function hubSessionTitle(item: HubReviewSessionSummaryDto): string {
@@ -149,8 +149,8 @@ function hubSessionVisibility(item: HubReviewSessionSummaryDto, review: ReturnTy
 }
 
 type UnifiedReviewSessionListEntry =
-  | { origin: 'local'; id: string; startedAt: string; local: ReviewSessionSummaryDto }
-  | { origin: 'remote'; id: string; startedAt: string; remote: HubReviewSessionSummaryDto }
+  | { origin: 'local'; id: string; activityAt: string; local: ReviewSessionSummaryDto }
+  | { origin: 'remote'; id: string; activityAt: string; remote: HubReviewSessionSummaryDto }
 
 function payloadRecord(value: unknown): Record<string, JsonValue> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, JsonValue> : {}
@@ -868,18 +868,18 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
     const groups = new Map<'今天' | '昨天' | '更早', UnifiedReviewSessionListEntry[]>()
     const now = new Date()
     const combined: UnifiedReviewSessionListEntry[] = [
-      ...(review.response?.items ?? []).map(item => ({ origin: 'local' as const, id: item.id, startedAt: item.startedAt, local: item })),
-      ...visibleHubSessions.map(item => ({ origin: 'remote' as const, id: item.id, startedAt: hubSessionTime(item), remote: item })),
+      ...(review.response?.items ?? []).map(item => ({ origin: 'local' as const, id: item.id, activityAt: item.endedAt || item.startedAt, local: item })),
+      ...visibleHubSessions.map(item => ({ origin: 'remote' as const, id: item.id, activityAt: hubSessionTime(item), remote: item })),
     ].sort((left, right) => {
-      const leftAt = Date.parse(left.startedAt)
-      const rightAt = Date.parse(right.startedAt)
+      const leftAt = Date.parse(left.activityAt)
+      const rightAt = Date.parse(right.activityAt)
       if (Number.isFinite(leftAt) && Number.isFinite(rightAt) && leftAt != rightAt) return rightAt - leftAt
       if (Number.isFinite(leftAt) && !Number.isFinite(rightAt)) return -1
       if (!Number.isFinite(leftAt) && Number.isFinite(rightAt)) return 1
       return left.id.localeCompare(right.id)
     })
     for (const item of combined) {
-      const label = sessionDayLabel(item.startedAt, now)
+      const label = sessionDayLabel(item.activityAt, now)
       const items = groups.get(label) ?? []
       items.push(item)
       groups.set(label, items)
@@ -1242,7 +1242,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
 
     <div className="review-layout">
       {!embedded && <aside className="session-panel">
-        <div className="session-panel-head"><div><b>会话</b><span>本机 + 远程 · 按创建时间倒序</span></div><span className="count-badge">{(review.response?.items.length ?? 0) + visibleHubSessions.length}{review.response?.meta.hasMore ? '+' : ''}</span></div>
+        <div className="session-panel-head"><div><b>会话</b><span>本机 + 远程 · 按最近活动倒序</span></div><span className="count-badge">{(review.response?.items.length ?? 0) + visibleHubSessions.length}{review.response?.meta.hasMore ? '+' : ''}</span></div>
         <div className="session-scroll">
           {review.loading && !review.response && <div className="empty-state">加载会话…</div>}
           {sessionGroups.map(group => <section className="session-group-block" key={group.label}>
@@ -1254,7 +1254,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
                 item.projectName ? `${item.projectName} 会话` : `${agentLabel(item.sourceIds[0] ?? '', item.productId)} 会话`,
               )
               return <button key={`local:${item.id}`} className={`session-item ${review.selectedId === item.id ? 'session-item-active' : ''}`} onClick={() => select(item.id)}>
-                <div className="session-item-meta"><span className={`source-dot ${sourceDot(item.sourceIds[0] ?? '')}`}/><span>{agentLabel(item.sourceIds[0] ?? '', item.productId)}</span>{presentation.activityLabel && <StatusBadge className="session-activity-badge">{presentation.activityLabel}</StatusBadge>}<time title={formatTime(item.startedAt)}>{sessionRelativeTime(item.startedAt)}</time></div>
+                <div className="session-item-meta"><span className={`source-dot ${sourceDot(item.sourceIds[0] ?? '')}`}/><span>{agentLabel(item.sourceIds[0] ?? '', item.productId)}</span>{presentation.activityLabel && <StatusBadge className="session-activity-badge">{presentation.activityLabel}</StatusBadge>}<time title={`最近活动：${formatTime(entry.activityAt)}`}>{sessionRelativeTime(entry.activityAt)}</time></div>
                 <div className="session-item-title">{presentation.title}</div>
                 <div className="session-item-foot"><span>{item.projectName ?? item.workspacePath?.split(/[\\/]/).pop() ?? '无项目'}</span><span>{item.toolCount} 调用{item.errorCount > 0 ? ` · ${item.errorCount} 错误` : ''}</span></div>
               </button>
@@ -1355,6 +1355,6 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
         </div>}
       </TaskSurface>
     </div>
-    {inspect && <Inspector node={inspect} loadSourceRecord={model.sourceRecord} onClose={() => setInspect(null)}/>} 
+    {inspect && <Inspector node={inspect} loadSourceRecord={model.sourceRecord} onClose={() => setInspect(null)/>} 
   </main>
 }
