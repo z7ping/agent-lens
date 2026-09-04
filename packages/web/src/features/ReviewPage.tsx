@@ -16,6 +16,7 @@ import type {
 } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { fetchHubReviewSessions } from '../client/hub-review'
+import { piLiveApi } from '../client/pi-live'
 import { useClientSnapshot } from '../App'
 import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
@@ -862,6 +863,8 @@ export function ReviewPage({
   const [roundExpansionRevision, setRoundExpansionRevision] = useState(0)
   const [showAllEvents, setShowAllEvents] = useState(true)
   const [hubSessions, setHubSessions] = useState<HubReviewSessionSummaryDto[]>([])
+  const [forkingPiSessionId, setForkingPiSessionId] = useState('')
+  const [piForkError, setPiForkError] = useState<{ sessionId: string; message: string } | null>(null)
   const sessionLoadSentinelRef = useRef<HTMLButtonElement>(null)
   const detailLoadSentinelRef = useRef<HTMLDivElement>(null)
   const readerPaneRef = useRef<HTMLElement>(null)
@@ -925,6 +928,7 @@ export function ReviewPage({
     setRoundExpansionRevision(0)
     setShowAllEvents(true)
     setInspect(null)
+    setPiForkError(null)
     followingTailRef.current = false
     detailAutoLoadBaselineRef.current = readerUserRevisionRef.current
   }, [detail?.id])
@@ -1234,6 +1238,20 @@ export function ReviewPage({
     pendingReaderAnchorRef.current = null
   }
 
+  const forkPiSession = async (logicalSessionId: string) => {
+    if (forkingPiSessionId || resumingPiSession) return
+    setForkingPiSessionId(logicalSessionId)
+    setPiForkError(null)
+    try {
+      const state = await piLiveApi.fork(logicalSessionId)
+      navigate(`/review/live/${encodeURIComponent(state.runtimeSessionId)}`)
+    } catch (reason) {
+      setPiForkError({ sessionId: logicalSessionId, message: reason instanceof Error ? reason.message : String(reason) })
+    } finally {
+      setForkingPiSessionId('')
+    }
+  }
+
   return <main className={`review-page ${embedded ? 'review-page-embedded' : ''}`}>
     {!embedded && <Toolbar className="workspace-toolbar" aria-label="任务复盘筛选">
       <AgentScope agents={agents} value={review.filters.sourceId} onChange={sourceId => model.setReviewFilters({ sourceId })}/>
@@ -1307,12 +1325,15 @@ export function ReviewPage({
             submeta={taskDetailModel?.startedAt && taskDetailModel.endedAt ? <><span>{formatRange(taskDetailModel.startedAt, taskDetailModel.endedAt)}</span>{taskDetailModel.workspacePath && <code title={taskDetailModel.workspacePath}>{taskDetailModel.workspacePath}</code>}</> : undefined}
             metrics={taskDetailModel?.metrics ?? []}
             actions={<>
-              {onResumePiSession && detail.sourceIds.includes('pi') ? <Button size="small" loading={resumingPiSession} disabled={resumingPiSession} onClick={() => void onResumePiSession(detail.id)}><UiIcon name="arrow-right" size={14}/>继续会话</Button> : null}
+              {onResumePiSession && detail.sourceIds.includes('pi') ? <>
+                <Button size="small" loading={resumingPiSession} disabled={resumingPiSession || Boolean(forkingPiSessionId)} onClick={() => void onResumePiSession(detail.id)}><UiIcon name="arrow-right" size={14}/>继续会话</Button>
+                <Button size="small" loading={forkingPiSessionId === detail.id} disabled={resumingPiSession || Boolean(forkingPiSessionId)} onClick={() => void forkPiSession(detail.id)}><UiIcon name="plus" size={14}/>分叉继续</Button>
+              </> : null}
               <button className="review-audit-toggle" aria-pressed={showAllEvents} onClick={toggleEventVisibility}>{showAllEvents ? '视图：全部事件' : '视图：核心事件'}</button>
             </>}
           />
 
-          {piResumeError && <div className="page-error" role="alert">{piResumeError}</div>}
+          {(piResumeError || (piForkError?.sessionId === detail.id ? piForkError.message : '')) && <div className="page-error" role="alert">{piResumeError || piForkError?.message}</div>}
 
           {detail.sourceIds.includes('pi') && review.relationships?.items.length ? <details className="pi-session-tree">
             <summary>Pi 会话树 · {review.relationships.items.length} 条关系</summary>
