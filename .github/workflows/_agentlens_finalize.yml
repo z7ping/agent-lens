@@ -1,0 +1,70 @@
+name: AgentLens attribution finalization
+
+on:
+  push:
+    branches:
+      - fix/alpha3-codex-provenance-activity
+    paths:
+      - .github/workflows/_agentlens_finalize.yml
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/alpha3-codex-provenance-activity
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.0'
+          cache: npm
+      - name: Apply verified attribution patch
+        run: |
+          awk '
+            /- name: Patch attribution code/ { found=1; next }
+            found && /run: \|/ { body=1; next }
+            body && /^      - name:/ { exit }
+            body { sub(/^          /, ""); print }
+          ' .github/workflows/_agentlens_code_patch.yml > /tmp/agentlens-attribution-patch.py
+          test -s /tmp/agentlens-attribution-patch.py
+          python /tmp/agentlens-attribution-patch.py
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('packages/projection-review/src/index.ts')
+          text = path.read_text(encoding='utf-8')
+          old = '      interactionIndex: detail.interactionIndex,\n'
+          new = '      ...(detail.interactionIndex ? { interactionIndex: detail.interactionIndex } : {}),\n'
+          if old not in text:
+              raise SystemExit('Review interactionIndex marker not found')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck changed packages
+        run: |
+          npm run typecheck --workspace @agent-lens/storage-sqlite
+          npm run typecheck --workspace @agent-lens/projection-session
+          npm run typecheck --workspace @agent-lens/projection-review
+          npm run typecheck --workspace @agent-lens/source-codex
+          npm run typecheck --workspace @agent-lens/web
+      - name: Focused tests
+        run: |
+          npm test --workspace @agent-lens/source-codex
+          npm test --workspace @agent-lens/storage-sqlite
+          npm test --workspace @agent-lens/projection-session
+          npm test --workspace @agent-lens/projection-review
+      - name: Web presentation checks
+        run: |
+          npm run check:web-presentation
+          npm run build:web
+      - name: Commit verified code
+        run: |
+          git config user.name "agent-lens-bot"
+          git config user.email "agent-lens-bot@users.noreply.github.com"
+          git add packages/projection-review/src/projection.ts packages/projection-review/src/index.ts packages/storage-sqlite/src/session-summaries.ts packages/web/src/features/ReviewPage.tsx packages/web/src/features/TaskCenterPage.tsx
+          git diff --cached --check
+          git commit -m "fix: 完成任务归属与内部活动表现层收口"
+          git push origin HEAD:fix/alpha3-codex-provenance-activity
