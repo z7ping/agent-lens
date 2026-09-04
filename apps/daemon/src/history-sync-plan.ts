@@ -11,8 +11,10 @@ export interface ProgressiveHistoryStage {
 export function createProgressiveHistoryStages(startedAt: number): ProgressiveHistoryStage[] {
   const activeSince = new Date(startedAt - HOT_HISTORY_WINDOW_MS).toISOString()
   return [
-    { id: 'latest', label: '最新 1 个会话', window: { activeSince, sessionLimit: 1 } },
-    { id: 'recent', label: '最近 10 个会话', window: { activeSince, sessionLimit: 10 } },
+    // “最新/最近”描述的是按来源自身最近活动排序后的会话数量，不能再被热窗口裁掉。
+    // 否则一个超过 7 天未使用的来源会在冷启动时表现为“没有任何历史”。
+    { id: 'latest', label: '最新 1 个会话', window: { sessionLimit: 1 } },
+    { id: 'recent', label: '最近 10 个会话', window: { sessionLimit: 10 } },
     { id: 'hot-window', label: '最近 7 天', window: { activeSince } },
   ]
 }
