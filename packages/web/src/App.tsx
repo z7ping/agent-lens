@@ -195,6 +195,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
         agents={agents}
         selectedAgentId={resolvedAgentOverviewSourceId}
         onSelectAgent={setAgentOverviewSourceId}
+        onRefreshAgents={() => { void model.refreshFacetsAndAgents() }}
         theme={theme}
         onToggleTheme={toggleTheme}
         onContextHost={setSidebarHost}
