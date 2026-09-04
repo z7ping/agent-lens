@@ -44,7 +44,7 @@ export function WorkspaceSidebar({
       </NavLink>
 
       <nav className="workspace-primary-nav" aria-label="主导航">
-        <NavLink to="/review" className={`workspace-primary-link ${onReview ? 'is-active' : ''}`}><UiIcon name="task" size={16}/><span>任务</span></NavLink>
+        <NavLink to="/review" className={`workspace-primary-link ${onReview ? 'is-active' : ''}`}><UiIcon name="task" size={16}/><span aria-label="任务中心">任务</span></NavLink>
         <NavLink to="/insights" className={`workspace-primary-link ${onInsights ? 'is-active' : ''}`}><UiIcon name="trend" size={16}/><span>洞察</span>{snapshot.usage.hasNewData && <i className="workspace-nav-dot" aria-label="有新数据"/>}</NavLink>
         <NavLink to="/agents" className={`workspace-primary-link ${onAgents ? 'is-active' : ''}`}><UiIcon name="agent" size={16}/><span>智能体</span>{snapshot.agentsHasNewData && <i className="workspace-nav-dot" aria-label="有新数据"/>}</NavLink>
       </nav>
