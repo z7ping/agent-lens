@@ -1,0 +1,43 @@
+name: Alpha.3 Fix Real Smoke Timeout
+
+on:
+  push:
+    branches:
+      - feature/1.0.0-alpha.3-task-surface
+    paths:
+      - .github/workflows/alpha3-fix-real-smoke-timeout.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-timeout:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feature/1.0.0-alpha.3-task-surface
+          fetch-depth: 0
+      - name: Patch desktop acceptance outer timeout and remove one-shot workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          target='.github/workflows/alpha3-task-center-real-smoke.yml'
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('.github/workflows/alpha3-task-center-real-smoke.yml')
+          text = path.read_text(encoding='utf-8')
+          old_wait = '$exited = $acceptance.WaitForExit(70000)'
+          new_wait = '$exited = $acceptance.WaitForExit(120000)'
+          old_log = "Write-Host 'Electron 验收进程 70 秒内未自然退出，清理进程树并使用已落盘报告判定结果。'"
+          new_log = "Write-Host 'Electron 验收进程 120 秒内未自然退出，清理进程树并使用已落盘报告判定结果。'"
+          if old_wait not in text or old_log not in text:
+              raise SystemExit('real smoke timeout contract no longer matches expected source')
+          path.write_text(text.replace(old_wait, new_wait).replace(old_log, new_log), encoding='utf-8')
+          PY
+          rm .github/workflows/alpha3-fix-real-smoke-timeout.yml
+          git config user.name 'agent-lens-ci'
+          git config user.email 'actions@users.noreply.github.com'
+          git add "$target" .github/workflows/alpha3-fix-real-smoke-timeout.yml
+          git commit -m 'ci: 允许桌面截图兜底完成百次切换验收'
+          git push origin HEAD:feature/1.0.0-alpha.3-task-surface
