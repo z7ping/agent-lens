@@ -87,7 +87,7 @@ function firstUserPayloadSql(sessionIdSql: string): string {
 }
 
 function sessionActivitySql(sessionIdSql: string): string {
-  return `COALESCE((
+  const attributedActivity = `(
     SELECT json_extract(activity.payload_json, '$.sessionActivity')
     FROM observations AS activity
     WHERE activity.logical_session_id = ${sessionIdSql}
@@ -95,7 +95,15 @@ function sessionActivitySql(sessionIdSql: string): string {
       AND json_extract(activity.payload_json, '$.sessionActivity') IS NOT NULL
     ORDER BY COALESCE(activity.occurred_at, activity.captured_at), activity.id
     LIMIT 1
-  ), 'user-task')`
+  )`
+  return `(
+    CASE
+      WHEN ${attributedActivity} IS NOT NULL AND ${attributedActivity} <> 'user-task'
+        THEN ${attributedActivity}
+      WHEN aggregate.user_turn_count = 0 AND aggregate.system_context_count > 0 THEN 'system-activity'
+      ELSE COALESCE(${attributedActivity}, 'user-task')
+    END
+  )`
 }
 
 function activitySourceLabelSql(sessionIdSql: string): string {

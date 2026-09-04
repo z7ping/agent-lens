@@ -22,7 +22,8 @@ import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { MarkdownContent } from '../components/MarkdownContent'
 import { ToolKindIcon } from '../components/ToolKindIcon'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
-import { Drawer, IconButton, Input, SelectMenu, Toolbar, UiIcon } from '../components/ui'
+import { Drawer, IconButton, Input, SelectMenu, StatusBadge, Toolbar, UiIcon } from '../components/ui'
+import { historyTaskPresentation } from './task-center'
 import { projectReviewInteractionPresentation } from './review-interaction-presentation'
 import { TaskEvent } from './TaskEvent'
 import { TaskHeader } from './TaskHeader'
@@ -105,33 +106,14 @@ function elapsed(start: string, end: string): number {
   return Number.isFinite(value) && value > 0 ? value : 0
 }
 
-const injectedTitlePatterns = [
-  /<recommended_plugins>[\s\S]*?<\/recommended_plugins>/gi,
-  /# AGENTS\.md instructions[^\n]*[\s\S]*?<\/INSTRUCTIONS>/gi,
-  /<environment_context>[\s\S]*?<\/environment_context>/gi,
-  /<app-context>[\s\S]*?<\/app-context>/gi,
-  /<skills_instructions>[\s\S]*?<\/skills_instructions>/gi,
-  /<permissions instructions>[\s\S]*?<\/permissions instructions>/gi,
-  /<collaboration_mode>[\s\S]*?<\/collaboration_mode>/gi,
-]
-
 function cleanSessionTitle(value: string | undefined): string {
-  let text = value?.trim() ?? ''
-  for (const pattern of injectedTitlePatterns) text = text.replace(pattern, ' ')
-  text = text.replace(/\s+/g, ' ').trim()
-  if (/^(?:<recommended_plugins>|# AGENTS\.md instructions|<environment_context>)/i.test(text)) return ''
-  return text
+  return value?.replace(/\s+/g, ' ').trim() ?? ''
 }
 
 function compactTitle(value: string | undefined, max = 92, fallback = '未命名会话'): string {
   const text = cleanSessionTitle(value)
   if (!text) return fallback
   return text.length > max ? `${text.slice(0, max)}…` : text
-}
-
-function sessionTitle(candidates: Array<string | undefined>, fallback: string, max = 92): string {
-  const value = candidates.find(candidate => cleanSessionTitle(candidate))
-  return compactTitle(value, max, fallback)
 }
 
 function hubAvailabilityString(value: HubReadAvailability): string | undefined {
@@ -1161,10 +1143,10 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
         highLatency: detail.page.filter === 'latency' || (threshold !== null && stats.durationMs >= threshold),
       }
     })
-    const title = sessionTitle(
-      [detail.title, detail.preview],
+    const title = historyTaskPresentation(
+      detail,
       detail.projectName ? `${detail.projectName} 会话` : `${agentLabel(detail.sourceIds[0] ?? '')} 会话`,
-    )
+    ).title
     return {
       id: detail.id,
       title,
@@ -1267,9 +1249,13 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
             <div className="session-group">{group.label}</div>
             {group.items.map(entry => entry.origin === 'local' ? (() => {
               const item = entry.local
+              const presentation = historyTaskPresentation(
+                item,
+                item.projectName ? `${item.projectName} 会话` : `${agentLabel(item.sourceIds[0] ?? '', item.productId)} 会话`,
+              )
               return <button key={`local:${item.id}`} className={`session-item ${review.selectedId === item.id ? 'session-item-active' : ''}`} onClick={() => select(item.id)}>
-                <div className="session-item-meta"><span className={`source-dot ${sourceDot(item.sourceIds[0] ?? '')}`}/><span>{agentLabel(item.sourceIds[0] ?? '', item.productId)}</span><time title={formatTime(item.startedAt)}>{sessionRelativeTime(item.startedAt)}</time></div>
-                <div className="session-item-title">{sessionTitle([item.title, item.preview], item.projectName ? `${item.projectName} 会话` : `${agentLabel(item.sourceIds[0] ?? '', item.productId)} 会话`, 74)}</div>
+                <div className="session-item-meta"><span className={`source-dot ${sourceDot(item.sourceIds[0] ?? '')}`}/><span>{agentLabel(item.sourceIds[0] ?? '', item.productId)}</span>{presentation.activityLabel && <StatusBadge className="session-activity-badge">{presentation.activityLabel}</StatusBadge>}<time title={formatTime(item.startedAt)}>{sessionRelativeTime(item.startedAt)}</time></div>
+                <div className="session-item-title">{presentation.title}</div>
                 <div className="session-item-foot"><span>{item.projectName ?? item.workspacePath?.split(/[\\/]/).pop() ?? '无项目'}</span><span>{item.toolCount} 调用{item.errorCount > 0 ? ` · ${item.errorCount} 错误` : ''}</span></div>
               </button>
             })() : (() => {

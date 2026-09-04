@@ -63,6 +63,9 @@ test('ReviewProjection builds task summaries and interaction tool status from ca
     const summary = response.items[0]!
     assert.equal(summary.id, user.observation.logicalSessionId)
     assert.equal(summary.preview, '修复登录问题')
+    assert.equal(summary.userTurnCount, 1)
+    assert.equal(summary.systemContextCount, 0)
+    assert.equal(summary.sessionActivity, 'user-task')
     assert.equal(summary.toolCount, 1)
     assert.equal(summary.errorCount, 1)
     assert.equal(summary.hasErrors, true)

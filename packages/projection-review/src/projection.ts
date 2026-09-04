@@ -349,6 +349,19 @@ interface InteractionDescriptor {
   preview?: string
 }
 
+function structuredSessionActivity(value: unknown): ReviewSessionSummaryDto['sessionActivity'] | undefined {
+  switch (value) {
+    case 'user-task':
+    case 'branch-task':
+    case 'subagent':
+    case 'internal-review':
+    case 'system-activity':
+      return value
+    default:
+      return undefined
+  }
+}
+
 function highLatencyThreshold(descriptors: InteractionDescriptor[]): number | null {
   const values = descriptors
     .map(item => durationMs(item.startedAt, item.endedAt))
@@ -375,9 +388,34 @@ export class ReviewProjection {
     const { session, logicalSession: logical, observations } = entry
     const project = session.projectId ? await this.storage.repositories.sessions.getProject(session.projectId) : null
     const workspace = session.workspaceId ? await this.storage.repositories.sessions.getWorkspace(session.workspaceId) : null
-    const firstUser = observations.find(item => item.kind === 'message.user')
+    const isRealUser = (item: CanonicalObservation): boolean => {
+      if (item.kind !== 'message.user') return false
+      const provenance = asRecord(asRecord(item.payload).provenance)
+      return (provenance.actualAuthor ?? 'human-user') === 'human-user'
+        && (provenance.contentRole ?? 'user-request') === 'user-request'
+    }
+    const firstUser = observations.find(isRealUser)
     const preview = firstUser ? textFromPayload(firstUser.payload) : undefined
+    const userTurnCount = observations.filter(isRealUser).length
+    const systemContextCount = observations.filter(item => item.kind === 'context.injected').length
+    const lifecycleActivity = observations
+      .filter(item => item.kind === 'session.lifecycle')
+      .map(item => asRecord(item.payload))
+      .find(payload => typeof payload.sessionActivity === 'string')
+    const attributedActivity = structuredSessionActivity(lifecycleActivity?.sessionActivity)
+    const sessionActivity = attributedActivity && attributedActivity !== 'user-task'
+      ? attributedActivity
+      : userTurnCount === 0 && systemContextCount > 0
+        ? 'system-activity'
+        : attributedActivity
+    const activitySourceLabel = typeof lifecycleActivity?.activitySourceLabel === 'string'
+      ? lifecycleActivity.activitySourceLabel
+      : undefined
+    const parentSessionId = typeof lifecycleActivity?.parentSessionId === 'string'
+      ? lifecycleActivity.parentSessionId
+      : undefined
     const toolCount = observations.filter(item => item.kind === 'tool.call').length
+    const toolEventCount = observations.filter(item => item.kind.startsWith('tool.')).length
     const errorCount = observations.filter(observationError).length
     return {
       id: session.id, installationId: session.installationId, productId: session.productId,
@@ -391,6 +429,13 @@ export class ReviewProjection {
       startedAt: session.startedAt, endedAt: session.endedAt,
       durationMs: durationMs(session.startedAt, session.endedAt),
       observationCount: session.observationCount, interactionCount: session.interactionCount,
+      userTurnCount,
+      systemContextCount,
+      internalReviewCount: sessionActivity === 'internal-review' ? 1 : 0,
+      otherEventCount: Math.max(0, observations.length - userTurnCount - systemContextCount - toolEventCount),
+      ...(sessionActivity ? { sessionActivity } : {}),
+      ...(activitySourceLabel ? { activitySourceLabel } : {}),
+      ...(parentSessionId ? { parentSessionId } : {}),
       toolCount, errorCount, hasErrors: errorCount > 0,
     }
   }
@@ -415,6 +460,13 @@ export class ReviewProjection {
       durationMs: durationMs(record.startedAt, record.endedAt),
       observationCount: record.observationCount,
       interactionCount: record.interactionCount,
+      ...(record.userTurnCount === undefined ? {} : { userTurnCount: record.userTurnCount }),
+      ...(record.systemContextCount === undefined ? {} : { systemContextCount: record.systemContextCount }),
+      ...(record.internalReviewCount === undefined ? {} : { internalReviewCount: record.internalReviewCount }),
+      ...(record.otherEventCount === undefined ? {} : { otherEventCount: record.otherEventCount }),
+      ...(record.sessionActivity ? { sessionActivity: record.sessionActivity } : {}),
+      ...(record.activitySourceLabel ? { activitySourceLabel: record.activitySourceLabel } : {}),
+      ...(record.parentSessionId ? { parentSessionId: record.parentSessionId } : {}),
       toolCount: record.toolCount,
       errorCount: record.errorCount,
       hasErrors: record.errorCount > 0,

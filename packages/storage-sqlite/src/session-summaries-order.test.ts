@@ -85,6 +85,57 @@ test('cooperative session summary rebuild stops after the active batch when canc
   }
 })
 
+test('session activity is derived from canonical provenance instead of message text', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+
+  try {
+    const identity = new DefaultIdentityService(storage)
+    const observations = new DefaultObservationService(storage, identity)
+    const host = await identity.resolveHost({ name: 'activity-provenance-host' })
+    const installation = await identity.resolveInstallation({ hostId: host.id, productId: 'codex' })
+    const commit = (nativeSessionId: string, kind: 'message.user' | 'context.injected', payload: unknown) => observations.commit({
+      sourceId: 'codex',
+      host,
+      installation,
+      candidate: {
+        kind,
+        nativeEventId: `${nativeSessionId}:${kind}`,
+        occurredAt: '2026-08-25T09:00:00.000Z',
+        capturedAt: '2026-08-25T09:00:00.000Z',
+        payload,
+        identityHints: { nativeSessionId },
+        dedupHints: { nativeEventId: `${nativeSessionId}:${kind}` },
+      },
+      evidenceCandidates: [],
+    })
+
+    const injected = await commit('injected-only', 'context.injected', {
+      text: '<recommended_plugins>系统提供的上下文</recommended_plugins>',
+      provenance: { actualAuthor: 'host-system', contentRole: 'injected-context' },
+    })
+    const quoted = await commit('user-quoted', 'message.user', {
+      text: '<recommended_plugins>用户主动引用的文本</recommended_plugins>',
+      provenance: { actualAuthor: 'human-user', contentRole: 'user-request' },
+    })
+
+    for (const materialized of [false, true]) {
+      if (materialized) await storage.sessionSummaryProjection.rebuild()
+      const injectedSummary = await storage.sessionSummaries.query({ logicalSessionId: injected.observation.logicalSessionId, limit: 1 })
+      assert.equal(injectedSummary.items[0]?.sessionActivity, 'system-activity')
+      assert.equal(injectedSummary.items[0]?.userTurnCount, 0)
+      assert.equal(injectedSummary.items[0]?.systemContextCount, 1)
+
+      const quotedSummary = await storage.sessionSummaries.query({ logicalSessionId: quoted.observation.logicalSessionId, limit: 1 })
+      assert.equal(quotedSummary.items[0]?.sessionActivity, 'user-task')
+      assert.equal(quotedSummary.items[0]?.userTurnCount, 1)
+      assert.equal(quotedSummary.items[0]?.systemContextCount, 0)
+    }
+  } finally {
+    await storage.close()
+  }
+})
+
 test('session summary projection sorts and paginates by session start time', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   await storage.migrate()

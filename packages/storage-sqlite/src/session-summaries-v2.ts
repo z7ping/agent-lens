@@ -63,13 +63,14 @@ export class SqliteSessionSummaryReader implements SessionSummaryProjectionStore
 
   async query(input: SessionSummaryQuery): Promise<{ items: SessionSummaryRecord[]; hasMore: boolean }> {
     const page = await this.base.query(input)
-    const items = await this.executor.run(() => page.items.map(item => ({
-      ...item,
-      internalReviewCount: internalReviewCount(this.executor, item.logicalSessionId),
-      ...(relatedParent(this.executor, item.logicalSessionId)
-        ? { parentSessionId: relatedParent(this.executor, item.logicalSessionId) }
-        : {}),
-    })))
+    const items = await this.executor.run(() => page.items.map(item => {
+      const parentSessionId = relatedParent(this.executor, item.logicalSessionId)
+      return {
+        ...item,
+        internalReviewCount: internalReviewCount(this.executor, item.logicalSessionId),
+        ...(parentSessionId ? { parentSessionId } : {}),
+      }
+    }))
     return { ...page, items }
   }
 
