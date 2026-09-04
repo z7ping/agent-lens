@@ -17,28 +17,42 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: fix/alpha3-codex-provenance-activity
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-node@v4
         with:
-          python-version: '3.x'
+          node-version: '22.23.0'
+          cache: npm
       - name: Patch Review projection and presentation
         shell: python
         run: |
           from pathlib import Path
-          import re
+
+          def replace_between(text: str, start: str, end: str, replacement: str, *, offset: int = 0):
+              left = text.find(start, offset)
+              if left < 0:
+                  raise SystemExit(f'start marker not found: {start}')
+              right = text.find(end, left + len(start))
+              if right < 0:
+                  raise SystemExit(f'end marker not found: {end}')
+              return text[:left] + replacement + text[right:]
 
           projection = Path('packages/projection-review/src/projection.ts')
           text = projection.read_text(encoding='utf-8')
-          before = text
-          text = text.replace("await this.backwardInteractionPage(logicalSessionId, { ...query, direction: 'backward' }, 'latest', summary.interactionCount)", "await this.backwardInteractionPage(logicalSessionId, { ...query, direction: 'backward' }, 'latest', descriptors.length)")
-          text = text.replace("await this.backwardInteractionPage(logicalSessionId, query, 'all', summary.interactionCount)", "await this.backwardInteractionPage(logicalSessionId, query, 'all', descriptors.length)")
-          if text == before:
-              raise SystemExit('projection.ts expected replacements not found')
+          expected = 0
+          old = "await this.backwardInteractionPage(logicalSessionId, { ...query, direction: 'backward' }, 'latest', summary.interactionCount)"
+          if old in text:
+              text = text.replace(old, "await this.backwardInteractionPage(logicalSessionId, { ...query, direction: 'backward' }, 'latest', descriptors.length)", 1)
+              expected += 1
+          old = "await this.backwardInteractionPage(logicalSessionId, query, 'all', summary.interactionCount)"
+          if old in text:
+              text = text.replace(old, "await this.backwardInteractionPage(logicalSessionId, query, 'all', descriptors.length)", 1)
+              expected += 1
+          if expected != 2:
+              raise SystemExit(f'projection replacements={expected}, expected=2')
           projection.write_text(text, encoding='utf-8')
 
           review = Path('packages/web/src/features/ReviewPage.tsx')
           text = review.read_text(encoding='utf-8')
 
-          title_pattern = re.compile(r"const injectedTitlePatterns = \[[\s\S]*?function sessionTitle\(candidates: Array<string \| undefined>, fallback: string, max = 92\): string \{[\s\S]*?\n\}\n", re.M)
           title_replacement = '''function normalizedSessionTitle(value: string | undefined): string {
             return value?.replace(/\\s+/g, ' ').trim() ?? ''
           }
@@ -53,12 +67,31 @@ jobs:
             const value = candidates.map(normalizedSessionTitle).find(Boolean)
             return compactTitle(value, max, fallback)
           }
-          '''
-          text, count = title_pattern.subn(lambda _: title_replacement, text, count=1)
-          if count != 1:
-              raise SystemExit(f'ReviewPage title cleanup replacement count={count}')
 
-          markdown_pattern = re.compile(r"function MarkdownSurface\(\{ text \}: \{ text: string \}\) \{[\s\S]*?\n\}\n\nfunction MessageBubble", re.M)
+          '''
+          text = replace_between(text, 'const injectedTitlePatterns = [', 'function hubAvailabilityString', title_replacement + 'function hubAvailabilityString')
+
+          old_label = "if (node.kind === 'context.injected') return '系统注入上下文'"
+          if old_label not in text:
+              raise SystemExit('context injected label line not found')
+          text = text.replace(old_label, "if (node.kind === 'context.injected') return stringValue(payload, 'label') || '系统注入上下文'", 1)
+
+          summary_start = text.find('function sourceEventSummary')
+          if summary_start < 0:
+              raise SystemExit('sourceEventSummary not found')
+          context_start = text.find("  if (node.kind === 'context.injected') {", summary_start)
+          lifecycle_start = text.find("  if (node.kind === 'session.lifecycle') {", context_start)
+          if context_start < 0 or lifecycle_start < 0:
+              raise SystemExit('context summary markers not found')
+          context_replacement = '''  if (node.kind === 'context.injected') {
+            const role = stringValue(payload, 'role')
+            const label = stringValue(payload, 'label')
+            const kind = stringValue(payload, 'injectedKind')
+            return [label || kind, role].filter(Boolean).join(' · ') || '系统注入'
+          }
+          '''
+          text = text[:context_start] + context_replacement + text[lifecycle_start:]
+
           markdown_replacement = '''function MarkdownSurface({ text }: { text: string }) {
             const [view, setView] = useState<'rendered' | 'source'>('rendered')
             return <div className="markdown-message" data-view={view}>
@@ -71,33 +104,9 @@ jobs:
             </div>
           }
 
-          function MessageBubble'''
-          text, count = markdown_pattern.subn(lambda _: markdown_replacement, text, count=1)
-          if count != 1:
-              raise SystemExit(f'ReviewPage MarkdownSurface replacement count={count}')
+          '''
+          text = replace_between(text, 'function MarkdownSurface', 'function MessageBubble', markdown_replacement + 'function MessageBubble')
 
-          old_label = "if (node.kind === 'context.injected') return '系统注入上下文'"
-          if old_label not in text:
-              raise SystemExit('ReviewPage context label line not found')
-          text = text.replace(old_label, "if (node.kind === 'context.injected') return stringValue(payload, 'label') || '系统注入上下文'", 1)
-
-          context_summary = '''  if (node.kind === 'context.injected') {
-            const role = stringValue(payload, 'role')
-            const text = stringValue(payload, 'text')
-            if (text) return [role, brief(text, 180)].filter(Boolean).join(' · ')
-            return role ? `${role} · 当前记录未包含正文` : '当前记录未包含正文'
-          }'''
-          context_summary_new = '''  if (node.kind === 'context.injected') {
-            const role = stringValue(payload, 'role')
-            const label = stringValue(payload, 'label')
-            const kind = stringValue(payload, 'injectedKind')
-            return [label || kind, role].filter(Boolean).join(' · ') || '系统注入'
-          }'''
-          if context_summary not in text:
-              raise SystemExit('ReviewPage context summary block not found')
-          text = text.replace(context_summary, context_summary_new, 1)
-
-          event_pattern = re.compile(r"function EventRow\(\{ event, inspect \}: \{ event: ReviewEventNodeDto; inspect\(node: ReviewNodeDto\): void \}\) \{[\s\S]*?\n\}\n\nfunction RawEventGroup", re.M)
           event_replacement = '''function systemEventExpansionKey(eventId: string): string {
             return `agent-lens:review:system-event:${eventId}:expanded`
           }
@@ -108,7 +117,7 @@ jobs:
 
           function SystemEventTrack({ event, inspect }: { event: ReviewEventNodeDto; inspect(node: ReviewNodeDto): void }) {
             const payload = payloadRecord(event.payload)
-            const text = stringValue(payload, 'text')
+            const body = stringValue(payload, 'text')
             const injectedKind = stringValue(payload, 'injectedKind') || 'application'
             const [expanded, setExpanded] = useState(() => readSystemEventExpanded(event.id))
             const toggle = () => setExpanded(value => {
@@ -126,8 +135,8 @@ jobs:
                 <span className="task-system-event-meta"><span>{agentLabel(event.sourceId)}</span><time>{formatClock(event.at)}</time></span>
                 <button className="task-system-event-inspect" onClick={() => inspect(event)}>源码 / Evidence</button>
               </header>
-              {expanded && (text
-                ? <CopyableCodeBlock className="task-system-event-body" copyValue={text}>{text}</CopyableCodeBlock>
+              {expanded && (body
+                ? <CopyableCodeBlock className="task-system-event-body" copyValue={body}>{body}</CopyableCodeBlock>
                 : <div className="task-system-event-empty">当前来源只记录了注入类型，没有可显示正文；可查看源码与 Evidence。</div>)}
             </section>
           }
@@ -150,13 +159,23 @@ jobs:
             />
           }
 
-          function RawEventGroup'''
-          text, count = event_pattern.subn(lambda _: event_replacement, text, count=1)
-          if count != 1:
-              raise SystemExit(f'ReviewPage EventRow replacement count={count}')
-
+          '''
+          text = replace_between(text, 'function EventRow', 'function RawEventGroup', event_replacement + 'function RawEventGroup')
           review.write_text(text, encoding='utf-8')
-      - name: Commit patch
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Focused tests
+        run: |
+          npm test --workspace @agent-lens/source-codex
+          npm test --workspace @agent-lens/storage-sqlite
+          npm test --workspace @agent-lens/projection-review
+      - name: Web presentation checks
+        run: |
+          npm run check:web-presentation
+          npm run build:web
+      - name: Commit verified patch
         run: |
           git config user.name "agent-lens-bot"
           git config user.email "agent-lens-bot@users.noreply.github.com"
