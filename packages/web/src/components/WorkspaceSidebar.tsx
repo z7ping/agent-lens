@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import type { AgentFacetDto } from '@agent-lens/protocol'
 import type { ClientSnapshot } from '../client/model'
-import { BrandVersion, ReleaseInfo } from './ReleaseInfo'
+import { ReleaseInfo } from './ReleaseInfo'
 import { RuntimeStatus } from './RuntimeStatus'
 import { agentLabel, sourceDot } from './AgentScope'
 import { Button, Drawer, IconButton, UiIcon } from './ui'
@@ -40,7 +40,7 @@ export function WorkspaceSidebar({
     <aside className="workspace-sidebar" aria-label="AgentLens 工作区导航">
       <NavLink to="/review" className="workspace-sidebar-brand" aria-label="AgentLens，返回任务中心" title="返回任务中心">
         <img className="workspace-sidebar-logo" src="/agentlens-icon.svg" alt="" aria-hidden="true"/>
-        <span className="workspace-sidebar-brand-copy"><b>AgentLens</b><BrandVersion /></span>
+        <span className="workspace-sidebar-brand-copy"><b>AgentLens</b></span>
       </NavLink>
 
       <nav className="workspace-primary-nav" aria-label="主导航">
@@ -79,10 +79,7 @@ export function WorkspaceSidebar({
       </div>
 
       <div className="workspace-sidebar-footer">
-        <div className="workspace-user" title="本机用户">
-          <span className="workspace-user-avatar" aria-hidden="true"><UiIcon name="agent" size={16}/></span>
-          <span>本机</span>
-        </div>
+        <span className="workspace-user-avatar" aria-label="本机用户" title="本机用户"><UiIcon name="agent" size={16}/></span>
         <IconButton aria-label="打开设置" title="设置" onClick={() => setSettingsOpen(true)}><UiIcon name="settings" size={16}/></IconButton>
       </div>
     </aside>
