@@ -129,6 +129,8 @@
 }
 .workspace-context-heading b { color: var(--al-ink-2); font-size: 12px; font-weight: 680; }
 .workspace-context-heading span { font-size: 12px; }
+.workspace-context-heading-actions { display: inline-flex; align-items: center; gap: 5px; }
+.workspace-context-heading-actions .ui-icon-button { color: var(--al-muted-2); }
 
 .workspace-context-link,
 .workspace-agent-link {
@@ -225,6 +227,12 @@
 .app-shell .task-center-toolbar { grid-column: 1; }
 .app-shell .task-center-main { grid-column: 1; }
 .app-shell .task-center-page.is-new-task { grid-template-columns: minmax(0, 1fr); }
+
+/* 智能体切换已经由全局上下文区持有，正文不再重复第二套来源导航和顶部 AgentScope。 */
+.app-shell .agents-responsive-shell .workspace-toolbar { display: none; }
+.app-shell .agents-responsive-shell .agents-browser { grid-template-columns: minmax(0, 1fr); gap: 0; margin-top: 0; }
+.app-shell .agents-responsive-shell .agent-source-nav { display: none; }
+.app-shell .agents-responsive-shell .agents-content { padding-top: 18px; }
 
 .workspace-settings-drawer .ui-drawer { width: min(420px, calc(100vw - 24px)); }
 .workspace-settings-section { display: grid; gap: 9px; }
