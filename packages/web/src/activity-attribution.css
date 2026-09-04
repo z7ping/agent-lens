@@ -81,8 +81,8 @@
 }
 
 .task-system-event-body {
-  max-height: none !important;
-  overflow: visible !important;
+  max-height: none;
+  overflow: visible;
   margin: 0;
   border: 0;
   border-top: 1px solid var(--border-subtle);
@@ -97,14 +97,4 @@
   border-top: 1px solid var(--border-subtle);
   color: var(--text-tertiary);
   font-size: 12px;
-}
-
-/* 正文不再使用固定高度/五行截断；折叠只发生在显式的系统事件轨道或 TaskRound。 */
-.markdown-surface.is-collapsed {
-  max-height: none !important;
-  overflow: visible !important;
-}
-
-.markdown-fade {
-  display: none !important;
 }
