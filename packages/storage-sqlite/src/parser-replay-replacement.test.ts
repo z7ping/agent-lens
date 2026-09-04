@@ -97,6 +97,44 @@ test('replay detaches one SourceRecord without deleting an observation supported
   }
 })
 
+test('replay detaches surviving children before deleting an orphan parent observation', async () => {
+  const { storage, now } = await setup()
+  try {
+    insertSourceRecord(storage, 'record-parent', '10', now)
+    insertSourceRecord(storage, 'record-child', '11', now)
+    insertEvidence(storage, 'evidence-parent', 'record-parent', '10', now)
+    insertEvidence(storage, 'evidence-child', 'record-child', '11', now)
+
+    insertObservation(storage, 'observation-parent', ['evidence-parent'], now)
+    storage.db.prepare(`
+      UPDATE observations
+      SET native_event_id = 'parent-event'
+      WHERE id = 'observation-parent'
+    `).run()
+
+    insertObservation(storage, 'observation-child', ['evidence-child'], now)
+    storage.db.prepare(`
+      UPDATE observations
+      SET native_event_id = 'child-event',
+          native_parent_event_id = 'parent-event',
+          parent_observation_id = 'observation-parent'
+      WHERE id = 'observation-child'
+    `).run()
+
+    await storage.repositories.sourceRecords.put(replayRecord('record-parent', now))
+
+    assert.equal(await storage.repositories.observations.get('observation-parent'), null)
+    const child = await storage.repositories.observations.get('observation-child')
+    assert.ok(child)
+    assert.equal(child.parentObservationId, undefined)
+    assert.equal(child.nativeParentEventId, 'parent-event')
+    assert.ok(await storage.repositories.evidence.get('evidence-parent'))
+    assert.ok(await storage.repositories.sourceRecords.get('record-parent'))
+  } finally {
+    await storage.close()
+  }
+})
+
 test('replaying the same parser version is idempotent', async () => {
   const { storage, now } = await setup()
   try {
