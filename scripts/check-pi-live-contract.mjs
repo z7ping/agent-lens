@@ -34,19 +34,24 @@ const [app, taskCenter, taskSurface, taskHeader, taskMessage, taskRound, taskThi
   readFile(new URL('../packages/core/src/domain/observation.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/protocol/src/timeline.ts', import.meta.url), 'utf8'),
 ])
+const workspaceSidebar = await readFile(new URL('../packages/web/src/components/WorkspaceSidebar.tsx', import.meta.url), 'utf8')
 
 const failures = []
 const requireText = (source, pattern, label) => { if (!pattern.test(source)) failures.push(label) }
 
-const navigationBlock = app.match(/const navigation = \[([\s\S]*?)\] as const/)?.[1] ?? ''
-const topLevelLinks = [...navigationBlock.matchAll(/to:\s*'\/(review|tools|insights|agents|backup)'/g)].length
-if (topLevelLinks !== 5) failures.push(`一级导航必须保持 5 个，当前 ${topLevelLinks}`)
-requireText(navigationBlock, /to:\s*'\/review',\s*label:\s*'任务中心'/, '一级任务入口必须命名为“任务中心”')
+const primaryNavigationBlock = workspaceSidebar.match(/<nav className="workspace-primary-nav"[\s\S]*?<\/nav>/)?.[0] ?? ''
+const topLevelLinks = [...primaryNavigationBlock.matchAll(/<NavLink\b/g)].length
+if (topLevelLinks !== 3) failures.push(`一级导航必须保持任务中心 / 洞察 / 智能体 3 个，当前 ${topLevelLinks}`)
+requireText(primaryNavigationBlock, /to="\/review"[\s\S]*?>[\s\S]*?任务中心/, '一级任务入口必须命名为“任务中心”')
+requireText(primaryNavigationBlock, /to="\/insights"[\s\S]*?>[\s\S]*?洞察/, '一级分析入口必须命名为“洞察”')
+requireText(primaryNavigationBlock, /to="\/agents"[\s\S]*?>[\s\S]*?智能体/, '一级 Agent 入口必须命名为“智能体”')
+if (/to="\/(?:tools|backup|review\/live)"/.test(primaryNavigationBlock)) failures.push('工具分析、资产备份、Pi Live 不得占用一级导航')
+requireText(workspaceSidebar, /to="\/tools"[\s\S]*?>工具分析/, '工具分析必须作为洞察上下文入口保留')
 requireText(app, /path="\/review\/new"/, '缺少新建任务路由')
 requireText(app, /path="\/review\/live"[^>]*element=\{<Navigate\s+to="\/review\/new"\s+replace\s*\/?>\}/, '旧 /review/live 必须重定向到新建任务')
 requireText(app, /path="\/review\/live\/:runtimeSessionId"/, '缺少 Pi Live runtime 路由')
 requireText(app, /onPiLive[\s\S]*!onPiLive/, 'Pi Live 必须从普通 Review overlay/turn rail 语义分离')
-if (/to="\/review\/live"[^>]*>Pi 实时<\/NavLink>/.test(app)) failures.push('顶部不得保留独立 Pi 实时入口')
+if (/to="\/review\/live"[^>]*>Pi 实时<\/NavLink>/.test(workspaceSidebar)) failures.push('一级导航不得保留独立 Pi 实时入口')
 
 requireText(taskCenter, /<UiIcon name="plus"[^>]*\/>\s*新建任务/, '任务中心左侧必须通过统一图标提供新建任务入口')
 requireText(taskCenter, /进行中 \+ 历史/, '任务中心必须统一进行中与历史任务')
@@ -202,4 +207,4 @@ if (failures.length) {
   for (const failure of failures) console.error(`- ${failure}`)
   process.exit(1)
 }
-console.log('Pi Live / 任务中心契约检查通过：统一 TaskSurface、独立 SDK Worker、异步状态机、有界 IPC、队列/Abort、历史事实、IME、滚动跟随与响应式布局已锁定。')
+console.log('Pi Live / 任务中心契约检查通过：统一 TaskSurface、三大工作区导航、独立 SDK Worker、异步状态机、有界 IPC、队列/Abort、历史事实、IME、滚动跟随与响应式布局已锁定。')
