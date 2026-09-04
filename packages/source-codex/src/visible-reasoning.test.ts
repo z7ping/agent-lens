@@ -64,7 +64,7 @@ test('memory citation text remains visible outside assistant final_answer', () =
   assert.equal(splitCodexVisibleAssistantText(`\`\`\`xml\n${quoted}\n\`\`\``, 'final_answer').text, `\`\`\`xml\n${quoted}\n\`\`\``)
 })
 
-test('injected context keeps its visible text in the dedicated canonical event', async () => {
+test('injected context keeps its visible text and structured provenance', async () => {
   const output = await normalizeCodexRecord(record({
     type: 'response_item',
     payload: {
@@ -74,13 +74,19 @@ test('injected context keeps its visible text in the dedicated canonical event',
     },
   }), ctx)
 
-  assert.deepEqual(output.observations[0]?.payload, {
-    sourceType: 'event_msg',
-    injectedContext: true,
-    role: 'developer',
-    text: '<environment_context>secret setup</environment_context>',
-  })
-  assert.equal(output.observations[0]?.kind, 'context.injected')
+  const fact = output.observations[0]!
+  assert.equal(fact.kind, 'context.injected')
+  const payload = fact.payload as any
+  assert.equal(payload.sourceType, 'event_msg')
+  assert.equal(payload.injectedContext, true)
+  assert.equal(payload.role, 'developer')
+  assert.equal(payload.label, 'Developer')
+  assert.equal(payload.injectedKind, 'developer')
+  assert.equal(payload.text, '<environment_context>secret setup</environment_context>')
+  assert.equal(payload.provenance.actualAuthor, 'developer')
+  assert.equal(payload.provenance.contentRole, 'developer-context')
+  assert.equal(payload.provenance.activityType, 'system-injection')
+  assert.equal(payload.provenance.sourceSignal, 'response_item.message.role=developer')
 })
 
 test('event_msg agent_reasoning is normalized to canonical message.reasoning', async () => {
