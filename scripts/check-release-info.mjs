@@ -76,8 +76,14 @@ const tooSmall = [...css.matchAll(/font-size\s*:\s*(\d+(?:\.\d+)?)px\b/g)]
 if (tooSmall.length) {
   throw new Error(`发行信息组件出现小于 12px 的字号：${[...new Set(tooSmall)].join(', ')}px`)
 }
-if (!css.includes('@media (max-width: 820px)') || !css.includes('.header-link-github')) {
-  throw new Error('发行信息组件必须保留窄屏入口收口规则')
+if (!css.includes('@media (max-width: 767.98px)') || !css.includes('.header-link-github')) {
+  throw new Error('发行信息组件必须使用正式 md 边界收口窄屏入口')
+}
+for (const legacy of ['820px', '560px']) {
+  if (css.includes(`max-width: ${legacy}`) || css.includes(`min-width: ${legacy}`)) throw new Error(`发行信息组件不得恢复旧一次性断点：${legacy}`)
+}
+if (css.includes('!important')) {
+  throw new Error('发行信息组件不得使用 !important 争夺样式优先级')
 }
 
 console.log(`发行信息界面检查通过：v${packageJson.version}`)
