@@ -1,0 +1,90 @@
+/*
+ * Task Surface 共享轮次导轨。
+ * Review / Pi Live / Hub 只提供 TaskRound；导轨的发现、定位与交互统一由 TaskSurface 持有。
+ */
+.task-turn-rail {
+  position: fixed;
+  z-index: 48;
+  display: flex;
+  width: 24px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: 6px 0;
+  transform: translateY(-50%);
+  opacity: .62;
+  pointer-events: none;
+  transition: opacity .16s ease;
+}
+.task-turn-rail:hover { opacity: 1; }
+.task-turn-rail::before { display: none; content: none; }
+.task-turn-rail .turn-tick {
+  position: relative;
+  display: grid;
+  width: 24px;
+  height: 7px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  pointer-events: auto;
+}
+.task-turn-rail .turn-tick i {
+  display: block;
+  width: 6px;
+  height: 1.5px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--al-muted) 58%, transparent);
+  transition: width .16s cubic-bezier(.2,.8,.2,1), height .16s ease, background .16s ease;
+}
+.task-turn-rail .turn-tick:hover i { width: 24px; height: 2px; background: var(--al-ink); }
+.task-turn-rail .turn-tick:has(+ .turn-tick:hover) i,
+.task-turn-rail .turn-tick:hover + .turn-tick i { width: 18px; }
+.task-turn-rail .turn-tick:has(+ .turn-tick + .turn-tick:hover) i,
+.task-turn-rail .turn-tick:hover + .turn-tick + .turn-tick i { width: 13px; }
+.task-turn-rail .turn-tick:has(+ .turn-tick + .turn-tick + .turn-tick:hover) i,
+.task-turn-rail .turn-tick:hover + .turn-tick + .turn-tick + .turn-tick i { width: 9px; }
+.task-turn-rail .turn-tick.active i { width: 24px; height: 2px; background: var(--al-ink); }
+.task-turn-rail .turn-tick.running i {
+  width: 18px;
+  height: 2px;
+  background: var(--al-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--al-accent) 10%, transparent);
+}
+.task-turn-rail .turn-tick.err i { background: color-mix(in srgb, var(--al-danger) 55%, var(--al-line)); }
+.task-turn-rail .turn-tick.err.active i { background: var(--al-danger); }
+.task-turn-rail .turn-tick::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 6px);
+  z-index: 90;
+  width: max-content;
+  max-width: 300px;
+  padding: 6px 9px;
+  transform: translateY(-50%);
+  border: 1px solid var(--al-line);
+  border-radius: 7px;
+  background: var(--al-ink);
+  box-shadow: 0 6px 20px rgb(0 0 0 / .18);
+  color: var(--al-surface);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: left;
+  white-space: normal;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .1s ease;
+}
+.task-turn-rail .turn-tick:hover::after,
+.task-turn-rail .turn-tick:focus-visible::after { opacity: 1; }
+
+@media (max-width: 991.98px) {
+  .task-turn-rail { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .task-turn-rail,
+  .task-turn-rail .turn-tick i { transition: none; }
+}
