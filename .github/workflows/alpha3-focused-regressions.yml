@@ -17,7 +17,7 @@ on:
       - .github/workflows/alpha3-focused-regressions.yml
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   focused-regressions:
@@ -25,22 +25,6 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
-      - name: Repair ReviewPage JSX typo
-        shell: pwsh
-        run: |
-          $path = 'packages/web/src/features/ReviewPage.tsx'
-          $text = Get-Content -Raw -Path $path
-          $from = 'onClose={() => setInspect(null)/>}'
-          $to = 'onClose={() => setInspect(null)}/>'
-          if ($text.Contains($from)) {
-            $text = $text.Replace($from, $to)
-            Set-Content -NoNewline -Encoding UTF8 -Path $path -Value $text
-            git config user.name 'github-actions[bot]'
-            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add $path
-            git commit -m 'fix: 修正 ReviewPage JSX 语法'
-            git push origin HEAD:feature/1.0.0-alpha.3-task-surface
-          }
       - uses: actions/setup-node@v7
         with:
           node-version: 22.23.0
