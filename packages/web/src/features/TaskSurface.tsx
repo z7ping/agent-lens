@@ -12,7 +12,6 @@ import {
   type HTMLAttributes,
   type PropsWithChildren,
 } from 'react'
-import '../task-turn-rail.css'
 
 export type TaskSurfaceMode = 'review' | 'live' | 'hub' | 'new'
 
