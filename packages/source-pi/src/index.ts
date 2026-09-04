@@ -137,10 +137,24 @@ function piAgentDir(env: Readonly<Record<string, string | undefined>>): string {
   return join(piHome, 'agent')
 }
 
+function expandHomePath(path: string): string {
+  if (path === '~') return homedir()
+  if (path.startsWith('~/') || path.startsWith('~\\')) return join(homedir(), path.slice(2))
+  return path
+}
+
+function piSessionsDir(
+  env: Readonly<Record<string, string | undefined>>,
+  agentDir: string,
+): string {
+  const explicit = env.PI_CODING_AGENT_SESSION_DIR?.trim()
+  return explicit ? expandHomePath(explicit) : join(agentDir, 'sessions')
+}
+
 export async function detectPi(ctx: SourceDetectionContext): Promise<DetectedSource[]> {
   const env = ctx.env ?? process.env
   const agentDir = piAgentDir(env)
-  const sessionsDir = join(agentDir, 'sessions')
+  const sessionsDir = piSessionsDir(env, agentDir)
   const [agentExists, sessionsExist, executable] = await Promise.all([
     exists(agentDir),
     exists(sessionsDir),
@@ -359,6 +373,7 @@ export async function startPiRuntimeCapture(
   let stopped = false
   let watcher: FSWatcher | null = null
   let pollTimer: NodeJS.Timeout | null = null
+  let reconcileTimer: NodeJS.Timeout | null = null
   const debounce = new Map<string, NodeJS.Timeout>()
   let processing = Promise.resolve()
 
@@ -386,6 +401,15 @@ export async function startPiRuntimeCapture(
     for (const filePath of await listJsonlFiles(sessionsDir)) schedule(filePath)
   }
 
+  const scheduleReconcile = () => {
+    if (stopped) return
+    if (reconcileTimer) clearTimeout(reconcileTimer)
+    reconcileTimer = setTimeout(() => {
+      reconcileTimer = null
+      void poll().catch(() => undefined)
+    }, RUNTIME_DEBOUNCE_MS)
+  }
+
   const startFallbackPolling = () => {
     if (pollTimer || stopped) return
     pollTimer = setInterval(() => { void poll().catch(() => undefined) }, RUNTIME_FALLBACK_POLL_MS)
@@ -393,8 +417,13 @@ export async function startPiRuntimeCapture(
 
   try {
     watcher = watch(sessionsDir, { recursive: true }, (_event, fileName) => {
-      if (!fileName) return
-      schedule(join(sessionsDir, fileName.toString()))
+      if (!fileName) {
+        scheduleReconcile()
+        return
+      }
+      const path = join(sessionsDir, fileName.toString())
+      if (extname(path).toLowerCase() === '.jsonl') schedule(path)
+      else scheduleReconcile()
     })
     watcher.on('error', () => {
       watcher?.close()
@@ -412,6 +441,7 @@ export async function startPiRuntimeCapture(
       stopped = true
       watcher?.close()
       if (pollTimer) clearInterval(pollTimer)
+      if (reconcileTimer) clearTimeout(reconcileTimer)
       for (const timer of debounce.values()) clearTimeout(timer)
       debounce.clear()
       await processing
@@ -862,4 +892,5 @@ export const piSourcePlugin = defineAgentLensPlugin(piManifest, applyPiSource)
 
 export const piInternals = {
   listJsonlFiles,
+  piSessionsDir,
 }
