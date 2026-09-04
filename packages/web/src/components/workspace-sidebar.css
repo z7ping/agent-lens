@@ -103,19 +103,27 @@
 }
 
 .workspace-sidebar-context {
+  display: flex;
   min-width: 0;
   min-height: 0;
+  flex-direction: column;
   overflow: hidden;
   padding-top: 2px;
   background: var(--al-soft-2);
 }
 
 .workspace-context-menu {
-  height: 100%;
   min-height: 0;
   padding: 4px 10px 10px;
   overflow: auto;
 }
+.workspace-insight-navigation {
+  flex: 0 0 auto;
+  overflow: visible;
+  padding-bottom: 4px;
+}
+.workspace-agent-context,
+.workspace-maintenance-context { flex: 1 1 auto; }
 
 .workspace-context-utility {
   display: flex;
@@ -170,6 +178,47 @@
 }
 .workspace-context-empty { padding: 16px 9px; color: var(--al-muted-2); font-size: 12px; line-height: 1.55; }
 
+.workspace-context-controls {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 9px;
+  padding: 10px 10px 12px;
+  overflow: visible;
+}
+.workspace-context-controls-head {
+  display: flex;
+  min-height: 28px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 4px;
+  color: var(--al-muted-2);
+  font-size: 12px;
+  font-weight: 620;
+}
+.workspace-context-controls-head .ui-icon-button {
+  border-color: transparent;
+  background: transparent;
+  color: var(--al-muted-2);
+}
+.workspace-context-controls-head .ui-icon-button:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--al-surface);
+  color: var(--al-ink);
+}
+.workspace-context-control {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  color: var(--al-muted-2);
+  font-size: 12px;
+}
+.workspace-context-control > .select-menu,
+.workspace-context-control .select-menu-trigger { width: 100%; min-width: 0; }
+.workspace-context-control .select-menu-trigger { background: color-mix(in srgb, var(--al-surface) 72%, transparent); }
+.workspace-context-control .select-menu-trigger:hover,
+.workspace-context-control .select-menu-trigger[aria-expanded='true'] { background: var(--al-surface); }
+
 .workspace-sidebar-footer {
   display: flex;
   min-width: 0;
@@ -222,6 +271,7 @@
 .workspace-sidebar-context > .task-center-rail {
   width: 100%;
   height: 100%;
+  flex: 1 1 auto;
   border-right: 0;
 }
 
@@ -270,7 +320,8 @@
   .workspace-sidebar-brand-copy b { font-size: 14px; }
   .workspace-primary-nav { padding: 4px 7px 10px; }
   .workspace-primary-link { min-height: 32px; padding-right: 7px; padding-left: 16px; font-size: 12px; }
-  .workspace-context-menu { padding-inline: 7px; }
+  .workspace-context-menu,
+  .workspace-context-controls { padding-inline: 7px; }
   .workspace-context-link,
   .workspace-agent-link { padding-inline: 7px; font-size: 12px; }
 }
