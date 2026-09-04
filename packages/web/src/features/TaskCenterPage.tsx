@@ -69,8 +69,12 @@ function availabilityString(value: HubReadAvailability): string | undefined {
     : undefined
 }
 
+function localTime(item: ReviewSessionSummaryDto): string {
+  return item.endedAt || item.startedAt
+}
+
 function remoteTime(item: HubReviewSessionSummaryDto): string {
-  return availabilityString(item.startedAt) ?? availabilityString(item.endedAt) ?? ''
+  return availabilityString(item.endedAt) ?? availabilityString(item.startedAt) ?? ''
 }
 
 function remoteTitle(item: HubReviewSessionSummaryDto): string {
@@ -207,7 +211,7 @@ function HistoryTaskItem({ item, active, onClick }: { item: ReviewSessionSummary
   const fallback = item.projectName ? `${item.projectName} 任务` : `${agentLabel(sourceId, item.productId)} 任务`
   const presentation = historyTaskPresentation(item, fallback)
   return <button className={`session-item ${active ? 'session-item-active' : ''}`} onClick={onClick}>
-    <div className="session-item-meta"><span className={`source-dot ${sourceDot(sourceId)}`}/><span>{agentLabel(sourceId, item.productId)}</span>{presentation.activityLabel && <StatusBadge className="session-activity-badge">{presentation.activityLabel}</StatusBadge>}<time>{formatTime(item.startedAt)}</time></div>
+    <div className="session-item-meta"><span className={`source-dot ${sourceDot(sourceId)}`}/><span>{agentLabel(sourceId, item.productId)}</span>{presentation.activityLabel && <StatusBadge className="session-activity-badge">{presentation.activityLabel}</StatusBadge>}<time>{formatTime(localTime(item))}</time></div>
     <div className="session-item-title">{presentation.title}</div>
     <div className="session-item-foot"><span>{item.projectName ?? item.workspacePath?.split(/[\\/]/).filter(Boolean).at(-1) ?? '无项目'}</span><span>{item.toolCount} 调用{item.errorCount ? ` · ${item.errorCount} 错误` : ''}</span></div>
   </button>
@@ -311,7 +315,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const visibleHub = useMemo(() => hubSessions.filter(item => remoteVisible(item, review)), [hubSessions, review])
   const historyGroups = useMemo(() => {
     const combined: HistoryTaskEntry[] = [
-      ...localSessions.map(item => ({ kind: 'local' as const, id: item.id, at: item.startedAt, local: item })),
+      ...localSessions.map(item => ({ kind: 'local' as const, id: item.id, at: localTime(item), local: item })),
       ...visibleHub.map(item => ({ kind: 'remote' as const, id: item.id, at: remoteTime(item), remote: item })),
     ].sort((left, right) => {
       const leftAt = Date.parse(left.at)
