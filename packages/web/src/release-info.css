@@ -177,9 +177,9 @@
   white-space: nowrap;
 }
 
-.web-update-fallback {
-  margin-top: 13px !important;
-  color: var(--al-muted) !important;
+.web-update-content .web-update-fallback {
+  margin-top: 13px;
+  color: var(--al-muted);
 }
 
 .web-update-notes {
@@ -231,12 +231,10 @@
   text-decoration: underline;
 }
 
-@media (max-width: 820px) {
+@media (max-width: 767.98px) {
   .brand-version,
   .header-link-github { display: none; }
-}
 
-@media (max-width: 560px) {
   .release-dialog-backdrop { padding: 10px; }
   .release-dialog {
     width: calc(100vw - 20px);
