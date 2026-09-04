@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
 import type { HubReadAvailability, HubReviewSessionSummaryDto, PiLiveStateDto, ReviewSessionSummaryDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
@@ -220,7 +221,7 @@ function RemoteTaskItem({ item, active, onClick }: { item: HubReviewSessionSumma
   </button>
 }
 
-export function TaskCenterPage({ model, mode }: { model: AgentLensClientModel; mode: TaskCenterMode }) {
+export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensClientModel; mode: TaskCenterMode; sidebarHost?: HTMLDivElement | null }) {
   const snapshot = useClientSnapshot(model)
   const location = useLocation()
   const navigate = useNavigate()
@@ -348,61 +349,64 @@ export function TaskCenterPage({ model, mode }: { model: AgentLensClientModel; m
   const surfaceMode = mode === 'history' ? 'review' : mode
   const historyCount = localSessions.length + visibleHub.length
 
-  return <div className={`task-center-page ${mode === 'new' ? 'is-new-task' : ''}`}>
-    {mode !== 'new' && <Toolbar className="task-center-toolbar" aria-label="筛选历史任务">
-      <span className="task-center-toolbar-label">筛选历史任务</span>
-      <AgentScope agents={agents} value={review.filters.sourceId} onChange={sourceId => model.setReviewFilters({ sourceId })}/>
-      <span className="toolbar-divider" />
-      <SelectMenu className="filter" value={review.filters.projectId} onChange={projectId => model.setReviewFilters({ projectId })} ariaLabel="筛选项目" placeholder="全部项目" menuWidth={280} searchable searchPlaceholder="搜索项目" options={[
-        { value: '', label: '全部项目' },
-        ...projects.map(project => ({ value: project.id, label: project.name ?? project.repositoryIdentity ?? project.id, description: project.repositoryIdentity ?? undefined })),
-      ]}/>
-      <SelectMenu className="filter" value={review.filters.range} onChange={range => model.setReviewFilters({ range: range as typeof review.filters.range })} ariaLabel="筛选时间范围" menuWidth={156} options={[
-        { value: 'today', label: '今天' }, { value: '7d', label: '最近 7 天' }, { value: '30d', label: '最近 30 天' }, { value: 'all', label: '全部时间' },
-      ]}/>
-      <SelectMenu className="filter" value={review.filters.status} onChange={status => model.setReviewFilters({ status: status as typeof review.filters.status })} ariaLabel="筛选状态" menuWidth={150} options={[
-        { value: 'all', label: '全部状态' }, { value: 'clean', label: '无错误' }, { value: 'with-errors', label: '有错误' },
-      ]}/>
-      <Input className="filter search-filter" placeholder="搜索历史任务…" value={review.filters.search} onChange={event => model.setReviewFilters({ search: event.target.value })} aria-label="搜索历史任务"/>
-      <IconButton onClick={() => void model.refreshReview()} title="刷新历史任务" aria-label="刷新历史任务"><UiIcon name="refresh" size={16}/></IconButton>
-    </Toolbar>}
+  const taskRail = <aside className="task-center-rail">
+    <div className="task-center-rail-head">
+      <div><b>任务</b><span>进行中 + 历史</span></div>
+      <Button size="small" variant="primary" onClick={newTask}><UiIcon name="plus" size={14}/> 新建任务</Button>
+    </div>
+    <div className="task-center-scroll">
+      {runtimes.length > 0 && <section className="task-center-group task-center-live-group">
+        <div className="task-center-group-title"><span>进行中</span><span>{runtimes.length}</span></div>
+        {runtimes.map(item => <button key={item.runtimeSessionId} className={`session-item task-live-item ${selectedRuntimeId === item.runtimeSessionId ? 'session-item-active' : ''}`} onClick={() => navigate(`/review/live/${encodeURIComponent(item.runtimeSessionId)}`)}>
+          <div className="session-item-meta"><span className={item.isStreaming || item.status === 'initializing' ? 'pi-live-pulse' : 'pi-live-idle-dot'}/><span>Pi</span><time>{runtimeActivityLabel(item)}</time></div>
+          <div className="session-item-title">{item.sessionName || 'Pi 任务'}</div>
+          <div className="session-item-foot"><span>{modelLabel(item)}</span><span>{item.status === 'failed' ? '需要处理' : item.status === 'initializing' ? item.initializationMessage || '正在初始化' : item.isStreaming ? '执行中' : '可继续'}</span></div>
+        </button>)}
+      </section>}
 
-    <aside className="task-center-rail">
-      <div className="task-center-rail-head">
-        <div><b>任务</b><span>进行中 + 历史</span></div>
-        <Button size="small" variant="primary" onClick={newTask}><UiIcon name="plus" size={14}/> 新建任务</Button>
-      </div>
-      <div className="task-center-scroll">
-        {runtimes.length > 0 && <section className="task-center-group task-center-live-group">
-          <div className="task-center-group-title"><span>进行中</span><span>{runtimes.length}</span></div>
-          {runtimes.map(item => <button key={item.runtimeSessionId} className={`session-item task-live-item ${selectedRuntimeId === item.runtimeSessionId ? 'session-item-active' : ''}`} onClick={() => navigate(`/review/live/${encodeURIComponent(item.runtimeSessionId)}`)}>
-            <div className="session-item-meta"><span className={item.isStreaming || item.status === 'initializing' ? 'pi-live-pulse' : 'pi-live-idle-dot'}/><span>Pi</span><time>{runtimeActivityLabel(item)}</time></div>
-            <div className="session-item-title">{item.sessionName || 'Pi 任务'}</div>
-            <div className="session-item-foot"><span>{modelLabel(item)}</span><span>{item.status === 'failed' ? '需要处理' : item.status === 'initializing' ? item.initializationMessage || '正在初始化' : item.isStreaming ? '执行中' : '可继续'}</span></div>
-          </button>)}
-        </section>}
+      {historyGroups.map(group => <section className="task-center-group task-center-history-group" key={group.label}>
+        <div className="task-center-group-title"><span>{group.label}</span><span>{group.items.length}{group.label === '更早' && review.response?.meta.hasMore ? '+' : ''}</span></div>
+        {group.items.map(entry => entry.kind === 'local'
+          ? <HistoryTaskItem key={`local:${entry.id}`} item={entry.local} active={mode === 'history' && review.selectedId === entry.id} onClick={() => openHistoryTask(entry.id)}/>
+          : <RemoteTaskItem key={`remote:${entry.id}`} item={entry.remote} active={mode === 'hub' && location.pathname === `/review/hub/${encodeURIComponent(entry.id)}`} onClick={() => navigate(`/review/hub/${encodeURIComponent(entry.id)}`)}/>)}
+      </section>)}
 
-        {historyGroups.map(group => <section className="task-center-group task-center-history-group" key={group.label}>
-          <div className="task-center-group-title"><span>{group.label}</span><span>{group.items.length}{group.label === '更早' && review.response?.meta.hasMore ? '+' : ''}</span></div>
-          {group.items.map(entry => entry.kind === 'local'
-            ? <HistoryTaskItem key={`local:${entry.id}`} item={entry.local} active={mode === 'history' && review.selectedId === entry.id} onClick={() => openHistoryTask(entry.id)}/>
-            : <RemoteTaskItem key={`remote:${entry.id}`} item={entry.remote} active={mode === 'hub' && location.pathname === `/review/hub/${encodeURIComponent(entry.id)}`} onClick={() => navigate(`/review/hub/${encodeURIComponent(entry.id)}`)}/>)}
-        </section>)}
+      {!historyCount && !review.loading && <div className="task-center-empty">当前筛选范围没有历史任务。</div>}
+      {review.response?.meta.hasMore && <Button size="small" className="session-load-more" loading={review.loadingMore} onClick={() => void model.loadMoreReview()}>加载更多历史任务</Button>}
+    </div>
+  </aside>
 
-        {!historyCount && !review.loading && <div className="task-center-empty">当前筛选范围没有历史任务。</div>}
-        {review.response?.meta.hasMore && <Button size="small" className="session-load-more" loading={review.loadingMore} onClick={() => void model.loadMoreReview()}>加载更多历史任务</Button>}
-      </div>
-    </aside>
+  return <>
+    {sidebarHost ? createPortal(taskRail, sidebarHost) : null}
+    <div className={`task-center-page ${mode === 'new' ? 'is-new-task' : ''}`}>
+      {mode !== 'new' && <Toolbar className="task-center-toolbar" aria-label="筛选历史任务">
+        <span className="task-center-toolbar-label">筛选历史任务</span>
+        <AgentScope agents={agents} value={review.filters.sourceId} onChange={sourceId => model.setReviewFilters({ sourceId })}/>
+        <span className="toolbar-divider" />
+        <SelectMenu className="filter" value={review.filters.projectId} onChange={projectId => model.setReviewFilters({ projectId })} ariaLabel="筛选项目" placeholder="全部项目" menuWidth={280} searchable searchPlaceholder="搜索项目" options={[
+          { value: '', label: '全部项目' },
+          ...projects.map(project => ({ value: project.id, label: project.name ?? project.repositoryIdentity ?? project.id, description: project.repositoryIdentity ?? undefined })),
+        ]}/>
+        <SelectMenu className="filter" value={review.filters.range} onChange={range => model.setReviewFilters({ range: range as typeof review.filters.range })} ariaLabel="筛选时间范围" menuWidth={156} options={[
+          { value: 'today', label: '今天' }, { value: '7d', label: '最近 7 天' }, { value: '30d', label: '最近 30 天' }, { value: 'all', label: '全部时间' },
+        ]}/>
+        <SelectMenu className="filter" value={review.filters.status} onChange={status => model.setReviewFilters({ status: status as typeof review.filters.status })} ariaLabel="筛选状态" menuWidth={150} options={[
+          { value: 'all', label: '全部状态' }, { value: 'clean', label: '无错误' }, { value: 'with-errors', label: '有错误' },
+        ]}/>
+        <Input className="filter search-filter" placeholder="搜索历史任务…" value={review.filters.search} onChange={event => model.setReviewFilters({ search: event.target.value })} aria-label="搜索历史任务"/>
+        <IconButton onClick={() => void model.refreshReview()} title="刷新历史任务" aria-label="刷新历史任务"><UiIcon name="refresh" size={16}/></IconButton>
+      </Toolbar>}
 
-    <section className="task-center-main">
-      <TaskSurface mode={surfaceMode}>
-        {mode === 'history' && <ReviewPage model={model} embedded/>}
-        {mode === 'live' && <PiLivePage embedded/>}
-        {mode === 'hub' && <HubReviewPage embedded/>}
-        {mode === 'new' && <NewTaskPanel options={projectOptions} preferredProjectId={preferredProjectId} onStarted={runtimeSessionId => navigate(`/review/live/${encodeURIComponent(runtimeSessionId)}`)}/>} 
-      </TaskSurface>
-    </section>
-  </div>
+      <section className="task-center-main">
+        <TaskSurface mode={surfaceMode}>
+          {mode === 'history' && <ReviewPage model={model} embedded/>}
+          {mode === 'live' && <PiLivePage embedded/>}
+          {mode === 'hub' && <HubReviewPage embedded/>}
+          {mode === 'new' && <NewTaskPanel options={projectOptions} preferredProjectId={preferredProjectId} onStarted={runtimeSessionId => navigate(`/review/live/${encodeURIComponent(runtimeSessionId)}`)}/>} 
+        </TaskSurface>
+      </section>
+    </div>
+  </>
 }
 
 function runtimeActivityLabel(state: PiLiveStateDto): string {
