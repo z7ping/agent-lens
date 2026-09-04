@@ -5,6 +5,7 @@ const api = fs.readFileSync('packages/web/src/client/api.ts', 'utf8')
 const reviewPage = fs.readFileSync('packages/web/src/features/ReviewPage.tsx', 'utf8')
 const hubReview = fs.readFileSync('packages/web/src/client/hub-review.ts', 'utf8')
 const app = fs.readFileSync('packages/web/src/App.tsx', 'utf8')
+const workspaceSidebar = fs.readFileSync('packages/web/src/components/WorkspaceSidebar.tsx', 'utf8')
 const releaseInfo = fs.readFileSync('packages/web/src/components/ReleaseInfo.tsx', 'utf8')
 const protocol = fs.readFileSync('packages/protocol/src/review.ts', 'utf8')
 const server = fs.readFileSync('packages/surface-http/src/server.ts', 'utf8')
@@ -25,7 +26,7 @@ const required = [
   [protocol.includes('nextCursor?: string'), 'Review 列表协议必须返回 nextCursor'],
   [server.includes("params.get('cursor')"), 'HTTP Surface 必须解析 Review 列表游标'],
   [releaseInfo.includes('runtimeReady') && releaseInfo.includes('{ runtimeOwner }'), '版本检查必须复用已有 runtime health 结果'],
-  [app.includes('runtimeOwner={snapshot.health?.runtime?.owner ?? null}'), 'Shell 必须把已有 health 传给版本检查'],
+  [workspaceSidebar.includes('runtimeOwner={snapshot.health?.runtime?.owner ?? null}'), 'Shell 必须把已有 health 传给版本检查'],
   [!api.includes('preferUserSessionTitle'), 'Web API 不得用首条用户消息覆盖 Source/Core 提供的原生会话标题'],
   [
     reviewPage.includes('sessionTitle([item.title, item.preview]')
