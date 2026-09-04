@@ -21,12 +21,14 @@ const changelog = readFileSync(changelogPath, 'utf8')
 if (!app.includes("import { WorkspaceSidebar } from './components/WorkspaceSidebar'")) {
   throw new Error('正式 Web Shell 必须接入统一左侧工作栏')
 }
-if (!sidebar.includes("import { BrandVersion, ReleaseInfo } from './ReleaseInfo'")) {
-  throw new Error('左侧工作栏必须接入统一发行信息组件')
+if (!sidebar.includes("import { ReleaseInfo } from './ReleaseInfo'")) {
+  throw new Error('左侧工作栏设置必须接入统一发行信息组件')
 }
-if (!sidebar.includes('<BrandVersion />')
-  || !sidebar.includes('<ReleaseInfo runtimeOwner={snapshot.health?.runtime?.owner ?? null} runtimeReady={snapshot.health !== null}/>')) {
-  throw new Error('正式 Web Shell 必须展示版本、复用运行时健康状态，并保留发行信息入口')
+if (!sidebar.includes('<ReleaseInfo runtimeOwner={snapshot.health?.runtime?.owner ?? null} runtimeReady={snapshot.health !== null}/>')) {
+  throw new Error('正式 Web 设置必须复用运行时健康状态，并保留版本 / 发行信息入口')
+}
+if (sidebar.includes('<BrandVersion />')) {
+  throw new Error('版本号属于低频发行信息，不得重新常驻占用工作栏品牌区')
 }
 if (!main.includes("import './release-info.css'")) {
   throw new Error('正式 Web 必须加载发行信息组件样式')
@@ -44,7 +46,7 @@ for (const label of ['新增', '调整', '修复', '安全', '已知限制']) {
   if (!releaseInfo.includes(`'${label}'`)) throw new Error(`发行信息组件缺少中文日志分类：${label}`)
 }
 if (!releaseInfo.includes('checkWebUpdate') || !releaseInfo.includes('新版本 v')) {
-  throw new Error('正式 Web Shell 必须保留低打扰的新版本提示')
+  throw new Error('正式 Web 设置必须保留低打扰的新版本提示')
 }
 if (!releaseInfo.includes('checkWebUpdate(packageMetadata.version, { runtimeOwner })')
   || !releaseInfo.includes('if (!runtimeReady) return')) {
