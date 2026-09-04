@@ -1,8 +1,18 @@
 import type {
+  ObservationCursor,
+  SessionSummaryRecord,
+  StorageService,
+} from '@agent-lens/core'
+import type {
   JsonValue,
   ReviewDetailQueryDto,
+  ReviewEventNodeDto,
+  ReviewQueryDto,
+  ReviewResponseDto,
   ReviewSessionDetailDto,
+  ReviewSessionSummaryDto,
 } from '@agent-lens/protocol'
+import { AGENT_LENS_PROTOCOL_VERSION } from '@agent-lens/protocol'
 import {
   ReviewProjection as BaseReviewProjection,
   reviewProjectionInternals as baseReviewProjectionInternals,
@@ -22,6 +32,30 @@ function stringField(record: Record<string, unknown>, ...keys: string[]): string
     if (typeof value === 'string' && value.trim()) return value.trim()
   }
   return undefined
+}
+
+function textFromPayload(value: JsonValue | unknown): string | undefined {
+  if (typeof value === 'string') return value
+  if (Array.isArray(value)) {
+    const parts = value.map(textFromPayload).filter((item): item is string => Boolean(item))
+    return parts.length ? parts.join('\n') : undefined
+  }
+  const record = asRecord(value)
+  const direct = stringField(record, 'text', 'message', 'content', 'summary', 'prompt')
+  if (direct) return direct
+  for (const key of ['content', 'message', 'parts']) {
+    const nested = record[key]
+    if (nested !== undefined && nested !== value) {
+      const text = textFromPayload(nested as JsonValue)
+      if (text) return text
+    }
+  }
+  return undefined
+}
+
+function durationMs(startedAt: string, endedAt: string): number {
+  const value = Date.parse(endedAt) - Date.parse(startedAt)
+  return Number.isFinite(value) && value > 0 ? value : 0
 }
 
 function normalizeLifecycleAction(value: string): string {
@@ -116,25 +150,194 @@ export function lifecycleEventLabel(payload: JsonValue | unknown): string {
   return '会话状态变化'
 }
 
+function contextEventLabel(node: ReviewEventNodeDto): string {
+  const payload = asRecord(node.payload)
+  const label = stringField(payload, 'label')
+  if (label) return label
+  const injectedKind = stringField(payload, 'injectedKind')
+  const labels: Record<string, string> = {
+    system: 'System',
+    developer: 'Developer',
+    permissions: '权限策略',
+    'runtime-environment': '运行环境',
+    agents: 'AGENTS',
+    skills: 'Skills',
+    plugins: 'Plugins',
+    application: '应用注入',
+    'transport-echo': '应用上下文',
+  }
+  return injectedKind ? labels[injectedKind] ?? '系统注入' : '系统注入'
+}
+
+function localizeNode(node: ReviewEventNodeDto, sessionActivity?: ReviewSessionSummaryDto['sessionActivity']): ReviewEventNodeDto {
+  if (node.kind === 'session.lifecycle') return { ...node, label: lifecycleEventLabel(node.payload) }
+  if (node.kind === 'context.injected') return { ...node, label: contextEventLabel(node) }
+  if (sessionActivity === 'internal-review' && node.kind === 'permission.request') return { ...node, label: '审查请求' }
+  if (sessionActivity === 'internal-review' && node.kind === 'permission.response') return { ...node, label: '审查结果' }
+  return node
+}
+
 function localizeLifecycle(detail: ReviewSessionDetailDto): ReviewSessionDetailDto {
   return {
     ...detail,
     interactions: detail.interactions.map(interaction => ({
       ...interaction,
-      nodes: interaction.nodes.map(node => node.type === 'event' && node.kind === 'session.lifecycle'
-        ? { ...node, label: lifecycleEventLabel(node.payload) }
+      nodes: interaction.nodes.map(node => node.type === 'event'
+        ? localizeNode(node, detail.sessionActivity)
         : node),
     })),
   }
 }
 
+function summaryFromRecord(record: SessionSummaryRecord): ReviewSessionSummaryDto {
+  const preview = record.firstUserPayload === undefined ? undefined : textFromPayload(record.firstUserPayload)
+  return {
+    id: record.logicalSessionId,
+    installationId: record.installationId,
+    productId: record.productId,
+    sourceIds: record.sourceIds,
+    ...(record.projectId ? { projectId: record.projectId } : {}),
+    ...(record.projectName ? { projectName: record.projectName } : {}),
+    ...(record.workspaceId ? { workspaceId: record.workspaceId } : {}),
+    ...(record.workspacePath ? { workspacePath: record.workspacePath } : {}),
+    ...(record.title ? { title: record.title } : {}),
+    ...(preview ? { preview } : {}),
+    startedAt: record.startedAt,
+    endedAt: record.endedAt,
+    durationMs: durationMs(record.startedAt, record.endedAt),
+    observationCount: record.observationCount,
+    interactionCount: record.interactionCount,
+    userTurnCount: record.userTurnCount ?? record.interactionCount,
+    systemContextCount: record.systemContextCount ?? 0,
+    internalReviewCount: record.internalReviewCount ?? 0,
+    otherEventCount: record.otherEventCount ?? 0,
+    toolCount: record.toolCount,
+    errorCount: record.errorCount,
+    hasErrors: record.errorCount > 0,
+    ...(record.sessionActivity ? { sessionActivity: record.sessionActivity } : {}),
+    ...(record.activitySourceLabel ? { activitySourceLabel: record.activitySourceLabel } : {}),
+    ...(record.parentSessionId ? { parentSessionId: record.parentSessionId } : {}),
+  }
+}
+
+function decodeListCursor(value: string): { startedAt: string; logicalSessionId: string } {
+  const parsed = JSON.parse(value) as Record<string, unknown>
+  const startedAt = typeof parsed.startedAt === 'string' ? parsed.startedAt : typeof parsed.endedAt === 'string' ? parsed.endedAt : ''
+  const logicalSessionId = typeof parsed.logicalSessionId === 'string' ? parsed.logicalSessionId : ''
+  if (!startedAt || !logicalSessionId) throw new Error('Invalid review list cursor')
+  return { startedAt, logicalSessionId }
+}
+
+function encodeListCursor(item: ReviewSessionSummaryDto): string {
+  return JSON.stringify({ startedAt: item.startedAt, logicalSessionId: item.id })
+}
+
+function observationCursor(item: { id: string; occurredAt?: string; capturedAt: string; canonicalSequence?: number; sourceSequence?: number }): ObservationCursor {
+  const sequence = item.canonicalSequence ?? item.sourceSequence
+  return {
+    effectiveAt: item.occurredAt ?? item.capturedAt,
+    ...(sequence === undefined ? {} : { sequence }),
+    id: item.id,
+  }
+}
+
+type SearchMatchSource = NonNullable<ReviewSessionSummaryDto['searchMatchSources']>[number]
+
+async function searchMatchSources(
+  storage: StorageService,
+  item: ReviewSessionSummaryDto,
+  search: string,
+): Promise<SearchMatchSource[]> {
+  const needle = search.trim().toLowerCase()
+  if (!needle) return []
+  const matches = new Set<SearchMatchSource>()
+  const header = [item.title, item.projectName, item.workspacePath, item.activitySourceLabel, ...item.sourceIds]
+    .filter(Boolean)
+    .join('\n')
+    .toLowerCase()
+  if (header.includes(needle)) matches.add('title')
+
+  let after: ObservationCursor | undefined
+  while (true) {
+    const page = await storage.repositories.observations.query({
+      logicalSessionId: item.id,
+      ...(after ? { after } : {}),
+      limit: 1000,
+    })
+    if (!page.length) break
+    for (const observation of page) {
+      let haystack = ''
+      try { haystack = JSON.stringify(observation.payload ?? '').toLowerCase() } catch { haystack = String(observation.payload ?? '').toLowerCase() }
+      if (!haystack.includes(needle)) continue
+      if (observation.kind === 'message.user') matches.add('user')
+      else if (observation.kind === 'context.injected') matches.add('system')
+      else if (observation.kind.startsWith('tool.')) matches.add('tool')
+      else if (item.sessionActivity === 'internal-review' || observation.kind.startsWith('permission.')) matches.add('review')
+      else matches.add('other')
+    }
+    after = observationCursor(page[page.length - 1]!)
+    if (page.length < 1000) break
+  }
+  return [...matches]
+}
+
 export class ReviewProjection extends BaseReviewProjection {
+  constructor(private readonly storageV2: StorageService) {
+    super(storageV2)
+  }
+
+  override async query(query: ReviewQueryDto = {}): Promise<ReviewResponseDto> {
+    if (!this.storageV2.sessionSummaries) return super.query(query)
+    const limit = Math.max(1, Math.min(query.limit ?? 100, 500))
+    const cursor = query.cursor ? decodeListCursor(query.cursor) : undefined
+    const page = await this.storageV2.sessionSummaries.query({
+      limit,
+      ...(query.sourceId ? { sourceId: query.sourceId } : {}),
+      ...(query.projectId ? { projectId: query.projectId } : {}),
+      ...(query.from ? { from: query.from } : {}),
+      ...(query.to ? { to: query.to } : {}),
+      ...(query.status === 'with-errors' ? { hasErrors: true } : {}),
+      ...(query.status === 'clean' ? { hasErrors: false } : {}),
+      ...(query.search?.trim() ? { search: query.search.trim() } : {}),
+      ...(cursor ? { after: cursor } : {}),
+    })
+    const items = page.items.map(summaryFromRecord)
+    if (query.search?.trim()) {
+      await Promise.all(items.map(async item => {
+        const sources = await searchMatchSources(this.storageV2, item, query.search!)
+        if (sources.length) item.searchMatchSources = sources
+      }))
+    }
+    const last = items.at(-1)
+    return {
+      items,
+      meta: {
+        protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
+        count: items.length,
+        hasMore: page.hasMore,
+        ...(page.hasMore && last ? { nextCursor: encodeListCursor(last) } : {}),
+        generatedAt: new Date().toISOString(),
+      },
+    }
+  }
+
   override async get(
     logicalSessionId: string,
     query: ReviewDetailQueryDto = {},
   ): Promise<ReviewSessionDetailDto | null> {
     const detail = await super.get(logicalSessionId, query)
-    return detail ? localizeLifecycle(detail) : null
+    if (!detail) return null
+    if (!this.storageV2.sessionSummaries) return localizeLifecycle(detail)
+    const page = await this.storageV2.sessionSummaries.query({ logicalSessionId, limit: 1 })
+    const record = page.items.find(item => item.logicalSessionId === logicalSessionId)
+    const summary = record ? summaryFromRecord(record) : detail
+    return localizeLifecycle({
+      ...detail,
+      ...summary,
+      interactions: detail.interactions,
+      interactionIndex: detail.interactionIndex,
+      page: detail.page,
+    })
   }
 }
 
@@ -142,4 +345,7 @@ export const reviewProjectionInternals = {
   ...baseReviewProjectionInternals,
   lifecycleEventLabel,
   localizeLifecycle,
+  contextEventLabel,
+  summaryFromRecord,
+  searchMatchSources,
 }
