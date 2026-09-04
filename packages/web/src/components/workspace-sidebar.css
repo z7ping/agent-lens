@@ -379,11 +379,10 @@
 
 /*
  * Task Center Rail 通过 Portal 挂到 WorkspaceSidebar。
- * 任务主路径是按时间倒序浏览，因此新建 + 搜索 / 筛选 / 刷新压缩成同一操作带。
- * 搜索默认只保留图标，聚焦时临时展开输入框。
+ * 任务主路径是按时间倒序浏览，因此新建 + 搜索 / 筛选 / 刷新固定在同一操作带。
+ * 搜索输入只在用户点击搜索图标后临时出现。
  */
 .workspace-sidebar-context > .task-center-rail {
-  position: relative;
   width: 100%;
   height: 100%;
   flex: 1 1 auto;
@@ -392,9 +391,15 @@
 }
 
 .workspace-sidebar-context > .task-center-rail .task-center-rail-head {
+  position: relative;
+  z-index: 14;
+  display: flex;
   min-height: 40px;
   flex-basis: 40px;
-  padding: 5px 10px 5px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px 5px 10px;
 }
 
 .workspace-sidebar-context > .task-center-rail .task-center-new-task-button {
@@ -414,81 +419,80 @@
   color: var(--al-ink);
 }
 
-/* 原 Toolbar 不再独占一行，悬浮到新建任务同一行右侧。 */
 .workspace-sidebar-context > .task-center-rail .task-center-toolbar {
-  position: absolute;
-  top: 5px;
-  right: 8px;
-  z-index: 12;
+  position: static;
+  z-index: 15;
   display: flex;
   width: auto;
   min-width: 0;
   min-height: 30px;
   grid-template-columns: none;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: flex-end;
-  gap: 3px;
+  gap: 2px;
   padding: 0;
   overflow: visible;
   background: transparent;
 }
 
+.workspace-sidebar-context > .task-center-rail .task-center-toolbar > .ui-icon-button {
+  width: 30px;
+  min-width: 30px;
+  height: 28px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--al-muted-2);
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-toolbar > .ui-icon-button:hover:not(:disabled),
+.workspace-sidebar-context > .task-center-rail .task-center-toolbar > .ui-icon-button.is-active {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--al-surface) 62%, transparent);
+  color: var(--al-ink);
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-search-panel {
+  position: relative;
+  z-index: 10;
+  flex: 0 0 auto;
+  padding: 1px 10px 6px;
+}
+
 .workspace-sidebar-context > .task-center-rail .task-center-search-field {
   position: relative;
-  width: 28px;
-  height: 28px;
-  flex: 0 0 auto;
-  transition: width .16s ease;
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
 }
 
 .workspace-sidebar-context > .task-center-rail .task-center-search-field > svg {
-  top: 7px;
-  left: 7px;
-  z-index: 2;
+  position: absolute;
+  left: 9px;
+  z-index: 1;
   color: var(--al-muted-2);
+  pointer-events: none;
 }
 
 .workspace-sidebar-context > .task-center-rail .task-center-search-input.ui-field {
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border-color: transparent;
-  border-radius: 7px;
-  background: transparent;
-  color: transparent;
-  caret-color: transparent;
+  width: 100%;
+  height: 34px;
+  padding: 0 9px 0 29px;
+  border-color: var(--al-line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--al-surface) 76%, transparent);
+  color: var(--al-ink);
   font-size: 13px;
-  cursor: pointer;
-  transition: width .16s ease, padding .16s ease, background-color .14s ease, border-color .14s ease;
 }
 
-.workspace-sidebar-context > .task-center-rail .task-center-search-input.ui-field::placeholder {
-  color: transparent;
-}
-
-.workspace-sidebar-context > .task-center-rail .task-center-search-field:hover .task-center-search-input.ui-field {
-  background: color-mix(in srgb, var(--al-surface) 58%, transparent);
-}
-
-.workspace-sidebar-context > .task-center-rail .task-center-search-field:focus-within {
-  width: 174px;
-}
-
-.workspace-sidebar-context > .task-center-rail .task-center-search-field:focus-within .task-center-search-input.ui-field {
-  width: 174px;
-  padding: 0 9px 0 28px;
+.workspace-sidebar-context > .task-center-rail .task-center-search-input.ui-field:hover,
+.workspace-sidebar-context > .task-center-rail .task-center-search-input.ui-field:focus {
   border-color: var(--al-line-strong);
   background: var(--al-surface);
-  color: var(--al-ink);
-  caret-color: auto;
-  cursor: text;
 }
 
-.workspace-sidebar-context > .task-center-rail .task-center-search-field:focus-within .task-center-search-input.ui-field::placeholder {
-  color: var(--al-muted-2);
-}
-
-/* 筛选 Disclosure 压缩为单个紧凑入口；高级条件仍只在需要时展开。 */
+/* 筛选 Disclosure 只显示统一 filter 图标，文字仅保留给可访问语义。 */
 .workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure {
   position: relative;
   width: 30px;
@@ -497,6 +501,7 @@
 }
 
 .workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure > summary {
+  position: relative;
   width: 30px;
   height: 28px;
   min-height: 28px;
@@ -514,7 +519,17 @@
   color: var(--al-ink);
 }
 
+.workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure .ui-disclosure-chevron {
+  display: none;
+}
+
 .workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure .ui-disclosure-summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-filter-text {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -524,38 +539,34 @@
   white-space: nowrap;
 }
 
-.workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure .ui-disclosure-chevron {
-  margin: 0;
-  transform: none;
-}
-
-.workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure[open] .ui-disclosure-chevron {
-  transform: rotate(180deg);
-}
-
 .workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure .ui-disclosure-meta {
   position: absolute;
-  top: -3px;
-  right: -2px;
-  min-width: 14px;
-  height: 14px;
+  top: -4px;
+  right: -3px;
+  min-width: 16px;
+  height: 16px;
   padding: 0 3px;
   border: 1px solid var(--al-soft-2);
   border-radius: 99px;
   background: var(--al-ink);
   color: var(--al-surface);
-  font-size: 10px;
-  line-height: 12px;
+  font-size: 12px;
+  line-height: 14px;
 }
 
 .workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure[open] {
   grid-column: auto;
 }
 
+.workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure[open] + .ui-icon-button {
+  grid-row: auto;
+  grid-column: auto;
+}
+
 .workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure .ui-disclosure-body {
   position: absolute;
-  top: 32px;
-  right: -31px;
+  top: 33px;
+  right: -32px;
   z-index: 24;
   width: 286px;
   padding: 0;
@@ -573,21 +584,6 @@
 
 .workspace-sidebar-context > .task-center-rail .task-center-filter-fields label.is-wide {
   grid-column: auto;
-}
-
-.workspace-sidebar-context > .task-center-rail .task-center-toolbar > .ui-icon-button {
-  width: 30px;
-  min-width: 30px;
-  height: 28px;
-  border-color: transparent;
-  background: transparent;
-  color: var(--al-muted-2);
-}
-
-.workspace-sidebar-context > .task-center-rail .task-center-toolbar > .ui-icon-button:hover:not(:disabled) {
-  border-color: transparent;
-  background: color-mix(in srgb, var(--al-surface) 62%, transparent);
-  color: var(--al-ink);
 }
 
 .workspace-sidebar-context > .task-center-rail .task-center-scroll {
@@ -721,11 +717,6 @@
   .app-shell {
     grid-template-columns: 286px minmax(0, 1fr);
   }
-
-  .workspace-sidebar-context > .task-center-rail .task-center-search-field:focus-within,
-  .workspace-sidebar-context > .task-center-rail .task-center-search-field:focus-within .task-center-search-input.ui-field {
-    width: 150px;
-  }
 }
 
 @media (max-width: 991.98px) {
@@ -755,11 +746,6 @@
     right: 10px;
     left: 10px;
   }
-
-  .workspace-sidebar-context > .task-center-rail .task-center-search-field:focus-within,
-  .workspace-sidebar-context > .task-center-rail .task-center-search-field:focus-within .task-center-search-input.ui-field {
-    width: 128px;
-  }
 }
 
 @media (max-width: 767.98px) {
@@ -771,9 +757,15 @@
     display: none;
   }
 
-  .workspace-sidebar-context > .task-center-rail .task-center-search-field:focus-within,
-  .workspace-sidebar-context > .task-center-rail .task-center-search-field:focus-within .task-center-search-input.ui-field {
-    width: 116px;
+  .workspace-sidebar-context > .task-center-rail .task-center-toolbar {
+    gap: 0;
+  }
+
+  .workspace-sidebar-context > .task-center-rail .task-center-toolbar > .ui-icon-button,
+  .workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure,
+  .workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure > summary {
+    width: 28px;
+    min-width: 28px;
   }
 }
 
@@ -821,9 +813,13 @@
     font-size: 12px;
   }
 
-  .workspace-sidebar-context > .task-center-rail .task-center-search-field:focus-within,
-  .workspace-sidebar-context > .task-center-rail .task-center-search-field:focus-within .task-center-search-input.ui-field {
-    width: 96px;
+  .workspace-sidebar-context > .task-center-rail .task-center-rail-head {
+    padding-inline: 6px;
+  }
+
+  .workspace-sidebar-context > .task-center-rail .task-center-new-task-button {
+    padding-inline: 5px;
+    font-size: 12px;
   }
 
   .workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure .ui-disclosure-body {
