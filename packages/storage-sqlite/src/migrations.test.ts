@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { SqliteStorageService } from './storage'
 
-test('storage migrations include replication, Hub replica state, and workspace project fallback', async () => {
+test('storage migrations include replication, Hub replica state, workspace project fallback, and session activity summary', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   try {
     await storage.migrate()
@@ -10,8 +10,8 @@ test('storage migrations include replication, Hub replica state, and workspace p
     const migrations = storage.db.prepare(
       'SELECT version, name FROM schema_migrations ORDER BY version',
     ).all() as Array<{ version: number; name: string }>
-    assert.equal(migrations.at(-1)?.version, 12)
-    assert.equal(migrations.at(-1)?.name, 'observation-native-parent-tree')
+    assert.equal(migrations.at(-1)?.version, 13)
+    assert.equal(migrations.at(-1)?.name, 'session-activity-summary')
 
     const indexes = storage.db.prepare("PRAGMA index_list('observations')").all() as Array<{ name: string }>
     const names = new Set(indexes.map(item => item.name))
