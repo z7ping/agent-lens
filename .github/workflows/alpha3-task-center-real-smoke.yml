@@ -11,6 +11,7 @@ on:
       - apps/daemon/**
       - packages/source-codex/src/**
       - packages/source-pi/src/**
+      - packages/core/src/**
       - packages/core-services/src/**
       - packages/projection-review/src/**
       - packages/protocol/src/**
@@ -31,6 +32,7 @@ on:
       - apps/daemon/**
       - packages/source-codex/src/**
       - packages/source-pi/src/**
+      - packages/core/src/**
       - packages/core-services/src/**
       - packages/projection-review/src/**
       - packages/protocol/src/**
@@ -68,6 +70,11 @@ jobs:
           node --check scripts/acceptance/codex-semantics-real.mjs
       - name: Verify focused Task Center regressions
         run: |
+          npm run typecheck --workspace @agent-lens/core
+          npm run typecheck --workspace @agent-lens/storage-sqlite
+          npm run test --workspace @agent-lens/storage-sqlite
+          npm run typecheck --workspace @agent-lens/projection-review
+          npm run test --workspace @agent-lens/projection-review
           npm run typecheck --workspace @agent-lens/source-pi
           npm run test --workspace @agent-lens/source-pi
           npm run typecheck --workspace @agent-lens/source-codex
@@ -149,17 +156,17 @@ jobs:
                 $items = @($review.items)
                 if ($items.Count -ge 2 -and $items[0].title -eq 'Alpha3 原生标题 B' -and $items[1].title -eq 'Alpha3 原生标题 A') {
                   $reviewReady = $true
-                  Write-Host "Review fixture 已进入正式投影：$($items.Count) 条任务；原生标题和创建时间排序正确"
+                  Write-Host "Review fixture 已进入正式投影：$($items.Count) 条任务；原生标题和最近活动排序正确"
                   break
                 }
               } catch {}
               Start-Sleep -Milliseconds 250
             }
-            if (-not $reviewReady) { throw '确定性 Codex fixture 未在 30 秒内按原生标题/真实时间进入 Review Projection' }
+            if (-not $reviewReady) { throw '确定性 Codex fixture 未在 30 秒内按原生标题/最近活动时间进入 Review Projection' }
             $items = @($review.items)
             if ([DateTimeOffset]::Parse($items[0].startedAt) -ge [DateTimeOffset]::Parse('2026-08-01T00:00:00Z')) { throw "旧会话 B 被导入时间污染：$($items[0].startedAt)" }
             if ([DateTimeOffset]::Parse($items[1].startedAt) -ge [DateTimeOffset]::Parse('2026-08-01T00:00:00Z')) { throw "旧会话 A 被导入时间污染：$($items[1].startedAt)" }
-            if ([DateTimeOffset]::Parse($items[0].startedAt) -le [DateTimeOffset]::Parse($items[1].startedAt)) { throw 'Review 列表没有按真实创建时间倒序' }
+            if ([DateTimeOffset]::Parse($items[0].endedAt) -le [DateTimeOffset]::Parse($items[1].endedAt)) { throw 'Review 列表没有按最近活动时间倒序' }
 
             $page1 = Invoke-RestMethod -Uri "$env:AGENT_LENS_ACCEPTANCE_URL/api/v1/review?limit=1" -TimeoutSec 2
             if (@($page1.items).Count -ne 1 -or -not $page1.meta.nextCursor) { throw 'Review cursor 第一页未返回单条结果与 nextCursor' }
