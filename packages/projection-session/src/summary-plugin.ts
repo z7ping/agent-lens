@@ -1,9 +1,4 @@
-import type {
-  ObservationCursor,
-  SessionSummaryProjectionStore,
-  SessionSummaryRecord,
-  StorageService,
-} from '@agent-lens/core'
+import type { SessionSummaryProjectionStore, StorageService } from '@agent-lens/core'
 import type { Context } from 'cordis'
 import { SESSION_SUMMARY_PROJECTION_ID } from './constants'
 
