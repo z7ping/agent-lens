@@ -156,11 +156,11 @@ function Shell({ model }: { model: AgentLensClientModel }) {
 
   useEffect(() => {
     model.setReviewActive(onLocalReview)
-    if (onLocalReview) void model.ensureReview()
+    if (onReview) void model.ensureReview()
     if (onTools) void model.ensureUsage()
     if (onAgents) void model.ensureAgents()
     return () => { if (onLocalReview) model.setReviewActive(false) }
-  }, [model, onLocalReview, onTools, onAgents])
+  }, [model, onReview, onLocalReview, onTools, onAgents])
 
   useEffect(() => {
     if (!onLocalReview) {
