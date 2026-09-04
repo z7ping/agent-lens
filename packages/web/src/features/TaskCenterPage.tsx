@@ -230,6 +230,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const [projectHistory, setProjectHistory] = useState<ReviewSessionSummaryDto[]>([])
   const historyScrollTargetRef = useRef('')
   const review = snapshot.review
+  const [searchOpen, setSearchOpen] = useState(Boolean(review.filters.search))
   const agents = snapshot.facets?.agents ?? []
   const projects = snapshot.facets?.projects ?? []
 
@@ -363,30 +364,42 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     ...projects.map(project => ({ value: project.id, label: project.name ?? project.repositoryIdentity ?? project.id, description: project.repositoryIdentity ?? undefined })),
   ]
 
+  const toggleSearch = () => {
+    if (searchOpen) {
+      setSearchOpen(false)
+      if (review.filters.search) model.setReviewFilters({ search: '' })
+      return
+    }
+    setSearchOpen(true)
+  }
+
   const taskRail = <aside className="task-center-rail" aria-label="任务列表：进行中 + 历史">
     <div className="task-center-rail-head">
       <Button size="small" variant="primary" className="task-center-new-task-button" onClick={newTask}><UiIcon name="plus" size={14}/> 新建任务</Button>
+      {mode !== 'new' && <Toolbar className="task-center-toolbar" aria-label="筛选历史任务">
+        <IconButton size="small" className={searchOpen || review.filters.search ? 'is-active' : ''} onClick={toggleSearch} title="搜索历史任务" aria-label="搜索历史任务" aria-pressed={searchOpen}><UiIcon name="search" size={14}/></IconButton>
+        <Disclosure className="task-center-filter-disclosure" summary={<><UiIcon name="filter" size={14}/><span className="task-center-filter-text">筛选</span></>} summaryMeta={activeFilterCount ? `${activeFilterCount}` : undefined}>
+          <div className="task-center-filter-fields">
+            <label className="is-wide"><span>智能体</span><SelectMenu variant="field" value={review.filters.sourceId} onChange={sourceId => model.setReviewFilters({ sourceId })} ariaLabel="筛选智能体" placeholder="全部智能体" menuWidth={260} options={agentFilterOptions}/></label>
+            <label className="is-wide"><span>项目</span><SelectMenu variant="field" value={review.filters.projectId} onChange={projectId => model.setReviewFilters({ projectId })} ariaLabel="筛选项目" placeholder="全部项目" menuWidth={280} searchable searchPlaceholder="搜索项目" options={projectFilterOptions}/></label>
+            <label><span>时间</span><SelectMenu variant="field" value={review.filters.range} onChange={range => model.setReviewFilters({ range: range as typeof review.filters.range })} ariaLabel="筛选时间范围" menuWidth={156} options={[
+              { value: 'today', label: '今天' }, { value: '7d', label: '最近 7 天' }, { value: '30d', label: '最近 30 天' }, { value: 'all', label: '全部时间' },
+            ]}/></label>
+            <label><span>状态</span><SelectMenu variant="field" value={review.filters.status} onChange={status => model.setReviewFilters({ status: status as typeof review.filters.status })} ariaLabel="筛选状态" menuWidth={150} options={[
+              { value: 'all', label: '全部状态' }, { value: 'clean', label: '无错误' }, { value: 'with-errors', label: '有错误' },
+            ]}/></label>
+          </div>
+        </Disclosure>
+        <IconButton size="small" onClick={() => void model.refreshReview()} title="刷新历史任务" aria-label="刷新历史任务"><UiIcon name="refresh" size={14}/></IconButton>
+      </Toolbar>}
     </div>
 
-    {mode !== 'new' && <Toolbar className="task-center-toolbar" aria-label="筛选历史任务">
+    {mode !== 'new' && searchOpen && <div className="task-center-search-panel">
       <div className="task-center-search-field">
         <UiIcon name="search" size={14}/>
-        <Input className="task-center-search-input" placeholder="搜索任务…" value={review.filters.search} onChange={event => model.setReviewFilters({ search: event.target.value })} aria-label="搜索历史任务"/>
+        <Input autoFocus className="task-center-search-input" placeholder="搜索任务…" value={review.filters.search} onChange={event => model.setReviewFilters({ search: event.target.value })} aria-label="搜索历史任务"/>
       </div>
-      <Disclosure className="task-center-filter-disclosure" summary="筛选" summaryMeta={activeFilterCount ? `${activeFilterCount}` : undefined}>
-        <div className="task-center-filter-fields">
-          <label className="is-wide"><span>智能体</span><SelectMenu variant="field" value={review.filters.sourceId} onChange={sourceId => model.setReviewFilters({ sourceId })} ariaLabel="筛选智能体" placeholder="全部智能体" menuWidth={260} options={agentFilterOptions}/></label>
-          <label className="is-wide"><span>项目</span><SelectMenu variant="field" value={review.filters.projectId} onChange={projectId => model.setReviewFilters({ projectId })} ariaLabel="筛选项目" placeholder="全部项目" menuWidth={280} searchable searchPlaceholder="搜索项目" options={projectFilterOptions}/></label>
-          <label><span>时间</span><SelectMenu variant="field" value={review.filters.range} onChange={range => model.setReviewFilters({ range: range as typeof review.filters.range })} ariaLabel="筛选时间范围" menuWidth={156} options={[
-            { value: 'today', label: '今天' }, { value: '7d', label: '最近 7 天' }, { value: '30d', label: '最近 30 天' }, { value: 'all', label: '全部时间' },
-          ]}/></label>
-          <label><span>状态</span><SelectMenu variant="field" value={review.filters.status} onChange={status => model.setReviewFilters({ status: status as typeof review.filters.status })} ariaLabel="筛选状态" menuWidth={150} options={[
-            { value: 'all', label: '全部状态' }, { value: 'clean', label: '无错误' }, { value: 'with-errors', label: '有错误' },
-          ]}/></label>
-        </div>
-      </Disclosure>
-      <IconButton size="small" onClick={() => void model.refreshReview()} title="刷新历史任务" aria-label="刷新历史任务"><UiIcon name="refresh" size={14}/></IconButton>
-    </Toolbar>}
+    </div>}
 
     <div className="task-center-scroll">
       {runtimes.length > 0 && <section className="task-center-group task-center-live-group">
