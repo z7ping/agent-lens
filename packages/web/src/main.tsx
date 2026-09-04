@@ -33,6 +33,7 @@ import './components/copyable-code-block.css'
 import './components/pi-markdown-composer.css'
 import './components/pi-startup-disclosure.css'
 import './task-center.css'
+import './activity-attribution.css'
 import './hub-review.css'
 import './task-view-options.css'
 // Task Surface 共享详情组件最后加载；页面所有者不得再定义这些共享选择器。
