@@ -113,6 +113,63 @@ function reverseQuery(executor: SqliteExecutor, query: ObservationQuery): Promis
   })
 }
 
+function cleanupStaleParserDerivations(executor: SqliteExecutor, evidenceRefs: readonly string[]): number {
+  if (!evidenceRefs.length) return 0
+  const placeholders = evidenceRefs.map(() => '?').join(', ')
+  const sourceRows = executor.db.prepare(`
+    SELECT DISTINCT e.source_record_id AS sourceRecordId
+    FROM evidence e
+    WHERE e.id IN (${placeholders}) AND e.source_record_id IS NOT NULL
+  `).all(...evidenceRefs) as Array<{ sourceRecordId: string }>
+  let deleted = 0
+
+  for (const { sourceRecordId } of sourceRows) {
+    const staleRows = executor.db.prepare(`
+      SELECT DISTINCT oe.observation_id AS observationId
+      FROM observation_evidence oe
+      JOIN evidence e ON e.id = oe.evidence_id
+      JOIN source_records sr ON sr.id = e.source_record_id
+      WHERE e.source_record_id = ?
+        AND COALESCE(e.parser_version, '') != COALESCE(sr.parser_version, '')
+    `).all(sourceRecordId) as Array<{ observationId: string }>
+    if (!staleRows.length) continue
+    const ids = staleRows.map(row => row.observationId)
+    const stalePlaceholders = ids.map(() => '?').join(', ')
+
+    executor.db.prepare(`
+      DELETE FROM observation_evidence
+      WHERE observation_id IN (${stalePlaceholders})
+        AND evidence_id IN (
+          SELECT e.id
+          FROM evidence e
+          JOIN source_records sr ON sr.id = e.source_record_id
+          WHERE e.source_record_id = ?
+            AND COALESCE(e.parser_version, '') != COALESCE(sr.parser_version, '')
+        )
+    `).run(...ids, sourceRecordId)
+
+    executor.db.prepare(`
+      UPDATE observations
+      SET parent_observation_id = NULL
+      WHERE parent_observation_id IN (${stalePlaceholders})
+        AND NOT EXISTS (
+          SELECT 1 FROM observation_evidence parent_oe
+          WHERE parent_oe.observation_id = observations.parent_observation_id
+        )
+    `).run(...ids)
+    const result = executor.db.prepare(`
+      DELETE FROM observations
+      WHERE id IN (${stalePlaceholders})
+        AND NOT EXISTS (
+          SELECT 1 FROM observation_evidence oe
+          WHERE oe.observation_id = observations.id
+        )
+    `).run(...ids)
+    deleted += Number(result.changes)
+  }
+  return deleted
+}
+
 export function withSqliteObservationPagination(
   executor: SqliteExecutor,
   base: ObservationRepository,
@@ -123,6 +180,12 @@ export function withSqliteObservationPagination(
       if (query.order !== 'desc' && !query.before) return base.query(query)
       return reverseQuery(executor, query)
     },
+    async put(observation) {
+      await base.put(observation)
+      // Parser Replay first advances source_records.parser_version, then writes new Evidence.
+      // Drop only links created by older parser versions; raw SourceRecord/Evidence rows remain immutable.
+      await executor.run(() => cleanupStaleParserDerivations(executor, observation.evidenceRefs))
+    },
     async removeDerivationsForSourceRecord(sourceRecordId) {
       return executor.run(() => {
         const rows = executor.db.prepare(`
@@ -132,7 +195,6 @@ export function withSqliteObservationPagination(
           WHERE e.source_record_id = ?
         `).all(sourceRecordId) as Array<{ observationId: string }>
         if (!rows.length) return 0
-
         const ids = rows.map(row => row.observationId)
         const placeholders = ids.map(() => '?').join(', ')
         executor.db.prepare(`
@@ -140,25 +202,15 @@ export function withSqliteObservationPagination(
           WHERE observation_id IN (${placeholders})
             AND evidence_id IN (SELECT id FROM evidence WHERE source_record_id = ?)
         `).run(...ids, sourceRecordId)
-
-        // Evidence/SourceRecord are immutable provenance. Only orphaned derived observations are removed.
-        // 012 uses a self-reference without ON DELETE; unlink children before deleting stale parents.
         executor.db.prepare(`
           UPDATE observations
           SET parent_observation_id = NULL
           WHERE parent_observation_id IN (${placeholders})
-            AND NOT EXISTS (
-              SELECT 1 FROM observation_evidence oe
-              WHERE oe.observation_id = observations.parent_observation_id
-            )
         `).run(...ids)
         const result = executor.db.prepare(`
           DELETE FROM observations
           WHERE id IN (${placeholders})
-            AND NOT EXISTS (
-              SELECT 1 FROM observation_evidence oe
-              WHERE oe.observation_id = observations.id
-            )
+            AND NOT EXISTS (SELECT 1 FROM observation_evidence oe WHERE oe.observation_id = observations.id)
         `).run(...ids)
         return Number(result.changes)
       })
