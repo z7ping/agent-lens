@@ -133,18 +133,23 @@ test('Pi Live routes common actions and fields through the UI layer', () => {
   assert.match(piLiveCss, /\.pi-live-thinking-picker \{[\s\S]*?width:\s*clamp/)
 })
 
-test('Task Center toolbar and common actions consume the UI layer', () => {
-  assert.match(taskCenterPage, /import \{ Button, IconButton, Input, SelectMenu, Toolbar \} from '\.\.\/components\/ui'/)
+test('Task Center context routes search, filters and actions through the UI layer', () => {
+  assert.match(taskCenterPage, /import \{ Button, Disclosure, IconButton, Input, SelectMenu, Toolbar \} from '\.\.\/components\/ui'/)
   assert.doesNotMatch(taskCenterPage, /from '\.\.\/components\/SelectMenu'/)
   assert.match(taskCenterPage, /<Toolbar className="task-center-toolbar" aria-label="筛选历史任务">/)
-  assert.match(taskCenterPage, /<Input className="filter search-filter"/)
-  assert.match(taskCenterPage, /<IconButton onClick=\{\(\) => void model\.refreshReview\(\)\}/)
-  assert.match(taskCenterPage, /<Button size="small" variant="primary" onClick=\{newTask\}>/)
+  assert.match(taskCenterPage, /<Input className="task-center-search-input"/)
+  assert.match(taskCenterPage, /<Disclosure className="task-center-filter-disclosure" summary="筛选"/)
+  assert.match(taskCenterPage, /<IconButton size="small" onClick=\{\(\) => void model\.refreshReview\(\)\}/)
+  assert.match(taskCenterPage, /<Button size="small" variant="primary" className="task-center-new-task-button" onClick=\{newTask\}>/)
   assert.match(taskCenterPage, /<Button variant="primary" loading=\{starting\}/)
+  assert.doesNotMatch(taskCenterPage, /className="filter search-filter"/)
+  assert.doesNotMatch(taskCenterPage, /<AgentScope\b/)
+  assert.match(taskCenterCss, /\.task-center-search-input\.ui-field \{[\s\S]*?height:\s*34px;[\s\S]*?font-size:\s*13px;/)
+  assert.match(taskCenterCss, /\.task-center-filter-disclosure\[open\]/)
   assert.doesNotMatch(taskCenterCss, /\.task-center-toolbar \.icon-button/)
   assert.doesNotMatch(taskCenterCss, /\.task-center-rail-head \.btn\s*\{/)
   assert.doesNotMatch(taskCenterCss, /\.task-center-new-actions \.btn\s*\{[^}]*min-height:/s)
-  assert.match(taskCenterCss, /\.task-center-toolbar \.ui-icon-button/)
+  assert.match(taskCenterCss, /\.task-center-toolbar > \.ui-icon-button/)
 })
 
 test('Review toolbar and Inspector consume shared UI primitives', () => {
