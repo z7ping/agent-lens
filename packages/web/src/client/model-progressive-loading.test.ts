@@ -268,7 +268,7 @@ test('默认最新页为空但轻量索引仍有记录时自动从头加载', as
         : {
             ...summary(1),
             interactions: [],
-            interactionIndex: [interaction(1)],
+            interactionIndex: [{ ...interaction(1), hasError: false }],
             page: { count: 0, hasMore: false, direction: 'backward', filter: 'all' },
           })
     }
