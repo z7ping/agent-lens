@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PropsWithChildren } from 'react'
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import type { AgentFacetDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel, ClientSnapshot } from './client/model'
 import { readAgentFilterPreference, readTheme, writeAgentFilterPreference, writeTheme } from './client/preferences'
@@ -8,6 +8,7 @@ import { BackgroundDataNotice } from './components/BackgroundDataNotice'
 import { ReviewStateOverlay } from './components/ReviewStateOverlay'
 import { ReviewTurnRail } from './components/ReviewTurnRail'
 import { WorkspaceSidebar } from './components/WorkspaceSidebar'
+import { Breadcrumb } from './components/ui'
 import { AgentsResponsivePage } from './features/AgentsResponsivePage'
 import { BackupPage } from './features/BackupPage'
 import { InsightsPage } from './features/InsightsPage'
@@ -124,6 +125,48 @@ function sameReviewFilters(left: ReviewFilters, right: ReviewFilters): boolean {
     && left.search === right.search
 }
 
+function WorkspaceBreadcrumb({
+  pathname,
+  snapshot,
+  selectedAgentId,
+}: {
+  pathname: string
+  snapshot: ClientSnapshot
+  selectedAgentId: string
+}) {
+  let items: Array<{ label: string; to?: string }>
+  if (pathname === '/review/new') {
+    items = [{ label: '任务中心', to: '/review' }, { label: '新建任务' }]
+  } else if (pathname.startsWith('/review/live/')) {
+    items = [{ label: '任务中心', to: '/review' }, { label: 'Pi 实时任务' }]
+  } else if (pathname.startsWith('/review/hub/')) {
+    items = [{ label: '任务中心', to: '/review' }, { label: '远程任务' }]
+  } else if (pathname.startsWith('/review/')) {
+    items = [{ label: '任务中心', to: '/review' }, { label: snapshot.review.detail?.title?.trim() || '任务详情' }]
+  } else if (pathname === '/review') {
+    const selectedTitle = snapshot.review.detail?.title?.trim()
+    items = selectedTitle ? [{ label: '任务中心' }, { label: selectedTitle }] : [{ label: '任务中心' }]
+  } else if (pathname.startsWith('/tools')) {
+    items = [{ label: '洞察', to: '/insights' }, { label: '工具分析' }]
+  } else if (pathname.startsWith('/insights')) {
+    items = [{ label: '洞察' }, { label: '使用概览' }]
+  } else if (pathname.startsWith('/agents')) {
+    const selected = snapshot.agents?.items.find(item => item.sourceId === selectedAgentId)
+    items = [{ label: '智能体' }, { label: selected?.displayName || selected?.sourceId || '概览' }]
+  } else if (pathname.startsWith('/backup')) {
+    items = [{ label: '设置' }, { label: '资产备份' }]
+  } else {
+    items = [{ label: 'AgentLens' }]
+  }
+
+  return <Breadcrumb
+    className="workspace-breadcrumb"
+    items={items.map((item, index) => item.to && index < items.length - 1
+      ? <NavLink key={item.to} to={item.to}>{item.label}</NavLink>
+      : <span key={`${item.label}:${index}`} title={item.label}>{item.label}</span>)}
+  />
+}
+
 function Shell({ model }: { model: AgentLensClientModel }) {
   const snapshot = useClientSnapshot(model)
   const location = useLocation()
@@ -201,6 +244,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
         onContextHost={setSidebarHost}
       />
       <div className="app-main">
+        <WorkspaceBreadcrumb pathname={location.pathname} snapshot={snapshot} selectedAgentId={resolvedAgentOverviewSourceId}/>
         {hasSseBanner && <div className="sse-banner" role="status">
           <span className="live-dot live-dot-waiting" />
           <span>实时通道已断开</span>

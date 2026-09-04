@@ -78,11 +78,18 @@ if (!/\.btn\s*\{[\s\S]*?display:\s*inline-flex;[\s\S]*?height:\s*30px;[\s\S]*?fo
   throw new Error('共享按钮必须保持 inline-flex / 30px / 12px / 不换行')
 }
 if (!/export function Button\b/.test(readFileSync(p('components/ui/Primitives.tsx'), 'utf8'))) throw new Error('统一 UI Primitive 必须保留 Button')
-if (!/export function Dialog\b/.test(readFileSync(p('components/ui/Overlay.tsx'), 'utf8')) || !/export function Drawer\b/.test(readFileSync(p('components/ui/Overlay.tsx'), 'utf8'))) {
-  throw new Error('统一 Overlay 必须保留 Dialog / Drawer')
+if (!/export function Breadcrumb\b/.test(readFileSync(p('components/ui/Primitives.tsx'), 'utf8'))) throw new Error('统一 UI Primitive 必须保留 Breadcrumb')
+if (!/export function Dialog\b/.test(readFileSync(p('components/ui/Overlay.tsx'), 'utf8')) || !/export function Drawer\b/.test(readFileSync(p('components/ui/Overlay.tsx'), 'utf8')) || !/export function Popover\b/.test(readFileSync(p('components/ui/Overlay.tsx'), 'utf8'))) {
+  throw new Error('统一 Overlay 必须保留 Dialog / Drawer / Popover')
 }
 if (!/export \{ SelectMenu \} from '\.\.\/SelectMenu'/.test(readFileSync(p('components/ui/index.ts'), 'utf8'))) throw new Error('高级 SelectMenu 必须经统一 UI 出口导出')
 if (!/export \{ UiIcon \} from '\.\.\/UiIcon'/.test(readFileSync(p('components/ui/index.ts'), 'utf8'))) throw new Error('UiIcon 必须经统一 UI 出口导出')
+const appShell = readFileSync(p('App.tsx'), 'utf8')
+const runtimeStatus = readFileSync(p('components/RuntimeStatus.tsx'), 'utf8')
+const sidebarInteractions = readFileSync(p('components/workspace-sidebar-interactions.css'), 'utf8')
+if (!appShell.includes('<WorkspaceBreadcrumb') || !appShell.includes('className="workspace-breadcrumb"')) throw new Error('右侧工作区必须保留统一面包屑')
+if (!runtimeStatus.includes('<Popover') || !runtimeStatus.includes('placement="right-end"')) throw new Error('Runtime 详情必须通过统一 Portal Popover 逃离侧栏裁剪')
+if (!/\.workspace-sidebar-footer\s*\{[\s\S]*?justify-content:\s*flex-start;/m.test(sidebarInteractions)) throw new Error('设置入口必须固定在侧栏左下角')
 
 function tsxFiles(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {

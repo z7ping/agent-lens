@@ -105,6 +105,12 @@
   border-top: 1px solid var(--al-line);
 }
 
+.ui-popover {
+  z-index: 1450;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
 @media (max-width: 767.98px) {
   .ui-overlay-dialog {
     align-items: flex-end;
