@@ -1,7 +1,7 @@
 /*
  * Review 长会话唯一性能/导航所有者。
- * 只负责虚拟挂载、独立滚动、Round Nav、Turn Rail 与长列表加载反馈；
- * 不定义 Task Message / Thinking / Tool 等共享详情组件视觉。
+ * 只负责虚拟挂载、独立滚动、Round Nav 与长列表加载反馈；
+ * Task Surface 共享轮次导轨由 task-turn-rail.css 负责。
  */
 .virtual-round-shell { min-width: 0; }
 .virtual-round-shell + .virtual-round-shell { border-top: 0; }
@@ -40,7 +40,7 @@
 }
 .review-page .session-group-block:first-child .session-group { margin-top: 0; }
 
-/* Round Nav 是 Review 长会话导航，不属于 TaskRound 组件。 */
+/* Round Nav 是 Review 的历史查询/筛选导航；轮次导轨已经下沉到 Task Surface。 */
 .review-page .round-nav {
   position: sticky;
   top: 0;
@@ -119,80 +119,6 @@
 }
 .detail-load-sentinel button:hover { border-color: var(--al-line-strong); background: var(--al-soft); }
 
-/* Turn Rail：贴近 ChatGPT 的轻量轮次刻度；完整索引不承担正文布局。 */
-.turn-rail {
-  z-index: 18;
-  display: flex;
-  width: 24px;
-  max-height: calc(100vh - 128px);
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1px;
-  padding: 6px 0;
-  transform: translateY(-50%);
-  opacity: .62;
-  pointer-events: none;
-  transition: opacity .16s ease;
-}
-.turn-rail:hover { opacity: 1; }
-.turn-rail::before { display: none; content: none; }
-.turn-tick {
-  position: relative;
-  display: grid;
-  width: 24px;
-  height: 7px;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  pointer-events: auto;
-}
-.turn-tick i {
-  display: block;
-  width: 6px;
-  height: 1.5px;
-  border-radius: 99px;
-  background: color-mix(in srgb, var(--al-muted) 58%, transparent);
-  transition: width .16s cubic-bezier(.2,.8,.2,1), height .16s ease, background .16s ease;
-}
-.turn-tick:hover i { width: 24px; height: 2px; background: var(--al-ink); }
-.turn-tick:has(+ .turn-tick:hover) i,
-.turn-tick:hover + .turn-tick i { width: 18px; }
-.turn-tick:has(+ .turn-tick + .turn-tick:hover) i,
-.turn-tick:hover + .turn-tick + .turn-tick i { width: 13px; }
-.turn-tick:has(+ .turn-tick + .turn-tick + .turn-tick:hover) i,
-.turn-tick:hover + .turn-tick + .turn-tick + .turn-tick i { width: 9px; }
-.turn-tick.active i { width: 24px; height: 2px; background: var(--al-ink); }
-.turn-tick.err i { background: color-mix(in srgb, var(--al-danger) 55%, var(--al-line)); }
-.turn-tick.err.active i { background: var(--al-danger); }
-.turn-tick::after {
-  content: attr(data-tip);
-  position: absolute;
-  top: 50%;
-  left: calc(100% + 6px);
-  z-index: 90;
-  width: max-content;
-  max-width: 300px;
-  padding: 6px 9px;
-  transform: translateY(-50%);
-  border: 1px solid var(--al-line);
-  border-radius: 7px;
-  background: var(--al-ink);
-  box-shadow: 0 6px 20px rgb(0 0 0 / .18);
-  color: var(--al-surface);
-  font-size: 12px;
-  line-height: 1.5;
-  text-align: left;
-  white-space: normal;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity .1s ease;
-}
-.turn-tick:hover::after,
-.turn-tick:focus-visible::after { opacity: 1; }
-
 @media (min-width: 1200px) {
   .review-page .review-reader { padding-left: 52px; }
 }
@@ -201,12 +127,9 @@
   .review-page { height: auto; min-height: 0; }
 }
 @media (max-width: 991.98px) {
-  .turn-rail { display: none; }
   .review-page .round-nav { align-items: flex-start; }
   .review-page .round-nav-actions { margin-left: 8px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .review-page .round-nav button,
-  .turn-rail,
-  .turn-tick i { transition: none; }
+  .review-page .round-nav button { transition: none; }
 }
