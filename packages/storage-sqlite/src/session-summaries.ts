@@ -20,9 +20,18 @@ function decodeJson<T>(value: unknown, fallback: T): T {
   return JSON.parse(value) as T
 }
 
+function payloadText(value: JsonValue | undefined): string | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const text = (value as Record<string, JsonValue>).text
+  return typeof text === 'string' && text.trim() ? text.trim() : undefined
+}
+
 function mapSummary(row: any): SessionSummaryRecord {
-  const leadingBackground = typeof row.leading_kind === 'string'
-    && row.leading_kind !== 'message.user'
+  const firstUserPayload = row.first_user_payload == null
+    ? undefined
+    : decodeJson<JsonValue>(row.first_user_payload, null)
+  const nativeTitle = typeof row.title === 'string' && row.title.trim() ? row.title.trim() : undefined
+  const fallbackTitle = payloadText(firstUserPayload)
   return {
     logicalSessionId: row.logical_session_id,
     installationId: row.installation_id,
@@ -32,17 +41,99 @@ function mapSummary(row: any): SessionSummaryRecord {
     ...(row.project_name ? { projectName: row.project_name } : {}),
     ...(row.workspace_id ? { workspaceId: row.workspace_id } : {}),
     ...(row.workspace_path ? { workspacePath: row.workspace_path } : {}),
-    ...(row.title ? { title: row.title } : {}),
-    ...(row.first_user_payload == null
-      ? {}
-      : { firstUserPayload: decodeJson<JsonValue>(row.first_user_payload, null) }),
+    ...(nativeTitle || fallbackTitle ? { title: nativeTitle ?? fallbackTitle } : {}),
+    ...(firstUserPayload === undefined ? {} : { firstUserPayload }),
     startedAt: row.started_at,
     endedAt: row.ended_at,
     observationCount: Number(row.observation_count),
-    interactionCount: Number(row.user_message_count) + (leadingBackground ? 1 : 0),
+    interactionCount: Number(row.user_turn_count ?? row.user_message_count ?? 0),
+    userTurnCount: Number(row.user_turn_count ?? row.user_message_count ?? 0),
+    systemContextCount: Number(row.system_context_count ?? 0),
+    internalReviewCount: Number(row.internal_review_count ?? 0),
+    otherEventCount: Number(row.other_event_count ?? 0),
     toolCount: Number(row.tool_count),
     errorCount: Number(row.error_count),
+    sessionActivity: row.session_activity ?? 'user-task',
+    ...(row.activity_source_label ? { activitySourceLabel: row.activity_source_label } : {}),
+    ...(row.parent_session_id ? { parentSessionId: row.parent_session_id } : {}),
   }
+}
+
+const REAL_USER_SQL = `
+  kind = 'message.user'
+  AND COALESCE(json_extract(payload_json, '$.provenance.actualAuthor'), 'human-user') = 'human-user'
+  AND COALESCE(json_extract(payload_json, '$.provenance.contentRole'), 'user-request') = 'user-request'
+`
+
+const SYSTEM_CONTEXT_SQL = `
+  kind = 'context.injected'
+  AND COALESCE(json_extract(payload_json, '$.provenance.activityType'), 'system-injection') = 'system-injection'
+`
+
+function firstUserPayloadSql(sessionIdSql: string): string {
+  return `(
+    SELECT payload_json
+    FROM observations AS first_user
+    WHERE first_user.logical_session_id = ${sessionIdSql}
+      AND first_user.kind = 'message.user'
+      AND COALESCE(json_extract(first_user.payload_json, '$.provenance.actualAuthor'), 'human-user') = 'human-user'
+      AND COALESCE(json_extract(first_user.payload_json, '$.provenance.contentRole'), 'user-request') = 'user-request'
+    ORDER BY
+      COALESCE(first_user.occurred_at, first_user.captured_at) ASC,
+      COALESCE(first_user.canonical_sequence, first_user.source_sequence, ${MAX_SEQUENCE}) ASC,
+      first_user.id ASC
+    LIMIT 1
+  )`
+}
+
+function sessionActivitySql(sessionIdSql: string): string {
+  return `COALESCE((
+    SELECT json_extract(activity.payload_json, '$.sessionActivity')
+    FROM observations AS activity
+    WHERE activity.logical_session_id = ${sessionIdSql}
+      AND activity.kind = 'session.lifecycle'
+      AND json_extract(activity.payload_json, '$.sessionActivity') IS NOT NULL
+    ORDER BY COALESCE(activity.occurred_at, activity.captured_at), activity.id
+    LIMIT 1
+  ), 'user-task')`
+}
+
+function activitySourceLabelSql(sessionIdSql: string): string {
+  return `(
+    SELECT json_extract(activity.payload_json, '$.activitySourceLabel')
+    FROM observations AS activity
+    WHERE activity.logical_session_id = ${sessionIdSql}
+      AND activity.kind = 'session.lifecycle'
+      AND json_extract(activity.payload_json, '$.activitySourceLabel') IS NOT NULL
+    ORDER BY COALESCE(activity.occurred_at, activity.captured_at), activity.id
+    LIMIT 1
+  )`
+}
+
+function parentSessionSql(sessionIdSql: string): string {
+  return `(
+    SELECT relation.from_session_id
+    FROM session_relationships AS relation
+    WHERE relation.to_session_id = ${sessionIdSql}
+      AND relation.type IN ('internal-review', 'subagent', 'branch-task', 'fork', 'related')
+    ORDER BY CASE relation.type
+      WHEN 'internal-review' THEN 0
+      WHEN 'subagent' THEN 1
+      WHEN 'branch-task' THEN 2
+      WHEN 'fork' THEN 3
+      ELSE 4 END,
+      relation.id
+    LIMIT 1
+  )`
+}
+
+function internalReviewCountSql(sessionIdSql: string): string {
+  return `(
+    SELECT COUNT(*)
+    FROM session_relationships AS review_relation
+    WHERE review_relation.from_session_id = ${sessionIdSql}
+      AND review_relation.type = 'internal-review'
+  )`
 }
 
 function legacyQuerySql(observationFilter: string, summaryFilter: string): string {
@@ -53,8 +144,10 @@ function legacyQuerySql(observationFilter: string, summaryFilter: string): strin
         COALESCE(MIN(occurred_at), MIN(captured_at)) AS started_at,
         COALESCE(MAX(occurred_at), MAX(captured_at)) AS ended_at,
         COUNT(*) AS observation_count,
-        SUM(CASE WHEN kind = 'message.user' THEN 1 ELSE 0 END) AS user_message_count,
+        SUM(CASE WHEN ${REAL_USER_SQL} THEN 1 ELSE 0 END) AS user_turn_count,
+        SUM(CASE WHEN ${SYSTEM_CONTEXT_SQL} THEN 1 ELSE 0 END) AS system_context_count,
         SUM(CASE WHEN kind = 'tool.call' THEN 1 ELSE 0 END) AS tool_count,
+        SUM(CASE WHEN kind LIKE 'tool.%' THEN 1 ELSE 0 END) AS tool_event_count,
         SUM(CASE
           WHEN kind = 'tool.result' AND json_extract(payload_json, '$.success') = 0 THEN 1
           ELSE 0
@@ -66,6 +159,12 @@ function legacyQuerySql(observationFilter: string, summaryFilter: string): strin
     legacy_summary AS (
       SELECT
         aggregate.*,
+        aggregate.user_turn_count AS user_message_count,
+        MAX(0, aggregate.observation_count - aggregate.user_turn_count - aggregate.system_context_count - aggregate.tool_event_count) AS other_event_count,
+        ${internalReviewCountSql('aggregate.logical_session_id')} AS internal_review_count,
+        ${sessionActivitySql('aggregate.logical_session_id')} AS session_activity,
+        ${activitySourceLabelSql('aggregate.logical_session_id')} AS activity_source_label,
+        ${parentSessionSql('aggregate.logical_session_id')} AS parent_session_id,
         logical.installation_id,
         installation.product_id,
         logical.project_id,
@@ -73,17 +172,7 @@ function legacyQuerySql(observationFilter: string, summaryFilter: string): strin
         logical.workspace_id,
         workspace.path AS workspace_path,
         logical.title,
-        (
-          SELECT payload_json
-          FROM observations AS first_user
-          WHERE first_user.logical_session_id = aggregate.logical_session_id
-            AND first_user.kind = 'message.user'
-          ORDER BY
-            COALESCE(first_user.occurred_at, first_user.captured_at) ASC,
-            COALESCE(first_user.canonical_sequence, first_user.source_sequence, ${MAX_SEQUENCE}) ASC,
-            first_user.id ASC
-          LIMIT 1
-        ) AS first_user_payload,
+        ${firstUserPayloadSql('aggregate.logical_session_id')} AS first_user_payload,
         (
           SELECT kind
           FROM observations AS first_content
@@ -131,11 +220,18 @@ export function sessionSummaryProjectionSelectSql(summaryFilter: string): string
         summary.ended_at,
         summary.observation_count,
         summary.user_message_count,
+        summary.user_turn_count,
+        summary.system_context_count,
+        summary.internal_review_count,
+        summary.other_event_count,
         summary.tool_count,
         summary.error_count,
         summary.first_user_payload,
         summary.leading_kind,
         summary.source_ids_json,
+        summary.session_activity,
+        summary.activity_source_label,
+        summary.parent_session_id,
         installation.product_id,
         logical.project_id,
         project.name AS project_name,
@@ -163,11 +259,18 @@ function rebuildInsertSql(sessionFilter: string): string {
       ended_at,
       observation_count,
       user_message_count,
+      user_turn_count,
+      system_context_count,
+      internal_review_count,
+      other_event_count,
       tool_count,
       error_count,
       first_user_payload,
       leading_kind,
       source_ids_json,
+      session_activity,
+      activity_source_label,
+      parent_session_id,
       rebuilt_at
     )
     SELECT
@@ -176,20 +279,14 @@ function rebuildInsertSql(sessionFilter: string): string {
       aggregate.started_at,
       aggregate.ended_at,
       aggregate.observation_count,
-      aggregate.user_message_count,
+      aggregate.user_turn_count,
+      aggregate.user_turn_count,
+      aggregate.system_context_count,
+      ${internalReviewCountSql('aggregate.logical_session_id')},
+      MAX(0, aggregate.observation_count - aggregate.user_turn_count - aggregate.system_context_count - aggregate.tool_event_count),
       aggregate.tool_count,
       aggregate.error_count,
-      (
-        SELECT payload_json
-        FROM observations AS first_user
-        WHERE first_user.logical_session_id = aggregate.logical_session_id
-          AND first_user.kind = 'message.user'
-        ORDER BY
-          COALESCE(first_user.occurred_at, first_user.captured_at) ASC,
-          COALESCE(first_user.canonical_sequence, first_user.source_sequence, ${MAX_SEQUENCE}) ASC,
-          first_user.id ASC
-        LIMIT 1
-      ) AS first_user_payload,
+      ${firstUserPayloadSql('aggregate.logical_session_id')},
       (
         SELECT kind
         FROM observations AS first_content
@@ -200,7 +297,7 @@ function rebuildInsertSql(sessionFilter: string): string {
           COALESCE(first_content.canonical_sequence, first_content.source_sequence, ${MAX_SEQUENCE}) ASC,
           first_content.id ASC
         LIMIT 1
-      ) AS leading_kind,
+      ),
       (
         SELECT json_group_array(source_id)
         FROM (
@@ -211,7 +308,10 @@ function rebuildInsertSql(sessionFilter: string): string {
           WHERE source_observation.logical_session_id = aggregate.logical_session_id
           ORDER BY source_session.source_id
         )
-      ) AS source_ids_json,
+      ),
+      ${sessionActivitySql('aggregate.logical_session_id')},
+      ${activitySourceLabelSql('aggregate.logical_session_id')},
+      ${parentSessionSql('aggregate.logical_session_id')},
       ? AS rebuilt_at
     FROM (
       SELECT
@@ -219,8 +319,10 @@ function rebuildInsertSql(sessionFilter: string): string {
         COALESCE(MIN(occurred_at), MIN(captured_at)) AS started_at,
         COALESCE(MAX(occurred_at), MAX(captured_at)) AS ended_at,
         COUNT(*) AS observation_count,
-        SUM(CASE WHEN kind = 'message.user' THEN 1 ELSE 0 END) AS user_message_count,
+        SUM(CASE WHEN ${REAL_USER_SQL} THEN 1 ELSE 0 END) AS user_turn_count,
+        SUM(CASE WHEN ${SYSTEM_CONTEXT_SQL} THEN 1 ELSE 0 END) AS system_context_count,
         SUM(CASE WHEN kind = 'tool.call' THEN 1 ELSE 0 END) AS tool_count,
+        SUM(CASE WHEN kind LIKE 'tool.%' THEN 1 ELSE 0 END) AS tool_event_count,
         SUM(CASE
           WHEN kind = 'tool.result' AND json_extract(payload_json, '$.success') = 0 THEN 1
           ELSE 0
@@ -236,11 +338,18 @@ function rebuildInsertSql(sessionFilter: string): string {
       ended_at = excluded.ended_at,
       observation_count = excluded.observation_count,
       user_message_count = excluded.user_message_count,
+      user_turn_count = excluded.user_turn_count,
+      system_context_count = excluded.system_context_count,
+      internal_review_count = excluded.internal_review_count,
+      other_event_count = excluded.other_event_count,
       tool_count = excluded.tool_count,
       error_count = excluded.error_count,
       first_user_payload = excluded.first_user_payload,
       leading_kind = excluded.leading_kind,
       source_ids_json = excluded.source_ids_json,
+      session_activity = excluded.session_activity,
+      activity_source_label = excluded.activity_source_label,
+      parent_session_id = excluded.parent_session_id,
       rebuilt_at = excluded.rebuilt_at
   `
 }
@@ -280,14 +389,22 @@ function summaryQueryWhere(input: SessionSummaryQuery): { sql: string; params: u
   if (input.hasErrors === false) conditions.push('summary.error_count = 0')
   const search = input.search?.trim().toLowerCase()
   if (search) {
-    conditions.push(`LOWER(
-      COALESCE(summary.title, '') || '\n' ||
-      COALESCE(summary.project_name, '') || '\n' ||
-      COALESCE(summary.workspace_path, '') || '\n' ||
-      COALESCE(summary.first_user_payload, '') || '\n' ||
-      COALESCE(summary.source_ids_json, '')
-    ) LIKE ?`)
-    params.push(`%${search}%`)
+    conditions.push(`(
+      LOWER(
+        COALESCE(summary.title, '') || '\n' ||
+        COALESCE(summary.project_name, '') || '\n' ||
+        COALESCE(summary.workspace_path, '') || '\n' ||
+        COALESCE(summary.first_user_payload, '') || '\n' ||
+        COALESCE(summary.source_ids_json, '') || '\n' ||
+        COALESCE(summary.activity_source_label, '')
+      ) LIKE ?
+      OR EXISTS (
+        SELECT 1 FROM observations AS search_event
+        WHERE search_event.logical_session_id = summary.logical_session_id
+          AND LOWER(COALESCE(search_event.payload_json, '')) LIKE ?
+      )
+    )`)
+    params.push(`%${search}%`, `%${search}%`)
   }
   if (input.after) {
     conditions.push('(summary.started_at < ? OR (summary.started_at = ? AND summary.logical_session_id > ?))')
@@ -337,12 +454,7 @@ export class SqliteSessionSummaryReader implements SessionSummaryProjectionStore
         const targetObservationExists = Boolean(this.executor.db.prepare(
           'SELECT 1 FROM observations WHERE logical_session_id = ? LIMIT 1',
         ).get(input.logicalSessionId))
-        if (!targetObservationExists) {
-          return { items: [], hasMore: false }
-        }
-        // The projection is globally available but this exact session can still be
-        // inside the debounced refresh window. Fall through to an exact canonical
-        // query for correctness; the steady-state path above remains indexed.
+        if (!targetObservationExists) return { items: [], hasMore: false }
       }
 
       const observationConditions: string[] = []

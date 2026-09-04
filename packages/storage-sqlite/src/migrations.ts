@@ -68,6 +68,11 @@ const migrations: readonly Migration[] = [
     name: 'observation-native-parent-tree',
     fileName: '012-observation-native-parent-tree.sql',
   },
+  {
+    version: 13,
+    name: 'session-activity-summary',
+    fileName: '013-session-activity-summary.sql',
+  },
 ]
 
 async function readMigrationSql(fileName: string): Promise<string> {

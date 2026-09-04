@@ -94,7 +94,9 @@ export type SessionRelationshipType =
   | 'resume'
   | 'continuation'
   | 'fork'
+  | 'branch-task'
   | 'subagent'
+  | 'internal-review'
   | 'import-copy'
   | 'related'
 

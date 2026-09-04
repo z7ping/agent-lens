@@ -69,6 +69,69 @@ export interface EvidenceCandidate {
   confidenceHint?: Confidence
 }
 
+/**
+ * 内容角色、实际作者、活动类型是互相独立的三个维度。
+ * `message.user` 只能用于 actualAuthor=human-user 且 contentRole=user-request 的内容。
+ */
+export type ContentRole =
+  | 'user-request'
+  | 'assistant-output'
+  | 'system-context'
+  | 'developer-context'
+  | 'application-context'
+  | 'runtime-context'
+  | 'internal-content'
+  | 'tool-content'
+  | 'other'
+
+export type ContentAuthor =
+  | 'human-user'
+  | 'assistant'
+  | 'system'
+  | 'developer'
+  | 'application'
+  | 'runtime'
+  | 'internal-service'
+  | 'tool'
+  | 'unknown'
+
+export type ActivityType =
+  | 'conversation'
+  | 'system-injection'
+  | 'transport-echo'
+  | 'permission-review'
+  | 'subagent'
+  | 'branch-task'
+  | 'tool'
+  | 'lifecycle'
+  | 'other'
+
+export type ContentOriginType =
+  | 'human-user'
+  | 'assistant'
+  | 'system'
+  | 'developer'
+  | 'application-injection'
+  | 'runtime-environment'
+  | 'internal-service'
+  | 'transport-echo'
+  | 'tool'
+  | 'unknown'
+
+export interface ContentProvenance {
+  contentRole: ContentRole
+  actualAuthor: ContentAuthor
+  activityType: ActivityType
+  originType: ContentOriginType
+  /** 原生协议中用于做出归属判断的权威信号。 */
+  sourceSignal: string
+  nativeRole?: string
+  injectedKind?: string
+  transportEcho?: boolean
+  nativeSessionId?: string
+  parentNativeSessionId?: string
+}
+
 export type ObservationKind =
   | 'session.lifecycle'
   | 'message.user'

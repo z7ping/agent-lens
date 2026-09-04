@@ -6,6 +6,7 @@ export type ReviewMessageRole = 'user' | 'assistant' | 'commentary' | 'reasoning
 export type ReviewEventCategory = 'permission' | 'subagent' | 'context' | 'model' | 'lifecycle' | 'artifact' | 'usage' | 'unknown'
 export type ReviewDetailFilter = 'all' | 'errors' | 'latency' | 'latest'
 export type ReviewDetailDirection = 'forward' | 'backward'
+export type ReviewSessionActivity = 'user-task' | 'branch-task' | 'subagent' | 'internal-review' | 'system-activity'
 
 export interface ReviewNodeSourceDto {
   nativeEventId?: string
@@ -30,10 +31,20 @@ export interface ReviewSessionSummaryDto {
   endedAt: string
   durationMs: number
   observationCount: number
+  /** 兼容字段：严格等于真实用户轮次。 */
   interactionCount: number
+  userTurnCount?: number
+  systemContextCount?: number
+  internalReviewCount?: number
+  otherEventCount?: number
   toolCount: number
   errorCount: number
   hasErrors: boolean
+  sessionActivity?: ReviewSessionActivity
+  activitySourceLabel?: string
+  parentSessionId?: string
+  /** 搜索命中系统/工具/审查内容时由服务端返回来源。 */
+  searchMatchSources?: Array<'title' | 'user' | 'system' | 'review' | 'tool' | 'other'>
 }
 
 export interface ReviewMessageNodeDto extends ReviewNodeSourceDto {
