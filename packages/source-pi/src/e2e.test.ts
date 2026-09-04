@@ -197,6 +197,36 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
         })
         return messages.length === 2
       })
+
+      // Pi 会按工作目录创建新的 Session 子目录。运行时必须能发现“新目录 + 新 JSONL”，
+      // 不能只覆盖启动时已经存在的文件继续追加这一种情况。
+      const freshTranscript = join(agentDir, 'sessions', 'fresh-project', 'fresh-session.jsonl')
+      await mkdir(dirname(freshTranscript), { recursive: true })
+      await writeFile(freshTranscript, `${[
+        {
+          type: 'session',
+          id: 'pi-session-fresh',
+          cwd: join(root, 'fresh-workspace'),
+          version: '1.0.0',
+          timestamp: '2026-08-20T11:01:00.000Z',
+        },
+        {
+          type: 'message',
+          id: 'pi-user-fresh',
+          parentId: null,
+          timestamp: '2026-08-20T11:01:01.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: 'new session while daemon is running' }] },
+        },
+      ].map(item => JSON.stringify(item)).join('\n')}\n`, 'utf8')
+
+      await waitFor(async () => {
+        const messages = await storage.repositories.observations.query({
+          installationId: historyResult.installationId,
+          kind: 'message.user',
+          limit: 20,
+        })
+        return messages.some(item => item.nativeEventId === 'pi-user-fresh')
+      })
     } finally {
       runtimeController.abort()
       await handle.dispose()
@@ -206,10 +236,11 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
       installationId: historyResult.installationId,
       limit: 100,
     })
-    assert.equal(facts.filter(item => item.kind === 'message.user').length, 2)
+    assert.equal(facts.filter(item => item.kind === 'message.user').length, 3)
     const continued = facts.find(item => item.nativeEventId === 'pi-user-2')
     assert.equal(continued?.nativeParentEventId, 'pi-result-1')
     assert.equal(continued?.parentObservationId, result.id)
+    assert.ok(facts.some(item => item.nativeEventId === 'pi-user-fresh'))
 
     storage.db.prepare(`UPDATE source_records SET parser_version = '4' WHERE source_id = 'pi'`).run()
     const replay = await history.sync({
