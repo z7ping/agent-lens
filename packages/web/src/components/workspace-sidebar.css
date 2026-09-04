@@ -180,14 +180,6 @@
   background: var(--al-soft-2);
 }
 
-.workspace-user {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 8px;
-  color: var(--al-muted);
-  font-size: 12px;
-}
 .workspace-user-avatar {
   display: grid;
   width: 30px;
@@ -199,7 +191,6 @@
   background: var(--al-surface);
   color: var(--al-ink-2);
 }
-.workspace-user > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .workspace-sidebar-footer > .ui-icon-button {
   border-color: transparent;
   background: transparent;
@@ -269,8 +260,6 @@
 
 @media (max-width: 767.98px) {
   .app-shell { grid-template-columns: 220px minmax(0, 1fr); }
-  .workspace-sidebar-brand-copy .release-version { display: none; }
-  .workspace-user > span:last-child { display: none; }
 }
 
 @media (max-width: 575.98px) {
