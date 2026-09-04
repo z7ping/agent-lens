@@ -17,6 +17,7 @@ export type UiIconName =
   | 'drag'
   | 'exclamation'
   | 'expand'
+  | 'filter'
   | 'moon'
   | 'plus'
   | 'refresh'
@@ -40,11 +41,12 @@ export function UiIcon({ name, size = 16, className, ...props }: UiIconProps) {
     if (name === 'refresh') return <><path d="M13 3v4H9"/><path d="M12.2 6A5 5 0 1 0 13 9"/></>
     if (name === 'close') return <path d="M4 4l8 8M12 4l-8 8"/>
     if (name === 'search') return <><circle cx="7" cy="7" r="3.5"/><path d="m9.7 9.7 3.3 3.3"/></>
+    if (name === 'filter') return <><path d="M2.8 4h10.4"/><path d="M4.8 8h6.4"/><path d="M6.6 12h2.8"/></>
     if (name === 'sort-up') return <path d="m4.5 9.5 3.5-3.5 3.5 3.5"/>
     if (name === 'sort-down') return <path d="m4.5 6.5 3.5 3.5 3.5-3.5"/>
     if (name === 'chevron-right') return <path d="m6 4.5 3.5 3.5L6 11.5"/>
     if (name === 'arrow-left') return <><path d="M13 8H4"/><path d="m7 5-3 3 3 3"/></>
-    if (name === 'arrow-right') return <><path d="M3 8h9"/><path d="m9 5 3 3-3 3"/></>
+    if (name === 'arrow-right') return <><path d="M3 8h9"/><path d="m9 5 3-3 3 3"/></>
     if (name === 'arrow-up') return <><path d="M8 13V4"/><path d="m5 7 3-3 3 3"/></>
     if (name === 'arrow-down') return <><path d="M8 3v9"/><path d="m5 9 3 3 3-3"/></>
     if (name === 'send') return <><path d="M8 13V4"/><path d="m4.5 7.5 3.5-3.5 3.5 3.5"/></>
