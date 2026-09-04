@@ -48,10 +48,28 @@ export class SqliteSessionRelationshipCandidateRepository {
       candidate.fromNativeSessionId,
       candidate.toNativeSessionId,
       candidate.nativeParentEventId ?? '',
-      candidate.type ?? '',
       candidate.nativeRelation ?? '',
     ])
     await this.executor.run(() => {
+      // 一对原生会话只保留当前 Parser 判定出的主关系，避免 replay 后同时残留 related/subagent/internal-review。
+      this.executor.db.prepare(`
+        DELETE FROM session_relationship_candidates
+        WHERE source_id = ? AND installation_id = ?
+          AND COALESCE(runtime_profile_id, '') = ?
+          AND from_native_session_id = ? AND to_native_session_id = ?
+          AND COALESCE(native_parent_event_id, '') = ?
+          AND COALESCE(native_relation, '') = ?
+          AND id != ?
+      `).run(
+        candidate.sourceId,
+        candidate.installationId,
+        candidate.runtimeProfileId ?? '',
+        candidate.fromNativeSessionId,
+        candidate.toNativeSessionId,
+        candidate.nativeParentEventId ?? '',
+        candidate.nativeRelation ?? '',
+        id,
+      )
       this.executor.db.prepare(`
         INSERT INTO session_relationship_candidates(
           id, source_id, installation_id, runtime_profile_id,
@@ -102,6 +120,10 @@ export class SqliteSessionRelationshipCandidateRepository {
         evidenceRefs: candidate.evidenceRefs ?? [],
         confidence: candidate.confidence,
       }
+      this.executor.db.prepare(`
+        DELETE FROM session_relationships
+        WHERE from_session_id = ? AND to_session_id = ? AND type != ?
+      `).run(relationship.fromSessionId, relationship.toSessionId, type)
       this.executor.db.prepare(`
         INSERT INTO session_relationships(
           id, from_session_id, to_session_id, type, evidence_refs_json, confidence
