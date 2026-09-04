@@ -123,5 +123,45 @@ export function withSqliteObservationPagination(
       if (query.order !== 'desc' && !query.before) return base.query(query)
       return reverseQuery(executor, query)
     },
+    async removeDerivationsForSourceRecord(sourceRecordId) {
+      return executor.run(() => {
+        const rows = executor.db.prepare(`
+          SELECT DISTINCT oe.observation_id AS observationId
+          FROM observation_evidence oe
+          JOIN evidence e ON e.id = oe.evidence_id
+          WHERE e.source_record_id = ?
+        `).all(sourceRecordId) as Array<{ observationId: string }>
+        if (!rows.length) return 0
+
+        const ids = rows.map(row => row.observationId)
+        const placeholders = ids.map(() => '?').join(', ')
+        executor.db.prepare(`
+          DELETE FROM observation_evidence
+          WHERE observation_id IN (${placeholders})
+            AND evidence_id IN (SELECT id FROM evidence WHERE source_record_id = ?)
+        `).run(...ids, sourceRecordId)
+
+        // Evidence/SourceRecord are immutable provenance. Only orphaned derived observations are removed.
+        // 012 uses a self-reference without ON DELETE; unlink children before deleting stale parents.
+        executor.db.prepare(`
+          UPDATE observations
+          SET parent_observation_id = NULL
+          WHERE parent_observation_id IN (${placeholders})
+            AND NOT EXISTS (
+              SELECT 1 FROM observation_evidence oe
+              WHERE oe.observation_id = observations.parent_observation_id
+            )
+        `).run(...ids)
+        const result = executor.db.prepare(`
+          DELETE FROM observations
+          WHERE id IN (${placeholders})
+            AND NOT EXISTS (
+              SELECT 1 FROM observation_evidence oe
+              WHERE oe.observation_id = observations.id
+            )
+        `).run(...ids)
+        return Number(result.changes)
+      })
+    },
   }
 }
