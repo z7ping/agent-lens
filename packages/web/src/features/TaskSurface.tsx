@@ -1,4 +1,18 @@
-import { createContext, forwardRef, useContext, useMemo, useState, type HTMLAttributes, type PropsWithChildren } from 'react'
+import { createPortal } from 'react-dom'
+import {
+  createContext,
+  forwardRef,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ForwardedRef,
+  type HTMLAttributes,
+  type PropsWithChildren,
+} from 'react'
+import '../task-turn-rail.css'
 
 export type TaskSurfaceMode = 'review' | 'live' | 'hub' | 'new'
 
@@ -9,6 +23,20 @@ export interface TaskSurfaceProps extends HTMLAttributes<HTMLElement> {
 interface TaskSurfaceViewValue {
   showUsageDetails: boolean
   setShowUsageDetails(value: boolean): void
+}
+
+interface TaskTurnRailItem {
+  id: string
+  label: string
+  error: boolean
+  state: string
+  element: HTMLElement
+}
+
+interface TaskTurnRailPosition {
+  left: number
+  top: number
+  maxHeight: number
 }
 
 const TaskSurfaceViewContext = createContext<TaskSurfaceViewValue>({
@@ -26,19 +54,205 @@ function TaskSurfaceViewProvider({ children }: PropsWithChildren) {
   return <TaskSurfaceViewContext.Provider value={value}>{children}</TaskSurfaceViewContext.Provider>
 }
 
+function setForwardedRef<T>(ref: ForwardedRef<T>, value: T | null) {
+  if (typeof ref === 'function') {
+    ref(value)
+    return
+  }
+  if (ref) ref.current = value
+}
+
+function scrollViewport(root: HTMLElement, element: HTMLElement): HTMLElement {
+  let current: HTMLElement | null = element.parentElement
+  while (current && (current === root || root.contains(current))) {
+    const style = window.getComputedStyle(current)
+    const overflow = `${style.overflowY} ${style.overflow}`
+    if (/(auto|scroll|overlay)/.test(overflow) && current.scrollHeight > current.clientHeight + 1) return current
+    if (current === root) break
+    current = current.parentElement
+  }
+  return root
+}
+
+function collectTurnRailItems(root: HTMLElement): TaskTurnRailItem[] {
+  const result: TaskTurnRailItem[] = []
+  const seen = new Set<string>()
+  const elements = root.querySelectorAll<HTMLElement>('.virtual-round-shell[data-interaction-id], .task-round[data-interaction-id]')
+  for (const element of elements) {
+    const id = element.dataset.interactionId?.trim()
+    if (!id || seen.has(id)) continue
+    seen.add(id)
+
+    const round = element.matches('.task-round')
+      ? element
+      : element.querySelector<HTMLElement>('.task-round[data-interaction-id]')
+    const label = element.dataset.roundLabel?.trim()
+      || round?.querySelector<HTMLElement>('.task-round-label')?.textContent?.trim()
+      || (id.includes('background') ? '后台活动' : `第 ${result.length + 1} 轮`)
+    const error = element.dataset.roundError === 'true' || round?.classList.contains('task-round-has-error') === true
+    const state = element.dataset.roundState?.trim() || round?.dataset.taskRoundState?.trim() || 'settled'
+    result.push({ id, label, error, state, element })
+  }
+  return result
+}
+
+function sameTurnRailItems(left: TaskTurnRailItem[], right: TaskTurnRailItem[]): boolean {
+  if (left.length !== right.length) return false
+  return left.every((item, index) => {
+    const next = right[index]
+    return Boolean(next)
+      && item.id === next.id
+      && item.label === next.label
+      && item.error === next.error
+      && item.state === next.state
+      && item.element === next.element
+  })
+}
+
 /**
  * 任务详情的统一表现宿主。
  *
  * Review / Live / Hub 是 Task Surface 的状态与数据来源，不是不同的产品页面。
- * 当前先建立稳定宿主边界；后续逐步把 ReviewPage / PiLivePage 内部的 Round、Message、
- * Thinking、Tool 等表现组件迁入此边界，直到删除两套详情树和 CSS 隐藏适配。
+ * Task Surface 同时持有跨状态共享的轮次导轨：只要正文使用 TaskRound / VirtualRoundMount，
+ * 历史复盘和实时任务就会得到同一套轮次定位、活动态与错误态导航。
  */
 export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function TaskSurface(
   { mode, className, children, ...props },
   ref,
 ) {
+  const rootRef = useRef<HTMLElement>(null)
+  const railItemsRef = useRef<TaskTurnRailItem[]>([])
+  const frameRef = useRef<number | null>(null)
+  const [railItems, setRailItems] = useState<TaskTurnRailItem[]>([])
+  const [activeRoundId, setActiveRoundId] = useState('')
+  const [railPosition, setRailPosition] = useState<TaskTurnRailPosition | null>(null)
   const classes = ['task-surface', `task-surface-${mode}`, className].filter(Boolean).join(' ')
+
+  const setRoot = useCallback((node: HTMLElement | null) => {
+    rootRef.current = node
+    setForwardedRef(ref, node)
+  }, [ref])
+
+  const updateRailViewport = useCallback(() => {
+    const root = rootRef.current
+    const items = railItemsRef.current
+    if (!root || items.length < 2) {
+      setRailPosition(null)
+      return
+    }
+
+    const viewport = scrollViewport(root, items[0]!.element)
+    const viewportRect = viewport.getBoundingClientRect()
+    if (viewportRect.width <= 0 || viewportRect.height <= 0) {
+      setRailPosition(null)
+      return
+    }
+
+    const anchorY = viewportRect.top + Math.min(Math.max(viewportRect.height * .3, 72), 190)
+    let active = items[0]!
+    let nearestDistance = Number.POSITIVE_INFINITY
+    for (const item of items) {
+      const rect = item.element.getBoundingClientRect()
+      if (rect.top <= anchorY && rect.bottom >= anchorY) {
+        active = item
+        nearestDistance = 0
+        break
+      }
+      const distance = Math.abs(rect.top - anchorY)
+      if (distance < nearestDistance) {
+        nearestDistance = distance
+        active = item
+      }
+    }
+
+    setActiveRoundId(current => current === active.id ? current : active.id)
+    const nextPosition = {
+      left: viewportRect.left + 10,
+      top: viewportRect.top + viewportRect.height / 2,
+      maxHeight: Math.max(96, viewportRect.height - 24),
+    }
+    setRailPosition(current => current
+      && Math.abs(current.left - nextPosition.left) < .5
+      && Math.abs(current.top - nextPosition.top) < .5
+      && Math.abs(current.maxHeight - nextPosition.maxHeight) < .5
+      ? current
+      : nextPosition)
+  }, [])
+
+  const scheduleRailViewport = useCallback(() => {
+    if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current)
+    frameRef.current = window.requestAnimationFrame(() => {
+      frameRef.current = null
+      updateRailViewport()
+    })
+  }, [updateRailViewport])
+
+  const scanRounds = useCallback(() => {
+    const root = rootRef.current
+    if (!root) return
+    const next = collectTurnRailItems(root)
+    railItemsRef.current = next
+    setRailItems(current => sameTurnRailItems(current, next) ? current : next)
+    scheduleRailViewport()
+  }, [scheduleRailViewport])
+
+  useEffect(() => {
+    const root = rootRef.current
+    if (!root || typeof MutationObserver === 'undefined') return
+    scanRounds()
+
+    const observer = new MutationObserver(scanRounds)
+    observer.observe(root, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['data-interaction-id', 'data-round-label', 'data-round-error', 'data-round-state', 'data-mounted', 'open'],
+    })
+    root.addEventListener('scroll', scheduleRailViewport, true)
+    window.addEventListener('resize', scheduleRailViewport)
+    return () => {
+      observer.disconnect()
+      root.removeEventListener('scroll', scheduleRailViewport, true)
+      window.removeEventListener('resize', scheduleRailViewport)
+      if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current)
+      frameRef.current = null
+    }
+  }, [scanRounds, scheduleRailViewport])
+
+  const jumpToRound = (item: TaskTurnRailItem) => {
+    const reducedMotion = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    item.element.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'center' })
+    setActiveRoundId(item.id)
+  }
+
+  const rail = railItems.length > 1 && railPosition && typeof document !== 'undefined'
+    ? createPortal(
+        <nav
+          className={`turn-rail task-turn-rail task-turn-rail-${mode}`}
+          aria-label="轮次导轨"
+          style={{ left: railPosition.left, top: railPosition.top, maxHeight: railPosition.maxHeight }}
+        >
+          {railItems.map(item => {
+            const active = item.id === activeRoundId
+            const running = item.state === 'running'
+            const tip = `${item.label}${running ? ' · 进行中' : ''}${item.error ? ' · 有错误' : ''}`
+            return <button
+              key={item.id}
+              type="button"
+              className={`turn-tick ${active ? 'active' : ''} ${item.error ? 'err' : ''} ${running ? 'running' : ''}`.trim()}
+              data-tip={tip}
+              aria-label={`跳到${tip}`}
+              aria-current={active ? 'step' : undefined}
+              onClick={() => jumpToRound(item)}
+            ><i/></button>
+          })}
+        </nav>,
+        document.body,
+      )
+    : null
+
   return <TaskSurfaceViewProvider>
-    <section ref={ref} className={classes} data-task-surface-mode={mode} {...props}>{children}</section>
+    <section ref={setRoot} className={classes} data-task-surface-mode={mode} {...props}>{children}</section>
+    {rail}
   </TaskSurfaceViewProvider>
 })
