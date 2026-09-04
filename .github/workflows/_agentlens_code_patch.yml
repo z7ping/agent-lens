@@ -21,7 +21,7 @@ jobs:
         with:
           node-version: '22.23.0'
           cache: npm
-      - name: Patch Review projection and presentation
+      - name: Patch attribution code
         shell: python
         run: |
           from pathlib import Path
@@ -49,6 +49,51 @@ jobs:
           if expected != 2:
               raise SystemExit(f'projection replacements={expected}, expected=2')
           projection.write_text(text, encoding='utf-8')
+
+          summary = Path('packages/storage-sqlite/src/session-summaries.ts')
+          text = summary.read_text(encoding='utf-8')
+          relationship_helpers = '''function parentSessionSql(sessionIdSql: string): string {
+            return `(
+              SELECT relation.from_session_id
+              FROM session_relationships AS relation
+              WHERE relation.to_session_id = ${sessionIdSql}
+                AND relation.type IN ('task-root', 'internal-review', 'subagent', 'branch-task', 'fork', 'related')
+              ORDER BY CASE relation.type
+                WHEN 'task-root' THEN 0
+                WHEN 'internal-review' THEN 1
+                WHEN 'subagent' THEN 2
+                WHEN 'branch-task' THEN 3
+                WHEN 'fork' THEN 4
+                ELSE 5 END,
+                relation.id
+              LIMIT 1
+            )`
+          }
+
+          function internalReviewCountSql(sessionIdSql: string): string {
+            return `(
+              SELECT COUNT(DISTINCT review_relation.to_session_id)
+              FROM session_relationships AS review_relation
+              WHERE review_relation.from_session_id = ${sessionIdSql}
+                AND (
+                  review_relation.type = 'internal-review'
+                  OR (
+                    review_relation.type = 'task-root'
+                    AND EXISTS (
+                      SELECT 1
+                      FROM observations AS review_activity
+                      WHERE review_activity.logical_session_id = review_relation.to_session_id
+                        AND review_activity.kind = 'session.lifecycle'
+                        AND json_extract(review_activity.payload_json, '$.sessionActivity') = 'internal-review'
+                    )
+                  )
+                )
+            )`
+          }
+
+          '''
+          text = replace_between(text, 'function parentSessionSql', 'function legacyQuerySql', relationship_helpers + 'function legacyQuerySql')
+          summary.write_text(text, encoding='utf-8')
 
           review = Path('packages/web/src/features/ReviewPage.tsx')
           text = review.read_text(encoding='utf-8')
@@ -179,7 +224,7 @@ jobs:
         run: |
           git config user.name "agent-lens-bot"
           git config user.email "agent-lens-bot@users.noreply.github.com"
-          git add packages/projection-review/src/projection.ts packages/web/src/features/ReviewPage.tsx
+          git add packages/projection-review/src/projection.ts packages/storage-sqlite/src/session-summaries.ts packages/web/src/features/ReviewPage.tsx
           git diff --cached --check
-          git commit -m "fix: 收口系统活动正文与轮次语义"
+          git commit -m "fix: 收口系统活动正文与根任务审查统计"
           git push origin HEAD:fix/alpha3-codex-provenance-activity
