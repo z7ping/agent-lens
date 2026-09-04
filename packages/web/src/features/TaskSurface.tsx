@@ -67,7 +67,7 @@ function scrollViewport(root: HTMLElement, element: HTMLElement): HTMLElement {
   while (current && (current === root || root.contains(current))) {
     const style = window.getComputedStyle(current)
     const overflow = `${style.overflowY} ${style.overflow}`
-    if (/(auto|scroll|overlay)/.test(overflow) && current.scrollHeight > current.clientHeight + 1) return current
+    if (/(auto|scroll|overlay)/.test(overflow)) return current
     if (current === root) break
     current = current.parentElement
   }
@@ -136,7 +136,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
   const updateRailViewport = useCallback(() => {
     const root = rootRef.current
     const items = railItemsRef.current
-    if (!root || items.length < 2) {
+    if (!root || items.length === 0) {
       setRailPosition(null)
       return
     }
@@ -225,7 +225,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
     setActiveRoundId(item.id)
   }
 
-  const rail = railItems.length > 1 && railPosition && typeof document !== 'undefined'
+  const rail = railItems.length > 0 && railPosition && typeof document !== 'undefined'
     ? createPortal(
         <nav
           className={`turn-rail task-turn-rail task-turn-rail-${mode}`}
