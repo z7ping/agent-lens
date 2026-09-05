@@ -35,14 +35,19 @@ const applyDataRuntimeStorage = Object.assign(
       nodeId: ctx.node.identity.nodeId,
     }
     const writer = new DataRuntimeClient({ ...common, role: 'writer' })
-    const reader = new DataRuntimeClient({ ...common, role: 'reader' })
+    // SQLite :memory: is connection-local. Reuse the writer client in tests/dev
+    // rather than creating a second empty database that cannot observe writes.
+    const reader = config.path === ':memory:'
+      ? writer
+      : new DataRuntimeClient({ ...common, role: 'reader' })
 
     try {
       // Writer owns schema migration and is the only writable SQLite connection.
       await writer.start()
       // Reader opens only after writer migration completed, so it never races schema creation.
-      await reader.start()
+      if (reader !== writer) await reader.start()
       const runtime = createDataRuntimeStorage(writer, reader)
+      runtime.dataRuntime.startRecovery()
       const unprovideDataRuntime = ctx.provide('dataRuntime', runtime.dataRuntime)
       const unprovideStorage = ctx.provide('storage', runtime.storage)
       const unprovideUnifiedRead = ctx.provide('unifiedRead', runtime.unifiedRead)
@@ -54,7 +59,7 @@ const applyDataRuntimeStorage = Object.assign(
         await runtime.dataRuntime.shutdown()
       }
     } catch (error) {
-      await reader.shutdown().catch(() => undefined)
+      if (reader !== writer) await reader.shutdown().catch(() => undefined)
       await writer.shutdown().catch(() => undefined)
       throw error
     }
