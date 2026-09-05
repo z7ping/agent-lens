@@ -144,8 +144,8 @@ export function AgentScope({ agents, value, onChange, allLabel = '全部智能�
       <AgentIcon sourceId={agent.sourceId} />
       <span className="agent-scope-option-name">{agentLabel(agent.sourceId, agent.displayName)}</span>
       <span className="agent-scope-order-actions">
-        <button type="button" disabled={index === 0} onClick={() => moveBy(agent.sourceId, -1)} aria-label={`${agentLabel(agent.sourceId, agent.displayName)}上移`}><UiIcon name="sort-up" size={14}/></button>
-        <button type="button" disabled={index === orderedAgents.length - 1} onClick={() => moveBy(agent.sourceId, 1)} aria-label={`${agentLabel(agent.sourceId, agent.displayName)}下移`}><UiIcon name="sort-down" size={14}/></button>
+        <button type="button" disabled={index === 0} onClick={() => moveBy(agent.sourceId, -1)} aria-label={`${agentLabel(agent.sourceId, agent.displayName)}上移`}><UiIcon name="arrow-big-up" size={14}/></button>
+        <button type="button" disabled={index === orderedAgents.length - 1} onClick={() => moveBy(agent.sourceId, 1)} aria-label={`${agentLabel(agent.sourceId, agent.displayName)}下移`}><UiIcon name="arrow-big-down" size={14}/></button>
       </span>
       <span className={`agent-scope-option-state ${agent.detected ? 'is-detected' : ''}`}>{agent.detected ? '已检测' : '未检测'}</span>
     </div>) : <div className="agent-scope-empty">暂未发现智能体</div>}
