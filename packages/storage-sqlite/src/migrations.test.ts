@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { SqliteStorageService } from './storage'
 
-test('storage migrations include replay, diagnostics and maintenance projections', async () => {
+test('storage migrations keep heavy indexes out of startup and maintenance creates them later', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   try {
     await storage.migrate()
@@ -13,22 +13,40 @@ test('storage migrations include replay, diagnostics and maintenance projections
     assert.equal(migrations.at(-1)?.version, 19)
     assert.equal(migrations.at(-1)?.name, 'source-record-payload-compression')
 
-    const indexes = storage.db.prepare("PRAGMA index_list('observations')").all() as Array<{ name: string }>
-    const names = new Set(indexes.map(item => item.name))
-    assert.ok(names.has('idx_observations_kind_timeline_order'))
-    assert.ok(names.has('idx_observations_installation_kind_timeline_order'))
-    assert.ok(names.has('idx_observations_source_native_event'))
-    assert.ok(names.has('idx_observations_source_native_parent'))
-    assert.ok(names.has('idx_observations_parent'))
-    assert.ok(names.has('idx_observations_captured_at'))
+    const indexesBefore = storage.db.prepare("PRAGMA index_list('observations')").all() as Array<{ name: string }>
+    const namesBefore = new Set(indexesBefore.map(item => item.name))
+    assert.ok(namesBefore.has('idx_observations_kind_timeline_order'))
+    assert.ok(namesBefore.has('idx_observations_installation_kind_timeline_order'))
+    assert.ok(namesBefore.has('idx_observations_source_native_event'))
+    assert.ok(namesBefore.has('idx_observations_source_native_parent'))
+    assert.ok(namesBefore.has('idx_observations_parent'))
+    assert.equal(namesBefore.has('idx_observations_captured_at'), false)
 
-    const evidenceIndexes = storage.db.prepare("PRAGMA index_list('evidence')").all() as Array<{ name: string }>
-    assert.ok(evidenceIndexes.some(index => index.name === 'idx_evidence_captured_at'))
+    const evidenceIndexesBefore = storage.db.prepare("PRAGMA index_list('evidence')").all() as Array<{ name: string }>
+    assert.equal(evidenceIndexesBefore.some(index => index.name === 'idx_evidence_captured_at'), false)
 
-    const sourceRecordIndexes = storage.db.prepare("PRAGMA index_list('source_records')")
+    const sourceRecordIndexesBefore = storage.db.prepare("PRAGMA index_list('source_records')")
       .all() as Array<{ name: string }>
-    assert.ok(sourceRecordIndexes.some(index => index.name === 'idx_source_records_parser_replay'))
-    assert.ok(sourceRecordIndexes.some(index => index.name === 'idx_source_records_payload_compression_pending'))
+    assert.equal(sourceRecordIndexesBefore.some(index => index.name === 'idx_source_records_parser_replay'), false)
+    assert.equal(sourceRecordIndexesBefore.some(index => index.name === 'idx_source_records_payload_compression_pending'), false)
+
+    const ensured = await storage.maintenance.ensureDeferredIndexes()
+    assert.deepEqual(new Set(ensured.created), new Set([
+      'idx_source_records_parser_replay',
+      'idx_observations_captured_at',
+      'idx_evidence_captured_at',
+      'idx_source_records_payload_compression_pending',
+    ]))
+
+    const indexesAfter = storage.db.prepare("PRAGMA index_list('observations')").all() as Array<{ name: string }>
+    assert.ok(indexesAfter.some(index => index.name === 'idx_observations_captured_at'))
+    const evidenceIndexesAfter = storage.db.prepare("PRAGMA index_list('evidence')").all() as Array<{ name: string }>
+    assert.ok(evidenceIndexesAfter.some(index => index.name === 'idx_evidence_captured_at'))
+    const sourceRecordIndexesAfter = storage.db.prepare("PRAGMA index_list('source_records')")
+      .all() as Array<{ name: string }>
+    assert.ok(sourceRecordIndexesAfter.some(index => index.name === 'idx_source_records_parser_replay'))
+    assert.ok(sourceRecordIndexesAfter.some(index => index.name === 'idx_source_records_payload_compression_pending'))
+
     const sourceRecordColumns = storage.db.prepare("PRAGMA table_info('source_records')")
       .all() as Array<{ name: string }>
     assert.ok(sourceRecordColumns.some(column => column.name === 'payload_encoding'))
