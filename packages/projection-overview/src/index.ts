@@ -2,6 +2,8 @@ import type {
   AssetInventoryEntry,
   CapabilityService,
   CapturePolicyService,
+  ObservationCursor,
+  SessionSummaryCursor,
   SourceService,
   StorageService,
 } from '@agent-lens/core'
@@ -16,6 +18,9 @@ import {
   type SessionRelationshipDto,
   type SessionRelationshipResponseDto,
 } from '@agent-lens/protocol'
+
+const FACET_SESSION_PAGE_SIZE = 500
+const FACET_OBSERVATION_PAGE_SIZE = 5000
 
 function latestStates(entry: AssetInventoryEntry): AgentAssetStateDto[] {
   const latest = new Map<string, AgentAssetStateDto>()
@@ -33,6 +38,63 @@ function latestStates(entry: AssetInventoryEntry): AgentAssetStateDto[] {
 
 function sourceEnabled(policy: CapturePolicyService | undefined, sourceId: string): boolean {
   return policy ? policy.isSourceEnabled(sourceId) : true
+}
+
+function updateFacetRange(range: { from?: string; to?: string }, from: string, to = from): void {
+  if (!range.from || from < range.from) range.from = from
+  if (!range.to || to > range.to) range.to = to
+}
+
+async function loadFacetScope(storage: StorageService): Promise<{
+  projectIds: string[]
+  from?: string
+  to?: string
+}> {
+  const projectIds = new Set<string>()
+  const range: { from?: string; to?: string } = {}
+
+  if (storage.sessionSummaries) {
+    let after: SessionSummaryCursor | undefined
+    while (true) {
+      const page = await storage.sessionSummaries.query({
+        limit: FACET_SESSION_PAGE_SIZE,
+        ...(after ? { after } : {}),
+      })
+      for (const session of page.items) {
+        if (session.projectId) projectIds.add(session.projectId)
+        updateFacetRange(range, session.startedAt, session.endedAt)
+      }
+      if (!page.hasMore) break
+      const last = page.items.at(-1)
+      if (!last) break
+      after = { activeAt: last.endedAt, logicalSessionId: last.logicalSessionId }
+    }
+    return { projectIds: [...projectIds], ...range }
+  }
+
+  let after: ObservationCursor | undefined
+  while (true) {
+    const observations = await storage.repositories.observations.query({
+      order: 'asc',
+      ...(after ? { after } : {}),
+      limit: FACET_OBSERVATION_PAGE_SIZE,
+    })
+    if (!observations.length) break
+    for (const observation of observations) {
+      if (observation.projectId) projectIds.add(observation.projectId)
+      const at = observation.occurredAt ?? observation.capturedAt
+      updateFacetRange(range, at)
+    }
+    if (observations.length < FACET_OBSERVATION_PAGE_SIZE) break
+    const last = observations.at(-1)!
+    const sequence = last.canonicalSequence ?? last.sourceSequence
+    after = {
+      effectiveAt: last.occurredAt ?? last.capturedAt,
+      ...(sequence === undefined ? {} : { sequence }),
+      id: last.id,
+    }
+  }
+  return { projectIds: [...projectIds], ...range }
 }
 
 export class FacetProjection {
@@ -57,18 +119,16 @@ export class FacetProjection {
       }
     }))
 
-    const observations = await this.storage.repositories.observations.query({ limit: 5000 })
-    const projectIds = [...new Set(observations.map(item => item.projectId).filter((id): id is string => Boolean(id)))]
-    const projects = (await Promise.all(projectIds.map(id => this.storage.repositories.sessions.getProject(id))))
+    const scope = await loadFacetScope(this.storage)
+    const projects = (await Promise.all(scope.projectIds.map(id => this.storage.repositories.sessions.getProject(id))))
       .filter((item): item is NonNullable<typeof item> => Boolean(item))
       .map(item => ({ id: item.id, ...(item.name ? { name: item.name } : {}), ...(item.repositoryIdentity ? { repositoryIdentity: item.repositoryIdentity } : {}) }))
       .sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id))
-    const times = observations.map(item => item.occurredAt ?? item.capturedAt).sort()
 
     return {
       agents: agents.sort((a, b) => a.displayName.localeCompare(b.displayName)),
       projects,
-      dateRange: { ...(times[0] ? { from: times[0] } : {}), ...(times.at(-1) ? { to: times.at(-1)! } : {}) },
+      dateRange: { ...(scope.from ? { from: scope.from } : {}), ...(scope.to ? { to: scope.to } : {}) },
       meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION, generatedAt: new Date().toISOString() },
     }
   }
