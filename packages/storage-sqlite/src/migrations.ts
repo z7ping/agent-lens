@@ -26,6 +26,7 @@ const migrations: readonly Migration[] = [
   { version: 16, name: 'health-diagnostics-time-indexes', fileName: '016-health-diagnostics-time-indexes.sql' },
   { version: 17, name: 'unknown-observation-projection', fileName: '017-unknown-observation-projection.sql' },
   { version: 18, name: 'tool-usage-fact-projection', fileName: '018-tool-usage-fact-projection.sql' },
+  { version: 19, name: 'source-record-payload-compression', fileName: '019-source-record-payload-compression.sql' },
 ]
 
 async function readMigrationSql(fileName: string): Promise<string> {
