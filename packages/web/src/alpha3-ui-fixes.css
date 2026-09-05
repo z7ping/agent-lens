@@ -215,13 +215,18 @@
     z-index: 90;
     width: min(88vw, 316px);
     max-width: calc(100vw - 36px);
+    visibility: hidden;
+    pointer-events: none;
     transform: translateX(-102%);
     box-shadow: 16px 0 40px rgb(15 23 42 / .18);
-    transition: transform .18s cubic-bezier(.2, .8, .2, 1);
+    transition: transform .18s cubic-bezier(.2, .8, .2, 1), visibility 0s linear .18s;
   }
 
   .workspace-sidebar.is-mobile-open {
+    visibility: visible;
+    pointer-events: auto;
     transform: translateX(0);
+    transition: transform .18s cubic-bezier(.2, .8, .2, 1), visibility 0s linear 0s;
   }
 
   .workspace-mobile-backdrop {
