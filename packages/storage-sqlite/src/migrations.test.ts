@@ -10,8 +10,8 @@ test('storage migrations keep heavy indexes out of startup and maintenance creat
     const migrations = storage.db.prepare(
       'SELECT version, name FROM schema_migrations ORDER BY version',
     ).all() as Array<{ version: number; name: string }>
-    assert.equal(migrations.at(-1)?.version, 19)
-    assert.equal(migrations.at(-1)?.name, 'source-record-payload-compression')
+    assert.equal(migrations.at(-1)?.version, 20)
+    assert.equal(migrations.at(-1)?.name, 'checkpoint-revision')
 
     const indexesBefore = storage.db.prepare("PRAGMA index_list('observations')").all() as Array<{ name: string }>
     const namesBefore = new Set(indexesBefore.map(item => item.name))
@@ -51,6 +51,15 @@ test('storage migrations keep heavy indexes out of startup and maintenance creat
       .all() as Array<{ name: string }>
     assert.ok(sourceRecordColumns.some(column => column.name === 'payload_encoding'))
     assert.ok(sourceRecordColumns.some(column => column.name === 'payload_blob'))
+    const checkpointColumns = storage.db.prepare("PRAGMA table_info('source_checkpoints')")
+      .all() as Array<{ name: string }>
+    assert.ok(checkpointColumns.some(column => column.name === 'revision'))
+
+    const checkpointTriggers = storage.db.prepare(`
+      SELECT name FROM sqlite_master
+      WHERE type = 'trigger' AND name = 'trg_source_checkpoint_revision_guard'
+    `).all() as Array<{ name: string }>
+    assert.equal(checkpointTriggers.length, 1)
 
     const projectionTables = storage.db.prepare(`
       SELECT name FROM sqlite_master
