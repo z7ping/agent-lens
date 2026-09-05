@@ -20,7 +20,7 @@ function record(entry: unknown, sourceSequence: number): SourceRecord {
     capturedAt: '2026-09-05T06:00:01.000Z',
     locator: { kind: 'file', path: '/safe/rollout.jsonl', offset: sourceSequence },
     payload: { entry, session: { nativeSessionId: 'thread-root', cwd: '/safe/project' } },
-    parserVersion: '13',
+    parserVersion: '14',
   }
 }
 
@@ -39,6 +39,19 @@ test('event_msg.agent_message becomes canonical assistant output instead of back
   assert.equal((fact.payload as any).provenance.sourceSignal, 'event_msg.agent_message')
 })
 
+test('legacy raw reasoning is visible Thinking rather than background unknown', async () => {
+  const output = await normalizeCurrentCodexRecord(record({
+    type: 'event_msg',
+    payload: { type: 'agent_reasoning_raw_content', text: 'source-visible raw reasoning' },
+  }, 2), ctx)
+
+  const fact = output.observations[0]!
+  assert.equal(fact.kind, 'message.reasoning')
+  assert.equal((fact.payload as any).text, 'source-visible raw reasoning')
+  assert.equal((fact.payload as any).rawReasoning, true)
+  assert.equal((fact.payload as any).sourceSignal, 'event_msg.agent_reasoning_raw_content')
+})
+
 test('legacy response_item assistant remains readable for old Codex rollouts', async () => {
   const output = await normalizeCurrentCodexRecord(record({
     type: 'response_item',
@@ -46,7 +59,7 @@ test('legacy response_item assistant remains readable for old Codex rollouts', a
       type: 'message', role: 'assistant', phase: 'final_answer',
       content: [{ type: 'output_text', text: '旧版正常回复' }],
     },
-  }, 2), ctx)
+  }, 3), ctx)
 
   const fact = output.observations[0]!
   assert.equal(fact.kind, 'message.assistant')
@@ -58,7 +71,7 @@ test('agent_message without visible text stays on the original unknown fallback 
   const output = await normalizeCurrentCodexRecord(record({
     type: 'event_msg',
     payload: { type: 'agent_message', message: '' },
-  }, 3), ctx)
+  }, 4), ctx)
 
   assert.equal(output.observations[0]?.kind, 'unknown')
 })
