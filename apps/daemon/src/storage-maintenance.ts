@@ -1,3 +1,5 @@
+import type { JsonValue } from '@agent-lens/core'
+
 export interface SourceRecordCompressionBatch {
   scanned: number
   compressed: number
@@ -5,11 +7,12 @@ export interface SourceRecordCompressionBatch {
   rawBytes: number
   storedBytes: number
   savedBytes: number
+  cursor?: string
   hasMore: boolean
 }
 
 export interface SourceRecordCompressionMaintenance {
-  compressSourceRecords(limit?: number): Promise<SourceRecordCompressionBatch>
+  compressSourceRecords(limit?: number, afterId?: string): Promise<SourceRecordCompressionBatch>
 }
 
 export interface DeferredIndexMaintenanceResult {
@@ -31,7 +34,24 @@ export interface SourceRecordCompressionRunResult {
   plain: number
   savedBytes: number
   batches: number
+  cursor?: string
   aborted: boolean
+}
+
+function progressRecord(progress: JsonValue | undefined): Record<string, JsonValue> | undefined {
+  return progress && typeof progress === 'object' && !Array.isArray(progress)
+    ? progress as Record<string, JsonValue>
+    : undefined
+}
+
+function progressNumber(progress: JsonValue | undefined, key: string): number {
+  const value = progressRecord(progress)?.[key]
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0
+}
+
+function progressCursor(progress: JsonValue | undefined): string | undefined {
+  const value = progressRecord(progress)?.cursor
+  return typeof value === 'string' && value ? value : undefined
 }
 
 export async function ensureDeferredStorageIndexes(
@@ -50,17 +70,21 @@ export async function compressLegacySourceRecords(
   gate: MaintenanceIdleGate,
   signal: AbortSignal,
   options: {
+    initialProgress?: JsonValue
     batchSize?: number
     onBatch?: (batch: SourceRecordCompressionBatch) => void
+    report?: (progress: JsonValue) => Promise<boolean>
     yieldControl?: () => Promise<void>
   } = {},
 ): Promise<SourceRecordCompressionRunResult> {
+  let cursor = progressCursor(options.initialProgress)
   const result: SourceRecordCompressionRunResult = {
-    scanned: 0,
-    compressed: 0,
-    plain: 0,
-    savedBytes: 0,
-    batches: 0,
+    scanned: progressNumber(options.initialProgress, 'scanned'),
+    compressed: progressNumber(options.initialProgress, 'compressed'),
+    plain: progressNumber(options.initialProgress, 'plain'),
+    savedBytes: progressNumber(options.initialProgress, 'savedBytes'),
+    batches: progressNumber(options.initialProgress, 'batches'),
+    ...(cursor ? { cursor } : {}),
     aborted: false,
   }
   if (!maintenance) return result
@@ -72,17 +96,34 @@ export async function compressLegacySourceRecords(
     await gate.wait(signal)
     if (signal.aborted) break
 
-    const batch = await maintenance.compressSourceRecords(batchSize)
+    const batch = await maintenance.compressSourceRecords(batchSize, cursor)
     result.scanned += batch.scanned
     result.compressed += batch.compressed
     result.plain += batch.plain
     result.savedBytes += batch.savedBytes
     result.batches += 1
+    cursor = batch.cursor ?? cursor
+    if (cursor) result.cursor = cursor
     options.onBatch?.(batch)
 
+    const accepted = await options.report?.({
+      scanned: result.scanned,
+      compressed: result.compressed,
+      plain: result.plain,
+      savedBytes: result.savedBytes,
+      batches: result.batches,
+      ...(cursor ? { cursor } : {}),
+    })
+    if (accepted === false) break
     if (!batch.hasMore || batch.scanned === 0) break
     await yieldControl()
   }
   result.aborted = signal.aborted
   return result
+}
+
+export const storageMaintenanceInternals = {
+  progressRecord,
+  progressNumber,
+  progressCursor,
 }
