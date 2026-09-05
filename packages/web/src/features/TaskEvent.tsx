@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
+import { UiIcon } from '../components/UiIcon'
 import { useTaskSurfaceView } from './TaskSurface'
 import type { TaskEventModel } from './task-detail-model'
 
@@ -30,7 +31,7 @@ export function TaskEvent({
       ? <button className={rowClass} onClick={onInspect}>{content}</button>
       : <div className={rowClass}>{content}</div>}
     {raw !== undefined && !onInspect && <details className="task-event-raw">
-      <summary>查看原始数据{model.nativeType ? ` · ${model.nativeType}` : ''}</summary>
+      <summary><UiIcon className="task-event-raw-chevron" name="chevron-right" size={14}/><span>查看原始数据{model.nativeType ? ` · ${model.nativeType}` : ''}</span></summary>
       {(model.nativeId || model.parentId) && <div className="task-event-raw-meta">{model.nativeId ? `Native ID ${model.nativeId}` : ''}{model.nativeId && model.parentId ? ' · ' : ''}{model.parentId ? `Parent ${model.parentId}` : ''}</div>}
       <CopyableCodeBlock className="task-event-raw-json" copyValue={JSON.stringify(raw, null, 2)}>{JSON.stringify(raw, null, 2)}</CopyableCodeBlock>
     </details>}
