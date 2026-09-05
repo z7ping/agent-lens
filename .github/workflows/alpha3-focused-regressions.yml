@@ -6,6 +6,7 @@ on:
     branches:
       - feature/1.0.0-alpha.3-task-surface
     paths:
+      - apps/daemon/src/**
       - packages/core/src/**
       - packages/core-services/src/**
       - packages/runtime-cordis/src/**
@@ -45,6 +46,14 @@ jobs:
         run: npm run typecheck --workspace @agent-lens/core-services
       - name: Core services tests
         run: npm run test --workspace @agent-lens/core-services
+      - name: Runtime Cordis typecheck
+        run: npm run typecheck --workspace @agent-lens/runtime-cordis
+      - name: Runtime Cordis tests
+        run: npm run test --workspace @agent-lens/runtime-cordis
+      - name: Daemon typecheck
+        run: npm run typecheck --workspace @agent-lens/daemon
+      - name: Daemon tests
+        run: npm run test --workspace @agent-lens/daemon
       - name: Storage typecheck
         run: npm run typecheck --workspace @agent-lens/storage-sqlite
       - name: Storage tests
