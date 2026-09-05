@@ -8,7 +8,7 @@ import { messageText, type CodexStoredEnvelope } from './format'
 import { normalizeCodexRecord } from './normalize'
 import { normalizePaginatedFunctionOutput } from './paginated-function-output'
 import { normalizePaginatedCodexRecord } from './paginated-protocol'
-import { assistantMessageProvenance } from './provenance'
+import { assistantMessageProvenance, contextClassification } from './provenance'
 
 export const CODEX_CURRENT_PARSER_VERSION = '15'
 
@@ -41,9 +41,11 @@ function isTransportEchoRecord(record: SourceRecord): boolean {
   const envelope = asRecord(record.payload)
   const entry = asRecord(envelope.entry)
   const payload = asRecord(entry.payload)
-  return entry.type === 'response_item'
-    && payload.type === 'message'
-    && stringField(payload, 'role')?.toLowerCase() === 'user'
+  if (entry.type !== 'response_item' || payload.type !== 'message') return false
+  const role = stringField(payload, 'role')?.toLowerCase()
+  if (role !== 'user') return false
+  const text = messageText(payload.content ?? payload.text ?? '')
+  return contextClassification(role, text).kind === 'transport-echo'
 }
 
 type AssistantEvent = {
@@ -138,8 +140,9 @@ async function normalizeTransportEcho(
   record: SourceRecord,
   ctx: SourceNormalizationContext,
 ): Promise<NormalizedSourceOutput> {
-  // response_item/message role=user 是 Codex 对输入的传输回显，而不是新的用户活动。
-  // 保留 SourceRecord/Evidence，但不进入 Canonical Observation，避免生成伪后台轮次。
+  // response_item/message role=user 的纯对话回显不是新的用户活动。
+  // 保留 SourceRecord/Evidence，但不进入 Canonical Observation；
+  // runtime/permissions 等结构化注入仍由通用 normalizer 保留为 context.injected。
   const normalized = await normalizeCodexRecord(record, ctx)
   return {
     ...normalized,
