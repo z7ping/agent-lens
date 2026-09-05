@@ -76,6 +76,14 @@ function isNonActivitySnapshotRecord(record: SourceRecord): boolean {
   return typeof entry.type === 'string' && NON_ACTIVITY_ROLLOUT_TYPES.has(entry.type)
 }
 
+function isOpaqueResponseReasoningRecord(record: SourceRecord): boolean {
+  const { entry, payload } = rolloutEntry(record)
+  if (entry.type !== 'response_item' || payload.type !== 'reasoning') return false
+  const visible = messageText(payload.summary ?? payload.content ?? payload.text ?? '').trim()
+  if (visible) return false
+  return Boolean(stringField(payload, 'encrypted_content', 'encryptedContent'))
+}
+
 function isEmptyLegacyAssistantOrReasoning(record: SourceRecord): boolean {
   const { entry, payload } = rolloutEntry(record)
   if (entry.type !== 'event_msg') return false
@@ -471,7 +479,7 @@ export async function normalizeCurrentCodexRecord(
   record: SourceRecord,
   ctx: SourceNormalizationContext,
 ): Promise<NormalizedSourceOutput> {
-  if (isTransportEchoRecord(record) || isNonActivitySnapshotRecord(record) || isEmptyLegacyAssistantOrReasoning(record)) {
+  if (isTransportEchoRecord(record) || isNonActivitySnapshotRecord(record) || isOpaqueResponseReasoningRecord(record) || isEmptyLegacyAssistantOrReasoning(record)) {
     return normalizeWithoutActivity(record, ctx)
   }
 
@@ -508,6 +516,7 @@ export const currentCodexProtocolInternals = {
   directRawReasoning,
   isTransportEchoRecord,
   isNonActivitySnapshotRecord,
+  isOpaqueResponseReasoningRecord,
   isEmptyLegacyAssistantOrReasoning,
   persistedThreadMetadataEvent,
   interAgentCommunication,
