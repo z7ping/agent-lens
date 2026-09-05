@@ -102,6 +102,16 @@ function payloadText(value: JsonValue | undefined): string | undefined {
   return typeof text === 'string' && text.trim() ? text.trim() : undefined
 }
 
+function correctedSessionActivity(
+  activity: SessionSummaryRecord['sessionActivity'],
+  strictUserTurns: number,
+): SessionSummaryRecord['sessionActivity'] {
+  if (activity === 'branch-task' || activity === 'subagent' || activity === 'internal-review') return activity
+  if (strictUserTurns > 0) return 'user-task'
+  if (activity === 'system-activity') return 'system-activity'
+  return strictUserTurns === 0 ? 'system-activity' : activity
+}
+
 function correctCodexSummaries(executor: SqliteExecutor, items: SessionSummaryRecord[]): SessionSummaryRecord[] {
   const codexItems = items.filter(item => item.sourceIds.includes('codex'))
   if (!codexItems.length) return items
@@ -151,11 +161,7 @@ function correctCodexSummaries(executor: SqliteExecutor, items: SessionSummaryRe
     const nativeTitle = typeof row.native_title === 'string' && row.native_title.trim() ? row.native_title.trim() : undefined
     const title = nativeTitle ?? payloadText(firstUserPayload)
     const { firstUserPayload: _legacyFirstUser, title: _legacyTitle, ...rest } = item
-    const sessionActivity = item.sessionActivity && item.sessionActivity !== 'user-task'
-      ? item.sessionActivity
-      : strictUserTurns === 0
-        ? 'system-activity'
-        : item.sessionActivity
+    const sessionActivity = correctedSessionActivity(item.sessionActivity, strictUserTurns)
 
     return {
       ...rest,
@@ -210,4 +216,5 @@ export class SqliteSessionSummaryReader implements SessionSummaryProjectionStore
 
 export const sessionSummaryV2Internals = {
   correctCodexSummaries,
+  correctedSessionActivity,
 }
