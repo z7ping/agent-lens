@@ -20,7 +20,7 @@ function record(entry: unknown, sourceSequence: number): SourceRecord {
     capturedAt: '2026-09-05T06:00:01.000Z',
     locator: { kind: 'file', path: '/safe/rollout.jsonl', offset: sourceSequence },
     payload: { entry, session: { nativeSessionId: 'thread-root', cwd: '/safe/project' } },
-    parserVersion: '14',
+    parserVersion: '15',
   }
 }
 
@@ -67,7 +67,7 @@ test('legacy response_item assistant remains readable for old Codex rollouts', a
   assert.equal((fact.payload as any).provenance.sourceSignal, 'response_item.message.role=assistant')
 })
 
-test('response_item role=user stays in SourceRecord/Evidence but does not create a background activity', async () => {
+test('plain response_item role=user stays in SourceRecord/Evidence but does not create a background activity', async () => {
   const output = await normalizeCurrentCodexRecord(record({
     type: 'response_item',
     payload: {
@@ -80,11 +80,25 @@ test('response_item role=user stays in SourceRecord/Evidence but does not create
   assert.equal(output.evidenceCandidates.length, 1)
 })
 
+test('response_item role=user runtime context remains a structured context activity', async () => {
+  const output = await normalizeCurrentCodexRecord(record({
+    type: 'response_item',
+    payload: {
+      type: 'message', role: 'user',
+      content: [{ type: 'input_text', text: '<environment_context>\n<cwd>/safe/project</cwd>\n</environment_context>' }],
+    },
+  }, 5), ctx)
+
+  assert.equal(output.observations.length, 1)
+  assert.equal(output.observations[0]?.kind, 'context.injected')
+  assert.equal((output.observations[0]?.payload as any).injectedKind, 'runtime-environment')
+})
+
 test('agent_message without visible text stays on the original unknown fallback path', async () => {
   const output = await normalizeCurrentCodexRecord(record({
     type: 'event_msg',
     payload: { type: 'agent_message', message: '' },
-  }, 5), ctx)
+  }, 6), ctx)
 
   assert.equal(output.observations[0]?.kind, 'unknown')
 })
