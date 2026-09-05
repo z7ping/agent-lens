@@ -37,6 +37,15 @@ function syntheticEntryRecord(record: SourceRecord, entry: Record<string, unknow
   }
 }
 
+function isTransportEchoRecord(record: SourceRecord): boolean {
+  const envelope = asRecord(record.payload)
+  const entry = asRecord(envelope.entry)
+  const payload = asRecord(entry.payload)
+  return entry.type === 'response_item'
+    && payload.type === 'message'
+    && stringField(payload, 'role')?.toLowerCase() === 'user'
+}
+
 type AssistantEvent = {
   source: 'event_msg.agent_message'
   text: string
@@ -125,6 +134,19 @@ async function normalizeDirectRawReasoning(
   }
 }
 
+async function normalizeTransportEcho(
+  record: SourceRecord,
+  ctx: SourceNormalizationContext,
+): Promise<NormalizedSourceOutput> {
+  // response_item/message role=user 是 Codex 对输入的传输回显，而不是新的用户活动。
+  // 保留 SourceRecord/Evidence，但不进入 Canonical Observation，避免生成伪后台轮次。
+  const normalized = await normalizeCodexRecord(record, ctx)
+  return {
+    ...normalized,
+    observations: [],
+  }
+}
+
 /**
  * Current Codex has two persisted history modes:
  * - Legacy: user_message / agent_message / reasoning events.
@@ -137,6 +159,8 @@ export async function normalizeCurrentCodexRecord(
   record: SourceRecord,
   ctx: SourceNormalizationContext,
 ): Promise<NormalizedSourceOutput> {
+  if (isTransportEchoRecord(record)) return normalizeTransportEcho(record, ctx)
+
   const functionOutput = await normalizePaginatedFunctionOutput(record, ctx)
   if (functionOutput) return functionOutput
 
@@ -159,4 +183,5 @@ export async function normalizeCurrentCodexRecord(
 export const currentCodexProtocolInternals = {
   directAssistantEvent,
   directRawReasoning,
+  isTransportEchoRecord,
 }
