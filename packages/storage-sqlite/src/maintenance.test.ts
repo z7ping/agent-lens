@@ -17,7 +17,7 @@ async function seedIdentity(storage: SqliteStorageService) {
   })
 }
 
-test('SourceRecord 大 payload 透明 gzip，旧 JSON 可分批迁移且读取语义不变', async () => {
+test('SourceRecord 大 payload 透明 gzip，旧 JSON 可按主键游标分批迁移且读取语义不变', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   await storage.migrate()
   try {
@@ -43,16 +43,27 @@ test('SourceRecord 大 payload 透明 gzip，旧 JSON 可分批迁移且读取�
     assert.ok(raw.blob_bytes > 0)
     assert.deepEqual((await storage.repositories.sourceRecords.get('compressed'))?.payload, payload)
 
-    storage.db.prepare(`
-      INSERT INTO source_records(
-        id, source_id, installation_id, native_type, captured_at, locator_json, payload_json, parser_version
-      ) VALUES (?, 'codex', 'install', 'legacy', ?, '{}', ?, '1')
-    `).run('legacy', '2026-08-01T00:00:00.000Z', JSON.stringify(payload))
-    const migrated = await storage.maintenance.compressSourceRecords(10)
-    assert.equal(migrated.scanned, 1)
-    assert.equal(migrated.compressed, 1)
-    assert.ok(migrated.savedBytes > 0)
-    assert.deepEqual((await storage.repositories.sourceRecords.get('legacy'))?.payload, payload)
+    for (const id of ['legacy-a', 'legacy-b']) {
+      storage.db.prepare(`
+        INSERT INTO source_records(
+          id, source_id, installation_id, native_type, captured_at, locator_json, payload_json, parser_version
+        ) VALUES (?, 'codex', 'install', 'legacy', ?, '{}', ?, '1')
+      `).run(id, '2026-08-01T00:00:00.000Z', JSON.stringify(payload))
+    }
+    const first = await storage.maintenance.compressSourceRecords(1)
+    assert.equal(first.scanned, 1)
+    assert.equal(first.compressed, 1)
+    assert.equal(first.cursor, 'legacy-a')
+    assert.equal(first.hasMore, true)
+
+    const second = await storage.maintenance.compressSourceRecords(1, first.cursor)
+    assert.equal(second.scanned, 1)
+    assert.equal(second.compressed, 1)
+    assert.equal(second.cursor, 'legacy-b')
+    assert.equal(second.hasMore, true)
+    assert.ok(first.savedBytes + second.savedBytes > 0)
+    assert.deepEqual((await storage.repositories.sourceRecords.get('legacy-a'))?.payload, payload)
+    assert.deepEqual((await storage.repositories.sourceRecords.get('legacy-b'))?.payload, payload)
   } finally {
     await storage.close()
   }
@@ -144,7 +155,7 @@ test('VACUUM INTO 生成独立紧凑库，不替换在线数据库', async () =>
     const copy = new Database(compacted, { readonly: true })
     try {
       const version = copy.prepare('SELECT MAX(version) AS version FROM schema_migrations').get() as { version: number }
-      assert.equal(version.version, 19)
+      assert.equal(version.version, 21)
     } finally {
       copy.close()
     }
