@@ -35,7 +35,6 @@ test('storage migrations keep heavy indexes out of startup and maintenance creat
       'idx_source_records_parser_replay',
       'idx_observations_captured_at',
       'idx_evidence_captured_at',
-      'idx_source_records_payload_compression_pending',
     ]))
 
     const indexesAfter = storage.db.prepare("PRAGMA index_list('observations')").all() as Array<{ name: string }>
@@ -45,7 +44,7 @@ test('storage migrations keep heavy indexes out of startup and maintenance creat
     const sourceRecordIndexesAfter = storage.db.prepare("PRAGMA index_list('source_records')")
       .all() as Array<{ name: string }>
     assert.ok(sourceRecordIndexesAfter.some(index => index.name === 'idx_source_records_parser_replay'))
-    assert.ok(sourceRecordIndexesAfter.some(index => index.name === 'idx_source_records_payload_compression_pending'))
+    assert.equal(sourceRecordIndexesAfter.some(index => index.name === 'idx_source_records_payload_compression_pending'), false)
 
     const sourceRecordColumns = storage.db.prepare("PRAGMA table_info('source_records')")
       .all() as Array<{ name: string }>
