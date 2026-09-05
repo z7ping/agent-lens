@@ -87,6 +87,69 @@ test('parser replay drains stale versions with an indexed row-value cursor', asy
   }
 })
 
+test('parser replay drains 1505 stale records across multiple 500-row pages and versions', async () => {
+  const storage = await setup()
+  try {
+    const insert = storage.db.prepare(`
+      INSERT INTO source_records(
+        id, source_id, installation_id, source_session_native_id, native_type,
+        captured_at, locator_json, payload_json, parser_version
+      ) VALUES (?, 'codex', 'install', 'session-native', 'response_item/message', ?, '{}', '{}', ?)
+    `)
+    const seed = storage.db.transaction(() => {
+      const base = Date.parse('2026-01-01T00:00:00.000Z')
+      for (let index = 0; index < 1505; index += 1) {
+        insert.run(
+          `stale-${String(index).padStart(4, '0')}`,
+          new Date(base + index).toISOString(),
+          index < 1200 ? '1' : '2',
+        )
+      }
+    })
+    seed()
+
+    const replay = storage.repositories.sourceRecords.listForParserReplay
+    assert.ok(replay)
+    const update = storage.db.prepare('UPDATE source_records SET parser_version = ? WHERE id = ?')
+    const promotePage = storage.db.transaction((records: SourceRecord[]) => {
+      for (const record of records) update.run('3', record.id)
+    })
+
+    let cursor: { parserVersion?: string; capturedAt: string; id: string } | undefined
+    let processed = 0
+    let pages = 0
+    const versions: string[] = []
+    while (true) {
+      const page = await replay('codex', 'install', '3', cursor, 500)
+      if (!page.length) break
+      pages += 1
+      processed += page.length
+      const pageVersions = [...new Set(page.map(record => record.parserVersion))]
+      assert.equal(pageVersions.length, 1, 'each page must stay inside one equality-constrained parser version')
+      versions.push(pageVersions[0]!)
+      promotePage(page)
+      const last = page.at(-1)!
+      cursor = {
+        parserVersion: last.parserVersion,
+        capturedAt: last.capturedAt,
+        id: last.id,
+      }
+    }
+
+    assert.equal(processed, 1505)
+    assert.equal(pages, 5)
+    assert.deepEqual(versions, ['1', '1', '1', '2', '2'])
+    const stale = storage.db.prepare(`
+      SELECT COUNT(*) AS count
+      FROM source_records
+      WHERE source_id = 'codex' AND installation_id = 'install' AND parser_version != '3'
+    `).get() as { count: number }
+    assert.equal(stale.count, 0)
+  } finally {
+    await storage.close()
+  }
+})
+
 test('parser replay query plan uses the replay index without a temporary sort', async () => {
   const storage = await setup()
   try {
