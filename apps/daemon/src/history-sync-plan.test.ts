@@ -26,11 +26,12 @@ test('最新与最近会话不受热窗口限制', () => {
   assert.equal(stages[2]?.window.activeSince, '2026-08-25T00:00:00.000Z')
 })
 
-test('数据库接近软阈值时暂停 7 天回填，超过预算时仍同步最新 1 个会话', () => {
+test('数据库接近软阈值时只保留最近会话，超限或未知时停止历史扩张', () => {
   const stages = createProgressiveHistoryStages(Date.parse('2026-09-01T00:00:00.000Z'))
   assert.deepEqual(stagesAllowedByCapacity(stages, 'healthy').map(stage => stage.id), ['latest', 'recent', 'hot-window'])
   assert.deepEqual(stagesAllowedByCapacity(stages, 'approaching').map(stage => stage.id), ['latest', 'recent'])
-  assert.deepEqual(stagesAllowedByCapacity(stages, 'exceeded').map(stage => stage.id), ['latest'])
+  assert.deepEqual(stagesAllowedByCapacity(stages, 'exceeded').map(stage => stage.id), [])
+  assert.deepEqual(stagesAllowedByCapacity(stages, 'unknown').map(stage => stage.id), [])
   assert.equal(storageCapacityState({ dataGrowth: { capacity: { state: 'exceeded' } } }), 'exceeded')
   assert.equal(storageCapacityState(undefined), 'unknown')
 })
