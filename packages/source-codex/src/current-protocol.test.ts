@@ -39,24 +39,26 @@ test('event_msg.agent_message becomes canonical assistant output instead of back
   assert.equal((fact.payload as any).provenance.sourceSignal, 'event_msg.agent_message')
 })
 
-test('agent_message and response_item assistant share one structural dedup key', async () => {
-  const eventMessage = await normalizeCurrentCodexRecord(record({
-    type: 'event_msg',
-    payload: { type: 'agent_message', message: '同一条回复', phase: 'final_answer' },
-  }, 1), ctx)
-  const responseItem = await normalizeCurrentCodexRecord(record({
+test('legacy response_item assistant remains readable for old Codex rollouts', async () => {
+  const output = await normalizeCurrentCodexRecord(record({
     type: 'response_item',
     payload: {
       type: 'message', role: 'assistant', phase: 'final_answer',
-      content: [{ type: 'output_text', text: '同一条回复' }],
+      content: [{ type: 'output_text', text: '旧版正常回复' }],
     },
   }, 2), ctx)
 
-  const first = eventMessage.observations[0]!
-  const second = responseItem.observations[0]!
-  assert.equal(first.kind, 'message.assistant')
-  assert.equal(second.kind, 'message.assistant')
-  assert.ok(first.dedupHints?.sharedEventKey)
-  assert.equal(first.dedupHints?.sharedEventKey, second.dedupHints?.sharedEventKey)
-  assert.notEqual(first.dedupHints?.sourceSequence, second.dedupHints?.sourceSequence)
+  const fact = output.observations[0]!
+  assert.equal(fact.kind, 'message.assistant')
+  assert.equal((fact.payload as any).text, '旧版正常回复')
+  assert.equal((fact.payload as any).provenance.sourceSignal, 'response_item.message.role=assistant')
+})
+
+test('agent_message without visible text stays on the original unknown fallback path', async () => {
+  const output = await normalizeCurrentCodexRecord(record({
+    type: 'event_msg',
+    payload: { type: 'agent_message', message: '' },
+  }, 3), ctx)
+
+  assert.equal(output.observations[0]?.kind, 'unknown')
 })
