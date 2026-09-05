@@ -24,8 +24,8 @@ function record(entry: unknown, sourceSequence: number): SourceRecord {
   }
 }
 
-test('current Codex parser version is 17 so earlier semantic derivations replay', () => {
-  assert.equal(CODEX_CURRENT_PARSER_VERSION, '17')
+test('current Codex parser version is 18 so earlier semantic derivations replay', () => {
+  assert.equal(CODEX_CURRENT_PARSER_VERSION, '18')
 })
 
 test('event_msg.agent_message becomes canonical assistant output instead of background unknown', async () => {
@@ -48,7 +48,6 @@ test('legacy raw reasoning is visible Thinking rather than background unknown', 
     type: 'event_msg',
     payload: { type: 'agent_reasoning_raw_content', text: 'source-visible raw reasoning' },
   }, 2), ctx)
-
   const fact = output.observations[0]!
   assert.equal(fact.kind, 'message.reasoning')
   assert.equal((fact.payload as any).text, 'source-visible raw reasoning')
@@ -64,7 +63,6 @@ test('legacy response_item assistant remains readable for old Codex rollouts', a
       content: [{ type: 'output_text', text: '旧版正常回复' }],
     },
   }, 3), ctx)
-
   const fact = output.observations[0]!
   assert.equal(fact.kind, 'message.assistant')
   assert.equal((fact.payload as any).text, '旧版正常回复')
@@ -79,7 +77,6 @@ test('plain response_item role=user stays in SourceRecord/Evidence but does not 
       content: [{ type: 'input_text', text: 'transport echo' }],
     },
   }, 4), ctx)
-
   assert.equal(output.observations.length, 0)
   assert.equal(output.evidenceCandidates.length, 1)
 })
@@ -92,10 +89,117 @@ test('response_item role=user runtime context remains a structured context activ
       content: [{ type: 'input_text', text: '<environment_context>\n<cwd>/safe/project</cwd>\n</environment_context>' }],
     },
   }, 5), ctx)
-
   assert.equal(output.observations.length, 1)
   assert.equal(output.observations[0]?.kind, 'context.injected')
   assert.equal((output.observations[0]?.payload as any).injectedKind, 'runtime-environment')
+})
+
+test('ResponseItem AgentMessage is agent communication, not user-visible assistant output', async () => {
+  const output = await normalizeCurrentCodexRecord(record({
+    type: 'response_item',
+    payload: {
+      type: 'agent_message', id: 'amsg-1', author: 'worker', recipient: 'root',
+      content: [
+        { type: 'input_text', text: '子 Agent 已完成检查' },
+        { type: 'encrypted_content', encrypted_content: 'opaque-ciphertext' },
+      ],
+    },
+  }, 10), ctx)
+  const fact = output.observations[0]!
+  assert.equal(fact.kind, 'session.lifecycle')
+  assert.equal((fact.payload as any).event, 'subagent.communication')
+  assert.equal((fact.payload as any).communicationType, 'response.agent_message')
+  assert.equal((fact.payload as any).author, 'worker')
+  assert.equal((fact.payload as any).recipient, 'root')
+  assert.equal((fact.payload as any).text, '子 Agent 已完成检查')
+  assert.equal((fact.payload as any).encryptedContent, true)
+  assert.equal(JSON.stringify(fact.payload).includes('opaque-ciphertext'), false)
+  assert.equal(output.observations.some(item => item.kind === 'message.assistant'), false)
+})
+
+test('ResponseItem LocalShellCall is a tool execution and completed status closes it', async () => {
+  const output = await normalizeCurrentCodexRecord(record({
+    type: 'response_item',
+    payload: {
+      type: 'local_shell_call', id: 'lsh-1', call_id: 'shell-call-1', status: 'completed',
+      action: {
+        type: 'exec', command: ['cat', 'README.md'], timeout_ms: 1000,
+        working_directory: '/safe/project', env: null, user: null,
+      },
+    },
+  }, 11), ctx)
+  assert.deepEqual(output.observations.map(item => item.kind), ['tool.call', 'tool.result'])
+  assert.equal((output.observations[0]?.payload as any).nativeToolName, 'local_shell')
+  assert.equal((output.observations[0]?.payload as any).callId, 'shell-call-1')
+  assert.equal((output.observations[1]?.payload as any).success, true)
+  assert.equal((output.observations[1]?.payload as any).status, 'completed')
+})
+
+test('ResponseItem LocalShellCall in progress stays open without a fake result', async () => {
+  const output = await normalizeCurrentCodexRecord(record({
+    type: 'response_item',
+    payload: {
+      type: 'local_shell_call', call_id: 'shell-call-running', status: 'in_progress',
+      action: { type: 'exec', command: ['npm', 'test'] },
+    },
+  }, 12), ctx)
+  assert.deepEqual(output.observations.map(item => item.kind), ['tool.call'])
+  assert.equal((output.observations[0]?.payload as any).status, 'in_progress')
+})
+
+test('ResponseItem ToolSearchCall is a visible tool call rather than raw background activity', async () => {
+  const output = await normalizeCurrentCodexRecord(record({
+    type: 'response_item',
+    payload: {
+      type: 'tool_search_call', id: 'tsc-1', call_id: 'tool-search-1',
+      status: 'completed', execution: 'search', arguments: { query: 'read file' },
+    },
+  }, 13), ctx)
+  const fact = output.observations[0]!
+  assert.equal(fact.kind, 'tool.call')
+  assert.equal((fact.payload as any).nativeToolName, 'tool_search')
+  assert.equal((fact.payload as any).callId, 'tool-search-1')
+  assert.equal((fact.payload as any).input.execution, 'search')
+})
+
+test('ResponseItem ImageGenerationCall is an artifact action without duplicating result bytes', async () => {
+  const output = await normalizeCurrentCodexRecord(record({
+    type: 'response_item',
+    payload: {
+      type: 'image_generation_call', id: 'ig-1', status: 'completed',
+      revised_prompt: 'a compact architecture diagram', result: 'x'.repeat(4096),
+    },
+  }, 14), ctx)
+  const fact = output.observations[0]!
+  assert.equal(fact.kind, 'artifact.action')
+  assert.equal((fact.payload as any).action, 'image.generate')
+  assert.equal((fact.payload as any).resultAvailable, true)
+  assert.equal('result' in (fact.payload as any), false)
+})
+
+test('ResponseItem ConfigurationUpdate is lifecycle configuration, not conversation', async () => {
+  const output = await normalizeCurrentCodexRecord(record({
+    type: 'response_item',
+    payload: { type: 'configuration_update', reasoning: { effort: 'high' } },
+  }, 15), ctx)
+  const fact = output.observations[0]!
+  assert.equal(fact.kind, 'session.lifecycle')
+  assert.equal((fact.payload as any).event, 'reasoning.configuration.updated')
+  assert.equal((fact.payload as any).reasoning.effort, 'high')
+})
+
+test('ResponseItem compaction variants are context compaction instead of unknown', async () => {
+  for (const [index, payload] of [
+    { type: 'compaction', id: 'cmp-1', encrypted_content: 'opaque' },
+    { type: 'context_compaction', id: 'ctx-cmp-1', encrypted_content: 'opaque' },
+  ].entries()) {
+    const output = await normalizeCurrentCodexRecord(record({ type: 'response_item', payload }, 16 + index), ctx)
+    const fact = output.observations[0]!
+    assert.equal(fact.kind, 'context.compaction')
+    assert.equal((fact.payload as any).opaque, true)
+    assert.equal(JSON.stringify(fact.payload).includes('opaque'), true)
+    assert.equal(JSON.stringify(fact.payload).includes('encrypted_content'), false)
+  }
 })
 
 test('persisted thread goal update is lifecycle metadata rather than raw unknown', async () => {
@@ -105,7 +209,7 @@ test('persisted thread goal update is lifecycle metadata rather than raw unknown
       type: 'thread_goal_updated', thread_id: 'thread-root', turn_id: 'turn-1',
       goal: { objective: '完成 Parser 收口', status: 'active', token_budget: 1000 },
     },
-  }, 6), ctx)
+  }, 20), ctx)
   const fact = output.observations[0]!
   assert.equal(fact.kind, 'session.lifecycle')
   assert.equal((fact.payload as any).event, 'thread.goal.updated')
@@ -116,7 +220,7 @@ test('persisted thread rollback is explicit lifecycle metadata', async () => {
   const output = await normalizeCurrentCodexRecord(record({
     type: 'event_msg',
     payload: { type: 'thread_rolled_back', num_turns: 2 },
-  }, 7), ctx)
+  }, 21), ctx)
   const fact = output.observations[0]!
   assert.equal(fact.kind, 'session.lifecycle')
   assert.equal((fact.payload as any).event, 'thread.rolled-back')
@@ -130,7 +234,7 @@ test('persisted thread settings update carries model/workspace identity without 
       type: 'thread_settings_applied', thread_id: 'thread-root',
       thread_settings: { model: 'gpt-5.6-codex', cwd: '/safe/updated-project', reasoning_effort: 'high' },
     },
-  }, 8), ctx)
+  }, 22), ctx)
   const fact = output.observations[0]!
   assert.equal(fact.kind, 'session.lifecycle')
   assert.equal((fact.payload as any).event, 'thread.settings.applied')
@@ -147,7 +251,7 @@ test('persisted rollout snapshots stay in SourceRecord/Evidence without manufact
     'inter_agent_communication_metadata',
   ]
   for (const [index, type] of types.entries()) {
-    const output = await normalizeCurrentCodexRecord(record({ type, payload: { marker: type } }, 20 + index), ctx)
+    const output = await normalizeCurrentCodexRecord(record({ type, payload: { marker: type } }, 30 + index), ctx)
     assert.equal(output.observations.length, 0, type)
     assert.equal(output.evidenceCandidates.length, 1, type)
   }
@@ -160,7 +264,7 @@ test('inter-agent communication remains an explicit subagent activity', async ()
       sender_thread_id: 'thread-root', receiver_thread_id: 'thread-child',
       message: '检查这一段实现',
     },
-  }, 30), ctx)
+  }, 40), ctx)
   const fact = output.observations[0]!
   assert.equal(fact.kind, 'session.lifecycle')
   assert.equal((fact.payload as any).event, 'subagent.communication')
@@ -173,7 +277,7 @@ test('empty assistant/reasoning records preserve evidence but do not create raw 
     { type: 'agent_reasoning', text: '' },
     { type: 'agent_reasoning_raw_content', text: '' },
   ].entries()) {
-    const output = await normalizeCurrentCodexRecord(record({ type: 'event_msg', payload }, 40 + index), ctx)
+    const output = await normalizeCurrentCodexRecord(record({ type: 'event_msg', payload }, 50 + index), ctx)
     assert.equal(output.observations.length, 0)
     assert.equal(output.evidenceCandidates.length, 1)
   }
