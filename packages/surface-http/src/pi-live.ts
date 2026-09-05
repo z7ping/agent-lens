@@ -45,6 +45,12 @@ function writeJson(response: ServerResponse, statusCode: number, body: unknown):
   response.end(content)
 }
 
+function serverTiming(response: ServerResponse, name: string, startedAt: number): void {
+  if (response.headersSent) return
+  const duration = Math.max(0, performance.now() - startedAt)
+  response.setHeader('server-timing', `${name};dur=${duration.toFixed(1)}`)
+}
+
 async function readJson<T>(request: IncomingMessage): Promise<T> {
   const contentType = String(request.headers['content-type'] ?? '').toLowerCase()
   if (!contentType.startsWith('application/json')) {
@@ -163,13 +169,16 @@ export async function handlePiLiveRequest(
         writeJson(response, 405, { error: 'method_not_allowed' })
         return true
       }
+      const startedAt = performance.now()
       const body = await readJson<PiLiveResumeRequestDto>(request)
       const input = await resolvePiLiveResumeInput(
         storage,
         nonEmpty(body.logicalSessionId, 'logicalSessionId'),
         historyAction(body.action),
       )
-      writeJson(response, 201, jsonValue(await service.start(input)))
+      const runtime = await service.start(input)
+      serverTiming(response, 'pi-resume-start', startedAt)
+      writeJson(response, 201, jsonValue(runtime))
       return true
     }
 
@@ -178,19 +187,26 @@ export async function handlePiLiveRequest(
         writeJson(response, 405, { error: 'method_not_allowed' })
         return true
       }
-      writeJson(response, 200, await service.availability())
+      const startedAt = performance.now()
+      const availability = await service.availability()
+      serverTiming(response, 'pi-availability', startedAt)
+      writeJson(response, 200, availability)
       return true
     }
 
     if (url.pathname === '/api/v1/pi-live') {
       if (request.method === 'GET') {
-        writeJson(response, 200, jsonValue(await service.list()))
+        const startedAt = performance.now()
+        const runtimes = await service.list()
+        serverTiming(response, 'pi-runtime-list', startedAt)
+        writeJson(response, 200, jsonValue(runtimes))
         return true
       }
       if (request.method !== 'POST') {
         writeJson(response, 405, { error: 'method_not_allowed' })
         return true
       }
+      const startedAt = performance.now()
       const body = await readJson<PiLiveStartRequestDto>(request)
       const input: PiLiveStartRequestDto = {
         cwd: nonEmpty(body.cwd, 'cwd'),
@@ -199,7 +215,9 @@ export async function handlePiLiveRequest(
         ...(optionalString(body.model) ? { model: optionalString(body.model) } : {}),
         ...(optionalString(body.name) ? { name: optionalString(body.name) } : {}),
       }
-      writeJson(response, 201, jsonValue(await service.start(input)))
+      const runtime = await service.start(input)
+      serverTiming(response, 'pi-start-return', startedAt)
+      writeJson(response, 201, jsonValue(runtime))
       return true
     }
 
@@ -296,4 +314,8 @@ export async function handlePiLiveRequest(
     else response.destroy(error instanceof Error ? error : new Error(String(error)))
     return true
   }
+}
+
+export const piLiveHttpInternals = {
+  serverTiming,
 }
