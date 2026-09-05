@@ -17,6 +17,8 @@ interface WorkspaceSidebarProps {
   theme: 'light' | 'dark'
   onToggleTheme(): void
   onContextHost(node: HTMLDivElement | null): void
+  mobileOpen?: boolean
+  onMobileClose?(): void
 }
 
 export function WorkspaceSidebar({
@@ -28,6 +30,8 @@ export function WorkspaceSidebar({
   theme,
   onToggleTheme,
   onContextHost,
+  mobileOpen = false,
+  onMobileClose = () => undefined,
 }: WorkspaceSidebarProps) {
   const location = useLocation()
   const navigate = useNavigate()
@@ -63,22 +67,22 @@ export function WorkspaceSidebar({
     }
   }, [settingsOpen])
 
-  return <aside className="workspace-sidebar" aria-label="AgentLens 工作区导航">
-    <NavLink to="/review" className="workspace-sidebar-brand" aria-label="AgentLens，返回任务中心" title="返回任务中心">
+  return <aside className={`workspace-sidebar ${mobileOpen ? 'is-mobile-open' : ''}`} aria-label="AgentLens 工作区导航">
+    <NavLink to="/review" className="workspace-sidebar-brand" aria-label="AgentLens，返回任务中心" title="返回任务中心" onClick={onMobileClose}>
       <img className="workspace-sidebar-logo" src="/agentlens-icon.svg" alt="" aria-hidden="true"/>
       <span className="workspace-sidebar-brand-copy"><b>AgentLens</b></span>
     </NavLink>
 
     <nav className="workspace-primary-nav" aria-label="主导航">
-      <NavLink to="/review" className={`workspace-primary-link ${onReview ? 'is-active' : ''}`}><UiIcon name="task" size={16}/><span aria-label="任务中心">任务</span></NavLink>
-      <NavLink to="/insights" className={`workspace-primary-link ${onInsights ? 'is-active' : ''}`}><UiIcon name="trend" size={16}/><span>洞察</span>{snapshot.usage.hasNewData && <i className="workspace-nav-dot" aria-label="有新数据"/>}</NavLink>
-      <NavLink to="/agents" className={`workspace-primary-link ${onAgents ? 'is-active' : ''}`}><UiIcon name="agent" size={16}/><span>智能体</span>{snapshot.agentsHasNewData && <i className="workspace-nav-dot" aria-label="有新数据"/>}</NavLink>
+      <NavLink to="/review" onClick={onMobileClose} className={`workspace-primary-link ${onReview ? 'is-active' : ''}`}><UiIcon name="task" size={16}/><span aria-label="任务中心">任务</span></NavLink>
+      <NavLink to="/insights" onClick={onMobileClose} className={`workspace-primary-link ${onInsights ? 'is-active' : ''}`}><UiIcon name="trend" size={16}/><span>洞察</span>{snapshot.usage.hasNewData && <i className="workspace-nav-dot" aria-label="有新数据"/>}</NavLink>
+      <NavLink to="/agents" onClick={onMobileClose} className={`workspace-primary-link ${onAgents ? 'is-active' : ''}`}><UiIcon name="agent" size={16}/><span>智能体</span>{snapshot.agentsHasNewData && <i className="workspace-nav-dot" aria-label="有新数据"/>}</NavLink>
     </nav>
 
     <div className="workspace-sidebar-context" ref={onContextHost}>
       {onInsights && <nav className="workspace-insight-switcher" aria-label="洞察视图">
-        <NavLink to="/insights" className={({ isActive }) => `workspace-insight-link ${isActive ? 'is-active' : ''}`} end>使用概览</NavLink>
-        <NavLink to="/tools" className={({ isActive }) => `workspace-insight-link ${isActive ? 'is-active' : ''}`}>工具分析{snapshot.usage.hasNewData && <i className="workspace-nav-dot" aria-hidden="true"/>}</NavLink>
+        <NavLink to="/insights" onClick={onMobileClose} className={({ isActive }) => `workspace-insight-link ${isActive ? 'is-active' : ''}`} end>使用概览</NavLink>
+        <NavLink to="/tools" onClick={onMobileClose} className={({ isActive }) => `workspace-insight-link ${isActive ? 'is-active' : ''}`}>工具分析{snapshot.usage.hasNewData && <i className="workspace-nav-dot" aria-hidden="true"/>}</NavLink>
       </nav>}
 
       {onAgents && <div className="workspace-context-menu workspace-agent-context">
@@ -90,7 +94,10 @@ export function WorkspaceSidebar({
           key={agent.sourceId}
           type="button"
           className={`workspace-agent-link ${selectedAgentId === agent.sourceId ? 'is-active' : ''}`}
-          onClick={() => onSelectAgent(agent.sourceId)}
+          onClick={() => {
+            onSelectAgent(agent.sourceId)
+            onMobileClose()
+          }}
           title={`${agentLabel(agent.sourceId, agent.displayName)} · ${agent.detected ? '已检测' : '未检测'}`}
         >
           <span className={`source-dot ${sourceDot(agent.sourceId)}`}/>
@@ -100,7 +107,7 @@ export function WorkspaceSidebar({
       </div>}
 
       {onBackup && <nav className="workspace-context-menu workspace-maintenance-context" aria-label="维护">
-        <NavLink to="/backup" className="workspace-context-link is-active">资产备份</NavLink>
+        <NavLink to="/backup" onClick={onMobileClose} className="workspace-context-link is-active">资产备份</NavLink>
       </nav>}
     </div>
 
@@ -121,7 +128,10 @@ export function WorkspaceSidebar({
               <button
                 type="button"
                 className={`workspace-settings-menu-item ${onBackup ? 'is-active' : ''}`}
-                onClick={() => navigate('/backup')}
+                onClick={() => {
+                  navigate('/backup')
+                  onMobileClose()
+                }}
               >
                 <UiIcon name="upload" size={14}/>
                 <span>资产备份</span>
