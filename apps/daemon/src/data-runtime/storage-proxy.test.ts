@@ -4,7 +4,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import { DataRuntimeClient } from './client'
-import { createDataRuntimeStorage } from './storage-proxy'
+import {
+  createDataRuntimeStorage,
+  dataRuntimeStorageInternals,
+} from './storage-proxy'
 
 async function waitFor(
   predicate: () => boolean,
@@ -56,6 +59,17 @@ const host = (id: string) => ({
   arch: 'x64',
   createdAt: '2026-09-06T00:00:00.000Z',
   lastSeenAt: '2026-09-06T00:00:00.000Z',
+})
+
+test('Data Runtime routes analytics reads to reader and rebuilds to writer budget', () => {
+  assert.equal(dataRuntimeStorageInternals.READ_TIMEOUT_MS, 2_000)
+  assert.equal(dataRuntimeStorageInternals.isReadPath(['toolUsageObservations', 'aggregate']), true)
+  assert.equal(dataRuntimeStorageInternals.isReadPath(['sessionSummaryProjection', 'query']), true)
+  assert.equal(dataRuntimeStorageInternals.isReadPath(['sessionSummaryProjection', 'rebuild']), false)
+  assert.equal(
+    dataRuntimeStorageInternals.timeoutFor(['toolUsageObservations', 'aggregate'], true),
+    2_000,
+  )
 })
 
 test('Data Runtime uses writer for mutations and reader for committed reads', async () => {
@@ -130,6 +144,37 @@ test('reader worker crash degrades then recovers without restarting writer', asy
     assert.equal(
       (await runtime.storage.repositories.hosts.get('survives-reader-crash'))?.id,
       'survives-reader-crash',
+    )
+    assert.equal(runtime.dataRuntime.snapshot().ok, true)
+  } finally {
+    await runtime.dispose()
+  }
+})
+
+test('writer worker crash keeps reader online and recovers write ownership', async () => {
+  const runtime = await fixture()
+  try {
+    await runtime.storage.repositories.hosts.put(host('before-writer-crash'))
+    const readerBefore = await runtime.reader.request<{ threadId: number }>('status')
+    runtime.dataRuntime.startRecovery(50)
+
+    await runtime.writer.request('diagnostic.exit')
+    await waitFor(() => runtime.writer.state() === 'degraded')
+    assert.equal(runtime.reader.state(), 'ready')
+    assert.equal(
+      (await runtime.storage.repositories.hosts.get('before-writer-crash'))?.id,
+      'before-writer-crash',
+    )
+    assert.equal(runtime.dataRuntime.snapshot().ok, false)
+
+    await waitFor(() => runtime.writer.state() === 'ready')
+    const readerAfter = await runtime.reader.request<{ threadId: number }>('status')
+    assert.equal(readerAfter.threadId, readerBefore.threadId)
+
+    await runtime.storage.repositories.hosts.put(host('after-writer-recovery'))
+    assert.equal(
+      (await runtime.storage.repositories.hosts.get('after-writer-recovery'))?.id,
+      'after-writer-recovery',
     )
     assert.equal(runtime.dataRuntime.snapshot().ok, true)
   } finally {
