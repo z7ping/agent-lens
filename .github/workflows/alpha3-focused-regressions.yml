@@ -13,6 +13,7 @@ on:
       - packages/projection-review/src/**
       - packages/projection-overview/src/**
       - packages/projection-insights/src/**
+      - packages/projection-usage/src/**
       - packages/source-pi/src/**
       - packages/source-codex/src/**
       - packages/web/src/**
@@ -51,6 +52,10 @@ jobs:
         run: npm run typecheck --workspace @agent-lens/projection-insights
       - name: Insights tests
         run: npm run test --workspace @agent-lens/projection-insights
+      - name: Usage typecheck
+        run: npm run typecheck --workspace @agent-lens/projection-usage
+      - name: Usage tests
+        run: npm run test --workspace @agent-lens/projection-usage
       - name: Pi typecheck
         run: npm run typecheck --workspace @agent-lens/source-pi
       - name: Pi tests
