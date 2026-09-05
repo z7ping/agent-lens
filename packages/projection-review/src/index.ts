@@ -92,6 +92,8 @@ export function lifecycleEventLabel(payload: JsonValue | unknown): string {
     stop: '轮次停止',
     'turn.ended': '轮次结束',
     'turn.end': '轮次结束',
+    'subagent.communication': '子 Agent 通信',
+    'reasoning.configuration.updated': '推理配置更新',
   }
   if (exact[action]) return exact[action]
 
