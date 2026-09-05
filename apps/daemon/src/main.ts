@@ -82,9 +82,8 @@ const daemonMode = process.env.AGENT_LENS_DAEMON_MODE === 'managed' ? 'managed' 
 const developmentApiPort = process.env.AGENT_LENS_DEV_API_PORT
 const interactiveTerminal = Boolean(process.stdin.isTTY && process.stdout.isTTY)
 const startedAt = Date.now()
-// 为 Web Shell 的首轮 Health / Facet / Review 查询保留短暂宽限期；
-// 历史和资产同步随后继续增量执行。
 const INITIAL_BACKGROUND_SYNC_DELAY_MS = 2_000
+const DATA_RUNTIME_RECOVERY_POLL_MS = 500
 
 const app = new AgentLensApplication()
 app.useRuntime(nodeRuntimePlugin, nodeRuntime)
@@ -133,6 +132,19 @@ function logSourceFailures(failures: RegisteredSourceFailure[]): void {
       failure.error,
     )
   }
+}
+
+async function waitForDataRuntime(signal: AbortSignal): Promise<boolean> {
+  let announced = false
+  while (!signal.aborted) {
+    if (app.context.dataRuntime.snapshot().ok) return true
+    if (!announced) {
+      announced = true
+      console.warn('[AgentLens] background data work paused while Data Runtime recovers')
+    }
+    await new Promise(resolve => setTimeout(resolve, DATA_RUNTIME_RECOVERY_POLL_MS))
+  }
+  return false
 }
 
 async function shutdown(signal: string): Promise<void> {
@@ -220,7 +232,7 @@ try {
 
   syncPromise = (async () => {
     await new Promise(resolve => setTimeout(resolve, INITIAL_BACKGROUND_SYNC_DELAY_MS))
-    if (runtimeController.signal.aborted) return
+    if (!await waitForDataRuntime(runtimeController.signal)) return
 
     const prepared = await prepareRegisteredSources(app.context, runtimeController.signal)
     logSourceFailures(prepared.failures)
@@ -304,7 +316,6 @@ try {
     }
     if (runtimeController.signal.aborted) return
 
-    // Parser Replay 完全退出启动链路；只允许在下面的空闲 Maintenance Job 中执行。
     const assets = await discoverRegisteredSourceAssets(
       app.context,
       runtimeController.signal,
@@ -326,8 +337,8 @@ try {
     const preMaintenanceHealth = await app.context.storage.health()
     const preMaintenanceCapacity = storageCapacityState(preMaintenanceHealth.details)
 
-    if (preMaintenanceCapacity === 'exceeded') {
-      console.warn('[AgentLens] storage capacity exceeded; projection backfill, deferred indexes and parser replay are paused')
+    if (preMaintenanceCapacity === 'exceeded' || preMaintenanceCapacity === 'unknown') {
+      console.warn(`[AgentLens] storage capacity=${preMaintenanceCapacity}; projection backfill, deferred indexes and parser replay are paused`)
     } else {
       const backfills = [
         {
@@ -492,36 +503,29 @@ try {
           priority: MAINTENANCE_PRIORITY.compression,
         },
         runtimeController.signal,
-        async job => {
-          const compression = await compressLegacySourceRecords(
-            storageMaintenance,
-            gate,
-            runtimeController.signal,
-            {
-              batchSize: 50,
-              onBatch(batch) {
-                if (!batch.scanned) return
-                console.info(
-                  `[AgentLens] SourceRecord compression: scanned=${batch.scanned} compressed=${batch.compressed} plain=${batch.plain} saved=${batch.savedBytes}`,
-                )
-              },
+        async job => compressLegacySourceRecords(
+          storageMaintenance,
+          gate,
+          runtimeController.signal,
+          {
+            initialProgress: job.initialProgress,
+            batchSize: 50,
+            report: job.report,
+            onBatch(batch) {
+              if (!batch.scanned) return
+              console.info(
+                `[AgentLens] SourceRecord compression: scanned=${batch.scanned} compressed=${batch.compressed} plain=${batch.plain} saved=${batch.savedBytes}`,
+              )
             },
-          )
-          await job.report({
-            scanned: compression.scanned,
-            compressed: compression.compressed,
-            plain: compression.plain,
-            savedBytes: compression.savedBytes,
-            batches: compression.batches,
-          })
-          return compression
-        },
+          },
+        ),
         value => ({
           scanned: value.scanned,
           compressed: value.compressed,
           plain: value.plain,
           savedBytes: value.savedBytes,
           batches: value.batches,
+          ...(value.cursor ? { cursor: value.cursor } : {}),
           aborted: value.aborted,
         }),
       )
@@ -537,7 +541,12 @@ try {
       }
     }
   })()
-  await syncPromise
+
+  await syncPromise.catch(error => {
+    if (!runtimeController.signal.aborted) {
+      console.error('[AgentLens] background data work failed; control plane remains online', error)
+    }
+  })
 } catch (error) {
   runtimeController.abort()
   disposeHttpActivityTracking?.()
