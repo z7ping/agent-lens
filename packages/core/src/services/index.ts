@@ -399,5 +399,8 @@ export interface StorageService {
   readonly sessionSummaries?: SessionSummaryReader
   readonly sessionSummaryProjection?: SessionSummaryProjectionStore
   transaction<T>(fn: (tx: StorageTransaction) => Promise<T>): Promise<T>
+  /** Fast liveness/readiness path. Implementations should avoid whole-dataset aggregation here. */
   health(): Promise<StorageHealth>
+  /** Optional explicit deep diagnostics path; callers must not use this for readiness. */
+  diagnostics?(): Promise<StorageHealth>
 }
