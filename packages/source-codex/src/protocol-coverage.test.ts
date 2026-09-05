@@ -151,10 +151,13 @@ test('persisted image generation becomes an artifact action without exposing the
     },
   }), ctx)
   const fact = output.observations[0]!
+  const payload = fact.payload as any
   assert.equal(fact.kind, 'artifact.action')
-  assert.equal((fact.payload as any).action, 'image.generation')
-  assert.equal((fact.payload as any).artifactId, 'image-1')
-  assert.equal((fact.payload as any).hasResult, true)
+  assert.equal(payload.action, 'image.generation')
+  assert.equal(payload.artifactId, 'image-1')
+  assert.equal(payload.hasResult, true)
+  assert.equal('result' in payload, false)
+  assert.equal('raw' in payload, false)
 })
 
 test('persisted compaction response items become canonical compaction facts', async () => {
