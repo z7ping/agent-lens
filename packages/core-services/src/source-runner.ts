@@ -384,7 +384,7 @@ export class SourceHistoryRunner {
     if (!replay) return result
 
     const yieldForInteractivity = createCooperativeScheduler()
-    let after: { capturedAt: string; id: string } | undefined
+    let after: { parserVersion?: string; capturedAt: string; id: string } | undefined
     while (!abortSignal.aborted) {
       const records = await replay(
         source.manifest.sourceId,
@@ -423,8 +423,11 @@ export class SourceHistoryRunner {
         await yieldForInteractivity()
       }
       const last = records.at(-1)!
-      after = { capturedAt: last.capturedAt, id: last.id }
-      if (records.length < 500) break
+      after = {
+        parserVersion: last.parserVersion,
+        capturedAt: last.capturedAt,
+        id: last.id,
+      }
     }
     return result
   }

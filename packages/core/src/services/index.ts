@@ -297,6 +297,8 @@ export interface SessionRepository {
 }
 
 export interface SourceRecordReplayCursor {
+  /** Parser version being drained. Keeps pagination on an equality-constrained index range. */
+  parserVersion?: string
   capturedAt: string
   id: SourceRecordId
 }

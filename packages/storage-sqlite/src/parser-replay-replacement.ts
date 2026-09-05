@@ -1,5 +1,6 @@
 import type {
   ObservationRepository,
+  SourceRecordReplayCursor,
   SourceRecordRepository,
 } from '@agent-lens/core'
 import type { SqliteExecutor } from './executor'
@@ -8,6 +9,12 @@ interface DerivedRelationshipRow {
   from_logical_session_id: string | null
   to_logical_session_id: string | null
   relation_type: string
+}
+
+interface ReplayRow {
+  id: string
+  captured_at: string
+  parser_version: string
 }
 
 /**
@@ -133,8 +140,114 @@ export function withSqliteParserReplayReplacement(
     })
   }
 
+  function replayWindow(
+    sourceId: string,
+    installationId: string,
+    window?: { activeSince?: string; sessionLimit?: number },
+  ): { clause: string; params: unknown[] } {
+    const activeSince = window?.activeSince
+    const sessionLimit = window?.sessionLimit
+    if (!activeSince && !sessionLimit) return { clause: '', params: [] }
+    return {
+      clause: `AND source_session_native_id IN (
+        SELECT source_session_native_id FROM source_records
+        WHERE source_id = ? AND installation_id = ? AND source_session_native_id IS NOT NULL
+        ${activeSince ? 'AND captured_at >= ?' : ''}
+        GROUP BY source_session_native_id
+        ORDER BY MAX(captured_at) DESC
+        ${sessionLimit ? 'LIMIT ?' : ''}
+      )`,
+      params: [
+        sourceId,
+        installationId,
+        ...(activeSince ? [activeSince] : []),
+        ...(sessionLimit ? [sessionLimit] : []),
+      ],
+    }
+  }
+
+  async function replayPage(
+    sourceId: string,
+    installationId: string,
+    parserVersion: string,
+    after: SourceRecordReplayCursor | undefined,
+    limit: number,
+    window?: { activeSince?: string; sessionLimit?: number },
+  ): Promise<ReplayRow[]> {
+    return executor.run(() => {
+      const filter = replayWindow(sourceId, installationId, window)
+      const cursor = after
+        ? 'AND (captured_at, id) > (?, ?)'
+        : ''
+      const params: unknown[] = [sourceId, installationId, parserVersion]
+      if (after) params.push(after.capturedAt, after.id)
+      params.push(...filter.params, limit)
+      return executor.db.prepare(`
+        SELECT id, captured_at, parser_version
+        FROM source_records
+        WHERE source_id = ? AND installation_id = ? AND parser_version = ?
+        ${cursor}
+        ${filter.clause}
+        ORDER BY captured_at ASC, id ASC
+        LIMIT ?
+      `).all(...params) as ReplayRow[]
+    })
+  }
+
+  async function nextReplayParserVersion(
+    sourceId: string,
+    installationId: string,
+    currentParserVersion: string,
+    window?: { activeSince?: string; sessionLimit?: number },
+  ): Promise<string | undefined> {
+    return executor.run(() => {
+      const filter = replayWindow(sourceId, installationId, window)
+      const row = executor.db.prepare(`
+        SELECT parser_version AS parserVersion
+        FROM source_records
+        WHERE source_id = ? AND installation_id = ? AND parser_version != ?
+        ${filter.clause}
+        ORDER BY parser_version ASC
+        LIMIT 1
+      `).get(sourceId, installationId, currentParserVersion, ...filter.params) as { parserVersion: string } | undefined
+      return row?.parserVersion
+    })
+  }
+
   const replayAwareSourceRecords: SourceRecordRepository = {
     ...sourceRecords,
+    async listForParserReplay(sourceId, installationId, currentParserVersion, after, limit = 500, window) {
+      const pageLimit = Math.max(1, Math.min(limit, 2000))
+      let parserVersion = after?.parserVersion
+      let rows = parserVersion
+        ? await replayPage(sourceId, installationId, parserVersion, after, pageLimit, window)
+        : []
+
+      if (!rows.length) {
+        parserVersion = await nextReplayParserVersion(sourceId, installationId, currentParserVersion, window)
+        if (!parserVersion) return []
+        const sameVersionCursor = after?.parserVersion === parserVersion ? after : undefined
+        rows = await replayPage(
+          sourceId,
+          installationId,
+          parserVersion,
+          sameVersionCursor,
+          pageLimit,
+          window,
+        )
+      }
+      if (!rows.length) return []
+
+      const ids = rows.map(row => row.id)
+      const records = sourceRecords.getMany
+        ? await sourceRecords.getMany(ids)
+        : (await Promise.all(ids.map(id => sourceRecords.get(id)))).filter(item => item != null)
+      const byId = new Map(records.map(record => [record.id, record]))
+      return ids.flatMap(id => {
+        const record = byId.get(id)
+        return record ? [record] : []
+      })
+    },
     async put(record) {
       const existing = await sourceRecords.get(record.id)
       if (existing && existing.parserVersion !== record.parserVersion) {

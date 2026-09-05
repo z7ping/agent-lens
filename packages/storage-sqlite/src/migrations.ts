@@ -78,6 +78,11 @@ const migrations: readonly Migration[] = [
     name: 'parser-derived-relationship-ownership',
     fileName: '014-parser-derived-relationship-ownership.sql',
   },
+  {
+    version: 15,
+    name: 'parser-replay-order-index',
+    fileName: '015-parser-replay-order-index.sql',
+  },
 ]
 
 async function readMigrationSql(fileName: string): Promise<string> {
