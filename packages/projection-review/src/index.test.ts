@@ -173,6 +173,8 @@ test('ReviewProjection localizes real lifecycle actions instead of collapsing th
   assert.equal(label({ event: 'session.discovered' }), '发现会话')
   assert.equal(label({ event: 'session.ended' }), '会话结束')
   assert.equal(label({ event: 'turn.stopped' }), '轮次停止')
+  assert.equal(label({ event: 'subagent.communication' }), '子 Agent 通信')
+  assert.equal(label({ event: 'reasoning.configuration.updated' }), '推理配置更新')
   assert.equal(label({ action: 'session_interrupted' }), '会话中断')
   assert.equal(label({ event: 'vendor.future.lifecycle' }), '会话状态变化')
 })
