@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { SqliteStorageService } from './storage'
 
-test('storage migrations include replication, Hub replica state, workspace project fallback, and session activity summary', async () => {
+test('storage migrations include replication, Hub replica state, workspace project fallback, session activity, and parser relationship ownership', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   try {
     await storage.migrate()
@@ -10,8 +10,8 @@ test('storage migrations include replication, Hub replica state, workspace proje
     const migrations = storage.db.prepare(
       'SELECT version, name FROM schema_migrations ORDER BY version',
     ).all() as Array<{ version: number; name: string }>
-    assert.equal(migrations.at(-1)?.version, 13)
-    assert.equal(migrations.at(-1)?.name, 'session-activity-summary')
+    assert.equal(migrations.at(-1)?.version, 14)
+    assert.equal(migrations.at(-1)?.name, 'parser-derived-relationship-ownership')
 
     const indexes = storage.db.prepare("PRAGMA index_list('observations')").all() as Array<{ name: string }>
     const names = new Set(indexes.map(item => item.name))
@@ -20,6 +20,13 @@ test('storage migrations include replication, Hub replica state, workspace proje
     assert.ok(names.has('idx_observations_source_native_event'))
     assert.ok(names.has('idx_observations_source_native_parent'))
     assert.ok(names.has('idx_observations_parent'))
+
+    const candidateColumns = storage.db.prepare("PRAGMA table_info('session_relationship_candidates')")
+      .all() as Array<{ name: string }>
+    assert.ok(candidateColumns.some(column => column.name === 'source_record_id'))
+    const candidateIndexes = storage.db.prepare("PRAGMA index_list('session_relationship_candidates')")
+      .all() as Array<{ name: string }>
+    assert.ok(candidateIndexes.some(index => index.name === 'idx_relationship_candidates_source_record'))
 
     const replicationTables = storage.db.prepare(`
       SELECT name FROM sqlite_master
@@ -102,4 +109,3 @@ test('late native parent can repair child relation without losing native parent 
     storage.close()
   }
 })
-
