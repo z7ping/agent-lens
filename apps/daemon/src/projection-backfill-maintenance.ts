@@ -24,10 +24,20 @@ export interface ProjectionBackfillRunResult {
   aborted: boolean
 }
 
+function progressRecord(progress: JsonValue | undefined): Record<string, JsonValue> | undefined {
+  return progress && typeof progress === 'object' && !Array.isArray(progress)
+    ? progress as Record<string, JsonValue>
+    : undefined
+}
+
 function cursorFromProgress(progress: JsonValue | undefined): string | undefined {
-  if (!progress || typeof progress !== 'object' || Array.isArray(progress)) return undefined
-  const cursor = (progress as Record<string, JsonValue>).cursor
+  const cursor = progressRecord(progress)?.cursor
   return typeof cursor === 'string' && cursor ? cursor : undefined
+}
+
+function counterFromProgress(progress: JsonValue | undefined, key: string): number {
+  const value = progressRecord(progress)?.[key]
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0
 }
 
 async function runBatches(
@@ -44,9 +54,9 @@ async function runBatches(
   const batchSize = Math.max(1, Math.min(options.batchSize ?? 250, 1000))
   const yieldControl = options.yieldControl ?? (() => new Promise<void>(resolve => setImmediate(resolve)))
   let cursor = cursorFromProgress(options.initialProgress)
-  let scanned = 0
-  let written = 0
-  let batches = 0
+  let scanned = counterFromProgress(options.initialProgress, 'scanned')
+  let written = counterFromProgress(options.initialProgress, 'written')
+  let batches = counterFromProgress(options.initialProgress, 'batches')
 
   while (!signal.aborted) {
     await gate.wait(signal)
@@ -109,6 +119,8 @@ export function backfillToolUsageFactProjection(
 }
 
 export const projectionBackfillInternals = {
+  progressRecord,
   cursorFromProgress,
+  counterFromProgress,
   runBatches,
 }
