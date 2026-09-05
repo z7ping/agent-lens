@@ -10,7 +10,7 @@ import { normalizePaginatedFunctionOutput } from './paginated-function-output'
 import { normalizePaginatedCodexRecord } from './paginated-protocol'
 import { assistantMessageProvenance, contextClassification } from './provenance'
 
-export const CODEX_CURRENT_PARSER_VERSION = '18'
+export const CODEX_CURRENT_PARSER_VERSION = '19'
 
 const NON_ACTIVITY_ROLLOUT_TYPES = new Set([
   'world_state',
@@ -380,6 +380,139 @@ async function normalizePersistedResponseItem(
   }
 }
 
+function normalizedEventValue(value: unknown): string {
+  return typeof value === 'string' ? value.trim().replace(/[\s-]+/g, '_').toLowerCase() : ''
+}
+
+function withNativeCallId(output: NormalizedSourceOutput, callId: string): NormalizedSourceOutput {
+  return {
+    ...output,
+    observations: output.observations.map(observation => ({
+      ...observation,
+      nativeCallId: callId,
+      dedupHints: {
+        ...observation.dedupHints,
+        nativeCallId: callId,
+      },
+    })),
+  }
+}
+
+function mcpResultSuccess(value: unknown): boolean | undefined {
+  const result = asRecord(value)
+  if ('Err' in result || 'err' in result) return false
+  const ok = asRecord(result.Ok ?? result.ok ?? value)
+  if (typeof ok.is_error === 'boolean') return !ok.is_error
+  if (typeof ok.isError === 'boolean') return !ok.isError
+  if ('Ok' in result || 'ok' in result) return true
+  return undefined
+}
+
+async function normalizePersistedLegacyEvent(
+  record: SourceRecord,
+  ctx: SourceNormalizationContext,
+): Promise<NormalizedSourceOutput | null> {
+  const { entry, payload } = rolloutEntry(record)
+  if (entry.type !== 'event_msg') return null
+
+  if (payload.type === 'entered_review_mode') {
+    return remapUnknown(record, ctx, 'session.lifecycle', {
+      ...payload,
+      event: 'review.entered',
+      reviewMode: true,
+    })
+  }
+  if (payload.type === 'exited_review_mode') {
+    return remapUnknown(record, ctx, 'session.lifecycle', {
+      ...payload,
+      event: 'review.exited',
+      reviewMode: false,
+    })
+  }
+  if (payload.type === 'patch_apply_end') {
+    return remapUnknown(record, ctx, 'artifact.action', {
+      ...payload,
+      action: 'file.change',
+      sourceType: 'event_msg.patch_apply_end',
+    })
+  }
+  if (payload.type === 'mcp_tool_call_end') {
+    const callId = stringField(payload, 'call_id') ?? `mcp-${record.sourceSequence ?? record.id}`
+    const invocation = asRecord(payload.invocation)
+    const tool = stringField(invocation, 'tool', 'tool_name', 'name') ?? 'mcp_tool'
+    const server = stringField(invocation, 'server')
+    const success = mcpResultSuccess(payload.result)
+    const output = await remapUnknown(record, ctx, 'tool.result', {
+      callId,
+      nativeToolName: server ? `${server}.${tool}` : tool,
+      ...(success === undefined ? {} : { success }),
+      output: payload.result ?? null,
+      raw: payload,
+    })
+    return withNativeCallId(output, callId)
+  }
+  if (payload.type === 'web_search_end') {
+    const callId = stringField(payload, 'call_id') ?? `web-search-${record.sourceSequence ?? record.id}`
+    const output = await remapUnknown(record, ctx, 'tool.result', {
+      callId,
+      nativeToolName: 'web_search',
+      success: true,
+      output: payload.results ?? {
+        query: payload.query ?? null,
+        action: payload.action ?? null,
+      },
+      raw: payload,
+    })
+    return withNativeCallId(output, callId)
+  }
+  if (payload.type === 'image_generation_end') {
+    const callId = stringField(payload, 'call_id')
+    return remapUnknown(record, ctx, 'artifact.action', {
+      action: 'image.generate',
+      sourceType: 'event_msg.image_generation_end',
+      ...(callId ? { callId } : {}),
+      status: payload.status ?? null,
+      ...(stringField(payload, 'revised_prompt', 'revisedPrompt') ? {
+        revisedPrompt: stringField(payload, 'revised_prompt', 'revisedPrompt'),
+      } : {}),
+      ...(payload.saved_path === undefined && payload.savedPath === undefined ? {} : {
+        savedPath: payload.saved_path ?? payload.savedPath,
+      }),
+      resultAvailable: typeof payload.result === 'string' && payload.result.length > 0,
+      raw: payload,
+    })
+  }
+  if (payload.type === 'subagent_activity') {
+    const activity = normalizedEventValue(payload.kind)
+    const actorId = stringField(payload, 'agent_thread_id', 'agentThreadId')
+    const kind: ObservationCandidate['kind'] = activity === 'started'
+      ? 'subagent.spawn'
+      : activity === 'completed' || activity === 'interrupted'
+        ? 'subagent.end'
+        : 'session.lifecycle'
+    const output = await remapUnknown(record, ctx, kind, {
+      ...(kind === 'session.lifecycle' ? { event: 'subagent.interacted' } : {}),
+      activityKind: payload.kind ?? null,
+      agentThreadId: actorId ?? null,
+      agentPath: payload.agent_path ?? payload.agentPath ?? null,
+      raw: payload,
+    })
+    return {
+      ...output,
+      observations: output.observations.map(observation => ({
+        ...observation,
+        identityHints: {
+          ...observation.identityHints,
+          ...(actorId ? { nativeActorId: actorId } : {}),
+          actorRole: 'subagent',
+        },
+      })),
+    }
+  }
+
+  return null
+}
+
 async function normalizeDirectRawReasoning(
   record: SourceRecord,
   ctx: SourceNormalizationContext,
@@ -471,8 +604,9 @@ async function normalizeWithoutActivity(
  *
  * State snapshots and model-invisible presentation facts remain available as
  * SourceRecord/Evidence but do not manufacture Review activities. Persistent
- * thread metadata, agent communication, and durable ResponseItems are mapped
- * from their native structure. Authorship is never inferred from message text.
+ * thread metadata, agent communication, durable ResponseItems, and official
+ * persisted legacy EventMsg variants are mapped from their native structure.
+ * Authorship is never inferred from message text.
  */
 export async function normalizeCurrentCodexRecord(
   record: SourceRecord,
@@ -490,6 +624,9 @@ export async function normalizeCurrentCodexRecord(
 
   const responseItem = await normalizePersistedResponseItem(record, ctx)
   if (responseItem) return responseItem
+
+  const legacyEvent = await normalizePersistedLegacyEvent(record, ctx)
+  if (legacyEvent) return legacyEvent
 
   const threadMetadata = persistedThreadMetadataEvent(record)
   if (threadMetadata) return normalizePersistedThreadMetadata(record, ctx, threadMetadata)
@@ -521,4 +658,5 @@ export const currentCodexProtocolInternals = {
   interAgentCommunication,
   plaintextAgentMessageContent,
   normalizePersistedResponseItem,
+  normalizePersistedLegacyEvent,
 }
