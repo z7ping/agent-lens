@@ -158,23 +158,21 @@ test('normalizer uses event_msg.user_message as the only authoritative user requ
     const records = []
     for await (const record of codexSourceDefinition.ingestHistory!(source)) records.push(record)
 
-    const kinds: string[] = []
     const outputs = []
     for (const record of records) {
       const normalized = await codexSourceDefinition.normalize(record, {
         host,
         installation: source.installation,
       })
-      kinds.push(normalized.observations[0]!.kind)
-      outputs.push(normalized.observations[0]!)
+      outputs.push(...normalized.observations)
       assert.equal(normalized.evidenceCandidates[0]?.sourceRecordId, record.id)
     }
+    const kinds = outputs.map(item => item.kind)
 
     assert.deepEqual(kinds, [
       'session.lifecycle',
       'session.lifecycle',
       'session.lifecycle',
-      'context.injected',
       'message.user',
       'message.reasoning',
       'message.assistant',
@@ -184,15 +182,14 @@ test('normalizer uses event_msg.user_message as the only authoritative user requ
       'context.injected',
     ])
 
-    assert.equal((outputs[3]?.payload as any).provenance.transportEcho, true)
-    assert.equal((outputs[4]?.payload as any).provenance.actualAuthor, 'human-user')
-    assert.equal((outputs[4]?.payload as any).text, '运行测试并修复')
-    assert.deepEqual(outputs[7]?.payload, {
+    assert.equal((outputs[3]?.payload as any).provenance.actualAuthor, 'human-user')
+    assert.equal((outputs[3]?.payload as any).text, '运行测试并修复')
+    assert.deepEqual(outputs[6]?.payload, {
       callId: 'call_c1',
       nativeToolName: 'shell_command',
       input: { command: 'npm test' },
     })
-    assert.deepEqual(outputs[8]?.payload, {
+    assert.deepEqual(outputs[7]?.payload, {
       callId: 'call_c1',
       success: false,
       exitCode: 1,
