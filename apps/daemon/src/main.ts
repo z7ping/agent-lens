@@ -37,11 +37,17 @@ import {
 } from './projection-readiness.js'
 import {
   createProgressiveHistoryStages,
+  createParserReplayMaintenanceStages,
   createParserReplayStages,
+  parserReplayMaintenanceStagesAllowedByCapacity,
   stagesAllowedByCapacity,
   storageCapacityState,
   yieldToForeground,
 } from './history-sync-plan.js'
+import {
+  attachHttpForegroundActivity,
+  ForegroundActivityGate,
+} from './maintenance-idle.js'
 import { profiledDshSourcePlugin } from './sources/dsh-profiled.js'
 
 const nodeRuntime = resolveAgentLensNodeRuntime()
@@ -90,6 +96,8 @@ let captureHandles: Awaited<ReturnType<typeof startRegisteredSourceCapture>>['re
 let shuttingDown = false
 let reuseSessionSummaryProjection = false
 let sessionSummaryProjectionReady = false
+let foregroundGate: ForegroundActivityGate | null = null
+let disposeHttpActivityTracking: (() => void) | null = null
 
 function runtimeAge(): string {
   const seconds = Math.max(0, Math.round((Date.now() - startedAt) / 1000))
@@ -120,6 +128,9 @@ async function shutdown(signal: string): Promise<void> {
       await handle.dispose().catch(() => undefined)
     }
     captureHandles = []
+    disposeHttpActivityTracking?.()
+    disposeHttpActivityTracking = null
+    foregroundGate = null
     let readinessError: unknown
     if (sessionSummaryProjectionReady) {
       try {
@@ -157,6 +168,9 @@ process.on('SIGTERM', () => handleSignal('SIGTERM'))
 
 try {
   await app.start()
+  foregroundGate = new ForegroundActivityGate()
+  disposeHttpActivityTracking = attachHttpForegroundActivity(app.context.http.server, foregroundGate)
+
   console.info(
     `[AgentLens] 1.0 runtime started (db: ${dbPath}, mode=${daemonMode}, interactive=${interactiveTerminal}, pid=${process.pid}, ppid=${process.ppid})`,
   )
@@ -181,9 +195,6 @@ try {
     await new Promise(resolve => setTimeout(resolve, INITIAL_BACKGROUND_SYNC_DELAY_MS))
     if (runtimeController.signal.aborted) return
 
-    // Runtime Ready 只依赖已启动的 HTTP Surface 与基础存储。来源探测和
-    // Capture 初始化可能触发 SQLite 写入或宿主 I/O，不能阻塞开发入口的
-    // health 探测和 Vite 启动。
     const prepared = await prepareRegisteredSources(app.context, runtimeController.signal)
     logSourceFailures(prepared.failures)
     if (runtimeController.signal.aborted) return
@@ -219,8 +230,6 @@ try {
 
     if (runtimeController.signal.aborted) return
 
-    // 历史任务是首要界面数据。先完成历史同步，再扫描静态资产，避免两个
-    // 冷扫描器同时争用同一个 SQLite 执行器和磁盘。
     const storageHealth = await app.context.storage.health()
     const capacityState = storageCapacityState(storageHealth.details)
     const plannedHistoryStages = createProgressiveHistoryStages(startedAt)
@@ -249,11 +258,11 @@ try {
     }
     if (runtimeController.signal.aborted) return
 
-    // 原生日志回填可按容量降级，但已经进入 Canonical Pipeline 的 SourceRecord
-    // 必须能随 parser 升级完成语义迁移。先重放近期会话恢复首屏，再渐进覆盖全量。
+    // 启动期只恢复最近会话。重型 7 天/全量 Replay 在资产扫描后进入
+    // 空闲维护阶段，不再占用首屏和 Pi Runtime 的前台启动窗口。
     for (const stage of createParserReplayStages(startedAt)) {
       if (runtimeController.signal.aborted) return
-      console.info(`[AgentLens] parser replay stage started: ${stage.label}`)
+      console.info(`[AgentLens] parser replay startup stage started: ${stage.label}`)
       const replay = await replayRegisteredSourceHistory(
         app.context,
         runtimeController.signal,
@@ -281,10 +290,53 @@ try {
         `[AgentLens] assets scanned: ${result.sourceId} assets=${result.assetsDiscovered} states=${result.statesRecorded}`,
       )
     }
+    if (runtimeController.signal.aborted) return
+
+    const gate = foregroundGate
+    if (!gate) return
+    await gate.wait(runtimeController.signal)
+    if (runtimeController.signal.aborted) return
+
+    const maintenanceHealth = await app.context.storage.health()
+    const maintenanceCapacityState = storageCapacityState(maintenanceHealth.details)
+    const plannedMaintenanceStages = createParserReplayMaintenanceStages(startedAt)
+    const maintenanceStages = parserReplayMaintenanceStagesAllowedByCapacity(
+      plannedMaintenanceStages,
+      maintenanceCapacityState,
+    )
+    if (maintenanceStages.length < plannedMaintenanceStages.length) {
+      const allowed = new Set(maintenanceStages.map(stage => stage.id))
+      const paused = plannedMaintenanceStages.filter(stage => !allowed.has(stage.id)).map(stage => stage.label)
+      console.warn(`[AgentLens] parser replay maintenance paused: ${paused.join(', ')}; storage capacity=${maintenanceCapacityState}`)
+    }
+
+    for (const stage of maintenanceStages) {
+      if (runtimeController.signal.aborted) return
+      await gate.wait(runtimeController.signal)
+      if (runtimeController.signal.aborted) return
+      console.info(`[AgentLens] parser replay maintenance stage started: ${stage.label}`)
+      const replay = await replayRegisteredSourceHistory(
+        app.context,
+        runtimeController.signal,
+        prepared.targets,
+        stage.window,
+        { cooperate: () => gate.wait(runtimeController.signal) },
+      )
+      logSourceFailures(replay.failures)
+      for (const result of replay.results) {
+        console.info(
+          `[AgentLens] parser replay maintenance: stage=${stage.id} source=${result.sourceId} records=${result.records} created=${result.observationsCreated} merged=${result.observationsMerged} unchanged=${result.observationsUnchanged}`,
+        )
+      }
+      await yieldToForeground(runtimeController.signal)
+    }
   })()
   await syncPromise
 } catch (error) {
   runtimeController.abort()
+  disposeHttpActivityTracking?.()
+  disposeHttpActivityTracking = null
+  foregroundGate = null
   for (const handle of [...captureHandles].reverse()) {
     await handle.dispose().catch(() => undefined)
   }
