@@ -17,7 +17,7 @@ function asRecord(value: unknown): Record<string, any> {
 }
 
 type AssistantEvent = {
-  source: 'event_msg.agent_message' | 'response_item.message.role=assistant'
+  source: 'event_msg.agent_message'
   text: string
   phase?: string
 }
@@ -26,32 +26,17 @@ function assistantEvent(record: SourceRecord): AssistantEvent | null {
   const envelope = asRecord(record.payload)
   const entry = asRecord(envelope.entry)
   const payload = asRecord(entry.payload)
+  if (entry.type !== 'event_msg' || payload.type !== 'agent_message') return null
+
+  const text = typeof payload.message === 'string'
+    ? payload.message
+    : typeof payload.text === 'string'
+      ? payload.text
+      : messageText(payload.content)
+  if (!text) return null
+
   const phase = typeof payload.phase === 'string' && payload.phase ? payload.phase : undefined
-
-  if (entry.type === 'event_msg' && payload.type === 'agent_message') {
-    const text = typeof payload.message === 'string'
-      ? payload.message
-      : typeof payload.text === 'string'
-        ? payload.text
-        : messageText(payload.content)
-    return text
-      ? { source: 'event_msg.agent_message', text, ...(phase ? { phase } : {}) }
-      : null
-  }
-
-  if (entry.type === 'response_item' && payload.type === 'message' && payload.role === 'assistant') {
-    const text = messageText(payload.content ?? payload.text ?? '')
-    return text
-      ? { source: 'response_item.message.role=assistant', text, ...(phase ? { phase } : {}) }
-      : null
-  }
-
-  return null
-}
-
-function sharedAssistantEventKey(record: SourceRecord, event: AssistantEvent): string | undefined {
-  if (!record.occurredAt) return undefined
-  return `codex-assistant:${record.occurredAt}:${event.phase ?? ''}:${event.text}`
+  return { source: 'event_msg.agent_message', text, ...(phase ? { phase } : {}) }
 }
 
 function asResponseItem(record: SourceRecord, event: AssistantEvent): SourceRecord {
@@ -77,35 +62,28 @@ function asResponseItem(record: SourceRecord, event: AssistantEvent): SourceReco
 
 function alignAssistantCandidate(
   observation: ObservationCandidate,
-  record: SourceRecord,
   event: AssistantEvent,
 ): ObservationCandidate {
   if (observation.kind !== 'message.assistant' && observation.kind !== 'message.commentary') return observation
 
-  const sharedEventKey = sharedAssistantEventKey(record, event)
   const originalPayload = asRecord(observation.payload)
-  const { content: _syntheticContent, provenance: _provenance, ...visiblePayload } = originalPayload
-  const payload = event.source === 'event_msg.agent_message'
-    ? {
-        ...visiblePayload,
-        provenance: assistantMessageProvenance('assistant', 'event_msg.agent_message'),
-      }
-    : originalPayload
-
+  const { content: _syntheticContent, provenance: _legacyProvenance, ...visiblePayload } = originalPayload
   return {
     ...observation,
-    payload,
-    dedupHints: {
-      ...observation.dedupHints,
-      ...(sharedEventKey ? { sharedEventKey } : {}),
+    payload: {
+      ...visiblePayload,
+      provenance: assistantMessageProvenance('assistant', event.source),
     },
   }
 }
 
 /**
- * 兼容当前 Codex rollout 协议：正常 Assistant 输出同时可能以
- * event_msg.agent_message 与 response_item/message 两种原生记录出现。
- * 两者都保留 SourceRecord/Evidence，但 Canonical 层使用结构化共享键合并为一次回复。
+ * 当前 Codex 的可见 Assistant 历史以 event_msg.agent_message 为权威信号。
+ * 官方 ThreadHistoryBuilder 会消费 AgentMessage，并忽略 response_item 中的 assistant message；
+ * 这里复用旧 message 解析逻辑，但保留原生 event_msg provenance。
+ *
+ * 旧 rollout 仍可能只有 response_item/message role=assistant，因此非 agent_message
+ * 继续交给旧 normalizer 兼容，不在这里用正文/时间戳做跨记录猜测去重。
  */
 export async function normalizeCurrentCodexRecord(
   record: SourceRecord,
@@ -114,18 +92,13 @@ export async function normalizeCurrentCodexRecord(
   const event = assistantEvent(record)
   if (!event) return normalizeCodexRecord(record, ctx)
 
-  const normalized = await normalizeCodexRecord(
-    event.source === 'event_msg.agent_message' ? asResponseItem(record, event) : record,
-    ctx,
-  )
-
+  const normalized = await normalizeCodexRecord(asResponseItem(record, event), ctx)
   return {
     ...normalized,
-    observations: normalized.observations.map(observation => alignAssistantCandidate(observation, record, event)),
+    observations: normalized.observations.map(observation => alignAssistantCandidate(observation, event)),
   }
 }
 
 export const currentCodexProtocolInternals = {
   assistantEvent,
-  sharedAssistantEventKey,
 }
