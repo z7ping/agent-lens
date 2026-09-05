@@ -19,7 +19,6 @@ import {
   type ReviewEventCategory,
   type ReviewEventNodeDto,
   type ReviewInteractionDto,
-  type ReviewInteractionIndexDto,
   type ReviewMessageNodeDto,
   type ReviewNodeDto,
   type ReviewNodeSourceDto,
@@ -37,6 +36,7 @@ const DEFAULT_DETAIL_LIMIT = 20
 const MAX_DETAIL_LIMIT = 100
 const TIMELINE_CHUNK = 250
 const DESCRIPTOR_SCAN_CHUNK = 1000
+const MAX_DESCRIPTOR_CACHE = 32
 
 function asRecord(value: JsonValue | unknown): Record<string, any> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {}
@@ -380,6 +380,7 @@ function highLatencyThreshold(descriptors: InteractionDescriptor[]): number | nu
 export class ReviewProjection {
   private readonly sessions: SessionProjection
   private readonly timeline: TimelineProjection
+  private readonly descriptorCache = new Map<string, { version: string; descriptors: InteractionDescriptor[] }>()
 
   constructor(private readonly storage: StorageService) {
     this.sessions = new SessionProjection(storage)
@@ -592,6 +593,74 @@ export class ReviewProjection {
     }
     flush()
     return descriptors
+  }
+
+  private async cachedInteractionDescriptors(summary: ReviewSessionSummaryDto): Promise<InteractionDescriptor[]> {
+    const version = `${summary.observationCount}:${summary.endedAt}`
+    const cached = this.descriptorCache.get(summary.id)
+    if (cached?.version === version) {
+      this.descriptorCache.delete(summary.id)
+      this.descriptorCache.set(summary.id, cached)
+      return cached.descriptors
+    }
+
+    const descriptors = await this.scanInteractionDescriptors(summary.id)
+    this.descriptorCache.set(summary.id, { version, descriptors })
+    while (this.descriptorCache.size > MAX_DESCRIPTOR_CACHE) {
+      const oldest = this.descriptorCache.keys().next().value as string | undefined
+      if (!oldest) break
+      this.descriptorCache.delete(oldest)
+    }
+    return descriptors
+  }
+
+  private async scanInteractionDescriptor(logicalSessionId: string, targetOrdinal: number): Promise<InteractionDescriptor | null> {
+    if (!Number.isSafeInteger(targetOrdinal) || targetOrdinal < 1) return null
+    let after: ObservationCursor | undefined
+    let current: InteractionDescriptor | null = null
+    let ordinal = 0
+
+    while (true) {
+      const observations = await this.storage.repositories.observations.query({
+        logicalSessionId,
+        ...(after ? { after } : {}),
+        limit: DESCRIPTOR_SCAN_CHUNK,
+      })
+      if (!observations.length) break
+
+      for (const observation of observations) {
+        if (observation.kind === 'message.user' && current) {
+          if (current.ordinal === targetOrdinal) return current
+          current = null
+        }
+        if (!current && observation.kind === 'session.lifecycle') continue
+        if (!current) {
+          ordinal += 1
+          const cursor = observationCursor(observation)
+          current = {
+            ordinal,
+            trigger: observation.kind === 'message.user' ? 'user' : 'background',
+            start: cursor,
+            end: cursor,
+            startedAt: cursor.effectiveAt,
+            endedAt: cursor.effectiveAt,
+            hasError: false,
+          }
+        }
+        if (!current.preview && observation.kind === 'message.user') {
+          const preview = textFromPayload(observation.payload)?.replace(/\s+/g, ' ').trim()
+          if (preview) current.preview = preview.length > 120 ? `${preview.slice(0, 120)}…` : preview
+        }
+        current.end = observationCursor(observation)
+        current.endedAt = observationEffectiveAt(observation)
+        current.hasError ||= observationError(observation)
+      }
+
+      after = observationCursor(observations[observations.length - 1]!)
+      if (observations.length < DESCRIPTOR_SCAN_CHUNK) break
+    }
+
+    return current?.ordinal === targetOrdinal ? current : null
   }
 
   private async countInteractions(logicalSessionId: string): Promise<number> {
@@ -862,36 +931,41 @@ export class ReviewProjection {
       if (session) summary = await this.summary(session)
     }
     if (!summary) return null
-    const descriptors = await this.scanInteractionDescriptors(logicalSessionId)
 
     const filter = query.filter ?? 'all'
     const direction = query.direction ?? 'forward'
-    const target = query.ordinal === undefined ? undefined : descriptors.find(item => item.ordinal === query.ordinal)
-    const result = query.ordinal !== undefined
-      ? {
-          interactions: target ? [await this.materializeDescriptor(logicalSessionId, target)] : [],
-          page: { count: target ? 1 : 0, hasMore: false, direction: 'forward' as const, filter: 'all' as const },
-        }
-      : filter === 'errors' || filter === 'latency'
-      ? await this.filteredInteractionPage(logicalSessionId, query, filter, descriptors)
-      : filter === 'latest'
-        ? await this.backwardInteractionPage(logicalSessionId, { ...query, direction: 'backward' }, 'latest', summary.interactionCount)
-        : direction === 'backward'
-          ? await this.backwardInteractionPage(logicalSessionId, query, 'all', summary.interactionCount)
-          : await this.forwardInteractionPage(logicalSessionId, query)
+    let result: { interactions: ReviewInteractionDto[]; page: ReviewDetailPageDto }
+
+    if (query.ordinal !== undefined) {
+      const target = await this.scanInteractionDescriptor(logicalSessionId, query.ordinal)
+      result = {
+        interactions: target ? [await this.materializeDescriptor(logicalSessionId, target)] : [],
+        page: { count: target ? 1 : 0, hasMore: false, direction: 'forward', filter: 'all' },
+      }
+    } else if (filter === 'errors' || filter === 'latency') {
+      const descriptors = await this.cachedInteractionDescriptors(summary)
+      result = await this.filteredInteractionPage(logicalSessionId, query, filter, descriptors)
+    } else if (filter === 'latest') {
+      result = await this.backwardInteractionPage(
+        logicalSessionId,
+        { ...query, direction: 'backward' },
+        'latest',
+        summary.interactionCount > 0 ? summary.interactionCount : undefined,
+      )
+    } else if (direction === 'backward') {
+      result = await this.backwardInteractionPage(
+        logicalSessionId,
+        query,
+        'all',
+        summary.interactionCount > 0 ? summary.interactionCount : undefined,
+      )
+    } else {
+      result = await this.forwardInteractionPage(logicalSessionId, query)
+    }
 
     return {
       ...summary,
       interactions: result.interactions,
-      interactionIndex: descriptors.map((item): ReviewInteractionIndexDto => ({
-        id: `${logicalSessionId}:interaction:${item.ordinal}`,
-        ordinal: item.ordinal,
-        trigger: item.trigger,
-        startedAt: item.startedAt,
-        endedAt: item.endedAt,
-        hasError: item.hasError,
-        ...(item.preview ? { preview: item.preview } : {}),
-      })),
       page: result.page,
     }
   }
@@ -909,4 +983,5 @@ export const reviewProjectionInternals = {
   encodeReviewCursor,
   decodeReviewCursor,
   highLatencyThreshold,
+  maxDescriptorCache: MAX_DESCRIPTOR_CACHE,
 }
