@@ -9,7 +9,7 @@ export interface ProgressiveHistoryStage {
 }
 
 export interface ParserReplayStage {
-  id: 'hot-window' | 'all'
+  id: 'recent' | 'hot-window' | 'all'
   label: string
   window?: SourceHistoryWindow
 }
@@ -25,7 +25,11 @@ export function createProgressiveHistoryStages(startedAt: number): ProgressiveHi
   ]
 }
 
-/** Parser Replay 完全退出启动链路，只能由空闲维护调度执行。 */
+/** Parser Replay 完全退出启动链路；保留 API 仅用于明确表达“启动期 0 Replay”。 */
+export function createParserReplayStages(_startedAt: number): ParserReplayStage[] {
+  return []
+}
+
 export function createParserReplayMaintenanceStages(startedAt: number): ParserReplayStage[] {
   const activeSince = new Date(startedAt - HOT_HISTORY_WINDOW_MS).toISOString()
   return [
