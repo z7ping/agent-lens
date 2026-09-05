@@ -85,7 +85,7 @@ test('legacy persisted tool results retain native call identity', async () => {
   ].entries()) {
     const output = await normalizeCurrentCodexRecord(record(payload, 20 + index), ctx)
     assert.equal(output.observations[0]?.nativeCallId, payload.call_id)
-    assert.equal(output.observations[0]?.dedupHints.nativeCallId, payload.call_id)
+    assert.equal(output.observations[0]?.dedupHints?.nativeCallId, payload.call_id)
   }
 })
 
