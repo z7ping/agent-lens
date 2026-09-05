@@ -20,6 +20,7 @@ import type {
   SourceRuntimeStatus,
   StorageService,
 } from '@agent-lens/core'
+import { materializeEvidence } from './index'
 import { deriveParentRelationshipCandidates } from './relationship-hints'
 
 const DEFAULT_COOPERATIVE_BUDGET_MS = 8
@@ -309,6 +310,15 @@ async function processSourceRecord(
   // 除了保证原子性，也避免冷导入时每次仓储写入都单独开启 SQLite 事务。
   await storage.transaction(async () => {
     await storage.repositories.sourceRecords.put(persistedRecord)
+
+    // 部分来源记录（例如 transport echo、状态快照）只保留 SourceRecord/Evidence，
+    // 不应为了挂 Evidence 而伪造 Canonical Observation。
+    const evidenceRepository = storage.repositories.evidence
+    if (!persistedOutput.observations.length && evidenceRepository) {
+      for (const candidate of persistedOutput.evidenceCandidates) {
+        await evidenceRepository.put(materializeEvidence(candidate))
+      }
+    }
 
     for (const observation of persistedOutput.observations) {
       if (runtimeProfile && !observation.identityHints.runtimeProfileNativeId) {
