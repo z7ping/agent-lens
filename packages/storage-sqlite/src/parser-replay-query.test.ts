@@ -102,7 +102,7 @@ test('parser replay drains 1505 stale records across multiple 500-row pages and 
         insert.run(
           `stale-${String(index).padStart(4, '0')}`,
           new Date(base + index).toISOString(),
-          index < 1200 ? '1' : '2',
+          index < 1001 ? '1' : '2',
         )
       }
     })
