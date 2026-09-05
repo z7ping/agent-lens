@@ -67,6 +67,109 @@ test('event_msg token_count becomes canonical usage', async () => {
   assert.equal((fact.payload as any).totalTokens, 120)
 })
 
+test('persisted thread settings becomes a readable reasoning configuration lifecycle fact', async () => {
+  const output = await normalizeCodexRecord(record({
+    type: 'event_msg',
+    payload: {
+      type: 'thread_settings_applied',
+      model: 'gpt-5.6-sol',
+      reasoning_effort: 'high',
+      reasoning_summary: 'auto',
+    },
+  }), ctx)
+  const fact = output.observations[0]!
+  assert.equal(fact.kind, 'session.lifecycle')
+  assert.equal((fact.payload as any).event, 'reasoning.configuration.updated')
+  assert.equal((fact.payload as any).reasoning_effort, 'high')
+})
+
+test('persisted agent communication becomes a readable lifecycle fact', async () => {
+  const response = await normalizeCodexRecord(record({
+    type: 'response_item',
+    payload: {
+      type: 'agent_message',
+      author: '/root/worker',
+      recipient: '/root',
+      content: [{ type: 'output_text', text: 'child done' }],
+    },
+  }), ctx)
+  assert.equal(response.observations[0]?.kind, 'session.lifecycle')
+  assert.equal((response.observations[0]?.payload as any).event, 'subagent.communication')
+  assert.equal((response.observations[0]?.payload as any).text, 'child done')
+
+  const rollout = await normalizeCodexRecord(record({
+    type: 'inter_agent_communication',
+    payload: {
+      author: '/root',
+      recipient: '/root/worker',
+      content: 'please inspect this',
+      trigger_turn: true,
+    },
+  }), ctx)
+  assert.equal(rollout.observations[0]?.kind, 'session.lifecycle')
+  assert.equal((rollout.observations[0]?.payload as any).event, 'subagent.communication')
+  assert.equal((rollout.observations[0]?.payload as any).text, 'please inspect this')
+})
+
+test('persisted local shell and tool search calls become canonical tool calls', async () => {
+  const shell = await normalizeCodexRecord(record({
+    type: 'response_item',
+    payload: {
+      type: 'local_shell_call',
+      call_id: 'shell-1',
+      status: 'completed',
+      action: { type: 'exec', command: ['git', 'status'], working_directory: '/safe/project' },
+    },
+  }), ctx)
+  assert.equal(shell.observations[0]?.kind, 'tool.call')
+  assert.equal((shell.observations[0]?.payload as any).nativeToolName, 'local_shell')
+  assert.deepEqual((shell.observations[0]?.payload as any).input.command, ['git', 'status'])
+
+  const search = await normalizeCodexRecord(record({
+    type: 'response_item',
+    payload: {
+      type: 'tool_search_call',
+      call_id: 'search-1',
+      execution: 'server',
+      status: 'completed',
+      arguments: { query: 'review tool' },
+    },
+  }), ctx)
+  assert.equal(search.observations[0]?.kind, 'tool.call')
+  assert.equal((search.observations[0]?.payload as any).nativeToolName, 'tool_search')
+  assert.equal((search.observations[0]?.payload as any).input.query, 'review tool')
+})
+
+test('persisted image generation becomes an artifact action without exposing the result body', async () => {
+  const output = await normalizeCodexRecord(record({
+    type: 'response_item',
+    payload: {
+      type: 'image_generation_call',
+      id: 'image-1',
+      status: 'completed',
+      result: 'base64-image-data',
+    },
+  }), ctx)
+  const fact = output.observations[0]!
+  assert.equal(fact.kind, 'artifact.action')
+  assert.equal((fact.payload as any).action, 'image.generation')
+  assert.equal((fact.payload as any).artifactId, 'image-1')
+  assert.equal((fact.payload as any).hasResult, true)
+  assert.equal('result' in (fact.payload as any), false)
+})
+
+test('persisted compaction response items become canonical compaction facts', async () => {
+  for (const type of ['compaction', 'context_compaction']) {
+    const output = await normalizeCodexRecord(record({
+      type: 'response_item',
+      payload: { type, encrypted_content: 'opaque', future_field: { survives: true } },
+    }), ctx)
+    assert.equal(output.observations[0]?.kind, 'context.compaction')
+    assert.equal((output.observations[0]?.payload as any).sourceType, type)
+    assert.equal((output.observations[0]?.payload as any).raw.future_field.survives, true)
+  }
+})
+
 test('compacted, web search and future rollout items retain source-visible detail', async () => {
   const compacted = await normalizeCodexRecord(record({ type: 'compacted', payload: { replacement_history: ['a'], reason: 'auto' } }), ctx)
   assert.equal(compacted.observations[0]?.kind, 'context.compaction')
