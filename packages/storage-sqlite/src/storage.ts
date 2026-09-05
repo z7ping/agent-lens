@@ -113,38 +113,98 @@ export class SqliteStorageService implements StorageService {
     await this.executor.run(() => migrateDatabase(this.db))
   }
 
+  private schemaVersion(): number {
+    const migrationTable = this.db.prepare(`
+      SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations'
+    `).get()
+    return migrationTable
+      ? Number((this.db.prepare(
+        'SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations',
+      ).get() as { version: number }).version)
+      : 0
+  }
+
+  private runtimeHealthDetails() {
+    const runtimeStatusTable = this.db.prepare(`
+      SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'source_runtime_status'
+    `).get()
+    const items = runtimeStatusTable
+      ? this.db.prepare(`
+          SELECT source_id AS sourceId,
+                 installation_id AS installationId,
+                 runtime_profile_id AS runtimeProfileId,
+                 stage,
+                 state,
+                 last_success_at AS lastSuccessAt,
+                 last_error_at AS lastErrorAt,
+                 error_count AS errorCount,
+                 last_error_summary AS lastErrorSummary
+          FROM source_runtime_status
+          ORDER BY source_id, installation_id, runtime_profile_id, stage
+        `).all()
+      : []
+    const typed = items as Array<{ state: string }>
+    return {
+      failed: typed.filter(item => item.state === 'failed').length,
+      running: typed.filter(item => item.state === 'running').length,
+      items,
+    }
+  }
+
+  private capacityDetails() {
+    const pageCount = Number(this.db.pragma('page_count', { simple: true }))
+    const pageSize = Number(this.db.pragma('page_size', { simple: true }))
+    const freelistCount = Number(this.db.pragma('freelist_count', { simple: true }))
+    const databaseBytes = fileSize(this.db.name)
+    const walBytes = fileSize(`${this.db.name}-wal`)
+    const logicalBytes = pageCount * pageSize
+    const reclaimableBytes = freelistCount * pageSize
+    return {
+      databaseBytes,
+      walBytes,
+      logicalBytes,
+      reclaimableBytes,
+      capacity: describeStorageCapacity(Math.max(databaseBytes, logicalBytes) + walBytes),
+    }
+  }
+
+  private checkpointHealthDetails() {
+    const checkpointTable = this.db.prepare(`
+      SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'source_checkpoints'
+    `).get()
+    const summary = checkpointTable
+      ? this.db.prepare(`
+          SELECT COUNT(*) AS count, MAX(updated_at) AS lastUpdatedAt
+          FROM source_checkpoints
+        `).get() as { count: number; lastUpdatedAt: string | null }
+      : { count: 0, lastUpdatedAt: null }
+    return {
+      count: Number(summary.count || 0),
+      lastUpdatedAt: summary.lastUpdatedAt,
+    }
+  }
+
   async health(): Promise<StorageHealth> {
     return this.executor.run(() => {
       const probe = this.db.prepare('SELECT 1 AS ok').get() as { ok: number }
-      const migrationTable = this.db.prepare(`
-        SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations'
-      `).get()
-      const schemaVersion = migrationTable
-        ? Number((this.db.prepare(
-          'SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations',
-        ).get() as { version: number }).version)
-        : 0
-      const runtimeStatusTable = this.db.prepare(`
-        SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'source_runtime_status'
-      `).get()
-      const sourceRuntime = runtimeStatusTable
-        ? this.db.prepare(`
-            SELECT source_id AS sourceId,
-                   installation_id AS installationId,
-                   runtime_profile_id AS runtimeProfileId,
-                   stage,
-                   state,
-                   last_success_at AS lastSuccessAt,
-                   last_error_at AS lastErrorAt,
-                   error_count AS errorCount,
-                   last_error_summary AS lastErrorSummary
-            FROM source_runtime_status
-            ORDER BY source_id, installation_id, runtime_profile_id, stage
-          `).all()
-        : []
-      const failedSources = (sourceRuntime as Array<{ state: string }>).filter(item => item.state === 'failed').length
-      const runningSources = (sourceRuntime as Array<{ state: string }>).filter(item => item.state === 'running').length
+      return {
+        ok: probe.ok === 1,
+        schemaVersion: this.schemaVersion(),
+        details: {
+          path: this.db.name,
+          readonly: this.db.readonly,
+          inTransaction: this.db.inTransaction,
+          sourceRuntime: this.runtimeHealthDetails(),
+          dataGrowth: this.capacityDetails(),
+          checkpoints: this.checkpointHealthDetails(),
+        },
+      }
+    })
+  }
 
+  async diagnostics(): Promise<StorageHealth> {
+    const health = await this.health()
+    return this.executor.run(() => {
       const unknownObservations = this.db.prepare(`
         SELECT sr.source_id AS sourceId,
                sr.native_type AS nativeType,
@@ -182,63 +242,25 @@ export class SqliteStorageService implements StorageService {
       }
 
       const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-      const count = (table: string): number => Number((this.db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get() as { count: number }).count)
-      const recentCount = (table: string, column: string): number => Number((this.db.prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE ${column} >= ?`).get(cutoff) as { count: number }).count)
-      const pageCount = Number(this.db.pragma('page_count', { simple: true }))
-      const pageSize = Number(this.db.pragma('page_size', { simple: true }))
-      const freelistCount = Number(this.db.pragma('freelist_count', { simple: true }))
-      const databaseBytes = fileSize(this.db.name)
-      const walBytes = fileSize(`${this.db.name}-wal`)
-      const logicalBytes = pageCount * pageSize
-      const reclaimableBytes = freelistCount * pageSize
-      const capacity = describeStorageCapacity(Math.max(databaseBytes, logicalBytes) + walBytes)
-      const checkpointTable = this.db.prepare(`
-        SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'source_checkpoints'
-      `).get()
-      const checkpointSummary = checkpointTable
-        ? this.db.prepare(`
-            SELECT COUNT(*) AS count, MAX(updated_at) AS lastUpdatedAt
-            FROM source_checkpoints
-          `).get() as { count: number; lastUpdatedAt: string | null }
-        : { count: 0, lastUpdatedAt: null }
-
-      const dataGrowth = {
-        databaseBytes,
-        walBytes,
-        logicalBytes,
-        reclaimableBytes,
-        capacity,
-        sevenDayCutoff: cutoff,
-        totals: {
-          sourceRecords: count('source_records'),
-          observations: count('observations'),
-          evidence: count('evidence'),
-          sessions: count('logical_sessions'),
-        },
-        last7Days: {
-          sourceRecords: recentCount('source_records', 'captured_at'),
-          observations: recentCount('observations', 'captured_at'),
-          evidence: recentCount('evidence', 'captured_at'),
-          sessions: Number((this.db.prepare(`
-            SELECT COUNT(*) AS count
-            FROM logical_sessions
-            WHERE COALESCE(started_at, ended_at) >= ?
-          `).get(cutoff) as { count: number }).count),
-        },
-      }
+      const count = (table: string): number => Number((this.db.prepare(
+        `SELECT COUNT(*) AS count FROM ${table}`,
+      ).get() as { count: number }).count)
+      const recentCount = (table: string, column: string): number => Number((this.db.prepare(
+        `SELECT COUNT(*) AS count FROM ${table} WHERE ${column} >= ?`,
+      ).get(cutoff) as { count: number }).count)
+      const recentSessions = Number((this.db.prepare(`
+        SELECT COUNT(*) AS count
+        FROM session_summary_projection
+        WHERE ended_at >= ?
+      `).get(cutoff) as { count: number }).count)
+      const baseGrowth = health.details?.dataGrowth && typeof health.details.dataGrowth === 'object'
+        ? health.details.dataGrowth as Readonly<Record<string, unknown>>
+        : this.capacityDetails()
 
       return {
-        ok: probe.ok === 1,
-        schemaVersion,
+        ...health,
         details: {
-          path: this.db.name,
-          readonly: this.db.readonly,
-          inTransaction: this.db.inTransaction,
-          sourceRuntime: {
-            failed: failedSources,
-            running: runningSources,
-            items: sourceRuntime,
-          },
+          ...health.details,
           unknownObservations: {
             total: unknownCount,
             groups: unknownObservations,
@@ -247,10 +269,21 @@ export class SqliteStorageService implements StorageService {
             summary: coverageSummary,
             items: coverageItems,
           },
-          dataGrowth,
-          checkpoints: {
-            count: Number(checkpointSummary.count || 0),
-            lastUpdatedAt: checkpointSummary.lastUpdatedAt,
+          dataGrowth: {
+            ...baseGrowth,
+            sevenDayCutoff: cutoff,
+            totals: {
+              sourceRecords: count('source_records'),
+              observations: count('observations'),
+              evidence: count('evidence'),
+              sessions: count('logical_sessions'),
+            },
+            last7Days: {
+              sourceRecords: recentCount('source_records', 'captured_at'),
+              observations: recentCount('observations', 'captured_at'),
+              evidence: recentCount('evidence', 'captured_at'),
+              sessions: recentSessions,
+            },
           },
         },
       }
