@@ -10,6 +10,7 @@ export type DataRuntimeMethod =
   | 'status'
   | 'shutdown'
   | 'diagnostic.block'
+  | 'diagnostic.exit'
   | 'storage.call'
   | 'storage.transaction.begin'
   | 'storage.transaction.commit'
