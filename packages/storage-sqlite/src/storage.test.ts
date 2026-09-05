@@ -15,12 +15,12 @@ async function createStorage() {
   return storage
 }
 
-test('SQLite storage migrates to schema version 19 and exposes required tables', async () => {
+test('SQLite storage migrates to schema version 20 and exposes required tables', async () => {
   const storage = await createStorage()
   try {
     const health = await storage.health()
     assert.equal(health.ok, true)
-    assert.equal(health.schemaVersion, 19)
+    assert.equal(health.schemaVersion, 20)
     const growth = (health.details as any)?.dataGrowth
     assert.equal(growth.capacity.softLimitBytes, 512 * 1024 * 1024)
     assert.equal(growth.capacity.state, 'healthy')
@@ -29,6 +29,8 @@ test('SQLite storage migrates to schema version 19 and exposes required tables',
     assert.equal((health.details as any)?.coverage, undefined)
     assert.equal(growth.totals, undefined)
     assert.equal(growth.last7Days, undefined)
+    assert.equal(typeof (health.details as any)?.executor?.queueDepth, 'number')
+    assert.equal(typeof (health.details as any)?.executor?.queueWaitMs?.p95, 'number')
 
     const rows = storage.db.prepare(`
       SELECT name FROM sqlite_master
@@ -91,6 +93,8 @@ test('SQLite storage migrates to schema version 19 and exposes required tables',
     const sourceRecordColumns = storage.db.prepare('PRAGMA table_info(source_records)').all() as Array<{ name: string }>
     assert.equal(sourceRecordColumns.some(column => column.name === 'payload_encoding'), true)
     assert.equal(sourceRecordColumns.some(column => column.name === 'payload_blob'), true)
+    const checkpointColumns = storage.db.prepare('PRAGMA table_info(source_checkpoints)').all() as Array<{ name: string }>
+    assert.equal(checkpointColumns.some(column => column.name === 'revision'), true)
   } finally {
     storage.close()
   }
