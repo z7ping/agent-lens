@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { SourceRecord } from '@agent-lens/core'
-import { normalizeCurrentCodexRecord } from './current-protocol'
+import { CODEX_CURRENT_PARSER_VERSION, normalizeCurrentCodexRecord } from './current-protocol'
 
 const ctx = {
   host: { id: 'host', name: 'host', platform: 'linux', arch: 'x64', createdAt: '2026-01-01T00:00:00.000Z', lastSeenAt: '2026-01-01T00:00:00.000Z' },
@@ -20,9 +20,13 @@ function record(entry: unknown, sourceSequence: number): SourceRecord {
     capturedAt: '2026-09-05T06:00:01.000Z',
     locator: { kind: 'file', path: '/safe/rollout.jsonl', offset: sourceSequence },
     payload: { entry, session: { nativeSessionId: 'thread-root', cwd: '/safe/project' } },
-    parserVersion: '15',
+    parserVersion: CODEX_CURRENT_PARSER_VERSION,
   }
 }
+
+test('current Codex parser version is 16 so Parser 15 derivations replay', () => {
+  assert.equal(CODEX_CURRENT_PARSER_VERSION, '16')
+})
 
 test('event_msg.agent_message becomes canonical assistant output instead of background unknown', async () => {
   const output = await normalizeCurrentCodexRecord(record({
@@ -94,11 +98,51 @@ test('response_item role=user runtime context remains a structured context activ
   assert.equal((output.observations[0]?.payload as any).injectedKind, 'runtime-environment')
 })
 
+test('persisted thread goal update is lifecycle metadata rather than raw unknown', async () => {
+  const output = await normalizeCurrentCodexRecord(record({
+    type: 'event_msg',
+    payload: {
+      type: 'thread_goal_updated', thread_id: 'thread-root', turn_id: 'turn-1',
+      goal: { objective: '完成 Parser 收口', status: 'active', token_budget: 1000 },
+    },
+  }, 6), ctx)
+  const fact = output.observations[0]!
+  assert.equal(fact.kind, 'session.lifecycle')
+  assert.equal((fact.payload as any).event, 'thread.goal.updated')
+  assert.equal((fact.payload as any).goal.objective, '完成 Parser 收口')
+})
+
+test('persisted thread rollback is explicit lifecycle metadata', async () => {
+  const output = await normalizeCurrentCodexRecord(record({
+    type: 'event_msg',
+    payload: { type: 'thread_rolled_back', num_turns: 2 },
+  }, 7), ctx)
+  const fact = output.observations[0]!
+  assert.equal(fact.kind, 'session.lifecycle')
+  assert.equal((fact.payload as any).event, 'thread.rolled-back')
+  assert.equal((fact.payload as any).num_turns, 2)
+})
+
+test('persisted thread settings update carries model/workspace identity without becoming a conversation node', async () => {
+  const output = await normalizeCurrentCodexRecord(record({
+    type: 'event_msg',
+    payload: {
+      type: 'thread_settings_applied', thread_id: 'thread-root',
+      thread_settings: { model: 'gpt-5.6-codex', cwd: '/safe/updated-project', reasoning_effort: 'high' },
+    },
+  }, 8), ctx)
+  const fact = output.observations[0]!
+  assert.equal(fact.kind, 'session.lifecycle')
+  assert.equal((fact.payload as any).event, 'thread.settings.applied')
+  assert.equal(fact.identityHints.modelName, 'gpt-5.6-codex')
+  assert.equal(fact.identityHints.workspacePath, '/safe/updated-project')
+})
+
 test('agent_message without visible text stays on the original unknown fallback path', async () => {
   const output = await normalizeCurrentCodexRecord(record({
     type: 'event_msg',
     payload: { type: 'agent_message', message: '' },
-  }, 6), ctx)
+  }, 9), ctx)
 
   assert.equal(output.observations[0]?.kind, 'unknown')
 })
