@@ -187,12 +187,13 @@ export class DataRuntimeService {
     }
     this.recoveryTimer = setInterval(tick, Math.max(500, intervalMs))
     this.recoveryTimer.unref?.()
+    tick()
   }
 
   async recover(): Promise<void> {
     if (this.stopping || this.recovering) return
-    const writerNeedsRecovery = this.writer.state() === 'degraded'
-    const readerNeedsRecovery = this.reader !== this.writer && this.reader.state() === 'degraded'
+    const writerNeedsRecovery = this.writer.state() !== 'ready'
+    const readerNeedsRecovery = this.reader !== this.writer && this.reader.state() !== 'ready'
     if (!writerNeedsRecovery && !readerNeedsRecovery) return
 
     this.recovering = true
@@ -269,8 +270,21 @@ export class DataRuntimeStorageService implements StorageService {
     return this.executor.transaction(() => fn(this.repositories))
   }
 
-  health(): Promise<StorageHealth> {
-    return this.executor.call(['health'])
+  async health(): Promise<StorageHealth> {
+    if (this.executor.reader.state() === 'ready') {
+      return this.executor.call(['health'])
+    }
+    if (this.executor.writer.state() === 'ready') {
+      return this.executor.call(['health'], [], { forceWriter: true })
+    }
+    return {
+      ok: false,
+      details: {
+        dataRuntimeUnavailable: true,
+        writerState: this.executor.writer.state(),
+        readerState: this.executor.reader.state(),
+      },
+    }
   }
 
   diagnostics(): Promise<StorageHealth> {
