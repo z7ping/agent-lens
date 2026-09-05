@@ -6,6 +6,7 @@ import type {
 } from '@agent-lens/core'
 import { messageText, type CodexStoredEnvelope } from './format'
 import { normalizeCodexRecord } from './normalize'
+import { normalizePaginatedFunctionOutput } from './paginated-function-output'
 import { normalizePaginatedCodexRecord } from './paginated-protocol'
 import { assistantMessageProvenance } from './provenance'
 
@@ -136,6 +137,9 @@ export async function normalizeCurrentCodexRecord(
   record: SourceRecord,
   ctx: SourceNormalizationContext,
 ): Promise<NormalizedSourceOutput> {
+  const functionOutput = await normalizePaginatedFunctionOutput(record, ctx)
+  if (functionOutput) return functionOutput
+
   const paginated = await normalizePaginatedCodexRecord(record, ctx)
   if (paginated) return paginated
 
