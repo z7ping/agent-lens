@@ -10,7 +10,7 @@ import { normalizePaginatedFunctionOutput } from './paginated-function-output'
 import { normalizePaginatedCodexRecord } from './paginated-protocol'
 import { assistantMessageProvenance } from './provenance'
 
-export const CODEX_CURRENT_PARSER_VERSION = '14'
+export const CODEX_CURRENT_PARSER_VERSION = '15'
 
 function asRecord(value: unknown): Record<string, any> {
   return value && typeof value === 'object' && !Array.isArray(value)
