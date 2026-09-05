@@ -40,8 +40,30 @@
 }
 .review-page .session-group-block:first-child .session-group { margin-top: 0; }
 
-/* Round Nav 是 Review 的历史查询/筛选导航；轮次导轨已经下沉到 Task Surface。 */
-.review-page .round-nav {
+/*
+ * 轮次筛选和“收起当前页”属于页面级阅读控制，和面包屑共享顶部 38px。
+ * 边界跳转则是阅读导航，固定在右下角，不再占顶部横向空间。
+ */
+.review-page.review-page-embedded .round-nav {
+  position: fixed;
+  top: 0;
+  right: 18px;
+  left: calc(316px + 205px);
+  z-index: 46;
+  display: flex;
+  min-width: 0;
+  height: 38px;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  pointer-events: none;
+}
+.review-page:not(.review-page-embedded) .round-nav {
   position: sticky;
   top: 0;
   z-index: 20;
@@ -64,6 +86,9 @@
   gap: 2px;
   flex: 0 0 auto;
 }
+.review-page.review-page-embedded .round-nav-filters,
+.review-page.review-page-embedded .round-nav-actions,
+.review-page.review-page-embedded .round-nav-status { pointer-events: auto; }
 .review-page .round-nav-actions { margin-left: auto; }
 .review-page .round-nav button {
   display: inline-flex;
@@ -78,7 +103,7 @@
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
-  transition: background .18s ease, color .18s ease, box-shadow .18s ease;
+  transition: background .18s ease, color .18s ease, box-shadow .18s ease, opacity .18s ease, transform .18s ease;
 }
 .review-page .round-nav button:hover:not(:disabled) {
   background: color-mix(in srgb, var(--al-accent-soft) 42%, var(--al-soft));
@@ -90,13 +115,63 @@
   color: var(--al-accent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--al-accent) 22%, transparent);
 }
-.review-page .round-nav button:disabled { cursor: not-allowed; opacity: .45; }
+.review-page .round-nav button:disabled { cursor: not-allowed; opacity: .38; }
 .review-page .round-nav button span { margin-left: 4px; font-variant-numeric: tabular-nums; opacity: .78; }
 .review-page .round-nav small { display: none; }
 .review-page .round-nav-actions .round-nav-expand { margin-left: 0; color: var(--al-muted); }
 .review-page .round-nav-actions button { padding-inline: 7px; color: var(--al-muted); font-weight: 560; }
-.review-page .round-nav-actions .round-nav-live { color: var(--al-accent); }
 .review-page .round-nav-status { margin-left: 8px; color: var(--al-muted); font-size: 12px; white-space: nowrap; }
+
+/* 右下角只保留上下图标，按钮语义文本仍保留给辅助技术。 */
+.review-page.review-page-embedded .round-nav-actions .round-nav-from-start,
+.review-page.review-page-embedded .round-nav-actions .round-nav-latest {
+  position: fixed;
+  right: 24px;
+  z-index: 54;
+  display: grid;
+  width: 42px;
+  height: 42px;
+  min-height: 42px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--al-accent) 28%, var(--al-line-strong));
+  border-radius: 11px;
+  box-shadow: 0 7px 20px rgb(16 24 40 / .14);
+  font-size: 0;
+  line-height: 0;
+  pointer-events: auto;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.review-page.review-page-embedded .round-nav-actions .round-nav-from-start {
+  bottom: 76px;
+  background: color-mix(in srgb, var(--al-surface) 92%, transparent);
+  color: var(--al-accent);
+}
+.review-page.review-page-embedded .round-nav-actions .round-nav-latest {
+  bottom: 24px;
+  border-color: var(--al-accent);
+  background: var(--al-accent);
+  color: var(--al-on-accent);
+}
+.review-page.review-page-embedded .round-nav-actions .round-nav-from-start:hover:not(:disabled) {
+  background: var(--al-surface);
+  color: var(--al-accent);
+  box-shadow: 0 9px 24px rgb(16 24 40 / .17), inset 0 0 0 1px color-mix(in srgb, var(--al-accent) 18%, transparent);
+  transform: translateY(-1px);
+}
+.review-page.review-page-embedded .round-nav-actions .round-nav-latest:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--al-accent) 88%, var(--al-ink));
+  color: var(--al-on-accent);
+  box-shadow: 0 9px 24px color-mix(in srgb, var(--al-accent) 28%, transparent);
+  transform: translateY(-1px);
+}
+.review-page.review-page-embedded .round-nav-actions .round-nav-from-start svg,
+.review-page.review-page-embedded .round-nav-actions .round-nav-latest svg {
+  width: 18px;
+  height: 18px;
+}
+.review-page.review-page-embedded .round-nav-actions .round-nav-live { display: none; }
 
 .detail-load-sentinel {
   min-height: 44px;
@@ -182,10 +257,39 @@
   .review-page { height: auto; min-height: 0; }
 }
 @media (max-width: 991.98px) {
-  .review-page .round-nav { align-items: flex-start; }
-  .review-page .round-nav-actions { margin-left: 8px; }
+  .review-page:not(.review-page-embedded) .round-nav { align-items: flex-start; }
+  .review-page:not(.review-page-embedded) .round-nav-actions { margin-left: 8px; }
+  .review-page.review-page-embedded .round-nav {
+    right: 12px;
+    left: calc(316px + 170px);
+  }
   .review-page .task-review-continuation { align-items: flex-start; flex-direction: column; gap: 10px; }
   .review-page .task-review-continuation-actions { width: 100%; flex-wrap: wrap; }
+}
+@media (max-width: 575.98px) {
+  .review-page.review-page-embedded .round-nav {
+    position: sticky;
+    top: 0;
+    right: auto;
+    left: auto;
+    z-index: 20;
+    height: auto;
+    padding: 4px 0;
+    overflow-x: auto;
+    border-bottom: 1px solid var(--al-line);
+    background: color-mix(in srgb, var(--al-surface) 96%, transparent);
+    pointer-events: auto;
+  }
+  .review-page.review-page-embedded .round-nav-actions .round-nav-expand { margin-left: 6px; }
+  .review-page.review-page-embedded .round-nav-actions .round-nav-from-start,
+  .review-page.review-page-embedded .round-nav-actions .round-nav-latest {
+    right: 14px;
+    width: 40px;
+    height: 40px;
+    min-height: 40px;
+  }
+  .review-page.review-page-embedded .round-nav-actions .round-nav-from-start { bottom: 68px; }
+  .review-page.review-page-embedded .round-nav-actions .round-nav-latest { bottom: 18px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .review-page .round-nav button { transition: none; }
