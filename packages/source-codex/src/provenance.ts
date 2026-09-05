@@ -132,13 +132,16 @@ export function userMessageProvenance(): ContentProvenance {
   }
 }
 
-export function assistantMessageProvenance(role = 'assistant'): ContentProvenance {
+export function assistantMessageProvenance(
+  role = 'assistant',
+  sourceSignal = 'response_item.message.role=assistant',
+): ContentProvenance {
   return {
     contentRole: 'assistant-output',
     actualAuthor: 'assistant',
     activityType: 'conversation',
     originType: 'assistant',
-    sourceSignal: 'response_item.message.role=assistant',
+    sourceSignal,
     nativeRole: role,
   }
 }
