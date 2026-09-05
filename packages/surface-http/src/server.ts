@@ -27,6 +27,7 @@ import {
   type BackupVerifyResponseDto,
   type CapturePolicyResponseDto,
   type CapturePolicySourceUpdateRequestDto,
+  type DataRuntimeHealthDto,
   type HealthResponseDto,
   type InsightsQueryDto,
   type JsonValue,
@@ -121,6 +122,14 @@ function jsonValue(value: unknown, depth = 0): JsonValue {
     return result
   }
   return null
+}
+
+function dataRuntimeHealth(value: unknown): DataRuntimeHealthDto | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const runtime = value as Partial<DataRuntimeHealthDto>
+  if (typeof runtime.ok !== 'boolean' || typeof runtime.recovering !== 'boolean') return undefined
+  if (!runtime.writer || !runtime.reader) return undefined
+  return value as DataRuntimeHealthDto
 }
 
 function writeJson(response: ServerResponse, statusCode: number, body: unknown): void {
@@ -218,11 +227,14 @@ function parseUsageQuery(params: URLSearchParams): ToolAssetUsageQueryDto {
   const limit = parseLimit(params, 500)
   const from = optionalTimestamp(params, 'from')
   const to = optionalTimestamp(params, 'to')
+  if (from && to && Date.parse(from) > Date.parse(to)) {
+    throw badRequest('Usage from must be earlier than or equal to to')
+  }
   return {
     ...(params.get('installationId') ? { installationId: params.get('installationId')! } : {}),
     ...(params.get('logicalSessionId') ? { logicalSessionId: params.get('logicalSessionId')! } : {}),
-    ...(params.get('sourceId') ? { sourceId: params.get('sourceId')! } : {}),
     ...(params.get('projectId') ? { projectId: params.get('projectId')! } : {}),
+    ...(params.get('sourceId') ? { sourceId: params.get('sourceId')! } : {}),
     ...(from ? { from } : {}),
     ...(to ? { to } : {}),
     ...(limit === undefined ? {} : { limit }),
@@ -236,207 +248,177 @@ function parseInsightsQuery(params: URLSearchParams): InsightsQueryDto {
     throw badRequest('Insights from must be earlier than or equal to to')
   }
   return {
-    ...(params.get('sourceId') ? { sourceId: params.get('sourceId')! } : {}),
+    ...(params.get('installationId') ? { installationId: params.get('installationId')! } : {}),
+    ...(params.get('logicalSessionId') ? { logicalSessionId: params.get('logicalSessionId')! } : {}),
     ...(params.get('projectId') ? { projectId: params.get('projectId')! } : {}),
+    ...(params.get('sourceId') ? { sourceId: params.get('sourceId')! } : {}),
     ...(from ? { from } : {}),
     ...(to ? { to } : {}),
   }
 }
 
+function parseReviewStatus(value: string | null): ReviewStatusFilter | undefined {
+  if (!value) return undefined
+  if (value === 'all' || value === 'running' || value === 'error') return value
+  throw badRequest(`Unknown review status: ${value}`)
+}
+
+function parseReviewDetailDirection(value: string | null): ReviewDetailDirection | undefined {
+  if (!value) return undefined
+  if (value === 'forward' || value === 'backward') return value
+  throw badRequest(`Unknown review detail direction: ${value}`)
+}
+
+function parseReviewDetailFilter(value: string | null): ReviewDetailFilter | undefined {
+  if (!value) return undefined
+  if (value === 'all' || value === 'messages' || value === 'tools' || value === 'system') return value
+  throw badRequest(`Unknown review detail filter: ${value}`)
+}
+
 function parseReviewQuery(params: URLSearchParams): ReviewQueryDto {
   const limit = parseLimit(params, 500)
-  const from = optionalTimestamp(params, 'from')
-  const to = optionalTimestamp(params, 'to')
-  const statusValue = params.get('status')
-  if (statusValue && !['all', 'with-errors', 'clean'].includes(statusValue)) {
-    throw badRequest(`Unknown review status: ${statusValue}`)
-  }
   return {
-    ...(params.get('cursor') ? { cursor: params.get('cursor')! } : {}),
-    ...(params.get('sourceId') ? { sourceId: params.get('sourceId')! } : {}),
+    ...(params.get('installationId') ? { installationId: params.get('installationId')! } : {}),
+    ...(params.get('logicalSessionId') ? { logicalSessionId: params.get('logicalSessionId')! } : {}),
     ...(params.get('projectId') ? { projectId: params.get('projectId')! } : {}),
-    ...(from ? { from } : {}),
-    ...(to ? { to } : {}),
-    ...(statusValue ? { status: statusValue as ReviewStatusFilter } : {}),
-    ...(params.get('search') ? { search: params.get('search')! } : {}),
+    ...(params.get('sourceId') ? { sourceId: params.get('sourceId')! } : {}),
+    ...(params.get('q') ? { q: params.get('q')! } : {}),
+    ...(parseReviewStatus(params.get('status')) ? { status: parseReviewStatus(params.get('status'))! } : {}),
     ...(limit === undefined ? {} : { limit }),
   }
 }
 
 function parseReviewDetailQuery(params: URLSearchParams): ReviewDetailQueryDto {
-  const limit = parseLimit(params, 100)
-  const ordinalValue = params.get('ordinal')
-  const ordinal = ordinalValue === null ? undefined : Number(ordinalValue)
-  if (ordinal !== undefined && (!Number.isSafeInteger(ordinal) || ordinal < 1)) {
-    throw badRequest(`Invalid review ordinal: ${ordinalValue}`)
-  }
-  const directionValue = params.get('direction')
-  if (directionValue && !['forward', 'backward'].includes(directionValue)) {
-    throw badRequest(`Unknown review direction: ${directionValue}`)
-  }
-  const filterValue = params.get('filter')
-  if (filterValue && !['all', 'errors', 'latency', 'latest'].includes(filterValue)) {
-    throw badRequest(`Unknown review filter: ${filterValue}`)
-  }
+  const limit = parseLimit(params, 1000)
+  const direction = parseReviewDetailDirection(params.get('direction'))
+  const filter = parseReviewDetailFilter(params.get('filter'))
   return {
     ...(params.get('cursor') ? { cursor: params.get('cursor')! } : {}),
-    ...(ordinal === undefined ? {} : { ordinal }),
-    ...(directionValue ? { direction: directionValue as ReviewDetailDirection } : {}),
-    ...(filterValue ? { filter: filterValue as ReviewDetailFilter } : {}),
+    ...(direction ? { direction } : {}),
+    ...(filter ? { filter } : {}),
     ...(limit === undefined ? {} : { limit }),
   }
 }
 
-async function readBody(request: IncomingMessage, maxBytes: number): Promise<Buffer> {
-  const chunks: Buffer[] = []
-  let size = 0
-  for await (const raw of request) {
-    const chunk = Buffer.isBuffer(raw) ? raw : Buffer.from(raw)
-    size += chunk.byteLength
-    if (size > maxBytes) throw httpError(413, 'Request body is too large')
-    chunks.push(chunk)
-  }
-  return Buffer.concat(chunks)
-}
+async function readJsonBody(request: IncomingMessage, maxBytes = MAX_JSON_BODY_BYTES): Promise<unknown> {
+  const contentType = request.headers['content-type']?.split(';')[0]?.trim().toLowerCase()
+  if (contentType !== 'application/json') throw httpError(415, 'Content-Type must be application/json')
 
-async function readJsonBody<T>(request: IncomingMessage): Promise<T> {
-  const bytes = await readBody(request, MAX_JSON_BODY_BYTES)
-  if (!bytes.byteLength) return {} as T
+  let size = 0
+  const chunks: Buffer[] = []
+  for await (const chunk of request) {
+    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+    size += bytes.byteLength
+    if (size > maxBytes) throw httpError(413, 'Request body is too large')
+    chunks.push(bytes)
+  }
+  if (!chunks.length) throw badRequest('JSON body is required')
   try {
-    return JSON.parse(bytes.toString('utf8')) as T
+    return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown
   } catch {
     throw badRequest('Request body must be valid JSON')
   }
 }
 
-function parseBackupCreate(value: BackupCreateRequestDto): BackupCreateInput {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw badRequest('Backup request must be an object')
-  if (value.sourceIds !== undefined
-    && (!Array.isArray(value.sourceIds) || value.sourceIds.some(item => typeof item !== 'string' || !item))) {
-    throw badRequest('sourceIds must be an array of non-empty strings')
-  }
-  if (value.kinds !== undefined
-    && (!Array.isArray(value.kinds) || value.kinds.some(item => !BACKUP_KINDS.has(item)))) {
-    throw badRequest('kinds contains an unknown backup asset kind')
-  }
-  return {
-    ...(value.sourceIds?.length ? { sourceIds: [...new Set(value.sourceIds)] } : {}),
-    ...(value.kinds?.length ? { kinds: [...new Set(value.kinds)] } : {}),
-  }
+function safeFilePath(root: string, pathname: string): string | null {
+  const relative = pathname.replace(/^\/+/, '')
+  const fullPath = resolve(root, relative)
+  if (fullPath === root || fullPath.startsWith(`${root}${sep}`)) return fullPath
+  return null
 }
 
-async function regularFile(path: string): Promise<boolean> {
+async function tryServeFile(response: ServerResponse, filePath: string): Promise<boolean> {
   try {
-    return (await stat(path)).isFile()
+    const info = await stat(filePath)
+    if (!info.isFile()) return false
+    const content = await readFile(filePath)
+    const contentType = MIME_TYPES[extname(filePath).toLowerCase()] ?? 'application/octet-stream'
+    response.statusCode = 200
+    response.setHeader('content-type', contentType)
+    response.setHeader('cache-control', 'no-cache')
+    response.setHeader('content-length', content.byteLength)
+    response.end(content)
+    return true
   } catch {
     return false
   }
 }
 
-function safeStaticPath(root: string, pathname: string): string | null {
-  let decoded: string
-  try {
-    decoded = decodeURIComponent(pathname)
-  } catch {
-    return null
-  }
-  const candidate = resolve(root, decoded.replace(/^\/+/, ''))
-  return candidate === root || candidate.startsWith(`${root}${sep}`) ? candidate : null
-}
-
-async function serveStatic(
+async function handleStatic(
   response: ServerResponse,
   pathname: string,
-  staticDir: string,
-  spaFallback = true,
+  mounts: Iterable<HttpStaticMount>,
 ): Promise<boolean> {
-  const root = resolve(staticDir)
-  const requested = pathname === '/' ? '/index.html' : pathname
-  const candidate = safeStaticPath(root, requested)
-  if (!candidate) return false
-  let target = candidate
-  if (!await regularFile(target)) {
-    if (!spaFallback || extname(requested)) return false
-    target = resolve(root, 'index.html')
-    if (!await regularFile(target)) return false
+  for (const mount of mounts) {
+    const root = resolve(mount.directory)
+    const requestedPath = pathname === '/' ? 'index.html' : pathname
+    const candidate = safeFilePath(root, requestedPath)
+    if (candidate && await tryServeFile(response, candidate)) return true
+
+    if (mount.spaFallback && !extname(pathname)) {
+      const indexPath = safeFilePath(root, 'index.html')
+      if (indexPath && await tryServeFile(response, indexPath)) return true
+    }
   }
-  writeBytes(
-    response,
-    200,
-    MIME_TYPES[extname(target).toLowerCase()] ?? 'application/octet-stream',
-    await readFile(target),
-  )
-  return true
+  return false
 }
 
-function backupMeta() {
-  return { protocolVersion: AGENT_LENS_PROTOCOL_VERSION, generatedAt: new Date().toISOString() }
-}
-
-function capturePolicyResponse(policy: CapturePolicyService): CapturePolicyResponseDto {
-  const configuration = policy.getSourceConfiguration?.() ?? {
-    effectiveEnabledSources: policy.settings.enabledSources,
-    configuredEnabledSources: policy.settings.enabledSources,
-    source: 'runtime' as const,
-    editable: false,
-    restartRequired: false,
-  }
-  return {
-    settings: {
-      effectiveEnabledSources: [...configuration.effectiveEnabledSources],
-      configuredEnabledSources: [...configuration.configuredEnabledSources],
-      managedBy: configuration.source,
-      editable: configuration.editable,
-      restartRequired: configuration.restartRequired,
-    },
-    meta: {
-      protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
-      generatedAt: new Date().toISOString(),
-    },
-  }
+function backupMeta(): { protocolVersion: typeof AGENT_LENS_PROTOCOL_VERSION } {
+  return { protocolVersion: AGENT_LENS_PROTOCOL_VERSION }
 }
 
 async function handleCapturePolicyRequest(
   request: IncomingMessage,
   response: ServerResponse,
   url: URL,
-  policy: CapturePolicyService | undefined,
+  capturePolicy?: CapturePolicyService,
 ): Promise<boolean> {
   if (url.pathname !== '/api/v1/capture-policy/sources') return false
-  if (!policy) {
+  if (!capturePolicy) {
     writeJson(response, 503, { error: 'capture_policy_unavailable' })
     return true
   }
+
   if (request.method === 'GET') {
-    writeJson(response, 200, capturePolicyResponse(policy))
+    const body: CapturePolicyResponseDto = {
+      settings: {
+        prompt: capturePolicy.settings.prompt,
+        tool: capturePolicy.settings.tool,
+        config: capturePolicy.settings.config,
+        environment: capturePolicy.settings.environment,
+        enabledSources: capturePolicy.settings.enabledSources,
+        ...capturePolicy.getSourceConfiguration(),
+      },
+      meta: backupMeta(),
+    }
+    writeJson(response, 200, body)
     return true
   }
+
   if (request.method !== 'PUT') {
     writeJson(response, 405, { error: 'method_not_allowed' })
     return true
   }
-  if (!String(request.headers['content-type'] ?? '').toLowerCase().startsWith('application/json')) {
-    throw httpError(415, 'Capture policy updates require application/json')
+
+  const payload = await readJsonBody(request) as CapturePolicySourceUpdateRequestDto
+  if (!payload || !Array.isArray(payload.enabledSources)) {
+    throw badRequest('enabledSources must be an array')
   }
-  if (!policy.setEnabledSources) {
-    writeJson(response, 409, { error: 'capture_policy_read_only' })
-    return true
+  const enabledSources = payload.enabledSources.map(value => String(value).trim()).filter(Boolean)
+  if (!enabledSources.length) throw badRequest('enabledSources must contain at least one source')
+  await capturePolicy.setEnabledSources(enabledSources)
+  const body: CapturePolicyResponseDto = {
+    settings: {
+      prompt: capturePolicy.settings.prompt,
+      tool: capturePolicy.settings.tool,
+      config: capturePolicy.settings.config,
+      environment: capturePolicy.settings.environment,
+      enabledSources: capturePolicy.settings.enabledSources,
+      ...capturePolicy.getSourceConfiguration(),
+    },
+    meta: backupMeta(),
   }
-  const body = await readJsonBody<CapturePolicySourceUpdateRequestDto>(request)
-  if (!Array.isArray(body.enabledSources) || body.enabledSources.length > 100
-    || body.enabledSources.some(item => typeof item !== 'string' || !/^[a-z0-9][a-z0-9._-]{0,63}$/i.test(item.trim()))) {
-    throw badRequest('enabledSources must contain at most 100 valid source IDs')
-  }
-  try {
-    await policy.setEnabledSources(body.enabledSources)
-  } catch (error) {
-    writeJson(response, 409, {
-      error: 'capture_policy_read_only',
-      message: error instanceof Error ? error.message : String(error),
-    })
-    return true
-  }
-  writeJson(response, 200, capturePolicyResponse(policy))
+  writeJson(response, 200, body)
   return true
 }
 
@@ -444,7 +426,7 @@ async function handleBackupRequest(
   request: IncomingMessage,
   response: ServerResponse,
   url: URL,
-  backup: BackupService | undefined,
+  backup?: BackupService,
 ): Promise<boolean> {
   if (!url.pathname.startsWith('/api/v1/backups')) return false
   if (!backup) {
@@ -452,51 +434,55 @@ async function handleBackupRequest(
     return true
   }
 
-  if (url.pathname === '/api/v1/backups') {
-    if (request.method === 'GET') {
-      const overview = await backup.overview()
-      const body: BackupOverviewResponseDto = { ...overview, meta: backupMeta() }
-      writeJson(response, 200, body)
-      return true
+  if (url.pathname === '/api/v1/backups' && request.method === 'GET') {
+    const query = {
+      ...(url.searchParams.get('kind') ? { kind: url.searchParams.get('kind') as BackupAssetKind } : {}),
+      ...(url.searchParams.get('q') ? { q: url.searchParams.get('q')! } : {}),
+      ...(url.searchParams.get('sourceId') ? { sourceId: url.searchParams.get('sourceId')! } : {}),
+      ...(url.searchParams.get('installationId') ? { installationId: url.searchParams.get('installationId')! } : {}),
+      ...(url.searchParams.get('state') ? { state: url.searchParams.get('state')! } : {}),
     }
-    if (request.method === 'POST') {
-      const input = parseBackupCreate(await readJsonBody<BackupCreateRequestDto>(request))
-      const snapshot = await backup.createSnapshot(input)
-      const body: BackupSnapshotResponseDto = { snapshot, meta: backupMeta() }
-      writeJson(response, 201, body)
-      return true
+    if (query.kind && !BACKUP_KINDS.has(query.kind)) throw badRequest(`Unknown backup kind: ${query.kind}`)
+    const body: BackupOverviewResponseDto = {
+      ...await backup.overview(query),
+      meta: backupMeta(),
     }
-    writeJson(response, 405, { error: 'method_not_allowed' })
-    return true
-  }
-
-  if (url.pathname === '/api/v1/backups/refresh') {
-    if (request.method !== 'POST') {
-      writeJson(response, 405, { error: 'method_not_allowed' })
-      return true
-    }
-    if (!backup.refreshIndex) {
-      writeJson(response, 501, { error: 'backup_refresh_unavailable' })
-      return true
-    }
-    const overview = await backup.refreshIndex()
-    const body: BackupOverviewResponseDto = { ...overview, meta: backupMeta() }
     writeJson(response, 200, body)
     return true
   }
 
-  if (url.pathname === '/api/v1/backups/import') {
-    if (request.method !== 'POST') {
-      writeJson(response, 405, { error: 'method_not_allowed' })
-      return true
+  if (url.pathname === '/api/v1/backups' && request.method === 'POST') {
+    const payload = await readJsonBody(request, MAX_BACKUP_BODY_BYTES) as BackupCreateRequestDto
+    if (!payload || !Array.isArray(payload.assetBindingIds) || !payload.assetBindingIds.length) {
+      throw badRequest('assetBindingIds must contain at least one asset')
     }
-    const snapshot = await backup.importSnapshot(await readBody(request, MAX_BACKUP_BODY_BYTES))
+    const input: BackupCreateInput = {
+      assetBindingIds: payload.assetBindingIds,
+      ...(typeof payload.label === 'string' && payload.label.trim() ? { label: payload.label.trim() } : {}),
+    }
+    const snapshot = await backup.createSnapshot(input)
     const body: BackupSnapshotResponseDto = { snapshot, meta: backupMeta() }
     writeJson(response, 201, body)
     return true
   }
 
-  const match = url.pathname.match(/^\/api\/v1\/backups\/([^/]+)(?:\/(verify|export|restore-preview|restore))?$/)
+  if (url.pathname === '/api/v1/backups/import' && request.method === 'POST') {
+    const chunks: Buffer[] = []
+    let total = 0
+    for await (const chunk of request) {
+      const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+      total += bytes.byteLength
+      if (total > MAX_BACKUP_BODY_BYTES) throw httpError(413, 'Backup file is too large')
+      chunks.push(bytes)
+    }
+    if (!chunks.length) throw badRequest('Backup payload is required')
+    const snapshot = await backup.importSnapshot(Buffer.concat(chunks))
+    const body: BackupSnapshotResponseDto = { snapshot, meta: backupMeta() }
+    writeJson(response, 201, body)
+    return true
+  }
+
+  const match = url.pathname.match(/^\/api\/v1\/backups\/([^/]+)(?:\/(verify|restore-preview|export))?$/)
   if (!match) {
     writeJson(response, 404, { error: 'not_found' })
     return true
@@ -582,9 +568,6 @@ export async function startHttpSurface(
           storageHealthProbe = null
         })
     }
-    // 首次启动仍等待真实探测；已有结果过期后则立即返回最近状态，耗时的
-    // 诊断刷新留在后台。这样历史摄取占用 SQLite 单写队列时也不会拖死
-    // Runtime readiness。
     if (cachedStorageHealth) return cachedStorageHealth
     return storageHealthProbe
   }
@@ -636,6 +619,7 @@ export async function startHttpSurface(
       }
       if (url.pathname === '/api/v1/health') {
         const health = await readStorageHealth()
+        const runtimeHealth = dataRuntimeHealth(health.details?.dataRuntime)
         const details = health.details
           ? Object.fromEntries(Object.entries(health.details).map(([key, value]) => [key, jsonValue(value)]))
           : undefined
@@ -648,6 +632,7 @@ export async function startHttpSurface(
             pid: process.pid,
             startedAt: RUNTIME_STARTED_AT,
           },
+          ...(runtimeHealth ? { dataRuntime: runtimeHealth } : {}),
           storage: {
             ok: health.ok,
             ...(health.schemaVersion === undefined ? {} : { schemaVersion: health.schemaVersion }),
@@ -707,28 +692,12 @@ export async function startHttpSurface(
           ...(record.sourceSequence === undefined ? {} : { sourceSequence: record.sourceSequence }),
           ...(record.occurredAt ? { occurredAt: record.occurredAt } : {}),
           capturedAt: record.capturedAt,
-          locator: { ...record.locator },
+          locator: record.locator,
           ...(record.fingerprint ? { fingerprint: record.fingerprint } : {}),
           payload: jsonValue(record.payload),
           parserVersion: record.parserVersion,
         }
         writeJson(response, 200, body)
-        return
-      }
-      if (url.pathname === '/api/v1/review') {
-        writeJson(response, 200, await review.query(parseReviewQuery(url.searchParams)))
-        return
-      }
-      if (url.pathname.startsWith('/api/v1/review/')) {
-        const id = decodeURIComponent(url.pathname.slice('/api/v1/review/'.length))
-        const detail = await review.get(id, parseReviewDetailQuery(url.searchParams))
-        writeJson(response, detail ? 200 : 404, detail ?? { error: 'not_found' })
-        return
-      }
-      if (url.pathname === '/api/v1/relationships') {
-        const id = url.searchParams.get('logicalSessionId')
-        if (!id) throw badRequest('logicalSessionId is required')
-        writeJson(response, 200, await relationships.query(id))
         return
       }
       if (url.pathname === '/api/v1/timeline') {
@@ -739,6 +708,17 @@ export async function startHttpSurface(
         writeJson(response, 200, await sessions.query(parseSessionQuery(url.searchParams)))
         return
       }
+      if (url.pathname === '/api/v1/review') {
+        writeJson(response, 200, await review.query(parseReviewQuery(url.searchParams)))
+        return
+      }
+      if (url.pathname.startsWith('/api/v1/review/')) {
+        const id = decodeURIComponent(url.pathname.slice('/api/v1/review/'.length))
+        if (!id) throw badRequest('logicalSessionId is required')
+        const detail = await review.get(id, parseReviewDetailQuery(url.searchParams))
+        writeJson(response, detail ? 200 : 404, detail ?? { error: 'not_found' })
+        return
+      }
       if (url.pathname === '/api/v1/usage') {
         writeJson(response, 200, await usage.query(parseUsageQuery(url.searchParams)))
         return
@@ -747,88 +727,51 @@ export async function startHttpSurface(
         writeJson(response, 200, await insights.query(parseInsightsQuery(url.searchParams)))
         return
       }
-      if (url.pathname.startsWith('/api/')) {
-        writeJson(response, 404, { error: 'not_found' })
+      if (url.pathname === '/api/v1/relationships') {
+        const limit = parseLimit(url.searchParams, 1000) ?? 500
+        writeJson(response, 200, await relationships.query({ limit }))
         return
       }
-      for (const mount of [...staticMounts.values()].reverse()) {
-        if (await serveStatic(response, url.pathname, mount.directory, mount.spaFallback ?? true)) return
+
+      if (options.eventHub && url.pathname === '/api/v1/events/snapshot') {
+        writeJson(response, 200, options.eventHub.snapshot())
+        return
       }
+
+      if (await handleStatic(response, url.pathname, staticMounts.values())) return
       writeJson(response, 404, { error: 'not_found' })
     } catch (error) {
-      const cursorError = error instanceof Error
-        && (error.message === 'Invalid timeline cursor'
-          || error.message === 'Invalid review cursor'
-          || error.message === 'Invalid review list cursor')
-      const statusCode = cursorError
-        ? 400
-        : error && typeof error === 'object' && 'statusCode' in error
-          ? Number((error as { statusCode: unknown }).statusCode)
-          : 500
+      const statusCode = error && typeof error === 'object' && 'statusCode' in error
+        ? Number((error as { statusCode?: unknown }).statusCode) || 500
+        : 500
       writeJson(response, statusCode, {
-        error: statusCode === 400 ? 'bad_request' : statusCode === 413 ? 'payload_too_large' : 'internal_error',
-        ...((statusCode === 400 || statusCode === 413) && error instanceof Error ? { message: error.message } : {}),
+        error: statusCode >= 500 ? 'internal_error' : 'bad_request',
+        message: error instanceof Error ? error.message : String(error),
       })
     }
   })
 
   await new Promise<void>((resolvePromise, reject) => {
-    const onError = (error: Error) => {
-      server.off('listening', onListening)
-      reject(error)
-    }
-    const onListening = () => {
-      server.off('error', onError)
-      resolvePromise()
-    }
-    server.once('error', onError)
-    server.once('listening', onListening)
-    server.listen(requestedPort, AGENT_LENS_HTTP_HOST)
+    server.once('error', reject)
+    server.listen(requestedPort, AGENT_LENS_HTTP_HOST, () => resolvePromise())
   })
 
   const address = server.address()
-  if (!address || typeof address === 'string') {
-    server.close()
-    throw new Error('AgentLens HTTP server did not expose a TCP address')
-  }
-  let disposed = false
+  const actualPort = address && typeof address !== 'string' ? address.port : requestedPort
+
   return {
     host: AGENT_LENS_HTTP_HOST,
-    port: address.port,
+    port: actualPort,
     server,
     mountStatic(mount) {
-      if (!mount.id || !mount.directory) throw new Error('Static mount requires id and directory')
-      const registered = { ...mount }
-      staticMounts.set(mount.id, registered)
-      return {
-        dispose() {
-          if (staticMounts.get(mount.id) === registered) staticMounts.delete(mount.id)
-        },
-      }
+      staticMounts.set(mount.id, mount)
+      return { dispose: () => { staticMounts.delete(mount.id) } }
     },
     async dispose() {
-      if (disposed) return
-      disposed = true
-      staticMounts.clear()
-      options.eventHub?.close()
+      for (const response of options.eventHub?.connections() ?? []) response.end()
       await new Promise<void>((resolvePromise, reject) => {
         server.close(error => error ? reject(error) : resolvePromise())
       })
     },
   }
-}
-
-export const httpSurfaceInternals = {
-  parseTimelineQuery,
-  parseSessionQuery,
-  parseUsageQuery,
-  parseInsightsQuery,
-  parseReviewQuery,
-  parseReviewDetailQuery,
-  parseBackupCreate,
-  currentRuntimeOwner,
-  currentRuntimeMode,
-  jsonValue,
-  safeStaticPath,
-  serveStatic,
 }
