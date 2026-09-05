@@ -122,10 +122,7 @@
 .review-page .round-nav-actions button { padding-inline: 7px; color: var(--al-muted); font-weight: 560; }
 .review-page .round-nav-status { margin-left: 8px; color: var(--al-muted); font-size: 12px; white-space: nowrap; }
 
-/*
- * 右下角是“定位到边界”，不是普通滚动箭头：箭头 + 边界线组成完整语义。
- * 文案仍保留在 DOM 中供 title/辅助技术使用，视觉只展示图标。
- */
+/* 右下角边界跳转使用统一 Lucide 图标；文案保留在 DOM 中供辅助技术使用。 */
 .review-page.review-page-embedded .round-nav-actions .round-nav-from-start,
 .review-page.review-page-embedded .round-nav-actions .round-nav-latest {
   position: fixed;
@@ -146,20 +143,6 @@
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
-.review-page.review-page-embedded .round-nav-actions .round-nav-from-start::before,
-.review-page.review-page-embedded .round-nav-actions .round-nav-latest::before {
-  content: "";
-  position: absolute;
-  right: 12px;
-  left: 12px;
-  height: 1.5px;
-  border-radius: 999px;
-  background: currentColor;
-  opacity: .9;
-  pointer-events: none;
-}
-.review-page.review-page-embedded .round-nav-actions .round-nav-from-start::before { top: 9px; }
-.review-page.review-page-embedded .round-nav-actions .round-nav-latest::before { bottom: 9px; }
 .review-page.review-page-embedded .round-nav-actions .round-nav-from-start {
   bottom: 76px;
   background: color-mix(in srgb, var(--al-surface) 92%, transparent);
@@ -185,11 +168,9 @@
 }
 .review-page.review-page-embedded .round-nav-actions .round-nav-from-start svg,
 .review-page.review-page-embedded .round-nav-actions .round-nav-latest svg {
-  width: 17px;
-  height: 17px;
+  width: 18px;
+  height: 18px;
 }
-.review-page.review-page-embedded .round-nav-actions .round-nav-from-start svg { transform: translateY(2px); }
-.review-page.review-page-embedded .round-nav-actions .round-nav-latest svg { transform: translateY(-2px); }
 .review-page.review-page-embedded .round-nav-actions .round-nav-live { display: none; }
 
 .detail-load-sentinel {
