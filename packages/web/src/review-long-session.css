@@ -128,11 +128,12 @@
   position: fixed;
   right: 24px;
   z-index: 54;
-  display: grid;
+  display: inline-flex;
   width: 42px;
   height: 42px;
   min-height: 42px;
-  place-items: center;
+  align-items: center;
+  justify-content: center;
   padding: 0;
   border: 1px solid color-mix(in srgb, var(--al-accent) 28%, var(--al-line-strong));
   border-radius: 11px;
