@@ -22,6 +22,7 @@ import { SqliteSourceRuntimeStatusRepository } from './runtime-status'
 import { withSqliteSessionRuntimeProfiles } from './session-runtime-profile'
 import { SqliteSessionSummaryReader } from './session-summaries-v2'
 import { SqliteToolUsageObservationReader } from './tool-usage-observations-v2'
+import { SqliteUnknownObservationProjection } from './unknown-observation-projection'
 
 const STORAGE_SOFT_LIMIT_BYTES = 512 * 1024 * 1024
 const STORAGE_APPROACHING_RATIO = 0.8
@@ -58,6 +59,7 @@ export class SqliteStorageService implements StorageService {
   readonly sessionSummaries: SqliteSessionSummaryReader
   readonly sessionSummaryProjection: SqliteSessionSummaryReader
   readonly toolUsageObservations: SqliteToolUsageObservationReader
+  readonly unknownObservationProjection: SqliteUnknownObservationProjection
   readonly runtimeProfiles: SqliteRuntimeProfileRepository
   readonly sourceRuntimeStatus: SqliteSourceRuntimeStatusRepository
   readonly sessionRelationshipCandidates: SqliteSessionRelationshipCandidateRepository
@@ -95,6 +97,7 @@ export class SqliteStorageService implements StorageService {
     this.sessionSummaries = sessionSummaries
     this.sessionSummaryProjection = sessionSummaries
     this.toolUsageObservations = new SqliteToolUsageObservationReader(this.executor)
+    this.unknownObservationProjection = new SqliteUnknownObservationProjection(this.executor)
     this.runtimeProfiles = new SqliteRuntimeProfileRepository(this.executor)
     this.sourceRuntimeStatus = new SqliteSourceRuntimeStatusRepository(this.executor)
     this.sessionRelationshipCandidates = new SqliteSessionRelationshipCandidateRepository(this.executor)
@@ -204,26 +207,8 @@ export class SqliteStorageService implements StorageService {
 
   async diagnostics(): Promise<StorageHealth> {
     const health = await this.health()
+    const unknownObservations = await this.unknownObservationProjection.summary()
     return this.executor.run(() => {
-      const unknownObservations = this.db.prepare(`
-        SELECT sr.source_id AS sourceId,
-               sr.native_type AS nativeType,
-               COUNT(DISTINCT o.id) AS count,
-               MAX(COALESCE(o.occurred_at, o.captured_at)) AS lastSeenAt
-        FROM observations o
-        JOIN observation_evidence oe ON oe.observation_id = o.id
-        JOIN evidence e ON e.id = oe.evidence_id
-        JOIN source_records sr ON sr.id = e.source_record_id
-        WHERE o.kind = 'unknown'
-        GROUP BY sr.source_id, sr.native_type
-        ORDER BY count DESC, sr.source_id, sr.native_type
-        LIMIT 100
-      `).all()
-      const unknownCount = (unknownObservations as Array<{ count: number }>).reduce(
-        (sum, item) => sum + Number(item.count || 0),
-        0,
-      )
-
       const coverageItems = this.db.prepare(`
         SELECT subject_type AS subjectType,
                subject_id AS subjectId,
@@ -261,10 +246,7 @@ export class SqliteStorageService implements StorageService {
         ...health,
         details: {
           ...health.details,
-          unknownObservations: {
-            total: unknownCount,
-            groups: unknownObservations,
-          },
+          unknownObservations,
           coverage: {
             summary: coverageSummary,
             items: coverageItems,
