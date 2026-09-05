@@ -1,0 +1,116 @@
+name: Temporary Review Transport Echo Patch
+
+on:
+  push:
+    branches:
+      - feature/1.0.0-alpha.3-task-surface
+    paths:
+      - .github/workflows/tmp-review-transport-echo-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message == 'chore: 临时执行 Review transport echo 分组修复'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/1.0.0-alpha.3-task-surface
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Patch projection semantics
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('packages/projection-review/src/projection.ts')
+          text = path.read_text(encoding='utf-8')
+
+          def replace_once(old: str, new: str, label: str):
+              global text
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected exactly 1 match, got {count}')
+              text = text.replace(old, new, 1)
+
+          replace_once(
+          """function toolCallId(item: TimelineItemDto): string | undefined {\n""",
+          """function isTransportEchoPayload(value: JsonValue | unknown): boolean {\n  const provenance = asRecord(asRecord(value).provenance)\n  return provenance.activityType === 'transport-echo' || provenance.transportEcho === true\n}\n\nfunction isTransportEchoTimelineItem(item: TimelineItemDto): boolean {\n  return item.kind === 'context.injected' && isTransportEchoPayload(item.payload)\n}\n\nfunction isTransportEchoObservation(item: CanonicalObservation): boolean {\n  return item.kind === 'context.injected' && isTransportEchoPayload(item.payload)\n}\n\nfunction isSystemContextObservation(item: CanonicalObservation): boolean {\n  if (item.kind !== 'context.injected') return false\n  return !isTransportEchoPayload(item.payload)\n}\n\nfunction toolCallId(item: TimelineItemDto): string | undefined {\n""",
+          'insert transport echo helpers',
+          )
+
+          replace_once(
+          """  for (const item of items) {\n    if (item.kind === 'message.user' || item.kind === 'message.assistant' || item.kind === 'message.commentary' || item.kind === 'message.reasoning') {\n""",
+          """  for (const item of items) {\n    if (isTransportEchoTimelineItem(item)) continue\n    if (item.kind === 'message.user' || item.kind === 'message.assistant' || item.kind === 'message.commentary' || item.kind === 'message.reasoning') {\n""",
+          'skip echo when building nodes',
+          )
+
+          replace_once(
+          """  for (const item of items) {\n    if (item.kind === 'message.user') linearRoot = item.id\n""",
+          """  for (const item of items) {\n    if (isTransportEchoTimelineItem(item)) continue\n    if (item.kind === 'message.user') linearRoot = item.id\n""",
+          'skip echo in interaction grouping',
+          )
+
+          replace_once(
+          """    const systemContextCount = observations.filter(item => item.kind === 'context.injected').length\n    const lifecycleActivity = observations\n""",
+          """    const systemContextCount = observations.filter(isSystemContextObservation).length\n    const lifecycleActivity = observations\n""",
+          'exclude echo from system context count',
+          )
+
+          replace_once(
+          """    const sessionActivity = attributedActivity && attributedActivity !== 'user-task'\n      ? attributedActivity\n      : userTurnCount === 0 && systemContextCount > 0\n        ? 'system-activity'\n        : attributedActivity\n""",
+          """    const strongActivity = attributedActivity === 'branch-task'\n      || attributedActivity === 'subagent'\n      || attributedActivity === 'internal-review'\n    const sessionActivity = strongActivity\n      ? attributedActivity\n      : userTurnCount > 0\n        ? 'user-task'\n        : attributedActivity === 'system-activity' || systemContextCount > 0\n          ? 'system-activity'\n          : attributedActivity\n""",
+          'align fallback session activity priority',
+          )
+
+          old_loop = """      for (const observation of observations) {\n        if (observation.kind === 'message.user' && current) flush()\n"""
+          new_loop = """      for (const observation of observations) {\n        if (isTransportEchoObservation(observation)) continue\n        if (observation.kind === 'message.user' && current) flush()\n"""
+          count = text.count(old_loop)
+          if count != 1:
+              raise SystemExit(f'scan descriptors: expected exactly 1 match, got {count}')
+          text = text.replace(old_loop, new_loop, 1)
+
+          old_target_loop = """      for (const observation of observations) {\n        if (observation.kind === 'message.user' && current) {\n"""
+          new_target_loop = """      for (const observation of observations) {\n        if (isTransportEchoObservation(observation)) continue\n        if (observation.kind === 'message.user' && current) {\n"""
+          count = text.count(old_target_loop)
+          if count != 1:
+              raise SystemExit(f'scan target descriptor: expected exactly 1 match, got {count}')
+          text = text.replace(old_target_loop, new_target_loop, 1)
+
+          replace_once(
+          """      for (const observation of probe) {\n        if (observation.kind === 'session.lifecycle') continue\n        leadingBackground = observation.kind !== 'message.user'\n""",
+          """      for (const observation of probe) {\n        if (observation.kind === 'session.lifecycle' || isTransportEchoObservation(observation)) continue\n        leadingBackground = observation.kind !== 'message.user'\n""",
+          'exclude echo from leading background probe',
+          )
+
+          old_forward = """      for (const item of page.items) {\n        if (item.kind === 'message.user' && pending.length) {\n"""
+          new_forward = """      for (const item of page.items) {\n        if (isTransportEchoTimelineItem(item)) continue\n        if (item.kind === 'message.user' && pending.length) {\n"""
+          count = text.count(old_forward)
+          if count != 1:
+              raise SystemExit(f'forward pagination: expected exactly 1 match, got {count}')
+          text = text.replace(old_forward, new_forward, 1)
+
+          replace_once(
+          """      for (const item of descendingItems) {\n        pendingDescending.push(item)\n""",
+          """      for (const item of descendingItems) {\n        if (isTransportEchoTimelineItem(item)) continue\n        pendingDescending.push(item)\n""",
+          'skip echo in backward pagination',
+          )
+
+          export_old = """  highLatencyThreshold,\n  maxDescriptorCache: MAX_DESCRIPTOR_CACHE,\n"""
+          export_new = """  highLatencyThreshold,\n  isTransportEchoPayload,\n  isTransportEchoTimelineItem,\n  isTransportEchoObservation,\n  isSystemContextObservation,\n  maxDescriptorCache: MAX_DESCRIPTOR_CACHE,\n"""
+          replace_once(export_old, export_new, 'export transport helpers')
+
+          path.write_text(text, encoding='utf-8')
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/projection-review/src/projection.ts
+          git diff --cached --check
+          git commit -m "fix(review): transport echo 不再创建后台轮次"
+          git push origin HEAD:feature/1.0.0-alpha.3-task-surface
