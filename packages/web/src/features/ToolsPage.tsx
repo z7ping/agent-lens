@@ -257,7 +257,7 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
 
           {firstFailedSession && <button type="button" className="tool-failure-shortcut" onClick={() => openReviewSession(firstFailedSession.logicalSessionId)}>
             <span><b>查看失败现场</b><small>{firstFailedSession.title ?? `会话 ${shortSessionId(firstFailedSession.logicalSessionId)}`} · {firstFailedSession.errorCount} 次该工具失败</small></span>
-            <UiIcon name="arrow-right" size={15}/>
+            <UiIcon name="arrow-right" size={16}/>
           </button>}
 
           <section className="tool-session-section">
