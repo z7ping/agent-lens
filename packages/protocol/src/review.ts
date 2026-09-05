@@ -99,6 +99,12 @@ export interface ReviewInteractionDto {
   startedAt: string
   endedAt: string
   nodes: ReviewNodeDto[]
+  /** 单轮节点超过服务端稳定性边界时，仅返回有界的首尾窗口。 */
+  nodesTruncated?: boolean
+  /** 截断前该轮的完整 Review 节点数。 */
+  totalNodeCount?: number
+  /** 本次响应中未返回的中间节点数。 */
+  omittedNodeCount?: number
 }
 
 export interface ReviewInteractionIndexDto {
