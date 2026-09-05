@@ -23,8 +23,26 @@ function timestamp(value: string): number {
   return Number.isFinite(time) ? time : 0
 }
 
+const namedTextEntities: Record<string, string> = {
+  amp: '&',
+  apos: "'",
+  gt: '>',
+  lt: '<',
+  nbsp: ' ',
+  quot: '"',
+}
+
+function decodeTextEntities(value: string): string {
+  return value.replace(/&(?:#(\d+)|#x([0-9a-f]+)|([a-z]+));/gi, (match, decimal: string | undefined, hex: string | undefined, named: string | undefined) => {
+    if (named) return namedTextEntities[named.toLowerCase()] ?? match
+    const codePoint = Number.parseInt(decimal ?? hex ?? '', hex ? 16 : 10)
+    if (!Number.isFinite(codePoint) || codePoint < 0 || codePoint > 0x10ffff || (codePoint >= 0xd800 && codePoint <= 0xdfff)) return match
+    return String.fromCodePoint(codePoint)
+  })
+}
+
 function cleanSessionTitle(value: string | undefined, fallback: string): string {
-  const text = value?.replace(/\s+/g, ' ').trim() ?? ''
+  const text = decodeTextEntities(value ?? '').replace(/\s+/g, ' ').trim()
   if (!text) return fallback
   return text.length > 74 ? `${text.slice(0, 74)}…` : text
 }
