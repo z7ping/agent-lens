@@ -515,7 +515,6 @@ export async function normalizeCodexRecord(
       ...(stringField(payload, 'id') ? { artifactId: stringField(payload, 'id') } : {}),
       ...(payload.status === undefined ? {} : { status: payload.status }),
       hasResult: typeof payload.result === 'string' && payload.result.length > 0,
-      raw: payload,
     }))
   } else if (topType === 'response_item' && innerType === 'reasoning') {
     const text = messageText(payload.summary ?? payload.content ?? payload.text ?? '')
