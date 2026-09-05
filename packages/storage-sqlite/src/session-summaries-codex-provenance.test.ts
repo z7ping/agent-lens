@@ -116,6 +116,53 @@ test('Codex legacy session with transport echo only is corrected to system activ
   }
 })
 
+test('Codex tool count deduplicates call/result and includes result-only executions', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+
+  try {
+    const identity = new DefaultIdentityService(storage)
+    const observations = new DefaultObservationService(storage, identity)
+    const host = await identity.resolveHost({ name: 'codex-tool-count-host' })
+    const installation = await identity.resolveInstallation({ hostId: host.id, productId: 'codex' })
+    const nativeSessionId = 'codex-tool-count-session'
+    const add = async (kind: 'message.user' | 'tool.call' | 'tool.result', id: string, payload: unknown, second: number) => observations.commit({
+      sourceId: 'codex', host, installation,
+      candidate: {
+        kind,
+        nativeEventId: id,
+        occurredAt: `2026-09-05T00:02:0${second}.000Z`,
+        capturedAt: `2026-09-05T00:02:0${second}.000Z`,
+        payload,
+        identityHints: { nativeSessionId },
+        dedupHints: { nativeEventId: id },
+      },
+      evidenceCandidates: [],
+    })
+
+    const user = await add('message.user', 'tool-count-user', {
+      text: '检查工具计数',
+      provenance: { actualAuthor: 'human-user', contentRole: 'user-request' },
+    }, 0)
+    await add('tool.call', 'paired-call', { callId: 'paired-1', nativeToolName: 'shell' }, 1)
+    await add('tool.result', 'paired-result', { callId: 'paired-1', nativeToolName: 'shell', success: true }, 2)
+    await add('tool.result', 'result-only', { callId: 'result-only-1', nativeToolName: 'read_file', success: true }, 3)
+
+    for (const materialized of [false, true]) {
+      if (materialized) await storage.sessionSummaryProjection.rebuild()
+      const page = await storage.sessionSummaries.query({ logicalSessionId: user.observation.logicalSessionId, limit: 1 })
+      const summary = page.items[0]
+      assert.ok(summary)
+      assert.equal(summary.userTurnCount, 1)
+      assert.equal(summary.interactionCount, 1)
+      assert.equal(summary.toolCount, 2)
+      assert.equal(summary.sessionActivity, 'user-task')
+    }
+  } finally {
+    await storage.close()
+  }
+})
+
 test('non-Codex legacy user messages without provenance remain compatible', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   await storage.migrate()
