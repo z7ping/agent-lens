@@ -17,11 +17,14 @@ function DisclosureChevron() {
   </span>
 }
 
+function presentationLabel(label: string): string {
+  return label === '思考过程' ? '执行过程' : label
+}
+
 function resolvedDefaultExpanded(model: TaskThinkingModel, defaultExpanded: boolean) {
-  // 聚合“思考过程”承载 commentary/reasoning 与具体工具调用。
-  // 它默认展开，保证 Tool Call 事实不被第二层 disclosure 隐藏；
-  // 独立 Thinking / reasoning 仍尊重调用方传入的默认折叠设置。
-  return defaultExpanded || model.label === '思考过程'
+  // Review 的聚合执行过程承载 commentary 与具体工具调用，默认展开；
+  // 独立 reasoning / thinking 仍尊重调用方传入的默认状态。
+  return defaultExpanded || model.label === '思考过程' || model.label === '执行过程'
 }
 
 export function TaskThinking({
@@ -33,6 +36,7 @@ export function TaskThinking({
   className = '',
 }: TaskThinkingProps) {
   const [expanded, setExpanded] = useState(defaultExpanded)
+  const label = presentationLabel(model.label)
 
   useEffect(() => {
     setExpanded(resolvedDefaultExpanded(model, defaultExpanded))
@@ -47,7 +51,7 @@ export function TaskThinking({
     <summary className="task-thinking-summary">
       <span className="task-thinking-summary-main">
         <DisclosureChevron/>
-        <span className="task-thinking-label">{model.label}</span>
+        <span className="task-thinking-label">{label}</span>
         {model.preview && !expanded && <span className="task-thinking-preview">{model.preview}</span>}
       </span>
       <span className="task-thinking-summary-meta">{meta}{model.time && <time>{model.time}</time>}</span>
