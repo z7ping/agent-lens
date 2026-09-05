@@ -173,6 +173,8 @@ function contextEventLabel(node: ReviewEventNodeDto): string {
 function localizeNode(node: ReviewEventNodeDto, sessionActivity?: ReviewSessionSummaryDto['sessionActivity']): ReviewEventNodeDto {
   if (node.kind === 'session.lifecycle') return { ...node, label: lifecycleEventLabel(node.payload) }
   if (node.kind === 'context.injected') return { ...node, label: contextEventLabel(node) }
+  if (node.kind === 'subagent.communication') return { ...node, label: '子 Agent 通信' }
+  if (node.kind === 'reasoning.configuration.updated') return { ...node, label: '推理配置更新' }
   if (sessionActivity === 'internal-review' && node.kind === 'permission.request') return { ...node, label: '审查请求' }
   if (sessionActivity === 'internal-review' && node.kind === 'permission.response') return { ...node, label: '审查结果' }
   return node
@@ -390,6 +392,7 @@ export class ReviewProjection extends BaseReviewProjection {
 export const reviewProjectionInternals = {
   ...baseReviewProjectionInternals,
   lifecycleEventLabel,
+  localizeNode,
   localizeLifecycle,
   contextEventLabel,
   summaryFromRecord,
