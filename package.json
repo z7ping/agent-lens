@@ -51,6 +51,7 @@
     "perf:pi-live-scheduler": "tsx scripts/performance/pi-live-scheduler-benchmark.ts",
     "perf:pi-live-history": "tsx scripts/performance/pi-live-history-virtualization-benchmark.ts",
     "perf:daemon-idle-cpu": "tsx scripts/performance/daemon-idle-cpu-benchmark.ts",
+    "perf:data-runtime-isolation": "tsx scripts/performance/data-runtime-isolation-benchmark.ts",
     "accept:pi-live-real": "node scripts/acceptance/pi-live-real.mjs",
     "accept:pi-live:1h": "node scripts/acceptance/pi-live-real.mjs --soak=3600000 --soak-interval=60000",
     "accept:task-center-desktop": "npm run accept:task-center-desktop --workspace @agent-lens/desktop",
