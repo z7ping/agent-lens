@@ -56,7 +56,7 @@ test('user-authored AGENTS/XML stays a real user request because event_msg is au
   assert.equal((output.observations[0]?.payload as any).provenance.actualAuthor, 'human-user')
 })
 
-test('response_item role=user is preserved as transport echo instead of a user bubble', async () => {
+test('plain response_item role=user transport echo preserves evidence without creating activity', async () => {
   const output = await normalize(record({
     type: 'response_item',
     payload: {
@@ -66,9 +66,8 @@ test('response_item role=user is preserved as transport echo instead of a user b
     },
   }, 'response-echo'))
 
-  assert.equal(output.observations[0]?.kind, 'context.injected')
-  assert.equal((output.observations[0]?.payload as any).provenance.transportEcho, true)
-  assert.equal((output.observations[0]?.payload as any).text, '真实正文的 transport echo')
+  assert.equal(output.observations.length, 0)
+  assert.equal(output.evidenceCandidates.length, 1)
 })
 
 test('user message keeps body and separates attachment metadata', async () => {
@@ -89,7 +88,7 @@ test('user message keeps body and separates attachment metadata', async () => {
   assert.deepEqual(payload.attachments.map((item: any) => item.kind), ['images', 'local_images', 'text_elements'])
 })
 
-test('guardian subagent session is linked as internal-review', async () => {
+test('guardian subagent session uses parent_thread_id as the direct internal-review relationship', async () => {
   const output = await normalize(record({
     type: 'session_meta',
     payload: {
@@ -104,13 +103,13 @@ test('guardian subagent session is linked as internal-review', async () => {
 
   const payload = output.observations[0]?.payload as any
   assert.equal(payload.sessionActivity, 'internal-review')
-  assert.equal(payload.rootSessionId, 'parent-task')
+  assert.equal(payload.rootSessionId, undefined)
   assert.equal(payload.parentSessionId, 'parent-task')
   assert.equal(output.observations[0]?.identityHints.nativeParentSessionId, 'parent-task')
-  assert.deepEqual(output.sessionRelationshipHints?.map(item => item.type).sort(), ['internal-review', 'task-root'])
+  assert.deepEqual(output.sessionRelationshipHints?.map(item => item.type), ['internal-review'])
 })
 
-test('normal subagent remains subagent and is not treated as guardian review', async () => {
+test('normal subagent remains subagent and does not infer task-root from shared session_id', async () => {
   const output = await normalize(record({
     type: 'session_meta',
     payload: {
@@ -124,10 +123,10 @@ test('normal subagent remains subagent and is not treated as guardian review', a
   }, 'subagent-meta', 'worker-child'))
 
   assert.equal((output.observations[0]?.payload as any).sessionActivity, 'subagent')
-  assert.deepEqual(output.sessionRelationshipHints?.map(item => item.type).sort(), ['subagent', 'task-root'])
+  assert.deepEqual(output.sessionRelationshipHints?.map(item => item.type), ['subagent'])
 })
 
-test('nested thread_spawn keeps direct parent and root task as separate relationships', async () => {
+test('nested thread_spawn keeps only its explicit direct parent relationship', async () => {
   const output = await normalize(record({
     type: 'session_meta',
     payload: {
@@ -148,16 +147,15 @@ test('nested thread_spawn keeps direct parent and root task as separate relation
 
   const payload = output.observations[0]?.payload as any
   assert.equal(payload.sessionActivity, 'subagent')
-  assert.equal(payload.rootSessionId, 'root-task')
+  assert.equal(payload.rootSessionId, undefined)
   assert.equal(payload.parentSessionId, 'direct-parent')
   assert.equal(payload.activitySourceLabel, 'Meitner')
   assert.deepEqual(output.sessionRelationshipHints?.map(item => [item.fromNativeSessionId, item.type, item.nativeRelation]), [
-    ['root-task', 'task-root', 'session_id'],
     ['direct-parent', 'subagent', 'source.subagent.thread_spawn.parent_thread_id'],
   ])
 })
 
-test('native subagent source review is classified as internal review', async () => {
+test('native subagent source review without an explicit parent remains orphan internal review', async () => {
   const output = await normalize(record({
     type: 'session_meta',
     payload: {
@@ -167,9 +165,11 @@ test('native subagent source review is classified as internal review', async () 
     },
   }, 'native-review-meta', 'review-child'))
 
-  assert.equal((output.observations[0]?.payload as any).sessionActivity, 'internal-review')
-  assert.equal((output.observations[0]?.payload as any).activitySourceLabel, 'Guardian 审查')
-  assert.equal(output.sessionRelationshipHints?.[0]?.type, 'task-root')
+  const payload = output.observations[0]?.payload as any
+  assert.equal(payload.sessionActivity, 'internal-review')
+  assert.equal(payload.activitySourceLabel, 'Guardian 审查')
+  assert.equal(payload.orphanInternalActivity, true)
+  assert.deepEqual(output.sessionRelationshipHints, [])
 })
 
 test('unlinked internal activity is preserved and marked orphan for system activity grouping', async () => {
