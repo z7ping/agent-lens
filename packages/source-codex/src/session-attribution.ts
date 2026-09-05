@@ -61,11 +61,6 @@ function directParentId(payload: Record<string, unknown>): string | undefined {
     ?? stringField(source, 'parent_thread_id', 'parent_session_id')
 }
 
-function rootTaskId(payload: Record<string, unknown>, ownSessionId: string): string | undefined {
-  const root = stringField(payload, 'session_id', 'root_session_id')
-  return root && root !== ownSessionId ? root : undefined
-}
-
 function guardianReview(payload: Record<string, unknown>): boolean {
   const { raw, subagent, spawn, threadSource } = subagentParts(payload)
   const values = [raw, subagent, spawn, threadSource, payload.agent_role, payload.agentRole]
@@ -100,8 +95,8 @@ function classifySession(payload: Record<string, unknown>): {
   const role = lowerText(payload.agent_role ?? payload.agentRole ?? subagent.agent_role ?? subagent.role)
   const sourceText = lowerText(threadSource)
   const rawText = lowerText(raw)
-  // Codex 官方持久化契约中 parent_thread_id 只会设置在子 Agent 线程上。
-  // 因此即使旧版 session_meta 缺少 thread_source/subagent 细节，也不能降级为泛化“系统活动”。
+  // Codex 当前持久化契约中 parent_thread_id 只设置在子 Agent 线程上。
+  // session_id 则由根线程和所有子 Agent 共享，不能用于推导线程父子关系。
   const isSubagent = Boolean(directParentId(payload))
     || sourceText.includes('subagent')
     || raw !== undefined
@@ -114,9 +109,6 @@ function classifySession(payload: Record<string, unknown>): {
       : { activity: 'subagent', relationship: 'subagent' }
   }
 
-  if (rootTaskId(payload, stringField(payload, 'id') ?? '')) {
-    return { activity: 'system-activity', relationship: 'related' }
-  }
   return { activity: 'user-task', relationship: 'related' }
 }
 
@@ -154,10 +146,8 @@ export function normalizeCodexSessionAttribution(
 
   const ownSessionId = meta.nativeSessionId
   const directParent = directParentId(meta.payload)
-  const rootTask = rootTaskId(meta.payload, ownSessionId)
-  const parentSessionId = directParent ?? rootTask
   const classification = classifySession(meta.payload)
-  const orphanInternalActivity = classification.activity !== 'user-task' && !directParent && !rootTask
+  const orphanInternalActivity = classification.activity !== 'user-task' && !directParent
 
   const observations = output.observations.map(observation => {
     if (observation.kind !== 'session.lifecycle') return observation
@@ -170,12 +160,11 @@ export function normalizeCodexSessionAttribution(
         sessionActivity: classification.activity,
         ...(classification.sourceLabel ? { activitySourceLabel: classification.sourceLabel } : {}),
         sessionId: ownSessionId,
-        ...(rootTask ? { rootSessionId: rootTask } : {}),
         ...(directParent ? { parentSessionId: directParent } : {}),
         ...(orphanInternalActivity ? { orphanInternalActivity: true } : {}),
       },
-      ...(parentSessionId
-        ? { identityHints: { ...observation.identityHints, nativeParentSessionId: parentSessionId } }
+      ...(directParent
+        ? { identityHints: { ...observation.identityHints, nativeParentSessionId: directParent } }
         : observation.identityHints
           ? { identityHints: observation.identityHints }
           : {}),
@@ -183,9 +172,6 @@ export function normalizeCodexSessionAttribution(
   })
 
   const relationships: SessionRelationshipCandidate[] = []
-  if (rootTask && rootTask !== ownSessionId) {
-    relationships.push(relationship(record, ctx, rootTask, ownSessionId, 'task-root', 'session_id'))
-  }
   if (directParent && directParent !== ownSessionId) {
     relationships.push(relationship(
       record,
