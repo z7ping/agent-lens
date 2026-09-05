@@ -10,6 +10,7 @@ import type {
 import { SqliteAssetInventoryReader } from './asset-inventory'
 import { SqliteCheckpointRepository } from './checkpoints'
 import { SqliteExecutor } from './executor'
+import { SqliteStorageMaintenance } from './maintenance'
 import { migrateDatabase } from './migrations'
 import { withSqliteObservationPagination } from './observation-pagination'
 import { withSqliteParserReplayReplacement } from './parser-replay-replacement'
@@ -21,6 +22,7 @@ import { SqliteRuntimeProfileRepository } from './runtime-profiles'
 import { SqliteSourceRuntimeStatusRepository } from './runtime-status'
 import { withSqliteSessionRuntimeProfiles } from './session-runtime-profile'
 import { SqliteSessionSummaryReader } from './session-summaries-v2'
+import { withSqliteSourceRecordCompression } from './source-record-compression'
 import { SqliteToolUsageObservationReader } from './tool-usage-observations-v2'
 import { SqliteUnknownObservationProjection } from './unknown-observation-projection'
 
@@ -60,6 +62,7 @@ export class SqliteStorageService implements StorageService {
   readonly sessionSummaryProjection: SqliteSessionSummaryReader
   readonly toolUsageObservations: SqliteToolUsageObservationReader
   readonly unknownObservationProjection: SqliteUnknownObservationProjection
+  readonly maintenance: SqliteStorageMaintenance
   readonly runtimeProfiles: SqliteRuntimeProfileRepository
   readonly sourceRuntimeStatus: SqliteSourceRuntimeStatusRepository
   readonly sessionRelationshipCandidates: SqliteSessionRelationshipCandidateRepository
@@ -80,9 +83,13 @@ export class SqliteStorageService implements StorageService {
 
     this.executor = new SqliteExecutor(this.db)
     const baseRepositories = createSqliteRepositories(this.executor)
-    const replayAware = withSqliteParserReplayReplacement(
+    const compressedSourceRecords = withSqliteSourceRecordCompression(
       this.executor,
       baseRepositories.sourceRecords,
+    )
+    const replayAware = withSqliteParserReplayReplacement(
+      this.executor,
+      compressedSourceRecords,
       baseRepositories.observations,
     )
     this.repositories = {
@@ -98,6 +105,7 @@ export class SqliteStorageService implements StorageService {
     this.sessionSummaryProjection = sessionSummaries
     this.toolUsageObservations = new SqliteToolUsageObservationReader(this.executor)
     this.unknownObservationProjection = new SqliteUnknownObservationProjection(this.executor)
+    this.maintenance = new SqliteStorageMaintenance(this.executor)
     this.runtimeProfiles = new SqliteRuntimeProfileRepository(this.executor)
     this.sourceRuntimeStatus = new SqliteSourceRuntimeStatusRepository(this.executor)
     this.sessionRelationshipCandidates = new SqliteSessionRelationshipCandidateRepository(this.executor)
