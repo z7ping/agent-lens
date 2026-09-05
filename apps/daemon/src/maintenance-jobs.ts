@@ -7,8 +7,8 @@ import type {
 
 export const MAINTENANCE_PRIORITY = {
   projection: 40,
+  deferredIndexes: 45,
   replay: 50,
-  deferredIndexes: 55,
   compression: 60,
   cleanup: 70,
 } as const
