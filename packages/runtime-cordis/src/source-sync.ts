@@ -35,6 +35,10 @@ export interface RegisteredSourceStageResult<T> {
   failures: RegisteredSourceFailure[]
 }
 
+export interface ParserReplayExecutionOptions {
+  cooperate?: () => Promise<void>
+}
+
 async function runtimeHost(ctx: AgentLensContext): Promise<Host> {
   return ctx.identity.resolveHost({
     name: hostname(),
@@ -143,6 +147,7 @@ export async function replayRegisteredSourceHistory(
   abortSignal: AbortSignal,
   targets: RegisteredSourceTarget[],
   historyWindow?: SourceHistoryWindow,
+  options: ParserReplayExecutionOptions = {},
 ): Promise<RegisteredSourceStageResult<SourceParserReplayResult>> {
   const runner = new SourceHistoryRunner(
     ctx.storage,
@@ -165,6 +170,7 @@ export async function replayRegisteredSourceHistory(
           ...target,
           abortSignal,
           ...(historyWindow ? { historyWindow } : {}),
+          ...(options.cooperate ? { cooperate: options.cooperate } : {}),
         }))
       } catch (error) {
         failures.push({ sourceId: target.source.manifest.sourceId, stage: 'history', error })
