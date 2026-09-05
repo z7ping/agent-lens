@@ -8,6 +8,7 @@ import type {
   SourceRecord,
   SourceRecordEmitter,
 } from '@agent-lens/core'
+import { CODEX_CURRENT_PARSER_VERSION } from './current-protocol'
 
 const POLL_INTERVAL_MS = 250
 const MAX_STRING = 32 * 1024
@@ -140,7 +141,7 @@ function sourceRecordFromEnvelope(
         ...(cwd ? { cwd } : {}),
       },
     },
-    parserVersion: '1',
+    parserVersion: CODEX_CURRENT_PARSER_VERSION,
   }
 }
 
