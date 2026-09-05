@@ -24,8 +24,8 @@ function record(entry: unknown, sourceSequence: number): SourceRecord {
   }
 }
 
-test('current Codex parser version is 16 so Parser 15 derivations replay', () => {
-  assert.equal(CODEX_CURRENT_PARSER_VERSION, '16')
+test('current Codex parser version is 17 so earlier semantic derivations replay', () => {
+  assert.equal(CODEX_CURRENT_PARSER_VERSION, '17')
 })
 
 test('event_msg.agent_message becomes canonical assistant output instead of background unknown', async () => {
@@ -138,11 +138,43 @@ test('persisted thread settings update carries model/workspace identity without 
   assert.equal(fact.identityHints.workspacePath, '/safe/updated-project')
 })
 
-test('agent_message without visible text stays on the original unknown fallback path', async () => {
-  const output = await normalizeCurrentCodexRecord(record({
-    type: 'event_msg',
-    payload: { type: 'agent_message', message: '' },
-  }, 9), ctx)
+test('persisted rollout snapshots stay in SourceRecord/Evidence without manufacturing Review activity', async () => {
+  const types = [
+    'world_state',
+    'retained_context',
+    'security_risk_score',
+    'realtime_item',
+    'inter_agent_communication_metadata',
+  ]
+  for (const [index, type] of types.entries()) {
+    const output = await normalizeCurrentCodexRecord(record({ type, payload: { marker: type } }, 20 + index), ctx)
+    assert.equal(output.observations.length, 0, type)
+    assert.equal(output.evidenceCandidates.length, 1, type)
+  }
+})
 
-  assert.equal(output.observations[0]?.kind, 'unknown')
+test('inter-agent communication remains an explicit subagent activity', async () => {
+  const output = await normalizeCurrentCodexRecord(record({
+    type: 'inter_agent_communication',
+    payload: {
+      sender_thread_id: 'thread-root', receiver_thread_id: 'thread-child',
+      message: '检查这一段实现',
+    },
+  }, 30), ctx)
+  const fact = output.observations[0]!
+  assert.equal(fact.kind, 'session.lifecycle')
+  assert.equal((fact.payload as any).event, 'subagent.communication')
+  assert.equal((fact.payload as any).receiver_thread_id, 'thread-child')
+})
+
+test('empty assistant/reasoning records preserve evidence but do not create raw background activity', async () => {
+  for (const [index, payload] of [
+    { type: 'agent_message', message: '' },
+    { type: 'agent_reasoning', text: '' },
+    { type: 'agent_reasoning_raw_content', text: '' },
+  ].entries()) {
+    const output = await normalizeCurrentCodexRecord(record({ type: 'event_msg', payload }, 40 + index), ctx)
+    assert.equal(output.observations.length, 0)
+    assert.equal(output.evidenceCandidates.length, 1)
+  }
 })
