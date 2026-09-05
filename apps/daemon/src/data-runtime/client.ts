@@ -101,7 +101,7 @@ export class DataRuntimeClient {
     worker.on('message', value => this.handleMessage(value))
     worker.on('error', error => this.markDegraded(error))
     worker.on('exit', code => {
-      this.worker = null
+      if (this.worker === worker) this.worker = null
       if (this.stopping) {
         this.stateValue = 'stopped'
       } else {
@@ -177,8 +177,15 @@ export class DataRuntimeClient {
         this.pending.delete(requestId)
         this.timeouts += 1
         const error = new Error(`Data Runtime ${this.role} request timed out: ${method}`)
-        this.lastError = error.message
+        this.markDegraded(error)
         reject(error)
+
+        // A timed-out synchronous Worker may still be blocked with every later request
+        // queued behind it. Treat the timeout as a circuit-breaker boundary: terminate
+        // this Worker and let DataRuntimeService reopen it from durable state.
+        if (!this.stopping && this.worker === worker) {
+          void worker.terminate().catch(() => undefined)
+        }
       }, Math.max(1, timeoutMs))
       timer.unref?.()
       this.pending.set(requestId, {
@@ -202,7 +209,7 @@ export class DataRuntimeClient {
       await this.request('shutdown', undefined, 1_000).catch(() => undefined)
     } finally {
       await worker.terminate().catch(() => undefined)
-      this.worker = null
+      if (this.worker === worker) this.worker = null
       this.stateValue = 'stopped'
       this.rejectAll(new Error(`Data Runtime ${this.role} worker stopped`))
     }
