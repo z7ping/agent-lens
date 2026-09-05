@@ -3,7 +3,18 @@ export const DATA_RUNTIME_MAX_MESSAGE_BYTES = 256 * 1024
 export const DATA_RUNTIME_MAX_PENDING_REQUESTS = 64
 export const DATA_RUNTIME_DEFAULT_TIMEOUT_MS = 5_000
 
-export type DataRuntimeMethod = 'ping' | 'status' | 'shutdown' | 'diagnostic.block'
+export type DataRuntimeRole = 'writer' | 'reader'
+
+export type DataRuntimeMethod =
+  | 'ping'
+  | 'status'
+  | 'shutdown'
+  | 'diagnostic.block'
+  | 'storage.call'
+  | 'storage.transaction.begin'
+  | 'storage.transaction.commit'
+  | 'storage.transaction.rollback'
+  | 'unified-read.call'
 
 export interface DataRuntimeRequest {
   protocolVersion: number
