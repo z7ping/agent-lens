@@ -24,8 +24,8 @@ function record(entry: unknown, sourceSequence: number): SourceRecord {
   }
 }
 
-test('current Codex parser version is 18 so earlier semantic derivations replay', () => {
-  assert.equal(CODEX_CURRENT_PARSER_VERSION, '18')
+test('current Codex parser version is 19 so earlier semantic derivations replay', () => {
+  assert.equal(CODEX_CURRENT_PARSER_VERSION, '19')
 })
 
 test('event_msg.agent_message becomes canonical assistant output instead of background unknown', async () => {
@@ -197,7 +197,6 @@ test('ResponseItem compaction variants are context compaction instead of unknown
     const fact = output.observations[0]!
     assert.equal(fact.kind, 'context.compaction')
     assert.equal((fact.payload as any).opaque, true)
-    assert.equal(JSON.stringify(fact.payload).includes('opaque'), true)
     assert.equal(JSON.stringify(fact.payload).includes('encrypted_content'), false)
   }
 })
