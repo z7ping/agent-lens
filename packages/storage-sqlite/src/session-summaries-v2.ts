@@ -153,7 +153,7 @@ function correctCodexSummaries(executor: SqliteExecutor, items: SessionSummaryRe
     const { firstUserPayload: _legacyFirstUser, title: _legacyTitle, ...rest } = item
     const sessionActivity = item.sessionActivity && item.sessionActivity !== 'user-task'
       ? item.sessionActivity
-      : strictUserTurns === 0 && (item.systemContextCount ?? 0) > 0
+      : strictUserTurns === 0
         ? 'system-activity'
         : item.sessionActivity
 
