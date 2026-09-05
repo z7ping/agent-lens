@@ -60,6 +60,28 @@ function replayRecord(id: string, now: string, parserVersion = '11') {
   }
 }
 
+function insertRelatedSession(storage: SqliteStorageService, now: string) {
+  storage.db.prepare(`
+    INSERT INTO logical_sessions(id, installation_id, started_at, ended_at)
+    VALUES ('session-root', 'install', ?, ?)
+  `).run(now, now)
+  storage.db.prepare(`
+    INSERT INTO source_sessions(id, source_id, installation_id, native_session_id, logical_session_id)
+    VALUES ('source-root', 'codex', 'install', 'native-root', 'session-root')
+  `).run()
+}
+
+const relationshipCandidate = (sourceRecordId: string) => ({
+  sourceId: 'codex',
+  installationId: 'install',
+  sourceRecordId,
+  fromNativeSessionId: 'native-root',
+  toNativeSessionId: 'native-session',
+  type: 'subagent' as const,
+  nativeRelation: 'parent_thread_id',
+  confidence: 'exact' as const,
+})
+
 test('parser version change removes only stale canonical derivation and preserves SourceRecord/Evidence', async () => {
   const { storage, now } = await setup()
   try {
@@ -147,6 +169,71 @@ test('replaying the same parser version is idempotent', async () => {
 
     assert.ok(await storage.repositories.observations.get('observation-current'))
     assert.ok(await storage.repositories.evidence.get('evidence-current'))
+  } finally {
+    await storage.close()
+  }
+})
+
+test('parser replay removes a stale relationship candidate and its unsupported promoted relationship', async () => {
+  const { storage, now } = await setup()
+  try {
+    insertRelatedSession(storage, now)
+    insertSourceRecord(storage, 'record-rel-old', '10', now)
+    const candidate = relationshipCandidate('record-rel-old')
+    await storage.sessionRelationshipCandidates.put(candidate)
+    assert.ok(await storage.sessionRelationshipCandidates.tryPromote(candidate))
+
+    assert.equal(Number((storage.db.prepare(`
+      SELECT COUNT(*) AS count FROM session_relationship_candidates
+      WHERE source_record_id = 'record-rel-old'
+    `).get() as { count: number }).count), 1)
+    assert.equal(Number((storage.db.prepare(`
+      SELECT COUNT(*) AS count FROM session_relationships
+      WHERE from_session_id = 'session-root' AND to_session_id = 'session' AND type = 'subagent'
+    `).get() as { count: number }).count), 1)
+
+    await storage.repositories.sourceRecords.put(replayRecord('record-rel-old', now))
+
+    assert.equal(Number((storage.db.prepare(`
+      SELECT COUNT(*) AS count FROM session_relationship_candidates
+      WHERE source_record_id = 'record-rel-old'
+    `).get() as { count: number }).count), 0)
+    assert.equal(Number((storage.db.prepare(`
+      SELECT COUNT(*) AS count FROM session_relationships
+      WHERE from_session_id = 'session-root' AND to_session_id = 'session' AND type = 'subagent'
+    `).get() as { count: number }).count), 0)
+  } finally {
+    await storage.close()
+  }
+})
+
+test('parser replay keeps a promoted relationship while another SourceRecord still supports it', async () => {
+  const { storage, now } = await setup()
+  try {
+    insertRelatedSession(storage, now)
+    insertSourceRecord(storage, 'record-rel-a', '10', now)
+    insertSourceRecord(storage, 'record-rel-b', '11', now)
+    const first = relationshipCandidate('record-rel-a')
+    const second = relationshipCandidate('record-rel-b')
+    await storage.sessionRelationshipCandidates.put(first)
+    await storage.sessionRelationshipCandidates.tryPromote(first)
+    await storage.sessionRelationshipCandidates.put(second)
+    await storage.sessionRelationshipCandidates.tryPromote(second)
+
+    await storage.repositories.sourceRecords.put(replayRecord('record-rel-a', now))
+
+    assert.equal(Number((storage.db.prepare(`
+      SELECT COUNT(*) AS count FROM session_relationship_candidates
+      WHERE source_record_id = 'record-rel-a'
+    `).get() as { count: number }).count), 0)
+    assert.equal(Number((storage.db.prepare(`
+      SELECT COUNT(*) AS count FROM session_relationship_candidates
+      WHERE source_record_id = 'record-rel-b'
+    `).get() as { count: number }).count), 1)
+    assert.equal(Number((storage.db.prepare(`
+      SELECT COUNT(*) AS count FROM session_relationships
+      WHERE from_session_id = 'session-root' AND to_session_id = 'session' AND type = 'subagent'
+    `).get() as { count: number }).count), 1)
   } finally {
     await storage.close()
   }
