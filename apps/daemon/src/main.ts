@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import type { MaintenanceJobStore } from '@agent-lens/core'
 import { backupLocalPlugin } from '@agent-lens/backup-local'
 import { capturePolicyPlugin } from '@agent-lens/capture-policy'
 import {
@@ -38,7 +39,6 @@ import {
 import {
   createProgressiveHistoryStages,
   createParserReplayMaintenanceStages,
-  createParserReplayStages,
   parserReplayMaintenanceStagesAllowedByCapacity,
   stagesAllowedByCapacity,
   storageCapacityState,
@@ -48,6 +48,10 @@ import {
   attachHttpForegroundActivity,
   ForegroundActivityGate,
 } from './maintenance-idle.js'
+import {
+  MAINTENANCE_PRIORITY,
+  runMaintenanceJob,
+} from './maintenance-jobs.js'
 import {
   compressLegacySourceRecords,
   ensureDeferredStorageIndexes,
@@ -176,6 +180,9 @@ try {
   await app.start()
   foregroundGate = new ForegroundActivityGate()
   disposeHttpActivityTracking = attachHttpForegroundActivity(app.context.http.server, foregroundGate)
+  const maintenanceJobs = (
+    app.context.storage as typeof app.context.storage & { maintenanceJobs?: MaintenanceJobStore }
+  ).maintenanceJobs
 
   console.info(
     `[AgentLens] 1.0 runtime started (db: ${dbPath}, mode=${daemonMode}, interactive=${interactiveTerminal}, pid=${process.pid}, ppid=${process.ppid})`,
@@ -222,11 +229,30 @@ try {
     } else {
       try {
         console.info('[AgentLens] session summary projection cooperative rebuild started')
-        await app.context.projections.rebuild(SESSION_SUMMARY_PROJECTION_ID, {
-          signal: runtimeController.signal,
-        })
-        sessionSummaryProjectionReady = true
-        console.info('[AgentLens] session summary projection rebuilt')
+        const projectionRun = await runMaintenanceJob(
+          maintenanceJobs,
+          {
+            id: 'projection:session-summary',
+            type: 'projection-rebuild',
+            scope: SESSION_SUMMARY_PROJECTION_ID,
+            priority: MAINTENANCE_PRIORITY.projection,
+          },
+          runtimeController.signal,
+          async () => {
+            await app.context.projections.rebuild(SESSION_SUMMARY_PROJECTION_ID, {
+              signal: runtimeController.signal,
+            })
+            return { rebuilt: true }
+          },
+          value => value,
+        )
+        if (projectionRun?.status === 'contended' || projectionRun?.status === 'paused') {
+          sessionSummaryProjectionReady = false
+          console.warn(`[AgentLens] session summary projection maintenance ${projectionRun.status}`)
+        } else {
+          sessionSummaryProjectionReady = true
+          console.info('[AgentLens] session summary projection rebuilt')
+        }
       } catch (error) {
         if (runtimeController.signal.aborted) return
         sessionSummaryProjectionReady = false
@@ -264,26 +290,7 @@ try {
     }
     if (runtimeController.signal.aborted) return
 
-    // Parser Replay 已完全退出启动链路；此 API 固定返回空列表，只保留边界表达。
-    for (const stage of createParserReplayStages(startedAt)) {
-      if (runtimeController.signal.aborted) return
-      console.info(`[AgentLens] parser replay startup stage started: ${stage.label}`)
-      const replay = await replayRegisteredSourceHistory(
-        app.context,
-        runtimeController.signal,
-        prepared.targets,
-        stage.window,
-      )
-      logSourceFailures(replay.failures)
-      for (const result of replay.results) {
-        console.info(
-          `[AgentLens] parser replayed: stage=${stage.id} source=${result.sourceId} records=${result.records} created=${result.observationsCreated} merged=${result.observationsMerged} unchanged=${result.observationsUnchanged}`,
-        )
-      }
-      await yieldToForeground(runtimeController.signal)
-    }
-    if (runtimeController.signal.aborted) return
-
+    // Parser Replay 完全退出启动链路；只允许在下面的空闲 Maintenance Job 中执行。
     const assets = await discoverRegisteredSourceAssets(
       app.context,
       runtimeController.signal,
@@ -308,11 +315,30 @@ try {
       }
     ).maintenance
     try {
-      const indexes = await ensureDeferredStorageIndexes(
-        storageMaintenance,
-        gate,
+      const indexRun = await runMaintenanceJob(
+        maintenanceJobs,
+        {
+          id: 'storage:deferred-indexes',
+          type: 'deferred-indexes',
+          scope: 'sqlite-primary',
+          priority: MAINTENANCE_PRIORITY.deferredIndexes,
+        },
         runtimeController.signal,
+        async () => {
+          const indexes = await ensureDeferredStorageIndexes(
+            storageMaintenance,
+            gate,
+            runtimeController.signal,
+          )
+          return indexes ?? { created: [], existing: [] }
+        },
+        value => ({ created: value.created, existing: value.existing }),
       )
+      if (indexRun?.status === 'contended' || indexRun?.status === 'paused') {
+        console.warn(`[AgentLens] deferred storage index maintenance ${indexRun.status}; replay/compression skipped`)
+        return
+      }
+      const indexes = indexRun?.value
       if (indexes?.created.length) {
         console.info(`[AgentLens] deferred storage indexes created: ${indexes.created.join(', ')}`)
       }
@@ -339,42 +365,98 @@ try {
 
     for (const stage of maintenanceStages) {
       if (runtimeController.signal.aborted) return
-      await gate.wait(runtimeController.signal)
-      if (runtimeController.signal.aborted) return
       console.info(`[AgentLens] parser replay maintenance stage started: ${stage.label}`)
-      const replay = await replayRegisteredSourceHistory(
-        app.context,
+      const replayRun = await runMaintenanceJob(
+        maintenanceJobs,
+        {
+          id: `parser-replay:${stage.id}`,
+          type: 'parser-replay',
+          scope: stage.id,
+          priority: MAINTENANCE_PRIORITY.replay,
+          progress: { stage: stage.id },
+        },
         runtimeController.signal,
-        prepared.targets,
-        stage.window,
-        { cooperate: () => gate.wait(runtimeController.signal) },
+        async job => {
+          await gate.wait(runtimeController.signal)
+          if (runtimeController.signal.aborted) {
+            return { stage: stage.id, sources: 0, failures: 0, records: 0 }
+          }
+          const replay = await replayRegisteredSourceHistory(
+            app.context,
+            runtimeController.signal,
+            prepared.targets,
+            stage.window,
+            { cooperate: () => gate.wait(runtimeController.signal) },
+          )
+          logSourceFailures(replay.failures)
+          for (const result of replay.results) {
+            console.info(
+              `[AgentLens] parser replay maintenance: stage=${stage.id} source=${result.sourceId} records=${result.records} created=${result.observationsCreated} merged=${result.observationsMerged} unchanged=${result.observationsUnchanged}`,
+            )
+          }
+          const progress = {
+            stage: stage.id,
+            sources: replay.results.length,
+            failures: replay.failures.length,
+            records: replay.results.reduce((sum, item) => sum + item.records, 0),
+          }
+          await job.report(progress)
+          await yieldToForeground(runtimeController.signal)
+          return progress
+        },
+        value => value,
       )
-      logSourceFailures(replay.failures)
-      for (const result of replay.results) {
-        console.info(
-          `[AgentLens] parser replay maintenance: stage=${stage.id} source=${result.sourceId} records=${result.records} created=${result.observationsCreated} merged=${result.observationsMerged} unchanged=${result.observationsUnchanged}`,
-        )
+      if (replayRun?.status === 'contended') {
+        console.warn(`[AgentLens] parser replay maintenance contended: stage=${stage.id}`)
       }
-      await yieldToForeground(runtimeController.signal)
     }
 
     if (runtimeController.signal.aborted) return
     try {
-      const compression = await compressLegacySourceRecords(
-        storageMaintenance,
-        gate,
-        runtimeController.signal,
+      const compressionRun = await runMaintenanceJob(
+        maintenanceJobs,
         {
-          batchSize: 50,
-          onBatch(batch) {
-            if (!batch.scanned) return
-            console.info(
-              `[AgentLens] SourceRecord compression: scanned=${batch.scanned} compressed=${batch.compressed} plain=${batch.plain} saved=${batch.savedBytes}`,
-            )
-          },
+          id: 'source-record:compression',
+          type: 'source-record-compression',
+          scope: 'legacy-json',
+          priority: MAINTENANCE_PRIORITY.compression,
         },
+        runtimeController.signal,
+        async job => {
+          const compression = await compressLegacySourceRecords(
+            storageMaintenance,
+            gate,
+            runtimeController.signal,
+            {
+              batchSize: 50,
+              onBatch(batch) {
+                if (!batch.scanned) return
+                console.info(
+                  `[AgentLens] SourceRecord compression: scanned=${batch.scanned} compressed=${batch.compressed} plain=${batch.plain} saved=${batch.savedBytes}`,
+                )
+              },
+            },
+          )
+          await job.report({
+            scanned: compression.scanned,
+            compressed: compression.compressed,
+            plain: compression.plain,
+            savedBytes: compression.savedBytes,
+            batches: compression.batches,
+          })
+          return compression
+        },
+        value => ({
+          scanned: value.scanned,
+          compressed: value.compressed,
+          plain: value.plain,
+          savedBytes: value.savedBytes,
+          batches: value.batches,
+          aborted: value.aborted,
+        }),
       )
-      if (compression.scanned > 0) {
+      const compression = compressionRun?.value
+      if (compression && compression.scanned > 0) {
         console.info(
           `[AgentLens] SourceRecord compression completed: scanned=${compression.scanned} compressed=${compression.compressed} plain=${compression.plain} saved=${compression.savedBytes} batches=${compression.batches}`,
         )
