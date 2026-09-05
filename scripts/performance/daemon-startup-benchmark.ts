@@ -144,7 +144,16 @@ async function waitForExit(child: ChildProcess, timeout = 10_000): Promise<void>
 
 function spawnDaemon(): { child: ChildProcess; output: { value: string } } {
   const output = { value: '' }
-  const child = spawn(process.execPath, ['--import', 'tsx', 'apps/daemon/src/main.ts'], {
+  // Windows 的 child.kill 会强制退出；基准通过私有 IPC 触发既有信号处理器，验证正常关闭后的复用。
+  const bootstrap = `
+    process.on('message', message => {
+      if (message !== 'benchmark:shutdown') return
+      process.emit('SIGTERM')
+      process.disconnect()
+    })
+    await import('./apps/daemon/src/main.ts')
+  `
+  const child = spawn(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', bootstrap], {
     cwd: process.cwd(),
     env: {
       ...process.env,
@@ -155,8 +164,10 @@ function spawnDaemon(): { child: ChildProcess; output: { value: string } } {
       AGENT_LENS_WEB_ROOT: webRoot,
       AGENT_LENS_PORT: String(port),
       AGENT_LENS_DAEMON_MODE: 'managed',
+      AGENT_LENS_ENABLED_SOURCES: 'none',
     },
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+    windowsHide: true,
   })
   child.stdout?.on('data', chunk => { output.value += String(chunk) })
   child.stderr?.on('data', chunk => { output.value += String(chunk) })
@@ -165,7 +176,8 @@ function spawnDaemon(): { child: ChildProcess; output: { value: string } } {
 
 async function stopDaemon(child: ChildProcess): Promise<void> {
   if (child.exitCode != null) return
-  child.kill('SIGTERM')
+  if (child.connected) child.send('benchmark:shutdown')
+  else child.kill('SIGTERM')
   try {
     await waitForExit(child)
   } catch {
@@ -230,7 +242,7 @@ async function runStartup(action: 'rebuilt' | 'reused') {
 
 try {
   const initialProjectionRebuildMs = await seed()
-  storage.close()
+  await storage.close()
 
   const startup: Record<string, unknown> = {}
   if (startupMode === 'unclean') {
@@ -252,6 +264,6 @@ try {
     startup,
   }, null, 2))
 } finally {
-  try { storage.close() } catch {}
+  try { await storage.close() } catch {}
   rmSync(root, { recursive: true, force: true })
 }

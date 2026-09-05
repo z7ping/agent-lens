@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
 import type { HubReadAvailability, HubReviewSessionSummaryDto, PiLiveStateDto, ReviewSessionSummaryDto } from '@agent-lens/protocol'
@@ -9,13 +9,14 @@ import { useClientSnapshot } from '../App'
 import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScope'
 import { Button, IconButton, Input, SelectMenu, StatusBadge, Toolbar } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
-import { HubReviewPage } from './HubReviewPage'
-import { PiLivePage } from './PiLivePage'
-import { ReviewPage } from './ReviewPage'
 import { TaskSurface } from './TaskSurface'
 import { deriveTaskProjectOptions, historyTaskPresentation, pickTaskProject, type TaskProjectOption } from './task-center'
 
 export type TaskCenterMode = 'history' | 'live' | 'new' | 'hub'
+
+const HubReviewPage = lazy(() => import('./HubReviewPage').then(module => ({ default: module.HubReviewPage })))
+const PiLivePage = lazy(() => import('./PiLivePage').then(module => ({ default: module.PiLivePage })))
+const ReviewPage = lazy(() => import('./ReviewPage').then(module => ({ default: module.ReviewPage })))
 type TaskDayGroup = '今天' | '昨天' | '更早'
 type HistoryTaskEntry =
   | { kind: 'local'; id: string; at: string; local: ReviewSessionSummaryDto }
@@ -512,16 +513,18 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     <div className={`task-center-page ${mode === 'new' ? 'is-new-task' : ''}`}>
       <section className="task-center-main">
         <TaskSurface mode={surfaceMode}>
+          <Suspense fallback={<div className="workspace-skeleton" role="status" aria-label="正在加载任务详情"><span className="state-skeleton"/><span className="state-skeleton"/><span className="state-skeleton"/></div>}>
           {mode === 'history' && <ReviewPage
             model={model}
             embedded
             onResumePiSession={resumePiSession}
             resumingPiSession={resumingSessionId === review.detail?.id}
-            piResumeError={piResumeError?.sessionId === review.detail?.id ? piResumeError.message : ''}
+            piResumeError={piResumeError && piResumeError.sessionId === review.detail?.id ? piResumeError.message : ''}
           />}
           {mode === 'live' && <PiLivePage embedded/>}
           {mode === 'hub' && <HubReviewPage embedded/>}
           {mode === 'new' && <NewTaskPanel options={projectOptions} preferredProjectId={preferredProjectId} onStarted={runtimeSessionId => navigate(`/review/live/${encodeURIComponent(runtimeSessionId)}`)}/>} 
+          </Suspense>
         </TaskSurface>
       </section>
     </div>

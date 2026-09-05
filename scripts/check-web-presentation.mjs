@@ -8,7 +8,7 @@ const files = {
   readability: p('readability.css'), semantic: p('semantic-colors.css'), shell: p('shell.css'), shellResponsive: p('shell-responsive.css'),
   states: p('states.css'), tools: p('tools.css'), insights: p('insights.css'), agents: p('agents.css'), agentResponsive: p('agent-insights-responsive.css'),
   backup: p('backup.css'), backupResponsive: p('backup-responsive.css'), review: p('review.css'), reviewLong: p('review-long-session.css'),
-  pi: p('pi-live.css'), taskCenter: p('task-center.css'), taskDetail: p('task-detail.css'),
+  pi: p('pi-live.css'), taskCenter: p('task-center.css'), taskDetail: p('task-detail.css'), taskTurnRail: p('task-turn-rail.css'),
   uiPrimitives: p('components/ui/ui-primitives.css'), uiOverlay: p('components/ui/overlay.css'),
   selectMenu: p('components/select-menu.css'), piStartup: p('components/pi-startup-disclosure.css'),
 }
@@ -36,7 +36,7 @@ const at = value => imports.indexOf(value)
 for (const required of [
   './styles.css', './tokens.css', './theme.css', './typography.css', './readability.css', './semantic-colors.css',
   './shell.css', './shell-responsive.css', './states.css', './agents.css', './agent-insights-responsive.css', './tools.css', './insights.css',
-  './review.css', './review-long-session.css', './backup.css', './backup-responsive.css', './pi-live.css', './task-center.css', './task-detail.css',
+  './review.css', './review-long-session.css', './backup.css', './backup-responsive.css', './pi-live.css', './task-center.css', './task-detail.css', './task-turn-rail.css',
 ]) {
   if (at(required) < 0) throw new Error(`正式 Web 缺少样式入口：${required}`)
 }
@@ -148,9 +148,10 @@ if (/\.snapshot-create-button\s*\{[^}]*height\s*:/s.test(css.backup)) throw new 
 
 if (!css.review.includes('AgentLens 1.0 Review 页面所有者') || !css.review.includes('.evidence-inline') || !css.review.includes('.raw-event-group') || !css.review.includes('.pi-session-tree') || !css.review.includes('.review-inspector-overlay')) throw new Error('review.css 必须只持有 Review 页面/证据/Inspector 业务内容')
 if (/\.inspector-panel\b|\.inspector-head\b|\.inspector-title\b/.test(css.review)) throw new Error('Review Inspector 外壳必须由统一 Drawer 持有，不得恢复页面自建抽屉')
-if (!css.reviewLong.includes('.round-nav') || !css.reviewLong.includes('.turn-rail') || !css.reviewLong.includes('.turn-tick') || !css.reviewLong.includes('.virtual-round-shell')) throw new Error('review-long-session.css 必须持有长会话/轮次导航能力')
+if (!css.reviewLong.includes('.round-nav') || !css.reviewLong.includes('.virtual-round-shell')) throw new Error('review-long-session.css 必须持有长会话导航与虚拟挂载能力')
+if (!css.taskTurnRail.includes('.task-turn-rail') || !css.taskTurnRail.includes('.turn-tick')) throw new Error('task-turn-rail.css 必须持有共享轮次导轨能力')
 if (!css.pi.includes('Pi Live 专属样式所有者') || !css.pi.includes('.pi-live-composer') || !css.pi.includes('.pi-live-queue') || !/\.pi-live-compose-hint[\s\S]*?position:\s*absolute/m.test(css.pi)) throw new Error('pi-live.css 必须持有 Runtime/Composer/Queue，且快捷提示不得参与布局高度')
-if (!css.taskCenter.includes('Task Center 页面壳层唯一所有者') || !css.taskCenter.includes('.task-center-rail') || !css.taskCenter.includes('.task-center-main') || !css.taskCenter.includes('左右滚动根完全隔离')) throw new Error('task-center.css 必须持有 Rail/详情壳层和独立滚动')
+if (!css.taskCenter.includes('Task Center 页面壳层唯一所有者') || !css.taskCenter.includes('.task-center-rail') || !css.taskCenter.includes('.task-center-main') || !/\.task-center-scroll\s*\{[^}]*overflow:\s*auto/.test(css.taskCenter) || !/\.task-center-main\s*\{[^}]*overflow:\s*hidden/.test(css.taskCenter)) throw new Error('task-center.css 必须持有 Rail/详情壳层和独立滚动')
 if (!css.taskDetail.includes('Task Surface 共享详情组件的唯一样式所有者') || !css.taskDetail.includes('.task-header') || !css.taskDetail.includes('.task-round') || !css.taskDetail.includes('.task-message-bubble-user') || !css.taskDetail.includes('background: var(--al-user-bubble)') || !css.taskDetail.includes('.task-message-assistant') || !css.taskDetail.includes('.task-thinking') || !css.taskDetail.includes('.task-tool-row') || !css.taskDetail.includes('.task-event-row')) throw new Error('task-detail.css 必须完整持有 Task Surface 共享组件')
 
 function block(source, selector) {

@@ -9,6 +9,7 @@ const workspaceSidebar = fs.readFileSync('packages/web/src/components/WorkspaceS
 const releaseInfo = fs.readFileSync('packages/web/src/components/ReleaseInfo.tsx', 'utf8')
 const protocol = fs.readFileSync('packages/protocol/src/review.ts', 'utf8')
 const server = fs.readFileSync('packages/surface-http/src/server.ts', 'utf8')
+const taskCenter = fs.readFileSync('packages/web/src/features/TaskCenterPage.tsx', 'utf8')
 
 const required = [
   [model.includes('reviewInFlight'), 'Review 列表必须保持单飞请求'],
@@ -27,12 +28,14 @@ const required = [
   [server.includes("params.get('cursor')"), 'HTTP Surface 必须解析 Review 列表游标'],
   [releaseInfo.includes('runtimeReady') && releaseInfo.includes('{ runtimeOwner }'), '版本检查必须复用已有 runtime health 结果'],
   [workspaceSidebar.includes('runtimeOwner={snapshot.health?.runtime?.owner ?? null}'), 'Shell 必须把已有 health 传给版本检查'],
+  [app.includes("lazy(() => import('./features/TaskCenterPage')"), '一级页面必须按路由拆包'],
+  [taskCenter.includes("lazy(() => import('./ReviewPage')") && taskCenter.includes("lazy(() => import('./PiLivePage')"), 'Review 与 Pi Live 必须按任务模式拆包'],
   [!api.includes('preferUserSessionTitle'), 'Web API 不得用首条用户消息覆盖 Source/Core 提供的原生会话标题'],
   [
-    reviewPage.includes('sessionTitle([item.title, item.preview]')
-      && reviewPage.includes('[detail.title, detail.preview]')
+    /historyTaskPresentation\(\s*item\s*,/.test(reviewPage)
+      && /historyTaskPresentation\(\s*detail\s*,/.test(reviewPage)
       && reviewPage.includes('const taskDetailModel = useMemo<TaskDetailModel | null>'),
-    '任务列表与 TaskDetailModel 详情投影必须统一使用“原生标题 → 首条用户消息 → 通用兜底”语义',
+    '任务列表与 TaskDetailModel 详情投影必须复用 historyTaskPresentation 的来源标题与活动类型语义',
   ],
 ]
 

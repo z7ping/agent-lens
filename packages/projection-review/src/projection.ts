@@ -813,12 +813,12 @@ export class ReviewProjection {
     logicalSessionId: string,
     query: ReviewDetailQueryDto,
     filter: 'errors' | 'latency',
+    descriptors: InteractionDescriptor[],
   ): Promise<{ interactions: ReviewInteractionDto[]; page: ReviewDetailPageDto }> {
     const requestedLimit = Math.max(1, Math.min(query.limit ?? DEFAULT_DETAIL_LIMIT, MAX_DETAIL_LIMIT))
     const decoded = query.cursor ? decodeReviewCursor(query.cursor) : null
     if (decoded && (decoded.mode !== 'filter' || decoded.filter !== filter)) throw new Error('Invalid review cursor')
     const afterOrdinal = decoded?.ordinal ?? 0
-    const descriptors = await this.scanInteractionDescriptors(logicalSessionId)
     const threshold = filter === 'latency' ? highLatencyThreshold(descriptors) : null
     const matches = descriptors.filter(descriptor => {
       if (descriptor.ordinal <= afterOrdinal) return false
@@ -873,7 +873,7 @@ export class ReviewProjection {
           page: { count: target ? 1 : 0, hasMore: false, direction: 'forward' as const, filter: 'all' as const },
         }
       : filter === 'errors' || filter === 'latency'
-      ? await this.filteredInteractionPage(logicalSessionId, query, filter)
+      ? await this.filteredInteractionPage(logicalSessionId, query, filter, descriptors)
       : filter === 'latest'
         ? await this.backwardInteractionPage(logicalSessionId, { ...query, direction: 'backward' }, 'latest', summary.interactionCount)
         : direction === 'backward'

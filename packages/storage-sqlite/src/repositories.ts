@@ -552,6 +552,16 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
         return row ? mapSourceRecord(row) : null
       })
     },
+    async getMany(ids) {
+      if (!ids.length) return []
+      return executor.run(() => {
+        const uniqueIds = [...new Set(ids)]
+        const placeholders = uniqueIds.map(() => '?').join(', ')
+        return db.prepare(`SELECT * FROM source_records WHERE id IN (${placeholders}) ORDER BY id`)
+          .all(...uniqueIds)
+          .map(mapSourceRecord)
+      })
+    },
     async listForParserReplay(sourceId, installationId, currentParserVersion, after, limit = 500, window) {
       return executor.run(() => {
         const params: unknown[] = [sourceId, installationId, currentParserVersion]

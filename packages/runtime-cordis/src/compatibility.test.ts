@@ -21,7 +21,6 @@ const storage: StorageService = {
   ): Promise<T> {
     return fn(repositories)
   },
-  async migrate(): Promise<void> {},
   async health() {
     return { ok: true }
   },

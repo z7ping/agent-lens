@@ -298,6 +298,6 @@ try {
     evidenceLookupQueryPlan: evidencePlan.map(row => row.detail),
   }, null, 2))
 } finally {
-  storage.close()
+  await storage.close()
   rmSync(root, { recursive: true, force: true })
 }

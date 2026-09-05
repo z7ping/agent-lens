@@ -28,10 +28,12 @@ async function resumablePiRecord(
   nativeSessionIds: ReadonlySet<string>,
 ): Promise<SourceRecord | null> {
   const evidence = storage.repositories.evidence.getMany
-    ? await storage.repositories.evidence.getMany(evidenceIds)
+    ? await storage.repositories.evidence.getMany([...evidenceIds])
     : await Promise.all(evidenceIds.map(id => storage.repositories.evidence.get(id)))
   const sourceRecordIds = [...new Set(evidence.flatMap(item => item?.sourceRecordId ? [item.sourceRecordId] : []))]
-  const sourceRecords = await Promise.all(sourceRecordIds.map(id => storage.repositories.sourceRecords.get(id)))
+  const sourceRecords = storage.repositories.sourceRecords.getMany
+    ? await storage.repositories.sourceRecords.getMany(sourceRecordIds)
+    : await Promise.all(sourceRecordIds.map(id => storage.repositories.sourceRecords.get(id)))
 
   return sourceRecords.find((item): item is SourceRecord => Boolean(
     item

@@ -303,6 +303,7 @@ export interface SourceRecordReplayCursor {
 
 export interface SourceRecordRepository {
   get(id: SourceRecordId): Promise<SourceRecord | null>
+  getMany?(ids: SourceRecordId[]): Promise<SourceRecord[]>
   listForParserReplay?(
     sourceId: string,
     installationId: AgentInstallationId,

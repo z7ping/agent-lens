@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PropsWithChildren } from 'react'
+import { createContext, lazy, Suspense, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PropsWithChildren } from 'react'
 import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import type { AgentFacetDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel, ClientSnapshot } from './client/model'
@@ -7,12 +7,14 @@ import { AgentsStateOverlay } from './components/AgentsStateOverlay'
 import { BackgroundDataNotice } from './components/BackgroundDataNotice'
 import { ReviewStateOverlay } from './components/ReviewStateOverlay'
 import { WorkspaceSidebar } from './components/WorkspaceSidebar'
+import { PageLoadingState } from './components/StateViews'
 import { Breadcrumb } from './components/ui'
-import { AgentsResponsivePage } from './features/AgentsResponsivePage'
-import { BackupPage } from './features/BackupPage'
-import { InsightsPage } from './features/InsightsPage'
-import { TaskCenterPage } from './features/TaskCenterPage'
-import { ToolsPage } from './features/ToolsPage'
+
+const AgentsResponsivePage = lazy(() => import('./features/AgentsResponsivePage').then(module => ({ default: module.AgentsResponsivePage })))
+const BackupPage = lazy(() => import('./features/BackupPage').then(module => ({ default: module.BackupPage })))
+const InsightsPage = lazy(() => import('./features/InsightsPage').then(module => ({ default: module.InsightsPage })))
+const TaskCenterPage = lazy(() => import('./features/TaskCenterPage').then(module => ({ default: module.TaskCenterPage })))
+const ToolsPage = lazy(() => import('./features/ToolsPage').then(module => ({ default: module.ToolsPage })))
 
 export function useClientSnapshot(model: AgentLensClientModel): ClientSnapshot {
   return useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot)
@@ -247,6 +249,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
           <span>实时通道已断开</span>
           <small>页面保留当前内容；重新连接后会继续接收新数据。</small>
         </div>}
+        <Suspense fallback={<PageLoadingState title="正在加载工作区" description="正在准备当前页面所需的数据与界面。"/>}>
         <Routes>
           <Route path="/review" element={<TaskCenterPage model={model} mode="history" sidebarHost={sidebarHost}/>} />
           <Route path="/review/new" element={<TaskCenterPage model={model} mode="new" sidebarHost={sidebarHost}/>} />
@@ -260,6 +263,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
           <Route path="/backup" element={<BackupPage />} />
           <Route path="*" element={<Navigate to="/review" replace />} />
         </Routes>
+        </Suspense>
         {onLocalReview && <ReviewStateOverlay model={model} snapshot={snapshot}/>} 
         {onAgents && <AgentsStateOverlay model={model} snapshot={snapshot}/>} 
         {onTools && snapshot.usage.hasNewData && <BackgroundDataNotice label="工具分析" hasSseBanner={hasSseBanner} onRefresh={() => model.refreshUsage()}/>} 
