@@ -23,6 +23,8 @@ export interface MaintenanceJobSpec {
 
 export interface MaintenanceJobContext {
   readonly signal: AbortSignal
+  /** Persisted progress from a previous run, if any. */
+  readonly initialProgress?: JsonValue
   report(progress: JsonValue): Promise<boolean>
 }
 
@@ -44,11 +46,12 @@ export async function runMaintenanceJob<T>(
   completeProgress?: (value: T) => JsonValue,
 ): Promise<MaintenanceJobRunResult<T> | null> {
   if (!store) {
-    await operation({ signal, report: async () => true })
+    await operation({ signal, initialProgress: spec.progress, report: async () => true })
     return null
   }
 
   let job = await store.ensure(spec)
+  const initialProgress = job.progress
   if (signal.aborted) {
     const paused = await store.transition(job.id, job.revision, { state: 'paused' })
     return { status: 'paused', job: paused ?? job }
@@ -56,7 +59,7 @@ export async function runMaintenanceJob<T>(
 
   const running = await store.transition(job.id, job.revision, {
     state: 'running',
-    ...(spec.progress === undefined ? {} : { progress: spec.progress }),
+    ...(job.progress === undefined && spec.progress !== undefined ? { progress: spec.progress } : {}),
   })
   if (!running) {
     const latest = await store.get(job.id)
@@ -66,6 +69,7 @@ export async function runMaintenanceJob<T>(
 
   const context: MaintenanceJobContext = {
     signal,
+    ...(initialProgress === undefined ? {} : { initialProgress }),
     async report(progress) {
       const next = await store.transition(job.id, job.revision, { state: 'running', progress })
       if (!next) return false
