@@ -21,6 +21,7 @@ import { SqliteRuntimeProfileRepository } from './runtime-profiles'
 import { SqliteSourceRuntimeStatusRepository } from './runtime-status'
 import { withSqliteSessionRuntimeProfiles } from './session-runtime-profile'
 import { SqliteSessionSummaryReader } from './session-summaries-v2'
+import { SqliteToolUsageObservationReader } from './tool-usage-observations-v2'
 
 const STORAGE_SOFT_LIMIT_BYTES = 512 * 1024 * 1024
 const STORAGE_APPROACHING_RATIO = 0.8
@@ -34,7 +35,6 @@ export function describeStorageCapacity(footprintBytes: number, softLimitBytes =
     state: ratio >= 1 ? 'exceeded' : ratio >= STORAGE_APPROACHING_RATIO ? 'approaching' : 'healthy',
   } as const
 }
-import { SqliteToolUsageObservationReader } from './tool-usage-observations'
 
 export interface SqliteStorageOptions {
   path: string
