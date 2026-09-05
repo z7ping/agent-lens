@@ -1,6 +1,7 @@
 import type {
   JsonValue,
   ReviewDetailQueryDto,
+  ReviewInteractionDto,
   ReviewSessionDetailDto,
 } from '@agent-lens/protocol'
 import {
@@ -9,6 +10,10 @@ import {
 } from './projection'
 
 export { HubReviewProjection, hubReviewProjectionInternals } from './hub'
+
+const MAX_REVIEW_INTERACTION_NODES = 600
+const REVIEW_INTERACTION_HEAD_NODES = 240
+const REVIEW_INTERACTION_TAIL_NODES = MAX_REVIEW_INTERACTION_NODES - REVIEW_INTERACTION_HEAD_NODES
 
 function asRecord(value: JsonValue | unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -116,6 +121,28 @@ export function lifecycleEventLabel(payload: JsonValue | unknown): string {
   return '会话状态变化'
 }
 
+function boundInteractionNodes(interaction: ReviewInteractionDto): ReviewInteractionDto {
+  if (interaction.nodes.length <= MAX_REVIEW_INTERACTION_NODES) return interaction
+  const totalNodeCount = interaction.nodes.length
+  return {
+    ...interaction,
+    nodes: [
+      ...interaction.nodes.slice(0, REVIEW_INTERACTION_HEAD_NODES),
+      ...interaction.nodes.slice(-REVIEW_INTERACTION_TAIL_NODES),
+    ],
+    nodesTruncated: true,
+    totalNodeCount,
+    omittedNodeCount: totalNodeCount - MAX_REVIEW_INTERACTION_NODES,
+  }
+}
+
+function boundReviewDetail(detail: ReviewSessionDetailDto): ReviewSessionDetailDto {
+  return {
+    ...detail,
+    interactions: detail.interactions.map(boundInteractionNodes),
+  }
+}
+
 function localizeLifecycle(detail: ReviewSessionDetailDto): ReviewSessionDetailDto {
   return {
     ...detail,
@@ -134,7 +161,7 @@ export class ReviewProjection extends BaseReviewProjection {
     query: ReviewDetailQueryDto = {},
   ): Promise<ReviewSessionDetailDto | null> {
     const detail = await super.get(logicalSessionId, query)
-    return detail ? localizeLifecycle(detail) : null
+    return detail ? localizeLifecycle(boundReviewDetail(detail)) : null
   }
 }
 
@@ -142,4 +169,9 @@ export const reviewProjectionInternals = {
   ...baseReviewProjectionInternals,
   lifecycleEventLabel,
   localizeLifecycle,
+  boundInteractionNodes,
+  boundReviewDetail,
+  maxReviewInteractionNodes: MAX_REVIEW_INTERACTION_NODES,
+  reviewInteractionHeadNodes: REVIEW_INTERACTION_HEAD_NODES,
+  reviewInteractionTailNodes: REVIEW_INTERACTION_TAIL_NODES,
 }
