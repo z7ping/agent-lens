@@ -143,7 +143,11 @@ function persistedThreadMetadataEvent(record: SourceRecord): PersistedThreadMeta
     return { event: 'thread.rolled-back', payload }
   }
   if (payload.type === 'thread_settings_applied') {
-    const settings = asRecord(payload.thread_settings ?? payload.threadSettings)
+    const rawSettings = payload.thread_settings ?? payload.threadSettings
+    const settings = asRecord(rawSettings)
+    // 当前官方持久化结构带 thread_settings 快照。旧版扁平结构继续交给
+    // normalize.ts 解释为 reasoning.configuration.updated，避免伪造新语义。
+    if (!Object.keys(settings).length) return null
     const modelName = stringField(settings, 'model')
     const workspacePath = stringField(settings, 'cwd')
     return {
@@ -228,14 +232,21 @@ async function normalizeResponseAgentMessage(
   payload: Record<string, any>,
 ): Promise<NormalizedSourceOutput> {
   const content = plaintextAgentMessageContent(payload.content)
-  return remapUnknown(record, ctx, 'session.lifecycle', {
+  const canonicalPayload = {
     event: 'subagent.communication',
     communicationType: 'response.agent_message',
     author: stringField(payload, 'author') ?? 'unknown',
     recipient: stringField(payload, 'recipient') ?? 'unknown',
     ...(content.text ? { text: content.text } : {}),
     ...(content.encrypted ? { encryptedContent: true } : {}),
-  })
+  }
+  const output = await normalizeCodexRecord(record, ctx)
+  return {
+    ...output,
+    observations: output.observations.map(observation => observation.kind === 'unknown' || observation.kind === 'session.lifecycle'
+      ? { ...observation, kind: 'session.lifecycle', payload: canonicalPayload }
+      : observation),
+  }
 }
 
 async function normalizeResponseLocalShellCall(
@@ -324,14 +335,21 @@ async function normalizeResponseImageGeneration(
   ctx: SourceNormalizationContext,
   payload: Record<string, any>,
 ): Promise<NormalizedSourceOutput> {
-  return remapUnknown(record, ctx, 'artifact.action', {
+  const canonicalPayload = {
     action: 'image.generate',
     status: payload.status ?? null,
     ...(stringField(payload, 'revised_prompt', 'revisedPrompt') ? {
       revisedPrompt: stringField(payload, 'revised_prompt', 'revisedPrompt'),
     } : {}),
     resultAvailable: typeof payload.result === 'string' && payload.result.length > 0,
-  })
+  }
+  const output = await normalizeCodexRecord(record, ctx)
+  return {
+    ...output,
+    observations: output.observations.map(observation => observation.kind === 'unknown' || observation.kind === 'artifact.action'
+      ? { ...observation, kind: 'artifact.action', payload: canonicalPayload }
+      : observation),
+  }
 }
 
 async function normalizeResponseConfigurationUpdate(
@@ -340,12 +358,19 @@ async function normalizeResponseConfigurationUpdate(
   payload: Record<string, any>,
 ): Promise<NormalizedSourceOutput> {
   const reasoning = asRecord(payload.reasoning)
-  return remapUnknown(record, ctx, 'session.lifecycle', {
+  const canonicalPayload = {
     event: 'reasoning.configuration.updated',
     reasoning: {
       ...(stringField(reasoning, 'effort') ? { effort: stringField(reasoning, 'effort') } : {}),
     },
-  })
+  }
+  const output = await normalizeCodexRecord(record, ctx)
+  return {
+    ...output,
+    observations: output.observations.map(observation => observation.kind === 'unknown' || observation.kind === 'session.lifecycle'
+      ? { ...observation, kind: 'session.lifecycle', payload: canonicalPayload }
+      : observation),
+  }
 }
 
 async function normalizeResponseCompaction(
@@ -353,11 +378,18 @@ async function normalizeResponseCompaction(
   ctx: SourceNormalizationContext,
   payload: Record<string, any>,
 ): Promise<NormalizedSourceOutput> {
-  return remapUnknown(record, ctx, 'context.compaction', {
+  const canonicalPayload = {
     phase: 'snapshot',
     sourceType: `response_item.${payload.type ?? 'compaction'}`,
     opaque: true,
-  })
+  }
+  const output = await normalizeCodexRecord(record, ctx)
+  return {
+    ...output,
+    observations: output.observations.map(observation => observation.kind === 'unknown' || observation.kind === 'context.compaction'
+      ? { ...observation, kind: 'context.compaction', payload: canonicalPayload }
+      : observation),
+  }
 }
 
 async function normalizePersistedResponseItem(
@@ -546,7 +578,7 @@ async function normalizePersistedThreadMetadata(
   const output = await normalizeCodexRecord(record, ctx)
   return {
     ...output,
-    observations: output.observations.map(observation => observation.kind === 'unknown'
+    observations: output.observations.map(observation => observation.kind === 'unknown' || observation.kind === 'session.lifecycle'
       ? {
           ...observation,
           kind: 'session.lifecycle',
@@ -572,13 +604,14 @@ async function normalizeInterAgentCommunication(
   const output = await normalizeCodexRecord(record, ctx)
   return {
     ...output,
-    observations: output.observations.map(observation => observation.kind === 'unknown'
+    observations: output.observations.map(observation => observation.kind === 'unknown' || observation.kind === 'session.lifecycle'
       ? {
           ...observation,
           kind: 'session.lifecycle',
           payload: {
             ...payload,
             event: 'subagent.communication',
+            text: messageText((payload as Record<string, unknown>).content ?? (payload as Record<string, unknown>).message ?? ''),
           },
         }
       : observation),
