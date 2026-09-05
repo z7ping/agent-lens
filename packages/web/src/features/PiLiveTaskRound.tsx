@@ -2,6 +2,7 @@ import { useRef, type ReactNode } from 'react'
 import { MarkdownContent } from '../components/MarkdownContent'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { toolVisualKind, toolVisualLabel } from '../components/ToolKindIcon'
+import { UiIcon } from '../components/UiIcon'
 import { TaskEvent } from './TaskEvent'
 import { TaskMessage } from './TaskMessage'
 import { TaskRound } from './TaskRound'
@@ -88,7 +89,7 @@ function ToolOutput({ tool }: { tool: TaskToolModel }) {
     return <div className="task-tool-live-output" role="status" aria-label={`${tool.name} 实时输出`}><CopyableCodeBlock copyValue={tool.output}>{tool.output}</CopyableCodeBlock></div>
   }
   return <details className="task-tool-output-details" open={tool.status === 'error'}>
-    <summary>{tool.status === 'error' ? '错误 / 输出' : '查看输出'}</summary>
+    <summary><UiIcon className="task-tool-output-chevron" name="chevron-right" size={14}/><span>{tool.status === 'error' ? '错误 / 输出' : '查看输出'}</span></summary>
     <CopyableCodeBlock copyValue={tool.output}>{tool.output}</CopyableCodeBlock>
   </details>
 }
