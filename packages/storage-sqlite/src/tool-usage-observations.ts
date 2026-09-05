@@ -76,9 +76,10 @@ function aggregateFilter(input: ToolUsageAggregateQuery): { conditions: string[]
   return { conditions, params }
 }
 
+// 先物化轻量事件与调用查找表，避免 SQLite 展开 JSON 表达式后对每条结果重扫调用。
 function aggregateCtes(conditions: string[]): string {
   return `
-    WITH events AS (
+    WITH events AS MATERIALIZED (
       SELECT
         o.id,
         o.logical_session_id,
@@ -119,7 +120,7 @@ function aggregateCtes(conditions: string[]): string {
       SELECT * FROM events
       WHERE kind = 'tool.call' AND tool_name IS NOT NULL
     ),
-    call_lookup AS (
+    call_lookup AS MATERIALIZED (
       SELECT * FROM (
         SELECT
           calls.*,
@@ -308,9 +309,12 @@ export class SqliteToolUsageObservationReader implements ToolUsageObservationRea
 
       const sessionRows = this.executor.db.prepare(`${ctes},
         session_counts AS (
-          SELECT source_id, tool_name, logical_session_id, COUNT(*) AS call_count
-          FROM calls
+          SELECT source_id, tool_name, logical_session_id,
+            SUM(CASE WHEN kind = 'tool.call' THEN 1 ELSE 0 END) AS call_count,
+            SUM(CASE WHEN kind = 'tool.result' AND success = 0 THEN 1 ELSE 0 END) AS error_count
+          FROM tool_events
           GROUP BY source_id, tool_name, logical_session_id
+          HAVING SUM(CASE WHEN kind = 'tool.call' THEN 1 ELSE 0 END) > 0
         ),
         ranked_sessions AS (
           SELECT
@@ -321,7 +325,7 @@ export class SqliteToolUsageObservationReader implements ToolUsageObservationRea
             ) AS detail_rank
           FROM session_counts
         )
-        SELECT source_id, tool_name, logical_session_id, call_count
+        SELECT source_id, tool_name, logical_session_id, call_count, error_count
         FROM ranked_sessions
         WHERE detail_rank <= ?
         ORDER BY source_id, tool_name, detail_rank
@@ -330,6 +334,7 @@ export class SqliteToolUsageObservationReader implements ToolUsageObservationRea
         tools.get(`${row.source_id}\u0000${row.tool_name}`)?.sessions.push({
           logicalSessionId: String(row.logical_session_id),
           callCount: Number(row.call_count ?? 0),
+          errorCount: Number(row.error_count ?? 0),
         })
       }
 
