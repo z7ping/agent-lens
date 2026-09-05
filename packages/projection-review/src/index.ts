@@ -107,6 +107,8 @@ export function lifecycleEventLabel(payload: JsonValue | unknown): string {
     'review.entered': '进入审查',
     'review.exited': '退出审查',
     'subagent.interacted': '子 Agent 活动',
+    'subagent.communication': '子 Agent 通信',
+    'reasoning.configuration.updated': '推理配置更新',
     'thread.goal.updated': '任务目标更新',
     'thread.rolled.back': '会话回滚',
     'thread.settings.applied': '会话设置更新',
