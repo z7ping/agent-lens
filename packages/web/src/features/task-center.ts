@@ -38,6 +38,14 @@ function userTaskTitle(item: ReviewSessionSummaryDto): string | undefined {
   return item.title || item.preview
 }
 
+function systemActivityTitle(item: ReviewSessionSummaryDto): string {
+  if (item.activitySourceLabel?.trim()) return item.activitySourceLabel.trim()
+  const scope = item.projectName?.trim()
+    || (item.workspacePath ? basename(item.workspacePath) : '')
+    || item.sourceIds[0]?.trim()
+  return scope ? `${scope} · 系统活动` : '系统活动'
+}
+
 /**
  * 会话列表保留所有活动，但不会把系统注入或内部审查正文伪装成用户任务标题。
  * 活动类型和标题候选只消费 Canonical Pipeline 投影出的结构化字段，禁止根据正文猜来源。
@@ -55,7 +63,7 @@ export function historyTaskPresentation(
     return { title: '内部审查活动', activityLabel: item.activitySourceLabel || '内部审查' }
   }
   if (activity === 'system-activity') {
-    return { title: item.activitySourceLabel || '系统活动', activityLabel: '系统活动' }
+    return { title: systemActivityTitle(item), activityLabel: '系统活动' }
   }
   if (activity === 'subagent') {
     return {
