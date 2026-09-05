@@ -26,59 +26,9 @@ ON tool_usage_fact_projection(installation_id, kind, effective_at, observation_i
 CREATE INDEX IF NOT EXISTS idx_tool_usage_fact_call
 ON tool_usage_fact_projection(logical_session_id, call_id, kind, effective_at, observation_id);
 
-INSERT OR REPLACE INTO tool_usage_fact_projection(
-  observation_id,
-  installation_id,
-  logical_session_id,
-  project_id,
-  source_id,
-  product_id,
-  kind,
-  effective_at,
-  tool_name,
-  call_id,
-  skill_name,
-  success,
-  duration_ms
-)
-SELECT
-  o.id,
-  o.installation_id,
-  o.logical_session_id,
-  o.project_id,
-  ss.source_id,
-  ai.product_id,
-  o.kind,
-  COALESCE(o.occurred_at, o.captured_at),
-  COALESCE(
-    CASE WHEN json_type(o.payload_json, '$.nativeToolName') = 'text' THEN NULLIF(json_extract(o.payload_json, '$.nativeToolName'), '') END,
-    CASE WHEN json_type(o.payload_json, '$.toolName') = 'text' THEN NULLIF(json_extract(o.payload_json, '$.toolName'), '') END,
-    CASE WHEN json_type(o.payload_json, '$.tool_name') = 'text' THEN NULLIF(json_extract(o.payload_json, '$.tool_name'), '') END,
-    CASE WHEN json_type(o.payload_json, '$.name') = 'text' THEN NULLIF(json_extract(o.payload_json, '$.name'), '') END
-  ),
-  COALESCE(
-    CASE WHEN json_type(o.payload_json, '$.callId') = 'text' THEN NULLIF(json_extract(o.payload_json, '$.callId'), '') END,
-    CASE WHEN json_type(o.payload_json, '$.call_id') = 'text' THEN NULLIF(json_extract(o.payload_json, '$.call_id'), '') END,
-    CASE WHEN json_type(o.payload_json, '$.toolUseId') = 'text' THEN NULLIF(json_extract(o.payload_json, '$.toolUseId'), '') END,
-    CASE WHEN json_type(o.payload_json, '$.tool_use_id') = 'text' THEN NULLIF(json_extract(o.payload_json, '$.tool_use_id'), '') END
-  ),
-  COALESCE(
-    CASE WHEN json_type(o.payload_json, '$.input.skill') = 'text' THEN NULLIF(json_extract(o.payload_json, '$.input.skill'), '') END,
-    CASE WHEN json_type(o.payload_json, '$.input.name') = 'text' THEN NULLIF(json_extract(o.payload_json, '$.input.name'), '') END
-  ),
-  CASE
-    WHEN json_type(o.payload_json, '$.success') IN ('true', 'false', 'integer')
-      THEN json_extract(o.payload_json, '$.success')
-  END,
-  COALESCE(
-    CASE WHEN json_type(o.payload_json, '$.durationMs') IN ('integer', 'real') THEN json_extract(o.payload_json, '$.durationMs') END,
-    CASE WHEN json_type(o.payload_json, '$.duration_ms') IN ('integer', 'real') THEN json_extract(o.payload_json, '$.duration_ms') END
-  )
-FROM observations o
-JOIN source_sessions ss ON ss.id = o.source_session_id
-JOIN agent_installations ai ON ai.id = o.installation_id
-WHERE o.kind IN ('tool.call', 'tool.result');
-
+-- Historical JSON backfill is deliberately not performed in schema migration.
+-- New/changed tool observations stay correct through triggers; existing history
+-- is materialized by the resumable background Maintenance Job after HTTP is ready.
 CREATE TRIGGER IF NOT EXISTS trg_tool_usage_fact_observation_insert
 AFTER INSERT ON observations
 WHEN NEW.kind IN ('tool.call', 'tool.result')
