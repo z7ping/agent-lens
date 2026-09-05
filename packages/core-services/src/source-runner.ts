@@ -47,6 +47,52 @@ interface ParserReplayCheckpoint {
   completedAt?: string
 }
 
+interface VersionedCheckpoint<T> {
+  value: T
+  revision: number
+}
+
+type VersionedCheckpointRepository = StorageService['checkpoints'] & {
+  getWithRevision?<T>(scope: string, key: string): Promise<VersionedCheckpoint<T> | null>
+  compareAndSet?<T>(
+    scope: string,
+    key: string,
+    expectedRevision: number | null,
+    value: T,
+  ): Promise<boolean>
+}
+
+async function readReplayCheckpoint(
+  storage: StorageService,
+  key: string,
+): Promise<VersionedCheckpoint<ParserReplayCheckpoint> | null> {
+  const checkpoints = storage.checkpoints as VersionedCheckpointRepository
+  if (checkpoints.getWithRevision) {
+    return checkpoints.getWithRevision<ParserReplayCheckpoint>(PARSER_REPLAY_CHECKPOINT_SCOPE, key)
+  }
+  const value = await checkpoints.get<ParserReplayCheckpoint>(PARSER_REPLAY_CHECKPOINT_SCOPE, key)
+  return value ? { value, revision: 0 } : null
+}
+
+async function compareAndSetReplayCheckpoint(
+  storage: StorageService,
+  key: string,
+  expectedRevision: number | null,
+  value: ParserReplayCheckpoint,
+): Promise<boolean> {
+  const checkpoints = storage.checkpoints as VersionedCheckpointRepository
+  if (checkpoints.compareAndSet) {
+    return checkpoints.compareAndSet(
+      PARSER_REPLAY_CHECKPOINT_SCOPE,
+      key,
+      expectedRevision,
+      value,
+    )
+  }
+  await checkpoints.set(PARSER_REPLAY_CHECKPOINT_SCOPE, key, value)
+  return true
+}
+
 function createCooperativeScheduler(options: CooperativeSchedulerOptions = {}) {
   const budgetMs = options.budgetMs ?? DEFAULT_COOPERATIVE_BUDGET_MS
   const now = options.now ?? Date.now
@@ -449,10 +495,8 @@ export class SourceHistoryRunner {
       source.manifest.parserVersion,
       input.historyWindow,
     )
-    const existingCheckpoint = await this.storage.checkpoints.get<ParserReplayCheckpoint>(
-      PARSER_REPLAY_CHECKPOINT_SCOPE,
-      checkpointKey,
-    )
+    let versionedCheckpoint = await readReplayCheckpoint(this.storage, checkpointKey)
+    const existingCheckpoint = versionedCheckpoint?.value
     if (
       existingCheckpoint?.targetParserVersion === source.manifest.parserVersion
       && existingCheckpoint.state === 'completed'
@@ -465,9 +509,10 @@ export class SourceHistoryRunner {
       && !existingCheckpoint.dirty
       ? existingCheckpoint.cursor
       : undefined
-    await this.storage.checkpoints.set(
-      PARSER_REPLAY_CHECKPOINT_SCOPE,
+    const claimed = await compareAndSetReplayCheckpoint(
+      this.storage,
       checkpointKey,
+      versionedCheckpoint?.revision ?? null,
       replayCheckpoint(
         source.manifest.sourceId,
         installation.id,
@@ -477,6 +522,19 @@ export class SourceHistoryRunner {
         after,
       ),
     )
+    if (!claimed) {
+      versionedCheckpoint = await readReplayCheckpoint(this.storage, checkpointKey)
+      const latest = versionedCheckpoint?.value
+      if (
+        latest?.targetParserVersion === source.manifest.parserVersion
+        && latest.state === 'completed'
+        && !latest.dirty
+      ) {
+        return result
+      }
+      // Another replay/dirty writer won the claim. Do not run a second maintenance owner.
+      return result
+    }
 
     const yieldForInteractivity = createCooperativeScheduler()
     let invalidated = false
@@ -493,14 +551,12 @@ export class SourceHistoryRunner {
         input.historyWindow,
       )
       if (!records.length) {
-        const latestCheckpoint = await this.storage.checkpoints.get<ParserReplayCheckpoint>(
-          PARSER_REPLAY_CHECKPOINT_SCOPE,
+        const latestCheckpoint = await readReplayCheckpoint(this.storage, checkpointKey)
+        if (latestCheckpoint?.value.dirty) break
+        const completed = await compareAndSetReplayCheckpoint(
+          this.storage,
           checkpointKey,
-        )
-        if (latestCheckpoint?.dirty) break
-        await this.storage.checkpoints.set(
-          PARSER_REPLAY_CHECKPOINT_SCOPE,
-          checkpointKey,
+          latestCheckpoint?.revision ?? null,
           replayCheckpoint(
             source.manifest.sourceId,
             installation.id,
@@ -510,6 +566,7 @@ export class SourceHistoryRunner {
             after,
           ),
         )
+        if (!completed) invalidated = true
         break
       }
 
@@ -552,17 +609,15 @@ export class SourceHistoryRunner {
             capturedAt: lastProcessed.capturedAt,
             id: lastProcessed.id,
           }
-          const latestCheckpoint = await this.storage.checkpoints.get<ParserReplayCheckpoint>(
-            PARSER_REPLAY_CHECKPOINT_SCOPE,
-            checkpointKey,
-          )
-          if (latestCheckpoint?.dirty) {
+          const latestCheckpoint = await readReplayCheckpoint(this.storage, checkpointKey)
+          if (latestCheckpoint?.value.dirty) {
             invalidated = true
             break
           }
-          await this.storage.checkpoints.set(
-            PARSER_REPLAY_CHECKPOINT_SCOPE,
+          const advanced = await compareAndSetReplayCheckpoint(
+            this.storage,
             checkpointKey,
+            latestCheckpoint?.revision ?? null,
             replayCheckpoint(
               source.manifest.sourceId,
               installation.id,
@@ -572,6 +627,10 @@ export class SourceHistoryRunner {
               after,
             ),
           )
+          if (!advanced) {
+            invalidated = true
+            break
+          }
         }
         await yieldForInteractivity()
       }
