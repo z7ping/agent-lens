@@ -71,8 +71,9 @@ test('Codex fixture enters canonical facts and remains idempotent', async () => 
     })
 
     // 10 条原生 rollout 记录 + 1 条稳定的 session_start 元数据。
+    // 纯 response_item role=user 传输回显保留 Evidence，但不生成 Canonical Observation。
     assert.equal(first.records, 11)
-    assert.equal(first.observationsCreated, 11)
+    assert.equal(first.observationsCreated, 10)
     assert.equal(first.observationsMerged, 0)
     assert.equal(first.observationsUnchanged, 0)
 
@@ -80,9 +81,9 @@ test('Codex fixture enters canonical facts and remains idempotent', async () => 
       installationId: first.installationId,
       limit: 100,
     })
-    assert.equal(facts.length, 11)
-    // response_item role=user 是 transport echo；真正用户请求来自 event_msg.user_message。
-    assert.equal(facts.filter(item => item.kind === 'context.injected').length, 3)
+    assert.equal(facts.length, 10)
+    // Developer + runtime environment 仍是结构化 context；纯用户传输回显不进入活动流。
+    assert.equal(facts.filter(item => item.kind === 'context.injected').length, 2)
     assert.equal(facts.filter(item => item.kind === 'unknown').length, 0)
     assert.equal(facts.filter(item => item.kind === 'message.reasoning').length, 1)
     assert.equal(facts.filter(item => item.kind === 'tool.call').length, 1)
@@ -120,7 +121,7 @@ test('Codex fixture enters canonical facts and remains idempotent', async () => 
       installationId: first.installationId,
       limit: 100,
     })
-    assert.equal(factsAfterReplay.length, 11)
+    assert.equal(factsAfterReplay.length, 10)
   } finally {
     storage.close()
     await rm(fixture.root, { recursive: true, force: true })
