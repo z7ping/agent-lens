@@ -1,8 +1,6 @@
 import type { SVGProps } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
-  ArrowBigDown,
-  ArrowBigUp,
   ArrowDownToLine,
   ArrowLeft,
   ArrowRight,
@@ -92,8 +90,6 @@ export type UiIconName =
 const icons = {
   agent: Bot,
   alert: TriangleAlert,
-  'arrow-big-down': ArrowBigDown,
-  'arrow-big-up': ArrowBigUp,
   'arrow-down': ChevronsDown,
   'arrow-down-to-line': ArrowDownToLine,
   'arrow-left': ArrowLeft,
@@ -133,14 +129,45 @@ const icons = {
   'tool-web': Globe,
   trend: TrendingUp,
   upload: Upload,
-} satisfies Record<UiIconName, LucideIcon>
+} satisfies Record<Exclude<UiIconName, 'arrow-big-down' | 'arrow-big-up'>, LucideIcon>
 
 export interface UiIconProps extends Omit<SVGProps<SVGSVGElement>, 'name'> {
   name: UiIconName
   size?: number
 }
 
+function BigArrowIcon({
+  direction,
+  size,
+  className,
+  ...props
+}: Omit<UiIconProps, 'name'> & { direction: 'up' | 'down'; size: number }) {
+  return <svg
+    {...props}
+    className={className}
+    width={size}
+    height={size}
+    viewBox="0 0 16 16"
+    fill="currentColor"
+    aria-hidden="true"
+    focusable="false"
+  >
+    {direction === 'up'
+      ? <path d="M6 14V6.7H3.3L8 2l4.7 4.7H10V14Z" />
+      : <path d="M6 2h4v7.3h2.7L8 14 3.3 9.3H6Z" />}
+  </svg>
+}
+
 export function UiIcon({ name, size = 16, className, strokeWidth = 1.75, ...props }: UiIconProps) {
+  if (name === 'arrow-big-up' || name === 'arrow-big-down') {
+    return <BigArrowIcon
+      {...props}
+      className={className}
+      size={size}
+      direction={name === 'arrow-big-up' ? 'up' : 'down'}
+    />
+  }
+
   const Icon = icons[name]
   return <Icon
     {...props}
