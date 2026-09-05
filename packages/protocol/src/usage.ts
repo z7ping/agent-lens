@@ -7,6 +7,11 @@ export type UsageAssetType = 'mcp' | 'skill'
 export interface ToolUsageSessionDto {
   logicalSessionId: string
   callCount: number
+  errorCount?: number
+  title?: string
+  projectName?: string
+  workspacePath?: string
+  endedAt?: string
 }
 
 export interface ToolUsageDto {
