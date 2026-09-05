@@ -17,6 +17,7 @@ import type {
   SourceDefinition,
   SourceHistoryWindow,
   SourceRecord,
+  SourceRecordReplayCursor,
   SourceRuntimeStatus,
   StorageService,
 } from '@agent-lens/core'
@@ -25,11 +26,24 @@ import { deriveParentRelationshipCandidates } from './relationship-hints'
 
 const DEFAULT_COOPERATIVE_BUDGET_MS = 8
 const PARSER_REPLAY_TRANSACTION_SIZE = 50
+const PARSER_REPLAY_CHECKPOINT_SCOPE = 'parser-replay'
 
 interface CooperativeSchedulerOptions {
   budgetMs?: number
   now?: () => number
   yieldControl?: () => Promise<void>
+}
+
+interface ParserReplayCheckpoint {
+  sourceId: string
+  installationId: string
+  targetParserVersion: string
+  window: string
+  state: 'pending' | 'running' | 'completed'
+  dirty: boolean
+  cursor?: SourceRecordReplayCursor
+  updatedAt: string
+  completedAt?: string
 }
 
 function createCooperativeScheduler(options: CooperativeSchedulerOptions = {}) {
@@ -44,6 +58,44 @@ function createCooperativeScheduler(options: CooperativeSchedulerOptions = {}) {
     await yieldControl()
     deadline = now() + budgetMs
     return true
+  }
+}
+
+function parserReplayWindowKey(window?: SourceHistoryWindow): string {
+  if (!window) return 'all'
+  if (window.sessionLimit != null) return `sessions:${window.sessionLimit}`
+  if (window.activeSince) return `since:${window.activeSince}`
+  return 'all'
+}
+
+function parserReplayCheckpointKey(
+  sourceId: string,
+  installationId: string,
+  targetParserVersion: string,
+  window?: SourceHistoryWindow,
+): string {
+  return `${sourceId}:${installationId}:${targetParserVersion}:${parserReplayWindowKey(window)}`
+}
+
+function replayCheckpoint(
+  sourceId: string,
+  installationId: string,
+  targetParserVersion: string,
+  window: SourceHistoryWindow | undefined,
+  state: ParserReplayCheckpoint['state'],
+  cursor?: SourceRecordReplayCursor,
+): ParserReplayCheckpoint {
+  const updatedAt = new Date().toISOString()
+  return {
+    sourceId,
+    installationId,
+    targetParserVersion,
+    window: parserReplayWindowKey(window),
+    state,
+    dirty: false,
+    ...(cursor ? { cursor } : {}),
+    updatedAt,
+    ...(state === 'completed' ? { completedAt: updatedAt } : {}),
   }
 }
 
@@ -383,9 +435,44 @@ export class SourceHistoryRunner {
     const replay = this.storage.repositories.sourceRecords.listForParserReplay
     if (!replay) return result
 
+    const checkpointKey = parserReplayCheckpointKey(
+      source.manifest.sourceId,
+      installation.id,
+      source.manifest.parserVersion,
+      input.historyWindow,
+    )
+    const existingCheckpoint = await this.storage.checkpoints.get<ParserReplayCheckpoint>(
+      PARSER_REPLAY_CHECKPOINT_SCOPE,
+      checkpointKey,
+    )
+    if (
+      existingCheckpoint?.targetParserVersion === source.manifest.parserVersion
+      && existingCheckpoint.state === 'completed'
+      && !existingCheckpoint.dirty
+    ) {
+      return result
+    }
+
+    let after = existingCheckpoint?.targetParserVersion === source.manifest.parserVersion
+      && !existingCheckpoint.dirty
+      ? existingCheckpoint.cursor
+      : undefined
+    await this.storage.checkpoints.set(
+      PARSER_REPLAY_CHECKPOINT_SCOPE,
+      checkpointKey,
+      replayCheckpoint(
+        source.manifest.sourceId,
+        installation.id,
+        source.manifest.parserVersion,
+        input.historyWindow,
+        'running',
+        after,
+      ),
+    )
+
     const yieldForInteractivity = createCooperativeScheduler()
-    let after: { parserVersion?: string; capturedAt: string; id: string } | undefined
-    while (!abortSignal.aborted) {
+    let invalidated = false
+    while (!abortSignal.aborted && !invalidated) {
       const records = await replay(
         source.manifest.sourceId,
         installation.id,
@@ -394,10 +481,31 @@ export class SourceHistoryRunner {
         500,
         input.historyWindow,
       )
-      if (!records.length) break
+      if (!records.length) {
+        const latestCheckpoint = await this.storage.checkpoints.get<ParserReplayCheckpoint>(
+          PARSER_REPLAY_CHECKPOINT_SCOPE,
+          checkpointKey,
+        )
+        if (latestCheckpoint?.dirty) break
+        await this.storage.checkpoints.set(
+          PARSER_REPLAY_CHECKPOINT_SCOPE,
+          checkpointKey,
+          replayCheckpoint(
+            source.manifest.sourceId,
+            installation.id,
+            source.manifest.parserVersion,
+            input.historyWindow,
+            'completed',
+            after,
+          ),
+        )
+        break
+      }
+
       for (let offset = 0; offset < records.length; offset += PARSER_REPLAY_TRANSACTION_SIZE) {
         if (abortSignal.aborted) break
         const batch = records.slice(offset, offset + PARSER_REPLAY_TRANSACTION_SIZE)
+        let lastProcessed: SourceRecord | undefined
         // Parser replay 只处理本地已持久化事实。小批次复用一个 SQLite 事务，
         // 避免每条记录单独 fsync；批间再让出执行权，限制 API 写队列等待时间。
         await this.storage.transaction(async () => {
@@ -414,19 +522,42 @@ export class SourceHistoryRunner {
               runtimeProfile,
               { ...stored, parserVersion: source.manifest.parserVersion },
             )
+            lastProcessed = stored
             result.records += 1
             result.observationsCreated += processed.observationsCreated
             result.observationsMerged += processed.observationsMerged
             result.observationsUnchanged += processed.observationsUnchanged
           }
         })
+
+        if (lastProcessed) {
+          after = {
+            parserVersion: lastProcessed.parserVersion,
+            capturedAt: lastProcessed.capturedAt,
+            id: lastProcessed.id,
+          }
+          const latestCheckpoint = await this.storage.checkpoints.get<ParserReplayCheckpoint>(
+            PARSER_REPLAY_CHECKPOINT_SCOPE,
+            checkpointKey,
+          )
+          if (latestCheckpoint?.dirty) {
+            invalidated = true
+            break
+          }
+          await this.storage.checkpoints.set(
+            PARSER_REPLAY_CHECKPOINT_SCOPE,
+            checkpointKey,
+            replayCheckpoint(
+              source.manifest.sourceId,
+              installation.id,
+              source.manifest.parserVersion,
+              input.historyWindow,
+              'running',
+              after,
+            ),
+          )
+        }
         await yieldForInteractivity()
-      }
-      const last = records.at(-1)!
-      after = {
-        parserVersion: last.parserVersion,
-        capturedAt: last.capturedAt,
-        id: last.id,
       }
     }
     return result
@@ -757,6 +888,9 @@ export class SourceAssetRunner {
 
 export const sourceRunnerInternals = {
   createCooperativeScheduler,
+  parserReplayCheckpointKey,
+  parserReplayWindowKey,
   DEFAULT_COOPERATIVE_BUDGET_MS,
   PARSER_REPLAY_TRANSACTION_SIZE,
+  PARSER_REPLAY_CHECKPOINT_SCOPE,
 }
