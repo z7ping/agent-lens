@@ -35,33 +35,32 @@ const applyDataRuntimeStorage = Object.assign(
       nodeId: ctx.node.identity.nodeId,
     }
     const writer = new DataRuntimeClient({ ...common, role: 'writer' })
-    // SQLite :memory: is connection-local. Reuse the writer client in tests/dev
-    // rather than creating a second empty database that cannot observe writes.
     const reader = config.path === ':memory:'
       ? writer
       : new DataRuntimeClient({ ...common, role: 'reader' })
+    const runtime = createDataRuntimeStorage(writer, reader)
 
-    try {
-      // Writer owns schema migration and is the only writable SQLite connection.
-      await writer.start()
-      // Reader opens only after writer migration completed, so it never races schema creation.
-      if (reader !== writer) await reader.start()
-      const runtime = createDataRuntimeStorage(writer, reader)
-      runtime.dataRuntime.startRecovery()
-      const unprovideDataRuntime = ctx.provide('dataRuntime', runtime.dataRuntime)
-      const unprovideStorage = ctx.provide('storage', runtime.storage)
-      const unprovideUnifiedRead = ctx.provide('unifiedRead', runtime.unifiedRead)
+    // Do not make the HTTP/Pi control plane depend on Data Runtime cold-start
+    // success. Failed workers stay degraded and the recovery loop retries them.
+    await writer.start().catch(error => {
+      console.error('[AgentLens] Data Runtime writer unavailable at startup; control plane will run degraded', error)
+    })
+    if (writer.state() === 'ready' && reader !== writer) {
+      await reader.start().catch(error => {
+        console.error('[AgentLens] Data Runtime reader unavailable at startup; control plane will run degraded', error)
+      })
+    }
+    runtime.dataRuntime.startRecovery()
 
-      return async () => {
-        unprovideUnifiedRead()
-        unprovideStorage()
-        unprovideDataRuntime()
-        await runtime.dataRuntime.shutdown()
-      }
-    } catch (error) {
-      if (reader !== writer) await reader.shutdown().catch(() => undefined)
-      await writer.shutdown().catch(() => undefined)
-      throw error
+    const unprovideDataRuntime = ctx.provide('dataRuntime', runtime.dataRuntime)
+    const unprovideStorage = ctx.provide('storage', runtime.storage)
+    const unprovideUnifiedRead = ctx.provide('unifiedRead', runtime.unifiedRead)
+
+    return async () => {
+      unprovideUnifiedRead()
+      unprovideStorage()
+      unprovideDataRuntime()
+      await runtime.dataRuntime.shutdown()
     }
   },
   { inject: ['node'] },
