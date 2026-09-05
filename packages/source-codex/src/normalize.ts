@@ -509,6 +509,14 @@ export async function normalizeCodexRecord(
       },
       raw: payload,
     }, { nativeCallId: callId }))
+  } else if (topType === 'response_item' && innerType === 'image_generation_call') {
+    push(candidate(record, envelope, 'artifact.action', {
+      action: 'image.generation',
+      ...(stringField(payload, 'id') ? { artifactId: stringField(payload, 'id') } : {}),
+      ...(payload.status === undefined ? {} : { status: payload.status }),
+      hasResult: typeof payload.result === 'string' && payload.result.length > 0,
+      raw: payload,
+    }))
   } else if (topType === 'response_item' && innerType === 'reasoning') {
     const text = messageText(payload.summary ?? payload.content ?? payload.text ?? '')
     push(text
