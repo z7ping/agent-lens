@@ -26,12 +26,12 @@ import { codexSourcePlugin } from '@agent-lens/source-codex'
 import { hermesSourcePlugin } from '@agent-lens/source-hermes'
 import { openCodeSourcePlugin } from '@agent-lens/source-opencode'
 import { piSourcePlugin } from '@agent-lens/source-pi'
-import { sqliteStoragePlugin } from '@agent-lens/storage-sqlite'
 import {
   DEFAULT_AGENT_LENS_HTTP_PORT,
   httpSurfacePlugin,
 } from '@agent-lens/surface-http'
 import { webPlugin } from '@agent-lens/web'
+import { dataRuntimeStoragePlugin } from './data-runtime/storage-plugin.js'
 import {
   beginSessionSummaryProjectionRun,
   markSessionSummaryProjectionClean,
@@ -52,6 +52,11 @@ import {
   MAINTENANCE_PRIORITY,
   runMaintenanceJob,
 } from './maintenance-jobs.js'
+import {
+  backfillToolUsageFactProjection,
+  backfillUnknownObservationProjection,
+  type ProjectionBackfillMaintenance,
+} from './projection-backfill-maintenance.js'
 import {
   compressLegacySourceRecords,
   ensureDeferredStorageIndexes,
@@ -83,7 +88,7 @@ const INITIAL_BACKGROUND_SYNC_DELAY_MS = 2_000
 
 const app = new AgentLensApplication()
 app.useRuntime(nodeRuntimePlugin, nodeRuntime)
-app.use(sqliteStoragePlugin, { path: dbPath })
+app.use(dataRuntimeStoragePlugin, { path: dbPath })
 app.useRuntime(coreServicesPlugin)
 app.useRuntime(sessionSummaryProjectionPlugin)
 app.useRuntime(capturePolicyPlugin)
@@ -97,7 +102,10 @@ if (capabilities.localCapture) {
   app.use(profiledDshSourcePlugin)
 }
 app.useRuntime(backupLocalPlugin, { vaultPath })
-app.use(httpSurfacePlugin, { port: configuredPort })
+app.use(httpSurfacePlugin, {
+  port: configuredPort,
+  dataRuntimeHealth: () => app.context.dataRuntime.snapshot(),
+})
 app.use(webPlugin, { staticDir: webRoot })
 
 const runtimeController = new AbortController()
@@ -180,13 +188,19 @@ try {
   await app.start()
   foregroundGate = new ForegroundActivityGate()
   disposeHttpActivityTracking = attachHttpForegroundActivity(app.context.http.server, foregroundGate)
-  const maintenanceJobs = (
-    app.context.storage as typeof app.context.storage & { maintenanceJobs?: MaintenanceJobStore }
-  ).maintenanceJobs
+  const storageExtensions = app.context.storage as typeof app.context.storage & {
+    maintenanceJobs?: MaintenanceJobStore
+    maintenance?: DeferredIndexMaintenance & SourceRecordCompressionMaintenance
+    projectionBackfill?: ProjectionBackfillMaintenance
+  }
+  const maintenanceJobs = storageExtensions.maintenanceJobs
+  const storageMaintenance = storageExtensions.maintenance
+  const projectionBackfill = storageExtensions.projectionBackfill
 
   console.info(
     `[AgentLens] 1.0 runtime started (db: ${dbPath}, mode=${daemonMode}, interactive=${interactiveTerminal}, pid=${process.pid}, ppid=${process.ppid})`,
   )
+  console.info(`[AgentLens] Data Runtime: writer=${app.context.dataRuntime.writer.state()} reader=${app.context.dataRuntime.reader.state()}`)
   console.info(`[AgentLens] node: ${app.context.node.identity.nodeId} profile=${runtimeProfile} ${capabilitySummary()}`)
   if (developmentApiPort) {
     console.info(`[AgentLens] Runtime API: http://127.0.0.1:${configuredPort}`)
@@ -309,45 +323,101 @@ try {
     await gate.wait(runtimeController.signal)
     if (runtimeController.signal.aborted) return
 
-    const storageMaintenance = (
-      app.context.storage as typeof app.context.storage & {
-        maintenance?: DeferredIndexMaintenance & SourceRecordCompressionMaintenance
-      }
-    ).maintenance
-    try {
-      const indexRun = await runMaintenanceJob(
-        maintenanceJobs,
+    const preMaintenanceHealth = await app.context.storage.health()
+    const preMaintenanceCapacity = storageCapacityState(preMaintenanceHealth.details)
+
+    if (preMaintenanceCapacity === 'exceeded') {
+      console.warn('[AgentLens] storage capacity exceeded; projection backfill, deferred indexes and parser replay are paused')
+    } else {
+      const backfills = [
         {
-          id: 'storage:deferred-indexes',
-          type: 'deferred-indexes',
-          scope: 'sqlite-primary',
-          priority: MAINTENANCE_PRIORITY.deferredIndexes,
+          id: 'projection:unknown-observation:v17',
+          scope: 'unknown-observation-v17',
+          label: 'Unknown Observation',
+          run: backfillUnknownObservationProjection,
         },
-        runtimeController.signal,
-        async () => {
-          const indexes = await ensureDeferredStorageIndexes(
-            storageMaintenance,
-            gate,
+        {
+          id: 'projection:tool-usage-facts:v18',
+          scope: 'tool-usage-facts-v18',
+          label: 'Tool Usage Facts',
+          run: backfillToolUsageFactProjection,
+        },
+      ] as const
+
+      for (const backfill of backfills) {
+        if (runtimeController.signal.aborted) return
+        try {
+          const run = await runMaintenanceJob(
+            maintenanceJobs,
+            {
+              id: backfill.id,
+              type: 'projection-rebuild',
+              scope: backfill.scope,
+              priority: MAINTENANCE_PRIORITY.projection,
+            },
             runtimeController.signal,
+            async job => backfill.run(
+              projectionBackfill,
+              gate,
+              runtimeController.signal,
+              {
+                initialProgress: job.initialProgress,
+                batchSize: 250,
+                report: job.report,
+              },
+            ),
+            value => ({
+              scanned: value.scanned,
+              written: value.written,
+              batches: value.batches,
+              ...(value.cursor ? { cursor: value.cursor } : {}),
+              aborted: value.aborted,
+            }),
           )
-          return indexes ?? { created: [], existing: [] }
-        },
-        value => ({ created: value.created, existing: value.existing }),
-      )
-      if (indexRun?.status === 'contended' || indexRun?.status === 'paused') {
-        console.warn(`[AgentLens] deferred storage index maintenance ${indexRun.status}; replay/compression skipped`)
-        return
+          if (run?.status === 'contended') {
+            console.warn(`[AgentLens] ${backfill.label} projection backfill contended`)
+          } else if (run?.value) {
+            console.info(`[AgentLens] ${backfill.label} projection backfill: scanned=${run.value.scanned} written=${run.value.written} batches=${run.value.batches}`)
+          }
+        } catch (error) {
+          if (!runtimeController.signal.aborted) {
+            console.error(`[AgentLens] ${backfill.label} projection backfill failed`, error)
+          }
+        }
       }
-      const indexes = indexRun?.value
-      if (indexes?.created.length) {
-        console.info(`[AgentLens] deferred storage indexes created: ${indexes.created.join(', ')}`)
+
+      try {
+        const indexRun = await runMaintenanceJob(
+          maintenanceJobs,
+          {
+            id: 'storage:deferred-indexes',
+            type: 'deferred-indexes',
+            scope: 'sqlite-primary',
+            priority: MAINTENANCE_PRIORITY.deferredIndexes,
+          },
+          runtimeController.signal,
+          async () => {
+            const indexes = await ensureDeferredStorageIndexes(
+              storageMaintenance,
+              gate,
+              runtimeController.signal,
+            )
+            return indexes ?? { created: [], existing: [] }
+          },
+          value => ({ created: value.created, existing: value.existing }),
+        )
+        if (indexRun?.status === 'contended' || indexRun?.status === 'paused') {
+          console.warn(`[AgentLens] deferred storage index maintenance ${indexRun.status}; parser replay skipped`)
+        } else if (indexRun?.value?.created.length) {
+          console.info(`[AgentLens] deferred storage indexes created: ${indexRun.value.created.join(', ')}`)
+        }
+      } catch (error) {
+        if (!runtimeController.signal.aborted) {
+          console.error('[AgentLens] deferred storage index maintenance failed; parser replay skipped', error)
+        }
       }
-    } catch (error) {
-      if (!runtimeController.signal.aborted) {
-        console.error('[AgentLens] deferred storage index maintenance failed; replay/compression skipped', error)
-      }
-      return
     }
+
     if (runtimeController.signal.aborted) return
 
     const maintenanceHealth = await app.context.storage.health()
