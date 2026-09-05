@@ -15,12 +15,12 @@ async function createStorage() {
   return storage
 }
 
-test('SQLite storage migrates to schema version 20 and exposes required tables', async () => {
+test('SQLite storage migrates to schema version 21 and exposes required tables', async () => {
   const storage = await createStorage()
   try {
     const health = await storage.health()
     assert.equal(health.ok, true)
-    assert.equal(health.schemaVersion, 20)
+    assert.equal(health.schemaVersion, 21)
     const growth = (health.details as any)?.dataGrowth
     assert.equal(growth.capacity.softLimitBytes, 512 * 1024 * 1024)
     assert.equal(growth.capacity.state, 'healthy')
@@ -65,6 +65,7 @@ test('SQLite storage migrates to schema version 20 and exposes required tables',
       'session_summary_projection',
       'unknown_observation_projection',
       'tool_usage_fact_projection',
+      'maintenance_jobs',
       'replication_streams',
       'replication_entity_state',
       'replication_pending_entities',
@@ -95,6 +96,8 @@ test('SQLite storage migrates to schema version 20 and exposes required tables',
     assert.equal(sourceRecordColumns.some(column => column.name === 'payload_blob'), true)
     const checkpointColumns = storage.db.prepare('PRAGMA table_info(source_checkpoints)').all() as Array<{ name: string }>
     assert.equal(checkpointColumns.some(column => column.name === 'revision'), true)
+    const maintenanceColumns = storage.db.prepare('PRAGMA table_info(maintenance_jobs)').all() as Array<{ name: string }>
+    assert.equal(maintenanceColumns.some(column => column.name === 'revision'), true)
   } finally {
     storage.close()
   }
