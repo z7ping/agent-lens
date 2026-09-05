@@ -29,6 +29,10 @@ const manifest = {
   displayName: 'AgentLens HTTP Surface',
 } as const
 
+function errorSummary(error: unknown): string {
+  return (error instanceof Error ? `${error.name}: ${error.message}` : String(error)).slice(0, 1000)
+}
+
 function storageWithRuntimeHealth(
   storage: StorageService,
   contributor: HttpSurfacePluginConfig['dataRuntimeHealth'],
@@ -38,15 +42,26 @@ function storageWithRuntimeHealth(
     get(target, property, receiver) {
       if (property === 'health') {
         return async () => {
-          const health = await target.health()
           const dataRuntime = contributor()
-          return {
-            ...health,
-            ok: health.ok && dataRuntime.ok !== false,
-            details: {
-              ...health.details,
-              dataRuntime,
-            },
+          try {
+            const health = await target.health()
+            return {
+              ...health,
+              ok: health.ok && dataRuntime.ok !== false,
+              details: {
+                ...health.details,
+                dataRuntime,
+              },
+            }
+          } catch (error) {
+            return {
+              ok: false,
+              details: {
+                dataRuntime,
+                storageUnavailable: true,
+                storageError: errorSummary(error),
+              },
+            }
           }
         }
       }
