@@ -2,27 +2,6 @@ name: Alpha.3 Task Center Real Smoke
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - feature/1.0.0-alpha.3-task-surface
-    paths:
-      - packages/web/src/**
-      - apps/desktop/**
-      - apps/daemon/**
-      - packages/source-codex/src/**
-      - packages/source-pi/src/**
-      - packages/core/src/**
-      - packages/core-services/src/**
-      - packages/projection-review/src/**
-      - packages/protocol/src/**
-      - packages/storage-sqlite/src/**
-      - packages/surface-http/src/**
-      - scripts/acceptance/**
-      - scripts/check-alpha3-real-acceptance-contract.mjs
-      - scripts/prepare-desktop.mjs
-      - package.json
-      - package-lock.json
-      - .github/workflows/alpha3-task-center-real-smoke.yml
   pull_request:
     branches:
       - main
