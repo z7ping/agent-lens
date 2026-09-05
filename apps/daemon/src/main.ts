@@ -50,6 +50,8 @@ import {
 } from './maintenance-idle.js'
 import {
   compressLegacySourceRecords,
+  ensureDeferredStorageIndexes,
+  type DeferredIndexMaintenance,
   type SourceRecordCompressionMaintenance,
 } from './storage-maintenance.js'
 import { profiledDshSourcePlugin } from './sources/dsh-profiled.js'
@@ -262,8 +264,7 @@ try {
     }
     if (runtimeController.signal.aborted) return
 
-    // 启动期只恢复最近会话。重型 7 天/全量 Replay 在资产扫描后进入
-    // 空闲维护阶段，不再占用首屏和 Pi Runtime 的前台启动窗口。
+    // Parser Replay 已完全退出启动链路；此 API 固定返回空列表，只保留边界表达。
     for (const stage of createParserReplayStages(startedAt)) {
       if (runtimeController.signal.aborted) return
       console.info(`[AgentLens] parser replay startup stage started: ${stage.label}`)
@@ -301,6 +302,28 @@ try {
     await gate.wait(runtimeController.signal)
     if (runtimeController.signal.aborted) return
 
+    const storageMaintenance = (
+      app.context.storage as typeof app.context.storage & {
+        maintenance?: DeferredIndexMaintenance & SourceRecordCompressionMaintenance
+      }
+    ).maintenance
+    try {
+      const indexes = await ensureDeferredStorageIndexes(
+        storageMaintenance,
+        gate,
+        runtimeController.signal,
+      )
+      if (indexes?.created.length) {
+        console.info(`[AgentLens] deferred storage indexes created: ${indexes.created.join(', ')}`)
+      }
+    } catch (error) {
+      if (!runtimeController.signal.aborted) {
+        console.error('[AgentLens] deferred storage index maintenance failed; replay/compression skipped', error)
+      }
+      return
+    }
+    if (runtimeController.signal.aborted) return
+
     const maintenanceHealth = await app.context.storage.health()
     const maintenanceCapacityState = storageCapacityState(maintenanceHealth.details)
     const plannedMaintenanceStages = createParserReplayMaintenanceStages(startedAt)
@@ -336,12 +359,9 @@ try {
     }
 
     if (runtimeController.signal.aborted) return
-    const compressionMaintenance = (
-      app.context.storage as typeof app.context.storage & { maintenance?: SourceRecordCompressionMaintenance }
-    ).maintenance
     try {
       const compression = await compressLegacySourceRecords(
-        compressionMaintenance,
+        storageMaintenance,
         gate,
         runtimeController.signal,
         {
