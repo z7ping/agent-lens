@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { SqliteStorageService } from './storage'
 
-test('storage migrations include replication, Hub replica state, workspace project fallback, session activity, parser ownership, and replay index', async () => {
+test('storage migrations include replay, diagnostics and maintenance projections', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   try {
     await storage.migrate()
@@ -10,8 +10,8 @@ test('storage migrations include replication, Hub replica state, workspace proje
     const migrations = storage.db.prepare(
       'SELECT version, name FROM schema_migrations ORDER BY version',
     ).all() as Array<{ version: number; name: string }>
-    assert.equal(migrations.at(-1)?.version, 15)
-    assert.equal(migrations.at(-1)?.name, 'parser-replay-order-index')
+    assert.equal(migrations.at(-1)?.version, 19)
+    assert.equal(migrations.at(-1)?.name, 'source-record-payload-compression')
 
     const indexes = storage.db.prepare("PRAGMA index_list('observations')").all() as Array<{ name: string }>
     const names = new Set(indexes.map(item => item.name))
@@ -20,10 +20,29 @@ test('storage migrations include replication, Hub replica state, workspace proje
     assert.ok(names.has('idx_observations_source_native_event'))
     assert.ok(names.has('idx_observations_source_native_parent'))
     assert.ok(names.has('idx_observations_parent'))
+    assert.ok(names.has('idx_observations_captured_at'))
+
+    const evidenceIndexes = storage.db.prepare("PRAGMA index_list('evidence')").all() as Array<{ name: string }>
+    assert.ok(evidenceIndexes.some(index => index.name === 'idx_evidence_captured_at'))
 
     const sourceRecordIndexes = storage.db.prepare("PRAGMA index_list('source_records')")
       .all() as Array<{ name: string }>
     assert.ok(sourceRecordIndexes.some(index => index.name === 'idx_source_records_parser_replay'))
+    assert.ok(sourceRecordIndexes.some(index => index.name === 'idx_source_records_payload_compression_pending'))
+    const sourceRecordColumns = storage.db.prepare("PRAGMA table_info('source_records')")
+      .all() as Array<{ name: string }>
+    assert.ok(sourceRecordColumns.some(column => column.name === 'payload_encoding'))
+    assert.ok(sourceRecordColumns.some(column => column.name === 'payload_blob'))
+
+    const projectionTables = storage.db.prepare(`
+      SELECT name FROM sqlite_master
+      WHERE type = 'table' AND name IN ('unknown_observation_projection', 'tool_usage_fact_projection')
+      ORDER BY name
+    `).all() as Array<{ name: string }>
+    assert.deepEqual(projectionTables.map(row => row.name), [
+      'tool_usage_fact_projection',
+      'unknown_observation_projection',
+    ])
 
     const candidateColumns = storage.db.prepare("PRAGMA table_info('session_relationship_candidates')")
       .all() as Array<{ name: string }>
