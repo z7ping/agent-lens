@@ -67,11 +67,24 @@ test('legacy response_item assistant remains readable for old Codex rollouts', a
   assert.equal((fact.payload as any).provenance.sourceSignal, 'response_item.message.role=assistant')
 })
 
+test('response_item role=user stays in SourceRecord/Evidence but does not create a background activity', async () => {
+  const output = await normalizeCurrentCodexRecord(record({
+    type: 'response_item',
+    payload: {
+      type: 'message', role: 'user',
+      content: [{ type: 'input_text', text: 'transport echo' }],
+    },
+  }, 4), ctx)
+
+  assert.equal(output.observations.length, 0)
+  assert.equal(output.evidenceCandidates.length, 1)
+})
+
 test('agent_message without visible text stays on the original unknown fallback path', async () => {
   const output = await normalizeCurrentCodexRecord(record({
     type: 'event_msg',
     payload: { type: 'agent_message', message: '' },
-  }, 4), ctx)
+  }, 5), ctx)
 
   assert.equal(output.observations[0]?.kind, 'unknown')
 })
