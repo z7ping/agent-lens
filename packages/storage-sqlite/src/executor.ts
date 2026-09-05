@@ -28,12 +28,15 @@ export interface SqliteExecutorMetrics {
 
 /**
  * Serializes access to one SQLite connection. Transaction callbacks may await
- * repository calls safely: operations in the active transaction bypass the
- * outer queue, while unrelated work waits until COMMIT/ROLLBACK.
+ * repository calls safely. An RPC owner may also hold an external transaction
+ * across several worker messages; while that owner is active nested repository
+ * transactions reuse the existing BEGIN/COMMIT boundary.
  */
 export class SqliteExecutor {
   private readonly transactionScope = new AsyncLocalStorage<boolean>()
   private tail: Promise<void> = Promise.resolve()
+  private externalTransaction = false
+  private externalTransactionStartedAt = 0
   private enqueued = 0
   private completed = 0
   private active = 0
@@ -53,14 +56,14 @@ export class SqliteExecutor {
   constructor(readonly db: Database.Database) {}
 
   run<T>(operation: () => T | Promise<T>): Promise<T> {
-    if (this.transactionScope.getStore()) {
-      return Promise.resolve(operation())
+    if (this.transactionScope.getStore() || this.externalTransaction) {
+      return this.measureDirect(operation)
     }
     return this.enqueue(operation)
   }
 
   transaction<T>(operation: () => Promise<T>): Promise<T> {
-    if (this.transactionScope.getStore()) {
+    if (this.transactionScope.getStore() || this.externalTransaction) {
       return operation()
     }
 
@@ -75,13 +78,41 @@ export class SqliteExecutor {
         this.db.exec('ROLLBACK')
         throw error
       } finally {
-        const duration = performance.now() - startedAt
-        this.transactionCount += 1
-        this.lastTransactionMs = duration
-        this.maxTransactionMs = Math.max(this.maxTransactionMs, duration)
-        pushSample(this.transactionSamples, duration)
+        this.recordTransaction(performance.now() - startedAt)
       }
     })
+  }
+
+  async beginExternalTransaction(): Promise<void> {
+    if (this.externalTransaction) throw new Error('SQLite external transaction is already active')
+    await this.enqueue(() => {
+      if (this.externalTransaction) throw new Error('SQLite external transaction is already active')
+      this.db.exec('BEGIN IMMEDIATE')
+      this.externalTransaction = true
+      this.externalTransactionStartedAt = performance.now()
+    })
+  }
+
+  commitExternalTransaction(): void {
+    if (!this.externalTransaction) throw new Error('SQLite external transaction is not active')
+    try {
+      this.db.exec('COMMIT')
+    } finally {
+      this.finishExternalTransaction()
+    }
+  }
+
+  rollbackExternalTransaction(): void {
+    if (!this.externalTransaction) return
+    try {
+      this.db.exec('ROLLBACK')
+    } finally {
+      this.finishExternalTransaction()
+    }
+  }
+
+  hasExternalTransaction(): boolean {
+    return this.externalTransaction
   }
 
   metrics(): SqliteExecutorMetrics {
@@ -118,7 +149,39 @@ export class SqliteExecutor {
 
   async close(): Promise<void> {
     await this.tail
+    if (this.externalTransaction) this.rollbackExternalTransaction()
     this.db.close()
+  }
+
+  private finishExternalTransaction(): void {
+    const duration = this.externalTransactionStartedAt > 0
+      ? performance.now() - this.externalTransactionStartedAt
+      : 0
+    this.externalTransaction = false
+    this.externalTransactionStartedAt = 0
+    this.recordTransaction(duration)
+  }
+
+  private recordTransaction(duration: number): void {
+    this.transactionCount += 1
+    this.lastTransactionMs = duration
+    this.maxTransactionMs = Math.max(this.maxTransactionMs, duration)
+    pushSample(this.transactionSamples, duration)
+  }
+
+  private async measureDirect<T>(operation: () => T | Promise<T>): Promise<T> {
+    this.active += 1
+    const startedAt = performance.now()
+    try {
+      return await operation()
+    } finally {
+      const duration = performance.now() - startedAt
+      this.lastExecutionMs = duration
+      this.maxExecutionMs = Math.max(this.maxExecutionMs, duration)
+      pushSample(this.executionSamples, duration)
+      this.active = Math.max(0, this.active - 1)
+      this.completed += 1
+    }
   }
 
   private enqueue<T>(operation: () => T | Promise<T>): Promise<T> {
