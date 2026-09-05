@@ -11,6 +11,8 @@ on:
       - packages/storage-sqlite/src/**
       - packages/projection-session/src/**
       - packages/projection-review/src/**
+      - packages/projection-overview/src/**
+      - packages/projection-insights/src/**
       - packages/source-pi/src/**
       - packages/source-codex/src/**
       - packages/web/src/**
@@ -41,6 +43,14 @@ jobs:
         run: npm run typecheck --workspace @agent-lens/projection-review
       - name: Review tests
         run: npm run test --workspace @agent-lens/projection-review
+      - name: Overview typecheck
+        run: npm run typecheck --workspace @agent-lens/projection-overview
+      - name: Overview tests
+        run: npm run test --workspace @agent-lens/projection-overview
+      - name: Insights typecheck
+        run: npm run typecheck --workspace @agent-lens/projection-insights
+      - name: Insights tests
+        run: npm run test --workspace @agent-lens/projection-insights
       - name: Pi typecheck
         run: npm run typecheck --workspace @agent-lens/source-pi
       - name: Pi tests
