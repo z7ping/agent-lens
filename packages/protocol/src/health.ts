@@ -10,16 +10,17 @@ export interface RuntimeHealthDto {
   startedAt: string
 }
 
-export interface DataRuntimeHealthDto {
-  state: 'starting' | 'ready' | 'degraded' | 'stopped' | 'not-started'
-  protocolVersion?: number
-  pending?: number
-  maxPending?: number
-  requests?: number
-  completed?: number
-  timeouts?: number
+export interface DataRuntimeWorkerHealthDto {
+  state: 'starting' | 'ready' | 'degraded' | 'stopped'
+  role: 'writer' | 'reader'
+  protocolVersion: number
+  pending: number
+  maxPending: number
+  requests: number
+  completed: number
+  timeouts: number
   lastError?: string
-  durationMs?: {
+  durationMs: {
     last: number
     max: number
     p50: number
@@ -28,10 +29,18 @@ export interface DataRuntimeHealthDto {
   }
 }
 
+export interface DataRuntimeHealthDto {
+  ok: boolean
+  recovering: boolean
+  writer: DataRuntimeWorkerHealthDto
+  reader: DataRuntimeWorkerHealthDto
+}
+
 export interface HealthResponseDto {
   status: 'ok' | 'degraded'
   protocolVersion: typeof AGENT_LENS_PROTOCOL_VERSION
   runtime?: RuntimeHealthDto
+  /** May also be mirrored in storage.details for backwards-compatible clients. */
   dataRuntime?: DataRuntimeHealthDto
   storage: {
     ok: boolean
