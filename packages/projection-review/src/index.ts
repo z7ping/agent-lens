@@ -2,7 +2,10 @@ import type {
   JsonValue,
   ReviewDetailQueryDto,
   ReviewInteractionDto,
+  ReviewQueryDto,
+  ReviewResponseDto,
   ReviewSessionDetailDto,
+  ReviewSessionSummaryDto,
 } from '@agent-lens/protocol'
 import {
   ReviewProjection as BaseReviewProjection,
@@ -155,13 +158,51 @@ function localizeLifecycle(detail: ReviewSessionDetailDto): ReviewSessionDetailD
   }
 }
 
+type ReviewSessionActivity = ReviewSessionSummaryDto['sessionActivity']
+
+function resolveSessionActivity(
+  attributed: ReviewSessionActivity | undefined,
+  userTurnCount: number | undefined,
+  systemContextCount: number | undefined,
+): ReviewSessionActivity | undefined {
+  if (attributed === 'branch-task' || attributed === 'subagent' || attributed === 'internal-review') {
+    return attributed
+  }
+  if ((userTurnCount ?? 0) > 0) return 'user-task'
+  if (attributed === 'system-activity' || (systemContextCount ?? 0) > 0) return 'system-activity'
+  return attributed
+}
+
+function normalizeReviewSummaryActivity<T extends ReviewSessionSummaryDto>(summary: T): T {
+  const sessionActivity = resolveSessionActivity(
+    summary.sessionActivity,
+    summary.userTurnCount,
+    summary.systemContextCount,
+  )
+  if (sessionActivity === summary.sessionActivity) return summary
+  return {
+    ...summary,
+    ...(sessionActivity ? { sessionActivity } : {}),
+  }
+}
+
 export class ReviewProjection extends BaseReviewProjection {
+  override async query(query: ReviewQueryDto = {}): Promise<ReviewResponseDto> {
+    const response = await super.query(query)
+    return {
+      ...response,
+      items: response.items.map(normalizeReviewSummaryActivity),
+    }
+  }
+
   override async get(
     logicalSessionId: string,
     query: ReviewDetailQueryDto = {},
   ): Promise<ReviewSessionDetailDto | null> {
     const detail = await super.get(logicalSessionId, query)
-    return detail ? localizeLifecycle(boundReviewDetail(detail)) : null
+    return detail
+      ? normalizeReviewSummaryActivity(localizeLifecycle(boundReviewDetail(detail)))
+      : null
   }
 }
 
@@ -171,6 +212,8 @@ export const reviewProjectionInternals = {
   localizeLifecycle,
   boundInteractionNodes,
   boundReviewDetail,
+  resolveSessionActivity,
+  normalizeReviewSummaryActivity,
   maxReviewInteractionNodes: MAX_REVIEW_INTERACTION_NODES,
   reviewInteractionHeadNodes: REVIEW_INTERACTION_HEAD_NODES,
   reviewInteractionTailNodes: REVIEW_INTERACTION_TAIL_NODES,
