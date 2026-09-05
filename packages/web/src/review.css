@@ -117,8 +117,11 @@
 
 /* Pi 会话树属于 Review 关系数据，不属于 TaskRound。 */
 .pi-session-tree { margin-top: 10px; overflow: hidden; border: 1px solid var(--al-line); border-radius: 8px; background: var(--al-soft-2); }
-.pi-session-tree > summary { padding: 8px 10px; cursor: pointer; list-style: none; color: var(--al-ink-2); font-size: 12px; font-weight: 650; }
+.pi-session-tree > summary { display: flex; align-items: center; gap: 6px; padding: 8px 10px; cursor: pointer; list-style: none; color: var(--al-ink-2); font-size: 12px; font-weight: 650; }
+.pi-session-tree > summary::marker { content: ''; }
 .pi-session-tree > summary::-webkit-details-marker { display: none; }
+.pi-session-tree-chevron { flex: 0 0 14px; color: var(--al-muted-2); transition: transform .16s ease; }
+.pi-session-tree[open] > summary > .pi-session-tree-chevron { transform: rotate(90deg); }
 .pi-session-tree > div > div { padding: 7px 10px; border-top: 1px solid var(--al-line); color: var(--al-muted); font: 12px/1.5 var(--font-mono); }
 
 /* Evidence 是 Review 的来源/可信度语义；完整详情统一进入 Inspector。 */
@@ -131,8 +134,11 @@
 .evidence-link:hover { background: var(--al-soft); color: var(--al-ink-2); }
 
 .raw-event-group { margin: 7px 0 7px 26px; overflow: hidden; border: 1px dashed var(--al-line-strong); border-radius: 8px; background: var(--al-soft-2); color: var(--al-muted); }
-.raw-event-group > summary { display: flex; min-height: 48px; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 10px; cursor: pointer; list-style: none; font-size: 12px; }
+.raw-event-group > summary { display: grid; min-height: 48px; grid-template-columns: 14px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 6px 10px; cursor: pointer; list-style: none; font-size: 12px; }
+.raw-event-group > summary::marker { content: ''; }
 .raw-event-group > summary::-webkit-details-marker { display: none; }
+.raw-event-group-chevron { flex: 0 0 14px; color: var(--al-muted-2); transition: transform .16s ease; }
+.raw-event-group[open] > summary > .raw-event-group-chevron { transform: rotate(90deg); }
 .raw-event-summary-copy { display: grid; min-width: 0; gap: 2px; }
 .raw-event-summary-title { display: flex; min-width: 0; align-items: center; gap: 7px; color: var(--al-ink-2); font-weight: 650; }
 .raw-event-summary-count { display: inline-flex; min-width: 20px; height: 18px; align-items: center; justify-content: center; padding: 0 5px; border: 1px solid var(--al-line); border-radius: 999px; color: var(--al-muted); font-size: 12px; font-variant-numeric: tabular-nums; font-weight: 550; }
@@ -187,4 +193,9 @@
   .review-page:not(.review-page-embedded) .workspace-toolbar { padding-inline: 10px; }
   .review-page:not(.review-page-embedded) .search-filter { width: 100%; min-width: 0; margin-left: 0; }
   .review-reader { padding-inline: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pi-session-tree-chevron,
+  .raw-event-group-chevron { transition: none; }
 }
