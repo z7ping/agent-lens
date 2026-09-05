@@ -205,6 +205,7 @@ export class SqliteStorageService implements StorageService {
           path: this.db.name,
           readonly: this.db.readonly,
           inTransaction: this.db.inTransaction,
+          executor: this.executor.metrics(),
           sourceRuntime: this.runtimeHealthDetails(),
           dataGrowth: this.capacityDetails(),
           checkpoints: this.checkpointHealthDetails(),
