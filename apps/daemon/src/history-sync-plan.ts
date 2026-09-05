@@ -17,8 +17,6 @@ export interface ParserReplayStage {
 export function createProgressiveHistoryStages(startedAt: number): ProgressiveHistoryStage[] {
   const activeSince = new Date(startedAt - HOT_HISTORY_WINDOW_MS).toISOString()
   return [
-    // “最新/最近”描述的是按来源自身最近活动排序后的会话数量，不能再被热窗口裁掉。
-    // 否则一个超过 7 天未使用的来源会在冷启动时表现为“没有任何历史”。
     { id: 'latest', label: '最新 1 个会话', window: { sessionLimit: 1 } },
     { id: 'recent', label: '最近 10 个会话', window: { sessionLimit: 10 } },
     { id: 'hot-window', label: '最近 7 天', window: { activeSince } },
@@ -53,7 +51,10 @@ export function stagesAllowedByCapacity(
   stages: readonly ProgressiveHistoryStage[],
   state: StorageCapacityState,
 ): ProgressiveHistoryStage[] {
-  if (state === 'exceeded') return stages.filter(stage => stage.id === 'latest')
+  // Unknown means we cannot prove there is room to expand. Fail closed until the
+  // Data Runtime/health snapshot recovers. Exceeded similarly allows only live
+  // capture and shrink-oriented maintenance; no historical ingestion grows the DB.
+  if (state === 'exceeded' || state === 'unknown') return []
   if (state === 'approaching') return stages.filter(stage => stage.id !== 'hot-window')
   return [...stages]
 }
