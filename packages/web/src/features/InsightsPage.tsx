@@ -39,6 +39,14 @@ function formatGeneratedAt(value: string): string {
   return Number.isFinite(date.getTime()) ? date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : value
 }
 
+function rangeLabel(range: 'today' | '7d' | '30d' | 'all', from?: string, to?: string): string {
+  const label = range === 'today' ? '今天' : range === '7d' ? '最近 7 天' : range === '30d' ? '最近 30 天' : '全部时间'
+  if (from && to) return `${label} · ${formatDate(from)} — ${formatDate(to)}`
+  if (from) return `${label} · ${formatDate(from)} 至今`
+  if (to) return `${label} · 截至 ${formatDate(to)}`
+  return label
+}
+
 function assetTypeLabel(type: string): string {
   if (type === 'skill') return '技能'
   if (type === 'mcp') return 'MCP（模型上下文协议）'
@@ -103,7 +111,7 @@ export function InsightsPage({ model, sidebarHost }: { model: AgentLensClientMod
 
         {insights.loading && !data ? <WorkspaceSkeleton kind="table"/> : data && data.summary.sessionCount > 0 ? <>
           <section className="insight-coverage-strip" aria-label="洞察统计覆盖范围">
-            <div><span>统计范围</span><b>{data.meta.from && data.meta.to ? `${formatDate(data.meta.from)} — ${formatDate(data.meta.to)}` : '全部已载入历史'}</b></div>
+            <div><span>统计范围</span><b>{rangeLabel(insights.filters.range, data.meta.from, data.meta.to)}</b></div>
             <div><span>会话样本</span><b>{data.summary.sessionCount} 个</b></div>
             <div><span>覆盖状态</span><b className={data.meta.sampled ? 'is-warning' : ''}>{data.meta.sampled ? `最近 ${data.meta.sessionSampleLimit} 个以内的安全样本` : '当前范围完整聚合'}</b></div>
             <div><span>生成时间</span><b>{formatGeneratedAt(data.meta.generatedAt)}</b></div>
