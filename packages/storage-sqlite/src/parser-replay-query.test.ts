@@ -6,6 +6,7 @@ import { SqliteStorageService } from './storage'
 async function setup() {
   const storage = new SqliteStorageService({ path: ':memory:' })
   await storage.migrate()
+  await storage.maintenance.ensureDeferredIndexes()
   const now = '2026-09-05T00:00:00.000Z'
   storage.db.prepare(`
     INSERT INTO hosts(id, name, platform, arch, created_at, last_seen_at)
