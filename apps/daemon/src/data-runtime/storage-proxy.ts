@@ -172,7 +172,13 @@ export class DataRuntimeService {
 
   snapshot(): DataRuntimeHealthSnapshot {
     const writer = this.writer.snapshot()
-    const reader = this.reader.snapshot()
+    const rawReader = this.reader.snapshot()
+    // SQLite :memory: is connection-local, so dev/tests intentionally reuse the
+    // writer client. Keep the public health contract semantic: the logical
+    // reader slot is still reported as role=reader even when it shares a client.
+    const reader: DataRuntimeClientSnapshot = this.reader === this.writer
+      ? { ...rawReader, role: 'reader' }
+      : rawReader
     return {
       writer,
       reader,
