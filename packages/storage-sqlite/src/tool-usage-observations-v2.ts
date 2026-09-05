@@ -7,7 +7,7 @@ import type {
   ToolUsageObservationRecord,
 } from '@agent-lens/core'
 import type { SqliteExecutor } from './executor'
-import { SqliteToolUsageObservationReader as BaseToolUsageObservationReader } from './tool-usage-observations'
+import { SqliteToolUsageFactReader as BaseToolUsageObservationReader } from './tool-usage-facts'
 
 const MAX_SEQUENCE = Number.MAX_SAFE_INTEGER
 const METADATA_CHUNK = 300
@@ -137,8 +137,8 @@ function sessionMetadata(executor: SqliteExecutor, sessionIds: string[]): Map<st
 }
 
 /**
- * 在已聚合、已限量的会话样本上补下钻元数据。
- * 聚合主体仍由 Base reader 在 SQLite 中完成，不把完整 tool.call/result 历史搬回 Node。
+ * 聚合主体从 tool_usage_fact_projection 读取轻量字段；只有已限量的会话样本
+ * 再回到 Canonical 数据补标题/项目等下钻元数据。
  */
 export class SqliteToolUsageObservationReader implements ToolUsageObservationReader {
   private readonly base: BaseToolUsageObservationReader
@@ -157,24 +157,20 @@ export class SqliteToolUsageObservationReader implements ToolUsageObservationRea
     for (const tool of aggregate.tools) {
       const sourceId = tool.sourceIds[0]
       if (!sourceId) continue
-      for (const session of tool.sessions) {
-        sessionIds.push(session.logicalSessionId)
-      }
+      for (const session of tool.sessions) sessionIds.push(session.logicalSessionId)
     }
     if (!sessionIds.length) return aggregate
 
     const metadata = await this.executor.run(() => sessionMetadata(this.executor, sessionIds))
     return {
       ...aggregate,
-      tools: aggregate.tools.map(tool => {
-        return {
-          ...tool,
-          sessions: tool.sessions.map(session => ({
-            ...session,
-            ...metadata.get(session.logicalSessionId),
-          })),
-        }
-      }),
+      tools: aggregate.tools.map(tool => ({
+        ...tool,
+        sessions: tool.sessions.map(session => ({
+          ...session,
+          ...metadata.get(session.logicalSessionId),
+        })),
+      })),
     }
   }
 }
