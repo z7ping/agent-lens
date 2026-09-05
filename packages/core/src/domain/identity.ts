@@ -9,6 +9,7 @@ import type {
   LogicalSessionId,
   ProjectId,
   RuntimeProfileId,
+  SourceRecordId,
   SourceSessionId,
   WorkspaceId,
 } from './common'
@@ -115,6 +116,8 @@ export interface SessionRelationshipCandidate {
   sourceId: string
   installationId: AgentInstallationId
   runtimeProfileId?: RuntimeProfileId
+  /** SourceRecord that produced this parser-derived relationship candidate. */
+  sourceRecordId?: SourceRecordId
   fromNativeSessionId: string
   toNativeSessionId: string
   nativeParentEventId?: string
