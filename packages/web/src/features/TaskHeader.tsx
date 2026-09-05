@@ -65,6 +65,7 @@ function collectPrimaryActions(node: ReactNode, result: ReactNode[] = []): React
 
 export function TaskHeader({ marker, agent, context, status, title, submeta, metrics = [], actions, className = '' }: TaskHeaderProps) {
   const resolvedStatus = status ?? '已完成'
+  const resolvedContext = context === '无项目' ? '未关联项目' : context
   const { showUsageDetails, setShowUsageDetails } = useTaskSurfaceView()
   const auditToggle = findAuditToggle(actions)
   const primaryActions = collectPrimaryActions(actions)
@@ -110,7 +111,7 @@ export function TaskHeader({ marker, agent, context, status, title, submeta, met
         <div className="task-header-meta">
           {marker && <span className="task-header-marker">{marker}</span>}
           <b>{agent}</b>
-          {context && <span className="task-header-context">{context}</span>}
+          {resolvedContext && <span className="task-header-context">{resolvedContext}</span>}
           <span className="task-header-status" data-tone={status === undefined ? 'success' : ''}>{resolvedStatus}</span>
         </div>
         <h1 className="task-header-title">{title}</h1>
