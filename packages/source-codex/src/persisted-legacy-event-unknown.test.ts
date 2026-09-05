@@ -89,6 +89,21 @@ test('legacy persisted tool results retain native call identity', async () => {
   }
 })
 
+test('legacy image generation keeps binary result only in source evidence', async () => {
+  const output = await normalizeCurrentCodexRecord(record({
+    type: 'image_generation_end',
+    call_id: 'image-safe',
+    status: 'completed',
+    revised_prompt: 'diagram',
+    result: 'base64-image-data',
+    saved_path: '/safe/image.png',
+  }, 30), ctx)
+  const payload = output.observations[0]?.payload as any
+  assert.equal(payload.resultAvailable, true)
+  assert.equal('result' in payload, false)
+  assert.equal('raw' in payload, false)
+})
+
 test('future persisted EventMsg still stays unknown instead of guessing semantics', async () => {
   const output = await normalizeCurrentCodexRecord(record({
     type: 'future_persisted_event',
