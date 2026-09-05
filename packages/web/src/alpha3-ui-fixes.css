@@ -63,6 +63,59 @@
   gap: 4px;
 }
 
+.tool-session-link.has-error {
+  border-color: color-mix(in srgb, var(--al-danger) 30%, var(--al-line));
+  background: color-mix(in srgb, var(--al-danger-soft) 44%, var(--al-surface));
+}
+
+.tool-session-link.has-error .tool-session-open {
+  color: var(--al-danger);
+}
+
+.tool-failure-shortcut {
+  display: flex;
+  width: 100%;
+  min-height: 54px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--al-danger) 34%, var(--al-line));
+  border-radius: 9px;
+  background: var(--al-danger-soft);
+  color: var(--al-danger);
+  text-align: left;
+}
+
+.tool-failure-shortcut > span {
+  min-width: 0;
+}
+
+.tool-failure-shortcut b,
+.tool-failure-shortcut small {
+  display: block;
+}
+
+.tool-failure-shortcut b {
+  font-size: 13px;
+  font-weight: 720;
+}
+
+.tool-failure-shortcut small {
+  overflow: hidden;
+  margin-top: 2px;
+  color: color-mix(in srgb, var(--al-danger) 72%, var(--al-ink));
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool-failure-shortcut:hover {
+  border-color: color-mix(in srgb, var(--al-danger) 54%, var(--al-line));
+  background: color-mix(in srgb, var(--al-danger-soft) 78%, var(--al-surface));
+}
+
 .tool-session-toggle {
   width: 100%;
   min-height: 34px;
