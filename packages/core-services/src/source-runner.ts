@@ -26,6 +26,7 @@ import { deriveParentRelationshipCandidates } from './relationship-hints'
 
 const DEFAULT_COOPERATIVE_BUDGET_MS = 8
 const PARSER_REPLAY_TRANSACTION_SIZE = 50
+const PARSER_REPLAY_TRANSACTION_BUDGET_MS = 20
 const PARSER_REPLAY_CHECKPOINT_SCOPE = 'parser-replay'
 
 interface CooperativeSchedulerOptions {
@@ -59,6 +60,15 @@ function createCooperativeScheduler(options: CooperativeSchedulerOptions = {}) {
     deadline = now() + budgetMs
     return true
   }
+}
+
+function parserReplayTransactionExpired(
+  startedAt: number,
+  processed: number,
+  now: () => number = Date.now,
+): boolean {
+  return processed >= PARSER_REPLAY_TRANSACTION_SIZE
+    || now() - startedAt >= PARSER_REPLAY_TRANSACTION_BUDGET_MS
 }
 
 function parserReplayWindowKey(window?: SourceHistoryWindow): string {
@@ -113,6 +123,8 @@ export interface SourceParserReplayInput {
   detected: DetectedSource
   abortSignal: AbortSignal
   historyWindow?: SourceHistoryWindow
+  /** Maintenance replay may pause here while foreground HTTP work is active. */
+  cooperate?: () => Promise<void>
 }
 
 export interface SourceHistorySyncResult {
@@ -358,13 +370,9 @@ async function processSourceRecord(
     evidenceCandidates: persistedOutput.evidenceCandidates,
   }
 
-  // 一条来源记录及其派生的 Canonical Observation 属于同一持久化单元。
-  // 除了保证原子性，也避免冷导入时每次仓储写入都单独开启 SQLite 事务。
   await storage.transaction(async () => {
     await storage.repositories.sourceRecords.put(persistedRecord)
 
-    // 部分来源记录（例如 transport echo、状态快照）只保留 SourceRecord/Evidence，
-    // 不应为了挂 Evidence 而伪造 Canonical Observation。
     const evidenceRepository = storage.repositories.evidence
     if (!persistedOutput.observations.length && evidenceRepository) {
       for (const candidate of persistedOutput.evidenceCandidates) {
@@ -473,6 +481,9 @@ export class SourceHistoryRunner {
     const yieldForInteractivity = createCooperativeScheduler()
     let invalidated = false
     while (!abortSignal.aborted && !invalidated) {
+      if (input.cooperate) await input.cooperate()
+      if (abortSignal.aborted) break
+
       const records = await replay(
         source.manifest.sourceId,
         installation.id,
@@ -502,15 +513,17 @@ export class SourceHistoryRunner {
         break
       }
 
-      for (let offset = 0; offset < records.length; offset += PARSER_REPLAY_TRANSACTION_SIZE) {
+      let offset = 0
+      while (offset < records.length && !abortSignal.aborted && !invalidated) {
+        if (input.cooperate) await input.cooperate()
         if (abortSignal.aborted) break
-        const batch = records.slice(offset, offset + PARSER_REPLAY_TRANSACTION_SIZE)
+
         let lastProcessed: SourceRecord | undefined
-        // Parser replay 只处理本地已持久化事实。小批次复用一个 SQLite 事务，
-        // 避免每条记录单独 fsync；批间再让出执行权，限制 API 写队列等待时间。
         await this.storage.transaction(async () => {
-          for (const stored of batch) {
-            if (abortSignal.aborted) break
+          const transactionStartedAt = Date.now()
+          let processedInTransaction = 0
+          while (offset < records.length && !abortSignal.aborted) {
+            const stored = records[offset]!
             const processed = await processSourceRecord(
               this.storage,
               this.observations,
@@ -523,10 +536,13 @@ export class SourceHistoryRunner {
               { ...stored, parserVersion: source.manifest.parserVersion },
             )
             lastProcessed = stored
+            offset += 1
+            processedInTransaction += 1
             result.records += 1
             result.observationsCreated += processed.observationsCreated
             result.observationsMerged += processed.observationsMerged
             result.observationsUnchanged += processed.observationsUnchanged
+            if (parserReplayTransactionExpired(transactionStartedAt, processedInTransaction)) break
           }
         })
 
@@ -890,7 +906,9 @@ export const sourceRunnerInternals = {
   createCooperativeScheduler,
   parserReplayCheckpointKey,
   parserReplayWindowKey,
+  parserReplayTransactionExpired,
   DEFAULT_COOPERATIVE_BUDGET_MS,
   PARSER_REPLAY_TRANSACTION_SIZE,
+  PARSER_REPLAY_TRANSACTION_BUDGET_MS,
   PARSER_REPLAY_CHECKPOINT_SCOPE,
 }
