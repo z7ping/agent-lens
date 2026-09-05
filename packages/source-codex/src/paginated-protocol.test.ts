@@ -21,13 +21,14 @@ function itemCompleted(item: Record<string, unknown>, sequence = 1): SourceRecor
       completed_at_ms: 1,
     },
   }
+  const nativeId = nativeIdForEntry(entry)
   return {
     id: `r-${sequence}`,
     sourceId: 'codex',
     installationId: 'install',
     sourceSessionNativeId: 'thread-root',
     nativeType: nativeTypeForEntry(entry),
-    nativeId: nativeIdForEntry(entry),
+    ...(nativeId ? { nativeId } : {}),
     sourceSequence: sequence,
     occurredAt: '2026-09-05T08:00:00.000Z',
     capturedAt: '2026-09-05T08:00:01.000Z',
