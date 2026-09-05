@@ -89,6 +89,67 @@ test('ReviewProjection builds task summaries and interaction tool status from ca
   }
 })
 
+test('ReviewProjection renders an orphan tool result as a completed Tool node', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    const identity = new DefaultIdentityService(storage)
+    const observations = new DefaultObservationService(storage, identity)
+    const host = await identity.resolveHost({ name: 'review-orphan-tool-host' })
+    const installation = await identity.resolveInstallation({ hostId: host.id, productId: 'codex' })
+    const common = {
+      sourceId: 'codex', host, installation,
+      evidenceCandidates: [],
+    }
+    const user = await observations.commit({
+      ...common,
+      candidate: {
+        kind: 'message.user',
+        nativeEventId: 'orphan-tool-user',
+        occurredAt: '2026-09-05T10:00:00.000Z',
+        capturedAt: '2026-09-05T10:00:00.000Z',
+        payload: { text: '读取文件' },
+        identityHints: { nativeSessionId: 'orphan-tool-session' },
+        dedupHints: { nativeEventId: 'orphan-tool-user' },
+      },
+    })
+    await observations.commit({
+      ...common,
+      candidate: {
+        kind: 'tool.result',
+        nativeEventId: 'orphan-tool-result',
+        occurredAt: '2026-09-05T10:00:01.000Z',
+        capturedAt: '2026-09-05T10:00:01.000Z',
+        payload: {
+          callId: 'function-output-1',
+          nativeToolName: 'read_file',
+          success: true,
+          durationMs: 12,
+          output: 'file content',
+        },
+        identityHints: { nativeSessionId: 'orphan-tool-session' },
+        dedupHints: { nativeEventId: 'orphan-tool-result' },
+      },
+    })
+
+    const detail = await new ReviewProjection(storage).get(user.observation.logicalSessionId)
+    assert.ok(detail)
+    const node = detail.interactions[0]?.nodes.find(item => item.id === 'orphan-tool-result' || item.observationIds.includes(user.observation.id) === false && item.type === 'tool')
+    assert.equal(node?.type, 'tool')
+    if (node?.type === 'tool') {
+      assert.equal(node.name, 'read_file')
+      assert.equal(node.callId, 'function-output-1')
+      assert.equal(node.status, 'success')
+      assert.equal(node.durationMs, 12)
+      assert.equal(node.output, 'file content')
+      assert.equal(node.startedAt, node.endedAt)
+      assert.equal(node.observationIds.length, 1)
+    }
+  } finally {
+    storage.close()
+  }
+})
+
 test('ReviewProjection omits preview when the first user message has no displayable text', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   await storage.migrate()
@@ -175,7 +236,13 @@ test('ReviewProjection localizes real lifecycle actions instead of collapsing th
   assert.equal(label({ event: 'session.resumed' }), '恢复会话')
   assert.equal(label({ event: 'session.discovered' }), '发现会话')
   assert.equal(label({ event: 'session.ended' }), '会话结束')
+  assert.equal(label({ event: 'turn.completed' }), '轮次结束')
   assert.equal(label({ event: 'turn.stopped' }), '轮次停止')
+  assert.equal(label({ event: 'turn.aborted' }), '轮次终止')
+  assert.equal(label({ event: 'turn.error' }), '轮次错误')
+  assert.equal(label({ event: 'review.entered' }), '进入审查')
+  assert.equal(label({ event: 'review.exited' }), '退出审查')
+  assert.equal(label({ event: 'subagent.interacted' }), '子 Agent 活动')
   assert.equal(label({ action: 'session_interrupted' }), '会话中断')
   assert.equal(label({ event: 'vendor.future.lifecycle' }), '会话状态变化')
 })
