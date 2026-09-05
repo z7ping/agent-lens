@@ -50,10 +50,17 @@ function transientDataRuntimeError(error: unknown): boolean {
 function waitForRetry(signal: AbortSignal): Promise<void> {
   if (signal.aborted) return Promise.resolve()
   return new Promise(resolve => {
-    const timer = setTimeout(resolve, TRANSIENT_RETRY_DELAY_MS)
+    let settled = false
+    const finish = () => {
+      if (settled) return
+      settled = true
+      signal.removeEventListener('abort', onAbort)
+      resolve()
+    }
+    const timer = setTimeout(finish, TRANSIENT_RETRY_DELAY_MS)
     const onAbort = () => {
       clearTimeout(timer)
-      resolve()
+      finish()
     }
     signal.addEventListener('abort', onAbort, { once: true })
     timer.unref?.()
