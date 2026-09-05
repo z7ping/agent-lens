@@ -9,6 +9,7 @@ export interface SourceRecordCompressionResult {
   rawBytes: number
   storedBytes: number
   savedBytes: number
+  cursor?: string
   hasMore: boolean
 }
 
@@ -57,12 +58,6 @@ const DEFERRED_INDEXES = [
     sql: `CREATE INDEX IF NOT EXISTS idx_evidence_captured_at
           ON evidence(captured_at)`,
   },
-  {
-    name: 'idx_source_records_payload_compression_pending',
-    sql: `CREATE INDEX IF NOT EXISTS idx_source_records_payload_compression_pending
-          ON source_records(captured_at, id)
-          WHERE payload_encoding = 'json'`,
-  },
 ] as const
 
 export class SqliteStorageMaintenance {
@@ -89,15 +84,16 @@ export class SqliteStorageMaintenance {
     })
   }
 
-  async compressSourceRecords(limit = 250): Promise<SourceRecordCompressionResult> {
+  async compressSourceRecords(limit = 250, afterId?: string): Promise<SourceRecordCompressionResult> {
     const batchLimit = Math.max(1, Math.min(limit, 2000))
     const rows = await this.executor.run(() => this.executor.db.prepare(`
       SELECT id, payload_json
       FROM source_records
       WHERE payload_encoding = 'json'
-      ORDER BY captured_at ASC, id ASC
+        AND (? IS NULL OR id > ?)
+      ORDER BY id ASC
       LIMIT ?
-    `).all(batchLimit) as Array<{ id: string; payload_json: string }>)
+    `).all(afterId ?? null, afterId ?? null, batchLimit) as Array<{ id: string; payload_json: string }>)
 
     const encoded = rows.map(row => ({ id: row.id, encoded: encodeSourceRecordPayloadJson(row.payload_json) }))
     await this.executor.transaction(async () => {
@@ -118,6 +114,7 @@ export class SqliteStorageMaintenance {
 
     const rawBytes = encoded.reduce((sum, item) => sum + item.encoded.rawBytes, 0)
     const storedBytes = encoded.reduce((sum, item) => sum + item.encoded.storedBytes, 0)
+    const cursor = rows.at(-1)?.id
     return {
       scanned: encoded.length,
       compressed: encoded.filter(item => item.encoded.payloadEncoding === 'gzip-json').length,
@@ -125,6 +122,7 @@ export class SqliteStorageMaintenance {
       rawBytes,
       storedBytes,
       savedBytes: Math.max(0, rawBytes - storedBytes),
+      ...(cursor ? { cursor } : {}),
       hasMore: encoded.length === batchLimit,
     }
   }
