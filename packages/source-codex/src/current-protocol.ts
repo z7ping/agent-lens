@@ -10,7 +10,7 @@ import { normalizePaginatedFunctionOutput } from './paginated-function-output'
 import { normalizePaginatedCodexRecord } from './paginated-protocol'
 import { assistantMessageProvenance, contextClassification } from './provenance'
 
-export const CODEX_CURRENT_PARSER_VERSION = '17'
+export const CODEX_CURRENT_PARSER_VERSION = '18'
 
 const NON_ACTIVITY_ROLLOUT_TYPES = new Set([
   'world_state',
@@ -48,6 +48,17 @@ function syntheticEntryRecord(record: SourceRecord, entry: Record<string, unknow
       ...envelope,
       entry,
     } as SourceRecord['payload'],
+  }
+}
+
+function mergeOutputs(outputs: NormalizedSourceOutput[]): NormalizedSourceOutput {
+  const relationships = outputs.flatMap(output => output.sessionRelationshipHints ?? [])
+  const coverage = outputs.flatMap(output => output.coverage ?? [])
+  return {
+    observations: outputs.flatMap(output => output.observations),
+    evidenceCandidates: outputs[0]?.evidenceCandidates ?? [],
+    ...(relationships.length ? { sessionRelationshipHints: relationships } : {}),
+    ...(coverage.length ? { coverage } : {}),
   }
 }
 
@@ -173,6 +184,195 @@ function alignAssistantCandidate(
   }
 }
 
+async function remapUnknown(
+  record: SourceRecord,
+  ctx: SourceNormalizationContext,
+  kind: ObservationCandidate['kind'],
+  payload: Record<string, unknown>,
+): Promise<NormalizedSourceOutput> {
+  const output = await normalizeCodexRecord(record, ctx)
+  return {
+    ...output,
+    observations: output.observations.map(observation => observation.kind === 'unknown'
+      ? { ...observation, kind, payload }
+      : observation),
+  }
+}
+
+function plaintextAgentMessageContent(content: unknown): { text?: string; encrypted: boolean } {
+  if (!Array.isArray(content)) return { encrypted: false }
+  const parts: string[] = []
+  let encrypted = false
+  for (const value of content) {
+    const item = asRecord(value)
+    if (item.type === 'input_text' && typeof item.text === 'string' && item.text.trim()) {
+      parts.push(item.text)
+    } else if (item.type === 'encrypted_content') {
+      encrypted = true
+    }
+  }
+  const text = parts.join('\n').trim()
+  return { ...(text ? { text } : {}), encrypted }
+}
+
+async function normalizeResponseAgentMessage(
+  record: SourceRecord,
+  ctx: SourceNormalizationContext,
+  payload: Record<string, any>,
+): Promise<NormalizedSourceOutput> {
+  const content = plaintextAgentMessageContent(payload.content)
+  return remapUnknown(record, ctx, 'session.lifecycle', {
+    event: 'subagent.communication',
+    communicationType: 'response.agent_message',
+    author: stringField(payload, 'author') ?? 'unknown',
+    recipient: stringField(payload, 'recipient') ?? 'unknown',
+    ...(content.text ? { text: content.text } : {}),
+    ...(content.encrypted ? { encryptedContent: true } : {}),
+  })
+}
+
+async function normalizeResponseLocalShellCall(
+  record: SourceRecord,
+  ctx: SourceNormalizationContext,
+  payload: Record<string, any>,
+): Promise<NormalizedSourceOutput> {
+  const callId = stringField(payload, 'call_id', 'id') ?? `local-shell-${record.sourceSequence ?? record.id}`
+  const status = stringField(payload, 'status')?.toLowerCase() ?? 'unknown'
+  const call = await normalizeCodexRecord(syntheticEntryRecord(record, {
+    type: 'response_item',
+    payload: {
+      type: 'function_call',
+      name: 'local_shell',
+      call_id: callId,
+      arguments: JSON.stringify({ action: payload.action ?? null }),
+    },
+  }), ctx)
+  call.observations = call.observations.map(observation => observation.kind === 'tool.call'
+    ? {
+        ...observation,
+        payload: {
+          ...asRecord(observation.payload),
+          status,
+          rawAction: payload.action ?? null,
+        },
+      }
+    : observation)
+  if (status === 'in_progress') return call
+
+  const result = await normalizeCodexRecord(syntheticEntryRecord(record, {
+    type: 'response_item',
+    payload: {
+      type: 'function_call_output',
+      call_id: callId,
+      output: JSON.stringify({ status }),
+    },
+  }), ctx)
+  result.observations = result.observations.map(observation => observation.kind === 'tool.result'
+    ? {
+        ...observation,
+        payload: {
+          ...asRecord(observation.payload),
+          nativeToolName: 'local_shell',
+          success: status === 'completed',
+          status,
+        },
+      }
+    : observation)
+  return mergeOutputs([call, result])
+}
+
+async function normalizeResponseToolSearchCall(
+  record: SourceRecord,
+  ctx: SourceNormalizationContext,
+  payload: Record<string, any>,
+): Promise<NormalizedSourceOutput> {
+  const callId = stringField(payload, 'call_id', 'id') ?? `tool-search-${record.sourceSequence ?? record.id}`
+  const output = await normalizeCodexRecord(syntheticEntryRecord(record, {
+    type: 'response_item',
+    payload: {
+      type: 'function_call',
+      name: 'tool_search',
+      call_id: callId,
+      arguments: JSON.stringify({
+        execution: payload.execution ?? null,
+        arguments: payload.arguments ?? null,
+        status: payload.status ?? null,
+      }),
+    },
+  }), ctx)
+  output.observations = output.observations.map(observation => observation.kind === 'tool.call'
+    ? {
+        ...observation,
+        payload: {
+          ...asRecord(observation.payload),
+          status: payload.status ?? null,
+        },
+      }
+    : observation)
+  return output
+}
+
+async function normalizeResponseImageGeneration(
+  record: SourceRecord,
+  ctx: SourceNormalizationContext,
+  payload: Record<string, any>,
+): Promise<NormalizedSourceOutput> {
+  return remapUnknown(record, ctx, 'artifact.action', {
+    action: 'image.generate',
+    status: payload.status ?? null,
+    ...(stringField(payload, 'revised_prompt', 'revisedPrompt') ? {
+      revisedPrompt: stringField(payload, 'revised_prompt', 'revisedPrompt'),
+    } : {}),
+    resultAvailable: typeof payload.result === 'string' && payload.result.length > 0,
+  })
+}
+
+async function normalizeResponseConfigurationUpdate(
+  record: SourceRecord,
+  ctx: SourceNormalizationContext,
+  payload: Record<string, any>,
+): Promise<NormalizedSourceOutput> {
+  const reasoning = asRecord(payload.reasoning)
+  return remapUnknown(record, ctx, 'session.lifecycle', {
+    event: 'reasoning.configuration.updated',
+    reasoning: {
+      ...(stringField(reasoning, 'effort') ? { effort: stringField(reasoning, 'effort') } : {}),
+    },
+  })
+}
+
+async function normalizeResponseCompaction(
+  record: SourceRecord,
+  ctx: SourceNormalizationContext,
+  payload: Record<string, any>,
+): Promise<NormalizedSourceOutput> {
+  return remapUnknown(record, ctx, 'context.compaction', {
+    phase: 'snapshot',
+    sourceType: `response_item.${payload.type ?? 'compaction'}`,
+    opaque: true,
+  })
+}
+
+async function normalizePersistedResponseItem(
+  record: SourceRecord,
+  ctx: SourceNormalizationContext,
+): Promise<NormalizedSourceOutput | null> {
+  const { entry, payload } = rolloutEntry(record)
+  if (entry.type !== 'response_item') return null
+  switch (payload.type) {
+    case 'agent_message': return normalizeResponseAgentMessage(record, ctx, payload)
+    case 'local_shell_call': return normalizeResponseLocalShellCall(record, ctx, payload)
+    case 'tool_search_call': return normalizeResponseToolSearchCall(record, ctx, payload)
+    case 'image_generation_call': return normalizeResponseImageGeneration(record, ctx, payload)
+    case 'configuration_update': return normalizeResponseConfigurationUpdate(record, ctx, payload)
+    case 'compaction':
+    case 'compaction_summary':
+    case 'context_compaction':
+      return normalizeResponseCompaction(record, ctx, payload)
+    default: return null
+  }
+}
+
 async function normalizeDirectRawReasoning(
   record: SourceRecord,
   ctx: SourceNormalizationContext,
@@ -264,8 +464,8 @@ async function normalizeWithoutActivity(
  *
  * State snapshots and model-invisible presentation facts remain available as
  * SourceRecord/Evidence but do not manufacture Review activities. Persistent
- * thread metadata and inter-agent communication are mapped explicitly.
- * Authorship and activity ownership are never inferred from message text.
+ * thread metadata, agent communication, and durable ResponseItems are mapped
+ * from their native structure. Authorship is never inferred from message text.
  */
 export async function normalizeCurrentCodexRecord(
   record: SourceRecord,
@@ -280,6 +480,9 @@ export async function normalizeCurrentCodexRecord(
 
   const paginated = await normalizePaginatedCodexRecord(record, ctx)
   if (paginated) return paginated
+
+  const responseItem = await normalizePersistedResponseItem(record, ctx)
+  if (responseItem) return responseItem
 
   const threadMetadata = persistedThreadMetadataEvent(record)
   if (threadMetadata) return normalizePersistedThreadMetadata(record, ctx, threadMetadata)
@@ -308,4 +511,6 @@ export const currentCodexProtocolInternals = {
   isEmptyLegacyAssistantOrReasoning,
   persistedThreadMetadataEvent,
   interAgentCommunication,
+  plaintextAgentMessageContent,
+  normalizePersistedResponseItem,
 }
