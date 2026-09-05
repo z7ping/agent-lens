@@ -10,7 +10,15 @@ import { normalizePaginatedFunctionOutput } from './paginated-function-output'
 import { normalizePaginatedCodexRecord } from './paginated-protocol'
 import { assistantMessageProvenance, contextClassification } from './provenance'
 
-export const CODEX_CURRENT_PARSER_VERSION = '16'
+export const CODEX_CURRENT_PARSER_VERSION = '17'
+
+const NON_ACTIVITY_ROLLOUT_TYPES = new Set([
+  'world_state',
+  'retained_context',
+  'security_risk_score',
+  'realtime_item',
+  'inter_agent_communication_metadata',
+])
 
 function asRecord(value: unknown): Record<string, any> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -26,6 +34,12 @@ function stringField(record: Record<string, any>, ...keys: string[]): string | u
   return undefined
 }
 
+function rolloutEntry(record: SourceRecord): { entry: Record<string, any>; payload: Record<string, any> } {
+  const envelope = asRecord(record.payload)
+  const entry = asRecord(envelope.entry)
+  return { entry, payload: asRecord(entry.payload) }
+}
+
 function syntheticEntryRecord(record: SourceRecord, entry: Record<string, unknown>): SourceRecord {
   const envelope = asRecord(record.payload) as CodexStoredEnvelope
   return {
@@ -38,14 +52,31 @@ function syntheticEntryRecord(record: SourceRecord, entry: Record<string, unknow
 }
 
 function isTransportEchoRecord(record: SourceRecord): boolean {
-  const envelope = asRecord(record.payload)
-  const entry = asRecord(envelope.entry)
-  const payload = asRecord(entry.payload)
+  const { entry, payload } = rolloutEntry(record)
   if (entry.type !== 'response_item' || payload.type !== 'message') return false
   const role = stringField(payload, 'role')?.toLowerCase()
   if (role !== 'user') return false
   const text = messageText(payload.content ?? payload.text ?? '')
   return contextClassification(role, text).kind === 'transport-echo'
+}
+
+function isNonActivitySnapshotRecord(record: SourceRecord): boolean {
+  const { entry } = rolloutEntry(record)
+  return typeof entry.type === 'string' && NON_ACTIVITY_ROLLOUT_TYPES.has(entry.type)
+}
+
+function isEmptyLegacyAssistantOrReasoning(record: SourceRecord): boolean {
+  const { entry, payload } = rolloutEntry(record)
+  if (entry.type !== 'event_msg') return false
+  if (payload.type === 'agent_message') {
+    const text = stringField(payload, 'message', 'text') ?? messageText(payload.content)
+    return !text.trim()
+  }
+  if (payload.type === 'agent_reasoning' || payload.type === 'agent_reasoning_raw_content') {
+    const text = stringField(payload, 'text') ?? messageText(payload.content)
+    return !text.trim()
+  }
+  return false
 }
 
 type AssistantEvent = {
@@ -56,9 +87,7 @@ type AssistantEvent = {
 }
 
 function directAssistantEvent(record: SourceRecord): AssistantEvent | null {
-  const envelope = asRecord(record.payload)
-  const entry = asRecord(envelope.entry)
-  const payload = asRecord(entry.payload)
+  const { entry, payload } = rolloutEntry(record)
   if (entry.type !== 'event_msg' || payload.type !== 'agent_message') return null
 
   const text = stringField(payload, 'message', 'text') ?? messageText(payload.content)
@@ -73,9 +102,7 @@ function directAssistantEvent(record: SourceRecord): AssistantEvent | null {
 }
 
 function directRawReasoning(record: SourceRecord): Record<string, unknown> | null {
-  const envelope = asRecord(record.payload)
-  const entry = asRecord(envelope.entry)
-  const payload = asRecord(entry.payload)
+  const { entry, payload } = rolloutEntry(record)
   if (entry.type !== 'event_msg' || payload.type !== 'agent_reasoning_raw_content') return null
   return stringField(payload, 'text') ? payload : null
 }
@@ -88,9 +115,7 @@ type PersistedThreadMetadataEvent = {
 }
 
 function persistedThreadMetadataEvent(record: SourceRecord): PersistedThreadMetadataEvent | null {
-  const envelope = asRecord(record.payload)
-  const entry = asRecord(envelope.entry)
-  const payload = asRecord(entry.payload)
+  const { entry, payload } = rolloutEntry(record)
   if (entry.type !== 'event_msg') return null
 
   if (payload.type === 'thread_goal_updated') {
@@ -111,6 +136,11 @@ function persistedThreadMetadataEvent(record: SourceRecord): PersistedThreadMeta
     }
   }
   return null
+}
+
+function interAgentCommunication(record: SourceRecord): Record<string, unknown> | null {
+  const { entry, payload } = rolloutEntry(record)
+  return entry.type === 'inter_agent_communication' ? payload : null
 }
 
 function asAssistantResponseItem(record: SourceRecord, event: AssistantEvent): SourceRecord {
@@ -195,13 +225,31 @@ async function normalizePersistedThreadMetadata(
   }
 }
 
-async function normalizeTransportEcho(
+async function normalizeInterAgentCommunication(
+  record: SourceRecord,
+  ctx: SourceNormalizationContext,
+  payload: Record<string, unknown>,
+): Promise<NormalizedSourceOutput> {
+  const output = await normalizeCodexRecord(record, ctx)
+  return {
+    ...output,
+    observations: output.observations.map(observation => observation.kind === 'unknown'
+      ? {
+          ...observation,
+          kind: 'session.lifecycle',
+          payload: {
+            ...payload,
+            event: 'subagent.communication',
+          },
+        }
+      : observation),
+  }
+}
+
+async function normalizeWithoutActivity(
   record: SourceRecord,
   ctx: SourceNormalizationContext,
 ): Promise<NormalizedSourceOutput> {
-  // response_item/message role=user 的纯对话回显不是新的用户活动。
-  // 保留 SourceRecord/Evidence，但不进入 Canonical Observation；
-  // runtime/permissions 等结构化注入仍由通用 normalizer 保留为 context.injected。
   const normalized = await normalizeCodexRecord(record, ctx)
   return {
     ...normalized,
@@ -214,15 +262,18 @@ async function normalizeTransportEcho(
  * - Legacy: user_message / agent_message / reasoning events.
  * - Paginated: event_msg.item_completed with a structured TurnItem.
  *
- * Persistent thread metadata events are mapped explicitly as lifecycle facts.
- * We only dispatch on native structure here. Authorship and activity ownership
- * are never inferred from message text.
+ * State snapshots and model-invisible presentation facts remain available as
+ * SourceRecord/Evidence but do not manufacture Review activities. Persistent
+ * thread metadata and inter-agent communication are mapped explicitly.
+ * Authorship and activity ownership are never inferred from message text.
  */
 export async function normalizeCurrentCodexRecord(
   record: SourceRecord,
   ctx: SourceNormalizationContext,
 ): Promise<NormalizedSourceOutput> {
-  if (isTransportEchoRecord(record)) return normalizeTransportEcho(record, ctx)
+  if (isTransportEchoRecord(record) || isNonActivitySnapshotRecord(record) || isEmptyLegacyAssistantOrReasoning(record)) {
+    return normalizeWithoutActivity(record, ctx)
+  }
 
   const functionOutput = await normalizePaginatedFunctionOutput(record, ctx)
   if (functionOutput) return functionOutput
@@ -232,6 +283,9 @@ export async function normalizeCurrentCodexRecord(
 
   const threadMetadata = persistedThreadMetadataEvent(record)
   if (threadMetadata) return normalizePersistedThreadMetadata(record, ctx, threadMetadata)
+
+  const communication = interAgentCommunication(record)
+  if (communication) return normalizeInterAgentCommunication(record, ctx, communication)
 
   const rawReasoning = directRawReasoning(record)
   if (rawReasoning) return normalizeDirectRawReasoning(record, ctx, rawReasoning)
@@ -250,5 +304,8 @@ export const currentCodexProtocolInternals = {
   directAssistantEvent,
   directRawReasoning,
   isTransportEchoRecord,
+  isNonActivitySnapshotRecord,
+  isEmptyLegacyAssistantOrReasoning,
   persistedThreadMetadataEvent,
+  interAgentCommunication,
 }
