@@ -176,3 +176,9 @@ test('ReviewProjection localizes real lifecycle actions instead of collapsing th
   assert.equal(label({ action: 'session_interrupted' }), '会话中断')
   assert.equal(label({ event: 'vendor.future.lifecycle' }), '会话状态变化')
 })
+
+test('ReviewProjection localizes subagent communication and reasoning configuration updates', () => {
+  const localizeNode = reviewProjectionInternals.localizeNode
+  assert.equal(localizeNode({ kind: 'subagent.communication', payload: {}, label: 'subagent.communication' } as any).label, '子 Agent 通信')
+  assert.equal(localizeNode({ kind: 'reasoning.configuration.updated', payload: {}, label: 'reasoning.configuration.updated' } as any).label, '推理配置更新')
+})
