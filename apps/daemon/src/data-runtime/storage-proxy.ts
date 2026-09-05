@@ -132,6 +132,26 @@ function namespaceProxy<T extends object>(
   }) as T
 }
 
+function sessionSummaryProxy(executor: RemoteStorageExecutor): SessionSummaryProjectionStore {
+  return {
+    query: input => executor.call(['sessionSummaryProjection', 'query'], [input]),
+    isMaterialized: () => executor.call(['sessionSummaryProjection', 'isMaterialized']),
+    rebuild: input => {
+      const portable = input
+        ? {
+            ...(input.logicalSessionId ? { logicalSessionId: input.logicalSessionId } : {}),
+            ...(input.strategy ? { strategy: input.strategy } : {}),
+          }
+        : undefined
+      return executor.call(
+        ['sessionSummaryProjection', 'rebuild'],
+        portable ? [portable] : [],
+        { forceWriter: true },
+      )
+    },
+  }
+}
+
 export interface DataRuntimeHealthSnapshot {
   writer: DataRuntimeClientSnapshot
   reader: DataRuntimeClientSnapshot
@@ -230,7 +250,7 @@ export class DataRuntimeStorageService implements StorageService {
     }
     this.checkpoints = namespaceProxy(executor, ['checkpoints'])
     this.assetInventory = namespaceProxy(executor, ['assetInventory'])
-    const summaries = namespaceProxy<SessionSummaryProjectionStore>(executor, ['sessionSummaryProjection'])
+    const summaries = sessionSummaryProxy(executor)
     this.sessionSummaries = summaries
     this.sessionSummaryProjection = summaries
     this.toolUsageObservations = namespaceProxy(executor, ['toolUsageObservations'])
@@ -302,6 +322,7 @@ export function createDataRuntimeStorage(
 export const dataRuntimeStorageInternals = {
   isReadPath,
   timeoutFor,
+  sessionSummaryProxy,
   READ_TIMEOUT_MS,
   WRITE_TIMEOUT_MS,
   MAINTENANCE_TIMEOUT_MS,
