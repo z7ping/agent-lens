@@ -13,6 +13,9 @@ export const MAINTENANCE_PRIORITY = {
   cleanup: 70,
 } as const
 
+const TRANSIENT_RETRY_LIMIT = 5
+const TRANSIENT_RETRY_DELAY_MS = 1_000
+
 export interface MaintenanceJobSpec {
   id: string
   type: MaintenanceJobType
@@ -23,7 +26,7 @@ export interface MaintenanceJobSpec {
 
 export interface MaintenanceJobContext {
   readonly signal: AbortSignal
-  /** Persisted progress from a previous run, if any. */
+  /** Persisted progress from the latest successful batch, if any. */
   readonly initialProgress?: JsonValue
   report(progress: JsonValue): Promise<boolean>
 }
@@ -36,6 +39,25 @@ export interface MaintenanceJobRunResult<T> {
 
 function errorSummary(error: unknown): string {
   return (error instanceof Error ? `${error.name}: ${error.message}` : String(error)).slice(0, 2000)
+}
+
+function transientDataRuntimeError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return /Data Runtime/i.test(message)
+    && /(unavailable|not started|timed out|worker|request limit|degraded)/i.test(message)
+}
+
+function waitForRetry(signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.resolve()
+  return new Promise(resolve => {
+    const timer = setTimeout(resolve, TRANSIENT_RETRY_DELAY_MS)
+    const onAbort = () => {
+      clearTimeout(timer)
+      resolve()
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+    timer.unref?.()
+  })
 }
 
 export async function runMaintenanceJob<T>(
@@ -51,7 +73,6 @@ export async function runMaintenanceJob<T>(
   }
 
   let job = await store.ensure(spec)
-  const initialProgress = job.progress
   if (signal.aborted) {
     const paused = await store.transition(job.id, job.revision, { state: 'paused' })
     return { status: 'paused', job: paused ?? job }
@@ -67,39 +88,62 @@ export async function runMaintenanceJob<T>(
   }
   job = running
 
-  const context: MaintenanceJobContext = {
+  const createContext = (): MaintenanceJobContext => ({
     signal,
-    ...(initialProgress === undefined ? {} : { initialProgress }),
+    ...(job.progress === undefined ? {} : { initialProgress: job.progress }),
     async report(progress) {
       const next = await store.transition(job.id, job.revision, { state: 'running', progress })
       if (!next) return false
       job = next
       return true
     },
+  })
+
+  let transientAttempts = 0
+  while (!signal.aborted) {
+    try {
+      const value = await operation(createContext())
+      if (signal.aborted) {
+        const paused = await store.transition(job.id, job.revision, { state: 'paused' })
+        return { status: 'paused', value, job: paused ?? job }
+      }
+      const completed = await store.transition(job.id, job.revision, {
+        state: 'completed',
+        ...(completeProgress ? { progress: completeProgress(value) } : {}),
+      })
+      if (!completed) {
+        const latest = await store.get(job.id)
+        return { status: 'contended', value, job: latest ?? job }
+      }
+      return { status: 'completed', value, job: completed }
+    } catch (error) {
+      if (transientDataRuntimeError(error) && transientAttempts < TRANSIENT_RETRY_LIMIT) {
+        transientAttempts += 1
+        await waitForRetry(signal)
+        if (signal.aborted) break
+        const latest = await store.get(job.id)
+        if (!latest || latest.revision !== job.revision) {
+          return { status: 'contended', job: latest ?? job }
+        }
+        job = latest
+        continue
+      }
+
+      const failed = await store.transition(job.id, job.revision, {
+        state: 'failed',
+        errorSummary: errorSummary(error),
+      })
+      job = failed ?? job
+      throw error
+    }
   }
 
-  try {
-    const value = await operation(context)
-    if (signal.aborted) {
-      const paused = await store.transition(job.id, job.revision, { state: 'paused' })
-      return { status: 'paused', value, job: paused ?? job }
-    }
-    const completed = await store.transition(job.id, job.revision, {
-      state: 'completed',
-      ...(completeProgress ? { progress: completeProgress(value) } : {}),
-    })
-    if (!completed) {
-      const latest = await store.get(job.id)
-      return { status: 'contended', value, job: latest ?? job }
-    }
-    return { status: 'completed', value, job: completed }
-  } catch (error) {
-    const failed = await store.transition(job.id, job.revision, {
-      state: signal.aborted ? 'paused' : 'failed',
-      ...(!signal.aborted ? { errorSummary: errorSummary(error) } : {}),
-    })
-    job = failed ?? job
-    if (signal.aborted) return { status: 'paused', job }
-    throw error
-  }
+  const paused = await store.transition(job.id, job.revision, { state: 'paused' })
+  return { status: 'paused', job: paused ?? job }
+}
+
+export const maintenanceJobInternals = {
+  transientDataRuntimeError,
+  TRANSIENT_RETRY_LIMIT,
+  TRANSIENT_RETRY_DELAY_MS,
 }
