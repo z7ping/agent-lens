@@ -19,12 +19,22 @@ function duration(ms: number): string {
 
 function rateValue(success: number, error: number): number | null {
   const total = success + error
-  return total ? Math.round(success / total * 100) : null
+  if (!total) return null
+  const rounded = Math.round(success / total * 1000) / 10
+  return error > 0 ? Math.min(99.9, rounded) : rounded
 }
 
 function rate(success: number, error: number): string {
-  const total = success + error
-  return total ? `${rateValue(success, error)}%` : '—'
+  const value = rateValue(success, error)
+  if (value === null) return '—'
+  return `${Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1)}%`
+}
+
+function rangeLabel(range: 'today' | '7d' | '30d' | 'all'): string {
+  if (range === 'today') return '今天'
+  if (range === '7d') return '最近 7 天'
+  if (range === '30d') return '最近 30 天'
+  return '全部时间'
 }
 
 function assetTypeLabel(type: string): string {
@@ -83,6 +93,7 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
   const activeFilterCount = [Boolean(usage.filters.sourceId), Boolean(usage.filters.projectId), usage.filters.range !== 'all'].filter(Boolean).length
   const blockingError = Boolean(usage.error && !data)
   const [selectedToolKey, setSelectedToolKey] = useState<string | null>(null)
+  const [showAllSessions, setShowAllSessions] = useState(false)
   const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'callCount', direction: 'descending' })
   const selectedTool = useMemo(() => tools.find(tool => toolKey(tool.sourceIds, tool.nativeToolName) === selectedToolKey), [selectedToolKey, tools])
   const sessionSummaries = useMemo(() => new Map((snapshot.review.response?.items ?? []).map(item => [item.id, item])), [snapshot.review.response?.items])
@@ -91,7 +102,13 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
     if (delta === 0) return a.nativeToolName.localeCompare(b.nativeToolName)
     return sort.direction === 'ascending' ? delta : -delta
   }), [tools, sort])
+  const selectedProject = projects.find(project => project.id === usage.filters.projectId)
+  const filterSummary = `${rangeLabel(usage.filters.range)} · ${usage.filters.projectId ? selectedProject?.name ?? selectedProject?.repositoryIdentity ?? '当前项目' : '全部项目'}`
 
+  const selectTool = (key: string) => {
+    setShowAllSessions(false)
+    setSelectedToolKey(key)
+  }
   const toggleSort = (key: SortKey) => {
     setSort(current => current.key === key
       ? { key, direction: current.direction === 'descending' ? 'ascending' : 'descending' }
@@ -124,13 +141,14 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
     ...projects.map(project => ({ value: project.id, label: project.name ?? project.repositoryIdentity ?? project.id, description: project.repositoryIdentity ?? undefined })),
   ]
   const sidebarFilters = <div className="workspace-insight-filters" aria-label="工具分析筛选">
-    <Disclosure className="workspace-insight-filter-disclosure" summary="筛选" summaryMeta={activeFilterCount ? `${activeFilterCount}` : undefined}>
+    <Disclosure className="workspace-insight-filter-disclosure" summary={filterSummary} summaryMeta={activeFilterCount > 1 ? `${activeFilterCount}` : undefined}>
       <div className="workspace-insight-filter-fields">
         <label><span>智能体</span><SelectMenu variant="field" value={usage.filters.sourceId} onChange={sourceId => model.setUsageFilters({ sourceId })} ariaLabel="筛选智能体" placeholder="全部智能体" menuWidth={260} options={agentFilterOptions}/></label>
         <label><span>项目</span><SelectMenu variant="field" value={usage.filters.projectId} onChange={projectId => model.setUsageFilters({ projectId })} ariaLabel="筛选项目" placeholder="全部项目" menuWidth={280} searchable searchPlaceholder="搜索项目" options={projectFilterOptions}/></label>
         <label><span>时间</span><SelectMenu variant="field" value={usage.filters.range} onChange={range => model.setUsageFilters({ range: range as typeof usage.filters.range })} ariaLabel="筛选时间范围" menuWidth={156} options={[
           { value: 'today', label: '今天' }, { value: '7d', label: '最近 7 天' }, { value: '30d', label: '最近 30 天' }, { value: 'all', label: '全部时间' },
         ]}/></label>
+        {canRelaxFilters && <button type="button" className="workspace-filter-clear" onClick={relaxFilters}>清除筛选</button>}
       </div>
     </Disclosure>
     <IconButton size="small" onClick={() => void model.refreshUsage()} title="刷新工具分析" aria-label="刷新工具分析"><UiIcon name="refresh" size={14}/></IconButton>
@@ -168,11 +186,11 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
                   const successRate = rateValue(tool.successCount, tool.errorCount)
                   const key = toolKey(tool.sourceIds, tool.nativeToolName)
                   const kind = toolVisualKind(tool.nativeToolName)
-                  return <tr key={key} tabIndex={0} onClick={() => setSelectedToolKey(key)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedToolKey(key) } }}>
+                  return <tr key={key} tabIndex={0} onClick={() => selectTool(key)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectTool(key) } }}>
                     <td><span className="tool-table-name"><ToolKindIcon kind={kind}/><span><b className="tool-name">{tool.nativeToolName}</b><span className="tool-source">{sourceLabels(tool.sourceIds)}</span></span></span></td>
                     <td><span className="tool-bar-cell"><span>{tool.callCount}</span><span className="metric-bar" aria-hidden="true"><i style={{ width: `${Math.max(4, tool.callCount / maxCalls * 100)}%` }}/></span></span></td>
                     <td>{tool.sessionCount}</td>
-                    <td><span className="tool-rate-cell" data-rate={successRate === null ? 'unknown' : successRate >= 95 ? 'good' : successRate >= 80 ? 'mid' : 'low'}><span>{rate(tool.successCount, tool.errorCount)}</span><span className="metric-bar" aria-hidden="true"><i style={{ width: `${successRate ?? 0}%` }}/></span></span></td>
+                    <td><span className="tool-rate-cell" data-rate={successRate === null ? 'unknown' : tool.errorCount > 0 ? 'mid' : successRate >= 95 ? 'good' : successRate >= 80 ? 'mid' : 'low'}><span>{rate(tool.successCount, tool.errorCount)}</span><span className="metric-bar" aria-hidden="true"><i style={{ width: `${successRate ?? 0}%` }}/></span></span></td>
                     <td className={tool.errorCount ? 'cell-danger' : 'cell-muted'}>{tool.errorCount}</td><td>{duration(tool.averageDurationMs)}</td>
                   </tr>
                 })}</tbody>
@@ -189,12 +207,12 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
           {(mostErrors || slowest) && <section className="tool-attention">
             <div className="section-heading-row"><div><h3>需要关注</h3><p>只列当前筛选范围内有事实支撑的异常与耗时项。</p></div></div>
             <div className="tool-attention-list">
-              {mostErrors && <button className="tool-attention-row" onClick={() => setSelectedToolKey(toolKey(mostErrors.sourceIds, mostErrors.nativeToolName))}>
+              {mostErrors && <button className="tool-attention-row" onClick={() => selectTool(toolKey(mostErrors.sourceIds, mostErrors.nativeToolName))}>
                 <span className="tool-attention-badge is-danger">失败集中</span>
                 <span><b>{mostErrors.nativeToolName}</b><small>{mostErrors.errorCount} 次已知失败 · 成功率 {rate(mostErrors.successCount, mostErrors.errorCount)}</small></span>
                 <strong>{mostErrors.errorCount} 次</strong>
               </button>}
-              {slowest && <button className="tool-attention-row" onClick={() => setSelectedToolKey(toolKey(slowest.sourceIds, slowest.nativeToolName))}>
+              {slowest && <button className="tool-attention-row" onClick={() => selectTool(toolKey(slowest.sourceIds, slowest.nativeToolName))}>
                 <span className="tool-attention-badge is-warning">平均最慢</span>
                 <span><b>{slowest.nativeToolName}</b><small>{slowest.callCount} 次调用 · {slowest.sessionCount} 个会话</small></span>
                 <strong>{duration(slowest.averageDurationMs)}</strong>
@@ -226,9 +244,9 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
             <div className="tool-drill-stat"><b>{duration(selectedTool.averageDurationMs)}</b><span>平均耗时</span></div>
           </div>
           <section className="tool-session-section">
-            <div className="table-section-head"><div><h2>会话分布 · Top 3</h2><p>按该工具在会话中的调用次数排序 · 点击直接进入任务复盘</p></div></div>
+            <div className="table-section-head"><div><h2>关联会话</h2><p>按该工具在会话中的调用次数排序 · 点击直接进入任务复盘</p></div></div>
             <div className="tool-session-list">
-              {selectedTool.sessions.slice(0, 3).map(session => {
+              {(showAllSessions ? selectedTool.sessions : selectedTool.sessions.slice(0, 3)).map(session => {
                 const summary = sessionSummaries.get(session.logicalSessionId)
                 const label = summary?.title ?? summary?.preview ?? `会话 ${shortSessionId(session.logicalSessionId)}`
                 const max = selectedTool.sessions[0]?.callCount ?? 1
@@ -240,9 +258,9 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
               })}
               {!selectedTool.sessions.length && <div className="tool-drill-note">当前范围没有可定位的会话记录。</div>}
             </div>
-            {selectedTool.sessions.length > 3 && <div className="tool-drill-note">前 3 个会话 · 共 {selectedTool.sessions.length} 个。完整调用过程、输入输出和 Evidence（证据）在任务复盘中查看。</div>}
+            {selectedTool.sessions.length > 3 && <button type="button" className="tool-session-toggle" onClick={() => setShowAllSessions(value => !value)}>{showAllSessions ? '收起关联会话' : `查看全部 ${selectedTool.sessions.length} 个关联会话`}</button>}
           </section>
-          {selectedTool.errorCount > 0 && <div className="tool-drill-note">当前聚合接口只提供失败次数和相关会话，不包含可安全展示的逐次错误载荷；错误示例请进入上方相关会话查看，避免用推测内容冒充事实。</div>}
+          {selectedTool.errorCount > 0 && <div className="tool-drill-note">该工具有 {selectedTool.errorCount} 次明确失败。查看错误上下文、输入输出和证据，请打开上方相关会话。</div>}
         </div>
       </Drawer>}
     </main>
