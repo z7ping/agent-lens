@@ -158,30 +158,6 @@ function localizeLifecycle(detail: ReviewSessionDetailDto): ReviewSessionDetailD
   }
 }
 
-function isTransportEchoNode(node: ReviewInteractionDto['nodes'][number]): boolean {
-  if (node.type !== 'event' || node.kind !== 'context.injected') return false
-  const provenance = asRecord(asRecord(node.payload).provenance)
-  return provenance.activityType === 'transport-echo'
-    || provenance.transportEcho === true
-}
-
-function suppressTransportEcho(detail: ReviewSessionDetailDto): ReviewSessionDetailDto {
-  const interactions = detail.interactions
-    .map(interaction => ({
-      ...interaction,
-      nodes: interaction.nodes.filter(node => !isTransportEchoNode(node)),
-    }))
-    .filter(interaction => interaction.nodes.length > 0)
-  return {
-    ...detail,
-    interactions,
-    page: {
-      ...detail.page,
-      count: interactions.length,
-    },
-  }
-}
-
 type ReviewSessionActivity = ReviewSessionSummaryDto['sessionActivity']
 
 function resolveSessionActivity(
@@ -225,7 +201,7 @@ export class ReviewProjection extends BaseReviewProjection {
   ): Promise<ReviewSessionDetailDto | null> {
     const detail = await super.get(logicalSessionId, query)
     return detail
-      ? normalizeReviewSummaryActivity(suppressTransportEcho(localizeLifecycle(boundReviewDetail(detail))))
+      ? normalizeReviewSummaryActivity(localizeLifecycle(boundReviewDetail(detail)))
       : null
   }
 }
@@ -236,8 +212,6 @@ export const reviewProjectionInternals = {
   localizeLifecycle,
   boundInteractionNodes,
   boundReviewDetail,
-  isTransportEchoNode,
-  suppressTransportEcho,
   resolveSessionActivity,
   normalizeReviewSummaryActivity,
   maxReviewInteractionNodes: MAX_REVIEW_INTERACTION_NODES,
