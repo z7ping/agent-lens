@@ -23,28 +23,47 @@ function record(payload: Record<string, unknown>, nativeSessionId: string): Sour
       entry: { type: 'session_meta', payload },
       session: { nativeSessionId, cwd: '/safe/project' },
     },
-    parserVersion: '13',
+    parserVersion: '14',
   }
 }
 
 test('parent_thread_id is a subagent signal even when legacy metadata omits thread_source details', async () => {
   const output = await codexSourceDefinition.normalize(record({
     id: 'child-thread',
+    session_id: 'shared-session',
     parent_thread_id: 'root-thread',
     source: 'cli',
   }, 'child-thread'), ctx)
 
   assert.equal((output.observations[0]?.payload as any).sessionActivity, 'subagent')
+  assert.equal((output.observations[0]?.payload as any).parentSessionId, 'root-thread')
   assert.equal(output.sessionRelationshipHints?.find(item => item.fromNativeSessionId === 'root-thread')?.type, 'subagent')
 })
 
-test('user thread without parent remains a real user task', async () => {
+test('shared session_id does not turn a root user thread into system activity', async () => {
   const output = await codexSourceDefinition.normalize(record({
-    session_id: 'root-thread',
+    id: 'root-thread',
+    session_id: 'shared-session',
     source: 'vscode',
     thread_source: 'user',
   }, 'root-thread'), ctx)
 
   assert.equal((output.observations[0]?.payload as any).sessionActivity, 'user-task')
+  assert.equal((output.observations[0]?.payload as any).parentSessionId, undefined)
+  assert.equal((output.observations[0]?.payload as any).rootSessionId, undefined)
   assert.equal(output.sessionRelationshipHints?.length ?? 0, 0)
+})
+
+test('forked_from_id remains an explicit branch relationship independent of session_id', async () => {
+  const output = await codexSourceDefinition.normalize(record({
+    id: 'fork-thread',
+    session_id: 'shared-session',
+    forked_from_id: 'root-thread',
+    source: 'vscode',
+    thread_source: 'user',
+  }, 'fork-thread'), ctx)
+
+  assert.equal((output.observations[0]?.payload as any).sessionActivity, 'branch-task')
+  assert.equal((output.observations[0]?.payload as any).parentSessionId, 'root-thread')
+  assert.equal(output.sessionRelationshipHints?.find(item => item.fromNativeSessionId === 'root-thread')?.type, 'branch-task')
 })
