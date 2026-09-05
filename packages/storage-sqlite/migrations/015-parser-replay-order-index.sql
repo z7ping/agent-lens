@@ -1,5 +1,3 @@
--- Parser replay drains one stale parser version at a time and paginates by (captured_at, id).
--- Keep the equality filters and ordering in one covering index prefix so large histories do not
--- fall back to idx_source_records_native + temporary B-Tree sorting.
-CREATE INDEX IF NOT EXISTS idx_source_records_parser_replay
-ON source_records(source_id, installation_id, parser_version, captured_at, id);
+-- Parser replay 专用索引可能在大库上构建很久，不能阻塞 Daemon/HTTP 启动。
+-- Schema 15 仅保留版本边界；索引由 SqliteStorageMaintenance.ensureDeferredIndexes()
+-- 在 HTTP 已可用且前台空闲后显式创建。
