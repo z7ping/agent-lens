@@ -15,16 +15,20 @@ async function createStorage() {
   return storage
 }
 
-test('SQLite storage migrates to schema version 15 and exposes required tables', async () => {
+test('SQLite storage migrates to schema version 19 and exposes required tables', async () => {
   const storage = await createStorage()
   try {
     const health = await storage.health()
     assert.equal(health.ok, true)
-    assert.equal(health.schemaVersion, 15)
+    assert.equal(health.schemaVersion, 19)
     const growth = (health.details as any)?.dataGrowth
     assert.equal(growth.capacity.softLimitBytes, 512 * 1024 * 1024)
     assert.equal(growth.capacity.state, 'healthy')
     assert.equal(typeof growth.reclaimableBytes, 'number')
+    assert.equal((health.details as any)?.unknownObservations, undefined)
+    assert.equal((health.details as any)?.coverage, undefined)
+    assert.equal(growth.totals, undefined)
+    assert.equal(growth.last7Days, undefined)
 
     const rows = storage.db.prepare(`
       SELECT name FROM sqlite_master
@@ -57,6 +61,8 @@ test('SQLite storage migrates to schema version 15 and exposes required tables',
       'asset_state_observations',
       'tool_definitions',
       'session_summary_projection',
+      'unknown_observation_projection',
+      'tool_usage_fact_projection',
       'replication_streams',
       'replication_entity_state',
       'replication_pending_entities',
@@ -82,6 +88,9 @@ test('SQLite storage migrates to schema version 15 and exposes required tables',
     assert.equal(sourceSessionColumns.some(column => column.name === 'runtime_profile_id'), true)
     const bindingColumns = storage.db.prepare('PRAGMA table_info(asset_bindings)').all() as Array<{ name: string }>
     assert.equal(bindingColumns.some(column => column.name === 'runtime_profile_id'), true)
+    const sourceRecordColumns = storage.db.prepare('PRAGMA table_info(source_records)').all() as Array<{ name: string }>
+    assert.equal(sourceRecordColumns.some(column => column.name === 'payload_encoding'), true)
+    assert.equal(sourceRecordColumns.some(column => column.name === 'payload_blob'), true)
   } finally {
     storage.close()
   }
