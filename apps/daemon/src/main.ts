@@ -48,6 +48,10 @@ import {
   attachHttpForegroundActivity,
   ForegroundActivityGate,
 } from './maintenance-idle.js'
+import {
+  compressLegacySourceRecords,
+  type SourceRecordCompressionMaintenance,
+} from './storage-maintenance.js'
 import { profiledDshSourcePlugin } from './sources/dsh-profiled.js'
 
 const nodeRuntime = resolveAgentLensNodeRuntime()
@@ -329,6 +333,36 @@ try {
         )
       }
       await yieldToForeground(runtimeController.signal)
+    }
+
+    if (runtimeController.signal.aborted) return
+    const compressionMaintenance = (
+      app.context.storage as typeof app.context.storage & { maintenance?: SourceRecordCompressionMaintenance }
+    ).maintenance
+    try {
+      const compression = await compressLegacySourceRecords(
+        compressionMaintenance,
+        gate,
+        runtimeController.signal,
+        {
+          batchSize: 50,
+          onBatch(batch) {
+            if (!batch.scanned) return
+            console.info(
+              `[AgentLens] SourceRecord compression: scanned=${batch.scanned} compressed=${batch.compressed} plain=${batch.plain} saved=${batch.savedBytes}`,
+            )
+          },
+        },
+      )
+      if (compression.scanned > 0) {
+        console.info(
+          `[AgentLens] SourceRecord compression completed: scanned=${compression.scanned} compressed=${compression.compressed} plain=${compression.plain} saved=${compression.savedBytes} batches=${compression.batches}`,
+        )
+      }
+    } catch (error) {
+      if (!runtimeController.signal.aborted) {
+        console.error('[AgentLens] SourceRecord compression maintenance failed', error)
+      }
     }
   })()
   await syncPromise
