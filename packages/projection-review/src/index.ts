@@ -153,6 +153,56 @@ function boundReviewDetail(detail: ReviewSessionDetailDto): ReviewSessionDetailD
   }
 }
 
+function normalizeOrphanToolResults(detail: ReviewSessionDetailDto): ReviewSessionDetailDto {
+  return {
+    ...detail,
+    interactions: detail.interactions.map(interaction => ({
+      ...interaction,
+      nodes: interaction.nodes.map(node => {
+        if (node.type !== 'event' || node.kind !== 'tool.result') return node
+        const payload = asRecord(node.payload)
+        const callId = stringField(payload, 'callId', 'call_id', 'toolUseId', 'tool_use_id')
+        const name = stringField(payload, 'nativeToolName', 'toolName', 'tool_name', 'name') ?? 'Tool'
+        const rawDuration = payload.durationMs ?? payload.duration_ms
+        const durationMs = typeof rawDuration === 'number' && Number.isFinite(rawDuration) && rawDuration >= 0
+          ? rawDuration
+          : undefined
+        const status = payload.success === false
+          ? 'error' as const
+          : payload.success === true
+            ? 'success' as const
+            : 'unknown' as const
+        const output = payload.output !== undefined
+          ? payload.output
+          : payload.result !== undefined
+            ? payload.result
+            : node.payload
+        return {
+          type: 'tool' as const,
+          id: node.id,
+          at: node.at,
+          sourceId: node.sourceId,
+          name,
+          ...(callId ? { callId } : {}),
+          status,
+          startedAt: node.at,
+          endedAt: node.at,
+          ...(durationMs === undefined ? {} : { durationMs }),
+          output: output as JsonValue,
+          payload: node.payload,
+          evidence: node.evidence,
+          observationIds: node.observationIds,
+          ...(node.nativeEventId ? { nativeEventId: node.nativeEventId } : {}),
+          ...(node.nativeParentEventId ? { nativeParentEventId: node.nativeParentEventId } : {}),
+          ...(node.parentObservationId ? { parentObservationId: node.parentObservationId } : {}),
+          ...(node.occurredAt ? { occurredAt: node.occurredAt } : {}),
+          capturedAt: node.capturedAt,
+        }
+      }),
+    })),
+  }
+}
+
 function localizeLifecycle(detail: ReviewSessionDetailDto): ReviewSessionDetailDto {
   return {
     ...detail,
@@ -208,7 +258,7 @@ export class ReviewProjection extends BaseReviewProjection {
   ): Promise<ReviewSessionDetailDto | null> {
     const detail = await super.get(logicalSessionId, query)
     return detail
-      ? normalizeReviewSummaryActivity(localizeLifecycle(boundReviewDetail(detail)))
+      ? normalizeReviewSummaryActivity(localizeLifecycle(normalizeOrphanToolResults(boundReviewDetail(detail))))
       : null
   }
 }
@@ -217,6 +267,7 @@ export const reviewProjectionInternals = {
   ...baseReviewProjectionInternals,
   lifecycleEventLabel,
   localizeLifecycle,
+  normalizeOrphanToolResults,
   boundInteractionNodes,
   boundReviewDetail,
   resolveSessionActivity,
