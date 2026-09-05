@@ -1,4 +1,4 @@
-import { parentPort, workerData } from 'node:worker_threads'
+import { parentPort, threadId, workerData } from 'node:worker_threads'
 import {
   DATA_RUNTIME_MAX_MESSAGE_BYTES,
   DATA_RUNTIME_PROTOCOL_VERSION,
@@ -60,7 +60,7 @@ parentPort.on('message', async value => {
       reply(value.requestId, {
         ok: true,
         protocolVersion: DATA_RUNTIME_PROTOCOL_VERSION,
-        threadId: process.pid,
+        threadId,
         startedAt,
         uptimeMs: Date.now() - startedAt,
       })
