@@ -9,22 +9,9 @@ CREATE TABLE IF NOT EXISTS unknown_observation_projection (
 CREATE INDEX IF NOT EXISTS idx_unknown_observation_projection_group
 ON unknown_observation_projection(source_id, native_type, last_seen_at DESC, observation_id);
 
--- Initial rebuild from canonical observations. One observation contributes at most once per
--- source/native-type group even when several Evidence rows support it.
-INSERT OR REPLACE INTO unknown_observation_projection(
-  observation_id, source_id, native_type, last_seen_at
-)
-SELECT DISTINCT
-  o.id,
-  sr.source_id,
-  sr.native_type,
-  COALESCE(o.occurred_at, o.captured_at)
-FROM observations o
-JOIN observation_evidence oe ON oe.observation_id = o.id
-JOIN evidence e ON e.id = oe.evidence_id
-JOIN source_records sr ON sr.id = e.source_record_id
-WHERE o.kind = 'unknown';
-
+-- Historical backfill is deliberately not performed in schema migration.
+-- New/changed rows stay correct through triggers; existing history is rebuilt by
+-- the resumable background Maintenance Job after the HTTP control plane is ready.
 CREATE TRIGGER IF NOT EXISTS trg_unknown_projection_observation_update
 AFTER UPDATE OF kind, occurred_at, captured_at ON observations
 BEGIN
