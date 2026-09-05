@@ -15,6 +15,7 @@ function mapCandidate(row: {
   source_id: string
   installation_id: string
   runtime_profile_id: string | null
+  source_record_id: string | null
   from_native_session_id: string
   to_native_session_id: string
   native_parent_event_id: string | null
@@ -27,6 +28,7 @@ function mapCandidate(row: {
     sourceId: row.source_id,
     installationId: row.installation_id,
     ...(row.runtime_profile_id ? { runtimeProfileId: row.runtime_profile_id } : {}),
+    ...(row.source_record_id ? { sourceRecordId: row.source_record_id } : {}),
     fromNativeSessionId: row.from_native_session_id,
     toNativeSessionId: row.to_native_session_id,
     ...(row.native_parent_event_id ? { nativeParentEventId: row.native_parent_event_id } : {}),
@@ -45,17 +47,20 @@ export class SqliteSessionRelationshipCandidateRepository {
       candidate.sourceId,
       candidate.installationId,
       candidate.runtimeProfileId ?? '',
+      candidate.sourceRecordId ?? '',
       candidate.fromNativeSessionId,
       candidate.toNativeSessionId,
       candidate.nativeParentEventId ?? '',
       candidate.nativeRelation ?? '',
     ])
     await this.executor.run(() => {
-      // 同一个原生关系信号只保留当前 Parser 判定，task-root 与直接父关系是不同信号，可同时存在。
+      // 同一个 SourceRecord 的同一原生关系信号只保留当前 Parser 判定。
+      // 不同 SourceRecord 可以独立支持同一 canonical relationship，便于 replay 精确撤销。
       this.executor.db.prepare(`
         DELETE FROM session_relationship_candidates
         WHERE source_id = ? AND installation_id = ?
           AND COALESCE(runtime_profile_id, '') = ?
+          AND COALESCE(source_record_id, '') = ?
           AND from_native_session_id = ? AND to_native_session_id = ?
           AND COALESCE(native_parent_event_id, '') = ?
           AND COALESCE(native_relation, '') = ?
@@ -64,6 +69,7 @@ export class SqliteSessionRelationshipCandidateRepository {
         candidate.sourceId,
         candidate.installationId,
         candidate.runtimeProfileId ?? '',
+        candidate.sourceRecordId ?? '',
         candidate.fromNativeSessionId,
         candidate.toNativeSessionId,
         candidate.nativeParentEventId ?? '',
@@ -72,10 +78,10 @@ export class SqliteSessionRelationshipCandidateRepository {
       )
       this.executor.db.prepare(`
         INSERT INTO session_relationship_candidates(
-          id, source_id, installation_id, runtime_profile_id,
+          id, source_id, installation_id, runtime_profile_id, source_record_id,
           from_native_session_id, to_native_session_id, native_parent_event_id,
           relation_type, native_relation, confidence, evidence_refs_json, observed_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           relation_type = excluded.relation_type,
           native_relation = excluded.native_relation,
@@ -87,6 +93,7 @@ export class SqliteSessionRelationshipCandidateRepository {
         candidate.sourceId,
         candidate.installationId,
         candidate.runtimeProfileId ?? null,
+        candidate.sourceRecordId ?? null,
         candidate.fromNativeSessionId,
         candidate.toNativeSessionId,
         candidate.nativeParentEventId ?? null,
@@ -157,7 +164,7 @@ export class SqliteSessionRelationshipCandidateRepository {
     nativeSessionId: string,
   ): Promise<number> {
     const candidates = await this.executor.run(() => this.executor.db.prepare(`
-      SELECT source_id, installation_id, runtime_profile_id,
+      SELECT source_id, installation_id, runtime_profile_id, source_record_id,
              from_native_session_id, to_native_session_id, native_parent_event_id,
              relation_type, native_relation, confidence, evidence_refs_json
       FROM session_relationship_candidates
