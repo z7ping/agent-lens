@@ -724,6 +724,7 @@ function RawEventGroup({ items, inspect }: { items: ReviewEventNodeDto[]; inspec
   const [expanded, setExpanded] = useState(false)
   return <details className="raw-event-group" open={expanded} onToggle={event => setExpanded(event.currentTarget.open)}>
     <summary>
+      <UiIcon className="raw-event-group-chevron" name="chevron-right" size={14}/>
       <span className="raw-event-summary-copy">
         <span className="raw-event-summary-title">其他运行记录 <span className="raw-event-summary-count">{items.length}</span></span>
         <small>Agent 原始日志中的状态、用量等辅助记录，不属于对话正文</small>
@@ -1336,7 +1337,7 @@ export function ReviewPage({
           {(piResumeError || (piForkError?.sessionId === detail.id ? piForkError.message : '')) && <div className="page-error" role="alert">{piResumeError || piForkError?.message}</div>}
 
           {detail.sourceIds.includes('pi') && review.relationships?.items.length ? <details className="pi-session-tree">
-            <summary>Pi 会话树 · {review.relationships.items.length} 条关系</summary>
+            <summary><UiIcon className="pi-session-tree-chevron" name="chevron-right" size={14}/><span>Pi 会话树 · {review.relationships.items.length} 条关系</span></summary>
             <div>{review.relationships.items.map(item => <div key={item.id}>{item.fromNativeSessionId ?? item.fromSessionId} <span><UiIcon name="arrow-right" size={14}/></span> {item.toNativeSessionId ?? item.toSessionId}</div>)}</div>
           </details> : null}
 
