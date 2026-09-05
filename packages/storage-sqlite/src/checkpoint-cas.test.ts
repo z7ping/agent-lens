@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { SqliteCheckpointRepository } from './checkpoints'
 import { SqliteStorageService } from './storage'
 
 test('checkpoint CAS rejects stale completion after concurrent dirty update', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   await storage.migrate()
   try {
-    const checkpoints = storage.checkpoints
+    const checkpoints = storage.checkpoints as SqliteCheckpointRepository
     const scope = 'parser-replay'
     const key = 'codex:install:20:all'
     const running = {
@@ -57,7 +58,7 @@ test('checkpoint CAS allows exactly one writer for the same revision', async () 
   const storage = new SqliteStorageService({ path: ':memory:' })
   await storage.migrate()
   try {
-    const checkpoints = storage.checkpoints
+    const checkpoints = storage.checkpoints as SqliteCheckpointRepository
     assert.equal(await checkpoints.compareAndSet('scope', 'key', null, { value: 1 }), true)
     const current = await checkpoints.getWithRevision<{ value: number }>('scope', 'key')
     assert.ok(current)
