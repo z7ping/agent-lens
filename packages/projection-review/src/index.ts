@@ -94,12 +94,19 @@ export function lifecycleEventLabel(payload: JsonValue | unknown): string {
     close: '会话结束',
     'turn.started': '轮次开始',
     'turn.start': '轮次开始',
+    'turn.completed': '轮次结束',
+    'turn.complete': '轮次结束',
     'turn.stopped': '轮次停止',
     'turn.stop': '轮次停止',
+    'turn.aborted': '轮次终止',
+    'turn.error': '轮次错误',
     stopped: '轮次停止',
     stop: '轮次停止',
     'turn.ended': '轮次结束',
     'turn.end': '轮次结束',
+    'review.entered': '进入审查',
+    'review.exited': '退出审查',
+    'subagent.interacted': '子 Agent 活动',
   }
   if (exact[action]) return exact[action]
 
@@ -117,7 +124,7 @@ export function lifecycleEventLabel(payload: JsonValue | unknown): string {
   if (has('abort', 'aborted')) return '会话终止'
   if (parts.has('turn') && has('start', 'started')) return '轮次开始'
   if (parts.has('turn') && has('stop', 'stopped')) return '轮次停止'
-  if (parts.has('turn') && has('end', 'ended')) return '轮次结束'
+  if (parts.has('turn') && has('end', 'ended', 'complete', 'completed')) return '轮次结束'
   if (has('start', 'started')) return '会话开始'
   if (has('stop', 'stopped', 'end', 'ended', 'close', 'closed')) return '会话结束'
 
