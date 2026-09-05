@@ -15,7 +15,8 @@ import { DataRuntimeClient, type DataRuntimeClientSnapshot } from './client.js'
 
 const WRITE_TIMEOUT_MS = 30_000
 const MAINTENANCE_TIMEOUT_MS = 120_000
-const READ_TIMEOUT_MS = 5_000
+// Foreground/Task Center reads must fail fast rather than recreate the old 5s frozen UI.
+const READ_TIMEOUT_MS = 2_000
 const RECOVERY_INTERVAL_MS = 2_000
 
 const READ_PREFIXES = [
@@ -143,7 +144,7 @@ function sessionSummaryProxy(executor: RemoteStorageExecutor): SessionSummaryPro
             ...(input.strategy ? { strategy: input.strategy } : {}),
           }
         : undefined
-      return executor.call(
+      return executor.call<void>(
         ['sessionSummaryProjection', 'rebuild'],
         portable ? [portable] : [],
         { forceWriter: true },
