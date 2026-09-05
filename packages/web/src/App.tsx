@@ -162,7 +162,7 @@ function WorkspaceBreadcrumb({
   }
 
   return <div className="workspace-breadcrumb-shell">
-    <IconButton className="workspace-mobile-nav-button" onClick={onOpenNavigation} title="打开工作区导航" aria-label="打开工作区导航"><UiIcon name="menu" size={17}/></IconButton>
+    <IconButton className="workspace-mobile-nav-button" onClick={onOpenNavigation} title="打开工作区导航" aria-label="打开工作区导航"><UiIcon name="menu" size={16}/></IconButton>
     <Breadcrumb
       className="workspace-breadcrumb"
       items={items.map((item, index) => item.to && index < items.length - 1
