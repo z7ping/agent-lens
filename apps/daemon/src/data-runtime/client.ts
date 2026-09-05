@@ -9,6 +9,7 @@ import {
   isDataRuntimeReply,
   type DataRuntimeMethod,
   type DataRuntimeRequest,
+  type DataRuntimeRole,
 } from './protocol.js'
 
 const METRIC_SAMPLE_LIMIT = 128
@@ -28,6 +29,7 @@ export type DataRuntimeClientState = 'starting' | 'ready' | 'degraded' | 'stoppe
 
 export interface DataRuntimeClientSnapshot {
   state: DataRuntimeClientState
+  role: DataRuntimeRole
   protocolVersion: number
   pending: number
   maxPending: number
@@ -49,6 +51,9 @@ export interface DataRuntimeClientOptions {
   workerUrl?: URL
   requestTimeoutMs?: number
   allowDiagnostics?: boolean
+  role?: DataRuntimeRole
+  dbPath?: string
+  nodeId?: string
 }
 
 export function resolveDataRuntimeWorkerUrl(moduleUrl = import.meta.url): URL {
@@ -70,8 +75,11 @@ export class DataRuntimeClient {
   private maxDurationMs = 0
   private readonly durations: number[] = []
   private stopping = false
+  readonly role: DataRuntimeRole
 
-  constructor(private readonly options: DataRuntimeClientOptions = {}) {}
+  constructor(private readonly options: DataRuntimeClientOptions = {}) {
+    this.role = options.role ?? 'writer'
+  }
 
   async start(): Promise<void> {
     if (this.worker && this.stateValue !== 'stopped') return
@@ -81,7 +89,12 @@ export class DataRuntimeClient {
     const workerUrl = this.options.workerUrl ?? resolveDataRuntimeWorkerUrl()
     const bundled = workerUrl.pathname.endsWith('.mjs')
     const worker = new Worker(workerUrl, {
-      workerData: { allowDiagnostics: this.options.allowDiagnostics === true },
+      workerData: {
+        allowDiagnostics: this.options.allowDiagnostics === true,
+        role: this.role,
+        ...(this.options.dbPath ? { dbPath: this.options.dbPath } : {}),
+        ...(this.options.nodeId ? { nodeId: this.options.nodeId } : {}),
+      },
       ...(bundled ? { execArgv: [] } : { execArgv: ['--import', 'tsx'] }),
     })
     this.worker = worker
@@ -92,13 +105,13 @@ export class DataRuntimeClient {
       if (this.stopping) {
         this.stateValue = 'stopped'
       } else {
-        this.markDegraded(new Error(`Data Runtime worker exited unexpectedly with code ${code}`))
+        this.markDegraded(new Error(`Data Runtime ${this.role} worker exited unexpectedly with code ${code}`))
       }
-      this.rejectAll(new Error('Data Runtime worker is unavailable'))
+      this.rejectAll(new Error(`Data Runtime ${this.role} worker is unavailable`))
     })
 
     try {
-      await this.request('ping')
+      await this.request('ping', undefined, Math.max(10_000, this.options.requestTimeoutMs ?? 0))
       this.stateValue = 'ready'
     } catch (error) {
       this.markDegraded(error)
@@ -113,6 +126,7 @@ export class DataRuntimeClient {
   snapshot(): DataRuntimeClientSnapshot {
     return {
       state: this.stateValue,
+      role: this.role,
       protocolVersion: DATA_RUNTIME_PROTOCOL_VERSION,
       pending: this.pending.size,
       maxPending: this.maxPending,
@@ -136,9 +150,9 @@ export class DataRuntimeClient {
     timeoutMs = this.options.requestTimeoutMs ?? DATA_RUNTIME_DEFAULT_TIMEOUT_MS,
   ): Promise<T> {
     const worker = this.worker
-    if (!worker) throw new Error('Data Runtime worker is not started')
+    if (!worker) throw new Error(`Data Runtime ${this.role} worker is not started`)
     if (this.pending.size >= DATA_RUNTIME_MAX_PENDING_REQUESTS) {
-      throw new Error('Data Runtime IPC pending request limit reached')
+      throw new Error(`Data Runtime ${this.role} IPC pending request limit reached`)
     }
 
     const requestId = randomUUID()
@@ -150,7 +164,7 @@ export class DataRuntimeClient {
       ...(params ? { params } : {}),
     }
     if (encodedMessageBytes(request) > DATA_RUNTIME_MAX_MESSAGE_BYTES) {
-      throw new Error('Data Runtime IPC request exceeds size limit')
+      throw new Error(`Data Runtime ${this.role} IPC request exceeds size limit`)
     }
 
     this.requests += 1
@@ -162,7 +176,7 @@ export class DataRuntimeClient {
         if (!pending) return
         this.pending.delete(requestId)
         this.timeouts += 1
-        const error = new Error(`Data Runtime request timed out: ${method}`)
+        const error = new Error(`Data Runtime ${this.role} request timed out: ${method}`)
         this.lastError = error.message
         reject(error)
       }, Math.max(1, timeoutMs))
@@ -190,7 +204,7 @@ export class DataRuntimeClient {
       await worker.terminate().catch(() => undefined)
       this.worker = null
       this.stateValue = 'stopped'
-      this.rejectAll(new Error('Data Runtime worker stopped'))
+      this.rejectAll(new Error(`Data Runtime ${this.role} worker stopped`))
     }
   }
 
