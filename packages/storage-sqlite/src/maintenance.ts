@@ -36,8 +36,58 @@ export interface IndexAuditCandidate {
   columns: string[]
 }
 
+export interface DeferredIndexMaintenanceResult {
+  created: string[]
+  existing: string[]
+}
+
+const DEFERRED_INDEXES = [
+  {
+    name: 'idx_source_records_parser_replay',
+    sql: `CREATE INDEX IF NOT EXISTS idx_source_records_parser_replay
+          ON source_records(source_id, installation_id, parser_version, captured_at, id)`,
+  },
+  {
+    name: 'idx_observations_captured_at',
+    sql: `CREATE INDEX IF NOT EXISTS idx_observations_captured_at
+          ON observations(captured_at)`,
+  },
+  {
+    name: 'idx_evidence_captured_at',
+    sql: `CREATE INDEX IF NOT EXISTS idx_evidence_captured_at
+          ON evidence(captured_at)`,
+  },
+  {
+    name: 'idx_source_records_payload_compression_pending',
+    sql: `CREATE INDEX IF NOT EXISTS idx_source_records_payload_compression_pending
+          ON source_records(captured_at, id)
+          WHERE payload_encoding = 'json'`,
+  },
+] as const
+
 export class SqliteStorageMaintenance {
   constructor(private readonly executor: SqliteExecutor) {}
+
+  async ensureDeferredIndexes(): Promise<DeferredIndexMaintenanceResult> {
+    return this.executor.run(() => {
+      const created: string[] = []
+      const existing: string[] = []
+      const lookup = this.executor.db.prepare(`
+        SELECT 1 AS found
+        FROM sqlite_master
+        WHERE type = 'index' AND name = ?
+      `)
+      for (const index of DEFERRED_INDEXES) {
+        if (lookup.get(index.name)) {
+          existing.push(index.name)
+          continue
+        }
+        this.executor.db.exec(index.sql)
+        created.push(index.name)
+      }
+      return { created, existing }
+    })
+  }
 
   async compressSourceRecords(limit = 250): Promise<SourceRecordCompressionResult> {
     const batchLimit = Math.max(1, Math.min(limit, 2000))
@@ -283,4 +333,5 @@ export class SqliteStorageMaintenance {
 
 export const maintenanceInternals = {
   SOURCE_RECORD_COMPRESSION_THRESHOLD_BYTES,
+  DEFERRED_INDEXES,
 }
