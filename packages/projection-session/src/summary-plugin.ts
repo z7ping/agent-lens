@@ -17,9 +17,10 @@ const applySessionSummaryProjection: Plugin.Function<void> = (ctx: AgentLensCont
   const pending = new Set<string>()
   let timer: ReturnType<typeof setTimeout> | undefined
   let flushPromise: Promise<void> | undefined
+  let parserReplayDepth = 0
 
   const schedule = () => {
-    if (timer || flushPromise || pending.size === 0) return
+    if (parserReplayDepth > 0 || timer || flushPromise || pending.size === 0) return
     timer = setTimeout(() => {
       timer = undefined
       void flush().catch(error => {
@@ -94,6 +95,19 @@ const applySessionSummaryProjection: Plugin.Function<void> = (ctx: AgentLensCont
     // EventingObservationService 已经过滤 unchanged；收到事件就说明 Canonical Observation
     // 有创建或合并变化，需要刷新会话摘要，覆盖 replay 后的新 provenance / metadata。
     pending.add(event.logicalSessionId)
+    schedule()
+  })
+
+  ctx.on('source/parser-replay-state', event => {
+    if (event.state === 'started') {
+      parserReplayDepth += 1
+      if (timer) {
+        clearTimeout(timer)
+        timer = undefined
+      }
+      return
+    }
+    parserReplayDepth = Math.max(0, parserReplayDepth - 1)
     schedule()
   })
 }

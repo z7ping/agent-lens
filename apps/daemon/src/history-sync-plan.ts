@@ -8,6 +8,12 @@ export interface ProgressiveHistoryStage {
   window: SourceHistoryWindow
 }
 
+export interface ParserReplayStage {
+  id: 'recent' | 'hot-window' | 'all'
+  label: string
+  window?: SourceHistoryWindow
+}
+
 export function createProgressiveHistoryStages(startedAt: number): ProgressiveHistoryStage[] {
   const activeSince = new Date(startedAt - HOT_HISTORY_WINDOW_MS).toISOString()
   return [
@@ -16,6 +22,15 @@ export function createProgressiveHistoryStages(startedAt: number): ProgressiveHi
     { id: 'latest', label: '最新 1 个会话', window: { sessionLimit: 1 } },
     { id: 'recent', label: '最近 10 个会话', window: { sessionLimit: 10 } },
     { id: 'hot-window', label: '最近 7 天', window: { activeSince } },
+  ]
+}
+
+export function createParserReplayStages(startedAt: number): ParserReplayStage[] {
+  const activeSince = new Date(startedAt - HOT_HISTORY_WINDOW_MS).toISOString()
+  return [
+    { id: 'recent', label: '最近 10 个会话', window: { sessionLimit: 10 } },
+    { id: 'hot-window', label: '最近 7 天', window: { activeSince } },
+    { id: 'all', label: '全部已持久化历史' },
   ]
 }
 

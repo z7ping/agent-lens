@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   createProgressiveHistoryStages,
+  createParserReplayStages,
   stagesAllowedByCapacity,
   storageCapacityState,
   yieldToForeground,
@@ -30,6 +31,15 @@ test('数据库接近软阈值时暂停 7 天回填，超过预算时仍同步�
   assert.deepEqual(stagesAllowedByCapacity(stages, 'exceeded').map(stage => stage.id), ['latest'])
   assert.equal(storageCapacityState({ dataGrowth: { capacity: { state: 'exceeded' } } }), 'exceeded')
   assert.equal(storageCapacityState(undefined), 'unknown')
+})
+
+test('parser 语义重放独立于原生历史容量降级并最终覆盖全部持久化记录', () => {
+  const stages = createParserReplayStages(Date.parse('2026-09-01T00:00:00.000Z'))
+  assert.deepEqual(stages.map(stage => ({ id: stage.id, window: stage.window })), [
+    { id: 'recent', window: { sessionLimit: 10 } },
+    { id: 'hot-window', window: { activeSince: '2026-08-25T00:00:00.000Z' } },
+    { id: 'all', window: undefined },
+  ])
 })
 
 test('前台让出点在取消后立即结束', async () => {

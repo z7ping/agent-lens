@@ -14,6 +14,7 @@ import {
   nodeRuntimePlugin,
   piLiveRuntimePlugin,
   prepareRegisteredSources,
+  replayRegisteredSourceHistory,
   resolveAgentLensNodeRuntime,
   startRegisteredSourceCapture,
   syncRegisteredSourceHistory,
@@ -36,6 +37,7 @@ import {
 } from './projection-readiness.js'
 import {
   createProgressiveHistoryStages,
+  createParserReplayStages,
   stagesAllowedByCapacity,
   storageCapacityState,
   yieldToForeground,
@@ -241,6 +243,27 @@ try {
       for (const result of history.results) {
         console.info(
           `[AgentLens] history synced: stage=${stage.id} source=${result.sourceId} records=${result.records} created=${result.observationsCreated} merged=${result.observationsMerged} unchanged=${result.observationsUnchanged}`,
+        )
+      }
+      await yieldToForeground(runtimeController.signal)
+    }
+    if (runtimeController.signal.aborted) return
+
+    // 原生日志回填可按容量降级，但已经进入 Canonical Pipeline 的 SourceRecord
+    // 必须能随 parser 升级完成语义迁移。先重放近期会话恢复首屏，再渐进覆盖全量。
+    for (const stage of createParserReplayStages(startedAt)) {
+      if (runtimeController.signal.aborted) return
+      console.info(`[AgentLens] parser replay stage started: ${stage.label}`)
+      const replay = await replayRegisteredSourceHistory(
+        app.context,
+        runtimeController.signal,
+        prepared.targets,
+        stage.window,
+      )
+      logSourceFailures(replay.failures)
+      for (const result of replay.results) {
+        console.info(
+          `[AgentLens] parser replayed: stage=${stage.id} source=${result.sourceId} records=${result.records} created=${result.observationsCreated} merged=${result.observationsMerged} unchanged=${result.observationsUnchanged}`,
         )
       }
       await yieldToForeground(runtimeController.signal)

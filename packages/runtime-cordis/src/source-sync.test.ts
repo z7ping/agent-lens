@@ -9,6 +9,7 @@ import type {
 import type { AgentLensContext } from './context'
 import {
   prepareRegisteredSources,
+  replayRegisteredSourceHistory,
   syncRegisteredSourceHistory,
   type RegisteredSourceTarget,
 } from './source-sync'
@@ -188,4 +189,50 @@ test('disabled prepared targets are ignored by later stages', async () => {
   assert.equal(historyReads, 0)
   assert.deepEqual(settled.results, [])
   assert.deepEqual(settled.failures, [])
+})
+
+test('独立 parser replay 不触发原生历史读取并透传重放窗口', async () => {
+  let historyReads = 0
+  let replayWindow: unknown
+  const replayStates: string[] = []
+  const source = sourceDefinition('codex', async () => [])
+  source.ingestHistory = async function* () { historyReads += 1 }
+  const targets: RegisteredSourceTarget[] = [{
+    source,
+    host,
+    detected: { sourceId: 'codex', productId: 'test-product', confidence: 'exact' },
+  }]
+  const ctx = {
+    storage: {
+      repositories: {
+        sourceRecords: {
+          async listForParserReplay(...args: any[]) {
+            replayWindow = args[5]
+            return []
+          },
+        },
+      },
+    },
+    identity: { async resolveInstallation() { return installation } },
+    observations: {},
+    capabilities: { registerSourceCapabilities() { return { dispose() {} } } },
+    coverage: {},
+    capturePolicy: capturePolicy(['codex']),
+    emit(event: string, payload: { state?: string }) {
+      if (event === 'source/parser-replay-state' && payload.state) replayStates.push(payload.state)
+    },
+  } as unknown as AgentLensContext
+
+  const settled = await replayRegisteredSourceHistory(
+    ctx,
+    new AbortController().signal,
+    targets,
+    { sessionLimit: 10 },
+  )
+
+  assert.equal(settled.failures.length, 0)
+  assert.equal(settled.results.length, 1)
+  assert.equal(historyReads, 0)
+  assert.deepEqual(replayWindow, { sessionLimit: 10 })
+  assert.deepEqual(replayStates, ['started', 'completed'])
 })

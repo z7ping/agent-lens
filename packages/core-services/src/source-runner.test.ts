@@ -237,3 +237,73 @@ test('渐进历史窗口把 parser replay 限定到同一批 Session', async () 
   assert.equal(replayReads, 1)
   assert.deepEqual(replayWindow, { sessionLimit: 1 })
 })
+
+test('独立 parser replay 只重放持久化记录且可覆盖全部历史', async () => {
+  const staleRecords = Array.from({ length: 51 }, (_, index) => ({
+    ...record(`stale-${index}`, `2026-08-20T00:${String(index).padStart(2, '0')}:00.000Z`),
+    parserVersion: '1',
+  }))
+  let ingestReads = 0
+  let replayWindow: unknown = 'unset'
+  const persistedVersions: string[] = []
+  let transactionDepth = 0
+  let replayTransactions = 0
+  const source: SourceDefinition = {
+    manifest: {
+      pluginId: 'test-source-plugin',
+      pluginVersion: '1.0.0',
+      apiVersion: '1.0',
+      pluginType: 'source',
+      displayName: 'Test Source',
+      sourceId: 'test-source',
+      productId: 'test-product',
+      parserVersion: '2',
+    },
+    async detect() { return [detected] },
+    async declareCapabilities() { return [] },
+    async *ingestHistory() { ingestReads += 1 },
+    async normalize(value) { return normalized(value) },
+  }
+  const runner = new SourceHistoryRunner(
+    {
+      repositories: {
+        sourceRecords: {
+          async put(value: SourceRecord) { persistedVersions.push(value.parserVersion) },
+          async listForParserReplay(...args: any[]) {
+            replayWindow = args[5]
+            return args[3] ? [] : staleRecords
+          },
+        },
+      },
+      async transaction(operation: () => Promise<unknown>) {
+        if (transactionDepth === 0) replayTransactions += 1
+        transactionDepth += 1
+        try {
+          return await operation()
+        } finally {
+          transactionDepth -= 1
+        }
+      },
+      checkpoints: { async get() { return null }, async set() {}, async clear() {} },
+    } as any,
+    { async resolveInstallation() { return installation } } as any,
+    { async commit() { throw new Error('No observations expected') } } as any,
+    { registerSourceCapabilities() { return { dispose() {} } } } as any,
+    { async declare() { return {} as any } } as any,
+    capturePolicy,
+  )
+
+  const result = await runner.replay({
+    source,
+    host,
+    detected,
+    abortSignal: new AbortController().signal,
+  })
+
+  assert.equal(result.records, 51)
+  assert.equal(ingestReads, 0)
+  assert.equal(replayWindow, undefined)
+  assert.equal(replayTransactions, 2)
+  assert.deepEqual(new Set(persistedVersions), new Set(['2']))
+  assert.equal(persistedVersions.length, 51)
+})

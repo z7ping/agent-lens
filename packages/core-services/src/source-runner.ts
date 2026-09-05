@@ -23,6 +23,7 @@ import type {
 import { deriveParentRelationshipCandidates } from './relationship-hints'
 
 const DEFAULT_COOPERATIVE_BUDGET_MS = 8
+const PARSER_REPLAY_TRANSACTION_SIZE = 50
 
 interface CooperativeSchedulerOptions {
   budgetMs?: number
@@ -53,7 +54,24 @@ export interface SourceHistorySyncInput {
   historyWindow?: SourceHistoryWindow
 }
 
+export interface SourceParserReplayInput {
+  source: SourceDefinition
+  host: Host
+  detected: DetectedSource
+  abortSignal: AbortSignal
+  historyWindow?: SourceHistoryWindow
+}
+
 export interface SourceHistorySyncResult {
+  sourceId: string
+  installationId: string
+  records: number
+  observationsCreated: number
+  observationsMerged: number
+  observationsUnchanged: number
+}
+
+export interface SourceParserReplayResult {
   sourceId: string
   installationId: string
   records: number
@@ -336,6 +354,71 @@ export class SourceHistoryRunner {
     private readonly capturePolicy: CapturePolicyService,
   ) {}
 
+  async replay(input: SourceParserReplayInput): Promise<SourceParserReplayResult> {
+    const { source, host, detected, abortSignal } = input
+    if (source.manifest.sourceId !== detected.sourceId) {
+      throw new Error(`Source mismatch: definition=${source.manifest.sourceId}, detected=${detected.sourceId}`)
+    }
+
+    const installation = await resolveInstallation(this.identity, host, detected)
+    const runtimeProfile = await resolveRuntimeProfile(this.storage, installation, detected)
+    const result: SourceParserReplayResult = {
+      sourceId: source.manifest.sourceId,
+      installationId: installation.id,
+      records: 0,
+      observationsCreated: 0,
+      observationsMerged: 0,
+      observationsUnchanged: 0,
+    }
+    const replay = this.storage.repositories.sourceRecords.listForParserReplay
+    if (!replay) return result
+
+    const yieldForInteractivity = createCooperativeScheduler()
+    let after: { capturedAt: string; id: string } | undefined
+    while (!abortSignal.aborted) {
+      const records = await replay(
+        source.manifest.sourceId,
+        installation.id,
+        source.manifest.parserVersion,
+        after,
+        500,
+        input.historyWindow,
+      )
+      if (!records.length) break
+      for (let offset = 0; offset < records.length; offset += PARSER_REPLAY_TRANSACTION_SIZE) {
+        if (abortSignal.aborted) break
+        const batch = records.slice(offset, offset + PARSER_REPLAY_TRANSACTION_SIZE)
+        // Parser replay 只处理本地已持久化事实。小批次复用一个 SQLite 事务，
+        // 避免每条记录单独 fsync；批间再让出执行权，限制 API 写队列等待时间。
+        await this.storage.transaction(async () => {
+          for (const stored of batch) {
+            if (abortSignal.aborted) break
+            const processed = await processSourceRecord(
+              this.storage,
+              this.observations,
+              this.coverage,
+              this.capturePolicy,
+              source,
+              host,
+              installation,
+              runtimeProfile,
+              { ...stored, parserVersion: source.manifest.parserVersion },
+            )
+            result.records += 1
+            result.observationsCreated += processed.observationsCreated
+            result.observationsMerged += processed.observationsMerged
+            result.observationsUnchanged += processed.observationsUnchanged
+          }
+        })
+        await yieldForInteractivity()
+      }
+      const last = records.at(-1)!
+      after = { capturedAt: last.capturedAt, id: last.id }
+      if (records.length < 500) break
+    }
+    return result
+  }
+
   async sync(input: SourceHistorySyncInput): Promise<SourceHistorySyncResult> {
     const { source, host, detected, abortSignal } = input
     if (source.manifest.sourceId !== detected.sourceId) {
@@ -366,44 +449,12 @@ export class SourceHistoryRunner {
       }
       const yieldForInteractivity = createCooperativeScheduler()
 
-      const replay = this.storage.repositories.sourceRecords.listForParserReplay
       // Parser 升级直接重规范化已持久化的 SourceRecord。渐进窗口会把重放
       // 限定到同一批 Session，避免为了修复语义重新读取完整原生日志前缀。
-      if (replay) {
-        let after: { capturedAt: string; id: string } | undefined
-        while (!abortSignal.aborted) {
-          const records = await replay(
-            source.manifest.sourceId,
-            installation.id,
-            source.manifest.parserVersion,
-            after,
-            500,
-            input.historyWindow,
-          )
-          if (!records.length) break
-          for (const stored of records) {
-            if (abortSignal.aborted) break
-            const processed = await processSourceRecord(
-              this.storage,
-              this.observations,
-              this.coverage,
-              this.capturePolicy,
-              source,
-              host,
-              installation,
-              runtimeProfile,
-              { ...stored, parserVersion: source.manifest.parserVersion },
-            )
-            result.observationsCreated += processed.observationsCreated
-            result.observationsMerged += processed.observationsMerged
-            result.observationsUnchanged += processed.observationsUnchanged
-            await yieldForInteractivity()
-          }
-          const last = records.at(-1)!
-          after = { capturedAt: last.capturedAt, id: last.id }
-          if (records.length < 500) break
-        }
-      }
+      const replayed = await this.replay(input)
+      result.observationsCreated += replayed.observationsCreated
+      result.observationsMerged += replayed.observationsMerged
+      result.observationsUnchanged += replayed.observationsUnchanged
 
       if (!source.ingestHistory) {
         await markHealthy(this.storage, runtimeStatus)
@@ -701,4 +752,5 @@ export class SourceAssetRunner {
 export const sourceRunnerInternals = {
   createCooperativeScheduler,
   DEFAULT_COOPERATIVE_BUDGET_MS,
+  PARSER_REPLAY_TRANSACTION_SIZE,
 }
