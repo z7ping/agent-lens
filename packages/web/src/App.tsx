@@ -8,7 +8,7 @@ import { BackgroundDataNotice } from './components/BackgroundDataNotice'
 import { ReviewStateOverlay } from './components/ReviewStateOverlay'
 import { WorkspaceSidebar } from './components/WorkspaceSidebar'
 import { PageLoadingState } from './components/StateViews'
-import { Breadcrumb } from './components/ui'
+import { Breadcrumb, IconButton, UiIcon } from './components/ui'
 
 const AgentsResponsivePage = lazy(() => import('./features/AgentsResponsivePage').then(module => ({ default: module.AgentsResponsivePage })))
 const BackupPage = lazy(() => import('./features/BackupPage').then(module => ({ default: module.BackupPage })))
@@ -130,10 +130,12 @@ function WorkspaceBreadcrumb({
   pathname,
   snapshot,
   selectedAgentId,
+  onOpenNavigation,
 }: {
   pathname: string
   snapshot: ClientSnapshot
   selectedAgentId: string
+  onOpenNavigation(): void
 }) {
   let items: Array<{ label: string; to?: string }>
   if (pathname === '/review/new') {
@@ -159,12 +161,15 @@ function WorkspaceBreadcrumb({
     items = [{ label: 'AgentLens' }]
   }
 
-  return <Breadcrumb
-    className="workspace-breadcrumb"
-    items={items.map((item, index) => item.to && index < items.length - 1
-      ? <NavLink key={item.to} to={item.to}>{item.label}</NavLink>
-      : <span key={`${item.label}:${index}`} title={item.label}>{item.label}</span>)}
-  />
+  return <div className="workspace-breadcrumb-shell">
+    <IconButton className="workspace-mobile-nav-button" onClick={onOpenNavigation} title="打开工作区导航" aria-label="打开工作区导航"><UiIcon name="menu" size={17}/></IconButton>
+    <Breadcrumb
+      className="workspace-breadcrumb"
+      items={items.map((item, index) => item.to && index < items.length - 1
+        ? <NavLink key={item.to} to={item.to}>{item.label}</NavLink>
+        : <span key={`${item.label}:${index}`} title={item.label}>{item.label}</span>)}
+    />
+  </div>
 }
 
 function Shell({ model }: { model: AgentLensClientModel }) {
@@ -174,6 +179,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const [theme, setTheme] = useState(readTheme)
   const [agentOverviewSourceId, setAgentOverviewSourceId] = useState('')
   const [sidebarHost, setSidebarHost] = useState<HTMLDivElement | null>(null)
+  const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false)
   const reviewUrlReadyRef = useRef(false)
   const skipReviewUrlWriteRef = useRef(false)
   const agents = snapshot.facets?.agents ?? []
@@ -195,6 +201,10 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const resolvedAgentOverviewSourceId = agentOverviewItems.some(item => item.sourceId === agentOverviewSourceId)
     ? agentOverviewSourceId
     : agentOverviewItems.find(item => item.detected)?.sourceId ?? agentOverviewItems[0]?.sourceId ?? agents.find(agent => agent.detected)?.sourceId ?? agents[0]?.sourceId ?? ''
+
+  useEffect(() => {
+    setMobileNavigationOpen(false)
+  }, [location.pathname])
 
   useEffect(() => {
     model.setReviewActive(onLocalReview)
@@ -231,7 +241,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   }, [location.pathname, location.search, navigate, onLocalReview, snapshot.review.filters])
 
   return <PinnedProvider agents={agents}>
-    <div className="app-shell">
+    <div className={`app-shell ${mobileNavigationOpen ? 'is-mobile-navigation-open' : ''}`}>
       <WorkspaceSidebar
         snapshot={snapshot}
         agents={agents}
@@ -241,9 +251,12 @@ function Shell({ model }: { model: AgentLensClientModel }) {
         theme={theme}
         onToggleTheme={toggleTheme}
         onContextHost={setSidebarHost}
+        mobileOpen={mobileNavigationOpen}
+        onMobileClose={() => setMobileNavigationOpen(false)}
       />
+      {mobileNavigationOpen && <button type="button" className="workspace-mobile-backdrop" aria-label="关闭工作区导航" onClick={() => setMobileNavigationOpen(false)}/>} 
       <div className="app-main">
-        <WorkspaceBreadcrumb pathname={location.pathname} snapshot={snapshot} selectedAgentId={resolvedAgentOverviewSourceId}/>
+        <WorkspaceBreadcrumb pathname={location.pathname} snapshot={snapshot} selectedAgentId={resolvedAgentOverviewSourceId} onOpenNavigation={() => setMobileNavigationOpen(true)}/>
         {hasSseBanner && <div className="sse-banner" role="status">
           <span className="live-dot live-dot-waiting" />
           <span>实时通道已断开</span>
@@ -259,7 +272,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
           <Route path="/review/:sessionId" element={<TaskCenterPage model={model} mode="history" sidebarHost={sidebarHost}/>} />
           <Route path="/tools" element={<ToolsPage model={model} sidebarHost={sidebarHost}/>} />
           <Route path="/insights" element={<InsightsPage model={model} sidebarHost={sidebarHost}/>} />
-          <Route path="/agents" element={<AgentsResponsivePage model={model} sourceId={agentOverviewSourceId} onSourceIdChange={setAgentOverviewSourceId} />} />
+          <Route path="/agents" element={<AgentsResponsivePage model={model} sourceId={resolvedAgentOverviewSourceId} onSourceIdChange={setAgentOverviewSourceId} />} />
           <Route path="/backup" element={<BackupPage />} />
           <Route path="*" element={<Navigate to="/review" replace />} />
         </Routes>
