@@ -38,6 +38,16 @@ test('ReviewProjection paginates only on complete interaction boundaries', async
     await add('message.user', '第三轮')
 
     const projection = new ReviewProjection(storage)
+    const instrumented = projection as unknown as {
+      scanInteractionDescriptors(logicalSessionId: string): Promise<unknown[]>
+    }
+    const originalFullScan = instrumented.scanInteractionDescriptors.bind(projection)
+    let fullDescriptorScans = 0
+    instrumented.scanInteractionDescriptors = async id => {
+      fullDescriptorScans += 1
+      return originalFullScan(id)
+    }
+
     const first = await projection.get(logicalSessionId, { limit: 1 })
     assert.ok(first)
     assert.equal(first.interactions[0]?.ordinal, 1)
@@ -64,8 +74,8 @@ test('ReviewProjection paginates only on complete interaction boundaries', async
     assert.deepEqual(jumped.interactions.map(item => item.ordinal), [2])
     assert.equal(jumped.page.count, 1)
     assert.equal(jumped.page.hasMore, false)
-    assert.ok(jumped.interactionIndex)
-    assert.deepEqual(jumped.interactionIndex.map(item => item.ordinal), [1, 2, 3])
+    assert.equal(jumped.interactionIndex, undefined)
+    assert.equal(fullDescriptorScans, 0)
   } finally {
     storage.close()
   }
@@ -175,12 +185,23 @@ test('ReviewProjection evaluates error and latency filters against the complete 
     }
 
     const projection = new ReviewProjection(storage)
+    const instrumented = projection as unknown as {
+      scanInteractionDescriptors(logicalSessionId: string): Promise<unknown[]>
+    }
+    const originalFullScan = instrumented.scanInteractionDescriptors.bind(projection)
+    let fullDescriptorScans = 0
+    instrumented.scanInteractionDescriptors = async id => {
+      fullDescriptorScans += 1
+      return originalFullScan(id)
+    }
+
     const firstErrors = await projection.get(logicalSessionId, { filter: 'errors', limit: 1 })
     assert.ok(firstErrors)
     assert.equal(firstErrors.page.filter, 'errors')
     assert.deepEqual(firstErrors.interactions.map(item => item.ordinal), [2])
     assert.equal(firstErrors.page.hasMore, true)
     assert.ok(firstErrors.page.nextCursor)
+    assert.equal(fullDescriptorScans, 1)
 
     const secondErrors = await projection.get(logicalSessionId, {
       filter: 'errors', cursor: firstErrors.page.nextCursor!, limit: 1,
@@ -188,17 +209,21 @@ test('ReviewProjection evaluates error and latency filters against the complete 
     assert.ok(secondErrors)
     assert.deepEqual(secondErrors.interactions.map(item => item.ordinal), [4])
     assert.equal(secondErrors.page.hasMore, false)
+    assert.equal(fullDescriptorScans, 1)
 
     const latency = await projection.get(logicalSessionId, { filter: 'latency', limit: 10 })
     assert.ok(latency)
     assert.equal(latency.page.filter, 'latency')
     assert.ok((latency.page.latencyThresholdMs ?? 0) > 0)
     assert.deepEqual(latency.interactions.map(item => item.ordinal), [4])
+    assert.equal(fullDescriptorScans, 1)
 
     const latest = await projection.get(logicalSessionId, { filter: 'latest' })
     assert.ok(latest)
     assert.equal(latest.page.filter, 'latest')
     assert.deepEqual(latest.interactions.map(item => item.ordinal), [4])
+    assert.equal(latest.interactionIndex, undefined)
+    assert.equal(fullDescriptorScans, 1)
   } finally {
     storage.close()
   }
