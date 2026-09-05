@@ -5,6 +5,8 @@ import type {
 } from '@agent-lens/core'
 import type { SqliteExecutor } from './executor'
 
+const PARSER_REPLAY_CHECKPOINT_SCOPE = 'parser-replay'
+
 interface DerivedRelationshipRow {
   from_logical_session_id: string | null
   to_logical_session_id: string | null
@@ -214,6 +216,41 @@ export function withSqliteParserReplayReplacement(
     })
   }
 
+  async function markReplayCheckpointsDirty(record: {
+    sourceId: string
+    installationId: string
+    parserVersion: string
+  }): Promise<void> {
+    await executor.run(() => {
+      const updatedAt = new Date().toISOString()
+      executor.db.prepare(`
+        UPDATE source_checkpoints
+        SET value_json = json_remove(
+              json_set(
+                value_json,
+                '$.state', 'pending',
+                '$.dirty', json('true'),
+                '$.updatedAt', ?
+              ),
+              '$.cursor',
+              '$.completedAt'
+            ),
+            updated_at = ?
+        WHERE scope = ?
+          AND json_extract(value_json, '$.sourceId') = ?
+          AND json_extract(value_json, '$.installationId') = ?
+          AND json_extract(value_json, '$.targetParserVersion') != ?
+      `).run(
+        updatedAt,
+        updatedAt,
+        PARSER_REPLAY_CHECKPOINT_SCOPE,
+        record.sourceId,
+        record.installationId,
+        record.parserVersion,
+      )
+    })
+  }
+
   const replayAwareSourceRecords: SourceRecordRepository = {
     ...sourceRecords,
     async listForParserReplay(sourceId, installationId, currentParserVersion, after, limit = 500, window) {
@@ -255,6 +292,7 @@ export function withSqliteParserReplayReplacement(
         await removeRelationshipDerivationsForSourceRecord(record.id)
       }
       await sourceRecords.put(record)
+      await markReplayCheckpointsDirty(record)
     },
   }
 
