@@ -44,7 +44,7 @@ function sessionMeta(record: SourceRecord): {
 
 function subagentParts(payload: Record<string, unknown>) {
   const source = asRecord(payload.source)
-  const raw = source.subagent ?? source.subAgent
+  const raw = source.subagent ?? source.subAgent ?? source.sub_agent
   const subagent = asRecord(raw)
   const spawn = asRecord(subagent.thread_spawn ?? subagent.threadSpawn)
   const threadSource = payload.thread_source ?? payload.threadSource
@@ -63,7 +63,7 @@ function directParentId(payload: Record<string, unknown>): string | undefined {
 
 function guardianReview(payload: Record<string, unknown>): boolean {
   const { raw, subagent, spawn, threadSource } = subagentParts(payload)
-  const values = [raw, subagent, spawn, threadSource, payload.agent_role, payload.agentRole]
+  const values = [raw, subagent, spawn, threadSource, payload.source, payload.agent_role, payload.agentRole]
     .map(lowerText)
     .join('\n')
   return /guardian[_-]?review/.test(values)
@@ -77,6 +77,23 @@ function subagentLabel(payload: Record<string, unknown>): string | undefined {
   return stringField(spawn, 'agent_nickname', 'agent_path', 'agent_role')
     ?? stringField(subagent, 'agent_nickname', 'agent_path', 'agent_role', 'name', 'type', 'other')
     ?? (typeof raw === 'string' && raw !== 'review' ? raw : undefined)
+}
+
+function structuredSystemActivity(payload: Record<string, unknown>): { system: boolean; sourceLabel?: string } {
+  const { source, threadSource } = subagentParts(payload)
+  const threadSourceText = lowerText(threadSource)
+  const internal = source.internal
+  if (threadSourceText.includes('memory_consolidation') || threadSourceText.includes('memoryconsolidation')) {
+    return { system: true, sourceLabel: '记忆整理' }
+  }
+  if (threadSourceText === 'feature' || threadSourceText.startsWith('feature:') || threadSourceText.startsWith('feature(')) {
+    return { system: true, sourceLabel: 'Codex Feature' }
+  }
+  if (internal !== undefined) {
+    const label = typeof internal === 'string' && internal.trim() ? internal.trim() : 'Codex Internal'
+    return { system: true, sourceLabel: label }
+  }
+  return { system: false }
 }
 
 function classifySession(payload: Record<string, unknown>): {
@@ -109,6 +126,13 @@ function classifySession(payload: Record<string, unknown>): {
       : { activity: 'subagent', relationship: 'subagent' }
   }
 
+  const system = structuredSystemActivity(payload)
+  if (system.system) {
+    return system.sourceLabel
+      ? { activity: 'system-activity', relationship: 'related', sourceLabel: system.sourceLabel }
+      : { activity: 'system-activity', relationship: 'related' }
+  }
+
   return { activity: 'user-task', relationship: 'related' }
 }
 
@@ -130,6 +154,15 @@ function relationship(
     nativeRelation,
     confidence: 'exact',
   }
+}
+
+function nativeParentRelation(payload: Record<string, unknown>): string {
+  if (stringField(payload, 'forked_from_id')) return 'forked_from_id'
+  if (stringField(payload, 'parent_thread_id')) return 'parent_thread_id'
+  const source = asRecord(payload.source)
+  if (source.subAgent !== undefined) return 'source.subAgent.thread_spawn.parent_thread_id'
+  if (source.sub_agent !== undefined) return 'source.sub_agent.thread_spawn.parent_thread_id'
+  return 'source.subagent.thread_spawn.parent_thread_id'
 }
 
 /**
@@ -179,11 +212,7 @@ export function normalizeCodexSessionAttribution(
       directParent,
       ownSessionId,
       classification.relationship,
-      stringField(meta.payload, 'forked_from_id')
-        ? 'forked_from_id'
-        : asRecord(subagentParts(meta.payload).spawn).parent_thread_id
-          ? 'source.subagent.thread_spawn.parent_thread_id'
-          : 'parent_thread_id',
+      nativeParentRelation(meta.payload),
     ))
   }
 
