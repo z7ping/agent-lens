@@ -637,13 +637,52 @@ async function normalizeImageGeneration(
   ctx: SourceNormalizationContext,
   completed: CodexCompletedTurnItem,
 ): Promise<NormalizedSourceOutput> {
-  return normalizeStructuredCompletedItem(record, ctx, completed, 'artifact.action', {
+  const canonicalPayload = {
     action: 'image.generate',
     status: completed.item.status ?? null,
     revisedPrompt: completed.item.revised_prompt ?? completed.item.revisedPrompt ?? null,
-    result: completed.item.result ?? null,
+    resultAvailable: typeof completed.item.result === 'string' && completed.item.result.length > 0,
     savedPath: completed.item.saved_path ?? completed.item.savedPath ?? null,
-  })
+    ...(completed.item.transparent_background === undefined && completed.item.transparentBackground === undefined
+      ? {}
+      : { transparentBackground: completed.item.transparent_background ?? completed.item.transparentBackground }),
+    ...(completed.item.failure === undefined ? {} : { failure: completed.item.failure }),
+    ...(completed.turnId ? { turnId: completed.turnId } : {}),
+  }
+  const output = await normalizeCodexRecord(record, ctx)
+  return {
+    ...output,
+    observations: output.observations.map(observation => observation.kind === 'unknown' || observation.kind === 'artifact.action'
+      ? { ...observation, kind: 'artifact.action', payload: canonicalPayload }
+      : observation),
+  }
+}
+
+async function normalizeExtension(
+  record: SourceRecord,
+  ctx: SourceNormalizationContext,
+  completed: CodexCompletedTurnItem,
+): Promise<NormalizedSourceOutput> {
+  const extensionKind = stringField(completed.item, 'kind') ?? ''
+  if (extensionKind === 'clock.sleep') {
+    const callId = completed.itemId ?? `clock-sleep-${record.sourceSequence ?? record.id}`
+    const output = await normalizeCodexRecord(syntheticRecord(record, {
+      type: 'response_item',
+      payload: {
+        type: 'function_call',
+        name: 'clock.sleep',
+        call_id: callId,
+        arguments: JSON.stringify({
+          durationMs: completed.item.durationMs ?? completed.item.duration_ms ?? null,
+        }),
+      },
+    }, completed.itemId), ctx)
+    output.observations = output.observations.map(observation => decorateToolCall(observation, completed))
+    return output
+  }
+  if (extensionKind === 'web.search') return normalizeWebSearch(record, ctx, completed)
+  if (extensionKind === 'image_gen.generation') return normalizeImageGeneration(record, ctx, completed)
+  return normalizeCodexRecord(record, ctx)
 }
 
 async function normalizeContextCompaction(
@@ -675,8 +714,9 @@ async function normalizeContextCompaction(
  * event_msg.item_completed record, allowing the legacy parser to handle it.
  *
  * Current Codex-owned TurnItem variants are mapped to explicit Canonical kinds.
- * Extension remains raw/unknown because its semantic owner and payload schema are
- * extension-defined; guessing it here would be less correct than preserving raw evidence.
+ * Officially-known extension wire kinds (clock.sleep, web.search,
+ * image_gen.generation) are mapped from their upstream schemas. Future or unknown
+ * extension kinds stay raw/unknown rather than guessing semantics.
  */
 export async function normalizePaginatedCodexRecord(
   record: SourceRecord,
@@ -700,6 +740,7 @@ export async function normalizePaginatedCodexRecord(
     case 'websearch': return normalizeWebSearch(record, ctx, completed)
     case 'imageview': return normalizeImageView(record, ctx, completed)
     case 'imagegeneration': return normalizeImageGeneration(record, ctx, completed)
+    case 'extension': return normalizeExtension(record, ctx, completed)
     case 'enteredreviewmode': return normalizeReviewMode(record, ctx, completed, 'entered')
     case 'exitedreviewmode': return normalizeReviewMode(record, ctx, completed, 'exited')
     case 'filechange': return normalizeFileChange(record, ctx, completed)
