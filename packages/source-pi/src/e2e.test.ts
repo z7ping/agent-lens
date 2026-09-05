@@ -243,14 +243,19 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
     assert.ok(facts.some(item => item.nativeEventId === 'pi-user-fresh'))
 
     storage.db.prepare(`UPDATE source_records SET parser_version = '4' WHERE source_id = 'pi'`).run()
-    const replay = await history.sync({
+    const staleBefore = storage.db.prepare(`
+      SELECT COUNT(*) AS count FROM source_records WHERE source_id = 'pi' AND parser_version != '5'
+    `).get() as { count: number }
+    const replay = await history.replay({
       source: piSourceDefinition,
       host,
       detected,
       abortSignal: new AbortController().signal,
     })
-    assert.equal(replay.records, 0)
-    const staleParsers = storage.db.prepare(`SELECT COUNT(*) AS count FROM source_records WHERE source_id = 'pi' AND parser_version != '5'`).get() as { count: number }
+    assert.equal(replay.records, staleBefore.count)
+    const staleParsers = storage.db.prepare(`
+      SELECT COUNT(*) AS count FROM source_records WHERE source_id = 'pi' AND parser_version != '5'
+    `).get() as { count: number }
     assert.equal(staleParsers.count, 0)
   } finally {
     storage.close()
