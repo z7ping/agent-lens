@@ -191,9 +191,10 @@ test('disabled prepared targets are ignored by later stages', async () => {
   assert.deepEqual(settled.failures, [])
 })
 
-test('独立 parser replay 不触发原生历史读取并透传重放窗口', async () => {
+test('独立 parser replay 不触发原生历史读取并透传重放窗口与协作门', async () => {
   let historyReads = 0
   let replayWindow: unknown
+  let cooperateCalls = 0
   const replayStates: string[] = []
   const source = sourceDefinition('codex', async () => [])
   source.ingestHistory = async function* () { historyReads += 1 }
@@ -212,6 +213,11 @@ test('独立 parser replay 不触发原生历史读取并透传重放窗口', as
           },
         },
       },
+      checkpoints: {
+        async get() { return null },
+        async set() {},
+        async clear() {},
+      },
     },
     identity: { async resolveInstallation() { return installation } },
     observations: {},
@@ -228,11 +234,13 @@ test('独立 parser replay 不触发原生历史读取并透传重放窗口', as
     new AbortController().signal,
     targets,
     { sessionLimit: 10 },
+    { cooperate: async () => { cooperateCalls += 1 } },
   )
 
   assert.equal(settled.failures.length, 0)
   assert.equal(settled.results.length, 1)
   assert.equal(historyReads, 0)
+  assert.equal(cooperateCalls, 1)
   assert.deepEqual(replayWindow, { sessionLimit: 10 })
   assert.deepEqual(replayStates, ['started', 'completed'])
 })
