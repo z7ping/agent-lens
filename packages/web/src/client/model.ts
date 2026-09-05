@@ -505,7 +505,7 @@ export class AgentLensClientModel {
     if (page.items.length >= targetLimit || !page.meta.hasMore || !page.meta.nextCursor) return page
 
     const items = new Map(page.items.map(item => [item.id, item]))
-    let cursor = page.meta.nextCursor
+    let cursor: string | undefined = page.meta.nextCursor
     while (items.size < targetLimit && page.meta.hasMore && cursor) {
       const previousCursor = cursor
       const remaining = targetLimit - items.size
