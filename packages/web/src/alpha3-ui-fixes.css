@@ -1,0 +1,177 @@
+/* Alpha.3 实际页面审查收口：窄屏导航与 Pi 历史继续操作。 */
+
+.workspace-breadcrumb-shell {
+  display: flex;
+  min-width: 0;
+  min-height: 38px;
+  flex: 0 0 38px;
+  align-items: stretch;
+  border-bottom: 1px solid var(--al-line);
+  background: var(--al-surface);
+}
+
+.workspace-breadcrumb-shell .workspace-breadcrumb {
+  min-width: 0;
+  min-height: 37px;
+  flex: 1 1 auto;
+  border-bottom: 0;
+}
+
+.workspace-mobile-nav-button,
+.workspace-mobile-backdrop {
+  display: none;
+}
+
+/* 历史 Pi 会话的继续操作放在真实会话尾部，但提高视觉层级。 */
+.task-review-tail-actions-host {
+  width: 100%;
+}
+
+.task-review-continuation {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 24px 0 4px;
+  padding: 15px 16px;
+  border: 1px solid color-mix(in srgb, var(--al-accent) 34%, var(--al-line));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--al-accent-soft) 42%, var(--al-surface));
+  box-shadow: 0 8px 24px rgb(16 24 40 / .055);
+}
+
+.task-review-continuation-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.task-review-continuation-copy b {
+  color: var(--al-ink);
+  font-size: 14px;
+  font-weight: 720;
+}
+
+.task-review-continuation-copy span {
+  color: var(--al-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.task-review-continuation-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.task-review-continuation-actions .btn {
+  min-height: 34px;
+  padding-inline: 13px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.task-review-continuation-actions .btn:first-child {
+  border-color: var(--al-accent);
+  background: var(--al-accent);
+  color: white;
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--al-accent) 22%, transparent);
+}
+
+.task-review-continuation-actions .btn:first-child:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--al-accent) 86%, black);
+  background: color-mix(in srgb, var(--al-accent) 90%, black);
+  color: white;
+}
+
+.task-review-continuation-actions .btn:nth-child(2) {
+  border-color: color-mix(in srgb, var(--al-accent) 38%, var(--al-line-strong));
+  background: var(--al-surface);
+  color: var(--al-accent);
+}
+
+@media (max-width: 575.98px) {
+  .app-shell {
+    position: relative;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workspace-sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 90;
+    width: min(88vw, 316px);
+    max-width: calc(100vw - 36px);
+    transform: translateX(-102%);
+    box-shadow: 16px 0 40px rgb(15 23 42 / .18);
+    transition: transform .18s cubic-bezier(.2, .8, .2, 1);
+  }
+
+  .workspace-sidebar.is-mobile-open {
+    transform: translateX(0);
+  }
+
+  .workspace-mobile-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    display: block;
+    padding: 0;
+    border: 0;
+    background: rgb(15 23 42 / .32);
+  }
+
+  .workspace-mobile-nav-button {
+    display: inline-flex;
+    width: 38px;
+    min-width: 38px;
+    height: 36px;
+    align-self: center;
+    margin-left: 4px;
+    border-color: transparent;
+    background: transparent;
+    color: var(--al-muted);
+  }
+
+  .workspace-mobile-nav-button:hover:not(:disabled) {
+    border-color: transparent;
+    background: var(--al-soft-2);
+    color: var(--al-ink);
+  }
+
+  .workspace-breadcrumb-shell {
+    min-height: 38px;
+    flex-basis: 38px;
+  }
+
+  .workspace-breadcrumb-shell .workspace-breadcrumb {
+    padding-left: 4px;
+  }
+
+  .task-review-continuation {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 18px;
+    padding: 14px;
+  }
+
+  .task-review-continuation-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .task-review-continuation-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-sidebar {
+    transition: none;
+  }
+}
