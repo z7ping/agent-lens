@@ -72,10 +72,21 @@ export function sanitizeCodexEntry(raw: unknown): Record<string, unknown> {
   if (type === 'session_meta') {
     safePayload = {
       id: payload.id,
+      session_id: payload.session_id,
       timestamp: payload.timestamp,
       cwd: payload.cwd,
       originator: payload.originator,
       cli_version: payload.cli_version,
+      parent_thread_id: payload.parent_thread_id,
+      forked_from_id: payload.forked_from_id,
+      source: sanitizeUnknown(payload.source),
+      thread_source: sanitizeUnknown(payload.thread_source),
+      agent_role: payload.agent_role,
+      agent_nickname: payload.agent_nickname,
+      agent_path: payload.agent_path,
+      model_provider: payload.model_provider,
+      history_mode: payload.history_mode,
+      subagent_history_start_ordinal: payload.subagent_history_start_ordinal,
     }
   } else if (type === 'response_item' && payload.type === 'message') {
     const role = typeof payload.role === 'string' ? payload.role : 'unknown'
