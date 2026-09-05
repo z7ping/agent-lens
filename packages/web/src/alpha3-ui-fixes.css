@@ -212,9 +212,9 @@
   min-height: 56px;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 18px;
   margin: 18px 0 4px;
-  padding: 9px 12px;
+  padding: 9px 18px;
   border: 1px solid var(--al-line);
   border-radius: 10px;
   background: color-mix(in srgb, var(--al-soft-2) 58%, var(--al-surface));
@@ -241,6 +241,7 @@
   flex: 0 0 auto;
   align-items: center;
   gap: 8px;
+  padding-right: 2px;
 }
 
 .task-review-continuation-actions .btn {
@@ -339,7 +340,7 @@
     flex-direction: column;
     gap: 10px;
     margin-top: 14px;
-    padding: 11px;
+    padding: 11px 14px;
   }
 
   .task-review-continuation-copy span {
@@ -349,6 +350,7 @@
   .task-review-continuation-actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
+    padding-right: 0;
   }
 
   .task-review-continuation-actions .btn {
