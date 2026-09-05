@@ -47,39 +47,30 @@
 .backup-tree-leaf { font-size: 12px; }
 .backup-tree-node > summary,
 .backup-tree-leaf {
-  position: relative;
   display: grid;
   min-height: 30px;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
-  padding: 4px 7px 4px 24px;
+  gap: 6px;
+  padding: 4px 7px;
   border-radius: 6px;
   list-style: none;
 }
 .backup-tree-node > summary { cursor: pointer; }
+.backup-tree-node > summary::marker { content: ''; }
 .backup-tree-node > summary::-webkit-details-marker { display: none; }
-.backup-tree-node > summary::before,
-.backup-tree-leaf::before {
-  content: '';
-  position: absolute;
-  left: 8px;
-  width: 7px;
-  height: 7px;
-  border-right: 1.5px solid var(--al-muted-2);
-  border-bottom: 1.5px solid var(--al-muted-2);
-  transform: rotate(-45deg);
+.backup-tree-chevron {
+  color: var(--al-muted-2);
   transition: transform .14s;
 }
-.backup-tree-leaf::before {
+.backup-tree-node[open] > summary > .backup-tree-chevron { transform: rotate(90deg); }
+.backup-tree-leaf-mark {
   width: 5px;
   height: 5px;
-  border: 0;
+  justify-self: center;
   border-radius: 99px;
   background: var(--al-line-strong);
-  transform: none;
 }
-.backup-tree-node[open] > summary::before { transform: rotate(45deg); }
 .backup-tree-node > summary:hover,
 .backup-tree-leaf:hover { background: var(--al-soft); }
 .backup-tree-name {
@@ -105,6 +96,10 @@
   line-height: 1.5;
 }
 .backup-tree-omitted { margin-left: 7px; border-left: 1px dashed var(--al-line-strong); }
+
+@media (prefers-reduced-motion: reduce) {
+  .backup-tree-chevron { transition: none; }
+}
 
 @media (max-width: 575.98px) {
   .backup-root-tree-head { grid-template-columns: auto minmax(0, 1fr); }
