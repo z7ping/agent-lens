@@ -43,7 +43,10 @@ export async function runMaintenanceJob<T>(
   operation: (context: MaintenanceJobContext) => Promise<T>,
   completeProgress?: (value: T) => JsonValue,
 ): Promise<MaintenanceJobRunResult<T> | null> {
-  if (!store) return null
+  if (!store) {
+    await operation({ signal, report: async () => true })
+    return null
+  }
 
   let job = await store.ensure(spec)
   if (signal.aborted) {
