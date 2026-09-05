@@ -467,6 +467,11 @@ export async function normalizeCodexRecord(
       }))
     } else if (innerType === 'token_count') {
       push(candidate(record, envelope, 'usage', tokenUsage(payload)))
+    } else if (innerType === 'thread_settings_applied') {
+      push(candidate(record, envelope, 'session.lifecycle', {
+        ...payload,
+        event: 'reasoning.configuration.updated',
+      }))
     } else if (innerType && visibleReasoningTypes.has(innerType)) {
       const text = visibleReasoningText(payload)
       push(text
@@ -506,6 +511,12 @@ export async function normalizeCodexRecord(
         ...(visible.sourceMetadata || payload.content === undefined ? {} : { content: payload.content }),
       }))
     }
+  } else if (topType === 'response_item' && innerType === 'agent_message') {
+    push(candidate(record, envelope, 'session.lifecycle', {
+      ...payload,
+      event: 'subagent.communication',
+      text: messageText(payload.content ?? payload.text ?? ''),
+    }))
   } else if (topType === 'response_item' && (innerType === 'function_call' || innerType === 'custom_tool_call')) {
     const callId = stringField(payload, 'call_id') ?? `codex-call-${record.sourceSequence ?? record.id}`
     const name = stringField(payload, 'name') ?? innerType
@@ -515,6 +526,25 @@ export async function normalizeCodexRecord(
       try { input = JSON.parse(rawInput) } catch { input = rawInput }
     }
     push(candidate(record, envelope, 'tool.call', { callId, nativeToolName: name, input }, { nativeCallId: callId }))
+  } else if (topType === 'response_item' && innerType === 'local_shell_call') {
+    const callId = stringField(payload, 'call_id', 'id') ?? `local-shell-${record.sourceSequence ?? record.id}`
+    push(candidate(record, envelope, 'tool.call', {
+      callId,
+      nativeToolName: 'local_shell',
+      input: payload.action ?? payload,
+      ...(payload.status === undefined ? {} : { status: payload.status }),
+      raw: payload,
+    }, { nativeCallId: callId }))
+  } else if (topType === 'response_item' && innerType === 'tool_search_call') {
+    const callId = stringField(payload, 'call_id', 'id') ?? `tool-search-${record.sourceSequence ?? record.id}`
+    push(candidate(record, envelope, 'tool.call', {
+      callId,
+      nativeToolName: 'tool_search',
+      input: payload.arguments ?? {},
+      ...(payload.execution === undefined ? {} : { execution: payload.execution }),
+      ...(payload.status === undefined ? {} : { status: payload.status }),
+      raw: payload,
+    }, { nativeCallId: callId }))
   } else if (topType === 'response_item' && (innerType === 'function_call_output' || innerType === 'custom_tool_call_output' || innerType === 'tool_search_output')) {
     const callId = stringField(payload, 'call_id') ?? `codex-call-${record.sourceSequence ?? record.id}`
     const outputValue = payload.output ?? payload.result ?? payload.content
@@ -538,12 +568,31 @@ export async function normalizeCodexRecord(
       },
       raw: payload,
     }, { nativeCallId: callId }))
+  } else if (topType === 'response_item' && innerType === 'image_generation_call') {
+    push(candidate(record, envelope, 'artifact.action', {
+      action: 'image.generation',
+      ...(stringField(payload, 'id') ? { artifactId: stringField(payload, 'id') } : {}),
+      ...(payload.status === undefined ? {} : { status: payload.status }),
+      hasResult: typeof payload.result === 'string' && payload.result.length > 0,
+    }))
   } else if (topType === 'response_item' && innerType === 'reasoning') {
     const text = messageText(payload.summary ?? payload.content ?? payload.text ?? '')
     push(text
       ? candidate(record, envelope, 'message.reasoning', { text, raw: payload })
       : unknownCandidate(record, envelope, entry as JsonValue))
-  } else if (topType === 'world_state' || topType === 'inter_agent_communication' || topType === 'realtime_item' || topType === 'security_risk_score') {
+  } else if (topType === 'response_item' && (innerType === 'compaction' || innerType === 'context_compaction')) {
+    push(candidate(record, envelope, 'context.compaction', {
+      phase: 'end',
+      sourceType: innerType,
+      raw: payload,
+    }))
+  } else if (topType === 'inter_agent_communication') {
+    push(candidate(record, envelope, 'session.lifecycle', {
+      ...payload,
+      event: 'subagent.communication',
+      text: messageText(payload.content ?? payload.message ?? ''),
+    }))
+  } else if (topType === 'world_state' || topType === 'inter_agent_communication_metadata' || topType === 'realtime_item' || topType === 'security_risk_score') {
     push(unknownCandidate(record, envelope, entry as JsonValue))
   } else {
     push(unknownCandidate(record, envelope, entry as JsonValue))
