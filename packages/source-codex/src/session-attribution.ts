@@ -148,6 +148,7 @@ function relationship(
     sourceId: 'codex',
     installationId: record.installationId,
     ...(ctx.runtimeProfile?.id ? { runtimeProfileId: ctx.runtimeProfile.id } : {}),
+    sourceRecordId: record.id,
     fromNativeSessionId,
     toNativeSessionId,
     type,
