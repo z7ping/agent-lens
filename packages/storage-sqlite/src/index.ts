@@ -1,6 +1,7 @@
 export * from './asset-inventory'
 export * from './checkpoints'
 export * from './executor'
+export * from './maintenance'
 export * from './migrations'
 export * from './repositories'
 export * from './replication-state'
