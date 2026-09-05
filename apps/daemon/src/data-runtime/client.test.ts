@@ -52,3 +52,19 @@ test('Data Runtime client rejects oversized messages before posting to worker', 
     await client.shutdown()
   }
 })
+
+test('timed out synchronous request degrades and circuit-breaks the worker', async () => {
+  const client = new DataRuntimeClient({ allowDiagnostics: true, requestTimeoutMs: 2_000 })
+  await client.start()
+  try {
+    await assert.rejects(
+      client.request('diagnostic.block', { durationMs: 250 }, 30),
+      /request timed out/,
+    )
+    assert.equal(client.state(), 'degraded')
+    assert.equal(client.snapshot().timeouts, 1)
+    assert.match(client.snapshot().lastError ?? '', /request timed out/)
+  } finally {
+    await client.shutdown()
+  }
+})
