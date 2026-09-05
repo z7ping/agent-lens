@@ -132,41 +132,108 @@
   background: var(--al-soft-2);
 }
 
-/* 历史 Pi 会话的继续操作放在真实会话尾部，但提高视觉层级。 */
+/* 任务列表优先展示“任务是什么”，来源、项目、时间与统计退到辅助层。 */
+.task-center-rail .session-item {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  padding: 8px 8px 8px 11px;
+}
+
+.task-center-rail .session-item-title {
+  display: -webkit-box;
+  order: 1;
+  max-height: 2.9em;
+  margin: 0;
+  overflow: hidden;
+  color: var(--al-ink);
+  font-size: 13px;
+  font-weight: 680;
+  line-height: 1.42;
+  text-overflow: ellipsis;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.task-center-rail .session-item-meta {
+  order: 2;
+  margin-top: 5px;
+  gap: 5px;
+  color: var(--al-muted-2);
+  font-size: 11.5px;
+}
+
+.task-center-rail .session-item-meta .source-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+}
+
+.task-center-rail .session-item-meta time {
+  color: var(--al-muted-2);
+  font-weight: 400;
+}
+
+.task-center-rail .session-item-foot {
+  order: 3;
+  margin-top: 3px;
+  gap: 9px;
+  color: color-mix(in srgb, var(--al-muted-2) 88%, transparent);
+  font-size: 11.5px;
+}
+
+.task-center-rail .session-activity-badge {
+  min-height: 18px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 620;
+}
+
+.task-center-rail .session-item-active {
+  background: color-mix(in srgb, var(--al-accent-soft) 34%, var(--al-surface));
+}
+
+.task-center-rail .session-item-active::before {
+  top: 7px;
+  bottom: 7px;
+  width: 2px;
+}
+
+/* 历史 Pi 会话的继续操作是正文末尾的一步操作，不再做成重卡片。 */
 .task-review-tail-actions-host {
   width: 100%;
 }
 
 .task-review-continuation {
   display: flex;
+  width: 100%;
   min-width: 0;
+  min-height: 56px;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
-  margin: 24px 0 4px;
-  padding: 15px 16px;
-  border: 1px solid color-mix(in srgb, var(--al-accent) 34%, var(--al-line));
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--al-accent-soft) 42%, var(--al-surface));
-  box-shadow: 0 8px 24px rgb(16 24 40 / .055);
+  gap: 16px;
+  margin: 18px 0 4px;
+  padding: 9px 12px;
+  border: 1px solid var(--al-line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--al-soft-2) 58%, var(--al-surface));
+  box-shadow: 0 2px 8px rgb(16 24 40 / .025);
 }
 
 .task-review-continuation-copy {
-  display: grid;
+  display: flex;
   min-width: 0;
-  gap: 3px;
-}
-
-.task-review-continuation-copy b {
-  color: var(--al-ink);
-  font-size: 14px;
-  font-weight: 720;
+  align-items: center;
 }
 
 .task-review-continuation-copy span {
+  overflow: hidden;
   color: var(--al-muted);
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: 12.5px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .task-review-continuation-actions {
@@ -188,7 +255,7 @@
   border-color: var(--al-accent);
   background: var(--al-accent);
   color: white;
-  box-shadow: 0 3px 10px color-mix(in srgb, var(--al-accent) 22%, transparent);
+  box-shadow: 0 2px 7px color-mix(in srgb, var(--al-accent) 18%, transparent);
 }
 
 .task-review-continuation-actions .btn:first-child:hover:not(:disabled) {
@@ -198,7 +265,7 @@
 }
 
 .task-review-continuation-actions .btn:nth-child(2) {
-  border-color: color-mix(in srgb, var(--al-accent) 38%, var(--al-line-strong));
+  border-color: color-mix(in srgb, var(--al-accent) 30%, var(--al-line-strong));
   background: var(--al-surface);
   color: var(--al-accent);
 }
@@ -267,11 +334,16 @@
   }
 
   .task-review-continuation {
+    min-height: 0;
     align-items: stretch;
     flex-direction: column;
-    gap: 12px;
-    margin-top: 18px;
-    padding: 14px;
+    gap: 10px;
+    margin-top: 14px;
+    padding: 11px;
+  }
+
+  .task-review-continuation-copy span {
+    white-space: normal;
   }
 
   .task-review-continuation-actions {
