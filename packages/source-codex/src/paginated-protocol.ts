@@ -73,10 +73,11 @@ export function completedTurnItem(record: SourceRecord): CodexCompletedTurnItem 
 
   const item = asRecord(payload.item)
   if (!Object.keys(item).length) return null
+  const itemId = stringField(item, 'id')
   return {
     turnId: stringField(payload, 'turn_id', 'turnId') ?? '',
     item,
-    itemId: stringField(item, 'id'),
+    ...(itemId ? { itemId } : {}),
     type: normalizedItemType(item.type),
   }
 }

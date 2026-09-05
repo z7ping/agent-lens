@@ -13,12 +13,23 @@ interface Options {
   evidencePerObservation: number
   samples: number
   limit: number
+  globalP95BudgetMs: number | null
+  overviewP95BudgetMs: number | null
 }
 
 function readPositiveInt(name: string, fallback: number): number {
   const prefix = `--${name}=`
   const raw = process.argv.find(arg => arg.startsWith(prefix))?.slice(prefix.length)
   if (!raw) return fallback
+  const value = Number.parseInt(raw, 10)
+  if (!Number.isFinite(value) || value <= 0) throw new Error(`${name} must be a positive integer`)
+  return value
+}
+
+function readOptionalPositiveInt(name: string): number | null {
+  const prefix = `--${name}=`
+  const raw = process.argv.find(arg => arg.startsWith(prefix))?.slice(prefix.length)
+  if (!raw) return null
   const value = Number.parseInt(raw, 10)
   if (!Number.isFinite(value) || value <= 0) throw new Error(`${name} must be a positive integer`)
   return value
@@ -31,6 +42,8 @@ const options: Options = {
   evidencePerObservation: readPositiveInt('evidence-per-observation', 1),
   samples: readPositiveInt('samples', 10),
   limit: readPositiveInt('limit', 100),
+  globalP95BudgetMs: readOptionalPositiveInt('global-p95-budget-ms'),
+  overviewP95BudgetMs: readOptionalPositiveInt('overview-p95-budget-ms'),
 }
 
 function percentile(values: number[], p: number): number {
@@ -277,6 +290,17 @@ try {
 
   const databaseBytes = fileSize(databasePath)
   const walBytes = fileSize(`${databasePath}-wal`)
+  const globalTiming = results.find(item => item.name === 'tool-analysis-global')
+  const overviewTiming = results.find(item => item.name === 'agent-overview-all-installations')
+  const budgetViolations = [
+    options.globalP95BudgetMs !== null && globalTiming && globalTiming.p95Ms > options.globalP95BudgetMs
+      ? `tool-analysis-global p95 ${globalTiming.p95Ms}ms exceeds ${options.globalP95BudgetMs}ms`
+      : null,
+    options.overviewP95BudgetMs !== null && overviewTiming && overviewTiming.p95Ms > options.overviewP95BudgetMs
+      ? `agent-overview-all-installations p95 ${overviewTiming.p95Ms}ms exceeds ${options.overviewP95BudgetMs}ms`
+      : null,
+  ].filter((item): item is string => item !== null)
+
   console.log(JSON.stringify({
     fixture: {
       ...counts,
@@ -293,10 +317,16 @@ try {
       overviewRepeatedUsageQueries: options.installations,
     },
     timings: results,
+    budgets: {
+      globalP95Ms: options.globalP95BudgetMs,
+      overviewP95Ms: options.overviewP95BudgetMs,
+      passed: budgetViolations.length === 0,
+    },
     oneInstallationQueryPlan: oneInstallationPlan.map(row => row.detail),
     globalQueryPlan: globalPlan.map(row => row.detail),
     evidenceLookupQueryPlan: evidencePlan.map(row => row.detail),
   }, null, 2))
+  if (budgetViolations.length) throw new Error(`performance budget failed: ${budgetViolations.join('; ')}`)
 } finally {
   await storage.close()
   rmSync(root, { recursive: true, force: true })
