@@ -96,7 +96,7 @@ export function withSqliteSourceRecordCompression(
     },
     async findByNativeId(sourceId, installationId, nativeId) {
       const record = await sourceRecords.findByNativeId(sourceId, installationId, nativeId)
-      return record ? this.get(record.id) : null
+      return restoreCompressedPayload(executor, record)
     },
     async put(record) {
       await sourceRecords.put(record)
