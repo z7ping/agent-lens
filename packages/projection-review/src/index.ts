@@ -107,6 +107,9 @@ export function lifecycleEventLabel(payload: JsonValue | unknown): string {
     'review.entered': '进入审查',
     'review.exited': '退出审查',
     'subagent.interacted': '子 Agent 活动',
+    'thread.goal.updated': '任务目标更新',
+    'thread.rolled.back': '会话回滚',
+    'thread.settings.applied': '会话设置更新',
   }
   if (exact[action]) return exact[action]
 
