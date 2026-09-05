@@ -1,3 +1,4 @@
+import type { StorageService } from '@agent-lens/core'
 import { HubReviewProjection } from '@agent-lens/projection-review'
 import { defineAgentLensPlugin, type AgentLensContext } from '@agent-lens/runtime-cordis'
 import { HttpEventHub } from './events'
@@ -16,6 +17,8 @@ declare module '@deepseek-ai/cordis' {
 
 export interface HttpSurfacePluginConfig {
   port?: number
+  /** Dynamic control/data-plane health contribution; must remain O(1). */
+  dataRuntimeHealth?: () => Readonly<Record<string, unknown>> & { ok?: boolean }
 }
 
 const manifest = {
@@ -25,6 +28,33 @@ const manifest = {
   pluginType: 'surface',
   displayName: 'AgentLens HTTP Surface',
 } as const
+
+function storageWithRuntimeHealth(
+  storage: StorageService,
+  contributor: HttpSurfacePluginConfig['dataRuntimeHealth'],
+): StorageService {
+  if (!contributor) return storage
+  return new Proxy(storage, {
+    get(target, property, receiver) {
+      if (property === 'health') {
+        return async () => {
+          const health = await target.health()
+          const dataRuntime = contributor()
+          return {
+            ...health,
+            ok: health.ok && dataRuntime.ok !== false,
+            details: {
+              ...health.details,
+              dataRuntime,
+            },
+          }
+        }
+      }
+      const value = Reflect.get(target as object, property, receiver)
+      return typeof value === 'function' ? value.bind(target) : value
+    },
+  })
+}
 
 const applyHttpSurface = Object.assign(
   async (ctx: AgentLensContext, config: HttpSurfacePluginConfig = {}) => {
@@ -81,7 +111,7 @@ const applyHttpSurface = Object.assign(
       })
     })
 
-    const surface = await startHttpSurface(ctx.storage, {
+    const surface = await startHttpSurface(storageWithRuntimeHealth(ctx.storage, config.dataRuntimeHealth), {
       port: config.port ?? DEFAULT_AGENT_LENS_HTTP_PORT,
       eventHub,
       sources: ctx.sources,
@@ -104,3 +134,7 @@ const applyHttpSurface = Object.assign(
 )
 
 export const httpSurfacePlugin = defineAgentLensPlugin(manifest, applyHttpSurface)
+
+export const httpSurfacePluginInternals = {
+  storageWithRuntimeHealth,
+}
