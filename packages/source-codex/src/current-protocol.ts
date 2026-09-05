@@ -10,7 +10,7 @@ import { normalizePaginatedFunctionOutput } from './paginated-function-output'
 import { normalizePaginatedCodexRecord } from './paginated-protocol'
 import { assistantMessageProvenance, contextClassification } from './provenance'
 
-export const CODEX_CURRENT_PARSER_VERSION = '15'
+export const CODEX_CURRENT_PARSER_VERSION = '16'
 
 function asRecord(value: unknown): Record<string, any> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -80,6 +80,39 @@ function directRawReasoning(record: SourceRecord): Record<string, unknown> | nul
   return stringField(payload, 'text') ? payload : null
 }
 
+type PersistedThreadMetadataEvent = {
+  event: 'thread.goal.updated' | 'thread.rolled-back' | 'thread.settings.applied'
+  payload: Record<string, unknown>
+  modelName?: string
+  workspacePath?: string
+}
+
+function persistedThreadMetadataEvent(record: SourceRecord): PersistedThreadMetadataEvent | null {
+  const envelope = asRecord(record.payload)
+  const entry = asRecord(envelope.entry)
+  const payload = asRecord(entry.payload)
+  if (entry.type !== 'event_msg') return null
+
+  if (payload.type === 'thread_goal_updated') {
+    return { event: 'thread.goal.updated', payload }
+  }
+  if (payload.type === 'thread_rolled_back') {
+    return { event: 'thread.rolled-back', payload }
+  }
+  if (payload.type === 'thread_settings_applied') {
+    const settings = asRecord(payload.thread_settings ?? payload.threadSettings)
+    const modelName = stringField(settings, 'model')
+    const workspacePath = stringField(settings, 'cwd')
+    return {
+      event: 'thread.settings.applied',
+      payload,
+      ...(modelName ? { modelName } : {}),
+      ...(workspacePath ? { workspacePath } : {}),
+    }
+  }
+  return null
+}
+
 function asAssistantResponseItem(record: SourceRecord, event: AssistantEvent): SourceRecord {
   return syntheticEntryRecord(record, {
     type: 'response_item',
@@ -136,6 +169,32 @@ async function normalizeDirectRawReasoning(
   }
 }
 
+async function normalizePersistedThreadMetadata(
+  record: SourceRecord,
+  ctx: SourceNormalizationContext,
+  metadata: PersistedThreadMetadataEvent,
+): Promise<NormalizedSourceOutput> {
+  const output = await normalizeCodexRecord(record, ctx)
+  return {
+    ...output,
+    observations: output.observations.map(observation => observation.kind === 'unknown'
+      ? {
+          ...observation,
+          kind: 'session.lifecycle',
+          payload: {
+            ...metadata.payload,
+            event: metadata.event,
+          },
+          identityHints: {
+            ...observation.identityHints,
+            ...(metadata.modelName ? { modelName: metadata.modelName } : {}),
+            ...(metadata.workspacePath ? { workspacePath: metadata.workspacePath } : {}),
+          },
+        }
+      : observation),
+  }
+}
+
 async function normalizeTransportEcho(
   record: SourceRecord,
   ctx: SourceNormalizationContext,
@@ -155,6 +214,7 @@ async function normalizeTransportEcho(
  * - Legacy: user_message / agent_message / reasoning events.
  * - Paginated: event_msg.item_completed with a structured TurnItem.
  *
+ * Persistent thread metadata events are mapped explicitly as lifecycle facts.
  * We only dispatch on native structure here. Authorship and activity ownership
  * are never inferred from message text.
  */
@@ -169,6 +229,9 @@ export async function normalizeCurrentCodexRecord(
 
   const paginated = await normalizePaginatedCodexRecord(record, ctx)
   if (paginated) return paginated
+
+  const threadMetadata = persistedThreadMetadataEvent(record)
+  if (threadMetadata) return normalizePersistedThreadMetadata(record, ctx, threadMetadata)
 
   const rawReasoning = directRawReasoning(record)
   if (rawReasoning) return normalizeDirectRawReasoning(record, ctx, rawReasoning)
@@ -187,4 +250,5 @@ export const currentCodexProtocolInternals = {
   directAssistantEvent,
   directRawReasoning,
   isTransportEchoRecord,
+  persistedThreadMetadataEvent,
 }
