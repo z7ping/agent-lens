@@ -100,7 +100,10 @@ function classifySession(payload: Record<string, unknown>): {
   const role = lowerText(payload.agent_role ?? payload.agentRole ?? subagent.agent_role ?? subagent.role)
   const sourceText = lowerText(threadSource)
   const rawText = lowerText(raw)
-  const isSubagent = sourceText.includes('subagent')
+  // Codex 官方持久化契约中 parent_thread_id 只会设置在子 Agent 线程上。
+  // 因此即使旧版 session_meta 缺少 thread_source/subagent 细节，也不能降级为泛化“系统活动”。
+  const isSubagent = Boolean(directParentId(payload))
+    || sourceText.includes('subagent')
     || raw !== undefined
     || rawText.includes('subagent')
     || /worker|subagent|child/.test(role)
@@ -111,7 +114,7 @@ function classifySession(payload: Record<string, unknown>): {
       : { activity: 'subagent', relationship: 'subagent' }
   }
 
-  if (directParentId(payload) || rootTaskId(payload, stringField(payload, 'id') ?? '')) {
+  if (rootTaskId(payload, stringField(payload, 'id') ?? '')) {
     return { activity: 'system-activity', relationship: 'related' }
   }
   return { activity: 'user-task', relationship: 'related' }
