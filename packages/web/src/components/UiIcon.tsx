@@ -13,6 +13,7 @@ import {
   ChevronsDown,
   ChevronsUp,
   CircleAlert,
+  Clock,
   Copy,
   Dot,
   FileText,
@@ -53,6 +54,7 @@ export type UiIconName =
   | 'check'
   | 'chevron-down'
   | 'chevron-right'
+  | 'clock'
   | 'close'
   | 'collapse'
   | 'copy'
@@ -95,6 +97,7 @@ const icons = {
   check: Check,
   'chevron-down': ChevronDown,
   'chevron-right': ChevronRight,
+  clock: Clock,
   close: X,
   collapse: Minimize2,
   copy: Copy,
