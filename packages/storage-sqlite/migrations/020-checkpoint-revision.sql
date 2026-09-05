@@ -1,0 +1,2 @@
+ALTER TABLE source_checkpoints
+ADD COLUMN revision INTEGER NOT NULL DEFAULT 0;
