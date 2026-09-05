@@ -1,3 +1,4 @@
+import { monitorEventLoopDelay } from 'node:perf_hooks'
 import type { StorageService } from '@agent-lens/core'
 import { HubReviewProjection } from '@agent-lens/projection-review'
 import { defineAgentLensPlugin, type AgentLensContext } from '@agent-lens/runtime-cordis'
@@ -33,31 +34,52 @@ function errorSummary(error: unknown): string {
   return (error instanceof Error ? `${error.name}: ${error.message}` : String(error)).slice(0, 1000)
 }
 
+function milliseconds(nanoseconds: number): number {
+  if (!Number.isFinite(nanoseconds) || nanoseconds <= 0) return 0
+  return nanoseconds / 1_000_000
+}
+
+function eventLoopSnapshot(histogram: ReturnType<typeof monitorEventLoopDelay>) {
+  return {
+    resolutionMs: 20,
+    minMs: milliseconds(histogram.min),
+    maxMs: milliseconds(histogram.max),
+    meanMs: milliseconds(histogram.mean),
+    p50Ms: milliseconds(histogram.percentile(50)),
+    p95Ms: milliseconds(histogram.percentile(95)),
+    p99Ms: milliseconds(histogram.percentile(99)),
+  }
+}
+
 function storageWithRuntimeHealth(
   storage: StorageService,
   contributor: HttpSurfacePluginConfig['dataRuntimeHealth'],
+  eventLoopHealth?: () => Readonly<Record<string, unknown>>,
 ): StorageService {
-  if (!contributor) return storage
+  if (!contributor && !eventLoopHealth) return storage
   return new Proxy(storage, {
     get(target, property, receiver) {
       if (property === 'health') {
         return async () => {
-          const dataRuntime = contributor()
+          const dataRuntime = contributor?.()
+          const eventLoop = eventLoopHealth?.()
           try {
             const health = await target.health()
             return {
               ...health,
-              ok: health.ok && dataRuntime.ok !== false,
+              ok: health.ok && dataRuntime?.ok !== false,
               details: {
                 ...health.details,
-                dataRuntime,
+                ...(dataRuntime ? { dataRuntime } : {}),
+                ...(eventLoop ? { eventLoop } : {}),
               },
             }
           } catch (error) {
             return {
               ok: false,
               details: {
-                dataRuntime,
+                ...(dataRuntime ? { dataRuntime } : {}),
+                ...(eventLoop ? { eventLoop } : {}),
                 storageUnavailable: true,
                 storageError: errorSummary(error),
               },
@@ -74,6 +96,8 @@ function storageWithRuntimeHealth(
 const applyHttpSurface = Object.assign(
   async (ctx: AgentLensContext, config: HttpSurfacePluginConfig = {}) => {
     const eventHub = new HttpEventHub()
+    const eventLoop = monitorEventLoopDelay({ resolution: 20 })
+    eventLoop.enable()
     const hubReview = new HubReviewProjection(
       ctx.unifiedRead.logicalSessions,
       ctx.unifiedRead.observations,
@@ -126,7 +150,12 @@ const applyHttpSurface = Object.assign(
       })
     })
 
-    const surface = await startHttpSurface(storageWithRuntimeHealth(ctx.storage, config.dataRuntimeHealth), {
+    const healthStorage = storageWithRuntimeHealth(
+      ctx.storage,
+      config.dataRuntimeHealth,
+      () => eventLoopSnapshot(eventLoop),
+    )
+    const surface = await startHttpSurface(healthStorage, {
       port: config.port ?? DEFAULT_AGENT_LENS_HTTP_PORT,
       eventHub,
       sources: ctx.sources,
@@ -139,6 +168,7 @@ const applyHttpSurface = Object.assign(
     const unprovideHubReview = ctx.provide('hubReview', hubReview)
     const unprovideHttp = ctx.provide('http', surface)
     return async () => {
+      eventLoop.disable()
       unprovideHttp()
       unprovideHubReview()
       eventHub.close()
@@ -152,4 +182,6 @@ export const httpSurfacePlugin = defineAgentLensPlugin(manifest, applyHttpSurfac
 
 export const httpSurfacePluginInternals = {
   storageWithRuntimeHealth,
+  milliseconds,
+  eventLoopSnapshot,
 }
