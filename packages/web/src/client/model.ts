@@ -26,6 +26,7 @@ export interface ClientSnapshot {
     response: ReviewResponseDto | null
     detail: ReviewSessionDetailDto | null
     relationships: SessionRelationshipResponseDto | null
+    relationshipError: string
     selectedId: string
     limit: number
     loading: boolean
@@ -82,6 +83,7 @@ export class AgentLensClientModel {
       response: null,
       detail: null,
       relationships: null,
+      relationshipError: '',
       selectedId: '',
       limit: INITIAL_REVIEW_LIMIT,
       loading: true,
@@ -498,6 +500,30 @@ export class AgentLensClientModel {
     return pending
   }
 
+  private async fetchReviewWindow(filters: ReviewFilters, targetLimit: number): Promise<ReviewResponseDto> {
+    let page = await this.api.review(filters, targetLimit)
+    if (page.items.length >= targetLimit || !page.meta.hasMore || !page.meta.nextCursor) return page
+
+    const items = new Map(page.items.map(item => [item.id, item]))
+    let cursor = page.meta.nextCursor
+    while (items.size < targetLimit && page.meta.hasMore && cursor) {
+      const previousCursor = cursor
+      const remaining = targetLimit - items.size
+      page = await this.api.review(filters, remaining, cursor)
+      const before = items.size
+      for (const item of page.items) items.set(item.id, item)
+      cursor = page.meta.nextCursor
+      if (items.size === before && (!cursor || cursor === previousCursor)) break
+    }
+
+    const merged = [...items.values()].slice(0, targetLimit)
+    return {
+      ...page,
+      items: merged,
+      meta: { ...page.meta, count: merged.length },
+    }
+  }
+
   private async executeReviewRefresh(generation: number, preserveDetail: boolean): Promise<void> {
     const current = this.snapshot.review
     const backgroundRefresh = preserveDetail && current.response !== null
@@ -511,7 +537,9 @@ export class AgentLensClientModel {
       const refreshLimit = backgroundRefresh
         ? Math.max(INITIAL_REVIEW_LIMIT, current.limit, current.response?.items.length ?? 0)
         : INITIAL_REVIEW_LIMIT
-      const response = await this.api.review(current.filters, refreshLimit)
+      const response = backgroundRefresh
+        ? await this.fetchReviewWindow(current.filters, refreshLimit)
+        : await this.api.review(current.filters, refreshLimit)
       if (generation !== this.reviewGeneration) return
       let selectedId = this.snapshot.review.selectedId
       if (!selectedId || (!preserveDetail && !response.items.some(item => item.id === selectedId))) {
@@ -523,7 +551,7 @@ export class AgentLensClientModel {
           ...this.snapshot.review,
           response,
           selectedId,
-          limit: refreshLimit,
+          limit: response.items.length,
           loading: false,
           loadingMore: false,
           error: '',
@@ -534,7 +562,7 @@ export class AgentLensClientModel {
       } else if (!selectedId) {
         this.publish({
           ...this.snapshot,
-          review: { ...this.snapshot.review, detail: null, relationships: null },
+          review: { ...this.snapshot.review, detail: null, relationships: null, relationshipError: '' },
         })
       }
       if (!backgroundRefresh) await this.expandInitialReview(generation, response)
@@ -583,6 +611,7 @@ export class AgentLensClientModel {
         detailLoading: true,
         detailLoadingMore: false,
         detailHasNewData: false,
+        relationshipError: '',
         ...(changingSession ? { detail: null, relationships: null } : {}),
       },
     })
@@ -591,17 +620,22 @@ export class AgentLensClientModel {
         .then(detail => detail.interactions.length > 0 || !detail.interactionIndex?.length
           ? detail
           : this.api.reviewDetail(id, { direction: 'forward', limit: REVIEW_DETAIL_PAGE_SIZE }))
-      const [detail, relationships] = await Promise.all([
-        detailRequest,
-        this.api.relationships(id),
-      ])
+      const relationshipsRequest = this.api.relationships(id).then(
+        relationships => ({ relationships, relationshipError: '' }),
+        reason => ({
+          relationships: null,
+          relationshipError: reason instanceof Error ? reason.message : String(reason),
+        }),
+      )
+      const [detail, relationshipState] = await Promise.all([detailRequest, relationshipsRequest])
       if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== id) return
       this.publish({
         ...this.snapshot,
         review: {
           ...this.snapshot.review,
           detail,
-          relationships,
+          relationships: relationshipState.relationships,
+          relationshipError: relationshipState.relationshipError,
           detailLoading: false,
           error: '',
         },
