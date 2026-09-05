@@ -20,6 +20,8 @@ const REPOSITORY_SCAN_CHUNK = 1000
 const LIGHT_SCAN_CHUNK = 5000
 const DEFAULT_LIMIT = 100
 const MAX_LIMIT = 500
+const MAX_DETAIL_OBSERVATION_IDS = 100
+const MAX_DETAIL_SESSIONS = 100
 
 type UsageObservation = CanonicalObservation | ToolUsageObservationRecord
 
@@ -64,6 +66,9 @@ interface AssetAccumulator {
 function updateWindow(accumulator: { firstUsedAt: string; lastUsedAt: string }, at: string): void {
   if (at < accumulator.firstUsedAt) accumulator.firstUsedAt = at
   if (at > accumulator.lastUsedAt) accumulator.lastUsedAt = at
+}
+function pushObservationSample(ids: string[], id: string): void {
+  if (ids.length < MAX_DETAIL_OBSERVATION_IDS) ids.push(id)
 }
 function usageReader(storage: StorageService): ToolUsageObservationReader | undefined {
   return (storage as StorageService & { readonly toolUsageObservations?: ToolUsageObservationReader }).toolUsageObservations
@@ -159,7 +164,7 @@ export class ToolAssetUsageProjection {
       }
       asset.sourceIds.add(metadata.sourceId)
       asset.callCount += 1
-      asset.observationIds.push(observation.id)
+      pushObservationSample(asset.observationIds, observation.id)
       updateWindow(asset, at)
     })
 
@@ -204,7 +209,7 @@ export class ToolAssetUsageProjection {
       }
       tool.sourceIds.add(metadata.sourceId)
       tool.productIds.add(metadata.productId)
-      tool.observationIds.push(observation.id)
+      pushObservationSample(tool.observationIds, observation.id)
       tool.callCount += 1
       tool.sessionCalls.set(observation.logicalSessionId, (tool.sessionCalls.get(observation.logicalSessionId) ?? 0) + 1)
       updateWindow(tool, at)
@@ -222,7 +227,7 @@ export class ToolAssetUsageProjection {
       }
       asset.sourceIds.add(metadata.sourceId)
       asset.callCount += 1
-      asset.observationIds.push(observation.id)
+      pushObservationSample(asset.observationIds, observation.id)
       updateWindow(asset, at)
     })
 
@@ -246,7 +251,7 @@ export class ToolAssetUsageProjection {
       }
       tool.sourceIds.add(sourceId)
       tool.productIds.add(productId)
-      tool.observationIds.push(observation.id)
+      pushObservationSample(tool.observationIds, observation.id)
       tool.resultCount += 1
       updateWindow(tool, at)
       const success = payload.success
@@ -267,7 +272,8 @@ export class ToolAssetUsageProjection {
       sessionCount: item.sessionCalls.size,
       sessions: [...item.sessionCalls.entries()]
         .map(([logicalSessionId, callCount]) => ({ logicalSessionId, callCount }))
-        .sort((a, b) => b.callCount - a.callCount || a.logicalSessionId.localeCompare(b.logicalSessionId)),
+        .sort((a, b) => b.callCount - a.callCount || a.logicalSessionId.localeCompare(b.logicalSessionId))
+        .slice(0, MAX_DETAIL_SESSIONS),
       totalDurationMs: item.totalDurationMs,
       averageDurationMs: item.resultCount ? Math.round(item.totalDurationMs / item.resultCount) : 0,
       firstUsedAt: item.firstUsedAt,
@@ -306,4 +312,10 @@ export class ToolAssetUsageProjection {
   }
 }
 
-export const usageProjectionInternals = { inferAssetUsage, callId, toolName }
+export const usageProjectionInternals = {
+  inferAssetUsage,
+  callId,
+  toolName,
+  maxDetailObservationIds: MAX_DETAIL_OBSERVATION_IDS,
+  maxDetailSessions: MAX_DETAIL_SESSIONS,
+}
