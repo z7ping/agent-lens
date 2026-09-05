@@ -2,22 +2,21 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import type {
   AssetInventoryReader,
   CheckpointRepository,
+  MaintenanceJobStore,
   RepositorySet,
+  SessionSummaryProjectionStore,
   StorageHealth,
   StorageService,
   StorageTransaction,
-} from '@agent-lens/core'
-import type { UnifiedReadService } from '@agent-lens/core/replication'
-import type {
-  MaintenanceJobStore,
-  SessionSummaryProjectionStore,
   ToolUsageObservationReader,
 } from '@agent-lens/core'
+import type { UnifiedReadService } from '@agent-lens/core/replication'
 import { DataRuntimeClient, type DataRuntimeClientSnapshot } from './client.js'
 
 const WRITE_TIMEOUT_MS = 30_000
 const MAINTENANCE_TIMEOUT_MS = 120_000
 const READ_TIMEOUT_MS = 5_000
+const RECOVERY_INTERVAL_MS = 2_000
 
 const READ_PREFIXES = [
   'get',
@@ -136,9 +135,14 @@ export interface DataRuntimeHealthSnapshot {
   writer: DataRuntimeClientSnapshot
   reader: DataRuntimeClientSnapshot
   ok: boolean
+  recovering: boolean
 }
 
 export class DataRuntimeService {
+  private recoveryTimer: NodeJS.Timeout | null = null
+  private recovering = false
+  private stopping = false
+
   constructor(
     readonly writer: DataRuntimeClient,
     readonly reader: DataRuntimeClient,
@@ -151,11 +155,46 @@ export class DataRuntimeService {
       writer,
       reader,
       ok: writer.state === 'ready' && reader.state === 'ready',
+      recovering: this.recovering,
+    }
+  }
+
+  startRecovery(intervalMs = RECOVERY_INTERVAL_MS): void {
+    if (this.recoveryTimer || this.stopping) return
+    const tick = () => {
+      void this.recover().catch(() => undefined)
+    }
+    this.recoveryTimer = setInterval(tick, Math.max(500, intervalMs))
+    this.recoveryTimer.unref?.()
+  }
+
+  async recover(): Promise<void> {
+    if (this.stopping || this.recovering) return
+    const writerNeedsRecovery = this.writer.state() === 'degraded'
+    const readerNeedsRecovery = this.reader !== this.writer && this.reader.state() === 'degraded'
+    if (!writerNeedsRecovery && !readerNeedsRecovery) return
+
+    this.recovering = true
+    try {
+      if (writerNeedsRecovery) {
+        await this.writer.start().catch(() => undefined)
+      }
+      // Never reopen the reader against a schema that the writer could not recover.
+      if (this.writer.state() === 'ready' && readerNeedsRecovery) {
+        await this.reader.start().catch(() => undefined)
+      }
+    } finally {
+      this.recovering = false
     }
   }
 
   async shutdown(): Promise<void> {
-    await this.reader.shutdown().catch(() => undefined)
+    this.stopping = true
+    if (this.recoveryTimer) {
+      clearInterval(this.recoveryTimer)
+      this.recoveryTimer = null
+    }
+    if (this.reader !== this.writer) await this.reader.shutdown().catch(() => undefined)
     await this.writer.shutdown().catch(() => undefined)
   }
 }
@@ -266,4 +305,5 @@ export const dataRuntimeStorageInternals = {
   READ_TIMEOUT_MS,
   WRITE_TIMEOUT_MS,
   MAINTENANCE_TIMEOUT_MS,
+  RECOVERY_INTERVAL_MS,
 }
