@@ -8,81 +8,22 @@ interface Migration {
 }
 
 const migrations: readonly Migration[] = [
-  {
-    version: 1,
-    name: 'initial-1.0-schema',
-    fileName: '001-initial.sql',
-  },
-  {
-    version: 2,
-    name: 'source-checkpoints',
-    fileName: '002-source-checkpoints.sql',
-  },
-  {
-    version: 3,
-    name: 'observation-timeline-order-index',
-    fileName: '003-observation-timeline-order-index.sql',
-  },
-  {
-    version: 4,
-    name: 'runtime-profiles-relationships-diagnostics',
-    fileName: '004-runtime-profiles-relationships-diagnostics.sql',
-  },
-  {
-    version: 5,
-    name: 'session-summary-projection',
-    fileName: '005-session-summary-projection.sql',
-  },
-  {
-    version: 6,
-    name: 'observation-tool-usage-order-indexes',
-    fileName: '006-observation-tool-usage-order-indexes.sql',
-  },
-  {
-    version: 7,
-    name: 'durable-replication-state',
-    fileName: '007-durable-replication-state.sql',
-  },
-  {
-    version: 8,
-    name: 'replication-canonical-change-journal',
-    fileName: '008-replication-canonical-change-journal.sql',
-  },
-  {
-    version: 9,
-    name: 'replication-change-progress',
-    fileName: '009-replication-change-progress.sql',
-  },
-  {
-    version: 10,
-    name: 'hub-remote-replica-store',
-    fileName: '010-hub-remote-replica-store.sql',
-  },
-  {
-    version: 11,
-    name: 'workspace-project-fallback',
-    fileName: '011-workspace-project-fallback.sql',
-  },
-  {
-    version: 12,
-    name: 'observation-native-parent-tree',
-    fileName: '012-observation-native-parent-tree.sql',
-  },
-  {
-    version: 13,
-    name: 'session-activity-summary',
-    fileName: '013-session-activity-summary.sql',
-  },
-  {
-    version: 14,
-    name: 'parser-derived-relationship-ownership',
-    fileName: '014-parser-derived-relationship-ownership.sql',
-  },
-  {
-    version: 15,
-    name: 'parser-replay-order-index',
-    fileName: '015-parser-replay-order-index.sql',
-  },
+  { version: 1, name: 'initial-1.0-schema', fileName: '001-initial.sql' },
+  { version: 2, name: 'source-checkpoints', fileName: '002-source-checkpoints.sql' },
+  { version: 3, name: 'observation-timeline-order-index', fileName: '003-observation-timeline-order-index.sql' },
+  { version: 4, name: 'runtime-profiles-relationships-diagnostics', fileName: '004-runtime-profiles-relationships-diagnostics.sql' },
+  { version: 5, name: 'session-summary-projection', fileName: '005-session-summary-projection.sql' },
+  { version: 6, name: 'observation-tool-usage-order-indexes', fileName: '006-observation-tool-usage-order-indexes.sql' },
+  { version: 7, name: 'durable-replication-state', fileName: '007-durable-replication-state.sql' },
+  { version: 8, name: 'replication-canonical-change-journal', fileName: '008-replication-canonical-change-journal.sql' },
+  { version: 9, name: 'replication-change-progress', fileName: '009-replication-change-progress.sql' },
+  { version: 10, name: 'hub-remote-replica-store', fileName: '010-hub-remote-replica-store.sql' },
+  { version: 11, name: 'workspace-project-fallback', fileName: '011-workspace-project-fallback.sql' },
+  { version: 12, name: 'observation-native-parent-tree', fileName: '012-observation-native-parent-tree.sql' },
+  { version: 13, name: 'session-activity-summary', fileName: '013-session-activity-summary.sql' },
+  { version: 14, name: 'parser-derived-relationship-ownership', fileName: '014-parser-derived-relationship-ownership.sql' },
+  { version: 15, name: 'parser-replay-order-index', fileName: '015-parser-replay-order-index.sql' },
+  { version: 16, name: 'health-diagnostics-time-indexes', fileName: '016-health-diagnostics-time-indexes.sql' },
 ]
 
 async function readMigrationSql(fileName: string): Promise<string> {
