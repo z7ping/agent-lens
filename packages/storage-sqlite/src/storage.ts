@@ -15,6 +15,7 @@ import { SqliteMaintenanceJobStore } from './maintenance-jobs'
 import { migrateDatabase } from './migrations'
 import { withSqliteObservationPagination } from './observation-pagination'
 import { withSqliteParserReplayReplacement } from './parser-replay-replacement'
+import { SqliteProjectionBackfillMaintenance } from './projection-backfill'
 import { createSqliteRepositories } from './repositories'
 import { SqliteReplicationCanonicalChangeReader } from './replication-canonical-changes'
 import { SqliteReplicationStateRepository } from './replication-state'
@@ -65,6 +66,7 @@ export class SqliteStorageService implements StorageService {
   readonly unknownObservationProjection: SqliteUnknownObservationProjection
   readonly maintenance: SqliteStorageMaintenance
   readonly maintenanceJobs: SqliteMaintenanceJobStore
+  readonly projectionBackfill: SqliteProjectionBackfillMaintenance
   readonly runtimeProfiles: SqliteRuntimeProfileRepository
   readonly sourceRuntimeStatus: SqliteSourceRuntimeStatusRepository
   readonly sessionRelationshipCandidates: SqliteSessionRelationshipCandidateRepository
@@ -109,6 +111,7 @@ export class SqliteStorageService implements StorageService {
     this.unknownObservationProjection = new SqliteUnknownObservationProjection(this.executor)
     this.maintenance = new SqliteStorageMaintenance(this.executor)
     this.maintenanceJobs = new SqliteMaintenanceJobStore(this.executor)
+    this.projectionBackfill = new SqliteProjectionBackfillMaintenance(this.executor)
     this.runtimeProfiles = new SqliteRuntimeProfileRepository(this.executor)
     this.sourceRuntimeStatus = new SqliteSourceRuntimeStatusRepository(this.executor)
     this.sessionRelationshipCandidates = new SqliteSessionRelationshipCandidateRepository(this.executor)
