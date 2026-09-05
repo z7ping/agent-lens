@@ -202,10 +202,18 @@
 }
 
 .hub-review-refs summary {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   cursor: pointer;
   color: var(--text-secondary);
   font-size: 12px;
+  list-style: none;
 }
+.hub-review-refs summary::marker { content: ''; }
+.hub-review-refs summary::-webkit-details-marker { display: none; }
+.hub-review-refs-chevron { flex: 0 0 14px; transition: transform .16s ease; }
+.hub-review-refs[open] > summary > .hub-review-refs-chevron { transform: rotate(90deg); }
 
 .hub-review-refs > div {
   display: grid;
@@ -224,6 +232,10 @@
   color: var(--text-secondary);
   font-size: 12px;
   overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hub-review-refs-chevron { transition: none; }
 }
 
 @media (max-width: 760px) {
