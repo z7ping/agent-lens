@@ -71,12 +71,37 @@ test('compacted, web search and future rollout items retain source-visible detai
   const compacted = await normalizeCodexRecord(record({ type: 'compacted', payload: { replacement_history: ['a'], reason: 'auto' } }), ctx)
   assert.equal(compacted.observations[0]?.kind, 'context.compaction')
 
-  const web = await normalizeCodexRecord(record({ type: 'response_item', payload: { type: 'web_search_call', call_id: 'w1', status: 'completed', action: { type: 'search', query: 'AgentLens', domains: ['github.com'] } } }), ctx)
+  const web = await normalizeCodexRecord(record({ type: 'response_item', payload: { type: 'web_search_call', id: 'w1', status: 'completed', action: { type: 'search', query: 'AgentLens', domains: ['github.com'] } } }), ctx)
   assert.equal(web.observations[0]?.kind, 'tool.call')
+  assert.equal(web.observations[0]?.nativeCallId, 'w1')
   assert.deepEqual((web.observations[0]?.payload as any).input.action.domains, ['github.com'])
   assert.equal((web.observations[0]?.payload as any).input.status, 'completed')
 
   const unknown = await normalizeCodexRecord(record({ type: 'future_rollout_item', payload: { future: { survives: true } } }, 'future_rollout_item'), ctx)
   assert.equal(unknown.observations[0]?.kind, 'unknown')
   assert.equal((unknown.observations[0]?.payload as any).rawPayload.payload.future.survives, true)
+})
+
+test('official persisted response_item variants do not degrade to unknown', async () => {
+  const cases: Array<[Record<string, unknown>, string]> = [
+    [{ type: 'agent_message', id: 'agent-message-1', author: '/root/worker', recipient: '/root', content: [{ type: 'input_text', text: 'done' }] }, 'subagent.communication'],
+    [{ type: 'reasoning', id: 'reasoning-1', summary: [], encrypted_content: 'cipher' }, 'message.reasoning'],
+    [{ type: 'local_shell_call', id: 'shell-1', call_id: null, status: 'completed', action: { type: 'exec', command: ['pwd'] } }, 'tool.call'],
+    [{ type: 'tool_search_call', id: 'tool-search-1', call_id: null, status: 'completed', execution: 'server', arguments: { query: 'search' } }, 'tool.call'],
+    [{ type: 'image_generation_call', id: 'image-1', status: 'completed', revised_prompt: 'diagram', result: 'image-ref' }, 'artifact.action'],
+    [{ type: 'configuration_update', reasoning: { effort: 'high', summary: 'auto' } }, 'reasoning.configuration.updated'],
+    [{ type: 'compaction', id: 'compaction-1', encrypted_content: 'cipher' }, 'context.compaction'],
+    [{ type: 'context_compaction', id: 'context-compaction-1', encrypted_content: 'cipher' }, 'context.compaction'],
+  ]
+
+  for (const [payload, expectedKind] of cases) {
+    const output = await normalizeCodexRecord(record({ type: 'response_item', payload }), ctx)
+    assert.equal(output.observations[0]?.kind, expectedKind, String(payload.type))
+  }
+
+  const interAgent = await normalizeCodexRecord(record({
+    type: 'inter_agent_communication',
+    payload: { author: '/root/worker', recipient: '/root', content: 'done' },
+  }), ctx)
+  assert.equal(interAgent.observations[0]?.kind, 'subagent.communication')
 })
