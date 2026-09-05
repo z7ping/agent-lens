@@ -25,10 +25,16 @@ export function createProgressiveHistoryStages(startedAt: number): ProgressiveHi
   ]
 }
 
-export function createParserReplayStages(startedAt: number): ParserReplayStage[] {
-  const activeSince = new Date(startedAt - HOT_HISTORY_WINDOW_MS).toISOString()
+/** 启动链路只恢复首屏近期语义，重型 Replay 交给维护调度。 */
+export function createParserReplayStages(_startedAt: number): ParserReplayStage[] {
   return [
     { id: 'recent', label: '最近 10 个会话', window: { sessionLimit: 10 } },
+  ]
+}
+
+export function createParserReplayMaintenanceStages(startedAt: number): ParserReplayStage[] {
+  const activeSince = new Date(startedAt - HOT_HISTORY_WINDOW_MS).toISOString()
+  return [
     { id: 'hot-window', label: '最近 7 天', window: { activeSince } },
     { id: 'all', label: '全部已持久化历史' },
   ]
@@ -52,6 +58,15 @@ export function stagesAllowedByCapacity(
   if (state === 'exceeded') return stages.filter(stage => stage.id === 'latest')
   if (state === 'approaching') return stages.filter(stage => stage.id !== 'hot-window')
   return [...stages]
+}
+
+export function parserReplayMaintenanceStagesAllowedByCapacity(
+  stages: readonly ParserReplayStage[],
+  state: StorageCapacityState,
+): ParserReplayStage[] {
+  if (state === 'healthy') return [...stages]
+  if (state === 'approaching') return stages.filter(stage => stage.id === 'hot-window')
+  return []
 }
 
 export function yieldToForeground(signal: AbortSignal): Promise<void> {

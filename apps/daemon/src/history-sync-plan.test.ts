@@ -2,7 +2,9 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   createProgressiveHistoryStages,
+  createParserReplayMaintenanceStages,
   createParserReplayStages,
+  parserReplayMaintenanceStagesAllowedByCapacity,
   stagesAllowedByCapacity,
   storageCapacityState,
   yieldToForeground,
@@ -33,13 +35,23 @@ test('数据库接近软阈值时暂停 7 天回填，超过预算时仍同步�
   assert.equal(storageCapacityState(undefined), 'unknown')
 })
 
-test('parser 语义重放独立于原生历史容量降级并最终覆盖全部持久化记录', () => {
+test('启动期 parser replay 只恢复最近 10 个会话', () => {
   const stages = createParserReplayStages(Date.parse('2026-09-01T00:00:00.000Z'))
   assert.deepEqual(stages.map(stage => ({ id: stage.id, window: stage.window })), [
     { id: 'recent', window: { sessionLimit: 10 } },
+  ])
+})
+
+test('parser replay 维护阶段受容量状态约束', () => {
+  const stages = createParserReplayMaintenanceStages(Date.parse('2026-09-01T00:00:00.000Z'))
+  assert.deepEqual(stages.map(stage => ({ id: stage.id, window: stage.window })), [
     { id: 'hot-window', window: { activeSince: '2026-08-25T00:00:00.000Z' } },
     { id: 'all', window: undefined },
   ])
+  assert.deepEqual(parserReplayMaintenanceStagesAllowedByCapacity(stages, 'healthy').map(stage => stage.id), ['hot-window', 'all'])
+  assert.deepEqual(parserReplayMaintenanceStagesAllowedByCapacity(stages, 'approaching').map(stage => stage.id), ['hot-window'])
+  assert.deepEqual(parserReplayMaintenanceStagesAllowedByCapacity(stages, 'exceeded').map(stage => stage.id), [])
+  assert.deepEqual(parserReplayMaintenanceStagesAllowedByCapacity(stages, 'unknown').map(stage => stage.id), [])
 })
 
 test('前台让出点在取消后立即结束', async () => {
