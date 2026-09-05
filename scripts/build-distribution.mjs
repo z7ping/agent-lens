@@ -50,6 +50,12 @@ await build({
   outfile: resolve(dist, 'daemon.mjs'),
 })
 
+await build({
+  ...common,
+  entryPoints: [resolve(root, 'apps/daemon/src/data-runtime/worker.ts')],
+  outfile: resolve(dist, 'data-runtime-worker.mjs'),
+})
+
 await cp(
   resolve(root, 'packages/runtime-cordis/src/pi-live/worker-entry.mjs'),
   resolve(dist, 'worker-entry.mjs'),
