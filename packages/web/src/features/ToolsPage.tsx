@@ -37,6 +37,13 @@ function rangeLabel(range: 'today' | '7d' | '30d' | 'all'): string {
   return '全部时间'
 }
 
+function formatSessionTime(value: string | undefined): string {
+  if (!value) return ''
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) return value
+  return date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+}
+
 function assetTypeLabel(type: string): string {
   if (type === 'skill') return '技能'
   if (type === 'mcp') return 'MCP（模型上下文协议）'
@@ -97,6 +104,10 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
   const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'callCount', direction: 'descending' })
   const selectedTool = useMemo(() => tools.find(tool => toolKey(tool.sourceIds, tool.nativeToolName) === selectedToolKey), [selectedToolKey, tools])
   const sessionSummaries = useMemo(() => new Map((snapshot.review.response?.items ?? []).map(item => [item.id, item])), [snapshot.review.response?.items])
+  const selectedSessions = useMemo(() => selectedTool
+    ? [...selectedTool.sessions].sort((a, b) => (b.errorCount ?? 0) - (a.errorCount ?? 0) || b.callCount - a.callCount || a.logicalSessionId.localeCompare(b.logicalSessionId))
+    : [], [selectedTool])
+  const firstFailedSession = selectedSessions.find(session => (session.errorCount ?? 0) > 0)
   const sortedTools = useMemo(() => [...tools].sort((a, b) => {
     const delta = sortMetric(a, sort.key) - sortMetric(b, sort.key)
     if (delta === 0) return a.nativeToolName.localeCompare(b.nativeToolName)
@@ -243,24 +254,33 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
             <div className="tool-drill-stat"><b>{duration(selectedTool.totalDurationMs)}</b><span>总耗时</span></div>
             <div className="tool-drill-stat"><b>{duration(selectedTool.averageDurationMs)}</b><span>平均耗时</span></div>
           </div>
+
+          {firstFailedSession && <button type="button" className="tool-failure-shortcut" onClick={() => openReviewSession(firstFailedSession.logicalSessionId)}>
+            <span><b>查看失败现场</b><small>{firstFailedSession.title ?? `会话 ${shortSessionId(firstFailedSession.logicalSessionId)}`} · {firstFailedSession.errorCount} 次该工具失败</small></span>
+            <UiIcon name="arrow-right" size={15}/>
+          </button>}
+
           <section className="tool-session-section">
-            <div className="table-section-head"><div><h2>关联会话</h2><p>按该工具在会话中的调用次数排序 · 点击直接进入任务复盘</p></div></div>
+            <div className="table-section-head"><div><h2>关联会话</h2><p>含失败的会话优先 · 点击直接进入任务复盘</p></div></div>
             <div className="tool-session-list">
-              {(showAllSessions ? selectedTool.sessions : selectedTool.sessions.slice(0, 3)).map(session => {
+              {(showAllSessions ? selectedSessions : selectedSessions.slice(0, 3)).map(session => {
                 const summary = sessionSummaries.get(session.logicalSessionId)
-                const label = summary?.title ?? summary?.preview ?? `会话 ${shortSessionId(session.logicalSessionId)}`
-                const max = selectedTool.sessions[0]?.callCount ?? 1
-                return <button key={session.logicalSessionId} className="tool-session-link" onClick={() => openReviewSession(session.logicalSessionId)} title={label}>
-                  <span className="tool-session-copy"><b>{label}</b><small>{sourceLabels(summary?.sourceIds ?? selectedTool.sourceIds)} · {session.callCount} 次调用</small></span>
+                const label = session.title ?? summary?.title ?? summary?.preview ?? `会话 ${shortSessionId(session.logicalSessionId)}`
+                const max = Math.max(1, ...selectedSessions.map(item => item.callCount))
+                const project = session.projectName ?? summary?.projectName ?? session.workspacePath?.split(/[\\/]/).filter(Boolean).at(-1) ?? summary?.workspacePath?.split(/[\\/]/).filter(Boolean).at(-1)
+                const time = formatSessionTime(session.endedAt ?? summary?.endedAt)
+                const context = [project, time, `${session.callCount} 次调用`, (session.errorCount ?? 0) > 0 ? `${session.errorCount} 次失败` : ''].filter(Boolean).join(' · ')
+                return <button key={session.logicalSessionId} className={`tool-session-link ${(session.errorCount ?? 0) > 0 ? 'has-error' : ''}`} onClick={() => openReviewSession(session.logicalSessionId)} title={label}>
+                  <span className="tool-session-copy"><b>{label}</b><small>{context || sourceLabels(summary?.sourceIds ?? selectedTool.sourceIds)}</small></span>
                   <span className="metric-bar" aria-hidden="true"><i style={{ width: `${Math.max(5, session.callCount / max * 100)}%` }}/></span>
-                  <span className="tool-session-open">打开 <UiIcon name="arrow-right" size={14}/></span>
+                  <span className="tool-session-open">{(session.errorCount ?? 0) > 0 ? '查看失败' : '打开'} <UiIcon name="arrow-right" size={14}/></span>
                 </button>
               })}
-              {!selectedTool.sessions.length && <div className="tool-drill-note">当前范围没有可定位的会话记录。</div>}
+              {!selectedSessions.length && <div className="tool-drill-note">当前范围没有可定位的会话记录。</div>}
             </div>
-            {selectedTool.sessions.length > 3 && <button type="button" className="tool-session-toggle" onClick={() => setShowAllSessions(value => !value)}>{showAllSessions ? '收起关联会话' : `查看全部 ${selectedTool.sessions.length} 个关联会话`}</button>}
+            {selectedSessions.length > 3 && <button type="button" className="tool-session-toggle" onClick={() => setShowAllSessions(value => !value)}>{showAllSessions ? '收起关联会话' : `查看全部 ${selectedSessions.length} 个关联会话`}</button>}
           </section>
-          {selectedTool.errorCount > 0 && <div className="tool-drill-note">该工具有 {selectedTool.errorCount} 次明确失败。查看错误上下文、输入输出和证据，请打开上方相关会话。</div>}
+          {selectedTool.errorCount > 0 && !firstFailedSession && <div className="tool-drill-note">该工具有 {selectedTool.errorCount} 次明确失败，但当前有界会话样本没有包含失败现场。可扩大当前会话样本后继续定位。</div>}
         </div>
       </Drawer>}
     </main>
