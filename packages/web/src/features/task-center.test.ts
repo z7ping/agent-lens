@@ -61,15 +61,16 @@ test('新建相关任务优先继承当前项目，其次继承工作目录', ()
   assert.equal(pickTaskProject(options)?.label, 'B')
 })
 
-test('会话列表只根据结构化活动类型区分系统活动', () => {
+test('会话列表只根据结构化活动类型区分系统活动，并用上下文避免同名', () => {
   assert.deepEqual(historyTaskPresentation(session({
     sourceIds: ['codex'],
     productId: 'codex',
     title: '<recommended_plugins> Here is a list of plugins that are available but not installed.',
     interactionCount: 0,
     sessionActivity: 'system-activity',
+    projectName: 'agent-lens',
   }), 'Codex 任务'), {
-    title: '系统活动',
+    title: 'agent-lens · 系统活动',
     activityLabel: '系统活动',
   })
 
@@ -81,6 +82,18 @@ test('会话列表只根据结构化活动类型区分系统活动', () => {
   }), 'Codex 任务'), {
     title: '内部审查活动',
     activityLabel: '内部审查',
+  })
+})
+
+test('系统活动没有项目时使用工作目录或来源作为可辨认上下文', () => {
+  assert.deepEqual(historyTaskPresentation(session({
+    sourceIds: ['codex'],
+    productId: 'codex',
+    workspacePath: 'F:\\workspace\\agent-lens',
+    sessionActivity: 'system-activity',
+  }), 'Codex 任务'), {
+    title: 'agent-lens · 系统活动',
+    activityLabel: '系统活动',
   })
 })
 
