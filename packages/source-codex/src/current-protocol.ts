@@ -80,8 +80,7 @@ function isOpaqueResponseReasoningRecord(record: SourceRecord): boolean {
   const { entry, payload } = rolloutEntry(record)
   if (entry.type !== 'response_item' || payload.type !== 'reasoning') return false
   const visible = messageText(payload.summary ?? payload.content ?? payload.text ?? '').trim()
-  if (visible) return false
-  return Boolean(stringField(payload, 'encrypted_content', 'encryptedContent'))
+  return !visible
 }
 
 function isEmptyLegacyAssistantOrReasoning(record: SourceRecord): boolean {
