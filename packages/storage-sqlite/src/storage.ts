@@ -11,6 +11,7 @@ import { SqliteAssetInventoryReader } from './asset-inventory'
 import { SqliteCheckpointRepository } from './checkpoints'
 import { SqliteExecutor } from './executor'
 import { SqliteStorageMaintenance } from './maintenance'
+import { SqliteMaintenanceJobStore } from './maintenance-jobs'
 import { migrateDatabase } from './migrations'
 import { withSqliteObservationPagination } from './observation-pagination'
 import { withSqliteParserReplayReplacement } from './parser-replay-replacement'
@@ -63,6 +64,7 @@ export class SqliteStorageService implements StorageService {
   readonly toolUsageObservations: SqliteToolUsageObservationReader
   readonly unknownObservationProjection: SqliteUnknownObservationProjection
   readonly maintenance: SqliteStorageMaintenance
+  readonly maintenanceJobs: SqliteMaintenanceJobStore
   readonly runtimeProfiles: SqliteRuntimeProfileRepository
   readonly sourceRuntimeStatus: SqliteSourceRuntimeStatusRepository
   readonly sessionRelationshipCandidates: SqliteSessionRelationshipCandidateRepository
@@ -106,6 +108,7 @@ export class SqliteStorageService implements StorageService {
     this.toolUsageObservations = new SqliteToolUsageObservationReader(this.executor)
     this.unknownObservationProjection = new SqliteUnknownObservationProjection(this.executor)
     this.maintenance = new SqliteStorageMaintenance(this.executor)
+    this.maintenanceJobs = new SqliteMaintenanceJobStore(this.executor)
     this.runtimeProfiles = new SqliteRuntimeProfileRepository(this.executor)
     this.sourceRuntimeStatus = new SqliteSourceRuntimeStatusRepository(this.executor)
     this.sessionRelationshipCandidates = new SqliteSessionRelationshipCandidateRepository(this.executor)
