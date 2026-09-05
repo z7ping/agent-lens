@@ -19,7 +19,7 @@ export function TaskEvent({
   if (model.category === 'usage' && !showUsageDetails) return null
 
   const content = <>
-    <span className="task-event-mark" />
+    <span className="task-event-mark"><UiIcon name="clock" size={15}/></span>
     <span className="task-event-copy"><b>{model.label}</b>{model.summary && <small>{model.summary}</small>}</span>
     {meta}
     {model.sourceLabel && <span className="task-event-source">{model.sourceLabel}</span>}
