@@ -12,6 +12,15 @@ export interface SourceRecordCompressionMaintenance {
   compressSourceRecords(limit?: number): Promise<SourceRecordCompressionBatch>
 }
 
+export interface DeferredIndexMaintenanceResult {
+  created: string[]
+  existing: string[]
+}
+
+export interface DeferredIndexMaintenance {
+  ensureDeferredIndexes(): Promise<DeferredIndexMaintenanceResult>
+}
+
 export interface MaintenanceIdleGate {
   wait(signal: AbortSignal): Promise<void>
 }
@@ -23,6 +32,17 @@ export interface SourceRecordCompressionRunResult {
   savedBytes: number
   batches: number
   aborted: boolean
+}
+
+export async function ensureDeferredStorageIndexes(
+  maintenance: DeferredIndexMaintenance | undefined,
+  gate: MaintenanceIdleGate,
+  signal: AbortSignal,
+): Promise<DeferredIndexMaintenanceResult | null> {
+  if (!maintenance || signal.aborted) return null
+  await gate.wait(signal)
+  if (signal.aborted) return null
+  return maintenance.ensureDeferredIndexes()
 }
 
 export async function compressLegacySourceRecords(
