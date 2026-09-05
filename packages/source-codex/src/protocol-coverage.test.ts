@@ -140,6 +140,23 @@ test('persisted local shell and tool search calls become canonical tool calls', 
   assert.equal((search.observations[0]?.payload as any).input.query, 'review tool')
 })
 
+test('persisted image generation becomes an artifact action without exposing the result body', async () => {
+  const output = await normalizeCodexRecord(record({
+    type: 'response_item',
+    payload: {
+      type: 'image_generation_call',
+      id: 'image-1',
+      status: 'completed',
+      result: 'base64-image-data',
+    },
+  }), ctx)
+  const fact = output.observations[0]!
+  assert.equal(fact.kind, 'artifact.action')
+  assert.equal((fact.payload as any).action, 'image.generation')
+  assert.equal((fact.payload as any).artifactId, 'image-1')
+  assert.equal((fact.payload as any).hasResult, true)
+})
+
 test('persisted compaction response items become canonical compaction facts', async () => {
   for (const type of ['compaction', 'context_compaction']) {
     const output = await normalizeCodexRecord(record({
