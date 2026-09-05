@@ -8,6 +8,8 @@ import { messageText, type CodexStoredEnvelope } from './format'
 import { normalizeCodexRecord } from './normalize'
 import { assistantMessageProvenance } from './provenance'
 
+export const CODEX_CURRENT_PARSER_VERSION = '13'
+
 function asRecord(value: unknown): Record<string, any> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, any>
