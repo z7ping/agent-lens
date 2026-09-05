@@ -462,13 +462,6 @@ export class SourceHistoryRunner {
       }
       const yieldForInteractivity = createCooperativeScheduler()
 
-      // Parser 升级直接重规范化已持久化的 SourceRecord。渐进窗口会把重放
-      // 限定到同一批 Session，避免为了修复语义重新读取完整原生日志前缀。
-      const replayed = await this.replay(input)
-      result.observationsCreated += replayed.observationsCreated
-      result.observationsMerged += replayed.observationsMerged
-      result.observationsUnchanged += replayed.observationsUnchanged
-
       if (!source.ingestHistory) {
         await markHealthy(this.storage, runtimeStatus)
         return result

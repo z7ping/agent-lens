@@ -185,9 +185,8 @@ test('History Coverage 只覆盖 history 能力并引用首尾 Source Evidence',
   )
 })
 
-test('渐进历史窗口把 parser replay 限定到同一批 Session', async () => {
+test('普通历史同步不再隐式触发 parser replay', async () => {
   let replayReads = 0
-  let replayWindow: unknown
   const source: SourceDefinition = {
     manifest: {
       pluginId: 'test-source-plugin',
@@ -209,9 +208,8 @@ test('渐进历史窗口把 parser replay 限定到同一批 Session', async () 
       repositories: {
         sourceRecords: {
           async put() {},
-          async listForParserReplay(...args: any[]) {
+          async listForParserReplay() {
             replayReads += 1
-            replayWindow = args[5]
             return []
           },
         },
@@ -234,8 +232,7 @@ test('渐进历史窗口把 parser replay 限定到同一批 Session', async () 
     historyWindow: { sessionLimit: 1 },
   })
 
-  assert.equal(replayReads, 1)
-  assert.deepEqual(replayWindow, { sessionLimit: 1 })
+  assert.equal(replayReads, 0)
 })
 
 test('独立 parser replay 只重放持久化记录且可覆盖全部历史', async () => {
