@@ -1,6 +1,8 @@
 import type { SVGProps } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
+  ArrowBigDown,
+  ArrowBigUp,
   ArrowDownToLine,
   ArrowLeft,
   ArrowRight,
@@ -45,6 +47,8 @@ import {
 export type UiIconName =
   | 'agent'
   | 'alert'
+  | 'arrow-big-down'
+  | 'arrow-big-up'
   | 'arrow-down'
   | 'arrow-down-to-line'
   | 'arrow-left'
@@ -88,6 +92,8 @@ export type UiIconName =
 const icons = {
   agent: Bot,
   alert: TriangleAlert,
+  'arrow-big-down': ArrowBigDown,
+  'arrow-big-up': ArrowBigUp,
   'arrow-down': ChevronsDown,
   'arrow-down-to-line': ArrowDownToLine,
   'arrow-left': ArrowLeft,
