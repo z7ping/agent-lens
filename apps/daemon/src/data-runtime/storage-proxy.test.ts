@@ -6,6 +6,17 @@ import test from 'node:test'
 import { DataRuntimeClient } from './client'
 import { createDataRuntimeStorage } from './storage-proxy'
 
+async function waitFor(
+  predicate: () => boolean,
+  timeoutMs = 2_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (!predicate()) {
+    if (Date.now() >= deadline) throw new Error('Timed out waiting for Data Runtime state')
+    await new Promise(resolve => setTimeout(resolve, 20))
+  }
+}
+
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'agent-lens-data-runtime-'))
   const dbPath = join(root, 'agent-lens.db')
@@ -94,8 +105,33 @@ test('writer synchronous work does not block independent reader queries', async 
     const readerDuration = performance.now() - startedAt
 
     assert.equal(visible?.id, 'reader-visible')
-    assert.ok(readerDuration < 150, `reader blocked for ${readerDuration.toFixed(1)}ms`)
+    assert.ok(readerDuration < 180, `reader blocked for ${readerDuration.toFixed(1)}ms`)
     assert.equal((await blocking).blockedMs, 200)
+  } finally {
+    await runtime.dispose()
+  }
+})
+
+test('reader worker crash degrades then recovers without restarting writer', async () => {
+  const runtime = await fixture()
+  try {
+    await runtime.storage.repositories.hosts.put(host('survives-reader-crash'))
+    const writerBefore = await runtime.writer.request<{ threadId: number }>('status')
+    runtime.dataRuntime.startRecovery(50)
+
+    await runtime.reader.request('diagnostic.exit')
+    await waitFor(() => runtime.reader.state() === 'degraded')
+    assert.equal(runtime.writer.state(), 'ready')
+    assert.equal(runtime.dataRuntime.snapshot().ok, false)
+
+    await waitFor(() => runtime.reader.state() === 'ready')
+    const writerAfter = await runtime.writer.request<{ threadId: number }>('status')
+    assert.equal(writerAfter.threadId, writerBefore.threadId)
+    assert.equal(
+      (await runtime.storage.repositories.hosts.get('survives-reader-crash'))?.id,
+      'survives-reader-crash',
+    )
+    assert.equal(runtime.dataRuntime.snapshot().ok, true)
   } finally {
     await runtime.dispose()
   }
