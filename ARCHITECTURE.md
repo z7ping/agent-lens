@@ -1,7 +1,7 @@
 # AgentLens 1.0 架构
 
 > 状态：1.0 Alpha 实现基线  
-> 更新日期：2026-08-27
+> 更新日期：2026-09-06
 
 本文只维护 AgentLens 1.0 的长期系统设计与关键边界。精确运行、发行、Hub、安全和采集规则分别引用对应权威文档，不在这里重复完整操作步骤或协议字段。
 
@@ -51,8 +51,10 @@ Native Source
   -> ObservationService.commit()
        -> CanonicalObservation
        -> Evidence
-  -> SQLite Repositories
-  -> Projection
+  -> Repository Contract
+  -> Data Runtime Writer
+  -> SQLite Canonical Store
+  -> Projection / Reader
   -> @agent-lens/protocol DTO
   -> HTTP / SSE
   -> Web / Desktop
@@ -73,12 +75,15 @@ Native Source
 Cordis 是唯一 Plugin Runtime；AgentLens 1.0 本身是一个 Cordis Application。
 
 ```text
-AgentLensApplication
-  ├─ storage-sqlite
+AgentLensApplication / Daemon Control Plane
+  ├─ data-runtime-storage
+  │    ├─ Writer Worker -> storage-sqlite (唯一 writable SQLite)
+  │    └─ Reader Worker -> storage-sqlite (readonly SQLite)
   ├─ core-services
   ├─ capture-policy
   ├─ sources/*
   ├─ projections/*
+  ├─ pi-live-runtime
   ├─ surface-http
   └─ web
 ```
@@ -90,6 +95,7 @@ AgentLensApplication
 - Core Domain / Core Services / Repository Contract / Parser / Normalizer / Protocol DTO 不依赖 Cordis；
 - Source / Storage / Surface 等运行时入口可以使用 Cordis Context / inject / lifecycle；
 - 不在 Cordis 前再维护第二套通用 Plugin Adapter / DI / Lifecycle；
+- Data Runtime IPC 是执行边界，不是第二业务模型；
 - `runtime-cordis` 只承担 AgentLens Application 与 Cordis 的薄集成边界。
 
 普通新增 Source 不应修改 Runtime 机制；如果必须改变 Core 语义、Canonical Identity、Evidence 或 Plugin Ownership，应进入 Contract Review。
@@ -134,6 +140,7 @@ Native Hook / Observer
  -> Durable Inbox
  -> Source.startCapture()
  -> Canonical Pipeline
+ -> Data Runtime Writer
 ```
 
 Hook / Observer 不依赖 Cordis、SQLite、Core Services、HTTP 或 Daemon 生命周期，不执行远程控制，也不得阻断上游 Agent。
@@ -163,11 +170,36 @@ Host
 
 典型去重优先级：native event ID -> native call ID -> shared event key -> source sequence -> payload fingerprint/time -> deterministic fallback。
 
-## 8. Storage
+## 8. Storage / Data Runtime
 
-1.0 使用全新的 SQLite Schema，并通过 Core Repository Interface 访问。
+1.0 使用 SQLite Canonical Store，并通过 Core Repository Interface 访问。
 
-业务代码不得绕过 Repository 直接写功能专用 SQL；SQLite Repository 实现保持 Cordis-independent。
+正式运行时边界：
+
+```text
+Daemon / Control Plane
+  ├─ HTTP / SSE / Pi
+  ├─ Reader Data Runtime
+  │    └─ readonly SQLite
+  └─ Writer Data Runtime
+       └─ 唯一 writable SQLite
+```
+
+硬约束：
+
+- Daemon 主线程不直接打开 SQLite；
+- 同一数据库只有 Writer Data Runtime 持有 writable connection；
+- Reader 只读；
+- Schema migration、Canonical 写入、History persistence、Projection rebuild、Replay、Compression、Deferred Index 都进入 Writer；
+- Task Center / Unified Read / Usage 等只读查询优先进入 Reader；
+- 远程 Repository 事务保持 BEGIN / COMMIT / ROLLBACK 原子边界；
+- Data Runtime unavailable 不应带崩 Daemon Control Plane。
+
+业务代码不得绕过 Repository 直接写功能专用 SQL；SQLite Repository 实现保持 Cordis-independent。IPC 只改变执行位置，不改变 Repository / Service 业务契约。
+
+`/ready` 不依赖 Data Runtime 重查询；`/health` 合并 Writer / Reader 状态与 Event Loop / IPC / SQLite 指标。前台 Data Runtime 读请求有明确查询预算，失败时快速降级而不是无限等待。
+
+大库维护、容量策略和真实验收见 `docs/1.0/STORAGE-MAINTENANCE.md`；运行时隔离长期决策见 `docs/adr/0010-data-runtime-control-plane-isolation.md`。
 
 Local Canonical Store 保持真实本机领域不变量。Projection 优化 Reader 可以存在，但不能成为第二事实源。
 
@@ -188,6 +220,8 @@ Hub 数据模型见 `docs/1.0/HUB-DESIGN.md`。
 - 使用洞察。
 
 Projection 只从 Repository / 正式 Read Contract 获取事实，不直接拥有 Source / SQLite 实现。
+
+历史 Projection Backfill 不允许重新塞回 Schema migration；大库历史补齐必须通过可恢复 Maintenance Job 批量执行。新写入 Projection 仍由正常写路径 / trigger 实时维护。
 
 静态 Asset Discovery 不等于实际 Usage。只有 Evidence 足够可靠时才把 Tool Call 归因到 Skill / MCP 等 Asset。
 
@@ -311,6 +345,7 @@ Hub 专项安全：`docs/1.0/HUB-PAIRING-SECURITY.md`。
 - 改变 Canonical Data Flow；
 - 改变 Core Identity / Evidence 语义；
 - 改变 Cordis Runtime 所有权；
+- 改变 Data Runtime 单 Writer / Control Plane 隔离边界；
 - 新增第二事实源；
 - 改变双发行单 Runtime 边界；
 - Hub 从单向 Replica 改为双向同步 / 多 Hub / Federation；
@@ -325,6 +360,8 @@ Hub 专项安全：`docs/1.0/HUB-PAIRING-SECURITY.md`。
 - `docs/1.0/CAPTURE-POLICY.md`：Source 与本机持久化隐私；
 - `docs/1.0/DISTRIBUTION-OPERATIONS.md`：npm / Desktop / Hook / Service 运维；
 - `docs/1.0/HERMES-OPENCODE-SOURCES.md`：Hermes / OpenCode Source 特有边界；
+- `docs/1.0/STORAGE-MAINTENANCE.md`：大库维护、容量和生产验收；
 - `docs/1.0/HUB-DESIGN.md`：Hub 当前有效系统设计；
 - `docs/1.0/IMPLEMENTATION-STATUS.md`：当前真实实现能力；
+- `docs/adr/0010-data-runtime-control-plane-isolation.md`：Data Runtime / Control Plane 隔离；
 - `docs/adr/`：关键长期架构决策形成原因。
