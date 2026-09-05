@@ -96,8 +96,7 @@ export function TaskHeader({ marker, agent, context, status, title, submeta, met
     ? createPortal(
         <section className="task-review-continuation" aria-label="继续此会话">
           <div className="task-review-continuation-copy">
-            <b>继续此会话</b>
-            <span>继续原会话，或保留当前历史并从这里分叉。</span>
+            <span>继续原会话，或从当前节点创建新会话。</span>
           </div>
           <div className="task-review-continuation-actions">{primaryActions}</div>
         </section>,
