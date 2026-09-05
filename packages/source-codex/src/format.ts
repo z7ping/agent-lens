@@ -145,11 +145,21 @@ export function sanitizeCodexEntry(raw: unknown): Record<string, unknown> {
   }
 }
 
+function completedItem(payload: Record<string, unknown>): Record<string, unknown> {
+  return payload.type === 'item_completed'
+    && payload.item
+    && typeof payload.item === 'object'
+    && !Array.isArray(payload.item)
+    ? payload.item as Record<string, unknown>
+    : {}
+}
+
 export function nativeIdForEntry(entry: Record<string, unknown>): string | undefined {
   const payload = entry.payload && typeof entry.payload === 'object'
     ? entry.payload as Record<string, unknown>
     : {}
-  for (const candidate of [payload.id, payload.call_id, payload.turn_id]) {
+  const item = completedItem(payload)
+  for (const candidate of [item.id, payload.id, payload.call_id, payload.turn_id]) {
     if (typeof candidate === 'string' && candidate) return candidate
   }
   return undefined
@@ -161,7 +171,10 @@ export function nativeTypeForEntry(entry: Record<string, unknown>): string {
     ? entry.payload as Record<string, unknown>
     : {}
   const inner = typeof payload.type === 'string' ? payload.type : undefined
-  return inner ? `${top}/${inner}` : top
+  if (!inner) return top
+  const item = completedItem(payload)
+  const itemType = typeof item.type === 'string' ? item.type : undefined
+  return itemType ? `${top}/${inner}/${itemType}` : `${top}/${inner}`
 }
 
 export function parseFunctionOutput(output: unknown): {
