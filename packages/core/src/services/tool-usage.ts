@@ -51,6 +51,13 @@ export interface ToolUsageAggregateQuery {
 export interface ToolUsageAggregateSession {
   logicalSessionId: LogicalSessionId
   callCount: number
+  /** Known failures of this specific tool in the session. */
+  errorCount?: number
+  /** Human-readable task title derived from canonical/native session facts. */
+  title?: string
+  projectName?: string
+  workspacePath?: string
+  endedAt?: string
 }
 
 export interface ToolUsageAggregateToolRecord {
