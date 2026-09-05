@@ -1,4 +1,4 @@
-/* Alpha.3 实际页面审查收口：窄屏导航与 Pi 历史继续操作。 */
+/* Alpha.3 实际页面审查收口：窄屏导航、Pi 历史继续操作与工具下钻。 */
 
 .workspace-breadcrumb-shell {
   display: flex;
@@ -20,6 +20,63 @@
 .workspace-mobile-nav-button,
 .workspace-mobile-backdrop {
   display: none;
+}
+
+/* 洞察 / 工具筛选收起后直接显示当前范围，长文本稳定省略。 */
+.workspace-insight-filter-disclosure > summary .ui-disclosure-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-filter-clear {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--al-accent);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.workspace-filter-clear:hover {
+  text-decoration: underline;
+}
+
+/* 工具详情的数字、标签和动作保持稳定分组。 */
+.tool-drill-stat {
+  display: grid;
+  align-content: center;
+  gap: 3px;
+}
+
+.tool-drill-stat b,
+.tool-drill-stat span {
+  display: block;
+}
+
+.tool-session-open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.tool-session-toggle {
+  width: 100%;
+  min-height: 34px;
+  margin-top: 9px;
+  border: 1px dashed var(--al-line-strong);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--al-accent);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.tool-session-toggle:hover {
+  background: var(--al-soft-2);
 }
 
 /* 历史 Pi 会话的继续操作放在真实会话尾部，但提高视觉层级。 */
