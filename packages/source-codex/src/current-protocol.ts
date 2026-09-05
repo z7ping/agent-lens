@@ -479,7 +479,6 @@ async function normalizePersistedLegacyEvent(
         savedPath: payload.saved_path ?? payload.savedPath,
       }),
       resultAvailable: typeof payload.result === 'string' && payload.result.length > 0,
-      raw: payload,
     })
   }
   if (payload.type === 'subagent_activity') {
