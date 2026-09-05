@@ -3,6 +3,8 @@ import type { SVGProps } from 'react'
 export type UiIconName =
   | 'agent'
   | 'alert'
+  | 'arrow-big-down'
+  | 'arrow-big-up'
   | 'arrow-down'
   | 'arrow-left'
   | 'arrow-right'
@@ -51,6 +53,8 @@ export function UiIcon({ name, size = 16, className, ...props }: UiIconProps) {
     if (name === 'arrow-right') return <><path d="M3 8h9"/><path d="m9 5 3 3-3 3"/></>
     if (name === 'arrow-up') return <><path d="M8 13V4"/><path d="m5 7 3-3 3 3"/></>
     if (name === 'arrow-down') return <><path d="M8 3v9"/><path d="m5 9 3 3 3-3"/></>
+    if (name === 'arrow-big-up') return <path d="M6 14V6.7H3.3L8 2l4.7 4.7H10V14Z"/>
+    if (name === 'arrow-big-down') return <path d="M6 2h4v7.3h2.7L8 14 3.3 9.3H6Z"/>
     if (name === 'send') return <><path d="M8 13V4"/><path d="m4.5 7.5 3.5-3.5 3.5 3.5"/></>
     if (name === 'task') return <><rect x="3" y="2.8" width="10" height="10.4" rx="1.7"/><path d="m5 6 1 1 1.6-1.8M9 6h2M5 10l1 1 1.6-1.8M9 10h2"/></>
     if (name === 'trend') return <><path d="M3 11.5 6.2 8l2.3 2 4.5-5"/><path d="M10 5h3v3"/></>
