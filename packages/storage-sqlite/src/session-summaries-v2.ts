@@ -130,6 +130,18 @@ function correctCodexSummaries(executor: SqliteExecutor, items: SessionSummaryRe
           AND ${codexRealUserSql('user_observation')}
       ) AS user_turn_count,
       (
+        SELECT COUNT(DISTINCT COALESCE(
+          NULLIF(json_extract(tool_observation.payload_json, '$.callId'), ''),
+          NULLIF(json_extract(tool_observation.payload_json, '$.call_id'), ''),
+          NULLIF(json_extract(tool_observation.payload_json, '$.toolUseId'), ''),
+          NULLIF(json_extract(tool_observation.payload_json, '$.tool_use_id'), ''),
+          tool_observation.id
+        ))
+        FROM observations AS tool_observation
+        WHERE tool_observation.logical_session_id = logical.id
+          AND tool_observation.kind IN ('tool.call', 'tool.result')
+      ) AS tool_execution_count,
+      (
         SELECT first_user.payload_json
         FROM observations AS first_user
         JOIN source_sessions AS first_source ON first_source.id = first_user.source_session_id
@@ -148,6 +160,7 @@ function correctCodexSummaries(executor: SqliteExecutor, items: SessionSummaryRe
     logical_session_id: string
     native_title?: string | null
     user_turn_count: number
+    tool_execution_count: number
     first_user_payload?: string | null
   }>
   const byId = new Map(rows.map(row => [row.logical_session_id, row]))
@@ -158,6 +171,7 @@ function correctCodexSummaries(executor: SqliteExecutor, items: SessionSummaryRe
     if (!row) return item
     const firstUserPayload = decodePayload(row.first_user_payload)
     const strictUserTurns = Number(row.user_turn_count || 0)
+    const toolCount = Number(row.tool_execution_count || 0)
     const nativeTitle = typeof row.native_title === 'string' && row.native_title.trim() ? row.native_title.trim() : undefined
     const title = nativeTitle ?? payloadText(firstUserPayload)
     const { firstUserPayload: _legacyFirstUser, title: _legacyTitle, ...rest } = item
@@ -169,6 +183,7 @@ function correctCodexSummaries(executor: SqliteExecutor, items: SessionSummaryRe
       ...(firstUserPayload === undefined ? {} : { firstUserPayload }),
       interactionCount: strictUserTurns,
       userTurnCount: strictUserTurns,
+      toolCount,
       ...(sessionActivity ? { sessionActivity } : {}),
     }
   })
@@ -176,7 +191,7 @@ function correctCodexSummaries(executor: SqliteExecutor, items: SessionSummaryRe
 
 /**
  * Session Summary V2 在旧物化结构之上补根任务关系语义，并用 SourceRecord / Evidence
- * 校正 Codex 旧数据里的真人消息身份。页面层不根据正文关键词猜测消息来源。
+ * 校正 Codex 旧数据里的真人消息身份和工具执行计数。页面层不根据正文关键词猜测消息来源。
  */
 export class SqliteSessionSummaryReader implements SessionSummaryProjectionStore {
   private readonly base: BaseSessionSummaryReader
