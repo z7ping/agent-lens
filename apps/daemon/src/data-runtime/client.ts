@@ -82,17 +82,17 @@ export class DataRuntimeClient {
     const bundled = workerUrl.pathname.endsWith('.mjs')
     const worker = new Worker(workerUrl, {
       workerData: { allowDiagnostics: this.options.allowDiagnostics === true },
-      ...(bundled ? { execArgv: [] } : { execArgv: process.execArgv }),
+      ...(bundled ? { execArgv: [] } : { execArgv: ['--import', 'tsx'] }),
     })
     this.worker = worker
     worker.on('message', value => this.handleMessage(value))
     worker.on('error', error => this.markDegraded(error))
     worker.on('exit', code => {
       this.worker = null
-      if (this.stopping || code === 0) {
+      if (this.stopping) {
         this.stateValue = 'stopped'
       } else {
-        this.markDegraded(new Error(`Data Runtime worker exited with code ${code}`))
+        this.markDegraded(new Error(`Data Runtime worker exited unexpectedly with code ${code}`))
       }
       this.rejectAll(new Error('Data Runtime worker is unavailable'))
     })
