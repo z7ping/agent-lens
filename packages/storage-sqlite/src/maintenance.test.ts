@@ -29,7 +29,7 @@ test('SourceRecord 大 payload 透明 gzip，旧 JSON 可分批迁移且读取�
       installationId: 'install',
       nativeType: 'response_item/message',
       capturedAt: '2026-09-01T00:00:00.000Z',
-      locator: { kind: 'external', key: 'compressed' },
+      locator: { kind: 'file', path: '/tmp/compressed.jsonl' },
       payload,
       parserVersion: '19',
     })
