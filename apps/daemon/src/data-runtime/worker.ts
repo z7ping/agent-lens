@@ -190,6 +190,16 @@ async function handleRequest(value: unknown): Promise<void> {
       return
     }
 
+    if (value.method === 'diagnostic.exit') {
+      if (!allowDiagnostics) {
+        fail(value.requestId, 'forbidden', 'Diagnostic exit is disabled')
+        return
+      }
+      reply(value.requestId, { exiting: true })
+      setImmediate(() => process.exit(23))
+      return
+    }
+
     if (value.method === 'storage.transaction.begin') {
       const local = requireStorage()
       if (role !== 'writer') throw new Error('Read-only Data Runtime cannot begin a write transaction')
