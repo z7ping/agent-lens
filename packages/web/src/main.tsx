@@ -38,6 +38,8 @@ import './task-view-options.css'
 import './task-turn-rail.css'
 // Task Surface 共享详情组件最后加载；页面所有者不得再定义这些共享选择器。
 import './task-detail.css'
+// Alpha.3 实际页面审查修复最后覆盖，避免历史响应式规则重新压缩窄屏正文。
+import './alpha3-ui-fixes.css'
 
 writeTheme(readTheme())
 const disposeLiveRecovery = installLiveRecovery(clientModel)
