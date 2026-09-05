@@ -24,6 +24,7 @@ const READ_PREFIXES = [
   'query',
   'find',
   'summary',
+  'aggregate',
   'health',
   'diagnostics',
   'isMaterialized',
@@ -179,7 +180,6 @@ export class DataRuntimeService {
       if (writerNeedsRecovery) {
         await this.writer.start().catch(() => undefined)
       }
-      // Never reopen the reader against a schema that the writer could not recover.
       if (this.writer.state() === 'ready' && readerNeedsRecovery) {
         await this.reader.start().catch(() => undefined)
       }
