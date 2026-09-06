@@ -50,7 +50,6 @@ tracker.db-shm
 tracker.db-wal
 .playwright-mcp/
 .superpowers/
-.superpowers/
 server/hooks/windows-hook-runner.exe
 apps/desktop/assets/icon-app.ico
 apps/desktop/assets/icon-window.png
