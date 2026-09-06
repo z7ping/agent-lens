@@ -204,28 +204,6 @@ export class SqliteStorageService implements StorageService {
     }
   }
 
-  private toolUsageFactProjectionDetails() {
-    const table = this.db.prepare(`
-      SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'tool_usage_fact_projection'
-    `).get()
-    const sourceObservationCount = Number((this.db.prepare(`
-      SELECT COUNT(*) AS count
-      FROM observations
-      WHERE kind IN ('tool.call', 'tool.result')
-    `).get() as { count: number }).count)
-    const projectedCount = table
-      ? Number((this.db.prepare('SELECT COUNT(*) AS count FROM tool_usage_fact_projection').get() as { count: number }).count)
-      : 0
-    const missingCount = Math.max(0, sourceObservationCount - projectedCount)
-    return {
-      state: missingCount === 0 ? 'ready' : 'partial',
-      sourceObservationCount,
-      projectedCount,
-      missingCount,
-      coverageRatio: sourceObservationCount > 0 ? Math.min(1, projectedCount / sourceObservationCount) : 1,
-    }
-  }
-
   async health(): Promise<StorageHealth> {
     return this.executor.run(() => {
       const probe = this.db.prepare('SELECT 1 AS ok').get() as { ok: number }
@@ -240,7 +218,6 @@ export class SqliteStorageService implements StorageService {
           sourceRuntime: this.runtimeHealthDetails(),
           dataGrowth: this.capacityDetails(),
           checkpoints: this.checkpointHealthDetails(),
-          toolUsageFacts: this.toolUsageFactProjectionDetails(),
         },
       }
     })
@@ -249,6 +226,7 @@ export class SqliteStorageService implements StorageService {
   async diagnostics(): Promise<StorageHealth> {
     const health = await this.health()
     const unknownObservations = await this.unknownObservationProjection.summary()
+    const toolUsageFacts = await this.projectionBackfill.toolUsageFactCoverage()
     return this.executor.run(() => {
       const coverageItems = this.db.prepare(`
         SELECT subject_type AS subjectType,
@@ -288,6 +266,10 @@ export class SqliteStorageService implements StorageService {
         details: {
           ...health.details,
           unknownObservations,
+          toolUsageFacts: {
+            state: toolUsageFacts.ready ? 'ready' : 'partial',
+            ...toolUsageFacts,
+          },
           coverage: {
             summary: coverageSummary,
             items: coverageItems,
