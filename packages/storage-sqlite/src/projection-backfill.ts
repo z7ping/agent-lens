@@ -39,6 +39,20 @@ function boundedLimit(limit: number | undefined): number {
   return Math.max(1, Math.min(limit ?? 250, 1000))
 }
 
+function repairToolFactCursor(executor: SqliteExecutor, after: string | undefined): string | undefined {
+  if (!after) return undefined
+  const missingBeforeCursor = executor.db.prepare(`
+    SELECT 1 AS missing
+    FROM observations o
+    LEFT JOIN tool_usage_fact_projection f ON f.observation_id = o.id
+    WHERE o.kind IN ('tool.call', 'tool.result')
+      AND o.id <= ?
+      AND f.observation_id IS NULL
+    LIMIT 1
+  `).get(after)
+  return missingBeforeCursor ? undefined : after
+}
+
 export class SqliteProjectionBackfillMaintenance {
   constructor(private readonly executor: SqliteExecutor) {}
 
@@ -103,10 +117,11 @@ export class SqliteProjectionBackfillMaintenance {
     limit?: number,
   ): Promise<ProjectionBackfillBatchResult> {
     const batchLimit = boundedLimit(limit)
+    const effectiveAfter = await this.executor.run(() => repairToolFactCursor(this.executor, after))
     const ids = await this.executor.run(() => batchIds(
       this.executor,
       "kind IN ('tool.call', 'tool.result')",
-      after,
+      effectiveAfter,
       batchLimit,
     ))
     if (!ids.length) return { scanned: 0, written: 0, hasMore: false }
@@ -175,4 +190,8 @@ export class SqliteProjectionBackfillMaintenance {
       hasMore: ids.length === batchLimit,
     }
   }
+}
+
+export const projectionBackfillInternals = {
+  repairToolFactCursor,
 }
