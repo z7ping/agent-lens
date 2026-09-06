@@ -13,82 +13,27 @@ import {
   type ReplicationStreamStatus,
 } from '@agent-lens/core/replication'
 import { SqliteExecutor } from './executor'
-
-function parseJson(value: string): JsonValue {
-  return JSON.parse(value) as JsonValue
-}
+import {
+  candidateStateRow,
+  frozenBatchRow,
+  mapPendingReplication,
+  parseReplicationJson,
+  pendingBindingRow,
+  pendingIdRow,
+  pendingRow,
+  reconciliationCursorRow,
+  streamRow,
+  type FrozenBatchRow,
+  type PendingRow,
+  type StreamRow,
+} from './replication-state-rows'
 
 function stringifyJson(value: JsonValue): string {
   return JSON.stringify(value)
 }
 
-interface StreamRow {
-  relationshipId: string
-  hubId: string
-  streamId: string
-  generationId: string
-  status: ReplicationStreamStatus
-  nextSequence: number
-  ackSequence: number
-  policyRevision: string
-  historyRevision: string
-  createdAt: string
-  updatedAt: string
-}
-
-interface PendingRow {
-  id: string
-  streamId: string
-  generationId: string
-  dedupKey: string
-  entityType: KnownReplicationEntityType
-  originEntityId: string
-  candidateHash: string
-  phase: ReplicationHistoryPhase
-  policyRevision: string
-  historyRevision: string
-  payloadJson: string
-  frozenSequence: number | null
-  createdAt: string
-  updatedAt: string
-}
-
-interface FrozenBatchRow {
-  streamId: string
-  generationId: string
-  sequence: number
-  batchId: string
-  contentHash: string
-  phase: ReplicationHistoryPhase
-  policyRevision: string
-  historyRevision: string
-  payloadJson: string
-  status: 'frozen' | 'acked'
-  frozenAt: string
-  ackedAt: string | null
-}
-
 function mapStream(row: StreamRow): ReplicationStreamState {
   return { ...row }
-}
-
-function mapPending(row: PendingRow): PendingReplicationEntity {
-  return {
-    id: row.id,
-    streamId: row.streamId,
-    generationId: row.generationId,
-    dedupKey: row.dedupKey,
-    entityType: row.entityType,
-    originEntityId: row.originEntityId,
-    candidateHash: row.candidateHash,
-    phase: row.phase,
-    policyRevision: row.policyRevision,
-    historyRevision: row.historyRevision,
-    payload: parseJson(row.payloadJson),
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-    ...(row.frozenSequence === null ? {} : { frozenSequence: row.frozenSequence }),
-  }
 }
 
 export interface EnsureReplicationStreamInput {
@@ -231,21 +176,20 @@ export class SqliteReplicationStateRepository {
         throw new DurableReplicationError('PENDING_ITEM_INVALID', 'Pending item generation does not match stream')
       }
 
-      const state = this.executor.db.prepare(`
+      const rawState = this.executor.db.prepare(`
         SELECT last_candidate_hash AS lastCandidateHash,
                last_pending_id AS lastPendingId
         FROM replication_entity_state
         WHERE stream_id = ? AND generation_id = ? AND dedup_key = ?
-      `).get(input.streamId, input.generationId, input.dedupKey) as
-        | { lastCandidateHash: string; lastPendingId: string | null }
-        | undefined
+      `).get(input.streamId, input.generationId, input.dedupKey)
+      const state = rawState ? candidateStateRow(rawState) : undefined
 
       if (state?.lastCandidateHash === input.candidateHash && state.lastPendingId) {
         const existing = this.getPendingRow(state.lastPendingId)
-        if (existing) return { item: mapPending(existing), created: false, replaced: false }
+        if (existing) return { item: mapPendingReplication(existing), created: false, replaced: false }
       }
 
-      const open = this.executor.db.prepare(`
+      const rawOpen = this.executor.db.prepare(`
         SELECT id,
                stream_id AS streamId,
                generation_id AS generationId,
@@ -262,7 +206,8 @@ export class SqliteReplicationStateRepository {
                updated_at AS updatedAt
         FROM replication_pending_entities
         WHERE stream_id = ? AND generation_id = ? AND dedup_key = ? AND frozen_sequence IS NULL
-      `).get(input.streamId, input.generationId, input.dedupKey) as PendingRow | undefined
+      `).get(input.streamId, input.generationId, input.dedupKey)
+      const open = rawOpen ? pendingRow(rawOpen) : undefined
 
       const now = input.now ?? new Date().toISOString()
       let itemId = input.id
@@ -348,41 +293,38 @@ export class SqliteReplicationStateRepository {
   }
 
   async listPending(streamId: string, limit = 100): Promise<readonly PendingReplicationEntity[]> {
-    return this.executor.run(() => {
-      const rows = this.executor.db.prepare(`
-        SELECT id,
-               stream_id AS streamId,
-               generation_id AS generationId,
-               dedup_key AS dedupKey,
-               entity_type AS entityType,
-               origin_entity_id AS originEntityId,
-               candidate_hash AS candidateHash,
-               phase,
-               policy_revision AS policyRevision,
-               history_revision AS historyRevision,
-               payload_json AS payloadJson,
-               frozen_sequence AS frozenSequence,
-               created_at AS createdAt,
-               updated_at AS updatedAt
-        FROM replication_pending_entities
-        WHERE stream_id = ? AND frozen_sequence IS NULL
-        ORDER BY created_at, id
-        LIMIT ?
-      `).all(streamId, limit) as PendingRow[]
-      return rows.map(mapPending)
-    })
+    return this.executor.run(() => this.executor.db.prepare(`
+      SELECT id,
+             stream_id AS streamId,
+             generation_id AS generationId,
+             dedup_key AS dedupKey,
+             entity_type AS entityType,
+             origin_entity_id AS originEntityId,
+             candidate_hash AS candidateHash,
+             phase,
+             policy_revision AS policyRevision,
+             history_revision AS historyRevision,
+             payload_json AS payloadJson,
+             frozen_sequence AS frozenSequence,
+             created_at AS createdAt,
+             updated_at AS updatedAt
+      FROM replication_pending_entities
+      WHERE stream_id = ? AND frozen_sequence IS NULL
+      ORDER BY created_at, id
+      LIMIT ?
+    `).all(streamId, limit).map(pendingRow).map(mapPendingReplication))
   }
 
   async freezeBatch(input: FreezeReplicationBatchInput): Promise<FrozenReplicationBatch> {
     return this.executor.transaction(async () => {
-      const streamRow = this.requireStreamRow(input.streamId)
-      if (streamRow.generationId !== input.generationId) {
+      const streamRowValue = this.requireStreamRow(input.streamId)
+      if (streamRowValue.generationId !== input.generationId) {
         throw new DurableReplicationError('STREAM_INVALID', 'Batch generation does not match active stream')
       }
 
       const existing = this.getFrozenBatchRow(input.streamId, input.sequence)
       const decision = assertFreezeSequence({
-        stream: mapStream(streamRow),
+        stream: mapStream(streamRowValue),
         incomingSequence: input.sequence,
         incomingBatchId: input.batchId,
         incomingContentHash: input.contentHash,
@@ -404,12 +346,7 @@ export class SqliteReplicationStateRepository {
         SELECT id, stream_id AS streamId, generation_id AS generationId, frozen_sequence AS frozenSequence
         FROM replication_pending_entities
         WHERE id IN (${placeholders})
-      `).all(...input.pendingItemIds) as Array<{
-        id: string
-        streamId: string
-        generationId: string
-        frozenSequence: number | null
-      }>
+      `).all(...input.pendingItemIds).map(pendingBindingRow)
       if (rows.length !== input.pendingItemIds.length || rows.some(row =>
         row.streamId !== input.streamId
         || row.generationId !== input.generationId
@@ -476,9 +413,9 @@ export class SqliteReplicationStateRepository {
 
   async acknowledge(streamId: string, sequence: number, now = new Date().toISOString()): Promise<ReplicationStreamState> {
     return this.executor.transaction(async () => {
-      const streamRow = this.requireStreamRow(streamId)
-      const decision = assertAckAdvance({ stream: mapStream(streamRow), sequence })
-      if (decision === 'already-acked') return mapStream(streamRow)
+      const streamRowValue = this.requireStreamRow(streamId)
+      const decision = assertAckAdvance({ stream: mapStream(streamRowValue), sequence })
+      if (decision === 'already-acked') return mapStream(streamRowValue)
 
       const batch = this.getFrozenBatchRow(streamId, sequence)
       if (!batch) throw new DurableReplicationError('SEQUENCE_GAP', 'Cannot ACK a batch that is not frozen locally')
@@ -491,7 +428,7 @@ export class SqliteReplicationStateRepository {
         UPDATE replication_streams SET ack_sequence = ?, updated_at = ? WHERE stream_id = ?
       `).run(sequence, now, streamId)
 
-      return mapStream({ ...streamRow, ackSequence: sequence, updatedAt: now })
+      return mapStream({ ...streamRowValue, ackSequence: sequence, updatedAt: now })
     })
   }
 
@@ -504,8 +441,8 @@ export class SqliteReplicationStateRepository {
         SELECT stream_id AS streamId, entity_type AS entityType, cursor, updated_at AS updatedAt
         FROM replication_reconciliation_cursors
         WHERE stream_id = ? AND entity_type = ?
-      `).get(streamId, entityType) as ReplicationReconciliationCursor | undefined
-      return row
+      `).get(streamId, entityType)
+      return row ? reconciliationCursorRow(row) : undefined
     })
   }
 
@@ -523,7 +460,7 @@ export class SqliteReplicationStateRepository {
   }
 
   private getStreamRow(streamId: string): StreamRow | undefined {
-    return this.executor.db.prepare(`
+    const row = this.executor.db.prepare(`
       SELECT relationship_id AS relationshipId,
              hub_id AS hubId,
              stream_id AS streamId,
@@ -537,7 +474,8 @@ export class SqliteReplicationStateRepository {
              updated_at AS updatedAt
       FROM replication_streams
       WHERE stream_id = ?
-    `).get(streamId) as StreamRow | undefined
+    `).get(streamId)
+    return row ? streamRow(row) : undefined
   }
 
   private requireStreamRow(streamId: string): StreamRow {
@@ -547,7 +485,7 @@ export class SqliteReplicationStateRepository {
   }
 
   private getPendingRow(id: string): PendingRow | undefined {
-    return this.executor.db.prepare(`
+    const row = this.executor.db.prepare(`
       SELECT id,
              stream_id AS streamId,
              generation_id AS generationId,
@@ -564,11 +502,12 @@ export class SqliteReplicationStateRepository {
              updated_at AS updatedAt
       FROM replication_pending_entities
       WHERE id = ?
-    `).get(id) as PendingRow | undefined
+    `).get(id)
+    return row ? pendingRow(row) : undefined
   }
 
   private getFrozenBatchRow(streamId: string, sequence: number): FrozenBatchRow | undefined {
-    return this.executor.db.prepare(`
+    const row = this.executor.db.prepare(`
       SELECT stream_id AS streamId,
              generation_id AS generationId,
              sequence,
@@ -583,16 +522,17 @@ export class SqliteReplicationStateRepository {
              acked_at AS ackedAt
       FROM replication_frozen_batches
       WHERE stream_id = ? AND sequence = ?
-    `).get(streamId, sequence) as FrozenBatchRow | undefined
+    `).get(streamId, sequence)
+    return row ? frozenBatchRow(row) : undefined
   }
 
   private mapFrozenBatch(row: FrozenBatchRow): FrozenReplicationBatch {
-    const items = this.executor.db.prepare(`
+    const pendingItemIds = this.executor.db.prepare(`
       SELECT pending_id AS pendingId
       FROM replication_batch_items
       WHERE stream_id = ? AND sequence = ?
       ORDER BY pending_id
-    `).all(row.streamId, row.sequence) as Array<{ pendingId: string }>
+    `).all(row.streamId, row.sequence).map(pendingIdRow)
     return {
       streamId: row.streamId,
       generationId: row.generationId,
@@ -602,11 +542,11 @@ export class SqliteReplicationStateRepository {
       phase: row.phase,
       policyRevision: row.policyRevision,
       historyRevision: row.historyRevision,
-      payload: parseJson(row.payloadJson),
+      payload: parseReplicationJson(row.payloadJson),
       status: row.status,
       frozenAt: row.frozenAt,
       ...(row.ackedAt ? { ackedAt: row.ackedAt } : {}),
-      pendingItemIds: items.map(item => item.pendingId),
+      pendingItemIds,
     }
   }
 }
