@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState, useSyncExternalStore } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import type { AgentLensClientModel, ClientSnapshot } from './client/model'
 import { readTheme, writeTheme } from './client/preferences'
@@ -82,6 +82,9 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     setTheme(next)
     writeTheme(next)
   }
+  const replaceReviewUrl = useCallback((pathname: string, search: string) => {
+    navigate({ pathname, search }, { replace: true })
+  }, [navigate])
 
   const onReview = location.pathname.startsWith('/review')
   const onHubReview = location.pathname.startsWith('/review/hub/')
@@ -117,9 +120,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     pathname: location.pathname,
     search: location.search,
     filters: snapshot.review.filters,
-    replace(pathname, search) {
-      navigate({ pathname, search }, { replace: true })
-    },
+    replace: replaceReviewUrl,
   })
 
   return <PinnedAgentsProvider agents={agents}>
