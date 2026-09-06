@@ -31,6 +31,75 @@ import { SqliteUnknownObservationProjection } from './unknown-observation-projec
 
 const STORAGE_SOFT_LIMIT_BYTES = 512 * 1024 * 1024
 const STORAGE_APPROACHING_RATIO = 0.8
+const COVERAGE_STATUSES = ['complete', 'partial', 'unavailable', 'unknown'] as const
+
+type StorageRow = Record<string, unknown>
+
+function rowRecord(value: unknown): StorageRow {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError('SQLite storage diagnostic query returned a non-object row')
+  }
+  return value as StorageRow
+}
+
+function requiredNumber(row: StorageRow, key: string): number {
+  const value = row[key]
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new TypeError(`SQLite storage diagnostic field ${key} must be a finite number`)
+  }
+  return value
+}
+
+function optionalString(row: StorageRow, key: string): string | null {
+  const value = row[key]
+  if (value == null) return null
+  if (typeof value !== 'string') {
+    throw new TypeError(`SQLite storage diagnostic field ${key} must be a string or null`)
+  }
+  return value
+}
+
+function countRow(value: unknown): number {
+  return requiredNumber(rowRecord(value), 'count')
+}
+
+function versionRow(value: unknown): number {
+  return requiredNumber(rowRecord(value), 'version')
+}
+
+function probeOk(value: unknown): boolean {
+  return requiredNumber(rowRecord(value), 'ok') === 1
+}
+
+function runtimeStatusRow(value: unknown): StorageRow {
+  const row = rowRecord(value)
+  if (typeof row.state !== 'string') {
+    throw new TypeError('SQLite source runtime diagnostic field state must be a string')
+  }
+  return row
+}
+
+function checkpointSummaryRow(value: unknown): { count: number; lastUpdatedAt: string | null } {
+  const row = rowRecord(value)
+  return {
+    count: requiredNumber(row, 'count'),
+    lastUpdatedAt: optionalString(row, 'lastUpdatedAt'),
+  }
+}
+
+function coverageStatus(value: unknown): typeof COVERAGE_STATUSES[number] | undefined {
+  const row = rowRecord(value)
+  const status = row.status
+  return typeof status === 'string' && (COVERAGE_STATUSES as readonly string[]).includes(status)
+    ? status as typeof COVERAGE_STATUSES[number]
+    : undefined
+}
+
+function readonlyRecord(value: unknown): Readonly<Record<string, unknown>> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Readonly<Record<string, unknown>>
+    : undefined
+}
 
 export function describeStorageCapacity(footprintBytes: number, softLimitBytes = STORAGE_SOFT_LIMIT_BYTES) {
   const ratio = softLimitBytes > 0 ? footprintBytes / softLimitBytes : 0
@@ -138,9 +207,9 @@ export class SqliteStorageService implements StorageService {
       SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations'
     `).get()
     return migrationTable
-      ? Number((this.db.prepare(
+      ? versionRow(this.db.prepare(
         'SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations',
-      ).get() as { version: number }).version)
+      ).get())
       : 0
   }
 
@@ -161,12 +230,11 @@ export class SqliteStorageService implements StorageService {
                  last_error_summary AS lastErrorSummary
           FROM source_runtime_status
           ORDER BY source_id, installation_id, runtime_profile_id, stage
-        `).all()
+        `).all().map(runtimeStatusRow)
       : []
-    const typed = items as Array<{ state: string }>
     return {
-      failed: typed.filter(item => item.state === 'failed').length,
-      running: typed.filter(item => item.state === 'running').length,
+      failed: items.filter(item => item.state === 'failed').length,
+      running: items.filter(item => item.state === 'running').length,
       items,
     }
   }
@@ -193,34 +261,28 @@ export class SqliteStorageService implements StorageService {
       SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'source_checkpoints'
     `).get()
     const summary = checkpointTable
-      ? this.db.prepare(`
+      ? checkpointSummaryRow(this.db.prepare(`
           SELECT COUNT(*) AS count, MAX(updated_at) AS lastUpdatedAt
           FROM source_checkpoints
-        `).get() as { count: number; lastUpdatedAt: string | null }
+        `).get())
       : { count: 0, lastUpdatedAt: null }
-    return {
-      count: Number(summary.count || 0),
-      lastUpdatedAt: summary.lastUpdatedAt,
-    }
+    return summary
   }
 
   async health(): Promise<StorageHealth> {
-    return this.executor.run(() => {
-      const probe = this.db.prepare('SELECT 1 AS ok').get() as { ok: number }
-      return {
-        ok: probe.ok === 1,
-        schemaVersion: this.schemaVersion(),
-        details: {
-          path: this.db.name,
-          readonly: this.db.readonly,
-          inTransaction: this.db.inTransaction,
-          executor: this.executor.metrics(),
-          sourceRuntime: this.runtimeHealthDetails(),
-          dataGrowth: this.capacityDetails(),
-          checkpoints: this.checkpointHealthDetails(),
-        },
-      }
-    })
+    return this.executor.run(() => ({
+      ok: probeOk(this.db.prepare('SELECT 1 AS ok').get()),
+      schemaVersion: this.schemaVersion(),
+      details: {
+        path: this.db.name,
+        readonly: this.db.readonly,
+        inTransaction: this.db.inTransaction,
+        executor: this.executor.metrics(),
+        sourceRuntime: this.runtimeHealthDetails(),
+        dataGrowth: this.capacityDetails(),
+        checkpoints: this.checkpointHealthDetails(),
+      },
+    }))
   }
 
   async diagnostics(): Promise<StorageHealth> {
@@ -239,27 +301,26 @@ export class SqliteStorageService implements StorageService {
         FROM coverage
         ORDER BY subject_type, subject_id, capability, COALESCE(to_time, from_time) DESC
         LIMIT 300
-      `).all()
+      `).all().map(rowRecord)
       const coverageSummary = { complete: 0, partial: 0, unavailable: 0, unknown: 0 }
-      for (const item of coverageItems as Array<{ status: keyof typeof coverageSummary }>) {
-        if (item.status in coverageSummary) coverageSummary[item.status] += 1
+      for (const item of coverageItems) {
+        const status = coverageStatus(item)
+        if (status) coverageSummary[status] += 1
       }
 
       const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-      const count = (tableName: string): number => Number((this.db.prepare(
+      const count = (tableName: string): number => countRow(this.db.prepare(
         `SELECT COUNT(*) AS count FROM ${tableName}`,
-      ).get() as { count: number }).count)
-      const recentCount = (tableName: string, column: string): number => Number((this.db.prepare(
+      ).get())
+      const recentCount = (tableName: string, column: string): number => countRow(this.db.prepare(
         `SELECT COUNT(*) AS count FROM ${tableName} WHERE ${column} >= ?`,
-      ).get(cutoff) as { count: number }).count)
-      const recentSessions = Number((this.db.prepare(`
+      ).get(cutoff))
+      const recentSessions = countRow(this.db.prepare(`
         SELECT COUNT(*) AS count
         FROM session_summary_projection
         WHERE ended_at >= ?
-      `).get(cutoff) as { count: number }).count)
-      const baseGrowth = health.details?.dataGrowth && typeof health.details.dataGrowth === 'object'
-        ? health.details.dataGrowth as Readonly<Record<string, unknown>>
-        : this.capacityDetails()
+      `).get(cutoff))
+      const baseGrowth = readonlyRecord(health.details?.dataGrowth) ?? this.capacityDetails()
 
       return {
         ...health,
