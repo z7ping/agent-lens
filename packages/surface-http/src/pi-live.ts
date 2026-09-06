@@ -136,7 +136,7 @@ export async function handlePiLiveRequest(
   service: PiLiveService | undefined,
   storage: StorageService,
 ): Promise<boolean> {
-  if (!url.pathname.startsWith('/api/v1/pi-live')) return false
+  if (url.pathname !== '/api/v1/pi-live' && !url.pathname.startsWith('/api/v1/pi-live/')) return false
   if (!service) {
     writeJson(response, 503, { error: 'pi_live_unavailable' })
     return true
