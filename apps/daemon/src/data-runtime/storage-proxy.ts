@@ -32,6 +32,7 @@ const READ_PREFIXES = [
   'overview',
   'preview',
   'verify',
+  'facetScope',
 ] as const
 
 function isReadPath(path: readonly string[]): boolean {
@@ -189,9 +190,18 @@ function namespaceProxy<T extends object>(executor: RemoteStorageExecutor, path:
   }) as T
 }
 
-function sessionSummaryProxy(executor: RemoteStorageExecutor): SessionSummaryProjectionStore {
+interface SessionSummaryFacetScope {
+  facetScope(): Promise<{
+    projects: Array<{ id: string; name?: string; repositoryIdentity?: string }>
+    from?: string
+    to?: string
+  }>
+}
+
+function sessionSummaryProxy(executor: RemoteStorageExecutor): SessionSummaryProjectionStore & SessionSummaryFacetScope {
   return {
     query: input => executor.call(['sessionSummaryProjection', 'query'], [input]),
+    facetScope: () => executor.call(['sessionSummaryProjection', 'facetScope']),
     isMaterialized: () => executor.call(['sessionSummaryProjection', 'isMaterialized']),
     rebuild: input => {
       const portable = input
