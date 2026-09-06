@@ -11,10 +11,41 @@ import type { SqliteExecutor } from './executor'
 import { SqliteToolUsageObservationReader as LegacyToolUsageObservationReader } from './tool-usage-observations'
 
 const MAX_AGGREGATE_DETAIL_LIMIT = 500
+const AGGREGATE_ROW_KINDS = ['tool', 'session', 'tool_observation', 'asset', 'asset_observation', 'unattributed'] as const
 
 type AggregateRow = {
-  row_kind: 'tool' | 'session' | 'tool_observation' | 'asset' | 'asset_observation' | 'unattributed'
+  row_kind: typeof AGGREGATE_ROW_KINDS[number]
   payload_json: string
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError('Tool usage aggregate payload must be an object')
+  }
+  return value as Record<string, unknown>
+}
+
+function aggregateRow(value: unknown): AggregateRow {
+  const row = asRecord(value)
+  const rowKind = row.row_kind
+  const payloadJson = row.payload_json
+  if (typeof rowKind !== 'string' || !(AGGREGATE_ROW_KINDS as readonly string[]).includes(rowKind)) {
+    throw new TypeError(`SQLite tool usage aggregate row_kind has unsupported value: ${String(rowKind)}`)
+  }
+  if (typeof payloadJson !== 'string') {
+    throw new TypeError('SQLite tool usage aggregate payload_json must be a string')
+  }
+  return { row_kind: rowKind as AggregateRow['row_kind'], payload_json: payloadJson }
+}
+
+function aggregatePayload(value: string): Record<string, unknown> {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(value)
+  } catch {
+    throw new TypeError('SQLite tool usage aggregate payload_json contains invalid JSON')
+  }
+  return asRecord(parsed)
 }
 
 function aggregateFilter(input: ToolUsageAggregateQuery): { conditions: string[]; params: unknown[] } {
@@ -156,7 +187,7 @@ function parseAggregateRows(rows: readonly AggregateRow[]): ToolUsageAggregateRe
   const assets = new Map<string, ToolUsageAggregateAssetRecord>()
   let unattributedToolCalls = 0
   for (const row of rows) {
-    const payload = JSON.parse(row.payload_json) as Record<string, unknown>
+    const payload = aggregatePayload(row.payload_json)
     if (row.row_kind === 'tool') {
       const sourceId = String(payload.sourceId)
       const toolName = String(payload.toolName)
@@ -291,7 +322,7 @@ export class SqliteToolUsageFactReader implements ToolUsageObservationReader {
           SELECT row_kind, payload_json
           FROM aggregate_rows
           ORDER BY category_rank, group_key, item_key
-        `).all(...params) as AggregateRow[]
+        `).all(...params).map(aggregateRow)
         return parseAggregateRows(rows)
       }
 
@@ -415,7 +446,7 @@ export class SqliteToolUsageFactReader implements ToolUsageObservationReader {
         SELECT row_kind, payload_json
         FROM aggregate_rows
         ORDER BY category_rank, group_key, item_key, detail_rank
-      `).all(...params, detailLimit, detailLimit, detailLimit) as AggregateRow[]
+      `).all(...params, detailLimit, detailLimit, detailLimit).map(aggregateRow)
 
       return parseAggregateRows(rows)
     })
