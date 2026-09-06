@@ -12,6 +12,11 @@ import { SqliteToolUsageObservationReader as LegacyToolUsageObservationReader } 
 
 const MAX_AGGREGATE_DETAIL_LIMIT = 500
 
+type AggregateRow = {
+  row_kind: 'tool' | 'session' | 'tool_observation' | 'asset' | 'asset_observation' | 'unattributed'
+  payload_json: string
+}
+
 function aggregateFilter(input: ToolUsageAggregateQuery): { conditions: string[]; params: unknown[] } {
   const conditions = ["f.kind IN ('tool.call', 'tool.result')"]
   const params: unknown[] = []
@@ -128,6 +133,68 @@ function aggregateCtes(conditions: string[]): string {
   `
 }
 
+function parseAggregateRows(rows: readonly AggregateRow[]): ToolUsageAggregateResult {
+  const tools = new Map<string, ToolUsageAggregateToolRecord>()
+  const assets = new Map<string, ToolUsageAggregateAssetRecord>()
+  let unattributedToolCalls = 0
+  for (const row of rows) {
+    const payload = JSON.parse(row.payload_json) as Record<string, unknown>
+    if (row.row_kind === 'tool') {
+      const sourceId = String(payload.sourceId)
+      const toolName = String(payload.toolName)
+      tools.set(`${sourceId}\u0000${toolName}`, {
+        nativeToolName: toolName,
+        sourceIds: [sourceId],
+        productIds: Array.isArray(payload.productIds)
+          ? payload.productIds.filter((item): item is string => typeof item === 'string').sort()
+          : [],
+        callCount: Number(payload.callCount ?? 0),
+        resultCount: Number(payload.resultCount ?? 0),
+        successCount: Number(payload.successCount ?? 0),
+        errorCount: Number(payload.errorCount ?? 0),
+        sessionCount: Number(payload.sessionCount ?? 0),
+        sessions: [],
+        totalDurationMs: Number(payload.totalDurationMs ?? 0),
+        firstUsedAt: String(payload.firstUsedAt),
+        lastUsedAt: String(payload.lastUsedAt),
+        observationIds: [],
+      })
+    } else if (row.row_kind === 'session') {
+      tools.get(`${payload.sourceId}\u0000${payload.toolName}`)?.sessions.push({
+        logicalSessionId: String(payload.logicalSessionId),
+        callCount: Number(payload.callCount ?? 0),
+        errorCount: Number(payload.errorCount ?? 0),
+      })
+    } else if (row.row_kind === 'tool_observation') {
+      tools.get(`${payload.sourceId}\u0000${payload.toolName}`)?.observationIds.push(String(payload.id))
+    } else if (row.row_kind === 'asset') {
+      const assetType = String(payload.assetType)
+      const canonicalName = String(payload.canonicalName)
+      assets.set(`${assetType}\u0000${canonicalName}`, {
+        type: assetType === 'skill' ? 'skill' : 'mcp',
+        canonicalName,
+        sourceIds: Array.isArray(payload.sourceIds)
+          ? payload.sourceIds.filter((item): item is string => typeof item === 'string').sort()
+          : [],
+        callCount: Number(payload.callCount ?? 0),
+        firstUsedAt: String(payload.firstUsedAt),
+        lastUsedAt: String(payload.lastUsedAt),
+        observationIds: [],
+      })
+    } else if (row.row_kind === 'asset_observation') {
+      assets.get(`${payload.assetType}\u0000${payload.canonicalName}`)?.observationIds.push(String(payload.id))
+    } else {
+      unattributedToolCalls = Number(payload.count ?? 0)
+    }
+  }
+
+  return {
+    tools: [...tools.values()],
+    assets: [...assets.values()],
+    unattributedToolCalls,
+  }
+}
+
 export class SqliteToolUsageFactReader implements ToolUsageObservationReader {
   private readonly legacy: LegacyToolUsageObservationReader
 
@@ -141,9 +208,75 @@ export class SqliteToolUsageFactReader implements ToolUsageObservationReader {
 
   aggregate(input: ToolUsageAggregateQuery): Promise<ToolUsageAggregateResult> {
     return this.executor.run(() => {
-      const detailLimit = Math.max(1, Math.min(input.detailLimit, MAX_AGGREGATE_DETAIL_LIMIT))
+      const detailLimit = Math.max(0, Math.min(input.detailLimit, MAX_AGGREGATE_DETAIL_LIMIT))
       const { conditions, params } = aggregateFilter(input)
       const ctes = aggregateCtes(conditions)
+
+      if (detailLimit === 0) {
+        const rows = this.executor.db.prepare(`${ctes},
+          tool_totals AS (
+            SELECT
+              source_id,
+              tool_name,
+              json_group_array(DISTINCT product_id) AS product_ids_json,
+              SUM(CASE WHEN kind = 'tool.call' THEN 1 ELSE 0 END) AS call_count,
+              SUM(CASE WHEN kind = 'tool.result' THEN 1 ELSE 0 END) AS result_count,
+              SUM(CASE WHEN kind = 'tool.result' AND success = 1 THEN 1 ELSE 0 END) AS success_count,
+              SUM(CASE WHEN kind = 'tool.result' AND success = 0 THEN 1 ELSE 0 END) AS error_count,
+              COUNT(DISTINCT CASE WHEN kind = 'tool.call' THEN logical_session_id END) AS session_count,
+              SUM(CASE WHEN kind = 'tool.result' AND duration_ms >= 0 THEN duration_ms ELSE 0 END) AS total_duration_ms,
+              MIN(effective_at) AS first_used_at,
+              MAX(effective_at) AS last_used_at
+            FROM tool_events
+            GROUP BY source_id, tool_name
+          ),
+          asset_totals AS (
+            SELECT
+              asset_type,
+              canonical_name,
+              json_group_array(DISTINCT source_id) AS source_ids_json,
+              COUNT(*) AS call_count,
+              MIN(effective_at) AS first_used_at,
+              MAX(effective_at) AS last_used_at
+            FROM asset_calls
+            WHERE asset_type IS NOT NULL AND canonical_name IS NOT NULL
+            GROUP BY asset_type, canonical_name
+          ),
+          aggregate_rows(category_rank, row_kind, group_key, item_key, payload_json) AS (
+            SELECT 0, 'tool', source_id, tool_name, json_object(
+              'sourceId', source_id,
+              'toolName', tool_name,
+              'productIds', json(product_ids_json),
+              'callCount', call_count,
+              'resultCount', result_count,
+              'successCount', success_count,
+              'errorCount', error_count,
+              'sessionCount', session_count,
+              'totalDurationMs', total_duration_ms,
+              'firstUsedAt', first_used_at,
+              'lastUsedAt', last_used_at
+            ) FROM tool_totals
+            UNION ALL
+            SELECT 1, 'asset', asset_type, canonical_name, json_object(
+              'assetType', asset_type,
+              'canonicalName', canonical_name,
+              'sourceIds', json(source_ids_json),
+              'callCount', call_count,
+              'firstUsedAt', first_used_at,
+              'lastUsedAt', last_used_at
+            ) FROM asset_totals
+            UNION ALL
+            SELECT 2, 'unattributed', '', '', json_object('count', COUNT(*))
+            FROM asset_calls
+            WHERE asset_type IS NULL OR canonical_name IS NULL
+          )
+          SELECT row_kind, payload_json
+          FROM aggregate_rows
+          ORDER BY category_rank, group_key, item_key
+        `).all(...params) as AggregateRow[]
+        return parseAggregateRows(rows)
+      }
+
       const rows = this.executor.db.prepare(`${ctes},
         tool_totals AS (
           SELECT
@@ -264,70 +397,9 @@ export class SqliteToolUsageFactReader implements ToolUsageObservationReader {
         SELECT row_kind, payload_json
         FROM aggregate_rows
         ORDER BY category_rank, group_key, item_key, detail_rank
-      `).all(...params, detailLimit, detailLimit, detailLimit) as Array<{
-        row_kind: 'tool' | 'session' | 'tool_observation' | 'asset' | 'asset_observation' | 'unattributed'
-        payload_json: string
-      }>
+      `).all(...params, detailLimit, detailLimit, detailLimit) as AggregateRow[]
 
-      const tools = new Map<string, ToolUsageAggregateToolRecord>()
-      const assets = new Map<string, ToolUsageAggregateAssetRecord>()
-      let unattributedToolCalls = 0
-      for (const row of rows) {
-        const payload = JSON.parse(row.payload_json) as Record<string, unknown>
-        if (row.row_kind === 'tool') {
-          const sourceId = String(payload.sourceId)
-          const toolName = String(payload.toolName)
-          tools.set(`${sourceId}\u0000${toolName}`, {
-            nativeToolName: toolName,
-            sourceIds: [sourceId],
-            productIds: Array.isArray(payload.productIds)
-              ? payload.productIds.filter((item): item is string => typeof item === 'string').sort()
-              : [],
-            callCount: Number(payload.callCount ?? 0),
-            resultCount: Number(payload.resultCount ?? 0),
-            successCount: Number(payload.successCount ?? 0),
-            errorCount: Number(payload.errorCount ?? 0),
-            sessionCount: Number(payload.sessionCount ?? 0),
-            sessions: [],
-            totalDurationMs: Number(payload.totalDurationMs ?? 0),
-            firstUsedAt: String(payload.firstUsedAt),
-            lastUsedAt: String(payload.lastUsedAt),
-            observationIds: [],
-          })
-        } else if (row.row_kind === 'session') {
-          tools.get(`${payload.sourceId}\u0000${payload.toolName}`)?.sessions.push({
-            logicalSessionId: String(payload.logicalSessionId),
-            callCount: Number(payload.callCount ?? 0),
-            errorCount: Number(payload.errorCount ?? 0),
-          })
-        } else if (row.row_kind === 'tool_observation') {
-          tools.get(`${payload.sourceId}\u0000${payload.toolName}`)?.observationIds.push(String(payload.id))
-        } else if (row.row_kind === 'asset') {
-          const assetType = String(payload.assetType)
-          const canonicalName = String(payload.canonicalName)
-          assets.set(`${assetType}\u0000${canonicalName}`, {
-            type: assetType === 'skill' ? 'skill' : 'mcp',
-            canonicalName,
-            sourceIds: Array.isArray(payload.sourceIds)
-              ? payload.sourceIds.filter((item): item is string => typeof item === 'string').sort()
-              : [],
-            callCount: Number(payload.callCount ?? 0),
-            firstUsedAt: String(payload.firstUsedAt),
-            lastUsedAt: String(payload.lastUsedAt),
-            observationIds: [],
-          })
-        } else if (row.row_kind === 'asset_observation') {
-          assets.get(`${payload.assetType}\u0000${payload.canonicalName}`)?.observationIds.push(String(payload.id))
-        } else {
-          unattributedToolCalls = Number(payload.count ?? 0)
-        }
-      }
-
-      return {
-        tools: [...tools.values()],
-        assets: [...assets.values()],
-        unattributedToolCalls,
-      }
+      return parseAggregateRows(rows)
     })
   }
 }
@@ -335,4 +407,5 @@ export class SqliteToolUsageFactReader implements ToolUsageObservationReader {
 export const toolUsageFactInternals = {
   aggregateFilter,
   aggregateCtes,
+  parseAggregateRows,
 }
