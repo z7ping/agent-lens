@@ -21,17 +21,22 @@ export function NewPiTaskPage() {
 
   useEffect(() => {
     let cancelled = false
-    void Promise.all([
-      piLiveApi.availability(),
-      fetchLocalReviewSessions(PROJECT_BOOTSTRAP_LIMIT),
-    ]).then(([pi, sessions]) => {
+    void piLiveApi.availability().then(pi => {
       if (cancelled) return
       setAvailability({ checked: true, available: pi.available, label: pi.available ? 'Pi 已就绪' : `Pi 不可用${pi.reason ? ` · ${pi.reason}` : ''}` })
-      setProjects(deriveTaskProjectOptions([], sessions.items))
     }, reason => {
       if (cancelled) return
       setAvailability({ checked: true, available: false, label: reason instanceof Error ? reason.message : String(reason) })
-      setProjects([])
+    })
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    void fetchLocalReviewSessions(PROJECT_BOOTSTRAP_LIMIT).then(sessions => {
+      if (!cancelled) setProjects(deriveTaskProjectOptions([], sessions.items))
+    }, () => {
+      if (!cancelled) setProjects([])
     })
     return () => { cancelled = true }
   }, [])
