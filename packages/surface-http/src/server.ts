@@ -1,6 +1,4 @@
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
-import { readFile, stat } from 'node:fs/promises'
-import { extname, resolve, sep } from 'node:path'
+import { createServer, type Server } from 'node:http'
 import type {
   BackupService,
   CapabilityService,
@@ -17,8 +15,6 @@ import { TimelineProjection } from '@agent-lens/projection-timeline'
 import { ToolAssetUsageProjection } from '@agent-lens/projection-usage'
 import {
   AGENT_LENS_PROTOCOL_VERSION,
-  type CapturePolicyResponseDto,
-  type CapturePolicySourceUpdateRequestDto,
   type HealthResponseDto,
   type JsonValue,
   type RuntimeModeDto,
@@ -27,9 +23,10 @@ import {
 } from '@agent-lens/protocol'
 import type { PiLiveService } from '@agent-lens/runtime-cordis'
 import { handleBackupRequest } from './backup-http'
+import { handleCapturePolicyRequest } from './capture-policy-http'
 import { parseDataRuntimeHealth } from './data-runtime-health'
 import type { HttpEventHub } from './events'
-import { badRequest, readJsonBody, writeJson } from './http-utils'
+import { badRequest, writeJson } from './http-utils'
 import { handlePiLiveRequest } from './pi-live'
 import {
   parseInsightsQuery,
@@ -40,19 +37,15 @@ import {
   parseTimelineQuery,
   parseUsageQuery,
 } from './query-params'
+import { handleStatic, type HttpStaticMount } from './static-files'
+
+export type { HttpStaticMount } from './static-files'
 
 export const AGENT_LENS_HTTP_HOST = '127.0.0.1' as const
 export const DEFAULT_AGENT_LENS_HTTP_PORT = 56789
-const MAX_JSON_BODY_BYTES = 1024 * 1024
 const HEALTH_CACHE_TTL_MS = 1_000
 const USAGE_DETAIL_LIMIT = 5
 const RUNTIME_STARTED_AT = new Date().toISOString()
-
-export interface HttpStaticMount {
-  id: string
-  directory: string
-  spaFallback?: boolean
-}
 
 export interface HttpSurfaceOptions {
   port?: number
@@ -72,18 +65,6 @@ export interface RunningHttpSurface {
   readonly server: Server
   mountStatic(mount: HttpStaticMount): Disposable
   dispose(): Promise<void>
-}
-
-const MIME_TYPES: Record<string, string> = {
-  '.css': 'text/css; charset=utf-8',
-  '.html': 'text/html; charset=utf-8',
-  '.ico': 'image/x-icon',
-  '.js': 'text/javascript; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.map': 'application/json; charset=utf-8',
-  '.svg': 'image/svg+xml',
-  '.txt': 'text/plain; charset=utf-8',
-  '.webp': 'image/webp',
 }
 
 function currentRuntimeOwner(): RuntimeOwnerDto {
@@ -111,107 +92,6 @@ function jsonValue(value: unknown, depth = 0): JsonValue {
     return result
   }
   return null
-}
-
-function safeFilePath(root: string, pathname: string): string | null {
-  const relative = pathname.replace(/^\/+/, '')
-  const fullPath = resolve(root, relative)
-  if (fullPath === root || fullPath.startsWith(`${root}${sep}`)) return fullPath
-  return null
-}
-
-async function tryServeFile(response: ServerResponse, filePath: string): Promise<boolean> {
-  try {
-    const info = await stat(filePath)
-    if (!info.isFile()) return false
-    const content = await readFile(filePath)
-    const contentType = MIME_TYPES[extname(filePath).toLowerCase()] ?? 'application/octet-stream'
-    response.statusCode = 200
-    response.setHeader('content-type', contentType)
-    response.setHeader('cache-control', 'no-cache')
-    response.setHeader('content-length', content.byteLength)
-    response.end(content)
-    return true
-  } catch {
-    return false
-  }
-}
-
-async function handleStatic(
-  response: ServerResponse,
-  pathname: string,
-  mounts: Iterable<HttpStaticMount>,
-): Promise<boolean> {
-  for (const mount of mounts) {
-    const root = resolve(mount.directory)
-    const requestedPath = pathname === '/' ? 'index.html' : pathname
-    const candidate = safeFilePath(root, requestedPath)
-    if (candidate && await tryServeFile(response, candidate)) return true
-
-    if (mount.spaFallback && !extname(pathname)) {
-      const indexPath = safeFilePath(root, 'index.html')
-      if (indexPath && await tryServeFile(response, indexPath)) return true
-    }
-  }
-  return false
-}
-
-function capturePolicyResponse(capturePolicy: CapturePolicyService): CapturePolicyResponseDto {
-  const configuration = capturePolicy.getSourceConfiguration()
-  return {
-    settings: {
-      effectiveEnabledSources: [...configuration.effectiveEnabledSources],
-      configuredEnabledSources: [...configuration.configuredEnabledSources],
-      managedBy: configuration.source,
-      editable: configuration.editable,
-      restartRequired: configuration.restartRequired,
-    },
-    meta: {
-      protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
-      generatedAt: new Date().toISOString(),
-    },
-  }
-}
-
-function capturePolicyUpdatePayload(value: unknown): CapturePolicySourceUpdateRequestDto {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw badRequest('Request body must be an object')
-  }
-  const enabledSources = (value as Record<string, unknown>).enabledSources
-  if (!Array.isArray(enabledSources) || !enabledSources.every(item => typeof item === 'string')) {
-    throw badRequest('enabledSources must be an array of strings')
-  }
-  const normalized = enabledSources.map(value => value.trim()).filter(Boolean)
-  if (!normalized.length) throw badRequest('enabledSources must contain at least one source')
-  return { enabledSources: normalized }
-}
-
-async function handleCapturePolicyRequest(
-  request: IncomingMessage,
-  response: ServerResponse,
-  url: URL,
-  capturePolicy?: CapturePolicyService,
-): Promise<boolean> {
-  if (url.pathname !== '/api/v1/capture-policy/sources') return false
-  if (!capturePolicy) {
-    writeJson(response, 503, { error: 'capture_policy_unavailable' })
-    return true
-  }
-
-  if (request.method === 'GET') {
-    writeJson(response, 200, capturePolicyResponse(capturePolicy))
-    return true
-  }
-
-  if (request.method !== 'PUT') {
-    writeJson(response, 405, { error: 'method_not_allowed' })
-    return true
-  }
-
-  const payload = capturePolicyUpdatePayload(await readJsonBody(request, { maxBytes: MAX_JSON_BODY_BYTES }))
-  await capturePolicy.setEnabledSources(payload.enabledSources)
-  writeJson(response, 200, capturePolicyResponse(capturePolicy))
-  return true
 }
 
 export async function startHttpSurface(
