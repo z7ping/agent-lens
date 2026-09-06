@@ -4,7 +4,7 @@ const DEFAULT_BASE_URL = 'http://127.0.0.1:56789'
 const DEFAULT_SAMPLES = 20
 const DEFAULT_WARMUP = 3
 const DEFAULT_TIMEOUT_MS = 5_000
-const HEALTH_CACHE_REFRESH_MS = 1_100
+const CACHE_REFRESH_MS = 1_100
 
 function arg(name, fallback) {
   const prefix = `--${name}=`
@@ -48,55 +48,13 @@ const options = {
 }
 
 const probes = [
-  {
-    id: 'ready',
-    label: '/ready',
-    path: '/api/v1/ready',
-    p95BudgetMs: 100,
-    acceptedStatuses: new Set([200]),
-  },
-  {
-    id: 'health',
-    label: '/health',
-    path: '/api/v1/health',
-    p95BudgetMs: 500,
-    acceptedStatuses: new Set([200, 503]),
-  },
-  {
-    id: 'piAvailability',
-    label: 'Pi availability',
-    path: '/api/v1/pi-live/availability',
-    p95BudgetMs: 100,
-    acceptedStatuses: new Set([200]),
-  },
-  {
-    id: 'taskCenter',
-    label: 'Task Center first page',
-    path: '/api/v1/review?limit=20',
-    p95BudgetMs: 500,
-    acceptedStatuses: new Set([200]),
-  },
-  {
-    id: 'facets',
-    label: 'facets',
-    path: '/api/v1/facets',
-    p95BudgetMs: 500,
-    acceptedStatuses: new Set([200]),
-  },
-  {
-    id: 'tools',
-    label: 'Tools summary',
-    path: '/api/v1/usage?limit=500',
-    p95BudgetMs: 1_000,
-    acceptedStatuses: new Set([200]),
-  },
-  {
-    id: 'agents',
-    label: 'Agent overview',
-    path: '/api/v1/agents',
-    p95BudgetMs: 1_000,
-    acceptedStatuses: new Set([200]),
-  },
+  { id: 'ready', label: '/ready', path: '/api/v1/ready', p95BudgetMs: 100, acceptedStatuses: new Set([200]) },
+  { id: 'health', label: '/health', path: '/api/v1/health', p95BudgetMs: 500, acceptedStatuses: new Set([200, 503]) },
+  { id: 'piAvailability', label: 'Pi availability', path: '/api/v1/pi-live/availability', p95BudgetMs: 100, acceptedStatuses: new Set([200]) },
+  { id: 'taskCenter', label: 'Task Center first page', path: '/api/v1/review?limit=20', p95BudgetMs: 500, acceptedStatuses: new Set([200]) },
+  { id: 'facets', label: 'facets', path: '/api/v1/facets', p95BudgetMs: 500, acceptedStatuses: new Set([200]) },
+  { id: 'tools', label: 'Tools summary', path: '/api/v1/usage?limit=500', p95BudgetMs: 1_000, acceptedStatuses: new Set([200]) },
+  { id: 'agents', label: 'Agent overview', path: '/api/v1/agents', p95BudgetMs: 1_000, acceptedStatuses: new Set([200]) },
 ]
 
 async function request(path, acceptedStatuses) {
@@ -127,9 +85,7 @@ async function request(path, acceptedStatuses) {
 }
 
 async function measureProbe(probe) {
-  for (let index = 0; index < options.warmup; index += 1) {
-    await request(probe.path, probe.acceptedStatuses)
-  }
+  for (let index = 0; index < options.warmup; index += 1) await request(probe.path, probe.acceptedStatuses)
 
   const samples = []
   let failures = 0
@@ -199,8 +155,8 @@ async function runBurst(count) {
   }
 }
 
-function projectionStatus(health) {
-  const value = health?.storage?.details?.toolUsageFacts
+function projectionStatus(usage) {
+  const value = usage?.meta?.projection
   if (!value || typeof value !== 'object') return null
   return {
     state: value.state,
@@ -225,14 +181,18 @@ for (const probe of probes) {
 const burst = await runBurst(options.burst)
 if (burst) console.log(`mixed foreground burst ${burst.passed ? 'PASS' : 'FAIL'} failures=${burst.failures}/${burst.count} elapsed=${burst.elapsedMs}ms`)
 
-// /health is cached for 1s. Never report the pre-burst snapshot as the final
-// Data Runtime state: wait past the cache TTL and explicitly fetch it again.
-if (burst) await delay(HEALTH_CACHE_REFRESH_MS)
-const freshHealthResult = await request('/api/v1/health', new Set([200, 503]))
+// HTTP health and Tool projection readiness both have short caches. Wait past
+// those TTLs, then explicitly refresh both final-state snapshots after burst.
+if (burst) await delay(CACHE_REFRESH_MS)
+const [freshHealthResult, freshUsageResult] = await Promise.all([
+  request('/api/v1/health', new Set([200, 503])),
+  request('/api/v1/usage?limit=1', new Set([200])),
+])
 const health = freshHealthResult.body
-const toolUsageProjection = projectionStatus(health)
+const toolUsageProjection = projectionStatus(freshUsageResult.body)
 const projectionReady = Boolean(
-  toolUsageProjection
+  freshUsageResult.ok
+  && toolUsageProjection
   && toolUsageProjection.state === 'ready'
   && toolUsageProjection.missingCount === 0
   && toolUsageProjection.coverageRatio >= 1,
@@ -252,7 +212,6 @@ const report = {
     dataRuntime: health.dataRuntime ?? health.storage?.details?.dataRuntime ?? null,
     eventLoop: health.storage?.details?.eventLoop ?? null,
     capacity: health.storage?.details?.dataGrowth?.capacity ?? null,
-    toolUsageFacts: toolUsageProjection,
   } : null,
 }
 console.log(JSON.stringify(report, null, 2))
@@ -260,7 +219,7 @@ console.log(JSON.stringify(report, null, 2))
 const failed = measurements.filter(item => !item.passed)
 if (burst && !burst.passed) failed.push({ label: 'mixed foreground burst' })
 if (!freshHealthResult.ok) failed.push({ label: 'fresh post-burst health' })
-if (!projectionReady) failed.push({ label: 'Tool Fact projection readiness' })
+if (!freshUsageResult.ok || !projectionReady) failed.push({ label: 'Tool Fact projection readiness' })
 if (failed.length) {
   console.error(`large DB acceptance failed: ${failed.map(item => item.label).join(', ')}`)
   process.exitCode = 1
