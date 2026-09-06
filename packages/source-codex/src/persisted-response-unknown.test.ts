@@ -2,11 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { SourceRecord } from '@agent-lens/core'
 import { normalizeCurrentCodexRecord } from './current-protocol'
-
-const ctx = {
-  host: { id: 'host', name: 'host', platform: 'linux', arch: 'x64', createdAt: '2026-01-01T00:00:00.000Z', lastSeenAt: '2026-01-01T00:00:00.000Z' },
-  installation: { id: 'install', hostId: 'host', productId: 'codex', firstSeenAt: '2026-01-01T00:00:00.000Z', lastSeenAt: '2026-01-01T00:00:00.000Z' },
-} as any
+import { codexTestContext } from './test-support'
 
 function record(payload: Record<string, unknown>, sourceSequence: number): SourceRecord {
   return {
@@ -47,7 +43,7 @@ test('official persisted ResponseItem variants do not degrade to unknown', async
   ]
 
   for (const [index, payload] of payloads.entries()) {
-    const output = await normalizeCurrentCodexRecord(record(payload, index + 1), ctx)
+    const output = await normalizeCurrentCodexRecord(record(payload, index + 1), codexTestContext)
     assert.equal(output.observations.some(item => item.kind === 'unknown'), false, String(payload.type))
   }
 })
@@ -58,7 +54,7 @@ test('encrypted-only persisted reasoning keeps evidence without manufacturing a 
     id: 'reasoning-encrypted-only',
     summary: [],
     encrypted_content: 'opaque-ciphertext',
-  }, 20), ctx)
+  }, 20), codexTestContext)
 
   assert.equal(output.observations.length, 0)
   assert.equal(output.evidenceCandidates.length, 1)
