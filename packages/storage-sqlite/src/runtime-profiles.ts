@@ -55,13 +55,16 @@ export class SqliteRuntimeProfileRepository {
       `).get(hint.installationId, hint.nativeProfileId))
       const now = new Date().toISOString()
       const existingProfile = existing ? mapRuntimeProfile(existing) : null
+      const name = hint.name ?? existingProfile?.name
+      const configRoot = hint.configRoot ?? existingProfile?.configRoot
+      const dataRoot = hint.dataRoot ?? existingProfile?.dataRoot
       const profile: RuntimeProfile = {
         id: existingProfile?.id ?? stableId([hint.installationId, hint.nativeProfileId]),
         installationId: hint.installationId,
         nativeProfileId: hint.nativeProfileId,
-        ...(hint.name ?? existingProfile?.name ? { name: hint.name ?? existingProfile?.name } : {}),
-        ...(hint.configRoot ?? existingProfile?.configRoot ? { configRoot: hint.configRoot ?? existingProfile?.configRoot } : {}),
-        ...(hint.dataRoot ?? existingProfile?.dataRoot ? { dataRoot: hint.dataRoot ?? existingProfile?.dataRoot } : {}),
+        ...(name === undefined ? {} : { name }),
+        ...(configRoot === undefined ? {} : { configRoot }),
+        ...(dataRoot === undefined ? {} : { dataRoot }),
         firstSeenAt: existingProfile?.firstSeenAt ?? now,
         lastSeenAt: now,
       }
