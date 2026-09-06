@@ -1,8 +1,30 @@
 /*
  * AgentLens 应用外壳响应式规则。
- * 只负责 Header / 导航 / 公共工具栏压缩，不承担一级页面专属视觉。
+ * 负责 Header / 导航 / 公共工具栏压缩，以及移动侧栏所需的承载壳。
  * 断点固定采用 Bootstrap 5：sm 576 / md 768 / lg 992 / xl 1200 / xxl 1400。
  */
+
+.workspace-breadcrumb-shell {
+  display: flex;
+  min-width: 0;
+  min-height: 38px;
+  flex: 0 0 38px;
+  align-items: stretch;
+  border-bottom: 1px solid var(--al-line);
+  background: var(--al-surface);
+}
+
+.workspace-breadcrumb-shell .workspace-breadcrumb {
+  min-width: 0;
+  min-height: 37px;
+  flex: 1 1 auto;
+  border-bottom: 0;
+}
+
+.workspace-mobile-nav-button,
+.workspace-mobile-backdrop {
+  display: none;
+}
 
 @media (max-width: 1199.98px) {
   .app-header-inner { gap: 14px; padding-inline: 14px; }
