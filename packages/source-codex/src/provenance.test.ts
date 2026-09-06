@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { AgentInstallation, Host, SourceRecord } from '@agent-lens/core'
 import { codexSourceDefinition } from './index'
+import { asRecord } from './test-support'
 
 const host: Host = {
   id: 'host-provenance',
@@ -28,7 +29,7 @@ function record(entry: Record<string, unknown>, id: string, sessionId = 'session
     sourceId: 'codex',
     installationId: installation.id,
     sourceSessionNativeId: sessionId,
-    nativeType: `${String(entry.type ?? 'unknown')}/${String((entry.payload as any)?.type ?? '')}`,
+    nativeType: `${String(entry.type ?? 'unknown')}/${String(asRecord(entry.payload).type ?? '')}`,
     sourceSequence: 1,
     capturedAt: '2026-09-04T00:00:01.000Z',
     locator: { kind: 'file', path: '/tmp/codex/sessions/rollout.jsonl', offset: 10 },
@@ -53,7 +54,7 @@ test('user-authored AGENTS/XML stays a real user request because event_msg is au
   }, 'user-authored-system-looking-text'))
 
   assert.equal(output.observations[0]?.kind, 'message.user')
-  assert.equal((output.observations[0]?.payload as any).provenance.actualAuthor, 'human-user')
+  assert.equal(asRecord(asRecord(output.observations[0]?.payload).provenance).actualAuthor, 'human-user')
 })
 
 test('plain response_item role=user transport echo preserves evidence without creating activity', async () => {
@@ -82,10 +83,11 @@ test('user message keeps body and separates attachment metadata', async () => {
     },
   }, 'attachment-user-message'))
 
-  const payload = output.observations[0]?.payload as any
+  const payload = asRecord(output.observations[0]?.payload)
+  const attachments = Array.isArray(payload.attachments) ? payload.attachments : []
   assert.equal(payload.text, '分析附件')
-  assert.equal(payload.attachments.length, 3)
-  assert.deepEqual(payload.attachments.map((item: any) => item.kind), ['images', 'local_images', 'text_elements'])
+  assert.equal(attachments.length, 3)
+  assert.deepEqual(attachments.map(item => asRecord(item).kind), ['images', 'local_images', 'text_elements'])
 })
 
 test('guardian subagent session uses parent_thread_id as the direct internal-review relationship', async () => {
@@ -101,7 +103,7 @@ test('guardian subagent session uses parent_thread_id as the direct internal-rev
     },
   }, 'guardian-meta', 'guardian-child'))
 
-  const payload = output.observations[0]?.payload as any
+  const payload = asRecord(output.observations[0]?.payload)
   assert.equal(payload.sessionActivity, 'internal-review')
   assert.equal(payload.rootSessionId, undefined)
   assert.equal(payload.parentSessionId, 'parent-task')
@@ -122,7 +124,7 @@ test('normal subagent remains subagent and does not infer task-root from shared 
     },
   }, 'subagent-meta', 'worker-child'))
 
-  assert.equal((output.observations[0]?.payload as any).sessionActivity, 'subagent')
+  assert.equal(asRecord(output.observations[0]?.payload).sessionActivity, 'subagent')
   assert.deepEqual(output.sessionRelationshipHints?.map(item => item.type), ['subagent'])
 })
 
@@ -145,7 +147,7 @@ test('nested thread_spawn keeps only its explicit direct parent relationship', a
     },
   }, 'nested-subagent-meta', 'nested-worker'))
 
-  const payload = output.observations[0]?.payload as any
+  const payload = asRecord(output.observations[0]?.payload)
   assert.equal(payload.sessionActivity, 'subagent')
   assert.equal(payload.rootSessionId, undefined)
   assert.equal(payload.parentSessionId, 'direct-parent')
@@ -165,7 +167,7 @@ test('native subagent source review without an explicit parent remains orphan in
     },
   }, 'native-review-meta', 'review-child'))
 
-  const payload = output.observations[0]?.payload as any
+  const payload = asRecord(output.observations[0]?.payload)
   assert.equal(payload.sessionActivity, 'internal-review')
   assert.equal(payload.activitySourceLabel, 'Guardian 审查')
   assert.equal(payload.orphanInternalActivity, true)
@@ -182,7 +184,7 @@ test('unlinked internal activity is preserved and marked orphan for system activ
     },
   }, 'orphan-subagent-meta', 'orphan-worker'))
 
-  const payload = output.observations[0]?.payload as any
+  const payload = asRecord(output.observations[0]?.payload)
   assert.equal(payload.sessionActivity, 'subagent')
   assert.equal(payload.orphanInternalActivity, true)
   assert.deepEqual(output.sessionRelationshipHints, [])
