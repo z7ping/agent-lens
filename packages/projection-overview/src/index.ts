@@ -4,6 +4,7 @@ import type {
   CapturePolicyService,
   ObservationCursor,
   SessionSummaryCursor,
+  SessionSummaryFacetScope,
   SourceService,
   StorageService,
 } from '@agent-lens/core'
@@ -25,11 +26,7 @@ const FACET_SCOPE_CACHE_MS = 10_000
 const FACET_RESPONSE_CACHE_MS = 2_000
 const AGENT_OVERVIEW_CACHE_MS = 2_000
 
-interface FastFacetScope {
-  projects: Array<{ id: string; name?: string; repositoryIdentity?: string }>
-  from?: string
-  to?: string
-}
+type FastFacetScope = SessionSummaryFacetScope
 
 function latestStates(entry: AssetInventoryEntry): AgentAssetStateDto[] {
   const latest = new Map<string, AgentAssetStateDto>()
@@ -107,10 +104,8 @@ async function loadFacetScopeFallback(storage: StorageService): Promise<{
 }
 
 function fastFacetScope(storage: StorageService): (() => Promise<FastFacetScope>) | undefined {
-  const projection = storage.sessionSummaryProjection as typeof storage.sessionSummaryProjection & {
-    facetScope?: () => Promise<FastFacetScope>
-  }
-  return projection?.facetScope ? () => projection.facetScope!() : undefined
+  const facetScope = storage.sessionSummaryProjection?.facetScope
+  return facetScope ? () => facetScope.call(storage.sessionSummaryProjection) : undefined
 }
 
 export class FacetProjection {
