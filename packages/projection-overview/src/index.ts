@@ -22,6 +22,8 @@ import {
 const FACET_SESSION_PAGE_SIZE = 500
 const FACET_OBSERVATION_PAGE_SIZE = 5000
 const FACET_SCOPE_CACHE_MS = 10_000
+const FACET_RESPONSE_CACHE_MS = 2_000
+const AGENT_OVERVIEW_CACHE_MS = 2_000
 
 interface FastFacetScope {
   projects: Array<{ id: string; name?: string; repositoryIdentity?: string }>
@@ -114,6 +116,9 @@ function fastFacetScope(storage: StorageService): (() => Promise<FastFacetScope>
 export class FacetProjection {
   private cachedScope: FastFacetScope | null = null
   private cachedScopeAt = 0
+  private cachedResponse: FacetResponseDto | null = null
+  private cachedResponseAt = 0
+  private queryInFlight: Promise<FacetResponseDto> | null = null
 
   constructor(
     private readonly storage: StorageService,
@@ -149,7 +154,22 @@ export class FacetProjection {
     return scope
   }
 
-  async query(): Promise<FacetResponseDto> {
+  query(): Promise<FacetResponseDto> {
+    if (this.cachedResponse && Date.now() - this.cachedResponseAt < FACET_RESPONSE_CACHE_MS) {
+      return Promise.resolve(this.cachedResponse)
+    }
+    if (this.queryInFlight) return this.queryInFlight
+    this.queryInFlight = this.buildResponse()
+      .then(response => {
+        this.cachedResponse = response
+        this.cachedResponseAt = Date.now()
+        return response
+      })
+      .finally(() => { this.queryInFlight = null })
+    return this.queryInFlight
+  }
+
+  private async buildResponse(): Promise<FacetResponseDto> {
     const definitions = this.sources?.list() ?? []
     const agents = await Promise.all(definitions.map(async definition => {
       const installations = await this.storage.repositories.installations.listByProduct(definition.manifest.productId)
@@ -179,6 +199,9 @@ export class FacetProjection {
 
 export class AgentOverviewProjection {
   private readonly usage: ToolAssetUsageProjection
+  private cachedResponse: AgentOverviewResponseDto | null = null
+  private cachedResponseAt = 0
+  private queryInFlight: Promise<AgentOverviewResponseDto> | null = null
 
   constructor(
     private readonly storage: StorageService,
@@ -189,15 +212,28 @@ export class AgentOverviewProjection {
     this.usage = new ToolAssetUsageProjection(storage)
   }
 
-  async query(): Promise<AgentOverviewResponseDto> {
+  query(): Promise<AgentOverviewResponseDto> {
+    if (this.cachedResponse && Date.now() - this.cachedResponseAt < AGENT_OVERVIEW_CACHE_MS) {
+      return Promise.resolve(this.cachedResponse)
+    }
+    if (this.queryInFlight) return this.queryInFlight
+    this.queryInFlight = this.buildResponse()
+      .then(response => {
+        this.cachedResponse = response
+        this.cachedResponseAt = Date.now()
+        return response
+      })
+      .finally(() => { this.queryInFlight = null })
+    return this.queryInFlight
+  }
+
+  private async buildResponse(): Promise<AgentOverviewResponseDto> {
     const definitions = this.sources?.list() ?? []
     const items = await Promise.all(definitions.map(async definition => {
       const installations = await this.storage.repositories.installations.listByProduct(definition.manifest.productId)
       const usedAssets = new Map<string, AgentOverviewResponseDto['items'][number]['usedAssets'][number]>()
       const inventory = new Map<string, AgentAssetInventoryDto>()
 
-      // Tool facts already carry source_id across all installations. Aggregate once
-      // for the source instead of repeating the expensive usage CTE per installation.
       const assets = await this.usage.queryAssets({ sourceId: definition.manifest.sourceId })
       for (const asset of assets) {
         const key = `${asset.type}\u0000${asset.canonicalName}`
@@ -314,5 +350,7 @@ export class SessionRelationshipProjection {
 
 export const projectionOverviewInternals = {
   FACET_SCOPE_CACHE_MS,
+  FACET_RESPONSE_CACHE_MS,
+  AGENT_OVERVIEW_CACHE_MS,
   fastFacetScope,
 }
