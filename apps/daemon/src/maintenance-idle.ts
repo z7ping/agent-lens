@@ -1,13 +1,19 @@
 import type { IncomingMessage, Server, ServerResponse } from 'node:http'
 
-const DEFAULT_QUIET_MS = 500
+const DEFAULT_QUIET_MS = 5_000
 const DEFAULT_POLL_MS = 100
+
+export interface ForegroundLoadSnapshot {
+  foregroundPending: number
+  writerPending: number
+}
 
 interface ForegroundActivityGateOptions {
   quietMs?: number
   pollMs?: number
   now?: () => number
   sleep?: (ms: number) => Promise<void>
+  loadProbe?: () => ForegroundLoadSnapshot
 }
 
 export class ForegroundActivityGate {
@@ -15,6 +21,7 @@ export class ForegroundActivityGate {
   private readonly pollMs: number
   private readonly now: () => number
   private readonly sleep: (ms: number) => Promise<void>
+  private loadProbe: (() => ForegroundLoadSnapshot) | null
   private activeRequests = 0
   private lastActivityAt: number
 
@@ -23,7 +30,12 @@ export class ForegroundActivityGate {
     this.pollMs = options.pollMs ?? DEFAULT_POLL_MS
     this.now = options.now ?? Date.now
     this.sleep = options.sleep ?? (ms => new Promise(resolve => setTimeout(resolve, ms)))
+    this.loadProbe = options.loadProbe ?? null
     this.lastActivityAt = this.now()
+  }
+
+  setLoadProbe(loadProbe: (() => ForegroundLoadSnapshot) | null): void {
+    this.loadProbe = loadProbe
   }
 
   begin(): () => void {
@@ -39,7 +51,11 @@ export class ForegroundActivityGate {
   }
 
   isIdle(): boolean {
-    return this.activeRequests === 0 && this.now() - this.lastActivityAt >= this.quietMs
+    const load = this.loadProbe?.() ?? { foregroundPending: 0, writerPending: 0 }
+    return this.activeRequests === 0
+      && load.foregroundPending === 0
+      && load.writerPending === 0
+      && this.now() - this.lastActivityAt >= this.quietMs
   }
 
   async wait(signal: AbortSignal): Promise<void> {
@@ -48,8 +64,12 @@ export class ForegroundActivityGate {
     }
   }
 
-  snapshot(): { activeRequests: number; lastActivityAt: number } {
-    return { activeRequests: this.activeRequests, lastActivityAt: this.lastActivityAt }
+  snapshot(): { activeRequests: number; lastActivityAt: number; load: ForegroundLoadSnapshot } {
+    return {
+      activeRequests: this.activeRequests,
+      lastActivityAt: this.lastActivityAt,
+      load: this.loadProbe?.() ?? { foregroundPending: 0, writerPending: 0 },
+    }
   }
 }
 
