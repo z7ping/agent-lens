@@ -1,6 +1,19 @@
 import type { LogicalSession, SessionRepository, SourceSession } from '@agent-lens/core'
 import type { SqliteExecutor } from './executor'
 
+function runtimeProfileIdFromRow(value: unknown): string | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    if (value == null) return undefined
+    throw new TypeError('SQLite runtime profile lookup returned a non-object row')
+  }
+  const runtimeProfileId = (value as Record<string, unknown>).runtimeProfileId
+  if (runtimeProfileId == null) return undefined
+  if (typeof runtimeProfileId !== 'string') {
+    throw new TypeError('SQLite runtime profile lookup field runtimeProfileId must be a string or null')
+  }
+  return runtimeProfileId
+}
+
 /**
  * Completes the runtime_profile_id mapping introduced by schema v4 without
  * duplicating the rest of SessionRepository SQL. This applies to every caller,
@@ -11,11 +24,9 @@ export function withSqliteSessionRuntimeProfiles(
   base: SessionRepository,
 ): SessionRepository {
   const readProfileId = (table: 'logical_sessions' | 'source_sessions', id: string): Promise<string | undefined> =>
-    executor.run(() => {
-      const row = executor.db.prepare(`SELECT runtime_profile_id AS runtimeProfileId FROM ${table} WHERE id = ?`)
-        .get(id) as { runtimeProfileId: string | null } | undefined
-      return row?.runtimeProfileId ?? undefined
-    })
+    executor.run(() => runtimeProfileIdFromRow(
+      executor.db.prepare(`SELECT runtime_profile_id AS runtimeProfileId FROM ${table} WHERE id = ?`).get(id),
+    ))
 
   const writeProfileId = async (
     table: 'logical_sessions' | 'source_sessions',
