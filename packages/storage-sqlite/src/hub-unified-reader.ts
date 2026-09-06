@@ -14,6 +14,8 @@ import {
   type UnifiedLogicalSession,
   type UnifiedLogicalSessionReader,
   type UnifiedObservationReader,
+  type UnifiedReadReference,
+  type UnifiedReadReferenceValue,
   type UnifiedReadReferences,
 } from '@agent-lens/core/replication'
 import type {
@@ -35,6 +37,12 @@ function availability(value: JsonValue | undefined): ReplicationAvailability {
   return { state: 'value', value }
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+}
+
 function localJsonValue(value: unknown, depth = 0): JsonValue {
   if (depth > 32) return '[max-depth]'
   if (value === null) return null
@@ -46,7 +54,7 @@ function localJsonValue(value: unknown, depth = 0): JsonValue {
   }
   if (typeof value === 'object') {
     const output: Record<string, JsonValue> = {}
-    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+    for (const [key, item] of Object.entries(asRecord(value))) {
       if (item === undefined || typeof item === 'function' || typeof item === 'symbol') continue
       output[key] = localJsonValue(item, depth + 1)
     }
@@ -117,6 +125,27 @@ function localObservationReferences(observation: CanonicalObservation): UnifiedR
   }
 }
 
+function replicationAvailability(value: JsonValue, field: string): ReplicationAvailability {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError(`Remote availability field ${field} must be an object`)
+  }
+  const state = value.state
+  if (state === 'value') {
+    if (!('value' in value)) throw new TypeError(`Remote availability field ${field} is missing value`)
+    return { state: 'value', value: value.value }
+  }
+  if (state === 'null') return { state: 'null' }
+  if (state === 'redacted') return { state: 'redacted' }
+  if (state === 'omitted') {
+    const reason = value.reason
+    if (reason === 'policy' || reason === 'not-captured' || reason === 'history-boundary' || reason === 'dependency-minimized') {
+      return { state: 'omitted', reason }
+    }
+    throw new TypeError(`Remote availability field ${field} has invalid omission reason`)
+  }
+  throw new TypeError(`Remote availability field ${field} has invalid state`)
+}
+
 function remoteAvailabilityBody(
   entity: HubRemoteReadEntity,
   expectedType: 'LogicalSession' | 'CanonicalObservation',
@@ -127,15 +156,18 @@ function remoteAvailabilityBody(
   if (!entity.body || Array.isArray(entity.body) || typeof entity.body !== 'object') {
     throw new TypeError(`Remote ${expectedType} body must be an availability object`)
   }
-  return entity.body as unknown as Readonly<Record<string, ReplicationAvailability>>
+  const output: Record<string, ReplicationAvailability> = {}
+  for (const [field, value] of Object.entries(entity.body)) {
+    output[field] = replicationAvailability(value, field)
+  }
+  return output
 }
 
 function remoteReferences(entity: HubRemoteReadEntity): UnifiedReadReferences {
   if (!entity.references || Array.isArray(entity.references) || typeof entity.references !== 'object') return {}
-  const output: Record<string, any> = {}
-  const mapRef = (value: unknown): { entityType: string; publicId: string } | undefined => {
-    if (!value || Array.isArray(value) || typeof value !== 'object') return undefined
-    const record = value as Record<string, unknown>
+  const output: Record<string, UnifiedReadReferenceValue> = {}
+  const mapRef = (value: unknown): UnifiedReadReference | undefined => {
+    const record = asRecord(value)
     if (record.kind === 'node' && typeof record.entityType === 'string' && typeof record.originEntityId === 'string') {
       return {
         entityType: record.entityType,
@@ -148,16 +180,16 @@ function remoteReferences(entity: HubRemoteReadEntity): UnifiedReadReferences {
     return undefined
   }
 
-  for (const [name, raw] of Object.entries(entity.references as Record<string, unknown>)) {
+  for (const [name, raw] of Object.entries(asRecord(entity.references))) {
     if (Array.isArray(raw)) {
-      const refs = raw.map(mapRef).filter((item): item is { entityType: string; publicId: string } => Boolean(item))
+      const refs = raw.map(mapRef).filter((item): item is UnifiedReadReference => item !== undefined)
       if (refs.length) output[name] = refs
       continue
     }
     const ref = mapRef(raw)
     if (ref) output[name] = ref
   }
-  return output as UnifiedReadReferences
+  return output
 }
 
 function unifiedRemoteSession(entity: HubRemoteReadEntity): UnifiedLogicalSession {
@@ -204,7 +236,7 @@ export class HubUnifiedLogicalSessionReader implements UnifiedLogicalSessionRead
   ) {}
 
   async get(publicId: string): Promise<UnifiedLogicalSession | undefined> {
-    const local = await this.localSessions.getLogicalSession(publicId as LogicalSession['id'])
+    const local = await this.localSessions.getLogicalSession(publicId)
     if (local) {
       return {
         publicId: local.id,
