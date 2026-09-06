@@ -17,25 +17,13 @@ import { TimelineProjection } from '@agent-lens/projection-timeline'
 import { ToolAssetUsageProjection } from '@agent-lens/projection-usage'
 import {
   AGENT_LENS_PROTOCOL_VERSION,
-  TIMELINE_OBSERVATION_KINDS,
   type CapturePolicyResponseDto,
   type CapturePolicySourceUpdateRequestDto,
   type HealthResponseDto,
-  type InsightsQueryDto,
   type JsonValue,
-  type ReviewDetailDirection,
-  type ReviewDetailFilter,
-  type ReviewDetailQueryDto,
-  type ReviewQueryDto,
-  type ReviewStatusFilter,
   type RuntimeModeDto,
   type RuntimeOwnerDto,
   type SourceRecordResponseDto,
-  type SessionQueryDto,
-  type TimelineDirection,
-  type TimelineObservationKind,
-  type TimelineQueryDto,
-  type ToolAssetUsageQueryDto,
 } from '@agent-lens/protocol'
 import type { PiLiveService } from '@agent-lens/runtime-cordis'
 import { handleBackupRequest } from './backup-http'
@@ -43,6 +31,15 @@ import { parseDataRuntimeHealth } from './data-runtime-health'
 import type { HttpEventHub } from './events'
 import { badRequest, readJsonBody, writeJson } from './http-utils'
 import { handlePiLiveRequest } from './pi-live'
+import {
+  parseInsightsQuery,
+  parseLimit,
+  parseReviewDetailQuery,
+  parseReviewQuery,
+  parseSessionQuery,
+  parseTimelineQuery,
+  parseUsageQuery,
+} from './query-params'
 
 export const AGENT_LENS_HTTP_HOST = '127.0.0.1' as const
 export const DEFAULT_AGENT_LENS_HTTP_PORT = 56789
@@ -114,158 +111,6 @@ function jsonValue(value: unknown, depth = 0): JsonValue {
     return result
   }
   return null
-}
-
-function parseLimit(params: URLSearchParams, max: number): number | undefined {
-  const raw = params.get('limit')
-  if (!raw) return undefined
-  const limit = Number(raw)
-  if (!Number.isInteger(limit) || limit < 1 || limit > max) {
-    throw badRequest(`Limit must be an integer between 1 and ${max}`)
-  }
-  return limit
-}
-
-function optionalTimestamp(params: URLSearchParams, key: string): string | undefined {
-  const value = params.get(key)
-  if (!value) return undefined
-  if (!Number.isFinite(Date.parse(value))) throw badRequest(`Invalid ${key} timestamp`)
-  return value
-}
-
-function parseTimelineQuery(params: URLSearchParams): TimelineQueryDto {
-  const kindValue = params.get('kind')
-  let kind: TimelineObservationKind | undefined
-  if (kindValue) {
-    if (!(TIMELINE_OBSERVATION_KINDS as readonly string[]).includes(kindValue)) {
-      throw badRequest(`Unknown timeline kind: ${kindValue}`)
-    }
-    kind = kindValue as TimelineObservationKind
-  }
-  const directionValue = params.get('direction')
-  if (directionValue && !['forward', 'backward'].includes(directionValue)) {
-    throw badRequest(`Unknown timeline direction: ${directionValue}`)
-  }
-  const from = optionalTimestamp(params, 'from')
-  const to = optionalTimestamp(params, 'to')
-  if (from && to && Date.parse(from) > Date.parse(to)) {
-    throw badRequest('Timeline from must be earlier than or equal to to')
-  }
-  const limit = parseLimit(params, 1000)
-  return {
-    ...(params.get('installationId') ? { installationId: params.get('installationId')! } : {}),
-    ...(params.get('logicalSessionId') ? { logicalSessionId: params.get('logicalSessionId')! } : {}),
-    ...(kind ? { kind } : {}),
-    ...(from ? { from } : {}),
-    ...(to ? { to } : {}),
-    ...(params.get('cursor') ? { cursor: params.get('cursor')! } : {}),
-    ...(directionValue ? { direction: directionValue as TimelineDirection } : {}),
-    ...(limit === undefined ? {} : { limit }),
-  }
-}
-
-function parseSessionQuery(params: URLSearchParams): SessionQueryDto {
-  const limit = parseLimit(params, 500)
-  return {
-    ...(params.get('installationId') ? { installationId: params.get('installationId')! } : {}),
-    ...(params.get('logicalSessionId') ? { logicalSessionId: params.get('logicalSessionId')! } : {}),
-    ...(limit === undefined ? {} : { limit }),
-  }
-}
-
-function parseUsageQuery(params: URLSearchParams): ToolAssetUsageQueryDto {
-  const limit = parseLimit(params, 500)
-  const from = optionalTimestamp(params, 'from')
-  const to = optionalTimestamp(params, 'to')
-  if (from && to && Date.parse(from) > Date.parse(to)) {
-    throw badRequest('Usage from must be earlier than or equal to to')
-  }
-  return {
-    ...(params.get('installationId') ? { installationId: params.get('installationId')! } : {}),
-    ...(params.get('logicalSessionId') ? { logicalSessionId: params.get('logicalSessionId')! } : {}),
-    ...(params.get('projectId') ? { projectId: params.get('projectId')! } : {}),
-    ...(params.get('sourceId') ? { sourceId: params.get('sourceId')! } : {}),
-    ...(params.get('toolName') ? { toolName: params.get('toolName')! } : {}),
-    ...(from ? { from } : {}),
-    ...(to ? { to } : {}),
-    ...(limit === undefined ? {} : { limit }),
-  }
-}
-
-function parseInsightsQuery(params: URLSearchParams): InsightsQueryDto {
-  const from = optionalTimestamp(params, 'from')
-  const to = optionalTimestamp(params, 'to')
-  if (from && to && Date.parse(from) > Date.parse(to)) {
-    throw badRequest('Insights from must be earlier than or equal to to')
-  }
-  return {
-    ...(params.get('installationId') ? { installationId: params.get('installationId')! } : {}),
-    ...(params.get('logicalSessionId') ? { logicalSessionId: params.get('logicalSessionId')! } : {}),
-    ...(params.get('projectId') ? { projectId: params.get('projectId')! } : {}),
-    ...(params.get('sourceId') ? { sourceId: params.get('sourceId')! } : {}),
-    ...(from ? { from } : {}),
-    ...(to ? { to } : {}),
-  }
-}
-
-function parseReviewStatus(value: string | null): ReviewStatusFilter | undefined {
-  if (!value) return undefined
-  if (value === 'all' || value === 'with-errors' || value === 'clean') return value
-  throw badRequest(`Unknown review status: ${value}`)
-}
-
-function parseReviewDetailDirection(value: string | null): ReviewDetailDirection | undefined {
-  if (!value) return undefined
-  if (value === 'forward' || value === 'backward') return value
-  throw badRequest(`Unknown review detail direction: ${value}`)
-}
-
-function parseReviewDetailFilter(value: string | null): ReviewDetailFilter | undefined {
-  if (!value) return undefined
-  if (value === 'all' || value === 'errors' || value === 'latency' || value === 'latest') return value
-  throw badRequest(`Unknown review detail filter: ${value}`)
-}
-
-function parsePositiveInteger(params: URLSearchParams, key: string): number | undefined {
-  const raw = params.get(key)
-  if (!raw) return undefined
-  const value = Number(raw)
-  if (!Number.isSafeInteger(value) || value < 1) throw badRequest(`${key} must be a positive integer`)
-  return value
-}
-
-function parseReviewQuery(params: URLSearchParams): ReviewQueryDto {
-  const limit = parseLimit(params, 500)
-  const from = optionalTimestamp(params, 'from')
-  const to = optionalTimestamp(params, 'to')
-  if (from && to && Date.parse(from) > Date.parse(to)) {
-    throw badRequest('Review from must be earlier than or equal to to')
-  }
-  const status = parseReviewStatus(params.get('status'))
-  return {
-    ...(params.get('cursor') ? { cursor: params.get('cursor')! } : {}),
-    ...(params.get('projectId') ? { projectId: params.get('projectId')! } : {}),
-    ...(params.get('sourceId') ? { sourceId: params.get('sourceId')! } : {}),
-    ...(from ? { from } : {}),
-    ...(to ? { to } : {}),
-    ...(status ? { status } : {}),
-    ...(params.get('search') ? { search: params.get('search')! } : {}),
-    ...(limit === undefined ? {} : { limit }),
-  }
-}
-
-function parseReviewDetailQuery(params: URLSearchParams): ReviewDetailQueryDto {
-  const limit = parseLimit(params, 100)
-  const direction = parseReviewDetailDirection(params.get('direction'))
-  const filter = parseReviewDetailFilter(params.get('filter'))
-  const ordinal = parsePositiveInteger(params, 'ordinal')
-  return {
-    ...(params.get('cursor') ? { cursor: params.get('cursor')! } : {}),
-    ...(ordinal === undefined ? {} : { ordinal }),
-    ...(direction ? { direction } : {}),
-    ...(filter ? { filter } : {}),
-    ...(limit === undefined ? {} : { limit }),
-  }
 }
 
 function safeFilePath(root: string, pathname: string): string | null {
