@@ -10,7 +10,7 @@ import {
 } from '@agent-lens/protocol'
 
 const MAX_BACKUP_BODY_BYTES = 256 * 1024 * 1024
-const BACKUP_KINDS = new Set<BackupAssetKind>([
+const BACKUP_KINDS: ReadonlySet<string> = new Set([
   'skill', 'mcp', 'plugin', 'extension', 'hook', 'memory', 'rule', 'session', 'config', 'other',
 ])
 
@@ -57,18 +57,22 @@ function responseMeta() {
   }
 }
 
+function isBackupKind(value: unknown): value is BackupAssetKind {
+  return typeof value === 'string' && BACKUP_KINDS.has(value)
+}
+
 function parseKind(value: string | null): BackupAssetKind | undefined {
   if (!value) return undefined
-  if (!BACKUP_KINDS.has(value as BackupAssetKind)) throw badRequest(`Unknown backup kind: ${value}`)
-  return value as BackupAssetKind
+  if (!isBackupKind(value)) throw badRequest(`Unknown backup kind: ${value}`)
+  return value
 }
 
 function parseKinds(value: unknown): BackupAssetKind[] | undefined {
   if (value === undefined) return undefined
-  if (!Array.isArray(value) || !value.every(item => typeof item === 'string' && BACKUP_KINDS.has(item as BackupAssetKind))) {
+  if (!Array.isArray(value) || !value.every(isBackupKind)) {
     throw badRequest('kinds must be an array of known backup kinds')
   }
-  return [...new Set(value as BackupAssetKind[])]
+  return [...new Set(value)]
 }
 
 function parseSourceIds(value: unknown): string[] | undefined {
@@ -241,6 +245,7 @@ export async function handleBackupRequest(
 }
 
 export const backupHttpInternals = {
+  isBackupKind,
   parseKind,
   parseKinds,
   parseSourceIds,
