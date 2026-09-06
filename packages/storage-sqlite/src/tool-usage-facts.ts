@@ -8,7 +8,7 @@ import type {
   ToolUsageObservationRecord,
 } from '@agent-lens/core'
 import type { SqliteExecutor } from './executor'
-import { SqliteToolUsageObservationReader as LegacyToolUsageObservationReader } from './tool-usage-observations'
+import { SqliteToolUsageObservationReader as ObservationQueryReader } from './tool-usage-observations'
 
 const MAX_AGGREGATE_DETAIL_LIMIT = 500
 const AGGREGATE_ROW_KINDS = ['tool', 'session', 'tool_observation', 'asset', 'asset_observation', 'unattributed'] as const
@@ -245,14 +245,14 @@ function parseAggregateRows(rows: readonly AggregateRow[]): ToolUsageAggregateRe
 }
 
 export class SqliteToolUsageFactReader implements ToolUsageObservationReader {
-  private readonly legacy: LegacyToolUsageObservationReader
+  private readonly queryReader: ObservationQueryReader
 
   constructor(private readonly executor: SqliteExecutor) {
-    this.legacy = new LegacyToolUsageObservationReader(executor)
+    this.queryReader = new ObservationQueryReader(executor)
   }
 
   query(input: ToolUsageObservationQuery): Promise<ToolUsageObservationRecord[]> {
-    return this.legacy.query(input)
+    return this.queryReader.query(input)
   }
 
   aggregate(input: ToolUsageAggregateQuery): Promise<ToolUsageAggregateResult> {
