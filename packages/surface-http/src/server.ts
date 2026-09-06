@@ -261,7 +261,7 @@ function parseInsightsQuery(params: URLSearchParams): InsightsQueryDto {
 
 function parseReviewStatus(value: string | null): ReviewStatusFilter | undefined {
   if (!value) return undefined
-  if (value === 'all' || value === 'running' || value === 'error') return value
+  if (value === 'all' || value === 'with-errors' || value === 'clean') return value
   throw badRequest(`Unknown review status: ${value}`)
 }
 
@@ -273,29 +273,46 @@ function parseReviewDetailDirection(value: string | null): ReviewDetailDirection
 
 function parseReviewDetailFilter(value: string | null): ReviewDetailFilter | undefined {
   if (!value) return undefined
-  if (value === 'all' || value === 'messages' || value === 'tools' || value === 'system') return value
+  if (value === 'all' || value === 'errors' || value === 'latency' || value === 'latest') return value
   throw badRequest(`Unknown review detail filter: ${value}`)
+}
+
+function parsePositiveInteger(params: URLSearchParams, key: string): number | undefined {
+  const raw = params.get(key)
+  if (!raw) return undefined
+  const value = Number(raw)
+  if (!Number.isSafeInteger(value) || value < 1) throw badRequest(`${key} must be a positive integer`)
+  return value
 }
 
 function parseReviewQuery(params: URLSearchParams): ReviewQueryDto {
   const limit = parseLimit(params, 500)
+  const from = optionalTimestamp(params, 'from')
+  const to = optionalTimestamp(params, 'to')
+  if (from && to && Date.parse(from) > Date.parse(to)) {
+    throw badRequest('Review from must be earlier than or equal to to')
+  }
+  const status = parseReviewStatus(params.get('status'))
   return {
-    ...(params.get('installationId') ? { installationId: params.get('installationId')! } : {}),
-    ...(params.get('logicalSessionId') ? { logicalSessionId: params.get('logicalSessionId')! } : {}),
+    ...(params.get('cursor') ? { cursor: params.get('cursor')! } : {}),
     ...(params.get('projectId') ? { projectId: params.get('projectId')! } : {}),
     ...(params.get('sourceId') ? { sourceId: params.get('sourceId')! } : {}),
-    ...(params.get('q') ? { q: params.get('q')! } : {}),
-    ...(parseReviewStatus(params.get('status')) ? { status: parseReviewStatus(params.get('status'))! } : {}),
+    ...(from ? { from } : {}),
+    ...(to ? { to } : {}),
+    ...(status ? { status } : {}),
+    ...(params.get('search') ? { search: params.get('search')! } : {}),
     ...(limit === undefined ? {} : { limit }),
   }
 }
 
 function parseReviewDetailQuery(params: URLSearchParams): ReviewDetailQueryDto {
-  const limit = parseLimit(params, 1000)
+  const limit = parseLimit(params, 100)
   const direction = parseReviewDetailDirection(params.get('direction'))
   const filter = parseReviewDetailFilter(params.get('filter'))
+  const ordinal = parsePositiveInteger(params, 'ordinal')
   return {
     ...(params.get('cursor') ? { cursor: params.get('cursor')! } : {}),
+    ...(ordinal === undefined ? {} : { ordinal }),
     ...(direction ? { direction } : {}),
     ...(filter ? { filter } : {}),
     ...(limit === undefined ? {} : { limit }),
@@ -369,6 +386,36 @@ function backupMeta(): { protocolVersion: typeof AGENT_LENS_PROTOCOL_VERSION } {
   return { protocolVersion: AGENT_LENS_PROTOCOL_VERSION }
 }
 
+function capturePolicyResponse(capturePolicy: CapturePolicyService): CapturePolicyResponseDto {
+  const configuration = capturePolicy.getSourceConfiguration()
+  return {
+    settings: {
+      effectiveEnabledSources: [...configuration.effectiveEnabledSources],
+      configuredEnabledSources: [...configuration.configuredEnabledSources],
+      managedBy: configuration.source,
+      editable: configuration.editable,
+      restartRequired: configuration.restartRequired,
+    },
+    meta: {
+      protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
+      generatedAt: new Date().toISOString(),
+    },
+  }
+}
+
+function capturePolicyUpdatePayload(value: unknown): CapturePolicySourceUpdateRequestDto {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw badRequest('Request body must be an object')
+  }
+  const enabledSources = (value as Record<string, unknown>).enabledSources
+  if (!Array.isArray(enabledSources) || !enabledSources.every(item => typeof item === 'string')) {
+    throw badRequest('enabledSources must be an array of strings')
+  }
+  const normalized = enabledSources.map(item => item.trim()).filter(Boolean)
+  if (!normalized.length) throw badRequest('enabledSources must contain at least one source')
+  return { enabledSources: normalized }
+}
+
 async function handleCapturePolicyRequest(
   request: IncomingMessage,
   response: ServerResponse,
@@ -382,18 +429,7 @@ async function handleCapturePolicyRequest(
   }
 
   if (request.method === 'GET') {
-    const body: CapturePolicyResponseDto = {
-      settings: {
-        prompt: capturePolicy.settings.prompt,
-        tool: capturePolicy.settings.tool,
-        config: capturePolicy.settings.config,
-        environment: capturePolicy.settings.environment,
-        enabledSources: capturePolicy.settings.enabledSources,
-        ...capturePolicy.getSourceConfiguration(),
-      },
-      meta: backupMeta(),
-    }
-    writeJson(response, 200, body)
+    writeJson(response, 200, capturePolicyResponse(capturePolicy))
     return true
   }
 
@@ -402,25 +438,9 @@ async function handleCapturePolicyRequest(
     return true
   }
 
-  const payload = await readJsonBody(request) as CapturePolicySourceUpdateRequestDto
-  if (!payload || !Array.isArray(payload.enabledSources)) {
-    throw badRequest('enabledSources must be an array')
-  }
-  const enabledSources = payload.enabledSources.map(value => String(value).trim()).filter(Boolean)
-  if (!enabledSources.length) throw badRequest('enabledSources must contain at least one source')
-  await capturePolicy.setEnabledSources(enabledSources)
-  const body: CapturePolicyResponseDto = {
-    settings: {
-      prompt: capturePolicy.settings.prompt,
-      tool: capturePolicy.settings.tool,
-      config: capturePolicy.settings.config,
-      environment: capturePolicy.settings.environment,
-      enabledSources: capturePolicy.settings.enabledSources,
-      ...capturePolicy.getSourceConfiguration(),
-    },
-    meta: backupMeta(),
-  }
-  writeJson(response, 200, body)
+  const payload = capturePolicyUpdatePayload(await readJsonBody(request))
+  await capturePolicy.setEnabledSources(payload.enabledSources)
+  writeJson(response, 200, capturePolicyResponse(capturePolicy))
   return true
 }
 
@@ -740,11 +760,6 @@ export async function startHttpSurface(
         return
       }
 
-      if (options.eventHub && url.pathname === '/api/v1/events/snapshot') {
-        writeJson(response, 200, options.eventHub.snapshot())
-        return
-      }
-
       if (await handleStatic(response, url.pathname, staticMounts.values())) return
       writeJson(response, 404, { error: 'not_found' })
     } catch (error) {
@@ -775,7 +790,7 @@ export async function startHttpSurface(
       return { dispose: () => { staticMounts.delete(mount.id) } }
     },
     async dispose() {
-      for (const response of options.eventHub?.connections() ?? []) response.end()
+      options.eventHub?.close()
       await new Promise<void>((resolvePromise, reject) => {
         server.close(error => error ? reject(error) : resolvePromise())
       })
