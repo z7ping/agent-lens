@@ -3,16 +3,16 @@ import type {
   SourceNormalizationContext,
   SourceRecord,
 } from '@agent-lens/core'
-import { messageText, type CodexStoredEnvelope } from './format'
+import { messageText } from './format'
 import { normalizeCodexRecord } from './normalize'
 
-function asRecord(value: unknown): Record<string, any> {
+function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, any>
+    ? value as Record<string, unknown>
     : {}
 }
 
-function stringField(record: Record<string, any>, ...keys: string[]): string | undefined {
+function stringField(record: Readonly<Record<string, unknown>>, ...keys: string[]): string | undefined {
   for (const key of keys) {
     const value = record[key]
     if (typeof value === 'string' && value.trim()) return value.trim()
@@ -24,7 +24,7 @@ export async function normalizePaginatedFunctionOutput(
   record: SourceRecord,
   ctx: SourceNormalizationContext,
 ): Promise<NormalizedSourceOutput | null> {
-  const envelope = asRecord(record.payload) as CodexStoredEnvelope
+  const envelope = asRecord(record.payload)
   const entry = asRecord(envelope.entry)
   const payload = asRecord(entry.payload)
   if (entry.type !== 'event_msg' || payload.type !== 'item_completed') return null
@@ -54,7 +54,7 @@ export async function normalizePaginatedFunctionOutput(
           output: text,
         },
       },
-    } as SourceRecord['payload'],
+    },
   }, ctx)
 
   const turnId = stringField(payload, 'turn_id', 'turnId')
