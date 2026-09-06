@@ -1,12 +1,18 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { SourceRecord } from '@agent-lens/core'
+import type { SourceNormalizationContext, SourceRecord } from '@agent-lens/core'
 import { CODEX_CURRENT_PARSER_VERSION, normalizeCurrentCodexRecord } from './current-protocol'
 
-const ctx = {
+const ctx: SourceNormalizationContext = {
   host: { id: 'host', name: 'host', platform: 'linux', arch: 'x64', createdAt: '2026-01-01T00:00:00.000Z', lastSeenAt: '2026-01-01T00:00:00.000Z' },
   installation: { id: 'install', hostId: 'host', productId: 'codex', firstSeenAt: '2026-01-01T00:00:00.000Z', lastSeenAt: '2026-01-01T00:00:00.000Z' },
-} as any
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+}
 
 function record(entry: unknown, sourceSequence: number): SourceRecord {
   return {
@@ -34,13 +40,15 @@ test('event_msg.agent_message becomes canonical assistant output instead of back
     payload: { type: 'agent_message', message: '这是正常回复', phase: 'final_answer' },
   }, 1), ctx)
   const fact = output.observations[0]!
+  const payload = asRecord(fact.payload)
+  const provenance = asRecord(payload.provenance)
   assert.equal(fact.kind, 'message.assistant')
-  assert.equal((fact.payload as any).text, '这是正常回复')
-  assert.equal((fact.payload as any).phase, 'final_answer')
-  assert.equal((fact.payload as any).provenance.actualAuthor, 'assistant')
-  assert.equal((fact.payload as any).provenance.contentRole, 'assistant-output')
-  assert.equal((fact.payload as any).provenance.activityType, 'conversation')
-  assert.equal((fact.payload as any).provenance.sourceSignal, 'event_msg.agent_message')
+  assert.equal(payload.text, '这是正常回复')
+  assert.equal(payload.phase, 'final_answer')
+  assert.equal(provenance.actualAuthor, 'assistant')
+  assert.equal(provenance.contentRole, 'assistant-output')
+  assert.equal(provenance.activityType, 'conversation')
+  assert.equal(provenance.sourceSignal, 'event_msg.agent_message')
 })
 
 test('legacy raw reasoning is visible Thinking rather than background unknown', async () => {
@@ -49,10 +57,11 @@ test('legacy raw reasoning is visible Thinking rather than background unknown', 
     payload: { type: 'agent_reasoning_raw_content', text: 'source-visible raw reasoning' },
   }, 2), ctx)
   const fact = output.observations[0]!
+  const payload = asRecord(fact.payload)
   assert.equal(fact.kind, 'message.reasoning')
-  assert.equal((fact.payload as any).text, 'source-visible raw reasoning')
-  assert.equal((fact.payload as any).rawReasoning, true)
-  assert.equal((fact.payload as any).sourceSignal, 'event_msg.agent_reasoning_raw_content')
+  assert.equal(payload.text, 'source-visible raw reasoning')
+  assert.equal(payload.rawReasoning, true)
+  assert.equal(payload.sourceSignal, 'event_msg.agent_reasoning_raw_content')
 })
 
 test('legacy response_item assistant remains readable for old Codex rollouts', async () => {
@@ -64,9 +73,10 @@ test('legacy response_item assistant remains readable for old Codex rollouts', a
     },
   }, 3), ctx)
   const fact = output.observations[0]!
+  const payload = asRecord(fact.payload)
   assert.equal(fact.kind, 'message.assistant')
-  assert.equal((fact.payload as any).text, '旧版正常回复')
-  assert.equal((fact.payload as any).provenance.sourceSignal, 'response_item.message.role=assistant')
+  assert.equal(payload.text, '旧版正常回复')
+  assert.equal(asRecord(payload.provenance).sourceSignal, 'response_item.message.role=assistant')
 })
 
 test('plain response_item role=user stays in SourceRecord/Evidence but does not create a background activity', async () => {
@@ -91,7 +101,7 @@ test('response_item role=user runtime context remains a structured context activ
   }, 5), ctx)
   assert.equal(output.observations.length, 1)
   assert.equal(output.observations[0]?.kind, 'context.injected')
-  assert.equal((output.observations[0]?.payload as any).injectedKind, 'runtime-environment')
+  assert.equal(asRecord(output.observations[0]?.payload).injectedKind, 'runtime-environment')
 })
 
 test('ResponseItem AgentMessage is agent communication, not user-visible assistant output', async () => {
@@ -106,13 +116,14 @@ test('ResponseItem AgentMessage is agent communication, not user-visible assista
     },
   }, 10), ctx)
   const fact = output.observations[0]!
+  const payload = asRecord(fact.payload)
   assert.equal(fact.kind, 'session.lifecycle')
-  assert.equal((fact.payload as any).event, 'subagent.communication')
-  assert.equal((fact.payload as any).communicationType, 'response.agent_message')
-  assert.equal((fact.payload as any).author, 'worker')
-  assert.equal((fact.payload as any).recipient, 'root')
-  assert.equal((fact.payload as any).text, '子 Agent 已完成检查')
-  assert.equal((fact.payload as any).encryptedContent, true)
+  assert.equal(payload.event, 'subagent.communication')
+  assert.equal(payload.communicationType, 'response.agent_message')
+  assert.equal(payload.author, 'worker')
+  assert.equal(payload.recipient, 'root')
+  assert.equal(payload.text, '子 Agent 已完成检查')
+  assert.equal(payload.encryptedContent, true)
   assert.equal(JSON.stringify(fact.payload).includes('opaque-ciphertext'), false)
   assert.equal(output.observations.some(item => item.kind === 'message.assistant'), false)
 })
@@ -129,10 +140,12 @@ test('ResponseItem LocalShellCall is a tool execution and completed status close
     },
   }, 11), ctx)
   assert.deepEqual(output.observations.map(item => item.kind), ['tool.call', 'tool.result'])
-  assert.equal((output.observations[0]?.payload as any).nativeToolName, 'local_shell')
-  assert.equal((output.observations[0]?.payload as any).callId, 'shell-call-1')
-  assert.equal((output.observations[1]?.payload as any).success, true)
-  assert.equal((output.observations[1]?.payload as any).status, 'completed')
+  const callPayload = asRecord(output.observations[0]?.payload)
+  const resultPayload = asRecord(output.observations[1]?.payload)
+  assert.equal(callPayload.nativeToolName, 'local_shell')
+  assert.equal(callPayload.callId, 'shell-call-1')
+  assert.equal(resultPayload.success, true)
+  assert.equal(resultPayload.status, 'completed')
 })
 
 test('ResponseItem LocalShellCall in progress stays open without a fake result', async () => {
@@ -144,7 +157,7 @@ test('ResponseItem LocalShellCall in progress stays open without a fake result',
     },
   }, 12), ctx)
   assert.deepEqual(output.observations.map(item => item.kind), ['tool.call'])
-  assert.equal((output.observations[0]?.payload as any).status, 'in_progress')
+  assert.equal(asRecord(output.observations[0]?.payload).status, 'in_progress')
 })
 
 test('ResponseItem ToolSearchCall is a visible tool call rather than raw background activity', async () => {
@@ -156,10 +169,11 @@ test('ResponseItem ToolSearchCall is a visible tool call rather than raw backgro
     },
   }, 13), ctx)
   const fact = output.observations[0]!
+  const payload = asRecord(fact.payload)
   assert.equal(fact.kind, 'tool.call')
-  assert.equal((fact.payload as any).nativeToolName, 'tool_search')
-  assert.equal((fact.payload as any).callId, 'tool-search-1')
-  assert.equal((fact.payload as any).input.execution, 'search')
+  assert.equal(payload.nativeToolName, 'tool_search')
+  assert.equal(payload.callId, 'tool-search-1')
+  assert.equal(asRecord(payload.input).execution, 'search')
 })
 
 test('ResponseItem ImageGenerationCall is an artifact action without duplicating result bytes', async () => {
@@ -171,10 +185,11 @@ test('ResponseItem ImageGenerationCall is an artifact action without duplicating
     },
   }, 14), ctx)
   const fact = output.observations[0]!
+  const payload = asRecord(fact.payload)
   assert.equal(fact.kind, 'artifact.action')
-  assert.equal((fact.payload as any).action, 'image.generate')
-  assert.equal((fact.payload as any).resultAvailable, true)
-  assert.equal('result' in (fact.payload as any), false)
+  assert.equal(payload.action, 'image.generate')
+  assert.equal(payload.resultAvailable, true)
+  assert.equal('result' in payload, false)
 })
 
 test('ResponseItem ConfigurationUpdate is lifecycle configuration, not conversation', async () => {
@@ -183,9 +198,10 @@ test('ResponseItem ConfigurationUpdate is lifecycle configuration, not conversat
     payload: { type: 'configuration_update', reasoning: { effort: 'high' } },
   }, 15), ctx)
   const fact = output.observations[0]!
+  const payload = asRecord(fact.payload)
   assert.equal(fact.kind, 'session.lifecycle')
-  assert.equal((fact.payload as any).event, 'reasoning.configuration.updated')
-  assert.equal((fact.payload as any).reasoning.effort, 'high')
+  assert.equal(payload.event, 'reasoning.configuration.updated')
+  assert.equal(asRecord(payload.reasoning).effort, 'high')
 })
 
 test('ResponseItem compaction variants are context compaction instead of unknown', async () => {
@@ -195,8 +211,9 @@ test('ResponseItem compaction variants are context compaction instead of unknown
   ].entries()) {
     const output = await normalizeCurrentCodexRecord(record({ type: 'response_item', payload }, 16 + index), ctx)
     const fact = output.observations[0]!
+    const factPayload = asRecord(fact.payload)
     assert.equal(fact.kind, 'context.compaction')
-    assert.equal((fact.payload as any).opaque, true)
+    assert.equal(factPayload.opaque, true)
     assert.equal(JSON.stringify(fact.payload).includes('encrypted_content'), false)
   }
 })
@@ -210,9 +227,10 @@ test('persisted thread goal update is lifecycle metadata rather than raw unknown
     },
   }, 20), ctx)
   const fact = output.observations[0]!
+  const payload = asRecord(fact.payload)
   assert.equal(fact.kind, 'session.lifecycle')
-  assert.equal((fact.payload as any).event, 'thread.goal.updated')
-  assert.equal((fact.payload as any).goal.objective, '完成 Parser 收口')
+  assert.equal(payload.event, 'thread.goal.updated')
+  assert.equal(asRecord(payload.goal).objective, '完成 Parser 收口')
 })
 
 test('persisted thread rollback is explicit lifecycle metadata', async () => {
@@ -221,9 +239,10 @@ test('persisted thread rollback is explicit lifecycle metadata', async () => {
     payload: { type: 'thread_rolled_back', num_turns: 2 },
   }, 21), ctx)
   const fact = output.observations[0]!
+  const payload = asRecord(fact.payload)
   assert.equal(fact.kind, 'session.lifecycle')
-  assert.equal((fact.payload as any).event, 'thread.rolled-back')
-  assert.equal((fact.payload as any).num_turns, 2)
+  assert.equal(payload.event, 'thread.rolled-back')
+  assert.equal(payload.num_turns, 2)
 })
 
 test('persisted thread settings update carries model/workspace identity without becoming a conversation node', async () => {
@@ -236,7 +255,7 @@ test('persisted thread settings update carries model/workspace identity without 
   }, 22), ctx)
   const fact = output.observations[0]!
   assert.equal(fact.kind, 'session.lifecycle')
-  assert.equal((fact.payload as any).event, 'thread.settings.applied')
+  assert.equal(asRecord(fact.payload).event, 'thread.settings.applied')
   assert.equal(fact.identityHints.modelName, 'gpt-5.6-codex')
   assert.equal(fact.identityHints.workspacePath, '/safe/updated-project')
 })
@@ -265,9 +284,10 @@ test('inter-agent communication remains an explicit subagent activity', async ()
     },
   }, 40), ctx)
   const fact = output.observations[0]!
+  const payload = asRecord(fact.payload)
   assert.equal(fact.kind, 'session.lifecycle')
-  assert.equal((fact.payload as any).event, 'subagent.communication')
-  assert.equal((fact.payload as any).receiver_thread_id, 'thread-child')
+  assert.equal(payload.event, 'subagent.communication')
+  assert.equal(payload.receiver_thread_id, 'thread-child')
 })
 
 test('empty assistant/reasoning records preserve evidence but do not create raw background activity', async () => {
