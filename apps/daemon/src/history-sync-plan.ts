@@ -14,6 +14,12 @@ export interface ParserReplayStage {
   window?: SourceHistoryWindow
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+}
+
 export function createProgressiveHistoryStages(startedAt: number): ProgressiveHistoryStage[] {
   const activeSince = new Date(startedAt - HOT_HISTORY_WINDOW_MS).toISOString()
   return [
@@ -21,11 +27,6 @@ export function createProgressiveHistoryStages(startedAt: number): ProgressiveHi
     { id: 'recent', label: '最近 10 个会话', window: { sessionLimit: 10 } },
     { id: 'hot-window', label: '最近 7 天', window: { activeSince } },
   ]
-}
-
-/** Parser Replay 完全退出启动链路；保留 API 仅用于明确表达“启动期 0 Replay”。 */
-export function createParserReplayStages(_startedAt: number): ParserReplayStage[] {
-  return []
 }
 
 export function createParserReplayMaintenanceStages(startedAt: number): ParserReplayStage[] {
@@ -39,11 +40,9 @@ export function createParserReplayMaintenanceStages(startedAt: number): ParserRe
 export type StorageCapacityState = 'healthy' | 'approaching' | 'exceeded' | 'unknown'
 
 export function storageCapacityState(details: Readonly<Record<string, unknown>> | undefined): StorageCapacityState {
-  const dataGrowth = details?.dataGrowth
-  if (!dataGrowth || typeof dataGrowth !== 'object' || Array.isArray(dataGrowth)) return 'unknown'
-  const capacity = (dataGrowth as Record<string, unknown>).capacity
-  if (!capacity || typeof capacity !== 'object' || Array.isArray(capacity)) return 'unknown'
-  const state = (capacity as Record<string, unknown>).state
+  const dataGrowth = asRecord(details?.dataGrowth)
+  const capacity = asRecord(dataGrowth.capacity)
+  const state = capacity.state
   return state === 'healthy' || state === 'approaching' || state === 'exceeded' ? state : 'unknown'
 }
 
