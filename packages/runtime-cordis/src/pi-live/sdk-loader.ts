@@ -39,6 +39,13 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
+function packageManifest(value: unknown, path: string): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError(`Pi SDK package manifest must be an object: ${path}`)
+  }
+  return value as Record<string, unknown>
+}
+
 export async function findPiExecutable(explicit?: string): Promise<string | undefined> {
   if (explicit && await exists(explicit)) return explicit
   const configured = process.env.PI_BIN?.trim()
@@ -84,7 +91,7 @@ async function packageFromEntry(entry: string): Promise<{
   while (true) {
     const manifestPath = join(cursor, 'package.json')
     try {
-      const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as Record<string, unknown>
+      const manifest = packageManifest(JSON.parse(await readFile(manifestPath, 'utf8')), manifestPath)
       if (manifest.name === PI_SDK_PACKAGE_NAME) {
         const main = typeof manifest.main === 'string' && manifest.main.trim()
           ? manifest.main
@@ -102,6 +109,7 @@ async function packageFromEntry(entry: string): Promise<{
     } catch (error) {
       if (error instanceof SyntaxError) throw error
       if (error instanceof Error && error.message.startsWith('Pi SDK entry declared by ')) throw error
+      if (error instanceof TypeError && error.message.startsWith('Pi SDK package manifest must be an object:')) throw error
     }
     const parent = dirname(cursor)
     if (parent === cursor) return undefined
