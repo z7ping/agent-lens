@@ -14,6 +14,7 @@ import {
   codexSourceDefinition,
   detectCodex,
 } from './index'
+import { asRecord } from './test-support'
 
 class MemoryCheckpoint implements SourceCheckpointService {
   private readonly values = new Map<string, unknown>()
@@ -105,7 +106,8 @@ test('history ingest is incremental and preserves every native record', async ()
 
     const serialized = JSON.stringify(first)
     const sessionMeta = first.find(record => record.nativeType === 'session_meta')
-    assert.equal((sessionMeta?.payload as any).entry.payload.future_field.nested, 'survives')
+    const sessionMetaEntry = asRecord(asRecord(sessionMeta?.payload).entry)
+    assert.equal(asRecord(asRecord(sessionMetaEntry.payload).future_field).nested, 'survives')
     assert.equal(serialized.includes('<permissions instructions>sandbox'), true)
     assert.equal(serialized.includes('<environment_context>'), true)
     assert.equal(serialized.includes('[redacted:injected-context]'), false)
@@ -144,7 +146,8 @@ test('history emits native title only on first discovery or thread_name change',
     for await (const record of codexSourceDefinition.ingestHistory!(source)) changed.push(record)
     assert.equal(changed.length, 1)
     assert.equal(changed[0]?.nativeType, 'metadata/session_title')
-    assert.equal((changed[0]?.payload as any).entry.payload.title, '第二次原生标题')
+    const entry = asRecord(asRecord(changed[0]?.payload).entry)
+    assert.equal(asRecord(entry.payload).title, '第二次原生标题')
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -182,8 +185,9 @@ test('normalizer uses event_msg.user_message as the only authoritative user requ
       'context.injected',
     ])
 
-    assert.equal((outputs[3]?.payload as any).provenance.actualAuthor, 'human-user')
-    assert.equal((outputs[3]?.payload as any).text, '运行测试并修复')
+    const userPayload = asRecord(outputs[3]?.payload)
+    assert.equal(asRecord(userPayload.provenance).actualAuthor, 'human-user')
+    assert.equal(userPayload.text, '运行测试并修复')
     assert.deepEqual(outputs[6]?.payload, {
       callId: 'call_c1',
       nativeToolName: 'shell_command',
@@ -195,7 +199,7 @@ test('normalizer uses event_msg.user_message as the only authoritative user requ
       exitCode: 1,
       output: 'failed 1 test',
     })
-    assert.equal((outputs[2]?.payload as any).event, 'turn.started')
+    assert.equal(asRecord(outputs[2]?.payload).event, 'turn.started')
   } finally {
     await rm(root, { recursive: true, force: true })
   }
