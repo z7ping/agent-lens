@@ -172,7 +172,6 @@ const applyHttpSurface = Object.assign(
       eventLoop.disable()
       unprovideHttp()
       unprovideHubReview()
-      eventHub.close()
       await surface.dispose()
     }
   },
