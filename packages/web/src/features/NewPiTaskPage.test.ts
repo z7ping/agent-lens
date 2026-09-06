@@ -2,12 +2,12 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
-import { newPiTaskInternals } from './NewPiTaskPage'
+import { PROJECT_BOOTSTRAP_LIMIT } from './new-pi-task'
 
 const appPath = fileURLToPath(new URL('../App.tsx', import.meta.url))
 
 test('new Pi task bootstrap stays bounded and does not initialize review history', async () => {
-  assert.equal(newPiTaskInternals.PROJECT_BOOTSTRAP_LIMIT, 20)
+  assert.equal(PROJECT_BOOTSTRAP_LIMIT, 20)
   const app = await readFile(appPath, 'utf8')
   assert.match(app, /if \(onLocalReview\) void model\.ensureReview\(\)/)
   assert.doesNotMatch(app, /if \(onReview\) void model\.ensureReview\(\)/)
