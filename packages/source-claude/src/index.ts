@@ -37,6 +37,7 @@ import type {
   SourceRecordEmitter,
 } from '@agent-lens/core'
 import {
+  abortableDelay,
   defineAgentLensPlugin,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
@@ -425,19 +426,6 @@ function runtimeRecord(
   }
 }
 
-async function sleep(ms: number, signal: AbortSignal): Promise<void> {
-  if (signal.aborted) return
-  await new Promise<void>(resolve => {
-    const timer = setTimeout(done, ms)
-    function done() {
-      signal.removeEventListener('abort', done)
-      clearTimeout(timer)
-      resolve()
-    }
-    signal.addEventListener('abort', done, { once: true })
-  })
-}
-
 export async function startClaudeRuntimeCapture(
   ctx: SourceExecutionContext,
   emitter: SourceRecordEmitter,
@@ -466,7 +454,7 @@ export async function startClaudeRuntimeCapture(
           break
         }
       }
-      if (!stopped && !ctx.abortSignal.aborted) await sleep(RUNTIME_POLL_MS, ctx.abortSignal)
+      if (!stopped && !ctx.abortSignal.aborted) await abortableDelay(RUNTIME_POLL_MS, ctx.abortSignal)
     }
   })()
 
