@@ -23,12 +23,11 @@ test('tool overview requests summary-only aggregate', async () => {
   assert.equal(usageProjectionInternals.aggregateOverviewDetailLimit, 0)
 })
 
-test('tool detail keeps the bounded session detail budget', async () => {
+test('tool detail keeps the bounded session detail budget supplied by the caller', async () => {
   const calls: ToolUsageAggregateQuery[] = []
   await new ToolAssetUsageProjection(storageWithAggregate(calls)).query({ sourceId: 'codex' }, 5)
   assert.equal(calls.length, 1)
   assert.equal(calls[0]?.detailLimit, 5)
-  assert.equal(usageProjectionInternals.aggregateDetailLimit, 5)
 })
 
 test('agent asset usage requests summary-only aggregate', async () => {
