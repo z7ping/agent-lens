@@ -4,6 +4,7 @@ import type {
   MaintenanceJobStore,
   MaintenanceJobType,
 } from '@agent-lens/core'
+import { abortableDelay } from '@agent-lens/runtime-cordis'
 
 export const MAINTENANCE_PRIORITY = {
   projection: 40,
@@ -51,26 +52,6 @@ function transientDataRuntimeError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
   return /Data Runtime/i.test(message)
     && /(unavailable|not started|timed out|worker|request limit|degraded|overload|queue wait)/i.test(message)
-}
-
-function waitForRetry(signal: AbortSignal): Promise<void> {
-  if (signal.aborted) return Promise.resolve()
-  return new Promise(resolve => {
-    let settled = false
-    const finish = () => {
-      if (settled) return
-      settled = true
-      signal.removeEventListener('abort', onAbort)
-      resolve()
-    }
-    const timer = setTimeout(finish, TRANSIENT_RETRY_DELAY_MS)
-    const onAbort = () => {
-      clearTimeout(timer)
-      finish()
-    }
-    signal.addEventListener('abort', onAbort, { once: true })
-    timer.unref?.()
-  })
 }
 
 export async function runMaintenanceJob<T>(
@@ -144,7 +125,7 @@ export async function runMaintenanceJob<T>(
     } catch (error) {
       if (transientDataRuntimeError(error) && transientAttempts < TRANSIENT_RETRY_LIMIT) {
         transientAttempts += 1
-        await waitForRetry(signal)
+        await abortableDelay(TRANSIENT_RETRY_DELAY_MS, signal)
         if (signal.aborted) break
         const latest = await store.get(job.id)
         if (!latest || latest.revision !== job.revision) {
