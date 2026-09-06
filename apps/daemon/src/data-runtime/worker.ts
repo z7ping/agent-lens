@@ -10,6 +10,7 @@ import {
   DATA_RUNTIME_MAX_MESSAGE_BYTES,
   DATA_RUNTIME_PROTOCOL_VERSION,
   encodedMessageBytes,
+  isDataRuntimeMethod,
   type DataRuntimeErrorResponse,
   type DataRuntimeRequest,
   type DataRuntimeResponse,
@@ -25,7 +26,41 @@ interface DataRuntimeWorkerData {
   nodeId?: string
 }
 
-const config = (workerData ?? {}) as DataRuntimeWorkerData
+function asRecord(value: unknown, label: string): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError(`${label} must be an object`)
+  }
+  return value as Record<string, unknown>
+}
+
+function parseWorkerData(value: unknown): DataRuntimeWorkerData {
+  if (value == null) return {}
+  const record = asRecord(value, 'Data Runtime workerData')
+  const allowDiagnostics = record.allowDiagnostics
+  const role = record.role
+  const dbPath = record.dbPath
+  const nodeId = record.nodeId
+  if (allowDiagnostics !== undefined && typeof allowDiagnostics !== 'boolean') {
+    throw new TypeError('Data Runtime workerData.allowDiagnostics must be a boolean')
+  }
+  if (role !== undefined && role !== 'writer' && role !== 'reader') {
+    throw new TypeError('Data Runtime workerData.role must be writer or reader')
+  }
+  if (dbPath !== undefined && typeof dbPath !== 'string') {
+    throw new TypeError('Data Runtime workerData.dbPath must be a string')
+  }
+  if (nodeId !== undefined && typeof nodeId !== 'string') {
+    throw new TypeError('Data Runtime workerData.nodeId must be a string')
+  }
+  return {
+    ...(allowDiagnostics === undefined ? {} : { allowDiagnostics }),
+    ...(role === undefined ? {} : { role }),
+    ...(dbPath === undefined ? {} : { dbPath }),
+    ...(nodeId === undefined ? {} : { nodeId }),
+  }
+}
+
+const config = parseWorkerData(workerData)
 const startedAt = Date.now()
 const allowDiagnostics = Boolean(config.allowDiagnostics)
 const role: DataRuntimeRole = config.role ?? 'writer'
@@ -83,20 +118,26 @@ function fail(requestId: string, code: string, message: string): void {
 function validRequest(value: unknown): value is DataRuntimeRequest {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const record = value as Record<string, unknown>
+  const params = record.params
   return record.protocolVersion === DATA_RUNTIME_PROTOCOL_VERSION
     && record.type === 'request'
     && typeof record.requestId === 'string'
-    && typeof record.method === 'string'
+    && isDataRuntimeMethod(record.method)
+    && (params === undefined || (params !== null && typeof params === 'object' && !Array.isArray(params)))
 }
 
 function stringArray(value: unknown, name: string): string[] {
-  if (!Array.isArray(value)
-    || value.length < 1
-    || value.length > 8
-    || value.some(item => typeof item !== 'string' || !item || ['__proto__', 'prototype', 'constructor'].includes(item))) {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 8) {
     throw new TypeError(`${name} must be a safe non-empty path`)
   }
-  return value as string[]
+  const result: string[] = []
+  for (const item of value) {
+    if (typeof item !== 'string' || !item || ['__proto__', 'prototype', 'constructor'].includes(item)) {
+      throw new TypeError(`${name} must be a safe non-empty path`)
+    }
+    result.push(item)
+  }
+  return result
 }
 
 function argsArray(value: unknown): unknown[] {
@@ -128,14 +169,17 @@ function storageRootAllowed(path: readonly string[]): boolean {
 }
 
 async function invoke(root: unknown, path: readonly string[], args: readonly unknown[]): Promise<unknown> {
-  let parent: any = null
-  let current: any = root
+  let parent: unknown = null
+  let current: unknown = root
   for (const segment of path) {
+    if (current === null || (typeof current !== 'object' && typeof current !== 'function')) {
+      throw new TypeError(`RPC path is not traversable: ${path.join('.')}`)
+    }
     parent = current
-    current = current?.[segment]
+    current = Reflect.get(current, segment)
   }
   if (typeof current !== 'function') throw new TypeError(`RPC target is not callable: ${path.join('.')}`)
-  return current.apply(parent, args)
+  return Reflect.apply(current, parent, [...args])
 }
 
 function requireStorage(): SqliteStorageService {
@@ -147,12 +191,15 @@ function transactionId(value: unknown): string | undefined {
   return typeof value === 'string' && value ? value : undefined
 }
 
+function requestIdForOversizedMessage(value: unknown): string {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return 'unknown'
+  const requestId = Reflect.get(value, 'requestId')
+  return requestId == null ? 'unknown' : String(requestId)
+}
+
 async function handleRequest(value: unknown): Promise<void> {
   if (encodedMessageBytes(value) > DATA_RUNTIME_MAX_MESSAGE_BYTES) {
-    const requestId = value && typeof value === 'object' && 'requestId' in value
-      ? String((value as { requestId?: unknown }).requestId ?? 'unknown')
-      : 'unknown'
-    fail(requestId, 'message_too_large', 'Data Runtime IPC message exceeds size limit')
+    fail(requestIdForOversizedMessage(value), 'message_too_large', 'Data Runtime IPC message exceeds size limit')
     return
   }
   if (!validRequest(value)) {
