@@ -24,7 +24,7 @@ const MAX_LIMIT = 500
 const MAX_DETAIL_OBSERVATION_IDS = 100
 const MAX_DETAIL_SESSIONS = 100
 const AGGREGATE_OVERVIEW_DETAIL_LIMIT = 5
-const AGGREGATE_ASSET_DETAIL_LIMIT = 1
+const AGGREGATE_ASSET_DETAIL_LIMIT = 0
 
 type UsageObservation = CanonicalObservation | ToolUsageObservationRecord
 
