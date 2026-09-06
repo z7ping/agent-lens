@@ -1,0 +1,1 @@
+export const PROJECT_BOOTSTRAP_LIMIT = 20
