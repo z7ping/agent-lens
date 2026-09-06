@@ -1,6 +1,7 @@
 import { monitorEventLoopDelay } from 'node:perf_hooks'
 import type { StorageService } from '@agent-lens/core'
 import { HubReviewProjection } from '@agent-lens/projection-review'
+import type { DataRuntimeHealthDto } from '@agent-lens/protocol'
 import { defineAgentLensPlugin, type AgentLensContext } from '@agent-lens/runtime-cordis'
 import { HttpEventHub } from './events'
 import {
@@ -19,7 +20,7 @@ declare module '@deepseek-ai/cordis' {
 export interface HttpSurfacePluginConfig {
   port?: number
   /** Dynamic control/data-plane health contribution; must remain O(1). */
-  dataRuntimeHealth?: () => Readonly<Record<string, unknown>> & { ok?: boolean }
+  dataRuntimeHealth?: () => DataRuntimeHealthDto
 }
 
 const manifest = {
