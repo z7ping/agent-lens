@@ -1,3 +1,4 @@
+import pLimit from 'p-limit'
 import type {
   AgentInstallation,
   CanonicalObservation,
@@ -28,17 +29,10 @@ async function loadUniqueById<T>(
 ): Promise<Map<string, T | null>> {
   const uniqueIds = [...new Set(ids)]
   const values = new Map<string, T | null>()
-  let cursor = 0
-  const workers = Array.from(
-    { length: Math.min(IDENTITY_LOOKUP_CONCURRENCY, uniqueIds.length) },
-    async () => {
-      while (cursor < uniqueIds.length) {
-        const id = uniqueIds[cursor++]!
-        values.set(id, await load(id))
-      }
-    },
-  )
-  await Promise.all(workers)
+  const limit = pLimit(IDENTITY_LOOKUP_CONCURRENCY)
+  await Promise.all(uniqueIds.map(id => limit(async () => {
+    values.set(id, await load(id))
+  })))
   return values
 }
 
