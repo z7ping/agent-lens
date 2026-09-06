@@ -1,4 +1,5 @@
 import type { SqliteExecutor } from './executor'
+import { sqliteRowId } from './repository-row-mappers'
 
 export interface ProjectionBackfillBatchResult {
   scanned: number
@@ -32,7 +33,18 @@ function batchIds(
       ${cursor}
     ORDER BY id ASC
     LIMIT ?
-  `).all(...params) as Array<{ id: string }>
+  `).all(...params).map(row => ({ id: sqliteRowId(row) }))
+}
+
+function countFromRow(value: unknown): number {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError('SQLite projection coverage query returned a non-object row')
+  }
+  const count = (value as Record<string, unknown>).count
+  if (typeof count !== 'number' || !Number.isFinite(count)) {
+    throw new TypeError('SQLite projection coverage count must be a finite number')
+  }
+  return count
 }
 
 function boundedLimit(limit: number | undefined): number {
@@ -40,15 +52,15 @@ function boundedLimit(limit: number | undefined): number {
 }
 
 function toolUsageFactCoverage(executor: SqliteExecutor): ToolUsageFactProjectionCoverage {
-  const sourceObservationCount = Number((executor.db.prepare(`
+  const sourceObservationCount = countFromRow(executor.db.prepare(`
     SELECT COUNT(*) AS count
     FROM observations
     WHERE kind IN ('tool.call', 'tool.result')
-  `).get() as { count: number }).count)
-  const projectedCount = Number((executor.db.prepare(`
+  `).get())
+  const projectedCount = countFromRow(executor.db.prepare(`
     SELECT COUNT(*) AS count
     FROM tool_usage_fact_projection
-  `).get() as { count: number }).count)
+  `).get())
   const missingCount = Math.max(0, sourceObservationCount - projectedCount)
   return {
     sourceObservationCount,
