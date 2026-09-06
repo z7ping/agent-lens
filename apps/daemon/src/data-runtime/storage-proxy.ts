@@ -11,6 +11,7 @@ import type {
   ToolUsageObservationReader,
 } from '@agent-lens/core'
 import type { UnifiedReadService } from '@agent-lens/core/replication'
+import type { SqliteStorageService } from '@agent-lens/storage-sqlite'
 import { DataRuntimeClient, type DataRuntimeClientSnapshot } from './client.js'
 import { DATA_RUNTIME_MAX_PENDING_REQUESTS } from './protocol.js'
 
@@ -379,15 +380,15 @@ export class DataRuntimeStorageService implements StorageService {
   readonly sessionSummaries: SessionSummaryProjectionStore
   readonly sessionSummaryProjection: SessionSummaryProjectionStore
   readonly toolUsageObservations: ToolUsageObservationReader
-  readonly unknownObservationProjection: any
-  readonly maintenance: any
+  readonly unknownObservationProjection: SqliteStorageService['unknownObservationProjection']
+  readonly maintenance: SqliteStorageService['maintenance']
   readonly maintenanceJobs: MaintenanceJobStore
-  readonly projectionBackfill: any
-  readonly runtimeProfiles: any
-  readonly sourceRuntimeStatus: any
-  readonly sessionRelationshipCandidates: any
-  readonly replication: any
-  readonly replicationCanonicalChanges: any
+  readonly projectionBackfill: SqliteStorageService['projectionBackfill']
+  readonly runtimeProfiles: SqliteStorageService['runtimeProfiles']
+  readonly sourceRuntimeStatus: SqliteStorageService['sourceRuntimeStatus']
+  readonly sessionRelationshipCandidates: SqliteStorageService['sessionRelationshipCandidates']
+  readonly replication: SqliteStorageService['replication']
+  readonly replicationCanonicalChanges: SqliteStorageService['replicationCanonicalChanges']
 
   constructor(private readonly executor: RemoteStorageExecutor) {
     this.repositories = {
