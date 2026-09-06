@@ -53,17 +53,27 @@ test('Data Runtime client rejects oversized messages before posting to worker', 
   }
 })
 
-test('timed out synchronous request degrades and circuit-breaks the worker', async () => {
-  const client = new DataRuntimeClient({ allowDiagnostics: true, requestTimeoutMs: 2_000 })
+test('ordinary request timeout is request-local and leaves worker available', async () => {
+  const client = new DataRuntimeClient({
+    allowDiagnostics: true,
+    requestTimeoutMs: 2_000,
+    heartbeatIntervalMs: 60_000,
+  })
   await client.start()
   try {
     await assert.rejects(
       client.request('diagnostic.block', { durationMs: 250 }, 30),
       /request timed out/,
     )
-    assert.equal(client.state(), 'degraded')
+    assert.equal(client.state(), 'ready')
     assert.equal(client.snapshot().timeouts, 1)
+    assert.equal(client.snapshot().livenessFailures, 0)
     assert.match(client.snapshot().lastError ?? '', /request timed out/)
+
+    await new Promise(resolve => setTimeout(resolve, 260))
+    const ping = await client.request<{ ok: boolean }>('ping', {}, 1_000)
+    assert.equal(ping.ok, true)
+    assert.equal(client.state(), 'ready')
   } finally {
     await client.shutdown()
   }
