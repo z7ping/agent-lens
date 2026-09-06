@@ -31,6 +31,7 @@ import type {
   SourceRecordEmitter,
 } from '@agent-lens/core'
 import {
+  abortableDelay,
   defineAgentLensPlugin,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
@@ -459,19 +460,6 @@ function hookRecord(envelope: InboxEnvelope, filePath: string, ctx: SourceExecut
   }
 }
 
-function sleep(ms: number, signal: AbortSignal): Promise<void> {
-  if (signal.aborted) return Promise.resolve()
-  return new Promise(resolve => {
-    const timer = setTimeout(done, ms)
-    function done() {
-      signal.removeEventListener('abort', done)
-      clearTimeout(timer)
-      resolve()
-    }
-    signal.addEventListener('abort', done, { once: true })
-  })
-}
-
 export async function startHermesRuntimeCapture(
   ctx: SourceExecutionContext,
   emitter: SourceRecordEmitter,
@@ -543,13 +531,13 @@ export async function startHermesRuntimeCapture(
           break
         }
       }
-      await sleep(INBOX_POLL_MS, ctx.abortSignal)
+      await abortableDelay(INBOX_POLL_MS, ctx.abortSignal)
     }
   })()
 
   const dbTask = (async () => {
     while (!stopped && !ctx.abortSignal.aborted) {
-      await sleep(DB_POLL_MS, ctx.abortSignal)
+      await abortableDelay(DB_POLL_MS, ctx.abortSignal)
       if (!stopped && !ctx.abortSignal.aborted) await scanDb(true).catch(() => undefined)
     }
   })()
