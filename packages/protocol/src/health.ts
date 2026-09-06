@@ -31,6 +31,15 @@ export interface DataRuntimeWorkerHealthDto {
   }
 }
 
+export interface DataRuntimeForegroundQueueHealthDto {
+  queued: number
+  maxQueued: number
+  maxQueue: number
+  overloads: number
+  queueTimeouts: number
+  waitBudgetMs: number
+}
+
 export interface DataRuntimeHealthDto {
   ok: boolean
   recovering: boolean
@@ -41,6 +50,8 @@ export interface DataRuntimeHealthDto {
   readers?: DataRuntimeWorkerHealthDto[]
   /** Dedicated low-priority reader for diagnostics/replay scans. */
   maintenanceReader?: DataRuntimeWorkerHealthDto
+  /** Bounded admission queue in front of the foreground Reader Pool. */
+  foregroundQueue?: DataRuntimeForegroundQueueHealthDto
 }
 
 export interface HealthResponseDto {
