@@ -72,6 +72,13 @@ function shortSessionId(id: string): string {
   return id.length > 16 ? `${id.slice(0, 8)}…${id.slice(-5)}` : id
 }
 
+function sameUsageFilters(
+  left: { sourceId: string; projectId: string; range: string },
+  right: { sourceId: string; projectId: string; range: string },
+): boolean {
+  return left.sourceId === right.sourceId && left.projectId === right.projectId && left.range === right.range
+}
+
 type SortKey = 'callCount' | 'sessionCount' | 'successRate' | 'errorCount' | 'averageDurationMs'
 type SortDirection = 'ascending' | 'descending'
 
@@ -135,14 +142,19 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
     setSelectedToolKey(key)
     setDetailError('')
     if (detailTools.has(key) || detailLoadingKey === key) return
+    const summaryTool = tools.find(tool => toolKey(tool.sourceIds, tool.nativeToolName) === key)
+    if (!summaryTool) return
+    const requestedFilters = { ...usage.filters }
     setDetailLoadingKey(key)
     try {
-      const detail = await toolDetailApi.usageDetail(usage.filters)
-      const next = new Map<string, ToolUsageDto>()
-      for (const tool of detail.tools) next.set(toolKey(tool.sourceIds, tool.nativeToolName), tool)
-      setDetailTools(current => new Map([...current, ...next]))
+      const detail = await toolDetailApi.usageDetail(requestedFilters, summaryTool.nativeToolName)
+      if (!sameUsageFilters(model.getSnapshot().usage.filters, requestedFilters)) return
+      const tool = detail.tools.find(item => toolKey(item.sourceIds, item.nativeToolName) === key)
+      if (tool) setDetailTools(current => new Map(current).set(key, tool))
     } catch (error) {
-      setDetailError(error instanceof Error ? error.message : String(error))
+      if (sameUsageFilters(model.getSnapshot().usage.filters, requestedFilters)) {
+        setDetailError(error instanceof Error ? error.message : String(error))
+      }
     } finally {
       setDetailLoadingKey(current => current === key ? null : current)
     }
