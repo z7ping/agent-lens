@@ -11,7 +11,10 @@ import type {
   LogicalSessionIdentityHint,
   Project,
   ProjectIdentityHint,
+  RuntimeProfile,
+  RuntimeProfileIdentityHint,
   SessionRelationship,
+  SessionRelationshipCandidate,
   SourceSession,
   SourceSessionIdentityHint,
   Workspace,
@@ -29,6 +32,7 @@ import type {
   LogicalSessionId,
   ObservationId,
   ProjectId,
+  RuntimeProfileId,
   SourceRecordId,
   SourceSessionId,
   WorkspaceId,
@@ -44,6 +48,7 @@ import type {
   ObservationCoverage,
   SourceRecord,
 } from '../domain/observation'
+import type { SourceRuntimeStatus } from '../domain/diagnostics'
 import type {
   AssetBinding,
   AssetBindingHint,
@@ -376,10 +381,49 @@ export interface RepositorySet {
   tools: ToolRepository
 }
 
+export interface VersionedCheckpoint<T> {
+  value: T
+  revision: number
+}
+
 export interface CheckpointRepository {
   get<T>(scope: string, key: string): Promise<T | null>
+  getWithRevision?<T>(scope: string, key: string): Promise<VersionedCheckpoint<T> | null>
+  compareAndSet?<T>(
+    scope: string,
+    key: string,
+    expectedRevision: number | null,
+    value: T,
+  ): Promise<boolean>
   set<T>(scope: string, key: string, value: T): Promise<void>
   clear(scope: string, key: string): Promise<void>
+}
+
+export interface RuntimeProfileRepository {
+  resolve(hint: RuntimeProfileIdentityHint): Promise<RuntimeProfile>
+  get(id: RuntimeProfileId): Promise<RuntimeProfile | null>
+  attachSession(
+    sourceId: string,
+    installationId: AgentInstallationId,
+    nativeSessionId: string,
+    runtimeProfileId: RuntimeProfileId,
+  ): Promise<void>
+  attachAssetBinding(assetBindingId: string, runtimeProfileId: RuntimeProfileId): Promise<void>
+}
+
+export interface SourceRuntimeStatusRepository {
+  put(status: SourceRuntimeStatus): Promise<void>
+  list(): Promise<SourceRuntimeStatus[]>
+}
+
+export interface SessionRelationshipCandidateRepository {
+  put(candidate: SessionRelationshipCandidate): Promise<void>
+  tryPromote(candidate: SessionRelationshipCandidate): Promise<SessionRelationship | null>
+  tryPromoteForSession(
+    sourceId: string,
+    installationId: AgentInstallationId,
+    nativeSessionId: string,
+  ): Promise<number>
 }
 
 export interface StorageTransaction extends RepositorySet {}
@@ -396,6 +440,9 @@ export interface StorageService {
   readonly assetInventory?: AssetInventoryReader
   readonly sessionSummaries?: SessionSummaryReader
   readonly sessionSummaryProjection?: SessionSummaryProjectionStore
+  readonly runtimeProfiles?: RuntimeProfileRepository
+  readonly sourceRuntimeStatus?: SourceRuntimeStatusRepository
+  readonly sessionRelationshipCandidates?: SessionRelationshipCandidateRepository
   transaction<T>(fn: (tx: StorageTransaction) => Promise<T>): Promise<T>
   /** Fast liveness/readiness path. Implementations should avoid whole-dataset aggregation here. */
   health(): Promise<StorageHealth>
