@@ -1,5 +1,6 @@
 import type { KnownReplicationEntityType, ReplicationHistoryPhase } from '@agent-lens/core/replication'
 import type { SqliteExecutor } from './executor'
+import { changeProgressRow } from './replication-state-rows'
 
 export interface ReplicationChangeProgress {
   streamId: string
@@ -31,8 +32,8 @@ export class SqliteReplicationChangeProgressRepository {
                updated_at AS updatedAt
         FROM replication_change_progress
         WHERE stream_id = ? AND generation_id = ? AND phase = ? AND entity_type = ?
-      `).get(input.streamId, input.generationId, input.phase, input.entityType) as ReplicationChangeProgress | undefined
-      return row ?? null
+      `).get(input.streamId, input.generationId, input.phase, input.entityType)
+      return row ? changeProgressRow(row) : null
     })
   }
 
