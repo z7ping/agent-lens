@@ -12,6 +12,28 @@ export interface UnknownObservationSummary {
   groups: UnknownObservationGroup[]
 }
 
+function mapGroup(value: unknown): UnknownObservationGroup {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError('SQLite unknown observation summary returned a non-object row')
+  }
+  const row = value as Record<string, unknown>
+  if (typeof row.sourceId !== 'string' || typeof row.nativeType !== 'string') {
+    throw new TypeError('SQLite unknown observation summary ids must be strings')
+  }
+  if (typeof row.count !== 'number' || !Number.isFinite(row.count)) {
+    throw new TypeError('SQLite unknown observation summary count must be a finite number')
+  }
+  if (row.lastSeenAt != null && typeof row.lastSeenAt !== 'string') {
+    throw new TypeError('SQLite unknown observation summary lastSeenAt must be a string or null')
+  }
+  return {
+    sourceId: row.sourceId,
+    nativeType: row.nativeType,
+    count: row.count,
+    lastSeenAt: row.lastSeenAt ?? null,
+  }
+}
+
 export class SqliteUnknownObservationProjection {
   constructor(private readonly executor: SqliteExecutor) {}
 
@@ -26,9 +48,9 @@ export class SqliteUnknownObservationProjection {
         GROUP BY source_id, native_type
         ORDER BY count DESC, source_id, native_type
         LIMIT ?
-      `).all(Math.max(1, Math.min(limit, 1000))) as UnknownObservationGroup[]
+      `).all(Math.max(1, Math.min(limit, 1000))).map(mapGroup)
       return {
-        total: groups.reduce((sum, item) => sum + Number(item.count || 0), 0),
+        total: groups.reduce((sum, item) => sum + item.count, 0),
         groups,
       }
     })
