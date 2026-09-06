@@ -23,3 +23,34 @@ test('Tool Fact readiness stays foreground while maintenance coverage and cursor
   assert.equal(dataRuntimeStorageInternals.isMaintenanceOperation(backfillPath), true)
   assert.equal(dataRuntimeStorageInternals.timeoutFor(backfillPath, false), 120_000)
 })
+
+test('only background maintenance writes are excluded from foreground Writer backlog', () => {
+  const maintenanceWrites = [
+    ['maintenanceJobs', 'ensure'],
+    ['maintenanceJobs', 'update'],
+    ['projectionBackfill', 'backfillToolUsageFacts'],
+    ['projectionBackfill', 'backfillUnknownObservations'],
+    ['sessionSummaryProjection', 'rebuild'],
+    ['maintenance', 'ensureDeferredIndexes'],
+  ]
+  for (const path of maintenanceWrites) {
+    assert.equal(
+      dataRuntimeStorageInternals.isMaintenanceOperation(path),
+      true,
+      `${path.join('.')} must use the maintenance Writer queue`,
+    )
+  }
+
+  const foregroundWrites = [
+    ['repositories', 'observations', 'upsert'],
+    ['repositories', 'sourceRecords', 'insert'],
+    ['checkpoints', 'set'],
+  ]
+  for (const path of foregroundWrites) {
+    assert.equal(
+      dataRuntimeStorageInternals.isMaintenanceOperation(path),
+      false,
+      `${path.join('.')} must remain visible to foreground Writer backlog`,
+    )
+  }
+})
