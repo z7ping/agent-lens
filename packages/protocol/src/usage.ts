@@ -43,6 +43,14 @@ export interface AssetUsageDto {
   observationIds: string[]
 }
 
+export interface ToolUsageProjectionStatusDto {
+  state: 'ready' | 'partial'
+  sourceObservationCount: number
+  projectedCount: number
+  missingCount: number
+  coverageRatio: number
+}
+
 export interface ToolAssetUsageQueryDto {
   installationId?: string
   logicalSessionId?: string
@@ -64,6 +72,7 @@ export interface ToolAssetUsageResponseDto {
     assetCount: number
     unattributedToolCalls: number
     hasMoreTools: boolean
+    projection?: ToolUsageProjectionStatusDto
     generatedAt: string
   }
 }
