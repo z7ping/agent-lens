@@ -59,13 +59,15 @@ test('Data Runtime routes analytics reads to foreground pool and maintenance sca
   assert.equal(dataRuntimeStorageInternals.READ_TIMEOUT_MS, 2_000)
   assert.equal(dataRuntimeStorageInternals.isReadPath(['toolUsageObservations', 'aggregate']), true)
   assert.equal(dataRuntimeStorageInternals.isReadPath(['projectionBackfill', 'toolUsageFactCoverage']), true)
+  assert.equal(dataRuntimeStorageInternals.isMaintenanceReadPath(['projectionBackfill', 'toolUsageFactCoverage']), false)
+  assert.equal(dataRuntimeStorageInternals.timeoutFor(['projectionBackfill', 'toolUsageFactCoverage'], true), 2_000)
+  assert.equal(dataRuntimeStorageInternals.isMaintenanceReadPath(['projectionBackfill', 'toolUsageFactCoverageForMaintenance']), true)
+  assert.equal(dataRuntimeStorageInternals.isMaintenanceReadPath(['projectionBackfill', 'repairToolUsageFactCursor']), true)
   assert.equal(dataRuntimeStorageInternals.isMaintenanceReadPath(['repositories', 'sourceRecords', 'listForParserReplay']), true)
   assert.equal(dataRuntimeStorageInternals.isMaintenanceReadPath(['diagnostics']), true)
   assert.equal(dataRuntimeStorageInternals.isMaintenanceReadPath(['sessionSummaryProjection', 'query']), false)
   assert.equal(dataRuntimeStorageInternals.isMaintenanceOperation(['projectionBackfill', 'backfillToolUsageFacts']), true)
-  assert.equal(dataRuntimeStorageInternals.isMaintenanceOperation(['projectionBackfill', 'toolUsageFactCoverage']), false)
   assert.equal(dataRuntimeStorageInternals.timeoutFor(['projectionBackfill', 'backfillToolUsageFacts'], false), 120_000)
-  assert.equal(dataRuntimeStorageInternals.timeoutFor(['projectionBackfill', 'toolUsageFactCoverage'], true), 2_000)
 })
 
 test('foreground reader pool prefers the least-loaded ready reader', async () => {
