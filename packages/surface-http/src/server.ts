@@ -54,6 +54,7 @@ export const DEFAULT_AGENT_LENS_HTTP_PORT = 56789
 const MAX_JSON_BODY_BYTES = 1024 * 1024
 const MAX_BACKUP_BODY_BYTES = 256 * 1024 * 1024
 const HEALTH_CACHE_TTL_MS = 1_000
+const USAGE_DETAIL_LIMIT = 5
 const RUNTIME_STARTED_AT = new Date().toISOString()
 const BACKUP_KINDS = new Set<BackupAssetKind>([
   'skill', 'mcp', 'plugin', 'extension', 'hook', 'memory', 'rule', 'session', 'config', 'other',
@@ -717,6 +718,10 @@ export async function startHttpSurface(
         if (!id) throw badRequest('logicalSessionId is required')
         const detail = await review.get(id, parseReviewDetailQuery(url.searchParams))
         writeJson(response, detail ? 200 : 404, detail ?? { error: 'not_found' })
+        return
+      }
+      if (url.pathname === '/api/v1/usage/detail') {
+        writeJson(response, 200, await usage.query(parseUsageQuery(url.searchParams), USAGE_DETAIL_LIMIT))
         return
       }
       if (url.pathname === '/api/v1/usage') {
