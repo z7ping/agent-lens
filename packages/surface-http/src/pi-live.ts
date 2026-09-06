@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { StorageService } from '@agent-lens/core'
 import type { PiLiveHistoryAction, PiLiveService } from '@agent-lens/runtime-cordis'
 import type { JsonValue, PiLiveStartRequestDto } from '@agent-lens/protocol'
+import { httpError, readJsonBody, writeJson } from './http-utils'
 import { resolvePiLiveResumeInput } from './pi-live-resume'
 
 const MAX_PI_LIVE_JSON_BYTES = 1024 * 1024
@@ -27,59 +28,31 @@ function jsonValue(value: unknown, depth = 0): JsonValue {
   return null
 }
 
-function writeJson(response: ServerResponse, statusCode: number, body: unknown): void {
-  const content = JSON.stringify(body)
-  response.statusCode = statusCode
-  response.setHeader('content-type', 'application/json; charset=utf-8')
-  response.setHeader('cache-control', 'no-store')
-  response.setHeader('content-length', Buffer.byteLength(content))
-  response.end(content)
-}
-
 function serverTiming(response: ServerResponse, name: string, startedAt: number): void {
   if (response.headersSent) return
   const duration = Math.max(0, performance.now() - startedAt)
   response.setHeader('server-timing', `${name};dur=${duration.toFixed(1)}`)
 }
 
-function requestError(statusCode: number, message: string): Error & { statusCode: number } {
-  const error = new Error(message) as Error & { statusCode: number }
-  error.statusCode = statusCode
-  return error
-}
-
 async function readJson(request: IncomingMessage): Promise<JsonValue> {
-  const contentType = String(request.headers['content-type'] ?? '').toLowerCase()
-  if (!contentType.startsWith('application/json')) {
-    throw requestError(415, 'Pi Live control requests require application/json')
-  }
-  const chunks: Buffer[] = []
-  let size = 0
-  for await (const raw of request) {
-    const chunk = Buffer.isBuffer(raw) ? raw : Buffer.from(raw)
-    size += chunk.byteLength
-    if (size > MAX_PI_LIVE_JSON_BYTES) {
-      throw requestError(413, 'Pi Live request body is too large')
-    }
-    chunks.push(chunk)
-  }
-  try {
-    return jsonValue(JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'))
-  } catch {
-    throw requestError(400, 'Pi Live request body must be valid JSON')
-  }
+  const value = await readJsonBody(request, {
+    maxBytes: MAX_PI_LIVE_JSON_BYTES,
+    contentTypeMessage: 'Pi Live control requests require application/json',
+    invalidJsonMessage: 'Pi Live request body must be valid JSON',
+  })
+  return jsonValue(value)
 }
 
 function objectBody(value: JsonValue): Record<string, JsonValue> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw requestError(400, 'Pi Live request body must be a JSON object')
+    throw httpError(400, 'Pi Live request body must be a JSON object')
   }
   return value
 }
 
 function nonEmpty(value: unknown, name: string): string {
   if (typeof value !== 'string' || !value.trim()) {
-    throw requestError(400, `${name} must be a non-empty string`)
+    throw httpError(400, `${name} must be a non-empty string`)
   }
   return value.trim()
 }
@@ -90,19 +63,19 @@ function optionalString(value: unknown): string | undefined {
 
 function optionalBoolean(value: unknown, name: string): boolean | undefined {
   if (value === undefined) return undefined
-  if (typeof value !== 'boolean') throw requestError(400, `${name} must be a boolean`)
+  if (typeof value !== 'boolean') throw httpError(400, `${name} must be a boolean`)
   return value
 }
 
 function historyAction(value: unknown): PiLiveHistoryAction {
   if (value === 'continue' || value === 'fork') return value
-  throw requestError(400, 'action must be continue or fork')
+  throw httpError(400, 'action must be continue or fork')
 }
 
 function streamingBehavior(value: unknown): 'steer' | 'followUp' | undefined {
   if (value === undefined) return undefined
   if (value === 'steer' || value === 'followUp') return value
-  throw requestError(400, 'behavior must be steer or followUp')
+  throw httpError(400, 'behavior must be steer or followUp')
 }
 
 function statusForError(error: unknown): number {
@@ -311,7 +284,7 @@ export async function handlePiLiveRequest(
     }
     if (action === 'extension-response' && request.method === 'POST') {
       const body = objectBody(await readJson(request))
-      if (!Object.hasOwn(body, 'response')) throw requestError(400, 'response is required')
+      if (!Object.hasOwn(body, 'response')) throw httpError(400, 'response is required')
       const extensionResponse = body.response
       await service.respondToExtension(runtimeSessionId, nonEmpty(body.requestId, 'requestId'), extensionResponse)
       writeJson(response, 202, { ok: true })
