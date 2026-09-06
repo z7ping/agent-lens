@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, statSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
@@ -6,6 +6,13 @@ import type { SourceDefinition, SourceService } from '../../packages/core/src/in
 import { AgentOverviewProjection } from '../../packages/projection-overview/src/index'
 import { ToolAssetUsageProjection } from '../../packages/projection-usage/src/index'
 import { SqliteStorageService } from '../../packages/storage-sqlite/src/index'
+import {
+  fileSize,
+  mb,
+  percentile,
+  readOptionalPositiveInt,
+  readPositiveInt,
+} from './benchmark-utils'
 
 interface Options {
   installations: number
@@ -18,24 +25,6 @@ interface Options {
   overviewP95BudgetMs: number | null
 }
 
-function readPositiveInt(name: string, fallback: number): number {
-  const prefix = `--${name}=`
-  const raw = process.argv.find(arg => arg.startsWith(prefix))?.slice(prefix.length)
-  if (!raw) return fallback
-  const value = Number.parseInt(raw, 10)
-  if (!Number.isFinite(value) || value <= 0) throw new Error(`${name} must be a positive integer`)
-  return value
-}
-
-function readOptionalPositiveInt(name: string): number | null {
-  const prefix = `--${name}=`
-  const raw = process.argv.find(arg => arg.startsWith(prefix))?.slice(prefix.length)
-  if (!raw) return null
-  const value = Number.parseInt(raw, 10)
-  if (!Number.isFinite(value) || value <= 0) throw new Error(`${name} must be a positive integer`)
-  return value
-}
-
 const options: Options = {
   installations: readPositiveInt('installations', 6),
   sessionsPerInstallation: readPositiveInt('sessions-per-installation', 100),
@@ -45,20 +34,6 @@ const options: Options = {
   limit: readPositiveInt('limit', 100),
   globalP95BudgetMs: readOptionalPositiveInt('global-p95-budget-ms'),
   overviewP95BudgetMs: readOptionalPositiveInt('overview-p95-budget-ms'),
-}
-
-function percentile(values: number[], p: number): number {
-  const sorted = [...values].sort((a, b) => a - b)
-  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * p) - 1))
-  return sorted[index] ?? 0
-}
-
-function fileSize(path: string): number {
-  try { return statSync(path).size } catch { return 0 }
-}
-
-function mb(bytes: number): string {
-  return (bytes / 1024 / 1024).toFixed(1)
 }
 
 function isoAt(offsetMs: number): string {
