@@ -82,6 +82,40 @@ test('foreground reader pool prefers the least-loaded ready reader', async () =>
   }
 })
 
+test('foreground reader pool fails fast at bounded saturation without recycling readers', async () => {
+  const left = new DataRuntimeClient({ role: 'reader', allowDiagnostics: true, heartbeatIntervalMs: 60_000 })
+  const right = new DataRuntimeClient({ role: 'reader', allowDiagnostics: true, heartbeatIntervalMs: 60_000 })
+  await left.start()
+  await right.start()
+  const pool = new DataRuntimeReaderPool([left, right])
+  try {
+    const blockers = [
+      left.request('diagnostic.block', { durationMs: 500 }, 1_000),
+      right.request('diagnostic.block', { durationMs: 500 }, 1_000),
+    ]
+    await new Promise(resolve => setTimeout(resolve, 20))
+
+    const queued = Array.from({ length: 126 }, () => pool.request('ping', {}, 1_000))
+    assert.equal(pool.pending(), 128)
+
+    const startedAt = performance.now()
+    await assert.rejects(pool.request('ping', {}, 1_000), /pending request limit reached/)
+    assert.ok(performance.now() - startedAt < 100)
+    assert.equal(left.state(), 'ready')
+    assert.equal(right.state(), 'ready')
+    assert.equal(left.snapshot().livenessFailures, 0)
+    assert.equal(right.snapshot().livenessFailures, 0)
+
+    await Promise.all([...blockers, ...queued])
+    assert.equal(pool.pending(), 0)
+    assert.equal(left.state(), 'ready')
+    assert.equal(right.state(), 'ready')
+  } finally {
+    await left.shutdown()
+    await right.shutdown()
+  }
+})
+
 test('Data Runtime uses writer for mutations and foreground readers for committed reads', async () => {
   const runtime = await fixture()
   try {
