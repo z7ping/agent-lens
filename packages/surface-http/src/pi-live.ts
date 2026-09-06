@@ -1,16 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { StorageService } from '@agent-lens/core'
 import type { PiLiveHistoryAction, PiLiveService } from '@agent-lens/runtime-cordis'
-import type {
-  JsonValue,
-  PiLiveAbortRequestDto,
-  PiLiveExtensionResponseRequestDto,
-  PiLivePromptRequestDto,
-  PiLiveResumeRequestDto,
-  PiLiveSetModelRequestDto,
-  PiLiveSetThinkingLevelRequestDto,
-  PiLiveStartRequestDto,
-} from '@agent-lens/protocol'
+import type { JsonValue, PiLiveStartRequestDto } from '@agent-lens/protocol'
 import { resolvePiLiveResumeInput } from './pi-live-resume'
 
 const MAX_PI_LIVE_JSON_BYTES = 1024 * 1024
@@ -51,12 +42,16 @@ function serverTiming(response: ServerResponse, name: string, startedAt: number)
   response.setHeader('server-timing', `${name};dur=${duration.toFixed(1)}`)
 }
 
-async function readJson<T>(request: IncomingMessage): Promise<T> {
+function requestError(statusCode: number, message: string): Error & { statusCode: number } {
+  const error = new Error(message) as Error & { statusCode: number }
+  error.statusCode = statusCode
+  return error
+}
+
+async function readJson(request: IncomingMessage): Promise<JsonValue> {
   const contentType = String(request.headers['content-type'] ?? '').toLowerCase()
   if (!contentType.startsWith('application/json')) {
-    const error = new Error('Pi Live control requests require application/json') as Error & { statusCode?: number }
-    error.statusCode = 415
-    throw error
+    throw requestError(415, 'Pi Live control requests require application/json')
   }
   const chunks: Buffer[] = []
   let size = 0
@@ -64,26 +59,27 @@ async function readJson<T>(request: IncomingMessage): Promise<T> {
     const chunk = Buffer.isBuffer(raw) ? raw : Buffer.from(raw)
     size += chunk.byteLength
     if (size > MAX_PI_LIVE_JSON_BYTES) {
-      const error = new Error('Pi Live request body is too large') as Error & { statusCode?: number }
-      error.statusCode = 413
-      throw error
+      throw requestError(413, 'Pi Live request body is too large')
     }
     chunks.push(chunk)
   }
   try {
-    return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}') as T
+    return jsonValue(JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'))
   } catch {
-    const error = new Error('Pi Live request body must be valid JSON') as Error & { statusCode?: number }
-    error.statusCode = 400
-    throw error
+    throw requestError(400, 'Pi Live request body must be valid JSON')
   }
+}
+
+function objectBody(value: JsonValue): Record<string, JsonValue> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw requestError(400, 'Pi Live request body must be a JSON object')
+  }
+  return value
 }
 
 function nonEmpty(value: unknown, name: string): string {
   if (typeof value !== 'string' || !value.trim()) {
-    const error = new Error(`${name} must be a non-empty string`) as Error & { statusCode?: number }
-    error.statusCode = 400
-    throw error
+    throw requestError(400, `${name} must be a non-empty string`)
   }
   return value.trim()
 }
@@ -92,11 +88,21 @@ function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
 }
 
+function optionalBoolean(value: unknown, name: string): boolean | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== 'boolean') throw requestError(400, `${name} must be a boolean`)
+  return value
+}
+
 function historyAction(value: unknown): PiLiveHistoryAction {
   if (value === 'continue' || value === 'fork') return value
-  const error = new Error('action must be continue or fork') as Error & { statusCode?: number }
-  error.statusCode = 400
-  throw error
+  throw requestError(400, 'action must be continue or fork')
+}
+
+function streamingBehavior(value: unknown): 'steer' | 'followUp' | undefined {
+  if (value === undefined) return undefined
+  if (value === 'steer' || value === 'followUp') return value
+  throw requestError(400, 'behavior must be steer or followUp')
 }
 
 function statusForError(error: unknown): number {
@@ -170,7 +176,7 @@ export async function handlePiLiveRequest(
         return true
       }
       const startedAt = performance.now()
-      const body = await readJson<PiLiveResumeRequestDto>(request)
+      const body = objectBody(await readJson(request))
       const input = await resolvePiLiveResumeInput(
         storage,
         nonEmpty(body.logicalSessionId, 'logicalSessionId'),
@@ -207,13 +213,17 @@ export async function handlePiLiveRequest(
         return true
       }
       const startedAt = performance.now()
-      const body = await readJson<PiLiveStartRequestDto>(request)
+      const body = objectBody(await readJson(request))
+      const executable = optionalString(body.executable)
+      const provider = optionalString(body.provider)
+      const model = optionalString(body.model)
+      const name = optionalString(body.name)
       const input: PiLiveStartRequestDto = {
         cwd: nonEmpty(body.cwd, 'cwd'),
-        ...(optionalString(body.executable) ? { executable: optionalString(body.executable) } : {}),
-        ...(optionalString(body.provider) ? { provider: optionalString(body.provider) } : {}),
-        ...(optionalString(body.model) ? { model: optionalString(body.model) } : {}),
-        ...(optionalString(body.name) ? { name: optionalString(body.name) } : {}),
+        ...(executable ? { executable } : {}),
+        ...(provider ? { provider } : {}),
+        ...(model ? { model } : {}),
+        ...(name ? { name } : {}),
       }
       const runtime = await service.start(input)
       serverTiming(response, 'pi-start-return', startedAt)
@@ -256,37 +266,35 @@ export async function handlePiLiveRequest(
       return true
     }
     if (action === 'model' && request.method === 'POST') {
-      const body = await readJson<PiLiveSetModelRequestDto>(request)
+      const body = objectBody(await readJson(request))
       const provider = nonEmpty(body.provider, 'provider')
       const modelId = nonEmpty(body.modelId, 'modelId')
       writeJson(response, 200, jsonValue(await service.setModel(runtimeSessionId, provider, modelId)))
       return true
     }
     if (action === 'thinking-level' && request.method === 'POST') {
-      const body = await readJson<PiLiveSetThinkingLevelRequestDto>(request)
+      const body = objectBody(await readJson(request))
       writeJson(response, 200, jsonValue(await service.setThinkingLevel(runtimeSessionId, nonEmpty(body.level, 'level'))))
       return true
     }
     if (action === 'prompt' && request.method === 'POST') {
-      const body = await readJson<PiLivePromptRequestDto>(request)
-      const message = nonEmpty(body.message, 'message')
-      if (body.behavior !== undefined && body.behavior !== 'steer' && body.behavior !== 'followUp') {
-        const error = new Error('behavior must be steer or followUp') as Error & { statusCode?: number }
-        error.statusCode = 400
-        throw error
-      }
-      await service.prompt(runtimeSessionId, message, body.behavior)
+      const body = objectBody(await readJson(request))
+      await service.prompt(
+        runtimeSessionId,
+        nonEmpty(body.message, 'message'),
+        streamingBehavior(body.behavior),
+      )
       writeJson(response, 202, { ok: true })
       return true
     }
     if (action === 'steer' && request.method === 'POST') {
-      const body = await readJson<PiLivePromptRequestDto>(request)
+      const body = objectBody(await readJson(request))
       await service.steer(runtimeSessionId, nonEmpty(body.message, 'message'))
       writeJson(response, 202, { ok: true })
       return true
     }
     if (action === 'follow-up' && request.method === 'POST') {
-      const body = await readJson<PiLivePromptRequestDto>(request)
+      const body = objectBody(await readJson(request))
       await service.followUp(runtimeSessionId, nonEmpty(body.message, 'message'))
       writeJson(response, 202, { ok: true })
       return true
@@ -296,13 +304,15 @@ export async function handlePiLiveRequest(
       return true
     }
     if (action === 'abort' && request.method === 'POST') {
-      const body = await readJson<PiLiveAbortRequestDto>(request)
-      writeJson(response, 200, await service.abort(runtimeSessionId, { restoreQueue: body.restoreQueue !== false }))
+      const body = objectBody(await readJson(request))
+      const restoreQueue = optionalBoolean(body.restoreQueue, 'restoreQueue')
+      writeJson(response, 200, await service.abort(runtimeSessionId, { restoreQueue: restoreQueue !== false }))
       return true
     }
     if (action === 'extension-response' && request.method === 'POST') {
-      const body = await readJson<PiLiveExtensionResponseRequestDto>(request)
-      await service.respondToExtension(runtimeSessionId, nonEmpty(body.requestId, 'requestId'), body.response)
+      const body = objectBody(await readJson(request))
+      if (!Object.hasOwn(body, 'response')) throw requestError(400, 'response is required')
+      await service.respondToExtension(runtimeSessionId, nonEmpty(body.requestId, 'requestId'), body.response!)
       writeJson(response, 202, { ok: true })
       return true
     }
