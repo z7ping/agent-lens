@@ -11,24 +11,31 @@ import {
 import { TimelineProjection, encodeTimelineCursor } from '@agent-lens/projection-timeline'
 import {
   AGENT_LENS_PROTOCOL_VERSION,
-  type JsonValue,
-  type ReviewDetailDirection,
   type ReviewDetailFilter,
   type ReviewDetailPageDto,
   type ReviewDetailQueryDto,
-  type ReviewEventCategory,
-  type ReviewEventNodeDto,
   type ReviewInteractionDto,
-  type ReviewMessageNodeDto,
-  type ReviewNodeDto,
-  type ReviewNodeSourceDto,
   type ReviewQueryDto,
   type ReviewResponseDto,
   type ReviewSessionDetailDto,
   type ReviewSessionSummaryDto,
-  type ReviewToolNodeDto,
   type TimelineItemDto,
 } from '@agent-lens/protocol'
+import {
+  decodeReviewCursor,
+  decodeReviewListCursor,
+  encodeReviewCursor,
+  encodeReviewListCursor,
+} from './cursor'
+import {
+  asRecord,
+  buildInteractionGroups,
+  buildInteractions,
+  buildNodes,
+  eventCategory,
+  splitInteractionGroups,
+  textFromPayload,
+} from './nodes'
 
 const MAX_SESSIONS = 500
 const DEFAULT_LIMIT = 100
@@ -37,216 +44,6 @@ const MAX_DETAIL_LIMIT = 100
 const TIMELINE_CHUNK = 250
 const DESCRIPTOR_SCAN_CHUNK = 1000
 const MAX_DESCRIPTOR_CACHE = 32
-
-function asRecord(value: JsonValue): Record<string, JsonValue>
-function asRecord(value: unknown): Record<string, unknown>
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {}
-}
-
-function stringField(record: Readonly<Record<string, unknown>>, ...keys: string[]): string | undefined {
-  for (const key of keys) {
-    const value = record[key]
-    if (typeof value === 'string' && value) return value
-  }
-  return undefined
-}
-
-function textFromPayload(value: JsonValue | unknown): string | undefined {
-  if (typeof value === 'string') return value
-  if (Array.isArray(value)) {
-    const parts = value.map(textFromPayload).filter((item): item is string => Boolean(item))
-    return parts.length ? parts.join('\n') : undefined
-  }
-  const record = asRecord(value)
-  const direct = stringField(record, 'text', 'message', 'content', 'summary', 'prompt')
-  if (direct) return direct
-  for (const key of ['content', 'message', 'parts']) {
-    if (record[key] && record[key] !== value) {
-      const nested = textFromPayload(record[key])
-      if (nested) return nested
-    }
-  }
-  return undefined
-}
-
-function toolCallId(item: TimelineItemDto): string | undefined {
-  return stringField(asRecord(item.payload), 'callId', 'call_id', 'toolUseId', 'tool_use_id')
-}
-
-function toolName(item: TimelineItemDto): string {
-  return stringField(asRecord(item.payload), 'nativeToolName', 'toolName', 'tool_name', 'name') ?? 'Tool'
-}
-
-function eventCategory(kind: TimelineItemDto['kind']): ReviewEventCategory {
-  if (kind.startsWith('permission.')) return 'permission'
-  if (kind.startsWith('subagent.')) return 'subagent'
-  if (kind.startsWith('context.')) return 'context'
-  if (kind.startsWith('model.') || kind.startsWith('reasoning.')) return 'model'
-  if (kind === 'session.lifecycle') return 'lifecycle'
-  if (kind === 'artifact.action') return 'artifact'
-  if (kind === 'usage') return 'usage'
-  return 'unknown'
-}
-
-function eventLabel(kind: TimelineItemDto['kind']): string {
-  const labels: Partial<Record<TimelineItemDto['kind'], string>> = {
-    'session.lifecycle': '会话生命周期',
-    'model.call': '模型调用',
-    'model.changed': '模型切换',
-    'reasoning.configuration.updated': '推理配置更新',
-    'tool.progress': '工具进度',
-    'permission.request': '权限请求',
-    'permission.response': '权限响应',
-    'subagent.spawn': '启动子 Agent',
-    'subagent.communication': '子 Agent 通信',
-    'subagent.end': '子 Agent 结束',
-    'context.compaction': '上下文压缩',
-    'context.summary': '上下文摘要',
-    'context.injected': '系统注入上下文',
-    'artifact.action': '产物操作',
-    usage: '用量',
-    unknown: '原始事件',
-  }
-  return labels[kind] ?? kind
-}
-
-function reviewNodeSource(item: TimelineItemDto): ReviewNodeSourceDto {
-  return {
-    ...(item.nativeEventId ? { nativeEventId: item.nativeEventId } : {}),
-    ...(item.nativeParentEventId ? { nativeParentEventId: item.nativeParentEventId } : {}),
-    ...(item.parentObservationId ? { parentObservationId: item.parentObservationId } : {}),
-    ...(item.occurredAt ? { occurredAt: item.occurredAt } : {}),
-    capturedAt: item.capturedAt,
-  }
-}
-
-function buildNodes(items: TimelineItemDto[]): ReviewNodeDto[] {
-  const nodes: ReviewNodeDto[] = []
-  const toolsByCallId = new Map<string, ReviewToolNodeDto>()
-
-  for (const item of items) {
-    if (item.kind === 'message.user' || item.kind === 'message.assistant' || item.kind === 'message.commentary' || item.kind === 'message.reasoning') {
-      const node: ReviewMessageNodeDto = {
-        type: 'message', id: item.id,
-        role: item.kind === 'message.user'
-          ? 'user'
-          : item.kind === 'message.commentary'
-            ? 'commentary'
-          : item.kind === 'message.reasoning'
-            ? 'reasoning'
-            : 'assistant',
-        at: item.effectiveAt, sourceId: item.sourceId, ...reviewNodeSource(item),
-        text: textFromPayload(item.payload) ?? '（无可显示文本）', payload: item.payload,
-        evidence: item.evidence, observationIds: [item.id],
-      }
-      nodes.push(node)
-      continue
-    }
-
-    if (item.kind === 'tool.call') {
-      const payload = asRecord(item.payload)
-      const id = toolCallId(item)
-      const node: ReviewToolNodeDto = {
-        type: 'tool', id: item.id, at: item.effectiveAt, sourceId: item.sourceId, ...reviewNodeSource(item),
-        name: toolName(item), ...(id ? { callId: id } : {}), status: 'running',
-        startedAt: item.effectiveAt,
-        ...(payload.input !== undefined ? { input: payload.input } : {}),
-        payload: item.payload, evidence: item.evidence, observationIds: [item.id],
-      }
-      nodes.push(node)
-      if (id) toolsByCallId.set(id, node)
-      continue
-    }
-
-    if (item.kind === 'tool.result') {
-      const payload = asRecord(item.payload)
-      const id = toolCallId(item)
-      const linked = id ? toolsByCallId.get(id) : undefined
-      if (linked) {
-        linked.endedAt = item.effectiveAt
-        linked.status = payload.success === false ? 'error' : payload.success === true ? 'success' : 'unknown'
-        const duration = payload.durationMs ?? payload.duration_ms
-        if (typeof duration === 'number' && Number.isFinite(duration) && duration >= 0) linked.durationMs = duration
-        if (payload.output !== undefined) linked.output = payload.output
-        else if (payload.result !== undefined) linked.output = payload.result
-        else linked.output = item.payload
-        linked.evidence = [...linked.evidence, ...item.evidence]
-        linked.observationIds.push(item.id)
-        continue
-      }
-    }
-
-    const node: ReviewEventNodeDto = {
-      type: 'event', id: item.id, at: item.effectiveAt, sourceId: item.sourceId, ...reviewNodeSource(item),
-      kind: item.kind, category: eventCategory(item.kind), label: eventLabel(item.kind),
-      payload: item.payload, evidence: item.evidence, observationIds: [item.id],
-    }
-    nodes.push(node)
-  }
-  return nodes
-}
-
-function splitInteractionGroups(items: TimelineItemDto[]): TimelineItemDto[][] {
-  const byId = new Map(items.map(item => [item.id, item]))
-  const groups: TimelineItemDto[][] = []
-  const groupByRoot = new Map<string, TimelineItemDto[]>()
-  let linearRoot: string | undefined
-
-  const rootUser = (item: TimelineItemDto): string | undefined => {
-    if (item.kind === 'message.user') return item.id
-    let current: TimelineItemDto | undefined = item
-    const seen = new Set<string>()
-    while (current?.parentObservationId && !seen.has(current.parentObservationId)) {
-      seen.add(current.parentObservationId)
-      current = byId.get(current.parentObservationId)
-      if (!current) return undefined
-      if (current.kind === 'message.user') return current.id
-    }
-    return undefined
-  }
-
-  for (const item of items) {
-    if (item.kind === 'message.user') linearRoot = item.id
-    const root = rootUser(item) ?? linearRoot
-    if (!root) {
-      if (item.kind === 'session.lifecycle') continue
-      const background = `background:${item.id}`
-      const group = [item]
-      groups.push(group)
-      groupByRoot.set(background, group)
-      continue
-    }
-    let group = groupByRoot.get(root)
-    if (!group) {
-      group = []
-      groups.push(group)
-      groupByRoot.set(root, group)
-    }
-    group.push(item)
-  }
-  return groups
-}
-
-function buildInteractionGroups(groups: TimelineItemDto[][], startingOrdinal = 1): ReviewInteractionDto[] {
-  return groups.map((group, index) => {
-    const ordinal = startingOrdinal + index
-    return {
-      id: `${group[0]!.logicalSessionId}:review:${ordinal}`,
-      ordinal,
-      trigger: group[0]!.kind === 'message.user' ? 'user' : 'background',
-      startedAt: group[0]!.effectiveAt,
-      endedAt: group[group.length - 1]!.effectiveAt,
-      nodes: buildNodes(group),
-    }
-  })
-}
-
-function buildInteractions(items: TimelineItemDto[], startingOrdinal = 1): ReviewInteractionDto[] {
-  return buildInteractionGroups(splitInteractionGroups(items), startingOrdinal)
-}
 
 function durationMs(startedAt: string, endedAt: string): number {
   const value = Date.parse(endedAt) - Date.parse(startedAt)
@@ -269,77 +66,6 @@ function observationCursor(item: CanonicalObservation): ObservationCursor {
     ...(sequence === undefined ? {} : { sequence }),
     id: item.id,
   }
-}
-
-type TimelineReviewCursor = {
-  mode: 'timeline'
-  direction: ReviewDetailDirection
-  timelineCursor: string
-  ordinal: number
-}
-
-type FilterReviewCursor = {
-  mode: 'filter'
-  filter: Exclude<ReviewDetailFilter, 'all' | 'latest'>
-  ordinal: number
-}
-
-type ReviewCursorPayload = TimelineReviewCursor | FilterReviewCursor
-
-interface ReviewListCursor {
-  activeAt: string
-  logicalSessionId: string
-}
-
-function encodeReviewListCursor(value: ReviewListCursor): string {
-  return JSON.stringify(value)
-}
-
-function decodeReviewListCursor(value: string): ReviewListCursor {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(value)
-  } catch {
-    throw new Error('Invalid review list cursor')
-  }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Invalid review list cursor')
-  const record = parsed as Record<string, unknown>
-  if (typeof record.activeAt !== 'string' || !record.activeAt
-    || typeof record.logicalSessionId !== 'string' || !record.logicalSessionId) {
-    throw new Error('Invalid review list cursor')
-  }
-  return { activeAt: record.activeAt, logicalSessionId: record.logicalSessionId }
-}
-
-function encodeReviewCursor(value: ReviewCursorPayload): string {
-  return JSON.stringify(value)
-}
-
-function decodeReviewCursor(value: string): ReviewCursorPayload {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(value)
-  } catch {
-    throw new Error('Invalid review cursor')
-  }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Invalid review cursor')
-  const record = parsed as Record<string, unknown>
-
-  if (record.mode === 'filter') {
-    if (record.filter !== 'errors' && record.filter !== 'latency') throw new Error('Invalid review cursor')
-    if (typeof record.ordinal !== 'number' || !Number.isSafeInteger(record.ordinal) || record.ordinal < 1) {
-      throw new Error('Invalid review cursor')
-    }
-    return { mode: 'filter', filter: record.filter, ordinal: record.ordinal }
-  }
-
-  if (record.mode !== 'timeline') throw new Error('Invalid review cursor')
-  if (typeof record.timelineCursor !== 'string' || !record.timelineCursor) throw new Error('Invalid review cursor')
-  if (typeof record.ordinal !== 'number' || !Number.isSafeInteger(record.ordinal) || record.ordinal < 1) {
-    throw new Error('Invalid review cursor')
-  }
-  const direction = record.direction === 'backward' ? 'backward' : 'forward'
-  return { mode: 'timeline', direction, timelineCursor: record.timelineCursor, ordinal: record.ordinal }
 }
 
 interface InteractionDescriptor {
@@ -423,7 +149,9 @@ export class ReviewProjection {
     const toolEventCount = observations.filter(item => item.kind.startsWith('tool.')).length
     const errorCount = observations.filter(observationError).length
     return {
-      id: session.id, installationId: session.installationId, productId: session.productId,
+      id: session.id,
+      installationId: session.installationId,
+      productId: session.productId,
       sourceIds: session.sourceIds,
       ...(session.projectId ? { projectId: session.projectId } : {}),
       ...(project?.name ? { projectName: project.name } : {}),
@@ -431,9 +159,11 @@ export class ReviewProjection {
       ...(workspace?.path ? { workspacePath: workspace.path } : {}),
       ...(logical?.title ? { title: logical.title } : {}),
       ...(preview ? { preview } : {}),
-      startedAt: session.startedAt, endedAt: session.endedAt,
+      startedAt: session.startedAt,
+      endedAt: session.endedAt,
       durationMs: durationMs(session.startedAt, session.endedAt),
-      observationCount: session.observationCount, interactionCount: session.interactionCount,
+      observationCount: session.observationCount,
+      interactionCount: session.interactionCount,
       userTurnCount,
       systemContextCount,
       internalReviewCount: sessionActivity === 'internal-review' ? 1 : 0,
@@ -441,7 +171,9 @@ export class ReviewProjection {
       ...(sessionActivity ? { sessionActivity } : {}),
       ...(activitySourceLabel ? { activitySourceLabel } : {}),
       ...(parentSessionId ? { parentSessionId } : {}),
-      toolCount, errorCount, hasErrors: errorCount > 0,
+      toolCount,
+      errorCount,
+      hasErrors: errorCount > 0,
     }
   }
 
