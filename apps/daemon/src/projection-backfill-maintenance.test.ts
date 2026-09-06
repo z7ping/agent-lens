@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { ForegroundActivityGate } from './maintenance-idle'
 import { backfillToolUsageFactProjection, type ProjectionBackfillMaintenance } from './projection-backfill-maintenance'
 
 const gate = { wait: async () => undefined }
@@ -48,4 +49,41 @@ test('Tool Fact partial repairs persisted cursor once then advances batches norm
   assert.equal(result.written, 2)
   assert.equal(result.batches, 2)
   assert.equal(result.cursor, 'b')
+})
+
+test('Tool Fact backfill keeps making bounded progress under sustained foreground reads', async () => {
+  let now = 0
+  let batches = 0
+  const foregroundGate = new ForegroundActivityGate({
+    quietMs: 5_000,
+    maxDeferMs: 300,
+    pollMs: 100,
+    now: () => now,
+    loadProbe: () => ({ foregroundPending: 1, writerPending: 0 }),
+    sleep: async ms => { now += ms },
+  })
+  const maintenance: ProjectionBackfillMaintenance = {
+    backfillUnknownObservations: async () => ({ scanned: 0, written: 0, hasMore: false }),
+    toolUsageFactCoverage: async () => ({ sourceObservationCount: 2, projectedCount: 0, missingCount: 2, coverageRatio: 0, ready: false }),
+    repairToolUsageFactCursor: async after => after,
+    backfillToolUsageFacts: async after => {
+      batches += 1
+      return batches === 1
+        ? { scanned: 1, written: 1, cursor: 'a', hasMore: true }
+        : { scanned: 1, written: 1, cursor: after === 'a' ? 'b' : 'unexpected', hasMore: false }
+    },
+  }
+
+  const result = await backfillToolUsageFactProjection(
+    maintenance,
+    foregroundGate,
+    new AbortController().signal,
+    { batchSize: 1, yieldControl: async () => undefined },
+  )
+
+  assert.equal(now, 600, 'each bounded batch earns its own maximum-defer window')
+  assert.equal(batches, 2)
+  assert.equal(result.written, 2)
+  assert.equal(result.cursor, 'b')
+  assert.equal(foregroundGate.snapshot().permits.forced, 2)
 })
