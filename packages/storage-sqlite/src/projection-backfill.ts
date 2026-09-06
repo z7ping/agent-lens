@@ -78,6 +78,10 @@ export class SqliteProjectionBackfillMaintenance {
     })
   }
 
+  async repairToolUsageFactCursor(after?: string): Promise<string | undefined> {
+    return this.executor.run(() => repairToolFactCursor(this.executor, after))
+  }
+
   async backfillUnknownObservations(
     after?: string,
     limit?: number,
@@ -117,11 +121,10 @@ export class SqliteProjectionBackfillMaintenance {
     limit?: number,
   ): Promise<ProjectionBackfillBatchResult> {
     const batchLimit = boundedLimit(limit)
-    const effectiveAfter = await this.executor.run(() => repairToolFactCursor(this.executor, after))
     const ids = await this.executor.run(() => batchIds(
       this.executor,
       "kind IN ('tool.call', 'tool.result')",
-      effectiveAfter,
+      after,
       batchLimit,
     ))
     if (!ids.length) return { scanned: 0, written: 0, hasMore: false }
