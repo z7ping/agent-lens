@@ -64,6 +64,8 @@ import type {
   SourceDefinition,
   SourceDetectionContext,
 } from '../contracts/source'
+import type { MaintenanceJobStore } from './maintenance'
+import type { ToolUsageObservationReader } from './tool-usage'
 
 export interface SourceService {
   register(definition: SourceDefinition): Disposable
@@ -219,6 +221,12 @@ export interface SessionSummaryReader {
   query(input: SessionSummaryQuery): Promise<{ items: SessionSummaryRecord[]; hasMore: boolean }>
 }
 
+export interface SessionSummaryFacetScope {
+  projects: Array<{ id: string; name?: string; repositoryIdentity?: string }>
+  from?: string
+  to?: string
+}
+
 /**
  * Writable derived view used by the Session Summary projection. Implementations
  * must be fully rebuildable from Canonical Observation data.
@@ -226,6 +234,8 @@ export interface SessionSummaryReader {
 export interface SessionSummaryProjectionStore extends SessionSummaryReader {
   /** Cheap integrity guard used before trusting a persisted projection across restarts. */
   isMaterialized(): Promise<boolean>
+  /** Optional optimized facet scan backed by the persisted projection. */
+  facetScope?(): Promise<SessionSummaryFacetScope>
   rebuild(input?: {
     logicalSessionId?: LogicalSessionId
     strategy?: 'atomic' | 'cooperative'
@@ -426,6 +436,50 @@ export interface SessionRelationshipCandidateRepository {
   ): Promise<number>
 }
 
+export interface SourceRecordCompressionBatch {
+  scanned: number
+  compressed: number
+  plain: number
+  rawBytes: number
+  storedBytes: number
+  savedBytes: number
+  cursor?: string
+  hasMore: boolean
+}
+
+export interface DeferredIndexMaintenanceResult {
+  created: string[]
+  existing: string[]
+}
+
+export interface StorageMaintenance {
+  ensureDeferredIndexes(): Promise<DeferredIndexMaintenanceResult>
+  compressSourceRecords(limit?: number, afterId?: string): Promise<SourceRecordCompressionBatch>
+}
+
+export interface ProjectionBackfillBatch {
+  scanned: number
+  written: number
+  cursor?: string
+  hasMore: boolean
+}
+
+export interface ToolUsageFactCoverage {
+  sourceObservationCount: number
+  projectedCount: number
+  missingCount: number
+  coverageRatio: number
+  ready: boolean
+}
+
+export interface ProjectionBackfillMaintenance {
+  backfillUnknownObservations(after?: string, limit?: number): Promise<ProjectionBackfillBatch>
+  backfillToolUsageFacts(after?: string, limit?: number): Promise<ProjectionBackfillBatch>
+  toolUsageFactCoverage?(): Promise<ToolUsageFactCoverage>
+  toolUsageFactCoverageForMaintenance?(): Promise<ToolUsageFactCoverage>
+  repairToolUsageFactCursor?(after?: string): Promise<string | undefined>
+}
+
 export interface StorageTransaction extends RepositorySet {}
 
 export interface StorageHealth {
@@ -440,6 +494,10 @@ export interface StorageService {
   readonly assetInventory?: AssetInventoryReader
   readonly sessionSummaries?: SessionSummaryReader
   readonly sessionSummaryProjection?: SessionSummaryProjectionStore
+  readonly toolUsageObservations?: ToolUsageObservationReader
+  readonly maintenance?: StorageMaintenance
+  readonly maintenanceJobs?: MaintenanceJobStore
+  readonly projectionBackfill?: ProjectionBackfillMaintenance
   readonly runtimeProfiles?: RuntimeProfileRepository
   readonly sourceRuntimeStatus?: SourceRuntimeStatusRepository
   readonly sessionRelationshipCandidates?: SessionRelationshipCandidateRepository
