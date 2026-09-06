@@ -26,7 +26,7 @@ import { handleBackupRequest } from './backup-http'
 import { handleCapturePolicyRequest } from './capture-policy-http'
 import { parseDataRuntimeHealth } from './data-runtime-health'
 import type { HttpEventHub } from './events'
-import { badRequest, writeJson } from './http-utils'
+import { badRequest, statusCodeForError, writeJson } from './http-utils'
 import { handlePiLiveRequest } from './pi-live'
 import {
   parseInsightsQuery,
@@ -308,9 +308,7 @@ export async function startHttpSurface(
       if (await handleStatic(response, url.pathname, staticMounts.values())) return
       writeJson(response, 404, { error: 'not_found' })
     } catch (error) {
-      const statusCode = error && typeof error === 'object' && 'statusCode' in error
-        ? Number((error as { statusCode?: unknown }).statusCode) || 500
-        : 500
+      const statusCode = statusCodeForError(error)
       writeJson(response, statusCode, {
         error: statusCode >= 500 ? 'internal_error' : 'bad_request',
         message: error instanceof Error ? error.message : String(error),
