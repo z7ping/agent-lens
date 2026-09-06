@@ -193,9 +193,7 @@ export interface SessionSummaryRecord {
 
 export interface SessionSummaryCursor {
   /** Canonical pagination boundary: latest observable activity time for the session. */
-  activeAt?: string
-  /** @deprecated Legacy cursor field accepted during the alpha.3 transition. */
-  startedAt?: string
+  activeAt: string
   logicalSessionId: LogicalSessionId
 }
 
