@@ -236,6 +236,7 @@ function parseUsageQuery(params: URLSearchParams): ToolAssetUsageQueryDto {
     ...(params.get('logicalSessionId') ? { logicalSessionId: params.get('logicalSessionId')! } : {}),
     ...(params.get('projectId') ? { projectId: params.get('projectId')! } : {}),
     ...(params.get('sourceId') ? { sourceId: params.get('sourceId')! } : {}),
+    ...(params.get('toolName') ? { toolName: params.get('toolName')! } : {}),
     ...(from ? { from } : {}),
     ...(to ? { to } : {}),
     ...(limit === undefined ? {} : { limit }),
