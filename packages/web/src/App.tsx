@@ -1,10 +1,11 @@
-import { createContext, lazy, Suspense, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PropsWithChildren } from 'react'
+import { lazy, Suspense, useEffect, useState, useSyncExternalStore } from 'react'
 import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
-import type { AgentFacetDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel, ClientSnapshot } from './client/model'
-import { readAgentFilterPreference, readTheme, writeAgentFilterPreference, writeTheme } from './client/preferences'
+import { readTheme, writeTheme } from './client/preferences'
+import { useReviewUrlSync } from './client/useReviewUrlSync'
 import { AgentsStateOverlay } from './components/AgentsStateOverlay'
 import { BackgroundDataNotice } from './components/BackgroundDataNotice'
+import { PinnedAgentsProvider } from './components/PinnedAgentsProvider'
 import { ReviewStateOverlay } from './components/ReviewStateOverlay'
 import { WorkspaceSidebar } from './components/WorkspaceSidebar'
 import { PageLoadingState } from './components/StateViews'
@@ -19,112 +20,6 @@ const ToolsPage = lazy(() => import('./features/ToolsPage').then(module => ({ de
 
 export function useClientSnapshot(model: AgentLensClientModel): ClientSnapshot {
   return useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot)
-}
-
-interface PinnedContextValue {
-  ordered: string[]
-  pinned: string[]
-  toggle(id: string): void
-  move(id: string, targetId: string): void
-  moveBy(id: string, offset: -1 | 1): void
-  reset(): void
-}
-const PinnedContext = createContext<PinnedContextValue>({ ordered: [], pinned: [], toggle: () => undefined, move: () => undefined, moveBy: () => undefined, reset: () => undefined })
-export function usePinnedAgents(): PinnedContextValue { return useContext(PinnedContext) }
-
-function PinnedProvider({ agents, children }: PropsWithChildren<{ agents: AgentFacetDto[] }>) {
-  const [preference, setPreference] = useState(() => readAgentFilterPreference() ?? { orderedAgentIds: [], visibleAgentIds: [] })
-  useEffect(() => {
-    if (!agents.length) return
-    setPreference(current => {
-      const available = agents.map(agent => agent.sourceId)
-      const known = current.orderedAgentIds.filter(id => available.includes(id))
-      const orderedAgentIds = [...known, ...available.filter(id => !known.includes(id))]
-      const visibleAgentIds = current.orderedAgentIds.length
-        ? current.visibleAgentIds.filter(id => available.includes(id))
-        : agents.filter(agent => agent.detected).map(agent => agent.sourceId)
-      const next = { orderedAgentIds, visibleAgentIds }
-      if (orderedAgentIds.join('\u0000') === current.orderedAgentIds.join('\u0000') && visibleAgentIds.join('\u0000') === current.visibleAgentIds.join('\u0000')) return current
-      writeAgentFilterPreference(next)
-      return next
-    })
-  }, [agents])
-  const value = useMemo<PinnedContextValue>(() => ({
-    ordered: preference.orderedAgentIds,
-    pinned: preference.visibleAgentIds,
-    toggle(id) {
-      setPreference(current => {
-        const visibleAgentIds = current.visibleAgentIds.includes(id) ? current.visibleAgentIds.filter(item => item !== id) : [...current.visibleAgentIds, id]
-        const next = { ...current, visibleAgentIds }
-        writeAgentFilterPreference(next)
-        return next
-      })
-    },
-    move(id, targetId) {
-      setPreference(current => {
-        const from = current.orderedAgentIds.indexOf(id)
-        const to = current.orderedAgentIds.indexOf(targetId)
-        if (from < 0 || to < 0 || from === to) return current
-        const orderedAgentIds = [...current.orderedAgentIds]
-        orderedAgentIds.splice(from, 1)
-        orderedAgentIds.splice(to, 0, id)
-        const next = { ...current, orderedAgentIds }
-        writeAgentFilterPreference(next)
-        return next
-      })
-    },
-    moveBy(id, offset) {
-      setPreference(current => {
-        const from = current.orderedAgentIds.indexOf(id)
-        const to = from + offset
-        if (from < 0 || to < 0 || to >= current.orderedAgentIds.length) return current
-        const orderedAgentIds = [...current.orderedAgentIds]
-        ;[orderedAgentIds[from], orderedAgentIds[to]] = [orderedAgentIds[to]!, orderedAgentIds[from]!]
-        const next = { ...current, orderedAgentIds }
-        writeAgentFilterPreference(next)
-        return next
-      })
-    },
-    reset() {
-      const next = { orderedAgentIds: agents.map(agent => agent.sourceId), visibleAgentIds: agents.filter(agent => agent.detected).map(agent => agent.sourceId) }
-      writeAgentFilterPreference(next)
-      setPreference(next)
-    },
-  }), [agents, preference])
-  return <PinnedContext.Provider value={value}>{children}</PinnedContext.Provider>
-}
-
-type ReviewFilters = ClientSnapshot['review']['filters']
-
-function reviewFiltersFromSearch(search: string): ReviewFilters {
-  const params = new URLSearchParams(search)
-  const range = params.get('range')
-  const status = params.get('status')
-  return {
-    sourceId: params.get('source') ?? '',
-    projectId: params.get('project') ?? '',
-    range: range === 'today' || range === '7d' || range === '30d' || range === 'all' ? range : '7d',
-    status: status === 'clean' || status === 'with-errors' || status === 'all' ? status : 'all',
-    search: params.get('q') ?? '',
-  }
-}
-
-function reviewSearchFromFilters(filters: ReviewFilters): string {
-  const params = new URLSearchParams()
-  if (filters.sourceId) params.set('source', filters.sourceId)
-  if (filters.projectId) params.set('project', filters.projectId)
-  params.set('range', filters.range)
-  params.set('status', filters.status)
-  if (filters.search) params.set('q', filters.search)
-  return `?${params.toString()}`
-}
-
-function sameReviewFilters(left: ReviewFilters, right: ReviewFilters): boolean {
-  return left.sourceId === right.sourceId
-    && left.projectId === right.projectId
-    && left.range === right.range
-    && left.status === right.status
-    && left.search === right.search
 }
 
 function WorkspaceBreadcrumb({
@@ -181,8 +76,6 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const [agentOverviewSourceId, setAgentOverviewSourceId] = useState('')
   const [sidebarHost, setSidebarHost] = useState<HTMLDivElement | null>(null)
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false)
-  const reviewUrlReadyRef = useRef(false)
-  const skipReviewUrlWriteRef = useRef(false)
   const agents = snapshot.facets?.agents ?? []
   const toggleTheme = () => {
     const next = theme === 'dark' ? 'light' : 'dark'
@@ -218,33 +111,18 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     return () => { if (onLocalReview) model.setReviewActive(false) }
   }, [model, needsFacets, onLocalReview, onTools, onAgents])
 
-  useEffect(() => {
-    if (!onLocalReview) {
-      reviewUrlReadyRef.current = false
-      skipReviewUrlWriteRef.current = false
-      return
-    }
-    if (reviewUrlReadyRef.current && !location.search) return
-    const filters = reviewFiltersFromSearch(location.search)
-    reviewUrlReadyRef.current = true
-    if (!sameReviewFilters(filters, model.getSnapshot().review.filters)) {
-      skipReviewUrlWriteRef.current = true
-      model.setReviewFilters(filters)
-    }
-  }, [location.search, model, onLocalReview])
+  useReviewUrlSync({
+    active: onLocalReview,
+    model,
+    pathname: location.pathname,
+    search: location.search,
+    filters: snapshot.review.filters,
+    replace(pathname, search) {
+      navigate({ pathname, search }, { replace: true })
+    },
+  })
 
-  useEffect(() => {
-    if (!onLocalReview || !reviewUrlReadyRef.current) return
-    if (skipReviewUrlWriteRef.current) {
-      skipReviewUrlWriteRef.current = false
-      return
-    }
-    const search = reviewSearchFromFilters(snapshot.review.filters)
-    if (location.search === search) return
-    navigate({ pathname: location.pathname, search }, { replace: true })
-  }, [location.pathname, location.search, navigate, onLocalReview, snapshot.review.filters])
-
-  return <PinnedProvider agents={agents}>
+  return <PinnedAgentsProvider agents={agents}>
     <div className={`app-shell ${mobileNavigationOpen ? 'is-mobile-navigation-open' : ''}`}>
       <WorkspaceSidebar
         snapshot={snapshot}
@@ -287,7 +165,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
         {onAgents && snapshot.agentsHasNewData && <BackgroundDataNotice label="智能体概览" hasSseBanner={hasSseBanner} onRefresh={() => model.refreshFacetsAndAgents()}/>} 
       </div>
     </div>
-  </PinnedProvider>
+  </PinnedAgentsProvider>
 }
 
 export function App({ model }: { model: AgentLensClientModel }) {
