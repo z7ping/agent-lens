@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
+import type { SourceHistoryExecutionContext } from '../../packages/core/src/index'
 import { ingestPiHistory } from '../../packages/source-pi/src/index'
 
 function readPositiveInt(name: string, fallback: number): number {
@@ -43,16 +44,32 @@ for (let fileIndex = 0; fileIndex < files; fileIndex += 1) {
 }
 
 const checkpoints = new Map<string, unknown>()
-const ctx = {
-  host: { id: 'host-perf', name: 'perf', platform: process.platform, arch: process.arch, createdAt: new Date().toISOString(), lastSeenAt: new Date().toISOString() },
-  installation: { id: 'pi-perf', hostId: 'host-perf', productId: 'pi', dataRoot: sessionsDir, configRoot: root, firstSeenAt: new Date().toISOString(), lastSeenAt: new Date().toISOString() },
+const observedAt = new Date().toISOString()
+const ctx: SourceHistoryExecutionContext = {
+  host: {
+    id: 'host-perf',
+    name: 'perf',
+    platform: process.platform,
+    arch: process.arch,
+    createdAt: observedAt,
+    lastSeenAt: observedAt,
+  },
+  installation: {
+    id: 'pi-perf',
+    hostId: 'host-perf',
+    productId: 'pi',
+    dataRoot: sessionsDir,
+    configRoot: root,
+    firstSeenAt: observedAt,
+    lastSeenAt: observedAt,
+  },
   abortSignal: new AbortController().signal,
   checkpoint: {
     async get<T>(key: string): Promise<T | null> { return (checkpoints.get(key) as T | undefined) ?? null },
     async set<T>(key: string, value: T): Promise<void> { checkpoints.set(key, value) },
     async clear(key: string): Promise<void> { checkpoints.delete(key) },
   },
-} as any
+}
 
 async function drain(): Promise<number> {
   let count = 0
