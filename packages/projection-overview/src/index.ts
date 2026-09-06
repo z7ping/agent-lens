@@ -196,49 +196,46 @@ export class AgentOverviewProjection {
       const usedAssets = new Map<string, AgentOverviewResponseDto['items'][number]['usedAssets'][number]>()
       const inventory = new Map<string, AgentAssetInventoryDto>()
 
-      for (const installation of installations) {
-        const assets = await this.usage.queryAssets({ installationId: installation.id })
-        for (const asset of assets) {
-          const key = `${asset.type}\u0000${asset.canonicalName}`
-          const previous = usedAssets.get(key)
-          usedAssets.set(key, previous ? {
-            ...previous,
-            callCount: previous.callCount + asset.callCount,
-            firstUsedAt: previous.firstUsedAt < asset.firstUsedAt ? previous.firstUsedAt : asset.firstUsedAt,
-            lastUsedAt: previous.lastUsedAt > asset.lastUsedAt ? previous.lastUsedAt : asset.lastUsedAt,
-          } : {
-            type: asset.type,
-            canonicalName: asset.canonicalName,
-            callCount: asset.callCount,
-            firstUsedAt: asset.firstUsedAt,
-            lastUsedAt: asset.lastUsedAt,
-            confidence: asset.confidence,
-          })
-        }
+      // Tool facts already carry source_id across all installations. Aggregate once
+      // for the source instead of repeating the expensive usage CTE per installation.
+      const assets = await this.usage.queryAssets({ sourceId: definition.manifest.sourceId })
+      for (const asset of assets) {
+        const key = `${asset.type}\u0000${asset.canonicalName}`
+        usedAssets.set(key, {
+          type: asset.type,
+          canonicalName: asset.canonicalName,
+          callCount: asset.callCount,
+          firstUsedAt: asset.firstUsedAt,
+          lastUsedAt: asset.lastUsedAt,
+          confidence: asset.confidence,
+        })
+      }
 
-        if (this.storage.assetInventory) {
-          for (const entry of await this.storage.assetInventory.listByInstallation(installation.id)) {
-            let asset = inventory.get(entry.definition.id)
-            if (!asset) {
-              asset = {
-                id: entry.definition.id,
-                type: entry.definition.type,
-                canonicalName: entry.definition.canonicalName,
-                ...(entry.definition.displayName ? { displayName: entry.definition.displayName } : {}),
-                ...(entry.definition.upstreamIdentity ? { upstreamIdentity: entry.definition.upstreamIdentity } : {}),
-                bindings: [],
-              }
-              inventory.set(entry.definition.id, asset)
+      const inventoryPages = this.storage.assetInventory
+        ? await Promise.all(installations.map(installation => this.storage.assetInventory!.listByInstallation(installation.id)))
+        : []
+      for (const entries of inventoryPages) {
+        for (const entry of entries) {
+          let asset = inventory.get(entry.definition.id)
+          if (!asset) {
+            asset = {
+              id: entry.definition.id,
+              type: entry.definition.type,
+              canonicalName: entry.definition.canonicalName,
+              ...(entry.definition.displayName ? { displayName: entry.definition.displayName } : {}),
+              ...(entry.definition.upstreamIdentity ? { upstreamIdentity: entry.definition.upstreamIdentity } : {}),
+              bindings: [],
             }
-            asset.bindings.push({
-              id: entry.binding.id,
-              installationId: entry.binding.installationId,
-              ...(entry.binding.path ? { path: entry.binding.path } : {}),
-              ...(entry.binding.source ? { source: entry.binding.source } : {}),
-              ...(entry.binding.version ? { version: entry.binding.version } : {}),
-              states: latestStates(entry),
-            })
+            inventory.set(entry.definition.id, asset)
           }
+          asset.bindings.push({
+            id: entry.binding.id,
+            installationId: entry.binding.installationId,
+            ...(entry.binding.path ? { path: entry.binding.path } : {}),
+            ...(entry.binding.source ? { source: entry.binding.source } : {}),
+            ...(entry.binding.version ? { version: entry.binding.version } : {}),
+            states: latestStates(entry),
+          })
         }
       }
 
