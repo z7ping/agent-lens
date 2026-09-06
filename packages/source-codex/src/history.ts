@@ -42,6 +42,12 @@ function sha256(value: string | Buffer): string {
   return createHash('sha256').update(value).digest('hex')
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+}
+
 async function* walkJsonlFiles(root: string): AsyncIterable<string> {
   let directory
   try {
@@ -101,7 +107,7 @@ async function readThreadNames(codexHome: string | undefined): Promise<Map<strin
     for (const line of text.split(/\r?\n/)) {
       if (!line.trim()) continue
       try {
-        const entry = JSON.parse(line) as Record<string, unknown>
+        const entry = asRecord(JSON.parse(line))
         const id = typeof entry.id === 'string' ? entry.id.trim() : ''
         const title = typeof entry.thread_name === 'string' ? entry.thread_name.trim() : ''
         if (!id || !title) continue
@@ -133,13 +139,14 @@ async function readSessionMetadata(
     for (const line of preview.split(/\r?\n/).slice(0, 32)) {
       if (!line.trim()) continue
       try {
-        const entry = JSON.parse(line) as Record<string, any>
-        if (entry.type !== 'session_meta' || !entry.payload) continue
-        const startedAt = normalizeTimestamp(entry.payload.timestamp)
+        const entry = asRecord(JSON.parse(line))
+        const payload = asRecord(entry.payload)
+        if (entry.type !== 'session_meta' || !Object.keys(payload).length) continue
+        const startedAt = normalizeTimestamp(payload.timestamp)
         return {
-          nativeSessionId: String(entry.payload.id || fallback.nativeSessionId),
-          ...(typeof entry.payload.cwd === 'string' ? { cwd: entry.payload.cwd } : {}),
-          ...(typeof entry.payload.cli_version === 'string' ? { cliVersion: entry.payload.cli_version } : {}),
+          nativeSessionId: typeof payload.id === 'string' && payload.id ? payload.id : fallback.nativeSessionId,
+          ...(typeof payload.cwd === 'string' ? { cwd: payload.cwd } : {}),
+          ...(typeof payload.cli_version === 'string' ? { cliVersion: payload.cli_version } : {}),
           ...(indexedTitle ? { title: indexedTitle.title } : {}),
           ...(startedAt ? { startedAt } : {}),
         }
@@ -200,7 +207,7 @@ async function* readJsonlLines(
 
 function parseLine(text: string): Record<string, unknown> {
   try {
-    return JSON.parse(text) as Record<string, unknown>
+    return asRecord(JSON.parse(text))
   } catch {
     return {
       type: 'malformed-json',
