@@ -1,5 +1,6 @@
 import { existsSync, statSync } from 'node:fs'
 import type { SqliteExecutor } from './executor'
+import { sqliteRowId } from './repository-row-mappers'
 import { encodeSourceRecordPayloadJson, SOURCE_RECORD_COMPRESSION_THRESHOLD_BYTES } from './source-record-compression'
 
 export interface SourceRecordCompressionResult {
@@ -60,6 +61,59 @@ const DEFERRED_INDEXES = [
   },
 ] as const
 
+type MaintenanceRow = Record<string, unknown>
+
+function rowRecord(value: unknown): MaintenanceRow {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError('SQLite maintenance query returned a non-object row')
+  }
+  return value as MaintenanceRow
+}
+
+function requiredString(row: MaintenanceRow, key: string): string {
+  const value = row[key]
+  if (typeof value !== 'string') throw new TypeError(`SQLite maintenance field ${key} must be a string`)
+  return value
+}
+
+function requiredNumber(row: MaintenanceRow, key: string): number {
+  const value = row[key]
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new TypeError(`SQLite maintenance field ${key} must be a finite number`)
+  }
+  return value
+}
+
+function compressionCandidateRow(value: unknown): { id: string; payloadJson: string } {
+  const row = rowRecord(value)
+  return {
+    id: requiredString(row, 'id'),
+    payloadJson: requiredString(row, 'payload_json'),
+  }
+}
+
+function tableNameRow(value: unknown): string {
+  return requiredString(rowRecord(value), 'name')
+}
+
+function indexListRow(value: unknown): { name: string; unique: number; origin: string; partial: number } {
+  const row = rowRecord(value)
+  return {
+    name: requiredString(row, 'name'),
+    unique: requiredNumber(row, 'unique'),
+    origin: requiredString(row, 'origin'),
+    partial: requiredNumber(row, 'partial'),
+  }
+}
+
+function indexColumnName(value: unknown): string | undefined {
+  const row = rowRecord(value)
+  const name = row.name
+  if (name == null) return undefined
+  if (typeof name !== 'string') throw new TypeError('SQLite maintenance index column name must be a string or null')
+  return name
+}
+
 export class SqliteStorageMaintenance {
   constructor(private readonly executor: SqliteExecutor) {}
 
@@ -93,9 +147,9 @@ export class SqliteStorageMaintenance {
         AND (? IS NULL OR id > ?)
       ORDER BY id ASC
       LIMIT ?
-    `).all(afterId ?? null, afterId ?? null, batchLimit) as Array<{ id: string; payload_json: string }>)
+    `).all(afterId ?? null, afterId ?? null, batchLimit).map(compressionCandidateRow))
 
-    const encoded = rows.map(row => ({ id: row.id, encoded: encodeSourceRecordPayloadJson(row.payload_json) }))
+    const encoded = rows.map(row => ({ id: row.id, encoded: encodeSourceRecordPayloadJson(row.payloadJson) }))
     await this.executor.transaction(async () => {
       const update = this.executor.db.prepare(`
         UPDATE source_records
@@ -130,15 +184,13 @@ export class SqliteStorageMaintenance {
   async purgeSessions(input: SessionRetentionInput): Promise<SessionRetentionResult> {
     if (!Number.isFinite(Date.parse(input.before))) throw new Error('Retention cutoff must be a valid timestamp')
     const limit = Math.max(1, Math.min(input.limit ?? 50, 500))
-    const sessionIds = await this.executor.run(() => (
-      this.executor.db.prepare(`
-        SELECT logical_session_id AS id
-        FROM session_summary_projection
-        WHERE ended_at < ?
-        ORDER BY ended_at ASC, logical_session_id ASC
-        LIMIT ?
-      `).all(input.before, limit) as Array<{ id: string }>
-    ).map(row => row.id))
+    const sessionIds = await this.executor.run(() => this.executor.db.prepare(`
+      SELECT logical_session_id AS id
+      FROM session_summary_projection
+      WHERE ended_at < ?
+      ORDER BY ended_at ASC, logical_session_id ASC
+      LIMIT ?
+    `).all(input.before, limit).map(sqliteRowId))
 
     const empty: SessionRetentionResult = {
       dryRun: input.dryRun ?? true,
@@ -290,22 +342,17 @@ export class SqliteStorageMaintenance {
         SELECT name FROM sqlite_master
         WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
         ORDER BY name
-      `).all() as Array<{ name: string }>
+      `).all().map(tableNameRow)
       const candidates: IndexAuditCandidate[] = []
       for (const table of tables) {
-        const indexes = this.executor.db.prepare(`PRAGMA index_list(${JSON.stringify(table.name)})`).all() as Array<{
-          name: string
-          unique: number
-          origin: string
-          partial: number
-        }>
+        const indexes = this.executor.db.prepare(`PRAGMA index_list(${JSON.stringify(table)})`).all().map(indexListRow)
         const described = indexes
           .filter(index => index.origin === 'c' && index.unique === 0 && index.partial === 0)
           .map(index => ({
             name: index.name,
-            columns: (this.executor.db.prepare(`PRAGMA index_info(${JSON.stringify(index.name)})`).all() as Array<{
-              name: string | null
-            }>).map(column => column.name).filter((name): name is string => Boolean(name)),
+            columns: this.executor.db.prepare(`PRAGMA index_info(${JSON.stringify(index.name)})`).all()
+              .map(indexColumnName)
+              .filter((name): name is string => name !== undefined),
           }))
           .filter(index => index.columns.length > 0)
         for (const left of described) {
@@ -314,7 +361,7 @@ export class SqliteStorageMaintenance {
             const prefix = left.columns.every((column, index) => right.columns[index] === column)
             if (!prefix) continue
             candidates.push({
-              table: table.name,
+              table,
               index: left.name,
               coveredBy: right.name,
               reason: left.columns.length === right.columns.length ? 'duplicate' : 'prefix',
