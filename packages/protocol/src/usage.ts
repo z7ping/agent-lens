@@ -48,6 +48,8 @@ export interface ToolAssetUsageQueryDto {
   logicalSessionId?: string
   sourceId?: string
   projectId?: string
+  /** Optional exact native tool name; primarily used by bounded drill-down reads. */
+  toolName?: string
   from?: string
   to?: string
   limit?: number
