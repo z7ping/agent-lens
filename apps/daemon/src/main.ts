@@ -9,6 +9,7 @@ import {
   sessionSummaryProjectionPlugin,
 } from '@agent-lens/projection-session'
 import {
+  abortableDelay,
   AgentLensApplication,
   coreServicesPlugin,
   discoverRegisteredSourceAssets,
@@ -142,7 +143,7 @@ async function waitForDataRuntime(signal: AbortSignal): Promise<boolean> {
       announced = true
       console.warn('[AgentLens] background data work paused while Data Runtime recovers')
     }
-    await new Promise(resolve => setTimeout(resolve, DATA_RUNTIME_RECOVERY_POLL_MS))
+    await abortableDelay(DATA_RUNTIME_RECOVERY_POLL_MS, signal)
   }
   return false
 }
@@ -237,7 +238,7 @@ try {
   sessionSummaryProjectionReady = reuseSessionSummaryProjection
 
   syncPromise = (async () => {
-    await new Promise(resolve => setTimeout(resolve, INITIAL_BACKGROUND_SYNC_DELAY_MS))
+    await abortableDelay(INITIAL_BACKGROUND_SYNC_DELAY_MS, runtimeController.signal)
     if (!await waitForDataRuntime(runtimeController.signal)) return
 
     const initialStorageHealth = await app.context.storage.health()
