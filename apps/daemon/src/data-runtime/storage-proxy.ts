@@ -15,7 +15,6 @@ import { DataRuntimeClient, type DataRuntimeClientSnapshot } from './client.js'
 
 const WRITE_TIMEOUT_MS = 30_000
 const MAINTENANCE_TIMEOUT_MS = 120_000
-// Foreground/Task Center reads must fail fast rather than recreate the old 5s frozen UI.
 const READ_TIMEOUT_MS = 2_000
 const RECOVERY_INTERVAL_MS = 2_000
 
@@ -40,13 +39,71 @@ function isReadPath(path: readonly string[]): boolean {
   return READ_PREFIXES.some(prefix => method.startsWith(prefix))
 }
 
+function isMaintenanceReadPath(path: readonly string[]): boolean {
+  const method = path.at(-1) ?? ''
+  return path[0] === 'diagnostics'
+    || method === 'listForParserReplay'
+    || method.startsWith('audit')
+}
+
 function timeoutFor(path: readonly string[], read: boolean): number {
-  if (path.includes('maintenance') || path.includes('projectionBackfill')) return MAINTENANCE_TIMEOUT_MS
+  if (path.includes('maintenance') || path.includes('projectionBackfill') || isMaintenanceReadPath(path)) {
+    return MAINTENANCE_TIMEOUT_MS
+  }
   return read ? READ_TIMEOUT_MS : WRITE_TIMEOUT_MS
+}
+
+function logicalReaderSnapshot(client: DataRuntimeClient): DataRuntimeClientSnapshot {
+  const snapshot = client.snapshot()
+  return snapshot.role === 'reader' ? snapshot : { ...snapshot, role: 'reader' }
+}
+
+export class DataRuntimeReaderPool {
+  private cursor = 0
+
+  constructor(readonly readers: readonly DataRuntimeClient[]) {
+    if (!readers.length) throw new Error('Data Runtime Reader Pool requires at least one reader')
+  }
+
+  request<T>(method: Parameters<DataRuntimeClient['request']>[0], params: Record<string, unknown>, timeoutMs: number): Promise<T> {
+    return this.pick().request<T>(method, params, timeoutMs)
+  }
+
+  snapshots(): DataRuntimeClientSnapshot[] {
+    return this.readers.map(logicalReaderSnapshot)
+  }
+
+  readyCount(): number {
+    return this.readers.filter(reader => reader.state() === 'ready').length
+  }
+
+  pending(): number {
+    return this.snapshots().reduce((sum, item) => sum + item.pending, 0)
+  }
+
+  private pick(): DataRuntimeClient {
+    const ready = this.readers.filter(reader => reader.state() === 'ready')
+    const candidates = ready.length ? ready : [...this.readers]
+    let bestPending = Number.POSITIVE_INFINITY
+    let best: DataRuntimeClient[] = []
+    for (const reader of candidates) {
+      const pending = reader.snapshot().pending
+      if (pending < bestPending) {
+        bestPending = pending
+        best = [reader]
+      } else if (pending === bestPending) {
+        best.push(reader)
+      }
+    }
+    const selected = best[this.cursor % best.length] ?? candidates[0]!
+    this.cursor = (this.cursor + 1) % Number.MAX_SAFE_INTEGER
+    return selected
+  }
 }
 
 interface RemoteCallOptions {
   forceWriter?: boolean
+  maintenanceRead?: boolean
 }
 
 class RemoteStorageExecutor {
@@ -55,7 +112,8 @@ class RemoteStorageExecutor {
 
   constructor(
     readonly writer: DataRuntimeClient,
-    readonly reader: DataRuntimeClient,
+    readonly foregroundReaders: DataRuntimeReaderPool,
+    readonly maintenanceReader: DataRuntimeClient,
   ) {}
 
   async call<T>(
@@ -74,10 +132,11 @@ class RemoteStorageExecutor {
 
     const read = !options.forceWriter && isReadPath(path)
     if (read) {
-      return this.reader.request<T>('storage.call', {
-        path: [...path],
-        args: [...args],
-      }, timeoutFor(path, true))
+      const params = { path: [...path], args: [...args] }
+      if (options.maintenanceRead || isMaintenanceReadPath(path)) {
+        return this.maintenanceReader.request<T>('storage.call', params, timeoutFor(path, true))
+      }
+      return this.foregroundReaders.request<T>('storage.call', params, timeoutFor(path, true))
     }
 
     return this.enqueueWriter(() => this.writer.request<T>('storage.call', {
@@ -120,10 +179,7 @@ class RemoteStorageExecutor {
   }
 }
 
-function namespaceProxy<T extends object>(
-  executor: RemoteStorageExecutor,
-  path: readonly string[],
-): T {
+function namespaceProxy<T extends object>(executor: RemoteStorageExecutor, path: readonly string[]): T {
   return new Proxy({}, {
     get(_target, property) {
       if (property === 'then') return undefined
@@ -156,6 +212,8 @@ function sessionSummaryProxy(executor: RemoteStorageExecutor): SessionSummaryPro
 export interface DataRuntimeHealthSnapshot {
   writer: DataRuntimeClientSnapshot
   reader: DataRuntimeClientSnapshot
+  readers: DataRuntimeClientSnapshot[]
+  maintenanceReader: DataRuntimeClientSnapshot
   ok: boolean
   recovering: boolean
 }
@@ -167,31 +225,39 @@ export class DataRuntimeService {
 
   constructor(
     readonly writer: DataRuntimeClient,
-    readonly reader: DataRuntimeClient,
+    readonly foregroundReaders: DataRuntimeReaderPool,
+    readonly maintenanceReader: DataRuntimeClient,
   ) {}
 
   snapshot(): DataRuntimeHealthSnapshot {
     const writer = this.writer.snapshot()
-    const rawReader = this.reader.snapshot()
-    // SQLite :memory: is connection-local, so dev/tests intentionally reuse the
-    // writer client. Keep the public health contract semantic: the logical
-    // reader slot is still reported as role=reader even when it shares a client.
-    const reader: DataRuntimeClientSnapshot = this.reader === this.writer
-      ? { ...rawReader, role: 'reader' }
-      : rawReader
+    const readers = this.foregroundReaders.snapshots()
+    const readyReaders = readers.filter(reader => reader.state === 'ready')
+    const reader = (readyReaders.length ? readyReaders : readers)
+      .slice()
+      .sort((left, right) => left.pending - right.pending)[0]!
+    const maintenanceReader = logicalReaderSnapshot(this.maintenanceReader)
     return {
       writer,
       reader,
-      ok: writer.state === 'ready' && reader.state === 'ready',
+      readers,
+      maintenanceReader,
+      ok: writer.state === 'ready' && readyReaders.length > 0,
       recovering: this.recovering,
     }
   }
 
+  foregroundPending(): number {
+    return this.foregroundReaders.pending()
+  }
+
+  writerPending(): number {
+    return this.writer.snapshot().pending
+  }
+
   startRecovery(intervalMs = RECOVERY_INTERVAL_MS): void {
     if (this.recoveryTimer || this.stopping) return
-    const tick = () => {
-      void this.recover().catch(() => undefined)
-    }
+    const tick = () => { void this.recover().catch(() => undefined) }
     this.recoveryTimer = setInterval(tick, Math.max(500, intervalMs))
     this.recoveryTimer.unref?.()
     tick()
@@ -200,16 +266,20 @@ export class DataRuntimeService {
   async recover(): Promise<void> {
     if (this.stopping || this.recovering) return
     const writerNeedsRecovery = this.writer.state() !== 'ready'
-    const readerNeedsRecovery = this.reader !== this.writer && this.reader.state() !== 'ready'
-    if (!writerNeedsRecovery && !readerNeedsRecovery) return
+    const readersNeedRecovery = this.foregroundReaders.readers.some(reader => reader !== this.writer && reader.state() !== 'ready')
+    const maintenanceNeedsRecovery = this.maintenanceReader !== this.writer && this.maintenanceReader.state() !== 'ready'
+    if (!writerNeedsRecovery && !readersNeedRecovery && !maintenanceNeedsRecovery) return
 
     this.recovering = true
     try {
-      if (writerNeedsRecovery) {
-        await this.writer.start().catch(() => undefined)
-      }
-      if (this.writer.state() === 'ready' && readerNeedsRecovery) {
-        await this.reader.start().catch(() => undefined)
+      if (writerNeedsRecovery) await this.writer.start().catch(() => undefined)
+      if (this.writer.state() === 'ready') {
+        for (const reader of this.foregroundReaders.readers) {
+          if (reader !== this.writer && reader.state() !== 'ready') await reader.start().catch(() => undefined)
+        }
+        if (this.maintenanceReader !== this.writer && this.maintenanceReader.state() !== 'ready') {
+          await this.maintenanceReader.start().catch(() => undefined)
+        }
       }
     } finally {
       this.recovering = false
@@ -218,12 +288,14 @@ export class DataRuntimeService {
 
   async shutdown(): Promise<void> {
     this.stopping = true
-    if (this.recoveryTimer) {
-      clearInterval(this.recoveryTimer)
-      this.recoveryTimer = null
-    }
-    if (this.reader !== this.writer) await this.reader.shutdown().catch(() => undefined)
-    await this.writer.shutdown().catch(() => undefined)
+    if (this.recoveryTimer) clearInterval(this.recoveryTimer)
+    this.recoveryTimer = null
+    const unique = new Set<DataRuntimeClient>([
+      ...this.foregroundReaders.readers,
+      this.maintenanceReader,
+      this.writer,
+    ])
+    for (const client of unique) await client.shutdown().catch(() => undefined)
   }
 }
 
@@ -278,24 +350,20 @@ export class DataRuntimeStorageService implements StorageService {
   }
 
   async health(): Promise<StorageHealth> {
-    if (this.executor.reader.state() === 'ready') {
-      return this.executor.call(['health'])
-    }
-    if (this.executor.writer.state() === 'ready') {
-      return this.executor.call(['health'], [], { forceWriter: true })
-    }
+    if (this.executor.foregroundReaders.readyCount() > 0) return this.executor.call(['health'])
+    if (this.executor.writer.state() === 'ready') return this.executor.call(['health'], [], { forceWriter: true })
     return {
       ok: false,
       details: {
         dataRuntimeUnavailable: true,
         writerState: this.executor.writer.state(),
-        readerState: this.executor.reader.state(),
+        readerStates: this.executor.foregroundReaders.snapshots().map(item => item.state),
       },
     }
   }
 
   diagnostics(): Promise<StorageHealth> {
-    return this.executor.call(['diagnostics'])
+    return this.executor.call(['diagnostics'], [], { maintenanceRead: true })
   }
 }
 
@@ -303,7 +371,7 @@ export class DataRuntimeUnifiedReadService implements UnifiedReadService {
   readonly logicalSessions: UnifiedReadService['logicalSessions']
   readonly observations: UnifiedReadService['observations']
 
-  constructor(private readonly reader: DataRuntimeClient) {
+  constructor(private readonly readers: DataRuntimeReaderPool) {
     this.logicalSessions = {
       get: publicId => this.call(['logicalSessions', 'get'], [publicId]),
       list: limit => this.call(['logicalSessions', 'list'], limit === undefined ? [] : [limit]),
@@ -317,31 +385,31 @@ export class DataRuntimeUnifiedReadService implements UnifiedReadService {
   }
 
   private call<T>(path: readonly string[], args: readonly unknown[]): Promise<T> {
-    return this.reader.request<T>('unified-read.call', {
-      path: [...path],
-      args: [...args],
-    }, READ_TIMEOUT_MS)
+    return this.readers.request<T>('unified-read.call', { path: [...path], args: [...args] }, READ_TIMEOUT_MS)
   }
 }
 
 export function createDataRuntimeStorage(
   writer: DataRuntimeClient,
-  reader: DataRuntimeClient,
+  readers: readonly DataRuntimeClient[],
+  maintenanceReader: DataRuntimeClient,
 ): {
   storage: DataRuntimeStorageService
   unifiedRead: DataRuntimeUnifiedReadService
   dataRuntime: DataRuntimeService
 } {
-  const executor = new RemoteStorageExecutor(writer, reader)
+  const foregroundReaders = new DataRuntimeReaderPool(readers)
+  const executor = new RemoteStorageExecutor(writer, foregroundReaders, maintenanceReader)
   return {
     storage: new DataRuntimeStorageService(executor),
-    unifiedRead: new DataRuntimeUnifiedReadService(reader),
-    dataRuntime: new DataRuntimeService(writer, reader),
+    unifiedRead: new DataRuntimeUnifiedReadService(foregroundReaders),
+    dataRuntime: new DataRuntimeService(writer, foregroundReaders, maintenanceReader),
   }
 }
 
 export const dataRuntimeStorageInternals = {
   isReadPath,
+  isMaintenanceReadPath,
   timeoutFor,
   sessionSummaryProxy,
   READ_TIMEOUT_MS,
