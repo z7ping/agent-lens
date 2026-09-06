@@ -153,7 +153,7 @@ export async function handleBackupRequest(
   url: URL,
   backup?: BackupService,
 ): Promise<boolean> {
-  if (!url.pathname.startsWith('/api/v1/backups')) return false
+  if (url.pathname !== '/api/v1/backups' && !url.pathname.startsWith('/api/v1/backups/')) return false
   if (!backup) {
     writeJson(response, 503, { error: 'backup_unavailable' })
     return true
