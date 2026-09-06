@@ -8,7 +8,7 @@ const app = fs.readFileSync('packages/web/src/App.tsx', 'utf8')
 const workspaceSidebar = fs.readFileSync('packages/web/src/components/WorkspaceSidebar.tsx', 'utf8')
 const releaseInfo = fs.readFileSync('packages/web/src/components/ReleaseInfo.tsx', 'utf8')
 const protocol = fs.readFileSync('packages/protocol/src/review.ts', 'utf8')
-const server = fs.readFileSync('packages/surface-http/src/server.ts', 'utf8')
+const queryParams = fs.readFileSync('packages/surface-http/src/query-params.ts', 'utf8')
 const taskCenter = fs.readFileSync('packages/web/src/features/TaskCenterPage.tsx', 'utf8')
 
 const required = [
@@ -25,7 +25,11 @@ const required = [
   [hubReview.includes('HUB_SESSION_CACHE_MS'), 'Hub 列表请求必须保留短缓存'],
   [api.includes("params.set('cursor', cursor)"), 'Review API 必须透传列表游标'],
   [protocol.includes('nextCursor?: string'), 'Review 列表协议必须返回 nextCursor'],
-  [server.includes("params.get('cursor')"), 'HTTP Surface 必须解析 Review 列表游标'],
+  [
+    queryParams.includes("const cursor = optionalParam(params, 'cursor')")
+      && queryParams.includes('...(cursor ? { cursor } : {})'),
+    'HTTP Surface 必须解析 Review 列表游标',
+  ],
   [releaseInfo.includes('runtimeReady') && releaseInfo.includes('{ runtimeOwner }'), '版本检查必须复用已有 runtime health 结果'],
   [workspaceSidebar.includes('runtimeOwner={snapshot.health?.runtime?.owner ?? null}'), 'Shell 必须把已有 health 传给版本检查'],
   [app.includes("lazy(() => import('./features/TaskCenterPage')"), '一级页面必须按路由拆包'],
