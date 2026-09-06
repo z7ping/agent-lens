@@ -1,4 +1,5 @@
 import type { IncomingMessage, Server, ServerResponse } from 'node:http'
+import { abortableDelay } from '@agent-lens/runtime-cordis'
 
 const DEFAULT_QUIET_MS = 5_000
 const DEFAULT_POLL_MS = 100
@@ -20,7 +21,7 @@ export class ForegroundActivityGate {
   private readonly quietMs: number
   private readonly pollMs: number
   private readonly now: () => number
-  private readonly sleep: (ms: number) => Promise<void>
+  private readonly customSleep?: (ms: number) => Promise<void>
   private loadProbe: (() => ForegroundLoadSnapshot) | null
   private activeRequests = 0
   private lastActivityAt: number
@@ -29,7 +30,7 @@ export class ForegroundActivityGate {
     this.quietMs = options.quietMs ?? DEFAULT_QUIET_MS
     this.pollMs = options.pollMs ?? DEFAULT_POLL_MS
     this.now = options.now ?? Date.now
-    this.sleep = options.sleep ?? (ms => new Promise(resolve => setTimeout(resolve, ms)))
+    this.customSleep = options.sleep
     this.loadProbe = options.loadProbe ?? null
     this.lastActivityAt = this.now()
   }
@@ -60,7 +61,8 @@ export class ForegroundActivityGate {
 
   async wait(signal: AbortSignal): Promise<void> {
     while (!signal.aborted && !this.isIdle()) {
-      await this.sleep(this.pollMs)
+      if (this.customSleep) await this.customSleep(this.pollMs)
+      else await abortableDelay(this.pollMs, signal)
     }
   }
 
