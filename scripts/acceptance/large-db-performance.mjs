@@ -4,7 +4,10 @@ const DEFAULT_BASE_URL = 'http://127.0.0.1:56789'
 const DEFAULT_SAMPLES = 20
 const DEFAULT_WARMUP = 3
 const DEFAULT_TIMEOUT_MS = 5_000
-const CACHE_REFRESH_MS = 1_100
+const DEFAULT_TOOLS_BURST = 64
+const DEFAULT_MIXED_BURST = 128
+const HEALTH_REFRESH_MS = 1_100
+const TOOLS_RESULT_CACHE_REFRESH_MS = 2_100
 
 function arg(name, fallback) {
   const prefix = `--${name}=`
@@ -44,7 +47,8 @@ const options = {
   samples: positiveInt('samples', DEFAULT_SAMPLES),
   warmup: nonNegativeInt('warmup', DEFAULT_WARMUP),
   timeoutMs: positiveInt('timeout-ms', DEFAULT_TIMEOUT_MS),
-  burst: nonNegativeInt('burst', 0),
+  toolsBurst: nonNegativeInt('tools-burst', DEFAULT_TOOLS_BURST),
+  burst: nonNegativeInt('burst', DEFAULT_MIXED_BURST),
 }
 
 const probes = [
@@ -56,6 +60,10 @@ const probes = [
   { id: 'tools', label: 'Tools summary', path: '/api/v1/usage?limit=500', p95BudgetMs: 1_000, acceptedStatuses: new Set([200]) },
   { id: 'agents', label: 'Agent overview', path: '/api/v1/agents', p95BudgetMs: 1_000, acceptedStatuses: new Set([200]) },
 ]
+
+const toolsProbe = probes.find(probe => probe.id === 'tools')
+if (!toolsProbe) throw new Error('Tools acceptance probe is missing')
+const mixedForegroundProbes = probes.filter(probe => ['taskCenter', 'facets', 'tools', 'agents'].includes(probe.id))
 
 async function request(path, acceptedStatuses) {
   const controller = new AbortController()
@@ -123,20 +131,26 @@ async function measureProbe(probe) {
   }
 }
 
-async function runBurst(count) {
+async function runBurst(count, burstProbes) {
   if (count <= 0) return null
-  const foreground = probes.filter(probe => ['taskCenter', 'facets', 'tools', 'agents'].includes(probe.id))
+  if (!burstProbes.length) throw new Error('burst probes must not be empty')
+
   const startedAt = performance.now()
   const jobs = Array.from({ length: count }, (_, index) => {
-    const probe = foreground[index % foreground.length]
+    const probe = burstProbes[index % burstProbes.length]
     return request(probe.path, probe.acceptedStatuses).then(result => ({ probe: probe.id, ...result }))
   })
   const results = await Promise.all(jobs)
   const failures = results.filter(result => !result.ok)
   const elapsedMs = performance.now() - startedAt
+  const durations = results.map(result => result.elapsedMs)
   return {
     count,
     elapsedMs: rounded(elapsedMs),
+    p50Ms: rounded(percentile(durations, 0.50)),
+    p95Ms: rounded(percentile(durations, 0.95)),
+    p99Ms: rounded(percentile(durations, 0.99)),
+    maxMs: rounded(Math.max(...durations)),
     failures: failures.length,
     failureRate: rounded(failures.length / count),
     statuses: Object.fromEntries(
@@ -178,12 +192,28 @@ for (const probe of probes) {
   console.log(`${result.passed ? 'PASS' : 'FAIL'} p95=${result.result.p95Ms}ms failures=${result.result.failures}/${result.result.count}`)
 }
 
-const burst = await runBurst(options.burst)
-if (burst) console.log(`mixed foreground burst ${burst.passed ? 'PASS' : 'FAIL'} failures=${burst.failures}/${burst.count} elapsed=${burst.elapsedMs}ms`)
+// The single-request probe above warms the short Tools aggregate cache. The
+// concurrency gates must start after that cache expires, otherwise a hot cache
+// could hide a broken same-key single-flight implementation.
+let toolsBurst = null
+if (options.toolsBurst > 0) {
+  await delay(TOOLS_RESULT_CACHE_REFRESH_MS)
+  toolsBurst = await runBurst(options.toolsBurst, [toolsProbe])
+  console.log(`cold Tools burst ${toolsBurst.passed ? 'PASS' : 'FAIL'} failures=${toolsBurst.failures}/${toolsBurst.count} p95=${toolsBurst.p95Ms}ms elapsed=${toolsBurst.elapsedMs}ms`)
+}
+
+let burst = null
+if (options.burst > 0) {
+  // A successful Tools-only burst also warms the same aggregate cache. Expire
+  // it again so mixed128 independently exercises cold shared-Reader admission.
+  await delay(TOOLS_RESULT_CACHE_REFRESH_MS)
+  burst = await runBurst(options.burst, mixedForegroundProbes)
+  console.log(`cold mixed foreground burst ${burst.passed ? 'PASS' : 'FAIL'} failures=${burst.failures}/${burst.count} p95=${burst.p95Ms}ms elapsed=${burst.elapsedMs}ms`)
+}
 
 // HTTP health and Tool projection readiness both have short caches. Wait past
-// those TTLs, then explicitly refresh both final-state snapshots after burst.
-if (burst) await delay(CACHE_REFRESH_MS)
+// those TTLs, then explicitly refresh both final-state snapshots after bursts.
+if (toolsBurst || burst) await delay(HEALTH_REFRESH_MS)
 const [freshHealthResult, freshUsageResult] = await Promise.all([
   request('/api/v1/health', new Set([200, 503])),
   request('/api/v1/usage?limit=1', new Set([200])),
@@ -202,6 +232,7 @@ const report = {
   generatedAt: new Date().toISOString(),
   baseUrl: options.baseUrl,
   measurements: measurements.map(({ lastBody: _lastBody, ...measurement }) => measurement),
+  ...(toolsBurst ? { toolsBurst } : {}),
   ...(burst ? { burst } : {}),
   projectionReadiness: {
     passed: projectionReady,
@@ -212,12 +243,14 @@ const report = {
     dataRuntime: health.dataRuntime ?? health.storage?.details?.dataRuntime ?? null,
     eventLoop: health.storage?.details?.eventLoop ?? null,
     capacity: health.storage?.details?.dataGrowth?.capacity ?? null,
+    maintenanceGate: health.storage?.details?.maintenanceGate ?? null,
   } : null,
 }
 console.log(JSON.stringify(report, null, 2))
 
 const failed = measurements.filter(item => !item.passed)
-if (burst && !burst.passed) failed.push({ label: 'mixed foreground burst' })
+if (toolsBurst && !toolsBurst.passed) failed.push({ label: 'cold Tools burst' })
+if (burst && !burst.passed) failed.push({ label: 'cold mixed foreground burst' })
 if (!freshHealthResult.ok) failed.push({ label: 'fresh post-burst health' })
 if (!freshUsageResult.ok || !projectionReady) failed.push({ label: 'Tool Fact projection readiness' })
 if (failed.length) {
