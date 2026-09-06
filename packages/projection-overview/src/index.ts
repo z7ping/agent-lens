@@ -21,6 +21,13 @@ import {
 
 const FACET_SESSION_PAGE_SIZE = 500
 const FACET_OBSERVATION_PAGE_SIZE = 5000
+const FACET_SCOPE_CACHE_MS = 10_000
+
+interface FastFacetScope {
+  projects: Array<{ id: string; name?: string; repositoryIdentity?: string }>
+  from?: string
+  to?: string
+}
 
 function latestStates(entry: AssetInventoryEntry): AgentAssetStateDto[] {
   const latest = new Map<string, AgentAssetStateDto>()
@@ -45,7 +52,7 @@ function updateFacetRange(range: { from?: string; to?: string }, from: string, t
   if (!range.to || to > range.to) range.to = to
 }
 
-async function loadFacetScope(storage: StorageService): Promise<{
+async function loadFacetScopeFallback(storage: StorageService): Promise<{
   projectIds: string[]
   from?: string
   to?: string
@@ -97,12 +104,50 @@ async function loadFacetScope(storage: StorageService): Promise<{
   return { projectIds: [...projectIds], ...range }
 }
 
+function fastFacetScope(storage: StorageService): (() => Promise<FastFacetScope>) | undefined {
+  const projection = storage.sessionSummaryProjection as typeof storage.sessionSummaryProjection & {
+    facetScope?: () => Promise<FastFacetScope>
+  }
+  return projection?.facetScope ? () => projection.facetScope!() : undefined
+}
+
 export class FacetProjection {
+  private cachedScope: FastFacetScope | null = null
+  private cachedScopeAt = 0
+
   constructor(
     private readonly storage: StorageService,
     private readonly sources?: SourceService,
     private readonly capturePolicy?: CapturePolicyService,
   ) {}
+
+  private async scope(): Promise<FastFacetScope> {
+    if (this.cachedScope && Date.now() - this.cachedScopeAt < FACET_SCOPE_CACHE_MS) return this.cachedScope
+    const fast = fastFacetScope(this.storage)
+    if (fast) {
+      const scope = await fast()
+      this.cachedScope = scope
+      this.cachedScopeAt = Date.now()
+      return scope
+    }
+
+    const fallback = await loadFacetScopeFallback(this.storage)
+    const projects = (await Promise.all(fallback.projectIds.map(id => this.storage.repositories.sessions.getProject(id))))
+      .filter((item): item is NonNullable<typeof item> => Boolean(item))
+      .map(item => ({
+        id: item.id,
+        ...(item.name ? { name: item.name } : {}),
+        ...(item.repositoryIdentity ? { repositoryIdentity: item.repositoryIdentity } : {}),
+      }))
+    const scope = {
+      projects,
+      ...(fallback.from ? { from: fallback.from } : {}),
+      ...(fallback.to ? { to: fallback.to } : {}),
+    }
+    this.cachedScope = scope
+    this.cachedScopeAt = Date.now()
+    return scope
+  }
 
   async query(): Promise<FacetResponseDto> {
     const definitions = this.sources?.list() ?? []
@@ -119,10 +164,8 @@ export class FacetProjection {
       }
     }))
 
-    const scope = await loadFacetScope(this.storage)
-    const projects = (await Promise.all(scope.projectIds.map(id => this.storage.repositories.sessions.getProject(id))))
-      .filter((item): item is NonNullable<typeof item> => Boolean(item))
-      .map(item => ({ id: item.id, ...(item.name ? { name: item.name } : {}), ...(item.repositoryIdentity ? { repositoryIdentity: item.repositoryIdentity } : {}) }))
+    const scope = await this.scope()
+    const projects = [...scope.projects]
       .sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id))
 
     return {
@@ -270,4 +313,9 @@ export class SessionRelationshipProjection {
     const dedup = new Map(items.map(item => [item.id, item]))
     return { items: [...dedup.values()], meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION, generatedAt: new Date().toISOString() } }
   }
+}
+
+export const projectionOverviewInternals = {
+  FACET_SCOPE_CACHE_MS,
+  fastFacetScope,
 }
