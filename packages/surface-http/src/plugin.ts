@@ -21,6 +21,8 @@ export interface HttpSurfacePluginConfig {
   port?: number
   /** Dynamic control/data-plane health contribution; must remain O(1). */
   dataRuntimeHealth?: () => DataRuntimeHealthDto
+  /** Additional O(1) runtime diagnostics merged into storage health details. */
+  healthDetails?: () => Readonly<Record<string, unknown>>
 }
 
 const manifest = {
@@ -56,14 +58,16 @@ function storageWithRuntimeHealth(
   storage: StorageService,
   contributor: HttpSurfacePluginConfig['dataRuntimeHealth'],
   eventLoopHealth?: () => Readonly<Record<string, unknown>>,
+  healthDetails?: HttpSurfacePluginConfig['healthDetails'],
 ): StorageService {
-  if (!contributor && !eventLoopHealth) return storage
+  if (!contributor && !eventLoopHealth && !healthDetails) return storage
   return new Proxy(storage, {
     get(target, property, receiver) {
       if (property === 'health') {
         return async () => {
           const dataRuntime = contributor?.()
           const eventLoop = eventLoopHealth?.()
+          const extraDetails = healthDetails?.()
           try {
             const health = await target.health()
             return {
@@ -71,6 +75,7 @@ function storageWithRuntimeHealth(
               ok: health.ok && dataRuntime?.ok !== false,
               details: {
                 ...health.details,
+                ...extraDetails,
                 ...(dataRuntime ? { dataRuntime } : {}),
                 ...(eventLoop ? { eventLoop } : {}),
               },
@@ -79,6 +84,7 @@ function storageWithRuntimeHealth(
             return {
               ok: false,
               details: {
+                ...extraDetails,
                 ...(dataRuntime ? { dataRuntime } : {}),
                 ...(eventLoop ? { eventLoop } : {}),
                 storageUnavailable: true,
@@ -155,6 +161,7 @@ const applyHttpSurface = Object.assign(
       ctx.storage,
       config.dataRuntimeHealth,
       () => eventLoopSnapshot(eventLoop),
+      config.healthDetails,
     )
     const surface = await startHttpSurface(healthStorage, {
       port: config.port ?? DEFAULT_AGENT_LENS_HTTP_PORT,
