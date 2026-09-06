@@ -10,12 +10,15 @@ test('shared :memory: client still reports logical writer/reader roles', async (
     nodeId: 'memory-health-test',
   })
   await writer.start()
-  const runtime = createDataRuntimeStorage(writer, writer)
+  const runtime = createDataRuntimeStorage(writer, [writer], writer)
 
   try {
     const health = runtime.dataRuntime.snapshot()
     assert.equal(health.writer.role, 'writer')
     assert.equal(health.reader.role, 'reader')
+    assert.equal(health.readers.length, 1)
+    assert.equal(health.readers[0]?.role, 'reader')
+    assert.equal(health.maintenanceReader.role, 'reader')
     assert.equal(health.writer.state, 'ready')
     assert.equal(health.reader.state, 'ready')
     assert.equal(health.ok, true)
