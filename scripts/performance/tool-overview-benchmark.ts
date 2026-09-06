@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
+import type { SourceDefinition, SourceService } from '../../packages/core/src/index'
 import { AgentOverviewProjection } from '../../packages/projection-overview/src/index'
 import { ToolAssetUsageProjection } from '../../packages/projection-usage/src/index'
 import { SqliteStorageService } from '../../packages/storage-sqlite/src/index'
@@ -97,15 +98,26 @@ const usage = new ToolAssetUsageProjection(storage)
 const productId = 'product-perf'
 const sourceId = 'codex'
 
-const sources = {
-  list: () => [{
-    manifest: {
-      sourceId,
-      productId,
-      displayName: 'Performance Agent',
-    },
-  }],
-} as any
+const sourceDefinition: SourceDefinition = {
+  manifest: {
+    pluginId: '@agent-lens/perf-source',
+    pluginVersion: '1.0.0',
+    apiVersion: '1.0',
+    pluginType: 'source',
+    displayName: 'Performance Agent',
+    sourceId,
+    productId,
+    parserVersion: 'perf',
+  },
+  async detect() { return [] },
+  async declareCapabilities() { return [] },
+  async normalize() { throw new Error('performance fixture source does not normalize records') },
+}
+const sources: SourceService = {
+  register() { return { dispose() {} } },
+  list: () => [sourceDefinition],
+  async detect() { return [] },
+}
 const overview = new AgentOverviewProjection(storage, sources)
 
 console.log('AgentLens tool analysis / agent overview benchmark')
