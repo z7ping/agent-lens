@@ -62,7 +62,7 @@ interface HermesRow {
 interface HermesDbEnvelope {
   message: Record<string, unknown>
   session: { nativeSessionId: string; cwd?: string; title?: string }
-  captureChannel: 'history' | 'native-tail'
+  captureChannel?: 'history' | 'native-tail'
 }
 
 interface HermesHookEnvelope {
@@ -118,6 +118,41 @@ function stringField(record: Record<string, unknown>, ...names: string[]): strin
     if (typeof value === 'string' && value) return value
   }
   return undefined
+}
+
+function hermesEnvelope(value: unknown, record: SourceRecord): HermesEnvelope {
+  const payload = asRecord(value)
+  const session = asRecord(payload.session)
+  const nativeSessionId = stringField(session, 'nativeSessionId')
+    ?? record.sourceSessionNativeId
+    ?? 'unknown'
+  const cwd = stringField(session, 'cwd')
+
+  if (payload.captureChannel === 'runtime-hook') {
+    return {
+      runtimeEvent: asRecord(payload.runtimeEvent),
+      session: { nativeSessionId, ...(cwd ? { cwd } : {}) },
+      captureChannel: 'runtime-hook',
+    }
+  }
+
+  const title = stringField(session, 'title')
+  const captureChannel = payload.captureChannel === 'history' || payload.captureChannel === 'native-tail'
+    ? payload.captureChannel
+    : undefined
+  return {
+    message: asRecord(payload.message),
+    session: {
+      nativeSessionId,
+      ...(cwd ? { cwd } : {}),
+      ...(title ? { title } : {}),
+    },
+    ...(captureChannel ? { captureChannel } : {}),
+  }
+}
+
+function isHermesHookEnvelope(envelope: HermesEnvelope): envelope is HermesHookEnvelope {
+  return envelope.captureChannel === 'runtime-hook'
 }
 
 function normalizeTimestamp(value: unknown): string | undefined {
@@ -284,7 +319,7 @@ function rowFingerprint(row: HermesRow): string {
 function dbRecord(
   row: HermesRow,
   ctx: SourceExecutionContext,
-  captureChannel: HermesDbEnvelope['captureChannel'],
+  captureChannel: NonNullable<HermesDbEnvelope['captureChannel']>,
 ): SourceRecord {
   const nativeSessionId = row.session_id ?? 'unknown'
   const fingerprint = rowFingerprint(row)
@@ -335,7 +370,6 @@ export async function* ingestHermesHistory(ctx: SourceHistoryExecutionContext): 
   if (!root || ctx.abortSignal.aborted || !await exists(join(root, DB_NAME))) return
   const db = openDatabase(root)
   try {
-    // v2 会一次性重放历史消息，让旧会话也获得原生标题。
     const parsedActiveSince = ctx.historyWindow?.activeSince ? Date.parse(ctx.historyWindow.activeSince) : Number.NaN
     const activeSinceMs = Number.isFinite(parsedActiveSince) ? parsedActiveSince : undefined
     const sessionLimit = ctx.historyWindow?.sessionLimit
@@ -670,7 +704,7 @@ export async function* discoverHermesAssets(ctx: SourceExecutionContext): AsyncI
 }
 
 function evidenceFor(record: SourceRecord, envelope: HermesEnvelope): EvidenceCandidate {
-  const runtime = envelope.captureChannel === 'runtime-hook'
+  const runtime = isHermesHookEnvelope(envelope)
   return {
     captureMethod: runtime ? 'runtime-hook' : 'native-db',
     derivation: runtime ? 'observed' : 'reported',
@@ -680,13 +714,17 @@ function evidenceFor(record: SourceRecord, envelope: HermesEnvelope): EvidenceCa
     ...(record.nativeId ? { nativeStableId: record.nativeId } : {}),
     ...(record.occurredAt ? { eventTime: record.occurredAt } : {}),
     capturedAt: record.capturedAt,
-    confidenceHint: runtime ? 'high' : 'exact',
+    ...(runtime
+      ? { confidenceHint: 'high' as const }
+      : envelope.captureChannel
+        ? { confidenceHint: 'exact' as const }
+        : {}),
   }
 }
 
-function identity(record: SourceRecord, envelope: HermesEnvelope): ObservationIdentityHints {
+function identity(_record: SourceRecord, envelope: HermesEnvelope): ObservationIdentityHints {
   return {
-    nativeSessionId: envelope.session.nativeSessionId || record.sourceSessionNativeId || 'unknown',
+    nativeSessionId: envelope.session.nativeSessionId,
     ...(envelope.session.cwd ? { workspacePath: envelope.session.cwd } : {}),
     ...('title' in envelope.session && envelope.session.title?.trim()
       ? { sessionTitle: envelope.session.title.trim() }
@@ -754,7 +792,7 @@ function resultSuccess(content: unknown): boolean | undefined {
 }
 
 function normalizeDbEnvelope(record: SourceRecord, envelope: HermesDbEnvelope): ObservationCandidate[] {
-  const message = asRecord(envelope.message)
+  const message = envelope.message
   const role = stringField(message, 'role') ?? 'unknown'
   const observations: ObservationCandidate[] = []
   if (role === 'user') {
@@ -790,7 +828,7 @@ function normalizeDbEnvelope(record: SourceRecord, envelope: HermesDbEnvelope): 
 }
 
 function normalizeHookEnvelope(record: SourceRecord, envelope: HermesHookEnvelope): ObservationCandidate[] {
-  const event = asRecord(envelope.runtimeEvent)
+  const event = envelope.runtimeEvent
   const eventName = stringField(event, 'hook_event_name', 'event_name', 'type') ?? 'unknown'
   const callId = hookCallId(event)
   const toolName = stringField(event, 'tool_name') ?? 'unknown'
@@ -836,8 +874,8 @@ export async function normalizeHermesRecord(
   record: SourceRecord,
   _ctx: SourceNormalizationContext,
 ): Promise<NormalizedSourceOutput> {
-  const envelope = record.payload as HermesEnvelope
-  const observations = envelope.captureChannel === 'runtime-hook'
+  const envelope = hermesEnvelope(record.payload, record)
+  const observations = isHermesHookEnvelope(envelope)
     ? normalizeHookEnvelope(record, envelope)
     : normalizeDbEnvelope(record, envelope)
   return { observations, evidenceCandidates: [evidenceFor(record, envelope)] }
@@ -901,4 +939,5 @@ export const hermesSourceInternals = {
   yamlSectionNames,
   yamlListValues,
   selectRows,
+  hermesEnvelope,
 }
