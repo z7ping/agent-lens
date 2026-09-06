@@ -1,61 +1,145 @@
 import type {
   JsonValue,
+  SessionActivityKind,
   SessionSummaryProjectionStore,
   SessionSummaryQuery,
   SessionSummaryRecord,
 } from '@agent-lens/core'
 import type { SqliteExecutor } from './executor'
+import { sqliteRowId } from './repository-row-mappers'
 
 const MAX_LIMIT = 500
 const MAX_SEQUENCE = Number.MAX_SAFE_INTEGER
 const DEFAULT_REBUILD_BATCH_SIZE = 25
+const SESSION_ACTIVITY = ['user-task', 'branch-task', 'subagent', 'internal-review', 'system-activity'] as const
+
+type SqliteRow = Record<string, unknown>
 
 export interface SqliteSessionSummaryReaderOptions {
   rebuildBatchSize?: number
   yieldControl?: () => Promise<void>
 }
 
-function decodeJson<T>(value: unknown, fallback: T): T {
-  if (typeof value !== 'string' || value.length === 0) return fallback
-  return JSON.parse(value) as T
+function rowRecord(value: unknown): SqliteRow {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError('SQLite session summary query returned a non-object row')
+  }
+  return value as SqliteRow
+}
+
+function requiredString(row: SqliteRow, key: string): string {
+  const value = row[key]
+  if (typeof value !== 'string') throw new TypeError(`SQLite session summary field ${key} must be a string`)
+  return value
+}
+
+function optionalString(row: SqliteRow, key: string): string | undefined {
+  const value = row[key]
+  if (value == null) return undefined
+  if (typeof value !== 'string') throw new TypeError(`SQLite session summary field ${key} must be a string or null`)
+  return value
+}
+
+function numericField(row: SqliteRow, key: string, fallback?: number): number {
+  const value = row[key]
+  if (value == null && fallback !== undefined) return fallback
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new TypeError(`SQLite session summary field ${key} must be a finite number`)
+  }
+  return value
+}
+
+function jsonValue(value: unknown, key: string): JsonValue {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return value
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (Array.isArray(value)) return value.map(item => jsonValue(item, key))
+  if (typeof value === 'object') {
+    const result: { [key: string]: JsonValue } = {}
+    for (const [entryKey, entryValue] of Object.entries(value)) result[entryKey] = jsonValue(entryValue, key)
+    return result
+  }
+  throw new TypeError(`SQLite session summary field ${key} must contain JSON data`)
+}
+
+function parseJsonValue(value: unknown, key: string): JsonValue {
+  if (typeof value !== 'string') throw new TypeError(`SQLite session summary field ${key} must contain JSON text`)
+  try {
+    return jsonValue(JSON.parse(value), key)
+  } catch (error) {
+    if (error instanceof TypeError) throw error
+    throw new TypeError(`SQLite session summary field ${key} contains invalid JSON`)
+  }
+}
+
+function parseStringArray(value: unknown, key: string): string[] {
+  if (typeof value !== 'string') throw new TypeError(`SQLite session summary field ${key} must contain JSON text`)
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(value)
+  } catch {
+    throw new TypeError(`SQLite session summary field ${key} contains invalid JSON`)
+  }
+  if (!Array.isArray(parsed) || !parsed.every(item => typeof item === 'string')) {
+    throw new TypeError(`SQLite session summary field ${key} must contain a JSON string array`)
+  }
+  return parsed
+}
+
+function sessionActivity(row: SqliteRow): SessionActivityKind {
+  const value = optionalString(row, 'session_activity') ?? 'user-task'
+  if (!(SESSION_ACTIVITY as readonly string[]).includes(value)) {
+    throw new TypeError(`SQLite session summary field session_activity has unsupported value: ${value}`)
+  }
+  return value as SessionActivityKind
 }
 
 function payloadText(value: JsonValue | undefined): string | undefined {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
-  const text = (value as Record<string, JsonValue>).text
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !('text' in value)) return undefined
+  const text = value.text
   return typeof text === 'string' && text.trim() ? text.trim() : undefined
 }
 
-function mapSummary(row: any): SessionSummaryRecord {
+function mapSummary(value: unknown): SessionSummaryRecord {
+  const row = rowRecord(value)
   const firstUserPayload = row.first_user_payload == null
     ? undefined
-    : decodeJson<JsonValue>(row.first_user_payload, null)
-  const nativeTitle = typeof row.title === 'string' && row.title.trim() ? row.title.trim() : undefined
+    : parseJsonValue(row.first_user_payload, 'first_user_payload')
+  const rawTitle = optionalString(row, 'title')
+  const nativeTitle = rawTitle?.trim() ? rawTitle.trim() : undefined
   const fallbackTitle = payloadText(firstUserPayload)
+  const projectId = optionalString(row, 'project_id')
+  const projectName = optionalString(row, 'project_name')
+  const workspaceId = optionalString(row, 'workspace_id')
+  const workspacePath = optionalString(row, 'workspace_path')
+  const activitySourceLabel = optionalString(row, 'activity_source_label')
+  const parentSessionId = optionalString(row, 'parent_session_id')
+  const userTurnCount = row.user_turn_count == null
+    ? numericField(row, 'user_message_count', 0)
+    : numericField(row, 'user_turn_count')
   return {
-    logicalSessionId: row.logical_session_id,
-    installationId: row.installation_id,
-    productId: row.product_id,
-    sourceIds: decodeJson<string[]>(row.source_ids_json, []),
-    ...(row.project_id ? { projectId: row.project_id } : {}),
-    ...(row.project_name ? { projectName: row.project_name } : {}),
-    ...(row.workspace_id ? { workspaceId: row.workspace_id } : {}),
-    ...(row.workspace_path ? { workspacePath: row.workspace_path } : {}),
+    logicalSessionId: requiredString(row, 'logical_session_id'),
+    installationId: requiredString(row, 'installation_id'),
+    productId: requiredString(row, 'product_id'),
+    sourceIds: parseStringArray(row.source_ids_json, 'source_ids_json'),
+    ...(projectId === undefined ? {} : { projectId }),
+    ...(projectName === undefined ? {} : { projectName }),
+    ...(workspaceId === undefined ? {} : { workspaceId }),
+    ...(workspacePath === undefined ? {} : { workspacePath }),
     ...(nativeTitle || fallbackTitle ? { title: nativeTitle ?? fallbackTitle } : {}),
     ...(firstUserPayload === undefined ? {} : { firstUserPayload }),
-    startedAt: row.started_at,
-    endedAt: row.ended_at,
-    observationCount: Number(row.observation_count),
-    interactionCount: Number(row.user_turn_count ?? row.user_message_count ?? 0),
-    userTurnCount: Number(row.user_turn_count ?? row.user_message_count ?? 0),
-    systemContextCount: Number(row.system_context_count ?? 0),
-    internalReviewCount: Number(row.internal_review_count ?? 0),
-    otherEventCount: Number(row.other_event_count ?? 0),
-    toolCount: Number(row.tool_count),
-    errorCount: Number(row.error_count),
-    sessionActivity: row.session_activity ?? 'user-task',
-    ...(row.activity_source_label ? { activitySourceLabel: row.activity_source_label } : {}),
-    ...(row.parent_session_id ? { parentSessionId: row.parent_session_id } : {}),
+    startedAt: requiredString(row, 'started_at'),
+    endedAt: requiredString(row, 'ended_at'),
+    observationCount: numericField(row, 'observation_count'),
+    interactionCount: userTurnCount,
+    userTurnCount,
+    systemContextCount: numericField(row, 'system_context_count', 0),
+    internalReviewCount: numericField(row, 'internal_review_count', 0),
+    otherEventCount: numericField(row, 'other_event_count', 0),
+    toolCount: numericField(row, 'tool_count'),
+    errorCount: numericField(row, 'error_count'),
+    sessionActivity: sessionActivity(row),
+    ...(activitySourceLabel === undefined ? {} : { activitySourceLabel }),
+    ...(parentSessionId === undefined ? {} : { parentSessionId }),
   }
 }
 
@@ -525,13 +609,11 @@ export class SqliteSessionSummaryReader implements SessionSummaryProjectionStore
   }
 
   private async rebuildCooperatively(signal?: AbortSignal): Promise<void> {
-    const logicalSessionIds = await this.executor.run(() => (
-      this.executor.db.prepare(`
-        SELECT id
-        FROM logical_sessions
-        ORDER BY COALESCE(ended_at, started_at, '') DESC, id ASC
-      `).all() as Array<{ id: string }>
-    ).map(row => row.id))
+    const logicalSessionIds = await this.executor.run(() => this.executor.db.prepare(`
+      SELECT id
+      FROM logical_sessions
+      ORDER BY COALESCE(ended_at, started_at, '') DESC, id ASC
+    `).all().map(sqliteRowId))
 
     signal?.throwIfAborted()
     for (let offset = 0; offset < logicalSessionIds.length; offset += this.rebuildBatchSize) {
