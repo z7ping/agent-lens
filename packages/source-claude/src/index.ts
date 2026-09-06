@@ -113,6 +113,21 @@ function stringField(record: Record<string, unknown>, ...names: string[]): strin
   return undefined
 }
 
+function claudeStoredEnvelope(value: unknown, record: SourceRecord): ClaudeStoredEnvelope {
+  const payload = asRecord(value)
+  const session = asRecord(payload.session)
+  const cwd = stringField(session, 'cwd')
+  return {
+    entry: asRecord(payload.entry),
+    session: {
+      nativeSessionId: stringField(session, 'nativeSessionId')
+        ?? record.sourceSessionNativeId
+        ?? 'unknown',
+      ...(cwd ? { cwd } : {}),
+    },
+  }
+}
+
 async function exists(path: string): Promise<boolean> {
   try {
     await access(path)
@@ -706,7 +721,7 @@ function baseIdentity(
   envelope: ClaudeStoredEnvelope,
 ): ObservationIdentityHints {
   return {
-    nativeSessionId: envelope.session.nativeSessionId || record.sourceSessionNativeId || 'unknown',
+    nativeSessionId: envelope.session.nativeSessionId,
     ...(envelope.session.cwd ? { workspacePath: envelope.session.cwd } : {}),
   }
 }
@@ -878,8 +893,8 @@ export async function normalizeClaudeRecord(
     }
   }
 
-  const envelope = asRecord(record.payload) as unknown as ClaudeStoredEnvelope
-  const entry = asRecord(envelope.entry)
+  const envelope = claudeStoredEnvelope(record.payload, record)
+  const entry = envelope.entry
   const type = stringField(entry, 'type') ?? 'unknown'
   const message = asRecord(entry.message)
   const content = message.content
@@ -1012,4 +1027,5 @@ export const claudeInternals = {
   parseRuntimeEnvelope,
   runtimeRecord,
   textFromContent,
+  claudeStoredEnvelope,
 }
