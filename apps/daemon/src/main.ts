@@ -81,6 +81,7 @@ const interactiveTerminal = Boolean(process.stdin.isTTY && process.stdout.isTTY)
 const startedAt = Date.now()
 const INITIAL_BACKGROUND_SYNC_DELAY_MS = 2_000
 const DATA_RUNTIME_RECOVERY_POLL_MS = 500
+let foregroundGate: ForegroundActivityGate | null = null
 
 const app = new AgentLensApplication()
 app.useRuntime(nodeRuntimePlugin, nodeRuntime)
@@ -101,6 +102,7 @@ app.useRuntime(backupLocalPlugin, { vaultPath })
 app.use(httpSurfacePlugin, {
   port: configuredPort,
   dataRuntimeHealth: () => app.context.dataRuntime.snapshot(),
+  healthDetails: () => foregroundGate ? { maintenanceGate: foregroundGate.snapshot() } : {},
 })
 app.use(webPlugin, { staticDir: webRoot })
 
@@ -110,7 +112,6 @@ let captureHandles: Awaited<ReturnType<typeof startRegisteredSourceCapture>>['re
 let shuttingDown = false
 let reuseSessionSummaryProjection = false
 let sessionSummaryProjectionReady = false
-let foregroundGate: ForegroundActivityGate | null = null
 let disposeHttpActivityTracking: (() => void) | null = null
 
 function runtimeAge(): string {
