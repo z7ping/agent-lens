@@ -59,7 +59,7 @@ export interface DataRuntimeClientOptions {
 export function resolveDataRuntimeWorkerUrl(moduleUrl = import.meta.url): URL {
   return moduleUrl.endsWith('.mjs')
     ? new URL('./data-runtime-worker.mjs', moduleUrl)
-    : new URL('./worker.ts', moduleUrl)
+    : new URL('./worker-source.mjs', moduleUrl)
 }
 
 export class DataRuntimeClient {
@@ -87,7 +87,6 @@ export class DataRuntimeClient {
     this.stateValue = 'starting'
     this.lastError = undefined
     const workerUrl = this.options.workerUrl ?? resolveDataRuntimeWorkerUrl()
-    const bundled = workerUrl.pathname.endsWith('.mjs')
     const worker = new Worker(workerUrl, {
       workerData: {
         allowDiagnostics: this.options.allowDiagnostics === true,
@@ -95,7 +94,7 @@ export class DataRuntimeClient {
         ...(this.options.dbPath ? { dbPath: this.options.dbPath } : {}),
         ...(this.options.nodeId ? { nodeId: this.options.nodeId } : {}),
       },
-      ...(bundled ? { execArgv: [] } : { execArgv: ['--import', 'tsx'] }),
+      execArgv: [],
     })
     this.worker = worker
     worker.on('message', value => this.handleMessage(value))
