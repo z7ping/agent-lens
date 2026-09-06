@@ -47,6 +47,7 @@ test('SQLite executor records transaction duration separately', async () => {
   const metrics = executor.metrics()
   assert.equal(metrics.transactionMs.count, 1)
   assert.ok(metrics.transactionMs.max >= 0)
-  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM sample').get().count, 1)
+  const countRow = db.prepare('SELECT COUNT(*) AS count FROM sample').get() as { count: number }
+  assert.equal(countRow.count, 1)
   await executor.close()
 })
