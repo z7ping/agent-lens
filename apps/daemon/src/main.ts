@@ -1,7 +1,6 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { MaintenanceJobStore } from '@agent-lens/core'
 import { backupLocalPlugin } from '@agent-lens/backup-local'
 import { capturePolicyPlugin } from '@agent-lens/capture-policy'
 import {
@@ -56,13 +55,10 @@ import {
 import {
   backfillToolUsageFactProjection,
   backfillUnknownObservationProjection,
-  type ProjectionBackfillMaintenance,
 } from './projection-backfill-maintenance.js'
 import {
   compressLegacySourceRecords,
   ensureDeferredStorageIndexes,
-  type DeferredIndexMaintenance,
-  type SourceRecordCompressionMaintenance,
 } from './storage-maintenance.js'
 import { profiledDshSourcePlugin } from './sources/dsh-profiled.js'
 
@@ -206,14 +202,9 @@ try {
     }),
   })
   disposeHttpActivityTracking = attachHttpForegroundActivity(app.context.http.server, foregroundGate)
-  const storageExtensions = app.context.storage as typeof app.context.storage & {
-    maintenanceJobs?: MaintenanceJobStore
-    maintenance?: DeferredIndexMaintenance & SourceRecordCompressionMaintenance
-    projectionBackfill?: ProjectionBackfillMaintenance
-  }
-  const maintenanceJobs = storageExtensions.maintenanceJobs
-  const storageMaintenance = storageExtensions.maintenance
-  const projectionBackfill = storageExtensions.projectionBackfill
+  const maintenanceJobs = app.context.storage.maintenanceJobs
+  const storageMaintenance = app.context.storage.maintenance
+  const projectionBackfill = app.context.storage.projectionBackfill
 
   console.info(
     `[AgentLens] 1.0 runtime started (db: ${dbPath}, mode=${daemonMode}, interactive=${interactiveTerminal}, pid=${process.pid}, ppid=${process.ppid})`,
