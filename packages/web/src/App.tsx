@@ -13,6 +13,7 @@ import { Breadcrumb, IconButton, UiIcon } from './components/ui'
 const AgentsResponsivePage = lazy(() => import('./features/AgentsResponsivePage').then(module => ({ default: module.AgentsResponsivePage })))
 const BackupPage = lazy(() => import('./features/BackupPage').then(module => ({ default: module.BackupPage })))
 const InsightsPage = lazy(() => import('./features/InsightsPage').then(module => ({ default: module.InsightsPage })))
+const NewPiTaskPage = lazy(() => import('./features/NewPiTaskPage').then(module => ({ default: module.NewPiTaskPage })))
 const TaskCenterPage = lazy(() => import('./features/TaskCenterPage').then(module => ({ default: module.TaskCenterPage })))
 const ToolsPage = lazy(() => import('./features/ToolsPage').then(module => ({ default: module.ToolsPage })))
 
@@ -208,11 +209,11 @@ function Shell({ model }: { model: AgentLensClientModel }) {
 
   useEffect(() => {
     model.setReviewActive(onLocalReview)
-    if (onReview) void model.ensureReview()
+    if (onLocalReview) void model.ensureReview()
     if (onTools) void model.ensureUsage()
     if (onAgents) void model.ensureAgents()
     return () => { if (onLocalReview) model.setReviewActive(false) }
-  }, [model, onReview, onLocalReview, onTools, onAgents])
+  }, [model, onLocalReview, onTools, onAgents])
 
   useEffect(() => {
     if (!onLocalReview) {
@@ -265,7 +266,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
         <Suspense fallback={<PageLoadingState title="正在加载工作区" description="正在准备当前页面所需的数据与界面。"/>}>
         <Routes>
           <Route path="/review" element={<TaskCenterPage model={model} mode="history" sidebarHost={sidebarHost}/>} />
-          <Route path="/review/new" element={<TaskCenterPage model={model} mode="new" sidebarHost={sidebarHost}/>} />
+          <Route path="/review/new" element={<NewPiTaskPage/>} />
           <Route path="/review/live" element={<Navigate to="/review/new" replace />} />
           <Route path="/review/live/:runtimeSessionId" element={<TaskCenterPage model={model} mode="live" sidebarHost={sidebarHost}/>} />
           <Route path="/review/hub/:sessionId" element={<TaskCenterPage model={model} mode="hub" sidebarHost={sidebarHost}/>} />
