@@ -9,7 +9,7 @@ import { SqliteStorageService } from '../../packages/storage-sqlite/src/index'
 import {
   fileSize,
   mb,
-  percentile,
+  measure,
   readOptionalPositiveInt,
   readPositiveInt,
 } from './benchmark-utils'
@@ -38,27 +38,6 @@ const options: Options = {
 
 function isoAt(offsetMs: number): string {
   return new Date(Date.UTC(2026, 7, 1) + offsetMs).toISOString()
-}
-
-async function measure(
-  name: string,
-  samples: number,
-  run: () => Promise<unknown>,
-): Promise<{ name: string; minMs: number; p50Ms: number; p95Ms: number; maxMs: number }> {
-  await run()
-  const durations: number[] = []
-  for (let index = 0; index < samples; index += 1) {
-    const started = performance.now()
-    await run()
-    durations.push(performance.now() - started)
-  }
-  return {
-    name,
-    minMs: Number(Math.min(...durations).toFixed(2)),
-    p50Ms: Number(percentile(durations, 0.50).toFixed(2)),
-    p95Ms: Number(percentile(durations, 0.95).toFixed(2)),
-    maxMs: Number(Math.max(...durations).toFixed(2)),
-  }
 }
 
 const toolObservationsPerCall = 2
