@@ -55,7 +55,7 @@ interface OpenCodeEnvelope {
     cwd?: string
     title?: string
   }
-  captureChannel: 'history' | 'native-tail'
+  captureChannel?: 'history' | 'native-tail'
 }
 
 function sha256(value: string): string {
@@ -97,6 +97,27 @@ function stringField(record: Record<string, unknown>, ...names: string[]): strin
     if (typeof value === 'string' && value) return value
   }
   return undefined
+}
+
+function openCodeEnvelope(value: unknown, record: SourceRecord): OpenCodeEnvelope {
+  const root = asRecord(value)
+  const session = asRecord(root.session)
+  const nativeSessionId = stringField(session, 'nativeSessionId') ?? record.sourceSessionNativeId ?? 'unknown'
+  const cwd = stringField(session, 'cwd')
+  const title = stringField(session, 'title')
+  const captureChannel = root.captureChannel === 'history' || root.captureChannel === 'native-tail'
+    ? root.captureChannel
+    : undefined
+  return {
+    part: asRecord(root.part),
+    message: asRecord(root.message),
+    session: {
+      nativeSessionId,
+      ...(cwd ? { cwd } : {}),
+      ...(title ? { title } : {}),
+    },
+    ...(captureChannel ? { captureChannel } : {}),
+  }
 }
 
 function normalizeTimestamp(value: unknown): string | undefined {
@@ -241,7 +262,7 @@ function rowFingerprint(row: OpenCodeRow): string {
 function recordFromRow(
   row: OpenCodeRow,
   ctx: SourceExecutionContext,
-  captureChannel: OpenCodeEnvelope['captureChannel'],
+  captureChannel: NonNullable<OpenCodeEnvelope['captureChannel']>,
 ): SourceRecord {
   const part = parseRecord(row.data)
   const message = parseRecord(row.message_data)
@@ -414,13 +435,17 @@ function evidenceFor(record: SourceRecord, envelope: OpenCodeEnvelope): Evidence
     ...(record.nativeId ? { nativeStableId: record.nativeId } : {}),
     ...(record.occurredAt ? { eventTime: record.occurredAt } : {}),
     capturedAt: record.capturedAt,
-    confidenceHint: envelope.captureChannel === 'history' ? 'exact' : 'high',
+    ...(envelope.captureChannel === 'history'
+      ? { confidenceHint: 'exact' as const }
+      : envelope.captureChannel === 'native-tail'
+        ? { confidenceHint: 'high' as const }
+        : {}),
   }
 }
 
 function identity(record: SourceRecord, envelope: OpenCodeEnvelope): ObservationIdentityHints {
   return {
-    nativeSessionId: envelope.session.nativeSessionId || record.sourceSessionNativeId || 'unknown',
+    nativeSessionId: envelope.session.nativeSessionId,
     ...(envelope.session.cwd ? { workspacePath: envelope.session.cwd } : {}),
     ...(envelope.session.title?.trim() ? { sessionTitle: envelope.session.title.trim() } : {}),
   }
@@ -466,9 +491,9 @@ export async function normalizeOpenCodeRecord(
   record: SourceRecord,
   _ctx: SourceNormalizationContext,
 ): Promise<NormalizedSourceOutput> {
-  const envelope = record.payload as OpenCodeEnvelope
-  const part = asRecord(envelope.part)
-  const message = asRecord(envelope.message)
+  const envelope = openCodeEnvelope(record.payload, record)
+  const part = envelope.part
+  const message = envelope.message
   const type = stringField(part, 'type') ?? 'unknown'
   const role = stringField(message, 'role') ?? 'unknown'
   const observations: ObservationCandidate[] = []
@@ -576,4 +601,5 @@ export const openCodeSourceInternals = {
   rowFingerprint,
   recordFromRow,
   selectRows,
+  openCodeEnvelope,
 }
