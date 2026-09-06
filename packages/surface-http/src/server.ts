@@ -20,7 +20,6 @@ import {
   TIMELINE_OBSERVATION_KINDS,
   type CapturePolicyResponseDto,
   type CapturePolicySourceUpdateRequestDto,
-  type DataRuntimeHealthDto,
   type HealthResponseDto,
   type InsightsQueryDto,
   type JsonValue,
@@ -40,7 +39,9 @@ import {
 } from '@agent-lens/protocol'
 import type { PiLiveService } from '@agent-lens/runtime-cordis'
 import { handleBackupRequest } from './backup-http'
+import { parseDataRuntimeHealth } from './data-runtime-health'
 import type { HttpEventHub } from './events'
+import { badRequest, readJsonBody, writeJson } from './http-utils'
 import { handlePiLiveRequest } from './pi-live'
 
 export const AGENT_LENS_HTTP_HOST = '127.0.0.1' as const
@@ -113,33 +114,6 @@ function jsonValue(value: unknown, depth = 0): JsonValue {
     return result
   }
   return null
-}
-
-function dataRuntimeHealth(value: unknown): DataRuntimeHealthDto | undefined {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
-  const runtime = value as Partial<DataRuntimeHealthDto>
-  if (typeof runtime.ok !== 'boolean' || typeof runtime.recovering !== 'boolean') return undefined
-  if (!runtime.writer || !runtime.reader) return undefined
-  return value as DataRuntimeHealthDto
-}
-
-function writeJson(response: ServerResponse, statusCode: number, body: unknown): void {
-  const content = JSON.stringify(body)
-  response.statusCode = statusCode
-  response.setHeader('content-type', 'application/json; charset=utf-8')
-  response.setHeader('cache-control', 'no-store')
-  response.setHeader('content-length', Buffer.byteLength(content))
-  response.end(content)
-}
-
-function httpError(statusCode: number, message: string): Error & { statusCode: number } {
-  const error = new Error(message) as Error & { statusCode: number }
-  error.statusCode = statusCode
-  return error
-}
-
-function badRequest(message: string): Error & { statusCode: number } {
-  return httpError(400, message)
 }
 
 function parseLimit(params: URLSearchParams, max: number): number | undefined {
@@ -294,26 +268,6 @@ function parseReviewDetailQuery(params: URLSearchParams): ReviewDetailQueryDto {
   }
 }
 
-async function readJsonBody(request: IncomingMessage, maxBytes = MAX_JSON_BODY_BYTES): Promise<unknown> {
-  const contentType = request.headers['content-type']?.split(';')[0]?.trim().toLowerCase()
-  if (contentType !== 'application/json') throw httpError(415, 'Content-Type must be application/json')
-
-  let size = 0
-  const chunks: Buffer[] = []
-  for await (const chunk of request) {
-    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
-    size += bytes.byteLength
-    if (size > maxBytes) throw httpError(413, 'Request body is too large')
-    chunks.push(bytes)
-  }
-  if (!chunks.length) throw badRequest('JSON body is required')
-  try {
-    return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown
-  } catch {
-    throw badRequest('Request body must be valid JSON')
-  }
-}
-
 function safeFilePath(root: string, pathname: string): string | null {
   const relative = pathname.replace(/^\/+/, '')
   const fullPath = resolve(root, relative)
@@ -409,7 +363,7 @@ async function handleCapturePolicyRequest(
     return true
   }
 
-  const payload = capturePolicyUpdatePayload(await readJsonBody(request))
+  const payload = capturePolicyUpdatePayload(await readJsonBody(request, { maxBytes: MAX_JSON_BODY_BYTES }))
   await capturePolicy.setEnabledSources(payload.enabledSources)
   writeJson(response, 200, capturePolicyResponse(capturePolicy))
   return true
@@ -507,7 +461,7 @@ export async function startHttpSurface(
       }
       if (url.pathname === '/api/v1/health') {
         const health = await readStorageHealth()
-        const runtimeHealth = dataRuntimeHealth(health.details?.dataRuntime)
+        const runtimeHealth = parseDataRuntimeHealth(health.details?.dataRuntime)
         const details = health.details
           ? Object.fromEntries(Object.entries(health.details).map(([key, value]) => [key, jsonValue(value)]))
           : undefined
