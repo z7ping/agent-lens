@@ -1,0 +1,17 @@
+{
+  "path": ["apps", "packages", "scripts"],
+  "reporters": ["console"],
+  "minLines": 8,
+  "minTokens": 50,
+  "threshold": 5,
+  "mode": "mild",
+  "gitignore": true,
+  "ignore": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/release/**",
+    "**/.electron-dist/**",
+    "**/coverage/**",
+    "**/*.test.*"
+  ]
+}
