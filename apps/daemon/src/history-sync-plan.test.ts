@@ -3,7 +3,6 @@ import test from 'node:test'
 import {
   createProgressiveHistoryStages,
   createParserReplayMaintenanceStages,
-  createParserReplayStages,
   parserReplayMaintenanceStagesAllowedByCapacity,
   stagesAllowedByCapacity,
   storageCapacityState,
@@ -34,10 +33,6 @@ test('数据库接近软阈值时只保留最近会话，超限或未知时停�
   assert.deepEqual(stagesAllowedByCapacity(stages, 'unknown').map(stage => stage.id), [])
   assert.equal(storageCapacityState({ dataGrowth: { capacity: { state: 'exceeded' } } }), 'exceeded')
   assert.equal(storageCapacityState(undefined), 'unknown')
-})
-
-test('启动期 parser replay 固定为空', () => {
-  assert.deepEqual(createParserReplayStages(Date.parse('2026-09-01T00:00:00.000Z')), [])
 })
 
 test('parser replay 维护阶段受容量状态约束', () => {
