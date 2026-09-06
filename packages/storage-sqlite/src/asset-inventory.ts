@@ -3,47 +3,99 @@ import type {
   AssetDefinition,
   AssetInventoryEntry,
   AssetInventoryReader,
+  AssetState,
   AssetStateObservation,
+  AssetType,
 } from '@agent-lens/core'
 import { SqliteExecutor } from './executor'
 
+type AssetRow = Record<string, unknown>
+const ASSET_TYPES = ['skill', 'mcp', 'plugin', 'extension', 'hook', 'memory', 'rule', 'builtin', 'unknown'] as const
+const ASSET_STATES = ['installed', 'configured', 'enabled', 'discoverable', 'exposed', 'invoked'] as const
+
+function rowRecord(value: unknown): AssetRow {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError('SQLite asset inventory query returned a non-object row')
+  }
+  return value as AssetRow
+}
+
+function requiredString(row: AssetRow, key: string): string {
+  const value = row[key]
+  if (typeof value !== 'string') throw new TypeError(`SQLite asset inventory field ${key} must be a string`)
+  return value
+}
+
+function optionalString(row: AssetRow, key: string): string | undefined {
+  const value = row[key]
+  if (value == null) return undefined
+  if (typeof value !== 'string') throw new TypeError(`SQLite asset inventory field ${key} must be a string or null`)
+  return value
+}
+
+function enumString<const T extends readonly string[]>(row: AssetRow, key: string, allowed: T): T[number] {
+  const value = requiredString(row, key)
+  if (!(allowed as readonly string[]).includes(value)) {
+    throw new TypeError(`SQLite asset inventory field ${key} has unsupported value: ${value}`)
+  }
+  return value as T[number]
+}
+
 function decodeEvidenceRefs(value: unknown): string[] {
   if (typeof value !== 'string' || value.length === 0) return []
-  const parsed = JSON.parse(value) as unknown
-  return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(value)
+  } catch {
+    throw new TypeError('SQLite asset inventory evidence_refs_json contains invalid JSON')
+  }
+  if (!Array.isArray(parsed) || !parsed.every(item => typeof item === 'string')) {
+    throw new TypeError('SQLite asset inventory evidence_refs_json must contain a JSON string array')
+  }
+  return parsed
 }
 
-function mapDefinition(row: any): AssetDefinition {
+function mapDefinition(value: unknown): AssetDefinition {
+  const row = rowRecord(value)
+  const displayName = optionalString(row, 'display_name')
+  const upstreamIdentity = optionalString(row, 'upstream_identity')
   return {
-    id: row.asset_id,
-    type: row.asset_type,
-    canonicalName: row.canonical_name,
-    ...(row.display_name ? { displayName: row.display_name } : {}),
-    ...(row.upstream_identity ? { upstreamIdentity: row.upstream_identity } : {}),
-  } as AssetDefinition
-}
-
-function mapBinding(row: any): AssetBinding {
-  return {
-    id: row.binding_id,
-    assetId: row.asset_id,
-    installationId: row.installation_id,
-    ...(row.path ? { path: row.path } : {}),
-    ...(row.source ? { source: row.source } : {}),
-    ...(row.version ? { version: row.version } : {}),
+    id: requiredString(row, 'asset_id'),
+    type: enumString(row, 'asset_type', ASSET_TYPES) as AssetType,
+    canonicalName: requiredString(row, 'canonical_name'),
+    ...(displayName === undefined ? {} : { displayName }),
+    ...(upstreamIdentity === undefined ? {} : { upstreamIdentity }),
   }
 }
 
-function mapState(row: any): AssetStateObservation {
-  const value = row.value === 'true' ? true : row.value === 'false' ? false : 'unknown'
+function mapBinding(value: unknown): AssetBinding {
+  const row = rowRecord(value)
+  const path = optionalString(row, 'path')
+  const source = optionalString(row, 'source')
+  const version = optionalString(row, 'version')
   return {
-    id: row.id,
-    assetBindingId: row.asset_binding_id,
-    state: row.state,
-    value,
-    observedAt: row.observed_at,
+    id: requiredString(row, 'binding_id'),
+    assetId: requiredString(row, 'asset_id'),
+    installationId: requiredString(row, 'installation_id'),
+    ...(path === undefined ? {} : { path }),
+    ...(source === undefined ? {} : { source }),
+    ...(version === undefined ? {} : { version }),
+  }
+}
+
+function mapState(value: unknown): AssetStateObservation {
+  const row = rowRecord(value)
+  const rawValue = requiredString(row, 'value')
+  const stateValue = rawValue === 'true' ? true : rawValue === 'false' ? false : rawValue === 'unknown' ? 'unknown' : null
+  if (stateValue === null) throw new TypeError(`SQLite asset inventory field value has unsupported value: ${rawValue}`)
+  return {
+    id: requiredString(row, 'id'),
+    assetBindingId: requiredString(row, 'asset_binding_id'),
+    state: enumString(row, 'state', ASSET_STATES) as AssetState,
+    value: stateValue,
+    observedAt: requiredString(row, 'observed_at'),
     evidenceRefs: decodeEvidenceRefs(row.evidence_refs_json),
-  } as AssetStateObservation
+  }
 }
 
 export class SqliteAssetInventoryReader implements AssetInventoryReader {
@@ -75,11 +127,14 @@ export class SqliteAssetInventoryReader implements AssetInventoryReader {
         ORDER BY observed_at DESC, id DESC
       `)
 
-      return bindings.map(row => ({
-        definition: mapDefinition(row),
-        binding: mapBinding(row),
-        states: states.all((row as any).binding_id).map(mapState),
-      }))
+      return bindings.map(row => {
+        const binding = mapBinding(row)
+        return {
+          definition: mapDefinition(row),
+          binding,
+          states: states.all(binding.id).map(mapState),
+        }
+      })
     })
   }
 }
