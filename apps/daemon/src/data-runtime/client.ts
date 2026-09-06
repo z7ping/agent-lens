@@ -13,6 +13,8 @@ import {
 } from './protocol.js'
 
 const METRIC_SAMPLE_LIMIT = 128
+const HEARTBEAT_INTERVAL_MS = 5_000
+const HEARTBEAT_TIMEOUT_MS = 15_000
 
 function pushSample(samples: number[], value: number): void {
   samples.push(value)
@@ -36,6 +38,7 @@ export interface DataRuntimeClientSnapshot {
   requests: number
   completed: number
   timeouts: number
+  livenessFailures: number
   lastError?: string
   durationMs: { last: number; max: number; p50: number; p95: number; p99: number }
 }
@@ -54,6 +57,8 @@ export interface DataRuntimeClientOptions {
   role?: DataRuntimeRole
   dbPath?: string
   nodeId?: string
+  heartbeatIntervalMs?: number
+  heartbeatTimeoutMs?: number
 }
 
 export function resolveDataRuntimeWorkerUrl(moduleUrl = import.meta.url): URL {
@@ -70,11 +75,14 @@ export class DataRuntimeClient {
   private requests = 0
   private completed = 0
   private timeouts = 0
+  private livenessFailures = 0
   private lastError: string | undefined
   private lastDurationMs = 0
   private maxDurationMs = 0
   private readonly durations: number[] = []
   private stopping = false
+  private heartbeatTimer: NodeJS.Timeout | null = null
+  private heartbeatInFlight = false
   readonly role: DataRuntimeRole
 
   constructor(private readonly options: DataRuntimeClientOptions = {}) {
@@ -83,6 +91,7 @@ export class DataRuntimeClient {
 
   async start(): Promise<void> {
     if (this.worker && this.stateValue !== 'stopped') return
+    this.stopHeartbeat()
     this.stopping = false
     this.stateValue = 'starting'
     this.lastError = undefined
@@ -100,6 +109,7 @@ export class DataRuntimeClient {
     worker.on('message', value => this.handleMessage(value))
     worker.on('error', error => this.markDegraded(error))
     worker.on('exit', code => {
+      this.stopHeartbeat()
       if (this.worker === worker) this.worker = null
       if (this.stopping) {
         this.stateValue = 'stopped'
@@ -110,8 +120,9 @@ export class DataRuntimeClient {
     })
 
     try {
-      await this.request('ping', undefined, Math.max(10_000, this.options.requestTimeoutMs ?? 0))
+      await this.requestInternal('ping', undefined, Math.max(10_000, this.options.requestTimeoutMs ?? 0), true)
       this.stateValue = 'ready'
+      this.startHeartbeat()
     } catch (error) {
       this.markDegraded(error)
       throw error
@@ -132,6 +143,7 @@ export class DataRuntimeClient {
       requests: this.requests,
       completed: this.completed,
       timeouts: this.timeouts,
+      livenessFailures: this.livenessFailures,
       ...(this.lastError ? { lastError: this.lastError } : {}),
       durationMs: {
         last: this.lastDurationMs,
@@ -143,15 +155,42 @@ export class DataRuntimeClient {
     }
   }
 
-  async request<T = unknown>(
+  request<T = unknown>(
     method: DataRuntimeMethod,
     params?: Record<string, unknown>,
     timeoutMs = this.options.requestTimeoutMs ?? DATA_RUNTIME_DEFAULT_TIMEOUT_MS,
   ): Promise<T> {
+    return this.requestInternal(method, params, timeoutMs, false)
+  }
+
+  async shutdown(): Promise<void> {
+    this.stopHeartbeat()
     const worker = this.worker
-    if (!worker) throw new Error(`Data Runtime ${this.role} worker is not started`)
+    if (!worker) {
+      this.stateValue = 'stopped'
+      return
+    }
+    this.stopping = true
+    try {
+      await this.requestInternal('shutdown', undefined, 1_000, false).catch(() => undefined)
+    } finally {
+      await worker.terminate().catch(() => undefined)
+      if (this.worker === worker) this.worker = null
+      this.stateValue = 'stopped'
+      this.rejectAll(new Error(`Data Runtime ${this.role} worker stopped`))
+    }
+  }
+
+  private requestInternal<T = unknown>(
+    method: DataRuntimeMethod,
+    params: Record<string, unknown> | undefined,
+    timeoutMs: number,
+    fatalTimeout: boolean,
+  ): Promise<T> {
+    const worker = this.worker
+    if (!worker) return Promise.reject(new Error(`Data Runtime ${this.role} worker is not started`))
     if (this.pending.size >= DATA_RUNTIME_MAX_PENDING_REQUESTS) {
-      throw new Error(`Data Runtime ${this.role} IPC pending request limit reached`)
+      return Promise.reject(new Error(`Data Runtime ${this.role} IPC pending request limit reached`))
     }
 
     const requestId = randomUUID()
@@ -163,7 +202,7 @@ export class DataRuntimeClient {
       ...(params ? { params } : {}),
     }
     if (encodedMessageBytes(request) > DATA_RUNTIME_MAX_MESSAGE_BYTES) {
-      throw new Error(`Data Runtime ${this.role} IPC request exceeds size limit`)
+      return Promise.reject(new Error(`Data Runtime ${this.role} IPC request exceeds size limit`))
     }
 
     this.requests += 1
@@ -176,42 +215,46 @@ export class DataRuntimeClient {
         this.pending.delete(requestId)
         this.timeouts += 1
         const error = new Error(`Data Runtime ${this.role} request timed out: ${method}`)
-        this.markDegraded(error)
+        this.lastError = error.message
         reject(error)
 
-        // A timed-out synchronous Worker may still be blocked with every later request
-        // queued behind it. Treat the timeout as a circuit-breaker boundary: terminate
-        // this Worker and let DataRuntimeService reopen it from durable state.
-        if (!this.stopping && this.worker === worker) {
+        // Ordinary query timeouts are request-local. A slow SQL must not kill the
+        // shared foreground Reader and fail unrelated requests. Only explicit
+        // liveness probes are allowed to recycle a Worker.
+        if (fatalTimeout && !this.stopping && this.worker === worker) {
+          this.livenessFailures += 1
+          this.markDegraded(error)
           void worker.terminate().catch(() => undefined)
         }
       }, Math.max(1, timeoutMs))
       timer.unref?.()
-      this.pending.set(requestId, {
-        startedAt,
-        timer,
-        resolve,
-        reject,
-      })
+      this.pending.set(requestId, { startedAt, timer, resolve, reject })
       worker.postMessage(request)
     })
   }
 
-  async shutdown(): Promise<void> {
-    const worker = this.worker
-    if (!worker) {
-      this.stateValue = 'stopped'
-      return
-    }
-    this.stopping = true
-    try {
-      await this.request('shutdown', undefined, 1_000).catch(() => undefined)
-    } finally {
-      await worker.terminate().catch(() => undefined)
-      if (this.worker === worker) this.worker = null
-      this.stateValue = 'stopped'
-      this.rejectAll(new Error(`Data Runtime ${this.role} worker stopped`))
-    }
+  private startHeartbeat(): void {
+    if (this.heartbeatTimer || this.stopping) return
+    const intervalMs = Math.max(1_000, this.options.heartbeatIntervalMs ?? HEARTBEAT_INTERVAL_MS)
+    this.heartbeatTimer = setInterval(() => {
+      if (this.stopping || this.stateValue !== 'ready' || this.heartbeatInFlight) return
+      this.heartbeatInFlight = true
+      void this.requestInternal(
+        'ping',
+        undefined,
+        Math.max(5_000, this.options.heartbeatTimeoutMs ?? HEARTBEAT_TIMEOUT_MS),
+        true,
+      ).catch(() => undefined).finally(() => {
+        this.heartbeatInFlight = false
+      })
+    }, intervalMs)
+    this.heartbeatTimer.unref?.()
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer)
+    this.heartbeatTimer = null
+    this.heartbeatInFlight = false
   }
 
   private handleMessage(value: unknown): void {
@@ -252,4 +295,6 @@ export class DataRuntimeClient {
 export const dataRuntimeClientInternals = {
   percentile,
   METRIC_SAMPLE_LIMIT,
+  HEARTBEAT_INTERVAL_MS,
+  HEARTBEAT_TIMEOUT_MS,
 }
