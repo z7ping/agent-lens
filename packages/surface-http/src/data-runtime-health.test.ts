@@ -63,3 +63,30 @@ test('Data Runtime degraded keeps ready online while health reports degraded', a
     await surface.dispose()
   }
 })
+
+test('HTTP health can expose O(1) maintenance fairness metrics without changing storage ownership', async () => {
+  const storage = {
+    async health() {
+      return { ok: true, schemaVersion: 18, details: { sqlite: 'ok' } }
+    },
+  } as unknown as StorageService
+  const healthStorage = httpSurfacePluginInternals.storageWithRuntimeHealth(
+    storage,
+    undefined,
+    undefined,
+    () => ({
+      maintenanceGate: {
+        permits: { quiet: 3, forced: 2, maxWaitMs: 5_000 },
+        policy: { quietMs: 5_000, maxDeferMs: 5_000 },
+      },
+    }),
+  )
+
+  const health = await healthStorage.health()
+  assert.equal(health.ok, true)
+  assert.equal(health.schemaVersion, 18)
+  assert.deepEqual(health.details?.maintenanceGate, {
+    permits: { quiet: 3, forced: 2, maxWaitMs: 5_000 },
+    policy: { quietMs: 5_000, maxDeferMs: 5_000 },
+  })
+})
