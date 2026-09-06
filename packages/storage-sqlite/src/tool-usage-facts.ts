@@ -37,8 +37,22 @@ function aggregateFilter(input: ToolUsageAggregateQuery): { conditions: string[]
     params.push(input.sourceId)
   }
   if (input.toolName) {
-    conditions.push('f.tool_name = ?')
-    params.push(input.toolName)
+    conditions.push(`(
+      f.tool_name = ?
+      OR (
+        f.kind = 'tool.result'
+        AND f.call_id IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM tool_usage_fact_projection AS linked_call
+          WHERE linked_call.kind = 'tool.call'
+            AND linked_call.logical_session_id = f.logical_session_id
+            AND linked_call.call_id = f.call_id
+            AND linked_call.tool_name = ?
+        )
+      )
+    )`)
+    params.push(input.toolName, input.toolName)
   }
   if (input.from) {
     conditions.push('f.effective_at >= ?')
