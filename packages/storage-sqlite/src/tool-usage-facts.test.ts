@@ -60,8 +60,20 @@ test('工具事实投影提取高频字段并驱动聚合', async () => {
     assert.equal(skillTool?.resultCount, 1)
     assert.equal(skillTool?.errorCount, 1)
     assert.equal(skillTool?.totalDurationMs, 12)
+    assert.equal(skillTool?.sessions.length, 1)
+    assert.ok((skillTool?.observationIds.length ?? 0) > 0)
     const skillAsset = aggregate.assets.find(item => item.type === 'skill' && item.canonicalName === 'review-code')
     assert.equal(skillAsset?.callCount, 1)
+
+    const summaryOnly = await storage.toolUsageObservations.aggregate({ detailLimit: 0 })
+    const summarySkill = summaryOnly.tools.find(item => item.nativeToolName === 'Skill')
+    assert.equal(summarySkill?.callCount, skillTool?.callCount)
+    assert.equal(summarySkill?.resultCount, skillTool?.resultCount)
+    assert.equal(summarySkill?.errorCount, skillTool?.errorCount)
+    assert.equal(summarySkill?.sessionCount, skillTool?.sessionCount)
+    assert.deepEqual(summarySkill?.sessions, [])
+    assert.deepEqual(summarySkill?.observationIds, [])
+    assert.equal(summaryOnly.assets.find(item => item.canonicalName === 'review-code')?.observationIds.length, 0)
   } finally {
     await storage.close()
   }
