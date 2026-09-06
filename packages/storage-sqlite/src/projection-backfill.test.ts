@@ -40,9 +40,6 @@ async function setup() {
     VALUES ('a-unknown', 'evidence-a');
   `)
 
-  // Simulate rows that existed before migrations 17/18. Current triggers populated
-  // them during setup, so remove only the materialized rows before exercising the
-  // maintenance backfill path.
   storage.db.exec(`
     DELETE FROM unknown_observation_projection;
     DELETE FROM tool_usage_fact_projection;
@@ -69,13 +66,28 @@ test('Unknown history projection backfills with a stable cursor', async () => {
   }
 })
 
-test('Tool usage history projection resumes across bounded batches', async () => {
+test('Tool usage history projection exposes partial coverage until bounded backfill completes', async () => {
   const storage = await setup()
   try {
+    assert.deepEqual(await storage.projectionBackfill.toolUsageFactCoverage(), {
+      sourceObservationCount: 2,
+      projectedCount: 0,
+      missingCount: 2,
+      coverageRatio: 0,
+      ready: false,
+    })
+
     const first = await storage.projectionBackfill.backfillToolUsageFacts(undefined, 1)
     assert.equal(first.scanned, 1)
     assert.equal(first.cursor, 'b-tool')
     assert.equal(first.hasMore, true)
+    assert.deepEqual(await storage.projectionBackfill.toolUsageFactCoverage(), {
+      sourceObservationCount: 2,
+      projectedCount: 1,
+      missingCount: 1,
+      coverageRatio: 0.5,
+      ready: false,
+    })
 
     const second = await storage.projectionBackfill.backfillToolUsageFacts(first.cursor, 1)
     assert.equal(second.scanned, 1)
@@ -85,6 +97,13 @@ test('Tool usage history projection resumes across bounded batches', async () =>
     const done = await storage.projectionBackfill.backfillToolUsageFacts(second.cursor, 1)
     assert.equal(done.scanned, 0)
     assert.equal(done.hasMore, false)
+    assert.deepEqual(await storage.projectionBackfill.toolUsageFactCoverage(), {
+      sourceObservationCount: 2,
+      projectedCount: 2,
+      missingCount: 0,
+      coverageRatio: 1,
+      ready: true,
+    })
 
     const rows = storage.db.prepare(`
       SELECT observation_id, tool_name, call_id, success, duration_ms
