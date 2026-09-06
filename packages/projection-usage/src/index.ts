@@ -14,6 +14,7 @@ import {
   type ToolAssetUsageQueryDto,
   type ToolAssetUsageResponseDto,
   type ToolUsageDto,
+  type ToolUsageProjectionStatusDto,
   type UsageAssetType,
 } from '@agent-lens/protocol'
 
@@ -26,8 +27,21 @@ const MAX_DETAIL_SESSIONS = 100
 const AGGREGATE_OVERVIEW_DETAIL_LIMIT = 0
 const AGGREGATE_DETAIL_LIMIT = 5
 const AGGREGATE_ASSET_DETAIL_LIMIT = 0
+const PROJECTION_STATUS_CACHE_MS = 1_000
 
 type UsageObservation = CanonicalObservation | ToolUsageObservationRecord
+
+type ToolUsageFactCoverage = {
+  sourceObservationCount: number
+  projectedCount: number
+  missingCount: number
+  coverageRatio: number
+  ready: boolean
+}
+
+type ProjectionBackfillStatusReader = {
+  toolUsageFactCoverage(): Promise<ToolUsageFactCoverage>
+}
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
@@ -77,6 +91,9 @@ function pushObservationSample(ids: string[], id: string): void {
 function usageReader(storage: StorageService): ToolUsageObservationReader | undefined {
   return (storage as StorageService & { readonly toolUsageObservations?: ToolUsageObservationReader }).toolUsageObservations
 }
+function projectionStatusReader(storage: StorageService): ProjectionBackfillStatusReader | undefined {
+  return (storage as StorageService & { readonly projectionBackfill?: ProjectionBackfillStatusReader }).projectionBackfill
+}
 function aggregateQuery(query: ToolAssetUsageQueryDto, detailLimit = AGGREGATE_OVERVIEW_DETAIL_LIMIT): ToolUsageAggregateQuery {
   return {
     ...(query.installationId ? { installationId: query.installationId } : {}),
@@ -94,7 +111,35 @@ function hasEmbeddedMetadata(observation: UsageObservation): observation is Tool
 }
 
 export class ToolAssetUsageProjection {
+  private cachedProjectionStatus: ToolUsageProjectionStatusDto | null = null
+  private cachedProjectionStatusAt = 0
+  private projectionStatusInFlight: Promise<ToolUsageProjectionStatusDto | undefined> | null = null
+
   constructor(private readonly storage: StorageService) {}
+
+  private projectionStatus(): Promise<ToolUsageProjectionStatusDto | undefined> {
+    if (this.cachedProjectionStatus && Date.now() - this.cachedProjectionStatusAt < PROJECTION_STATUS_CACHE_MS) {
+      return Promise.resolve(this.cachedProjectionStatus)
+    }
+    if (this.projectionStatusInFlight) return this.projectionStatusInFlight
+    const reader = projectionStatusReader(this.storage)
+    if (!reader) return Promise.resolve(undefined)
+    this.projectionStatusInFlight = reader.toolUsageFactCoverage()
+      .then(coverage => {
+        const status: ToolUsageProjectionStatusDto = {
+          state: coverage.ready ? 'ready' : 'partial',
+          sourceObservationCount: coverage.sourceObservationCount,
+          projectedCount: coverage.projectedCount,
+          missingCount: coverage.missingCount,
+          coverageRatio: coverage.coverageRatio,
+        }
+        this.cachedProjectionStatus = status
+        this.cachedProjectionStatusAt = Date.now()
+        return status
+      })
+      .finally(() => { this.projectionStatusInFlight = null })
+    return this.projectionStatusInFlight
+  }
 
   private async forEachKind(
     kind: 'tool.call' | 'tool.result',
@@ -225,7 +270,10 @@ export class ToolAssetUsageProjection {
     const limit = Math.max(1, Math.min(query.limit ?? DEFAULT_LIMIT, MAX_LIMIT))
     const reader = usageReader(this.storage)
     if (reader?.aggregate) {
-      const aggregate = await reader.aggregate(aggregateQuery(query, normalizedDetailLimit))
+      const [aggregate, projection] = await Promise.all([
+        reader.aggregate(aggregateQuery(query, normalizedDetailLimit)),
+        this.projectionStatus(),
+      ])
       const toolDtos: ToolUsageDto[] = aggregate.tools.map(item => ({
         nativeToolName: item.nativeToolName,
         sourceIds: [...item.sourceIds].sort(),
@@ -273,6 +321,7 @@ export class ToolAssetUsageProjection {
           assetCount: assetDtos.length,
           unattributedToolCalls: aggregate.unattributedToolCalls,
           hasMoreTools,
+          ...(projection ? { projection } : {}),
           generatedAt: new Date().toISOString(),
         },
       }
@@ -412,9 +461,11 @@ export const usageProjectionInternals = {
   callId,
   toolName,
   aggregateQuery,
+  projectionStatusReader,
   aggregateOverviewDetailLimit: AGGREGATE_OVERVIEW_DETAIL_LIMIT,
   aggregateDetailLimit: AGGREGATE_DETAIL_LIMIT,
   aggregateAssetDetailLimit: AGGREGATE_ASSET_DETAIL_LIMIT,
   maxDetailObservationIds: MAX_DETAIL_OBSERVATION_IDS,
   maxDetailSessions: MAX_DETAIL_SESSIONS,
+  projectionStatusCacheMs: PROJECTION_STATUS_CACHE_MS,
 }
