@@ -6,8 +6,7 @@ import { Button, SelectMenu } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
 import { TaskSurface } from './TaskSurface'
 import { deriveTaskProjectOptions, pickTaskProject, type TaskProjectOption } from './task-center'
-
-const PROJECT_BOOTSTRAP_LIMIT = 20
+import { PROJECT_BOOTSTRAP_LIMIT } from './new-pi-task'
 
 export function NewPiTaskPage() {
   const location = useLocation()
@@ -89,5 +88,3 @@ export function NewPiTaskPage() {
     </section>
   </div>
 }
-
-export const newPiTaskInternals = { PROJECT_BOOTSTRAP_LIMIT }
