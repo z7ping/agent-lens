@@ -240,9 +240,6 @@ try {
     await new Promise(resolve => setTimeout(resolve, INITIAL_BACKGROUND_SYNC_DELAY_MS))
     if (!await waitForDataRuntime(runtimeController.signal)) return
 
-    // Capacity must be known before any non-essential projection rebuild. On a
-    // large/unknown store the control plane and realtime capture remain available,
-    // while rebuild/backfill/replay/index expansion stays paused.
     const initialStorageHealth = await app.context.storage.health()
     const initialCapacityState = storageCapacityState(initialStorageHealth.details)
 
@@ -358,64 +355,92 @@ try {
 
     const preMaintenanceHealth = await app.context.storage.health()
     const preMaintenanceCapacity = storageCapacityState(preMaintenanceHealth.details)
+    const capacityConstrained = preMaintenanceCapacity === 'exceeded' || preMaintenanceCapacity === 'unknown'
 
-    if (preMaintenanceCapacity === 'exceeded' || preMaintenanceCapacity === 'unknown') {
-      console.warn(`[AgentLens] storage capacity=${preMaintenanceCapacity}; projection backfill, deferred indexes and parser replay are paused`)
-    } else {
-      const backfills = [
-        {
-          id: 'projection:unknown-observation:v17',
-          scope: 'unknown-observation-v17',
-          label: 'Unknown Observation',
-          run: backfillUnknownObservationProjection,
-        },
+    // Tool Usage Facts are a correctness projection, not optional expansion. If
+    // this backfill is permanently skipped on a large store the Tools/Agents UI
+    // silently becomes incomplete forever. Keep it resumable and foreground-gated,
+    // but shrink the batch while capacity is constrained.
+    try {
+      const toolFactRun = await runMaintenanceJob(
+        maintenanceJobs,
         {
           id: 'projection:tool-usage-facts:v18',
+          type: 'projection-rebuild',
           scope: 'tool-usage-facts-v18',
-          label: 'Tool Usage Facts',
-          run: backfillToolUsageFactProjection,
+          priority: MAINTENANCE_PRIORITY.projection,
         },
-      ] as const
+        runtimeController.signal,
+        async job => backfillToolUsageFactProjection(
+          projectionBackfill,
+          gate,
+          runtimeController.signal,
+          {
+            initialProgress: job.initialProgress,
+            batchSize: capacityConstrained ? 50 : 250,
+            report: job.report,
+          },
+        ),
+        value => ({
+          scanned: value.scanned,
+          written: value.written,
+          batches: value.batches,
+          ...(value.cursor ? { cursor: value.cursor } : {}),
+          aborted: value.aborted,
+        }),
+      )
+      if (toolFactRun?.status === 'contended') {
+        console.warn('[AgentLens] Tool Usage Facts projection backfill contended')
+      } else if (toolFactRun?.value) {
+        console.info(`[AgentLens] Tool Usage Facts projection backfill: scanned=${toolFactRun.value.scanned} written=${toolFactRun.value.written} batches=${toolFactRun.value.batches} constrained=${capacityConstrained}`)
+      }
+    } catch (error) {
+      if (!runtimeController.signal.aborted) {
+        console.error('[AgentLens] Tool Usage Facts projection backfill failed', error)
+      }
+    }
 
-      for (const backfill of backfills) {
-        if (runtimeController.signal.aborted) return
-        try {
-          const run = await runMaintenanceJob(
-            maintenanceJobs,
-            {
-              id: backfill.id,
-              type: 'projection-rebuild',
-              scope: backfill.scope,
-              priority: MAINTENANCE_PRIORITY.projection,
-            },
+    if (runtimeController.signal.aborted) return
+
+    if (capacityConstrained) {
+      console.warn(`[AgentLens] storage capacity=${preMaintenanceCapacity}; non-essential projection backfill, deferred indexes and parser replay remain paused; Tool Usage Facts consistency backfill is still enabled`)
+    } else {
+      try {
+        const unknownRun = await runMaintenanceJob(
+          maintenanceJobs,
+          {
+            id: 'projection:unknown-observation:v17',
+            type: 'projection-rebuild',
+            scope: 'unknown-observation-v17',
+            priority: MAINTENANCE_PRIORITY.projection,
+          },
+          runtimeController.signal,
+          async job => backfillUnknownObservationProjection(
+            projectionBackfill,
+            gate,
             runtimeController.signal,
-            async job => backfill.run(
-              projectionBackfill,
-              gate,
-              runtimeController.signal,
-              {
-                initialProgress: job.initialProgress,
-                batchSize: 250,
-                report: job.report,
-              },
-            ),
-            value => ({
-              scanned: value.scanned,
-              written: value.written,
-              batches: value.batches,
-              ...(value.cursor ? { cursor: value.cursor } : {}),
-              aborted: value.aborted,
-            }),
-          )
-          if (run?.status === 'contended') {
-            console.warn(`[AgentLens] ${backfill.label} projection backfill contended`)
-          } else if (run?.value) {
-            console.info(`[AgentLens] ${backfill.label} projection backfill: scanned=${run.value.scanned} written=${run.value.written} batches=${run.value.batches}`)
-          }
-        } catch (error) {
-          if (!runtimeController.signal.aborted) {
-            console.error(`[AgentLens] ${backfill.label} projection backfill failed`, error)
-          }
+            {
+              initialProgress: job.initialProgress,
+              batchSize: 250,
+              report: job.report,
+            },
+          ),
+          value => ({
+            scanned: value.scanned,
+            written: value.written,
+            batches: value.batches,
+            ...(value.cursor ? { cursor: value.cursor } : {}),
+            aborted: value.aborted,
+          }),
+        )
+        if (unknownRun?.status === 'contended') {
+          console.warn('[AgentLens] Unknown Observation projection backfill contended')
+        } else if (unknownRun?.value) {
+          console.info(`[AgentLens] Unknown Observation projection backfill: scanned=${unknownRun.value.scanned} written=${unknownRun.value.written} batches=${unknownRun.value.batches}`)
+        }
+      } catch (error) {
+        if (!runtimeController.signal.aborted) {
+          console.error('[AgentLens] Unknown Observation projection backfill failed', error)
         }
       }
 
