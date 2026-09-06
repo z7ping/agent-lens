@@ -196,7 +196,9 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const onNewTask = location.pathname === '/review/new'
   const onLocalReview = onReview && !onHubReview && !onPiLive && !onNewTask
   const onTools = location.pathname.startsWith('/tools')
+  const onInsights = location.pathname.startsWith('/insights')
   const onAgents = location.pathname.startsWith('/agents')
+  const needsFacets = (onReview && !onNewTask) || onTools || onInsights || onAgents
   const hasSseBanner = Boolean(snapshot.health && !snapshot.liveConnected && !onPiLive)
   const agentOverviewItems = snapshot.agents?.items ?? []
   const resolvedAgentOverviewSourceId = agentOverviewItems.some(item => item.sourceId === agentOverviewSourceId)
@@ -209,11 +211,12 @@ function Shell({ model }: { model: AgentLensClientModel }) {
 
   useEffect(() => {
     model.setReviewActive(onLocalReview)
+    if (needsFacets) void model.ensureFacets()
     if (onLocalReview) void model.ensureReview()
     if (onTools) void model.ensureUsage()
     if (onAgents) void model.ensureAgents()
     return () => { if (onLocalReview) model.setReviewActive(false) }
-  }, [model, onLocalReview, onTools, onAgents])
+  }, [model, needsFacets, onLocalReview, onTools, onAgents])
 
   useEffect(() => {
     if (!onLocalReview) {
