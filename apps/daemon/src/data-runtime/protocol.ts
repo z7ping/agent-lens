@@ -51,7 +51,17 @@ export function encodedMessageBytes(value: unknown): number {
 export function isDataRuntimeReply(value: unknown): value is DataRuntimeResponse | DataRuntimeErrorResponse {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const record = value as Record<string, unknown>
-  return record.protocolVersion === DATA_RUNTIME_PROTOCOL_VERSION
-    && (record.type === 'response' || record.type === 'error')
-    && typeof record.requestId === 'string'
+  if (
+    record.protocolVersion !== DATA_RUNTIME_PROTOCOL_VERSION
+    || typeof record.requestId !== 'string'
+  ) return false
+
+  if (record.type === 'response') return true
+  if (record.type !== 'error') return false
+
+  const error = record.error
+  if (!error || typeof error !== 'object' || Array.isArray(error)) return false
+  const errorRecord = error as Record<string, unknown>
+  return typeof errorRecord.code === 'string'
+    && typeof errorRecord.message === 'string'
 }
