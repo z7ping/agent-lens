@@ -69,9 +69,10 @@ if (!initialUsage.ok || !initialProjection) {
 
 if (initialProjection.state === 'ready') {
   console.log(JSON.stringify({
-    passed: true,
+    passed: false,
     skipped: true,
-    reason: 'Tool Fact projection is already ready; run this acceptance against an incomplete large-DB copy to validate active backfill coexistence.',
+    verified: false,
+    reason: 'Tool Fact projection is already ready; this run did not exercise active backfill + foreground coexistence. Use an incomplete large-DB copy for this acceptance.',
     projection: initialProjection,
   }, null, 2))
   process.exit(0)
@@ -112,6 +113,8 @@ const passed = failures === 0 && finalUsage.ok && nonRegressing && progressed
 
 console.log(JSON.stringify({
   passed,
+  skipped: false,
+  verified: passed,
   durationMs,
   rounds,
   requests: samples.length,
