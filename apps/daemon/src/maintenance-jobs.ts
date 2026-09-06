@@ -22,6 +22,12 @@ export interface MaintenanceJobSpec {
   scope: string
   priority: number
   progress?: JsonValue
+  /**
+   * Re-open a previously completed job with a fresh progress cursor. Use only
+   * when an independent readiness check proves the materialized result became
+   * incomplete after the job had completed.
+   */
+  restartCompleted?: boolean
 }
 
 export interface MaintenanceJobContext {
@@ -44,7 +50,7 @@ function errorSummary(error: unknown): string {
 function transientDataRuntimeError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
   return /Data Runtime/i.test(message)
-    && /(unavailable|not started|timed out|worker|request limit|degraded)/i.test(message)
+    && /(unavailable|not started|timed out|worker|request limit|degraded|overload|queue wait)/i.test(message)
 }
 
 function waitForRetry(signal: AbortSignal): Promise<void> {
@@ -83,6 +89,18 @@ export async function runMaintenanceJob<T>(
   if (signal.aborted) {
     const paused = await store.transition(job.id, job.revision, { state: 'paused' })
     return { status: 'paused', job: paused ?? job }
+  }
+
+  if (spec.restartCompleted && job.state === 'completed') {
+    const restarted = await store.transition(job.id, job.revision, {
+      state: 'pending',
+      progress: spec.progress ?? {},
+    })
+    if (!restarted) {
+      const latest = await store.get(job.id)
+      return { status: 'contended', job: latest ?? job }
+    }
+    job = restarted
   }
 
   const running = await store.transition(job.id, job.revision, {
