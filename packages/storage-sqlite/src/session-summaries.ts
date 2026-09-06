@@ -414,10 +414,9 @@ function summaryQueryWhere(input: SessionSummaryQuery): { sql: string; params: u
     )`)
     params.push(`%${search}%`, `%${search}%`)
   }
-  const activeAt = input.after?.activeAt ?? input.after?.startedAt
-  if (input.after && activeAt) {
+  if (input.after) {
     conditions.push('(summary.ended_at < ? OR (summary.ended_at = ? AND summary.logical_session_id > ?))')
-    params.push(activeAt, activeAt, input.after.logicalSessionId)
+    params.push(input.after.activeAt, input.after.activeAt, input.after.logicalSessionId)
   }
   return { sql: whereClause(conditions), params }
 }
