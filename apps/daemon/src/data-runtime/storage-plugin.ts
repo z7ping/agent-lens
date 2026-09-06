@@ -17,6 +17,8 @@ export interface DataRuntimeStoragePluginConfig {
   path: string
 }
 
+const FOREGROUND_READER_COUNT = 2
+
 const manifest = {
   pluginId: '@agent-lens/data-runtime-storage',
   pluginVersion: '1.0.0-alpha.3',
@@ -35,20 +37,29 @@ const applyDataRuntimeStorage = Object.assign(
       nodeId: ctx.node.identity.nodeId,
     }
     const writer = new DataRuntimeClient({ ...common, role: 'writer' })
-    const reader = config.path === ':memory:'
+    const readers = config.path === ':memory:'
+      ? [writer]
+      : Array.from({ length: FOREGROUND_READER_COUNT }, () => new DataRuntimeClient({ ...common, role: 'reader' }))
+    const maintenanceReader = config.path === ':memory:'
       ? writer
       : new DataRuntimeClient({ ...common, role: 'reader' })
-    const runtime = createDataRuntimeStorage(writer, reader)
+    const runtime = createDataRuntimeStorage(writer, readers, maintenanceReader)
 
-    // Do not make the HTTP/Pi control plane depend on Data Runtime cold-start
-    // success. Failed workers stay degraded and the recovery loop retries them.
     await writer.start().catch(error => {
       console.error('[AgentLens] Data Runtime writer unavailable at startup; control plane will run degraded', error)
     })
-    if (writer.state() === 'ready' && reader !== writer) {
-      await reader.start().catch(error => {
-        console.error('[AgentLens] Data Runtime reader unavailable at startup; control plane will run degraded', error)
-      })
+    if (writer.state() === 'ready') {
+      for (const [index, reader] of readers.entries()) {
+        if (reader === writer) continue
+        await reader.start().catch(error => {
+          console.error(`[AgentLens] Data Runtime foreground reader ${index + 1} unavailable at startup`, error)
+        })
+      }
+      if (maintenanceReader !== writer) {
+        await maintenanceReader.start().catch(error => {
+          console.error('[AgentLens] Data Runtime maintenance reader unavailable at startup', error)
+        })
+      }
     }
     runtime.dataRuntime.startRecovery()
 
@@ -67,3 +78,7 @@ const applyDataRuntimeStorage = Object.assign(
 )
 
 export const dataRuntimeStoragePlugin = defineAgentLensPlugin(manifest, applyDataRuntimeStorage)
+
+export const dataRuntimeStoragePluginInternals = {
+  FOREGROUND_READER_COUNT,
+}
