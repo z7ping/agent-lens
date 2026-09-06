@@ -12,11 +12,16 @@ import type {
 } from '@agent-lens/core'
 import type { UnifiedReadService } from '@agent-lens/core/replication'
 import { DataRuntimeClient, type DataRuntimeClientSnapshot } from './client.js'
+import { DATA_RUNTIME_MAX_PENDING_REQUESTS } from './protocol.js'
 
 const WRITE_TIMEOUT_MS = 30_000
 const MAINTENANCE_TIMEOUT_MS = 120_000
 const READ_TIMEOUT_MS = 2_000
 const RECOVERY_INTERVAL_MS = 2_000
+const READER_RESERVED_PENDING = 1
+const FOREGROUND_QUEUE_MAX = 256
+const FOREGROUND_QUEUE_WAIT_MS = 1_500
+const FOREGROUND_QUEUE_POLL_MS = 2
 
 const READ_PREFIXES = [
   'get',
@@ -59,19 +64,63 @@ function logicalReaderSnapshot(client: DataRuntimeClient): DataRuntimeClientSnap
   return snapshot.role === 'reader' ? snapshot : { ...snapshot, role: 'reader' }
 }
 
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
 export class DataRuntimeReaderPool {
   private cursor = 0
+  private queued = 0
+  private maxQueued = 0
+  private overloads = 0
+  private queueTimeouts = 0
 
   constructor(readonly readers: readonly DataRuntimeClient[]) {
     if (!readers.length) throw new Error('Data Runtime Reader Pool requires at least one reader')
   }
 
-  request<T>(method: Parameters<DataRuntimeClient['request']>[0], params: Record<string, unknown>, timeoutMs: number): Promise<T> {
-    return this.pick().request<T>(method, params, timeoutMs)
+  async request<T>(method: Parameters<DataRuntimeClient['request']>[0], params: Record<string, unknown>, timeoutMs: number): Promise<T> {
+    const immediate = this.pickAvailable()
+    if (immediate) return immediate.request<T>(method, params, timeoutMs)
+
+    if (this.queued >= FOREGROUND_QUEUE_MAX) {
+      this.overloads += 1
+      throw new Error('Data Runtime reader pool overload queue limit reached')
+    }
+
+    this.queued += 1
+    this.maxQueued = Math.max(this.maxQueued, this.queued)
+    const startedAt = performance.now()
+    const waitBudgetMs = Math.min(timeoutMs, FOREGROUND_QUEUE_WAIT_MS)
+    try {
+      while (performance.now() - startedAt < waitBudgetMs) {
+        const reader = this.pickAvailable()
+        if (reader) {
+          const elapsed = performance.now() - startedAt
+          return reader.request<T>(method, params, Math.max(1, timeoutMs - elapsed))
+        }
+        await delay(FOREGROUND_QUEUE_POLL_MS)
+      }
+      this.queueTimeouts += 1
+      throw new Error('Data Runtime reader pool queue wait timed out')
+    } finally {
+      this.queued -= 1
+    }
   }
 
   snapshots(): DataRuntimeClientSnapshot[] {
     return this.readers.map(logicalReaderSnapshot)
+  }
+
+  queueSnapshot() {
+    return {
+      queued: this.queued,
+      maxQueued: this.maxQueued,
+      maxQueue: FOREGROUND_QUEUE_MAX,
+      overloads: this.overloads,
+      queueTimeouts: this.queueTimeouts,
+      waitBudgetMs: FOREGROUND_QUEUE_WAIT_MS,
+    }
   }
 
   readyCount(): number {
@@ -82,9 +131,11 @@ export class DataRuntimeReaderPool {
     return this.snapshots().reduce((sum, item) => sum + item.pending, 0)
   }
 
-  private pick(): DataRuntimeClient {
+  private pickAvailable(): DataRuntimeClient | undefined {
     const ready = this.readers.filter(reader => reader.state() === 'ready')
-    const candidates = ready.length ? ready : [...this.readers]
+    const capacity = DATA_RUNTIME_MAX_PENDING_REQUESTS - READER_RESERVED_PENDING
+    const candidates = ready.filter(reader => reader.snapshot().pending < capacity)
+    if (!candidates.length) return undefined
     let bestPending = Number.POSITIVE_INFINITY
     let best: DataRuntimeClient[] = []
     for (const reader of candidates) {
@@ -224,6 +275,7 @@ export interface DataRuntimeHealthSnapshot {
   reader: DataRuntimeClientSnapshot
   readers: DataRuntimeClientSnapshot[]
   maintenanceReader: DataRuntimeClientSnapshot
+  foregroundQueue: ReturnType<DataRuntimeReaderPool['queueSnapshot']>
   ok: boolean
   recovering: boolean
 }
@@ -252,6 +304,7 @@ export class DataRuntimeService {
       reader,
       readers,
       maintenanceReader,
+      foregroundQueue: this.foregroundReaders.queueSnapshot(),
       ok: writer.state === 'ready' && readyReaders.length > 0,
       recovering: this.recovering,
     }
@@ -426,4 +479,7 @@ export const dataRuntimeStorageInternals = {
   WRITE_TIMEOUT_MS,
   MAINTENANCE_TIMEOUT_MS,
   RECOVERY_INTERVAL_MS,
+  FOREGROUND_QUEUE_MAX,
+  FOREGROUND_QUEUE_WAIT_MS,
+  READER_RESERVED_PENDING,
 }
