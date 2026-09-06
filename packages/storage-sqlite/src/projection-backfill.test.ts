@@ -118,3 +118,25 @@ test('Tool usage history projection exposes partial coverage until bounded backf
     await storage.close()
   }
 })
+
+test('Tool usage backfill repairs a missing row even when persisted cursor is already at the end', async () => {
+  const storage = await setup()
+  try {
+    const first = await storage.projectionBackfill.backfillToolUsageFacts(undefined, 10)
+    assert.equal(first.scanned, 2)
+    assert.equal(first.cursor, 'c-tool')
+    assert.equal((await storage.projectionBackfill.toolUsageFactCoverage()).ready, true)
+
+    storage.db.prepare('DELETE FROM tool_usage_fact_projection WHERE observation_id = ?').run('b-tool')
+    const partial = await storage.projectionBackfill.toolUsageFactCoverage()
+    assert.equal(partial.ready, false)
+    assert.equal(partial.missingCount, 1)
+
+    const repaired = await storage.projectionBackfill.backfillToolUsageFacts(first.cursor, 1)
+    assert.equal(repaired.scanned, 1)
+    assert.equal(repaired.cursor, 'b-tool')
+    assert.equal((await storage.projectionBackfill.toolUsageFactCoverage()).ready, true)
+  } finally {
+    await storage.close()
+  }
+})
