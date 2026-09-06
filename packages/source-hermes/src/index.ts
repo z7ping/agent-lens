@@ -35,6 +35,7 @@ import {
   defineAgentLensPlugin,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
+import { hermesRow, tableColumnName, type HermesRow } from './sqlite-rows.js'
 
 const SOURCE_ID = 'hermes'
 const PARSER_VERSION = '2'
@@ -45,20 +46,6 @@ const DB_POLL_MS = 2000
 const INBOX_POLL_MS = 250
 const MAX_STRING = 64 * 1024
 const SENSITIVE_KEY = /(password|passwd|secret|token|api[_-]?key|authorization|cookie)/i
-
-interface HermesRow {
-  row_id: number
-  id: string | number | null
-  session_id: string | null
-  role: string | null
-  content: string | null
-  timestamp: number | string | null
-  tool_calls: string | null
-  tool_call_id: string | null
-  tool_name: string | null
-  cwd: string | null
-  session_title: string | null
-}
 
 interface HermesDbEnvelope {
   message: Record<string, unknown>
@@ -95,7 +82,7 @@ function sanitize(value: unknown, depth = 0): unknown {
   if (Array.isArray(value)) return value.slice(0, 200).map(item => sanitize(item, depth + 1))
   if (typeof value !== 'object') return String(value)
   const result: Record<string, unknown> = {}
-  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+  for (const [key, item] of Object.entries(value)) {
     result[key] = SENSITIVE_KEY.test(key) ? '[redacted]' : sanitize(item, depth + 1)
   }
   return result
@@ -213,8 +200,10 @@ function openDatabase(root: string): Database.Database {
 
 function tableColumns(db: Database.Database, table: string): Set<string> {
   try {
-    const rows = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name?: string }>
-    return new Set(rows.map(row => row.name).filter((name): name is string => Boolean(name)))
+    const names = db.prepare(`PRAGMA table_info(${table})`).all()
+      .map(tableColumnName)
+      .filter((name): name is string => name !== undefined)
+    return new Set(names)
   } catch {
     return new Set()
   }
@@ -302,12 +291,12 @@ function selectRows(
     params.push(Math.max(0, Math.floor(sessionLimit)))
   }
   params.push(limit)
-  return statement.all(...params) as HermesRow[]
+  return statement.all(...params).map(hermesRow)
 }
 
 function recentRows(db: Database.Database, limit: number): HermesRow[] {
   const statement = messageQuery(db, true)
-  return (statement.all(limit) as HermesRow[]).reverse()
+  return statement.all(limit).map(hermesRow).reverse()
 }
 
 function rowFingerprint(row: HermesRow): string {
