@@ -23,6 +23,8 @@ const DEFAULT_LIMIT = 100
 const MAX_LIMIT = 500
 const MAX_DETAIL_OBSERVATION_IDS = 100
 const MAX_DETAIL_SESSIONS = 100
+const AGGREGATE_OVERVIEW_DETAIL_LIMIT = 5
+const AGGREGATE_ASSET_DETAIL_LIMIT = 1
 
 type UsageObservation = CanonicalObservation | ToolUsageObservationRecord
 
@@ -74,7 +76,7 @@ function pushObservationSample(ids: string[], id: string): void {
 function usageReader(storage: StorageService): ToolUsageObservationReader | undefined {
   return (storage as StorageService & { readonly toolUsageObservations?: ToolUsageObservationReader }).toolUsageObservations
 }
-function aggregateQuery(query: ToolAssetUsageQueryDto): ToolUsageAggregateQuery {
+function aggregateQuery(query: ToolAssetUsageQueryDto, detailLimit = AGGREGATE_OVERVIEW_DETAIL_LIMIT): ToolUsageAggregateQuery {
   return {
     ...(query.installationId ? { installationId: query.installationId } : {}),
     ...(query.logicalSessionId ? { logicalSessionId: query.logicalSessionId } : {}),
@@ -82,7 +84,7 @@ function aggregateQuery(query: ToolAssetUsageQueryDto): ToolUsageAggregateQuery 
     ...(query.sourceId ? { sourceId: query.sourceId } : {}),
     ...(query.from ? { from: query.from } : {}),
     ...(query.to ? { to: query.to } : {}),
-    detailLimit: Math.max(MAX_DETAIL_OBSERVATION_IDS, MAX_DETAIL_SESSIONS),
+    detailLimit,
   }
 }
 function hasEmbeddedMetadata(observation: UsageObservation): observation is ToolUsageObservationRecord {
@@ -158,7 +160,7 @@ export class ToolAssetUsageProjection {
   async queryAssets(query: ToolAssetUsageQueryDto = {}): Promise<AssetUsageDto[]> {
     const reader = usageReader(this.storage)
     if (reader?.aggregate) {
-      const aggregate = await reader.aggregate(aggregateQuery(query))
+      const aggregate = await reader.aggregate(aggregateQuery(query, AGGREGATE_ASSET_DETAIL_LIMIT))
       const result: AssetUsageDto[] = aggregate.assets.map(item => ({
         type: item.type,
         canonicalName: item.canonicalName,
@@ -217,7 +219,7 @@ export class ToolAssetUsageProjection {
     const limit = Math.max(1, Math.min(query.limit ?? DEFAULT_LIMIT, MAX_LIMIT))
     const reader = usageReader(this.storage)
     if (reader?.aggregate) {
-      const aggregate = await reader.aggregate(aggregateQuery(query))
+      const aggregate = await reader.aggregate(aggregateQuery(query, AGGREGATE_OVERVIEW_DETAIL_LIMIT))
       const toolDtos: ToolUsageDto[] = aggregate.tools.map(item => ({
         nativeToolName: item.nativeToolName,
         sourceIds: [...item.sourceIds].sort(),
@@ -230,12 +232,12 @@ export class ToolAssetUsageProjection {
         sessions: item.sessions
           .slice()
           .sort((a, b) => b.callCount - a.callCount || a.logicalSessionId.localeCompare(b.logicalSessionId))
-          .slice(0, MAX_DETAIL_SESSIONS),
+          .slice(0, AGGREGATE_OVERVIEW_DETAIL_LIMIT),
         totalDurationMs: item.totalDurationMs,
         averageDurationMs: item.resultCount ? Math.round(item.totalDurationMs / item.resultCount) : 0,
         firstUsedAt: item.firstUsedAt,
         lastUsedAt: item.lastUsedAt,
-        observationIds: item.observationIds.slice(0, MAX_DETAIL_OBSERVATION_IDS),
+        observationIds: item.observationIds.slice(0, AGGREGATE_OVERVIEW_DETAIL_LIMIT),
       }))
       toolDtos.sort((a, b) => b.callCount - a.callCount || b.lastUsedAt.localeCompare(a.lastUsedAt) || a.nativeToolName.localeCompare(b.nativeToolName))
 
@@ -248,7 +250,7 @@ export class ToolAssetUsageProjection {
         lastUsedAt: item.lastUsedAt,
         attribution: 'derived',
         confidence: 'high',
-        observationIds: item.observationIds.slice(0, MAX_DETAIL_OBSERVATION_IDS),
+        observationIds: item.observationIds.slice(0, AGGREGATE_OVERVIEW_DETAIL_LIMIT),
       }))
       assetDtos.sort((a, b) => b.callCount - a.callCount || b.lastUsedAt.localeCompare(a.lastUsedAt) || a.canonicalName.localeCompare(b.canonicalName))
 
@@ -399,6 +401,9 @@ export const usageProjectionInternals = {
   inferAssetUsage,
   callId,
   toolName,
+  aggregateQuery,
+  aggregateOverviewDetailLimit: AGGREGATE_OVERVIEW_DETAIL_LIMIT,
+  aggregateAssetDetailLimit: AGGREGATE_ASSET_DETAIL_LIMIT,
   maxDetailObservationIds: MAX_DETAIL_OBSERVATION_IDS,
   maxDetailSessions: MAX_DETAIL_SESSIONS,
 }
