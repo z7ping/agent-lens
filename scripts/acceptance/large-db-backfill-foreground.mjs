@@ -4,10 +4,12 @@ const baseUrl = (process.env.AGENT_LENS_ACCEPT_BASE_URL ?? 'http://127.0.0.1:567
 const durationMs = Number.parseInt(process.argv.find(arg => arg.startsWith('--duration-ms='))?.slice('--duration-ms='.length) ?? '30000', 10)
 const intervalMs = Number.parseInt(process.argv.find(arg => arg.startsWith('--interval-ms='))?.slice('--interval-ms='.length) ?? '100', 10)
 const timeoutMs = Number.parseInt(process.argv.find(arg => arg.startsWith('--timeout-ms='))?.slice('--timeout-ms='.length) ?? '3000', 10)
+const foregroundP95BudgetMs = Number.parseInt(process.argv.find(arg => arg.startsWith('--foreground-p95-budget-ms='))?.slice('--foreground-p95-budget-ms='.length) ?? '1000', 10)
 
 if (!Number.isFinite(durationMs) || durationMs <= 0) throw new Error('duration-ms must be positive')
 if (!Number.isFinite(intervalMs) || intervalMs <= 0) throw new Error('interval-ms must be positive')
 if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error('timeout-ms must be positive')
+if (!Number.isFinite(foregroundP95BudgetMs) || foregroundP95BudgetMs <= 0) throw new Error('foreground-p95-budget-ms must be positive')
 
 const foreground = [
   '/api/v1/review?limit=20',
@@ -15,10 +17,11 @@ const foreground = [
   '/api/v1/usage?limit=500',
   '/api/v1/agents',
 ]
+const HEALTH_STATUSES = new Set([200, 503])
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
 
-async function request(path) {
+async function request(path, acceptedStatuses) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   timer.unref?.()
@@ -30,8 +33,11 @@ async function request(path) {
     })
     let body = null
     try { body = await response.json() } catch { /* diagnostics only */ }
+    const ok = acceptedStatuses
+      ? acceptedStatuses.has(response.status)
+      : response.status >= 200 && response.status < 300
     return {
-      ok: response.status >= 200 && response.status < 300,
+      ok,
       status: response.status,
       elapsedMs: performance.now() - startedAt,
       body,
@@ -83,7 +89,7 @@ function maintenanceGate(body) {
 
 const [initialUsage, initialHealth] = await Promise.all([
   request('/api/v1/usage?limit=1'),
-  request('/api/v1/health'),
+  request('/api/v1/health', HEALTH_STATUSES),
 ])
 const initialProjection = projection(initialUsage.body)
 const initialGate = maintenanceGate(initialHealth.body)
@@ -134,7 +140,7 @@ while (performance.now() - startedAt < durationMs) {
 await delay(1100)
 const [finalUsage, finalHealth] = await Promise.all([
   request('/api/v1/usage?limit=1'),
-  request('/api/v1/health'),
+  request('/api/v1/health', HEALTH_STATUSES),
 ])
 const finalProjection = projection(finalUsage.body) ?? latestProjection
 const finalGate = maintenanceGate(finalHealth.body)
@@ -145,12 +151,14 @@ const fairnessObserved = forcedPermitsDelta > 0
 const p95 = samples.length
   ? [...samples].sort((a, b) => a - b)[Math.min(samples.length - 1, Math.ceil(samples.length * 0.95) - 1)]
   : 0
+const foregroundLatencyPassed = p95 <= foregroundP95BudgetMs
 const passed = failures === 0
   && finalUsage.ok
   && finalHealth.ok
   && nonRegressing
   && progressed
   && fairnessObserved
+  && foregroundLatencyPassed
 
 console.log(JSON.stringify({
   passed,
@@ -161,6 +169,8 @@ console.log(JSON.stringify({
   requests: samples.length,
   failures,
   foregroundP95Ms: Number(p95.toFixed(2)),
+  foregroundP95BudgetMs,
+  foregroundLatencyPassed,
   initialProjection,
   finalProjection,
   progressed,
@@ -175,5 +185,6 @@ console.log(JSON.stringify({
 if (!passed) {
   if (!progressed) console.error('Tool Fact backfill made no observable progress during the foreground coexistence window')
   if (!fairnessObserved) console.error('maintenance gate did not record any forced permit during sustained foreground traffic')
+  if (!foregroundLatencyPassed) console.error(`foreground P95 ${p95.toFixed(2)}ms exceeds ${foregroundP95BudgetMs}ms budget during maintenance coexistence`)
   process.exitCode = 1
 }
