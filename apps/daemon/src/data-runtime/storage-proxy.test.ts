@@ -82,7 +82,7 @@ test('foreground reader pool prefers the least-loaded ready reader', async () =>
   }
 })
 
-test('foreground reader pool fails fast at bounded saturation without recycling readers', async () => {
+test('foreground reader pool applies bounded backpressure at saturation without recycling readers', async () => {
   const left = new DataRuntimeClient({ role: 'reader', allowDiagnostics: true, heartbeatIntervalMs: 60_000 })
   const right = new DataRuntimeClient({ role: 'reader', allowDiagnostics: true, heartbeatIntervalMs: 60_000 })
   await left.start()
@@ -90,26 +90,28 @@ test('foreground reader pool fails fast at bounded saturation without recycling 
   const pool = new DataRuntimeReaderPool([left, right])
   try {
     const blockers = [
-      left.request('diagnostic.block', { durationMs: 500 }, 1_000),
-      right.request('diagnostic.block', { durationMs: 500 }, 1_000),
+      left.request('diagnostic.block', { durationMs: 250 }, 1_000),
+      right.request('diagnostic.block', { durationMs: 250 }, 1_000),
     ]
     await new Promise(resolve => setTimeout(resolve, 20))
 
-    const queued = Array.from({ length: 126 }, () => pool.request('ping', {}, 1_000))
-    assert.equal(pool.pending(), 128)
+    const burst = Array.from({ length: 128 }, () => pool.request('ping', {}, 1_000))
+    await new Promise(resolve => setTimeout(resolve, 20))
+    const saturated = pool.queueSnapshot()
+    assert.ok(saturated.queued > 0)
+    assert.ok(pool.pending() <= 126)
 
-    const startedAt = performance.now()
-    await assert.rejects(pool.request('ping', {}, 1_000), /pending request limit reached/)
-    assert.ok(performance.now() - startedAt < 100)
+    await Promise.all([...blockers, ...burst])
+    const settled = pool.queueSnapshot()
+    assert.equal(pool.pending(), 0)
+    assert.equal(settled.queued, 0)
+    assert.ok(settled.maxQueued > 0)
+    assert.equal(settled.overloads, 0)
+    assert.equal(settled.queueTimeouts, 0)
     assert.equal(left.state(), 'ready')
     assert.equal(right.state(), 'ready')
     assert.equal(left.snapshot().livenessFailures, 0)
     assert.equal(right.snapshot().livenessFailures, 0)
-
-    await Promise.all([...blockers, ...queued])
-    assert.equal(pool.pending(), 0)
-    assert.equal(left.state(), 'ready')
-    assert.equal(right.state(), 'ready')
   } finally {
     await left.shutdown()
     await right.shutdown()
