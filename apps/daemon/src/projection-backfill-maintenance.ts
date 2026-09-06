@@ -19,6 +19,7 @@ export interface ProjectionBackfillMaintenance {
   backfillUnknownObservations(after?: string, limit?: number): Promise<ProjectionBackfillBatch>
   backfillToolUsageFacts(after?: string, limit?: number): Promise<ProjectionBackfillBatch>
   toolUsageFactCoverage?(): Promise<ToolUsageFactCoverage>
+  toolUsageFactCoverageForMaintenance?(): Promise<ToolUsageFactCoverage>
   repairToolUsageFactCursor?(after?: string): Promise<string | undefined>
 }
 
@@ -121,7 +122,8 @@ export async function backfillToolUsageFactProjection(
 ): Promise<ProjectionBackfillRunResult> {
   if (!maintenance) return { scanned: 0, written: 0, batches: 0, aborted: signal.aborted }
 
-  const coverage = await maintenance.toolUsageFactCoverage?.()
+  const coverageReader = maintenance.toolUsageFactCoverageForMaintenance ?? maintenance.toolUsageFactCoverage
+  const coverage = await coverageReader?.call(maintenance)
   if (coverage?.ready) {
     return { scanned: 0, written: 0, batches: 0, aborted: signal.aborted }
   }
