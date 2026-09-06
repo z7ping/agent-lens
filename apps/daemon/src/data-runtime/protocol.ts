@@ -5,17 +5,25 @@ export const DATA_RUNTIME_DEFAULT_TIMEOUT_MS = 5_000
 
 export type DataRuntimeRole = 'writer' | 'reader'
 
-export type DataRuntimeMethod =
-  | 'ping'
-  | 'status'
-  | 'shutdown'
-  | 'diagnostic.block'
-  | 'diagnostic.exit'
-  | 'storage.call'
-  | 'storage.transaction.begin'
-  | 'storage.transaction.commit'
-  | 'storage.transaction.rollback'
-  | 'unified-read.call'
+export const DATA_RUNTIME_METHODS = [
+  'ping',
+  'status',
+  'shutdown',
+  'diagnostic.block',
+  'diagnostic.exit',
+  'storage.call',
+  'storage.transaction.begin',
+  'storage.transaction.commit',
+  'storage.transaction.rollback',
+  'unified-read.call',
+] as const
+
+export type DataRuntimeMethod = typeof DATA_RUNTIME_METHODS[number]
+
+export function isDataRuntimeMethod(value: unknown): value is DataRuntimeMethod {
+  return typeof value === 'string'
+    && (DATA_RUNTIME_METHODS as readonly string[]).includes(value)
+}
 
 export interface DataRuntimeRequest {
   protocolVersion: number
