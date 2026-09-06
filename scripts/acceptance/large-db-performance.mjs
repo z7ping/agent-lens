@@ -4,6 +4,7 @@ const DEFAULT_BASE_URL = 'http://127.0.0.1:56789'
 const DEFAULT_SAMPLES = 20
 const DEFAULT_WARMUP = 3
 const DEFAULT_TIMEOUT_MS = 5_000
+const HEALTH_CACHE_REFRESH_MS = 1_100
 
 function arg(name, fallback) {
   const prefix = `--${name}=`
@@ -34,6 +35,10 @@ function rounded(value) {
   return Number(value.toFixed(2))
 }
 
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
 const options = {
   baseUrl: arg('base-url', process.env.AGENT_LENS_ACCEPT_BASE_URL ?? DEFAULT_BASE_URL).replace(/\/$/, ''),
   samples: positiveInt('samples', DEFAULT_SAMPLES),
@@ -55,8 +60,6 @@ const probes = [
     label: '/health',
     path: '/api/v1/health',
     p95BudgetMs: 500,
-    // Capacity/degraded state is reported separately; health response latency is
-    // still measurable when the store intentionally returns 503.
     acceptedStatuses: new Set([200, 503]),
   },
   {
@@ -187,7 +190,24 @@ async function runBurst(count) {
         return map
       }, new Map()).entries()],
     ),
+    errors: failures.slice(0, 10).map(result => ({
+      probe: result.probe,
+      status: result.status,
+      message: result.body?.message ?? result.error ?? null,
+    })),
     passed: failures.length === 0,
+  }
+}
+
+function projectionStatus(health) {
+  const value = health?.storage?.details?.toolUsageFacts
+  if (!value || typeof value !== 'object') return null
+  return {
+    state: value.state,
+    sourceObservationCount: Number(value.sourceObservationCount ?? 0),
+    projectedCount: Number(value.projectedCount ?? 0),
+    missingCount: Number(value.missingCount ?? 0),
+    coverageRatio: Number(value.coverageRatio ?? 0),
   }
 }
 
@@ -205,23 +225,42 @@ for (const probe of probes) {
 const burst = await runBurst(options.burst)
 if (burst) console.log(`mixed foreground burst ${burst.passed ? 'PASS' : 'FAIL'} failures=${burst.failures}/${burst.count} elapsed=${burst.elapsedMs}ms`)
 
-const health = measurements.find(item => item.id === 'health')?.lastBody
+// /health is cached for 1s. Never report the pre-burst snapshot as the final
+// Data Runtime state: wait past the cache TTL and explicitly fetch it again.
+if (burst) await delay(HEALTH_CACHE_REFRESH_MS)
+const freshHealthResult = await request('/api/v1/health', new Set([200, 503]))
+const health = freshHealthResult.body
+const toolUsageProjection = projectionStatus(health)
+const projectionReady = Boolean(
+  toolUsageProjection
+  && toolUsageProjection.state === 'ready'
+  && toolUsageProjection.missingCount === 0
+  && toolUsageProjection.coverageRatio >= 1,
+)
+
 const report = {
   generatedAt: new Date().toISOString(),
   baseUrl: options.baseUrl,
   measurements: measurements.map(({ lastBody: _lastBody, ...measurement }) => measurement),
   ...(burst ? { burst } : {}),
+  projectionReadiness: {
+    passed: projectionReady,
+    toolUsageFacts: toolUsageProjection,
+  },
   health: health && typeof health === 'object' ? {
     status: health.status,
     dataRuntime: health.dataRuntime ?? health.storage?.details?.dataRuntime ?? null,
     eventLoop: health.storage?.details?.eventLoop ?? null,
     capacity: health.storage?.details?.dataGrowth?.capacity ?? null,
+    toolUsageFacts: toolUsageProjection,
   } : null,
 }
 console.log(JSON.stringify(report, null, 2))
 
 const failed = measurements.filter(item => !item.passed)
 if (burst && !burst.passed) failed.push({ label: 'mixed foreground burst' })
+if (!freshHealthResult.ok) failed.push({ label: 'fresh post-burst health' })
+if (!projectionReady) failed.push({ label: 'Tool Fact projection readiness' })
 if (failed.length) {
   console.error(`large DB acceptance failed: ${failed.map(item => item.label).join(', ')}`)
   process.exitCode = 1
