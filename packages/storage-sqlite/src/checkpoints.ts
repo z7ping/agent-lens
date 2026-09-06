@@ -9,6 +9,21 @@ function encode(value: unknown): string {
   return encoded
 }
 
+function checkpointRow(value: unknown): { valueJson: string; revision: number } | null {
+  if (value == null) return null
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError('SQLite checkpoint query returned a non-object row')
+  }
+  const row = value as Record<string, unknown>
+  if (typeof row.value_json !== 'string') {
+    throw new TypeError('SQLite checkpoint field value_json must be a string')
+  }
+  if (typeof row.revision !== 'number' || !Number.isSafeInteger(row.revision)) {
+    throw new TypeError('SQLite checkpoint field revision must be a safe integer')
+  }
+  return { valueJson: row.value_json, revision: row.revision }
+}
+
 export interface VersionedCheckpoint<T> {
   value: T
   revision: number
@@ -24,14 +39,14 @@ export class SqliteCheckpointRepository implements CheckpointRepository {
 
   async getWithRevision<T>(scope: string, key: string): Promise<VersionedCheckpoint<T> | null> {
     return this.executor.run(() => {
-      const row = this.executor.db.prepare(`
+      const row = checkpointRow(this.executor.db.prepare(`
         SELECT value_json, revision
         FROM source_checkpoints
         WHERE scope = ? AND checkpoint_key = ?
-      `).get(scope, key) as { value_json: string; revision: number } | undefined
+      `).get(scope, key))
 
       return row
-        ? { value: JSON.parse(row.value_json) as T, revision: Number(row.revision) }
+        ? { value: JSON.parse(row.valueJson) as T, revision: row.revision }
         : null
     })
   }
