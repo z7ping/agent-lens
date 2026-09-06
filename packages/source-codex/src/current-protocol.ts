@@ -4,7 +4,7 @@ import type {
   SourceNormalizationContext,
   SourceRecord,
 } from '@agent-lens/core'
-import { messageText, type CodexStoredEnvelope } from './format'
+import { messageText } from './format'
 import { normalizeCodexRecord } from './normalize'
 import { normalizePaginatedFunctionOutput } from './paginated-function-output'
 import { normalizePaginatedCodexRecord } from './paginated-protocol'
@@ -20,13 +20,13 @@ const NON_ACTIVITY_ROLLOUT_TYPES = new Set([
   'inter_agent_communication_metadata',
 ])
 
-function asRecord(value: unknown): Record<string, any> {
+function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, any>
+    ? value as Record<string, unknown>
     : {}
 }
 
-function stringField(record: Record<string, any>, ...keys: string[]): string | undefined {
+function stringField(record: Readonly<Record<string, unknown>>, ...keys: string[]): string | undefined {
   for (const key of keys) {
     const value = record[key]
     if (typeof value === 'string' && value.trim()) return value.trim()
@@ -34,20 +34,20 @@ function stringField(record: Record<string, any>, ...keys: string[]): string | u
   return undefined
 }
 
-function rolloutEntry(record: SourceRecord): { entry: Record<string, any>; payload: Record<string, any> } {
+function rolloutEntry(record: SourceRecord): { entry: Record<string, unknown>; payload: Record<string, unknown> } {
   const envelope = asRecord(record.payload)
   const entry = asRecord(envelope.entry)
   return { entry, payload: asRecord(entry.payload) }
 }
 
 function syntheticEntryRecord(record: SourceRecord, entry: Record<string, unknown>): SourceRecord {
-  const envelope = asRecord(record.payload) as CodexStoredEnvelope
+  const envelope = asRecord(record.payload)
   return {
     ...record,
     payload: {
       ...envelope,
       entry,
-    } as SourceRecord['payload'],
+    },
   }
 }
 
@@ -229,7 +229,7 @@ function plaintextAgentMessageContent(content: unknown): { text?: string; encryp
 async function normalizeResponseAgentMessage(
   record: SourceRecord,
   ctx: SourceNormalizationContext,
-  payload: Record<string, any>,
+  payload: Record<string, unknown>,
 ): Promise<NormalizedSourceOutput> {
   const content = plaintextAgentMessageContent(payload.content)
   const canonicalPayload = {
@@ -252,7 +252,7 @@ async function normalizeResponseAgentMessage(
 async function normalizeResponseLocalShellCall(
   record: SourceRecord,
   ctx: SourceNormalizationContext,
-  payload: Record<string, any>,
+  payload: Record<string, unknown>,
 ): Promise<NormalizedSourceOutput> {
   const callId = stringField(payload, 'call_id', 'id') ?? `local-shell-${record.sourceSequence ?? record.id}`
   const status = stringField(payload, 'status')?.toLowerCase() ?? 'unknown'
@@ -302,7 +302,7 @@ async function normalizeResponseLocalShellCall(
 async function normalizeResponseToolSearchCall(
   record: SourceRecord,
   ctx: SourceNormalizationContext,
-  payload: Record<string, any>,
+  payload: Record<string, unknown>,
 ): Promise<NormalizedSourceOutput> {
   const callId = stringField(payload, 'call_id', 'id') ?? `tool-search-${record.sourceSequence ?? record.id}`
   const output = await normalizeCodexRecord(syntheticEntryRecord(record, {
@@ -333,7 +333,7 @@ async function normalizeResponseToolSearchCall(
 async function normalizeResponseImageGeneration(
   record: SourceRecord,
   ctx: SourceNormalizationContext,
-  payload: Record<string, any>,
+  payload: Record<string, unknown>,
 ): Promise<NormalizedSourceOutput> {
   const canonicalPayload = {
     action: 'image.generate',
@@ -355,7 +355,7 @@ async function normalizeResponseImageGeneration(
 async function normalizeResponseConfigurationUpdate(
   record: SourceRecord,
   ctx: SourceNormalizationContext,
-  payload: Record<string, any>,
+  payload: Record<string, unknown>,
 ): Promise<NormalizedSourceOutput> {
   const reasoning = asRecord(payload.reasoning)
   const canonicalPayload = {
@@ -376,11 +376,11 @@ async function normalizeResponseConfigurationUpdate(
 async function normalizeResponseCompaction(
   record: SourceRecord,
   ctx: SourceNormalizationContext,
-  payload: Record<string, any>,
+  payload: Record<string, unknown>,
 ): Promise<NormalizedSourceOutput> {
   const canonicalPayload = {
     phase: 'snapshot',
-    sourceType: `response_item.${payload.type ?? 'compaction'}`,
+    sourceType: `response_item.${typeof payload.type === 'string' ? payload.type : 'compaction'}`,
     opaque: true,
   }
   const output = await normalizeCodexRecord(record, ctx)
@@ -611,7 +611,7 @@ async function normalizeInterAgentCommunication(
           payload: {
             ...payload,
             event: 'subagent.communication',
-            text: messageText((payload as Record<string, unknown>).content ?? (payload as Record<string, unknown>).message ?? ''),
+            text: messageText(payload.content ?? payload.message ?? ''),
           },
         }
       : observation),
