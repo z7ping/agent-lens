@@ -4,7 +4,7 @@ import type {
   SourceNormalizationContext,
   SourceRecord,
 } from '@agent-lens/core'
-import { messageText, type CodexStoredEnvelope } from './format'
+import { messageText } from './format'
 import { normalizeCodexRecord } from './normalize'
 import {
   assistantMessageProvenance,
@@ -12,13 +12,13 @@ import {
   userMessageProvenance,
 } from './provenance'
 
-function asRecord(value: unknown): Record<string, any> {
+function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, any>
+    ? value as Record<string, unknown>
     : {}
 }
 
-function stringField(record: Record<string, any>, ...keys: string[]): string | undefined {
+function stringField(record: Readonly<Record<string, unknown>>, ...keys: string[]): string | undefined {
   for (const key of keys) {
     const value = record[key]
     if (typeof value === 'string' && value.trim()) return value.trim()
@@ -35,7 +35,7 @@ function syntheticRecord(
   entry: Record<string, unknown>,
   nativeId?: string,
 ): SourceRecord {
-  const envelope = asRecord(record.payload) as CodexStoredEnvelope
+  const envelope = asRecord(record.payload)
   const { nativeId: _outerNativeId, ...withoutNativeId } = record
   return {
     ...withoutNativeId,
@@ -43,7 +43,7 @@ function syntheticRecord(
     payload: {
       ...envelope,
       entry,
-    } as SourceRecord['payload'],
+    },
   }
 }
 
@@ -60,7 +60,7 @@ function mergeOutputs(outputs: NormalizedSourceOutput[]): NormalizedSourceOutput
 
 export interface CodexCompletedTurnItem {
   turnId: string
-  item: Record<string, any>
+  item: Record<string, unknown>
   itemId?: string
   type: string
 }
@@ -309,7 +309,7 @@ function decorateToolResult(
     : observation
 }
 
-function commandOutput(item: Record<string, any>): string {
+function commandOutput(item: Readonly<Record<string, unknown>>): string {
   for (const key of ['formatted_output', 'aggregated_output']) {
     if (typeof item[key] === 'string' && item[key]) return item[key]
   }
