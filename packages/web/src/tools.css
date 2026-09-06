@@ -6,6 +6,23 @@
 
 .tools-content { overflow: auto; }
 
+.tool-projection-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--al-line);
+  border-radius: 9px;
+  background: var(--al-soft-2);
+  color: var(--al-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.tool-projection-status > svg { flex: 0 0 auto; margin-top: 1px; }
+.tool-projection-status b { display: block; color: var(--al-ink-2); font-size: 12px; font-weight: 660; }
+.tool-projection-status small { display: block; margin-top: 2px; color: var(--al-muted-2); font-size: 12px; }
+
 /* SVG 工具图标 */
 .tool-kind-svg {
   display: inline-grid;
