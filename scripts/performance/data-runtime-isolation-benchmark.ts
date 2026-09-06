@@ -20,11 +20,19 @@ const reader = new DataRuntimeClient({
   allowDiagnostics: true,
   requestTimeoutMs: 5_000,
 })
+const maintenanceReader = new DataRuntimeClient({
+  role: 'reader',
+  dbPath,
+  nodeId: 'perf-node',
+  allowDiagnostics: true,
+  requestTimeoutMs: 5_000,
+})
 
 try {
   await writer.start()
   await reader.start()
-  const runtime = createDataRuntimeStorage(writer, reader)
+  await maintenanceReader.start()
+  const runtime = createDataRuntimeStorage(writer, [reader], maintenanceReader)
   await runtime.storage.repositories.hosts.put({
     id: 'perf-host',
     name: 'perf-host',
@@ -56,6 +64,7 @@ try {
     },
     writer: writer.snapshot(),
     reader: reader.snapshot(),
+    maintenanceReader: maintenanceReader.snapshot(),
   }
   console.log(JSON.stringify(report, null, 2))
 
@@ -65,6 +74,7 @@ try {
 
   await runtime.dataRuntime.shutdown()
 } finally {
+  await maintenanceReader.shutdown().catch(() => undefined)
   await reader.shutdown().catch(() => undefined)
   await writer.shutdown().catch(() => undefined)
   await rm(root, { recursive: true, force: true })

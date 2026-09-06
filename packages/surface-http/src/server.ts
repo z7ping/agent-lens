@@ -733,8 +733,9 @@ export async function startHttpSurface(
         return
       }
       if (url.pathname === '/api/v1/relationships') {
-        const limit = parseLimit(url.searchParams, 1000) ?? 500
-        writeJson(response, 200, await relationships.query({ limit }))
+        const logicalSessionId = url.searchParams.get('logicalSessionId')
+        if (!logicalSessionId) throw badRequest('logicalSessionId is required')
+        writeJson(response, 200, await relationships.query(logicalSessionId))
         return
       }
 

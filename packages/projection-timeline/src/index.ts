@@ -20,6 +20,27 @@ import {
 
 const DEFAULT_LIMIT = 200
 const MAX_LIMIT = 1000
+const IDENTITY_LOOKUP_CONCURRENCY = 8
+
+async function loadUniqueById<T>(
+  ids: readonly string[],
+  load: (id: string) => Promise<T | null>,
+): Promise<Map<string, T | null>> {
+  const uniqueIds = [...new Set(ids)]
+  const values = new Map<string, T | null>()
+  let cursor = 0
+  const workers = Array.from(
+    { length: Math.min(IDENTITY_LOOKUP_CONCURRENCY, uniqueIds.length) },
+    async () => {
+      while (cursor < uniqueIds.length) {
+        const id = uniqueIds[cursor++]!
+        values.set(id, await load(id))
+      }
+    },
+  )
+  await Promise.all(workers)
+  return values
+}
 
 function toJsonValue(value: unknown, depth = 0): JsonValue {
   if (depth > 32) return '[max-depth]'
@@ -151,24 +172,22 @@ export class TimelineProjection {
       }
     }
 
-    const sourceSessionCache = new Map<string, SourceSession | null>()
-    const installationCache = new Map<string, AgentInstallation | null>()
+    const sourceSessions = await loadUniqueById<SourceSession>(
+      observations.map(observation => observation.sourceSessionId),
+      id => this.storage.repositories.sessions.getSourceSession(id),
+    )
+    const installations = await loadUniqueById<AgentInstallation>(
+      observations.map(observation => observation.installationId),
+      id => this.storage.repositories.installations.get(id),
+    )
 
     const items = await Promise.all(observations.map(async observation => {
-      let sourceSession = sourceSessionCache.get(observation.sourceSessionId)
-      if (sourceSession === undefined) {
-        sourceSession = await this.storage.repositories.sessions.getSourceSession(observation.sourceSessionId)
-        sourceSessionCache.set(observation.sourceSessionId, sourceSession)
-      }
+      const sourceSession = sourceSessions.get(observation.sourceSessionId)
       if (!sourceSession) {
         throw new Error(`Timeline projection integrity error: missing source session ${observation.sourceSessionId}`)
       }
 
-      let installation = installationCache.get(observation.installationId)
-      if (installation === undefined) {
-        installation = await this.storage.repositories.installations.get(observation.installationId)
-        installationCache.set(observation.installationId, installation)
-      }
+      const installation = installations.get(observation.installationId)
       if (!installation) {
         throw new Error(`Timeline projection integrity error: missing installation ${observation.installationId}`)
       }
@@ -248,4 +267,6 @@ export const timelineProjectionInternals = {
   encodeCursor,
   decodeCursor,
   cursorForObservation,
+  loadUniqueById,
+  IDENTITY_LOOKUP_CONCURRENCY,
 }

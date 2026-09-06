@@ -5,7 +5,83 @@ import {
   DefaultObservationService,
 } from '@agent-lens/core-services'
 import { SqliteStorageService } from '@agent-lens/storage-sqlite'
-import { TimelineProjection } from './index'
+import { TimelineProjection, timelineProjectionInternals } from './index'
+
+test('TimelineProjection deduplicates and bounds concurrent identity lookups', async () => {
+  let active = 0
+  let maxActive = 0
+  let calls = 0
+  const ids = Array.from({ length: 200 }, (_, index) => `identity-${index % 100}`)
+
+  const values = await timelineProjectionInternals.loadUniqueById(ids, async id => {
+    calls += 1
+    active += 1
+    maxActive = Math.max(maxActive, active)
+    await new Promise(resolve => setTimeout(resolve, 1))
+    active -= 1
+    return { id }
+  })
+
+  assert.equal(values.size, 100)
+  assert.equal(calls, 100)
+  assert.ok(maxActive <= timelineProjectionInternals.IDENTITY_LOOKUP_CONCURRENCY)
+})
+
+test('TimelineProjection maps a full page without repeating shared identity reads', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+
+  try {
+    const identity = new DefaultIdentityService(storage)
+    const observationService = new DefaultObservationService(storage, identity)
+    const host = await identity.resolveHost({ name: 'timeline-shared-identity-host' })
+    const installation = await identity.resolveInstallation({ hostId: host.id, productId: 'codex' })
+    await observationService.commit({
+      sourceId: 'codex',
+      host,
+      installation,
+      candidate: {
+        kind: 'message.user',
+        nativeEventId: 'shared-identity-event',
+        capturedAt: '2026-09-06T00:00:00.000Z',
+        payload: { text: 'shared identity' },
+        identityHints: { nativeSessionId: 'shared-identity-session' },
+        dedupHints: { nativeEventId: 'shared-identity-event' },
+      },
+      evidenceCandidates: [],
+    })
+    const observation = (await storage.repositories.observations.query({ limit: 1 }))[0]
+    assert.ok(observation)
+
+    const originalSourceSession = storage.repositories.sessions.getSourceSession.bind(storage.repositories.sessions)
+    const originalInstallation = storage.repositories.installations.get.bind(storage.repositories.installations)
+    let sourceSessionReads = 0
+    let installationReads = 0
+    storage.repositories.sessions.getSourceSession = async id => {
+      sourceSessionReads += 1
+      await new Promise(resolve => setTimeout(resolve, 1))
+      return originalSourceSession(id)
+    }
+    storage.repositories.installations.get = async id => {
+      installationReads += 1
+      await new Promise(resolve => setTimeout(resolve, 1))
+      return originalInstallation(id)
+    }
+
+    const page = Array.from({ length: 250 }, (_, index) => ({
+      ...observation,
+      id: `${observation.id}-${index}`,
+      canonicalSequence: index + 1,
+    }))
+    const items = await new TimelineProjection(storage).mapObservations(page)
+
+    assert.equal(items.length, 250)
+    assert.equal(sourceSessionReads, 1)
+    assert.equal(installationReads, 1)
+  } finally {
+    storage.close()
+  }
+})
 
 test('TimelineProjection maps canonical facts to protocol DTOs in effective-time order', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })

@@ -137,6 +137,29 @@ test('HTTP surface reads and updates AgentLens-managed user source authorization
   }
 })
 
+test('HTTP relationship surface requires and forwards logicalSessionId', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  const surface = await startHttpSurface(storage, { port: 0 })
+
+  try {
+    const base = `http://${surface.host}:${surface.port}/api/v1/relationships`
+    const missing = await fetch(base)
+    assert.equal(missing.status, 400)
+    assert.deepEqual(await missing.json(), {
+      error: 'bad_request',
+      message: 'logicalSessionId is required',
+    })
+
+    const valid = await fetch(`${base}?logicalSessionId=${encodeURIComponent('session-empty')}`)
+    assert.equal(valid.status, 200)
+    assert.deepEqual((await valid.json() as { items: unknown[] }).items, [])
+  } finally {
+    await surface.dispose()
+    storage.close()
+  }
+})
+
 test('HTTP surface exposes v1 API and production web assets on loopback', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   await storage.migrate()
