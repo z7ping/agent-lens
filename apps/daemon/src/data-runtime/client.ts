@@ -15,6 +15,7 @@ import {
 const METRIC_SAMPLE_LIMIT = 128
 const HEARTBEAT_INTERVAL_MS = 5_000
 const HEARTBEAT_TIMEOUT_MS = 15_000
+const MIN_EXPLICIT_HEARTBEAT_MS = 50
 
 function pushSample(samples: number[], value: number): void {
   samples.push(value)
@@ -25,6 +26,10 @@ function percentile(samples: readonly number[], ratio: number): number {
   if (!samples.length) return 0
   const sorted = [...samples].sort((a, b) => a - b)
   return sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * ratio) - 1))] ?? 0
+}
+
+function heartbeatDuration(value: number | undefined, fallback: number): number {
+  return value === undefined ? fallback : Math.max(MIN_EXPLICIT_HEARTBEAT_MS, value)
 }
 
 export type DataRuntimeClientState = 'starting' | 'ready' | 'degraded' | 'stopped'
@@ -235,14 +240,14 @@ export class DataRuntimeClient {
 
   private startHeartbeat(): void {
     if (this.heartbeatTimer || this.stopping) return
-    const intervalMs = Math.max(1_000, this.options.heartbeatIntervalMs ?? HEARTBEAT_INTERVAL_MS)
+    const intervalMs = heartbeatDuration(this.options.heartbeatIntervalMs, HEARTBEAT_INTERVAL_MS)
     this.heartbeatTimer = setInterval(() => {
       if (this.stopping || this.stateValue !== 'ready' || this.heartbeatInFlight) return
       this.heartbeatInFlight = true
       void this.requestInternal(
         'ping',
         undefined,
-        Math.max(5_000, this.options.heartbeatTimeoutMs ?? HEARTBEAT_TIMEOUT_MS),
+        heartbeatDuration(this.options.heartbeatTimeoutMs, HEARTBEAT_TIMEOUT_MS),
         true,
       ).catch(() => undefined).finally(() => {
         this.heartbeatInFlight = false
@@ -294,7 +299,9 @@ export class DataRuntimeClient {
 
 export const dataRuntimeClientInternals = {
   percentile,
+  heartbeatDuration,
   METRIC_SAMPLE_LIMIT,
   HEARTBEAT_INTERVAL_MS,
   HEARTBEAT_TIMEOUT_MS,
+  MIN_EXPLICIT_HEARTBEAT_MS,
 }
