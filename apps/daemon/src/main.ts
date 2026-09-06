@@ -132,6 +132,18 @@ function logSourceFailures(failures: RegisteredSourceFailure[]): void {
   }
 }
 
+async function disposeCaptureHandles(): Promise<void> {
+  const handles = [...captureHandles].reverse()
+  captureHandles = []
+  for (const handle of handles) {
+    try {
+      await handle.dispose()
+    } catch {
+      // Best-effort cleanup must not hide the primary shutdown/startup error.
+    }
+  }
+}
+
 async function waitForDataRuntime(signal: AbortSignal): Promise<boolean> {
   let announced = false
   while (!signal.aborted) {
@@ -152,10 +164,7 @@ async function shutdown(signal: string): Promise<void> {
 
   try {
     if (syncPromise) await syncPromise.catch(() => undefined)
-    for (const handle of [...captureHandles].reverse()) {
-      await handle.dispose().catch(() => undefined)
-    }
-    captureHandles = []
+    await disposeCaptureHandles()
     disposeHttpActivityTracking?.()
     disposeHttpActivityTracking = null
     foregroundGate = null
@@ -592,9 +601,7 @@ try {
   disposeHttpActivityTracking?.()
   disposeHttpActivityTracking = null
   foregroundGate = null
-  for (const handle of [...captureHandles].reverse()) {
-    await handle.dispose().catch(() => undefined)
-  }
+  await disposeCaptureHandles()
   await app.stop().catch(() => undefined)
   console.error('[AgentLens] daemon startup failed', error)
   process.exitCode = 1
