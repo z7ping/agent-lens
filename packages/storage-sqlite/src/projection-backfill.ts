@@ -39,6 +39,26 @@ function boundedLimit(limit: number | undefined): number {
   return Math.max(1, Math.min(limit ?? 250, 1000))
 }
 
+function toolUsageFactCoverage(executor: SqliteExecutor): ToolUsageFactProjectionCoverage {
+  const sourceObservationCount = Number((executor.db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM observations
+    WHERE kind IN ('tool.call', 'tool.result')
+  `).get() as { count: number }).count)
+  const projectedCount = Number((executor.db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM tool_usage_fact_projection
+  `).get() as { count: number }).count)
+  const missingCount = Math.max(0, sourceObservationCount - projectedCount)
+  return {
+    sourceObservationCount,
+    projectedCount,
+    missingCount,
+    coverageRatio: sourceObservationCount > 0 ? Math.min(1, projectedCount / sourceObservationCount) : 1,
+    ready: missingCount === 0,
+  }
+}
+
 function repairToolFactCursor(executor: SqliteExecutor, after: string | undefined): string | undefined {
   if (!after) return undefined
   const missingBeforeCursor = executor.db.prepare(`
@@ -57,25 +77,11 @@ export class SqliteProjectionBackfillMaintenance {
   constructor(private readonly executor: SqliteExecutor) {}
 
   async toolUsageFactCoverage(): Promise<ToolUsageFactProjectionCoverage> {
-    return this.executor.run(() => {
-      const sourceObservationCount = Number((this.executor.db.prepare(`
-        SELECT COUNT(*) AS count
-        FROM observations
-        WHERE kind IN ('tool.call', 'tool.result')
-      `).get() as { count: number }).count)
-      const projectedCount = Number((this.executor.db.prepare(`
-        SELECT COUNT(*) AS count
-        FROM tool_usage_fact_projection
-      `).get() as { count: number }).count)
-      const missingCount = Math.max(0, sourceObservationCount - projectedCount)
-      return {
-        sourceObservationCount,
-        projectedCount,
-        missingCount,
-        coverageRatio: sourceObservationCount > 0 ? Math.min(1, projectedCount / sourceObservationCount) : 1,
-        ready: missingCount === 0,
-      }
-    })
+    return this.executor.run(() => toolUsageFactCoverage(this.executor))
+  }
+
+  async toolUsageFactCoverageForMaintenance(): Promise<ToolUsageFactProjectionCoverage> {
+    return this.executor.run(() => toolUsageFactCoverage(this.executor))
   }
 
   async repairToolUsageFactCursor(after?: string): Promise<string | undefined> {
@@ -196,5 +202,6 @@ export class SqliteProjectionBackfillMaintenance {
 }
 
 export const projectionBackfillInternals = {
+  toolUsageFactCoverage,
   repairToolFactCursor,
 }
