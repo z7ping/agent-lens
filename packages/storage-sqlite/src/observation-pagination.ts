@@ -4,36 +4,33 @@ import type {
   ObservationRepository,
 } from '@agent-lens/core'
 import type { SqliteExecutor } from './executor'
+import { mapObservation, sqliteRowId } from './repository-row-mappers'
 
 const MAX_SEQUENCE = Number.MAX_SAFE_INTEGER
 
-function decodeJson<T>(value: unknown, fallback: T): T {
-  if (typeof value !== 'string' || value.length === 0) return fallback
-  return JSON.parse(value) as T
+type SqliteRow = Record<string, unknown>
+
+function rowRecord(value: unknown): SqliteRow {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError('SQLite observation pagination query returned a non-object row')
+  }
+  return value as SqliteRow
 }
 
-function mapObservation(row: any, evidenceRefs: string[] = []): CanonicalObservation {
-  return {
-    id: row.id,
-    hostId: row.host_id,
-    installationId: row.installation_id,
-    projectId: row.project_id ?? undefined,
-    workspaceId: row.workspace_id ?? undefined,
-    logicalSessionId: row.logical_session_id,
-    sourceSessionId: row.source_session_id,
-    interactionId: row.interaction_id ?? undefined,
-    actorId: row.actor_id ?? undefined,
-    nativeEventId: row.native_event_id ?? undefined,
-    nativeParentEventId: row.native_parent_event_id ?? undefined,
-    parentObservationId: row.parent_observation_id ?? undefined,
-    kind: row.kind,
-    sourceSequence: row.source_sequence == null ? undefined : Number(row.source_sequence),
-    canonicalSequence: row.canonical_sequence == null ? undefined : Number(row.canonical_sequence),
-    occurredAt: row.occurred_at ?? undefined,
-    capturedAt: row.captured_at,
-    payload: decodeJson(row.payload_json, null),
-    evidenceRefs,
-  } as CanonicalObservation
+function stringField(value: unknown, key: string): string {
+  const field = rowRecord(value)[key]
+  if (typeof field !== 'string') throw new TypeError(`SQLite observation pagination field ${key} must be a string`)
+  return field
+}
+
+function evidenceLink(value: unknown): { observationId: string; evidenceId: string } {
+  const row = rowRecord(value)
+  const observationId = row.observation_id
+  const evidenceId = row.evidence_id
+  if (typeof observationId !== 'string' || typeof evidenceId !== 'string') {
+    throw new TypeError('SQLite observation evidence link must contain string ids')
+  }
+  return { observationId, evidenceId }
 }
 
 function reverseQuery(executor: SqliteExecutor, query: ObservationQuery): Promise<CanonicalObservation[]> {
@@ -95,45 +92,47 @@ function reverseQuery(executor: SqliteExecutor, query: ObservationQuery): Promis
     `).all(...params, limit)
     if (!rows.length) return []
 
-    const ids = rows.map(row => (row as any).id as string)
+    const ids = rows.map(sqliteRowId)
     const placeholders = ids.map(() => '?').join(', ')
     const evidenceRows = db.prepare(`
       SELECT observation_id, evidence_id
       FROM observation_evidence
       WHERE observation_id IN (${placeholders})
       ORDER BY observation_id, evidence_id
-    `).all(...ids) as Array<{ observation_id: string; evidence_id: string }>
+    `).all(...ids).map(evidenceLink)
     const evidenceByObservation = new Map<string, string[]>()
     for (const row of evidenceRows) {
-      const values = evidenceByObservation.get(row.observation_id) ?? []
-      values.push(row.evidence_id)
-      evidenceByObservation.set(row.observation_id, values)
+      const values = evidenceByObservation.get(row.observationId) ?? []
+      values.push(row.evidenceId)
+      evidenceByObservation.set(row.observationId, values)
     }
-    return rows.map(row => mapObservation(row, evidenceByObservation.get((row as any).id) ?? []))
+    return rows.map(row => {
+      const id = sqliteRowId(row)
+      return mapObservation(row, evidenceByObservation.get(id) ?? [])
+    })
   })
 }
 
 function cleanupStaleParserDerivations(executor: SqliteExecutor, evidenceRefs: readonly string[]): number {
   if (!evidenceRefs.length) return 0
   const placeholders = evidenceRefs.map(() => '?').join(', ')
-  const sourceRows = executor.db.prepare(`
+  const sourceRecordIds = executor.db.prepare(`
     SELECT DISTINCT e.source_record_id AS sourceRecordId
     FROM evidence e
     WHERE e.id IN (${placeholders}) AND e.source_record_id IS NOT NULL
-  `).all(...evidenceRefs) as Array<{ sourceRecordId: string }>
+  `).all(...evidenceRefs).map(row => stringField(row, 'sourceRecordId'))
   let deleted = 0
 
-  for (const { sourceRecordId } of sourceRows) {
-    const staleRows = executor.db.prepare(`
+  for (const sourceRecordId of sourceRecordIds) {
+    const ids = executor.db.prepare(`
       SELECT DISTINCT oe.observation_id AS observationId
       FROM observation_evidence oe
       JOIN evidence e ON e.id = oe.evidence_id
       JOIN source_records sr ON sr.id = e.source_record_id
       WHERE e.source_record_id = ?
         AND COALESCE(e.parser_version, '') != COALESCE(sr.parser_version, '')
-    `).all(sourceRecordId) as Array<{ observationId: string }>
-    if (!staleRows.length) continue
-    const ids = staleRows.map(row => row.observationId)
+    `).all(sourceRecordId).map(row => stringField(row, 'observationId'))
+    if (!ids.length) continue
     const stalePlaceholders = ids.map(() => '?').join(', ')
 
     executor.db.prepare(`
@@ -188,14 +187,13 @@ export function withSqliteObservationPagination(
     },
     async removeDerivationsForSourceRecord(sourceRecordId) {
       return executor.run(() => {
-        const rows = executor.db.prepare(`
+        const ids = executor.db.prepare(`
           SELECT DISTINCT oe.observation_id AS observationId
           FROM observation_evidence oe
           JOIN evidence e ON e.id = oe.evidence_id
           WHERE e.source_record_id = ?
-        `).all(sourceRecordId) as Array<{ observationId: string }>
-        if (!rows.length) return 0
-        const ids = rows.map(row => row.observationId)
+        `).all(sourceRecordId).map(row => stringField(row, 'observationId'))
+        if (!ids.length) return 0
         const placeholders = ids.map(() => '?').join(', ')
         executor.db.prepare(`
           DELETE FROM observation_evidence
