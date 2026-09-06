@@ -2,11 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { SourceRecord } from '@agent-lens/core'
 import { normalizeCurrentCodexRecord } from './current-protocol'
-
-const ctx = {
-  host: { id: 'host', name: 'host', platform: 'linux', arch: 'x64', createdAt: '2026-01-01T00:00:00.000Z', lastSeenAt: '2026-01-01T00:00:00.000Z' },
-  installation: { id: 'install', hostId: 'host', productId: 'codex', firstSeenAt: '2026-01-01T00:00:00.000Z', lastSeenAt: '2026-01-01T00:00:00.000Z' },
-} as any
+import { asRecord, codexTestContext } from './test-support'
 
 function record(payload: Record<string, unknown>, sourceSequence: number): SourceRecord {
   return {
@@ -71,10 +67,10 @@ test('official persisted legacy EventMsg variants do not degrade to unknown', as
   ]
 
   for (const [index, value] of cases.entries()) {
-    const output = await normalizeCurrentCodexRecord(record(value.payload, index + 1), ctx)
+    const output = await normalizeCurrentCodexRecord(record(value.payload, index + 1), codexTestContext)
     assert.equal(output.observations.some(item => item.kind === 'unknown'), false, String(value.payload.type))
     assert.equal(output.observations[0]?.kind, value.kind, String(value.payload.type))
-    if (value.event) assert.equal((output.observations[0]?.payload as any).event, value.event)
+    if (value.event) assert.equal(asRecord(output.observations[0]?.payload).event, value.event)
   }
 })
 
@@ -83,7 +79,7 @@ test('legacy persisted tool results retain native call identity', async () => {
     { type: 'mcp_tool_call_end', call_id: 'mcp-1', invocation: { server: 'docs', tool: 'read' }, result: { Ok: { is_error: false } } },
     { type: 'web_search_end', call_id: 'web-1', query: 'AgentLens', action: { type: 'search', query: 'AgentLens' }, results: [] },
   ].entries()) {
-    const output = await normalizeCurrentCodexRecord(record(payload, 20 + index), ctx)
+    const output = await normalizeCurrentCodexRecord(record(payload, 20 + index), codexTestContext)
     assert.equal(output.observations[0]?.nativeCallId, payload.call_id)
     assert.equal(output.observations[0]?.dedupHints?.nativeCallId, payload.call_id)
   }
@@ -97,8 +93,8 @@ test('legacy image generation keeps binary result only in source evidence', asyn
     revised_prompt: 'diagram',
     result: 'base64-image-data',
     saved_path: '/safe/image.png',
-  }, 30), ctx)
-  const payload = output.observations[0]?.payload as any
+  }, 30), codexTestContext)
+  const payload = asRecord(output.observations[0]?.payload)
   assert.equal(payload.resultAvailable, true)
   assert.equal('result' in payload, false)
   assert.equal('raw' in payload, false)
@@ -108,8 +104,9 @@ test('future persisted EventMsg still stays unknown instead of guessing semantic
   const output = await normalizeCurrentCodexRecord(record({
     type: 'future_persisted_event',
     future: { survives: true },
-  }, 40), ctx)
+  }, 40), codexTestContext)
 
   assert.equal(output.observations[0]?.kind, 'unknown')
-  assert.equal((output.observations[0]?.payload as any).rawPayload.payload.future.survives, true)
+  const rawPayload = asRecord(asRecord(output.observations[0]?.payload).rawPayload)
+  assert.equal(asRecord(asRecord(rawPayload.payload).future).survives, true)
 })
