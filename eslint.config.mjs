@@ -5,6 +5,7 @@ const ignored = [
   '**/node_modules/**',
   '**/dist/**',
   '**/release/**',
+  'apps/desktop/runtime/**',
   '**/.electron-dist/**',
   '**/coverage/**',
 ]
