@@ -13,6 +13,27 @@ const MAX_SEQUENCE = Number.MAX_SAFE_INTEGER
 const METADATA_CHUNK = 300
 
 type SessionMetadata = Pick<ToolUsageAggregateSession, 'title' | 'projectName' | 'workspacePath' | 'endedAt'>
+type SessionMetadataRow = Record<string, unknown>
+
+function rowRecord(value: unknown): SessionMetadataRow {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError('SQLite tool usage session metadata query returned a non-object row')
+  }
+  return value as SessionMetadataRow
+}
+
+function requiredString(row: SessionMetadataRow, key: string): string {
+  const value = row[key]
+  if (typeof value !== 'string') throw new TypeError(`SQLite tool usage session metadata field ${key} must be a string`)
+  return value
+}
+
+function optionalString(row: SessionMetadataRow, key: string): string | undefined {
+  const value = row[key]
+  if (value == null) return undefined
+  if (typeof value !== 'string') throw new TypeError(`SQLite tool usage session metadata field ${key} must be a string or null`)
+  return value
+}
 
 function codexRealUserSql(alias: string): string {
   return `
@@ -116,20 +137,18 @@ function sessionMetadata(executor: SqliteExecutor, sessionIds: string[]): Map<st
       LEFT JOIN workspaces AS workspace ON workspace.id = logical.workspace_id
       LEFT JOIN session_summary_projection AS summary ON summary.logical_session_id = logical.id
       WHERE logical.id IN (${placeholders})
-    `).all(...batch) as Array<{
-      logical_session_id: string
-      title?: string | null
-      project_name?: string | null
-      workspace_path?: string | null
-      ended_at?: string | null
-    }>
+    `).all(...batch).map(rowRecord)
 
     for (const row of rows) {
-      result.set(row.logical_session_id, {
-        ...(row.title ? { title: row.title } : {}),
-        ...(row.project_name ? { projectName: row.project_name } : {}),
-        ...(row.workspace_path ? { workspacePath: row.workspace_path } : {}),
-        ...(row.ended_at ? { endedAt: row.ended_at } : {}),
+      const title = optionalString(row, 'title')
+      const projectName = optionalString(row, 'project_name')
+      const workspacePath = optionalString(row, 'workspace_path')
+      const endedAt = optionalString(row, 'ended_at')
+      result.set(requiredString(row, 'logical_session_id'), {
+        ...(title === undefined ? {} : { title }),
+        ...(projectName === undefined ? {} : { projectName }),
+        ...(workspacePath === undefined ? {} : { workspacePath }),
+        ...(endedAt === undefined ? {} : { endedAt }),
       })
     }
   }
