@@ -142,7 +142,10 @@ export async function backfillToolUsageFactProjection(
     (after, limit) => maintenance.backfillToolUsageFacts(after, limit),
     gate,
     signal,
-    { ...options, initialProgress: repairedProgress },
+    {
+      ...options,
+      ...(repairedProgress === undefined ? {} : { initialProgress: repairedProgress }),
+    },
   )
 }
 
