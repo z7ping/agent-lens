@@ -60,10 +60,39 @@ function projection(body) {
   }
 }
 
-const initialUsage = await request('/api/v1/usage?limit=1')
+function maintenanceGate(body) {
+  const value = body?.storage?.details?.maintenanceGate
+  if (!value || typeof value !== 'object') return null
+  const permits = value.permits
+  const policy = value.policy
+  return {
+    activeRequests: Number(value.activeRequests ?? 0),
+    load: value.load ?? null,
+    policy: policy && typeof policy === 'object' ? {
+      quietMs: Number(policy.quietMs ?? 0),
+      pollMs: Number(policy.pollMs ?? 0),
+      maxDeferMs: Number(policy.maxDeferMs ?? 0),
+    } : null,
+    permits: permits && typeof permits === 'object' ? {
+      quiet: Number(permits.quiet ?? 0),
+      forced: Number(permits.forced ?? 0),
+      maxWaitMs: Number(permits.maxWaitMs ?? 0),
+    } : null,
+  }
+}
+
+const [initialUsage, initialHealth] = await Promise.all([
+  request('/api/v1/usage?limit=1'),
+  request('/api/v1/health'),
+])
 const initialProjection = projection(initialUsage.body)
+const initialGate = maintenanceGate(initialHealth.body)
 if (!initialUsage.ok || !initialProjection) {
   console.error('cannot read Tool Fact projection readiness before backfill/foreground acceptance')
+  process.exit(1)
+}
+if (!initialHealth.ok || !initialGate?.permits) {
+  console.error('cannot read maintenance fairness metrics before backfill/foreground acceptance')
   process.exit(1)
 }
 
@@ -74,6 +103,7 @@ if (initialProjection.state === 'ready') {
     verified: false,
     reason: 'Tool Fact projection is already ready; this run did not exercise active backfill + foreground coexistence. Use an incomplete large-DB copy for this acceptance.',
     projection: initialProjection,
+    maintenanceGate: initialGate,
   }, null, 2))
   process.exit(0)
 }
@@ -100,16 +130,27 @@ while (performance.now() - startedAt < durationMs) {
   await delay(intervalMs)
 }
 
-// Projection status is cached for one second. Fetch a final fresh sample.
+// Projection status and HTTP health both use short caches. Fetch final fresh samples.
 await delay(1100)
-const finalUsage = await request('/api/v1/usage?limit=1')
+const [finalUsage, finalHealth] = await Promise.all([
+  request('/api/v1/usage?limit=1'),
+  request('/api/v1/health'),
+])
 const finalProjection = projection(finalUsage.body) ?? latestProjection
+const finalGate = maintenanceGate(finalHealth.body)
 const progressed = finalProjection.projectedCount > initialProjection.projectedCount
 const nonRegressing = finalProjection.projectedCount >= initialProjection.projectedCount
+const forcedPermitsDelta = (finalGate?.permits?.forced ?? 0) - initialGate.permits.forced
+const fairnessObserved = forcedPermitsDelta > 0
 const p95 = samples.length
   ? [...samples].sort((a, b) => a - b)[Math.min(samples.length - 1, Math.ceil(samples.length * 0.95) - 1)]
   : 0
-const passed = failures === 0 && finalUsage.ok && nonRegressing && progressed
+const passed = failures === 0
+  && finalUsage.ok
+  && finalHealth.ok
+  && nonRegressing
+  && progressed
+  && fairnessObserved
 
 console.log(JSON.stringify({
   passed,
@@ -123,9 +164,16 @@ console.log(JSON.stringify({
   initialProjection,
   finalProjection,
   progressed,
+  maintenanceFairness: {
+    observed: fairnessObserved,
+    forcedPermitsDelta,
+    initial: initialGate,
+    final: finalGate,
+  },
 }, null, 2))
 
 if (!passed) {
   if (!progressed) console.error('Tool Fact backfill made no observable progress during the foreground coexistence window')
+  if (!fairnessObserved) console.error('maintenance gate did not record any forced permit during sustained foreground traffic')
   process.exitCode = 1
 }
