@@ -376,7 +376,7 @@ try {
           gate,
           runtimeController.signal,
           {
-            initialProgress: job.initialProgress,
+            ...(job.initialProgress === undefined ? {} : { initialProgress: job.initialProgress }),
             batchSize: capacityConstrained ? 50 : 250,
             report: job.report,
           },
@@ -420,7 +420,7 @@ try {
             gate,
             runtimeController.signal,
             {
-              initialProgress: job.initialProgress,
+              ...(job.initialProgress === undefined ? {} : { initialProgress: job.initialProgress }),
               batchSize: 250,
               report: job.report,
             },
@@ -555,7 +555,7 @@ try {
           gate,
           runtimeController.signal,
           {
-            initialProgress: job.initialProgress,
+            ...(job.initialProgress === undefined ? {} : { initialProgress: job.initialProgress }),
             batchSize: 50,
             report: job.report,
             onBatch(batch) {
