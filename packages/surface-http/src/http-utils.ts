@@ -1,15 +1,25 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
-export type HttpError = Error & { statusCode: number }
+export class HttpError extends Error {
+  constructor(
+    readonly statusCode: number,
+    message: string,
+  ) {
+    super(message)
+    this.name = 'HttpError'
+  }
+}
 
 export function httpError(statusCode: number, message: string): HttpError {
-  const error = new Error(message) as HttpError
-  error.statusCode = statusCode
-  return error
+  return new HttpError(statusCode, message)
 }
 
 export function badRequest(message: string): HttpError {
   return httpError(400, message)
+}
+
+export function statusCodeForError(error: unknown): number {
+  return error instanceof HttpError ? error.statusCode : 500
 }
 
 export function writeJson(response: ServerResponse, statusCode: number, body: unknown): void {
@@ -45,7 +55,7 @@ export async function readJsonBody(
   }
   if (!chunks.length) throw badRequest(options.emptyBodyMessage ?? 'JSON body is required')
   try {
-    return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown
+    return JSON.parse(Buffer.concat(chunks).toString('utf8'))
   } catch {
     throw badRequest(options.invalidJsonMessage ?? 'Request body must be valid JSON')
   }
