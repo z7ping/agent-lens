@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { createPortal } from 'react-dom'
 import type { AgentFacetDto } from '@agent-lens/protocol'
-import { usePinnedAgents } from '../App'
 import { orderAgentsByPreference } from './agent-order'
+import { usePinnedAgents } from './PinnedAgentsProvider'
 import { UiIcon } from './UiIcon'
 
 export function agentLabel(sourceId: string, fallback?: string): string {
