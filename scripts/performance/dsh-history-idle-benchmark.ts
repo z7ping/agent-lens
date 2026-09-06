@@ -4,26 +4,12 @@ import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import type { SourceHistoryExecutionContext } from '../../packages/core/src/index'
 import { ingestDshHistory } from '../../apps/daemon/src/sources/dsh'
-
-function readPositiveInt(name: string, fallback: number): number {
-  const prefix = `--${name}=`
-  const raw = process.argv.find(arg => arg.startsWith(prefix))?.slice(prefix.length)
-  if (!raw) return fallback
-  const value = Number.parseInt(raw, 10)
-  if (!Number.isFinite(value) || value <= 0) throw new Error(`${name} must be a positive integer`)
-  return value
-}
+import { percentile, readPositiveInt } from './benchmark-utils'
 
 const files = readPositiveInt('files', 500)
 const eventsPerFile = readPositiveInt('events-per-file', 20)
 const payloadBytes = readPositiveInt('payload-bytes', 2048)
 const samples = readPositiveInt('samples', 5)
-
-function percentile(values: number[], p: number): number {
-  const sorted = [...values].sort((a, b) => a - b)
-  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * p) - 1))
-  return sorted[index] ?? 0
-}
 
 const root = mkdtempSync(join(tmpdir(), 'agent-lens-dsh-idle-'))
 const sessionsDir = join(root, 'sessions')
