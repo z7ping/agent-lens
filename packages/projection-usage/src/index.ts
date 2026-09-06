@@ -23,7 +23,8 @@ const DEFAULT_LIMIT = 100
 const MAX_LIMIT = 500
 const MAX_DETAIL_OBSERVATION_IDS = 100
 const MAX_DETAIL_SESSIONS = 100
-const AGGREGATE_OVERVIEW_DETAIL_LIMIT = 5
+const AGGREGATE_OVERVIEW_DETAIL_LIMIT = 0
+const AGGREGATE_DETAIL_LIMIT = 5
 const AGGREGATE_ASSET_DETAIL_LIMIT = 0
 
 type UsageObservation = CanonicalObservation | ToolUsageObservationRecord
@@ -215,11 +216,15 @@ export class ToolAssetUsageProjection {
     return result
   }
 
-  async query(query: ToolAssetUsageQueryDto = {}): Promise<ToolAssetUsageResponseDto> {
+  async query(
+    query: ToolAssetUsageQueryDto = {},
+    detailLimit = AGGREGATE_OVERVIEW_DETAIL_LIMIT,
+  ): Promise<ToolAssetUsageResponseDto> {
+    const normalizedDetailLimit = Math.max(0, Math.min(detailLimit, MAX_DETAIL_SESSIONS, MAX_DETAIL_OBSERVATION_IDS))
     const limit = Math.max(1, Math.min(query.limit ?? DEFAULT_LIMIT, MAX_LIMIT))
     const reader = usageReader(this.storage)
     if (reader?.aggregate) {
-      const aggregate = await reader.aggregate(aggregateQuery(query, AGGREGATE_OVERVIEW_DETAIL_LIMIT))
+      const aggregate = await reader.aggregate(aggregateQuery(query, normalizedDetailLimit))
       const toolDtos: ToolUsageDto[] = aggregate.tools.map(item => ({
         nativeToolName: item.nativeToolName,
         sourceIds: [...item.sourceIds].sort(),
@@ -229,15 +234,17 @@ export class ToolAssetUsageProjection {
         successCount: item.successCount,
         errorCount: item.errorCount,
         sessionCount: item.sessionCount,
-        sessions: item.sessions
-          .slice()
-          .sort((a, b) => b.callCount - a.callCount || a.logicalSessionId.localeCompare(b.logicalSessionId))
-          .slice(0, AGGREGATE_OVERVIEW_DETAIL_LIMIT),
+        sessions: normalizedDetailLimit > 0
+          ? item.sessions
+              .slice()
+              .sort((a, b) => b.callCount - a.callCount || a.logicalSessionId.localeCompare(b.logicalSessionId))
+              .slice(0, normalizedDetailLimit)
+          : [],
         totalDurationMs: item.totalDurationMs,
         averageDurationMs: item.resultCount ? Math.round(item.totalDurationMs / item.resultCount) : 0,
         firstUsedAt: item.firstUsedAt,
         lastUsedAt: item.lastUsedAt,
-        observationIds: item.observationIds.slice(0, AGGREGATE_OVERVIEW_DETAIL_LIMIT),
+        observationIds: normalizedDetailLimit > 0 ? item.observationIds.slice(0, normalizedDetailLimit) : [],
       }))
       toolDtos.sort((a, b) => b.callCount - a.callCount || b.lastUsedAt.localeCompare(a.lastUsedAt) || a.nativeToolName.localeCompare(b.nativeToolName))
 
@@ -250,7 +257,7 @@ export class ToolAssetUsageProjection {
         lastUsedAt: item.lastUsedAt,
         attribution: 'derived',
         confidence: 'high',
-        observationIds: item.observationIds.slice(0, AGGREGATE_OVERVIEW_DETAIL_LIMIT),
+        observationIds: normalizedDetailLimit > 0 ? item.observationIds.slice(0, normalizedDetailLimit) : [],
       }))
       assetDtos.sort((a, b) => b.callCount - a.callCount || b.lastUsedAt.localeCompare(a.lastUsedAt) || a.canonicalName.localeCompare(b.canonicalName))
 
@@ -355,15 +362,17 @@ export class ToolAssetUsageProjection {
       successCount: item.successCount,
       errorCount: item.errorCount,
       sessionCount: item.sessionCalls.size,
-      sessions: [...item.sessionCalls.entries()]
-        .map(([logicalSessionId, callCount]) => ({ logicalSessionId, callCount }))
-        .sort((a, b) => b.callCount - a.callCount || a.logicalSessionId.localeCompare(b.logicalSessionId))
-        .slice(0, MAX_DETAIL_SESSIONS),
+      sessions: normalizedDetailLimit > 0
+        ? [...item.sessionCalls.entries()]
+            .map(([logicalSessionId, callCount]) => ({ logicalSessionId, callCount }))
+            .sort((a, b) => b.callCount - a.callCount || a.logicalSessionId.localeCompare(b.logicalSessionId))
+            .slice(0, normalizedDetailLimit)
+        : [],
       totalDurationMs: item.totalDurationMs,
       averageDurationMs: item.resultCount ? Math.round(item.totalDurationMs / item.resultCount) : 0,
       firstUsedAt: item.firstUsedAt,
       lastUsedAt: item.lastUsedAt,
-      observationIds: item.observationIds,
+      observationIds: normalizedDetailLimit > 0 ? item.observationIds.slice(0, normalizedDetailLimit) : [],
     }))
     toolDtos.sort((a, b) => b.callCount - a.callCount || b.lastUsedAt.localeCompare(a.lastUsedAt) || a.nativeToolName.localeCompare(b.nativeToolName))
 
@@ -376,7 +385,7 @@ export class ToolAssetUsageProjection {
       lastUsedAt: item.lastUsedAt,
       attribution: 'derived',
       confidence: 'high',
-      observationIds: item.observationIds,
+      observationIds: normalizedDetailLimit > 0 ? item.observationIds.slice(0, normalizedDetailLimit) : [],
     }))
     assetDtos.sort((a, b) => b.callCount - a.callCount || b.lastUsedAt.localeCompare(a.lastUsedAt) || a.canonicalName.localeCompare(b.canonicalName))
 
@@ -403,6 +412,7 @@ export const usageProjectionInternals = {
   toolName,
   aggregateQuery,
   aggregateOverviewDetailLimit: AGGREGATE_OVERVIEW_DETAIL_LIMIT,
+  aggregateDetailLimit: AGGREGATE_DETAIL_LIMIT,
   aggregateAssetDetailLimit: AGGREGATE_ASSET_DETAIL_LIMIT,
   maxDetailObservationIds: MAX_DETAIL_OBSERVATION_IDS,
   maxDetailSessions: MAX_DETAIL_SESSIONS,
