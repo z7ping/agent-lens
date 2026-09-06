@@ -118,13 +118,14 @@ export async function backfillToolUsageFactProjection(
     : repairedCursor
       ? { cursor: repairedCursor }
       : undefined
+  const { initialProgress: _persistedProgress, ...runOptions } = options
 
   return runBatches(
     (after, limit) => maintenance.backfillToolUsageFacts(after, limit),
     gate,
     signal,
     {
-      ...options,
+      ...runOptions,
       ...(repairedProgress === undefined ? {} : { initialProgress: repairedProgress }),
     },
   )
