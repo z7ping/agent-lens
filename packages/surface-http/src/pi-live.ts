@@ -312,7 +312,8 @@ export async function handlePiLiveRequest(
     if (action === 'extension-response' && request.method === 'POST') {
       const body = objectBody(await readJson(request))
       if (!Object.hasOwn(body, 'response')) throw requestError(400, 'response is required')
-      await service.respondToExtension(runtimeSessionId, nonEmpty(body.requestId, 'requestId'), body.response!)
+      const extensionResponse = body.response
+      await service.respondToExtension(runtimeSessionId, nonEmpty(body.requestId, 'requestId'), extensionResponse)
       writeJson(response, 202, { ok: true })
       return true
     }
