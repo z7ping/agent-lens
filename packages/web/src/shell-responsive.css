@@ -36,6 +36,66 @@
 }
 
 @media (max-width: 575.98px) {
+  .app-shell {
+    position: relative;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workspace-sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 90;
+    width: min(88vw, 316px);
+    max-width: calc(100vw - 36px);
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateX(-102%);
+    box-shadow: 16px 0 40px rgb(15 23 42 / .18);
+    transition: transform .18s cubic-bezier(.2, .8, .2, 1), visibility 0s linear .18s;
+  }
+
+  .workspace-sidebar.is-mobile-open {
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateX(0);
+    transition: transform .18s cubic-bezier(.2, .8, .2, 1), visibility 0s linear 0s;
+  }
+
+  .workspace-mobile-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    display: block;
+    padding: 0;
+    border: 0;
+    background: rgb(15 23 42 / .32);
+  }
+
+  .workspace-mobile-nav-button {
+    display: inline-flex;
+    width: 38px;
+    min-width: 38px;
+    height: 36px;
+    align-self: center;
+    margin-left: 4px;
+    border-color: transparent;
+    background: transparent;
+    color: var(--al-muted);
+  }
+
+  .workspace-mobile-nav-button:hover:not(:disabled) {
+    border-color: transparent;
+    background: var(--al-soft-2);
+    color: var(--al-ink);
+  }
+
+  .workspace-breadcrumb-shell {
+    min-height: 38px;
+    flex-basis: 38px;
+  }
+
+  .workspace-breadcrumb-shell .workspace-breadcrumb { padding-left: 4px; }
+
   .app-header-inner { gap: 6px; padding-inline: 7px; }
   .app-header .brand { display: flex; }
   .brand-logo { width: 25px; height: 25px; }
@@ -49,4 +109,8 @@
   .runtime-status-popover { right: -34px; }
   .page-content { padding: 20px 14px 40px; }
   .heading-help::after { left: auto; right: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-sidebar { transition: none; }
 }
