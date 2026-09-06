@@ -1,13 +1,19 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { SourceRecord } from '@agent-lens/core'
+import type { SourceNormalizationContext, SourceRecord } from '@agent-lens/core'
 import { normalizeCurrentCodexRecord } from './current-protocol'
 import { nativeIdForEntry, nativeTypeForEntry } from './format'
 
-const ctx = {
+const ctx: SourceNormalizationContext = {
   host: { id: 'host', name: 'host', platform: 'linux', arch: 'x64', createdAt: '2026-01-01T00:00:00.000Z', lastSeenAt: '2026-01-01T00:00:00.000Z' },
   installation: { id: 'install', hostId: 'host', productId: 'codex', firstSeenAt: '2026-01-01T00:00:00.000Z', lastSeenAt: '2026-01-01T00:00:00.000Z' },
-} as any
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+}
 
 function record(): SourceRecord {
   const entry = {
@@ -45,12 +51,13 @@ function record(): SourceRecord {
 test('Paginated FunctionCallOutput becomes canonical tool result', async () => {
   const output = await normalizeCurrentCodexRecord(record(), ctx)
   const fact = output.observations[0]!
+  const payload = asRecord(fact.payload)
   assert.equal(fact.kind, 'tool.result')
   assert.equal(fact.nativeEventId, 'call-1')
-  assert.equal((fact.payload as any).callId, 'call-1')
-  assert.equal((fact.payload as any).nativeToolName, 'read_file')
-  assert.equal((fact.payload as any).namespace, 'workspace')
-  assert.equal((fact.payload as any).output, 'file contents')
-  assert.equal((fact.payload as any).sourceSignal, 'event_msg.item_completed.FunctionCallOutput')
-  assert.equal((fact.payload as any).turnId, 'turn-1')
+  assert.equal(payload.callId, 'call-1')
+  assert.equal(payload.nativeToolName, 'read_file')
+  assert.equal(payload.namespace, 'workspace')
+  assert.equal(payload.output, 'file contents')
+  assert.equal(payload.sourceSignal, 'event_msg.item_completed.FunctionCallOutput')
+  assert.equal(payload.turnId, 'turn-1')
 })
