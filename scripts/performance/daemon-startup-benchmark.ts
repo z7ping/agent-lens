@@ -5,17 +5,9 @@ import { performance } from 'node:perf_hooks'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { projectionReadinessInternals } from '../../apps/daemon/src/projection-readiness'
 import { SqliteStorageService } from '../../packages/storage-sqlite/src/index'
+import { readPositiveInt } from './benchmark-utils'
 
 type StartupMode = 'unclean' | 'clean' | 'cycle'
-
-function readPositiveInt(name: string, fallback: number): number {
-  const prefix = `--${name}=`
-  const raw = process.argv.find(arg => arg.startsWith(prefix))?.slice(prefix.length)
-  if (!raw) return fallback
-  const value = Number.parseInt(raw, 10)
-  if (!Number.isFinite(value) || value <= 0) throw new Error(`${name} must be a positive integer`)
-  return value
-}
 
 function readStartupMode(): StartupMode {
   const prefix = '--startup-mode='
@@ -219,6 +211,7 @@ async function runStartup(action: 'rebuilt' | 'reused') {
       throw new Error(`${action} decision timeout after ${timeoutMs}ms\n${output.value}`)
     }
     const projectionDecisionReadyMs = performance.now() - startedAt
+    const backgroundP95Ms = percentile(backgroundHealthSamples, 0.95)
     return {
       action,
       healthReadyMs: Number(healthReadyMs.toFixed(2)),
@@ -227,9 +220,7 @@ async function runStartup(action: 'rebuilt' | 'reused') {
       backgroundHealth: {
         samples: backgroundHealthSamples.length,
         failures: backgroundHealthFailures,
-        p95Ms: percentile(backgroundHealthSamples, 0.95) == null
-          ? null
-          : Number(percentile(backgroundHealthSamples, 0.95)!.toFixed(2)),
+        p95Ms: backgroundP95Ms == null ? null : Number(backgroundP95Ms.toFixed(2)),
         maxMs: backgroundHealthSamples.length === 0
           ? null
           : Number(Math.max(...backgroundHealthSamples).toFixed(2)),
