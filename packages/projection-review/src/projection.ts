@@ -38,12 +38,19 @@ const TIMELINE_CHUNK = 250
 const DESCRIPTOR_SCAN_CHUNK = 1000
 const MAX_DESCRIPTOR_CACHE = 32
 
-function asRecord(value: JsonValue | unknown): Record<string, any> {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {}
+function asRecord(value: JsonValue): Record<string, JsonValue>
+function asRecord(value: unknown): Record<string, unknown>
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
 }
 
-function stringField(record: Record<string, any>, ...keys: string[]): string | undefined {
-  for (const key of keys) if (typeof record[key] === 'string' && record[key]) return record[key]
+function stringField(record: Readonly<Record<string, unknown>>, ...keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = record[key]
+    if (typeof value === 'string' && value) return value
+  }
   return undefined
 }
 
@@ -77,7 +84,7 @@ function eventCategory(kind: TimelineItemDto['kind']): ReviewEventCategory {
   if (kind.startsWith('permission.')) return 'permission'
   if (kind.startsWith('subagent.')) return 'subagent'
   if (kind.startsWith('context.')) return 'context'
-  if (kind.startsWith('model.')) return 'model'
+  if (kind.startsWith('model.') || kind.startsWith('reasoning.')) return 'model'
   if (kind === 'session.lifecycle') return 'lifecycle'
   if (kind === 'artifact.action') return 'artifact'
   if (kind === 'usage') return 'usage'
@@ -89,10 +96,12 @@ function eventLabel(kind: TimelineItemDto['kind']): string {
     'session.lifecycle': '会话生命周期',
     'model.call': '模型调用',
     'model.changed': '模型切换',
+    'reasoning.configuration.updated': '推理配置更新',
     'tool.progress': '工具进度',
     'permission.request': '权限请求',
     'permission.response': '权限响应',
     'subagent.spawn': '启动子 Agent',
+    'subagent.communication': '子 Agent 通信',
     'subagent.end': '子 Agent 结束',
     'context.compaction': '上下文压缩',
     'context.summary': '上下文摘要',
@@ -144,7 +153,7 @@ function buildNodes(items: TimelineItemDto[]): ReviewNodeDto[] {
         type: 'tool', id: item.id, at: item.effectiveAt, sourceId: item.sourceId, ...reviewNodeSource(item),
         name: toolName(item), ...(id ? { callId: id } : {}), status: 'running',
         startedAt: item.effectiveAt,
-        ...(payload.input !== undefined ? { input: payload.input as JsonValue } : {}),
+        ...(payload.input !== undefined ? { input: payload.input } : {}),
         payload: item.payload, evidence: item.evidence, observationIds: [item.id],
       }
       nodes.push(node)
@@ -161,8 +170,8 @@ function buildNodes(items: TimelineItemDto[]): ReviewNodeDto[] {
         linked.status = payload.success === false ? 'error' : payload.success === true ? 'success' : 'unknown'
         const duration = payload.durationMs ?? payload.duration_ms
         if (typeof duration === 'number' && Number.isFinite(duration) && duration >= 0) linked.durationMs = duration
-        if (payload.output !== undefined) linked.output = payload.output as JsonValue
-        else if (payload.result !== undefined) linked.output = payload.result as JsonValue
+        if (payload.output !== undefined) linked.output = payload.output
+        else if (payload.result !== undefined) linked.output = payload.result
         else linked.output = item.payload
         linked.evidence = [...linked.evidence, ...item.evidence]
         linked.observationIds.push(item.id)
@@ -295,17 +304,11 @@ function decodeReviewListCursor(value: string): ReviewListCursor {
   }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Invalid review list cursor')
   const record = parsed as Record<string, unknown>
-  const activeAt = typeof record.activeAt === 'string' && record.activeAt
-    ? record.activeAt
-    : typeof record.endedAt === 'string' && record.endedAt
-      ? record.endedAt
-      : typeof record.startedAt === 'string' && record.startedAt
-        ? record.startedAt
-        : undefined
-  if (!activeAt || typeof record.logicalSessionId !== 'string' || !record.logicalSessionId) {
+  if (typeof record.activeAt !== 'string' || !record.activeAt
+    || typeof record.logicalSessionId !== 'string' || !record.logicalSessionId) {
     throw new Error('Invalid review list cursor')
   }
-  return { activeAt, logicalSessionId: record.logicalSessionId }
+  return { activeAt: record.activeAt, logicalSessionId: record.logicalSessionId }
 }
 
 function encodeReviewCursor(value: ReviewCursorPayload): string {
@@ -330,8 +333,7 @@ function decodeReviewCursor(value: string): ReviewCursorPayload {
     return { mode: 'filter', filter: record.filter, ordinal: record.ordinal }
   }
 
-  const legacyTimeline = record.mode === undefined && typeof record.timelineCursor === 'string'
-  if (record.mode !== 'timeline' && !legacyTimeline) throw new Error('Invalid review cursor')
+  if (record.mode !== 'timeline') throw new Error('Invalid review cursor')
   if (typeof record.timelineCursor !== 'string' || !record.timelineCursor) throw new Error('Invalid review cursor')
   if (typeof record.ordinal !== 'number' || !Number.isSafeInteger(record.ordinal) || record.ordinal < 1) {
     throw new Error('Invalid review cursor')
