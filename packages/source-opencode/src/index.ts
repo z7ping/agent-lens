@@ -74,7 +74,7 @@ function sanitize(value: unknown, depth = 0): unknown {
   if (Array.isArray(value)) return value.slice(0, 200).map(item => sanitize(item, depth + 1))
   if (typeof value !== 'object') return String(value)
   const result: Record<string, unknown> = {}
-  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+  for (const [key, item] of Object.entries(value)) {
     result[key] = SENSITIVE_KEY.test(key) ? '[redacted]' : sanitize(item, depth + 1)
   }
   return result
@@ -84,6 +84,44 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {}
+}
+
+function nullableString(record: Record<string, unknown>, key: string): string | null {
+  const value = record[key]
+  if (value == null) return null
+  if (typeof value !== 'string') throw new TypeError(`OpenCode SQLite field ${key} must be a string or null`)
+  return value
+}
+
+function nullableTimestamp(record: Record<string, unknown>, key: string): number | string | null {
+  const value = record[key]
+  if (value == null) return null
+  if (typeof value !== 'number' && typeof value !== 'string') {
+    throw new TypeError(`OpenCode SQLite field ${key} must be a number, string, or null`)
+  }
+  if (typeof value === 'number' && !Number.isFinite(value)) {
+    throw new TypeError(`OpenCode SQLite field ${key} must be finite`)
+  }
+  return value
+}
+
+function openCodeRow(value: unknown): OpenCodeRow {
+  const row = asRecord(value)
+  const rowId = row.row_id
+  if (typeof rowId !== 'number' || !Number.isSafeInteger(rowId)) {
+    throw new TypeError('OpenCode SQLite field row_id must be a safe integer')
+  }
+  return {
+    row_id: rowId,
+    id: nullableString(row, 'id'),
+    message_id: nullableString(row, 'message_id'),
+    session_id: nullableString(row, 'session_id'),
+    time_created: nullableTimestamp(row, 'time_created'),
+    data: nullableString(row, 'data'),
+    message_data: nullableString(row, 'message_data'),
+    directory: nullableString(row, 'directory'),
+    session_title: nullableString(row, 'session_title'),
+  }
 }
 
 function parseRecord(value: string | null): Record<string, unknown> {
@@ -230,7 +268,7 @@ function selectRows(
      WHERE p.rowid > ? ${historyFilter}
      ORDER BY p.rowid ASC
      LIMIT ?
-  `).all(...params) as OpenCodeRow[]
+  `).all(...params).map(openCodeRow)
 }
 
 function recentRows(db: Database.Database, limit: number): OpenCodeRow[] {
@@ -249,7 +287,7 @@ function recentRows(db: Database.Database, limit: number): OpenCodeRow[] {
       LEFT JOIN session s ON p.session_id = s.id
      ORDER BY p.rowid DESC
      LIMIT ?
-  `).all(limit) as OpenCodeRow[]
+  `).all(limit).map(openCodeRow)
   return rows.reverse()
 }
 
