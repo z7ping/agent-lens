@@ -19,6 +19,8 @@ export interface DataRuntimeWorkerHealthDto {
   requests: number
   completed: number
   timeouts: number
+  /** Heartbeat/liveness failures that recycle a Worker; ordinary query timeouts do not increment this. */
+  livenessFailures?: number
   lastError?: string
   durationMs: {
     last: number
@@ -33,7 +35,12 @@ export interface DataRuntimeHealthDto {
   ok: boolean
   recovering: boolean
   writer: DataRuntimeWorkerHealthDto
+  /** Backwards-compatible representative foreground reader. */
   reader: DataRuntimeWorkerHealthDto
+  /** Full foreground Reader Pool. */
+  readers?: DataRuntimeWorkerHealthDto[]
+  /** Dedicated low-priority reader for diagnostics/replay scans. */
+  maintenanceReader?: DataRuntimeWorkerHealthDto
 }
 
 export interface HealthResponseDto {
