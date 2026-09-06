@@ -38,6 +38,7 @@ const READ_PREFIXES = [
   'preview',
   'verify',
   'facetScope',
+  'toolUsageFactCoverage',
 ] as const
 
 function isReadPath(path: readonly string[]): boolean {
