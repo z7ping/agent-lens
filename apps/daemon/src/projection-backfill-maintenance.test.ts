@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import type { ProjectionBackfillMaintenance } from '@agent-lens/core'
 import { ForegroundActivityGate } from './maintenance-idle'
-import { backfillToolUsageFactProjection, type ProjectionBackfillMaintenance } from './projection-backfill-maintenance'
+import { backfillToolUsageFactProjection } from './projection-backfill-maintenance'
 
 const gate = { wait: async () => undefined }
 
