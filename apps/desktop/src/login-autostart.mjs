@@ -5,7 +5,6 @@ import { dirname, join } from 'node:path'
 function quoteDesktopExec(value) {
   return `"${String(value).replace(/[\\"`$]/g, match => `\\${match}`)}"`
 }
-
 function linuxAutostartPath(home, env) {
   const configRoot = env.XDG_CONFIG_HOME?.trim() || join(home, '.config')
   return join(configRoot, 'autostart', 'agentlens.desktop')
@@ -114,10 +113,4 @@ export function createLoginAutostartController({
     shouldStartHidden,
     refreshRegistrationIfEnabled,
   }
-}
-
-export const loginAutostartInternals = {
-  linuxAutostartPath,
-  linuxDesktopEntry,
-  quoteDesktopExec,
 }

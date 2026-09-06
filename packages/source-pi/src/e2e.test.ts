@@ -151,8 +151,9 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
     assert.equal(facts.filter(item => item.kind === 'context.compaction').length, 1)
     const usage = facts.find(item => item.kind === 'usage')
     assert.ok(usage)
-    assert.equal((usage.payload as any).totalTokens, 155)
-    assert.equal((usage.payload as any).cost.total, 0.01)
+    const usagePayload = usage.payload as { totalTokens: number, cost: { total: number } }
+    assert.equal(usagePayload.totalTokens, 155)
+    assert.equal(usagePayload.cost.total, 0.01)
     const user = facts.find(item => item.nativeEventId === 'pi-user-1')
     const assistant = facts.find(item => item.nativeEventId === 'pi-assistant-1')
     const result = facts.find(item => item.nativeEventId === 'pi-result-1')
@@ -163,7 +164,7 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
     assert.equal(result.nativeParentEventId, 'pi-assistant-1')
     assert.equal(result.parentObservationId, assistant.id)
     assert.equal(tool.parentObservationId, assistant.id)
-    assert.equal((assistant.payload as any).stopReason, 'toolUse')
+    assert.equal((assistant.payload as { stopReason?: string }).stopReason, 'toolUse')
 
     const assetResult = await assetRunner.scan({
       source: piSourceDefinition,

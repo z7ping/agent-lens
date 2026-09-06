@@ -48,7 +48,7 @@ function publishedAtLabel(value: string | null): string | null {
   return date.toLocaleString('zh-CN', { hour12: false })
 }
 
-export function parseCurrentChangelog(markdown: string, version: string): CurrentChangelog {
+function parseCurrentChangelog(markdown: string, version: string): CurrentChangelog {
   const lines = markdown.split(/\r?\n/)
   const start = lines.findIndex(line => line.startsWith(`## ${version}`))
   if (start < 0) return { heading: `v${version}`, sections: [] }

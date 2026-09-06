@@ -195,6 +195,7 @@ test('独立 parser replay 不触发原生历史读取并透传重放窗口与�
   let historyReads = 0
   let replayWindow: unknown
   let cooperateCalls = 0
+  let checkpoint: { value: unknown, revision: number } | null = null
   const replayStates: string[] = []
   const source = sourceDefinition('codex', async () => [])
   source.ingestHistory = async function* () { historyReads += 1 }
@@ -207,16 +208,35 @@ test('独立 parser replay 不触发原生历史读取并透传重放窗口与�
     storage: {
       repositories: {
         sourceRecords: {
-          async listForParserReplay(...args: any[]) {
-            replayWindow = args[5]
+          async listForParserReplay(
+            _sourceId: string,
+            _installationId: string,
+            _targetParserVersion: string,
+            _after: unknown,
+            _limit: number,
+            window: unknown,
+          ) {
+            replayWindow = window
             return []
           },
         },
       },
       checkpoints: {
-        async get() { return null },
-        async set() {},
-        async clear() {},
+        async get<T>() { return checkpoint?.value as T | null ?? null },
+        async getWithRevision<T>() {
+          return checkpoint
+            ? { value: checkpoint.value as T, revision: checkpoint.revision }
+            : null
+        },
+        async compareAndSet<T>(_scope: string, _key: string, expectedRevision: number | null, value: T) {
+          if ((checkpoint?.revision ?? null) !== expectedRevision) return false
+          checkpoint = { value, revision: (checkpoint?.revision ?? 0) + 1 }
+          return true
+        },
+        async set<T>(_scope: string, _key: string, value: T) {
+          checkpoint = { value, revision: (checkpoint?.revision ?? 0) + 1 }
+        },
+        async clear() { checkpoint = null },
       },
     },
     identity: { async resolveInstallation() { return installation } },

@@ -47,7 +47,7 @@ test('SourceRecord 大 payload 透明 gzip，旧 JSON 可按主键游标分批�
       storage.db.prepare(`
         INSERT INTO source_records(
           id, source_id, installation_id, native_type, captured_at, locator_json, payload_json, parser_version
-        ) VALUES (?, 'codex', 'install', 'legacy', ?, '{}', ?, '1')
+        ) VALUES (?, 'codex', 'install', 'legacy', ?, '{"kind":"file"}', ?, '1')
       `).run(id, '2026-08-01T00:00:00.000Z', JSON.stringify(payload))
     }
     const first = await storage.maintenance.compressSourceRecords(1)

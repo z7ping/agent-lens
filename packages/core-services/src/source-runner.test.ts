@@ -2,13 +2,20 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type {
   AgentInstallation,
+  CapabilityService,
   CapturePolicyService,
   CoverageDeclaration,
+  CoverageService,
   DetectedSource,
   Host,
+  IdentityService,
   NormalizedSourceOutput,
+  ObservationService,
   SourceDefinition,
   SourceRecord,
+  SourceRecordReplayCursor,
+  SourceHistoryWindow,
+  StorageService,
 } from '@agent-lens/core'
 import { SourceHistoryRunner, sourceRunnerInternals } from './source-runner'
 
@@ -150,16 +157,16 @@ test('History Coverage 只覆盖 history 能力并引用首尾 Source Evidence',
         async set() {},
         async clear() {},
       },
-    } as any,
-    { async resolveInstallation() { return installation } } as any,
-    { async commit() { throw new Error('No observations expected') } } as any,
-    { registerSourceCapabilities() { return { dispose() {} } } } as any,
+    } as unknown as StorageService,
+    { async resolveInstallation() { return installation } } as unknown as IdentityService,
+    { async commit() { throw new Error('No observations expected') } } as unknown as ObservationService,
+    { registerSourceCapabilities() { return { dispose() {} } } } as unknown as CapabilityService,
     {
       async declare(value: CoverageDeclaration) {
         declarations.push(value)
-        return {} as any
+        return {}
       },
-    } as any,
+    } as unknown as CoverageService,
     capturePolicy,
   )
 
@@ -216,11 +223,11 @@ test('普通历史同步不再隐式触发 parser replay', async () => {
       },
       async transaction(operation: () => Promise<unknown>) { return operation() },
       checkpoints: { async get() { return null }, async set() {}, async clear() {} },
-    } as any,
-    { async resolveInstallation() { return installation } } as any,
-    { async commit() { throw new Error('No observations expected') } } as any,
-    { registerSourceCapabilities() { return { dispose() {} } } } as any,
-    { async declare() { return {} as any } } as any,
+    } as unknown as StorageService,
+    { async resolveInstallation() { return installation } } as unknown as IdentityService,
+    { async commit() { throw new Error('No observations expected') } } as unknown as ObservationService,
+    { registerSourceCapabilities() { return { dispose() {} } } } as unknown as CapabilityService,
+    { async declare() { return {} } } as unknown as CoverageService,
     capturePolicy,
   )
 
@@ -245,6 +252,8 @@ test('独立 parser replay 只重放持久化记录且可覆盖全部历史', as
   const persistedVersions: string[] = []
   let transactionDepth = 0
   let replayTransactions = 0
+  let checkpoint: unknown
+  let checkpointRevision = 0
   const source: SourceDefinition = {
     manifest: {
       pluginId: 'test-source-plugin',
@@ -266,9 +275,16 @@ test('独立 parser replay 只重放持久化记录且可覆盖全部历史', as
       repositories: {
         sourceRecords: {
           async put(value: SourceRecord) { persistedVersions.push(value.parserVersion) },
-          async listForParserReplay(...args: any[]) {
-            replayWindow = args[5]
-            return args[3] ? [] : staleRecords
+          async listForParserReplay(
+            _sourceId: string,
+            _installationId: string,
+            _targetParserVersion: string,
+            after: SourceRecordReplayCursor | undefined,
+            _limit: number,
+            window: SourceHistoryWindow | undefined,
+          ) {
+            replayWindow = window
+            return after ? [] : staleRecords
           },
         },
       },
@@ -281,12 +297,28 @@ test('独立 parser replay 只重放持久化记录且可覆盖全部历史', as
           transactionDepth -= 1
         }
       },
-      checkpoints: { async get() { return null }, async set() {}, async clear() {} },
-    } as any,
-    { async resolveInstallation() { return installation } } as any,
-    { async commit() { throw new Error('No observations expected') } } as any,
-    { registerSourceCapabilities() { return { dispose() {} } } } as any,
-    { async declare() { return {} as any } } as any,
+      checkpoints: {
+        async get<T>() { return (checkpoint as T | undefined) ?? null },
+        async getWithRevision<T>() {
+          return checkpoint === undefined ? null : { value: checkpoint as T, revision: checkpointRevision }
+        },
+        async compareAndSet<T>(_scope: string, _key: string, expectedRevision: number | null, value: T) {
+          if ((checkpoint === undefined ? null : checkpointRevision) !== expectedRevision) return false
+          checkpoint = structuredClone(value)
+          checkpointRevision += 1
+          return true
+        },
+        async set<T>(_scope: string, _key: string, value: T) {
+          checkpoint = structuredClone(value)
+          checkpointRevision += 1
+        },
+        async clear() { checkpoint = undefined },
+      },
+    } as unknown as StorageService,
+    { async resolveInstallation() { return installation } } as unknown as IdentityService,
+    { async commit() { throw new Error('No observations expected') } } as unknown as ObservationService,
+    { registerSourceCapabilities() { return { dispose() {} } } } as unknown as CapabilityService,
+    { async declare() { return {} } } as unknown as CoverageService,
     capturePolicy,
   )
 

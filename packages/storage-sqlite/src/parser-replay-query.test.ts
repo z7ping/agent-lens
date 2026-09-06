@@ -30,7 +30,7 @@ function insertRecord(
     INSERT INTO source_records(
       id, source_id, installation_id, source_session_native_id, native_type,
       captured_at, locator_json, payload_json, parser_version
-    ) VALUES (?, 'codex', 'install', 'session-native', 'response_item/message', ?, '{}', '{}', ?)
+    ) VALUES (?, 'codex', 'install', 'session-native', 'response_item/message', ?, '{"kind":"file"}', '{}', ?)
   `).run(id, capturedAt, parserVersion)
 }
 
@@ -95,7 +95,7 @@ test('parser replay drains 1505 stale records across multiple 500-row pages and 
       INSERT INTO source_records(
         id, source_id, installation_id, source_session_native_id, native_type,
         captured_at, locator_json, payload_json, parser_version
-      ) VALUES (?, 'codex', 'install', 'session-native', 'response_item/message', ?, '{}', '{}', ?)
+      ) VALUES (?, 'codex', 'install', 'session-native', 'response_item/message', ?, '{"kind":"file"}', '{}', ?)
     `)
     const seed = storage.db.transaction(() => {
       const base = Date.parse('2026-01-01T00:00:00.000Z')

@@ -158,7 +158,7 @@ requireText(coreObservation, /'thinking\.level\.changed'/, 'Core 缺少 thinking
 requireText(timelineProtocol, /'thinking\.level\.changed'/, 'Timeline 缺少 thinking.level.changed')
 
 requireText(client, /requestJson<PiLiveStateDto\[]>\('\/api\/v1\/pi-live'\)/, '活跃任务必须优先从 Runtime 服务端列举')
-requireText(client, /Compatibility fallback[\s\S]*readKnownRuntimeIds\(\)/, '活跃任务需保留旧 Runtime 兼容回退')
+if (/readKnownRuntimeIds|agent-lens:pi-live-runtime-ids/.test(client)) failures.push('活跃 Runtime 已由服务端统一持有，不得恢复 localStorage 兼容分支')
 requireText(client, /HIDDEN_FLUSH_MS = 250/, '后台页面必须降低 Streaming UI 提交频率')
 requireText(client, /requestAnimationFrame/, '前台 Streaming 必须按动画帧批量提交')
 requireText(client, /coalescedEvents/, 'Scheduler 缺少事件合并诊断')

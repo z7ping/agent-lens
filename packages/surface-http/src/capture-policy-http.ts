@@ -25,7 +25,6 @@ function capturePolicyResponse(capturePolicy: CapturePolicyService): CapturePoli
     },
   }
 }
-
 function capturePolicyUpdatePayload(value: unknown): CapturePolicySourceUpdateRequestDto {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw badRequest('Request body must be an object')
@@ -65,9 +64,4 @@ export async function handleCapturePolicyRequest(
   await capturePolicy.setEnabledSources(payload.enabledSources)
   writeJson(response, 200, capturePolicyResponse(capturePolicy))
   return true
-}
-
-export const capturePolicyHttpInternals = {
-  capturePolicyResponse,
-  capturePolicyUpdatePayload,
 }

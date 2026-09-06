@@ -8,7 +8,6 @@ import type {
 export interface MaintenanceIdleGate {
   wait(signal: AbortSignal): Promise<void>
 }
-
 export interface SourceRecordCompressionRunResult {
   scanned: number
   compressed: number
@@ -101,10 +100,4 @@ export async function compressLegacySourceRecords(
   }
   result.aborted = signal.aborted
   return result
-}
-
-export const storageMaintenanceInternals = {
-  progressRecord,
-  progressNumber,
-  progressCursor,
 }

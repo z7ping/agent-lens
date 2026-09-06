@@ -7,14 +7,25 @@ test('health 不返回全量聚合，diagnostics 显式提供 Unknown/Coverage/�
   await storage.migrate()
   try {
     const health = await storage.health()
-    const healthDetails = health.details as Record<string, any>
+    const healthDetails = health.details as {
+      unknownObservations?: unknown
+      coverage?: unknown
+      dataGrowth: { totals?: unknown, last7Days?: unknown }
+    }
     assert.equal(healthDetails.unknownObservations, undefined)
     assert.equal(healthDetails.coverage, undefined)
     assert.equal(healthDetails.dataGrowth.totals, undefined)
     assert.equal(healthDetails.dataGrowth.last7Days, undefined)
 
     const diagnostics = await storage.diagnostics()
-    const details = diagnostics.details as Record<string, any>
+    const details = diagnostics.details as {
+      unknownObservations: { total: number, groups: unknown[] }
+      coverage: { summary: unknown }
+      dataGrowth: {
+        totals: { sourceRecords: number }
+        last7Days: { sessions: number }
+      }
+    }
     assert.equal(details.unknownObservations.total, 0)
     assert.deepEqual(details.unknownObservations.groups, [])
     assert.ok(details.coverage.summary)

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { StorageService, ToolUsageAggregateQuery } from '@agent-lens/core'
+import type { SourceService, StorageService, ToolUsageAggregateQuery } from '@agent-lens/core'
 import { AgentOverviewProjection, FacetProjection } from './index'
 
 test('facets uses one materialized facetScope call instead of paging all sessions', async () => {
@@ -67,7 +67,7 @@ test('Agent Overview aggregates tool assets once per source, not once per instal
     list() {
       return [{ manifest: { sourceId: 'codex', productId: 'codex', displayName: 'Codex' } }]
     },
-  } as any
+  } as unknown as SourceService
 
   const result = await new AgentOverviewProjection(storage, sources).query()
   assert.equal(aggregateCalls.length, 1)

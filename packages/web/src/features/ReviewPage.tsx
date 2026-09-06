@@ -25,7 +25,7 @@ import { ToolKindIcon } from '../components/ToolKindIcon'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import { Button, Drawer, IconButton, Input, SelectMenu, StatusBadge, Toolbar, UiIcon } from '../components/ui'
 import { historyTaskPresentation } from './task-center'
-import { projectReviewInteractionPresentation } from './review-interaction-presentation'
+import { projectReviewInteractionPresentation, type ReviewProcessPresentationItem } from './review-interaction-presentation'
 import { TaskEvent } from './TaskEvent'
 import { TaskHeader } from './TaskHeader'
 import { TaskMessage } from './TaskMessage'
@@ -676,7 +676,7 @@ function ReviewProcessGroup({
   inspect,
 }: {
   id: string
-  items: import('./review-interaction-presentation').ReviewProcessPresentationItem[]
+  items: ReviewProcessPresentationItem[]
   inspect(node: ReviewNodeDto): void
 }) {
   const messages = items.filter((item): item is Extract<typeof item, { type: 'message' }> => item.type === 'message')

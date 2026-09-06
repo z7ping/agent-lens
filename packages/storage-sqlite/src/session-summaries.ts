@@ -107,6 +107,7 @@ function mapSummary(value: unknown): SessionSummaryRecord {
   const rawTitle = optionalString(row, 'title')
   const nativeTitle = rawTitle?.trim() ? rawTitle.trim() : undefined
   const fallbackTitle = payloadText(firstUserPayload)
+  const title = nativeTitle ?? fallbackTitle
   const projectId = optionalString(row, 'project_id')
   const projectName = optionalString(row, 'project_name')
   const workspaceId = optionalString(row, 'workspace_id')
@@ -125,7 +126,7 @@ function mapSummary(value: unknown): SessionSummaryRecord {
     ...(projectName === undefined ? {} : { projectName }),
     ...(workspaceId === undefined ? {} : { workspaceId }),
     ...(workspacePath === undefined ? {} : { workspacePath }),
-    ...(nativeTitle || fallbackTitle ? { title: nativeTitle ?? fallbackTitle } : {}),
+    ...(title === undefined ? {} : { title }),
     ...(firstUserPayload === undefined ? {} : { firstUserPayload }),
     startedAt: requiredString(row, 'started_at'),
     endedAt: requiredString(row, 'ended_at'),
@@ -143,15 +144,60 @@ function mapSummary(value: unknown): SessionSummaryRecord {
   }
 }
 
-const REAL_USER_SQL = `
-  kind = 'message.user'
-  AND COALESCE(json_extract(payload_json, '$.provenance.actualAuthor'), 'human-user') = 'human-user'
-  AND COALESCE(json_extract(payload_json, '$.provenance.contentRole'), 'user-request') = 'user-request'
-`
+function codexLegacyTransportEchoSql(alias: string): string {
+  return `
+    ${alias}.kind = 'message.user'
+    AND json_extract(${alias}.payload_json, '$.provenance.actualAuthor') IS NULL
+    AND json_extract(${alias}.payload_json, '$.provenance.contentRole') IS NULL
+    AND EXISTS (
+      SELECT 1
+      FROM observation_evidence legacy_link
+      JOIN evidence legacy_evidence ON legacy_evidence.id = legacy_link.evidence_id
+      JOIN source_records legacy_record ON legacy_record.id = legacy_evidence.source_record_id
+      WHERE legacy_link.observation_id = ${alias}.id
+        AND legacy_record.source_id = 'codex'
+    )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM observation_evidence authoritative_link
+      JOIN evidence authoritative_evidence ON authoritative_evidence.id = authoritative_link.evidence_id
+      JOIN source_records authoritative_record ON authoritative_record.id = authoritative_evidence.source_record_id
+      WHERE authoritative_link.observation_id = ${alias}.id
+        AND authoritative_record.source_id = 'codex'
+        AND authoritative_record.native_type = 'event_msg/user_message'
+    )
+  `
+}
+
+function realUserSql(alias: string): string {
+  return `
+    ${alias}.kind = 'message.user'
+    AND NOT (${codexLegacyTransportEchoSql(alias)})
+    AND COALESCE(json_extract(${alias}.payload_json, '$.provenance.actualAuthor'), 'human-user') = 'human-user'
+    AND COALESCE(json_extract(${alias}.payload_json, '$.provenance.contentRole'), 'user-request') = 'user-request'
+  `
+}
+
+const REAL_USER_SQL = realUserSql('observations')
 
 const SYSTEM_CONTEXT_SQL = `
-  kind = 'context.injected'
-  AND COALESCE(json_extract(payload_json, '$.provenance.activityType'), 'system-injection') = 'system-injection'
+  (
+    observations.kind = 'context.injected'
+    AND COALESCE(json_extract(observations.payload_json, '$.provenance.activityType'), 'system-injection') = 'system-injection'
+  )
+  OR (${codexLegacyTransportEchoSql('observations')})
+`
+
+const TOOL_EXECUTION_COUNT_SQL = `
+  COUNT(DISTINCT CASE
+    WHEN observations.kind IN ('tool.call', 'tool.result') THEN COALESCE(
+      NULLIF(json_extract(observations.payload_json, '$.callId'), ''),
+      NULLIF(json_extract(observations.payload_json, '$.call_id'), ''),
+      NULLIF(json_extract(observations.payload_json, '$.toolUseId'), ''),
+      NULLIF(json_extract(observations.payload_json, '$.tool_use_id'), ''),
+      observations.kind || ':' || observations.id
+    )
+  END)
 `
 
 function firstUserPayloadSql(sessionIdSql: string): string {
@@ -159,9 +205,7 @@ function firstUserPayloadSql(sessionIdSql: string): string {
     SELECT payload_json
     FROM observations AS first_user
     WHERE first_user.logical_session_id = ${sessionIdSql}
-      AND first_user.kind = 'message.user'
-      AND COALESCE(json_extract(first_user.payload_json, '$.provenance.actualAuthor'), 'human-user') = 'human-user'
-      AND COALESCE(json_extract(first_user.payload_json, '$.provenance.contentRole'), 'user-request') = 'user-request'
+      AND ${realUserSql('first_user')}
     ORDER BY
       COALESCE(first_user.occurred_at, first_user.captured_at) ASC,
       COALESCE(first_user.canonical_sequence, first_user.source_sequence, ${MAX_SEQUENCE}) ASC,
@@ -238,7 +282,7 @@ function legacyQuerySql(observationFilter: string, summaryFilter: string): strin
         COUNT(*) AS observation_count,
         SUM(CASE WHEN ${REAL_USER_SQL} THEN 1 ELSE 0 END) AS user_turn_count,
         SUM(CASE WHEN ${SYSTEM_CONTEXT_SQL} THEN 1 ELSE 0 END) AS system_context_count,
-        SUM(CASE WHEN kind = 'tool.call' THEN 1 ELSE 0 END) AS tool_count,
+        ${TOOL_EXECUTION_COUNT_SQL} AS tool_count,
         SUM(CASE WHEN kind LIKE 'tool.%' THEN 1 ELSE 0 END) AS tool_event_count,
         SUM(CASE
           WHEN kind = 'tool.result' AND json_extract(payload_json, '$.success') = 0 THEN 1
@@ -413,7 +457,7 @@ function rebuildInsertSql(sessionFilter: string): string {
         COUNT(*) AS observation_count,
         SUM(CASE WHEN ${REAL_USER_SQL} THEN 1 ELSE 0 END) AS user_turn_count,
         SUM(CASE WHEN ${SYSTEM_CONTEXT_SQL} THEN 1 ELSE 0 END) AS system_context_count,
-        SUM(CASE WHEN kind = 'tool.call' THEN 1 ELSE 0 END) AS tool_count,
+        ${TOOL_EXECUTION_COUNT_SQL} AS tool_count,
         SUM(CASE WHEN kind LIKE 'tool.%' THEN 1 ELSE 0 END) AS tool_event_count,
         SUM(CASE
           WHEN kind = 'tool.result' AND json_extract(payload_json, '$.success') = 0 THEN 1

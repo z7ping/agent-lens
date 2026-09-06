@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash } from 'node:crypto'
 import { watch, type FSWatcher } from 'node:fs'
 import {
   access,

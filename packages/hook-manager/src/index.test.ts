@@ -9,13 +9,20 @@ import {
   uninstallHooks,
 } from './index'
 
-function handlerCount(config: any, marker: string): number {
+interface HookConfig {
+  hooks?: Record<string, unknown>
+}
+
+function handlerCount(config: HookConfig, marker: string): number {
   let count = 0
   for (const groups of Object.values(config.hooks ?? {})) {
     if (!Array.isArray(groups)) continue
-    for (const group of groups as any[]) {
-      for (const hook of Array.isArray(group?.hooks) ? group.hooks : []) {
-        if (typeof hook?.command === 'string' && hook.command.includes(marker)) count += 1
+    for (const group of groups) {
+      if (!group || typeof group !== 'object') continue
+      const hooks = 'hooks' in group && Array.isArray(group.hooks) ? group.hooks : []
+      for (const hook of hooks) {
+        if (hook && typeof hook === 'object' && 'command' in hook
+          && typeof hook.command === 'string' && hook.command.includes(marker)) count += 1
       }
     }
   }

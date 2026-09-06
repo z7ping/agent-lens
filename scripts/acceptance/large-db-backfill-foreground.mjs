@@ -5,11 +5,13 @@ const durationMs = Number.parseInt(process.argv.find(arg => arg.startsWith('--du
 const intervalMs = Number.parseInt(process.argv.find(arg => arg.startsWith('--interval-ms='))?.slice('--interval-ms='.length) ?? '100', 10)
 const timeoutMs = Number.parseInt(process.argv.find(arg => arg.startsWith('--timeout-ms='))?.slice('--timeout-ms='.length) ?? '3000', 10)
 const foregroundP95BudgetMs = Number.parseInt(process.argv.find(arg => arg.startsWith('--foreground-p95-budget-ms='))?.slice('--foreground-p95-budget-ms='.length) ?? '1000', 10)
+const activationTimeoutMs = Number.parseInt(process.argv.find(arg => arg.startsWith('--activation-timeout-ms='))?.slice('--activation-timeout-ms='.length) ?? '120000', 10)
 
 if (!Number.isFinite(durationMs) || durationMs <= 0) throw new Error('duration-ms must be positive')
 if (!Number.isFinite(intervalMs) || intervalMs <= 0) throw new Error('interval-ms must be positive')
 if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error('timeout-ms must be positive')
 if (!Number.isFinite(foregroundP95BudgetMs) || foregroundP95BudgetMs <= 0) throw new Error('foreground-p95-budget-ms must be positive')
+if (!Number.isFinite(activationTimeoutMs) || activationTimeoutMs <= 0) throw new Error('activation-timeout-ms must be positive')
 
 const foreground = [
   '/api/v1/review?limit=20',
@@ -87,12 +89,36 @@ function maintenanceGate(body) {
   }
 }
 
-const [initialUsage, initialHealth] = await Promise.all([
-  request('/api/v1/usage?limit=1'),
-  request('/api/v1/health', HEALTH_STATUSES),
-])
-const initialProjection = projection(initialUsage.body)
-const initialGate = maintenanceGate(initialHealth.body)
+async function freshSnapshot() {
+  // Usage aggregate has a 2s cache. Health is stale-while-revalidate, so the
+  // first expired read starts refresh and the second read observes it.
+  await delay(2100)
+  await Promise.all([
+    request('/api/v1/usage?limit=1'),
+    request('/api/v1/health', HEALTH_STATUSES),
+  ])
+  await delay(200)
+  const [usage, health] = await Promise.all([
+    request('/api/v1/usage?limit=1'),
+    request('/api/v1/health', HEALTH_STATUSES),
+  ])
+  return { usage, health, projection: projection(usage.body), gate: maintenanceGate(health.body) }
+}
+
+let initial = await freshSnapshot()
+const activationStartedAt = performance.now()
+const activationBaseline = initial.projection?.projectedCount ?? 0
+while (initial.projection?.state !== 'ready'
+  && initial.projection?.projectedCount === activationBaseline
+  && performance.now() - activationStartedAt < activationTimeoutMs) {
+  initial = await freshSnapshot()
+}
+const activationMs = Math.round(performance.now() - activationStartedAt)
+
+const initialUsage = initial.usage
+const initialHealth = initial.health
+const initialProjection = initial.projection
+const initialGate = initial.gate
 if (!initialUsage.ok || !initialProjection) {
   console.error('cannot read Tool Fact projection readiness before backfill/foreground acceptance')
   process.exit(1)
@@ -112,6 +138,10 @@ if (initialProjection.state === 'ready') {
     maintenanceGate: initialGate,
   }, null, 2))
   process.exit(0)
+}
+if (initialProjection.projectedCount === activationBaseline) {
+  console.error(`Tool Fact backfill did not become active within ${activationTimeoutMs}ms`)
+  process.exit(1)
 }
 
 const startedAt = performance.now()
@@ -136,14 +166,11 @@ while (performance.now() - startedAt < durationMs) {
   await delay(intervalMs)
 }
 
-// Projection status and HTTP health both use short caches. Fetch final fresh samples.
-await delay(1100)
-const [finalUsage, finalHealth] = await Promise.all([
-  request('/api/v1/usage?limit=1'),
-  request('/api/v1/health', HEALTH_STATUSES),
-])
-const finalProjection = projection(finalUsage.body) ?? latestProjection
-const finalGate = maintenanceGate(finalHealth.body)
+const final = await freshSnapshot()
+const finalUsage = final.usage
+const finalHealth = final.health
+const finalProjection = final.projection ?? latestProjection
+const finalGate = final.gate
 const progressed = finalProjection.projectedCount > initialProjection.projectedCount
 const nonRegressing = finalProjection.projectedCount >= initialProjection.projectedCount
 const forcedPermitsDelta = (finalGate?.permits?.forced ?? 0) - initialGate.permits.forced
@@ -165,6 +192,7 @@ console.log(JSON.stringify({
   skipped: false,
   verified: passed,
   durationMs,
+  activationMs,
   rounds,
   requests: samples.length,
   failures,

@@ -78,7 +78,3 @@ const applyDataRuntimeStorage = Object.assign(
 )
 
 export const dataRuntimeStoragePlugin = defineAgentLensPlugin(manifest, applyDataRuntimeStorage)
-
-export const dataRuntimeStoragePluginInternals = {
-  FOREGROUND_READER_COUNT,
-}

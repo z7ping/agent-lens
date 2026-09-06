@@ -60,7 +60,6 @@ function rowRecord(value: unknown): SqliteRow {
   }
   return value as SqliteRow
 }
-
 function requiredString(row: SqliteRow, key: string): string {
   const value = row[key]
   if (typeof value !== 'string') throw new TypeError(`SQLite row field ${key} must be a string`)
@@ -420,16 +419,4 @@ export function mapTool(value: unknown): ToolDefinition {
     ...(installationId === undefined ? {} : { installationId }),
     ...(schemaHash === undefined ? {} : { schemaHash }),
   }
-}
-
-export const repositoryRowMapperInternals = {
-  rowRecord,
-  requiredString,
-  optionalString,
-  requiredNumber,
-  optionalNumber,
-  enumString,
-  parseJson,
-  stringArrayJson,
-  sourceLocator,
 }

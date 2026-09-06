@@ -1,6 +1,6 @@
 import type { ContentProvenance } from '@agent-lens/core'
 
-export type CodexInjectedKind =
+type CodexInjectedKind =
   | 'system'
   | 'developer'
   | 'permissions'
@@ -28,7 +28,7 @@ function containsAny(text: string, values: string[]): boolean {
   return values.some(value => normalized.includes(value))
 }
 
-export function classifyCodexInjectedKind(role: string, text: string): CodexInjectedKind {
+function classifyCodexInjectedKind(role: string, text: string): CodexInjectedKind {
   const nativeRole = role.trim().toLowerCase()
   if (nativeRole === 'system') return 'system'
   if (nativeRole === 'developer') return 'developer'

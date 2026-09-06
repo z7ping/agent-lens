@@ -15,7 +15,6 @@ function reviewFiltersFromSearch(search: string): ReviewFilters {
     search: params.get('q') ?? '',
   }
 }
-
 function reviewSearchFromFilters(filters: ReviewFilters): string {
   const params = new URLSearchParams()
   if (filters.sourceId) params.set('source', filters.sourceId)
@@ -77,10 +76,4 @@ export function useReviewUrlSync({
     if (search === nextSearch) return
     replace(pathname, nextSearch)
   }, [active, filters, pathname, replace, search])
-}
-
-export const reviewUrlSyncInternals = {
-  reviewFiltersFromSearch,
-  reviewSearchFromFilters,
-  sameReviewFilters,
 }

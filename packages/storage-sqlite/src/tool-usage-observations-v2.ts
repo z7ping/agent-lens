@@ -21,7 +21,6 @@ function rowRecord(value: unknown): SessionMetadataRow {
   }
   return value as SessionMetadataRow
 }
-
 function requiredString(row: SessionMetadataRow, key: string): string {
   const value = row[key]
   if (typeof value !== 'string') throw new TypeError(`SQLite tool usage session metadata field ${key} must be a string`)
@@ -192,8 +191,4 @@ export class SqliteToolUsageObservationReader implements ToolUsageObservationRea
       })),
     }
   }
-}
-
-export const toolUsageObservationV2Internals = {
-  sessionMetadata,
 }

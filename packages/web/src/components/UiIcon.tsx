@@ -1,6 +1,6 @@
 import type { SVGProps } from 'react'
-import type { LucideIcon } from 'lucide-react'
 import {
+  type LucideIcon,
   ArrowBigDown,
   ArrowBigUp,
   ArrowDownToLine,

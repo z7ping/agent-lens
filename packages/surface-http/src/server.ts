@@ -305,6 +305,11 @@ export async function startHttpSurface(
         return
       }
 
+      if (url.pathname.startsWith('/api/v1/')) {
+        writeJson(response, 404, { error: 'not_found' })
+        return
+      }
+
       if (await handleStatic(response, url.pathname, staticMounts.values())) return
       writeJson(response, 404, { error: 'not_found' })
     } catch (error) {

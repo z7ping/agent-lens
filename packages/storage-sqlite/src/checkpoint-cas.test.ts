@@ -32,8 +32,8 @@ test('checkpoint CAS rejects stale completion after concurrent dirty update', as
     const afterDirty = await checkpoints.getWithRevision<typeof running>(scope, key)
     assert.ok(afterDirty)
     assert.ok(afterDirty.revision > beforeDirty.revision)
-    assert.equal((afterDirty.value as any).dirty, true)
-    assert.equal((afterDirty.value as any).state, 'pending')
+    assert.equal(afterDirty.value.dirty, true)
+    assert.equal(afterDirty.value.state, 'pending')
 
     const staleCompleted = {
       ...running,
@@ -46,7 +46,7 @@ test('checkpoint CAS rejects stale completion after concurrent dirty update', as
       false,
     )
 
-    const final = await checkpoints.getWithRevision<any>(scope, key)
+    const final = await checkpoints.getWithRevision<typeof running>(scope, key)
     assert.equal(final?.value.dirty, true)
     assert.equal(final?.value.state, 'pending')
   } finally {

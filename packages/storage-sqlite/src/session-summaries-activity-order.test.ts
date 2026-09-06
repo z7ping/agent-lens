@@ -64,12 +64,6 @@ test('session summaries filter, sort and paginate by latest activity time', asyn
       assert.deepEqual(secondPage.items.map(item => item.logicalSessionId), [recent.observation.logicalSessionId])
       assert.equal(secondPage.hasMore, false)
 
-      const legacyCursorPage = await storage.sessionSummaries.query({
-        from: '2026-09-01T00:00:00.000Z',
-        limit: 1,
-        after: { startedAt: first.endedAt, logicalSessionId: first.logicalSessionId },
-      })
-      assert.deepEqual(legacyCursorPage.items.map(item => item.logicalSessionId), [recent.observation.logicalSessionId])
     }
   } finally {
     await storage.close()

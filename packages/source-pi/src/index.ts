@@ -641,16 +641,6 @@ export async function* discoverPiAssets(
   }
 }
 
-function textFromContent(content: unknown): string {
-  if (typeof content === 'string') return content
-  if (!Array.isArray(content)) return ''
-  return content.map(block => {
-    if (typeof block === 'string') return block
-    const item = asRecord(block)
-    return item.type === 'text' ? stringField(item, 'text') ?? '' : ''
-  }).filter(Boolean).join('\n\n')
-}
-
 function evidenceFor(record: SourceRecord): EvidenceCandidate {
   return {
     captureMethod: 'native-log',

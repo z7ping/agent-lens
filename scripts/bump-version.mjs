@@ -1,8 +1,6 @@
-import { access, readFile, writeFile } from 'node:fs/promises'
-import { readdir } from 'node:fs/promises'
+import { access, readFile, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-const root = new URL('../', import.meta.url)
 const requested = process.argv[2]
 const dryRun = process.argv.includes('--dry-run') || process.env.npm_config_dry_run === 'true'
 

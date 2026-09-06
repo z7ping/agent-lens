@@ -55,11 +55,13 @@ test('DSH request header never persists explicit authorization or API tokens', (
 
   const safeRecord = service.sanitizeSourceRecord(record, normalized)
   const safeOutput = service.sanitizeNormalizedOutput(normalized)
-  assert.equal((safeRecord.payload as any).authorization, REDACTED)
-  assert.equal((safeRecord.payload as any).headers['x-api-key'], REDACTED)
-  assert.equal((safeOutput.observations[0]?.payload as any).authorization, REDACTED)
-  assert.equal((safeOutput.observations[0]?.payload as any).headers['x-api-key'], REDACTED)
-  assert.equal((safeOutput.observations[0]?.payload as any).model, 'deepseek-chat')
+  const safeRecordPayload = safeRecord.payload as { authorization: unknown, headers: Record<string, unknown> }
+  const safeObservationPayload = safeOutput.observations[0]?.payload as { authorization: unknown, headers: Record<string, unknown>, model: unknown }
+  assert.equal(safeRecordPayload.authorization, REDACTED)
+  assert.equal(safeRecordPayload.headers['x-api-key'], REDACTED)
+  assert.equal(safeObservationPayload.authorization, REDACTED)
+  assert.equal(safeObservationPayload.headers['x-api-key'], REDACTED)
+  assert.equal(safeObservationPayload.model, 'deepseek-chat')
 })
 
 test('MCP configuration redacts secret-shaped keys while retaining structural metadata', () => {
@@ -73,10 +75,11 @@ test('MCP configuration redacts secret-shaped keys while retaining structural me
       MODE: 'safe',
     },
   })
-  assert.equal((captured.value as any).name, 'filesystem')
-  assert.equal((captured.value as any).apiKey, REDACTED)
-  assert.equal((captured.value as any).env.ACCESS_TOKEN, REDACTED)
-  assert.equal((captured.value as any).env.MODE, 'safe')
+  const value = captured.value as { name: unknown, apiKey: unknown, env: Record<string, unknown> }
+  assert.equal(value.name, 'filesystem')
+  assert.equal(value.apiKey, REDACTED)
+  assert.equal(value.env.ACCESS_TOKEN, REDACTED)
+  assert.equal(value.env.MODE, 'safe')
 })
 
 test('environment scope is not captured by default dogfood privacy policy', () => {

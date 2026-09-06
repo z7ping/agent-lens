@@ -9,7 +9,6 @@ function record(value: unknown): Record<string, unknown> | undefined {
     ? value as Record<string, unknown>
     : undefined
 }
-
 function finiteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
 }
@@ -119,9 +118,4 @@ export function parseDataRuntimeHealth(value: unknown): DataRuntimeHealthDto | u
     ...(maintenanceReader === undefined ? {} : { maintenanceReader }),
     ...(foregroundQueue === undefined ? {} : { foregroundQueue }),
   }
-}
-
-export const dataRuntimeHealthInternals = {
-  workerHealth,
-  foregroundQueueHealth,
 }

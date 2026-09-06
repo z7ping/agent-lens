@@ -24,7 +24,6 @@ type ReviewInteractionPage = {
   interactions: ReviewInteractionDto[]
   page: ReviewDetailPageDto
 }
-
 function requestedLimit(query: ReviewDetailQueryDto, override?: number): number {
   return override ?? Math.max(1, Math.min(query.limit ?? DEFAULT_DETAIL_LIMIT, MAX_DETAIL_LIMIT))
 }
@@ -252,10 +251,4 @@ export class ReviewInteractionPager {
     }
     return this.forward(logicalSessionId, query)
   }
-}
-
-export const interactionPaginationInternals = {
-  defaultDetailLimit: DEFAULT_DETAIL_LIMIT,
-  maxDetailLimit: MAX_DETAIL_LIMIT,
-  timelineChunk: TIMELINE_CHUNK,
 }

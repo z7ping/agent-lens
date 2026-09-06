@@ -18,7 +18,6 @@ function optionalParam(params: URLSearchParams, key: string): string | undefined
   const value = params.get(key)
   return value ? value : undefined
 }
-
 export function parseLimit(params: URLSearchParams, max: number): number | undefined {
   const raw = optionalParam(params, 'limit')
   if (!raw) return undefined
@@ -83,7 +82,6 @@ export function parseTimelineQuery(params: URLSearchParams): TimelineQueryDto {
     ...(limit === undefined ? {} : { limit }),
   }
 }
-
 export function parseSessionQuery(params: URLSearchParams): SessionQueryDto {
   const installationId = optionalParam(params, 'installationId')
   const logicalSessionId = optionalParam(params, 'logicalSessionId')
@@ -184,16 +182,4 @@ export function parseReviewDetailQuery(params: URLSearchParams): ReviewDetailQue
     ...(filter ? { filter } : {}),
     ...(limit === undefined ? {} : { limit }),
   }
-}
-
-export const queryParamInternals = {
-  optionalParam,
-  optionalTimestamp,
-  orderedRange,
-  timelineKind,
-  timelineDirection,
-  parseReviewStatus,
-  parseReviewDetailDirection,
-  parseReviewDetailFilter,
-  parsePositiveInteger,
 }

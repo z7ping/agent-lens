@@ -480,7 +480,7 @@ export interface ProjectionBackfillMaintenance {
   repairToolUsageFactCursor?(after?: string): Promise<string | undefined>
 }
 
-export interface StorageTransaction extends RepositorySet {}
+export type StorageTransaction = RepositorySet
 
 export interface StorageHealth {
   ok: boolean

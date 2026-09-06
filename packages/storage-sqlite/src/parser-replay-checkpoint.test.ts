@@ -52,13 +52,15 @@ test('writing a stale parser record marks completed replay checkpoints pending a
     await storage.checkpoints.set('parser-replay', 'codex:install:5:all', completed)
 
     await storage.repositories.sourceRecords.put(record('current', '5'))
-    const afterCurrent = await storage.checkpoints.get<any>('parser-replay', 'codex:install:5:all')
+    const afterCurrent = await storage.checkpoints.get<typeof completed>('parser-replay', 'codex:install:5:all')
+    assert.ok(afterCurrent)
     assert.equal(afterCurrent.state, 'completed')
     assert.equal(afterCurrent.dirty, false)
     assert.equal(afterCurrent.cursor.id, 'old-cursor')
 
     await storage.repositories.sourceRecords.put(record('stale', '1'))
-    const afterStale = await storage.checkpoints.get<any>('parser-replay', 'codex:install:5:all')
+    const afterStale = await storage.checkpoints.get<typeof completed>('parser-replay', 'codex:install:5:all')
+    assert.ok(afterStale)
     assert.equal(afterStale.state, 'pending')
     assert.equal(afterStale.dirty, true)
     assert.equal(afterStale.cursor, undefined)

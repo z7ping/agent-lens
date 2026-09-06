@@ -1,5 +1,4 @@
-import type { JsonValue, TimelineEvidenceDto, TimelineObservationKind } from './timeline'
-import { AGENT_LENS_PROTOCOL_VERSION } from './timeline'
+import { AGENT_LENS_PROTOCOL_VERSION, type JsonValue, type TimelineEvidenceDto, type TimelineObservationKind } from './timeline'
 
 export type ReviewStatusFilter = 'all' | 'with-errors' | 'clean'
 export type ReviewMessageRole = 'user' | 'assistant' | 'commentary' | 'reasoning'

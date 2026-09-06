@@ -10,7 +10,7 @@ import {
   type ReplicationStreamStatus,
 } from '@agent-lens/core/replication'
 
-export interface StreamRow extends ReplicationStreamState {}
+export type StreamRow = ReplicationStreamState
 
 export interface PendingRow {
   id: string

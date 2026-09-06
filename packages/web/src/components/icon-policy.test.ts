@@ -25,7 +25,7 @@ test('Web 通用操作图标只能经 UiIcon 进入业务层', async () => {
   const dataSvg = ["data:image", 'svg+xml'].join('/')
 
   for (const path of await sourceFiles(sourceRoot)) {
-    const file = relative(sourceRoot, path).replaceAll('\\\\', '/')
+    const file = relative(sourceRoot, path).replaceAll('\\', '/')
     if (file === self) continue
     const content = await readFile(path, 'utf8')
 

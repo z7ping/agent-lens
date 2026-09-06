@@ -105,7 +105,7 @@ test('ToolAssetUsageProjection attributes only defensible MCP and Skill usage', 
 
     const detail = await projection.query(
       { installationId: installation.id },
-      usageProjectionInternals.aggregateDetailLimit,
+      1,
     )
     const detailMcp = detail.tools.find(item => item.nativeToolName === 'mcp__docs__search')
     assert.equal(detailMcp?.sessions.length, 1)
@@ -256,13 +256,14 @@ test('ToolAssetUsageProjection keeps exact totals while detail query returns onl
   assert.equal(summaryAsset?.callCount, 150)
   assert.equal(summaryAsset?.observationIds.length, 0)
 
-  const detail = await projection.query({}, usageProjectionInternals.aggregateDetailLimit)
+  const detailLimit = usageProjectionInternals.maxDetailSessions
+  const detail = await projection.query({}, detailLimit)
   const detailTool = detail.tools[0]
   const detailAsset = detail.assets[0]
   assert.equal(detailTool?.callCount, 150)
   assert.equal(detailTool?.sessionCount, 150)
-  assert.equal(detailTool?.sessions.length, usageProjectionInternals.aggregateDetailLimit)
-  assert.equal(detailTool?.observationIds.length, usageProjectionInternals.aggregateDetailLimit)
+  assert.equal(detailTool?.sessions.length, detailLimit)
+  assert.equal(detailTool?.observationIds.length, detailLimit)
   assert.equal(detailAsset?.callCount, 150)
-  assert.equal(detailAsset?.observationIds.length, usageProjectionInternals.aggregateDetailLimit)
+  assert.equal(detailAsset?.observationIds.length, detailLimit)
 })

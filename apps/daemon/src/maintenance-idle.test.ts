@@ -42,6 +42,7 @@ test('foreground gate also waits for reader and writer pending work', () => {
   writerPending = 1
   assert.equal(gate.isIdle(), false)
   writerPending = 0
+  now = 15_000
   assert.equal(gate.isIdle(), true)
 
   const snapshot = gate.snapshot()

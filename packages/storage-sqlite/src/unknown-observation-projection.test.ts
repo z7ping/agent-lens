@@ -19,9 +19,9 @@ async function setup() {
       captured_at, locator_json, payload_json, parser_version
     ) VALUES
       ('record-a', 'codex', 'install', 'native-session', 'response_item/message',
-       '2026-09-01T00:00:00.000Z', '{}', '{}', '1'),
+       '2026-09-01T00:00:00.000Z', '{"kind":"file"}', '{}', '1'),
       ('record-b', 'codex', 'install', 'native-session', 'response_item/message',
-       '2026-09-01T00:00:01.000Z', '{}', '{}', '1');
+       '2026-09-01T00:00:01.000Z', '{"kind":"file"}', '{}', '1');
     INSERT INTO observations(
       id, host_id, installation_id, logical_session_id, source_session_id,
       kind, captured_at, payload_json

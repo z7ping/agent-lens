@@ -135,7 +135,7 @@ test('HTTP backup surface exposes snapshot lifecycle without a restore write end
     assert.equal(preview.blocked, 0)
 
     const unsafeWrite = await fetch(`${base}/api/v1/backups/${manifest.id}/restore`, { method: 'POST' })
-    assert.equal(unsafeWrite.status, 405)
+    assert.equal(unsafeWrite.status, 404)
   } finally {
     await surface.dispose()
     storage.close()

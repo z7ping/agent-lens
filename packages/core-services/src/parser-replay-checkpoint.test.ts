@@ -2,12 +2,17 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type {
   AgentInstallation,
+  CapabilityService,
   CapturePolicyService,
+  CoverageService,
   DetectedSource,
   Host,
+  IdentityService,
   NormalizedSourceOutput,
+  ObservationService,
   SourceDefinition,
   SourceRecord,
+  StorageService,
 } from '@agent-lens/core'
 import { SourceHistoryRunner } from './source-runner'
 
@@ -59,15 +64,28 @@ const capturePolicy = {
 } as unknown as CapturePolicyService
 
 function createCheckpointStore() {
-  const values = new Map<string, unknown>()
+  const values = new Map<string, { value: unknown, revision: number }>()
   return {
     values,
     repository: {
       async get<T>(scope: string, key: string): Promise<T | null> {
-        return (values.get(`${scope}/${key}`) as T | undefined) ?? null
+        return (values.get(`${scope}/${key}`)?.value as T | undefined) ?? null
+      },
+      async getWithRevision<T>(scope: string, key: string) {
+        const entry = values.get(`${scope}/${key}`)
+        return entry ? { value: entry.value as T, revision: entry.revision } : null
+      },
+      async compareAndSet<T>(scope: string, key: string, expectedRevision: number | null, value: T): Promise<boolean> {
+        const storageKey = `${scope}/${key}`
+        const current = values.get(storageKey)
+        if ((current?.revision ?? null) !== expectedRevision) return false
+        values.set(storageKey, { value: structuredClone(value), revision: (current?.revision ?? 0) + 1 })
+        return true
       },
       async set<T>(scope: string, key: string, value: T): Promise<void> {
-        values.set(`${scope}/${key}`, structuredClone(value))
+        const storageKey = `${scope}/${key}`
+        const current = values.get(storageKey)
+        values.set(storageKey, { value: structuredClone(value), revision: (current?.revision ?? 0) + 1 })
       },
       async clear(scope: string, key: string): Promise<void> {
         values.delete(`${scope}/${key}`)
@@ -85,11 +103,11 @@ function createRunner(
       repositories: { sourceRecords },
       checkpoints,
       async transaction(operation: () => Promise<unknown>) { return operation() },
-    } as any,
-    { async resolveInstallation() { return installation } } as any,
-    { async commit() { throw new Error('No observations expected') } } as any,
-    { registerSourceCapabilities() { return { dispose() {} } } } as any,
-    { async declare() { return {} as any } } as any,
+    } as unknown as StorageService,
+    { async resolveInstallation() { return installation } } as unknown as IdentityService,
+    { async commit() { throw new Error('No observations expected') } } as unknown as ObservationService,
+    { registerSourceCapabilities() { return { dispose() {} } } } as unknown as CapabilityService,
+    { async declare() { return {} } } as unknown as CoverageService,
     capturePolicy,
   )
 }
@@ -131,7 +149,7 @@ test('completed parser replay is skipped without reading source records again', 
     abortSignal: new AbortController().signal,
   })
   assert.equal(replayReads, 1)
-  const completed = [...checkpoints.values.values()][0] as any
+  const completed = [...checkpoints.values.values()][0]!.value as { state: string, dirty: boolean }
   assert.equal(completed.state, 'completed')
   assert.equal(completed.dirty, false)
 
@@ -178,7 +196,7 @@ test('parser replay resumes from the last successfully processed record after ca
     abortSignal: firstController.signal,
   })
   assert.deepEqual(processed, ['a'])
-  const interrupted = [...checkpoints.values.values()][0] as any
+  const interrupted = [...checkpoints.values.values()][0]!.value as { state: string, cursor: { id: string } }
   assert.equal(interrupted.state, 'running')
   assert.equal(interrupted.cursor.id, 'a')
 
@@ -190,7 +208,7 @@ test('parser replay resumes from the last successfully processed record after ca
     abortSignal: new AbortController().signal,
   })
   assert.deepEqual(processed, ['a', 'b'])
-  const completed = [...checkpoints.values.values()][0] as any
+  const completed = [...checkpoints.values.values()][0]!.value as { state: string, cursor: { id: string } }
   assert.equal(completed.state, 'completed')
   assert.equal(completed.cursor.id, 'b')
 })

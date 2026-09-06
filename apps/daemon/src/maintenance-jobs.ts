@@ -30,7 +30,6 @@ export interface MaintenanceJobSpec {
    */
   restartCompleted?: boolean
 }
-
 export interface MaintenanceJobContext {
   readonly signal: AbortSignal
   /** Persisted progress from the latest successful batch, if any. */
@@ -62,7 +61,11 @@ export async function runMaintenanceJob<T>(
   completeProgress?: (value: T) => JsonValue,
 ): Promise<MaintenanceJobRunResult<T> | null> {
   if (!store) {
-    await operation({ signal, initialProgress: spec.progress, report: async () => true })
+    await operation({
+      signal,
+      ...(spec.progress === undefined ? {} : { initialProgress: spec.progress }),
+      report: async () => true,
+    })
     return null
   }
 
@@ -146,10 +149,4 @@ export async function runMaintenanceJob<T>(
 
   const paused = await store.transition(job.id, job.revision, { state: 'paused' })
   return { status: 'paused', job: paused ?? job }
-}
-
-export const maintenanceJobInternals = {
-  transientDataRuntimeError,
-  TRANSIENT_RETRY_LIMIT,
-  TRANSIENT_RETRY_DELAY_MS,
 }

@@ -24,7 +24,7 @@ export function sourceDot(sourceId: string): string {
   return 'source-unknown'
 }
 
-export function AgentIcon({ sourceId }: { sourceId: string }) {
+function AgentIcon({ sourceId }: { sourceId: string }) {
   return <span className={`agent-icon ${sourceDot(sourceId)}`} aria-hidden="true"><UiIcon name="agent" size={14}/></span>
 }
 

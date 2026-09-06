@@ -8,6 +8,34 @@
     "packages/*",
     "apps/*"
   ],
+  "knip": {
+    "ignoreDependencies": [
+      "@deepseek-ai/cordis",
+      "better-sqlite3",
+      "electron"
+    ],
+    "ignoreBinaries": [
+      "pwsh",
+      "taskkill.exe"
+    ],
+    "workspaces": {
+      ".": {
+        "entry": [
+          "scripts/acceptance/codex-semantics-desktop-app/main.cjs",
+          "scripts/acceptance/codex-semantics-real.mjs",
+          "scripts/acceptance/task-center-desktop-app/main.cjs",
+          "scripts/acceptance/task-center-desktop.mjs",
+          "scripts/acceptance/task-center-resource-soak.mjs"
+        ]
+      },
+      "apps/daemon": {
+        "entry": [
+          "src/data-runtime/worker-source.mjs",
+          "src/data-runtime/worker.ts"
+        ]
+      }
+    }
+  },
   "bin": {
     "agent-lens": "dist/cli.mjs",
     "agent-lens-hook-codex": "dist/hooks/agent-lens-hook-codex.mjs",
@@ -99,15 +127,18 @@
     "better-sqlite3": "13.0.3"
   },
   "devDependencies": {
+    "@agent-lens/protocol": "1.0.0-alpha.2",
+    "@electron/get": "5.1.0",
     "@types/node": "22.20.0",
-    "eslint": "10.10.0",
     "esbuild": "0.28.2",
+    "eslint": "10.10.0",
     "globals": "17.12.0",
     "jscpd": "5.1.2",
     "knip": "6.34.0",
     "tsx": "4.22.4",
     "typescript": "6.0.3",
-    "typescript-eslint": "8.69.0"
+    "typescript-eslint": "8.69.0",
+    "unzipper": "0.12.5"
   },
   "allowScripts": {
     "@google/genai@1.52.0": true,

@@ -1,6 +1,6 @@
 import type { SqliteExecutor } from './executor'
 
-export interface UnknownObservationGroup {
+interface UnknownObservationGroup {
   sourceId: string
   nativeType: string
   count: number

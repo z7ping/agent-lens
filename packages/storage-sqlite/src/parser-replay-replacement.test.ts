@@ -24,7 +24,7 @@ function insertSourceRecord(storage: SqliteStorageService, id: string, parserVer
     INSERT INTO source_records(
       id, source_id, installation_id, source_session_native_id, native_type,
       captured_at, locator_json, payload_json, parser_version
-    ) VALUES (?, 'codex', 'install', 'native-session', 'response_item/message', ?, '{}', '{}', ?)
+    ) VALUES (?, 'codex', 'install', 'native-session', 'response_item/message', ?, '{"kind":"file"}', '{}', ?)
   `).run(id, now, parserVersion)
 }
 

@@ -21,7 +21,6 @@ function pushSample(samples: number[], value: number): void {
   samples.push(value)
   if (samples.length > METRIC_SAMPLE_LIMIT) samples.shift()
 }
-
 function percentile(samples: readonly number[], ratio: number): number {
   if (!samples.length) return 0
   const sorted = [...samples].sort((a, b) => a - b)
@@ -295,13 +294,4 @@ export class DataRuntimeClient {
     }
     this.pending.clear()
   }
-}
-
-export const dataRuntimeClientInternals = {
-  percentile,
-  heartbeatDuration,
-  METRIC_SAMPLE_LIMIT,
-  HEARTBEAT_INTERVAL_MS,
-  HEARTBEAT_TIMEOUT_MS,
-  MIN_EXPLICIT_HEARTBEAT_MS,
 }

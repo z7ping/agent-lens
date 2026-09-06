@@ -5,7 +5,7 @@ export const DATA_RUNTIME_DEFAULT_TIMEOUT_MS = 5_000
 
 export type DataRuntimeRole = 'writer' | 'reader'
 
-export const DATA_RUNTIME_METHODS = [
+const DATA_RUNTIME_METHODS = [
   'ping',
   'status',
   'shutdown',
@@ -50,7 +50,6 @@ export interface DataRuntimeErrorResponse {
   }
 }
 
-export type DataRuntimeMessage = DataRuntimeRequest | DataRuntimeResponse | DataRuntimeErrorResponse
 
 export function encodedMessageBytes(value: unknown): number {
   return Buffer.byteLength(JSON.stringify(value), 'utf8')

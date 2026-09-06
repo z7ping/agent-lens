@@ -1,6 +1,6 @@
 import type { SqliteExecutor } from './executor'
 
-export interface FacetScopeProject {
+interface FacetScopeProject {
   id: string
   name?: string
   repositoryIdentity?: string

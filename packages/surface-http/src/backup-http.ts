@@ -29,7 +29,6 @@ function writeBytes(
   for (const [key, value] of Object.entries(headers)) response.setHeader(key, value)
   response.end(content)
 }
-
 function responseMeta() {
   return {
     protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
@@ -202,13 +201,4 @@ export async function handleBackupRequest(
 
   writeJson(response, 405, { error: 'method_not_allowed' })
   return true
-}
-
-export const backupHttpInternals = {
-  isBackupKind,
-  parseKind,
-  parseKinds,
-  parseSourceIds,
-  parseCreateRequest,
-  overviewInput,
 }

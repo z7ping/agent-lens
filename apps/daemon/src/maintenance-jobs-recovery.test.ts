@@ -1,12 +1,17 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { MaintenanceJob, MaintenanceJobStore } from '@agent-lens/core'
+import type {
+  MaintenanceJob,
+  MaintenanceJobEnsureInput,
+  MaintenanceJobStore,
+  MaintenanceJobTransitionInput,
+} from '@agent-lens/core'
 import { runMaintenanceJob } from './maintenance-jobs'
 
 class MemoryStore implements MaintenanceJobStore {
   job: MaintenanceJob | null = null
 
-  async ensure(input: { id: string; type: any; scope: string; priority: number; progress?: any }) {
+  async ensure(input: MaintenanceJobEnsureInput) {
     if (!this.job) {
       this.job = {
         id: input.id,
@@ -31,7 +36,7 @@ class MemoryStore implements MaintenanceJobStore {
     return this.job ? [this.job] : []
   }
 
-  async transition(id: string, revision: number, patch: any) {
+  async transition(id: string, revision: number, patch: MaintenanceJobTransitionInput) {
     if (!this.job || this.job.id !== id || this.job.revision !== revision) return null
     this.job = {
       ...this.job,

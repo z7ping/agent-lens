@@ -176,7 +176,7 @@ test('H7 rejects sequence gaps without leaving an empty stream or any Remote Rep
     const store = new SqliteHubReplicaStore(storage.executor)
     await assert.rejects(
       importReplicationBatch({ store, batch: baseBatch(2, [product()]) }),
-      (error: any) => error?.code === 'SEQUENCE_GAP',
+      (error: unknown) => error instanceof Error && 'code' in error && error.code === 'SEQUENCE_GAP',
     )
     assert.equal(await store.getStream('stream-a'), undefined)
     assert.equal(await store.getGeneration('node-a', 'gen-a'), undefined)
@@ -247,7 +247,7 @@ test('H7 rejects a node-scoped Host that claims shared Wire scope before persist
 
     await assert.rejects(
       importReplicationBatch({ store, batch: baseBatch(1, [forgedHost]) }),
-      (error: any) => error?.code === 'ENTITY_SCOPE_INVALID',
+      (error: unknown) => error instanceof Error && 'code' in error && error.code === 'ENTITY_SCOPE_INVALID',
     )
 
     assert.equal(await store.getStream('stream-a'), undefined)

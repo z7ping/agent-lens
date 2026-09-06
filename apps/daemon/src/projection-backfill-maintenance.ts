@@ -7,7 +7,6 @@ import type {
 export interface ProjectionBackfillIdleGate {
   wait(signal: AbortSignal): Promise<void>
 }
-
 export interface ProjectionBackfillRunResult {
   scanned: number
   written: number
@@ -129,11 +128,4 @@ export async function backfillToolUsageFactProjection(
       ...(repairedProgress === undefined ? {} : { initialProgress: repairedProgress }),
     },
   )
-}
-
-export const projectionBackfillInternals = {
-  progressRecord,
-  cursorFromProgress,
-  counterFromProgress,
-  runBatches,
 }

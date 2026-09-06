@@ -17,7 +17,6 @@ function asRecord(value: unknown): Record<string, unknown> {
     ? value as Record<string, unknown>
     : {}
 }
-
 function stringField(record: Readonly<Record<string, unknown>>, ...keys: string[]): string | undefined {
   for (const key of keys) {
     const value = record[key]
@@ -58,14 +57,14 @@ function mergeOutputs(outputs: NormalizedSourceOutput[]): NormalizedSourceOutput
   }
 }
 
-export interface CodexCompletedTurnItem {
+interface CodexCompletedTurnItem {
   turnId: string
   item: Record<string, unknown>
   itemId?: string
   type: string
 }
 
-export function completedTurnItem(record: SourceRecord): CodexCompletedTurnItem | null {
+function completedTurnItem(record: SourceRecord): CodexCompletedTurnItem | null {
   const envelope = asRecord(record.payload)
   const entry = asRecord(envelope.entry)
   const payload = asRecord(entry.payload)
@@ -747,10 +746,4 @@ export async function normalizePaginatedCodexRecord(
     case 'contextcompaction': return normalizeContextCompaction(record, ctx, completed)
     default: return normalizeCodexRecord(record, ctx)
   }
-}
-
-export const paginatedProtocolInternals = {
-  completedTurnItem,
-  normalizedItemType,
-  userItemAttachments,
 }

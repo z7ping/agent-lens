@@ -72,7 +72,7 @@ export function encodeSourceRecordPayloadJson(serialized: string): EncodedSource
   }
 }
 
-export function decodeCompressedSourceRecordPayload(blob: unknown): unknown {
+function decodeCompressedSourceRecordPayload(blob: unknown): unknown {
   if (!(blob instanceof Uint8Array)) throw new Error('Compressed SourceRecord payload is missing')
   return JSON.parse(gunzipSync(Buffer.from(blob)).toString('utf8'))
 }

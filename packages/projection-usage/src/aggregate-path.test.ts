@@ -16,7 +16,7 @@ test('ToolAssetUsageProjection prefers storage-side aggregate without enumeratin
     async aggregate(input) {
       aggregateCalls += 1
       assert.equal(input.sourceId, 'codex')
-      assert.equal(input.detailLimit, usageProjectionInternals.maxDetailObservationIds)
+      assert.equal(input.detailLimit, 0)
       return {
         tools: [{
           nativeToolName: 'mcp__docs__search',
@@ -53,10 +53,10 @@ test('ToolAssetUsageProjection prefers storage-side aggregate without enumeratin
   assert.equal(aggregateCalls, 1)
   assert.equal(response.tools[0]?.callCount, 10_000)
   assert.equal(response.tools[0]?.sessionCount, 2_000)
-  assert.equal(response.tools[0]?.observationIds.length, usageProjectionInternals.maxDetailObservationIds)
+  assert.equal(response.tools[0]?.observationIds.length, 0)
   assert.equal(response.assets[0]?.callCount, 10_000)
 
   const assets = await projection.queryAssets({ sourceId: 'codex' })
-  assert.equal(aggregateCalls, 2)
+  assert.equal(aggregateCalls, 1)
   assert.equal(assets[0]?.canonicalName, 'docs')
 })

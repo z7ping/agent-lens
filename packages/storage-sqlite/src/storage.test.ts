@@ -21,16 +21,22 @@ test('SQLite storage migrates to schema version 21 and exposes required tables',
     const health = await storage.health()
     assert.equal(health.ok, true)
     assert.equal(health.schemaVersion, 21)
-    const growth = (health.details as any)?.dataGrowth
+    const details = health.details as {
+      dataGrowth: { capacity: { softLimitBytes: number, state: string }, reclaimableBytes: number, totals?: unknown, last7Days?: unknown }
+      unknownObservations?: unknown
+      coverage?: unknown
+      executor?: { queueDepth?: number, queueWaitMs?: { p95?: number } }
+    }
+    const growth = details.dataGrowth
     assert.equal(growth.capacity.softLimitBytes, 512 * 1024 * 1024)
     assert.equal(growth.capacity.state, 'healthy')
     assert.equal(typeof growth.reclaimableBytes, 'number')
-    assert.equal((health.details as any)?.unknownObservations, undefined)
-    assert.equal((health.details as any)?.coverage, undefined)
+    assert.equal(details.unknownObservations, undefined)
+    assert.equal(details.coverage, undefined)
     assert.equal(growth.totals, undefined)
     assert.equal(growth.last7Days, undefined)
-    assert.equal(typeof (health.details as any)?.executor?.queueDepth, 'number')
-    assert.equal(typeof (health.details as any)?.executor?.queueWaitMs?.p95, 'number')
+    assert.equal(typeof details.executor?.queueDepth, 'number')
+    assert.equal(typeof details.executor?.queueWaitMs?.p95, 'number')
 
     const rows = storage.db.prepare(`
       SELECT name FROM sqlite_master
@@ -163,7 +169,7 @@ test('source runtime status preserves last error and accumulates failures', asyn
     assert.equal(status?.lastSuccessAt, '2026-08-25T10:02:00.000Z')
     assert.equal(status?.lastErrorSummary, 'second failure')
     const health = await storage.health()
-    const sourceRuntime = (health.details as any)?.sourceRuntime
+    const sourceRuntime = (health.details as { sourceRuntime?: { failed: number, items: unknown[] } })?.sourceRuntime
     assert.equal(sourceRuntime?.failed, 1)
     assert.equal(sourceRuntime?.items?.length, 1)
   } finally { storage.close() }

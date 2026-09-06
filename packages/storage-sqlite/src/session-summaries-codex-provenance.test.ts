@@ -9,7 +9,7 @@ function attachNativeEvidence(storage: SqliteStorageService, observationId: stri
     INSERT INTO source_records(
       id, source_id, installation_id, source_session_native_id, native_type,
       captured_at, locator_json, payload_json, parser_version
-    ) VALUES (?, 'codex', ?, ?, ?, ?, '{}', '{}', 'legacy')
+    ) VALUES (?, 'codex', ?, ?, ?, ?, '{"kind":"file"}', '{}', 'legacy')
   `).run(`source-${suffix}`, installationId, nativeSessionId, nativeType, capturedAt)
   storage.db.prepare(`
     INSERT INTO evidence(id, capture_method, derivation, confidence, source_record_id, captured_at)
@@ -71,7 +71,7 @@ test('Codex legacy transport echo cannot become the task title when native evide
       assert.ok(summary)
       assert.equal(summary.userTurnCount, 1)
       assert.equal(summary.interactionCount, 1)
-      assert.equal((summary.firstUserPayload as any)?.text, '真正的用户任务')
+      assert.equal((summary.firstUserPayload as { text?: string } | undefined)?.text, '真正的用户任务')
       assert.equal(summary.title, '真正的用户任务')
       assert.equal(summary.sessionActivity, 'user-task')
     }
@@ -190,7 +190,7 @@ test('non-Codex legacy user messages without provenance remain compatible', asyn
 
     const page = await storage.sessionSummaries.query({ logicalSessionId: committed.observation.logicalSessionId, limit: 1 })
     assert.equal(page.items[0]?.userTurnCount, 1)
-    assert.equal((page.items[0]?.firstUserPayload as any)?.text, '旧版真实用户请求')
+    assert.equal((page.items[0]?.firstUserPayload as { text?: string } | undefined)?.text, '旧版真实用户请求')
   } finally {
     await storage.close()
   }

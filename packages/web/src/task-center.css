@@ -209,14 +209,14 @@
   order: 2;
   gap: 5px;
   margin-top: 5px;
-  font-size: 11.5px;
+  font-size: 12px;
 }
 .task-center-rail .session-item-foot {
   order: 3;
   gap: 9px;
   margin-top: 3px;
   color: color-mix(in srgb, var(--al-muted-2) 88%, transparent);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 .task-center-rail .session-item-meta .source-dot { width: 6px; height: 6px; flex: 0 0 6px; }
 .task-center-page.is-new-task { grid-template-rows: minmax(0, 1fr); }
@@ -240,7 +240,7 @@
   flex: 0 0 auto;
   padding: 1px 5px;
   border-radius: 999px;
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 620;
 }
 .task-center-rail .session-load-more {

@@ -7,7 +7,6 @@ export interface HttpStaticMount {
   directory: string
   spaFallback?: boolean
 }
-
 const MIME_TYPES: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',
   '.html': 'text/html; charset=utf-8',
@@ -61,9 +60,4 @@ export async function handleStatic(
     }
   }
   return false
-}
-
-export const staticFileInternals = {
-  safeFilePath,
-  tryServeFile,
 }

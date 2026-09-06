@@ -7,7 +7,6 @@ export interface ProgressiveHistoryStage {
   label: string
   window: SourceHistoryWindow
 }
-
 export interface ParserReplayStage {
   id: 'recent' | 'hot-window' | 'all'
   label: string
@@ -70,8 +69,4 @@ export function parserReplayMaintenanceStagesAllowedByCapacity(
 export function yieldToForeground(signal: AbortSignal): Promise<void> {
   if (signal.aborted) return Promise.resolve()
   return new Promise(resolve => setImmediate(resolve))
-}
-
-export const progressiveHistoryInternals = {
-  HOT_HISTORY_WINDOW_MS,
 }
