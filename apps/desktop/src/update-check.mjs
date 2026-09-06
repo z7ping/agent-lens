@@ -1,52 +1,43 @@
+import semver from 'semver'
+
 const RELEASES_API = 'https://api.github.com/repos/z7ping/agent-lens/releases?per_page=20'
 export const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 export const UPDATE_CHECK_STARTUP_DELAY_MS = 8_000
 
-export function parseSemver(value) {
+function normalizedSemver(value) {
   if (typeof value !== 'string') return null
-  const match = value.trim().match(/^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/)
-  if (!match) return null
+  const cleaned = semver.clean(value.trim())
+  return cleaned && semver.valid(cleaned) ? cleaned : null
+}
+
+export function parseSemver(value) {
+  const normalized = normalizedSemver(value)
+  if (!normalized) return null
+  const parsed = semver.parse(normalized)
+  if (!parsed) return null
   return {
     raw: value,
-    major: Number(match[1]),
-    minor: Number(match[2]),
-    patch: Number(match[3]),
-    prerelease: match[4] ? match[4].split('.') : [],
+    major: parsed.major,
+    minor: parsed.minor,
+    patch: parsed.patch,
+    prerelease: parsed.prerelease.map(String),
   }
 }
 
-function comparePrereleaseIdentifier(left, right) {
-  const leftNumeric = /^\d+$/.test(left)
-  const rightNumeric = /^\d+$/.test(right)
-  if (leftNumeric && rightNumeric) return Number(left) - Number(right)
-  if (leftNumeric) return -1
-  if (rightNumeric) return 1
-  return left.localeCompare(right, 'en')
+function comparableSemver(value) {
+  if (typeof value === 'string') return normalizedSemver(value)
+  if (!value || typeof value !== 'object') return null
+  const prerelease = Array.isArray(value.prerelease) && value.prerelease.length
+    ? `-${value.prerelease.join('.')}`
+    : ''
+  return normalizedSemver(`${value.major}.${value.minor}.${value.patch}${prerelease}`)
 }
 
 export function compareSemver(leftValue, rightValue) {
-  const left = typeof leftValue === 'string' ? parseSemver(leftValue) : leftValue
-  const right = typeof rightValue === 'string' ? parseSemver(rightValue) : rightValue
+  const left = comparableSemver(leftValue)
+  const right = comparableSemver(rightValue)
   if (!left || !right) throw new Error('无法比较无效的语义化版本')
-
-  for (const key of ['major', 'minor', 'patch']) {
-    if (left[key] !== right[key]) return left[key] - right[key]
-  }
-
-  if (!left.prerelease.length && !right.prerelease.length) return 0
-  if (!left.prerelease.length) return 1
-  if (!right.prerelease.length) return -1
-
-  const length = Math.max(left.prerelease.length, right.prerelease.length)
-  for (let index = 0; index < length; index += 1) {
-    const leftPart = left.prerelease[index]
-    const rightPart = right.prerelease[index]
-    if (leftPart === undefined) return -1
-    if (rightPart === undefined) return 1
-    const compared = comparePrereleaseIdentifier(leftPart, rightPart)
-    if (compared !== 0) return compared
-  }
-  return 0
+  return semver.compare(left, right)
 }
 
 function releaseVersion(release) {
