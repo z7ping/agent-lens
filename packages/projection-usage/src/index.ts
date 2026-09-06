@@ -26,7 +26,6 @@ const MAX_LIMIT = 500
 const MAX_DETAIL_OBSERVATION_IDS = 100
 const MAX_DETAIL_SESSIONS = 100
 const AGGREGATE_OVERVIEW_DETAIL_LIMIT = 0
-const AGGREGATE_DETAIL_LIMIT = 5
 const AGGREGATE_ASSET_DETAIL_LIMIT = 0
 const PROJECTION_STATUS_CACHE_MS = 1_000
 const AGGREGATE_RESULT_CACHE_MS = 2_000
@@ -506,7 +505,6 @@ export const usageProjectionInternals = {
   aggregateCacheKey,
   projectionStatusReader,
   aggregateOverviewDetailLimit: AGGREGATE_OVERVIEW_DETAIL_LIMIT,
-  aggregateDetailLimit: AGGREGATE_DETAIL_LIMIT,
   aggregateAssetDetailLimit: AGGREGATE_ASSET_DETAIL_LIMIT,
   maxDetailObservationIds: MAX_DETAIL_OBSERVATION_IDS,
   maxDetailSessions: MAX_DETAIL_SESSIONS,
