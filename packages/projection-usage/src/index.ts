@@ -83,6 +83,7 @@ function aggregateQuery(query: ToolAssetUsageQueryDto, detailLimit = AGGREGATE_O
     ...(query.logicalSessionId ? { logicalSessionId: query.logicalSessionId } : {}),
     ...(query.projectId ? { projectId: query.projectId } : {}),
     ...(query.sourceId ? { sourceId: query.sourceId } : {}),
+    ...(query.toolName ? { toolName: query.toolName } : {}),
     ...(query.from ? { from: query.from } : {}),
     ...(query.to ? { to: query.to } : {}),
     detailLimit,
@@ -185,7 +186,7 @@ export class ToolAssetUsageProjection {
       if (!metadata || (query.sourceId && metadata.sourceId !== query.sourceId)) return
       const payload = asRecord(observation.payload)
       const name = toolName(observation)
-      if (!name) return
+      if (!name || (query.toolName && name !== query.toolName)) return
       const inferred = inferAssetUsage(name, payload)
       if (!inferred) return
       const at = effectiveAt(observation)
@@ -289,7 +290,7 @@ export class ToolAssetUsageProjection {
       const payload = asRecord(observation.payload)
       const identity = callId(observation)
       const name = toolName(observation)
-      if (!name) return
+      if (!name || (query.toolName && name !== query.toolName)) return
       if (identity) callsByIdentity.set(`${observation.logicalSessionId}\u0000${identity}`, { name, sourceId: metadata.sourceId, productId: metadata.productId })
 
       const at = effectiveAt(observation)
@@ -330,7 +331,7 @@ export class ToolAssetUsageProjection {
       const identity = callId(observation)
       const linkedCall = identity ? callsByIdentity.get(`${observation.logicalSessionId}\u0000${identity}`) : undefined
       const name = toolName(observation) ?? linkedCall?.name
-      if (!name) return
+      if (!name || (query.toolName && name !== query.toolName)) return
       const sourceId = linkedCall?.sourceId ?? metadata.sourceId
       if (query.sourceId && sourceId !== query.sourceId) return
       const productId = linkedCall?.productId ?? metadata.productId
