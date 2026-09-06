@@ -31,18 +31,6 @@ const PROJECTION_STATUS_CACHE_MS = 1_000
 
 type UsageObservation = CanonicalObservation | ToolUsageObservationRecord
 
-type ToolUsageFactCoverage = {
-  sourceObservationCount: number
-  projectedCount: number
-  missingCount: number
-  coverageRatio: number
-  ready: boolean
-}
-
-type ProjectionBackfillStatusReader = {
-  toolUsageFactCoverage(): Promise<ToolUsageFactCoverage>
-}
-
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 }
@@ -89,10 +77,10 @@ function pushObservationSample(ids: string[], id: string): void {
   if (ids.length < MAX_DETAIL_OBSERVATION_IDS) ids.push(id)
 }
 function usageReader(storage: StorageService): ToolUsageObservationReader | undefined {
-  return (storage as StorageService & { readonly toolUsageObservations?: ToolUsageObservationReader }).toolUsageObservations
+  return storage.toolUsageObservations
 }
-function projectionStatusReader(storage: StorageService): ProjectionBackfillStatusReader | undefined {
-  return (storage as StorageService & { readonly projectionBackfill?: ProjectionBackfillStatusReader }).projectionBackfill
+function projectionStatusReader(storage: StorageService) {
+  return storage.projectionBackfill?.toolUsageFactCoverage ? storage.projectionBackfill : undefined
 }
 function aggregateQuery(query: ToolAssetUsageQueryDto, detailLimit = AGGREGATE_OVERVIEW_DETAIL_LIMIT): ToolUsageAggregateQuery {
   return {
@@ -123,7 +111,7 @@ export class ToolAssetUsageProjection {
     }
     if (this.projectionStatusInFlight) return this.projectionStatusInFlight
     const reader = projectionStatusReader(this.storage)
-    if (!reader) return Promise.resolve(undefined)
+    if (!reader?.toolUsageFactCoverage) return Promise.resolve(undefined)
     this.projectionStatusInFlight = reader.toolUsageFactCoverage()
       .then(coverage => {
         const status: ToolUsageProjectionStatusDto = {
