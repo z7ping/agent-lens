@@ -10,6 +10,7 @@ export interface ProjectionBackfillBatch {
 export interface ProjectionBackfillMaintenance {
   backfillUnknownObservations(after?: string, limit?: number): Promise<ProjectionBackfillBatch>
   backfillToolUsageFacts(after?: string, limit?: number): Promise<ProjectionBackfillBatch>
+  repairToolUsageFactCursor?(after?: string): Promise<string | undefined>
 }
 
 export interface ProjectionBackfillIdleGate {
@@ -103,18 +104,29 @@ export function backfillUnknownObservationProjection(
   )
 }
 
-export function backfillToolUsageFactProjection(
+export async function backfillToolUsageFactProjection(
   maintenance: ProjectionBackfillMaintenance | undefined,
   gate: ProjectionBackfillIdleGate,
   signal: AbortSignal,
   options: Parameters<typeof runBatches>[3] = {},
 ): Promise<ProjectionBackfillRunResult> {
-  if (!maintenance) return Promise.resolve({ scanned: 0, written: 0, batches: 0, aborted: signal.aborted })
+  if (!maintenance) return { scanned: 0, written: 0, batches: 0, aborted: signal.aborted }
+
+  const persistedCursor = cursorFromProgress(options.initialProgress)
+  const repairedCursor = maintenance.repairToolUsageFactCursor
+    ? await maintenance.repairToolUsageFactCursor(persistedCursor)
+    : persistedCursor
+  const repairedProgress = repairedCursor === persistedCursor
+    ? options.initialProgress
+    : repairedCursor
+      ? { cursor: repairedCursor }
+      : undefined
+
   return runBatches(
     (after, limit) => maintenance.backfillToolUsageFacts(after, limit),
     gate,
     signal,
-    options,
+    { ...options, initialProgress: repairedProgress },
   )
 }
 
