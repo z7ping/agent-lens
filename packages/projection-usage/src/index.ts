@@ -5,6 +5,7 @@ import type {
   SourceSession,
   StorageService,
   ToolUsageAggregateQuery,
+  ToolUsageAggregateResult,
   ToolUsageObservationReader,
   ToolUsageObservationRecord,
 } from '@agent-lens/core'
@@ -28,6 +29,8 @@ const AGGREGATE_OVERVIEW_DETAIL_LIMIT = 0
 const AGGREGATE_DETAIL_LIMIT = 5
 const AGGREGATE_ASSET_DETAIL_LIMIT = 0
 const PROJECTION_STATUS_CACHE_MS = 1_000
+const AGGREGATE_RESULT_CACHE_MS = 2_000
+const AGGREGATE_RESULT_CACHE_MAX_ENTRIES = 64
 
 type UsageObservation = CanonicalObservation | ToolUsageObservationRecord
 
@@ -69,6 +72,10 @@ interface AssetAccumulator {
   type: UsageAssetType; canonicalName: string; sourceIds: Set<string>; callCount: number
   firstUsedAt: string; lastUsedAt: string; observationIds: string[]
 }
+interface AggregateCacheEntry {
+  value: ToolUsageAggregateResult
+  cachedAt: number
+}
 function updateWindow(accumulator: { firstUsedAt: string; lastUsedAt: string }, at: string): void {
   if (at < accumulator.firstUsedAt) accumulator.firstUsedAt = at
   if (at > accumulator.lastUsedAt) accumulator.lastUsedAt = at
@@ -94,6 +101,18 @@ function aggregateQuery(query: ToolAssetUsageQueryDto, detailLimit = AGGREGATE_O
     detailLimit,
   }
 }
+function aggregateCacheKey(query: ToolUsageAggregateQuery): string {
+  return JSON.stringify([
+    query.installationId ?? null,
+    query.logicalSessionId ?? null,
+    query.projectId ?? null,
+    query.sourceId ?? null,
+    query.toolName ?? null,
+    query.from ?? null,
+    query.to ?? null,
+    query.detailLimit,
+  ])
+}
 function hasEmbeddedMetadata(observation: UsageObservation): observation is ToolUsageObservationRecord {
   return 'sourceId' in observation && 'productId' in observation
 }
@@ -102,6 +121,8 @@ export class ToolAssetUsageProjection {
   private cachedProjectionStatus: ToolUsageProjectionStatusDto | null = null
   private cachedProjectionStatusAt = 0
   private projectionStatusInFlight: Promise<ToolUsageProjectionStatusDto | undefined> | null = null
+  private readonly aggregateCache = new Map<string, AggregateCacheEntry>()
+  private readonly aggregateInFlight = new Map<string, Promise<ToolUsageAggregateResult>>()
 
   constructor(private readonly storage: StorageService) {}
 
@@ -127,6 +148,37 @@ export class ToolAssetUsageProjection {
       })
       .finally(() => { this.projectionStatusInFlight = null })
     return this.projectionStatusInFlight
+  }
+
+  private aggregate(
+    query: ToolUsageAggregateQuery,
+    load: () => Promise<ToolUsageAggregateResult>,
+  ): Promise<ToolUsageAggregateResult> {
+    const key = aggregateCacheKey(query)
+    const cached = this.aggregateCache.get(key)
+    if (cached && Date.now() - cached.cachedAt < AGGREGATE_RESULT_CACHE_MS) {
+      return Promise.resolve(cached.value)
+    }
+    if (cached) this.aggregateCache.delete(key)
+
+    const inFlight = this.aggregateInFlight.get(key)
+    if (inFlight) return inFlight
+
+    const request = Promise.resolve()
+      .then(load)
+      .then(value => {
+        this.aggregateCache.delete(key)
+        this.aggregateCache.set(key, { value, cachedAt: Date.now() })
+        while (this.aggregateCache.size > AGGREGATE_RESULT_CACHE_MAX_ENTRIES) {
+          const oldestKey = this.aggregateCache.keys().next().value
+          if (typeof oldestKey !== 'string') break
+          this.aggregateCache.delete(oldestKey)
+        }
+        return value
+      })
+      .finally(() => { this.aggregateInFlight.delete(key) })
+    this.aggregateInFlight.set(key, request)
+    return request
   }
 
   private async forEachKind(
@@ -195,7 +247,8 @@ export class ToolAssetUsageProjection {
   async queryAssets(query: ToolAssetUsageQueryDto = {}): Promise<AssetUsageDto[]> {
     const reader = usageReader(this.storage)
     if (reader?.aggregate) {
-      const aggregate = await reader.aggregate(aggregateQuery(query, AGGREGATE_ASSET_DETAIL_LIMIT))
+      const aggregateInput = aggregateQuery(query, AGGREGATE_ASSET_DETAIL_LIMIT)
+      const aggregate = await this.aggregate(aggregateInput, () => reader.aggregate!(aggregateInput))
       const result: AssetUsageDto[] = aggregate.assets.map(item => ({
         type: item.type,
         canonicalName: item.canonicalName,
@@ -258,8 +311,9 @@ export class ToolAssetUsageProjection {
     const limit = Math.max(1, Math.min(query.limit ?? DEFAULT_LIMIT, MAX_LIMIT))
     const reader = usageReader(this.storage)
     if (reader?.aggregate) {
+      const aggregateInput = aggregateQuery(query, normalizedDetailLimit)
       const [aggregate, projection] = await Promise.all([
-        reader.aggregate(aggregateQuery(query, normalizedDetailLimit)),
+        this.aggregate(aggregateInput, () => reader.aggregate!(aggregateInput)),
         this.projectionStatus(),
       ])
       const toolDtos: ToolUsageDto[] = aggregate.tools.map(item => ({
@@ -449,6 +503,7 @@ export const usageProjectionInternals = {
   callId,
   toolName,
   aggregateQuery,
+  aggregateCacheKey,
   projectionStatusReader,
   aggregateOverviewDetailLimit: AGGREGATE_OVERVIEW_DETAIL_LIMIT,
   aggregateDetailLimit: AGGREGATE_DETAIL_LIMIT,
@@ -456,4 +511,6 @@ export const usageProjectionInternals = {
   maxDetailObservationIds: MAX_DETAIL_OBSERVATION_IDS,
   maxDetailSessions: MAX_DETAIL_SESSIONS,
   projectionStatusCacheMs: PROJECTION_STATUS_CACHE_MS,
+  aggregateResultCacheMs: AGGREGATE_RESULT_CACHE_MS,
+  aggregateResultCacheMaxEntries: AGGREGATE_RESULT_CACHE_MAX_ENTRIES,
 }
