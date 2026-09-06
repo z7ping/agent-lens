@@ -14,8 +14,13 @@ import {
 } from '@agent-lens/protocol'
 import { badRequest } from './http-utils'
 
+function optionalParam(params: URLSearchParams, key: string): string | undefined {
+  const value = params.get(key)
+  return value ? value : undefined
+}
+
 export function parseLimit(params: URLSearchParams, max: number): number | undefined {
-  const raw = params.get('limit')
+  const raw = optionalParam(params, 'limit')
   if (!raw) return undefined
   const limit = Number(raw)
   if (!Number.isInteger(limit) || limit < 1 || limit > max) {
@@ -25,7 +30,7 @@ export function parseLimit(params: URLSearchParams, max: number): number | undef
 }
 
 function optionalTimestamp(params: URLSearchParams, key: string): string | undefined {
-  const value = params.get(key)
+  const value = optionalParam(params, key)
   if (!value) return undefined
   if (!Number.isFinite(Date.parse(value))) throw badRequest(`Invalid ${key} timestamp`)
   return value
@@ -46,84 +51,102 @@ function orderedRange(
   }
 }
 
+function timelineKind(value: string | undefined): TimelineObservationKind | undefined {
+  if (!value) return undefined
+  if ((TIMELINE_OBSERVATION_KINDS as readonly string[]).includes(value)) {
+    return value as TimelineObservationKind
+  }
+  throw badRequest(`Unknown timeline kind: ${value}`)
+}
+
+function timelineDirection(value: string | undefined): TimelineDirection | undefined {
+  if (!value) return undefined
+  if (value === 'forward' || value === 'backward') return value
+  throw badRequest(`Unknown timeline direction: ${value}`)
+}
+
 export function parseTimelineQuery(params: URLSearchParams): TimelineQueryDto {
-  const kindValue = params.get('kind')
-  let kind: TimelineObservationKind | undefined
-  if (kindValue) {
-    if (!(TIMELINE_OBSERVATION_KINDS as readonly string[]).includes(kindValue)) {
-      throw badRequest(`Unknown timeline kind: ${kindValue}`)
-    }
-    kind = kindValue as TimelineObservationKind
-  }
-  const directionValue = params.get('direction')
-  if (directionValue && directionValue !== 'forward' && directionValue !== 'backward') {
-    throw badRequest(`Unknown timeline direction: ${directionValue}`)
-  }
+  const kind = timelineKind(optionalParam(params, 'kind'))
+  const direction = timelineDirection(optionalParam(params, 'direction'))
+  const cursor = optionalParam(params, 'cursor')
+  const installationId = optionalParam(params, 'installationId')
+  const logicalSessionId = optionalParam(params, 'logicalSessionId')
   const range = orderedRange(params, 'Timeline')
   const limit = parseLimit(params, 1000)
   return {
-    ...(params.get('installationId') ? { installationId: params.get('installationId')! } : {}),
-    ...(params.get('logicalSessionId') ? { logicalSessionId: params.get('logicalSessionId')! } : {}),
+    ...(installationId ? { installationId } : {}),
+    ...(logicalSessionId ? { logicalSessionId } : {}),
     ...(kind ? { kind } : {}),
     ...range,
-    ...(params.get('cursor') ? { cursor: params.get('cursor')! } : {}),
-    ...(directionValue ? { direction: directionValue as TimelineDirection } : {}),
+    ...(cursor ? { cursor } : {}),
+    ...(direction ? { direction } : {}),
     ...(limit === undefined ? {} : { limit }),
   }
 }
 
 export function parseSessionQuery(params: URLSearchParams): SessionQueryDto {
+  const installationId = optionalParam(params, 'installationId')
+  const logicalSessionId = optionalParam(params, 'logicalSessionId')
   const limit = parseLimit(params, 500)
   return {
-    ...(params.get('installationId') ? { installationId: params.get('installationId')! } : {}),
-    ...(params.get('logicalSessionId') ? { logicalSessionId: params.get('logicalSessionId')! } : {}),
+    ...(installationId ? { installationId } : {}),
+    ...(logicalSessionId ? { logicalSessionId } : {}),
     ...(limit === undefined ? {} : { limit }),
   }
 }
 
 export function parseUsageQuery(params: URLSearchParams): ToolAssetUsageQueryDto {
+  const installationId = optionalParam(params, 'installationId')
+  const logicalSessionId = optionalParam(params, 'logicalSessionId')
+  const projectId = optionalParam(params, 'projectId')
+  const sourceId = optionalParam(params, 'sourceId')
+  const toolName = optionalParam(params, 'toolName')
   const limit = parseLimit(params, 500)
   return {
-    ...(params.get('installationId') ? { installationId: params.get('installationId')! } : {}),
-    ...(params.get('logicalSessionId') ? { logicalSessionId: params.get('logicalSessionId')! } : {}),
-    ...(params.get('projectId') ? { projectId: params.get('projectId')! } : {}),
-    ...(params.get('sourceId') ? { sourceId: params.get('sourceId')! } : {}),
-    ...(params.get('toolName') ? { toolName: params.get('toolName')! } : {}),
+    ...(installationId ? { installationId } : {}),
+    ...(logicalSessionId ? { logicalSessionId } : {}),
+    ...(projectId ? { projectId } : {}),
+    ...(sourceId ? { sourceId } : {}),
+    ...(toolName ? { toolName } : {}),
     ...orderedRange(params, 'Usage'),
     ...(limit === undefined ? {} : { limit }),
   }
 }
 
 export function parseInsightsQuery(params: URLSearchParams): InsightsQueryDto {
+  const installationId = optionalParam(params, 'installationId')
+  const logicalSessionId = optionalParam(params, 'logicalSessionId')
+  const projectId = optionalParam(params, 'projectId')
+  const sourceId = optionalParam(params, 'sourceId')
   return {
-    ...(params.get('installationId') ? { installationId: params.get('installationId')! } : {}),
-    ...(params.get('logicalSessionId') ? { logicalSessionId: params.get('logicalSessionId')! } : {}),
-    ...(params.get('projectId') ? { projectId: params.get('projectId')! } : {}),
-    ...(params.get('sourceId') ? { sourceId: params.get('sourceId')! } : {}),
+    ...(installationId ? { installationId } : {}),
+    ...(logicalSessionId ? { logicalSessionId } : {}),
+    ...(projectId ? { projectId } : {}),
+    ...(sourceId ? { sourceId } : {}),
     ...orderedRange(params, 'Insights'),
   }
 }
 
-function parseReviewStatus(value: string | null): ReviewStatusFilter | undefined {
+function parseReviewStatus(value: string | undefined): ReviewStatusFilter | undefined {
   if (!value) return undefined
   if (value === 'all' || value === 'with-errors' || value === 'clean') return value
   throw badRequest(`Unknown review status: ${value}`)
 }
 
-function parseReviewDetailDirection(value: string | null): ReviewDetailDirection | undefined {
+function parseReviewDetailDirection(value: string | undefined): ReviewDetailDirection | undefined {
   if (!value) return undefined
   if (value === 'forward' || value === 'backward') return value
   throw badRequest(`Unknown review detail direction: ${value}`)
 }
 
-function parseReviewDetailFilter(value: string | null): ReviewDetailFilter | undefined {
+function parseReviewDetailFilter(value: string | undefined): ReviewDetailFilter | undefined {
   if (!value) return undefined
   if (value === 'all' || value === 'errors' || value === 'latency' || value === 'latest') return value
   throw badRequest(`Unknown review detail filter: ${value}`)
 }
 
 function parsePositiveInteger(params: URLSearchParams, key: string): number | undefined {
-  const raw = params.get(key)
+  const raw = optionalParam(params, key)
   if (!raw) return undefined
   const value = Number(raw)
   if (!Number.isSafeInteger(value) || value < 1) throw badRequest(`${key} must be a positive integer`)
@@ -131,26 +154,31 @@ function parsePositiveInteger(params: URLSearchParams, key: string): number | un
 }
 
 export function parseReviewQuery(params: URLSearchParams): ReviewQueryDto {
+  const cursor = optionalParam(params, 'cursor')
+  const projectId = optionalParam(params, 'projectId')
+  const sourceId = optionalParam(params, 'sourceId')
+  const search = optionalParam(params, 'search')
   const limit = parseLimit(params, 500)
-  const status = parseReviewStatus(params.get('status'))
+  const status = parseReviewStatus(optionalParam(params, 'status'))
   return {
-    ...(params.get('cursor') ? { cursor: params.get('cursor')! } : {}),
-    ...(params.get('projectId') ? { projectId: params.get('projectId')! } : {}),
-    ...(params.get('sourceId') ? { sourceId: params.get('sourceId')! } : {}),
+    ...(cursor ? { cursor } : {}),
+    ...(projectId ? { projectId } : {}),
+    ...(sourceId ? { sourceId } : {}),
     ...orderedRange(params, 'Review'),
     ...(status ? { status } : {}),
-    ...(params.get('search') ? { search: params.get('search')! } : {}),
+    ...(search ? { search } : {}),
     ...(limit === undefined ? {} : { limit }),
   }
 }
 
 export function parseReviewDetailQuery(params: URLSearchParams): ReviewDetailQueryDto {
+  const cursor = optionalParam(params, 'cursor')
   const limit = parseLimit(params, 100)
-  const direction = parseReviewDetailDirection(params.get('direction'))
-  const filter = parseReviewDetailFilter(params.get('filter'))
+  const direction = parseReviewDetailDirection(optionalParam(params, 'direction'))
+  const filter = parseReviewDetailFilter(optionalParam(params, 'filter'))
   const ordinal = parsePositiveInteger(params, 'ordinal')
   return {
-    ...(params.get('cursor') ? { cursor: params.get('cursor')! } : {}),
+    ...(cursor ? { cursor } : {}),
     ...(ordinal === undefined ? {} : { ordinal }),
     ...(direction ? { direction } : {}),
     ...(filter ? { filter } : {}),
@@ -159,8 +187,11 @@ export function parseReviewDetailQuery(params: URLSearchParams): ReviewDetailQue
 }
 
 export const queryParamInternals = {
+  optionalParam,
   optionalTimestamp,
   orderedRange,
+  timelineKind,
+  timelineDirection,
   parseReviewStatus,
   parseReviewDetailDirection,
   parseReviewDetailFilter,
