@@ -2,8 +2,6 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { readFile, stat } from 'node:fs/promises'
 import { extname, resolve, sep } from 'node:path'
 import type {
-  BackupAssetKind,
-  BackupCreateInput,
   BackupService,
   CapabilityService,
   CapturePolicyService,
@@ -20,11 +18,6 @@ import { ToolAssetUsageProjection } from '@agent-lens/projection-usage'
 import {
   AGENT_LENS_PROTOCOL_VERSION,
   TIMELINE_OBSERVATION_KINDS,
-  type BackupCreateRequestDto,
-  type BackupOverviewResponseDto,
-  type BackupRestorePreviewResponseDto,
-  type BackupSnapshotResponseDto,
-  type BackupVerifyResponseDto,
   type CapturePolicyResponseDto,
   type CapturePolicySourceUpdateRequestDto,
   type DataRuntimeHealthDto,
@@ -46,19 +39,16 @@ import {
   type ToolAssetUsageQueryDto,
 } from '@agent-lens/protocol'
 import type { PiLiveService } from '@agent-lens/runtime-cordis'
+import { handleBackupRequest } from './backup-http'
 import type { HttpEventHub } from './events'
 import { handlePiLiveRequest } from './pi-live'
 
 export const AGENT_LENS_HTTP_HOST = '127.0.0.1' as const
 export const DEFAULT_AGENT_LENS_HTTP_PORT = 56789
 const MAX_JSON_BODY_BYTES = 1024 * 1024
-const MAX_BACKUP_BODY_BYTES = 256 * 1024 * 1024
 const HEALTH_CACHE_TTL_MS = 1_000
 const USAGE_DETAIL_LIMIT = 5
 const RUNTIME_STARTED_AT = new Date().toISOString()
-const BACKUP_KINDS = new Set<BackupAssetKind>([
-  'skill', 'mcp', 'plugin', 'extension', 'hook', 'memory', 'rule', 'session', 'config', 'other',
-])
 
 export interface HttpStaticMount {
   id: string
@@ -139,21 +129,6 @@ function writeJson(response: ServerResponse, statusCode: number, body: unknown):
   response.setHeader('content-type', 'application/json; charset=utf-8')
   response.setHeader('cache-control', 'no-store')
   response.setHeader('content-length', Buffer.byteLength(content))
-  response.end(content)
-}
-
-function writeBytes(
-  response: ServerResponse,
-  statusCode: number,
-  contentType: string,
-  content: Buffer,
-  headers: Record<string, string> = {},
-): void {
-  response.statusCode = statusCode
-  response.setHeader('content-type', contentType)
-  response.setHeader('cache-control', 'no-store')
-  response.setHeader('content-length', content.byteLength)
-  for (const [key, value] of Object.entries(headers)) response.setHeader(key, value)
   response.end(content)
 }
 
@@ -382,10 +357,6 @@ async function handleStatic(
   return false
 }
 
-function backupMeta(): { protocolVersion: typeof AGENT_LENS_PROTOCOL_VERSION } {
-  return { protocolVersion: AGENT_LENS_PROTOCOL_VERSION }
-}
-
 function capturePolicyResponse(capturePolicy: CapturePolicyService): CapturePolicyResponseDto {
   const configuration = capturePolicy.getSourceConfiguration()
   return {
@@ -411,7 +382,7 @@ function capturePolicyUpdatePayload(value: unknown): CapturePolicySourceUpdateRe
   if (!Array.isArray(enabledSources) || !enabledSources.every(item => typeof item === 'string')) {
     throw badRequest('enabledSources must be an array of strings')
   }
-  const normalized = enabledSources.map(item => item.trim()).filter(Boolean)
+  const normalized = enabledSources.map(value => value.trim()).filter(Boolean)
   if (!normalized.length) throw badRequest('enabledSources must contain at least one source')
   return { enabledSources: normalized }
 }
@@ -441,111 +412,6 @@ async function handleCapturePolicyRequest(
   const payload = capturePolicyUpdatePayload(await readJsonBody(request))
   await capturePolicy.setEnabledSources(payload.enabledSources)
   writeJson(response, 200, capturePolicyResponse(capturePolicy))
-  return true
-}
-
-async function handleBackupRequest(
-  request: IncomingMessage,
-  response: ServerResponse,
-  url: URL,
-  backup?: BackupService,
-): Promise<boolean> {
-  if (!url.pathname.startsWith('/api/v1/backups')) return false
-  if (!backup) {
-    writeJson(response, 503, { error: 'backup_unavailable' })
-    return true
-  }
-
-  if (url.pathname === '/api/v1/backups' && request.method === 'GET') {
-    const query = {
-      ...(url.searchParams.get('kind') ? { kind: url.searchParams.get('kind') as BackupAssetKind } : {}),
-      ...(url.searchParams.get('q') ? { q: url.searchParams.get('q')! } : {}),
-      ...(url.searchParams.get('sourceId') ? { sourceId: url.searchParams.get('sourceId')! } : {}),
-      ...(url.searchParams.get('installationId') ? { installationId: url.searchParams.get('installationId')! } : {}),
-      ...(url.searchParams.get('state') ? { state: url.searchParams.get('state')! } : {}),
-    }
-    if (query.kind && !BACKUP_KINDS.has(query.kind)) throw badRequest(`Unknown backup kind: ${query.kind}`)
-    const body: BackupOverviewResponseDto = {
-      ...await backup.overview(query),
-      meta: backupMeta(),
-    }
-    writeJson(response, 200, body)
-    return true
-  }
-
-  if (url.pathname === '/api/v1/backups' && request.method === 'POST') {
-    const payload = await readJsonBody(request, MAX_BACKUP_BODY_BYTES) as BackupCreateRequestDto
-    if (!payload || !Array.isArray(payload.assetBindingIds) || !payload.assetBindingIds.length) {
-      throw badRequest('assetBindingIds must contain at least one asset')
-    }
-    const input: BackupCreateInput = {
-      assetBindingIds: payload.assetBindingIds,
-      ...(typeof payload.label === 'string' && payload.label.trim() ? { label: payload.label.trim() } : {}),
-    }
-    const snapshot = await backup.createSnapshot(input)
-    const body: BackupSnapshotResponseDto = { snapshot, meta: backupMeta() }
-    writeJson(response, 201, body)
-    return true
-  }
-
-  if (url.pathname === '/api/v1/backups/import' && request.method === 'POST') {
-    const chunks: Buffer[] = []
-    let total = 0
-    for await (const chunk of request) {
-      const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
-      total += bytes.byteLength
-      if (total > MAX_BACKUP_BODY_BYTES) throw httpError(413, 'Backup file is too large')
-      chunks.push(bytes)
-    }
-    if (!chunks.length) throw badRequest('Backup payload is required')
-    const snapshot = await backup.importSnapshot(Buffer.concat(chunks))
-    const body: BackupSnapshotResponseDto = { snapshot, meta: backupMeta() }
-    writeJson(response, 201, body)
-    return true
-  }
-
-  const match = url.pathname.match(/^\/api\/v1\/backups\/([^/]+)(?:\/(verify|restore-preview|export))?$/)
-  if (!match) {
-    writeJson(response, 404, { error: 'not_found' })
-    return true
-  }
-  const id = decodeURIComponent(match[1]!)
-  const action = match[2]
-
-  if (!action && request.method === 'GET') {
-    const snapshot = await backup.getSnapshot(id)
-    if (!snapshot) {
-      writeJson(response, 404, { error: 'not_found' })
-      return true
-    }
-    const body: BackupSnapshotResponseDto = { snapshot, meta: backupMeta() }
-    writeJson(response, 200, body)
-    return true
-  }
-  if (action === 'verify' && request.method === 'POST') {
-    const verified = await backup.verifySnapshot(id)
-    const body: BackupVerifyResponseDto = { ...verified, meta: backupMeta() }
-    writeJson(response, 200, body)
-    return true
-  }
-  if (action === 'restore-preview' && request.method === 'GET') {
-    const preview = await backup.previewRestore(id)
-    const body: BackupRestorePreviewResponseDto = {
-      ...preview,
-      meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION },
-    }
-    writeJson(response, 200, body)
-    return true
-  }
-  if (action === 'export' && request.method === 'GET') {
-    const bytes = Buffer.from(await backup.exportSnapshot(id))
-    writeBytes(response, 200, 'application/vnd.agentlens.backup', bytes, {
-      'content-disposition': `attachment; filename="${id}.agentlens-backup"`,
-    })
-    return true
-  }
-
-  writeJson(response, 405, { error: 'method_not_allowed' })
   return true
 }
 
