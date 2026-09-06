@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { sanitizeCodexEntry } from './format'
+import { asRecord } from './test-support'
 
 test('session_meta sanitizer preserves structural attribution fields without leaking secrets', () => {
   const sanitized = sanitizeCodexEntry({
@@ -32,7 +33,10 @@ test('session_meta sanitizer preserves structural attribution fields without lea
     },
   })
 
-  const payload = sanitized.payload as Record<string, any>
+  const payload = asRecord(sanitized.payload)
+  const source = asRecord(payload.source)
+  const subagent = asRecord(source.subagent)
+  const threadSpawn = asRecord(subagent.thread_spawn)
   assert.equal(payload.id, 'child-thread')
   assert.equal(payload.session_id, 'shared-session')
   assert.equal(payload.parent_thread_id, 'root-thread')
@@ -40,7 +44,7 @@ test('session_meta sanitizer preserves structural attribution fields without lea
   assert.equal(payload.agent_role, 'worker')
   assert.equal(payload.history_mode, 'paginated')
   assert.equal(payload.subagent_history_start_ordinal, 42)
-  assert.equal(payload.source.subagent.thread_spawn.parent_thread_id, 'root-thread')
-  assert.equal(payload.source.subagent.thread_spawn.api_token, '[redacted]')
+  assert.equal(threadSpawn.parent_thread_id, 'root-thread')
+  assert.equal(threadSpawn.api_token, '[redacted]')
   assert.equal(payload.base_instructions, undefined)
 })
