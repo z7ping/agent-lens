@@ -42,7 +42,7 @@ export class ForegroundActivityGate {
   private readonly pollMs: number
   private readonly maxDeferMs: number
   private readonly now: () => number
-  private readonly customSleep?: (ms: number) => Promise<void>
+  private readonly customSleep: ((ms: number) => Promise<void>) | undefined
   private loadProbe: (() => ForegroundLoadSnapshot) | null
   private activeRequests = 0
   private lastActivityAt: number
