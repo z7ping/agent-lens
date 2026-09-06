@@ -1,28 +1,9 @@
-import type { JsonValue } from '@agent-lens/core'
-
-export interface SourceRecordCompressionBatch {
-  scanned: number
-  compressed: number
-  plain: number
-  rawBytes: number
-  storedBytes: number
-  savedBytes: number
-  cursor?: string
-  hasMore: boolean
-}
-
-export interface SourceRecordCompressionMaintenance {
-  compressSourceRecords(limit?: number, afterId?: string): Promise<SourceRecordCompressionBatch>
-}
-
-export interface DeferredIndexMaintenanceResult {
-  created: string[]
-  existing: string[]
-}
-
-export interface DeferredIndexMaintenance {
-  ensureDeferredIndexes(): Promise<DeferredIndexMaintenanceResult>
-}
+import type {
+  DeferredIndexMaintenanceResult,
+  JsonValue,
+  SourceRecordCompressionBatch,
+  StorageMaintenance,
+} from '@agent-lens/core'
 
 export interface MaintenanceIdleGate {
   wait(signal: AbortSignal): Promise<void>
@@ -55,7 +36,7 @@ function progressCursor(progress: JsonValue | undefined): string | undefined {
 }
 
 export async function ensureDeferredStorageIndexes(
-  maintenance: DeferredIndexMaintenance | undefined,
+  maintenance: Pick<StorageMaintenance, 'ensureDeferredIndexes'> | undefined,
   gate: MaintenanceIdleGate,
   signal: AbortSignal,
 ): Promise<DeferredIndexMaintenanceResult | null> {
@@ -66,7 +47,7 @@ export async function ensureDeferredStorageIndexes(
 }
 
 export async function compressLegacySourceRecords(
-  maintenance: SourceRecordCompressionMaintenance | undefined,
+  maintenance: Pick<StorageMaintenance, 'compressSourceRecords'> | undefined,
   gate: MaintenanceIdleGate,
   signal: AbortSignal,
   options: {
