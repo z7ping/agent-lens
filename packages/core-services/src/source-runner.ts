@@ -20,6 +20,7 @@ import type {
   SourceRecordReplayCursor,
   SourceRuntimeStatus,
   StorageService,
+  VersionedCheckpoint,
 } from '@agent-lens/core'
 import { materializeEvidence } from './index'
 import { deriveParentRelationshipCandidates } from './relationship-hints'
@@ -47,31 +48,14 @@ interface ParserReplayCheckpoint {
   completedAt?: string
 }
 
-interface VersionedCheckpoint<T> {
-  value: T
-  revision: number
-}
-
-type VersionedCheckpointRepository = StorageService['checkpoints'] & {
-  getWithRevision?<T>(scope: string, key: string): Promise<VersionedCheckpoint<T> | null>
-  compareAndSet?<T>(
-    scope: string,
-    key: string,
-    expectedRevision: number | null,
-    value: T,
-  ): Promise<boolean>
-}
-
 async function readReplayCheckpoint(
   storage: StorageService,
   key: string,
 ): Promise<VersionedCheckpoint<ParserReplayCheckpoint> | null> {
-  const checkpoints = storage.checkpoints as VersionedCheckpointRepository
-  if (checkpoints.getWithRevision) {
-    return checkpoints.getWithRevision<ParserReplayCheckpoint>(PARSER_REPLAY_CHECKPOINT_SCOPE, key)
+  if (!storage.checkpoints.getWithRevision) {
+    throw new Error('Parser Replay requires versioned checkpoint storage')
   }
-  const value = await checkpoints.get<ParserReplayCheckpoint>(PARSER_REPLAY_CHECKPOINT_SCOPE, key)
-  return value ? { value, revision: 0 } : null
+  return storage.checkpoints.getWithRevision<ParserReplayCheckpoint>(PARSER_REPLAY_CHECKPOINT_SCOPE, key)
 }
 
 async function compareAndSetReplayCheckpoint(
@@ -80,17 +64,15 @@ async function compareAndSetReplayCheckpoint(
   expectedRevision: number | null,
   value: ParserReplayCheckpoint,
 ): Promise<boolean> {
-  const checkpoints = storage.checkpoints as VersionedCheckpointRepository
-  if (checkpoints.compareAndSet) {
-    return checkpoints.compareAndSet(
-      PARSER_REPLAY_CHECKPOINT_SCOPE,
-      key,
-      expectedRevision,
-      value,
-    )
+  if (!storage.checkpoints.compareAndSet) {
+    throw new Error('Parser Replay requires compare-and-set checkpoint storage')
   }
-  await checkpoints.set(PARSER_REPLAY_CHECKPOINT_SCOPE, key, value)
-  return true
+  return storage.checkpoints.compareAndSet(
+    PARSER_REPLAY_CHECKPOINT_SCOPE,
+    key,
+    expectedRevision,
+    value,
+  )
 }
 
 function createCooperativeScheduler(options: CooperativeSchedulerOptions = {}) {
@@ -225,31 +207,6 @@ interface ProcessResult {
   evidenceCandidates: EvidenceCandidate[]
 }
 
-interface RuntimeStatusWriter {
-  put(status: SourceRuntimeStatus): Promise<void>
-}
-
-interface RelationshipCandidateWriter {
-  put(candidate: SessionRelationshipCandidate): Promise<void>
-  tryPromote(candidate: SessionRelationshipCandidate): Promise<unknown>
-}
-
-interface RuntimeProfileResolver {
-  resolve(hint: {
-    installationId: string
-    nativeProfileId: string
-    name?: string
-    configRoot?: string
-    dataRoot?: string
-  }): Promise<RuntimeProfile>
-}
-
-type StorageWithRuntimeExtensions = StorageService & {
-  sourceRuntimeStatus?: RuntimeStatusWriter
-  sessionRelationshipCandidates?: RelationshipCandidateWriter
-  runtimeProfiles?: RuntimeProfileResolver
-}
-
 class ScopedCheckpointService implements SourceCheckpointService {
   constructor(
     private readonly storage: StorageService,
@@ -285,7 +242,7 @@ function errorSummary(error: unknown): string {
 }
 
 async function putRuntimeStatus(storage: StorageService, status: SourceRuntimeStatus): Promise<void> {
-  const writer = (storage as StorageWithRuntimeExtensions).sourceRuntimeStatus
+  const writer = storage.sourceRuntimeStatus
   if (!writer) return
   await writer.put(status)
 }
@@ -295,7 +252,7 @@ async function persistRelationshipCandidates(
   candidates: readonly SessionRelationshipCandidate[] | undefined,
 ): Promise<void> {
   if (!candidates?.length) return
-  const writer = (storage as StorageWithRuntimeExtensions).sessionRelationshipCandidates
+  const writer = storage.sessionRelationshipCandidates
   if (!writer) return
   for (const candidate of candidates) {
     await writer.put(candidate)
@@ -367,7 +324,7 @@ async function resolveRuntimeProfile(
   detected: DetectedSource,
 ): Promise<RuntimeProfile | undefined> {
   if (!detected.runtimeProfile) return undefined
-  const resolver = (storage as StorageWithRuntimeExtensions).runtimeProfiles
+  const resolver = storage.runtimeProfiles
   if (!resolver) return undefined
   const profile = detected.runtimeProfile
   return resolver.resolve({
