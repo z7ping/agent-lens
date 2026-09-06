@@ -1,27 +1,8 @@
-import type { JsonValue } from '@agent-lens/core'
-
-export interface ProjectionBackfillBatch {
-  scanned: number
-  written: number
-  cursor?: string
-  hasMore: boolean
-}
-
-export interface ToolUsageFactCoverage {
-  sourceObservationCount: number
-  projectedCount: number
-  missingCount: number
-  coverageRatio: number
-  ready: boolean
-}
-
-export interface ProjectionBackfillMaintenance {
-  backfillUnknownObservations(after?: string, limit?: number): Promise<ProjectionBackfillBatch>
-  backfillToolUsageFacts(after?: string, limit?: number): Promise<ProjectionBackfillBatch>
-  toolUsageFactCoverage?(): Promise<ToolUsageFactCoverage>
-  toolUsageFactCoverageForMaintenance?(): Promise<ToolUsageFactCoverage>
-  repairToolUsageFactCursor?(after?: string): Promise<string | undefined>
-}
+import type {
+  JsonValue,
+  ProjectionBackfillBatch,
+  ProjectionBackfillMaintenance,
+} from '@agent-lens/core'
 
 export interface ProjectionBackfillIdleGate {
   wait(signal: AbortSignal): Promise<void>
