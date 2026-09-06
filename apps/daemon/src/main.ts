@@ -198,7 +198,12 @@ process.on('SIGTERM', () => handleSignal('SIGTERM'))
 
 try {
   await app.start()
-  foregroundGate = new ForegroundActivityGate()
+  foregroundGate = new ForegroundActivityGate({
+    loadProbe: () => ({
+      foregroundPending: app.context.dataRuntime.foregroundPending(),
+      writerPending: app.context.dataRuntime.writerPending(),
+    }),
+  })
   disposeHttpActivityTracking = attachHttpForegroundActivity(app.context.http.server, foregroundGate)
   const storageExtensions = app.context.storage as typeof app.context.storage & {
     maintenanceJobs?: MaintenanceJobStore
@@ -212,7 +217,8 @@ try {
   console.info(
     `[AgentLens] 1.0 runtime started (db: ${dbPath}, mode=${daemonMode}, interactive=${interactiveTerminal}, pid=${process.pid}, ppid=${process.ppid})`,
   )
-  console.info(`[AgentLens] Data Runtime: writer=${app.context.dataRuntime.writer.state()} reader=${app.context.dataRuntime.reader.state()}`)
+  const dataRuntimeSnapshot = app.context.dataRuntime.snapshot()
+  console.info(`[AgentLens] Data Runtime: writer=${dataRuntimeSnapshot.writer.state} readers=${dataRuntimeSnapshot.readers.map(reader => reader.state).join(',')} maintenance=${dataRuntimeSnapshot.maintenanceReader.state}`)
   console.info(`[AgentLens] node: ${app.context.node.identity.nodeId} profile=${runtimeProfile} ${capabilitySummary()}`)
   if (developmentApiPort) {
     console.info(`[AgentLens] Runtime API: http://127.0.0.1:${configuredPort}`)
@@ -234,6 +240,12 @@ try {
     await new Promise(resolve => setTimeout(resolve, INITIAL_BACKGROUND_SYNC_DELAY_MS))
     if (!await waitForDataRuntime(runtimeController.signal)) return
 
+    // Capacity must be known before any non-essential projection rebuild. On a
+    // large/unknown store the control plane and realtime capture remain available,
+    // while rebuild/backfill/replay/index expansion stays paused.
+    const initialStorageHealth = await app.context.storage.health()
+    const initialCapacityState = storageCapacityState(initialStorageHealth.details)
+
     const prepared = await prepareRegisteredSources(app.context, runtimeController.signal)
     logSourceFailures(prepared.failures)
     if (runtimeController.signal.aborted) return
@@ -252,6 +264,9 @@ try {
 
     if (reuseSessionSummaryProjection) {
       console.info('[AgentLens] session summary projection reused from clean shutdown')
+    } else if (initialCapacityState === 'exceeded' || initialCapacityState === 'unknown') {
+      sessionSummaryProjectionReady = false
+      console.warn(`[AgentLens] session summary projection rebuild paused; storage capacity=${initialCapacityState}`)
     } else {
       try {
         console.info('[AgentLens] session summary projection cooperative rebuild started')
@@ -265,6 +280,9 @@ try {
           },
           runtimeController.signal,
           async () => {
+            const gate = foregroundGate
+            if (gate) await gate.wait(runtimeController.signal)
+            if (runtimeController.signal.aborted) return { rebuilt: false }
             await app.context.projections.rebuild(SESSION_SUMMARY_PROJECTION_ID, {
               signal: runtimeController.signal,
             })
@@ -272,9 +290,9 @@ try {
           },
           value => value,
         )
-        if (projectionRun?.status === 'contended' || projectionRun?.status === 'paused') {
+        if (projectionRun?.status === 'contended' || projectionRun?.status === 'paused' || !projectionRun?.value?.rebuilt) {
           sessionSummaryProjectionReady = false
-          console.warn(`[AgentLens] session summary projection maintenance ${projectionRun.status}`)
+          console.warn(`[AgentLens] session summary projection maintenance ${projectionRun?.status ?? 'paused'}`)
         } else {
           sessionSummaryProjectionReady = true
           console.info('[AgentLens] session summary projection rebuilt')
@@ -316,16 +334,20 @@ try {
     }
     if (runtimeController.signal.aborted) return
 
-    const assets = await discoverRegisteredSourceAssets(
-      app.context,
-      runtimeController.signal,
-      prepared.targets,
-    )
-    logSourceFailures(assets.failures)
-    for (const result of assets.results) {
-      console.info(
-        `[AgentLens] assets scanned: ${result.sourceId} assets=${result.assetsDiscovered} states=${result.statesRecorded}`,
+    if (capacityState !== 'exceeded' && capacityState !== 'unknown') {
+      const assets = await discoverRegisteredSourceAssets(
+        app.context,
+        runtimeController.signal,
+        prepared.targets,
       )
+      logSourceFailures(assets.failures)
+      for (const result of assets.results) {
+        console.info(
+          `[AgentLens] assets scanned: ${result.sourceId} assets=${result.assetsDiscovered} states=${result.statesRecorded}`,
+        )
+      }
+    } else {
+      console.warn(`[AgentLens] asset discovery paused; storage capacity=${capacityState}`)
     }
     if (runtimeController.signal.aborted) return
 
