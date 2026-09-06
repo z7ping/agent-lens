@@ -12,6 +12,34 @@ export interface EncodedSourceRecordPayload {
   storedBytes: number
 }
 
+interface CompressionRow {
+  id?: string
+  payloadEncoding?: string
+  payloadBlob?: Uint8Array
+}
+
+function compressionRow(value: unknown): CompressionRow {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError('SQLite SourceRecord compression query returned a non-object row')
+  }
+  const row = value as Record<string, unknown>
+  const id = row.id
+  const payloadEncoding = row.payload_encoding
+  const payloadBlob = row.payload_blob
+  if (id != null && typeof id !== 'string') throw new TypeError('SQLite SourceRecord compression field id must be a string')
+  if (payloadEncoding != null && typeof payloadEncoding !== 'string') {
+    throw new TypeError('SQLite SourceRecord compression field payload_encoding must be a string or null')
+  }
+  if (payloadBlob != null && !(payloadBlob instanceof Uint8Array)) {
+    throw new TypeError('SQLite SourceRecord compression field payload_blob must be binary or null')
+  }
+  return {
+    ...(typeof id === 'string' ? { id } : {}),
+    ...(typeof payloadEncoding === 'string' ? { payloadEncoding } : {}),
+    ...(payloadBlob instanceof Uint8Array ? { payloadBlob } : {}),
+  }
+}
+
 export function encodeSourceRecordPayloadJson(serialized: string): EncodedSourceRecordPayload {
   const raw = Buffer.from(serialized, 'utf8')
   if (raw.byteLength < SOURCE_RECORD_COMPRESSION_THRESHOLD_BYTES) {
@@ -46,12 +74,7 @@ export function encodeSourceRecordPayloadJson(serialized: string): EncodedSource
 
 export function decodeCompressedSourceRecordPayload(blob: unknown): unknown {
   if (!(blob instanceof Uint8Array)) throw new Error('Compressed SourceRecord payload is missing')
-  return JSON.parse(gunzipSync(Buffer.from(blob)).toString('utf8')) as unknown
-}
-
-interface CompressionRow {
-  payload_encoding?: string | null
-  payload_blob?: Uint8Array | null
+  return JSON.parse(gunzipSync(Buffer.from(blob)).toString('utf8'))
 }
 
 async function restoreCompressedPayload(
@@ -59,11 +82,13 @@ async function restoreCompressedPayload(
   record: SourceRecord | null,
 ): Promise<SourceRecord | null> {
   if (!record) return null
-  const row = await executor.run(() => executor.db.prepare(`
+  const rawRow = await executor.run(() => executor.db.prepare(`
     SELECT payload_encoding, payload_blob FROM source_records WHERE id = ?
-  `).get(record.id) as CompressionRow | undefined)
-  if (row?.payload_encoding !== 'gzip-json') return record
-  return { ...record, payload: decodeCompressedSourceRecordPayload(row.payload_blob) }
+  `).get(record.id))
+  if (!rawRow) return record
+  const row = compressionRow(rawRow)
+  if (row.payloadEncoding !== 'gzip-json') return record
+  return { ...record, payload: decodeCompressedSourceRecordPayload(row.payloadBlob) }
 }
 
 export function withSqliteSourceRecordCompression(
@@ -86,10 +111,10 @@ export function withSqliteSourceRecordCompression(
         SELECT id, payload_encoding, payload_blob
         FROM source_records
         WHERE id IN (${placeholders})
-      `).all(...uniqueIds) as Array<CompressionRow & { id: string }>)
-      const compressed = new Map(rows
-        .filter(row => row.payload_encoding === 'gzip-json')
-        .map(row => [row.id, row.payload_blob]))
+      `).all(...uniqueIds).map(compressionRow))
+      const compressed = new Map(rows.flatMap(row => row.id && row.payloadEncoding === 'gzip-json'
+        ? [[row.id, row.payloadBlob] as const]
+        : []))
       return records.map(record => compressed.has(record.id)
         ? { ...record, payload: decodeCompressedSourceRecordPayload(compressed.get(record.id)) }
         : record)
