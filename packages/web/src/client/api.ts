@@ -176,6 +176,13 @@ export class AgentLensApi {
     return requestJson(`/api/v1/usage?${params}`)
   }
 
+  usageDetail(filters: QueryFilters): Promise<ToolAssetUsageResponseDto> {
+    const params = new URLSearchParams()
+    appendFilters(params, filters)
+    params.set('limit', '500')
+    return requestJson(`/api/v1/usage/detail?${params}`)
+  }
+
   insights(filters: QueryFilters): Promise<InsightsResponseDto> {
     const params = new URLSearchParams()
     appendFilters(params, filters)
