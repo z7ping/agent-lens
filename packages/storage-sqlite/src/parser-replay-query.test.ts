@@ -121,11 +121,11 @@ test('parser replay drains 1505 stale records across multiple 500-row pages and 
     let pages = 0
     const versions: string[] = []
     while (true) {
-      const page = await replay('codex', 'install', '3', cursor, 500)
+      const page: SourceRecord[] = await replay('codex', 'install', '3', cursor, 500)
       if (!page.length) break
       pages += 1
       processed += page.length
-      const pageVersions = [...new Set(page.map(record => record.parserVersion))]
+      const pageVersions: string[] = [...new Set(page.map(record => record.parserVersion))]
       assert.equal(pageVersions.length, 1, 'each page must stay inside one equality-constrained parser version')
       versions.push(pageVersions[0]!)
       promotePage(page)
