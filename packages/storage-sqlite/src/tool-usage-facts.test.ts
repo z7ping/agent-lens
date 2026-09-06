@@ -34,6 +34,26 @@ test('工具事实投影提取高频字段并驱动聚合', async () => {
       },
       evidenceCandidates: [],
     })
+    await observations.commit({
+      sourceId: 'codex', host, installation,
+      candidate: {
+        kind: 'tool.call', nativeEventId: 'bash-call', nativeCallId: 'c2',
+        occurredAt: '2026-09-05T01:00:02.000Z', capturedAt: '2026-09-05T01:00:02.000Z',
+        payload: { callId: 'c2', toolName: 'Bash', input: { command: 'git status' } },
+        identityHints: { nativeSessionId }, dedupHints: { nativeEventId: 'bash-call' },
+      },
+      evidenceCandidates: [],
+    })
+    await observations.commit({
+      sourceId: 'codex', host, installation,
+      candidate: {
+        kind: 'tool.result', nativeEventId: 'bash-result', nativeCallId: 'c2',
+        occurredAt: '2026-09-05T01:00:03.000Z', capturedAt: '2026-09-05T01:00:03.000Z',
+        payload: { call_id: 'c2', success: true, duration_ms: 3 },
+        identityHints: { nativeSessionId }, dedupHints: { nativeEventId: 'bash-result' },
+      },
+      evidenceCandidates: [],
+    })
 
     const fact = storage.db.prepare(`
       SELECT tool_name, call_id, skill_name, success, duration_ms
@@ -74,6 +94,13 @@ test('工具事实投影提取高频字段并驱动聚合', async () => {
     assert.deepEqual(summarySkill?.sessions, [])
     assert.deepEqual(summarySkill?.observationIds, [])
     assert.equal(summaryOnly.assets.find(item => item.canonicalName === 'review-code')?.observationIds.length, 0)
+
+    const drilldown = await storage.toolUsageObservations.aggregate({ toolName: 'Skill', detailLimit: 5 })
+    assert.deepEqual(drilldown.tools.map(item => item.nativeToolName), ['Skill'])
+    assert.equal(drilldown.tools[0]?.callCount, 1)
+    assert.equal(drilldown.tools[0]?.resultCount, 1)
+    assert.equal(drilldown.tools[0]?.sessions.length, 1)
+    assert.equal(drilldown.assets.some(item => item.canonicalName === 'review-code'), true)
   } finally {
     await storage.close()
   }
@@ -85,4 +112,11 @@ test('工具聚合 CTE 只读取轻量事实表，不再解析 Observation paylo
   assert.doesNotMatch(sql, /payload_json/i)
   assert.doesNotMatch(sql, /json_extract/i)
   assert.doesNotMatch(sql, /FROM\s+observations/i)
+})
+
+test('工具详情过滤在事实表入口按原生工具名收窄', () => {
+  const filter = toolUsageFactInternals.aggregateFilter({ sourceId: 'codex', toolName: 'Skill', detailLimit: 5 })
+  assert.equal(filter.conditions.includes('f.source_id = ?'), true)
+  assert.equal(filter.conditions.includes('f.tool_name = ?'), true)
+  assert.deepEqual(filter.params, ['codex', 'Skill'])
 })
