@@ -99,6 +99,8 @@ test('工具事实投影提取高频字段并驱动聚合', async () => {
     assert.deepEqual(drilldown.tools.map(item => item.nativeToolName), ['Skill'])
     assert.equal(drilldown.tools[0]?.callCount, 1)
     assert.equal(drilldown.tools[0]?.resultCount, 1)
+    assert.equal(drilldown.tools[0]?.errorCount, 1)
+    assert.equal(drilldown.tools[0]?.totalDurationMs, 12)
     assert.equal(drilldown.tools[0]?.sessions.length, 1)
     assert.equal(drilldown.assets.some(item => item.canonicalName === 'review-code'), true)
   } finally {
@@ -114,9 +116,13 @@ test('工具聚合 CTE 只读取轻量事实表，不再解析 Observation paylo
   assert.doesNotMatch(sql, /FROM\s+observations/i)
 })
 
-test('工具详情过滤在事实表入口按原生工具名收窄', () => {
+test('工具详情过滤锁定调用并保留 call_id 关联结果', () => {
   const filter = toolUsageFactInternals.aggregateFilter({ sourceId: 'codex', toolName: 'Skill', detailLimit: 5 })
   assert.equal(filter.conditions.includes('f.source_id = ?'), true)
-  assert.equal(filter.conditions.includes('f.tool_name = ?'), true)
-  assert.deepEqual(filter.params, ['codex', 'Skill'])
+  const toolCondition = filter.conditions.find(condition => condition.includes('linked_call.tool_name = ?'))
+  assert.ok(toolCondition)
+  assert.match(toolCondition, /f\.tool_name = \?/)
+  assert.match(toolCondition, /linked_call\.logical_session_id = f\.logical_session_id/)
+  assert.match(toolCondition, /linked_call\.call_id = f\.call_id/)
+  assert.deepEqual(filter.params, ['codex', 'Skill', 'Skill'])
 })
