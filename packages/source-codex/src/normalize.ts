@@ -1,6 +1,5 @@
 import type {
   EvidenceCandidate,
-  JsonValue,
   NormalizedSourceOutput,
   ObservationCandidate,
   ObservationIdentityHints,
@@ -66,6 +65,27 @@ function numberField(record: Record<string, unknown>, ...names: string[]): numbe
     if (typeof value === 'string' && value.trim() && Number.isFinite(Number(value))) return Number(value)
   }
   return undefined
+}
+
+function storedEnvelope(record: SourceRecord): CodexStoredEnvelope {
+  const payload = asRecord(record.payload)
+  const session = asRecord(payload.session)
+  const cwd = stringField(session, 'cwd')
+  const cliVersion = stringField(session, 'cliVersion')
+  const title = stringField(session, 'title')
+  const startedAt = stringField(session, 'startedAt')
+  return {
+    entry: asRecord(payload.entry),
+    session: {
+      nativeSessionId: stringField(session, 'nativeSessionId')
+        ?? record.sourceSessionNativeId
+        ?? 'unknown',
+      ...(cwd ? { cwd } : {}),
+      ...(cliVersion ? { cliVersion } : {}),
+      ...(title ? { title } : {}),
+      ...(startedAt ? { startedAt } : {}),
+    },
+  }
 }
 
 function actorRole(value: unknown): NonNullable<ObservationIdentityHints['actorRole']> {
@@ -211,7 +231,7 @@ function candidate(
 function unknownCandidate(
   record: SourceRecord,
   envelope: CodexStoredEnvelope,
-  rawPayload: JsonValue = envelope.entry as JsonValue,
+  rawPayload: unknown = envelope.entry,
 ): ObservationCandidate {
   return candidate(record, envelope, 'unknown', {
     rawType: record.nativeType,
@@ -374,7 +394,7 @@ function normalizeRuntimeRecord(
     }, {}, actorIdentity)
   }
 
-  return unknownCandidate(record, envelope, event as unknown as JsonValue)
+  return unknownCandidate(record, envelope, event)
 }
 
 export async function normalizeCodexRecord(
@@ -388,8 +408,8 @@ export async function normalizeCodexRecord(
     }
   }
 
-  const envelope = asRecord(record.payload) as unknown as CodexStoredEnvelope
-  const entry = asRecord(envelope.entry)
+  const envelope = storedEnvelope(record)
+  const entry = envelope.entry
   const payload = asRecord(entry.payload)
   const topType = typeof entry.type === 'string' ? entry.type : 'unknown'
   const innerType = typeof payload.type === 'string' ? payload.type : undefined
@@ -476,7 +496,7 @@ export async function normalizeCodexRecord(
       const text = visibleReasoningText(payload)
       push(text
         ? candidate(record, envelope, 'message.reasoning', { text, raw: payload })
-        : unknownCandidate(record, envelope, entry as JsonValue))
+        : unknownCandidate(record, envelope, entry))
     } else if (innerType === 'task_started' || innerType === 'turn_started') {
       push(candidate(record, envelope, 'session.lifecycle', { event: 'turn.started', ...payload }))
     } else if (innerType === 'task_complete' || innerType === 'turn_complete') {
@@ -488,7 +508,7 @@ export async function normalizeCodexRecord(
     } else if (innerType === 'error') {
       push(candidate(record, envelope, 'session.lifecycle', { event: 'turn.error', ...payload }))
     } else {
-      push(unknownCandidate(record, envelope, entry as JsonValue))
+      push(unknownCandidate(record, envelope, entry))
     }
   } else if (topType === 'compacted') {
     push(candidate(record, envelope, 'context.compaction', { phase: 'end', ...payload }))
@@ -579,7 +599,7 @@ export async function normalizeCodexRecord(
     const text = messageText(payload.summary ?? payload.content ?? payload.text ?? '')
     push(text
       ? candidate(record, envelope, 'message.reasoning', { text, raw: payload })
-      : unknownCandidate(record, envelope, entry as JsonValue))
+      : unknownCandidate(record, envelope, entry))
   } else if (topType === 'response_item' && (innerType === 'compaction' || innerType === 'context_compaction')) {
     push(candidate(record, envelope, 'context.compaction', {
       phase: 'end',
@@ -593,9 +613,9 @@ export async function normalizeCodexRecord(
       text: messageText(payload.content ?? payload.message ?? ''),
     }))
   } else if (topType === 'world_state' || topType === 'inter_agent_communication_metadata' || topType === 'realtime_item' || topType === 'security_risk_score') {
-    push(unknownCandidate(record, envelope, entry as JsonValue))
+    push(unknownCandidate(record, envelope, entry))
   } else {
-    push(unknownCandidate(record, envelope, entry as JsonValue))
+    push(unknownCandidate(record, envelope, entry))
   }
 
   return {
