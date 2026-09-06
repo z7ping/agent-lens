@@ -10,6 +10,7 @@ import type {
 import { SqliteAssetInventoryReader } from './asset-inventory'
 import { SqliteCheckpointRepository } from './checkpoints'
 import { SqliteExecutor } from './executor'
+import { SqliteFacetScopeReader } from './facet-scope'
 import { SqliteStorageMaintenance } from './maintenance'
 import { SqliteMaintenanceJobStore } from './maintenance-jobs'
 import { migrateDatabase } from './migrations'
@@ -60,6 +61,7 @@ export class SqliteStorageService implements StorageService {
   readonly repositories: RepositorySet
   readonly checkpoints: CheckpointRepository
   readonly assetInventory: SqliteAssetInventoryReader
+  readonly facetScope: SqliteFacetScopeReader
   readonly sessionSummaries: SqliteSessionSummaryReader
   readonly sessionSummaryProjection: SqliteSessionSummaryReader
   readonly toolUsageObservations: SqliteToolUsageObservationReader
@@ -104,6 +106,7 @@ export class SqliteStorageService implements StorageService {
     }
     this.checkpoints = new SqliteCheckpointRepository(this.executor)
     this.assetInventory = new SqliteAssetInventoryReader(this.executor)
+    this.facetScope = new SqliteFacetScopeReader(this.executor)
     const sessionSummaries = new SqliteSessionSummaryReader(this.executor)
     this.sessionSummaries = sessionSummaries
     this.sessionSummaryProjection = sessionSummaries
