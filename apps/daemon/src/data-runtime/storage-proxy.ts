@@ -39,6 +39,7 @@ const READ_PREFIXES = [
   'verify',
   'facetScope',
   'toolUsageFactCoverage',
+  'repairToolUsageFactCursor',
 ] as const
 
 function isReadPath(path: readonly string[]): boolean {
@@ -50,6 +51,7 @@ function isMaintenanceReadPath(path: readonly string[]): boolean {
   const method = path.at(-1) ?? ''
   return path[0] === 'diagnostics'
     || method === 'listForParserReplay'
+    || method === 'repairToolUsageFactCursor'
     || method.startsWith('audit')
 }
 
