@@ -15,12 +15,20 @@ function storageWithAggregate(calls: ToolUsageAggregateQuery[]): StorageService 
   } as unknown as StorageService
 }
 
-test('tool overview keeps only a small bounded detail sample', async () => {
+test('tool overview requests summary-only aggregate', async () => {
   const calls: ToolUsageAggregateQuery[] = []
   await new ToolAssetUsageProjection(storageWithAggregate(calls)).query({ sourceId: 'codex' })
   assert.equal(calls.length, 1)
+  assert.equal(calls[0]?.detailLimit, 0)
+  assert.equal(usageProjectionInternals.aggregateOverviewDetailLimit, 0)
+})
+
+test('tool detail keeps the bounded session detail budget', async () => {
+  const calls: ToolUsageAggregateQuery[] = []
+  await new ToolAssetUsageProjection(storageWithAggregate(calls)).query({ sourceId: 'codex' }, 5)
+  assert.equal(calls.length, 1)
   assert.equal(calls[0]?.detailLimit, 5)
-  assert.equal(usageProjectionInternals.aggregateOverviewDetailLimit, 5)
+  assert.equal(usageProjectionInternals.aggregateDetailLimit, 5)
 })
 
 test('agent asset usage requests summary-only aggregate', async () => {
