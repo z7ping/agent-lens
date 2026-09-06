@@ -42,6 +42,7 @@ export interface ToolUsageAggregateQuery {
   logicalSessionId?: LogicalSessionId
   projectId?: ProjectId
   sourceId?: string
+  toolName?: string
   from?: string
   to?: string
   /** Maximum number of evidence/session detail samples returned per aggregate row. */
