@@ -15,7 +15,9 @@ function emptyAggregate(): ToolUsageAggregateResult {
 test('ToolAssetUsageProjection coalesces 64 identical aggregate reads and reuses the short cache', async () => {
   let aggregateCalls = 0
   let releaseAggregate: (() => void) | undefined
-  const blocked = new Promise<void>(resolve => { releaseAggregate = resolve })
+  const blocked = new Promise<void>(resolve => {
+    releaseAggregate = () => resolve()
+  })
   const reader: ToolUsageObservationReader = {
     async query() {
       throw new Error('raw observation enumeration must not run when aggregate() is available')
