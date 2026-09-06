@@ -36,6 +36,10 @@ function aggregateFilter(input: ToolUsageAggregateQuery): { conditions: string[]
     conditions.push('f.source_id = ?')
     params.push(input.sourceId)
   }
+  if (input.toolName) {
+    conditions.push('f.tool_name = ?')
+    params.push(input.toolName)
+  }
   if (input.from) {
     conditions.push('f.effective_at >= ?')
     params.push(input.from)
