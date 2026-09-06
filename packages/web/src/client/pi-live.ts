@@ -1,25 +1,30 @@
-import type {
-  JsonValue,
-  PiLiveAbortRequestDto,
-  PiLiveAvailabilityDto,
-  PiLiveControlsDto,
-  PiLiveEventDto,
-  PiLiveExtensionResponseRequestDto,
-  PiLivePromptRequestDto,
-  PiLiveResumeActionDto,
-  PiLiveResumeRequestDto,
-  PiLiveQueueDto,
-  PiLiveSetModelRequestDto,
-  PiLiveSetThinkingLevelRequestDto,
-  PiLiveSnapshotDto,
-  PiLiveStartRequestDto,
-  PiLiveStateDto,
-  PiLiveStreamingBehaviorDto,
+import {
+  parsePiLiveEvent,
+  type JsonValue,
+  type PiLiveAbortRequestDto,
+  type PiLiveAvailabilityDto,
+  type PiLiveControlsDto,
+  type PiLiveEventDto,
+  type PiLiveExtensionResponseRequestDto,
+  type PiLivePromptRequestDto,
+  type PiLiveResumeActionDto,
+  type PiLiveResumeRequestDto,
+  type PiLiveQueueDto,
+  type PiLiveSetModelRequestDto,
+  type PiLiveSetThinkingLevelRequestDto,
+  type PiLiveSnapshotDto,
+  type PiLiveStartRequestDto,
+  type PiLiveStateDto,
+  type PiLiveStreamingBehaviorDto,
 } from '@agent-lens/protocol'
 
-const KNOWN_RUNTIME_KEY = 'agent-lens:pi-live-runtime-ids'
 const HIDDEN_FLUSH_MS = 250
-const MAX_KNOWN_RUNTIMES = 12
+
+function responseErrorMessage(value: unknown): string | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const message = Reflect.get(value, 'message')
+  return typeof message === 'string' && message ? message : undefined
+}
 
 async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(path, {
@@ -28,10 +33,7 @@ async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> 
   })
   if (!response.ok) {
     let message = ''
-    try {
-      const body = await response.json() as { message?: unknown }
-      if (typeof body.message === 'string') message = body.message
-    } catch { /* ignore non-json error */ }
+    try { message = responseErrorMessage(await response.json()) ?? '' } catch { /* ignore non-json error */ }
     throw new Error(message || `Pi Live 请求失败（${response.status}）`)
   }
   return response.json() as Promise<T>
@@ -45,34 +47,8 @@ function jsonRequest(body: unknown): RequestInit {
   }
 }
 
-function readKnownRuntimeIds(): string[] {
-  try {
-    const value = JSON.parse(localStorage.getItem(KNOWN_RUNTIME_KEY) ?? '[]')
-    return Array.isArray(value)
-      ? value.filter((item): item is string => typeof item === 'string' && Boolean(item)).slice(0, MAX_KNOWN_RUNTIMES)
-      : []
-  } catch {
-    return []
-  }
-}
-
-function writeKnownRuntimeIds(ids: string[]): void {
-  try { localStorage.setItem(KNOWN_RUNTIME_KEY, JSON.stringify([...new Set(ids)].slice(0, MAX_KNOWN_RUNTIMES))) } catch { /* storage unavailable */ }
-}
-
-function rememberRuntime(id: string): void {
-  if (!id) return
-  writeKnownRuntimeIds([id, ...readKnownRuntimeIds().filter(item => item !== id)])
-}
-
-function forgetRuntime(id: string): void {
-  writeKnownRuntimeIds(readKnownRuntimeIds().filter(item => item !== id))
-}
-
-function record(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {}
+function record(value: JsonValue | undefined): { [key: string]: JsonValue } {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
 }
 
 function mergeSnapshot(previous: PiLiveSnapshotDto, next: PiLiveSnapshotDto): PiLiveSnapshotDto {
@@ -131,7 +107,7 @@ function mergeCoalesced(previous: PiLiveEventDto, next: PiLiveEventDto): PiLiveE
         assistantMessageEvent: {
           ...nextUpdate,
           delta: `${previousDelta}${nextDelta}`,
-        } as JsonValue,
+        },
       },
     }
   }
@@ -290,31 +266,16 @@ export class PiLiveApi {
   }
 
   async knownRuntimes(): Promise<PiLiveStateDto[]> {
-    try {
-      const values = await requestJson<PiLiveStateDto[]>('/api/v1/pi-live')
-      writeKnownRuntimeIds(values.map(item => item.runtimeSessionId))
-      return values
-    } catch {
-      // Compatibility fallback for a newer Web talking to an older AgentLens runtime.
-      const ids = readKnownRuntimeIds()
-      const results = await Promise.allSettled(ids.map(id => this.state(id)))
-      const values = results.flatMap(result => result.status === 'fulfilled' ? [result.value] : [])
-      writeKnownRuntimeIds(values.map(item => item.runtimeSessionId))
-      return values
-    }
+    return requestJson<PiLiveStateDto[]>('/api/v1/pi-live')
   }
 
-  async start(input: PiLiveStartRequestDto): Promise<PiLiveStateDto> {
-    const state = await requestJson<PiLiveStateDto>('/api/v1/pi-live', jsonRequest(input))
-    rememberRuntime(state.runtimeSessionId)
-    return state
+  start(input: PiLiveStartRequestDto): Promise<PiLiveStateDto> {
+    return requestJson<PiLiveStateDto>('/api/v1/pi-live', jsonRequest(input))
   }
 
-  private async resumeHistory(logicalSessionId: string, action: PiLiveResumeActionDto): Promise<PiLiveStateDto> {
+  private resumeHistory(logicalSessionId: string, action: PiLiveResumeActionDto): Promise<PiLiveStateDto> {
     const body: PiLiveResumeRequestDto = { logicalSessionId, action }
-    const state = await requestJson<PiLiveStateDto>('/api/v1/pi-live/resume', jsonRequest(body))
-    rememberRuntime(state.runtimeSessionId)
-    return state
+    return requestJson<PiLiveStateDto>('/api/v1/pi-live/resume', jsonRequest(body))
   }
 
   resume(logicalSessionId: string): Promise<PiLiveStateDto> {
@@ -388,7 +349,6 @@ export class PiLiveApi {
   async terminate(runtimeSessionId: string): Promise<void> {
     await requestJson(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}`, { method: 'DELETE' })
     this.snapshots.delete(runtimeSessionId)
-    forgetRuntime(runtimeSessionId)
   }
 
   connect(runtimeSessionId: string, handlers: PiLiveConnectionHandlers): () => void {
@@ -427,11 +387,8 @@ export class PiLiveApi {
       handlers.onConnection(false)
     }
     source.addEventListener('pi-live', raw => {
-      if (disposed) return
-      try {
-        const value = JSON.parse((raw as MessageEvent<string>).data) as PiLiveEventDto
-        scheduler.push(value)
-      } catch { /* malformed transport frame */ }
+      if (disposed || !(raw instanceof MessageEvent) || typeof raw.data !== 'string') return
+      try { scheduler.push(parsePiLiveEvent(JSON.parse(raw.data))) } catch { /* malformed transport frame */ }
     })
 
     return () => {
