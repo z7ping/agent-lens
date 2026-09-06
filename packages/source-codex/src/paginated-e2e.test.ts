@@ -14,6 +14,7 @@ import { SourceHistoryRunner } from '@agent-lens/core-services/source-runner'
 import { createTestCapturePolicy } from '@agent-lens/core-services/test-support'
 import { SqliteStorageService } from '@agent-lens/storage-sqlite'
 import { codexSourceDefinition, detectCodex } from './index'
+import { asRecord } from './test-support'
 
 function completedItem(timestamp: string, item: Record<string, unknown>, startedAtMs: number) {
   return {
@@ -169,7 +170,7 @@ test('Paginated Codex history remains one real user task while native non-conver
 
     const lifecycleEvents = facts
       .filter(item => item.kind === 'session.lifecycle')
-      .map(item => (item.payload as any).event)
+      .map(item => asRecord(item.payload).event)
     assert.ok(lifecycleEvents.includes('subagent.interacted'))
     assert.ok(lifecycleEvents.includes('review.entered'))
     assert.ok(lifecycleEvents.includes('review.exited'))
@@ -182,10 +183,10 @@ test('Paginated Codex history remains one real user task while native non-conver
     assert.equal(assistant?.nativeEventId, 'agent-item-1')
     assert.equal(plan?.nativeEventId, 'plan-item-1')
     assert.equal(hook?.nativeEventId, 'hook-item-1')
-    assert.equal((user?.payload as any).provenance.sourceSignal, 'event_msg.item_completed.UserMessage')
-    assert.equal((assistant?.payload as any).provenance.sourceSignal, 'event_msg.item_completed.AgentMessage')
-    assert.equal((plan?.payload as any).provenance.sourceSignal, 'event_msg.item_completed.Plan')
-    assert.equal((hook?.payload as any).provenance.actualAuthor, 'application')
+    assert.equal(asRecord(asRecord(user?.payload).provenance).sourceSignal, 'event_msg.item_completed.UserMessage')
+    assert.equal(asRecord(asRecord(assistant?.payload).provenance).sourceSignal, 'event_msg.item_completed.AgentMessage')
+    assert.equal(asRecord(asRecord(plan?.payload).provenance).sourceSignal, 'event_msg.item_completed.Plan')
+    assert.equal(asRecord(asRecord(hook?.payload).provenance).actualAuthor, 'application')
 
     const summaries = await storage.sessionSummaries.query({
       installationId: sync.installationId,
@@ -198,7 +199,7 @@ test('Paginated Codex history remains one real user task while native non-conver
     assert.equal(summary.systemContextCount, 1)
     assert.equal(summary.toolCount, 2)
     assert.equal(summary.sessionActivity, 'user-task')
-    assert.equal((summary.firstUserPayload as any)?.text, '修复 Codex Paginated 解析')
+    assert.equal(asRecord(summary.firstUserPayload).text, '修复 Codex Paginated 解析')
   } finally {
     await storage.close()
     await rm(fixture.root, { recursive: true, force: true })
