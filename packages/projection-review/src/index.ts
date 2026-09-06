@@ -7,6 +7,7 @@ import type {
   ReviewSessionDetailDto,
   ReviewSessionSummaryDto,
 } from '@agent-lens/protocol'
+import { asRecord, stringField } from './nodes'
 import {
   ReviewProjection as BaseReviewProjection,
   reviewProjectionInternals as baseReviewProjectionInternals,
@@ -17,20 +18,6 @@ export { HubReviewProjection, hubReviewProjectionInternals } from './hub'
 const MAX_REVIEW_INTERACTION_NODES = 600
 const REVIEW_INTERACTION_HEAD_NODES = 240
 const REVIEW_INTERACTION_TAIL_NODES = MAX_REVIEW_INTERACTION_NODES - REVIEW_INTERACTION_HEAD_NODES
-
-function asRecord(value: JsonValue | unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {}
-}
-
-function stringField(record: Record<string, unknown>, ...keys: string[]): string | undefined {
-  for (const key of keys) {
-    const value = record[key]
-    if (typeof value === 'string' && value.trim()) return value.trim()
-  }
-  return undefined
-}
 
 function normalizeLifecycleAction(value: string): string {
   return value.trim().toLowerCase().replace(/[\s_:\-]+/g, '.')
@@ -193,7 +180,7 @@ function normalizeOrphanToolResults(detail: ReviewSessionDetailDto): ReviewSessi
           startedAt: node.at,
           endedAt: node.at,
           ...(durationMs === undefined ? {} : { durationMs }),
-          output: output as JsonValue,
+          output,
           payload: node.payload,
           evidence: node.evidence,
           observationIds: node.observationIds,
