@@ -4,19 +4,64 @@ import type {
   SourceRecordRepository,
 } from '@agent-lens/core'
 import type { SqliteExecutor } from './executor'
+import { sqliteRowId } from './repository-row-mappers'
 
 const PARSER_REPLAY_CHECKPOINT_SCOPE = 'parser-replay'
 
+type ReplayDbRow = Record<string, unknown>
+
 interface DerivedRelationshipRow {
-  from_logical_session_id: string | null
-  to_logical_session_id: string | null
-  relation_type: string
+  fromLogicalSessionId: string | null
+  toLogicalSessionId: string | null
+  relationType: string
 }
 
 interface ReplayRow {
   id: string
-  captured_at: string
-  parser_version: string
+  capturedAt: string
+  parserVersion: string
+}
+
+function rowRecord(value: unknown): ReplayDbRow {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError('Parser Replay SQLite query returned a non-object row')
+  }
+  return value as ReplayDbRow
+}
+
+function requiredString(row: ReplayDbRow, key: string): string {
+  const value = row[key]
+  if (typeof value !== 'string') throw new TypeError(`Parser Replay SQLite field ${key} must be a string`)
+  return value
+}
+
+function nullableString(row: ReplayDbRow, key: string): string | null {
+  const value = row[key]
+  if (value == null) return null
+  if (typeof value !== 'string') throw new TypeError(`Parser Replay SQLite field ${key} must be a string or null`)
+  return value
+}
+
+function relationshipRow(value: unknown): DerivedRelationshipRow {
+  const row = rowRecord(value)
+  return {
+    fromLogicalSessionId: nullableString(row, 'fromLogicalSessionId'),
+    toLogicalSessionId: nullableString(row, 'toLogicalSessionId'),
+    relationType: requiredString(row, 'relationType'),
+  }
+}
+
+function replayRow(value: unknown): ReplayRow {
+  const row = rowRecord(value)
+  return {
+    id: requiredString(row, 'id'),
+    capturedAt: requiredString(row, 'capturedAt'),
+    parserVersion: requiredString(row, 'parserVersion'),
+  }
+}
+
+function parserVersionRow(value: unknown): string {
+  return requiredString(rowRecord(value), 'parserVersion')
 }
 
 /**
@@ -47,7 +92,7 @@ export function withSqliteParserReplayReplacement(
           FROM observation_evidence oe
           JOIN evidence e ON e.id = oe.evidence_id
           WHERE e.source_record_id = ?
-        `).all(sourceRecordId) as Array<{ id: string }>
+        `).all(sourceRecordId).map(sqliteRowId)
         if (!rows.length) return 0
 
         executor.db.prepare(`
@@ -71,10 +116,10 @@ export function withSqliteParserReplayReplacement(
         const remove = executor.db.prepare('DELETE FROM observations WHERE id = ?')
 
         let removed = 0
-        for (const row of rows) {
-          if (hasEvidence.get(row.id)) continue
-          detachChildren.run(row.id)
-          removed += Number(remove.run(row.id).changes)
+        for (const id of rows) {
+          if (hasEvidence.get(id)) continue
+          detachChildren.run(id)
+          removed += Number(remove.run(id).changes)
         }
         return removed
       })
@@ -85,9 +130,9 @@ export function withSqliteParserReplayReplacement(
     return executor.transaction(async () => {
       const candidates = executor.db.prepare(`
         SELECT DISTINCT
-          from_ss.logical_session_id AS from_logical_session_id,
-          to_ss.logical_session_id AS to_logical_session_id,
-          COALESCE(c.relation_type, 'related') AS relation_type
+          from_ss.logical_session_id AS fromLogicalSessionId,
+          to_ss.logical_session_id AS toLogicalSessionId,
+          COALESCE(c.relation_type, 'related') AS relationType
         FROM session_relationship_candidates c
         LEFT JOIN source_sessions from_ss
           ON from_ss.source_id = c.source_id
@@ -98,7 +143,7 @@ export function withSqliteParserReplayReplacement(
          AND to_ss.installation_id = c.installation_id
          AND to_ss.native_session_id = c.to_native_session_id
         WHERE c.source_record_id = ?
-      `).all(sourceRecordId) as DerivedRelationshipRow[]
+      `).all(sourceRecordId).map(relationshipRow)
 
       const deletedCandidates = Number(executor.db.prepare(`
         DELETE FROM session_relationship_candidates
@@ -130,12 +175,12 @@ export function withSqliteParserReplayReplacement(
 
       let removedRelationships = 0
       for (const candidate of candidates) {
-        const fromSessionId = candidate.from_logical_session_id
-        const toSessionId = candidate.to_logical_session_id
+        const fromSessionId = candidate.fromLogicalSessionId
+        const toSessionId = candidate.toLogicalSessionId
         if (!fromSessionId || !toSessionId) continue
-        if (hasRemainingSupport.get(fromSessionId, toSessionId, candidate.relation_type)) continue
+        if (hasRemainingSupport.get(fromSessionId, toSessionId, candidate.relationType)) continue
         removedRelationships += Number(
-          removeRelationship.run(fromSessionId, toSessionId, candidate.relation_type).changes,
+          removeRelationship.run(fromSessionId, toSessionId, candidate.relationType).changes,
         )
       }
       return deletedCandidates + removedRelationships
@@ -185,14 +230,14 @@ export function withSqliteParserReplayReplacement(
       if (after) params.push(after.capturedAt, after.id)
       params.push(...filter.params, limit)
       return executor.db.prepare(`
-        SELECT id, captured_at, parser_version
+        SELECT id, captured_at AS capturedAt, parser_version AS parserVersion
         FROM source_records
         WHERE source_id = ? AND installation_id = ? AND parser_version = ?
         ${cursor}
         ${filter.clause}
         ORDER BY captured_at ASC, id ASC
         LIMIT ?
-      `).all(...params) as ReplayRow[]
+      `).all(...params).map(replayRow)
     })
   }
 
@@ -211,8 +256,8 @@ export function withSqliteParserReplayReplacement(
         ${filter.clause}
         ORDER BY parser_version ASC
         LIMIT 1
-      `).get(sourceId, installationId, currentParserVersion, ...filter.params) as { parserVersion: string } | undefined
-      return row?.parserVersion
+      `).get(sourceId, installationId, currentParserVersion, ...filter.params)
+      return row ? parserVersionRow(row) : undefined
     })
   }
 
