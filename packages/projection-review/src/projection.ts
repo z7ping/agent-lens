@@ -7,18 +7,14 @@ import {
   SessionProjection,
   type SessionProjectionEntry,
 } from '@agent-lens/projection-session'
-import { TimelineProjection, encodeTimelineCursor } from '@agent-lens/projection-timeline'
+import { TimelineProjection } from '@agent-lens/projection-timeline'
 import {
   AGENT_LENS_PROTOCOL_VERSION,
-  type ReviewDetailFilter,
-  type ReviewDetailPageDto,
   type ReviewDetailQueryDto,
-  type ReviewInteractionDto,
   type ReviewQueryDto,
   type ReviewResponseDto,
   type ReviewSessionDetailDto,
   type ReviewSessionSummaryDto,
-  type TimelineItemDto,
 } from '@agent-lens/protocol'
 import {
   decodeReviewCursor,
@@ -32,8 +28,8 @@ import {
   InteractionDescriptorStore,
   interactionDescriptorInternals,
   observationError,
-  type InteractionDescriptor,
 } from './interaction-descriptors'
+import { ReviewInteractionPager } from './interaction-pagination'
 import {
   asRecord,
   buildInteractionGroups,
@@ -46,9 +42,6 @@ import {
 
 const MAX_SESSIONS = 500
 const DEFAULT_LIMIT = 100
-const DEFAULT_DETAIL_LIMIT = 20
-const MAX_DETAIL_LIMIT = 100
-const TIMELINE_CHUNK = 250
 
 function structuredSessionActivity(value: unknown): ReviewSessionSummaryDto['sessionActivity'] | undefined {
   switch (value) {
@@ -67,11 +60,13 @@ export class ReviewProjection {
   private readonly sessions: SessionProjection
   private readonly timeline: TimelineProjection
   private readonly descriptors: InteractionDescriptorStore
+  private readonly pager: ReviewInteractionPager
 
   constructor(private readonly storage: StorageService) {
     this.sessions = new SessionProjection(storage)
     this.timeline = new TimelineProjection(storage)
     this.descriptors = new InteractionDescriptorStore(storage, this.timeline)
+    this.pager = new ReviewInteractionPager(this.timeline, this.descriptors)
   }
 
   private async summary(entry: SessionProjectionEntry): Promise<ReviewSessionSummaryDto> {
@@ -238,192 +233,6 @@ export class ReviewProjection {
     return Promise.all(raw.entries.map(item => this.summary(item)))
   }
 
-  private async forwardInteractionPage(
-    logicalSessionId: string,
-    query: ReviewDetailQueryDto,
-  ): Promise<{ interactions: ReviewInteractionDto[]; page: ReviewDetailPageDto }> {
-    const requestedLimit = Math.max(1, Math.min(query.limit ?? DEFAULT_DETAIL_LIMIT, MAX_DETAIL_LIMIT))
-    const decoded = query.cursor ? decodeReviewCursor(query.cursor) : null
-    if (decoded && (decoded.mode !== 'timeline' || decoded.direction !== 'forward')) throw new Error('Invalid review cursor')
-    const startingOrdinal = decoded?.ordinal ?? 1
-    let timelineCursor = decoded?.timelineCursor
-    let pending: TimelineItemDto[] = []
-    const completed: TimelineItemDto[][] = []
-    let exhausted = false
-    let stoppedAtNextInteraction = false
-
-    while (!exhausted && !stoppedAtNextInteraction && completed.length <= requestedLimit) {
-      const page = await this.timeline.query({
-        logicalSessionId,
-        ...(timelineCursor ? { cursor: timelineCursor } : {}),
-        direction: 'forward',
-        limit: TIMELINE_CHUNK,
-      })
-
-      for (const item of page.items) {
-        if (item.kind === 'message.user' && pending.length) {
-          completed.push(pending)
-          pending = []
-          if (completed.length > requestedLimit) {
-            stoppedAtNextInteraction = true
-            break
-          }
-        }
-        if (!pending.length && item.kind === 'session.lifecycle') continue
-        pending.push(item)
-      }
-
-      if (stoppedAtNextInteraction) break
-      if (!page.meta.hasMore) {
-        exhausted = true
-        if (pending.length) completed.push(pending)
-        pending = []
-        break
-      }
-      if (!page.meta.nextCursor) throw new Error('Timeline pagination integrity error: missing next cursor')
-      timelineCursor = page.meta.nextCursor
-    }
-
-    const includedGroups = completed.slice(0, requestedLimit)
-    const interactions = buildInteractionGroups(includedGroups, startingOrdinal)
-    const hasMore = completed.length > requestedLimit || !exhausted || pending.length > 0
-    const lastIncluded = includedGroups.at(-1)?.at(-1)
-    const nextCursor = hasMore && lastIncluded
-      ? encodeReviewCursor({
-          mode: 'timeline',
-          direction: 'forward',
-          timelineCursor: encodeTimelineCursor(lastIncluded),
-          ordinal: startingOrdinal + interactions.length,
-        })
-      : undefined
-
-    return {
-      interactions,
-      page: {
-        count: interactions.length,
-        hasMore,
-        ...(nextCursor ? { nextCursor } : {}),
-        direction: 'forward',
-        filter: 'all',
-      },
-    }
-  }
-
-  private async backwardInteractionPage(
-    logicalSessionId: string,
-    query: ReviewDetailQueryDto,
-    filter: ReviewDetailFilter = 'all',
-    knownInteractionCount?: number,
-  ): Promise<{ interactions: ReviewInteractionDto[]; page: ReviewDetailPageDto }> {
-    const requestedLimit = filter === 'latest' ? 1 : Math.max(1, Math.min(query.limit ?? DEFAULT_DETAIL_LIMIT, MAX_DETAIL_LIMIT))
-    const decoded = query.cursor ? decodeReviewCursor(query.cursor) : null
-    if (decoded && (decoded.mode !== 'timeline' || decoded.direction !== 'backward')) throw new Error('Invalid review cursor')
-    const endingOrdinal = decoded?.ordinal ?? knownInteractionCount ?? await this.descriptors.count(logicalSessionId)
-    if (endingOrdinal < 1) {
-      return { interactions: [], page: { count: 0, hasMore: false, direction: 'backward', filter } }
-    }
-
-    let timelineCursor = decoded?.timelineCursor
-    let pendingDescending: TimelineItemDto[] = []
-    const groupsLatestFirst: TimelineItemDto[][] = []
-    let exhausted = false
-
-    while (!exhausted && groupsLatestFirst.length < requestedLimit) {
-      const page = await this.timeline.query({
-        logicalSessionId,
-        ...(timelineCursor ? { cursor: timelineCursor } : {}),
-        direction: 'backward',
-        limit: TIMELINE_CHUNK,
-      })
-      const descendingItems = [...page.items].reverse()
-      for (const item of descendingItems) {
-        pendingDescending.push(item)
-        if (item.kind === 'message.user') {
-          groupsLatestFirst.push([...pendingDescending].reverse())
-          pendingDescending = []
-          if (groupsLatestFirst.length >= requestedLimit) break
-        }
-      }
-
-      if (groupsLatestFirst.length >= requestedLimit) break
-      if (!page.meta.hasMore) {
-        exhausted = true
-        if (pendingDescending.length) {
-          const chronological = [...pendingDescending].reverse()
-          while (chronological[0]?.kind === 'session.lifecycle') chronological.shift()
-          if (chronological.length) groupsLatestFirst.push(chronological)
-          pendingDescending = []
-        }
-        break
-      }
-      if (!page.meta.nextCursor) throw new Error('Timeline pagination integrity error: missing next cursor')
-      timelineCursor = page.meta.nextCursor
-    }
-
-    const chronologicalGroups = [...groupsLatestFirst].reverse()
-    const startingOrdinal = endingOrdinal - chronologicalGroups.length + 1
-    const interactions = buildInteractionGroups(chronologicalGroups, startingOrdinal)
-    const hasMore = filter === 'latest' ? false : startingOrdinal > 1
-    const oldestIncluded = chronologicalGroups[0]?.[0]
-    const nextCursor = hasMore && oldestIncluded
-      ? encodeReviewCursor({
-          mode: 'timeline',
-          direction: 'backward',
-          timelineCursor: encodeTimelineCursor(oldestIncluded),
-          ordinal: startingOrdinal - 1,
-        })
-      : undefined
-
-    return {
-      interactions,
-      page: {
-        count: interactions.length,
-        hasMore,
-        ...(nextCursor ? { nextCursor } : {}),
-        direction: 'backward',
-        filter,
-      },
-    }
-  }
-
-  private async filteredInteractionPage(
-    logicalSessionId: string,
-    query: ReviewDetailQueryDto,
-    filter: 'errors' | 'latency',
-    descriptors: InteractionDescriptor[],
-  ): Promise<{ interactions: ReviewInteractionDto[]; page: ReviewDetailPageDto }> {
-    const requestedLimit = Math.max(1, Math.min(query.limit ?? DEFAULT_DETAIL_LIMIT, MAX_DETAIL_LIMIT))
-    const decoded = query.cursor ? decodeReviewCursor(query.cursor) : null
-    if (decoded && (decoded.mode !== 'filter' || decoded.filter !== filter)) throw new Error('Invalid review cursor')
-    const afterOrdinal = decoded?.ordinal ?? 0
-    const threshold = filter === 'latency' ? highLatencyThreshold(descriptors) : null
-    const matches = descriptors.filter(descriptor => {
-      if (descriptor.ordinal <= afterOrdinal) return false
-      if (filter === 'errors') return descriptor.hasError
-      return threshold !== null && durationMs(descriptor.startedAt, descriptor.endedAt) >= threshold
-    })
-    const selected = matches.slice(0, requestedLimit)
-    const interactions: ReviewInteractionDto[] = []
-    for (const descriptor of selected) interactions.push(await this.descriptors.materialize(logicalSessionId, descriptor))
-    const hasMore = matches.length > requestedLimit
-    const last = selected.at(-1)
-    const nextCursor = hasMore && last
-      ? encodeReviewCursor({ mode: 'filter', filter, ordinal: last.ordinal })
-      : undefined
-
-    return {
-      interactions,
-      page: {
-        count: interactions.length,
-        hasMore,
-        ...(nextCursor ? { nextCursor } : {}),
-        direction: 'forward',
-        filter,
-        ...(threshold === null ? {} : { latencyThresholdMs: threshold }),
-      },
-    }
-  }
-
   async get(logicalSessionId: string, query: ReviewDetailQueryDto = {}): Promise<ReviewSessionDetailDto | null> {
     let summary: ReviewSessionSummaryDto | null = null
     if (this.storage.sessionSummaries) {
@@ -440,37 +249,7 @@ export class ReviewProjection {
     }
     if (!summary) return null
 
-    const filter = query.filter ?? 'all'
-    const direction = query.direction ?? 'forward'
-    let result: { interactions: ReviewInteractionDto[]; page: ReviewDetailPageDto }
-
-    if (query.ordinal !== undefined) {
-      const target = await this.descriptors.find(logicalSessionId, query.ordinal)
-      result = {
-        interactions: target ? [await this.descriptors.materialize(logicalSessionId, target)] : [],
-        page: { count: target ? 1 : 0, hasMore: false, direction: 'forward', filter: 'all' },
-      }
-    } else if (filter === 'errors' || filter === 'latency') {
-      const descriptors = await this.descriptors.cached(summary)
-      result = await this.filteredInteractionPage(logicalSessionId, query, filter, descriptors)
-    } else if (filter === 'latest') {
-      result = await this.backwardInteractionPage(
-        logicalSessionId,
-        { ...query, direction: 'backward' },
-        'latest',
-        summary.interactionCount > 0 ? summary.interactionCount : undefined,
-      )
-    } else if (direction === 'backward') {
-      result = await this.backwardInteractionPage(
-        logicalSessionId,
-        query,
-        'all',
-        summary.interactionCount > 0 ? summary.interactionCount : undefined,
-      )
-    } else {
-      result = await this.forwardInteractionPage(logicalSessionId, query)
-    }
-
+    const result = await this.pager.forQuery(logicalSessionId, query, summary)
     return {
       ...summary,
       interactions: result.interactions,
