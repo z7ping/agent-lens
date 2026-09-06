@@ -61,8 +61,10 @@ function isMaintenanceReadPath(path: readonly string[]): boolean {
 function isMaintenanceOperation(path: readonly string[]): boolean {
   const method = path.at(-1) ?? ''
   return path.includes('maintenance')
+    || path.includes('maintenanceJobs')
     || isMaintenanceReadPath(path)
     || (path.includes('projectionBackfill') && method.startsWith('backfill'))
+    || (path.includes('sessionSummaryProjection') && method === 'rebuild')
 }
 
 function timeoutFor(path: readonly string[], read: boolean): number {
@@ -169,9 +171,13 @@ interface RemoteCallOptions {
   maintenanceRead?: boolean
 }
 
+type WriterWorkClass = 'foreground' | 'maintenance'
+
 class RemoteStorageExecutor {
   private readonly transactionScope = new AsyncLocalStorage<string>()
   private writerTail: Promise<void> = Promise.resolve()
+  private foregroundWriterPendingValue = 0
+  private maintenanceWriterPendingValue = 0
 
   constructor(
     readonly writer: DataRuntimeClient,
@@ -202,10 +208,13 @@ class RemoteStorageExecutor {
       return this.foregroundReaders.request<T>('storage.call', params, timeoutFor(path, true))
     }
 
-    return this.enqueueWriter(() => this.writer.request<T>('storage.call', {
-      path: [...path],
-      args: [...args],
-    }, timeoutFor(path, false)))
+    return this.enqueueWriter(
+      () => this.writer.request<T>('storage.call', {
+        path: [...path],
+        args: [...args],
+      }, timeoutFor(path, false)),
+      isMaintenanceOperation(path) ? 'maintenance' : 'foreground',
+    )
   }
 
   transaction<T>(operation: () => Promise<T>): Promise<T> {
@@ -232,11 +241,40 @@ class RemoteStorageExecutor {
         ).catch(() => undefined)
         throw error
       }
-    })
+    }, 'foreground')
   }
 
-  private enqueueWriter<T>(operation: () => Promise<T>): Promise<T> {
-    const result = this.writerTail.then(operation, operation)
+  foregroundWriterPending(): number {
+    return this.foregroundWriterPendingValue
+  }
+
+  maintenanceWriterPending(): number {
+    return this.maintenanceWriterPendingValue
+  }
+
+  writerQueueSnapshot() {
+    return {
+      foregroundPending: this.foregroundWriterPendingValue,
+      maintenancePending: this.maintenanceWriterPendingValue,
+    }
+  }
+
+  private enqueueWriter<T>(operation: () => Promise<T>, workClass: WriterWorkClass): Promise<T> {
+    if (workClass === 'maintenance') this.maintenanceWriterPendingValue += 1
+    else this.foregroundWriterPendingValue += 1
+
+    const execute = async () => {
+      try {
+        return await operation()
+      } finally {
+        if (workClass === 'maintenance') {
+          this.maintenanceWriterPendingValue = Math.max(0, this.maintenanceWriterPendingValue - 1)
+        } else {
+          this.foregroundWriterPendingValue = Math.max(0, this.foregroundWriterPendingValue - 1)
+        }
+      }
+    }
+    const result = this.writerTail.then(execute, execute)
     this.writerTail = result.then(() => undefined, () => undefined)
     return result
   }
@@ -287,6 +325,10 @@ export interface DataRuntimeHealthSnapshot {
   readers: DataRuntimeClientSnapshot[]
   maintenanceReader: DataRuntimeClientSnapshot
   foregroundQueue: ReturnType<DataRuntimeReaderPool['queueSnapshot']>
+  writerQueue: {
+    foregroundPending: number
+    maintenancePending: number
+  }
   ok: boolean
   recovering: boolean
 }
@@ -300,6 +342,7 @@ export class DataRuntimeService {
     readonly writer: DataRuntimeClient,
     readonly foregroundReaders: DataRuntimeReaderPool,
     readonly maintenanceReader: DataRuntimeClient,
+    private readonly executor: RemoteStorageExecutor,
   ) {}
 
   snapshot(): DataRuntimeHealthSnapshot {
@@ -316,6 +359,7 @@ export class DataRuntimeService {
       readers,
       maintenanceReader,
       foregroundQueue: this.foregroundReaders.queueSnapshot(),
+      writerQueue: this.executor.writerQueueSnapshot(),
       ok: writer.state === 'ready' && readyReaders.length > 0,
       recovering: this.recovering,
     }
@@ -326,7 +370,11 @@ export class DataRuntimeService {
   }
 
   writerPending(): number {
-    return this.writer.snapshot().pending
+    return this.executor.foregroundWriterPending()
+  }
+
+  maintenanceWriterPending(): number {
+    return this.executor.maintenanceWriterPending()
   }
 
   startRecovery(intervalMs = RECOVERY_INTERVAL_MS): void {
@@ -477,7 +525,7 @@ export function createDataRuntimeStorage(
   return {
     storage: new DataRuntimeStorageService(executor),
     unifiedRead: new DataRuntimeUnifiedReadService(foregroundReaders),
-    dataRuntime: new DataRuntimeService(writer, foregroundReaders, maintenanceReader),
+    dataRuntime: new DataRuntimeService(writer, foregroundReaders, maintenanceReader, executor),
   }
 }
 
