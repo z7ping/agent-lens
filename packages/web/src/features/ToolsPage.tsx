@@ -92,6 +92,9 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
   const navigate = useNavigate()
   const usage = snapshot.usage
   const data = usage.response
+  const projection = data?.meta.projection
+  const projectionPartial = projection?.state === 'partial'
+  const projectionPercent = projection ? Math.max(0, Math.min(100, Math.round(projection.coverageRatio * 100))) : 0
   const agents = useOrderedAgents(snapshot.facets?.agents ?? [])
   const projects = snapshot.facets?.projects ?? []
   const tools = data?.tools ?? []
@@ -211,6 +214,10 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
         <CompactPageHeading title="工具分析" description="只展示可验证的调用事实：用了什么、失败多少、耗时如何，以及有多少调用能够可靠归因到具体能力资产。"/>
 
         {usage.error && <ErrorStateBanner message={usage.error} onRetry={() => void model.refreshUsage()}/>} 
+        {projectionPartial && projection && <div className="tool-projection-status" role="status" aria-live="polite">
+          <UiIcon name="refresh" size={14}/>
+          <span><b>历史工具索引正在回填，当前结果不完整</b><small>已投影 {projection.projectedCount.toLocaleString()} / {projection.sourceObservationCount.toLocaleString()} 条工具事件（{projectionPercent}%），当前统计会随回填继续增长。</small></span>
+        </div>}
 
         {blockingError ? null : usage.loading && !data ? <WorkspaceSkeleton kind="table"/> : <>
           <section className="tool-summary-grid">
