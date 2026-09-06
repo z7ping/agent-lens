@@ -53,10 +53,15 @@ function isMaintenanceReadPath(path: readonly string[]): boolean {
     || method.startsWith('audit')
 }
 
+function isMaintenanceOperation(path: readonly string[]): boolean {
+  const method = path.at(-1) ?? ''
+  return path.includes('maintenance')
+    || isMaintenanceReadPath(path)
+    || (path.includes('projectionBackfill') && method.startsWith('backfill'))
+}
+
 function timeoutFor(path: readonly string[], read: boolean): number {
-  if (path.includes('maintenance') || path.includes('projectionBackfill') || isMaintenanceReadPath(path)) {
-    return MAINTENANCE_TIMEOUT_MS
-  }
+  if (isMaintenanceOperation(path)) return MAINTENANCE_TIMEOUT_MS
   return read ? READ_TIMEOUT_MS : WRITE_TIMEOUT_MS
 }
 
@@ -474,6 +479,7 @@ export function createDataRuntimeStorage(
 export const dataRuntimeStorageInternals = {
   isReadPath,
   isMaintenanceReadPath,
+  isMaintenanceOperation,
   timeoutFor,
   sessionSummaryProxy,
   READ_TIMEOUT_MS,
