@@ -44,6 +44,23 @@ export interface FrozenBatchRow {
   ackedAt: string | null
 }
 
+export interface CanonicalChangeRow {
+  revision: number
+  entityType: KnownReplicationEntityType
+  originEntityId: string
+  changedAt: string
+}
+
+export interface ChangeProgressRow {
+  streamId: string
+  generationId: string
+  phase: ReplicationHistoryPhase
+  entityType: KnownReplicationEntityType
+  revision: number
+  throughRevision: number
+  updatedAt: string
+}
+
 type Row = Record<string, unknown>
 const STREAM_STATUS = ['active', 'paused', 'rollover-required'] as const
 const HISTORY_PHASE = ['bootstrap', 'incremental', 'reconcile'] as const
@@ -98,6 +115,10 @@ function entityType(row: Row, key: string): KnownReplicationEntityType {
   return enumString(row, key, KNOWN_REPLICATION_ENTITY_TYPES)
 }
 
+function historyPhase(row: Row, key = 'phase'): ReplicationHistoryPhase {
+  return enumString(row, key, HISTORY_PHASE)
+}
+
 function jsonValue(value: unknown, key: string): JsonValue {
   if (value === null || typeof value === 'string' || typeof value === 'boolean') return value
   if (typeof value === 'number' && Number.isFinite(value)) return value
@@ -148,7 +169,7 @@ export function pendingRow(value: unknown): PendingRow {
     entityType: entityType(row, 'entityType'),
     originEntityId: requiredString(row, 'originEntityId'),
     candidateHash: requiredString(row, 'candidateHash'),
-    phase: enumString(row, 'phase', HISTORY_PHASE) as ReplicationHistoryPhase,
+    phase: historyPhase(row),
     policyRevision: requiredString(row, 'policyRevision'),
     historyRevision: requiredString(row, 'historyRevision'),
     payloadJson: requiredString(row, 'payloadJson'),
@@ -166,7 +187,7 @@ export function frozenBatchRow(value: unknown): FrozenBatchRow {
     sequence: requiredNumber(row, 'sequence'),
     batchId: requiredString(row, 'batchId'),
     contentHash: requiredString(row, 'contentHash'),
-    phase: enumString(row, 'phase', HISTORY_PHASE) as ReplicationHistoryPhase,
+    phase: historyPhase(row),
     policyRevision: requiredString(row, 'policyRevision'),
     historyRevision: requiredString(row, 'historyRevision'),
     payloadJson: requiredString(row, 'payloadJson'),
@@ -205,6 +226,33 @@ export function reconciliationCursorRow(value: unknown): ReplicationReconciliati
     streamId: requiredString(row, 'streamId'),
     entityType: entityType(row, 'entityType'),
     cursor: requiredString(row, 'cursor'),
+    updatedAt: requiredString(row, 'updatedAt'),
+  }
+}
+
+export function canonicalChangeRow(value: unknown): CanonicalChangeRow {
+  const row = rowRecord(value)
+  return {
+    revision: requiredNumber(row, 'revision'),
+    entityType: entityType(row, 'entityType'),
+    originEntityId: requiredString(row, 'originEntityId'),
+    changedAt: requiredString(row, 'changedAt'),
+  }
+}
+
+export function revisionRow(value: unknown): number {
+  return requiredNumber(rowRecord(value), 'revision')
+}
+
+export function changeProgressRow(value: unknown): ChangeProgressRow {
+  const row = rowRecord(value)
+  return {
+    streamId: requiredString(row, 'streamId'),
+    generationId: requiredString(row, 'generationId'),
+    phase: historyPhase(row),
+    entityType: entityType(row, 'entityType'),
+    revision: requiredNumber(row, 'revision'),
+    throughRevision: requiredNumber(row, 'throughRevision'),
     updatedAt: requiredString(row, 'updatedAt'),
   }
 }
