@@ -7,8 +7,8 @@ import { promisify } from 'node:util'
 const execFileAsync = promisify(execFile)
 const SHELL_PATH_BEGIN = '__AGENT_LENS_PATH_BEGIN__'
 const SHELL_PATH_END = '__AGENT_LENS_PATH_END__'
-const SHELL_PATH_TIMEOUT_MS = 1500
-const MAX_SHELL_OUTPUT = 128 * 1024
+const DISCOVERY_TIMEOUT_MS = 1500
+const MAX_DISCOVERY_OUTPUT = 128 * 1024
 
 export interface ExecutableDiscoveryOptions {
   explicit?: string | undefined
@@ -34,6 +34,15 @@ function executableNames(name: string, platform: NodeJS.Platform): string[] {
     .map(value => value.trim().toLowerCase())
     .filter(Boolean)
   return [name, ...extensions.map(extension => `${name}${extension}`)]
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await access(path, constants.F_OK)
+    return true
+  } catch {
+    return false
+  }
 }
 
 async function isUsableExecutable(path: string, platform: NodeJS.Platform): Promise<boolean> {
@@ -81,8 +90,8 @@ async function readPathFromShell(shell: string): Promise<string | undefined> {
       `printf '${SHELL_PATH_BEGIN}%s${SHELL_PATH_END}' "$PATH"; exit`,
     ], {
       windowsHide: true,
-      timeout: SHELL_PATH_TIMEOUT_MS,
-      maxBuffer: MAX_SHELL_OUTPUT,
+      timeout: DISCOVERY_TIMEOUT_MS,
+      maxBuffer: MAX_DISCOVERY_OUTPUT,
       encoding: 'utf8',
       env: {
         ...process.env,
@@ -134,4 +143,34 @@ export async function resolveExecutable(
   }
 
   return undefined
+}
+
+export async function resolveManagedExecutableTarget(
+  name: string,
+  executable: string,
+  options: Pick<ExecutableDiscoveryOptions, 'platform' | 'pathValue' | 'shellPathResolver'> = {},
+): Promise<string> {
+  const platform = options.platform ?? process.platform
+  const volta = await resolveExecutable('volta', {
+    platform,
+    pathValue: options.pathValue,
+    shellPathResolver: options.shellPathResolver,
+  })
+  if (!volta) return executable
+
+  try {
+    const { stdout } = await execFileAsync(volta, ['which', name], {
+      windowsHide: true,
+      timeout: DISCOVERY_TIMEOUT_MS,
+      maxBuffer: MAX_DISCOVERY_OUTPUT,
+      encoding: 'utf8',
+      env: process.env,
+    })
+    const candidate = stdout.trim().split(/\r?\n/).filter(Boolean).at(-1)
+    if (candidate && await pathExists(candidate)) return candidate
+  } catch {
+    // The executable is not managed by Volta, or Volta cannot resolve it in this context.
+  }
+
+  return executable
 }
