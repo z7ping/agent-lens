@@ -131,7 +131,8 @@ export class AgentLensApi {
   agents(): Promise<AgentOverviewResponseDto> {
     if (agentsInFlight) return agentsInFlight
     const pending = requestJson<AgentOverviewResponseDto>('/api/v1/agents')
-    agentsInFlight = pending.then(
+    let shared: Promise<AgentOverviewResponseDto>
+    shared = pending.then(
       result => {
         if (agentsInFlight === shared) agentsInFlight = null
         return result
@@ -141,7 +142,7 @@ export class AgentLensApi {
         throw error
       },
     )
-    const shared = agentsInFlight
+    agentsInFlight = shared
     return shared
   }
   capturePolicy(): Promise<CapturePolicyResponseDto> { return requestJson('/api/v1/capture-policy/sources') }
