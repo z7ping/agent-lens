@@ -16,39 +16,20 @@ export interface PiLiveCurrentToolInput {
   contentIndex?: number | undefined
 }
 
+type PiLiveContentKind = 'text' | 'thinking'
+
 function nextLiveId(items: PiLiveHistoryItem[], kind: 'message' | 'thinking'): string {
   const count = items.filter(item => item.kind === kind).length
   return `pi-live-current:${kind}:${count}`
 }
 
-function deltaBlockId(kind: 'text' | 'thinking', items: PiLiveHistoryItem[], options: PiLiveDeltaOptions): string {
+function deltaBlockId(kind: PiLiveContentKind, items: PiLiveHistoryItem[], options: PiLiveDeltaOptions): string {
   const itemKind = kind === 'text' ? 'message' : 'thinking'
   if (options.contentIndex === undefined) return nextLiveId(items, itemKind)
   return `pi-live-current:message-${options.messageEpoch ?? 0}:${itemKind}:${options.contentIndex}`
 }
 
-function appendToExistingDeltaBlock(
-  items: PiLiveHistoryItem[],
-  index: number,
-  kind: 'text' | 'thinking',
-  delta: string,
-): PiLiveHistoryItem[] | null {
-  if (index < 0) return null
-  const current = items[index]
-  if (kind === 'text' && current?.kind === 'message' && current.role === 'assistant') {
-    const next = [...items]
-    next[index] = { ...current, text: current.text + delta, state: 'running' }
-    return next
-  }
-  if (kind === 'thinking' && current?.kind === 'thinking') {
-    const next = [...items]
-    next[index] = { ...current, text: current.text + delta, state: 'running' }
-    return next
-  }
-  return null
-}
-
-function recoveredDeltaIndex(items: PiLiveHistoryItem[], kind: 'text' | 'thinking', contentIndex: number): number {
+function recoveredDeltaIndex(items: PiLiveHistoryItem[], kind: PiLiveContentKind, contentIndex: number): number {
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index]
     if (kind === 'text' && item?.kind === 'message' && item.role === 'assistant' && item.contentIndex === contentIndex && item.state === 'running') return index
@@ -57,23 +38,98 @@ function recoveredDeltaIndex(items: PiLiveHistoryItem[], kind: 'text' | 'thinkin
   return -1
 }
 
+function contentBlockIndex(
+  items: PiLiveHistoryItem[],
+  kind: PiLiveContentKind,
+  options: PiLiveDeltaOptions,
+): number {
+  if (options.contentIndex === undefined) return -1
+  const id = deltaBlockId(kind, items, options)
+  const exact = items.findIndex(item => item.id === id)
+  if (exact >= 0) return exact
+  return recoveredDeltaIndex(items, kind, options.contentIndex)
+}
+
+function contentText(item: PiLiveHistoryItem | undefined, kind: PiLiveContentKind): string | undefined {
+  if (kind === 'text' && item?.kind === 'message' && item.role === 'assistant') return item.text
+  if (kind === 'thinking' && item?.kind === 'thinking') return item.text
+  return undefined
+}
+
+function updateContentBlock(
+  items: PiLiveHistoryItem[],
+  index: number,
+  kind: PiLiveContentKind,
+  text: string,
+  state: 'running' | 'settled',
+): PiLiveHistoryItem[] | null {
+  if (index < 0) return null
+  const current = items[index]
+  const next = [...items]
+  if (kind === 'text' && current?.kind === 'message' && current.role === 'assistant') {
+    next[index] = { ...current, text, state }
+    return next
+  }
+  if (kind === 'thinking' && current?.kind === 'thinking') {
+    next[index] = { ...current, text, state }
+    return next
+  }
+  return null
+}
+
+/**
+ * `*_start` 就建立空 block。Pi 允许不同 content block 的事件交错；
+ * 如果等第一个 delta 才创建，后启动的 tool/text 可能先占位并改变来源顺序。
+ */
+export function startPiLiveContentBlock(
+  items: PiLiveHistoryItem[],
+  kind: PiLiveContentKind,
+  options: PiLiveDeltaOptions,
+  initialText = '',
+): PiLiveHistoryItem[] {
+  if (options.contentIndex === undefined) return items
+  const index = contentBlockIndex(items, kind, options)
+  if (index >= 0) {
+    const currentText = contentText(items[index], kind)
+    if (initialText && !currentText) return updateContentBlock(items, index, kind, initialText, 'running') ?? items
+    return items
+  }
+
+  const id = deltaBlockId(kind, items, options)
+  if (kind === 'text') {
+    return [...items, {
+      id,
+      kind: 'message',
+      role: 'assistant',
+      text: initialText,
+      at: options.at ?? '',
+      state: 'running',
+      contentIndex: options.contentIndex,
+    }]
+  }
+  return [...items, {
+    id,
+    kind: 'thinking',
+    text: initialText,
+    at: options.at ?? '',
+    state: 'running',
+    contentIndex: options.contentIndex,
+  }]
+}
+
 export function appendPiLiveDelta(
   items: PiLiveHistoryItem[],
-  kind: 'text' | 'thinking',
+  kind: PiLiveContentKind,
   delta: string,
   options: PiLiveDeltaOptions = {},
 ): PiLiveHistoryItem[] {
   if (!delta) return items
-  const id = deltaBlockId(kind, items, options)
-  const exactIndex = options.contentIndex === undefined ? -1 : items.findIndex(item => item.id === id)
-  const exact = appendToExistingDeltaBlock(items, exactIndex, kind, delta)
-  if (exact) return exact
 
   if (options.contentIndex !== undefined) {
-    // SSE 重连后 Snapshot block 保留持久 ID；只允许续写仍处于 running 的同 contentIndex block。
-    // 已 settled 的同 index 属于更早 assistant message，不能被新消息误续写。
-    const recovered = appendToExistingDeltaBlock(items, recoveredDeltaIndex(items, kind, options.contentIndex), kind, delta)
-    if (recovered) return recovered
+    const prepared = startPiLiveContentBlock(items, kind, options)
+    const index = contentBlockIndex(prepared, kind, options)
+    const current = contentText(prepared[index], kind)
+    if (current !== undefined) return updateContentBlock(prepared, index, kind, current + delta, 'running') ?? prepared
   }
 
   const last = items.at(-1)
@@ -86,6 +142,7 @@ export function appendPiLiveDelta(
     }
   }
 
+  const id = deltaBlockId(kind, items, options)
   if (kind === 'text') {
     return [...items, {
       id,
@@ -105,6 +162,19 @@ export function appendPiLiveDelta(
     state: 'running',
     contentIndex: options.contentIndex,
   }]
+}
+
+/** `*_end` 的完整内容是权威值，原位覆盖 delta 聚合结果并结算该 block。 */
+export function finishPiLiveContentBlock(
+  items: PiLiveHistoryItem[],
+  kind: PiLiveContentKind,
+  content: string,
+  options: PiLiveDeltaOptions,
+): PiLiveHistoryItem[] {
+  if (options.contentIndex === undefined) return items
+  const prepared = startPiLiveContentBlock(items, kind, options, content)
+  const index = contentBlockIndex(prepared, kind, options)
+  return updateContentBlock(prepared, index, kind, content || contentText(prepared[index], kind) || '', 'settled') ?? prepared
 }
 
 export function startPiLiveTool(items: PiLiveHistoryItem[], input: PiLiveCurrentToolInput): PiLiveHistoryItem[] {
@@ -168,7 +238,7 @@ export function markPiLiveItemsRunning(items: PiLiveHistoryItem[]): PiLiveHistor
   return items.map((item, index) => {
     if (index > lastTerminal && item.kind === 'message' && item.role === 'assistant') return { ...item, state: 'running' as const }
     if (index > lastTerminal && item.kind === 'thinking') return { ...item, state: 'running' as const }
-    if (item.kind === 'tool' && item.status === 'unknown') return { ...item, status: 'running' as const }
+    if (index > lastTerminal && item.kind === 'tool' && item.status === 'unknown') return { ...item, status: 'running' as const }
     return item
   })
 }

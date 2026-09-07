@@ -8,7 +8,7 @@ import { PiMarkdownComposer, type PiMarkdownComposerHandle } from '../components
 import { PiStartupDisclosure, piStartupSummary } from '../components/PiStartupDisclosure'
 import { Button, IconButton, Input, Textarea } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
-import { appendPiLiveDelta, finishPiLiveTool, markPiLiveItemsRunning, reconcilePiLiveItems, startPiLiveTool, updatePiLiveTool } from './pi-live-current'
+import { appendPiLiveDelta, finishPiLiveContentBlock, finishPiLiveTool, markPiLiveItemsRunning, reconcilePiLiveItems, startPiLiveContentBlock, startPiLiveTool, updatePiLiveTool } from './pi-live-current'
 import { omitPiLivePromptMessages, projectPiLiveHistory, type PiLiveHistoryItem } from './pi-live-history'
 import { PiLiveCurrentTaskRound, PiLiveHistoryTaskRound } from './PiLiveTaskRound'
 import { piLiveTaskRoundEstimate, projectPiLiveRunningRound, projectPiLiveTaskDetail, projectPiLiveTaskRounds } from './pi-live-task-projection'
@@ -162,6 +162,13 @@ function toolOutput(value: unknown): string {
     }).filter(Boolean).join('\n')
   }
   return brief(value, 4000)
+}
+
+function assistantPartialContent(update: Record<string, unknown>, contentIndex: number | undefined): Record<string, unknown> {
+  if (contentIndex === undefined) return {}
+  const partial = record(update.partial)
+  const content = Array.isArray(partial.content) ? partial.content : []
+  return record(content[contentIndex])
 }
 
 function extensionRequest(event: Record<string, unknown>): ExtensionRequest | null {
@@ -448,16 +455,28 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             const update = record(event.assistantMessageEvent)
             const delta = stringValue(update.delta)
             const contentIndex = typeof update.contentIndex === 'number' ? update.contentIndex : undefined
+            const block = assistantPartialContent(update, contentIndex)
             const deltaOptions = {
               messageEpoch: assistantMessageEpochRef.current,
               ...(contentIndex === undefined ? {} : { contentIndex }),
             }
-            if (update.type === 'text_delta' && delta) {
+            if (update.type === 'text_start') {
+              setCurrentItems(items => startPiLiveContentBlock(items, 'text', deltaOptions, stringValue(block.text)))
+            } else if (update.type === 'text_delta' && delta) {
               setCurrentItems(items => appendPiLiveDelta(items, 'text', delta, deltaOptions))
+            } else if (update.type === 'text_end') {
+              const content = stringValue(update.content) || stringValue(block.text)
+              setCurrentItems(items => finishPiLiveContentBlock(items, 'text', content, deltaOptions))
+            } else if (update.type === 'thinking_start') {
+              setCurrentItems(items => startPiLiveContentBlock(items, 'thinking', deltaOptions, stringValue(block.thinking || block.text)))
             } else if (update.type === 'thinking_delta' && delta) {
               setCurrentItems(items => appendPiLiveDelta(items, 'thinking', delta, deltaOptions))
-            } else if (update.type === 'toolcall_start' || update.type === 'toolcall_end') {
-              const toolCall = record(update.toolCall)
+            } else if (update.type === 'thinking_end') {
+              const content = stringValue(update.content) || stringValue(block.thinking || block.text)
+              setCurrentItems(items => finishPiLiveContentBlock(items, 'thinking', content, deltaOptions))
+            } else if (update.type === 'toolcall_start' || update.type === 'toolcall_delta' || update.type === 'toolcall_end') {
+              const completed = record(update.toolCall)
+              const toolCall = Object.keys(completed).length ? completed : block
               const callId = stringValue(update.id || update.toolCallId || toolCall.id)
               if (callId) {
                 const args = toolCall.arguments ?? toolCall.args ?? update.arguments ?? update.args

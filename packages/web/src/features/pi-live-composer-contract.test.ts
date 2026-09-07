@@ -72,14 +72,20 @@ test('Pi Live sends optimistically into one stable ordered current round before 
   assert.match(taskRound, /promptText && <TaskMessage role="user"/)
 })
 
-test('Pi Live SSE uses contentIndex and message identity to preserve interleaved block order', () => {
+test('Pi Live SSE uses start/delta/end plus contentIndex to preserve interleaved source block order', () => {
   assert.match(page, /const assistantMessageEpochRef = useRef\(0\)/)
   assert.match(page, /type === 'message_start'[\s\S]*?assistantMessageEpochRef\.current \+= 1/)
   assert.match(page, /const contentIndex = typeof update\.contentIndex === 'number' \? update\.contentIndex : undefined/)
+  assert.match(page, /const block = assistantPartialContent\(update, contentIndex\)/)
   assert.match(page, /messageEpoch: assistantMessageEpochRef\.current/)
+  assert.match(page, /update\.type === 'text_start'[\s\S]*?startPiLiveContentBlock\(items, 'text'/)
   assert.match(page, /appendPiLiveDelta\(items, 'text', delta, deltaOptions\)/)
+  assert.match(page, /update\.type === 'text_end'[\s\S]*?finishPiLiveContentBlock\(items, 'text'/)
+  assert.match(page, /update\.type === 'thinking_start'[\s\S]*?startPiLiveContentBlock\(items, 'thinking'/)
   assert.match(page, /appendPiLiveDelta\(items, 'thinking', delta, deltaOptions\)/)
-  assert.match(page, /update\.type === 'toolcall_start' \|\| update\.type === 'toolcall_end'/)
+  assert.match(page, /update\.type === 'thinking_end'[\s\S]*?finishPiLiveContentBlock\(items, 'thinking'/)
+  assert.match(page, /update\.type === 'toolcall_start' \|\| update\.type === 'toolcall_delta' \|\| update\.type === 'toolcall_end'/)
+  assert.match(page, /const toolCall = Object\.keys\(completed\)\.length \? completed : block/)
   assert.match(page, /startPiLiveTool\(items,[\s\S]*?contentIndex/)
 })
 

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { appendPiLiveDelta, finishPiLiveTool, markPiLiveItemsRunning, reconcilePiLiveItems, settlePiLiveItems, startPiLiveTool } from './pi-live-current'
+import { appendPiLiveDelta, finishPiLiveContentBlock, finishPiLiveTool, markPiLiveItemsRunning, reconcilePiLiveItems, settlePiLiveItems, startPiLiveContentBlock, startPiLiveTool } from './pi-live-current'
 import type { PiLiveHistoryItem } from './pi-live-history'
 
 test('Pi Live 按 SSE 到达顺序保留 thinking / text / tool 的交错块', () => {
@@ -19,6 +19,30 @@ test('Pi Live 按 SSE 到达顺序保留 thinking / text / tool 的交错块', (
   assert.ok(tool && tool.kind === 'tool')
   assert.equal(tool.status, 'success')
   assert.equal(tool.contentIndex, 2)
+})
+
+test('Pi Live 在 *_start 就占位，后续交错 delta 不会越过工具块', () => {
+  let items: PiLiveHistoryItem[] = []
+  items = startPiLiveContentBlock(items, 'text', { messageEpoch: 1, contentIndex: 0 })
+  const textId = items[0]!.id
+  items = startPiLiveTool(items, { callId: 'tool-1', name: 'bash', summary: '', contentIndex: 1 })
+  items = appendPiLiveDelta(items, 'text', '工具前正文继续到达', { messageEpoch: 1, contentIndex: 0 })
+
+  assert.deepEqual(items.map(item => item.kind), ['message', 'tool'])
+  assert.equal(items[0]!.id, textId)
+  assert.equal(items[0]!.kind === 'message' ? items[0].text : '', '工具前正文继续到达')
+})
+
+test('Pi Live *_end 用权威完整内容原位结算 block', () => {
+  let items: PiLiveHistoryItem[] = []
+  items = startPiLiveContentBlock(items, 'thinking', { messageEpoch: 1, contentIndex: 0 }, '完整思考')
+  const id = items[0]!.id
+  items = finishPiLiveContentBlock(items, 'thinking', '完整思考', { messageEpoch: 1, contentIndex: 0 })
+
+  assert.equal(items.length, 1)
+  assert.equal(items[0]!.id, id)
+  assert.equal(items[0]!.kind === 'thinking' ? items[0].text : '', '完整思考')
+  assert.equal(items[0]!.kind === 'thinking' ? items[0].state : undefined, 'settled')
 })
 
 test('Pi Live 同一 contentIndex 的 delta 原位增长，即使中途出现其他块', () => {
@@ -42,7 +66,7 @@ test('Pi Live 相邻同类型但不同 contentIndex 不会被合并', () => {
   items = appendPiLiveDelta(items, 'thinking', '思考二', { messageEpoch: 2, contentIndex: 3 })
 
   assert.deepEqual(items.map(item => item.kind), ['message', 'message', 'thinking', 'thinking'])
-  assert.deepEqual(items.map(item => item.contentIndex), [0, 1, 2, 3])
+  assert.deepEqual(items.map(item => 'contentIndex' in item ? item.contentIndex : undefined), [0, 1, 2, 3])
   assert.notEqual(items[0]!.id, items[1]!.id)
   assert.notEqual(items[2]!.id, items[3]!.id)
 })
@@ -84,7 +108,7 @@ test('Pi Live settled 对账保留已渲染 block 的 id 和相对顺序', () =>
   assert.deepEqual(settled.slice(0, 3).map(item => item.id), liveIds)
   assert.equal(settled[0]!.kind === 'thinking' ? settled[0].state : undefined, 'settled')
   assert.equal(settled[2]!.kind === 'message' ? settled[2].state : undefined, 'settled')
-  assert.deepEqual(settled.slice(0, 3).map(item => item.contentIndex), [0, 1, 2])
+  assert.deepEqual(settled.slice(0, 3).map(item => 'contentIndex' in item ? item.contentIndex : undefined), [0, 1, 2])
 })
 
 test('Pi Live settled 使用 contentIndex 避免同类缺失块错配', () => {
@@ -119,18 +143,20 @@ test('Pi Live settled 不会为了 Snapshot 的冲突顺序移动已经显示的
 test('Pi Live streaming Snapshot 只把最后一个未完成 assistant 段标记为 running', () => {
   const restored = markPiLiveItemsRunning([
     { id: 'old-thinking', kind: 'thinking', text: '前一段思考', at: '', contentIndex: 0 },
-    { id: 'old-text', kind: 'message', role: 'assistant', text: '前一段正文', at: '', contentIndex: 1 },
+    { id: 'old-tool', kind: 'tool', callId: 'old-tool', name: 'bash', summary: '', output: '', status: 'unknown', at: '', contentIndex: 1 },
+    { id: 'old-text', kind: 'message', role: 'assistant', text: '前一段正文', at: '', contentIndex: 2 },
     { id: 'old-stop', kind: 'lifecycle', event: 'assistant.stop', label: 'Pi 响应结束', detail: 'toolUse', at: '' },
-    { id: 'tool', kind: 'tool', callId: 'tool-1', name: 'bash', summary: '', output: '', status: 'unknown', at: '', contentIndex: 2 },
+    { id: 'tool', kind: 'tool', callId: 'tool-1', name: 'bash', summary: '', output: '', status: 'unknown', at: '', contentIndex: 3 },
     { id: 'current-thinking', kind: 'thinking', text: '当前思考', at: '', contentIndex: 0 },
     { id: 'current-text', kind: 'message', role: 'assistant', text: '当前部分正文', at: '', contentIndex: 1 },
   ])
 
   assert.equal(restored[0]!.kind === 'thinking' ? restored[0].state : undefined, undefined)
-  assert.equal(restored[1]!.kind === 'message' ? restored[1].state : undefined, undefined)
-  assert.equal(restored[3]!.kind === 'tool' ? restored[3].status : undefined, 'running')
-  assert.equal(restored[4]!.kind === 'thinking' ? restored[4].state : undefined, 'running')
-  assert.equal(restored[5]!.kind === 'message' ? restored[5].state : undefined, 'running')
+  assert.equal(restored[1]!.kind === 'tool' ? restored[1].status : undefined, 'unknown')
+  assert.equal(restored[2]!.kind === 'message' ? restored[2].state : undefined, undefined)
+  assert.equal(restored[4]!.kind === 'tool' ? restored[4].status : undefined, 'running')
+  assert.equal(restored[5]!.kind === 'thinking' ? restored[5].state : undefined, 'running')
+  assert.equal(restored[6]!.kind === 'message' ? restored[6].state : undefined, 'running')
 })
 
 test('Pi Live SSE 重连后继续写入 Snapshot 的 running block 而不创建重复正文', () => {

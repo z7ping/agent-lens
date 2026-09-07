@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { PiLiveRunningTaskRound } from './PiLiveTaskRound'
+import { PiLiveCurrentTaskRound } from './PiLiveTaskRound'
 import { TaskMessage } from './TaskMessage'
 import { TaskRound } from './TaskRound'
 import { TaskToolGroup } from './TaskToolGroup'
@@ -76,7 +76,14 @@ test('工具状态和耗时紧跟工具类型，而不是放到最右侧', () =>
 })
 
 test('Pi Running Tool 直接展示事实行，并在行下展示有限高度实时输出', () => {
-  const html = renderToStaticMarkup(createElement(PiLiveRunningTaskRound, { model: runningRound, thinkingText: '检查文件后继续执行。', tools: [{ id: 'running-tool', name: 'bash', status: 'running', summary: 'npm test', output: 'line 1\nline 2' }], streamText: '', isStreaming: true, pendingMessageCount: 0 }))
+  const html = renderToStaticMarkup(createElement(PiLiveCurrentTaskRound, {
+    model: runningRound,
+    items: [
+      { id: 'thinking', kind: 'thinking', text: '检查文件后继续执行。', at: '', state: 'running' },
+      { id: 'running-tool', kind: 'tool', callId: 'running-tool', name: 'bash', status: 'running', summary: 'npm test', output: 'line 1\nline 2', at: '' },
+    ],
+    pendingMessageCount: 0,
+  }))
   assert.match(html, /data-status="running"/)
   assert.match(html, /data-tool-fact="true"/)
   assert.match(html, /class="task-tool-live-output"/)
@@ -86,7 +93,11 @@ test('Pi Running Tool 直接展示事实行，并在行下展示有限高度实�
 })
 
 test('Pi settled 成功输出折叠在 Tool Call 事实行之下', () => {
-  const html = renderToStaticMarkup(createElement(PiLiveRunningTaskRound, { model: { ...runningRound, state: 'settled' }, thinkingText: '', tools: [{ id: 'success-tool', name: 'read_file', status: 'success', summary: 'very/long/path/to/source.ts', output: 'file content' }], streamText: '', isStreaming: false, pendingMessageCount: 0 }))
+  const html = renderToStaticMarkup(createElement(PiLiveCurrentTaskRound, {
+    model: { ...runningRound, state: 'settled' },
+    items: [{ id: 'success-tool', kind: 'tool', callId: 'success-tool', name: 'read_file', status: 'success', summary: 'very/long/path/to/source.ts', output: 'file content', at: '' }],
+    pendingMessageCount: 0,
+  }))
   assert.match(html, /data-status="success"/)
   assert.match(html, /very\/long\/path\/to\/source\.ts/)
   assert.match(html, /class="task-tool-output-details"/)
@@ -94,7 +105,11 @@ test('Pi settled 成功输出折叠在 Tool Call 事实行之下', () => {
 })
 
 test('Pi Running 失败 Tool 保留事实行并默认展开错误输出', () => {
-  const html = renderToStaticMarkup(createElement(PiLiveRunningTaskRound, { model: { ...runningRound, state: 'settled', errorCount: 1 }, thinkingText: '', tools: [{ id: 'error-tool', name: 'npm test', status: 'error', summary: 'web tests', output: '1 assertion failed' }], streamText: '', isStreaming: false, pendingMessageCount: 0 }))
+  const html = renderToStaticMarkup(createElement(PiLiveCurrentTaskRound, {
+    model: { ...runningRound, state: 'settled', errorCount: 1 },
+    items: [{ id: 'error-tool', kind: 'tool', callId: 'error-tool', name: 'npm test', status: 'error', summary: 'web tests', output: '1 assertion failed', at: '' }],
+    pendingMessageCount: 0,
+  }))
   assert.match(html, /data-status="error"/)
   assert.match(html, /data-kind="test"/)
   assert.match(html, /class="task-tool-output-details"[^>]*open=""|open=""[^>]*class="task-tool-output-details"/)

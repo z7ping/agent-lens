@@ -44,7 +44,7 @@ import {
 import { normalizePiSessionEntry, type PiNativeFact } from '@agent-lens/protocol'
 
 const SOURCE_ID = 'pi'
-const PARSER_VERSION = '5'
+const PARSER_VERSION = '6'
 const RUNTIME_FALLBACK_POLL_MS = 5000
 const RUNTIME_DEBOUNCE_MS = 180
 const MAX_STRING = 64 * 1024

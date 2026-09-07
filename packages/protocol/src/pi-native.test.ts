@@ -30,7 +30,7 @@ test('Pi Native Normalizer preserves assistant content block order, ids, indexes
     'usage',
   ])
   assert.deepEqual(facts.slice(0, 6).map(fact => fact.id), [
-    'a1:content:0',
+    'a1',
     'a1:content:1',
     'a1:content:2:tool:c1',
     'a1:content:3',
@@ -38,7 +38,8 @@ test('Pi Native Normalizer preserves assistant content block order, ids, indexes
     'a1:content:5',
   ])
   assert.deepEqual(facts.slice(0, 6).map(fact => fact.contentIndex), [0, 1, 2, 3, 4, 5])
-  assert.ok(facts.slice(0, 6).every(fact => fact.parentId === 'a1'))
+  assert.equal(facts[0]?.parentId, 'u1')
+  assert.ok(facts.slice(1, 6).every(fact => fact.parentId === 'a1'))
 
   const firstText = facts[1]
   assert.ok(firstText?.kind === 'message')
@@ -78,8 +79,8 @@ test('Pi Native Normalizer gives scalar assistant content the same block identit
   assert.equal(facts.length, 1)
   const message = facts[0]
   assert.ok(message?.kind === 'message')
-  assert.equal(message.id, 'a-scalar:content:0')
-  assert.equal(message.parentId, 'a-scalar')
+  assert.equal(message.id, 'a-scalar')
+  assert.equal(message.parentId, 'u1')
   assert.equal(message.contentIndex, 0)
 })
 
