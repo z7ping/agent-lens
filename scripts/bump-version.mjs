@@ -58,7 +58,7 @@ const changelogHeading = `## ${requested}`
 const date = new Date().toISOString().slice(0, 10)
 const nextChangelog = changelog.includes(changelogHeading)
   ? changelog
-  : `${changelogHeading}（${date}）\n\n### 调整\n- 版本更新至 ${requested}，详见本次发布说明。\n\n${changelog}`
+  : insertChangelogVersion(changelog, `${changelogHeading}（${date}）\n\n### 调整\n- 版本更新至 ${requested}，详见本次发布说明。\n\n`)
 
 const changes = new Map()
 for (const { path, value } of packages) {
@@ -96,6 +96,15 @@ console.log(`${dryRun ? '[dry-run] ' : ''}准备将 ${oldVersion} 升级为 ${re
 if (!dryRun) {
   for (const [path, content] of changes) await writeFile(path, content, 'utf8')
   console.log('版本同步完成。下一步运行：npm run release:check')
+}
+
+function insertChangelogVersion(changelog, section) {
+  const title = '# 更新日志'
+  if (!changelog.startsWith(title)) {
+    throw new Error('CHANGELOG.md 必须以“# 更新日志”作为一级标题')
+  }
+  const body = changelog.slice(title.length).replace(/^\s+/, '')
+  return `${title}\n\n${section}${body}`
 }
 
 function file(relativePath) {
