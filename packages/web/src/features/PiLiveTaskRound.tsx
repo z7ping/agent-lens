@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { MarkdownContent } from '../components/MarkdownContent'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { toolVisualKind, toolVisualLabel } from '../components/ToolKindIcon'
@@ -11,19 +11,6 @@ import { TaskToolGroup } from './TaskToolGroup'
 import type { TaskRoundModel, TaskThinkingModel, TaskToolGroupModel, TaskToolKind, TaskToolModel } from './task-detail-model'
 import { omitPiLivePromptMessages, type PiLiveHistoryItem } from './pi-live-history'
 import type { PiLiveTaskRoundProjection } from './pi-live-task-projection'
-
-export interface PiLiveRunningTool {
-  id: string
-  name: string
-  status: 'running' | 'success' | 'error'
-  summary: string
-  output: string
-}
-
-interface ToolTiming {
-  startedAtMs: number
-  durationMs?: number | undefined
-}
 
 function formatClock(value: string): string {
   if (!value) return ''
@@ -128,7 +115,7 @@ function HistoryThinking({ item }: { item: Extract<PiLiveHistoryItem, { kind: 't
     text: item.text,
     preview: compactPreview(item.text),
     time: item.at ? formatClock(item.at) : undefined,
-    state: 'settled',
+    state: item.state ?? 'settled',
   }
   return <TaskThinking model={model} defaultExpanded><ThinkingMarkdown text={item.text}/></TaskThinking>
 }
@@ -140,7 +127,7 @@ function HistoryToolGroup({ id, items }: { id: string; items: HistoryTool[] }) {
     item.status,
     item.summary,
     item.output,
-    { durationMs: item.durationMs },
+    { durationMs: item.durationMs, startedAtMs: item.startedAtMs },
   )))
   return <TaskToolGroup
     model={model}
@@ -158,6 +145,7 @@ function HistoryEntries({ items, showAllEvents = false }: { items: PiLiveHistory
         text={entry.text}
         author={entry.role === 'user' ? '你' : 'Pi'}
         time={entry.at ? formatClock(entry.at) : undefined}
+        streaming={entry.role === 'assistant' && entry.state === 'running'}
         className="pi-live-task-message"
       />
     }
@@ -193,71 +181,25 @@ export function PiLiveHistoryTaskRound({
   </TaskRound>
 }
 
-export function PiLiveRunningTaskRound({
+export function PiLiveCurrentTaskRound({
   model,
   promptText,
-  settledItems,
+  items,
   showAllEvents = false,
-  thinkingText,
-  tools,
-  streamText,
-  isStreaming,
   pendingMessageCount,
 }: {
   model: TaskRoundModel
   promptText?: string
-  settledItems?: PiLiveHistoryItem[]
+  items: PiLiveHistoryItem[]
   showAllEvents?: boolean
-  thinkingText: string
-  tools: PiLiveRunningTool[]
-  streamText: string
-  isStreaming: boolean
   pendingMessageCount: number
 }) {
-  const timingRef = useRef(new Map<string, ToolTiming>())
-  const now = Date.now()
-  const currentIds = new Set(tools.map(tool => tool.id))
-  for (const id of timingRef.current.keys()) {
-    if (!currentIds.has(id)) timingRef.current.delete(id)
-  }
-  const toolModels = tools.map(tool => {
-    let timing = timingRef.current.get(tool.id)
-    if (!timing) {
-      timing = { startedAtMs: now }
-      timingRef.current.set(tool.id, timing)
-    }
-    if (tool.status !== 'running' && timing.durationMs === undefined) timing.durationMs = Math.max(0, now - timing.startedAtMs)
-    return taskTool(tool.name, tool.id, tool.status, tool.summary, tool.output, timing)
-  })
-  const thinking: TaskThinkingModel = {
-    id: `${model.id}:thinking`,
-    label: '思考',
-    text: thinkingText,
-    preview: compactPreview(thinkingText),
-    state: model.state,
-  }
-  const hasSettledItems = Boolean(settledItems?.length)
-  const waiting = isStreaming && !hasSettledItems && !thinkingText && toolModels.length === 0 && !streamText
-
   return <TaskRound
     model={model}
     className="pi-live-current-round"
     summaryMeta={pendingMessageCount > 0 ? <span>{pendingMessageCount} 条排队</span> : undefined}
   >
     {promptText && <TaskMessage role="user" text={promptText} author="你" className="pi-live-task-message pi-live-optimistic-message"/>}
-    {hasSettledItems
-      ? <HistoryEntries items={omitPiLivePromptMessages(settledItems ?? [], promptText)} showAllEvents={showAllEvents}/>
-      : <>
-        {thinkingText && <TaskThinking model={thinking} defaultExpanded><div className="task-thinking-stream-text">{thinkingText}</div></TaskThinking>}
-        {toolModels.length > 0 && <TaskToolGroup
-          model={toolGroup('pi-live-current-tools', toolModels)}
-          renderDetails={tool => <ToolOutput tool={tool}/>}
-        />}
-        {(waiting || streamText) && <div className={`pi-live-stream-response${waiting ? ' is-waiting' : ''}`} role={waiting ? 'status' : undefined}>
-          <div className="pi-live-message-meta"><b>Pi</b><span>{waiting ? '等待响应' : isStreaming ? '生成中' : '输出'}</span></div>
-          <div className="pi-live-stream-text">{waiting ? '等待 Pi 响应…' : streamText}</div>
-          {isStreaming && <span className="pi-live-caret" aria-hidden="true"/>}
-        </div>}
-      </>}
+    <HistoryEntries items={omitPiLivePromptMessages(items, promptText)} showAllEvents={showAllEvents}/>
   </TaskRound>
 }

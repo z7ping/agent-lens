@@ -12,13 +12,11 @@ export interface TaskMessageProps {
   meta?: ReactNode
   actions?: ReactNode
   collapsible?: boolean
+  streaming?: boolean
   className?: string
 }
 
-/**
- * 历史 Review 与已完成 Live 消息共用的稳定消息表现。
- * Streaming Tail 不使用本组件，避免生成过程中切换源码导致内容状态混乱。
- */
+/** 历史 Review 与 Live 共用的稳定消息表现；streaming 只改变状态，不切换消息容器。 */
 export function TaskMessage({
   role,
   text,
@@ -27,6 +25,7 @@ export function TaskMessage({
   meta,
   actions,
   collapsible = true,
+  streaming = false,
   className = '',
 }: TaskMessageProps) {
   const user = role === 'user'
@@ -67,7 +66,12 @@ export function TaskMessage({
   const roleClass = user ? 'task-message-user' : 'task-message-assistant'
   const bubbleClass = user ? 'task-message-bubble-user' : 'task-message-bubble-assistant'
 
-  return <div className={`task-message-row ${roleClass} ${className}`.trim()} data-task-message-role={role}>
+  return <div
+    className={`task-message-row ${roleClass} ${className}`.trim()}
+    data-task-message-role={role}
+    data-streaming={streaming ? 'true' : undefined}
+    aria-busy={streaming || undefined}
+  >
     <div className={`task-message-bubble ${bubbleClass}`}>
       <div className="task-message-meta"><b>{author}</b>{meta}{time && <time>{time}</time>}</div>
       <div className="markdown-message task-message-content" data-view={view}>
