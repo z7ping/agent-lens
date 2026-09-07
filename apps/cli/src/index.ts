@@ -133,7 +133,7 @@ function runtimeOwner(health: Record<string, unknown>): string | null {
 }
 
 function runtimeOwnerLabel(owner: string | null): string {
-  if (owner === 'desktop') return 'Windows 客户端'
+  if (owner === 'desktop') return '桌面端'
   if (owner === 'service') return '后台服务'
   if (owner === 'cli') return '命令行'
   return owner ?? '未报告'
@@ -336,8 +336,8 @@ async function startDaemon(owner: RuntimeOwner = 'cli', mode: RuntimeMode = 'for
     const health = await fetchHealth()
     const existingOwner = runtimeOwner(health)
     if (mode === 'managed' && owner === 'service' && existingOwner !== 'service') {
-      console.error(`当前运行时由${runtimeOwnerLabel(existingOwner)}管理，后台服务不会强行接管。`)
-      return 1
+      console.log(`当前运行时由${runtimeOwnerLabel(existingOwner)}管理，后台服务不会强行接管。`)
+      return 0
     }
     console.log(`AgentLens 已在运行（管理方式：${runtimeOwnerLabel(existingOwner)}）`)
     console.log(`Web: ${daemonUrl('/')}`)
@@ -409,9 +409,10 @@ async function runService(action: string, json: boolean): Promise<number> {
   }
 
   const options = lifecycleOptions()
-  const before = await healthOrNull()
+  const startsService = action === 'start' || action === 'restart'
+  const before = startsService ? await healthOrNull() : null
   const beforeOwner = before ? runtimeOwner(before) : null
-  if ((action === 'start' || action === 'restart') && before && beforeOwner !== 'service') {
+  if (startsService && before && beforeOwner !== 'service') {
     const result = {
       ok: false,
       reason: 'runtime-owned-elsewhere',
@@ -430,7 +431,7 @@ async function runService(action: string, json: boolean): Promise<number> {
   else lifecycle = await getLifecycleStatus(options)
 
   let health = await healthOrNull()
-  if ((action === 'start' || action === 'restart') && !health) health = await waitForHealth()
+  if (startsService && !health) health = await waitForHealth()
   if (action === 'stop' && health && runtimeOwner(health) === 'service') {
     for (let attempt = 0; attempt < 10; attempt += 1) {
       await delay(150)
@@ -443,7 +444,7 @@ async function runService(action: string, json: boolean): Promise<number> {
   const owner = health ? runtimeOwner(health) : null
   let reason: string | null = null
   let message: string | null = null
-  if (action === 'start' || action === 'restart') {
+  if (startsService) {
     if (!lifecycle.active || !health || owner !== 'service') {
       reason = 'service-not-ready'
       message = `后台服务未进入可用状态：${lifecycleDetail(lifecycle)}；运行时=${health ? runtimeOwnerLabel(owner) : '离线'}`
@@ -497,16 +498,25 @@ async function runAutostart(action: string, json: boolean): Promise<number> {
     : action === 'disable'
       ? await setAutostart(false, options)
       : await getLifecycleStatus(options)
+  const expected = action === 'enable' ? true : action === 'disable' ? false : null
+  const ok = expected === null || lifecycle.autostart === expected
+  const message = ok || expected === null
+    ? null
+    : `登录自启状态未达到预期：${lifecycleDetail(lifecycle)}`
 
-  const result = { ok: true, action, lifecycle }
+  const result = { ok, action, ...(message ? { message } : {}), lifecycle }
   if (json) {
     console.log(JSON.stringify(result, null, 2))
-    return 0
+    return ok ? 0 : 1
   }
-  if (action === 'enable') console.log('AgentLens 登录后自动运行已启用。')
-  else if (action === 'disable') console.log('AgentLens 登录后自动运行已关闭。')
+  if (ok) {
+    if (action === 'enable') console.log('AgentLens 登录后自动运行已启用。')
+    else if (action === 'disable') console.log('AgentLens 登录后自动运行已关闭。')
+  } else if (message) {
+    console.log(message)
+  }
   printLifecycleState(lifecycle)
-  return 0
+  return ok ? 0 : 1
 }
 
 async function status(json: boolean): Promise<number> {
@@ -584,7 +594,7 @@ async function doctor(json: boolean): Promise<number> {
     const staleWindowsDefinition = lifecycle.status.manager === 'windows-task-scheduler'
       && lifecycle.status.registered
       && lifecycle.status.hidden !== true
-    const ownershipMismatch = (lifecycle.status.active && !health)
+    const ownershipMismatch = (lifecycle.status.active && (!health || owner !== 'service'))
       || (owner === 'service' && !lifecycle.status.active)
     checks.push({
       id: 'lifecycle',
