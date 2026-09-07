@@ -32,6 +32,7 @@ import {
 } from './lifecycle'
 
 const VERSION = '1.0.0-alpha.3'
+const PROTOCOL_VERSION = '1.0'
 const DEFAULT_PORT = 56789
 const MIN_NODE = [22, 23, 0] as const
 
@@ -98,13 +99,24 @@ function daemonUrl(pathname = '/api/v1/health'): string {
   return `http://127.0.0.1:${port}${pathname}`
 }
 
+function compatibleHealth(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('AgentLens health payload is not an object')
+  }
+  const health = value as Record<string, unknown>
+  if (health.protocolVersion !== PROTOCOL_VERSION) {
+    throw new Error(`AgentLens 协议不兼容：期望 ${PROTOCOL_VERSION}，实际 ${String(health.protocolVersion ?? 'unknown')}`)
+  }
+  return health
+}
+
 async function fetchHealth(): Promise<Record<string, unknown>> {
   const response = await fetch(daemonUrl(), {
     headers: { accept: 'application/json' },
     signal: AbortSignal.timeout(1500),
   })
   if (!response.ok && response.status !== 503) throw new Error(`HTTP ${response.status}`)
-  return response.json() as Promise<Record<string, unknown>>
+  return compatibleHealth(await response.json())
 }
 
 async function healthOrNull(): Promise<Record<string, unknown> | null> {
@@ -765,6 +777,7 @@ export const cliInternals = {
   versionAtLeast,
   targetFrom,
   daemonUrl,
+  compatibleHealth,
   runtimeOwner,
   sourceRoots,
   setupHookTargets,
