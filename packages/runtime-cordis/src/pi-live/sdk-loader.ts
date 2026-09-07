@@ -1,7 +1,7 @@
 import { access, readFile, realpath } from 'node:fs/promises'
 import { dirname, extname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { resolveExecutable } from '../executable-discovery'
+import { resolveExecutable, resolveManagedExecutableTarget } from '../executable-discovery'
 import {
   PI_SDK_PACKAGE_NAME,
   assertPiSdkModule,
@@ -138,12 +138,20 @@ export const loadInstalledPiSdk: PiSdkLoader = async explicitExecutable => {
   if (!executable) {
     throw new Error('Pi executable was not found in PI_BIN, the managed runtime PATH, or the user login-shell PATH')
   }
-  const discovery = await resolveInstalledPiSdk(executable)
-  if (!discovery) {
+
+  const packageTarget = await resolveManagedExecutableTarget('pi', executable)
+  const resolved = await resolveInstalledPiSdk(packageTarget)
+  if (!resolved) {
+    const targetDetail = packageTarget === executable ? '' : ` (resolved target: ${packageTarget})`
     throw new Error(
-      `Pi was found at ${executable}, but the official ${PI_SDK_PACKAGE_NAME} SDK could not be located. `
+      `Pi was found at ${executable}${targetDetail}, but the official ${PI_SDK_PACKAGE_NAME} SDK could not be located. `
       + 'Install Pi from its official npm package instead of using the removed AgentLens RPC fallback.',
     )
+  }
+
+  const discovery = {
+    ...resolved,
+    executable,
   }
   const imported = await import(pathToFileURL(discovery.sdkEntry).href)
   return {
