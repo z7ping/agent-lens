@@ -159,7 +159,7 @@ export function windowsTaskScript(options: LifecycleOptions, autostart: boolean)
 function windowsStatusScript(): string {
   return [
     "$ErrorActionPreference = 'Stop'",
-    `$task = Get-ScheduledTask -TaskName ${psQuote(WINDOWS_TASK_NAME)} -ErrorActionAction SilentlyContinue`,
+    `$task = Get-ScheduledTask -TaskName ${psQuote(WINDOWS_TASK_NAME)} -ErrorAction SilentlyContinue`,
     "if ($null -eq $task) { [pscustomobject]@{ registered = $false; active = $false; autostart = $false; hidden = $false; state = 'Missing' } | ConvertTo-Json -Compress; exit 0 }",
     "$hasLogon = @($task.Triggers | Where-Object { $_.CimClass.CimClassName -eq 'MSFT_TaskLogonTrigger' -and $_.Enabled }).Count -gt 0",
     '$action = @($task.Actions)[0]',
