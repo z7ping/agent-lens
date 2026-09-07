@@ -59,6 +59,12 @@ interface LifecycleProbe {
   error: string | null
 }
 
+interface RuntimeHealthProbe {
+  reachable: boolean
+  health: Record<string, unknown> | null
+  error: string | null
+}
+
 function usage(): string {
   return [
     'AgentLens 1.0',
@@ -110,27 +116,61 @@ function compatibleHealth(value: unknown): Record<string, unknown> {
   return health
 }
 
+async function probeHealth(): Promise<RuntimeHealthProbe> {
+  let response: Response
+  try {
+    response = await fetch(daemonUrl(), {
+      headers: { accept: 'application/json' },
+      signal: AbortSignal.timeout(1500),
+    })
+  } catch (error) {
+    return {
+      reachable: false,
+      health: null,
+      error: error instanceof Error ? error.message : String(error),
+    }
+  }
+
+  if (!response.ok && response.status !== 503) {
+    return { reachable: true, health: null, error: `HTTP ${response.status}` }
+  }
+
+  let payload: unknown
+  try {
+    payload = await response.json()
+  } catch (error) {
+    return {
+      reachable: true,
+      health: null,
+      error: `AgentLens health 响应不是有效 JSON：${error instanceof Error ? error.message : String(error)}`,
+    }
+  }
+
+  try {
+    return { reachable: true, health: compatibleHealth(payload), error: null }
+  } catch (error) {
+    return {
+      reachable: true,
+      health: null,
+      error: error instanceof Error ? error.message : String(error),
+    }
+  }
+}
+
 async function fetchHealth(): Promise<Record<string, unknown>> {
-  const response = await fetch(daemonUrl(), {
-    headers: { accept: 'application/json' },
-    signal: AbortSignal.timeout(1500),
-  })
-  if (!response.ok && response.status !== 503) throw new Error(`HTTP ${response.status}`)
-  return compatibleHealth(await response.json())
+  const probe = await probeHealth()
+  if (probe.health) return probe.health
+  throw new Error(probe.error ?? 'AgentLens health endpoint is unavailable')
 }
 
 async function healthOrNull(): Promise<Record<string, unknown> | null> {
-  try {
-    return await fetchHealth()
-  } catch {
-    return null
-  }
+  return (await probeHealth()).health
 }
 
 async function waitForHealth(timeoutMs = 4000): Promise<Record<string, unknown> | null> {
   const deadline = Date.now() + timeoutMs
   do {
-    const health = await healthOrNull()
+    const health = (await probeHealth()).health
     if (health) return health
     await delay(200)
   } while (Date.now() < deadline)
@@ -344,9 +384,9 @@ async function runHook(action: string, targetValue: string | undefined, json: bo
 }
 
 async function startDaemon(owner: RuntimeOwner = 'cli', mode: RuntimeMode = 'foreground'): Promise<number> {
-  try {
-    const health = await fetchHealth()
-    const existingOwner = runtimeOwner(health)
+  const existing = await probeHealth()
+  if (existing.health) {
+    const existingOwner = runtimeOwner(existing.health)
     if (mode === 'managed' && owner === 'service' && existingOwner !== 'service') {
       console.log(`当前运行时由${runtimeOwnerLabel(existingOwner)}管理，后台服务不会强行接管。`)
       return 0
@@ -354,8 +394,10 @@ async function startDaemon(owner: RuntimeOwner = 'cli', mode: RuntimeMode = 'for
     console.log(`AgentLens 已在运行（管理方式：${runtimeOwnerLabel(existingOwner)}）`)
     console.log(`Web: ${daemonUrl('/')}`)
     return 0
-  } catch {
-    // No compatible AgentLens health endpoint is currently reachable; start one daemon only.
+  }
+  if (existing.reachable) {
+    console.error(`默认端口已有不兼容服务，AgentLens 不会抢占：${existing.error ?? '无法识别的运行时'}`)
+    return mode === 'managed' ? 0 : 1
   }
 
   const explicit = process.env.AGENT_LENS_DAEMON_ENTRY
@@ -422,9 +464,19 @@ async function runService(action: string, json: boolean): Promise<number> {
 
   const options = lifecycleOptions()
   const startsService = action === 'start' || action === 'restart'
-  const before = startsService ? await healthOrNull() : null
-  const beforeOwner = before ? runtimeOwner(before) : null
-  if (startsService && before && beforeOwner !== 'service') {
+  const before = startsService ? await probeHealth() : null
+  if (before?.reachable && !before.health) {
+    const result = {
+      ok: false,
+      reason: 'runtime-endpoint-incompatible',
+      message: `默认端口已有不兼容服务，后台服务不会抢占：${before.error ?? '无法识别的运行时'}`,
+    }
+    if (json) console.log(JSON.stringify(result, null, 2))
+    else console.log(result.message)
+    return 1
+  }
+  const beforeOwner = before?.health ? runtimeOwner(before.health) : null
+  if (startsService && before?.health && beforeOwner !== 'service') {
     const result = {
       ok: false,
       reason: 'runtime-owned-elsewhere',
@@ -459,7 +511,7 @@ async function runService(action: string, json: boolean): Promise<number> {
   if (startsService) {
     if (!lifecycle.active || !health || owner !== 'service') {
       reason = 'service-not-ready'
-      message = `后台服务未进入可用状态：${lifecycleDetail(lifecycle)}；运行时=${health ? runtimeOwnerLabel(owner) : '离线'}`
+      message = `后台服务未确认可用：${lifecycleDetail(lifecycle)}；运行时=${health ? runtimeOwnerLabel(owner) : '离线'}`
     }
   } else if (action === 'stop') {
     if (lifecycle.active || owner === 'service') {
@@ -532,20 +584,15 @@ async function runAutostart(action: string, json: boolean): Promise<number> {
 }
 
 async function status(json: boolean): Promise<number> {
-  let health: Record<string, unknown> | null = null
-  let healthError: string | null = null
-  try {
-    health = await fetchHealth()
-  } catch (error) {
-    healthError = error instanceof Error ? error.message : String(error)
-  }
+  const runtime = await probeHealth()
+  const health = runtime.health
   const lifecycle = await lifecycleStatusProbe()
   const owner = health ? runtimeOwner(health) : null
   const result = {
     online: health !== null,
     url: daemonUrl('/'),
     owner,
-    ...(health ? { health } : { error: healthError }),
+    ...(health ? { health } : { error: runtime.error }),
     lifecycle: lifecycle.status,
     lifecycleError: lifecycle.error,
   }
@@ -561,7 +608,7 @@ async function status(json: boolean): Promise<number> {
     console.log(`协议版本：${String(health.protocolVersion ?? 'unknown')}`)
     console.log(`管理方式：${runtimeOwnerLabel(owner)}`)
   } else {
-    console.log(`AgentLens 后台运行时：离线（${healthError ?? '无法连接'}）`)
+    console.log(`AgentLens 后台运行时：离线（${runtime.error ?? '无法连接'}）`)
   }
   if (lifecycle.status) printLifecycleState(lifecycle.status)
   else console.log(`系统托管：无法读取（${lifecycle.error ?? '未知错误'}）`)
@@ -587,17 +634,22 @@ async function doctor(json: boolean): Promise<number> {
     checks.push({ id: 'data-root', level: 'fail', message: 'AgentLens 数据目录不可访问', detail: String(error) })
   }
 
-  let health: Record<string, unknown> | null = null
-  try {
-    health = await fetchHealth()
+  const runtime = await probeHealth()
+  const health = runtime.health
+  if (health) {
     checks.push({
       id: 'daemon',
       level: 'pass',
       message: '后台运行时可连接',
       detail: `${daemonUrl('/')} · 协议 ${String(health.protocolVersion ?? 'unknown')} · ${runtimeOwnerLabel(runtimeOwner(health))}`,
     })
-  } catch (error) {
-    checks.push({ id: 'daemon', level: 'warn', message: '后台运行时当前不可连接', detail: error instanceof Error ? error.message : String(error) })
+  } else {
+    checks.push({
+      id: 'daemon',
+      level: 'warn',
+      message: runtime.reachable ? '默认端口存在不兼容服务' : '后台运行时当前不可连接',
+      detail: runtime.error ?? '无法连接',
+    })
   }
 
   const lifecycle = await lifecycleStatusProbe()
