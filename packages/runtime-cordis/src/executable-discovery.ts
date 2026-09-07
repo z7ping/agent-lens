@@ -243,13 +243,10 @@ export async function resolveManagedExecutableTarget(
   executable: string,
   options: Pick<ExecutableDiscoveryOptions, 'platform' | 'pathValue' | 'shellPathResolver'> = {},
 ): Promise<string> {
-  const directTarget = await canonicalPath(executable)
-  if (directTarget !== executable) return directTarget
-
   for (const resolver of shimResolvers) {
     const target = await resolveWithShimManager(resolver, name, executable, options)
     if (target) return target
   }
 
-  return executable
+  return canonicalPath(executable)
 }
