@@ -10,8 +10,7 @@
 Shell
   ├─ PATH
   ├─ Node / npm 版本管理器
-  ├─ Source 自定义目录
-  └─ AgentLens 运行配置
+  └─ Source 自定义目录
 
 systemd / launchd / Task Scheduler
   └─ 可能没有继承以上 Shell 环境
@@ -21,38 +20,36 @@ systemd / launchd / Task Scheduler
 
 ## 2. 正式原则
 
-后台生命周期必须使用**显式白名单环境继承**：
+alpha.4 生命周期只持久化**工具发现和 Source 根目录所需的非敏感环境**：
 
-- 只固化 AgentLens Runtime 和 Source 运行真正需要的非敏感配置；
 - Windows Task Scheduler、Linux systemd user service、macOS LaunchAgent 使用同一份语义白名单；
 - 不复制完整 `process.env`；
 - 不把 API Key、Token、Cookie、Credential 等敏感变量写进 service definition；
 - 不针对 Volta、nvm、Homebrew 等工具写固定目录；
-- PATH 不足时由通用 executable discovery 负责从用户登录 Shell 恢复工具路径；
-- opaque shim 由独立 resolver 解析，不能把某个版本管理器写进 Pi 业务逻辑。
+- PATH 不足时由通用 executable discovery 从用户登录 Shell 恢复工具路径；
+- opaque shim 由独立 resolver 解析，不能把某个版本管理器写进 Pi 业务逻辑；
+- AgentLens 自身 Runtime 配置不借这套机制顺便持久化，必须等独立配置模型保证 `start/status/restart` 共用同一真值来源。
 
-## 3. 环境变量分类
+## 3. 当前白名单
 
-### 3.1 工具发现
-
-典型变量：
+### 3.1 工具与 Shell 发现
 
 ```text
 PATH
+SHELL
 CODEX_BIN
 CLAUDE_BIN
 PI_BIN
 ```
 
-用于发现 CLI executable。PATH 是通用基础能力，显式 `*_BIN` 的优先级高于 PATH。
+显式 `*_BIN` 优先于 PATH；`SHELL` 只用于 POSIX 登录 Shell PATH 发现。
 
 ### 3.2 Source 数据目录覆盖
-
-典型变量：
 
 ```text
 CODEX_HOME
 CLAUDE_CODE_HOME
+CLAUDE_HOME
 PI_HOME
 PI_CODING_AGENT_DIR
 PI_CODING_AGENT_SESSION_DIR
@@ -64,9 +61,11 @@ XDG_DATA_HOME
 
 如果用户明确设置了这些目录，切换到后台 Runtime 后必须保持同一 Source 视图，不能悄悄回退默认目录。
 
-### 3.3 AgentLens Runtime 配置
+`CLAUDE_HOME` 当前作为兼容别名保留；Source 正式发现优先使用 `CLAUDE_CODE_HOME`。
 
-典型变量：
+### 3.3 不属于本轮生命周期白名单的 AgentLens Runtime 配置
+
+例如：
 
 ```text
 AGENT_LENS_PORT
@@ -82,7 +81,9 @@ AGENT_LENS_CONFIG_CAPTURE
 AGENT_LENS_ENV_CAPTURE
 ```
 
-这些变量改变 AgentLens 自己的运行语义。用户在执行 `service start` / `autostart enable` 时明确配置了它们，系统托管定义就应保持相同语义。
+这些变量会改变 AgentLens 自身运行语义，不能仅在 `service start` 时复制到 systemd / launchd / Task Scheduler。否则后续 CLI 在没有同一环境变量的终端执行 `status`、`restart` 时可能使用另一套端口、Profile 或数据路径，形成隐藏状态漂移。
+
+如果未来需要让这些配置跨系统托管生命周期持久化，应先建立独立的 Runtime 配置文件/服务，并让 CLI、Daemon 和生命周期管理器从同一真值来源读取，再接入系统服务定义。
 
 ### 3.4 禁止自动持久化的环境
 
@@ -101,9 +102,9 @@ Object.entries(process.env)
 - Authorization；
 - Cookie；
 - Password / Secret / Credential；
-- 与 AgentLens 生命周期无关的第三方应用环境。
+- 与 AgentLens 工具发现和 Source 根目录无关的第三方环境。
 
-需要新增环境变量时，应先判断它是否属于 Runtime / Source 的正式配置契约，再加入统一白名单。
+需要新增白名单项时，应先证明它属于工具发现或 Source 正式配置契约，而不是为了让某一台机器临时跑通。
 
 ## 4. executable discovery
 
@@ -118,7 +119,7 @@ Object.entries(process.env)
 → 未找到
 ```
 
-找到 executable 后，如果路径是普通文件或 symlink，先走真实路径与包定位；只有遇到 opaque shim 时才进入 shim resolver。
+找到 executable 后，如果路径是普通文件或 symlink，走真实路径与包定位；遇到 opaque shim 时才进入 shim resolver。
 
 当前 shim resolver 作为可扩展适配层支持：
 
@@ -153,8 +154,9 @@ owner        Runtime Owner 与期望一致
 
 1. 是否需要 executable discovery？
 2. 是否已有通用 resolver 可以复用？
-3. 是否有需要跨后台生命周期保留的非敏感配置？
+3. 是否有需要跨后台生命周期保留的非敏感 Source 配置？
 4. 是否把环境差异误写成某个用户、某台机器或某种安装器的特判？
 5. 系统状态和 AgentLens Health 是否分别验证？
+6. 若涉及 AgentLens Runtime 配置，是否已经有独立持久化真值来源，而不是借 service definition 临时保存？
 
 不满足以上条件时，不应以“当前机器能运行”作为正式实现完成标准。
