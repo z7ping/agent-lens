@@ -303,6 +303,15 @@ async function ensureMacDefinition(options: LifecycleOptions, autostart: boolean
   await mkdir(dirname(path), { recursive: true })
   await mkdir(runtimeDir(options.homeDir), { recursive: true })
   await writeFile(path, launchdPlist(options, autostart), 'utf8')
+  await runChecked('/usr/bin/plutil', ['-lint', path], '校验 launchd 用户服务定义')
+}
+
+async function reloadMacDefinition(options: LifecycleOptions): Promise<void> {
+  const loaded = await run('launchctl', ['print', macTarget()])
+  if (loaded.code === 0) {
+    await runChecked('launchctl', ['bootout', macTarget()], '卸载旧 launchd 用户服务定义')
+  }
+  await runChecked('launchctl', ['bootstrap', macDomain(), macPlistPath(options.homeDir)], '加载 launchd 用户服务')
 }
 
 async function macStatus(options: LifecycleOptions): Promise<LifecycleStatus> {
@@ -368,10 +377,7 @@ export async function serviceStart(options: LifecycleOptions): Promise<Lifecycle
   } else if (platform === 'linux') {
     await runChecked('systemctl', ['--user', 'start', LINUX_UNIT_NAME], '启动 systemd 用户服务')
   } else {
-    const loaded = await run('launchctl', ['print', macTarget()])
-    if (loaded.code !== 0) {
-      await runChecked('launchctl', ['bootstrap', macDomain(), macPlistPath(options.homeDir)], '加载 launchd 用户服务')
-    }
+    await reloadMacDefinition(options)
     await runChecked('launchctl', ['kickstart', '-k', macTarget()], '启动 launchd 用户服务')
   }
   return getLifecycleStatus(options)
