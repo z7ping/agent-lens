@@ -10,16 +10,8 @@ export interface PiLiveTaskRoundProjection {
   continuation: boolean
 }
 
-export interface PiLiveRunningToolProjectionInput {
-  id: string
-  name: string
-  status: 'running' | 'success' | 'error'
-  summary: string
-  output: string
-}
-
 export interface PiLiveRunningRoundProjectionInput {
-  tools: PiLiveRunningToolProjectionInput[]
+  items: PiLiveHistoryItem[]
   isStreaming: boolean
 }
 
@@ -106,8 +98,6 @@ export function piLiveTaskRoundEstimate(projection: PiLiveTaskRoundProjection): 
     }
     if (item.kind === 'thinking') return total + 52
     if (item.kind === 'tool') return total + (item.output ? 82 : 48)
-    // TaskEvent 的主行和折叠原始数据入口都会占高度；与紧凑样式对齐，
-    // 避免虚拟轮次从估算高度切到实测高度时产生明显滚动跳动。
     return total + 56
   }, 0)
   return 34 + factHeight
@@ -149,12 +139,13 @@ export function projectPiLiveTaskRounds(history: PiLiveHistoryItem[]): PiLiveTas
 }
 
 export function projectPiLiveRunningRound(input: PiLiveRunningRoundProjectionInput): TaskRoundModel {
+  const tools = input.items.filter((item): item is Extract<PiLiveHistoryItem, { kind: 'tool' }> => item.kind === 'tool')
   return {
     id: 'pi-live-current-round',
     label: '当前轮次',
     state: input.isStreaming ? 'running' : 'stopped',
-    toolCount: input.tools.length,
-    errorCount: input.tools.filter(tool => tool.status === 'error').length,
+    toolCount: tools.length,
+    errorCount: tools.filter(tool => tool.status === 'error').length,
     durationMs: 0,
     highLatency: false,
   }
