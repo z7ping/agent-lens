@@ -12,17 +12,20 @@ const options = {
   },
 } as const
 
-test('Windows 后台任务可独立于登录自启注册且隐藏控制台窗口', () => {
+test('Windows 后台任务可独立于登录自启注册并继承托管环境', () => {
   const manual = windowsTaskScript({ ...options, platform: 'win32' }, false)
   const autostart = windowsTaskScript({ ...options, platform: 'win32' }, true)
+  const command = lifecycleInternals.windowsManagedCommand({ ...options, platform: 'win32' })
 
   assert.match(manual, /powershell\.exe/)
   assert.match(manual, /WindowStyle Hidden/)
-  assert.match(manual, /\/usr\/local\/bin\/node/)
-  assert.match(manual, /service run/)
+  assert.match(manual, /EncodedCommand/)
   assert.doesNotMatch(manual, /New-ScheduledTaskTrigger/)
   assert.match(autostart, /New-ScheduledTaskTrigger -AtLogOn/)
   assert.match(autostart, /MultipleInstances IgnoreNew/)
+  assert.match(command, /\$env:PATH = '\/home\/tester\/\.volta\/bin:\/opt\/with&sign\/bin:\/usr\/bin'/)
+  assert.match(command, /\$env:PI_BIN = '\/home\/tester\/\.volta\/bin\/pi'/)
+  assert.match(command, /& '\/usr\/local\/bin\/node' '\/opt\/agent-lens\/dist\/cli\.mjs' service run/)
 })
 
 test('Windows 状态检查能识别隐藏窗口任务定义', () => {
@@ -42,7 +45,7 @@ test('Linux systemd 使用绝对启动入口并继承工具 PATH，不再依赖 
   assert.match(unit, /WantedBy=default\.target/)
 })
 
-test('macOS launchd 将工具 PATH 和 PI_BIN 固化进后台运行环境', () => {
+test('macOS launchd 固化托管环境且不依赖安装目录作为工作目录', () => {
   const disabled = launchdPlist({ ...options, platform: 'darwin' }, false)
   const enabled = launchdPlist({ ...options, platform: 'darwin' }, true)
 
@@ -52,5 +55,6 @@ test('macOS launchd 将工具 PATH 和 PI_BIN 固化进后台运行环境', () =
   assert.match(enabled, /<key>EnvironmentVariables<\/key>/)
   assert.match(enabled, /<key>PATH<\/key>\s+<string>\/home\/tester\/\.volta\/bin:\/opt\/with&amp;sign\/bin:\/usr\/bin<\/string>/)
   assert.match(enabled, /<key>PI_BIN<\/key>\s+<string>\/home\/tester\/\.volta\/bin\/pi<\/string>/)
+  assert.doesNotMatch(enabled, /<key>WorkingDirectory<\/key>/)
   assert.match(enabled, /<key>SuccessfulExit<\/key>\s+<false\/>/)
 })
