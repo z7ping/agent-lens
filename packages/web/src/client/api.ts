@@ -34,6 +34,7 @@ export interface ReviewFilters extends QueryFilters {
   search: string
 }
 
+let agentsInFlight: Promise<AgentOverviewResponseDto> | null = null
 let backupOverviewInFlight: Promise<BackupOverviewResponseDto> | null = null
 let backupOverviewCache: BackupOverviewResponseDto | null = null
 let reuseBackupOverviewOnce = false
@@ -127,7 +128,22 @@ export class AgentLensApi {
 
   health(): Promise<HealthResponseDto> { return requestJson('/api/v1/health') }
   facets(): Promise<FacetResponseDto> { return requestJson('/api/v1/facets') }
-  agents(): Promise<AgentOverviewResponseDto> { return requestJson('/api/v1/agents') }
+  agents(): Promise<AgentOverviewResponseDto> {
+    if (agentsInFlight) return agentsInFlight
+    const pending = requestJson<AgentOverviewResponseDto>('/api/v1/agents')
+    agentsInFlight = pending.then(
+      result => {
+        if (agentsInFlight === shared) agentsInFlight = null
+        return result
+      },
+      error => {
+        if (agentsInFlight === shared) agentsInFlight = null
+        throw error
+      },
+    )
+    const shared = agentsInFlight
+    return shared
+  }
   capturePolicy(): Promise<CapturePolicyResponseDto> { return requestJson('/api/v1/capture-policy/sources') }
 
   updateCaptureSources(enabledSources: readonly string[]): Promise<CapturePolicyResponseDto> {
