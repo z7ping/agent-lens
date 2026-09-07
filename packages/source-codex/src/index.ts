@@ -20,7 +20,7 @@ import { normalizeCodexSessionAttribution } from './session-attribution'
 
 export const codexManifest: SourcePluginManifest = {
   pluginId: '@agent-lens/source-codex',
-  pluginVersion: '1.0.0-alpha.2',
+  pluginVersion: '1.0.0-alpha.3',
   apiVersion: '1.0',
   pluginType: 'source',
   displayName: 'Codex Source',
