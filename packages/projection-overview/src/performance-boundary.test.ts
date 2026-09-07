@@ -75,3 +75,30 @@ test('Agent Overview aggregates tool assets once per source, not once per instal
   assert.equal(aggregateCalls[0]?.detailLimit, 0)
   assert.equal(result.items[0]?.usedAssets[0]?.callCount, 10)
 })
+
+test('Agent Overview uses one exact source-partitioned asset aggregate when storage provides it', async () => {
+  let aggregateCalls = 0
+  let sourceAggregateCalls = 0
+  const storage = {
+    repositories: { installations: { async listByProduct() { return [] } } },
+    toolUsageObservations: {
+      async query() { return [] },
+      async aggregate() { aggregateCalls += 1; return { tools: [], assets: [], unattributedToolCalls: 0 } },
+      async aggregateAssetsBySource() {
+        sourceAggregateCalls += 1
+        return [{ type: 'mcp' as const, canonicalName: 'github', sourceIds: ['codex'], callCount: 7,
+          firstUsedAt: '2026-09-01T00:00:00.000Z', lastUsedAt: '2026-09-06T00:00:00.000Z', observationIds: [] }]
+      },
+    },
+  } as unknown as StorageService
+  const sources = { list() { return [
+    { manifest: { sourceId: 'codex', productId: 'codex', displayName: 'Codex' } },
+    { manifest: { sourceId: 'claude', productId: 'claude', displayName: 'Claude' } },
+  ] } } as unknown as SourceService
+
+  const result = await new AgentOverviewProjection(storage, sources).query()
+  assert.equal(sourceAggregateCalls, 1)
+  assert.equal(aggregateCalls, 0)
+  assert.equal(result.items.find(item => item.sourceId === 'codex')?.usedAssets[0]?.callCount, 7)
+  assert.equal(result.items.find(item => item.sourceId === 'claude')?.usedAssets.length, 0)
+})

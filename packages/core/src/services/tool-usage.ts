@@ -105,4 +105,6 @@ export interface ToolUsageAggregateResult {
 export interface ToolUsageObservationReader {
   query(input: ToolUsageObservationQuery): Promise<ToolUsageObservationRecord[]>
   aggregate?(input: ToolUsageAggregateQuery): Promise<ToolUsageAggregateResult>
+  /** Exact asset totals partitioned by source, for source-oriented surfaces. */
+  aggregateAssetsBySource?(input: ToolUsageAggregateQuery): Promise<ToolUsageAggregateAssetRecord[]>
 }

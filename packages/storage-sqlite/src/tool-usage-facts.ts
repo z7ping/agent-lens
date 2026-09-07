@@ -451,6 +451,29 @@ export class SqliteToolUsageFactReader implements ToolUsageObservationReader {
       return parseAggregateRows(rows)
     })
   }
+
+  aggregateAssetsBySource(input: ToolUsageAggregateQuery): Promise<ToolUsageAggregateAssetRecord[]> {
+    return this.executor.run(() => {
+      const { conditions, params } = aggregateFilter(input)
+      const rows = this.executor.db.prepare(`${aggregateCtes(conditions)}
+        SELECT source_id, asset_type, canonical_name,
+          COUNT(*) AS call_count, MIN(effective_at) AS first_used_at, MAX(effective_at) AS last_used_at
+        FROM asset_calls
+        WHERE asset_type IS NOT NULL AND canonical_name IS NOT NULL
+        GROUP BY source_id, asset_type, canonical_name
+        ORDER BY source_id, asset_type, canonical_name
+      `).all(...params) as Array<Record<string, unknown>>
+      return rows.map(row => ({
+        type: row.asset_type === 'skill' ? 'skill' : 'mcp',
+        canonicalName: String(row.canonical_name),
+        sourceIds: [String(row.source_id)],
+        callCount: Number(row.call_count),
+        firstUsedAt: String(row.first_used_at),
+        lastUsedAt: String(row.last_used_at),
+        observationIds: [],
+      }))
+    })
+  }
 }
 
 export const toolUsageFactInternals = {

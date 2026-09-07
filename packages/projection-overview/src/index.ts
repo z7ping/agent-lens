@@ -235,13 +235,28 @@ export class AgentOverviewProjection {
   private async buildResponse(): Promise<AgentOverviewResponseDto> {
     const startedAt = performance.now()
     const definitions = this.sources?.list() ?? []
+    const sourceAssets = this.storage.toolUsageObservations?.aggregateAssetsBySource
+      ? await this.storage.toolUsageObservations.aggregateAssetsBySource({ detailLimit: 0 })
+      : null
+    const assetsBySource = new Map<string, typeof sourceAssets>()
+    if (sourceAssets) {
+      for (const asset of sourceAssets) {
+        const sourceId = asset.sourceIds[0]
+        if (!sourceId) continue
+        const items = assetsBySource.get(sourceId) ?? []
+        items.push(asset)
+        assetsBySource.set(sourceId, items)
+      }
+    }
     const items = await Promise.all(definitions.map(async definition => {
       const sourceStartedAt = performance.now()
       const installations = await this.storage.repositories.installations.listByProduct(definition.manifest.productId)
       const usedAssets = new Map<string, AgentOverviewResponseDto['items'][number]['usedAssets'][number]>()
       const inventory = new Map<string, AgentAssetInventoryDto>()
 
-      const assets = await this.usage.queryAssets({ sourceId: definition.manifest.sourceId })
+      const assets = sourceAssets
+        ? assetsBySource.get(definition.manifest.sourceId) ?? []
+        : await this.usage.queryAssets({ sourceId: definition.manifest.sourceId })
       for (const asset of assets) {
         const key = `${asset.type}\u0000${asset.canonicalName}`
         usedAssets.set(key, {
@@ -250,7 +265,10 @@ export class AgentOverviewProjection {
           callCount: asset.callCount,
           firstUsedAt: asset.firstUsedAt,
           lastUsedAt: asset.lastUsedAt,
-          confidence: asset.confidence,
+          confidence: 'confidence' in asset
+            && (asset.confidence === 'high' || asset.confidence === 'medium' || asset.confidence === 'low')
+            ? asset.confidence
+            : 'high',
         })
       }
 

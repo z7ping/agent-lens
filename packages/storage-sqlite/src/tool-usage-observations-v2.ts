@@ -191,4 +191,8 @@ export class SqliteToolUsageObservationReader implements ToolUsageObservationRea
       })),
     }
   }
+
+  aggregateAssetsBySource(input: ToolUsageAggregateQuery) {
+    return this.base.aggregateAssetsBySource(input)
+  }
 }
