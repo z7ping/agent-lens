@@ -2,27 +2,14 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
+import type { SourceHistoryExecutionContext } from '../../packages/core/src/index'
 import { ingestDshHistory } from '../../apps/daemon/src/sources/dsh'
-
-function readPositiveInt(name: string, fallback: number): number {
-  const prefix = `--${name}=`
-  const raw = process.argv.find(arg => arg.startsWith(prefix))?.slice(prefix.length)
-  if (!raw) return fallback
-  const value = Number.parseInt(raw, 10)
-  if (!Number.isFinite(value) || value <= 0) throw new Error(`${name} must be a positive integer`)
-  return value
-}
+import { percentile, readPositiveInt } from './benchmark-utils'
 
 const files = readPositiveInt('files', 500)
 const eventsPerFile = readPositiveInt('events-per-file', 20)
 const payloadBytes = readPositiveInt('payload-bytes', 2048)
 const samples = readPositiveInt('samples', 5)
-
-function percentile(values: number[], p: number): number {
-  const sorted = [...values].sort((a, b) => a - b)
-  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * p) - 1))
-  return sorted[index] ?? 0
-}
 
 const root = mkdtempSync(join(tmpdir(), 'agent-lens-dsh-idle-'))
 const sessionsDir = join(root, 'sessions')
@@ -43,16 +30,32 @@ for (let fileIndex = 0; fileIndex < files; fileIndex += 1) {
 }
 
 const checkpoints = new Map<string, unknown>()
-const ctx = {
-  host: { id: 'host-perf', name: 'perf', platform: process.platform, arch: process.arch, createdAt: new Date().toISOString(), lastSeenAt: new Date().toISOString() },
-  installation: { id: 'dsh-perf', hostId: 'host-perf', productId: 'dsh', dataRoot: root, configRoot: root, firstSeenAt: new Date().toISOString(), lastSeenAt: new Date().toISOString() },
+const observedAt = new Date().toISOString()
+const ctx: SourceHistoryExecutionContext = {
+  host: {
+    id: 'host-perf',
+    name: 'perf',
+    platform: process.platform,
+    arch: process.arch,
+    createdAt: observedAt,
+    lastSeenAt: observedAt,
+  },
+  installation: {
+    id: 'dsh-perf',
+    hostId: 'host-perf',
+    productId: 'dsh',
+    dataRoot: root,
+    configRoot: root,
+    firstSeenAt: observedAt,
+    lastSeenAt: observedAt,
+  },
   abortSignal: new AbortController().signal,
   checkpoint: {
     async get<T>(key: string): Promise<T | null> { return (checkpoints.get(key) as T | undefined) ?? null },
     async set<T>(key: string, value: T): Promise<void> { checkpoints.set(key, value) },
     async clear(key: string): Promise<void> { checkpoints.delete(key) },
   },
-} as any
+}
 
 async function drain(): Promise<number> {
   let count = 0

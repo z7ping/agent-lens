@@ -4,7 +4,7 @@ import type { InsightMetricDeltaDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { InsightsClientModel } from '../client/insights-model'
 import { useClientSnapshot } from '../App'
-import { agentLabel } from '../components/AgentScope'
+import { agentLabel, useOrderedAgents } from '../components/AgentScope'
 import { BackgroundDataNotice } from '../components/BackgroundDataNotice'
 import { CompactPageHeading } from '../components/CompactPageHeading'
 import { EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from '../components/StateViews'
@@ -39,6 +39,14 @@ function formatGeneratedAt(value: string): string {
   return Number.isFinite(date.getTime()) ? date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : value
 }
 
+function rangeLabel(range: 'today' | '7d' | '30d' | 'all', from?: string, to?: string): string {
+  const label = range === 'today' ? '今天' : range === '7d' ? '最近 7 天' : range === '30d' ? '最近 30 天' : '全部时间'
+  if (from && to) return `${label} · ${formatDate(from)} — ${formatDate(to)}`
+  if (from) return `${label} · ${formatDate(from)} 至今`
+  if (to) return `${label} · 截至 ${formatDate(to)}`
+  return label
+}
+
 function assetTypeLabel(type: string): string {
   if (type === 'skill') return '技能'
   if (type === 'mcp') return 'MCP（模型上下文协议）'
@@ -60,7 +68,8 @@ export function InsightsPage({ model, sidebarHost }: { model: AgentLensClientMod
   }, [insightsModel])
 
   const data = insights.response
-  const agents = appSnapshot.facets?.agents ?? []
+  const agents = useOrderedAgents(appSnapshot.facets?.agents ?? [])
+  const insightAgents = useOrderedAgents(data?.agents ?? [])
   const projects = appSnapshot.facets?.projects ?? []
   const maxTrendSessions = Math.max(1, ...(data?.trend.map(item => item.sessionCount) ?? [1]))
   const canRelaxFilters = Boolean(insights.filters.sourceId || insights.filters.projectId || insights.filters.range !== 'all')
@@ -102,7 +111,7 @@ export function InsightsPage({ model, sidebarHost }: { model: AgentLensClientMod
 
         {insights.loading && !data ? <WorkspaceSkeleton kind="table"/> : data && data.summary.sessionCount > 0 ? <>
           <section className="insight-coverage-strip" aria-label="洞察统计覆盖范围">
-            <div><span>统计范围</span><b>{data.meta.from && data.meta.to ? `${formatDate(data.meta.from)} — ${formatDate(data.meta.to)}` : '全部已载入历史'}</b></div>
+            <div><span>统计范围</span><b>{rangeLabel(insights.filters.range, data.meta.from, data.meta.to)}</b></div>
             <div><span>会话样本</span><b>{data.summary.sessionCount} 个</b></div>
             <div><span>覆盖状态</span><b className={data.meta.sampled ? 'is-warning' : ''}>{data.meta.sampled ? `最近 ${data.meta.sessionSampleLimit} 个以内的安全样本` : '当前范围完整聚合'}</b></div>
             <div><span>生成时间</span><b>{formatGeneratedAt(data.meta.generatedAt)}</b></div>
@@ -144,7 +153,7 @@ export function InsightsPage({ model, sidebarHost }: { model: AgentLensClientMod
             <div className="insight-card-head"><div><h2>智能体使用结构</h2><p>同一会话若同时包含多个来源，会分别计入对应智能体；这是“会话中出现过该来源”，不是独占归因。</p></div></div>
             <div className="insight-agent-table-wrap"><table className="insight-agent-table">
               <thead><tr><th>智能体</th><th>会话</th><th>交互</th><th>工具调用</th><th>明确失败</th><th>已观察资产调用</th><th>会话跨度合计</th></tr></thead>
-              <tbody>{data.agents.map(agent => <tr key={agent.sourceId}><td><b>{agentLabel(agent.sourceId)}</b></td><td>{agent.sessionCount}</td><td>{agent.interactionCount}</td><td>{agent.toolCallCount}</td><td>{agent.errorCount}</td><td>{agent.observedAssetCallCount}</td><td>{duration(agent.totalDurationMs)}</td></tr>)}</tbody>
+              <tbody>{insightAgents.map(agent => <tr key={agent.sourceId}><td><b>{agentLabel(agent.sourceId)}</b></td><td>{agent.sessionCount}</td><td>{agent.interactionCount}</td><td>{agent.toolCallCount}</td><td>{agent.errorCount}</td><td>{agent.observedAssetCallCount}</td><td>{duration(agent.totalDurationMs)}</td></tr>)}</tbody>
             </table></div>
           </section>
 

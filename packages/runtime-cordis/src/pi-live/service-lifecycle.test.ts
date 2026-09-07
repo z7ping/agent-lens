@@ -80,3 +80,20 @@ test('初始化失败保留可诊断状态，并且只允许显式 Retry', async
   assert.equal(calls, 2)
   await service.dispose()
 })
+
+test('同一 Pi 历史文件不能被两个 Runtime 同时继续', async () => {
+  const host: PiRuntimeHost = {
+    start: async (_id, _input, signal) => new Promise<PiRuntimeHandle>((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(new Error('cancelled')), { once: true })
+    }),
+  }
+  const service = new DefaultPiLiveService(host)
+  const first = await service.start({ cwd: '/workspace', sessionPath: '/sessions/history.jsonl' })
+
+  await assert.rejects(
+    () => service.start({ cwd: '/workspace', sessionPath: '/sessions/history.jsonl' }),
+    /已经在进行中/,
+  )
+
+  await service.terminate(first.runtimeSessionId)
+})

@@ -420,19 +420,10 @@
   white-space: pre-wrap;
 }
 .task-surface .task-tool-output-details > summary { display: flex; min-height: 24px; align-items: center; gap: 5px; color: var(--al-muted); font-size: 12px; cursor: pointer; list-style: none; }
+.task-surface .task-tool-output-details > summary::marker { content: ''; }
 .task-surface .task-tool-output-details > summary::-webkit-details-marker { display: none; }
-.task-surface .task-tool-output-details > summary::before {
-  content: "";
-  display: block;
-  width: 14px;
-  height: 14px;
-  flex: 0 0 14px;
-  background: currentColor;
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 4 4 4-4 4'/%3E%3C/svg%3E") center/14px 14px no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 4 4 4-4 4'/%3E%3C/svg%3E") center/14px 14px no-repeat;
-  transition: transform .18s cubic-bezier(.2,.8,.2,1);
-}
-.task-surface .task-tool-output-details[open] > summary::before { transform: rotate(90deg); }
+.task-surface .task-tool-output-chevron { flex: 0 0 14px; transition: transform .18s cubic-bezier(.2,.8,.2,1); }
+.task-surface .task-tool-output-details[open] > summary > .task-tool-output-chevron { transform: rotate(90deg); }
 
 /* ── Event ── */
 .task-surface .task-event-row {
@@ -453,14 +444,14 @@
 .task-surface button.task-event-row { cursor: pointer; }
 .task-surface .task-event-row:hover { background: var(--al-soft-2); }
 .task-surface .task-event-mark {
+  display: grid;
   width: 15px;
   height: 15px;
   justify-self: center;
-  background: currentColor;
+  place-items: center;
   color: var(--al-muted);
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='5.2' fill='none' stroke='black' stroke-width='1.5'/%3E%3Cpath d='M8 4.8v3.4l2.2 1.5' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E") center/contain no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='5.2' fill='none' stroke='black' stroke-width='1.5'/%3E%3Cpath d='M8 4.8v3.4l2.2 1.5' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E") center/contain no-repeat;
 }
+.task-surface .task-event-mark > svg { display: block; }
 .task-surface .task-event-permission .task-event-mark { color: var(--al-warning); }
 .task-surface .task-event-subagent .task-event-mark,
 .task-surface .task-event-model .task-event-mark { color: var(--al-accent); }
@@ -475,7 +466,11 @@
 .task-surface .task-event-source,
 .task-surface .task-event-row > time { color: var(--al-muted); font-size: 12px; white-space: nowrap; text-align: right; }
 .task-surface .task-event-raw { margin: -1px 0 2px 24px; padding: 0 6px 4px; border-left: 1px solid color-mix(in srgb, var(--al-line) 72%, transparent); color: var(--al-muted); font-size: 12px; }
-.task-surface .task-event-raw > summary { min-height: 24px; cursor: pointer; }
+.task-surface .task-event-raw > summary { display: flex; min-height: 24px; align-items: center; gap: 5px; cursor: pointer; list-style: none; }
+.task-surface .task-event-raw > summary::marker { content: ''; }
+.task-surface .task-event-raw > summary::-webkit-details-marker { display: none; }
+.task-surface .task-event-raw-chevron { flex: 0 0 14px; transition: transform .18s cubic-bezier(.2,.8,.2,1); }
+.task-surface .task-event-raw[open] > summary > .task-event-raw-chevron { transform: rotate(90deg); }
 .task-surface .task-event-raw-meta { margin-bottom: 3px; overflow-wrap: anywhere; font-family: var(--font-mono); }
 .task-surface .task-event-raw-json {
   max-height: 320px;
@@ -525,6 +520,7 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .task-surface .task-disclosure-chevron,
-  .task-surface .task-tool-output-details > summary::before,
+  .task-surface .task-tool-output-chevron,
+  .task-surface .task-event-raw-chevron,
   .task-surface .task-message-assistant .markdown-message-actions { transition: none; }
 }

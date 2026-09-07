@@ -1,5 +1,10 @@
 import type { ProjectFacetDto, ReviewSessionSummaryDto } from '@agent-lens/protocol'
 
+export interface HistoryTaskPresentation {
+  title: string
+  activityLabel?: string
+}
+
 export interface TaskProjectOption {
   key: string
   projectId?: string
@@ -16,6 +21,78 @@ function basename(path: string): string {
 function timestamp(value: string): number {
   const time = Date.parse(value)
   return Number.isFinite(time) ? time : 0
+}
+
+const namedTextEntities: Record<string, string> = {
+  amp: '&',
+  apos: "'",
+  gt: '>',
+  lt: '<',
+  nbsp: ' ',
+  quot: '"',
+}
+
+function decodeTextEntities(value: string): string {
+  return value.replace(/&(?:#(\d+)|#x([0-9a-f]+)|([a-z]+));/gi, (match, decimal: string | undefined, hex: string | undefined, named: string | undefined) => {
+    if (named) return namedTextEntities[named.toLowerCase()] ?? match
+    const codePoint = Number.parseInt(decimal ?? hex ?? '', hex ? 16 : 10)
+    if (!Number.isFinite(codePoint) || codePoint < 0 || codePoint > 0x10ffff || (codePoint >= 0xd800 && codePoint <= 0xdfff)) return match
+    return String.fromCodePoint(codePoint)
+  })
+}
+
+function cleanSessionTitle(value: string | undefined, fallback: string): string {
+  const text = decodeTextEntities(value ?? '').replace(/\s+/g, ' ').trim()
+  if (!text) return fallback
+  return text.length > 74 ? `${text.slice(0, 74)}…` : text
+}
+
+function userTaskTitle(item: ReviewSessionSummaryDto): string | undefined {
+  // Codex 的 legacy session_index.thread_name 是来源原生会话标签，但当前格式无法证明
+  // 它一定来自显式 /rename；它也可能由应用注入上下文派生。真实 event_msg.user_message
+  // 已由 Source Adapter 归一为 preview，因此 Codex 用户任务优先使用该结构化用户请求。
+  // 这里按来源语义选择候选，不检查正文内容，也不做任何关键词/标签黑名单。
+  if (item.sourceIds.includes('codex') && item.preview?.trim()) return item.preview
+  return item.title || item.preview
+}
+
+function systemActivityTitle(item: ReviewSessionSummaryDto): string {
+  if (item.activitySourceLabel?.trim()) return item.activitySourceLabel.trim()
+  const scope = item.projectName?.trim()
+    || (item.workspacePath ? basename(item.workspacePath) : '')
+    || item.sourceIds[0]?.trim()
+  return scope ? `${scope} · 系统活动` : '系统活动'
+}
+
+/**
+ * 会话列表保留所有活动，但不会把系统注入或内部审查正文伪装成用户任务标题。
+ * 活动类型和标题候选只消费 Canonical Pipeline 投影出的结构化字段，禁止根据正文猜来源。
+ */
+export function historyTaskPresentation(
+  item: ReviewSessionSummaryDto,
+  fallback: string,
+): HistoryTaskPresentation {
+  const activity = item.sessionActivity
+  if (!activity || activity === 'user-task') {
+    return { title: cleanSessionTitle(userTaskTitle(item), fallback) }
+  }
+
+  if (activity === 'internal-review') {
+    return { title: '内部审查活动', activityLabel: item.activitySourceLabel || '内部审查' }
+  }
+  if (activity === 'system-activity') {
+    return { title: systemActivityTitle(item), activityLabel: '系统活动' }
+  }
+  if (activity === 'subagent') {
+    return {
+      title: cleanSessionTitle(item.activitySourceLabel || item.title || item.preview, '子智能体运行记录'),
+      activityLabel: '子智能体',
+    }
+  }
+  return {
+    title: cleanSessionTitle(item.title || item.preview, '分支任务记录'),
+    activityLabel: item.activitySourceLabel || '分支任务',
+  }
 }
 
 /**

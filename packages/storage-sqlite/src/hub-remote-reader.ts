@@ -1,5 +1,8 @@
 import type { JsonValue } from '@agent-lens/core'
-import type { KnownReplicationEntityType } from '@agent-lens/core/replication'
+import {
+  KNOWN_REPLICATION_ENTITY_TYPES,
+  type KnownReplicationEntityType,
+} from '@agent-lens/core/replication'
 import type { SqliteExecutor } from './executor'
 
 export interface HubRemoteReadSharedIdentity {
@@ -41,49 +44,114 @@ export interface HubRemoteObservationQuery {
   limit?: number
 }
 
-interface RemoteRow {
-  publicId: string
-  originNodeId: string
-  generationId: string
-  entityType: KnownReplicationEntityType
-  originEntityId: string
-  scope: 'node' | 'shared'
-  entityVersion: number
-  contentHash: string
-  bodyJson: string
-  referencesJson: string | null
-  sharedStateKind: 'shared-root' | 'conditional-membership' | null
-  sharedIdentityAlgorithm: string | null
-  sharedNormalizedIdentity: string | null
-  sharedKey: string | null
-  updatedSequence: number
-  updatedAt: string
+type RemoteRowRecord = Record<string, unknown>
+
+function rowRecord(value: unknown): RemoteRowRecord {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError('Hub remote replica query returned a non-object row')
+  }
+  return value as RemoteRowRecord
 }
 
-function mapRow(row: RemoteRow): HubRemoteReadEntity {
-  const sharedIdentity = row.sharedStateKind && row.sharedIdentityAlgorithm && row.sharedKey
+function requiredString(row: RemoteRowRecord, key: string): string {
+  const value = row[key]
+  if (typeof value !== 'string') throw new TypeError(`Hub remote replica field ${key} must be a string`)
+  return value
+}
+
+function optionalString(row: RemoteRowRecord, key: string): string | undefined {
+  const value = row[key]
+  if (value == null) return undefined
+  if (typeof value !== 'string') throw new TypeError(`Hub remote replica field ${key} must be a string or null`)
+  return value
+}
+
+function requiredNumber(row: RemoteRowRecord, key: string): number {
+  const value = row[key]
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new TypeError(`Hub remote replica field ${key} must be a finite number`)
+  }
+  return value
+}
+
+function parseJsonValue(value: unknown, key: string): JsonValue {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return value
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (Array.isArray(value)) return value.map(item => parseJsonValue(item, key))
+  if (typeof value === 'object') {
+    const output: { [key: string]: JsonValue } = {}
+    for (const [entryKey, entryValue] of Object.entries(value)) output[entryKey] = parseJsonValue(entryValue, key)
+    return output
+  }
+  throw new TypeError(`Hub remote replica field ${key} must contain JSON data`)
+}
+
+function parseJsonText(value: unknown, key: string): JsonValue {
+  if (typeof value !== 'string') throw new TypeError(`Hub remote replica field ${key} must contain JSON text`)
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(value)
+  } catch {
+    throw new TypeError(`Hub remote replica field ${key} contains invalid JSON`)
+  }
+  return parseJsonValue(parsed, key)
+}
+
+function entityType(row: RemoteRowRecord): KnownReplicationEntityType {
+  const value = requiredString(row, 'entityType')
+  if (!(KNOWN_REPLICATION_ENTITY_TYPES as readonly string[]).includes(value)) {
+    throw new TypeError(`Hub remote replica field entityType has unsupported value: ${value}`)
+  }
+  return value as KnownReplicationEntityType
+}
+
+function scope(row: RemoteRowRecord): 'node' | 'shared' {
+  const value = requiredString(row, 'scope')
+  if (value !== 'node' && value !== 'shared') {
+    throw new TypeError(`Hub remote replica field scope has unsupported value: ${value}`)
+  }
+  return value
+}
+
+function sharedStateKind(row: RemoteRowRecord): HubRemoteReadSharedIdentity['stateKind'] | undefined {
+  const value = optionalString(row, 'sharedStateKind')
+  if (value === undefined) return undefined
+  if (value !== 'shared-root' && value !== 'conditional-membership') {
+    throw new TypeError(`Hub remote replica field sharedStateKind has unsupported value: ${value}`)
+  }
+  return value
+}
+
+function mapRow(value: unknown): HubRemoteReadEntity {
+  const row = rowRecord(value)
+  const stateKind = sharedStateKind(row)
+  const sharedIdentityAlgorithm = optionalString(row, 'sharedIdentityAlgorithm')
+  const sharedNormalizedIdentity = optionalString(row, 'sharedNormalizedIdentity')
+  const sharedKey = optionalString(row, 'sharedKey')
+  const referencesJson = optionalString(row, 'referencesJson')
+  const sharedIdentity = stateKind && sharedIdentityAlgorithm && sharedKey
     ? {
-        stateKind: row.sharedStateKind,
-        identityAlgorithm: row.sharedIdentityAlgorithm,
-        ...(row.sharedNormalizedIdentity ? { normalizedIdentity: row.sharedNormalizedIdentity } : {}),
-        sharedKey: row.sharedKey,
+        stateKind,
+        identityAlgorithm: sharedIdentityAlgorithm,
+        ...(sharedNormalizedIdentity ? { normalizedIdentity: sharedNormalizedIdentity } : {}),
+        sharedKey,
       }
     : undefined
 
   return {
-    publicId: row.publicId,
-    originNodeId: row.originNodeId,
-    generationId: row.generationId,
-    entityType: row.entityType,
-    originEntityId: row.originEntityId,
-    scope: row.scope,
-    entityVersion: Number(row.entityVersion),
-    contentHash: row.contentHash,
-    body: JSON.parse(row.bodyJson) as JsonValue,
-    ...(row.referencesJson ? { references: JSON.parse(row.referencesJson) } : {}),
+    publicId: requiredString(row, 'publicId'),
+    originNodeId: requiredString(row, 'originNodeId'),
+    generationId: requiredString(row, 'generationId'),
+    entityType: entityType(row),
+    originEntityId: requiredString(row, 'originEntityId'),
+    scope: scope(row),
+    entityVersion: requiredNumber(row, 'entityVersion'),
+    contentHash: requiredString(row, 'contentHash'),
+    body: parseJsonText(row.bodyJson, 'bodyJson'),
+    ...(referencesJson === undefined ? {} : { references: parseJsonText(referencesJson, 'referencesJson') }),
     ...(sharedIdentity ? { sharedIdentity } : {}),
-    updatedSequence: Number(row.updatedSequence),
-    updatedAt: row.updatedAt,
+    updatedSequence: requiredNumber(row, 'updatedSequence'),
+    updatedAt: requiredString(row, 'updatedAt'),
   }
 }
 
@@ -133,7 +201,7 @@ export class SqliteHubRemoteReadRepository {
       const row = this.executor.db.prepare(`${ACTIVE_REMOTE_SELECT}
         AND e.replica_key = ?
         LIMIT 1
-      `).get(publicId) as RemoteRow | undefined
+      `).get(publicId)
       return row ? mapRow(row) : undefined
     })
   }
@@ -155,35 +223,29 @@ export class SqliteHubRemoteReadRepository {
     }
     const extraWhere = conditions.length ? ` AND ${conditions.join(' AND ')}` : ''
 
-    return this.executor.run(() => {
-      const rows = this.executor.db.prepare(`${ACTIVE_REMOTE_SELECT}
-        ${extraWhere}
-        ORDER BY e.origin_node_id, e.entity_type, e.replica_key
-        LIMIT ?
-      `).all(...params, boundedLimit(query.limit)) as RemoteRow[]
-      return rows.map(mapRow)
-    })
+    return this.executor.run(() => this.executor.db.prepare(`${ACTIVE_REMOTE_SELECT}
+      ${extraWhere}
+      ORDER BY e.origin_node_id, e.entity_type, e.replica_key
+      LIMIT ?
+    `).all(...params, boundedLimit(query.limit)).map(mapRow))
   }
 
   /** Active-generation LogicalSessions ordered by real replicated session time. */
   async listLogicalSessions(limit?: number): Promise<readonly HubRemoteReadEntity[]> {
-    return this.executor.run(() => {
-      const rows = this.executor.db.prepare(`${ACTIVE_REMOTE_SELECT}
-        AND e.entity_type = 'LogicalSession'
-        ORDER BY
-          CASE
-            WHEN json_extract(e.body_json, '$.endedAt.state') = 'value'
-              THEN json_extract(e.body_json, '$.endedAt.value')
-            WHEN json_extract(e.body_json, '$.startedAt.state') = 'value'
-              THEN json_extract(e.body_json, '$.startedAt.value')
-            ELSE NULL
-          END DESC,
-          e.origin_node_id ASC,
-          e.replica_key ASC
-        LIMIT ?
-      `).all(boundedLimit(limit)) as RemoteRow[]
-      return rows.map(mapRow)
-    })
+    return this.executor.run(() => this.executor.db.prepare(`${ACTIVE_REMOTE_SELECT}
+      AND e.entity_type = 'LogicalSession'
+      ORDER BY
+        CASE
+          WHEN json_extract(e.body_json, '$.endedAt.state') = 'value'
+            THEN json_extract(e.body_json, '$.endedAt.value')
+          WHEN json_extract(e.body_json, '$.startedAt.state') = 'value'
+            THEN json_extract(e.body_json, '$.startedAt.value')
+          ELSE NULL
+        END DESC,
+        e.origin_node_id ASC,
+        e.replica_key ASC
+      LIMIT ?
+    `).all(boundedLimit(limit)).map(mapRow))
   }
 
   /**
@@ -194,34 +256,31 @@ export class SqliteHubRemoteReadRepository {
   async listCanonicalObservationsForLogicalSession(
     query: HubRemoteObservationQuery,
   ): Promise<readonly HubRemoteReadEntity[]> {
-    return this.executor.run(() => {
-      const rows = this.executor.db.prepare(`${ACTIVE_REMOTE_SELECT}
-        AND e.origin_node_id = ?
-        AND e.generation_id = ?
-        AND e.entity_type = 'CanonicalObservation'
-        AND json_extract(e.references_json, '$.logicalSession.kind') = 'node'
-        AND json_extract(e.references_json, '$.logicalSession.entityType') = 'LogicalSession'
-        AND json_extract(e.references_json, '$.logicalSession.originEntityId') = ?
-        ORDER BY
-          COALESCE(
-            json_extract(e.body_json, '$.occurredAt.value'),
-            json_extract(e.body_json, '$.capturedAt.value'),
-            e.updated_at
-          ),
-          COALESCE(
-            json_extract(e.body_json, '$.canonicalSequence.value'),
-            json_extract(e.body_json, '$.sourceSequence.value'),
-            9007199254740991
-          ),
-          e.replica_key
-        LIMIT ?
-      `).all(
-        query.originNodeId,
-        query.generationId,
-        query.logicalSessionOriginId,
-        boundedLimit(query.limit),
-      ) as RemoteRow[]
-      return rows.map(mapRow)
-    })
+    return this.executor.run(() => this.executor.db.prepare(`${ACTIVE_REMOTE_SELECT}
+      AND e.origin_node_id = ?
+      AND e.generation_id = ?
+      AND e.entity_type = 'CanonicalObservation'
+      AND json_extract(e.references_json, '$.logicalSession.kind') = 'node'
+      AND json_extract(e.references_json, '$.logicalSession.entityType') = 'LogicalSession'
+      AND json_extract(e.references_json, '$.logicalSession.originEntityId') = ?
+      ORDER BY
+        COALESCE(
+          json_extract(e.body_json, '$.occurredAt.value'),
+          json_extract(e.body_json, '$.capturedAt.value'),
+          e.updated_at
+        ),
+        COALESCE(
+          json_extract(e.body_json, '$.canonicalSequence.value'),
+          json_extract(e.body_json, '$.sourceSequence.value'),
+          9007199254740991
+        ),
+        e.replica_key
+      LIMIT ?
+    `).all(
+      query.originNodeId,
+      query.generationId,
+      query.logicalSessionOriginId,
+      boundedLimit(query.limit),
+    ).map(mapRow))
   }
 }

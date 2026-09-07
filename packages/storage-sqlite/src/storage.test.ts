@@ -15,16 +15,28 @@ async function createStorage() {
   return storage
 }
 
-test('SQLite storage migrates to schema version 12 and exposes required tables', async () => {
+test('SQLite storage migrates to schema version 21 and exposes required tables', async () => {
   const storage = await createStorage()
   try {
     const health = await storage.health()
     assert.equal(health.ok, true)
-    assert.equal(health.schemaVersion, 12)
-    const growth = (health.details as any)?.dataGrowth
+    assert.equal(health.schemaVersion, 21)
+    const details = health.details as {
+      dataGrowth: { capacity: { softLimitBytes: number, state: string }, reclaimableBytes: number, totals?: unknown, last7Days?: unknown }
+      unknownObservations?: unknown
+      coverage?: unknown
+      executor?: { queueDepth?: number, queueWaitMs?: { p95?: number } }
+    }
+    const growth = details.dataGrowth
     assert.equal(growth.capacity.softLimitBytes, 512 * 1024 * 1024)
     assert.equal(growth.capacity.state, 'healthy')
     assert.equal(typeof growth.reclaimableBytes, 'number')
+    assert.equal(details.unknownObservations, undefined)
+    assert.equal(details.coverage, undefined)
+    assert.equal(growth.totals, undefined)
+    assert.equal(growth.last7Days, undefined)
+    assert.equal(typeof details.executor?.queueDepth, 'number')
+    assert.equal(typeof details.executor?.queueWaitMs?.p95, 'number')
 
     const rows = storage.db.prepare(`
       SELECT name FROM sqlite_master
@@ -57,6 +69,9 @@ test('SQLite storage migrates to schema version 12 and exposes required tables',
       'asset_state_observations',
       'tool_definitions',
       'session_summary_projection',
+      'unknown_observation_projection',
+      'tool_usage_fact_projection',
+      'maintenance_jobs',
       'replication_streams',
       'replication_entity_state',
       'replication_pending_entities',
@@ -82,6 +97,13 @@ test('SQLite storage migrates to schema version 12 and exposes required tables',
     assert.equal(sourceSessionColumns.some(column => column.name === 'runtime_profile_id'), true)
     const bindingColumns = storage.db.prepare('PRAGMA table_info(asset_bindings)').all() as Array<{ name: string }>
     assert.equal(bindingColumns.some(column => column.name === 'runtime_profile_id'), true)
+    const sourceRecordColumns = storage.db.prepare('PRAGMA table_info(source_records)').all() as Array<{ name: string }>
+    assert.equal(sourceRecordColumns.some(column => column.name === 'payload_encoding'), true)
+    assert.equal(sourceRecordColumns.some(column => column.name === 'payload_blob'), true)
+    const checkpointColumns = storage.db.prepare('PRAGMA table_info(source_checkpoints)').all() as Array<{ name: string }>
+    assert.equal(checkpointColumns.some(column => column.name === 'revision'), true)
+    const maintenanceColumns = storage.db.prepare('PRAGMA table_info(maintenance_jobs)').all() as Array<{ name: string }>
+    assert.equal(maintenanceColumns.some(column => column.name === 'revision'), true)
   } finally {
     storage.close()
   }
@@ -147,7 +169,7 @@ test('source runtime status preserves last error and accumulates failures', asyn
     assert.equal(status?.lastSuccessAt, '2026-08-25T10:02:00.000Z')
     assert.equal(status?.lastErrorSummary, 'second failure')
     const health = await storage.health()
-    const sourceRuntime = (health.details as any)?.sourceRuntime
+    const sourceRuntime = (health.details as { sourceRuntime?: { failed: number, items: unknown[] } })?.sourceRuntime
     assert.equal(sourceRuntime?.failed, 1)
     assert.equal(sourceRuntime?.items?.length, 1)
   } finally { storage.close() }

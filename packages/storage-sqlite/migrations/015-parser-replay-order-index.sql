@@ -1,0 +1,3 @@
+-- Parser replay 专用索引可能在大库上构建很久，不能阻塞 Daemon/HTTP 启动。
+-- Schema 15 仅保留版本边界；索引由 SqliteStorageMaintenance.ensureDeferredIndexes()
+-- 在 HTTP 已可用且前台空闲后显式创建。

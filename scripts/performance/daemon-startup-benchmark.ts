@@ -5,17 +5,9 @@ import { performance } from 'node:perf_hooks'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { projectionReadinessInternals } from '../../apps/daemon/src/projection-readiness'
 import { SqliteStorageService } from '../../packages/storage-sqlite/src/index'
+import { readPositiveInt } from './benchmark-utils'
 
 type StartupMode = 'unclean' | 'clean' | 'cycle'
-
-function readPositiveInt(name: string, fallback: number): number {
-  const prefix = `--${name}=`
-  const raw = process.argv.find(arg => arg.startsWith(prefix))?.slice(prefix.length)
-  if (!raw) return fallback
-  const value = Number.parseInt(raw, 10)
-  if (!Number.isFinite(value) || value <= 0) throw new Error(`${name} must be a positive integer`)
-  return value
-}
 
 function readStartupMode(): StartupMode {
   const prefix = '--startup-mode='
@@ -144,7 +136,16 @@ async function waitForExit(child: ChildProcess, timeout = 10_000): Promise<void>
 
 function spawnDaemon(): { child: ChildProcess; output: { value: string } } {
   const output = { value: '' }
-  const child = spawn(process.execPath, ['--import', 'tsx', 'apps/daemon/src/main.ts'], {
+  // Windows 的 child.kill 会强制退出；基准通过私有 IPC 触发既有信号处理器，验证正常关闭后的复用。
+  const bootstrap = `
+    process.on('message', message => {
+      if (message !== 'benchmark:shutdown') return
+      process.emit('SIGTERM')
+      process.disconnect()
+    })
+    await import('./apps/daemon/src/main.ts')
+  `
+  const child = spawn(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', bootstrap], {
     cwd: process.cwd(),
     env: {
       ...process.env,
@@ -155,8 +156,10 @@ function spawnDaemon(): { child: ChildProcess; output: { value: string } } {
       AGENT_LENS_WEB_ROOT: webRoot,
       AGENT_LENS_PORT: String(port),
       AGENT_LENS_DAEMON_MODE: 'managed',
+      AGENT_LENS_ENABLED_SOURCES: 'none',
     },
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+    windowsHide: true,
   })
   child.stdout?.on('data', chunk => { output.value += String(chunk) })
   child.stderr?.on('data', chunk => { output.value += String(chunk) })
@@ -165,7 +168,8 @@ function spawnDaemon(): { child: ChildProcess; output: { value: string } } {
 
 async function stopDaemon(child: ChildProcess): Promise<void> {
   if (child.exitCode != null) return
-  child.kill('SIGTERM')
+  if (child.connected) child.send('benchmark:shutdown')
+  else child.kill('SIGTERM')
   try {
     await waitForExit(child)
   } catch {
@@ -207,6 +211,7 @@ async function runStartup(action: 'rebuilt' | 'reused') {
       throw new Error(`${action} decision timeout after ${timeoutMs}ms\n${output.value}`)
     }
     const projectionDecisionReadyMs = performance.now() - startedAt
+    const backgroundP95Ms = percentile(backgroundHealthSamples, 0.95)
     return {
       action,
       healthReadyMs: Number(healthReadyMs.toFixed(2)),
@@ -215,9 +220,7 @@ async function runStartup(action: 'rebuilt' | 'reused') {
       backgroundHealth: {
         samples: backgroundHealthSamples.length,
         failures: backgroundHealthFailures,
-        p95Ms: percentile(backgroundHealthSamples, 0.95) == null
-          ? null
-          : Number(percentile(backgroundHealthSamples, 0.95)!.toFixed(2)),
+        p95Ms: backgroundP95Ms == null ? null : Number(backgroundP95Ms.toFixed(2)),
         maxMs: backgroundHealthSamples.length === 0
           ? null
           : Number(Math.max(...backgroundHealthSamples).toFixed(2)),
@@ -230,7 +233,7 @@ async function runStartup(action: 'rebuilt' | 'reused') {
 
 try {
   const initialProjectionRebuildMs = await seed()
-  storage.close()
+  await storage.close()
 
   const startup: Record<string, unknown> = {}
   if (startupMode === 'unclean') {
@@ -252,6 +255,6 @@ try {
     startup,
   }, null, 2))
 } finally {
-  try { storage.close() } catch {}
+  try { await storage.close() } catch {}
   rmSync(root, { recursive: true, force: true })
 }

@@ -22,18 +22,24 @@ export interface ProjectionReadinessStorage {
 export async function beginSessionSummaryProjectionRun(
   storage: ProjectionReadinessStorage,
 ): Promise<boolean> {
-  const marker = await storage.checkpoints.get<SessionSummaryCleanMarker>(
-    CHECKPOINT_SCOPE,
-    CHECKPOINT_KEY,
-  )
+  try {
+    const marker = await storage.checkpoints.get<SessionSummaryCleanMarker>(
+      CHECKPOINT_SCOPE,
+      CHECKPOINT_KEY,
+    )
 
-  // Mark this process dirty before any source can commit new Canonical data. A crash
-  // anywhere after this point therefore forces a conservative rebuild next start.
-  await storage.checkpoints.clear(CHECKPOINT_SCOPE, CHECKPOINT_KEY)
+    // Mark this process dirty before any source can commit new Canonical data. A crash
+    // anywhere after this point therefore forces a conservative rebuild next start.
+    await storage.checkpoints.clear(CHECKPOINT_SCOPE, CHECKPOINT_KEY)
 
-  if (marker?.version !== 1 || marker.clean !== true) return false
-  const projection = storage.sessionSummaryProjection
-  return projection ? projection.isMaterialized() : false
+    if (marker?.version !== 1 || marker.clean !== true) return false
+    const projection = storage.sessionSummaryProjection
+    return projection ? projection.isMaterialized() : false
+  } catch {
+    // Data Runtime may be recovering while the control plane is already online.
+    // Treat projection readiness as unknown/dirty rather than taking Daemon down.
+    return false
+  }
 }
 
 export async function markSessionSummaryProjectionClean(

@@ -2,13 +2,20 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type {
   AgentInstallation,
+  CapabilityService,
   CapturePolicyService,
   CoverageDeclaration,
+  CoverageService,
   DetectedSource,
   Host,
+  IdentityService,
   NormalizedSourceOutput,
+  ObservationService,
   SourceDefinition,
   SourceRecord,
+  SourceRecordReplayCursor,
+  SourceHistoryWindow,
+  StorageService,
 } from '@agent-lens/core'
 import { SourceHistoryRunner, sourceRunnerInternals } from './source-runner'
 
@@ -150,16 +157,16 @@ test('History Coverage 只覆盖 history 能力并引用首尾 Source Evidence',
         async set() {},
         async clear() {},
       },
-    } as any,
-    { async resolveInstallation() { return installation } } as any,
-    { async commit() { throw new Error('No observations expected') } } as any,
-    { registerSourceCapabilities() { return { dispose() {} } } } as any,
+    } as unknown as StorageService,
+    { async resolveInstallation() { return installation } } as unknown as IdentityService,
+    { async commit() { throw new Error('No observations expected') } } as unknown as ObservationService,
+    { registerSourceCapabilities() { return { dispose() {} } } } as unknown as CapabilityService,
     {
       async declare(value: CoverageDeclaration) {
         declarations.push(value)
-        return {} as any
+        return {}
       },
-    } as any,
+    } as unknown as CoverageService,
     capturePolicy,
   )
 
@@ -185,9 +192,8 @@ test('History Coverage 只覆盖 history 能力并引用首尾 Source Evidence',
   )
 })
 
-test('渐进历史窗口把 parser replay 限定到同一批 Session', async () => {
+test('普通历史同步不再隐式触发 parser replay', async () => {
   let replayReads = 0
-  let replayWindow: unknown
   const source: SourceDefinition = {
     manifest: {
       pluginId: 'test-source-plugin',
@@ -209,20 +215,19 @@ test('渐进历史窗口把 parser replay 限定到同一批 Session', async () 
       repositories: {
         sourceRecords: {
           async put() {},
-          async listForParserReplay(...args: any[]) {
+          async listForParserReplay() {
             replayReads += 1
-            replayWindow = args[5]
             return []
           },
         },
       },
       async transaction(operation: () => Promise<unknown>) { return operation() },
       checkpoints: { async get() { return null }, async set() {}, async clear() {} },
-    } as any,
-    { async resolveInstallation() { return installation } } as any,
-    { async commit() { throw new Error('No observations expected') } } as any,
-    { registerSourceCapabilities() { return { dispose() {} } } } as any,
-    { async declare() { return {} as any } } as any,
+    } as unknown as StorageService,
+    { async resolveInstallation() { return installation } } as unknown as IdentityService,
+    { async commit() { throw new Error('No observations expected') } } as unknown as ObservationService,
+    { registerSourceCapabilities() { return { dispose() {} } } } as unknown as CapabilityService,
+    { async declare() { return {} } } as unknown as CoverageService,
     capturePolicy,
   )
 
@@ -234,6 +239,100 @@ test('渐进历史窗口把 parser replay 限定到同一批 Session', async () 
     historyWindow: { sessionLimit: 1 },
   })
 
-  assert.equal(replayReads, 1)
-  assert.deepEqual(replayWindow, { sessionLimit: 1 })
+  assert.equal(replayReads, 0)
+})
+
+test('独立 parser replay 只重放持久化记录且可覆盖全部历史', async () => {
+  const staleRecords = Array.from({ length: 51 }, (_, index) => ({
+    ...record(`stale-${index}`, `2026-08-20T00:${String(index).padStart(2, '0')}:00.000Z`),
+    parserVersion: '1',
+  }))
+  let ingestReads = 0
+  let replayWindow: unknown = 'unset'
+  const persistedVersions: string[] = []
+  let transactionDepth = 0
+  let replayTransactions = 0
+  let checkpoint: unknown
+  let checkpointRevision = 0
+  const source: SourceDefinition = {
+    manifest: {
+      pluginId: 'test-source-plugin',
+      pluginVersion: '1.0.0',
+      apiVersion: '1.0',
+      pluginType: 'source',
+      displayName: 'Test Source',
+      sourceId: 'test-source',
+      productId: 'test-product',
+      parserVersion: '2',
+    },
+    async detect() { return [detected] },
+    async declareCapabilities() { return [] },
+    async *ingestHistory() { ingestReads += 1 },
+    async normalize(value) { return normalized(value) },
+  }
+  const runner = new SourceHistoryRunner(
+    {
+      repositories: {
+        sourceRecords: {
+          async put(value: SourceRecord) { persistedVersions.push(value.parserVersion) },
+          async listForParserReplay(
+            _sourceId: string,
+            _installationId: string,
+            _targetParserVersion: string,
+            after: SourceRecordReplayCursor | undefined,
+            _limit: number,
+            window: SourceHistoryWindow | undefined,
+          ) {
+            replayWindow = window
+            return after ? [] : staleRecords
+          },
+        },
+      },
+      async transaction(operation: () => Promise<unknown>) {
+        if (transactionDepth === 0) replayTransactions += 1
+        transactionDepth += 1
+        try {
+          return await operation()
+        } finally {
+          transactionDepth -= 1
+        }
+      },
+      checkpoints: {
+        async get<T>() { return (checkpoint as T | undefined) ?? null },
+        async getWithRevision<T>() {
+          return checkpoint === undefined ? null : { value: checkpoint as T, revision: checkpointRevision }
+        },
+        async compareAndSet<T>(_scope: string, _key: string, expectedRevision: number | null, value: T) {
+          if ((checkpoint === undefined ? null : checkpointRevision) !== expectedRevision) return false
+          checkpoint = structuredClone(value)
+          checkpointRevision += 1
+          return true
+        },
+        async set<T>(_scope: string, _key: string, value: T) {
+          checkpoint = structuredClone(value)
+          checkpointRevision += 1
+        },
+        async clear() { checkpoint = undefined },
+      },
+    } as unknown as StorageService,
+    { async resolveInstallation() { return installation } } as unknown as IdentityService,
+    { async commit() { throw new Error('No observations expected') } } as unknown as ObservationService,
+    { registerSourceCapabilities() { return { dispose() {} } } } as unknown as CapabilityService,
+    { async declare() { return {} } } as unknown as CoverageService,
+    capturePolicy,
+  )
+
+  const result = await runner.replay({
+    source,
+    host,
+    detected,
+    abortSignal: new AbortController().signal,
+  })
+
+  assert.equal(result.records, 51)
+  assert.equal(ingestReads, 0)
+  assert.equal(replayWindow, undefined)
+  assert.equal(replayTransactions, 2)
+  assert.deepEqual(new Set(persistedVersions), new Set(['2']))
+  assert.equal(persistedVersions.length, 51)
 })

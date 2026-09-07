@@ -2,11 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { SourceRecord } from '@agent-lens/core'
 import { normalizeCodexRecord, splitCodexVisibleAssistantText } from './normalize'
-
-const ctx = {
-  host: { id: 'host', name: 'host', platform: 'linux', arch: 'x64', createdAt: '2026-01-01T00:00:00.000Z', lastSeenAt: '2026-01-01T00:00:00.000Z' },
-  installation: { id: 'install', hostId: 'host', productId: 'codex', firstSeenAt: '2026-01-01T00:00:00.000Z', lastSeenAt: '2026-01-01T00:00:00.000Z' },
-} as any
+import { asRecord, codexTestContext } from './test-support'
 
 function record(entry: unknown): SourceRecord {
   return {
@@ -32,12 +28,13 @@ test('assistant commentary keeps its visible execution phase', async () => {
       phase: 'commentary',
       content: [{ type: 'output_text', text: '先检查实际启动链路。' }],
     },
-  }), ctx)
+  }), codexTestContext)
 
   const fact = output.observations[0]!
+  const payload = asRecord(fact.payload)
   assert.equal(fact.kind, 'message.commentary')
-  assert.equal((fact.payload as any).text, '先检查实际启动链路。')
-  assert.equal((fact.payload as any).phase, 'commentary')
+  assert.equal(payload.text, '先检查实际启动链路。')
+  assert.equal(payload.phase, 'commentary')
 })
 
 test('assistant final_answer separates trailing memory citation metadata', async () => {
@@ -49,13 +46,14 @@ test('assistant final_answer separates trailing memory citation metadata', async
       phase: 'final_answer',
       content: [{ type: 'output_text', text: '已完成。\n\n<oai-mem-citation>\n<citation_entries>\nMEMORY.md:1-2|note=[test]\n</citation_entries>\n<rollout_ids>\nrollout-1\n</rollout_ids>\n</oai-mem-citation>' }],
     },
-  }), ctx)
+  }), codexTestContext)
 
   const fact = output.observations[0]!
+  const payload = asRecord(fact.payload)
   assert.equal(fact.kind, 'message.assistant')
-  assert.equal((fact.payload as any).text, '已完成。')
-  assert.deepEqual((fact.payload as any).sourceMetadata, [{ kind: 'memory.citation' }])
-  assert.equal('content' in (fact.payload as Record<string, unknown>), false)
+  assert.equal(payload.text, '已完成。')
+  assert.deepEqual(payload.sourceMetadata, [{ kind: 'memory.citation' }])
+  assert.equal('content' in payload, false)
 })
 
 test('memory citation text remains visible outside assistant final_answer', () => {
@@ -64,7 +62,7 @@ test('memory citation text remains visible outside assistant final_answer', () =
   assert.equal(splitCodexVisibleAssistantText(`\`\`\`xml\n${quoted}\n\`\`\``, 'final_answer').text, `\`\`\`xml\n${quoted}\n\`\`\``)
 })
 
-test('injected context keeps its visible text in the dedicated canonical event', async () => {
+test('injected context keeps its visible text and structured provenance', async () => {
   const output = await normalizeCodexRecord(record({
     type: 'response_item',
     payload: {
@@ -72,15 +70,22 @@ test('injected context keeps its visible text in the dedicated canonical event',
       role: 'developer',
       content: [{ type: 'input_text', text: '<environment_context>secret setup</environment_context>' }],
     },
-  }), ctx)
+  }), codexTestContext)
 
-  assert.deepEqual(output.observations[0]?.payload, {
-    sourceType: 'event_msg',
-    injectedContext: true,
-    role: 'developer',
-    text: '<environment_context>secret setup</environment_context>',
-  })
-  assert.equal(output.observations[0]?.kind, 'context.injected')
+  const fact = output.observations[0]!
+  const payload = asRecord(fact.payload)
+  const provenance = asRecord(payload.provenance)
+  assert.equal(fact.kind, 'context.injected')
+  assert.equal(payload.sourceType, 'event_msg')
+  assert.equal(payload.injectedContext, true)
+  assert.equal(payload.role, 'developer')
+  assert.equal(payload.label, 'Developer')
+  assert.equal(payload.injectedKind, 'developer')
+  assert.equal(payload.text, '<environment_context>secret setup</environment_context>')
+  assert.equal(provenance.actualAuthor, 'developer')
+  assert.equal(provenance.contentRole, 'developer-context')
+  assert.equal(provenance.activityType, 'system-injection')
+  assert.equal(provenance.sourceSignal, 'response_item.message.role=developer')
 })
 
 test('event_msg agent_reasoning is normalized to canonical message.reasoning', async () => {
@@ -91,12 +96,13 @@ test('event_msg agent_reasoning is normalized to canonical message.reasoning', a
       text: 'Inspect the runtime chain before changing code.',
       phase: 'analysis',
     },
-  }), ctx)
+  }), codexTestContext)
 
   const fact = output.observations[0]!
+  const payload = asRecord(fact.payload)
   assert.equal(fact.kind, 'message.reasoning')
-  assert.equal((fact.payload as any).text, 'Inspect the runtime chain before changing code.')
-  assert.equal((fact.payload as any).raw.phase, 'analysis')
+  assert.equal(payload.text, 'Inspect the runtime chain before changing code.')
+  assert.equal(asRecord(payload.raw).phase, 'analysis')
   assert.equal(fact.sourceSequence, 7)
 })
 
@@ -110,11 +116,11 @@ test('reasoning_summary supports structured summary blocks', async () => {
         { type: 'summary_text', text: 'Then inspect projection.' },
       ],
     },
-  }), ctx)
+  }), codexTestContext)
 
   const fact = output.observations[0]!
   assert.equal(fact.kind, 'message.reasoning')
-  assert.equal((fact.payload as any).text, 'Check parser state.\n\nThen inspect projection.')
+  assert.equal(asRecord(fact.payload).text, 'Check parser state.\n\nThen inspect projection.')
 })
 
 test('reasoning token statistics are not promoted to Thinking text', async () => {
@@ -124,7 +130,7 @@ test('reasoning token statistics are not promoted to Thinking text', async () =>
       type: 'token_count',
       info: { total_token_usage: { output_tokens: 20, reasoning_output_tokens: 12 } },
     },
-  }), ctx)
+  }), codexTestContext)
 
   assert.equal(output.observations[0]?.kind, 'usage')
 })
@@ -133,7 +139,7 @@ test('non-reasoning event_msg keeps original normalization', async () => {
   const output = await normalizeCodexRecord(record({
     type: 'event_msg',
     payload: { type: 'turn_started', turn_id: 'turn-1' },
-  }), ctx)
+  }), codexTestContext)
 
   assert.equal(output.observations[0]?.kind, 'session.lifecycle')
 })

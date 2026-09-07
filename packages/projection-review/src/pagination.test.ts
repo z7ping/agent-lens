@@ -64,8 +64,7 @@ test('ReviewProjection paginates only on complete interaction boundaries', async
     assert.deepEqual(jumped.interactions.map(item => item.ordinal), [2])
     assert.equal(jumped.page.count, 1)
     assert.equal(jumped.page.hasMore, false)
-    assert.ok(jumped.interactionIndex)
-    assert.deepEqual(jumped.interactionIndex.map(item => item.ordinal), [1, 2, 3])
+    assert.equal(jumped.interactionIndex, undefined)
   } finally {
     storage.close()
   }
@@ -199,6 +198,7 @@ test('ReviewProjection evaluates error and latency filters against the complete 
     assert.ok(latest)
     assert.equal(latest.page.filter, 'latest')
     assert.deepEqual(latest.interactions.map(item => item.ordinal), [4])
+    assert.equal(latest.interactionIndex, undefined)
   } finally {
     storage.close()
   }

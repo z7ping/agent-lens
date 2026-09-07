@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
 import type { HubReadAvailability, HubReviewSessionSummaryDto, PiLiveStateDto, ReviewSessionSummaryDto } from '@agent-lens/protocol'
@@ -6,16 +6,17 @@ import type { AgentLensClientModel } from '../client/model'
 import { fetchHubReviewSessions, fetchLocalReviewSessions } from '../client/hub-review'
 import { piLiveApi } from '../client/pi-live'
 import { useClientSnapshot } from '../App'
-import { agentLabel, sourceDot } from '../components/AgentScope'
-import { Button, Disclosure, IconButton, Input, SelectMenu, Toolbar } from '../components/ui'
+import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScope'
+import { Button, IconButton, Input, SelectMenu, StatusBadge, Toolbar } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
-import { HubReviewPage } from './HubReviewPage'
-import { PiLivePage } from './PiLivePage'
-import { ReviewPage } from './ReviewPage'
 import { TaskSurface } from './TaskSurface'
-import { deriveTaskProjectOptions, pickTaskProject, type TaskProjectOption } from './task-center'
+import { deriveTaskProjectOptions, historyTaskPresentation, pickTaskProject, type TaskProjectOption } from './task-center'
 
 export type TaskCenterMode = 'history' | 'live' | 'new' | 'hub'
+
+const HubReviewPage = lazy(() => import('./HubReviewPage').then(module => ({ default: module.HubReviewPage })))
+const PiLivePage = lazy(() => import('./PiLivePage').then(module => ({ default: module.PiLivePage })))
+const ReviewPage = lazy(() => import('./ReviewPage').then(module => ({ default: module.ReviewPage })))
 type TaskDayGroup = '今天' | '昨天' | '更早'
 type HistoryTaskEntry =
   | { kind: 'local'; id: string; at: string; local: ReviewSessionSummaryDto }
@@ -69,8 +70,12 @@ function availabilityString(value: HubReadAvailability): string | undefined {
     : undefined
 }
 
+function localTime(item: ReviewSessionSummaryDto): string {
+  return item.endedAt || item.startedAt
+}
+
 function remoteTime(item: HubReviewSessionSummaryDto): string {
-  return availabilityString(item.startedAt) ?? availabilityString(item.endedAt) ?? ''
+  return availabilityString(item.endedAt) ?? availabilityString(item.startedAt) ?? ''
 }
 
 function remoteTitle(item: HubReviewSessionSummaryDto): string {
@@ -205,9 +210,10 @@ function NewTaskPanel({
 function HistoryTaskItem({ item, active, onClick }: { item: ReviewSessionSummaryDto; active: boolean; onClick(): void }) {
   const sourceId = item.sourceIds[0] ?? ''
   const fallback = item.projectName ? `${item.projectName} 任务` : `${agentLabel(sourceId, item.productId)} 任务`
+  const presentation = historyTaskPresentation(item, fallback)
   return <button className={`session-item ${active ? 'session-item-active' : ''}`} onClick={onClick}>
-    <div className="session-item-meta"><span className={`source-dot ${sourceDot(sourceId)}`}/><span>{agentLabel(sourceId, item.productId)}</span><time>{formatTime(item.startedAt)}</time></div>
-    <div className="session-item-title">{cleanTitle(item.title || item.preview, fallback)}</div>
+    <div className="session-item-meta"><span className={`source-dot ${sourceDot(sourceId)}`}/><span>{agentLabel(sourceId, item.productId)}</span>{presentation.activityLabel && <StatusBadge className="session-activity-badge">{presentation.activityLabel}</StatusBadge>}<time>{formatTime(localTime(item))}</time></div>
+    <div className="session-item-title">{presentation.title}</div>
     <div className="session-item-foot"><span>{item.projectName ?? item.workspacePath?.split(/[\\/]/).filter(Boolean).at(-1) ?? '无项目'}</span><span>{item.toolCount} 调用{item.errorCount ? ` · ${item.errorCount} 错误` : ''}</span></div>
   </button>
 }
@@ -229,9 +235,14 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const [hubSessions, setHubSessions] = useState<HubReviewSessionSummaryDto[]>([])
   const [projectHistory, setProjectHistory] = useState<ReviewSessionSummaryDto[]>([])
   const historyScrollTargetRef = useRef('')
+  const resumeRequestRef = useRef('')
+  const filterPopoverRef = useRef<HTMLDivElement>(null)
   const review = snapshot.review
   const [searchOpen, setSearchOpen] = useState(Boolean(review.filters.search))
-  const agents = snapshot.facets?.agents ?? []
+  const [filterOpen, setFilterOpen] = useState(false)
+  const [resumingSessionId, setResumingSessionId] = useState('')
+  const [piResumeError, setPiResumeError] = useState<{ sessionId: string; message: string } | null>(null)
+  const agents = useOrderedAgents(snapshot.facets?.agents ?? [])
   const projects = snapshot.facets?.projects ?? []
 
   const refreshRuntimes = useCallback(() => {
@@ -260,6 +271,34 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   }, [review.response?.meta.generatedAt])
 
   useEffect(() => {
+    setFilterOpen(false)
+  }, [location.pathname])
+
+  useEffect(() => {
+    if (!filterOpen) return
+
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target
+      if (!(target instanceof Node)) return
+      if (filterPopoverRef.current?.contains(target)) return
+      if (target instanceof Element && target.closest('.select-menu-popover')) return
+      setFilterOpen(false)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return
+      setFilterOpen(false)
+      requestAnimationFrame(() => filterPopoverRef.current?.querySelector<HTMLButtonElement>('.task-center-filter-button')?.focus({ preventScroll: true }))
+    }
+
+    document.addEventListener('pointerdown', closeOnOutsidePointer, true)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer, true)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [filterOpen])
+
+  useEffect(() => {
     if (mode !== 'new') return
     let cancelled = false
     void fetchLocalReviewSessions(500).then(
@@ -280,7 +319,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const visibleHub = useMemo(() => hubSessions.filter(item => remoteVisible(item, review)), [hubSessions, review])
   const historyGroups = useMemo(() => {
     const combined: HistoryTaskEntry[] = [
-      ...localSessions.map(item => ({ kind: 'local' as const, id: item.id, at: item.startedAt, local: item })),
+      ...localSessions.map(item => ({ kind: 'local' as const, id: item.id, at: localTime(item), local: item })),
       ...visibleHub.map(item => ({ kind: 'remote' as const, id: item.id, at: remoteTime(item), remote: item })),
     ].sort((left, right) => {
       const leftAt = Date.parse(left.at)
@@ -344,6 +383,25 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     window.requestAnimationFrame(settle)
   }, [model, navigate])
 
+  const resumePiSession = useCallback(async (logicalSessionId: string) => {
+    if (resumeRequestRef.current) return
+    resumeRequestRef.current = logicalSessionId
+    setResumingSessionId(logicalSessionId)
+    setPiResumeError(null)
+    try {
+      const state = await piLiveApi.resume(logicalSessionId)
+      navigate(`/review/live/${encodeURIComponent(state.runtimeSessionId)}`)
+    } catch (reason) {
+      setPiResumeError({
+        sessionId: logicalSessionId,
+        message: reason instanceof Error ? reason.message : String(reason),
+      })
+    } finally {
+      resumeRequestRef.current = ''
+      setResumingSessionId('')
+    }
+  }, [navigate])
+
   const selectedRuntimeId = location.pathname.startsWith('/review/live/')
     ? decodeURIComponent(location.pathname.slice('/review/live/'.length))
     : ''
@@ -364,32 +422,44 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     ...projects.map(project => ({ value: project.id, label: project.name ?? project.repositoryIdentity ?? project.id, description: project.repositoryIdentity ?? undefined })),
   ]
 
-  const toggleSearch = () => {
-    if (searchOpen) {
-      setSearchOpen(false)
-      if (review.filters.search) model.setReviewFilters({ search: '' })
-      return
-    }
-    setSearchOpen(true)
-  }
-
   const taskRail = <aside className="task-center-rail" aria-label="任务列表：进行中 + 历史">
     <div className="task-center-rail-head">
       <Button size="small" variant="primary" className="task-center-new-task-button" onClick={newTask}><UiIcon name="plus" size={14}/> 新建任务</Button>
       {mode !== 'new' && <Toolbar className="task-center-toolbar" aria-label="筛选历史任务">
-        <IconButton size="small" className={searchOpen || review.filters.search ? 'is-active' : ''} onClick={toggleSearch} title="搜索历史任务" aria-label="搜索历史任务" aria-pressed={searchOpen}><UiIcon name="search" size={14}/></IconButton>
-        <Disclosure className="task-center-filter-disclosure" summary={<><UiIcon name="filter" size={14}/><span className="task-center-filter-text">筛选</span></>} summaryMeta={activeFilterCount ? `${activeFilterCount}` : undefined}>
-          <div className="task-center-filter-fields">
-            <label className="is-wide"><span>智能体</span><SelectMenu variant="field" value={review.filters.sourceId} onChange={sourceId => model.setReviewFilters({ sourceId })} ariaLabel="筛选智能体" placeholder="全部智能体" menuWidth={260} options={agentFilterOptions}/></label>
-            <label className="is-wide"><span>项目</span><SelectMenu variant="field" value={review.filters.projectId} onChange={projectId => model.setReviewFilters({ projectId })} ariaLabel="筛选项目" placeholder="全部项目" menuWidth={280} searchable searchPlaceholder="搜索项目" options={projectFilterOptions}/></label>
-            <label><span>时间</span><SelectMenu variant="field" value={review.filters.range} onChange={range => model.setReviewFilters({ range: range as typeof review.filters.range })} ariaLabel="筛选时间范围" menuWidth={156} options={[
-              { value: 'today', label: '今天' }, { value: '7d', label: '最近 7 天' }, { value: '30d', label: '最近 30 天' }, { value: 'all', label: '全部时间' },
-            ]}/></label>
-            <label><span>状态</span><SelectMenu variant="field" value={review.filters.status} onChange={status => model.setReviewFilters({ status: status as typeof review.filters.status })} ariaLabel="筛选状态" menuWidth={150} options={[
-              { value: 'all', label: '全部状态' }, { value: 'clean', label: '无错误' }, { value: 'with-errors', label: '有错误' },
-            ]}/></label>
-          </div>
-        </Disclosure>
+        <IconButton
+          size="small"
+          className={searchOpen || review.filters.search ? 'is-active' : ''}
+          onClick={() => setSearchOpen(current => !current)}
+          title={searchOpen ? '收起搜索' : '搜索历史任务'}
+          aria-label={searchOpen ? '收起搜索' : '搜索历史任务'}
+          aria-pressed={searchOpen}
+        ><UiIcon name="search" size={14}/></IconButton>
+        <div className="task-center-filter-popover" ref={filterPopoverRef}>
+          <IconButton
+            size="small"
+            className={`task-center-filter-button ${filterOpen || activeFilterCount ? 'is-active' : ''}`}
+            onClick={() => setFilterOpen(current => !current)}
+            title="筛选历史任务"
+            aria-label="筛选历史任务"
+            aria-expanded={filterOpen}
+            aria-controls={filterOpen ? 'task-center-filter-panel' : undefined}
+          >
+            <UiIcon name="filter" size={14}/>
+            {activeFilterCount > 0 && <span className="task-center-filter-badge" aria-hidden="true">{activeFilterCount}</span>}
+          </IconButton>
+          {filterOpen && <div id="task-center-filter-panel" className="task-center-filter-panel" role="group" aria-label="筛选历史任务">
+            <div className="task-center-filter-fields">
+              <label className="is-wide"><span>智能体</span><SelectMenu variant="field" value={review.filters.sourceId} onChange={sourceId => model.setReviewFilters({ sourceId })} ariaLabel="筛选智能体" placeholder="全部智能体" menuWidth={260} options={agentFilterOptions}/></label>
+              <label className="is-wide"><span>项目</span><SelectMenu variant="field" value={review.filters.projectId} onChange={projectId => model.setReviewFilters({ projectId })} ariaLabel="筛选项目" placeholder="全部项目" menuWidth={280} searchable searchPlaceholder="搜索项目" options={projectFilterOptions}/></label>
+              <label><span>时间</span><SelectMenu variant="field" value={review.filters.range} onChange={range => model.setReviewFilters({ range: range as typeof review.filters.range })} ariaLabel="筛选时间范围" menuWidth={156} options={[
+                { value: 'today', label: '今天' }, { value: '7d', label: '最近 7 天' }, { value: '30d', label: '最近 30 天' }, { value: 'all', label: '全部时间' },
+              ]}/></label>
+              <label><span>状态</span><SelectMenu variant="field" value={review.filters.status} onChange={status => model.setReviewFilters({ status: status as typeof review.filters.status })} ariaLabel="筛选状态" menuWidth={150} options={[
+                { value: 'all', label: '全部状态' }, { value: 'clean', label: '无错误' }, { value: 'with-errors', label: '有错误' },
+              ]}/></label>
+            </div>
+          </div>}
+        </div>
         <IconButton size="small" onClick={() => void model.refreshReview()} title="刷新历史任务" aria-label="刷新历史任务"><UiIcon name="refresh" size={14}/></IconButton>
       </Toolbar>}
     </div>
@@ -397,7 +467,22 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     {mode !== 'new' && searchOpen && <div className="task-center-search-panel">
       <div className="task-center-search-field">
         <UiIcon name="search" size={14}/>
-        <Input autoFocus className="task-center-search-input" placeholder="搜索任务…" value={review.filters.search} onChange={event => model.setReviewFilters({ search: event.target.value })} aria-label="搜索历史任务"/>
+        <Input
+          autoFocus
+          className="task-center-search-input"
+          placeholder="搜索任务…"
+          value={review.filters.search}
+          onChange={event => model.setReviewFilters({ search: event.target.value })}
+          onKeyDown={event => { if (event.key === 'Escape') setSearchOpen(false) }}
+          aria-label="搜索历史任务"
+        />
+        {review.filters.search && <IconButton
+          size="small"
+          className="task-center-search-clear"
+          onClick={() => model.setReviewFilters({ search: '' })}
+          title="清除搜索"
+          aria-label="清除搜索"
+        ><UiIcon name="close" size={14}/></IconButton>}
       </div>
     </div>}
 
@@ -428,10 +513,18 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     <div className={`task-center-page ${mode === 'new' ? 'is-new-task' : ''}`}>
       <section className="task-center-main">
         <TaskSurface mode={surfaceMode}>
-          {mode === 'history' && <ReviewPage model={model} embedded/>}
+          <Suspense fallback={<div className="workspace-skeleton" role="status" aria-label="正在加载任务详情"><span className="state-skeleton"/><span className="state-skeleton"/><span className="state-skeleton"/></div>}>
+          {mode === 'history' && <ReviewPage
+            model={model}
+            embedded
+            onResumePiSession={resumePiSession}
+            resumingPiSession={resumingSessionId === review.detail?.id}
+            piResumeError={piResumeError && piResumeError.sessionId === review.detail?.id ? piResumeError.message : ''}
+          />}
           {mode === 'live' && <PiLivePage embedded/>}
           {mode === 'hub' && <HubReviewPage embedded/>}
           {mode === 'new' && <NewTaskPanel options={projectOptions} preferredProjectId={preferredProjectId} onStarted={runtimeSessionId => navigate(`/review/live/${encodeURIComponent(runtimeSessionId)}`)}/>} 
+          </Suspense>
         </TaskSurface>
       </section>
     </div>

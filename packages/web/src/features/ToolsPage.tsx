@@ -1,14 +1,17 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import type { ToolUsageDto } from '@agent-lens/protocol'
+import { AgentLensApi } from '../client/api'
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
-import { agentLabel } from '../components/AgentScope'
+import { agentLabel, useOrderedAgents } from '../components/AgentScope'
 import { CompactPageHeading } from '../components/CompactPageHeading'
 import { EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from '../components/StateViews'
 import { ToolKindIcon, toolVisualKind } from '../components/ToolKindIcon'
 import { Disclosure, Drawer, IconButton, SelectMenu, UiIcon } from '../components/ui'
+
+const toolDetailApi = new AgentLensApi()
 
 function duration(ms: number): string {
   if (ms <= 0) return '未观察到'
@@ -19,12 +22,29 @@ function duration(ms: number): string {
 
 function rateValue(success: number, error: number): number | null {
   const total = success + error
-  return total ? Math.round(success / total * 100) : null
+  if (!total) return null
+  const rounded = Math.round(success / total * 1000) / 10
+  return error > 0 ? Math.min(99.9, rounded) : rounded
 }
 
 function rate(success: number, error: number): string {
-  const total = success + error
-  return total ? `${rateValue(success, error)}%` : '—'
+  const value = rateValue(success, error)
+  if (value === null) return '—'
+  return `${Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1)}%`
+}
+
+function rangeLabel(range: 'today' | '7d' | '30d' | 'all'): string {
+  if (range === 'today') return '今天'
+  if (range === '7d') return '最近 7 天'
+  if (range === '30d') return '最近 30 天'
+  return '全部时间'
+}
+
+function formatSessionTime(value: string | undefined): string {
+  if (!value) return ''
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) return value
+  return date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
 function assetTypeLabel(type: string): string {
@@ -52,6 +72,13 @@ function shortSessionId(id: string): string {
   return id.length > 16 ? `${id.slice(0, 8)}…${id.slice(-5)}` : id
 }
 
+function sameUsageFilters(
+  left: { sourceId: string; projectId: string; range: string },
+  right: { sourceId: string; projectId: string; range: string },
+): boolean {
+  return left.sourceId === right.sourceId && left.projectId === right.projectId && left.range === right.range
+}
+
 type SortKey = 'callCount' | 'sessionCount' | 'successRate' | 'errorCount' | 'averageDurationMs'
 type SortDirection = 'ascending' | 'descending'
 
@@ -65,7 +92,10 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
   const navigate = useNavigate()
   const usage = snapshot.usage
   const data = usage.response
-  const agents = snapshot.facets?.agents ?? []
+  const projection = data?.meta.projection
+  const projectionPartial = projection?.state === 'partial'
+  const projectionPercent = projection ? Math.max(0, Math.min(100, Math.round(projection.coverageRatio * 100))) : 0
+  const agents = useOrderedAgents(snapshot.facets?.agents ?? [])
   const projects = snapshot.facets?.projects ?? []
   const tools = data?.tools ?? []
   const assets = data?.assets ?? []
@@ -83,15 +113,55 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
   const activeFilterCount = [Boolean(usage.filters.sourceId), Boolean(usage.filters.projectId), usage.filters.range !== 'all'].filter(Boolean).length
   const blockingError = Boolean(usage.error && !data)
   const [selectedToolKey, setSelectedToolKey] = useState<string | null>(null)
+  const [detailTools, setDetailTools] = useState<Map<string, ToolUsageDto>>(() => new Map())
+  const [detailLoadingKey, setDetailLoadingKey] = useState<string | null>(null)
+  const [detailError, setDetailError] = useState('')
+  const [showAllSessions, setShowAllSessions] = useState(false)
   const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'callCount', direction: 'descending' })
-  const selectedTool = useMemo(() => tools.find(tool => toolKey(tool.sourceIds, tool.nativeToolName) === selectedToolKey), [selectedToolKey, tools])
+  const selectedSummaryTool = useMemo(() => tools.find(tool => toolKey(tool.sourceIds, tool.nativeToolName) === selectedToolKey), [selectedToolKey, tools])
+  const selectedTool = selectedToolKey ? detailTools.get(selectedToolKey) ?? selectedSummaryTool : undefined
   const sessionSummaries = useMemo(() => new Map((snapshot.review.response?.items ?? []).map(item => [item.id, item])), [snapshot.review.response?.items])
+  const selectedSessions = useMemo(() => selectedTool
+    ? [...selectedTool.sessions].sort((a, b) => (b.errorCount ?? 0) - (a.errorCount ?? 0) || b.callCount - a.callCount || a.logicalSessionId.localeCompare(b.logicalSessionId))
+    : [], [selectedTool])
+  const firstFailedSession = selectedSessions.find(session => (session.errorCount ?? 0) > 0)
   const sortedTools = useMemo(() => [...tools].sort((a, b) => {
     const delta = sortMetric(a, sort.key) - sortMetric(b, sort.key)
     if (delta === 0) return a.nativeToolName.localeCompare(b.nativeToolName)
     return sort.direction === 'ascending' ? delta : -delta
   }), [tools, sort])
+  const selectedProject = projects.find(project => project.id === usage.filters.projectId)
+  const filterSummary = `${rangeLabel(usage.filters.range)} · ${usage.filters.projectId ? selectedProject?.name ?? selectedProject?.repositoryIdentity ?? '当前项目' : '全部项目'}`
 
+  useEffect(() => {
+    setSelectedToolKey(null)
+    setDetailTools(new Map())
+    setDetailLoadingKey(null)
+    setDetailError('')
+  }, [usage.filters.sourceId, usage.filters.projectId, usage.filters.range])
+
+  const selectTool = async (key: string) => {
+    setShowAllSessions(false)
+    setSelectedToolKey(key)
+    setDetailError('')
+    if (detailTools.has(key) || detailLoadingKey === key) return
+    const summaryTool = tools.find(tool => toolKey(tool.sourceIds, tool.nativeToolName) === key)
+    if (!summaryTool) return
+    const requestedFilters = { ...usage.filters }
+    setDetailLoadingKey(key)
+    try {
+      const detail = await toolDetailApi.usageDetail(requestedFilters, summaryTool.nativeToolName)
+      if (!sameUsageFilters(model.getSnapshot().usage.filters, requestedFilters)) return
+      const tool = detail.tools.find(item => toolKey(item.sourceIds, item.nativeToolName) === key)
+      if (tool) setDetailTools(current => new Map(current).set(key, tool))
+    } catch (error) {
+      if (sameUsageFilters(model.getSnapshot().usage.filters, requestedFilters)) {
+        setDetailError(error instanceof Error ? error.message : String(error))
+      }
+    } finally {
+      setDetailLoadingKey(current => current === key ? null : current)
+    }
+  }
   const toggleSort = (key: SortKey) => {
     setSort(current => current.key === key
       ? { key, direction: current.direction === 'descending' ? 'ascending' : 'descending' }
@@ -124,13 +194,14 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
     ...projects.map(project => ({ value: project.id, label: project.name ?? project.repositoryIdentity ?? project.id, description: project.repositoryIdentity ?? undefined })),
   ]
   const sidebarFilters = <div className="workspace-insight-filters" aria-label="工具分析筛选">
-    <Disclosure className="workspace-insight-filter-disclosure" summary="筛选" summaryMeta={activeFilterCount ? `${activeFilterCount}` : undefined}>
+    <Disclosure className="workspace-insight-filter-disclosure" summary={filterSummary} summaryMeta={activeFilterCount > 1 ? `${activeFilterCount}` : undefined}>
       <div className="workspace-insight-filter-fields">
         <label><span>智能体</span><SelectMenu variant="field" value={usage.filters.sourceId} onChange={sourceId => model.setUsageFilters({ sourceId })} ariaLabel="筛选智能体" placeholder="全部智能体" menuWidth={260} options={agentFilterOptions}/></label>
         <label><span>项目</span><SelectMenu variant="field" value={usage.filters.projectId} onChange={projectId => model.setUsageFilters({ projectId })} ariaLabel="筛选项目" placeholder="全部项目" menuWidth={280} searchable searchPlaceholder="搜索项目" options={projectFilterOptions}/></label>
         <label><span>时间</span><SelectMenu variant="field" value={usage.filters.range} onChange={range => model.setUsageFilters({ range: range as typeof usage.filters.range })} ariaLabel="筛选时间范围" menuWidth={156} options={[
           { value: 'today', label: '今天' }, { value: '7d', label: '最近 7 天' }, { value: '30d', label: '最近 30 天' }, { value: 'all', label: '全部时间' },
         ]}/></label>
+        {canRelaxFilters && <button type="button" className="workspace-filter-clear" onClick={relaxFilters}>清除筛选</button>}
       </div>
     </Disclosure>
     <IconButton size="small" onClick={() => void model.refreshUsage()} title="刷新工具分析" aria-label="刷新工具分析"><UiIcon name="refresh" size={14}/></IconButton>
@@ -143,6 +214,10 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
         <CompactPageHeading title="工具分析" description="只展示可验证的调用事实：用了什么、失败多少、耗时如何，以及有多少调用能够可靠归因到具体能力资产。"/>
 
         {usage.error && <ErrorStateBanner message={usage.error} onRetry={() => void model.refreshUsage()}/>} 
+        {projectionPartial && projection && <div className="tool-projection-status" role="status" aria-live="polite">
+          <UiIcon name="refresh" size={14}/>
+          <span><b>历史工具索引正在回填，当前结果不完整</b><small>已投影 {projection.projectedCount.toLocaleString()} / {projection.sourceObservationCount.toLocaleString()} 条工具事件（{projectionPercent}%），当前统计会随回填继续增长。</small></span>
+        </div>}
 
         {blockingError ? null : usage.loading && !data ? <WorkspaceSkeleton kind="table"/> : <>
           <section className="tool-summary-grid">
@@ -168,11 +243,11 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
                   const successRate = rateValue(tool.successCount, tool.errorCount)
                   const key = toolKey(tool.sourceIds, tool.nativeToolName)
                   const kind = toolVisualKind(tool.nativeToolName)
-                  return <tr key={key} tabIndex={0} onClick={() => setSelectedToolKey(key)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedToolKey(key) } }}>
+                  return <tr key={key} tabIndex={0} onClick={() => { void selectTool(key) }} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); void selectTool(key) } }}>
                     <td><span className="tool-table-name"><ToolKindIcon kind={kind}/><span><b className="tool-name">{tool.nativeToolName}</b><span className="tool-source">{sourceLabels(tool.sourceIds)}</span></span></span></td>
                     <td><span className="tool-bar-cell"><span>{tool.callCount}</span><span className="metric-bar" aria-hidden="true"><i style={{ width: `${Math.max(4, tool.callCount / maxCalls * 100)}%` }}/></span></span></td>
                     <td>{tool.sessionCount}</td>
-                    <td><span className="tool-rate-cell" data-rate={successRate === null ? 'unknown' : successRate >= 95 ? 'good' : successRate >= 80 ? 'mid' : 'low'}><span>{rate(tool.successCount, tool.errorCount)}</span><span className="metric-bar" aria-hidden="true"><i style={{ width: `${successRate ?? 0}%` }}/></span></span></td>
+                    <td><span className="tool-rate-cell" data-rate={successRate === null ? 'unknown' : tool.errorCount > 0 ? 'mid' : successRate >= 95 ? 'good' : successRate >= 80 ? 'mid' : 'low'}><span>{rate(tool.successCount, tool.errorCount)}</span><span className="metric-bar" aria-hidden="true"><i style={{ width: `${successRate ?? 0}%` }}/></span></span></td>
                     <td className={tool.errorCount ? 'cell-danger' : 'cell-muted'}>{tool.errorCount}</td><td>{duration(tool.averageDurationMs)}</td>
                   </tr>
                 })}</tbody>
@@ -189,12 +264,12 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
           {(mostErrors || slowest) && <section className="tool-attention">
             <div className="section-heading-row"><div><h3>需要关注</h3><p>只列当前筛选范围内有事实支撑的异常与耗时项。</p></div></div>
             <div className="tool-attention-list">
-              {mostErrors && <button className="tool-attention-row" onClick={() => setSelectedToolKey(toolKey(mostErrors.sourceIds, mostErrors.nativeToolName))}>
+              {mostErrors && <button className="tool-attention-row" onClick={() => { void selectTool(toolKey(mostErrors.sourceIds, mostErrors.nativeToolName)) }}>
                 <span className="tool-attention-badge is-danger">失败集中</span>
                 <span><b>{mostErrors.nativeToolName}</b><small>{mostErrors.errorCount} 次已知失败 · 成功率 {rate(mostErrors.successCount, mostErrors.errorCount)}</small></span>
                 <strong>{mostErrors.errorCount} 次</strong>
               </button>}
-              {slowest && <button className="tool-attention-row" onClick={() => setSelectedToolKey(toolKey(slowest.sourceIds, slowest.nativeToolName))}>
+              {slowest && <button className="tool-attention-row" onClick={() => { void selectTool(toolKey(slowest.sourceIds, slowest.nativeToolName)) }}>
                 <span className="tool-attention-badge is-warning">平均最慢</span>
                 <span><b>{slowest.nativeToolName}</b><small>{slowest.callCount} 次调用 · {slowest.sessionCount} 个会话</small></span>
                 <strong>{duration(slowest.averageDurationMs)}</strong>
@@ -225,24 +300,35 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
             <div className="tool-drill-stat"><b>{duration(selectedTool.totalDurationMs)}</b><span>总耗时</span></div>
             <div className="tool-drill-stat"><b>{duration(selectedTool.averageDurationMs)}</b><span>平均耗时</span></div>
           </div>
+
+          {firstFailedSession && <button type="button" className="tool-failure-shortcut" onClick={() => openReviewSession(firstFailedSession.logicalSessionId)}>
+            <span><b>查看失败现场</b><small>{firstFailedSession.title ?? `会话 ${shortSessionId(firstFailedSession.logicalSessionId)}`} · {firstFailedSession.errorCount} 次该工具失败</small></span>
+            <UiIcon name="arrow-right" size={16}/>
+          </button>}
+
           <section className="tool-session-section">
-            <div className="table-section-head"><div><h2>会话分布 · Top 3</h2><p>按该工具在会话中的调用次数排序 · 点击直接进入任务复盘</p></div></div>
+            <div className="table-section-head"><div><h2>关联会话</h2><p>含失败的会话优先 · 点击直接进入任务复盘</p></div></div>
             <div className="tool-session-list">
-              {selectedTool.sessions.slice(0, 3).map(session => {
+              {detailLoadingKey === selectedToolKey && <div className="tool-drill-note">正在加载关联会话…</div>}
+              {detailError && detailLoadingKey !== selectedToolKey && <div className="tool-drill-note">关联会话加载失败：{detailError}</div>}
+              {detailLoadingKey !== selectedToolKey && (showAllSessions ? selectedSessions : selectedSessions.slice(0, 3)).map(session => {
                 const summary = sessionSummaries.get(session.logicalSessionId)
-                const label = summary?.title ?? summary?.preview ?? `会话 ${shortSessionId(session.logicalSessionId)}`
-                const max = selectedTool.sessions[0]?.callCount ?? 1
-                return <button key={session.logicalSessionId} className="tool-session-link" onClick={() => openReviewSession(session.logicalSessionId)} title={label}>
-                  <span className="tool-session-copy"><b>{label}</b><small>{sourceLabels(summary?.sourceIds ?? selectedTool.sourceIds)} · {session.callCount} 次调用</small></span>
+                const label = session.title ?? summary?.title ?? summary?.preview ?? `会话 ${shortSessionId(session.logicalSessionId)}`
+                const max = Math.max(1, ...selectedSessions.map(item => item.callCount))
+                const project = session.projectName ?? summary?.projectName ?? session.workspacePath?.split(/[\\/]/).filter(Boolean).at(-1) ?? summary?.workspacePath?.split(/[\\/]/).filter(Boolean).at(-1)
+                const time = formatSessionTime(session.endedAt ?? summary?.endedAt)
+                const context = [project, time, `${session.callCount} 次调用`, (session.errorCount ?? 0) > 0 ? `${session.errorCount} 次失败` : ''].filter(Boolean).join(' · ')
+                return <button key={session.logicalSessionId} className={`tool-session-link ${(session.errorCount ?? 0) > 0 ? 'has-error' : ''}`} onClick={() => openReviewSession(session.logicalSessionId)} title={label}>
+                  <span className="tool-session-copy"><b>{label}</b><small>{context || sourceLabels(summary?.sourceIds ?? selectedTool.sourceIds)}</small></span>
                   <span className="metric-bar" aria-hidden="true"><i style={{ width: `${Math.max(5, session.callCount / max * 100)}%` }}/></span>
-                  <span className="tool-session-open">打开 <UiIcon name="arrow-right" size={14}/></span>
+                  <span className="tool-session-open">{(session.errorCount ?? 0) > 0 ? '查看失败' : '打开'} <UiIcon name="arrow-right" size={14}/></span>
                 </button>
               })}
-              {!selectedTool.sessions.length && <div className="tool-drill-note">当前范围没有可定位的会话记录。</div>}
+              {detailLoadingKey !== selectedToolKey && !detailError && !selectedSessions.length && <div className="tool-drill-note">当前范围没有可定位的会话记录。</div>}
             </div>
-            {selectedTool.sessions.length > 3 && <div className="tool-drill-note">前 3 个会话 · 共 {selectedTool.sessions.length} 个。完整调用过程、输入输出和 Evidence（证据）在任务复盘中查看。</div>}
+            {detailLoadingKey !== selectedToolKey && selectedSessions.length > 3 && <button type="button" className="tool-session-toggle" onClick={() => setShowAllSessions(value => !value)}>{showAllSessions ? '收起关联会话' : `查看全部 ${selectedSessions.length} 个关联会话`}</button>}
           </section>
-          {selectedTool.errorCount > 0 && <div className="tool-drill-note">当前聚合接口只提供失败次数和相关会话，不包含可安全展示的逐次错误载荷；错误示例请进入上方相关会话查看，避免用推测内容冒充事实。</div>}
+          {detailLoadingKey !== selectedToolKey && selectedTool.errorCount > 0 && !firstFailedSession && <div className="tool-drill-note">该工具有 {selectedTool.errorCount} 次明确失败，但当前有界会话样本没有包含失败现场。可扩大当前会话样本后继续定位。</div>}
         </div>
       </Drawer>}
     </main>

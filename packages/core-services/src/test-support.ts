@@ -2,6 +2,7 @@ import type {
   CapturePolicyService,
   CapturePolicySettings,
   CapturePolicyScope,
+  CapturePolicySourceConfiguration,
   CaptureValueOptions,
   CaptureValueResult,
   DiscoveredAsset,
@@ -16,17 +17,28 @@ import type {
  * 避免各 Source 测试重复实现隐私策略，同时不会把直通策略带入运行时。
  */
 export function createTestCapturePolicy(enabledSources: readonly string[] = []): CapturePolicyService {
-  const settings: Readonly<CapturePolicySettings> = Object.freeze({
+  let configuredEnabledSources = [...enabledSources]
+
+  const settings = (): Readonly<CapturePolicySettings> => Object.freeze({
     prompt: 'full',
     tool: 'full',
     config: 'full',
     environment: 'full',
-    enabledSources: Object.freeze([...enabledSources]),
+    enabledSources: Object.freeze([...configuredEnabledSources]),
   })
-  const enabled = new Set(enabledSources.map(sourceId => sourceId.toLowerCase()))
+
+  const sourceConfiguration = (): CapturePolicySourceConfiguration => ({
+    effectiveEnabledSources: [...configuredEnabledSources],
+    configuredEnabledSources: [...configuredEnabledSources],
+    source: 'runtime',
+    editable: true,
+    restartRequired: false,
+  })
 
   return {
-    settings,
+    get settings() {
+      return settings()
+    },
     modeFor(_scope: CapturePolicyScope) {
       return 'full'
     },
@@ -34,7 +46,9 @@ export function createTestCapturePolicy(enabledSources: readonly string[] = []):
       return true
     },
     isSourceEnabled(sourceId: string) {
-      return enabled.size === 0 || enabled.has(sourceId.toLowerCase())
+      if (configuredEnabledSources.length === 0) return true
+      const normalized = sourceId.toLowerCase()
+      return configuredEnabledSources.some(value => value.toLowerCase() === normalized)
     },
     capture<T>(
       _scope: CapturePolicyScope,
@@ -51,6 +65,13 @@ export function createTestCapturePolicy(enabledSources: readonly string[] = []):
     },
     sanitizeDiscoveredAsset(asset: DiscoveredAsset) {
       return asset
+    },
+    getSourceConfiguration() {
+      return sourceConfiguration()
+    },
+    async setEnabledSources(nextEnabledSources: readonly string[]) {
+      configuredEnabledSources = [...nextEnabledSources]
+      return sourceConfiguration()
     },
   }
 }

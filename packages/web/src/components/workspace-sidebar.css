@@ -370,6 +370,27 @@
   background: var(--al-canvas);
 }
 
+.workspace-breadcrumb {
+  display: flex;
+  min-height: 38px;
+  flex: 0 0 38px;
+  align-items: center;
+  padding: 0 20px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--al-line);
+  background: var(--al-surface);
+}
+
+.workspace-breadcrumb ol,
+.workspace-breadcrumb li:last-child,
+.workspace-breadcrumb li:last-child .ui-breadcrumb-item {
+  min-width: 0;
+}
+
+.workspace-breadcrumb li:last-child {
+  overflow: hidden;
+}
+
 .app-main > .workspace-page,
 .app-main > .agents-responsive-shell,
 .app-main > .task-center-page {
@@ -751,6 +772,12 @@
 @media (max-width: 767.98px) {
   .app-shell {
     grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .workspace-breadcrumb {
+    min-height: 36px;
+    flex-basis: 36px;
+    padding-inline: 12px;
   }
 
   .workspace-primary-link > svg {

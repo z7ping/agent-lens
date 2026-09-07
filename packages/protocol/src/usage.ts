@@ -7,6 +7,11 @@ export type UsageAssetType = 'mcp' | 'skill'
 export interface ToolUsageSessionDto {
   logicalSessionId: string
   callCount: number
+  errorCount?: number
+  title?: string
+  projectName?: string
+  workspacePath?: string
+  endedAt?: string
 }
 
 export interface ToolUsageDto {
@@ -38,11 +43,21 @@ export interface AssetUsageDto {
   observationIds: string[]
 }
 
+export interface ToolUsageProjectionStatusDto {
+  state: 'ready' | 'partial'
+  sourceObservationCount: number
+  projectedCount: number
+  missingCount: number
+  coverageRatio: number
+}
+
 export interface ToolAssetUsageQueryDto {
   installationId?: string
   logicalSessionId?: string
   sourceId?: string
   projectId?: string
+  /** Optional exact native tool name; primarily used by bounded drill-down reads. */
+  toolName?: string
   from?: string
   to?: string
   limit?: number
@@ -57,6 +72,7 @@ export interface ToolAssetUsageResponseDto {
     assetCount: number
     unattributedToolCalls: number
     hasMoreTools: boolean
+    projection?: ToolUsageProjectionStatusDto
     generatedAt: string
   }
 }

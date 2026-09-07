@@ -4,6 +4,8 @@ import type {
   ObservationCursor,
   SourceSession,
   StorageService,
+  ToolUsageAggregateQuery,
+  ToolUsageAggregateResult,
   ToolUsageObservationReader,
   ToolUsageObservationRecord,
 } from '@agent-lens/core'
@@ -13,6 +15,7 @@ import {
   type ToolAssetUsageQueryDto,
   type ToolAssetUsageResponseDto,
   type ToolUsageDto,
+  type ToolUsageProjectionStatusDto,
   type UsageAssetType,
 } from '@agent-lens/protocol'
 
@@ -20,6 +23,13 @@ const REPOSITORY_SCAN_CHUNK = 1000
 const LIGHT_SCAN_CHUNK = 5000
 const DEFAULT_LIMIT = 100
 const MAX_LIMIT = 500
+const MAX_DETAIL_OBSERVATION_IDS = 100
+const MAX_DETAIL_SESSIONS = 100
+const AGGREGATE_OVERVIEW_DETAIL_LIMIT = 0
+const AGGREGATE_ASSET_DETAIL_LIMIT = 0
+const PROJECTION_STATUS_CACHE_MS = 1_000
+const AGGREGATE_RESULT_CACHE_MS = 2_000
+const AGGREGATE_RESULT_CACHE_MAX_ENTRIES = 64
 
 type UsageObservation = CanonicalObservation | ToolUsageObservationRecord
 
@@ -61,19 +71,114 @@ interface AssetAccumulator {
   type: UsageAssetType; canonicalName: string; sourceIds: Set<string>; callCount: number
   firstUsedAt: string; lastUsedAt: string; observationIds: string[]
 }
+interface AggregateCacheEntry {
+  value: ToolUsageAggregateResult
+  cachedAt: number
+}
 function updateWindow(accumulator: { firstUsedAt: string; lastUsedAt: string }, at: string): void {
   if (at < accumulator.firstUsedAt) accumulator.firstUsedAt = at
   if (at > accumulator.lastUsedAt) accumulator.lastUsedAt = at
 }
+function pushObservationSample(ids: string[], id: string): void {
+  if (ids.length < MAX_DETAIL_OBSERVATION_IDS) ids.push(id)
+}
 function usageReader(storage: StorageService): ToolUsageObservationReader | undefined {
-  return (storage as StorageService & { readonly toolUsageObservations?: ToolUsageObservationReader }).toolUsageObservations
+  return storage.toolUsageObservations
+}
+function projectionStatusReader(storage: StorageService) {
+  return storage.projectionBackfill?.toolUsageFactCoverage ? storage.projectionBackfill : undefined
+}
+function aggregateQuery(query: ToolAssetUsageQueryDto, detailLimit = AGGREGATE_OVERVIEW_DETAIL_LIMIT): ToolUsageAggregateQuery {
+  return {
+    ...(query.installationId ? { installationId: query.installationId } : {}),
+    ...(query.logicalSessionId ? { logicalSessionId: query.logicalSessionId } : {}),
+    ...(query.projectId ? { projectId: query.projectId } : {}),
+    ...(query.sourceId ? { sourceId: query.sourceId } : {}),
+    ...(query.toolName ? { toolName: query.toolName } : {}),
+    ...(query.from ? { from: query.from } : {}),
+    ...(query.to ? { to: query.to } : {}),
+    detailLimit,
+  }
+}
+function aggregateCacheKey(query: ToolUsageAggregateQuery): string {
+  return JSON.stringify([
+    query.installationId ?? null,
+    query.logicalSessionId ?? null,
+    query.projectId ?? null,
+    query.sourceId ?? null,
+    query.toolName ?? null,
+    query.from ?? null,
+    query.to ?? null,
+    query.detailLimit,
+  ])
 }
 function hasEmbeddedMetadata(observation: UsageObservation): observation is ToolUsageObservationRecord {
   return 'sourceId' in observation && 'productId' in observation
 }
 
 export class ToolAssetUsageProjection {
+  private cachedProjectionStatus: ToolUsageProjectionStatusDto | null = null
+  private cachedProjectionStatusAt = 0
+  private projectionStatusInFlight: Promise<ToolUsageProjectionStatusDto | undefined> | null = null
+  private readonly aggregateCache = new Map<string, AggregateCacheEntry>()
+  private readonly aggregateInFlight = new Map<string, Promise<ToolUsageAggregateResult>>()
+
   constructor(private readonly storage: StorageService) {}
+
+  private projectionStatus(): Promise<ToolUsageProjectionStatusDto | undefined> {
+    if (this.cachedProjectionStatus && Date.now() - this.cachedProjectionStatusAt < PROJECTION_STATUS_CACHE_MS) {
+      return Promise.resolve(this.cachedProjectionStatus)
+    }
+    if (this.projectionStatusInFlight) return this.projectionStatusInFlight
+    const reader = projectionStatusReader(this.storage)
+    if (!reader?.toolUsageFactCoverage) return Promise.resolve(undefined)
+    this.projectionStatusInFlight = reader.toolUsageFactCoverage()
+      .then(coverage => {
+        const status: ToolUsageProjectionStatusDto = {
+          state: coverage.ready ? 'ready' : 'partial',
+          sourceObservationCount: coverage.sourceObservationCount,
+          projectedCount: coverage.projectedCount,
+          missingCount: coverage.missingCount,
+          coverageRatio: coverage.coverageRatio,
+        }
+        this.cachedProjectionStatus = status
+        this.cachedProjectionStatusAt = Date.now()
+        return status
+      })
+      .finally(() => { this.projectionStatusInFlight = null })
+    return this.projectionStatusInFlight
+  }
+
+  private aggregate(
+    query: ToolUsageAggregateQuery,
+    load: () => Promise<ToolUsageAggregateResult>,
+  ): Promise<ToolUsageAggregateResult> {
+    const key = aggregateCacheKey(query)
+    const cached = this.aggregateCache.get(key)
+    if (cached && Date.now() - cached.cachedAt < AGGREGATE_RESULT_CACHE_MS) {
+      return Promise.resolve(cached.value)
+    }
+    if (cached) this.aggregateCache.delete(key)
+
+    const inFlight = this.aggregateInFlight.get(key)
+    if (inFlight) return inFlight
+
+    const request = Promise.resolve()
+      .then(load)
+      .then(value => {
+        this.aggregateCache.delete(key)
+        this.aggregateCache.set(key, { value, cachedAt: Date.now() })
+        while (this.aggregateCache.size > AGGREGATE_RESULT_CACHE_MAX_ENTRIES) {
+          const oldestKey = this.aggregateCache.keys().next().value
+          if (typeof oldestKey !== 'string') break
+          this.aggregateCache.delete(oldestKey)
+        }
+        return value
+      })
+      .finally(() => { this.aggregateInFlight.delete(key) })
+    this.aggregateInFlight.set(key, request)
+    return request
+  }
 
   private async forEachKind(
     kind: 'tool.call' | 'tool.result',
@@ -139,6 +244,25 @@ export class ToolAssetUsageProjection {
   }
 
   async queryAssets(query: ToolAssetUsageQueryDto = {}): Promise<AssetUsageDto[]> {
+    const reader = usageReader(this.storage)
+    if (reader?.aggregate) {
+      const aggregateInput = aggregateQuery(query, AGGREGATE_ASSET_DETAIL_LIMIT)
+      const aggregate = await this.aggregate(aggregateInput, () => reader.aggregate!(aggregateInput))
+      const result: AssetUsageDto[] = aggregate.assets.map(item => ({
+        type: item.type,
+        canonicalName: item.canonicalName,
+        sourceIds: [...item.sourceIds].sort(),
+        callCount: item.callCount,
+        firstUsedAt: item.firstUsedAt,
+        lastUsedAt: item.lastUsedAt,
+        attribution: 'derived',
+        confidence: 'high',
+        observationIds: item.observationIds.slice(0, MAX_DETAIL_OBSERVATION_IDS),
+      }))
+      result.sort((a, b) => b.callCount - a.callCount || b.lastUsedAt.localeCompare(a.lastUsedAt) || a.canonicalName.localeCompare(b.canonicalName))
+      return result
+    }
+
     const metadataFor = this.metadataResolver()
     const assets = new Map<string, AssetAccumulator>()
 
@@ -147,7 +271,7 @@ export class ToolAssetUsageProjection {
       if (!metadata || (query.sourceId && metadata.sourceId !== query.sourceId)) return
       const payload = asRecord(observation.payload)
       const name = toolName(observation)
-      if (!name) return
+      if (!name || (query.toolName && name !== query.toolName)) return
       const inferred = inferAssetUsage(name, payload)
       if (!inferred) return
       const at = effectiveAt(observation)
@@ -159,7 +283,7 @@ export class ToolAssetUsageProjection {
       }
       asset.sourceIds.add(metadata.sourceId)
       asset.callCount += 1
-      asset.observationIds.push(observation.id)
+      pushObservationSample(asset.observationIds, observation.id)
       updateWindow(asset, at)
     })
 
@@ -178,8 +302,72 @@ export class ToolAssetUsageProjection {
     return result
   }
 
-  async query(query: ToolAssetUsageQueryDto = {}): Promise<ToolAssetUsageResponseDto> {
+  async query(
+    query: ToolAssetUsageQueryDto = {},
+    detailLimit = AGGREGATE_OVERVIEW_DETAIL_LIMIT,
+  ): Promise<ToolAssetUsageResponseDto> {
+    const normalizedDetailLimit = Math.max(0, Math.min(detailLimit, MAX_DETAIL_SESSIONS, MAX_DETAIL_OBSERVATION_IDS))
     const limit = Math.max(1, Math.min(query.limit ?? DEFAULT_LIMIT, MAX_LIMIT))
+    const reader = usageReader(this.storage)
+    if (reader?.aggregate) {
+      const aggregateInput = aggregateQuery(query, normalizedDetailLimit)
+      const [aggregate, projection] = await Promise.all([
+        this.aggregate(aggregateInput, () => reader.aggregate!(aggregateInput)),
+        this.projectionStatus(),
+      ])
+      const toolDtos: ToolUsageDto[] = aggregate.tools.map(item => ({
+        nativeToolName: item.nativeToolName,
+        sourceIds: [...item.sourceIds].sort(),
+        productIds: [...item.productIds].sort(),
+        callCount: item.callCount,
+        resultCount: item.resultCount,
+        successCount: item.successCount,
+        errorCount: item.errorCount,
+        sessionCount: item.sessionCount,
+        sessions: normalizedDetailLimit > 0
+          ? item.sessions
+              .slice()
+              .sort((a, b) => b.callCount - a.callCount || a.logicalSessionId.localeCompare(b.logicalSessionId))
+              .slice(0, normalizedDetailLimit)
+          : [],
+        totalDurationMs: item.totalDurationMs,
+        averageDurationMs: item.resultCount ? Math.round(item.totalDurationMs / item.resultCount) : 0,
+        firstUsedAt: item.firstUsedAt,
+        lastUsedAt: item.lastUsedAt,
+        observationIds: normalizedDetailLimit > 0 ? item.observationIds.slice(0, normalizedDetailLimit) : [],
+      }))
+      toolDtos.sort((a, b) => b.callCount - a.callCount || b.lastUsedAt.localeCompare(a.lastUsedAt) || a.nativeToolName.localeCompare(b.nativeToolName))
+
+      const assetDtos: AssetUsageDto[] = aggregate.assets.map(item => ({
+        type: item.type,
+        canonicalName: item.canonicalName,
+        sourceIds: [...item.sourceIds].sort(),
+        callCount: item.callCount,
+        firstUsedAt: item.firstUsedAt,
+        lastUsedAt: item.lastUsedAt,
+        attribution: 'derived',
+        confidence: 'high',
+        observationIds: normalizedDetailLimit > 0 ? item.observationIds.slice(0, normalizedDetailLimit) : [],
+      }))
+      assetDtos.sort((a, b) => b.callCount - a.callCount || b.lastUsedAt.localeCompare(a.lastUsedAt) || a.canonicalName.localeCompare(b.canonicalName))
+
+      const hasMoreTools = toolDtos.length > limit
+      const limitedTools = toolDtos.slice(0, limit)
+      return {
+        tools: limitedTools,
+        assets: assetDtos,
+        meta: {
+          protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
+          toolCount: limitedTools.length,
+          assetCount: assetDtos.length,
+          unattributedToolCalls: aggregate.unattributedToolCalls,
+          hasMoreTools,
+          ...(projection ? { projection } : {}),
+          generatedAt: new Date().toISOString(),
+        },
+      }
+    }
+
     const metadataFor = this.metadataResolver()
     const callsByIdentity = new Map<string, { name: string; sourceId: string; productId: string }>()
     const tools = new Map<string, ToolAccumulator>()
@@ -192,7 +380,7 @@ export class ToolAssetUsageProjection {
       const payload = asRecord(observation.payload)
       const identity = callId(observation)
       const name = toolName(observation)
-      if (!name) return
+      if (!name || (query.toolName && name !== query.toolName)) return
       if (identity) callsByIdentity.set(`${observation.logicalSessionId}\u0000${identity}`, { name, sourceId: metadata.sourceId, productId: metadata.productId })
 
       const at = effectiveAt(observation)
@@ -204,7 +392,7 @@ export class ToolAssetUsageProjection {
       }
       tool.sourceIds.add(metadata.sourceId)
       tool.productIds.add(metadata.productId)
-      tool.observationIds.push(observation.id)
+      pushObservationSample(tool.observationIds, observation.id)
       tool.callCount += 1
       tool.sessionCalls.set(observation.logicalSessionId, (tool.sessionCalls.get(observation.logicalSessionId) ?? 0) + 1)
       updateWindow(tool, at)
@@ -222,7 +410,7 @@ export class ToolAssetUsageProjection {
       }
       asset.sourceIds.add(metadata.sourceId)
       asset.callCount += 1
-      asset.observationIds.push(observation.id)
+      pushObservationSample(asset.observationIds, observation.id)
       updateWindow(asset, at)
     })
 
@@ -233,7 +421,7 @@ export class ToolAssetUsageProjection {
       const identity = callId(observation)
       const linkedCall = identity ? callsByIdentity.get(`${observation.logicalSessionId}\u0000${identity}`) : undefined
       const name = toolName(observation) ?? linkedCall?.name
-      if (!name) return
+      if (!name || (query.toolName && name !== query.toolName)) return
       const sourceId = linkedCall?.sourceId ?? metadata.sourceId
       if (query.sourceId && sourceId !== query.sourceId) return
       const productId = linkedCall?.productId ?? metadata.productId
@@ -246,7 +434,7 @@ export class ToolAssetUsageProjection {
       }
       tool.sourceIds.add(sourceId)
       tool.productIds.add(productId)
-      tool.observationIds.push(observation.id)
+      pushObservationSample(tool.observationIds, observation.id)
       tool.resultCount += 1
       updateWindow(tool, at)
       const success = payload.success
@@ -265,14 +453,17 @@ export class ToolAssetUsageProjection {
       successCount: item.successCount,
       errorCount: item.errorCount,
       sessionCount: item.sessionCalls.size,
-      sessions: [...item.sessionCalls.entries()]
-        .map(([logicalSessionId, callCount]) => ({ logicalSessionId, callCount }))
-        .sort((a, b) => b.callCount - a.callCount || a.logicalSessionId.localeCompare(b.logicalSessionId)),
+      sessions: normalizedDetailLimit > 0
+        ? [...item.sessionCalls.entries()]
+            .map(([logicalSessionId, callCount]) => ({ logicalSessionId, callCount }))
+            .sort((a, b) => b.callCount - a.callCount || a.logicalSessionId.localeCompare(b.logicalSessionId))
+            .slice(0, normalizedDetailLimit)
+        : [],
       totalDurationMs: item.totalDurationMs,
       averageDurationMs: item.resultCount ? Math.round(item.totalDurationMs / item.resultCount) : 0,
       firstUsedAt: item.firstUsedAt,
       lastUsedAt: item.lastUsedAt,
-      observationIds: item.observationIds,
+      observationIds: normalizedDetailLimit > 0 ? item.observationIds.slice(0, normalizedDetailLimit) : [],
     }))
     toolDtos.sort((a, b) => b.callCount - a.callCount || b.lastUsedAt.localeCompare(a.lastUsedAt) || a.nativeToolName.localeCompare(b.nativeToolName))
 
@@ -285,7 +476,7 @@ export class ToolAssetUsageProjection {
       lastUsedAt: item.lastUsedAt,
       attribution: 'derived',
       confidence: 'high',
-      observationIds: item.observationIds,
+      observationIds: normalizedDetailLimit > 0 ? item.observationIds.slice(0, normalizedDetailLimit) : [],
     }))
     assetDtos.sort((a, b) => b.callCount - a.callCount || b.lastUsedAt.localeCompare(a.lastUsedAt) || a.canonicalName.localeCompare(b.canonicalName))
 
@@ -306,4 +497,18 @@ export class ToolAssetUsageProjection {
   }
 }
 
-export const usageProjectionInternals = { inferAssetUsage, callId, toolName }
+export const usageProjectionInternals = {
+  inferAssetUsage,
+  callId,
+  toolName,
+  aggregateQuery,
+  aggregateCacheKey,
+  projectionStatusReader,
+  aggregateOverviewDetailLimit: AGGREGATE_OVERVIEW_DETAIL_LIMIT,
+  aggregateAssetDetailLimit: AGGREGATE_ASSET_DETAIL_LIMIT,
+  maxDetailObservationIds: MAX_DETAIL_OBSERVATION_IDS,
+  maxDetailSessions: MAX_DETAIL_SESSIONS,
+  projectionStatusCacheMs: PROJECTION_STATUS_CACHE_MS,
+  aggregateResultCacheMs: AGGREGATE_RESULT_CACHE_MS,
+  aggregateResultCacheMaxEntries: AGGREGATE_RESULT_CACHE_MAX_ENTRIES,
+}

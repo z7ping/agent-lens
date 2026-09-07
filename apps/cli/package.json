@@ -1,6 +1,6 @@
 {
   "name": "@agent-lens/cli",
-  "version": "1.0.0-alpha.2",
+  "version": "1.0.0-alpha.3",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,7 +9,7 @@
     "test": "tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
-    "@agent-lens/capture-policy": "1.0.0-alpha.2",
-    "@agent-lens/hook-manager": "1.0.0-alpha.2"
+    "@agent-lens/capture-policy": "1.0.0-alpha.3",
+    "@agent-lens/hook-manager": "1.0.0-alpha.3"
   }
 }

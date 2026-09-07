@@ -1,0 +1,3 @@
+-- Deep diagnostics 的时间索引可能在大库上构建很久，不能阻塞 Daemon/HTTP 启动。
+-- Schema 16 仅保留版本边界；索引由 SqliteStorageMaintenance.ensureDeferredIndexes()
+-- 在前台可用后的维护阶段显式创建。

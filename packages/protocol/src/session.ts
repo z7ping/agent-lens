@@ -1,5 +1,4 @@
-import type { TimelineObservationKind } from './timeline'
-import { AGENT_LENS_PROTOCOL_VERSION } from './timeline'
+import { AGENT_LENS_PROTOCOL_VERSION, type TimelineObservationKind } from './timeline'
 
 export type SessionInteractionTrigger = 'user' | 'background'
 

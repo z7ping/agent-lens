@@ -17,17 +17,62 @@ import type {
   SourceDefinition,
   SourceHistoryWindow,
   SourceRecord,
+  SourceRecordReplayCursor,
   SourceRuntimeStatus,
   StorageService,
+  VersionedCheckpoint,
 } from '@agent-lens/core'
+import { materializeEvidence } from './index'
 import { deriveParentRelationshipCandidates } from './relationship-hints'
 
 const DEFAULT_COOPERATIVE_BUDGET_MS = 8
+const PARSER_REPLAY_TRANSACTION_SIZE = 50
+const PARSER_REPLAY_TRANSACTION_BUDGET_MS = 20
+const PARSER_REPLAY_CHECKPOINT_SCOPE = 'parser-replay'
 
 interface CooperativeSchedulerOptions {
   budgetMs?: number
   now?: () => number
   yieldControl?: () => Promise<void>
+}
+
+interface ParserReplayCheckpoint {
+  sourceId: string
+  installationId: string
+  targetParserVersion: string
+  window: string
+  state: 'pending' | 'running' | 'completed'
+  dirty: boolean
+  cursor?: SourceRecordReplayCursor
+  updatedAt: string
+  completedAt?: string
+}
+
+async function readReplayCheckpoint(
+  storage: StorageService,
+  key: string,
+): Promise<VersionedCheckpoint<ParserReplayCheckpoint> | null> {
+  if (!storage.checkpoints.getWithRevision) {
+    throw new Error('Parser Replay requires versioned checkpoint storage')
+  }
+  return storage.checkpoints.getWithRevision<ParserReplayCheckpoint>(PARSER_REPLAY_CHECKPOINT_SCOPE, key)
+}
+
+async function compareAndSetReplayCheckpoint(
+  storage: StorageService,
+  key: string,
+  expectedRevision: number | null,
+  value: ParserReplayCheckpoint,
+): Promise<boolean> {
+  if (!storage.checkpoints.compareAndSet) {
+    throw new Error('Parser Replay requires compare-and-set checkpoint storage')
+  }
+  return storage.checkpoints.compareAndSet(
+    PARSER_REPLAY_CHECKPOINT_SCOPE,
+    key,
+    expectedRevision,
+    value,
+  )
 }
 
 function createCooperativeScheduler(options: CooperativeSchedulerOptions = {}) {
@@ -45,6 +90,53 @@ function createCooperativeScheduler(options: CooperativeSchedulerOptions = {}) {
   }
 }
 
+function parserReplayTransactionExpired(
+  startedAt: number,
+  processed: number,
+  now: () => number = Date.now,
+): boolean {
+  return processed >= PARSER_REPLAY_TRANSACTION_SIZE
+    || now() - startedAt >= PARSER_REPLAY_TRANSACTION_BUDGET_MS
+}
+
+function parserReplayWindowKey(window?: SourceHistoryWindow): string {
+  if (!window) return 'all'
+  if (window.sessionLimit != null) return `sessions:${window.sessionLimit}`
+  if (window.activeSince) return `since:${window.activeSince}`
+  return 'all'
+}
+
+function parserReplayCheckpointKey(
+  sourceId: string,
+  installationId: string,
+  targetParserVersion: string,
+  window?: SourceHistoryWindow,
+): string {
+  return `${sourceId}:${installationId}:${targetParserVersion}:${parserReplayWindowKey(window)}`
+}
+
+function replayCheckpoint(
+  sourceId: string,
+  installationId: string,
+  targetParserVersion: string,
+  window: SourceHistoryWindow | undefined,
+  state: ParserReplayCheckpoint['state'],
+  cursor?: SourceRecordReplayCursor,
+): ParserReplayCheckpoint {
+  const updatedAt = new Date().toISOString()
+  return {
+    sourceId,
+    installationId,
+    targetParserVersion,
+    window: parserReplayWindowKey(window),
+    state,
+    dirty: false,
+    ...(cursor ? { cursor } : {}),
+    updatedAt,
+    ...(state === 'completed' ? { completedAt: updatedAt } : {}),
+  }
+}
+
 export interface SourceHistorySyncInput {
   source: SourceDefinition
   host: Host
@@ -53,7 +145,26 @@ export interface SourceHistorySyncInput {
   historyWindow?: SourceHistoryWindow
 }
 
+export interface SourceParserReplayInput {
+  source: SourceDefinition
+  host: Host
+  detected: DetectedSource
+  abortSignal: AbortSignal
+  historyWindow?: SourceHistoryWindow
+  /** Maintenance replay may pause here while foreground HTTP work is active. */
+  cooperate?: () => Promise<void>
+}
+
 export interface SourceHistorySyncResult {
+  sourceId: string
+  installationId: string
+  records: number
+  observationsCreated: number
+  observationsMerged: number
+  observationsUnchanged: number
+}
+
+export interface SourceParserReplayResult {
   sourceId: string
   installationId: string
   records: number
@@ -96,31 +207,6 @@ interface ProcessResult {
   evidenceCandidates: EvidenceCandidate[]
 }
 
-interface RuntimeStatusWriter {
-  put(status: SourceRuntimeStatus): Promise<void>
-}
-
-interface RelationshipCandidateWriter {
-  put(candidate: SessionRelationshipCandidate): Promise<void>
-  tryPromote(candidate: SessionRelationshipCandidate): Promise<unknown>
-}
-
-interface RuntimeProfileResolver {
-  resolve(hint: {
-    installationId: string
-    nativeProfileId: string
-    name?: string
-    configRoot?: string
-    dataRoot?: string
-  }): Promise<RuntimeProfile>
-}
-
-type StorageWithRuntimeExtensions = StorageService & {
-  sourceRuntimeStatus?: RuntimeStatusWriter
-  sessionRelationshipCandidates?: RelationshipCandidateWriter
-  runtimeProfiles?: RuntimeProfileResolver
-}
-
 class ScopedCheckpointService implements SourceCheckpointService {
   constructor(
     private readonly storage: StorageService,
@@ -156,7 +242,7 @@ function errorSummary(error: unknown): string {
 }
 
 async function putRuntimeStatus(storage: StorageService, status: SourceRuntimeStatus): Promise<void> {
-  const writer = (storage as StorageWithRuntimeExtensions).sourceRuntimeStatus
+  const writer = storage.sourceRuntimeStatus
   if (!writer) return
   await writer.put(status)
 }
@@ -166,7 +252,7 @@ async function persistRelationshipCandidates(
   candidates: readonly SessionRelationshipCandidate[] | undefined,
 ): Promise<void> {
   if (!candidates?.length) return
-  const writer = (storage as StorageWithRuntimeExtensions).sessionRelationshipCandidates
+  const writer = storage.sessionRelationshipCandidates
   if (!writer) return
   for (const candidate of candidates) {
     await writer.put(candidate)
@@ -238,7 +324,7 @@ async function resolveRuntimeProfile(
   detected: DetectedSource,
 ): Promise<RuntimeProfile | undefined> {
   if (!detected.runtimeProfile) return undefined
-  const resolver = (storage as StorageWithRuntimeExtensions).runtimeProfiles
+  const resolver = storage.runtimeProfiles
   if (!resolver) return undefined
   const profile = detected.runtimeProfile
   return resolver.resolve({
@@ -287,10 +373,15 @@ async function processSourceRecord(
     evidenceCandidates: persistedOutput.evidenceCandidates,
   }
 
-  // 一条来源记录及其派生的 Canonical Observation 属于同一持久化单元。
-  // 除了保证原子性，也避免冷导入时每次仓储写入都单独开启 SQLite 事务。
   await storage.transaction(async () => {
     await storage.repositories.sourceRecords.put(persistedRecord)
+
+    const evidenceRepository = storage.repositories.evidence
+    if (!persistedOutput.observations.length && evidenceRepository) {
+      for (const candidate of persistedOutput.evidenceCandidates) {
+        await evidenceRepository.put(materializeEvidence(candidate))
+      }
+    }
 
     for (const observation of persistedOutput.observations) {
       if (runtimeProfile && !observation.identityHints.runtimeProfileNativeId) {
@@ -336,6 +427,174 @@ export class SourceHistoryRunner {
     private readonly capturePolicy: CapturePolicyService,
   ) {}
 
+  async replay(input: SourceParserReplayInput): Promise<SourceParserReplayResult> {
+    const { source, host, detected, abortSignal } = input
+    if (source.manifest.sourceId !== detected.sourceId) {
+      throw new Error(`Source mismatch: definition=${source.manifest.sourceId}, detected=${detected.sourceId}`)
+    }
+
+    const installation = await resolveInstallation(this.identity, host, detected)
+    const runtimeProfile = await resolveRuntimeProfile(this.storage, installation, detected)
+    const result: SourceParserReplayResult = {
+      sourceId: source.manifest.sourceId,
+      installationId: installation.id,
+      records: 0,
+      observationsCreated: 0,
+      observationsMerged: 0,
+      observationsUnchanged: 0,
+    }
+    const replay = this.storage.repositories.sourceRecords.listForParserReplay
+    if (!replay) return result
+
+    const checkpointKey = parserReplayCheckpointKey(
+      source.manifest.sourceId,
+      installation.id,
+      source.manifest.parserVersion,
+      input.historyWindow,
+    )
+    let versionedCheckpoint = await readReplayCheckpoint(this.storage, checkpointKey)
+    const existingCheckpoint = versionedCheckpoint?.value
+    if (
+      existingCheckpoint?.targetParserVersion === source.manifest.parserVersion
+      && existingCheckpoint.state === 'completed'
+      && !existingCheckpoint.dirty
+    ) {
+      return result
+    }
+
+    let after = existingCheckpoint?.targetParserVersion === source.manifest.parserVersion
+      && !existingCheckpoint.dirty
+      ? existingCheckpoint.cursor
+      : undefined
+    const claimed = await compareAndSetReplayCheckpoint(
+      this.storage,
+      checkpointKey,
+      versionedCheckpoint?.revision ?? null,
+      replayCheckpoint(
+        source.manifest.sourceId,
+        installation.id,
+        source.manifest.parserVersion,
+        input.historyWindow,
+        'running',
+        after,
+      ),
+    )
+    if (!claimed) {
+      versionedCheckpoint = await readReplayCheckpoint(this.storage, checkpointKey)
+      const latest = versionedCheckpoint?.value
+      if (
+        latest?.targetParserVersion === source.manifest.parserVersion
+        && latest.state === 'completed'
+        && !latest.dirty
+      ) {
+        return result
+      }
+      // Another replay/dirty writer won the claim. Do not run a second maintenance owner.
+      return result
+    }
+
+    const yieldForInteractivity = createCooperativeScheduler()
+    let invalidated = false
+    while (!abortSignal.aborted && !invalidated) {
+      if (input.cooperate) await input.cooperate()
+      if (abortSignal.aborted) break
+
+      const records = await replay(
+        source.manifest.sourceId,
+        installation.id,
+        source.manifest.parserVersion,
+        after,
+        500,
+        input.historyWindow,
+      )
+      if (!records.length) {
+        const latestCheckpoint = await readReplayCheckpoint(this.storage, checkpointKey)
+        if (latestCheckpoint?.value.dirty) break
+        const completed = await compareAndSetReplayCheckpoint(
+          this.storage,
+          checkpointKey,
+          latestCheckpoint?.revision ?? null,
+          replayCheckpoint(
+            source.manifest.sourceId,
+            installation.id,
+            source.manifest.parserVersion,
+            input.historyWindow,
+            'completed',
+            after,
+          ),
+        )
+        if (!completed) invalidated = true
+        break
+      }
+
+      let offset = 0
+      while (offset < records.length && !abortSignal.aborted && !invalidated) {
+        if (input.cooperate) await input.cooperate()
+        if (abortSignal.aborted) break
+
+        let lastProcessed: SourceRecord | undefined
+        await this.storage.transaction(async () => {
+          const transactionStartedAt = Date.now()
+          let processedInTransaction = 0
+          while (offset < records.length && !abortSignal.aborted) {
+            const stored = records[offset]!
+            const processed = await processSourceRecord(
+              this.storage,
+              this.observations,
+              this.coverage,
+              this.capturePolicy,
+              source,
+              host,
+              installation,
+              runtimeProfile,
+              { ...stored, parserVersion: source.manifest.parserVersion },
+            )
+            lastProcessed = stored
+            offset += 1
+            processedInTransaction += 1
+            result.records += 1
+            result.observationsCreated += processed.observationsCreated
+            result.observationsMerged += processed.observationsMerged
+            result.observationsUnchanged += processed.observationsUnchanged
+            if (parserReplayTransactionExpired(transactionStartedAt, processedInTransaction)) break
+          }
+        })
+
+        if (lastProcessed) {
+          after = {
+            parserVersion: lastProcessed.parserVersion,
+            capturedAt: lastProcessed.capturedAt,
+            id: lastProcessed.id,
+          }
+          const latestCheckpoint = await readReplayCheckpoint(this.storage, checkpointKey)
+          if (latestCheckpoint?.value.dirty) {
+            invalidated = true
+            break
+          }
+          const advanced = await compareAndSetReplayCheckpoint(
+            this.storage,
+            checkpointKey,
+            latestCheckpoint?.revision ?? null,
+            replayCheckpoint(
+              source.manifest.sourceId,
+              installation.id,
+              source.manifest.parserVersion,
+              input.historyWindow,
+              'running',
+              after,
+            ),
+          )
+          if (!advanced) {
+            invalidated = true
+            break
+          }
+        }
+        await yieldForInteractivity()
+      }
+    }
+    return result
+  }
+
   async sync(input: SourceHistorySyncInput): Promise<SourceHistorySyncResult> {
     const { source, host, detected, abortSignal } = input
     if (source.manifest.sourceId !== detected.sourceId) {
@@ -365,45 +624,6 @@ export class SourceHistoryRunner {
         observationsUnchanged: 0,
       }
       const yieldForInteractivity = createCooperativeScheduler()
-
-      const replay = this.storage.repositories.sourceRecords.listForParserReplay
-      // Parser 升级直接重规范化已持久化的 SourceRecord。渐进窗口会把重放
-      // 限定到同一批 Session，避免为了修复语义重新读取完整原生日志前缀。
-      if (replay) {
-        let after: { capturedAt: string; id: string } | undefined
-        while (!abortSignal.aborted) {
-          const records = await replay(
-            source.manifest.sourceId,
-            installation.id,
-            source.manifest.parserVersion,
-            after,
-            500,
-            input.historyWindow,
-          )
-          if (!records.length) break
-          for (const stored of records) {
-            if (abortSignal.aborted) break
-            const processed = await processSourceRecord(
-              this.storage,
-              this.observations,
-              this.coverage,
-              this.capturePolicy,
-              source,
-              host,
-              installation,
-              runtimeProfile,
-              { ...stored, parserVersion: source.manifest.parserVersion },
-            )
-            result.observationsCreated += processed.observationsCreated
-            result.observationsMerged += processed.observationsMerged
-            result.observationsUnchanged += processed.observationsUnchanged
-            await yieldForInteractivity()
-          }
-          const last = records.at(-1)!
-          after = { capturedAt: last.capturedAt, id: last.id }
-          if (records.length < 500) break
-        }
-      }
 
       if (!source.ingestHistory) {
         await markHealthy(this.storage, runtimeStatus)
@@ -700,5 +920,11 @@ export class SourceAssetRunner {
 
 export const sourceRunnerInternals = {
   createCooperativeScheduler,
+  parserReplayCheckpointKey,
+  parserReplayWindowKey,
+  parserReplayTransactionExpired,
   DEFAULT_COOPERATIVE_BUDGET_MS,
+  PARSER_REPLAY_TRANSACTION_SIZE,
+  PARSER_REPLAY_TRANSACTION_BUDGET_MS,
+  PARSER_REPLAY_CHECKPOINT_SCOPE,
 }

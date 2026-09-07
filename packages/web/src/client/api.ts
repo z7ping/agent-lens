@@ -1,23 +1,24 @@
-import type {
-  AgentOverviewResponseDto,
-  BackupCreateRequestDto,
-  BackupOverviewResponseDto,
-  BackupRestorePreviewResponseDto,
-  BackupSnapshotResponseDto,
-  BackupSnapshotSummaryDto,
-  BackupVerifyResponseDto,
-  CapturePolicyResponseDto,
-  FacetResponseDto,
-  HealthResponseDto,
-  InsightsResponseDto,
-  LiveUpdateEventDto,
-  ReviewDetailDirection,
-  ReviewDetailFilter,
-  ReviewResponseDto,
-  ReviewSessionDetailDto,
-  SessionRelationshipResponseDto,
-  SourceRecordResponseDto,
-  ToolAssetUsageResponseDto,
+import {
+  parseLiveUpdateEvent,
+  type AgentOverviewResponseDto,
+  type BackupCreateRequestDto,
+  type BackupOverviewResponseDto,
+  type BackupRestorePreviewResponseDto,
+  type BackupSnapshotResponseDto,
+  type BackupSnapshotSummaryDto,
+  type BackupVerifyResponseDto,
+  type CapturePolicyResponseDto,
+  type FacetResponseDto,
+  type HealthResponseDto,
+  type InsightsResponseDto,
+  type LiveUpdateEventDto,
+  type ReviewDetailDirection,
+  type ReviewDetailFilter,
+  type ReviewResponseDto,
+  type ReviewSessionDetailDto,
+  type SessionRelationshipResponseDto,
+  type SourceRecordResponseDto,
+  type ToolAssetUsageResponseDto,
 } from '@agent-lens/protocol'
 
 export const LIVE_RECONNECTED_EVENT = 'agent-lens:live-reconnected'
@@ -52,6 +53,12 @@ function appendFilters(params: URLSearchParams, filters: QueryFilters): void {
   if (from) params.set('from', from)
 }
 
+function responseErrorMessage(value: unknown): string | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const message = Reflect.get(value, 'message')
+  return typeof message === 'string' && message ? message : undefined
+}
+
 async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> {
   try {
     const response = await fetch(path, {
@@ -61,8 +68,8 @@ async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> 
     if (!response.ok) {
       let detail = ''
       try {
-        const body = await response.json() as { message?: unknown }
-        if (typeof body.message === 'string' && body.message) detail = `：${body.message}`
+        const message = responseErrorMessage(await response.json())
+        if (message) detail = `：${message}`
       } catch { /* non-json error */ }
       throw new Error(`AgentLens 接口请求失败（状态码 ${response.status}）${detail}：${path}`)
     }
@@ -176,6 +183,14 @@ export class AgentLensApi {
     return requestJson(`/api/v1/usage?${params}`)
   }
 
+  usageDetail(filters: QueryFilters, toolName: string): Promise<ToolAssetUsageResponseDto> {
+    const params = new URLSearchParams()
+    appendFilters(params, filters)
+    params.set('toolName', toolName)
+    params.set('limit', '1')
+    return requestJson(`/api/v1/usage/detail?${params}`)
+  }
+
   insights(filters: QueryFilters): Promise<InsightsResponseDto> {
     const params = new URLSearchParams()
     appendFilters(params, filters)
@@ -277,8 +292,8 @@ export class AgentLensApi {
       onConnection(false)
     }
     source.addEventListener('observation', raw => {
-      if (disposed) return
-      try { onEvent(JSON.parse((raw as MessageEvent<string>).data) as LiveUpdateEventDto) } catch { /* ignore malformed frame */ }
+      if (disposed || !(raw instanceof MessageEvent) || typeof raw.data !== 'string') return
+      try { onEvent(parseLiveUpdateEvent(JSON.parse(raw.data))) } catch { /* ignore malformed frame */ }
     })
     return () => {
       disposed = true

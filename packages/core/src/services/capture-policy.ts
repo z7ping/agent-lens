@@ -50,6 +50,6 @@ export interface CapturePolicyService {
   sanitizeSourceRecord(record: SourceRecord, normalized?: NormalizedSourceOutput): SourceRecord
   sanitizeNormalizedOutput(normalized: NormalizedSourceOutput): NormalizedSourceOutput
   sanitizeDiscoveredAsset(asset: DiscoveredAsset): DiscoveredAsset | null
-  getSourceConfiguration?(): CapturePolicySourceConfiguration
-  setEnabledSources?(enabledSources: readonly string[]): Promise<CapturePolicySourceConfiguration>
+  getSourceConfiguration(): CapturePolicySourceConfiguration
+  setEnabledSources(enabledSources: readonly string[]): Promise<CapturePolicySourceConfiguration>
 }

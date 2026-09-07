@@ -8,6 +8,8 @@ import type {
   SourceRecord,
   SourceRecordEmitter,
 } from '@agent-lens/core'
+import { abortableDelay } from '@agent-lens/runtime-cordis'
+import { CODEX_CURRENT_PARSER_VERSION } from './current-protocol'
 
 const POLL_INTERVAL_MS = 250
 const MAX_STRING = 32 * 1024
@@ -140,21 +142,8 @@ function sourceRecordFromEnvelope(
         ...(cwd ? { cwd } : {}),
       },
     },
-    parserVersion: '1',
+    parserVersion: CODEX_CURRENT_PARSER_VERSION,
   }
-}
-
-async function sleep(ms: number, signal: AbortSignal): Promise<void> {
-  if (signal.aborted) return
-  await new Promise<void>(resolve => {
-    const timer = setTimeout(done, ms)
-    function done() {
-      signal.removeEventListener('abort', done)
-      clearTimeout(timer)
-      resolve()
-    }
-    signal.addEventListener('abort', done, { once: true })
-  })
 }
 
 export async function startCodexRuntimeCapture(
@@ -192,7 +181,7 @@ export async function startCodexRuntimeCapture(
       }
 
       if (!stopped && !ctx.abortSignal.aborted) {
-        await sleep(POLL_INTERVAL_MS, ctx.abortSignal)
+        await abortableDelay(POLL_INTERVAL_MS, ctx.abortSignal)
       }
     }
   })()

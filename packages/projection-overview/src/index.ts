@@ -2,6 +2,9 @@ import type {
   AssetInventoryEntry,
   CapabilityService,
   CapturePolicyService,
+  ObservationCursor,
+  SessionSummaryCursor,
+  SessionSummaryFacetScope,
   SourceService,
   StorageService,
 } from '@agent-lens/core'
@@ -16,6 +19,14 @@ import {
   type SessionRelationshipDto,
   type SessionRelationshipResponseDto,
 } from '@agent-lens/protocol'
+
+const FACET_SESSION_PAGE_SIZE = 500
+const FACET_OBSERVATION_PAGE_SIZE = 5000
+const FACET_SCOPE_CACHE_MS = 10_000
+const FACET_RESPONSE_CACHE_MS = 2_000
+const AGENT_OVERVIEW_CACHE_MS = 2_000
+
+type FastFacetScope = SessionSummaryFacetScope
 
 function latestStates(entry: AssetInventoryEntry): AgentAssetStateDto[] {
   const latest = new Map<string, AgentAssetStateDto>()
@@ -35,14 +46,125 @@ function sourceEnabled(policy: CapturePolicyService | undefined, sourceId: strin
   return policy ? policy.isSourceEnabled(sourceId) : true
 }
 
+function updateFacetRange(range: { from?: string; to?: string }, from: string, to = from): void {
+  if (!range.from || from < range.from) range.from = from
+  if (!range.to || to > range.to) range.to = to
+}
+
+async function loadFacetScopeFallback(storage: StorageService): Promise<{
+  projectIds: string[]
+  from?: string
+  to?: string
+}> {
+  const projectIds = new Set<string>()
+  const range: { from?: string; to?: string } = {}
+
+  if (storage.sessionSummaries) {
+    let after: SessionSummaryCursor | undefined
+    while (true) {
+      const page = await storage.sessionSummaries.query({
+        limit: FACET_SESSION_PAGE_SIZE,
+        ...(after ? { after } : {}),
+      })
+      for (const session of page.items) {
+        if (session.projectId) projectIds.add(session.projectId)
+        updateFacetRange(range, session.startedAt, session.endedAt)
+      }
+      if (!page.hasMore) break
+      const last = page.items.at(-1)
+      if (!last) break
+      after = { activeAt: last.endedAt, logicalSessionId: last.logicalSessionId }
+    }
+    return { projectIds: [...projectIds], ...range }
+  }
+
+  let after: ObservationCursor | undefined
+  while (true) {
+    const observations = await storage.repositories.observations.query({
+      order: 'asc',
+      ...(after ? { after } : {}),
+      limit: FACET_OBSERVATION_PAGE_SIZE,
+    })
+    if (!observations.length) break
+    for (const observation of observations) {
+      if (observation.projectId) projectIds.add(observation.projectId)
+      const at = observation.occurredAt ?? observation.capturedAt
+      updateFacetRange(range, at)
+    }
+    if (observations.length < FACET_OBSERVATION_PAGE_SIZE) break
+    const last = observations.at(-1)!
+    const sequence = last.canonicalSequence ?? last.sourceSequence
+    after = {
+      effectiveAt: last.occurredAt ?? last.capturedAt,
+      ...(sequence === undefined ? {} : { sequence }),
+      id: last.id,
+    }
+  }
+  return { projectIds: [...projectIds], ...range }
+}
+
+function fastFacetScope(storage: StorageService): (() => Promise<FastFacetScope>) | undefined {
+  const facetScope = storage.sessionSummaryProjection?.facetScope
+  return facetScope ? () => facetScope.call(storage.sessionSummaryProjection) : undefined
+}
+
 export class FacetProjection {
+  private cachedScope: FastFacetScope | null = null
+  private cachedScopeAt = 0
+  private cachedResponse: FacetResponseDto | null = null
+  private cachedResponseAt = 0
+  private queryInFlight: Promise<FacetResponseDto> | null = null
+
   constructor(
     private readonly storage: StorageService,
     private readonly sources?: SourceService,
     private readonly capturePolicy?: CapturePolicyService,
   ) {}
 
-  async query(): Promise<FacetResponseDto> {
+  private async scope(): Promise<FastFacetScope> {
+    if (this.cachedScope && Date.now() - this.cachedScopeAt < FACET_SCOPE_CACHE_MS) return this.cachedScope
+    const fast = fastFacetScope(this.storage)
+    if (fast) {
+      const scope = await fast()
+      this.cachedScope = scope
+      this.cachedScopeAt = Date.now()
+      return scope
+    }
+
+    const fallback = await loadFacetScopeFallback(this.storage)
+    const projects = (await Promise.all(fallback.projectIds.map(id => this.storage.repositories.sessions.getProject(id))))
+      .filter((item): item is NonNullable<typeof item> => Boolean(item))
+      .map(item => ({
+        id: item.id,
+        ...(item.name ? { name: item.name } : {}),
+        ...(item.repositoryIdentity ? { repositoryIdentity: item.repositoryIdentity } : {}),
+      }))
+    const scope = {
+      projects,
+      ...(fallback.from ? { from: fallback.from } : {}),
+      ...(fallback.to ? { to: fallback.to } : {}),
+    }
+    this.cachedScope = scope
+    this.cachedScopeAt = Date.now()
+    return scope
+  }
+
+  query(): Promise<FacetResponseDto> {
+    if (this.cachedResponse && Date.now() - this.cachedResponseAt < FACET_RESPONSE_CACHE_MS) {
+      return Promise.resolve(this.cachedResponse)
+    }
+    if (this.queryInFlight) return this.queryInFlight
+    this.queryInFlight = this.buildResponse()
+      .then(response => {
+        this.cachedResponse = response
+        this.cachedResponseAt = Date.now()
+        return response
+      })
+      .finally(() => { this.queryInFlight = null })
+    return this.queryInFlight
+  }
+
+  private async buildResponse(): Promise<FacetResponseDto> {
     const definitions = this.sources?.list() ?? []
     const agents = await Promise.all(definitions.map(async definition => {
       const installations = await this.storage.repositories.installations.listByProduct(definition.manifest.productId)
@@ -57,18 +179,14 @@ export class FacetProjection {
       }
     }))
 
-    const observations = await this.storage.repositories.observations.query({ limit: 5000 })
-    const projectIds = [...new Set(observations.map(item => item.projectId).filter((id): id is string => Boolean(id)))]
-    const projects = (await Promise.all(projectIds.map(id => this.storage.repositories.sessions.getProject(id))))
-      .filter((item): item is NonNullable<typeof item> => Boolean(item))
-      .map(item => ({ id: item.id, ...(item.name ? { name: item.name } : {}), ...(item.repositoryIdentity ? { repositoryIdentity: item.repositoryIdentity } : {}) }))
+    const scope = await this.scope()
+    const projects = [...scope.projects]
       .sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id))
-    const times = observations.map(item => item.occurredAt ?? item.capturedAt).sort()
 
     return {
       agents: agents.sort((a, b) => a.displayName.localeCompare(b.displayName)),
       projects,
-      dateRange: { ...(times[0] ? { from: times[0] } : {}), ...(times.at(-1) ? { to: times.at(-1)! } : {}) },
+      dateRange: { ...(scope.from ? { from: scope.from } : {}), ...(scope.to ? { to: scope.to } : {}) },
       meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION, generatedAt: new Date().toISOString() },
     }
   }
@@ -76,6 +194,9 @@ export class FacetProjection {
 
 export class AgentOverviewProjection {
   private readonly usage: ToolAssetUsageProjection
+  private cachedResponse: AgentOverviewResponseDto | null = null
+  private cachedResponseAt = 0
+  private queryInFlight: Promise<AgentOverviewResponseDto> | null = null
 
   constructor(
     private readonly storage: StorageService,
@@ -86,56 +207,66 @@ export class AgentOverviewProjection {
     this.usage = new ToolAssetUsageProjection(storage)
   }
 
-  async query(): Promise<AgentOverviewResponseDto> {
+  query(): Promise<AgentOverviewResponseDto> {
+    if (this.cachedResponse && Date.now() - this.cachedResponseAt < AGENT_OVERVIEW_CACHE_MS) {
+      return Promise.resolve(this.cachedResponse)
+    }
+    if (this.queryInFlight) return this.queryInFlight
+    this.queryInFlight = this.buildResponse()
+      .then(response => {
+        this.cachedResponse = response
+        this.cachedResponseAt = Date.now()
+        return response
+      })
+      .finally(() => { this.queryInFlight = null })
+    return this.queryInFlight
+  }
+
+  private async buildResponse(): Promise<AgentOverviewResponseDto> {
     const definitions = this.sources?.list() ?? []
     const items = await Promise.all(definitions.map(async definition => {
       const installations = await this.storage.repositories.installations.listByProduct(definition.manifest.productId)
       const usedAssets = new Map<string, AgentOverviewResponseDto['items'][number]['usedAssets'][number]>()
       const inventory = new Map<string, AgentAssetInventoryDto>()
 
-      for (const installation of installations) {
-        const assets = await this.usage.queryAssets({ installationId: installation.id })
-        for (const asset of assets) {
-          const key = `${asset.type}\u0000${asset.canonicalName}`
-          const previous = usedAssets.get(key)
-          usedAssets.set(key, previous ? {
-            ...previous,
-            callCount: previous.callCount + asset.callCount,
-            firstUsedAt: previous.firstUsedAt < asset.firstUsedAt ? previous.firstUsedAt : asset.firstUsedAt,
-            lastUsedAt: previous.lastUsedAt > asset.lastUsedAt ? previous.lastUsedAt : asset.lastUsedAt,
-          } : {
-            type: asset.type,
-            canonicalName: asset.canonicalName,
-            callCount: asset.callCount,
-            firstUsedAt: asset.firstUsedAt,
-            lastUsedAt: asset.lastUsedAt,
-            confidence: asset.confidence,
-          })
-        }
+      const assets = await this.usage.queryAssets({ sourceId: definition.manifest.sourceId })
+      for (const asset of assets) {
+        const key = `${asset.type}\u0000${asset.canonicalName}`
+        usedAssets.set(key, {
+          type: asset.type,
+          canonicalName: asset.canonicalName,
+          callCount: asset.callCount,
+          firstUsedAt: asset.firstUsedAt,
+          lastUsedAt: asset.lastUsedAt,
+          confidence: asset.confidence,
+        })
+      }
 
-        if (this.storage.assetInventory) {
-          for (const entry of await this.storage.assetInventory.listByInstallation(installation.id)) {
-            let asset = inventory.get(entry.definition.id)
-            if (!asset) {
-              asset = {
-                id: entry.definition.id,
-                type: entry.definition.type,
-                canonicalName: entry.definition.canonicalName,
-                ...(entry.definition.displayName ? { displayName: entry.definition.displayName } : {}),
-                ...(entry.definition.upstreamIdentity ? { upstreamIdentity: entry.definition.upstreamIdentity } : {}),
-                bindings: [],
-              }
-              inventory.set(entry.definition.id, asset)
+      const inventoryPages = this.storage.assetInventory
+        ? await Promise.all(installations.map(installation => this.storage.assetInventory!.listByInstallation(installation.id)))
+        : []
+      for (const entries of inventoryPages) {
+        for (const entry of entries) {
+          let asset = inventory.get(entry.definition.id)
+          if (!asset) {
+            asset = {
+              id: entry.definition.id,
+              type: entry.definition.type,
+              canonicalName: entry.definition.canonicalName,
+              ...(entry.definition.displayName ? { displayName: entry.definition.displayName } : {}),
+              ...(entry.definition.upstreamIdentity ? { upstreamIdentity: entry.definition.upstreamIdentity } : {}),
+              bindings: [],
             }
-            asset.bindings.push({
-              id: entry.binding.id,
-              installationId: entry.binding.installationId,
-              ...(entry.binding.path ? { path: entry.binding.path } : {}),
-              ...(entry.binding.source ? { source: entry.binding.source } : {}),
-              ...(entry.binding.version ? { version: entry.binding.version } : {}),
-              states: latestStates(entry),
-            })
+            inventory.set(entry.definition.id, asset)
           }
+          asset.bindings.push({
+            id: entry.binding.id,
+            installationId: entry.binding.installationId,
+            ...(entry.binding.path ? { path: entry.binding.path } : {}),
+            ...(entry.binding.source ? { source: entry.binding.source } : {}),
+            ...(entry.binding.version ? { version: entry.binding.version } : {}),
+            states: latestStates(entry),
+          })
         }
       }
 
@@ -210,4 +341,11 @@ export class SessionRelationshipProjection {
     const dedup = new Map(items.map(item => [item.id, item]))
     return { items: [...dedup.values()], meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION, generatedAt: new Date().toISOString() } }
   }
+}
+
+export const projectionOverviewInternals = {
+  FACET_SCOPE_CACHE_MS,
+  FACET_RESPONSE_CACHE_MS,
+  AGENT_OVERVIEW_CACHE_MS,
+  fastFacetScope,
 }

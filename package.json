@@ -1,6 +1,6 @@
 {
   "name": "@z7ping/agent-lens",
-  "version": "1.0.0-alpha.2",
+  "version": "1.0.0-alpha.3",
   "description": "Local observability and replay for AI coding agents, rebuilt around a canonical evidence model.",
   "private": false,
   "type": "module",
@@ -8,6 +8,34 @@
     "packages/*",
     "apps/*"
   ],
+  "knip": {
+    "ignoreDependencies": [
+      "@deepseek-ai/cordis",
+      "better-sqlite3",
+      "electron"
+    ],
+    "ignoreBinaries": [
+      "pwsh",
+      "taskkill.exe"
+    ],
+    "workspaces": {
+      ".": {
+        "entry": [
+          "scripts/acceptance/codex-semantics-desktop-app/main.cjs",
+          "scripts/acceptance/codex-semantics-real.mjs",
+          "scripts/acceptance/task-center-desktop-app/main.cjs",
+          "scripts/acceptance/task-center-desktop.mjs",
+          "scripts/acceptance/task-center-resource-soak.mjs"
+        ]
+      },
+      "apps/daemon": {
+        "entry": [
+          "src/data-runtime/worker-source.mjs",
+          "src/data-runtime/worker.ts"
+        ]
+      }
+    }
+  },
   "bin": {
     "agent-lens": "dist/cli.mjs",
     "agent-lens-hook-codex": "dist/hooks/agent-lens-hook-codex.mjs",
@@ -25,9 +53,13 @@
     "cli": "npm run start --workspace @agent-lens/cli --",
     "dev:web": "npm run dev --workspace @agent-lens/web",
     "build:web": "npm run build --workspace @agent-lens/web",
+    "lint": "eslint apps packages scripts --ext .js,.mjs,.cjs,.ts,.tsx,.mts,.cts",
+    "check:dead-code": "knip",
+    "check:duplicates": "jscpd --config .jscpd.json",
+    "check:quality": "npm run lint && npm run check:dead-code && npm run check:duplicates",
     "check:web-presentation": "node scripts/check-task-center-performance-contract.mjs && node scripts/check-task-style-ownership.mjs && node scripts/check-web-presentation.mjs && node scripts/check-release-info.mjs && node scripts/check-review-contract.mjs && node scripts/check-backup-overlays.mjs && node scripts/check-page-heading-contract.mjs && node scripts/check-interaction-closure.mjs && node scripts/check-pi-live-contract.mjs",
     "check:brand-assets": "node scripts/check-brand-assets.mjs",
-    "check:alpha3-real-acceptance": "node --check scripts/acceptance/pi-live-real.mjs && node --check scripts/acceptance/task-center-desktop.mjs && node --check scripts/acceptance/task-center-resource-soak.mjs && node --test scripts/acceptance/task-center-screenshot-contract.test.mjs && node scripts/check-alpha3-real-acceptance-contract.mjs",
+    "check:alpha3-real-acceptance": "node --check scripts/acceptance/pi-live-real.mjs && node --check scripts/acceptance/task-center-desktop.mjs && node --check scripts/acceptance/task-center-resource-soak.mjs && node --check scripts/acceptance/large-db-performance.mjs && node --check scripts/acceptance/large-db-backfill-foreground.mjs && node --test scripts/acceptance/task-center-screenshot-contract.test.mjs && node scripts/check-alpha3-real-acceptance-contract.mjs",
     "check:desktop-shell": "node --check apps/desktop/src/bootstrap.mjs && node --check apps/desktop/src/external-links.mjs && node --check apps/desktop/src/integration.mjs && node --check apps/desktop/src/legacy-windows-migration.mjs && node --check apps/desktop/src/login-autostart.mjs && node --check apps/desktop/src/main.mjs && node --check apps/desktop/src/update-check.mjs && node --check scripts/check-release-signing.mjs && node --check scripts/check-release-version.mjs && node --check scripts/resolve-npm-dist-tag.mjs && node --test scripts/resolve-release-version.test.mjs && node scripts/check-release-channel.mjs && node scripts/check-version-consistency.mjs && node --check scripts/smoke-desktop-runtime.mjs && node scripts/check-desktop-contract.mjs && npm run check:alpha3-real-acceptance",
     "build:dist": "node scripts/build-distribution.mjs",
     "build": "npm run build:dist",
@@ -51,6 +83,9 @@
     "perf:pi-live-scheduler": "tsx scripts/performance/pi-live-scheduler-benchmark.ts",
     "perf:pi-live-history": "tsx scripts/performance/pi-live-history-virtualization-benchmark.ts",
     "perf:daemon-idle-cpu": "tsx scripts/performance/daemon-idle-cpu-benchmark.ts",
+    "perf:data-runtime-isolation": "tsx scripts/performance/data-runtime-isolation-benchmark.ts",
+    "accept:large-db-performance": "node scripts/acceptance/large-db-performance.mjs",
+    "accept:large-db-backfill": "node scripts/acceptance/large-db-backfill-foreground.mjs",
     "accept:pi-live-real": "node scripts/acceptance/pi-live-real.mjs",
     "accept:pi-live:1h": "node scripts/acceptance/pi-live-real.mjs --soak=3600000 --soak-interval=60000",
     "accept:task-center-desktop": "npm run accept:task-center-desktop --workspace @agent-lens/desktop",
@@ -92,9 +127,24 @@
     "better-sqlite3": "13.0.3"
   },
   "devDependencies": {
+    "@agent-lens/protocol": "1.0.0-alpha.3",
+    "@electron/get": "5.1.0",
     "@types/node": "22.20.0",
     "esbuild": "0.28.2",
+    "eslint": "10.10.0",
+    "globals": "17.12.0",
+    "jscpd": "5.1.2",
+    "knip": "6.34.0",
     "tsx": "4.22.4",
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.69.0",
+    "unzipper": "0.12.5"
+  },
+  "allowScripts": {
+    "@google/genai@1.52.0": true,
+    "protobufjs@7.6.5": true,
+    "better-sqlite3@13.0.3": true,
+    "electron-winstaller@5.4.0": true,
+    "esbuild@0.28.2": true
   }
 }

@@ -35,12 +35,6 @@ interface PendingRequest {
   reject(error: Error): void
 }
 
-interface WorkerHandshakeDiagnostics {
-  capabilities?: PiLiveRuntimeCapabilities | undefined
-  initializationElapsedMs?: number | undefined
-  initializationTimings?: PiLiveInitializationTiming[] | undefined
-}
-
 export interface PiRuntimeHandle {
   readonly processId?: number | undefined
   readonly capabilities?: PiLiveRuntimeCapabilities | undefined

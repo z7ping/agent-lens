@@ -1,0 +1,137 @@
+import assert from 'node:assert/strict'
+import test from 'node:test'
+import type { SourceRecord } from '@agent-lens/core'
+import { codexSourceDefinition } from './index'
+import { asRecord, codexTestContext } from './test-support'
+
+function record(payload: Record<string, unknown>, nativeSessionId: string): SourceRecord {
+  return {
+    id: `record-${nativeSessionId}`,
+    sourceId: 'codex',
+    installationId: 'install',
+    sourceSessionNativeId: nativeSessionId,
+    nativeType: 'session_meta',
+    sourceSequence: 1,
+    occurredAt: '2026-09-05T06:00:00.000Z',
+    capturedAt: '2026-09-05T06:00:00.000Z',
+    locator: { kind: 'file', path: '/safe/rollout.jsonl', offset: 0 },
+    payload: {
+      entry: { type: 'session_meta', payload },
+      session: { nativeSessionId, cwd: '/safe/project' },
+    },
+    parserVersion: '15',
+  }
+}
+
+function firstPayload(output: Awaited<ReturnType<typeof codexSourceDefinition.normalize>>): Record<string, unknown> {
+  return asRecord(output.observations[0]?.payload)
+}
+
+test('parent_thread_id is a subagent signal even when legacy metadata omits thread_source details', async () => {
+  const output = await codexSourceDefinition.normalize(record({
+    id: 'child-thread',
+    session_id: 'shared-session',
+    parent_thread_id: 'root-thread',
+    source: 'cli',
+  }, 'child-thread'), codexTestContext)
+
+  const payload = firstPayload(output)
+  assert.equal(payload.sessionActivity, 'subagent')
+  assert.equal(payload.parentSessionId, 'root-thread')
+  assert.equal(output.sessionRelationshipHints?.find(item => item.fromNativeSessionId === 'root-thread')?.type, 'subagent')
+})
+
+test('shared session_id does not turn a root user thread into system activity', async () => {
+  const output = await codexSourceDefinition.normalize(record({
+    id: 'root-thread',
+    session_id: 'shared-session',
+    source: 'vscode',
+    thread_source: 'user',
+  }, 'root-thread'), codexTestContext)
+
+  const payload = firstPayload(output)
+  assert.equal(payload.sessionActivity, 'user-task')
+  assert.equal(payload.parentSessionId, undefined)
+  assert.equal(payload.rootSessionId, undefined)
+  assert.equal(output.sessionRelationshipHints?.length ?? 0, 0)
+})
+
+test('forked_from_id remains an explicit branch relationship independent of session_id', async () => {
+  const output = await codexSourceDefinition.normalize(record({
+    id: 'fork-thread',
+    session_id: 'shared-session',
+    forked_from_id: 'root-thread',
+    source: 'vscode',
+    thread_source: 'user',
+  }, 'fork-thread'), codexTestContext)
+
+  const payload = firstPayload(output)
+  assert.equal(payload.sessionActivity, 'branch-task')
+  assert.equal(payload.parentSessionId, 'root-thread')
+  assert.equal(output.sessionRelationshipHints?.find(item => item.fromNativeSessionId === 'root-thread')?.type, 'branch-task')
+})
+
+test('source.subAgent thread_spawn preserves exact subagent ownership', async () => {
+  const output = await codexSourceDefinition.normalize(record({
+    id: 'child-app-server',
+    session_id: 'shared-session',
+    source: {
+      subAgent: {
+        thread_spawn: {
+          parent_thread_id: 'root-thread',
+          agent_nickname: 'worker-a',
+          depth: 1,
+        },
+      },
+    },
+    thread_source: 'subagent',
+  }, 'child-app-server'), codexTestContext)
+
+  const payload = firstPayload(output)
+  assert.equal(payload.sessionActivity, 'subagent')
+  assert.equal(payload.activitySourceLabel, 'worker-a')
+  assert.equal(output.sessionRelationshipHints?.[0]?.nativeRelation, 'source.subAgent.thread_spawn.parent_thread_id')
+})
+
+test('source.sub_agent legacy/raw shape is also recognized structurally', async () => {
+  const output = await codexSourceDefinition.normalize(record({
+    id: 'child-raw',
+    session_id: 'shared-session',
+    source: {
+      sub_agent: {
+        thread_spawn: {
+          parent_thread_id: 'root-thread',
+          agent_role: 'worker',
+          depth: 1,
+        },
+      },
+    },
+  }, 'child-raw'), codexTestContext)
+
+  assert.equal(firstPayload(output).sessionActivity, 'subagent')
+  assert.equal(output.sessionRelationshipHints?.[0]?.nativeRelation, 'source.sub_agent.thread_spawn.parent_thread_id')
+})
+
+test('memory consolidation remains system activity instead of being promoted to a user task', async () => {
+  const output = await codexSourceDefinition.normalize(record({
+    id: 'memory-thread',
+    session_id: 'shared-session',
+    source: 'app_server',
+    thread_source: 'memory_consolidation',
+  }, 'memory-thread'), codexTestContext)
+
+  const payload = firstPayload(output)
+  assert.equal(payload.sessionActivity, 'system-activity')
+  assert.equal(payload.activitySourceLabel, '记忆整理')
+})
+
+test('feature thread remains system activity when no human user ownership exists', async () => {
+  const output = await codexSourceDefinition.normalize(record({
+    id: 'feature-thread',
+    session_id: 'shared-session',
+    source: 'app_server',
+    thread_source: 'feature:background-job',
+  }, 'feature-thread'), codexTestContext)
+
+  assert.equal(firstPayload(output).sessionActivity, 'system-activity')
+})

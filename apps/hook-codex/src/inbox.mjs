@@ -12,7 +12,6 @@ function capturePolicyConfigurationPath(env = process.env) {
   return env.AGENT_LENS_CAPTURE_POLICY_PATH
     || join(homedir(), '.agent-lens', '1.0', 'config', 'capture-policy.json')
 }
-
 function configuredSources(env = process.env) {
   try {
     const value = JSON.parse(readFileSync(capturePolicyConfigurationPath(env), 'utf8'))
@@ -57,7 +56,7 @@ export function sourceCaptureEnabled(sourceId, env = process.env) {
   return enabledSources(env).includes(String(sourceId || '').trim().toLowerCase())
 }
 
-export function codexInboxDirectory(env = process.env) {
+function codexInboxDirectory(env = process.env) {
   return env.AGENT_LENS_CODEX_INBOX
     || join(homedir(), '.agent-lens', '1.0', 'inbox', 'codex')
 }
@@ -101,10 +100,4 @@ export async function persistCodexHookEvent(rawEvent, options = {}) {
   }
 
   return finalPath
-}
-
-export const hookInboxInternals = {
-  sanitize,
-  configuredSources,
-  capturePolicyConfigurationPath,
 }

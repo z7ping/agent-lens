@@ -1,6 +1,7 @@
 import type {
   CanonicalObservation,
   ObservationCursor,
+  SessionSummaryCursor,
   SessionSummaryRecord,
   SourceSession,
   StorageService,
@@ -150,9 +151,11 @@ function toolCategory(nativeName: string): string {
   return nativeName
 }
 
-async function fallbackSessions(storage: StorageService): Promise<SessionLoadResult> {
+async function fallbackSessions(storage: StorageService, query: InsightsQueryDto): Promise<SessionLoadResult> {
   const observations = await storage.repositories.observations.query({
     order: 'desc',
+    ...(query.from ? { from: query.from } : {}),
+    ...(query.to ? { to: query.to } : {}),
     limit: FALLBACK_OBSERVATION_LIMIT,
   })
   const grouped = new Map<string, CanonicalObservation[]>()
@@ -183,7 +186,7 @@ async function fallbackSessions(storage: StorageService): Promise<SessionLoadRes
     const firstContent = [...group]
       .sort((a, b) => effectiveAt(a).localeCompare(effectiveAt(b)))
       .find(item => item.kind !== 'session.lifecycle')
-    items.push({
+    const item: SessionSummaryRecord = {
       logicalSessionId,
       installationId: logical.installationId,
       productId: installation.productId,
@@ -197,7 +200,8 @@ async function fallbackSessions(storage: StorageService): Promise<SessionLoadRes
       interactionCount: userCount + (firstContent && firstContent.kind !== 'message.user' ? 1 : 0),
       toolCount,
       errorCount,
-    })
+    }
+    if (matchesScope(item, query)) items.push(item)
     if (items.length >= SESSION_SAMPLE_LIMIT) break
   }
   items.sort((a, b) => b.endedAt.localeCompare(a.endedAt) || a.logicalSessionId.localeCompare(b.logicalSessionId))
@@ -207,10 +211,31 @@ async function fallbackSessions(storage: StorageService): Promise<SessionLoadRes
   }
 }
 
-async function loadSessions(storage: StorageService): Promise<SessionLoadResult> {
-  if (!storage.sessionSummaries) return fallbackSessions(storage)
-  const response = await storage.sessionSummaries.query({ limit: SESSION_SAMPLE_LIMIT })
-  return { items: response.items, sampled: response.hasMore }
+async function loadSessions(storage: StorageService, query: InsightsQueryDto): Promise<SessionLoadResult> {
+  if (!storage.sessionSummaries) return fallbackSessions(storage, query)
+
+  const items: SessionSummaryRecord[] = []
+  let after: SessionSummaryCursor | undefined
+  while (true) {
+    const response = await storage.sessionSummaries.query({
+      limit: SESSION_SAMPLE_LIMIT,
+      ...(query.sourceId ? { sourceId: query.sourceId } : {}),
+      ...(query.projectId ? { projectId: query.projectId } : {}),
+      ...(query.from ? { from: query.from } : {}),
+      ...(after ? { after } : {}),
+    })
+    for (const item of response.items) {
+      // SessionSummaryQuery.to uses endedAt, while Insights intentionally treats a session
+      // as in-range when its interval overlaps the requested upper boundary. Keep that
+      // final overlap check here rather than narrowing the storage query incorrectly.
+      if (matchesScope(item, query)) items.push(item)
+    }
+    if (!response.hasMore) break
+    const last = response.items.at(-1)
+    if (!last) break
+    after = { activeAt: last.endedAt, logicalSessionId: last.logicalSessionId }
+  }
+  return { items, sampled: false }
 }
 
 async function loadToolCalls(
@@ -333,8 +358,8 @@ export class UsageInsightsProjection {
       throw new Error('Insights from must be earlier than or equal to to')
     }
 
-    const loaded = await loadSessions(this.storage)
-    const sessions = loaded.items.filter(item => matchesScope(item, query))
+    const loaded = await loadSessions(this.storage, query)
+    const sessions = loaded.items
     const summary = metricsFor(sessions)
     const usage = await this.usage.query({
       ...(query.sourceId ? { sourceId: query.sourceId } : {}),
@@ -388,21 +413,23 @@ export class UsageInsightsProjection {
         const previousFromMs = previousToMs - width
         const previousFrom = new Date(previousFromMs).toISOString()
         const previousTo = new Date(previousToMs).toISOString()
-        const previousSessions = loaded.items.filter(item => matchesScope(item, {
+        const previousLoaded = await loadSessions(this.storage, {
           ...(query.sourceId ? { sourceId: query.sourceId } : {}),
           ...(query.projectId ? { projectId: query.projectId } : {}),
           from: previousFrom,
           to: previousTo,
-        }))
-        const previous = metricsFor(previousSessions)
-        comparison = {
-          current: summary,
-          previous,
-          delta: metricDelta(summary, previous),
-          currentFrom: query.from,
-          currentTo,
-          previousFrom,
-          previousTo,
+        })
+        if (!previousLoaded.sampled) {
+          const previous = metricsFor(previousLoaded.items)
+          comparison = {
+            current: summary,
+            previous,
+            delta: metricDelta(summary, previous),
+            currentFrom: query.from,
+            currentTo,
+            previousFrom,
+            previousTo,
+          }
         }
       }
     }

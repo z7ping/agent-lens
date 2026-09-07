@@ -1,7 +1,6 @@
 import { access, readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 
-const root = new URL('../', import.meta.url)
 const rootPackage = await readJson(file('package.json'))
 const expected = rootPackage.version
 const failures = []

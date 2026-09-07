@@ -183,7 +183,12 @@ test('SourceRecord safety boundary preserves unknown structure while redacting a
     evidenceCandidates: [],
   }
   const safe = policy.sanitizeSourceRecord(source, output)
-  const payload = safe.payload as Record<string, any>
+  const payload = safe.payload as {
+    futureField: { nested: unknown }
+    apiToken: unknown
+    huge: unknown
+    many: unknown[]
+  }
   assert.equal(payload.futureField.nested, 'survives')
   assert.equal(payload.apiToken, REDACTED)
   assert.ok(String(payload.huge).length < 100_000)

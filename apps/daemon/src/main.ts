@@ -8,12 +8,14 @@ import {
   sessionSummaryProjectionPlugin,
 } from '@agent-lens/projection-session'
 import {
+  abortableDelay,
   AgentLensApplication,
   coreServicesPlugin,
   discoverRegisteredSourceAssets,
   nodeRuntimePlugin,
   piLiveRuntimePlugin,
   prepareRegisteredSources,
+  replayRegisteredSourceHistory,
   resolveAgentLensNodeRuntime,
   startRegisteredSourceCapture,
   syncRegisteredSourceHistory,
@@ -24,22 +26,40 @@ import { codexSourcePlugin } from '@agent-lens/source-codex'
 import { hermesSourcePlugin } from '@agent-lens/source-hermes'
 import { openCodeSourcePlugin } from '@agent-lens/source-opencode'
 import { piSourcePlugin } from '@agent-lens/source-pi'
-import { sqliteStoragePlugin } from '@agent-lens/storage-sqlite'
 import {
   DEFAULT_AGENT_LENS_HTTP_PORT,
   httpSurfacePlugin,
 } from '@agent-lens/surface-http'
 import { webPlugin } from '@agent-lens/web'
+import { dataRuntimeStoragePlugin } from './data-runtime/storage-plugin.js'
 import {
   beginSessionSummaryProjectionRun,
   markSessionSummaryProjectionClean,
 } from './projection-readiness.js'
 import {
   createProgressiveHistoryStages,
+  createParserReplayMaintenanceStages,
+  parserReplayMaintenanceStagesAllowedByCapacity,
   stagesAllowedByCapacity,
   storageCapacityState,
   yieldToForeground,
 } from './history-sync-plan.js'
+import {
+  attachHttpForegroundActivity,
+  ForegroundActivityGate,
+} from './maintenance-idle.js'
+import {
+  MAINTENANCE_PRIORITY,
+  runMaintenanceJob,
+} from './maintenance-jobs.js'
+import {
+  backfillToolUsageFactProjection,
+  backfillUnknownObservationProjection,
+} from './projection-backfill-maintenance.js'
+import {
+  compressLegacySourceRecords,
+  ensureDeferredStorageIndexes,
+} from './storage-maintenance.js'
 import { profiledDshSourcePlugin } from './sources/dsh-profiled.js'
 
 const nodeRuntime = resolveAgentLensNodeRuntime()
@@ -59,13 +79,13 @@ const daemonMode = process.env.AGENT_LENS_DAEMON_MODE === 'managed' ? 'managed' 
 const developmentApiPort = process.env.AGENT_LENS_DEV_API_PORT
 const interactiveTerminal = Boolean(process.stdin.isTTY && process.stdout.isTTY)
 const startedAt = Date.now()
-// 为 Web Shell 的首轮 Health / Facet / Review 查询保留短暂宽限期；
-// 历史和资产同步随后继续增量执行。
 const INITIAL_BACKGROUND_SYNC_DELAY_MS = 2_000
+const DATA_RUNTIME_RECOVERY_POLL_MS = 500
+let foregroundGate: ForegroundActivityGate | null = null
 
 const app = new AgentLensApplication()
 app.useRuntime(nodeRuntimePlugin, nodeRuntime)
-app.use(sqliteStoragePlugin, { path: dbPath })
+app.use(dataRuntimeStoragePlugin, { path: dbPath })
 app.useRuntime(coreServicesPlugin)
 app.useRuntime(sessionSummaryProjectionPlugin)
 app.useRuntime(capturePolicyPlugin)
@@ -79,7 +99,11 @@ if (capabilities.localCapture) {
   app.use(profiledDshSourcePlugin)
 }
 app.useRuntime(backupLocalPlugin, { vaultPath })
-app.use(httpSurfacePlugin, { port: configuredPort })
+app.use(httpSurfacePlugin, {
+  port: configuredPort,
+  dataRuntimeHealth: () => app.context.dataRuntime.snapshot(),
+  healthDetails: () => foregroundGate ? { maintenanceGate: foregroundGate.snapshot() } : {},
+})
 app.use(webPlugin, { staticDir: webRoot })
 
 const runtimeController = new AbortController()
@@ -88,6 +112,7 @@ let captureHandles: Awaited<ReturnType<typeof startRegisteredSourceCapture>>['re
 let shuttingDown = false
 let reuseSessionSummaryProjection = false
 let sessionSummaryProjectionReady = false
+let disposeHttpActivityTracking: (() => void) | null = null
 
 function runtimeAge(): string {
   const seconds = Math.max(0, Math.round((Date.now() - startedAt) / 1000))
@@ -107,6 +132,31 @@ function logSourceFailures(failures: RegisteredSourceFailure[]): void {
   }
 }
 
+async function disposeCaptureHandles(): Promise<void> {
+  const handles = [...captureHandles].reverse()
+  captureHandles = []
+  for (const handle of handles) {
+    try {
+      await handle.dispose()
+    } catch {
+      // Best-effort cleanup must not hide the primary shutdown/startup error.
+    }
+  }
+}
+
+async function waitForDataRuntime(signal: AbortSignal): Promise<boolean> {
+  let announced = false
+  while (!signal.aborted) {
+    if (app.context.dataRuntime.snapshot().ok) return true
+    if (!announced) {
+      announced = true
+      console.warn('[AgentLens] background data work paused while Data Runtime recovers')
+    }
+    await abortableDelay(DATA_RUNTIME_RECOVERY_POLL_MS, signal)
+  }
+  return false
+}
+
 async function shutdown(signal: string): Promise<void> {
   if (shuttingDown) return
   shuttingDown = true
@@ -114,10 +164,10 @@ async function shutdown(signal: string): Promise<void> {
 
   try {
     if (syncPromise) await syncPromise.catch(() => undefined)
-    for (const handle of [...captureHandles].reverse()) {
-      await handle.dispose().catch(() => undefined)
-    }
-    captureHandles = []
+    await disposeCaptureHandles()
+    disposeHttpActivityTracking?.()
+    disposeHttpActivityTracking = null
+    foregroundGate = null
     let readinessError: unknown
     if (sessionSummaryProjectionReady) {
       try {
@@ -155,9 +205,22 @@ process.on('SIGTERM', () => handleSignal('SIGTERM'))
 
 try {
   await app.start()
+  foregroundGate = new ForegroundActivityGate({
+    loadProbe: () => ({
+      foregroundPending: app.context.dataRuntime.foregroundPending(),
+      writerPending: app.context.dataRuntime.writerPending(),
+    }),
+  })
+  disposeHttpActivityTracking = attachHttpForegroundActivity(app.context.http.server, foregroundGate)
+  const maintenanceJobs = app.context.storage.maintenanceJobs
+  const storageMaintenance = app.context.storage.maintenance
+  const projectionBackfill = app.context.storage.projectionBackfill
+
   console.info(
     `[AgentLens] 1.0 runtime started (db: ${dbPath}, mode=${daemonMode}, interactive=${interactiveTerminal}, pid=${process.pid}, ppid=${process.ppid})`,
   )
+  const dataRuntimeSnapshot = app.context.dataRuntime.snapshot()
+  console.info(`[AgentLens] Data Runtime: writer=${dataRuntimeSnapshot.writer.state} readers=${dataRuntimeSnapshot.readers.map(reader => reader.state).join(',')} maintenance=${dataRuntimeSnapshot.maintenanceReader.state}`)
   console.info(`[AgentLens] node: ${app.context.node.identity.nodeId} profile=${runtimeProfile} ${capabilitySummary()}`)
   if (developmentApiPort) {
     console.info(`[AgentLens] Runtime API: http://127.0.0.1:${configuredPort}`)
@@ -176,12 +239,12 @@ try {
   sessionSummaryProjectionReady = reuseSessionSummaryProjection
 
   syncPromise = (async () => {
-    await new Promise(resolve => setTimeout(resolve, INITIAL_BACKGROUND_SYNC_DELAY_MS))
-    if (runtimeController.signal.aborted) return
+    await abortableDelay(INITIAL_BACKGROUND_SYNC_DELAY_MS, runtimeController.signal)
+    if (!await waitForDataRuntime(runtimeController.signal)) return
 
-    // Runtime Ready 只依赖已启动的 HTTP Surface 与基础存储。来源探测和
-    // Capture 初始化可能触发 SQLite 写入或宿主 I/O，不能阻塞开发入口的
-    // health 探测和 Vite 启动。
+    const initialStorageHealth = await app.context.storage.health()
+    const initialCapacityState = storageCapacityState(initialStorageHealth.details)
+
     const prepared = await prepareRegisteredSources(app.context, runtimeController.signal)
     logSourceFailures(prepared.failures)
     if (runtimeController.signal.aborted) return
@@ -200,14 +263,39 @@ try {
 
     if (reuseSessionSummaryProjection) {
       console.info('[AgentLens] session summary projection reused from clean shutdown')
+    } else if (initialCapacityState === 'exceeded' || initialCapacityState === 'unknown') {
+      sessionSummaryProjectionReady = false
+      console.warn(`[AgentLens] session summary projection rebuild paused; storage capacity=${initialCapacityState}`)
     } else {
       try {
         console.info('[AgentLens] session summary projection cooperative rebuild started')
-        await app.context.projections.rebuild(SESSION_SUMMARY_PROJECTION_ID, {
-          signal: runtimeController.signal,
-        })
-        sessionSummaryProjectionReady = true
-        console.info('[AgentLens] session summary projection rebuilt')
+        const projectionRun = await runMaintenanceJob(
+          maintenanceJobs,
+          {
+            id: 'projection:session-summary',
+            type: 'projection-rebuild',
+            scope: SESSION_SUMMARY_PROJECTION_ID,
+            priority: MAINTENANCE_PRIORITY.projection,
+          },
+          runtimeController.signal,
+          async () => {
+            const gate = foregroundGate
+            if (gate) await gate.wait(runtimeController.signal)
+            if (runtimeController.signal.aborted) return { rebuilt: false }
+            await app.context.projections.rebuild(SESSION_SUMMARY_PROJECTION_ID, {
+              signal: runtimeController.signal,
+            })
+            return { rebuilt: true }
+          },
+          value => value,
+        )
+        if (projectionRun?.status === 'contended' || projectionRun?.status === 'paused' || !projectionRun?.value?.rebuilt) {
+          sessionSummaryProjectionReady = false
+          console.warn(`[AgentLens] session summary projection maintenance ${projectionRun?.status ?? 'paused'}`)
+        } else {
+          sessionSummaryProjectionReady = true
+          console.info('[AgentLens] session summary projection rebuilt')
+        }
       } catch (error) {
         if (runtimeController.signal.aborted) return
         sessionSummaryProjectionReady = false
@@ -217,8 +305,6 @@ try {
 
     if (runtimeController.signal.aborted) return
 
-    // 历史任务是首要界面数据。先完成历史同步，再扫描静态资产，避免两个
-    // 冷扫描器同时争用同一个 SQLite 执行器和磁盘。
     const storageHealth = await app.context.storage.health()
     const capacityState = storageCapacityState(storageHealth.details)
     const plannedHistoryStages = createProgressiveHistoryStages(startedAt)
@@ -247,24 +333,275 @@ try {
     }
     if (runtimeController.signal.aborted) return
 
-    const assets = await discoverRegisteredSourceAssets(
-      app.context,
-      runtimeController.signal,
-      prepared.targets,
-    )
-    logSourceFailures(assets.failures)
-    for (const result of assets.results) {
-      console.info(
-        `[AgentLens] assets scanned: ${result.sourceId} assets=${result.assetsDiscovered} states=${result.statesRecorded}`,
+    if (capacityState !== 'exceeded' && capacityState !== 'unknown') {
+      const assets = await discoverRegisteredSourceAssets(
+        app.context,
+        runtimeController.signal,
+        prepared.targets,
       )
+      logSourceFailures(assets.failures)
+      for (const result of assets.results) {
+        console.info(
+          `[AgentLens] assets scanned: ${result.sourceId} assets=${result.assetsDiscovered} states=${result.statesRecorded}`,
+        )
+      }
+    } else {
+      console.warn(`[AgentLens] asset discovery paused; storage capacity=${capacityState}`)
+    }
+    if (runtimeController.signal.aborted) return
+
+    const gate = foregroundGate
+    if (!gate) return
+    await gate.wait(runtimeController.signal)
+    if (runtimeController.signal.aborted) return
+
+    const preMaintenanceHealth = await app.context.storage.health()
+    const preMaintenanceCapacity = storageCapacityState(preMaintenanceHealth.details)
+    const capacityConstrained = preMaintenanceCapacity === 'exceeded' || preMaintenanceCapacity === 'unknown'
+
+    // Tool Usage Facts are a correctness projection, not optional expansion. If
+    // this backfill is permanently skipped on a large store the Tools/Agents UI
+    // silently becomes incomplete forever. Keep it resumable and foreground-gated,
+    // but shrink the batch while capacity is constrained.
+    try {
+      const toolFactRun = await runMaintenanceJob(
+        maintenanceJobs,
+        {
+          id: 'projection:tool-usage-facts:v18',
+          type: 'projection-rebuild',
+          scope: 'tool-usage-facts-v18',
+          priority: MAINTENANCE_PRIORITY.projection,
+        },
+        runtimeController.signal,
+        async job => backfillToolUsageFactProjection(
+          projectionBackfill,
+          gate,
+          runtimeController.signal,
+          {
+            ...(job.initialProgress === undefined ? {} : { initialProgress: job.initialProgress }),
+            batchSize: capacityConstrained ? 50 : 250,
+            report: job.report,
+          },
+        ),
+        value => ({
+          scanned: value.scanned,
+          written: value.written,
+          batches: value.batches,
+          ...(value.cursor ? { cursor: value.cursor } : {}),
+          aborted: value.aborted,
+        }),
+      )
+      if (toolFactRun?.status === 'contended') {
+        console.warn('[AgentLens] Tool Usage Facts projection backfill contended')
+      } else if (toolFactRun?.value) {
+        console.info(`[AgentLens] Tool Usage Facts projection backfill: scanned=${toolFactRun.value.scanned} written=${toolFactRun.value.written} batches=${toolFactRun.value.batches} constrained=${capacityConstrained}`)
+      }
+    } catch (error) {
+      if (!runtimeController.signal.aborted) {
+        console.error('[AgentLens] Tool Usage Facts projection backfill failed', error)
+      }
+    }
+
+    if (runtimeController.signal.aborted) return
+
+    if (capacityConstrained) {
+      console.warn(`[AgentLens] storage capacity=${preMaintenanceCapacity}; non-essential projection backfill, deferred indexes and parser replay remain paused; Tool Usage Facts consistency backfill is still enabled`)
+    } else {
+      try {
+        const unknownRun = await runMaintenanceJob(
+          maintenanceJobs,
+          {
+            id: 'projection:unknown-observation:v17',
+            type: 'projection-rebuild',
+            scope: 'unknown-observation-v17',
+            priority: MAINTENANCE_PRIORITY.projection,
+          },
+          runtimeController.signal,
+          async job => backfillUnknownObservationProjection(
+            projectionBackfill,
+            gate,
+            runtimeController.signal,
+            {
+              ...(job.initialProgress === undefined ? {} : { initialProgress: job.initialProgress }),
+              batchSize: 250,
+              report: job.report,
+            },
+          ),
+          value => ({
+            scanned: value.scanned,
+            written: value.written,
+            batches: value.batches,
+            ...(value.cursor ? { cursor: value.cursor } : {}),
+            aborted: value.aborted,
+          }),
+        )
+        if (unknownRun?.status === 'contended') {
+          console.warn('[AgentLens] Unknown Observation projection backfill contended')
+        } else if (unknownRun?.value) {
+          console.info(`[AgentLens] Unknown Observation projection backfill: scanned=${unknownRun.value.scanned} written=${unknownRun.value.written} batches=${unknownRun.value.batches}`)
+        }
+      } catch (error) {
+        if (!runtimeController.signal.aborted) {
+          console.error('[AgentLens] Unknown Observation projection backfill failed', error)
+        }
+      }
+
+      try {
+        const indexRun = await runMaintenanceJob(
+          maintenanceJobs,
+          {
+            id: 'storage:deferred-indexes',
+            type: 'deferred-indexes',
+            scope: 'sqlite-primary',
+            priority: MAINTENANCE_PRIORITY.deferredIndexes,
+          },
+          runtimeController.signal,
+          async () => {
+            const indexes = await ensureDeferredStorageIndexes(
+              storageMaintenance,
+              gate,
+              runtimeController.signal,
+            )
+            return indexes ?? { created: [], existing: [] }
+          },
+          value => ({ created: value.created, existing: value.existing }),
+        )
+        if (indexRun?.status === 'contended' || indexRun?.status === 'paused') {
+          console.warn(`[AgentLens] deferred storage index maintenance ${indexRun.status}; parser replay skipped`)
+        } else if (indexRun?.value?.created.length) {
+          console.info(`[AgentLens] deferred storage indexes created: ${indexRun.value.created.join(', ')}`)
+        }
+      } catch (error) {
+        if (!runtimeController.signal.aborted) {
+          console.error('[AgentLens] deferred storage index maintenance failed; parser replay skipped', error)
+        }
+      }
+    }
+
+    if (runtimeController.signal.aborted) return
+
+    const maintenanceHealth = await app.context.storage.health()
+    const maintenanceCapacityState = storageCapacityState(maintenanceHealth.details)
+    const plannedMaintenanceStages = createParserReplayMaintenanceStages(startedAt)
+    const maintenanceStages = parserReplayMaintenanceStagesAllowedByCapacity(
+      plannedMaintenanceStages,
+      maintenanceCapacityState,
+    )
+    if (maintenanceStages.length < plannedMaintenanceStages.length) {
+      const allowed = new Set(maintenanceStages.map(stage => stage.id))
+      const paused = plannedMaintenanceStages.filter(stage => !allowed.has(stage.id)).map(stage => stage.label)
+      console.warn(`[AgentLens] parser replay maintenance paused: ${paused.join(', ')}; storage capacity=${maintenanceCapacityState}`)
+    }
+
+    for (const stage of maintenanceStages) {
+      if (runtimeController.signal.aborted) return
+      console.info(`[AgentLens] parser replay maintenance stage started: ${stage.label}`)
+      const replayRun = await runMaintenanceJob(
+        maintenanceJobs,
+        {
+          id: `parser-replay:${stage.id}`,
+          type: 'parser-replay',
+          scope: stage.id,
+          priority: MAINTENANCE_PRIORITY.replay,
+          progress: { stage: stage.id },
+        },
+        runtimeController.signal,
+        async job => {
+          await gate.wait(runtimeController.signal)
+          if (runtimeController.signal.aborted) {
+            return { stage: stage.id, sources: 0, failures: 0, records: 0 }
+          }
+          const replay = await replayRegisteredSourceHistory(
+            app.context,
+            runtimeController.signal,
+            prepared.targets,
+            stage.window,
+            { cooperate: () => gate.wait(runtimeController.signal) },
+          )
+          logSourceFailures(replay.failures)
+          for (const result of replay.results) {
+            console.info(
+              `[AgentLens] parser replay maintenance: stage=${stage.id} source=${result.sourceId} records=${result.records} created=${result.observationsCreated} merged=${result.observationsMerged} unchanged=${result.observationsUnchanged}`,
+            )
+          }
+          const progress = {
+            stage: stage.id,
+            sources: replay.results.length,
+            failures: replay.failures.length,
+            records: replay.results.reduce((sum, item) => sum + item.records, 0),
+          }
+          await job.report(progress)
+          await yieldToForeground(runtimeController.signal)
+          return progress
+        },
+        value => value,
+      )
+      if (replayRun?.status === 'contended') {
+        console.warn(`[AgentLens] parser replay maintenance contended: stage=${stage.id}`)
+      }
+    }
+
+    if (runtimeController.signal.aborted) return
+    try {
+      const compressionRun = await runMaintenanceJob(
+        maintenanceJobs,
+        {
+          id: 'source-record:compression',
+          type: 'source-record-compression',
+          scope: 'legacy-json',
+          priority: MAINTENANCE_PRIORITY.compression,
+        },
+        runtimeController.signal,
+        async job => compressLegacySourceRecords(
+          storageMaintenance,
+          gate,
+          runtimeController.signal,
+          {
+            ...(job.initialProgress === undefined ? {} : { initialProgress: job.initialProgress }),
+            batchSize: 50,
+            report: job.report,
+            onBatch(batch) {
+              if (!batch.scanned) return
+              console.info(
+                `[AgentLens] SourceRecord compression: scanned=${batch.scanned} compressed=${batch.compressed} plain=${batch.plain} saved=${batch.savedBytes}`,
+              )
+            },
+          },
+        ),
+        value => ({
+          scanned: value.scanned,
+          compressed: value.compressed,
+          plain: value.plain,
+          savedBytes: value.savedBytes,
+          batches: value.batches,
+          ...(value.cursor ? { cursor: value.cursor } : {}),
+          aborted: value.aborted,
+        }),
+      )
+      const compression = compressionRun?.value
+      if (compression && compression.scanned > 0) {
+        console.info(
+          `[AgentLens] SourceRecord compression completed: scanned=${compression.scanned} compressed=${compression.compressed} plain=${compression.plain} saved=${compression.savedBytes} batches=${compression.batches}`,
+        )
+      }
+    } catch (error) {
+      if (!runtimeController.signal.aborted) {
+        console.error('[AgentLens] SourceRecord compression maintenance failed', error)
+      }
     }
   })()
-  await syncPromise
+
+  await syncPromise.catch(error => {
+    if (!runtimeController.signal.aborted) {
+      console.error('[AgentLens] background data work failed; control plane remains online', error)
+    }
+  })
 } catch (error) {
   runtimeController.abort()
-  for (const handle of [...captureHandles].reverse()) {
-    await handle.dispose().catch(() => undefined)
-  }
+  disposeHttpActivityTracking?.()
+  disposeHttpActivityTracking = null
+  foregroundGate = null
+  await disposeCaptureHandles()
   await app.stop().catch(() => undefined)
   console.error('[AgentLens] daemon startup failed', error)
   process.exitCode = 1

@@ -17,7 +17,7 @@ export interface SqliteStoragePluginConfig {
 
 const manifest = {
   pluginId: '@agent-lens/storage-sqlite',
-  pluginVersion: '1.0.0-alpha.2',
+  pluginVersion: '1.0.0-alpha.3',
   apiVersion: '1.0',
   pluginType: 'storage',
   displayName: 'AgentLens SQLite Storage',

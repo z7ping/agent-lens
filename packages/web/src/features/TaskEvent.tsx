@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
+import { UiIcon } from '../components/UiIcon'
 import { useTaskSurfaceView } from './TaskSurface'
 import type { TaskEventModel } from './task-detail-model'
 
@@ -18,7 +19,7 @@ export function TaskEvent({
   if (model.category === 'usage' && !showUsageDetails) return null
 
   const content = <>
-    <span className="task-event-mark" />
+    <span className="task-event-mark"><UiIcon name="clock" size={14}/></span>
     <span className="task-event-copy"><b>{model.label}</b>{model.summary && <small>{model.summary}</small>}</span>
     {meta}
     {model.sourceLabel && <span className="task-event-source">{model.sourceLabel}</span>}
@@ -30,7 +31,7 @@ export function TaskEvent({
       ? <button className={rowClass} onClick={onInspect}>{content}</button>
       : <div className={rowClass}>{content}</div>}
     {raw !== undefined && !onInspect && <details className="task-event-raw">
-      <summary>查看原始数据{model.nativeType ? ` · ${model.nativeType}` : ''}</summary>
+      <summary><UiIcon className="task-event-raw-chevron" name="chevron-right" size={14}/><span>查看原始数据{model.nativeType ? ` · ${model.nativeType}` : ''}</span></summary>
       {(model.nativeId || model.parentId) && <div className="task-event-raw-meta">{model.nativeId ? `Native ID ${model.nativeId}` : ''}{model.nativeId && model.parentId ? ' · ' : ''}{model.parentId ? `Parent ${model.parentId}` : ''}</div>}
       <CopyableCodeBlock className="task-event-raw-json" copyValue={JSON.stringify(raw, null, 2)}>{JSON.stringify(raw, null, 2)}</CopyableCodeBlock>
     </details>}

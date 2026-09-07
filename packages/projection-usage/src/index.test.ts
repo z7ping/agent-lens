@@ -6,7 +6,7 @@ import {
 } from '@agent-lens/core-services'
 import type { CanonicalObservation, StorageService } from '@agent-lens/core'
 import { SqliteStorageService } from '@agent-lens/storage-sqlite'
-import { ToolAssetUsageProjection } from './index'
+import { ToolAssetUsageProjection, usageProjectionInternals } from './index'
 
 test('ToolAssetUsageProjection attributes only defensible MCP and Skill usage', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
@@ -82,6 +82,8 @@ test('ToolAssetUsageProjection attributes only defensible MCP and Skill usage', 
     assert.equal(response.tools.length, 3)
     assert.equal(response.assets.length, 2)
     assert.equal(response.meta.unattributedToolCalls, 1)
+    assert.equal(response.tools.every(item => item.sessions.length === 0), true)
+    assert.equal(response.tools.every(item => item.observationIds.length === 0), true)
 
     const mcpTool = response.tools.find(item => item.nativeToolName === 'mcp__docs__search')
     assert.equal(mcpTool?.callCount, 1)
@@ -100,12 +102,20 @@ test('ToolAssetUsageProjection attributes only defensible MCP and Skill usage', 
     assert.equal(response.assets.every(item => item.attribution === 'derived'), true)
     assert.equal(response.assets.every(item => item.confidence === 'high'), true)
     assert.equal(response.assets.some(item => item.canonicalName === 'Bash'), false)
+
+    const detail = await projection.query(
+      { installationId: installation.id },
+      1,
+    )
+    const detailMcp = detail.tools.find(item => item.nativeToolName === 'mcp__docs__search')
+    assert.equal(detailMcp?.sessions.length, 1)
+    assert.equal(detailMcp?.observationIds.length > 0, true)
   } finally {
     storage.close()
   }
 })
 
-test('ToolAssetUsageProjection paginates beyond the repository row limit', async () => {
+test('ToolAssetUsageProjection paginates beyond the repository row limit without materializing summary detail', async () => {
   const calls: CanonicalObservation[] = Array.from({ length: 5_001 }, (_, index) => {
     const at = new Date(Date.UTC(2026, 7, 20, 12, 0, 0, index)).toISOString()
     const id = `tool-call-${String(index).padStart(5, '0')}`
@@ -169,5 +179,91 @@ test('ToolAssetUsageProjection paginates beyond the repository row limit', async
   assert.equal(response.tools.length, 1)
   assert.equal(response.tools[0]?.nativeToolName, 'Bash')
   assert.equal(response.tools[0]?.callCount, 5_001)
+  assert.equal(response.tools[0]?.observationIds.length, 0)
+  assert.equal(response.tools[0]?.sessions.length, 0)
   assert.equal(response.meta.unattributedToolCalls, 5_001)
+})
+
+test('ToolAssetUsageProjection keeps exact totals while detail query returns only bounded samples', async () => {
+  const calls: CanonicalObservation[] = Array.from({ length: 150 }, (_, index) => {
+    const id = `bounded-call-${String(index).padStart(3, '0')}`
+    const at = new Date(Date.UTC(2026, 7, 21, 12, 0, index)).toISOString()
+    return {
+      id,
+      hostId: 'host',
+      installationId: 'installation',
+      logicalSessionId: `session-${String(index).padStart(3, '0')}`,
+      sourceSessionId: 'source-session',
+      kind: 'tool.call',
+      canonicalSequence: index,
+      occurredAt: at,
+      capturedAt: at,
+      payload: {
+        callId: id,
+        nativeToolName: 'mcp__docs__search',
+        input: { query: id },
+      },
+      evidenceRefs: [],
+    }
+  })
+  const storage = {
+    repositories: {
+      observations: {
+        async query(query: { kind?: string; after?: { id: string }; limit?: number }) {
+          if (query.kind !== 'tool.call') return []
+          const start = query.after
+            ? calls.findIndex(item => item.id === query.after!.id) + 1
+            : 0
+          return calls.slice(start, start + (query.limit ?? 500))
+        },
+      },
+      sessions: {
+        async getSourceSession() {
+          return {
+            id: 'source-session',
+            sourceId: 'codex',
+            installationId: 'installation',
+            logicalSessionId: 'session',
+            nativeSessionId: 'native-session',
+            createdAt: '2026-08-21T12:00:00.000Z',
+            updatedAt: '2026-08-21T12:00:00.000Z',
+          }
+        },
+      },
+      installations: {
+        async get() {
+          return {
+            id: 'installation',
+            hostId: 'host',
+            productId: 'codex',
+            createdAt: '2026-08-21T12:00:00.000Z',
+            updatedAt: '2026-08-21T12:00:00.000Z',
+          }
+        },
+      },
+    },
+  } as unknown as StorageService
+
+  const projection = new ToolAssetUsageProjection(storage)
+  const summary = await projection.query()
+  const summaryTool = summary.tools[0]
+  const summaryAsset = summary.assets[0]
+
+  assert.equal(summaryTool?.callCount, 150)
+  assert.equal(summaryTool?.sessionCount, 150)
+  assert.equal(summaryTool?.sessions.length, 0)
+  assert.equal(summaryTool?.observationIds.length, 0)
+  assert.equal(summaryAsset?.callCount, 150)
+  assert.equal(summaryAsset?.observationIds.length, 0)
+
+  const detailLimit = usageProjectionInternals.maxDetailSessions
+  const detail = await projection.query({}, detailLimit)
+  const detailTool = detail.tools[0]
+  const detailAsset = detail.assets[0]
+  assert.equal(detailTool?.callCount, 150)
+  assert.equal(detailTool?.sessionCount, 150)
+  assert.equal(detailTool?.sessions.length, detailLimit)
+  assert.equal(detailTool?.observationIds.length, detailLimit)
+  assert.equal(detailAsset?.callCount, 150)
+  assert.equal(detailAsset?.observationIds.length, detailLimit)
 })

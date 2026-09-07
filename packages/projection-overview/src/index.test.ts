@@ -100,3 +100,45 @@ test('AgentOverview 与 Facet 使用采集策略报告真实 enabled 状态', as
     storage.close()
   }
 })
+
+test('FacetProjection collapses concurrent identical queries into one build', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    const original = storage.repositories.installations.listByProduct.bind(storage.repositories.installations)
+    let reads = 0
+    storage.repositories.installations.listByProduct = async productId => {
+      reads += 1
+      await new Promise(resolve => setTimeout(resolve, 5))
+      return original(productId)
+    }
+
+    const projection = new FacetProjection(storage, sources)
+    const results = await Promise.all(Array.from({ length: 64 }, () => projection.query()))
+    assert.equal(results.length, 64)
+    assert.equal(reads, 1)
+  } finally {
+    storage.close()
+  }
+})
+
+test('AgentOverviewProjection collapses concurrent identical queries into one build', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    const original = storage.repositories.installations.listByProduct.bind(storage.repositories.installations)
+    let reads = 0
+    storage.repositories.installations.listByProduct = async productId => {
+      reads += 1
+      await new Promise(resolve => setTimeout(resolve, 5))
+      return original(productId)
+    }
+
+    const projection = new AgentOverviewProjection(storage, sources)
+    const results = await Promise.all(Array.from({ length: 64 }, () => projection.query()))
+    assert.equal(results.length, 64)
+    assert.equal(reads, 1)
+  } finally {
+    storage.close()
+  }
+})

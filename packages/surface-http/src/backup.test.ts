@@ -19,31 +19,34 @@ const manifest: BackupSnapshotManifest = {
   manifestSha256: 'abc123',
 }
 
+function backupOverview() {
+  return {
+    vaultPath: '/tmp/vault',
+    sources: [{
+      sourceId: 'codex',
+      productId: 'codex',
+      displayName: 'Codex',
+      detected: true,
+      fileCount: 3,
+      excludedCount: 1,
+      kinds: { skill: 1, session: 2 },
+    }],
+    snapshots: [{
+      id: manifest.id,
+      createdAt: manifest.createdAt,
+      sourceIds: ['codex'],
+      fileCount: 0,
+      excludedCount: 0,
+      totalBytes: 0,
+      manifestSha256: manifest.manifestSha256,
+    }],
+  }
+}
+
 function stubBackup(): BackupService {
   return {
-    async overview() {
-      return {
-        vaultPath: '/tmp/vault',
-        sources: [{
-          sourceId: 'codex',
-          productId: 'codex',
-          displayName: 'Codex',
-          detected: true,
-          fileCount: 3,
-          excludedCount: 1,
-          kinds: { skill: 1, session: 2 },
-        }],
-        snapshots: [{
-          id: manifest.id,
-          createdAt: manifest.createdAt,
-          sourceIds: ['codex'],
-          fileCount: 0,
-          excludedCount: 0,
-          totalBytes: 0,
-          manifestSha256: manifest.manifestSha256,
-        }],
-      }
-    },
+    async overview() { return backupOverview() },
+    async refreshIndex() { return backupOverview() },
     async listSnapshots() { return [] },
     async getSnapshot(id) { return id === manifest.id ? manifest : null },
     async createSnapshot() { return manifest },
@@ -84,6 +87,13 @@ test('HTTP backup surface exposes snapshot lifecycle without a restore write end
     const overview = await overviewResponse.json() as BackupOverviewResponseDto
     assert.equal(overview.sources[0]?.fileCount, 3)
     assert.equal(overview.meta.protocolVersion, '1.0')
+    assert.ok(Number.isFinite(Date.parse(overview.meta.generatedAt)))
+
+    const refreshResponse = await fetch(`${base}/api/v1/backups/refresh`, { method: 'POST' })
+    assert.equal(refreshResponse.status, 200)
+    const refreshed = await refreshResponse.json() as BackupOverviewResponseDto
+    assert.equal(refreshed.sources[0]?.sourceId, 'codex')
+    assert.ok(Number.isFinite(Date.parse(refreshed.meta.generatedAt)))
 
     const createResponse = await fetch(`${base}/api/v1/backups`, {
       method: 'POST',
@@ -93,6 +103,14 @@ test('HTTP backup surface exposes snapshot lifecycle without a restore write end
     assert.equal(createResponse.status, 201)
     const created = await createResponse.json() as BackupSnapshotResponseDto
     assert.equal(created.snapshot.id, manifest.id)
+    assert.ok(Number.isFinite(Date.parse(created.meta.generatedAt)))
+
+    const invalidCreate = await fetch(`${base}/api/v1/backups`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sourceIds: ['codex'], kinds: ['not-a-kind'] }),
+    })
+    assert.equal(invalidCreate.status, 400)
 
     const verifyResponse = await fetch(`${base}/api/v1/backups/${manifest.id}/verify`, { method: 'POST' })
     assert.equal(verifyResponse.status, 200)
@@ -117,7 +135,7 @@ test('HTTP backup surface exposes snapshot lifecycle without a restore write end
     assert.equal(preview.blocked, 0)
 
     const unsafeWrite = await fetch(`${base}/api/v1/backups/${manifest.id}/restore`, { method: 'POST' })
-    assert.equal(unsafeWrite.status, 405)
+    assert.equal(unsafeWrite.status, 404)
   } finally {
     await surface.dispose()
     storage.close()

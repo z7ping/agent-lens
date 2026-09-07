@@ -9,20 +9,24 @@ import {
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
 import { discoverCodexAssets } from './assets'
+import {
+  CODEX_CURRENT_PARSER_VERSION,
+  normalizeCurrentCodexRecord,
+} from './current-protocol'
 import { detectCodex } from './detect'
-import { CODEX_PARSER_VERSION, ingestCodexHistory } from './history'
-import { normalizeCodexRecord } from './normalize'
+import { ingestCodexHistory } from './history'
 import { startCodexRuntimeCapture } from './runtime'
+import { normalizeCodexSessionAttribution } from './session-attribution'
 
 export const codexManifest: SourcePluginManifest = {
   pluginId: '@agent-lens/source-codex',
-  pluginVersion: '1.0.0-alpha.2',
+  pluginVersion: '1.0.0-alpha.3',
   apiVersion: '1.0',
   pluginType: 'source',
   displayName: 'Codex Source',
   sourceId: 'codex',
   productId: 'codex',
-  parserVersion: CODEX_PARSER_VERSION,
+  parserVersion: CODEX_CURRENT_PARSER_VERSION,
 }
 
 export async function declareCodexCapabilities(
@@ -44,14 +48,26 @@ export async function declareCodexCapabilities(
   ]
 }
 
+const ingestCurrentCodexHistory: NonNullable<SourceDefinition['ingestHistory']> = async function* (ctx) {
+  for await (const record of ingestCodexHistory(ctx)) {
+    yield record.parserVersion === CODEX_CURRENT_PARSER_VERSION
+      ? record
+      : { ...record, parserVersion: CODEX_CURRENT_PARSER_VERSION }
+  }
+}
+
 export const codexSourceDefinition: SourceDefinition = {
   manifest: codexManifest,
   detect: detectCodex,
   declareCapabilities: declareCodexCapabilities,
   discoverAssets: discoverCodexAssets,
-  ingestHistory: ingestCodexHistory,
+  ingestHistory: ingestCurrentCodexHistory,
   startCapture: startCodexRuntimeCapture,
-  normalize: normalizeCodexRecord,
+  normalize: async (record, ctx) => normalizeCodexSessionAttribution(
+    record,
+    ctx,
+    await normalizeCurrentCodexRecord(record, ctx),
+  ),
 }
 
 const applyCodexSource = Object.assign(
@@ -65,8 +81,10 @@ const applyCodexSource = Object.assign(
 export const codexSourcePlugin = defineAgentLensPlugin(codexManifest, applyCodexSource)
 
 export * from './assets'
+export * from './current-protocol'
 export * from './detect'
 export * from './format'
 export * from './history'
 export * from './normalize'
 export * from './runtime'
+export * from './session-attribution'

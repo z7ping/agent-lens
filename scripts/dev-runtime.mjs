@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { mkdir } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { dirname, join, resolve } from 'node:path'
@@ -8,7 +8,9 @@ import { fileURLToPath } from 'node:url'
 // 将开发 Runtime 误识别为可复用的正式 Runtime。
 export const DEFAULT_DEV_PORT = 56800
 export const DEV_PORT_ATTEMPTS = 21
-export const DEV_RUNTIME_READY_TIMEOUT_MS = 30_000
+// 历史量较大的源码数据库需要完成 SQLite 打开/迁移后才能监听 HTTP。
+// 30 秒对冷启动过于激进；仍可通过环境变量收紧或放宽。
+export const DEV_RUNTIME_READY_TIMEOUT_MS = 120_000
 export const DEV_RUNTIME_READY_INTERVAL_MS = 100
 
 function devLog(message, ...details) {
@@ -161,7 +163,31 @@ function stopChild(child) {
   } catch {
     // 退出阶段尽力停止；具体子进程也会收到终端信号。
   }
+  // Windows 下 npm 会再创建 cmd.exe 和 node 子进程，ChildProcess.kill 只
+  // 结束 npm 顶层进程，留下的 Daemon 会继续占用开发端口。按 PID 回收
+  // 整棵由本次启动创建的进程树，避免下一次启动命中不可用的残留 Runtime。
+  if (process.platform === 'win32' && child.pid) {
+    try {
+      execFileSync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], {
+        stdio: 'ignore',
+        windowsHide: true,
+      })
+    } catch {
+      // 子进程可能已自行退出；退出阶段不因清理失败覆盖原始错误。
+    }
+  }
 }
+
+function parseReadyTimeout(value) {
+  if (value === undefined || value === null || value === '') return DEV_RUNTIME_READY_TIMEOUT_MS
+  const timeout = Number(value)
+  if (!Number.isInteger(timeout) || timeout < 1_000 || timeout > tenMinutesMs) {
+    throw new Error(`AGENT_LENS_DEV_READY_TIMEOUT_MS 必须是 1000-${tenMinutesMs} 毫秒的整数，当前值：${String(value)}`)
+  }
+  return timeout
+}
+
+const tenMinutesMs = 10 * 60 * 1_000
 
 export async function runDevRuntime() {
   const startedAt = Date.now()
@@ -169,6 +195,7 @@ export async function runDevRuntime() {
   const currentFile = fileURLToPath(import.meta.url)
   const repoRoot = resolve(dirname(currentFile), '..')
   const startPort = parseDevPort(process.env.AGENT_LENS_DEV_PORT)
+  const readyTimeoutMs = parseReadyTimeout(process.env.AGENT_LENS_DEV_READY_TIMEOUT_MS)
   const port = await findAvailableDevPort(startPort)
   const paths = devRuntimePaths(repoRoot, port)
   const devEnv = buildDevEnvironment(process.env, repoRoot, port)
@@ -225,6 +252,7 @@ export async function runDevRuntime() {
   try {
     await waitForRuntimeReady(`http://127.0.0.1:${port}/api/v1/ready`, {
       signal: startupController.signal,
+      timeoutMs: readyTimeoutMs,
     })
   } catch (error) {
     if (shuttingDown) return

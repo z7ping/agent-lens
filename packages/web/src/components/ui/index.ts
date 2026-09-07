@@ -1,4 +1,5 @@
 export {
+  Breadcrumb,
   Button,
   Disclosure,
   IconButton,
@@ -10,6 +11,7 @@ export {
   ToolbarGroup,
 } from './Primitives'
 export type {
+  BreadcrumbProps,
   ButtonProps,
   ButtonSize,
   ButtonVariant,
@@ -20,8 +22,8 @@ export type {
   ToolbarProps,
 } from './Primitives'
 
-export { Dialog, Drawer } from './Overlay'
-export type { DialogProps, DrawerProps } from './Overlay'
+export { Dialog, Drawer, Popover } from './Overlay'
+export type { DialogProps, DrawerProps, PopoverProps } from './Overlay'
 
 export { SelectMenu } from '../SelectMenu'
 export type { SelectMenuOption, SelectMenuVariant } from '../SelectMenu'

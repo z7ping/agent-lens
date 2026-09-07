@@ -13,14 +13,14 @@ export type AgentLensApplicationState =
   | 'stopped'
 
 interface PluginRegistration {
-  plugin: Plugin<any>
+  plugin: Plugin<unknown>
   config?: unknown
   validateManifest: boolean
 }
 
 export interface AgentLensApplicationOptions {
   plugins?: ReadonlyArray<{
-    plugin: AgentLensCordisPlugin<any>
+    plugin: AgentLensCordisPlugin<unknown>
     config?: unknown
   }>
 }
@@ -44,7 +44,7 @@ export class AgentLensApplication {
   }
 
   /** Register an AgentLens extension plugin with Plugin API validation. */
-  use(plugin: AgentLensCordisPlugin<any>, config?: unknown): this {
+  use(plugin: AgentLensCordisPlugin<unknown>, config?: unknown): this {
     this.assertConfigurable()
     assertAgentLensPluginCompatible(plugin.manifest)
     this.registrations.push({
@@ -60,7 +60,7 @@ export class AgentLensApplication {
    * This is for AgentLens runtime wiring (for example Core Service providers),
    * not a second public plugin API.
    */
-  useRuntime(plugin: Plugin<any>, config?: unknown): this {
+  useRuntime(plugin: Plugin<unknown>, config?: unknown): this {
     this.assertConfigurable()
     this.registrations.push({
       plugin,
@@ -77,7 +77,7 @@ export class AgentLensApplication {
 
     this._state = 'starting'
     const load = this.context.plugin.bind(this.context) as (
-      plugin: Plugin<any>,
+      plugin: Plugin<unknown>,
       config?: unknown,
     ) => Fiber & PromiseLike<Fiber>
 
@@ -85,7 +85,7 @@ export class AgentLensApplication {
       for (const registration of this.registrations) {
         if (registration.validateManifest) {
           assertAgentLensPluginCompatible(
-            (registration.plugin as AgentLensCordisPlugin<any>).manifest,
+            (registration.plugin as AgentLensCordisPlugin<unknown>).manifest,
           )
         }
         const fiber = registration.config === undefined

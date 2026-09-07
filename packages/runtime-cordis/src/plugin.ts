@@ -4,7 +4,7 @@ import {
   type AgentLensPluginManifest,
 } from '@agent-lens/core'
 
-export type AgentLensCordisPlugin<T = any> = Plugin<T> & {
+export type AgentLensCordisPlugin<T = unknown> = Plugin<T> & {
   readonly manifest: AgentLensPluginManifest
 }
 
@@ -18,7 +18,7 @@ export function assertAgentLensPluginCompatible(
   }
 }
 
-export function defineAgentLensPlugin<P extends Plugin<any>>(
+export function defineAgentLensPlugin<P extends Plugin<unknown>>(
   manifest: AgentLensPluginManifest,
   plugin: P,
 ): P & { readonly manifest: AgentLensPluginManifest } {

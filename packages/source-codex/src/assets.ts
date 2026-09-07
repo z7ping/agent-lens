@@ -6,6 +6,12 @@ import type {
   SourceExecutionContext,
 } from '@agent-lens/core'
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+}
+
 async function safeStat(path: string) {
   try {
     return await stat(path)
@@ -178,8 +184,7 @@ async function* discoverPluginManifests(
     if (!meta?.isFile()) continue
     let manifest: Record<string, unknown> = {}
     try {
-      const parsed = JSON.parse(await readFile(manifestPath, 'utf8'))
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) manifest = parsed
+      manifest = asRecord(JSON.parse(await readFile(manifestPath, 'utf8')))
     } catch {
       // A malformed manifest still proves that a plugin binding exists at this path.
     }
@@ -264,15 +269,12 @@ async function* discoverHooks(
 
   let hooks: Record<string, unknown> = {}
   try {
-    const parsed = JSON.parse(await readFile(hooksPath, 'utf8'))
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) hooks = parsed
+    hooks = asRecord(JSON.parse(await readFile(hooksPath, 'utf8')))
   } catch {
     return
   }
 
-  const root = hooks.hooks && typeof hooks.hooks === 'object' && !Array.isArray(hooks.hooks)
-    ? hooks.hooks as Record<string, unknown>
-    : {}
+  const root = asRecord(hooks.hooks)
   const observedAt = meta.mtime.toISOString()
   for (const [eventName, groups] of Object.entries(root)) {
     if (!Array.isArray(groups) || groups.length === 0) continue

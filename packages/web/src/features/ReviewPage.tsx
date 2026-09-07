@@ -16,14 +16,16 @@ import type {
 } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { fetchHubReviewSessions } from '../client/hub-review'
+import { piLiveApi } from '../client/pi-live'
 import { useClientSnapshot } from '../App'
 import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { MarkdownContent } from '../components/MarkdownContent'
 import { ToolKindIcon } from '../components/ToolKindIcon'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
-import { Drawer, IconButton, Input, SelectMenu, Toolbar, UiIcon } from '../components/ui'
-import { projectReviewInteractionPresentation } from './review-interaction-presentation'
+import { Button, Drawer, IconButton, Input, SelectMenu, StatusBadge, Toolbar, UiIcon } from '../components/ui'
+import { historyTaskPresentation } from './task-center'
+import { projectReviewInteractionPresentation, type ReviewProcessPresentationItem } from './review-interaction-presentation'
 import { TaskEvent } from './TaskEvent'
 import { TaskHeader } from './TaskHeader'
 import { TaskMessage } from './TaskMessage'
@@ -105,33 +107,14 @@ function elapsed(start: string, end: string): number {
   return Number.isFinite(value) && value > 0 ? value : 0
 }
 
-const injectedTitlePatterns = [
-  /<recommended_plugins>[\s\S]*?<\/recommended_plugins>/gi,
-  /# AGENTS\.md instructions[^\n]*[\s\S]*?<\/INSTRUCTIONS>/gi,
-  /<environment_context>[\s\S]*?<\/environment_context>/gi,
-  /<app-context>[\s\S]*?<\/app-context>/gi,
-  /<skills_instructions>[\s\S]*?<\/skills_instructions>/gi,
-  /<permissions instructions>[\s\S]*?<\/permissions instructions>/gi,
-  /<collaboration_mode>[\s\S]*?<\/collaboration_mode>/gi,
-]
-
 function cleanSessionTitle(value: string | undefined): string {
-  let text = value?.trim() ?? ''
-  for (const pattern of injectedTitlePatterns) text = text.replace(pattern, ' ')
-  text = text.replace(/\s+/g, ' ').trim()
-  if (/^(?:<recommended_plugins>|# AGENTS\.md instructions|<environment_context>)/i.test(text)) return ''
-  return text
+  return value?.replace(/\s+/g, ' ').trim() ?? ''
 }
 
 function compactTitle(value: string | undefined, max = 92, fallback = '未命名会话'): string {
   const text = cleanSessionTitle(value)
   if (!text) return fallback
   return text.length > max ? `${text.slice(0, max)}…` : text
-}
-
-function sessionTitle(candidates: Array<string | undefined>, fallback: string, max = 92): string {
-  const value = candidates.find(candidate => cleanSessionTitle(candidate))
-  return compactTitle(value, max, fallback)
 }
 
 function hubAvailabilityString(value: HubReadAvailability): string | undefined {
@@ -141,7 +124,7 @@ function hubAvailabilityString(value: HubReadAvailability): string | undefined {
 }
 
 function hubSessionTime(item: HubReviewSessionSummaryDto): string {
-  return hubAvailabilityString(item.startedAt) ?? hubAvailabilityString(item.endedAt) ?? ''
+  return hubAvailabilityString(item.endedAt) ?? hubAvailabilityString(item.startedAt) ?? ''
 }
 
 function hubSessionTitle(item: HubReviewSessionSummaryDto): string {
@@ -167,8 +150,8 @@ function hubSessionVisibility(item: HubReviewSessionSummaryDto, review: ReturnTy
 }
 
 type UnifiedReviewSessionListEntry =
-  | { origin: 'local'; id: string; startedAt: string; local: ReviewSessionSummaryDto }
-  | { origin: 'remote'; id: string; startedAt: string; remote: HubReviewSessionSummaryDto }
+  | { origin: 'local'; id: string; activityAt: string; local: ReviewSessionSummaryDto }
+  | { origin: 'remote'; id: string; activityAt: string; remote: HubReviewSessionSummaryDto }
 
 function payloadRecord(value: unknown): Record<string, JsonValue> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, JsonValue> : {}
@@ -693,7 +676,7 @@ function ReviewProcessGroup({
   inspect,
 }: {
   id: string
-  items: import('./review-interaction-presentation').ReviewProcessPresentationItem[]
+  items: ReviewProcessPresentationItem[]
   inspect(node: ReviewNodeDto): void
 }) {
   const messages = items.filter((item): item is Extract<typeof item, { type: 'message' }> => item.type === 'message')
@@ -741,6 +724,7 @@ function RawEventGroup({ items, inspect }: { items: ReviewEventNodeDto[]; inspec
   const [expanded, setExpanded] = useState(false)
   return <details className="raw-event-group" open={expanded} onToggle={event => setExpanded(event.currentTarget.open)}>
     <summary>
+      <UiIcon className="raw-event-group-chevron" name="chevron-right" size={14}/>
       <span className="raw-event-summary-copy">
         <span className="raw-event-summary-title">其他运行记录 <span className="raw-event-summary-count">{items.length}</span></span>
         <small>Agent 原始日志中的状态、用量等辅助记录，不属于对话正文</small>
@@ -857,7 +841,19 @@ function highLatencyThreshold(interactions: ReviewInteractionDto[]): number | nu
   return Math.max(upperQuartile, median * 1.75)
 }
 
-export function ReviewPage({ model, embedded = false }: { model: AgentLensClientModel; embedded?: boolean }) {
+export function ReviewPage({
+  model,
+  embedded = false,
+  onResumePiSession,
+  resumingPiSession = false,
+  piResumeError = '',
+}: {
+  model: AgentLensClientModel
+  embedded?: boolean
+  onResumePiSession?(logicalSessionId: string): void | Promise<void>
+  resumingPiSession?: boolean
+  piResumeError?: string
+}) {
   const snapshot = useClientSnapshot(model)
   const { sessionId } = useParams()
   const navigate = useNavigate()
@@ -868,6 +864,8 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
   const [roundExpansionRevision, setRoundExpansionRevision] = useState(0)
   const [showAllEvents, setShowAllEvents] = useState(true)
   const [hubSessions, setHubSessions] = useState<HubReviewSessionSummaryDto[]>([])
+  const [forkingPiSessionId, setForkingPiSessionId] = useState('')
+  const [piForkError, setPiForkError] = useState<{ sessionId: string; message: string } | null>(null)
   const sessionLoadSentinelRef = useRef<HTMLButtonElement>(null)
   const detailLoadSentinelRef = useRef<HTMLDivElement>(null)
   const readerPaneRef = useRef<HTMLElement>(null)
@@ -886,18 +884,18 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
     const groups = new Map<'今天' | '昨天' | '更早', UnifiedReviewSessionListEntry[]>()
     const now = new Date()
     const combined: UnifiedReviewSessionListEntry[] = [
-      ...(review.response?.items ?? []).map(item => ({ origin: 'local' as const, id: item.id, startedAt: item.startedAt, local: item })),
-      ...visibleHubSessions.map(item => ({ origin: 'remote' as const, id: item.id, startedAt: hubSessionTime(item), remote: item })),
+      ...(review.response?.items ?? []).map(item => ({ origin: 'local' as const, id: item.id, activityAt: item.endedAt || item.startedAt, local: item })),
+      ...visibleHubSessions.map(item => ({ origin: 'remote' as const, id: item.id, activityAt: hubSessionTime(item), remote: item })),
     ].sort((left, right) => {
-      const leftAt = Date.parse(left.startedAt)
-      const rightAt = Date.parse(right.startedAt)
+      const leftAt = Date.parse(left.activityAt)
+      const rightAt = Date.parse(right.activityAt)
       if (Number.isFinite(leftAt) && Number.isFinite(rightAt) && leftAt != rightAt) return rightAt - leftAt
       if (Number.isFinite(leftAt) && !Number.isFinite(rightAt)) return -1
       if (!Number.isFinite(leftAt) && Number.isFinite(rightAt)) return 1
       return left.id.localeCompare(right.id)
     })
     for (const item of combined) {
-      const label = sessionDayLabel(item.startedAt, now)
+      const label = sessionDayLabel(item.activityAt, now)
       const items = groups.get(label) ?? []
       items.push(item)
       groups.set(label, items)
@@ -919,10 +917,10 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
   }, [embedded, review.response?.meta.generatedAt])
 
   useEffect(() => {
-    if (!sessionId || sessionId === review.selectedId) return
+    if (!sessionId || (sessionId === review.selectedId && (review.detailLoading || review.detail?.id === sessionId || review.error))) return
     readerPositionsRef.current.delete(sessionId)
     void model.selectReviewSession(sessionId)
-  }, [sessionId, review.selectedId, model])
+  }, [sessionId, review.selectedId, review.detail?.id, review.detailLoading, review.error, model])
   useEffect(() => {
     roundExpansionRef.current.clear()
     setRoundFilter('all')
@@ -931,6 +929,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
     setRoundExpansionRevision(0)
     setShowAllEvents(true)
     setInspect(null)
+    setPiForkError(null)
     followingTailRef.current = false
     detailAutoLoadBaselineRef.current = readerUserRevisionRef.current
   }, [detail?.id])
@@ -1161,10 +1160,10 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
         highLatency: detail.page.filter === 'latency' || (threshold !== null && stats.durationMs >= threshold),
       }
     })
-    const title = sessionTitle(
-      [detail.title, detail.preview],
+    const title = historyTaskPresentation(
+      detail,
       detail.projectName ? `${detail.projectName} 会话` : `${agentLabel(detail.sourceIds[0] ?? '')} 会话`,
-    )
+    ).title
     return {
       id: detail.id,
       title,
@@ -1240,6 +1239,20 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
     pendingReaderAnchorRef.current = null
   }
 
+  const forkPiSession = async (logicalSessionId: string) => {
+    if (forkingPiSessionId || resumingPiSession) return
+    setForkingPiSessionId(logicalSessionId)
+    setPiForkError(null)
+    try {
+      const state = await piLiveApi.fork(logicalSessionId)
+      navigate(`/review/live/${encodeURIComponent(state.runtimeSessionId)}`)
+    } catch (reason) {
+      setPiForkError({ sessionId: logicalSessionId, message: reason instanceof Error ? reason.message : String(reason) })
+    } finally {
+      setForkingPiSessionId('')
+    }
+  }
+
   return <main className={`review-page ${embedded ? 'review-page-embedded' : ''}`}>
     {!embedded && <Toolbar className="workspace-toolbar" aria-label="任务复盘筛选">
       <AgentScope agents={agents} value={review.filters.sourceId} onChange={sourceId => model.setReviewFilters({ sourceId })}/>
@@ -1260,16 +1273,20 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
 
     <div className="review-layout">
       {!embedded && <aside className="session-panel">
-        <div className="session-panel-head"><div><b>会话</b><span>本机 + 远程 · 按创建时间倒序</span></div><span className="count-badge">{(review.response?.items.length ?? 0) + visibleHubSessions.length}{review.response?.meta.hasMore ? '+' : ''}</span></div>
+        <div className="session-panel-head"><div><b>会话</b><span>本机 + 远程 · 按最近活动倒序</span></div><span className="count-badge">{(review.response?.items.length ?? 0) + visibleHubSessions.length}{review.response?.meta.hasMore ? '+' : ''}</span></div>
         <div className="session-scroll">
           {review.loading && !review.response && <div className="empty-state">加载会话…</div>}
           {sessionGroups.map(group => <section className="session-group-block" key={group.label}>
             <div className="session-group">{group.label}</div>
             {group.items.map(entry => entry.origin === 'local' ? (() => {
               const item = entry.local
+              const presentation = historyTaskPresentation(
+                item,
+                item.projectName ? `${item.projectName} 会话` : `${agentLabel(item.sourceIds[0] ?? '', item.productId)} 会话`,
+              )
               return <button key={`local:${item.id}`} className={`session-item ${review.selectedId === item.id ? 'session-item-active' : ''}`} onClick={() => select(item.id)}>
-                <div className="session-item-meta"><span className={`source-dot ${sourceDot(item.sourceIds[0] ?? '')}`}/><span>{agentLabel(item.sourceIds[0] ?? '', item.productId)}</span><time title={formatTime(item.startedAt)}>{sessionRelativeTime(item.startedAt)}</time></div>
-                <div className="session-item-title">{sessionTitle([item.title, item.preview], item.projectName ? `${item.projectName} 会话` : `${agentLabel(item.sourceIds[0] ?? '', item.productId)} 会话`, 74)}</div>
+                <div className="session-item-meta"><span className={`source-dot ${sourceDot(item.sourceIds[0] ?? '')}`}/><span>{agentLabel(item.sourceIds[0] ?? '', item.productId)}</span>{presentation.activityLabel && <StatusBadge className="session-activity-badge">{presentation.activityLabel}</StatusBadge>}<time title={`最近活动：${formatTime(entry.activityAt)}`}>{sessionRelativeTime(entry.activityAt)}</time></div>
+                <div className="session-item-title">{presentation.title}</div>
                 <div className="session-item-foot"><span>{item.projectName ?? item.workspacePath?.split(/[\\/]/).pop() ?? '无项目'}</span><span>{item.toolCount} 调用{item.errorCount > 0 ? ` · ${item.errorCount} 错误` : ''}</span></div>
               </button>
             })() : (() => {
@@ -1308,11 +1325,19 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
             title={<span title={taskDetailModel?.title}>{taskDetailModel?.title}</span>}
             submeta={taskDetailModel?.startedAt && taskDetailModel.endedAt ? <><span>{formatRange(taskDetailModel.startedAt, taskDetailModel.endedAt)}</span>{taskDetailModel.workspacePath && <code title={taskDetailModel.workspacePath}>{taskDetailModel.workspacePath}</code>}</> : undefined}
             metrics={taskDetailModel?.metrics ?? []}
-            actions={<button className="review-audit-toggle" aria-pressed={showAllEvents} onClick={toggleEventVisibility}>{showAllEvents ? '视图：全部事件' : '视图：核心事件'}</button>}
+            actions={<>
+              {onResumePiSession && detail.sourceIds.includes('pi') ? <>
+                <Button size="small" loading={resumingPiSession} disabled={resumingPiSession || Boolean(forkingPiSessionId)} onClick={() => void onResumePiSession(detail.id)}><UiIcon name="arrow-right" size={14}/>继续会话</Button>
+                <Button size="small" loading={forkingPiSessionId === detail.id} disabled={resumingPiSession || Boolean(forkingPiSessionId)} onClick={() => void forkPiSession(detail.id)}><UiIcon name="plus" size={14}/>分叉继续</Button>
+              </> : null}
+              <button className="review-audit-toggle" aria-pressed={showAllEvents} onClick={toggleEventVisibility}>{showAllEvents ? '视图：全部事件' : '视图：核心事件'}</button>
+            </>}
           />
 
+          {(piResumeError || (piForkError?.sessionId === detail.id ? piForkError.message : '')) && <div className="page-error" role="alert">{piResumeError || piForkError?.message}</div>}
+
           {detail.sourceIds.includes('pi') && review.relationships?.items.length ? <details className="pi-session-tree">
-            <summary>Pi 会话树 · {review.relationships.items.length} 条关系</summary>
+            <summary><UiIcon className="pi-session-tree-chevron" name="chevron-right" size={14}/><span>Pi 会话树 · {review.relationships.items.length} 条关系</span></summary>
             <div>{review.relationships.items.map(item => <div key={item.id}>{item.fromNativeSessionId ?? item.fromSessionId} <span><UiIcon name="arrow-right" size={14}/></span> {item.toNativeSessionId ?? item.toSessionId}</div>)}</div>
           </details> : null}
 

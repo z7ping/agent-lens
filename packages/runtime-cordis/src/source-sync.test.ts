@@ -9,6 +9,7 @@ import type {
 import type { AgentLensContext } from './context'
 import {
   prepareRegisteredSources,
+  replayRegisteredSourceHistory,
   syncRegisteredSourceHistory,
   type RegisteredSourceTarget,
 } from './source-sync'
@@ -188,4 +189,78 @@ test('disabled prepared targets are ignored by later stages', async () => {
   assert.equal(historyReads, 0)
   assert.deepEqual(settled.results, [])
   assert.deepEqual(settled.failures, [])
+})
+
+test('独立 parser replay 不触发原生历史读取并透传重放窗口与协作门', async () => {
+  let historyReads = 0
+  let replayWindow: unknown
+  let cooperateCalls = 0
+  let checkpoint: { value: unknown, revision: number } | null = null
+  const replayStates: string[] = []
+  const source = sourceDefinition('codex', async () => [])
+  source.ingestHistory = async function* () { historyReads += 1 }
+  const targets: RegisteredSourceTarget[] = [{
+    source,
+    host,
+    detected: { sourceId: 'codex', productId: 'test-product', confidence: 'exact' },
+  }]
+  const ctx = {
+    storage: {
+      repositories: {
+        sourceRecords: {
+          async listForParserReplay(
+            _sourceId: string,
+            _installationId: string,
+            _targetParserVersion: string,
+            _after: unknown,
+            _limit: number,
+            window: unknown,
+          ) {
+            replayWindow = window
+            return []
+          },
+        },
+      },
+      checkpoints: {
+        async get<T>() { return checkpoint?.value as T | null ?? null },
+        async getWithRevision<T>() {
+          return checkpoint
+            ? { value: checkpoint.value as T, revision: checkpoint.revision }
+            : null
+        },
+        async compareAndSet<T>(_scope: string, _key: string, expectedRevision: number | null, value: T) {
+          if ((checkpoint?.revision ?? null) !== expectedRevision) return false
+          checkpoint = { value, revision: (checkpoint?.revision ?? 0) + 1 }
+          return true
+        },
+        async set<T>(_scope: string, _key: string, value: T) {
+          checkpoint = { value, revision: (checkpoint?.revision ?? 0) + 1 }
+        },
+        async clear() { checkpoint = null },
+      },
+    },
+    identity: { async resolveInstallation() { return installation } },
+    observations: {},
+    capabilities: { registerSourceCapabilities() { return { dispose() {} } } },
+    coverage: {},
+    capturePolicy: capturePolicy(['codex']),
+    emit(event: string, payload: { state?: string }) {
+      if (event === 'source/parser-replay-state' && payload.state) replayStates.push(payload.state)
+    },
+  } as unknown as AgentLensContext
+
+  const settled = await replayRegisteredSourceHistory(
+    ctx,
+    new AbortController().signal,
+    targets,
+    { sessionLimit: 10 },
+    { cooperate: async () => { cooperateCalls += 1 } },
+  )
+
+  assert.equal(settled.failures.length, 0)
+  assert.equal(settled.results.length, 1)
+  assert.equal(historyReads, 0)
+  assert.equal(cooperateCalls, 1)
+  assert.deepEqual(replayWindow, { sessionLimit: 10 })
+  assert.deepEqual(replayStates, ['started', 'completed'])
 })

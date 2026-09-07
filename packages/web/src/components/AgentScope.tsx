@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { createPortal } from 'react-dom'
 import type { AgentFacetDto } from '@agent-lens/protocol'
-import { usePinnedAgents } from '../App'
+import { orderAgentsByPreference } from './agent-order'
+import { usePinnedAgents } from './PinnedAgentsProvider'
 import { UiIcon } from './UiIcon'
 
 export function agentLabel(sourceId: string, fallback?: string): string {
@@ -23,8 +24,13 @@ export function sourceDot(sourceId: string): string {
   return 'source-unknown'
 }
 
-export function AgentIcon({ sourceId }: { sourceId: string }) {
+function AgentIcon({ sourceId }: { sourceId: string }) {
   return <span className={`agent-icon ${sourceDot(sourceId)}`} aria-hidden="true"><UiIcon name="agent" size={14}/></span>
+}
+
+export function useOrderedAgents<T extends { sourceId: string }>(agents: readonly T[]): T[] {
+  const { ordered } = usePinnedAgents()
+  return useMemo(() => orderAgentsByPreference(agents, ordered), [agents, ordered])
 }
 
 interface ScopeMenuPosition {
@@ -35,10 +41,7 @@ interface ScopeMenuPosition {
 
 export function AgentScope({ agents, value, onChange, allLabel = '全部智能体' }: { agents: AgentFacetDto[]; value: string; onChange(value: string): void; allLabel?: string | false }) {
   const { ordered, pinned, toggle, move, moveBy, reset } = usePinnedAgents()
-  const orderedAgents = useMemo(() => {
-    const byId = new Map(agents.map(agent => [agent.sourceId, agent]))
-    return [...ordered.map(id => byId.get(id)).filter((agent): agent is AgentFacetDto => Boolean(agent)), ...agents.filter(agent => !ordered.includes(agent.sourceId))]
-  }, [agents, ordered])
+  const orderedAgents = useOrderedAgents(agents)
   const visible = orderedAgents.filter(agent => pinned.includes(agent.sourceId))
   const shown = allLabel === false ? orderedAgents : (() => {
     const shortcuts = visible.slice(0, 4)
@@ -141,8 +144,8 @@ export function AgentScope({ agents, value, onChange, allLabel = '全部智能�
       <AgentIcon sourceId={agent.sourceId} />
       <span className="agent-scope-option-name">{agentLabel(agent.sourceId, agent.displayName)}</span>
       <span className="agent-scope-order-actions">
-        <button type="button" disabled={index === 0} onClick={() => moveBy(agent.sourceId, -1)} aria-label={`${agentLabel(agent.sourceId, agent.displayName)}上移`}><UiIcon name="sort-up" size={14}/></button>
-        <button type="button" disabled={index === orderedAgents.length - 1} onClick={() => moveBy(agent.sourceId, 1)} aria-label={`${agentLabel(agent.sourceId, agent.displayName)}下移`}><UiIcon name="sort-down" size={14}/></button>
+        <button type="button" disabled={index === 0} onClick={() => moveBy(agent.sourceId, -1)} aria-label={`${agentLabel(agent.sourceId, agent.displayName)}上移`}><UiIcon name="arrow-big-up" size={14}/></button>
+        <button type="button" disabled={index === orderedAgents.length - 1} onClick={() => moveBy(agent.sourceId, 1)} aria-label={`${agentLabel(agent.sourceId, agent.displayName)}下移`}><UiIcon name="arrow-big-down" size={14}/></button>
       </span>
       <span className={`agent-scope-option-state ${agent.detected ? 'is-detected' : ''}`}>{agent.detected ? '已检测' : '未检测'}</span>
     </div>) : <div className="agent-scope-empty">暂未发现智能体</div>}

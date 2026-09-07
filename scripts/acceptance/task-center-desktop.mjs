@@ -95,7 +95,7 @@ async function captureViewport(win, viewport, theme) {
       format: 'png',
       fromSurface: true,
       captureBeyondViewport: false,
-    }), 10_000, `${viewport.width}×${viewport.height} ${theme} CDP 截图`)
+    }), 3_000, `${viewport.width}×${viewport.height} ${theme} CDP 截图`)
     if (!result?.data) fail(`${viewport.width}×${viewport.height} ${theme} CDP 截图数据为空`)
     return Buffer.from(result.data, 'base64')
   } catch (error) {

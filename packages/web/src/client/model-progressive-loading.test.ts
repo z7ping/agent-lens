@@ -13,7 +13,7 @@ import { AgentLensApi, type ReviewFilters } from './api'
 import { AgentLensClientModel, REVIEW_DETAIL_WINDOW_SIZE } from './model'
 
 function summary(index: number): ReviewSessionSummaryDto {
-  const at = new Date(Date.UTC(2026, 8, 1, 0, 0, 10 - index)).toISOString()
+  const at = new Date(Date.UTC(2026, 8, 1, 0, 0, 30 - index)).toISOString()
   return {
     id: `session-${index}`,
     installationId: 'installation-1',
@@ -63,7 +63,7 @@ function detailPage(start: number, direction: 'forward' | 'backward', hasMore = 
   }
 }
 
-test('review 首屏先展示 1 个会话和最新 10 个轮次，再补载到 10 个会话', async () => {
+test('review 首屏一次读取 20 个会话并加载最新 10 个轮次', async () => {
   let releaseDetail!: (value: ReviewSessionDetailDto) => void
   const detailPending = new Promise<ReviewSessionDetailDto>(resolve => { releaseDetail = resolve })
   const reviewLimits: number[] = []
@@ -72,7 +72,7 @@ test('review 首屏先展示 1 个会话和最新 10 个轮次，再补载到 10
   class ProgressiveApi extends AgentLensApi {
     override review(_filters: ReviewFilters, limit = 40): Promise<ReviewResponseDto> {
       reviewLimits.push(limit)
-      return Promise.resolve(response(limit === 1 ? 1 : 10))
+      return Promise.resolve(response(limit))
     }
 
     override reviewDetail(_id: string, options: { limit?: number } = {}): Promise<ReviewSessionDetailDto> {
@@ -93,9 +93,9 @@ test('review 首屏先展示 1 个会话和最新 10 个轮次，再补载到 10
   await Promise.resolve()
   await Promise.resolve()
 
-  assert.equal(model.getSnapshot().review.response?.items.length, 1)
+  assert.equal(model.getSnapshot().review.response?.items.length, 20)
   assert.equal(model.getSnapshot().review.selectedId, 'session-1')
-  assert.deepEqual(reviewLimits, [1])
+  assert.deepEqual(reviewLimits, [20])
   assert.deepEqual(detailLimits, [10])
 
   releaseDetail({
@@ -105,8 +105,8 @@ test('review 首屏先展示 1 个会话和最新 10 个轮次，再补载到 10
   })
   await refreshing
 
-  assert.deepEqual(reviewLimits, [1, 10])
-  assert.equal(model.getSnapshot().review.response?.items.length, 10)
+  assert.deepEqual(reviewLimits, [20])
+  assert.equal(model.getSnapshot().review.response?.items.length, 20)
   assert.equal(model.getSnapshot().review.selectedId, 'session-1')
 })
 
@@ -116,7 +116,7 @@ test('review 后台刷新保持已加载窗口且不重新进入首屏 loading',
   class BackgroundRefreshApi extends AgentLensApi {
     override review(_filters: ReviewFilters, limit = 40): Promise<ReviewResponseDto> {
       reviewLimits.push(limit)
-      return Promise.resolve(response(limit === 1 ? 1 : 10))
+      return Promise.resolve(response(limit))
     }
 
     override reviewDetail(): Promise<ReviewSessionDetailDto> {
@@ -144,8 +144,8 @@ test('review 后台刷新保持已加载窗口且不重新进入首屏 loading',
   await Promise.resolve()
   unsubscribe()
 
-  assert.deepEqual(reviewLimits, [1, 10, 10])
-  assert.equal(model.getSnapshot().review.response?.items.length, 10)
+  assert.deepEqual(reviewLimits, [20, 20])
+  assert.equal(model.getSnapshot().review.response?.items.length, 20)
   assert.equal(model.getSnapshot().review.loading, false)
   assert.equal(loadingStates.includes(true), false)
 })
@@ -181,7 +181,7 @@ test('正在阅读的会话持续写入时只提示新记录，不刷新任务�
   class LiveSelectedSessionApi extends AgentLensApi {
     override review(_filters: ReviewFilters, limit = 40): Promise<ReviewResponseDto> {
       reviewCalls += 1
-      return Promise.resolve(response(limit === 1 ? 1 : 10))
+      return Promise.resolve(response(limit))
     }
 
     override reviewDetail(): Promise<ReviewSessionDetailDto> {
@@ -214,7 +214,7 @@ test('正在阅读的会话持续写入时只提示新记录，不刷新任务�
   ;(model as unknown as { onLiveEvent(event: LiveUpdateEventDto): void }).onLiveEvent(event)
   await new Promise(resolve => setTimeout(resolve, 900))
 
-  assert.equal(reviewCalls, 2)
+  assert.equal(reviewCalls, 1)
   assert.equal(model.getSnapshot().review.detailHasNewData, true)
   model.stop()
 })
@@ -224,7 +224,7 @@ test('后台刷新不会把摘要窗口外的当前阅读会话切回第一条',
 
   class OutsideWindowApi extends AgentLensApi {
     override review(_filters: ReviewFilters, limit = 40): Promise<ReviewResponseDto> {
-      return Promise.resolve(response(limit === 1 ? 1 : 10))
+      return Promise.resolve(response(limit))
     }
 
     override reviewDetail(id: string): Promise<ReviewSessionDetailDto> {
@@ -255,4 +255,33 @@ test('后台刷新不会把摘要窗口外的当前阅读会话切回第一条',
   assert.equal(model.getSnapshot().review.selectedId, 'outside-window')
   assert.equal(model.getSnapshot().review.detail?.id, 'outside-window')
   assert.equal(detailCalls, callsBeforeRefresh)
+})
+
+test('默认最新页为空但轻量索引仍有记录时自动从头加载', async () => {
+  const directions: Array<'forward' | 'backward' | undefined> = []
+
+  class SparseLatestApi extends AgentLensApi {
+    override reviewDetail(_id: string, options: { direction?: 'forward' | 'backward' } = {}): Promise<ReviewSessionDetailDto> {
+      directions.push(options.direction)
+      return Promise.resolve(options.direction === 'forward'
+        ? detailPage(1, 'forward', false)
+        : {
+            ...summary(1),
+            interactions: [],
+            interactionIndex: [{ ...interaction(1), hasError: false }],
+            page: { count: 0, hasMore: false, direction: 'backward', filter: 'all' },
+          })
+    }
+
+    override relationships(): Promise<SessionRelationshipResponseDto> {
+      return Promise.resolve({ items: [], meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION, generatedAt: '2026-09-01T00:00:00.000Z' } })
+    }
+  }
+
+  const model = new AgentLensClientModel(new SparseLatestApi())
+  await model.selectReviewSession('session-1')
+
+  assert.deepEqual(directions, ['backward', 'forward'])
+  assert.equal(model.getSnapshot().review.detail?.interactions.length, 10)
+  assert.equal(model.getSnapshot().review.detail?.page.direction, 'forward')
 })

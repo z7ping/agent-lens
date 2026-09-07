@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { resolve } from 'node:path'
 import { findPiExecutable, type PiSdkLoader } from './sdk-loader'
 import { InProcessPiRuntimeHost } from './in-process-host'
 import { WorkerPiRuntimeHost, type PiRuntimeHandle, type PiRuntimeHost } from './worker-host'
@@ -38,6 +39,11 @@ function record(value: unknown): Record<string, unknown> {
 
 function formatElapsed(elapsedMs: number): string {
   return elapsedMs < 1_000 ? `${elapsedMs}ms` : `${(elapsedMs / 1_000).toFixed(1)}s`
+}
+
+function sessionPathKey(value: string): string {
+  const path = resolve(value)
+  return process.platform === 'win32' ? path.toLowerCase() : path
 }
 
 function textList(value: unknown, limit = 240): string[] {
@@ -99,6 +105,13 @@ export class DefaultPiLiveService implements PiLiveService {
   async start(input: PiLiveStartInput): Promise<PiLiveRuntimeState> {
     if (this.disposed) throw new Error('Pi Live service is disposed')
     if (!input.cwd.trim()) throw new Error('Pi Live requires a working directory')
+    if (input.sessionPath) {
+      const requestedPath = sessionPathKey(input.sessionPath)
+      const duplicate = [...this.runtimes.values()].find(runtime => runtime.input.sessionPath
+        && sessionPathKey(runtime.input.sessionPath) === requestedPath
+        && runtime.status !== 'terminated')
+      if (duplicate) throw this.conflict('该 Pi 历史会话已经在进行中，请直接打开现有实时任务')
+    }
     const id = randomUUID()
     const now = Date.now()
     const runtime: OwnedRuntime = {
@@ -181,6 +194,15 @@ export class DefaultPiLiveService implements PiLiveService {
       runtime.handle = handle
       runtime.capabilities = handle.capabilities ?? runtime.capabilities
       if (!runtime.initializationTimings.length && handle.initializationTimings?.length) runtime.initializationTimings = [...handle.initializationTimings]
+      if (runtime.input.historyAction === 'fork' && runtime.input.sessionPath) {
+        const forkedState = await handle.state()
+        if (!forkedState.sessionFile || sessionPathKey(forkedState.sessionFile) === sessionPathKey(runtime.input.sessionPath)) {
+          await handle.terminate().catch(() => undefined)
+          runtime.handle = undefined
+          throw new Error('Pi 分叉 Runtime 未切换到新的 Session，已拒绝继续')
+        }
+        runtime.input = { ...runtime.input, sessionPath: forkedState.sessionFile, historyAction: 'continue' }
+      }
       this.advanceInitialization(runtime, 'ready')
       runtime.status = 'ready'
       runtime.message = `Pi Runtime 已就绪 · ${formatElapsed(runtime.initializationElapsedMs)}`

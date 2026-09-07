@@ -1,0 +1,225 @@
+import type {
+  NormalizedSourceOutput,
+  SessionActivityKind,
+  SessionRelationshipCandidate,
+  SessionRelationshipType,
+  SourceNormalizationContext,
+  SourceRecord,
+} from '@agent-lens/core'
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+}
+
+function stringField(record: Record<string, unknown>, ...keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = record[key]
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return undefined
+}
+
+function lowerText(value: unknown): string {
+  if (typeof value === 'string') return value.toLowerCase()
+  try { return JSON.stringify(value ?? '').toLowerCase() } catch { return '' }
+}
+
+function sessionMeta(record: SourceRecord): {
+  entry: Record<string, unknown>
+  payload: Record<string, unknown>
+  nativeSessionId: string
+} | null {
+  const envelope = asRecord(record.payload)
+  const entry = asRecord(envelope.entry)
+  if (entry.type !== 'session_meta') return null
+  const payload = asRecord(entry.payload)
+  const session = asRecord(envelope.session)
+  const nativeSessionId = stringField(payload, 'id')
+    ?? stringField(session, 'nativeSessionId')
+    ?? record.sourceSessionNativeId
+  return nativeSessionId ? { entry, payload, nativeSessionId } : null
+}
+
+function subagentParts(payload: Record<string, unknown>) {
+  const source = asRecord(payload.source)
+  const raw = source.subagent ?? source.subAgent ?? source.sub_agent
+  const subagent = asRecord(raw)
+  const spawn = asRecord(subagent.thread_spawn ?? subagent.threadSpawn)
+  const threadSource = payload.thread_source ?? payload.threadSource
+  return { source, raw, subagent, spawn, threadSource }
+}
+
+function directParentId(payload: Record<string, unknown>): string | undefined {
+  const { source, subagent, spawn } = subagentParts(payload)
+  const threadSource = asRecord(payload.thread_source ?? payload.threadSource)
+  return stringField(payload, 'parent_thread_id', 'parent_session_id', 'forked_from_id')
+    ?? stringField(spawn, 'parent_thread_id', 'parent_session_id')
+    ?? stringField(subagent, 'parent_thread_id', 'parent_session_id')
+    ?? stringField(threadSource, 'parent_thread_id', 'parent_session_id')
+    ?? stringField(source, 'parent_thread_id', 'parent_session_id')
+}
+
+function guardianReview(payload: Record<string, unknown>): boolean {
+  const { raw, subagent, spawn, threadSource } = subagentParts(payload)
+  const values = [raw, subagent, spawn, threadSource, payload.source, payload.agent_role, payload.agentRole]
+    .map(lowerText)
+    .join('\n')
+  return /guardian[_-]?review/.test(values)
+    || /(^|["\s:_-])guardian(["\s:_-]|$)/.test(values)
+    || (typeof raw === 'string' && raw.toLowerCase() === 'review')
+}
+
+function subagentLabel(payload: Record<string, unknown>): string | undefined {
+  const { raw, subagent, spawn } = subagentParts(payload)
+  if (guardianReview(payload)) return 'Guardian 审查'
+  return stringField(spawn, 'agent_nickname', 'agent_path', 'agent_role')
+    ?? stringField(subagent, 'agent_nickname', 'agent_path', 'agent_role', 'name', 'type', 'other')
+    ?? (typeof raw === 'string' && raw !== 'review' ? raw : undefined)
+}
+
+function structuredSystemActivity(payload: Record<string, unknown>): { system: boolean; sourceLabel?: string } {
+  const { source, threadSource } = subagentParts(payload)
+  const threadSourceText = lowerText(threadSource)
+  const internal = source.internal
+  if (threadSourceText.includes('memory_consolidation') || threadSourceText.includes('memoryconsolidation')) {
+    return { system: true, sourceLabel: '记忆整理' }
+  }
+  if (threadSourceText === 'feature' || threadSourceText.startsWith('feature:') || threadSourceText.startsWith('feature(')) {
+    return { system: true, sourceLabel: 'Codex Feature' }
+  }
+  if (internal !== undefined) {
+    const label = typeof internal === 'string' && internal.trim() ? internal.trim() : 'Codex Internal'
+    return { system: true, sourceLabel: label }
+  }
+  return { system: false }
+}
+
+function classifySession(payload: Record<string, unknown>): {
+  activity: SessionActivityKind
+  relationship: SessionRelationshipType
+  sourceLabel?: string
+} {
+  const { raw, subagent, threadSource } = subagentParts(payload)
+  if (guardianReview(payload)) {
+    return { activity: 'internal-review', relationship: 'internal-review', sourceLabel: 'Guardian 审查' }
+  }
+  if (stringField(payload, 'forked_from_id')) {
+    return { activity: 'branch-task', relationship: 'branch-task', sourceLabel: '分支任务' }
+  }
+
+  const role = lowerText(payload.agent_role ?? payload.agentRole ?? subagent.agent_role ?? subagent.role)
+  const sourceText = lowerText(threadSource)
+  const rawText = lowerText(raw)
+  // Codex 当前持久化契约中 parent_thread_id 只设置在子 Agent 线程上。
+  // session_id 则由根线程和所有子 Agent 共享，不能用于推导线程父子关系。
+  const isSubagent = Boolean(directParentId(payload))
+    || sourceText.includes('subagent')
+    || raw !== undefined
+    || rawText.includes('subagent')
+    || /worker|subagent|child/.test(role)
+  if (isSubagent) {
+    const sourceLabel = subagentLabel(payload)
+    return sourceLabel
+      ? { activity: 'subagent', relationship: 'subagent', sourceLabel }
+      : { activity: 'subagent', relationship: 'subagent' }
+  }
+
+  const system = structuredSystemActivity(payload)
+  if (system.system) {
+    return system.sourceLabel
+      ? { activity: 'system-activity', relationship: 'related', sourceLabel: system.sourceLabel }
+      : { activity: 'system-activity', relationship: 'related' }
+  }
+
+  return { activity: 'user-task', relationship: 'related' }
+}
+
+function relationship(
+  record: SourceRecord,
+  ctx: SourceNormalizationContext,
+  fromNativeSessionId: string,
+  toNativeSessionId: string,
+  type: SessionRelationshipType,
+  nativeRelation: string,
+): SessionRelationshipCandidate {
+  return {
+    sourceId: 'codex',
+    installationId: record.installationId,
+    ...(ctx.runtimeProfile?.id ? { runtimeProfileId: ctx.runtimeProfile.id } : {}),
+    sourceRecordId: record.id,
+    fromNativeSessionId,
+    toNativeSessionId,
+    type,
+    nativeRelation,
+    confidence: 'exact',
+  }
+}
+
+function nativeParentRelation(payload: Record<string, unknown>): string {
+  if (stringField(payload, 'forked_from_id')) return 'forked_from_id'
+  if (stringField(payload, 'parent_thread_id')) return 'parent_thread_id'
+  const source = asRecord(payload.source)
+  if (source.subAgent !== undefined) return 'source.subAgent.thread_spawn.parent_thread_id'
+  if (source.sub_agent !== undefined) return 'source.sub_agent.thread_spawn.parent_thread_id'
+  return 'source.subagent.thread_spawn.parent_thread_id'
+}
+
+/**
+ * Codex 的 session_meta 在版本间出现过多种 parent/source 形态。
+ * normalize.ts 负责通用事件解析；这里集中做会话归属修正，避免 UI 再猜。
+ */
+export function normalizeCodexSessionAttribution(
+  record: SourceRecord,
+  ctx: SourceNormalizationContext,
+  output: NormalizedSourceOutput,
+): NormalizedSourceOutput {
+  const meta = sessionMeta(record)
+  if (!meta) return output
+
+  const ownSessionId = meta.nativeSessionId
+  const directParent = directParentId(meta.payload)
+  const classification = classifySession(meta.payload)
+  const orphanInternalActivity = classification.activity !== 'user-task' && !directParent
+
+  const observations = output.observations.map(observation => {
+    if (observation.kind !== 'session.lifecycle') return observation
+    const payload = asRecord(observation.payload)
+    if (payload.event !== 'session.discovered') return observation
+    return {
+      ...observation,
+      payload: {
+        ...payload,
+        sessionActivity: classification.activity,
+        ...(classification.sourceLabel ? { activitySourceLabel: classification.sourceLabel } : {}),
+        sessionId: ownSessionId,
+        ...(directParent ? { parentSessionId: directParent } : {}),
+        ...(orphanInternalActivity ? { orphanInternalActivity: true } : {}),
+      },
+      ...(directParent
+        ? { identityHints: { ...observation.identityHints, nativeParentSessionId: directParent } }
+        : observation.identityHints
+          ? { identityHints: observation.identityHints }
+          : {}),
+    }
+  })
+
+  const relationships: SessionRelationshipCandidate[] = []
+  if (directParent && directParent !== ownSessionId) {
+    relationships.push(relationship(
+      record,
+      ctx,
+      directParent,
+      ownSessionId,
+      classification.relationship,
+      nativeParentRelation(meta.payload),
+    ))
+  }
+
+  return {
+    ...output,
+    observations,
+    ...(relationships.length ? { sessionRelationshipHints: relationships } : { sessionRelationshipHints: [] }),
+  }
+}

@@ -1,9 +1,10 @@
-import { mkdtempSync, rmSync, statSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { ReviewProjection } from '../../packages/projection-review/src/index'
 import { SqliteStorageService } from '../../packages/storage-sqlite/src/index'
+import { fileSize, mb, measure, readPositiveInt } from './benchmark-utils'
 
 interface Options {
   interactions: number
@@ -11,15 +12,6 @@ interface Options {
   evidencePerObservation: number
   samples: number
   limit: number
-}
-
-function readPositiveInt(name: string, fallback: number): number {
-  const prefix = `--${name}=`
-  const raw = process.argv.find(arg => arg.startsWith(prefix))?.slice(prefix.length)
-  if (!raw) return fallback
-  const value = Number.parseInt(raw, 10)
-  if (!Number.isFinite(value) || value <= 0) throw new Error(`${name} must be a positive integer`)
-  return value
 }
 
 const options: Options = {
@@ -30,43 +22,8 @@ const options: Options = {
   limit: readPositiveInt('limit', 20),
 }
 
-function percentile(values: number[], p: number): number {
-  const sorted = [...values].sort((a, b) => a - b)
-  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * p) - 1))
-  return sorted[index] ?? 0
-}
-
-function fileSize(path: string): number {
-  try { return statSync(path).size } catch { return 0 }
-}
-
-function mb(bytes: number): string {
-  return (bytes / 1024 / 1024).toFixed(1)
-}
-
 function isoAt(offsetSeconds: number): string {
   return new Date(Date.UTC(2026, 7, 1) + offsetSeconds * 1000).toISOString()
-}
-
-async function measure(
-  name: string,
-  samples: number,
-  run: () => Promise<unknown>,
-): Promise<{ name: string; minMs: number; p50Ms: number; p95Ms: number; maxMs: number }> {
-  await run()
-  const durations: number[] = []
-  for (let index = 0; index < samples; index += 1) {
-    const started = performance.now()
-    await run()
-    durations.push(performance.now() - started)
-  }
-  return {
-    name,
-    minMs: Number(Math.min(...durations).toFixed(2)),
-    p50Ms: Number(percentile(durations, 0.50).toFixed(2)),
-    p95Ms: Number(percentile(durations, 0.95).toFixed(2)),
-    maxMs: Number(Math.max(...durations).toFixed(2)),
-  }
 }
 
 const expectedObservations = options.interactions * options.observationsPerInteraction
@@ -237,6 +194,6 @@ try {
     sessionSummaryQueryPlan: summaryPlan.map(row => row.detail),
   }, null, 2))
 } finally {
-  storage.close()
+  await storage.close()
   rmSync(root, { recursive: true, force: true })
 }

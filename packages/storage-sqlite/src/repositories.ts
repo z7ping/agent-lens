@@ -1,36 +1,39 @@
 import type {
-  AgentActor,
-  AgentInstallation,
-  AgentProduct,
   AssetBinding,
-  AssetDefinition,
   AssetRepository,
   AssetStateObservation,
-  CanonicalObservation,
   CoverageQuery,
   CoverageRepository,
-  Evidence,
   EvidenceRepository,
-  Host,
   HostRepository,
   InstallationRepository,
-  Interaction,
-  LogicalSession,
-  ObservationCoverage,
   ObservationQuery,
   ObservationRepository,
-  Project,
   RepositorySet,
-  SessionRelationship,
   SessionRepository,
-  SourceRecord,
   SourceRecordRepository,
-  SourceSession,
-  ToolDefinition,
   ToolRepository,
-  Workspace,
 } from '@agent-lens/core'
 import { SqliteExecutor } from './executor'
+import {
+  mapActor,
+  mapAssetDefinition,
+  mapCoverage,
+  mapEvidence,
+  mapHost,
+  mapInstallation,
+  mapInteraction,
+  mapLogicalSession,
+  mapObservation,
+  mapProduct,
+  mapProject,
+  mapRelationship,
+  mapSourceRecord,
+  mapSourceSession,
+  mapTool,
+  mapWorkspace,
+  sqliteRowId,
+} from './repository-row-mappers'
 
 const MAX_SEQUENCE = Number.MAX_SAFE_INTEGER
 
@@ -40,218 +43,6 @@ function encodeJson(value: unknown): string {
     throw new TypeError('SQLite persistence requires JSON-serializable values')
   }
   return encoded
-}
-
-function decodeJson<T>(value: unknown, fallback: T): T {
-  if (typeof value !== 'string' || value.length === 0) return fallback
-  return JSON.parse(value) as T
-}
-
-function mapHost(row: any): Host {
-  return {
-    id: row.id,
-    name: row.name,
-    platform: row.platform,
-    arch: row.arch,
-    createdAt: row.created_at,
-    lastSeenAt: row.last_seen_at,
-  }
-}
-
-function mapProduct(row: any): AgentProduct {
-  return {
-    id: row.id,
-    name: row.name,
-    vendor: row.vendor ?? undefined,
-    homepage: row.homepage ?? undefined,
-  } as AgentProduct
-}
-
-function mapInstallation(row: any): AgentInstallation {
-  return {
-    id: row.id,
-    hostId: row.host_id,
-    productId: row.product_id,
-    version: row.version ?? undefined,
-    executable: row.executable ?? undefined,
-    configRoot: row.config_root ?? undefined,
-    dataRoot: row.data_root ?? undefined,
-    firstSeenAt: row.first_seen_at,
-    lastSeenAt: row.last_seen_at,
-  } as AgentInstallation
-}
-
-function mapProject(row: any): Project {
-  return {
-    id: row.id,
-    name: row.name ?? undefined,
-    repositoryIdentity: row.repository_identity ?? undefined,
-    createdAt: row.created_at,
-    lastSeenAt: row.last_seen_at,
-  } as Project
-}
-
-function mapWorkspace(row: any): Workspace {
-  return {
-    id: row.id,
-    hostId: row.host_id,
-    projectId: row.project_id ?? undefined,
-    path: row.path,
-    repositoryId: row.repository_id ?? undefined,
-    worktreeId: row.worktree_id ?? undefined,
-  } as Workspace
-}
-
-function mapLogicalSession(row: any): LogicalSession {
-  return {
-    id: row.id,
-    installationId: row.installation_id,
-    projectId: row.project_id ?? undefined,
-    workspaceId: row.workspace_id ?? undefined,
-    title: row.title ?? undefined,
-    startedAt: row.started_at ?? undefined,
-    endedAt: row.ended_at ?? undefined,
-  } as LogicalSession
-}
-
-function mapSourceSession(row: any): SourceSession {
-  return {
-    id: row.id,
-    sourceId: row.source_id,
-    installationId: row.installation_id,
-    nativeSessionId: row.native_session_id,
-    logicalSessionId: row.logical_session_id ?? undefined,
-    nativeParentSessionId: row.native_parent_session_id ?? undefined,
-  } as SourceSession
-}
-
-function mapRelationship(row: any): SessionRelationship {
-  return {
-    id: row.id,
-    fromSessionId: row.from_session_id,
-    toSessionId: row.to_session_id,
-    type: row.type,
-    evidenceRefs: decodeJson<string[]>(row.evidence_refs_json, []),
-    confidence: row.confidence,
-  }
-}
-
-function mapActor(row: any): AgentActor {
-  return {
-    id: row.id,
-    installationId: row.installation_id,
-    logicalSessionId: row.logical_session_id ?? undefined,
-    parentActorId: row.parent_actor_id ?? undefined,
-    role: row.role,
-    nativeActorId: row.native_actor_id ?? undefined,
-    evidenceRefs: decodeJson<string[]>(row.evidence_refs_json, []),
-  } as AgentActor
-}
-
-function mapInteraction(row: any): Interaction {
-  return {
-    id: row.id,
-    logicalSessionId: row.logical_session_id,
-    ordinal: Number(row.ordinal),
-    trigger: row.trigger,
-    startObservationId: row.start_observation_id ?? undefined,
-    endObservationId: row.end_observation_id ?? undefined,
-    startedAt: row.started_at ?? undefined,
-    endedAt: row.ended_at ?? undefined,
-  } as Interaction
-}
-
-function mapSourceRecord(row: any): SourceRecord {
-  return {
-    id: row.id,
-    sourceId: row.source_id,
-    installationId: row.installation_id,
-    sourceSessionNativeId: row.source_session_native_id ?? undefined,
-    nativeType: row.native_type,
-    nativeId: row.native_id ?? undefined,
-    sourceSequence: row.source_sequence == null ? undefined : Number(row.source_sequence),
-    occurredAt: row.occurred_at ?? undefined,
-    capturedAt: row.captured_at,
-    locator: decodeJson(row.locator_json, { kind: 'external' }),
-    fingerprint: row.fingerprint ?? undefined,
-    payload: decodeJson(row.payload_json, null),
-    parserVersion: row.parser_version,
-  } as SourceRecord
-}
-
-function mapObservation(row: any, evidenceRefs: string[] = []): CanonicalObservation {
-  return {
-    id: row.id,
-    hostId: row.host_id,
-    installationId: row.installation_id,
-    projectId: row.project_id ?? undefined,
-    workspaceId: row.workspace_id ?? undefined,
-    logicalSessionId: row.logical_session_id,
-    sourceSessionId: row.source_session_id,
-    interactionId: row.interaction_id ?? undefined,
-    actorId: row.actor_id ?? undefined,
-    nativeEventId: row.native_event_id ?? undefined,
-    nativeParentEventId: row.native_parent_event_id ?? undefined,
-    parentObservationId: row.parent_observation_id ?? undefined,
-    kind: row.kind,
-    sourceSequence: row.source_sequence == null ? undefined : Number(row.source_sequence),
-    canonicalSequence: row.canonical_sequence == null ? undefined : Number(row.canonical_sequence),
-    occurredAt: row.occurred_at ?? undefined,
-    capturedAt: row.captured_at,
-    payload: decodeJson(row.payload_json, null),
-    evidenceRefs,
-  } as CanonicalObservation
-}
-
-function mapEvidence(row: any): Evidence {
-  return {
-    id: row.id,
-    captureMethod: row.capture_method,
-    derivation: row.derivation,
-    confidence: row.confidence,
-    sourceRecordId: row.source_record_id ?? undefined,
-    sourceLocator: row.source_locator_json == null ? undefined : decodeJson(row.source_locator_json, undefined),
-    parserVersion: row.parser_version ?? undefined,
-    eventTime: row.event_time ?? undefined,
-    capturedAt: row.captured_at,
-    missingReason: row.missing_reason ?? undefined,
-  } as Evidence
-}
-
-function mapCoverage(row: any): ObservationCoverage {
-  return {
-    id: row.id,
-    subjectType: row.subject_type,
-    subjectId: row.subject_id,
-    capability: row.capability,
-    from: row.from_time ?? undefined,
-    to: row.to_time ?? undefined,
-    status: row.status,
-    reason: row.reason ?? undefined,
-    evidenceRefs: decodeJson<string[]>(row.evidence_refs_json, []),
-  } as ObservationCoverage
-}
-
-function mapAssetDefinition(row: any): AssetDefinition {
-  return {
-    id: row.id,
-    type: row.type,
-    canonicalName: row.canonical_name,
-    displayName: row.display_name ?? undefined,
-    upstreamIdentity: row.upstream_identity ?? undefined,
-  } as AssetDefinition
-}
-
-function mapTool(row: any): ToolDefinition {
-  return {
-    id: row.id,
-    canonicalName: row.canonical_name,
-    displayName: row.display_name ?? undefined,
-    sourceType: row.source_type,
-    assetDefinitionId: row.asset_definition_id ?? undefined,
-    installationId: row.installation_id ?? undefined,
-    schemaHash: row.schema_hash ?? undefined,
-  } as ToolDefinition
 }
 
 export function createSqliteRepositories(executor: SqliteExecutor): RepositorySet {
@@ -552,6 +343,16 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
         return row ? mapSourceRecord(row) : null
       })
     },
+    async getMany(ids) {
+      if (!ids.length) return []
+      return executor.run(() => {
+        const uniqueIds = [...new Set(ids)]
+        const placeholders = uniqueIds.map(() => '?').join(', ')
+        return db.prepare(`SELECT * FROM source_records WHERE id IN (${placeholders}) ORDER BY id`)
+          .all(...uniqueIds)
+          .map(mapSourceRecord)
+      })
+    },
     async listForParserReplay(sourceId, installationId, currentParserVersion, after, limit = 500, window) {
       return executor.run(() => {
         const params: unknown[] = [sourceId, installationId, currentParserVersion]
@@ -696,7 +497,7 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
           LIMIT ?
         `).all(...params, limit)
         if (!rows.length) return []
-        const ids = rows.map(row => (row as any).id as string)
+        const ids = rows.map(sqliteRowId)
         const placeholders = ids.map(() => '?').join(', ')
         const evidenceRows = db.prepare(`
           SELECT observation_id, evidence_id
@@ -710,7 +511,10 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
           values.push(row.evidence_id)
           evidenceByObservation.set(row.observation_id, values)
         }
-        return rows.map(row => mapObservation(row, evidenceByObservation.get((row as any).id) ?? []))
+        return rows.map(row => {
+          const id = sqliteRowId(row)
+          return mapObservation(row, evidenceByObservation.get(id) ?? [])
+        })
       })
     },
     async findIdByNativeEventId(sourceSessionId, nativeEventId) {
@@ -719,8 +523,8 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
           SELECT id FROM observations
           WHERE source_session_id = ? AND native_event_id = ?
           ORDER BY id LIMIT 1
-        `).get(sourceSessionId, nativeEventId) as { id: string } | undefined
-        return row?.id ?? null
+        `).get(sourceSessionId, nativeEventId)
+        return row ? sqliteRowId(row) : null
       })
     },
     async linkChildrenToParent(sourceSessionId, nativeParentEventId, parentObservationId) {

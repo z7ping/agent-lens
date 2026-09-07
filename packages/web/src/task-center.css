@@ -6,11 +6,10 @@
  * Task 详情组件归 task-detail.css，长会话导航归 review-long-session.css，Pi Live 专属 UI 归 pi-live.css。
  */
 .task-center-page {
-  --task-center-rail: 316px;
   display: grid;
-  height: calc(100dvh - 52px);
+  height: 100%;
   min-height: 0;
-  grid-template-columns: var(--task-center-rail) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
   background: var(--al-canvas);
@@ -81,9 +80,7 @@
   font-size: 12px;
   font-weight: 650;
 }
-.task-center-filter-disclosure[open] {
-  grid-column: 1 / -1;
-}
+.task-center-filter-disclosure[open] { grid-column: 1 / -1; }
 .task-center-filter-disclosure[open] + .ui-icon-button { grid-row: 1; grid-column: 3; }
 .task-center-filter-disclosure .ui-disclosure-body { padding-top: 7px; }
 .task-center-filter-fields {
@@ -134,10 +131,7 @@
   align-items: center;
   padding: 2px 10px 4px;
 }
-.task-center-new-task-button {
-  border-color: transparent;
-  box-shadow: none;
-}
+.task-center-new-task-button { border-color: transparent; box-shadow: none; }
 .task-center-scroll { min-height: 0; flex: 1; overflow: auto; padding: 2px 10px 12px; }
 .task-center-group + .task-center-group { margin-top: 0; padding-top: 0; border-top: 0; }
 .task-center-group-title {
@@ -164,9 +158,12 @@
 /* Rail 是平面高密度列表；session-item 基础语义来自 Review 数据模型，视觉仅在 Rail 上下文内生效。 */
 .task-center-rail .session-item {
   position: relative;
+  display: flex;
   width: 100%;
+  min-height: 0;
+  flex-direction: column;
   margin: 0;
-  padding: 9px 7px 9px 9px;
+  padding: 8px 8px 8px 11px;
   border: 0;
   border-bottom: 1px solid color-mix(in srgb, var(--al-line) 58%, transparent);
   border-radius: 0;
@@ -175,30 +172,54 @@
   text-align: left;
 }
 .task-center-rail .session-item:hover { background: color-mix(in srgb, var(--al-surface) 56%, transparent); }
-.task-center-rail .session-item-active { background: color-mix(in srgb, var(--al-surface) 76%, transparent); }
+.task-center-rail .session-item-active { background: color-mix(in srgb, var(--al-accent-soft) 34%, var(--al-surface)); }
 .task-center-rail .session-item-active::before {
   content: "";
   position: absolute;
-  top: 9px;
-  bottom: 9px;
+  top: 7px;
+  bottom: 7px;
   left: 0;
   width: 2px;
   border-radius: 2px;
   background: var(--al-accent);
 }
-.task-center-rail .session-item-title { margin-top: 4px; color: var(--al-ink); font-size: 13px; font-weight: 650; line-height: 1.45; }
+.task-center-rail .session-item-title {
+  display: -webkit-box;
+  order: 1;
+  max-height: 2.9em;
+  margin: 0;
+  overflow: hidden;
+  color: var(--al-ink);
+  font-size: 13px;
+  font-weight: 680;
+  line-height: 1.42;
+  text-overflow: ellipsis;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
 .task-center-rail .session-item-meta,
 .task-center-rail .session-item-foot {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 7px;
   color: var(--al-muted-2);
-  font-size: 12px;
   line-height: 1.35;
 }
+.task-center-rail .session-item-meta {
+  order: 2;
+  gap: 5px;
+  margin-top: 5px;
+  font-size: 12px;
+}
+.task-center-rail .session-item-foot {
+  order: 3;
+  gap: 9px;
+  margin-top: 3px;
+  color: color-mix(in srgb, var(--al-muted-2) 88%, transparent);
+  font-size: 12px;
+}
+.task-center-rail .session-item-meta .source-dot { width: 6px; height: 6px; flex: 0 0 6px; }
 .task-center-page.is-new-task { grid-template-rows: minmax(0, 1fr); }
-.task-center-page.is-new-task .task-center-rail,
 .task-center-page.is-new-task .task-center-main { grid-row: 1; }
 .task-center-rail .session-item-meta > span:not(.source-dot):not(.pi-live-pulse):not(.pi-live-idle-dot),
 .task-center-rail .session-item-foot > span:first-child {
@@ -213,8 +234,15 @@
   flex: 0 0 auto;
   white-space: nowrap;
 }
-.task-center-rail .session-item-meta time { font-variant-numeric: tabular-nums; }
-.task-center-rail .session-item-foot { margin-top: 4px; gap: 12px; }
+.task-center-rail .session-item-meta time { color: var(--al-muted-2); font-weight: 400; font-variant-numeric: tabular-nums; }
+.task-center-rail .session-activity-badge {
+  min-height: 18px;
+  flex: 0 0 auto;
+  padding: 1px 5px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 620;
+}
 .task-center-rail .session-load-more {
   width: 100%;
   margin-top: 9px;
@@ -225,9 +253,9 @@
 }
 .task-center-rail .session-load-more:hover:not(:disabled) { border-color: transparent; background: var(--al-surface); color: var(--al-ink-2); }
 
-/* 左右滚动根完全隔离。 */
+/* 左侧任务列表已 Portal 到 WorkspaceSidebar；页面自身只保留详情滚动根。 */
 .task-center-main {
-  grid-column: 2;
+  grid-column: 1;
   grid-row: 1;
   min-width: 0;
   min-height: 0;
@@ -293,12 +321,10 @@
 .task-center-new-actions { display: flex; justify-content: flex-end; margin-top: 18px; }
 
 @media (max-width: 1199.98px) {
-  .task-center-page { --task-center-rail: 286px; }
   .task-center-main .review-reader,
   .task-center-main .pi-live-document { padding-right: 22px; padding-left: 44px; }
 }
 @media (max-width: 991.98px) {
-  .task-center-page { --task-center-rail: 252px; }
   .task-center-filter-fields { grid-template-columns: minmax(0, 1fr); }
   .task-center-filter-fields label.is-wide { grid-column: auto; }
   .task-center-main .review-reader,

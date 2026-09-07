@@ -11,7 +11,10 @@ import type {
   LogicalSessionIdentityHint,
   Project,
   ProjectIdentityHint,
+  RuntimeProfile,
+  RuntimeProfileIdentityHint,
   SessionRelationship,
+  SessionRelationshipCandidate,
   SourceSession,
   SourceSessionIdentityHint,
   Workspace,
@@ -29,6 +32,7 @@ import type {
   LogicalSessionId,
   ObservationId,
   ProjectId,
+  RuntimeProfileId,
   SourceRecordId,
   SourceSessionId,
   WorkspaceId,
@@ -44,6 +48,7 @@ import type {
   ObservationCoverage,
   SourceRecord,
 } from '../domain/observation'
+import type { SourceRuntimeStatus } from '../domain/diagnostics'
 import type {
   AssetBinding,
   AssetBindingHint,
@@ -59,6 +64,8 @@ import type {
   SourceDefinition,
   SourceDetectionContext,
 } from '../contracts/source'
+import type { MaintenanceJobStore } from './maintenance'
+import type { ToolUsageObservationReader } from './tool-usage'
 
 export interface SourceService {
   register(definition: SourceDefinition): Disposable
@@ -162,6 +169,8 @@ export interface AssetInventoryReader {
   listByInstallation(installationId: AgentInstallationId): Promise<AssetInventoryEntry[]>
 }
 
+export type SessionActivityKind = 'user-task' | 'branch-task' | 'subagent' | 'internal-review' | 'system-activity'
+
 export interface SessionSummaryRecord {
   logicalSessionId: LogicalSessionId
   installationId: AgentInstallationId
@@ -176,13 +185,22 @@ export interface SessionSummaryRecord {
   startedAt: string
   endedAt: string
   observationCount: number
+  /** Backward compatible name; now strictly means real human user turns. */
   interactionCount: number
+  userTurnCount?: number
+  systemContextCount?: number
+  internalReviewCount?: number
+  otherEventCount?: number
   toolCount: number
   errorCount: number
+  sessionActivity?: SessionActivityKind
+  activitySourceLabel?: string
+  parentSessionId?: LogicalSessionId
 }
 
 export interface SessionSummaryCursor {
-  startedAt: string
+  /** Canonical pagination boundary: latest observable activity time for the session. */
+  activeAt: string
   logicalSessionId: LogicalSessionId
 }
 
@@ -203,6 +221,12 @@ export interface SessionSummaryReader {
   query(input: SessionSummaryQuery): Promise<{ items: SessionSummaryRecord[]; hasMore: boolean }>
 }
 
+export interface SessionSummaryFacetScope {
+  projects: Array<{ id: string; name?: string; repositoryIdentity?: string }>
+  from?: string
+  to?: string
+}
+
 /**
  * Writable derived view used by the Session Summary projection. Implementations
  * must be fully rebuildable from Canonical Observation data.
@@ -210,6 +234,8 @@ export interface SessionSummaryReader {
 export interface SessionSummaryProjectionStore extends SessionSummaryReader {
   /** Cheap integrity guard used before trusting a persisted projection across restarts. */
   isMaterialized(): Promise<boolean>
+  /** Optional optimized facet scan backed by the persisted projection. */
+  facetScope?(): Promise<SessionSummaryFacetScope>
   rebuild(input?: {
     logicalSessionId?: LogicalSessionId
     strategy?: 'atomic' | 'cooperative'
@@ -284,12 +310,15 @@ export interface SessionRepository {
 }
 
 export interface SourceRecordReplayCursor {
+  /** Parser version being drained. Keeps pagination on an equality-constrained index range. */
+  parserVersion?: string
   capturedAt: string
   id: SourceRecordId
 }
 
 export interface SourceRecordRepository {
   get(id: SourceRecordId): Promise<SourceRecord | null>
+  getMany?(ids: SourceRecordId[]): Promise<SourceRecord[]>
   listForParserReplay?(
     sourceId: string,
     installationId: AgentInstallationId,
@@ -318,6 +347,11 @@ export interface ObservationRepository {
     nativeParentEventId: string,
     parentObservationId: ObservationId,
   ): Promise<void>
+  /**
+   * Detach the canonical observations previously derived from one raw SourceRecord.
+   * Evidence rows and SourceRecord rows stay intact; observations with other evidence survive.
+   */
+  removeDerivationsForSourceRecord?(sourceRecordId: SourceRecordId): Promise<number>
   put(observation: CanonicalObservation): Promise<void>
 }
 
@@ -357,13 +391,96 @@ export interface RepositorySet {
   tools: ToolRepository
 }
 
+export interface VersionedCheckpoint<T> {
+  value: T
+  revision: number
+}
+
 export interface CheckpointRepository {
   get<T>(scope: string, key: string): Promise<T | null>
+  getWithRevision?<T>(scope: string, key: string): Promise<VersionedCheckpoint<T> | null>
+  compareAndSet?<T>(
+    scope: string,
+    key: string,
+    expectedRevision: number | null,
+    value: T,
+  ): Promise<boolean>
   set<T>(scope: string, key: string, value: T): Promise<void>
   clear(scope: string, key: string): Promise<void>
 }
 
-export interface StorageTransaction extends RepositorySet {}
+export interface RuntimeProfileRepository {
+  resolve(hint: RuntimeProfileIdentityHint): Promise<RuntimeProfile>
+  get(id: RuntimeProfileId): Promise<RuntimeProfile | null>
+  attachSession(
+    sourceId: string,
+    installationId: AgentInstallationId,
+    nativeSessionId: string,
+    runtimeProfileId: RuntimeProfileId,
+  ): Promise<void>
+  attachAssetBinding(assetBindingId: string, runtimeProfileId: RuntimeProfileId): Promise<void>
+}
+
+export interface SourceRuntimeStatusRepository {
+  put(status: SourceRuntimeStatus): Promise<void>
+  list(): Promise<SourceRuntimeStatus[]>
+}
+
+export interface SessionRelationshipCandidateRepository {
+  put(candidate: SessionRelationshipCandidate): Promise<void>
+  tryPromote(candidate: SessionRelationshipCandidate): Promise<SessionRelationship | null>
+  tryPromoteForSession(
+    sourceId: string,
+    installationId: AgentInstallationId,
+    nativeSessionId: string,
+  ): Promise<number>
+}
+
+export interface SourceRecordCompressionBatch {
+  scanned: number
+  compressed: number
+  plain: number
+  rawBytes: number
+  storedBytes: number
+  savedBytes: number
+  cursor?: string
+  hasMore: boolean
+}
+
+export interface DeferredIndexMaintenanceResult {
+  created: string[]
+  existing: string[]
+}
+
+export interface StorageMaintenance {
+  ensureDeferredIndexes(): Promise<DeferredIndexMaintenanceResult>
+  compressSourceRecords(limit?: number, afterId?: string): Promise<SourceRecordCompressionBatch>
+}
+
+export interface ProjectionBackfillBatch {
+  scanned: number
+  written: number
+  cursor?: string
+  hasMore: boolean
+}
+
+export interface ToolUsageFactCoverage {
+  sourceObservationCount: number
+  projectedCount: number
+  missingCount: number
+  coverageRatio: number
+  ready: boolean
+}
+
+export interface ProjectionBackfillMaintenance {
+  backfillUnknownObservations(after?: string, limit?: number): Promise<ProjectionBackfillBatch>
+  backfillToolUsageFacts(after?: string, limit?: number): Promise<ProjectionBackfillBatch>
+  toolUsageFactCoverage?(): Promise<ToolUsageFactCoverage>
+  toolUsageFactCoverageForMaintenance?(): Promise<ToolUsageFactCoverage>
+  repairToolUsageFactCursor?(after?: string): Promise<string | undefined>
+}
+
+export type StorageTransaction = RepositorySet
 
 export interface StorageHealth {
   ok: boolean
@@ -377,7 +494,16 @@ export interface StorageService {
   readonly assetInventory?: AssetInventoryReader
   readonly sessionSummaries?: SessionSummaryReader
   readonly sessionSummaryProjection?: SessionSummaryProjectionStore
+  readonly toolUsageObservations?: ToolUsageObservationReader
+  readonly maintenance?: StorageMaintenance
+  readonly maintenanceJobs?: MaintenanceJobStore
+  readonly projectionBackfill?: ProjectionBackfillMaintenance
+  readonly runtimeProfiles?: RuntimeProfileRepository
+  readonly sourceRuntimeStatus?: SourceRuntimeStatusRepository
+  readonly sessionRelationshipCandidates?: SessionRelationshipCandidateRepository
   transaction<T>(fn: (tx: StorageTransaction) => Promise<T>): Promise<T>
-  migrate(): Promise<void>
+  /** Fast liveness/readiness path. Implementations should avoid whole-dataset aggregation here. */
   health(): Promise<StorageHealth>
+  /** Optional explicit deep diagnostics path; callers must not use this for readiness. */
+  diagnostics?(): Promise<StorageHealth>
 }

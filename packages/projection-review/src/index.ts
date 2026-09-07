@@ -1,8 +1,13 @@
 import type {
   JsonValue,
   ReviewDetailQueryDto,
+  ReviewInteractionDto,
+  ReviewQueryDto,
+  ReviewResponseDto,
   ReviewSessionDetailDto,
+  ReviewSessionSummaryDto,
 } from '@agent-lens/protocol'
+import { asRecord, stringField } from './nodes'
 import {
   ReviewProjection as BaseReviewProjection,
   reviewProjectionInternals as baseReviewProjectionInternals,
@@ -10,19 +15,9 @@ import {
 
 export { HubReviewProjection, hubReviewProjectionInternals } from './hub'
 
-function asRecord(value: JsonValue | unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {}
-}
-
-function stringField(record: Record<string, unknown>, ...keys: string[]): string | undefined {
-  for (const key of keys) {
-    const value = record[key]
-    if (typeof value === 'string' && value.trim()) return value.trim()
-  }
-  return undefined
-}
+const MAX_REVIEW_INTERACTION_NODES = 600
+const REVIEW_INTERACTION_HEAD_NODES = 240
+const REVIEW_INTERACTION_TAIL_NODES = MAX_REVIEW_INTERACTION_NODES - REVIEW_INTERACTION_HEAD_NODES
 
 function normalizeLifecycleAction(value: string): string {
   return value.trim().toLowerCase().replace(/[\s_:\-]+/g, '.')
@@ -86,12 +81,24 @@ export function lifecycleEventLabel(payload: JsonValue | unknown): string {
     close: '会话结束',
     'turn.started': '轮次开始',
     'turn.start': '轮次开始',
+    'turn.completed': '轮次结束',
+    'turn.complete': '轮次结束',
     'turn.stopped': '轮次停止',
     'turn.stop': '轮次停止',
+    'turn.aborted': '轮次终止',
+    'turn.error': '轮次错误',
     stopped: '轮次停止',
     stop: '轮次停止',
     'turn.ended': '轮次结束',
     'turn.end': '轮次结束',
+    'review.entered': '进入审查',
+    'review.exited': '退出审查',
+    'subagent.interacted': '子 Agent 活动',
+    'subagent.communication': '子 Agent 通信',
+    'reasoning.configuration.updated': '推理配置更新',
+    'thread.goal.updated': '任务目标更新',
+    'thread.rolled.back': '会话回滚',
+    'thread.settings.applied': '会话设置更新',
   }
   if (exact[action]) return exact[action]
 
@@ -109,11 +116,83 @@ export function lifecycleEventLabel(payload: JsonValue | unknown): string {
   if (has('abort', 'aborted')) return '会话终止'
   if (parts.has('turn') && has('start', 'started')) return '轮次开始'
   if (parts.has('turn') && has('stop', 'stopped')) return '轮次停止'
-  if (parts.has('turn') && has('end', 'ended')) return '轮次结束'
+  if (parts.has('turn') && has('end', 'ended', 'complete', 'completed')) return '轮次结束'
   if (has('start', 'started')) return '会话开始'
   if (has('stop', 'stopped', 'end', 'ended', 'close', 'closed')) return '会话结束'
 
   return '会话状态变化'
+}
+
+function boundInteractionNodes(interaction: ReviewInteractionDto): ReviewInteractionDto {
+  if (interaction.nodes.length <= MAX_REVIEW_INTERACTION_NODES) return interaction
+  const totalNodeCount = interaction.nodes.length
+  return {
+    ...interaction,
+    nodes: [
+      ...interaction.nodes.slice(0, REVIEW_INTERACTION_HEAD_NODES),
+      ...interaction.nodes.slice(-REVIEW_INTERACTION_TAIL_NODES),
+    ],
+    nodesTruncated: true,
+    totalNodeCount,
+    omittedNodeCount: totalNodeCount - MAX_REVIEW_INTERACTION_NODES,
+  }
+}
+
+function boundReviewDetail(detail: ReviewSessionDetailDto): ReviewSessionDetailDto {
+  return {
+    ...detail,
+    interactions: detail.interactions.map(boundInteractionNodes),
+  }
+}
+
+function normalizeOrphanToolResults(detail: ReviewSessionDetailDto): ReviewSessionDetailDto {
+  return {
+    ...detail,
+    interactions: detail.interactions.map(interaction => ({
+      ...interaction,
+      nodes: interaction.nodes.map(node => {
+        if (node.type !== 'event' || node.kind !== 'tool.result') return node
+        const payload = asRecord(node.payload)
+        const callId = stringField(payload, 'callId', 'call_id', 'toolUseId', 'tool_use_id')
+        const name = stringField(payload, 'nativeToolName', 'toolName', 'tool_name', 'name') ?? 'Tool'
+        const rawDuration = payload.durationMs ?? payload.duration_ms
+        const durationMs = typeof rawDuration === 'number' && Number.isFinite(rawDuration) && rawDuration >= 0
+          ? rawDuration
+          : undefined
+        const status = payload.success === false
+          ? 'error' as const
+          : payload.success === true
+            ? 'success' as const
+            : 'unknown' as const
+        const output = payload.output !== undefined
+          ? payload.output
+          : payload.result !== undefined
+            ? payload.result
+            : node.payload
+        return {
+          type: 'tool' as const,
+          id: node.id,
+          at: node.at,
+          sourceId: node.sourceId,
+          name,
+          ...(callId ? { callId } : {}),
+          status,
+          startedAt: node.at,
+          endedAt: node.at,
+          ...(durationMs === undefined ? {} : { durationMs }),
+          output,
+          payload: node.payload,
+          evidence: node.evidence,
+          observationIds: node.observationIds,
+          ...(node.nativeEventId ? { nativeEventId: node.nativeEventId } : {}),
+          ...(node.nativeParentEventId ? { nativeParentEventId: node.nativeParentEventId } : {}),
+          ...(node.parentObservationId ? { parentObservationId: node.parentObservationId } : {}),
+          ...(node.occurredAt ? { occurredAt: node.occurredAt } : {}),
+          capturedAt: node.capturedAt,
+        }
+      }),
+    })),
+  }
 }
 
 function localizeLifecycle(detail: ReviewSessionDetailDto): ReviewSessionDetailDto {
@@ -128,13 +207,51 @@ function localizeLifecycle(detail: ReviewSessionDetailDto): ReviewSessionDetailD
   }
 }
 
+type ReviewSessionActivity = ReviewSessionSummaryDto['sessionActivity']
+
+function resolveSessionActivity(
+  attributed: ReviewSessionActivity | undefined,
+  userTurnCount: number | undefined,
+  systemContextCount: number | undefined,
+): ReviewSessionActivity | undefined {
+  if (attributed === 'branch-task' || attributed === 'subagent' || attributed === 'internal-review') {
+    return attributed
+  }
+  if ((userTurnCount ?? 0) > 0) return 'user-task'
+  if (attributed === 'system-activity' || (systemContextCount ?? 0) > 0) return 'system-activity'
+  return attributed
+}
+
+function normalizeReviewSummaryActivity<T extends ReviewSessionSummaryDto>(summary: T): T {
+  const sessionActivity = resolveSessionActivity(
+    summary.sessionActivity,
+    summary.userTurnCount,
+    summary.systemContextCount,
+  )
+  if (sessionActivity === summary.sessionActivity) return summary
+  return {
+    ...summary,
+    ...(sessionActivity ? { sessionActivity } : {}),
+  }
+}
+
 export class ReviewProjection extends BaseReviewProjection {
+  override async query(query: ReviewQueryDto = {}): Promise<ReviewResponseDto> {
+    const response = await super.query(query)
+    return {
+      ...response,
+      items: response.items.map(normalizeReviewSummaryActivity),
+    }
+  }
+
   override async get(
     logicalSessionId: string,
     query: ReviewDetailQueryDto = {},
   ): Promise<ReviewSessionDetailDto | null> {
     const detail = await super.get(logicalSessionId, query)
-    return detail ? localizeLifecycle(detail) : null
+    return detail
+      ? normalizeReviewSummaryActivity(localizeLifecycle(normalizeOrphanToolResults(boundReviewDetail(detail))))
+      : null
   }
 }
 
@@ -142,4 +259,12 @@ export const reviewProjectionInternals = {
   ...baseReviewProjectionInternals,
   lifecycleEventLabel,
   localizeLifecycle,
+  normalizeOrphanToolResults,
+  boundInteractionNodes,
+  boundReviewDetail,
+  resolveSessionActivity,
+  normalizeReviewSummaryActivity,
+  maxReviewInteractionNodes: MAX_REVIEW_INTERACTION_NODES,
+  reviewInteractionHeadNodes: REVIEW_INTERACTION_HEAD_NODES,
+  reviewInteractionTailNodes: REVIEW_INTERACTION_TAIL_NODES,
 }

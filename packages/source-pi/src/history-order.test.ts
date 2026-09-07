@@ -37,3 +37,13 @@ test('Pi 冷导入按最近活动时间优先并稳定回填旧文件', async ()
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test('Pi 会话目录遵循原生 PI_CODING_AGENT_SESSION_DIR 配置', () => {
+  const agentDir = join(tmpdir(), 'agent-lens-pi-agent')
+  const customSessions = join(tmpdir(), 'agent-lens-pi-custom-sessions')
+  assert.equal(
+    piInternals.piSessionsDir({ PI_CODING_AGENT_SESSION_DIR: customSessions }, agentDir),
+    customSessions,
+  )
+  assert.equal(piInternals.piSessionsDir({}, agentDir), join(agentDir, 'sessions'))
+})

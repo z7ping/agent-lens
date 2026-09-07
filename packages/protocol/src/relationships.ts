@@ -5,7 +5,17 @@ export interface SessionRelationshipDto {
   sourceId?: string
   fromSessionId: string
   toSessionId: string
-  type: 'resume' | 'continuation' | 'fork' | 'subagent' | 'import-copy' | 'related' | 'native-parent'
+  type:
+    | 'resume'
+    | 'continuation'
+    | 'fork'
+    | 'branch-task'
+    | 'subagent'
+    | 'internal-review'
+    | 'task-root'
+    | 'import-copy'
+    | 'related'
+    | 'native-parent'
   confidence: 'exact' | 'high' | 'medium' | 'low' | 'unknown'
   fromNativeSessionId?: string
   toNativeSessionId?: string

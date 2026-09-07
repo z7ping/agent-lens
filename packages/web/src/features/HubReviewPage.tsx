@@ -127,7 +127,7 @@ function TimelineItem({ item }: { item: HubReviewTimelineItemDto }) {
         : <div className="hub-review-unavailable"><AvailabilityBadge value={item.payload}/><small>AgentLens 不会用空字符串或空对象代替未同步内容。</small></div>}
     </div>
     {Object.keys(item.references).length > 0 && <details className="hub-review-refs">
-      <summary>引用 {Object.keys(item.references).length}</summary>
+      <summary><UiIcon className="hub-review-refs-chevron" name="chevron-right" size={14}/><span>引用 {Object.keys(item.references).length}</span></summary>
       <div>{Object.entries(item.references).map(([key, value]) => {
         const refs = Array.isArray(value) ? value : [value]
         return <div key={key}><b>{key}</b>{refs.map(ref => <code key={`${ref.entityType}:${ref.publicId}`}>{ref.entityType} · {ref.publicId}</code>)}</div>

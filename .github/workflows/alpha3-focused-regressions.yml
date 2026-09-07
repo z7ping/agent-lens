@@ -1,0 +1,88 @@
+name: Alpha.3 Focused Regressions
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/1.0.0-alpha.3-task-surface
+    paths:
+      - apps/daemon/src/**
+      - packages/core/src/**
+      - packages/core-services/src/**
+      - packages/runtime-cordis/src/**
+      - packages/storage-sqlite/src/**
+      - packages/projection-session/src/**
+      - packages/projection-review/src/**
+      - packages/projection-overview/src/**
+      - packages/projection-insights/src/**
+      - packages/projection-usage/src/**
+      - packages/source-pi/src/**
+      - packages/source-codex/src/**
+      - packages/web/src/**
+      - .github/workflows/alpha3-focused-regressions.yml
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  focused-regressions:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.23.0
+          package-manager-cache: false
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Core typecheck
+        run: npm run typecheck --workspace @agent-lens/core
+      - name: Core services typecheck
+        run: npm run typecheck --workspace @agent-lens/core-services
+      - name: Core services tests
+        run: npm run test --workspace @agent-lens/core-services
+      - name: Runtime Cordis typecheck
+        run: npm run typecheck --workspace @agent-lens/runtime-cordis
+      - name: Runtime Cordis tests
+        run: npm run test --workspace @agent-lens/runtime-cordis
+      - name: Daemon typecheck
+        run: npm run typecheck --workspace @agent-lens/daemon
+      - name: Daemon tests
+        run: npm run test --workspace @agent-lens/daemon
+      - name: Storage typecheck
+        run: npm run typecheck --workspace @agent-lens/storage-sqlite
+      - name: Storage tests
+        run: npm run test --workspace @agent-lens/storage-sqlite
+      - name: Review typecheck
+        run: npm run typecheck --workspace @agent-lens/projection-review
+      - name: Review tests
+        run: npm run test --workspace @agent-lens/projection-review
+      - name: Overview typecheck
+        run: npm run typecheck --workspace @agent-lens/projection-overview
+      - name: Overview tests
+        run: npm run test --workspace @agent-lens/projection-overview
+      - name: Insights typecheck
+        run: npm run typecheck --workspace @agent-lens/projection-insights
+      - name: Insights tests
+        run: npm run test --workspace @agent-lens/projection-insights
+      - name: Usage typecheck
+        run: npm run typecheck --workspace @agent-lens/projection-usage
+      - name: Usage tests
+        run: npm run test --workspace @agent-lens/projection-usage
+      - name: Pi typecheck
+        run: npm run typecheck --workspace @agent-lens/source-pi
+      - name: Pi tests
+        run: npm run test --workspace @agent-lens/source-pi
+      - name: Codex typecheck
+        run: npm run typecheck --workspace @agent-lens/source-codex
+      - name: Codex tests
+        run: npm run test --workspace @agent-lens/source-codex
+      - name: Web typecheck
+        run: npm run typecheck --workspace @agent-lens/web
+      - name: Web tests
+        run: npm run test --workspace @agent-lens/web

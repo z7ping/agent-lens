@@ -1,10 +1,18 @@
-import { mkdtempSync, rmSync, statSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
+import type { SourceDefinition, SourceService } from '../../packages/core/src/index'
 import { AgentOverviewProjection } from '../../packages/projection-overview/src/index'
 import { ToolAssetUsageProjection } from '../../packages/projection-usage/src/index'
 import { SqliteStorageService } from '../../packages/storage-sqlite/src/index'
+import {
+  fileSize,
+  mb,
+  measure,
+  readOptionalPositiveInt,
+  readPositiveInt,
+} from './benchmark-utils'
 
 interface Options {
   installations: number
@@ -13,15 +21,8 @@ interface Options {
   evidencePerObservation: number
   samples: number
   limit: number
-}
-
-function readPositiveInt(name: string, fallback: number): number {
-  const prefix = `--${name}=`
-  const raw = process.argv.find(arg => arg.startsWith(prefix))?.slice(prefix.length)
-  if (!raw) return fallback
-  const value = Number.parseInt(raw, 10)
-  if (!Number.isFinite(value) || value <= 0) throw new Error(`${name} must be a positive integer`)
-  return value
+  globalP95BudgetMs: number | null
+  overviewP95BudgetMs: number | null
 }
 
 const options: Options = {
@@ -31,45 +32,12 @@ const options: Options = {
   evidencePerObservation: readPositiveInt('evidence-per-observation', 1),
   samples: readPositiveInt('samples', 10),
   limit: readPositiveInt('limit', 100),
-}
-
-function percentile(values: number[], p: number): number {
-  const sorted = [...values].sort((a, b) => a - b)
-  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * p) - 1))
-  return sorted[index] ?? 0
-}
-
-function fileSize(path: string): number {
-  try { return statSync(path).size } catch { return 0 }
-}
-
-function mb(bytes: number): string {
-  return (bytes / 1024 / 1024).toFixed(1)
+  globalP95BudgetMs: readOptionalPositiveInt('global-p95-budget-ms'),
+  overviewP95BudgetMs: readOptionalPositiveInt('overview-p95-budget-ms'),
 }
 
 function isoAt(offsetMs: number): string {
   return new Date(Date.UTC(2026, 7, 1) + offsetMs).toISOString()
-}
-
-async function measure(
-  name: string,
-  samples: number,
-  run: () => Promise<unknown>,
-): Promise<{ name: string; minMs: number; p50Ms: number; p95Ms: number; maxMs: number }> {
-  await run()
-  const durations: number[] = []
-  for (let index = 0; index < samples; index += 1) {
-    const started = performance.now()
-    await run()
-    durations.push(performance.now() - started)
-  }
-  return {
-    name,
-    minMs: Number(Math.min(...durations).toFixed(2)),
-    p50Ms: Number(percentile(durations, 0.50).toFixed(2)),
-    p95Ms: Number(percentile(durations, 0.95).toFixed(2)),
-    maxMs: Number(Math.max(...durations).toFixed(2)),
-  }
 }
 
 const toolObservationsPerCall = 2
@@ -84,15 +52,26 @@ const usage = new ToolAssetUsageProjection(storage)
 const productId = 'product-perf'
 const sourceId = 'codex'
 
-const sources = {
-  list: () => [{
-    manifest: {
-      sourceId,
-      productId,
-      displayName: 'Performance Agent',
-    },
-  }],
-} as any
+const sourceDefinition: SourceDefinition = {
+  manifest: {
+    pluginId: '@agent-lens/perf-source',
+    pluginVersion: '1.0.0',
+    apiVersion: '1.0',
+    pluginType: 'source',
+    displayName: 'Performance Agent',
+    sourceId,
+    productId,
+    parserVersion: 'perf',
+  },
+  async detect() { return [] },
+  async declareCapabilities() { return [] },
+  async normalize() { throw new Error('performance fixture source does not normalize records') },
+}
+const sources: SourceService = {
+  register() { return { dispose() {} } },
+  list: () => [sourceDefinition],
+  async detect() { return [] },
+}
 const overview = new AgentOverviewProjection(storage, sources)
 
 console.log('AgentLens tool analysis / agent overview benchmark')
@@ -277,6 +256,17 @@ try {
 
   const databaseBytes = fileSize(databasePath)
   const walBytes = fileSize(`${databasePath}-wal`)
+  const globalTiming = results.find(item => item.name === 'tool-analysis-global')
+  const overviewTiming = results.find(item => item.name === 'agent-overview-all-installations')
+  const budgetViolations = [
+    options.globalP95BudgetMs !== null && globalTiming && globalTiming.p95Ms > options.globalP95BudgetMs
+      ? `tool-analysis-global p95 ${globalTiming.p95Ms}ms exceeds ${options.globalP95BudgetMs}ms`
+      : null,
+    options.overviewP95BudgetMs !== null && overviewTiming && overviewTiming.p95Ms > options.overviewP95BudgetMs
+      ? `agent-overview-all-installations p95 ${overviewTiming.p95Ms}ms exceeds ${options.overviewP95BudgetMs}ms`
+      : null,
+  ].filter((item): item is string => item !== null)
+
   console.log(JSON.stringify({
     fixture: {
       ...counts,
@@ -293,11 +283,17 @@ try {
       overviewRepeatedUsageQueries: options.installations,
     },
     timings: results,
+    budgets: {
+      globalP95Ms: options.globalP95BudgetMs,
+      overviewP95Ms: options.overviewP95BudgetMs,
+      passed: budgetViolations.length === 0,
+    },
     oneInstallationQueryPlan: oneInstallationPlan.map(row => row.detail),
     globalQueryPlan: globalPlan.map(row => row.detail),
     evidenceLookupQueryPlan: evidencePlan.map(row => row.detail),
   }, null, 2))
+  if (budgetViolations.length) throw new Error(`performance budget failed: ${budgetViolations.join('; ')}`)
 } finally {
-  storage.close()
+  await storage.close()
   rmSync(root, { recursive: true, force: true })
 }

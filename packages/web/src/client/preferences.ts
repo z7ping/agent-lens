@@ -30,17 +30,13 @@ export function writeAgentFilterPreference(preference: AgentFilterPreference): v
   }))
 }
 
-export function readPinnedAgents(): string[] | null {
+function readPinnedAgents(): string[] | null {
   try {
     const raw = localStorage.getItem(PINNED_KEY)
     if (raw === null) return null
     const value = JSON.parse(raw)
     return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : null
   } catch { return null }
-}
-
-export function writePinnedAgents(ids: string[]): void {
-  localStorage.setItem(PINNED_KEY, JSON.stringify([...new Set(ids)]))
 }
 
 export type ThemePreference = 'light' | 'dark'

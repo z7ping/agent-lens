@@ -1,5 +1,4 @@
-import type { Components } from 'react-markdown'
-import ReactMarkdown from 'react-markdown'
+import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { CopyableCodeBlock } from './CopyableCodeBlock'
 

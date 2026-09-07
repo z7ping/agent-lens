@@ -37,6 +37,7 @@ import type {
   SourceRecordEmitter,
 } from '@agent-lens/core'
 import {
+  abortableDelay,
   defineAgentLensPlugin,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
@@ -111,6 +112,21 @@ function stringField(record: Record<string, unknown>, ...names: string[]): strin
     if (typeof value === 'string' && value) return value
   }
   return undefined
+}
+
+function claudeStoredEnvelope(value: unknown, record: SourceRecord): ClaudeStoredEnvelope {
+  const payload = asRecord(value)
+  const session = asRecord(payload.session)
+  const cwd = stringField(session, 'cwd')
+  return {
+    entry: asRecord(payload.entry),
+    session: {
+      nativeSessionId: stringField(session, 'nativeSessionId')
+        ?? record.sourceSessionNativeId
+        ?? 'unknown',
+      ...(cwd ? { cwd } : {}),
+    },
+  }
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -410,19 +426,6 @@ function runtimeRecord(
   }
 }
 
-async function sleep(ms: number, signal: AbortSignal): Promise<void> {
-  if (signal.aborted) return
-  await new Promise<void>(resolve => {
-    const timer = setTimeout(done, ms)
-    function done() {
-      signal.removeEventListener('abort', done)
-      clearTimeout(timer)
-      resolve()
-    }
-    signal.addEventListener('abort', done, { once: true })
-  })
-}
-
 export async function startClaudeRuntimeCapture(
   ctx: SourceExecutionContext,
   emitter: SourceRecordEmitter,
@@ -451,7 +454,7 @@ export async function startClaudeRuntimeCapture(
           break
         }
       }
-      if (!stopped && !ctx.abortSignal.aborted) await sleep(RUNTIME_POLL_MS, ctx.abortSignal)
+      if (!stopped && !ctx.abortSignal.aborted) await abortableDelay(RUNTIME_POLL_MS, ctx.abortSignal)
     }
   })()
 
@@ -706,7 +709,7 @@ function baseIdentity(
   envelope: ClaudeStoredEnvelope,
 ): ObservationIdentityHints {
   return {
-    nativeSessionId: envelope.session.nativeSessionId || record.sourceSessionNativeId || 'unknown',
+    nativeSessionId: envelope.session.nativeSessionId,
     ...(envelope.session.cwd ? { workspacePath: envelope.session.cwd } : {}),
   }
 }
@@ -878,8 +881,8 @@ export async function normalizeClaudeRecord(
     }
   }
 
-  const envelope = asRecord(record.payload) as unknown as ClaudeStoredEnvelope
-  const entry = asRecord(envelope.entry)
+  const envelope = claudeStoredEnvelope(record.payload, record)
+  const entry = envelope.entry
   const type = stringField(entry, 'type') ?? 'unknown'
   const message = asRecord(entry.message)
   const content = message.content
@@ -977,7 +980,7 @@ export async function declareClaudeCapabilities(
 
 export const claudeManifest: SourcePluginManifest = {
   pluginId: '@agent-lens/source-claude',
-  pluginVersion: '1.0.0-alpha.2',
+  pluginVersion: '1.0.0-alpha.3',
   apiVersion: '1.0',
   pluginType: 'source',
   displayName: 'Claude Code Source',
@@ -1012,4 +1015,5 @@ export const claudeInternals = {
   parseRuntimeEnvelope,
   runtimeRecord,
   textFromContent,
+  claudeStoredEnvelope,
 }

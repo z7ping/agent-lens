@@ -54,7 +54,7 @@ export function resolveRuntimeEndpoint(options: RuntimeEndpointOptions): Runtime
   }
 }
 
-export type RuntimeStatusTone = 'connecting' | 'healthy' | 'warning'
+type RuntimeStatusTone = 'connecting' | 'healthy' | 'warning'
 
 export interface RuntimeStatusView {
   tone: RuntimeStatusTone

@@ -151,8 +151,9 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
     assert.equal(facts.filter(item => item.kind === 'context.compaction').length, 1)
     const usage = facts.find(item => item.kind === 'usage')
     assert.ok(usage)
-    assert.equal((usage.payload as any).totalTokens, 155)
-    assert.equal((usage.payload as any).cost.total, 0.01)
+    const usagePayload = usage.payload as { totalTokens: number, cost: { total: number } }
+    assert.equal(usagePayload.totalTokens, 155)
+    assert.equal(usagePayload.cost.total, 0.01)
     const user = facts.find(item => item.nativeEventId === 'pi-user-1')
     const assistant = facts.find(item => item.nativeEventId === 'pi-assistant-1')
     const result = facts.find(item => item.nativeEventId === 'pi-result-1')
@@ -163,7 +164,7 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
     assert.equal(result.nativeParentEventId, 'pi-assistant-1')
     assert.equal(result.parentObservationId, assistant.id)
     assert.equal(tool.parentObservationId, assistant.id)
-    assert.equal((assistant.payload as any).stopReason, 'toolUse')
+    assert.equal((assistant.payload as { stopReason?: string }).stopReason, 'toolUse')
 
     const assetResult = await assetRunner.scan({
       source: piSourceDefinition,
@@ -197,6 +198,36 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
         })
         return messages.length === 2
       })
+
+      // Pi 会按工作目录创建新的 Session 子目录。运行时必须能发现“新目录 + 新 JSONL”，
+      // 不能只覆盖启动时已经存在的文件继续追加这一种情况。
+      const freshTranscript = join(agentDir, 'sessions', 'fresh-project', 'fresh-session.jsonl')
+      await mkdir(dirname(freshTranscript), { recursive: true })
+      await writeFile(freshTranscript, `${[
+        {
+          type: 'session',
+          id: 'pi-session-fresh',
+          cwd: join(root, 'fresh-workspace'),
+          version: '1.0.0',
+          timestamp: '2026-08-20T11:01:00.000Z',
+        },
+        {
+          type: 'message',
+          id: 'pi-user-fresh',
+          parentId: null,
+          timestamp: '2026-08-20T11:01:01.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: 'new session while daemon is running' }] },
+        },
+      ].map(item => JSON.stringify(item)).join('\n')}\n`, 'utf8')
+
+      await waitFor(async () => {
+        const messages = await storage.repositories.observations.query({
+          installationId: historyResult.installationId,
+          kind: 'message.user',
+          limit: 20,
+        })
+        return messages.some(item => item.nativeEventId === 'pi-user-fresh')
+      })
     } finally {
       runtimeController.abort()
       await handle.dispose()
@@ -206,20 +237,26 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
       installationId: historyResult.installationId,
       limit: 100,
     })
-    assert.equal(facts.filter(item => item.kind === 'message.user').length, 2)
+    assert.equal(facts.filter(item => item.kind === 'message.user').length, 3)
     const continued = facts.find(item => item.nativeEventId === 'pi-user-2')
     assert.equal(continued?.nativeParentEventId, 'pi-result-1')
     assert.equal(continued?.parentObservationId, result.id)
+    assert.ok(facts.some(item => item.nativeEventId === 'pi-user-fresh'))
 
     storage.db.prepare(`UPDATE source_records SET parser_version = '4' WHERE source_id = 'pi'`).run()
-    const replay = await history.sync({
+    const staleBefore = storage.db.prepare(`
+      SELECT COUNT(*) AS count FROM source_records WHERE source_id = 'pi' AND parser_version != '5'
+    `).get() as { count: number }
+    const replay = await history.replay({
       source: piSourceDefinition,
       host,
       detected,
       abortSignal: new AbortController().signal,
     })
-    assert.equal(replay.records, 0)
-    const staleParsers = storage.db.prepare(`SELECT COUNT(*) AS count FROM source_records WHERE source_id = 'pi' AND parser_version != '5'`).get() as { count: number }
+    assert.equal(replay.records, staleBefore.count)
+    const staleParsers = storage.db.prepare(`
+      SELECT COUNT(*) AS count FROM source_records WHERE source_id = 'pi' AND parser_version != '5'
+    `).get() as { count: number }
     assert.equal(staleParsers.count, 0)
   } finally {
     storage.close()

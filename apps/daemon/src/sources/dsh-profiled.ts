@@ -34,7 +34,7 @@ function profileContext<T extends SourceExecutionContext>(ctx: T): T {
   } as T
 }
 
-export const profiledDshSourceDefinition: SourceDefinition = {
+const profiledDshSourceDefinition: SourceDefinition = {
   ...dshSourceDefinition,
   detect: detectProfiledDsh,
   async *discoverAssets(ctx) {

@@ -44,6 +44,7 @@ declare module '@deepseek-ai/cordis' {
     'asset/changed'(event: CoreEventMap['asset/changed']): void
     'projection/invalidated'(event: CoreEventMap['projection/invalidated']): void
     'projection/rebuilt'(event: CoreEventMap['projection/rebuilt']): void
+    'source/parser-replay-state'(event: { state: 'started' | 'completed' }): void
   }
 }
 

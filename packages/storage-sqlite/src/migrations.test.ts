@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { SqliteStorageService } from './storage'
 
-test('storage migrations include replication, Hub replica state, and workspace project fallback', async () => {
+test('storage migrations keep heavy indexes out of startup and maintenance creates them later', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   try {
     await storage.migrate()
@@ -10,16 +10,77 @@ test('storage migrations include replication, Hub replica state, and workspace p
     const migrations = storage.db.prepare(
       'SELECT version, name FROM schema_migrations ORDER BY version',
     ).all() as Array<{ version: number; name: string }>
-    assert.equal(migrations.at(-1)?.version, 12)
-    assert.equal(migrations.at(-1)?.name, 'observation-native-parent-tree')
+    assert.equal(migrations.at(-1)?.version, 21)
+    assert.equal(migrations.at(-1)?.name, 'maintenance-jobs')
 
-    const indexes = storage.db.prepare("PRAGMA index_list('observations')").all() as Array<{ name: string }>
-    const names = new Set(indexes.map(item => item.name))
-    assert.ok(names.has('idx_observations_kind_timeline_order'))
-    assert.ok(names.has('idx_observations_installation_kind_timeline_order'))
-    assert.ok(names.has('idx_observations_source_native_event'))
-    assert.ok(names.has('idx_observations_source_native_parent'))
-    assert.ok(names.has('idx_observations_parent'))
+    const indexesBefore = storage.db.prepare("PRAGMA index_list('observations')").all() as Array<{ name: string }>
+    const namesBefore = new Set(indexesBefore.map(item => item.name))
+    assert.ok(namesBefore.has('idx_observations_kind_timeline_order'))
+    assert.ok(namesBefore.has('idx_observations_installation_kind_timeline_order'))
+    assert.ok(namesBefore.has('idx_observations_source_native_event'))
+    assert.ok(namesBefore.has('idx_observations_source_native_parent'))
+    assert.ok(namesBefore.has('idx_observations_parent'))
+    assert.equal(namesBefore.has('idx_observations_captured_at'), false)
+
+    const evidenceIndexesBefore = storage.db.prepare("PRAGMA index_list('evidence')").all() as Array<{ name: string }>
+    assert.equal(evidenceIndexesBefore.some(index => index.name === 'idx_evidence_captured_at'), false)
+
+    const sourceRecordIndexesBefore = storage.db.prepare("PRAGMA index_list('source_records')")
+      .all() as Array<{ name: string }>
+    assert.equal(sourceRecordIndexesBefore.some(index => index.name === 'idx_source_records_parser_replay'), false)
+    assert.equal(sourceRecordIndexesBefore.some(index => index.name === 'idx_source_records_payload_compression_pending'), false)
+
+    const ensured = await storage.maintenance.ensureDeferredIndexes()
+    assert.deepEqual(new Set(ensured.created), new Set([
+      'idx_source_records_parser_replay',
+      'idx_observations_captured_at',
+      'idx_evidence_captured_at',
+    ]))
+
+    const indexesAfter = storage.db.prepare("PRAGMA index_list('observations')").all() as Array<{ name: string }>
+    assert.ok(indexesAfter.some(index => index.name === 'idx_observations_captured_at'))
+    const evidenceIndexesAfter = storage.db.prepare("PRAGMA index_list('evidence')").all() as Array<{ name: string }>
+    assert.ok(evidenceIndexesAfter.some(index => index.name === 'idx_evidence_captured_at'))
+    const sourceRecordIndexesAfter = storage.db.prepare("PRAGMA index_list('source_records')")
+      .all() as Array<{ name: string }>
+    assert.ok(sourceRecordIndexesAfter.some(index => index.name === 'idx_source_records_parser_replay'))
+    assert.equal(sourceRecordIndexesAfter.some(index => index.name === 'idx_source_records_payload_compression_pending'), false)
+
+    const sourceRecordColumns = storage.db.prepare("PRAGMA table_info('source_records')")
+      .all() as Array<{ name: string }>
+    assert.ok(sourceRecordColumns.some(column => column.name === 'payload_encoding'))
+    assert.ok(sourceRecordColumns.some(column => column.name === 'payload_blob'))
+    const checkpointColumns = storage.db.prepare("PRAGMA table_info('source_checkpoints')")
+      .all() as Array<{ name: string }>
+    assert.ok(checkpointColumns.some(column => column.name === 'revision'))
+
+    const checkpointTriggers = storage.db.prepare(`
+      SELECT name FROM sqlite_master
+      WHERE type = 'trigger' AND name = 'trg_source_checkpoint_revision_guard'
+    `).all() as Array<{ name: string }>
+    assert.equal(checkpointTriggers.length, 1)
+
+    const maintenanceColumns = storage.db.prepare("PRAGMA table_info('maintenance_jobs')")
+      .all() as Array<{ name: string }>
+    assert.ok(maintenanceColumns.some(column => column.name === 'revision'))
+    assert.ok(maintenanceColumns.some(column => column.name === 'priority'))
+
+    const projectionTables = storage.db.prepare(`
+      SELECT name FROM sqlite_master
+      WHERE type = 'table' AND name IN ('unknown_observation_projection', 'tool_usage_fact_projection')
+      ORDER BY name
+    `).all() as Array<{ name: string }>
+    assert.deepEqual(projectionTables.map(row => row.name), [
+      'tool_usage_fact_projection',
+      'unknown_observation_projection',
+    ])
+
+    const candidateColumns = storage.db.prepare("PRAGMA table_info('session_relationship_candidates')")
+      .all() as Array<{ name: string }>
+    assert.ok(candidateColumns.some(column => column.name === 'source_record_id'))
+    const candidateIndexes = storage.db.prepare("PRAGMA index_list('session_relationship_candidates')")
+      .all() as Array<{ name: string }>
+    assert.ok(candidateIndexes.some(index => index.name === 'idx_relationship_candidates_source_record'))
 
     const replicationTables = storage.db.prepare(`
       SELECT name FROM sqlite_master
@@ -102,4 +163,3 @@ test('late native parent can repair child relation without losing native parent 
     storage.close()
   }
 })
-

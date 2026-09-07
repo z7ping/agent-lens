@@ -9,7 +9,6 @@ import type {
   Host,
   LogicalSession,
   Project,
-  RuntimeProfile,
   SourceRecord,
   SourceSession,
   Workspace,

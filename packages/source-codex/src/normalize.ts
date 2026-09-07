@@ -1,18 +1,24 @@
 import type {
   EvidenceCandidate,
-  JsonValue,
   NormalizedSourceOutput,
   ObservationCandidate,
   ObservationIdentityHints,
+  SessionRelationshipType,
   SourceNormalizationContext,
   SourceRecord,
 } from '@agent-lens/core'
 import {
-  isInjectedContext,
   messageText,
   parseFunctionOutput,
   type CodexStoredEnvelope,
 } from './format'
+import {
+  assistantMessageProvenance,
+  attachmentMetadata,
+  contextClassification,
+  isGuardianSource,
+  userMessageProvenance,
+} from './provenance'
 
 const TRAILING_MEMORY_CITATION = /(?:\r?\n){0,2}<oai-mem-citation>\s*<citation_entries>[\s\S]*?<\/citation_entries>\s*<rollout_ids>[\s\S]*?<\/rollout_ids>\s*<\/oai-mem-citation>\s*$/i
 const CLIENT_DIRECTIVE_LINE = /^::(?:created-thread|code-comment)\{[^\r\n]*\}\s*$/gm
@@ -61,10 +67,31 @@ function numberField(record: Record<string, unknown>, ...names: string[]): numbe
   return undefined
 }
 
+function storedEnvelope(record: SourceRecord): CodexStoredEnvelope {
+  const payload = asRecord(record.payload)
+  const session = asRecord(payload.session)
+  const cwd = stringField(session, 'cwd')
+  const cliVersion = stringField(session, 'cliVersion')
+  const title = stringField(session, 'title')
+  const startedAt = stringField(session, 'startedAt')
+  return {
+    entry: asRecord(payload.entry),
+    session: {
+      nativeSessionId: stringField(session, 'nativeSessionId')
+        ?? record.sourceSessionNativeId
+        ?? 'unknown',
+      ...(cwd ? { cwd } : {}),
+      ...(cliVersion ? { cliVersion } : {}),
+      ...(title ? { title } : {}),
+      ...(startedAt ? { startedAt } : {}),
+    },
+  }
+}
+
 function actorRole(value: unknown): NonNullable<ObservationIdentityHints['actorRole']> {
   const role = typeof value === 'string' ? value.toLowerCase() : ''
   if (role.includes('worker')) return 'worker-agent'
-  if (role.includes('sub') || role.includes('child')) return 'subagent'
+  if (role.includes('sub') || role.includes('child') || role.includes('review')) return 'subagent'
   if (role.includes('main') || role.includes('root')) return 'main-agent'
   return 'unknown'
 }
@@ -110,10 +137,43 @@ function visibleReasoningText(payload: Record<string, unknown>): string {
   return ''
 }
 
-function relationType(payload: Record<string, unknown>): 'fork' | 'subagent' | 'related' {
-  if (stringField(payload, 'forked_from_id')) return 'fork'
-  const role = actorRole(payload.agent_role)
-  return role === 'subagent' || role === 'worker-agent' ? 'subagent' : 'related'
+function sourceSubagent(payload: Record<string, unknown>): Record<string, unknown> {
+  const source = asRecord(payload.source)
+  return asRecord(source.subagent ?? source.subAgent)
+}
+
+function parentThreadId(payload: Record<string, unknown>): string | undefined {
+  const threadSource = asRecord(payload.thread_source)
+  const source = asRecord(payload.source)
+  const subagent = sourceSubagent(payload)
+  return stringField(payload, 'forked_from_id', 'parent_thread_id', 'parent_session_id')
+    ?? stringField(threadSource, 'parent_thread_id', 'parent_session_id')
+    ?? stringField(source, 'parent_thread_id', 'parent_session_id')
+    ?? stringField(subagent, 'parent_thread_id', 'parent_session_id')
+}
+
+function sessionActivity(payload: Record<string, unknown>): {
+  kind: 'user-task' | 'branch-task' | 'subagent' | 'internal-review' | 'system-activity'
+  relationship: SessionRelationshipType
+  sourceLabel?: string
+} {
+  const source = payload.source
+  const threadSource = payload.thread_source
+  const subagent = sourceSubagent(payload)
+  if (isGuardianSource(source) || isGuardianSource(subagent) || isGuardianSource(payload.agent_role)) {
+    return { kind: 'internal-review', relationship: 'internal-review', sourceLabel: 'Guardian 审查' }
+  }
+  if (stringField(payload, 'forked_from_id')) {
+    return { kind: 'branch-task', relationship: 'branch-task', sourceLabel: '分支任务' }
+  }
+  const threadSourceText = typeof threadSource === 'string' ? threadSource.toLowerCase() : ''
+  const subagentName = stringField(subagent, 'other', 'name', 'type')
+  const role = actorRole(payload.agent_role ?? subagent.agent_role ?? subagent.role)
+  if (threadSourceText === 'subagent' || Object.keys(subagent).length > 0 || role === 'subagent' || role === 'worker-agent') {
+    return { kind: 'subagent', relationship: 'subagent', ...(subagentName ? { sourceLabel: subagentName } : {}) }
+  }
+  if (parentThreadId(payload)) return { kind: 'system-activity', relationship: 'related' }
+  return { kind: 'user-task', relationship: 'related' }
 }
 
 function evidenceFor(record: SourceRecord): EvidenceCandidate {
@@ -171,7 +231,7 @@ function candidate(
 function unknownCandidate(
   record: SourceRecord,
   envelope: CodexStoredEnvelope,
-  rawPayload: JsonValue = envelope.entry as JsonValue,
+  rawPayload: unknown = envelope.entry,
 ): ObservationCandidate {
   return candidate(record, envelope, 'unknown', {
     rawType: record.nativeType,
@@ -185,11 +245,15 @@ function injectedContextCandidate(
   role: string,
   text: string,
 ): ObservationCandidate {
+  const classification = contextClassification(role, text)
   return candidate(record, envelope, 'context.injected', {
     sourceType: record.nativeType,
     injectedContext: true,
     role,
+    label: classification.label,
+    injectedKind: classification.kind,
     text,
+    provenance: classification.provenance,
   })
 }
 
@@ -281,6 +345,7 @@ function normalizeRuntimeRecord(
   if (hookName === 'UserPromptSubmit') {
     return candidate(record, envelope, 'message.user', {
       text: stringField(event, 'prompt', 'user_prompt', 'message') ?? '',
+      provenance: userMessageProvenance(),
       ...(turnId ? { turnId } : {}),
     })
   }
@@ -329,7 +394,7 @@ function normalizeRuntimeRecord(
     }, {}, actorIdentity)
   }
 
-  return unknownCandidate(record, envelope, event as unknown as JsonValue)
+  return unknownCandidate(record, envelope, event)
 }
 
 export async function normalizeCodexRecord(
@@ -343,8 +408,8 @@ export async function normalizeCodexRecord(
     }
   }
 
-  const envelope = asRecord(record.payload) as unknown as CodexStoredEnvelope
-  const entry = asRecord(envelope.entry)
+  const envelope = storedEnvelope(record)
+  const entry = envelope.entry
   const payload = asRecord(entry.payload)
   const topType = typeof entry.type === 'string' ? entry.type : 'unknown'
   const innerType = typeof payload.type === 'string' ? payload.type : undefined
@@ -365,27 +430,38 @@ export async function normalizeCodexRecord(
       ...(stringField(payload, 'updatedAt') ? { updatedAt: stringField(payload, 'updatedAt') } : {}),
     }))
   } else if (topType === 'session_meta') {
-    const parentThreadId = stringField(payload, 'forked_from_id', 'parent_thread_id')
+    const parentId = parentThreadId(payload)
+    const subagent = sourceSubagent(payload)
     const nativeActorId = stringField(payload, 'agent_path', 'agent_nickname')
-    const role = actorRole(payload.agent_role)
+      ?? stringField(subagent, 'id', 'agent_id', 'nickname')
+    const role = actorRole(payload.agent_role ?? subagent.agent_role ?? subagent.role)
     const modelProvider = stringField(payload, 'model_provider')
+    const activity = sessionActivity(payload)
     push(candidate(record, envelope, 'session.lifecycle', {
       event: 'session.discovered',
       ...payload,
+      sessionActivity: activity.kind,
+      ...(activity.sourceLabel ? { activitySourceLabel: activity.sourceLabel } : {}),
+      sessionId: stringField(payload, 'session_id', 'id') ?? envelope.session.nativeSessionId,
+      ...(parentId ? { parentSessionId: parentId } : {}),
     }, {}, {
-      ...(parentThreadId ? { nativeParentSessionId: parentThreadId } : {}),
+      ...(parentId ? { nativeParentSessionId: parentId } : {}),
       ...(nativeActorId ? { nativeActorId, actorRole: role } : {}),
       ...(modelProvider ? { modelName: modelProvider } : {}),
     }))
-    if (parentThreadId) {
+    if (parentId) {
       relationships.push({
         sourceId: 'codex',
         installationId: record.installationId,
         ...(ctx.runtimeProfile?.id ? { runtimeProfileId: ctx.runtimeProfile.id } : {}),
-        fromNativeSessionId: parentThreadId,
+        fromNativeSessionId: parentId,
         toNativeSessionId: envelope.session.nativeSessionId,
-        type: relationType(payload),
-        nativeRelation: stringField(payload, 'forked_from_id') ? 'forked_from_id' : 'parent_thread_id',
+        type: activity.relationship,
+        nativeRelation: stringField(payload, 'forked_from_id')
+          ? 'forked_from_id'
+          : stringField(payload, 'parent_thread_id')
+            ? 'parent_thread_id'
+            : 'parent_session_id',
         confidence: 'exact',
       })
     }
@@ -400,13 +476,27 @@ export async function normalizeCodexRecord(
       ...(model ? { modelName: model } : {}),
     }))
   } else if (topType === 'event_msg') {
-    if (innerType === 'token_count') {
+    if (innerType === 'user_message') {
+      const text = stringField(payload, 'message', 'text', 'prompt') ?? messageText(payload.content)
+      const attachments = attachmentMetadata(payload)
+      push(candidate(record, envelope, 'message.user', {
+        text,
+        provenance: userMessageProvenance(),
+        ...(stringField(payload, 'kind') ? { messageKind: stringField(payload, 'kind') } : {}),
+        ...(attachments.length ? { attachments } : {}),
+      }))
+    } else if (innerType === 'token_count') {
       push(candidate(record, envelope, 'usage', tokenUsage(payload)))
+    } else if (innerType === 'thread_settings_applied') {
+      push(candidate(record, envelope, 'session.lifecycle', {
+        ...payload,
+        event: 'reasoning.configuration.updated',
+      }))
     } else if (innerType && visibleReasoningTypes.has(innerType)) {
       const text = visibleReasoningText(payload)
       push(text
         ? candidate(record, envelope, 'message.reasoning', { text, raw: payload })
-        : unknownCandidate(record, envelope, entry as JsonValue))
+        : unknownCandidate(record, envelope, entry))
     } else if (innerType === 'task_started' || innerType === 'turn_started') {
       push(candidate(record, envelope, 'session.lifecycle', { event: 'turn.started', ...payload }))
     } else if (innerType === 'task_complete' || innerType === 'turn_complete') {
@@ -418,7 +508,7 @@ export async function normalizeCodexRecord(
     } else if (innerType === 'error') {
       push(candidate(record, envelope, 'session.lifecycle', { event: 'turn.error', ...payload }))
     } else {
-      push(unknownCandidate(record, envelope, entry as JsonValue))
+      push(unknownCandidate(record, envelope, entry))
     }
   } else if (topType === 'compacted') {
     push(candidate(record, envelope, 'context.compaction', { phase: 'end', ...payload }))
@@ -428,25 +518,25 @@ export async function normalizeCodexRecord(
     const role = typeof payload.role === 'string' ? payload.role : 'unknown'
     const phase = typeof payload.phase === 'string' ? payload.phase : undefined
     const text = messageText(payload.content ?? payload.text ?? '')
-    const injected = payload.injectedContext === true || isInjectedContext(role, text)
-    if (injected || (role !== 'user' && role !== 'assistant')) {
+    if (role !== 'assistant') {
       push(injectedContextCandidate(record, envelope, role, text))
     } else {
-      const kind = role === 'user'
-        ? 'message.user'
-        : phase === 'commentary'
-          ? 'message.commentary'
-          : 'message.assistant'
-      const visible = role === 'assistant'
-        ? splitCodexVisibleAssistantText(text, phase)
-        : { text }
+      const kind = phase === 'commentary' ? 'message.commentary' : 'message.assistant'
+      const visible = splitCodexVisibleAssistantText(text, phase)
       push(candidate(record, envelope, kind, {
         text: visible.text,
+        provenance: assistantMessageProvenance(role),
         ...(phase ? { phase } : {}),
         ...(visible.sourceMetadata ? { sourceMetadata: visible.sourceMetadata } : {}),
         ...(visible.sourceMetadata || payload.content === undefined ? {} : { content: payload.content }),
       }))
     }
+  } else if (topType === 'response_item' && innerType === 'agent_message') {
+    push(candidate(record, envelope, 'session.lifecycle', {
+      ...payload,
+      event: 'subagent.communication',
+      text: messageText(payload.content ?? payload.text ?? ''),
+    }))
   } else if (topType === 'response_item' && (innerType === 'function_call' || innerType === 'custom_tool_call')) {
     const callId = stringField(payload, 'call_id') ?? `codex-call-${record.sourceSequence ?? record.id}`
     const name = stringField(payload, 'name') ?? innerType
@@ -456,6 +546,25 @@ export async function normalizeCodexRecord(
       try { input = JSON.parse(rawInput) } catch { input = rawInput }
     }
     push(candidate(record, envelope, 'tool.call', { callId, nativeToolName: name, input }, { nativeCallId: callId }))
+  } else if (topType === 'response_item' && innerType === 'local_shell_call') {
+    const callId = stringField(payload, 'call_id', 'id') ?? `local-shell-${record.sourceSequence ?? record.id}`
+    push(candidate(record, envelope, 'tool.call', {
+      callId,
+      nativeToolName: 'local_shell',
+      input: payload.action ?? payload,
+      ...(payload.status === undefined ? {} : { status: payload.status }),
+      raw: payload,
+    }, { nativeCallId: callId }))
+  } else if (topType === 'response_item' && innerType === 'tool_search_call') {
+    const callId = stringField(payload, 'call_id', 'id') ?? `tool-search-${record.sourceSequence ?? record.id}`
+    push(candidate(record, envelope, 'tool.call', {
+      callId,
+      nativeToolName: 'tool_search',
+      input: payload.arguments ?? {},
+      ...(payload.execution === undefined ? {} : { execution: payload.execution }),
+      ...(payload.status === undefined ? {} : { status: payload.status }),
+      raw: payload,
+    }, { nativeCallId: callId }))
   } else if (topType === 'response_item' && (innerType === 'function_call_output' || innerType === 'custom_tool_call_output' || innerType === 'tool_search_output')) {
     const callId = stringField(payload, 'call_id') ?? `codex-call-${record.sourceSequence ?? record.id}`
     const outputValue = payload.output ?? payload.result ?? payload.content
@@ -479,15 +588,34 @@ export async function normalizeCodexRecord(
       },
       raw: payload,
     }, { nativeCallId: callId }))
+  } else if (topType === 'response_item' && innerType === 'image_generation_call') {
+    push(candidate(record, envelope, 'artifact.action', {
+      action: 'image.generation',
+      ...(stringField(payload, 'id') ? { artifactId: stringField(payload, 'id') } : {}),
+      ...(payload.status === undefined ? {} : { status: payload.status }),
+      hasResult: typeof payload.result === 'string' && payload.result.length > 0,
+    }))
   } else if (topType === 'response_item' && innerType === 'reasoning') {
     const text = messageText(payload.summary ?? payload.content ?? payload.text ?? '')
     push(text
       ? candidate(record, envelope, 'message.reasoning', { text, raw: payload })
-      : unknownCandidate(record, envelope, entry as JsonValue))
-  } else if (topType === 'world_state' || topType === 'inter_agent_communication' || topType === 'realtime_item' || topType === 'security_risk_score') {
-    push(unknownCandidate(record, envelope, entry as JsonValue))
+      : unknownCandidate(record, envelope, entry))
+  } else if (topType === 'response_item' && (innerType === 'compaction' || innerType === 'context_compaction')) {
+    push(candidate(record, envelope, 'context.compaction', {
+      phase: 'end',
+      sourceType: innerType,
+      raw: payload,
+    }))
+  } else if (topType === 'inter_agent_communication') {
+    push(candidate(record, envelope, 'session.lifecycle', {
+      ...payload,
+      event: 'subagent.communication',
+      text: messageText(payload.content ?? payload.message ?? ''),
+    }))
+  } else if (topType === 'world_state' || topType === 'inter_agent_communication_metadata' || topType === 'realtime_item' || topType === 'security_risk_score') {
+    push(unknownCandidate(record, envelope, entry))
   } else {
-    push(unknownCandidate(record, envelope, entry as JsonValue))
+    push(unknownCandidate(record, envelope, entry))
   }
 
   return {

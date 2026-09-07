@@ -21,6 +21,12 @@ export function truncate(value: string, limit: number): string {
   return value.length <= limit ? value : `${value.slice(0, limit)}…[truncated]`
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+}
+
 function sanitizeUnknown(value: unknown, depth = 0): unknown {
   if (depth > 8) return '[max-depth]'
   if (typeof value === 'string') return truncate(value, MAX_UNKNOWN_STRING)
@@ -29,7 +35,7 @@ function sanitizeUnknown(value: unknown, depth = 0): unknown {
   if (typeof value !== 'object') return String(value)
 
   const output: Record<string, unknown> = {}
-  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+  for (const [key, item] of Object.entries(asRecord(value))) {
     output[key] = SENSITIVE_KEY.test(key) ? '[redacted]' : sanitizeUnknown(item, depth + 1)
   }
   return output
@@ -37,17 +43,16 @@ function sanitizeUnknown(value: unknown, depth = 0): unknown {
 
 export function messageText(blocks: unknown): string {
   if (typeof blocks === 'string') return blocks
-  if (!Array.isArray(blocks)) {
-    if (!blocks || typeof blocks !== 'object') return ''
-    const item = blocks as Record<string, unknown>
-    for (const key of ['text', 'input_text', 'output_text', 'content', 'refusal']) {
-      const value = item[key]
-      if (typeof value === 'string') return value
-      if (Array.isArray(value)) return messageText(value)
-    }
-    return ''
+  if (!blocks || typeof blocks !== 'object' || Array.isArray(blocks)) {
+    return Array.isArray(blocks) ? blocks.map(messageText).filter(Boolean).join('\n\n') : ''
   }
-  return blocks.map(messageText).filter(Boolean).join('\n\n')
+  const item = asRecord(blocks)
+  for (const key of ['text', 'input_text', 'output_text', 'content', 'refusal']) {
+    const value = item[key]
+    if (typeof value === 'string') return value
+    if (Array.isArray(value)) return messageText(value)
+  }
+  return ''
 }
 
 export function isInjectedContext(role: string, text: string): boolean {
@@ -57,25 +62,34 @@ export function isInjectedContext(role: string, text: string): boolean {
 }
 
 export function sanitizeCodexEntry(raw: unknown): Record<string, unknown> {
-  if (!raw || typeof raw !== 'object') {
+  const entry = asRecord(raw)
+  if (!Object.keys(entry).length) {
     return { type: 'malformed', payload: sanitizeUnknown(raw) }
   }
 
-  const entry = raw as Record<string, unknown>
   const type = typeof entry.type === 'string' ? entry.type : 'unknown'
   const timestamp = typeof entry.timestamp === 'string' ? entry.timestamp : undefined
-  const payload = entry.payload && typeof entry.payload === 'object'
-    ? entry.payload as Record<string, unknown>
-    : {}
+  const payload = asRecord(entry.payload)
 
   let safePayload: Record<string, unknown>
   if (type === 'session_meta') {
     safePayload = {
       id: payload.id,
+      session_id: payload.session_id,
       timestamp: payload.timestamp,
       cwd: payload.cwd,
       originator: payload.originator,
       cli_version: payload.cli_version,
+      parent_thread_id: payload.parent_thread_id,
+      forked_from_id: payload.forked_from_id,
+      source: sanitizeUnknown(payload.source),
+      thread_source: sanitizeUnknown(payload.thread_source),
+      agent_role: payload.agent_role,
+      agent_nickname: payload.agent_nickname,
+      agent_path: payload.agent_path,
+      model_provider: payload.model_provider,
+      history_mode: payload.history_mode,
+      subagent_history_start_ordinal: payload.subagent_history_start_ordinal,
     }
   } else if (type === 'response_item' && payload.type === 'message') {
     const role = typeof payload.role === 'string' ? payload.role : 'unknown'
@@ -127,7 +141,7 @@ export function sanitizeCodexEntry(raw: unknown): Record<string, unknown> {
         : sanitizeUnknown(payload.output),
     }
   } else if (type === 'response_item' && payload.type === 'web_search_call') {
-    safePayload = sanitizeUnknown(payload) as Record<string, unknown>
+    safePayload = asRecord(sanitizeUnknown(payload))
   } else if (type === 'response_item' && payload.type === 'reasoning') {
     safePayload = {
       type: 'reasoning',
@@ -135,7 +149,7 @@ export function sanitizeCodexEntry(raw: unknown): Record<string, unknown> {
       text: truncate(messageText(payload.summary ?? payload.content ?? payload.text), MAX_TEXT),
     }
   } else {
-    safePayload = sanitizeUnknown(payload) as Record<string, unknown>
+    safePayload = asRecord(sanitizeUnknown(payload))
   }
 
   return {
@@ -145,11 +159,14 @@ export function sanitizeCodexEntry(raw: unknown): Record<string, unknown> {
   }
 }
 
+function completedItem(payload: Record<string, unknown>): Record<string, unknown> {
+  return payload.type === 'item_completed' ? asRecord(payload.item) : {}
+}
+
 export function nativeIdForEntry(entry: Record<string, unknown>): string | undefined {
-  const payload = entry.payload && typeof entry.payload === 'object'
-    ? entry.payload as Record<string, unknown>
-    : {}
-  for (const candidate of [payload.id, payload.call_id, payload.turn_id]) {
+  const payload = asRecord(entry.payload)
+  const item = completedItem(payload)
+  for (const candidate of [item.id, payload.id, payload.call_id, payload.turn_id]) {
     if (typeof candidate === 'string' && candidate) return candidate
   }
   return undefined
@@ -157,11 +174,12 @@ export function nativeIdForEntry(entry: Record<string, unknown>): string | undef
 
 export function nativeTypeForEntry(entry: Record<string, unknown>): string {
   const top = typeof entry.type === 'string' ? entry.type : 'unknown'
-  const payload = entry.payload && typeof entry.payload === 'object'
-    ? entry.payload as Record<string, unknown>
-    : {}
+  const payload = asRecord(entry.payload)
   const inner = typeof payload.type === 'string' ? payload.type : undefined
-  return inner ? `${top}/${inner}` : top
+  if (!inner) return top
+  const item = completedItem(payload)
+  const itemType = typeof item.type === 'string' ? item.type : undefined
+  return itemType ? `${top}/${inner}/${itemType}` : `${top}/${inner}`
 }
 
 export function parseFunctionOutput(output: unknown): {

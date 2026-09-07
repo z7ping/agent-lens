@@ -7,7 +7,7 @@ import type {
   BackupVerifyResponseDto,
 } from '@agent-lens/protocol'
 import { AgentLensApi } from '../client/api'
-import { agentLabel } from '../components/AgentScope'
+import { agentLabel, useOrderedAgents } from '../components/AgentScope'
 import { BackupDataRootTree } from '../components/BackupDirectoryTree'
 import { CompactPageHeading } from '../components/CompactPageHeading'
 import { PageLoadingState } from '../components/StateViews'
@@ -187,7 +187,7 @@ export function BackupPage() {
     return () => window.clearTimeout(timer)
   }, [success])
 
-  const sources = overview?.sources ?? []
+  const sources = useOrderedAgents(overview?.sources ?? [])
   const snapshots = overview?.snapshots ?? []
   const protectedFiles = sources.reduce((sum, source) => sum + source.fileCount, 0)
   const protectedBytes = sources.reduce((sum, source) => sum + (source.totalBytes ?? 0), 0)

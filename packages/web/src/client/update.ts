@@ -3,7 +3,7 @@ const GITHUB_RELEASES_API = 'https://api.github.com/repos/z7ping/agent-lens/rele
 const GITHUB_RELEASES_URL = 'https://github.com/z7ping/agent-lens/releases'
 const STORAGE_KEY = 'agent-lens:web-update-state:v1'
 
-export const WEB_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
+const WEB_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 
 export interface ParsedSemver {
   raw: string
@@ -49,7 +49,7 @@ interface StorageLike {
   setItem(key: string, value: string): void
 }
 
-export function parseSemver(value: unknown): ParsedSemver | null {
+function parseSemver(value: unknown): ParsedSemver | null {
   if (typeof value !== 'string') return null
   const match = value.trim().match(/^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/)
   if (!match) return null
@@ -135,7 +135,7 @@ function safeStorage(): StorageLike | null {
   }
 }
 
-export function readWebUpdateState(storage: StorageLike | null = safeStorage()): WebUpdateState {
+function readWebUpdateState(storage: StorageLike | null = safeStorage()): WebUpdateState {
   if (!storage) return {}
   try {
     const parsed = JSON.parse(storage.getItem(STORAGE_KEY) ?? '{}') as WebUpdateState
@@ -145,7 +145,7 @@ export function readWebUpdateState(storage: StorageLike | null = safeStorage()):
   }
 }
 
-export function writeWebUpdateState(state: WebUpdateState, storage: StorageLike | null = safeStorage()): void {
+function writeWebUpdateState(state: WebUpdateState, storage: StorageLike | null = safeStorage()): void {
   if (!storage) return
   try {
     storage.setItem(STORAGE_KEY, JSON.stringify(state))
@@ -197,7 +197,7 @@ async function fetchReleaseMetadata(version: string, fetchImpl: typeof fetch, si
   }
 }
 
-export async function fetchRuntimeOwner(fetchImpl: typeof fetch = fetch): Promise<string | null> {
+async function fetchRuntimeOwner(fetchImpl: typeof fetch = fetch): Promise<string | null> {
   try {
     const response = await fetchImpl('/api/v1/health', {
       headers: { Accept: 'application/json' },

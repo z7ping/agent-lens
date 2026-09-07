@@ -3,6 +3,24 @@
  * 页面只管理洞察内容；顶部壳层和导航响应式由 shell.css / shell-responsive.css 负责。
  */
 
+.workspace-insight-filter-disclosure > summary .ui-disclosure-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-filter-clear {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--al-accent);
+  font-size: 12px;
+  cursor: pointer;
+}
+.workspace-filter-clear:hover { text-decoration: underline; }
+
 .insights-content {
   max-width: 1320px;
   margin: 0 auto;

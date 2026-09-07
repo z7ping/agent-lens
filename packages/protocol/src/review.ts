@@ -1,11 +1,11 @@
-import type { JsonValue, TimelineEvidenceDto, TimelineObservationKind } from './timeline'
-import { AGENT_LENS_PROTOCOL_VERSION } from './timeline'
+import { AGENT_LENS_PROTOCOL_VERSION, type JsonValue, type TimelineEvidenceDto, type TimelineObservationKind } from './timeline'
 
 export type ReviewStatusFilter = 'all' | 'with-errors' | 'clean'
 export type ReviewMessageRole = 'user' | 'assistant' | 'commentary' | 'reasoning'
 export type ReviewEventCategory = 'permission' | 'subagent' | 'context' | 'model' | 'lifecycle' | 'artifact' | 'usage' | 'unknown'
 export type ReviewDetailFilter = 'all' | 'errors' | 'latency' | 'latest'
 export type ReviewDetailDirection = 'forward' | 'backward'
+export type ReviewSessionActivity = 'user-task' | 'branch-task' | 'subagent' | 'internal-review' | 'system-activity'
 
 export interface ReviewNodeSourceDto {
   nativeEventId?: string
@@ -30,10 +30,20 @@ export interface ReviewSessionSummaryDto {
   endedAt: string
   durationMs: number
   observationCount: number
+  /** 兼容字段：严格等于真实用户轮次。 */
   interactionCount: number
+  userTurnCount?: number
+  systemContextCount?: number
+  internalReviewCount?: number
+  otherEventCount?: number
   toolCount: number
   errorCount: number
   hasErrors: boolean
+  sessionActivity?: ReviewSessionActivity
+  activitySourceLabel?: string
+  parentSessionId?: string
+  /** 搜索命中系统/工具/审查内容时由服务端返回来源。 */
+  searchMatchSources?: Array<'title' | 'user' | 'system' | 'review' | 'tool' | 'other'>
 }
 
 export interface ReviewMessageNodeDto extends ReviewNodeSourceDto {
@@ -88,6 +98,12 @@ export interface ReviewInteractionDto {
   startedAt: string
   endedAt: string
   nodes: ReviewNodeDto[]
+  /** 单轮节点超过服务端稳定性边界时，仅返回有界的首尾窗口。 */
+  nodesTruncated?: boolean
+  /** 截断前该轮的完整 Review 节点数。 */
+  totalNodeCount?: number
+  /** 本次响应中未返回的中间节点数。 */
+  omittedNodeCount?: number
 }
 
 export interface ReviewInteractionIndexDto {

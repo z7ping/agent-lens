@@ -9,6 +9,20 @@ interface SharedVirtualObserver {
   listeners: Map<Element, (entry: IntersectionObserverEntry) => void>
 }
 
+interface VirtualRoundChildModel {
+  id?: string
+  label?: string
+  errorCount?: number
+  state?: string
+}
+
+interface VirtualRoundChildProps {
+  interaction?: { id?: string }
+  round?: VirtualRoundChildModel
+  model?: VirtualRoundChildModel
+  projection?: { model?: VirtualRoundChildModel }
+}
+
 const sharedVirtualObservers = new WeakMap<Element, SharedVirtualObserver>()
 
 function observeWithSharedVirtualObserver(
@@ -64,10 +78,12 @@ export function VirtualRoundMount({
   const everMountedRef = useRef(eager)
   const [mounted, setMounted] = useState(eager)
   const [height, setHeight] = useState(estimate)
-  const childInteractionId = isValidElement<{ interaction?: { id?: string } }>(children)
-    ? children.props.interaction?.id
-    : undefined
-  const stableInteractionId = interactionId ?? childInteractionId
+  const childProps = isValidElement<VirtualRoundChildProps>(children) ? children.props : undefined
+  const childModel = childProps?.round ?? childProps?.projection?.model ?? childProps?.model
+  const stableInteractionId = interactionId ?? childProps?.interaction?.id ?? childModel?.id
+  const stableRoundLabel = childModel?.label
+  const stableRoundError = Boolean(childModel?.errorCount)
+  const stableRoundState = childModel?.state
 
   const cancelPendingUnmount = () => {
     if (unmountTimerRef.current === null) return
@@ -157,6 +173,9 @@ export function VirtualRoundMount({
     className="virtual-round-shell"
     data-mounted={mounted ? 'true' : 'false'}
     data-interaction-id={stableInteractionId || undefined}
+    data-round-label={stableRoundLabel || undefined}
+    data-round-error={stableRoundError ? 'true' : undefined}
+    data-round-state={stableRoundState || undefined}
     style={style}
   >
     {!mounted && stableInteractionId && <span

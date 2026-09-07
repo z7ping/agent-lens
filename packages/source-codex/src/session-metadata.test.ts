@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import type { SourceRecord } from '@agent-lens/core'
 import { codexHistoryInternals } from './history'
 import { normalizeCodexRecord } from './normalize'
+import { codexTestContext } from './test-support'
 
 test('Codex session index uses the latest native thread_name', async () => {
   const root = await mkdtemp(join(tmpdir(), 'agent-lens-codex-index-'))
@@ -76,7 +77,7 @@ test('Codex native title becomes sessionTitle identity metadata', async () => {
     },
   }
 
-  const normalized = await normalizeCodexRecord(record, {} as never)
+  const normalized = await normalizeCodexRecord(record, codexTestContext)
   assert.equal(normalized.observations[0]?.identityHints.sessionTitle, 'Codex 原生线程摘要')
   assert.equal(normalized.observations[0]?.kind, 'session.lifecycle')
 })

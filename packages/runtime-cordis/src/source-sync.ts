@@ -5,6 +5,7 @@ import {
   SourceRuntimeRunner,
   type SourceAssetDiscoveryResult,
   type SourceHistorySyncResult,
+  type SourceParserReplayResult,
   type SourceRuntimeCaptureHandle,
 } from '@agent-lens/core-services/source-runner'
 import type { DetectedSource, Host, SourceDefinition, SourceHistoryWindow } from '@agent-lens/core'
@@ -32,6 +33,10 @@ export interface RegisteredSourcePreparation {
 export interface RegisteredSourceStageResult<T> {
   results: T[]
   failures: RegisteredSourceFailure[]
+}
+
+export interface ParserReplayExecutionOptions {
+  cooperate?: () => Promise<void>
 }
 
 async function runtimeHost(ctx: AgentLensContext): Promise<Host> {
@@ -132,6 +137,47 @@ export async function syncRegisteredSourceHistory(
     } catch (error) {
       failures.push({ sourceId: target.source.manifest.sourceId, stage: 'history', error })
     }
+  }
+
+  return { results, failures }
+}
+
+export async function replayRegisteredSourceHistory(
+  ctx: AgentLensContext,
+  abortSignal: AbortSignal,
+  targets: RegisteredSourceTarget[],
+  historyWindow?: SourceHistoryWindow,
+  options: ParserReplayExecutionOptions = {},
+): Promise<RegisteredSourceStageResult<SourceParserReplayResult>> {
+  const runner = new SourceHistoryRunner(
+    ctx.storage,
+    ctx.identity,
+    ctx.observations,
+    ctx.capabilities,
+    ctx.coverage,
+    ctx.capturePolicy,
+  )
+  const results: SourceParserReplayResult[] = []
+  const failures: RegisteredSourceFailure[] = []
+
+  ctx.emit('source/parser-replay-state', { state: 'started' })
+  try {
+    for (const target of targets) {
+      if (abortSignal.aborted) break
+      if (!sourceEnabled(ctx, target.source)) continue
+      try {
+        results.push(await runner.replay({
+          ...target,
+          abortSignal,
+          ...(historyWindow ? { historyWindow } : {}),
+          ...(options.cooperate ? { cooperate: options.cooperate } : {}),
+        }))
+      } catch (error) {
+        failures.push({ sourceId: target.source.manifest.sourceId, stage: 'history', error })
+      }
+    }
+  } finally {
+    ctx.emit('source/parser-replay-state', { state: 'completed' })
   }
 
   return { results, failures }

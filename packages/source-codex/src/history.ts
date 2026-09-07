@@ -36,10 +36,16 @@ interface CodexThreadName {
 }
 
 const CHECKPOINT_BATCH_SIZE = 100
-export const CODEX_PARSER_VERSION = '10'
+export const CODEX_PARSER_VERSION = '12'
 
 function sha256(value: string | Buffer): string {
   return createHash('sha256').update(value).digest('hex')
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
 }
 
 async function* walkJsonlFiles(root: string): AsyncIterable<string> {
@@ -68,13 +74,10 @@ async function listJsonlFiles(root: string, historyWindow?: SourceHistoryWindow)
     try {
       return { path, mtimeMs: (await stat(path)).mtimeMs }
     } catch {
-      // 文件可能在目录遍历后被宿主清理，跳过即可。
       return null
     }
   }))).filter((candidate): candidate is { path: string; mtimeMs: number } => candidate !== null)
 
-  // 冷启动首先导入最近有活动的会话；恢复旧会话时 mtime 比目录日期更可靠。
-  // 路径降序只用于相同时间戳下的稳定排序，旧历史仍会在后续完整回填。
   const activeSince = historyWindow?.activeSince ? Date.parse(historyWindow.activeSince) : Number.NaN
   const filtered = Number.isFinite(activeSince)
     ? candidates.filter(candidate => candidate.mtimeMs >= activeSince)
@@ -104,7 +107,7 @@ async function readThreadNames(codexHome: string | undefined): Promise<Map<strin
     for (const line of text.split(/\r?\n/)) {
       if (!line.trim()) continue
       try {
-        const entry = JSON.parse(line) as Record<string, unknown>
+        const entry = asRecord(JSON.parse(line))
         const id = typeof entry.id === 'string' ? entry.id.trim() : ''
         const title = typeof entry.thread_name === 'string' ? entry.thread_name.trim() : ''
         if (!id || !title) continue
@@ -136,13 +139,14 @@ async function readSessionMetadata(
     for (const line of preview.split(/\r?\n/).slice(0, 32)) {
       if (!line.trim()) continue
       try {
-        const entry = JSON.parse(line) as Record<string, any>
-        if (entry.type !== 'session_meta' || !entry.payload) continue
-        const startedAt = normalizeTimestamp(entry.payload.timestamp)
+        const entry = asRecord(JSON.parse(line))
+        const payload = asRecord(entry.payload)
+        if (entry.type !== 'session_meta' || !Object.keys(payload).length) continue
+        const startedAt = normalizeTimestamp(payload.timestamp)
         return {
-          nativeSessionId: String(entry.payload.id || fallback.nativeSessionId),
-          ...(typeof entry.payload.cwd === 'string' ? { cwd: entry.payload.cwd } : {}),
-          ...(typeof entry.payload.cli_version === 'string' ? { cliVersion: entry.payload.cli_version } : {}),
+          nativeSessionId: typeof payload.id === 'string' && payload.id ? payload.id : fallback.nativeSessionId,
+          ...(typeof payload.cwd === 'string' ? { cwd: payload.cwd } : {}),
+          ...(typeof payload.cli_version === 'string' ? { cliVersion: payload.cli_version } : {}),
           ...(indexedTitle ? { title: indexedTitle.title } : {}),
           ...(startedAt ? { startedAt } : {}),
         }
@@ -203,7 +207,7 @@ async function* readJsonlLines(
 
 function parseLine(text: string): Record<string, unknown> {
   try {
-    return JSON.parse(text) as Record<string, unknown>
+    return asRecord(JSON.parse(text))
   } catch {
     return {
       type: 'malformed-json',
@@ -374,8 +378,6 @@ export async function* ingestCodexHistory(ctx: SourceHistoryExecutionContext): A
       }
 
       yield sourceRecordForLine(ctx, filePath, session, line, sequence)
-      // 生成器只会在消费端持久化当前记录后继续执行。批量推进游标可以避免
-      // 冷导入为每行 JSONL 增加一次 SQLite 事务；崩溃时最多幂等重放一批。
       pendingCheckpointLines += 1
       if (pendingCheckpointLines >= CHECKPOINT_BATCH_SIZE) await persistCheckpoint()
     }

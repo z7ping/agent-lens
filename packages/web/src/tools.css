@@ -6,6 +6,23 @@
 
 .tools-content { overflow: auto; }
 
+.tool-projection-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--al-line);
+  border-radius: 9px;
+  background: var(--al-soft-2);
+  color: var(--al-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.tool-projection-status > svg { flex: 0 0 auto; margin-top: 1px; }
+.tool-projection-status b { display: block; color: var(--al-ink-2); font-size: 12px; font-weight: 660; }
+.tool-projection-status small { display: block; margin-top: 2px; color: var(--al-muted-2); font-size: 12px; }
+
 /* SVG 工具图标 */
 .tool-kind-svg {
   display: inline-grid;
@@ -201,10 +218,19 @@
   border-top: 1px solid var(--al-line);
   border-bottom: 1px solid var(--al-line);
 }
-.tool-drill-stat { min-height: 0; padding: 10px 12px; border: 0; border-right: 1px solid var(--al-line); background: transparent; }
+.tool-drill-stat {
+  display: grid;
+  min-height: 0;
+  align-content: center;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 0;
+  border-right: 1px solid var(--al-line);
+  background: transparent;
+}
 .tool-drill-stat:nth-child(3n) { border-right: 0; }
-.tool-drill-stat b { font-size: 14px; font-variant-numeric: tabular-nums; }
-.tool-drill-stat span { color: var(--al-muted); font-size: 12px; }
+.tool-drill-stat b { display: block; font-size: 14px; font-variant-numeric: tabular-nums; }
+.tool-drill-stat span { display: block; color: var(--al-muted); font-size: 12px; }
 .tool-drill-note { margin-top: 16px; padding: 10px 12px; border-radius: 9px; background: var(--al-soft-2); color: var(--al-muted); font-size: 12px; line-height: 1.65; }
 
 /* 会话钻取 */
@@ -226,10 +252,69 @@
   text-align: left;
 }
 .tool-session-link:hover { border-color: var(--al-line-strong); background: var(--al-soft); }
+.tool-session-link.has-error {
+  border-color: color-mix(in srgb, var(--al-danger) 30%, var(--al-line));
+  background: color-mix(in srgb, var(--al-danger-soft) 44%, var(--al-surface));
+}
 .tool-session-copy { min-width: 0; }
 .tool-session-copy b { display: block; overflow: hidden; color: var(--al-ink); font-size: 13px; font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
 .tool-session-copy small { display: block; margin-top: 2px; color: var(--al-muted-2); font-size: 12px; }
-.tool-session-open { color: var(--al-accent); font-size: 12px; font-weight: 650; white-space: nowrap; }
+.tool-session-open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  color: var(--al-accent);
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.tool-session-link.has-error .tool-session-open { color: var(--al-danger); }
+
+.tool-failure-shortcut {
+  display: flex;
+  width: 100%;
+  min-height: 54px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--al-danger) 34%, var(--al-line));
+  border-radius: 9px;
+  background: var(--al-danger-soft);
+  color: var(--al-danger);
+  text-align: left;
+}
+.tool-failure-shortcut > span { min-width: 0; }
+.tool-failure-shortcut b,
+.tool-failure-shortcut small { display: block; }
+.tool-failure-shortcut b { font-size: 13px; font-weight: 720; }
+.tool-failure-shortcut small {
+  overflow: hidden;
+  margin-top: 2px;
+  color: color-mix(in srgb, var(--al-danger) 72%, var(--al-ink));
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tool-failure-shortcut:hover {
+  border-color: color-mix(in srgb, var(--al-danger) 54%, var(--al-line));
+  background: color-mix(in srgb, var(--al-danger-soft) 78%, var(--al-surface));
+}
+
+.tool-session-toggle {
+  width: 100%;
+  min-height: 34px;
+  margin-top: 9px;
+  border: 1px dashed var(--al-line-strong);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--al-accent);
+  font-size: 12px;
+  font-weight: 650;
+}
+.tool-session-toggle:hover { background: var(--al-soft-2); }
 
 @media (max-width: 991.98px) {
   .tool-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

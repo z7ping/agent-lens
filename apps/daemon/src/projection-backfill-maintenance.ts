@@ -1,0 +1,131 @@
+import type {
+  JsonValue,
+  ProjectionBackfillBatch,
+  ProjectionBackfillMaintenance,
+} from '@agent-lens/core'
+
+export interface ProjectionBackfillIdleGate {
+  wait(signal: AbortSignal): Promise<void>
+}
+export interface ProjectionBackfillRunResult {
+  scanned: number
+  written: number
+  batches: number
+  cursor?: string
+  aborted: boolean
+}
+
+function progressRecord(progress: JsonValue | undefined): Record<string, JsonValue> | undefined {
+  return progress && typeof progress === 'object' && !Array.isArray(progress)
+    ? progress as Record<string, JsonValue>
+    : undefined
+}
+
+function cursorFromProgress(progress: JsonValue | undefined): string | undefined {
+  const cursor = progressRecord(progress)?.cursor
+  return typeof cursor === 'string' && cursor ? cursor : undefined
+}
+
+function counterFromProgress(progress: JsonValue | undefined, key: string): number {
+  const value = progressRecord(progress)?.[key]
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0
+}
+
+async function runBatches(
+  execute: (after?: string, limit?: number) => Promise<ProjectionBackfillBatch>,
+  gate: ProjectionBackfillIdleGate,
+  signal: AbortSignal,
+  options: {
+    initialProgress?: JsonValue
+    batchSize?: number
+    report?: (progress: JsonValue) => Promise<boolean>
+    yieldControl?: () => Promise<void>
+  } = {},
+): Promise<ProjectionBackfillRunResult> {
+  const batchSize = Math.max(1, Math.min(options.batchSize ?? 250, 1000))
+  const yieldControl = options.yieldControl ?? (() => new Promise<void>(resolve => setImmediate(resolve)))
+  let cursor = cursorFromProgress(options.initialProgress)
+  let scanned = counterFromProgress(options.initialProgress, 'scanned')
+  let written = counterFromProgress(options.initialProgress, 'written')
+  let batches = counterFromProgress(options.initialProgress, 'batches')
+
+  while (!signal.aborted) {
+    await gate.wait(signal)
+    if (signal.aborted) break
+
+    const batch = await execute(cursor, batchSize)
+    scanned += batch.scanned
+    written += batch.written
+    batches += 1
+    cursor = batch.cursor ?? cursor
+
+    const accepted = await options.report?.({
+      scanned,
+      written,
+      batches,
+      ...(cursor ? { cursor } : {}),
+    })
+    if (accepted === false) break
+    if (!batch.hasMore || batch.scanned === 0) break
+    await yieldControl()
+  }
+
+  return {
+    scanned,
+    written,
+    batches,
+    ...(cursor ? { cursor } : {}),
+    aborted: signal.aborted,
+  }
+}
+
+export function backfillUnknownObservationProjection(
+  maintenance: ProjectionBackfillMaintenance | undefined,
+  gate: ProjectionBackfillIdleGate,
+  signal: AbortSignal,
+  options: Parameters<typeof runBatches>[3] = {},
+): Promise<ProjectionBackfillRunResult> {
+  if (!maintenance) return Promise.resolve({ scanned: 0, written: 0, batches: 0, aborted: signal.aborted })
+  return runBatches(
+    (after, limit) => maintenance.backfillUnknownObservations(after, limit),
+    gate,
+    signal,
+    options,
+  )
+}
+
+export async function backfillToolUsageFactProjection(
+  maintenance: ProjectionBackfillMaintenance | undefined,
+  gate: ProjectionBackfillIdleGate,
+  signal: AbortSignal,
+  options: Parameters<typeof runBatches>[3] = {},
+): Promise<ProjectionBackfillRunResult> {
+  if (!maintenance) return { scanned: 0, written: 0, batches: 0, aborted: signal.aborted }
+
+  const coverageReader = maintenance.toolUsageFactCoverageForMaintenance ?? maintenance.toolUsageFactCoverage
+  const coverage = await coverageReader?.call(maintenance)
+  if (coverage?.ready) {
+    return { scanned: 0, written: 0, batches: 0, aborted: signal.aborted }
+  }
+
+  const persistedCursor = cursorFromProgress(options.initialProgress)
+  const repairedCursor = maintenance.repairToolUsageFactCursor
+    ? await maintenance.repairToolUsageFactCursor(persistedCursor)
+    : persistedCursor
+  const repairedProgress = repairedCursor === persistedCursor
+    ? options.initialProgress
+    : repairedCursor
+      ? { cursor: repairedCursor }
+      : undefined
+  const { initialProgress: _persistedProgress, ...runOptions } = options
+
+  return runBatches(
+    (after, limit) => maintenance.backfillToolUsageFacts(after, limit),
+    gate,
+    signal,
+    {
+      ...runOptions,
+      ...(repairedProgress === undefined ? {} : { initialProgress: repairedProgress }),
+    },
+  )
+}

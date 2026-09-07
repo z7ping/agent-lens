@@ -5,8 +5,9 @@ import { app, BrowserWindow } from 'electron'
 const baseUrl = (process.env.AGENT_LENS_ACCEPTANCE_URL || 'http://127.0.0.1:56789').replace(/\/$/, '')
 const path = process.env.AGENT_LENS_ACCEPTANCE_PATH || '/review?range=all&status=all'
 const outputDir = resolve(process.env.AGENT_LENS_ACCEPTANCE_OUTPUT || '.agent-lens/acceptance/task-center')
-const expectedLatestTitle = process.env.AGENT_LENS_ACCEPTANCE_LATEST_TITLE || 'Alpha3 原生标题 B'
-const expectedOlderTitle = process.env.AGENT_LENS_ACCEPTANCE_OLDER_TITLE || 'Alpha3 原生标题 A'
+// Source / Review API 保留 Codex 原生 thread_name；Task Center 的用户任务标题则来自
+// authoritative event_msg.user_message。两层语义在 workflow 与这里分别验收。
+const expectedTaskTitle = process.env.AGENT_LENS_ACCEPTANCE_TASK_TITLE || '运行测试并修复'
 
 function delay(ms) { return new Promise(resolveDelay => setTimeout(resolveDelay, ms)) }
 
@@ -83,9 +84,9 @@ try {
 
   report.value = { ...value, inspectorOpen }
   const errors = report.errors
-  if (value.sessionTitles[0] !== expectedLatestTitle) errors.push(`列表首条原生标题错误：${value.sessionTitles[0] ?? '<missing>'}`)
-  if (value.sessionTitles[1] !== expectedOlderTitle) errors.push(`列表第二条原生标题错误：${value.sessionTitles[1] ?? '<missing>'}`)
-  if (value.headerTitle !== expectedLatestTitle) errors.push(`详情标题与列表标题不一致：${value.headerTitle || '<missing>'}`)
+  if (value.sessionTitles[0] !== expectedTaskTitle) errors.push(`列表首条未使用结构化真实用户任务标题：${value.sessionTitles[0] ?? '<missing>'}`)
+  if (value.sessionTitles[1] !== expectedTaskTitle) errors.push(`列表第二条未使用结构化真实用户任务标题：${value.sessionTitles[1] ?? '<missing>'}`)
+  if (value.headerTitle !== expectedTaskTitle) errors.push(`详情标题未与 Task Center 用户任务标题一致：${value.headerTitle || '<missing>'}`)
   if (!value.assistantTexts.some(item => item.includes('好的，先跑测试'))) errors.push('未找到期望的 Assistant 可见正文')
   if (value.machineMetadataVisible) errors.push('Chromium 可见正文仍泄漏 Codex machine metadata')
   if (value.processGroupCount < 1) errors.push('未渲染聚合思考过程')

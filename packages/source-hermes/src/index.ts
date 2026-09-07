@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash } from 'node:crypto'
 import { watch, type FSWatcher } from 'node:fs'
 import {
   access,
@@ -31,9 +31,11 @@ import type {
   SourceRecordEmitter,
 } from '@agent-lens/core'
 import {
+  abortableDelay,
   defineAgentLensPlugin,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
+import { hermesRow, tableColumnName, type HermesRow } from './sqlite-rows.js'
 
 const SOURCE_ID = 'hermes'
 const PARSER_VERSION = '2'
@@ -45,24 +47,10 @@ const INBOX_POLL_MS = 250
 const MAX_STRING = 64 * 1024
 const SENSITIVE_KEY = /(password|passwd|secret|token|api[_-]?key|authorization|cookie)/i
 
-interface HermesRow {
-  row_id: number
-  id: string | number | null
-  session_id: string | null
-  role: string | null
-  content: string | null
-  timestamp: number | string | null
-  tool_calls: string | null
-  tool_call_id: string | null
-  tool_name: string | null
-  cwd: string | null
-  session_title: string | null
-}
-
 interface HermesDbEnvelope {
   message: Record<string, unknown>
   session: { nativeSessionId: string; cwd?: string; title?: string }
-  captureChannel: 'history' | 'native-tail'
+  captureChannel?: 'history' | 'native-tail'
 }
 
 interface HermesHookEnvelope {
@@ -94,7 +82,7 @@ function sanitize(value: unknown, depth = 0): unknown {
   if (Array.isArray(value)) return value.slice(0, 200).map(item => sanitize(item, depth + 1))
   if (typeof value !== 'object') return String(value)
   const result: Record<string, unknown> = {}
-  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+  for (const [key, item] of Object.entries(value)) {
     result[key] = SENSITIVE_KEY.test(key) ? '[redacted]' : sanitize(item, depth + 1)
   }
   return result
@@ -118,6 +106,41 @@ function stringField(record: Record<string, unknown>, ...names: string[]): strin
     if (typeof value === 'string' && value) return value
   }
   return undefined
+}
+
+function hermesEnvelope(value: unknown, record: SourceRecord): HermesEnvelope {
+  const payload = asRecord(value)
+  const session = asRecord(payload.session)
+  const nativeSessionId = stringField(session, 'nativeSessionId')
+    ?? record.sourceSessionNativeId
+    ?? 'unknown'
+  const cwd = stringField(session, 'cwd')
+
+  if (payload.captureChannel === 'runtime-hook') {
+    return {
+      runtimeEvent: asRecord(payload.runtimeEvent),
+      session: { nativeSessionId, ...(cwd ? { cwd } : {}) },
+      captureChannel: 'runtime-hook',
+    }
+  }
+
+  const title = stringField(session, 'title')
+  const captureChannel = payload.captureChannel === 'history' || payload.captureChannel === 'native-tail'
+    ? payload.captureChannel
+    : undefined
+  return {
+    message: asRecord(payload.message),
+    session: {
+      nativeSessionId,
+      ...(cwd ? { cwd } : {}),
+      ...(title ? { title } : {}),
+    },
+    ...(captureChannel ? { captureChannel } : {}),
+  }
+}
+
+function isHermesHookEnvelope(envelope: HermesEnvelope): envelope is HermesHookEnvelope {
+  return envelope.captureChannel === 'runtime-hook'
 }
 
 function normalizeTimestamp(value: unknown): string | undefined {
@@ -177,8 +200,10 @@ function openDatabase(root: string): Database.Database {
 
 function tableColumns(db: Database.Database, table: string): Set<string> {
   try {
-    const rows = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name?: string }>
-    return new Set(rows.map(row => row.name).filter((name): name is string => Boolean(name)))
+    const names = db.prepare(`PRAGMA table_info(${table})`).all()
+      .map(tableColumnName)
+      .filter((name): name is string => name !== undefined)
+    return new Set(names)
   } catch {
     return new Set()
   }
@@ -266,12 +291,12 @@ function selectRows(
     params.push(Math.max(0, Math.floor(sessionLimit)))
   }
   params.push(limit)
-  return statement.all(...params) as HermesRow[]
+  return statement.all(...params).map(hermesRow)
 }
 
 function recentRows(db: Database.Database, limit: number): HermesRow[] {
   const statement = messageQuery(db, true)
-  return (statement.all(limit) as HermesRow[]).reverse()
+  return statement.all(limit).map(hermesRow).reverse()
 }
 
 function rowFingerprint(row: HermesRow): string {
@@ -284,7 +309,7 @@ function rowFingerprint(row: HermesRow): string {
 function dbRecord(
   row: HermesRow,
   ctx: SourceExecutionContext,
-  captureChannel: HermesDbEnvelope['captureChannel'],
+  captureChannel: NonNullable<HermesDbEnvelope['captureChannel']>,
 ): SourceRecord {
   const nativeSessionId = row.session_id ?? 'unknown'
   const fingerprint = rowFingerprint(row)
@@ -335,7 +360,6 @@ export async function* ingestHermesHistory(ctx: SourceHistoryExecutionContext): 
   if (!root || ctx.abortSignal.aborted || !await exists(join(root, DB_NAME))) return
   const db = openDatabase(root)
   try {
-    // v2 会一次性重放历史消息，让旧会话也获得原生标题。
     const parsedActiveSince = ctx.historyWindow?.activeSince ? Date.parse(ctx.historyWindow.activeSince) : Number.NaN
     const activeSinceMs = Number.isFinite(parsedActiveSince) ? parsedActiveSince : undefined
     const sessionLimit = ctx.historyWindow?.sessionLimit
@@ -425,19 +449,6 @@ function hookRecord(envelope: InboxEnvelope, filePath: string, ctx: SourceExecut
   }
 }
 
-function sleep(ms: number, signal: AbortSignal): Promise<void> {
-  if (signal.aborted) return Promise.resolve()
-  return new Promise(resolve => {
-    const timer = setTimeout(done, ms)
-    function done() {
-      signal.removeEventListener('abort', done)
-      clearTimeout(timer)
-      resolve()
-    }
-    signal.addEventListener('abort', done, { once: true })
-  })
-}
-
 export async function startHermesRuntimeCapture(
   ctx: SourceExecutionContext,
   emitter: SourceRecordEmitter,
@@ -509,13 +520,13 @@ export async function startHermesRuntimeCapture(
           break
         }
       }
-      await sleep(INBOX_POLL_MS, ctx.abortSignal)
+      await abortableDelay(INBOX_POLL_MS, ctx.abortSignal)
     }
   })()
 
   const dbTask = (async () => {
     while (!stopped && !ctx.abortSignal.aborted) {
-      await sleep(DB_POLL_MS, ctx.abortSignal)
+      await abortableDelay(DB_POLL_MS, ctx.abortSignal)
       if (!stopped && !ctx.abortSignal.aborted) await scanDb(true).catch(() => undefined)
     }
   })()
@@ -670,7 +681,7 @@ export async function* discoverHermesAssets(ctx: SourceExecutionContext): AsyncI
 }
 
 function evidenceFor(record: SourceRecord, envelope: HermesEnvelope): EvidenceCandidate {
-  const runtime = envelope.captureChannel === 'runtime-hook'
+  const runtime = isHermesHookEnvelope(envelope)
   return {
     captureMethod: runtime ? 'runtime-hook' : 'native-db',
     derivation: runtime ? 'observed' : 'reported',
@@ -680,13 +691,17 @@ function evidenceFor(record: SourceRecord, envelope: HermesEnvelope): EvidenceCa
     ...(record.nativeId ? { nativeStableId: record.nativeId } : {}),
     ...(record.occurredAt ? { eventTime: record.occurredAt } : {}),
     capturedAt: record.capturedAt,
-    confidenceHint: runtime ? 'high' : 'exact',
+    ...(runtime
+      ? { confidenceHint: 'high' as const }
+      : envelope.captureChannel
+        ? { confidenceHint: 'exact' as const }
+        : {}),
   }
 }
 
-function identity(record: SourceRecord, envelope: HermesEnvelope): ObservationIdentityHints {
+function identity(_record: SourceRecord, envelope: HermesEnvelope): ObservationIdentityHints {
   return {
-    nativeSessionId: envelope.session.nativeSessionId || record.sourceSessionNativeId || 'unknown',
+    nativeSessionId: envelope.session.nativeSessionId,
     ...(envelope.session.cwd ? { workspacePath: envelope.session.cwd } : {}),
     ...('title' in envelope.session && envelope.session.title?.trim()
       ? { sessionTitle: envelope.session.title.trim() }
@@ -754,7 +769,7 @@ function resultSuccess(content: unknown): boolean | undefined {
 }
 
 function normalizeDbEnvelope(record: SourceRecord, envelope: HermesDbEnvelope): ObservationCandidate[] {
-  const message = asRecord(envelope.message)
+  const message = envelope.message
   const role = stringField(message, 'role') ?? 'unknown'
   const observations: ObservationCandidate[] = []
   if (role === 'user') {
@@ -790,7 +805,7 @@ function normalizeDbEnvelope(record: SourceRecord, envelope: HermesDbEnvelope): 
 }
 
 function normalizeHookEnvelope(record: SourceRecord, envelope: HermesHookEnvelope): ObservationCandidate[] {
-  const event = asRecord(envelope.runtimeEvent)
+  const event = envelope.runtimeEvent
   const eventName = stringField(event, 'hook_event_name', 'event_name', 'type') ?? 'unknown'
   const callId = hookCallId(event)
   const toolName = stringField(event, 'tool_name') ?? 'unknown'
@@ -836,8 +851,8 @@ export async function normalizeHermesRecord(
   record: SourceRecord,
   _ctx: SourceNormalizationContext,
 ): Promise<NormalizedSourceOutput> {
-  const envelope = record.payload as HermesEnvelope
-  const observations = envelope.captureChannel === 'runtime-hook'
+  const envelope = hermesEnvelope(record.payload, record)
+  const observations = isHermesHookEnvelope(envelope)
     ? normalizeHookEnvelope(record, envelope)
     : normalizeDbEnvelope(record, envelope)
   return { observations, evidenceCandidates: [evidenceFor(record, envelope)] }
@@ -862,7 +877,7 @@ export async function declareHermesCapabilities(_detected: DetectedSource): Prom
 
 export const hermesManifest: SourcePluginManifest = {
   pluginId: '@agent-lens/source-hermes',
-  pluginVersion: '1.0.0-alpha.2',
+  pluginVersion: '1.0.0-alpha.3',
   apiVersion: '1.0',
   pluginType: 'source',
   displayName: 'Hermes Source',
@@ -901,4 +916,5 @@ export const hermesSourceInternals = {
   yamlSectionNames,
   yamlListValues,
   selectRows,
+  hermesEnvelope,
 }

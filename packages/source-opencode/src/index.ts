@@ -22,6 +22,7 @@ import type {
   SourceRecordEmitter,
 } from '@agent-lens/core'
 import {
+  abortableDelay,
   defineAgentLensPlugin,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
@@ -55,7 +56,7 @@ interface OpenCodeEnvelope {
     cwd?: string
     title?: string
   }
-  captureChannel: 'history' | 'native-tail'
+  captureChannel?: 'history' | 'native-tail'
 }
 
 function sha256(value: string): string {
@@ -73,7 +74,7 @@ function sanitize(value: unknown, depth = 0): unknown {
   if (Array.isArray(value)) return value.slice(0, 200).map(item => sanitize(item, depth + 1))
   if (typeof value !== 'object') return String(value)
   const result: Record<string, unknown> = {}
-  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+  for (const [key, item] of Object.entries(value)) {
     result[key] = SENSITIVE_KEY.test(key) ? '[redacted]' : sanitize(item, depth + 1)
   }
   return result
@@ -83,6 +84,44 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {}
+}
+
+function nullableString(record: Record<string, unknown>, key: string): string | null {
+  const value = record[key]
+  if (value == null) return null
+  if (typeof value !== 'string') throw new TypeError(`OpenCode SQLite field ${key} must be a string or null`)
+  return value
+}
+
+function nullableTimestamp(record: Record<string, unknown>, key: string): number | string | null {
+  const value = record[key]
+  if (value == null) return null
+  if (typeof value !== 'number' && typeof value !== 'string') {
+    throw new TypeError(`OpenCode SQLite field ${key} must be a number, string, or null`)
+  }
+  if (typeof value === 'number' && !Number.isFinite(value)) {
+    throw new TypeError(`OpenCode SQLite field ${key} must be finite`)
+  }
+  return value
+}
+
+function openCodeRow(value: unknown): OpenCodeRow {
+  const row = asRecord(value)
+  const rowId = row.row_id
+  if (typeof rowId !== 'number' || !Number.isSafeInteger(rowId)) {
+    throw new TypeError('OpenCode SQLite field row_id must be a safe integer')
+  }
+  return {
+    row_id: rowId,
+    id: nullableString(row, 'id'),
+    message_id: nullableString(row, 'message_id'),
+    session_id: nullableString(row, 'session_id'),
+    time_created: nullableTimestamp(row, 'time_created'),
+    data: nullableString(row, 'data'),
+    message_data: nullableString(row, 'message_data'),
+    directory: nullableString(row, 'directory'),
+    session_title: nullableString(row, 'session_title'),
+  }
 }
 
 function parseRecord(value: string | null): Record<string, unknown> {
@@ -97,6 +136,27 @@ function stringField(record: Record<string, unknown>, ...names: string[]): strin
     if (typeof value === 'string' && value) return value
   }
   return undefined
+}
+
+function openCodeEnvelope(value: unknown, record: SourceRecord): OpenCodeEnvelope {
+  const root = asRecord(value)
+  const session = asRecord(root.session)
+  const nativeSessionId = stringField(session, 'nativeSessionId') ?? record.sourceSessionNativeId ?? 'unknown'
+  const cwd = stringField(session, 'cwd')
+  const title = stringField(session, 'title')
+  const captureChannel = root.captureChannel === 'history' || root.captureChannel === 'native-tail'
+    ? root.captureChannel
+    : undefined
+  return {
+    part: asRecord(root.part),
+    message: asRecord(root.message),
+    session: {
+      nativeSessionId,
+      ...(cwd ? { cwd } : {}),
+      ...(title ? { title } : {}),
+    },
+    ...(captureChannel ? { captureChannel } : {}),
+  }
 }
 
 function normalizeTimestamp(value: unknown): string | undefined {
@@ -208,7 +268,7 @@ function selectRows(
      WHERE p.rowid > ? ${historyFilter}
      ORDER BY p.rowid ASC
      LIMIT ?
-  `).all(...params) as OpenCodeRow[]
+  `).all(...params).map(openCodeRow)
 }
 
 function recentRows(db: Database.Database, limit: number): OpenCodeRow[] {
@@ -227,7 +287,7 @@ function recentRows(db: Database.Database, limit: number): OpenCodeRow[] {
       LEFT JOIN session s ON p.session_id = s.id
      ORDER BY p.rowid DESC
      LIMIT ?
-  `).all(limit) as OpenCodeRow[]
+  `).all(limit).map(openCodeRow)
   return rows.reverse()
 }
 
@@ -241,7 +301,7 @@ function rowFingerprint(row: OpenCodeRow): string {
 function recordFromRow(
   row: OpenCodeRow,
   ctx: SourceExecutionContext,
-  captureChannel: OpenCodeEnvelope['captureChannel'],
+  captureChannel: NonNullable<OpenCodeEnvelope['captureChannel']>,
 ): SourceRecord {
   const part = parseRecord(row.data)
   const message = parseRecord(row.message_data)
@@ -318,19 +378,6 @@ export async function* ingestOpenCodeHistory(
   }
 }
 
-function sleep(ms: number, signal: AbortSignal): Promise<void> {
-  if (signal.aborted) return Promise.resolve()
-  return new Promise(resolve => {
-    const timer = setTimeout(done, ms)
-    function done() {
-      signal.removeEventListener('abort', done)
-      clearTimeout(timer)
-      resolve()
-    }
-    signal.addEventListener('abort', done, { once: true })
-  })
-}
-
 export async function startOpenCodeRuntimeCapture(
   ctx: SourceExecutionContext,
   emitter: SourceRecordEmitter,
@@ -387,7 +434,7 @@ export async function startOpenCodeRuntimeCapture(
 
   const task = (async () => {
     while (!stopped && !ctx.abortSignal.aborted) {
-      await sleep(RUNTIME_POLL_MS, ctx.abortSignal)
+      await abortableDelay(RUNTIME_POLL_MS, ctx.abortSignal)
       if (!stopped && !ctx.abortSignal.aborted) await scan(true).catch(() => undefined)
     }
   })()
@@ -414,13 +461,17 @@ function evidenceFor(record: SourceRecord, envelope: OpenCodeEnvelope): Evidence
     ...(record.nativeId ? { nativeStableId: record.nativeId } : {}),
     ...(record.occurredAt ? { eventTime: record.occurredAt } : {}),
     capturedAt: record.capturedAt,
-    confidenceHint: envelope.captureChannel === 'history' ? 'exact' : 'high',
+    ...(envelope.captureChannel === 'history'
+      ? { confidenceHint: 'exact' as const }
+      : envelope.captureChannel === 'native-tail'
+        ? { confidenceHint: 'high' as const }
+        : {}),
   }
 }
 
 function identity(record: SourceRecord, envelope: OpenCodeEnvelope): ObservationIdentityHints {
   return {
-    nativeSessionId: envelope.session.nativeSessionId || record.sourceSessionNativeId || 'unknown',
+    nativeSessionId: envelope.session.nativeSessionId,
     ...(envelope.session.cwd ? { workspacePath: envelope.session.cwd } : {}),
     ...(envelope.session.title?.trim() ? { sessionTitle: envelope.session.title.trim() } : {}),
   }
@@ -466,9 +517,9 @@ export async function normalizeOpenCodeRecord(
   record: SourceRecord,
   _ctx: SourceNormalizationContext,
 ): Promise<NormalizedSourceOutput> {
-  const envelope = record.payload as OpenCodeEnvelope
-  const part = asRecord(envelope.part)
-  const message = asRecord(envelope.message)
+  const envelope = openCodeEnvelope(record.payload, record)
+  const part = envelope.part
+  const message = envelope.message
   const type = stringField(part, 'type') ?? 'unknown'
   const role = stringField(message, 'role') ?? 'unknown'
   const observations: ObservationCandidate[] = []
@@ -542,7 +593,7 @@ export async function declareOpenCodeCapabilities(
 
 export const openCodeManifest: SourcePluginManifest = {
   pluginId: '@agent-lens/source-opencode',
-  pluginVersion: '1.0.0-alpha.2',
+  pluginVersion: '1.0.0-alpha.3',
   apiVersion: '1.0',
   pluginType: 'source',
   displayName: 'OpenCode Source',
@@ -576,4 +627,5 @@ export const openCodeSourceInternals = {
   rowFingerprint,
   recordFromRow,
   selectRows,
+  openCodeEnvelope,
 }

@@ -1,6 +1,7 @@
 export type PiLiveStreamingBehavior = 'steer' | 'followUp'
 export type PiLiveRuntimeStatus = 'initializing' | 'ready' | 'failed' | 'terminating' | 'terminated'
 export type PiLiveInitializationStage = 'starting_worker' | 'loading_sdk' | 'loading_resources' | 'creating_session' | 'binding_extensions' | 'ready'
+export type PiLiveHistoryAction = 'continue' | 'fork'
 
 export interface PiLiveInitializationTiming {
   stage: PiLiveInitializationStage
@@ -34,6 +35,8 @@ export interface PiLiveStartInput {
   name?: string | undefined
   sessionDir?: string | undefined
   sessionPath?: string | undefined
+  /** Internal-only action for a server-resolved Pi history JSONL. Never accepted from the generic public start endpoint. */
+  historyAction?: PiLiveHistoryAction | undefined
 }
 
 export interface PiLiveAvailability {

@@ -2,9 +2,46 @@ import { createHash } from 'node:crypto'
 import type { RuntimeProfile, RuntimeProfileIdentityHint } from '@agent-lens/core'
 import { SqliteExecutor } from './executor'
 
+type RuntimeProfileRow = Record<string, unknown>
+
 function stableId(parts: unknown[]): string {
   const digest = createHash('sha256').update(JSON.stringify(parts)).digest('hex').slice(0, 32)
   return `runtime-profile-${digest}`
+}
+
+function rowRecord(value: unknown): RuntimeProfileRow | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as RuntimeProfileRow
+    : null
+}
+
+function requiredString(row: RuntimeProfileRow, key: string): string {
+  const value = row[key]
+  if (typeof value !== 'string') throw new TypeError(`SQLite runtime profile field ${key} must be a string`)
+  return value
+}
+
+function optionalString(row: RuntimeProfileRow, key: string): string | undefined {
+  const value = row[key]
+  if (value == null) return undefined
+  if (typeof value !== 'string') throw new TypeError(`SQLite runtime profile field ${key} must be a string or null`)
+  return value
+}
+
+function mapRuntimeProfile(row: RuntimeProfileRow): RuntimeProfile {
+  const name = optionalString(row, 'name')
+  const configRoot = optionalString(row, 'config_root')
+  const dataRoot = optionalString(row, 'data_root')
+  return {
+    id: requiredString(row, 'id'),
+    installationId: requiredString(row, 'installation_id'),
+    nativeProfileId: requiredString(row, 'native_profile_id'),
+    ...(name === undefined ? {} : { name }),
+    ...(configRoot === undefined ? {} : { configRoot }),
+    ...(dataRoot === undefined ? {} : { dataRoot }),
+    firstSeenAt: requiredString(row, 'first_seen_at'),
+    lastSeenAt: requiredString(row, 'last_seen_at'),
+  }
 }
 
 export class SqliteRuntimeProfileRepository {
@@ -12,19 +49,23 @@ export class SqliteRuntimeProfileRepository {
 
   async resolve(hint: RuntimeProfileIdentityHint): Promise<RuntimeProfile> {
     return this.executor.run(() => {
-      const existing = this.executor.db.prepare(`
+      const existing = rowRecord(this.executor.db.prepare(`
         SELECT * FROM runtime_profiles
         WHERE installation_id = ? AND native_profile_id = ?
-      `).get(hint.installationId, hint.nativeProfileId) as any
+      `).get(hint.installationId, hint.nativeProfileId))
       const now = new Date().toISOString()
+      const existingProfile = existing ? mapRuntimeProfile(existing) : null
+      const name = hint.name ?? existingProfile?.name
+      const configRoot = hint.configRoot ?? existingProfile?.configRoot
+      const dataRoot = hint.dataRoot ?? existingProfile?.dataRoot
       const profile: RuntimeProfile = {
-        id: existing?.id ?? stableId([hint.installationId, hint.nativeProfileId]),
+        id: existingProfile?.id ?? stableId([hint.installationId, hint.nativeProfileId]),
         installationId: hint.installationId,
         nativeProfileId: hint.nativeProfileId,
-        ...(hint.name ?? existing?.name ? { name: hint.name ?? existing.name } : {}),
-        ...(hint.configRoot ?? existing?.config_root ? { configRoot: hint.configRoot ?? existing.config_root } : {}),
-        ...(hint.dataRoot ?? existing?.data_root ? { dataRoot: hint.dataRoot ?? existing.data_root } : {}),
-        firstSeenAt: existing?.first_seen_at ?? now,
+        ...(name === undefined ? {} : { name }),
+        ...(configRoot === undefined ? {} : { configRoot }),
+        ...(dataRoot === undefined ? {} : { dataRoot }),
+        firstSeenAt: existingProfile?.firstSeenAt ?? now,
         lastSeenAt: now,
       }
       this.executor.db.prepare(`
@@ -52,18 +93,8 @@ export class SqliteRuntimeProfileRepository {
 
   async get(id: string): Promise<RuntimeProfile | null> {
     return this.executor.run(() => {
-      const row = this.executor.db.prepare('SELECT * FROM runtime_profiles WHERE id = ?').get(id) as any
-      if (!row) return null
-      return {
-        id: row.id,
-        installationId: row.installation_id,
-        nativeProfileId: row.native_profile_id,
-        ...(row.name ? { name: row.name } : {}),
-        ...(row.config_root ? { configRoot: row.config_root } : {}),
-        ...(row.data_root ? { dataRoot: row.data_root } : {}),
-        firstSeenAt: row.first_seen_at,
-        lastSeenAt: row.last_seen_at,
-      }
+      const row = rowRecord(this.executor.db.prepare('SELECT * FROM runtime_profiles WHERE id = ?').get(id))
+      return row ? mapRuntimeProfile(row) : null
     })
   }
 

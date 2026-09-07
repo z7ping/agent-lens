@@ -23,7 +23,6 @@ import type {
   SourceRecord,
   SourceRecordEmitter,
 } from '@agent-lens/core'
-import { defineAgentLensPlugin, type AgentLensContext } from '@agent-lens/runtime-cordis'
 
 const SOURCE_ID = 'dsh'
 const PARSER_VERSION = '2'
@@ -224,7 +223,7 @@ async function readSession(path: string): Promise<ParsedSession | null> {
   return parseDshJsonl(decodeSession(await readFile(path), path), path)
 }
 
-export async function detectDsh(ctx: SourceDetectionContext): Promise<DetectedSource[]> {
+async function detectDsh(ctx: SourceDetectionContext): Promise<DetectedSource[]> {
   const env = ctx.env ?? process.env
   const detected: DetectedSource[] = []
   for (const profile of await profileRoots(env)) {
@@ -356,7 +355,7 @@ async function emitChangedSession(
   }
 }
 
-export async function startDshRuntimeCapture(
+async function startDshRuntimeCapture(
   ctx: SourceExecutionContext,
   emitter: SourceRecordEmitter,
 ): Promise<Disposable> {
@@ -597,7 +596,7 @@ export async function normalizeDshRecord(record: SourceRecord, _ctx: SourceNorma
   return { observations, evidenceCandidates: [evidenceFor(record)] }
 }
 
-export async function declareDshCapabilities(_detected: DetectedSource): Promise<ObservationCapability[]> {
+async function declareDshCapabilities(_detected: DetectedSource): Promise<ObservationCapability[]> {
   return [
     { sourceId: SOURCE_ID, name: 'session', status: 'available', captureModes: ['history', 'native-tail'] },
     { sourceId: SOURCE_ID, name: 'transcript', status: 'available', captureModes: ['history', 'native-tail'] },
@@ -616,7 +615,7 @@ export async function declareDshCapabilities(_detected: DetectedSource): Promise
 
 export const dshManifest: SourcePluginManifest = {
   pluginId: '@agent-lens/source-dsh',
-  pluginVersion: '1.0.0-alpha.2',
+  pluginVersion: '1.0.0-alpha.3',
   apiVersion: '1.0',
   pluginType: 'source',
   displayName: 'DeepSeek Harness Source',
@@ -634,16 +633,6 @@ export const dshSourceDefinition: SourceDefinition = {
   startCapture: startDshRuntimeCapture,
   normalize: normalizeDshRecord,
 }
-
-const applyDshSource = Object.assign(
-  (ctx: AgentLensContext) => {
-    const registration = ctx.sources.register(dshSourceDefinition)
-    return () => registration.dispose()
-  },
-  { inject: ['sources'] },
-)
-
-export const dshSourcePlugin = defineAgentLensPlugin(dshManifest, applyDshSource)
 
 export const dshSourceInternals = {
   dshHome,

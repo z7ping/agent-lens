@@ -130,9 +130,9 @@ jobs:
         run: |
           PROFILE="${{ github.event.inputs.profile || 'smoke' }}"
           case "$PROFILE" in
-            smoke) echo 'args=--installations=2 --sessions-per-installation=10 --calls-per-session=10 --evidence-per-observation=1 --samples=3 --limit=100' >> "$GITHUB_OUTPUT" ;;
-            s) echo 'args=--installations=4 --sessions-per-installation=50 --calls-per-session=50 --evidence-per-observation=1 --samples=8 --limit=100' >> "$GITHUB_OUTPUT" ;;
-            m) echo 'args=--installations=6 --sessions-per-installation=100 --calls-per-session=100 --evidence-per-observation=1 --samples=10 --limit=100' >> "$GITHUB_OUTPUT" ;;
+            smoke) echo 'args=--installations=2 --sessions-per-installation=10 --calls-per-session=10 --evidence-per-observation=1 --samples=3 --limit=100 --global-p95-budget-ms=500 --overview-p95-budget-ms=1000' >> "$GITHUB_OUTPUT" ;;
+            s) echo 'args=--installations=4 --sessions-per-installation=50 --calls-per-session=50 --evidence-per-observation=1 --samples=8 --limit=100 --global-p95-budget-ms=3000 --overview-p95-budget-ms=5000' >> "$GITHUB_OUTPUT" ;;
+            m) echo 'args=--installations=6 --sessions-per-installation=100 --calls-per-session=100 --evidence-per-observation=1 --samples=10 --limit=100 --global-p95-budget-ms=15000 --overview-p95-budget-ms=20000' >> "$GITHUB_OUTPUT" ;;
             *) echo "Unknown profile: $PROFILE" >&2; exit 1 ;;
           esac
           echo "profile=$PROFILE" >> "$GITHUB_OUTPUT"
@@ -140,7 +140,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p performance-artifacts
-          npm run perf:tool-overview -- ${{ steps.profile.outputs.args }} | tee performance-artifacts/tool-overview-${{ steps.profile.outputs.profile }}.txt
+          node --import tsx scripts/performance/tool-overview-benchmark.ts ${{ steps.profile.outputs.args }} | tee performance-artifacts/tool-overview-${{ steps.profile.outputs.profile }}.txt
       - name: Upload performance report
         uses: actions/upload-artifact@v4
         with:

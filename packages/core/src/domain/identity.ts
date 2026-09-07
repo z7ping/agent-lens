@@ -9,6 +9,7 @@ import type {
   LogicalSessionId,
   ProjectId,
   RuntimeProfileId,
+  SourceRecordId,
   SourceSessionId,
   WorkspaceId,
 } from './common'
@@ -94,7 +95,11 @@ export type SessionRelationshipType =
   | 'resume'
   | 'continuation'
   | 'fork'
+  | 'branch-task'
   | 'subagent'
+  | 'internal-review'
+  /** Native metadata explicitly associates an internal session with its root user task. */
+  | 'task-root'
   | 'import-copy'
   | 'related'
 
@@ -111,6 +116,8 @@ export interface SessionRelationshipCandidate {
   sourceId: string
   installationId: AgentInstallationId
   runtimeProfileId?: RuntimeProfileId
+  /** SourceRecord that produced this parser-derived relationship candidate. */
+  sourceRecordId?: SourceRecordId
   fromNativeSessionId: string
   toNativeSessionId: string
   nativeParentEventId?: string

@@ -1,5 +1,6 @@
 import type { KnownReplicationEntityType } from '@agent-lens/core/replication'
 import type { SqliteExecutor } from './executor'
+import { canonicalChangeRow, revisionRow } from './replication-state-rows'
 
 export interface CanonicalChangeEntry {
   revision: number
@@ -22,10 +23,10 @@ export class SqliteReplicationCanonicalChangeReader {
   constructor(private readonly executor: SqliteExecutor) {}
 
   async highWaterRevision(): Promise<number> {
-    return this.executor.run(() => Number((this.executor.db.prepare(`
+    return this.executor.run(() => revisionRow(this.executor.db.prepare(`
       SELECT COALESCE(MAX(revision), 0) AS revision
       FROM replication_canonical_changes
-    `).get() as { revision: number }).revision))
+    `).get()))
   }
 
   async scan(input: {
@@ -59,7 +60,7 @@ export class SqliteReplicationCanonicalChangeReader {
         ${entityFilter}
         ORDER BY revision ASC
         LIMIT ?
-      `).all(...params) as CanonicalChangeEntry[]
+      `).all(...params).map(canonicalChangeRow)
 
       const nextRevision = rows.at(-1)?.revision ?? afterRevision
       return {

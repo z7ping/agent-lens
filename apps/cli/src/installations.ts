@@ -21,7 +21,6 @@ export interface InstallationRecord {
   registeredAt: string
   updatedAt: string
 }
-
 export interface InstallationStatus {
   kind: InstallationKind
   record: InstallationRecord | null
@@ -42,11 +41,11 @@ function dataRoot(homeDir = homedir()): string {
   return join(homeDir, '.agent-lens', '1.0')
 }
 
-export function installationsDir(homeDir = homedir()): string {
+function installationsDir(homeDir = homedir()): string {
   return join(dataRoot(homeDir), 'installations')
 }
 
-export function installationPath(kind: InstallationKind, homeDir = homedir()): string {
+function installationPath(kind: InstallationKind, homeDir = homedir()): string {
   return join(installationsDir(homeDir), `${kind}.json`)
 }
 
@@ -109,30 +108,4 @@ export function getInstallationStatusSync(kind: InstallationKind, homeDir?: stri
   const record = readRecordSync(kind, homeDir)
   const validity = validateRecord(record)
   return { kind, record, ...validity }
-}
-
-export function listInstallationStatusSync(homeDir?: string): InstallationStatus[] {
-  return [
-    getInstallationStatusSync('desktop', homeDir),
-    getInstallationStatusSync('npm', homeDir),
-  ]
-}
-
-export async function registerInstallation(input: RegisterInstallationInput): Promise<InstallationRecord> {
-  return registerInstallationSync(input)
-}
-
-export async function getInstallationStatus(kind: InstallationKind, homeDir?: string): Promise<InstallationStatus> {
-  return getInstallationStatusSync(kind, homeDir)
-}
-
-export async function listInstallationStatus(homeDir?: string): Promise<InstallationStatus[]> {
-  return listInstallationStatusSync(homeDir)
-}
-
-export const installationInternals = {
-  dataRoot,
-  isInstallationRecord,
-  validateRecord,
-  readRecordSync,
 }

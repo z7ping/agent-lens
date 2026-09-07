@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import type { AgentAssetInventoryDto, AgentOverviewDto, CapturePolicyResponseDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
-import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
+import { AgentScope, agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScope'
 import { CompactPageHeading } from '../components/CompactPageHeading'
 import { IconButton, Toolbar, UiIcon } from '../components/ui'
 import { copyText } from '../client/clipboard'
@@ -161,11 +161,15 @@ function AssetCard({ agent, asset }: { agent: AgentOverviewDto; asset: AgentAsse
   </div>
 }
 
+function DisclosureChevron() {
+  return <UiIcon className="disclosure-chevron" name="chevron-right" size={14}/>
+}
+
 function AssetGroup({ agent, type, assets }: { agent: AgentOverviewDto; type: string; assets: AgentAssetInventoryDto[] }) {
   const [showAll, setShowAll] = useState(false)
   const shown = showAll ? assets : assets.slice(0, USER_ASSET_LIMIT)
   return <details className="disclosure-group">
-    <summary><span>{assetTypeLabel[type] ?? type}</span><span className="disclosure-count">{assets.length}</span></summary>
+    <summary><DisclosureChevron/><span>{assetTypeLabel[type] ?? type}</span><span className="disclosure-count">{assets.length}</span></summary>
     <div className="asset-list-grid">{shown.map(asset => <AssetCard key={asset.id} agent={agent} asset={asset}/>)}</div>
     {assets.length > USER_ASSET_LIMIT && <button className="show-more-button" onClick={() => setShowAll(value => !value)}>{showAll ? '收起' : `查看更多 ${assets.length - USER_ASSET_LIMIT} 个`}</button>}
   </details>
@@ -337,7 +341,7 @@ function AgentCard({ agent, policy, onCaptureChange }: {
     <section className="agent-secondary">
       {builtinAssets.length > 0 && <AssetGroup agent={agent} type="builtin" assets={builtinAssets}/>} 
       <details className="disclosure-group">
-        <summary><span>装配路径</span><span className="disclosure-count">{bindings.length}</span></summary>
+        <summary><DisclosureChevron/><span>装配路径</span><span className="disclosure-count">{bindings.length}</span></summary>
         <div className="assembly-list">
           {installation?.executable && <div><span>可执行文件</span><code>{installation.executable}</code></div>}
           {installation?.configRoot && <div><span>配置</span><code>{installation.configRoot}</code></div>}
@@ -348,7 +352,7 @@ function AgentCard({ agent, policy, onCaptureChange }: {
         {bindings.length > ASSEMBLY_PATH_LIMIT && <button className="show-more-button" onClick={() => setShowAllBindings(value => !value)}>{showAllBindings ? '收起' : `查看更多 ${bindings.length - ASSEMBLY_PATH_LIMIT} 条路径`}</button>}
       </details>
       <details className="disclosure-group">
-        <summary><span>可观测能力</span><span className="disclosure-count">{agent.capabilities.length}</span></summary>
+        <summary><DisclosureChevron/><span>可观测能力</span><span className="disclosure-count">{agent.capabilities.length}</span></summary>
         <div className="capability-list">
           {agent.capabilities.map(cap => <div key={cap.name} className="capability-row" title={capabilityDetail(cap)}><span>{capabilityLabel[cap.name] ?? cap.name} · {capabilityDetail(cap)}</span><b data-status={cap.status}>{capabilityStatusLabel[cap.status] ?? cap.status}</b></div>)}
         </div>
@@ -359,8 +363,8 @@ function AgentCard({ agent, policy, onCaptureChange }: {
 
 export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: AgentLensClientModel; sourceId: string; onSourceIdChange(sourceId: string): void }) {
   const snapshot = useClientSnapshot(model)
-  const agents = snapshot.facets?.agents ?? []
-  const items = snapshot.agents?.items ?? []
+  const agents = useOrderedAgents(snapshot.facets?.agents ?? [])
+  const items = useOrderedAgents(snapshot.agents?.items ?? [])
   const fallbackSourceId = items.find(item => item.detected)?.sourceId || items[0]?.sourceId || ''
   const selectedSourceId = items.some(item => item.sourceId === sourceId) ? sourceId : fallbackSourceId
   const selectedAgent = items.find(item => item.sourceId === selectedSourceId)

@@ -17,4 +17,4 @@ export interface SourceRuntimeStatus {
   checkpointSummary?: string
 }
 
-export interface SourceRuntimeStatusInput extends SourceRuntimeStatus {}
+export type SourceRuntimeStatusInput = SourceRuntimeStatus

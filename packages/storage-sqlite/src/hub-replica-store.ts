@@ -1,5 +1,8 @@
 import type { JsonValue } from '@agent-lens/core'
-import type { KnownReplicationEntityType } from '@agent-lens/core/replication'
+import {
+  KNOWN_REPLICATION_ENTITY_TYPES,
+  type KnownReplicationEntityType,
+} from '@agent-lens/core/replication'
 import type { SqliteExecutor } from './executor'
 
 export type SqliteHubReplicaGenerationStatus = 'staged' | 'active' | 'retired'
@@ -63,47 +66,138 @@ export interface SqliteHubRemoteSharedIdentityRecord {
   updatedAt: string
 }
 
-interface GenerationRow {
-  originNodeId: string
-  generationId: string
-  status: SqliteHubReplicaGenerationStatus
-  createdAt: string
-  activatedAt: string | null
-  retiredAt: string | null
+type HubRow = Record<string, unknown>
+const GENERATION_STATUSES = ['staged', 'active', 'retired'] as const
+const STREAM_STATUSES = ['active', 'paused', 'revoked'] as const
+const REMOTE_SCOPES = ['node', 'shared'] as const
+
+function rowRecord(value: unknown): HubRow {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError('Hub replica SQLite query returned a non-object row')
+  }
+  return value as HubRow
 }
 
-interface StreamRow {
-  streamId: string
-  originNodeId: string
-  status: SqliteHubReplicationStreamStatus
-  ackSequence: number
-  createdAt: string
-  updatedAt: string
+function requiredString(row: HubRow, key: string): string {
+  const value = row[key]
+  if (typeof value !== 'string') throw new TypeError(`Hub replica SQLite field ${key} must be a string`)
+  return value
 }
 
-interface BatchRow {
-  streamId: string
-  sequence: number
-  originNodeId: string
-  generationId: string
-  batchId: string
-  contentHash: string
-  committedAt: string
+function optionalString(row: HubRow, key: string): string | undefined {
+  const value = row[key]
+  if (value == null) return undefined
+  if (typeof value !== 'string') throw new TypeError(`Hub replica SQLite field ${key} must be a string or null`)
+  return value
 }
 
-function mapGeneration(row: GenerationRow): SqliteHubReplicaGenerationRecord {
+function requiredNumber(row: HubRow, key: string): number {
+  const value = row[key]
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new TypeError(`Hub replica SQLite field ${key} must be a finite number`)
+  }
+  return value
+}
+
+function enumString<const T extends readonly string[]>(row: HubRow, key: string, allowed: T): T[number] {
+  const value = requiredString(row, key)
+  if (!(allowed as readonly string[]).includes(value)) {
+    throw new TypeError(`Hub replica SQLite field ${key} has unsupported value: ${value}`)
+  }
+  return value as T[number]
+}
+
+function entityType(row: HubRow): KnownReplicationEntityType {
+  return enumString(row, 'entityType', KNOWN_REPLICATION_ENTITY_TYPES)
+}
+
+function jsonValue(value: unknown, key: string): JsonValue {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return value
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (Array.isArray(value)) return value.map(item => jsonValue(item, key))
+  if (typeof value === 'object') {
+    const output: { [key: string]: JsonValue } = {}
+    for (const [entryKey, entryValue] of Object.entries(value)) output[entryKey] = jsonValue(entryValue, key)
+    return output
+  }
+  throw new TypeError(`Hub replica SQLite field ${key} must contain JSON data`)
+}
+
+function parseJson(value: unknown, key: string): JsonValue {
+  if (typeof value !== 'string') throw new TypeError(`Hub replica SQLite field ${key} must contain JSON text`)
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(value)
+  } catch {
+    throw new TypeError(`Hub replica SQLite field ${key} contains invalid JSON`)
+  }
+  return jsonValue(parsed, key)
+}
+
+function mapGeneration(value: unknown): SqliteHubReplicaGenerationRecord {
+  const row = rowRecord(value)
+  const activatedAt = optionalString(row, 'activatedAt')
+  const retiredAt = optionalString(row, 'retiredAt')
   return {
-    originNodeId: row.originNodeId,
-    generationId: row.generationId,
-    status: row.status,
-    createdAt: row.createdAt,
-    ...(row.activatedAt ? { activatedAt: row.activatedAt } : {}),
-    ...(row.retiredAt ? { retiredAt: row.retiredAt } : {}),
+    originNodeId: requiredString(row, 'originNodeId'),
+    generationId: requiredString(row, 'generationId'),
+    status: enumString(row, 'status', GENERATION_STATUSES),
+    createdAt: requiredString(row, 'createdAt'),
+    ...(activatedAt === undefined ? {} : { activatedAt }),
+    ...(retiredAt === undefined ? {} : { retiredAt }),
+  }
+}
+
+function mapStream(value: unknown): SqliteHubReplicationStreamRecord {
+  const row = rowRecord(value)
+  return {
+    streamId: requiredString(row, 'streamId'),
+    originNodeId: requiredString(row, 'originNodeId'),
+    status: enumString(row, 'status', STREAM_STATUSES),
+    ackSequence: requiredNumber(row, 'ackSequence'),
+    createdAt: requiredString(row, 'createdAt'),
+    updatedAt: requiredString(row, 'updatedAt'),
+  }
+}
+
+function mapBatch(value: unknown): SqliteHubCommittedBatchRecord {
+  const row = rowRecord(value)
+  return {
+    streamId: requiredString(row, 'streamId'),
+    sequence: requiredNumber(row, 'sequence'),
+    originNodeId: requiredString(row, 'originNodeId'),
+    generationId: requiredString(row, 'generationId'),
+    batchId: requiredString(row, 'batchId'),
+    contentHash: requiredString(row, 'contentHash'),
+    committedAt: requiredString(row, 'committedAt'),
+  }
+}
+
+function mapEntity(value: unknown): SqliteHubRemoteReplicaEntityRecord {
+  const row = rowRecord(value)
+  const referencesJson = optionalString(row, 'referencesJson')
+  const sharedIdentityJson = optionalString(row, 'sharedIdentityJson')
+  return {
+    originNodeId: requiredString(row, 'originNodeId'),
+    generationId: requiredString(row, 'generationId'),
+    entityType: entityType(row),
+    originEntityId: requiredString(row, 'originEntityId'),
+    replicaKey: requiredString(row, 'replicaKey'),
+    scope: enumString(row, 'scope', REMOTE_SCOPES),
+    entityVersion: requiredNumber(row, 'entityVersion'),
+    contentHash: requiredString(row, 'contentHash'),
+    body: parseJson(row.bodyJson, 'bodyJson'),
+    ...(referencesJson === undefined ? {} : { references: parseJson(referencesJson, 'referencesJson') }),
+    ...(sharedIdentityJson === undefined ? {} : { sharedIdentity: parseJson(sharedIdentityJson, 'sharedIdentityJson') }),
+    updatedSequence: requiredNumber(row, 'updatedSequence'),
+    updatedAt: requiredString(row, 'updatedAt'),
   }
 }
 
 function stringify(value: unknown): string {
-  return JSON.stringify(value)
+  const result = JSON.stringify(value)
+  if (result === undefined) throw new TypeError('Hub replica persistence requires JSON-serializable values')
+  return result
 }
 
 /**
@@ -128,8 +222,8 @@ export class SqliteHubReplicaStore {
                updated_at AS updatedAt
         FROM hub_replication_streams
         WHERE stream_id = ?
-      `).get(streamId) as StreamRow | undefined
-      return row
+      `).get(streamId)
+      return row ? mapStream(row) : undefined
     })
   }
 
@@ -158,7 +252,7 @@ export class SqliteHubReplicaStore {
                retired_at AS retiredAt
         FROM hub_replica_generations
         WHERE origin_node_id = ? AND generation_id = ?
-      `).get(originNodeId, generationId) as GenerationRow | undefined
+      `).get(originNodeId, generationId)
       return row ? mapGeneration(row) : undefined
     })
   }
@@ -186,7 +280,7 @@ export class SqliteHubReplicaStore {
 
   async getCommittedBatch(streamId: string, sequence: number): Promise<SqliteHubCommittedBatchRecord | undefined> {
     return this.executor.run(() => {
-      return this.executor.db.prepare(`
+      const row = this.executor.db.prepare(`
         SELECT stream_id AS streamId,
                sequence,
                origin_node_id AS originNodeId,
@@ -196,7 +290,8 @@ export class SqliteHubReplicaStore {
                committed_at AS committedAt
         FROM hub_committed_batches
         WHERE stream_id = ? AND sequence = ?
-      `).get(streamId, sequence) as BatchRow | undefined
+      `).get(streamId, sequence)
+      return row ? mapBatch(row) : undefined
     })
   }
 
@@ -291,23 +386,8 @@ export class SqliteHubReplicaStore {
                updated_at AS updatedAt
         FROM hub_remote_replica_entities
         WHERE origin_node_id = ? AND generation_id = ? AND entity_type = ? AND origin_entity_id = ?
-      `).get(input.originNodeId, input.generationId, input.entityType, input.originEntityId) as any
-      if (!row) return undefined
-      return {
-        originNodeId: row.originNodeId,
-        generationId: row.generationId,
-        entityType: row.entityType,
-        originEntityId: row.originEntityId,
-        replicaKey: row.replicaKey,
-        scope: row.scope,
-        entityVersion: Number(row.entityVersion),
-        contentHash: row.contentHash,
-        body: JSON.parse(row.bodyJson) as JsonValue,
-        ...(row.referencesJson ? { references: JSON.parse(row.referencesJson) } : {}),
-        ...(row.sharedIdentityJson ? { sharedIdentity: JSON.parse(row.sharedIdentityJson) } : {}),
-        updatedSequence: Number(row.updatedSequence),
-        updatedAt: row.updatedAt,
-      }
+      `).get(input.originNodeId, input.generationId, input.entityType, input.originEntityId)
+      return row ? mapEntity(row) : undefined
     })
   }
 
