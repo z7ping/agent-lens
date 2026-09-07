@@ -58,7 +58,7 @@ const changelogHeading = `## ${requested}`
 const date = new Date().toISOString().slice(0, 10)
 const nextChangelog = changelog.includes(changelogHeading)
   ? changelog
-  : `${changelogHeading}（${date}）\n\n### Changed\n- 版本更新至 ${requested}，详见本次发布说明。\n\n${changelog}`
+  : `${changelogHeading}（${date}）\n\n### 调整\n- 版本更新至 ${requested}，详见本次发布说明。\n\n${changelog}`
 
 const changes = new Map()
 for (const { path, value } of packages) {
