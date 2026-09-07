@@ -1,8 +1,10 @@
 import { constants } from 'node:fs'
 import { access } from 'node:fs/promises'
-import { spawn } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { dirname, extname, join } from 'node:path'
+import { promisify } from 'node:util'
 
+const execFileAsync = promisify(execFile)
 const SHELL_PATH_BEGIN = '__AGENT_LENS_PATH_BEGIN__'
 const SHELL_PATH_END = '__AGENT_LENS_PATH_END__'
 const SHELL_PATH_TIMEOUT_MS = 1500
@@ -21,7 +23,6 @@ function pathRoots(value: string | undefined, platform: NodeJS.Platform): string
   const separator = platform === 'win32' ? ';' : ':'
   return value
     .split(separator)
-    .map(item => item.trim())
     .map(item => item.length >= 2 && item.startsWith('"') && item.endsWith('"') ? item.slice(1, -1) : item)
     .filter(Boolean)
 }
@@ -69,28 +70,20 @@ function parseShellPath(output: string): string | undefined {
   const valueStart = start + SHELL_PATH_BEGIN.length
   const end = output.indexOf(SHELL_PATH_END, valueStart)
   if (end < 0) return undefined
-  const value = output.slice(valueStart, end).trim()
+  const value = output.slice(valueStart, end)
   return value || undefined
 }
 
 async function readPathFromShell(shell: string): Promise<string | undefined> {
-  return new Promise(resolve => {
-    let settled = false
-    let stdout = ''
-    let timer: NodeJS.Timeout | undefined
-    const finish = (value: string | undefined) => {
-      if (settled) return
-      settled = true
-      if (timer) clearTimeout(timer)
-      resolve(value)
-    }
-
-    const child = spawn(shell, [
+  try {
+    const { stdout } = await execFileAsync(shell, [
       '-ilc',
       `printf '${SHELL_PATH_BEGIN}%s${SHELL_PATH_END}' "$PATH"; exit`,
     ], {
       windowsHide: true,
-      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: SHELL_PATH_TIMEOUT_MS,
+      maxBuffer: MAX_SHELL_OUTPUT,
+      encoding: 'utf8',
       env: {
         ...process.env,
         DISABLE_AUTO_UPDATE: 'true',
@@ -98,21 +91,10 @@ async function readPathFromShell(shell: string): Promise<string | undefined> {
         ZSH_TMUX_AUTOSTART: 'false',
       },
     })
-
-    child.stdout?.setEncoding('utf8')
-    child.stdout?.on('data', chunk => {
-      if (stdout.length >= MAX_SHELL_OUTPUT) return
-      stdout += String(chunk).slice(0, MAX_SHELL_OUTPUT - stdout.length)
-    })
-    child.once('error', () => finish(undefined))
-    child.once('exit', code => finish(code === 0 ? parseShellPath(stdout) : undefined))
-
-    timer = setTimeout(() => {
-      child.kill('SIGTERM')
-      finish(undefined)
-    }, SHELL_PATH_TIMEOUT_MS)
-    timer.unref?.()
-  })
+    return parseShellPath(stdout)
+  } catch {
+    return undefined
+  }
 }
 
 export async function resolveLoginShellPath(platform: NodeJS.Platform = process.platform): Promise<string | undefined> {
