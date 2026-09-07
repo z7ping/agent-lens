@@ -93,6 +93,40 @@ export interface ToolUsageAggregateResult {
   unattributedToolCalls: number
 }
 
+export interface ToolUsageWorkflowPatternQuery {
+  projectId?: ProjectId
+  sourceId?: string
+  from?: string
+  to?: string
+  minimumSessions: number
+  patternLimit: number
+  sessionSampleLimit: number
+  observationSampleLimit: number
+}
+
+export interface ToolUsageWorkflowPatternRecord {
+  key: string
+  steps: string[]
+  sessionCount: number
+  occurrenceCount: number
+  sampleSessionIds: LogicalSessionId[]
+  observationIds: ObservationId[]
+}
+
+/** Deterministic workflow taxonomy shared by portable and storage-side aggregators. */
+export function toolUsageWorkflowCategory(nativeName: string): string {
+  const lower = nativeName.toLowerCase()
+  const mcp = lower.match(/^mcp__(.+?)__(.+)$/)
+  if (mcp?.[1]) return `MCP：${mcp[1]}`
+  if (lower === 'skill') return '技能调用'
+  if (/(^|[_-])(read|cat|view|open)([_-]|$)/.test(lower)) return '读取文件'
+  if (/(^|[_-])(write|edit|patch|apply)([_-]|$)/.test(lower)) return '修改文件'
+  if (/(^|[_-])(grep|search|find|glob|list)([_-]|$)/.test(lower)) return '搜索定位'
+  if (/(^|[_-])(bash|shell|exec|terminal|command|run)([_-]|$)/.test(lower)) return '命令执行'
+  if (/(^|[_-])(web|http|fetch|browser)([_-]|$)/.test(lower)) return '网络访问'
+  return nativeName
+}
+
 /**
  * Narrow read-only storage contract for usage projections.
  * It deliberately excludes Evidence and unrelated Observation fields so
@@ -107,4 +141,6 @@ export interface ToolUsageObservationReader {
   aggregate?(input: ToolUsageAggregateQuery): Promise<ToolUsageAggregateResult>
   /** Exact asset totals partitioned by source, for source-oriented surfaces. */
   aggregateAssetsBySource?(input: ToolUsageAggregateQuery): Promise<ToolUsageAggregateAssetRecord[]>
+  /** Exact workflow n-gram summaries derived from the incrementally maintained Tool Fact layer. */
+  workflowPatterns?(input: ToolUsageWorkflowPatternQuery): Promise<ToolUsageWorkflowPatternRecord[]>
 }
