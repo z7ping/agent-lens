@@ -187,6 +187,15 @@ export async function resolveExecutable(
 
 const shimResolvers: readonly ShimResolver[] = [
   {
+    id: 'asdf',
+    managerCommand: 'asdf',
+    targetArgs: name => ['which', name],
+    matches: async executable => {
+      const prefix = await readPrefix(executable)
+      return Boolean(prefix && /\basdf\s+exec\b/.test(prefix))
+    },
+  },
+  {
     id: 'volta',
     managerCommand: 'volta',
     targetArgs: name => ['which', name],
@@ -197,15 +206,6 @@ const shimResolvers: readonly ShimResolver[] = [
     managerCommand: 'mise',
     targetArgs: name => ['which', name],
     matches: (executable, managerExecutable, platform) => sameCanonicalPath(executable, managerExecutable, platform),
-  },
-  {
-    id: 'asdf',
-    managerCommand: 'asdf',
-    targetArgs: name => ['which', name],
-    matches: async executable => {
-      const prefix = await readPrefix(executable)
-      return Boolean(prefix && /\basdf\s+exec\b/.test(prefix))
-    },
   },
 ]
 
@@ -243,8 +243,21 @@ export async function resolveManagedExecutableTarget(
   executable: string,
   options: Pick<ExecutableDiscoveryOptions, 'platform' | 'pathValue' | 'shellPathResolver'> = {},
 ): Promise<string> {
+  const platform = options.platform ?? process.platform
+  let shellPathPromise: Promise<string | undefined> | undefined
+  const sourceShellPathResolver = options.shellPathResolver ?? (() => resolveLoginShellPath(platform))
+  const sharedShellPathResolver = () => {
+    shellPathPromise ??= Promise.resolve(sourceShellPathResolver())
+    return shellPathPromise
+  }
+  const sharedOptions = {
+    ...options,
+    platform,
+    shellPathResolver: sharedShellPathResolver,
+  }
+
   for (const resolver of shimResolvers) {
-    const target = await resolveWithShimManager(resolver, name, executable, options)
+    const target = await resolveWithShimManager(resolver, name, executable, sharedOptions)
     if (target) return target
   }
 
