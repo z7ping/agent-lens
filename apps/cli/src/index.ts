@@ -334,7 +334,12 @@ async function runHook(action: string, targetValue: string | undefined, json: bo
 async function startDaemon(owner: RuntimeOwner = 'cli', mode: RuntimeMode = 'foreground'): Promise<number> {
   try {
     const health = await fetchHealth()
-    console.log(`AgentLens 已在运行（管理方式：${runtimeOwnerLabel(runtimeOwner(health))}）`)
+    const existingOwner = runtimeOwner(health)
+    if (mode === 'managed' && owner === 'service' && existingOwner !== 'service') {
+      console.error(`当前运行时由${runtimeOwnerLabel(existingOwner)}管理，后台服务不会强行接管。`)
+      return 1
+    }
+    console.log(`AgentLens 已在运行（管理方式：${runtimeOwnerLabel(existingOwner)}）`)
     console.log(`Web: ${daemonUrl('/')}`)
     return 0
   } catch {
@@ -405,12 +410,13 @@ async function runService(action: string, json: boolean): Promise<number> {
 
   const options = lifecycleOptions()
   const before = await healthOrNull()
-  if (action === 'restart' && before && runtimeOwner(before) !== 'service') {
+  const beforeOwner = before ? runtimeOwner(before) : null
+  if ((action === 'start' || action === 'restart') && before && beforeOwner !== 'service') {
     const result = {
       ok: false,
       reason: 'runtime-owned-elsewhere',
-      owner: runtimeOwner(before),
-      message: `当前运行时由${runtimeOwnerLabel(runtimeOwner(before))}管理，后台服务不会强行接管。`,
+      owner: beforeOwner,
+      message: `当前运行时由${runtimeOwnerLabel(beforeOwner)}管理，后台服务不会强行接管。`,
     }
     if (json) console.log(JSON.stringify(result, null, 2))
     else console.log(result.message)
@@ -432,31 +438,53 @@ async function runService(action: string, json: boolean): Promise<number> {
       if (!health || runtimeOwner(health) !== 'service') break
     }
   }
+  if (action !== 'status') lifecycle = await getLifecycleStatus(options)
 
+  const owner = health ? runtimeOwner(health) : null
+  let reason: string | null = null
+  let message: string | null = null
+  if (action === 'start' || action === 'restart') {
+    if (!lifecycle.active || !health || owner !== 'service') {
+      reason = 'service-not-ready'
+      message = `后台服务未进入可用状态：${lifecycleDetail(lifecycle)}；运行时=${health ? runtimeOwnerLabel(owner) : '离线'}`
+    }
+  } else if (action === 'stop') {
+    if (lifecycle.active || owner === 'service') {
+      reason = 'service-still-running'
+      message = `后台服务停止后仍处于活动状态：${lifecycleDetail(lifecycle)}；运行时=${health ? runtimeOwnerLabel(owner) : '离线'}`
+    }
+  }
+
+  const ok = reason === null
   const result = {
-    ok: true,
+    ok,
     action,
+    ...(reason ? { reason, message } : {}),
     lifecycle,
     runtime: health
-      ? { online: true, owner: runtimeOwner(health), url: daemonUrl('/') }
+      ? { online: true, owner, url: daemonUrl('/') }
       : { online: false, url: daemonUrl('/') },
   }
   if (json) {
     console.log(JSON.stringify(result, null, 2))
-    return 0
+    return ok ? 0 : 1
   }
 
-  if (action === 'start') console.log('AgentLens 后台服务启动请求已完成。')
-  else if (action === 'stop') console.log('AgentLens 后台服务停止请求已完成。')
-  else if (action === 'restart') console.log('AgentLens 后台服务重启请求已完成。')
+  if (ok) {
+    if (action === 'start') console.log('AgentLens 后台服务已启动并确认可用。')
+    else if (action === 'stop') console.log('AgentLens 后台服务已停止。')
+    else if (action === 'restart') console.log('AgentLens 后台服务已重启并确认可用。')
+  } else if (message) {
+    console.log(message)
+  }
   printLifecycleState(lifecycle)
   if (health) {
-    console.log(`运行时：在线（管理方式：${runtimeOwnerLabel(runtimeOwner(health))}）`)
+    console.log(`运行时：在线（管理方式：${runtimeOwnerLabel(owner)}）`)
     console.log(`Web：${daemonUrl('/')}`)
   } else {
     console.log('运行时：当前离线')
   }
-  return 0
+  return ok ? 0 : 1
 }
 
 async function runAutostart(action: string, json: boolean): Promise<number> {
