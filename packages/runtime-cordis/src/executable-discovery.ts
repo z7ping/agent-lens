@@ -1,7 +1,7 @@
 import { constants } from 'node:fs'
 import { access } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
-import { delimiter, dirname, extname, join } from 'node:path'
+import { dirname, extname, join } from 'node:path'
 
 const SHELL_PATH_BEGIN = '__AGENT_LENS_PATH_BEGIN__'
 const SHELL_PATH_END = '__AGENT_LENS_PATH_END__'
@@ -16,10 +16,11 @@ export interface ExecutableDiscoveryOptions {
   shellPathResolver?: (() => Promise<string | undefined>) | undefined
 }
 
-function pathRoots(value: string | undefined): string[] {
+function pathRoots(value: string | undefined, platform: NodeJS.Platform): string[] {
   if (!value) return []
+  const separator = platform === 'win32' ? ';' : ':'
   return value
-    .split(delimiter)
+    .split(separator)
     .map(item => item.trim())
     .map(item => item.length >= 2 && item.startsWith('"') && item.endsWith('"') ? item.slice(1, -1) : item)
     .filter(Boolean)
@@ -45,7 +46,7 @@ async function isUsableExecutable(path: string, platform: NodeJS.Platform): Prom
 
 async function findInPath(name: string, pathValue: string | undefined, platform: NodeJS.Platform): Promise<string | undefined> {
   const names = executableNames(name, platform)
-  for (const root of pathRoots(pathValue)) {
+  for (const root of pathRoots(pathValue, platform)) {
     for (const candidateName of names) {
       const candidate = join(root, candidateName)
       if (await isUsableExecutable(candidate, platform)) return candidate
