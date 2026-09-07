@@ -18,22 +18,24 @@ const applySessionSummaryProjection: Plugin.Function<void> = (ctx: AgentLensCont
   let timer: ReturnType<typeof setTimeout> | undefined
   let flushPromise: Promise<void> | undefined
   let parserReplayDepth = 0
+  let disposed = false
 
   const schedule = () => {
-    if (parserReplayDepth > 0 || timer || flushPromise || pending.size === 0) return
+    if (disposed || parserReplayDepth > 0 || timer || flushPromise || pending.size === 0) return
     timer = setTimeout(() => {
       timer = undefined
+      if (disposed) return
       void flush().catch(error => {
-        console.error('[AgentLens] session summary projection refresh failed', error)
+        if (!disposed) console.error('[AgentLens] session summary projection refresh failed', error)
       })
     }, REBUILD_DEBOUNCE_MS)
   }
 
   const runPending = async () => {
-    while (pending.size > 0) {
+    while (!disposed && pending.size > 0) {
       const ids = [...pending]
       pending.clear()
-      for (let index = 0; index < ids.length; index += 1) {
+      for (let index = 0; index < ids.length && !disposed; index += 1) {
         const logicalSessionId = ids[index]!
         const scope = { subjectType: 'logical-session', subjectId: logicalSessionId }
         try {
@@ -43,7 +45,9 @@ const applySessionSummaryProjection: Plugin.Function<void> = (ctx: AgentLensCont
           })
           await ctx.projections.rebuild(SESSION_SUMMARY_PROJECTION_ID, scope)
         } catch (error) {
-          for (const remaining of ids.slice(index)) pending.add(remaining)
+          if (!disposed) {
+            for (const remaining of ids.slice(index)) pending.add(remaining)
+          }
           throw error
         }
       }
@@ -55,9 +59,13 @@ const applySessionSummaryProjection: Plugin.Function<void> = (ctx: AgentLensCont
       clearTimeout(timer)
       timer = undefined
     }
+    if (disposed) {
+      pending.clear()
+      return
+    }
     if (flushPromise) {
       await flushPromise
-      if (pending.size > 0) await flush()
+      if (!disposed && pending.size > 0) await flush()
       return
     }
     if (pending.size === 0) return
@@ -110,6 +118,17 @@ const applySessionSummaryProjection: Plugin.Function<void> = (ctx: AgentLensCont
     parserReplayDepth = Math.max(0, parserReplayDepth - 1)
     schedule()
   })
+
+  return async () => {
+    disposed = true
+    if (timer) {
+      clearTimeout(timer)
+      timer = undefined
+    }
+    pending.clear()
+    const activeFlush = flushPromise
+    if (activeFlush) await activeFlush.catch(() => undefined)
+  }
 }
 
 applySessionSummaryProjection.inject = ['storage', 'projections']

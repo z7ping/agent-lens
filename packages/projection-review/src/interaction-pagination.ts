@@ -175,12 +175,14 @@ export class ReviewInteractionPager {
     logicalSessionId: string,
     query: ReviewDetailQueryDto,
     filter: ReviewDetailFilter = 'all',
-    knownInteractionCount?: number,
   ): Promise<ReviewInteractionPage> {
     const limit = requestedLimit(query, filter === 'latest' ? 1 : undefined)
     const decoded = query.cursor ? decodeReviewCursor(query.cursor) : null
     if (decoded && (decoded.mode !== 'timeline' || decoded.direction !== 'backward')) throw new Error('Invalid review cursor')
-    const endingOrdinal = decoded?.ordinal ?? knownInteractionCount ?? await this.descriptors.count(logicalSessionId)
+    // Review interaction ordinals include all message.user boundaries plus a possible
+    // leading background round. SessionSummary.interactionCount is intentionally only
+    // the real human-user turn count, so it cannot be used as the Review ordinal tail.
+    const endingOrdinal = decoded?.ordinal ?? await this.descriptors.count(logicalSessionId)
     if (endingOrdinal < 1) {
       return { interactions: [], page: { count: 0, hasMore: false, direction: 'backward', filter } }
     }
@@ -307,19 +309,17 @@ export class ReviewInteractionPager {
         mode = filter
       } else if (filter === 'latest') {
         result = await this.backward(
-        logicalSessionId,
-        { ...query, direction: 'backward' },
-        'latest',
-        summary.interactionCount > 0 ? summary.interactionCount : undefined,
-      )
+          logicalSessionId,
+          { ...query, direction: 'backward' },
+          'latest',
+        )
         mode = 'latest'
       } else if ((query.direction ?? 'forward') === 'backward') {
         result = await this.backward(
-        logicalSessionId,
-        query,
-        'all',
-        summary.interactionCount > 0 ? summary.interactionCount : undefined,
-      )
+          logicalSessionId,
+          query,
+          'all',
+        )
         mode = 'backward'
       } else {
         result = await this.forwardBounded(logicalSessionId, query, summary)

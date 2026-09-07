@@ -282,6 +282,47 @@ export class InteractionDescriptorStore {
 
   async count(logicalSessionId: string): Promise<number> {
     const startedAt = performance.now()
+    const headers = this.storage.repositories.observations.queryHeaders
+    if (headers) {
+      let userCount = 0
+      let pages = 0
+      let after: ObservationCursor | undefined
+      while (true) {
+        const page = await headers.call(this.storage.repositories.observations, {
+          logicalSessionId,
+          kind: 'message.user',
+          ...(after ? { after } : {}),
+          limit: DESCRIPTOR_SCAN_CHUNK,
+        })
+        if (!page.length) break
+        pages += 1
+        userCount += page.length
+        after = headerCursor(page[page.length - 1]!)
+        if (page.length < DESCRIPTOR_SCAN_CHUNK) break
+      }
+
+      let leadingBackground = false
+      let probeAfter: ObservationCursor | undefined
+      outer: while (true) {
+        const probe = await headers.call(this.storage.repositories.observations, {
+          logicalSessionId,
+          ...(probeAfter ? { after: probeAfter } : {}),
+          limit: 100,
+        })
+        if (!probe.length) break
+        for (const observation of probe) {
+          if (observation.kind === 'session.lifecycle') continue
+          leadingBackground = observation.kind !== 'message.user'
+          break outer
+        }
+        probeAfter = headerCursor(probe[probe.length - 1]!)
+        if (probe.length < 100) break
+      }
+      const count = userCount + (leadingBackground ? 1 : 0)
+      logSlowDescriptorPhase('count-headers', startedAt, { pages, interactions: count })
+      return count
+    }
+
     let userCount = 0
     let pages = 0
     let after: ObservationCursor | undefined

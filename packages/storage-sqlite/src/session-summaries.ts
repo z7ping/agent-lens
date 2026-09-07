@@ -277,8 +277,8 @@ function legacyQuerySql(observationFilter: string, summaryFilter: string): strin
     WITH session_aggregates AS (
       SELECT
         logical_session_id,
-        COALESCE(MIN(occurred_at), MIN(captured_at)) AS started_at,
-        COALESCE(MAX(occurred_at), MAX(captured_at)) AS ended_at,
+        MIN(COALESCE(occurred_at, captured_at)) AS started_at,
+        MAX(COALESCE(occurred_at, captured_at)) AS ended_at,
         COUNT(*) AS observation_count,
         SUM(CASE WHEN ${REAL_USER_SQL} THEN 1 ELSE 0 END) AS user_turn_count,
         SUM(CASE WHEN ${SYSTEM_CONTEXT_SQL} THEN 1 ELSE 0 END) AS system_context_count,
@@ -452,8 +452,8 @@ function rebuildInsertSql(sessionFilter: string): string {
     FROM (
       SELECT
         logical_session_id,
-        COALESCE(MIN(occurred_at), MIN(captured_at)) AS started_at,
-        COALESCE(MAX(occurred_at), MAX(captured_at)) AS ended_at,
+        MIN(COALESCE(occurred_at, captured_at)) AS started_at,
+        MAX(COALESCE(occurred_at, captured_at)) AS ended_at,
         COUNT(*) AS observation_count,
         SUM(CASE WHEN ${REAL_USER_SQL} THEN 1 ELSE 0 END) AS user_turn_count,
         SUM(CASE WHEN ${SYSTEM_CONTEXT_SQL} THEN 1 ELSE 0 END) AS system_context_count,
