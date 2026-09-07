@@ -1,5 +1,5 @@
 import { constants } from 'node:fs'
-import { access } from 'node:fs/promises'
+import { access, open, realpath } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import { dirname, extname, join } from 'node:path'
 import { promisify } from 'node:util'
@@ -9,6 +9,7 @@ const SHELL_PATH_BEGIN = '__AGENT_LENS_PATH_BEGIN__'
 const SHELL_PATH_END = '__AGENT_LENS_PATH_END__'
 const DISCOVERY_TIMEOUT_MS = 1500
 const MAX_DISCOVERY_OUTPUT = 128 * 1024
+const SHIM_PROBE_BYTES = 8 * 1024
 
 export interface ExecutableDiscoveryOptions {
   explicit?: string | undefined
@@ -16,6 +17,13 @@ export interface ExecutableDiscoveryOptions {
   platform?: NodeJS.Platform | undefined
   pathValue?: string | undefined
   shellPathResolver?: (() => Promise<string | undefined>) | undefined
+}
+
+interface ShimResolver {
+  id: 'volta' | 'mise' | 'asdf'
+  managerCommand: string
+  targetArgs(name: string): string[]
+  matches(executable: string, managerExecutable: string, platform: NodeJS.Platform): Promise<boolean>
 }
 
 function pathRoots(value: string | undefined, platform: NodeJS.Platform): string[] {
@@ -51,6 +59,38 @@ async function isUsableExecutable(path: string, platform: NodeJS.Platform): Prom
     return true
   } catch {
     return false
+  }
+}
+
+async function canonicalPath(path: string): Promise<string> {
+  return realpath(path).catch(() => path)
+}
+
+function comparablePath(path: string, platform: NodeJS.Platform): string {
+  return platform === 'win32' ? path.toLowerCase() : path
+}
+
+async function sameCanonicalPath(a: string, b: string, platform: NodeJS.Platform): Promise<boolean> {
+  const [left, right] = await Promise.all([canonicalPath(a), canonicalPath(b)])
+  return comparablePath(left, platform) === comparablePath(right, platform)
+}
+
+async function sameDirectory(a: string, b: string, platform: NodeJS.Platform): Promise<boolean> {
+  const [left, right] = await Promise.all([canonicalPath(dirname(a)), canonicalPath(dirname(b))])
+  return comparablePath(left, platform) === comparablePath(right, platform)
+}
+
+async function readPrefix(path: string): Promise<string | undefined> {
+  let handle: Awaited<ReturnType<typeof open>> | undefined
+  try {
+    handle = await open(path, 'r')
+    const buffer = Buffer.allocUnsafe(SHIM_PROBE_BYTES)
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0)
+    return buffer.subarray(0, bytesRead).toString('utf8')
+  } catch {
+    return undefined
+  } finally {
+    await handle?.close().catch(() => undefined)
   }
 }
 
@@ -145,21 +185,46 @@ export async function resolveExecutable(
   return undefined
 }
 
-export async function resolveManagedExecutableTarget(
+const shimResolvers: readonly ShimResolver[] = [
+  {
+    id: 'volta',
+    managerCommand: 'volta',
+    targetArgs: name => ['which', name],
+    matches: (executable, managerExecutable, platform) => sameDirectory(executable, managerExecutable, platform),
+  },
+  {
+    id: 'mise',
+    managerCommand: 'mise',
+    targetArgs: name => ['which', name],
+    matches: (executable, managerExecutable, platform) => sameCanonicalPath(executable, managerExecutable, platform),
+  },
+  {
+    id: 'asdf',
+    managerCommand: 'asdf',
+    targetArgs: name => ['which', name],
+    matches: async executable => {
+      const prefix = await readPrefix(executable)
+      return Boolean(prefix && /\basdf\s+exec\b/.test(prefix))
+    },
+  },
+]
+
+async function resolveWithShimManager(
+  resolver: ShimResolver,
   name: string,
   executable: string,
-  options: Pick<ExecutableDiscoveryOptions, 'platform' | 'pathValue' | 'shellPathResolver'> = {},
-): Promise<string> {
+  options: Pick<ExecutableDiscoveryOptions, 'platform' | 'pathValue' | 'shellPathResolver'>,
+): Promise<string | undefined> {
   const platform = options.platform ?? process.platform
-  const volta = await resolveExecutable('volta', {
+  const managerExecutable = await resolveExecutable(resolver.managerCommand, {
     platform,
     pathValue: options.pathValue,
     shellPathResolver: options.shellPathResolver,
   })
-  if (!volta) return executable
+  if (!managerExecutable || !await resolver.matches(executable, managerExecutable, platform)) return undefined
 
   try {
-    const { stdout } = await execFileAsync(volta, ['which', name], {
+    const { stdout } = await execFileAsync(managerExecutable, resolver.targetArgs(name), {
       windowsHide: true,
       timeout: DISCOVERY_TIMEOUT_MS,
       maxBuffer: MAX_DISCOVERY_OUTPUT,
@@ -167,9 +232,23 @@ export async function resolveManagedExecutableTarget(
       env: process.env,
     })
     const candidate = stdout.trim().split(/\r?\n/).filter(Boolean).at(-1)
-    if (candidate && await pathExists(candidate)) return candidate
+    return candidate && await pathExists(candidate) ? candidate : undefined
   } catch {
-    // The executable is not managed by Volta, or Volta cannot resolve it in this context.
+    return undefined
+  }
+}
+
+export async function resolveManagedExecutableTarget(
+  name: string,
+  executable: string,
+  options: Pick<ExecutableDiscoveryOptions, 'platform' | 'pathValue' | 'shellPathResolver'> = {},
+): Promise<string> {
+  const directTarget = await canonicalPath(executable)
+  if (directTarget !== executable) return directTarget
+
+  for (const resolver of shimResolvers) {
+    const target = await resolveWithShimManager(resolver, name, executable, options)
+    if (target) return target
   }
 
   return executable
