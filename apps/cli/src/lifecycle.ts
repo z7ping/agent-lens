@@ -8,6 +8,33 @@ import { spawn } from 'node:child_process'
 const WINDOWS_TASK_NAME = 'AgentLens Background'
 const LINUX_UNIT_NAME = 'agent-lens.service'
 const MAC_LABEL = 'com.agentlens.daemon'
+const MANAGED_ENVIRONMENT_NAMES = [
+  'PATH',
+  'AGENT_LENS_PORT',
+  'AGENT_LENS_DB_PATH',
+  'AGENT_LENS_VAULT_PATH',
+  'AGENT_LENS_WEB_ROOT',
+  'AGENT_LENS_PROFILE',
+  'AGENT_LENS_CAPTURE_POLICY_PATH',
+  'AGENT_LENS_ENABLED_SOURCES',
+  'AGENT_LENS_PROMPT_CAPTURE',
+  'AGENT_LENS_TOOL_CAPTURE',
+  'AGENT_LENS_CONFIG_CAPTURE',
+  'AGENT_LENS_ENV_CAPTURE',
+  'CODEX_BIN',
+  'CODEX_HOME',
+  'CLAUDE_BIN',
+  'CLAUDE_CODE_HOME',
+  'CLAUDE_HOME',
+  'PI_BIN',
+  'PI_HOME',
+  'PI_CODING_AGENT_DIR',
+  'PI_CODING_AGENT_SESSION_DIR',
+  'HERMES_HOME',
+  'OPENCODE_HOME',
+  'DSH_HOME',
+  'XDG_DATA_HOME',
+] as const
 
 export interface LifecycleOptions {
   cliEntry: string
@@ -90,7 +117,7 @@ async function runChecked(command: string, args: string[], label: string): Promi
 function managedEnvironment(options: LifecycleOptions): Array<readonly [string, string]> {
   const source = options.environment ?? process.env
   const result: Array<readonly [string, string]> = []
-  for (const name of ['PATH', 'PI_BIN'] as const) {
+  for (const name of MANAGED_ENVIRONMENT_NAMES) {
     const value = source[name]?.trim()
     if (value) result.push([name, value])
   }
@@ -132,7 +159,7 @@ export function windowsTaskScript(options: LifecycleOptions, autostart: boolean)
 function windowsStatusScript(): string {
   return [
     "$ErrorActionPreference = 'Stop'",
-    `$task = Get-ScheduledTask -TaskName ${psQuote(WINDOWS_TASK_NAME)} -ErrorAction SilentlyContinue`,
+    `$task = Get-ScheduledTask -TaskName ${psQuote(WINDOWS_TASK_NAME)} -ErrorActionAction SilentlyContinue`,
     "if ($null -eq $task) { [pscustomobject]@{ registered = $false; active = $false; autostart = $false; hidden = $false; state = 'Missing' } | ConvertTo-Json -Compress; exit 0 }",
     "$hasLogon = @($task.Triggers | Where-Object { $_.CimClass.CimClassName -eq 'MSFT_TaskLogonTrigger' -and $_.Enabled }).Count -gt 0",
     '$action = @($task.Actions)[0]',
