@@ -157,15 +157,25 @@ export function encodeTimelineCursor(item: Pick<TimelineItemDto, 'effectiveAt' |
 export class TimelineProjection {
   constructor(private readonly storage: StorageService) {}
 
+  private logSlowPhase(phase: string, startedAt: number, details: Record<string, number | string> = {}): void {
+    const elapsedMs = performance.now() - startedAt
+    if (elapsedMs < 500) return
+    console.warn('[AgentLens] Timeline slow phase', { phase, elapsedMs: Math.round(elapsedMs), ...details })
+  }
+
   async mapObservations(observations: CanonicalObservation[]): Promise<TimelineItemDto[]> {
+    const startedAt = performance.now()
     const evidenceById = new Map<string, Evidence>()
     const evidenceIds = [...new Set(observations.flatMap(observation => observation.evidenceRefs))]
+    const evidenceStartedAt = performance.now()
     if (evidenceIds.length && this.storage.repositories.evidence.getMany) {
       for (const evidence of await this.storage.repositories.evidence.getMany(evidenceIds)) {
         evidenceById.set(evidence.id, evidence)
       }
     }
+    this.logSlowPhase('load-evidence', evidenceStartedAt, { observations: observations.length, evidenceIds: evidenceIds.length })
 
+    const metadataStartedAt = performance.now()
     const sourceSessions = await loadUniqueById<SourceSession>(
       observations.map(observation => observation.sourceSessionId),
       id => this.storage.repositories.sessions.getSourceSession(id),
@@ -174,6 +184,10 @@ export class TimelineProjection {
       observations.map(observation => observation.installationId),
       id => this.storage.repositories.installations.get(id),
     )
+    this.logSlowPhase('load-metadata', metadataStartedAt, {
+      sourceSessions: sourceSessions.size,
+      installations: installations.size,
+    })
 
     const items = await Promise.all(observations.map(async observation => {
       const sourceSession = sourceSessions.get(observation.sourceSessionId)
@@ -217,10 +231,12 @@ export class TimelineProjection {
     }))
 
     items.sort(compareTimelineItems)
+    this.logSlowPhase('map-observations', startedAt, { observations: observations.length, evidenceIds: evidenceIds.length })
     return items
   }
 
   async query(query: TimelineQueryDto = {}): Promise<TimelineResponseDto> {
+    const startedAt = performance.now()
     const requestedLimit = Math.max(1, Math.min(query.limit ?? DEFAULT_LIMIT, MAX_LIMIT))
     const direction = query.direction ?? 'forward'
     const decodedCursor = query.cursor ? decodeCursor(query.cursor) : undefined
@@ -235,13 +251,17 @@ export class TimelineProjection {
       order: direction === 'backward' ? 'desc' : 'asc',
       limit: requestedLimit + 1,
     }
+    const observationStartedAt = performance.now()
     const observations = await this.storage.repositories.observations.query(coreQuery)
+    this.logSlowPhase('query-observations', observationStartedAt, { limit: requestedLimit, observations: observations.length })
     const hasMore = observations.length > requestedLimit
     const limitedObservations = observations.slice(0, requestedLimit)
+    const mappingStartedAt = performance.now()
     const items = await this.mapObservations(limitedObservations)
+    this.logSlowPhase('query-map', mappingStartedAt, { observations: limitedObservations.length })
     const cursorObservation = limitedObservations.at(-1)
 
-    return {
+    const response = {
       items,
       meta: {
         protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
@@ -252,6 +272,8 @@ export class TimelineProjection {
         generatedAt: new Date().toISOString(),
       },
     }
+    this.logSlowPhase('query-total', startedAt, { observations: limitedObservations.length, direction })
+    return response
   }
 }
 

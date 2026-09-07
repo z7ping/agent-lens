@@ -24,10 +24,17 @@ const OBSERVATION_SCAN_CHUNK = 1000
 const WORKFLOW_PATTERN_MINIMUM_SESSIONS = 5
 const MAX_WORKFLOW_PATTERNS = 8
 const MAX_PATTERN_OBSERVATIONS = 24
+const SLOW_INSIGHTS_PHASE_MS = 500
 
 interface SessionLoadResult {
   items: SessionSummaryRecord[]
   sampled: boolean
+}
+
+function logSlowInsightsPhase(phase: string, startedAt: number, details: Record<string, number | boolean> = {}): void {
+  const elapsedMs = performance.now() - startedAt
+  if (elapsedMs < SLOW_INSIGHTS_PHASE_MS) return
+  console.warn('[AgentLens] Insights slow phase', { phase, elapsedMs: Math.round(elapsedMs), ...details })
 }
 
 function effectiveAt(item: CanonicalObservation): string {
@@ -358,9 +365,13 @@ export class UsageInsightsProjection {
       throw new Error('Insights from must be earlier than or equal to to')
     }
 
+    const requestStartedAt = performance.now()
+    const sessionLoadStartedAt = performance.now()
     const loaded = await loadSessions(this.storage, query)
+    logSlowInsightsPhase('load-sessions', sessionLoadStartedAt, { sessions: loaded.items.length, sampled: loaded.sampled })
     const sessions = loaded.items
     const summary = metricsFor(sessions)
+    const usageStartedAt = performance.now()
     const usage = await this.usage.query({
       ...(query.sourceId ? { sourceId: query.sourceId } : {}),
       ...(query.projectId ? { projectId: query.projectId } : {}),
@@ -368,6 +379,7 @@ export class UsageInsightsProjection {
       ...(query.to ? { to: query.to } : {}),
       limit: 500,
     })
+    logSlowInsightsPhase('load-usage', usageStartedAt, { assets: usage.assets.length })
 
     const agentMap = new Map<string, {
       metrics: InsightMetricSetDto
@@ -400,7 +412,9 @@ export class UsageInsightsProjection {
     }))
     agents.sort((a, b) => b.sessionCount - a.sessionCount || a.sourceId.localeCompare(b.sourceId))
 
+    const toolCallLoadStartedAt = performance.now()
     const calls = await loadToolCalls(this.storage, sessions, query)
+    logSlowInsightsPhase('load-tool-calls', toolCallLoadStartedAt, { sessions: sessions.length, calls: calls.length })
 
     let comparison: InsightsResponseDto['comparison']
     if (query.from && !loaded.sampled) {
@@ -434,7 +448,7 @@ export class UsageInsightsProjection {
       }
     }
 
-    return {
+    const response = {
       summary,
       trend: trendFor(sessions, query),
       agents,
@@ -466,6 +480,8 @@ export class UsageInsightsProjection {
         ],
       },
     }
+    logSlowInsightsPhase('total', requestStartedAt, { sessions: sessions.length, calls: calls.length, assets: usage.assets.length })
+    return response
   }
 }
 

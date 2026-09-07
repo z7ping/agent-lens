@@ -66,6 +66,7 @@ const allowDiagnostics = Boolean(config.allowDiagnostics)
 const role: DataRuntimeRole = config.role ?? 'writer'
 const dbPath = config.dbPath
 const nodeId = config.nodeId ?? 'local'
+const SLOW_OPERATION_LOG_MS = 500
 let storage: SqliteStorageService | null = null
 let unifiedRead: {
   logicalSessions: HubUnifiedLogicalSessionReader
@@ -197,7 +198,49 @@ function requestIdForOversizedMessage(value: unknown): string {
   return requestId == null ? 'unknown' : String(requestId)
 }
 
-async function handleRequest(value: unknown): Promise<void> {
+function safeOperationShape(args: readonly unknown[]): Record<string, number | boolean> | undefined {
+  const first = args[0]
+  if (!first || typeof first !== 'object' || Array.isArray(first)) return undefined
+  const record = first as Record<string, unknown>
+  const shape: Record<string, number | boolean> = {}
+  if (typeof record.limit === 'number') shape.limit = record.limit
+  if (Array.isArray(record.logicalSessionIds)) shape.logicalSessionIds = record.logicalSessionIds.length
+  if (Array.isArray(record.evidenceIds)) shape.evidenceIds = record.evidenceIds.length
+  if (Array.isArray(record.ids)) shape.ids = record.ids.length
+  if (typeof record.logicalSessionId === 'string') shape.hasLogicalSessionId = true
+  return Object.keys(shape).length ? shape : undefined
+}
+
+function safeRequestPath(value: DataRuntimeRequest): string | undefined {
+  const path = value.params?.path
+  return Array.isArray(path) && path.every(item => typeof item === 'string') ? path.join('.') : undefined
+}
+
+function logSlowOperation(
+  method: 'storage.call' | 'unified-read.call',
+  path: readonly string[],
+  args: readonly unknown[],
+  queuedAt: number,
+  executionStartedAt: number,
+): void {
+  const queuedMs = executionStartedAt - queuedAt
+  const executionMs = performance.now() - executionStartedAt
+  if (queuedMs + executionMs < SLOW_OPERATION_LOG_MS) return
+  const shape = safeOperationShape(args)
+
+  // 参数可能包含路径、提示词或其他用户数据；诊断日志只保留稳定 RPC 路径、时序与无内容的批量规模。
+  console.warn('[AgentLens] Data Runtime slow operation', {
+    role,
+    method,
+    path: path.join('.'),
+    queuedMs: Math.round(queuedMs),
+    executionMs: Math.round(executionMs),
+    totalMs: Math.round(queuedMs + executionMs),
+    ...(shape ? { shape } : {}),
+  })
+}
+
+async function handleRequest(value: unknown, queuedAt: number): Promise<void> {
   if (encodedMessageBytes(value) > DATA_RUNTIME_MAX_MESSAGE_BYTES) {
     fail(requestIdForOversizedMessage(value), 'message_too_large', 'Data Runtime IPC message exceeds size limit')
     return
@@ -280,7 +323,13 @@ async function handleRequest(value: unknown): Promise<void> {
         throw new Error('Data Runtime storage call cannot cross an active transaction')
       }
       if (!activeTransactionId && requestedId) throw new Error('Data Runtime transaction is not active')
-      reply(value.requestId, await invoke(local, path, argsArray(value.params?.args)))
+      const args = argsArray(value.params?.args)
+      const executionStartedAt = performance.now()
+      try {
+        reply(value.requestId, await invoke(local, path, args))
+      } finally {
+        logSlowOperation('storage.call', path, args, queuedAt, executionStartedAt)
+      }
       return
     }
 
@@ -291,7 +340,13 @@ async function handleRequest(value: unknown): Promise<void> {
       if (!['logicalSessions', 'observations'].includes(path[0]!)) {
         throw new Error(`Unified read RPC root is not allowed: ${path[0]}`)
       }
-      reply(value.requestId, await invoke(unifiedRead, path, argsArray(value.params?.args)))
+      const args = argsArray(value.params?.args)
+      const executionStartedAt = performance.now()
+      try {
+        reply(value.requestId, await invoke(unifiedRead, path, args))
+      } finally {
+        logSlowOperation('unified-read.call', path, args, queuedAt, executionStartedAt)
+      }
       return
     }
 
@@ -311,14 +366,22 @@ async function handleRequest(value: unknown): Promise<void> {
 
     fail(value.requestId, 'method_not_found', `Unknown Data Runtime method: ${value.method}`)
   } catch (error) {
+    const path = safeRequestPath(value)
+    console.warn('[AgentLens] Data Runtime request failed', {
+      role,
+      method: value.method,
+      ...(path ? { path } : {}),
+      errorType: error instanceof Error ? error.name : typeof error,
+    })
     fail(value.requestId, 'internal_error', error instanceof Error ? error.message : String(error))
   }
 }
 
 parentPort.on('message', value => {
+  const queuedAt = performance.now()
   const task = requestTail.then(
-    () => handleRequest(value),
-    () => handleRequest(value),
+    () => handleRequest(value, queuedAt),
+    () => handleRequest(value, queuedAt),
   )
   requestTail = task.then(() => undefined, () => undefined)
 })

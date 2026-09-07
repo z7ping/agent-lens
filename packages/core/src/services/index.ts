@@ -122,6 +122,23 @@ export interface ObservationQuery {
   limit?: number
 }
 
+/**
+ * Ordering and identity fields needed to navigate canonical observations without
+ * loading their payload or evidence.  Detail projections use this for planning
+ * a bounded page before materialising the nodes that will actually be shown.
+ */
+export interface ObservationHeader {
+  id: ObservationId
+  installationId: AgentInstallationId
+  logicalSessionId: LogicalSessionId
+  sourceSessionId: SourceSessionId
+  kind: CanonicalObservation['kind']
+  sourceSequence?: number
+  canonicalSequence?: number
+  occurredAt?: string
+  capturedAt: string
+}
+
 export interface ObservationService {
   commit(input: CommitObservationInput): Promise<ObservationCommitResult>
   get(id: ObservationId): Promise<CanonicalObservation | null>
@@ -338,6 +355,7 @@ export interface SourceRecordRepository {
 export interface ObservationRepository {
   get(id: ObservationId): Promise<CanonicalObservation | null>
   query(query: ObservationQuery): Promise<CanonicalObservation[]>
+  queryHeaders?(query: ObservationQuery): Promise<ObservationHeader[]>
   findIdByNativeEventId?(
     sourceSessionId: SourceSessionId,
     nativeEventId: string,

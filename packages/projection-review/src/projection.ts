@@ -42,6 +42,13 @@ import {
 
 const MAX_SESSIONS = 500
 const DEFAULT_LIMIT = 100
+const SLOW_REVIEW_PHASE_MS = 500
+
+function logSlowReviewPhase(phase: string, startedAt: number, details: Record<string, number | string | boolean> = {}): void {
+  const elapsedMs = performance.now() - startedAt
+  if (elapsedMs < SLOW_REVIEW_PHASE_MS) return
+  console.warn('[AgentLens] Review slow phase', { phase, elapsedMs: Math.round(elapsedMs), ...details })
+}
 
 function structuredSessionActivity(value: unknown): ReviewSessionSummaryDto['sessionActivity'] | undefined {
   switch (value) {
@@ -165,6 +172,7 @@ export class ReviewProjection {
   }
 
   async query(query: ReviewQueryDto = {}): Promise<ReviewResponseDto> {
+    const startedAt = performance.now()
     const requestedLimit = Math.max(1, Math.min(query.limit ?? DEFAULT_LIMIT, MAX_SESSIONS))
     const cursor = query.cursor ? decodeReviewListCursor(query.cursor) : undefined
     const search = query.search?.trim()
@@ -183,7 +191,7 @@ export class ReviewProjection {
       })
       const items = page.items.map(item => this.summaryFromRecord(item))
       const last = items.at(-1)
-      return {
+      const response = {
         items,
         meta: {
           protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
@@ -193,6 +201,8 @@ export class ReviewProjection {
           generatedAt: new Date().toISOString(),
         },
       }
+      logSlowReviewPhase('list-session-summaries', startedAt, { items: items.length, hasMore: page.hasMore })
+      return response
     }
 
     const summaries = await this.fallbackSummaries()
@@ -216,7 +226,7 @@ export class ReviewProjection {
     const hasMore = filtered.length > requestedLimit
     const items = filtered.slice(0, requestedLimit)
     const last = items.at(-1)
-    return {
+    const response = {
       items,
       meta: {
         protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
@@ -226,6 +236,8 @@ export class ReviewProjection {
         generatedAt: new Date().toISOString(),
       },
     }
+    logSlowReviewPhase('list-fallback-summaries', startedAt, { items: items.length, hasMore })
+    return response
   }
 
   private async fallbackSummaries(): Promise<ReviewSessionSummaryDto[]> {
@@ -234,6 +246,7 @@ export class ReviewProjection {
   }
 
   async get(logicalSessionId: string, query: ReviewDetailQueryDto = {}): Promise<ReviewSessionDetailDto | null> {
+    const startedAt = performance.now()
     let summary: ReviewSessionSummaryDto | null = null
     if (this.storage.sessionSummaries) {
       const summaryResult = await this.storage.sessionSummaries.query({
@@ -247,14 +260,28 @@ export class ReviewProjection {
       const session = sessionResult.entries.find(item => item.session.id === logicalSessionId)
       if (session) summary = await this.summary(session)
     }
-    if (!summary) return null
+    if (!summary) {
+      logSlowReviewPhase('detail-summary', startedAt, { found: false })
+      return null
+    }
 
+    const pagerStartedAt = performance.now()
     const result = await this.pager.forQuery(logicalSessionId, query, summary)
-    return {
+    logSlowReviewPhase('detail-pager', pagerStartedAt, {
+      interactions: result.interactions.length,
+      filter: query.filter ?? 'all',
+      direction: query.direction ?? 'forward',
+    })
+    const response = {
       ...summary,
       interactions: result.interactions,
       page: result.page,
     }
+    logSlowReviewPhase('detail-total', startedAt, {
+      interactions: result.interactions.length,
+      filter: query.filter ?? 'all',
+    })
+    return response
   }
 }
 
