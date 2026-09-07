@@ -139,8 +139,15 @@ export const loadInstalledPiSdk: PiSdkLoader = async explicitExecutable => {
     throw new Error('Pi executable was not found in PI_BIN, the managed runtime PATH, or the user login-shell PATH')
   }
 
-  const packageTarget = await resolveManagedExecutableTarget('pi', executable)
-  const resolved = await resolveInstalledPiSdk(packageTarget)
+  let packageTarget = executable
+  let resolved = await resolveInstalledPiSdk(executable)
+  if (!resolved) {
+    packageTarget = await resolveManagedExecutableTarget('pi', executable)
+    if (packageTarget !== executable) {
+      resolved = await resolveInstalledPiSdk(packageTarget)
+    }
+  }
+
   if (!resolved) {
     const targetDetail = packageTarget === executable ? '' : ` (resolved target: ${packageTarget})`
     throw new Error(
