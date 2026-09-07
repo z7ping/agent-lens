@@ -19,6 +19,7 @@ interface PiNativeFactBase {
   at: string
   nativeType: string
   raw: unknown
+  contentIndex?: number
 }
 
 export type PiNativeFact =
@@ -140,6 +141,27 @@ function usageFact(base: PiNativeFactBase, usage: unknown, suffix = 'usage'): Pi
   }
 }
 
+function assistantStopFact(
+  base: PiNativeFactBase,
+  entryId: string,
+  stopReason?: string,
+  errorMessage?: string,
+): PiNativeFact | null {
+  if (!stopReason && !errorMessage) return null
+  const cancelledByUser = stopReason === 'aborted'
+  const failed = !cancelledByUser && (stopReason === 'error' || Boolean(errorMessage))
+  return {
+    ...base,
+    id: `${entryId}:stop`,
+    parentId: entryId,
+    kind: 'event',
+    event: cancelledByUser ? 'assistant.cancelled' : failed ? 'assistant.error' : 'assistant.stop',
+    label: cancelledByUser ? '用户已取消 Pi 响应' : failed ? 'Pi 响应错误' : 'Pi 响应结束',
+    detail: cancelledByUser ? '' : [stopReason, errorMessage].filter(Boolean).join(' · '),
+    payload: { stopReason, errorMessage },
+  }
+}
+
 export function normalizePiSessionEntry(
   raw: unknown,
   options: NormalizePiSessionEntryOptions = {},
@@ -177,37 +199,108 @@ export function normalizePiSessionEntry(
       const model = stringField(message, 'model')
       const stopReason = stringField(message, 'stopReason', 'stop_reason')
       const errorMessage = stringField(message, 'errorMessage', 'error_message')
-      facts.push({
-        ...messageBase,
-        kind: 'message',
-        role: 'assistant',
-        text: textFromContent(content),
-        content,
-        nonTextContent: nonTextContent(content),
+      const assistantMeta = {
         ...(provider ? { provider } : {}),
         ...(model ? { model } : {}),
-        ...(stopReason ? { stopReason } : {}),
-        ...(errorMessage ? { errorMessage } : {}),
-      })
-      const blocks = Array.isArray(content) ? content.map(record) : []
-      const thinking = blocks
-        .filter(block => block.type === 'thinking')
-        .map(block => stringField(block, 'thinking', 'text') ?? '')
-        .filter(Boolean)
-      if (thinking.length) facts.push({ ...messageBase, id: `${id}:thinking`, parentId: id, kind: 'thinking', text: thinking.join('\n\n') })
-      for (const block of blocks.filter(item => item.type === 'toolCall')) {
-        const callId = stringField(block, 'id')
-        if (!callId) continue
+      }
+
+      if (Array.isArray(content)) {
+        for (const [index, rawBlock] of content.entries()) {
+          if (typeof rawBlock === 'string') {
+            if (rawBlock) facts.push({
+              ...messageBase,
+              ...assistantMeta,
+              id: `${id}:content:${index}`,
+              parentId: id,
+              contentIndex: index,
+              kind: 'message',
+              role: 'assistant',
+              text: rawBlock,
+              content: rawBlock,
+              nonTextContent: [],
+            })
+            continue
+          }
+          const block = record(rawBlock)
+          if (block.type === 'text') {
+            const text = stringField(block, 'text') ?? ''
+            if (text) facts.push({
+              ...messageBase,
+              ...assistantMeta,
+              id: `${id}:content:${index}`,
+              parentId: id,
+              contentIndex: index,
+              kind: 'message',
+              role: 'assistant',
+              text,
+              content: rawBlock,
+              nonTextContent: [],
+            })
+            continue
+          }
+          if (block.type === 'thinking') {
+            const text = stringField(block, 'thinking', 'text') ?? ''
+            if (text) facts.push({ ...messageBase, id: `${id}:content:${index}`, parentId: id, contentIndex: index, kind: 'thinking', text })
+            continue
+          }
+          if (block.type === 'toolCall') {
+            const callId = stringField(block, 'id')
+            if (!callId) continue
+            facts.push({
+              ...messageBase,
+              id: `${id}:content:${index}:tool:${callId}`,
+              parentId: id,
+              contentIndex: index,
+              kind: 'tool-call',
+              callId,
+              name: stringField(block, 'name') ?? 'unknown',
+              input: block.arguments ?? block.args ?? {},
+            })
+            continue
+          }
+          facts.push({
+            ...messageBase,
+            ...assistantMeta,
+            id: `${id}:content:${index}`,
+            parentId: id,
+            contentIndex: index,
+            kind: 'message',
+            role: 'assistant',
+            text: '',
+            content: rawBlock,
+            nonTextContent: [rawBlock],
+          })
+        }
+      } else if (typeof content === 'string') {
+        if (content) facts.push({
+          ...messageBase,
+          ...assistantMeta,
+          id: `${id}:content:0`,
+          parentId: id,
+          contentIndex: 0,
+          kind: 'message',
+          role: 'assistant',
+          text: content,
+          content,
+          nonTextContent: [],
+        })
+      } else if (content !== undefined && content !== null) {
         facts.push({
           ...messageBase,
-          id: `${id}:tool:${callId}`,
+          ...assistantMeta,
+          id: `${id}:content:0`,
           parentId: id,
-          kind: 'tool-call',
-          callId,
-          name: stringField(block, 'name') ?? 'unknown',
-          input: block.arguments ?? block.args ?? {},
+          contentIndex: 0,
+          kind: 'message',
+          role: 'assistant',
+          text: '',
+          content,
+          nonTextContent: [content],
         })
       }
+
+      const stop = assistantStopFact(messageBase, id, stopReason, errorMessage)
+      if (stop) facts.push(stop)
       const usage = usageFact(messageBase, message.usage)
       if (usage) facts.push(usage)
       return facts
@@ -234,7 +327,7 @@ export function normalizePiSessionEntry(
   if (type === 'model_change') {
     const provider = stringField(entry, 'provider') ?? 'unknown'
     const model = stringField(entry, 'modelId', 'model') ?? 'unknown'
-    facts.push({ ...base, kind: 'event', event: 'model.changed', label: '模型已切换', detail: [provider, model].filter(Boolean).join(' / '), payload: { provider, model } })
+    facts.push({ ...base, kind: 'event', event: 'model.changed', label: '模型已切换', detail: [provider, model].filter(Boolean).join(' / ') || '', payload: { provider, model } })
   } else if (type === 'thinking_level_change') {
     const level = stringField(entry, 'thinkingLevel', 'level') ?? 'unknown'
     facts.push({ ...base, kind: 'event', event: 'thinking.level.changed', label: '推理级别已切换', detail: level, payload: { level } })
