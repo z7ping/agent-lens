@@ -12,6 +12,7 @@ interface SharedVirtualObserver {
 interface VirtualRoundChildModel {
   id?: string
   label?: string
+  preview?: string
   errorCount?: number
   state?: string
 }
@@ -82,6 +83,7 @@ export function VirtualRoundMount({
   const childModel = childProps?.round ?? childProps?.projection?.model ?? childProps?.model
   const stableInteractionId = interactionId ?? childProps?.interaction?.id ?? childModel?.id
   const stableRoundLabel = childModel?.label
+  const stableRoundPreview = childModel?.preview
   const stableRoundError = Boolean(childModel?.errorCount)
   const stableRoundState = childModel?.state
 
@@ -174,6 +176,7 @@ export function VirtualRoundMount({
     data-mounted={mounted ? 'true' : 'false'}
     data-interaction-id={stableInteractionId || undefined}
     data-round-label={stableRoundLabel || undefined}
+    data-round-preview={stableRoundPreview || undefined}
     data-round-error={stableRoundError ? 'true' : undefined}
     data-round-state={stableRoundState || undefined}
     style={style}

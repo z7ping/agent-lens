@@ -85,10 +85,53 @@
 .task-turn-rail .turn-tick:hover::after,
 .task-turn-rail .turn-tick:focus-visible::after { opacity: 1; }
 
+/* Pi Live 与 Review 使用同一组上下边界语义，但位置跟随实际 Reader 可视区。 */
+.task-boundary-nav {
+  position: fixed;
+  z-index: 54;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.task-boundary-nav > button {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  min-height: 42px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--al-accent) 28%, var(--al-line-strong));
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--al-surface) 92%, transparent);
+  box-shadow: 0 7px 20px rgb(16 24 40 / .14);
+  color: var(--al-accent);
+  pointer-events: auto;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: transform .18s ease, background .18s ease, box-shadow .18s ease;
+}
+.task-boundary-nav > button:hover {
+  background: var(--al-surface);
+  box-shadow: 0 9px 24px rgb(16 24 40 / .17), inset 0 0 0 1px color-mix(in srgb, var(--al-accent) 18%, transparent);
+  transform: translateY(-1px);
+}
+.task-boundary-nav > .task-boundary-latest {
+  border-color: var(--al-accent);
+  background: var(--al-accent);
+  color: var(--al-on-accent);
+}
+.task-boundary-nav > .task-boundary-latest:hover {
+  background: color-mix(in srgb, var(--al-accent) 88%, var(--al-ink));
+  box-shadow: 0 9px 24px color-mix(in srgb, var(--al-accent) 28%, transparent);
+}
+
 @media (max-width: 991.98px) {
-  .task-turn-rail { display: none; }
+  .task-turn-rail,
+  .task-boundary-nav { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .task-turn-rail,
-  .task-turn-rail .turn-tick i { transition: none; }
+  .task-turn-rail .turn-tick i,
+  .task-boundary-nav > button { transition: none; }
 }
