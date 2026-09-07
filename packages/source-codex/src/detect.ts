@@ -1,7 +1,8 @@
 import { access } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { delimiter, join } from 'node:path'
+import { join } from 'node:path'
 import type { DetectedSource, SourceDetectionContext } from '@agent-lens/core'
+import { resolveExecutable } from '@agent-lens/runtime-cordis'
 
 async function exists(path: string): Promise<boolean> {
   try {
@@ -17,23 +18,6 @@ function resolveHome(env: Readonly<Record<string, string | undefined>>): string 
   return override || join(homedir(), '.codex')
 }
 
-async function findExecutable(env: Readonly<Record<string, string | undefined>>): Promise<string | undefined> {
-  const explicit = env.CODEX_BIN?.trim()
-  if (explicit && await exists(explicit)) return explicit
-
-  const pathValue = env.PATH ?? process.env.PATH ?? ''
-  const names = process.platform === 'win32'
-    ? ['codex.exe', 'codex.cmd', 'codex.bat']
-    : ['codex']
-  for (const root of pathValue.split(delimiter).filter(Boolean)) {
-    for (const name of names) {
-      const candidate = join(root, name)
-      if (await exists(candidate)) return candidate
-    }
-  }
-  return undefined
-}
-
 export async function detectCodex(ctx: SourceDetectionContext): Promise<DetectedSource[]> {
   const env = ctx.env ?? process.env
   const home = resolveHome(env)
@@ -41,7 +25,10 @@ export async function detectCodex(ctx: SourceDetectionContext): Promise<Detected
   const [homeExists, sessionsExist, executable] = await Promise.all([
     exists(home),
     exists(sessionsDir),
-    findExecutable(env),
+    resolveExecutable('codex', {
+      explicit: env.CODEX_BIN,
+      pathValue: env.PATH ?? process.env.PATH,
+    }),
   ])
 
   if (!homeExists && !sessionsExist && !executable) return []
