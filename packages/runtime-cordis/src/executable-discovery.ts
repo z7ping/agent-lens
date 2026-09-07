@@ -133,12 +133,7 @@ async function readPathFromShell(shell: string): Promise<string | undefined> {
       timeout: DISCOVERY_TIMEOUT_MS,
       maxBuffer: MAX_DISCOVERY_OUTPUT,
       encoding: 'utf8',
-      env: {
-        ...process.env,
-        DISABLE_AUTO_UPDATE: 'true',
-        ZSH_TMUX_AUTOSTARTED: 'true',
-        ZSH_TMUX_AUTOSTART: 'false',
-      },
+      env: process.env,
     })
     return parseShellPath(stdout)
   } catch {
