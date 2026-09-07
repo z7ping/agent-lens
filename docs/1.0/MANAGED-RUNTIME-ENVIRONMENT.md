@@ -61,7 +61,7 @@ XDG_DATA_HOME
 
 如果用户明确设置了这些目录，切换到后台 Runtime 后必须保持同一 Source 视图，不能悄悄回退默认目录。
 
-`CLAUDE_HOME` 当前作为兼容别名保留；Source 正式发现优先使用 `CLAUDE_CODE_HOME`。
+`CLAUDE_CODE_HOME` 与 `CLAUDE_HOME` 当前由不同既有入口读取，生命周期暂时保留两者，避免切到系统托管环境时丢失已有配置；这不代表两者已经在 Source 层实现了统一别名语义。
 
 ### 3.3 不属于本轮生命周期白名单的 AgentLens Runtime 配置
 
