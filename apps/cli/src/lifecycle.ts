@@ -14,6 +14,7 @@ export interface LifecycleOptions {
   nodePath?: string
   homeDir?: string
   platform?: NodeJS.Platform
+  environment?: Readonly<Record<string, string | undefined>>
 }
 
 export interface LifecycleStatus {
@@ -86,6 +87,16 @@ async function runChecked(command: string, args: string[], label: string): Promi
   return result
 }
 
+function managedEnvironment(options: LifecycleOptions): Array<readonly [string, string]> {
+  const source = options.environment ?? process.env
+  const result: Array<readonly [string, string]> = []
+  for (const name of ['PATH', 'PI_BIN'] as const) {
+    const value = source[name]?.trim()
+    if (value) result.push([name, value])
+  }
+  return result
+}
+
 function psQuote(value: string): string {
   return `'${value.replace(/'/g, "''")}'`
 }
@@ -153,6 +164,7 @@ function systemdQuote(value: string): string {
 
 export function systemdUnit(options: LifecycleOptions): string {
   const nodePath = options.nodePath ?? process.execPath
+  const environment = managedEnvironment(options)
   return [
     '[Unit]',
     'Description=AgentLens user background runtime',
@@ -160,8 +172,8 @@ export function systemdUnit(options: LifecycleOptions): string {
     '',
     '[Service]',
     'Type=simple',
+    ...environment.map(([name, value]) => `Environment=${systemdQuote(`${name}=${value}`)}`),
     `ExecStart=${systemdQuote(nodePath)} ${systemdQuote(options.cliEntry)} service run`,
-    `WorkingDirectory=${systemdQuote(dirname(options.cliEntry))}`,
     'Restart=on-failure',
     'RestartSec=2',
     'KillMode=control-group',
@@ -176,26 +188,39 @@ function linuxUnitPath(homeDir?: string): string {
   return join(homeDir ?? homedir(), '.config', 'systemd', 'user', LINUX_UNIT_NAME)
 }
 
+async function linuxLoadState(): Promise<CommandResult> {
+  return run('systemctl', ['--user', 'show', LINUX_UNIT_NAME, '--property=LoadState', '--value'])
+}
+
 async function ensureLinuxDefinition(options: LifecycleOptions): Promise<void> {
   const path = linuxUnitPath(options.homeDir)
   await mkdir(dirname(path), { recursive: true })
   await writeFile(path, systemdUnit(options), 'utf8')
   await runChecked('systemctl', ['--user', 'daemon-reload'], '刷新 systemd 用户服务')
+  const load = await linuxLoadState()
+  const loadState = load.stdout || load.stderr || 'unknown'
+  if (load.code !== 0 || load.stdout !== 'loaded') {
+    throw new Error(`systemd 用户服务定义无效（LoadState=${loadState}）：${path}`)
+  }
 }
 
 async function linuxStatus(options: LifecycleOptions): Promise<LifecycleStatus> {
   const registered = existsSync(linuxUnitPath(options.homeDir))
   if (!registered) return { manager: 'systemd-user', registered: false, active: false, autostart: false, detail: 'missing' }
-  const [active, enabled] = await Promise.all([
+  const [load, active, enabled] = await Promise.all([
+    linuxLoadState(),
     run('systemctl', ['--user', 'is-active', LINUX_UNIT_NAME]),
     run('systemctl', ['--user', 'is-enabled', LINUX_UNIT_NAME]),
   ])
+  const loadState = load.stdout || load.stderr || 'unknown'
   return {
     manager: 'systemd-user',
     registered: true,
-    active: active.code === 0 && active.stdout === 'active',
+    active: loadState === 'loaded' && active.code === 0 && active.stdout === 'active',
     autostart: enabled.code === 0 && enabled.stdout === 'enabled',
-    detail: active.stdout || active.stderr || 'unknown',
+    detail: loadState === 'loaded'
+      ? (active.stdout || active.stderr || 'unknown')
+      : `LoadState=${loadState}`,
   }
 }
 
@@ -212,6 +237,7 @@ export function launchdPlist(options: LifecycleOptions, autostart: boolean): str
   const home = options.homeDir ?? homedir()
   const logs = runtimeDir(home)
   const nodePath = options.nodePath ?? process.execPath
+  const environment = managedEnvironment(options)
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
@@ -228,6 +254,17 @@ export function launchdPlist(options: LifecycleOptions, autostart: boolean): str
     '  </array>',
     '  <key>WorkingDirectory</key>',
     `  <string>${xmlEscape(dirname(options.cliEntry))}</string>`,
+    ...(environment.length > 0
+      ? [
+          '  <key>EnvironmentVariables</key>',
+          '  <dict>',
+          ...environment.flatMap(([name, value]) => [
+            `    <key>${xmlEscape(name)}</key>`,
+            `    <string>${xmlEscape(value)}</string>`,
+          ]),
+          '  </dict>',
+        ]
+      : []),
     '  <key>RunAtLoad</key>',
     autostart ? '  <true/>' : '  <false/>',
     '  <key>KeepAlive</key>',
@@ -364,6 +401,7 @@ export const lifecycleInternals = {
   dataRoot,
   runtimeDir,
   preferencesPath,
+  managedEnvironment,
   windowsManagedArgument,
   windowsTaskScript,
   windowsStatusScript,
