@@ -53,3 +53,15 @@
 .markdown .markdown-table-scroll th > p,
 .markdown .markdown-table-scroll td > p { margin: 0; white-space: normal; }
 
+/*
+ * 流式阶段只把已经完成的 Markdown 块交给统一渲染器；当前未闭合块保持正文排版，
+ * 既能持续阅读，也不会因粗体、链接、代码围栏尚未闭合而整段反复跳样式。
+ */
+.markdown-streaming-tail {
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
