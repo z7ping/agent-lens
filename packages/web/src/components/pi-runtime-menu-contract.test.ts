@@ -6,12 +6,13 @@ const action = readFileSync(new URL('./PiRuntimeMenu.tsx', import.meta.url), 'ut
 const page = readFileSync(new URL('../features/PiLivePage.tsx', import.meta.url), 'utf8')
 const icons = readFileSync(new URL('./UiIcon.tsx', import.meta.url), 'utf8')
 
-test('Pi Live 用统一电源图标承载 Runtime 结束操作，并保留二次确认', () => {
+test('Pi Live 用标准 30px IconButton + 16px 电源图标承载 Runtime 结束操作，并保留二次确认', () => {
   assert.match(page, /<PiRuntimeMenu busy=\{busy\}/)
   assert.match(action, /variant="danger"/)
+  assert.doesNotMatch(action, /size="small"/)
   assert.match(action, /title="结束 Pi Runtime"/)
   assert.match(action, /aria-label="结束 Pi Runtime"/)
-  assert.match(action, /<UiIcon name="power" size=\{14\}\/>/)
+  assert.match(action, /<UiIcon name="power" size=\{16\}\/>/)
   assert.doesNotMatch(action, /<Popover/)
   assert.doesNotMatch(action, /role="menu"/)
   assert.match(action, /<Dialog[\s\S]*?title="结束 Pi Runtime？"/)
