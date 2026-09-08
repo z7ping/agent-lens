@@ -144,6 +144,7 @@
 .task-surface-live .task-header-actions { grid-column: 5; grid-row: 1; }
 .task-surface-live { container-name: task-surface; container-type: inline-size; }
 .task-header-compact-info-anchor { display: none; }
+.task-surface-review .task-header-compact-info-anchor { display: inline-flex; }
 .task-header-compact-info-popover {
   width: min(340px, calc(100vw - 24px));
   padding: 7px;
@@ -489,17 +490,12 @@
 .task-surface .task-event-row > .evidence-inline-list { justify-self: end; }
 .task-surface .task-event-source,
 .task-surface .task-event-row > time { color: var(--al-muted); font-size: 12px; white-space: nowrap; text-align: right; }
-.task-surface .task-event-raw { margin: -1px 0 2px 24px; padding: 0 6px 4px; border-left: 1px solid color-mix(in srgb, var(--al-line) 72%, transparent); color: var(--al-muted); font-size: 12px; }
-.task-surface .task-event-raw > summary { display: flex; min-height: 24px; align-items: center; gap: 5px; cursor: pointer; list-style: none; }
-.task-surface .task-event-raw > summary::marker { content: ''; }
-.task-surface .task-event-raw > summary::-webkit-details-marker { display: none; }
-.task-surface .task-event-raw-chevron { flex: 0 0 14px; transition: transform .18s cubic-bezier(.2,.8,.2,1); }
-.task-surface .task-event-raw[open] > summary > .task-event-raw-chevron { transform: rotate(90deg); }
-.task-surface .task-event-raw-meta { margin-bottom: 3px; overflow-wrap: anywhere; font-family: var(--font-mono); }
-.task-surface .task-event-raw-json {
-  max-height: 320px;
+.task-event-raw-drawer-body { display: grid; gap: 10px; }
+.task-event-raw-drawer-meta { overflow-wrap: anywhere; color: var(--al-muted); font: 12px/1.5 var(--font-mono); }
+.task-event-raw-drawer-json {
+  max-height: min(62vh, 720px);
   margin: 0;
-  padding: 8px;
+  padding: 10px;
   overflow: auto;
   border: 1px solid var(--al-line);
   border-radius: 8px;
@@ -552,6 +548,5 @@
 @media (prefers-reduced-motion: reduce) {
   .task-surface .task-disclosure-chevron,
   .task-surface .task-tool-output-chevron,
-  .task-surface .task-event-raw-chevron,
   .task-surface .task-message-assistant .markdown-message-actions { transition: none; }
 }

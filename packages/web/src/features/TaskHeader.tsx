@@ -9,6 +9,12 @@ export interface TaskHeaderMetric {
   tone?: 'danger' | 'accent' | undefined
 }
 
+export interface TaskHeaderInfoItem {
+  label: string
+  value: ReactNode
+  tone?: 'danger' | 'accent' | undefined
+}
+
 export interface TaskHeaderProps {
   marker?: ReactNode
   agent: ReactNode
@@ -17,6 +23,7 @@ export interface TaskHeaderProps {
   title: ReactNode
   submeta?: ReactNode
   metrics?: TaskHeaderMetric[]
+  infoItems?: TaskHeaderInfoItem[]
   actions?: ReactNode
   className?: string
 }
@@ -63,7 +70,7 @@ function collectPrimaryActions(node: ReactNode, result: ReactNode[] = []): React
   return result
 }
 
-export function TaskHeader({ marker, agent, context, status, title, submeta, metrics = [], actions, className = '' }: TaskHeaderProps) {
+export function TaskHeader({ marker, agent, context, status, title, submeta, metrics = [], infoItems = [], actions, className = '' }: TaskHeaderProps) {
   const resolvedStatus = status ?? '已完成'
   const resolvedContext = context === '无项目' ? '未关联项目' : context
   const { showUsageDetails, setShowUsageDetails } = useTaskSurfaceView()
@@ -76,7 +83,7 @@ export function TaskHeader({ marker, agent, context, status, title, submeta, met
   const [compactInfoOpen, setCompactInfoOpen] = useState(false)
   const [reviewTailHost, setReviewTailHost] = useState<HTMLElement | null>(null)
   const compactInfoAnchorRef = useRef<HTMLSpanElement>(null)
-  const hasCompactInfo = Boolean(resolvedContext || submeta || metrics.length > 0)
+  const hasCompactInfo = Boolean(infoItems.length > 0 || resolvedContext || submeta || metrics.length > 0)
 
   useLayoutEffect(() => {
     const header = headerRef.current
@@ -96,7 +103,7 @@ export function TaskHeader({ marker, agent, context, status, title, submeta, met
   }, [primaryActions.length])
 
   const inlineActions = reviewTailHost ? [] : primaryActions
-  const hasHeaderActions = Boolean(auditToggle) || inlineActions.length > 0
+  const hasHeaderActions = hasCompactInfo || Boolean(auditToggle) || inlineActions.length > 0
   const tailActions = reviewTailHost && primaryActions.length > 0
     ? createPortal(
         <section className="task-review-continuation" aria-label="继续此会话">
@@ -147,11 +154,15 @@ export function TaskHeader({ marker, agent, context, status, title, submeta, met
               <section className="task-header-compact-info-list" aria-label="任务信息">
                 <div className="task-header-compact-info-heading">
                   <strong>任务信息</strong>
-                  <span>当前运行快照</span>
+                  <span>当前任务详情</span>
                 </div>
-                {resolvedContext && <div><span>上下文</span><b>{resolvedContext}</b></div>}
-                {submeta && <div><span>工作区</span><b>{submeta}</b></div>}
-                {metrics.map(metric => <div key={metric.label} data-tone={metric.tone ?? ''}><span>{metric.label}</span><b>{metric.value}</b></div>)}
+                {infoItems.length > 0
+                  ? infoItems.map((item, index) => <div key={`${item.label}-${index}`} data-tone={item.tone ?? ''}><span>{item.label}</span><b>{item.value}</b></div>)
+                  : <>
+                    {resolvedContext && <div><span>上下文</span><b>{resolvedContext}</b></div>}
+                    {submeta && <div><span>工作区</span><b>{submeta}</b></div>}
+                    {metrics.map(metric => <div key={metric.label} data-tone={metric.tone ?? ''}><span>{metric.label}</span><b>{metric.value}</b></div>)}
+                  </>}
               </section>
             </Popover>
           </>}

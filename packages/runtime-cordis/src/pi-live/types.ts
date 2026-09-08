@@ -60,6 +60,8 @@ export interface PiLiveControls {
 export interface PiLiveRuntimeState {
   /** Stable Pi Live task identity. A new Worker/PID may be attached after an AgentLens Daemon restart. */
   runtimeSessionId: string
+  /** Durable AgentLens Live Task creation time; preserved across Daemon recovery. */
+  startedAt?: string | undefined
   status: PiLiveRuntimeStatus
   initializationStage?: PiLiveInitializationStage | undefined
   initializationMessage?: string | undefined

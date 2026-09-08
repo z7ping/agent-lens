@@ -78,6 +78,14 @@ test('Pi Live Header 保持安全边距并使用统一 Pi Agent 图标', () => {
   assert.match(taskDetailCss, /\.task-surface-live \.task-header \{[\s\S]*?padding-inline: 18px;/)
 })
 
+test('Task 信息明确展示历史会话与 Pi Live 的开始时间', () => {
+  assert.match(reviewPage, /label: '开始时间'/)
+  assert.match(reviewPage, /label: '结束时间'/)
+  assert.match(reviewPage, /label: '持续时间'/)
+  assert.match(piLivePage, /state\.startedAt/)
+  assert.match(piLivePage, /label: '已运行时长'/)
+})
+
 test('legacy Task Surface MutationObserver compatibility layer is removed', () => {
   assert.equal(existsSync(new URL('../client/task-surface-defaults.ts', import.meta.url)), false)
   assert.doesNotMatch(mainEntry, /installTaskSurfaceDefaults|task-surface-defaults/)

@@ -132,6 +132,30 @@ function modelSelection(state: PiLiveStateDto | null): string {
   return provider && id ? JSON.stringify([provider, id]) : ''
 }
 
+function formatTaskDateTime(value: string): string {
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) return value
+  return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(date)
+}
+
+function formatTaskDuration(ms: number): string {
+  const value = Math.max(0, ms)
+  if (value < 60_000) return `${Math.floor(value / 1000)} 秒`
+  if (value < 3_600_000) return `${Math.floor(value / 60_000)} 分钟`
+  if (value < 86_400_000) return `${Math.floor(value / 3_600_000)} 小时 ${Math.floor(value % 3_600_000 / 60_000)} 分钟`
+  return `${Math.floor(value / 86_400_000)} 天 ${Math.floor(value % 86_400_000 / 3_600_000)} 小时`
+}
+
+function PiLiveElapsed({ startedAt }: { startedAt: string }) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+  const started = Date.parse(startedAt)
+  return <>{Number.isFinite(started) ? formatTaskDuration(now - started) : '—'}</>
+}
+
 function parseModelSelection(value: string): { provider: string; modelId: string } | null {
   try {
     const parsed = JSON.parse(value)
@@ -929,6 +953,17 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
         title={headerTitle}
         submeta={state?.gitBranch ? <span className="pi-live-header-branch" title={`Git 分支：${state.gitBranch}`}>分支 {state.gitBranch}</span> : undefined}
         metrics={taskDetailModel.metrics}
+        infoItems={state ? [
+          { label: '模型', value: taskDetailModel.contextLabel ?? 'Pi 默认模型' },
+          { label: '项目', value: state.projectName ?? '未关联项目' },
+          ...(state.workspacePath ? [{ label: '工作区', value: <code title={state.workspacePath}>{state.workspacePath}</code> }] : []),
+          ...(state.gitBranch ? [{ label: '分支', value: state.gitBranch }] : []),
+          ...(state.startedAt ? [
+            { label: '开始时间', value: formatTaskDateTime(state.startedAt) },
+            { label: '已运行时长', value: <PiLiveElapsed startedAt={state.startedAt}/> },
+          ] : []),
+          ...taskDetailModel.metrics.map(metric => ({ label: metric.label, value: metric.value, tone: metric.tone })),
+        ] : []}
         actions={<>
           <Button size="small" className="review-audit-toggle" aria-pressed={showAllEvents} onClick={() => setShowAllEvents(value => !value)}>{showAllEvents ? '视图：全部事件' : '视图：核心事件'}</Button>
           {optimisticStreaming && <Button size="small" variant="danger" className="pi-live-stop" disabled={abortPending || queueMutationPending} onClick={() => void stop()}>{abortPending ? '正在中断…' : '中断本轮'}</Button>}

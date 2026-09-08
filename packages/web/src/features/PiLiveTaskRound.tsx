@@ -84,6 +84,11 @@ function ToolOutput({ tool }: { tool: TaskToolModel }) {
 type HistoryTool = Extract<PiLiveHistoryItem, { kind: 'tool' }>
 type HistoryRenderEntry = PiLiveHistoryItem | { kind: 'tool-group'; id: string; items: HistoryTool[] }
 
+export function piLiveLifecycleSummary(entry: Extract<PiLiveHistoryItem, { kind: 'lifecycle' }>): string {
+  if (entry.event !== 'session.info') return entry.detail
+  return entry.detail.replace(/\s*·\s*Pi\s*$/, '').trim()
+}
+
 function historyEntries(items: PiLiveHistoryItem[]): HistoryRenderEntry[] {
   const result: HistoryRenderEntry[] = []
   let tools: HistoryTool[] = []
@@ -154,11 +159,12 @@ function HistoryEntries({ items, showAllEvents = false }: { items: PiLiveHistory
     if (entry.kind === 'usage') {
       const cost = entry.usage.cost?.total
       const summary = `输入 ${entry.usage.inputTokens.toLocaleString()} · 输出 ${entry.usage.outputTokens.toLocaleString()} · 缓存读 ${entry.usage.cacheReadTokens.toLocaleString()} · 缓存写 ${entry.usage.cacheWriteTokens.toLocaleString()} · 共 ${entry.usage.totalTokens.toLocaleString()} 词元${cost !== undefined ? ` · $${cost.toFixed(4)}` : ''}`
-      return <TaskEvent key={entry.id} model={{ id: entry.id, label: '用量', category: 'usage', summary, sourceLabel: 'Pi', time: entry.at ? formatClock(entry.at) : undefined, nativeType: entry.nativeType, parentId: entry.parentId }} raw={entry.raw}/>
+      return <TaskEvent key={entry.id} model={{ id: entry.id, label: '用量', category: 'usage', summary, time: entry.at ? formatClock(entry.at) : undefined, nativeType: entry.nativeType, parentId: entry.parentId }} raw={entry.raw}/>
     }
     if (entry.kind === 'lifecycle') {
       if (entry.event === 'native.unknown' && !showAllEvents) return null
-      return <TaskEvent key={entry.id} model={{ id: entry.id, label: entry.label, category: entry.event === 'native.unknown' ? 'unknown' : 'lifecycle', summary: entry.detail || undefined, sourceLabel: 'Pi', time: entry.at ? formatClock(entry.at) : undefined, nativeType: entry.nativeType, parentId: entry.parentId }} raw={entry.raw}/>
+      const summary = piLiveLifecycleSummary(entry)
+      return <TaskEvent key={entry.id} model={{ id: entry.id, label: entry.label, category: entry.event === 'native.unknown' ? 'unknown' : 'lifecycle', summary: summary || undefined, time: entry.at ? formatClock(entry.at) : undefined, nativeType: entry.nativeType, parentId: entry.parentId }} raw={entry.raw}/>
     }
     return null
   })}</>

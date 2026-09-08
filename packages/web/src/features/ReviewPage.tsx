@@ -57,6 +57,12 @@ function formatRange(start: string, end: string): string {
   return sameDay ? `${date} ${formatClock(start)} – ${formatClock(end)}` : `${formatTime(start)} – ${formatTime(end)}`
 }
 
+function formatDateTime(value: string): string {
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) return value
+  return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(date)
+}
+
 function localDayStart(value: Date): number {
   return new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime()
 }
@@ -1325,6 +1331,14 @@ export function ReviewPage({
             title={<span title={taskDetailModel?.title}>{taskDetailModel?.title}</span>}
             submeta={taskDetailModel?.startedAt && taskDetailModel.endedAt ? <><span>{formatRange(taskDetailModel.startedAt, taskDetailModel.endedAt)}</span>{taskDetailModel.workspacePath && <code title={taskDetailModel.workspacePath}>{taskDetailModel.workspacePath}</code>}</> : undefined}
             metrics={taskDetailModel?.metrics ?? []}
+            infoItems={taskDetailModel?.startedAt && taskDetailModel.endedAt ? [
+              { label: '项目', value: taskDetailModel.projectLabel ?? '未关联项目' },
+              { label: '开始时间', value: formatDateTime(taskDetailModel.startedAt) },
+              { label: '结束时间', value: formatDateTime(taskDetailModel.endedAt) },
+              { label: '持续时间', value: duration(detail.durationMs) },
+              ...(taskDetailModel.workspacePath ? [{ label: '工作区', value: <code title={taskDetailModel.workspacePath}>{taskDetailModel.workspacePath}</code> }] : []),
+              ...taskDetailModel.metrics.filter(metric => metric.label !== '跨度').map(metric => ({ label: metric.label, value: metric.value, tone: metric.tone })),
+            ] : []}
             actions={<>
               {onResumePiSession && detail.sourceIds.includes('pi') ? <>
                 <Button size="small" loading={resumingPiSession} disabled={resumingPiSession || Boolean(forkingPiSessionId)} onClick={() => void onResumePiSession(detail.id)}><UiIcon name="arrow-right" size={14}/>继续会话</Button>

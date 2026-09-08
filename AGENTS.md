@@ -4,7 +4,7 @@
 
 ## 当前阶段
 
-AgentLens 1.0 当前处于 **1.0.0-alpha.3 稳定化 / 表现层收敛**。默认目标是修复缺陷、收敛 Task Center / Pi Live、提高性能和资源稳定性。
+AgentLens 1.0 已发布 **1.0.0-alpha.4**。默认目标是处理发布后的缺陷、收敛 Task Center / Pi Live 的表现层，并提高性能和资源稳定性。
 
 未经用户明确要求：
 
@@ -124,7 +124,7 @@ Task Center / Review / Pi Live 的任务内容继续复用现有：
 
 - `agent-lens/docs/design/UI-UX-PROPOSAL.md`
 - `agent-lens/docs/design/README.md`
-- alpha.3 任务相关修改再读 `ALPHA3-CHECKLIST.md` 与 `ALPHA3-TASK-REVIEW-PI-LIVE.md`
+- 当前 UI 修改再读 `UI-UX-CONTRACT.md`、`UI-UX-CHANGE-PLAN.md` 与相关 Phase 验收文档；`ALPHA3-*` 文件仅在追溯历史决策或验收依据时读取
 
 真实功能 / 字段 / 数据语义以本仓库正式实现为依据；视觉、信息层级、公共控件和响应式以有效设计规范为依据。
 

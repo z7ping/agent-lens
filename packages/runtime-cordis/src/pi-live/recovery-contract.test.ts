@@ -99,6 +99,8 @@ test('Pi Live 只有在原生 Session 恢复点持久化后才进入 ready', asy
   }
   const service = new DefaultPiLiveService(host, store)
   const initial = await service.start({ cwd: '/workspace' })
+  assert.ok(initial.startedAt)
+  assert.equal(store.values.get(initial.runtimeSessionId)?.createdAt, initial.startedAt)
 
   await new Promise(resolve => setTimeout(resolve, 0))
   assert.equal(store.putCalls, 2)
@@ -109,6 +111,7 @@ test('Pi Live 只有在原生 Session 恢复点持久化后才进入 ready', asy
 
   const ready = await service.state(initial.runtimeSessionId)
   assert.equal(ready.status, 'ready')
+  assert.equal(ready.startedAt, initial.startedAt)
   assert.equal(store.values.get(initial.runtimeSessionId)?.input.sessionPath, '/sessions/live.jsonl')
   assert.equal(store.values.get(initial.runtimeSessionId)?.input.historyAction, 'continue')
 

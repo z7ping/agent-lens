@@ -71,6 +71,8 @@ export interface PiLiveSetThinkingLevelRequestDto {
 
 export interface PiLiveStateDto {
   runtimeSessionId: string
+  /** AgentLens 创建该 Live Task 的时间；Runtime 恢复后保持不变。 */
+  startedAt?: string | undefined
   status: PiLiveRuntimeStatusDto
   initializationStage?: PiLiveInitializationStageDto | undefined
   initializationMessage?: string | undefined
