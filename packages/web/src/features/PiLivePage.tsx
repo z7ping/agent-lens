@@ -5,6 +5,7 @@ import { piLiveApi, type PiLiveTransportDiagnostics } from '../client/pi-live'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import { ComposerPillSelect } from '../components/ComposerPillSelect'
 import { PiMarkdownComposer, type PiMarkdownComposerHandle } from '../components/PiMarkdownComposer'
+import { PiRuntimeMenu } from '../components/PiRuntimeMenu'
 import { PiStartupDisclosure, piStartupSummary } from '../components/PiStartupDisclosure'
 import { OperationProgress } from '../components/StateViews'
 import { Button, IconButton, Input, Textarea } from '../components/ui'
@@ -920,7 +921,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
         actions={<>
           <Button size="small" className="review-audit-toggle" aria-pressed={showAllEvents} onClick={() => setShowAllEvents(value => !value)}>{showAllEvents ? '视图：全部事件' : '视图：核心事件'}</Button>
           <Button size="small" className="pi-live-stop" disabled={!optimisticStreaming || abortPending || queueMutationPending} onClick={() => void stop()}>停止当前任务</Button>
-          <IconButton size="small" variant="danger" className="pi-live-menu" title="结束 Pi Runtime" aria-label="结束 Pi Runtime" disabled={busy} onClick={() => void terminate()}><UiIcon name="close" size={14}/></IconButton>
+          <PiRuntimeMenu busy={busy} onTerminate={() => { void terminate() }}/>
         </>}
       />
 
