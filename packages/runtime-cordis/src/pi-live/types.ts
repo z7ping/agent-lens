@@ -74,6 +74,10 @@ export interface PiLiveRuntimeState {
   nativeSessionId?: string | undefined
   sessionFile?: string | undefined
   sessionName?: string | undefined
+  /** Public working-directory context. Native Pi session-file paths remain private. */
+  workspacePath?: string | undefined
+  projectName?: string | undefined
+  gitBranch?: string | undefined
   model?: unknown
   thinkingLevel?: string | undefined
   isStreaming: boolean
