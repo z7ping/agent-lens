@@ -85,23 +85,38 @@
 .task-turn-rail .turn-tick:hover::after,
 .task-turn-rail .turn-tick:focus-visible::after { opacity: 1; }
 
-/* Pi Live 与 Review 使用同一组上下边界语义，但位置跟随实际 Reader 可视区。
- * 按钮尺寸、颜色和交互状态全部由 IconButton Primitive 持有，这里只负责浮动布局与层级。
+/*
+ * 全局任务边界导航规范。
+ * - 位置属于 Workspace 级固定位置，不跟随 Reader / 页面宽度漂移；
+ * - 右侧与底部统一保留 24px 安全边距；
+ * - 上下按钮统一 42×42，图标与语义仍由 IconButton / UiIcon 提供；
+ * - 页面只提供跳转行为，不得覆盖尺寸和位置。
  */
 .task-boundary-nav {
   position: fixed;
+  right: 24px;
+  bottom: 24px;
   z-index: 54;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   pointer-events: none;
 }
 .task-boundary-nav > .ui-icon-button {
+  width: 42px;
+  height: 42px;
+  min-height: 42px;
+  flex: 0 0 42px;
+  border-radius: 11px;
   pointer-events: auto;
-  box-shadow: var(--al-shadow);
+  box-shadow: 0 7px 20px rgb(16 24 40 / .14);
 }
 .task-boundary-nav > .ui-icon-button:hover:not(:disabled) {
+  box-shadow: 0 9px 24px rgb(16 24 40 / .17);
   transform: translateY(-1px);
+}
+.task-boundary-nav > .ui-icon-button.is-primary:hover:not(:disabled) {
+  box-shadow: 0 9px 24px color-mix(in srgb, var(--al-accent) 28%, transparent);
 }
 
 @media (max-width: 991.98px) {
