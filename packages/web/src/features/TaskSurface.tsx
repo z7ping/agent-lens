@@ -37,8 +37,6 @@ interface TaskTurnRailItem {
 interface TaskTurnRailPosition {
   left: number
   top: number
-  right: number
-  bottom: number
   maxHeight: number
 }
 
@@ -196,15 +194,11 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
     const nextPosition = {
       left: viewportRect.left + 10,
       top: viewportRect.top + viewportRect.height / 2,
-      right: Math.max(10, window.innerWidth - viewportRect.right + 12),
-      bottom: Math.max(10, window.innerHeight - viewportRect.bottom + 12),
       maxHeight: Math.max(96, viewportRect.height - 24),
     }
     setRailPosition(current => current
       && Math.abs(current.left - nextPosition.left) < .5
       && Math.abs(current.top - nextPosition.top) < .5
-      && Math.abs(current.right - nextPosition.right) < .5
-      && Math.abs(current.bottom - nextPosition.bottom) < .5
       && Math.abs(current.maxHeight - nextPosition.maxHeight) < .5
       ? current
       : nextPosition)
@@ -300,7 +294,6 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
         <nav
           className="task-boundary-nav task-boundary-nav-live"
           aria-label="Pi Live 会话边界导航"
-          style={{ right: railPosition.right, bottom: railPosition.bottom }}
         >
           <IconButton title="跳到开头" aria-label="跳到开头" onClick={() => jumpToBoundary('start')}>
             <UiIcon name="arrow-big-up" size={20}/>
