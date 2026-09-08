@@ -145,6 +145,10 @@ export function TaskHeader({ marker, agent, context, status, title, submeta, met
               onClose={() => setCompactInfoOpen(false)}
             >
               <section className="task-header-compact-info-list" aria-label="任务信息">
+                <div className="task-header-compact-info-heading">
+                  <strong>任务信息</strong>
+                  <span>当前运行快照</span>
+                </div>
                 {resolvedContext && <div><span>上下文</span><b>{resolvedContext}</b></div>}
                 {submeta && <div><span>工作区</span><b>{submeta}</b></div>}
                 {metrics.map(metric => <div key={metric.label} data-tone={metric.tone ?? ''}><span>{metric.label}</span><b>{metric.value}</b></div>)}

@@ -144,11 +144,30 @@
 .task-surface-live .task-header-actions { grid-column: 5; grid-row: 1; }
 .task-surface-live { container-name: task-surface; container-type: inline-size; }
 .task-header-compact-info-anchor { display: none; }
-.task-header-compact-info-popover { width: min(360px, calc(100vw - 24px)); padding: 8px; }
-.task-header-compact-info-list { display: grid; gap: 2px; }
-.task-header-compact-info-list > div { display: grid; grid-template-columns: 72px minmax(0, 1fr); align-items: start; gap: 8px; padding: 6px 7px; border-radius: 6px; }
+.task-header-compact-info-popover {
+  width: min(340px, calc(100vw - 24px));
+  padding: 7px;
+  border: 1px solid var(--al-line);
+  border-radius: 9px;
+  background: var(--al-surface-raised);
+  box-shadow: var(--al-shadow-lg);
+}
+.task-header-compact-info-list { display: grid; gap: 0; }
+.task-header-compact-info-heading {
+  display: flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 7px 5px;
+  border-bottom: 1px solid var(--al-line);
+}
+.task-header-compact-info-heading strong { color: var(--al-ink); font-size: 13px; font-weight: 680; }
+.task-header-compact-info-heading span { color: var(--al-muted); font-size: 12px; }
+.task-header-compact-info-list > div:not(.task-header-compact-info-heading) { display: grid; grid-template-columns: 68px minmax(0, 1fr); align-items: start; gap: 8px; padding: 7px; }
+.task-header-compact-info-list > div:not(.task-header-compact-info-heading) + div:not(.task-header-compact-info-heading) { border-top: 1px solid var(--al-line); }
 .task-header-compact-info-list > div > span { color: var(--al-muted); font-size: 12px; line-height: 1.45; }
-.task-header-compact-info-list > div > b { min-width: 0; color: var(--al-ink-2); font-size: 12px; font-weight: 600; line-height: 1.45; overflow-wrap: anywhere; }
+.task-header-compact-info-list > div > b { min-width: 0; color: var(--al-ink-2); font-size: 13px; font-weight: 600; line-height: 1.45; overflow-wrap: anywhere; }
 .task-header-compact-info-list > div[data-tone='danger'] > b { color: var(--al-danger); }
 .task-header-compact-info-list > div[data-tone='accent'] > b { color: var(--al-accent); }
 

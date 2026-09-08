@@ -39,6 +39,7 @@ interface TaskTurnRailPosition {
   top: number
   maxHeight: number
   boundaryBottom: number
+  boundaryLeft: number
 }
 
 const TaskSurfaceViewContext = createContext<TaskSurfaceViewValue>({
@@ -192,6 +193,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
     const active = activeTurnRailItem(items, anchorY)
     setActiveRoundId(current => current === active.id ? current : active.id)
 
+    const composerRect = root.querySelector<HTMLElement>('.pi-live-composer')?.getBoundingClientRect()
     const nextPosition = {
       left: viewportRect.left + 10,
       top: viewportRect.top + viewportRect.height / 2,
@@ -199,12 +201,15 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
       // Pi Live 的 Composer 位于 Reader 之后。边界导航以 Reader 底边为基准，
       // 不能使用全局窗口底部，否则会遮挡底部输入与发送操作。
       boundaryBottom: Math.max(16, window.innerHeight - viewportRect.bottom + 16),
+      // 导航属于当前会话阅读列，跟随 Composer 的右边缘而不是浏览器窗口右边缘。
+      boundaryLeft: composerRect && composerRect.width > 0 ? composerRect.right + 12 : viewportRect.right - 54,
     }
     setRailPosition(current => current
       && Math.abs(current.left - nextPosition.left) < .5
       && Math.abs(current.top - nextPosition.top) < .5
       && Math.abs(current.maxHeight - nextPosition.maxHeight) < .5
       && Math.abs(current.boundaryBottom - nextPosition.boundaryBottom) < .5
+      && Math.abs(current.boundaryLeft - nextPosition.boundaryLeft) < .5
       ? current
       : nextPosition)
   }, [])
@@ -299,7 +304,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
         <nav
           className="task-boundary-nav task-boundary-nav-live"
           aria-label="Pi Live 会话边界导航"
-          style={{ bottom: railPosition.boundaryBottom }}
+          style={{ bottom: railPosition.boundaryBottom, left: railPosition.boundaryLeft }}
         >
           <IconButton title="跳到开头" aria-label="跳到开头" onClick={() => jumpToBoundary('start')}>
             <UiIcon name="arrow-big-up" size={20} strokeWidth={2}/>

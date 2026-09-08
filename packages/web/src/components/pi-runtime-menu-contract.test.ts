@@ -17,7 +17,7 @@ test('Pi Live 用标准 30px IconButton + 16px 电源图标承载 Runtime 结束
   assert.doesNotMatch(action, /role="menu"/)
   assert.match(action, /<Dialog[\s\S]*?title="结束 Pi Runtime？"/)
   assert.match(action, /variant="danger"[\s\S]*?>结束 Runtime<\/Button>/)
-  assert.match(action, /停止当前任务/)
+  assert.match(action, /中断本轮/)
   assert.match(icons, /\bPower\b/)
   assert.match(icons, /power: Power/)
 })

@@ -605,6 +605,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     historyRounds,
     runningRound,
   }), [connected, historyRounds, runningRound, state, visiblePendingCount])
+  const headerTitle = taskDetailModel.title.replace(/\s*[·•]\s*Pi\s*$/i, '').trim() || taskDetailModel.title
 
   const beginOptimisticPrompt = useCallback((text: string) => {
     setInterruptNotice(false)
@@ -925,15 +926,12 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
         agent={taskDetailModel.agentLabel}
         context={taskDetailModel.contextLabel}
         status={<span className={!connected ? 'pi-live-disconnected' : undefined}>{taskDetailModel.statusLabel}</span>}
-        title={taskDetailModel.title}
-        submeta={state?.projectName || state?.gitBranch ? <>
-          {state?.projectName && <span className="pi-live-header-project" title={state.workspacePath || state.projectName}>项目 {state.projectName}</span>}
-          {state?.gitBranch && <span className="pi-live-header-branch" title={`Git 分支：${state.gitBranch}`}>分支 {state.gitBranch}</span>}
-        </> : undefined}
+        title={headerTitle}
+        submeta={state?.gitBranch ? <span className="pi-live-header-branch" title={`Git 分支：${state.gitBranch}`}>分支 {state.gitBranch}</span> : undefined}
         metrics={taskDetailModel.metrics}
         actions={<>
           <Button size="small" className="review-audit-toggle" aria-pressed={showAllEvents} onClick={() => setShowAllEvents(value => !value)}>{showAllEvents ? '视图：全部事件' : '视图：核心事件'}</Button>
-          <Button size="small" variant="danger" className="pi-live-stop" disabled={!optimisticStreaming || abortPending || queueMutationPending} onClick={() => void stop()}>{abortPending ? '正在停止…' : '停止当前任务'}</Button>
+          {optimisticStreaming && <Button size="small" variant="danger" className="pi-live-stop" disabled={abortPending || queueMutationPending} onClick={() => void stop()}>{abortPending ? '正在中断…' : '中断本轮'}</Button>}
           <PiRuntimeMenu busy={busy} onTerminate={() => { void terminate() }}/>
         </>}
       />
