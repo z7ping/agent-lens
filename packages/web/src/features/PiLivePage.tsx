@@ -8,7 +8,7 @@ import { PiMarkdownComposer, type PiMarkdownComposerHandle } from '../components
 import { PiRuntimeMenu } from '../components/PiRuntimeMenu'
 import { PiStartupDisclosure, piStartupSummary } from '../components/PiStartupDisclosure'
 import { OperationProgress } from '../components/StateViews'
-import { Button, IconButton, Input, Textarea } from '../components/ui'
+import { Button, Disclosure, IconButton, Input, Textarea } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
 import { appendPiLiveDelta, finishPiLiveContentBlock, finishPiLiveTool, markPiLiveItemsRunning, reconcilePiLiveItems, startPiLiveContentBlock, startPiLiveTool, updatePiLiveTool } from './pi-live-current'
 import { omitPiLivePromptMessages, projectPiLiveHistory, type PiLiveHistoryItem } from './pi-live-history'
@@ -237,13 +237,12 @@ function PiLiveStart({ known }: { known: PiLiveStateDto[] }) {
       <h1>开始一个 Pi 任务</h1>
       <p>Pi 由 AgentLens 后台服务持有。关闭页面、刷新浏览器或切去任务复盘，不会自动结束正在执行的任务。</p>
       <label>工作目录<Input value={cwd} onChange={event => setCwd(event.target.value)} placeholder="例如 F:\\workspace\\agent-lens 或 /workspace/agent-lens" autoFocus/></label>
-      <details>
-        <summary>模型设置（可选）</summary>
+      <Disclosure summary="模型设置（可选）" className="pi-live-start-model-settings">
         <div className="pi-live-start-grid">
           <label>Provider<Input value={provider} onChange={event => setProvider(event.target.value)} placeholder="留空使用 Pi 默认"/></label>
           <label>Model<Input value={model} onChange={event => setModel(event.target.value)} placeholder="留空使用 Pi 默认"/></label>
         </div>
-      </details>
+      </Disclosure>
       <div className="pi-live-start-status">{availability}</div>
       {error && <div className="pi-live-error" role="alert">{error}</div>}
       <div className="pi-live-start-actions">
@@ -920,7 +919,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
         metrics={taskDetailModel.metrics}
         actions={<>
           <Button size="small" className="review-audit-toggle" aria-pressed={showAllEvents} onClick={() => setShowAllEvents(value => !value)}>{showAllEvents ? '视图：全部事件' : '视图：核心事件'}</Button>
-          <Button size="small" className="pi-live-stop" disabled={!optimisticStreaming || abortPending || queueMutationPending} onClick={() => void stop()}>停止当前任务</Button>
+          <Button size="small" variant="danger" className="pi-live-stop" disabled={!optimisticStreaming || abortPending || queueMutationPending} onClick={() => void stop()}>停止当前任务</Button>
           <PiRuntimeMenu busy={busy} onTerminate={() => { void terminate() }}/>
         </>}
       />
@@ -989,7 +988,6 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
           <div className="pi-live-editor">
             <div className="pi-live-editor-toolbar" aria-label="输入区工具">
               <IconButton
-                size="small"
                 className="pi-live-editor-action"
                 title={composerExpanded ? '缩小输入区' : '放大输入区'}
                 aria-label={composerExpanded ? '缩小输入区' : '放大输入区'}
