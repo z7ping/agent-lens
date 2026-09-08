@@ -104,8 +104,8 @@ function historyEntries(items: PiLiveHistoryItem[]): HistoryRenderEntry[] {
   return result
 }
 
-function ThinkingMarkdown({ text }: { text: string }) {
-  return <MarkdownContent text={text}/>
+function ThinkingMarkdown({ text, streaming = false }: { text: string; streaming?: boolean }) {
+  return <MarkdownContent text={text} streaming={streaming}/>
 }
 
 function HistoryThinking({ item }: { item: Extract<PiLiveHistoryItem, { kind: 'thinking' }> }) {
@@ -117,7 +117,7 @@ function HistoryThinking({ item }: { item: Extract<PiLiveHistoryItem, { kind: 't
     time: item.at ? formatClock(item.at) : undefined,
     state: item.state ?? 'settled',
   }
-  return <TaskThinking model={model} defaultExpanded><ThinkingMarkdown text={item.text}/></TaskThinking>
+  return <TaskThinking model={model} defaultExpanded><ThinkingMarkdown text={item.text} streaming={item.state === 'running'}/></TaskThinking>
 }
 
 function HistoryToolGroup({ id, items }: { id: string; items: HistoryTool[] }) {
