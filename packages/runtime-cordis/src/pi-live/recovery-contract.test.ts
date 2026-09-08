@@ -117,10 +117,12 @@ test('新建 Runtime 可交互就绪不等待 Recovery checkpoint', async () => 
   }
   const service = new DefaultPiLiveService(host, store)
   const initial = await service.start({ cwd: '/workspace' })
+  assert.ok(initial.startedAt)
 
   await new Promise(resolve => setTimeout(resolve, 0))
   const ready = await service.state(initial.runtimeSessionId)
   assert.equal(ready.status, 'ready')
+  assert.equal(ready.startedAt, initial.startedAt)
   assert.equal(store.putCalls, 1)
 
   await service.prompt(initial.runtimeSessionId, 'hello')
@@ -129,6 +131,7 @@ test('新建 Runtime 可交互就绪不等待 Recovery checkpoint', async () => 
 
   store.checkpoint.resolve(undefined)
   await new Promise(resolve => setTimeout(resolve, 0))
+  assert.equal(store.values.get(initial.runtimeSessionId)?.createdAt, initial.startedAt)
   assert.equal(store.values.get(initial.runtimeSessionId)?.input.sessionPath, '/sessions/live.jsonl')
   assert.equal(store.values.get(initial.runtimeSessionId)?.input.historyAction, 'continue')
 

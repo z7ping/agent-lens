@@ -19,6 +19,8 @@ export interface ClientSnapshot {
   facets: FacetResponseDto | null
   agents: AgentOverviewResponseDto | null
   capturePolicy: CapturePolicyResponseDto | null
+  agentsLoading: boolean
+  agentsError: string
   agentsHasNewData: boolean
   liveConnected: boolean
   review: {
@@ -75,6 +77,8 @@ export class AgentLensClientModel {
     facets: null,
     agents: null,
     capturePolicy: null,
+    agentsLoading: false,
+    agentsError: '',
     agentsHasNewData: false,
     liveConnected: false,
     review: {
@@ -199,15 +203,18 @@ export class AgentLensClientModel {
   async refreshAgents(): Promise<void> {
     const generation = ++this.agentsGeneration
     const invalidation = this.agentsInvalidation
+    this.patch({ agentsLoading: true, agentsError: '' })
     try {
       const [agents, capturePolicy] = await Promise.all([
         this.api.agents(),
         this.api.capturePolicy().catch(() => null),
       ])
       if (generation !== this.agentsGeneration) return
-      this.patch({ agents, capturePolicy, agentsHasNewData: this.agentsInvalidation !== invalidation })
+      this.patch({ agents, capturePolicy, agentsLoading: false, agentsHasNewData: this.agentsInvalidation !== invalidation })
     } catch {
       // Existing data remains visible on refresh failure.
+      if (generation !== this.agentsGeneration) return
+      this.patch({ agentsLoading: false, agentsError: '智能体概览查询失败。请重试；若持续失败，请运行诊断命令。' })
     }
   }
 

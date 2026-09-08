@@ -52,7 +52,7 @@ test('Pi Live recovery store 只持久化可继续的原生 Session 身份并可
 
 test('Pi Live recovery store 拒绝没有原生 Session 路径的伪恢复记录', async () => {
   const store = new CheckpointPiLiveRecoveryStore(checkpoints())
-  await assert.rejects(
+  assert.throws(
     () => store.put({
       id: 'live-without-session',
       input: { cwd: '/workspace', name: '尚未解析 Session' },

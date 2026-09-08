@@ -21,7 +21,7 @@
   border-bottom: 0;
 }
 
-.workspace-mobile-nav-button,
+.workspace-breadcrumb-shell .workspace-mobile-nav-button,
 .workspace-mobile-backdrop,
 .workspace-sidebar-restore-button {
   display: none;
@@ -114,7 +114,7 @@
     background: rgb(15 23 42 / .32);
   }
 
-  .workspace-mobile-nav-button {
+  .workspace-breadcrumb-shell .workspace-mobile-nav-button {
     display: inline-flex;
     width: 38px;
     min-width: 38px;

@@ -107,6 +107,7 @@
   gap: 10px;
   pointer-events: none;
 }
+.task-boundary-nav-live { right: auto; }
 
 .review-page.review-page-embedded .round-nav-actions .round-nav-from-start,
 .review-page.review-page-embedded .round-nav-actions .round-nav-latest {

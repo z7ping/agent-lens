@@ -556,6 +556,7 @@ export class DefaultPiLiveService implements PiLiveService {
     }
     return {
       runtimeSessionId: runtime.id,
+      startedAt: runtime.createdAt,
       status: runtime.status,
       initializationStage: runtime.stage,
       initializationMessage: runtime.message,
@@ -580,6 +581,7 @@ export class DefaultPiLiveService implements PiLiveService {
     return {
       ...state,
       runtimeSessionId: runtime.id,
+      startedAt: runtime.createdAt,
       status: 'ready',
       initializationStage: 'ready',
       initializationMessage: runtime.message,

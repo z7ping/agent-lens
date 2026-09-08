@@ -131,10 +131,11 @@ test('Pi Live 已入队消息可单项撤回并恢复其余队列', () => {
   assert.match(page, /onClick=\{\(\) => void removeQueued\(item\.mode, Number\(item\.queueIndex\), item\.text\)\}>撤回<\/Button>/)
 })
 
-test('Pi Live Escape 和停止操作不受发送请求锁影响', () => {
+test('Pi Live Escape 和中断本轮仅在执行中可用，且不受发送请求锁影响', () => {
   assert.match(page, /window\.addEventListener\('keydown', onKeyDown\)/)
   assert.match(page, /event\.key !== 'Escape'/)
-  assert.match(page, /disabled=\{!optimisticStreaming \|\| abortPending \|\| queueMutationPending\}/)
+  assert.match(page, /\{optimisticStreaming && <Button[\s\S]*?className="pi-live-stop"[\s\S]*?disabled=\{abortPending \|\| queueMutationPending\}/)
+  assert.match(page, /正在中断…' : '中断本轮/)
   assert.match(page, /onEscape=\{optimisticStreaming \? \(\) => void stop\(\) : undefined\}/)
 })
 

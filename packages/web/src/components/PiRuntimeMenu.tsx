@@ -36,7 +36,7 @@ export function PiRuntimeMenu({
         }}>结束 Runtime</Button>
       </>}
     >
-      <p className="pi-runtime-terminate-copy">如果只是想中断当前一轮生成，请使用“停止当前任务”，不需要结束整个 Runtime。</p>
+      <p className="pi-runtime-terminate-copy">如果只是想中断当前一轮生成，请使用“中断本轮”，不需要结束整个 Runtime。</p>
     </Dialog>
   </>
 }

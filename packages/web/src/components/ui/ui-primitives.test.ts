@@ -50,6 +50,13 @@ test('shared UI primitives expose the unified component set', () => {
   assert.match(index, /export \{ UiIcon \} from '\.\.\/UiIcon'/)
 })
 
+test('DeepSeek Harness 在浅色和深色主题都拥有来源色 Token', () => {
+  const tokens = readFileSync(new URL('../../tokens.css', import.meta.url), 'utf8')
+  assert.match(tokens, /:root\s*\{[\s\S]*?--src-dsh:\s*#[0-9A-Fa-f]{6};/)
+  assert.match(tokens, /:root\[data-theme='dark'\]\s*\{[\s\S]*?--src-dsh:\s*#[0-9A-Fa-f]{6};/)
+  assert.match(tokens, /\.source-dot\.source-dsh,[\s\S]*?background:var\(--src-dsh\)/)
+})
+
 test('界面图标统一走 UiIcon，页面不保留字符占位或重复 SVG', () => {
   const webSource = fileURLToPath(new URL('../..', import.meta.url))
   const files = tsxFiles(webSource)
