@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { resolve } from 'node:path'
+import { readFile, stat } from 'node:fs/promises'
+import { basename, dirname, join, resolve } from 'node:path'
 import { findPiExecutable, type PiSdkLoader } from './sdk-loader'
 import { InProcessPiRuntimeHost } from './in-process-host'
 import type { PiLiveRecoveryRecord, PiLiveRecoveryStore } from './recovery-store'
@@ -27,6 +28,9 @@ interface OwnedRuntime {
   startupResources?: PiLiveStartupResources | undefined
   startupOutput: string[]
   capabilities?: PiLiveRuntimeCapabilities | undefined
+  workspacePath: string
+  projectName: string
+  gitBranch?: string | undefined
 }
 
 function safeError(error: unknown): string {
@@ -47,6 +51,51 @@ function formatElapsed(elapsedMs: number): string {
 function sessionPathKey(value: string): string {
   const path = resolve(value)
   return process.platform === 'win32' ? path.toLowerCase() : path
+}
+
+interface ResolvedWorkspaceContext {
+  workspacePath: string
+  projectName: string
+  gitBranch?: string | undefined
+}
+
+async function resolveGitContext(workspacePath: string): Promise<{ root: string; branch?: string | undefined } | undefined> {
+  let current = workspacePath
+  while (true) {
+    const marker = join(current, '.git')
+    try {
+      const markerStat = await stat(marker)
+      let gitDir = marker
+      if (markerStat.isFile()) {
+        const pointer = await readFile(marker, 'utf8')
+        const match = pointer.match(/^gitdir:\s*(.+)$/im)
+        if (!match?.[1]) return { root: current }
+        gitDir = resolve(current, match[1].trim())
+      } else if (!markerStat.isDirectory()) {
+        return { root: current }
+      }
+      const head = (await readFile(join(gitDir, 'HEAD'), 'utf8')).trim()
+      const branchPrefix = 'ref: refs/heads/'
+      if (head.startsWith(branchPrefix)) return { root: current, branch: head.slice(branchPrefix.length) }
+      if (/^[0-9a-f]{7,40}$/i.test(head)) return { root: current, branch: head.slice(0, 8) }
+      return { root: current }
+    } catch {
+      const parent = dirname(current)
+      if (parent === current) return undefined
+      current = parent
+    }
+  }
+}
+
+async function resolveWorkspaceContext(cwd: string): Promise<ResolvedWorkspaceContext> {
+  const workspacePath = resolve(cwd)
+  const git = await resolveGitContext(workspacePath).catch(() => undefined)
+  const projectRoot = git?.root ?? workspacePath
+  return {
+    workspacePath,
+    projectName: basename(projectRoot) || projectRoot,
+    ...(git?.branch ? { gitBranch: git.branch } : {}),
+  }
 }
 
 function textList(value: unknown, limit = 240): string[] {
@@ -192,6 +241,7 @@ export class DefaultPiLiveService implements PiLiveService {
   private createRuntime(id: string, input: PiLiveStartInput, restored: boolean, createdAt = new Date().toISOString()): OwnedRuntime {
     const now = Date.now()
     const normalizedInput = restored ? recoveryInput(input) : input
+    const workspacePath = resolve(normalizedInput.cwd)
     return {
       id,
       input: normalizedInput,
@@ -209,6 +259,8 @@ export class DefaultPiLiveService implements PiLiveService {
       initializationElapsedMs: 0,
       initializationTimings: [],
       startupOutput: [],
+      workspacePath,
+      projectName: basename(workspacePath) || workspacePath,
     }
   }
 
@@ -261,6 +313,13 @@ export class DefaultPiLiveService implements PiLiveService {
     const currentPath = runtime.input.sessionPath?.trim()
     if (currentPath && sessionPathKey(currentPath) === sessionPathKey(nextPath) && runtime.input.historyAction === 'continue') return
     this.persistRuntimeBestEffort(runtime, state)
+  }
+
+  private async refreshWorkspaceContext(runtime: OwnedRuntime): Promise<void> {
+    const context = await resolveWorkspaceContext(runtime.input.cwd)
+    runtime.workspacePath = context.workspacePath
+    runtime.projectName = context.projectName
+    runtime.gitBranch = context.gitBranch
   }
 
   private advanceInitialization(runtime: OwnedRuntime, stage: PiLiveInitializationStage, now = Date.now()): void {
@@ -455,6 +514,7 @@ export class DefaultPiLiveService implements PiLiveService {
   }
 
   private async runtimeState(runtime: OwnedRuntime): Promise<PiLiveRuntimeState> {
+    await this.refreshWorkspaceContext(runtime)
     if (runtime.status === 'initializing') runtime.initializationElapsedMs = Math.max(0, Date.now() - runtime.initializationStartedAt)
     if (runtime.status === 'ready' && runtime.handle) {
       const state = await runtime.handle.state()
@@ -473,6 +533,9 @@ export class DefaultPiLiveService implements PiLiveService {
       ...(runtime.capabilities ? { capabilities: runtime.capabilities } : {}),
       ...(runtime.error ? { error: runtime.error } : {}),
       ...(runtime.input.name ? { sessionName: runtime.input.name } : {}),
+      workspacePath: runtime.workspacePath,
+      projectName: runtime.projectName,
+      ...(runtime.gitBranch ? { gitBranch: runtime.gitBranch } : {}),
       isStreaming: false,
       isCompacting: false,
       pendingMessageCount: 0,
@@ -492,6 +555,9 @@ export class DefaultPiLiveService implements PiLiveService {
       ...(runtime.startupResources ? { startupResources: runtime.startupResources } : {}),
       ...(runtime.startupOutput.length ? { startupOutput: runtime.startupOutput } : {}),
       ...(runtime.capabilities ? { capabilities: runtime.capabilities } : {}),
+      workspacePath: runtime.workspacePath,
+      projectName: runtime.projectName,
+      ...(runtime.gitBranch ? { gitBranch: runtime.gitBranch } : {}),
       ...(runtime.handle?.processId ? { processId: runtime.handle.processId } : {}),
     }
   }
