@@ -252,7 +252,7 @@
 .task-surface .task-message-bubble-user .markdown-source { color: var(--al-user-bubble-text); }
 .task-surface .task-message-bubble-user .markdown :not(pre) > code,
 .task-surface .task-message-bubble-user .markdown-source,
-.task-surface .task-message-bubble-user .markdown pre { background: var(--al-user-bubble-code); border-color: transparent; }
+.task-surface .task-message-bubble-user .markdown pre { background: var(--al-user-bubble-code); border-color: transparent; color: var(--al-user-bubble-text); }
 .task-surface .task-message-bubble-user .markdown a { color: var(--al-user-bubble-link); }
 .task-surface .task-message-bubble-user .markdown-fade { background: linear-gradient(to bottom, transparent, var(--al-user-bubble)); }
 .task-surface .task-message-bubble-user .evidence-inline { border-color: color-mix(in srgb, var(--al-user-bubble-muted) 48%, transparent); color: var(--al-user-bubble-muted); }
