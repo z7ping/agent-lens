@@ -296,10 +296,10 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
           aria-label="Pi Live 会话边界导航"
         >
           <IconButton title="跳到开头" aria-label="跳到开头" onClick={() => jumpToBoundary('start')}>
-            <UiIcon name="arrow-big-up" size={20}/>
+            <UiIcon name="arrow-big-up" size={20} strokeWidth={2}/>
           </IconButton>
           <IconButton className="task-boundary-latest" variant="primary" title="跳到最新" aria-label="跳到最新" onClick={() => jumpToBoundary('end')}>
-            <UiIcon name="arrow-big-down" size={20}/>
+            <UiIcon name="arrow-big-down" size={20} strokeWidth={2}/>
           </IconButton>
         </nav>,
         document.body,
