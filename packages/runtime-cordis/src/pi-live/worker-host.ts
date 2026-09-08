@@ -1,6 +1,7 @@
 import { fork, type ChildProcess } from 'node:child_process'
 import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
+import { resolveExecutable, resolveManagedExecutableTarget } from '../executable-discovery'
 import type {
   PiLiveControls,
   PiLiveInitializationTiming,
@@ -266,6 +267,15 @@ export class WorkerPiRuntimeHost implements PiRuntimeHost {
     onEvent: (event: Record<string, unknown>) => void,
     onExit: (error: Error) => void,
   ): Promise<PiRuntimeHandle> {
+    // 先在父进程解析 Volta/mise/asdf 的通用 shim；Worker 只接收真实 CLI
+    // 入口，才能从入口向上回溯到同一 npm 包的 SDK。
+    const executable = await resolveExecutable('pi', {
+      explicit: input.executable,
+      envVar: 'PI_BIN',
+    })
+    const workerInput = executable
+      ? { ...input, executable: await resolveManagedExecutableTarget('pi', executable) }
+      : input
     const entry = fileURLToPath(new URL('./worker-entry.mjs', import.meta.url))
     const forkOptions = {
       cwd: input.cwd,
@@ -312,7 +322,7 @@ export class WorkerPiRuntimeHost implements PiRuntimeHost {
         reject(new Error('Pi Runtime Worker initialization was cancelled'))
         return
       }
-      child.send({ version: PROTOCOL_VERSION, runtimeSessionId, type: 'initialize', requestId, payload: input }, error => {
+      child.send({ version: PROTOCOL_VERSION, runtimeSessionId, type: 'initialize', requestId, payload: workerInput }, error => {
         if (!error) return
         cleanup()
         reject(error)
