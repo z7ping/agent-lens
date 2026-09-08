@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react'
-import { Button, Dialog, IconButton, Popover, UiIcon } from './ui'
+import { useState } from 'react'
+import { Button, Dialog, IconButton, UiIcon } from './ui'
 import './pi-runtime-menu.css'
 
 export function PiRuntimeMenu({
@@ -9,44 +9,18 @@ export function PiRuntimeMenu({
   busy: boolean
   onTerminate(): void
 }) {
-  const anchorRef = useRef<HTMLSpanElement>(null)
-  const [menuOpen, setMenuOpen] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
 
-  const requestTerminate = () => {
-    setMenuOpen(false)
-    setConfirmOpen(true)
-  }
-
   return <>
-    <span ref={anchorRef} className="pi-runtime-menu-anchor">
-      <IconButton
-        size="small"
-        className="pi-live-menu"
-        title="更多 Runtime 操作"
-        aria-label="更多 Runtime 操作"
-        aria-haspopup="menu"
-        aria-expanded={menuOpen}
-        disabled={busy}
-        onClick={() => setMenuOpen(value => !value)}
-      ><UiIcon name="more" size={14}/></IconButton>
-    </span>
-
-    <Popover
-      open={menuOpen}
-      anchorRef={anchorRef}
-      onClose={() => setMenuOpen(false)}
-      className="pi-runtime-menu"
-    >
-      <div className="pi-runtime-menu-list" role="menu" aria-label="Pi Runtime 操作">
-        <button
-          type="button"
-          role="menuitem"
-          className="pi-runtime-menu-item is-danger"
-          onClick={requestTerminate}
-        >结束 Pi Runtime</button>
-      </div>
-    </Popover>
+    <IconButton
+      size="small"
+      variant="danger"
+      className="pi-runtime-terminate-button"
+      title="结束 Pi Runtime"
+      aria-label="结束 Pi Runtime"
+      disabled={busy}
+      onClick={() => setConfirmOpen(true)}
+    ><UiIcon name="power" size={14}/></IconButton>
 
     <Dialog
       open={confirmOpen}
