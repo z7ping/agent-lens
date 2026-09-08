@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { PiLiveRuntimeState } from './types'
+import type { PiLiveRecoveryRecord, PiLiveRecoveryStore } from './recovery-store'
+import type { PiLiveRuntimeState, PiLiveStartInput } from './types'
 import { DefaultPiLiveService } from './service'
 import type { PiRuntimeHandle, PiRuntimeHost } from './worker-host'
 
@@ -11,20 +12,45 @@ function deferred<T>() {
   return { promise, resolve, reject }
 }
 
-function readyState(id: string): PiLiveRuntimeState {
-  return { runtimeSessionId: id, status: 'ready', initializationStage: 'ready', isStreaming: false, isCompacting: false, pendingMessageCount: 0, leafId: null }
+function readyState(id: string, sessionFile?: string): PiLiveRuntimeState {
+  return {
+    runtimeSessionId: id,
+    status: 'ready',
+    initializationStage: 'ready',
+    isStreaming: false,
+    isCompacting: false,
+    pendingMessageCount: 0,
+    leafId: null,
+    ...(sessionFile ? { sessionFile, nativeSessionId: 'native-session' } : {}),
+  }
 }
 
-function handle(id: string): PiRuntimeHandle {
+function handle(id: string, sessionFile?: string): PiRuntimeHandle {
   return {
     processId: 1234,
-    state: async () => readyState(id),
-    snapshot: async () => ({ state: readyState(id), entries: [], leafId: null }),
+    state: async () => readyState(id, sessionFile),
+    snapshot: async () => ({ state: readyState(id, sessionFile), entries: [], leafId: null }),
     controls: async () => ({ models: [], thinkingLevels: [] }),
-    setModel: async () => readyState(id), setThinkingLevel: async () => readyState(id),
+    setModel: async () => readyState(id, sessionFile), setThinkingLevel: async () => readyState(id, sessionFile),
     prompt: async () => {}, steer: async () => {}, followUp: async () => {},
     clearQueue: async () => ({ steering: [], followUp: [] }),
     abort: async () => ({ steering: [], followUp: [] }), respondToExtension: async () => {}, terminate: async () => {},
+  }
+}
+
+class MemoryRecoveryStore implements PiLiveRecoveryStore {
+  readonly values = new Map<string, PiLiveRecoveryRecord>()
+
+  async list(): Promise<PiLiveRecoveryRecord[]> {
+    return [...this.values.values()].map(item => ({ ...item, input: { ...item.input } }))
+  }
+
+  async put(value: PiLiveRecoveryRecord): Promise<void> {
+    this.values.set(value.id, { ...value, input: { ...value.input } })
+  }
+
+  async remove(id: string): Promise<void> {
+    this.values.delete(id)
   }
 }
 
@@ -96,4 +122,57 @@ test('同一 Pi 历史文件不能被两个 Runtime 同时继续', async () => {
   )
 
   await service.terminate(first.runtimeSessionId)
+})
+
+test('Daemon dispose 保留 Live Task，下一代 Runtime 使用同一稳定 ID 继续原 Session', async () => {
+  const store = new MemoryRecoveryStore()
+  let firstTerminateCalls = 0
+  const firstHost: PiRuntimeHost = {
+    start: async id => ({
+      ...handle(id, '/sessions/live.jsonl'),
+      terminate: async () => { firstTerminateCalls += 1 },
+    }),
+  }
+  const first = new DefaultPiLiveService(firstHost, store)
+  const initial = await first.start({ cwd: '/workspace', name: '可恢复任务', provider: 'deepseek', model: 'v4' })
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.equal((await first.state(initial.runtimeSessionId)).status, 'ready')
+  assert.equal(store.values.get(initial.runtimeSessionId)?.input.sessionPath, '/sessions/live.jsonl')
+
+  await first.dispose()
+  assert.equal(firstTerminateCalls, 1)
+  assert.equal(store.values.has(initial.runtimeSessionId), true)
+
+  let recoveredInput: PiLiveStartInput | undefined
+  let promptCalls = 0
+  const secondHost: PiRuntimeHost = {
+    start: async (id, input) => {
+      recoveredInput = input
+      return {
+        ...handle(id, '/sessions/live.jsonl'),
+        prompt: async () => { promptCalls += 1 },
+      }
+    },
+  }
+  const second = new DefaultPiLiveService(secondHost, store)
+  const recovering = await second.state(initial.runtimeSessionId)
+  assert.ok(['initializing', 'ready'].includes(recovering.status))
+  await new Promise(resolve => setTimeout(resolve, 0))
+  const restored = await second.state(initial.runtimeSessionId)
+
+  assert.equal(restored.runtimeSessionId, initial.runtimeSessionId)
+  assert.equal(restored.status, 'ready')
+  assert.equal(restored.initializationMessage?.startsWith('Pi Runtime 已恢复'), true)
+  assert.equal(recoveredInput?.sessionPath, '/sessions/live.jsonl')
+  assert.equal(recoveredInput?.historyAction, 'continue')
+  assert.equal(recoveredInput?.provider, undefined)
+  assert.equal(recoveredInput?.model, undefined)
+  assert.equal(promptCalls, 0)
+
+  await second.terminate(initial.runtimeSessionId)
+  assert.equal(store.values.has(initial.runtimeSessionId), false)
+
+  const third = new DefaultPiLiveService(secondHost, store)
+  await assert.rejects(() => third.state(initial.runtimeSessionId), /Unknown Pi Live runtime session/)
+  await third.dispose()
 })
