@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom'
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
-import { UiIcon } from './UiIcon'
+import { UiIcon, type UiIconName } from './UiIcon'
 
 export interface SelectMenuOption {
   value: string
@@ -9,6 +9,15 @@ export interface SelectMenuOption {
   keywords?: string | undefined
   tooltip?: string | undefined
   disabled?: boolean | undefined
+}
+
+export interface SelectMenuAction {
+  key: string
+  label: string
+  description?: string | undefined
+  icon?: UiIconName | undefined
+  disabled?: boolean | undefined
+  onSelect(): void
 }
 
 export type SelectMenuVariant = 'toolbar' | 'field' | 'pill'
@@ -57,6 +66,7 @@ function selectMenuTooltip(option: SelectMenuOption | undefined): string | undef
 export function SelectMenu({
   value,
   options,
+  actions = [],
   onChange,
   ariaLabel,
   placeholder = '请选择',
@@ -70,6 +80,7 @@ export function SelectMenu({
 }: {
   value: string
   options: SelectMenuOption[]
+  actions?: SelectMenuAction[]
   onChange(value: string): void
   ariaLabel: string
   placeholder?: string
@@ -107,12 +118,12 @@ export function SelectMenu({
     const rect = trigger.getBoundingClientRect()
     const width = Math.min(Math.max(rect.width, menuWidth), Math.max(176, window.innerWidth - 16))
     const left = Math.min(Math.max(8, rect.left), Math.max(8, window.innerWidth - width - 8))
-    const estimatedHeight = Math.min(360, Math.max(64, options.length * 48 + (searchable ? 54 : 12)))
+    const estimatedHeight = Math.min(360, Math.max(64, options.length * 48 + actions.length * 46 + (searchable ? 54 : 12)))
     const openAbove = window.innerHeight - rect.bottom < Math.min(estimatedHeight, 220) && rect.top > window.innerHeight - rect.bottom
     setPosition(openAbove
       ? { left, bottom: window.innerHeight - rect.top + 8, width }
       : { left, top: rect.bottom + 8, width })
-  }, [menuWidth, options.length, searchable])
+  }, [actions.length, menuWidth, options.length, searchable])
 
   const close = useCallback((restoreFocus = false) => {
     setOpen(false)
@@ -124,6 +135,12 @@ export function SelectMenu({
     if (nextValue !== value) onChange(nextValue)
     close(true)
   }, [close, onChange, value])
+
+  const runAction = useCallback((action: SelectMenuAction) => {
+    if (action.disabled) return
+    close(false)
+    action.onSelect()
+  }, [close])
 
   useEffect(() => {
     if (!open) return
@@ -187,6 +204,8 @@ export function SelectMenu({
     ...(position.bottom !== undefined ? { bottom: position.bottom } : {}),
   } : undefined
 
+  const showEmpty = !filteredOptions.length && (options.length > 0 || actions.length === 0 || Boolean(query.trim()))
+
   return <>
     <button
       ref={triggerRef}
@@ -249,8 +268,21 @@ export function SelectMenu({
               <span className="select-menu-check" aria-hidden="true">{checked && <UiIcon name="check" size={16}/>}</span>
             </button>
           })}
-          {!filteredOptions.length && <div className="select-menu-empty">没有匹配项</div>}
+          {showEmpty && <div className="select-menu-empty">没有匹配项</div>}
         </div>
+        {actions.length > 0 && <div className="select-menu-actions" aria-label={`${ariaLabel}操作`}>
+          {actions.map(action => <button
+            key={action.key}
+            type="button"
+            className="select-menu-action"
+            disabled={action.disabled}
+            title={action.description}
+            onClick={() => runAction(action)}
+          >
+            {action.icon && <UiIcon className="select-menu-action-icon" name={action.icon} size={15}/>} 
+            <span><b>{action.label}</b>{action.description && <small>{action.description}</small>}</span>
+          </button>)}
+        </div>}
       </div>,
       document.body,
     )}
