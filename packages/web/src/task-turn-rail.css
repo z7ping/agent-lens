@@ -19,7 +19,7 @@
   transform: translateY(-50%);
   opacity: .72;
   pointer-events: none;
-  transition: opacity var(--al-motion-fast) ease;
+  transition: opacity .16s ease;
 }
 .task-turn-rail::-webkit-scrollbar { display: none; }
 .task-turn-rail:hover,
@@ -46,7 +46,7 @@
   height: 3px;
   border-radius: 99px;
   background: color-mix(in srgb, var(--al-muted) 58%, transparent);
-  transition: width var(--al-motion-fast) cubic-bezier(.2,.8,.2,1), background var(--al-motion-fast) ease;
+  transition: width .16s cubic-bezier(.2,.8,.2,1), background .16s ease;
 }
 .task-turn-rail .turn-tick:hover i,
 .task-turn-rail .turn-tick:focus-visible i { width: 21px; background: var(--al-ink); }
@@ -62,7 +62,7 @@
 /*
  * 全局任务边界导航规范。
  * - 位置属于 Workspace 级固定位置，不跟随页面私有宽度漂移；
- * - 安全边距来自正式几何语义 Token；
+ * - 安全边距来自正式 Task Surface 几何语义 Token；
  * - 上下按钮统一 42×42，图标统一 20px；
  * - 页面只提供跳转行为，不得覆盖尺寸、位置和视觉状态。
  */
@@ -75,7 +75,7 @@
 .task-boundary-nav {
   position: fixed;
   bottom: var(--al-safe-task-boundary-block);
-  z-index: var(--al-layer-floating);
+  z-index: 54;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -86,7 +86,7 @@
 .review-page.review-page-embedded .round-nav-actions .round-nav-from-start,
 .review-page.review-page-embedded .round-nav-actions .round-nav-latest {
   position: fixed;
-  z-index: var(--al-layer-floating);
+  z-index: 54;
 }
 .review-page.review-page-embedded .round-nav-actions .round-nav-from-start { bottom: calc(var(--al-safe-task-boundary-block) + 52px); }
 .review-page.review-page-embedded .round-nav-actions .round-nav-latest { bottom: var(--al-safe-task-boundary-block); }
