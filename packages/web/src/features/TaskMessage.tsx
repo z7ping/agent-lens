@@ -80,7 +80,7 @@ export function TaskMessage({
           className={`markdown-surface ${canCollapse && !expanded ? 'is-collapsed' : ''}`}
           style={canCollapse && !expanded && collapsedHeight ? { maxHeight: `${collapsedHeight}px` } : undefined}
         >
-          {view === 'rendered' ? <MarkdownContent text={text}/> : <CopyableCodeBlock className="markdown-source" copyValue={text}>{text}</CopyableCodeBlock>}
+          {view === 'rendered' ? <MarkdownContent text={text} streaming={streaming}/> : <CopyableCodeBlock className="markdown-source" copyValue={text}>{text}</CopyableCodeBlock>}
           {canCollapse && !expanded && <span className="markdown-fade" aria-hidden="true"/>}
         </div>
         {(canCollapse || !user) && <div className="markdown-message-actions">
