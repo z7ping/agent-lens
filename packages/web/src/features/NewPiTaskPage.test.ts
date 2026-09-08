@@ -7,6 +7,7 @@ import { PROJECT_BOOTSTRAP_LIMIT } from './new-pi-task'
 const appPath = fileURLToPath(new URL('../App.tsx', import.meta.url))
 const pagePath = fileURLToPath(new URL('./NewPiTaskPage.tsx', import.meta.url))
 const desktopWorkspacePath = fileURLToPath(new URL('../client/desktop-workspace.ts', import.meta.url))
+const selectMenuPath = fileURLToPath(new URL('../components/SelectMenu.tsx', import.meta.url))
 
 test('new Pi task bootstrap stays bounded and does not initialize review history', async () => {
   assert.equal(PROJECT_BOOTSTRAP_LIMIT, 20)
@@ -23,13 +24,18 @@ test('new Pi task exposes a visible elapsed operation state before entering Live
   assert.match(page, /elapsedMs=\{startingElapsedMs\}/)
 })
 
-test('desktop new Pi task can select an unobserved local workspace without manual cwd input', async () => {
-  const [page, bridge] = await Promise.all([
+test('desktop new Pi task browses an unobserved workspace from the existing project selector', async () => {
+  const [page, bridge, selectMenu] = await Promise.all([
     readFile(pagePath, 'utf8'),
     readFile(desktopWorkspacePath, 'utf8'),
+    readFile(selectMenuPath, 'utf8'),
   ])
   assert.match(page, /selectDesktopWorkspace\(\)/)
-  assert.match(page, />选择文件夹</)
+  assert.match(page, /actions=\{canBrowseWorkspace/)
+  assert.match(page, /label: pickingWorkspace \? '正在打开…' : '打开其他文件夹…'/)
   assert.match(page, /key: `workspace:\$\{cwd\}`/)
+  assert.doesNotMatch(page, />选择文件夹</)
+  assert.match(selectMenu, /export interface SelectMenuAction/)
+  assert.match(selectMenu, /className="select-menu-actions"/)
   assert.match(bridge, /window\.agentLensDesktop!\.selectWorkspace\(\)/)
 })
