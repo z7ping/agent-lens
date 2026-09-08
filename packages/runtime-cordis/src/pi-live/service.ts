@@ -255,6 +255,14 @@ export class DefaultPiLiveService implements PiLiveService {
     })
   }
 
+  private persistSessionIfChanged(runtime: OwnedRuntime, state: PiLiveRuntimeState): void {
+    const nextPath = state.sessionFile?.trim()
+    if (!nextPath) return
+    const currentPath = runtime.input.sessionPath?.trim()
+    if (currentPath && sessionPathKey(currentPath) === sessionPathKey(nextPath) && runtime.input.historyAction === 'continue') return
+    this.persistRuntimeBestEffort(runtime, state)
+  }
+
   private advanceInitialization(runtime: OwnedRuntime, stage: PiLiveInitializationStage, now = Date.now()): void {
     if (runtime.stage !== stage) {
       if (runtime.stage !== 'ready') {
@@ -304,7 +312,7 @@ export class DefaultPiLiveService implements PiLiveService {
         readyState = forkedState
       }
       if (!readyState) readyState = await handle.state().catch(() => undefined)
-      this.persistRuntimeBestEffort(runtime, readyState)
+      if (readyState) this.persistRuntimeBestEffort(runtime, readyState)
 
       this.advanceInitialization(runtime, 'ready')
       runtime.status = 'ready'
@@ -350,7 +358,7 @@ export class DefaultPiLiveService implements PiLiveService {
     const runtime = await this.runtime(id)
     if (!runtime.handle || runtime.status !== 'ready') return { state: await this.runtimeState(runtime), entries: [], leafId: null }
     const snapshot = await runtime.handle.snapshot(since)
-    this.persistRuntimeBestEffort(runtime, snapshot.state)
+    this.persistSessionIfChanged(runtime, snapshot.state)
     return { ...snapshot, state: this.decorateReadyState(runtime, snapshot.state) }
   }
 
@@ -373,16 +381,23 @@ export class DefaultPiLiveService implements PiLiveService {
 
   async terminate(id: string): Promise<void> {
     await this.ensureRecoveryLoaded()
+    await this.recoveryStore?.remove(id)
     const runtime = this.runtimes.get(id)
     if (runtime) await this.terminateRuntime(runtime, true)
-    await this.recoveryStore?.remove(id)
   }
 
   async dispose(): Promise<void> {
     if (this.disposed) return
     this.disposed = true
     if (this.recoveryLoadPromise) await this.recoveryLoadPromise.catch(() => undefined)
-    await Promise.allSettled([...this.runtimes.values()].map(runtime => this.terminateRuntime(runtime, false)))
+    const runtimes = [...this.runtimes.values()]
+    await Promise.allSettled(runtimes.map(async runtime => {
+      if (runtime.status === 'ready' && runtime.handle) {
+        const state = await runtime.handle.state().catch(() => undefined)
+        if (state) await this.persistRuntime(runtime, state).catch(() => undefined)
+      }
+      await this.terminateRuntime(runtime, false)
+    }))
   }
 
   private async terminateRuntime(runtime: OwnedRuntime, explicit: boolean): Promise<void> {
@@ -428,7 +443,7 @@ export class DefaultPiLiveService implements PiLiveService {
     if (runtime.status === 'initializing') runtime.initializationElapsedMs = Math.max(0, Date.now() - runtime.initializationStartedAt)
     if (runtime.status === 'ready' && runtime.handle) {
       const state = await runtime.handle.state()
-      this.persistRuntimeBestEffort(runtime, state)
+      this.persistSessionIfChanged(runtime, state)
       return this.decorateReadyState(runtime, state)
     }
     return {
