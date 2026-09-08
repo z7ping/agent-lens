@@ -6,28 +6,33 @@
   position: fixed;
   z-index: 48;
   display: flex;
-  width: 24px;
-  height: 100vh;
+  width: 44px;
+  height: max-content;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 0;
-  padding: 6px 0;
+  justify-content: flex-start;
+  gap: 4px;
+  padding: 4px 7px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
   transform: translateY(-50%);
-  opacity: .62;
+  opacity: .72;
   pointer-events: none;
-  transition: opacity .16s ease;
+  transition: opacity var(--al-motion-fast) ease;
 }
-.task-turn-rail:hover { opacity: 1; }
+.task-turn-rail::-webkit-scrollbar { display: none; }
+.task-turn-rail:hover,
+.task-turn-rail:focus-within { opacity: 1; }
 .task-turn-rail::before { display: none; content: none; }
 .task-turn-rail .turn-tick {
   position: relative;
   display: grid;
-  width: 24px;
-  height: 9px;
-  min-height: 2px;
-  max-height: 9px;
-  flex: 0 1 9px;
+  width: 30px;
+  height: 24px;
+  min-height: 24px;
+  max-height: 24px;
+  flex: 0 0 24px;
   place-items: center;
   padding: 0;
   border: 0;
@@ -37,71 +42,40 @@
 }
 .task-turn-rail .turn-tick i {
   display: block;
-  width: 6px;
-  height: 1.5px;
+  width: 13px;
+  height: 3px;
   border-radius: 99px;
   background: color-mix(in srgb, var(--al-muted) 58%, transparent);
-  transition: width .16s cubic-bezier(.2,.8,.2,1), height .16s ease, background .16s ease;
+  transition: width var(--al-motion-fast) cubic-bezier(.2,.8,.2,1), background var(--al-motion-fast) ease;
 }
-.task-turn-rail .turn-tick:hover i { width: 24px; height: 2px; background: var(--al-ink); }
-.task-turn-rail .turn-tick:has(+ .turn-tick:hover) i,
-.task-turn-rail .turn-tick:hover + .turn-tick i { width: 18px; }
-.task-turn-rail .turn-tick:has(+ .turn-tick + .turn-tick:hover) i,
-.task-turn-rail .turn-tick:hover + .turn-tick + .turn-tick i { width: 13px; }
-.task-turn-rail .turn-tick:has(+ .turn-tick + .turn-tick + .turn-tick:hover) i,
-.task-turn-rail .turn-tick:hover + .turn-tick + .turn-tick + .turn-tick i { width: 9px; }
-.task-turn-rail .turn-tick.active i { background: var(--al-ink); }
+.task-turn-rail .turn-tick:hover i,
+.task-turn-rail .turn-tick:focus-visible i { width: 21px; background: var(--al-ink); }
+.task-turn-rail .turn-tick.active i { width: 23px; background: var(--al-ink); }
 .task-turn-rail .turn-tick.running i {
-  width: 18px;
-  height: 2px;
+  width: 23px;
   background: var(--al-accent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--al-accent) 10%, transparent);
 }
-.task-turn-rail .turn-tick.err i { background: color-mix(in srgb, var(--al-danger) 55%, var(--al-line)); }
+.task-turn-rail .turn-tick.err i { background: color-mix(in srgb, var(--al-danger) 62%, var(--al-line)); }
 .task-turn-rail .turn-tick.err.active i { background: var(--al-danger); }
-.task-turn-rail .turn-tick::after {
-  content: attr(data-tip);
-  position: absolute;
-  top: 50%;
-  left: calc(100% + 6px);
-  z-index: 90;
-  width: max-content;
-  max-width: 300px;
-  padding: 6px 9px;
-  transform: translateY(-50%);
-  border: 1px solid var(--al-line);
-  border-radius: 7px;
-  background: var(--al-ink);
-  box-shadow: 0 6px 20px rgb(0 0 0 / .18);
-  color: var(--al-surface);
-  font-size: 12px;
-  line-height: 1.5;
-  text-align: left;
-  white-space: normal;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity .1s ease;
-}
-.task-turn-rail .turn-tick:hover::after,
-.task-turn-rail .turn-tick:focus-visible::after { opacity: 1; }
 
 /*
  * 全局任务边界导航规范。
- * - 位置属于 Workspace 级固定位置，不跟随 Reader / 页面宽度漂移；
- * - 右侧保留 40px、底部保留 32px 安全边距；
+ * - 位置属于 Workspace 级固定位置，不跟随页面私有宽度漂移；
+ * - 安全边距来自正式几何语义 Token；
  * - 上下按钮统一 42×42，图标统一 20px；
  * - 页面只提供跳转行为，不得覆盖尺寸、位置和视觉状态。
  */
 .task-boundary-nav,
 .review-page.review-page-embedded .round-nav-actions .round-nav-from-start,
 .review-page.review-page-embedded .round-nav-actions .round-nav-latest {
-  right: 40px;
+  right: var(--al-safe-task-boundary-inline);
 }
 
 .task-boundary-nav {
   position: fixed;
-  bottom: 32px;
-  z-index: 54;
+  bottom: var(--al-safe-task-boundary-block);
+  z-index: var(--al-layer-floating);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -112,10 +86,10 @@
 .review-page.review-page-embedded .round-nav-actions .round-nav-from-start,
 .review-page.review-page-embedded .round-nav-actions .round-nav-latest {
   position: fixed;
-  z-index: 54;
+  z-index: var(--al-layer-floating);
 }
-.review-page.review-page-embedded .round-nav-actions .round-nav-from-start { bottom: 84px; }
-.review-page.review-page-embedded .round-nav-actions .round-nav-latest { bottom: 32px; }
+.review-page.review-page-embedded .round-nav-actions .round-nav-from-start { bottom: calc(var(--al-safe-task-boundary-block) + 52px); }
+.review-page.review-page-embedded .round-nav-actions .round-nav-latest { bottom: var(--al-safe-task-boundary-block); }
 
 .task-boundary-nav > .ui-icon-button,
 .review-page.review-page-embedded .round-nav-actions .round-nav-from-start,
