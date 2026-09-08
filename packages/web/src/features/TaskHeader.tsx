@@ -1,7 +1,7 @@
 import { Children, Fragment, isValidElement, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { UiIcon } from '../components/ui'
 import { useTaskSurfaceView } from './TaskSurface'
-import { UiIcon } from '../components/UiIcon'
 
 export interface TaskHeaderMetric {
   label: string
@@ -124,10 +124,10 @@ export function TaskHeader({ marker, agent, context, status, title, submeta, met
         </div>}
         {hasHeaderActions && <div className="task-header-actions">
           {auditToggle && <details className="task-view-menu">
-            <summary aria-label="视图选项">视图 <UiIcon name="chevron-down" size={12}/></summary>
+            <summary aria-label="视图选项">视图 <UiIcon name="chevron-down" size={14}/></summary>
             <div className="task-view-menu-popover">
-              <button type="button" aria-pressed={showAllEvents} onClick={() => auditToggle.props.onClick?.()}><span>全部事件</span><b>{showAllEvents && <UiIcon name="check" size={12}/>}</b></button>
-              <button type="button" aria-pressed={showUsageDetails} onClick={() => setShowUsageDetails(!showUsageDetails)}><span>用量详情</span><b>{showUsageDetails && <UiIcon name="check" size={12}/>}</b></button>
+              <button type="button" aria-pressed={showAllEvents} onClick={() => auditToggle.props.onClick?.()}><span>全部事件</span><b>{showAllEvents && <UiIcon name="check" size={14}/>}</b></button>
+              <button type="button" aria-pressed={showUsageDetails} onClick={() => setShowUsageDetails(!showUsageDetails)}><span>用量详情</span><b>{showUsageDetails && <UiIcon name="check" size={14}/>}</b></button>
             </div>
           </details>}
           {inlineActions}
