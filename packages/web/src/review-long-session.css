@@ -1,7 +1,7 @@
 /*
  * Review 长会话唯一性能/导航所有者。
  * 只负责虚拟挂载、独立滚动、Round Nav 与长列表加载反馈；
- * Task Surface 共享轮次导轨由 task-turn-rail.css 负责。
+ * Task Surface 共享轮次导轨与边界导航由 task-turn-rail.css 负责。
  */
 .virtual-round-shell { min-width: 0; }
 .virtual-round-shell + .virtual-round-shell { border-top: 0; }
@@ -42,7 +42,7 @@
 
 /*
  * 轮次筛选和“收起当前页”属于页面级阅读控制，和面包屑共享顶部 38px。
- * 边界跳转则是阅读导航，固定在右下角，不再占顶部横向空间。
+ * 边界跳转属于 Task Surface 全局导航，不在本文件维护尺寸和位置。
  */
 .review-page.review-page-embedded .round-nav {
   position: fixed;
@@ -121,57 +121,6 @@
 .review-page .round-nav-actions .round-nav-expand { margin-left: 0; color: var(--al-muted); }
 .review-page .round-nav-actions button { padding-inline: 7px; color: var(--al-muted); font-weight: 560; }
 .review-page .round-nav-status { margin-left: 8px; color: var(--al-muted); font-size: 12px; white-space: nowrap; }
-
-/* 右下角边界跳转使用统一 Lucide 图标；文案保留在 DOM 中供辅助技术使用。 */
-.review-page.review-page-embedded .round-nav-actions .round-nav-from-start,
-.review-page.review-page-embedded .round-nav-actions .round-nav-latest {
-  position: fixed;
-  right: 24px;
-  z-index: 54;
-  display: inline-flex;
-  width: 42px;
-  height: 42px;
-  min-height: 42px;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 1px solid color-mix(in srgb, var(--al-accent) 28%, var(--al-line-strong));
-  border-radius: 11px;
-  box-shadow: 0 7px 20px rgb(16 24 40 / .14);
-  font-size: 0;
-  line-height: 0;
-  pointer-events: auto;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-.review-page.review-page-embedded .round-nav-actions .round-nav-from-start {
-  bottom: 76px;
-  background: color-mix(in srgb, var(--al-surface) 92%, transparent);
-  color: var(--al-accent);
-}
-.review-page.review-page-embedded .round-nav-actions .round-nav-latest {
-  bottom: 24px;
-  border-color: var(--al-accent);
-  background: var(--al-accent);
-  color: var(--al-on-accent);
-}
-.review-page.review-page-embedded .round-nav-actions .round-nav-from-start:hover:not(:disabled) {
-  background: var(--al-surface);
-  color: var(--al-accent);
-  box-shadow: 0 9px 24px rgb(16 24 40 / .17), inset 0 0 0 1px color-mix(in srgb, var(--al-accent) 18%, transparent);
-  transform: translateY(-1px);
-}
-.review-page.review-page-embedded .round-nav-actions .round-nav-latest:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--al-accent) 88%, var(--al-ink));
-  color: var(--al-on-accent);
-  box-shadow: 0 9px 24px color-mix(in srgb, var(--al-accent) 28%, transparent);
-  transform: translateY(-1px);
-}
-.review-page.review-page-embedded .round-nav-actions .round-nav-from-start svg,
-.review-page.review-page-embedded .round-nav-actions .round-nav-latest svg {
-  width: 18px;
-  height: 18px;
-}
 .review-page.review-page-embedded .round-nav-actions .round-nav-live { display: none; }
 
 .detail-load-sentinel {
@@ -282,15 +231,6 @@
     pointer-events: auto;
   }
   .review-page.review-page-embedded .round-nav-actions .round-nav-expand { margin-left: 6px; }
-  .review-page.review-page-embedded .round-nav-actions .round-nav-from-start,
-  .review-page.review-page-embedded .round-nav-actions .round-nav-latest {
-    right: 14px;
-    width: 40px;
-    height: 40px;
-    min-height: 40px;
-  }
-  .review-page.review-page-embedded .round-nav-actions .round-nav-from-start { bottom: 68px; }
-  .review-page.review-page-embedded .round-nav-actions .round-nav-latest { bottom: 18px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .review-page .round-nav button { transition: none; }
