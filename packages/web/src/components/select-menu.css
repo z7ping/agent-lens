@@ -56,6 +56,16 @@
 .select-menu-check { width: 18px; flex: 0 0 18px; color: var(--al-accent); font-size: 14px; font-weight: 700; text-align: center; }
 .select-menu-empty { padding: 18px 10px; color: var(--al-muted); font-size: 12px; text-align: center; }
 
+.select-menu-actions { margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--al-line); }
+.select-menu-action { display: flex; width: 100%; min-height: 40px; align-items: center; gap: 9px; padding: 7px 9px; border: 0; border-radius: 8px; background: transparent; color: var(--al-ink-2); text-align: left; cursor: pointer; }
+.select-menu-action:hover:not(:disabled),
+.select-menu-action:focus-visible { background: var(--al-soft-2); color: var(--al-ink); }
+.select-menu-action:disabled { cursor: default; opacity: .46; }
+.select-menu-action-icon { width: 15px; height: 15px; flex: 0 0 15px; color: var(--al-accent); }
+.select-menu-action > span { min-width: 0; }
+.select-menu-action b { display: block; overflow: hidden; font-size: 13px; font-weight: 600; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.select-menu-action small { display: block; margin-top: 2px; overflow: hidden; color: var(--al-muted); font-size: 12px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+
 @media (max-width: 767.98px) {
   .select-menu-popover { border-radius: 11px; }
   .select-menu-trigger-toolbar { min-width: 92px; }
