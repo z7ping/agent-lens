@@ -82,6 +82,8 @@ process.on('unhandledRejection', error => {
 bootStage('before-external-links-import')
 await import('./external-links.mjs')
 bootStage('after-external-links-import')
+await import('./workspace-picker.mjs')
+bootStage('after-workspace-picker-import')
 await import('./main.mjs')
 bootStage('after-main-import')
 await import('./integration.mjs')
