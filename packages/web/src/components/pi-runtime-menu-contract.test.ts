@@ -2,17 +2,21 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
-const menu = readFileSync(new URL('./PiRuntimeMenu.tsx', import.meta.url), 'utf8')
+const action = readFileSync(new URL('./PiRuntimeMenu.tsx', import.meta.url), 'utf8')
 const page = readFileSync(new URL('../features/PiLivePage.tsx', import.meta.url), 'utf8')
+const icons = readFileSync(new URL('./UiIcon.tsx', import.meta.url), 'utf8')
 
-test('Pi Live 将 Runtime 生命周期操作收进标准更多菜单并二次确认', () => {
+test('Pi Live 用统一电源图标承载 Runtime 结束操作，并保留二次确认', () => {
   assert.match(page, /<PiRuntimeMenu busy=\{busy\}/)
-  assert.doesNotMatch(page, /variant="danger" className="pi-live-menu"/)
-  assert.doesNotMatch(page, /title="结束 Pi Runtime" aria-label="结束 Pi Runtime"/)
-  assert.match(menu, /<UiIcon name="more" size=\{14\}\/>/)
-  assert.match(menu, /<Popover[\s\S]*?role="menu"/)
-  assert.match(menu, />结束 Pi Runtime<\/button>/)
-  assert.match(menu, /<Dialog[\s\S]*?title="结束 Pi Runtime？"/)
-  assert.match(menu, /variant="danger"[\s\S]*?>结束 Runtime<\/Button>/)
-  assert.match(menu, /停止当前任务/)
+  assert.match(action, /variant="danger"/)
+  assert.match(action, /title="结束 Pi Runtime"/)
+  assert.match(action, /aria-label="结束 Pi Runtime"/)
+  assert.match(action, /<UiIcon name="power" size=\{14\}\/>/)
+  assert.doesNotMatch(action, /<Popover/)
+  assert.doesNotMatch(action, /role="menu"/)
+  assert.match(action, /<Dialog[\s\S]*?title="结束 Pi Runtime？"/)
+  assert.match(action, /variant="danger"[\s\S]*?>结束 Runtime<\/Button>/)
+  assert.match(action, /停止当前任务/)
+  assert.match(icons, /\bPower\b/)
+  assert.match(icons, /power: Power/)
 })
