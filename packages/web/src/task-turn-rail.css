@@ -88,19 +88,19 @@
 /*
  * 全局任务边界导航规范。
  * - 位置属于 Workspace 级固定位置，不跟随 Reader / 页面宽度漂移；
- * - 右侧统一保留 32px、底部保留 24px 安全边距；
+ * - 右侧保留 40px、底部保留 32px 安全边距；
  * - 上下按钮统一 42×42，图标统一 20px；
  * - 页面只提供跳转行为，不得覆盖尺寸、位置和视觉状态。
  */
 .task-boundary-nav,
 .review-page.review-page-embedded .round-nav-actions .round-nav-from-start,
 .review-page.review-page-embedded .round-nav-actions .round-nav-latest {
-  right: 32px;
+  right: 40px;
 }
 
 .task-boundary-nav {
   position: fixed;
-  bottom: 24px;
+  bottom: 32px;
   z-index: 54;
   display: flex;
   flex-direction: column;
@@ -113,8 +113,8 @@
   position: fixed;
   z-index: 54;
 }
-.review-page.review-page-embedded .round-nav-actions .round-nav-from-start { bottom: 76px; }
-.review-page.review-page-embedded .round-nav-actions .round-nav-latest { bottom: 24px; }
+.review-page.review-page-embedded .round-nav-actions .round-nav-from-start { bottom: 84px; }
+.review-page.review-page-embedded .round-nav-actions .round-nav-latest { bottom: 32px; }
 
 .task-boundary-nav > .ui-icon-button,
 .review-page.review-page-embedded .round-nav-actions .round-nav-from-start,
