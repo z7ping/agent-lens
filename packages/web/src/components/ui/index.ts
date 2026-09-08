@@ -26,7 +26,7 @@ export { Dialog, Drawer, Popover } from './Overlay'
 export type { DialogProps, DrawerProps, PopoverProps } from './Overlay'
 
 export { SelectMenu } from '../SelectMenu'
-export type { SelectMenuOption, SelectMenuVariant } from '../SelectMenu'
+export type { SelectMenuAction, SelectMenuOption, SelectMenuVariant } from '../SelectMenu'
 
 export { UiIcon } from '../UiIcon'
 export type { UiIconName, UiIconProps } from '../UiIcon'
