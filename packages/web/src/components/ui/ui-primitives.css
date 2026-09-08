@@ -55,6 +55,13 @@
 }
 
 .ui-icon-button.is-danger {
+  border-color: color-mix(in srgb, var(--al-danger) 34%, var(--al-line-strong));
+  color: var(--al-danger);
+}
+
+.ui-icon-button.is-danger:hover:not(:disabled) {
+  border-color: var(--al-danger);
+  background: var(--al-danger-soft);
   color: var(--al-danger);
 }
 
@@ -115,64 +122,47 @@
   background: var(--al-soft-2);
   color: var(--al-muted);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 620;
   line-height: 1.2;
-  white-space: nowrap;
 }
 
-.ui-status-badge.is-accent {
-  border-color: color-mix(in srgb, var(--al-accent) 24%, var(--al-line));
-  background: var(--al-accent-soft);
-  color: var(--al-accent);
-}
-
-.ui-status-badge.is-success {
-  border-color: color-mix(in srgb, var(--al-success) 24%, var(--al-line));
-  background: var(--al-success-soft);
-  color: var(--al-success);
-}
-
-.ui-status-badge.is-warning {
-  border-color: color-mix(in srgb, var(--al-warning) 24%, var(--al-line));
-  background: var(--al-warning-soft);
-  color: var(--al-warning);
-}
-
-.ui-status-badge.is-danger {
-  border-color: color-mix(in srgb, var(--al-danger) 24%, var(--al-line));
-  background: var(--al-danger-soft);
-  color: var(--al-danger);
-}
+.ui-status-badge.is-accent { border-color: color-mix(in srgb, var(--al-accent) 25%, var(--al-line)); background: var(--al-accent-soft); color: var(--al-accent); }
+.ui-status-badge.is-success { border-color: color-mix(in srgb, var(--al-success) 25%, var(--al-line)); background: var(--al-success-soft); color: var(--al-success); }
+.ui-status-badge.is-warning { border-color: color-mix(in srgb, var(--al-warning) 25%, var(--al-line)); background: var(--al-warning-soft); color: var(--al-warning); }
+.ui-status-badge.is-danger { border-color: color-mix(in srgb, var(--al-danger) 25%, var(--al-line)); background: var(--al-danger-soft); color: var(--al-danger); }
 
 .ui-status-dot {
   width: 6px;
   height: 6px;
-  flex: 0 0 auto;
+  flex: 0 0 6px;
   border-radius: 50%;
   background: currentColor;
 }
 
 .ui-disclosure {
-  min-width: 0;
+  border: 1px solid var(--al-line);
+  border-radius: 9px;
+  background: var(--al-surface);
 }
 
 .ui-disclosure > summary {
-  min-height: 30px;
+  min-height: 34px;
   display: flex;
   align-items: center;
   gap: 7px;
-  cursor: pointer;
-  list-style: none;
+  padding: 0 10px;
   color: var(--al-ink-2);
   font-size: 12px;
+  font-weight: 620;
+  cursor: pointer;
+  list-style: none;
 }
 
-.ui-disclosure > summary::-webkit-details-marker {
-  display: none;
-}
+.ui-disclosure > summary::-webkit-details-marker { display: none; }
 
 .ui-disclosure-chevron {
   flex: 0 0 auto;
+  color: var(--al-muted);
   transition: transform .15s ease;
 }
 
@@ -188,18 +178,23 @@
 .ui-disclosure-meta {
   flex: 0 0 auto;
   color: var(--al-muted);
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .ui-disclosure-body {
-  min-width: 0;
-  padding-top: 6px;
+  padding: 8px 10px 10px;
+  border-top: 1px solid var(--al-line);
 }
 
 .ui-toolbar {
   min-height: 50px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--al-line);
+  background: var(--al-surface);
 }
 
 .ui-toolbar-group {
@@ -213,69 +208,46 @@
   margin-left: auto;
 }
 
-.ui-breadcrumb {
-  min-width: 0;
-}
-
 .ui-breadcrumb ol {
-  display: flex;
   min-width: 0;
-  align-items: center;
-  gap: 5px;
   margin: 0;
   padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
   list-style: none;
 }
 
 .ui-breadcrumb li {
-  display: flex;
   min-width: 0;
+  display: flex;
   align-items: center;
-  gap: 5px;
-  color: var(--al-muted-2);
+  gap: 4px;
+  color: var(--al-muted);
   font-size: 12px;
-  white-space: nowrap;
 }
 
-.ui-breadcrumb li[aria-current='page'] {
-  min-width: 0;
+.ui-breadcrumb li:last-child {
   color: var(--al-ink-2);
-  font-weight: 620;
 }
 
 .ui-breadcrumb-item {
-  display: block;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.ui-breadcrumb a {
-  color: inherit;
-  text-decoration: none;
-}
-
-.ui-breadcrumb a:hover {
-  color: var(--al-ink);
+  white-space: nowrap;
 }
 
 .ui-breadcrumb-separator {
-  flex: 0 0 12px;
+  flex: 0 0 auto;
   color: var(--al-muted-2);
-}
-
-@media (max-width: 991.98px) {
-  .ui-toolbar {
-    align-items: flex-start;
-    flex-wrap: wrap;
-    padding-block: 8px;
-  }
-
-  .ui-toolbar-group.is-end {
-    margin-left: 0;
-  }
 }
 
 @keyframes ui-spin {
   to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-button-spinner { animation: none; }
+  .ui-disclosure-chevron { transition: none; }
 }
