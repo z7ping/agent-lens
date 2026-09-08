@@ -29,7 +29,7 @@ export function PiRuntimeMenu({
         aria-expanded={menuOpen}
         disabled={busy}
         onClick={() => setMenuOpen(value => !value)}
-      ><UiIcon name="menu" size={14}/></IconButton>
+      ><UiIcon name="more" size={14}/></IconButton>
     </span>
 
     <Popover
