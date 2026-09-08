@@ -388,10 +388,25 @@ export class PiLiveApi {
       } catch (error) {
         if (disposed || terminal || generation !== probeGeneration) return
         if (error instanceof PiLiveRequestError && error.status === 404) {
+          const message = 'Pi Live 任务已结束，或当前版本没有可用于恢复该任务的持久状态。'
           terminal = true
           recoveryGeneration += 1
           source.close()
-          handlers.onError?.(new Error('Pi Live 任务已结束，或当前版本没有可用于恢复该任务的持久状态。'))
+          handlers.onSnapshot?.({
+            state: {
+              runtimeSessionId,
+              status: 'failed',
+              initializationStage: 'starting_worker',
+              initializationMessage: 'Pi Runtime 无法恢复',
+              error: message,
+              isStreaming: false,
+              isCompacting: false,
+              pendingMessageCount: 0,
+            },
+            entries: [],
+            leafId: null,
+          })
+          handlers.onError?.(new Error(message))
         }
       }
     }
