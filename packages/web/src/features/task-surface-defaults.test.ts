@@ -5,6 +5,7 @@ import test from 'node:test'
 const reviewPage = readFileSync(new URL('./ReviewPage.tsx', import.meta.url), 'utf8')
 const piLivePage = readFileSync(new URL('./PiLivePage.tsx', import.meta.url), 'utf8')
 const taskThinking = readFileSync(new URL('./TaskThinking.tsx', import.meta.url), 'utf8')
+const taskDetailCss = readFileSync(new URL('../task-detail.css', import.meta.url), 'utf8')
 const mainEntry = readFileSync(new URL('../main.tsx', import.meta.url), 'utf8')
 
 test('Task Review defaults to full observable events without a DOM adapter', () => {
@@ -69,6 +70,12 @@ test('Pi Live defaults and resets to full observable events natively', () => {
   assert.match(piLivePage, /const \[showAllEvents, setShowAllEvents\] = useState\(true\)/)
   assert.match(piLivePage, /setShowAllEvents\(true\)/)
   assert.doesNotMatch(piLivePage, /setShowAllEvents\(false\)/)
+})
+
+test('Pi Live Header 保持安全边距并使用统一 Pi Agent 图标', () => {
+  assert.match(piLivePage, /marker=\{<span className="agent-icon source-pi" aria-hidden="true"><UiIcon name="agent" size=\{14\}\/\><\/span>\}/)
+  assert.doesNotMatch(piLivePage, /marker=\{<span className=\{state\?\.isStreaming/)
+  assert.match(taskDetailCss, /\.task-surface-live \.task-header \{[\s\S]*?padding-inline: 18px;/)
 })
 
 test('legacy Task Surface MutationObserver compatibility layer is removed', () => {

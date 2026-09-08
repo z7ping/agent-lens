@@ -911,7 +911,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
 
     <TaskSurface mode="live" className="pi-live-workspace">
       <TaskHeader
-        marker={<span className={state?.isStreaming ? 'pi-live-pulse' : 'pi-live-idle-dot'}/>}
+        marker={<span className="agent-icon source-pi" aria-hidden="true"><UiIcon name="agent" size={14}/></span>}
         agent={taskDetailModel.agentLabel}
         context={taskDetailModel.contextLabel}
         status={<span className={!connected ? 'pi-live-disconnected' : undefined}>{taskDetailModel.statusLabel}</span>}

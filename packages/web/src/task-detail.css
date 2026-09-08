@@ -148,8 +148,12 @@
 .task-surface .task-header-metric[data-tone='danger'] span { color: var(--al-danger); }
 .task-surface .task-header-metric[data-tone='accent'] b { color: var(--al-accent); }
 
-/* Live Header 固定为单行。 */
-.task-surface-live .task-header { grid-template-columns: auto minmax(0, 1fr) auto auto; grid-template-rows: 30px; }
+/* Live Header 固定为单行，并由 Task Surface 自己持有左右安全间距。 */
+.task-surface-live .task-header {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-rows: 30px;
+  padding-inline: 18px;
+}
 .task-surface-live .task-header-meta { grid-column: 1; grid-row: 1; }
 .task-surface-live .task-header-title { grid-column: 2; grid-row: 1; }
 .task-surface-live .task-header-metrics { grid-column: 3; grid-row: 1; }
@@ -503,7 +507,7 @@
   .task-surface .task-header-actions { grid-column: 2; grid-row: 1; }
   .task-surface .task-header-submeta { grid-column: 1 / 3; grid-row: 2; }
   .task-surface .task-header-metrics { display: none; }
-  .task-surface-live .task-header { grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: 30px 22px; }
+  .task-surface-live .task-header { grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: 30px 22px; padding-inline: 12px; }
   .task-surface-live .task-header-title { grid-column: 1; grid-row: 1; }
   .task-surface-live .task-header-actions { grid-column: 2; grid-row: 1 / 3; }
   .task-surface-live .task-header-metrics { display: flex; grid-column: 1; grid-row: 2; justify-self: start; }
