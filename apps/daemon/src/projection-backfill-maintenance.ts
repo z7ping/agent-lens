@@ -102,6 +102,10 @@ export async function backfillToolUsageFactProjection(
 ): Promise<ProjectionBackfillRunResult> {
   if (!maintenance) return { scanned: 0, written: 0, batches: 0, aborted: signal.aborted }
 
+  // Coverage scans the whole projection. It must earn the same foreground-idle
+  // permit as a backfill batch, otherwise startup can contend with an active API read.
+  await gate.wait(signal)
+  if (signal.aborted) return { scanned: 0, written: 0, batches: 0, aborted: true }
   const coverageReader = maintenance.toolUsageFactCoverageForMaintenance ?? maintenance.toolUsageFactCoverage
   const coverage = await coverageReader?.call(maintenance)
   if (coverage?.ready) {

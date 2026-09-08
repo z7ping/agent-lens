@@ -141,10 +141,7 @@ export class ReviewInteractionPager {
       observationCount += descriptor.observationCount
     }
 
-    const interactions: ReviewInteractionDto[] = []
-    for (const descriptor of selected) {
-      interactions.push(await this.descriptors.materialize(logicalSessionId, descriptor))
-    }
+    const interactions = await this.descriptors.materializeMany(logicalSessionId, selected)
     const last = selected.at(-1)
     const hasMore = Boolean(last && candidates.length > selected.length)
     const nextCursor = hasMore && last
@@ -266,8 +263,7 @@ export class ReviewInteractionPager {
       return threshold !== null && durationMs(descriptor.startedAt, descriptor.endedAt) >= threshold
     })
     const selected = matches.slice(0, limit)
-    const interactions: ReviewInteractionDto[] = []
-    for (const descriptor of selected) interactions.push(await this.descriptors.materialize(logicalSessionId, descriptor))
+    const interactions = await this.descriptors.materializeMany(logicalSessionId, selected)
     const hasMore = matches.length > limit
     const last = selected.at(-1)
     const nextCursor = hasMore && last

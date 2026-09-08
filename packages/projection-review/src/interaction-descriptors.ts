@@ -363,6 +363,51 @@ export class InteractionDescriptorStore {
   }
 
   async materialize(logicalSessionId: string, descriptor: InteractionDescriptor): Promise<ReviewInteractionDto> {
+    const [interaction] = await this.materializeMany(logicalSessionId, [descriptor])
+    if (!interaction) throw new Error(`Review projection integrity error: empty interaction ${descriptor.ordinal}`)
+    return interaction
+  }
+
+  /**
+   * Materialise a bounded Review page in two stages. Observation ranges remain
+   * independent so descriptor integrity is preserved, but evidence and identity
+   * hydration are deliberately shared across the complete foreground page.
+   * Calling TimelineProjection once prevents each interaction from serially
+   * issuing the same large evidence-reader work.
+   */
+  async materializeMany(
+    logicalSessionId: string,
+    descriptors: readonly InteractionDescriptor[],
+  ): Promise<ReviewInteractionDto[]> {
+    const startedAt = performance.now()
+    const groups: Array<{ descriptor: InteractionDescriptor; observations: CanonicalObservation[]; pages: number }> = []
+    for (const descriptor of descriptors) {
+      groups.push(await this.loadObservations(logicalSessionId, descriptor))
+    }
+    const observations = groups.flatMap(group => group.observations)
+    const itemsById = new Map((await this.timeline.mapObservations(observations)).map(item => [item.id, item]))
+    const interactions = groups.map(group => {
+      const items = group.observations.map(observation => {
+        const item = itemsById.get(observation.id)
+        if (!item) throw new Error(`Review projection integrity error: missing timeline item ${observation.id}`)
+        return item
+      })
+      const interaction = buildInteractionGroups([items], group.descriptor.ordinal)[0]
+      if (!interaction) throw new Error(`Review projection integrity error: empty interaction ${group.descriptor.ordinal}`)
+      return interaction
+    })
+    logSlowDescriptorPhase('materialize-many', startedAt, {
+      interactions: interactions.length,
+      observations: observations.length,
+      pages: groups.reduce((total, group) => total + group.pages, 0),
+    })
+    return interactions
+  }
+
+  private async loadObservations(
+    logicalSessionId: string,
+    descriptor: InteractionDescriptor,
+  ): Promise<{ descriptor: InteractionDescriptor; observations: CanonicalObservation[]; pages: number }> {
     const startedAt = performance.now()
     const first = await this.storage.repositories.observations.get(descriptor.start.id)
     if (!first) throw new Error(`Review projection integrity error: missing observation ${descriptor.start.id}`)
@@ -390,11 +435,8 @@ export class InteractionDescriptorStore {
       after = observationCursor(page[page.length - 1]!)
     }
 
-    const items = await this.timeline.mapObservations(observations)
-    const interaction = buildInteractionGroups([items], descriptor.ordinal)[0]
-    if (!interaction) throw new Error(`Review projection integrity error: empty interaction ${descriptor.ordinal}`)
-    logSlowDescriptorPhase('materialize', startedAt, { pages, observations: observations.length, nodes: interaction.nodes.length })
-    return interaction
+    logSlowDescriptorPhase('load-observations', startedAt, { pages, observations: observations.length })
+    return { descriptor, observations, pages }
   }
 }
 
