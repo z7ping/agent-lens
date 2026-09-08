@@ -104,6 +104,7 @@
   justify-self: end;
   gap: 6px;
 }
+.task-surface .task-header-actions button { pointer-events: auto; }
 .task-surface .task-header-metrics {
   grid-column: 3;
   grid-row: 2;

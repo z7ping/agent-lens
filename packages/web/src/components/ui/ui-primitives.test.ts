@@ -88,8 +88,8 @@ test('Dialog and Drawer own common accessibility behavior', () => {
 test('shared composites and Pi surfaces reuse UI primitives', () => {
   assert.match(composerPill, /import \{ SelectMenu, type SelectMenuOption \} from '\.\/ui'/)
   assert.match(stateViews, /import \{ Button \} from '\.\/ui'/)
-  assert.match(piStartup, /import \{ Button \} from '\.\/ui'/)
-  assert.match(piLivePage, /import \{ Button, IconButton, Input, Textarea \} from '\.\.\/components\/ui'/)
+  assert.match(piStartup, /import \{ Button, UiIcon \} from '\.\/ui'/)
+  assert.match(piLivePage, /import \{ Button, Disclosure, IconButton, Input, Textarea \} from '\.\.\/components\/ui'/)
   assert.match(piLivePage, /<Textarea className="pi-live-blocking-field"/)
   assert.match(piLivePage, /<Input className="pi-live-blocking-field"/)
   assert.match(piLivePage, /<IconButton variant="primary" className="pi-live-send"/)

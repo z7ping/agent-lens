@@ -114,8 +114,9 @@ requireText(piHistory, /elapsedMs\(fact\.at, paired\.at\)/, 'Pi History 必须�
 requireText(piTaskRound, /className="task-tool-live-output"/, 'Pi Running 必须显示局部实时输出')
 requireText(piTaskRound, /className="task-tool-output-details" open=\{tool\.status === 'error'\}/, '错误 Tool 输出必须默认展开')
 requireText(piTaskRound, /startedAtMs/, 'Pi Running Tool 必须保留本轮起始时间')
-const explicitThinkingExpanded = piTaskRound.match(/<TaskThinking[^>]*defaultExpanded/g) ?? []
-if (explicitThinkingExpanded.length < 2) failures.push('Pi History / Running Thinking 必须显式默认展开')
+requireText(piTaskRound, /return <TaskThinking model=\{model\} defaultExpanded>/, 'Pi Thinking 必须通过共享 TaskThinking 显式默认展开')
+const sharedHistoryEntries = piTaskRound.match(/<HistoryEntries\b/g) ?? []
+if (sharedHistoryEntries.length < 2) failures.push('Pi History / Running Thinking 必须共用默认展开的共享渲染链路')
 
 /* Task Surface 视觉与响应式只有 task-detail.css 一个所有者。 */
 requireText(round, /task-round interaction-block/, 'Round 必须保留稳定阅读锚点')

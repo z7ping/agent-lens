@@ -39,6 +39,9 @@ import './task-turn-rail.css'
 import './components/task-continuation.css'
 // Task Surface 共享详情组件最后加载；页面所有者不得再定义这些共享选择器。
 import './task-detail.css'
+import './components/ui/ui-primitives.css'
+import './components/ui/overlay.css'
+import './components/select-menu.css'
 
 writeTheme(readTheme())
 const disposeLiveRecovery = installLiveRecovery(clientModel)

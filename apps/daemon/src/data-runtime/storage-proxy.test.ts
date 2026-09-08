@@ -56,11 +56,11 @@ const host = (id: string) => ({
 })
 
 test('Data Runtime routes analytics reads to foreground pool and maintenance scans separately', () => {
-  assert.equal(dataRuntimeStorageInternals.READ_TIMEOUT_MS, 2_000)
+  assert.equal(dataRuntimeStorageInternals.READ_TIMEOUT_MS, 20_000)
   assert.equal(dataRuntimeStorageInternals.isReadPath(['toolUsageObservations', 'aggregate']), true)
   assert.equal(dataRuntimeStorageInternals.isReadPath(['projectionBackfill', 'toolUsageFactCoverage']), true)
   assert.equal(dataRuntimeStorageInternals.isMaintenanceReadPath(['projectionBackfill', 'toolUsageFactCoverage']), false)
-  assert.equal(dataRuntimeStorageInternals.timeoutFor(['projectionBackfill', 'toolUsageFactCoverage'], true), 2_000)
+  assert.equal(dataRuntimeStorageInternals.timeoutFor(['projectionBackfill', 'toolUsageFactCoverage'], true), 20_000)
   assert.equal(dataRuntimeStorageInternals.isMaintenanceReadPath(['projectionBackfill', 'toolUsageFactCoverageForMaintenance']), true)
   assert.equal(dataRuntimeStorageInternals.isMaintenanceReadPath(['projectionBackfill', 'repairToolUsageFactCursor']), true)
   assert.equal(dataRuntimeStorageInternals.isMaintenanceReadPath(['repositories', 'sourceRecords', 'listForParserReplay']), true)

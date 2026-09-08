@@ -211,8 +211,9 @@ export class DefaultPiLiveService implements PiLiveService {
       this.runtimes.delete(runtime.id)
       throw error
     }
-    void this.initialize(runtime, runtime.generation)
-    return this.runtimeState(runtime)
+    const initialState = await this.runtimeState(runtime)
+    this.scheduleInitialize(runtime, runtime.generation)
+    return initialState
   }
 
   async retry(runtimeSessionId: string): Promise<PiLiveRuntimeState> {
@@ -234,8 +235,13 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.startupOutput = []
     runtime.capabilities = undefined
     this.publish(runtime, { type: 'runtime_status', status: runtime.status, stage: runtime.stage, message: runtime.message })
-    void this.initialize(runtime, runtime.generation)
-    return this.runtimeState(runtime)
+    const initialState = await this.runtimeState(runtime)
+    this.scheduleInitialize(runtime, runtime.generation)
+    return initialState
+  }
+
+  private scheduleInitialize(runtime: OwnedRuntime, generation: number): void {
+    queueMicrotask(() => { void this.initialize(runtime, generation) })
   }
 
   private createRuntime(id: string, input: PiLiveStartInput, restored: boolean, createdAt = new Date().toISOString()): OwnedRuntime {
@@ -370,6 +376,7 @@ export class DefaultPiLiveService implements PiLiveService {
           runtime.handle = undefined
           throw new Error('Pi 分叉 Runtime 未切换到新的 Session，已拒绝继续')
         }
+        runtime.input = { ...runtime.input, sessionPath: forkedState.sessionFile, historyAction: 'continue' }
         readyState = forkedState
       }
       if (!readyState) readyState = await handle.state().catch(() => undefined)
