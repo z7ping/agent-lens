@@ -71,7 +71,7 @@ export function TaskHeader({ marker, agent, context, status, title, submeta, met
   const primaryActions = collectPrimaryActions(actions)
   const showAllEvents = auditToggle?.props['aria-pressed'] === true
   const headerRef = useRef<HTMLElement>(null)
-  const viewMenuAnchorRef = useRef<HTMLButtonElement>(null)
+  const viewMenuAnchorRef = useRef<HTMLSpanElement>(null)
   const [viewMenuOpen, setViewMenuOpen] = useState(false)
   const [reviewTailHost, setReviewTailHost] = useState<HTMLElement | null>(null)
 
@@ -126,15 +126,16 @@ export function TaskHeader({ marker, agent, context, status, title, submeta, met
         </div>}
         {hasHeaderActions && <div className="task-header-actions">
           {auditToggle && <>
-            <Button
-              ref={viewMenuAnchorRef}
-              size="small"
-              className="task-view-menu-trigger"
-              aria-label="视图选项"
-              aria-haspopup="menu"
-              aria-expanded={viewMenuOpen}
-              onClick={() => setViewMenuOpen(value => !value)}
-            >视图 <UiIcon name="chevron-down" size={14}/></Button>
+            <span ref={viewMenuAnchorRef} className="task-view-menu-anchor">
+              <Button
+                size="small"
+                className="task-view-menu-trigger"
+                aria-label="视图选项"
+                aria-haspopup="menu"
+                aria-expanded={viewMenuOpen}
+                onClick={() => setViewMenuOpen(value => !value)}
+              >视图 <UiIcon name="chevron-down" size={14}/></Button>
+            </span>
             <Popover
               open={viewMenuOpen}
               anchorRef={viewMenuAnchorRef}
