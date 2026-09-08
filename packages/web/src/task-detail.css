@@ -123,17 +123,23 @@
 .task-surface .task-header-metric[data-tone='danger'] span { color: var(--al-danger); }
 .task-surface .task-header-metric[data-tone='accent'] b { color: var(--al-accent); }
 
-/* Live Header 固定为单行，并由 Task Surface 自己持有左右安全间距。 */
+/* Live Header 固定为单行；工作区上下文使用共享 submeta 槽位，不另造页面私有 Header。 */
 .task-surface-live .task-header {
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, auto) auto auto;
   grid-template-rows: 30px;
   padding-inline: 18px;
 }
 .task-surface-live .task-header-meta { grid-column: 1; grid-row: 1; }
 .task-surface-live .task-header-title { grid-column: 2; grid-row: 1; }
-.task-surface-live .task-header-metrics { grid-column: 3; grid-row: 1; }
-.task-surface-live .task-header-actions { grid-column: 4; grid-row: 1; }
-.task-surface-live .task-header-submeta { display: none; }
+.task-surface-live .task-header-submeta {
+  display: flex;
+  grid-column: 3;
+  grid-row: 1;
+  max-width: min(30vw, 420px);
+  justify-self: start;
+}
+.task-surface-live .task-header-metrics { grid-column: 4; grid-row: 1; }
+.task-surface-live .task-header-actions { grid-column: 5; grid-row: 1; }
 
 /* ── Disclosure ── */
 .task-surface .task-disclosure-chevron {
@@ -473,6 +479,10 @@
   .task-surface .task-tool-row { grid-template-columns: 64px auto minmax(0, 1fr); }
   .task-surface .task-tool-action { display: none; }
   .task-surface .task-header-metric:nth-child(n+5) { display: none; }
+  .task-surface-live .task-header { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+  .task-surface-live .task-header-submeta { display: none; }
+  .task-surface-live .task-header-metrics { grid-column: 3; }
+  .task-surface-live .task-header-actions { grid-column: 4; }
   .task-surface .task-message-bubble-user { max-width: 88%; }
 }
 @media (max-width: 767.98px) {
@@ -486,6 +496,7 @@
   .task-surface-live .task-header-title { grid-column: 1; grid-row: 1; }
   .task-surface-live .task-header-actions { grid-column: 2; grid-row: 1 / 3; }
   .task-surface-live .task-header-metrics { display: flex; grid-column: 1; grid-row: 2; justify-self: start; }
+  .task-surface-live .task-header-submeta { display: none; }
   .task-surface .task-round-preview { max-width: 48%; }
   .task-surface .task-round-meta { display: none; }
   .task-surface .task-message-bubble-user { max-width: 94%; }
