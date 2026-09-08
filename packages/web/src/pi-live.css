@@ -89,6 +89,7 @@
   background: var(--al-surface);
 }
 .pi-live-document { width: 100%; max-width: 1040px; margin: 0 auto; padding: 8px 38px 8px 30px; }
+.pi-live-startup-spotlight { margin: 18px 0 14px; }
 .pi-live-page.pi-live-page-embedded .pi-live-document { padding: 8px 34px 8px 48px; }
 .pi-live-current-round { margin-top: 3px; padding-top: 1px; }
 .pi-live-empty { padding: 7px 0 5px; color: var(--al-muted); font-size: 13px; text-align: left; }

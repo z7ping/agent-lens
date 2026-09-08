@@ -6,6 +6,7 @@ import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import { ComposerPillSelect } from '../components/ComposerPillSelect'
 import { PiMarkdownComposer, type PiMarkdownComposerHandle } from '../components/PiMarkdownComposer'
 import { PiStartupDisclosure, piStartupSummary } from '../components/PiStartupDisclosure'
+import { OperationProgress } from '../components/StateViews'
 import { Button, IconButton, Input, Textarea } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
 import { appendPiLiveDelta, finishPiLiveContentBlock, finishPiLiveTool, markPiLiveItemsRunning, reconcilePiLiveItems, startPiLiveContentBlock, startPiLiveTool, updatePiLiveTool } from './pi-live-current'
@@ -925,14 +926,20 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
 
       <div ref={readerRef} className="pi-live-reader" onScroll={onReaderScroll}>
         <div className="pi-live-document">
-          {startupState && !hasBackgroundRound && <PiLiveHistoryTaskRound
+          {!state && <div className="pi-live-startup-spotlight"><OperationProgress
+            statusLabel="正在连接"
+            title="正在连接 Pi Runtime"
+            description="正在读取 Runtime 状态并建立实时事件通道。"
+          /></div>}
+          {startupState && startupState.status !== 'ready' && <div className="pi-live-startup-spotlight">{startupContent}</div>}
+          {startupState?.status === 'ready' && !hasBackgroundRound && <PiLiveHistoryTaskRound
             projection={PI_LIVE_STARTUP_BACKGROUND}
             showAllEvents={showAllEvents}
             beforeContent={startupContent}
             summaryMeta={startupSummaryMeta}
           />}
           {visibleHistoryRounds.map((projection, index) => {
-            const carriesStartup = Boolean(startupState && projection.model.id === 'background:0')
+            const carriesStartup = Boolean(startupState?.status === 'ready' && projection.model.id === 'background:0')
             return <VirtualRoundMount
               key={projection.model.id}
               rootSelector=".pi-live-reader"

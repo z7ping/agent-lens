@@ -299,10 +299,10 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
           style={{ right: railPosition.right, bottom: railPosition.bottom }}
         >
           <button type="button" title="跳到开头" aria-label="跳到开头" onClick={() => jumpToBoundary('start')}>
-            <UiIcon name="arrow-big-up" size={18}/>
+            <UiIcon name="arrow-big-up" size={20}/>
           </button>
           <button type="button" className="task-boundary-latest" title="跳到最新" aria-label="跳到最新" onClick={() => jumpToBoundary('end')}>
-            <UiIcon name="arrow-big-down" size={18}/>
+            <UiIcon name="arrow-big-down" size={20}/>
           </button>
         </nav>,
         document.body,

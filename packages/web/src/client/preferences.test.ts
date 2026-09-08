@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { readAgentFilterPreference, writeAgentFilterPreference } from './preferences'
+import { readAgentFilterPreference, readSidebarCollapsed, writeAgentFilterPreference, writeSidebarCollapsed } from './preferences'
 
 function storage(initial: Record<string, string> = {}) {
   const values = new Map(Object.entries(initial))
@@ -27,6 +27,21 @@ test('智能体筛选偏好分别保存顺序和工具栏显示项并去重', ()
   try {
     writeAgentFilterPreference({ orderedAgentIds: ['pi', 'codex', 'pi'], visibleAgentIds: ['codex', 'codex'] })
     assert.deepEqual(readAgentFilterPreference(), { orderedAgentIds: ['pi', 'codex'], visibleAgentIds: ['codex'] })
+  } finally {
+    Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: previous })
+  }
+})
+
+test('桌面侧栏收起状态可以持久化并安全恢复默认值', () => {
+  const previous = globalThis.localStorage
+  const memory = storage()
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: memory })
+  try {
+    assert.equal(readSidebarCollapsed(), false)
+    writeSidebarCollapsed(true)
+    assert.equal(readSidebarCollapsed(), true)
+    writeSidebarCollapsed(false)
+    assert.equal(readSidebarCollapsed(), false)
   } finally {
     Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: previous })
   }

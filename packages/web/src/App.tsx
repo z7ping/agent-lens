@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import type { AgentLensClientModel, ClientSnapshot } from './client/model'
-import { readTheme, writeTheme } from './client/preferences'
+import { readSidebarCollapsed, readTheme, writeSidebarCollapsed, writeTheme } from './client/preferences'
 import { useReviewUrlSync } from './client/useReviewUrlSync'
 import { AgentsStateOverlay } from './components/AgentsStateOverlay'
 import { BackgroundDataNotice } from './components/BackgroundDataNotice'
@@ -27,11 +27,15 @@ function WorkspaceBreadcrumb({
   snapshot,
   selectedAgentId,
   onOpenNavigation,
+  sidebarCollapsed,
+  onExpandSidebar,
 }: {
   pathname: string
   snapshot: ClientSnapshot
   selectedAgentId: string
   onOpenNavigation(): void
+  sidebarCollapsed: boolean
+  onExpandSidebar(): void
 }) {
   let items: Array<{ label: string; to?: string }>
   if (pathname === '/review/new') {
@@ -59,6 +63,7 @@ function WorkspaceBreadcrumb({
 
   return <div className="workspace-breadcrumb-shell">
     <IconButton className="workspace-mobile-nav-button" onClick={onOpenNavigation} title="打开工作区导航" aria-label="打开工作区导航"><UiIcon name="menu" size={16}/></IconButton>
+    {sidebarCollapsed && <IconButton className="workspace-sidebar-restore-button" onClick={onExpandSidebar} title="展开侧栏" aria-label="展开侧栏"><UiIcon name="panel-left-open" size={16}/></IconButton>}
     <Breadcrumb
       className="workspace-breadcrumb"
       items={items.map((item, index) => item.to && index < items.length - 1
@@ -73,6 +78,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const location = useLocation()
   const navigate = useNavigate()
   const [theme, setTheme] = useState(readTheme)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed)
   const [agentOverviewSourceId, setAgentOverviewSourceId] = useState('')
   const [sidebarHost, setSidebarHost] = useState<HTMLDivElement | null>(null)
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false)
@@ -81,6 +87,10 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     const next = theme === 'dark' ? 'light' : 'dark'
     setTheme(next)
     writeTheme(next)
+  }
+  const setDesktopSidebarCollapsed = (collapsed: boolean) => {
+    setSidebarCollapsed(collapsed)
+    writeSidebarCollapsed(collapsed)
   }
   const replaceReviewUrl = useCallback((pathname: string, search: string) => {
     navigate({ pathname, search }, { replace: true })
@@ -124,7 +134,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   })
 
   return <PinnedAgentsProvider agents={agents}>
-    <div className={`app-shell ${mobileNavigationOpen ? 'is-mobile-navigation-open' : ''}`}>
+    <div className={`app-shell ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''} ${mobileNavigationOpen ? 'is-mobile-navigation-open' : ''}`}>
       <WorkspaceSidebar
         snapshot={snapshot}
         agents={agents}
@@ -134,12 +144,20 @@ function Shell({ model }: { model: AgentLensClientModel }) {
         theme={theme}
         onToggleTheme={toggleTheme}
         onContextHost={setSidebarHost}
+        onCollapse={() => setDesktopSidebarCollapsed(true)}
         mobileOpen={mobileNavigationOpen}
         onMobileClose={() => setMobileNavigationOpen(false)}
       />
       {mobileNavigationOpen && <button type="button" className="workspace-mobile-backdrop" aria-label="关闭工作区导航" onClick={() => setMobileNavigationOpen(false)}/>} 
       <div className="app-main">
-        <WorkspaceBreadcrumb pathname={location.pathname} snapshot={snapshot} selectedAgentId={resolvedAgentOverviewSourceId} onOpenNavigation={() => setMobileNavigationOpen(true)}/>
+        <WorkspaceBreadcrumb
+          pathname={location.pathname}
+          snapshot={snapshot}
+          selectedAgentId={resolvedAgentOverviewSourceId}
+          onOpenNavigation={() => setMobileNavigationOpen(true)}
+          sidebarCollapsed={sidebarCollapsed}
+          onExpandSidebar={() => setDesktopSidebarCollapsed(false)}
+        />
         {hasSseBanner && <div className="sse-banner" role="status">
           <span className="live-dot live-dot-waiting" />
           <span>实时通道已断开</span>

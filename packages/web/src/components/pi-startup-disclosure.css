@@ -38,6 +38,9 @@
 .pi-startup-disclosure[open] .pi-startup-chevron { transform: rotate(180deg); }
 .pi-startup-body { padding: 0 10px 9px 27px; }
 .pi-startup-inline .pi-startup-body { padding: 1px 0 5px; }
+.pi-startup-complete { display: flex; min-height: 32px; align-items: center; gap: 7px; color: var(--al-success); font-size: 12px; }
+.pi-startup-complete b { color: var(--al-ink-2); font-size: 12px; font-weight: 650; }
+.pi-startup-complete span { margin-left: auto; color: var(--al-muted); font: 12px/1 var(--font-mono); }
 .pi-startup-steps { display: grid; gap: 1px; border-top: 1px solid var(--al-line); padding-top: 6px; }
 .pi-startup-inline .pi-startup-steps { border-top: 0; padding-top: 0; }
 .pi-startup-step {

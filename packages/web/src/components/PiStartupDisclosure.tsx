@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PiLiveInitializationStageDto, PiLiveStateDto } from '@agent-lens/protocol'
 import { CopyableCodeBlock } from './CopyableCodeBlock'
+import { OperationProgress } from './StateViews'
 import { UiIcon } from './UiIcon'
 import { Button } from './ui'
 
@@ -146,7 +147,18 @@ export function PiStartupDisclosure({
     </div>
   </div>
 
-  if (embedded) return <div className={`pi-startup-inline is-${state.status}`}>{body}</div>
+  if (embedded && state.status === 'ready') return <div className="pi-startup-complete" role="status">
+    <UiIcon name="check" size={14}/><b>Pi 已就绪</b><span>{formatPiStartupDuration(elapsed)}</span>
+  </div>
+
+  if (embedded) return <OperationProgress
+    title={title}
+    description={state.status === 'failed' ? state.error || fallbackError || 'Pi Runtime 未能完成初始化。' : state.initializationMessage || '正在加载配置、扩展、上下文与 Session。可以先在下方输入任务。'}
+    statusLabel={state.status === 'failed' ? '启动失败' : 'Runtime 初始化'}
+    elapsedMs={elapsed}
+    tone={state.status === 'failed' ? 'danger' : 'accent'}
+    active={state.status === 'initializing'}
+  ><div className={`pi-startup-inline is-${state.status}`}>{body}</div></OperationProgress>
 
   return <details
     className={`pi-startup-disclosure is-${state.status}`}
