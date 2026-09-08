@@ -49,10 +49,9 @@ export function stagesAllowedByCapacity(
   stages: readonly ProgressiveHistoryStage[],
   state: StorageCapacityState,
 ): ProgressiveHistoryStage[] {
-  // Unknown means we cannot prove there is room to expand. Fail closed until the
-  // Data Runtime/health snapshot recovers. Exceeded similarly allows only live
-  // capture and shrink-oriented maintenance; no historical ingestion grows the DB.
-  if (state === 'exceeded' || state === 'unknown') return []
+  // 容量受限时禁止历史扩张，但仍保留严格有界的 latest 发现能力。
+  // Source 是否可见不能依赖数据库是否有空间继续回填 recent / hot-window。
+  if (state === 'exceeded' || state === 'unknown') return stages.filter(stage => stage.id === 'latest')
   if (state === 'approaching') return stages.filter(stage => stage.id !== 'hot-window')
   return [...stages]
 }
