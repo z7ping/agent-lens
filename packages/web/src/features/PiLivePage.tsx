@@ -317,6 +317,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const [controlBusy, setControlBusy] = useState(false)
   const [diagnostics, setDiagnostics] = useState<PiLiveTransportDiagnostics | null>(null)
   const [newRecords, setNewRecords] = useState(false)
+  const [interruptNotice, setInterruptNotice] = useState(false)
   const [showAllEvents, setShowAllEvents] = useState(true)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -329,6 +330,12 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     void piLiveApi.knownRuntimes().then(value => { if (!cancelled) setKnown(value) }, () => undefined)
     return () => { cancelled = true }
   }, [runtimeId])
+
+  useEffect(() => {
+    if (!interruptNotice) return
+    const timeout = window.setTimeout(() => setInterruptNotice(false), 2800)
+    return () => window.clearTimeout(timeout)
+  }, [interruptNotice])
 
   useEffect(() => {
     if (!runtimeId) return
@@ -348,6 +355,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     setRestored([])
     setExtension(null)
     setError('')
+    setInterruptNotice(false)
     setShowAllEvents(true)
     setStartupQueued('')
     setComposerExpanded(false)
@@ -599,6 +607,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   }), [connected, historyRounds, runningRound, state, visiblePendingCount])
 
   const beginOptimisticPrompt = useCallback((text: string) => {
+    setInterruptNotice(false)
     setCurrentOrdinal(null)
     setCurrentItems([])
     activePromptRef.current = text
@@ -733,6 +742,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       setPendingQueue([])
       setState(current => current ? { ...current, isStreaming: false, pendingMessageCount: 0 } : current)
       setCurrentItems(items => reconcilePiLiveItems(items, []))
+      setInterruptNotice(true)
       inputRef.current?.focus({ preventScroll: true })
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
@@ -916,10 +926,14 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
         context={taskDetailModel.contextLabel}
         status={<span className={!connected ? 'pi-live-disconnected' : undefined}>{taskDetailModel.statusLabel}</span>}
         title={taskDetailModel.title}
+        submeta={state?.projectName || state?.gitBranch ? <>
+          {state?.projectName && <span className="pi-live-header-project" title={state.workspacePath || state.projectName}>项目 {state.projectName}</span>}
+          {state?.gitBranch && <span className="pi-live-header-branch" title={`Git 分支：${state.gitBranch}`}>分支 {state.gitBranch}</span>}
+        </> : undefined}
         metrics={taskDetailModel.metrics}
         actions={<>
           <Button size="small" className="review-audit-toggle" aria-pressed={showAllEvents} onClick={() => setShowAllEvents(value => !value)}>{showAllEvents ? '视图：全部事件' : '视图：核心事件'}</Button>
-          <Button size="small" variant="danger" className="pi-live-stop" disabled={!optimisticStreaming || abortPending || queueMutationPending} onClick={() => void stop()}>停止当前任务</Button>
+          <Button size="small" variant="danger" className="pi-live-stop" disabled={!optimisticStreaming || abortPending || queueMutationPending} onClick={() => void stop()}>{abortPending ? '正在停止…' : '停止当前任务'}</Button>
           <PiRuntimeMenu busy={busy} onTerminate={() => { void terminate() }}/>
         </>}
       />
@@ -971,6 +985,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       <div className="pi-live-compose-wrap">
         <div className="pi-live-float-stack">
           {newRecords && <Button size="small" className="pi-live-new-records" onClick={jumpLatest}>有新记录 <UiIcon name="arrow-down" size={14}/></Button>}
+          {interruptNotice && <div className="pi-live-interrupt-notice" role="status" aria-live="polite"><UiIcon name="check" size={14}/><b>已停止当前生成</b><span>可以继续输入。</span></div>}
           {startupQueued && <div className="pi-live-startup-queue" role="status">
             <span>等待 Pi 就绪</span><b>{startupQueued}</b><div><Button size="small" className="pi-live-queue-action" onClick={editStartupQueued}>编辑</Button><Button size="small" className="pi-live-queue-action" onClick={removeStartupQueued}>撤回</Button></div>
           </div>}
