@@ -104,23 +104,7 @@
   justify-self: end;
   gap: 6px;
 }
-.task-surface .task-header-actions button {
-  height: 28px;
-  padding: 0 9px;
-  border: 1px solid var(--al-line-strong);
-  border-radius: 7px;
-  background: var(--al-surface);
-  color: var(--al-ink-2);
-  box-shadow: 0 1px 2px rgb(16 24 40 / .04);
-  font-size: 12px;
-  font-weight: 560;
-}
-.task-surface .task-header-actions button:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--al-accent) 40%, var(--al-line-strong));
-  background: var(--al-soft-2);
-  color: var(--al-accent);
-}
-.task-surface .task-header-actions button:disabled { cursor: not-allowed; opacity: .45; }
+/* Header 只负责布局和语义分组；Button / IconButton 的尺寸与基础状态由 Primitive 自己持有。 */
 .task-surface .task-header-actions .pi-live-stop,
 .task-surface .task-header-actions .pi-live-danger,
 .task-surface .task-header-actions .danger,
