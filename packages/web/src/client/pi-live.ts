@@ -26,6 +26,13 @@ function responseErrorMessage(value: unknown): string | undefined {
   return typeof message === 'string' && message ? message : undefined
 }
 
+export class PiLiveRequestError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message)
+    this.name = 'PiLiveRequestError'
+  }
+}
+
 async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(path, {
     ...init,
@@ -34,7 +41,7 @@ async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> 
   if (!response.ok) {
     let message = ''
     try { message = responseErrorMessage(await response.json()) ?? '' } catch { /* ignore non-json error */ }
-    throw new Error(message || `Pi Live 请求失败（${response.status}）`)
+    throw new PiLiveRequestError(message || `Pi Live 请求失败（${response.status}）`, response.status)
   }
   return response.json() as Promise<T>
 }
@@ -357,8 +364,10 @@ export class PiLiveApi {
     let disposed = false
     let opened = false
     let reconnecting = false
+    let terminal = false
     let leafId: string | undefined
     let recoveryGeneration = 0
+    let probeGeneration = 0
 
     const recover = async () => {
       const generation = ++recoveryGeneration
@@ -372,27 +381,45 @@ export class PiLiveApi {
       }
     }
 
+    const probeTerminalState = async () => {
+      const generation = ++probeGeneration
+      try {
+        await this.state(runtimeSessionId)
+      } catch (error) {
+        if (disposed || terminal || generation !== probeGeneration) return
+        if (error instanceof PiLiveRequestError && error.status === 404) {
+          terminal = true
+          recoveryGeneration += 1
+          source.close()
+          handlers.onError?.(new Error('Pi Live 任务已结束，或当前版本没有可用于恢复该任务的持久状态。'))
+        }
+      }
+    }
+
     const onVisibility = () => scheduler.visibilityChanged()
     document.addEventListener('visibilitychange', onVisibility)
 
     source.onopen = () => {
-      if (disposed) return
+      if (disposed || terminal) return
+      probeGeneration += 1
       reconnecting = opened
       opened = true
       handlers.onConnection(true)
       if (reconnecting || !leafId) void recover()
     }
     source.onerror = () => {
-      if (disposed) return
+      if (disposed || terminal) return
       handlers.onConnection(false)
+      void probeTerminalState()
     }
     source.addEventListener('pi-live', raw => {
-      if (disposed || !(raw instanceof MessageEvent) || typeof raw.data !== 'string') return
+      if (disposed || terminal || !(raw instanceof MessageEvent) || typeof raw.data !== 'string') return
       try { scheduler.push(parsePiLiveEvent(JSON.parse(raw.data))) } catch { /* malformed transport frame */ }
     })
 
     return () => {
       disposed = true
+      probeGeneration += 1
       recoveryGeneration += 1
       document.removeEventListener('visibilitychange', onVisibility)
       scheduler.dispose()
