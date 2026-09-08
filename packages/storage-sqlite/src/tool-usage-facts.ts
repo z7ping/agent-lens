@@ -96,6 +96,20 @@ function aggregateFilter(input: ToolUsageAggregateQuery): { conditions: string[]
   return { conditions, params }
 }
 
+/** Agent Overview needs only call-side asset attribution, not full result linking. */
+function assetCallFilter(input: ToolUsageAggregateQuery): { conditions: string[]; params: unknown[] } {
+  const conditions = ["f.kind = 'tool.call'", 'f.tool_name IS NOT NULL']
+  const params: unknown[] = []
+  if (input.installationId) { conditions.push('f.installation_id = ?'); params.push(input.installationId) }
+  if (input.logicalSessionId) { conditions.push('f.logical_session_id = ?'); params.push(input.logicalSessionId) }
+  if (input.projectId) { conditions.push('f.project_id = ?'); params.push(input.projectId) }
+  if (input.sourceId) { conditions.push('f.source_id = ?'); params.push(input.sourceId) }
+  if (input.toolName) { conditions.push('f.tool_name = ?'); params.push(input.toolName) }
+  if (input.from) { conditions.push('f.effective_at >= ?'); params.push(input.from) }
+  if (input.to) { conditions.push('f.effective_at <= ?'); params.push(input.to) }
+  return { conditions, params }
+}
+
 function aggregateCtes(conditions: string[]): string {
   return `
     WITH events AS MATERIALIZED (
@@ -451,10 +465,52 @@ export class SqliteToolUsageFactReader implements ToolUsageObservationReader {
       return parseAggregateRows(rows)
     })
   }
+
+  aggregateAssetsBySource(input: ToolUsageAggregateQuery): Promise<ToolUsageAggregateAssetRecord[]> {
+    return this.executor.run(() => {
+      const { conditions, params } = assetCallFilter(input)
+      const rows = this.executor.db.prepare(`
+        WITH asset_calls AS (
+          SELECT f.source_id, f.effective_at,
+            CASE
+              WHEN lower(substr(f.tool_name, 1, 5)) = 'mcp__'
+                AND instr(substr(f.tool_name, 6), '__') > 1
+                AND length(substr(substr(f.tool_name, 6), instr(substr(f.tool_name, 6), '__') + 2)) > 0 THEN 'mcp'
+              WHEN lower(f.tool_name) = 'skill' AND f.skill_name IS NOT NULL THEN 'skill'
+            END AS asset_type,
+            CASE
+              WHEN lower(substr(f.tool_name, 1, 5)) = 'mcp__'
+                AND instr(substr(f.tool_name, 6), '__') > 1
+                AND length(substr(substr(f.tool_name, 6), instr(substr(f.tool_name, 6), '__') + 2)) > 0
+                THEN substr(f.tool_name, 6, instr(substr(f.tool_name, 6), '__') - 1)
+              WHEN lower(f.tool_name) = 'skill' AND f.skill_name IS NOT NULL THEN f.skill_name
+            END AS canonical_name
+          FROM tool_usage_fact_projection AS f
+          WHERE ${conditions.join(' AND ')}
+        )
+        SELECT source_id, asset_type, canonical_name,
+          COUNT(*) AS call_count, MIN(effective_at) AS first_used_at, MAX(effective_at) AS last_used_at
+        FROM asset_calls
+        WHERE asset_type IS NOT NULL AND canonical_name IS NOT NULL
+        GROUP BY source_id, asset_type, canonical_name
+        ORDER BY source_id, asset_type, canonical_name
+      `).all(...params) as Array<Record<string, unknown>>
+      return rows.map(row => ({
+        type: row.asset_type === 'skill' ? 'skill' : 'mcp',
+        canonicalName: String(row.canonical_name),
+        sourceIds: [String(row.source_id)],
+        callCount: Number(row.call_count),
+        firstUsedAt: String(row.first_used_at),
+        lastUsedAt: String(row.last_used_at),
+        observationIds: [],
+      }))
+    })
+  }
 }
 
 export const toolUsageFactInternals = {
   aggregateFilter,
+  assetCallFilter,
   aggregateCtes,
   parseAggregateRows,
 }

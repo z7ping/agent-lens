@@ -11,11 +11,13 @@ import {
   type DataRuntimeRequest,
   type DataRuntimeRole,
 } from './protocol.js'
+import { logDataRuntimeDebug, logDataRuntimeFailure } from './diagnostics.js'
 
 const METRIC_SAMPLE_LIMIT = 128
 const HEARTBEAT_INTERVAL_MS = 5_000
 const HEARTBEAT_TIMEOUT_MS = 15_000
 const MIN_EXPLICIT_HEARTBEAT_MS = 50
+const SLOW_ROUND_TRIP_LOG_MS = 500
 
 function pushSample(samples: number[], value: number): void {
   samples.push(value)
@@ -29,6 +31,32 @@ function percentile(samples: readonly number[], ratio: number): number {
 
 function heartbeatDuration(value: number | undefined, fallback: number): number {
   return value === undefined ? fallback : Math.max(MIN_EXPLICIT_HEARTBEAT_MS, value)
+}
+
+function safeArgumentShape(value: unknown): Record<string, number | boolean> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const record = value as Record<string, unknown>
+  const shape: Record<string, number | boolean> = {}
+  if (typeof record.limit === 'number') shape.limit = record.limit
+  if (Array.isArray(record.logicalSessionIds)) shape.logicalSessionIds = record.logicalSessionIds.length
+  if (Array.isArray(record.evidenceIds)) shape.evidenceIds = record.evidenceIds.length
+  if (Array.isArray(record.ids)) shape.ids = record.ids.length
+  if (typeof record.logicalSessionId === 'string') shape.hasLogicalSessionId = true
+  return Object.keys(shape).length ? shape : undefined
+}
+
+function requestContext(role: DataRuntimeRole, method: DataRuntimeMethod, params: Record<string, unknown> | undefined): Record<string, unknown> {
+  const path = Array.isArray(params?.path) && params.path.every(item => typeof item === 'string')
+    ? params.path.join('.')
+    : undefined
+  const args = Array.isArray(params?.args) ? params.args : []
+  const shape = safeArgumentShape(args[0])
+  return {
+    role,
+    method,
+    ...(path ? { path } : {}),
+    ...(shape ? { shape } : {}),
+  }
 }
 
 export type DataRuntimeClientState = 'starting' | 'ready' | 'degraded' | 'stopped'
@@ -50,6 +78,7 @@ export interface DataRuntimeClientSnapshot {
 interface PendingRequest {
   startedAt: number
   timer: NodeJS.Timeout
+  context: Record<string, unknown>
   resolve(value: unknown): void
   reject(error: Error): void
 }
@@ -192,8 +221,17 @@ export class DataRuntimeClient {
     fatalTimeout: boolean,
   ): Promise<T> {
     const worker = this.worker
-    if (!worker) return Promise.reject(new Error(`Data Runtime ${this.role} worker is not started`))
+    if (!worker) {
+      logDataRuntimeFailure('[AgentLens] Data Runtime request rejected', { role: this.role, method, reason: 'worker_not_started' })
+      return Promise.reject(new Error(`Data Runtime ${this.role} worker is not started`))
+    }
     if (this.pending.size >= DATA_RUNTIME_MAX_PENDING_REQUESTS) {
+      logDataRuntimeFailure('[AgentLens] Data Runtime request rejected', {
+        ...requestContext(this.role, method, params),
+        reason: 'pending_limit',
+        pending: this.pending.size,
+        maxPending: DATA_RUNTIME_MAX_PENDING_REQUESTS,
+      })
       return Promise.reject(new Error(`Data Runtime ${this.role} IPC pending request limit reached`))
     }
 
@@ -206,6 +244,10 @@ export class DataRuntimeClient {
       ...(params ? { params } : {}),
     }
     if (encodedMessageBytes(request) > DATA_RUNTIME_MAX_MESSAGE_BYTES) {
+      logDataRuntimeFailure('[AgentLens] Data Runtime request rejected', {
+        ...requestContext(this.role, method, params),
+        reason: 'message_too_large',
+      })
       return Promise.reject(new Error(`Data Runtime ${this.role} IPC request exceeds size limit`))
     }
 
@@ -213,6 +255,7 @@ export class DataRuntimeClient {
     this.maxPending = Math.max(this.maxPending, this.pending.size + 1)
     return new Promise<T>((resolve, reject) => {
       const startedAt = performance.now()
+      const context = requestContext(this.role, method, params)
       const timer = setTimeout(() => {
         const pending = this.pending.get(requestId)
         if (!pending) return
@@ -220,6 +263,13 @@ export class DataRuntimeClient {
         this.timeouts += 1
         const error = new Error(`Data Runtime ${this.role} request timed out: ${method}`)
         this.lastError = error.message
+        // 超时不会取消 Worker 中已经开始的 SQLite 任务；记录发起端事实，和 Worker 完成日志配对。
+        logDataRuntimeFailure('[AgentLens] Data Runtime request timeout', {
+          ...pending.context,
+          timeoutMs,
+          elapsedMs: Math.round(performance.now() - pending.startedAt),
+          pendingAfterTimeout: this.pending.size,
+        })
         reject(error)
 
         // Ordinary query timeouts are request-local. A slow SQL must not kill the
@@ -232,7 +282,7 @@ export class DataRuntimeClient {
         }
       }, Math.max(1, timeoutMs))
       timer.unref?.()
-      this.pending.set(requestId, { startedAt, timer, resolve, reject })
+      this.pending.set(requestId, { startedAt, timer, context, resolve, reject })
       worker.postMessage(request)
     })
   }
@@ -272,6 +322,15 @@ export class DataRuntimeClient {
     this.maxDurationMs = Math.max(this.maxDurationMs, duration)
     pushSample(this.durations, duration)
     this.completed += 1
+
+    if (duration >= SLOW_ROUND_TRIP_LOG_MS) {
+      logDataRuntimeDebug('[AgentLens] Data Runtime slow round trip', {
+        ...pending.context,
+        durationMs: Math.round(duration),
+        pendingAfterReply: this.pending.size,
+        result: value.type,
+      })
+    }
 
     if (value.type === 'error') {
       const error = new Error(`${value.error.code}: ${value.error.message}`)

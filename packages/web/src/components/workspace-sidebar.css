@@ -13,6 +13,7 @@
   grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
   background: var(--al-canvas);
+  transition: grid-template-columns .18s cubic-bezier(.2, .8, .2, 1);
 }
 
 .workspace-sidebar {
@@ -23,6 +24,16 @@
   overflow: hidden;
   border-right: 1px solid var(--al-line);
   background: var(--al-soft-2);
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity .14s ease, transform .18s cubic-bezier(.2, .8, .2, 1), visibility 0s linear 0s;
+}
+
+.workspace-sidebar-brand-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  padding-right: 10px;
 }
 
 .workspace-sidebar-brand {
@@ -33,6 +44,34 @@
   padding: 0 15px;
   color: var(--al-ink);
   text-decoration: none;
+  flex: 1 1 auto;
+}
+
+.workspace-sidebar-collapse-button {
+  flex: 0 0 26px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--al-muted-2);
+}
+
+.workspace-sidebar-collapse-button:hover:not(:disabled) {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--al-surface) 64%, transparent);
+  color: var(--al-ink);
+}
+
+@media (min-width: 768px) {
+  .app-shell.is-sidebar-collapsed {
+    grid-template-columns: 0 minmax(0, 1fr);
+  }
+
+  .app-shell.is-sidebar-collapsed > .workspace-sidebar {
+    visibility: hidden;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateX(-16px);
+    transition: opacity .12s ease, transform .18s cubic-bezier(.2, .8, .2, 1), visibility 0s linear .18s;
+  }
 }
 
 .workspace-sidebar-logo {

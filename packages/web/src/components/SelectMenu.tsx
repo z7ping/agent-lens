@@ -1,7 +1,6 @@
 import { createPortal } from 'react-dom'
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
 import { UiIcon } from './UiIcon'
-import './select-menu.css'
 
 export interface SelectMenuOption {
   value: string

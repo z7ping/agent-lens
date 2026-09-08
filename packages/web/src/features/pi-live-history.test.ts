@@ -87,7 +87,7 @@ test('Pi Live persisted history preserves native thinking / text / tool interlea
     'lifecycle',
   ])
   assert.deepEqual(items.slice(1, 6).map(item => item.id), [
-    'assistant-1:content:0',
+    'assistant-1',
     'assistant-1:content:1',
     'assistant-1:content:2:tool:tool-1',
     'assistant-1:content:3',

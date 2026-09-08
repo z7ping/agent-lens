@@ -1,5 +1,6 @@
 import type {
   CanonicalObservation,
+  ObservationHeader,
   ObservationCursor,
   StorageService,
 } from '@agent-lens/core'
@@ -12,6 +13,13 @@ import { asRecord, buildInteractionGroups, textFromPayload } from './nodes'
 
 const DESCRIPTOR_SCAN_CHUNK = 1000
 const MAX_DESCRIPTOR_CACHE = 32
+const SLOW_DESCRIPTOR_PHASE_MS = 500
+
+function logSlowDescriptorPhase(phase: string, startedAt: number, details: Record<string, number> = {}): void {
+  const elapsedMs = performance.now() - startedAt
+  if (elapsedMs < SLOW_DESCRIPTOR_PHASE_MS) return
+  console.warn('[AgentLens] Review descriptor slow phase', { phase, elapsedMs: Math.round(elapsedMs), ...details })
+}
 
 export interface InteractionDescriptor {
   ordinal: number
@@ -21,6 +29,7 @@ export interface InteractionDescriptor {
   startedAt: string
   endedAt: string
   hasError: boolean
+  observationCount: number
   preview?: string
 }
 
@@ -55,6 +64,27 @@ function updateDescriptor(descriptor: InteractionDescriptor, observation: Canoni
   descriptor.end = observationCursor(observation)
   descriptor.endedAt = observationEffectiveAt(observation)
   descriptor.hasError ||= observationError(observation)
+  descriptor.observationCount += 1
+}
+
+function headerEffectiveAt(item: ObservationHeader): string {
+  return item.occurredAt ?? item.capturedAt
+}
+
+function headerCursor(item: ObservationHeader): ObservationCursor {
+  return {
+    effectiveAt: headerEffectiveAt(item),
+    ...(item.canonicalSequence === undefined && item.sourceSequence === undefined
+      ? {}
+      : { sequence: item.canonicalSequence ?? item.sourceSequence }),
+    id: item.id,
+  }
+}
+
+function updateStructureDescriptor(descriptor: InteractionDescriptor, observation: ObservationHeader): void {
+  descriptor.end = headerCursor(observation)
+  descriptor.endedAt = headerEffectiveAt(observation)
+  descriptor.observationCount += 1
 }
 
 function newDescriptor(observation: CanonicalObservation, ordinal: number): InteractionDescriptor {
@@ -67,9 +97,24 @@ function newDescriptor(observation: CanonicalObservation, ordinal: number): Inte
     startedAt: cursor.effectiveAt,
     endedAt: cursor.effectiveAt,
     hasError: false,
+    observationCount: 0,
   }
   updateDescriptor(descriptor, observation)
   return descriptor
+}
+
+function newStructureDescriptor(observation: ObservationHeader, ordinal: number): InteractionDescriptor {
+  const cursor = headerCursor(observation)
+  return {
+    ordinal,
+    trigger: observation.kind === 'message.user' ? 'user' : 'background',
+    start: cursor,
+    end: cursor,
+    startedAt: cursor.effectiveAt,
+    endedAt: cursor.effectiveAt,
+    hasError: false,
+    observationCount: 1,
+  }
 }
 
 export function highLatencyThreshold(descriptors: InteractionDescriptor[]): number | null {
@@ -87,6 +132,7 @@ export function highLatencyThreshold(descriptors: InteractionDescriptor[]): numb
 
 export class InteractionDescriptorStore {
   private readonly cache = new Map<string, { version: string; descriptors: InteractionDescriptor[] }>()
+  private readonly structureCache = new Map<string, { version: string; descriptors: InteractionDescriptor[] }>()
 
   constructor(
     private readonly storage: StorageService,
@@ -94,7 +140,10 @@ export class InteractionDescriptorStore {
   ) {}
 
   async scanAll(logicalSessionId: string): Promise<InteractionDescriptor[]> {
+    const startedAt = performance.now()
     const descriptors: InteractionDescriptor[] = []
+    let observationCount = 0
+    let pages = 0
     let after: ObservationCursor | undefined
     let current: InteractionDescriptor | null = null
 
@@ -111,6 +160,8 @@ export class InteractionDescriptorStore {
         limit: DESCRIPTOR_SCAN_CHUNK,
       })
       if (!observations.length) break
+      pages += 1
+      observationCount += observations.length
 
       for (const observation of observations) {
         if (observation.kind === 'message.user' && current) flush()
@@ -123,6 +174,7 @@ export class InteractionDescriptorStore {
       if (observations.length < DESCRIPTOR_SCAN_CHUNK) break
     }
     flush()
+    logSlowDescriptorPhase('scan-all', startedAt, { pages, observations: observationCount, descriptors: descriptors.length })
     return descriptors
   }
 
@@ -142,6 +194,54 @@ export class InteractionDescriptorStore {
       if (oldest.done) break
       this.cache.delete(oldest.value)
     }
+    return descriptors
+  }
+
+  /** Read only ordering headers when the caller needs normal chronological paging.
+   * This deliberately avoids payload and evidence hydration for interactions which
+   * will not be part of the current Review page. */
+  async structureCached(summary: ReviewSessionSummaryDto): Promise<InteractionDescriptor[]> {
+    const version = `${summary.observationCount}:${summary.endedAt}`
+    const cached = this.structureCache.get(summary.id)
+    if (cached?.version === version) return cached.descriptors
+    const headers = this.storage.repositories.observations.queryHeaders
+    if (!headers) return this.cached(summary)
+
+    const startedAt = performance.now()
+    const descriptors: InteractionDescriptor[] = []
+    let after: ObservationCursor | undefined
+    let current: InteractionDescriptor | null = null
+    let pages = 0
+    let observationCount = 0
+    while (true) {
+      const page = await headers.call(this.storage.repositories.observations, {
+        logicalSessionId: summary.id,
+        ...(after ? { after } : {}),
+        limit: DESCRIPTOR_SCAN_CHUNK,
+      })
+      if (!page.length) break
+      pages += 1
+      observationCount += page.length
+      for (const observation of page) {
+        if (observation.kind === 'message.user' && current) {
+          descriptors.push(current)
+          current = null
+        }
+        if (!current && observation.kind === 'session.lifecycle') continue
+        if (!current) current = newStructureDescriptor(observation, descriptors.length + 1)
+        else updateStructureDescriptor(current, observation)
+      }
+      after = headerCursor(page[page.length - 1]!)
+      if (page.length < DESCRIPTOR_SCAN_CHUNK) break
+    }
+    if (current) descriptors.push(current)
+    this.structureCache.set(summary.id, { version, descriptors })
+    while (this.structureCache.size > MAX_DESCRIPTOR_CACHE) {
+      const oldest = this.structureCache.keys().next()
+      if (oldest.done) break
+      this.structureCache.delete(oldest.value)
+    }
+    logSlowDescriptorPhase('scan-structure', startedAt, { pages, observations: observationCount, descriptors: descriptors.length })
     return descriptors
   }
 
@@ -181,7 +281,50 @@ export class InteractionDescriptorStore {
   }
 
   async count(logicalSessionId: string): Promise<number> {
+    const startedAt = performance.now()
+    const headers = this.storage.repositories.observations.queryHeaders
+    if (headers) {
+      let userCount = 0
+      let pages = 0
+      let after: ObservationCursor | undefined
+      while (true) {
+        const page = await headers.call(this.storage.repositories.observations, {
+          logicalSessionId,
+          kind: 'message.user',
+          ...(after ? { after } : {}),
+          limit: DESCRIPTOR_SCAN_CHUNK,
+        })
+        if (!page.length) break
+        pages += 1
+        userCount += page.length
+        after = headerCursor(page[page.length - 1]!)
+        if (page.length < DESCRIPTOR_SCAN_CHUNK) break
+      }
+
+      let leadingBackground = false
+      let probeAfter: ObservationCursor | undefined
+      outer: while (true) {
+        const probe = await headers.call(this.storage.repositories.observations, {
+          logicalSessionId,
+          ...(probeAfter ? { after: probeAfter } : {}),
+          limit: 100,
+        })
+        if (!probe.length) break
+        for (const observation of probe) {
+          if (observation.kind === 'session.lifecycle') continue
+          leadingBackground = observation.kind !== 'message.user'
+          break outer
+        }
+        probeAfter = headerCursor(probe[probe.length - 1]!)
+        if (probe.length < 100) break
+      }
+      const count = userCount + (leadingBackground ? 1 : 0)
+      logSlowDescriptorPhase('count-headers', startedAt, { pages, interactions: count })
+      return count
+    }
+
     let userCount = 0
+    let pages = 0
     let after: ObservationCursor | undefined
     while (true) {
       const observations = await this.storage.repositories.observations.query({
@@ -191,6 +334,7 @@ export class InteractionDescriptorStore {
         limit: DESCRIPTOR_SCAN_CHUNK,
       })
       if (!observations.length) break
+      pages += 1
       userCount += observations.length
       after = observationCursor(observations[observations.length - 1]!)
       if (observations.length < DESCRIPTOR_SCAN_CHUNK) break
@@ -213,13 +357,62 @@ export class InteractionDescriptorStore {
       probeAfter = observationCursor(probe[probe.length - 1]!)
       if (probe.length < 100) break
     }
-    return userCount + (leadingBackground ? 1 : 0)
+    const count = userCount + (leadingBackground ? 1 : 0)
+    logSlowDescriptorPhase('count', startedAt, { pages, interactions: count })
+    return count
   }
 
   async materialize(logicalSessionId: string, descriptor: InteractionDescriptor): Promise<ReviewInteractionDto> {
+    const [interaction] = await this.materializeMany(logicalSessionId, [descriptor])
+    if (!interaction) throw new Error(`Review projection integrity error: empty interaction ${descriptor.ordinal}`)
+    return interaction
+  }
+
+  /**
+   * Materialise a bounded Review page in two stages. Observation ranges remain
+   * independent so descriptor integrity is preserved, but evidence and identity
+   * hydration are deliberately shared across the complete foreground page.
+   * Calling TimelineProjection once prevents each interaction from serially
+   * issuing the same large evidence-reader work.
+   */
+  async materializeMany(
+    logicalSessionId: string,
+    descriptors: readonly InteractionDescriptor[],
+  ): Promise<ReviewInteractionDto[]> {
+    const startedAt = performance.now()
+    const groups: Array<{ descriptor: InteractionDescriptor; observations: CanonicalObservation[]; pages: number }> = []
+    for (const descriptor of descriptors) {
+      groups.push(await this.loadObservations(logicalSessionId, descriptor))
+    }
+    const observations = groups.flatMap(group => group.observations)
+    const itemsById = new Map((await this.timeline.mapObservations(observations)).map(item => [item.id, item]))
+    const interactions = groups.map(group => {
+      const items = group.observations.map(observation => {
+        const item = itemsById.get(observation.id)
+        if (!item) throw new Error(`Review projection integrity error: missing timeline item ${observation.id}`)
+        return item
+      })
+      const interaction = buildInteractionGroups([items], group.descriptor.ordinal)[0]
+      if (!interaction) throw new Error(`Review projection integrity error: empty interaction ${group.descriptor.ordinal}`)
+      return interaction
+    })
+    logSlowDescriptorPhase('materialize-many', startedAt, {
+      interactions: interactions.length,
+      observations: observations.length,
+      pages: groups.reduce((total, group) => total + group.pages, 0),
+    })
+    return interactions
+  }
+
+  private async loadObservations(
+    logicalSessionId: string,
+    descriptor: InteractionDescriptor,
+  ): Promise<{ descriptor: InteractionDescriptor; observations: CanonicalObservation[]; pages: number }> {
+    const startedAt = performance.now()
     const first = await this.storage.repositories.observations.get(descriptor.start.id)
     if (!first) throw new Error(`Review projection integrity error: missing observation ${descriptor.start.id}`)
     const observations: CanonicalObservation[] = [first]
+    let pages = 0
     let after = descriptor.start
 
     while (observations[observations.length - 1]!.id !== descriptor.end.id) {
@@ -229,6 +422,7 @@ export class InteractionDescriptorStore {
         limit: DESCRIPTOR_SCAN_CHUNK,
       })
       if (!page.length) throw new Error(`Review projection integrity error: incomplete interaction ${descriptor.ordinal}`)
+      pages += 1
       let found = false
       for (const observation of page) {
         observations.push(observation)
@@ -241,10 +435,8 @@ export class InteractionDescriptorStore {
       after = observationCursor(page[page.length - 1]!)
     }
 
-    const items = await this.timeline.mapObservations(observations)
-    const interaction = buildInteractionGroups([items], descriptor.ordinal)[0]
-    if (!interaction) throw new Error(`Review projection integrity error: empty interaction ${descriptor.ordinal}`)
-    return interaction
+    logSlowDescriptorPhase('load-observations', startedAt, { pages, observations: observations.length })
+    return { descriptor, observations, pages }
   }
 }
 

@@ -6,6 +6,7 @@ import {
   createDataRuntimeStorage,
   type DataRuntimeService,
 } from './storage-proxy.js'
+import { logDataRuntimeFailure } from './diagnostics.js'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -46,18 +47,18 @@ const applyDataRuntimeStorage = Object.assign(
     const runtime = createDataRuntimeStorage(writer, readers, maintenanceReader)
 
     await writer.start().catch(error => {
-      console.error('[AgentLens] Data Runtime writer unavailable at startup; control plane will run degraded', error)
+      logDataRuntimeFailure('[AgentLens] Data Runtime writer unavailable at startup; control plane will run degraded', { error })
     })
     if (writer.state() === 'ready') {
       for (const [index, reader] of readers.entries()) {
         if (reader === writer) continue
         await reader.start().catch(error => {
-          console.error(`[AgentLens] Data Runtime foreground reader ${index + 1} unavailable at startup`, error)
+          logDataRuntimeFailure(`[AgentLens] Data Runtime foreground reader ${index + 1} unavailable at startup`, { error })
         })
       }
       if (maintenanceReader !== writer) {
         await maintenanceReader.start().catch(error => {
-          console.error('[AgentLens] Data Runtime maintenance reader unavailable at startup', error)
+          logDataRuntimeFailure('[AgentLens] Data Runtime maintenance reader unavailable at startup', { error })
         })
       }
     }

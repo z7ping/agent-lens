@@ -27,8 +27,11 @@ import {
   Minimize2,
   Moon,
   Network,
+  PanelLeftClose,
+  PanelLeftOpen,
   Pencil,
   Plus,
+  Power,
   RefreshCw,
   Search,
   Send,
@@ -67,7 +70,10 @@ export type UiIconName =
   | 'filter'
   | 'menu'
   | 'moon'
+  | 'panel-left-close'
+  | 'panel-left-open'
   | 'plus'
+  | 'power'
   | 'refresh'
   | 'search'
   | 'send'
@@ -112,7 +118,10 @@ const icons = {
   filter: Filter,
   menu: Menu,
   moon: Moon,
+  'panel-left-close': PanelLeftClose,
+  'panel-left-open': PanelLeftOpen,
   plus: Plus,
+  power: Power,
   refresh: RefreshCw,
   search: Search,
   send: Send,

@@ -23,6 +23,17 @@ AgentLens 1.0 当前处于 **1.0.0-alpha.3 稳定化 / 表现层收敛**。默�
 
 Core 保持框架无关；Cordis 是唯一 Plugin Runtime。Source 事实必须走 Canonical Pipeline，不得绕过 Observation / Evidence / Projection 自建第二套事实链路。Web 只消费 `@agent-lens/protocol` / `/api/v1/*`。
 
+## 跨平台与兼容性规则（强制）
+
+涉及操作系统、Shell、PATH、包管理器、运行时管理器、CLI shim、安装目录、服务管理器等兼容性问题时，必须先抽象通用机制，再处理具体工具。
+
+- 禁止针对单台机器、用户名、个人目录或固定安装路径写正式逻辑。
+- 禁止把 Volta、nvm、Homebrew、mise、asdf 等单一工具作为主流程前提；具体工具只能作为通用 Resolver / Adapter 的一种实现。
+- 优先使用操作系统、包管理器或工具自身提供的标准发现/解析能力，不复制其内部目录规则。
+- 新增特判前，先判断是否属于现有通用机制；能扩展通用层时不得在业务层补丁式处理。
+- Pi、Codex、Claude 等业务 Runtime 只消费统一发现结果，不感知具体机器环境或工具管理器。
+- 任何仅能“让当前机器跑起来”的修复，都不得作为正式实现合入。
+
 ## UI / 组件契约（强制）
 
 跟踪 Issue：#55 `refactor(ui): 建立 Web 统一组件契约并收敛重复 UI 实现`。

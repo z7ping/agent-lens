@@ -46,6 +46,7 @@ export const DEFAULT_AGENT_LENS_HTTP_PORT = 56789
 const HEALTH_CACHE_TTL_MS = 1_000
 const USAGE_DETAIL_LIMIT = 5
 const RUNTIME_STARTED_AT = new Date().toISOString()
+const SLOW_HTTP_REQUEST_LOG_MS = 500
 
 export interface HttpSurfaceOptions {
   port?: number
@@ -92,6 +93,13 @@ function jsonValue(value: unknown, depth = 0): JsonValue {
     return result
   }
   return null
+}
+
+function httpRouteLabel(pathname: string): string {
+  if (/^\/api\/v1\/(?:review|source-records)\//.test(pathname)) {
+    return pathname.replace(/^(\/api\/v1\/(?:review|source-records))\/.+$/, '$1/:id')
+  }
+  return pathname
 }
 
 export async function startHttpSurface(
@@ -153,8 +161,31 @@ export async function startHttpSurface(
   }
 
   const server = createServer(async (request, response) => {
+    const startedAt = performance.now()
+    let route = '<invalid-url>'
+    let finished = false
+    response.once('finish', () => {
+      finished = true
+      const durationMs = performance.now() - startedAt
+      if (!route.startsWith('/api/') || (durationMs < SLOW_HTTP_REQUEST_LOG_MS && response.statusCode < 500)) return
+      console.warn('[AgentLens] HTTP request observed', {
+        method: request.method ?? 'UNKNOWN',
+        route,
+        statusCode: response.statusCode,
+        durationMs: Math.round(durationMs),
+      })
+    })
+    response.once('close', () => {
+      if (finished || !route.startsWith('/api/')) return
+      console.warn('[AgentLens] HTTP request aborted', {
+        method: request.method ?? 'UNKNOWN',
+        route,
+        elapsedMs: Math.round(performance.now() - startedAt),
+      })
+    })
     try {
       const url = new URL(request.url ?? '/', `http://${AGENT_LENS_HTTP_HOST}`)
+      route = httpRouteLabel(url.pathname)
       if (await handlePiLiveRequest(request, response, url, options.piLive, storage)) return
       if (await handleBackupRequest(request, response, url, options.backup)) return
       if (await handleCapturePolicyRequest(request, response, url, options.capturePolicy)) return

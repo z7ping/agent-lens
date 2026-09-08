@@ -12,12 +12,14 @@ import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin'
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin'
 import { HeadingNode, QuoteNode } from '@lexical/rich-text'
 import {
+  $createParagraphNode,
   $getRoot,
   $getSelection,
   COMMAND_PRIORITY_HIGH,
   KEY_ENTER_COMMAND,
   KEY_ESCAPE_COMMAND,
   type EditorState,
+  type LexicalEditor,
 } from 'lexical'
 import { forwardRef, useEffect, useImperativeHandle, type ForwardedRef } from 'react'
 
@@ -75,6 +77,20 @@ function markdownFromEditor(editorState: EditorState): string {
   return markdown
 }
 
+function replaceMarkdownDocument(editor: LexicalEditor, value: string): void {
+  editor.update(() => {
+    const root = $getRoot()
+    root.clear()
+    if (value) {
+      $convertFromMarkdownString(value, TRANSFORMERS, root, true)
+      return
+    }
+    const paragraph = $createParagraphNode()
+    root.append(paragraph)
+    paragraph.selectStart()
+  })
+}
+
 function ExternalValuePlugin({ value }: { value: string }) {
   const [editor] = useLexicalComposerContext()
   useEffect(() => {
@@ -83,9 +99,7 @@ function ExternalValuePlugin({ value }: { value: string }) {
       current = $convertToMarkdownString(TRANSFORMERS, undefined, true)
     })
     if (current === value) return
-    editor.update(() => {
-      $convertFromMarkdownString(value, TRANSFORMERS, undefined, true)
-    })
+    replaceMarkdownDocument(editor, value)
   }, [editor, value])
   return null
 }
@@ -165,7 +179,14 @@ export const PiMarkdownComposer = forwardRef<PiMarkdownComposerHandle, PiMarkdow
     nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, CodeNode, LinkNode],
     onError(error) { throw error },
   }}>
-    <div className="pi-markdown-composer">
+    <div
+      className="pi-markdown-composer"
+      onMouseDown={event => {
+        const target = event.target as HTMLElement
+        if (target.closest('[contenteditable="true"]')) return
+        event.currentTarget.querySelector<HTMLElement>('[contenteditable="true"]')?.focus({ preventScroll: true })
+      }}
+    >
       <RichTextPlugin
         contentEditable={<ContentEditable
           className="pi-live-input pi-markdown-input"

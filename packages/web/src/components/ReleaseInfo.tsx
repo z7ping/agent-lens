@@ -3,7 +3,7 @@ import packageMetadata from '../../package.json'
 import changelogMarkdown from '../../../../CHANGELOG.md?raw'
 import { checkWebUpdate, type WebUpdateInfo } from '../client/update'
 import { CopyableCodeBlock } from './CopyableCodeBlock'
-import { IconButton, UiIcon } from './ui'
+import { Button, Dialog } from './ui'
 
 const REPOSITORY_URL = 'https://github.com/z7ping/agent-lens'
 const CHANGELOG_URL = `${REPOSITORY_URL}/blob/main/CHANGELOG.md`
@@ -78,43 +78,34 @@ export function BrandVersion() {
 
 function UpdateDialog({ update, onClose }: { update: WebUpdateInfo; onClose(): void }) {
   const publishedAt = publishedAtLabel(update.publishedAt)
-  return <div
-    className="release-dialog-backdrop"
-    role="presentation"
-    onMouseDown={event => {
-      if (event.target === event.currentTarget) onClose()
-    }}
-  >
-    <section className="release-dialog" role="dialog" aria-modal="true" aria-labelledby="web-update-dialog-title">
-      <header className="release-dialog-header">
-        <div>
-          <h2 id="web-update-dialog-title">发现新版本</h2>
-          <p>当前 v{update.currentVersion} · 最新 v{update.latestVersion}{publishedAt ? ` · ${publishedAt}` : ''}</p>
-        </div>
-        <IconButton className="release-dialog-close" onClick={onClose} aria-label="关闭新版本提示"><UiIcon name="close" size={16}/></IconButton>
-      </header>
-      <div className="release-dialog-content web-update-content">
-        <section className="release-section">
-          <h3>npm / CLI 更新</h3>
-          <p>推荐使用 AgentLens 已有更新命令；它会按当前运行时归属处理 npm 后台服务，不接管 Windows Desktop。</p>
-          <CopyableCodeBlock className="web-update-command" copyValue={update.installCommand}>{update.installCommand}</CopyableCodeBlock>
-          <p className="web-update-fallback">也可以直接执行：</p>
-          <CopyableCodeBlock className="web-update-command" copyValue={update.fallbackInstallCommand}>{update.fallbackInstallCommand}</CopyableCodeBlock>
-        </section>
-        {update.releaseNotes && <section className="release-section">
-          <h3>版本说明</h3>
-          <CopyableCodeBlock className="web-update-notes" copyValue={update.releaseNotes}>{update.releaseNotes}</CopyableCodeBlock>
-        </section>}
+  return <Dialog
+    open
+    className="release-dialog-overlay"
+    title="发现新版本"
+    description={`当前 v${update.currentVersion} · 最新 v${update.latestVersion}${publishedAt ? ` · ${publishedAt}` : ''}`}
+    onClose={onClose}
+    footer={<div className="release-dialog-footer">
+      <span>不会自动安装或强制重启</span>
+      <div>
+        <a href={update.releasePageUrl} target="_blank" rel="noreferrer">查看版本</a>
+        <Button size="small" onClick={onClose}>稍后</Button>
       </div>
-      <footer className="release-dialog-footer">
-        <span>不会自动安装或强制重启</span>
-        <div>
-          <a href={update.releasePageUrl} target="_blank" rel="noreferrer">查看版本</a>
-          <button className="release-footer-button" type="button" onClick={onClose}>稍后</button>
-        </div>
-      </footer>
-    </section>
-  </div>
+    </div>}
+  >
+    <div className="release-dialog-content web-update-content">
+      <section className="release-section">
+        <h3>npm / CLI 更新</h3>
+        <p>推荐使用 AgentLens 已有更新命令；它会按当前运行时归属处理 npm 后台服务，不接管 Windows Desktop。</p>
+        <CopyableCodeBlock className="web-update-command" copyValue={update.installCommand}>{update.installCommand}</CopyableCodeBlock>
+        <p className="web-update-fallback">也可以直接执行：</p>
+        <CopyableCodeBlock className="web-update-command" copyValue={update.fallbackInstallCommand}>{update.fallbackInstallCommand}</CopyableCodeBlock>
+      </section>
+      {update.releaseNotes && <section className="release-section">
+        <h3>版本说明</h3>
+        <CopyableCodeBlock className="web-update-notes" copyValue={update.releaseNotes}>{update.releaseNotes}</CopyableCodeBlock>
+      </section>}
+    </div>
+  </Dialog>
 }
 
 export function ReleaseInfo({ runtimeOwner, runtimeReady }: { runtimeOwner: string | null; runtimeReady: boolean }) {
@@ -135,23 +126,15 @@ export function ReleaseInfo({ runtimeOwner, runtimeReady }: { runtimeOwner: stri
     return () => { active = false }
   }, [runtimeOwner, runtimeReady])
 
-  useEffect(() => {
-    if (!open && !updateOpen) return
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
-      setOpen(false)
-      setUpdateOpen(false)
-    }
-    window.addEventListener('keydown', closeOnEscape)
-    return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [open, updateOpen])
-
   return <>
     {update && <button
       className="header-link header-update-link"
       type="button"
       title={`发现新版本 ${update.latestVersion}`}
-      onClick={() => setUpdateOpen(true)}
+      onClick={() => {
+        setOpen(false)
+        setUpdateOpen(true)
+      }}
     >新版本 v{update.latestVersion}</button>}
     <a
       className="header-link header-link-github"
@@ -159,39 +142,33 @@ export function ReleaseInfo({ runtimeOwner, runtimeReady }: { runtimeOwner: stri
       target="_blank"
       rel="noreferrer"
     >GitHub</a>
-    <button className="header-link" type="button" onClick={() => setOpen(true)}>更新日志</button>
+    <button className="header-link" type="button" onClick={() => {
+      setUpdateOpen(false)
+      setOpen(true)
+    }}>更新日志</button>
 
     {update && updateOpen && <UpdateDialog update={update} onClose={() => setUpdateOpen(false)} />}
 
-    {open && <div
-      className="release-dialog-backdrop"
-      role="presentation"
-      onMouseDown={event => {
-        if (event.target === event.currentTarget) setOpen(false)
-      }}
-    >
-      <section className="release-dialog" role="dialog" aria-modal="true" aria-labelledby="release-dialog-title">
-        <header className="release-dialog-header">
-          <div>
-            <h2 id="release-dialog-title">更新日志</h2>
-            <p>{changelog.heading || `v${packageMetadata.version}`}</p>
-          </div>
-          <IconButton className="release-dialog-close" onClick={() => setOpen(false)} aria-label="关闭更新日志"><UiIcon name="close" size={16}/></IconButton>
-        </header>
-        <div className="release-dialog-content">
-          {changelog.sections.length ? changelog.sections.map(section => <section className="release-section" key={section.title}>
-            <h3>{section.title}</h3>
-            <ul>{section.items.map((item, index) => <li key={`${section.title}-${index}`}>{item}</li>)}</ul>
-          </section>) : <p className="release-empty">当前版本暂无更新日志摘要。</p>}
+    <Dialog
+      open={open}
+      className="release-dialog-overlay"
+      title="更新日志"
+      description={changelog.heading || `v${packageMetadata.version}`}
+      onClose={() => setOpen(false)}
+      footer={<div className="release-dialog-footer">
+        <span>AgentLens {packageMetadata.version}</span>
+        <div>
+          <a href={RELEASES_URL} target="_blank" rel="noreferrer">发布记录</a>
+          <a href={CHANGELOG_URL} target="_blank" rel="noreferrer">完整更新日志</a>
         </div>
-        <footer className="release-dialog-footer">
-          <span>AgentLens {packageMetadata.version}</span>
-          <div>
-            <a href={RELEASES_URL} target="_blank" rel="noreferrer">发布记录</a>
-            <a href={CHANGELOG_URL} target="_blank" rel="noreferrer">完整更新日志</a>
-          </div>
-        </footer>
-      </section>
-    </div>}
+      </div>}
+    >
+      <div className="release-dialog-content">
+        {changelog.sections.length ? changelog.sections.map(section => <section className="release-section" key={section.title}>
+          <h3>{section.title}</h3>
+          <ul>{section.items.map((item, index) => <li key={`${section.title}-${index}`}>{item}</li>)}</ul>
+        </section>) : <p className="release-empty">当前版本暂无更新日志摘要。</p>}
+      </div>
+    </Dialog>
   </>
 }

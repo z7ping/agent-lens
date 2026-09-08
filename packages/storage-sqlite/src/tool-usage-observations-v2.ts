@@ -5,7 +5,10 @@ import type {
   ToolUsageObservationQuery,
   ToolUsageObservationReader,
   ToolUsageObservationRecord,
+  ToolUsageWorkflowPatternQuery,
+  ToolUsageWorkflowPatternRecord,
 } from '@agent-lens/core'
+import { toolUsageWorkflowCategory } from '@agent-lens/core'
 import type { SqliteExecutor } from './executor'
 import { SqliteToolUsageFactReader as BaseToolUsageObservationReader } from './tool-usage-facts'
 
@@ -154,6 +157,117 @@ function sessionMetadata(executor: SqliteExecutor, sessionIds: string[]): Map<st
   return result
 }
 
+interface WorkflowAccumulator {
+  key: string
+  steps: string[]
+  sessionCount: number
+  occurrenceCount: number
+  sampleSessionIds: string[]
+  observationIds: string[]
+}
+
+function workflowPatterns(executor: SqliteExecutor, input: ToolUsageWorkflowPatternQuery): ToolUsageWorkflowPatternRecord[] {
+  const minimumSessions = Math.max(1, Math.floor(input.minimumSessions))
+  const patternLimit = Math.max(0, Math.min(Math.floor(input.patternLimit), 100))
+  const sessionSampleLimit = Math.max(0, Math.min(Math.floor(input.sessionSampleLimit), 100))
+  const observationSampleLimit = Math.max(0, Math.min(Math.floor(input.observationSampleLimit), 500))
+  if (patternLimit === 0) return []
+
+  const conditions = ["fact.kind = 'tool.call'"]
+  const params: unknown[] = []
+  if (input.sourceId) {
+    conditions.push('fact.source_id = ?')
+    params.push(input.sourceId)
+  }
+  if (input.projectId) {
+    conditions.push('fact.project_id = ?')
+    params.push(input.projectId)
+  }
+  if (input.from) {
+    conditions.push('fact.effective_at >= ?')
+    params.push(input.from)
+  }
+  if (input.to) {
+    conditions.push('fact.effective_at <= ?')
+    params.push(input.to)
+  }
+
+  const statement = executor.db.prepare(`
+    SELECT
+      fact.observation_id,
+      fact.logical_session_id,
+      fact.tool_name
+    FROM tool_usage_fact_projection AS fact
+    JOIN observations AS observation ON observation.id = fact.observation_id
+    WHERE ${conditions.join(' AND ')}
+    ORDER BY
+      fact.logical_session_id ASC,
+      fact.effective_at ASC,
+      COALESCE(observation.canonical_sequence, observation.source_sequence, ${MAX_SEQUENCE}) ASC,
+      fact.observation_id ASC
+  `)
+
+  const patterns = new Map<string, WorkflowAccumulator>()
+  let sessionId = ''
+  let normalized: Array<{ category: string; observationId: string }> = []
+
+  const flushSession = () => {
+    if (!sessionId || normalized.length < 2) {
+      normalized = []
+      return
+    }
+    const seenInSession = new Set<string>()
+    for (const length of [2, 3]) {
+      for (let index = 0; index + length <= normalized.length; index += 1) {
+        const window = normalized.slice(index, index + length)
+        const steps = window.map(item => item.category)
+        const key = steps.join(' → ')
+        let pattern = patterns.get(key)
+        if (!pattern) {
+          pattern = {
+            key,
+            steps,
+            sessionCount: 0,
+            occurrenceCount: 0,
+            sampleSessionIds: [],
+            observationIds: [],
+          }
+          patterns.set(key, pattern)
+        }
+        pattern.occurrenceCount += 1
+        if (!seenInSession.has(key)) {
+          seenInSession.add(key)
+          pattern.sessionCount += 1
+          if (pattern.sampleSessionIds.length < sessionSampleLimit) pattern.sampleSessionIds.push(sessionId)
+        }
+        for (const item of window) {
+          if (pattern.observationIds.length >= observationSampleLimit) break
+          if (!pattern.observationIds.includes(item.observationId)) pattern.observationIds.push(item.observationId)
+        }
+      }
+    }
+    normalized = []
+  }
+
+  for (const value of statement.iterate(...params)) {
+    const row = rowRecord(value)
+    const rowSessionId = requiredString(row, 'logical_session_id')
+    if (sessionId && rowSessionId !== sessionId) flushSession()
+    sessionId = rowSessionId
+    const category = toolUsageWorkflowCategory(optionalString(row, 'tool_name') ?? 'unknown')
+    if (normalized.at(-1)?.category === category) continue
+    normalized.push({ category, observationId: requiredString(row, 'observation_id') })
+  }
+  flushSession()
+
+  return [...patterns.values()]
+    .filter(item => item.sessionCount >= minimumSessions)
+    .sort((a, b) => b.sessionCount - a.sessionCount
+      || b.occurrenceCount - a.occurrenceCount
+      || a.key.localeCompare(b.key))
+    .slice(0, patternLimit)
+}
+
 /**
  * 聚合主体从 tool_usage_fact_projection 读取轻量字段；只有已限量的会话样本
  * 再回到 Canonical 数据补标题/项目等下钻元数据。
@@ -190,5 +304,13 @@ export class SqliteToolUsageObservationReader implements ToolUsageObservationRea
         })),
       })),
     }
+  }
+
+  aggregateAssetsBySource(input: ToolUsageAggregateQuery) {
+    return this.base.aggregateAssetsBySource(input)
+  }
+
+  workflowPatterns(input: ToolUsageWorkflowPatternQuery): Promise<ToolUsageWorkflowPatternRecord[]> {
+    return this.executor.run(() => workflowPatterns(this.executor, input))
   }
 }

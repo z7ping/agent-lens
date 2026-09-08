@@ -14,15 +14,18 @@ import type { UnifiedReadService } from '@agent-lens/core/replication'
 import type { SqliteStorageService } from '@agent-lens/storage-sqlite'
 import { DataRuntimeClient, type DataRuntimeClientSnapshot } from './client.js'
 import { DATA_RUNTIME_MAX_PENDING_REQUESTS } from './protocol.js'
+import { logDataRuntimeDebug, logDataRuntimeFailure } from './diagnostics.js'
 
 const WRITE_TIMEOUT_MS = 30_000
 const MAINTENANCE_TIMEOUT_MS = 120_000
-const READ_TIMEOUT_MS = 2_000
+const READ_TIMEOUT_MS = 20_000
 const RECOVERY_INTERVAL_MS = 2_000
 const READER_RESERVED_PENDING = 1
 const FOREGROUND_QUEUE_MAX = 256
 const FOREGROUND_QUEUE_WAIT_MS = 1_500
 const FOREGROUND_QUEUE_POLL_MS = 2
+const SLOW_READER_QUEUE_LOG_MS = 100
+const SLOW_WRITER_QUEUE_LOG_MS = 100
 
 const READ_PREFIXES = [
   'get',
@@ -81,6 +84,16 @@ function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
+function readerRequestContext(
+  method: Parameters<DataRuntimeClient['request']>[0],
+  params: Record<string, unknown>,
+): Record<string, unknown> {
+  const path = Array.isArray(params.path) && params.path.every(item => typeof item === 'string')
+    ? params.path.join('.')
+    : undefined
+  return { method, ...(path ? { path } : {}) }
+}
+
 export class DataRuntimeReaderPool {
   private cursor = 0
   private queued = 0
@@ -98,6 +111,11 @@ export class DataRuntimeReaderPool {
 
     if (this.queued >= FOREGROUND_QUEUE_MAX) {
       this.overloads += 1
+      logDataRuntimeFailure('[AgentLens] Data Runtime reader queue overload', {
+        ...readerRequestContext(method, params),
+        queued: this.queued,
+        maxQueue: FOREGROUND_QUEUE_MAX,
+      })
       throw new Error('Data Runtime reader pool overload queue limit reached')
     }
 
@@ -110,11 +128,25 @@ export class DataRuntimeReaderPool {
         const reader = this.pickAvailable()
         if (reader) {
           const elapsed = performance.now() - startedAt
+          if (elapsed >= SLOW_READER_QUEUE_LOG_MS) {
+            logDataRuntimeDebug('[AgentLens] Data Runtime reader queue wait', {
+              ...readerRequestContext(method, params),
+              waitedMs: Math.round(elapsed),
+              queued: this.queued,
+              readerPending: reader.snapshot().pending,
+            })
+          }
           return reader.request<T>(method, params, Math.max(1, timeoutMs - elapsed))
         }
         await delay(FOREGROUND_QUEUE_POLL_MS)
       }
       this.queueTimeouts += 1
+      logDataRuntimeFailure('[AgentLens] Data Runtime reader queue timeout', {
+        ...readerRequestContext(method, params),
+        waitedMs: Math.round(performance.now() - startedAt),
+        waitBudgetMs,
+        queued: this.queued,
+      })
       throw new Error('Data Runtime reader pool queue wait timed out')
     } finally {
       this.queued -= 1
@@ -173,8 +205,13 @@ interface RemoteCallOptions {
 
 type WriterWorkClass = 'foreground' | 'maintenance'
 
+interface RemoteTransactionScope {
+  readonly id: string
+  active: boolean
+}
+
 class RemoteStorageExecutor {
-  private readonly transactionScope = new AsyncLocalStorage<string>()
+  private readonly transactionScope = new AsyncLocalStorage<RemoteTransactionScope>()
   private writerTail: Promise<void> = Promise.resolve()
   private foregroundWriterPendingValue = 0
   private maintenanceWriterPendingValue = 0
@@ -190,12 +227,12 @@ class RemoteStorageExecutor {
     args: readonly unknown[] = [],
     options: RemoteCallOptions = {},
   ): Promise<T> {
-    const activeTransactionId = this.transactionScope.getStore()
-    if (activeTransactionId) {
+    const transaction = this.transactionScope.getStore()
+    if (transaction?.active) {
       return this.writer.request<T>('storage.call', {
         path: [...path],
         args: [...args],
-        transactionId: activeTransactionId,
+        transactionId: transaction.id,
       }, timeoutFor(path, false))
     }
 
@@ -214,34 +251,40 @@ class RemoteStorageExecutor {
         args: [...args],
       }, timeoutFor(path, false)),
       isMaintenanceOperation(path) ? 'maintenance' : 'foreground',
+      path.join('.'),
     )
   }
 
   transaction<T>(operation: () => Promise<T>): Promise<T> {
-    if (this.transactionScope.getStore()) return operation()
+    if (this.transactionScope.getStore()?.active) return operation()
     return this.enqueueWriter(async () => {
       const opened = await this.writer.request<{ transactionId: string }>(
         'storage.transaction.begin',
         undefined,
         WRITE_TIMEOUT_MS,
       )
+      const scope: RemoteTransactionScope = { id: opened.transactionId, active: true }
       try {
-        const result = await this.transactionScope.run(opened.transactionId, operation)
+        const result = await this.transactionScope.run(scope, operation)
+        // AsyncLocalStorage 会把当前上下文传给事务内创建的计时器、事件回调等。
+        // 回调在 operation 完成后才执行时，已不属于这个 BEGIN/COMMIT 边界，不能携带旧事务 ID。
+        scope.active = false
         await this.writer.request(
           'storage.transaction.commit',
-          { transactionId: opened.transactionId },
+          { transactionId: scope.id },
           WRITE_TIMEOUT_MS,
         )
         return result
       } catch (error) {
+        scope.active = false
         await this.writer.request(
           'storage.transaction.rollback',
-          { transactionId: opened.transactionId },
+          { transactionId: scope.id },
           WRITE_TIMEOUT_MS,
         ).catch(() => undefined)
         throw error
       }
-    }, 'foreground')
+    }, 'foreground', 'storage.transaction')
   }
 
   foregroundWriterPending(): number {
@@ -259,11 +302,22 @@ class RemoteStorageExecutor {
     }
   }
 
-  private enqueueWriter<T>(operation: () => Promise<T>, workClass: WriterWorkClass): Promise<T> {
+  private enqueueWriter<T>(operation: () => Promise<T>, workClass: WriterWorkClass, path: string): Promise<T> {
     if (workClass === 'maintenance') this.maintenanceWriterPendingValue += 1
     else this.foregroundWriterPendingValue += 1
 
+    const queuedAt = performance.now()
     const execute = async () => {
+      const waitedMs = performance.now() - queuedAt
+      if (waitedMs >= SLOW_WRITER_QUEUE_LOG_MS) {
+        logDataRuntimeDebug('[AgentLens] Data Runtime writer queue wait', {
+          workClass,
+          path,
+          waitedMs: Math.round(waitedMs),
+          foregroundPending: this.foregroundWriterPendingValue,
+          maintenancePending: this.maintenanceWriterPendingValue,
+        })
+      }
       try {
         return await operation()
       } finally {

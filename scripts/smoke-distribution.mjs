@@ -80,7 +80,7 @@ async function health() {
 
 try {
   const version = await runCli(['--version'])
-  if (version.stdout.trim() !== '1.0.0-alpha.3') {
+  if (version.stdout.trim() !== '1.0.0-alpha.4') {
     throw new Error(`Unexpected CLI version output: ${version.stdout}`)
   }
   const help = await runCli(['--help'])

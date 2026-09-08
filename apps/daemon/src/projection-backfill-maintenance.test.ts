@@ -82,9 +82,9 @@ test('Tool Fact backfill keeps making bounded progress under sustained foregroun
     { batchSize: 1, yieldControl: async () => undefined },
   )
 
-  assert.equal(now, 600, 'each bounded batch earns its own maximum-defer window')
+  assert.equal(now, 900, 'coverage check and each bounded batch earn their own maximum-defer window')
   assert.equal(batches, 2)
   assert.equal(result.written, 2)
   assert.equal(result.cursor, 'b')
-  assert.equal(foregroundGate.snapshot().permits.forced, 2)
+  assert.equal(foregroundGate.snapshot().permits.forced, 3)
 })

@@ -56,6 +56,7 @@ export function TaskRound({
     className={`task-round interaction-block ${model.errorCount ? 'task-round-has-error' : ''} ${className}`.trim()}
     data-interaction-id={model.id}
     data-round-label={model.label}
+    data-round-preview={model.preview || undefined}
     data-round-error={model.errorCount > 0 ? 'true' : undefined}
     data-round-state={model.state}
     data-task-round-state={model.state}

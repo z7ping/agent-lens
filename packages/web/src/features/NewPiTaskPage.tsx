@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { fetchLocalReviewSessions } from '../client/hub-review'
 import { piLiveApi } from '../client/pi-live'
+import { OperationProgress } from '../components/StateViews'
 import { Button, SelectMenu } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
 import { TaskSurface } from './TaskSurface'
@@ -15,6 +16,7 @@ export function NewPiTaskPage() {
   const [selectedKey, setSelectedKey] = useState('')
   const [availability, setAvailability] = useState<{ checked: boolean; available: boolean; label: string }>({ checked: false, available: false, label: '正在检测 Pi…' })
   const [starting, setStarting] = useState(false)
+  const [startingElapsedMs, setStartingElapsedMs] = useState(0)
   const [error, setError] = useState('')
   const preferredProjectId = new URLSearchParams(location.search).get('project') || undefined
 
@@ -44,6 +46,16 @@ export function NewPiTaskPage() {
     const preferred = pickTaskProject(projects, preferredProjectId)
     setSelectedKey(current => projects.some(option => option.key === current) ? current : preferred?.key ?? '')
   }, [preferredProjectId, projects])
+
+  useEffect(() => {
+    if (!starting) {
+      setStartingElapsedMs(0)
+      return
+    }
+    const startedAt = Date.now()
+    const timer = window.setInterval(() => setStartingElapsedMs(Date.now() - startedAt), 250)
+    return () => window.clearInterval(timer)
+  }, [starting])
 
   const selected = projects.find(option => option.key === selectedKey)
   const projectOptions = useMemo(() => projects.map(option => ({ value: option.key, label: option.label, description: option.cwd, keywords: option.cwd })), [projects])
@@ -75,13 +87,20 @@ export function NewPiTaskPage() {
               <div><div className="task-center-new-kicker">新建任务</div><h1>新建 Pi 任务</h1><p>选择工作项目，进入 Pi 实时任务工作区。</p></div>
               <span className="task-center-new-readiness" data-state={availabilityState}><i/>{agentStateLabel}</span>
             </header>
-            <div className="task-center-new-fields">
-              <label className="task-center-new-project-field"><span>项目</span><SelectMenu value={selectedKey} options={projectOptions} onChange={setSelectedKey} ariaLabel="选择 Pi 任务项目" placeholder={projects.length ? '选择项目' : '暂无可启动项目'} variant="field" className="task-center-new-project-select" menuWidth={420} searchable searchPlaceholder="搜索项目或工作目录" disabled={!projects.length}/></label>
-            </div>
-            <div className="task-center-new-status"><b>{selected ? `在 ${selected.label} 中启动` : '等待选择项目'}</b><span>{composerStateLabel}</span></div>
-            {error && <div className="pi-live-error" role="alert">{error}</div>}
-            {!projects.length && availability.checked && <div className="task-center-project-hint">最近会话中没有可用工作目录；本页面不会加载完整历史或要求手填 cwd。</div>}
-            <div className="task-center-new-actions"><Button variant="primary" loading={starting} disabled={!selected || !availability.available} onClick={() => void start()}>创建 Pi 任务 <UiIcon name="arrow-right" size={14}/></Button></div>
+            {starting ? <div className="task-center-new-operation"><OperationProgress
+              statusLabel="正在创建"
+              title="正在进入 Pi 实时任务"
+              description={`正在为 ${selected?.label || '所选项目'} 分配 Runtime；进入工作区后会继续显示资源与 Session 初始化进度。`}
+              elapsedMs={startingElapsedMs}
+            /></div> : <>
+              <div className="task-center-new-fields">
+                <label className="task-center-new-project-field"><span>项目</span><SelectMenu value={selectedKey} options={projectOptions} onChange={setSelectedKey} ariaLabel="选择 Pi 任务项目" placeholder={projects.length ? '选择项目' : '暂无可启动项目'} variant="field" className="task-center-new-project-select" menuWidth={420} searchable searchPlaceholder="搜索项目或工作目录" disabled={!projects.length}/></label>
+              </div>
+              <div className="task-center-new-status"><b>{selected ? `在 ${selected.label} 中启动` : '等待选择项目'}</b><span>{composerStateLabel}</span></div>
+              {error && <div className="pi-live-error" role="alert">{error}</div>}
+              {!projects.length && availability.checked && <div className="task-center-project-hint">最近会话中没有可用工作目录；本页面不会加载完整历史或要求手填 cwd。</div>}
+              <div className="task-center-new-actions"><Button variant="primary" disabled={!selected || !availability.available} onClick={() => void start()}>创建 Pi 任务 <UiIcon name="arrow-right" size={14}/></Button></div>
+            </>}
           </section>
         </div>
       </TaskSurface>

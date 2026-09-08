@@ -1,7 +1,7 @@
 import { Children, Fragment, isValidElement, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { Button, Popover, UiIcon } from '../components/ui'
 import { useTaskSurfaceView } from './TaskSurface'
-import { UiIcon } from '../components/UiIcon'
 
 export interface TaskHeaderMetric {
   label: string
@@ -71,6 +71,8 @@ export function TaskHeader({ marker, agent, context, status, title, submeta, met
   const primaryActions = collectPrimaryActions(actions)
   const showAllEvents = auditToggle?.props['aria-pressed'] === true
   const headerRef = useRef<HTMLElement>(null)
+  const viewMenuAnchorRef = useRef<HTMLSpanElement>(null)
+  const [viewMenuOpen, setViewMenuOpen] = useState(false)
   const [reviewTailHost, setReviewTailHost] = useState<HTMLElement | null>(null)
 
   useLayoutEffect(() => {
@@ -123,13 +125,29 @@ export function TaskHeader({ marker, agent, context, status, title, submeta, met
           </div>)}
         </div>}
         {hasHeaderActions && <div className="task-header-actions">
-          {auditToggle && <details className="task-view-menu">
-            <summary aria-label="视图选项">视图 <UiIcon name="chevron-down" size={12}/></summary>
-            <div className="task-view-menu-popover">
-              <button type="button" aria-pressed={showAllEvents} onClick={() => auditToggle.props.onClick?.()}><span>全部事件</span><b>{showAllEvents && <UiIcon name="check" size={12}/>}</b></button>
-              <button type="button" aria-pressed={showUsageDetails} onClick={() => setShowUsageDetails(!showUsageDetails)}><span>用量详情</span><b>{showUsageDetails && <UiIcon name="check" size={12}/>}</b></button>
-            </div>
-          </details>}
+          {auditToggle && <>
+            <span ref={viewMenuAnchorRef} className="task-view-menu-anchor">
+              <Button
+                size="small"
+                className="task-view-menu-trigger"
+                aria-label="视图选项"
+                aria-haspopup="menu"
+                aria-expanded={viewMenuOpen}
+                onClick={() => setViewMenuOpen(value => !value)}
+              >视图 <UiIcon name="chevron-down" size={14}/></Button>
+            </span>
+            <Popover
+              open={viewMenuOpen}
+              anchorRef={viewMenuAnchorRef}
+              className="task-view-menu-popover"
+              onClose={() => setViewMenuOpen(false)}
+            >
+              <div className="task-view-menu-list" role="menu" aria-label="视图选项">
+                <button type="button" role="menuitemcheckbox" aria-checked={showAllEvents} onClick={() => auditToggle.props.onClick?.()}><span>全部事件</span><b>{showAllEvents && <UiIcon name="check" size={14}/>}</b></button>
+                <button type="button" role="menuitemcheckbox" aria-checked={showUsageDetails} onClick={() => setShowUsageDetails(!showUsageDetails)}><span>用量详情</span><b>{showUsageDetails && <UiIcon name="check" size={14}/>}</b></button>
+              </div>
+            </Popover>
+          </>}
           {inlineActions}
         </div>}
       </div>}

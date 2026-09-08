@@ -58,6 +58,7 @@ export interface PiLiveControls {
 }
 
 export interface PiLiveRuntimeState {
+  /** Stable Pi Live task identity. A new Worker/PID may be attached after an AgentLens Daemon restart. */
   runtimeSessionId: string
   status: PiLiveRuntimeStatus
   initializationStage?: PiLiveInitializationStage | undefined
@@ -73,13 +74,17 @@ export interface PiLiveRuntimeState {
   nativeSessionId?: string | undefined
   sessionFile?: string | undefined
   sessionName?: string | undefined
+  /** Public working-directory context. Native Pi session-file paths remain private. */
+  workspacePath?: string | undefined
+  projectName?: string | undefined
+  gitBranch?: string | undefined
   model?: unknown
   thinkingLevel?: string | undefined
   isStreaming: boolean
   isCompacting: boolean
   pendingMessageCount: number
   leafId?: string | null | undefined
-  /** Legacy transport compatibility. Worker-backed Pi runtimes expose the Worker PID here. */
+  /** Current Worker generation PID; unlike runtimeSessionId this is intentionally not durable. */
   processId?: number | undefined
 }
 
@@ -105,7 +110,7 @@ export type PiLiveRuntimeListener = (event: PiLiveRuntimeEvent) => void
 
 export interface PiLiveService {
   availability(): Promise<PiLiveAvailability>
-  /** List Pi runtimes currently owned by this AgentLens runtime generation. */
+  /** List live tasks owned now or restored from the previous AgentLens Daemon generation. */
   list(): Promise<PiLiveRuntimeState[]>
   start(input: PiLiveStartInput): Promise<PiLiveRuntimeState>
   retry(runtimeSessionId: string): Promise<PiLiveRuntimeState>
@@ -121,7 +126,8 @@ export interface PiLiveService {
   abort(runtimeSessionId: string, options?: { restoreQueue?: boolean }): Promise<PiLiveQueueState>
   respondToExtension(runtimeSessionId: string, requestId: string, response: unknown): Promise<void>
   subscribe(runtimeSessionId: string, listener: PiLiveRuntimeListener): () => void
-  /** Dispose the owned Pi Runtime Worker. This is intentionally different from aborting one task run. */
+  /** Explicit user termination removes the durable recovery record; this differs from Daemon disposal. */
   terminate(runtimeSessionId: string): Promise<void>
+  /** Stop current Worker generations while preserving recoverable live tasks for the next Daemon generation. */
   dispose(): Promise<void>
 }

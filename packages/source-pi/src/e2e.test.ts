@@ -143,12 +143,14 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
       installationId: historyResult.installationId,
       limit: 100,
     })
-    assert.equal(facts.length, 9)
+    assert.equal(facts.length, 10)
     assert.equal(facts.filter(item => item.kind === 'tool.call').length, 1)
     assert.equal(facts.filter(item => item.kind === 'tool.result').length, 1)
     assert.equal(facts.filter(item => item.kind === 'model.changed').length, 1)
     assert.equal(facts.filter(item => item.kind === 'thinking.level.changed').length, 1)
     assert.equal(facts.filter(item => item.kind === 'context.compaction').length, 1)
+    const stop = facts.find(item => item.kind === 'unknown' && (item.payload as { event?: string }).event === 'assistant.stop')
+    assert.ok(stop)
     const usage = facts.find(item => item.kind === 'usage')
     assert.ok(usage)
     const usagePayload = usage.payload as { totalTokens: number, cost: { total: number } }
@@ -164,7 +166,7 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
     assert.equal(result.nativeParentEventId, 'pi-assistant-1')
     assert.equal(result.parentObservationId, assistant.id)
     assert.equal(tool.parentObservationId, assistant.id)
-    assert.equal((assistant.payload as { stopReason?: string }).stopReason, 'toolUse')
+    assert.equal((stop.payload as { rawPayload?: { stopReason?: string } }).rawPayload?.stopReason, 'toolUse')
 
     const assetResult = await assetRunner.scan({
       source: piSourceDefinition,
@@ -174,6 +176,27 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
     })
     assert.ok(assetResult.assetsDiscovered >= 3)
 
+    // Runtime 启动前就存在、但尚未经过 History Sync 的最新 Session，
+    // 必须在 watcher 建立后通过有界 reconcile 进入 AgentLens，而不是等文件再次变化。
+    const reconcileTranscript = join(agentDir, 'sessions', 'startup-reconcile', 'session.jsonl')
+    await mkdir(dirname(reconcileTranscript), { recursive: true })
+    await writeFile(reconcileTranscript, `${[
+      {
+        type: 'session',
+        id: 'pi-session-reconcile',
+        cwd: join(root, 'startup-reconcile-workspace'),
+        version: '1.0.0',
+        timestamp: '2026-08-20T11:00:30.000Z',
+      },
+      {
+        type: 'message',
+        id: 'pi-user-reconcile',
+        parentId: null,
+        timestamp: '2026-08-20T11:00:31.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'preexisting session before runtime start' }] },
+      },
+    ].map(item => JSON.stringify(item)).join('\n')}\n`, 'utf8')
+
     const runtimeController = new AbortController()
     const handle = await runtime.start({
       source: piSourceDefinition,
@@ -182,6 +205,15 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
       abortSignal: runtimeController.signal,
     })
     try {
+      await waitFor(async () => {
+        const messages = await storage.repositories.observations.query({
+          installationId: historyResult.installationId,
+          kind: 'message.user',
+          limit: 20,
+        })
+        return messages.some(item => item.nativeEventId === 'pi-user-reconcile')
+      })
+
       await appendFile(transcript, `${JSON.stringify({
         type: 'message',
         id: 'pi-user-2',
@@ -196,7 +228,7 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
           kind: 'message.user',
           limit: 20,
         })
-        return messages.length === 2
+        return messages.some(item => item.nativeEventId === 'pi-user-2')
       })
 
       // Pi 会按工作目录创建新的 Session 子目录。运行时必须能发现“新目录 + 新 JSONL”，
@@ -237,15 +269,16 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
       installationId: historyResult.installationId,
       limit: 100,
     })
-    assert.equal(facts.filter(item => item.kind === 'message.user').length, 3)
+    assert.equal(facts.filter(item => item.kind === 'message.user').length, 4)
     const continued = facts.find(item => item.nativeEventId === 'pi-user-2')
     assert.equal(continued?.nativeParentEventId, 'pi-result-1')
     assert.equal(continued?.parentObservationId, result.id)
+    assert.ok(facts.some(item => item.nativeEventId === 'pi-user-reconcile'))
     assert.ok(facts.some(item => item.nativeEventId === 'pi-user-fresh'))
 
     storage.db.prepare(`UPDATE source_records SET parser_version = '4' WHERE source_id = 'pi'`).run()
     const staleBefore = storage.db.prepare(`
-      SELECT COUNT(*) AS count FROM source_records WHERE source_id = 'pi' AND parser_version != '5'
+      SELECT COUNT(*) AS count FROM source_records WHERE source_id = 'pi' AND parser_version != '6'
     `).get() as { count: number }
     const replay = await history.replay({
       source: piSourceDefinition,
@@ -255,7 +288,7 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
     })
     assert.equal(replay.records, staleBefore.count)
     const staleParsers = storage.db.prepare(`
-      SELECT COUNT(*) AS count FROM source_records WHERE source_id = 'pi' AND parser_version != '5'
+      SELECT COUNT(*) AS count FROM source_records WHERE source_id = 'pi' AND parser_version != '6'
     `).get() as { count: number }
     assert.equal(staleParsers.count, 0)
   } finally {

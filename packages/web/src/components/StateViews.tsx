@@ -144,6 +144,42 @@ export function PageLoadingState({
   </div>
 }
 
+export function OperationProgress({
+  title,
+  description,
+  statusLabel = '进行中',
+  elapsedMs,
+  tone = 'accent',
+  active = true,
+  children,
+}: {
+  title: string
+  description: string
+  statusLabel?: string
+  elapsedMs?: number
+  tone?: 'accent' | 'danger'
+  active?: boolean
+  children?: ReactNode
+}) {
+  const elapsed = elapsedMs === undefined
+    ? ''
+    : elapsedMs < 1_000
+      ? '<1s'
+      : `${Math.floor(elapsedMs / 60_000) > 0 ? `${Math.floor(elapsedMs / 60_000)}m ` : ''}${Math.floor((elapsedMs % 60_000) / 1_000)}s`
+  return <section className={`operation-progress is-${tone} ${active ? 'is-active' : ''}`} role={tone === 'danger' ? 'alert' : 'status'} aria-live="polite" aria-label={title}>
+    <div className="operation-progress-main">
+      <span className="operation-progress-icon" aria-hidden="true"><UiIcon name={tone === 'danger' ? 'exclamation' : 'refresh'} size={20}/></span>
+      <span className="operation-progress-copy">
+        <span className="operation-progress-kicker"><b>{statusLabel}</b>{elapsed && <small>{elapsed}</small>}</span>
+        <strong>{title}</strong>
+        <span>{description}</span>
+      </span>
+    </div>
+    {active && <span className="operation-progress-track" aria-hidden="true"><i/></span>}
+    {children && <div className="operation-progress-body">{children}</div>}
+  </section>
+}
+
 export function FirstRunGuide({
   detectedCount,
   enabledCount,

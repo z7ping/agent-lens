@@ -12,6 +12,7 @@ import {
   type HTMLAttributes,
   type PropsWithChildren,
 } from 'react'
+import { IconButton, UiIcon } from '../components/ui'
 
 export type TaskSurfaceMode = 'review' | 'live' | 'hub' | 'new'
 
@@ -27,6 +28,7 @@ interface TaskSurfaceViewValue {
 interface TaskTurnRailItem {
   id: string
   label: string
+  preview: string
   error: boolean
   state: string
   element: HTMLElement
@@ -73,11 +75,21 @@ function scrollViewport(root: HTMLElement, element: HTMLElement): HTMLElement {
   return root
 }
 
+function compactRailPreview(value: string | undefined, max = 86): string {
+  const text = value?.replace(/\s+/g, ' ').trim() ?? ''
+  if (!text) return ''
+  return text.length > max ? `${text.slice(0, max)}…` : text
+}
+
 function collectTurnRailItems(root: HTMLElement): TaskTurnRailItem[] {
   const result: TaskTurnRailItem[] = []
   const seen = new Set<string>()
   const elements = root.querySelectorAll<HTMLElement>('.virtual-round-shell[data-interaction-id], .task-round[data-interaction-id]')
   for (const element of elements) {
+    // TaskCenter 可能承载一个拥有自己 TaskSurface 的详情视图。外层不得再次接管
+    // 内层轮次，否则会生成重复导轨 / 边界导航并重复监听同一批 DOM。
+    if (element.closest('.task-surface') !== root) continue
+
     const id = element.dataset.interactionId?.trim()
     if (!id || seen.has(id)) continue
     seen.add(id)
@@ -88,9 +100,16 @@ function collectTurnRailItems(root: HTMLElement): TaskTurnRailItem[] {
     const label = element.dataset.roundLabel?.trim()
       || round?.querySelector<HTMLElement>('.task-round-label')?.textContent?.trim()
       || (id.includes('background') ? '后台活动' : `第 ${result.length + 1} 轮`)
+    const preview = compactRailPreview(
+      element.dataset.roundPreview
+      || round?.dataset.roundPreview
+      || round?.querySelector<HTMLElement>('.task-round-preview')?.textContent
+      || round?.querySelector<HTMLElement>('[data-task-message-role="user"] .markdown-surface')?.textContent
+      || undefined,
+    )
     const error = element.dataset.roundError === 'true' || round?.classList.contains('task-round-has-error') === true
     const state = element.dataset.roundState?.trim() || round?.dataset.taskRoundState?.trim() || 'settled'
-    result.push({ id, label, error, state, element })
+    result.push({ id, label, preview, error, state, element })
   }
   return result
 }
@@ -102,6 +121,7 @@ function sameTurnRailItems(left: TaskTurnRailItem[], right: TaskTurnRailItem[]):
     return Boolean(next)
       && item.id === next.id
       && item.label === next.label
+      && item.preview === next.preview
       && item.error === next.error
       && item.state === next.state
       && item.element === next.element
@@ -212,7 +232,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ['class', 'data-interaction-id', 'data-round-label', 'data-round-error', 'data-round-state', 'data-mounted', 'open'],
+      attributeFilter: ['class', 'data-interaction-id', 'data-round-label', 'data-round-preview', 'data-round-error', 'data-round-state', 'data-mounted', 'open'],
     })
     root.addEventListener('scroll', scheduleRailViewport, true)
     window.addEventListener('resize', scheduleRailViewport)
@@ -232,6 +252,17 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
     setActiveRoundId(item.id)
   }
 
+  const jumpToBoundary = (boundary: 'start' | 'end') => {
+    const viewport = railViewportRef.current
+    if (!viewport) return
+    const reducedMotion = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    viewport.scrollTo({
+      top: boundary === 'start' ? 0 : viewport.scrollHeight,
+      behavior: reducedMotion ? 'auto' : 'smooth',
+    })
+    scheduleRailViewport()
+  }
+
   const rail = railItems.length > 0 && railPosition && typeof document !== 'undefined'
     ? createPortal(
         <nav
@@ -242,7 +273,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
           {railItems.map(item => {
             const active = item.id === activeRoundId
             const running = item.state === 'running'
-            const tip = `${item.label}${running ? ' · 进行中' : ''}${item.error ? ' · 有错误' : ''}`
+            const tip = [item.label, item.preview, running ? '进行中' : '', item.error ? '有错误' : ''].filter(Boolean).join(' · ')
             return <button
               key={item.id}
               type="button"
@@ -258,8 +289,26 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
       )
     : null
 
+  const boundaryNav = mode === 'live' && railItems.length > 0 && railPosition && typeof document !== 'undefined'
+    ? createPortal(
+        <nav
+          className="task-boundary-nav task-boundary-nav-live"
+          aria-label="Pi Live 会话边界导航"
+        >
+          <IconButton title="跳到开头" aria-label="跳到开头" onClick={() => jumpToBoundary('start')}>
+            <UiIcon name="arrow-big-up" size={20} strokeWidth={2}/>
+          </IconButton>
+          <IconButton className="task-boundary-latest" variant="primary" title="跳到最新" aria-label="跳到最新" onClick={() => jumpToBoundary('end')}>
+            <UiIcon name="arrow-big-down" size={20} strokeWidth={2}/>
+          </IconButton>
+        </nav>,
+        document.body,
+      )
+    : null
+
   return <TaskSurfaceViewProvider>
     <section ref={setRoot} className={classes} data-task-surface-mode={mode} {...props}>{children}</section>
     {rail}
+    {boundaryNav}
   </TaskSurfaceViewProvider>
 })

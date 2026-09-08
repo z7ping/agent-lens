@@ -1,10 +1,11 @@
-import type {
-  CanonicalObservation,
-  ObservationCursor,
-  SessionSummaryCursor,
-  SessionSummaryRecord,
-  SourceSession,
-  StorageService,
+import {
+  toolUsageWorkflowCategory,
+  type CanonicalObservation,
+  type ObservationCursor,
+  type SessionSummaryCursor,
+  type SessionSummaryRecord,
+  type SourceSession,
+  type StorageService,
 } from '@agent-lens/core'
 import { ToolAssetUsageProjection } from '@agent-lens/projection-usage'
 import {
@@ -23,11 +24,19 @@ const FALLBACK_OBSERVATION_LIMIT = 5000
 const OBSERVATION_SCAN_CHUNK = 1000
 const WORKFLOW_PATTERN_MINIMUM_SESSIONS = 5
 const MAX_WORKFLOW_PATTERNS = 8
+const WORKFLOW_PATTERN_SESSION_SAMPLE_LIMIT = 5
 const MAX_PATTERN_OBSERVATIONS = 24
+const SLOW_INSIGHTS_PHASE_MS = 500
 
 interface SessionLoadResult {
   items: SessionSummaryRecord[]
   sampled: boolean
+}
+
+function logSlowInsightsPhase(phase: string, startedAt: number, details: Record<string, number | boolean> = {}): void {
+  const elapsedMs = performance.now() - startedAt
+  if (elapsedMs < SLOW_INSIGHTS_PHASE_MS) return
+  console.warn('[AgentLens] Insights slow phase', { phase, elapsedMs: Math.round(elapsedMs), ...details })
 }
 
 function effectiveAt(item: CanonicalObservation): string {
@@ -139,16 +148,7 @@ function toolName(item: CanonicalObservation): string {
 }
 
 function toolCategory(nativeName: string): string {
-  const lower = nativeName.toLowerCase()
-  const mcp = lower.match(/^mcp__(.+?)__(.+)$/)
-  if (mcp?.[1]) return `MCP：${mcp[1]}`
-  if (lower === 'skill') return '技能调用'
-  if (/(^|[_-])(read|cat|view|open)([_-]|$)/.test(lower)) return '读取文件'
-  if (/(^|[_-])(write|edit|patch|apply)([_-]|$)/.test(lower)) return '修改文件'
-  if (/(^|[_-])(grep|search|find|glob|list)([_-]|$)/.test(lower)) return '搜索定位'
-  if (/(^|[_-])(bash|shell|exec|terminal|command|run)([_-]|$)/.test(lower)) return '命令执行'
-  if (/(^|[_-])(web|http|fetch|browser)([_-]|$)/.test(lower)) return '网络访问'
-  return nativeName
+  return toolUsageWorkflowCategory(nativeName)
 }
 
 async function fallbackSessions(storage: StorageService, query: InsightsQueryDto): Promise<SessionLoadResult> {
@@ -340,7 +340,7 @@ function workflowPatterns(calls: CanonicalObservation[]): InsightWorkflowPattern
       steps: item.steps,
       sessionCount: item.sessionIds.size,
       occurrenceCount: item.occurrenceCount,
-      sampleSessionIds: [...item.sessionIds].sort().slice(0, 5),
+      sampleSessionIds: [...item.sessionIds].sort().slice(0, WORKFLOW_PATTERN_SESSION_SAMPLE_LIMIT),
       observationIds: item.observationIds,
       derivation: 'deterministic-sequence' as const,
     }))
@@ -358,9 +358,13 @@ export class UsageInsightsProjection {
       throw new Error('Insights from must be earlier than or equal to to')
     }
 
+    const requestStartedAt = performance.now()
+    const sessionLoadStartedAt = performance.now()
     const loaded = await loadSessions(this.storage, query)
+    logSlowInsightsPhase('load-sessions', sessionLoadStartedAt, { sessions: loaded.items.length, sampled: loaded.sampled })
     const sessions = loaded.items
     const summary = metricsFor(sessions)
+    const usageStartedAt = performance.now()
     const usage = await this.usage.query({
       ...(query.sourceId ? { sourceId: query.sourceId } : {}),
       ...(query.projectId ? { projectId: query.projectId } : {}),
@@ -368,6 +372,7 @@ export class UsageInsightsProjection {
       ...(query.to ? { to: query.to } : {}),
       limit: 500,
     })
+    logSlowInsightsPhase('load-usage', usageStartedAt, { assets: usage.assets.length })
 
     const agentMap = new Map<string, {
       metrics: InsightMetricSetDto
@@ -400,7 +405,38 @@ export class UsageInsightsProjection {
     }))
     agents.sort((a, b) => b.sessionCount - a.sessionCount || a.sourceId.localeCompare(b.sourceId))
 
-    const calls = await loadToolCalls(this.storage, sessions, query)
+    const workflowStartedAt = performance.now()
+    let patterns: InsightWorkflowPatternDto[]
+    const workflowReader = usage.meta.projection?.state === 'ready'
+      ? this.storage.toolUsageObservations
+      : undefined
+    if (workflowReader?.workflowPatterns) {
+      const aggregated = await workflowReader.workflowPatterns({
+        ...(query.sourceId ? { sourceId: query.sourceId } : {}),
+        ...(query.projectId ? { projectId: query.projectId } : {}),
+        ...(query.from ? { from: query.from } : {}),
+        ...(query.to ? { to: query.to } : {}),
+        minimumSessions: WORKFLOW_PATTERN_MINIMUM_SESSIONS,
+        patternLimit: MAX_WORKFLOW_PATTERNS,
+        sessionSampleLimit: WORKFLOW_PATTERN_SESSION_SAMPLE_LIMIT,
+        observationSampleLimit: MAX_PATTERN_OBSERVATIONS,
+      })
+      patterns = aggregated.map(item => ({ ...item, derivation: 'deterministic-sequence' as const }))
+      logSlowInsightsPhase('load-workflow-patterns', workflowStartedAt, {
+        sessions: sessions.length,
+        patterns: patterns.length,
+        fastPath: true,
+      })
+    } else {
+      const calls = await loadToolCalls(this.storage, sessions, query)
+      patterns = workflowPatterns(calls)
+      logSlowInsightsPhase('load-workflow-patterns', workflowStartedAt, {
+        sessions: sessions.length,
+        calls: calls.length,
+        patterns: patterns.length,
+        fastPath: false,
+      })
+    }
 
     let comparison: InsightsResponseDto['comparison']
     if (query.from && !loaded.sampled) {
@@ -434,7 +470,7 @@ export class UsageInsightsProjection {
       }
     }
 
-    return {
+    const response = {
       summary,
       trend: trendFor(sessions, query),
       agents,
@@ -449,7 +485,7 @@ export class UsageInsightsProjection {
         confidence: asset.confidence,
         observationIds: asset.observationIds,
       })),
-      workflowPatterns: workflowPatterns(calls),
+      workflowPatterns: patterns,
       ...(comparison ? { comparison } : {}),
       meta: {
         protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
@@ -466,6 +502,12 @@ export class UsageInsightsProjection {
         ],
       },
     }
+    logSlowInsightsPhase('total', requestStartedAt, {
+      sessions: sessions.length,
+      patterns: patterns.length,
+      assets: usage.assets.length,
+    })
+    return response
   }
 }
 

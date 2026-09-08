@@ -110,6 +110,7 @@ export class AgentLensClientModel {
   private reviewLiveDirty = false
   private reviewActive = false
   private facetsInFlight: Promise<void> | null = null
+  private agentsInFlight: Promise<void> | null = null
   private visibilityListener: (() => void) | null = null
   private unsubscribeLive: (() => void) | null = null
   private reviewGeneration = 0
@@ -233,7 +234,13 @@ export class AgentLensClientModel {
   }
 
   ensureAgents(): Promise<void> {
-    return this.snapshot.agents ? Promise.resolve() : this.refreshAgents()
+    if (this.snapshot.agents) return Promise.resolve()
+    if (this.agentsInFlight) return this.agentsInFlight
+    const pending = this.refreshAgents().finally(() => {
+      if (this.agentsInFlight === pending) this.agentsInFlight = null
+    })
+    this.agentsInFlight = pending
+    return pending
   }
 
   setReviewActive(active: boolean): void {

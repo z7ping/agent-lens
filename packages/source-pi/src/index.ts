@@ -44,7 +44,7 @@ import {
 import { normalizePiSessionEntry, type PiNativeFact } from '@agent-lens/protocol'
 
 const SOURCE_ID = 'pi'
-const PARSER_VERSION = '5'
+const PARSER_VERSION = '6'
 const RUNTIME_FALLBACK_POLL_MS = 5000
 const RUNTIME_DEBOUNCE_MS = 180
 const MAX_STRING = 64 * 1024
@@ -396,9 +396,9 @@ export async function startPiRuntimeCapture(
     }, RUNTIME_DEBOUNCE_MS))
   }
 
-  const poll = async () => {
+  const poll = async (historyWindow?: SourceHistoryWindow) => {
     if (stopped || ctx.abortSignal.aborted) return
-    for (const filePath of await listJsonlFiles(sessionsDir)) schedule(filePath)
+    for (const filePath of await listJsonlFiles(sessionsDir, historyWindow)) schedule(filePath)
   }
 
   const scheduleReconcile = () => {
@@ -434,6 +434,10 @@ export async function startPiRuntimeCapture(
     watcher = null
     startFallbackPolling()
   }
+
+  // watcher 只负责后续变更；启动时做一次严格有界的最新 Session 对账，
+  // 避免已有 Pi 会话必须再次写入后才进入 AgentLens，同时不绕过历史容量策略。
+  void poll({ sessionLimit: 1 }).catch(() => undefined)
 
   return {
     async dispose(): Promise<void> {
@@ -851,7 +855,7 @@ export async function declarePiCapabilities(
 
 export const piManifest: SourcePluginManifest = {
   pluginId: '@agent-lens/source-pi',
-  pluginVersion: '1.0.0-alpha.3',
+  pluginVersion: '1.0.0-alpha.4',
   apiVersion: '1.0',
   pluginType: 'source',
   displayName: 'Pi Source',

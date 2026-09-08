@@ -84,6 +84,9 @@ export interface PiLiveStateDto {
   runtimeMode?: 'session_runtime' | 'compatibility' | undefined
   nativeSessionId?: string | undefined
   sessionName?: string | undefined
+  workspacePath?: string | undefined
+  projectName?: string | undefined
+  gitBranch?: string | undefined
   model?: JsonValue | undefined
   thinkingLevel?: string | undefined
   isStreaming: boolean

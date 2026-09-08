@@ -5,8 +5,10 @@ import { piLiveApi, type PiLiveTransportDiagnostics } from '../client/pi-live'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import { ComposerPillSelect } from '../components/ComposerPillSelect'
 import { PiMarkdownComposer, type PiMarkdownComposerHandle } from '../components/PiMarkdownComposer'
+import { PiRuntimeMenu } from '../components/PiRuntimeMenu'
 import { PiStartupDisclosure, piStartupSummary } from '../components/PiStartupDisclosure'
-import { Button, IconButton, Input, Textarea } from '../components/ui'
+import { OperationProgress } from '../components/StateViews'
+import { Button, Disclosure, IconButton, Input, Textarea } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
 import { appendPiLiveDelta, finishPiLiveContentBlock, finishPiLiveTool, markPiLiveItemsRunning, reconcilePiLiveItems, startPiLiveContentBlock, startPiLiveTool, updatePiLiveTool } from './pi-live-current'
 import { omitPiLivePromptMessages, projectPiLiveHistory, type PiLiveHistoryItem } from './pi-live-history'
@@ -235,13 +237,12 @@ function PiLiveStart({ known }: { known: PiLiveStateDto[] }) {
       <h1>开始一个 Pi 任务</h1>
       <p>Pi 由 AgentLens 后台服务持有。关闭页面、刷新浏览器或切去任务复盘，不会自动结束正在执行的任务。</p>
       <label>工作目录<Input value={cwd} onChange={event => setCwd(event.target.value)} placeholder="例如 F:\\workspace\\agent-lens 或 /workspace/agent-lens" autoFocus/></label>
-      <details>
-        <summary>模型设置（可选）</summary>
+      <Disclosure summary="模型设置（可选）" className="pi-live-start-model-settings">
         <div className="pi-live-start-grid">
           <label>Provider<Input value={provider} onChange={event => setProvider(event.target.value)} placeholder="留空使用 Pi 默认"/></label>
           <label>Model<Input value={model} onChange={event => setModel(event.target.value)} placeholder="留空使用 Pi 默认"/></label>
         </div>
-      </details>
+      </Disclosure>
       <div className="pi-live-start-status">{availability}</div>
       {error && <div className="pi-live-error" role="alert">{error}</div>}
       <div className="pi-live-start-actions">
@@ -316,6 +317,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const [controlBusy, setControlBusy] = useState(false)
   const [diagnostics, setDiagnostics] = useState<PiLiveTransportDiagnostics | null>(null)
   const [newRecords, setNewRecords] = useState(false)
+  const [interruptNotice, setInterruptNotice] = useState(false)
   const [showAllEvents, setShowAllEvents] = useState(true)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -328,6 +330,12 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     void piLiveApi.knownRuntimes().then(value => { if (!cancelled) setKnown(value) }, () => undefined)
     return () => { cancelled = true }
   }, [runtimeId])
+
+  useEffect(() => {
+    if (!interruptNotice) return
+    const timeout = window.setTimeout(() => setInterruptNotice(false), 2800)
+    return () => window.clearTimeout(timeout)
+  }, [interruptNotice])
 
   useEffect(() => {
     if (!runtimeId) return
@@ -347,6 +355,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     setRestored([])
     setExtension(null)
     setError('')
+    setInterruptNotice(false)
     setShowAllEvents(true)
     setStartupQueued('')
     setComposerExpanded(false)
@@ -598,6 +607,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   }), [connected, historyRounds, runningRound, state, visiblePendingCount])
 
   const beginOptimisticPrompt = useCallback((text: string) => {
+    setInterruptNotice(false)
     setCurrentOrdinal(null)
     setCurrentItems([])
     activePromptRef.current = text
@@ -732,6 +742,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       setPendingQueue([])
       setState(current => current ? { ...current, isStreaming: false, pendingMessageCount: 0 } : current)
       setCurrentItems(items => reconcilePiLiveItems(items, []))
+      setInterruptNotice(true)
       inputRef.current?.focus({ preventScroll: true })
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
@@ -910,29 +921,39 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
 
     <TaskSurface mode="live" className="pi-live-workspace">
       <TaskHeader
-        marker={<span className={state?.isStreaming ? 'pi-live-pulse' : 'pi-live-idle-dot'}/>}
+        marker={<span className="agent-icon source-pi" aria-hidden="true"><UiIcon name="agent" size={14}/></span>}
         agent={taskDetailModel.agentLabel}
         context={taskDetailModel.contextLabel}
         status={<span className={!connected ? 'pi-live-disconnected' : undefined}>{taskDetailModel.statusLabel}</span>}
         title={taskDetailModel.title}
+        submeta={state?.projectName || state?.gitBranch ? <>
+          {state?.projectName && <span className="pi-live-header-project" title={state.workspacePath || state.projectName}>项目 {state.projectName}</span>}
+          {state?.gitBranch && <span className="pi-live-header-branch" title={`Git 分支：${state.gitBranch}`}>分支 {state.gitBranch}</span>}
+        </> : undefined}
         metrics={taskDetailModel.metrics}
         actions={<>
           <Button size="small" className="review-audit-toggle" aria-pressed={showAllEvents} onClick={() => setShowAllEvents(value => !value)}>{showAllEvents ? '视图：全部事件' : '视图：核心事件'}</Button>
-          <Button size="small" className="pi-live-stop" disabled={!optimisticStreaming || abortPending || queueMutationPending} onClick={() => void stop()}>停止当前任务</Button>
-          <IconButton size="small" variant="danger" className="pi-live-menu" title="结束 Pi Runtime" aria-label="结束 Pi Runtime" disabled={busy} onClick={() => void terminate()}><UiIcon name="close" size={14}/></IconButton>
+          <Button size="small" variant="danger" className="pi-live-stop" disabled={!optimisticStreaming || abortPending || queueMutationPending} onClick={() => void stop()}>{abortPending ? '正在停止…' : '停止当前任务'}</Button>
+          <PiRuntimeMenu busy={busy} onTerminate={() => { void terminate() }}/>
         </>}
       />
 
       <div ref={readerRef} className="pi-live-reader" onScroll={onReaderScroll}>
         <div className="pi-live-document">
-          {startupState && !hasBackgroundRound && <PiLiveHistoryTaskRound
+          {!state && <div className="pi-live-startup-spotlight"><OperationProgress
+            statusLabel="正在连接"
+            title="正在连接 Pi Runtime"
+            description="正在读取 Runtime 状态并建立实时事件通道。"
+          /></div>}
+          {startupState && startupState.status !== 'ready' && <div className="pi-live-startup-spotlight">{startupContent}</div>}
+          {startupState?.status === 'ready' && !hasBackgroundRound && <PiLiveHistoryTaskRound
             projection={PI_LIVE_STARTUP_BACKGROUND}
             showAllEvents={showAllEvents}
             beforeContent={startupContent}
             summaryMeta={startupSummaryMeta}
           />}
           {visibleHistoryRounds.map((projection, index) => {
-            const carriesStartup = Boolean(startupState && projection.model.id === 'background:0')
+            const carriesStartup = Boolean(startupState?.status === 'ready' && projection.model.id === 'background:0')
             return <VirtualRoundMount
               key={projection.model.id}
               rootSelector=".pi-live-reader"
@@ -964,6 +985,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       <div className="pi-live-compose-wrap">
         <div className="pi-live-float-stack">
           {newRecords && <Button size="small" className="pi-live-new-records" onClick={jumpLatest}>有新记录 <UiIcon name="arrow-down" size={14}/></Button>}
+          {interruptNotice && <div className="pi-live-interrupt-notice" role="status" aria-live="polite"><UiIcon name="check" size={14}/><b>已停止当前生成</b><span>可以继续输入。</span></div>}
           {startupQueued && <div className="pi-live-startup-queue" role="status">
             <span>等待 Pi 就绪</span><b>{startupQueued}</b><div><Button size="small" className="pi-live-queue-action" onClick={editStartupQueued}>编辑</Button><Button size="small" className="pi-live-queue-action" onClick={removeStartupQueued}>撤回</Button></div>
           </div>}
@@ -981,7 +1003,6 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
           <div className="pi-live-editor">
             <div className="pi-live-editor-toolbar" aria-label="输入区工具">
               <IconButton
-                size="small"
                 className="pi-live-editor-action"
                 title={composerExpanded ? '缩小输入区' : '放大输入区'}
                 aria-label={composerExpanded ? '缩小输入区' : '放大输入区'}

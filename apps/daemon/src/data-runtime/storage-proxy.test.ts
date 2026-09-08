@@ -56,11 +56,11 @@ const host = (id: string) => ({
 })
 
 test('Data Runtime routes analytics reads to foreground pool and maintenance scans separately', () => {
-  assert.equal(dataRuntimeStorageInternals.READ_TIMEOUT_MS, 2_000)
+  assert.equal(dataRuntimeStorageInternals.READ_TIMEOUT_MS, 20_000)
   assert.equal(dataRuntimeStorageInternals.isReadPath(['toolUsageObservations', 'aggregate']), true)
   assert.equal(dataRuntimeStorageInternals.isReadPath(['projectionBackfill', 'toolUsageFactCoverage']), true)
   assert.equal(dataRuntimeStorageInternals.isMaintenanceReadPath(['projectionBackfill', 'toolUsageFactCoverage']), false)
-  assert.equal(dataRuntimeStorageInternals.timeoutFor(['projectionBackfill', 'toolUsageFactCoverage'], true), 2_000)
+  assert.equal(dataRuntimeStorageInternals.timeoutFor(['projectionBackfill', 'toolUsageFactCoverage'], true), 20_000)
   assert.equal(dataRuntimeStorageInternals.isMaintenanceReadPath(['projectionBackfill', 'toolUsageFactCoverageForMaintenance']), true)
   assert.equal(dataRuntimeStorageInternals.isMaintenanceReadPath(['projectionBackfill', 'repairToolUsageFactCursor']), true)
   assert.equal(dataRuntimeStorageInternals.isMaintenanceReadPath(['repositories', 'sourceRecords', 'listForParserReplay']), true)
@@ -152,6 +152,28 @@ test('remote Storage transaction commits atomically and rolls back on failure', 
     }), /force rollback/)
 
     assert.equal(await runtime.storage.repositories.hosts.get('rolled-back'), null)
+  } finally {
+    await runtime.dispose()
+  }
+})
+
+test('事务结束后执行的异步回调不会复用失效的 Writer transaction ID', async () => {
+  const runtime = await fixture()
+  try {
+    let deferredWrite: Promise<void> | undefined
+    await runtime.storage.transaction(async tx => {
+      await tx.hosts.put(host('in-transaction'))
+      deferredWrite = new Promise((resolve, reject) => {
+        setTimeout(() => {
+          void runtime.storage.repositories.hosts.put(host('after-transaction')).then(resolve, reject)
+        }, 20)
+      })
+    })
+
+    assert.ok(deferredWrite)
+    await deferredWrite
+    assert.equal((await runtime.storage.repositories.hosts.get('in-transaction'))?.id, 'in-transaction')
+    assert.equal((await runtime.storage.repositories.hosts.get('after-transaction'))?.id, 'after-transaction')
   } finally {
     await runtime.dispose()
   }

@@ -1,6 +1,7 @@
 const PINNED_KEY = 'agent-lens.pinned-agents.v1'
 const AGENT_FILTER_KEY = 'agent-lens.agent-filter.v2'
 const THEME_KEY = 'agent-lens.theme.v1'
+const SIDEBAR_COLLAPSED_KEY = 'agent-lens.sidebar-collapsed.v1'
 
 export interface AgentFilterPreference {
   orderedAgentIds: string[]
@@ -48,4 +49,12 @@ export function readTheme(): ThemePreference {
 export function writeTheme(theme: ThemePreference): void {
   localStorage.setItem(THEME_KEY, theme)
   document.documentElement.dataset.theme = theme
+}
+
+export function readSidebarCollapsed(): boolean {
+  try { return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true' } catch { return false }
+}
+
+export function writeSidebarCollapsed(collapsed: boolean): void {
+  try { localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed)) } catch { /* ignore unavailable storage */ }
 }

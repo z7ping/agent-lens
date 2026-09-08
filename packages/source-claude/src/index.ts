@@ -12,7 +12,6 @@ import {
 import { homedir } from 'node:os'
 import {
   basename,
-  delimiter,
   dirname,
   extname,
   join,
@@ -39,6 +38,7 @@ import type {
 import {
   abortableDelay,
   defineAgentLensPlugin,
+  resolveExecutable,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
 
@@ -138,25 +138,6 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-async function findExecutable(
-  env: Readonly<Record<string, string | undefined>>,
-): Promise<string | undefined> {
-  const explicit = env.CLAUDE_BIN?.trim()
-  if (explicit && await exists(explicit)) return explicit
-
-  const pathValue = env.PATH ?? process.env.PATH ?? ''
-  const names = process.platform === 'win32'
-    ? ['claude.exe', 'claude.cmd', 'claude.bat']
-    : ['claude']
-  for (const root of pathValue.split(delimiter).filter(Boolean)) {
-    for (const name of names) {
-      const candidate = join(root, name)
-      if (await exists(candidate)) return candidate
-    }
-  }
-  return undefined
-}
-
 function claudeHome(env: Readonly<Record<string, string | undefined>>): string {
   return env.CLAUDE_CODE_HOME?.trim() || join(homedir(), '.claude')
 }
@@ -170,7 +151,10 @@ export async function detectClaudeCode(
   const [homeExists, projectsExist, executable] = await Promise.all([
     exists(home),
     exists(projectsDir),
-    findExecutable(env),
+    resolveExecutable('claude', {
+      explicit: env.CLAUDE_BIN,
+      pathValue: env.PATH ?? process.env.PATH,
+    }),
   ])
   if (!homeExists && !projectsExist && !executable) return []
 
@@ -980,7 +964,7 @@ export async function declareClaudeCapabilities(
 
 export const claudeManifest: SourcePluginManifest = {
   pluginId: '@agent-lens/source-claude',
-  pluginVersion: '1.0.0-alpha.3',
+  pluginVersion: '1.0.0-alpha.4',
   apiVersion: '1.0',
   pluginType: 'source',
   displayName: 'Claude Code Source',

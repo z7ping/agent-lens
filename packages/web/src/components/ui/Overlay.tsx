@@ -2,7 +2,6 @@ import { createPortal } from 'react-dom'
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
 import { UiIcon } from '../UiIcon'
 import { IconButton } from './Primitives'
-import './overlay.css'
 
 const FOCUSABLE = [
   'a[href]',

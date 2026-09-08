@@ -1,9 +1,9 @@
 # AgentLens 1.0.0-alpha.3 Pi Runtime Worker 开发 Checklist
 
 状态：开发中
-最后同步：2026-09-03
+最后同步：2026-09-08
 架构依据：ADR-0009
-实施跟踪：GitHub Issue #51
+实施跟踪：GitHub Issue #51；Alpha.4 Daemon 恢复跟踪 #84
 
 ## 进度规则
 
@@ -96,6 +96,19 @@
 - [ ] 后台 Streaming 30 分钟
 - [ ] 连续 Streaming 1 小时
 - [ ] 8 小时 CPU、Heap、RSS、DOM、Listener 与资源回落
+
+## Alpha.4：跨 Daemon Generation 恢复
+
+Issue #84 用于补齐此前未实现的 Daemon / Desktop / 系统重启恢复语义。当前代码方向已经明确，但真实重启验收尚未执行，因此不修改上面的阶段 6 勾选状态。
+
+- Pi Live 对 Web 暂时保持现有 `runtimeSessionId` 字段和 URL 兼容，但该 ID 在 Alpha.4 恢复路径中作为稳定 Live Task 身份；Worker PID 与内部 generation 仍是可重建执行实例。
+- 恢复描述存入 AgentLens 既有 `StorageService.checkpoints`，不使用浏览器 `localStorage` 建立第二套真值。
+- Pi SDK 返回真实 `sessionFile` 后，内部恢复描述切换为该 Session 的 `continue`；本机路径继续只存在服务端，HTTP 输出仍过滤 `sessionFile / sessionPath / sessionDir`。
+- Daemon/Cordis dispose 只停止当前 Worker generation，不等同于用户“结束 Pi Runtime”；恢复记录继续保留供下一代 Daemon 使用。
+- 用户显式结束 Runtime 会删除恢复记录，后续 Daemon 不得自动复活。
+- 恢复机制不持久化、不自动重放 Prompt、Steer / Follow-up 队列或 Extension UI 等可能带副作用的内存动作。
+- Web 对 SSE 临时断线与 Runtime 404 分开处理；只有 Daemon 已可达且确认任务不存在时才进入不可恢复失败态，不再无限显示“正在连接”。
+- 已加入 Recovery Store、跨 Daemon generation、显式终止不复活、Runtime 404 与临时断线区分的测试代码；尚未在本地执行 typecheck/tests，也尚未完成真实 Pi 重启链路验收。
 
 ## 当前进度
 

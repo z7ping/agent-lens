@@ -8,12 +8,30 @@ import { spawn } from 'node:child_process'
 const WINDOWS_TASK_NAME = 'AgentLens Background'
 const LINUX_UNIT_NAME = 'agent-lens.service'
 const MAC_LABEL = 'com.agentlens.daemon'
+const MANAGED_ENVIRONMENT_NAMES = [
+  'PATH',
+  'SHELL',
+  'CODEX_BIN',
+  'CODEX_HOME',
+  'CLAUDE_BIN',
+  'CLAUDE_CODE_HOME',
+  'CLAUDE_HOME',
+  'PI_BIN',
+  'PI_HOME',
+  'PI_CODING_AGENT_DIR',
+  'PI_CODING_AGENT_SESSION_DIR',
+  'HERMES_HOME',
+  'OPENCODE_HOME',
+  'DSH_HOME',
+  'XDG_DATA_HOME',
+] as const
 
 export interface LifecycleOptions {
   cliEntry: string
   nodePath?: string
   homeDir?: string
   platform?: NodeJS.Platform
+  environment?: Readonly<Record<string, string | undefined>>
 }
 
 export interface LifecycleStatus {
@@ -86,14 +104,31 @@ async function runChecked(command: string, args: string[], label: string): Promi
   return result
 }
 
+function managedEnvironment(options: LifecycleOptions): Array<readonly [string, string]> {
+  const source = options.environment ?? process.env
+  const result: Array<readonly [string, string]> = []
+  for (const name of MANAGED_ENVIRONMENT_NAMES) {
+    const value = source[name]?.trim()
+    if (value) result.push([name, value])
+  }
+  return result
+}
+
 function psQuote(value: string): string {
   return `'${value.replace(/'/g, "''")}'`
 }
 
-function windowsManagedArgument(options: LifecycleOptions): string {
+function windowsManagedCommand(options: LifecycleOptions): string {
   const nodePath = options.nodePath ?? process.execPath
-  const command = `& ${psQuote(nodePath)} ${psQuote(options.cliEntry)} service run`
-  return `-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command "${command}"`
+  return [
+    ...managedEnvironment(options).map(([name, value]) => `$env:${name} = ${psQuote(value)}`),
+    `& ${psQuote(nodePath)} ${psQuote(options.cliEntry)} service run`,
+  ].join('; ')
+}
+
+function windowsManagedArgument(options: LifecycleOptions): string {
+  const encodedCommand = Buffer.from(windowsManagedCommand(options), 'utf16le').toString('base64')
+  return `-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -EncodedCommand ${encodedCommand}`
 }
 
 export function windowsTaskScript(options: LifecycleOptions, autostart: boolean): string {
@@ -153,6 +188,7 @@ function systemdQuote(value: string): string {
 
 export function systemdUnit(options: LifecycleOptions): string {
   const nodePath = options.nodePath ?? process.execPath
+  const environment = managedEnvironment(options)
   return [
     '[Unit]',
     'Description=AgentLens user background runtime',
@@ -160,8 +196,8 @@ export function systemdUnit(options: LifecycleOptions): string {
     '',
     '[Service]',
     'Type=simple',
+    ...environment.map(([name, value]) => `Environment=${systemdQuote(`${name}=${value}`)}`),
     `ExecStart=${systemdQuote(nodePath)} ${systemdQuote(options.cliEntry)} service run`,
-    `WorkingDirectory=${systemdQuote(dirname(options.cliEntry))}`,
     'Restart=on-failure',
     'RestartSec=2',
     'KillMode=control-group',
@@ -176,26 +212,39 @@ function linuxUnitPath(homeDir?: string): string {
   return join(homeDir ?? homedir(), '.config', 'systemd', 'user', LINUX_UNIT_NAME)
 }
 
+async function linuxLoadState(): Promise<CommandResult> {
+  return run('systemctl', ['--user', 'show', LINUX_UNIT_NAME, '--property=LoadState', '--value'])
+}
+
 async function ensureLinuxDefinition(options: LifecycleOptions): Promise<void> {
   const path = linuxUnitPath(options.homeDir)
   await mkdir(dirname(path), { recursive: true })
   await writeFile(path, systemdUnit(options), 'utf8')
   await runChecked('systemctl', ['--user', 'daemon-reload'], '刷新 systemd 用户服务')
+  const load = await linuxLoadState()
+  const loadState = load.stdout || load.stderr || 'unknown'
+  if (load.code !== 0 || load.stdout !== 'loaded') {
+    throw new Error(`systemd 用户服务定义无效（LoadState=${loadState}）：${path}`)
+  }
 }
 
 async function linuxStatus(options: LifecycleOptions): Promise<LifecycleStatus> {
   const registered = existsSync(linuxUnitPath(options.homeDir))
   if (!registered) return { manager: 'systemd-user', registered: false, active: false, autostart: false, detail: 'missing' }
-  const [active, enabled] = await Promise.all([
+  const [load, active, enabled] = await Promise.all([
+    linuxLoadState(),
     run('systemctl', ['--user', 'is-active', LINUX_UNIT_NAME]),
     run('systemctl', ['--user', 'is-enabled', LINUX_UNIT_NAME]),
   ])
+  const loadState = load.stdout || load.stderr || 'unknown'
   return {
     manager: 'systemd-user',
     registered: true,
-    active: active.code === 0 && active.stdout === 'active',
+    active: loadState === 'loaded' && active.code === 0 && active.stdout === 'active',
     autostart: enabled.code === 0 && enabled.stdout === 'enabled',
-    detail: active.stdout || active.stderr || 'unknown',
+    detail: loadState === 'loaded'
+      ? (active.stdout || active.stderr || 'unknown')
+      : `LoadState=${loadState}`,
   }
 }
 
@@ -212,6 +261,7 @@ export function launchdPlist(options: LifecycleOptions, autostart: boolean): str
   const home = options.homeDir ?? homedir()
   const logs = runtimeDir(home)
   const nodePath = options.nodePath ?? process.execPath
+  const environment = managedEnvironment(options)
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
@@ -226,8 +276,17 @@ export function launchdPlist(options: LifecycleOptions, autostart: boolean): str
     '    <string>service</string>',
     '    <string>run</string>',
     '  </array>',
-    '  <key>WorkingDirectory</key>',
-    `  <string>${xmlEscape(dirname(options.cliEntry))}</string>`,
+    ...(environment.length > 0
+      ? [
+          '  <key>EnvironmentVariables</key>',
+          '  <dict>',
+          ...environment.flatMap(([name, value]) => [
+            `    <key>${xmlEscape(name)}</key>`,
+            `    <string>${xmlEscape(value)}</string>`,
+          ]),
+          '  </dict>',
+        ]
+      : []),
     '  <key>RunAtLoad</key>',
     autostart ? '  <true/>' : '  <false/>',
     '  <key>KeepAlive</key>',
@@ -261,23 +320,44 @@ function macDomain(): string {
   return `gui/${uid}`
 }
 
+async function macDefinitionAutostart(options: LifecycleOptions): Promise<boolean> {
+  try {
+    const source = await readFile(macPlistPath(options.homeDir), 'utf8')
+    const match = source.match(/<key>RunAtLoad<\/key>\s*<(true|false)\/>/)
+    return match?.[1] === 'true'
+  } catch {
+    return false
+  }
+}
+
 async function ensureMacDefinition(options: LifecycleOptions, autostart: boolean): Promise<void> {
   const path = macPlistPath(options.homeDir)
   await mkdir(dirname(path), { recursive: true })
   await mkdir(runtimeDir(options.homeDir), { recursive: true })
   await writeFile(path, launchdPlist(options, autostart), 'utf8')
+  await runChecked('/usr/bin/plutil', ['-lint', path], '校验 launchd 用户服务定义')
+}
+
+async function reloadMacDefinition(options: LifecycleOptions): Promise<void> {
+  const loaded = await run('launchctl', ['print', macTarget()])
+  if (loaded.code === 0) {
+    await runChecked('launchctl', ['bootout', macTarget()], '卸载旧 launchd 用户服务定义')
+  }
+  await runChecked('launchctl', ['bootstrap', macDomain(), macPlistPath(options.homeDir)], '加载 launchd 用户服务')
 }
 
 async function macStatus(options: LifecycleOptions): Promise<LifecycleStatus> {
   const registered = existsSync(macPlistPath(options.homeDir))
   if (!registered) return { manager: 'launchd-user', registered: false, active: false, autostart: false, detail: 'missing' }
-  const preferences = await readPreferences(options.homeDir)
-  const result = await run('launchctl', ['print', macTarget()])
+  const [autostart, result] = await Promise.all([
+    macDefinitionAutostart(options),
+    run('launchctl', ['print', macTarget()]),
+  ])
   return {
     manager: 'launchd-user',
     registered: true,
     active: result.code === 0 && /state\s*=\s*running/.test(result.stdout),
-    autostart: preferences.autostart,
+    autostart,
     detail: result.code === 0 ? (result.stdout.match(/state\s*=\s*([^\n]+)/)?.[1]?.trim() ?? 'loaded') : 'not loaded',
   }
 }
@@ -331,11 +411,8 @@ export async function serviceStart(options: LifecycleOptions): Promise<Lifecycle
   } else if (platform === 'linux') {
     await runChecked('systemctl', ['--user', 'start', LINUX_UNIT_NAME], '启动 systemd 用户服务')
   } else {
-    const loaded = await run('launchctl', ['print', macTarget()])
-    if (loaded.code !== 0) {
-      await runChecked('launchctl', ['bootstrap', macDomain(), macPlistPath(options.homeDir)], '加载 launchd 用户服务')
-    }
-    await runChecked('launchctl', ['kickstart', '-k', macTarget()], '启动 launchd 用户服务')
+    await reloadMacDefinition(options)
+    await runChecked('launchctl', ['kickstart', macTarget()], '启动 launchd 用户服务')
   }
   return getLifecycleStatus(options)
 }
@@ -364,6 +441,8 @@ export const lifecycleInternals = {
   dataRoot,
   runtimeDir,
   preferencesPath,
+  managedEnvironment,
+  windowsManagedCommand,
   windowsManagedArgument,
   windowsTaskScript,
   windowsStatusScript,

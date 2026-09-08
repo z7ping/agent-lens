@@ -25,8 +25,15 @@ const FACET_OBSERVATION_PAGE_SIZE = 5000
 const FACET_SCOPE_CACHE_MS = 10_000
 const FACET_RESPONSE_CACHE_MS = 2_000
 const AGENT_OVERVIEW_CACHE_MS = 2_000
+const SLOW_OVERVIEW_PHASE_MS = 500
 
 type FastFacetScope = SessionSummaryFacetScope
+
+function logSlowOverviewPhase(phase: string, startedAt: number, details: Record<string, number | string> = {}): void {
+  const elapsedMs = performance.now() - startedAt
+  if (elapsedMs < SLOW_OVERVIEW_PHASE_MS) return
+  console.warn('[AgentLens] Overview slow phase', { phase, elapsedMs: Math.round(elapsedMs), ...details })
+}
 
 function latestStates(entry: AssetInventoryEntry): AgentAssetStateDto[] {
   const latest = new Map<string, AgentAssetStateDto>()
@@ -123,11 +130,13 @@ export class FacetProjection {
 
   private async scope(): Promise<FastFacetScope> {
     if (this.cachedScope && Date.now() - this.cachedScopeAt < FACET_SCOPE_CACHE_MS) return this.cachedScope
+    const startedAt = performance.now()
     const fast = fastFacetScope(this.storage)
     if (fast) {
       const scope = await fast()
       this.cachedScope = scope
       this.cachedScopeAt = Date.now()
+      logSlowOverviewPhase('facet-scope', startedAt, { projects: scope.projects.length, source: 'projection' })
       return scope
     }
 
@@ -146,6 +155,7 @@ export class FacetProjection {
     }
     this.cachedScope = scope
     this.cachedScopeAt = Date.now()
+    logSlowOverviewPhase('facet-scope', startedAt, { projects: scope.projects.length, source: 'fallback' })
     return scope
   }
 
@@ -223,13 +233,30 @@ export class AgentOverviewProjection {
   }
 
   private async buildResponse(): Promise<AgentOverviewResponseDto> {
+    const startedAt = performance.now()
     const definitions = this.sources?.list() ?? []
+    const sourceAssets = this.storage.toolUsageObservations?.aggregateAssetsBySource
+      ? await this.storage.toolUsageObservations.aggregateAssetsBySource({ detailLimit: 0 })
+      : null
+    const assetsBySource = new Map<string, typeof sourceAssets>()
+    if (sourceAssets) {
+      for (const asset of sourceAssets) {
+        const sourceId = asset.sourceIds[0]
+        if (!sourceId) continue
+        const items = assetsBySource.get(sourceId) ?? []
+        items.push(asset)
+        assetsBySource.set(sourceId, items)
+      }
+    }
     const items = await Promise.all(definitions.map(async definition => {
+      const sourceStartedAt = performance.now()
       const installations = await this.storage.repositories.installations.listByProduct(definition.manifest.productId)
       const usedAssets = new Map<string, AgentOverviewResponseDto['items'][number]['usedAssets'][number]>()
       const inventory = new Map<string, AgentAssetInventoryDto>()
 
-      const assets = await this.usage.queryAssets({ sourceId: definition.manifest.sourceId })
+      const assets = sourceAssets
+        ? assetsBySource.get(definition.manifest.sourceId) ?? []
+        : await this.usage.queryAssets({ sourceId: definition.manifest.sourceId })
       for (const asset of assets) {
         const key = `${asset.type}\u0000${asset.canonicalName}`
         usedAssets.set(key, {
@@ -238,7 +265,10 @@ export class AgentOverviewProjection {
           callCount: asset.callCount,
           firstUsedAt: asset.firstUsedAt,
           lastUsedAt: asset.lastUsedAt,
-          confidence: asset.confidence,
+          confidence: 'confidence' in asset
+            && (asset.confidence === 'high' || asset.confidence === 'medium' || asset.confidence === 'low')
+            ? asset.confidence
+            : 'high',
         })
       }
 
@@ -277,7 +307,7 @@ export class AgentOverviewProjection {
       assetInventory.sort((a, b) => a.type.localeCompare(b.type)
         || (a.displayName ?? a.canonicalName).localeCompare(b.displayName ?? b.canonicalName))
 
-      return {
+      const item = {
         sourceId: definition.manifest.sourceId,
         productId: definition.manifest.productId,
         displayName: definition.manifest.displayName,
@@ -303,7 +333,15 @@ export class AgentOverviewProjection {
         usedAssets: [...usedAssets.values()].sort((a, b) => b.callCount - a.callCount || a.canonicalName.localeCompare(b.canonicalName)),
         assetInventoryStatus: this.storage.assetInventory ? 'available' as const : 'unavailable' as const,
       }
+      logSlowOverviewPhase('agent-source', sourceStartedAt, {
+        sourceId: definition.manifest.sourceId,
+        installations: installations.length,
+        usedAssets: usedAssets.size,
+        inventoryAssets: assetInventory.length,
+      })
+      return item
     }))
+    logSlowOverviewPhase('agent-overview-total', startedAt, { sources: definitions.length, items: items.length })
     return { items, meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION, generatedAt: new Date().toISOString() } }
   }
 }

@@ -162,6 +162,17 @@ function assistantStopFact(
   }
 }
 
+function promoteAssistantEntryAnchor(facts: PiNativeFact[], entryId: string, parentId?: string): void {
+  const first = facts[0]
+  if (!first) return
+  const { parentId: _contentParentId, ...anchored } = first
+  facts[0] = {
+    ...anchored,
+    id: entryId,
+    ...(parentId ? { parentId } : {}),
+  } as PiNativeFact
+}
+
 export function normalizePiSessionEntry(
   raw: unknown,
   options: NormalizePiSessionEntryOptions = {},
@@ -303,6 +314,9 @@ export function normalizePiSessionEntry(
       if (stop) facts.push(stop)
       const usage = usageFact(messageBase, message.usage)
       if (usage) facts.push(usage)
+      // 第一个可观察内容块继续承载原生 assistant entry 身份，确保旧证据身份稳定，
+      // 并让后续 content block、Tool Result、stop/usage 的 parentId 指向真实存在的事实。
+      promoteAssistantEntryAnchor(facts, id, parentId)
       return facts
     }
     if (role === 'tool' || role === 'toolResult') {

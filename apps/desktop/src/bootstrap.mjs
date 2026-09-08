@@ -2,6 +2,10 @@ import { appendFileSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 import { app } from 'electron'
+import { appendBoundedLogSync } from './rotating-log.mjs'
+
+const BOOT_LOG_MAX_BYTES = 1024 * 1024
+const BOOT_LOG_BACKUPS = 2
 
 function fallbackBootLogPath() {
   if (process.platform === 'win32') {
@@ -46,7 +50,11 @@ try {
 function bootStage(stage) {
   try {
     mkdirSync(dirname(bootLogPath), { recursive: true })
-    appendFileSync(bootLogPath, `${new Date().toISOString()} bootstrap ${stage} pid=${process.pid} argv=${JSON.stringify(process.argv)}\n`, 'utf8')
+    appendBoundedLogSync(
+      bootLogPath,
+      `${new Date().toISOString()} bootstrap ${stage} pid=${process.pid} argv=${JSON.stringify(process.argv)}\n`,
+      { maxBytes: BOOT_LOG_MAX_BYTES, backups: BOOT_LOG_BACKUPS },
+    )
   } catch {
     // Diagnostic logging must never change desktop startup semantics.
   }

@@ -19,6 +19,23 @@ import { buildInteractionGroups } from './nodes'
 const DEFAULT_DETAIL_LIMIT = 20
 const MAX_DETAIL_LIMIT = 100
 const TIMELINE_CHUNK = 250
+// Evidence rows can be larger than their observation headers (and may have
+// multiple parser versions). Keep the foreground materialisation batch below
+// the per-interaction display window so a normal page stays within the reader
+// budget instead of merely moving the old timeout to the next cursor page.
+const MAX_PAGE_OBSERVATIONS = 240
+const SLOW_REVIEW_PAGER_MS = 500
+
+function logSlowReviewPager(startedAt: number, mode: string, page: ReviewInteractionPage): void {
+  const elapsedMs = performance.now() - startedAt
+  if (elapsedMs < SLOW_REVIEW_PAGER_MS) return
+  console.warn('[AgentLens] Review pager slow phase', {
+    mode,
+    elapsedMs: Math.round(elapsedMs),
+    interactions: page.interactions.length,
+    hasMore: page.page.hasMore,
+  })
+}
 
 type ReviewInteractionPage = {
   interactions: ReviewInteractionDto[]
@@ -102,16 +119,67 @@ export class ReviewInteractionPager {
     }
   }
 
+  private async forwardBounded(
+    logicalSessionId: string,
+    query: ReviewDetailQueryDto,
+    summary: ReviewSessionSummaryDto,
+  ): Promise<ReviewInteractionPage> {
+    const limit = requestedLimit(query)
+    const decoded = query.cursor ? decodeReviewCursor(query.cursor) : null
+    if (decoded && (decoded.mode !== 'timeline' || decoded.direction !== 'forward')) throw new Error('Invalid review cursor')
+    const startingOrdinal = decoded?.ordinal ?? 1
+    const descriptors = await this.descriptors.structureCached(summary)
+    const candidates = descriptors.filter(item => item.ordinal >= startingOrdinal)
+    const selected: InteractionDescriptor[] = []
+    let observationCount = 0
+    for (const descriptor of candidates) {
+      if (selected.length >= limit) break
+      // Keep an oversized interaction reachable. Its existing 600-node head/tail
+      // contract is still applied by ReviewProjection after materialisation.
+      if (selected.length > 0 && observationCount + descriptor.observationCount > MAX_PAGE_OBSERVATIONS) break
+      selected.push(descriptor)
+      observationCount += descriptor.observationCount
+    }
+
+    const interactions = await this.descriptors.materializeMany(logicalSessionId, selected)
+    const last = selected.at(-1)
+    const hasMore = Boolean(last && candidates.length > selected.length)
+    const nextCursor = hasMore && last
+      ? encodeReviewCursor({
+          mode: 'timeline',
+          direction: 'forward',
+          timelineCursor: encodeTimelineCursor({
+            id: last.end.id,
+            effectiveAt: last.end.effectiveAt,
+            ...(last.end.sequence === undefined ? {} : { canonicalSequence: last.end.sequence }),
+          }),
+          ordinal: last.ordinal + 1,
+        })
+      : undefined
+    return {
+      interactions,
+      page: {
+        count: interactions.length,
+        hasMore,
+        ...(nextCursor ? { nextCursor } : {}),
+        direction: 'forward',
+        filter: 'all',
+      },
+    }
+  }
+
   async backward(
     logicalSessionId: string,
     query: ReviewDetailQueryDto,
     filter: ReviewDetailFilter = 'all',
-    knownInteractionCount?: number,
   ): Promise<ReviewInteractionPage> {
     const limit = requestedLimit(query, filter === 'latest' ? 1 : undefined)
     const decoded = query.cursor ? decodeReviewCursor(query.cursor) : null
     if (decoded && (decoded.mode !== 'timeline' || decoded.direction !== 'backward')) throw new Error('Invalid review cursor')
-    const endingOrdinal = decoded?.ordinal ?? knownInteractionCount ?? await this.descriptors.count(logicalSessionId)
+    // Review interaction ordinals include all message.user boundaries plus a possible
+    // leading background round. SessionSummary.interactionCount is intentionally only
+    // the real human-user turn count, so it cannot be used as the Review ordinal tail.
+    const endingOrdinal = decoded?.ordinal ?? await this.descriptors.count(logicalSessionId)
     if (endingOrdinal < 1) {
       return { interactions: [], page: { count: 0, hasMore: false, direction: 'backward', filter } }
     }
@@ -195,8 +263,7 @@ export class ReviewInteractionPager {
       return threshold !== null && durationMs(descriptor.startedAt, descriptor.endedAt) >= threshold
     })
     const selected = matches.slice(0, limit)
-    const interactions: ReviewInteractionDto[] = []
-    for (const descriptor of selected) interactions.push(await this.descriptors.materialize(logicalSessionId, descriptor))
+    const interactions = await this.descriptors.materializeMany(logicalSessionId, selected)
     const hasMore = matches.length > limit
     const last = selected.at(-1)
     const nextCursor = hasMore && last
@@ -221,34 +288,40 @@ export class ReviewInteractionPager {
     query: ReviewDetailQueryDto,
     summary: ReviewSessionSummaryDto,
   ): Promise<ReviewInteractionPage> {
+    const startedAt = performance.now()
+    let mode = 'forward'
+    let result: ReviewInteractionPage
     if (query.ordinal !== undefined) {
       const target = await this.descriptors.find(logicalSessionId, query.ordinal)
-      return {
+      result = {
         interactions: target ? [await this.descriptors.materialize(logicalSessionId, target)] : [],
         page: { count: target ? 1 : 0, hasMore: false, direction: 'forward', filter: 'all' },
       }
+      mode = 'ordinal'
+    } else {
+      const filter = query.filter ?? 'all'
+      if (filter === 'errors' || filter === 'latency') {
+        result = await this.filtered(logicalSessionId, query, filter, await this.descriptors.cached(summary))
+        mode = filter
+      } else if (filter === 'latest') {
+        result = await this.backward(
+          logicalSessionId,
+          { ...query, direction: 'backward' },
+          'latest',
+        )
+        mode = 'latest'
+      } else if ((query.direction ?? 'forward') === 'backward') {
+        result = await this.backward(
+          logicalSessionId,
+          query,
+          'all',
+        )
+        mode = 'backward'
+      } else {
+        result = await this.forwardBounded(logicalSessionId, query, summary)
+      }
     }
-
-    const filter = query.filter ?? 'all'
-    if (filter === 'errors' || filter === 'latency') {
-      return this.filtered(logicalSessionId, query, filter, await this.descriptors.cached(summary))
-    }
-    if (filter === 'latest') {
-      return this.backward(
-        logicalSessionId,
-        { ...query, direction: 'backward' },
-        'latest',
-        summary.interactionCount > 0 ? summary.interactionCount : undefined,
-      )
-    }
-    if ((query.direction ?? 'forward') === 'backward') {
-      return this.backward(
-        logicalSessionId,
-        query,
-        'all',
-        summary.interactionCount > 0 ? summary.interactionCount : undefined,
-      )
-    }
-    return this.forward(logicalSessionId, query)
+    logSlowReviewPager(startedAt, mode, result)
+    return result
   }
 }

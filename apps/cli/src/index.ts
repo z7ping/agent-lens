@@ -31,7 +31,8 @@ import {
   type LifecycleStatus,
 } from './lifecycle'
 
-const VERSION = '1.0.0-alpha.3'
+const VERSION = '1.0.0-alpha.4'
+const PROTOCOL_VERSION = '1.0'
 const DEFAULT_PORT = 56789
 const MIN_NODE = [22, 23, 0] as const
 
@@ -55,6 +56,12 @@ interface DetectedSourceRoot {
 
 interface LifecycleProbe {
   status: LifecycleStatus | null
+  error: string | null
+}
+
+interface RuntimeHealthProbe {
+  reachable: boolean
+  health: Record<string, unknown> | null
   error: string | null
 }
 
@@ -98,27 +105,72 @@ function daemonUrl(pathname = '/api/v1/health'): string {
   return `http://127.0.0.1:${port}${pathname}`
 }
 
+function compatibleHealth(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('AgentLens health payload is not an object')
+  }
+  const health = value as Record<string, unknown>
+  if (health.protocolVersion !== PROTOCOL_VERSION) {
+    throw new Error(`AgentLens 协议不兼容：期望 ${PROTOCOL_VERSION}，实际 ${String(health.protocolVersion ?? 'unknown')}`)
+  }
+  return health
+}
+
+async function probeHealth(): Promise<RuntimeHealthProbe> {
+  let response: Response
+  try {
+    response = await fetch(daemonUrl(), {
+      headers: { accept: 'application/json' },
+      signal: AbortSignal.timeout(1500),
+    })
+  } catch (error) {
+    return {
+      reachable: false,
+      health: null,
+      error: error instanceof Error ? error.message : String(error),
+    }
+  }
+
+  if (!response.ok && response.status !== 503) {
+    return { reachable: true, health: null, error: `HTTP ${response.status}` }
+  }
+
+  let payload: unknown
+  try {
+    payload = await response.json()
+  } catch (error) {
+    return {
+      reachable: true,
+      health: null,
+      error: `AgentLens health 响应不是有效 JSON：${error instanceof Error ? error.message : String(error)}`,
+    }
+  }
+
+  try {
+    return { reachable: true, health: compatibleHealth(payload), error: null }
+  } catch (error) {
+    return {
+      reachable: true,
+      health: null,
+      error: error instanceof Error ? error.message : String(error),
+    }
+  }
+}
+
 async function fetchHealth(): Promise<Record<string, unknown>> {
-  const response = await fetch(daemonUrl(), {
-    headers: { accept: 'application/json' },
-    signal: AbortSignal.timeout(1500),
-  })
-  if (!response.ok && response.status !== 503) throw new Error(`HTTP ${response.status}`)
-  return response.json() as Promise<Record<string, unknown>>
+  const probe = await probeHealth()
+  if (probe.health) return probe.health
+  throw new Error(probe.error ?? 'AgentLens health endpoint is unavailable')
 }
 
 async function healthOrNull(): Promise<Record<string, unknown> | null> {
-  try {
-    return await fetchHealth()
-  } catch {
-    return null
-  }
+  return (await probeHealth()).health
 }
 
 async function waitForHealth(timeoutMs = 4000): Promise<Record<string, unknown> | null> {
   const deadline = Date.now() + timeoutMs
   do {
-    const health = await healthOrNull()
+    const health = (await probeHealth()).health
     if (health) return health
     await delay(200)
   } while (Date.now() < deadline)
@@ -133,7 +185,7 @@ function runtimeOwner(health: Record<string, unknown>): string | null {
 }
 
 function runtimeOwnerLabel(owner: string | null): string {
-  if (owner === 'desktop') return 'Windows 客户端'
+  if (owner === 'desktop') return '桌面端'
   if (owner === 'service') return '后台服务'
   if (owner === 'cli') return '命令行'
   return owner ?? '未报告'
@@ -332,13 +384,20 @@ async function runHook(action: string, targetValue: string | undefined, json: bo
 }
 
 async function startDaemon(owner: RuntimeOwner = 'cli', mode: RuntimeMode = 'foreground'): Promise<number> {
-  try {
-    const health = await fetchHealth()
-    console.log(`AgentLens 已在运行（管理方式：${runtimeOwnerLabel(runtimeOwner(health))}）`)
+  const existing = await probeHealth()
+  if (existing.health) {
+    const existingOwner = runtimeOwner(existing.health)
+    if (mode === 'managed' && owner === 'service' && existingOwner !== 'service') {
+      console.log(`当前运行时由${runtimeOwnerLabel(existingOwner)}管理，后台服务不会强行接管。`)
+      return 0
+    }
+    console.log(`AgentLens 已在运行（管理方式：${runtimeOwnerLabel(existingOwner)}）`)
     console.log(`Web: ${daemonUrl('/')}`)
     return 0
-  } catch {
-    // No compatible AgentLens health endpoint is currently reachable; start one daemon only.
+  }
+  if (existing.reachable) {
+    console.error(`默认端口已有不兼容服务，AgentLens 不会抢占：${existing.error ?? '无法识别的运行时'}`)
+    return mode === 'managed' ? 0 : 1
   }
 
   const explicit = process.env.AGENT_LENS_DAEMON_ENTRY
@@ -404,13 +463,25 @@ async function runService(action: string, json: boolean): Promise<number> {
   }
 
   const options = lifecycleOptions()
-  const before = await healthOrNull()
-  if (action === 'restart' && before && runtimeOwner(before) !== 'service') {
+  const startsService = action === 'start' || action === 'restart'
+  const before = startsService ? await probeHealth() : null
+  if (before?.reachable && !before.health) {
+    const result = {
+      ok: false,
+      reason: 'runtime-endpoint-incompatible',
+      message: `默认端口已有不兼容服务，后台服务不会抢占：${before.error ?? '无法识别的运行时'}`,
+    }
+    if (json) console.log(JSON.stringify(result, null, 2))
+    else console.log(result.message)
+    return 1
+  }
+  const beforeOwner = before?.health ? runtimeOwner(before.health) : null
+  if (startsService && before?.health && beforeOwner !== 'service') {
     const result = {
       ok: false,
       reason: 'runtime-owned-elsewhere',
-      owner: runtimeOwner(before),
-      message: `当前运行时由${runtimeOwnerLabel(runtimeOwner(before))}管理，后台服务不会强行接管。`,
+      owner: beforeOwner,
+      message: `当前运行时由${runtimeOwnerLabel(beforeOwner)}管理，后台服务不会强行接管。`,
     }
     if (json) console.log(JSON.stringify(result, null, 2))
     else console.log(result.message)
@@ -424,7 +495,7 @@ async function runService(action: string, json: boolean): Promise<number> {
   else lifecycle = await getLifecycleStatus(options)
 
   let health = await healthOrNull()
-  if ((action === 'start' || action === 'restart') && !health) health = await waitForHealth()
+  if (startsService && !health) health = await waitForHealth()
   if (action === 'stop' && health && runtimeOwner(health) === 'service') {
     for (let attempt = 0; attempt < 10; attempt += 1) {
       await delay(150)
@@ -432,31 +503,53 @@ async function runService(action: string, json: boolean): Promise<number> {
       if (!health || runtimeOwner(health) !== 'service') break
     }
   }
+  if (action !== 'status') lifecycle = await getLifecycleStatus(options)
 
+  const owner = health ? runtimeOwner(health) : null
+  let reason: string | null = null
+  let message: string | null = null
+  if (startsService) {
+    if (!lifecycle.active || !health || owner !== 'service') {
+      reason = 'service-not-ready'
+      message = `后台服务未确认可用：${lifecycleDetail(lifecycle)}；运行时=${health ? runtimeOwnerLabel(owner) : '离线'}`
+    }
+  } else if (action === 'stop') {
+    if (lifecycle.active || owner === 'service') {
+      reason = 'service-still-running'
+      message = `后台服务停止后仍处于活动状态：${lifecycleDetail(lifecycle)}；运行时=${health ? runtimeOwnerLabel(owner) : '离线'}`
+    }
+  }
+
+  const ok = reason === null
   const result = {
-    ok: true,
+    ok,
     action,
+    ...(reason ? { reason, message } : {}),
     lifecycle,
     runtime: health
-      ? { online: true, owner: runtimeOwner(health), url: daemonUrl('/') }
+      ? { online: true, owner, url: daemonUrl('/') }
       : { online: false, url: daemonUrl('/') },
   }
   if (json) {
     console.log(JSON.stringify(result, null, 2))
-    return 0
+    return ok ? 0 : 1
   }
 
-  if (action === 'start') console.log('AgentLens 后台服务启动请求已完成。')
-  else if (action === 'stop') console.log('AgentLens 后台服务停止请求已完成。')
-  else if (action === 'restart') console.log('AgentLens 后台服务重启请求已完成。')
+  if (ok) {
+    if (action === 'start') console.log('AgentLens 后台服务已启动并确认可用。')
+    else if (action === 'stop') console.log('AgentLens 后台服务已停止。')
+    else if (action === 'restart') console.log('AgentLens 后台服务已重启并确认可用。')
+  } else if (message) {
+    console.log(message)
+  }
   printLifecycleState(lifecycle)
   if (health) {
-    console.log(`运行时：在线（管理方式：${runtimeOwnerLabel(runtimeOwner(health))}）`)
+    console.log(`运行时：在线（管理方式：${runtimeOwnerLabel(owner)}）`)
     console.log(`Web：${daemonUrl('/')}`)
   } else {
     console.log('运行时：当前离线')
   }
-  return 0
+  return ok ? 0 : 1
 }
 
 async function runAutostart(action: string, json: boolean): Promise<number> {
@@ -469,33 +562,37 @@ async function runAutostart(action: string, json: boolean): Promise<number> {
     : action === 'disable'
       ? await setAutostart(false, options)
       : await getLifecycleStatus(options)
+  const expected = action === 'enable' ? true : action === 'disable' ? false : null
+  const ok = expected === null || lifecycle.autostart === expected
+  const message = ok || expected === null
+    ? null
+    : `登录自启状态未达到预期：${lifecycleDetail(lifecycle)}`
 
-  const result = { ok: true, action, lifecycle }
+  const result = { ok, action, ...(message ? { message } : {}), lifecycle }
   if (json) {
     console.log(JSON.stringify(result, null, 2))
-    return 0
+    return ok ? 0 : 1
   }
-  if (action === 'enable') console.log('AgentLens 登录后自动运行已启用。')
-  else if (action === 'disable') console.log('AgentLens 登录后自动运行已关闭。')
+  if (ok) {
+    if (action === 'enable') console.log('AgentLens 登录后自动运行已启用。')
+    else if (action === 'disable') console.log('AgentLens 登录后自动运行已关闭。')
+  } else if (message) {
+    console.log(message)
+  }
   printLifecycleState(lifecycle)
-  return 0
+  return ok ? 0 : 1
 }
 
 async function status(json: boolean): Promise<number> {
-  let health: Record<string, unknown> | null = null
-  let healthError: string | null = null
-  try {
-    health = await fetchHealth()
-  } catch (error) {
-    healthError = error instanceof Error ? error.message : String(error)
-  }
+  const runtime = await probeHealth()
+  const health = runtime.health
   const lifecycle = await lifecycleStatusProbe()
   const owner = health ? runtimeOwner(health) : null
   const result = {
     online: health !== null,
     url: daemonUrl('/'),
     owner,
-    ...(health ? { health } : { error: healthError }),
+    ...(health ? { health } : { error: runtime.error }),
     lifecycle: lifecycle.status,
     lifecycleError: lifecycle.error,
   }
@@ -511,7 +608,7 @@ async function status(json: boolean): Promise<number> {
     console.log(`协议版本：${String(health.protocolVersion ?? 'unknown')}`)
     console.log(`管理方式：${runtimeOwnerLabel(owner)}`)
   } else {
-    console.log(`AgentLens 后台运行时：离线（${healthError ?? '无法连接'}）`)
+    console.log(`AgentLens 后台运行时：离线（${runtime.error ?? '无法连接'}）`)
   }
   if (lifecycle.status) printLifecycleState(lifecycle.status)
   else console.log(`系统托管：无法读取（${lifecycle.error ?? '未知错误'}）`)
@@ -537,17 +634,22 @@ async function doctor(json: boolean): Promise<number> {
     checks.push({ id: 'data-root', level: 'fail', message: 'AgentLens 数据目录不可访问', detail: String(error) })
   }
 
-  let health: Record<string, unknown> | null = null
-  try {
-    health = await fetchHealth()
+  const runtime = await probeHealth()
+  const health = runtime.health
+  if (health) {
     checks.push({
       id: 'daemon',
       level: 'pass',
       message: '后台运行时可连接',
       detail: `${daemonUrl('/')} · 协议 ${String(health.protocolVersion ?? 'unknown')} · ${runtimeOwnerLabel(runtimeOwner(health))}`,
     })
-  } catch (error) {
-    checks.push({ id: 'daemon', level: 'warn', message: '后台运行时当前不可连接', detail: error instanceof Error ? error.message : String(error) })
+  } else {
+    checks.push({
+      id: 'daemon',
+      level: 'warn',
+      message: runtime.reachable ? '默认端口存在不兼容服务' : '后台运行时当前不可连接',
+      detail: runtime.error ?? '无法连接',
+    })
   }
 
   const lifecycle = await lifecycleStatusProbe()
@@ -556,7 +658,7 @@ async function doctor(json: boolean): Promise<number> {
     const staleWindowsDefinition = lifecycle.status.manager === 'windows-task-scheduler'
       && lifecycle.status.registered
       && lifecycle.status.hidden !== true
-    const ownershipMismatch = (lifecycle.status.active && !health)
+    const ownershipMismatch = (lifecycle.status.active && (!health || owner !== 'service'))
       || (owner === 'service' && !lifecycle.status.active)
     checks.push({
       id: 'lifecycle',
@@ -727,6 +829,7 @@ export const cliInternals = {
   versionAtLeast,
   targetFrom,
   daemonUrl,
+  compatibleHealth,
   runtimeOwner,
   sourceRoots,
   setupHookTargets,

@@ -17,6 +17,7 @@ interface WorkspaceSidebarProps {
   theme: 'light' | 'dark'
   onToggleTheme(): void
   onContextHost(node: HTMLDivElement | null): void
+  onCollapse(): void
   mobileOpen?: boolean
   onMobileClose?(): void
 }
@@ -30,6 +31,7 @@ export function WorkspaceSidebar({
   theme,
   onToggleTheme,
   onContextHost,
+  onCollapse,
   mobileOpen = false,
   onMobileClose = () => undefined,
 }: WorkspaceSidebarProps) {
@@ -68,10 +70,13 @@ export function WorkspaceSidebar({
   }, [settingsOpen])
 
   return <aside className={`workspace-sidebar ${mobileOpen ? 'is-mobile-open' : ''}`} aria-label="AgentLens 工作区导航">
-    <NavLink to="/review" className="workspace-sidebar-brand" aria-label="AgentLens，返回任务中心" title="返回任务中心" onClick={onMobileClose}>
-      <img className="workspace-sidebar-logo" src="/agentlens-icon.svg" alt="" aria-hidden="true"/>
-      <span className="workspace-sidebar-brand-copy"><b>AgentLens</b></span>
-    </NavLink>
+    <div className="workspace-sidebar-brand-row">
+      <NavLink to="/review" className="workspace-sidebar-brand" aria-label="AgentLens，返回任务中心" title="返回任务中心" onClick={onMobileClose}>
+        <img className="workspace-sidebar-logo" src="/agentlens-icon.svg" alt="" aria-hidden="true"/>
+        <span className="workspace-sidebar-brand-copy"><b>AgentLens</b></span>
+      </NavLink>
+      <IconButton className="workspace-sidebar-collapse-button" size="small" onClick={onCollapse} title="收起侧栏" aria-label="收起侧栏"><UiIcon name="panel-left-close" size={16}/></IconButton>
+    </div>
 
     <nav className="workspace-primary-nav" aria-label="主导航">
       <NavLink to="/review" onClick={onMobileClose} className={`workspace-primary-link ${onReview ? 'is-active' : ''}`}><UiIcon name="task" size={16}/><span aria-label="任务中心">任务</span></NavLink>

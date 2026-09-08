@@ -1,6 +1,7 @@
 import { access, readFile, realpath } from 'node:fs/promises'
-import { delimiter, dirname, extname, join, resolve } from 'node:path'
+import { dirname, extname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { resolveExecutable, resolveManagedExecutableTarget } from '../executable-discovery'
 import {
   PI_SDK_PACKAGE_NAME,
   assertPiSdkModule,
@@ -47,18 +48,10 @@ function packageManifest(value: unknown, path: string): Record<string, unknown> 
 }
 
 export async function findPiExecutable(explicit?: string): Promise<string | undefined> {
-  if (explicit && await exists(explicit)) return explicit
-  const configured = process.env.PI_BIN?.trim()
-  if (configured && await exists(configured)) return configured
-  const names = process.platform === 'win32' ? ['pi.cmd', 'pi.exe', 'pi.bat'] : ['pi']
-  const pathValue = process.env.PATH ?? ''
-  for (const root of pathValue.split(delimiter).filter(Boolean)) {
-    for (const name of names) {
-      const candidate = join(root, name)
-      if (await exists(candidate)) return candidate
-    }
-  }
-  return undefined
+  return resolveExecutable('pi', {
+    explicit,
+    envVar: 'PI_BIN',
+  })
 }
 
 export async function resolveWindowsNpmShimNodeEntry(executable: string): Promise<string | undefined> {
@@ -142,13 +135,30 @@ export async function resolveInstalledPiSdk(
 
 export const loadInstalledPiSdk: PiSdkLoader = async explicitExecutable => {
   const executable = await findPiExecutable(explicitExecutable)
-  if (!executable) throw new Error('Pi executable was not found in PATH or PI_BIN')
-  const discovery = await resolveInstalledPiSdk(executable)
-  if (!discovery) {
+  if (!executable) {
+    throw new Error('Pi executable was not found in PI_BIN, the managed runtime PATH, or the user login-shell PATH')
+  }
+
+  let packageTarget = executable
+  let resolved = await resolveInstalledPiSdk(executable)
+  if (!resolved) {
+    packageTarget = await resolveManagedExecutableTarget('pi', executable)
+    if (packageTarget !== executable) {
+      resolved = await resolveInstalledPiSdk(packageTarget)
+    }
+  }
+
+  if (!resolved) {
+    const targetDetail = packageTarget === executable ? '' : ` (resolved target: ${packageTarget})`
     throw new Error(
-      `Pi was found at ${executable}, but the official ${PI_SDK_PACKAGE_NAME} SDK could not be located. `
+      `Pi was found at ${executable}${targetDetail}, but the official ${PI_SDK_PACKAGE_NAME} SDK could not be located. `
       + 'Install Pi from its official npm package instead of using the removed AgentLens RPC fallback.',
     )
+  }
+
+  const discovery = {
+    ...resolved,
+    executable,
   }
   const imported = await import(pathToFileURL(discovery.sdkEntry).href)
   return {

@@ -8,6 +8,7 @@ import type {
   HostRepository,
   InstallationRepository,
   ObservationQuery,
+  ObservationHeader,
   ObservationRepository,
   RepositorySet,
   SessionRepository,
@@ -515,6 +516,53 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
           const id = sqliteRowId(row)
           return mapObservation(row, evidenceByObservation.get(id) ?? [])
         })
+      })
+    },
+    async queryHeaders(query: ObservationQuery): Promise<ObservationHeader[]> {
+      return executor.run(() => {
+        const conditions: string[] = []
+        const params: unknown[] = []
+        if (query.installationId) { conditions.push('installation_id = ?'); params.push(query.installationId) }
+        if (query.logicalSessionId) { conditions.push('logical_session_id = ?'); params.push(query.logicalSessionId) }
+        if (query.logicalSessionIds?.length) {
+          conditions.push(`logical_session_id IN (${query.logicalSessionIds.map(() => '?').join(', ')})`)
+          params.push(...query.logicalSessionIds)
+        }
+        if (query.kind) { conditions.push('kind = ?'); params.push(query.kind) }
+        if (query.from) { conditions.push('COALESCE(occurred_at, captured_at) >= ?'); params.push(query.from) }
+        if (query.to) { conditions.push('COALESCE(occurred_at, captured_at) <= ?'); params.push(query.to) }
+        if (query.after) {
+          const sequence = query.after.sequence ?? MAX_SEQUENCE
+          conditions.push(`(
+            COALESCE(occurred_at, captured_at) > ?
+            OR (COALESCE(occurred_at, captured_at) = ? AND (
+              COALESCE(canonical_sequence, source_sequence, ${MAX_SEQUENCE}) > ?
+              OR (COALESCE(canonical_sequence, source_sequence, ${MAX_SEQUENCE}) = ? AND id > ?)
+            ))
+          )`)
+          params.push(query.after.effectiveAt, query.after.effectiveAt, sequence, sequence, query.after.id)
+        }
+        const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
+        const limit = Math.max(1, Math.min(query.limit ?? 500, 5000))
+        const rows = db.prepare(`
+          SELECT id, installation_id, logical_session_id, source_session_id, kind,
+                 source_sequence, canonical_sequence, occurred_at, captured_at
+          FROM observations ${where}
+          ORDER BY COALESCE(occurred_at, captured_at) ASC,
+                   COALESCE(canonical_sequence, source_sequence, ${MAX_SEQUENCE}) ASC, id ASC
+          LIMIT ?
+        `).all(...params, limit) as Array<Record<string, unknown>>
+        return rows.map(row => ({
+          id: sqliteRowId(row),
+          installationId: String(row.installation_id),
+          logicalSessionId: String(row.logical_session_id),
+          sourceSessionId: String(row.source_session_id),
+          kind: String(row.kind) as ObservationHeader['kind'],
+          ...(typeof row.source_sequence === 'number' ? { sourceSequence: row.source_sequence } : {}),
+          ...(typeof row.canonical_sequence === 'number' ? { canonicalSequence: row.canonical_sequence } : {}),
+          ...(typeof row.occurred_at === 'string' ? { occurredAt: row.occurred_at } : {}),
+          capturedAt: String(row.captured_at),
+        }))
       })
     },
     async findIdByNativeEventId(sourceSessionId, nativeEventId) {

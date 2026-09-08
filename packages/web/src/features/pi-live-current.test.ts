@@ -66,7 +66,7 @@ test('Pi Live 相邻同类型但不同 contentIndex 不会被合并', () => {
   items = appendPiLiveDelta(items, 'thinking', '思考二', { messageEpoch: 2, contentIndex: 3 })
 
   assert.deepEqual(items.map(item => item.kind), ['message', 'message', 'thinking', 'thinking'])
-  assert.deepEqual(items.map(item => item.contentIndex), [0, 1, 2, 3])
+  assert.deepEqual(items.map(item => 'contentIndex' in item ? item.contentIndex : undefined), [0, 1, 2, 3])
   assert.notEqual(items[0]!.id, items[1]!.id)
   assert.notEqual(items[2]!.id, items[3]!.id)
 })
@@ -108,7 +108,7 @@ test('Pi Live settled 对账保留已渲染 block 的 id 和相对顺序', () =>
   assert.deepEqual(settled.slice(0, 3).map(item => item.id), liveIds)
   assert.equal(settled[0]!.kind === 'thinking' ? settled[0].state : undefined, 'settled')
   assert.equal(settled[2]!.kind === 'message' ? settled[2].state : undefined, 'settled')
-  assert.deepEqual(settled.slice(0, 3).map(item => item.contentIndex), [0, 1, 2])
+  assert.deepEqual(settled.slice(0, 3).map(item => 'contentIndex' in item ? item.contentIndex : undefined), [0, 1, 2])
 })
 
 test('Pi Live settled 使用 contentIndex 避免同类缺失块错配', () => {
