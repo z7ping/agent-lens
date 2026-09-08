@@ -71,7 +71,7 @@ test('expired Health cache returns immediately while storage diagnostics refresh
     assert.equal((await fetch(`${base}/api/v1/health`)).status, 200)
     assert.equal(probes, 1)
 
-    await new Promise(resolve => setTimeout(resolve, 1_050))
+    await new Promise(resolve => setTimeout(resolve, 2_050))
     const response = await Promise.race([
       fetch(`${base}/api/v1/health`),
       new Promise<never>((_, reject) => setTimeout(() => reject(new Error('health blocked on refresh')), 250)),
