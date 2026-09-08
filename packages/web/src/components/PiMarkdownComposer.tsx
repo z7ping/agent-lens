@@ -179,7 +179,14 @@ export const PiMarkdownComposer = forwardRef<PiMarkdownComposerHandle, PiMarkdow
     nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, CodeNode, LinkNode],
     onError(error) { throw error },
   }}>
-    <div className="pi-markdown-composer">
+    <div
+      className="pi-markdown-composer"
+      onMouseDown={event => {
+        const target = event.target as HTMLElement
+        if (target.closest('[contenteditable="true"]')) return
+        event.currentTarget.querySelector<HTMLElement>('[contenteditable="true"]')?.focus({ preventScroll: true })
+      }}
+    >
       <RichTextPlugin
         contentEditable={<ContentEditable
           className="pi-live-input pi-markdown-input"
