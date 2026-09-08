@@ -1,4 +1,5 @@
-import { stat } from 'node:fs/promises'
+import { constants } from 'node:fs'
+import { access, stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
 function workspaceError(message: string): Error {
@@ -15,6 +16,7 @@ export async function validatePiLiveWorkspace(cwd: string): Promise<string> {
     if (!workspaceStat.isDirectory()) {
       throw workspaceError(`Pi Live 工作目录不是文件夹：${workspacePath}`)
     }
+    await access(workspacePath, constants.R_OK)
   } catch (error) {
     if (error instanceof Error && 'statusCode' in error) throw error
     const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : ''
