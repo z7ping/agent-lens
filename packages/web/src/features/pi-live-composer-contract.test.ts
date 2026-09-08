@@ -4,6 +4,7 @@ import test from 'node:test'
 
 const page = readFileSync(new URL('./PiLivePage.tsx', import.meta.url), 'utf8')
 const taskRound = readFileSync(new URL('./PiLiveTaskRound.tsx', import.meta.url), 'utf8')
+const taskMessage = readFileSync(new URL('./TaskMessage.tsx', import.meta.url), 'utf8')
 const css = readFileSync(new URL('../pi-live.css', import.meta.url), 'utf8')
 const pill = readFileSync(new URL('../components/ComposerPillSelect.tsx', import.meta.url), 'utf8')
 const selectMenu = readFileSync(new URL('../components/SelectMenu.tsx', import.meta.url), 'utf8')
@@ -50,45 +51,67 @@ test('Pi Live composer keeps status labels and adjacent controls visually separa
   assert.match(css, /\.pi-live-review-link \{[^}]*display:\s*flex;[^}]*gap:\s*8px;/)
 })
 
-test('Pi Live streaming tail keeps layout stable while tokens arrive', () => {
-  assert.match(taskRound, /<div className="pi-live-stream-text">\{waiting \? '等待 Pi 响应…' : streamText\}<\/div>/)
-  assert.doesNotMatch(taskRound, /<MarkdownContent text=\{streamText\}\s*\/>/)
+test('Pi Live streaming assistant reuses TaskMessage and has no parallel response bubble', () => {
+  assert.match(taskRound, /<TaskMessage[\s\S]*?streaming=\{entry\.role === 'assistant' && entry\.state === 'running'\}/)
+  assert.match(taskMessage, /data-streaming=\{streaming \? 'true' : undefined\}/)
+  assert.match(taskMessage, /aria-busy=\{streaming \|\| undefined\}/)
+  assert.doesNotMatch(taskRound, /pi-live-stream-response|pi-live-stream-text|PiLiveRunningTaskRound/)
+  assert.doesNotMatch(css, /\.pi-live-stream-response|\.pi-live-stream-text|\.pi-live-caret/)
   assert.match(css, /\.pi-live-reader \{[\s\S]*?scrollbar-gutter:\s*stable;/)
   assert.match(css, /\.pi-live-reader \{[\s\S]*?overflow-anchor:\s*none;/)
-  assert.match(css, /\.pi-live-stream-text \{[^}]*white-space:\s*pre-wrap;[^}]*overflow-wrap:\s*anywhere;/)
 })
 
-test('Pi Live sends optimistically into one stable current round before the first token', () => {
+test('Pi Live sends optimistically into one stable ordered current round before the first token', () => {
   assert.match(page, /const \[optimisticPrompt, setOptimisticPrompt\] = useState\(''\)/)
-  assert.match(page, /const activePromptRef = useRef\(''\)/)
-  assert.match(page, /const beginOptimisticPrompt = useCallback\(\(text: string\) => \{[\s\S]*?setSettledCurrentOrdinal\(null\)[\s\S]*?activePromptRef\.current = text[\s\S]*?setOptimisticPrompt\(text\)[\s\S]*?isStreaming: true/)
-  assert.match(page, /startupSendingRef\.current = true[\s\S]*?setStartupQueued\([\s\S]*?beginOptimisticPrompt\(text\)[\s\S]*?piLiveApi\.prompt\(runtimeId, text\)/)
-  assert.match(page, /setInput\(''\)[\s\S]*?if \(!wasStreaming\) beginOptimisticPrompt\(text\)/)
-  assert.match(page, /if \(!optimisticPrompt && !state\?\.isStreaming && !thinkingText && tools\.length === 0 && !streamText\) return undefined/)
-  assert.match(page, /\.\.\.\(optimisticPrompt \? \{ promptText: optimisticPrompt \} : \{\}\)/)
+  assert.match(page, /const \[currentOrdinal, setCurrentOrdinal\] = useState<number \| null>\(null\)/)
+  assert.match(page, /const \[currentItems, setCurrentItems\] = useState<PiLiveHistoryItem\[]>\(\[\]\)/)
+  assert.match(page, /const beginOptimisticPrompt = useCallback\(\(text: string\) => \{[\s\S]*?setCurrentOrdinal\(null\)[\s\S]*?setCurrentItems\(\[\]\)[\s\S]*?activePromptRef\.current = text[\s\S]*?setOptimisticPrompt\(text\)/)
+  assert.match(page, /if \(!optimisticPrompt && !state\?\.isStreaming && currentItems\.length === 0\) return undefined/)
+  assert.match(page, /projectPiLiveRunningRound\(\{ items: currentItems, isStreaming: optimisticStreaming \}\)/)
+  assert.match(page, /<PiLiveCurrentTaskRound[\s\S]*?items=\{currentItems\}/)
   assert.match(taskRound, /promptText && <TaskMessage role="user"/)
-  assert.match(taskRound, /\(waiting \|\| streamText\) && <div className=\{`pi-live-stream-response\$\{waiting \? ' is-waiting' : ''\}`\} role=\{waiting \? 'status' : undefined\}>/)
-  assert.match(taskRound, /waiting \? '等待 Pi 响应…' : streamText/)
 })
 
-test('Pi Live auto-follow is coalesced to one animation frame', () => {
+test('Pi Live SSE uses start/delta/end plus contentIndex to preserve interleaved source block order', () => {
+  assert.match(page, /const assistantMessageEpochRef = useRef\(0\)/)
+  assert.match(page, /type === 'message_start'[\s\S]*?assistantMessageEpochRef\.current \+= 1/)
+  assert.match(page, /const contentIndex = typeof update\.contentIndex === 'number' \? update\.contentIndex : undefined/)
+  assert.match(page, /const block = assistantPartialContent\(update, contentIndex\)/)
+  assert.match(page, /messageEpoch: assistantMessageEpochRef\.current/)
+  assert.match(page, /update\.type === 'text_start'[\s\S]*?startPiLiveContentBlock\(items, 'text'/)
+  assert.match(page, /appendPiLiveDelta\(items, 'text', delta, deltaOptions\)/)
+  assert.match(page, /update\.type === 'text_end'[\s\S]*?finishPiLiveContentBlock\(items, 'text'/)
+  assert.match(page, /update\.type === 'thinking_start'[\s\S]*?startPiLiveContentBlock\(items, 'thinking'/)
+  assert.match(page, /appendPiLiveDelta\(items, 'thinking', delta, deltaOptions\)/)
+  assert.match(page, /update\.type === 'thinking_end'[\s\S]*?finishPiLiveContentBlock\(items, 'thinking'/)
+  assert.match(page, /update\.type === 'toolcall_start' \|\| update\.type === 'toolcall_delta' \|\| update\.type === 'toolcall_end'/)
+  assert.match(page, /const toolCall = Object\.keys\(completed\)\.length \? completed : block/)
+  assert.match(page, /startPiLiveTool\(items,[\s\S]*?contentIndex/)
+})
+
+test('Pi Live auto-follow is coalesced to one animation frame and follows currentItems', () => {
   assert.match(page, /const followFrameRef = useRef<number \| null>\(null\)/)
   assert.match(page, /if \(!followingRef\.current \|\| followFrameRef\.current !== null\) return/)
   assert.match(page, /followFrameRef\.current = requestAnimationFrame\(\(\) => \{[\s\S]*?followFrameRef\.current = null[\s\S]*?reader\.scrollTop = target/)
   assert.doesNotMatch(page, /return \(\) => cancelAnimationFrame\(frame\)/)
-  assert.match(page, /\[visibleHistoryRounds, streamText, thinkingText, tools,[\s\S]*?restored, extension\?\.id\]/)
+  assert.match(page, /\[visibleHistoryRounds, currentItems, optimisticPrompt,[\s\S]*?restored, extension\?\.id\]/)
 })
 
-test('Pi Live settle reconciles snapshot facts into the same current round shell', () => {
-  assert.match(page, /const \[settledCurrentOrdinal, setSettledCurrentOrdinal\] = useState<number \| null>\(null\)/)
-  assert.match(page, /const \[settledCurrentItems, setSettledCurrentItems\] = useState<PiLiveHistoryItem\[]>\(\[\]\)/)
-  assert.match(page, /const freshHistory = mergePiLiveObservedThinking\(projectPiLiveHistory\(value\), observedThinkingRef\.current\)[\s\S]*?const freshRounds = projectPiLiveTaskRounds\(freshHistory\)/)
-  assert.match(page, /setSettledCurrentOrdinal\(ordinal\)[\s\S]*?setSettledCurrentItems\(settledItems\)[\s\S]*?setOptimisticPrompt\(prompt\)/)
-  assert.match(page, /historyRounds\.filter\(round => round\.model\.ordinal !== settledCurrentOrdinal\)/)
+test('Pi Live settle reconciles Snapshot into the same current block list instead of replacing a second subtree', () => {
+  assert.match(page, /const freshHistory = projectPiLiveHistory\(value\)[\s\S]*?const freshRounds = projectPiLiveTaskRounds\(freshHistory\)/)
+  assert.match(page, /setCurrentItems\(current => reconcilePiLiveItems\(current, omitPiLivePromptMessages\(settledItems, resolvedPrompt\)\)\)/)
+  assert.match(page, /historyRounds\.filter\(round => round\.model\.ordinal !== currentOrdinal\)/)
   assert.match(page, /return \{ \.\.\.settledProjection\.model, id: 'pi-live-current-round' \}/)
-  assert.match(page, /\.\.\.\(settledCurrentItems\.length \? \{ settledItems: settledCurrentItems \} : \{\}\)/)
-  assert.match(taskRound, /hasSettledItems[\s\S]*?\? <HistoryEntries items=\{omitPiLivePromptMessages\(settledItems \?\? \[\], promptText\)\} showAllEvents=\{showAllEvents\}\/>/)
-  assert.match(taskRound, /model=\{model\}[\s\S]*?className="pi-live-current-round"/)
+  assert.match(taskRound, /<HistoryEntries items=\{omitPiLivePromptMessages\(items, promptText\)\} showAllEvents=\{showAllEvents\}\/>/)
+  assert.doesNotMatch(page, /settledCurrentItems|streamText|thinkingText|toolsRef|observedThinking/)
+  assert.doesNotMatch(taskRound, /hasSettledItems|settledItems/)
+})
+
+test('Pi Live reconnect hydrates the streaming round from Snapshot into the same current items', () => {
+  assert.match(page, /if \(value\.state\.isStreaming\) \{[\s\S]*?projectPiLiveTaskRounds\(projectPiLiveHistory\(value\)\)/)
+  assert.match(page, /setCurrentOrdinal\(ordinal\)/)
+  assert.match(page, /markPiLiveItemsRunning\(current\.length \? reconcilePiLiveItems\(current, persisted\) : persisted\)/)
+  assert.match(page, /piLiveApi\.snapshot\(runtimeId, leafIdRef\.current\)\.then\(acceptSnapshot/)
 })
 
 test('Pi Live 生成中使用专用介入和继续通道并即时展示队列', () => {
@@ -113,13 +136,6 @@ test('Pi Live Escape 和停止操作不受发送请求锁影响', () => {
   assert.match(page, /event\.key !== 'Escape'/)
   assert.match(page, /disabled=\{!optimisticStreaming \|\| abortPending \|\| queueMutationPending\}/)
   assert.match(page, /onEscape=\{optimisticStreaming \? \(\) => void stop\(\) : undefined\}/)
-})
-
-test('Pi Live 完成后保留流式观察到的思考', () => {
-  assert.match(page, /thinkingTextRef\.current \+= delta/)
-  assert.match(page, /type === 'message_end'/)
-  assert.match(page, /setObservedThinking\(current =>/)
-  assert.match(page, /mergePiLiveObservedThinking\(projectPiLiveHistory\(snapshot\), observedThinking\)/)
 })
 
 test('medium desktop viewports reclaim space instead of forcing connection text into another row', () => {

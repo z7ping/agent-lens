@@ -8,8 +8,9 @@ import { PiMarkdownComposer, type PiMarkdownComposerHandle } from '../components
 import { PiStartupDisclosure, piStartupSummary } from '../components/PiStartupDisclosure'
 import { Button, IconButton, Input, Textarea } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
-import { mergePiLiveObservedThinking, projectPiLiveHistory, type PiLiveHistoryItem, type PiLiveObservedThinking } from './pi-live-history'
-import { PiLiveHistoryTaskRound, PiLiveRunningTaskRound } from './PiLiveTaskRound'
+import { appendPiLiveDelta, finishPiLiveContentBlock, finishPiLiveTool, markPiLiveItemsRunning, reconcilePiLiveItems, startPiLiveContentBlock, startPiLiveTool, updatePiLiveTool } from './pi-live-current'
+import { omitPiLivePromptMessages, projectPiLiveHistory, type PiLiveHistoryItem } from './pi-live-history'
+import { PiLiveCurrentTaskRound, PiLiveHistoryTaskRound } from './PiLiveTaskRound'
 import { piLiveTaskRoundEstimate, projectPiLiveRunningRound, projectPiLiveTaskDetail, projectPiLiveTaskRounds } from './pi-live-task-projection'
 import { TaskHeader } from './TaskHeader'
 import { TaskSurface } from './TaskSurface'
@@ -17,13 +18,6 @@ import { TaskSurface } from './TaskSurface'
 type QueueMode = 'steer' | 'followUp'
 type PendingQueueSubmission = { id: string; mode: QueueMode; text: string }
 interface RestoredDraft { id: string; mode: QueueMode; text: string }
-interface LiveTool {
-  id: string
-  name: string
-  status: 'running' | 'success' | 'error'
-  summary: string
-  output: string
-}
 interface ExtensionRequest {
   id: string
   method: string
@@ -170,6 +164,13 @@ function toolOutput(value: unknown): string {
   return brief(value, 4000)
 }
 
+function assistantPartialContent(update: Record<string, unknown>, contentIndex: number | undefined): Record<string, unknown> {
+  if (contentIndex === undefined) return {}
+  const partial = record(update.partial)
+  const content = Array.isArray(partial.content) ? partial.content : []
+  return record(content[contentIndex])
+}
+
 function extensionRequest(event: Record<string, unknown>): ExtensionRequest | null {
   if (event.type !== 'extension_ui_request') return null
   const id = stringValue(event.id)
@@ -292,9 +293,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const followingRef = useRef(true)
   const followFrameRef = useRef<number | null>(null)
   const leafIdRef = useRef<string | undefined>(undefined)
-  const toolsRef = useRef(new Map<string, LiveTool>())
-  const thinkingTextRef = useRef('')
-  const observedThinkingRef = useRef<PiLiveObservedThinking[]>([])
+  const assistantMessageEpochRef = useRef(0)
   const startupSendingRef = useRef(false)
   const activePromptRef = useRef('')
   const [known, setKnown] = useState<PiLiveStateDto[]>([])
@@ -307,14 +306,10 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const [composerExpanded, setComposerExpanded] = useState(false)
   const [startupQueued, setStartupQueued] = useState('')
   const [optimisticPrompt, setOptimisticPrompt] = useState('')
-  const [settledCurrentOrdinal, setSettledCurrentOrdinal] = useState<number | null>(null)
-  const [settledCurrentItems, setSettledCurrentItems] = useState<PiLiveHistoryItem[]>([])
-  const [streamText, setStreamText] = useState('')
-  const [thinkingText, setThinkingText] = useState('')
-  const [tools, setTools] = useState<LiveTool[]>([])
+  const [currentOrdinal, setCurrentOrdinal] = useState<number | null>(null)
+  const [currentItems, setCurrentItems] = useState<PiLiveHistoryItem[]>([])
   const [queue, setQueue] = useState<PiLiveQueueDto>({ steering: [], followUp: [] })
   const [pendingQueue, setPendingQueue] = useState<PendingQueueSubmission[]>([])
-  const [observedThinking, setObservedThinking] = useState<PiLiveObservedThinking[]>([])
   const [restored, setRestored] = useState<RestoredDraft[]>([])
   const [extension, setExtension] = useState<ExtensionRequest | null>(null)
   const [extensionPending, setExtensionPending] = useState(false)
@@ -345,17 +340,10 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     setState(null)
     setControls({ models: [], thinkingLevels: [] })
     setOptimisticPrompt('')
-    setSettledCurrentOrdinal(null)
-    setSettledCurrentItems([])
-    setStreamText('')
-    setThinkingText('')
-    thinkingTextRef.current = ''
-    setTools([])
-    toolsRef.current.clear()
+    setCurrentOrdinal(null)
+    setCurrentItems([])
     setQueue({ steering: [], followUp: [] })
     setPendingQueue([])
-    setObservedThinking([])
-    observedThinkingRef.current = []
     setRestored([])
     setExtension(null)
     setError('')
@@ -363,18 +351,10 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     setStartupQueued('')
     setComposerExpanded(false)
     setQueueMutationPending(false)
+    assistantMessageEpochRef.current = 0
     startupSendingRef.current = false
     activePromptRef.current = ''
     leafIdRef.current = undefined
-
-    const acceptSnapshot = (value: PiLiveSnapshotDto) => {
-      if (!active || value.state.runtimeSessionId !== runtimeId) return
-      setSnapshot(current => mergeSnapshot(current, value))
-      setState(value.state)
-      leafIdRef.current = value.leafId ?? undefined
-      window.dispatchEvent(new Event('agent-lens:pi-live-state-changed'))
-      if (value.state.status === 'ready') void refreshControls()
-    }
 
     const refreshControls = async () => {
       try {
@@ -385,46 +365,56 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       }
     }
 
+    const acceptSnapshot = (value: PiLiveSnapshotDto) => {
+      if (!active || value.state.runtimeSessionId !== runtimeId) return
+      setSnapshot(current => mergeSnapshot(current, value))
+      setState(value.state)
+      leafIdRef.current = value.leafId ?? undefined
+      if (value.state.isStreaming) {
+        const projected = projectPiLiveTaskRounds(projectPiLiveHistory(value))
+        const latest = [...projected].reverse().find(round => round.model.ordinal !== undefined)
+        if (latest?.model.ordinal !== undefined) {
+          const ordinal = latest.model.ordinal
+          const roundItems = projected.filter(round => round.model.ordinal === ordinal).flatMap(round => round.items)
+          const prompt = roundItems.find(item => item.kind === 'message' && item.role === 'user')
+          const promptText = prompt?.kind === 'message' ? prompt.text : ''
+          const persisted = omitPiLivePromptMessages(roundItems, promptText)
+          setCurrentOrdinal(ordinal)
+          setOptimisticPrompt(promptText)
+          activePromptRef.current = promptText
+          setCurrentItems(current => markPiLiveItemsRunning(current.length ? reconcilePiLiveItems(current, persisted) : persisted))
+        }
+      }
+      window.dispatchEvent(new Event('agent-lens:pi-live-state-changed'))
+      if (value.state.status === 'ready') void refreshControls()
+    }
+
     const refreshAfterSettled = async () => {
       try {
         const value = await piLiveApi.snapshot(runtimeId, leafIdRef.current)
         if (!active) return
         const prompt = activePromptRef.current.trim()
-        const freshHistory = mergePiLiveObservedThinking(projectPiLiveHistory(value), observedThinkingRef.current)
+        const freshHistory = projectPiLiveHistory(value)
         const freshRounds = projectPiLiveTaskRounds(freshHistory)
-        const matchedRound = prompt
-          ? [...freshRounds].reverse().find(round => round.model.ordinal !== undefined && round.items.some(item => item.kind === 'message' && item.role === 'user' && item.text.trim() === prompt))
-          : undefined
-        const ordinal = matchedRound?.model.ordinal ?? null
-        let settledItems = ordinal === null
+        const ordinal = prompt
+          ? [...freshRounds].reverse().find(round => round.model.ordinal !== undefined && round.items.some(item => item.kind === 'message' && item.role === 'user' && item.text.trim() === prompt))?.model.ordinal ?? null
+          : [...freshRounds].reverse().find(round => round.model.ordinal !== undefined)?.model.ordinal ?? null
+        const settledItems = ordinal === null
           ? []
           : freshRounds.filter(round => round.model.ordinal === ordinal).flatMap(round => round.items)
-        const finalThinking = thinkingTextRef.current.trim()
-        if (ordinal !== null && finalThinking) {
-          const fallback = { ordinal, text: finalThinking, at: new Date().toISOString() }
-          setObservedThinking(current => {
-            const next = [...current.filter(item => item.ordinal !== ordinal), fallback]
-            observedThinkingRef.current = next
-            return next
-          })
-          settledItems = mergePiLiveObservedThinking(settledItems, [{ ...fallback, ordinal: 1 }])
-        }
+        const resolvedPromptItem = settledItems.find(item => item.kind === 'message' && item.role === 'user')
+        const resolvedPrompt = prompt || (resolvedPromptItem?.kind === 'message' ? resolvedPromptItem.text : '')
         acceptSnapshot(value)
         if (ordinal !== null && settledItems.length > 0) {
-          setSettledCurrentOrdinal(ordinal)
-          setSettledCurrentItems(settledItems)
-          setOptimisticPrompt(prompt)
+          setCurrentOrdinal(ordinal)
+          setCurrentItems(current => reconcilePiLiveItems(current, omitPiLivePromptMessages(settledItems, resolvedPrompt)))
+          setOptimisticPrompt(resolvedPrompt)
         } else {
-          setSettledCurrentOrdinal(null)
-          setSettledCurrentItems([])
+          setCurrentOrdinal(null)
+          setCurrentItems([])
           setOptimisticPrompt('')
         }
         activePromptRef.current = ''
-        setStreamText('')
-        setThinkingText('')
-        thinkingTextRef.current = ''
-        toolsRef.current.clear()
-        setTools([])
       } catch (reason) {
         if (active) setError(reason instanceof Error ? reason.message : String(reason))
       }
@@ -444,14 +434,17 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
           const type = stringValue(event.type)
           if (type === 'agent_start') {
             statePatch = { ...statePatch, isStreaming: true }
-            setStreamText('')
-            setThinkingText('')
-            thinkingTextRef.current = ''
-            toolsRef.current.clear()
-            setTools([])
+            setCurrentItems([])
+            if (!activePromptRef.current) {
+              setCurrentOrdinal(null)
+              setOptimisticPrompt('')
+            }
           } else if (type === 'agent_settled') {
             statePatch = { ...statePatch, isStreaming: false, pendingMessageCount: 0 }
             settled = true
+          } else if (type === 'message_start') {
+            const message = record(event.message)
+            if (message.role === 'assistant') assistantMessageEpochRef.current += 1
           } else if (type === 'compaction_start') {
             statePatch = { ...statePatch, isCompacting: true }
           } else if (type === 'compaction_end') {
@@ -461,53 +454,61 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
           } else if (type === 'message_update') {
             const update = record(event.assistantMessageEvent)
             const delta = stringValue(update.delta)
-            if (update.type === 'text_delta' && delta) setStreamText(value => value + delta)
-            if (update.type === 'thinking_delta' && delta) {
-              thinkingTextRef.current += delta
-              setThinkingText(thinkingTextRef.current)
+            const contentIndex = typeof update.contentIndex === 'number' ? update.contentIndex : undefined
+            const block = assistantPartialContent(update, contentIndex)
+            const deltaOptions = {
+              messageEpoch: assistantMessageEpochRef.current,
+              ...(contentIndex === undefined ? {} : { contentIndex }),
+            }
+            if (update.type === 'text_start') {
+              setCurrentItems(items => startPiLiveContentBlock(items, 'text', deltaOptions, stringValue(block.text)))
+            } else if (update.type === 'text_delta' && delta) {
+              setCurrentItems(items => appendPiLiveDelta(items, 'text', delta, deltaOptions))
+            } else if (update.type === 'text_end') {
+              const content = stringValue(update.content) || stringValue(block.text)
+              setCurrentItems(items => finishPiLiveContentBlock(items, 'text', content, deltaOptions))
+            } else if (update.type === 'thinking_start') {
+              setCurrentItems(items => startPiLiveContentBlock(items, 'thinking', deltaOptions, stringValue(block.thinking || block.text)))
+            } else if (update.type === 'thinking_delta' && delta) {
+              setCurrentItems(items => appendPiLiveDelta(items, 'thinking', delta, deltaOptions))
+            } else if (update.type === 'thinking_end') {
+              const content = stringValue(update.content) || stringValue(block.thinking || block.text)
+              setCurrentItems(items => finishPiLiveContentBlock(items, 'thinking', content, deltaOptions))
+            } else if (update.type === 'toolcall_start' || update.type === 'toolcall_delta' || update.type === 'toolcall_end') {
+              const completed = record(update.toolCall)
+              const toolCall = Object.keys(completed).length ? completed : block
+              const callId = stringValue(update.id || update.toolCallId || toolCall.id)
+              if (callId) {
+                const args = toolCall.arguments ?? toolCall.args ?? update.arguments ?? update.args
+                setCurrentItems(items => startPiLiveTool(items, {
+                  callId,
+                  name: stringValue(update.toolName || update.name || toolCall.name) || 'tool',
+                  summary: args === undefined ? '' : brief(args),
+                  ...(contentIndex === undefined ? {} : { contentIndex }),
+                }))
+              }
             }
           } else if (type === 'message_end') {
-            const message = record(event.message)
-            const content = Array.isArray(message.content) ? message.content.map(record) : []
-            const finalThinking = content
-              .filter(block => block.type === 'thinking')
-              .map(block => stringValue(block.thinking || block.text))
-              .filter(Boolean)
-              .join('\n\n')
-            if (finalThinking) {
-              thinkingTextRef.current = finalThinking
-              setThinkingText(finalThinking)
-            }
+            // 最终消息由 agent_settled Snapshot 对账；这里不重排或替换已经展示的 block。
           } else if (type === 'tool_execution_start') {
             const id = stringValue(event.toolCallId)
-            if (id) {
-              toolsRef.current.set(id, {
-                id,
-                name: stringValue(event.toolName) || 'tool',
-                status: 'running',
-                summary: brief(event.args),
-                output: '',
-              })
-              setTools([...toolsRef.current.values()])
-            }
+            if (id) setCurrentItems(items => startPiLiveTool(items, {
+              callId: id,
+              name: stringValue(event.toolName) || 'tool',
+              summary: brief(event.args),
+              startedAtMs: Date.now(),
+            }))
           } else if (type === 'tool_execution_update') {
             const id = stringValue(event.toolCallId)
-            const current = toolsRef.current.get(id)
-            if (current) {
-              toolsRef.current.set(id, { ...current, output: toolOutput(event.partialResult) })
-              setTools([...toolsRef.current.values()])
-            }
+            if (id) setCurrentItems(items => updatePiLiveTool(items, id, toolOutput(event.partialResult)))
           } else if (type === 'tool_execution_end') {
             const id = stringValue(event.toolCallId)
-            const current = toolsRef.current.get(id)
-            if (current) {
-              toolsRef.current.set(id, {
-                ...current,
-                status: event.isError === true ? 'error' : 'success',
-                output: toolOutput(event.result) || current.output,
-              })
-              setTools([...toolsRef.current.values()])
-            }
+            if (id) setCurrentItems(items => finishPiLiveTool(
+              items,
+              id,
+              event.isError === true ? 'error' : 'success',
+              toolOutput(event.result),
+            ))
           } else if (type === 'queue_update') {
             const steering = Array.isArray(event.steering) ? event.steering.filter((item): item is string => typeof item === 'string') : []
             const followUp = Array.isArray(event.followUp) ? event.followUp.filter((item): item is string => typeof item === 'string') : []
@@ -541,7 +542,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             if (runtimeError) setError(runtimeError)
             window.dispatchEvent(new Event('agent-lens:pi-live-state-changed'))
             if (status === 'ready' || initializationStage === 'ready') {
-              void refreshAfterSettled()
+              void piLiveApi.snapshot(runtimeId, leafIdRef.current).then(acceptSnapshot, () => undefined)
               void refreshControls()
             }
           } else {
@@ -574,21 +575,21 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     }
   }, [runtimeId])
 
-  const history = useMemo(() => mergePiLiveObservedThinking(projectPiLiveHistory(snapshot), observedThinking), [observedThinking, snapshot])
+  const history = useMemo(() => projectPiLiveHistory(snapshot), [snapshot])
   const historyRounds = useMemo(() => projectPiLiveTaskRounds(history), [history])
-  const visibleHistoryRounds = useMemo(() => settledCurrentOrdinal === null
+  const visibleHistoryRounds = useMemo(() => currentOrdinal === null
     ? historyRounds
-    : historyRounds.filter(round => round.model.ordinal !== settledCurrentOrdinal), [historyRounds, settledCurrentOrdinal])
-  const optimisticStreaming = ((Boolean(optimisticPrompt) && settledCurrentOrdinal === null) || (state?.isStreaming ?? false))
+    : historyRounds.filter(round => round.model.ordinal !== currentOrdinal), [currentOrdinal, historyRounds])
+  const optimisticStreaming = ((Boolean(optimisticPrompt) && currentOrdinal === null) || (state?.isStreaming ?? false))
   const visiblePendingCount = queue.steering.length + queue.followUp.length + pendingQueue.length
   const runningRound = useMemo(() => {
-    if (settledCurrentOrdinal !== null) {
-      const settledProjection = historyRounds.find(round => round.model.ordinal === settledCurrentOrdinal && !round.continuation)
-      if (settledProjection) return { ...settledProjection.model, id: 'pi-live-current-round' }
+    if (currentOrdinal !== null) {
+      const settledProjection = historyRounds.find(round => round.model.ordinal === currentOrdinal && !round.continuation)
+      if (settledProjection && !optimisticStreaming) return { ...settledProjection.model, id: 'pi-live-current-round' }
     }
-    if (!optimisticPrompt && !state?.isStreaming && !thinkingText && tools.length === 0 && !streamText) return undefined
-    return projectPiLiveRunningRound({ tools, isStreaming: optimisticStreaming })
-  }, [historyRounds, optimisticPrompt, optimisticStreaming, settledCurrentOrdinal, state?.isStreaming, streamText, thinkingText, tools])
+    if (!optimisticPrompt && !state?.isStreaming && currentItems.length === 0) return undefined
+    return projectPiLiveRunningRound({ items: currentItems, isStreaming: optimisticStreaming })
+  }, [currentItems, currentOrdinal, historyRounds, optimisticPrompt, optimisticStreaming, state?.isStreaming])
   const taskDetailModel = useMemo(() => projectPiLiveTaskDetail({
     state: state ? { ...state, pendingMessageCount: visiblePendingCount } : state,
     connected,
@@ -597,8 +598,8 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   }), [connected, historyRounds, runningRound, state, visiblePendingCount])
 
   const beginOptimisticPrompt = useCallback((text: string) => {
-    setSettledCurrentOrdinal(null)
-    setSettledCurrentItems([])
+    setCurrentOrdinal(null)
+    setCurrentItems([])
     activePromptRef.current = text
     setOptimisticPrompt(text)
     setState(current => current ? { ...current, isStreaming: true } : current)
@@ -608,6 +609,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     if (activePromptRef.current !== text) return
     activePromptRef.current = ''
     setOptimisticPrompt('')
+    setCurrentItems([])
     setState(current => current ? { ...current, isStreaming: false } : current)
   }, [])
 
@@ -620,7 +622,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       const target = Math.max(0, reader.scrollHeight - reader.clientHeight)
       if (Math.abs(reader.scrollTop - target) > 1) reader.scrollTop = target
     })
-  }, [visibleHistoryRounds, streamText, thinkingText, tools, optimisticPrompt, settledCurrentItems, queue.steering.length, queue.followUp.length, restored, extension?.id])
+  }, [visibleHistoryRounds, currentItems, optimisticPrompt, queue.steering.length, queue.followUp.length, restored, extension?.id])
 
   // 初始化阶段先接住第一条任务；Worker ready 后只发送一次，失败则还原为可编辑草稿。
   useEffect(() => {
@@ -645,11 +647,6 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   }, [beginOptimisticPrompt, rollbackOptimisticPrompt, runtimeId, startupQueued, state?.status])
 
   if (!runtimeId) return <PiLiveStart known={known}/>
-
-  const runtimeReady = state?.status === 'ready'
-  const runtimeInitializing = !state || state.status === 'initializing'
-  const runtimeTerminating = state?.status === 'terminating'
-  const canStageStartup = runtimeInitializing && !startupQueued
 
   const send = async (forcedMode?: QueueMode) => {
     const text = input.trim()
@@ -734,6 +731,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       setQueue({ steering: [], followUp: [] })
       setPendingQueue([])
       setState(current => current ? { ...current, isStreaming: false, pendingMessageCount: 0 } : current)
+      setCurrentItems(items => reconcilePiLiveItems(items, []))
       inputRef.current?.focus({ preventScroll: true })
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
@@ -862,6 +860,10 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     ...restored.map(item => ({ ...item, active: false })),
   ]
   const selectedModel = modelSelection(state)
+  const runtimeReady = state?.status === 'ready'
+  const runtimeInitializing = !state || state.status === 'initializing'
+  const runtimeTerminating = state?.status === 'terminating'
+  const canStageStartup = runtimeInitializing && !startupQueued
   const canSend = Boolean(input.trim()) && !sendPending && !queueMutationPending && !extension && !runtimeTerminating && (runtimeReady ? !startupQueued : canStageStartup)
   const composerStatus = startupQueued
     ? { label: '待发送', color: 'var(--al-accent)', title: '等待 Pi 就绪后自动发送' }
@@ -947,18 +949,14 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             </VirtualRoundMount>
           })}
 
-          {runningRound && <PiLiveRunningTaskRound
+          {runningRound && <PiLiveCurrentTaskRound
             model={runningRound}
             {...(optimisticPrompt ? { promptText: optimisticPrompt } : {})}
-            {...(settledCurrentItems.length ? { settledItems: settledCurrentItems } : {})}
+            items={currentItems}
             showAllEvents={showAllEvents}
-            thinkingText={thinkingText}
-            tools={tools}
-            streamText={streamText}
-            isStreaming={optimisticStreaming}
             pendingMessageCount={visiblePendingCount}
           />}
-          {!history.length && !optimisticPrompt && !streamText && !thinkingText && !tools.length && runtimeReady && <div className="pi-live-empty">这个 Pi Runtime 还没有消息。可以直接在下方输入开始任务。</div>}
+          {!history.length && !optimisticPrompt && !currentItems.length && runtimeReady && <div className="pi-live-empty">这个 Pi Runtime 还没有消息。可以直接在下方输入开始任务。</div>}
           {error && <div className="pi-live-error pi-live-reader-error" role="alert">{error}</div>}
         </div>
       </div>
