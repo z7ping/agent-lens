@@ -29,26 +29,18 @@ function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
 }
 
+/** Recovery records are resumable identities, not startup intents. */
 function recoveryInput(value: unknown): PiLiveStartInput | null {
   const input = record(value)
   const cwd = optionalString(input.cwd)
-  if (!cwd) return null
-  const provider = optionalString(input.provider)
-  const model = optionalString(input.model)
-  const name = optionalString(input.name)
-  const sessionDir = optionalString(input.sessionDir)
   const sessionPath = optionalString(input.sessionPath)
-  const historyAction = input.historyAction === 'continue' || input.historyAction === 'fork'
-    ? input.historyAction
-    : undefined
+  if (!cwd || !sessionPath) return null
+  const name = optionalString(input.name)
   return {
     cwd,
-    ...(provider ? { provider } : {}),
-    ...(model ? { model } : {}),
     ...(name ? { name } : {}),
-    ...(sessionDir ? { sessionDir } : {}),
-    ...(sessionPath ? { sessionPath } : {}),
-    ...(historyAction ? { historyAction } : {}),
+    sessionPath,
+    historyAction: 'continue',
   }
 }
 
@@ -64,7 +56,7 @@ function recoveryRecord(value: unknown): PiLiveRecoveryRecord | null {
 
 function normalizeRecord(value: PiLiveRecoveryRecord): PiLiveRecoveryRecord {
   const input = recoveryInput(value.input)
-  if (!input) throw new Error('Pi Live recovery record requires a working directory')
+  if (!input) throw new Error('Pi Live recovery record requires a native session path')
   return {
     id: value.id.trim(),
     input,

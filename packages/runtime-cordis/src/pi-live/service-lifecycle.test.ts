@@ -176,3 +176,58 @@ test('Daemon dispose 保留 Live Task，下一代 Runtime 使用同一稳定 ID 
   await assert.rejects(() => third.state(initial.runtimeSessionId), /Unknown Pi Live runtime session/)
   await third.dispose()
 })
+
+test('分叉后的 Runtime 跨 Daemon 只恢复新 Session，不再次 fork 原 Session', async () => {
+  const store = new MemoryRecoveryStore()
+  const originalPath = '/sessions/original.jsonl'
+  const forkedPath = '/sessions/forked.jsonl'
+  let firstInput: PiLiveStartInput | undefined
+  const firstHost: PiRuntimeHost = {
+    start: async (id, input) => {
+      firstInput = input
+      return handle(id, input.historyAction === 'fork' ? forkedPath : input.sessionPath)
+    },
+  }
+  const first = new DefaultPiLiveService(firstHost, store)
+  const started = await first.start({ cwd: '/workspace', sessionPath: originalPath, historyAction: 'fork' })
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.equal((await first.state(started.runtimeSessionId)).status, 'ready')
+  assert.equal(firstInput?.historyAction, 'fork')
+  assert.equal(store.values.get(started.runtimeSessionId)?.input.sessionPath, forkedPath)
+  assert.equal(store.values.get(started.runtimeSessionId)?.input.historyAction, 'continue')
+  await first.dispose()
+
+  let restoredInput: PiLiveStartInput | undefined
+  const secondHost: PiRuntimeHost = {
+    start: async (id, input) => {
+      restoredInput = input
+      return handle(id, input.sessionPath)
+    },
+  }
+  const second = new DefaultPiLiveService(secondHost, store)
+  await second.state(started.runtimeSessionId)
+  await new Promise(resolve => setTimeout(resolve, 0))
+  const restored = await second.state(started.runtimeSessionId)
+
+  assert.equal(restored.status, 'ready')
+  assert.equal(restored.sessionFile, forkedPath)
+  assert.equal(restoredInput?.sessionPath, forkedPath)
+  assert.equal(restoredInput?.historyAction, 'continue')
+  assert.notEqual(restoredInput?.sessionPath, originalPath)
+  await second.terminate(started.runtimeSessionId)
+})
+
+test('URL 指向未知 runtimeSessionId 且无 Recovery 时明确不存在，不创建 Worker', async () => {
+  const store = new MemoryRecoveryStore()
+  let startCalls = 0
+  const host: PiRuntimeHost = {
+    start: async id => {
+      startCalls += 1
+      return handle(id, '/sessions/should-not-exist.jsonl')
+    },
+  }
+  const service = new DefaultPiLiveService(host, store)
+  await assert.rejects(() => service.state('missing-runtime'), /Unknown Pi Live runtime session/)
+  assert.equal(startCalls, 0)
+  await service.dispose()
+})

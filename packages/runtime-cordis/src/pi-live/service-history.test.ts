@@ -23,8 +23,14 @@ function readyState(runtimeSessionId: string, sessionFile: string): PiLiveRuntim
   }
 }
 
+type SessionResolver = (input: PiLiveStartInput) => string
+
 class HistoryHost implements PiRuntimeHost {
   readonly starts: StartCall[] = []
+
+  constructor(private readonly resolveSession: SessionResolver = input => input.historyAction === 'fork'
+    ? '/sessions/forked.jsonl'
+    : input.sessionPath ?? '/sessions/new.jsonl') {}
 
   async start(
     runtimeSessionId: string,
@@ -35,9 +41,7 @@ class HistoryHost implements PiRuntimeHost {
   ): Promise<PiRuntimeHandle> {
     const snapshot = { ...input }
     this.starts.push({ runtimeSessionId, input: snapshot, exit: onExit })
-    const sessionFile = input.historyAction === 'fork'
-      ? '/sessions/forked.jsonl'
-      : input.sessionPath ?? '/sessions/new.jsonl'
+    const sessionFile = this.resolveSession(input)
     const state = () => readyState(runtimeSessionId, sessionFile)
     return {
       state: async () => state(),
@@ -64,6 +68,45 @@ async function waitForStatus(service: DefaultPiLiveService, id: string, status: 
   }
   throw new Error(`runtime ${id} did not reach ${status}`)
 }
+
+test('继续会话只有确认 Worker 仍持有目标 Session 后才 ready', async () => {
+  const host = new HistoryHost()
+  const service = new DefaultPiLiveService(host)
+  try {
+    const originalPath = '/sessions/original.jsonl'
+    const continued = await service.start({ cwd: '/workspace', sessionPath: originalPath, historyAction: 'continue' })
+    const ready = await waitForStatus(service, continued.runtimeSessionId, 'ready')
+    assert.equal(ready.sessionFile, originalPath)
+    assert.equal(host.starts.length, 1)
+  } finally {
+    await service.dispose()
+  }
+})
+
+test('继续会话返回其他 Session 时拒绝 ready，避免续错会话', async () => {
+  const host = new HistoryHost(() => '/sessions/other.jsonl')
+  const service = new DefaultPiLiveService(host)
+  try {
+    const continued = await service.start({ cwd: '/workspace', sessionPath: '/sessions/original.jsonl', historyAction: 'continue' })
+    const failed = await waitForStatus(service, continued.runtimeSessionId, 'failed')
+    assert.match(failed.error ?? '', /未保持目标 Session/)
+  } finally {
+    await service.dispose()
+  }
+})
+
+test('分叉只有确认新 Session 与原 Session 不同时才 ready', async () => {
+  const originalPath = '/sessions/original.jsonl'
+  const host = new HistoryHost(input => input.sessionPath ?? originalPath)
+  const service = new DefaultPiLiveService(host)
+  try {
+    const forked = await service.start({ cwd: '/workspace', sessionPath: originalPath, historyAction: 'fork' })
+    const failed = await waitForStatus(service, forked.runtimeSessionId, 'failed')
+    assert.match(failed.error ?? '', /未切换到新的 Session/)
+  } finally {
+    await service.dispose()
+  }
+})
 
 test('分叉成功后锁转移到新 Session，原 Session 可再次启动且重试不会重复分叉', async () => {
   const host = new HistoryHost()
@@ -95,6 +138,21 @@ test('分叉成功后锁转移到新 Session，原 Session 可再次启动且重
     assert.equal(retryStarts[0]?.input.historyAction, 'fork')
     assert.equal(retryStarts[1]?.input.sessionPath, '/sessions/forked.jsonl')
     assert.equal(retryStarts[1]?.input.historyAction, 'continue')
+  } finally {
+    await service.dispose()
+  }
+})
+
+test('同一 runtimeSessionId 反复读取状态只重新挂载，不重复启动 Worker', async () => {
+  const host = new HistoryHost()
+  const service = new DefaultPiLiveService(host)
+  try {
+    const started = await service.start({ cwd: '/workspace' })
+    await waitForStatus(service, started.runtimeSessionId, 'ready')
+    await service.state(started.runtimeSessionId)
+    await service.state(started.runtimeSessionId)
+    await service.snapshot(started.runtimeSessionId)
+    assert.equal(host.starts.filter(item => item.runtimeSessionId === started.runtimeSessionId).length, 1)
   } finally {
     await service.dispose()
   }
