@@ -31,6 +31,8 @@ interface OwnedRuntime {
   workspacePath: string
   projectName: string
   gitBranch?: string | undefined
+  recoverySessionPath?: string | undefined
+  recoveryCheckpointPending?: string | undefined
 }
 
 function safeError(error: unknown): string {
@@ -132,21 +134,13 @@ function runtimeCapabilities(value: unknown): PiLiveRuntimeCapabilities | undefi
 
 function recoveryInput(input: PiLiveStartInput, resumedSessionPath?: string): PiLiveStartInput {
   const resumedPath = resumedSessionPath?.trim()
-  if (resumedPath) {
-    return {
-      cwd: input.cwd,
-      ...(input.name ? { name: input.name } : {}),
-      sessionPath: resumedPath,
-      historyAction: 'continue',
-    }
-  }
-  const existingPath = input.sessionPath?.trim()
+  const existingPath = resumedPath || input.sessionPath?.trim()
   if (existingPath) {
     return {
       cwd: input.cwd,
       ...(input.name ? { name: input.name } : {}),
       sessionPath: existingPath,
-      historyAction: input.historyAction === 'fork' ? 'fork' : 'continue',
+      historyAction: 'continue',
     }
   }
   return {
@@ -205,12 +199,6 @@ export class DefaultPiLiveService implements PiLiveService {
     }
     const runtime = this.createRuntime(randomUUID(), input, false)
     this.runtimes.set(runtime.id, runtime)
-    try {
-      await this.persistRuntime(runtime)
-    } catch (error) {
-      this.runtimes.delete(runtime.id)
-      throw error
-    }
     const initialState = await this.runtimeState(runtime)
     this.scheduleInitialize(runtime, runtime.generation)
     return initialState
@@ -267,6 +255,7 @@ export class DefaultPiLiveService implements PiLiveService {
       startupOutput: [],
       workspacePath,
       projectName: basename(workspacePath) || workspacePath,
+      ...(restored && normalizedInput.sessionPath ? { recoverySessionPath: normalizedInput.sessionPath } : {}),
     }
   }
 
@@ -292,33 +281,56 @@ export class DefaultPiLiveService implements PiLiveService {
     }
   }
 
-  private async persistRuntime(runtime: OwnedRuntime, state?: PiLiveRuntimeState): Promise<void> {
+  private adoptRuntimeSession(runtime: OwnedRuntime, sessionPath: string): void {
+    const nextPath = sessionPath.trim()
+    if (!nextPath) return
+    const currentPath = runtime.input.sessionPath?.trim()
+    if (currentPath && sessionPathKey(currentPath) === sessionPathKey(nextPath) && runtime.input.historyAction === 'continue') return
+    runtime.input = recoveryInput(runtime.input, nextPath)
+  }
+
+  private async persistRuntime(runtime: OwnedRuntime): Promise<void> {
     if (!this.recoveryStore) return
-    const nextInput = recoveryInput(runtime.input, state?.sessionFile)
+    const sessionPath = runtime.input.sessionPath?.trim()
+    if (!sessionPath) return
     const value: PiLiveRecoveryRecord = {
       id: runtime.id,
-      input: nextInput,
+      input: recoveryInput(runtime.input, sessionPath),
       createdAt: runtime.createdAt,
       updatedAt: new Date().toISOString(),
     }
     await this.recoveryStore.put(value)
-    if (state?.sessionFile) runtime.input = nextInput
+    runtime.recoverySessionPath = sessionPath
   }
 
-  private persistRuntimeBestEffort(runtime: OwnedRuntime, state?: PiLiveRuntimeState): void {
-    void this.persistRuntime(runtime, state).catch(error => {
-      const message = `Pi Live recovery checkpoint failed: ${safeError(error)}`
-      if (!runtime.startupOutput.includes(message)) runtime.startupOutput = [...runtime.startupOutput, message].slice(-80)
-      console.warn(`[AgentLens] ${message}`)
+  private recoveryDiagnostic(runtime: OwnedRuntime, prefix: string, error: unknown): void {
+    const message = `${prefix}: ${safeError(error)}`
+    if (!runtime.startupOutput.includes(message)) runtime.startupOutput = [...runtime.startupOutput, message].slice(-80)
+    console.warn(`[AgentLens] ${message}`)
+  }
+
+  private persistRuntimeBestEffort(runtime: OwnedRuntime): void {
+    if (!this.recoveryStore) return
+    const sessionPath = runtime.input.sessionPath?.trim()
+    if (!sessionPath) return
+    const pathKey = sessionPathKey(sessionPath)
+    if (runtime.recoverySessionPath && sessionPathKey(runtime.recoverySessionPath) === pathKey) return
+    if (runtime.recoveryCheckpointPending && sessionPathKey(runtime.recoveryCheckpointPending) === pathKey) return
+    runtime.recoveryCheckpointPending = sessionPath
+    void this.persistRuntime(runtime).catch(error => {
+      this.recoveryDiagnostic(runtime, 'Pi Live recovery checkpoint failed', error)
+    }).finally(() => {
+      if (runtime.recoveryCheckpointPending && sessionPathKey(runtime.recoveryCheckpointPending) === pathKey) {
+        runtime.recoveryCheckpointPending = undefined
+      }
     })
   }
 
   private persistSessionIfChanged(runtime: OwnedRuntime, state: PiLiveRuntimeState): void {
     const nextPath = state.sessionFile?.trim()
     if (!nextPath) return
-    const currentPath = runtime.input.sessionPath?.trim()
-    if (currentPath && sessionPathKey(currentPath) === sessionPathKey(nextPath) && runtime.input.historyAction === 'continue') return
-    this.persistRuntimeBestEffort(runtime, state)
+    this.adoptRuntimeSession(runtime, nextPath)
+    this.persistRuntimeBestEffort(runtime)
   }
 
   private async refreshWorkspaceContext(runtime: OwnedRuntime): Promise<void> {
@@ -365,34 +377,26 @@ export class DefaultPiLiveService implements PiLiveService {
       runtime.capabilities = handle.capabilities ?? runtime.capabilities
       if (!runtime.initializationTimings.length && handle.initializationTimings?.length) runtime.initializationTimings = [...handle.initializationTimings]
 
-      const requiresResolvedSessionCheckpoint = Boolean(
-        this.recoveryStore && (!runtime.input.sessionPath?.trim() || runtime.input.historyAction === 'fork'),
-      )
+      const requestedSessionPath = runtime.input.sessionPath?.trim()
       let readyState: PiLiveRuntimeState | undefined
-      if (runtime.input.historyAction === 'fork' && runtime.input.sessionPath) {
+      if (runtime.input.historyAction === 'fork' && requestedSessionPath) {
         const forkedState = await handle.state()
-        if (!forkedState.sessionFile || sessionPathKey(forkedState.sessionFile) === sessionPathKey(runtime.input.sessionPath)) {
+        if (!forkedState.sessionFile || sessionPathKey(forkedState.sessionFile) === sessionPathKey(requestedSessionPath)) {
           await handle.terminate().catch(() => undefined)
           runtime.handle = undefined
           throw new Error('Pi 分叉 Runtime 未切换到新的 Session，已拒绝继续')
         }
-        runtime.input = { ...runtime.input, sessionPath: forkedState.sessionFile, historyAction: 'continue' }
+        this.adoptRuntimeSession(runtime, forkedState.sessionFile)
         readyState = forkedState
-      }
-      if (!readyState) readyState = await handle.state().catch(() => undefined)
-      if (requiresResolvedSessionCheckpoint && !readyState?.sessionFile?.trim()) {
-        await handle.terminate().catch(() => undefined)
-        runtime.handle = undefined
-        throw new Error('Pi Runtime 已启动，但没有可用于 Daemon 恢复的原生 Session')
-      }
-      if (readyState) {
-        try {
-          await this.persistRuntime(runtime, readyState)
-        } catch (error) {
+      } else if (runtime.input.historyAction === 'continue' && requestedSessionPath) {
+        const continuedState = await handle.state()
+        if (!continuedState.sessionFile || sessionPathKey(continuedState.sessionFile) !== sessionPathKey(requestedSessionPath)) {
           await handle.terminate().catch(() => undefined)
           runtime.handle = undefined
-          throw new Error(`Pi Live recovery checkpoint failed: ${safeError(error)}`)
+          throw new Error('Pi 继续 Runtime 未保持目标 Session，已拒绝继续')
         }
+        this.adoptRuntimeSession(runtime, continuedState.sessionFile)
+        readyState = continuedState
       }
 
       this.advanceInitialization(runtime, 'ready')
@@ -409,6 +413,18 @@ export class DefaultPiLiveService implements PiLiveService {
         initializationTimings: runtime.initializationTimings,
         ...(runtime.capabilities ? { capabilities: runtime.capabilities } : {}),
       })
+
+      if (readyState) {
+        this.persistSessionIfChanged(runtime, readyState)
+      } else {
+        void handle.state().then(state => {
+          if (runtime.generation !== generation || runtime.status !== 'ready' || runtime.handle !== handle) return
+          this.persistSessionIfChanged(runtime, state)
+        }).catch(error => {
+          if (runtime.generation !== generation || runtime.status !== 'ready' || runtime.handle !== handle) return
+          this.recoveryDiagnostic(runtime, 'Pi Live recovery state probe failed', error)
+        })
+      }
     } catch (error) {
       if (runtime.generation !== generation || runtime.status === 'terminating' || runtime.status === 'terminated') return
       runtime.initializationElapsedMs = Math.max(0, Date.now() - runtime.initializationStartedAt)
@@ -475,7 +491,10 @@ export class DefaultPiLiveService implements PiLiveService {
     await Promise.allSettled(runtimes.map(async runtime => {
       if (runtime.status === 'ready' && runtime.handle) {
         const state = await runtime.handle.state().catch(() => undefined)
-        if (state) await this.persistRuntime(runtime, state).catch(() => undefined)
+        if (state?.sessionFile) {
+          this.adoptRuntimeSession(runtime, state.sessionFile)
+          await this.persistRuntime(runtime).catch(error => this.recoveryDiagnostic(runtime, 'Pi Live recovery checkpoint failed', error))
+        }
       }
       await this.terminateRuntime(runtime, false)
     }))
