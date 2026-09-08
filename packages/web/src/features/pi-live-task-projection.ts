@@ -166,6 +166,8 @@ export function projectPiLiveTaskDetail(input: {
     title: state?.sessionName || 'Pi 实时任务',
     agentLabel: 'Pi',
     contextLabel: runtimeModelLabel(state),
+    projectLabel: state?.projectName,
+    workspacePath: state?.workspacePath,
     statusLabel: runtimeStatusLabel(state, input.connected),
     metrics: [
       ...(totalTokens > 0 ? [{ value: totalTokens.toLocaleString(), label: '词元' }] : []),
