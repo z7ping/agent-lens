@@ -23,5 +23,7 @@ const applyPiLiveRuntime: Plugin.Function<void> = (ctx: AgentLensContext) => {
   }
 }
 
+applyPiLiveRuntime.inject = ['storage']
+
 /** Internal runtime service. Pi observation remains owned by @agent-lens/source-pi. */
 export const piLiveRuntimePlugin = applyPiLiveRuntime
