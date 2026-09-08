@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -61,7 +61,7 @@ test('单次 shim 目标解析共享登录 Shell PATH，不为每个管理器重
       },
     })
 
-    assert.equal(resolved, executable)
+    assert.equal(resolved, await realpath(executable))
     assert.equal(shellCalls, 1)
   } finally {
     await rm(root, { recursive: true, force: true })

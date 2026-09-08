@@ -43,7 +43,7 @@ export type { HttpStaticMount } from './static-files'
 
 export const AGENT_LENS_HTTP_HOST = '127.0.0.1' as const
 export const DEFAULT_AGENT_LENS_HTTP_PORT = 56789
-const HEALTH_CACHE_TTL_MS = 1_000
+const HEALTH_CACHE_TTL_MS = 2_000
 const USAGE_DETAIL_LIMIT = 5
 const RUNTIME_STARTED_AT = new Date().toISOString()
 const SLOW_HTTP_REQUEST_LOG_MS = 500
