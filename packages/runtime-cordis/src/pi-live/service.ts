@@ -33,6 +33,7 @@ interface OwnedRuntime {
   gitBranch?: string | undefined
   recoverySessionPath?: string | undefined
   recoveryCheckpointPending?: string | undefined
+  recoveryCheckpointTask?: Promise<void> | undefined
 }
 
 function safeError(error: unknown): string {
@@ -317,13 +318,15 @@ export class DefaultPiLiveService implements PiLiveService {
     if (runtime.recoverySessionPath && sessionPathKey(runtime.recoverySessionPath) === pathKey) return
     if (runtime.recoveryCheckpointPending && sessionPathKey(runtime.recoveryCheckpointPending) === pathKey) return
     runtime.recoveryCheckpointPending = sessionPath
-    void this.persistRuntime(runtime).catch(error => {
+    const checkpoint = this.persistRuntime(runtime).catch(error => {
       this.recoveryDiagnostic(runtime, 'Pi Live recovery checkpoint failed', error)
     }).finally(() => {
       if (runtime.recoveryCheckpointPending && sessionPathKey(runtime.recoveryCheckpointPending) === pathKey) {
         runtime.recoveryCheckpointPending = undefined
       }
+      if (runtime.recoveryCheckpointTask === checkpoint) runtime.recoveryCheckpointTask = undefined
     })
+    runtime.recoveryCheckpointTask = checkpoint
   }
 
   private persistSessionIfChanged(runtime: OwnedRuntime, state: PiLiveRuntimeState): void {
@@ -478,9 +481,12 @@ export class DefaultPiLiveService implements PiLiveService {
 
   async terminate(id: string): Promise<void> {
     await this.ensureRecoveryLoaded()
-    await this.recoveryStore?.remove(id)
     const runtime = this.runtimes.get(id)
-    if (runtime) await this.terminateRuntime(runtime, true)
+    if (runtime) {
+      await this.terminateRuntime(runtime, true)
+      await runtime.recoveryCheckpointTask?.catch(() => undefined)
+    }
+    await this.recoveryStore?.remove(id)
   }
 
   async dispose(): Promise<void> {
@@ -489,6 +495,7 @@ export class DefaultPiLiveService implements PiLiveService {
     if (this.recoveryLoadPromise) await this.recoveryLoadPromise.catch(() => undefined)
     const runtimes = [...this.runtimes.values()]
     await Promise.allSettled(runtimes.map(async runtime => {
+      await runtime.recoveryCheckpointTask?.catch(() => undefined)
       if (runtime.status === 'ready' && runtime.handle) {
         const state = await runtime.handle.state().catch(() => undefined)
         if (state?.sessionFile) {
