@@ -13,14 +13,13 @@ export function PiRuntimeMenu({
 
   return <>
     <IconButton
-      size="small"
       variant="danger"
       className="pi-runtime-terminate-button"
       title="结束 Pi Runtime"
       aria-label="结束 Pi Runtime"
       disabled={busy}
       onClick={() => setConfirmOpen(true)}
-    ><UiIcon name="power" size={14}/></IconButton>
+    ><UiIcon name="power" size={16}/></IconButton>
 
     <Dialog
       open={confirmOpen}
