@@ -124,7 +124,7 @@ export function NewPiTaskPage() {
             /></div> : <>
               <div className="task-center-new-fields">
                 <label className="task-center-new-project-field"><span>项目</span><SelectMenu value={selectedKey} options={projectOptions} onChange={setSelectedKey} ariaLabel="选择 Pi 任务项目" placeholder={projects.length ? '选择项目' : '暂无最近项目'} variant="field" className="task-center-new-project-select" menuWidth={420} searchable searchPlaceholder="搜索项目或工作目录" disabled={!projects.length}/></label>
-                {canBrowseWorkspace && <Button variant="secondary" disabled={pickingWorkspace} onClick={() => void pickWorkspace()}>{pickingWorkspace ? '正在选择…' : '选择文件夹'}</Button>}
+                {canBrowseWorkspace && <Button disabled={pickingWorkspace} onClick={() => void pickWorkspace()}>{pickingWorkspace ? '正在选择…' : '选择文件夹'}</Button>}
               </div>
               <div className="task-center-new-status"><b>{selected ? `在 ${selected.label} 中启动` : '等待选择项目'}</b><span>{composerStateLabel}</span></div>
               {error && <div className="pi-live-error" role="alert">{error}</div>}
