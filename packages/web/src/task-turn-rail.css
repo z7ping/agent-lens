@@ -24,10 +24,10 @@
   position: relative;
   display: grid;
   width: 24px;
-  height: 7px;
+  height: 9px;
   min-height: 2px;
-  max-height: 7px;
-  flex: 0 1 7px;
+  max-height: 9px;
+  flex: 0 1 9px;
   place-items: center;
   padding: 0;
   border: 0;
