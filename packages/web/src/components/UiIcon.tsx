@@ -16,7 +16,6 @@ import {
   Clock,
   Copy,
   Dot,
-  Ellipsis,
   FileText,
   Filter,
   FlaskConical,
@@ -32,6 +31,7 @@ import {
   PanelLeftOpen,
   Pencil,
   Plus,
+  Power,
   RefreshCw,
   Search,
   Send,
@@ -69,11 +69,11 @@ export type UiIconName =
   | 'expand'
   | 'filter'
   | 'menu'
-  | 'more'
   | 'moon'
   | 'panel-left-close'
   | 'panel-left-open'
   | 'plus'
+  | 'power'
   | 'refresh'
   | 'search'
   | 'send'
@@ -117,11 +117,11 @@ const icons = {
   expand: Maximize2,
   filter: Filter,
   menu: Menu,
-  more: Ellipsis,
   moon: Moon,
   'panel-left-close': PanelLeftClose,
   'panel-left-open': PanelLeftOpen,
   plus: Plus,
+  power: Power,
   refresh: RefreshCw,
   search: Search,
   send: Send,
