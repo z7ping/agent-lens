@@ -73,7 +73,10 @@ export function TaskHeader({ marker, agent, context, status, title, submeta, met
   const headerRef = useRef<HTMLElement>(null)
   const viewMenuAnchorRef = useRef<HTMLSpanElement>(null)
   const [viewMenuOpen, setViewMenuOpen] = useState(false)
+  const [compactInfoOpen, setCompactInfoOpen] = useState(false)
   const [reviewTailHost, setReviewTailHost] = useState<HTMLElement | null>(null)
+  const compactInfoAnchorRef = useRef<HTMLSpanElement>(null)
+  const hasCompactInfo = Boolean(resolvedContext || submeta || metrics.length > 0)
 
   useLayoutEffect(() => {
     const header = headerRef.current
@@ -125,6 +128,29 @@ export function TaskHeader({ marker, agent, context, status, title, submeta, met
           </div>)}
         </div>}
         {hasHeaderActions && <div className="task-header-actions">
+          {hasCompactInfo && <>
+            <span ref={compactInfoAnchorRef} className="task-header-compact-info-anchor">
+              <Button
+                size="small"
+                className="task-header-compact-info-trigger"
+                aria-haspopup="dialog"
+                aria-expanded={compactInfoOpen}
+                onClick={() => setCompactInfoOpen(value => !value)}
+              >任务信息</Button>
+            </span>
+            <Popover
+              open={compactInfoOpen}
+              anchorRef={compactInfoAnchorRef}
+              className="task-header-compact-info-popover"
+              onClose={() => setCompactInfoOpen(false)}
+            >
+              <section className="task-header-compact-info-list" aria-label="任务信息">
+                {resolvedContext && <div><span>上下文</span><b>{resolvedContext}</b></div>}
+                {submeta && <div><span>工作区</span><b>{submeta}</b></div>}
+                {metrics.map(metric => <div key={metric.label} data-tone={metric.tone ?? ''}><span>{metric.label}</span><b>{metric.value}</b></div>)}
+              </section>
+            </Popover>
+          </>}
           {auditToggle && <>
             <span ref={viewMenuAnchorRef} className="task-view-menu-anchor">
               <Button

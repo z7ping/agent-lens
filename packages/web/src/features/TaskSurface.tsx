@@ -38,6 +38,7 @@ interface TaskTurnRailPosition {
   left: number
   top: number
   maxHeight: number
+  boundaryBottom: number
 }
 
 const TaskSurfaceViewContext = createContext<TaskSurfaceViewValue>({
@@ -195,11 +196,15 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
       left: viewportRect.left + 10,
       top: viewportRect.top + viewportRect.height / 2,
       maxHeight: Math.max(96, viewportRect.height - 24),
+      // Pi Live 的 Composer 位于 Reader 之后。边界导航以 Reader 底边为基准，
+      // 不能使用全局窗口底部，否则会遮挡底部输入与发送操作。
+      boundaryBottom: Math.max(16, window.innerHeight - viewportRect.bottom + 16),
     }
     setRailPosition(current => current
       && Math.abs(current.left - nextPosition.left) < .5
       && Math.abs(current.top - nextPosition.top) < .5
       && Math.abs(current.maxHeight - nextPosition.maxHeight) < .5
+      && Math.abs(current.boundaryBottom - nextPosition.boundaryBottom) < .5
       ? current
       : nextPosition)
   }, [])
@@ -294,6 +299,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
         <nav
           className="task-boundary-nav task-boundary-nav-live"
           aria-label="Pi Live 会话边界导航"
+          style={{ bottom: railPosition.boundaryBottom }}
         >
           <IconButton title="跳到开头" aria-label="跳到开头" onClick={() => jumpToBoundary('start')}>
             <UiIcon name="arrow-big-up" size={20} strokeWidth={2}/>
