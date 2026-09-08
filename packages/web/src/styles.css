@@ -28,10 +28,6 @@ body,
   margin: 0;
 }
 
-html {
-  scrollbar-gutter: stable;
-}
-
 body {
   background: var(--al-canvas);
   color: var(--al-ink);
