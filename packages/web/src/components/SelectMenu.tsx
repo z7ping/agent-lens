@@ -182,6 +182,14 @@ export function SelectMenu({
   }
 
   const handleMenuKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    const actionTarget = event.target instanceof Element && event.target.closest('.select-menu-action')
+    if (actionTarget) {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        close(true)
+      }
+      return
+    }
     if (event.key === 'Escape') {
       event.preventDefault()
       close(true)
