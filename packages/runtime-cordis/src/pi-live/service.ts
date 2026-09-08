@@ -237,7 +237,6 @@ export class DefaultPiLiveService implements PiLiveService {
   private async persistRuntime(runtime: OwnedRuntime, state?: PiLiveRuntimeState): Promise<void> {
     if (!this.recoveryStore) return
     const nextInput = recoveryInput(runtime.input, state?.sessionFile)
-    if (state?.sessionFile) runtime.input = nextInput
     const value: PiLiveRecoveryRecord = {
       id: runtime.id,
       input: nextInput,
@@ -245,6 +244,7 @@ export class DefaultPiLiveService implements PiLiveService {
       updatedAt: new Date().toISOString(),
     }
     await this.recoveryStore.put(value)
+    if (state?.sessionFile) runtime.input = nextInput
   }
 
   private persistRuntimeBestEffort(runtime: OwnedRuntime, state?: PiLiveRuntimeState): void {
@@ -300,6 +300,9 @@ export class DefaultPiLiveService implements PiLiveService {
       runtime.capabilities = handle.capabilities ?? runtime.capabilities
       if (!runtime.initializationTimings.length && handle.initializationTimings?.length) runtime.initializationTimings = [...handle.initializationTimings]
 
+      const requiresResolvedSessionCheckpoint = Boolean(
+        this.recoveryStore && (!runtime.input.sessionPath?.trim() || runtime.input.historyAction === 'fork'),
+      )
       let readyState: PiLiveRuntimeState | undefined
       if (runtime.input.historyAction === 'fork' && runtime.input.sessionPath) {
         const forkedState = await handle.state()
@@ -308,11 +311,23 @@ export class DefaultPiLiveService implements PiLiveService {
           runtime.handle = undefined
           throw new Error('Pi 分叉 Runtime 未切换到新的 Session，已拒绝继续')
         }
-        runtime.input = recoveryInput(runtime.input, forkedState.sessionFile)
         readyState = forkedState
       }
       if (!readyState) readyState = await handle.state().catch(() => undefined)
-      if (readyState) this.persistRuntimeBestEffort(runtime, readyState)
+      if (requiresResolvedSessionCheckpoint && !readyState?.sessionFile?.trim()) {
+        await handle.terminate().catch(() => undefined)
+        runtime.handle = undefined
+        throw new Error('Pi Runtime 已启动，但没有可用于 Daemon 恢复的原生 Session')
+      }
+      if (readyState) {
+        try {
+          await this.persistRuntime(runtime, readyState)
+        } catch (error) {
+          await handle.terminate().catch(() => undefined)
+          runtime.handle = undefined
+          throw new Error(`Pi Live recovery checkpoint failed: ${safeError(error)}`)
+        }
+      }
 
       this.advanceInitialization(runtime, 'ready')
       runtime.status = 'ready'
