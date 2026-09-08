@@ -144,60 +144,10 @@
 }
 .detail-load-sentinel button:hover { border-color: var(--al-line-strong); background: var(--al-soft); }
 
-/* Pi 历史会话的“下一步”属于会话尾部，而不是 Header。 */
+/* 会话尾部只保留 Review 布局间距；组件本身统一由 components/task-continuation.css 负责。 */
 .review-page .task-review-tail-actions-host {
   margin: 6px 0 22px;
 }
-.review-page .task-review-continuation {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 14px 0 4px;
-  border-top: 1px solid color-mix(in srgb, var(--al-line-strong) 72%, transparent);
-}
-.review-page .task-review-continuation-copy {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 3px;
-}
-.review-page .task-review-continuation-copy b {
-  color: var(--al-ink-2);
-  font-size: 13px;
-  font-weight: 680;
-}
-.review-page .task-review-continuation-copy span {
-  color: var(--al-muted-2);
-  font-size: 12px;
-  line-height: 1.45;
-}
-.review-page .task-review-continuation-actions {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 7px;
-}
-.review-page .task-review-continuation-actions button {
-  display: inline-flex;
-  min-height: 30px;
-  align-items: center;
-  gap: 5px;
-  padding: 0 11px;
-  border: 1px solid var(--al-line-strong);
-  border-radius: 7px;
-  background: var(--al-surface);
-  color: var(--al-ink-2);
-  font-size: 12px;
-  font-weight: 600;
-}
-.review-page .task-review-continuation-actions button:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--al-accent) 40%, var(--al-line-strong));
-  background: var(--al-soft-2);
-  color: var(--al-accent);
-}
-.review-page .task-review-continuation-actions button:disabled { cursor: not-allowed; opacity: .45; }
 
 @media (min-width: 1200px) {
   .review-page .review-reader { padding-left: 52px; }
@@ -213,8 +163,6 @@
     right: 12px;
     left: calc(316px + 170px);
   }
-  .review-page .task-review-continuation { align-items: flex-start; flex-direction: column; gap: 10px; }
-  .review-page .task-review-continuation-actions { width: 100%; flex-wrap: wrap; }
 }
 @media (max-width: 575.98px) {
   .review-page.review-page-embedded .round-nav {
