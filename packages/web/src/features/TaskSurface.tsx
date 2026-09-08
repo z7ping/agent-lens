@@ -12,7 +12,7 @@ import {
   type HTMLAttributes,
   type PropsWithChildren,
 } from 'react'
-import { UiIcon } from '../components/UiIcon'
+import { IconButton, UiIcon } from '../components/ui'
 
 export type TaskSurfaceMode = 'review' | 'live' | 'hub' | 'new'
 
@@ -88,6 +88,10 @@ function collectTurnRailItems(root: HTMLElement): TaskTurnRailItem[] {
   const seen = new Set<string>()
   const elements = root.querySelectorAll<HTMLElement>('.virtual-round-shell[data-interaction-id], .task-round[data-interaction-id]')
   for (const element of elements) {
+    // TaskCenter 可能承载一个拥有自己 TaskSurface 的详情视图。外层不得再次接管
+    // 内层轮次，否则会生成重复导轨 / 边界导航并重复监听同一批 DOM。
+    if (element.closest('.task-surface') !== root) continue
+
     const id = element.dataset.interactionId?.trim()
     if (!id || seen.has(id)) continue
     seen.add(id)
@@ -298,12 +302,12 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
           aria-label="Pi Live 会话边界导航"
           style={{ right: railPosition.right, bottom: railPosition.bottom }}
         >
-          <button type="button" title="跳到开头" aria-label="跳到开头" onClick={() => jumpToBoundary('start')}>
+          <IconButton title="跳到开头" aria-label="跳到开头" onClick={() => jumpToBoundary('start')}>
             <UiIcon name="arrow-big-up" size={20}/>
-          </button>
-          <button type="button" className="task-boundary-latest" title="跳到最新" aria-label="跳到最新" onClick={() => jumpToBoundary('end')}>
+          </IconButton>
+          <IconButton className="task-boundary-latest" variant="primary" title="跳到最新" aria-label="跳到最新" onClick={() => jumpToBoundary('end')}>
             <UiIcon name="arrow-big-down" size={20}/>
-          </button>
+          </IconButton>
         </nav>,
         document.body,
       )
