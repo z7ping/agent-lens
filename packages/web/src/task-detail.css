@@ -104,15 +104,6 @@
   justify-self: end;
   gap: 6px;
 }
-/* Header 只负责布局和语义分组；Button / IconButton 的尺寸与基础状态由 Primitive 自己持有。 */
-.task-surface .task-header-actions .pi-live-stop,
-.task-surface .task-header-actions .pi-live-danger,
-.task-surface .task-header-actions .danger,
-.task-surface .task-header-actions [data-tone='danger'] {
-  border-color: color-mix(in srgb, var(--al-danger) 34%, var(--al-line));
-  background: color-mix(in srgb, var(--al-danger-soft) 44%, var(--al-surface));
-  color: var(--al-danger);
-}
 .task-surface .task-header-metrics {
   grid-column: 3;
   grid-row: 2;
