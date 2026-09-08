@@ -574,7 +574,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             }
             if (runtimeError) setError(runtimeError)
             window.dispatchEvent(new Event('agent-lens:pi-live-state-changed'))
-            if (status === 'ready' || initializationStage === 'ready') {
+            if (status === 'ready') {
               void piLiveApi.snapshot(runtimeId, leafIdRef.current).then(acceptSnapshot, () => undefined)
               void refreshControls()
             }
@@ -593,8 +593,11 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
         if (!followingRef.current) setNewRecords(true)
         if (settled) void refreshAfterSettled()
         if (controlsChanged) {
-          void piLiveApi.state(runtimeId).then(value => { if (active) setState(value) }, () => undefined)
-          void refreshControls()
+          void piLiveApi.state(runtimeId).then(value => {
+            if (!active) return
+            setState(value)
+            if (value.status === 'ready') void refreshControls()
+          }, () => undefined)
         }
       },
     })
