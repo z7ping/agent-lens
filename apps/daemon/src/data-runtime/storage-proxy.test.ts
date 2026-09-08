@@ -157,6 +157,28 @@ test('remote Storage transaction commits atomically and rolls back on failure', 
   }
 })
 
+test('事务结束后执行的异步回调不会复用失效的 Writer transaction ID', async () => {
+  const runtime = await fixture()
+  try {
+    let deferredWrite: Promise<void> | undefined
+    await runtime.storage.transaction(async tx => {
+      await tx.hosts.put(host('in-transaction'))
+      deferredWrite = new Promise((resolve, reject) => {
+        setTimeout(() => {
+          void runtime.storage.repositories.hosts.put(host('after-transaction')).then(resolve, reject)
+        }, 20)
+      })
+    })
+
+    assert.ok(deferredWrite)
+    await deferredWrite
+    assert.equal((await runtime.storage.repositories.hosts.get('in-transaction'))?.id, 'in-transaction')
+    assert.equal((await runtime.storage.repositories.hosts.get('after-transaction'))?.id, 'after-transaction')
+  } finally {
+    await runtime.dispose()
+  }
+})
+
 test('writer synchronous work does not block independent foreground reader queries', async () => {
   const runtime = await fixture()
   try {

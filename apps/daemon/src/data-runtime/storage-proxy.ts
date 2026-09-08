@@ -204,8 +204,13 @@ interface RemoteCallOptions {
 
 type WriterWorkClass = 'foreground' | 'maintenance'
 
+interface RemoteTransactionScope {
+  readonly id: string
+  active: boolean
+}
+
 class RemoteStorageExecutor {
-  private readonly transactionScope = new AsyncLocalStorage<string>()
+  private readonly transactionScope = new AsyncLocalStorage<RemoteTransactionScope>()
   private writerTail: Promise<void> = Promise.resolve()
   private foregroundWriterPendingValue = 0
   private maintenanceWriterPendingValue = 0
@@ -221,12 +226,12 @@ class RemoteStorageExecutor {
     args: readonly unknown[] = [],
     options: RemoteCallOptions = {},
   ): Promise<T> {
-    const activeTransactionId = this.transactionScope.getStore()
-    if (activeTransactionId) {
+    const transaction = this.transactionScope.getStore()
+    if (transaction?.active) {
       return this.writer.request<T>('storage.call', {
         path: [...path],
         args: [...args],
-        transactionId: activeTransactionId,
+        transactionId: transaction.id,
       }, timeoutFor(path, false))
     }
 
@@ -250,25 +255,30 @@ class RemoteStorageExecutor {
   }
 
   transaction<T>(operation: () => Promise<T>): Promise<T> {
-    if (this.transactionScope.getStore()) return operation()
+    if (this.transactionScope.getStore()?.active) return operation()
     return this.enqueueWriter(async () => {
       const opened = await this.writer.request<{ transactionId: string }>(
         'storage.transaction.begin',
         undefined,
         WRITE_TIMEOUT_MS,
       )
+      const scope: RemoteTransactionScope = { id: opened.transactionId, active: true }
       try {
-        const result = await this.transactionScope.run(opened.transactionId, operation)
+        const result = await this.transactionScope.run(scope, operation)
+        // AsyncLocalStorage 会把当前上下文传给事务内创建的计时器、事件回调等。
+        // 回调在 operation 完成后才执行时，已不属于这个 BEGIN/COMMIT 边界，不能携带旧事务 ID。
+        scope.active = false
         await this.writer.request(
           'storage.transaction.commit',
-          { transactionId: opened.transactionId },
+          { transactionId: scope.id },
           WRITE_TIMEOUT_MS,
         )
         return result
       } catch (error) {
+        scope.active = false
         await this.writer.request(
           'storage.transaction.rollback',
-          { transactionId: opened.transactionId },
+          { transactionId: scope.id },
           WRITE_TIMEOUT_MS,
         ).catch(() => undefined)
         throw error
