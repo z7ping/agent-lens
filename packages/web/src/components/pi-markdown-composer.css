@@ -31,28 +31,31 @@
   user-select: none;
 }
 
-.pi-md-paragraph { margin: 0 0 4px; }
+/*
+ * Composer 是输入控件，不是正文阅读器。Markdown 语义需要可见，但不应因标题/列表
+ * 把输入框撑成文档编辑器；最终展示仍由统一 MarkdownContent 负责。
+ */
+.pi-md-paragraph { margin: 0 0 2px; }
 .pi-md-paragraph:last-child { margin-bottom: 0; }
 .pi-md-h1, .pi-md-h2, .pi-md-h3, .pi-md-h4, .pi-md-h5, .pi-md-h6 {
-  margin: 5px 0 3px;
+  margin: 2px 0;
   color: var(--al-ink);
-  line-height: 1.35;
-  font-weight: 700;
+  line-height: 1.5;
+  font-weight: 680;
 }
-.pi-md-h1 { font-size: 20px; }
-.pi-md-h2 { font-size: 18px; }
-.pi-md-h3 { font-size: 16px; }
-.pi-md-h4, .pi-md-h5, .pi-md-h6 { font-size: 15px; }
+.pi-md-h1 { font-size: 15.5px; }
+.pi-md-h2 { font-size: 15px; }
+.pi-md-h3, .pi-md-h4, .pi-md-h5, .pi-md-h6 { font-size: 14.5px; }
 
 .pi-md-ul, .pi-md-ol {
-  margin: 3px 0;
-  padding-left: 22px;
+  margin: 2px 0;
+  padding-left: 19px;
 }
 .pi-md-ul { list-style: disc outside; }
 .pi-md-ol { list-style: decimal outside; }
-.pi-md-listitem { margin: 1px 0; }
+.pi-md-listitem { margin: 0; }
 .pi-md-listitem-nested { list-style: none; }
-.pi-md-checklist { list-style: none; padding-left: 20px; }
+.pi-md-checklist { list-style: none; padding-left: 18px; }
 .pi-md-listitem-checked,
 .pi-md-listitem-unchecked {
   position: relative;
@@ -61,10 +64,10 @@
 .pi-md-listitem-checked::before,
 .pi-md-listitem-unchecked::before {
   position: absolute;
-  left: -20px;
-  top: .15em;
-  width: 13px;
-  height: 13px;
+  left: -18px;
+  top: .22em;
+  width: 12px;
+  height: 12px;
   border: 1px solid var(--al-line-strong);
   border-radius: 3px;
   content: '';
@@ -76,25 +79,25 @@
 }
 
 .pi-md-quote {
-  margin: 4px 0;
-  padding-left: 10px;
-  border-left: 3px solid var(--al-line-strong);
+  margin: 2px 0;
+  padding-left: 8px;
+  border-left: 2px solid var(--al-line-strong);
   color: var(--al-muted-strong);
 }
 
 .pi-md-code-block {
   display: block;
-  margin: 5px 0;
-  padding: 7px 9px;
+  margin: 3px 0;
+  padding: 5px 7px;
   overflow-x: auto;
   border: 1px solid var(--al-line);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--al-soft-2);
-  font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font: 12.5px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   white-space: pre;
 }
 .pi-md-inline-code {
-  padding: 1px 4px;
+  padding: 0 3px;
   border-radius: 4px;
   background: var(--al-soft-2);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
