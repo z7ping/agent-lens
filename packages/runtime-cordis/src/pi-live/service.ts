@@ -81,14 +81,23 @@ function runtimeCapabilities(value: unknown): PiLiveRuntimeCapabilities | undefi
   }
 }
 
-function recoveryInput(input: PiLiveStartInput, sessionPath?: string): PiLiveStartInput {
-  const path = sessionPath?.trim() || input.sessionPath?.trim()
-  if (path) {
+function recoveryInput(input: PiLiveStartInput, resumedSessionPath?: string): PiLiveStartInput {
+  const resumedPath = resumedSessionPath?.trim()
+  if (resumedPath) {
     return {
       cwd: input.cwd,
       ...(input.name ? { name: input.name } : {}),
-      sessionPath: path,
+      sessionPath: resumedPath,
       historyAction: 'continue',
+    }
+  }
+  const existingPath = input.sessionPath?.trim()
+  if (existingPath) {
+    return {
+      cwd: input.cwd,
+      ...(input.name ? { name: input.name } : {}),
+      sessionPath: existingPath,
+      historyAction: input.historyAction === 'fork' ? 'fork' : 'continue',
     }
   }
   return {
@@ -228,7 +237,7 @@ export class DefaultPiLiveService implements PiLiveService {
   private async persistRuntime(runtime: OwnedRuntime, state?: PiLiveRuntimeState): Promise<void> {
     if (!this.recoveryStore) return
     const nextInput = recoveryInput(runtime.input, state?.sessionFile)
-    runtime.input = nextInput
+    if (state?.sessionFile) runtime.input = nextInput
     const value: PiLiveRecoveryRecord = {
       id: runtime.id,
       input: nextInput,
