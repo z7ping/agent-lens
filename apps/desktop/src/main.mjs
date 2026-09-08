@@ -1,4 +1,4 @@
-import { createWriteStream, existsSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -14,6 +14,7 @@ import {
 } from 'electron'
 import { createLoginAutostartController } from './login-autostart.mjs'
 import { migrateLegacyWindowsRuntime } from './legacy-windows-migration.mjs'
+import { createRotatingLogWriter } from './rotating-log.mjs'
 
 const DEFAULT_PORT = 56789
 const EXPECTED_PROTOCOL_VERSION = '1.0'
@@ -91,14 +92,18 @@ async function trayIcon() {
 }
 
 async function ensureDaemonLog() {
-  if (daemonLog && !daemonLog.destroyed) return
+  if (daemonLog) return
   const logDir = app.getPath('logs')
   await mkdir(logDir, { recursive: true })
-  daemonLog = createWriteStream(join(logDir, 'daemon.log'), { flags: 'a' })
+  daemonLog = await createRotatingLogWriter(join(logDir, 'daemon.log'))
 }
 
 function writeDaemonLog(message) {
   daemonLog?.write(`${message}\n`)
+}
+
+function writeDaemonOutput(chunk) {
+  daemonLog?.write(chunk)
 }
 
 async function readDaemonHealth(timeoutMs = DAEMON_HEALTH_TIMEOUT_MS) {
@@ -280,8 +285,8 @@ async function startDaemon() {
   daemonOwnership = 'desktop'
   externalDaemonOwner = null
   writeDaemonLog(`--- daemon spawned pid=${child.pid ?? 'unknown'} desktopPid=${process.pid} ---`)
-  child.stdout?.pipe(daemonLog, { end: false })
-  child.stderr?.pipe(daemonLog, { end: false })
+  child.stdout?.on('data', writeDaemonOutput)
+  child.stderr?.on('data', writeDaemonOutput)
   child.once('exit', (code, signal) => {
     const ownedByDesktop = daemonOwnership === 'desktop' && daemon === child
     writeDaemonLog(`--- daemon exited code=${code} signal=${signal ?? 'none'} expected=${quitting || stoppingDaemon} ---`)
@@ -475,8 +480,8 @@ if (!singleInstance) {
     quitting = true
     clearRecoveryTimers()
     if (!quitStopPromise) {
-      quitStopPromise = stopDaemon().finally(() => {
-        daemonLog?.end()
+      quitStopPromise = stopDaemon().finally(async () => {
+        await daemonLog?.flush()
         quitAfterDaemonStop = true
         app.quit()
       })

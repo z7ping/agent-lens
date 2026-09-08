@@ -14,6 +14,7 @@ import type { UnifiedReadService } from '@agent-lens/core/replication'
 import type { SqliteStorageService } from '@agent-lens/storage-sqlite'
 import { DataRuntimeClient, type DataRuntimeClientSnapshot } from './client.js'
 import { DATA_RUNTIME_MAX_PENDING_REQUESTS } from './protocol.js'
+import { logDataRuntimeDebug, logDataRuntimeFailure } from './diagnostics.js'
 
 const WRITE_TIMEOUT_MS = 30_000
 const MAINTENANCE_TIMEOUT_MS = 120_000
@@ -110,7 +111,7 @@ export class DataRuntimeReaderPool {
 
     if (this.queued >= FOREGROUND_QUEUE_MAX) {
       this.overloads += 1
-      console.warn('[AgentLens] Data Runtime reader queue overload', {
+      logDataRuntimeFailure('[AgentLens] Data Runtime reader queue overload', {
         ...readerRequestContext(method, params),
         queued: this.queued,
         maxQueue: FOREGROUND_QUEUE_MAX,
@@ -128,7 +129,7 @@ export class DataRuntimeReaderPool {
         if (reader) {
           const elapsed = performance.now() - startedAt
           if (elapsed >= SLOW_READER_QUEUE_LOG_MS) {
-            console.warn('[AgentLens] Data Runtime reader queue wait', {
+            logDataRuntimeDebug('[AgentLens] Data Runtime reader queue wait', {
               ...readerRequestContext(method, params),
               waitedMs: Math.round(elapsed),
               queued: this.queued,
@@ -140,7 +141,7 @@ export class DataRuntimeReaderPool {
         await delay(FOREGROUND_QUEUE_POLL_MS)
       }
       this.queueTimeouts += 1
-      console.warn('[AgentLens] Data Runtime reader queue timeout', {
+      logDataRuntimeFailure('[AgentLens] Data Runtime reader queue timeout', {
         ...readerRequestContext(method, params),
         waitedMs: Math.round(performance.now() - startedAt),
         waitBudgetMs,
@@ -309,7 +310,7 @@ class RemoteStorageExecutor {
     const execute = async () => {
       const waitedMs = performance.now() - queuedAt
       if (waitedMs >= SLOW_WRITER_QUEUE_LOG_MS) {
-        console.warn('[AgentLens] Data Runtime writer queue wait', {
+        logDataRuntimeDebug('[AgentLens] Data Runtime writer queue wait', {
           workClass,
           path,
           waitedMs: Math.round(waitedMs),

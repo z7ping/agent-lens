@@ -1,6 +1,7 @@
 import type { Plugin } from '@deepseek-ai/cordis'
 import type { ProjectionDefinition, ProjectionScope } from '@agent-lens/core'
 import type { AgentLensContext } from '@agent-lens/runtime-cordis'
+import { logSessionSummaryRefreshFailure } from './diagnostics.js'
 
 export const SESSION_SUMMARY_PROJECTION_ID = 'session-summary'
 const REBUILD_DEBOUNCE_MS = 500
@@ -26,7 +27,7 @@ const applySessionSummaryProjection: Plugin.Function<void> = (ctx: AgentLensCont
       timer = undefined
       if (disposed) return
       void flush().catch(error => {
-        if (!disposed) console.error('[AgentLens] session summary projection refresh failed', error)
+        if (!disposed) logSessionSummaryRefreshFailure(error)
       })
     }, REBUILD_DEBOUNCE_MS)
   }

@@ -16,6 +16,7 @@ import {
   type DataRuntimeResponse,
   type DataRuntimeRole,
 } from './protocol.js'
+import { logDataRuntimeDebug, logDataRuntimeFailure } from './diagnostics.js'
 
 if (!parentPort) throw new Error('Data Runtime worker requires parentPort')
 
@@ -229,7 +230,7 @@ function logSlowOperation(
   const shape = safeOperationShape(args)
 
   // 参数可能包含路径、提示词或其他用户数据；诊断日志只保留稳定 RPC 路径、时序与无内容的批量规模。
-  console.warn('[AgentLens] Data Runtime slow operation', {
+  logDataRuntimeDebug('[AgentLens] Data Runtime slow operation', {
     role,
     method,
     path: path.join('.'),
@@ -367,7 +368,7 @@ async function handleRequest(value: unknown, queuedAt: number): Promise<void> {
     fail(value.requestId, 'method_not_found', `Unknown Data Runtime method: ${value.method}`)
   } catch (error) {
     const path = safeRequestPath(value)
-    console.warn('[AgentLens] Data Runtime request failed', {
+    logDataRuntimeFailure('[AgentLens] Data Runtime request failed', {
       role,
       method: value.method,
       ...(path ? { path } : {}),

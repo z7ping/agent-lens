@@ -11,6 +11,7 @@ import {
   type DataRuntimeRequest,
   type DataRuntimeRole,
 } from './protocol.js'
+import { logDataRuntimeDebug, logDataRuntimeFailure } from './diagnostics.js'
 
 const METRIC_SAMPLE_LIMIT = 128
 const HEARTBEAT_INTERVAL_MS = 5_000
@@ -221,11 +222,11 @@ export class DataRuntimeClient {
   ): Promise<T> {
     const worker = this.worker
     if (!worker) {
-      console.warn('[AgentLens] Data Runtime request rejected', { role: this.role, method, reason: 'worker_not_started' })
+      logDataRuntimeFailure('[AgentLens] Data Runtime request rejected', { role: this.role, method, reason: 'worker_not_started' })
       return Promise.reject(new Error(`Data Runtime ${this.role} worker is not started`))
     }
     if (this.pending.size >= DATA_RUNTIME_MAX_PENDING_REQUESTS) {
-      console.warn('[AgentLens] Data Runtime request rejected', {
+      logDataRuntimeFailure('[AgentLens] Data Runtime request rejected', {
         ...requestContext(this.role, method, params),
         reason: 'pending_limit',
         pending: this.pending.size,
@@ -243,7 +244,7 @@ export class DataRuntimeClient {
       ...(params ? { params } : {}),
     }
     if (encodedMessageBytes(request) > DATA_RUNTIME_MAX_MESSAGE_BYTES) {
-      console.warn('[AgentLens] Data Runtime request rejected', {
+      logDataRuntimeFailure('[AgentLens] Data Runtime request rejected', {
         ...requestContext(this.role, method, params),
         reason: 'message_too_large',
       })
@@ -263,7 +264,7 @@ export class DataRuntimeClient {
         const error = new Error(`Data Runtime ${this.role} request timed out: ${method}`)
         this.lastError = error.message
         // 超时不会取消 Worker 中已经开始的 SQLite 任务；记录发起端事实，和 Worker 完成日志配对。
-        console.warn('[AgentLens] Data Runtime request timeout', {
+        logDataRuntimeFailure('[AgentLens] Data Runtime request timeout', {
           ...pending.context,
           timeoutMs,
           elapsedMs: Math.round(performance.now() - pending.startedAt),
@@ -323,7 +324,7 @@ export class DataRuntimeClient {
     this.completed += 1
 
     if (duration >= SLOW_ROUND_TRIP_LOG_MS) {
-      console.warn('[AgentLens] Data Runtime slow round trip', {
+      logDataRuntimeDebug('[AgentLens] Data Runtime slow round trip', {
         ...pending.context,
         durationMs: Math.round(duration),
         pendingAfterReply: this.pending.size,
