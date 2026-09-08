@@ -2,8 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PiLiveInitializationStageDto, PiLiveStateDto } from '@agent-lens/protocol'
 import { CopyableCodeBlock } from './CopyableCodeBlock'
 import { OperationProgress } from './StateViews'
-import { UiIcon } from './UiIcon'
-import { Button } from './ui'
+import { Button, UiIcon } from './ui'
 
 const STAGES: Array<{ stage: PiLiveInitializationStageDto; label: string; detail: string }> = [
   { stage: 'starting_worker', label: '启动 Runtime Worker', detail: '创建独立 Pi 运行进程' },
@@ -124,7 +123,7 @@ export function PiStartupDisclosure({
       {state.processId && <span>Worker PID {state.processId}</span>}
     </div>}
     {resourceGroups.length > 0 && <details className="pi-startup-resource-details">
-      <summary>{resourceSummary}<UiIcon className="pi-startup-resource-chevron" name="chevron-right" size={12}/></summary>
+      <summary>{resourceSummary}<UiIcon className="pi-startup-resource-chevron" name="chevron-right" size={14}/></summary>
       <div className="pi-startup-resources" aria-label="Pi 已加载资源">
         {resourceGroups.map(group => <div className="pi-startup-resource-row" key={group.label}>
           <b>[{group.label}]</b><span>{group.values.join(', ')}</span>
