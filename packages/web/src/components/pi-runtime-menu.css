@@ -1,48 +1,5 @@
-.pi-runtime-menu-anchor {
-  display: inline-flex;
-  align-items: center;
-}
-
-.pi-runtime-menu {
-  min-width: 178px;
-  padding: 5px;
-  border: 1px solid var(--al-line-strong);
-  border-radius: 9px;
-  background: var(--al-surface-raised);
-  box-shadow: var(--al-shadow-lg);
-}
-
-.pi-runtime-menu-list {
-  display: grid;
-  gap: 2px;
-}
-
-.pi-runtime-menu-item {
-  width: 100%;
-  min-height: 32px;
-  padding: 0 9px;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--al-ink-2);
-  font-size: 12px;
-  font-weight: 600;
-  text-align: left;
-}
-
-.pi-runtime-menu-item:hover,
-.pi-runtime-menu-item:focus-visible {
-  outline: none;
-  background: var(--al-soft-2);
-}
-
-.pi-runtime-menu-item.is-danger {
-  color: var(--al-danger);
-}
-
-.pi-runtime-menu-item.is-danger:hover,
-.pi-runtime-menu-item.is-danger:focus-visible {
-  background: var(--al-danger-soft);
+.pi-runtime-terminate-button {
+  border-radius: 8px;
 }
 
 .pi-runtime-terminate-dialog .ui-dialog {
