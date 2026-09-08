@@ -53,6 +53,49 @@
   --radius-md:10px;
   --radius-lg:14px;
 
+  /* Task Surface / Workspace 几何语义。页面不得重新声明同义宽度与安全区。 */
+  --al-space-control-gap:6px;
+  --al-space-inline-gap:8px;
+  --al-space-field-gap:8px;
+  --al-space-panel-padding:16px;
+  --al-space-section-gap:14px;
+  --al-space-page-x:28px;
+  --al-space-page-y:16px;
+
+  --al-control-compact:26px;
+  --al-control-standard:30px;
+  --al-control-field:34px;
+  --al-control-scope:32px;
+  --al-control-touch-hit:44px;
+
+  --al-radius-control:var(--radius-sm);
+  --al-radius-panel:var(--radius-md);
+  --al-radius-overlay:var(--radius-lg);
+  --al-radius-pill:999px;
+  --al-radius-product-special:28px;
+
+  --al-content-form:620px;
+  --al-content-page:1320px;
+  --al-content-task-reading:1120px;
+  --al-content-task-composer:1120px;
+  --al-content-workspace:1480px;
+
+  --al-layer-sticky:20;
+  --al-layer-floating:54;
+  --al-layer-popover:70;
+  --al-layer-drawer:90;
+  --al-layer-dialog:100;
+  --al-layer-toast:110;
+
+  --al-motion-fast:.12s;
+  --al-motion-normal:.18s;
+  --al-motion-slow:.24s;
+
+  --al-safe-workspace-floating:40px;
+  --al-safe-task-boundary-inline:40px;
+  --al-safe-task-boundary-block:32px;
+  --al-safe-composer-inline:18px;
+
   --src-codex:#16866D;
   --src-claude:#C96E4D;
   --src-pi:#756FDC;
