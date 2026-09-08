@@ -89,8 +89,8 @@
  * 全局任务边界导航规范。
  * - 位置属于 Workspace 级固定位置，不跟随 Reader / 页面宽度漂移；
  * - 右侧与底部统一保留 24px 安全边距；
- * - 上下按钮统一 42×42，图标与语义仍由 IconButton / UiIcon 提供；
- * - 页面只提供跳转行为，不得覆盖尺寸和位置。
+ * - 上下按钮统一 42×42，图标统一 20px；
+ * - 页面只提供跳转行为，不得覆盖尺寸、位置和视觉状态。
  */
 .task-boundary-nav {
   position: fixed;
@@ -102,29 +102,73 @@
   gap: 10px;
   pointer-events: none;
 }
-.task-boundary-nav > .ui-icon-button {
+
+.review-page.review-page-embedded .round-nav-actions .round-nav-from-start,
+.review-page.review-page-embedded .round-nav-actions .round-nav-latest {
+  position: fixed;
+  right: 24px;
+  z-index: 54;
+}
+.review-page.review-page-embedded .round-nav-actions .round-nav-from-start { bottom: 76px; }
+.review-page.review-page-embedded .round-nav-actions .round-nav-latest { bottom: 24px; }
+
+.task-boundary-nav > .ui-icon-button,
+.review-page.review-page-embedded .round-nav-actions .round-nav-from-start,
+.review-page.review-page-embedded .round-nav-actions .round-nav-latest {
   width: 42px;
   height: 42px;
   min-height: 42px;
   flex: 0 0 42px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--al-line-strong);
   border-radius: 11px;
-  pointer-events: auto;
+  background: var(--al-surface);
   box-shadow: 0 7px 20px rgb(16 24 40 / .14);
+  color: var(--al-ink-2);
+  font-size: 0;
+  line-height: 0;
+  pointer-events: auto;
 }
-.task-boundary-nav > .ui-icon-button:hover:not(:disabled) {
+.task-boundary-nav > .ui-icon-button svg,
+.review-page.review-page-embedded .round-nav-actions .round-nav-from-start svg,
+.review-page.review-page-embedded .round-nav-actions .round-nav-latest svg {
+  width: 20px;
+  height: 20px;
+}
+.task-boundary-nav > .ui-icon-button:hover:not(:disabled),
+.review-page.review-page-embedded .round-nav-actions .round-nav-from-start:hover:not(:disabled) {
+  border-color: var(--al-accent);
+  color: var(--al-accent);
   box-shadow: 0 9px 24px rgb(16 24 40 / .17);
   transform: translateY(-1px);
 }
-.task-boundary-nav > .ui-icon-button.is-primary:hover:not(:disabled) {
+.task-boundary-nav > .ui-icon-button.is-primary,
+.review-page.review-page-embedded .round-nav-actions .round-nav-latest {
+  border-color: var(--al-accent);
+  background: var(--al-accent);
+  color: var(--al-on-accent);
+}
+.task-boundary-nav > .ui-icon-button.is-primary:hover:not(:disabled),
+.review-page.review-page-embedded .round-nav-actions .round-nav-latest:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--al-accent) 88%, var(--al-ink));
+  background: color-mix(in srgb, var(--al-accent) 88%, var(--al-ink));
+  color: var(--al-on-accent);
   box-shadow: 0 9px 24px color-mix(in srgb, var(--al-accent) 28%, transparent);
+  transform: translateY(-1px);
 }
 
 @media (max-width: 991.98px) {
   .task-turn-rail,
-  .task-boundary-nav { display: none; }
+  .task-boundary-nav,
+  .review-page.review-page-embedded .round-nav-actions .round-nav-from-start,
+  .review-page.review-page-embedded .round-nav-actions .round-nav-latest { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .task-turn-rail,
   .task-turn-rail .turn-tick i,
-  .task-boundary-nav > .ui-icon-button { transition: none; }
+  .task-boundary-nav > .ui-icon-button,
+  .review-page.review-page-embedded .round-nav-actions .round-nav-from-start,
+  .review-page.review-page-embedded .round-nav-actions .round-nav-latest { transition: none; }
 }
