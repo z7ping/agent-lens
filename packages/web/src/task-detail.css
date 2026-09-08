@@ -32,12 +32,6 @@
   border-bottom: 1px solid var(--al-line);
   background: var(--al-surface);
 }
-/* Live Header 与 Review 使用同一信息层级；差异只来自状态、动作和数据。 */
-.task-surface-live > .task-header {
-  max-width: var(--al-content-task-reading);
-  margin-inline: auto;
-  padding-inline: var(--al-space-page-x);
-}
 .task-surface .task-header-copy,
 .task-surface .task-header-side { display: contents; }
 .task-surface .task-header-meta {
@@ -140,30 +134,30 @@
 .task-surface .task-header-metric[data-tone='danger'] span { color: var(--al-danger); }
 .task-surface .task-header-metric[data-tone='accent'] b { color: var(--al-accent); }
 
-/* 任务信息入口是 TaskHeader 的共享能力，Review / Live 使用同一交互。 */
-.task-header-compact-info-anchor { display: inline-flex; }
-.task-header-compact-info-popover {
-  width: min(340px, calc(100vw - 24px));
-  padding: 7px;
-  border: 1px solid var(--al-line);
-  border-radius: 9px;
-  background: var(--al-surface-raised);
-  box-shadow: var(--al-shadow-lg);
+/* Live 是 Task Surface 的运行态 modifier：共享 Header 组件，但桌面保持单行，避免排队/PID额外占行。 */
+.task-surface-live .task-header {
+  max-width: var(--al-content-task-reading);
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, auto) auto auto;
+  grid-template-rows: 30px;
+  margin-inline: auto;
+  padding-inline: var(--al-space-page-x);
 }
-.task-header-compact-info-list { display: grid; gap: 0; }
-.task-header-compact-info-heading {
+.task-surface-live .task-header-meta { grid-column: 1; grid-row: 1; }
+.task-surface-live .task-header-title { grid-column: 2; grid-row: 1; }
+.task-surface-live .task-header-submeta {
   display: flex;
-  min-height: 30px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 0 7px 5px;
-  border-bottom: 1px solid var(--al-line);
+  grid-column: 3;
+  grid-row: 1;
+  max-width: min(30vw, 420px);
+  justify-self: start;
 }
-.task-header-compact-info-heading strong { color: var(--al-ink); font-size: 13px; font-weight: 680; }
-.task-header-compact-info-heading span { color: var(--al-muted); font-size: 12px; }
-.task-header-compact-info-list > div:not(.task-header-compact-info-heading) { display: grid; grid-template-columns: 68px minmax(0, 1fr); align-items: start; gap: 8px; padding: 7px; }
-.task-header-compact-info-list > div:not(.task-header-compact-info-heading) + div:not(.task-header-compact-info-heading) { border-top: 1px solid var(--al-line); }
+.task-surface-live .task-header-metrics { grid-column: 4; grid-row: 1; }
+.task-surface-live .task-header-actions { grid-column: 5; grid-row: 1; }
+
+/* 任务信息入口是 TaskHeader 的共享能力，Review / Live 使用同一 Drawer。 */
+.task-header-compact-info-list { display: grid; gap: 0; }
+.task-header-compact-info-list > div { display: grid; grid-template-columns: 68px minmax(0, 1fr); align-items: start; gap: 8px; padding: 7px; }
+.task-header-compact-info-list > div + div { border-top: 1px solid var(--al-line); }
 .task-header-compact-info-list > div > span { color: var(--al-muted); font-size: 12px; line-height: 1.45; }
 .task-header-compact-info-list > div > b { min-width: 0; color: var(--al-ink-2); font-size: 13px; font-weight: 600; line-height: 1.45; overflow-wrap: anywhere; }
 .task-header-compact-info-list > div[data-tone='danger'] > b { color: var(--al-danger); }
@@ -306,7 +300,6 @@
   transition: opacity .12s;
 }
 .task-surface .task-message-assistant:hover .markdown-message-actions,
-.task-surface .task-message-assistant:focus-within .markdown-message-actions,
 .task-surface .task-message-assistant .task-message-content[data-view='source'] .markdown-message-actions { opacity: .82; }
 .task-surface .markdown-message-actions button,
 .task-surface .task-message-actions button { min-height: 0; height: 22px; padding: 0 5px; border: 0; border-radius: 5px; background: transparent; color: var(--al-accent); font-size: 12px; font-weight: 620; }
@@ -354,8 +347,7 @@
   border: 0;
   opacity: .28;
 }
-.task-surface .task-thinking-content .markdown-message:hover .markdown-message-actions,
-.task-surface .task-thinking-content .markdown-message:focus-within .markdown-message-actions { opacity: .8; }
+.task-surface .task-thinking-content .markdown-message:hover .markdown-message-actions { opacity: .8; }
 .task-surface .task-thinking-actions > .evidence-link { display: none; }
 .task-surface .task-thinking-actions:has(> .evidence-link:only-child) { display: none; }
 
@@ -503,20 +495,31 @@
 @media (max-width: 991.98px) {
   .task-surface-review .review-reader,
   .task-surface-live .pi-live-document,
-  .task-surface-live > .task-header { padding-inline: 20px; }
+  .task-surface-live .task-header { padding-inline: 20px; }
+  .task-surface-live .task-header { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .task-surface-live .task-header-context,
+  .task-surface-live .task-header-submeta,
+  .task-surface-live .task-header-metrics { display: none; }
+  .task-surface-live .task-header-actions { grid-column: 3; }
   .task-surface .task-tool-row { grid-template-columns: 64px auto minmax(0, 1fr); }
   .task-surface .task-tool-action { display: none; }
   .task-surface .task-header-metric:nth-child(n+5) { display: none; }
   .task-surface .task-message-bubble-user { max-width: 88%; }
 }
 @media (max-width: 767.98px) {
+  .task-surface-review .review-reader,
+  .task-surface-live .pi-live-document,
+  .task-surface-live .task-header { padding-inline: 12px; }
   .task-surface .task-header { grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; padding: 7px 0 8px; }
-  .task-surface-live > .task-header { padding-inline: 20px; }
+  .task-surface-live .task-header { grid-template-columns: minmax(0, 1fr); grid-template-rows: 30px 22px; }
   .task-surface .task-header-meta { display: none; }
   .task-surface .task-header-title { grid-column: 1; grid-row: 1; font-size: 15px; }
   .task-surface .task-header-actions { grid-column: 2; grid-row: 1; }
   .task-surface .task-header-submeta { grid-column: 1 / 3; grid-row: 2; }
   .task-surface .task-header-metrics { display: none; }
+  .task-surface-live .task-header-title { grid-column: 1; grid-row: 2; }
+  .task-surface-live .task-header-actions { grid-column: 1; grid-row: 1; justify-self: end; }
+  .task-surface-live .task-header-submeta { display: none; }
   .task-surface .task-round-preview { max-width: 48%; }
   .task-surface .task-round-meta { display: none; }
   .task-surface .task-message-bubble-user { max-width: 94%; }
@@ -527,11 +530,6 @@
   .task-surface .task-event-row > .evidence-inline-list { margin-left: 26px; }
   .task-surface .task-event-source,
   .task-surface .task-event-row > time { text-align: left; }
-}
-@media (max-width: 575.98px) {
-  .task-surface-review .review-reader,
-  .task-surface-live .pi-live-document,
-  .task-surface-live > .task-header { padding-inline: 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .task-surface .task-disclosure-chevron,
