@@ -3,12 +3,11 @@
 /*
  * AgentLens 1.0 Review 页面所有者。
  * 只负责 Review 页面布局、独立会话列表、证据/Raw Inspector 与 Review 专属容器；
- * TaskHeader / Round / Message / Thinking / Tool / Event 统一由 task-detail.css 负责；
+ * TaskHeader / Round / Message / Thinking / Tool / Event 与共同阅读轴统一由 task-detail.css 负责；
  * 长会话滚动、Round Nav 与 Turn Rail 统一由 review-long-session.css 负责。
  */
 
 .review-page {
-  --review-reader-max: 1320px;
   --review-session-width: 320px;
   --session-source: var(--al-accent);
   display: flex;
@@ -40,7 +39,7 @@
   background: var(--al-canvas);
 }
 .review-reader-pane { min-width: 0; min-height: 0; overflow: auto; scrollbar-gutter: stable; background: var(--al-surface); }
-.review-reader { width: 100%; max-width: var(--review-reader-max); margin: 0 auto; padding: 16px 28px 96px; }
+.review-reader { padding-block: 16px 96px; }
 .review-flow { display: flex; flex-direction: column; gap: 0; padding-top: 6px; }
 .round-filter-empty { padding: 34px 12px; color: var(--al-muted); font-size: 13px; text-align: center; }
 .session-status-error { color: var(--al-danger); font-size: 12px; font-weight: 650; }
@@ -187,12 +186,11 @@
   .review-page:not(.review-page-embedded) .review-layout { display: block; overflow: visible; }
   .review-page:not(.review-page-embedded) .session-panel { max-height: 36vh; min-height: 280px; border-right: 0; border-bottom: 1px solid var(--al-line); }
   .review-page:not(.review-page-embedded) .review-reader-pane { overflow: visible; }
-  .review-reader { padding: 18px 16px 80px; }
+  .review-reader { padding-block: 18px 80px; }
 }
 @media (max-width: 767.98px) {
   .review-page:not(.review-page-embedded) .workspace-toolbar { padding-inline: 10px; }
   .review-page:not(.review-page-embedded) .search-filter { width: 100%; min-width: 0; margin-left: 0; }
-  .review-reader { padding-inline: 12px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
