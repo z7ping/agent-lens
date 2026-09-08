@@ -123,12 +123,31 @@ export function NewPiTaskPage() {
               elapsedMs={startingElapsedMs}
             /></div> : <>
               <div className="task-center-new-fields">
-                <label className="task-center-new-project-field"><span>项目</span><SelectMenu value={selectedKey} options={projectOptions} onChange={setSelectedKey} ariaLabel="选择 Pi 任务项目" placeholder={projects.length ? '选择项目' : '暂无最近项目'} variant="field" className="task-center-new-project-select" menuWidth={420} searchable searchPlaceholder="搜索项目或工作目录" disabled={!projects.length}/></label>
-                {canBrowseWorkspace && <Button disabled={pickingWorkspace} onClick={() => void pickWorkspace()}>{pickingWorkspace ? '正在选择…' : '选择文件夹'}</Button>}
+                <label className="task-center-new-project-field"><span>项目</span><SelectMenu
+                  value={selectedKey}
+                  options={projectOptions}
+                  actions={canBrowseWorkspace ? [{
+                    key: 'browse-workspace',
+                    label: pickingWorkspace ? '正在打开…' : '打开其他文件夹…',
+                    description: '从本机选择一个已有工作目录',
+                    icon: 'plus',
+                    disabled: pickingWorkspace,
+                    onSelect: () => void pickWorkspace(),
+                  }] : []}
+                  onChange={setSelectedKey}
+                  ariaLabel="选择 Pi 任务项目"
+                  placeholder={projects.length ? '选择项目' : canBrowseWorkspace ? '选择工作区' : '暂无最近项目'}
+                  variant="field"
+                  className="task-center-new-project-select"
+                  menuWidth={420}
+                  searchable={projects.length > 0}
+                  searchPlaceholder="搜索项目或工作目录"
+                  disabled={!projects.length && !canBrowseWorkspace}
+                /></label>
               </div>
               <div className="task-center-new-status"><b>{selected ? `在 ${selected.label} 中启动` : '等待选择项目'}</b><span>{composerStateLabel}</span></div>
               {error && <div className="pi-live-error" role="alert">{error}</div>}
-              {!projects.length && availability.checked && <div className="task-center-project-hint">{canBrowseWorkspace ? '最近会话中没有可用工作目录，可以直接选择本机文件夹。' : '最近会话中没有可用工作目录；浏览器版无法直接读取本机目录。'}</div>}
+              {!projects.length && availability.checked && <div className="task-center-project-hint">{canBrowseWorkspace ? '最近会话中没有可用工作目录，可以从项目选择器打开其他文件夹。' : '最近会话中没有可用工作目录；浏览器版无法直接读取本机目录。'}</div>}
               <div className="task-center-new-actions"><Button variant="primary" disabled={!selected || !availability.available} onClick={() => void start()}>创建 Pi 任务 <UiIcon name="arrow-right" size={14}/></Button></div>
             </>}
           </section>
