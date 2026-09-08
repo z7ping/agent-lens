@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { canSelectDesktopWorkspace, selectDesktopWorkspace } from '../client/desktop-workspace'
 import { fetchLocalReviewSessions } from '../client/hub-review'
 import { piLiveApi } from '../client/pi-live'
 import { OperationProgress } from '../components/StateViews'
@@ -9,6 +10,10 @@ import { TaskSurface } from './TaskSurface'
 import { deriveTaskProjectOptions, pickTaskProject, type TaskProjectOption } from './task-center'
 import { PROJECT_BOOTSTRAP_LIMIT } from './new-pi-task'
 
+function workspaceLabel(path: string): string {
+  return path.split(/[\\/]/).filter(Boolean).at(-1) || path
+}
+
 export function NewPiTaskPage() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -16,9 +21,11 @@ export function NewPiTaskPage() {
   const [selectedKey, setSelectedKey] = useState('')
   const [availability, setAvailability] = useState<{ checked: boolean; available: boolean; label: string }>({ checked: false, available: false, label: '正在检测 Pi…' })
   const [starting, setStarting] = useState(false)
+  const [pickingWorkspace, setPickingWorkspace] = useState(false)
   const [startingElapsedMs, setStartingElapsedMs] = useState(0)
   const [error, setError] = useState('')
   const preferredProjectId = new URLSearchParams(location.search).get('project') || undefined
+  const canBrowseWorkspace = canSelectDesktopWorkspace()
 
   useEffect(() => {
     let cancelled = false
@@ -63,6 +70,28 @@ export function NewPiTaskPage() {
   const agentStateLabel = !availability.checked ? '检测中' : availability.available ? '已就绪' : '不可用'
   const composerStateLabel = !availability.checked ? '正在检测 Pi…' : !availability.available ? availability.label : selected ? '打开后直接在 Pi 页面输入任务' : '等待可启动项目'
 
+  const pickWorkspace = async () => {
+    if (!canBrowseWorkspace || pickingWorkspace || starting) return
+    setPickingWorkspace(true)
+    setError('')
+    try {
+      const cwd = await selectDesktopWorkspace()
+      if (!cwd) return
+      const option: TaskProjectOption = {
+        key: `workspace:${cwd}`,
+        label: workspaceLabel(cwd),
+        cwd,
+        lastSeenAt: new Date().toISOString(),
+      }
+      setProjects(current => [option, ...current.filter(item => item.cwd !== cwd)])
+      setSelectedKey(option.key)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setPickingWorkspace(false)
+    }
+  }
+
   const start = async () => {
     if (!selected || starting || !availability.available) return
     setStarting(true)
@@ -94,11 +123,12 @@ export function NewPiTaskPage() {
               elapsedMs={startingElapsedMs}
             /></div> : <>
               <div className="task-center-new-fields">
-                <label className="task-center-new-project-field"><span>项目</span><SelectMenu value={selectedKey} options={projectOptions} onChange={setSelectedKey} ariaLabel="选择 Pi 任务项目" placeholder={projects.length ? '选择项目' : '暂无可启动项目'} variant="field" className="task-center-new-project-select" menuWidth={420} searchable searchPlaceholder="搜索项目或工作目录" disabled={!projects.length}/></label>
+                <label className="task-center-new-project-field"><span>项目</span><SelectMenu value={selectedKey} options={projectOptions} onChange={setSelectedKey} ariaLabel="选择 Pi 任务项目" placeholder={projects.length ? '选择项目' : '暂无最近项目'} variant="field" className="task-center-new-project-select" menuWidth={420} searchable searchPlaceholder="搜索项目或工作目录" disabled={!projects.length}/></label>
+                {canBrowseWorkspace && <Button variant="secondary" disabled={pickingWorkspace} onClick={() => void pickWorkspace()}>{pickingWorkspace ? '正在选择…' : '选择文件夹'}</Button>}
               </div>
               <div className="task-center-new-status"><b>{selected ? `在 ${selected.label} 中启动` : '等待选择项目'}</b><span>{composerStateLabel}</span></div>
               {error && <div className="pi-live-error" role="alert">{error}</div>}
-              {!projects.length && availability.checked && <div className="task-center-project-hint">最近会话中没有可用工作目录；本页面不会加载完整历史或要求手填 cwd。</div>}
+              {!projects.length && availability.checked && <div className="task-center-project-hint">{canBrowseWorkspace ? '最近会话中没有可用工作目录，可以直接选择本机文件夹。' : '最近会话中没有可用工作目录；浏览器版无法直接读取本机目录。'}</div>}
               <div className="task-center-new-actions"><Button variant="primary" disabled={!selected || !availability.available} onClick={() => void start()}>创建 Pi 任务 <UiIcon name="arrow-right" size={14}/></Button></div>
             </>}
           </section>
