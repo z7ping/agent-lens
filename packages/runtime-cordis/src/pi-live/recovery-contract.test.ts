@@ -104,7 +104,7 @@ test('Pi Live 只有在原生 Session 恢复点持久化后才进入 ready', asy
   assert.equal(store.putCalls, 2)
   assert.equal((await service.state(initial.runtimeSessionId)).status, 'initializing')
 
-  store.readyCheckpoint.resolve()
+  store.readyCheckpoint.resolve(undefined)
   await new Promise(resolve => setTimeout(resolve, 0))
 
   const ready = await service.state(initial.runtimeSessionId)
