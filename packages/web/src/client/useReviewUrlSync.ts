@@ -8,7 +8,7 @@ function reviewFiltersFromSearch(search: string): ReviewFilters {
   const range = params.get('range')
   const status = params.get('status')
   return {
-    sourceIds: [...new Set(params.getAll('source').map(value => value.trim()).filter(Boolean))],
+    sourceIds: params.has('source') ? [...new Set(params.getAll('source').map(value => value.trim()).filter(Boolean))] : null,
     projectId: params.get('project') ?? '',
     range: range === 'today' || range === '7d' || range === '30d' || range === 'all' ? range : '7d',
     status: status === 'clean' || status === 'with-errors' || status === 'all' ? status : 'all',
@@ -17,7 +17,10 @@ function reviewFiltersFromSearch(search: string): ReviewFilters {
 }
 function reviewSearchFromFilters(filters: ReviewFilters): string {
   const params = new URLSearchParams()
-  for (const sourceId of filters.sourceIds) params.append('source', sourceId)
+  if (filters.sourceIds !== null) {
+    if (!filters.sourceIds.length) params.append('source', '')
+    else for (const sourceId of filters.sourceIds) params.append('source', sourceId)
+  }
   if (filters.projectId) params.set('project', filters.projectId)
   params.set('range', filters.range)
   params.set('status', filters.status)
@@ -26,8 +29,9 @@ function reviewSearchFromFilters(filters: ReviewFilters): string {
 }
 
 function sameReviewFilters(left: ReviewFilters, right: ReviewFilters): boolean {
-  return left.sourceIds.length === right.sourceIds.length
-    && left.sourceIds.every((sourceId, index) => sourceId === right.sourceIds[index])
+  return left.sourceIds === right.sourceIds || (left.sourceIds !== null && right.sourceIds !== null
+    && left.sourceIds.length === right.sourceIds.length
+    && left.sourceIds.every((sourceId, index) => sourceId === right.sourceIds[index]))
     && left.projectId === right.projectId
     && left.range === right.range
     && left.status === right.status

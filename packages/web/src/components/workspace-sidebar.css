@@ -189,6 +189,7 @@
 }
 
 .workspace-agent-context,
+.workspace-insight-context,
 .workspace-maintenance-context {
   flex: 1 1 auto;
 }
@@ -311,30 +312,6 @@
 
 .workspace-context-control .select-menu-trigger {
   background: color-mix(in srgb, var(--al-surface) 68%, transparent);
-}
-
-/* 洞察页：二级视图保持轻量，智能体 / 项目 / 时间统一折叠。 */
-.workspace-insight-filters {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 26px;
-  flex: 0 0 auto;
-  align-items: start;
-  gap: 6px;
-  padding: 3px 10px 12px;
-  overflow: visible;
-}
-
-.workspace-insight-filters > .ui-icon-button {
-  margin-top: 4px;
-  border-color: transparent;
-  background: transparent;
-  color: var(--al-muted-2);
-}
-
-.workspace-insight-filters > .ui-icon-button:hover:not(:disabled) {
-  border-color: transparent;
-  background: var(--al-surface);
-  color: var(--al-ink);
 }
 
 .workspace-sidebar-filter-disclosure {
@@ -786,8 +763,7 @@
   }
 
   .workspace-context-menu,
-  .workspace-context-controls,
-  .workspace-insight-filters {
+  .workspace-context-controls {
     padding-inline: 7px;
   }
 

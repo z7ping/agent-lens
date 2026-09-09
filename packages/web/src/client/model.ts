@@ -48,7 +48,7 @@ export interface ClientSnapshot {
 }
 
 type Listener = () => void
-const initialQuery: QueryFilters = { sourceIds: [], projectId: '', range: '7d' }
+const initialQuery: QueryFilters = { sourceIds: null, projectId: '', range: '7d' }
 const INITIAL_REVIEW_LIMIT = 20
 const REVIEW_PAGE_SIZE = 20
 const REVIEW_DETAIL_PAGE_SIZE = 10
@@ -82,7 +82,7 @@ export class AgentLensClientModel {
     agentsHasNewData: false,
     liveConnected: false,
     review: {
-      filters: { sourceIds: [], projectId: '', range: '7d', status: 'all', search: '' },
+      filters: { sourceIds: null, projectId: '', range: '7d', status: 'all', search: '' },
       response: null,
       detail: null,
       relationships: null,

@@ -24,7 +24,8 @@ import {
 export const LIVE_RECONNECTED_EVENT = 'agent-lens:live-reconnected'
 
 export interface QueryFilters {
-  sourceIds: string[]
+  /** null 表示全部来源；空数组表示明确不选择任何来源。 */
+  sourceIds: string[] | null
   projectId: string
   range: 'today' | '7d' | '30d' | 'all'
 }
@@ -48,7 +49,10 @@ function rangeStart(range: QueryFilters['range']): string | undefined {
 }
 
 function appendFilters(params: URLSearchParams, filters: QueryFilters): void {
-  for (const sourceId of filters.sourceIds) params.append('sourceId', sourceId)
+  if (filters.sourceIds !== null) {
+    if (!filters.sourceIds.length) params.append('sourceId', '')
+    else for (const sourceId of filters.sourceIds) params.append('sourceId', sourceId)
+  }
   if (filters.projectId) params.set('projectId', filters.projectId)
   const from = rangeStart(filters.range)
   if (from) params.set('from', from)

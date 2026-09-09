@@ -67,11 +67,12 @@ function shortSessionId(id: string): string {
 }
 
 function sameUsageFilters(
-  left: { sourceIds: string[]; projectId: string; range: string },
-  right: { sourceIds: string[]; projectId: string; range: string },
+  left: { sourceIds: string[] | null; projectId: string; range: string },
+  right: { sourceIds: string[] | null; projectId: string; range: string },
 ): boolean {
-  return left.sourceIds.length === right.sourceIds.length
-    && left.sourceIds.every((sourceId, index) => sourceId === right.sourceIds[index])
+  return left.sourceIds === right.sourceIds || (left.sourceIds !== null && right.sourceIds !== null
+    && left.sourceIds.length === right.sourceIds.length
+    && left.sourceIds.every((sourceId, index) => sourceId === right.sourceIds[index]))
     && left.projectId === right.projectId
     && left.range === right.range
 }
@@ -94,6 +95,7 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
   const projectionPercent = projection ? Math.max(0, Math.min(100, Math.round(projection.coverageRatio * 100))) : 0
   const agents = useOrderedAgents(snapshot.facets?.agents ?? [])
   const projects = snapshot.facets?.projects ?? []
+  const agentSelectionSummary = usage.filters.sourceIds === null ? '全部智能体' : usage.filters.sourceIds.length ? `已选 ${usage.filters.sourceIds.length} 个` : '未选择'
   const tools = data?.tools ?? []
   const assets = data?.assets ?? []
   const mostUsed = [...tools].sort((a, b) => b.callCount - a.callCount)[0]
@@ -106,8 +108,7 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
   const attributionCoverage = totalCalls ? Math.round(attributedCalls / totalCalls * 100) : 0
   const maxCalls = Math.max(1, ...tools.map(tool => tool.callCount))
   const maxAssetCalls = Math.max(1, ...assets.map(asset => asset.callCount))
-  const canRelaxFilters = Boolean(usage.filters.sourceIds.length || usage.filters.projectId || usage.filters.range !== 'all')
-  const activeFilterCount = [usage.filters.sourceIds.length > 0, Boolean(usage.filters.projectId), usage.filters.range !== 'all'].filter(Boolean).length
+  const canRelaxFilters = Boolean(usage.filters.sourceIds !== null || usage.filters.projectId || usage.filters.range !== 'all')
   const blockingError = Boolean(usage.error && !data)
   const [selectedToolKey, setSelectedToolKey] = useState<string | null>(null)
   const [detailTools, setDetailTools] = useState<Map<string, ToolUsageDto>>(() => new Map())
@@ -170,10 +171,10 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
     event.preventDefault()
     toggleSort(key)
   }
-  const relaxFilters = () => model.setUsageFilters({ sourceIds: [], projectId: '', range: 'all' })
+  const relaxFilters = () => model.setUsageFilters({ sourceIds: null, projectId: '', range: 'all' })
   const openReviewSession = (logicalSessionId: string) => {
     const params = new URLSearchParams()
-    for (const sourceId of usage.filters.sourceIds) params.append('source', sourceId)
+    for (const sourceId of usage.filters.sourceIds ?? []) params.append('source', sourceId)
     if (usage.filters.projectId) params.set('project', usage.filters.projectId)
     params.set('range', usage.filters.range)
     params.set('status', 'all')
@@ -183,8 +184,12 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
     { value: '', label: '全部项目' },
     ...projects.map(project => ({ value: project.id, label: project.name ?? project.repositoryIdentity ?? project.id, description: project.repositoryIdentity ?? undefined })),
   ]
-  const sidebarFilters = <div className="workspace-insight-filters" aria-label="工具分析筛选">
-    <SidebarFilterDisclosure className="workspace-insight-filter-disclosure" summaryMeta={activeFilterCount ? `已选 ${activeFilterCount} 项` : '全部'} agents={agents} agentSelection={{ mode: 'multiple', value: usage.filters.sourceIds.length ? usage.filters.sourceIds : null, onChange: sourceIds => model.setUsageFilters({ sourceIds: sourceIds ?? [] }) }}>
+  const sidebarFilters = <div className="workspace-context-menu workspace-insight-context" aria-label="工具分析筛选">
+    <div className="workspace-context-utility">
+      <span>{agentSelectionSummary}</span>
+      <IconButton size="small" onClick={() => void model.refreshUsage()} title="刷新工具分析" aria-label="刷新工具分析"><UiIcon name="refresh" size={14}/></IconButton>
+    </div>
+    <SidebarFilterDisclosure className="workspace-insight-filter-disclosure" summaryMeta={agentSelectionSummary} agents={agents} agentSelection={{ mode: 'multiple', value: usage.filters.sourceIds, onChange: sourceIds => model.setUsageFilters({ sourceIds }) }}>
       <div className="workspace-insight-filter-fields">
         <label><span>项目</span><SelectMenu variant="field" value={usage.filters.projectId} onChange={projectId => model.setUsageFilters({ projectId })} ariaLabel="筛选项目" placeholder="全部项目" menuWidth={280} searchable searchPlaceholder="搜索项目" options={projectFilterOptions}/></label>
         <label><span>时间</span><SelectMenu variant="field" value={usage.filters.range} onChange={range => model.setUsageFilters({ range: range as typeof usage.filters.range })} ariaLabel="筛选时间范围" menuWidth={156} options={[
@@ -193,7 +198,6 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
         {canRelaxFilters && <button type="button" className="workspace-filter-clear" onClick={relaxFilters}>清除筛选</button>}
       </div>
     </SidebarFilterDisclosure>
-    <IconButton size="small" onClick={() => void model.refreshUsage()} title="刷新工具分析" aria-label="刷新工具分析"><UiIcon name="refresh" size={14}/></IconButton>
   </div>
 
   return <>

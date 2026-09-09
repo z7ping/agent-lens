@@ -18,7 +18,7 @@ type Listener = () => void
 
 export class InsightsClientModel {
   private snapshot: InsightsClientSnapshot = {
-    filters: { sourceIds: [], projectId: '', range: '7d' },
+    filters: { sourceIds: null, projectId: '', range: '7d' },
     response: null,
     loading: true,
     hasNewData: false,

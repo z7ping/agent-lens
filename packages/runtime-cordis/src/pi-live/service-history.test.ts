@@ -116,10 +116,8 @@ test('分叉成功后锁转移到新 Session，原 Session 可再次启动且重
     const forked = await service.start({ cwd: '/workspace', sessionPath: originalPath, historyAction: 'fork' })
     await waitForStatus(service, forked.runtimeSessionId, 'ready')
 
-    await assert.rejects(
-      () => service.start({ cwd: '/workspace', sessionPath: '/sessions/forked.jsonl', historyAction: 'continue' }),
-      /已经在进行中/,
-    )
+    const repeatedFork = await service.start({ cwd: '/workspace', sessionPath: '/sessions/forked.jsonl', historyAction: 'continue' })
+    assert.equal(repeatedFork.runtimeSessionId, forked.runtimeSessionId)
 
     const original = await service.start({ cwd: '/workspace', sessionPath: originalPath, historyAction: 'continue' })
     await waitForStatus(service, original.runtimeSessionId, 'ready')

@@ -1,7 +1,8 @@
 /*
  * Task Surface 共享轮次导轨。
  * Review / Pi Live / Hub 只提供语义 TaskRound；导轨的发现、定位与交互统一由 TaskSurface 持有。
- * running / error / active 只改变状态视觉，不得改变 tick 的基础占位几何。
+ * tick 静态几何固定为 6×1.5；active / running / error 只能改变颜色、透明度或光晕。
+ * hover 只允许做横向展开，不允许改变线条粗细；24×9 命中区与轮次间距始终保持一致。
  */
 .task-turn-rail {
   position: fixed;
@@ -42,9 +43,9 @@
   height: 1.5px;
   border-radius: 99px;
   background: color-mix(in srgb, var(--al-muted) 58%, transparent);
-  transition: width .16s cubic-bezier(.2,.8,.2,1), height .16s ease, background .16s ease;
+  transition: width .16s cubic-bezier(.2,.8,.2,1), background .16s ease, box-shadow .16s ease;
 }
-.task-turn-rail .turn-tick:hover i { width: 24px; height: 2px; background: var(--al-ink); }
+.task-turn-rail .turn-tick:hover i { width: 24px; background: var(--al-ink); }
 .task-turn-rail .turn-tick:has(+ .turn-tick:hover) i,
 .task-turn-rail .turn-tick:hover + .turn-tick i { width: 18px; }
 .task-turn-rail .turn-tick:has(+ .turn-tick + .turn-tick:hover) i,
@@ -52,7 +53,10 @@
 .task-turn-rail .turn-tick:has(+ .turn-tick + .turn-tick + .turn-tick:hover) i,
 .task-turn-rail .turn-tick:hover + .turn-tick + .turn-tick + .turn-tick i { width: 9px; }
 .task-turn-rail .turn-tick.active i { background: var(--al-ink); }
-.task-turn-rail .turn-tick.running i { background: var(--al-accent); }
+.task-turn-rail .turn-tick.running i {
+  background: var(--al-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--al-accent) 10%, transparent);
+}
 .task-turn-rail .turn-tick.err i { background: color-mix(in srgb, var(--al-danger) 55%, var(--al-line)); }
 .task-turn-rail .turn-tick.err.active i { background: var(--al-danger); }
 .task-turn-rail .turn-tick::after {
@@ -84,7 +88,7 @@
 /*
  * Task Surface 共享会话边界导航。
  * Review / Pi Live 只提供跳转行为；DOM、位置、尺寸、图标和视觉状态全部由 TaskSurface 持有。
- * 位置统一锚定 Session Document 右侧与 Session View 底部，不允许页面模式单独覆盖。
+ * 位置统一锚定 Session Document 右侧与共享 Rail Frame 底部，不允许页面模式单独覆盖。
  */
 .task-boundary-nav {
   position: fixed;

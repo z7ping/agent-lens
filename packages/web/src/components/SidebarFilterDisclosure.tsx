@@ -28,7 +28,7 @@ export function SidebarFilterDisclosure({
   const orderedAgents = useOrderedAgents(agents)
   const detectedIds = orderedAgents.filter(agent => agent.detected).map(agent => agent.sourceId)
   const selectedIds = agentSelection?.mode === 'multiple'
-    ? agentSelection.value?.length ? agentSelection.value : detectedIds
+    ? agentSelection.value === null ? detectedIds : agentSelection.value
     : agentSelection?.value ? [agentSelection.value] : []
   const allSelected = agentSelection?.mode === 'multiple'
     ? detectedIds.length > 0 && detectedIds.every(id => selectedIds.includes(id))
@@ -50,11 +50,11 @@ export function SidebarFilterDisclosure({
       agentSelection.onChange(sourceId)
       return
     }
-    const current = agentSelection.value?.length ? agentSelection.value : detectedIds
+    const current = agentSelection.value === null ? detectedIds : agentSelection.value
     const next = current.includes(sourceId)
       ? current.filter(id => id !== sourceId)
       : [...current, sourceId]
-    agentSelection.onChange(next.length ? next : null)
+    agentSelection.onChange(next)
   }
 
   return <Disclosure className={`workspace-sidebar-filter-disclosure ${className}`.trim()} summary={summary} summaryMeta={summaryMeta ?? computedSummary}>

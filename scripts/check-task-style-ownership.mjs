@@ -2,6 +2,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs'
 
 const webRoot = 'packages/web/src'
 const mainPath = `${webRoot}/main.tsx`
+const tokensPath = `${webRoot}/tokens.css`
 const taskSurfacePath = `${webRoot}/features/TaskSurface.tsx`
 const reviewPagePath = `${webRoot}/features/ReviewPage.tsx`
 const taskRoundPath = `${webRoot}/features/TaskRound.tsx`
@@ -28,6 +29,7 @@ if (!existsSync(sessionOwnerPath)) throw new Error(`Task Session 缺少共享会
 if (!existsSync(turnRailOwnerPath)) throw new Error(`Task Surface 缺少共享轮次导轨样式所有者：${turnRailOwnerPath}`)
 
 const main = readFileSync(mainPath, 'utf8')
+const tokens = readFileSync(tokensPath, 'utf8')
 const taskSurface = readFileSync(taskSurfacePath, 'utf8')
 const reviewPage = readFileSync(reviewPagePath, 'utf8')
 const taskRound = readFileSync(taskRoundPath, 'utf8')
@@ -70,6 +72,18 @@ for (const marker of [
   if (![taskDetailModel, taskRound, virtualRound, taskSurface].some(source => source.includes(marker))) {
     throw new Error(`Turn Rail 缺少统一语义/几何/稳定身份契约：${marker}`)
   }
+}
+
+for (const marker of [
+  "cssPixelValue(root, '--al-task-turn-rail-bottom-reserve')",
+  "child.classList.contains('task-session-composer')",
+  'const reserve = Math.max(baselineReserve, composerRect?.height ?? 0)',
+  'const bottom = Math.max(top, surface.bottom - reserve)',
+]) {
+  if (!taskSurface.includes(marker)) throw new Error(`Turn Rail 缺少 Pi Live 基准的共享 Rail Frame 契约：${marker}`)
+}
+if (!tokens.includes('--al-task-turn-rail-bottom-reserve:145px;')) {
+  throw new Error('tokens.css 必须定义统一 Turn Rail 底部安全区，保持 Review 与 Pi Live 默认视觉尺度一致')
 }
 
 for (const marker of [
@@ -123,12 +137,27 @@ for (const retiredSelector of ['.review-reader-pane', '.review-reader', '.pi-liv
 }
 
 const turnRailOwner = readFileSync(turnRailOwnerPath, 'utf8')
+if (!/\.task-turn-rail \.turn-tick\s*\{[^}]*width:\s*24px;[^}]*height:\s*9px;/s.test(turnRailOwner)) {
+  throw new Error('Turn Rail 每个 tick 的 24×9px 命中区必须统一，状态不得改变轮次间距')
+}
 if (!/\.task-turn-rail \.turn-tick i\s*\{[^}]*width:\s*6px;[^}]*height:\s*1\.5px;/s.test(turnRailOwner)) {
-  throw new Error('Turn Rail 基础 tick 必须保持统一 6×1.5px 几何')
+  throw new Error('Turn Rail 基础标记必须固定为 6×1.5px')
+}
+const stateGeometryRule = /\.task-turn-rail \.turn-tick\.(?:active|running|err)[^{]*\{[^}]*(?:width|height)\s*:/s
+if (stateGeometryRule.test(turnRailOwner)) {
+  throw new Error('Turn Rail active / running / error 只能改变颜色、透明度或光晕，不得修改 width / height')
+}
+const hoverRule = turnRailOwner.match(/\.task-turn-rail \.turn-tick:hover i\s*\{([^}]*)\}/s)?.[1] ?? ''
+if (!hoverRule || /height\s*:/.test(hoverRule)) {
+  throw new Error('Turn Rail hover 只允许横向展开，不得改变固定 1.5px 线条粗细')
+}
+const activeRule = turnRailOwner.match(/\.task-turn-rail \.turn-tick\.active i\s*\{([^}]*)\}/s)?.[1] ?? ''
+if (!activeRule || !activeRule.includes('var(--al-ink)')) {
+  throw new Error('Turn Rail active 必须只通过共享状态颜色强调当前轮次')
 }
 const runningRule = turnRailOwner.match(/\.task-turn-rail \.turn-tick\.running i\s*\{([^}]*)\}/s)?.[1] ?? ''
-if (!runningRule || /(?:width|height|box-shadow)\s*:/.test(runningRule)) {
-  throw new Error('Turn Rail running 状态只能改变状态视觉，不得改变基础粗细或占位几何')
+if (!runningRule || !runningRule.includes('var(--al-accent)') || !runningRule.includes('box-shadow')) {
+  throw new Error('Turn Rail running 必须保留强调色与轻量光晕，但不得改变固定几何')
 }
 if (/\.task-turn-rail-(?:review|live)\b/.test(turnRailOwner)) {
   throw new Error('Review / Pi Live 不得拥有模式专属 Turn Rail 样式；两者必须消费同一导轨视觉')
@@ -202,4 +231,4 @@ for (const component of ['TaskHeader.tsx', 'TaskRound.tsx', 'TaskMessage.tsx', '
   }
 }
 
-console.log('Task 样式所有权检查通过：TaskSurface 统一 Session 槽位、语义 Turn Rail 与 BoundaryNav；Review / Pi Live 仅保留控制器行为差异，无模式专属导航 DOM / CSS。')
+console.log('Task 样式所有权检查通过：TaskSurface 统一 Session 槽位、语义 Turn Rail 与 BoundaryNav；Review / Pi Live 共用 Rail Frame，tick 固定 6×1.5px，状态不改变几何。')

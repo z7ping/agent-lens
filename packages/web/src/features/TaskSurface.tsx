@@ -140,12 +140,21 @@ function scrollViewport(root: HTMLElement, element: HTMLElement): HTMLElement {
   return root
 }
 
+function cssPixelValue(element: HTMLElement, property: string): number {
+  const value = Number.parseFloat(window.getComputedStyle(element).getPropertyValue(property))
+  return Number.isFinite(value) ? Math.max(0, value) : 0
+}
 function sessionRailFrame(root: HTMLElement, fallback: DOMRect): RailFrameRect {
   const surface = root.getBoundingClientRect()
   const header = Array.from(root.children).find(child => child instanceof HTMLElement && child.classList.contains('task-header'))
   const headerRect = header instanceof HTMLElement ? header.getBoundingClientRect() : null
+  const composer = Array.from(root.children).find(child => child instanceof HTMLElement && child.classList.contains('task-session-composer'))
+  const composerRect = composer instanceof HTMLElement ? composer.getBoundingClientRect() : null
   const top = headerRect && headerRect.height > 0 ? Math.max(surface.top, headerRect.bottom) : surface.top
-  const height = Math.max(0, surface.bottom - top)
+  const baselineReserve = cssPixelValue(root, '--al-task-turn-rail-bottom-reserve')
+  const reserve = Math.max(baselineReserve, composerRect?.height ?? 0)
+  const bottom = Math.max(top, surface.bottom - reserve)
+  const height = Math.max(0, bottom - top)
   if (surface.width <= 0 || height <= 0) {
     return { left: fallback.left, top: fallback.top, width: fallback.width, height: fallback.height }
   }

@@ -199,12 +199,14 @@ export class DefaultPiLiveService implements PiLiveService {
     if (this.disposed) throw new Error('Pi Live service is disposed')
     if (!input.cwd.trim()) throw new Error('Pi Live requires a working directory')
     await this.ensureRecoveryLoaded()
-    if (input.sessionPath) {
+    if (input.sessionPath && input.historyAction !== 'fork') {
       const requestedPath = sessionPathKey(input.sessionPath)
       const duplicate = [...this.runtimes.values()].find(runtime => runtime.input.sessionPath
         && sessionPathKey(runtime.input.sessionPath) === requestedPath
         && runtime.status !== 'terminated')
-      if (duplicate) throw this.conflict('该 Pi 历史会话已经在进行中，请直接打开现有实时任务')
+      // “继续”同一份历史不是创建第二个 Runtime，而是回到已经存在的那个。
+      // 这让重复点击和前端跳转中断都保持幂等；“分叉”仍需保留新 Runtime。
+      if (duplicate) return this.runtimeState(duplicate)
     }
     const runtime = this.createRuntime(randomUUID(), input, false)
     this.runtimes.set(runtime.id, runtime)

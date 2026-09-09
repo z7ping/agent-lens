@@ -87,7 +87,7 @@ function remoteTitle(item: HubReviewSessionSummaryDto): string {
 }
 
 function remoteVisible(item: HubReviewSessionSummaryDto, review: ReturnType<AgentLensClientModel['getSnapshot']>['review']): boolean {
-  if (review.filters.sourceIds.length || review.filters.projectId || review.filters.status !== 'all') return false
+  if (review.filters.sourceIds !== null || review.filters.projectId || review.filters.status !== 'all') return false
   const search = review.filters.search.trim().toLowerCase()
   if (search && !remoteTitle(item).toLowerCase().includes(search) && !item.origin.nodeId.toLowerCase().includes(search)) return false
   const time = remoteTime(item)
@@ -241,6 +241,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const [resumingSessionId, setResumingSessionId] = useState('')
   const [piResumeError, setPiResumeError] = useState<{ sessionId: string; message: string } | null>(null)
   const agents = useOrderedAgents(snapshot.facets?.agents ?? [])
+  const agentSelectionSummary = review.filters.sourceIds === null ? '全部智能体' : review.filters.sourceIds.length ? `已选 ${review.filters.sourceIds.length} 个` : '未选择'
   const projects = snapshot.facets?.projects ?? []
 
   const refreshRuntimes = useCallback(() => {
@@ -376,12 +377,6 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     ? decodeURIComponent(location.pathname.slice('/review/live/'.length))
     : ''
   const historyCount = localSessions.length + visibleHub.length
-  const activeFilterCount = [
-    review.filters.sourceIds.length > 0,
-    Boolean(review.filters.projectId),
-    review.filters.range !== '7d',
-    review.filters.status !== 'all',
-  ].filter(Boolean).length
   const projectFilterOptions = [
     { value: '', label: '全部项目' },
     ...projects.map(project => ({ value: project.id, label: project.name ?? project.repositoryIdentity ?? project.id, description: project.repositoryIdentity ?? undefined })),
@@ -403,7 +398,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
       </Toolbar>}
     </div>
 
-    {mode !== 'new' && <SidebarFilterDisclosure className="task-center-sidebar-filter" summaryMeta={activeFilterCount ? `已选 ${activeFilterCount} 项` : '全部'} agents={agents} agentSelection={{ mode: 'multiple', value: review.filters.sourceIds.length ? review.filters.sourceIds : null, onChange: sourceIds => model.setReviewFilters({ sourceIds: sourceIds ?? [] }) }}>
+    {mode !== 'new' && <SidebarFilterDisclosure className="task-center-sidebar-filter" summaryMeta={agentSelectionSummary} agents={agents} agentSelection={{ mode: 'multiple', value: review.filters.sourceIds, onChange: sourceIds => model.setReviewFilters({ sourceIds }) }}>
       <div className="workspace-insight-filter-fields" aria-label="筛选历史任务">
         <label><span>项目</span><SelectMenu variant="field" value={review.filters.projectId} onChange={projectId => model.setReviewFilters({ projectId })} ariaLabel="筛选项目" placeholder="全部项目" menuWidth={280} searchable searchPlaceholder="搜索项目" options={projectFilterOptions}/></label>
         <label><span>时间</span><SelectMenu variant="field" value={review.filters.range} onChange={range => model.setReviewFilters({ range: range as typeof review.filters.range })} ariaLabel="筛选时间范围" menuWidth={156} options={[

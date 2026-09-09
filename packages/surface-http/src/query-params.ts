@@ -108,7 +108,7 @@ export function parseUsageQuery(params: URLSearchParams): ToolAssetUsageQueryDto
     ...(installationId ? { installationId } : {}),
     ...(logicalSessionId ? { logicalSessionId } : {}),
     ...(projectId ? { projectId } : {}),
-    ...(sourceIds.length > 1 ? { sourceIds } : sourceIds[0] ? { sourceId: sourceIds[0] } : {}),
+    ...(params.has('sourceId') ? { sourceIds } : {}),
     ...(toolName ? { toolName } : {}),
     ...orderedRange(params, 'Usage'),
     ...(limit === undefined ? {} : { limit }),
@@ -124,7 +124,7 @@ export function parseInsightsQuery(params: URLSearchParams): InsightsQueryDto {
     ...(installationId ? { installationId } : {}),
     ...(logicalSessionId ? { logicalSessionId } : {}),
     ...(projectId ? { projectId } : {}),
-    ...(sourceIds.length > 1 ? { sourceIds } : sourceIds[0] ? { sourceId: sourceIds[0] } : {}),
+    ...(params.has('sourceId') ? { sourceIds } : {}),
     ...orderedRange(params, 'Insights'),
   }
 }
@@ -165,7 +165,7 @@ export function parseReviewQuery(params: URLSearchParams): ReviewQueryDto {
   return {
     ...(cursor ? { cursor } : {}),
     ...(projectId ? { projectId } : {}),
-    ...(sourceIds.length > 1 ? { sourceIds } : sourceIds[0] ? { sourceId: sourceIds[0] } : {}),
+    ...(params.has('sourceId') ? { sourceIds } : {}),
     ...orderedRange(params, 'Review'),
     ...(status ? { status } : {}),
     ...(search ? { search } : {}),

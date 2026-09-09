@@ -72,21 +72,25 @@ export function InsightsPage({ model, sidebarHost }: { model: AgentLensClientMod
   const agents = useOrderedAgents(appSnapshot.facets?.agents ?? [])
   const insightAgents = useOrderedAgents(data?.agents ?? [])
   const projects = appSnapshot.facets?.projects ?? []
+  const agentSelectionSummary = insights.filters.sourceIds === null ? '全部智能体' : insights.filters.sourceIds.length ? `已选 ${insights.filters.sourceIds.length} 个` : '未选择'
   const maxTrendSessions = Math.max(1, ...(data?.trend.map(item => item.sessionCount) ?? [1]))
-  const canRelaxFilters = Boolean(insights.filters.sourceIds.length || insights.filters.projectId || insights.filters.range !== 'all')
-  const activeFilterCount = [insights.filters.sourceIds.length > 0, Boolean(insights.filters.projectId), insights.filters.range !== 'all'].filter(Boolean).length
+  const canRelaxFilters = Boolean(insights.filters.sourceIds !== null || insights.filters.projectId || insights.filters.range !== 'all')
   const hasSseBanner = Boolean(appSnapshot.health && !appSnapshot.liveConnected)
   const comparison = data?.comparison
   const delta: InsightMetricDeltaDto | undefined = comparison?.delta
   const boundedRange = insights.filters.range !== 'all'
 
-  const relaxFilters = () => insightsModel.setFilters({ sourceIds: [], projectId: '', range: 'all' })
+  const relaxFilters = () => insightsModel.setFilters({ sourceIds: null, projectId: '', range: 'all' })
   const projectFilterOptions = [
     { value: '', label: '全部项目' },
     ...projects.map(project => ({ value: project.id, label: project.name ?? project.repositoryIdentity ?? project.id, description: project.repositoryIdentity ?? undefined })),
   ]
-  const sidebarFilters = <div className="workspace-insight-filters" aria-label="使用洞察筛选">
-    <SidebarFilterDisclosure className="workspace-insight-filter-disclosure" summaryMeta={activeFilterCount ? `已选 ${activeFilterCount} 项` : '全部'} agents={agents} agentSelection={{ mode: 'multiple', value: insights.filters.sourceIds.length ? insights.filters.sourceIds : null, onChange: sourceIds => insightsModel.setFilters({ sourceIds: sourceIds ?? [] }) }}>
+  const sidebarFilters = <div className="workspace-context-menu workspace-insight-context" aria-label="使用洞察筛选">
+    <div className="workspace-context-utility">
+      <span>{agentSelectionSummary}</span>
+      <IconButton size="small" onClick={() => void insightsModel.refresh()} title="刷新使用洞察" aria-label="刷新使用洞察"><UiIcon name="refresh" size={14}/></IconButton>
+    </div>
+    <SidebarFilterDisclosure className="workspace-insight-filter-disclosure" summaryMeta={agentSelectionSummary} agents={agents} agentSelection={{ mode: 'multiple', value: insights.filters.sourceIds, onChange: sourceIds => insightsModel.setFilters({ sourceIds }) }}>
       <div className="workspace-insight-filter-fields">
         <label><span>项目</span><SelectMenu variant="field" value={insights.filters.projectId} onChange={projectId => insightsModel.setFilters({ projectId })} ariaLabel="筛选项目" placeholder="全部项目" menuWidth={280} searchable searchPlaceholder="搜索项目" options={projectFilterOptions}/></label>
         <label><span>时间</span><SelectMenu variant="field" value={insights.filters.range} onChange={range => insightsModel.setFilters({ range: range as typeof insights.filters.range })} ariaLabel="筛选时间范围" menuWidth={156} options={[
@@ -94,7 +98,6 @@ export function InsightsPage({ model, sidebarHost }: { model: AgentLensClientMod
         ]}/></label>
       </div>
     </SidebarFilterDisclosure>
-    <IconButton size="small" onClick={() => void insightsModel.refresh()} title="刷新使用洞察" aria-label="刷新使用洞察"><UiIcon name="refresh" size={14}/></IconButton>
   </div>
 
   return <>
