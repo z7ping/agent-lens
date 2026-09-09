@@ -24,6 +24,7 @@ test('Task Review 的独立 Thinking 仍可折叠，聚合思考过程默认展�
 test('Task Review 将 commentary、reasoning 与工具统一放入思考过程', () => {
   assert.match(reviewPage, /label: '思考过程'/)
   assert.match(reviewPage, /entry\.type === 'process'/)
+  assert.match(reviewPage, /<TaskThinking model=\{model\} defaultExpanded=\{false\} className="task-review-process">/)
 })
 
 test('Task Review 的其他运行记录会解释用途，折叠时不挂载事件行', () => {

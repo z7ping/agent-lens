@@ -42,7 +42,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p performance-artifacts
-          npm run perf:web-live-visibility -- --samples=10 --budget-p95-ms=500 | tee performance-artifacts/web-live-visibility.txt
+          npm run perf:web-live-visibility -- --samples=10 --budget-p95-ms=1000 | tee performance-artifacts/web-live-visibility.txt
 
       - name: Build distributable for Daemon measurement
         run: npm run build:dist

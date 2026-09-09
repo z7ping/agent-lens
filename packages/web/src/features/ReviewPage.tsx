@@ -696,7 +696,7 @@ function ReviewProcessGroup({
     time: first ? formatClock(first.at) : undefined,
     state: 'settled',
   }
-  return <TaskThinking model={model} defaultExpanded={false}>
+  return <TaskThinking model={model} defaultExpanded={false} className="task-review-process">
     <div className="task-process-sequence">
       {items.map((item, index) => item.type === 'tool-group'
         ? <ReviewToolGroupAdapter key={`tools-${index}`} items={item.items} inspect={inspect}/>

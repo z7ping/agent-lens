@@ -43,6 +43,7 @@ async function measureOne(index: number): Promise<number> {
 
   const model = new AgentLensClientModel(api)
   await model.start()
+  model.setReviewActive(true)
   if (!emitEvent) throw new Error('Web ClientModel 没有建立实时订阅')
 
   let startedAt = 0
@@ -76,7 +77,9 @@ async function measureOne(index: number): Promise<number> {
 }
 
 const samples = Math.floor(argNumber('samples', 10))
-const budgetP95Ms = argNumber('budget-p95-ms', 500)
+// Review 对连续实时事件采用 800ms 防抖以避免请求风暴；预算为该策略预留
+// 调度与一次轻量刷新余量，而非要求绕过防抖立即请求。
+const budgetP95Ms = argNumber('budget-p95-ms', 1000)
 const values: number[] = []
 for (let index = 0; index < samples; index += 1) values.push(await measureOne(index))
 

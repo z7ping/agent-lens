@@ -59,7 +59,7 @@ try {
     const headerTitle = text(document.querySelector('.task-header-title'))
     const assistantTexts = [...document.querySelectorAll('[data-task-message-role="assistant"] .task-message-bubble')].map(text)
     const bodyText = document.body.innerText || ''
-    const processGroups = [...document.querySelectorAll('details.task-thinking')].filter(item => text(item.querySelector('.task-thinking-label')) === '思考过程')
+    const processGroups = [...document.querySelectorAll('details.task-thinking.task-review-process')]
     const toolRows = [...document.querySelectorAll('[data-tool-fact="true"] .task-tool-row')]
     const trigger = toolRows[0]
     if (trigger instanceof HTMLElement) trigger.click()
@@ -89,9 +89,9 @@ try {
   if (value.headerTitle !== expectedTaskTitle) errors.push(`详情标题未与 Task Center 用户任务标题一致：${value.headerTitle || '<missing>'}`)
   if (!value.assistantTexts.some(item => item.includes('好的，先跑测试'))) errors.push('未找到期望的 Assistant 可见正文')
   if (value.machineMetadataVisible) errors.push('Chromium 可见正文仍泄漏 Codex machine metadata')
-  if (value.processGroupCount < 1) errors.push('未渲染聚合思考过程')
-  if (value.openProcessGroupCount !== value.processGroupCount) errors.push(`聚合思考过程未默认展开：${value.openProcessGroupCount}/${value.processGroupCount}`)
-  if (value.toolCount < 1) errors.push('聚合思考过程展开后仍没有具体 Tool Row')
+  if (value.processGroupCount < 1) errors.push('未渲染聚合执行过程')
+  if (value.openProcessGroupCount !== value.processGroupCount) errors.push(`聚合执行过程未默认展开：${value.openProcessGroupCount}/${value.processGroupCount}`)
+  if (value.toolCount < 1) errors.push('聚合执行过程展开后仍没有具体 Tool Row')
   if (!value.clickedTool || !inspectorOpen) errors.push('Tool Row 未能打开 Inspector')
   report.ok = errors.length === 0
 } catch (error) {
