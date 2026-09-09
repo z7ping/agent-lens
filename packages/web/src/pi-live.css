@@ -64,21 +64,6 @@
 .pi-live-review-link { display: flex; width: 100%; margin-top: 8px; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border: 0; border-top: 1px solid var(--al-line); background: transparent; color: var(--al-muted); font-size: 12px; text-align: left; }
 .pi-live-review-link:hover { color: var(--al-accent); }
 
-/*
- * Pi Live 固定为 Header / Reader / Composer 三段式布局。
- * Reader 始终占满中间剩余空间，Composer 无论历史长短都稳定贴在可视区底部；
- * Composer 主动放大时只压缩 Reader，不改变底部锚点。
- */
-.pi-live-workspace {
-  position: relative;
-  display: grid;
-  min-width: 0;
-  min-height: 0;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  overflow: hidden;
-  background: var(--al-surface);
-}
 .pi-live-disconnected { color: var(--al-warning); }
 .pi-live-header-branch { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pi-live-header-branch { max-width: 220px; color: var(--al-muted); font: 11px/1.4 var(--font-mono); }
@@ -116,14 +101,8 @@
 
 /*
  * Composer 对齐 ChatGPT 类输入交互：大圆角容器、正文编辑区 + 底部工具条、右上角显式放大/缩小。
- * 外层水平留白由 task-session-view.css 持有；Queue / Extension / 诊断继续属于 Pi Live。
+ * 外层壳层与留白由 task-session-view.css 持有；Queue / Extension / 诊断继续属于 Pi Live。
  */
-.pi-live-compose-wrap {
-  position: relative;
-  z-index: 10;
-  border-top: 0;
-  background: var(--al-surface);
-}
 .pi-live-float-stack {
   position: absolute;
   right: var(--al-safe-composer-inline);
