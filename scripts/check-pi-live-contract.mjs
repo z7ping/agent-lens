@@ -219,8 +219,11 @@ if (/backdrop-filter|filter:\s*blur\(/.test(`${css}\n${stableVisibleCss}`)) fail
 if (/max-width:\s*575|max-width:\s*576|min-width:\s*576/.test(`${css}\n${stableVisibleCss}`)) failures.push('Pi Live / 任务中心不得新增 576px 断点')
 for (const expected of ['1199.98px', '991.98px', '767.98px']) {
   if (!css.includes(expected)) failures.push(`Pi Live CSS 缺少响应式基线 ${expected}`)
-  if (!taskCenterCss.includes(expected)) failures.push(`任务中心 CSS 缺少响应式基线 ${expected}`)
-  if (!taskDetailCss.includes(expected)) failures.push(`Task Surface CSS 缺少响应式基线 ${expected}`)
+  if (!taskDetailCss.includes(expected)) failures.push(`Task Surface 组件 CSS 缺少响应式基线 ${expected}`)
+}
+for (const expected of ['991.98px', '767.98px']) {
+  if (!taskCenterCss.includes(expected)) failures.push(`任务中心页面壳层 CSS 缺少响应式基线 ${expected}`)
+  if (!taskSessionCss.includes(expected)) failures.push(`统一 Session View CSS 缺少响应式基线 ${expected}`)
 }
 requireText(css, /\.pi-live-compose-hint,[\s\S]{0,260}position:\s*absolute/, 'Pi Composer 快捷提示必须绝对定位，不得撑高输入区')
 requireText(taskSessionCss, /\.task-session-view \.task-header\s*\{[\s\S]{0,260}grid-template-rows:\s*30px/, 'Review / Pi Live 桌面 Header 必须由统一 Session View 保持单行')
