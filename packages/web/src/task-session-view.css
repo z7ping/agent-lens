@@ -15,6 +15,10 @@
   overflow: hidden;
   background: var(--al-surface);
 }
+.task-session-view > .task-header { grid-row: 1; }
+.task-surface-review > .review-reader-pane,
+.task-surface-live > .pi-live-reader { grid-row: 2; }
+.task-surface-live > .pi-live-compose-wrap { grid-row: 3; }
 
 /* Review / Live 的第二行都是唯一 Reader；分页和实时追加只改变控制器行为。 */
 .task-surface-review .review-reader-pane,
