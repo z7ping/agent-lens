@@ -268,13 +268,6 @@
 .task-center-main .task-surface > .task-center-new { height: 100%; }
 .task-center-main .review-layout { grid-template-columns: minmax(0, 1fr); }
 .task-center-main .pi-live-page { grid-template-columns: minmax(0, 1fr); }
-.task-center-main .review-reader-pane { background: var(--al-surface); }
-.task-center-main .review-reader,
-.task-center-main .pi-live-document {
-  width: min(1180px, 100%);
-  margin: 0 auto;
-  padding: 0 34px 88px 48px;
-}
 
 /* 新建任务：聚焦的 Pi 启动卡片。 */
 .task-center-new {
@@ -321,21 +314,13 @@
 .task-center-project-hint { margin-top: 10px; padding: 9px 10px; border: 1px solid var(--al-line); border-radius: 8px; background: var(--al-soft-2); color: var(--al-muted); font-size: 12px; line-height: 1.55; }
 .task-center-new-actions { display: flex; justify-content: flex-end; margin-top: 18px; }
 
-@media (max-width: 1199.98px) {
-  .task-center-main .review-reader,
-  .task-center-main .pi-live-document { padding-right: 22px; padding-left: 44px; }
-}
 @media (max-width: 991.98px) {
   .task-center-filter-fields { grid-template-columns: minmax(0, 1fr); }
   .task-center-filter-fields label.is-wide { grid-column: auto; }
-  .task-center-main .review-reader,
-  .task-center-main .pi-live-document { padding-right: 18px; padding-left: 40px; }
 }
 @media (max-width: 767.98px) {
   .task-center-page { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
   .task-center-main { grid-column: 1; grid-row: 1; }
-  .task-center-main .review-reader,
-  .task-center-main .pi-live-document { padding: 13px 14px 74px; }
   .task-center-page.is-new-task { display: block; height: 100%; }
   .task-center-new { padding: 22px 14px 56px; }
   .task-center-new-card { padding: 20px 16px; border-radius: 14px; }
