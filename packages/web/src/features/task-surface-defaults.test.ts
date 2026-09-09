@@ -76,7 +76,7 @@ test('Pi Live defaults and resets to full observable events natively', () => {
 test('Pi Live Header 保持安全边距并使用统一 Pi Agent 图标', () => {
   assert.match(piLivePage, /marker=\{<span className="agent-icon source-pi" aria-hidden="true"><UiIcon name="agent" size=\{14\}\/\><\/span>\}/)
   assert.doesNotMatch(piLivePage, /marker=\{<span className=\{state\?\.isStreaming/)
-  assert.match(taskDetailCss, /\.task-surface-live \.task-header \{[\s\S]*?padding-inline: 18px;/)
+  assert.match(taskDetailCss, /\.task-surface-live \.task-header \{[\s\S]*?padding-inline: var\(--al-space-page-x\);/)
 })
 
 test('Task 信息明确展示历史会话与 Pi Live 的开始时间', () => {

@@ -11,7 +11,7 @@ import { agentLabel, useOrderedAgents } from '../components/AgentScope'
 import { BackupDataRootTree } from '../components/BackupDirectoryTree'
 import { CompactPageHeading } from '../components/CompactPageHeading'
 import { PageLoadingState } from '../components/StateViews'
-import { Button, Dialog, Drawer, Toolbar } from '../components/ui'
+import { Button, Dialog, Drawer, Toolbar, ToolbarGroup } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
 
 const RECOMMENDED_KINDS: BackupAssetKindDto[] = ['config', 'skill', 'mcp', 'plugin', 'extension', 'hook', 'rule']
@@ -125,29 +125,28 @@ function policyKinds(kindGroup: BackupAssetKindDto[], sources: BackupProtectionS
   return kindGroup.filter(kind => sumKindFiles(sources, sourceIds, kind) > 0)
 }
 
-export function BackupPage() {
+export function BackupPage({
+  selectedSourceIds,
+  onSelectedSourceIdsChange,
+}: {
+  selectedSourceIds: string[] | null
+  onSelectedSourceIdsChange(sourceIds: string[] | null): void
+}) {
   const api = useMemo(() => new AgentLensApi(), [])
   const [overview, setOverview] = useState<BackupOverviewResponseDto | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
-  const [selectedSources, setSelectedSources] = useState<string[]>([])
   const [selectedKinds, setSelectedKinds] = useState<BackupAssetKindDto[]>(RECOMMENDED_KINDS)
   const [verification, setVerification] = useState<Record<string, BackupVerifyResponseDto>>({})
   const [preview, setPreview] = useState<BackupRestorePreviewResponseDto | null>(null)
   const [detailSourceId, setDetailSourceId] = useState<string | null>(null)
   const [confirmation, setConfirmation] = useState<PendingConfirmation | null>(null)
-  const selectionInitialized = useRef(false)
   const importInput = useRef<HTMLInputElement>(null)
 
   const applyOverview = (next: BackupOverviewResponseDto) => {
     setOverview(next)
-    // 渐进扫描期间只展示已完成 Source，不提前把默认备份范围锁成第一个智能体。
-    if (!selectionInitialized.current && next.index?.ready !== false && next.index?.refreshing !== true) {
-      selectionInitialized.current = true
-      setSelectedSources(next.sources.filter(source => source.detected).map(source => source.sourceId))
-    }
   }
 
   const refresh = async (force = false) => {
@@ -188,6 +187,8 @@ export function BackupPage() {
   }, [success])
 
   const sources = useOrderedAgents(overview?.sources ?? [])
+  const detectedSourceIds = sources.filter(source => source.detected).map(source => source.sourceId)
+  const selectedSources = selectedSourceIds ?? detectedSourceIds
   const snapshots = overview?.snapshots ?? []
   const protectedFiles = sources.reduce((sum, source) => sum + source.fileCount, 0)
   const protectedBytes = sources.reduce((sum, source) => sum + (source.totalBytes ?? 0), 0)
@@ -206,7 +207,8 @@ export function BackupPage() {
   const detailSource = sources.find(source => source.sourceId === detailSourceId) ?? null
 
   const toggleSource = (sourceId: string) => {
-    setSelectedSources(current => current.includes(sourceId)
+    const current = selectedSourceIds ?? detectedSourceIds
+    onSelectedSourceIdsChange(current.includes(sourceId)
       ? current.filter(item => item !== sourceId)
       : [...current, sourceId])
   }
@@ -353,8 +355,7 @@ export function BackupPage() {
   const indexTime = overview.index?.generatedAt
   const indexRefreshing = overview.index?.refreshing ?? false
   const refreshing = loading || indexRefreshing
-  const detectedSourceCount = sources.filter(source => source.detected).length
-  const allDetectedSelected = detectedSourceCount > 0 && selectedSources.length === detectedSourceCount
+  const detectedSourceCount = detectedSourceIds.length
   const recommendedVisible = policyKinds(RECOMMENDED_KINDS, sources, selectedSources)
   const optionalVisible = policyKinds(OPTIONAL_KINDS, sources, selectedSources)
   const otherVisible = policyKinds(OTHER_KINDS, sources, selectedSources)
@@ -371,16 +372,11 @@ export function BackupPage() {
 
   return <>
     <Toolbar className="workspace-toolbar" aria-label="资产备份工具栏">
-      <div className="agent-scope">
-        <button className={`scope-chip ${allDetectedSelected ? 'scope-chip-active' : ''}`} onClick={() => setSelectedSources(sources.filter(source => source.detected).map(source => source.sourceId))}>全部智能体</button>
-        {sources.map(source => <button key={source.sourceId} disabled={!source.detected} className={`scope-chip ${selectedSources.includes(source.sourceId) ? 'scope-chip-active' : ''}`} onClick={() => toggleSource(source.sourceId)}>
-          <span className={`src-dot ${sourceDotClass(source.sourceId)}`}/>{sourceLabel(source.sourceId, source.displayName)}
-        </button>)}
-      </div>
-      <span className="toolbar-divider"/>
-      <span className="backup-toolbar-note">默认排除凭据、令牌与私钥</span>
-      <Button className="toolbar-end" loading={busy === 'import'} disabled={Boolean(busy)} onClick={() => importInput.current?.click()}><UiIcon name="upload" size={14}/>导入备份包</Button>
-      <Button variant="primary" loading={busy === 'create'} disabled={Boolean(busy) || !selectedSources.length || !selectedKinds.length} onClick={requestCreateSnapshot}><UiIcon name="plus" size={14}/>创建快照</Button>
+      <ToolbarGroup><span className="backup-toolbar-note">默认排除凭据、令牌与私钥</span></ToolbarGroup>
+      <ToolbarGroup align="end">
+        <Button loading={busy === 'import'} disabled={Boolean(busy)} onClick={() => importInput.current?.click()}><UiIcon name="upload" size={14}/>导入备份包</Button>
+        <Button variant="primary" loading={busy === 'create'} disabled={Boolean(busy) || !selectedSources.length || !selectedKinds.length} onClick={requestCreateSnapshot}><UiIcon name="plus" size={14}/>创建快照</Button>
+      </ToolbarGroup>
       <input ref={importInput} className="backup-file-input" type="file" accept=".agentlens-backup,application/vnd.agentlens.backup" onChange={selectImportBackup}/>
     </Toolbar>
 

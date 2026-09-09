@@ -5,6 +5,8 @@ import type { ClientSnapshot } from '../client/model'
 import { BrandVersion, ReleaseInfo } from './ReleaseInfo'
 import { RuntimeStatus } from './RuntimeStatus'
 import { agentLabel, sourceDot, useOrderedAgents } from './AgentScope'
+import { BackupAgentFilter } from './BackupAgentFilter'
+import { WorkspacePrimaryNavigation } from './WorkspacePrimaryNavigation'
 import { IconButton, UiIcon } from './ui'
 import './workspace-sidebar-menu.css'
 
@@ -14,6 +16,8 @@ interface WorkspaceSidebarProps {
   selectedAgentId: string
   onSelectAgent(id: string): void
   onRefreshAgents(): void
+  backupSourceIds: string[] | null
+  onBackupSourceIdsChange(sourceIds: string[] | null): void
   theme: 'light' | 'dark'
   onToggleTheme(): void
   onContextHost(node: HTMLDivElement | null): void
@@ -28,6 +32,8 @@ export function WorkspaceSidebar({
   selectedAgentId,
   onSelectAgent,
   onRefreshAgents,
+  backupSourceIds,
+  onBackupSourceIdsChange,
   theme,
   onToggleTheme,
   onContextHost,
@@ -78,11 +84,12 @@ export function WorkspaceSidebar({
       <IconButton className="workspace-sidebar-collapse-button" size="small" onClick={onCollapse} title="收起侧栏" aria-label="收起侧栏"><UiIcon name="panel-left-close" size={16}/></IconButton>
     </div>
 
-    <nav className="workspace-primary-nav" aria-label="主导航">
-      <NavLink to="/review" onClick={onMobileClose} className={`workspace-primary-link ${onReview ? 'is-active' : ''}`}><UiIcon name="task" size={16}/><span aria-label="任务中心">任务</span></NavLink>
-      <NavLink to="/insights" onClick={onMobileClose} className={`workspace-primary-link ${onInsights ? 'is-active' : ''}`}><UiIcon name="trend" size={16}/><span>洞察</span>{snapshot.usage.hasNewData && <i className="workspace-nav-dot" aria-label="有新数据"/>}</NavLink>
-      <NavLink to="/agents" onClick={onMobileClose} className={`workspace-primary-link ${onAgents ? 'is-active' : ''}`}><UiIcon name="agent" size={16}/><span>智能体</span>{snapshot.agentsHasNewData && <i className="workspace-nav-dot" aria-label="有新数据"/>}</NavLink>
-    </nav>
+    <WorkspacePrimaryNavigation
+      activeSection={onReview ? 'review' : onInsights ? 'insights' : onAgents ? 'agents' : undefined}
+      hasInsightsUpdate={snapshot.usage.hasNewData}
+      hasAgentsUpdate={snapshot.agentsHasNewData}
+      onNavigate={onMobileClose}
+    />
 
     <div className="workspace-sidebar-context" ref={onContextHost}>
       {onInsights && <nav className="workspace-insight-switcher" aria-label="洞察视图">
@@ -113,6 +120,11 @@ export function WorkspaceSidebar({
 
       {onBackup && <nav className="workspace-context-menu workspace-maintenance-context" aria-label="维护">
         <NavLink to="/backup" onClick={onMobileClose} className="workspace-context-link is-active">资产备份</NavLink>
+        <BackupAgentFilter
+          agents={agents}
+          selectedSourceIds={backupSourceIds}
+          onSelectedSourceIdsChange={onBackupSourceIdsChange}
+        />
       </nav>}
     </div>
 

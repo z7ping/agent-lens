@@ -133,7 +133,7 @@ if (!css.backup.includes('AgentLens 1.0 资产备份正式样式') || !css.backu
 if (!css.backupResponsive.includes('1280×800 / 1366×768') || !css.backupResponsive.includes('@media (min-width: 1200px) and (max-width: 1399.98px)') || !css.backupResponsive.includes('white-space: nowrap') || !css.backupResponsive.includes('grid-column: 1 / -1')) throw new Error('资产备份 xl 主桌面响应式契约缺失')
 const backupPage = readFileSync(p('features/BackupPage.tsx'), 'utf8')
 for (const required of [
-  "import { Button, Dialog, Drawer, Toolbar } from '../components/ui'",
+  "import { Button, Dialog, Drawer, Toolbar, ToolbarGroup } from '../components/ui'",
   '<Toolbar className="workspace-toolbar"',
   '<Drawer',
   '<Dialog',

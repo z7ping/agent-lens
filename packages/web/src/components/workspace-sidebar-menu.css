@@ -212,6 +212,77 @@
   font-size: 12px;
 }
 
+.workspace-backup-filter {
+  margin: 4px 6px 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.workspace-backup-filter > summary {
+  min-height: 32px;
+  padding: 0 8px;
+  border-radius: 7px;
+  color: var(--al-muted);
+  font-size: 12px;
+  font-weight: 620;
+}
+
+.workspace-backup-filter > summary:hover {
+  background: var(--al-soft);
+  color: var(--al-ink);
+}
+
+.workspace-backup-filter .ui-disclosure-body {
+  padding: 4px 0 2px;
+  border-top: 0;
+}
+
+.workspace-backup-filter-options {
+  display: grid;
+  gap: 3px;
+}
+
+.workspace-backup-filter-option {
+  display: flex;
+  width: 100%;
+  min-height: 32px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--al-ink-2);
+  font-size: 12px;
+  font-weight: 520;
+  text-align: left;
+}
+
+.workspace-backup-filter-option:hover:not(:disabled) {
+  background: var(--al-soft);
+  color: var(--al-ink);
+}
+
+.workspace-backup-filter-option.is-selected {
+  border-color: color-mix(in srgb, var(--al-accent) 25%, var(--al-line));
+  background: color-mix(in srgb, var(--al-accent) 10%, transparent);
+  color: var(--al-accent);
+  font-weight: 650;
+}
+
+.workspace-backup-filter-option:disabled {
+  cursor: default;
+  opacity: .55;
+}
+
+.workspace-backup-filter-state {
+  margin-left: auto;
+  color: var(--al-muted-2);
+  font-size: 12px;
+  font-weight: 500;
+}
+
 @media (max-width: 767.98px) {
   .workspace-settings-popover {
     right: auto;

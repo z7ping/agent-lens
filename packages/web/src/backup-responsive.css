@@ -54,21 +54,6 @@
 
 /* xl：1280×800 / 1366×768 主设计基线。 */
 @media (min-width: 1200px) and (max-width: 1399.98px) {
-  .workspace-page > .workspace-toolbar:has(.backup-toolbar-note) .agent-scope {
-    min-width: 0;
-    flex: 0 1 auto;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-  .workspace-page > .workspace-toolbar:has(.backup-toolbar-note) .agent-scope::-webkit-scrollbar { display: none; }
-  .workspace-page > .workspace-toolbar:has(.backup-toolbar-note) .backup-toolbar-note {
-    min-width: 0;
-    max-width: 150px;
-    flex: 0 1 150px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
   .backup-page .protection-grid > .protection-card {
     grid-template-columns: minmax(190px, .82fr) minmax(0, 1.68fr);
     gap: 8px 18px;

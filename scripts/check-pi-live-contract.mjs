@@ -35,19 +35,20 @@ const [app, taskCenter, taskSurface, taskHeader, taskMessage, taskRound, taskThi
   readFile(new URL('../packages/protocol/src/timeline.ts', import.meta.url), 'utf8'),
 ])
 const workspaceSidebar = await readFile(new URL('../packages/web/src/components/WorkspaceSidebar.tsx', import.meta.url), 'utf8')
+const workspacePrimaryNavigation = await readFile(new URL('../packages/web/src/components/WorkspacePrimaryNavigation.tsx', import.meta.url), 'utf8')
 const resumeResolver = await readFile(new URL('../packages/surface-http/src/pi-live-resume.ts', import.meta.url), 'utf8')
 const piLiveProtocol = await readFile(new URL('../packages/protocol/src/pi-live.ts', import.meta.url), 'utf8')
 
 const failures = []
 const requireText = (source, pattern, label) => { if (!pattern.test(source)) failures.push(label) }
 
-const primaryNavigationBlock = workspaceSidebar.match(/<nav className="workspace-primary-nav"[\s\S]*?<\/nav>/)?.[0] ?? ''
-const topLevelLinks = [...primaryNavigationBlock.matchAll(/<NavLink\b/g)].length
+const primaryNavigationBlock = workspacePrimaryNavigation.match(/const PRIMARY_SECTIONS[\s\S]*?\n\]/)?.[0] ?? ''
+const topLevelLinks = [...primaryNavigationBlock.matchAll(/\bid: '/g)].length
 if (topLevelLinks !== 3) failures.push(`一级导航必须保持任务中心 / 洞察 / 智能体 3 个，当前 ${topLevelLinks}`)
-requireText(primaryNavigationBlock, /to="\/review"[\s\S]*?>[\s\S]*?任务中心/, '一级任务入口必须命名为“任务中心”')
-requireText(primaryNavigationBlock, /to="\/insights"[\s\S]*?>[\s\S]*?洞察/, '一级分析入口必须命名为“洞察”')
-requireText(primaryNavigationBlock, /to="\/agents"[\s\S]*?>[\s\S]*?智能体/, '一级 Agent 入口必须命名为“智能体”')
-if (/to="\/(?:tools|backup|review\/live)"/.test(primaryNavigationBlock)) failures.push('工具分析、资产备份、Pi Live 不得占用一级导航')
+requireText(primaryNavigationBlock, /id: 'review',[\s\S]*?to: '\/review',[\s\S]*?label: '任务'/, '一级任务入口必须命名为“任务”')
+requireText(primaryNavigationBlock, /id: 'insights',[\s\S]*?to: '\/insights',[\s\S]*?label: '洞察'/, '一级分析入口必须命名为“洞察”')
+requireText(primaryNavigationBlock, /id: 'agents',[\s\S]*?to: '\/agents',[\s\S]*?label: '智能体'/, '一级 Agent 入口必须命名为“智能体”')
+if (/to: '\/(?:tools|backup|review\/live)'/.test(primaryNavigationBlock)) failures.push('工具分析、资产备份、Pi Live 不得占用一级导航')
 requireText(workspaceSidebar, /to="\/tools"[\s\S]*?>工具分析/, '工具分析必须作为洞察上下文入口保留')
 requireText(app, /path="\/review\/new"/, '缺少新建任务路由')
 requireText(app, /path="\/review\/live"[^>]*element=\{<Navigate\s+to="\/review\/new"\s+replace\s*\/?>\}/, '旧 /review/live 必须重定向到新建任务')

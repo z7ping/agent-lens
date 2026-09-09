@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 
 const main = readFileSync('packages/web/src/main.tsx', 'utf8')
+const app = readFileSync('packages/web/src/App.tsx', 'utf8')
 const page = readFileSync('packages/web/src/features/BackupPage.tsx', 'utf8')
 const tree = readFileSync('packages/web/src/components/BackupDirectoryTree.tsx', 'utf8')
 const css = readFileSync('packages/web/src/backup-overlays.css', 'utf8')
@@ -79,8 +80,8 @@ if (!swr.includes('for (const sourceId of this.sourceOrder)') || !swr.includes("
 if (!localService.includes('this.plan(input)') || !localService.includes("filter(file => !selectedIds.has(file.sourceId))")) {
   throw new Error('资产备份局部刷新必须只扫描指定 Source，并合并保留其他 Source 的既有索引')
 }
-if (!page.includes('next.index?.refreshing !== true')) {
-  throw new Error('渐进扫描未完成时不得提前把默认备份范围锁定为首个完成的智能体')
+if (!app.includes("useState<string[] | null>(null)") || !page.includes('const selectedSources = selectedSourceIds ?? detectedSourceIds')) {
+  throw new Error('渐进扫描期间必须以“全部已检测智能体”作为动态默认范围，不得锁定为首个完成的智能体')
 }
 
 console.log('资产备份统一 Overlay / 目录树 / 解释层性能 / 渐进加载检查通过')
