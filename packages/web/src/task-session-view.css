@@ -3,18 +3,23 @@
 /*
  * Review / Pi Live 共用会话视图的唯一样式所有者。
  * TaskSurface 本身就是统一 Session View：Review 是只读态，Live 是开启 Composer 的交互态。
- * 页面控制器只保留数据来源与能力差异，不再持有另一套 Header / 阅读轴几何。
+ * 页面控制器只保留数据来源与能力差异，不再持有另一套 Header / Reader / Composer 外层几何。
  */
 .task-session-view {
   position: relative;
+  display: grid;
   min-width: 0;
   min-height: 0;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
   background: var(--al-surface);
 }
 
-/* Reader / Document 使用同一阅读轴；Review 仍保留自己的长会话加载逻辑。 */
-.task-surface-review.review-reader-pane,
+/* Review / Live 的第二行都是唯一 Reader；分页和实时追加只改变控制器行为。 */
+.task-surface-review .review-reader-pane,
 .task-surface-live .pi-live-reader {
+  position: relative;
   min-width: 0;
   min-height: 0;
   overflow: auto;
@@ -35,7 +40,10 @@
 
 /* Composer 是 Live 的可选能力；外层几何归 Session View，内部交互仍归 Pi Live。 */
 .task-surface-live .pi-live-compose-wrap {
+  position: relative;
+  z-index: 10;
   padding: 3px var(--al-safe-composer-inline) 10px;
+  background: var(--al-surface);
 }
 
 /* Review / Live 的 Header 使用同一套单行桌面布局。 */
@@ -57,13 +65,6 @@
 }
 .task-session-view .task-header-metrics { grid-column: 4; grid-row: 1; }
 .task-session-view .task-header-actions { grid-column: 5; grid-row: 1; }
-
-/* Review 的 Header 仍位于历史 Reader DOM 内，固定在滚动区顶部；Live 本身已在 Reader 外。 */
-.task-surface-review .task-header {
-  position: sticky;
-  top: -8px;
-  z-index: 18;
-}
 
 /*
  * 1280px 窗口配合工作栏时，实际 Task Surface 会落入 lg 宽度。
