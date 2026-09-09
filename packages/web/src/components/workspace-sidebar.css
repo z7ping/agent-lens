@@ -544,7 +544,7 @@
 }
 
 .workspace-sidebar-context > .task-center-rail .task-center-scroll {
-  padding: 1px 8px 12px;
+  padding: 1px 10px 12px;
 }
 
 .workspace-sidebar-context > .task-center-rail .task-center-group-title {
@@ -558,20 +558,22 @@
 
 .workspace-sidebar-context > .task-center-rail .session-item {
   width: 100%;
-  margin: 1px 0;
+  margin: 3px 0;
   padding: 8px 8px 8px 9px;
-  border: 0;
+  border: 1px solid color-mix(in srgb, var(--al-line) 72%, transparent);
   border-radius: 8px;
-  background: transparent;
+  background: color-mix(in srgb, var(--al-surface) 74%, transparent);
   box-shadow: none;
 }
 
 .workspace-sidebar-context > .task-center-rail .session-item:hover {
-  background: color-mix(in srgb, var(--al-surface) 48%, transparent);
+  border-color: var(--al-line);
+  background: var(--al-surface);
 }
 
 .workspace-sidebar-context > .task-center-rail .session-item-active {
-  background: color-mix(in srgb, var(--al-surface) 72%, transparent);
+  border-color: color-mix(in srgb, var(--al-accent) 34%, var(--al-line));
+  background: color-mix(in srgb, var(--al-accent-soft) 34%, var(--al-surface));
 }
 
 .workspace-sidebar-context > .task-center-rail .session-item-active::before {

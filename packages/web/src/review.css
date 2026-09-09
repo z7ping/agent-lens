@@ -83,22 +83,24 @@
 .review-page:not(.review-page-embedded) .session-item:hover { border-color: var(--al-line); background: var(--al-surface); }
 .review-page:not(.review-page-embedded) .session-item-active { border-color: color-mix(in srgb, var(--session-source) 34%, var(--al-line)); background: var(--al-surface); box-shadow: inset 3px 0 0 var(--session-source); }
 .review-page:not(.review-page-embedded) .session-item-meta { display: flex; min-width: 0; align-items: center; gap: 6px; color: var(--al-muted); font-size: 12px; font-weight: 600; }
+.review-page:not(.review-page-embedded) .session-item-meta .session-item-project { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .review-page:not(.review-page-embedded) .session-item-meta time { margin-left: auto; flex: 0 0 auto; font-weight: 400; font-variant-numeric: tabular-nums; }
 .review-page:not(.review-page-embedded) .session-item-title {
   display: -webkit-box;
   margin-top: 3px;
   overflow: hidden;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
   color: var(--al-ink);
   font-size: 13px;
   font-weight: 620;
   line-height: 1.4;
 }
+.review-page:not(.review-page-embedded) .session-item-title-row { display: flex; min-width: 0; align-items: center; gap: 8px; }
+.review-page:not(.review-page-embedded) .session-item-title-row .session-item-title { min-width: 0; flex: 1; margin-top: 0; }
+.review-page:not(.review-page-embedded) .session-item-title-row .ui-status-badge { flex: 0 0 auto; gap: 4px; padding: 1px 5px; }
 .review-page:not(.review-page-embedded) .session-item-active .session-item-title { font-weight: 700; }
-.review-page:not(.review-page-embedded) .session-item-foot { display: flex; min-width: 0; align-items: center; gap: 6px; margin-top: 3px; color: var(--al-muted); font-size: 12px; }
-.review-page:not(.review-page-embedded) .session-item-foot span:first-child { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.review-page:not(.review-page-embedded) .session-item-foot span:last-child { flex: 0 0 auto; }
+.review-page:not(.review-page-embedded) .session-item-meta { margin-top: 4px; }
 .review-page:not(.review-page-embedded) .session-load-more {
   width: calc(100% - 8px);
   min-height: 32px;

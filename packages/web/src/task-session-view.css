@@ -27,6 +27,8 @@
   overflow: auto;
   overflow-anchor: none;
   overscroll-behavior: contain;
+  padding-bottom: 32px;
+  scroll-padding-bottom: 128px;
   scrollbar-gutter: stable;
   background: var(--al-surface);
 }
@@ -36,9 +38,8 @@
   width: 100%;
   max-width: var(--al-content-task-reading);
   margin-inline: auto;
-  padding: 8px var(--al-space-page-x);
+  padding: 8px var(--al-space-page-x) 128px;
 }
-.task-session-view[data-task-session-interactive='false'] .task-session-document { padding-bottom: 96px; }
 
 /* Composer 是 Live 的可选能力；外层几何归 Session View，内部交互仍归 Pi Live。 */
 .task-session-view .task-session-composer {

@@ -135,6 +135,7 @@ export async function handlePiLiveRequest(
   url: URL,
   service: PiLiveService | undefined,
   storage: StorageService,
+  selectProjectDirectory?: () => Promise<string | undefined>,
 ): Promise<boolean> {
   if (url.pathname !== '/api/v1/pi-live' && !url.pathname.startsWith('/api/v1/pi-live/')) return false
   if (!service) {
@@ -143,6 +144,17 @@ export async function handlePiLiveRequest(
   }
 
   try {
+    if (url.pathname === '/api/v1/pi-live/project-directory') {
+      if (request.method !== 'POST') {
+        writeJson(response, 405, { error: 'method_not_allowed' })
+        return true
+      }
+      if (!selectProjectDirectory) throw httpError(501, '当前运行时不支持选择项目目录')
+      const cwd = await selectProjectDirectory()
+      writeJson(response, 200, { cwd: cwd ?? null })
+      return true
+    }
+
     if (url.pathname === '/api/v1/pi-live/resume') {
       if (request.method !== 'POST') {
         writeJson(response, 405, { error: 'method_not_allowed' })

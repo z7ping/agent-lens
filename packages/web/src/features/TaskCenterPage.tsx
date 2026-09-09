@@ -10,7 +10,9 @@ import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScop
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
 import { Button, IconButton, Input, SelectMenu, StatusBadge, Toolbar } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
-import { deriveTaskProjectOptions, historyTaskPresentation, pickTaskProject, type TaskProjectOption } from './task-center'
+import { deriveTaskProjectOptions, historyTaskPresentation, pickTaskProject, sessionListTitle, type TaskProjectOption } from './task-center'
+import { workspaceDisplayName } from './task-detail-model'
+import { PROJECT_BOOTSTRAP_LIMIT } from './new-pi-task'
 
 export type TaskCenterMode = 'history' | 'live' | 'new' | 'hub'
 
@@ -53,15 +55,6 @@ function cleanTitle(value: string | undefined, fallback: string): string {
   const text = value?.replace(/\s+/g, ' ').trim() ?? ''
   if (!text) return fallback
   return text.length > 74 ? `${text.slice(0, 74)}…` : text
-}
-
-function modelLabel(state: PiLiveStateDto): string {
-  const model = state.model && typeof state.model === 'object' && !Array.isArray(state.model)
-    ? state.model as Record<string, unknown>
-    : {}
-  const provider = typeof model.provider === 'string' ? model.provider : ''
-  const id = typeof model.id === 'string' ? model.id : typeof model.modelId === 'string' ? model.modelId : ''
-  return [provider, id].filter(Boolean).join(' / ') || 'Pi 默认模型'
 }
 
 function availabilityString(value: HubReadAvailability): string | undefined {
@@ -116,6 +109,7 @@ function NewTaskPanel({
   const [selectedKey, setSelectedKey] = useState('')
   const [availability, setAvailability] = useState<{ checked: boolean; available: boolean; label: string }>({ checked: false, available: false, label: '正在检测 Pi…' })
   const [starting, setStarting] = useState(false)
+  const [selectingDirectory, setSelectingDirectory] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -142,27 +136,46 @@ function NewTaskPanel({
   const projectOptions = useMemo(() => options.map(option => ({ value: option.key, label: option.label, description: option.cwd, keywords: option.cwd })), [options])
   const agentStateLabel = !availability.checked ? '检测中' : availability.available ? '已就绪' : '不可用'
   const availabilityState = !availability.checked ? 'checking' : availability.available ? 'ready' : 'unavailable'
-  const composerStateLabel = !availability.checked
+  const composerStateLabel = selectingDirectory
+    ? '正在打开系统目录选择器…'
+    : !availability.checked
     ? '正在检测 Pi…'
     : !availability.available
       ? availability.label
       : selected
         ? '打开后直接在 Pi 页面输入任务'
         : '等待可启动项目'
-  const start = async () => {
-    if (!selected || starting || !availability.available) return
+  const start = async (project: { cwd: string; label: string }) => {
+    if (starting || !availability.available) return
     setStarting(true)
     setError('')
     try {
       const state = await piLiveApi.start({
-        cwd: selected.cwd,
-        name: `${selected.label} · Pi`,
+        cwd: project.cwd,
+        name: `${project.label} · Pi`,
       })
       await onStarted(state.runtimeSessionId)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
       setStarting(false)
+    }
+  }
+
+  const selectDirectoryAndStart = async () => {
+    if (starting || selectingDirectory || !availability.available) return
+    setSelectingDirectory(true)
+    setError('')
+    try {
+      const cwd = await piLiveApi.selectProjectDirectory()
+      if (!cwd) return
+      const parts = cwd.replace(/[\\/]+$/, '').split(/[\\/]/).filter(Boolean)
+      const label = parts.at(-1) ?? cwd
+      await start({ cwd, label })
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setSelectingDirectory(false)
     }
   }
 
@@ -180,12 +193,12 @@ function NewTaskPanel({
 
       <div className="task-center-new-fields">
         <label className="task-center-new-project-field">
-          <span>项目</span>
+          <span>已有项目</span>
           <SelectMenu
             value={selectedKey}
             options={projectOptions}
             onChange={setSelectedKey}
-            ariaLabel="选择 Pi 任务项目"
+            ariaLabel="选择已有 Pi 项目"
             placeholder={options.length ? '选择项目' : '暂无可启动项目'}
             variant="field"
             className="task-center-new-project-select"
@@ -195,13 +208,17 @@ function NewTaskPanel({
             disabled={!options.length}
           />
         </label>
+        <div className="task-center-new-directory-action">
+          <span>新项目</span>
+          <Button loading={selectingDirectory} disabled={!availability.available || starting} onClick={() => void selectDirectoryAndStart()}>选择目录新建并打开 <UiIcon name="arrow-right" size={14}/></Button>
+        </div>
       </div>
 
       <div className="task-center-new-status"><b>{selected ? `在 ${selected.label} 中启动` : '等待选择项目'}</b><span>{composerStateLabel}</span></div>
       {error && <div className="pi-live-error" role="alert">{error}</div>}
-      {!options.length && <div className="task-center-project-hint">先让 AgentLens 采集到一次带工作目录的项目会话，再从这里打开 Pi；本页面不会要求你手填 cwd。</div>}
+      {!options.length && availability.checked && <div className="task-center-project-hint">最近会话中没有可用项目；可选择目录新建项目并打开。</div>}
       <div className="task-center-new-actions">
-        <Button variant="primary" loading={starting} disabled={!selected || !availability.available} onClick={() => void start()}>创建 Pi 任务 <UiIcon name="arrow-right" size={14}/></Button>
+        <Button variant="primary" loading={starting} disabled={!selected || !availability.available} onClick={() => selected && void start(selected)}>打开已有项目 <UiIcon name="arrow-right" size={14}/></Button>
       </div>
     </section>
   </div>
@@ -212,18 +229,16 @@ function HistoryTaskItem({ item, active, onClick }: { item: ReviewSessionSummary
   const fallback = item.projectName ? `${item.projectName} 任务` : `${agentLabel(sourceId, item.productId)} 任务`
   const presentation = historyTaskPresentation(item, fallback)
   return <button className={`session-item ${active ? 'session-item-active' : ''}`} onClick={onClick}>
-    <div className="session-item-meta"><span className={`source-dot ${sourceDot(sourceId)}`}/><span>{agentLabel(sourceId, item.productId)}</span>{presentation.activityLabel && <StatusBadge className="session-activity-badge">{presentation.activityLabel}</StatusBadge>}<time>{formatTime(localTime(item))}</time></div>
-    <div className="session-item-title">{presentation.title}</div>
-    <div className="session-item-foot"><span>{item.projectName ?? item.workspacePath?.split(/[\\/]/).filter(Boolean).at(-1) ?? '无项目'}</span><span>{item.toolCount} 调用{item.errorCount ? ` · ${item.errorCount} 错误` : ''}</span></div>
+    <div className="session-item-title-row"><div className="session-item-title" title={presentation.title}>{sessionListTitle(presentation.title, fallback, item.sourceIds)}</div>{sourceId === 'pi' ? <StatusBadge tone="success">可继续</StatusBadge> : presentation.activityLabel && <StatusBadge className="session-activity-badge">{presentation.activityLabel}</StatusBadge>}</div>
+    <div className="session-item-meta"><span className={`source-dot ${sourceDot(sourceId)}`}/><span>{agentLabel(sourceId, item.productId)}</span><span className="session-item-project">{item.projectName ?? item.workspacePath?.split(/[\\/]/).filter(Boolean).at(-1) ?? '无项目'}</span><time>{formatTime(localTime(item))}</time></div>
   </button>
 }
 
 function RemoteTaskItem({ item, active, onClick }: { item: HubReviewSessionSummaryDto; active: boolean; onClick(): void }) {
   const time = remoteTime(item)
   return <button className={`session-item ${active ? 'session-item-active' : ''}`} onClick={onClick}>
+    <div className="session-item-title-row"><div className="session-item-title" title={remoteTitle(item)}>{sessionListTitle(remoteTitle(item), '远程任务')}</div></div>
     <div className="session-item-meta"><span className="hub-session-source remote">远程 · {item.origin.nodeId}</span><time>{time ? formatTime(time) : '时间未同步'}</time></div>
-    <div className="session-item-title">{remoteTitle(item)}</div>
-    <div className="session-item-foot"><span>Hub 任务</span><span>{item.origin.nodeId}</span></div>
   </button>
 }
 
@@ -272,7 +287,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   useEffect(() => {
     if (mode !== 'new') return
     let cancelled = false
-    void fetchLocalReviewSessions(500).then(
+    void fetchLocalReviewSessions(PROJECT_BOOTSTRAP_LIMIT).then(
       value => { if (!cancelled) setProjectHistory(value.items) },
       () => { if (!cancelled) setProjectHistory([]) },
     )
@@ -436,9 +451,8 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
       {runtimes.length > 0 && <section className="task-center-group task-center-live-group">
         <div className="task-center-group-title"><span>进行中</span><span>{runtimes.length}</span></div>
         {runtimes.map(item => <button key={item.runtimeSessionId} className={`session-item task-live-item ${selectedRuntimeId === item.runtimeSessionId ? 'session-item-active' : ''}`} onClick={() => navigate(`/review/live/${encodeURIComponent(item.runtimeSessionId)}`)}>
-          <div className="session-item-meta"><span className={item.isStreaming || item.status === 'initializing' ? 'pi-live-pulse' : 'pi-live-idle-dot'}/><span>Pi</span><time>{runtimeActivityLabel(item)}</time></div>
-          <div className="session-item-title">{item.sessionName || 'Pi 任务'}</div>
-          <div className="session-item-foot"><span>{modelLabel(item)}</span><span>{item.status === 'failed' ? '需要处理' : item.status === 'initializing' ? item.initializationMessage || '正在初始化' : item.isStreaming ? '执行中' : '可继续'}</span></div>
+          <div className="session-item-title-row"><div className="session-item-title" title={item.taskSummary || item.sessionName || 'Pi 任务'}>{sessionListTitle(item.taskSummary || item.sessionName, 'Pi 任务', ['pi'])}</div><PiLiveRuntimeStatusBadge state={item}/></div>
+          <div className="session-item-meta"><span className={item.isStreaming || item.status === 'initializing' ? 'pi-live-pulse' : 'pi-live-idle-dot'}/><span>Pi</span><span className="session-item-project">{item.projectName || workspaceDisplayName(item.workspacePath) || '未关联项目'}</span>{item.startedAt && <time>{formatTime(item.startedAt)}</time>}</div>
         </button>)}
       </section>}
 
@@ -475,8 +489,14 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   </>
 }
 
-function runtimeActivityLabel(state: PiLiveStateDto): string {
-  if (state.status === 'initializing') return '启动中'
-  if (state.status === 'failed') return '启动失败'
-  return state.isStreaming ? '实时' : '等待输入'
+function runtimeStatusBadge(state: PiLiveStateDto): { label: string; tone: 'neutral' | 'accent' | 'warning' | 'danger'; dot?: boolean } {
+  if (state.status === 'failed') return { label: '需要处理', tone: 'danger' }
+  if (state.status === 'initializing') return { label: '启动中', tone: 'warning', dot: true }
+  if (state.isStreaming) return { label: '执行中', tone: 'accent', dot: true }
+  return { label: '等待输入', tone: 'warning' }
+}
+
+function PiLiveRuntimeStatusBadge({ state }: { state: PiLiveStateDto }) {
+  const badge = runtimeStatusBadge(state)
+  return <StatusBadge tone={badge.tone} dot={badge.dot}>{badge.label}</StatusBadge>
 }

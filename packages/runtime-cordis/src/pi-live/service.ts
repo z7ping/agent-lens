@@ -31,6 +31,7 @@ interface OwnedRuntime {
   workspacePath: string
   projectName: string
   gitBranch?: string | undefined
+  taskSummary?: string | undefined
   recoverySessionPath?: string | undefined
   recoveryCheckpointPending?: string | undefined
   recoveryCheckpointTask?: Promise<void> | undefined
@@ -41,6 +42,11 @@ function safeError(error: unknown): string {
     .replace(/(?:api[_-]?key|token|authorization|password)\s*[:=]\s*\S+/gi, '[redacted]')
     .replace(/[\r\n]+/g, ' ')
     .slice(0, 2_000)
+}
+
+function taskSummary(message: string): string | undefined {
+  const normalized = message.replace(/\s+/g, ' ').trim()
+  return normalized ? normalized.slice(0, 240) : undefined
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -475,9 +481,24 @@ export class DefaultPiLiveService implements PiLiveService {
   async controls(id: string): Promise<PiLiveControls> { return (await this.readyRuntime(id)).handle!.controls() }
   async setModel(id: string, provider: string, modelId: string): Promise<PiLiveRuntimeState> { const runtime = await this.readyRuntime(id); return this.decorateReadyState(runtime, await runtime.handle!.setModel(provider, modelId)) }
   async setThinkingLevel(id: string, level: string): Promise<PiLiveRuntimeState> { const runtime = await this.readyRuntime(id); return this.decorateReadyState(runtime, await runtime.handle!.setThinkingLevel(level)) }
-  async prompt(id: string, message: string, behavior?: PiLiveStreamingBehavior): Promise<void> { if (message.trim()) await (await this.readyRuntime(id)).handle!.prompt(message, behavior) }
-  async steer(id: string, message: string): Promise<void> { if (message.trim()) await (await this.readyRuntime(id)).handle!.steer(message) }
-  async followUp(id: string, message: string): Promise<void> { if (message.trim()) await (await this.readyRuntime(id)).handle!.followUp(message) }
+  async prompt(id: string, message: string, behavior?: PiLiveStreamingBehavior): Promise<void> {
+    if (!message.trim()) return
+    const runtime = await this.readyRuntime(id)
+    await runtime.handle!.prompt(message, behavior)
+    this.captureTaskSummary(runtime, message)
+  }
+  async steer(id: string, message: string): Promise<void> {
+    if (!message.trim()) return
+    const runtime = await this.readyRuntime(id)
+    await runtime.handle!.steer(message)
+    this.captureTaskSummary(runtime, message)
+  }
+  async followUp(id: string, message: string): Promise<void> {
+    if (!message.trim()) return
+    const runtime = await this.readyRuntime(id)
+    await runtime.handle!.followUp(message)
+    this.captureTaskSummary(runtime, message)
+  }
   async clearQueue(id: string): Promise<PiLiveQueueState> { return (await this.readyRuntime(id)).handle!.clearQueue() }
   async abort(id: string, options: { restoreQueue?: boolean } = {}): Promise<PiLiveQueueState> { return (await this.readyRuntime(id)).handle!.abort(options.restoreQueue !== false) }
   async respondToExtension(id: string, requestId: string, response: unknown): Promise<void> { if (!requestId) throw new Error('Pi extension request id is required'); await (await this.readyRuntime(id)).handle!.respondToExtension(requestId, response) }
@@ -578,6 +599,7 @@ export class DefaultPiLiveService implements PiLiveService {
       ...(runtime.capabilities ? { capabilities: runtime.capabilities } : {}),
       ...(runtime.error ? { error: runtime.error } : {}),
       ...(runtime.input.name ? { sessionName: runtime.input.name } : {}),
+      ...(runtime.taskSummary ? { taskSummary: runtime.taskSummary } : {}),
       workspacePath: runtime.workspacePath,
       projectName: runtime.projectName,
       ...(runtime.gitBranch ? { gitBranch: runtime.gitBranch } : {}),
@@ -601,11 +623,20 @@ export class DefaultPiLiveService implements PiLiveService {
       ...(runtime.startupResources ? { startupResources: runtime.startupResources } : {}),
       ...(runtime.startupOutput.length ? { startupOutput: runtime.startupOutput } : {}),
       ...(runtime.capabilities ? { capabilities: runtime.capabilities } : {}),
+      ...(runtime.taskSummary ? { taskSummary: runtime.taskSummary } : {}),
       workspacePath: runtime.workspacePath,
       projectName: runtime.projectName,
       ...(runtime.gitBranch ? { gitBranch: runtime.gitBranch } : {}),
       ...(runtime.handle?.processId ? { processId: runtime.handle.processId } : {}),
     }
+  }
+
+  private captureTaskSummary(runtime: OwnedRuntime, message: string): void {
+    if (runtime.taskSummary) return
+    const summary = taskSummary(message)
+    if (!summary) return
+    runtime.taskSummary = summary
+    this.publish(runtime, { type: 'task_summary', taskSummary: summary })
   }
 
   private publish(runtime: OwnedRuntime, event: Record<string, unknown>): void {

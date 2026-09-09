@@ -24,7 +24,7 @@ import { MarkdownContent } from '../components/MarkdownContent'
 import { ToolKindIcon } from '../components/ToolKindIcon'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import { Button, Drawer, IconButton, Input, SelectMenu, StatusBadge, Toolbar, UiIcon } from '../components/ui'
-import { historyTaskPresentation } from './task-center'
+import { historyTaskPresentation, sessionListTitle } from './task-center'
 import { projectReviewInteractionPresentation, type ReviewProcessPresentationItem } from './review-interaction-presentation'
 import { TaskEvent } from './TaskEvent'
 import { TaskHeader } from './TaskHeader'
@@ -1283,17 +1283,15 @@ export function ReviewPage({
                 item.projectName ? `${item.projectName} 会话` : `${agentLabel(item.sourceIds[0] ?? '', item.productId)} 会话`,
               )
               return <button key={`local:${item.id}`} className={`session-item ${review.selectedId === item.id ? 'session-item-active' : ''}`} onClick={() => select(item.id)}>
-                <div className="session-item-meta"><span className={`source-dot ${sourceDot(item.sourceIds[0] ?? '')}`}/><span>{agentLabel(item.sourceIds[0] ?? '', item.productId)}</span>{presentation.activityLabel && <StatusBadge className="session-activity-badge">{presentation.activityLabel}</StatusBadge>}<time title={`最近活动：${formatTime(entry.activityAt)}`}>{sessionRelativeTime(entry.activityAt)}</time></div>
-                <div className="session-item-title">{presentation.title}</div>
-                <div className="session-item-foot"><span>{item.projectName ?? item.workspacePath?.split(/[\\/]/).pop() ?? '无项目'}</span><span>{item.toolCount} 调用{item.errorCount > 0 ? ` · ${item.errorCount} 错误` : ''}</span></div>
+                <div className="session-item-title-row"><div className="session-item-title" title={presentation.title}>{sessionListTitle(presentation.title, `${agentLabel(item.sourceIds[0] ?? '', item.productId)} 会话`, item.sourceIds)}</div>{item.sourceIds.includes('pi') ? <StatusBadge tone="success">可继续</StatusBadge> : presentation.activityLabel && <StatusBadge className="session-activity-badge">{presentation.activityLabel}</StatusBadge>}</div>
+                <div className="session-item-meta"><span className={`source-dot ${sourceDot(item.sourceIds[0] ?? '')}`}/><span>{agentLabel(item.sourceIds[0] ?? '', item.productId)}</span><span className="session-item-project">{item.projectName ?? item.workspacePath?.split(/[\\/]/).pop() ?? '无项目'}</span><time title={`最近活动：${formatTime(entry.activityAt)}`}>{sessionRelativeTime(entry.activityAt)}</time></div>
               </button>
             })() : (() => {
               const item = entry.remote
               const time = hubSessionTime(item)
               return <button key={`remote:${item.id}`} className="session-item" onClick={() => navigate(`/review/hub/${encodeURIComponent(item.id)}`)}>
+                <div className="session-item-title-row"><div className="session-item-title" title={hubSessionTitle(item)}>{sessionListTitle(hubSessionTitle(item), '远程会话')}</div></div>
                 <div className="session-item-meta"><span className="hub-session-source remote">远程 · {item.origin.nodeId}</span><time title={time || '时间未同步'}>{time ? sessionRelativeTime(time) : '时间未同步'}</time></div>
-                <div className="session-item-title">{hubSessionTitle(item)}</div>
-                <div className="session-item-foot"><span>{item.title.state === 'redacted' ? '标题已脱敏' : item.title.state === 'omitted' ? '部分字段未同步' : 'Hub 会话'}</span><span>{item.origin.nodeId}</span></div>
               </button>
             })())}
           </section>)}

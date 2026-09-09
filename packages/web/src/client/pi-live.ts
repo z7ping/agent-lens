@@ -276,6 +276,11 @@ export class PiLiveApi {
     return requestJson<PiLiveStateDto[]>('/api/v1/pi-live')
   }
 
+  async selectProjectDirectory(): Promise<string | undefined> {
+    const result = await requestJson<{ cwd: string | null }>('/api/v1/pi-live/project-directory', { method: 'POST' })
+    return result.cwd ?? undefined
+  }
+
   start(input: PiLiveStartRequestDto): Promise<PiLiveStateDto> {
     return requestJson<PiLiveStateDto>('/api/v1/pi-live', jsonRequest(input))
   }

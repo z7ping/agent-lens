@@ -61,6 +61,7 @@ import {
   ensureDeferredStorageIndexes,
 } from './storage-maintenance.js'
 import { profiledDshSourcePlugin } from './sources/dsh-profiled.js'
+import { createProjectDirectoryPicker } from './project-directory-picker.js'
 
 const nodeRuntime = resolveAgentLensNodeRuntime()
 const { dataRoot, profile: runtimeProfile, capabilities } = nodeRuntime
@@ -82,6 +83,7 @@ const startedAt = Date.now()
 const INITIAL_BACKGROUND_SYNC_DELAY_MS = 2_000
 const DATA_RUNTIME_RECOVERY_POLL_MS = 500
 let foregroundGate: ForegroundActivityGate | null = null
+const projectDirectoryPicker = createProjectDirectoryPicker()
 
 const app = new AgentLensApplication()
 app.useRuntime(nodeRuntimePlugin, nodeRuntime)
@@ -101,6 +103,7 @@ if (capabilities.localCapture) {
 app.useRuntime(backupLocalPlugin, { vaultPath })
 app.use(httpSurfacePlugin, {
   port: configuredPort,
+  selectProjectDirectory: () => projectDirectoryPicker.select(),
   dataRuntimeHealth: () => app.context.dataRuntime.snapshot(),
   healthDetails: () => foregroundGate ? { maintenanceGate: foregroundGate.snapshot() } : {},
 })

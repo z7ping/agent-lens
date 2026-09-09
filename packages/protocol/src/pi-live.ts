@@ -86,6 +86,8 @@ export interface PiLiveStateDto {
   runtimeMode?: 'session_runtime' | 'compatibility' | undefined
   nativeSessionId?: string | undefined
   sessionName?: string | undefined
+  /** 首条用户任务的简要文本，用于在列表中识别 Pi Live 会话。 */
+  taskSummary?: string | undefined
   workspacePath?: string | undefined
   projectName?: string | undefined
   gitBranch?: string | undefined

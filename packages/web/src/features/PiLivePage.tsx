@@ -557,6 +557,12 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             if (message) {
               setState(current => current ? { ...current, startupOutput: [...(current.startupOutput ?? []), message].slice(-80) } : current)
             }
+          } else if (type === 'task_summary') {
+            const summary = stringValue(event.taskSummary).trim()
+            if (summary) {
+              statePatch = { ...statePatch, taskSummary: summary }
+              window.dispatchEvent(new Event('agent-lens:pi-live-state-changed'))
+            }
           } else if (type === 'runtime_initialization' || type === 'runtime_status') {
             const status = stringValue(event.status)
             const initializationStage = stringValue(event.stage)

@@ -21,6 +21,21 @@
 
 * { box-sizing: border-box; }
 
+/* 统一滚动条基线；需要隐藏滚动条的导航等局部控件可在自身样式中覆盖。 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--al-muted-2) 52%, transparent) transparent;
+}
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--al-muted-2) 42%, transparent);
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover { background-color: var(--al-muted-2); }
+
 html,
 body,
 #root {

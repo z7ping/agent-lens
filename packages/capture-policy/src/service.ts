@@ -33,6 +33,10 @@ const FULL_MAX_TEXT: Record<CapturePolicyScope, number> = {
 
 const MAX_ARRAY_ITEMS = 100
 const MAX_OBJECT_KEYS = 100
+// Data Runtime 的单次 IPC 上限是 256 KiB。这里为请求信封、身份与证据字段预留空间，
+// 使任何一个持久化 payload 都不会因为多个“各自合规”的字段叠加而击穿传输边界。
+const MAX_PERSISTED_PAYLOAD_BYTES = 96 * 1024
+const PAYLOAD_TRUNCATION_MARKER = '…[truncated]'
 
 const SENSITIVE_KEY = /(?:^|[_-])(authorization|cookie|set-cookie|password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|client[_-]?secret|credential|credentials)(?:$|[_-])/i
 const SENSITIVE_KEY_SUFFIX = /(?:authorization|cookie|cookies|password|passwd|pwd|secret|token|apikey|accesskey|privatekey|clientsecret|credential|credentials)$/
@@ -200,6 +204,46 @@ function structuralValue(value: unknown, maxText = 4_000): unknown {
   return sanitizeValue(value, { redacted: false, maxText }).value
 }
 
+function serializedBytes(value: unknown): number {
+  return Buffer.byteLength(JSON.stringify(value) ?? 'null', 'utf8')
+}
+
+function truncateToBytes(value: string, maxBytes: number): string {
+  if (serializedBytes(value) <= maxBytes) return value
+  if (maxBytes <= serializedBytes(PAYLOAD_TRUNCATION_MARKER)) return ''
+  let end = Math.max(0, Math.floor(value.length * maxBytes / Math.max(1, serializedBytes(value))))
+  let result = `${value.slice(0, end)}${PAYLOAD_TRUNCATION_MARKER}`
+  while (end > 0 && serializedBytes(result) > maxBytes) {
+    end -= 1
+    result = `${value.slice(0, end)}${PAYLOAD_TRUNCATION_MARKER}`
+  }
+  return result
+}
+
+function boundPersistedPayload(value: unknown, maxBytes = MAX_PERSISTED_PAYLOAD_BYTES): unknown {
+  if (serializedBytes(value) <= maxBytes) return value
+  if (typeof value === 'string') return truncateToBytes(value, maxBytes)
+  if (Array.isArray(value)) {
+    const result: unknown[] = []
+    for (const item of value) {
+      const next = boundPersistedPayload(item, Math.max(256, maxBytes - serializedBytes(result) - 2))
+      if (serializedBytes([...result, next]) > maxBytes) break
+      result.push(next)
+    }
+    return result
+  }
+  if (value && typeof value === 'object') {
+    const result: Record<string, unknown> = {}
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+      const next = boundPersistedPayload(item, Math.max(256, maxBytes - serializedBytes(result) - key.length - 8))
+      if (serializedBytes({ ...result, [key]: next }) > maxBytes) break
+      result[key] = next
+    }
+    return result
+  }
+  return value
+}
+
 export class DefaultCapturePolicyService implements CapturePolicyService {
   readonly settings: Readonly<CapturePolicySettings>
   private readonly enabledSourceIds: ReadonlySet<string>
@@ -255,14 +299,14 @@ export class DefaultCapturePolicyService implements CapturePolicyService {
       ? [...new Set(normalized.observations.flatMap(item => observationScopes(item.kind)))]
       : ['prompt', 'tool'] satisfies CapturePolicyScope[]
     if (!scopes.length) {
-      return { ...record, payload: structuralValue(record.payload) }
+      return { ...record, payload: boundPersistedPayload(structuralValue(record.payload)) }
     }
     const mode = strictestMode(scopes.map(scope => this.modeFor(scope)))
     if (mode === 'off') return { ...record, payload: null }
     const maxText = Math.min(...scopes.map(scope => mode === 'full' ? FULL_MAX_TEXT[scope] : DEFAULT_MAX_TEXT[scope]))
     return {
       ...record,
-      payload: sanitizeValue(record.payload, { redacted: mode === 'redacted', maxText }).value,
+      payload: boundPersistedPayload(sanitizeValue(record.payload, { redacted: mode === 'redacted', maxText }).value),
     }
   }
 
@@ -270,14 +314,14 @@ export class DefaultCapturePolicyService implements CapturePolicyService {
     const observations: ObservationCandidate[] = normalized.observations.map(observation => {
       const scopes = observationScopes(observation.kind)
       if (!scopes.length) {
-        return { ...observation, payload: structuralValue(observation.payload) }
+        return { ...observation, payload: boundPersistedPayload(structuralValue(observation.payload)) }
       }
       const mode = strictestMode(scopes.map(scope => this.modeFor(scope)))
       if (mode === 'off') return { ...observation, payload: offPayload(observation.kind, observation.payload) }
       const maxText = Math.min(...scopes.map(scope => mode === 'full' ? FULL_MAX_TEXT[scope] : DEFAULT_MAX_TEXT[scope]))
       return {
         ...observation,
-        payload: sanitizeValue(observation.payload, { redacted: mode === 'redacted', maxText }).value,
+        payload: boundPersistedPayload(sanitizeValue(observation.payload, { redacted: mode === 'redacted', maxText }).value),
       }
     })
 

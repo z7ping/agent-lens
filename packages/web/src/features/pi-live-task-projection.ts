@@ -166,7 +166,7 @@ export function projectPiLiveTaskDetail(input: {
   const totalCost = usageItems.reduce((sum, item) => sum + (item.usage.cost?.total ?? 0), 0)
   return {
     id: state?.runtimeSessionId ?? 'pi-live-pending',
-    title: state?.sessionName || 'Pi 实时任务',
+    title: state?.taskSummary || state?.sessionName || 'Pi 实时任务',
     agentLabel: 'Pi',
     contextLabel: runtimeModelLabel(state),
     projectLabel: state?.projectName,

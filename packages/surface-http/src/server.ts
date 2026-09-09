@@ -57,6 +57,7 @@ export interface HttpSurfaceOptions {
   capturePolicy?: CapturePolicyService
   backup?: BackupService
   piLive?: PiLiveService
+  selectProjectDirectory?: () => Promise<string | undefined>
   hubReview?: Pick<HubReviewProjection, 'get' | 'query'>
 }
 
@@ -186,7 +187,7 @@ export async function startHttpSurface(
     try {
       const url = new URL(request.url ?? '/', `http://${AGENT_LENS_HTTP_HOST}`)
       route = httpRouteLabel(url.pathname)
-      if (await handlePiLiveRequest(request, response, url, options.piLive, storage)) return
+      if (await handlePiLiveRequest(request, response, url, options.piLive, storage, options.selectProjectDirectory)) return
       if (await handleBackupRequest(request, response, url, options.backup)) return
       if (await handleCapturePolicyRequest(request, response, url, options.capturePolicy)) return
 

@@ -47,12 +47,23 @@ function cleanSessionTitle(value: string | undefined, fallback: string): string 
   return text.length > 74 ? `${text.slice(0, 74)}…` : text
 }
 
+/** 左侧会话列表的标题契约：只呈现任务名，不重复 Pi 工具标记或模型信息。 */
+export function sessionListTitle(value: string | undefined, fallback: string, sourceIds: readonly string[] = []): string {
+  const normalized = decodeTextEntities(value ?? '').replace(/\s+/g, ' ').trim()
+  const withoutPiSuffix = sourceIds.includes('pi')
+    ? normalized.replace(/\s*[·•]\s*Pi\s*$/i, '').trim()
+    : normalized
+  const text = withoutPiSuffix || fallback
+  return text.length > 30 ? `${text.slice(0, 30)}…` : text
+}
+
 function userTaskTitle(item: ReviewSessionSummaryDto): string | undefined {
   // Codex 的 legacy session_index.thread_name 是来源原生会话标签，但当前格式无法证明
   // 它一定来自显式 /rename；它也可能由应用注入上下文派生。真实 event_msg.user_message
   // 已由 Source Adapter 归一为 preview，因此 Codex 用户任务优先使用该结构化用户请求。
   // 这里按来源语义选择候选，不检查正文内容，也不做任何关键词/标签黑名单。
   if (item.sourceIds.includes('codex') && item.preview?.trim()) return item.preview
+  if (item.sourceIds.includes('pi') && item.preview?.trim()) return item.preview
   return item.title || item.preview
 }
 
@@ -96,8 +107,8 @@ export function historyTaskPresentation(
 }
 
 /**
- * 新建任务只消费 AgentLens 已经从真实会话观测到的 workspacePath。
- * ProjectFacet 本身不携带路径，因此不得根据项目名猜目录，更不能要求用户手敲 cwd。
+ * 已有项目选项只消费 AgentLens 已经从真实会话观测到的 workspacePath。
+ * ProjectFacet 本身不携带路径，因此不得根据项目名猜目录；新项目由桌面端目录选择器明确提供目录。
  */
 export function deriveTaskProjectOptions(
   projects: ProjectFacetDto[],

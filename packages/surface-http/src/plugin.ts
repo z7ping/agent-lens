@@ -19,6 +19,8 @@ declare module '@deepseek-ai/cordis' {
 
 export interface HttpSurfacePluginConfig {
   port?: number
+  /** Opens the current host's native directory chooser for a new Pi project. */
+  selectProjectDirectory?: () => Promise<string | undefined>
   /** Dynamic control/data-plane health contribution; must remain O(1). */
   dataRuntimeHealth?: () => DataRuntimeHealthDto
   /** Additional O(1) runtime diagnostics merged into storage health details. */
@@ -171,6 +173,7 @@ const applyHttpSurface = Object.assign(
       capturePolicy: ctx.capturePolicy,
       backup: ctx.backup,
       piLive: ctx.piLive,
+      selectProjectDirectory: config.selectProjectDirectory,
       hubReview,
     })
     const unprovideHubReview = ctx.provide('hubReview', hubReview)
