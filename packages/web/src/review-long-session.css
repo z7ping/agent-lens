@@ -1,7 +1,7 @@
 /*
  * Review 长会话唯一性能/导航所有者。
- * 只负责虚拟挂载、独立滚动、Round Nav 与长列表加载反馈；
- * Task Surface 共享轮次导轨与边界导航由 task-turn-rail.css 负责。
+ * 只负责虚拟挂载、Round Nav、会话列表滚动与长列表加载反馈；
+ * Session Reader 滚动几何归 task-session-view.css，Task Surface 导轨归 task-turn-rail.css。
  */
 .virtual-round-shell { min-width: 0; }
 .virtual-round-shell + .virtual-round-shell { border-top: 0; }
@@ -15,8 +15,7 @@
 
 .review-page .review-layout,
 .review-page .session-panel { min-height: 0; overflow: hidden; }
-.review-page .session-scroll,
-.review-page .review-reader-pane {
+.review-page .session-scroll {
   min-height: 0;
   overflow: auto;
   overflow-anchor: none;
