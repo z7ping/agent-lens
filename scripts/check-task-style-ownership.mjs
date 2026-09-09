@@ -4,6 +4,7 @@ const webRoot = 'packages/web/src'
 const mainPath = `${webRoot}/main.tsx`
 const detailOwnerPath = `${webRoot}/task-detail.css`
 const sessionOwnerPath = `${webRoot}/task-session-view.css`
+const taskCenterPath = `${webRoot}/task-center.css`
 const retiredPaths = [
   `${webRoot}/task-detail-prototype.css`,
   `${webRoot}/task-detail-polish.css`,
@@ -51,6 +52,14 @@ for (const marker of [
   '.task-surface-live .pi-live-compose-wrap',
 ]) {
   if (!sessionOwner.includes(marker)) throw new Error(`task-session-view.css 缺少共享会话壳层契约：${marker}`)
+}
+
+const taskCenter = readFileSync(taskCenterPath, 'utf8')
+for (const marker of [
+  '.task-center-main .review-reader',
+  '.task-center-main .pi-live-document',
+]) {
+  if (taskCenter.includes(marker)) throw new Error(`task-center.css 不得重新接管 Session 阅读几何：${marker}`)
 }
 
 const componentSelector = /\.(?:task-round(?:\b|-)|task-message(?:\b|-)|task-thinking(?:\b|-)|task-tool(?:\b|-)|task-event(?:\b|-)|task-disclosure(?:\b|-))/g
