@@ -8,7 +8,8 @@ import { agentLabel, useOrderedAgents } from '../components/AgentScope'
 import { BackgroundDataNotice } from '../components/BackgroundDataNotice'
 import { CompactPageHeading } from '../components/CompactPageHeading'
 import { EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from '../components/StateViews'
-import { Disclosure, IconButton, SelectMenu, UiIcon } from '../components/ui'
+import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
+import { IconButton, SelectMenu, UiIcon } from '../components/ui'
 
 function duration(ms: number): string {
   if (ms < 1000) return `${ms} 毫秒`
@@ -72,32 +73,27 @@ export function InsightsPage({ model, sidebarHost }: { model: AgentLensClientMod
   const insightAgents = useOrderedAgents(data?.agents ?? [])
   const projects = appSnapshot.facets?.projects ?? []
   const maxTrendSessions = Math.max(1, ...(data?.trend.map(item => item.sessionCount) ?? [1]))
-  const canRelaxFilters = Boolean(insights.filters.sourceId || insights.filters.projectId || insights.filters.range !== 'all')
-  const activeFilterCount = [Boolean(insights.filters.sourceId), Boolean(insights.filters.projectId), insights.filters.range !== 'all'].filter(Boolean).length
+  const canRelaxFilters = Boolean(insights.filters.sourceIds.length || insights.filters.projectId || insights.filters.range !== 'all')
+  const activeFilterCount = [insights.filters.sourceIds.length > 0, Boolean(insights.filters.projectId), insights.filters.range !== 'all'].filter(Boolean).length
   const hasSseBanner = Boolean(appSnapshot.health && !appSnapshot.liveConnected)
   const comparison = data?.comparison
   const delta: InsightMetricDeltaDto | undefined = comparison?.delta
   const boundedRange = insights.filters.range !== 'all'
 
-  const relaxFilters = () => insightsModel.setFilters({ sourceId: '', projectId: '', range: 'all' })
-  const agentFilterOptions = [
-    { value: '', label: '全部智能体' },
-    ...agents.map(agent => ({ value: agent.sourceId, label: agentLabel(agent.sourceId, agent.displayName) })),
-  ]
+  const relaxFilters = () => insightsModel.setFilters({ sourceIds: [], projectId: '', range: 'all' })
   const projectFilterOptions = [
     { value: '', label: '全部项目' },
     ...projects.map(project => ({ value: project.id, label: project.name ?? project.repositoryIdentity ?? project.id, description: project.repositoryIdentity ?? undefined })),
   ]
   const sidebarFilters = <div className="workspace-insight-filters" aria-label="使用洞察筛选">
-    <Disclosure className="workspace-insight-filter-disclosure" summary="筛选" summaryMeta={activeFilterCount ? `${activeFilterCount}` : undefined}>
+    <SidebarFilterDisclosure className="workspace-insight-filter-disclosure" summaryMeta={activeFilterCount ? `已选 ${activeFilterCount} 项` : '全部'} agents={agents} agentSelection={{ mode: 'multiple', value: insights.filters.sourceIds.length ? insights.filters.sourceIds : null, onChange: sourceIds => insightsModel.setFilters({ sourceIds: sourceIds ?? [] }) }}>
       <div className="workspace-insight-filter-fields">
-        <label><span>智能体</span><SelectMenu variant="field" value={insights.filters.sourceId} onChange={sourceId => insightsModel.setFilters({ sourceId })} ariaLabel="筛选智能体" placeholder="全部智能体" menuWidth={260} options={agentFilterOptions}/></label>
         <label><span>项目</span><SelectMenu variant="field" value={insights.filters.projectId} onChange={projectId => insightsModel.setFilters({ projectId })} ariaLabel="筛选项目" placeholder="全部项目" menuWidth={280} searchable searchPlaceholder="搜索项目" options={projectFilterOptions}/></label>
         <label><span>时间</span><SelectMenu variant="field" value={insights.filters.range} onChange={range => insightsModel.setFilters({ range: range as typeof insights.filters.range })} ariaLabel="筛选时间范围" menuWidth={156} options={[
           { value: 'today', label: '今天' }, { value: '7d', label: '最近 7 天' }, { value: '30d', label: '最近 30 天' }, { value: 'all', label: '全部时间' },
         ]}/></label>
       </div>
-    </Disclosure>
+    </SidebarFilterDisclosure>
     <IconButton size="small" onClick={() => void insightsModel.refresh()} title="刷新使用洞察" aria-label="刷新使用洞察"><UiIcon name="refresh" size={14}/></IconButton>
   </div>
 

@@ -174,7 +174,9 @@
 }
 
 .workspace-context-menu {
+  display: flex;
   min-height: 0;
+  flex-direction: column;
   padding: 8px 10px 12px;
   overflow: auto;
 }
@@ -335,13 +337,15 @@
   color: var(--al-ink);
 }
 
-.workspace-insight-filter-disclosure {
+.workspace-sidebar-filter-disclosure {
+  width: 100%;
   min-width: 0;
+  flex: 0 0 auto;
   border: 0;
   background: transparent;
 }
 
-.workspace-insight-filter-disclosure > summary {
+.workspace-sidebar-filter-disclosure > summary {
   min-height: 32px;
   padding: 0 4px;
   border: 0;
@@ -349,18 +353,20 @@
   color: var(--al-muted);
 }
 
-.workspace-insight-filter-disclosure > summary:hover {
+.workspace-sidebar-filter-disclosure > summary:hover {
   color: var(--al-ink);
 }
 
-.workspace-insight-filter-disclosure .ui-disclosure-body {
-  padding: 7px 0 0;
+.workspace-sidebar-filter-disclosure .ui-disclosure-body {
+  display: grid;
+  gap: 12px;
+  padding: 10px 4px 7px;
 }
 
 .workspace-insight-filter-fields {
   display: grid;
   min-width: 0;
-  gap: 8px;
+  gap: 10px;
 }
 
 .workspace-insight-filter-fields label {
@@ -401,6 +407,7 @@
 }
 
 .app-main {
+  position: relative;
   display: flex;
   min-width: 0;
   min-height: 0;
@@ -552,98 +559,11 @@
   background: var(--al-surface);
 }
 
-/* 筛选 Disclosure 只显示统一 filter 图标，文字仅保留给可访问语义。 */
-.workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure {
-  position: relative;
-  width: 30px;
-  min-width: 30px;
-  flex: 0 0 30px;
-}
-
-.workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure > summary {
-  position: relative;
-  width: 30px;
-  height: 28px;
-  min-height: 28px;
-  justify-content: center;
-  gap: 0;
-  padding: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--al-muted-2);
-}
-
-.workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure > summary:hover,
-.workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure[open] > summary {
-  background: color-mix(in srgb, var(--al-surface) 62%, transparent);
-  color: var(--al-ink);
-}
-
-.workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure .ui-disclosure-chevron {
-  display: none;
-}
-
-.workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure .ui-disclosure-summary {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.workspace-sidebar-context > .task-center-rail .task-center-filter-text {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-
-.workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure .ui-disclosure-meta {
-  position: absolute;
-  top: -4px;
-  right: -3px;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 3px;
-  border: 1px solid var(--al-soft-2);
-  border-radius: 99px;
-  background: var(--al-ink);
-  color: var(--al-surface);
-  font-size: 12px;
-  line-height: 14px;
-}
-
-.workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure[open] {
-  grid-column: auto;
-}
-
-.workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure[open] + .ui-icon-button {
-  grid-row: auto;
-  grid-column: auto;
-}
-
-.workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure .ui-disclosure-body {
-  position: absolute;
-  top: 33px;
-  right: -32px;
-  z-index: 24;
-  width: 286px;
-  padding: 0;
-}
-
-.workspace-sidebar-context > .task-center-rail .task-center-filter-fields {
-  grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
-  padding: 10px;
-  border: 1px solid var(--al-line);
-  border-radius: 10px;
-  background: var(--al-surface);
-  box-shadow: 0 10px 28px rgb(15 23 42 / .08);
-}
-
-.workspace-sidebar-context > .task-center-rail .task-center-filter-fields label.is-wide {
-  grid-column: auto;
+/* 任务筛选与其他工作区共用同一个平铺 Disclosure，并按自然高度参与布局。 */
+.workspace-sidebar-context > .task-center-rail .task-center-sidebar-filter {
+  width: auto;
+  margin: 0 10px 5px;
+  flex: 0 0 auto;
 }
 
 .workspace-sidebar-context > .task-center-rail .task-center-scroll {
@@ -827,9 +747,7 @@
     gap: 0;
   }
 
-  .workspace-sidebar-context > .task-center-rail .task-center-toolbar > .ui-icon-button,
-  .workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure,
-  .workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure > summary {
+  .workspace-sidebar-context > .task-center-rail .task-center-toolbar > .ui-icon-button {
     width: 28px;
     min-width: 28px;
   }
@@ -888,7 +806,4 @@
     font-size: 12px;
   }
 
-  .workspace-sidebar-context > .task-center-rail .task-center-filter-disclosure .ui-disclosure-body {
-    width: 178px;
-  }
 }

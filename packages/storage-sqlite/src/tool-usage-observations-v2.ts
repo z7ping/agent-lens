@@ -175,7 +175,10 @@ function workflowPatterns(executor: SqliteExecutor, input: ToolUsageWorkflowPatt
 
   const conditions = ["fact.kind = 'tool.call'"]
   const params: unknown[] = []
-  if (input.sourceId) {
+  if (input.sourceIds?.length) {
+    conditions.push(`fact.source_id IN (${input.sourceIds.map(() => '?').join(', ')})`)
+    params.push(...input.sourceIds)
+  } else if (input.sourceId) {
     conditions.push('fact.source_id = ?')
     params.push(input.sourceId)
   }

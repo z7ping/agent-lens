@@ -517,7 +517,14 @@ function summaryQueryWhere(input: SessionSummaryQuery): { sql: string; params: u
     conditions.push('summary.installation_id = ?')
     params.push(input.installationId)
   }
-  if (input.sourceId) {
+  if (input.sourceIds?.length) {
+    conditions.push(`EXISTS (
+      SELECT 1
+      FROM json_each(COALESCE(summary.source_ids_json, '[]')) AS source
+      WHERE source.value IN (${input.sourceIds.map(() => '?').join(', ')})
+    )`)
+    params.push(...input.sourceIds)
+  } else if (input.sourceId) {
     conditions.push("EXISTS (SELECT 1 FROM json_each(COALESCE(summary.source_ids_json, '[]')) AS source WHERE source.value = ?)")
     params.push(input.sourceId)
   }

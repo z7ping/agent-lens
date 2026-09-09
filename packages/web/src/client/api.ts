@@ -24,7 +24,7 @@ import {
 export const LIVE_RECONNECTED_EVENT = 'agent-lens:live-reconnected'
 
 export interface QueryFilters {
-  sourceId: string
+  sourceIds: string[]
   projectId: string
   range: 'today' | '7d' | '30d' | 'all'
 }
@@ -48,7 +48,7 @@ function rangeStart(range: QueryFilters['range']): string | undefined {
 }
 
 function appendFilters(params: URLSearchParams, filters: QueryFilters): void {
-  if (filters.sourceId) params.set('sourceId', filters.sourceId)
+  for (const sourceId of filters.sourceIds) params.append('sourceId', sourceId)
   if (filters.projectId) params.set('projectId', filters.projectId)
   const from = rangeStart(filters.range)
   if (from) params.set('from', from)

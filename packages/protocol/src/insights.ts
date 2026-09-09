@@ -3,6 +3,8 @@ import { AGENT_LENS_PROTOCOL_VERSION } from './timeline'
 export type InsightConfidenceDto = 'exact' | 'high' | 'medium' | 'low' | 'unknown'
 
 export interface InsightsQueryDto {
+  sourceIds?: string[]
+  /** @deprecated 单来源兼容参数；新调用方使用 sourceIds。 */
   sourceId?: string
   projectId?: string
   from?: string

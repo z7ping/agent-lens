@@ -225,6 +225,7 @@ export interface SessionSummaryQuery {
   limit: number
   installationId?: AgentInstallationId
   logicalSessionId?: LogicalSessionId
+  sourceIds?: string[]
   sourceId?: string
   projectId?: ProjectId
   from?: string

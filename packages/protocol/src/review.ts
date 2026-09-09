@@ -141,6 +141,8 @@ export interface ReviewDetailQueryDto {
 
 export interface ReviewQueryDto {
   cursor?: string
+  sourceIds?: string[]
+  /** @deprecated 单来源兼容参数；新调用方使用 sourceIds。 */
   sourceId?: string
   projectId?: string
   from?: string

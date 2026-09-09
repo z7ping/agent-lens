@@ -4,8 +4,7 @@ import type { AgentFacetDto } from '@agent-lens/protocol'
 import type { ClientSnapshot } from '../client/model'
 import { BrandVersion, ReleaseInfo } from './ReleaseInfo'
 import { RuntimeStatus } from './RuntimeStatus'
-import { agentLabel, sourceDot, useOrderedAgents } from './AgentScope'
-import { BackupAgentFilter } from './BackupAgentFilter'
+import { SidebarFilterDisclosure } from './SidebarFilterDisclosure'
 import { WorkspacePrimaryNavigation } from './WorkspacePrimaryNavigation'
 import { IconButton, UiIcon } from './ui'
 import './workspace-sidebar-menu.css'
@@ -45,7 +44,6 @@ export function WorkspaceSidebar({
   const navigate = useNavigate()
   const settingsAnchorRef = useRef<HTMLDivElement>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const orderedAgents = useOrderedAgents(agents)
   const onReview = location.pathname.startsWith('/review')
   const onInsights = location.pathname.startsWith('/insights') || location.pathname.startsWith('/tools')
   const onAgents = location.pathname.startsWith('/agents')
@@ -102,29 +100,12 @@ export function WorkspaceSidebar({
           <span>{agents.length} 个来源</span>
           <IconButton size="small" onClick={onRefreshAgents} title="刷新智能体" aria-label="刷新智能体"><UiIcon name="refresh" size={14}/></IconButton>
         </div>
-        {orderedAgents.map(agent => <button
-          key={agent.sourceId}
-          type="button"
-          className={`workspace-agent-link ${selectedAgentId === agent.sourceId ? 'is-active' : ''}`}
-          onClick={() => {
-            onSelectAgent(agent.sourceId)
-            onMobileClose()
-          }}
-          title={`${agentLabel(agent.sourceId, agent.displayName)} · ${agent.detected ? '已检测' : '未检测'}`}
-        >
-          <span className={`source-dot ${sourceDot(agent.sourceId)}`}/>
-          <span>{agentLabel(agent.sourceId, agent.displayName)}</span>
-        </button>)}
-        {!agents.length && <div className="workspace-context-empty">暂未发现智能体</div>}
+        <SidebarFilterDisclosure agents={agents} agentSelection={{ mode: 'single', value: selectedAgentId, onChange: sourceId => { onSelectAgent(sourceId); onMobileClose() } }} />
       </div>}
 
       {onBackup && <nav className="workspace-context-menu workspace-maintenance-context" aria-label="维护">
         <NavLink to="/backup" onClick={onMobileClose} className="workspace-context-link is-active">资产备份</NavLink>
-        <BackupAgentFilter
-          agents={agents}
-          selectedSourceIds={backupSourceIds}
-          onSelectedSourceIdsChange={onBackupSourceIdsChange}
-        />
+        <SidebarFilterDisclosure agents={agents} agentSelection={{ mode: 'multiple', value: backupSourceIds, onChange: onBackupSourceIdsChange }}/>
       </nav>}
     </div>
 

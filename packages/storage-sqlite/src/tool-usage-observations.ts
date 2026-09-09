@@ -118,7 +118,10 @@ export class SqliteToolUsageObservationReader implements ToolUsageObservationRea
         conditions.push('o.project_id = ?')
         params.push(input.projectId)
       }
-      if (input.sourceId) {
+      if (input.sourceIds?.length) {
+        conditions.push(`ss.source_id IN (${input.sourceIds.map(() => '?').join(', ')})`)
+        params.push(...input.sourceIds)
+      } else if (input.sourceId) {
         conditions.push('ss.source_id = ?')
         params.push(input.sourceId)
       }

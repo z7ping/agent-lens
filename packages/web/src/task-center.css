@@ -53,55 +53,6 @@
 .task-center-search-input.ui-field:hover,
 .task-center-search-input.ui-field:focus { border-color: var(--al-line-strong); background: var(--al-surface); }
 
-.task-center-filter-disclosure {
-  position: relative;
-  min-width: 0;
-}
-.task-center-filter-disclosure > summary {
-  height: 30px;
-  min-height: 30px;
-  gap: 5px;
-  padding: 0 7px;
-  border-radius: 7px;
-  color: var(--al-muted);
-  white-space: nowrap;
-}
-.task-center-filter-disclosure > summary:hover,
-.task-center-filter-disclosure[open] > summary { background: var(--al-surface); color: var(--al-ink); }
-.task-center-filter-disclosure .ui-disclosure-summary { flex: 0 0 auto; }
-.task-center-filter-disclosure .ui-disclosure-meta {
-  display: grid;
-  min-width: 17px;
-  height: 17px;
-  place-items: center;
-  border-radius: 99px;
-  background: var(--al-accent-soft);
-  color: var(--al-accent);
-  font-size: 12px;
-  font-weight: 650;
-}
-.task-center-filter-disclosure[open] { grid-column: 1 / -1; }
-.task-center-filter-disclosure[open] + .ui-icon-button { grid-row: 1; grid-column: 3; }
-.task-center-filter-disclosure .ui-disclosure-body { padding-top: 7px; }
-.task-center-filter-fields {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  padding: 8px;
-  border: 1px solid var(--al-line);
-  border-radius: 9px;
-  background: var(--al-surface);
-}
-.task-center-filter-fields label {
-  display: grid;
-  min-width: 0;
-  gap: 4px;
-  color: var(--al-muted-2);
-  font-size: 12px;
-}
-.task-center-filter-fields label.is-wide { grid-column: 1 / -1; }
-.task-center-filter-fields .select-menu,
-.task-center-filter-fields .select-menu-trigger { width: 100%; min-width: 0; }
 .task-center-toolbar > .ui-icon-button {
   border-color: transparent;
   background: transparent;
@@ -313,10 +264,6 @@
 .task-center-project-hint { margin-top: 10px; padding: 9px 10px; border: 1px solid var(--al-line); border-radius: 8px; background: var(--al-soft-2); color: var(--al-muted); font-size: 12px; line-height: 1.55; }
 .task-center-new-actions { display: flex; justify-content: flex-end; margin-top: 18px; }
 
-@media (max-width: 991.98px) {
-  .task-center-filter-fields { grid-template-columns: minmax(0, 1fr); }
-  .task-center-filter-fields label.is-wide { grid-column: auto; }
-}
 @media (max-width: 767.98px) {
   .task-center-page { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
   .task-center-main { grid-column: 1; grid-row: 1; }

@@ -30,6 +30,7 @@ export interface ToolUsageObservationQuery {
   installationId?: AgentInstallationId
   logicalSessionId?: LogicalSessionId
   projectId?: ProjectId
+  sourceIds?: string[]
   sourceId?: string
   from?: string
   to?: string
@@ -41,6 +42,7 @@ export interface ToolUsageAggregateQuery {
   installationId?: AgentInstallationId
   logicalSessionId?: LogicalSessionId
   projectId?: ProjectId
+  sourceIds?: string[]
   sourceId?: string
   toolName?: string
   from?: string
@@ -95,6 +97,7 @@ export interface ToolUsageAggregateResult {
 
 export interface ToolUsageWorkflowPatternQuery {
   projectId?: ProjectId
+  sourceIds?: string[]
   sourceId?: string
   from?: string
   to?: string

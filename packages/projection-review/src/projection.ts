@@ -176,11 +176,12 @@ export class ReviewProjection {
     const requestedLimit = Math.max(1, Math.min(query.limit ?? DEFAULT_LIMIT, MAX_SESSIONS))
     const cursor = query.cursor ? decodeReviewListCursor(query.cursor) : undefined
     const search = query.search?.trim()
+    const sourceIds = query.sourceIds?.length ? query.sourceIds : query.sourceId ? [query.sourceId] : []
 
     if (this.storage.sessionSummaries) {
       const page = await this.storage.sessionSummaries.query({
         limit: requestedLimit,
-        ...(query.sourceId ? { sourceId: query.sourceId } : {}),
+        ...(sourceIds.length ? { sourceIds } : {}),
         ...(query.projectId ? { projectId: query.projectId } : {}),
         ...(query.from ? { from: query.from } : {}),
         ...(query.to ? { to: query.to } : {}),
@@ -210,7 +211,7 @@ export class ReviewProjection {
     const filtered = summaries.filter(item => {
       if (cursor && !(item.endedAt < cursor.activeAt
         || (item.endedAt === cursor.activeAt && item.id > cursor.logicalSessionId))) return false
-      if (query.sourceId && !item.sourceIds.includes(query.sourceId)) return false
+      if (sourceIds.length && !item.sourceIds.some(sourceId => sourceIds.includes(sourceId))) return false
       if (query.projectId && item.projectId !== query.projectId) return false
       if (query.from && item.endedAt < query.from) return false
       if (query.to && item.endedAt > query.to) return false

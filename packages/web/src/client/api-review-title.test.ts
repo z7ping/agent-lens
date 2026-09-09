@@ -34,7 +34,7 @@ test('会话列表保留 Agent 原生标题，preview 仅作为兜底数据', as
     meta: { protocolVersion: '1.0', count: 1, hasMore: false, generatedAt: '2026-08-20T02:00:00.000Z' },
   } satisfies ReviewResponseDto)
   try {
-    const result = await new AgentLensApi().review({ sourceId: '', projectId: '', range: 'all', status: 'all', search: '' })
+    const result = await new AgentLensApi().review({ sourceIds: [], projectId: '', range: 'all', status: 'all', search: '' })
     assert.equal(result.items[0]?.title, 'Codex 原生线程摘要')
     assert.equal(result.items[0]?.preview, '请检查 Windows 安装器图标问题')
   } finally {

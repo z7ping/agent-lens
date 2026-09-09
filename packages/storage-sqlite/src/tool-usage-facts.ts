@@ -63,7 +63,10 @@ function aggregateFilter(input: ToolUsageAggregateQuery): { conditions: string[]
     conditions.push('f.project_id = ?')
     params.push(input.projectId)
   }
-  if (input.sourceId) {
+  if (input.sourceIds?.length) {
+    conditions.push(`f.source_id IN (${input.sourceIds.map(() => '?').join(', ')})`)
+    params.push(...input.sourceIds)
+  } else if (input.sourceId) {
     conditions.push('f.source_id = ?')
     params.push(input.sourceId)
   }
@@ -103,7 +106,8 @@ function assetCallFilter(input: ToolUsageAggregateQuery): { conditions: string[]
   if (input.installationId) { conditions.push('f.installation_id = ?'); params.push(input.installationId) }
   if (input.logicalSessionId) { conditions.push('f.logical_session_id = ?'); params.push(input.logicalSessionId) }
   if (input.projectId) { conditions.push('f.project_id = ?'); params.push(input.projectId) }
-  if (input.sourceId) { conditions.push('f.source_id = ?'); params.push(input.sourceId) }
+  if (input.sourceIds?.length) { conditions.push(`f.source_id IN (${input.sourceIds.map(() => '?').join(', ')})`); params.push(...input.sourceIds) }
+  else if (input.sourceId) { conditions.push('f.source_id = ?'); params.push(input.sourceId) }
   if (input.toolName) { conditions.push('f.tool_name = ?'); params.push(input.toolName) }
   if (input.from) { conditions.push('f.effective_at >= ?'); params.push(input.from) }
   if (input.to) { conditions.push('f.effective_at <= ?'); params.push(input.to) }

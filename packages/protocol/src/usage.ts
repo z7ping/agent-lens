@@ -54,6 +54,8 @@ export interface ToolUsageProjectionStatusDto {
 export interface ToolAssetUsageQueryDto {
   installationId?: string
   logicalSessionId?: string
+  sourceIds?: string[]
+  /** @deprecated 单来源兼容参数；新调用方使用 sourceIds。 */
   sourceId?: string
   projectId?: string
   /** Optional exact native tool name; primarily used by bounded drill-down reads. */

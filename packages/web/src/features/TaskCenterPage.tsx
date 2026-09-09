@@ -7,6 +7,7 @@ import { fetchHubReviewSessions, fetchLocalReviewSessions } from '../client/hub-
 import { piLiveApi } from '../client/pi-live'
 import { useClientSnapshot } from '../App'
 import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScope'
+import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
 import { Button, IconButton, Input, SelectMenu, StatusBadge, Toolbar } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
 import { deriveTaskProjectOptions, historyTaskPresentation, pickTaskProject, type TaskProjectOption } from './task-center'
@@ -86,7 +87,7 @@ function remoteTitle(item: HubReviewSessionSummaryDto): string {
 }
 
 function remoteVisible(item: HubReviewSessionSummaryDto, review: ReturnType<AgentLensClientModel['getSnapshot']>['review']): boolean {
-  if (review.filters.sourceId || review.filters.projectId || review.filters.status !== 'all') return false
+  if (review.filters.sourceIds.length || review.filters.projectId || review.filters.status !== 'all') return false
   const search = review.filters.search.trim().toLowerCase()
   if (search && !remoteTitle(item).toLowerCase().includes(search) && !item.origin.nodeId.toLowerCase().includes(search)) return false
   const time = remoteTime(item)
@@ -235,10 +236,8 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const [projectHistory, setProjectHistory] = useState<ReviewSessionSummaryDto[]>([])
   const historyScrollTargetRef = useRef('')
   const resumeRequestRef = useRef('')
-  const filterPopoverRef = useRef<HTMLDivElement>(null)
   const review = snapshot.review
   const [searchOpen, setSearchOpen] = useState(Boolean(review.filters.search))
-  const [filterOpen, setFilterOpen] = useState(false)
   const [resumingSessionId, setResumingSessionId] = useState('')
   const [piResumeError, setPiResumeError] = useState<{ sessionId: string; message: string } | null>(null)
   const agents = useOrderedAgents(snapshot.facets?.agents ?? [])
@@ -268,34 +267,6 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     )
     return () => { cancelled = true }
   }, [review.response?.meta.generatedAt])
-
-  useEffect(() => {
-    setFilterOpen(false)
-  }, [location.pathname])
-
-  useEffect(() => {
-    if (!filterOpen) return
-
-    const closeOnOutsidePointer = (event: PointerEvent) => {
-      const target = event.target
-      if (!(target instanceof Node)) return
-      if (filterPopoverRef.current?.contains(target)) return
-      if (target instanceof Element && target.closest('.select-menu-popover')) return
-      setFilterOpen(false)
-    }
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || event.defaultPrevented) return
-      setFilterOpen(false)
-      requestAnimationFrame(() => filterPopoverRef.current?.querySelector<HTMLButtonElement>('.task-center-filter-button')?.focus({ preventScroll: true }))
-    }
-
-    document.addEventListener('pointerdown', closeOnOutsidePointer, true)
-    document.addEventListener('keydown', closeOnEscape)
-    return () => {
-      document.removeEventListener('pointerdown', closeOnOutsidePointer, true)
-      document.removeEventListener('keydown', closeOnEscape)
-    }
-  }, [filterOpen])
 
   useEffect(() => {
     if (mode !== 'new') return
@@ -406,15 +377,11 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     : ''
   const historyCount = localSessions.length + visibleHub.length
   const activeFilterCount = [
-    Boolean(review.filters.sourceId),
+    review.filters.sourceIds.length > 0,
     Boolean(review.filters.projectId),
     review.filters.range !== '7d',
     review.filters.status !== 'all',
   ].filter(Boolean).length
-  const agentFilterOptions = [
-    { value: '', label: '全部智能体' },
-    ...agents.map(agent => ({ value: agent.sourceId, label: agentLabel(agent.sourceId, agent.displayName), description: agent.detected ? '已检测' : '未检测' })),
-  ]
   const projectFilterOptions = [
     { value: '', label: '全部项目' },
     ...projects.map(project => ({ value: project.id, label: project.name ?? project.repositoryIdentity ?? project.id, description: project.repositoryIdentity ?? undefined })),
@@ -432,35 +399,21 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
           aria-label={searchOpen ? '收起搜索' : '搜索历史任务'}
           aria-pressed={searchOpen}
         ><UiIcon name="search" size={14}/></IconButton>
-        <div className="task-center-filter-popover" ref={filterPopoverRef}>
-          <IconButton
-            size="small"
-            className={`task-center-filter-button ${filterOpen || activeFilterCount ? 'is-active' : ''}`}
-            onClick={() => setFilterOpen(current => !current)}
-            title="筛选历史任务"
-            aria-label="筛选历史任务"
-            aria-expanded={filterOpen}
-            aria-controls={filterOpen ? 'task-center-filter-panel' : undefined}
-          >
-            <UiIcon name="filter" size={14}/>
-            {activeFilterCount > 0 && <span className="task-center-filter-badge" aria-hidden="true">{activeFilterCount}</span>}
-          </IconButton>
-          {filterOpen && <div id="task-center-filter-panel" className="task-center-filter-panel" role="group" aria-label="筛选历史任务">
-            <div className="task-center-filter-fields">
-              <label className="is-wide"><span>智能体</span><SelectMenu variant="field" value={review.filters.sourceId} onChange={sourceId => model.setReviewFilters({ sourceId })} ariaLabel="筛选智能体" placeholder="全部智能体" menuWidth={260} options={agentFilterOptions}/></label>
-              <label className="is-wide"><span>项目</span><SelectMenu variant="field" value={review.filters.projectId} onChange={projectId => model.setReviewFilters({ projectId })} ariaLabel="筛选项目" placeholder="全部项目" menuWidth={280} searchable searchPlaceholder="搜索项目" options={projectFilterOptions}/></label>
-              <label><span>时间</span><SelectMenu variant="field" value={review.filters.range} onChange={range => model.setReviewFilters({ range: range as typeof review.filters.range })} ariaLabel="筛选时间范围" menuWidth={156} options={[
-                { value: 'today', label: '今天' }, { value: '7d', label: '最近 7 天' }, { value: '30d', label: '最近 30 天' }, { value: 'all', label: '全部时间' },
-              ]}/></label>
-              <label><span>状态</span><SelectMenu variant="field" value={review.filters.status} onChange={status => model.setReviewFilters({ status: status as typeof review.filters.status })} ariaLabel="筛选状态" menuWidth={150} options={[
-                { value: 'all', label: '全部状态' }, { value: 'clean', label: '无错误' }, { value: 'with-errors', label: '有错误' },
-              ]}/></label>
-            </div>
-          </div>}
-        </div>
         <IconButton size="small" onClick={() => void model.refreshReview()} title="刷新历史任务" aria-label="刷新历史任务"><UiIcon name="refresh" size={14}/></IconButton>
       </Toolbar>}
     </div>
+
+    {mode !== 'new' && <SidebarFilterDisclosure className="task-center-sidebar-filter" summaryMeta={activeFilterCount ? `已选 ${activeFilterCount} 项` : '全部'} agents={agents} agentSelection={{ mode: 'multiple', value: review.filters.sourceIds.length ? review.filters.sourceIds : null, onChange: sourceIds => model.setReviewFilters({ sourceIds: sourceIds ?? [] }) }}>
+      <div className="workspace-insight-filter-fields" aria-label="筛选历史任务">
+        <label><span>项目</span><SelectMenu variant="field" value={review.filters.projectId} onChange={projectId => model.setReviewFilters({ projectId })} ariaLabel="筛选项目" placeholder="全部项目" menuWidth={280} searchable searchPlaceholder="搜索项目" options={projectFilterOptions}/></label>
+        <label><span>时间</span><SelectMenu variant="field" value={review.filters.range} onChange={range => model.setReviewFilters({ range: range as typeof review.filters.range })} ariaLabel="筛选时间范围" menuWidth={156} options={[
+          { value: 'today', label: '今天' }, { value: '7d', label: '最近 7 天' }, { value: '30d', label: '最近 30 天' }, { value: 'all', label: '全部时间' },
+        ]}/></label>
+        <label><span>状态</span><SelectMenu variant="field" value={review.filters.status} onChange={status => model.setReviewFilters({ status: status as typeof review.filters.status })} ariaLabel="筛选状态" menuWidth={150} options={[
+          { value: 'all', label: '全部状态' }, { value: 'clean', label: '无错误' }, { value: 'with-errors', label: '有错误' },
+        ]}/></label>
+      </div>
+    </SidebarFilterDisclosure>}
 
     {mode !== 'new' && searchOpen && <div className="task-center-search-panel">
       <div className="task-center-search-field">

@@ -96,8 +96,13 @@ function metricDelta(current: InsightMetricSetDto, previous: InsightMetricSetDto
   }
 }
 
+function selectedSourceIds(query: Pick<InsightsQueryDto, 'sourceIds' | 'sourceId'>): string[] {
+  return query.sourceIds?.length ? query.sourceIds : query.sourceId ? [query.sourceId] : []
+}
+
 function matchesScope(session: SessionSummaryRecord, query: InsightsQueryDto): boolean {
-  if (query.sourceId && !session.sourceIds.includes(query.sourceId)) return false
+  const sourceIds = selectedSourceIds(query)
+  if (sourceIds.length && !session.sourceIds.some(sourceId => sourceIds.includes(sourceId))) return false
   if (query.projectId && session.projectId !== query.projectId) return false
   if (query.from && session.endedAt < query.from) return false
   if (query.to && session.startedAt > query.to) return false
@@ -219,7 +224,7 @@ async function loadSessions(storage: StorageService, query: InsightsQueryDto): P
   while (true) {
     const response = await storage.sessionSummaries.query({
       limit: SESSION_SAMPLE_LIMIT,
-      ...(query.sourceId ? { sourceId: query.sourceId } : {}),
+      ...(selectedSourceIds(query).length ? { sourceIds: selectedSourceIds(query) } : {}),
       ...(query.projectId ? { projectId: query.projectId } : {}),
       ...(query.from ? { from: query.from } : {}),
       ...(after ? { after } : {}),
@@ -266,7 +271,8 @@ async function loadToolCalls(
     }
   }
 
-  if (!query.sourceId) return calls
+  const sourceIds = selectedSourceIds(query)
+  if (!sourceIds.length) return calls
   const sourceCache = new Map<string, SourceSession | null>()
   const filtered: CanonicalObservation[] = []
   for (const call of calls) {
@@ -275,7 +281,7 @@ async function loadToolCalls(
       source = await storage.repositories.sessions.getSourceSession(call.sourceSessionId)
       sourceCache.set(call.sourceSessionId, source)
     }
-    if (source?.sourceId === query.sourceId) filtered.push(call)
+    if (source && sourceIds.includes(source.sourceId)) filtered.push(call)
   }
   return filtered
 }
@@ -366,7 +372,7 @@ export class UsageInsightsProjection {
     const summary = metricsFor(sessions)
     const usageStartedAt = performance.now()
     const usage = await this.usage.query({
-      ...(query.sourceId ? { sourceId: query.sourceId } : {}),
+      ...(selectedSourceIds(query).length ? { sourceIds: selectedSourceIds(query) } : {}),
       ...(query.projectId ? { projectId: query.projectId } : {}),
       ...(query.from ? { from: query.from } : {}),
       ...(query.to ? { to: query.to } : {}),
@@ -381,7 +387,7 @@ export class UsageInsightsProjection {
     }>()
     for (const session of sessions) {
       for (const sourceId of session.sourceIds) {
-        if (query.sourceId && sourceId !== query.sourceId) continue
+        if (selectedSourceIds(query).length && !selectedSourceIds(query).includes(sourceId)) continue
         let agent = agentMap.get(sourceId)
         if (!agent) {
           agent = { metrics: emptyMetrics(), productIds: new Set(), observedAssetCallCount: 0 }
@@ -412,7 +418,7 @@ export class UsageInsightsProjection {
       : undefined
     if (workflowReader?.workflowPatterns) {
       const aggregated = await workflowReader.workflowPatterns({
-        ...(query.sourceId ? { sourceId: query.sourceId } : {}),
+        ...(selectedSourceIds(query).length ? { sourceIds: selectedSourceIds(query) } : {}),
         ...(query.projectId ? { projectId: query.projectId } : {}),
         ...(query.from ? { from: query.from } : {}),
         ...(query.to ? { to: query.to } : {}),
@@ -450,7 +456,7 @@ export class UsageInsightsProjection {
         const previousFrom = new Date(previousFromMs).toISOString()
         const previousTo = new Date(previousToMs).toISOString()
         const previousLoaded = await loadSessions(this.storage, {
-          ...(query.sourceId ? { sourceId: query.sourceId } : {}),
+          ...(selectedSourceIds(query).length ? { sourceIds: selectedSourceIds(query) } : {}),
           ...(query.projectId ? { projectId: query.projectId } : {}),
           from: previousFrom,
           to: previousTo,

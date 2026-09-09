@@ -29,9 +29,7 @@ test('统一智能体列表忽略已移除来源且不会重复项目', () => {
 test('所有智能体展示列表统一消费用户排序', () => {
   const consumers = [
     './AgentInsightsRail.tsx',
-    './WorkspaceSidebar.tsx',
     '../features/AgentsPage.tsx',
-    '../features/BackupPage.tsx',
     '../features/InsightsPage.tsx',
     '../features/TaskCenterPage.tsx',
     '../features/ToolsPage.tsx',
@@ -41,4 +39,8 @@ test('所有智能体展示列表统一消费用户排序', () => {
     const source = readFileSync(new URL(consumer, import.meta.url), 'utf8')
     assert.match(source, /useOrderedAgents\(/, `${consumer} 必须使用统一智能体排序`)
   }
+
+  const sidebarFilter = readFileSync(new URL('./SidebarFilterDisclosure.tsx', import.meta.url), 'utf8')
+  assert.match(sidebarFilter, /useOrderedAgents\(agents\)/, '左侧平铺智能体筛选必须统一消费用户排序')
+  assert.doesNotMatch(sidebarFilter, /<Disclosure[^>]*\sopen(?:\s|>)/, '统一侧栏筛选默认必须收起')
 })

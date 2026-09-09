@@ -18,6 +18,10 @@ function optionalParam(params: URLSearchParams, key: string): string | undefined
   const value = params.get(key)
   return value ? value : undefined
 }
+
+function repeatedParams(params: URLSearchParams, key: string): string[] {
+  return [...new Set(params.getAll(key).map(value => value.trim()).filter(Boolean))]
+}
 export function parseLimit(params: URLSearchParams, max: number): number | undefined {
   const raw = optionalParam(params, 'limit')
   if (!raw) return undefined
@@ -97,14 +101,14 @@ export function parseUsageQuery(params: URLSearchParams): ToolAssetUsageQueryDto
   const installationId = optionalParam(params, 'installationId')
   const logicalSessionId = optionalParam(params, 'logicalSessionId')
   const projectId = optionalParam(params, 'projectId')
-  const sourceId = optionalParam(params, 'sourceId')
+  const sourceIds = repeatedParams(params, 'sourceId')
   const toolName = optionalParam(params, 'toolName')
   const limit = parseLimit(params, 500)
   return {
     ...(installationId ? { installationId } : {}),
     ...(logicalSessionId ? { logicalSessionId } : {}),
     ...(projectId ? { projectId } : {}),
-    ...(sourceId ? { sourceId } : {}),
+    ...(sourceIds.length > 1 ? { sourceIds } : sourceIds[0] ? { sourceId: sourceIds[0] } : {}),
     ...(toolName ? { toolName } : {}),
     ...orderedRange(params, 'Usage'),
     ...(limit === undefined ? {} : { limit }),
@@ -115,12 +119,12 @@ export function parseInsightsQuery(params: URLSearchParams): InsightsQueryDto {
   const installationId = optionalParam(params, 'installationId')
   const logicalSessionId = optionalParam(params, 'logicalSessionId')
   const projectId = optionalParam(params, 'projectId')
-  const sourceId = optionalParam(params, 'sourceId')
+  const sourceIds = repeatedParams(params, 'sourceId')
   return {
     ...(installationId ? { installationId } : {}),
     ...(logicalSessionId ? { logicalSessionId } : {}),
     ...(projectId ? { projectId } : {}),
-    ...(sourceId ? { sourceId } : {}),
+    ...(sourceIds.length > 1 ? { sourceIds } : sourceIds[0] ? { sourceId: sourceIds[0] } : {}),
     ...orderedRange(params, 'Insights'),
   }
 }
@@ -154,14 +158,14 @@ function parsePositiveInteger(params: URLSearchParams, key: string): number | un
 export function parseReviewQuery(params: URLSearchParams): ReviewQueryDto {
   const cursor = optionalParam(params, 'cursor')
   const projectId = optionalParam(params, 'projectId')
-  const sourceId = optionalParam(params, 'sourceId')
+  const sourceIds = repeatedParams(params, 'sourceId')
   const search = optionalParam(params, 'search')
   const limit = parseLimit(params, 500)
   const status = parseReviewStatus(optionalParam(params, 'status'))
   return {
     ...(cursor ? { cursor } : {}),
     ...(projectId ? { projectId } : {}),
-    ...(sourceId ? { sourceId } : {}),
+    ...(sourceIds.length > 1 ? { sourceIds } : sourceIds[0] ? { sourceId: sourceIds[0] } : {}),
     ...orderedRange(params, 'Review'),
     ...(status ? { status } : {}),
     ...(search ? { search } : {}),

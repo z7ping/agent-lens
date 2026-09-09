@@ -88,12 +88,19 @@ function usageReader(storage: StorageService): ToolUsageObservationReader | unde
 function projectionStatusReader(storage: StorageService) {
   return storage.projectionBackfill?.toolUsageFactCoverage ? storage.projectionBackfill : undefined
 }
+function selectedSourceIds(query: Pick<ToolAssetUsageQueryDto, 'sourceIds' | 'sourceId'>): string[] {
+  return query.sourceIds?.length ? query.sourceIds : query.sourceId ? [query.sourceId] : []
+}
+function matchesSelectedSource(query: Pick<ToolAssetUsageQueryDto, 'sourceIds' | 'sourceId'>, sourceId: string): boolean {
+  const sourceIds = selectedSourceIds(query)
+  return sourceIds.length === 0 || sourceIds.includes(sourceId)
+}
 function aggregateQuery(query: ToolAssetUsageQueryDto, detailLimit = AGGREGATE_OVERVIEW_DETAIL_LIMIT): ToolUsageAggregateQuery {
   return {
     ...(query.installationId ? { installationId: query.installationId } : {}),
     ...(query.logicalSessionId ? { logicalSessionId: query.logicalSessionId } : {}),
     ...(query.projectId ? { projectId: query.projectId } : {}),
-    ...(query.sourceId ? { sourceId: query.sourceId } : {}),
+    ...(selectedSourceIds(query).length ? { sourceIds: selectedSourceIds(query) } : {}),
     ...(query.toolName ? { toolName: query.toolName } : {}),
     ...(query.from ? { from: query.from } : {}),
     ...(query.to ? { to: query.to } : {}),
@@ -105,7 +112,7 @@ function aggregateCacheKey(query: ToolUsageAggregateQuery): string {
     query.installationId ?? null,
     query.logicalSessionId ?? null,
     query.projectId ?? null,
-    query.sourceId ?? null,
+    query.sourceIds ?? (query.sourceId ? [query.sourceId] : null),
     query.toolName ?? null,
     query.from ?? null,
     query.to ?? null,
@@ -195,7 +202,7 @@ export class ToolAssetUsageProjection {
             ...(query.installationId ? { installationId: query.installationId } : {}),
             ...(query.logicalSessionId ? { logicalSessionId: query.logicalSessionId } : {}),
             ...(query.projectId ? { projectId: query.projectId } : {}),
-            ...(query.sourceId ? { sourceId: query.sourceId } : {}),
+            ...(selectedSourceIds(query).length ? { sourceIds: selectedSourceIds(query) } : {}),
             ...(query.from ? { from: query.from } : {}),
             ...(query.to ? { to: query.to } : {}),
             ...(after ? { after } : {}),
@@ -268,7 +275,7 @@ export class ToolAssetUsageProjection {
 
     await this.forEachKind('tool.call', query, async observation => {
       const metadata = await metadataFor(observation)
-      if (!metadata || (query.sourceId && metadata.sourceId !== query.sourceId)) return
+      if (!metadata || !matchesSelectedSource(query, metadata.sourceId)) return
       const payload = asRecord(observation.payload)
       const name = toolName(observation)
       if (!name || (query.toolName && name !== query.toolName)) return
@@ -376,7 +383,7 @@ export class ToolAssetUsageProjection {
 
     await this.forEachKind('tool.call', query, async observation => {
       const metadata = await metadataFor(observation)
-      if (!metadata || (query.sourceId && metadata.sourceId !== query.sourceId)) return
+      if (!metadata || !matchesSelectedSource(query, metadata.sourceId)) return
       const payload = asRecord(observation.payload)
       const identity = callId(observation)
       const name = toolName(observation)
@@ -423,7 +430,7 @@ export class ToolAssetUsageProjection {
       const name = toolName(observation) ?? linkedCall?.name
       if (!name || (query.toolName && name !== query.toolName)) return
       const sourceId = linkedCall?.sourceId ?? metadata.sourceId
-      if (query.sourceId && sourceId !== query.sourceId) return
+      if (!matchesSelectedSource(query, sourceId)) return
       const productId = linkedCall?.productId ?? metadata.productId
       const at = effectiveAt(observation)
       const key = `${sourceId}\u0000${name}`

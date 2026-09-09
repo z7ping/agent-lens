@@ -3,7 +3,7 @@ import { EmptyStatePanel, ErrorStateBanner, FirstRunGuide, ReviewDetailSkeleton,
 import { UiIcon } from './ui'
 
 function broadReviewFilters(review: ClientSnapshot['review']): boolean {
-  return !review.filters.sourceId
+  return review.filters.sourceIds.length === 0
     && !review.filters.projectId
     && !review.filters.search
     && review.filters.status === 'all'
@@ -45,7 +45,7 @@ export function ReviewStateOverlay({ model, snapshot }: { model: AgentLensClient
             description="当前筛选范围没有会话。可以先放宽时间、项目、智能体或状态筛选，再继续查找。"
             action={{
               label: '放宽筛选条件',
-              onClick: () => model.setReviewFilters({ sourceId: '', projectId: '', range: 'all', status: 'all', search: '' }),
+              onClick: () => model.setReviewFilters({ sourceIds: [], projectId: '', range: 'all', status: 'all', search: '' }),
             }}
           />}
       </div>
