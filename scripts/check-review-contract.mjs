@@ -3,11 +3,13 @@ import { readFileSync } from 'node:fs'
 const mainSource = readFileSync('packages/web/src/main.tsx', 'utf8')
 const clientModel = readFileSync('packages/web/src/client/model.ts', 'utf8')
 const reviewPage = readFileSync('packages/web/src/features/ReviewPage.tsx', 'utf8')
+const taskSurface = readFileSync('packages/web/src/features/TaskSurface.tsx', 'utf8')
 const taskHeader = readFileSync('packages/web/src/features/TaskHeader.tsx', 'utf8')
 const taskMessage = readFileSync('packages/web/src/features/TaskMessage.tsx', 'utf8')
 const taskToolGroup = readFileSync('packages/web/src/features/TaskToolGroup.tsx', 'utf8')
 const reviewPresentation = readFileSync('packages/web/src/features/review-interaction-presentation.ts', 'utf8')
 const taskDetailCss = readFileSync('packages/web/src/task-detail.css', 'utf8')
+const taskSessionCss = readFileSync('packages/web/src/task-session-view.css', 'utf8')
 const reviewCss = readFileSync('packages/web/src/review.css', 'utf8')
 const longCss = readFileSync('packages/web/src/review-long-session.css', 'utf8')
 
@@ -30,8 +32,16 @@ if (!fromStartBody.includes("direction: 'forward'")) throw new Error('从头查�
 if (!reviewPage.includes("detail.page.direction !== 'backward'") || !reviewPage.includes('pane.scrollTop = pane.scrollHeight') || !reviewPage.includes('followingTailRef.current = true')) throw new Error('默认最新窗口必须渲染后定位到底部并进入跟随状态')
 if (!reviewPage.includes('pane.scrollHeight - pane.scrollTop - pane.clientHeight < 180')) throw new Error('阅读历史时不得抢滚动位置')
 
+if (!reviewPage.includes('className="review-reader-pane"') || !reviewPage.includes('className="review-reader"')) throw new Error('Review 必须保留分页/滚动行为钩子，由 TaskSurface 归一为 Session 槽位')
+if (!taskSurface.includes("const sessionReaderHooks = new Set(['review-reader-pane', 'pi-live-reader'])")) throw new Error('TaskSurface 必须识别 Review / Live Reader 行为钩子')
+if (!taskSurface.includes("const sessionDocumentHooks = new Set(['review-reader', 'pi-live-document'])")) throw new Error('TaskSurface 必须识别 Review / Live Document 行为钩子')
+if (!taskSurface.includes("withSessionClass(element, 'task-session-reader'") || !taskSurface.includes("withSessionClass(candidate, 'task-session-document')")) throw new Error('TaskSurface 必须将 Review / Live 归一为共享 Reader / Document 槽位')
+if (!taskSessionCss.includes('.task-session-view > .task-session-reader') || !taskSessionCss.includes('.task-session-view .task-session-document')) throw new Error('统一 Session 样式必须只基于共享 Reader / Document 槽位')
+if (taskSessionCss.includes('.review-reader') || taskSessionCss.includes('.pi-live-document')) throw new Error('统一 Session 样式不得再依赖 Review / Pi 页面私有正文类')
+
 if (taskHeader.includes('.task-surface-review') || taskHeader.includes('.review-reader')) throw new Error('共享 TaskHeader 不得依赖 Review 页面类名或 DOM')
 if (!taskHeader.includes('.task-session-view[data-task-session-interactive="false"]')) throw new Error('只读会话尾部操作必须依据统一 Session 状态定位')
+if (!taskHeader.includes('.task-session-reader > .task-session-document')) throw new Error('只读会话尾部操作必须直接定位统一 Session Document')
 if (!taskHeader.includes("className = 'task-session-tail-actions-host'") || !taskHeader.includes('documentRoot.append(host)')) throw new Error('继续/分叉操作必须保留统一 Session 正文尾部挂载点')
 if (!taskHeader.includes('sessionTailHost?.parentElement === documentRoot')) throw new Error('切换同能力会话时必须核对尾部挂载点仍属于当前正文')
 if (/\},\s*\[primaryActions\.length\]\)/.test(taskHeader)) throw new Error('尾部挂载点不得只按按钮数量更新，否则同能力会话切换会遗留旧 Host')
@@ -47,7 +57,7 @@ if (/\.round-nav[^\n{]*\[[^\]]*(?:data-|aria-)[^\]]*\][^{}]*\{[^{}]*(?:display|v
 if (!/\.review-page \.round-nav button\s*\{[^}]*white-space:\s*nowrap/s.test(longCss)) throw new Error('长会话导航所有者必须保证操作单行展示')
 if (!longCss.includes('.round-nav-filters') || !longCss.includes('.round-nav-actions')) throw new Error('长会话布局必须基于筛选组/操作组')
 
-if (!mainSource.includes("import './task-detail.css'")) throw new Error('Task Surface 共享正式样式必须在 Web 入口加载')
+if (!mainSource.includes("import './task-detail.css'") || !mainSource.includes("import './task-session-view.css'")) throw new Error('Task Surface 共享组件与 Session 样式必须在 Web 入口加载')
 if (mainSource.includes("task-detail-prototype.css") || mainSource.includes("task-detail-polish.css") || mainSource.includes("task-feedback-polish.css")) throw new Error('正式入口不得恢复 Task Surface 临时覆盖层')
 if (taskMessage.includes('task-message-agent-mark') || taskMessage.includes('chat-avatar-agent')) throw new Error('Agent 输出不得恢复头像节点')
 if (!taskMessage.includes('{!user && <button') || !taskMessage.includes('<span>源码</span>')) throw new Error('源码切换只属于 Agent Markdown')
@@ -60,4 +70,4 @@ if (!taskDetailCss.includes('.task-round-summary::after') || !taskDetailCss.incl
 if (!taskDetailCss.includes('.task-header-status') || !taskDetailCss.includes('pointer-events: none') || !taskDetailCss.includes('.task-header-actions button')) throw new Error('任务详情头必须明确区分状态与可点击操作')
 if (!reviewCss.includes('.evidence-inline') || !reviewCss.includes('.review-inspector-overlay') || /\.inspector-panel\b/.test(reviewCss)) throw new Error('Review 页面所有者必须保留证据/Inspector 业务内容，抽屉外壳统一由 Drawer 持有')
 
-console.log('任务复盘交互契约检查通过：默认最新窗口、历史阅读不抢滚动、统一 Drawer、统一 Session 尾部继续操作、单一短分隔线、显式 Thinking/Tool 层级、Agent 源码入口悬浮与 Task Surface 单一样式所有权均已锁定。')
+console.log('任务复盘交互契约检查通过：统一 Session Reader / Document、默认最新窗口、历史阅读不抢滚动、统一 Drawer、尾部继续操作、轮次导航与显式 Thinking / Tool 层级均已锁定。')
