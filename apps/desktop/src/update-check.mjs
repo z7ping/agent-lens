@@ -3,6 +3,11 @@ import semver from 'semver'
 const RELEASES_API = 'https://api.github.com/repos/z7ping/agent-lens/releases?per_page=20'
 export const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 export const UPDATE_CHECK_STARTUP_DELAY_MS = 8_000
+export const SUPPORTED_DESKTOP_ARCHITECTURES = ['x64']
+
+export function isSupportedDesktopArchitecture(arch) {
+  return SUPPORTED_DESKTOP_ARCHITECTURES.includes(String(arch))
+}
 
 function normalizedSemver(value) {
   if (typeof value !== 'string') return null
@@ -91,6 +96,9 @@ function releaseNotes(release) {
 }
 
 export function selectUpdateRelease(releases, currentVersion, options = {}) {
+  const arch = options.arch ?? 'x64'
+  if (!isSupportedDesktopArchitecture(arch)) return null
+
   const current = parseSemver(currentVersion)
   if (!current || !Array.isArray(releases)) return null
   const acceptPrereleases = current.prerelease.length > 0
@@ -110,7 +118,7 @@ export function selectUpdateRelease(releases, currentVersion, options = {}) {
   }
 
   if (!selected || !selectedVersion) return null
-  const downloadUrl = releaseDownloadUrl(selected, options)
+  const downloadUrl = releaseDownloadUrl(selected, { ...options, arch })
   if (!downloadUrl) return null
   return {
     version: `${selectedVersion.major}.${selectedVersion.minor}.${selectedVersion.patch}${selectedVersion.prerelease.length ? `-${selectedVersion.prerelease.join('.')}` : ''}`,
@@ -135,6 +143,9 @@ export function shouldNotifyUpdate(update, state = {}) {
 }
 
 export async function fetchAvailableUpdate(currentVersion, options = {}) {
+  const arch = options.arch ?? 'x64'
+  if (!isSupportedDesktopArchitecture(arch)) return null
+
   const fetchImpl = options.fetchImpl ?? fetch
   const response = await fetchImpl(RELEASES_API, {
     headers: {
@@ -148,6 +159,6 @@ export async function fetchAvailableUpdate(currentVersion, options = {}) {
   const releases = await response.json()
   return selectUpdateRelease(releases, currentVersion, {
     platform: options.platform ?? 'win32',
-    arch: options.arch ?? 'x64',
+    arch,
   })
 }

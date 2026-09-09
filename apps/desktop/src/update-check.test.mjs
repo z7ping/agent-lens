@@ -3,6 +3,7 @@ import test from 'node:test'
 import {
   compareSemver,
   fetchAvailableUpdate,
+  isSupportedDesktopArchitecture,
   parseSemver,
   selectUpdateRelease,
   shouldCheckForUpdate,
@@ -16,6 +17,11 @@ test('parseSemver and compareSemver follow prerelease precedence', () => {
   assert.ok(compareSemver('1.0.0-beta.2', '1.0.0-rc.1') < 0)
   assert.ok(compareSemver('1.0.0-rc.1', '1.0.0') < 0)
   assert.ok(compareSemver('1.0.1', '1.0.0') > 0)
+})
+
+test('desktop release architecture is x64 only', () => {
+  assert.equal(isSupportedDesktopArchitecture('x64'), true)
+  assert.equal(isSupportedDesktopArchitecture('arm64'), false)
 })
 
 test('stable builds ignore prereleases', () => {
@@ -47,7 +53,7 @@ test('prerelease builds can advance through later prereleases into stable', () =
   assert.equal(update?.releaseNotes, '稳定版发布说明')
 })
 
-test('platform-specific desktop assets are preferred', () => {
+test('platform-specific x64 desktop assets are preferred', () => {
   const release = {
     tag_name: 'v1.0.0-alpha.1',
     prerelease: true,
@@ -55,15 +61,15 @@ test('platform-specific desktop assets are preferred', () => {
     html_url: 'https://example.test/release',
     assets: [
       { name: 'AgentLens-1.0.0-alpha.1-Setup-x64.exe', browser_download_url: 'https://example.test/windows.exe' },
-      { name: 'AgentLens-1.0.0-alpha.1-macOS-arm64.zip', browser_download_url: 'https://example.test/mac.zip' },
-      { name: 'AgentLens-1.0.0-alpha.1-macOS-arm64.dmg', browser_download_url: 'https://example.test/mac.dmg' },
+      { name: 'AgentLens-1.0.0-alpha.1-macOS-x64.zip', browser_download_url: 'https://example.test/mac.zip' },
+      { name: 'AgentLens-1.0.0-alpha.1-macOS-x64.dmg', browser_download_url: 'https://example.test/mac.dmg' },
       { name: 'AgentLens-1.0.0-alpha.1-Linux-x64.deb', browser_download_url: 'https://example.test/linux.deb' },
       { name: 'AgentLens-1.0.0-alpha.1-Linux-x64.AppImage', browser_download_url: 'https://example.test/linux.AppImage' },
     ],
   }
 
   assert.equal(
-    selectUpdateRelease([release], '1.0.0-alpha.0', { platform: 'darwin', arch: 'arm64' })?.downloadUrl,
+    selectUpdateRelease([release], '1.0.0-alpha.0', { platform: 'darwin', arch: 'x64' })?.downloadUrl,
     'https://example.test/mac.dmg',
   )
   assert.equal(
@@ -72,7 +78,21 @@ test('platform-specific desktop assets are preferred', () => {
   )
 })
 
-test('missing platform asset falls back to the release page', () => {
+test('ARM64 desktop builds do not receive release updates', () => {
+  const release = {
+    tag_name: 'v1.0.0-alpha.1',
+    prerelease: true,
+    draft: false,
+    html_url: 'https://example.test/release',
+    assets: [
+      { name: 'AgentLens-1.0.0-alpha.1-macOS-arm64.dmg', browser_download_url: 'https://example.test/mac-arm64.dmg' },
+      { name: 'AgentLens-1.0.0-alpha.1-macOS-x64.dmg', browser_download_url: 'https://example.test/mac-x64.dmg' },
+    ],
+  }
+  assert.equal(selectUpdateRelease([release], '1.0.0-alpha.0', { platform: 'darwin', arch: 'arm64' }), null)
+})
+
+test('missing platform asset falls back to the release page for supported x64', () => {
   const update = selectUpdateRelease([
     {
       tag_name: 'v1.0.0-alpha.1',
@@ -81,7 +101,7 @@ test('missing platform asset falls back to the release page', () => {
       html_url: 'https://example.test/release',
       assets: [{ name: 'AgentLens-1.0.0-alpha.1-Setup-x64.exe', browser_download_url: 'https://example.test/windows.exe' }],
     },
-  ], '1.0.0-alpha.0', { platform: 'darwin', arch: 'arm64' })
+  ], '1.0.0-alpha.0', { platform: 'darwin', arch: 'x64' })
   assert.equal(update?.downloadUrl, 'https://example.test/release')
 })
 
@@ -131,4 +151,18 @@ test('fetchAvailableUpdate uses release list and returns selected update', async
   })
   assert.equal(update?.version, '1.0.0-alpha.1')
   assert.equal(update?.downloadUrl, 'https://example.test/linux.AppImage')
+})
+
+test('fetchAvailableUpdate skips network access for unsupported ARM64', async () => {
+  let fetched = false
+  const update = await fetchAvailableUpdate('1.0.0-alpha.0', {
+    platform: 'darwin',
+    arch: 'arm64',
+    fetchImpl: async () => {
+      fetched = true
+      throw new Error('should not fetch')
+    },
+  })
+  assert.equal(update, null)
+  assert.equal(fetched, false)
 })

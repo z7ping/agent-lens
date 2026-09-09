@@ -5,6 +5,7 @@ const app = readFileSync('packages/web/src/App.tsx', 'utf8')
 const page = readFileSync('packages/web/src/features/BackupPage.tsx', 'utf8')
 const tree = readFileSync('packages/web/src/components/BackupDirectoryTree.tsx', 'utf8')
 const css = readFileSync('packages/web/src/backup-overlays.css', 'utf8')
+const scrollCss = readFileSync('packages/web/src/backup-scroll.css', 'utf8')
 const overlay = readFileSync('packages/web/src/components/ui/Overlay.tsx', 'utf8')
 const overlayCss = readFileSync('packages/web/src/components/ui/overlay.css', 'utf8')
 const explainability = readFileSync('packages/backup-local/src/explainability.ts', 'utf8')
@@ -13,11 +14,26 @@ const swr = readFileSync('packages/backup-local/src/stale-while-revalidate.ts', 
 const plugin = readFileSync('packages/backup-local/src/plugin.ts', 'utf8')
 
 const backupImport = main.indexOf("import './backup.css'")
+const scrollImport = main.indexOf("import './backup-scroll.css'")
 const overlayImport = main.indexOf("import './backup-overlays.css'")
 const insightsImport = main.indexOf("import './insights.css'")
-if (backupImport < 0 || overlayImport < 0 || insightsImport < 0 || !(backupImport < overlayImport && overlayImport < insightsImport)) {
-  throw new Error('资产备份目录树样式必须紧随 backup.css 接入，并位于后续一级页面样式之前')
+if (backupImport < 0 || scrollImport < 0 || overlayImport < 0 || insightsImport < 0 || !(backupImport < scrollImport && scrollImport < overlayImport && overlayImport < insightsImport)) {
+  throw new Error('资产备份滚动/目录树样式必须紧随 backup.css 接入，并位于后续一级页面样式之前')
 }
+
+if (!page.includes('<div className="page-scroll">')) {
+  throw new Error('资产备份必须保留工具栏下方的独立 page-scroll 内容区')
+}
+for (const required of [
+  '.app-main > .page-scroll',
+  'min-height: 0',
+  'flex: 1 1 auto',
+  'overflow-y: auto',
+  'scrollbar-gutter: stable',
+]) {
+  if (!scrollCss.includes(required)) throw new Error(`资产备份独立滚动契约缺失：${required}`)
+}
+if (/!important\b/.test(scrollCss)) throw new Error('资产备份滚动不得依赖 !important 争夺布局所有权')
 
 if (!page.includes('onClick={() => setDetailSourceId(source.sourceId)}>数据详情</button>')) {
   throw new Error('资产备份必须保留“数据详情”点击状态入口')
@@ -84,4 +100,4 @@ if (!app.includes("useState<string[] | null>(null)") || !page.includes('const se
   throw new Error('渐进扫描期间必须以“全部已检测智能体”作为动态默认范围，不得锁定为首个完成的智能体')
 }
 
-console.log('资产备份统一 Overlay / 目录树 / 解释层性能 / 渐进加载检查通过')
+console.log('资产备份统一 Overlay / 独立滚动 / 目录树 / 解释层性能 / 渐进加载检查通过')

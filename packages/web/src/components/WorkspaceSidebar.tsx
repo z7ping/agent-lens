@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import type { AgentFacetDto } from '@agent-lens/protocol'
 import type { ClientSnapshot } from '../client/model'
+import { BackgroundActivityStatus } from './BackgroundActivityStatus'
 import { BrandVersion, ReleaseInfo } from './ReleaseInfo'
 import { RuntimeStatus } from './RuntimeStatus'
 import { SidebarFilterDisclosure } from './SidebarFilterDisclosure'
@@ -168,6 +169,7 @@ export function WorkspaceSidebar({
           </section>
         </section>}
       </div>
+      <BackgroundActivityStatus health={snapshot.health}/>
     </div>
   </aside>
 }

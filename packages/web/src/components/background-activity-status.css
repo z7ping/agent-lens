@@ -1,0 +1,257 @@
+.workspace-background-activity {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.background-activity-trigger {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 232px;
+  height: 32px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--al-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.background-activity-trigger:hover,
+.background-activity-trigger[aria-expanded='true'] {
+  border-color: var(--al-line);
+  background: var(--al-soft-2);
+}
+
+.background-activity-trigger.is-active { color: var(--al-accent); }
+.background-activity-trigger.is-success { color: var(--al-success); }
+.background-activity-trigger.is-warning { color: var(--al-danger); }
+
+.background-activity-indicator {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: .78;
+}
+
+.background-activity-trigger.is-active .background-activity-indicator {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid color-mix(in srgb, currentColor 26%, transparent);
+  border-top-color: currentColor;
+  background: transparent;
+  opacity: 1;
+  animation: background-activity-spin .9s linear infinite;
+}
+
+.background-activity-trigger-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 620;
+}
+
+.background-activity-popover {
+  width: min(294px, calc(100vw - 24px));
+  max-height: min(520px, calc(100dvh - 24px));
+  border: 1px solid var(--al-line);
+  border-radius: 12px;
+  background: var(--al-surface-raised);
+  box-shadow: var(--al-shadow-lg);
+  color: var(--al-ink);
+}
+
+.background-activity-popover-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 13px 14px 11px;
+  border-bottom: 1px solid var(--al-line);
+}
+
+.background-activity-popover-head > div {
+  min-width: 0;
+}
+
+.background-activity-popover-head b {
+  display: block;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.background-activity-popover-head span:not(.background-activity-state) {
+  display: block;
+  margin-top: 3px;
+  color: var(--al-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.background-activity-state {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--al-soft);
+  color: var(--al-muted);
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.background-activity-state.is-active { background: var(--al-accent-soft); color: var(--al-accent); }
+.background-activity-state.is-success { background: var(--al-success-soft); color: var(--al-success); }
+.background-activity-state.is-warning { background: var(--al-danger-soft); color: var(--al-danger); }
+
+.background-activity-process {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 10px 12px 2px;
+  padding: 8px 9px;
+  border-radius: 8px;
+  background: var(--al-soft-2);
+  color: var(--al-muted);
+  font-size: 12px;
+}
+
+.background-activity-process-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--al-muted-2);
+}
+
+.background-activity-process.is-ok .background-activity-process-dot { background: var(--al-success); }
+.background-activity-process.is-degraded .background-activity-process-dot { background: var(--al-danger); }
+
+.background-activity-section {
+  padding: 10px 12px 11px;
+}
+
+.background-activity-section + .background-activity-section {
+  border-top: 1px solid var(--al-line);
+}
+
+.background-activity-section-title {
+  margin-bottom: 7px;
+  color: var(--al-muted-2);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+
+.background-activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.background-activity-item {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 6px;
+  border-radius: 8px;
+}
+
+.background-activity-item:hover {
+  background: var(--al-soft-2);
+}
+
+.background-activity-item-mark {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  margin-top: 5px;
+  border-radius: 999px;
+  background: var(--al-muted-2);
+}
+
+.background-activity-item.is-active .background-activity-item-mark {
+  width: 8px;
+  height: 8px;
+  margin-top: 4px;
+  border: 1.5px solid color-mix(in srgb, var(--al-accent) 26%, transparent);
+  border-top-color: var(--al-accent);
+  background: transparent;
+  animation: background-activity-spin .9s linear infinite;
+}
+
+.background-activity-item.is-completed .background-activity-item-mark { background: var(--al-success); }
+.background-activity-item.is-failed .background-activity-item-mark,
+.background-activity-item.is-degraded .background-activity-item-mark { background: var(--al-danger); }
+.background-activity-item.is-paused .background-activity-item-mark { background: var(--al-warning); }
+
+.background-activity-item-copy {
+  display: block;
+  min-width: 0;
+  flex: 1;
+}
+
+.background-activity-item-copy b,
+.background-activity-item-copy small {
+  display: block;
+  min-width: 0;
+}
+
+.background-activity-item-copy b {
+  overflow: hidden;
+  color: var(--al-ink-2);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.background-activity-item-copy small {
+  margin-top: 2px;
+  color: var(--al-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.background-activity-item-copy .background-activity-error {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--al-danger);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.background-activity-empty,
+.background-activity-load-error {
+  color: var(--al-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.background-activity-load-error {
+  padding: 9px 12px 11px;
+  border-top: 1px solid var(--al-line);
+  color: var(--al-danger);
+}
+
+@keyframes background-activity-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .background-activity-trigger.is-active .background-activity-indicator,
+  .background-activity-item.is-active .background-activity-item-mark {
+    animation: none;
+    border-color: currentColor;
+  }
+}

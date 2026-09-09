@@ -127,8 +127,7 @@ html body .evidence-inline-more,
 html body .event-row,
 html body .event-copy small,
 html body .event-source,
-html body .event-row time,
-html body .turn-tick::after{font-size:var(--text-caption)}
+html body .event-row time{font-size:var(--text-caption)}
 html body .session-item-title,
 html body .interaction-title,
 html body .thinking-content,

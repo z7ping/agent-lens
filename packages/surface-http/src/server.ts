@@ -22,6 +22,7 @@ import {
   type SourceRecordResponseDto,
 } from '@agent-lens/protocol'
 import type { PiLiveService } from '@agent-lens/runtime-cordis'
+import { readBackgroundActivity } from './background-activity'
 import { handleBackupRequest } from './backup-http'
 import { handleCapturePolicyRequest } from './capture-policy-http'
 import { parseDataRuntimeHealth } from './data-runtime-health'
@@ -195,6 +196,10 @@ export async function startHttpSurface(
         writeJson(response, 405, { error: 'method_not_allowed' })
         return
       }
+      if (url.pathname === '/api/v1/background-activity') {
+        writeJson(response, 200, await readBackgroundActivity(storage))
+        return
+      }
       if (url.pathname === '/api/v1/ready') {
         writeJson(response, 200, {
           status: 'ok',
@@ -357,7 +362,6 @@ export async function startHttpSurface(
     server.once('error', reject)
     server.listen(requestedPort, AGENT_LENS_HTTP_HOST, () => resolvePromise())
   })
-
   const address = server.address()
   const actualPort = address && typeof address !== 'string' ? address.port : requestedPort
 

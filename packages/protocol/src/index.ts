@@ -1,3 +1,4 @@
+export * from './background-activity'
 export * from './backup'
 export * from './capture-policy'
 export * from './events'
