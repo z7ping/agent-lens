@@ -53,6 +53,15 @@
   --radius-md:10px;
   --radius-lg:14px;
 
+  /* #89：Review / Pi Live 共用 Task Surface 的几何语义。 */
+  --al-space-page-x:28px;
+  --al-content-task-reading:1120px;
+  --al-content-task-composer:1120px;
+  --al-radius-product-special:28px;
+  --al-safe-task-boundary-inline:40px;
+  --al-safe-task-boundary-block:32px;
+  --al-safe-composer-inline:18px;
+
   --src-codex:#16866D;
   --src-claude:#C96E4D;
   --src-pi:#756FDC;

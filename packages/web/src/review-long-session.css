@@ -149,9 +149,6 @@
   margin: 6px 0 22px;
 }
 
-@media (min-width: 1200px) {
-  .review-page .review-reader { padding-left: 52px; }
-}
 @media (min-width: 992px) {
   .app-shell:has(.review-page) { height: 100vh; min-height: 0; overflow: hidden; }
   .review-page { height: auto; min-height: 0; }

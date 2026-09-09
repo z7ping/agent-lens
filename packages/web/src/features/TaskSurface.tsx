@@ -288,7 +288,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
               key={item.id}
               type="button"
               className={`turn-tick ${active ? 'active' : ''} ${item.error ? 'err' : ''} ${running ? 'running' : ''}`.trim()}
-              data-tip={tip}
+              title={tip}
               aria-label={`跳到${tip}`}
               aria-current={active ? 'step' : undefined}
               onClick={() => jumpToRound(item)}

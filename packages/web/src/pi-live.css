@@ -3,7 +3,7 @@
 /*
  * Pi Live 专属样式所有者。
  * 只负责 Runtime 页面壳层、会话侧栏、Composer、队列和扩展交互。
- * TaskHeader / Round / Message / Thinking / Tool / Event 统一由 task-detail.css 负责。
+ * TaskHeader / Round / Message / Thinking / Tool / Event 与共同阅读轴统一由 task-detail.css 负责。
  */
 .pi-live-page {
   --pi-live-side: 288px;
@@ -91,16 +91,8 @@
   overflow-anchor: none;
   background: var(--al-surface);
 }
-.pi-live-document { width: 100%; max-width: 1040px; margin: 0 auto; padding: 8px 38px 8px 30px; }
+.pi-live-document { padding-block: 8px; }
 .pi-live-startup-spotlight { margin: 18px 0 14px; }
-.pi-live-page.pi-live-page-embedded .pi-live-document { padding: 8px 34px 8px 48px; }
-
-/* 1280px 窗口下，工作栏会使实际阅读区降至 lg 宽度；收敛为稳定阅读列，而非贴边铺满。 */
-@container task-surface (max-width: 991.98px) {
-  .pi-live-page.pi-live-page-embedded .pi-live-document { padding-inline: 96px; }
-  .pi-live-page.pi-live-page-embedded .pi-live-compose-wrap { padding-inline: 96px; }
-  .pi-live-page.pi-live-page-embedded .pi-live-float-stack { right: 96px; left: 96px; width: auto; }
-}
 
 .pi-live-current-round { margin-top: 3px; padding-top: 1px; }
 .pi-live-empty { padding: 7px 0 5px; color: var(--al-muted); font-size: 13px; text-align: left; }
@@ -138,18 +130,18 @@
 .pi-live-compose-wrap {
   position: relative;
   z-index: 10;
-  padding: 3px 18px 10px;
+  padding: 3px var(--al-safe-composer-inline) 10px;
   border-top: 0;
   background: var(--al-surface);
 }
 .pi-live-float-stack {
   position: absolute;
-  right: 18px;
+  right: var(--al-safe-composer-inline);
   bottom: calc(100% - 1px);
-  left: 18px;
+  left: var(--al-safe-composer-inline);
   z-index: 12;
   display: grid;
-  width: min(1040px, calc(100% - 36px));
+  width: min(var(--al-content-task-composer), calc(100% - (var(--al-safe-composer-inline) * 2)));
   max-height: min(44vh, 320px);
   margin: 0 auto;
   gap: 6px;
@@ -216,11 +208,11 @@ textarea.pi-live-blocking-field { min-height: 74px; }
 .pi-live-composer {
   position: relative;
   width: 100%;
-  max-width: 1040px;
+  max-width: var(--al-content-task-composer);
   margin: 0 auto;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--al-line-strong) 82%, transparent);
-  border-radius: 28px;
+  border-radius: var(--al-radius-product-special);
   background: var(--al-surface);
   box-shadow: 0 2px 10px rgb(16 24 40 / .06), 0 8px 24px rgb(16 24 40 / .035);
   transition: border-color .15s ease, box-shadow .15s ease;
@@ -335,23 +327,18 @@ textarea.pi-live-blocking-field { min-height: 74px; }
 @media (max-width: 1199.98px) {
   .pi-live-page { --pi-live-side: 260px; }
   .pi-live-compose-runtime { display: none; }
-  .pi-live-document { padding-right: 28px; padding-left: 24px; }
-  .pi-live-page.pi-live-page-embedded .pi-live-document { padding-right: 22px; padding-left: 44px; }
 }
 @media (max-width: 991.98px) {
   .pi-live-page { --pi-live-side: 236px; }
-  .pi-live-compose-wrap { padding-right: 12px; padding-left: 12px; }
-  .pi-live-float-stack { right: 12px; left: 12px; width: calc(100% - 24px); }
+  .pi-live-compose-wrap { padding-right: 20px; padding-left: 20px; }
+  .pi-live-float-stack { right: 20px; left: 20px; width: calc(100% - 40px); }
   .pi-live-model-picker { width: clamp(180px, 24vw, 230px); max-width: 230px; }
   .pi-live-thinking-picker { width: clamp(132px, 16vw, 160px); max-width: 160px; }
-  .pi-live-page.pi-live-page-embedded .pi-live-document { padding-right: 18px; padding-left: 40px; }
   .pi-live-composer.is-expanded .pi-live-editor { height: clamp(220px, 44vh, 440px); }
 }
 @media (max-width: 767.98px) {
   .pi-live-page { grid-template-columns: 1fr; }
   .pi-live-sessions { display: none; }
-  .pi-live-document { padding: 7px 14px 8px; }
-  .pi-live-page.pi-live-page-embedded .pi-live-document { padding: 7px 14px 8px; }
   .pi-live-compose-wrap { padding: 3px 10px 8px; }
   .pi-live-float-stack { right: 10px; left: 10px; width: calc(100% - 20px); }
   .pi-live-editor { height: 78px; min-height: 78px; }
