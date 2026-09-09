@@ -162,8 +162,12 @@ function sessionRailFrame(root: HTMLElement, fallback: DOMRect): RailFrameRect {
 }
 
 function sessionBoundaryPosition(root: HTMLElement, railFrame: RailFrameRect, fallback: DOMRect) {
-  const documentRect = root.querySelector<HTMLElement>('.task-session-document')?.getBoundingClientRect()
-  const documentRight = documentRect && documentRect.width > 0 ? documentRect.right : fallback.right
+  const document = root.querySelector<HTMLElement>('.task-session-document')
+  const documentRect = document?.getBoundingClientRect()
+  // 边界导航贴阅读内容轴，而非包含左右 padding 的 Session Document 外缘。
+  const documentRight = document && documentRect && documentRect.width > 0
+    ? documentRect.right - cssPixelValue(document, 'padding-right')
+    : fallback.right
   return {
     bottom: Math.max(16, window.innerHeight - (railFrame.top + railFrame.height) + 16),
     left: Math.min(window.innerWidth - 58, Math.max(16, documentRight + 12)),
