@@ -112,6 +112,7 @@ export function projectPiLiveTaskRounds(history: PiLiveHistoryItem[]): PiLiveTas
     const durationMs = roundDuration(round.items)
     const preview = roundPreview(round.items)
     const fragments = Math.max(1, Math.ceil(round.items.length / PI_LIVE_HISTORY_ROUND_FACT_LIMIT))
+    const semanticId = round.background ? 'pi-background' : `pi-round-${round.ordinal}`
 
     for (let index = 0; index < fragments; index += 1) {
       const items = round.items.slice(index * PI_LIVE_HISTORY_ROUND_FACT_LIMIT, (index + 1) * PI_LIVE_HISTORY_ROUND_FACT_LIMIT)
@@ -120,6 +121,7 @@ export function projectPiLiveTaskRounds(history: PiLiveHistoryItem[]): PiLiveTas
       result.push({
         model: {
           id: `${round.background ? 'background' : `round-${round.ordinal}`}:${index}`,
+          semanticId,
           ordinal: round.background ? undefined : round.ordinal,
           label: continuation ? `${baseLabel} · 续` : baseLabel,
           state: 'settled',
@@ -142,6 +144,7 @@ export function projectPiLiveRunningRound(input: PiLiveRunningRoundProjectionInp
   const tools = input.items.filter((item): item is Extract<PiLiveHistoryItem, { kind: 'tool' }> => item.kind === 'tool')
   return {
     id: 'pi-live-current-round',
+    semanticId: 'pi-live-current-round',
     label: '当前轮次',
     state: input.isStreaming ? 'running' : 'stopped',
     toolCount: tools.length,

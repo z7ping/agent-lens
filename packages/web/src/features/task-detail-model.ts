@@ -62,7 +62,10 @@ export interface TaskToolGroupModel {
 }
 
 export interface TaskRoundModel {
+  /** Render identity. Multiple render fragments may belong to one semantic round. */
   id: string
+  /** Stable logical round identity used by cross-session navigation such as Turn Rail. */
+  semanticId?: string | undefined
   ordinal?: number | undefined
   label: string
   state: TaskRoundState
