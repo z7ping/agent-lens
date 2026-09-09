@@ -33,6 +33,8 @@ if (!reviewPage.includes('pane.scrollHeight - pane.scrollTop - pane.clientHeight
 if (taskHeader.includes('.task-surface-review') || taskHeader.includes('.review-reader')) throw new Error('共享 TaskHeader 不得依赖 Review 页面类名或 DOM')
 if (!taskHeader.includes('.task-session-view[data-task-session-interactive="false"]')) throw new Error('只读会话尾部操作必须依据统一 Session 状态定位')
 if (!taskHeader.includes("className = 'task-session-tail-actions-host'") || !taskHeader.includes('documentRoot.append(host)')) throw new Error('继续/分叉操作必须保留统一 Session 正文尾部挂载点')
+if (!taskHeader.includes('sessionTailHost?.parentElement === documentRoot')) throw new Error('切换同能力会话时必须核对尾部挂载点仍属于当前正文')
+if (/\},\s*\[primaryActions\.length\]\)/.test(taskHeader)) throw new Error('尾部挂载点不得只按按钮数量更新，否则同能力会话切换会遗留旧 Host')
 if (!longCss.includes('.task-session-tail-actions-host')) throw new Error('Review 长会话层必须只补充统一 Session 尾部挂载点间距')
 
 if (!reviewPage.includes('<Drawer') || !reviewPage.includes('className="review-inspector-overlay"') || !reviewPage.includes('onClose={onClose}')) throw new Error('事件详情必须消费统一 Drawer')
