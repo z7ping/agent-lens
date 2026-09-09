@@ -1,6 +1,7 @@
 /*
  * Task Surface 共享轮次导轨。
- * Review / Pi Live / Hub 只提供 TaskRound；导轨的发现、定位与交互统一由 TaskSurface 持有。
+ * Review / Pi Live / Hub 只提供语义 TaskRound；导轨的发现、定位与交互统一由 TaskSurface 持有。
+ * running / error / active 只改变状态视觉，不得改变 tick 的基础占位几何。
  */
 .task-turn-rail {
   position: fixed;
@@ -51,12 +52,7 @@
 .task-turn-rail .turn-tick:has(+ .turn-tick + .turn-tick + .turn-tick:hover) i,
 .task-turn-rail .turn-tick:hover + .turn-tick + .turn-tick + .turn-tick i { width: 9px; }
 .task-turn-rail .turn-tick.active i { background: var(--al-ink); }
-.task-turn-rail .turn-tick.running i {
-  width: 18px;
-  height: 2px;
-  background: var(--al-accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--al-accent) 10%, transparent);
-}
+.task-turn-rail .turn-tick.running i { background: var(--al-accent); }
 .task-turn-rail .turn-tick.err i { background: color-mix(in srgb, var(--al-danger) 55%, var(--al-line)); }
 .task-turn-rail .turn-tick.err.active i { background: var(--al-danger); }
 .task-turn-rail .turn-tick::after {
@@ -86,40 +82,19 @@
 .task-turn-rail .turn-tick:focus-visible::after { opacity: 1; }
 
 /*
- * 全局任务边界导航规范。
- * - 位置属于 Workspace 级固定位置，不跟随页面私有宽度漂移；
- * - 安全边距来自正式 Task Surface 几何语义 Token；
- * - 上下按钮统一 42×42，图标统一 20px；
- * - 页面只提供跳转行为，不得覆盖尺寸、位置和视觉状态。
+ * Task Surface 共享会话边界导航。
+ * Review / Pi Live 只提供跳转行为；DOM、位置、尺寸、图标和视觉状态全部由 TaskSurface 持有。
+ * 位置统一锚定 Session Document 右侧与 Session View 底部，不允许页面模式单独覆盖。
  */
-.task-boundary-nav,
-.review-page.review-page-embedded .round-nav-actions .round-nav-from-start,
-.review-page.review-page-embedded .round-nav-actions .round-nav-latest {
-  right: var(--al-safe-task-boundary-inline);
-}
-
 .task-boundary-nav {
   position: fixed;
-  bottom: var(--al-safe-task-boundary-block);
   z-index: 54;
   display: flex;
   flex-direction: column;
   gap: 10px;
   pointer-events: none;
 }
-.task-boundary-nav-live { right: auto; }
-
-.review-page.review-page-embedded .round-nav-actions .round-nav-from-start,
-.review-page.review-page-embedded .round-nav-actions .round-nav-latest {
-  position: fixed;
-  z-index: 54;
-}
-.review-page.review-page-embedded .round-nav-actions .round-nav-from-start { bottom: calc(var(--al-safe-task-boundary-block) + 52px); }
-.review-page.review-page-embedded .round-nav-actions .round-nav-latest { bottom: var(--al-safe-task-boundary-block); }
-
-.task-boundary-nav > .ui-icon-button,
-.review-page.review-page-embedded .round-nav-actions .round-nav-from-start,
-.review-page.review-page-embedded .round-nav-actions .round-nav-latest {
+.task-boundary-nav > .ui-icon-button {
   width: 42px;
   height: 42px;
   min-height: 42px;
@@ -136,27 +111,22 @@
   line-height: 0;
   pointer-events: auto;
 }
-.task-boundary-nav > .ui-icon-button svg,
-.review-page.review-page-embedded .round-nav-actions .round-nav-from-start svg,
-.review-page.review-page-embedded .round-nav-actions .round-nav-latest svg {
+.task-boundary-nav > .ui-icon-button svg {
   width: 20px;
   height: 20px;
 }
-.task-boundary-nav > .ui-icon-button:hover:not(:disabled),
-.review-page.review-page-embedded .round-nav-actions .round-nav-from-start:hover:not(:disabled) {
+.task-boundary-nav > .ui-icon-button:hover:not(:disabled) {
   border-color: var(--al-accent);
   color: var(--al-accent);
   box-shadow: 0 9px 24px rgb(16 24 40 / .17);
   transform: translateY(-1px);
 }
-.task-boundary-nav > .ui-icon-button.is-primary,
-.review-page.review-page-embedded .round-nav-actions .round-nav-latest {
+.task-boundary-nav > .ui-icon-button.is-primary {
   border-color: var(--al-accent);
   background: var(--al-accent);
   color: var(--al-on-accent);
 }
-.task-boundary-nav > .ui-icon-button.is-primary:hover:not(:disabled),
-.review-page.review-page-embedded .round-nav-actions .round-nav-latest:hover:not(:disabled) {
+.task-boundary-nav > .ui-icon-button.is-primary:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--al-accent) 88%, var(--al-ink));
   background: color-mix(in srgb, var(--al-accent) 88%, var(--al-ink));
   color: var(--al-on-accent);
@@ -166,14 +136,10 @@
 
 @media (max-width: 991.98px) {
   .task-turn-rail,
-  .task-boundary-nav,
-  .review-page.review-page-embedded .round-nav-actions .round-nav-from-start,
-  .review-page.review-page-embedded .round-nav-actions .round-nav-latest { display: none; }
+  .task-boundary-nav { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .task-turn-rail,
   .task-turn-rail .turn-tick i,
-  .task-boundary-nav > .ui-icon-button,
-  .review-page.review-page-embedded .round-nav-actions .round-nav-from-start,
-  .review-page.review-page-embedded .round-nav-actions .round-nav-latest { transition: none; }
+  .task-boundary-nav > .ui-icon-button { transition: none; }
 }

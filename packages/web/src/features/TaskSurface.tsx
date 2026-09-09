@@ -21,8 +21,16 @@ import { IconButton, UiIcon } from '../components/ui'
 
 export type TaskSurfaceMode = 'review' | 'live' | 'hub' | 'new'
 
+export interface TaskBoundaryNavigation {
+  startDisabled?: boolean
+  endDisabled?: boolean
+  onStart(): void | Promise<void>
+  onEnd(): void | Promise<void>
+}
+
 export interface TaskSurfaceProps extends HTMLAttributes<HTMLElement> {
   mode: TaskSurfaceMode
+  boundaryNavigation?: TaskBoundaryNavigation
 }
 
 interface TaskSurfaceViewValue {
@@ -32,6 +40,7 @@ interface TaskSurfaceViewValue {
 
 interface TaskTurnRailItem {
   id: string
+  semanticId: string
   label: string
   preview: string
   error: boolean
@@ -45,6 +54,13 @@ interface TaskTurnRailPosition {
   maxHeight: number
   boundaryBottom: number
   boundaryLeft: number
+}
+
+interface RailFrameRect {
+  left: number
+  top: number
+  width: number
+  height: number
 }
 
 type SessionSlotElement = ReactElement<{ className?: string; children?: ReactNode }>
@@ -124,31 +140,58 @@ function scrollViewport(root: HTMLElement, element: HTMLElement): HTMLElement {
   return root
 }
 
+function sessionRailFrame(root: HTMLElement, fallback: DOMRect): RailFrameRect {
+  const surface = root.getBoundingClientRect()
+  const header = Array.from(root.children).find(child => child instanceof HTMLElement && child.classList.contains('task-header'))
+  const headerRect = header instanceof HTMLElement ? header.getBoundingClientRect() : null
+  const top = headerRect && headerRect.height > 0 ? Math.max(surface.top, headerRect.bottom) : surface.top
+  const height = Math.max(0, surface.bottom - top)
+  if (surface.width <= 0 || height <= 0) {
+    return { left: fallback.left, top: fallback.top, width: fallback.width, height: fallback.height }
+  }
+  return { left: surface.left, top, width: surface.width, height }
+}
+
+function sessionBoundaryPosition(root: HTMLElement, railFrame: RailFrameRect, fallback: DOMRect) {
+  const documentRect = root.querySelector<HTMLElement>('.task-session-document')?.getBoundingClientRect()
+  const documentRight = documentRect && documentRect.width > 0 ? documentRect.right : fallback.right
+  return {
+    bottom: Math.max(16, window.innerHeight - (railFrame.top + railFrame.height) + 16),
+    left: Math.min(window.innerWidth - 58, Math.max(16, documentRight + 12)),
+  }
+}
+
 function compactRailPreview(value: string | undefined, max = 86): string {
   const text = value?.replace(/\s+/g, ' ').trim() ?? ''
   if (!text) return ''
   return text.length > max ? `${text.slice(0, max)}…` : text
 }
 
+function mergeRoundState(current: string, next: string): string {
+  if (current === 'running' || next === 'running') return 'running'
+  if (current === 'stopped' || next === 'stopped') return 'stopped'
+  return next || current || 'settled'
+}
+
 function collectTurnRailItems(root: HTMLElement): TaskTurnRailItem[] {
   const result: TaskTurnRailItem[] = []
-  const seen = new Set<string>()
+  const bySemanticId = new Map<string, TaskTurnRailItem>()
   const elements = root.querySelectorAll<HTMLElement>('.virtual-round-shell[data-interaction-id], .task-round[data-interaction-id]')
   for (const element of elements) {
-    // TaskCenter 可能承载一个拥有自己 TaskSurface 的详情视图。外层不得再次接管
-    // 内层轮次，否则会生成重复导轨 / 边界导航并重复监听同一批 DOM。
     if (element.closest('.task-surface') !== root) continue
 
-    const id = element.dataset.interactionId?.trim()
-    if (!id || seen.has(id)) continue
-    seen.add(id)
+    const renderId = element.dataset.interactionId?.trim()
+    if (!renderId) continue
 
     const round = element.matches('.task-round')
       ? element
       : element.querySelector<HTMLElement>('.task-round[data-interaction-id]')
+    const semanticId = element.dataset.roundSemanticId?.trim()
+      || round?.dataset.roundSemanticId?.trim()
+      || renderId
     const label = element.dataset.roundLabel?.trim()
       || round?.querySelector<HTMLElement>('.task-round-label')?.textContent?.trim()
-      || (id.includes('background') ? '后台活动' : `第 ${result.length + 1} 轮`)
+      || (semanticId.includes('background') ? '后台活动' : `第 ${result.length + 1} 轮`)
     const preview = compactRailPreview(
       element.dataset.roundPreview
       || round?.dataset.roundPreview
@@ -158,9 +201,49 @@ function collectTurnRailItems(root: HTMLElement): TaskTurnRailItem[] {
     )
     const error = element.dataset.roundError === 'true' || round?.classList.contains('task-round-has-error') === true
     const state = element.dataset.roundState?.trim() || round?.dataset.taskRoundState?.trim() || 'settled'
-    result.push({ id, label, preview, error, state, element })
+
+    const existing = bySemanticId.get(semanticId)
+    if (existing) {
+      existing.error = existing.error || error
+      existing.state = mergeRoundState(existing.state, state)
+      if (!existing.preview && preview) existing.preview = preview
+      continue
+    }
+
+    const item = { id: semanticId, semanticId, label, preview, error, state, element }
+    bySemanticId.set(semanticId, item)
+    result.push(item)
   }
   return result
+}
+
+function stabilizeTurnRailItemIds(previous: TaskTurnRailItem[], next: TaskTurnRailItem[]): TaskTurnRailItem[] {
+  if (!previous.length || !next.length) return next
+
+  const previousBySemanticId = new Map(previous.map(item => [item.semanticId, item] as const))
+  const previousByElement = new Map(previous.map(item => [item.element, item] as const))
+  const resolved = next.map(item => {
+    const sameSemantic = previousBySemanticId.get(item.semanticId)
+    if (sameSemantic) return { ...item, id: sameSemantic.id }
+    const sameElement = previousByElement.get(item.element)
+    if (sameElement) return { ...item, id: sameElement.id }
+    return item
+  })
+
+  if (previous.length !== resolved.length) return resolved
+  const changed = resolved.flatMap((item, index) => {
+    const before = previous[index]
+    if (!before || before.semanticId === item.semanticId || before.element === item.element) return []
+    return [{ index, before, item }]
+  })
+  if (changed.length !== 1) return resolved
+
+  const transition = changed[0]!
+  const samePreview = Boolean(transition.before.preview && transition.before.preview === transition.item.preview)
+  const sameLabel = transition.before.label === transition.item.label
+  if (!samePreview && !sameLabel) return resolved
+  resolved[transition.index] = { ...transition.item, id: transition.before.id }
+  return resolved
 }
 
 function sameTurnRailItems(left: TaskTurnRailItem[], right: TaskTurnRailItem[]): boolean {
@@ -169,6 +252,7 @@ function sameTurnRailItems(left: TaskTurnRailItem[], right: TaskTurnRailItem[]):
     const next = right[index]
     return Boolean(next)
       && item.id === next.id
+      && item.semanticId === next.semanticId
       && item.label === next.label
       && item.preview === next.preview
       && item.error === next.error
@@ -197,17 +281,11 @@ function activeTurnRailItem(items: TaskTurnRailItem[], anchorY: number): TaskTur
 
 /**
  * 任务详情的统一表现宿主。
- *
- * Review / Live / Hub 是 Task Surface 的状态与数据来源，不是不同的产品页面。
- * Review / Live 同时属于同一个 Session View：Live 只是额外开启实时交互能力。
- * 页面继续保留分页、实时流、Composer 等控制器差异，但 Reader / Document / optional Composer
- * 会在这里统一归一为固定 Session 槽位；页面私有类只作为行为钩子保留。
- *
- * Task Surface 同时持有跨状态共享的轮次导轨：只要正文使用 TaskRound / VirtualRoundMount，
- * 历史复盘和实时任务就会得到同一套轮次定位、活动态与错误态导航。
+ * Review / Live 同属一个 Session View；页面仅保留控制器与能力差异。
+ * TaskSurface 持有统一 Reader/Document/Composer 槽位、语义轮次导轨与边界导航。
  */
 export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function TaskSurface(
-  { mode, className, children, ...props },
+  { mode, className, children, boundaryNavigation, ...props },
   ref,
 ) {
   const rootRef = useRef<HTMLElement>(null)
@@ -228,34 +306,40 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
 
   const updateRailViewport = useCallback(() => {
     const root = rootRef.current
-    const items = railItemsRef.current
-    if (!root || items.length === 0) {
+    if (!root) {
       setRailPosition(null)
       return
     }
 
-    const viewport = railViewportRef.current ?? scrollViewport(root, items[0]!.element)
+    const items = railItemsRef.current
+    const viewport = railViewportRef.current
+      ?? (items.length ? scrollViewport(root, items[0]!.element) : root.querySelector<HTMLElement>('.task-session-reader'))
     railViewportRef.current = viewport
+    if (!viewport) {
+      setRailPosition(null)
+      return
+    }
+
     const viewportRect = viewport.getBoundingClientRect()
     if (viewportRect.width <= 0 || viewportRect.height <= 0) {
       setRailPosition(null)
       return
     }
 
-    const anchorY = viewportRect.top + Math.min(Math.max(viewportRect.height * .3, 72), 190)
-    const active = activeTurnRailItem(items, anchorY)
-    setActiveRoundId(current => current === active.id ? current : active.id)
+    if (items.length) {
+      const anchorY = viewportRect.top + Math.min(Math.max(viewportRect.height * .3, 72), 190)
+      const active = activeTurnRailItem(items, anchorY)
+      setActiveRoundId(current => current === active.id ? current : active.id)
+    }
 
-    const composerRect = root.querySelector<HTMLElement>('.pi-live-composer')?.getBoundingClientRect()
+    const railFrame = sessionMode ? sessionRailFrame(root, viewportRect) : viewportRect
+    const boundary = sessionBoundaryPosition(root, railFrame, viewportRect)
     const nextPosition = {
-      left: viewportRect.left + 10,
-      top: viewportRect.top + viewportRect.height / 2,
-      maxHeight: Math.max(96, viewportRect.height - 24),
-      // Pi Live 的 Composer 位于 Reader 之后。边界导航以 Reader 底边为基准，
-      // 不能使用全局窗口底部，否则会遮挡底部输入与发送操作。
-      boundaryBottom: Math.max(16, window.innerHeight - viewportRect.bottom + 16),
-      // 导航属于当前会话阅读列，跟随 Composer 的右边缘而不是浏览器窗口右边缘。
-      boundaryLeft: composerRect && composerRect.width > 0 ? composerRect.right + 12 : viewportRect.right - 54,
+      left: railFrame.left + 10,
+      top: railFrame.top + railFrame.height / 2,
+      maxHeight: Math.max(96, railFrame.height - 24),
+      boundaryBottom: boundary.bottom,
+      boundaryLeft: boundary.left,
     }
     setRailPosition(current => current
       && Math.abs(current.left - nextPosition.left) < .5
@@ -265,7 +349,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
       && Math.abs(current.boundaryLeft - nextPosition.boundaryLeft) < .5
       ? current
       : nextPosition)
-  }, [])
+  }, [sessionMode])
 
   const scheduleRailViewport = useCallback(() => {
     if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current)
@@ -278,9 +362,12 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
   const scanRounds = useCallback(() => {
     const root = rootRef.current
     if (!root) return
-    const next = collectTurnRailItems(root)
+    const collected = collectTurnRailItems(root)
+    const next = stabilizeTurnRailItemIds(railItemsRef.current, collected)
     railItemsRef.current = next
-    railViewportRef.current = next.length ? scrollViewport(root, next[0]!.element) : null
+    railViewportRef.current = next.length
+      ? scrollViewport(root, next[0]!.element)
+      : root.querySelector<HTMLElement>('.task-session-reader')
     setRailItems(current => sameTurnRailItems(current, next) ? current : next)
     scheduleRailViewport()
   }, [scheduleRailViewport])
@@ -295,7 +382,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ['class', 'data-interaction-id', 'data-round-label', 'data-round-preview', 'data-round-error', 'data-round-state', 'data-mounted', 'open'],
+      attributeFilter: ['class', 'data-interaction-id', 'data-round-semantic-id', 'data-round-label', 'data-round-preview', 'data-round-error', 'data-round-state', 'data-mounted', 'open'],
     })
     root.addEventListener('scroll', scheduleRailViewport, true)
     window.addEventListener('resize', scheduleRailViewport)
@@ -326,6 +413,14 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
     scheduleRailViewport()
   }
 
+  const resolvedBoundaryNavigation: TaskBoundaryNavigation | undefined = boundaryNavigation
+    ?? (mode === 'live'
+      ? {
+          onStart: () => jumpToBoundary('start'),
+          onEnd: () => jumpToBoundary('end'),
+        }
+      : undefined)
+
   const rail = railItems.length > 0 && railPosition && typeof document !== 'undefined'
     ? createPortal(
         <nav
@@ -352,17 +447,29 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
       )
     : null
 
-  const boundaryNav = mode === 'live' && railItems.length > 0 && railPosition && typeof document !== 'undefined'
+  const boundaryNav = railItems.length > 0 && resolvedBoundaryNavigation && railPosition && typeof document !== 'undefined'
     ? createPortal(
         <nav
-          className="task-boundary-nav task-boundary-nav-live"
-          aria-label="Pi Live 会话边界导航"
+          className="task-boundary-nav"
+          aria-label="会话边界导航"
           style={{ bottom: railPosition.boundaryBottom, left: railPosition.boundaryLeft }}
         >
-          <IconButton title="跳到开头" aria-label="跳到开头" onClick={() => jumpToBoundary('start')}>
+          <IconButton
+            title="跳到开头"
+            aria-label="跳到开头"
+            disabled={resolvedBoundaryNavigation.startDisabled}
+            onClick={() => void resolvedBoundaryNavigation.onStart()}
+          >
             <UiIcon name="arrow-big-up" size={20} strokeWidth={2}/>
           </IconButton>
-          <IconButton className="task-boundary-latest" variant="primary" title="跳到最新" aria-label="跳到最新" onClick={() => jumpToBoundary('end')}>
+          <IconButton
+            className="task-boundary-latest"
+            variant="primary"
+            title="跳到最新"
+            aria-label="跳到最新"
+            disabled={resolvedBoundaryNavigation.endDisabled}
+            onClick={() => void resolvedBoundaryNavigation.onEnd()}
+          >
             <UiIcon name="arrow-big-down" size={20} strokeWidth={2}/>
           </IconButton>
         </nav>,
