@@ -75,7 +75,7 @@ function readonlySessionDocument(header: HTMLElement | null): HTMLElement | null
   if (!surface) return null
   const reader = Array.from(surface.children).find(child => child instanceof HTMLElement && child !== header)
   if (!(reader instanceof HTMLElement)) return null
-  const documentRoot = reader.firstElementChild
+  const documentRoot = reader.lastElementChild
   return documentRoot instanceof HTMLElement ? documentRoot : null
 }
 
