@@ -152,6 +152,9 @@ function activeTurnRailItem(items: TaskTurnRailItem[], anchorY: number): TaskTur
  * 任务详情的统一表现宿主。
  *
  * Review / Live / Hub 是 Task Surface 的状态与数据来源，不是不同的产品页面。
+ * Review / Live 同时属于同一个 Session View：Live 只是额外开启实时交互能力，
+ * 页面可按状态提供 Composer，但不得再维护另一套 Header / Reader 视觉体系。
+ *
  * Task Surface 同时持有跨状态共享的轮次导轨：只要正文使用 TaskRound / VirtualRoundMount，
  * 历史复盘和实时任务就会得到同一套轮次定位、活动态与错误态导航。
  */
@@ -166,7 +169,8 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
   const [railItems, setRailItems] = useState<TaskTurnRailItem[]>([])
   const [activeRoundId, setActiveRoundId] = useState('')
   const [railPosition, setRailPosition] = useState<TaskTurnRailPosition | null>(null)
-  const classes = ['task-surface', `task-surface-${mode}`, className].filter(Boolean).join(' ')
+  const sessionMode = mode === 'review' || mode === 'live'
+  const classes = ['task-surface', sessionMode ? 'task-session-view' : '', `task-surface-${mode}`, className].filter(Boolean).join(' ')
 
   const setRoot = useCallback((node: HTMLElement | null) => {
     rootRef.current = node
@@ -318,7 +322,13 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
     : null
 
   return <TaskSurfaceViewProvider>
-    <section ref={setRoot} className={classes} data-task-surface-mode={mode} {...props}>{children}</section>
+    <section
+      ref={setRoot}
+      className={classes}
+      data-task-surface-mode={mode}
+      data-task-session-interactive={sessionMode ? (mode === 'live' ? 'true' : 'false') : undefined}
+      {...props}
+    >{children}</section>
     {rail}
     {boundaryNav}
   </TaskSurfaceViewProvider>
