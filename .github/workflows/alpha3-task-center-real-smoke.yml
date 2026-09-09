@@ -3,6 +3,7 @@ name: Alpha.3 Task Center Real Smoke
 on:
   workflow_dispatch:
   pull_request:
+    types: [opened, reopened, ready_for_review]
     branches:
       - main
     paths:
