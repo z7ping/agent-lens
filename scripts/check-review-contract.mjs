@@ -30,9 +30,10 @@ if (!fromStartBody.includes("direction: 'forward'")) throw new Error('从头查�
 if (!reviewPage.includes("detail.page.direction !== 'backward'") || !reviewPage.includes('pane.scrollTop = pane.scrollHeight') || !reviewPage.includes('followingTailRef.current = true')) throw new Error('默认最新窗口必须渲染后定位到底部并进入跟随状态')
 if (!reviewPage.includes('pane.scrollHeight - pane.scrollTop - pane.clientHeight < 180')) throw new Error('阅读历史时不得抢滚动位置')
 
-if (!taskHeader.includes("closest<HTMLElement>('.task-surface-review')") || !taskHeader.includes("querySelector<HTMLElement>('.review-reader')")) throw new Error('Review Header 与 Reader 分离后，继续/分叉操作必须仍挂载到当前 Review 会话尾部')
-if (taskHeader.includes("closest<HTMLElement>('.review-reader')")) throw new Error('TaskHeader 不得假设 Review Header 位于 Reader 内部')
-if (!taskHeader.includes("className = 'task-review-tail-actions-host'") || !taskHeader.includes('reader.append(host)')) throw new Error('Review 继续/分叉操作必须保留会话尾部挂载点')
+if (taskHeader.includes('.task-surface-review') || taskHeader.includes('.review-reader')) throw new Error('共享 TaskHeader 不得依赖 Review 页面类名或 DOM')
+if (!taskHeader.includes('.task-session-view[data-task-session-interactive="false"]')) throw new Error('只读会话尾部操作必须依据统一 Session 状态定位')
+if (!taskHeader.includes("className = 'task-session-tail-actions-host'") || !taskHeader.includes('documentRoot.append(host)')) throw new Error('继续/分叉操作必须保留统一 Session 正文尾部挂载点')
+if (!longCss.includes('.task-session-tail-actions-host')) throw new Error('Review 长会话层必须只补充统一 Session 尾部挂载点间距')
 
 if (!reviewPage.includes('<Drawer') || !reviewPage.includes('className="review-inspector-overlay"') || !reviewPage.includes('onClose={onClose}')) throw new Error('事件详情必须消费统一 Drawer')
 if (reviewPage.includes("document.addEventListener('keydown'") || reviewPage.includes('className="inspector-panel"')) throw new Error('事件详情不得恢复页面自建键盘/抽屉生命周期')
@@ -57,4 +58,4 @@ if (!taskDetailCss.includes('.task-round-summary::after') || !taskDetailCss.incl
 if (!taskDetailCss.includes('.task-header-status') || !taskDetailCss.includes('pointer-events: none') || !taskDetailCss.includes('.task-header-actions button')) throw new Error('任务详情头必须明确区分状态与可点击操作')
 if (!reviewCss.includes('.evidence-inline') || !reviewCss.includes('.review-inspector-overlay') || /\.inspector-panel\b/.test(reviewCss)) throw new Error('Review 页面所有者必须保留证据/Inspector 业务内容，抽屉外壳统一由 Drawer 持有')
 
-console.log('任务复盘交互契约检查通过：默认最新窗口、历史阅读不抢滚动、统一 Drawer、会话尾部继续操作、单一短分隔线、显式 Thinking/Tool 层级、Agent 源码入口悬浮与 Task Surface 单一样式所有权均已锁定。')
+console.log('任务复盘交互契约检查通过：默认最新窗口、历史阅读不抢滚动、统一 Drawer、统一 Session 尾部继续操作、单一短分隔线、显式 Thinking/Tool 层级、Agent 源码入口悬浮与 Task Surface 单一样式所有权均已锁定。')
