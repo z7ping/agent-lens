@@ -96,19 +96,25 @@ export function TaskHeader({ marker, agent, context, status, title, submeta, met
   useLayoutEffect(() => {
     const documentRoot = readonlySessionDocument(headerRef.current)
     if (!documentRoot || primaryActions.length === 0) {
-      setSessionTailHost(null)
+      if (sessionTailHost) {
+        sessionTailHost.remove()
+        setSessionTailHost(null)
+      }
       return
     }
 
+    if (sessionTailHost?.parentElement === documentRoot) return
+    sessionTailHost?.remove()
     const host = document.createElement('div')
     host.className = 'task-session-tail-actions-host'
     host.dataset.taskSessionContinuationHost = 'true'
     documentRoot.append(host)
     setSessionTailHost(host)
-    return () => {
-      host.remove()
-    }
-  }, [primaryActions.length])
+  })
+
+  useLayoutEffect(() => () => {
+    sessionTailHost?.remove()
+  }, [sessionTailHost])
 
   const inlineActions = sessionTailHost ? [] : primaryActions
   const hasHeaderActions = hasCompactInfo || Boolean(auditToggle) || inlineActions.length > 0
