@@ -6,33 +6,28 @@
   position: fixed;
   z-index: 48;
   display: flex;
-  width: 44px;
-  height: max-content;
+  width: 24px;
+  height: 100vh;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
-  gap: 4px;
-  padding: 4px 7px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  scrollbar-width: none;
+  justify-content: center;
+  gap: 0;
+  padding: 6px 0;
   transform: translateY(-50%);
-  opacity: .72;
+  opacity: .62;
   pointer-events: none;
   transition: opacity .16s ease;
 }
-.task-turn-rail::-webkit-scrollbar { display: none; }
-.task-turn-rail:hover,
-.task-turn-rail:focus-within { opacity: 1; }
+.task-turn-rail:hover { opacity: 1; }
 .task-turn-rail::before { display: none; content: none; }
 .task-turn-rail .turn-tick {
   position: relative;
   display: grid;
-  width: 30px;
-  height: 24px;
-  min-height: 24px;
-  max-height: 24px;
-  flex: 0 0 24px;
+  width: 24px;
+  height: 9px;
+  min-height: 2px;
+  max-height: 9px;
+  flex: 0 1 9px;
   place-items: center;
   padding: 0;
   border: 0;
@@ -42,22 +37,53 @@
 }
 .task-turn-rail .turn-tick i {
   display: block;
-  width: 13px;
-  height: 3px;
+  width: 6px;
+  height: 1.5px;
   border-radius: 99px;
   background: color-mix(in srgb, var(--al-muted) 58%, transparent);
-  transition: width .16s cubic-bezier(.2,.8,.2,1), background .16s ease;
+  transition: width .16s cubic-bezier(.2,.8,.2,1), height .16s ease, background .16s ease;
 }
-.task-turn-rail .turn-tick:hover i,
-.task-turn-rail .turn-tick:focus-visible i { width: 21px; background: var(--al-ink); }
-.task-turn-rail .turn-tick.active i { width: 23px; background: var(--al-ink); }
+.task-turn-rail .turn-tick:hover i { width: 24px; height: 2px; background: var(--al-ink); }
+.task-turn-rail .turn-tick:has(+ .turn-tick:hover) i,
+.task-turn-rail .turn-tick:hover + .turn-tick i { width: 18px; }
+.task-turn-rail .turn-tick:has(+ .turn-tick + .turn-tick:hover) i,
+.task-turn-rail .turn-tick:hover + .turn-tick + .turn-tick i { width: 13px; }
+.task-turn-rail .turn-tick:has(+ .turn-tick + .turn-tick + .turn-tick:hover) i,
+.task-turn-rail .turn-tick:hover + .turn-tick + .turn-tick + .turn-tick i { width: 9px; }
+.task-turn-rail .turn-tick.active i { background: var(--al-ink); }
 .task-turn-rail .turn-tick.running i {
-  width: 23px;
+  width: 18px;
+  height: 2px;
   background: var(--al-accent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--al-accent) 10%, transparent);
 }
-.task-turn-rail .turn-tick.err i { background: color-mix(in srgb, var(--al-danger) 62%, var(--al-line)); }
+.task-turn-rail .turn-tick.err i { background: color-mix(in srgb, var(--al-danger) 55%, var(--al-line)); }
 .task-turn-rail .turn-tick.err.active i { background: var(--al-danger); }
+.task-turn-rail .turn-tick::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 6px);
+  z-index: 90;
+  width: max-content;
+  max-width: 300px;
+  padding: 6px 9px;
+  transform: translateY(-50%);
+  border: 1px solid var(--al-line);
+  border-radius: 7px;
+  background: var(--al-ink);
+  box-shadow: 0 6px 20px rgb(0 0 0 / .18);
+  color: var(--al-surface);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: left;
+  white-space: normal;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .1s ease;
+}
+.task-turn-rail .turn-tick:hover::after,
+.task-turn-rail .turn-tick:focus-visible::after { opacity: 1; }
 
 /*
  * 全局任务边界导航规范。
