@@ -195,20 +195,33 @@ async function runSelf(args: string[]): Promise<ProcessResult> {
   return runProcess(process.execPath, [entry, ...args])
 }
 
-async function npmServiceState(): Promise<{ active: boolean; owner: string | null }> {
+interface NpmServiceState {
+  registered: boolean
+  active: boolean
+  autostart: boolean
+  hidden: boolean | null
+  owner: string | null
+}
+
+async function npmServiceState(): Promise<NpmServiceState> {
   try {
     const result = await runSelf(['service', 'status', '--json'])
-    if (result.code !== 0 && !result.stdout.trim()) return { active: false, owner: null }
+    if (result.code !== 0 && !result.stdout.trim()) {
+      return { registered: false, active: false, autostart: false, hidden: null, owner: null }
+    }
     const parsed = JSON.parse(result.stdout) as {
-      lifecycle?: { active?: boolean }
+      lifecycle?: { registered?: boolean; active?: boolean; autostart?: boolean; hidden?: boolean }
       runtime?: { owner?: string | null }
     }
     return {
+      registered: parsed.lifecycle?.registered === true,
       active: parsed.lifecycle?.active === true,
+      autostart: parsed.lifecycle?.autostart === true,
+      hidden: typeof parsed.lifecycle?.hidden === 'boolean' ? parsed.lifecycle.hidden : null,
       owner: typeof parsed.runtime?.owner === 'string' ? parsed.runtime.owner : null,
     }
   } catch {
-    return { active: false, owner: null }
+    return { registered: false, active: false, autostart: false, hidden: null, owner: null }
   }
 }
 
@@ -261,6 +274,16 @@ export async function runUpdateCommand(currentVersion: string, args: string[]): 
       await runSelf(['service', 'start', '--json']).catch(() => undefined)
     }
     return installed.code || 1
+  }
+
+  if (process.platform === 'win32' && service.registered) {
+    console.log('正在更新 Windows 后台任务定义…')
+    const migrated = await runSelf(['autostart', service.autostart ? 'enable' : 'disable', '--json'])
+    if (migrated.code !== 0) {
+      console.error(`AgentLens 已升级到 ${update.latestVersion}，但 Windows 后台任务定义迁移失败。`)
+      console.error(`请执行：agent-lens autostart ${service.autostart ? 'enable' : 'disable'}`)
+      return 1
+    }
   }
 
   if (restartService) {
