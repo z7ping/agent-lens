@@ -94,6 +94,13 @@
 .pi-live-document { padding-block: 8px; }
 .pi-live-startup-spotlight { margin: 18px 0 14px; }
 
+/* 1280px 窗口下，工作栏会使实际阅读区降至 lg 宽度；保留已确认的稳定阅读列留白。 */
+@container task-surface (max-width: 991.98px) {
+  .pi-live-page.pi-live-page-embedded .pi-live-document { padding-inline: 96px; }
+  .pi-live-page.pi-live-page-embedded .pi-live-compose-wrap { padding-inline: 96px; }
+  .pi-live-page.pi-live-page-embedded .pi-live-float-stack { right: 96px; left: 96px; width: auto; }
+}
+
 .pi-live-current-round { margin-top: 3px; padding-top: 1px; }
 .pi-live-empty { padding: 7px 0 5px; color: var(--al-muted); font-size: 13px; text-align: left; }
 .pi-live-initializing {
