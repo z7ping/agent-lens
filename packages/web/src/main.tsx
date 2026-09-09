@@ -39,6 +39,8 @@ import './task-turn-rail.css'
 import './components/task-continuation.css'
 // Task Surface 共享详情组件最后加载；页面所有者不得再定义这些共享选择器。
 import './task-detail.css'
+// 会话壳层在共享详情组件之后加载，统一 Review / Pi Live 的 Header、Reader 与可选 Composer。
+import './task-session-view.css'
 import './components/ui/ui-primitives.css'
 import './components/ui/overlay.css'
 import './components/select-menu.css'
