@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 
-const [app, taskCenter, taskSurface, taskHeader, taskMessage, taskRound, taskThinking, taskToolGroup, taskToolRow, taskDetailModel, taskCenterCss, taskDetailCss, reviewPage, page, piComposer, piTaskRound, piTaskProjection, hubPage, history, piNative, client, css, http, runtime, workerHost, workerEntry, inProcessHost, sdkLoader, sdkAdapter, runtimePackage, coreObservation, timelineProtocol] = await Promise.all([
+const [app, taskCenter, taskSurface, taskHeader, taskMessage, taskRound, taskThinking, taskToolGroup, taskToolRow, taskDetailModel, taskCenterCss, taskDetailCss, taskSessionCss, reviewPage, page, piComposer, piTaskRound, piTaskProjection, hubPage, history, piNative, client, css, http, runtime, workerHost, workerEntry, inProcessHost, sdkLoader, sdkAdapter, runtimePackage, coreObservation, timelineProtocol] = await Promise.all([
   readFile(new URL('../packages/web/src/App.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/TaskCenterPage.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/TaskSurface.tsx', import.meta.url), 'utf8'),
@@ -13,6 +13,7 @@ const [app, taskCenter, taskSurface, taskHeader, taskMessage, taskRound, taskThi
   readFile(new URL('../packages/web/src/features/task-detail-model.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/task-center.css', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/task-detail.css', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/web/src/task-session-view.css', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/ReviewPage.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/PiLivePage.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/components/PiMarkdownComposer.tsx', import.meta.url), 'utf8'),
@@ -212,7 +213,7 @@ requireText(sdkLoader, /assertPiSdkModule\(imported, discovery\.sdkEntry, discov
 if (/export interface PiSdk(?:Session|Module|Model)/.test(sdkLoader)) failures.push('Loader 不得维护手写 SDK 接口镜像')
 if (/PiRpcClient|--mode['"\s,]+rpc|child_process/.test(`${runtime}\n${sdkLoader}`)) failures.push('Runtime 不得重新引入自维护 RPC 子进程协议')
 
-const stableVisibleCss = `${taskCenterCss}\n${taskDetailCss}`
+const stableVisibleCss = `${taskCenterCss}\n${taskDetailCss}\n${taskSessionCss}`
 if (/font-size:\s*(?:[0-9]|1[01])px/.test(stableVisibleCss)) failures.push('任务中心 / Task Surface 正式可见文字不得小于 12px')
 if (/backdrop-filter|filter:\s*blur\(/.test(`${css}\n${stableVisibleCss}`)) failures.push('Pi Live / 任务中心不得使用模糊/毛玻璃')
 if (/max-width:\s*575|max-width:\s*576|min-width:\s*576/.test(`${css}\n${stableVisibleCss}`)) failures.push('Pi Live / 任务中心不得新增 576px 断点')
@@ -222,7 +223,7 @@ for (const expected of ['1199.98px', '991.98px', '767.98px']) {
   if (!taskDetailCss.includes(expected)) failures.push(`Task Surface CSS 缺少响应式基线 ${expected}`)
 }
 requireText(css, /\.pi-live-compose-hint,[\s\S]{0,260}position:\s*absolute/, 'Pi Composer 快捷提示必须绝对定位，不得撑高输入区')
-requireText(taskDetailCss, /\.task-surface-live \.task-header\s*\{[\s\S]{0,220}grid-template-rows:\s*30px/, 'Pi Live 桌面 Header 必须保持单行，不让排队/PID独占一行')
+requireText(taskSessionCss, /\.task-session-view \.task-header\s*\{[\s\S]{0,260}grid-template-rows:\s*30px/, 'Review / Pi Live 桌面 Header 必须由统一 Session View 保持单行')
 
 if (failures.length) {
   console.error('Pi Live / 任务中心契约检查失败：')
