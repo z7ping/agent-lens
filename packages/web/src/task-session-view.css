@@ -1,25 +1,20 @@
 @reference "./styles.css";
 
 /*
- * Review / Pi Live 共用会话壳层的唯一样式所有者。
- * TaskSurface 本身就是统一会话视图：页面只提供 Header、Reader 内容，以及
- * Live 状态下可选的 Composer。Runtime / 分页 / Evidence 等仍由页面控制器持有。
+ * Review / Pi Live 共用会话视图的唯一样式所有者。
+ * TaskSurface 本身就是统一 Session View：Review 是只读态，Live 是开启 Composer 的交互态。
+ * 页面控制器只保留数据来源与能力差异，不再持有另一套 Header / 阅读轴几何。
  */
-.task-surface-review.review-session-view,
-.task-surface-live.pi-live-workspace {
+.task-session-view {
   position: relative;
-  display: grid;
   min-width: 0;
   min-height: 0;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  overflow: hidden;
   background: var(--al-surface);
 }
 
-.review-session-view .review-reader-pane,
+/* Reader / Document 使用同一阅读轴；Review 仍保留自己的长会话加载逻辑。 */
+.task-surface-review.review-reader-pane,
 .task-surface-live .pi-live-reader {
-  position: relative;
   min-width: 0;
   min-height: 0;
   overflow: auto;
@@ -28,7 +23,7 @@
   background: var(--al-surface);
 }
 
-.review-session-view .task-session-document,
+.task-surface-review .review-reader,
 .task-surface-live .pi-live-document {
   box-sizing: border-box;
   width: 100%;
@@ -36,40 +31,41 @@
   margin-inline: auto;
   padding: 8px var(--al-space-page-x);
 }
-.review-session-view .task-session-document { padding-bottom: 96px; }
+.task-surface-review .review-reader { padding-bottom: 96px; }
 
 /* Review / Live 的 Header 使用同一套单行桌面布局。 */
-.review-session-view .task-header,
-.task-surface-live .task-header {
+.task-session-view .task-header {
   max-width: var(--al-content-task-reading);
   grid-template-columns: auto minmax(0, 1fr) minmax(0, auto) auto auto;
   grid-template-rows: 30px;
   margin-inline: auto;
   padding-inline: var(--al-space-page-x);
 }
-.review-session-view .task-header-meta,
-.task-surface-live .task-header-meta { grid-column: 1; grid-row: 1; }
-.review-session-view .task-header-title,
-.task-surface-live .task-header-title { grid-column: 2; grid-row: 1; }
-.review-session-view .task-header-submeta,
-.task-surface-live .task-header-submeta {
+.task-session-view .task-header-meta { grid-column: 1; grid-row: 1; }
+.task-session-view .task-header-title { grid-column: 2; grid-row: 1; }
+.task-session-view .task-header-submeta {
   display: flex;
   grid-column: 3;
   grid-row: 1;
   max-width: min(30vw, 420px);
   justify-self: start;
 }
-.review-session-view .task-header-metrics,
-.task-surface-live .task-header-metrics { grid-column: 4; grid-row: 1; }
-.review-session-view .task-header-actions,
-.task-surface-live .task-header-actions { grid-column: 5; grid-row: 1; }
+.task-session-view .task-header-metrics { grid-column: 4; grid-row: 1; }
+.task-session-view .task-header-actions { grid-column: 5; grid-row: 1; }
+
+/* Review 的 Header 仍位于历史 Reader DOM 内，固定在滚动区顶部；Live 本身已在 Reader 外。 */
+.task-surface-review .task-header {
+  position: sticky;
+  top: -8px;
+  z-index: 18;
+}
 
 /*
  * 1280px 窗口配合工作栏时，实际 Task Surface 会落入 lg 宽度。
  * 96px 是已确认的稳定阅读列留白；真实小屏仍由下面 viewport media 收窄。
  */
 @container task-surface (max-width: 991.98px) {
-  .review-session-view .task-session-document,
+  .task-surface-review .review-reader,
   .task-surface-live .pi-live-document,
   .task-surface-live .pi-live-compose-wrap { padding-inline: 96px; }
 
@@ -81,22 +77,16 @@
 }
 
 @media (max-width: 991.98px) {
-  .review-session-view .task-session-document,
-  .review-session-view .task-header,
+  .task-surface-review .review-reader,
   .task-surface-live .pi-live-document,
   .task-surface-live .pi-live-compose-wrap,
-  .task-surface-live .task-header { padding-inline: 20px; }
+  .task-session-view .task-header { padding-inline: 20px; }
 
-  .review-session-view .task-header,
-  .task-surface-live .task-header { grid-template-columns: auto minmax(0, 1fr) auto; }
-  .review-session-view .task-header-context,
-  .review-session-view .task-header-submeta,
-  .review-session-view .task-header-metrics,
-  .task-surface-live .task-header-context,
-  .task-surface-live .task-header-submeta,
-  .task-surface-live .task-header-metrics { display: none; }
-  .review-session-view .task-header-actions,
-  .task-surface-live .task-header-actions { grid-column: 3; }
+  .task-session-view .task-header { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .task-session-view .task-header-context,
+  .task-session-view .task-header-submeta,
+  .task-session-view .task-header-metrics { display: none; }
+  .task-session-view .task-header-actions { grid-column: 3; }
 
   .task-surface-live .pi-live-float-stack {
     right: 20px;
@@ -106,27 +96,20 @@
 }
 
 @media (max-width: 767.98px) {
-  .review-session-view .task-session-document,
-  .review-session-view .task-header,
+  .task-surface-review .review-reader,
   .task-surface-live .pi-live-document,
   .task-surface-live .pi-live-compose-wrap,
-  .task-surface-live .task-header { padding-inline: 12px; }
+  .task-session-view .task-header { padding-inline: 12px; }
 
-  .review-session-view .task-header,
-  .task-surface-live .task-header {
+  .task-session-view .task-header {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: 30px 22px;
   }
-  .review-session-view .task-header-meta,
-  .task-surface-live .task-header-meta { display: none; }
-  .review-session-view .task-header-title,
-  .task-surface-live .task-header-title { grid-column: 1; grid-row: 2; font-size: 15px; }
-  .review-session-view .task-header-actions,
-  .task-surface-live .task-header-actions { grid-column: 1; grid-row: 1; justify-self: end; }
-  .review-session-view .task-header-submeta,
-  .review-session-view .task-header-metrics,
-  .task-surface-live .task-header-submeta,
-  .task-surface-live .task-header-metrics { display: none; }
+  .task-session-view .task-header-meta { display: none; }
+  .task-session-view .task-header-title { grid-column: 1; grid-row: 2; font-size: 15px; }
+  .task-session-view .task-header-actions { grid-column: 1; grid-row: 1; justify-self: end; }
+  .task-session-view .task-header-submeta,
+  .task-session-view .task-header-metrics { display: none; }
 
   .task-surface-live .pi-live-float-stack {
     right: 12px;
