@@ -47,6 +47,7 @@
   position: relative;
   z-index: 10;
   padding: 3px var(--al-safe-composer-inline) 10px;
+  border-top: 0;
   background: var(--al-surface);
 }
 
