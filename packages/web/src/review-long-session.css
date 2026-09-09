@@ -145,7 +145,7 @@
 .detail-load-sentinel button:hover { border-color: var(--al-line-strong); background: var(--al-soft); }
 
 /* 会话尾部只保留 Review 布局间距；组件本身统一由 components/task-continuation.css 负责。 */
-.review-page .task-review-tail-actions-host {
+.review-page .task-session-tail-actions-host {
   margin: 6px 0 22px;
 }
 
