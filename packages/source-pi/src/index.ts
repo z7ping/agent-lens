@@ -11,7 +11,6 @@ import {
 import { homedir } from 'node:os'
 import {
   basename,
-  delimiter,
   dirname,
   extname,
   isAbsolute,
@@ -39,6 +38,7 @@ import type {
 } from '@agent-lens/core'
 import {
   defineAgentLensPlugin,
+  resolveExecutable,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
 import { normalizePiSessionEntry, type PiNativeFact } from '@agent-lens/protocol'
@@ -114,22 +114,6 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-async function findExecutable(
-  env: Readonly<Record<string, string | undefined>>,
-): Promise<string | undefined> {
-  const explicit = env.PI_BIN?.trim()
-  if (explicit && await exists(explicit)) return explicit
-  const pathValue = env.PATH ?? process.env.PATH ?? ''
-  const names = process.platform === 'win32' ? ['pi.exe', 'pi.cmd', 'pi.bat'] : ['pi']
-  for (const root of pathValue.split(delimiter).filter(Boolean)) {
-    for (const name of names) {
-      const candidate = join(root, name)
-      if (await exists(candidate)) return candidate
-    }
-  }
-  return undefined
-}
-
 function piAgentDir(env: Readonly<Record<string, string | undefined>>): string {
   const explicit = env.PI_CODING_AGENT_DIR?.trim()
   if (explicit) return explicit
@@ -158,7 +142,10 @@ export async function detectPi(ctx: SourceDetectionContext): Promise<DetectedSou
   const [agentExists, sessionsExist, executable] = await Promise.all([
     exists(agentDir),
     exists(sessionsDir),
-    findExecutable(env),
+    resolveExecutable('pi', {
+      explicit: env.PI_BIN,
+      pathValue: env.PATH,
+    }),
   ])
   if (!agentExists && !sessionsExist && !executable) return []
   return [{
