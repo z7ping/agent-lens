@@ -37,8 +37,10 @@ import './hub-review.css'
 import './task-view-options.css'
 import './task-turn-rail.css'
 import './components/task-continuation.css'
-// Task Surface 共享详情组件最后加载；页面所有者不得再定义这些共享选择器。
+// Task Surface 详情组件只持有 Header / Round / Message / Tool / Event 等组件自身样式。
 import './task-detail.css'
+// Session View 最后持有 Review / Pi Live 的 Header 几何、Reader、阅读轴与可选 Composer 外层。
+import './task-session-view.css'
 import './components/ui/ui-primitives.css'
 import './components/ui/overlay.css'
 import './components/select-menu.css'

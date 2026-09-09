@@ -874,7 +874,7 @@ export function ReviewPage({
   const [piForkError, setPiForkError] = useState<{ sessionId: string; message: string } | null>(null)
   const sessionLoadSentinelRef = useRef<HTMLButtonElement>(null)
   const detailLoadSentinelRef = useRef<HTMLDivElement>(null)
-  const readerPaneRef = useRef<HTMLElement>(null)
+  const readerPaneRef = useRef<HTMLDivElement>(null)
   const readerPositionsRef = useRef(new Map<string, ReviewReaderPosition>())
   const pendingReaderAnchorRef = useRef<{ position: ReviewReaderPosition; userRevision: number } | null>(null)
   const readerUserRevisionRef = useRef(0)
@@ -1311,101 +1311,102 @@ export function ReviewPage({
         </div>
       </aside>}
 
-      <TaskSurface
-        ref={readerPaneRef}
-        mode="review"
-        className="review-reader-pane"
-        onScroll={onReaderScroll}
-        onWheelCapture={noteReaderUserIntent}
-        onTouchStartCapture={noteReaderUserIntent}
-        onPointerDownCapture={noteReaderUserIntent}
-        onKeyDownCapture={noteReaderUserIntent}
-      >
-        {review.error && <div className="page-error">{review.error}</div>}
-        {!detail ? <div className="empty-state fill">{review.selectedId && review.detailLoading ? '加载会话详情…' : '选择一个会话开始复盘'}</div> : <div className="review-reader">
-          <TaskHeader
-            marker={<span className={`source-dot ${sourceDot(detail.sourceIds[0] ?? '')}`}/>}
-            agent={taskDetailModel?.agentLabel ?? ''}
-            context={taskDetailModel?.projectLabel}
-            status={taskDetailModel?.statusLabel ? <span className="session-status-error">{taskDetailModel.statusLabel}</span> : undefined}
-            title={<span title={taskDetailModel?.title}>{taskDetailModel?.title}</span>}
-            submeta={taskDetailModel?.startedAt && taskDetailModel.endedAt ? <><span>{formatRange(taskDetailModel.startedAt, taskDetailModel.endedAt)}</span>{taskDetailModel.workspacePath && <code title={taskDetailModel.workspacePath}>{taskDetailModel.workspacePath}</code>}</> : undefined}
-            metrics={taskDetailModel?.metrics ?? []}
-            infoItems={taskDetailModel?.startedAt && taskDetailModel.endedAt ? [
-              { label: '项目', value: taskDetailModel.projectLabel ?? '未关联项目' },
-              { label: '开始时间', value: formatDateTime(taskDetailModel.startedAt) },
-              { label: '结束时间', value: formatDateTime(taskDetailModel.endedAt) },
-              { label: '持续时间', value: duration(detail.durationMs) },
-              ...(taskDetailModel.workspacePath ? [{ label: '工作区', value: <code title={taskDetailModel.workspacePath}>{taskDetailModel.workspacePath}</code> }] : []),
-              ...taskDetailModel.metrics.filter(metric => metric.label !== '跨度').map(metric => ({ label: metric.label, value: metric.value, tone: metric.tone })),
-            ] : []}
-            actions={<>
-              {onResumePiSession && detail.sourceIds.includes('pi') ? <>
-                <Button size="small" loading={resumingPiSession} disabled={resumingPiSession || Boolean(forkingPiSessionId)} onClick={() => void onResumePiSession(detail.id)}><UiIcon name="arrow-right" size={14}/>继续会话</Button>
-                <Button size="small" loading={forkingPiSessionId === detail.id} disabled={resumingPiSession || Boolean(forkingPiSessionId)} onClick={() => void forkPiSession(detail.id)}><UiIcon name="plus" size={14}/>分叉继续</Button>
-              </> : null}
-              <button className="review-audit-toggle" aria-pressed={showAllEvents} onClick={toggleEventVisibility}>{showAllEvents ? '视图：全部事件' : '视图：核心事件'}</button>
-            </>}
-          />
+      <TaskSurface mode="review" className="review-session-view">
+        {detail && <TaskHeader
+          marker={<span className={`source-dot ${sourceDot(detail.sourceIds[0] ?? '')}`}/>}
+          agent={taskDetailModel?.agentLabel ?? ''}
+          context={taskDetailModel?.projectLabel}
+          status={taskDetailModel?.statusLabel ? <span className="session-status-error">{taskDetailModel.statusLabel}</span> : undefined}
+          title={<span title={taskDetailModel?.title}>{taskDetailModel?.title}</span>}
+          submeta={taskDetailModel?.startedAt && taskDetailModel.endedAt ? <><span>{formatRange(taskDetailModel.startedAt, taskDetailModel.endedAt)}</span>{taskDetailModel.workspacePath && <code title={taskDetailModel.workspacePath}>{taskDetailModel.workspacePath}</code>}</> : undefined}
+          metrics={taskDetailModel?.metrics ?? []}
+          infoItems={taskDetailModel?.startedAt && taskDetailModel.endedAt ? [
+            { label: '项目', value: taskDetailModel.projectLabel ?? '未关联项目' },
+            { label: '开始时间', value: formatDateTime(taskDetailModel.startedAt) },
+            { label: '结束时间', value: formatDateTime(taskDetailModel.endedAt) },
+            { label: '持续时间', value: duration(detail.durationMs) },
+            ...(taskDetailModel.workspacePath ? [{ label: '工作区', value: <code title={taskDetailModel.workspacePath}>{taskDetailModel.workspacePath}</code> }] : []),
+            ...taskDetailModel.metrics.filter(metric => metric.label !== '跨度').map(metric => ({ label: metric.label, value: metric.value, tone: metric.tone })),
+          ] : []}
+          actions={<>
+            {onResumePiSession && detail.sourceIds.includes('pi') ? <>
+              <Button size="small" loading={resumingPiSession} disabled={resumingPiSession || Boolean(forkingPiSessionId)} onClick={() => void onResumePiSession(detail.id)}><UiIcon name="arrow-right" size={14}/>继续会话</Button>
+              <Button size="small" loading={forkingPiSessionId === detail.id} disabled={resumingPiSession || Boolean(forkingPiSessionId)} onClick={() => void forkPiSession(detail.id)}><UiIcon name="plus" size={14}/>分叉继续</Button>
+            </> : null}
+            <button className="review-audit-toggle" aria-pressed={showAllEvents} onClick={toggleEventVisibility}>{showAllEvents ? '视图：全部事件' : '视图：核心事件'}</button>
+          </>}
+        />}
 
-          {(piResumeError || (piForkError?.sessionId === detail.id ? piForkError.message : '')) && <div className="page-error" role="alert">{piResumeError || piForkError?.message}</div>}
+        <div
+          ref={readerPaneRef}
+          className="review-reader-pane"
+          onScroll={onReaderScroll}
+          onWheelCapture={noteReaderUserIntent}
+          onTouchStartCapture={noteReaderUserIntent}
+          onPointerDownCapture={noteReaderUserIntent}
+          onKeyDownCapture={noteReaderUserIntent}
+        >
+          {review.error && <div className="page-error">{review.error}</div>}
+          {!detail ? <div className="empty-state fill">{review.selectedId && review.detailLoading ? '加载会话详情…' : '选择一个会话开始复盘'}</div> : <div className="review-reader">
+            {(piResumeError || (piForkError?.sessionId === detail.id ? piForkError.message : '')) && <div className="page-error" role="alert">{piResumeError || piForkError?.message}</div>}
 
-          {detail.sourceIds.includes('pi') && review.relationships?.items.length ? <details className="pi-session-tree">
-            <summary><UiIcon className="pi-session-tree-chevron" name="chevron-right" size={14}/><span>Pi 会话树 · {review.relationships.items.length} 条关系</span></summary>
-            <div>{review.relationships.items.map(item => <div key={item.id}>{item.fromNativeSessionId ?? item.fromSessionId} <span><UiIcon name="arrow-right" size={14}/></span> {item.toNativeSessionId ?? item.toSessionId}</div>)}</div>
-          </details> : null}
+            {detail.sourceIds.includes('pi') && review.relationships?.items.length ? <details className="pi-session-tree">
+              <summary><UiIcon className="pi-session-tree-chevron" name="chevron-right" size={14}/><span>Pi 会话树 · {review.relationships.items.length} 条关系</span></summary>
+              <div>{review.relationships.items.map(item => <div key={item.id}>{item.fromNativeSessionId ?? item.fromSessionId} <span><UiIcon name="arrow-right" size={14}/></span> {item.toNativeSessionId ?? item.toSessionId}</div>)}</div>
+            </details> : null}
 
-          <div className="round-nav" aria-label="轮次快速导航">
-            <div className="round-nav-filters" aria-label="轮次筛选">
-              <button className={roundFilter === 'all' && !isBackward ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('all')}>全部 {roundFilter === 'all' && !isBackward && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
-              <button className={roundFilter === 'errors' ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('errors')}>有错误 {roundFilter === 'errors' && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
-              <button className={roundFilter === 'latency' ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('latency')}>耗时较高 {roundFilter === 'latency' && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
+            <div className="round-nav" aria-label="轮次快速导航">
+              <div className="round-nav-filters" aria-label="轮次筛选">
+                <button className={roundFilter === 'all' && !isBackward ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('all')}>全部 {roundFilter === 'all' && !isBackward && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
+                <button className={roundFilter === 'errors' ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('errors')}>有错误 {roundFilter === 'errors' && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
+                <button className={roundFilter === 'latency' ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('latency')}>耗时较高 {roundFilter === 'latency' && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
+              </div>
+              <div className="round-nav-actions" aria-label="轮次操作">
+                <button className="round-nav-expand" disabled={roundFilterLoading} onClick={toggleRoundExpansion}>{expandAllRounds ? '收起当前页' : '展开当前页'}</button>
+                <button className="round-nav-from-start" disabled={roundFilterLoading || atStart} onClick={() => void showFromStart()}>从头查看 <UiIcon name="arrow-up" size={14}/></button>
+                <button className="round-nav-latest" disabled={roundFilterLoading} onClick={() => void jumpToLatest()}>跳到最新 <UiIcon name="arrow-down" size={14}/></button>
+                {review.detailHasNewData && <button className="round-nav-live" onClick={() => void jumpToLatest()}>有新记录 <UiIcon name="arrow-down" size={14}/></button>}
+              </div>
+              {roundFilterLoading && <span className="round-nav-status">正在查询完整会话…</span>}
+              <small>“耗时较高”由服务器基于完整会话的轮次耗时分布计算。</small>
             </div>
-            <div className="round-nav-actions" aria-label="轮次操作">
-              <button className="round-nav-expand" disabled={roundFilterLoading} onClick={toggleRoundExpansion}>{expandAllRounds ? '收起当前页' : '展开当前页'}</button>
-              <button className="round-nav-from-start" disabled={roundFilterLoading || atStart} onClick={() => void showFromStart()}>从头查看 <UiIcon name="arrow-up" size={14}/></button>
-              <button className="round-nav-latest" disabled={roundFilterLoading} onClick={() => void jumpToLatest()}>跳到最新 <UiIcon name="arrow-down" size={14}/></button>
-              {review.detailHasNewData && <button className="round-nav-live" onClick={() => void jumpToLatest()}>有新记录 <UiIcon name="arrow-down" size={14}/></button>}
-            </div>
-            {roundFilterLoading && <span className="round-nav-status">正在查询完整会话…</span>}
-            <small>“耗时较高”由服务器基于完整会话的轮次耗时分布计算。</small>
-          </div>
 
-          <div className="review-flow">
-            {isBackward && roundFilter === 'all' && pageIncomplete && <div ref={detailLoadSentinelRef} className="detail-load-sentinel detail-load-sentinel-top" aria-live="polite">
-              {review.detailLoadingMore ? '正在加载更早轮次…' : review.error ? <button onClick={() => void loadOlder()}>加载失败 · 重试</button> : <button onClick={() => void loadOlder()}>加载更早轮次</button>}
-            </div>}
-            {annotatedInteractions.map((item, index) => <VirtualRoundMount
-              key={item.round.id}
-              eager={index < 6 || item.round.id === annotatedInteractions.at(-1)?.round.id}
-              retainMounted
-              estimate={item.round.toolCount > 12 ? 420 : item.round.toolCount > 4 ? 300 : 220}
-            >
-              <ReviewRoundAdapter
-                interaction={item.interaction}
-                round={item.round}
-                defaultExpanded={expandAllRounds}
-                expansionStore={roundExpansionRef.current}
-                forceExpanded={expandAllRounds}
-                forceRevision={roundExpansionRevision}
-                showAllEvents={showAllEvents}
-                inspect={setInspect}
-              />
-            </VirtualRoundMount>)}
-            {!annotatedInteractions.length && <div className="round-filter-empty">{emptyLabel}</div>}
-            {!isBackward && roundFilter !== 'latest' && <div ref={detailLoadSentinelRef} className="detail-load-sentinel" aria-live="polite">
-              {review.detailLoadingMore
-                ? `正在加载${isFiltered ? '后续匹配' : '后续'}轮次…`
-                : detail.page.hasMore
-                  ? review.error
-                    ? <button onClick={() => void loadFollowing()}>加载失败 · 重试</button>
-                    : `继续向下滚动，${isFiltered ? '后续匹配' : '后续'}轮次会自动加载`
-                  : isFiltered
-                    ? `已加载全部 ${detail.interactions.length} 个匹配轮次`
-                    : `已完整加载 ${detail.interactions.length} 轮`}
-            </div>}
-          </div>
-        </div>}
+            <div className="review-flow">
+              {isBackward && roundFilter === 'all' && pageIncomplete && <div ref={detailLoadSentinelRef} className="detail-load-sentinel detail-load-sentinel-top" aria-live="polite">
+                {review.detailLoadingMore ? '正在加载更早轮次…' : review.error ? <button onClick={() => void loadOlder()}>加载失败 · 重试</button> : <button onClick={() => void loadOlder()}>加载更早轮次</button>}
+              </div>}
+              {annotatedInteractions.map((item, index) => <VirtualRoundMount
+                key={item.round.id}
+                eager={index < 6 || item.round.id === annotatedInteractions.at(-1)?.round.id}
+                retainMounted
+                estimate={item.round.toolCount > 12 ? 420 : item.round.toolCount > 4 ? 300 : 220}
+              >
+                <ReviewRoundAdapter
+                  interaction={item.interaction}
+                  round={item.round}
+                  defaultExpanded={expandAllRounds}
+                  expansionStore={roundExpansionRef.current}
+                  forceExpanded={expandAllRounds}
+                  forceRevision={roundExpansionRevision}
+                  showAllEvents={showAllEvents}
+                  inspect={setInspect}
+                />
+              </VirtualRoundMount>)}
+              {!annotatedInteractions.length && <div className="round-filter-empty">{emptyLabel}</div>}
+              {!isBackward && roundFilter !== 'latest' && <div ref={detailLoadSentinelRef} className="detail-load-sentinel" aria-live="polite">
+                {review.detailLoadingMore
+                  ? `正在加载${isFiltered ? '后续匹配' : '后续'}轮次…`
+                  : detail.page.hasMore
+                    ? review.error
+                      ? <button onClick={() => void loadFollowing()}>加载失败 · 重试</button>
+                      : `继续向下滚动，${isFiltered ? '后续匹配' : '后续'}轮次会自动加载`
+                    : isFiltered
+                      ? `已加载全部 ${detail.interactions.length} 个匹配轮次`
+                      : `已完整加载 ${detail.interactions.length} 轮`}
+              </div>}
+            </div>
+          </div>}
+        </div>
       </TaskSurface>
     </div>
     {inspect && <Inspector node={inspect} loadSourceRecord={model.sourceRecord} onClose={() => setInspect(null)}/>} 
