@@ -13,7 +13,7 @@ import { UiIcon } from '../components/UiIcon'
 import { appendPiLiveDelta, finishPiLiveContentBlock, finishPiLiveTool, markPiLiveItemsRunning, reconcilePiLiveItems, startPiLiveContentBlock, startPiLiveTool, updatePiLiveTool } from './pi-live-current'
 import { omitPiLivePromptMessages, projectPiLiveHistory, type PiLiveHistoryItem } from './pi-live-history'
 import { PiLiveCurrentTaskRound, PiLiveHistoryTaskRound } from './PiLiveTaskRound'
-import { piLiveTaskRoundEstimate, projectPiLiveRunningRound, projectPiLiveTaskDetail, projectPiLiveTaskRounds } from './pi-live-task-projection'
+import { piLiveSessionTitle, piLiveTaskRoundEstimate, projectPiLiveRunningRound, projectPiLiveTaskDetail, projectPiLiveTaskRounds } from './pi-live-task-projection'
 import { TaskHeader } from './TaskHeader'
 import { TaskSurface } from './TaskSurface'
 import { workspaceDisplayName } from './task-detail-model'
@@ -278,7 +278,7 @@ function PiLiveStart({ known }: { known: PiLiveStateDto[] }) {
     {known.length > 0 && <section className="pi-live-known-card">
       <div><b>仍在后台的 Pi 任务</b><span>来自本浏览器最近启动的运行时</span></div>
       {known.map(item => <button key={item.runtimeSessionId} onClick={() => navigate(`/review/live/${encodeURIComponent(item.runtimeSessionId)}`)}>
-        <span>{item.sessionName || 'Pi 实时任务'}</span>
+        <span>{piLiveSessionTitle(item)}</span>
         <small>{modelLabel(item)} · {item.status === 'initializing' ? '正在初始化' : item.status === 'failed' ? '启动失败' : item.isStreaming ? '正在工作' : '等待输入'}</small>
       </button>)}
     </section>}
@@ -639,7 +639,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     historyRounds,
     runningRound,
   }), [connected, historyRounds, runningRound, state, visiblePendingCount])
-  const headerTitle = taskDetailModel.title.replace(/\s*[·•]\s*Pi\s*$/i, '').trim() || taskDetailModel.title
+  const headerTitle = taskDetailModel.title
 
   const beginOptimisticPrompt = useCallback((text: string) => {
     setInterruptNotice(false)
@@ -946,7 +946,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       <div className="pi-live-session-scroll">
         {known.map(item => <button key={item.runtimeSessionId} className={`pi-live-session ${item.runtimeSessionId === runtimeId ? 'active' : ''}`} onClick={() => navigate(`/review/live/${encodeURIComponent(item.runtimeSessionId)}`)}>
           <div className="pi-live-session-top"><span className={item.isStreaming || item.status === 'initializing' ? 'pi-live-pulse' : 'pi-live-idle-dot'}/><span>Pi</span><span>{item.status === 'initializing' ? '启动中' : item.status === 'failed' ? '失败' : item.isStreaming ? '实时' : '空闲'}</span></div>
-          <div className="pi-live-session-title">{item.sessionName || 'Pi 实时任务'}</div>
+          <div className="pi-live-session-title">{piLiveSessionTitle(item)}</div>
           <div className="pi-live-session-foot"><span>{modelLabel(item)}</span><span>PID {item.processId ?? '—'}</span></div>
         </button>)}
         {!known.length && <div className="pi-live-side-empty">当前浏览器没有记录到其他后台 Pi 任务。</div>}

@@ -11,6 +11,7 @@ import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
 import { Button, IconButton, Input, SelectMenu, StatusBadge, Toolbar } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
 import { deriveTaskProjectOptions, historyTaskPresentation, pickTaskProject, sessionListTitle, type TaskProjectOption } from './task-center'
+import { piLiveSessionTitle } from './pi-live-task-projection'
 import { workspaceDisplayName } from './task-detail-model'
 import { PROJECT_BOOTSTRAP_LIMIT } from './new-pi-task'
 
@@ -100,16 +101,21 @@ function remoteVisible(item: HubReviewSessionSummaryDto, review: ReturnType<Agen
 function NewTaskPanel({
   options,
   preferredProjectId,
+  nativeDirectoryPicker,
   onStarted,
 }: {
   options: TaskProjectOption[]
   preferredProjectId?: string | undefined
+  nativeDirectoryPicker: boolean
   onStarted(runtimeSessionId: string): void | Promise<void>
 }) {
   const [selectedKey, setSelectedKey] = useState('')
   const [availability, setAvailability] = useState<{ checked: boolean; available: boolean; label: string }>({ checked: false, available: false, label: '正在检测 Pi…' })
   const [starting, setStarting] = useState(false)
   const [selectingDirectory, setSelectingDirectory] = useState(false)
+  const [manualDirectoryOpen, setManualDirectoryOpen] = useState(false)
+  const [manualDirectory, setManualDirectory] = useState('')
+  const [taskTitle, setTaskTitle] = useState('')
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -136,6 +142,7 @@ function NewTaskPanel({
   const projectOptions = useMemo(() => options.map(option => ({ value: option.key, label: option.label, description: option.cwd, keywords: option.cwd })), [options])
   const agentStateLabel = !availability.checked ? '检测中' : availability.available ? '已就绪' : '不可用'
   const availabilityState = !availability.checked ? 'checking' : availability.available ? 'ready' : 'unavailable'
+  const manualDirectoryVisible = !nativeDirectoryPicker || manualDirectoryOpen
   const composerStateLabel = selectingDirectory
     ? '正在打开系统目录选择器…'
     : !availability.checked
@@ -152,7 +159,7 @@ function NewTaskPanel({
     try {
       const state = await piLiveApi.start({
         cwd: project.cwd,
-        name: `${project.label} · Pi`,
+        name: taskTitle.trim() || project.label,
       })
       await onStarted(state.runtimeSessionId)
     } catch (reason) {
@@ -179,6 +186,17 @@ function NewTaskPanel({
     }
   }
 
+  const startManualDirectory = async () => {
+    const cwd = manualDirectory.trim()
+    if (!cwd) {
+      setError('请输入要启动 Pi 任务的工作目录。')
+      return
+    }
+    const parts = cwd.replace(/[\\/]+$/, '').split(/[\\/]/).filter(Boolean)
+    const label = parts.at(-1) ?? cwd
+    await start({ cwd, label })
+  }
+
   return <div className="task-center-new">
     <section className="task-center-new-card">
       <header className="task-center-new-head">
@@ -192,6 +210,10 @@ function NewTaskPanel({
       </header>
 
       <div className="task-center-new-fields">
+        <label className="task-center-new-task-title">
+          <span>任务标题（可选）</span>
+          <Input value={taskTitle} onChange={event => setTaskTitle(event.target.value)} placeholder="例如：修复目录选择无响应" disabled={starting} aria-label="Pi 任务标题"/>
+        </label>
         <label className="task-center-new-project-field">
           <span>已有项目</span>
           <SelectMenu
@@ -210,9 +232,26 @@ function NewTaskPanel({
         </label>
         <div className="task-center-new-directory-action">
           <span>新项目</span>
-          <Button loading={selectingDirectory} disabled={!availability.available || starting} onClick={() => void selectDirectoryAndStart()}>选择目录新建并打开 <UiIcon name="arrow-right" size={14}/></Button>
+          <div className="task-center-new-directory-actions">
+            {nativeDirectoryPicker && <Button loading={selectingDirectory} disabled={!availability.available || starting} onClick={() => void selectDirectoryAndStart()}>选择目录新建并打开 <UiIcon name="arrow-right" size={14}/></Button>}
+            {nativeDirectoryPicker && <Button size="small" disabled={!availability.available || starting} onClick={() => { setManualDirectoryOpen(value => !value); setError('') }}>输入路径</Button>}
+          </div>
         </div>
       </div>
+      {manualDirectoryVisible && <div className="task-center-new-manual-directory">
+        <Input
+          value={manualDirectory}
+          onChange={event => setManualDirectory(event.target.value)}
+          placeholder="例如 F:\\workspace\\my-project"
+          aria-label="输入 Pi 新项目目录"
+          disabled={starting}
+          onKeyDown={event => {
+            if (event.key === 'Enter') void startManualDirectory()
+          }}
+        />
+        <Button variant="primary" loading={starting} disabled={!availability.available} onClick={() => void startManualDirectory()}>用此路径新建并打开 <UiIcon name="arrow-right" size={14}/></Button>
+        {!nativeDirectoryPicker && <p className="task-center-new-directory-hint">请输入运行 AgentLens 的这台计算机上的绝对路径。系统会先检查目录存在且可读写，再启动 Pi。</p>}
+      </div>}
 
       <div className="task-center-new-status"><b>{selected ? `在 ${selected.label} 中启动` : '等待选择项目'}</b><span>{composerStateLabel}</span></div>
       {error && <div className="pi-live-error" role="alert">{error}</div>}
@@ -400,7 +439,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const taskRail = <aside className="task-center-rail" aria-label="任务列表：进行中 + 历史">
     <div className="task-center-rail-head">
       <Button size="small" variant="primary" className="task-center-new-task-button" onClick={newTask}><UiIcon name="plus" size={14}/> 新建任务</Button>
-      {mode !== 'new' && <Toolbar className="task-center-toolbar" aria-label="筛选历史任务">
+      <Toolbar className="task-center-toolbar" aria-label="筛选历史任务">
         <IconButton
           size="small"
           className={searchOpen || review.filters.search ? 'is-active' : ''}
@@ -410,10 +449,10 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
           aria-pressed={searchOpen}
         ><UiIcon name="search" size={14}/></IconButton>
         <IconButton size="small" onClick={() => void model.refreshReview()} title="刷新历史任务" aria-label="刷新历史任务"><UiIcon name="refresh" size={14}/></IconButton>
-      </Toolbar>}
+      </Toolbar>
     </div>
 
-    {mode !== 'new' && <SidebarFilterDisclosure className="task-center-sidebar-filter" summaryMeta={agentSelectionSummary} agents={agents} agentSelection={{ mode: 'multiple', value: review.filters.sourceIds, onChange: sourceIds => model.setReviewFilters({ sourceIds }) }}>
+    <SidebarFilterDisclosure className="task-center-sidebar-filter" summaryMeta={agentSelectionSummary} agents={agents} agentSelection={{ mode: 'multiple', value: review.filters.sourceIds, onChange: sourceIds => model.setReviewFilters({ sourceIds }) }}>
       <div className="workspace-insight-filter-fields" aria-label="筛选历史任务">
         <label><span>项目</span><SelectMenu variant="field" value={review.filters.projectId} onChange={projectId => model.setReviewFilters({ projectId })} ariaLabel="筛选项目" placeholder="全部项目" menuWidth={280} searchable searchPlaceholder="搜索项目" options={projectFilterOptions}/></label>
         <label><span>时间</span><SelectMenu variant="field" value={review.filters.range} onChange={range => model.setReviewFilters({ range: range as typeof review.filters.range })} ariaLabel="筛选时间范围" menuWidth={156} options={[
@@ -423,9 +462,9 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
           { value: 'all', label: '全部状态' }, { value: 'clean', label: '无错误' }, { value: 'with-errors', label: '有错误' },
         ]}/></label>
       </div>
-    </SidebarFilterDisclosure>}
+    </SidebarFilterDisclosure>
 
-    {mode !== 'new' && searchOpen && <div className="task-center-search-panel">
+    {searchOpen && <div className="task-center-search-panel">
       <div className="task-center-search-field">
         <UiIcon name="search" size={14}/>
         <Input
@@ -451,7 +490,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
       {runtimes.length > 0 && <section className="task-center-group task-center-live-group">
         <div className="task-center-group-title"><span>进行中</span><span>{runtimes.length}</span></div>
         {runtimes.map(item => <button key={item.runtimeSessionId} className={`session-item task-live-item ${selectedRuntimeId === item.runtimeSessionId ? 'session-item-active' : ''}`} onClick={() => navigate(`/review/live/${encodeURIComponent(item.runtimeSessionId)}`)}>
-          <div className="session-item-title-row"><div className="session-item-title" title={item.taskSummary || item.sessionName || 'Pi 任务'}>{sessionListTitle(item.taskSummary || item.sessionName, 'Pi 任务', ['pi'])}</div><PiLiveRuntimeStatusBadge state={item}/></div>
+          <div className="session-item-title-row"><div className="session-item-title" title={piLiveSessionTitle(item)}>{sessionListTitle(piLiveSessionTitle(item), 'Pi 任务', ['pi'])}</div><PiLiveRuntimeStatusBadge state={item}/></div>
           <div className="session-item-meta"><span className={item.isStreaming || item.status === 'initializing' ? 'pi-live-pulse' : 'pi-live-idle-dot'}/><span>Pi</span><span className="session-item-project">{item.projectName || workspaceDisplayName(item.workspacePath) || '未关联项目'}</span>{item.startedAt && <time>{formatTime(item.startedAt)}</time>}</div>
         </button>)}
       </section>}
@@ -482,7 +521,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
           />}
           {mode === 'live' && <PiLivePage embedded/>}
           {mode === 'hub' && <HubReviewPage embedded/>}
-          {mode === 'new' && <NewTaskPanel options={projectOptions} preferredProjectId={preferredProjectId} onStarted={runtimeSessionId => navigate(`/review/live/${encodeURIComponent(runtimeSessionId)}`)}/>} 
+          {mode === 'new' && <NewTaskPanel options={projectOptions} preferredProjectId={preferredProjectId} nativeDirectoryPicker={snapshot.health?.runtime?.owner === 'desktop'} onStarted={runtimeSessionId => navigate(`/review/live/${encodeURIComponent(runtimeSessionId)}`)}/>}
         </Suspense>
       </section>
     </div>

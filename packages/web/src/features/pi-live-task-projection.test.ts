@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { PiLiveHistoryItem } from './pi-live-history'
-import { projectPiLiveRunningRound, projectPiLiveTaskRounds } from './pi-live-task-projection'
+import { piLiveSessionTitle, projectPiLiveRunningRound, projectPiLiveTaskRounds } from './pi-live-task-projection'
 
 function lifecycle(id: string): PiLiveHistoryItem {
   return {
@@ -45,4 +45,10 @@ test('Pi Live 当前轮次拥有稳定语义身份', () => {
   const round = projectPiLiveRunningRound({ items: [], isStreaming: true })
   assert.equal(round.semanticId, 'pi-live-current-round')
   assert.equal(round.state, 'running')
+})
+
+test('Pi Live 标题优先使用任务语义，不拼接来源标识', () => {
+  assert.equal(piLiveSessionTitle({ sessionName: '修复目录选择无响应' }), '修复目录选择无响应')
+  assert.equal(piLiveSessionTitle({ sessionName: '修复目录选择无响应', taskSummary: '验证 Windows 选择器' }), '验证 Windows 选择器')
+  assert.equal(piLiveSessionTitle(null), '未命名任务')
 })

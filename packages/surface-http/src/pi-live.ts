@@ -1,4 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { access, constants as fsConstants, stat } from 'node:fs/promises'
+import { isAbsolute } from 'node:path'
 import type { StorageService } from '@agent-lens/core'
 import type { PiLiveHistoryAction, PiLiveService } from '@agent-lens/runtime-cordis'
 import type { JsonValue, PiLiveStartRequestDto } from '@agent-lens/protocol'
@@ -62,6 +64,31 @@ function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
 }
 
+/**
+ * Pi 在 HTTP Runtime 所在的主机启动；因此 cwd 必须是该主机上可读写的绝对目录。
+ * 在创建 Runtime 前完成校验，避免把一个必然失败的输入显示成“启动中”。
+ */
+export async function validatePiWorkingDirectory(cwd: string): Promise<string> {
+  const normalized = cwd.trim()
+  if (!isAbsolute(normalized)) {
+    throw httpError(400, '项目目录必须是运行 AgentLens 的这台计算机上的绝对路径。')
+  }
+  try {
+    const metadata = await stat(normalized)
+    if (!metadata.isDirectory()) {
+      throw httpError(400, `项目路径不是目录：${normalized}`)
+    }
+    await access(normalized, fsConstants.R_OK | fsConstants.W_OK)
+    return normalized
+  } catch (error) {
+    if (error && typeof error === 'object' && 'statusCode' in error) throw error
+    const code = error && typeof error === 'object' ? String((error as { code?: unknown }).code ?? '') : ''
+    if (code === 'ENOENT') throw httpError(400, `找不到项目目录：${normalized}`)
+    if (code === 'ENOTDIR') throw httpError(400, `项目路径不是目录：${normalized}`)
+    throw httpError(400, `项目目录不可读写：${normalized}。请检查路径和访问权限。`)
+  }
+}
+
 function optionalBoolean(value: unknown, name: string): boolean | undefined {
   if (value === undefined) return undefined
   if (typeof value !== 'boolean') throw httpError(400, `${name} must be a boolean`)
@@ -93,7 +120,7 @@ function writeError(response: ServerResponse, error: unknown): void {
   const status = statusForError(error)
   writeJson(response, status, {
     error: status === 404 ? 'not_found' : status === 503 ? 'pi_unavailable' : status < 500 ? 'bad_request' : 'internal_error',
-    ...(error instanceof Error && status < 500 ? { message: error.message } : {}),
+    ...(error instanceof Error && (status < 500 || status === 503) ? { message: error.message } : {}),
   })
 }
 
@@ -210,7 +237,7 @@ export async function handlePiLiveRequest(
       const model = optionalString(body.model)
       const name = optionalString(body.name)
       const input: PiLiveStartRequestDto = {
-        cwd: nonEmpty(body.cwd, 'cwd'),
+        cwd: await validatePiWorkingDirectory(nonEmpty(body.cwd, 'cwd')),
         ...(executable ? { executable } : {}),
         ...(provider ? { provider } : {}),
         ...(model ? { model } : {}),

@@ -50,6 +50,11 @@ function runtimeStatusLabel(state: PiLiveStateDto | null, connected: boolean): s
   return '等待输入'
 }
 
+/** 同一 Pi Runtime 在任务列表、会话切换与页头使用一致的任务标题。 */
+export function piLiveSessionTitle(state: Pick<PiLiveStateDto, 'taskSummary' | 'sessionName'> | null | undefined): string {
+  return state?.taskSummary?.trim() || state?.sessionName?.trim() || '未命名任务'
+}
+
 function factTime(item: PiLiveHistoryItem): number | null {
   if (!item.at) return null
   const value = Date.parse(item.at)
@@ -166,7 +171,7 @@ export function projectPiLiveTaskDetail(input: {
   const totalCost = usageItems.reduce((sum, item) => sum + (item.usage.cost?.total ?? 0), 0)
   return {
     id: state?.runtimeSessionId ?? 'pi-live-pending',
-    title: state?.taskSummary || state?.sessionName || 'Pi 实时任务',
+    title: piLiveSessionTitle(state),
     agentLabel: 'Pi',
     contextLabel: runtimeModelLabel(state),
     projectLabel: state?.projectName,

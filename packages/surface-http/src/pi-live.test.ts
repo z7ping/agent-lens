@@ -152,6 +152,58 @@ async function json(response: Response) {
   return await response.json() as Record<string, unknown>
 }
 
+test('浏览器在系统目录选择器不可用时收到可操作的错误信息', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  const piLive = new FakePiLiveService()
+  const surface = await startHttpSurface(storage, {
+    port: 0,
+    piLive,
+    selectProjectDirectory: async () => {
+      const error = new Error('当前 Linux 环境没有可用的系统目录选择器（需要 zenity 或 kdialog）。') as Error & { statusCode: number }
+      error.statusCode = 503
+      throw error
+    },
+  })
+  const base = `http://${surface.host}:${surface.port}`
+
+  try {
+    const response = await fetch(`${base}/api/v1/pi-live/project-directory`, { method: 'POST' })
+    assert.equal(response.status, 503)
+    assert.deepEqual(await json(response), {
+      error: 'pi_unavailable',
+      message: '当前 Linux 环境没有可用的系统目录选择器（需要 zenity 或 kdialog）。',
+    })
+  } finally {
+    await surface.dispose()
+  }
+})
+
+test('Pi Live 在创建前拒绝不存在、非目录或不可用的工作路径', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  const piLive = new FakePiLiveService()
+  const surface = await startHttpSurface(storage, { port: 0, piLive })
+  const base = `http://${surface.host}:${surface.port}`
+
+  try {
+    const relative = await fetch(`${base}/api/v1/pi-live`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ cwd: 'relative-project' }),
+    })
+    assert.equal(relative.status, 400)
+    assert.match(String((await json(relative)).message), /绝对路径/)
+
+    const missing = await fetch(`${base}/api/v1/pi-live`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ cwd: process.platform === 'win32' ? 'Z:\\agent-lens-not-a-project' : '/agent-lens-not-a-project' }),
+    })
+    assert.equal(missing.status, 400)
+    assert.match(String((await json(missing)).message), /找不到项目目录/)
+    assert.equal(piLive.startInput, null)
+  } finally {
+    await surface.dispose()
+  }
+})
+
 test('Pi Live HTTP control surface preserves runtime ownership and validates commands', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   await storage.migrate()
@@ -179,12 +231,12 @@ test('Pi Live HTTP control surface preserves runtime ownership and validates com
     const started = await fetch(`${base}/api/v1/pi-live`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ cwd: '/workspace', provider: 'test-provider', model: 'test-model', name: 'live-task' }),
+      body: JSON.stringify({ cwd: process.cwd(), provider: 'test-provider', model: 'test-model', name: 'live-task' }),
     })
     assert.equal(started.status, 201)
     assert.equal((await json(started)).runtimeSessionId, piLive.runtimeSessionId)
     assert.deepEqual(piLive.startInput, {
-      cwd: '/workspace',
+      cwd: process.cwd(),
       provider: 'test-provider',
       model: 'test-model',
       name: 'live-task',

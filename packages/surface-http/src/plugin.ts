@@ -173,7 +173,7 @@ const applyHttpSurface = Object.assign(
       capturePolicy: ctx.capturePolicy,
       backup: ctx.backup,
       piLive: ctx.piLive,
-      selectProjectDirectory: config.selectProjectDirectory,
+      ...(config.selectProjectDirectory ? { selectProjectDirectory: config.selectProjectDirectory } : {}),
       hubReview,
     })
     const unprovideHubReview = ctx.provide('hubReview', hubReview)
