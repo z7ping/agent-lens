@@ -86,7 +86,8 @@ export function TaskHeader({ marker, agent, context, status, title, submeta, met
 
   useLayoutEffect(() => {
     const header = headerRef.current
-    const reader = header?.closest<HTMLElement>('.review-reader')
+    const reviewSurface = header?.closest<HTMLElement>('.task-surface-review')
+    const reader = reviewSurface?.querySelector<HTMLElement>('.review-reader')
     if (!reader || primaryActions.length === 0) {
       setReviewTailHost(null)
       return
