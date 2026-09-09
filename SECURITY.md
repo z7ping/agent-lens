@@ -58,8 +58,6 @@ AGENT_LENS_ENV_CAPTURE=off
 - `redacted`：统一脱敏；
 - `full`：保留普通正文，但 Token、API Key、Password、Authorization、Cookie 等明确凭据仍强制遮蔽。
 
-详细规则的唯一权威来源：`docs/1.0/CAPTURE-POLICY.md`。
-
 ## Hub 多机复制安全边界
 
 Hub Alpha 仍保持 Local-first：
@@ -84,13 +82,7 @@ Node
 - Hub 汇聚多机数据后安全半径高于单 Node；
 - Alpha 不提供 Remote Web Login、Remote Execution 或 Remote Attestation。
 
-Hub 的密码学、配对、Clone Detection、数据出站范围、重放保护、资源滥用限制与 trusted-node 真实性边界，统一以：
-
-`docs/1.0/HUB-PAIRING-SECURITY.md`
-
-为专项权威来源；Wire 兼容语义见 `docs/1.0/HUB-REPLICATION-PROTOCOL.md`，系统设计见 `docs/1.0/HUB-DESIGN.md`。
-
-不要在本文件再次复制完整 Hub Policy 字段矩阵、协议错误码或握手字段。
+公开仓库只保留上述安全承诺，不在此复制未公开的协议字段、握手细节或内部防护实现。
 
 ## 本机数据
 

@@ -4,13 +4,7 @@ AgentLens 1.0 是一次 Clean Rebuild。当前代码仓库只维护 1.0 实现�
 
 ## 开始之前
 
-架构或 Contract 相关修改前，先阅读：
-
-1. [`ARCHITECTURE.md`](ARCHITECTURE.md)
-2. [`docs/1.0/CORE-CONTRACT.md`](docs/1.0/CORE-CONTRACT.md)
-3. [`docs/1.0/IMPLEMENTATION-STATUS.md`](docs/1.0/IMPLEMENTATION-STATUS.md)
-
-修改正式 Web UI 前，同时阅读 [`docs/1.0/WEB-UI-GUIDELINES.md`](docs/1.0/WEB-UI-GUIDELINES.md)；通用操作、导航和展开/收起图标必须遵守其中的统一入口约束。
+架构或 Contract 相关修改前，先阅读仓库中的实现、测试和适用的 Agent 约束；涉及未公开的决策边界时，维护者会在 Issue 或 Pull Request 中提供必要的公开信息。
 
 Issue、Milestone、Project 和 Pull Request 以 GitHub 为准。安全问题请按 [`SECURITY.md`](SECURITY.md) 私密报告。
 
@@ -120,10 +114,6 @@ Pull Request 应满足：
 公开代码仓库只维护实现和使用所需的最小文档：
 
 - `README.md` / `README.en.md`：对外能力和使用方式；
-- `ARCHITECTURE.md`：当前真实架构边界；
-- `docs/1.0/CORE-CONTRACT.md`：稳定 Contract；
-- `docs/1.0/IMPLEMENTATION-STATUS.md`：当前实现与验证状态；
-- `docs/1.0/WEB-UI-GUIDELINES.md`：正式 Web UI 实现约束；
 - `CHANGELOG.md`：发布记录；
 - `SECURITY.md`：安全报告方式。
 

@@ -203,14 +203,7 @@ Check the system tray first and inspect `<installation directory>\logs\desktop.l
 
 AgentLens 1.0 is a Cordis Application and pins `@deepseek-ai/cordis@4.0.1` as its only Plugin Runtime. Core remains framework-agnostic. Sources, Storage, and Surfaces compose through the Cordis lifecycle but may not bypass the Canonical Data Flow.
 
-Read more:
-
-- [Architecture](ARCHITECTURE.md)
-- [1.0 Core Contract](docs/1.0/CORE-CONTRACT.md)
-- [Distribution operations](docs/1.0/DISTRIBUTION-OPERATIONS.md)
-- [Desktop release matrix](docs/1.0/DESKTOP-RELEASES.md)
-- [Contributing](CONTRIBUTING.md)
-- [Security policy](SECURITY.md)
+See [Contributing](CONTRIBUTING.md) and the [Security policy](SECURITY.md) for contribution and security-reporting guidance.
 
 Local development:
 

@@ -61,7 +61,7 @@ if (-not $SkipChecks) { npm run release:check }
 git diff --check
 $pending = @(git status --porcelain)
 if ($pending.Count -gt 0) {
-  git add .github/workflows/npm-publish.yml package.json package-lock.json apps packages scripts CHANGELOG.md docs/1.0/RELEASE-RUNBOOK.md
+  git add .github/workflows/npm-publish.yml package.json package-lock.json apps packages scripts CHANGELOG.md
   git commit -m "发布 AgentLens $Version"
 }
 if (-not $tagExists) {

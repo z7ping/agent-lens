@@ -203,14 +203,7 @@ Windows 后台使用当前用户计划任务，Linux 使用 `systemd --user`，m
 
 AgentLens 1.0 是 Cordis Application，精确使用 `@deepseek-ai/cordis@4.0.1` 作为唯一 Plugin Runtime。Core 保持框架无关；Source、Storage 与 Surface 通过 Cordis 生命周期组合，但不能绕过 Canonical Data Flow。
 
-深入阅读：
-
-- [架构总览](ARCHITECTURE.md)
-- [1.0 Core Contract](docs/1.0/CORE-CONTRACT.md)
-- [发行与运维](docs/1.0/DISTRIBUTION-OPERATIONS.md)
-- [桌面发行矩阵](docs/1.0/DESKTOP-RELEASES.md)
-- [贡献指南](CONTRIBUTING.md)
-- [安全策略](SECURITY.md)
+更多贡献与安全报告方式见 [贡献指南](CONTRIBUTING.md) 和 [安全策略](SECURITY.md)。
 
 本地开发：
 

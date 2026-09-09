@@ -9,6 +9,8 @@ const MAX_MESSAGE_BYTES = 1024 * 1024
 const MAX_OUTBOUND_MESSAGES = 256
 const MAX_SEEN_REQUEST_IDS = 512
 let runtimeSessionId = ''
+let sdk
+let loadedSdkEntry
 let runtime
 let session
 let unsubscribe = () => {}
@@ -209,7 +211,7 @@ function enqueueEnvelope(envelope) {
 }
 
 function send(type, payload, requestId, ok = true, error) {
-  if (!process.send || !runtimeSessionId) return false
+  if (!process.send || runtimeSessionId === undefined) return false
   const envelope = { version: VERSION, runtimeSessionId, type, ...(requestId ? { requestId } : {}), ...(payload !== undefined ? { payload } : {}), ...(type === 'response' ? { ok } : {}), ...(error ? { error: diagnostic(error) } : {}) }
   let size
   try { size = serialize(envelope).byteLength } catch { return false }
@@ -288,6 +290,21 @@ async function createSessionManager(sdk, input) {
     throw new Error('Pi 已返回分叉 Session 路径，但新 JSONL 尚未创建')
   }
   return manager
+}
+
+async function loadSdk(discovery) {
+  const sdkEntry = typeof discovery.sdkEntry === 'string' ? discovery.sdkEntry : ''
+  if (!sdkEntry) throw new Error('Pi Runtime Worker did not receive a verified official Pi SDK entry')
+  if (!await exists(sdkEntry)) throw new Error(`Verified Pi SDK entry no longer exists: ${sdkEntry}`)
+  if (sdk) {
+    if (!samePath(loadedSdkEntry, sdkEntry)) throw new Error('Pi Runtime Worker cannot switch SDK after prewarm')
+    return sdk
+  }
+  sdkVersion = typeof discovery.version === 'string' ? discovery.version : undefined
+  sdk = await import(pathToFileURL(sdkEntry).href)
+  if (typeof sdk.createAgentSession !== 'function' || !sdk.SessionManager) throw new Error('Installed Pi SDK is missing required AgentSession capabilities')
+  loadedSdkEntry = sdkEntry
+  return sdk
 }
 
 function wireEvent(event) {
@@ -379,32 +396,26 @@ async function initialize(input) {
   currentStageStartedAt = initializationStartedAt
   initializationTimings = []
   progress('loading_sdk', '正在加载 Pi SDK')
-  const discovery = record(input.sdk)
-  const sdkEntry = typeof discovery.sdkEntry === 'string' ? discovery.sdkEntry : ''
-  if (!sdkEntry) throw new Error('Pi Runtime Worker did not receive a verified official Pi SDK entry')
-  if (!await exists(sdkEntry)) throw new Error(`Verified Pi SDK entry no longer exists: ${sdkEntry}`)
-  sdkVersion = typeof discovery.version === 'string' ? discovery.version : undefined
-  const sdk = await import(pathToFileURL(sdkEntry).href)
-  if (typeof sdk.createAgentSession !== 'function' || !sdk.SessionManager) throw new Error('Installed Pi SDK is missing required AgentSession capabilities')
-  const sessionManager = await createSessionManager(sdk, input)
-  const hasSessionRuntime = ['createAgentSessionServices', 'createAgentSessionRuntime', 'createAgentSessionFromServices'].every(name => typeof sdk[name] === 'function')
+  const loadedSdk = await loadSdk(record(input.sdk))
+  const sessionManager = await createSessionManager(loadedSdk, input)
+  const hasSessionRuntime = ['createAgentSessionServices', 'createAgentSessionRuntime', 'createAgentSessionFromServices'].every(name => typeof loadedSdk[name] === 'function')
   if (hasSessionRuntime) {
     runtimeMode = 'session_runtime'
-    const agentDir = sdk.getAgentDir()
+    const agentDir = loadedSdk.getAgentDir()
     const createRuntime = async options => {
       progress('loading_resources', '正在加载配置、扩展与上下文')
-      const services = await sdk.createAgentSessionServices({ cwd: options.cwd, agentDir: options.agentDir, modelRuntimeSignal: AbortSignal.timeout(15_000) })
+      const services = await loadedSdk.createAgentSessionServices({ cwd: options.cwd, agentDir: options.agentDir, modelRuntimeSignal: AbortSignal.timeout(15_000) })
       send('event', { type: 'runtime_resources', resources: startupResourceSnapshot(services.resourceLoader, input.cwd, services.diagnostics) })
       progress('creating_session', '正在创建 Pi Session')
-      const created = await sdk.createAgentSessionFromServices({ services, sessionManager: options.sessionManager, sessionStartEvent: options.sessionStartEvent })
+      const created = await loadedSdk.createAgentSessionFromServices({ services, sessionManager: options.sessionManager, sessionStartEvent: options.sessionStartEvent })
       return { ...created, services, diagnostics: services.diagnostics }
     }
-    runtime = await sdk.createAgentSessionRuntime(createRuntime, { cwd: input.cwd, agentDir, sessionManager })
+    runtime = await loadedSdk.createAgentSessionRuntime(createRuntime, { cwd: input.cwd, agentDir, sessionManager })
     session = runtime.session
   } else {
     progress('loading_resources', '正在使用兼容模式加载 Pi 配置与扩展')
     progress('creating_session', '正在创建 Pi Session')
-    const created = await sdk.createAgentSession({ cwd: input.cwd, sessionManager })
+    const created = await loadedSdk.createAgentSession({ cwd: input.cwd, sessionManager })
     const compatibilityLoader = record(created).resourceLoader ?? record(record(created).services).resourceLoader
     const compatibilityResources = startupResourceSnapshot(compatibilityLoader, input.cwd, record(created).diagnostics, record(created).extensionsResult)
     if (Object.values(compatibilityResources).some(value => Array.isArray(value) && value.length)) {
@@ -497,6 +508,17 @@ async function dispose() {
 process.on('message', async value => {
   const envelope = record(value)
   if (envelope.version !== VERSION || typeof envelope.runtimeSessionId !== 'string') return
+  if (envelope.type === 'prewarm') {
+    if (runtimeSessionId || typeof envelope.requestId !== 'string') return
+    if (!rememberRequestId(envelope.requestId)) return
+    try {
+      await loadSdk(record(record(envelope.payload).sdk))
+      send('response', { sdkVersion }, envelope.requestId, true)
+    } catch (error) {
+      send('response', undefined, envelope.requestId, false, error instanceof Error ? error.message : String(error))
+    }
+    return
+  }
   if (!runtimeSessionId) runtimeSessionId = envelope.runtimeSessionId
   if (envelope.runtimeSessionId !== runtimeSessionId) return
   if ((envelope.type === 'initialize' || envelope.type === 'request') && typeof envelope.requestId === 'string') {

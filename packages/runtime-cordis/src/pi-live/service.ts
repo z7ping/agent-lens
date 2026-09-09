@@ -177,9 +177,17 @@ export class DefaultPiLiveService implements PiLiveService {
     return this.availabilityPromise
   }
 
-  /** Worker 自己加载 SDK；同时恢复上一个 Daemon generation 尚未被用户结束的 Live Task。 */
+  /**
+   * SDK 只在空闲 Worker 内预热；失败时保留冷启动路径。Recovery 不依赖预热成功。
+   */
   async preload(): Promise<void> {
-    await Promise.all([this.availability(), this.ensureRecoveryLoaded()])
+    await Promise.all([
+      this.availability(),
+      this.ensureRecoveryLoaded(),
+      this.host.preload?.().catch(error => {
+        console.warn('[AgentLens] Pi Live SDK Worker 预热失败；新建任务将按冷启动路径继续', error)
+      }),
+    ])
   }
 
   async list(): Promise<PiLiveRuntimeState[]> {
@@ -505,6 +513,7 @@ export class DefaultPiLiveService implements PiLiveService {
       }
       await this.terminateRuntime(runtime, false)
     }))
+    await this.host.dispose?.().catch(() => undefined)
   }
 
   private async terminateRuntime(runtime: OwnedRuntime, explicit: boolean): Promise<void> {

@@ -15,11 +15,7 @@ AgentLens 1.0 已发布 **1.0.0-alpha.4**。默认目标是处理发布后的缺
 
 ## 架构底线
 
-修改架构、Core Contract、Source / Storage / Surface、Daemon 生命周期前，先阅读：
-
-1. `ARCHITECTURE.md`
-2. `docs/1.0/CORE-CONTRACT.md`
-3. `docs/adr/0001-agentlens-1.0-clean-rebuild-and-cordis-runtime.md`
+修改架构、Core Contract、Source / Storage / Surface、Daemon 生命周期前，先阅读相关实现、测试和当前任务提供的决策上下文。
 
 Core 保持框架无关；Cordis 是唯一 Plugin Runtime。Source 事实必须走 Canonical Pipeline，不得绕过 Observation / Evidence / Projection 自建第二套事实链路。Web 只消费 `@agent-lens/protocol` / `/api/v1/*`。
 

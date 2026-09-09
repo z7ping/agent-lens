@@ -56,6 +56,9 @@ export interface PiRuntimeHandle {
 }
 
 export interface PiRuntimeHost {
+  /** 在没有任务数据的空闲 Worker 中提前导入 SDK；失败不影响后续冷启动。 */
+  preload?(): Promise<void>
+  dispose?(): Promise<void>
   start(
     runtimeSessionId: string,
     input: PiLiveStartInput,
@@ -63,6 +66,16 @@ export interface PiRuntimeHost {
     onEvent: (event: Record<string, unknown>) => void,
     onExit: (error: Error) => void,
   ): Promise<PiRuntimeHandle>
+}
+
+interface PiSdkDescriptor {
+  sdkEntry: string
+  version?: string | undefined
+}
+
+interface WarmWorker {
+  child: ChildProcess
+  sdk: PiSdkDescriptor
 }
 
 function sanitizeDiagnostic(value: string): string {
@@ -260,6 +273,98 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
 }
 
 export class WorkerPiRuntimeHost implements PiRuntimeHost {
+  private warmWorker?: WarmWorker | undefined
+  private warming?: Promise<void> | undefined
+
+  private workerEntry(): string {
+    return fileURLToPath(new URL('./worker-entry.mjs', import.meta.url))
+  }
+
+  private forkWorker(cwd: string): ChildProcess {
+    const forkOptions = {
+      cwd,
+      env: process.env,
+      // Worker 入口是纯 ESM，不继承 Daemon 的 tsx/inspect/input-type 参数。
+      execArgv: [],
+      serialization: 'advanced',
+      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+      windowsHide: true,
+    } as Parameters<typeof fork>[2] & { windowsHide: boolean }
+    return fork(this.workerEntry(), [], forkOptions)
+  }
+
+  private sameSdk(left: PiSdkDescriptor, right: PiSdkDescriptor): boolean {
+    const normalize = (value: string) => process.platform === 'win32' ? value.toLowerCase() : value
+    return normalize(left.sdkEntry) === normalize(right.sdkEntry) && left.version === right.version
+  }
+
+  /** 预热 Worker 不读取任务 cwd、不创建 Session，只导入 Host 已验证的 SDK。 */
+  async preload(): Promise<void> {
+    if (this.warmWorker || this.warming) return this.warming
+    this.warming = (async () => {
+      const discovered = await discoverInstalledPiSdk()
+      const sdk: PiSdkDescriptor = { sdkEntry: discovered.sdkEntry, ...(discovered.version ? { version: discovered.version } : {}) }
+      const child = this.forkWorker(process.cwd())
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const cleanup = () => {
+            child.off('message', message)
+            child.off('error', failed)
+            child.off('exit', exited)
+            clearTimeout(timeout)
+          }
+          const failed = (error: Error) => { cleanup(); reject(error) }
+          const exited = (code: number | null, signal: NodeJS.Signals | null) => {
+            cleanup()
+            reject(new Error(`Pi SDK prewarm Worker exited (code=${code ?? 'null'}, signal=${signal ?? 'none'})`))
+          }
+          const timeout = setTimeout(() => { cleanup(); reject(new Error('Pi SDK prewarm timed out')) }, 120_000)
+          timeout.unref?.()
+          const message = (value: unknown) => {
+            const envelope = record(value) as unknown as WorkerEnvelope & { ok?: boolean; error?: string }
+            if (envelope.version !== PROTOCOL_VERSION || envelope.runtimeSessionId !== '' || envelope.type !== 'response' || envelope.requestId !== 'prewarm') return
+            cleanup()
+            if (envelope.ok) resolve()
+            else reject(new Error(envelope.error || 'Pi SDK prewarm failed'))
+          }
+          child.on('message', message)
+          child.once('error', failed)
+          child.once('exit', exited)
+          child.send({ version: PROTOCOL_VERSION, runtimeSessionId: '', type: 'prewarm', requestId: 'prewarm', payload: { sdk } }, error => {
+            if (!error) return
+            cleanup()
+            reject(error)
+          })
+        })
+        if (child.exitCode !== null || child.signalCode !== null || !child.connected) throw new Error('Pi SDK prewarm Worker disconnected')
+        const warm: WarmWorker = { child, sdk }
+        this.warmWorker = warm
+        child.once('close', () => { if (this.warmWorker === warm) this.warmWorker = undefined })
+      } catch (error) {
+        if (child.connected) child.disconnect()
+        if (child.exitCode === null && child.signalCode === null) child.kill()
+        throw error
+      }
+    })().finally(() => { this.warming = undefined })
+    return this.warming
+  }
+
+  private takeWarmWorker(sdk: PiSdkDescriptor): ChildProcess | undefined {
+    const warm = this.warmWorker
+    if (!warm || !this.sameSdk(warm.sdk, sdk)) return undefined
+    this.warmWorker = undefined
+    if (warm.child.exitCode !== null || warm.child.signalCode !== null || !warm.child.connected) return undefined
+    return warm.child
+  }
+
+  async dispose(): Promise<void> {
+    const warm = this.warmWorker
+    this.warmWorker = undefined
+    if (!warm) return
+    if (warm.child.connected) warm.child.disconnect()
+    if (warm.child.exitCode === null && warm.child.signalCode === null) warm.child.kill()
+  }
+
   async start(
     runtimeSessionId: string,
     input: PiLiveStartInput,
@@ -270,24 +375,17 @@ export class WorkerPiRuntimeHost implements PiRuntimeHost {
     // 可执行文件、npm shim 与 SDK 包只能在一个位置解析。Worker 只接收已经
     // 验证的 SDK 入口，避免父/子进程分别维护一套 PATH 与 shim 规则。
     const sdk = await discoverInstalledPiSdk(input.executable)
+    const sdkDescriptor: PiSdkDescriptor = {
+      sdkEntry: sdk.sdkEntry,
+      ...(sdk.version ? { version: sdk.version } : {}),
+    }
     const workerInput = {
       ...input,
-      sdk: {
-        sdkEntry: sdk.sdkEntry,
-        ...(sdk.version ? { version: sdk.version } : {}),
-      },
+      sdk: sdkDescriptor,
     }
-    const entry = fileURLToPath(new URL('./worker-entry.mjs', import.meta.url))
-    const forkOptions = {
-      cwd: input.cwd,
-      env: process.env,
-      // Worker 入口是纯 ESM，不继承 Daemon 的 tsx/inspect/input-type 参数。
-      execArgv: [],
-      serialization: 'advanced',
-      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-      windowsHide: true,
-    } as Parameters<typeof fork>[2] & { windowsHide: boolean }
-    const child = fork(entry, [], forkOptions)
+    // 只领取从未创建 Session 的空闲 Worker。领取后立即尝试补位，失败则让下一次继续冷启动。
+    const child = this.takeWarmWorker(sdkDescriptor) ?? this.forkWorker(input.cwd)
+    void this.preload().catch(() => undefined)
     const handle = new WorkerPiRuntimeHandle(child, runtimeSessionId, onEvent, onExit)
     const abort = () => { if (child.exitCode === null && child.signalCode === null) child.kill() }
     signal.addEventListener('abort', abort, { once: true })
