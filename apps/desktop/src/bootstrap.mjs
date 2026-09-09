@@ -82,6 +82,8 @@ process.on('unhandledRejection', error => {
 bootStage('before-external-links-import')
 await import('./external-links.mjs')
 bootStage('after-external-links-import')
+await import('./desktop-bridge.mjs')
+bootStage('after-desktop-bridge-import')
 await import('./main.mjs')
 bootStage('after-main-import')
 await import('./integration.mjs')
