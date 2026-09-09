@@ -3,7 +3,7 @@
 /*
  * Review / Pi Live 共用会话视图的唯一样式所有者。
  * TaskSurface 本身就是统一 Session View：Review 是只读态，Live 是开启 Composer 的交互态。
- * 页面控制器只保留数据来源与能力差异，不再持有另一套 Header / Reader / Composer 外层几何。
+ * 页面控制器只保留数据来源与能力差异；Reader / Document / optional Composer 由 TaskSurface 归一为固定槽位。
  */
 .task-session-view {
   position: relative;
@@ -16,13 +16,11 @@
   background: var(--al-surface);
 }
 .task-session-view > .task-header { grid-row: 1; }
-.task-surface-review > .review-reader-pane,
-.task-surface-live > .pi-live-reader { grid-row: 2; }
-.task-surface-live > .pi-live-compose-wrap { grid-row: 3; }
+.task-session-view > .task-session-reader { grid-row: 2; }
+.task-session-view > .task-session-composer { grid-row: 3; }
 
-/* Review / Live 的第二行都是唯一 Reader；分页和实时追加只改变控制器行为。 */
-.task-surface-review .review-reader-pane,
-.task-surface-live .pi-live-reader {
+/* Review / Live 的第二行都是同一个 Reader 槽位；分页和实时追加只改变控制器行为。 */
+.task-session-view .task-session-reader {
   position: relative;
   min-width: 0;
   min-height: 0;
@@ -33,18 +31,17 @@
   background: var(--al-surface);
 }
 
-.task-surface-review .review-reader,
-.task-surface-live .pi-live-document {
+.task-session-view .task-session-document {
   box-sizing: border-box;
   width: 100%;
   max-width: var(--al-content-task-reading);
   margin-inline: auto;
   padding: 8px var(--al-space-page-x);
 }
-.task-surface-review .review-reader { padding-bottom: 96px; }
+.task-session-view[data-task-session-interactive='false'] .task-session-document { padding-bottom: 96px; }
 
 /* Composer 是 Live 的可选能力；外层几何归 Session View，内部交互仍归 Pi Live。 */
-.task-surface-live .pi-live-compose-wrap {
+.task-session-view .task-session-composer {
   position: relative;
   z-index: 10;
   padding: 3px var(--al-safe-composer-inline) 10px;
@@ -77,9 +74,8 @@
  * 96px 是已确认的稳定阅读列留白；真实小屏仍由下面 viewport media 收窄。
  */
 @container task-surface (max-width: 991.98px) {
-  .task-surface-review .review-reader,
-  .task-surface-live .pi-live-document,
-  .task-surface-live .pi-live-compose-wrap { padding-inline: 96px; }
+  .task-session-view .task-session-document,
+  .task-session-view .task-session-composer { padding-inline: 96px; }
 
   .task-surface-live .pi-live-float-stack {
     right: 96px;
@@ -89,9 +85,8 @@
 }
 
 @media (max-width: 991.98px) {
-  .task-surface-review .review-reader,
-  .task-surface-live .pi-live-document,
-  .task-surface-live .pi-live-compose-wrap,
+  .task-session-view .task-session-document,
+  .task-session-view .task-session-composer,
   .task-session-view .task-header { padding-inline: 20px; }
 
   .task-session-view .task-header { grid-template-columns: auto minmax(0, 1fr) auto; }
@@ -108,10 +103,9 @@
 }
 
 @media (max-width: 767.98px) {
-  .task-surface-review .review-reader,
-  .task-surface-live .pi-live-document,
+  .task-session-view .task-session-document,
   .task-session-view .task-header { padding-inline: 12px; }
-  .task-surface-live .pi-live-compose-wrap { padding: 3px 10px 8px; }
+  .task-session-view .task-session-composer { padding: 3px 10px 8px; }
 
   .task-session-view .task-header {
     grid-template-columns: minmax(0, 1fr);
