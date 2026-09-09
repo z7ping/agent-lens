@@ -1,12 +1,9 @@
 name: AgentLens 1.0 CI
 
 on:
-  push:
-    branches:
-      - main
-      - 'release/**'
-      - 'bugfix/**'
+  workflow_dispatch:
   pull_request:
+    types: [opened, reopened, ready_for_review]
     branches:
       - main
 
