@@ -2,10 +2,11 @@
 
 /*
  * Review / Pi Live 共用会话壳层的唯一样式所有者。
- * 页面只负责提供 Header、Reader 内容和可选 Composer；滚动层级、阅读轴和
- * Header 几何在这里统一，避免再用页面私有 padding 对齐两套实现。
+ * TaskSurface 本身就是统一会话视图：页面只提供 Header、Reader 内容，以及
+ * Live 状态下可选的 Composer。Runtime / 分页 / Evidence 等仍由页面控制器持有。
  */
-.task-session-view {
+.task-surface-review.review-session-view,
+.task-surface-live.pi-live-workspace {
   position: relative;
   display: grid;
   min-width: 0;
@@ -16,7 +17,8 @@
   background: var(--al-surface);
 }
 
-.task-session-reader {
+.review-session-view .review-reader-pane,
+.task-surface-live .pi-live-reader {
   position: relative;
   min-width: 0;
   min-height: 0;
@@ -26,51 +28,52 @@
   background: var(--al-surface);
 }
 
-.task-session-document {
+.review-session-view .task-session-document,
+.task-surface-live .pi-live-document {
   box-sizing: border-box;
   width: 100%;
   max-width: var(--al-content-task-reading);
   margin-inline: auto;
   padding: 8px var(--al-space-page-x);
 }
-.task-surface-review .task-session-document { padding-bottom: 96px; }
+.review-session-view .task-session-document { padding-bottom: 96px; }
 
-.task-session-composer {
-  position: relative;
-  z-index: 10;
-  padding: 3px var(--al-safe-composer-inline) 10px;
-  background: var(--al-surface);
-}
-
-/* Review / Live 进入同一个会话视图后，Header 使用同一套单行桌面布局。 */
-.task-session-view .task-header {
+/* Review / Live 的 Header 使用同一套单行桌面布局。 */
+.review-session-view .task-header,
+.task-surface-live .task-header {
   max-width: var(--al-content-task-reading);
   grid-template-columns: auto minmax(0, 1fr) minmax(0, auto) auto auto;
   grid-template-rows: 30px;
   margin-inline: auto;
   padding-inline: var(--al-space-page-x);
 }
-.task-session-view .task-header-meta { grid-column: 1; grid-row: 1; }
-.task-session-view .task-header-title { grid-column: 2; grid-row: 1; }
-.task-session-view .task-header-submeta {
+.review-session-view .task-header-meta,
+.task-surface-live .task-header-meta { grid-column: 1; grid-row: 1; }
+.review-session-view .task-header-title,
+.task-surface-live .task-header-title { grid-column: 2; grid-row: 1; }
+.review-session-view .task-header-submeta,
+.task-surface-live .task-header-submeta {
   display: flex;
   grid-column: 3;
   grid-row: 1;
   max-width: min(30vw, 420px);
   justify-self: start;
 }
-.task-session-view .task-header-metrics { grid-column: 4; grid-row: 1; }
-.task-session-view .task-header-actions { grid-column: 5; grid-row: 1; }
+.review-session-view .task-header-metrics,
+.task-surface-live .task-header-metrics { grid-column: 4; grid-row: 1; }
+.review-session-view .task-header-actions,
+.task-surface-live .task-header-actions { grid-column: 5; grid-row: 1; }
 
 /*
  * 1280px 窗口配合工作栏时，实际 Task Surface 会落入 lg 宽度。
  * 96px 是已确认的稳定阅读列留白；真实小屏仍由下面 viewport media 收窄。
  */
 @container task-surface (max-width: 991.98px) {
-  .task-session-view .task-session-document,
-  .task-session-view .task-session-composer { padding-inline: 96px; }
+  .review-session-view .task-session-document,
+  .task-surface-live .pi-live-document,
+  .task-surface-live .pi-live-compose-wrap { padding-inline: 96px; }
 
-  .task-session-view .pi-live-float-stack {
+  .task-surface-live .pi-live-float-stack {
     right: 96px;
     left: 96px;
     width: auto;
@@ -78,17 +81,24 @@
 }
 
 @media (max-width: 991.98px) {
-  .task-session-view .task-session-document,
-  .task-session-view .task-session-composer,
-  .task-session-view .task-header { padding-inline: 20px; }
+  .review-session-view .task-session-document,
+  .review-session-view .task-header,
+  .task-surface-live .pi-live-document,
+  .task-surface-live .pi-live-compose-wrap,
+  .task-surface-live .task-header { padding-inline: 20px; }
 
-  .task-session-view .task-header { grid-template-columns: auto minmax(0, 1fr) auto; }
-  .task-session-view .task-header-context,
-  .task-session-view .task-header-submeta,
-  .task-session-view .task-header-metrics { display: none; }
-  .task-session-view .task-header-actions { grid-column: 3; }
+  .review-session-view .task-header,
+  .task-surface-live .task-header { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .review-session-view .task-header-context,
+  .review-session-view .task-header-submeta,
+  .review-session-view .task-header-metrics,
+  .task-surface-live .task-header-context,
+  .task-surface-live .task-header-submeta,
+  .task-surface-live .task-header-metrics { display: none; }
+  .review-session-view .task-header-actions,
+  .task-surface-live .task-header-actions { grid-column: 3; }
 
-  .task-session-view .pi-live-float-stack {
+  .task-surface-live .pi-live-float-stack {
     right: 20px;
     left: 20px;
     width: calc(100% - 40px);
@@ -96,21 +106,29 @@
 }
 
 @media (max-width: 767.98px) {
-  .task-session-view .task-session-document,
-  .task-session-view .task-session-composer,
-  .task-session-view .task-header { padding-inline: 12px; }
+  .review-session-view .task-session-document,
+  .review-session-view .task-header,
+  .task-surface-live .pi-live-document,
+  .task-surface-live .pi-live-compose-wrap,
+  .task-surface-live .task-header { padding-inline: 12px; }
 
-  .task-session-view .task-header {
+  .review-session-view .task-header,
+  .task-surface-live .task-header {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: 30px 22px;
   }
-  .task-session-view .task-header-meta { display: none; }
-  .task-session-view .task-header-title { grid-column: 1; grid-row: 2; font-size: 15px; }
-  .task-session-view .task-header-actions { grid-column: 1; grid-row: 1; justify-self: end; }
-  .task-session-view .task-header-submeta,
-  .task-session-view .task-header-metrics { display: none; }
+  .review-session-view .task-header-meta,
+  .task-surface-live .task-header-meta { display: none; }
+  .review-session-view .task-header-title,
+  .task-surface-live .task-header-title { grid-column: 1; grid-row: 2; font-size: 15px; }
+  .review-session-view .task-header-actions,
+  .task-surface-live .task-header-actions { grid-column: 1; grid-row: 1; justify-self: end; }
+  .review-session-view .task-header-submeta,
+  .review-session-view .task-header-metrics,
+  .task-surface-live .task-header-submeta,
+  .task-surface-live .task-header-metrics { display: none; }
 
-  .task-session-view .pi-live-float-stack {
+  .task-surface-live .pi-live-float-stack {
     right: 12px;
     left: 12px;
     width: calc(100% - 24px);
