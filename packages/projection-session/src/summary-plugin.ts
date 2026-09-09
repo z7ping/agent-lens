@@ -98,7 +98,7 @@ const applySessionSummaryProjection: Plugin.Function<void> = (ctx: AgentLensCont
     flush,
   }
 
-  ctx.projections.register(definition)
+  const registration = ctx.projections.register(definition)
 
   ctx.on('observation/committed', event => {
     // EventingObservationService 已经过滤 unchanged；收到事件就说明 Canonical Observation
@@ -129,6 +129,7 @@ const applySessionSummaryProjection: Plugin.Function<void> = (ctx: AgentLensCont
     pending.clear()
     const activeFlush = flushPromise
     if (activeFlush) await activeFlush.catch(() => undefined)
+    await registration.dispose()
   }
 }
 
