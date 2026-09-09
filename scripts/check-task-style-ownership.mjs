@@ -64,6 +64,7 @@ for (const marker of [
 
 const componentSelector = /\.(?:task-round(?:\b|-)|task-message(?:\b|-)|task-thinking(?:\b|-)|task-tool(?:\b|-)|task-event(?:\b|-)|task-disclosure(?:\b|-))/g
 const headerSelector = /\.task-header(?:\b|-)/g
+const sessionGeometrySelector = /\.(?:review-reader-pane|review-reader|pi-live-reader|pi-live-document|pi-live-compose-wrap)(?![\w-])/g
 const cssFiles = readdirSync(webRoot, { withFileTypes: true })
   .filter(entry => entry.isFile() && entry.name.endsWith('.css'))
   .map(entry => entry.name)
@@ -80,6 +81,11 @@ for (const file of cssFiles) {
     const selectors = [...new Set(source.match(headerSelector) ?? [])]
     if (selectors.length) throw new Error(`${file} 越权定义 TaskHeader 共享选择器：${selectors.slice(0, 8).join(', ')}`)
   }
+
+  if (file !== 'task-session-view.css') {
+    const selectors = [...new Set(source.match(sessionGeometrySelector) ?? [])]
+    if (selectors.length) throw new Error(`${file} 越权定义 Session Reader / Composer 外层几何：${selectors.slice(0, 8).join(', ')}`)
+  }
 }
 
 for (const component of ['TaskHeader.tsx', 'TaskRound.tsx', 'TaskMessage.tsx', 'TaskThinking.tsx', 'TaskToolGroup.tsx', 'TaskToolRow.tsx', 'TaskEvent.tsx']) {
@@ -90,4 +96,4 @@ for (const component of ['TaskHeader.tsx', 'TaskRound.tsx', 'TaskMessage.tsx', '
   }
 }
 
-console.log('Task 样式所有权检查通过：共享组件与 Session 几何分层持有，旧覆盖层与跨页面越权规则均已退役。')
+console.log('Task 样式所有权检查通过：共享组件与 Session Reader / Composer 几何分层持有，旧覆盖层与跨页面越权规则均已退役。')
