@@ -70,6 +70,15 @@ function collectPrimaryActions(node: ReactNode, result: ReactNode[] = []): React
   return result
 }
 
+function readonlySessionDocument(header: HTMLElement | null): HTMLElement | null {
+  const surface = header?.closest<HTMLElement>('.task-session-view[data-task-session-interactive="false"]')
+  if (!surface) return null
+  const reader = Array.from(surface.children).find(child => child instanceof HTMLElement && child !== header)
+  if (!(reader instanceof HTMLElement)) return null
+  const documentRoot = reader.firstElementChild
+  return documentRoot instanceof HTMLElement ? documentRoot : null
+}
+
 export function TaskHeader({ marker, agent, context, status, title, submeta, metrics = [], infoItems = [], actions, className = '' }: TaskHeaderProps) {
   const resolvedStatus = status ?? '已完成'
   const resolvedContext = context === '无项目' ? '未关联项目' : context
@@ -81,38 +90,37 @@ export function TaskHeader({ marker, agent, context, status, title, submeta, met
   const viewMenuAnchorRef = useRef<HTMLSpanElement>(null)
   const [viewMenuOpen, setViewMenuOpen] = useState(false)
   const [compactInfoOpen, setCompactInfoOpen] = useState(false)
-  const [reviewTailHost, setReviewTailHost] = useState<HTMLElement | null>(null)
+  const [sessionTailHost, setSessionTailHost] = useState<HTMLElement | null>(null)
   const hasCompactInfo = Boolean(infoItems.length > 0 || resolvedContext || submeta || metrics.length > 0)
 
   useLayoutEffect(() => {
-    const header = headerRef.current
-    const reviewSurface = header?.closest<HTMLElement>('.task-surface-review')
-    const reader = reviewSurface?.querySelector<HTMLElement>('.review-reader')
-    if (!reader || primaryActions.length === 0) {
-      setReviewTailHost(null)
+    const documentRoot = readonlySessionDocument(headerRef.current)
+    if (!documentRoot || primaryActions.length === 0) {
+      setSessionTailHost(null)
       return
     }
 
     const host = document.createElement('div')
-    host.className = 'task-review-tail-actions-host'
-    reader.append(host)
-    setReviewTailHost(host)
+    host.className = 'task-session-tail-actions-host'
+    host.dataset.taskSessionContinuationHost = 'true'
+    documentRoot.append(host)
+    setSessionTailHost(host)
     return () => {
       host.remove()
     }
   }, [primaryActions.length])
 
-  const inlineActions = reviewTailHost ? [] : primaryActions
+  const inlineActions = sessionTailHost ? [] : primaryActions
   const hasHeaderActions = hasCompactInfo || Boolean(auditToggle) || inlineActions.length > 0
-  const tailActions = reviewTailHost && primaryActions.length > 0
+  const tailActions = sessionTailHost && primaryActions.length > 0
     ? createPortal(
-        <section className="task-review-continuation" aria-label="继续此会话">
-          <div className="task-review-continuation-copy">
+        <section className="task-session-continuation" aria-label="继续此会话">
+          <div className="task-session-continuation-copy">
             <span>继续原会话，或从当前节点创建新会话。</span>
           </div>
-          <div className="task-review-continuation-actions">{primaryActions}</div>
+          <div className="task-session-continuation-actions">{primaryActions}</div>
         </section>,
-        reviewTailHost,
+        sessionTailHost,
       )
     : null
 
