@@ -16,6 +16,7 @@ import { PiLiveCurrentTaskRound, PiLiveHistoryTaskRound } from './PiLiveTaskRoun
 import { piLiveTaskRoundEstimate, projectPiLiveRunningRound, projectPiLiveTaskDetail, projectPiLiveTaskRounds } from './pi-live-task-projection'
 import { TaskHeader } from './TaskHeader'
 import { TaskSurface } from './TaskSurface'
+import { workspaceDisplayName } from './task-detail-model'
 
 type QueueMode = 'steer' | 'followUp'
 type PendingQueueSubmission = { id: string; mode: QueueMode; text: string }
@@ -951,11 +952,11 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       <TaskHeader
         marker={<span className="agent-icon source-pi" aria-hidden="true"><UiIcon name="agent" size={14}/></span>}
         agent={taskDetailModel.agentLabel}
-        context={taskDetailModel.contextLabel}
-        status={<span className={!connected ? 'pi-live-disconnected' : undefined}>{taskDetailModel.statusLabel}</span>}
-        title={headerTitle}
+        context={state?.projectName || workspaceDisplayName(state?.workspacePath) || '未关联项目'}
+        showStatus={false}
+        title={<span title={headerTitle}>{brief(headerTitle, 15)}</span>}
         submeta={state?.gitBranch ? <span className="pi-live-header-branch" title={`Git 分支：${state.gitBranch}`}>分支 {state.gitBranch}</span> : undefined}
-        metrics={taskDetailModel.metrics}
+        metrics={[]}
         infoItems={state ? [
           { label: '模型', value: taskDetailModel.contextLabel ?? 'Pi 默认模型' },
           { label: '项目', value: state.projectName ?? '未关联项目' },

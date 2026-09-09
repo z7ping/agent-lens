@@ -20,6 +20,7 @@ export interface TaskHeaderProps {
   agent: ReactNode
   context?: ReactNode
   status?: ReactNode
+  showStatus?: boolean
   title: ReactNode
   submeta?: ReactNode
   metrics?: TaskHeaderMetric[]
@@ -79,7 +80,7 @@ function readonlySessionDocument(header: HTMLElement | null): HTMLElement | null
   return documentRoot instanceof HTMLElement ? documentRoot : null
 }
 
-export function TaskHeader({ marker, agent, context, status, title, submeta, metrics = [], infoItems = [], actions, className = '' }: TaskHeaderProps) {
+export function TaskHeader({ marker, agent, context, status, showStatus = true, title, submeta, metrics = [], infoItems = [], actions, className = '' }: TaskHeaderProps) {
   const resolvedStatus = status ?? '已完成'
   const resolvedContext = context === '无项目' ? '未关联项目' : context
   const { showUsageDetails, setShowUsageDetails } = useTaskSurfaceView()
@@ -137,7 +138,7 @@ export function TaskHeader({ marker, agent, context, status, title, submeta, met
           {marker && <span className="task-header-marker">{marker}</span>}
           <b>{agent}</b>
           {resolvedContext && <span className="task-header-context">{resolvedContext}</span>}
-          <span className="task-header-status" data-tone={status === undefined ? 'success' : ''}>{resolvedStatus}</span>
+          {showStatus && <span className="task-header-status" data-tone={status === undefined ? 'success' : ''}>{resolvedStatus}</span>}
         </div>
         <h1 className="task-header-title">{title}</h1>
         {submeta && <div className="task-header-submeta">{submeta}</div>}

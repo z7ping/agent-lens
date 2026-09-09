@@ -33,7 +33,7 @@ import { TaskRound } from './TaskRound'
 import { TaskSurface } from './TaskSurface'
 import { TaskThinking } from './TaskThinking'
 import { TaskToolGroup } from './TaskToolGroup'
-import type { TaskDetailModel, TaskRoundModel, TaskThinkingModel, TaskToolGroupModel, TaskToolModel } from './task-detail-model'
+import { workspaceDisplayName, type TaskDetailModel, type TaskRoundModel, type TaskThinkingModel, type TaskToolGroupModel, type TaskToolModel } from './task-detail-model'
 
 function formatTime(value: string): string {
   return new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(value))
@@ -47,14 +47,6 @@ function formatClock(value: string): string {
 function formatHourMinute(value: string): string {
   if (!value) return ''
   return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value))
-}
-
-function formatRange(start: string, end: string): string {
-  const left = new Date(start)
-  const right = new Date(end)
-  const sameDay = left.toDateString() === right.toDateString()
-  const date = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(left)
-  return sameDay ? `${date} ${formatClock(start)} – ${formatClock(end)}` : `${formatTime(start)} – ${formatTime(end)}`
 }
 
 function formatDateTime(value: string): string {
@@ -1174,7 +1166,7 @@ export function ReviewPage({
       id: detail.id,
       title,
       agentLabel: detail.sourceIds.map(id => agentLabel(id)).join(' / '),
-      projectLabel: detail.projectName ?? '无项目',
+      projectLabel: detail.projectName,
       statusLabel: detail.errorCount > 0 ? '有错误' : undefined,
       startedAt: detail.startedAt,
       endedAt: detail.endedAt,
@@ -1324,11 +1316,10 @@ export function ReviewPage({
         {detail && <TaskHeader
           marker={<span className={`source-dot ${sourceDot(detail.sourceIds[0] ?? '')}`}/>}
           agent={taskDetailModel?.agentLabel ?? ''}
-          context={taskDetailModel?.projectLabel}
-          status={taskDetailModel?.statusLabel ? <span className="session-status-error">{taskDetailModel.statusLabel}</span> : undefined}
-          title={<span title={taskDetailModel?.title}>{taskDetailModel?.title}</span>}
-          submeta={taskDetailModel?.startedAt && taskDetailModel.endedAt ? <><span>{formatRange(taskDetailModel.startedAt, taskDetailModel.endedAt)}</span>{taskDetailModel.workspacePath && <code title={taskDetailModel.workspacePath}>{taskDetailModel.workspacePath}</code>}</> : undefined}
-          metrics={taskDetailModel?.metrics ?? []}
+          context={taskDetailModel?.projectLabel ?? workspaceDisplayName(taskDetailModel?.workspacePath) ?? '未关联项目'}
+          showStatus={false}
+          title={<span title={taskDetailModel?.title}>{compactTitle(taskDetailModel?.title, 15)}</span>}
+          metrics={[]}
           infoItems={taskDetailModel?.startedAt && taskDetailModel.endedAt ? [
             { label: '项目', value: taskDetailModel.projectLabel ?? '未关联项目' },
             { label: '开始时间', value: formatDateTime(taskDetailModel.startedAt) },

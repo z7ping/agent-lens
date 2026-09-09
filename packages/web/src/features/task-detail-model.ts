@@ -103,3 +103,13 @@ export function taskDurationLabel(ms: number): string {
   const days = value / 86_400_000
   return `${days < 10 ? days.toFixed(1) : Math.round(days)} 天`
 }
+
+/**
+ * 用于缺少项目关联时的紧凑展示；完整工作区路径仍应在任务信息中呈现。
+ */
+export function workspaceDisplayName(workspacePath: string | undefined): string | undefined {
+  const normalized = workspacePath?.trim().replace(/[\\/]+$/, '')
+  if (!normalized) return undefined
+  const parts = normalized.split(/[\\/]+/).filter(Boolean)
+  return parts.at(-1) || undefined
+}
