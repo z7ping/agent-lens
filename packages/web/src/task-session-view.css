@@ -33,6 +33,11 @@
 }
 .task-surface-review .review-reader { padding-bottom: 96px; }
 
+/* Composer 是 Live 的可选能力；外层几何归 Session View，内部交互仍归 Pi Live。 */
+.task-surface-live .pi-live-compose-wrap {
+  padding: 3px var(--al-safe-composer-inline) 10px;
+}
+
 /* Review / Live 的 Header 使用同一套单行桌面布局。 */
 .task-session-view .task-header {
   max-width: var(--al-content-task-reading);
@@ -98,8 +103,8 @@
 @media (max-width: 767.98px) {
   .task-surface-review .review-reader,
   .task-surface-live .pi-live-document,
-  .task-surface-live .pi-live-compose-wrap,
   .task-session-view .task-header { padding-inline: 12px; }
+  .task-surface-live .pi-live-compose-wrap { padding: 3px 10px 8px; }
 
   .task-session-view .task-header {
     grid-template-columns: minmax(0, 1fr);
@@ -112,8 +117,8 @@
   .task-session-view .task-header-metrics { display: none; }
 
   .task-surface-live .pi-live-float-stack {
-    right: 12px;
-    left: 12px;
-    width: calc(100% - 24px);
+    right: 10px;
+    left: 10px;
+    width: calc(100% - 20px);
   }
 }
