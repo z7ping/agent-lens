@@ -41,7 +41,10 @@ function executableNames(name: string, platform: NodeJS.Platform): string[] {
     .split(';')
     .map(value => value.trim().toLowerCase())
     .filter(Boolean)
-  return [name, ...extensions.map(extension => `${name}${extension}`)]
+  // Windows command discovery follows PATHEXT. npm places a POSIX shim and a
+  // cmd shim next to each other in node_modules/.bin; choosing the extensionless
+  // file first bypasses the cmd shim that Windows actually executes.
+  return [...extensions.map(extension => `${name}${extension}`), name]
 }
 
 async function pathExists(path: string): Promise<boolean> {

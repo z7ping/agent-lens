@@ -9,7 +9,7 @@ import { PinnedAgentsProvider } from './components/PinnedAgentsProvider'
 import { ReviewStateOverlay } from './components/ReviewStateOverlay'
 import { WorkspaceSidebar } from './components/WorkspaceSidebar'
 import { PageLoadingState } from './components/StateViews'
-import { Breadcrumb, IconButton, UiIcon } from './components/ui'
+import { Breadcrumb, IconButton, StatusBadge, UiIcon } from './components/ui'
 
 const AgentsResponsivePage = lazy(() => import('./features/AgentsResponsivePage').then(module => ({ default: module.AgentsResponsivePage })))
 const BackupPage = lazy(() => import('./features/BackupPage').then(module => ({ default: module.BackupPage })))
@@ -158,10 +158,13 @@ function Shell({ model }: { model: AgentLensClientModel }) {
           sidebarCollapsed={sidebarCollapsed}
           onExpandSidebar={() => setDesktopSidebarCollapsed(false)}
         />
-        {hasSseBanner && <div className="sse-banner" role="status">
-          <span className="live-dot live-dot-waiting" />
-          <span>实时通道已断开</span>
-          <small>页面保留当前内容；重新连接后会继续接收新数据。</small>
+        {hasSseBanner && <div className="sse-banner" role="status" aria-live="polite">
+          <span className="sse-banner-icon" aria-hidden="true"><UiIcon name="exclamation" size={14}/></span>
+          <div className="sse-banner-copy">
+            <b>实时更新暂时中断</b>
+            <span>当前内容保持可读，连接恢复后会自动同步。</span>
+          </div>
+          <StatusBadge className="sse-banner-status" tone="warning" dot>正在重连</StatusBadge>
         </div>}
         <Suspense fallback={<PageLoadingState title="正在加载工作区" description="正在准备当前页面所需的数据与界面。"/>}>
         <Routes>

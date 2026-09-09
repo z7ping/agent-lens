@@ -1,7 +1,7 @@
 import { fork, type ChildProcess } from 'node:child_process'
 import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
-import { resolveExecutable, resolveManagedExecutableTarget } from '../executable-discovery'
+import { discoverInstalledPiSdk } from './sdk-loader'
 import type {
   PiLiveControls,
   PiLiveInitializationTiming,
@@ -267,15 +267,16 @@ export class WorkerPiRuntimeHost implements PiRuntimeHost {
     onEvent: (event: Record<string, unknown>) => void,
     onExit: (error: Error) => void,
   ): Promise<PiRuntimeHandle> {
-    // 先在父进程解析 Volta/mise/asdf 的通用 shim；Worker 只接收真实 CLI
-    // 入口，才能从入口向上回溯到同一 npm 包的 SDK。
-    const executable = await resolveExecutable('pi', {
-      explicit: input.executable,
-      envVar: 'PI_BIN',
-    })
-    const workerInput = executable
-      ? { ...input, executable: await resolveManagedExecutableTarget('pi', executable) }
-      : input
+    // 可执行文件、npm shim 与 SDK 包只能在一个位置解析。Worker 只接收已经
+    // 验证的 SDK 入口，避免父/子进程分别维护一套 PATH 与 shim 规则。
+    const sdk = await discoverInstalledPiSdk(input.executable)
+    const workerInput = {
+      ...input,
+      sdk: {
+        sdkEntry: sdk.sdkEntry,
+        ...(sdk.version ? { version: sdk.version } : {}),
+      },
+    }
     const entry = fileURLToPath(new URL('./worker-entry.mjs', import.meta.url))
     const forkOptions = {
       cwd: input.cwd,

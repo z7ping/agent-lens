@@ -1,6 +1,21 @@
 .nav-item{gap:6px}
 .nav-new-dot{width:6px;height:6px;border-radius:99px;background:var(--al-accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--al-accent) 12%,transparent);flex:0 0 auto}
 
+.sse-banner{
+  min-height:34px;padding:0 16px;
+  display:flex;align-items:center;gap:9px;
+  border-block:1px solid color-mix(in srgb,var(--al-warning) 22%,var(--al-line));
+  background:color-mix(in srgb,var(--al-warning-soft) 62%,var(--al-surface));
+}
+.sse-banner-icon{
+  width:20px;height:20px;display:grid;place-items:center;flex:0 0 auto;
+  border-radius:7px;background:var(--al-warning-soft);color:var(--al-warning);
+}
+.sse-banner-copy{min-width:0;display:flex;align-items:baseline;gap:8px;color:var(--al-ink-2);font-size:12px;line-height:1.35}
+.sse-banner-copy b{flex:0 0 auto;font-weight:700}
+.sse-banner-copy span{min-width:0;overflow:hidden;color:var(--al-muted);text-overflow:ellipsis;white-space:nowrap}
+.sse-banner-status{margin-left:auto;flex:0 0 auto}
+
 .background-data-notice{
   position:fixed;z-index:38;top:106px;right:18px;
   min-height:34px;padding:0 7px 0 11px;
@@ -17,4 +32,9 @@
 
 @media(max-width:820px){
   .background-data-notice{left:12px;right:12px;justify-content:center}
+}
+
+@media(max-width:767.98px){
+  .sse-banner{padding-inline:12px}
+  .sse-banner-copy span{display:none}
 }

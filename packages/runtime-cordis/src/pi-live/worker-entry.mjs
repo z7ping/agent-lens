@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { access, readFile, realpath } from 'node:fs/promises'
-import { basename, delimiter, dirname, extname, join, relative, resolve } from 'node:path'
+import { access, readFile } from 'node:fs/promises'
+import { basename, dirname, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { serialize } from 'node:v8'
 
@@ -290,55 +290,6 @@ async function createSessionManager(sdk, input) {
   return manager
 }
 
-async function findExecutable(explicit) {
-  if (explicit && await exists(explicit)) return explicit
-  const configured = process.env.PI_BIN?.trim()
-  if (configured && await exists(configured)) return configured
-  const names = process.platform === 'win32' ? ['pi.cmd', 'pi.exe', 'pi.bat'] : ['pi']
-  for (const root of (process.env.PATH ?? '').split(delimiter).filter(Boolean)) {
-    for (const name of names) {
-      const candidate = join(root, name)
-      if (await exists(candidate)) return candidate
-    }
-  }
-  throw new Error('Pi executable was not found in PATH or PI_BIN')
-}
-
-async function shimEntry(executable) {
-  const source = await readFile(executable, 'utf8')
-  for (const match of source.matchAll(/%(?:~dp0|dp0%)([^"\r\n]*?\.(?:mjs|cjs|js))/ig)) {
-    const suffix = match[1]
-    if (!suffix) continue
-    const candidate = resolve(dirname(executable), suffix.replace(/^[\\/]+/, '').replace(/[\\/]/g, process.platform === 'win32' ? '\\' : '/'))
-    if (await exists(candidate)) return candidate
-  }
-}
-
-async function sdkEntryFor(executable) {
-  const extension = extname(executable).toLowerCase()
-  let entry = executable
-  if (process.platform === 'win32' && (extension === '.cmd' || extension === '.bat')) entry = await shimEntry(executable)
-  else entry = await realpath(executable).catch(() => resolve(executable))
-  if (!entry) throw new Error(`Pi SDK could not be located from ${executable}`)
-  let cursor = dirname(entry)
-  while (true) {
-    try {
-      const manifest = JSON.parse(await readFile(join(cursor, 'package.json'), 'utf8'))
-      if (manifest.name === '@earendil-works/pi-coding-agent') {
-        const sdkEntry = resolve(cursor, typeof manifest.main === 'string' ? manifest.main : './dist/index.js')
-        if (!await exists(sdkEntry)) throw new Error(`Pi SDK entry does not exist: ${sdkEntry}`)
-        return { sdkEntry, version: typeof manifest.version === 'string' ? manifest.version : undefined }
-      }
-    } catch (error) {
-      if (error instanceof SyntaxError || String(error?.message ?? '').startsWith('Pi SDK entry')) throw error
-    }
-    const parent = dirname(cursor)
-    if (parent === cursor) break
-    cursor = parent
-  }
-  throw new Error(`Official Pi SDK package could not be located from ${executable}`)
-}
-
 function wireEvent(event) {
   const value = record(event)
   if (value.type !== 'message_update') return value
@@ -428,10 +379,12 @@ async function initialize(input) {
   currentStageStartedAt = initializationStartedAt
   initializationTimings = []
   progress('loading_sdk', '正在加载 Pi SDK')
-  const executable = await findExecutable(input.executable)
-  const discovery = await sdkEntryFor(executable)
-  sdkVersion = discovery.version
-  const sdk = await import(pathToFileURL(discovery.sdkEntry).href)
+  const discovery = record(input.sdk)
+  const sdkEntry = typeof discovery.sdkEntry === 'string' ? discovery.sdkEntry : ''
+  if (!sdkEntry) throw new Error('Pi Runtime Worker did not receive a verified official Pi SDK entry')
+  if (!await exists(sdkEntry)) throw new Error(`Verified Pi SDK entry no longer exists: ${sdkEntry}`)
+  sdkVersion = typeof discovery.version === 'string' ? discovery.version : undefined
+  const sdk = await import(pathToFileURL(sdkEntry).href)
   if (typeof sdk.createAgentSession !== 'function' || !sdk.SessionManager) throw new Error('Installed Pi SDK is missing required AgentSession capabilities')
   const sessionManager = await createSessionManager(sdk, input)
   const hasSessionRuntime = ['createAgentSessionServices', 'createAgentSessionRuntime', 'createAgentSessionFromServices'].every(name => typeof sdk[name] === 'function')

@@ -133,7 +133,8 @@ export async function resolveInstalledPiSdk(
   }
 }
 
-export const loadInstalledPiSdk: PiSdkLoader = async explicitExecutable => {
+/** Resolve the CLI and its official SDK once, before crossing into a Worker. */
+export async function discoverInstalledPiSdk(explicitExecutable?: string): Promise<Omit<InstalledPiSdk, 'module'>> {
   const executable = await findPiExecutable(explicitExecutable)
   if (!executable) {
     throw new Error('Pi executable was not found in PI_BIN, the managed runtime PATH, or the user login-shell PATH')
@@ -160,6 +161,11 @@ export const loadInstalledPiSdk: PiSdkLoader = async explicitExecutable => {
     ...resolved,
     executable,
   }
+  return discovery
+}
+
+export const loadInstalledPiSdk: PiSdkLoader = async explicitExecutable => {
+  const discovery = await discoverInstalledPiSdk(explicitExecutable)
   const imported = await import(pathToFileURL(discovery.sdkEntry).href)
   return {
     ...discovery,

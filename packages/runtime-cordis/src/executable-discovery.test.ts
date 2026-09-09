@@ -44,6 +44,21 @@ test('显式可执行文件优先于 PATH 和登录 Shell', { skip: process.plat
   }
 })
 
+test('Windows PATH 优先选用 PATHEXT 入口，不把 npm 的无扩展名 shim 当作 CLI', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-executable-windows-npm-shim-'))
+  try {
+    const bareShim = join(root, 'pi')
+    const commandShim = join(root, 'pi.cmd')
+    await writeFile(bareShim, '#!/bin/sh\nexit 0\n', 'utf8')
+    await writeFile(commandShim, '@echo off\r\nexit /b 0\r\n', 'utf8')
+
+    const found = await resolveExecutable('pi', { platform: 'win32', pathValue: root })
+    assert.equal(found, commandShim)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('单次 shim 目标解析共享登录 Shell PATH，不为每个管理器重复启动 Shell', { skip: process.platform === 'win32' }, async () => {
   const root = await mkdtemp(join(tmpdir(), 'agent-lens-executable-managed-'))
   try {

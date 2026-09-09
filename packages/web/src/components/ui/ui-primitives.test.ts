@@ -32,6 +32,7 @@ const agentsResponsiveCss = readFileSync(new URL('../../agent-insights-responsiv
 const workspaceSidebar = readFileSync(new URL('../WorkspaceSidebar.tsx', import.meta.url), 'utf8')
 const workspaceSidebarCss = readFileSync(new URL('../workspace-sidebar.css', import.meta.url), 'utf8')
 const app = readFileSync(new URL('../../App.tsx', import.meta.url), 'utf8')
+const liveNoticeCss = readFileSync(new URL('../../live-notice.css', import.meta.url), 'utf8')
 const agentRules = readFileSync(new URL('../../../../../AGENTS.md', import.meta.url), 'utf8')
 
 function tsxFiles(directory: string): string[] {
@@ -129,6 +130,16 @@ test('Workspace Shell owns three primary workspaces and one dynamic context host
   assert.match(workspaceSidebarCss, /workspace-insight-filter-disclosure/)
   assert.match(app, /<ToolsPage model=\{model\} sidebarHost=\{sidebarHost\}/)
   assert.match(app, /<InsightsPage model=\{model\} sidebarHost=\{sidebarHost\}/)
+})
+
+test('实时通道断开使用结构化状态提示而不是裸文本警告', () => {
+  assert.match(app, /<UiIcon name="exclamation" size=\{14\}/)
+  assert.match(app, /实时更新暂时中断/)
+  assert.match(app, /连接恢复后会自动同步/)
+  assert.match(app, /<StatusBadge className="sse-banner-status" tone="warning" dot>正在重连<\/StatusBadge>/)
+  assert.match(liveNoticeCss, /\.sse-banner\{[\s\S]*?border-block:[\s\S]*?background:/)
+  assert.match(liveNoticeCss, /\.sse-banner-copy\{[\s\S]*?text-overflow:ellipsis/)
+  assert.match(liveNoticeCss, /\.sse-banner-status\{margin-left:auto/)
 })
 
 test('Task Center context owns search, controlled filters and task list', () => {

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import {
+  discoverInstalledPiSdk,
   resolveInstalledPiSdk,
   resolveWindowsNpmShimNodeEntry,
 } from './sdk-loader'
@@ -60,6 +61,20 @@ test('直接位于官方 Pi 包内的 CLI 入口可回溯到 SDK 主入口', asy
     const resolved = await resolveInstalledPiSdk(pkg.cliEntry, process.platform)
     assert.equal(resolved?.packageRoot, await realpath(pkg.packageRoot))
     assert.equal(resolved?.sdkEntry, await realpath(pkg.sdkEntry))
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('官方 SDK 发现由宿主完成，Windows npm shim 不需要 Worker 再次解析', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-pi-sdk-host-discovery-'))
+  try {
+    const pkg = await createFakeOfficialPiPackage(root)
+    const shim = join(root, 'pi.cmd')
+    await writeFile(shim, '@echo off\r\nnode "%~dp0node_modules\\@earendil-works\\pi-coding-agent\\dist\\bundle\\cli.js" %*\r\n', 'utf8')
+    const resolved = await discoverInstalledPiSdk(shim)
+    assert.equal(resolved.sdkEntry, pkg.sdkEntry)
+    assert.equal(resolved.version, '0.0.0-test')
   } finally {
     await rm(root, { recursive: true, force: true })
   }
