@@ -1,7 +1,10 @@
 import { createPortal } from 'react-dom'
 import {
+  Children,
+  cloneElement,
   createContext,
   forwardRef,
+  isValidElement,
   useCallback,
   useContext,
   useEffect,
@@ -11,6 +14,8 @@ import {
   type ForwardedRef,
   type HTMLAttributes,
   type PropsWithChildren,
+  type ReactElement,
+  type ReactNode,
 } from 'react'
 import { IconButton, UiIcon } from '../components/ui'
 
@@ -42,10 +47,15 @@ interface TaskTurnRailPosition {
   boundaryLeft: number
 }
 
+type SessionSlotElement = ReactElement<{ className?: string; children?: ReactNode }>
+
 const TaskSurfaceViewContext = createContext<TaskSurfaceViewValue>({
   showUsageDetails: false,
   setShowUsageDetails: () => undefined,
 })
+
+const sessionReaderHooks = new Set(['review-reader-pane', 'pi-live-reader'])
+const sessionDocumentHooks = new Set(['review-reader', 'pi-live-document'])
 
 export function useTaskSurfaceView(): TaskSurfaceViewValue {
   return useContext(TaskSurfaceViewContext)
@@ -63,6 +73,42 @@ function setForwardedRef<T>(ref: ForwardedRef<T>, value: T | null) {
     return
   }
   if (ref) ref.current = value
+}
+
+function classTokens(value: string | undefined): string[] {
+  return value?.split(/\s+/).filter(Boolean) ?? []
+}
+
+function hasSessionHook(element: SessionSlotElement, hooks: Set<string>): boolean {
+  return classTokens(element.props.className).some(value => hooks.has(value))
+}
+
+function withSessionClass(element: SessionSlotElement, className: string, children = element.props.children): SessionSlotElement {
+  const classes = classTokens(element.props.className)
+  if (!classes.includes(className)) classes.unshift(className)
+  return cloneElement(element, { className: classes.join(' ') }, children)
+}
+
+function normalizeSessionReader(element: SessionSlotElement): SessionSlotElement {
+  const content = Children.map(element.props.children, child => {
+    if (!isValidElement<{ className?: string; children?: ReactNode }>(child)) return child
+    const candidate = child as SessionSlotElement
+    return hasSessionHook(candidate, sessionDocumentHooks)
+      ? withSessionClass(candidate, 'task-session-document')
+      : child
+  })
+  return withSessionClass(element, 'task-session-reader', content)
+}
+
+function normalizeSessionChildren(children: ReactNode, sessionMode: boolean): ReactNode {
+  if (!sessionMode) return children
+  return Children.map(children, child => {
+    if (!isValidElement<{ className?: string; children?: ReactNode }>(child)) return child
+    const candidate = child as SessionSlotElement
+    return hasSessionHook(candidate, sessionReaderHooks)
+      ? normalizeSessionReader(candidate)
+      : child
+  })
 }
 
 function scrollViewport(root: HTMLElement, element: HTMLElement): HTMLElement {
@@ -152,8 +198,9 @@ function activeTurnRailItem(items: TaskTurnRailItem[], anchorY: number): TaskTur
  * 任务详情的统一表现宿主。
  *
  * Review / Live / Hub 是 Task Surface 的状态与数据来源，不是不同的产品页面。
- * Review / Live 同时属于同一个 Session View：Live 只是额外开启实时交互能力，
- * 页面可按状态提供 Composer，但不得再维护另一套 Header / Reader 视觉体系。
+ * Review / Live 同时属于同一个 Session View：Live 只是额外开启实时交互能力。
+ * 页面继续保留分页、实时流、Composer 等控制器差异，但 Reader / Document 会在这里
+ * 统一归一为 task-session-reader / task-session-document，页面私有类只作为行为钩子保留。
  *
  * Task Surface 同时持有跨状态共享的轮次导轨：只要正文使用 TaskRound / VirtualRoundMount，
  * 历史复盘和实时任务就会得到同一套轮次定位、活动态与错误态导航。
@@ -171,6 +218,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
   const [railPosition, setRailPosition] = useState<TaskTurnRailPosition | null>(null)
   const sessionMode = mode === 'review' || mode === 'live'
   const classes = ['task-surface', sessionMode ? 'task-session-view' : '', `task-surface-${mode}`, className].filter(Boolean).join(' ')
+  const sessionChildren = normalizeSessionChildren(children, sessionMode)
 
   const setRoot = useCallback((node: HTMLElement | null) => {
     rootRef.current = node
@@ -328,7 +376,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
       data-task-surface-mode={mode}
       data-task-session-interactive={sessionMode ? (mode === 'live' ? 'true' : 'false') : undefined}
       {...props}
-    >{children}</section>
+    >{sessionChildren}</section>
     {rail}
     {boundaryNav}
   </TaskSurfaceViewProvider>
