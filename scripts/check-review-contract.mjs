@@ -13,17 +13,37 @@ const taskSessionCss = readFileSync('packages/web/src/task-session-view.css', 'u
 const reviewCss = readFileSync('packages/web/src/review.css', 'utf8')
 const longCss = readFileSync('packages/web/src/review-long-session.css', 'utf8')
 
-for (const label of ['从头查看', '跳到最新', '有新记录']) {
-  if (!reviewPage.includes(label)) throw new Error(`正式任务复盘缺少关键长会话操作：${label}`)
-}
+if (!reviewPage.includes('有新记录')) throw new Error('正式任务复盘缺少新记录提示')
 for (const label of ['源码', '证据详情']) {
   if (!reviewPage.includes(label) && !taskMessage.includes(label)) throw new Error(`正式任务复盘缺少消息操作：${label}`)
 }
 if (!reviewPage.includes('className="round-nav-filters"') || !reviewPage.includes('className="round-nav-actions"')) throw new Error('任务复盘必须保留轮次筛选组和操作组')
-for (const semanticClass of ['round-nav-from-start', 'round-nav-latest', 'round-nav-live']) {
-  if (!reviewPage.includes(`className="${semanticClass}"`)) throw new Error(`任务复盘缺少稳定语义类：${semanticClass}`)
+if (!reviewPage.includes('className="round-nav-live"')) throw new Error('任务复盘必须保留新记录快捷入口')
+for (const marker of [
+  'boundaryNavigation={detail ? {',
+  'startDisabled: roundFilterLoading || atStart',
+  'endDisabled: roundFilterLoading',
+  'onStart: showFromStart',
+  'onEnd: jumpToLatest',
+]) {
+  if (!reviewPage.includes(marker)) throw new Error(`Review 必须向 TaskSurface 提供统一边界导航行为：${marker}`)
 }
-if (/\{[^{}]*&&\s*<button[^>]*className="round-nav-(?:from-start|latest)"/s.test(reviewPage)) throw new Error('从头查看和跳到最新必须常驻渲染，无意义状态使用 disabled')
+for (const marker of [
+  'export interface TaskBoundaryNavigation',
+  'className="task-boundary-nav"',
+  'aria-label="会话边界导航"',
+  'title="跳到开头"',
+  'aria-label="跳到开头"',
+  'className="task-boundary-latest"',
+  'title="跳到最新"',
+  'onClick={() => void resolvedBoundaryNavigation.onStart()}',
+  'onClick={() => void resolvedBoundaryNavigation.onEnd()}',
+]) {
+  if (!taskSurface.includes(marker)) throw new Error(`TaskSurface 缺少统一边界导航契约：${marker}`)
+}
+for (const retiredClass of ['round-nav-from-start', 'round-nav-latest']) {
+  if (reviewPage.includes(retiredClass)) throw new Error(`Review 不得恢复已迁移到 TaskSurface 的私有边界按钮：${retiredClass}`)
+}
 
 const selectSessionBody = clientModel.match(/async selectReviewSession\(id: string\): Promise<void> \{([\s\S]*?)\r?\n  \}\r?\n\r?\n  async refreshUsage/)?.[1] ?? ''
 if (!selectSessionBody.includes("this.api.reviewDetail(id, { direction: 'backward', limit: REVIEW_DETAIL_PAGE_SIZE })")) throw new Error('默认选择会话必须请求 backward 最新窗口')
@@ -70,4 +90,4 @@ if (!taskDetailCss.includes('.task-round-summary::after') || !taskDetailCss.incl
 if (!taskDetailCss.includes('.task-header-status') || !taskDetailCss.includes('pointer-events: none') || !taskDetailCss.includes('.task-header-actions button')) throw new Error('任务详情头必须明确区分状态与可点击操作')
 if (!reviewCss.includes('.evidence-inline') || !reviewCss.includes('.review-inspector-overlay') || /\.inspector-panel\b/.test(reviewCss)) throw new Error('Review 页面所有者必须保留证据/Inspector 业务内容，抽屉外壳统一由 Drawer 持有')
 
-console.log('任务复盘交互契约检查通过：统一 Session Reader / Document、默认最新窗口、历史阅读不抢滚动、统一 Drawer、尾部继续操作、轮次导航与显式 Thinking / Tool 层级均已锁定。')
+console.log('任务复盘交互契约检查通过：统一 Session Reader / Document、统一边界导航、默认最新窗口、历史阅读不抢滚动、统一 Drawer、尾部继续操作、轮次导航与显式 Thinking / Tool 层级均已锁定。')
