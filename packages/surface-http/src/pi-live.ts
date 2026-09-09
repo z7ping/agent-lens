@@ -3,6 +3,7 @@ import type { StorageService } from '@agent-lens/core'
 import type { PiLiveHistoryAction, PiLiveService } from '@agent-lens/runtime-cordis'
 import type { JsonValue, PiLiveStartRequestDto } from '@agent-lens/protocol'
 import { httpError, readJsonBody, writeJson } from './http-utils'
+import { readHostProjectDirectory } from './project-directory-host'
 import { resolvePiLiveResumeInput } from './pi-live-resume'
 
 const MAX_PI_LIVE_JSON_BYTES = 1024 * 1024
@@ -147,6 +148,11 @@ export async function handlePiLiveRequest(
     if (url.pathname === '/api/v1/pi-live/project-directory') {
       if (request.method !== 'POST') {
         writeJson(response, 405, { error: 'method_not_allowed' })
+        return true
+      }
+      const hostSelection = readHostProjectDirectory(request)
+      if (hostSelection.handled) {
+        writeJson(response, 200, { cwd: hostSelection.cwd ?? null })
         return true
       }
       if (!selectProjectDirectory) throw httpError(501, '当前运行时不支持选择项目目录')
