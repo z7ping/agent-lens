@@ -73,9 +73,9 @@ function collectPrimaryActions(node: ReactNode, result: ReactNode[] = []): React
 function readonlySessionDocument(header: HTMLElement | null): HTMLElement | null {
   const surface = header?.closest<HTMLElement>('.task-session-view[data-task-session-interactive="false"]')
   if (!surface) return null
-  const reader = Array.from(surface.children).find(child => child instanceof HTMLElement && child !== header)
+  const reader = Array.from(surface.children).find(child => child instanceof HTMLElement && child.classList.contains('task-session-reader'))
   if (!(reader instanceof HTMLElement)) return null
-  const documentRoot = reader.lastElementChild
+  const documentRoot = Array.from(reader.children).find(child => child instanceof HTMLElement && child.classList.contains('task-session-document'))
   return documentRoot instanceof HTMLElement ? documentRoot : null
 }
 
