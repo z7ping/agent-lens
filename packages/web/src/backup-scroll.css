@@ -1,0 +1,10 @@
+/* 资产备份保留固定工具栏，内容区独立滚动，避免工作区整体滚动。 */
+.app-main > .page-scroll {
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}

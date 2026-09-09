@@ -77,7 +77,6 @@
 }
 
 /* 暗色主题保持正式 Token 定义的表面层级。 */
-:root[data-theme='dark'] .review-reader-pane,
 :root[data-theme='dark'] .app-shell {
   background: var(--al-canvas);
 }
