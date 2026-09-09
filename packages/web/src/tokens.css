@@ -61,6 +61,8 @@
   --al-safe-task-boundary-inline:32px;
   --al-safe-task-boundary-block:32px;
   --al-safe-composer-inline:18px;
+  /* Turn Rail 以 Pi Live 默认交互区的紧凑视觉尺度为共享基准。 */
+  --al-task-turn-rail-bottom-reserve:145px;
 
   --src-codex:#16866D;
   --src-claude:#C96E4D;

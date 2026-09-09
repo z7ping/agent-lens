@@ -294,7 +294,7 @@ function sourceEventSummary(node: ReviewEventNodeDto): string {
   if (node.kind === 'subagent.spawn' || node.kind === 'subagent.end') {
     const type = stringValue(payload, 'agentType', 'agent_type', 'subagentType', 'subagent_type', 'name')
     const agentId = stringValue(payload, 'agentId', 'agent_id', 'subagentId', 'subagent_id')
-    return [type, agentId ? `子智能体 ${agentId}` : ''].filter(Boolean).join(' · ') || brief(payload, 100)
+    return [type, agentId ? `子智能体 ${agentId}` : ''].filter(Boolean).join(' · ') || brief(payload, 140)
   }
   if (node.kind === 'context.compaction') {
     const trigger = stringValue(payload, 'trigger', 'compactTrigger', 'compact_trigger', 'reason', 'compactReason', 'compact_reason')
@@ -1311,7 +1311,16 @@ export function ReviewPage({
         </div>
       </aside>}
 
-      <TaskSurface mode="review" className="review-session-view">
+      <TaskSurface
+        mode="review"
+        className="review-session-view"
+        boundaryNavigation={detail ? {
+          startDisabled: roundFilterLoading || atStart,
+          endDisabled: roundFilterLoading,
+          onStart: showFromStart,
+          onEnd: jumpToLatest,
+        } : undefined}
+      >
         {detail && <TaskHeader
           marker={<span className={`source-dot ${sourceDot(detail.sourceIds[0] ?? '')}`}/>}
           agent={taskDetailModel?.agentLabel ?? ''}
@@ -1365,8 +1374,6 @@ export function ReviewPage({
               </div>
               <div className="round-nav-actions" aria-label="轮次操作">
                 <button className="round-nav-expand" disabled={roundFilterLoading} onClick={toggleRoundExpansion}>{expandAllRounds ? '收起当前页' : '展开当前页'}</button>
-                <button className="round-nav-from-start" disabled={roundFilterLoading || atStart} onClick={() => void showFromStart()}>从头查看 <UiIcon name="arrow-up" size={14}/></button>
-                <button className="round-nav-latest" disabled={roundFilterLoading} onClick={() => void jumpToLatest()}>跳到最新 <UiIcon name="arrow-down" size={14}/></button>
                 {review.detailHasNewData && <button className="round-nav-live" onClick={() => void jumpToLatest()}>有新记录 <UiIcon name="arrow-down" size={14}/></button>}
               </div>
               {roundFilterLoading && <span className="round-nav-status">正在查询完整会话…</span>}
