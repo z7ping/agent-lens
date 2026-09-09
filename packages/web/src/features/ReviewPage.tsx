@@ -1330,8 +1330,10 @@ export function ReviewPage({
           ] : []}
           actions={<>
             {onResumePiSession && detail.sourceIds.includes('pi') ? <>
-              <Button size="small" loading={resumingPiSession} disabled={resumingPiSession || Boolean(forkingPiSessionId)} onClick={() => void onResumePiSession(detail.id)}><UiIcon name="arrow-right" size={14}/>继续会话</Button>
+              <Button size="small" loading={resumingPiSession} disabled={resumingPiSession || Boolean(forkingPiSessionId)} onClick={() => void onResumePiSession(detail.id)}><UiIcon name="arrow-right" size={14}/>{resumingPiSession ? '正在打开 Pi…' : '继续会话'}</Button>
               <Button size="small" loading={forkingPiSessionId === detail.id} disabled={resumingPiSession || Boolean(forkingPiSessionId)} onClick={() => void forkPiSession(detail.id)}><UiIcon name="plus" size={14}/>分叉继续</Button>
+              {resumingPiSession && <StatusBadge tone="accent" dot role="status">正在准备历史会话</StatusBadge>}
+              {piResumeError && <StatusBadge tone="danger" title={piResumeError}>继续失败</StatusBadge>}
             </> : null}
             <button className="review-audit-toggle" aria-pressed={showAllEvents} onClick={toggleEventVisibility}>{showAllEvents ? '视图：全部事件' : '视图：核心事件'}</button>
           </>}
