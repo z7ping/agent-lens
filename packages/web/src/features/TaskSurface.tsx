@@ -56,6 +56,7 @@ const TaskSurfaceViewContext = createContext<TaskSurfaceViewValue>({
 
 const sessionReaderHooks = new Set(['review-reader-pane', 'pi-live-reader'])
 const sessionDocumentHooks = new Set(['review-reader', 'pi-live-document'])
+const sessionComposerHooks = new Set(['pi-live-compose-wrap'])
 
 export function useTaskSurfaceView(): TaskSurfaceViewValue {
   return useContext(TaskSurfaceViewContext)
@@ -105,9 +106,9 @@ function normalizeSessionChildren(children: ReactNode, sessionMode: boolean): Re
   return Children.map(children, child => {
     if (!isValidElement<{ className?: string; children?: ReactNode }>(child)) return child
     const candidate = child as SessionSlotElement
-    return hasSessionHook(candidate, sessionReaderHooks)
-      ? normalizeSessionReader(candidate)
-      : child
+    if (hasSessionHook(candidate, sessionReaderHooks)) return normalizeSessionReader(candidate)
+    if (hasSessionHook(candidate, sessionComposerHooks)) return withSessionClass(candidate, 'task-session-composer')
+    return child
   })
 }
 
@@ -199,8 +200,8 @@ function activeTurnRailItem(items: TaskTurnRailItem[], anchorY: number): TaskTur
  *
  * Review / Live / Hub 是 Task Surface 的状态与数据来源，不是不同的产品页面。
  * Review / Live 同时属于同一个 Session View：Live 只是额外开启实时交互能力。
- * 页面继续保留分页、实时流、Composer 等控制器差异，但 Reader / Document 会在这里
- * 统一归一为 task-session-reader / task-session-document，页面私有类只作为行为钩子保留。
+ * 页面继续保留分页、实时流、Composer 等控制器差异，但 Reader / Document / optional Composer
+ * 会在这里统一归一为固定 Session 槽位；页面私有类只作为行为钩子保留。
  *
  * Task Surface 同时持有跨状态共享的轮次导轨：只要正文使用 TaskRound / VirtualRoundMount，
  * 历史复盘和实时任务就会得到同一套轮次定位、活动态与错误态导航。
