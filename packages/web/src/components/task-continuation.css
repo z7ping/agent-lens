@@ -1,9 +1,9 @@
-/* 历史 Pi 会话继续操作：Task Detail 正文末尾的独立动作组件。 */
-.task-review-tail-actions-host {
+/* 只读 Session 的继续操作：Task Detail 正文末尾的独立动作组件。 */
+.task-session-tail-actions-host {
   width: 100%;
 }
 
-.task-review-continuation {
+.task-session-continuation {
   display: flex;
   width: 100%;
   min-width: 0;
@@ -19,13 +19,13 @@
   box-shadow: 0 2px 8px rgb(16 24 40 / .025);
 }
 
-.task-review-continuation-copy {
+.task-session-continuation-copy {
   display: flex;
   min-width: 0;
   align-items: center;
 }
 
-.task-review-continuation-copy span {
+.task-session-continuation-copy span {
   overflow: hidden;
   color: var(--al-muted);
   font-size: 12.5px;
@@ -34,7 +34,7 @@
   white-space: nowrap;
 }
 
-.task-review-continuation-actions {
+.task-session-continuation-actions {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
@@ -42,7 +42,7 @@
   padding-right: 2px;
 }
 
-.task-review-continuation-actions .btn {
+.task-session-continuation-actions .btn {
   min-height: 34px;
   padding-inline: 13px;
   border-radius: 8px;
@@ -50,27 +50,27 @@
   font-weight: 650;
 }
 
-.task-review-continuation-actions .btn:first-child {
+.task-session-continuation-actions .btn:first-child {
   border-color: var(--al-accent);
   background: var(--al-accent);
   color: white;
   box-shadow: 0 2px 7px color-mix(in srgb, var(--al-accent) 18%, transparent);
 }
 
-.task-review-continuation-actions .btn:first-child:hover:not(:disabled) {
+.task-session-continuation-actions .btn:first-child:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--al-accent) 86%, black);
   background: color-mix(in srgb, var(--al-accent) 90%, black);
   color: white;
 }
 
-.task-review-continuation-actions .btn:nth-child(2) {
+.task-session-continuation-actions .btn:nth-child(2) {
   border-color: color-mix(in srgb, var(--al-accent) 30%, var(--al-line-strong));
   background: var(--al-surface);
   color: var(--al-accent);
 }
 
 @media (max-width: 575.98px) {
-  .task-review-continuation {
+  .task-session-continuation {
     min-height: 0;
     align-items: stretch;
     flex-direction: column;
@@ -79,15 +79,15 @@
     padding: 11px 14px;
   }
 
-  .task-review-continuation-copy span { white-space: normal; }
+  .task-session-continuation-copy span { white-space: normal; }
 
-  .task-review-continuation-actions {
+  .task-session-continuation-actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
     padding-right: 0;
   }
 
-  .task-review-continuation-actions .btn {
+  .task-session-continuation-actions .btn {
     width: 100%;
     justify-content: center;
   }

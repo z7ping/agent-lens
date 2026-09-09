@@ -9,7 +9,6 @@ import { useClientSnapshot } from '../App'
 import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScope'
 import { Button, IconButton, Input, SelectMenu, StatusBadge, Toolbar } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
-import { TaskSurface } from './TaskSurface'
 import { deriveTaskProjectOptions, historyTaskPresentation, pickTaskProject, type TaskProjectOption } from './task-center'
 
 export type TaskCenterMode = 'history' | 'live' | 'new' | 'hub'
@@ -405,7 +404,6 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const selectedRuntimeId = location.pathname.startsWith('/review/live/')
     ? decodeURIComponent(location.pathname.slice('/review/live/'.length))
     : ''
-  const surfaceMode = mode === 'history' ? 'review' : mode
   const historyCount = localSessions.length + visibleHub.length
   const activeFilterCount = [
     Boolean(review.filters.sourceId),
@@ -512,8 +510,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     {sidebarHost ? createPortal(taskRail, sidebarHost) : null}
     <div className={`task-center-page ${mode === 'new' ? 'is-new-task' : ''}`}>
       <section className="task-center-main">
-        <TaskSurface mode={surfaceMode}>
-          <Suspense fallback={<div className="workspace-skeleton" role="status" aria-label="正在加载任务详情"><span className="state-skeleton"/><span className="state-skeleton"/><span className="state-skeleton"/></div>}>
+        <Suspense fallback={<div className="workspace-skeleton" role="status" aria-label="正在加载任务详情"><span className="state-skeleton"/><span className="state-skeleton"/><span className="state-skeleton"/></div>}>
           {mode === 'history' && <ReviewPage
             model={model}
             embedded
@@ -524,8 +521,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
           {mode === 'live' && <PiLivePage embedded/>}
           {mode === 'hub' && <HubReviewPage embedded/>}
           {mode === 'new' && <NewTaskPanel options={projectOptions} preferredProjectId={preferredProjectId} onStarted={runtimeSessionId => navigate(`/review/live/${encodeURIComponent(runtimeSessionId)}`)}/>} 
-          </Suspense>
-        </TaskSurface>
+        </Suspense>
       </section>
     </div>
   </>

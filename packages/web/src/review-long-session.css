@@ -1,7 +1,7 @@
 /*
  * Review 长会话唯一性能/导航所有者。
- * 只负责虚拟挂载、独立滚动、Round Nav 与长列表加载反馈；
- * Task Surface 共享轮次导轨与边界导航由 task-turn-rail.css 负责。
+ * 只负责虚拟挂载、Round Nav、会话列表滚动与长列表加载反馈；
+ * Session Reader 滚动几何归 task-session-view.css，Task Surface 导轨归 task-turn-rail.css。
  */
 .virtual-round-shell { min-width: 0; }
 .virtual-round-shell + .virtual-round-shell { border-top: 0; }
@@ -15,8 +15,7 @@
 
 .review-page .review-layout,
 .review-page .session-panel { min-height: 0; overflow: hidden; }
-.review-page .session-scroll,
-.review-page .review-reader-pane {
+.review-page .session-scroll {
   min-height: 0;
   overflow: auto;
   overflow-anchor: none;
@@ -145,13 +144,10 @@
 .detail-load-sentinel button:hover { border-color: var(--al-line-strong); background: var(--al-soft); }
 
 /* 会话尾部只保留 Review 布局间距；组件本身统一由 components/task-continuation.css 负责。 */
-.review-page .task-review-tail-actions-host {
+.review-page .task-session-tail-actions-host {
   margin: 6px 0 22px;
 }
 
-@media (min-width: 1200px) {
-  .review-page .review-reader { padding-left: 52px; }
-}
 @media (min-width: 992px) {
   .app-shell:has(.review-page) { height: 100vh; min-height: 0; overflow: hidden; }
   .review-page { height: auto; min-height: 0; }
