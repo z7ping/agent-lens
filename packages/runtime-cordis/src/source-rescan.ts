@@ -34,11 +34,16 @@ function failureDto(failure: RegisteredSourceFailure): SourceRescanFailure {
 
 export class SourceRescanService {
   private inFlight: Promise<SourceRescanSummary> | null = null
+  private readonly detectedSources = new Map<string, boolean>()
 
   constructor(
     private readonly ctx: AgentLensContext,
     private readonly runtimeSignal: AbortSignal,
   ) {}
+
+  isSourceDetected(sourceId: string): boolean | undefined {
+    return this.detectedSources.get(sourceId)
+  }
 
   rescan(): Promise<SourceRescanSummary> {
     if (this.inFlight) return this.inFlight
@@ -52,8 +57,24 @@ export class SourceRescanService {
   private async run(): Promise<SourceRescanSummary> {
     if (this.runtimeSignal.aborted) throw new Error('AgentLens runtime is shutting down')
     const startedAt = new Date().toISOString()
+    const enabledSourceIds = this.ctx.sources.list()
+      .filter(source => this.ctx.capturePolicy.isSourceEnabled(source.manifest.sourceId))
+      .map(source => source.manifest.sourceId)
     const prepared = await prepareRegisteredSources(this.ctx, this.runtimeSignal)
     if (this.runtimeSignal.aborted) throw new Error('AgentLens runtime is shutting down')
+
+    const failedDetections = new Set(
+      prepared.failures
+        .filter(failure => failure.stage === 'detect')
+        .map(failure => failure.sourceId),
+    )
+    const detectedNow = new Set(prepared.targets.map(target => target.source.manifest.sourceId))
+    for (const sourceId of enabledSourceIds) {
+      // A failed detector is unknown, not "uninstalled". Preserve the previous
+      // current-state answer when available instead of overwriting it with false.
+      if (failedDetections.has(sourceId)) continue
+      this.detectedSources.set(sourceId, detectedNow.has(sourceId))
+    }
 
     const scanned = await discoverRegisteredSourceAssets(
       this.ctx,
