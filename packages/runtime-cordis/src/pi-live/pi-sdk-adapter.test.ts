@@ -48,7 +48,7 @@ test('0.84.x 使用 0.84.4 官方类型基线标记为已验证版本', () => {
   assert.equal(inspectPiSdkCompatibility(undefined).testedVersion, false)
 })
 
-test('0.84.4 官方 SDK 暴露 Pi Source P0 所需资源解析能力', () => {
+test('0.84.4 官方 SDK 暴露 Pi Source P0/P1 所需纯资源解析能力', () => {
   const live = assertPiSdkModule(officialPiSdk, '/pi/dist/index.js', PI_SDK_TYPE_BASELINE)
   const resources = resolvePiSdkResourceApi(live)
   assert.ok(resources)
@@ -58,6 +58,8 @@ test('0.84.4 官方 SDK 暴露 Pi Source P0 所需资源解析能力', () => {
   assert.equal(typeof resources.hasTrustRequiringProjectResources, 'function')
   assert.equal(typeof resources.loadSkills, 'function')
   assert.equal(typeof resources.loadSkillsFromDir, 'function')
+  assert.equal(typeof resources.loadProjectContextFiles, 'function')
+  assert.equal(typeof resources.parseFrontmatter, 'function')
 })
 
 test('模块能力缺失时给出明确 capability 错误', () => {
