@@ -438,7 +438,7 @@ async function globalContextAssets(
       contextSource('user', name === 'SYSTEM.md' ? 'system' : 'append-system'),
       capturedAt,
       true,
-      true,
+      'unknown',
     )
     if (asset) assets.push(asset)
   }
