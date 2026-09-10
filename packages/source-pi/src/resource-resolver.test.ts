@@ -90,3 +90,110 @@ test('Pi project resource bindings keep cwd scope isolated', () => {
   assert.match(first, /^pi:resource:project:/)
   assert.match(second, /^pi:resource:project:/)
 })
+
+
+test('Pi prompt resources use official frontmatter parsing and first-name precedence', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-pi-prompt-'))
+  const first = join(root, 'review.md')
+  const duplicateDir = join(root, 'duplicate')
+  const duplicate = join(duplicateDir, 'review.md')
+  const broken = join(root, 'broken.md')
+  await mkdir(duplicateDir, { recursive: true })
+  await writeFile(first, '---\ndescription: first\n---\nBody\n', 'utf8')
+  await writeFile(duplicate, '---\ndescription: second\n---\nBody\n', 'utf8')
+  await writeFile(broken, 'BROKEN', 'utf8')
+
+  const api = {
+    parseFrontmatter(text: string) {
+      if (text === 'BROKEN') throw new Error('invalid frontmatter')
+      return { frontmatter: {}, body: text }
+    },
+  } as any
+
+  try {
+    assert.deepEqual(await piResourceResolverInternals.promptCandidate(api, first), {
+      name: 'review',
+      valid: true,
+    })
+    assert.deepEqual(await piResourceResolverInternals.promptCandidate(api, broken), {
+      name: 'broken',
+      valid: false,
+    })
+    const selected = await piResourceResolverInternals.selectedPromptPaths(api, [
+      { path: first, enabled: true, metadata: { source: 'auto', scope: 'user', origin: 'top-level' } },
+      { path: duplicate, enabled: true, metadata: { source: 'auto', scope: 'user', origin: 'top-level' } },
+      { path: broken, enabled: true, metadata: { source: 'auto', scope: 'user', origin: 'top-level' } },
+    ] as any)
+    assert.deepEqual([...selected], [resolve(first)])
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('Pi theme candidates do not claim malformed or nameless JSON as discoverable themes', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-pi-theme-'))
+  const named = join(root, 'named.json')
+  const nameless = join(root, 'nameless.json')
+  const broken = join(root, 'broken.json')
+  await writeFile(named, JSON.stringify({ name: 'night' }), 'utf8')
+  await writeFile(nameless, JSON.stringify({ colors: {} }), 'utf8')
+  await writeFile(broken, '{', 'utf8')
+
+  try {
+    assert.deepEqual(await piResourceResolverInternals.themeCandidate(named), {
+      name: 'night',
+      definitelyInvalid: false,
+    })
+    assert.equal((await piResourceResolverInternals.themeCandidate(nameless)).definitelyInvalid, true)
+    assert.equal((await piResourceResolverInternals.themeCandidate(broken)).definitelyInvalid, true)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('Pi context resources keep AGENTS loading separate from project trust and gate project SYSTEM files', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-pi-context-'))
+  const agentDir = join(root, 'agent')
+  const project = join(root, 'project')
+  const globalAgents = join(agentDir, 'AGENTS.md')
+  const projectAgents = join(project, 'AGENTS.md')
+  const projectSystem = join(project, '.pi', 'SYSTEM.md')
+  await mkdir(join(project, '.pi'), { recursive: true })
+  await mkdir(agentDir, { recursive: true })
+  await writeFile(globalAgents, '# global\n', 'utf8')
+  await writeFile(projectAgents, '# project\n', 'utf8')
+  await writeFile(projectSystem, '# system\n', 'utf8')
+
+  const api = {
+    loadProjectContextFiles({ cwd }: { cwd: string }) {
+      return resolve(cwd) === resolve(agentDir)
+        ? [{ path: globalAgents, content: '# global' }]
+        : [
+            { path: globalAgents, content: '# global' },
+            { path: projectAgents, content: '# project' },
+          ]
+    },
+  } as any
+
+  try {
+    const global = await piResourceResolverInternals.globalContextAssets(api, agentDir, '2026-09-11T00:00:00.000Z')
+    assert.ok(global.some(asset => asset.binding?.path === globalAgents))
+
+    const projectAssets = await piResourceResolverInternals.projectContextAssets(
+      api,
+      project,
+      agentDir,
+      'unknown',
+      '2026-09-11T00:00:00.000Z',
+    )
+    const agents = projectAssets.find(asset => asset.binding?.path === projectAgents)
+    assert.equal(agents?.states?.find(state => state.state === 'enabled')?.value, true)
+    assert.equal(agents?.states?.find(state => state.state === 'discoverable')?.value, true)
+
+    const system = projectAssets.find(asset => asset.binding?.path === projectSystem)
+    assert.equal(system?.states?.find(state => state.state === 'enabled')?.value, 'unknown')
+    assert.equal(system?.states?.find(state => state.state === 'discoverable')?.value, 'unknown')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
