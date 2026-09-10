@@ -84,6 +84,23 @@ test('Pi Native Normalizer gives scalar assistant content the same block identit
   assert.equal(message.contentIndex, 0)
 })
 
+test('Pi Native Normalizer preserves an empty assistant entry as a parentable message anchor', () => {
+  const facts = normalizePiSessionEntry({
+    type: 'message', id: 'a-empty', parentId: 'u1',
+    message: { role: 'assistant', provider: 'test', model: 'test-model', content: [] },
+  })
+
+  assert.equal(facts.length, 1)
+  const message = facts[0]
+  assert.ok(message?.kind === 'message')
+  assert.equal(message.role, 'assistant')
+  assert.equal(message.id, 'a-empty')
+  assert.equal(message.parentId, 'u1')
+  assert.equal(message.text, '')
+  assert.equal(message.provider, 'test')
+  assert.equal(message.model, 'test-model')
+})
+
 test('Pi Native Normalizer keeps abort lifecycle after content without turning it into an error', () => {
   const facts = normalizePiSessionEntry({
     type: 'message', id: 'a-abort',
