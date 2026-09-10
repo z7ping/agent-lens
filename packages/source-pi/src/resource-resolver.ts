@@ -232,8 +232,11 @@ function validatedSkills(
         skillPaths: [resource.path],
         includeDefaults: false,
       }).skills)
-    } catch {
-      // Invalid or unreadable resources are not valid Pi skills and remain unclaimed.
+    } catch (error) {
+      if (error && typeof error === 'object' && 'code' in error && !isMissingPathError(error)) {
+        throw error
+      }
+      // Missing or syntactically invalid resources are not valid Pi skills and remain unclaimed.
     }
   }
   const seen = new Set<string>()
