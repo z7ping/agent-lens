@@ -144,6 +144,47 @@ test('Pi Native Normalizer preserves a tool result without inventing a call id',
   assert.equal(result.output, 'ok')
 })
 
+test('Pi Native Normalizer preserves coding-agent custom message roles instead of flattening them to other', () => {
+  const custom = normalizePiSessionEntry({
+    type: 'message', id: 'custom-message',
+    message: {
+      role: 'custom',
+      customType: 'handoff',
+      content: [{ type: 'text', text: 'extension context' }],
+      display: true,
+      timestamp: 1789000000000,
+    },
+  })[0]
+  assert.ok(custom?.kind === 'event')
+  assert.equal(custom.event, 'pi.custom_message')
+  assert.equal(custom.detail, 'extension context')
+
+  const bash = normalizePiSessionEntry({
+    type: 'message', id: 'bash-message',
+    message: {
+      role: 'bashExecution', command: 'pwd', output: '/workspace', exitCode: 0,
+      cancelled: false, truncated: false, timestamp: 1789000000000,
+    },
+  })[0]
+  assert.ok(bash?.kind === 'event')
+  assert.equal(bash.event, 'pi.bash_execution')
+  assert.equal((bash.payload as { command?: string }).command, 'pwd')
+
+  const branch = normalizePiSessionEntry({
+    type: 'message', id: 'branch-message',
+    message: { role: 'branchSummary', summary: 'branch summary', fromId: 'entry-1', timestamp: 1789000000000 },
+  })[0]
+  assert.ok(branch?.kind === 'event')
+  assert.equal(branch.event, 'context.summary')
+
+  const compaction = normalizePiSessionEntry({
+    type: 'message', id: 'compaction-message',
+    message: { role: 'compactionSummary', summary: 'compact', tokensBefore: 1200, timestamp: 1789000000000 },
+  })[0]
+  assert.ok(compaction?.kind === 'event')
+  assert.equal(compaction.event, 'context.compaction')
+})
+
 test('Pi Native Normalizer keeps custom and unknown entries visible', () => {
   const custom = normalizePiSessionEntry({ type: 'custom', id: 'x1', customType: 'extension', data: { value: 1 } })
   assert.equal(custom[0]?.kind, 'event')
