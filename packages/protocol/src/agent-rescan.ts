@@ -1,3 +1,6 @@
+import type { FacetResponseDto } from './facets'
+import type { AgentOverviewResponseDto } from './overview'
+
 export type AgentRescanStatus = 'completed' | 'partial' | 'failed'
 
 export interface AgentRescanFailureDto {
@@ -6,7 +9,7 @@ export interface AgentRescanFailureDto {
   message: string
 }
 
-export interface AgentRescanResponseDto {
+export interface AgentRescanSummaryDto {
   status: AgentRescanStatus
   startedAt: string
   completedAt: string
@@ -17,4 +20,9 @@ export interface AgentRescanResponseDto {
   statesRecorded: number
   statesCleared: number
   failures: AgentRescanFailureDto[]
+}
+
+export interface AgentRescanResponseDto extends AgentRescanSummaryDto {
+  agents: AgentOverviewResponseDto
+  facets: FacetResponseDto
 }
