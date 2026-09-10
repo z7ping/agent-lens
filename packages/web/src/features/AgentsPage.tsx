@@ -64,12 +64,15 @@ const assetTypeLabel: Record<string, string> = {
   extension: '扩展',
   hook: '钩子',
   memory: '记忆',
+  prompt: '提示词模板',
+  theme: '主题',
+  context: '上下文文件',
   rule: '规则',
   builtin: '内建能力',
   unknown: '其他',
 }
 
-const assetTypeOrder = ['skill', 'mcp', 'plugin', 'extension', 'hook', 'memory', 'rule', 'builtin', 'unknown']
+const assetTypeOrder = ['skill', 'mcp', 'plugin', 'extension', 'prompt', 'context', 'theme', 'hook', 'memory', 'rule', 'builtin', 'unknown']
 const USER_ASSET_LIMIT = 24
 const ASSEMBLY_PATH_LIMIT = 18
 
