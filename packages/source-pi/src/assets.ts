@@ -243,7 +243,6 @@ async function* discoverPiSkills(
         skill.filePath,
         observedAt,
         capturedAt,
-        `skill:${skill.filePath}`,
       ),
     }
   }
@@ -321,7 +320,6 @@ async function* discoverPiExtensions(
           extensionPath,
           observedAt,
           capturedAt,
-          `extension:${extensionPath}`,
         ),
       }
     }
