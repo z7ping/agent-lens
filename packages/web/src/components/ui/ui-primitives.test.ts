@@ -167,7 +167,7 @@ test('Tools and Insights own filters in the left context, never in a right-side 
   assert.match(toolsPage, /import \{ Drawer, IconButton, SelectMenu, UiIcon \} from '\.\.\/components\/ui'/)
   assert.match(toolsPage, /createPortal\(sidebarFilters, sidebarHost\)/)
   assert.match(toolsPage, /workspace-insight-filter-disclosure/)
-  assert.match(toolsPage, /summaryMeta=\{activeFilterCount \? `已选 \$\{activeFilterCount\} 项` : '全部'\}/)
+  assert.match(toolsPage, /summaryMeta=\{agentSelectionSummary\}/)
   assert.doesNotMatch(toolsPage, /<Toolbar\b/)
   assert.doesNotMatch(toolsPage, /<AgentScope\b/)
   assert.match(toolsPage, /<Drawer[\s\S]*?className="tool-drill-overlay"/)
