@@ -313,6 +313,17 @@ export function normalizePiSessionEntry(
       if (stop) facts.push(stop)
       const usage = usageFact(messageBase, message.usage)
       if (usage) facts.push(usage)
+      if (!facts.length) {
+        facts.push({
+          ...messageBase,
+          ...assistantMeta,
+          kind: 'message',
+          role: 'assistant',
+          text: '',
+          content,
+          nonTextContent: nonTextContent(content),
+        })
+      }
       promoteAssistantEntryAnchor(facts, id, parentId)
       return facts
     }
