@@ -28,10 +28,14 @@ function reviewSearchFromFilters(filters: ReviewFilters): string {
   return `?${params.toString()}`
 }
 
+function sameSourceIds(left: string[] | null, right: string[] | null): boolean {
+  if (left === right) return true
+  if (left === null || right === null || left.length !== right.length) return false
+  return left.every((sourceId, index) => sourceId === right[index])
+}
+
 function sameReviewFilters(left: ReviewFilters, right: ReviewFilters): boolean {
-  return left.sourceIds === right.sourceIds || (left.sourceIds !== null && right.sourceIds !== null
-    && left.sourceIds.length === right.sourceIds.length
-    && left.sourceIds.every((sourceId, index) => sourceId === right.sourceIds[index]))
+  return sameSourceIds(left.sourceIds, right.sourceIds)
     && left.projectId === right.projectId
     && left.range === right.range
     && left.status === right.status
