@@ -1,6 +1,6 @@
 {
   "name": "@agent-lens/cli",
-  "version": "1.0.0-alpha.4",
+  "version": "1.0.0-alpha.5",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,8 +9,8 @@
     "test": "tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
-    "@agent-lens/capture-policy": "1.0.0-alpha.4",
-    "@agent-lens/hook-manager": "1.0.0-alpha.4",
-    "@agent-lens/runtime-cordis": "1.0.0-alpha.4"
+    "@agent-lens/capture-policy": "1.0.0-alpha.5",
+    "@agent-lens/hook-manager": "1.0.0-alpha.5",
+    "@agent-lens/runtime-cordis": "1.0.0-alpha.5"
   }
 }

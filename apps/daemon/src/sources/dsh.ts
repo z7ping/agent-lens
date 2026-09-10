@@ -615,7 +615,7 @@ async function declareDshCapabilities(_detected: DetectedSource): Promise<Observ
 
 export const dshManifest: SourcePluginManifest = {
   pluginId: '@agent-lens/source-dsh',
-  pluginVersion: '1.0.0-alpha.4',
+  pluginVersion: '1.0.0-alpha.5',
   apiVersion: '1.0',
   pluginType: 'source',
   displayName: 'DeepSeek Harness Source',

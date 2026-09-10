@@ -36,7 +36,7 @@ import {
   type LifecycleStatus,
 } from './lifecycle'
 
-const VERSION = '1.0.0-alpha.4'
+const VERSION = '1.0.0-alpha.5'
 const PROTOCOL_VERSION = '1.0'
 const DEFAULT_PORT = 56789
 const MIN_NODE = [22, 23, 0] as const

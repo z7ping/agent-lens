@@ -16,7 +16,7 @@ const host: Host = {
 }
 
 function context(env: SourceDetectionContext['env']): SourceDetectionContext {
-  return { host, env }
+  return env === undefined ? { host } : { host, env }
 }
 
 async function executable(path: string): Promise<void> {
