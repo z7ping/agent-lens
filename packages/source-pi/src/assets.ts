@@ -66,8 +66,8 @@ function installationOnlyStates(
       evidenceCandidates: [staticEvidence(path, observedAt, capturedAt, nativeStableId)],
     },
     {
-      // SourceAssetRunner otherwise treats an omitted discoverable state as true.
-      // Resource presence alone does not prove activation for every Pi invocation.
+      // Keep uncertainty explicit so existing optimistic state observations are superseded.
+      // Resource presence alone does not prove discoverability for every Pi invocation.
       state: 'discoverable',
       value: 'unknown',
       observedAt: capturedAt,
