@@ -62,10 +62,12 @@ class InProcessHandle implements PiRuntimeHandle {
   constructor(private readonly id: string, private readonly session: PiSdkSession, private readonly extensionUi: PiExtensionUiBridge, private readonly unsubscribe: () => void) {}
 
   async state(): Promise<PiLiveRuntimeState> {
+    const resources = runtimeResourceSnapshot(this.session)
     return { runtimeSessionId: this.id, status: 'ready', initializationStage: 'ready', nativeSessionId: this.session.sessionId,
       ...(this.session.sessionFile ? { sessionFile: this.session.sessionFile } : {}), ...(this.session.sessionName ? { sessionName: this.session.sessionName } : {}),
       ...(this.session.model ? { model: this.session.model } : {}), thinkingLevel: this.session.thinkingLevel, isStreaming: this.session.isStreaming,
-      isCompacting: this.session.isCompacting, pendingMessageCount: this.session.pendingMessageCount, leafId: this.session.sessionManager.getLeafId() }
+      isCompacting: this.session.isCompacting, pendingMessageCount: this.session.pendingMessageCount, leafId: this.session.sessionManager.getLeafId(),
+      ...(resources ? { startupResources: resources } : {}) }
   }
   async snapshot(since?: string): Promise<PiLiveSnapshot> { const all = this.session.sessionManager.getEntries(); const index = since ? all.findIndex(entry => record(entry).id === since) : -1; return { state: await this.state(), entries: since && index >= 0 ? all.slice(index + 1) : all, leafId: this.session.sessionManager.getLeafId() } }
   private async models(provider?: string): Promise<readonly PiSdkModel[]> { const snapshot = this.session.modelRuntime.getAvailableSnapshot(); const filtered = provider ? snapshot.filter(model => model.provider === provider) : snapshot; return filtered.length ? filtered : await this.session.modelRuntime.getAvailable(provider) }
