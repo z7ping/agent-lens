@@ -41,7 +41,7 @@ const detected: DetectedSource = {
   confidence: 'exact',
 }
 
-function sourceWithInventory(inventory: { current: boolean; discoverable?: boolean }): SourceDefinition {
+function sourceWithInventory(inventory: { current: boolean; discoverable?: boolean; fail?: boolean }): SourceDefinition {
   return {
     manifest: {
       pluginId: 'test-source-plugin',
@@ -56,6 +56,7 @@ function sourceWithInventory(inventory: { current: boolean; discoverable?: boole
     async detect() { return [detected] },
     async declareCapabilities() { return [] },
     async *discoverAssets() {
+      if (inventory.fail) throw new Error('simulated asset scan failure')
       if (!inventory.current) return
       const states: NonNullable<DiscoveredAsset['states']> = [{
         state: 'installed',
@@ -215,3 +216,31 @@ test('同一资产仍存在但不再声明旧状态时，旧状态退回 unknown
     [['installed', true], ['discoverable', 'unknown']],
   )
 })
+
+test('资产扫描失败时保留上一次成功快照，不把失败当成空清单', async () => {
+  const inventory = { current: true, fail: false }
+  const { runner, writes } = harness()
+  const source = sourceWithInventory(inventory)
+  const signal = new AbortController().signal
+
+  await runner.scan({ source, host, detected, abortSignal: signal })
+  writes.length = 0
+
+  inventory.fail = true
+  await assert.rejects(
+    runner.scan({ source, host, detected, abortSignal: signal }),
+    /simulated asset scan failure/,
+  )
+  assert.deepEqual(writes, [])
+
+  inventory.fail = false
+  inventory.current = false
+  const third = await runner.scan({ source, host, detected, abortSignal: signal })
+
+  assert.equal(third.assetsRemoved, 1)
+  assert.deepEqual(
+    writes.map(item => [item.state, item.value]),
+    [['installed', false]],
+  )
+})
+
