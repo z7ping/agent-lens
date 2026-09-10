@@ -196,7 +196,7 @@ jobs:
         run: |
           cd release/linux
           shopt -s nullglob
-          files=(AgentLens-*-Linux-x64.AppImage AgentLens-*-Linux-x64.deb)
+          files=(AgentLens-*-Linux-x86_64.AppImage AgentLens-*-Linux-amd64.deb)
           if [ "${#files[@]}" -eq 0 ]; then
             echo "没有找到 Linux x64 发布产物" >&2
             exit 1
@@ -208,8 +208,8 @@ jobs:
         with:
           name: agent-lens-linux-x64-${{ github.run_id }}
           path: |
-            release/linux/AgentLens-*-Linux-x64.AppImage
-            release/linux/AgentLens-*-Linux-x64.deb
+            release/linux/AgentLens-*-Linux-x86_64.AppImage
+            release/linux/AgentLens-*-Linux-amd64.deb
             release/linux/SHA256SUMS-linux-x64.txt
           if-no-files-found: error
 
@@ -218,4 +218,4 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$GITHUB_REF_NAME" release/linux/AgentLens-*-Linux-x64.AppImage release/linux/AgentLens-*-Linux-x64.deb release/linux/SHA256SUMS-linux-x64.txt --clobber
+        run: gh release upload "$GITHUB_REF_NAME" release/linux/AgentLens-*-Linux-x86_64.AppImage release/linux/AgentLens-*-Linux-amd64.deb release/linux/SHA256SUMS-linux-x64.txt --clobber
