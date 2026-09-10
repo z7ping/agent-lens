@@ -99,6 +99,7 @@ async function selectLinuxDirectory(): Promise<string | undefined> {
 export function createProjectDirectoryPicker(
   platform = process.platform,
   selectOverride?: () => Promise<string | undefined>,
+  daemonMode = process.env.AGENT_LENS_DAEMON_MODE,
 ): ProjectDirectoryPicker {
   const picker = platform === 'win32'
     ? selectWindowsDirectory
@@ -107,7 +108,17 @@ export function createProjectDirectoryPicker(
       : platform === 'linux'
         ? selectLinuxDirectory
         : async () => { throw new Error(`当前系统暂不支持原生目录选择：${platform}`) }
-  const select = selectOverride ?? picker
+
+  // 受 Desktop / system service 管理的 Daemon 不是 UI 所有者，不能自己再弹
+  // PowerShell / osascript / zenity 对话框。Desktop 会在 Electron 主进程接管
+  // 目录选择；如果宿主结果丢失或请求被重放，这里也必须保持静默，避免
+  // “取消第一个目录框后又弹第二个框”。前台 CLI / 浏览器运行时继续保留
+  // 原有系统选择器降级能力。
+  const nativeSelect = selectOverride ?? picker
+  const select = daemonMode === 'managed'
+    ? async () => undefined
+    : nativeSelect
+
   let pending: Promise<string | undefined> | null = null
   return {
     select() {
