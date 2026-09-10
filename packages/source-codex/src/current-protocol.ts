@@ -10,7 +10,7 @@ import { normalizePaginatedFunctionOutput } from './paginated-function-output'
 import { normalizePaginatedCodexRecord } from './paginated-protocol'
 import { assistantMessageProvenance, contextClassification } from './provenance'
 
-export const CODEX_CURRENT_PARSER_VERSION = '19'
+export const CODEX_CURRENT_PARSER_VERSION = '20'
 
 const NON_ACTIVITY_ROLLOUT_TYPES = new Set([
   'world_state',
