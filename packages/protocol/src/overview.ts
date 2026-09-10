@@ -44,7 +44,7 @@ export interface AgentAssetBindingDto {
 
 export interface AgentAssetInventoryDto {
   id: string
-  type: 'skill' | 'mcp' | 'plugin' | 'extension' | 'hook' | 'memory' | 'rule' | 'builtin' | 'unknown'
+  type: 'skill' | 'mcp' | 'plugin' | 'extension' | 'hook' | 'memory' | 'prompt' | 'theme' | 'context' | 'rule' | 'builtin' | 'unknown'
   canonicalName: string
   displayName?: string
   upstreamIdentity?: string
