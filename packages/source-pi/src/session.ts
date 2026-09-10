@@ -27,6 +27,7 @@ import type {
 import {
   discoverInstalledPiSdk,
   isCompleteJson,
+  isMissingPathError,
   readJsonlLines,
   resolveExecutable,
   resolvePiLocation,
@@ -92,8 +93,9 @@ async function exists(path: string): Promise<boolean> {
   try {
     await access(path)
     return true
-  } catch {
-    return false
+  } catch (error) {
+    if (isMissingPathError(error)) return false
+    throw error
   }
 }
 
@@ -111,8 +113,9 @@ function parseJsonObject(text: string): Record<string, unknown> | null {
 async function readPiSettings(configRoot: string): Promise<Record<string, unknown> | null> {
   try {
     return parseJsonObject(await readFile(join(configRoot, 'settings.json'), 'utf8'))
-  } catch {
-    return null
+  } catch (error) {
+    if (isMissingPathError(error)) return null
+    throw error
   }
 }
 
@@ -193,8 +196,9 @@ async function* walkJsonlFiles(root: string): AsyncIterable<string> {
   let directory
   try {
     directory = await opendir(root)
-  } catch {
-    return
+  } catch (error) {
+    if (isMissingPathError(error)) return
+    throw error
   }
   for await (const entry of directory) {
     const path = join(root, entry.name)
@@ -209,8 +213,9 @@ export async function listJsonlFiles(root: string, historyWindow?: SourceHistory
   const candidates = (await Promise.all(paths.map(async path => {
     try {
       return { path, mtimeMs: (await stat(path)).mtimeMs }
-    } catch {
-      return null
+    } catch (error) {
+      if (isMissingPathError(error)) return null
+      throw error
     }
   }))).filter((candidate): candidate is { path: string; mtimeMs: number } => candidate !== null)
 
@@ -250,8 +255,9 @@ async function readSessionHeader(filePath: string): Promise<Record<string, unkno
       return entry.type === 'session' && typeof entry.id === 'string' ? entry : null
     }
     return null
-  } catch {
-    return null
+  } catch (error) {
+    if (isMissingPathError(error)) return null
+    throw error
   }
 }
 
@@ -292,7 +298,12 @@ export async function* ingestPiFile(
 ): AsyncIterable<SourceRecord> {
   if (ctx.abortSignal.aborted || extname(filePath).toLowerCase() !== '.jsonl') return
   let fileStat
-  try { fileStat = await stat(filePath) } catch { return }
+  try {
+    fileStat = await stat(filePath)
+  } catch (error) {
+    if (isMissingPathError(error)) return
+    throw error
+  }
   const initialFileId = fileIdentity(fileStat)
   const key = historyCheckpointKey(filePath)
   const previous = await ctx.checkpoint.get<HistoryCheckpoint>(key)
@@ -385,7 +396,8 @@ export async function* ingestPiFile(
           fileId: initialFileId,
         })
       }
-    } catch {
+    } catch (error) {
+      if (!isMissingPathError(error)) throw error
       // A removed/rotated file will be rediscovered or reset on the next scan.
     }
   }
