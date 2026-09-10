@@ -8,6 +8,8 @@ import { spawn } from 'node:child_process'
 const WINDOWS_TASK_NAME = 'AgentLens Background'
 const LINUX_UNIT_NAME = 'agent-lens.service'
 const MAC_LABEL = 'com.agentlens.daemon'
+const WINDOWS_SERVICE_LOG_MAX_BYTES = 2 * 1024 * 1024
+const WINDOWS_SERVICE_LOG_MAX_LINE_CHARS = 256 * 1024
 const MANAGED_ENVIRONMENT_NAMES = [
   'PATH',
   'SHELL',
@@ -120,9 +122,20 @@ function psQuote(value: string): string {
 
 function windowsManagedCommand(options: LifecycleOptions): string {
   const nodePath = options.nodePath ?? process.execPath
+  const logDir = runtimeDir(options.homeDir)
+  const logPath = join(logDir, 'service.log')
+  const previousLogPath = `${logPath}.1`
+  const runCommand = `& ${psQuote(nodePath)} ${psQuote(options.cliEntry)} service run 2>&1 | ForEach-Object { $line = [string]$_; if ($line.Length -gt ${WINDOWS_SERVICE_LOG_MAX_LINE_CHARS}) { $line = $line.Substring($line.Length - ${WINDOWS_SERVICE_LOG_MAX_LINE_CHARS}) }; $payload = $line + [Environment]::NewLine; $payloadBytes = [System.Text.Encoding]::UTF8.GetByteCount($payload); if ((Test-Path -LiteralPath $logPath) -and ((Get-Item -LiteralPath $logPath).Length + $payloadBytes -gt $maxLogBytes)) { Remove-Item -LiteralPath $previousLogPath -Force -ErrorAction SilentlyContinue; Move-Item -LiteralPath $logPath -Destination $previousLogPath -Force }; [System.IO.File]::AppendAllText($logPath, $payload, [System.Text.UTF8Encoding]::new($false)) }`
   return [
     ...managedEnvironment(options).map(([name, value]) => `$env:${name} = ${psQuote(value)}`),
-    `& ${psQuote(nodePath)} ${psQuote(options.cliEntry)} service run`,
+    `$logDir = ${psQuote(logDir)}`,
+    `$logPath = ${psQuote(logPath)}`,
+    `$previousLogPath = ${psQuote(previousLogPath)}`,
+    `$maxLogBytes = ${WINDOWS_SERVICE_LOG_MAX_BYTES}`,
+    'New-Item -ItemType Directory -Force -Path $logDir | Out-Null',
+    runCommand,
+    '$agentLensExitCode = $LASTEXITCODE',
+    'exit $agentLensExitCode',
   ].join('; ')
 }
 
