@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { inspectPiSdkCompatibility } from './pi-sdk-adapter'
+import { resolvePiLiveRuntimeSessionDir } from './in-process-host'
 import { DefaultPiLiveService } from './service'
 import type {
   InstalledPiSdk,
@@ -263,4 +264,14 @@ test('Pi Live SDK prompt 在预检失败时向 HTTP 调用方返回错误', asyn
   const state = await waitUntilReady(service, initializing.runtimeSessionId)
   await assert.rejects(() => service.prompt(state.runtimeSessionId, 'hello'), /No model selected/)
   await service.dispose()
+})
+
+
+test('Pi Live resolves relative sessionDir against the task cwd instead of the daemon cwd', () => {
+  const cwd = process.platform === 'win32' ? 'C:\\workspace\\pi-project' : '/workspace/pi-project'
+  const expected = process.platform === 'win32'
+    ? 'C:\\workspace\\pi-project\\sessions-local'
+    : '/workspace/pi-project/sessions-local'
+  assert.equal(resolvePiLiveRuntimeSessionDir(cwd, './sessions-local'), expected)
+  assert.equal(resolvePiLiveRuntimeSessionDir(cwd, ''), undefined)
 })
