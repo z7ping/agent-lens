@@ -18,6 +18,8 @@ const HEARTBEAT_INTERVAL_MS = 5_000
 const HEARTBEAT_TIMEOUT_MS = 15_000
 const MIN_EXPLICIT_HEARTBEAT_MS = 50
 const SLOW_ROUND_TRIP_LOG_MS = 500
+const RECOVERY_WAIT_POLL_MS = 25
+const SLOW_RECOVERY_WAIT_LOG_MS = 100
 
 function pushSample(samples: number[], value: number): void {
   samples.push(value)
@@ -188,12 +190,38 @@ export class DataRuntimeClient {
     }
   }
 
-  request<T = unknown>(
+  async request<T = unknown>(
     method: DataRuntimeMethod,
     params?: Record<string, unknown>,
     timeoutMs = this.options.requestTimeoutMs ?? DATA_RUNTIME_DEFAULT_TIMEOUT_MS,
   ): Promise<T> {
-    return this.requestInternal(method, params, timeoutMs, false)
+    const startedAt = performance.now()
+    if (this.stateValue === 'starting' || this.stateValue === 'degraded') {
+      while (!this.stopping && (this.stateValue === 'starting' || this.stateValue === 'degraded')) {
+        const elapsedMs = performance.now() - startedAt
+        if (elapsedMs >= timeoutMs) {
+          logDataRuntimeFailure('[AgentLens] Data Runtime request recovery wait timed out', {
+            ...requestContext(this.role, method, params),
+            state: this.stateValue,
+            timeoutMs,
+          })
+          throw new Error(`Data Runtime ${this.role} worker did not recover before request timeout`)
+        }
+        await new Promise(resolve => setTimeout(
+          resolve,
+          Math.min(RECOVERY_WAIT_POLL_MS, Math.max(1, timeoutMs - elapsedMs)),
+        ))
+      }
+    }
+
+    const waitedMs = performance.now() - startedAt
+    if (waitedMs >= SLOW_RECOVERY_WAIT_LOG_MS && this.stateValue === 'ready') {
+      logDataRuntimeDebug('[AgentLens] Data Runtime request resumed after worker recovery', {
+        ...requestContext(this.role, method, params),
+        waitedMs: Math.round(waitedMs),
+      })
+    }
+    return this.requestInternal(method, params, Math.max(1, timeoutMs - waitedMs), false)
   }
 
   async shutdown(): Promise<void> {
