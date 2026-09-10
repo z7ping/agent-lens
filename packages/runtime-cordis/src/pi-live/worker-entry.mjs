@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { access, readFile } from 'node:fs/promises'
-import { basename, dirname, join, relative, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { homedir } from 'node:os'
 import { serialize } from 'node:v8'
 
 const VERSION = 1
@@ -9,6 +10,7 @@ const MAX_MESSAGE_BYTES = 1024 * 1024
 const MAX_OUTBOUND_MESSAGES = 256
 const MAX_SEEN_REQUEST_IDS = 512
 let runtimeSessionId = ''
+let runtimeCwd = ''
 let sdk
 let loadedSdkEntry
 let runtime
@@ -270,9 +272,20 @@ function samePath(left, right) {
   return normalized(left) === normalized(right)
 }
 
+function resolvedRuntimeSessionDir(cwd, value) {
+  if (typeof value !== 'string' || !value.trim()) return undefined
+  const raw = value.trim()
+  if (raw === '~') return homedir()
+  if (raw.startsWith('~/') || (process.platform === 'win32' && raw.startsWith('~\\'))) {
+    return resolve(homedir(), raw.slice(2))
+  }
+  return isAbsolute(raw) ? resolve(raw) : resolve(cwd, raw)
+}
+
 async function createSessionManager(sdk, input) {
-  if (!input.sessionPath) return sdk.SessionManager.create(input.cwd, input.sessionDir)
-  const manager = sdk.SessionManager.open(input.sessionPath, input.sessionDir, input.cwd)
+  const sessionDir = resolvedRuntimeSessionDir(input.cwd, input.sessionDir)
+  if (!input.sessionPath) return sdk.SessionManager.create(input.cwd, sessionDir)
+  const manager = sdk.SessionManager.open(input.sessionPath, sessionDir, input.cwd)
   if (input.historyAction !== 'fork') return manager
   if (typeof manager.createBranchedSession !== 'function') {
     throw new Error('Installed Pi SDK does not support createBranchedSession; cannot fork this history session')
@@ -391,6 +404,7 @@ function handshakeDiagnostics() {
 }
 
 async function initialize(input) {
+  runtimeCwd = typeof input.cwd === 'string' ? input.cwd : ''
   initializationStartedAt = Date.now()
   currentInitializationStage = undefined
   currentStageStartedAt = initializationStartedAt
@@ -435,6 +449,14 @@ async function initialize(input) {
     abortHandler: () => { void session.abort() },
     onError: value => send('event', { type: 'extension_error', error: diagnostic(record(value).error ?? 'Unknown extension error') }),
   })
+  // resources_discover runs during bindExtensions() and may extend skills/prompts/themes.
+  // Emit a post-bind snapshot so the service sees the actual runtime resource set rather than
+  // only the pre-session loader state.
+  const finalResourceLoader = record(session).resourceLoader
+  const finalResources = startupResourceSnapshot(finalResourceLoader, input.cwd)
+  if (Object.values(finalResources).some(value => Array.isArray(value) && value.length)) {
+    send('event', { type: 'runtime_resources', resources: finalResources })
+  }
   if (input.name) session.setSessionName(input.name)
   if (input.provider || input.model) await selectModel(input.provider, input.model)
   progress('ready', 'Pi Runtime 已就绪')
@@ -448,6 +470,7 @@ function state() {
     ...(session.sessionName ? { sessionName: session.sessionName } : {}), ...(session.model ? { model: session.model } : {}),
     thinkingLevel: session.thinkingLevel, isStreaming: session.isStreaming, isCompacting: session.isCompacting,
     pendingMessageCount: session.pendingMessageCount, leafId: session.sessionManager.getLeafId(), processId: process.pid,
+    startupResources: startupResourceSnapshot(record(session).resourceLoader, runtimeCwd),
   }
 }
 

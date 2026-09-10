@@ -67,6 +67,7 @@ export interface PiLiveRuntimeState {
   initializationMessage?: string | undefined
   initializationElapsedMs?: number | undefined
   initializationTimings?: PiLiveInitializationTiming[] | undefined
+  /** Current Pi runtime resource snapshot. Field name is retained for API compatibility. */
   startupResources?: PiLiveStartupResources | undefined
   startupOutput?: string[] | undefined
   capabilities?: PiLiveRuntimeCapabilities | undefined

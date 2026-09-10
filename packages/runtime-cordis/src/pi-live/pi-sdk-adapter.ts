@@ -34,6 +34,14 @@ export interface PiSdkModelRuntime {
   getAvailable(providerId?: Parameters<AgentSession['modelRuntime']['getAvailable']>[0]): Promise<readonly PiSdkModel[]>
 }
 
+export interface PiSdkRuntimeResourceLoader {
+  getExtensions?(): unknown
+  getSkills?(): unknown
+  getPrompts?(): unknown
+  getThemes?(): unknown
+  getAgentsFiles?(): unknown
+}
+
 export interface PiSdkSession {
   readonly sessionManager: PiSdkSessionManager
   readonly sessionId: AgentSession['sessionId']
@@ -45,6 +53,7 @@ export interface PiSdkSession {
   readonly isCompacting: AgentSession['isCompacting']
   readonly pendingMessageCount: AgentSession['pendingMessageCount']
   readonly modelRuntime: PiSdkModelRuntime
+  readonly resourceLoader?: PiSdkRuntimeResourceLoader
   bindExtensions(bindings: PiSdkExtensionBindings): ReturnType<AgentSession['bindExtensions']>
   subscribe(listener: Parameters<AgentSession['subscribe']>[0]): ReturnType<AgentSession['subscribe']>
   setSessionName(name: Parameters<AgentSession['setSessionName']>[0]): ReturnType<AgentSession['setSessionName']>
@@ -70,6 +79,22 @@ export interface PiSdkModule {
     create(...args: Parameters<OfficialPiModule['SessionManager']['create']>): PiSdkSessionManager
     open(...args: Parameters<OfficialPiModule['SessionManager']['open']>): PiSdkSessionManager
   }
+}
+
+/**
+ * Resource-facing exports are kept separate from the Pi Live contract. They are optional at
+ * runtime because AgentLens may encounter an older compatible Pi SDK that still supports live
+ * sessions but predates one of the resource APIs used by the Source adapter.
+ */
+export interface PiSdkResourceApi {
+  SettingsManager: OfficialPiModule['SettingsManager']
+  DefaultPackageManager: OfficialPiModule['DefaultPackageManager']
+  ProjectTrustStore: OfficialPiModule['ProjectTrustStore']
+  hasTrustRequiringProjectResources: OfficialPiModule['hasTrustRequiringProjectResources']
+  loadSkills: OfficialPiModule['loadSkills']
+  loadSkillsFromDir: OfficialPiModule['loadSkillsFromDir']
+  loadProjectContextFiles: OfficialPiModule['loadProjectContextFiles']
+  parseFrontmatter: OfficialPiModule['parseFrontmatter']
 }
 
 export interface PiSdkCompatibility {
@@ -126,6 +151,23 @@ export function assertPiSdkModule(value: unknown, sdkEntry: string, version?: st
     )
   }
   return module as unknown as PiSdkModule
+}
+
+export function resolvePiSdkResourceApi(value: PiSdkModule): PiSdkResourceApi | null {
+  const module = capabilityTarget(value)
+  const required = [
+    'SettingsManager',
+    'DefaultPackageManager',
+    'ProjectTrustStore',
+    'hasTrustRequiringProjectResources',
+    'loadSkills',
+    'loadSkillsFromDir',
+    'loadProjectContextFiles',
+    'parseFrontmatter',
+  ] as const
+  return missingCapabilities(module, required).length
+    ? null
+    : module as unknown as PiSdkResourceApi
 }
 
 export function assertPiSdkSession(value: unknown, sdkEntry: string, version?: string): asserts value is PiSdkSession {

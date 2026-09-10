@@ -84,6 +84,23 @@ test('Pi Native Normalizer gives scalar assistant content the same block identit
   assert.equal(message.contentIndex, 0)
 })
 
+test('Pi Native Normalizer preserves an empty assistant entry as a parentable message anchor', () => {
+  const facts = normalizePiSessionEntry({
+    type: 'message', id: 'a-empty', parentId: 'u1',
+    message: { role: 'assistant', provider: 'test', model: 'test-model', content: [] },
+  })
+
+  assert.equal(facts.length, 1)
+  const message = facts[0]
+  assert.ok(message?.kind === 'message')
+  assert.equal(message.role, 'assistant')
+  assert.equal(message.id, 'a-empty')
+  assert.equal(message.parentId, 'u1')
+  assert.equal(message.text, '')
+  assert.equal(message.provider, 'test')
+  assert.equal(message.model, 'test-model')
+})
+
 test('Pi Native Normalizer keeps abort lifecycle after content without turning it into an error', () => {
   const facts = normalizePiSessionEntry({
     type: 'message', id: 'a-abort',
@@ -104,6 +121,85 @@ test('Pi Native Normalizer keeps abort lifecycle after content without turning i
   assert.equal(lifecycle.event, 'assistant.cancelled')
   assert.equal(lifecycle.label, '用户已取消 Pi 响应')
   assert.equal(lifecycle.detail, '')
+})
+
+test('Pi Native Normalizer preserves a tool call when Pi provides no call id', () => {
+  const facts = normalizePiSessionEntry({
+    type: 'message', id: 'a-no-call-id', parentId: 'u1',
+    message: {
+      role: 'assistant',
+      content: [{ type: 'toolCall', name: 'bash', arguments: { command: 'pwd' } }],
+    },
+  })
+
+  assert.equal(facts.length, 1)
+  const tool = facts[0]
+  assert.ok(tool?.kind === 'tool-call')
+  assert.equal(tool.id, 'a-no-call-id')
+  assert.equal(tool.callId, undefined)
+  assert.equal(tool.name, 'bash')
+  assert.deepEqual(tool.input, { command: 'pwd' })
+})
+
+test('Pi Native Normalizer preserves a tool result without inventing a call id', () => {
+  const facts = normalizePiSessionEntry({
+    type: 'message', id: 'result-no-call-id', parentId: 'a1',
+    message: {
+      role: 'toolResult',
+      toolName: 'bash',
+      isError: false,
+      content: [{ type: 'text', text: 'ok' }],
+    },
+  })
+
+  assert.equal(facts.length, 1)
+  const result = facts[0]
+  assert.ok(result?.kind === 'tool-result')
+  assert.equal(result.id, 'result-no-call-id')
+  assert.equal(result.callId, undefined)
+  assert.equal(result.name, 'bash')
+  assert.equal(result.output, 'ok')
+})
+
+test('Pi Native Normalizer preserves coding-agent custom message roles instead of flattening them to other', () => {
+  const custom = normalizePiSessionEntry({
+    type: 'message', id: 'custom-message',
+    message: {
+      role: 'custom',
+      customType: 'handoff',
+      content: [{ type: 'text', text: 'extension context' }],
+      display: true,
+      timestamp: 1789000000000,
+    },
+  })[0]
+  assert.ok(custom?.kind === 'event')
+  assert.equal(custom.event, 'pi.custom_message')
+  assert.equal(custom.detail, 'extension context')
+
+  const bash = normalizePiSessionEntry({
+    type: 'message', id: 'bash-message',
+    message: {
+      role: 'bashExecution', command: 'pwd', output: '/workspace', exitCode: 0,
+      cancelled: false, truncated: false, timestamp: 1789000000000,
+    },
+  })[0]
+  assert.ok(bash?.kind === 'event')
+  assert.equal(bash.event, 'pi.bash_execution')
+  assert.equal((bash.payload as { command?: string }).command, 'pwd')
+
+  const branch = normalizePiSessionEntry({
+    type: 'message', id: 'branch-message',
+    message: { role: 'branchSummary', summary: 'branch summary', fromId: 'entry-1', timestamp: 1789000000000 },
+  })[0]
+  assert.ok(branch?.kind === 'event')
+  assert.equal(branch.event, 'context.summary')
+
+  const compaction = normalizePiSessionEntry({
+    type: 'message', id: 'compaction-message',
+    message: { role: 'compactionSummary', summary: 'compact', tokensBefore: 1200, timestamp: 1789000000000 },
+  })[0]
+  assert.ok(compaction?.kind === 'event')
+  assert.equal(compaction.event, 'context.compaction')
 })
 
 test('Pi Native Normalizer keeps custom and unknown entries visible', () => {

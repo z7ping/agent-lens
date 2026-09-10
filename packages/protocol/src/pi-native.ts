@@ -35,8 +35,8 @@ export type PiNativeFact =
       errorMessage?: string
     })
   | (PiNativeFactBase & { kind: 'thinking'; text: string })
-  | (PiNativeFactBase & { kind: 'tool-call'; callId: string; name: string; input: unknown })
-  | (PiNativeFactBase & { kind: 'tool-result'; callId: string; name: string; success: boolean; output: string; details?: unknown })
+  | (PiNativeFactBase & { kind: 'tool-call'; callId?: string; name: string; input: unknown })
+  | (PiNativeFactBase & { kind: 'tool-result'; callId?: string; name: string; success: boolean; output: string; details?: unknown })
   | (PiNativeFactBase & { kind: 'usage'; usage: PiNativeUsage })
   | (PiNativeFactBase & { kind: 'event'; event: string; label: string; detail: string; payload: unknown })
   | (PiNativeFactBase & { kind: 'unknown'; payload: unknown })
@@ -256,14 +256,13 @@ export function normalizePiSessionEntry(
           }
           if (block.type === 'toolCall') {
             const callId = stringField(block, 'id')
-            if (!callId) continue
             facts.push({
               ...messageBase,
-              id: `${id}:content:${index}:tool:${callId}`,
+              id: callId ? `${id}:content:${index}:tool:${callId}` : `${id}:content:${index}`,
               parentId: id,
               contentIndex: index,
               kind: 'tool-call',
-              callId,
+              ...(callId ? { callId } : {}),
               name: stringField(block, 'name') ?? 'unknown',
               input: block.arguments ?? block.args ?? {},
             })
@@ -314,17 +313,26 @@ export function normalizePiSessionEntry(
       if (stop) facts.push(stop)
       const usage = usageFact(messageBase, message.usage)
       if (usage) facts.push(usage)
-      // 第一个可观察内容块继续承载原生 assistant entry 身份，确保旧证据身份稳定，
-      // 并让后续 content block、Tool Result、stop/usage 的 parentId 指向真实存在的事实。
+      if (!facts.length) {
+        facts.push({
+          ...messageBase,
+          ...assistantMeta,
+          kind: 'message',
+          role: 'assistant',
+          text: '',
+          content,
+          nonTextContent: nonTextContent(content),
+        })
+      }
       promoteAssistantEntryAnchor(facts, id, parentId)
       return facts
     }
     if (role === 'tool' || role === 'toolResult') {
-      const callId = stringField(message, 'toolCallId') ?? `pi-result-${id}`
+      const callId = stringField(message, 'toolCallId')
       facts.push({
         ...messageBase,
         kind: 'tool-result',
-        callId,
+        ...(callId ? { callId } : {}),
         name: stringField(message, 'toolName') ?? 'unknown',
         success: message.isError !== true,
         output: textFromContent(content),
@@ -332,6 +340,75 @@ export function normalizePiSessionEntry(
       })
       const usage = usageFact(messageBase, message.usage)
       if (usage) facts.push(usage)
+      return facts
+    }
+    if (role === 'bashExecution') {
+      const command = stringField(message, 'command') ?? ''
+      const output = stringField(message, 'output') ?? ''
+      const exitCode = finiteNumber(message.exitCode)
+      facts.push({
+        ...messageBase,
+        kind: 'event',
+        event: 'pi.bash_execution',
+        label: 'Pi Bash',
+        detail: command || compact(output),
+        payload: {
+          command,
+          output,
+          ...(exitCode === undefined ? {} : { exitCode }),
+          cancelled: message.cancelled === true,
+          truncated: message.truncated === true,
+          ...(stringField(message, 'fullOutputPath') ? { fullOutputPath: stringField(message, 'fullOutputPath')! } : {}),
+          ...(typeof message.excludeFromContext === 'boolean' ? { excludeFromContext: message.excludeFromContext } : {}),
+        },
+      })
+      return facts
+    }
+    if (role === 'custom') {
+      const customType = stringField(message, 'customType') ?? 'custom'
+      facts.push({
+        ...messageBase,
+        kind: 'event',
+        event: 'pi.custom_message',
+        label: `Pi 扩展消息 · ${customType}`,
+        detail: textFromContent(content),
+        payload: {
+          customType,
+          content,
+          ...(typeof message.display === 'boolean' ? { display: message.display } : {}),
+          ...(message.details === undefined ? {} : { details: message.details }),
+        },
+      })
+      return facts
+    }
+    if (role === 'branchSummary') {
+      const summary = stringField(message, 'summary') ?? ''
+      const fromId = stringField(message, 'fromId')
+      facts.push({
+        ...messageBase,
+        kind: 'event',
+        event: 'context.summary',
+        label: '分支摘要',
+        detail: summary,
+        payload: { text: summary, ...(fromId ? { branchFromEntryId: fromId } : {}) },
+      })
+      return facts
+    }
+    if (role === 'compactionSummary') {
+      const summary = stringField(message, 'summary') ?? ''
+      const tokensBefore = finiteNumber(message.tokensBefore)
+      facts.push({
+        ...messageBase,
+        kind: 'event',
+        event: 'context.compaction',
+        label: '上下文已压缩',
+        detail: [tokensBefore === undefined ? '' : `${tokensBefore} tokens`, summary].filter(Boolean).join(' · '),
+        payload: {
+          phase: 'end',
+          summary,
+          ...(tokensBefore === undefined ? {} : { tokensBefore }),
+        },
+      })
       return facts
     }
     facts.push({ ...messageBase, kind: 'message', role: 'other', text: textFromContent(content), content, nonTextContent: nonTextContent(content) })
@@ -369,7 +446,8 @@ export function normalizePiSessionEntry(
     const customType = stringField(entry, 'customType', 'name', 'event') ?? 'custom'
     facts.push({ ...base, kind: 'event', event: 'pi.custom', label: `Pi 自定义事件 · ${customType}`, detail: compact(entry.data ?? entry.payload), payload: raw })
   } else if (type === 'custom_message') {
-    facts.push({ ...base, kind: 'event', event: 'pi.custom_message', label: 'Pi 扩展消息', detail: textFromContent(entry.content ?? entry.message ?? entry.text) || compact(entry), payload: raw })
+    const customType = stringField(entry, 'customType') ?? 'custom'
+    facts.push({ ...base, kind: 'event', event: 'pi.custom_message', label: `Pi 扩展消息 · ${customType}`, detail: textFromContent(entry.content) || compact(entry), payload: raw })
   } else if (type === 'label') {
     const label = stringField(entry, 'label', 'name') ?? ''
     facts.push({ ...base, kind: 'event', event: 'pi.label', label: 'Pi 标签', detail: label, payload: raw })
