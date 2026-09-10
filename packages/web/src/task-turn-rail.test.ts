@@ -15,12 +15,13 @@ test('轮次导轨选中态只改变颜色，不改变刻度几何', () => {
   assert.doesNotMatch(activeRule, /\b(?:width|height)\s*:/)
 })
 
-test('轮次导轨恢复成熟版本的 hover 与 running 强调粗细', () => {
+test('轮次导轨 hover 只横向展开，running 只用颜色和光晕强调', () => {
   const hoverRule = rule(/\.task-turn-rail \.turn-tick:hover i\s*\{([^}]*)\}/)
   const runningRule = rule(/\.task-turn-rail \.turn-tick\.running i\s*\{([^}]*)\}/)
 
   assert.match(hoverRule, /width:\s*24px/)
-  assert.match(hoverRule, /height:\s*2px/)
-  assert.match(runningRule, /width:\s*18px/)
-  assert.match(runningRule, /height:\s*2px/)
+  assert.doesNotMatch(hoverRule, /\bheight\s*:/)
+  assert.match(runningRule, /background:\s*var\(--al-accent\)/)
+  assert.match(runningRule, /box-shadow:/)
+  assert.doesNotMatch(runningRule, /\b(?:width|height)\s*:/)
 })
