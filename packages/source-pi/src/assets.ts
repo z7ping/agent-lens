@@ -43,18 +43,28 @@ function staticEvidence(
   }
 }
 
-function installedState(
+function installationOnlyStates(
   path: string,
   observedAt: string,
   capturedAt: string,
   nativeStableId: string,
 ): NonNullable<DiscoveredAsset['states']> {
-  return [{
-    state: 'installed',
-    value: true,
-    observedAt,
-    evidenceCandidates: [staticEvidence(path, observedAt, capturedAt, nativeStableId)],
-  }]
+  return [
+    {
+      state: 'installed',
+      value: true,
+      observedAt,
+      evidenceCandidates: [staticEvidence(path, observedAt, capturedAt, nativeStableId)],
+    },
+    {
+      // SourceAssetRunner otherwise treats an omitted discoverable state as true.
+      // Pi resource presence does not prove runtime discoverability because invocation flags,
+      // project trust and configured package/path resolution can change the loaded resource set.
+      state: 'discoverable',
+      value: 'unknown',
+      observedAt: capturedAt,
+    },
+  ]
 }
 
 function unquoteYamlScalar(value: string): string {
@@ -164,9 +174,7 @@ async function* discoverPiSkills(
     yield {
       definition: { type: 'skill', canonicalName: skill.name, displayName: skill.name },
       binding: { path: dirname(skillFile), source: 'pi:skills' },
-      // File presence proves installation only. Whether Pi actually exposes the skill also
-      // depends on project trust, configured paths/packages and invocation flags.
-      states: installedState(skillFile, observedAt, capturedAt, `skill:${skillFile}`),
+      states: installationOnlyStates(skillFile, observedAt, capturedAt, `skill:${skillFile}`),
     }
   }
 }
@@ -238,9 +246,7 @@ async function* discoverPiExtensions(
       yield {
         definition: { type: 'extension', canonicalName: name, displayName: name },
         binding: { path: extensionPath, source: 'pi:extensions' },
-        // Presence under an official Pi resource location proves installation, not runtime
-        // activation. `enabled`/`discoverable` deliberately stay unreported here.
-        states: installedState(
+        states: installationOnlyStates(
           extensionPath,
           observedAt,
           capturedAt,
