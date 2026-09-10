@@ -49,6 +49,9 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
   let name = 'SDK task'
   let streaming = false
   let releasePrompt: (() => void) | undefined
+  const runtimeSkills: Array<{ name: string }> = [{ name: 'static-skill' }]
+  const runtimePrompts: Array<{ name: string }> = [{ name: 'static-prompt' }]
+  const runtimeThemes: Array<{ name: string }> = [{ name: 'static-theme' }]
 
   const session: PiSdkSession = {
     sessionManager: manager,
@@ -64,7 +67,20 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
       getAvailableSnapshot: () => models,
       getAvailable: async () => models,
     },
-    bindExtensions: async value => { bindings = value },
+    resourceLoader: {
+      getExtensions: () => ({ extensions: [{ path: '/extensions/static.ts' }] }),
+      getSkills: () => ({ skills: runtimeSkills }),
+      getPrompts: () => ({ prompts: runtimePrompts }),
+      getThemes: () => ({ themes: runtimeThemes }),
+      getAgentsFiles: () => ({ agentsFiles: [{ path: '/workspace/AGENTS.md' }] }),
+    },
+    bindExtensions: async value => {
+      bindings = value
+      // Pi resources_discover runs during bindExtensions and mutates ResourceLoader.
+      runtimeSkills.push({ name: 'extension-skill' })
+      runtimePrompts.push({ name: 'extension-prompt' })
+      runtimeThemes.push({ name: 'extension-theme' })
+    },
     subscribe: listener => {
       agentListener = listener
       return () => { agentListener = undefined }
@@ -112,6 +128,10 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
   assert.equal(state.sessionName, 'AgentLens task')
   assert.equal(state.processId, undefined)
   assert.equal(calls.includes('model:openai/gpt-test'), true)
+  assert.deepEqual(state.startupResources?.skills, ['static-skill', 'extension-skill'])
+  assert.deepEqual(state.startupResources?.prompts, ['static-prompt', 'extension-prompt'])
+  assert.deepEqual(state.startupResources?.themes, ['static-theme', 'extension-theme'])
+  assert.deepEqual(state.startupResources?.contexts, ['/workspace/AGENTS.md'])
 
   const events: Record<string, unknown>[] = []
   const unsubscribe = service.subscribe(state.runtimeSessionId, event => events.push(event.event))
