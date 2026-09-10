@@ -195,7 +195,6 @@ test('资产消失时只对库存状态写 false，运行/发现状态退回 unk
   )
 })
 
-
 test('同一资产仍存在但不再声明旧状态时，旧状态退回 unknown', async () => {
   const inventory = { current: true, discoverable: true }
   const { runner, writes } = harness()
