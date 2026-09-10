@@ -38,7 +38,17 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
   await mkdir(cwd, { recursive: true })
   await mkdir(join(agentDir, 'skills', 'reviewer'), { recursive: true })
   await mkdir(join(agentDir, 'extensions', 'trace-ext'), { recursive: true })
-  await writeFile(join(agentDir, 'skills', 'reviewer', 'SKILL.md'), '# reviewer\n', 'utf8')
+  await writeFile(join(agentDir, 'skills', 'reviewer', 'SKILL.md'), [
+    '---',
+    'name: reviewer',
+    'description: Review repository changes.',
+    '---',
+    '# reviewer',
+    '',
+  ].join('\n'), 'utf8')
+  await writeFile(join(agentDir, 'extensions', 'trace-ext', 'index.ts'), 'export default function traceExt() {}\n', 'utf8')
+  // Pi itself does not define mcpServers. Keep this fixture to prove an extension-private
+  // setting is not promoted into a native Pi MCP asset by the source adapter.
   await writeFile(join(agentDir, 'settings.json'), JSON.stringify({
     mcpServers: { docs: { command: 'node' } },
   }), 'utf8')
@@ -48,7 +58,7 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
       type: 'session',
       id: 'pi-session-1',
       cwd,
-      version: '1.0.0',
+      version: 3,
       timestamp: '2026-08-20T11:00:00.000Z',
     },
     {
@@ -174,7 +184,7 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
       detected,
       abortSignal: new AbortController().signal,
     })
-    assert.ok(assetResult.assetsDiscovered >= 3)
+    assert.equal(assetResult.assetsDiscovered, 2)
 
     // Runtime 启动前就存在、但尚未经过 History Sync 的最新 Session，
     // 必须在 watcher 建立后通过有界 reconcile 进入 AgentLens，而不是等文件再次变化。
@@ -185,7 +195,7 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
         type: 'session',
         id: 'pi-session-reconcile',
         cwd: join(root, 'startup-reconcile-workspace'),
-        version: '1.0.0',
+        version: 3,
         timestamp: '2026-08-20T11:00:30.000Z',
       },
       {
@@ -240,7 +250,7 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
           type: 'session',
           id: 'pi-session-fresh',
           cwd: join(root, 'fresh-workspace'),
-          version: '1.0.0',
+          version: 3,
           timestamp: '2026-08-20T11:01:00.000Z',
         },
         {
@@ -276,9 +286,9 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
     assert.ok(facts.some(item => item.nativeEventId === 'pi-user-reconcile'))
     assert.ok(facts.some(item => item.nativeEventId === 'pi-user-fresh'))
 
-    storage.db.prepare(`UPDATE source_records SET parser_version = '4' WHERE source_id = 'pi'`).run()
+    storage.db.prepare(`UPDATE source_records SET parser_version = '6' WHERE source_id = 'pi'`).run()
     const staleBefore = storage.db.prepare(`
-      SELECT COUNT(*) AS count FROM source_records WHERE source_id = 'pi' AND parser_version != '6'
+      SELECT COUNT(*) AS count FROM source_records WHERE source_id = 'pi' AND parser_version != '7'
     `).get() as { count: number }
     const replay = await history.replay({
       source: piSourceDefinition,
@@ -288,7 +298,7 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
     })
     assert.equal(replay.records, staleBefore.count)
     const staleParsers = storage.db.prepare(`
-      SELECT COUNT(*) AS count FROM source_records WHERE source_id = 'pi' AND parser_version != '6'
+      SELECT COUNT(*) AS count FROM source_records WHERE source_id = 'pi' AND parser_version != '7'
     `).get() as { count: number }
     assert.equal(staleParsers.count, 0)
   } finally {

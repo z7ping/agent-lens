@@ -106,6 +106,44 @@ test('Pi Native Normalizer keeps abort lifecycle after content without turning i
   assert.equal(lifecycle.detail, '')
 })
 
+test('Pi Native Normalizer preserves a tool call when Pi provides no call id', () => {
+  const facts = normalizePiSessionEntry({
+    type: 'message', id: 'a-no-call-id', parentId: 'u1',
+    message: {
+      role: 'assistant',
+      content: [{ type: 'toolCall', name: 'bash', arguments: { command: 'pwd' } }],
+    },
+  })
+
+  assert.equal(facts.length, 1)
+  const tool = facts[0]
+  assert.ok(tool?.kind === 'tool-call')
+  assert.equal(tool.id, 'a-no-call-id')
+  assert.equal(tool.callId, undefined)
+  assert.equal(tool.name, 'bash')
+  assert.deepEqual(tool.input, { command: 'pwd' })
+})
+
+test('Pi Native Normalizer preserves a tool result without inventing a call id', () => {
+  const facts = normalizePiSessionEntry({
+    type: 'message', id: 'result-no-call-id', parentId: 'a1',
+    message: {
+      role: 'toolResult',
+      toolName: 'bash',
+      isError: false,
+      content: [{ type: 'text', text: 'ok' }],
+    },
+  })
+
+  assert.equal(facts.length, 1)
+  const result = facts[0]
+  assert.ok(result?.kind === 'tool-result')
+  assert.equal(result.id, 'result-no-call-id')
+  assert.equal(result.callId, undefined)
+  assert.equal(result.name, 'bash')
+  assert.equal(result.output, 'ok')
+})
+
 test('Pi Native Normalizer keeps custom and unknown entries visible', () => {
   const custom = normalizePiSessionEntry({ type: 'custom', id: 'x1', customType: 'extension', data: { value: 1 } })
   assert.equal(custom[0]?.kind, 'event')

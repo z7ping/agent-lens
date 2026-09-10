@@ -35,8 +35,8 @@ export type PiNativeFact =
       errorMessage?: string
     })
   | (PiNativeFactBase & { kind: 'thinking'; text: string })
-  | (PiNativeFactBase & { kind: 'tool-call'; callId: string; name: string; input: unknown })
-  | (PiNativeFactBase & { kind: 'tool-result'; callId: string; name: string; success: boolean; output: string; details?: unknown })
+  | (PiNativeFactBase & { kind: 'tool-call'; callId?: string; name: string; input: unknown })
+  | (PiNativeFactBase & { kind: 'tool-result'; callId?: string; name: string; success: boolean; output: string; details?: unknown })
   | (PiNativeFactBase & { kind: 'usage'; usage: PiNativeUsage })
   | (PiNativeFactBase & { kind: 'event'; event: string; label: string; detail: string; payload: unknown })
   | (PiNativeFactBase & { kind: 'unknown'; payload: unknown })
@@ -256,14 +256,13 @@ export function normalizePiSessionEntry(
           }
           if (block.type === 'toolCall') {
             const callId = stringField(block, 'id')
-            if (!callId) continue
             facts.push({
               ...messageBase,
-              id: `${id}:content:${index}:tool:${callId}`,
+              id: callId ? `${id}:content:${index}:tool:${callId}` : `${id}:content:${index}`,
               parentId: id,
               contentIndex: index,
               kind: 'tool-call',
-              callId,
+              ...(callId ? { callId } : {}),
               name: stringField(block, 'name') ?? 'unknown',
               input: block.arguments ?? block.args ?? {},
             })
@@ -320,11 +319,11 @@ export function normalizePiSessionEntry(
       return facts
     }
     if (role === 'tool' || role === 'toolResult') {
-      const callId = stringField(message, 'toolCallId') ?? `pi-result-${id}`
+      const callId = stringField(message, 'toolCallId')
       facts.push({
         ...messageBase,
         kind: 'tool-result',
-        callId,
+        ...(callId ? { callId } : {}),
         name: stringField(message, 'toolName') ?? 'unknown',
         success: message.isError !== true,
         output: textFromContent(content),
