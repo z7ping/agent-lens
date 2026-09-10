@@ -146,9 +146,19 @@ export function PiStartupDisclosure({
     </div>
   </div>
 
-  if (embedded && state.status === 'ready') return <div className="pi-startup-complete" role="status">
-    <UiIcon name="check" size={14}/><b>Pi 已就绪</b><span>{formatPiStartupDuration(elapsed)}</span>
-  </div>
+  if (embedded && state.status === 'ready') return <details
+    className="pi-startup-disclosure is-ready"
+    open={expanded}
+    onToggle={event => setExpanded(event.currentTarget.open)}
+  >
+    <summary>
+      <span className="pi-startup-summary-state" aria-hidden="true"/>
+      <span className="pi-startup-summary-copy"><b>Pi 已就绪</b>{resourceSummary && <small>{resourceSummary}</small>}</span>
+      <span className="pi-startup-summary-time">{formatPiStartupDuration(elapsed)}</span>
+      <UiIcon className="pi-startup-chevron" name="chevron-down" size={14}/>
+    </summary>
+    {body}
+  </details>
 
   if (embedded) return <OperationProgress
     title={title}
