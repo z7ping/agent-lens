@@ -81,6 +81,8 @@ test('asset inventory reader accepts prompt theme and context definitions', asyn
     await storage.repositories.hosts.put({
       id: 'host:pi-assets',
       name: 'pi-assets',
+      platform: process.platform,
+      arch: process.arch,
       createdAt: seenAt,
       lastSeenAt: seenAt,
     })
