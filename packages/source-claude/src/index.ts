@@ -38,6 +38,7 @@ import type {
 import {
   abortableDelay,
   defineAgentLensPlugin,
+  resolveClaudeLocation,
   resolveExecutable,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
@@ -138,19 +139,14 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-function claudeHome(env: Readonly<Record<string, string | undefined>>): string {
-  return env.CLAUDE_CODE_HOME?.trim() || join(homedir(), '.claude')
-}
-
 export async function detectClaudeCode(
   ctx: SourceDetectionContext,
 ): Promise<DetectedSource[]> {
   const env = ctx.env ?? process.env
-  const home = claudeHome(env)
-  const projectsDir = join(home, 'projects')
+  const location = resolveClaudeLocation(env)
   const [homeExists, projectsExist, executable] = await Promise.all([
-    exists(home),
-    exists(projectsDir),
+    exists(location.configRoot),
+    exists(location.dataRoot),
     resolveExecutable('claude', {
       explicit: env.CLAUDE_BIN,
       pathValue: env.PATH ?? process.env.PATH,
@@ -162,8 +158,8 @@ export async function detectClaudeCode(
     sourceId: SOURCE_ID,
     productId: SOURCE_ID,
     ...(executable ? { executable } : {}),
-    configRoot: home,
-    dataRoot: projectsDir,
+    configRoot: location.configRoot,
+    dataRoot: location.dataRoot,
     confidence: executable && projectsExist ? 'exact' : 'high',
   }]
 }
