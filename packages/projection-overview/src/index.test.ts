@@ -83,6 +83,79 @@ test('AgentOverviewProjection keeps inventory state separate from observed usage
   }
 })
 
+test('AgentOverview 只展示当前仍存在的资产，已安装但禁用的资产仍保留', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    const identity = new DefaultIdentityService(storage)
+    const host = await identity.resolveHost({ name: 'inventory-current-host' })
+    const installation = await identity.resolveInstallation({ hostId: host.id, productId: 'codex' })
+
+    for (const name of ['removed', 'disabled']) {
+      await storage.repositories.assets.putDefinition({
+        id: `asset:skill:${name}`,
+        type: 'skill',
+        canonicalName: name,
+      })
+      await storage.repositories.assets.putBinding({
+        id: `binding:skill:${name}`,
+        assetId: `asset:skill:${name}`,
+        installationId: installation.id,
+        path: `/tmp/.codex/skills/${name}`,
+      })
+    }
+
+    await storage.repositories.assets.putState({
+      id: 'state:removed:installed:true',
+      assetBindingId: 'binding:skill:removed',
+      state: 'installed',
+      value: true,
+      observedAt: '2026-09-10T01:00:00.000Z',
+      evidenceRefs: [],
+    })
+    await storage.repositories.assets.putState({
+      id: 'state:removed:installed:false',
+      assetBindingId: 'binding:skill:removed',
+      state: 'installed',
+      value: false,
+      observedAt: '2026-09-10T02:00:00.000Z',
+      evidenceRefs: [],
+    })
+    await storage.repositories.assets.putState({
+      id: 'state:removed:discoverable:false',
+      assetBindingId: 'binding:skill:removed',
+      state: 'discoverable',
+      value: false,
+      observedAt: '2026-09-10T02:00:00.000Z',
+      evidenceRefs: [],
+    })
+
+    await storage.repositories.assets.putState({
+      id: 'state:disabled:installed:true',
+      assetBindingId: 'binding:skill:disabled',
+      state: 'installed',
+      value: true,
+      observedAt: '2026-09-10T02:00:00.000Z',
+      evidenceRefs: [],
+    })
+    await storage.repositories.assets.putState({
+      id: 'state:disabled:enabled:false',
+      assetBindingId: 'binding:skill:disabled',
+      state: 'enabled',
+      value: false,
+      observedAt: '2026-09-10T02:00:00.000Z',
+      evidenceRefs: [],
+    })
+
+    const response = await new AgentOverviewProjection(storage, sources).query()
+    const inventory = response.items[0]?.assetInventory ?? []
+    assert.deepEqual(inventory.map(item => item.canonicalName), ['disabled'])
+    assert.equal(inventory[0]?.bindings[0]?.states.find(state => state.state === 'enabled')?.value, false)
+  } finally {
+    storage.close()
+  }
+})
+
 test('AgentOverview 与 Facet 使用采集策略报告真实 enabled 状态', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   await storage.migrate()
@@ -96,6 +169,33 @@ test('AgentOverview 与 Facet 使用采集策略报告真实 enabled 状态', as
     assert.equal(overview.items[0]?.enabled, false)
     assert.equal(facets.agents[0]?.sourceId, 'codex')
     assert.equal(facets.agents[0]?.enabled, false)
+  } finally {
+    storage.close()
+  }
+})
+
+test('当前检测结果覆盖历史 Installation，并可通过 invalidate 立即刷新', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    const identity = new DefaultIdentityService(storage)
+    const host = await identity.resolveHost({ name: 'detection-current-host' })
+    await identity.resolveInstallation({ hostId: host.id, productId: 'codex', version: '1.0.0' })
+
+    let currentlyDetected = false
+    const resolver = () => currentlyDetected
+    const overviewProjection = new AgentOverviewProjection(storage, sources, undefined, undefined, resolver)
+    const facetProjection = new FacetProjection(storage, sources, undefined, resolver)
+
+    assert.equal((await overviewProjection.query()).items[0]?.detected, false)
+    assert.equal((await facetProjection.query()).agents[0]?.detected, false)
+
+    currentlyDetected = true
+    overviewProjection.invalidate()
+    facetProjection.invalidate()
+
+    assert.equal((await overviewProjection.query()).items[0]?.detected, true)
+    assert.equal((await facetProjection.query()).agents[0]?.detected, true)
   } finally {
     storage.close()
   }
