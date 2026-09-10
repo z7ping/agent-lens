@@ -10,6 +10,10 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
 import type { HookManagerOptions } from '@agent-lens/hook-manager'
+import {
+  resolveClaudeLocation,
+  resolveCodexLocation,
+} from '@agent-lens/runtime-cordis'
 import { registerInstallationSync, type InstallationKind, type InstallationRecord } from './installations'
 
 export interface HookExecutionProfile {
@@ -98,16 +102,28 @@ function distributionContext(
   }
 }
 
+function sourceHookPaths(env: NodeJS.ProcessEnv, homeDir: string): HookManagerOptions {
+  const codex = resolveCodexLocation(env, homeDir)
+  const claude = resolveClaudeLocation(env, homeDir)
+  return {
+    codexHooksFile: join(codex.configRoot, 'hooks.json'),
+    codexConfigFile: join(codex.configRoot, 'config.toml'),
+    claudeSettingsFile: join(claude.configRoot, 'settings.json'),
+  }
+}
+
 export function resolveHookExecutionProfile(options: ResolveHookExecutionOptions = {}): HookExecutionProfile {
   const version = options.version ?? process.env.AGENT_LENS_VERSION ?? '1.0.0-alpha.4'
   const moduleUrl = options.moduleUrl ?? import.meta.url
   const platform = options.platform ?? process.platform
   const nodePath = options.nodePath ?? process.execPath
   const env = options.env ?? process.env
+  const homeDir = options.homeDir ?? homedir()
   const context = distributionContext(moduleUrl, nodePath, env)
   const codexScript = join(context.hooksRoot, 'agent-lens-hook-codex.mjs')
   const claudeScript = join(context.hooksRoot, 'agent-lens-hook-claude.mjs')
   const dispatcherSource = join(context.hooksRoot, 'windows-hook-dispatcher.ps1')
+  const hookPaths = sourceHookPaths(env, homeDir)
 
   let installation: InstallationRecord | undefined
   if (context.formalDistribution && [context.executable, context.hooksRoot, codexScript, claudeScript].every(existsSync)) {
@@ -129,16 +145,16 @@ export function resolveHookExecutionProfile(options: ResolveHookExecutionOptions
         }
       : {}
     return {
-      options: desktopCommands,
+      options: { ...hookPaths, ...desktopCommands },
       windowsNoWindow: false,
       ...(installation ? { installation } : {}),
     }
   }
 
-  const dispatcherPath = sharedDispatcherPath(options.homeDir)
+  const dispatcherPath = sharedDispatcherPath(homeDir)
   if (!installation || !existsSync(dispatcherSource)) {
     return {
-      options: {},
+      options: hookPaths,
       windowsNoWindow: false,
       dispatcherPath,
       runnerPath: dispatcherPath,
@@ -149,6 +165,7 @@ export function resolveHookExecutionProfile(options: ResolveHookExecutionOptions
   installSharedDispatcherSync(dispatcherSource, dispatcherPath)
   return {
     options: {
+      ...hookPaths,
       codexCommand: windowsDispatcherCommand(dispatcherPath, 'codex'),
       claudeCommand: windowsDispatcherCommand(dispatcherPath, 'claude'),
     },
@@ -163,4 +180,5 @@ export const hookExecutionInternals = {
   sharedDispatcherPath,
   distributionContext,
   installSharedDispatcherSync,
+  sourceHookPaths,
 }

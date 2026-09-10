@@ -1253,7 +1253,7 @@ export function ReviewPage({
 
   return <main className={`review-page ${embedded ? 'review-page-embedded' : ''}`}>
     {!embedded && <Toolbar className="workspace-toolbar" aria-label="任务复盘筛选">
-      <AgentScope agents={agents} value={review.filters.sourceIds[0] ?? ''} onChange={sourceId => model.setReviewFilters({ sourceIds: sourceId ? [sourceId] : [] })}/>
+      <AgentScope agents={agents} value={review.filters.sourceIds?.[0] ?? ''} onChange={sourceId => model.setReviewFilters({ sourceIds: sourceId ? [sourceId] : [] })}/>
       <span className="toolbar-divider" />
       <SelectMenu className="filter" value={review.filters.projectId} onChange={projectId => model.setReviewFilters({ projectId })} ariaLabel="筛选项目" placeholder="全部项目" menuWidth={280} searchable searchPlaceholder="搜索项目" options={[
         { value: '', label: '全部项目' },

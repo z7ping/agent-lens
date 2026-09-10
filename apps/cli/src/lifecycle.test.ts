@@ -28,6 +28,18 @@ test('Windows 后台任务可独立于登录自启注册并继承托管环境', 
   assert.match(command, /& '\/usr\/local\/bin\/node' '\/opt\/agent-lens\/dist\/cli\.mjs' service run/)
 })
 
+test('Windows 后台任务把输出写入有界轮转日志', () => {
+  const command = lifecycleInternals.windowsManagedCommand({ ...options, platform: 'win32' })
+
+  assert.match(command, /service\.log/)
+  assert.match(command, /service\.log\.1/)
+  assert.match(command, /\$maxLogBytes = 2097152/)
+  assert.match(command, /2>&1 \| ForEach-Object/)
+  assert.match(command, /Move-Item -LiteralPath \$logPath -Destination \$previousLogPath -Force/)
+  assert.match(command, /AppendAllText\(\$logPath, \$payload/)
+  assert.match(command, /\$agentLensExitCode = \$LASTEXITCODE; exit \$agentLensExitCode/)
+})
+
 test('Windows 状态检查能识别隐藏窗口任务定义', () => {
   const script = lifecycleInternals.windowsStatusScript()
   assert.match(script, /WindowStyle\\s\+Hidden/)

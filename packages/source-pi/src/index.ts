@@ -8,10 +8,8 @@ import {
   readdir,
   stat,
 } from 'node:fs/promises'
-import { homedir } from 'node:os'
 import {
   basename,
-  delimiter,
   dirname,
   extname,
   isAbsolute,
@@ -39,6 +37,8 @@ import type {
 } from '@agent-lens/core'
 import {
   defineAgentLensPlugin,
+  resolveExecutable,
+  resolvePiLocation,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
 import { normalizePiSessionEntry, type PiNativeFact } from '@agent-lens/protocol'
@@ -114,59 +114,31 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-async function findExecutable(
-  env: Readonly<Record<string, string | undefined>>,
-): Promise<string | undefined> {
-  const explicit = env.PI_BIN?.trim()
-  if (explicit && await exists(explicit)) return explicit
-  const pathValue = env.PATH ?? process.env.PATH ?? ''
-  const names = process.platform === 'win32' ? ['pi.exe', 'pi.cmd', 'pi.bat'] : ['pi']
-  for (const root of pathValue.split(delimiter).filter(Boolean)) {
-    for (const name of names) {
-      const candidate = join(root, name)
-      if (await exists(candidate)) return candidate
-    }
-  }
-  return undefined
-}
-
-function piAgentDir(env: Readonly<Record<string, string | undefined>>): string {
-  const explicit = env.PI_CODING_AGENT_DIR?.trim()
-  if (explicit) return explicit
-  const piHome = env.PI_HOME?.trim() || join(homedir(), '.pi')
-  return join(piHome, 'agent')
-}
-
-function expandHomePath(path: string): string {
-  if (path === '~') return homedir()
-  if (path.startsWith('~/') || path.startsWith('~\\')) return join(homedir(), path.slice(2))
-  return path
-}
-
 function piSessionsDir(
   env: Readonly<Record<string, string | undefined>>,
-  agentDir: string,
+  _agentDir?: string,
 ): string {
-  const explicit = env.PI_CODING_AGENT_SESSION_DIR?.trim()
-  return explicit ? expandHomePath(explicit) : join(agentDir, 'sessions')
+  return resolvePiLocation(env).dataRoot
 }
 
 export async function detectPi(ctx: SourceDetectionContext): Promise<DetectedSource[]> {
   const env = ctx.env ?? process.env
-  const agentDir = piAgentDir(env)
-  const sessionsDir = piSessionsDir(env, agentDir)
+  const location = resolvePiLocation(env)
   const [agentExists, sessionsExist, executable] = await Promise.all([
-    exists(agentDir),
-    exists(sessionsDir),
-    findExecutable(env),
+    exists(location.configRoot),
+    exists(location.dataRoot),
+    resolveExecutable('pi', {
+      explicit: env.PI_BIN,
+      pathValue: env.PATH,
+    }),
   ])
   if (!agentExists && !sessionsExist && !executable) return []
   return [{
     sourceId: SOURCE_ID,
     productId: SOURCE_ID,
     ...(executable ? { executable } : {}),
-    configRoot: agentDir,
-    dataRoot: sessionsDir,
+    configRoot: location.configRoot,
+    dataRoot: location.dataRoot,
     confidence: executable && sessionsExist ? 'exact' : 'high',
   }]
 }

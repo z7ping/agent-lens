@@ -79,18 +79,19 @@ export function Select({ className, children, ...props }: SelectHTMLAttributes<H
 
 export type StatusTone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger'
 
+export interface StatusBadgeProps extends HTMLAttributes<HTMLSpanElement> {
+  tone?: StatusTone
+  dot?: boolean | undefined
+}
+
 export function StatusBadge({
   tone = 'neutral',
   dot = false,
   children,
   className,
-}: {
-  tone?: StatusTone
-  dot?: boolean
-  children: ReactNode
-  className?: string
-}) {
-  return <span className={classes('ui-status-badge', `is-${tone}`, className)}>
+  ...props
+}: StatusBadgeProps) {
+  return <span className={classes('ui-status-badge', `is-${tone}`, className)} {...props}>
     {dot && <span className="ui-status-dot" aria-hidden="true"/>}
     {children}
   </span>

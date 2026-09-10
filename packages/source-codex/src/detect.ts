@@ -1,8 +1,9 @@
 import { access } from 'node:fs/promises'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
 import type { DetectedSource, SourceDetectionContext } from '@agent-lens/core'
-import { resolveExecutable } from '@agent-lens/runtime-cordis'
+import {
+  resolveCodexLocation,
+  resolveExecutable,
+} from '@agent-lens/runtime-cordis'
 
 async function exists(path: string): Promise<boolean> {
   try {
@@ -13,18 +14,12 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-function resolveHome(env: Readonly<Record<string, string | undefined>>): string {
-  const override = env.CODEX_HOME?.trim()
-  return override || join(homedir(), '.codex')
-}
-
 export async function detectCodex(ctx: SourceDetectionContext): Promise<DetectedSource[]> {
   const env = ctx.env ?? process.env
-  const home = resolveHome(env)
-  const sessionsDir = join(home, 'sessions')
+  const location = resolveCodexLocation(env)
   const [homeExists, sessionsExist, executable] = await Promise.all([
-    exists(home),
-    exists(sessionsDir),
+    exists(location.configRoot),
+    exists(location.dataRoot),
     resolveExecutable('codex', {
       explicit: env.CODEX_BIN,
       pathValue: env.PATH ?? process.env.PATH,
@@ -37,12 +32,12 @@ export async function detectCodex(ctx: SourceDetectionContext): Promise<Detected
     sourceId: 'codex',
     productId: 'codex',
     ...(executable ? { executable } : {}),
-    configRoot: home,
-    dataRoot: sessionsDir,
+    configRoot: location.configRoot,
+    dataRoot: location.dataRoot,
     confidence: executable && sessionsExist ? 'exact' : 'high',
   }]
 }
 
 export function codexHomeFromInstallation(configRoot?: string): string {
-  return configRoot?.trim() || join(homedir(), '.codex')
+  return configRoot?.trim() || resolveCodexLocation().configRoot
 }

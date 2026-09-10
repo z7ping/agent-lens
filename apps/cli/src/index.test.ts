@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import test from 'node:test'
 import { cliInternals } from './index'
 
@@ -22,6 +25,42 @@ test('CLI runtime owner parser tolerates old health payloads', () => {
   assert.equal(cliInternals.runtimeOwner({ runtime: { owner: 'desktop' } }), 'desktop')
   assert.equal(cliInternals.runtimeOwner({ runtime: { owner: 'service' } }), 'service')
   assert.equal(cliInternals.runtimeOwner({ runtime: null }), null)
+})
+
+test('CLI source detection roots use the canonical Source location resolver', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-cli-source-'))
+  const codex = join(root, 'codex')
+  const claudePrimary = join(root, 'claude-primary')
+  const claudeLegacy = join(root, 'claude-legacy')
+  const piAgent = join(root, 'pi-agent')
+  await Promise.all([codex, claudePrimary, claudeLegacy, piAgent].map(path => mkdir(path, { recursive: true })))
+
+  const previous = {
+    CODEX_HOME: process.env.CODEX_HOME,
+    CLAUDE_CODE_HOME: process.env.CLAUDE_CODE_HOME,
+    CLAUDE_HOME: process.env.CLAUDE_HOME,
+    PI_CODING_AGENT_DIR: process.env.PI_CODING_AGENT_DIR,
+  }
+  try {
+    process.env.CODEX_HOME = codex
+    process.env.CLAUDE_CODE_HOME = claudePrimary
+    process.env.CLAUDE_HOME = claudeLegacy
+    process.env.PI_CODING_AGENT_DIR = piAgent
+
+    const roots = new Map(cliInternals.sourceRoots().map(item => [item.source, item]))
+    assert.equal(roots.get('codex')?.root, codex)
+    assert.equal(roots.get('claude')?.root, claudePrimary)
+    assert.equal(roots.get('pi')?.root, piAgent)
+    assert.equal(roots.get('codex')?.detected, true)
+    assert.equal(roots.get('claude')?.detected, true)
+    assert.equal(roots.get('pi')?.detected, true)
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
+    await rm(root, { recursive: true, force: true })
+  }
 })
 
 test('CLI setup only installs hooks for detected sources that need repair', () => {

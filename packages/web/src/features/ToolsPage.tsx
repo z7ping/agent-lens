@@ -66,13 +66,17 @@ function shortSessionId(id: string): string {
   return id.length > 16 ? `${id.slice(0, 8)}…${id.slice(-5)}` : id
 }
 
+function sameSourceIds(left: string[] | null, right: string[] | null): boolean {
+  if (left === right) return true
+  if (left === null || right === null || left.length !== right.length) return false
+  return left.every((sourceId, index) => sourceId === right[index])
+}
+
 function sameUsageFilters(
   left: { sourceIds: string[] | null; projectId: string; range: string },
   right: { sourceIds: string[] | null; projectId: string; range: string },
 ): boolean {
-  return left.sourceIds === right.sourceIds || (left.sourceIds !== null && right.sourceIds !== null
-    && left.sourceIds.length === right.sourceIds.length
-    && left.sourceIds.every((sourceId, index) => sourceId === right.sourceIds[index]))
+  return sameSourceIds(left.sourceIds, right.sourceIds)
     && left.projectId === right.projectId
     && left.range === right.range
 }

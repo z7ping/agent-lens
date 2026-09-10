@@ -24,3 +24,14 @@ test('npm install failure attempts to restore the previous service', () => {
 test('desktop-owned runtime is never taken over by npm update', () => {
   assert.match(source, /if \(service\.owner === 'desktop'\) console\.log\('Windows 客户端当前运行时未被 npm 更新命令接管。'\)/)
 })
+
+test('Windows update migrates any registered AgentLens task while preserving autostart intent', () => {
+  assert.match(source, /process\.platform === 'win32' && service\.registered/)
+  assert.match(source, /runSelf\(\['autostart', service\.autostart \? 'enable' : 'disable', '--json'\]\)/)
+
+  const installIndex = source.indexOf("runProcess(npmCommand, npmInstallArgs(update.latestVersion)")
+  const migrationIndex = source.indexOf("runSelf(['autostart', service.autostart ? 'enable' : 'disable', '--json'])")
+  const restartIndex = source.lastIndexOf("runSelf(['service', 'start', '--json'])")
+  assert.ok(installIndex >= 0 && migrationIndex > installIndex)
+  assert.ok(restartIndex > migrationIndex)
+})
