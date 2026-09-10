@@ -18,7 +18,7 @@ test('degraded worker recovery wait remains bounded by the caller timeout', asyn
   })
   await client.start()
   try {
-    await client.request('diagnostic.exit')
+    await client.request('diagnostic.exit').catch(() => undefined)
     await waitFor(() => client.state() === 'degraded')
 
     const startedAt = performance.now()
