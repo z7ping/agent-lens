@@ -435,6 +435,14 @@ async function initialize(input) {
     abortHandler: () => { void session.abort() },
     onError: value => send('event', { type: 'extension_error', error: diagnostic(record(value).error ?? 'Unknown extension error') }),
   })
+  // resources_discover runs during bindExtensions() and may extend skills/prompts/themes.
+  // Emit a post-bind snapshot so the service sees the actual runtime resource set rather than
+  // only the pre-session loader state.
+  const finalResourceLoader = record(session).resourceLoader
+  const finalResources = startupResourceSnapshot(finalResourceLoader, input.cwd)
+  if (Object.values(finalResources).some(value => Array.isArray(value) && value.length)) {
+    send('event', { type: 'runtime_resources', resources: finalResources })
+  }
   if (input.name) session.setSessionName(input.name)
   if (input.provider || input.model) await selectModel(input.provider, input.model)
   progress('ready', 'Pi Runtime 已就绪')
