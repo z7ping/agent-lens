@@ -25,12 +25,12 @@ import type {
   SourceRecordEmitter,
 } from '@agent-lens/core'
 import {
+  discoverInstalledPiSdk,
   resolveExecutable,
   resolvePiLocation,
 } from '@agent-lens/runtime-cordis'
+import { PI_PARSER_VERSION, PI_SOURCE_ID } from './constants'
 
-const SOURCE_ID = 'pi'
-const PARSER_VERSION = '7'
 const RUNTIME_FALLBACK_POLL_MS = 5000
 const RUNTIME_RECONCILE_POLL_MS = 60_000
 const RUNTIME_DEBOUNCE_MS = 180
@@ -53,6 +53,7 @@ interface HistoryCheckpoint {
   sequence: number
   size: number
   mtimeMs: number
+  fileId?: string
 }
 
 interface JsonlLine {
@@ -85,6 +86,10 @@ function normalizeTimestamp(value: unknown): string | undefined {
   if (typeof value !== 'string' || !value) return undefined
   const parsed = Date.parse(value)
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : value
+}
+
+function fileIdentity(value: { dev: number; ino: number }): string {
+  return `${value.dev}:${value.ino}`
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -120,9 +125,8 @@ function settingSessionDir(
   env: Readonly<Record<string, string | undefined>>,
 ): string | undefined {
   const dataRoot = resolvePiLocation({ ...env, PI_CODING_AGENT_SESSION_DIR: raw }).dataRoot
-  // Pi keeps relative sessionDir relative to the invoking process cwd. AgentLens observes
-  // sessions outside that invocation and therefore cannot resolve a relative value truthfully.
-  // Do not guess a daemon-relative path and accidentally observe the wrong directory.
+  // Pi resolves relative sessionDir against the invoking process cwd. AgentLens observes
+  // sessions outside that invocation and cannot prove that cwd at installation-detection time.
   return isAbsolute(dataRoot) ? dataRoot : undefined
 }
 
@@ -143,6 +147,15 @@ export function piSessionsDir(
   return resolvePiLocation(env).dataRoot
 }
 
+async function installedPiVersion(executable: string | undefined): Promise<string | undefined> {
+  if (!executable) return undefined
+  try {
+    return (await discoverInstalledPiSdk(executable)).version
+  } catch {
+    return undefined
+  }
+}
+
 export async function detectPi(ctx: SourceDetectionContext): Promise<DetectedSource[]> {
   const env = ctx.env ?? process.env
   const location = resolvePiLocation(env)
@@ -156,10 +169,12 @@ export async function detectPi(ctx: SourceDetectionContext): Promise<DetectedSou
     }),
   ])
   if (!agentExists && !sessionsExist && !executable) return []
+  const version = await installedPiVersion(executable)
   return [{
-    sourceId: SOURCE_ID,
-    productId: SOURCE_ID,
+    sourceId: PI_SOURCE_ID,
+    productId: PI_SOURCE_ID,
     ...(executable ? { executable } : {}),
+    ...(version ? { version } : {}),
     configRoot: location.configRoot,
     dataRoot,
     confidence: executable && sessionsExist ? 'exact' : 'high',
@@ -293,7 +308,7 @@ async function sessionMetadata(filePath: string): Promise<PiSessionMetadata> {
 }
 
 function historyCheckpointKey(filePath: string): string {
-  return `pi:history:v5-complete-jsonl:${sha256(filePath)}`
+  return `pi:history:v6-file-identity:${sha256(filePath)}`
 }
 
 function nativeId(entry: Record<string, unknown>, sessionId: string): string | undefined {
@@ -308,16 +323,21 @@ export async function* ingestPiFile(
   if (ctx.abortSignal.aborted || extname(filePath).toLowerCase() !== '.jsonl') return
   let fileStat
   try { fileStat = await stat(filePath) } catch { return }
+  const initialFileId = fileIdentity(fileStat)
   const key = historyCheckpointKey(filePath)
   const previous = await ctx.checkpoint.get<HistoryCheckpoint>(key)
   const unchanged = previous
     && previous.path === filePath
+    && previous.fileId === initialFileId
     && previous.offset === fileStat.size
     && previous.size === fileStat.size
     && previous.mtimeMs === fileStat.mtimeMs
   if (unchanged) return
 
-  const reset = !previous || previous.path !== filePath || fileStat.size < previous.offset
+  const reset = !previous
+    || previous.path !== filePath
+    || previous.fileId !== initialFileId
+    || fileStat.size < previous.offset
   let offset = reset ? 0 : previous.offset
   let sequence = reset ? 0 : previous.sequence
   let incompleteTail = false
@@ -338,7 +358,12 @@ export async function* ingestPiFile(
     offset = line.endOffset
     if (!line.text.trim()) {
       await ctx.checkpoint.set(key, {
-        path: filePath, offset, sequence, size: fileStat.size, mtimeMs: fileStat.mtimeMs,
+        path: filePath,
+        offset,
+        sequence,
+        size: fileStat.size,
+        mtimeMs: fileStat.mtimeMs,
+        fileId: initialFileId,
       })
       continue
     }
@@ -350,7 +375,7 @@ export async function* ingestPiFile(
       ?? normalizeTimestamp(asRecord(entry.message).timestamp)
     yield {
       id: `pi-record-${sha256(`${filePath}|${line.startOffset}|${fingerprint}`).slice(0, 32)}`,
-      sourceId: SOURCE_ID,
+      sourceId: PI_SOURCE_ID,
       installationId: ctx.installation.id,
       sourceSessionNativeId: session.nativeSessionId,
       nativeType: `history/${stringField(entry, 'type') ?? 'unknown'}`,
@@ -361,26 +386,35 @@ export async function* ingestPiFile(
       locator: { kind: 'file', path: filePath, offset: line.startOffset },
       fingerprint,
       payload: { entry, session } satisfies PiStoredEnvelope,
-      parserVersion: PARSER_VERSION,
+      parserVersion: PI_PARSER_VERSION,
     }
     await ctx.checkpoint.set(key, {
-      path: filePath, offset, sequence, size: fileStat.size, mtimeMs: fileStat.mtimeMs,
+      path: filePath,
+      offset,
+      sequence,
+      size: fileStat.size,
+      mtimeMs: fileStat.mtimeMs,
+      fileId: initialFileId,
     })
   }
 
   // If the stream reached a complete EOF, reconcile metadata after the read. The file can grow
   // while we are consuming it; keeping the initial size/mtime would make every later poll think
-  // the file changed even when the checkpoint already sits at the real EOF.
+  // the file changed even when the checkpoint already sits at the real EOF. If the path was
+  // replaced during the read, keep the old file identity so the next pass resets the new file.
   if (!ctx.abortSignal.aborted && !incompleteTail) {
     try {
       const finalStat = await stat(filePath)
-      await ctx.checkpoint.set(key, {
-        path: filePath,
-        offset,
-        sequence,
-        size: finalStat.size,
-        mtimeMs: finalStat.mtimeMs,
-      })
+      if (fileIdentity(finalStat) === initialFileId) {
+        await ctx.checkpoint.set(key, {
+          path: filePath,
+          offset,
+          sequence,
+          size: finalStat.size,
+          mtimeMs: finalStat.mtimeMs,
+          fileId: initialFileId,
+        })
+      }
     } catch {
       // A removed/rotated file will be rediscovered or reset on the next scan.
     }
