@@ -180,6 +180,7 @@ const applyHttpSurface = Object.assign(
       backup: ctx.backup,
       piLive: ctx.piLive,
       rescanAgents: () => sourceRescan.rescan(),
+      sourceDetection: sourceId => sourceRescan.isSourceDetected(sourceId),
       ...(config.selectProjectDirectory ? { selectProjectDirectory: config.selectProjectDirectory } : {}),
       hubReview,
     })
