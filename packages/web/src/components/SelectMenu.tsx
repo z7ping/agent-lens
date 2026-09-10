@@ -84,6 +84,7 @@ export function SelectMenu({
   const listboxId = useId()
   const triggerRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  const listboxRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -129,7 +130,7 @@ export function SelectMenu({
     if (!open) return
     updatePosition()
     setActiveValue(selected && !selected.disabled ? selected.value : enabledOptions[0]?.value ?? '')
-    const focusFrame = requestAnimationFrame(() => (searchable ? searchRef.current : menuRef.current)?.focus({ preventScroll: true }))
+    const focusFrame = requestAnimationFrame(() => (searchable ? searchRef.current : listboxRef.current)?.focus({ preventScroll: true }))
     const dismiss = (event: PointerEvent) => {
       const target = event.target as Node | null
       if (!target || triggerRef.current?.contains(target) || menuRef.current?.contains(target)) return
@@ -174,7 +175,7 @@ export function SelectMenu({
     } else if (event.key === 'Home' || event.key === 'End') {
       event.preventDefault()
       setActiveValue((event.key === 'Home' ? enabledOptions[0] : enabledOptions.at(-1))?.value ?? '')
-    } else if (event.key === 'Enter' && activeValue) {
+    } else if ((event.key === 'Enter' || (!searchable && event.key === ' ')) && activeValue) {
       event.preventDefault()
       choose(activeValue)
     }
@@ -227,7 +228,7 @@ export function SelectMenu({
             aria-activedescendant={activeValue ? `${listboxId}-${activeValue}` : undefined}
           />
         </div>}
-        <div id={listboxId} className="select-menu-options" role="listbox" aria-label={ariaLabel} tabIndex={searchable ? undefined : -1} aria-activedescendant={activeValue ? `${listboxId}-${activeValue}` : undefined}>
+        <div ref={listboxRef} id={listboxId} className="select-menu-options" role="listbox" aria-label={ariaLabel} tabIndex={searchable ? undefined : -1} aria-activedescendant={activeValue ? `${listboxId}-${activeValue}` : undefined}>
           {filteredOptions.map(option => {
             const checked = option.value === value
             const active = option.value === activeValue
