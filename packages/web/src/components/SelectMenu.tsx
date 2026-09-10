@@ -119,12 +119,13 @@ export function SelectMenu({
     const rect = trigger.getBoundingClientRect()
     const width = Math.min(Math.max(rect.width, menuWidth), Math.max(176, window.innerWidth - 16))
     const left = Math.min(Math.max(8, rect.left), Math.max(8, window.innerWidth - width - 8))
-    const estimatedHeight = Math.min(360, Math.max(64, options.length * 48 + (searchable ? 54 : 12)))
+    const footerHeight = onLoadMore && (hasMore || loadingMore) ? 38 : 0
+    const estimatedHeight = Math.min(360, Math.max(64, options.length * 48 + (searchable ? 54 : 12) + footerHeight))
     const openAbove = window.innerHeight - rect.bottom < Math.min(estimatedHeight, 220) && rect.top > window.innerHeight - rect.bottom
     setPosition(openAbove
       ? { left, bottom: window.innerHeight - rect.top + 8, width }
       : { left, top: rect.bottom + 8, width })
-  }, [menuWidth, options.length, searchable])
+  }, [hasMore, loadingMore, menuWidth, onLoadMore, options.length, searchable])
 
   const close = useCallback((restoreFocus = false) => {
     setOpen(false)
