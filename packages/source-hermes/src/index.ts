@@ -24,14 +24,14 @@ import {
   type ObservationCapability,
   type ObservationCandidate,
   type ObservationIdentityHints,
-  SourceDefinition,
-  SourceDetectionContext,
-  SourceExecutionContext,
-  SourceHistoryExecutionContext,
-  SourceNormalizationContext,
-  SourcePluginManifest,
-  SourceRecord,
-  SourceRecordEmitter,
+  type SourceDefinition,
+  type SourceDetectionContext,
+  type SourceExecutionContext,
+  type SourceHistoryExecutionContext,
+  type SourceNormalizationContext,
+  type SourcePluginManifest,
+  type SourceRecord,
+  type SourceRecordEmitter,
 } from '@agent-lens/core'
 import {
   abortableDelay,
@@ -305,12 +305,13 @@ function dbRecord(
 ): SourceRecord {
   const nativeSessionId = row.session_id ?? 'unknown'
   const fingerprint = rowFingerprint(row)
-  const nativeId = row.id == null ? `row-${row.row_id}` : String(row.id)
+  const nativeId = row.id == null ? undefined : String(row.id)
+  const recordKey = nativeId ?? `row:${row.row_id}`
   const capturedAt = new Date().toISOString()
   const occurredAt = normalizeTimestamp(row.timestamp)
   const dbPath = join(ctx.installation.dataRoot ?? '', DB_NAME)
   const title = row.session_title?.trim() || undefined
-  const message = asRecord(sanitize({
+  const message = {
     id: row.id,
     session_id: row.session_id,
     role: row.role,
@@ -320,15 +321,15 @@ function dbRecord(
     tool_calls: parseJson(row.tool_calls),
     tool_call_id: row.tool_call_id,
     tool_name: row.tool_name,
-  }))
+  }
 
   return {
-    id: `hermes-db-${sha256(`${nativeId}:${fingerprint}`).slice(0, 32)}`,
+    id: `hermes-db-${sha256(`${recordKey}:${fingerprint}`).slice(0, 32)}`,
     sourceId: SOURCE_ID,
     installationId: ctx.installation.id,
     sourceSessionNativeId: nativeSessionId,
     nativeType: `message/${row.role ?? 'unknown'}`,
-    nativeId,
+    ...(nativeId ? { nativeId } : {}),
     sourceSequence: row.row_id * 10,
     ...(occurredAt ? { occurredAt } : {}),
     capturedAt,
@@ -388,13 +389,13 @@ function parseInboxEnvelope(text: string, fileName: string): InboxEnvelope {
     return {
       id: stringField(parsed, 'id') ?? fileName,
       capturedAt: stringField(parsed, 'capturedAt') ?? new Date().toISOString(),
-      event: asRecord(sanitize(parsed.event)),
+      event: asRecord(parsed.event),
     }
   } catch {
     return {
       id: fileName,
       capturedAt: new Date().toISOString(),
-      event: { hook_event_name: 'malformed', raw: truncate(text) },
+      event: { hook_event_name: 'malformed', raw: text },
     }
   }
 }
@@ -404,21 +405,22 @@ function hookSessionId(event: Record<string, unknown>): string {
 }
 
 function hookCallId(event: Record<string, unknown>): string | undefined {
-  const direct = stringField(event, 'tool_call_id', 'call_id', 'tool_use_id')
-  if (direct) return direct
+  return stringField(event, 'tool_call_id', 'call_id', 'tool_use_id')
+}
+
+function hookSharedCallKey(event: Record<string, unknown>, recordId: string): string {
   const request = stringField(event, 'api_request_id')
-  const count = event.api_call_count
   const tool = stringField(event, 'tool_name')
-  if (request && tool) return `${request}:${String(count ?? '')}:${tool}`
-  return undefined
+  return request && tool
+    ? `hermes-hook:${request}:${String(event.api_call_count ?? '')}:${tool}`
+    : `hermes-hook:${recordId}`
 }
 
 function hookRecord(envelope: InboxEnvelope, filePath: string, ctx: SourceExecutionContext): SourceRecord {
   const event = envelope.event
   const eventName = stringField(event, 'hook_event_name', 'event_name', 'type') ?? 'unknown'
   const sessionId = hookSessionId(event)
-  const callId = hookCallId(event)
-  const nativeId = callId ?? stringField(event, 'source_event_id', 'hook_invocation_id', 'turn_id') ?? envelope.id
+  const nativeId = stringField(event, 'source_event_id', 'hook_invocation_id', 'turn_id')
   const occurredAt = normalizeTimestamp(event.timestamp ?? event.ts) ?? envelope.capturedAt
   const cwd = stringField(event, 'cwd', 'working_directory', 'workdir')
   return {
@@ -427,7 +429,7 @@ function hookRecord(envelope: InboxEnvelope, filePath: string, ctx: SourceExecut
     installationId: ctx.installation.id,
     sourceSessionNativeId: sessionId,
     nativeType: `hook/${eventName}`,
-    nativeId,
+    ...(nativeId ? { nativeId } : {}),
     occurredAt,
     capturedAt: envelope.capturedAt,
     locator: { kind: 'runtime-hook', path: filePath, hookEventId: envelope.id },
