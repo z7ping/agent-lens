@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
@@ -52,9 +52,9 @@ test('Hook 配置路径与 Source Home 使用同一环境解析结果', () => {
     },
   })
 
-  assert.equal(profile.options.codexHooksFile, '/data/codex/hooks.json')
-  assert.equal(profile.options.codexConfigFile, '/data/codex/config.toml')
-  assert.equal(profile.options.claudeSettingsFile, '/data/claude-primary/settings.json')
+  assert.equal(profile.options.codexHooksFile, join('/data/codex', 'hooks.json'))
+  assert.equal(profile.options.codexConfigFile, join('/data/codex', 'config.toml'))
+  assert.equal(profile.options.claudeSettingsFile, join('/data/claude-primary', 'settings.json'))
 })
 
 test('Windows 共享分发器使用 PowerShell 5.1 兼容的 UTF-8 stdin 转发', () => {
