@@ -39,8 +39,7 @@ function projectCandidatesSql(search: boolean, after: boolean): string {
         logical.project_id AS project_id,
         project.name AS project_name,
         project.repository_identity AS repository_identity,
-        MAX(summary.ended_at) AS last_seen_at,
-        GROUP_CONCAT(DISTINCT workspace.path) AS workspace_paths
+        MAX(summary.ended_at) AS last_seen_at
       FROM session_summary_projection AS summary
       JOIN logical_sessions AS logical
         ON logical.id = summary.logical_session_id
@@ -59,8 +58,7 @@ function projectCandidatesSql(search: boolean, after: boolean): string {
         NULL AS project_id,
         NULL AS project_name,
         NULL AS repository_identity,
-        MAX(summary.ended_at) AS last_seen_at,
-        workspace.path AS workspace_paths
+        MAX(summary.ended_at) AS last_seen_at
       FROM session_summary_projection AS summary
       JOIN logical_sessions AS logical
         ON logical.id = summary.logical_session_id
@@ -78,11 +76,26 @@ function projectCandidatesSql(search: boolean, after: boolean): string {
       last_seen_at
     FROM project_activity
     WHERE 1 = 1
-      ${search ? `AND LOWER(
-        COALESCE(project_name, '') || char(10) ||
-        COALESCE(repository_identity, '') || char(10) ||
-        COALESCE(workspace_paths, '')
-      ) LIKE ?` : ''}
+      ${search ? `AND (
+        LOWER(COALESCE(project_name, '')) LIKE ?
+        OR LOWER(COALESCE(repository_identity, '')) LIKE ?
+        OR EXISTS (
+          SELECT 1
+          FROM logical_sessions AS search_logical
+          JOIN workspaces AS search_workspace
+            ON search_workspace.id = search_logical.workspace_id
+          WHERE TRIM(search_workspace.path) <> ''
+            AND (
+              (project_id IS NOT NULL AND search_logical.project_id = project_id)
+              OR (
+                project_id IS NULL
+                AND search_logical.project_id IS NULL
+                AND 'workspace:' || search_workspace.id = project_key
+              )
+            )
+            AND LOWER(search_workspace.path) LIKE ?
+        )
+      )` : ''}
       ${after ? `AND (
         last_seen_at < ?
         OR (last_seen_at = ? AND project_key > ?)
@@ -136,7 +149,10 @@ export class SqliteLaunchableProjectReader implements LaunchableProjectReader {
     const search = input.search?.trim().toLocaleLowerCase()
     return this.executor.run(() => {
       const params: unknown[] = []
-      if (search) params.push(`%${search}%`)
+      if (search) {
+        const pattern = `%${search}%`
+        params.push(pattern, pattern, pattern)
+      }
       if (input.after) {
         params.push(input.after.lastSeenAt, input.after.lastSeenAt, input.after.key)
       }
