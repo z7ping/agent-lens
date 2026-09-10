@@ -2,11 +2,49 @@ import { PiExtensionUiBridge } from './extension-ui-bridge'
 import { assertPiSdkSession, type PiSdkSessionManager } from './pi-sdk-adapter'
 import { toPiLiveWireEvent } from './sdk-event'
 import type { PiSdkLoader, PiSdkModel, PiSdkSession, PiSdkThinkingLevel } from './sdk-loader'
-import type { PiLiveControls, PiLiveQueueState, PiLiveRuntimeState, PiLiveSnapshot, PiLiveStartInput, PiLiveStreamingBehavior } from './types'
+import type { PiLiveControls, PiLiveQueueState, PiLiveRuntimeState, PiLiveSnapshot, PiLiveStartInput, PiLiveStartupResources, PiLiveStreamingBehavior } from './types'
 import type { PiRuntimeHandle, PiRuntimeHost } from './worker-host'
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function resultItems(value: unknown, key: string): unknown[] {
+  const row = record(value)
+  return Array.isArray(row[key]) ? row[key] as unknown[] : []
+}
+
+function resourceLabel(value: unknown): string | undefined {
+  const row = record(value)
+  for (const key of ['name', 'filePath', 'sourcePath', 'path', 'resolvedPath']) {
+    const item = row[key]
+    if (typeof item === 'string' && item.trim()) return item.trim()
+  }
+  return undefined
+}
+
+function runtimeResourceSnapshot(session: PiSdkSession): PiLiveStartupResources | undefined {
+  const loader = session.resourceLoader
+  if (!loader) return undefined
+  const call = (method: keyof NonNullable<PiSdkSession['resourceLoader']>) => {
+    const fn = loader[method]
+    try { return typeof fn === 'function' ? fn.call(loader) : undefined } catch { return undefined }
+  }
+  const extensions = resultItems(call('getExtensions'), 'extensions').map(resourceLabel).filter((value): value is string => Boolean(value))
+  const skills = resultItems(call('getSkills'), 'skills').map(resourceLabel).filter((value): value is string => Boolean(value))
+  const prompts = resultItems(call('getPrompts'), 'prompts').map(resourceLabel).filter((value): value is string => Boolean(value))
+  const themes = resultItems(call('getThemes'), 'themes').map(resourceLabel).filter((value): value is string => Boolean(value))
+  const contexts = resultItems(call('getAgentsFiles'), 'agentsFiles').map(resourceLabel).filter((value): value is string => Boolean(value))
+  const unique = (values: string[]) => [...new Set(values)]
+  const result: PiLiveStartupResources = {
+    contexts: unique(contexts),
+    skills: unique(skills),
+    prompts: unique(prompts),
+    extensions: unique(extensions),
+    themes: unique(themes),
+    diagnostics: [],
+  }
+  return Object.values(result).some(values => values.length) ? result : undefined
 }
 
 function forkSessionManager(manager: PiSdkSessionManager): PiSdkSessionManager {
@@ -57,6 +95,8 @@ export class InProcessPiRuntimeHost implements PiRuntimeHost {
     const unsubscribe = session.subscribe(event => onEvent(toPiLiveWireEvent(record(event))))
     try {
       await session.bindExtensions({ uiContext: extensionUi.context, mode: 'rpc', abortHandler: () => { void session.abort() }, onError: value => onEvent({ type: 'extension_error', error: String(record(value).error ?? 'Unknown extension error') }) })
+      const resources = runtimeResourceSnapshot(session)
+      if (resources) onEvent({ type: 'runtime_resources', resources })
       if (input.name) session.setSessionName(input.name)
       if (input.provider || input.model) { const snapshot = session.modelRuntime.getAvailableSnapshot(); const models = snapshot.length ? snapshot : await session.modelRuntime.getAvailable(input.provider); const model = models.find(item => (!input.provider || item.provider === input.provider) && (!input.model || item.id === input.model || item.name === input.model)); if (!model) throw new Error(`Pi model is not available: ${[input.provider, input.model].filter(Boolean).join('/')}`); await session.setModel(model) }
       return new InProcessHandle(id, session, extensionUi, unsubscribe)
