@@ -1,19 +1,19 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
-import type { HubReadAvailability, HubReviewSessionSummaryDto, PiLiveStateDto, ReviewSessionSummaryDto } from '@agent-lens/protocol'
+import type { HubReadAvailability, HubReviewSessionSummaryDto, LaunchableProjectDto, LaunchableProjectsResponseDto, PiLiveStateDto, ReviewSessionSummaryDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
-import { fetchHubReviewSessions, fetchLocalReviewSessions } from '../client/hub-review'
+import { fetchHubReviewSessions } from '../client/hub-review'
+import { fetchLaunchableProjects } from '../client/launchable-projects'
 import { piLiveApi } from '../client/pi-live'
 import { useClientSnapshot } from '../App'
 import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScope'
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
 import { Button, IconButton, Input, SelectMenu, StatusBadge, Toolbar } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
-import { deriveTaskProjectOptions, historyTaskPresentation, pickTaskProject, sessionListTitle, type TaskProjectOption } from './task-center'
+import { historyTaskPresentation, launchableTaskProjectOptions, pickTaskProject, sessionListTitle, type TaskProjectOption } from './task-center'
 import { piLiveSessionTitle } from './pi-live-task-projection'
 import { workspaceDisplayName } from './task-detail-model'
-import { PROJECT_BOOTSTRAP_LIMIT } from './new-pi-task'
 
 export type TaskCenterMode = 'history' | 'live' | 'new' | 'hub'
 
@@ -24,6 +24,22 @@ type TaskDayGroup = '今天' | '昨天' | '更早'
 type HistoryTaskEntry =
   | { kind: 'local'; id: string; at: string; local: ReviewSessionSummaryDto }
   | { kind: 'remote'; id: string; at: string; remote: HubReviewSessionSummaryDto }
+
+function mergeLaunchableProjects(
+  current: readonly LaunchableProjectDto[],
+  incoming: readonly LaunchableProjectDto[],
+): LaunchableProjectDto[] {
+  const byKey = new Map(current.map(item => [item.key, item]))
+  for (const item of incoming) byKey.set(item.key, item)
+  return [...byKey.values()].sort((left, right) => {
+    const leftAt = Date.parse(left.lastSeenAt)
+    const rightAt = Date.parse(right.lastSeenAt)
+    if (Number.isFinite(leftAt) && Number.isFinite(rightAt) && leftAt !== rightAt) return rightAt - leftAt
+    if (Number.isFinite(leftAt) && !Number.isFinite(rightAt)) return -1
+    if (!Number.isFinite(leftAt) && Number.isFinite(rightAt)) return 1
+    return left.key.localeCompare(right.key)
+  })
+}
 
 function formatTime(value: string): string {
   const date = new Date(value)
@@ -102,11 +118,25 @@ function NewTaskPanel({
   options,
   preferredProjectId,
   nativeDirectoryPicker,
+  projectLoading,
+  projectHasMore,
+  projectLoadingMore,
+  projectDiscoveryError,
+  projectSearchActive,
+  onProjectSearch,
+  onProjectLoadMore,
   onStarted,
 }: {
   options: TaskProjectOption[]
   preferredProjectId?: string | undefined
   nativeDirectoryPicker: boolean
+  projectLoading: boolean
+  projectHasMore: boolean
+  projectLoadingMore: boolean
+  projectDiscoveryError: string
+  projectSearchActive: boolean
+  onProjectSearch(value: string): void
+  onProjectLoadMore(): void
   onStarted(runtimeSessionId: string): void | Promise<void>
 }) {
   const [selectedKey, setSelectedKey] = useState('')
@@ -120,7 +150,7 @@ function NewTaskPanel({
 
   useEffect(() => {
     const preferred = pickTaskProject(options, preferredProjectId)
-    setSelectedKey(current => options.some(option => option.key === current) ? current : preferred?.key ?? '')
+    setSelectedKey(current => current || preferred?.key || '')
   }, [options, preferredProjectId])
 
   useEffect(() => {
@@ -227,7 +257,13 @@ function NewTaskPanel({
             menuWidth={420}
             searchable
             searchPlaceholder="搜索项目或工作目录"
-            disabled={!options.length}
+            onSearchChange={onProjectSearch}
+            loading={projectLoading}
+            hasMore={projectHasMore}
+            onLoadMore={onProjectLoadMore}
+            loadingMore={projectLoadingMore}
+            loadMoreLabel="加载更多项目"
+            disabled={!options.length && !projectHasMore && !projectLoading}
           />
         </label>
         <div className="task-center-new-directory-action">
@@ -255,7 +291,8 @@ function NewTaskPanel({
 
       <div className="task-center-new-status"><b>{selected ? `在 ${selected.label} 中启动` : '等待选择项目'}</b><span>{composerStateLabel}</span></div>
       {error && <div className="pi-live-error" role="alert">{error}</div>}
-      {!options.length && availability.checked && <div className="task-center-project-hint">最近会话中没有可用项目；可选择目录新建项目并打开。</div>}
+      {projectDiscoveryError && <div className="task-center-project-hint" role="alert">{projectDiscoveryError}</div>}
+      {!options.length && availability.checked && !projectLoading && !projectDiscoveryError && !projectSearchActive && <div className="task-center-project-hint">当前没有可启动的本地项目；可选择目录新建项目并打开。</div>}
       <div className="task-center-new-actions">
         <Button variant="primary" loading={starting} disabled={!selected || !availability.available} onClick={() => selected && void start(selected)}>打开已有项目 <UiIcon name="arrow-right" size={14}/></Button>
       </div>
@@ -287,7 +324,13 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const navigate = useNavigate()
   const [runtimes, setRuntimes] = useState<PiLiveStateDto[]>([])
   const [hubSessions, setHubSessions] = useState<HubReviewSessionSummaryDto[]>([])
-  const [projectHistory, setProjectHistory] = useState<ReviewSessionSummaryDto[]>([])
+  const [launchableProjects, setLaunchableProjects] = useState<LaunchableProjectDto[]>([])
+  const [launchablePage, setLaunchablePage] = useState<LaunchableProjectsResponseDto['meta'] | null>(null)
+  const [projectSearch, setProjectSearch] = useState('')
+  const [projectLoading, setProjectLoading] = useState(false)
+  const [projectLoadingMore, setProjectLoadingMore] = useState(false)
+  const [projectDiscoveryError, setProjectDiscoveryError] = useState('')
+  const projectRequestGenerationRef = useRef(0)
   const historyScrollTargetRef = useRef('')
   const resumeRequestRef = useRef('')
   const review = snapshot.review
@@ -325,22 +368,62 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
 
   useEffect(() => {
     if (mode !== 'new') return
-    let cancelled = false
-    void fetchLocalReviewSessions(PROJECT_BOOTSTRAP_LIMIT).then(
-      value => { if (!cancelled) setProjectHistory(value.items) },
-      () => { if (!cancelled) setProjectHistory([]) },
-    )
-    return () => { cancelled = true }
-  }, [mode])
+    const generation = ++projectRequestGenerationRef.current
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => {
+      setProjectLoading(true)
+      setProjectLoadingMore(false)
+      setProjectDiscoveryError('')
+      void fetchLaunchableProjects({
+        search: projectSearch,
+        limit: 20,
+        signal: controller.signal,
+      }).then(
+        value => {
+          if (generation !== projectRequestGenerationRef.current) return
+          setLaunchableProjects(current => mergeLaunchableProjects(current, value.items))
+          setLaunchablePage(value.meta)
+        },
+        reason => {
+          if (generation !== projectRequestGenerationRef.current || (reason instanceof DOMException && reason.name === 'AbortError')) return
+          setProjectDiscoveryError(reason instanceof Error ? reason.message : String(reason))
+          setLaunchablePage(null)
+        },
+      ).finally(() => {
+        if (generation === projectRequestGenerationRef.current) setProjectLoading(false)
+      })
+    }, projectSearch.trim() ? 180 : 0)
+    return () => {
+      window.clearTimeout(timer)
+      controller.abort()
+    }
+  }, [mode, projectSearch])
+
+  const loadMoreProjects = useCallback(async () => {
+    const cursor = launchablePage?.nextCursor
+    if (mode !== 'new' || !cursor || projectLoading || projectLoadingMore) return
+    const generation = projectRequestGenerationRef.current
+    setProjectLoadingMore(true)
+    setProjectDiscoveryError('')
+    try {
+      const value = await fetchLaunchableProjects({
+        search: projectSearch,
+        cursor,
+        limit: 20,
+      })
+      if (generation !== projectRequestGenerationRef.current) return
+      setLaunchableProjects(current => mergeLaunchableProjects(current, value.items))
+      setLaunchablePage(value.meta)
+    } catch (reason) {
+      if (generation !== projectRequestGenerationRef.current) return
+      setProjectDiscoveryError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      if (generation === projectRequestGenerationRef.current) setProjectLoadingMore(false)
+    }
+  }, [launchablePage?.nextCursor, mode, projectLoading, projectLoadingMore, projectSearch])
 
   const localSessions = review.response?.items ?? []
-  const projectSessions = useMemo(() => {
-    const byId = new Map<string, ReviewSessionSummaryDto>()
-    for (const item of [...projectHistory, ...localSessions]) byId.set(item.id, item)
-    if (review.detail) byId.set(review.detail.id, review.detail)
-    return [...byId.values()]
-  }, [projectHistory, localSessions, review.detail])
-  const projectOptions = useMemo(() => deriveTaskProjectOptions(projects, projectSessions), [projects, projectSessions])
+  const projectOptions = useMemo(() => launchableTaskProjectOptions(launchableProjects), [launchableProjects])
   const visibleHub = useMemo(() => hubSessions.filter(item => remoteVisible(item, review)), [hubSessions, review])
   const historyGroups = useMemo(() => {
     const combined: HistoryTaskEntry[] = [
@@ -521,7 +604,19 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
           />}
           {mode === 'live' && <PiLivePage embedded/>}
           {mode === 'hub' && <HubReviewPage embedded/>}
-          {mode === 'new' && <NewTaskPanel options={projectOptions} preferredProjectId={preferredProjectId} nativeDirectoryPicker={snapshot.health?.runtime?.owner === 'desktop'} onStarted={runtimeSessionId => navigate(`/review/live/${encodeURIComponent(runtimeSessionId)}`)}/>}
+          {mode === 'new' && <NewTaskPanel
+            options={projectOptions}
+            preferredProjectId={preferredProjectId}
+            nativeDirectoryPicker={snapshot.health?.runtime?.owner === 'desktop'}
+            projectLoading={projectLoading}
+            projectHasMore={launchablePage?.hasMore ?? false}
+            projectLoadingMore={projectLoadingMore}
+            projectDiscoveryError={projectDiscoveryError}
+            projectSearchActive={Boolean(projectSearch.trim())}
+            onProjectSearch={setProjectSearch}
+            onProjectLoadMore={() => void loadMoreProjects()}
+            onStarted={runtimeSessionId => navigate(`/review/live/${encodeURIComponent(runtimeSessionId)}`)}
+          />}
         </Suspense>
       </section>
     </div>

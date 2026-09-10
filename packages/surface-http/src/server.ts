@@ -30,6 +30,7 @@ import { handleCapturePolicyRequest } from './capture-policy-http'
 import { parseDataRuntimeHealth } from './data-runtime-health'
 import type { HttpEventHub } from './events'
 import { badRequest, statusCodeForError, writeJson } from './http-utils'
+import { readLaunchableProjects } from './launchable-projects'
 import { handlePiLiveRequest } from './pi-live'
 import {
   parseInsightsQuery,
@@ -283,6 +284,10 @@ export async function startHttpSurface(
       }
       if (url.pathname === '/api/v1/facets') {
         writeJson(response, 200, await facets.query())
+        return
+      }
+      if (url.pathname === '/api/v1/projects/launchable') {
+        writeJson(response, 200, await readLaunchableProjects(storage, url.searchParams))
         return
       }
       if (url.pathname === '/api/v1/agents') {

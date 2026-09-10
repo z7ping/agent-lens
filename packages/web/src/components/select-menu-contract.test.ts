@@ -54,3 +54,13 @@ test('新建 Pi 任务使用聚焦启动卡片并提供已有项目与目录启�
   assert.match(taskCenterSource, /mode === 'new' \? 'is-new-task' : ''/)
   assert.doesNotMatch(taskCenterSource, /task-center-agent-fixed/)
 })
+
+
+test('已有项目下拉支持服务端搜索和继续加载，同时 SelectMenu 其他调用保持可选增强', () => {
+  assert.match(selectSource, /onSearchChange\?: \(value: string\) => void/)
+  assert.match(selectSource, /onLoadMore\?: \(\) => void/)
+  assert.match(selectSource, /className="select-menu-footer"/)
+  assert.match(taskCenterSource, /onSearchChange=\{onProjectSearch\}/)
+  assert.match(taskCenterSource, /onLoadMore=\{onProjectLoadMore\}/)
+  assert.match(taskCenterSource, /loadMoreLabel="加载更多项目"/)
+})
