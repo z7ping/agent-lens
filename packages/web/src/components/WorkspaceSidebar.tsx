@@ -90,13 +90,7 @@ export function WorkspaceSidebar({
         <img className="workspace-sidebar-logo" src="/agentlens-icon.svg" alt="" aria-hidden="true"/>
         <span className="workspace-sidebar-brand-copy"><b>AgentLens</b></span>
       </NavLink>
-      <IconButton
-        className="workspace-sidebar-collapse-button"
-        size="small"
-        onClick={mobileOpen ? onMobileClose : onCollapse}
-        title={mobileOpen ? '关闭导航' : '收起侧栏'}
-        aria-label={mobileOpen ? '关闭工作区导航' : '收起侧栏'}
-      ><UiIcon name="panel-left-close" size={16}/></IconButton>
+      <IconButton className="workspace-sidebar-collapse-button" size="small" onClick={onCollapse} title="收起侧栏" aria-label="收起侧栏"><UiIcon name="panel-left-close" size={16}/></IconButton>
     </div>
 
     <WorkspacePrimaryNavigation
