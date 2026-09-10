@@ -614,6 +614,7 @@ async function resolvedSkillsAsAssets(input: {
       binding: {
         path: dirname(skill.filePath),
         source,
+        ...(version ? { version } : {}),
       },
       states: resourceStates({
         path: skill.filePath,
@@ -656,6 +657,7 @@ async function resolvedExtensionsAsAssets(input: {
       binding: {
         path: resource.path,
         source,
+        ...(version ? { version } : {}),
       },
       states: resourceStates({
         path: resource.path,
