@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { stat } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { basename, dirname, extname, isAbsolute, relative, resolve, sep } from 'node:path'
 import type {
   DiscoveredAsset,
@@ -50,6 +50,29 @@ async function fileMtime(path: string): Promise<string | undefined> {
     return (await stat(path)).mtime.toISOString()
   } catch {
     return undefined
+  }
+}
+
+async function readUtf8(path: string): Promise<string | undefined> {
+  try {
+    return await readFile(path, 'utf8')
+  } catch {
+    return undefined
+  }
+}
+
+function contextSource(scope: 'user' | 'project', kind: string, cwd?: string): string {
+  const context = cwd ? `:${sha256(pathKey(cwd)).slice(0, 12)}` : ''
+  return `pi:context:${scope}${context}:${kind}`
+}
+
+function contextDefinition(path: string): DiscoveredAsset['definition'] {
+  const name = basename(path)
+  return {
+    type: 'context',
+    canonicalName: name,
+    displayName: name,
+    upstreamIdentity: `pi-context:${sha256(pathKey(path))}`,
   }
 }
 
@@ -213,6 +236,255 @@ function validatedSkills(
     seen.add(key)
     return true
   })
+}
+
+interface PromptCandidate {
+  name: string
+  valid: boolean
+}
+
+async function promptCandidate(api: PiSdkResourceApi, path: string): Promise<PromptCandidate> {
+  const name = basename(path, extname(path))
+  if (extname(path).toLowerCase() !== '.md') return { name, valid: false }
+  const text = await readUtf8(path)
+  if (text === undefined) return { name, valid: false }
+  try {
+    api.parseFrontmatter(text)
+    return { name, valid: true }
+  } catch {
+    return { name, valid: false }
+  }
+}
+
+async function selectedPromptPaths(
+  api: PiSdkResourceApi,
+  resources: readonly PiResolvedResource[],
+): Promise<Set<string>> {
+  const winners = new Map<string, string>()
+  for (const resource of resources) {
+    if (!resource.enabled) continue
+    const candidate = await promptCandidate(api, resource.path)
+    if (!candidate.valid || winners.has(candidate.name)) continue
+    winners.set(candidate.name, pathKey(resource.path))
+  }
+  return new Set(winners.values())
+}
+
+async function resolvedPromptsAsAssets(input: {
+  api: PiSdkResourceApi
+  resources: PiResolvedResource[]
+  allResourcesForPrecedence: PiResolvedResource[]
+  trust: ProjectTrustState
+  capturedAt: string
+  projectCwd?: string
+}): Promise<DiscoveredAsset[]> {
+  const assets: DiscoveredAsset[] = []
+  const selected = input.trust === true
+    ? await selectedPromptPaths(input.api, input.allResourcesForPrecedence)
+    : new Set<string>()
+
+  for (const resource of input.resources) {
+    const observedAt = await fileMtime(resource.path)
+    if (!observedAt) continue
+    const candidate = await promptCandidate(input.api, resource.path)
+    const enabled = effectiveEnabled(resource.enabled, input.trust)
+    const discoverable = !candidate.valid || enabled === false
+      ? false
+      : enabled === 'unknown'
+        ? 'unknown'
+        : selected.has(pathKey(resource.path))
+
+    assets.push({
+      definition: {
+        type: 'prompt',
+        canonicalName: candidate.name,
+        displayName: candidate.name,
+      },
+      binding: {
+        path: resource.path,
+        source: resourceSource(resource, input.projectCwd),
+      },
+      states: resourceStates({
+        path: resource.path,
+        observedAt,
+        capturedAt: input.capturedAt,
+        nativeStableId: `prompt:${resource.path}:${resourceSource(resource, input.projectCwd)}`,
+        configured: configuredResource(resource),
+        enabled,
+        discoverable,
+      }),
+    })
+  }
+  return assets
+}
+
+interface ThemeCandidate {
+  name: string
+  definitelyInvalid: boolean
+}
+
+async function themeCandidate(path: string): Promise<ThemeCandidate> {
+  const fallback = basename(path, extname(path))
+  if (extname(path).toLowerCase() !== '.json') return { name: fallback, definitelyInvalid: true }
+  const text = await readUtf8(path)
+  if (text === undefined) return { name: fallback, definitelyInvalid: true }
+  try {
+    const parsed = JSON.parse(text.replace(/^\uFEFF/, '')) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { name: fallback, definitelyInvalid: true }
+    }
+    const name = (parsed as Record<string, unknown>).name
+    return typeof name === 'string' && name.trim()
+      ? { name: name.trim(), definitelyInvalid: false }
+      : { name: fallback, definitelyInvalid: true }
+  } catch {
+    return { name: fallback, definitelyInvalid: true }
+  }
+}
+
+async function resolvedThemesAsAssets(input: {
+  resources: PiResolvedResource[]
+  trust: ProjectTrustState
+  capturedAt: string
+  projectCwd?: string
+}): Promise<DiscoveredAsset[]> {
+  const assets: DiscoveredAsset[] = []
+  for (const resource of input.resources) {
+    const observedAt = await fileMtime(resource.path)
+    if (!observedAt) continue
+    const candidate = await themeCandidate(resource.path)
+    const enabled = effectiveEnabled(resource.enabled, input.trust)
+    // Pi's full Theme schema validator is not a public SDK capability. A valid JSON object with
+    // a name is still only a candidate until a real Pi runtime proves that it loaded successfully.
+    const discoverable = candidate.definitelyInvalid || enabled === false
+      ? false
+      : 'unknown'
+
+    assets.push({
+      definition: {
+        type: 'theme',
+        canonicalName: candidate.name,
+        displayName: candidate.name,
+      },
+      binding: {
+        path: resource.path,
+        source: resourceSource(resource, input.projectCwd),
+      },
+      states: resourceStates({
+        path: resource.path,
+        observedAt,
+        capturedAt: input.capturedAt,
+        nativeStableId: `theme:${resource.path}:${resourceSource(resource, input.projectCwd)}`,
+        configured: configuredResource(resource),
+        enabled,
+        discoverable,
+      }),
+    })
+  }
+  return assets
+}
+
+async function contextAsset(
+  path: string,
+  source: string,
+  capturedAt: string,
+  enabled: EffectiveResourceState,
+  discoverable: EffectiveResourceState,
+): Promise<DiscoveredAsset | undefined> {
+  const observedAt = await fileMtime(path)
+  if (!observedAt) return undefined
+  return {
+    definition: contextDefinition(path),
+    binding: { path, source },
+    states: resourceStates({
+      path,
+      observedAt,
+      capturedAt,
+      nativeStableId: `context:${path}:${source}`,
+      configured: false,
+      enabled,
+      discoverable,
+    }),
+  }
+}
+
+async function globalContextAssets(
+  api: PiSdkResourceApi,
+  agentDir: string,
+  capturedAt: string,
+): Promise<DiscoveredAsset[]> {
+  const assets: DiscoveredAsset[] = []
+  try {
+    const rows = api.loadProjectContextFiles({ cwd: agentDir, agentDir })
+    for (const row of rows) {
+      if (pathKey(dirname(row.path)) !== pathKey(agentDir)) continue
+      const asset = await contextAsset(
+        row.path,
+        contextSource('user', 'agents'),
+        capturedAt,
+        true,
+        true,
+      )
+      if (asset) assets.push(asset)
+    }
+  } catch {
+    // Context discovery remains independent from package/settings parsing failures.
+  }
+
+  for (const name of ['SYSTEM.md', 'APPEND_SYSTEM.md']) {
+    const path = resolve(agentDir, name)
+    const asset = await contextAsset(
+      path,
+      contextSource('user', name === 'SYSTEM.md' ? 'system' : 'append-system'),
+      capturedAt,
+      true,
+      true,
+    )
+    if (asset) assets.push(asset)
+  }
+  return assets
+}
+
+async function projectContextAssets(
+  api: PiSdkResourceApi,
+  cwd: string,
+  agentDir: string,
+  trust: ProjectTrustState,
+  capturedAt: string,
+): Promise<DiscoveredAsset[]> {
+  const assets: DiscoveredAsset[] = []
+  try {
+    // Pi loads AGENTS/CLAUDE context independently of project trust. The pure SDK helper
+    // reproduces filename precedence, ancestor ordering, and linked-worktree shadowing.
+    const rows = api.loadProjectContextFiles({ cwd, agentDir })
+    for (const row of rows) {
+      if (pathKey(dirname(row.path)) === pathKey(agentDir)) continue
+      const asset = await contextAsset(
+        row.path,
+        contextSource('project', 'agents', cwd),
+        capturedAt,
+        true,
+        true,
+      )
+      if (asset) assets.push(asset)
+    }
+  } catch {
+    // One unreadable context chain must not suppress other resource families.
+  }
+
+  for (const name of ['SYSTEM.md', 'APPEND_SYSTEM.md']) {
+    const path = resolve(cwd, '.pi', name)
+    const enabled = effectiveEnabled(true, trust)
+    const asset = await contextAsset(
+      path,
+      contextSource('project', name === 'SYSTEM.md' ? 'system' : 'append-system', cwd),
+      capturedAt,
+      enabled,
+      enabled,
+    )
+    if (asset) assets.push(asset)
+  }
+  return assets
 }
 
 async function readSessionCwd(filePath: string): Promise<string | undefined> {
@@ -403,16 +675,25 @@ export async function resolvePiResourceAssets(
   const capturedAt = new Date().toISOString()
   const assets: DiscoveredAsset[] = []
 
+  // Context files are a pure Pi SDK discovery path and must not disappear because a package or
+  // settings entry is broken.
+  assets.push(...await globalContextAssets(api, agentDir, capturedAt))
+
   // Resolve user scope with project settings disabled. This includes ~/.pi/agent resources,
-  // ~/.agents/skills, settings skills/extensions and installed user package resources.
-  let userPaths: PiResolvedPaths
+  // ~/.agents/skills, settings paths and installed user package resources.
+  let userPaths: PiResolvedPaths = { extensions: [], skills: [], prompts: [], themes: [] }
   try {
     userPaths = await resolvePaths(api, process.cwd(), agentDir, false)
   } catch {
-    return null
+    // Keep independently proven context assets; unresolved configured/package resources remain
+    // absent rather than guessed.
   }
+
   const userSkills = userPaths.skills.filter(resource => resource.metadata.scope === 'user')
   const userExtensions = userPaths.extensions.filter(resource => resource.metadata.scope === 'user')
+  const userPrompts = userPaths.prompts.filter(resource => resource.metadata.scope === 'user')
+  const userThemes = userPaths.themes.filter(resource => resource.metadata.scope === 'user')
+
   assets.push(...await resolvedSkillsAsAssets({
     api,
     cwd: process.cwd(),
@@ -427,20 +708,42 @@ export async function resolvePiResourceAssets(
     trust: true,
     capturedAt,
   }))
+  assets.push(...await resolvedPromptsAsAssets({
+    api,
+    resources: userPrompts,
+    allResourcesForPrecedence: userPrompts,
+    trust: true,
+    capturedAt,
+  }))
+  assets.push(...await resolvedThemesAsAssets({
+    resources: userThemes,
+    trust: true,
+    capturedAt,
+  }))
 
   const globalExtensionsMayOverrideTrust = userExtensions.some(resource => resource.enabled)
   const projectCwds = await listPiProjectCwds(ctx.installation.dataRoot)
   for (const cwd of projectCwds) {
     if (ctx.abortSignal.aborted) break
+
+    let trust: ProjectTrustState = 'unknown'
+    try {
+      trust = await builtInProjectTrust(api, cwd, agentDir, globalExtensionsMayOverrideTrust)
+    } catch {
+      // Corrupt/locked trust state cannot be promoted into either trusted or rejected.
+    }
+
+    assets.push(...await projectContextAssets(api, cwd, agentDir, trust, capturedAt))
+
     try {
       // Resolve the potential trusted view so installed project resources are visible even when
-      // current trust is false/unknown. Trust is then represented as state, not by hiding files.
+      // current trust is false/unknown. Trust is represented as state, not by hiding files.
       const paths = await resolvePaths(api, cwd, agentDir, true)
       const projectSkills = paths.skills.filter(resource => resource.metadata.scope === 'project')
       const projectExtensions = paths.extensions.filter(resource => resource.metadata.scope === 'project')
-      if (!projectSkills.length && !projectExtensions.length) continue
+      const projectPrompts = paths.prompts.filter(resource => resource.metadata.scope === 'project')
+      const projectThemes = paths.themes.filter(resource => resource.metadata.scope === 'project')
 
-      const trust = await builtInProjectTrust(api, cwd, agentDir, globalExtensionsMayOverrideTrust)
       assets.push(...await resolvedSkillsAsAssets({
         api,
         cwd,
@@ -453,6 +756,20 @@ export async function resolvePiResourceAssets(
       }))
       assets.push(...await resolvedExtensionsAsAssets({
         resources: projectExtensions,
+        trust,
+        capturedAt,
+        projectCwd: cwd,
+      }))
+      assets.push(...await resolvedPromptsAsAssets({
+        api,
+        resources: projectPrompts,
+        allResourcesForPrecedence: paths.prompts,
+        trust,
+        capturedAt,
+        projectCwd: cwd,
+      }))
+      assets.push(...await resolvedThemesAsAssets({
+        resources: projectThemes,
         trust,
         capturedAt,
         projectCwd: cwd,
@@ -479,4 +796,9 @@ export const piResourceResolverInternals = {
   configuredResource,
   effectiveEnabled,
   resourceSource,
+  promptCandidate,
+  selectedPromptPaths,
+  themeCandidate,
+  globalContextAssets,
+  projectContextAssets,
 }
