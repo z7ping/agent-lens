@@ -65,6 +65,12 @@ export function SelectMenu({
   disabled = false,
   searchable = false,
   searchPlaceholder = '搜索…',
+  onSearchChange,
+  loading = false,
+  hasMore = false,
+  onLoadMore,
+  loadingMore = false,
+  loadMoreLabel = '继续加载',
   menuWidth = 220,
   title,
 }: {
@@ -78,6 +84,12 @@ export function SelectMenu({
   disabled?: boolean
   searchable?: boolean
   searchPlaceholder?: string
+  onSearchChange?: (value: string) => void
+  loading?: boolean
+  hasMore?: boolean
+  onLoadMore?: () => void
+  loadingMore?: boolean
+  loadMoreLabel?: string
   menuWidth?: number
   title?: string | undefined
 }) {
@@ -117,8 +129,9 @@ export function SelectMenu({
   const close = useCallback((restoreFocus = false) => {
     setOpen(false)
     setQuery('')
+    onSearchChange?.('')
     if (restoreFocus) requestAnimationFrame(() => triggerRef.current?.focus({ preventScroll: true }))
-  }, [])
+  }, [onSearchChange])
 
   const choose = useCallback((nextValue: string) => {
     if (nextValue !== value) onChange(nextValue)
@@ -220,7 +233,11 @@ export function SelectMenu({
           <input
             ref={searchRef}
             value={query}
-            onChange={event => setQuery(event.target.value)}
+            onChange={event => {
+              const next = event.target.value
+              setQuery(next)
+              onSearchChange?.(next)
+            }}
             placeholder={searchPlaceholder}
             aria-label={searchPlaceholder}
             aria-controls={listboxId}
@@ -249,8 +266,11 @@ export function SelectMenu({
               <span className="select-menu-check" aria-hidden="true">{checked && <UiIcon name="check" size={16}/>}</span>
             </button>
           })}
-          {!filteredOptions.length && <div className="select-menu-empty">没有匹配项</div>}
+          {!filteredOptions.length && <div className="select-menu-empty">{loading ? '正在加载…' : '没有匹配项'}</div>}
         </div>
+        {onLoadMore && (hasMore || loadingMore) && <div className="select-menu-footer">
+          <button type="button" disabled={loadingMore} onClick={onLoadMore}>{loadingMore ? '正在加载…' : loadMoreLabel}</button>
+        </div>}
       </div>,
       document.body,
     )}
