@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { join } from 'node:path'
 import test from 'node:test'
 import {
   resolveClaudeLocation,
@@ -6,22 +7,22 @@ import {
   resolvePiLocation,
 } from './source-environment'
 
-const home = '/home/agentlens-test'
+const home = join('agentlens-test', 'home')
 
 test('Source locations use stable defaults', () => {
   assert.deepEqual(resolveCodexLocation({}, home), {
-    configRoot: `${home}/.codex`,
-    dataRoot: `${home}/.codex/sessions`,
+    configRoot: join(home, '.codex'),
+    dataRoot: join(home, '.codex', 'sessions'),
     explicit: false,
   })
   assert.deepEqual(resolveClaudeLocation({}, home), {
-    configRoot: `${home}/.claude`,
-    dataRoot: `${home}/.claude/projects`,
+    configRoot: join(home, '.claude'),
+    dataRoot: join(home, '.claude', 'projects'),
     explicit: false,
   })
   assert.deepEqual(resolvePiLocation({}, home), {
-    configRoot: `${home}/.pi/agent`,
-    dataRoot: `${home}/.pi/agent/sessions`,
+    configRoot: join(home, '.pi', 'agent'),
+    dataRoot: join(home, '.pi', 'agent', 'sessions'),
     explicit: false,
   })
 })
@@ -47,7 +48,7 @@ test('Pi location keeps native directory precedence', () => {
 })
 
 test('Source locations expand home-relative overrides against the supplied home', () => {
-  assert.equal(resolveCodexLocation({ CODEX_HOME: '~/.custom-codex' }, home).configRoot, `${home}/.custom-codex`)
-  assert.equal(resolveClaudeLocation({ CLAUDE_CODE_HOME: '~/.custom-claude' }, home).configRoot, `${home}/.custom-claude`)
-  assert.equal(resolvePiLocation({ PI_CODING_AGENT_SESSION_DIR: '~/pi-sessions' }, home).dataRoot, `${home}/pi-sessions`)
+  assert.equal(resolveCodexLocation({ CODEX_HOME: '~/.custom-codex' }, home).configRoot, join(home, '.custom-codex'))
+  assert.equal(resolveClaudeLocation({ CLAUDE_CODE_HOME: '~/.custom-claude' }, home).configRoot, join(home, '.custom-claude'))
+  assert.equal(resolvePiLocation({ PI_CODING_AGENT_SESSION_DIR: '~/pi-sessions' }, home).dataRoot, join(home, 'pi-sessions'))
 })
