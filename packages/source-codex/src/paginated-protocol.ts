@@ -64,6 +64,10 @@ interface CodexCompletedTurnItem {
   type: string
 }
 
+function completedCallId(completed: CodexCompletedTurnItem): string | undefined {
+  return stringField(completed.item, 'call_id', 'callId', 'tool_call_id', 'toolCallId')
+}
+
 function completedTurnItem(record: SourceRecord): CodexCompletedTurnItem | null {
   const envelope = asRecord(record.payload)
   const entry = asRecord(envelope.entry)
@@ -322,7 +326,7 @@ async function normalizeFunctionCallOutput(
   ctx: SourceNormalizationContext,
   completed: CodexCompletedTurnItem,
 ): Promise<NormalizedSourceOutput> {
-  const callId = completed.itemId
+  const callId = completedCallId(completed)
   const name = stringField(completed.item, 'name') ?? 'function_call'
   const output = await normalizeCodexRecord(syntheticRecord(record, {
     type: 'response_item',
@@ -354,7 +358,7 @@ async function normalizeCommandExecution(
   ctx: SourceNormalizationContext,
   completed: CodexCompletedTurnItem,
 ): Promise<NormalizedSourceOutput> {
-  const callId = completed.itemId
+  const callId = completedCallId(completed)
   const call = await normalizeCodexRecord(syntheticRecord(record, {
     type: 'response_item',
     payload: {
@@ -395,7 +399,7 @@ async function normalizeDynamicToolCall(
   ctx: SourceNormalizationContext,
   completed: CodexCompletedTurnItem,
 ): Promise<NormalizedSourceOutput> {
-  const callId = completed.itemId
+  const callId = completedCallId(completed)
   const name = stringField(completed.item, 'tool') ?? 'dynamic_tool'
   const call = await normalizeCodexRecord(syntheticRecord(record, {
     type: 'response_item',
@@ -435,7 +439,7 @@ async function normalizeCollabAgentToolCall(
   ctx: SourceNormalizationContext,
   completed: CodexCompletedTurnItem,
 ): Promise<NormalizedSourceOutput> {
-  const callId = completed.itemId
+  const callId = completedCallId(completed)
   const tool = stringField(completed.item, 'tool') ?? 'collab_agent'
   const nativeToolName = `collab_agent.${tool}`
   const input = {
@@ -513,7 +517,7 @@ async function normalizeMcpToolCall(
   ctx: SourceNormalizationContext,
   completed: CodexCompletedTurnItem,
 ): Promise<NormalizedSourceOutput> {
-  const callId = completed.itemId
+  const callId = completedCallId(completed)
   const name = stringField(completed.item, 'tool') ?? 'mcp_tool'
   const call = await normalizeCodexRecord(syntheticRecord(record, {
     type: 'response_item',
@@ -556,7 +560,7 @@ async function normalizeWebSearch(
   ctx: SourceNormalizationContext,
   completed: CodexCompletedTurnItem,
 ): Promise<NormalizedSourceOutput> {
-  const callId = completed.itemId
+  const callId = completedCallId(completed)
   const call = await normalizeCodexRecord(syntheticRecord(record, {
     type: 'response_item',
     payload: {
@@ -664,7 +668,7 @@ async function normalizeExtension(
 ): Promise<NormalizedSourceOutput> {
   const extensionKind = stringField(completed.item, 'kind') ?? ''
   if (extensionKind === 'clock.sleep') {
-    const callId = completed.itemId
+    const callId = completedCallId(completed)
     const output = await normalizeCodexRecord(syntheticRecord(record, {
       type: 'response_item',
       payload: {
