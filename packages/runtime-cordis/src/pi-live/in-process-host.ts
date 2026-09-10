@@ -1,9 +1,21 @@
+import { homedir } from 'node:os'
+import { isAbsolute, resolve } from 'node:path'
 import { PiExtensionUiBridge } from './extension-ui-bridge'
 import { assertPiSdkSession, type PiSdkSessionManager } from './pi-sdk-adapter'
 import { toPiLiveWireEvent } from './sdk-event'
 import type { PiSdkLoader, PiSdkModel, PiSdkSession, PiSdkThinkingLevel } from './sdk-loader'
 import type { PiLiveControls, PiLiveQueueState, PiLiveRuntimeState, PiLiveSnapshot, PiLiveStartInput, PiLiveStartupResources, PiLiveStreamingBehavior } from './types'
 import type { PiRuntimeHandle, PiRuntimeHost } from './worker-host'
+
+export function resolvePiLiveRuntimeSessionDir(cwd: string, value: string | undefined): string | undefined {
+  const raw = value?.trim()
+  if (!raw) return undefined
+  if (raw === '~') return homedir()
+  if (raw.startsWith('~/') || (process.platform === 'win32' && raw.startsWith('~\\'))) {
+    return resolve(homedir(), raw.slice(2))
+  }
+  return isAbsolute(raw) ? resolve(raw) : resolve(cwd, raw)
+}
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
@@ -88,7 +100,8 @@ export class InProcessPiRuntimeHost implements PiRuntimeHost {
   constructor(private readonly loadSdk: PiSdkLoader) {}
   async start(id: string, input: PiLiveStartInput, _signal: AbortSignal, onEvent: (event: Record<string, unknown>) => void): Promise<PiRuntimeHandle> {
     const installed = await this.loadSdk(input.executable)
-    let manager = input.sessionPath ? installed.module.SessionManager.open(input.sessionPath, input.sessionDir, input.cwd) : installed.module.SessionManager.create(input.cwd, input.sessionDir)
+    const sessionDir = resolvePiLiveRuntimeSessionDir(input.cwd, input.sessionDir)
+    let manager = input.sessionPath ? installed.module.SessionManager.open(input.sessionPath, sessionDir, input.cwd) : installed.module.SessionManager.create(input.cwd, sessionDir)
     if (input.sessionPath && input.historyAction === 'fork') manager = forkSessionManager(manager)
     const created = await installed.module.createAgentSession({ cwd: input.cwd, sessionManager: manager })
     assertPiSdkSession(created.session, installed.sdkEntry, installed.version)
