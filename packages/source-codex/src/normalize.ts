@@ -206,7 +206,7 @@ function candidate(
 ): ObservationCandidate {
   const nativeCallId = typeof dedup.nativeCallId === 'string' ? dedup.nativeCallId : undefined
   const sharedEventKey = typeof dedup.sharedEventKey === 'string' ? dedup.sharedEventKey : undefined
-  const nativeEventId = !nativeCallId && !sharedEventKey ? record.nativeId : undefined
+  const nativeEventId = record.nativeId
   return observationFromSourceRecord(record, {
     kind,
     payload,
@@ -583,7 +583,7 @@ export async function normalizeCodexRecord(
         ...(payload.status === undefined ? {} : { status: payload.status }),
       },
       raw: payload,
-    }, callId ? { nativeCallId: callId } : { sharedEventKey: `web-search:${record.id}` }))
+    }, callId ? { nativeCallId: callId } : { sharedEventKey: `codex-call:${record.id}` }))
   } else if (topType === 'response_item' && innerType === 'image_generation_call') {
     push(candidate(record, envelope, 'artifact.action', {
       action: 'image.generation',
