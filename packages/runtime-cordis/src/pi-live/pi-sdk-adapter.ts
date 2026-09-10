@@ -72,6 +72,20 @@ export interface PiSdkModule {
   }
 }
 
+/**
+ * Resource-facing exports are kept separate from the Pi Live contract. They are optional at
+ * runtime because AgentLens may encounter an older compatible Pi SDK that still supports live
+ * sessions but predates one of the resource APIs used by the Source adapter.
+ */
+export interface PiSdkResourceApi {
+  SettingsManager: OfficialPiModule['SettingsManager']
+  DefaultPackageManager: OfficialPiModule['DefaultPackageManager']
+  ProjectTrustStore: OfficialPiModule['ProjectTrustStore']
+  hasTrustRequiringProjectResources: OfficialPiModule['hasTrustRequiringProjectResources']
+  loadSkills: OfficialPiModule['loadSkills']
+  loadSkillsFromDir: OfficialPiModule['loadSkillsFromDir']
+}
+
 export interface PiSdkCompatibility {
   packageVersion?: string | undefined
   typeBaseline: string
@@ -126,6 +140,21 @@ export function assertPiSdkModule(value: unknown, sdkEntry: string, version?: st
     )
   }
   return module as unknown as PiSdkModule
+}
+
+export function resolvePiSdkResourceApi(value: PiSdkModule): PiSdkResourceApi | null {
+  const module = capabilityTarget(value)
+  const required = [
+    'SettingsManager',
+    'DefaultPackageManager',
+    'ProjectTrustStore',
+    'hasTrustRequiringProjectResources',
+    'loadSkills',
+    'loadSkillsFromDir',
+  ] as const
+  return missingCapabilities(module, required).length
+    ? null
+    : module as unknown as PiSdkResourceApi
 }
 
 export function assertPiSdkSession(value: unknown, sdkEntry: string, version?: string): asserts value is PiSdkSession {
