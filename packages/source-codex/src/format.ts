@@ -166,7 +166,7 @@ function completedItem(payload: Record<string, unknown>): Record<string, unknown
 export function nativeIdForEntry(entry: Record<string, unknown>): string | undefined {
   const payload = asRecord(entry.payload)
   const item = completedItem(payload)
-  for (const candidate of [item.id, payload.id, payload.call_id, payload.turn_id]) {
+  for (const candidate of [item.id, payload.id, payload.call_id]) {
     if (typeof candidate === 'string' && candidate) return candidate
   }
   return undefined
