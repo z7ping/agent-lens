@@ -138,12 +138,77 @@
   transform: translateY(-1px);
 }
 
+/* 窄窗保留长会话的最小导航能力；位置复用 TaskSurface 计算出的动态底部边界。 */
+.task-compact-round-nav {
+  position: fixed;
+  right: 16px;
+  z-index: 54;
+  display: none;
+  height: 44px;
+  align-items: center;
+  gap: 2px;
+  padding: 0 4px;
+  border: 1px solid var(--al-line-strong);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--al-surface-raised) 96%, transparent);
+  box-shadow: var(--al-shadow);
+}
+.task-compact-round-nav > .ui-icon-button {
+  width: 44px;
+  min-width: 44px;
+  height: 42px;
+  min-height: 42px;
+  padding: 0;
+  border-color: transparent;
+  border-radius: 9px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--al-ink-2);
+}
+.task-compact-round-nav > .ui-icon-button:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--al-soft);
+  color: var(--al-accent);
+}
+.task-compact-round-nav > span {
+  min-width: 44px;
+  padding: 0 5px;
+  color: var(--al-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  white-space: nowrap;
+}
+.task-compact-round-nav > .task-compact-round-error {
+  width: 34px;
+  min-width: 34px;
+  color: var(--al-danger);
+}
+.task-compact-round-nav > .task-compact-round-error:hover:not(:disabled) {
+  color: var(--al-danger);
+}
+.task-compact-round-nav > .task-compact-round-latest.is-primary {
+  border-color: var(--al-accent);
+  background: var(--al-accent);
+  color: var(--al-on-accent);
+}
+.task-compact-round-nav > .task-compact-round-latest.is-primary:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--al-accent) 88%, var(--al-ink));
+  background: color-mix(in srgb, var(--al-accent) 88%, var(--al-ink));
+  color: var(--al-on-accent);
+}
+
 @media (max-width: 991.98px) {
   .task-turn-rail,
   .task-boundary-nav { display: none; }
+  .task-compact-round-nav { display: flex; }
+}
+@media (max-width: 767.98px) {
+  .task-compact-round-nav { right: 10px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .task-turn-rail,
   .task-turn-rail .turn-tick i,
-  .task-boundary-nav > .ui-icon-button { transition: none; }
+  .task-boundary-nav > .ui-icon-button,
+  .task-compact-round-nav > .ui-icon-button { transition: none; }
 }

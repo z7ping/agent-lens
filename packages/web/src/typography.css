@@ -301,6 +301,6 @@ html body .insight-coverage-strip b{font-size:var(--text-secondary)}
 html body .insight-kpi>strong{font-size:var(--text-metric-lg)}
 html body .insight-asset-row>strong{font-size:var(--text-section-title)}
 
-@media(max-width:900px){
+@media(max-width:991.98px){
   html body .nav-item{font-size:var(--text-secondary)}
 }

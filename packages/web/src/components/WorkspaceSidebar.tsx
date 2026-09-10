@@ -7,7 +7,7 @@ import { BrandVersion, ReleaseInfo } from './ReleaseInfo'
 import { RuntimeStatus } from './RuntimeStatus'
 import { SidebarFilterDisclosure } from './SidebarFilterDisclosure'
 import { WorkspacePrimaryNavigation } from './WorkspacePrimaryNavigation'
-import { IconButton, UiIcon } from './ui'
+import { IconButton, UiIcon, useModalFocusScope } from './ui'
 import './workspace-sidebar-menu.css'
 
 interface WorkspaceSidebarProps {
@@ -43,12 +43,15 @@ export function WorkspaceSidebar({
 }: WorkspaceSidebarProps) {
   const location = useLocation()
   const navigate = useNavigate()
+  const sidebarRef = useRef<HTMLElement>(null)
   const settingsAnchorRef = useRef<HTMLDivElement>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const onReview = location.pathname.startsWith('/review')
   const onInsights = location.pathname.startsWith('/insights') || location.pathname.startsWith('/tools')
   const onAgents = location.pathname.startsWith('/agents')
   const onBackup = location.pathname.startsWith('/backup')
+
+  useModalFocusScope({ open: mobileOpen, onClose: onMobileClose, panelRef: sidebarRef })
 
   useEffect(() => {
     setSettingsOpen(false)
@@ -74,7 +77,14 @@ export function WorkspaceSidebar({
     }
   }, [settingsOpen])
 
-  return <aside className={`workspace-sidebar ${mobileOpen ? 'is-mobile-open' : ''}`} aria-label="AgentLens 工作区导航">
+  return <aside
+    ref={sidebarRef}
+    className={`workspace-sidebar ${mobileOpen ? 'is-mobile-open' : ''}`}
+    aria-label="AgentLens 工作区导航"
+    role={mobileOpen ? 'dialog' : undefined}
+    aria-modal={mobileOpen ? 'true' : undefined}
+    tabIndex={mobileOpen ? -1 : undefined}
+  >
     <div className="workspace-sidebar-brand-row">
       <NavLink to="/review" className="workspace-sidebar-brand" aria-label="AgentLens，返回任务中心" title="返回任务中心" onClick={onMobileClose}>
         <img className="workspace-sidebar-logo" src="/agentlens-icon.svg" alt="" aria-hidden="true"/>

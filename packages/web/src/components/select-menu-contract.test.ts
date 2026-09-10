@@ -25,8 +25,16 @@ test('SelectMenu 提供键盘、搜索、选中态与窗口安全定位', () => 
   assert.match(selectSource, /aria-activedescendant=/)
   assert.match(selectSource, /event\.key === 'Escape'/)
   assert.match(selectSource, /event\.key === 'Home' \|\| event\.key === 'End'/)
+  assert.match(selectSource, /event\.key === 'Enter' \|\| \(!searchable && event\.key === ' '\)/)
   assert.match(selectSource, /searchable && <div className="select-menu-search-wrap">/)
   assert.match(selectSource, /createPortal\(/)
+})
+
+test('SelectMenu 非搜索模式把真实 listbox 作为键盘焦点 Owner', () => {
+  assert.match(selectSource, /const listboxRef = useRef<HTMLDivElement>\(null\)/)
+  assert.match(selectSource, /\(searchable \? searchRef\.current : listboxRef\.current\)\?\.focus/)
+  assert.match(selectSource, /<div ref=\{listboxRef\} id=\{listboxId\}[\s\S]*?role="listbox"[\s\S]*?tabIndex=\{searchable \? undefined : -1\}/)
+  assert.doesNotMatch(selectSource, /\(searchable \? searchRef\.current : menuRef\.current\)\?\.focus/)
 })
 
 test('路径型项目选项第一行收敛为项目名，第二行保留路径并提供 tooltip', () => {
