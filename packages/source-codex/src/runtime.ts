@@ -12,8 +12,6 @@ import { abortableDelay } from '@agent-lens/runtime-cordis'
 import { CODEX_CURRENT_PARSER_VERSION } from './current-protocol'
 
 const POLL_INTERVAL_MS = 250
-const MAX_STRING = 32 * 1024
-const SENSITIVE_KEY = /(password|passwd|secret|token|api[_-]?key|authorization|cookie)/i
 
 interface CodexInboxEnvelope {
   id: string
@@ -25,23 +23,6 @@ function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex')
 }
 
-function truncate(value: string): string {
-  return value.length <= MAX_STRING ? value : `${value.slice(0, MAX_STRING)}…[truncated]`
-}
-
-function sanitize(value: unknown, depth = 0): unknown {
-  if (depth > 8) return '[max-depth]'
-  if (typeof value === 'string') return truncate(value)
-  if (value == null || typeof value === 'number' || typeof value === 'boolean') return value
-  if (Array.isArray(value)) return value.slice(0, 200).map(item => sanitize(item, depth + 1))
-  if (typeof value !== 'object') return String(value)
-
-  const result: Record<string, unknown> = {}
-  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
-    result[key] = SENSITIVE_KEY.test(key) ? '[redacted]' : sanitize(item, depth + 1)
-  }
-  return result
-}
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -71,24 +52,13 @@ function nativeSessionId(event: Record<string, unknown>): string {
 }
 
 function nativeId(event: Record<string, unknown>): string | undefined {
-  const name = eventName(event)
-  if (name === 'PreToolUse' || name === 'PostToolUse') {
-    return stringField(event, 'call_id', 'tool_use_id')
-  }
-  return stringField(
-    event,
-    'source_event_id',
-    'hook_invocation_id',
-    'turn_id',
-    'agent_id',
-    'subagent_id',
-  )
+  return stringField(event, 'source_event_id', 'hook_invocation_id')
 }
 
 function parseEnvelope(text: string, fileName: string): CodexInboxEnvelope {
   try {
     const parsed = asRecord(JSON.parse(text))
-    const event = asRecord(sanitize(parsed.event))
+    const event = asRecord(parsed.event)
     return {
       id: typeof parsed.id === 'string' && parsed.id ? parsed.id : fileName,
       capturedAt: typeof parsed.capturedAt === 'string' && parsed.capturedAt
@@ -102,7 +72,7 @@ function parseEnvelope(text: string, fileName: string): CodexInboxEnvelope {
       capturedAt: new Date().toISOString(),
       event: {
         hook_event_name: 'MalformedInboxEvent',
-        raw: truncate(text),
+        raw: text,
       },
     }
   }
