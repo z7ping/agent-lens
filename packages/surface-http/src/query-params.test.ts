@@ -14,12 +14,12 @@ function params(value: string): URLSearchParams {
 
 test('Review query exposes only the current protocol fields', () => {
   const query = parseReviewQuery(params(
-    'cursor=next&sourceId=codex&projectId=p1&from=2026-09-01T00%3A00%3A00.000Z&to=2026-09-02T00%3A00%3A00.000Z&status=with-errors&search=parser&limit=25&q=legacy&installationId=old&logicalSessionId=old-session',
+    'cursor=next&sourceId=codex&sourceId=pi&projectId=p1&from=2026-09-01T00%3A00%3A00.000Z&to=2026-09-02T00%3A00%3A00.000Z&status=with-errors&search=parser&limit=25&q=legacy&installationId=old&logicalSessionId=old-session',
   ))
 
   assert.deepEqual(query, {
     cursor: 'next',
-    sourceId: 'codex',
+    sourceIds: ['codex', 'pi'],
     projectId: 'p1',
     from: '2026-09-01T00:00:00.000Z',
     to: '2026-09-02T00:00:00.000Z',
@@ -55,12 +55,12 @@ test('Timeline validates kind, direction, range and limit at the HTTP boundary',
 
 test('Usage and Insights share strict timestamp ordering without sharing DTO fields', () => {
   assert.deepEqual(
-    parseUsageQuery(params('installationId=i1&toolName=read_file&sourceId=codex&limit=50')),
-    { installationId: 'i1', toolName: 'read_file', sourceId: 'codex', limit: 50 },
+    parseUsageQuery(params('installationId=i1&toolName=read_file&sourceId=codex&sourceId=pi&limit=50')),
+    { installationId: 'i1', toolName: 'read_file', sourceIds: ['codex', 'pi'], limit: 50 },
   )
   assert.deepEqual(
     parseInsightsQuery(params('logicalSessionId=s1&projectId=p1&sourceId=pi')),
-    { logicalSessionId: 's1', projectId: 'p1', sourceId: 'pi' },
+    { logicalSessionId: 's1', projectId: 'p1', sourceIds: ['pi'] },
   )
   assert.throws(
     () => parseUsageQuery(params('from=bad-date')),

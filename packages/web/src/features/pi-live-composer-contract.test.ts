@@ -6,6 +6,7 @@ const page = readFileSync(new URL('./PiLivePage.tsx', import.meta.url), 'utf8')
 const taskRound = readFileSync(new URL('./PiLiveTaskRound.tsx', import.meta.url), 'utf8')
 const taskMessage = readFileSync(new URL('./TaskMessage.tsx', import.meta.url), 'utf8')
 const css = readFileSync(new URL('../pi-live.css', import.meta.url), 'utf8')
+const sessionCss = readFileSync(new URL('../task-session-view.css', import.meta.url), 'utf8')
 const pill = readFileSync(new URL('../components/ComposerPillSelect.tsx', import.meta.url), 'utf8')
 const selectMenu = readFileSync(new URL('../components/SelectMenu.tsx', import.meta.url), 'utf8')
 const selectCss = readFileSync(new URL('../components/select-menu.css', import.meta.url), 'utf8')
@@ -57,8 +58,9 @@ test('Pi Live streaming assistant reuses TaskMessage and has no parallel respons
   assert.match(taskMessage, /aria-busy=\{streaming \|\| undefined\}/)
   assert.doesNotMatch(taskRound, /pi-live-stream-response|pi-live-stream-text|PiLiveRunningTaskRound/)
   assert.doesNotMatch(css, /\.pi-live-stream-response|\.pi-live-stream-text|\.pi-live-caret/)
-  assert.match(css, /\.pi-live-reader \{[\s\S]*?scrollbar-gutter:\s*stable;/)
-  assert.match(css, /\.pi-live-reader \{[\s\S]*?overflow-anchor:\s*none;/)
+  assert.match(sessionCss, /\.task-session-view \.task-session-reader \{[\s\S]*?scrollbar-gutter:\s*stable;/)
+  assert.match(sessionCss, /\.task-session-view \.task-session-reader \{[\s\S]*?overflow-anchor:\s*none;/)
+  assert.doesNotMatch(css, /\.pi-live-reader\s*\{/)
 })
 
 test('Pi Live sends optimistically into one stable ordered current round before the first token', () => {
@@ -111,7 +113,7 @@ test('Pi Live reconnect hydrates the streaming round from Snapshot into the same
   assert.match(page, /if \(value\.state\.isStreaming\) \{[\s\S]*?projectPiLiveTaskRounds\(projectPiLiveHistory\(value\)\)/)
   assert.match(page, /setCurrentOrdinal\(ordinal\)/)
   assert.match(page, /markPiLiveItemsRunning\(current\.length \? reconcilePiLiveItems\(current, persisted\) : persisted\)/)
-  assert.match(page, /piLiveApi\.snapshot\(runtimeId, leafIdRef\.current\)\.then\(acceptSnapshot/)
+  assert.match(page, /piLiveApi\.snapshot\(runtimeId, leafIdRef\.current\)\.then\(acceptSnapshot\)/)
 })
 
 test('Pi Live 生成中使用专用介入和继续通道并即时展示队列', () => {
