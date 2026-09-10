@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto'
-import { createReadStream } from 'node:fs'
 import { open, opendir, readFile, stat } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 import type { SourceExecutionContext, SourceHistoryExecutionContext, SourceHistoryWindow, SourceRecord } from '@agent-lens/core'
+import { isCompleteJson, isMissingPathError, readJsonlLines, type JsonlLine } from '@agent-lens/runtime-cordis'
 import {
   nativeIdForEntry,
   nativeTypeForEntry,
@@ -24,11 +24,6 @@ interface MetadataCheckpoint {
   titleFingerprint?: string
 }
 
-interface JsonlLine {
-  text: string
-  startOffset: number
-  endOffset: number
-}
 
 interface CodexThreadName {
   title: string
@@ -52,8 +47,9 @@ async function* walkJsonlFiles(root: string): AsyncIterable<string> {
   let directory
   try {
     directory = await opendir(root)
-  } catch {
-    return
+  } catch (error) {
+    if (isMissingPathError(error)) return
+    throw error
   }
 
   for await (const entry of directory) {
@@ -73,8 +69,9 @@ async function listJsonlFiles(root: string, historyWindow?: SourceHistoryWindow)
   const candidates = (await Promise.all(paths.map(async path => {
     try {
       return { path, mtimeMs: (await stat(path)).mtimeMs }
-    } catch {
-      return null
+    } catch (error) {
+      if (isMissingPathError(error)) return null
+      throw error
     }
   }))).filter((candidate): candidate is { path: string; mtimeMs: number } => candidate !== null)
 
@@ -117,7 +114,8 @@ async function readThreadNames(codexHome: string | undefined): Promise<Map<strin
         // session_index.jsonl 是 append-only；坏行不应阻断其他会话标题读取。
       }
     }
-  } catch {
+  } catch (error) {
+    if (!isMissingPathError(error)) throw error
     // 旧版 Codex 可能不存在 session_index.jsonl，保持首条用户消息兜底。
   }
   return result
@@ -160,58 +158,13 @@ async function readSessionMetadata(
   }
 }
 
-async function* readJsonlLines(
-  filePath: string,
-  startOffset: number,
-  endOffset?: number,
-): AsyncIterable<JsonlLine> {
-  if (endOffset !== undefined && endOffset <= startOffset) return
-  const stream = createReadStream(filePath, {
-    start: startOffset,
-    ...(endOffset === undefined ? {} : { end: endOffset - 1 }),
-  })
-  let carry = Buffer.alloc(0)
-  let carryOffset = startOffset
-
-  for await (const rawChunk of stream) {
-    const chunk = Buffer.isBuffer(rawChunk) ? rawChunk : Buffer.from(rawChunk)
-    const data = carry.length ? Buffer.concat([carry, chunk]) : chunk
-    const dataOffset = carryOffset
-    let cursor = 0
-
-    while (true) {
-      const newline = data.indexOf(0x0a, cursor)
-      if (newline < 0) break
-      let line = data.subarray(cursor, newline)
-      if (line.length && line[line.length - 1] === 0x0d) line = line.subarray(0, -1)
-      yield {
-        text: line.toString('utf8'),
-        startOffset: dataOffset + cursor,
-        endOffset: dataOffset + newline + 1,
-      }
-      cursor = newline + 1
-    }
-
-    carry = data.subarray(cursor)
-    carryOffset = dataOffset + cursor
-  }
-
-  if (carry.length) {
-    yield {
-      text: carry.toString('utf8'),
-      startOffset: carryOffset,
-      endOffset: carryOffset + carry.length,
-    }
-  }
-}
-
 function parseLine(text: string): Record<string, unknown> {
   try {
     return asRecord(JSON.parse(text))
   } catch {
     return {
       type: 'malformed-json',
-      payload: { raw: text.slice(0, 16 * 1024) },
+      payload: { raw: text },
     }
   }
 }
@@ -271,19 +224,18 @@ function metadataRecord(
   const title = session.title?.trim()
   if (kind === 'session_start' && !session.startedAt) return null
   if (kind === 'session_title' && !title) return null
-  const nativeId = kind === 'session_start'
+  const recordKey = kind === 'session_start'
     ? `session-start:${session.nativeSessionId}`
     : `session-title:${session.nativeSessionId}:${sha256(title!).slice(0, 16)}`
   const payload = kind === 'session_start'
     ? { startedAt: session.startedAt }
     : { title, ...(indexedTitle?.updatedAt ? { updatedAt: indexedTitle.updatedAt } : {}) }
   return {
-    id: `codex-metadata-${sha256(nativeId).slice(0, 32)}`,
+    id: `codex-metadata-${sha256(recordKey).slice(0, 32)}`,
     sourceId: 'codex',
     installationId: ctx.installation.id,
     sourceSessionNativeId: session.nativeSessionId,
     nativeType: `metadata/${kind}`,
-    nativeId,
     ...(kind === 'session_start' && session.startedAt ? { occurredAt: session.startedAt } : {}),
     capturedAt: new Date().toISOString(),
     locator: {
@@ -368,6 +320,8 @@ export async function* ingestCodexHistory(ctx: SourceHistoryExecutionContext): A
 
     for await (const line of readJsonlLines(filePath, offset)) {
       if (ctx.abortSignal.aborted) break
+      if (!line.terminated && line.text.trim() && !isCompleteJson(line.text)) break
+
       sequence += 1
       offset = line.endOffset
 
