@@ -9,6 +9,7 @@ const MAX_MESSAGE_BYTES = 1024 * 1024
 const MAX_OUTBOUND_MESSAGES = 256
 const MAX_SEEN_REQUEST_IDS = 512
 let runtimeSessionId = ''
+let runtimeCwd = ''
 let sdk
 let loadedSdkEntry
 let runtime
@@ -391,6 +392,7 @@ function handshakeDiagnostics() {
 }
 
 async function initialize(input) {
+  runtimeCwd = typeof input.cwd === 'string' ? input.cwd : ''
   initializationStartedAt = Date.now()
   currentInitializationStage = undefined
   currentStageStartedAt = initializationStartedAt
@@ -456,6 +458,7 @@ function state() {
     ...(session.sessionName ? { sessionName: session.sessionName } : {}), ...(session.model ? { model: session.model } : {}),
     thinkingLevel: session.thinkingLevel, isStreaming: session.isStreaming, isCompacting: session.isCompacting,
     pendingMessageCount: session.pendingMessageCount, leafId: session.sessionManager.getLeafId(), processId: process.pid,
+    startupResources: startupResourceSnapshot(record(session).resourceLoader, runtimeCwd),
   }
 }
 
