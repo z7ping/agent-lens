@@ -288,7 +288,7 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
 
     storage.db.prepare(`UPDATE source_records SET parser_version = '6' WHERE source_id = 'pi'`).run()
     const staleBefore = storage.db.prepare(`
-      SELECT COUNT(*) AS count FROM source_records WHERE source_id = 'pi' AND parser_version != '7'
+      SELECT COUNT(*) AS count FROM source_records WHERE source_id = 'pi' AND parser_version != '8'
     `).get() as { count: number }
     const replay = await history.replay({
       source: piSourceDefinition,
@@ -298,7 +298,7 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
     })
     assert.equal(replay.records, staleBefore.count)
     const staleParsers = storage.db.prepare(`
-      SELECT COUNT(*) AS count FROM source_records WHERE source_id = 'pi' AND parser_version != '7'
+      SELECT COUNT(*) AS count FROM source_records WHERE source_id = 'pi' AND parser_version != '8'
     `).get() as { count: number }
     assert.equal(staleParsers.count, 0)
   } finally {
