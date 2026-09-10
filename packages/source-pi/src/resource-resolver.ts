@@ -84,13 +84,11 @@ function observedEvidence(
   path: string,
   observedAt: string,
   capturedAt: string,
-  nativeStableId: string,
 ): EvidenceCandidate {
   return {
     captureMethod: 'static-scan',
     derivation: 'observed',
     sourceLocator: { kind: 'file', path },
-    nativeStableId,
     eventTime: observedAt,
     capturedAt,
     confidenceHint: 'exact',
@@ -100,13 +98,11 @@ function observedEvidence(
 function derivedEvidence(
   path: string,
   capturedAt: string,
-  nativeStableId: string,
 ): EvidenceCandidate {
   return {
     captureMethod: 'static-scan',
     derivation: 'derived',
     sourceLocator: { kind: 'file', path },
-    nativeStableId,
     capturedAt,
     confidenceHint: 'high',
   }
@@ -121,7 +117,6 @@ function resourceStates(input: {
   path: string
   observedAt: string
   capturedAt: string
-  nativeStableId: string
   configured: boolean
   enabled: EffectiveResourceState
   discoverable: EffectiveResourceState
@@ -130,12 +125,10 @@ function resourceStates(input: {
     input.path,
     input.observedAt,
     input.capturedAt,
-    `${input.nativeStableId}:installed`,
   )
-  const stateEvidence = (state: 'configured' | 'enabled' | 'discoverable') => derivedEvidence(
+  const stateEvidence = (_state: 'configured' | 'enabled' | 'discoverable') => derivedEvidence(
     input.path,
     input.capturedAt,
-    `${input.nativeStableId}:${state}`,
   )
   return [
     {
@@ -324,7 +317,6 @@ async function resolvedPromptsAsAssets(input: {
         path: resource.path,
         observedAt,
         capturedAt: input.capturedAt,
-        nativeStableId: `prompt:${resource.path}:${resourceSource(resource, input.projectCwd)}`,
         configured: configuredResource(resource),
         enabled,
         discoverable,
@@ -392,7 +384,6 @@ async function resolvedThemesAsAssets(input: {
         path: resource.path,
         observedAt,
         capturedAt: input.capturedAt,
-        nativeStableId: `theme:${resource.path}:${resourceSource(resource, input.projectCwd)}`,
         configured: configuredResource(resource),
         enabled,
         discoverable,
@@ -418,7 +409,6 @@ async function contextAsset(
       path,
       observedAt,
       capturedAt,
-      nativeStableId: `context:${path}:${source}`,
       configured: false,
       enabled,
       discoverable,
@@ -621,7 +611,6 @@ async function resolvedSkillsAsAssets(input: {
         path: skill.filePath,
         observedAt,
         capturedAt: input.capturedAt,
-        nativeStableId: `skill:${skill.filePath}:${source}`,
         configured: configuredResource(resource),
         enabled,
         discoverable,
@@ -664,7 +653,6 @@ async function resolvedExtensionsAsAssets(input: {
         path: resource.path,
         observedAt,
         capturedAt: input.capturedAt,
-        nativeStableId: `extension:${resource.path}:${source}`,
         configured: configuredResource(resource),
         enabled,
         discoverable,
