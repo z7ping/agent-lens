@@ -880,6 +880,7 @@ export class SourceAssetRunner {
       )
       const previousSnapshot = await checkpoint.get<AssetDiscoverySnapshot>(ASSET_DISCOVERY_SNAPSHOT_KEY)
       const currentBindings = new Map<string, Set<AssetState>>()
+      const reportedBindingStates = new Map<string, Set<AssetState>>()
       const yieldForInteractivity = createCooperativeScheduler()
 
       for await (const discovered of source.discoverAssets({
@@ -907,6 +908,8 @@ export class SourceAssetRunner {
         result.assetsDiscovered += 1
         const bindingStates = currentBindings.get(binding.id) ?? new Set<AssetState>()
         currentBindings.set(binding.id, bindingStates)
+        const reportedStates = reportedBindingStates.get(binding.id) ?? new Set<AssetState>()
+        reportedBindingStates.set(binding.id, reportedStates)
         for (const state of safeDiscovered.states ?? []) {
           const evidenceRefs: string[] = []
           for (const candidate of state.evidenceCandidates ?? []) {
@@ -919,6 +922,7 @@ export class SourceAssetRunner {
             observedAt: state.observedAt,
             evidenceRefs,
           })
+          reportedStates.add(state.state)
           if (state.value === true && ASSET_PRESENCE_STATES.has(state.state)) bindingStates.add(state.state)
           result.statesRecorded += 1
         }
@@ -934,6 +938,24 @@ export class SourceAssetRunner {
           ),
           completedAt,
         }
+
+        // Omission means unknown. This also neutralizes optimistic states written by older
+        // SourceAssetRunner versions when the binding still exists but the source no longer
+        // reports enough evidence for that state.
+        for (const [bindingId, reportedStates] of reportedBindingStates) {
+          for (const state of previousSnapshot?.bindings[bindingId] ?? []) {
+            if (!ASSET_PRESENCE_STATES.has(state) || reportedStates.has(state)) continue
+            await this.assets.recordState({
+              assetBindingId: bindingId,
+              state,
+              value: 'unknown',
+              observedAt: completedAt,
+              evidenceRefs: [],
+            })
+            result.statesCleared += 1
+          }
+        }
+
         for (const [bindingId, states] of Object.entries(previousSnapshot?.bindings ?? {})) {
           if (currentBindings.has(bindingId)) continue
           result.assetsRemoved += 1
