@@ -5,7 +5,7 @@ import type {
   EvidenceCandidate,
   SourceExecutionContext,
 } from '@agent-lens/core'
-import { loadInstalledPiSdk } from '@agent-lens/runtime-cordis'
+import { isMissingPathError, loadInstalledPiSdk } from '@agent-lens/runtime-cordis'
 import { resolvePiResourceAssets } from './resource-resolver'
 
 interface SkillMetadata {
@@ -22,16 +22,18 @@ type PiSkillLoader = (options: { dir: string; source: string }) => PiSkillLoader
 async function safeStat(path: string) {
   try {
     return await stat(path)
-  } catch {
-    return null
+  } catch (error) {
+    if (isMissingPathError(error)) return null
+    throw error
   }
 }
 
 async function safeEntries(path: string) {
   try {
     return await readdir(path, { withFileTypes: true })
-  } catch {
-    return []
+  } catch (error) {
+    if (isMissingPathError(error)) return []
+    throw error
   }
 }
 
@@ -173,8 +175,9 @@ async function readSkillMetadata(filePath: string): Promise<SkillMetadata | null
   let text: string
   try {
     text = await readFile(filePath, 'utf8')
-  } catch {
-    return null
+  } catch (error) {
+    if (isMissingPathError(error)) return null
+    throw error
   }
   const frontmatter = skillFrontmatter(text)
   if (!frontmatter?.description?.trim()) return null
@@ -269,8 +272,9 @@ async function piManifestExtensions(directory: string): Promise<string[]> {
       if (entryMeta?.isFile()) paths.push(path)
     }
     return paths
-  } catch {
-    return []
+  } catch (error) {
+    if (isMissingPathError(error) || error instanceof SyntaxError) return []
+    throw error
   }
 }
 
