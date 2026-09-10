@@ -539,7 +539,12 @@ export async function startHermesRuntimeCapture(
 
 async function* walkSkillFiles(root: string): AsyncIterable<string> {
   let dir
-  try { dir = await opendir(root) } catch { return }
+  try {
+    dir = await opendir(root)
+  } catch (error) {
+    if (isMissingPathError(error)) return
+    throw error
+  }
   for await (const entry of dir) {
     const path = join(root, entry.name)
     if (entry.isDirectory()) yield* walkSkillFiles(path)
@@ -569,8 +574,13 @@ function installedState(path: string, observedAt: string): NonNullable<Discovere
 
 async function* discoverSkillAssets(root: string): AsyncIterable<DiscoveredAsset> {
   for await (const skillFile of walkSkillFiles(join(root, 'skills'))) {
-    const meta = await stat(skillFile).catch(() => null)
-    if (!meta) continue
+    let meta
+    try {
+      meta = await stat(skillFile)
+    } catch (error) {
+      if (isMissingPathError(error)) continue
+      throw error
+    }
     const relative = skillFile.slice(join(root, 'skills').length + 1).replace(/[\\/]+SKILL\.md$/, '')
     const name = relative.replace(/[\\/]+/g, ':') || basename(dirname(skillFile))
     const observedAt = meta.mtime.toISOString()
@@ -582,15 +592,25 @@ async function* discoverSkillAssets(root: string): AsyncIterable<DiscoveredAsset
   }
 }
 
-async function* discoverDirectoryAssets(root: string, directory: string, type: 'plugin' | 'mcp' | 'memory'): AsyncIterable<DiscoveredAsset> {
+async function* discoverDirectoryAssets(root: string, directory: string, type: 'plugin' | 'memory'): AsyncIterable<DiscoveredAsset> {
   const path = join(root, directory)
   let entries
-  try { entries = await readdir(path, { withFileTypes: true }) } catch { return }
+  try {
+    entries = await readdir(path, { withFileTypes: true })
+  } catch (error) {
+    if (isMissingPathError(error)) return
+    throw error
+  }
   for (const entry of entries) {
     if (!entry.isDirectory() && type !== 'memory') continue
     const itemPath = join(path, entry.name)
-    const meta = await stat(itemPath).catch(() => null)
-    if (!meta) continue
+    let meta
+    try {
+      meta = await stat(itemPath)
+    } catch (error) {
+      if (isMissingPathError(error)) continue
+      throw error
+    }
     const observedAt = meta.mtime.toISOString()
     yield {
       definition: { type, canonicalName: entry.name, displayName: entry.name },
@@ -600,58 +620,87 @@ async function* discoverDirectoryAssets(root: string, directory: string, type: '
   }
 }
 
-function yamlSectionNames(text: string, section: string): string[] {
-  const names: string[] = []
-  let active = false
-  for (const line of text.split(/\r?\n/)) {
-    if (!line.trim() || line.trim().startsWith('#')) continue
-    const top = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/)
-    if (top && !line.startsWith(' ')) {
-      active = top[1] === section
-      continue
-    }
-    if (!active) continue
-    const child = line.match(/^\s{2}([A-Za-z0-9_.@/-]+):/)
-    if (child) names.push(child[1])
-  }
-  return names
+function stringSet(value: unknown): Set<string> {
+  if (!Array.isArray(value)) return new Set()
+  return new Set(value.filter((item): item is string => typeof item === 'string' && Boolean(item.trim())).map(item => item.trim()))
 }
 
-function yamlListValues(text: string, sections: string[]): string[] {
-  const wanted = new Set(sections)
-  const values: string[] = []
-  let active = false
-  for (const line of text.split(/\r?\n/)) {
-    if (!line.trim() || line.trim().startsWith('#')) continue
-    const top = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/)
-    if (top && !line.startsWith(' ')) {
-      active = wanted.has(top[1])
-      continue
-    }
-    if (!active) continue
-    const item = line.match(/^\s*-\s*["']?([^"'\s#]+)["']?/)
-    if (item) values.push(item[1])
+function boolLike(value: unknown, fallback: boolean): boolean {
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value !== 0
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    if (['true', '1', 'yes', 'on'].includes(normalized)) return true
+    if (['false', '0', 'no', 'off'].includes(normalized)) return false
   }
-  return values
+  return fallback
+}
+
+function parseHermesConfig(text: string): Record<string, unknown> {
+  return asRecord(parseYaml(text))
 }
 
 async function* discoverConfigAssets(root: string): AsyncIterable<DiscoveredAsset> {
   const configPath = join(root, 'config.yaml')
-  if (!await exists(configPath)) return
-  const [text, meta] = await Promise.all([readFile(configPath, 'utf8'), stat(configPath)])
+  let text: string
+  let meta
+  try {
+    ;[text, meta] = await Promise.all([readFile(configPath, 'utf8'), stat(configPath)])
+  } catch (error) {
+    if (isMissingPathError(error)) return
+    throw error
+  }
+
+  const config = parseHermesConfig(text)
   const observedAt = meta.mtime.toISOString()
-  for (const name of yamlSectionNames(text, 'mcp_servers')) {
+  const evidenceCandidates = assetEvidence(configPath, observedAt)
+  const mcpServers = asRecord(config.mcp_servers)
+
+  for (const [name, rawConfig] of Object.entries(mcpServers)) {
+    const server = asRecord(rawConfig)
+    const enabled = boolLike(server.enabled, true)
     yield {
       definition: { type: 'mcp', canonicalName: name, displayName: name },
       binding: { path: configPath, source: 'hermes:config' },
-      states: [{ state: 'configured', value: true, observedAt, evidenceCandidates: assetEvidence(configPath, observedAt) }],
+      states: [
+        { state: 'configured', value: true, observedAt, evidenceCandidates },
+        { state: 'enabled', value: enabled, observedAt, evidenceCandidates },
+        {
+          state: 'discoverable',
+          value: enabled ? 'unknown' : false,
+          observedAt,
+          ...(enabled ? {} : { evidenceCandidates }),
+        },
+      ],
     }
   }
-  for (const name of yamlListValues(text, ['toolsets', 'platform_toolsets'])) {
+
+  const plugins = asRecord(config.plugins)
+  const enabledPlugins = stringSet(plugins.enabled)
+  const disabledPlugins = stringSet(plugins.disabled)
+  for (const name of new Set([...enabledPlugins, ...disabledPlugins])) {
+    const enabled = enabledPlugins.has(name) && !disabledPlugins.has(name)
     yield {
-      definition: { type: 'builtin', canonicalName: name, displayName: name },
+      definition: { type: 'plugin', canonicalName: name, displayName: name },
       binding: { path: configPath, source: 'hermes:config' },
-      states: [{ state: 'configured', value: true, observedAt, evidenceCandidates: assetEvidence(configPath, observedAt) }],
+      states: [
+        { state: 'configured', value: true, observedAt, evidenceCandidates },
+        { state: 'enabled', value: enabled, observedAt, evidenceCandidates },
+      ],
+    }
+  }
+
+  for (const section of ['toolsets', 'platform_toolsets']) {
+    const values = config[section]
+    const names = Array.isArray(values)
+      ? values.filter((item): item is string => typeof item === 'string' && Boolean(item.trim())).map(item => item.trim())
+      : Object.keys(asRecord(values))
+    for (const name of names) {
+      yield {
+        definition: { type: 'builtin', canonicalName: name, displayName: name },
+        binding: { path: configPath, source: `hermes:config:${section}` },
+        states: [{ state: 'configured', value: true, observedAt, evidenceCandidates }],
+      }
     }
   }
 }
@@ -662,7 +711,6 @@ export async function* discoverHermesAssets(ctx: SourceExecutionContext): AsyncI
     for (const group of [
       discoverSkillAssets(root),
       discoverDirectoryAssets(root, 'plugins', 'plugin'),
-      discoverDirectoryAssets(root, 'mcp-servers', 'mcp'),
       discoverDirectoryAssets(root, 'memories', 'memory'),
       discoverConfigAssets(root),
     ]) {
@@ -676,21 +724,16 @@ export async function* discoverHermesAssets(ctx: SourceExecutionContext): AsyncI
 
 function evidenceFor(record: SourceRecord, envelope: HermesEnvelope): EvidenceCandidate {
   const runtime = isHermesHookEnvelope(envelope)
-  return {
+  return evidenceFromSourceRecord(record, {
     captureMethod: runtime ? 'runtime-hook' : 'native-db',
     derivation: runtime ? 'observed' : 'reported',
-    sourceRecordId: record.id,
-    sourceLocator: record.locator,
-    parserVersion: record.parserVersion,
     ...(record.nativeId ? { nativeStableId: record.nativeId } : {}),
-    ...(record.occurredAt ? { eventTime: record.occurredAt } : {}),
-    capturedAt: record.capturedAt,
     ...(runtime
       ? { confidenceHint: 'high' as const }
       : envelope.captureChannel
         ? { confidenceHint: 'exact' as const }
         : {}),
-  }
+  })
 }
 
 function identity(_record: SourceRecord, envelope: HermesEnvelope): ObservationIdentityHints {
@@ -708,27 +751,24 @@ function candidate(
   envelope: HermesEnvelope,
   kind: ObservationCandidate['kind'],
   payload: unknown,
-  options: { nativeCallId?: string; nativeEventId?: string; offset?: number } = {},
+  options: {
+    nativeCallId?: string
+    nativeEventId?: string
+    sharedEventKey?: string
+    offset?: number
+  } = {},
 ): ObservationCandidate {
-  const nativeCallId = options.nativeCallId
-  const nativeEventId = options.nativeEventId ?? (!nativeCallId ? record.nativeId : undefined)
-  const sourceSequence = record.sourceSequence === undefined ? undefined : record.sourceSequence + (options.offset ?? 0)
-  return {
+  const nativeEventId = options.nativeEventId
+    ?? (!options.nativeCallId && !options.sharedEventKey ? record.nativeId : undefined)
+  return observationFromSourceRecord(record, {
     kind,
-    ...(nativeCallId ? { nativeCallId } : {}),
-    ...(nativeEventId ? { nativeEventId } : {}),
-    ...(sourceSequence === undefined ? {} : { sourceSequence }),
-    ...(record.occurredAt ? { occurredAt: record.occurredAt } : {}),
-    capturedAt: record.capturedAt,
     payload,
     identityHints: identity(record, envelope),
-    dedupHints: {
-      ...(nativeCallId ? { nativeCallId } : {}),
-      ...(nativeEventId ? { nativeEventId } : {}),
-      ...(sourceSequence === undefined ? {} : { sourceSequence }),
-      ...(record.fingerprint ? { payloadFingerprint: record.fingerprint } : {}),
-    },
-  }
+    ...(options.nativeCallId ? { nativeCallId: options.nativeCallId } : {}),
+    ...(nativeEventId ? { nativeEventId } : {}),
+    ...(options.sharedEventKey ? { sharedEventKey: options.sharedEventKey } : {}),
+    sequenceOffset: options.offset ?? 0,
+  })
 }
 
 function toolCalls(value: unknown): Record<string, unknown>[] {
@@ -742,16 +782,16 @@ function toolCallParts(call: Record<string, unknown>): { callId?: string; toolNa
   const toolName = stringField(fn, 'name') ?? stringField(call, 'name', 'tool_name') ?? 'unknown'
   let input: unknown = fn.arguments ?? call.arguments ?? call.args ?? {}
   if (typeof input === 'string') input = parseJson(input)
-  return { ...(callId ? { callId } : {}), toolName, input: sanitize(input) }
+  return { ...(callId ? { callId } : {}), toolName, input }
 }
 
 function contentText(message: Record<string, unknown>): string {
   const raw = message.raw_content
-  if (typeof raw === 'string') return truncate(raw)
+  if (typeof raw === 'string') return raw
   const content = message.content
-  if (typeof content === 'string') return truncate(content)
+  if (typeof content === 'string') return content
   if (content == null) return ''
-  return truncate(typeof content === 'object' ? JSON.stringify(content) : String(content))
+  return typeof content === 'object' ? JSON.stringify(content) : String(content)
 }
 
 function resultSuccess(content: unknown): boolean | undefined {
@@ -774,24 +814,29 @@ function normalizeDbEnvelope(record: SourceRecord, envelope: HermesDbEnvelope): 
     let offset = 1
     for (const call of toolCalls(message.tool_calls)) {
       const parts = toolCallParts(call)
-      const callId = parts.callId ?? `hermes-call-${record.id}-${offset}`
+      const callId = parts.callId
       observations.push(candidate(record, envelope, 'tool.call', {
-        callId,
+        ...(callId ? { callId } : {}),
         nativeToolName: parts.toolName,
         input: parts.input,
-      }, { nativeCallId: callId, offset: offset++ }))
+      }, {
+        ...(callId ? { nativeCallId: callId } : { sharedEventKey: `hermes-call:${record.id}:${offset}` }),
+        offset: offset++,
+      }))
     }
     if (!observations.length) observations.push(candidate(record, envelope, 'message.assistant', { text: '' }))
   } else if (role === 'tool') {
-    const callId = stringField(message, 'tool_call_id') ?? `hermes-result-${record.id}`
+    const callId = stringField(message, 'tool_call_id')
     const content = message.content
     const success = resultSuccess(content)
     observations.push(candidate(record, envelope, 'tool.result', {
-      callId,
+      ...(callId ? { callId } : {}),
       nativeToolName: stringField(message, 'tool_name') ?? 'unknown',
       ...(success === undefined ? {} : { success }),
-      output: sanitize(content ?? message.raw_content ?? ''),
-    }, { nativeCallId: callId }))
+      output: content ?? message.raw_content ?? '',
+    }, {
+      ...(callId ? { nativeCallId: callId } : { sharedEventKey: `hermes-result:${record.id}` }),
+    }))
   } else {
     observations.push(candidate(record, envelope, 'unknown', { rawType: `message/${role}`, rawPayload: message }))
   }
@@ -810,34 +855,40 @@ function normalizeHookEnvelope(record: SourceRecord, envelope: HermesHookEnvelop
     return [candidate(record, envelope, 'session.lifecycle', { event: 'session.ended' })]
   }
   if (eventName === 'pre_tool_call') {
-    const id = callId ?? `hermes-hook-call-${record.id}`
     return [candidate(record, envelope, 'tool.call', {
-      callId: id,
+      ...(callId ? { callId } : {}),
       nativeToolName: toolName,
-      input: sanitize(event.args ?? event.tool_input ?? {}),
-    }, { nativeCallId: id })]
+      input: event.args ?? event.tool_input ?? {},
+    }, {
+      ...(callId
+        ? { nativeCallId: callId }
+        : { sharedEventKey: hookSharedCallKey(event, record.id) }),
+    })]
   }
   if (eventName === 'post_tool_call') {
-    const id = callId ?? `hermes-hook-call-${record.id}`
     const status = stringField(event, 'status')
     const success = status ? status === 'ok' : resultSuccess(parseJson(typeof event.result === 'string' ? event.result : null))
     return [candidate(record, envelope, 'tool.result', {
-      callId: id,
+      ...(callId ? { callId } : {}),
       nativeToolName: toolName,
       ...(success === undefined ? {} : { success }),
-      output: sanitize(event.result ?? ''),
+      output: event.result ?? '',
       ...(typeof event.duration_ms === 'number' ? { durationMs: event.duration_ms } : {}),
       ...(status ? { status } : {}),
-    }, { nativeCallId: id })]
+    }, {
+      ...(callId
+        ? { nativeCallId: callId }
+        : { sharedEventKey: hookSharedCallKey(event, record.id) }),
+    })]
   }
   if (eventName === 'pre_approval_request') {
-    return [candidate(record, envelope, 'permission.request', sanitize(event))]
+    return [candidate(record, envelope, 'permission.request', event)]
   }
   if (eventName === 'post_approval_response') {
-    return [candidate(record, envelope, 'permission.response', sanitize(event))]
+    return [candidate(record, envelope, 'permission.response', event)]
   }
-  if (eventName === 'subagent_start') return [candidate(record, envelope, 'subagent.spawn', sanitize(event))]
-  if (eventName === 'subagent_stop') return [candidate(record, envelope, 'subagent.end', sanitize(event))]
+  if (eventName === 'subagent_start') return [candidate(record, envelope, 'subagent.spawn', event)]
+  if (eventName === 'subagent_stop') return [candidate(record, envelope, 'subagent.end', event)]
   return [candidate(record, envelope, 'unknown', { rawType: `hook/${eventName}`, rawPayload: event })]
 }
 
@@ -860,7 +911,7 @@ export async function declareHermesCapabilities(_detected: DetectedSource): Prom
     { sourceId: SOURCE_ID, name: 'tool-result', status: 'available', captureModes: ['history', 'native-tail', 'runtime-hook'] },
     { sourceId: SOURCE_ID, name: 'permission', status: 'partial', captureModes: ['runtime-hook'], reason: 'Available when the optional AgentLens Hermes observer plugin is explicitly enabled' },
     { sourceId: SOURCE_ID, name: 'subagent', status: 'partial', captureModes: ['runtime-hook'], reason: 'Available when the optional AgentLens Hermes observer plugin is explicitly enabled' },
-    { sourceId: SOURCE_ID, name: 'asset-discovery', status: 'available', captureModes: ['static-scan'] },
+    { sourceId: SOURCE_ID, name: 'asset-discovery', status: 'partial', captureModes: ['static-scan'], reason: 'User-scope files and config are observable; runtime-loaded, bundled, pip and project-plugin discovery requires stronger runtime evidence' },
     { sourceId: SOURCE_ID, name: 'thinking', status: 'unavailable', captureModes: [], reason: 'No stable source-visible reasoning mapping is implemented' },
     { sourceId: SOURCE_ID, name: 'context', status: 'unavailable', captureModes: [], reason: 'Context lifecycle mapping is not implemented' },
     { sourceId: SOURCE_ID, name: 'usage', status: 'unavailable', captureModes: [], reason: 'Usage mapping is not implemented' },
@@ -907,8 +958,8 @@ export const hermesSourceInternals = {
   rowFingerprint,
   parseInboxEnvelope,
   hookRecord,
-  yamlSectionNames,
-  yamlListValues,
+  parseHermesConfig,
+  boolLike,
   selectRows,
   hermesEnvelope,
 }
