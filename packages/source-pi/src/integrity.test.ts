@@ -174,6 +174,61 @@ test('Pi detection honors absolute settings.sessionDir without overriding an exp
   }
 })
 
+test('Pi detection does not resolve relative session roots against the AgentLens daemon cwd', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-pi-relative-session-dir-'))
+  const agentDir = join(root, 'agent')
+  await mkdir(agentDir, { recursive: true })
+
+  const host = {
+    id: 'pi-relative-session-dir-host',
+    name: 'pi-relative-session-dir-host',
+    platform: process.platform,
+    arch: process.arch,
+    createdAt: '2026-09-10T00:00:00.000Z',
+    lastSeenAt: '2026-09-10T00:00:00.000Z',
+  }
+
+  try {
+    await writeFile(join(agentDir, 'settings.json'), JSON.stringify({ sessionDir: './sessions-from-invocation' }), 'utf8')
+    const [fromSettings] = await detectPi({ host, env: { PI_CODING_AGENT_DIR: agentDir, PATH: '' } })
+    assert.ok(fromSettings)
+    assert.equal(fromSettings.dataRoot, undefined)
+
+    const [fromEnv] = await detectPi({
+      host,
+      env: {
+        PI_CODING_AGENT_DIR: agentDir,
+        PI_CODING_AGENT_SESSION_DIR: './sessions-from-env-invocation',
+        PATH: '',
+      },
+    })
+    assert.ok(fromEnv)
+    assert.equal(fromEnv.dataRoot, undefined)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('Pi detection does not claim a relative agent root without invocation cwd evidence', async () => {
+  const host = {
+    id: 'pi-relative-agent-dir-host',
+    name: 'pi-relative-agent-dir-host',
+    platform: process.platform,
+    arch: process.arch,
+    createdAt: '2026-09-10T00:00:00.000Z',
+    lastSeenAt: '2026-09-10T00:00:00.000Z',
+  }
+
+  const detected = await detectPi({
+    host,
+    env: {
+      PI_CODING_AGENT_DIR: './relative-agent-dir',
+      PATH: '',
+    },
+  })
+  assert.deepEqual(detected, [])
+})
+
 test('Pi asset discovery does not promote extension-private settings or arbitrary files into native assets', async () => {
   const root = await mkdtemp(join(tmpdir(), 'agent-lens-pi-assets-'))
   const agentDir = join(root, 'agent')
