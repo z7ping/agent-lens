@@ -277,11 +277,12 @@ async function sessionMetadata(filePath: string): Promise<PiSessionMetadata> {
 }
 
 function historyCheckpointKey(filePath: string): string {
-  return `pi:history:v6-file-identity:${sha256(filePath)}`
+  // v7 intentionally replays Pi source files once so SourceRecord native identity written by
+  // older adapters can be corrected in-place without creating duplicate SourceRecord IDs.
+  return `pi:history:v7-native-identity:${sha256(filePath)}`
 }
 
-function nativeId(entry: Record<string, unknown>, sessionId: string): string | undefined {
-  if (entry.type === 'session') return `session:${sessionId}`
+function nativeId(entry: Record<string, unknown>): string | undefined {
   return stringField(entry, 'id')
 }
 
@@ -339,7 +340,7 @@ export async function* ingestPiFile(
 
     const entry = parseLine(line.text)
     const fingerprint = sha256(line.text)
-    const entryId = nativeId(entry, session.nativeSessionId)
+    const entryId = nativeId(entry)
     const timestamp = normalizeTimestamp(entry.timestamp)
       ?? normalizeTimestamp(asRecord(entry.message).timestamp)
     yield {
