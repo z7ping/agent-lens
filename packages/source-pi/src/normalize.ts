@@ -37,17 +37,22 @@ function stringField(record: Record<string, unknown>, ...names: string[]): strin
   return undefined
 }
 
-function evidenceFor(record: SourceRecord): EvidenceCandidate {
+function entryNativeId(envelope: PiStoredEnvelope): string | undefined {
+  return stringField(envelope.entry, 'id')
+}
+
+function evidenceFor(record: SourceRecord, envelope: PiStoredEnvelope): EvidenceCandidate {
+  const nativeStableId = entryNativeId(envelope)
   return {
     captureMethod: 'native-log',
     derivation: 'reported',
     sourceRecordId: record.id,
     sourceLocator: record.locator,
     parserVersion: record.parserVersion,
-    ...(record.nativeId ? { nativeStableId: record.nativeId } : {}),
+    ...(nativeStableId ? { nativeStableId } : {}),
     ...(record.occurredAt ? { eventTime: record.occurredAt } : {}),
     capturedAt: record.capturedAt,
-    confidenceHint: record.nativeId ? 'exact' : 'high',
+    confidenceHint: nativeStableId ? 'exact' : 'high',
   }
 }
 
@@ -73,12 +78,13 @@ function candidate(
     nativeCallId?: string
     nativeEventId?: string
     nativeParentEventId?: string
+    sharedEventKey?: string
     sequenceOffset?: number
     identity?: Partial<ObservationIdentityHints>
   } = {},
 ): ObservationCandidate {
   const nativeCallId = options.nativeCallId
-  const eventId = options.nativeEventId ?? record.nativeId
+  const eventId = options.nativeEventId
   const sourceSequence = record.sourceSequence === undefined
     ? undefined
     : record.sourceSequence + (options.sequenceOffset ?? 0)
@@ -96,6 +102,7 @@ function candidate(
     dedupHints: {
       ...(eventId ? { nativeEventId: eventId } : {}),
       ...(nativeCallId ? { nativeCallId } : {}),
+      ...(options.sharedEventKey ? { sharedEventKey: options.sharedEventKey } : {}),
       ...(sourceSequence === undefined ? {} : { sourceSequence }),
       ...(record.fingerprint ? { payloadFingerprint: record.fingerprint } : {}),
     },
@@ -111,10 +118,27 @@ function piFactCandidate(
   sequenceOffset: number,
   options: { nativeCallId?: string; identity?: Partial<ObservationIdentityHints> } = {},
 ): ObservationCandidate {
+  const nativeEntryId = entryNativeId(envelope)
+  const nativeEntryParentId = stringField(envelope.entry, 'parentId')
+  const nativeEventId = nativeEntryId && fact.id === nativeEntryId
+    ? nativeEntryId
+    : undefined
+  const nativeParentEventId = nativeEventId
+    ? nativeEntryParentId
+    : nativeEntryId && fact.parentId === nativeEntryId
+      ? nativeEntryId
+      : nativeEntryParentId && fact.parentId === nativeEntryParentId
+        ? nativeEntryParentId
+        : undefined
+  const sharedEventKey = nativeEventId || options.nativeCallId
+    ? undefined
+    : fact.id
+
   return candidate(record, envelope, kind, payload, {
-    nativeEventId: fact.id,
-    nativeParentEventId: fact.parentId,
+    ...(nativeEventId ? { nativeEventId } : {}),
+    ...(nativeParentEventId ? { nativeParentEventId } : {}),
     ...(options.nativeCallId ? { nativeCallId: options.nativeCallId } : {}),
+    ...(sharedEventKey ? { sharedEventKey } : {}),
     sequenceOffset,
     ...(options.identity ? { identity: options.identity } : {}),
   })
@@ -143,7 +167,6 @@ export async function normalizePiRecord(
   const envelope = asRecord(record.payload) as unknown as PiStoredEnvelope
   const entry = asRecord(envelope.entry)
   const facts = normalizePiSessionEntry(entry, {
-    ...(record.nativeId ? { nativeEventId: record.nativeId } : {}),
     fallbackId: record.id,
   })
   const observations: ObservationCandidate[] = []
@@ -241,5 +264,5 @@ export async function normalizePiRecord(
     }, offset))
   })
 
-  return { observations, evidenceCandidates: [evidenceFor(record)] }
+  return { observations, evidenceCandidates: [evidenceFor(record, envelope)] }
 }
