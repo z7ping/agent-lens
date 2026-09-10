@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import * as officialPiSdk from '@earendil-works/pi-coding-agent'
 import {
   PI_SDK_TYPE_BASELINE,
   assertPiSdkModule,
   assertPiSdkSession,
   inspectPiSdkCompatibility,
+  resolvePiSdkResourceApi,
 } from './pi-sdk-adapter'
 
 function fakeSession(): Record<string, unknown> {
@@ -46,6 +48,18 @@ test('0.84.x 使用 0.84.4 官方类型基线标记为已验证版本', () => {
   assert.equal(inspectPiSdkCompatibility(undefined).testedVersion, false)
 })
 
+test('0.84.4 官方 SDK 暴露 Pi Source P0 所需资源解析能力', () => {
+  const live = assertPiSdkModule(officialPiSdk, '/pi/dist/index.js', PI_SDK_TYPE_BASELINE)
+  const resources = resolvePiSdkResourceApi(live)
+  assert.ok(resources)
+  assert.equal(typeof resources.SettingsManager.create, 'function')
+  assert.equal(typeof resources.DefaultPackageManager, 'function')
+  assert.equal(typeof resources.ProjectTrustStore, 'function')
+  assert.equal(typeof resources.hasTrustRequiringProjectResources, 'function')
+  assert.equal(typeof resources.loadSkills, 'function')
+  assert.equal(typeof resources.loadSkillsFromDir, 'function')
+})
+
 test('模块能力缺失时给出明确 capability 错误', () => {
   assert.throws(
     () => assertPiSdkModule({ createAgentSession() {}, SessionManager: { create() {} } }, '/pi/dist/index.js', '0.85.0'),
@@ -63,6 +77,15 @@ test('模块校验识别 class 上的 SessionManager 静态方法', () => {
     '/pi/dist/index.js',
     '0.84.4',
   ))
+})
+
+test('资源能力不完整时只关闭资源解析，不破坏 Pi Live SDK 契约', () => {
+  class SessionManager {
+    static create() {}
+    static open() {}
+  }
+  const live = assertPiSdkModule({ createAgentSession() {}, SessionManager }, '/pi/dist/index.js', '0.84.4')
+  assert.equal(resolvePiSdkResourceApi(live), null)
 })
 
 test('Session 能力完整时允许未验证 minor 版本继续运行', () => {
