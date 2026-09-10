@@ -166,7 +166,7 @@ function completedItem(payload: Record<string, unknown>): Record<string, unknown
 export function nativeIdForEntry(entry: Record<string, unknown>): string | undefined {
   const payload = asRecord(entry.payload)
   const item = completedItem(payload)
-  for (const candidate of [item.id, payload.id, payload.call_id]) {
+  for (const candidate of [item.id, payload.id]) {
     if (typeof candidate === 'string' && candidate) return candidate
   }
   return undefined
@@ -195,6 +195,6 @@ export function parseFunctionOutput(output: unknown): {
   return {
     success: exitCode === undefined || exitCode === 0,
     ...(exitCode === undefined ? {} : { exitCode }),
-    ...(body ? { output: truncate(body, MAX_TOOL_PAYLOAD) } : {}),
+    ...(body ? { output: body } : {}),
   }
 }
