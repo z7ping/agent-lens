@@ -1,4 +1,4 @@
-import type { ProjectFacetDto, ReviewSessionSummaryDto } from '@agent-lens/protocol'
+import type { LaunchableProjectDto, ProjectFacetDto, ReviewSessionSummaryDto } from '@agent-lens/protocol'
 
 export interface HistoryTaskPresentation {
   title: string
@@ -11,6 +11,19 @@ export interface TaskProjectOption {
   label: string
   cwd: string
   lastSeenAt: string
+}
+
+export function launchableTaskProjectOptions(items: readonly LaunchableProjectDto[]): TaskProjectOption[] {
+  return items.map(item => ({
+    key: item.key,
+    ...(item.projectId ? { projectId: item.projectId } : {}),
+    label: item.projectName?.trim()
+      || item.repositoryIdentity?.trim()
+      || basename(item.workspacePath)
+      || '未命名项目',
+    cwd: item.workspacePath,
+    lastSeenAt: item.lastSeenAt,
+  }))
 }
 
 function basename(path: string): string {
