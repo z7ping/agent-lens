@@ -300,6 +300,7 @@ async function resolvedPromptsAsAssets(input: {
   for (const resource of input.resources) {
     const observedAt = await fileMtime(resource.path)
     if (!observedAt) continue
+    const version = await resourceVersion(resource)
     const candidate = await promptCandidate(input.api, resource.path)
     const enabled = effectiveEnabled(resource.enabled, input.trust)
     const discoverable = !candidate.valid || enabled === false
@@ -317,7 +318,7 @@ async function resolvedPromptsAsAssets(input: {
       binding: {
         path: resource.path,
         source: resourceSource(resource, input.projectCwd),
-        ...((await resourceVersion(resource)) ? { version: await resourceVersion(resource) } : {}),
+        ...(version ? { version } : {}),
       },
       states: resourceStates({
         path: resource.path,
@@ -367,6 +368,7 @@ async function resolvedThemesAsAssets(input: {
   for (const resource of input.resources) {
     const observedAt = await fileMtime(resource.path)
     if (!observedAt) continue
+    const version = await resourceVersion(resource)
     const candidate = await themeCandidate(resource.path)
     const enabled = effectiveEnabled(resource.enabled, input.trust)
     // Pi's full Theme schema validator is not a public SDK capability. A valid JSON object with
@@ -384,7 +386,7 @@ async function resolvedThemesAsAssets(input: {
       binding: {
         path: resource.path,
         source: resourceSource(resource, input.projectCwd),
-        ...((await resourceVersion(resource)) ? { version: await resourceVersion(resource) } : {}),
+        ...(version ? { version } : {}),
       },
       states: resourceStates({
         path: resource.path,
@@ -597,6 +599,7 @@ async function resolvedSkillsAsAssets(input: {
     if (!resource) continue
     const observedAt = await fileMtime(skill.filePath)
     if (!observedAt) continue
+    const version = await resourceVersion(resource)
     const enabled = effectiveEnabled(resource.enabled, input.trust)
     const selectedByPi = resource.enabled && selected.has(pathKey(skill.filePath))
     const discoverable = enabled === false
@@ -636,6 +639,7 @@ async function resolvedExtensionsAsAssets(input: {
   for (const resource of input.resources) {
     const observedAt = await fileMtime(resource.path)
     if (!observedAt) continue
+    const version = await resourceVersion(resource)
     const enabled = effectiveEnabled(resource.enabled, input.trust)
     // PackageManager proves that Pi selected a path, but proving successful extension loading would
     // require executing arbitrary extension code. Keep discoverable unknown unless it is disabled.
