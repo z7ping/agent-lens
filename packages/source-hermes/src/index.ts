@@ -420,7 +420,7 @@ function hookRecord(envelope: InboxEnvelope, filePath: string, ctx: SourceExecut
   const event = envelope.event
   const eventName = stringField(event, 'hook_event_name', 'event_name', 'type') ?? 'unknown'
   const sessionId = hookSessionId(event)
-  const nativeId = stringField(event, 'source_event_id', 'hook_invocation_id', 'turn_id')
+  const nativeId = stringField(event, 'source_event_id', 'hook_invocation_id')
   const occurredAt = normalizeTimestamp(event.timestamp ?? event.ts) ?? envelope.capturedAt
   const cwd = stringField(event, 'cwd', 'working_directory', 'workdir')
   return {
