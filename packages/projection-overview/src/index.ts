@@ -26,8 +26,10 @@ const FACET_SCOPE_CACHE_MS = 10_000
 const FACET_RESPONSE_CACHE_MS = 2_000
 const AGENT_OVERVIEW_CACHE_MS = 2_000
 const SLOW_OVERVIEW_PHASE_MS = 500
+const CURRENT_ASSET_PRESENCE_STATES = new Set(['installed', 'configured', 'enabled', 'discoverable', 'exposed'])
 
 type FastFacetScope = SessionSummaryFacetScope
+export type SourceDetectionResolver = (sourceId: string) => boolean | undefined
 
 function logSlowOverviewPhase(phase: string, startedAt: number, details: Record<string, number | string> = {}): void {
   const elapsedMs = performance.now() - startedAt
@@ -49,8 +51,23 @@ function latestStates(entry: AssetInventoryEntry): AgentAssetStateDto[] {
   return [...latest.values()].sort((a, b) => a.state.localeCompare(b.state))
 }
 
+function bindingIsCurrent(states: readonly AgentAssetStateDto[]): boolean {
+  const presence = states.filter(state => CURRENT_ASSET_PRESENCE_STATES.has(state.state))
+  if (presence.some(state => state.value === true)) return true
+  if (presence.some(state => state.value === false)) return false
+  return true
+}
+
 function sourceEnabled(policy: CapturePolicyService | undefined, sourceId: string): boolean {
   return policy ? policy.isSourceEnabled(sourceId) : true
+}
+
+function sourceDetected(
+  resolver: SourceDetectionResolver | undefined,
+  sourceId: string,
+  persistedInstallationDetected: boolean,
+): boolean {
+  return resolver?.(sourceId) ?? persistedInstallationDetected
 }
 
 function updateFacetRange(range: { from?: string; to?: string }, from: string, to = from): void {
@@ -126,6 +143,7 @@ export class FacetProjection {
     private readonly storage: StorageService,
     private readonly sources?: SourceService,
     private readonly capturePolicy?: CapturePolicyService,
+    private readonly sourceDetection?: SourceDetectionResolver,
   ) {}
 
   private async scope(): Promise<FastFacetScope> {
@@ -159,6 +177,11 @@ export class FacetProjection {
     return scope
   }
 
+  invalidate(): void {
+    this.cachedResponse = null
+    this.cachedResponseAt = 0
+  }
+
   query(): Promise<FacetResponseDto> {
     if (this.cachedResponse && Date.now() - this.cachedResponseAt < FACET_RESPONSE_CACHE_MS) {
       return Promise.resolve(this.cachedResponse)
@@ -184,7 +207,7 @@ export class FacetProjection {
         displayName: definition.manifest.displayName,
         supported: true,
         enabled: sourceEnabled(this.capturePolicy, definition.manifest.sourceId),
-        detected: installations.length > 0,
+        detected: sourceDetected(this.sourceDetection, definition.manifest.sourceId, installations.length > 0),
         installationIds: installations.map(item => item.id),
       }
     }))
@@ -213,8 +236,14 @@ export class AgentOverviewProjection {
     private readonly sources?: SourceService,
     private readonly capabilities?: CapabilityService,
     private readonly capturePolicy?: CapturePolicyService,
+    private readonly sourceDetection?: SourceDetectionResolver,
   ) {
     this.usage = new ToolAssetUsageProjection(storage)
+  }
+
+  invalidate(): void {
+    this.cachedResponse = null
+    this.cachedResponseAt = 0
   }
 
   query(): Promise<AgentOverviewResponseDto> {
@@ -277,6 +306,8 @@ export class AgentOverviewProjection {
         : []
       for (const entries of inventoryPages) {
         for (const entry of entries) {
+          const states = latestStates(entry)
+          if (!bindingIsCurrent(states)) continue
           let asset = inventory.get(entry.definition.id)
           if (!asset) {
             asset = {
@@ -295,7 +326,7 @@ export class AgentOverviewProjection {
             ...(entry.binding.path ? { path: entry.binding.path } : {}),
             ...(entry.binding.source ? { source: entry.binding.source } : {}),
             ...(entry.binding.version ? { version: entry.binding.version } : {}),
-            states: latestStates(entry),
+            states,
           })
         }
       }
@@ -313,7 +344,7 @@ export class AgentOverviewProjection {
         displayName: definition.manifest.displayName,
         supported: true,
         enabled: sourceEnabled(this.capturePolicy, definition.manifest.sourceId),
-        detected: installations.length > 0,
+        detected: sourceDetected(this.sourceDetection, definition.manifest.sourceId, installations.length > 0),
         installations: installations.map(item => ({
           id: item.id,
           ...(item.version ? { version: item.version } : {}),
@@ -385,5 +416,7 @@ export const projectionOverviewInternals = {
   FACET_SCOPE_CACHE_MS,
   FACET_RESPONSE_CACHE_MS,
   AGENT_OVERVIEW_CACHE_MS,
+  CURRENT_ASSET_PRESENCE_STATES,
+  bindingIsCurrent,
   fastFacetScope,
 }
