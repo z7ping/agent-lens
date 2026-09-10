@@ -23,10 +23,10 @@ const capabilityLabel: Record<string, string> = {
 }
 
 const capabilityStatusLabel: Record<string, string> = {
-  available: '可用',
-  partial: '部分可用',
+  available: '支持',
+  partial: '部分支持',
   experimental: '实验性',
-  unavailable: '不可用',
+  unavailable: '暂不支持',
   'not-applicable': '不适用',
 }
 
@@ -90,7 +90,7 @@ function captureState(agent: Pick<AgentOverviewDto, 'supported' | 'enabled' | 'd
 
 function capabilityDetail(cap: AgentOverviewDto['capabilities'][number]): string {
   const modes = cap.captureModes.map(mode => captureModeLabel[mode] ?? mode)
-  const parts = [modes.length ? `采集：${modes.join(' / ')}` : '采集：未声明']
+  const parts = [modes.length ? `采集方式：${modes.join(' / ')}` : '采集方式：未声明']
   if (cap.reason) parts.push(`说明：${cap.reason}`)
   return parts.join(' · ')
 }
@@ -193,13 +193,18 @@ function SkillLifecycle({ agent, skills }: { agent: AgentOverviewDto; skills: Ag
   if (!skills.length) return null
   const installedReported = skills.some(asset => stateValue(asset, 'installed') !== undefined)
   const installed = installedReported ? skills.filter(asset => stateValue(asset, 'installed') === true).length : skills.length
-  const discoverableReported = skills.some(asset => stateValue(asset, 'discoverable') !== undefined)
-  const discoverable = skills.filter(asset => stateValue(asset, 'discoverable') === true).length
+  const discoverableKnown = skills.some(asset => {
+    const value = stateValue(asset, 'discoverable')
+    return value === true || value === false
+  })
+  const discoverable = discoverableKnown
+    ? skills.filter(asset => stateValue(asset, 'discoverable') === true).length
+    : null
   const used = skills.filter(asset => assetUsageCount(agent, asset) > 0).length
   const baseline = Math.max(1, installed)
   const rows = [
     { key: 'installed', label: installedReported ? '已安装' : '已发现', value: installed, percent: 100, active: false },
-    { key: 'discoverable', label: discoverableReported ? '可发现' : '可发现状态未报告', value: discoverableReported ? discoverable : null, percent: discoverableReported ? Math.min(100, discoverable / baseline * 100) : 0, active: false },
+    { key: 'discoverable', label: discoverableKnown ? '可发现' : '可发现状态未知', value: discoverable, percent: discoverable === null ? 0 : Math.min(100, discoverable / baseline * 100), active: false },
     { key: 'used', label: '已使用', value: used, percent: Math.min(100, used / baseline * 100), active: true },
   ]
 
@@ -212,7 +217,7 @@ function SkillLifecycle({ agent, skills }: { agent: AgentOverviewDto; skills: Ag
         <strong>{row.value ?? '—'}</strong>
       </div>)}
     </div>
-    {!discoverableReported && <p className="skill-funnel-note">数据源没有明确报告“可发现”状态时，不把“未报告”误算成 0。</p>}
+    {!discoverableKnown && <p className="skill-funnel-note">数据源没有证据确认“可发现”真值时，保持未知，不把未知误算成 0。</p>}
   </section>
 }
 
@@ -352,7 +357,7 @@ function AgentCard({ agent, policy, onCaptureChange }: {
         {bindings.length > ASSEMBLY_PATH_LIMIT && <button className="show-more-button" onClick={() => setShowAllBindings(value => !value)}>{showAllBindings ? '收起' : `查看更多 ${bindings.length - ASSEMBLY_PATH_LIMIT} 条路径`}</button>}
       </details>
       <details className="disclosure-group">
-        <summary><DisclosureChevron/><span>可观测能力</span><span className="disclosure-count">{agent.capabilities.length}</span></summary>
+        <summary title="这里展示的是 AgentLens 适配器声明的采集支持，不代表当前智能体安装实例自报告的产品能力。"><DisclosureChevron/><span>AgentLens 采集支持</span><span className="disclosure-count">{agent.capabilities.length}</span></summary>
         <div className="capability-list">
           {agent.capabilities.map(cap => <div key={cap.name} className="capability-row" title={capabilityDetail(cap)}><span>{capabilityLabel[cap.name] ?? cap.name} · {capabilityDetail(cap)}</span><b data-status={cap.status}>{capabilityStatusLabel[cap.status] ?? cap.status}</b></div>)}
         </div>
