@@ -2,7 +2,11 @@ import { monitorEventLoopDelay } from 'node:perf_hooks'
 import type { StorageService } from '@agent-lens/core'
 import { HubReviewProjection } from '@agent-lens/projection-review'
 import type { DataRuntimeHealthDto } from '@agent-lens/protocol'
-import { defineAgentLensPlugin, type AgentLensContext } from '@agent-lens/runtime-cordis'
+import {
+  defineAgentLensPlugin,
+  SourceRescanService,
+  type AgentLensContext,
+} from '@agent-lens/runtime-cordis'
 import { HttpEventHub } from './events'
 import {
   DEFAULT_AGENT_LENS_HTTP_PORT,
@@ -106,6 +110,8 @@ const applyHttpSurface = Object.assign(
   async (ctx: AgentLensContext, config: HttpSurfacePluginConfig = {}) => {
     const eventHub = new HttpEventHub()
     const eventLoop = monitorEventLoopDelay({ resolution: 20 })
+    const rescanController = new AbortController()
+    const sourceRescan = new SourceRescanService(ctx, rescanController.signal)
     eventLoop.enable()
     const hubReview = new HubReviewProjection(
       ctx.unifiedRead.logicalSessions,
@@ -173,19 +179,22 @@ const applyHttpSurface = Object.assign(
       capturePolicy: ctx.capturePolicy,
       backup: ctx.backup,
       piLive: ctx.piLive,
+      rescanAgents: () => sourceRescan.rescan(),
+      sourceDetection: sourceId => sourceRescan.isSourceDetected(sourceId),
       ...(config.selectProjectDirectory ? { selectProjectDirectory: config.selectProjectDirectory } : {}),
       hubReview,
     })
     const unprovideHubReview = ctx.provide('hubReview', hubReview)
     const unprovideHttp = ctx.provide('http', surface)
     return async () => {
+      rescanController.abort()
       eventLoop.disable()
       unprovideHttp()
       unprovideHubReview()
       await surface.dispose()
     }
   },
-  { inject: ['storage', 'unifiedRead', 'sources', 'capabilities', 'capturePolicy', 'backup', 'piLive'] },
+  { inject: ['storage', 'unifiedRead', 'sources', 'identity', 'capabilities', 'assets', 'evidence', 'capturePolicy', 'backup', 'piLive'] },
 )
 
 export const httpSurfacePlugin = defineAgentLensPlugin(manifest, applyHttpSurface)

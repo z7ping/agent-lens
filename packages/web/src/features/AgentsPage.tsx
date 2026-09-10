@@ -4,7 +4,7 @@ import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
 import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScope'
 import { CompactPageHeading } from '../components/CompactPageHeading'
-import { UiIcon } from '../components/ui'
+import { Button, StatusBadge, Toolbar, UiIcon } from '../components/ui'
 import { copyText } from '../client/clipboard'
 
 const capabilityLabel: Record<string, string> = {
@@ -368,10 +368,27 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
   const fallbackSourceId = items.find(item => item.detected)?.sourceId || items[0]?.sourceId || ''
   const selectedSourceId = items.some(item => item.sourceId === sourceId) ? sourceId : fallbackSourceId
   const selectedAgent = items.find(item => item.sourceId === selectedSourceId)
+  const rescan = snapshot.agentsRescanResult
+  const rescanStatus = snapshot.agentsRescanning
+    ? <StatusBadge tone="accent" dot>正在重新扫描本机智能体与资产</StatusBadge>
+    : snapshot.agentsRescanError
+      ? <StatusBadge tone="danger" title={snapshot.agentsRescanError}>重新扫描失败</StatusBadge>
+      : rescan
+        ? <StatusBadge tone={rescan.status === 'completed' ? 'success' : 'danger'} title={rescan.failures.map(item => `${item.sourceId}: ${item.message}`).join('\n') || undefined}>
+            {rescan.status === 'completed'
+              ? `扫描完成 · ${rescan.sourcesDetected} 个来源 · ${rescan.assetsDiscovered} 项资产${rescan.assetsRemoved ? ` · ${rescan.assetsRemoved} 项已移除` : ''}`
+              : `扫描${rescan.status === 'partial' ? '部分完成' : '失败'} · ${rescan.failures.length} 个来源异常`}
+          </StatusBadge>
+        : null
 
   return <main className="workspace-page">
     <div className="page-content agents-content">
-      <CompactPageHeading title="智能体概览" description="集中查看本机智能体、用户资产、真实使用情况和技能生命周期。已检测只表示发现了智能体，不等于已经启用采集。"/>
+      <CompactPageHeading title="智能体概览" description="集中查看本机智能体、用户资产、真实使用情况和技能生命周期。已检测只表示发现了智能体，不等于已经启用采集。">
+        <Toolbar aria-label="智能体扫描" className="agents-rescan-toolbar">
+          <Button size="small" loading={snapshot.agentsRescanning} disabled={snapshot.agentsRescanning} onClick={() => void model.rescanAgents().catch(() => undefined)}><UiIcon name="refresh" size={14}/>{snapshot.agentsRescanning ? '正在扫描…' : '重新扫描'}</Button>
+          {rescanStatus}
+        </Toolbar>
+      </CompactPageHeading>
       {items.length ? <div className="agents-browser">
         <nav className="agent-source-nav" aria-label="智能体列表">
           <div className="agent-source-nav-head"><b>本机智能体</b><span>{items.length}</span></div>

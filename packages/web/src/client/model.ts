@@ -1,5 +1,6 @@
 import type {
   AgentOverviewResponseDto,
+  AgentRescanResponseDto,
   CapturePolicyResponseDto,
   FacetResponseDto,
   HealthResponseDto,
@@ -22,6 +23,9 @@ export interface ClientSnapshot {
   agentsLoading: boolean
   agentsError: string
   agentsHasNewData: boolean
+  agentsRescanning: boolean
+  agentsRescanResult: AgentRescanResponseDto | null
+  agentsRescanError: string
   liveConnected: boolean
   review: {
     filters: ReviewFilters
@@ -80,6 +84,9 @@ export class AgentLensClientModel {
     agentsLoading: false,
     agentsError: '',
     agentsHasNewData: false,
+    agentsRescanning: false,
+    agentsRescanResult: null,
+    agentsRescanError: '',
     liveConnected: false,
     review: {
       filters: { sourceIds: null, projectId: '', range: '7d', status: 'all', search: '' },
@@ -115,6 +122,7 @@ export class AgentLensClientModel {
   private reviewActive = false
   private facetsInFlight: Promise<void> | null = null
   private agentsInFlight: Promise<void> | null = null
+  private agentsRescanInFlight: Promise<AgentRescanResponseDto> | null = null
   private visibilityListener: (() => void) | null = null
   private unsubscribeLive: (() => void) | null = null
   private reviewGeneration = 0
@@ -216,6 +224,41 @@ export class AgentLensClientModel {
       if (generation !== this.agentsGeneration) return
       this.patch({ agentsLoading: false, agentsError: '智能体概览查询失败。请重试；若持续失败，请运行诊断命令。' })
     }
+  }
+
+  rescanAgents(): Promise<AgentRescanResponseDto> {
+    if (this.agentsRescanInFlight) return this.agentsRescanInFlight
+    const generation = ++this.agentsGeneration
+    this.patch({ agentsRescanning: true, agentsRescanError: '' })
+    const pending = this.api.rescanAgents().then(
+      result => {
+        if (generation === this.agentsGeneration) {
+          this.patch({
+            agents: result.agents,
+            facets: result.facets,
+            agentsLoading: false,
+            agentsHasNewData: false,
+            agentsRescanning: false,
+            agentsRescanResult: result,
+            agentsRescanError: '',
+          })
+        }
+        return result
+      },
+      error => {
+        if (generation === this.agentsGeneration) {
+          this.patch({
+            agentsRescanning: false,
+            agentsRescanError: error instanceof Error ? error.message : String(error),
+          })
+        }
+        throw error
+      },
+    ).finally(() => {
+      if (this.agentsRescanInFlight === pending) this.agentsRescanInFlight = null
+    })
+    this.agentsRescanInFlight = pending
+    return pending
   }
 
   async setSourceEnabled(sourceId: string, enabled: boolean): Promise<void> {

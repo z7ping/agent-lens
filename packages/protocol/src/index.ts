@@ -1,3 +1,4 @@
+export * from './agent-rescan'
 export * from './background-activity'
 export * from './backup'
 export * from './capture-policy'

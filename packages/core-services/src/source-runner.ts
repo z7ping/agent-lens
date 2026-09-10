@@ -1,6 +1,7 @@
 import type {
   AgentInstallation,
   AssetService,
+  AssetState,
   CapabilityService,
   CapturePolicyService,
   CoverageService,
@@ -29,6 +30,8 @@ const DEFAULT_COOPERATIVE_BUDGET_MS = 8
 const PARSER_REPLAY_TRANSACTION_SIZE = 50
 const PARSER_REPLAY_TRANSACTION_BUDGET_MS = 20
 const PARSER_REPLAY_CHECKPOINT_SCOPE = 'parser-replay'
+const ASSET_DISCOVERY_SNAPSHOT_KEY = 'asset-discovery-inventory-v1'
+const ASSET_PRESENCE_STATES = new Set<AssetState>(['installed', 'configured', 'enabled', 'discoverable', 'exposed'])
 
 interface CooperativeSchedulerOptions {
   budgetMs?: number
@@ -46,6 +49,11 @@ interface ParserReplayCheckpoint {
   cursor?: SourceRecordReplayCursor
   updatedAt: string
   completedAt?: string
+}
+
+interface AssetDiscoverySnapshot {
+  bindings: Record<string, AssetState[]>
+  completedAt: string
 }
 
 async function readReplayCheckpoint(
@@ -198,6 +206,8 @@ export interface SourceAssetDiscoveryResult {
   installationId: string
   assetsDiscovered: number
   statesRecorded: number
+  assetsRemoved: number
+  statesCleared: number
 }
 
 interface ProcessResult {
@@ -489,7 +499,6 @@ export class SourceHistoryRunner {
       ) {
         return result
       }
-      // Another replay/dirty writer won the claim. Do not run a second maintenance owner.
       return result
     }
 
@@ -856,6 +865,8 @@ export class SourceAssetRunner {
         installationId: installation.id,
         assetsDiscovered: 0,
         statesRecorded: 0,
+        assetsRemoved: 0,
+        statesCleared: 0,
       }
       if (!source.discoverAssets || !this.capturePolicy.isEnabled('config')) {
         await markHealthy(this.storage, runtimeStatus)
@@ -866,7 +877,10 @@ export class SourceAssetRunner {
         this.storage,
         checkpointScope(source.manifest.sourceId, installation.id, runtimeProfile),
       )
+      const previousSnapshot = await checkpoint.get<AssetDiscoverySnapshot>(ASSET_DISCOVERY_SNAPSHOT_KEY)
+      const currentBindings = new Map<string, Set<AssetState>>()
       const yieldForInteractivity = createCooperativeScheduler()
+      const scanObservedAt = new Date().toISOString()
 
       for await (const discovered of source.discoverAssets({
         host,
@@ -891,6 +905,9 @@ export class SourceAssetRunner {
           ...(safeDiscovered.binding?.version ? { version: safeDiscovered.binding.version } : {}),
         })
         result.assetsDiscovered += 1
+        const bindingStates = currentBindings.get(binding.id) ?? new Set<AssetState>()
+        currentBindings.set(binding.id, bindingStates)
+        let discoverableReported = false
 
         for (const state of safeDiscovered.states ?? []) {
           const evidenceRefs: string[] = []
@@ -904,9 +921,52 @@ export class SourceAssetRunner {
             observedAt: state.observedAt,
             evidenceRefs,
           })
+          if (state.state === 'discoverable') discoverableReported = true
+          if (state.value === true && ASSET_PRESENCE_STATES.has(state.state)) bindingStates.add(state.state)
           result.statesRecorded += 1
         }
+
+        if (!discoverableReported) {
+          bindingStates.add('discoverable')
+          const previouslyDiscoverable = previousSnapshot?.bindings[binding.id]?.includes('discoverable') ?? false
+          if (!previouslyDiscoverable) {
+            await this.assets.recordState({
+              assetBindingId: binding.id,
+              state: 'discoverable',
+              value: true,
+              observedAt: scanObservedAt,
+              evidenceRefs: [],
+            })
+            result.statesRecorded += 1
+          }
+        }
         await yieldForInteractivity()
+      }
+
+      if (!abortSignal.aborted) {
+        const completedAt = new Date().toISOString()
+        const currentSnapshot: AssetDiscoverySnapshot = {
+          bindings: Object.fromEntries(
+            [...currentBindings].map(([bindingId, states]) => [bindingId, [...states].sort()]),
+          ),
+          completedAt,
+        }
+        for (const [bindingId, states] of Object.entries(previousSnapshot?.bindings ?? {})) {
+          if (currentBindings.has(bindingId)) continue
+          result.assetsRemoved += 1
+          for (const state of states) {
+            if (!ASSET_PRESENCE_STATES.has(state)) continue
+            await this.assets.recordState({
+              assetBindingId: bindingId,
+              state,
+              value: false,
+              observedAt: completedAt,
+              evidenceRefs: [],
+            })
+            result.statesCleared += 1
+          }
+        }
+        await checkpoint.set(ASSET_DISCOVERY_SNAPSHOT_KEY, currentSnapshot)
       }
 
       await markHealthy(this.storage, runtimeStatus)
@@ -927,4 +987,6 @@ export const sourceRunnerInternals = {
   PARSER_REPLAY_TRANSACTION_SIZE,
   PARSER_REPLAY_TRANSACTION_BUDGET_MS,
   PARSER_REPLAY_CHECKPOINT_SCOPE,
+  ASSET_DISCOVERY_SNAPSHOT_KEY,
+  ASSET_PRESENCE_STATES,
 }
