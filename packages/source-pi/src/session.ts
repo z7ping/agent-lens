@@ -120,31 +120,42 @@ async function readPiSettings(configRoot: string): Promise<Record<string, unknow
   }
 }
 
+function provenAbsolutePath(path: string): string | undefined {
+  return isAbsolute(path) ? path : undefined
+}
+
 function settingSessionDir(
   raw: string,
   env: Readonly<Record<string, string | undefined>>,
 ): string | undefined {
   const dataRoot = resolvePiLocation({ ...env, PI_CODING_AGENT_SESSION_DIR: raw }).dataRoot
-  // Pi resolves relative sessionDir against the invoking process cwd. AgentLens observes
-  // sessions outside that invocation and cannot prove that cwd at installation-detection time.
-  return isAbsolute(dataRoot) ? dataRoot : undefined
+  // Pi keeps relative session directories relative to the invoking process cwd. AgentLens is
+  // observing an installation outside that invocation, so a daemon-relative resolution would
+  // be a fabricated location rather than a Pi fact.
+  return provenAbsolutePath(dataRoot)
 }
 
 async function resolveDetectedSessionDir(
   env: Readonly<Record<string, string | undefined>>,
-  configRoot: string,
+  configRoot: string | undefined,
   defaultDataRoot: string,
-): Promise<string> {
-  if (env.PI_CODING_AGENT_SESSION_DIR?.trim()) return defaultDataRoot
-  const settings = await readPiSettings(configRoot)
-  const configured = settings ? stringField(settings, 'sessionDir')?.trim() : undefined
-  return configured ? settingSessionDir(configured, env) ?? defaultDataRoot : defaultDataRoot
+): Promise<string | undefined> {
+  const explicit = env.PI_CODING_AGENT_SESSION_DIR?.trim()
+  if (explicit) return settingSessionDir(explicit, env)
+
+  if (configRoot) {
+    const settings = await readPiSettings(configRoot)
+    const configured = settings ? stringField(settings, 'sessionDir')?.trim() : undefined
+    if (configured) return settingSessionDir(configured, env)
+  }
+
+  return provenAbsolutePath(defaultDataRoot)
 }
 
 export function piSessionsDir(
   env: Readonly<Record<string, string | undefined>>,
-): string {
-  return resolvePiLocation(env).dataRoot
+): string | undefined {
+  return provenAbsolutePath(resolvePiLocation(env).dataRoot)
 }
 
 async function installedPiVersion(executable: string | undefined): Promise<string | undefined> {
@@ -159,10 +170,11 @@ async function installedPiVersion(executable: string | undefined): Promise<strin
 export async function detectPi(ctx: SourceDetectionContext): Promise<DetectedSource[]> {
   const env = ctx.env ?? process.env
   const location = resolvePiLocation(env)
-  const dataRoot = await resolveDetectedSessionDir(env, location.configRoot, location.dataRoot)
+  const configRoot = provenAbsolutePath(location.configRoot)
+  const dataRoot = await resolveDetectedSessionDir(env, configRoot, location.dataRoot)
   const [agentExists, sessionsExist, executable] = await Promise.all([
-    exists(location.configRoot),
-    exists(dataRoot),
+    configRoot ? exists(configRoot) : Promise.resolve(false),
+    dataRoot ? exists(dataRoot) : Promise.resolve(false),
     resolveExecutable('pi', {
       explicit: env.PI_BIN,
       pathValue: env.PATH,
@@ -175,8 +187,8 @@ export async function detectPi(ctx: SourceDetectionContext): Promise<DetectedSou
     productId: PI_SOURCE_ID,
     ...(executable ? { executable } : {}),
     ...(version ? { version } : {}),
-    configRoot: location.configRoot,
-    dataRoot,
+    ...(configRoot ? { configRoot } : {}),
+    ...(dataRoot ? { dataRoot } : {}),
     confidence: executable && sessionsExist ? 'exact' : 'high',
   }]
 }
@@ -423,7 +435,6 @@ export async function* ingestPiFile(
 
 export async function* ingestPiHistory(ctx: SourceHistoryExecutionContext): AsyncIterable<SourceRecord> {
   const sessionsDir = ctx.installation.dataRoot
-    ?? (ctx.installation.configRoot ? join(ctx.installation.configRoot, 'sessions') : undefined)
   if (!sessionsDir) return
   for (const filePath of await listJsonlFiles(sessionsDir, ctx.historyWindow)) {
     if (ctx.abortSignal.aborted) return
@@ -436,7 +447,6 @@ export async function startPiRuntimeCapture(
   emitter: SourceRecordEmitter,
 ): Promise<Disposable> {
   const sessionsDir = ctx.installation.dataRoot
-    ?? (ctx.installation.configRoot ? join(ctx.installation.configRoot, 'sessions') : undefined)
   if (!sessionsDir || !await exists(sessionsDir)) return { dispose() {} }
 
   let stopped = false
