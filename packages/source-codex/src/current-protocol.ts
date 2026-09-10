@@ -254,14 +254,14 @@ async function normalizeResponseLocalShellCall(
   ctx: SourceNormalizationContext,
   payload: Record<string, unknown>,
 ): Promise<NormalizedSourceOutput> {
-  const callId = stringField(payload, 'call_id', 'id') ?? `local-shell-${record.sourceSequence ?? record.id}`
+  const callId = stringField(payload, 'call_id', 'id')
   const status = stringField(payload, 'status')?.toLowerCase() ?? 'unknown'
   const call = await normalizeCodexRecord(syntheticEntryRecord(record, {
     type: 'response_item',
     payload: {
       type: 'function_call',
       name: 'local_shell',
-      call_id: callId,
+      ...(callId ? { call_id: callId } : {}),
       arguments: JSON.stringify({ action: payload.action ?? null }),
     },
   }), ctx)
@@ -281,7 +281,7 @@ async function normalizeResponseLocalShellCall(
     type: 'response_item',
     payload: {
       type: 'function_call_output',
-      call_id: callId,
+      ...(callId ? { call_id: callId } : {}),
       output: JSON.stringify({ status }),
     },
   }), ctx)
@@ -304,13 +304,13 @@ async function normalizeResponseToolSearchCall(
   ctx: SourceNormalizationContext,
   payload: Record<string, unknown>,
 ): Promise<NormalizedSourceOutput> {
-  const callId = stringField(payload, 'call_id', 'id') ?? `tool-search-${record.sourceSequence ?? record.id}`
+  const callId = stringField(payload, 'call_id', 'id')
   const output = await normalizeCodexRecord(syntheticEntryRecord(record, {
     type: 'response_item',
     payload: {
       type: 'function_call',
       name: 'tool_search',
-      call_id: callId,
+      ...(callId ? { call_id: callId } : {}),
       arguments: JSON.stringify({
         execution: payload.execution ?? null,
         arguments: payload.arguments ?? null,
@@ -419,14 +419,17 @@ function normalizedEventValue(value: unknown): string {
 function withNativeCallId(output: NormalizedSourceOutput, callId: string): NormalizedSourceOutput {
   return {
     ...output,
-    observations: output.observations.map(observation => ({
-      ...observation,
-      nativeCallId: callId,
-      dedupHints: {
-        ...observation.dedupHints,
+    observations: output.observations.map(observation => {
+      const duplicateEventIdentity = observation.nativeEventId === callId
+      const dedup = { ...observation.dedupHints, nativeCallId: callId }
+      if (duplicateEventIdentity) delete dedup.nativeEventId
+      return {
+        ...observation,
+        ...(duplicateEventIdentity ? { nativeEventId: undefined } : {}),
         nativeCallId: callId,
-      },
-    })),
+        dedupHints: dedup,
+      }
+    }),
   }
 }
 
@@ -469,24 +472,24 @@ async function normalizePersistedLegacyEvent(
     })
   }
   if (payload.type === 'mcp_tool_call_end') {
-    const callId = stringField(payload, 'call_id') ?? `mcp-${record.sourceSequence ?? record.id}`
+    const callId = stringField(payload, 'call_id')
     const invocation = asRecord(payload.invocation)
     const tool = stringField(invocation, 'tool', 'tool_name', 'name') ?? 'mcp_tool'
     const server = stringField(invocation, 'server')
     const success = mcpResultSuccess(payload.result)
     const output = await remapUnknown(record, ctx, 'tool.result', {
-      callId,
+      ...(callId ? { callId } : {}),
       nativeToolName: server ? `${server}.${tool}` : tool,
       ...(success === undefined ? {} : { success }),
       output: payload.result ?? null,
       raw: payload,
     })
-    return withNativeCallId(output, callId)
+    return callId ? withNativeCallId(output, callId) : output
   }
   if (payload.type === 'web_search_end') {
-    const callId = stringField(payload, 'call_id') ?? `web-search-${record.sourceSequence ?? record.id}`
+    const callId = stringField(payload, 'call_id')
     const output = await remapUnknown(record, ctx, 'tool.result', {
-      callId,
+      ...(callId ? { callId } : {}),
       nativeToolName: 'web_search',
       success: true,
       output: payload.results ?? {
@@ -495,7 +498,7 @@ async function normalizePersistedLegacyEvent(
       },
       raw: payload,
     })
-    return withNativeCallId(output, callId)
+    return callId ? withNativeCallId(output, callId) : output
   }
   if (payload.type === 'image_generation_end') {
     const callId = stringField(payload, 'call_id')
