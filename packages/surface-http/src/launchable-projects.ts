@@ -46,26 +46,28 @@ function searchValue(params: URLSearchParams): string | undefined {
 }
 
 async function launchableWorkspace(candidate: LaunchableProjectCandidate): Promise<LaunchableProjectDto | undefined> {
-  const checks = await Promise.all(candidate.workspaces.map(async workspace => {
+  // Workspace candidates are already newest-first. Validate lazily and stop at the first
+  // launchable path so a project with years of historical worktrees does not fan out dozens of
+  // filesystem probes on every dropdown request.
+  for (const workspace of candidate.workspaces) {
     try {
       const workspacePath = await validatePiWorkingDirectory(workspace.workspacePath)
-      return { ...workspace, workspacePath }
+      return {
+        key: candidate.key,
+        ...(candidate.projectId ? { projectId: candidate.projectId } : {}),
+        ...(candidate.projectName ? { projectName: candidate.projectName } : {}),
+        ...(candidate.repositoryIdentity ? { repositoryIdentity: candidate.repositoryIdentity } : {}),
+        workspaceId: workspace.workspaceId,
+        workspacePath,
+        // Keep the project-level activity key used by server ordering/cursors. The chosen
+        // workspace may be older only because a newer historical worktree no longer exists.
+        lastSeenAt: candidate.lastSeenAt,
+      }
     } catch {
-      return undefined
+      // Stale/moved workspace: try the next observed workspace for the same project.
     }
-  }))
-  const workspace = checks.find(Boolean)
-  if (!workspace) return undefined
-
-  return {
-    key: candidate.key,
-    ...(candidate.projectId ? { projectId: candidate.projectId } : {}),
-    ...(candidate.projectName ? { projectName: candidate.projectName } : {}),
-    ...(candidate.repositoryIdentity ? { repositoryIdentity: candidate.repositoryIdentity } : {}),
-    workspaceId: workspace.workspaceId,
-    workspacePath: workspace.workspacePath,
-    lastSeenAt: workspace.lastSeenAt,
   }
+  return undefined
 }
 
 export async function readLaunchableProjects(
