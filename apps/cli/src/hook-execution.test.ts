@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
   hookExecutionInternals,
   posixDesktopHookCommand,
+  resolveHookExecutionProfile,
   windowsDispatcherCommand,
 } from './hook-execution'
 
@@ -36,6 +37,24 @@ test('macOS/Linux Desktop Hook 使用 Electron Node 模式直连打包脚本', (
   assert.match(command, /AgentLens Test\.app/)
   assert.match(command, /agent-lens-hook-codex\.mjs/)
   assert.match(command, /tester'"'"'s AgentLens/)
+})
+
+test('Hook 配置路径与 Source Home 使用同一环境解析结果', () => {
+  const profile = resolveHookExecutionProfile({
+    moduleUrl: fixtureModuleUrl('workspace', 'apps', 'cli', 'src', 'index.ts'),
+    platform: 'linux',
+    nodePath: '/usr/bin/node',
+    homeDir: '/home/tester',
+    env: {
+      CODEX_HOME: '/data/codex',
+      CLAUDE_CODE_HOME: '/data/claude-primary',
+      CLAUDE_HOME: '/data/claude-legacy',
+    },
+  })
+
+  assert.equal(profile.options.codexHooksFile, '/data/codex/hooks.json')
+  assert.equal(profile.options.codexConfigFile, '/data/codex/config.toml')
+  assert.equal(profile.options.claudeSettingsFile, '/data/claude-primary/settings.json')
 })
 
 test('Windows 共享分发器使用 PowerShell 5.1 兼容的 UTF-8 stdin 转发', () => {
