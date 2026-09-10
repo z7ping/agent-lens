@@ -6,6 +6,7 @@ const reviewPage = readFileSync(new URL('./ReviewPage.tsx', import.meta.url), 'u
 const piLivePage = readFileSync(new URL('./PiLivePage.tsx', import.meta.url), 'utf8')
 const taskThinking = readFileSync(new URL('./TaskThinking.tsx', import.meta.url), 'utf8')
 const taskDetailCss = readFileSync(new URL('../task-detail.css', import.meta.url), 'utf8')
+const taskSessionCss = readFileSync(new URL('../task-session-view.css', import.meta.url), 'utf8')
 const mainEntry = readFileSync(new URL('../main.tsx', import.meta.url), 'utf8')
 
 test('Task Review defaults to full observable events without a DOM adapter', () => {
@@ -76,7 +77,8 @@ test('Pi Live defaults and resets to full observable events natively', () => {
 test('Pi Live Header 保持安全边距并使用统一 Pi Agent 图标', () => {
   assert.match(piLivePage, /marker=\{<span className="agent-icon source-pi" aria-hidden="true"><UiIcon name="agent" size=\{14\}\/\><\/span>\}/)
   assert.doesNotMatch(piLivePage, /marker=\{<span className=\{state\?\.isStreaming/)
-  assert.match(taskDetailCss, /\.task-surface-live \.task-header \{[\s\S]*?padding-inline: var\(--al-space-page-x\);/)
+  assert.match(taskSessionCss, /\.task-session-view \.task-header \{[\s\S]*?padding-inline: var\(--al-space-page-x\);/)
+  assert.doesNotMatch(taskDetailCss, /\.task-surface-live \.task-header\s*\{/)
 })
 
 test('Task 信息明确展示历史会话与 Pi Live 的开始时间', () => {
