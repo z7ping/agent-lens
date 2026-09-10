@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { stat } from 'node:fs/promises'
-import { basename, dirname, extname, isAbsolute, resolve, sep } from 'node:path'
+import { basename, dirname, extname, isAbsolute, relative, resolve, sep } from 'node:path'
 import type {
   DiscoveredAsset,
   DiscoveredAssetStateHint,
@@ -18,6 +18,7 @@ type PiResolvedPaths = Awaited<ReturnType<InstanceType<PiSdkResourceApi['Default
 type PiResolvedResource = PiResolvedPaths['skills'][number]
 type PiSkill = ReturnType<PiSdkResourceApi['loadSkills']>['skills'][number]
 type ProjectTrustState = true | false | 'unknown'
+type EffectiveResourceState = boolean | 'unknown'
 
 const MAX_SESSION_HEADER_SCAN_BYTES = 1024 * 1024
 
@@ -31,9 +32,9 @@ function pathKey(path: string): string {
 }
 
 function pathContains(parent: string, child: string): boolean {
-  const relative = resolve(child).slice(resolve(parent).length)
-  if (!relative) return true
-  return relative.startsWith(sep) || relative.startsWith('/') || relative.startsWith('\\')
+  const value = relative(resolve(parent), resolve(child))
+  return value === ''
+    || (value !== '..' && !value.startsWith(`..${sep}`) && !isAbsolute(value))
 }
 
 async function isDirectory(path: string): Promise<boolean> {
@@ -52,7 +53,7 @@ async function fileMtime(path: string): Promise<string | undefined> {
   }
 }
 
-function staticEvidence(
+function observedEvidence(
   path: string,
   observedAt: string,
   capturedAt: string,
@@ -69,40 +70,70 @@ function staticEvidence(
   }
 }
 
+function derivedEvidence(
+  path: string,
+  capturedAt: string,
+  nativeStableId: string,
+): EvidenceCandidate {
+  return {
+    captureMethod: 'static-scan',
+    derivation: 'derived',
+    sourceLocator: { kind: 'file', path },
+    nativeStableId,
+    capturedAt,
+    confidenceHint: 'high',
+  }
+}
+
+function effectiveEnabled(configuredEnabled: boolean, trust: ProjectTrustState): EffectiveResourceState {
+  if (!configuredEnabled || trust === false) return false
+  return trust === 'unknown' ? 'unknown' : true
+}
+
 function resourceStates(input: {
   path: string
   observedAt: string
   capturedAt: string
   nativeStableId: string
   configured: boolean
-  enabled: boolean
-  discoverable: boolean | 'unknown'
+  enabled: EffectiveResourceState
+  discoverable: EffectiveResourceState
 }): DiscoveredAssetStateHint[] {
-  const evidence = staticEvidence(input.path, input.observedAt, input.capturedAt, input.nativeStableId)
+  const installedEvidence = observedEvidence(
+    input.path,
+    input.observedAt,
+    input.capturedAt,
+    `${input.nativeStableId}:installed`,
+  )
+  const stateEvidence = (state: 'configured' | 'enabled' | 'discoverable') => derivedEvidence(
+    input.path,
+    input.capturedAt,
+    `${input.nativeStableId}:${state}`,
+  )
   return [
     {
       state: 'installed',
       value: true,
       observedAt: input.observedAt,
-      evidenceCandidates: [evidence],
+      evidenceCandidates: [installedEvidence],
     },
     ...(input.configured ? [{
       state: 'configured' as const,
       value: true,
-      observedAt: input.observedAt,
-      evidenceCandidates: [evidence],
+      observedAt: input.capturedAt,
+      evidenceCandidates: [stateEvidence('configured')],
     }] : []),
     {
       state: 'enabled',
       value: input.enabled,
       observedAt: input.capturedAt,
-      evidenceCandidates: [evidence],
+      ...(input.enabled === 'unknown' ? {} : { evidenceCandidates: [stateEvidence('enabled')] }),
     },
     {
       state: 'discoverable',
       value: input.discoverable,
       observedAt: input.capturedAt,
-      ...(input.discoverable === 'unknown' ? {} : { evidenceCandidates: [evidence] }),
+      ...(input.discoverable === 'unknown' ? {} : { evidenceCandidates: [stateEvidence('discoverable')] }),
     },
   ]
 }
@@ -210,13 +241,13 @@ async function readSessionCwd(filePath: string): Promise<string | undefined> {
 
 export async function listPiProjectCwds(dataRoot: string | undefined): Promise<string[]> {
   if (!dataRoot) return []
-  const cwds = new Set<string>()
+  const cwds = new Map<string, string>()
   for (const filePath of await listJsonlFiles(dataRoot)) {
     const cwd = await readSessionCwd(filePath)
     if (!cwd || !await isDirectory(cwd)) continue
-    cwds.add(pathKey(cwd))
+    if (!cwds.has(pathKey(cwd))) cwds.set(pathKey(cwd), cwd)
   }
-  return [...cwds]
+  return [...cwds.values()]
 }
 
 async function resolvePaths(
@@ -238,6 +269,8 @@ async function builtInProjectTrust(
   globalExtensionsMayOverride: boolean,
 ): Promise<ProjectTrustState> {
   if (!api.hasTrustRequiringProjectResources(cwd)) return true
+  // Pi lets user/global extensions answer project_trust before saved/default trust is consulted.
+  // Static discovery must not execute those extensions merely to classify assets.
   if (globalExtensionsMayOverride) return 'unknown'
 
   const trustStore = new api.ProjectTrustStore(agentDir)
@@ -276,27 +309,26 @@ async function resolvedSkillsAsAssets(input: {
     if (!resource) continue
     const observedAt = await fileMtime(skill.filePath)
     if (!observedAt) continue
-    const enabled = resource.enabled
-    const selectedByPi = enabled && selected.has(pathKey(skill.filePath))
-    const discoverable = !enabled
+    const enabled = effectiveEnabled(resource.enabled, input.trust)
+    const selectedByPi = resource.enabled && selected.has(pathKey(skill.filePath))
+    const discoverable = enabled === false
       ? false
-      : input.trust === false
-        ? false
-        : input.trust === 'unknown'
-          ? 'unknown'
-          : selectedByPi
+      : enabled === 'unknown'
+        ? 'unknown'
+        : selectedByPi
+    const source = resourceSource(resource, input.projectCwd)
 
     assets.push({
       definition: { type: 'skill', canonicalName: skill.name, displayName: skill.name },
       binding: {
         path: dirname(skill.filePath),
-        source: resourceSource(resource, input.projectCwd),
+        source,
       },
       states: resourceStates({
         path: skill.filePath,
         observedAt,
         capturedAt: input.capturedAt,
-        nativeStableId: `skill:${skill.filePath}:${resourceSource(resource, input.projectCwd)}`,
+        nativeStableId: `skill:${skill.filePath}:${source}`,
         configured: configuredResource(resource),
         enabled,
         discoverable,
@@ -316,12 +348,12 @@ async function resolvedExtensionsAsAssets(input: {
   for (const resource of input.resources) {
     const observedAt = await fileMtime(resource.path)
     if (!observedAt) continue
-    const enabled = resource.enabled
-    // Resolving a path proves Pi selected it for loading, not that executing extension code succeeds.
-    const discoverable = !enabled || input.trust === false
-      ? false
-      : 'unknown'
+    const enabled = effectiveEnabled(resource.enabled, input.trust)
+    // PackageManager proves that Pi selected a path, but proving successful extension loading would
+    // require executing arbitrary extension code. Keep discoverable unknown unless it is disabled.
+    const discoverable: EffectiveResourceState = enabled === false ? false : 'unknown'
     const name = extensionName(resource.path)
+    const source = resourceSource(resource, input.projectCwd)
     assets.push({
       definition: {
         type: 'extension',
@@ -331,13 +363,13 @@ async function resolvedExtensionsAsAssets(input: {
       },
       binding: {
         path: resource.path,
-        source: resourceSource(resource, input.projectCwd),
+        source,
       },
       states: resourceStates({
         path: resource.path,
         observedAt,
         capturedAt: input.capturedAt,
-        nativeStableId: `extension:${resource.path}:${resourceSource(resource, input.projectCwd)}`,
+        nativeStableId: `extension:${resource.path}:${source}`,
         configured: configuredResource(resource),
         enabled,
         discoverable,
@@ -445,5 +477,6 @@ export const piResourceResolverInternals = {
   listPiProjectCwds,
   builtInProjectTrust,
   configuredResource,
+  effectiveEnabled,
   resourceSource,
 }
