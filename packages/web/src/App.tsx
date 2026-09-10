@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useState, useSyncExternalStore } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import type { AgentLensClientModel, ClientSnapshot } from './client/model'
 import { readSidebarCollapsed, readTheme, writeSidebarCollapsed, writeTheme } from './client/preferences'
@@ -76,6 +76,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const snapshot = useClientSnapshot(model)
   const location = useLocation()
   const navigate = useNavigate()
+  const mainRef = useRef<HTMLDivElement>(null)
   const [theme, setTheme] = useState(readTheme)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed)
   const [agentOverviewSourceId, setAgentOverviewSourceId] = useState('')
@@ -117,6 +118,13 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   }, [location.pathname])
 
   useEffect(() => {
+    const main = mainRef.current
+    if (!main) return
+    main.inert = mobileNavigationOpen
+    return () => { main.inert = false }
+  }, [mobileNavigationOpen])
+
+  useEffect(() => {
     model.setReviewActive(onLocalReview)
     if (needsFacets) void model.ensureFacets()
     if (onLocalReview) void model.ensureReview()
@@ -152,7 +160,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
         onMobileClose={() => setMobileNavigationOpen(false)}
       />
       {mobileNavigationOpen && <button type="button" className="workspace-mobile-backdrop" aria-label="关闭工作区导航" onClick={() => setMobileNavigationOpen(false)}/>} 
-      <div className="app-main">
+      <div ref={mainRef} className="app-main">
         <WorkspaceBreadcrumb
           pathname={location.pathname}
           snapshot={snapshot}
