@@ -12,14 +12,14 @@ const FOCUSABLE = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(',')
 
-function useOverlayFocus({
+export function useModalFocusScope({
   open,
   onClose,
   panelRef,
 }: {
   open: boolean
   onClose(): void
-  panelRef: RefObject<HTMLDivElement | null>
+  panelRef: RefObject<HTMLElement | null>
 }) {
   const closeRef = useRef(onClose)
   useEffect(() => {
@@ -96,7 +96,7 @@ function OverlayFrame({
   const titleId = useId()
   const descriptionId = useId()
   const panelRef = useRef<HTMLDivElement>(null)
-  useOverlayFocus({ open, onClose, panelRef })
+  useModalFocusScope({ open, onClose, panelRef })
   if (!open) return null
 
   return createPortal(
