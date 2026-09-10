@@ -9,7 +9,6 @@ import type {
   AssetStateObservation,
 } from '@agent-lens/core'
 import { SourceAssetRunner, type SourceAssetDiscoveryResult } from '@agent-lens/core-services/source-runner'
-import type { AgentRescanFailureDto, AgentRescanSummaryDto } from '@agent-lens/protocol'
 import type { AgentLensContext } from './context'
 import {
   prepareRegisteredSources,
@@ -30,7 +29,26 @@ interface ReconciledAssetDiscoveryResult extends SourceAssetDiscoveryResult {
   statesCleared: number
 }
 
-function failureDto(failure: RegisteredSourceFailure): AgentRescanFailureDto {
+export interface SourceRescanFailure {
+  sourceId: string
+  stage: 'detect' | 'assets'
+  message: string
+}
+
+export interface SourceRescanSummary {
+  status: 'completed' | 'partial' | 'failed'
+  startedAt: string
+  completedAt: string
+  sourcesDetected: number
+  assetSourcesScanned: number
+  assetsDiscovered: number
+  assetsRemoved: number
+  statesRecorded: number
+  statesCleared: number
+  failures: SourceRescanFailure[]
+}
+
+function failureDto(failure: RegisteredSourceFailure): SourceRescanFailure {
   return {
     sourceId: failure.sourceId,
     stage: failure.stage === 'detect' ? 'detect' : 'assets',
@@ -38,7 +56,7 @@ function failureDto(failure: RegisteredSourceFailure): AgentRescanFailureDto {
   }
 }
 
-function assetFailure(sourceId: string, error: unknown): AgentRescanFailureDto {
+function assetFailure(sourceId: string, error: unknown): SourceRescanFailure {
   return {
     sourceId,
     stage: 'assets',
@@ -106,14 +124,14 @@ class TrackingAssetService implements AssetService {
 }
 
 export class SourceRescanService {
-  private inFlight: Promise<AgentRescanSummaryDto> | null = null
+  private inFlight: Promise<SourceRescanSummary> | null = null
 
   constructor(
     private readonly ctx: AgentLensContext,
     private readonly runtimeSignal: AbortSignal,
   ) {}
 
-  rescan(): Promise<AgentRescanSummaryDto> {
+  rescan(): Promise<SourceRescanSummary> {
     if (this.inFlight) return this.inFlight
     const pending = this.run().finally(() => {
       if (this.inFlight === pending) this.inFlight = null
@@ -182,14 +200,14 @@ export class SourceRescanService {
     }
   }
 
-  private async run(): Promise<AgentRescanSummaryDto> {
+  private async run(): Promise<SourceRescanSummary> {
     if (this.runtimeSignal.aborted) throw new Error('AgentLens runtime is shutting down')
     const startedAt = new Date().toISOString()
     const prepared = await prepareRegisteredSources(this.ctx, this.runtimeSignal)
     if (this.runtimeSignal.aborted) throw new Error('AgentLens runtime is shutting down')
 
     const results: ReconciledAssetDiscoveryResult[] = []
-    const failures: AgentRescanFailureDto[] = prepared.failures.map(failureDto)
+    const failures: SourceRescanFailure[] = prepared.failures.map(failureDto)
     for (const target of prepared.targets) {
       if (this.runtimeSignal.aborted) break
       if (!this.ctx.capturePolicy.isSourceEnabled(target.source.manifest.sourceId)) continue
