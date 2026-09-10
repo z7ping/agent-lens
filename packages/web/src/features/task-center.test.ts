@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { ProjectFacetDto, ReviewSessionSummaryDto } from '@agent-lens/protocol'
-import { deriveTaskProjectOptions, historyTaskPresentation, pickTaskProject } from './task-center'
+import type { LaunchableProjectDto, ProjectFacetDto, ReviewSessionSummaryDto } from '@agent-lens/protocol'
+import { deriveTaskProjectOptions, historyTaskPresentation, launchableTaskProjectOptions, pickTaskProject } from './task-center'
 
 function session(overrides: Partial<ReviewSessionSummaryDto>): ReviewSessionSummaryDto {
   return {
@@ -140,4 +140,41 @@ test('会话列表优先使用来源提供的活动分类和名称', () => {
     title: '内部审查活动',
     activityLabel: 'Guardian 审查',
   })
+})
+
+
+test('服务端可启动项目结果直接映射为 Pi 启动选项，不再从会话窗口重建 cwd', () => {
+  const items: LaunchableProjectDto[] = [
+    {
+      key: 'project:agent-lens',
+      projectId: 'agent-lens',
+      projectName: 'AgentLens',
+      repositoryIdentity: 'z7ping/agent-lens',
+      workspaceId: 'workspace-agent-lens',
+      workspacePath: 'F:\\workspace\\agent-lens',
+      lastSeenAt: '2026-09-10T09:00:00.000Z',
+    },
+    {
+      key: 'workspace:slowlight',
+      workspaceId: 'workspace-slowlight',
+      workspacePath: '/workspace/slowlight',
+      lastSeenAt: '2026-09-09T09:00:00.000Z',
+    },
+  ]
+
+  assert.deepEqual(launchableTaskProjectOptions(items), [
+    {
+      key: 'project:agent-lens',
+      projectId: 'agent-lens',
+      label: 'AgentLens',
+      cwd: 'F:\\workspace\\agent-lens',
+      lastSeenAt: '2026-09-10T09:00:00.000Z',
+    },
+    {
+      key: 'workspace:slowlight',
+      label: 'slowlight',
+      cwd: '/workspace/slowlight',
+      lastSeenAt: '2026-09-09T09:00:00.000Z',
+    },
+  ])
 })
