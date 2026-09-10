@@ -676,7 +676,8 @@ async function resolvedExtensionsAsAssets(input: {
 
 /**
  * Resolve Pi resources through the actual installed Pi package manager. null means the installed
- * SDK is too old or unavailable, allowing the caller to use its conservative filesystem fallback.
+ * SDK does not expose the required resource API, allowing the caller to use its conservative
+ * filesystem fallback. Runtime filesystem/IO failures are errors, not an empty inventory.
  */
 export async function resolvePiResourceAssets(
   ctx: SourceExecutionContext,
