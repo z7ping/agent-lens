@@ -5,10 +5,18 @@ import type {
   EvidenceCandidate,
   SourceExecutionContext,
 } from '@agent-lens/core'
+import { loadInstalledPiSdk } from '@agent-lens/runtime-cordis'
 
 interface SkillMetadata {
   name: string
+  filePath: string
 }
+
+interface PiSkillLoaderResult {
+  skills?: unknown
+}
+
+type PiSkillLoader = (options: { dir: string; source: string }) => PiSkillLoaderResult
 
 async function safeStat(path: string) {
   try {
@@ -58,13 +66,58 @@ function installationOnlyStates(
     },
     {
       // SourceAssetRunner otherwise treats an omitted discoverable state as true.
-      // Pi resource presence does not prove runtime discoverability because invocation flags,
-      // project trust and configured package/path resolution can change the loaded resource set.
+      // Resource presence alone does not prove activation for every Pi invocation.
       state: 'discoverable',
       value: 'unknown',
       observedAt: capturedAt,
     },
   ]
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+}
+
+function installedSkillLoader(module: unknown): PiSkillLoader | undefined {
+  const loader = asRecord(module).loadSkillsFromDir
+  return typeof loader === 'function' ? loader as PiSkillLoader : undefined
+}
+
+function normalizeLoadedSkills(value: unknown): SkillMetadata[] | null {
+  if (!Array.isArray(value)) return null
+  const skills: SkillMetadata[] = []
+  for (const raw of value) {
+    const skill = asRecord(raw)
+    if (typeof skill.name !== 'string' || !skill.name.trim()) return null
+    if (typeof skill.filePath !== 'string' || !skill.filePath) return null
+    skills.push({ name: skill.name, filePath: skill.filePath })
+  }
+  return skills
+}
+
+/**
+ * Prefer the resource loader from the actual installed Pi version. This keeps AgentLens aligned
+ * with Pi's YAML/frontmatter, ignore-file and recursive discovery semantics without copying them.
+ * null means the installed SDK cannot prove the resource set, so the caller may use a conservative
+ * filesystem fallback instead.
+ */
+async function loadSkillsWithInstalledPi(
+  ctx: SourceExecutionContext,
+  root: string,
+): Promise<SkillMetadata[] | null> {
+  const executable = ctx.installation.executable
+  if (!executable) return null
+  try {
+    const installed = await loadInstalledPiSdk(executable)
+    const loader = installedSkillLoader(installed.module)
+    if (!loader) return null
+    const result = loader({ dir: root, source: 'user' })
+    return normalizeLoadedSkills(result.skills)
+  } catch {
+    return null
+  }
 }
 
 function unquoteYamlScalar(value: string): string {
@@ -80,9 +133,8 @@ function unquoteYamlScalar(value: string): string {
 }
 
 /**
- * Pi uses Agent Skills frontmatter and requires a non-empty description. We only need
- * enough metadata to prove that a Markdown file is a Pi skill and to preserve its name;
- * unsupported YAML constructs are treated conservatively as unproven instead of guessed.
+ * Conservative fallback used only when the actual installed Pi loader cannot be resolved.
+ * Unsupported YAML stays unproven rather than being guessed as a valid Pi skill.
  */
 function skillFrontmatter(text: string): { name?: string; description?: string } | null {
   const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/)
@@ -103,15 +155,15 @@ function skillFrontmatter(text: string): { name?: string; description?: string }
       for (let next = index + 1; next < body.length; next += 1) {
         const continuation = body[next]!
         if (!/^\s+/.test(continuation)) break
-        const value = continuation.trim()
-        if (value) chunks.push(value)
+        const item = continuation.trim()
+        if (item) chunks.push(item)
         index = next
       }
       if (chunks.length) result[key] = chunks.join(raw === '>' ? ' ' : '\n')
       continue
     }
-    const value = unquoteYamlScalar(raw)
-    if (value) result[key] = value
+    const item = unquoteYamlScalar(raw)
+    if (item) result[key] = item
   }
   return result
 }
@@ -128,11 +180,10 @@ async function readSkillMetadata(filePath: string): Promise<SkillMetadata | null
   const declared = basename(filePath) === 'SKILL.md'
   const fallback = declared ? basename(dirname(filePath)) : basename(filePath, extname(filePath))
   const name = frontmatter.name?.trim() || fallback
-  return name ? { name } : null
+  return name ? { name, filePath } : null
 }
 
-/** Mirrors Pi's default directory shape: SKILL.md makes a directory a skill root;
- * otherwise direct root Markdown files are candidates and subdirectories are searched. */
+/** Pi-compatible directory shape for the conservative no-SDK fallback. */
 async function* walkPiSkillFiles(
   root: string,
   includeRootFiles = true,
@@ -161,20 +212,35 @@ async function* walkPiSkillFiles(
   }
 }
 
+async function fallbackSkills(root: string): Promise<SkillMetadata[]> {
+  const skills: SkillMetadata[] = []
+  for await (const skillFile of walkPiSkillFiles(root)) {
+    const skill = await readSkillMetadata(skillFile)
+    if (skill) skills.push(skill)
+  }
+  return skills
+}
+
 async function* discoverPiSkills(
+  ctx: SourceExecutionContext,
   configRoot: string,
   capturedAt: string,
 ): AsyncIterable<DiscoveredAsset> {
   const root = join(configRoot, 'skills')
-  for await (const skillFile of walkPiSkillFiles(root)) {
-    const meta = await safeStat(skillFile)
-    const skill = await readSkillMetadata(skillFile)
-    if (!meta?.isFile() || !skill) continue
+  const skills = await loadSkillsWithInstalledPi(ctx, root) ?? await fallbackSkills(root)
+  for (const skill of skills) {
+    const meta = await safeStat(skill.filePath)
+    if (!meta?.isFile()) continue
     const observedAt = meta.mtime.toISOString()
     yield {
       definition: { type: 'skill', canonicalName: skill.name, displayName: skill.name },
-      binding: { path: dirname(skillFile), source: 'pi:skills' },
-      states: installationOnlyStates(skillFile, observedAt, capturedAt, `skill:${skillFile}`),
+      binding: { path: dirname(skill.filePath), source: 'pi:skills' },
+      states: installationOnlyStates(
+        skill.filePath,
+        observedAt,
+        capturedAt,
+        `skill:${skill.filePath}`,
+      ),
     }
   }
 }
@@ -264,12 +330,11 @@ export async function* discoverPiAssets(
   if (!root || ctx.abortSignal.aborted) return
   const capturedAt = new Date().toISOString()
 
-  // This installation-scoped pass only reports resources whose presence can be proven from
-  // Pi's global resource directories. Project resources, configured external paths and package
-  // resources need cwd/trust/package-resolution context that SourceExecutionContext does not
-  // currently carry; guessing them here would turn configuration assumptions into fake facts.
+  // Installation scope can prove global resources. Project resources, configured external
+  // paths and package resources need cwd/trust/package-resolution context that this Source
+  // execution context does not carry; they deliberately remain unclaimed instead of guessed.
   for (const group of [
-    discoverPiSkills(root, capturedAt),
+    discoverPiSkills(ctx, root, capturedAt),
     discoverPiExtensions(root, capturedAt),
   ]) {
     for await (const asset of group) {
@@ -284,4 +349,5 @@ export const piAssetInternals = {
   readSkillMetadata,
   extensionEntries,
   piManifestExtensions,
+  loadSkillsWithInstalledPi,
 }
