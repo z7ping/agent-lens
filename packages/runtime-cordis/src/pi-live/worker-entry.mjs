@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { access, readFile } from 'node:fs/promises'
-import { basename, dirname, join, relative, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { homedir } from 'node:os'
 import { serialize } from 'node:v8'
 
 const VERSION = 1
@@ -271,9 +272,20 @@ function samePath(left, right) {
   return normalized(left) === normalized(right)
 }
 
+function resolvedRuntimeSessionDir(cwd, value) {
+  if (typeof value !== 'string' || !value.trim()) return undefined
+  const raw = value.trim()
+  if (raw === '~') return homedir()
+  if (raw.startsWith('~/') || (process.platform === 'win32' && raw.startsWith('~\\'))) {
+    return resolve(homedir(), raw.slice(2))
+  }
+  return isAbsolute(raw) ? resolve(raw) : resolve(cwd, raw)
+}
+
 async function createSessionManager(sdk, input) {
-  if (!input.sessionPath) return sdk.SessionManager.create(input.cwd, input.sessionDir)
-  const manager = sdk.SessionManager.open(input.sessionPath, input.sessionDir, input.cwd)
+  const sessionDir = resolvedRuntimeSessionDir(input.cwd, input.sessionDir)
+  if (!input.sessionPath) return sdk.SessionManager.create(input.cwd, sessionDir)
+  const manager = sdk.SessionManager.open(input.sessionPath, sessionDir, input.cwd)
   if (input.historyAction !== 'fork') return manager
   if (typeof manager.createBranchedSession !== 'function') {
     throw new Error('Installed Pi SDK does not support createBranchedSession; cannot fork this history session')
