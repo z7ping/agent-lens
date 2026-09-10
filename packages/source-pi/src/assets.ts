@@ -118,7 +118,10 @@ async function loadSkillsWithInstalledPi(
     if (!loader) return null
     const result = loader({ dir: root, source: 'user' })
     return normalizeLoadedSkills(result.skills)
-  } catch {
+  } catch (error) {
+    // Missing/permission/IO errors mean the installed Pi view is currently unavailable, not that
+    // the richer asset inventory disappeared. Only non-filesystem incompatibility may fall back.
+    if (error && typeof error === 'object' && 'code' in error) throw error
     return null
   }
 }
