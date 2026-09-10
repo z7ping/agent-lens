@@ -6,6 +6,7 @@ import type {
   SourceExecutionContext,
 } from '@agent-lens/core'
 import { loadInstalledPiSdk } from '@agent-lens/runtime-cordis'
+import { resolvePiResourceAssets } from './resource-resolver'
 
 interface SkillMetadata {
   name: string
@@ -326,13 +327,23 @@ async function* discoverPiExtensions(
 export async function* discoverPiAssets(
   ctx: SourceExecutionContext,
 ): AsyncIterable<DiscoveredAsset> {
+  if (ctx.abortSignal.aborted) return
+
+  const resolved = await resolvePiResourceAssets(ctx)
+  if (resolved) {
+    for (const asset of resolved) {
+      if (ctx.abortSignal.aborted) return
+      yield asset
+    }
+    return
+  }
+
   const root = ctx.installation.configRoot
-  if (!root || ctx.abortSignal.aborted) return
+  if (!root) return
   const capturedAt = new Date().toISOString()
 
-  // Installation scope can prove global resources. Project resources, configured external
-  // paths and package resources need cwd/trust/package-resolution context that this Source
-  // execution context does not carry; they deliberately remain unclaimed instead of guessed.
+  // Older/unresolvable SDKs fall back to a deliberately narrow installation-only scan. It never
+  // claims project/settings/package coverage or promotes presence into discoverable/enabled=true.
   for (const group of [
     discoverPiSkills(ctx, root, capturedAt),
     discoverPiExtensions(root, capturedAt),
