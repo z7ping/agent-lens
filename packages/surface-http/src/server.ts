@@ -61,6 +61,7 @@ export interface HttpSurfaceOptions {
   backup?: BackupService
   piLive?: PiLiveService
   rescanAgents?: () => Promise<AgentRescanSummaryDto>
+  sourceDetection?: (sourceId: string) => boolean | undefined
   selectProjectDirectory?: () => Promise<string | undefined>
   hubReview?: Pick<HubReviewProjection, 'get' | 'query'>
 }
@@ -116,8 +117,14 @@ export async function startHttpSurface(
   const usage = new ToolAssetUsageProjection(storage)
   const insights = new UsageInsightsProjection(storage)
   const review = new ReviewProjection(storage)
-  const facets = new FacetProjection(storage, options.sources, options.capturePolicy)
-  const agents = new AgentOverviewProjection(storage, options.sources, options.capabilities, options.capturePolicy)
+  const facets = new FacetProjection(storage, options.sources, options.capturePolicy, options.sourceDetection)
+  const agents = new AgentOverviewProjection(
+    storage,
+    options.sources,
+    options.capabilities,
+    options.capturePolicy,
+    options.sourceDetection,
+  )
   const relationships = new SessionRelationshipProjection(storage)
   const staticMounts = new Map<string, HttpStaticMount>()
   type StorageHealth = Awaited<ReturnType<StorageService['health']>>
@@ -205,9 +212,11 @@ export async function startHttpSurface(
           return
         }
         const summary = await options.rescanAgents()
+        agents.invalidate()
+        facets.invalidate()
         const [freshAgents, freshFacets] = await Promise.all([
-          new AgentOverviewProjection(storage, options.sources, options.capabilities, options.capturePolicy).query(),
-          new FacetProjection(storage, options.sources, options.capturePolicy).query(),
+          agents.query(),
+          facets.query(),
         ])
         const body: AgentRescanResponseDto = {
           ...summary,
