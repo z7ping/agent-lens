@@ -1,4 +1,4 @@
-import type { AgentRescanFailureDto, AgentRescanResponseDto } from '@agent-lens/protocol'
+import type { AgentRescanFailureDto, AgentRescanSummaryDto } from '@agent-lens/protocol'
 import type { AgentLensContext } from './context'
 import {
   discoverRegisteredSourceAssets,
@@ -15,14 +15,14 @@ function failureDto(failure: RegisteredSourceFailure): AgentRescanFailureDto {
 }
 
 export class SourceRescanService {
-  private inFlight: Promise<AgentRescanResponseDto> | null = null
+  private inFlight: Promise<AgentRescanSummaryDto> | null = null
 
   constructor(
     private readonly ctx: AgentLensContext,
     private readonly runtimeSignal: AbortSignal,
   ) {}
 
-  rescan(): Promise<AgentRescanResponseDto> {
+  rescan(): Promise<AgentRescanSummaryDto> {
     if (this.inFlight) return this.inFlight
     const pending = this.run().finally(() => {
       if (this.inFlight === pending) this.inFlight = null
@@ -31,7 +31,7 @@ export class SourceRescanService {
     return pending
   }
 
-  private async run(): Promise<AgentRescanResponseDto> {
+  private async run(): Promise<AgentRescanSummaryDto> {
     if (this.runtimeSignal.aborted) throw new Error('AgentLens runtime is shutting down')
     const startedAt = new Date().toISOString()
     const prepared = await prepareRegisteredSources(this.ctx, this.runtimeSignal)
