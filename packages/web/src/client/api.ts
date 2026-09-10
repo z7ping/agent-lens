@@ -1,6 +1,7 @@
 import {
   parseLiveUpdateEvent,
   type AgentOverviewResponseDto,
+  type AgentRescanResponseDto,
   type BackupCreateRequestDto,
   type BackupOverviewResponseDto,
   type BackupRestorePreviewResponseDto,
@@ -148,6 +149,9 @@ export class AgentLensApi {
     )
     agentsInFlight = shared
     return shared
+  }
+  rescanAgents(): Promise<AgentRescanResponseDto> {
+    return requestJson('/api/v1/agents/rescan', { method: 'POST' })
   }
   capturePolicy(): Promise<CapturePolicyResponseDto> { return requestJson('/api/v1/capture-policy/sources') }
 
