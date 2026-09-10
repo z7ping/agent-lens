@@ -71,7 +71,7 @@ test('Agent Overview aggregates tool assets once per source, not once per instal
 
   const result = await new AgentOverviewProjection(storage, sources).query()
   assert.equal(aggregateCalls.length, 1)
-  assert.equal(aggregateCalls[0]?.sourceId, 'codex')
+  assert.deepEqual(aggregateCalls[0]?.sourceIds, ['codex'])
   assert.equal(aggregateCalls[0]?.detailLimit, 0)
   assert.equal(result.items[0]?.usedAssets[0]?.callCount, 10)
 })
