@@ -171,6 +171,20 @@ function resourceSource(resource: PiResolvedResource, cwd?: string): string {
   return `pi:resource:${scope}${context}:${resource.metadata.origin}:${resource.metadata.source}`
 }
 
+async function resourceVersion(resource: PiResolvedResource): Promise<string | undefined> {
+  if (resource.metadata.origin !== 'package' || !resource.metadata.baseDir) return undefined
+  const manifest = await readUtf8(resolve(resource.metadata.baseDir, 'package.json'))
+  if (manifest === undefined) return undefined
+  try {
+    const parsed = JSON.parse(manifest.replace(/^\uFEFF/, '')) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined
+    const version = (parsed as Record<string, unknown>).version
+    return typeof version === 'string' && version.trim() ? version.trim() : undefined
+  } catch {
+    return undefined
+  }
+}
+
 function extensionName(path: string): string {
   const base = basename(path, extname(path))
   return base === 'index' ? basename(dirname(path)) : base
@@ -303,6 +317,7 @@ async function resolvedPromptsAsAssets(input: {
       binding: {
         path: resource.path,
         source: resourceSource(resource, input.projectCwd),
+        ...((await resourceVersion(resource)) ? { version: await resourceVersion(resource) } : {}),
       },
       states: resourceStates({
         path: resource.path,
@@ -369,6 +384,7 @@ async function resolvedThemesAsAssets(input: {
       binding: {
         path: resource.path,
         source: resourceSource(resource, input.projectCwd),
+        ...((await resourceVersion(resource)) ? { version: await resourceVersion(resource) } : {}),
       },
       states: resourceStates({
         path: resource.path,
@@ -796,6 +812,7 @@ export const piResourceResolverInternals = {
   configuredResource,
   effectiveEnabled,
   resourceSource,
+  resourceVersion,
   promptCandidate,
   selectedPromptPaths,
   themeCandidate,
