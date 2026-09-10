@@ -143,14 +143,6 @@ test('服务端可启动项目结果直接映射为 Pi 启动选项，不再从�
 test('新建相关任务在服务端项目结果中优先继承当前项目，其次继承工作目录', () => {
   const options = launchableTaskProjectOptions([
     {
-      key: 'project-a',
-      projectId: 'project-a',
-      projectName: 'A',
-      workspaceId: 'workspace-a',
-      workspacePath: '/work/a',
-      lastSeenAt: '2026-09-09T09:00:00.000Z',
-    },
-    {
       key: 'project-b',
       projectId: 'project-b',
       projectName: 'B',
@@ -158,8 +150,16 @@ test('新建相关任务在服务端项目结果中优先继承当前项目，�
       workspacePath: '/work/b',
       lastSeenAt: '2026-09-10T09:00:00.000Z',
     },
+    {
+      key: 'project-a',
+      projectId: 'project-a',
+      projectName: 'A',
+      workspaceId: 'workspace-a',
+      workspacePath: '/work/a',
+      lastSeenAt: '2026-09-09T09:00:00.000Z',
+    },
   ])
   assert.equal(pickTaskProject(options, 'project-a')?.cwd, '/work/a')
   assert.equal(pickTaskProject(options, undefined, '/work/a')?.label, 'A')
-  assert.equal(pickTaskProject(options)?.label, 'A')
+  assert.equal(pickTaskProject(options)?.label, 'B')
 })
