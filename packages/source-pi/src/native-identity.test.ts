@@ -93,3 +93,18 @@ test('Pi evidence nativeStableId comes from raw upstream entry id, not legacy So
   assert.equal(normalized.observations[0]?.nativeEventId, 'real-session-id')
   assert.equal(normalized.evidenceCandidates[0]?.nativeStableId, 'real-session-id')
 })
+
+test('Pi normalizer leaves generic text bounding to central CapturePolicy', async () => {
+  const text = 'x'.repeat(70_000)
+  const normalized = await normalizePiRecord(record({
+    type: 'message',
+    id: 'long-user-message',
+    message: {
+      role: 'user',
+      content: [{ type: 'text', text }],
+    },
+  }, 'long-user-message'), {} as never)
+
+  assert.equal((normalized.observations[0]?.payload as { text?: string }).text?.length, text.length)
+})
+
