@@ -34,6 +34,7 @@ import { PI_PARSER_VERSION, PI_SOURCE_ID } from './constants'
 const RUNTIME_FALLBACK_POLL_MS = 5000
 const RUNTIME_RECONCILE_POLL_MS = 60_000
 const RUNTIME_DEBOUNCE_MS = 180
+const MAX_SESSION_HEADER_SCAN_BYTES = 1024 * 1024
 
 interface PiSessionMetadata {
   nativeSessionId: string
@@ -287,10 +288,15 @@ function completeJson(text: string): boolean {
 async function readSessionHeader(filePath: string): Promise<Record<string, unknown> | null> {
   try {
     for await (const line of readJsonlLines(filePath, 0)) {
+      if (line.endOffset > MAX_SESSION_HEADER_SCAN_BYTES) return null
       if (!line.text.trim()) continue
       if (!line.terminated && !completeJson(line.text)) return null
       const entry = parseLine(line.text)
-      return entry.type === 'session' ? entry : null
+      if (entry.type === 'malformed-json') {
+        if (line.terminated) continue
+        return null
+      }
+      return entry.type === 'session' && typeof entry.id === 'string' ? entry : null
     }
     return null
   } catch {
