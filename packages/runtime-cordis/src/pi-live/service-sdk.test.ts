@@ -133,6 +133,10 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
   assert.deepEqual(state.startupResources?.themes, ['static-theme', 'extension-theme'])
   assert.deepEqual(state.startupResources?.contexts, ['/workspace/AGENTS.md'])
 
+  runtimeSkills.push({ name: 'late-runtime-skill' })
+  const refreshed = await service.state(state.runtimeSessionId)
+  assert.deepEqual(refreshed.startupResources?.skills, ['static-skill', 'extension-skill', 'late-runtime-skill'])
+
   const events: Record<string, unknown>[] = []
   const unsubscribe = service.subscribe(state.runtimeSessionId, event => events.push(event.event))
   emit(agentListener, { type: 'tool_execution_start', toolCallId: 'tool-1', toolName: 'read' })
