@@ -584,6 +584,7 @@ export class DefaultPiLiveService implements PiLiveService {
     if (runtime.status === 'ready' && runtime.handle) {
       const state = await runtime.handle.state()
       this.persistSessionIfChanged(runtime, state)
+      if (state.startupResources) runtime.startupResources = state.startupResources
       return this.decorateReadyState(runtime, state)
     }
     return {
