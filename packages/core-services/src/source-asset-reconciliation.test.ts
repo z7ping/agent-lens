@@ -194,3 +194,25 @@ test('资产消失时只对库存状态写 false，运行/发现状态退回 unk
     [['discoverable', 'unknown'], ['installed', false]],
   )
 })
+
+
+test('同一资产仍存在但不再声明旧状态时，旧状态退回 unknown', async () => {
+  const inventory = { current: true, discoverable: true }
+  const { runner, writes } = harness()
+  const source = sourceWithInventory(inventory)
+  const signal = new AbortController().signal
+
+  await runner.scan({ source, host, detected, abortSignal: signal })
+  writes.length = 0
+
+  inventory.discoverable = false
+  const second = await runner.scan({ source, host, detected, abortSignal: signal })
+
+  assert.equal(second.assetsDiscovered, 1)
+  assert.equal(second.assetsRemoved, 0)
+  assert.equal(second.statesCleared, 1)
+  assert.deepEqual(
+    writes.map(item => [item.state, item.value]),
+    [['installed', true], ['discoverable', 'unknown']],
+  )
+})
