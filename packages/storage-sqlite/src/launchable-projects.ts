@@ -69,16 +69,16 @@ function projectCandidatesSql(search: boolean, after: boolean): string {
       GROUP BY workspace.id, workspace.path
     )
     SELECT
-      project_key,
-      project_id,
-      project_name,
-      repository_identity,
-      last_seen_at
-    FROM project_activity
+      candidate.project_key,
+      candidate.project_id,
+      candidate.project_name,
+      candidate.repository_identity,
+      candidate.last_seen_at
+    FROM project_activity AS candidate
     WHERE 1 = 1
       ${search ? `AND (
-        LOWER(COALESCE(project_name, '')) LIKE ?
-        OR LOWER(COALESCE(repository_identity, '')) LIKE ?
+        LOWER(COALESCE(candidate.project_name, '')) LIKE ?
+        OR LOWER(COALESCE(candidate.repository_identity, '')) LIKE ?
         OR EXISTS (
           SELECT 1
           FROM logical_sessions AS search_logical
@@ -86,21 +86,21 @@ function projectCandidatesSql(search: boolean, after: boolean): string {
             ON search_workspace.id = search_logical.workspace_id
           WHERE TRIM(search_workspace.path) <> ''
             AND (
-              (project_id IS NOT NULL AND search_logical.project_id = project_id)
+              (candidate.project_id IS NOT NULL AND search_logical.project_id = candidate.project_id)
               OR (
-                project_id IS NULL
+                candidate.project_id IS NULL
                 AND search_logical.project_id IS NULL
-                AND 'workspace:' || search_workspace.id = project_key
+                AND 'workspace:' || search_workspace.id = candidate.project_key
               )
             )
             AND LOWER(search_workspace.path) LIKE ?
         )
       )` : ''}
       ${after ? `AND (
-        last_seen_at < ?
-        OR (last_seen_at = ? AND project_key > ?)
+        candidate.last_seen_at < ?
+        OR (candidate.last_seen_at = ? AND candidate.project_key > ?)
       )` : ''}
-    ORDER BY last_seen_at DESC, project_key ASC
+    ORDER BY candidate.last_seen_at DESC, candidate.project_key ASC
     LIMIT ?
   `
 }
