@@ -283,9 +283,9 @@ async function sessionMetadata(filePath: string): Promise<PiSessionMetadata> {
 }
 
 function historyCheckpointKey(filePath: string): string {
-  // v7 intentionally replays Pi source files once so SourceRecord native identity written by
-  // older adapters can be corrected in-place without creating duplicate SourceRecord IDs.
-  return `pi:history:v7-native-identity:${sha256(filePath)}`
+  // Keep the existing checkpoint generation stable. Parser upgrades must not turn the low-frequency
+  // runtime reconciliation into an accidental full-history re-ingest on large installations.
+  return `pi:history:v6-file-identity:${sha256(filePath)}`
 }
 
 function nativeId(entry: Record<string, unknown>): string | undefined {
