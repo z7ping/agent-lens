@@ -8,7 +8,7 @@ import type {
   AssetStateInput,
   AssetStateObservation,
 } from '@agent-lens/core'
-import { SourceAssetRunner, type SourceAssetDiscoveryResult } from '@agent-lens/core-services'
+import { SourceAssetRunner, type SourceAssetDiscoveryResult } from '@agent-lens/core-services/source-runner'
 import type { AgentRescanFailureDto, AgentRescanSummaryDto } from '@agent-lens/protocol'
 import type { AgentLensContext } from './context'
 import {
