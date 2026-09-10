@@ -288,3 +288,34 @@ test('Pi asset discovery does not promote extension-private settings or arbitrar
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test('Pi session SourceRecord nativeId is the upstream session id without AgentLens prefix', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-pi-native-source-id-'))
+  const agentDir = join(root, 'agent')
+  const transcript = join(agentDir, 'sessions', 'native-id', 'session.jsonl')
+  await mkdir(dirname(transcript), { recursive: true })
+  await writeFile(transcript, `${sessionLine('pi-upstream-session-id')}\n`, 'utf8')
+
+  try {
+    await withHistoryRunner(agentDir, async ({ storage, history, host, detected }) => {
+      await history.sync({
+        source: piSourceDefinition,
+        host,
+        detected,
+        abortSignal: new AbortController().signal,
+      })
+
+      const row = storage.db.prepare(`
+        SELECT native_id AS nativeId
+        FROM source_records
+        WHERE source_id = 'pi' AND native_type = 'history/session'
+        LIMIT 1
+      `).get() as { nativeId: string | null } | undefined
+
+      assert.equal(row?.nativeId, 'pi-upstream-session-id')
+    })
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
