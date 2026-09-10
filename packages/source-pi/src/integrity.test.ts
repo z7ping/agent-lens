@@ -223,8 +223,11 @@ test('Pi asset discovery does not promote extension-private settings or arbitrar
     const assets = []
     for await (const asset of discoverPiAssets(context)) assets.push(asset)
     assert.deepEqual(assets.map(asset => asset.definition.canonicalName).sort(), ['reviewer', 'trace'])
-    assert.ok(assets.every(asset => asset.states?.length === 1 && asset.states[0]?.state === 'installed'))
-    assert.ok(assets.every(asset => asset.states?.[0]?.value === true))
+    for (const asset of assets) {
+      assert.equal(asset.states?.find(state => state.state === 'installed')?.value, true)
+      assert.equal(asset.states?.find(state => state.state === 'discoverable')?.value, 'unknown')
+      assert.equal(asset.states?.find(state => state.state === 'enabled'), undefined)
+    }
   } finally {
     storage.close()
     await rm(root, { recursive: true, force: true })
