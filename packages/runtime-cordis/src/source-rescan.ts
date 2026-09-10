@@ -44,9 +44,9 @@ export class SourceRescanService {
     )
     const failures = [...prepared.failures, ...scanned.failures].map(failureDto)
     const assetsDiscovered = scanned.results.reduce((sum, result) => sum + result.assetsDiscovered, 0)
-    const assetsRemoved = scanned.results.reduce((sum, result) => sum + result.assetsRemoved, 0)
+    const assetsRemoved = scanned.results.reduce((sum, result) => sum + (('assetsRemoved' in result ? Number(result.assetsRemoved) : 0) || 0), 0)
     const statesRecorded = scanned.results.reduce((sum, result) => sum + result.statesRecorded, 0)
-    const statesCleared = scanned.results.reduce((sum, result) => sum + result.statesCleared, 0)
+    const statesCleared = scanned.results.reduce((sum, result) => sum + (('statesCleared' in result ? Number(result.statesCleared) : 0) || 0), 0)
     const successfulStages = prepared.targets.length + scanned.results.length
     const status = failures.length === 0
       ? 'completed'
