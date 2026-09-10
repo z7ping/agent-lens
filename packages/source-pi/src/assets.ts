@@ -41,13 +41,11 @@ function staticEvidence(
   path: string,
   observedAt: string,
   capturedAt: string,
-  nativeStableId: string,
 ): EvidenceCandidate {
   return {
     captureMethod: 'static-scan',
     derivation: 'observed',
     sourceLocator: { kind: 'file', path },
-    nativeStableId,
     eventTime: observedAt,
     capturedAt,
     confidenceHint: 'exact',
@@ -58,14 +56,13 @@ function installationOnlyStates(
   path: string,
   observedAt: string,
   capturedAt: string,
-  nativeStableId: string,
 ): NonNullable<DiscoveredAsset['states']> {
   return [
     {
       state: 'installed',
       value: true,
       observedAt,
-      evidenceCandidates: [staticEvidence(path, observedAt, capturedAt, nativeStableId)],
+      evidenceCandidates: [staticEvidence(path, observedAt, capturedAt)],
     },
     {
       // Keep uncertainty explicit so existing optimistic state observations are superseded.
