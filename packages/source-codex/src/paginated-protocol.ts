@@ -322,13 +322,13 @@ async function normalizeFunctionCallOutput(
   ctx: SourceNormalizationContext,
   completed: CodexCompletedTurnItem,
 ): Promise<NormalizedSourceOutput> {
-  const callId = completed.itemId ?? `function-output-${record.sourceSequence ?? record.id}`
+  const callId = completed.itemId
   const name = stringField(completed.item, 'name') ?? 'function_call'
   const output = await normalizeCodexRecord(syntheticRecord(record, {
     type: 'response_item',
     payload: {
       type: 'function_call_output',
-      call_id: callId,
+      ...(callId ? { call_id: callId } : {}),
       output: typeof completed.item.output === 'string'
         ? completed.item.output
         : JSON.stringify(completed.item.output ?? null),
@@ -354,13 +354,13 @@ async function normalizeCommandExecution(
   ctx: SourceNormalizationContext,
   completed: CodexCompletedTurnItem,
 ): Promise<NormalizedSourceOutput> {
-  const callId = completed.itemId ?? `command-${record.sourceSequence ?? record.id}`
+  const callId = completed.itemId
   const call = await normalizeCodexRecord(syntheticRecord(record, {
     type: 'response_item',
     payload: {
       type: 'function_call',
       name: 'command_execution',
-      call_id: callId,
+      ...(callId ? { call_id: callId } : {}),
       arguments: JSON.stringify({
         command: completed.item.command ?? [],
         cwd: completed.item.cwd ?? null,
@@ -379,7 +379,7 @@ async function normalizeCommandExecution(
   const outputText = `${exitCode === undefined ? '' : `Exit code: ${exitCode}\n`}Output:\n${commandOutput(completed.item)}`
   const result = await normalizeCodexRecord(syntheticRecord(record, {
     type: 'response_item',
-    payload: { type: 'function_call_output', call_id: callId, output: outputText },
+    payload: { type: 'function_call_output', ...(callId ? { call_id: callId } : {}), output: outputText },
   }, completed.itemId), ctx)
   const failed = status === 'failed' || status === 'declined' || (exitCode !== undefined && exitCode !== 0)
   result.observations = result.observations.map(observation => decorateToolResult(
@@ -395,14 +395,14 @@ async function normalizeDynamicToolCall(
   ctx: SourceNormalizationContext,
   completed: CodexCompletedTurnItem,
 ): Promise<NormalizedSourceOutput> {
-  const callId = completed.itemId ?? `dynamic-${record.sourceSequence ?? record.id}`
+  const callId = completed.itemId
   const name = stringField(completed.item, 'tool') ?? 'dynamic_tool'
   const call = await normalizeCodexRecord(syntheticRecord(record, {
     type: 'response_item',
     payload: {
       type: 'custom_tool_call',
       name,
-      call_id: callId,
+      ...(callId ? { call_id: callId } : {}),
       input: completed.item.arguments ?? {},
     },
   }, completed.itemId), ctx)
@@ -415,7 +415,7 @@ async function normalizeDynamicToolCall(
     type: 'response_item',
     payload: {
       type: 'custom_tool_call_output',
-      call_id: callId,
+      ...(callId ? { call_id: callId } : {}),
       output: completed.item.content_items ?? completed.item.error ?? null,
     },
   }, completed.itemId), ctx)
@@ -435,7 +435,7 @@ async function normalizeCollabAgentToolCall(
   ctx: SourceNormalizationContext,
   completed: CodexCompletedTurnItem,
 ): Promise<NormalizedSourceOutput> {
-  const callId = completed.itemId ?? `collab-${record.sourceSequence ?? record.id}`
+  const callId = completed.itemId
   const tool = stringField(completed.item, 'tool') ?? 'collab_agent'
   const nativeToolName = `collab_agent.${tool}`
   const input = {
@@ -451,7 +451,7 @@ async function normalizeCollabAgentToolCall(
     payload: {
       type: 'function_call',
       name: nativeToolName,
-      call_id: callId,
+      ...(callId ? { call_id: callId } : {}),
       arguments: JSON.stringify(input),
     },
   }, completed.itemId), ctx)
@@ -465,7 +465,7 @@ async function normalizeCollabAgentToolCall(
     type: 'response_item',
     payload: {
       type: 'function_call_output',
-      call_id: callId,
+      ...(callId ? { call_id: callId } : {}),
       output: JSON.stringify({
         status: completed.item.status ?? null,
         agentsStates: completed.item.agents_states ?? completed.item.agentsStates ?? {},
@@ -513,14 +513,14 @@ async function normalizeMcpToolCall(
   ctx: SourceNormalizationContext,
   completed: CodexCompletedTurnItem,
 ): Promise<NormalizedSourceOutput> {
-  const callId = completed.itemId ?? `mcp-${record.sourceSequence ?? record.id}`
+  const callId = completed.itemId
   const name = stringField(completed.item, 'tool') ?? 'mcp_tool'
   const call = await normalizeCodexRecord(syntheticRecord(record, {
     type: 'response_item',
     payload: {
       type: 'function_call',
       name,
-      call_id: callId,
+      ...(callId ? { call_id: callId } : {}),
       arguments: JSON.stringify({
         server: completed.item.server ?? null,
         arguments: completed.item.arguments ?? {},
@@ -539,7 +539,7 @@ async function normalizeMcpToolCall(
     type: 'response_item',
     payload: {
       type: 'function_call_output',
-      call_id: callId,
+      ...(callId ? { call_id: callId } : {}),
       output: JSON.stringify(completed.item.result ?? completed.item.error ?? null),
     },
   }, completed.itemId), ctx)
@@ -556,12 +556,12 @@ async function normalizeWebSearch(
   ctx: SourceNormalizationContext,
   completed: CodexCompletedTurnItem,
 ): Promise<NormalizedSourceOutput> {
-  const callId = completed.itemId ?? `web-${record.sourceSequence ?? record.id}`
+  const callId = completed.itemId
   const call = await normalizeCodexRecord(syntheticRecord(record, {
     type: 'response_item',
     payload: {
       type: 'web_search_call',
-      call_id: callId,
+      ...(callId ? { call_id: callId } : {}),
       status: 'completed',
       action: completed.item.action ?? { type: 'search', query: completed.item.query ?? '' },
     },
@@ -573,7 +573,7 @@ async function normalizeWebSearch(
     type: 'response_item',
     payload: {
       type: 'function_call_output',
-      call_id: callId,
+      ...(callId ? { call_id: callId } : {}),
       output: JSON.stringify(completed.item.results),
     },
   }, completed.itemId), ctx)
@@ -664,13 +664,13 @@ async function normalizeExtension(
 ): Promise<NormalizedSourceOutput> {
   const extensionKind = stringField(completed.item, 'kind') ?? ''
   if (extensionKind === 'clock.sleep') {
-    const callId = completed.itemId ?? `clock-sleep-${record.sourceSequence ?? record.id}`
+    const callId = completed.itemId
     const output = await normalizeCodexRecord(syntheticRecord(record, {
       type: 'response_item',
       payload: {
         type: 'function_call',
         name: 'clock.sleep',
-        call_id: callId,
+        ...(callId ? { call_id: callId } : {}),
         arguments: JSON.stringify({
           durationMs: completed.item.durationMs ?? completed.item.duration_ms ?? null,
         }),
