@@ -4,37 +4,38 @@ import { access } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import Database from 'better-sqlite3'
-import type {
-  DetectedSource,
-  Disposable,
-  EvidenceCandidate,
-  NormalizedSourceOutput,
-  ObservationCapability,
-  ObservationCandidate,
-  ObservationIdentityHints,
-  SourceDefinition,
-  SourceDetectionContext,
-  SourceExecutionContext,
-  SourceHistoryExecutionContext,
-  SourceNormalizationContext,
-  SourcePluginManifest,
-  SourceRecord,
-  SourceRecordEmitter,
+import {
+  evidenceFromSourceRecord,
+  observationFromSourceRecord,
+  type DetectedSource,
+  type Disposable,
+  type EvidenceCandidate,
+  type NormalizedSourceOutput,
+  type ObservationCapability,
+  type ObservationCandidate,
+  type ObservationIdentityHints,
+  type SourceDefinition,
+  type SourceDetectionContext,
+  type SourceExecutionContext,
+  type SourceHistoryExecutionContext,
+  type SourceNormalizationContext,
+  type SourcePluginManifest,
+  type SourceRecord,
+  type SourceRecordEmitter,
 } from '@agent-lens/core'
 import {
   abortableDelay,
   defineAgentLensPlugin,
+  isMissingPathError,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
 
 const SOURCE_ID = 'opencode'
-const PARSER_VERSION = '2'
+const PARSER_VERSION = '3'
 const DB_NAME = 'opencode.db'
 const HISTORY_BATCH = 1000
 const RUNTIME_RECENT_ROWS = 500
 const RUNTIME_POLL_MS = 2000
-const MAX_STRING = 64 * 1024
-const SENSITIVE_KEY = /(password|passwd|secret|token|api[_-]?key|authorization|cookie)/i
 
 interface OpenCodeRow {
   row_id: number
@@ -63,22 +64,6 @@ function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex')
 }
 
-function truncate(value: string, limit = MAX_STRING): string {
-  return value.length <= limit ? value : `${value.slice(0, limit)}…[truncated]`
-}
-
-function sanitize(value: unknown, depth = 0): unknown {
-  if (depth > 8) return '[max-depth]'
-  if (typeof value === 'string') return truncate(value)
-  if (value == null || typeof value === 'number' || typeof value === 'boolean') return value
-  if (Array.isArray(value)) return value.slice(0, 200).map(item => sanitize(item, depth + 1))
-  if (typeof value !== 'object') return String(value)
-  const result: Record<string, unknown> = {}
-  for (const [key, item] of Object.entries(value)) {
-    result[key] = SENSITIVE_KEY.test(key) ? '[redacted]' : sanitize(item, depth + 1)
-  }
-  return result
-}
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -126,8 +111,8 @@ function openCodeRow(value: unknown): OpenCodeRow {
 
 function parseRecord(value: string | null): Record<string, unknown> {
   if (!value) return {}
-  try { return asRecord(sanitize(JSON.parse(value))) }
-  catch { return { raw: truncate(value) } }
+  try { return asRecord(JSON.parse(value)) }
+  catch { return { raw: value } }
 }
 
 function stringField(record: Record<string, unknown>, ...names: string[]): string | undefined {
@@ -172,7 +157,13 @@ function normalizeTimestamp(value: unknown): string | undefined {
 }
 
 async function exists(path: string): Promise<boolean> {
-  try { await access(path); return true } catch { return false }
+  try {
+    await access(path)
+    return true
+  } catch (error) {
+    if (isMissingPathError(error)) return false
+    throw error
+  }
 }
 
 function candidateRoots(env: Readonly<Record<string, string | undefined>>): string[] {
@@ -310,17 +301,18 @@ function recordFromRow(
   const fingerprint = rowFingerprint(row)
   const capturedAt = new Date().toISOString()
   const occurredAt = normalizeTimestamp(row.time_created)
-  const nativeId = row.id || `row-${row.row_id}`
+  const nativeId = row.id || undefined
+  const recordKey = nativeId ?? `row:${row.row_id}`
   const dbPath = join(ctx.installation.dataRoot ?? ctx.installation.configRoot ?? '', DB_NAME)
   const title = row.session_title?.trim() || undefined
 
   return {
-    id: `opencode-${sha256(`${nativeId}:${fingerprint}`).slice(0, 32)}`,
+    id: `opencode-${sha256(`${recordKey}:${fingerprint}`).slice(0, 32)}`,
     sourceId: SOURCE_ID,
     installationId: ctx.installation.id,
     sourceSessionNativeId: nativeSessionId,
     nativeType: `part/${nativeType}`,
-    nativeId,
+    ...(nativeId ? { nativeId } : {}),
     sourceSequence: row.row_id * 10,
     ...(occurredAt ? { occurredAt } : {}),
     capturedAt,
@@ -452,24 +444,19 @@ export async function startOpenCodeRuntimeCapture(
 }
 
 function evidenceFor(record: SourceRecord, envelope: OpenCodeEnvelope): EvidenceCandidate {
-  return {
+  return evidenceFromSourceRecord(record, {
     captureMethod: 'native-db',
     derivation: 'reported',
-    sourceRecordId: record.id,
-    sourceLocator: record.locator,
-    parserVersion: record.parserVersion,
     ...(record.nativeId ? { nativeStableId: record.nativeId } : {}),
-    ...(record.occurredAt ? { eventTime: record.occurredAt } : {}),
-    capturedAt: record.capturedAt,
     ...(envelope.captureChannel === 'history'
       ? { confidenceHint: 'exact' as const }
       : envelope.captureChannel === 'native-tail'
         ? { confidenceHint: 'high' as const }
         : {}),
-  }
+  })
 }
 
-function identity(record: SourceRecord, envelope: OpenCodeEnvelope): ObservationIdentityHints {
+function identity(_record: SourceRecord, envelope: OpenCodeEnvelope): ObservationIdentityHints {
   return {
     nativeSessionId: envelope.session.nativeSessionId,
     ...(envelope.session.cwd ? { workspacePath: envelope.session.cwd } : {}),
@@ -482,27 +469,24 @@ function candidate(
   envelope: OpenCodeEnvelope,
   kind: ObservationCandidate['kind'],
   payload: unknown,
-  options: { nativeCallId?: string; nativeEventId?: string; offset?: number } = {},
+  options: {
+    nativeCallId?: string
+    nativeEventId?: string
+    sharedEventKey?: string
+    offset?: number
+  } = {},
 ): ObservationCandidate {
-  const nativeCallId = options.nativeCallId
-  const nativeEventId = options.nativeEventId ?? (!nativeCallId ? record.nativeId : undefined)
-  const sourceSequence = record.sourceSequence === undefined ? undefined : record.sourceSequence + (options.offset ?? 0)
-  return {
+  const nativeEventId = options.nativeEventId
+    ?? (!options.nativeCallId && !options.sharedEventKey ? record.nativeId : undefined)
+  return observationFromSourceRecord(record, {
     kind,
-    ...(nativeCallId ? { nativeCallId } : {}),
-    ...(nativeEventId ? { nativeEventId } : {}),
-    ...(sourceSequence === undefined ? {} : { sourceSequence }),
-    ...(record.occurredAt ? { occurredAt: record.occurredAt } : {}),
-    capturedAt: record.capturedAt,
     payload,
     identityHints: identity(record, envelope),
-    dedupHints: {
-      ...(nativeCallId ? { nativeCallId } : {}),
-      ...(nativeEventId ? { nativeEventId } : {}),
-      ...(sourceSequence === undefined ? {} : { sourceSequence }),
-      ...(record.fingerprint ? { payloadFingerprint: record.fingerprint } : {}),
-    },
-  }
+    ...(options.nativeCallId ? { nativeCallId: options.nativeCallId } : {}),
+    ...(nativeEventId ? { nativeEventId } : {}),
+    ...(options.sharedEventKey ? { sharedEventKey: options.sharedEventKey } : {}),
+    sequenceOffset: options.offset ?? 0,
+  })
 }
 
 function toolSuccess(state: Record<string, unknown>): boolean | undefined {
@@ -526,37 +510,44 @@ export async function normalizeOpenCodeRecord(
 
   if (type === 'text') {
     const text = stringField(part, 'text', 'content') ?? ''
-    if (role === 'user') observations.push(candidate(record, envelope, 'message.user', { text: truncate(text) }))
+    if (role === 'user') observations.push(candidate(record, envelope, 'message.user', { text: text }))
     else if (role === 'assistant') {
       const model = stringField(message, 'modelID', 'model_id', 'model')
       observations.push(candidate(record, envelope, 'message.assistant', {
-        text: truncate(text),
+        text: text,
         ...(model ? { model } : {}),
       }))
     } else observations.push(candidate(record, envelope, 'unknown', { rawType: `text/${role}`, rawPayload: part }))
   } else if (type === 'reasoning') {
     observations.push(candidate(record, envelope, 'message.reasoning', {
-      text: truncate(stringField(part, 'text', 'content') ?? ''),
+      text: stringField(part, 'text', 'content') ?? '',
     }))
   } else if (type === 'tool') {
     const state = asRecord(part.state)
-    const callId = stringField(part, 'callID', 'callId', 'call_id') ?? record.nativeId ?? `opencode-call-${record.id}`
+    const callId = stringField(part, 'callID', 'callId', 'call_id')
+    const sharedEventKey = callId ? undefined : `opencode-tool:${record.id}`
     const toolName = stringField(part, 'tool', 'name') ?? 'unknown'
     observations.push(candidate(record, envelope, 'tool.call', {
-      callId,
+      ...(callId ? { callId } : {}),
       nativeToolName: toolName,
-      input: sanitize(state.input ?? part.input ?? {}),
-    }, { nativeCallId: callId, offset: 0 }))
+      input: state.input ?? part.input ?? {},
+    }, {
+      ...(callId ? { nativeCallId: callId } : { sharedEventKey }),
+      offset: 0,
+    }))
 
     const success = toolSuccess(state)
     if (success !== undefined || state.output !== undefined || state.error !== undefined) {
       observations.push(candidate(record, envelope, 'tool.result', {
-        callId,
+        ...(callId ? { callId } : {}),
         nativeToolName: toolName,
         ...(success === undefined ? {} : { success }),
-        output: sanitize(state.output ?? state.error ?? ''),
+        output: state.output ?? state.error ?? '',
         ...(stringField(state, 'status') ? { status: stringField(state, 'status') } : {}),
-      }, { nativeCallId: callId, offset: 1 }))
+      }, {
+        ...(callId ? { nativeCallId: callId } : { sharedEventKey }),
+        offset: 1,
+      }))
     }
   } else if (type === 'step-start') {
     observations.push(candidate(record, envelope, 'session.lifecycle', { event: 'step.started' }))
