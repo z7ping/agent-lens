@@ -1024,18 +1024,32 @@ export function ReviewPage({
 
   useEffect(() => {
     const sentinel = detailLoadSentinelRef.current
-    // 向前翻历史会在内容顶部插入轮次。若用 IntersectionObserver 自动触发，
-    // 锚点补偿会在用户滚到顶部时反复改写 scrollTop，形成“滚轮被抢走”的体验。
-    // backward 方向只保留显式按钮；forward 方向仍可在接近尾部时渐进补载。
+    // backward 方向仍只允许显式加载，避免顶部插入内容时抢滚动。
+    // forward 方向既监听交叉，也监听真实滚动：用户意图保存在 ref 中，
+    // 如果 sentinel 已经位于 rootMargin 内，仅修改 ref 不会让 IntersectionObserver
+    // 再触发；滚动监听负责补上这条缺失信号，同时 baseline 继续阻止程序性跳转
+    // 自动把整场会话一次性拉完。
     if (!sentinel || !detail?.page.hasMore || detail.page.direction !== 'forward' || review.detailLoadingMore || review.error) return
-    const root = sentinel.closest('.review-reader-pane')
+    const root = sentinel.closest('.review-reader-pane') as HTMLElement | null
+    if (!root) return
+    let pending = false
+    const maybeLoadFollowing = () => {
+      if (pending || readerUserRevisionRef.current <= detailAutoLoadBaselineRef.current) return
+      const rootBounds = root.getBoundingClientRect()
+      const sentinelBounds = sentinel.getBoundingClientRect()
+      if (sentinelBounds.top > rootBounds.bottom + 800 || sentinelBounds.bottom < rootBounds.top - 800) return
+      pending = true
+      void loadFollowing().finally(() => { pending = false })
+    }
     const observer = new IntersectionObserver(entries => {
-      if (!entries.some(entry => entry.isIntersecting)) return
-      if (readerUserRevisionRef.current <= detailAutoLoadBaselineRef.current) return
-      void loadFollowing()
+      if (entries.some(entry => entry.isIntersecting)) maybeLoadFollowing()
     }, { root, rootMargin: '800px 0px' })
     observer.observe(sentinel)
-    return () => observer.disconnect()
+    root.addEventListener('scroll', maybeLoadFollowing, { passive: true })
+    return () => {
+      observer.disconnect()
+      root.removeEventListener('scroll', maybeLoadFollowing)
+    }
   }, [detail?.id, detail?.page.hasMore, detail?.page.nextCursor, detail?.page.direction, review.detailLoadingMore, review.error, loadFollowing])
 
   const select = (id: string) => {
