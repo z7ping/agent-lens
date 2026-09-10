@@ -30,7 +30,7 @@ export interface TaskBoundaryNavigation {
 
 export interface TaskSurfaceProps extends HTMLAttributes<HTMLElement> {
   mode: TaskSurfaceMode
-  boundaryNavigation?: TaskBoundaryNavigation
+  boundaryNavigation?: TaskBoundaryNavigation | undefined
 }
 
 interface TaskSurfaceViewValue {
