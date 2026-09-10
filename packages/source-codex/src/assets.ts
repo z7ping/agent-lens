@@ -182,8 +182,9 @@ async function* discoverPluginManifests(
     let manifest: Record<string, unknown> = {}
     try {
       manifest = asRecord(JSON.parse(await readFile(manifestPath, 'utf8')))
-    } catch {
-      // A malformed manifest still proves that a plugin binding exists at this path.
+    } catch (error) {
+      if (!isMissingPathError(error) && !(error instanceof SyntaxError)) throw error
+      // Missing/malformed metadata does not erase the independently observed plugin directory.
     }
 
     const name = typeof manifest.name === 'string' && manifest.name
