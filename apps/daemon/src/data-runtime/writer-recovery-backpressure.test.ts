@@ -48,7 +48,7 @@ test('storage write waits for transient writer recovery instead of failing immed
 
   try {
     await runtime.storage.repositories.hosts.put(host('before-recovery'))
-    await writer.request('diagnostic.exit')
+    await writer.request('diagnostic.exit').catch(() => undefined)
     await waitFor(() => writer.state() === 'degraded')
 
     const writeDuringRecovery = runtime.storage.repositories.hosts.put(host('during-recovery'))
