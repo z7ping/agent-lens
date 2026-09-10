@@ -120,6 +120,22 @@ function piFactCandidate(
   })
 }
 
+function injectedContextPayload(fact: Extract<PiNativeFact, { kind: 'event' }>): Record<string, unknown> {
+  return {
+    event: fact.event,
+    text: truncate(fact.detail),
+    rawPayload: fact.payload,
+    provenance: {
+      contentRole: 'application-context',
+      actualAuthor: 'application',
+      activityType: 'system-injection',
+      originType: 'application-injection',
+      sourceSignal: 'pi custom message',
+      injectedKind: stringField(asRecord(fact.payload), 'customType') ?? 'custom',
+    },
+  }
+}
+
 export async function normalizePiRecord(
   record: SourceRecord,
   _ctx: SourceNormalizationContext,
@@ -195,15 +211,19 @@ export async function normalizePiRecord(
             ? 'context.compaction'
             : fact.event === 'context.summary'
               ? 'context.summary'
-              : fact.event === 'session.started' || fact.event === 'session.info'
-                ? 'session.lifecycle'
-                : 'unknown'
+              : fact.event === 'pi.custom_message'
+                ? 'context.injected'
+                : fact.event === 'session.started' || fact.event === 'session.info'
+                  ? 'session.lifecycle'
+                  : 'unknown'
       const name = fact.event === 'session.info' ? stringField(asRecord(fact.payload), 'name')?.trim() : undefined
       const payload = kind === 'unknown'
         ? { event: fact.event, label: fact.label, detail: fact.detail, rawPayload: fact.payload }
         : kind === 'session.lifecycle'
           ? { event: fact.event, ...asRecord(fact.payload) }
-          : fact.payload
+          : kind === 'context.injected'
+            ? injectedContextPayload(fact)
+            : fact.payload
       observations.push(piFactCandidate(
         record,
         envelope,
