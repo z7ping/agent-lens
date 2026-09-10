@@ -12,15 +12,18 @@ import {
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import Database from 'better-sqlite3'
-import type {
-  DetectedSource,
-  DiscoveredAsset,
-  Disposable,
-  EvidenceCandidate,
-  NormalizedSourceOutput,
-  ObservationCapability,
-  ObservationCandidate,
-  ObservationIdentityHints,
+import { parse as parseYaml } from 'yaml'
+import {
+  evidenceFromSourceRecord,
+  observationFromSourceRecord,
+  type DetectedSource,
+  type DiscoveredAsset,
+  type Disposable,
+  type EvidenceCandidate,
+  type NormalizedSourceOutput,
+  type ObservationCapability,
+  type ObservationCandidate,
+  type ObservationIdentityHints,
   SourceDefinition,
   SourceDetectionContext,
   SourceExecutionContext,
@@ -33,19 +36,18 @@ import type {
 import {
   abortableDelay,
   defineAgentLensPlugin,
+  isMissingPathError,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
 import { hermesRow, tableColumnName, type HermesRow } from './sqlite-rows.js'
 
 const SOURCE_ID = 'hermes'
-const PARSER_VERSION = '2'
+const PARSER_VERSION = '3'
 const DB_NAME = 'state.db'
 const HISTORY_BATCH = 1000
 const RUNTIME_RECENT_ROWS = 500
 const DB_POLL_MS = 2000
 const INBOX_POLL_MS = 250
-const MAX_STRING = 64 * 1024
-const SENSITIVE_KEY = /(password|passwd|secret|token|api[_-]?key|authorization|cookie)/i
 
 interface HermesDbEnvelope {
   message: Record<string, unknown>
@@ -71,22 +73,6 @@ function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex')
 }
 
-function truncate(value: string, limit = MAX_STRING): string {
-  return value.length <= limit ? value : `${value.slice(0, limit)}…[truncated]`
-}
-
-function sanitize(value: unknown, depth = 0): unknown {
-  if (depth > 8) return '[max-depth]'
-  if (typeof value === 'string') return truncate(value)
-  if (value == null || typeof value === 'number' || typeof value === 'boolean') return value
-  if (Array.isArray(value)) return value.slice(0, 200).map(item => sanitize(item, depth + 1))
-  if (typeof value !== 'object') return String(value)
-  const result: Record<string, unknown> = {}
-  for (const [key, item] of Object.entries(value)) {
-    result[key] = SENSITIVE_KEY.test(key) ? '[redacted]' : sanitize(item, depth + 1)
-  }
-  return result
-}
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -96,8 +82,8 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function parseJson(value: string | null): unknown {
   if (!value) return undefined
-  try { return sanitize(JSON.parse(value)) }
-  catch { return truncate(value) }
+  try { return JSON.parse(value) }
+  catch { return value }
 }
 
 function stringField(record: Record<string, unknown>, ...names: string[]): string | undefined {
@@ -156,7 +142,13 @@ function normalizeTimestamp(value: unknown): string | undefined {
 }
 
 async function exists(path: string): Promise<boolean> {
-  try { await access(path); return true } catch { return false }
+  try {
+    await access(path)
+    return true
+  } catch (error) {
+    if (isMissingPathError(error)) return false
+    throw error
+  }
 }
 
 function unique(values: string[]): string[] {
