@@ -15,6 +15,8 @@ import { TimelineProjection } from '@agent-lens/projection-timeline'
 import { ToolAssetUsageProjection } from '@agent-lens/projection-usage'
 import {
   AGENT_LENS_PROTOCOL_VERSION,
+  type AgentRescanResponseDto,
+  type AgentRescanSummaryDto,
   type HealthResponseDto,
   type JsonValue,
   type RuntimeModeDto,
@@ -58,6 +60,7 @@ export interface HttpSurfaceOptions {
   capturePolicy?: CapturePolicyService
   backup?: BackupService
   piLive?: PiLiveService
+  rescanAgents?: () => Promise<AgentRescanSummaryDto>
   selectProjectDirectory?: () => Promise<string | undefined>
   hubReview?: Pick<HubReviewProjection, 'get' | 'query'>
 }
@@ -191,6 +194,29 @@ export async function startHttpSurface(
       if (await handlePiLiveRequest(request, response, url, options.piLive, storage, options.selectProjectDirectory)) return
       if (await handleBackupRequest(request, response, url, options.backup)) return
       if (await handleCapturePolicyRequest(request, response, url, options.capturePolicy)) return
+
+      if (url.pathname === '/api/v1/agents/rescan') {
+        if (request.method !== 'POST') {
+          writeJson(response, 405, { error: 'method_not_allowed' })
+          return
+        }
+        if (!options.rescanAgents) {
+          writeJson(response, 503, { error: 'agents_rescan_unavailable' })
+          return
+        }
+        const summary = await options.rescanAgents()
+        const [freshAgents, freshFacets] = await Promise.all([
+          new AgentOverviewProjection(storage, options.sources, options.capabilities, options.capturePolicy).query(),
+          new FacetProjection(storage, options.sources, options.capturePolicy).query(),
+        ])
+        const body: AgentRescanResponseDto = {
+          ...summary,
+          agents: freshAgents,
+          facets: freshFacets,
+        }
+        writeJson(response, 200, body)
+        return
+      }
 
       if (request.method !== 'GET') {
         writeJson(response, 405, { error: 'method_not_allowed' })
