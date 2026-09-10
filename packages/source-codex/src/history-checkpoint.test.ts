@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, rm, stat, utimes, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, mkdtemp, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -176,3 +176,37 @@ test('旧 Parser 游标只升级检查点且不重读已消费区间', async () 
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test('Codex EOF 未完成 JSON 不消费，补全后只导入一次真实记录', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-codex-partial-tail-'))
+  const sessions = join(root, 'sessions')
+  const path = join(sessions, 'rollout-partial.jsonl')
+  await mkdir(sessions, { recursive: true })
+  const first = JSON.stringify({
+    timestamp: '2026-09-11T00:00:00.000Z',
+    type: 'event_msg',
+    payload: { type: 'agent_message', message: 'first' },
+  })
+  const partial = '{"timestamp":"2026-09-11T00:00:01.000Z","type":"event_msg","payload":{"type":"agent_message","message":"sec'
+  await writeFile(path, `${first}\n${partial}`, 'utf8')
+  const checkpoints = new Map<string, unknown>()
+  const writes: unknown[] = []
+
+  try {
+    const firstPass = []
+    for await (const record of ingestCodexHistory(context(sessions, checkpoints, writes))) firstPass.push(record)
+    assert.equal(firstPass.length, 1)
+    const checkpoint = checkpoints.get(codexHistoryInternals.checkpointKey(path)) as { offset: number; sequence: number }
+    assert.equal(checkpoint.offset, Buffer.byteLength(first) + 1)
+    assert.equal(checkpoint.sequence, 1)
+
+    await appendFile(path, 'ond"}}\n', 'utf8')
+    const secondPass = []
+    for await (const record of ingestCodexHistory(context(sessions, checkpoints, []))) secondPass.push(record)
+    assert.equal(secondPass.length, 1)
+    assert.equal((secondPass[0]?.payload as { entry?: { payload?: { message?: string } } }).entry?.payload?.message, 'second')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
