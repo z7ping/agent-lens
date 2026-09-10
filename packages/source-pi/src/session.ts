@@ -320,6 +320,7 @@ export async function* ingestPiFile(
   const reset = !previous || previous.path !== filePath || fileStat.size < previous.offset
   let offset = reset ? 0 : previous.offset
   let sequence = reset ? 0 : previous.sequence
+  let incompleteTail = false
   const session = await sessionMetadata(filePath)
 
   for await (const line of readJsonlLines(filePath, offset)) {
@@ -328,7 +329,10 @@ export async function* ingestPiFile(
     // A live JSONL file may be observed between two writes. An unterminated fragment that
     // does not yet parse as JSON is not a record: leave the checkpoint before it so the
     // next append reconstructs the original Pi entry instead of persisting two fake rows.
-    if (!line.terminated && line.text.trim() && !completeJson(line.text)) break
+    if (!line.terminated && line.text.trim() && !completeJson(line.text)) {
+      incompleteTail = true
+      break
+    }
 
     sequence += 1
     offset = line.endOffset
@@ -362,6 +366,24 @@ export async function* ingestPiFile(
     await ctx.checkpoint.set(key, {
       path: filePath, offset, sequence, size: fileStat.size, mtimeMs: fileStat.mtimeMs,
     })
+  }
+
+  // If the stream reached a complete EOF, reconcile metadata after the read. The file can grow
+  // while we are consuming it; keeping the initial size/mtime would make every later poll think
+  // the file changed even when the checkpoint already sits at the real EOF.
+  if (!ctx.abortSignal.aborted && !incompleteTail) {
+    try {
+      const finalStat = await stat(filePath)
+      await ctx.checkpoint.set(key, {
+        path: filePath,
+        offset,
+        sequence,
+        size: finalStat.size,
+        mtimeMs: finalStat.mtimeMs,
+      })
+    } catch {
+      // A removed/rotated file will be rediscovered or reset on the next scan.
+    }
   }
 }
 
