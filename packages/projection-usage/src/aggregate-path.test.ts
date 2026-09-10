@@ -15,7 +15,7 @@ test('ToolAssetUsageProjection prefers storage-side aggregate without enumeratin
     },
     async aggregate(input) {
       aggregateCalls += 1
-      assert.equal(input.sourceId, 'codex')
+      assert.deepEqual(input.sourceIds, ['codex'])
       assert.equal(input.detailLimit, 0)
       return {
         tools: [{
