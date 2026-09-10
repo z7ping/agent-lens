@@ -198,3 +198,30 @@ test('Pi context resources keep AGENTS loading separate from project trust and g
     await rm(root, { recursive: true, force: true })
   }
 })
+
+
+test('Pi package resource version comes from the installed package manifest', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-pi-package-version-'))
+  const packageRoot = join(root, 'package')
+  await mkdir(packageRoot, { recursive: true })
+  await writeFile(join(packageRoot, 'package.json'), JSON.stringify({
+    name: '@example/pi-resources',
+    version: '2.3.4',
+  }), 'utf8')
+
+  try {
+    const resource = {
+      path: join(packageRoot, 'skills', 'reviewer', 'SKILL.md'),
+      enabled: true,
+      metadata: {
+        source: 'npm:@example/pi-resources@^2',
+        scope: 'user',
+        origin: 'package',
+        baseDir: packageRoot,
+      },
+    } as any
+    assert.equal(await piResourceResolverInternals.resourceVersion(resource), '2.3.4')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
