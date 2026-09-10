@@ -30,6 +30,8 @@
 .select-menu-popover {
   position: fixed;
   z-index: 1200;
+  display: flex;
+  flex-direction: column;
   max-height: min(360px, calc(100vh - 16px));
   padding: 6px;
   overflow: hidden;
@@ -44,7 +46,7 @@
 .select-menu-search-wrap:focus-within { border-color: color-mix(in srgb, var(--al-accent) 48%, var(--al-line)); background: var(--al-surface); }
 .select-menu-search-wrap svg { width: 14px; height: 14px; flex: 0 0 14px; fill: none; stroke: var(--al-muted); stroke-width: 1.5; stroke-linecap: round; }
 .select-menu-search-wrap input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--al-ink); font-size: 12px; }
-.select-menu-options { max-height: 296px; overflow: auto; outline: 0; }
+.select-menu-options { min-height: 0; max-height: 296px; flex: 1 1 auto; overflow: auto; outline: 0; }
 .select-menu-option { display: flex; width: 100%; min-height: 38px; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 9px; border: 0; border-radius: 8px; background: transparent; color: var(--al-ink-2); text-align: left; cursor: pointer; }
 .select-menu-option:hover,
 .select-menu-option.is-active { background: var(--al-soft-2); }
