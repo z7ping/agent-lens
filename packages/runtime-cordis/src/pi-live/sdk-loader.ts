@@ -10,11 +10,13 @@ import {
   type PiSdkModule,
 } from './pi-sdk-adapter'
 
+export { resolvePiSdkResourceApi } from './pi-sdk-adapter'
 export type {
   PiSdkModel,
   PiSdkModelRuntime,
   PiSdkModule,
   PiSdkPromptOptions,
+  PiSdkResourceApi,
   PiSdkSession,
   PiSdkSessionManager,
   PiSdkThinkingLevel,
