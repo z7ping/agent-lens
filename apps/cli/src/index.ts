@@ -21,6 +21,11 @@ import {
   type HookStatus,
   type HookTarget,
 } from '@agent-lens/hook-manager'
+import {
+  resolveClaudeLocation,
+  resolveCodexLocation,
+  resolvePiLocation,
+} from '@agent-lens/runtime-cordis'
 import { resolveHookExecutionProfile } from './hook-execution'
 import {
   getLifecycleStatus,
@@ -234,6 +239,9 @@ function firstCandidate(candidates: string[]): string {
 
 function sourceRoots(): DetectedSourceRoot[] {
   const home = homedir()
+  const codex = resolveCodexLocation(process.env, home)
+  const claude = resolveClaudeLocation(process.env, home)
+  const pi = resolvePiLocation(process.env, home)
   const hermesRoot = process.env.HERMES_HOME ?? firstCandidate(process.platform === 'win32'
     ? [
         join(process.env.LOCALAPPDATA ?? join(home, 'AppData', 'Local'), 'hermes'),
@@ -247,9 +255,9 @@ function sourceRoots(): DetectedSourceRoot[] {
       ]
     : [join(process.env.XDG_DATA_HOME ?? join(home, '.local', 'share'), 'opencode')])
   const roots: ReadonlyArray<readonly [SourceId, string]> = [
-    ['codex', process.env.CODEX_HOME ?? join(home, '.codex')],
-    ['claude', process.env.CLAUDE_HOME ?? join(home, '.claude')],
-    ['pi', process.env.PI_HOME ?? join(home, '.pi')],
+    ['codex', codex.configRoot],
+    ['claude', claude.configRoot],
+    ['pi', pi.configRoot],
     ['hermes', hermesRoot],
     ['opencode', openCodeRoot],
   ]
