@@ -84,6 +84,8 @@ export interface PiSdkResourceApi {
   hasTrustRequiringProjectResources: OfficialPiModule['hasTrustRequiringProjectResources']
   loadSkills: OfficialPiModule['loadSkills']
   loadSkillsFromDir: OfficialPiModule['loadSkillsFromDir']
+  loadProjectContextFiles: OfficialPiModule['loadProjectContextFiles']
+  parseFrontmatter: OfficialPiModule['parseFrontmatter']
 }
 
 export interface PiSdkCompatibility {
@@ -151,6 +153,8 @@ export function resolvePiSdkResourceApi(value: PiSdkModule): PiSdkResourceApi | 
     'hasTrustRequiringProjectResources',
     'loadSkills',
     'loadSkillsFromDir',
+    'loadProjectContextFiles',
+    'parseFrontmatter',
   ] as const
   return missingCapabilities(module, required).length
     ? null
