@@ -3,10 +3,10 @@ import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { isCompleteJson, readJsonlLines } from './source-jsonl'
+import { isCompleteJson, readJsonlLines, type JsonlLine } from './source-jsonl'
 
 async function collect(path: string, startOffset = 0) {
-  const lines = []
+  const lines: JsonlLine[] = []
   for await (const line of readJsonlLines(path, startOffset)) lines.push(line)
   return lines
 }
