@@ -113,7 +113,7 @@ test('Pi Live reconnect hydrates the streaming round from Snapshot into the same
   assert.match(page, /if \(value\.state\.isStreaming\) \{[\s\S]*?projectPiLiveTaskRounds\(projectPiLiveHistory\(value\)\)/)
   assert.match(page, /setCurrentOrdinal\(ordinal\)/)
   assert.match(page, /markPiLiveItemsRunning\(current\.length \? reconcilePiLiveItems\(current, persisted\) : persisted\)/)
-  assert.match(page, /piLiveApi\.snapshot\(runtimeId, leafIdRef\.current\)\.then\(acceptSnapshot\)/)
+  assert.match(page, /piLiveApi\.snapshot\(runtimeId, leafIdRef\.current\)\.then\(acceptSnapshot, \(\) => undefined\)/)
 })
 
 test('Pi Live 生成中使用专用介入和继续通道并即时展示队列', () => {

@@ -66,7 +66,9 @@ test('直接位于官方 Pi 包内的 CLI 入口可回溯到 SDK 主入口', asy
   }
 })
 
-test('官方 SDK 发现由宿主完成，Windows npm shim 不需要 Worker 再次解析', async () => {
+test('官方 SDK 发现由宿主完成，Windows npm shim 不需要 Worker 再次解析', {
+  skip: process.platform !== 'win32',
+}, async () => {
   const root = await mkdtemp(join(tmpdir(), 'agent-lens-pi-sdk-host-discovery-'))
   try {
     const pkg = await createFakeOfficialPiPackage(root)
