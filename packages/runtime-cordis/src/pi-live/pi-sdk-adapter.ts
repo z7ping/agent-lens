@@ -34,6 +34,14 @@ export interface PiSdkModelRuntime {
   getAvailable(providerId?: Parameters<AgentSession['modelRuntime']['getAvailable']>[0]): Promise<readonly PiSdkModel[]>
 }
 
+export interface PiSdkRuntimeResourceLoader {
+  getExtensions?(): unknown
+  getSkills?(): unknown
+  getPrompts?(): unknown
+  getThemes?(): unknown
+  getAgentsFiles?(): unknown
+}
+
 export interface PiSdkSession {
   readonly sessionManager: PiSdkSessionManager
   readonly sessionId: AgentSession['sessionId']
@@ -45,6 +53,7 @@ export interface PiSdkSession {
   readonly isCompacting: AgentSession['isCompacting']
   readonly pendingMessageCount: AgentSession['pendingMessageCount']
   readonly modelRuntime: PiSdkModelRuntime
+  readonly resourceLoader?: PiSdkRuntimeResourceLoader
   bindExtensions(bindings: PiSdkExtensionBindings): ReturnType<AgentSession['bindExtensions']>
   subscribe(listener: Parameters<AgentSession['subscribe']>[0]): ReturnType<AgentSession['subscribe']>
   setSessionName(name: Parameters<AgentSession['setSessionName']>[0]): ReturnType<AgentSession['setSessionName']>
