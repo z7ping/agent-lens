@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto'
-import { watch, type FSWatcher } from 'node:fs'
 import {
   access,
   opendir,
@@ -34,12 +33,10 @@ import {
   isMissingPathError,
   readJsonlLines,
   sourceFileIdentity,
+  startHistoryFileWatch,
 } from '@agent-lens/source-support'
 import { PI_PARSER_VERSION, PI_SOURCE_ID } from './constants'
 
-const RUNTIME_FALLBACK_POLL_MS = 5000
-const RUNTIME_RECONCILE_POLL_MS = 60_000
-const RUNTIME_DEBOUNCE_MS = 180
 const MAX_SESSION_HEADER_SCAN_BYTES = 1024 * 1024
 
 interface PiSessionMetadata {
@@ -419,91 +416,30 @@ export async function startPiRuntimeCapture(
   const sessionsDir = ctx.installation.dataRoot
   if (!sessionsDir || !await exists(sessionsDir)) return { dispose() {} }
 
-  let stopped = false
-  let watcher: FSWatcher | null = null
-  let pollTimer: NodeJS.Timeout | null = null
-  let reconcileTimer: NodeJS.Timeout | null = null
-  const debounce = new Map<string, NodeJS.Timeout>()
-  let processing = Promise.resolve()
-
-  const emitFile = (filePath: string) => {
-    processing = processing.then(async () => {
+  return startHistoryFileWatch({
+    root: sessionsDir,
+    signal: ctx.abortSignal,
+    accept: filePath => extname(filePath).toLowerCase() === '.jsonl',
+    listFiles: limit => listJsonlFiles(
+      sessionsDir,
+      limit === undefined ? undefined : { sessionLimit: limit },
+    ),
+    onFile: async filePath => {
       for await (const record of ingestPiFile(ctx, filePath)) {
-        if (stopped || ctx.abortSignal.aborted) return
+        if (ctx.abortSignal.aborted) return
         await emitter.emit(record)
       }
-    }).catch(() => undefined)
-  }
-
-  const schedule = (filePath: string) => {
-    if (stopped || extname(filePath).toLowerCase() !== '.jsonl') return
-    const previous = debounce.get(filePath)
-    if (previous) clearTimeout(previous)
-    debounce.set(filePath, setTimeout(() => {
-      debounce.delete(filePath)
-      emitFile(filePath)
-    }, RUNTIME_DEBOUNCE_MS))
-  }
-
-  const poll = async (historyWindow?: SourceHistoryWindow) => {
-    if (stopped || ctx.abortSignal.aborted) return
-    for (const filePath of await listJsonlFiles(sessionsDir, historyWindow)) schedule(filePath)
-  }
-
-  const scheduleReconcile = () => {
-    if (stopped) return
-    if (reconcileTimer) clearTimeout(reconcileTimer)
-    reconcileTimer = setTimeout(() => {
-      reconcileTimer = null
-      void poll().catch(() => undefined)
-    }, RUNTIME_DEBOUNCE_MS)
-  }
-
-  const startPolling = (intervalMs: number) => {
-    if (pollTimer) clearInterval(pollTimer)
-    if (stopped) return
-    pollTimer = setInterval(() => { void poll().catch(() => undefined) }, intervalMs)
-  }
-
-  try {
-    watcher = watch(sessionsDir, { recursive: true }, (_event, fileName) => {
-      if (!fileName) {
-        scheduleReconcile()
-        return
-      }
-      const path = join(sessionsDir, fileName.toString())
-      if (extname(path).toLowerCase() === '.jsonl') schedule(path)
-      else scheduleReconcile()
-    })
-    watcher.on('error', () => {
-      watcher?.close()
-      watcher = null
-      startPolling(RUNTIME_FALLBACK_POLL_MS)
-    })
-    // Native watchers can silently miss events on some filesystems. A low-frequency full
-    // reconciliation preserves eventual completeness without turning polling into the hot path.
-    startPolling(RUNTIME_RECONCILE_POLL_MS)
-  } catch {
-    watcher = null
-    startPolling(RUNTIME_FALLBACK_POLL_MS)
-  }
-
-  // watcher only covers future changes. Reconcile the newest existing session once so a
-  // session created just before daemon startup does not need another write to become visible.
-  void poll({ sessionLimit: 1 }).catch(() => undefined)
-
-  return {
-    async dispose(): Promise<void> {
-      if (stopped) return
-      stopped = true
-      watcher?.close()
-      if (pollTimer) clearInterval(pollTimer)
-      if (reconcileTimer) clearTimeout(reconcileTimer)
-      for (const timer of debounce.values()) clearTimeout(timer)
-      debounce.clear()
-      await processing
     },
-  }
+    debounceMs: 180,
+    fallbackPollMs: 5_000,
+    fallbackReconcileLimit: 20,
+    reconcilePollMs: 60_000,
+    reconcileLimit: 20,
+    initialReconcileLimit: 1,
+    onError: error => {
+      console.error('[AgentLens] Pi history reconcile failed', error)
+    },
+  })
 }
 
 export const piSessionInternals = {
