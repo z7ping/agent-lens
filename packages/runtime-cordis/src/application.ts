@@ -108,9 +108,9 @@ export class AgentLensApplication {
             availability: enabled && (!granted || restartPending) ? 'unavailable' : 'available',
             authorization: granted ? 'granted' : 'required',
             ...(!granted && enabled
-              ? { reason: '等待用户授权' }
+              ? { reasonCode: 'authorization-required' }
               : restartPending
-                ? { reason: '授权已保存，等待重启加载' }
+                ? { reasonCode: 'authorization-restart-required' }
                 : {}),
           })
         }
@@ -196,7 +196,7 @@ export class AgentLensApplication {
           ...next[index]!,
           capability,
           availability: 'unavailable',
-          reason: 'Live Adapter 未加载',
+          reasonCode: 'live-adapter-missing',
         }
       }
       return { ...base, availability: integrationAvailability(next), capabilities: next }
@@ -223,7 +223,7 @@ export class AgentLensApplication {
           ...next[index]!,
           capability,
           availability: 'error',
-          reason: 'Live 可用性检查失败',
+          reasonCode: 'live-availability-failed',
         }
       }
     }
@@ -322,7 +322,7 @@ export class AgentLensApplication {
     try {
       for (const registration of this.registrations) {
         if (registration.integrationId && this.failedIntegrations.has(registration.integrationId)) {
-          this.markComponentUnavailable(registration, '同一智能体集成的前序组件启动失败')
+          this.markComponentUnavailable(registration, 'dependency-start-failed')
           continue
         }
         try {
@@ -389,7 +389,10 @@ export class AgentLensApplication {
     this.capabilityStatus.set(registration.integrationId, statuses)
   }
 
-  private markComponentUnavailable(registration: PluginRegistration, reason: string): void {
+  private markComponentUnavailable(
+    registration: PluginRegistration,
+    reasonCode: AgentIntegrationCapabilityStatus['reasonCode'],
+  ): void {
     if (!registration.integrationId) return
     const statuses = this.capabilityStatus.get(registration.integrationId) ?? new Map()
     for (const capability of registration.componentCapabilities ?? []) {
@@ -397,7 +400,7 @@ export class AgentLensApplication {
       statuses.set(capability, {
         capability,
         availability: 'unavailable',
-        reason,
+        ...(reasonCode ? { reasonCode } : {}),
       })
     }
     this.capabilityStatus.set(registration.integrationId, statuses)
