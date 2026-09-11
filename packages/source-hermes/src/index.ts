@@ -34,6 +34,7 @@ import {
   type SourceRecordEmitter,
 } from '@agent-lens/core'
 import {
+  HERMES_STATE_DB_NAME as DB_NAME,
   abortableDelay,
   defineAgentLensPlugin,
   resolveHermesConfigRoots,
@@ -45,7 +46,7 @@ import { hermesRow, tableColumnName, type HermesRow } from './sqlite-rows.js'
 
 const SOURCE_ID = 'hermes'
 const PARSER_VERSION = '3'
-const DB_NAME = 'state.db'
+
 const HISTORY_BATCH = 1000
 const RUNTIME_RECENT_ROWS = 500
 const DB_POLL_MS = 2000
