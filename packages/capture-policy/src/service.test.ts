@@ -156,7 +156,7 @@ test('config off prevents static assets from entering persistence', () => {
 
 test('runtime resource snapshots follow config capture policy', () => {
   const policy = new DefaultCapturePolicyService(settings({ config: 'off' }))
-  const output = normalized('runtime.resources', {
+  const output = normalized('runtime.startup', {
     event: 'runtime.startup.resources',
     resources: {
       contexts: ['/workspace/AGENTS.md'],
