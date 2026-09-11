@@ -1,5 +1,3 @@
-import { mkdir } from 'node:fs/promises'
-import { dirname } from 'node:path'
 import {
   defineAgentLensPlugin,
   type AgentLensContext,
@@ -9,36 +7,18 @@ import {
   HubUnifiedLogicalSessionReader,
   HubUnifiedObservationReader,
 } from './hub-unified-reader'
-import { SqliteStorageService } from './storage'
+import { sqliteStorageProvider, type SqliteStorageProviderConfig } from './provider'
 
-export interface SqliteStoragePluginConfig {
-  path: string
-}
-
-const manifest = {
-  pluginId: '@agent-lens/storage-sqlite',
-  pluginVersion: '1.0.0-alpha.5',
-  apiVersion: '1.0',
-  pluginType: 'storage',
-  displayName: 'AgentLens SQLite Storage',
-} as const
+export type SqliteStoragePluginConfig = SqliteStorageProviderConfig
 
 const applyStorage = Object.assign(
   async (
     ctx: AgentLensContext,
     config: SqliteStoragePluginConfig,
   ) => {
-    if (!config?.path) {
-      throw new Error('SQLite storage requires a database path')
-    }
-
-    if (config.path !== ':memory:') {
-      await mkdir(dirname(config.path), { recursive: true })
-    }
-
-    const storage = new SqliteStorageService({ path: config.path })
+    const storage = await sqliteStorageProvider.create(config)
     try {
-      await storage.migrate()
+      await sqliteStorageProvider.initialize?.(storage, config)
       const remote = new SqliteHubRemoteReadRepository(storage.executor)
       const logicalSessions = new HubUnifiedLogicalSessionReader(
         ctx.node.identity.nodeId,
@@ -57,17 +37,17 @@ const applyStorage = Object.assign(
         logicalSessions,
         observations,
       })
-      return () => {
+      return async () => {
         unprovideUnifiedRead()
         unprovideStorage()
-        storage.close()
+        await sqliteStorageProvider.dispose(storage)
       }
     } catch (error) {
-      storage.close()
+      await sqliteStorageProvider.dispose(storage)
       throw error
     }
   },
   { inject: ['node'] },
 )
 
-export const sqliteStoragePlugin = defineAgentLensPlugin(manifest, applyStorage)
+export const sqliteStoragePlugin = defineAgentLensPlugin(sqliteStorageProvider.manifest, applyStorage)
