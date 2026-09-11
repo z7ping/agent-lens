@@ -144,6 +144,27 @@
 .source-capture-control p { margin: 4px 0 0; color: var(--al-muted); font-size: 12px; line-height: 1.55; }
 .source-capture-control .source-capture-note { color: var(--al-warning, var(--al-muted)); }
 .source-capture-control .source-capture-error { color: var(--al-danger); }
+.integration-availability {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 8px;
+}
+.integration-availability-overall,
+.integration-capability-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.integration-availability-overall small {
+  color: var(--al-muted-2);
+  font-size: 12px;
+}
+.integration-capability-badges .ui-status-badge {
+  font-weight: 560;
+}
 .source-capture-switch {
   display: flex;
   min-width: 92px;
