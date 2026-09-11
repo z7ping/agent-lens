@@ -119,20 +119,25 @@ async function discoverEntry(
 ): Promise<OfficialToolDiscoveryItem> {
   try {
     const executableDescriptor = entry.discovery.executable
-    const executableProbe = (async () => {
-      if (!executableDescriptor) return undefined
+    const executableProbe = (async (): Promise<{ executable?: string; errors: string[] }> => {
+      if (!executableDescriptor) return { errors: [] }
+      const errors: string[] = []
       for (const command of executableDescriptor.commands) {
-        const executable = await options.executableResolver(command, {
-          explicit: executableDescriptor.explicitEnvVar
-            ? options.env[executableDescriptor.explicitEnvVar]
-            : undefined,
-          platform: options.platform,
-          pathValue: options.env.PATH,
-          shellPathResolver: options.shellPathResolver,
-        })
-        if (executable) return executable
+        try {
+          const executable = await options.executableResolver(command, {
+            explicit: executableDescriptor.explicitEnvVar
+              ? options.env[executableDescriptor.explicitEnvVar]
+              : undefined,
+            platform: options.platform,
+            pathValue: options.env.PATH,
+            shellPathResolver: options.shellPathResolver,
+          })
+          if (executable) return { executable, errors }
+        } catch (error) {
+          errors.push(errorMessage(error))
+        }
       }
-      return undefined
+      return { errors }
     })()
 
     const roots = resolveToolDiscoveryRoots(entry, {
@@ -140,13 +145,17 @@ async function discoverEntry(
       platform: options.platform,
       homeDir: options.homeDir,
     })
-    const [executable, probes] = await Promise.all([
+    const [executableResult, probes] = await Promise.all([
       executableProbe,
       Promise.all(roots.map(probeRoot)),
     ])
+    const executable = executableResult.executable
     const configRoot = probes.find(item => item.role === 'config' && item.exists)?.path
     const dataRoot = probes.find(item => item.role === 'data' && item.exists)?.path
-    const errors = probes.flatMap(item => item.error ? [item.error] : [])
+    const errors = [
+      ...executableResult.errors,
+      ...probes.flatMap(item => item.error ? [item.error] : []),
+    ]
 
     const presence: ToolPresence = executable
       ? 'present'
