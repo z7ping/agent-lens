@@ -275,3 +275,72 @@ test('Pi Live resolves relative sessionDir against the task cwd instead of the d
   assert.equal(resolvePiLiveRuntimeSessionDir(cwd, './sessions-local'), expected)
   assert.equal(resolvePiLiveRuntimeSessionDir(cwd, ''), undefined)
 })
+
+
+test('Pi Live controls 只读模型快照，只有显式切换模型才触发 availability refresh', async () => {
+  const manager = new FakeSessionManager()
+  const model: PiSdkModel = { provider: 'openai', id: 'gpt-refresh', name: 'GPT Refresh', reasoning: true }
+  let availabilityCalls = 0
+  let currentModel: PiSdkModel | undefined
+
+  const session = {
+    sessionManager: manager,
+    sessionId: manager.getSessionId(),
+    sessionFile: manager.getSessionFile(),
+    sessionName: manager.getSessionName(),
+    get model() { return currentModel },
+    thinkingLevel: 'medium',
+    isStreaming: false,
+    isCompacting: false,
+    pendingMessageCount: 0,
+    modelRuntime: {
+      getAvailableSnapshot: () => [],
+      getAvailable: async (provider?: string) => {
+        availabilityCalls += 1
+        assert.equal(provider, 'openai')
+        return [model]
+      },
+    },
+    bindExtensions: async () => {},
+    subscribe: () => () => {},
+    setSessionName: () => {},
+    setModel: async (value: PiSdkModel) => { currentModel = value },
+    setThinkingLevel: () => {},
+    getAvailableThinkingLevels: () => ['off', 'medium', 'high'],
+    prompt: async (_message: string, options?: { preflightResult?: (success: boolean) => void }) => {
+      options?.preflightResult?.(true)
+    },
+    steer: async () => {},
+    followUp: async () => {},
+    clearQueue: () => ({ steering: [], followUp: [] }),
+    abort: async () => {},
+    waitForIdle: async () => {},
+    dispose: () => {},
+  } satisfies PiSdkSession
+
+  const installed: InstalledPiSdk = {
+    executable: '/bin/pi',
+    packageRoot: '/pi',
+    sdkEntry: '/pi/dist/index.js',
+    version: '0.84.4',
+    compatibility: compatibility(),
+    module: {
+      createAgentSession: async () => ({ session }),
+      SessionManager: { create: () => manager, open: () => manager },
+    },
+  }
+
+  const service = new DefaultPiLiveService(async () => installed)
+  const initializing = await service.start({ cwd: '/workspace' })
+  const state = await waitUntilReady(service, initializing.runtimeSessionId)
+
+  const controls = await service.controls(state.runtimeSessionId)
+  assert.deepEqual(controls.models, [])
+  assert.equal(availabilityCalls, 0, 'passive controls refresh must not probe provider availability')
+
+  const changed = await service.setModel(state.runtimeSessionId, 'openai', 'gpt-refresh')
+  assert.equal(availabilityCalls, 1, 'explicit model selection may refresh provider availability')
+  assert.equal((changed.model as PiSdkModel | undefined)?.id, 'gpt-refresh')
+
+  await service.dispose()
+})

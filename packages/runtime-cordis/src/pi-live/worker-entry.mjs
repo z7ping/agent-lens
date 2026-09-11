@@ -7,6 +7,9 @@ import { serialize } from 'node:v8'
 
 const VERSION = 1
 const MAX_MESSAGE_BYTES = 1024 * 1024
+const SNAPSHOT_CHUNK_BYTES = 384 * 1024
+const MAX_SNAPSHOT_TRANSFERS = 8
+const SNAPSHOT_TRANSFER_TTL_MS = 30_000
 const MAX_OUTBOUND_MESSAGES = 256
 const MAX_SEEN_REQUEST_IDS = 512
 let runtimeSessionId = ''
@@ -26,6 +29,7 @@ let currentInitializationStage
 let currentStageStartedAt = 0
 let initializationTimings = []
 const seenRequestIds = new Set()
+const snapshotTransfers = new Map()
 const outboundQueue = []
 let outboundSending = false
 let exitAfterFlush = false
@@ -272,6 +276,50 @@ function samePath(left, right) {
   return normalized(left) === normalized(right)
 }
 
+function pruneSnapshotTransfers(now = Date.now()) {
+  for (const [transferId, transfer] of snapshotTransfers) {
+    if (transfer.expiresAt <= now) snapshotTransfers.delete(transferId)
+  }
+}
+
+function nextSnapshotChunk(transferId) {
+  pruneSnapshotTransfers()
+  const transfer = snapshotTransfers.get(transferId)
+  if (!transfer) throw new Error('Unknown or expired Pi Runtime snapshot transfer')
+  transfer.expiresAt = Date.now() + SNAPSHOT_TRANSFER_TTL_MS
+  const start = transfer.offset
+  const end = Math.min(transfer.bytes.length, start + SNAPSHOT_CHUNK_BYTES)
+  const chunk = transfer.bytes.subarray(start, end)
+  const sequence = transfer.sequence
+  transfer.offset = end
+  transfer.sequence += 1
+  const done = end >= transfer.bytes.length
+  if (done) snapshotTransfers.delete(transferId)
+  return { transferId, sequence, chunk, done }
+}
+
+function beginSnapshotTransfer(since) {
+  const all = session.sessionManager.getEntries()
+  const index = since ? all.findIndex(entry => record(entry).id === since) : -1
+  const entries = since && index >= 0 ? all.slice(index + 1) : all
+  const snapshot = { state: state(), entries, leafId: session.sessionManager.getLeafId() }
+  const bytes = serialize(snapshot)
+
+  pruneSnapshotTransfers()
+  if (snapshotTransfers.size >= MAX_SNAPSHOT_TRANSFERS) {
+    throw new Error('Pi Runtime has too many concurrent snapshot transfers')
+  }
+
+  const transferId = randomUUID()
+  snapshotTransfers.set(transferId, {
+    bytes,
+    offset: 0,
+    sequence: 0,
+    expiresAt: Date.now() + SNAPSHOT_TRANSFER_TTL_MS,
+  })
+  return nextSnapshotChunk(transferId)
+}
+
 function resolvedRuntimeSessionDir(cwd, value) {
   if (typeof value !== 'string' || !value.trim()) return undefined
   const raw = value.trim()
@@ -474,14 +522,22 @@ function state() {
   }
 }
 
-async function models(provider) {
-  const snapshot = session.modelRuntime.getAvailableSnapshot()
-  const filtered = provider ? snapshot.filter(model => model.provider === provider) : snapshot
-  return filtered.length ? filtered : await session.modelRuntime.getAvailable(provider)
+function modelSnapshot(provider) {
+  const snapshot = [...session.modelRuntime.getAvailableSnapshot()]
+  const selected = session.model
+  const catalog = selected && !snapshot.some(model => model.provider === selected.provider && model.id === selected.id)
+    ? [...snapshot, selected]
+    : snapshot
+  return provider ? catalog.filter(model => model.provider === provider) : catalog
+}
+
+async function modelsForSelection(provider) {
+  const snapshot = modelSnapshot(provider)
+  return snapshot.length ? snapshot : await session.modelRuntime.getAvailable(provider)
 }
 
 async function selectModel(provider, modelId) {
-  const available = await models(provider)
+  const available = await modelsForSelection(provider)
   const model = available.find(item => (!provider || item.provider === provider) && (!modelId || item.id === modelId || item.name === modelId))
   if (!model) throw new Error(`Pi model is not available: ${[provider, modelId].filter(Boolean).join('/') || 'requested model'}`)
   await session.setModel(model)
@@ -490,13 +546,12 @@ async function selectModel(provider, modelId) {
 async function command(name, value = {}) {
   if (!session && name !== 'terminate') throw new Error('Pi Runtime is not ready')
   if (name === 'state') return state()
-  if (name === 'snapshot') {
-    const all = session.sessionManager.getEntries()
-    const index = value.since ? all.findIndex(entry => record(entry).id === value.since) : -1
-    const entries = value.since && index >= 0 ? all.slice(index + 1) : all
-    return { state: state(), entries, leafId: session.sessionManager.getLeafId() }
+  if (name === 'snapshotBegin') return beginSnapshotTransfer(value.since)
+  if (name === 'snapshotChunk') {
+    if (typeof value.transferId !== 'string' || !value.transferId) throw new Error('Pi Runtime snapshot transfer id is required')
+    return nextSnapshotChunk(value.transferId)
   }
-  if (name === 'controls') return { models: (await models()).map(({ provider, id, name, reasoning }) => ({ provider, id, ...(name ? { name } : {}), ...(typeof reasoning === 'boolean' ? { reasoning } : {}) })), thinkingLevels: session.getAvailableThinkingLevels() }
+  if (name === 'controls') return { models: modelSnapshot().map(({ provider, id, name, reasoning }) => ({ provider, id, ...(name ? { name } : {}), ...(typeof reasoning === 'boolean' ? { reasoning } : {}) })), thinkingLevels: session.getAvailableThinkingLevels() }
   if (name === 'setModel') { await selectModel(value.provider, value.modelId); return state() }
   if (name === 'setThinkingLevel') { session.setThinkingLevel(value.level); return state() }
   if (name === 'prompt') {
@@ -522,6 +577,7 @@ async function command(name, value = {}) {
 async function dispose() {
   if (terminating) return
   terminating = true
+  snapshotTransfers.clear()
   unsubscribe()
   extensionUi?.dispose()
   if (session?.isStreaming) { session.abortBash?.(); await session.abort().catch(() => undefined) }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import type { JsonValue, PiLiveControlsDto, PiLiveQueueDto, PiLiveSnapshotDto, PiLiveStateDto } from '@agent-lens/protocol'
-import { piLiveApi, type PiLiveTransportDiagnostics } from '../client/pi-live'
+import { PiLiveRequestError, piLiveApi, type PiLiveTransportDiagnostics } from '../client/pi-live'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import { ComposerPillSelect } from '../components/ComposerPillSelect'
 import { PiMarkdownComposer, type PiMarkdownComposerHandle } from '../components/PiMarkdownComposer'
@@ -10,7 +10,7 @@ import { PiStartupDisclosure, piStartupSummary } from '../components/PiStartupDi
 import { OperationProgress } from '../components/StateViews'
 import { Button, Disclosure, IconButton, Input, Textarea } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
-import { appendPiLiveDelta, finishPiLiveContentBlock, finishPiLiveTool, markPiLiveItemsRunning, reconcilePiLiveItems, startPiLiveContentBlock, startPiLiveTool, updatePiLiveTool } from './pi-live-current'
+import { appendPiLiveDelta, finishPiLiveContentBlock, finishPiLiveTool, markPiLiveItemsRunning, reconcilePiLiveItems, settlePiLiveItems, startPiLiveContentBlock, startPiLiveTool, updatePiLiveTool } from './pi-live-current'
 import { omitPiLivePromptMessages, projectPiLiveHistory, type PiLiveHistoryItem } from './pi-live-history'
 import { PiLiveCurrentTaskRound, PiLiveHistoryTaskRound } from './PiLiveTaskRound'
 import { piLiveSessionTitle, piLiveTaskRoundEstimate, projectPiLiveRunningRound, projectPiLiveTaskDetail, projectPiLiveTaskRounds } from './pi-live-task-projection'
@@ -345,6 +345,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const [interruptNotice, setInterruptNotice] = useState(false)
   const [showAllEvents, setShowAllEvents] = useState(true)
   const [error, setError] = useState('')
+  const [syncWarning, setSyncWarning] = useState('')
   const [busy, setBusy] = useState(false)
   const [sendPending, setSendPending] = useState(false)
   const [abortPending, setAbortPending] = useState(false)
@@ -380,6 +381,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     setRestored([])
     setExtension(null)
     setError('')
+    setSyncWarning('')
     setInterruptNotice(false)
     setShowAllEvents(true)
     setStartupQueued('')
@@ -390,13 +392,29 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     activePromptRef.current = ''
     leafIdRef.current = undefined
 
-    const refreshControls = async () => {
-      try {
-        const value = await piLiveApi.controls(runtimeId)
-        if (active) setControls(value)
-      } catch (reason) {
-        if (active) setError(reason instanceof Error ? reason.message : String(reason))
-      }
+    let controlsLoaded = false
+    let controlsRefreshTask: Promise<void> | null = null
+    let settlementRefreshTask: Promise<void> | null = null
+    let settlementRefreshPending = false
+
+    const refreshControls = (force = false): Promise<void> => {
+      if (!force && controlsLoaded) return Promise.resolve()
+      if (controlsRefreshTask) return controlsRefreshTask
+      const task = piLiveApi.controls(runtimeId).then(value => {
+        if (!active) return
+        controlsLoaded = true
+        setControls(value)
+        setSyncWarning(current => current.startsWith('模型控制状态刷新失败') ? '' : current)
+      }).catch(reason => {
+        if (!active) return
+        const detail = reason instanceof Error ? reason.message : String(reason)
+        console.warn('[AgentLens] Pi Live controls refresh failed:', detail)
+        setSyncWarning('模型控制状态刷新失败；当前对话不受影响。')
+      }).finally(() => {
+        if (controlsRefreshTask === task) controlsRefreshTask = null
+      })
+      controlsRefreshTask = task
+      return task
     }
 
     const acceptSnapshot = (value: PiLiveSnapshotDto) => {
@@ -420,10 +438,9 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
         }
       }
       window.dispatchEvent(new Event('agent-lens:pi-live-state-changed'))
-      if (value.state.status === 'ready') void refreshControls()
     }
 
-    const refreshAfterSettled = async () => {
+    const reconcileSettledSnapshot = async () => {
       try {
         const value = await piLiveApi.snapshot(runtimeId, leafIdRef.current)
         if (!active) return
@@ -443,21 +460,49 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
           setCurrentOrdinal(ordinal)
           setCurrentItems(current => reconcilePiLiveItems(current, omitPiLivePromptMessages(settledItems, resolvedPrompt)))
           setOptimisticPrompt(resolvedPrompt)
-        } else {
-          setCurrentOrdinal(null)
-          setCurrentItems([])
-          setOptimisticPrompt('')
         }
         activePromptRef.current = ''
+        setSyncWarning(current => current.startsWith('历史对账失败') ? '' : current)
       } catch (reason) {
-        if (active) setError(reason instanceof Error ? reason.message : String(reason))
+        if (!active) return
+        const detail = reason instanceof Error ? reason.message : String(reason)
+        console.warn('[AgentLens] Pi Live settled snapshot reconciliation failed:', detail)
+        setCurrentItems(current => settlePiLiveItems(current))
+        setSyncWarning('历史对账失败；本轮已完成的回复已保留，可以继续对话。')
       }
+    }
+
+    const refreshAfterSettled = (): Promise<void> => {
+      if (settlementRefreshTask) {
+        settlementRefreshPending = true
+        return settlementRefreshTask
+      }
+      const task = (async () => {
+        do {
+          settlementRefreshPending = false
+          await reconcileSettledSnapshot()
+        } while (active && settlementRefreshPending)
+      })().finally(() => {
+        if (settlementRefreshTask === task) settlementRefreshTask = null
+      })
+      settlementRefreshTask = task
+      return task
     }
 
     const dispose = piLiveApi.connect(runtimeId, {
       onConnection: value => { if (active) setConnected(value) },
-      onSnapshot: acceptSnapshot,
-      onError: reason => { if (active) setError(reason.message) },
+      onSnapshot: value => {
+        acceptSnapshot(value)
+        if (value.state.status === 'ready') void refreshControls()
+      },
+      onError: reason => {
+        if (!active) return
+        if (reason instanceof PiLiveRequestError && reason.status === 502) {
+          setSyncWarning('历史快照同步失败；当前已显示内容不会被清空。')
+          return
+        }
+        setError(reason.message)
+      },
       onEvents(events, nextDiagnostics) {
         if (!active) return
         let settled = false
@@ -475,6 +520,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             }
           } else if (type === 'agent_settled') {
             statePatch = { ...statePatch, isStreaming: false, pendingMessageCount: 0 }
+            setCurrentItems(current => settlePiLiveItems(current))
             settled = true
           } else if (type === 'message_start') {
             const message = record(event.message)
@@ -582,7 +628,11 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             if (runtimeError) setError(runtimeError)
             window.dispatchEvent(new Event('agent-lens:pi-live-state-changed'))
             if (status === 'ready') {
-              void piLiveApi.snapshot(runtimeId, leafIdRef.current).then(acceptSnapshot, () => undefined)
+              void piLiveApi.snapshot(runtimeId, leafIdRef.current).then(acceptSnapshot, reason => {
+                const detail = reason instanceof Error ? reason.message : String(reason)
+                console.warn('[AgentLens] Pi Live ready snapshot refresh failed:', detail)
+                if (active) setSyncWarning('历史快照同步失败；当前已显示内容不会被清空。')
+              })
               void refreshControls()
             }
           } else {
@@ -603,7 +653,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
           void piLiveApi.state(runtimeId).then(value => {
             if (!active) return
             setState(value)
-            if (value.status === 'ready') void refreshControls()
+            if (value.status === 'ready') void refreshControls(true)
           }, () => undefined)
         }
       },
@@ -623,7 +673,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const visibleHistoryRounds = useMemo(() => currentOrdinal === null
     ? historyRounds
     : historyRounds.filter(round => round.model.ordinal !== currentOrdinal), [currentOrdinal, historyRounds])
-  const optimisticStreaming = ((Boolean(optimisticPrompt) && currentOrdinal === null) || (state?.isStreaming ?? false))
+  const optimisticStreaming = ((Boolean(optimisticPrompt) && currentOrdinal === null && state?.isStreaming !== false) || (state?.isStreaming ?? false))
   const visiblePendingCount = queue.steering.length + queue.followUp.length + pendingQueue.length
   const runningRound = useMemo(() => {
     if (currentOrdinal !== null) {
@@ -1027,6 +1077,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
 
       <div className="pi-live-compose-wrap">
         <div className="pi-live-float-stack">
+          {syncWarning && <div className="pi-live-sync-warning" role="status" aria-live="polite">{syncWarning}</div>}
           {newRecords && <Button size="small" className="pi-live-new-records" onClick={jumpLatest}>有新记录 <UiIcon name="arrow-down" size={14}/></Button>}
           {interruptNotice && <div className="pi-live-interrupt-notice" role="status" aria-live="polite"><UiIcon name="check" size={14}/><b>已停止当前生成</b><span>可以继续输入。</span></div>}
           {startupQueued && <div className="pi-live-startup-queue" role="status">
