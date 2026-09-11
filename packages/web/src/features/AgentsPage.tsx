@@ -238,23 +238,25 @@ function DisclosureChevron() {
 }
 
 function AssetGroup({ agent, type, assets }: { agent: AgentOverviewDto; type: string; assets: AgentAssetInventoryDto[] }) {
+  const { t } = useTranslation('agents')
   const [showAll, setShowAll] = useState(false)
   const shown = showAll ? assets : assets.slice(0, USER_ASSET_LIMIT)
   return <details className="disclosure-group">
-    <summary><DisclosureChevron/><span>{assetTypeLabel[type] ?? type}</span><span className="disclosure-count">{assets.length}</span></summary>
+    <summary><DisclosureChevron/><span>{translatedLabel(assetTypeLabelKey, type, t)}</span><span className="disclosure-count">{assets.length}</span></summary>
     <div className="asset-list-grid">{shown.map(asset => <AssetCard key={asset.id} agent={agent} asset={asset}/>)}</div>
-    {assets.length > USER_ASSET_LIMIT && <button className="show-more-button" onClick={() => setShowAll(value => !value)}>{showAll ? '收起' : `查看更多 ${assets.length - USER_ASSET_LIMIT} 个`}</button>}
+    {assets.length > USER_ASSET_LIMIT && <button className="show-more-button" onClick={() => setShowAll(value => !value)}>{showAll ? t('collapse') : t('showMoreItems', { count: assets.length - USER_ASSET_LIMIT })}</button>}
   </details>
 }
 
 function FrequentAssets({ agent, assets }: { agent: AgentOverviewDto; assets: AgentAssetInventoryDto[] }) {
-  if (!assets.length) return <div className="muted-empty compact">暂无能够可靠归因的技能或 MCP（模型上下文协议）使用记录</div>
+  const { t } = useTranslation('agents')
+  if (!assets.length) return <div className="muted-empty compact">{t('noReliableSkillMcpUsage')}</div>
   const rows = assets.map(asset => ({ asset, count: assetUsageCount(agent, asset) }))
   const max = Math.max(1, ...rows.map(row => row.count))
   return <div className="frequent-assets">
     {rows.map(({ asset, count }, index) => <div key={asset.id} className="frequent-asset-row">
       <span className="frequent-rank">{index + 1}</span>
-      <div className="frequent-main"><b>{asset.displayName ?? asset.canonicalName}</b><span>{assetTypeLabel[asset.type] ?? asset.type}</span></div>
+      <div className="frequent-main"><b>{asset.displayName ?? asset.canonicalName}</b><span>{translatedLabel(assetTypeLabelKey, asset.type, t)}</span></div>
       <span className="frequent-usage-track" aria-hidden="true"><i style={{ width: `${Math.max(4, count / max * 100)}%` }}/></span>
       <strong>{count}</strong>
     </div>)}
@@ -262,6 +264,7 @@ function FrequentAssets({ agent, assets }: { agent: AgentOverviewDto; assets: Ag
 }
 
 function SkillLifecycle({ agent, skills }: { agent: AgentOverviewDto; skills: AgentAssetInventoryDto[] }) {
+  const { t } = useTranslation('agents')
   if (!skills.length) return null
   const installedReported = skills.some(asset => stateValue(asset, 'installed') !== undefined)
   const installed = installedReported ? skills.filter(asset => stateValue(asset, 'installed') === true).length : skills.length
@@ -275,13 +278,13 @@ function SkillLifecycle({ agent, skills }: { agent: AgentOverviewDto; skills: Ag
   const used = skills.filter(asset => assetUsageCount(agent, asset) > 0).length
   const baseline = Math.max(1, installed)
   const rows = [
-    { key: 'installed', label: installedReported ? '已安装' : '已发现', value: installed, percent: 100, active: false },
-    { key: 'discoverable', label: discoverableKnown ? '可发现' : '可发现状态未知', value: discoverable, percent: discoverable === null ? 0 : Math.min(100, discoverable / baseline * 100), active: false },
-    { key: 'used', label: '已使用', value: used, percent: Math.min(100, used / baseline * 100), active: true },
+    { key: 'installed', label: installedReported ? t('lifecycle.installed') : t('lifecycle.discovered'), value: installed, percent: 100, active: false },
+    { key: 'discoverable', label: discoverableKnown ? t('lifecycle.discoverable') : t('lifecycle.discoverableUnknown'), value: discoverable, percent: discoverable === null ? 0 : Math.min(100, discoverable / baseline * 100), active: false },
+    { key: 'used', label: t('lifecycle.used'), value: used, percent: Math.min(100, used / baseline * 100), active: true },
   ]
 
   return <section className="skill-lifecycle">
-    <div className="section-heading-row"><div><h3>技能生命周期</h3><p>从本机资产发现，到智能体可发现，再到有证据支撑的真实调用。</p></div></div>
+    <div className="section-heading-row"><div><h3>{t('lifecycle.title')}</h3><p>{t('lifecycle.description')}</p></div></div>
     <div className="skill-funnel">
       {rows.map(row => <div key={row.key} className="skill-funnel-row" data-active={row.active || undefined} data-muted={row.value === null || undefined}>
         <span>{row.label}</span>
@@ -289,7 +292,7 @@ function SkillLifecycle({ agent, skills }: { agent: AgentOverviewDto; skills: Ag
         <strong>{row.value ?? '—'}</strong>
       </div>)}
     </div>
-    {!discoverableKnown && <p className="skill-funnel-note">数据源没有证据确认“可发现”真值时，保持未知，不把未知误算成 0。</p>}
+    {!discoverableKnown && <p className="skill-funnel-note">{t('lifecycle.unknownNote')}</p>}
   </section>
 }
 
