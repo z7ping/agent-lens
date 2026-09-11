@@ -47,8 +47,8 @@ function eventName(event: Record<string, unknown>): string {
   return stringField(event, 'hook_event_name', 'event_name', 'type') ?? 'UnknownHookEvent'
 }
 
-function nativeSessionId(event: Record<string, unknown>): string {
-  return stringField(event, 'session_id', 'conversation_id', 'sessionId') ?? 'runtime-unknown'
+function nativeSessionId(event: Record<string, unknown>): string | undefined {
+  return stringField(event, 'session_id', 'conversation_id', 'sessionId')
 }
 
 function nativeId(event: Record<string, unknown>): string | undefined {
@@ -94,7 +94,7 @@ function sourceRecordFromEnvelope(
     id: `codex-runtime-${sha256(envelope.id).slice(0, 32)}`,
     sourceId: 'codex',
     installationId: ctx.installation.id,
-    sourceSessionNativeId: sessionId,
+    ...(sessionId ? { sourceSessionNativeId: sessionId } : {}),
     nativeType: `hook/${hookName}`,
     ...(stableNativeId ? { nativeId: stableNativeId } : {}),
     occurredAt,
@@ -108,7 +108,7 @@ function sourceRecordFromEnvelope(
     payload: {
       runtimeEvent: event,
       session: {
-        nativeSessionId: sessionId,
+        ...(sessionId ? { nativeSessionId: sessionId } : {}),
         ...(cwd ? { cwd } : {}),
       },
     },
