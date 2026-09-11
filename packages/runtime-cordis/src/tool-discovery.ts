@@ -6,9 +6,11 @@ import {
   resolveToolDiscoveryRoots,
   type OfficialIntegrationCatalogEntry,
 } from '@agent-lens/integration-catalog'
+import { formatLiveError } from '@agent-lens/live-support'
 import {
   resolveExecutable,
   resolveLoginShellPath,
+  type ExecutableDiscoveryOptions,
 } from './executable-discovery'
 
 export type ToolPresence = 'present' | 'data-only' | 'absent' | 'error'
@@ -39,6 +41,10 @@ export interface OfficialToolDiscoveryOptions {
   homeDir?: string | undefined
   timeoutMs?: number | undefined
   shellPathResolver?: (() => Promise<string | undefined>) | undefined
+  executableResolver?: ((
+    name: string,
+    options?: ExecutableDiscoveryOptions,
+  ) => Promise<string | undefined>) | undefined
 }
 
 interface RootProbe {
@@ -51,11 +57,7 @@ interface RootProbe {
 const DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS = 2_500
 
 function errorMessage(error: unknown): string {
-  return (error instanceof Error ? error.message : String(error))
-    .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
-    .replace(/(?:api[_-]?key|token|authorization|password)\s*[:=]\s*\S+/gi, '[redacted]')
-    .replace(/[\r\n]+/g, ' ')
-    .slice(0, 800)
+  return formatLiveError(error, 800)
 }
 
 async function pathExists(path: string): Promise<boolean> {
@@ -112,6 +114,7 @@ async function discoverEntry(
   options: Required<Pick<OfficialToolDiscoveryOptions, 'platform' | 'homeDir' | 'timeoutMs'>> & {
     env: Readonly<Record<string, string | undefined>>
     shellPathResolver: () => Promise<string | undefined>
+    executableResolver: NonNullable<OfficialToolDiscoveryOptions['executableResolver']>
   },
 ): Promise<OfficialToolDiscoveryItem> {
   try {
@@ -119,7 +122,7 @@ async function discoverEntry(
     let executable: string | undefined
     if (executableDescriptor) {
       for (const command of executableDescriptor.commands) {
-        executable = await resolveExecutable(command, {
+        executable = await options.executableResolver(command, {
           explicit: executableDescriptor.explicitEnvVar
             ? options.env[executableDescriptor.explicitEnvVar]
             : undefined,
@@ -177,6 +180,7 @@ export async function discoverOfficialTools(
   const platform = options.platform ?? process.platform
   const homeDir = options.homeDir ?? homedir()
   const timeoutMs = options.timeoutMs ?? DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS
+  const executableResolver = options.executableResolver ?? resolveExecutable
   let shellPathPromise: Promise<string | undefined> | undefined
   const sourceShellPathResolver = options.shellPathResolver ?? (() => resolveLoginShellPath(platform))
   const shellPathResolver = () => {
@@ -186,7 +190,7 @@ export async function discoverOfficialTools(
 
   return Promise.all(OFFICIAL_INTEGRATION_CATALOG.map(entry =>
     timeout(
-      discoverEntry(entry, { env, platform, homeDir, timeoutMs, shellPathResolver }),
+      discoverEntry(entry, { env, platform, homeDir, timeoutMs, shellPathResolver, executableResolver }),
       timeoutMs,
       `Tool discovery for ${entry.integrationId}`,
     ).catch(error => ({
