@@ -76,6 +76,29 @@ const assetTypeOrder = ['skill', 'mcp', 'plugin', 'extension', 'prompt', 'contex
 const USER_ASSET_LIMIT = 24
 const ASSEMBLY_PATH_LIMIT = 18
 
+const integrationCapabilityLabel: Record<string, string> = {
+  source: 'Source',
+  hook: 'Hook',
+  runtime: 'Runtime',
+  live: 'Live',
+}
+
+const integrationAvailabilityLabel: Record<string, string> = {
+  available: '可用',
+  partial: '部分可用',
+  unavailable: '不可用',
+  error: '异常',
+}
+
+function integrationAvailabilityTone(
+  availability: string,
+): 'success' | 'warning' | 'danger' | 'neutral' {
+  if (availability === 'available') return 'success'
+  if (availability === 'partial' || availability === 'unavailable') return 'warning'
+  if (availability === 'error') return 'danger'
+  return 'neutral'
+}
+
 const agentDescription: Record<string, string> = {
   codex: 'OpenAI Codex · 本机历史、运行时钩子与能力资产',
   'claude-code': 'Anthropic Claude Code · 会话、钩子与能力资产',
@@ -262,6 +285,21 @@ function IntegrationControl({
         : configured
           ? '启用此智能体在 AgentLens 中声明的 Source / Hook / Runtime / Live 能力；具体可用能力取决于该智能体集成。'
           : '不会启动此智能体的新采集、Hook 处理或 Live / Runtime 控制能力；已有历史数据不会删除。'}</p>
+      {agent.integration && <div className="integration-availability">
+        <span className="integration-availability-overall">
+          <small>当前可用性</small>
+          <StatusBadge tone={integrationAvailabilityTone(agent.integration.availability)} dot>
+            {integrationAvailabilityLabel[agent.integration.availability] ?? agent.integration.availability}
+          </StatusBadge>
+        </span>
+        <span className="integration-capability-badges">
+          {agent.integration.capabilities.map(item => <StatusBadge
+            key={item.capability}
+            tone={integrationAvailabilityTone(item.availability)}
+            title={item.reason}
+          >{integrationCapabilityLabel[item.capability] ?? item.capability} · {integrationAvailabilityLabel[item.availability] ?? item.availability}</StatusBadge>)}
+        </span>
+      </div>}
       {!editable && settings && <p className="source-capture-note">当前由{settings.managedBy === 'environment' ? '兼容环境变量' : '运行时配置'}管理，界面只读。</p>}
       {error && <p className="source-capture-error">{error}</p>}
     </div>
