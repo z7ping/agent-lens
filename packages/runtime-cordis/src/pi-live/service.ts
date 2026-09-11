@@ -565,8 +565,22 @@ export class DefaultPiLiveService implements PiLiveService {
   }
 
   async controls(id: string): Promise<PiLiveControls> { return (await this.readyRuntime(id)).handle!.controls() }
-  async setModel(id: string, provider: string, modelId: string): Promise<PiLiveRuntimeState> { const runtime = await this.readyRuntime(id); return this.decorateReadyState(runtime, await runtime.handle!.setModel(provider, modelId)) }
-  async setThinkingLevel(id: string, level: string): Promise<PiLiveRuntimeState> { const runtime = await this.readyRuntime(id); return this.decorateReadyState(runtime, await runtime.handle!.setThinkingLevel(level)) }
+  async setModel(id: string, provider: string, modelId: string): Promise<PiLiveRuntimeState> {
+    const runtime = await this.readyRuntime(id)
+    const state = await runtime.handle!.setModel(provider, modelId)
+    this.updateRuntimeResources(runtime, state)
+    this.persistStartupAuditBestEffort(runtime, state)
+    this.persistPackageUpdatesBestEffort(runtime, runtime.generation)
+    return this.decorateReadyState(runtime, state)
+  }
+  async setThinkingLevel(id: string, level: string): Promise<PiLiveRuntimeState> {
+    const runtime = await this.readyRuntime(id)
+    const state = await runtime.handle!.setThinkingLevel(level)
+    this.updateRuntimeResources(runtime, state)
+    this.persistStartupAuditBestEffort(runtime, state)
+    this.persistPackageUpdatesBestEffort(runtime, runtime.generation)
+    return this.decorateReadyState(runtime, state)
+  }
   async prompt(id: string, message: string, behavior?: PiLiveStreamingBehavior): Promise<void> {
     if (!message.trim()) return
     const runtime = await this.readyRuntime(id)
@@ -723,8 +737,14 @@ export class DefaultPiLiveService implements PiLiveService {
   }
 
   private decorateReadyState(runtime: OwnedRuntime, state: PiLiveRuntimeState): PiLiveRuntimeState {
+    const {
+      startupResources: _startupResources,
+      packageUpdates: _packageUpdates,
+      packageUpdateCheck: _packageUpdateCheck,
+      ...safeState
+    } = state
     return {
-      ...state,
+      ...safeState,
       runtimeSessionId: runtime.id,
       startedAt: runtime.createdAt,
       status: 'ready',
@@ -753,16 +773,18 @@ export class DefaultPiLiveService implements PiLiveService {
   }
 
   private updateRuntimeResources(runtime: OwnedRuntime, state: PiLiveRuntimeState): void {
-    if (state.packageUpdateCheck) {
-      runtime.packageUpdateCheck = state.packageUpdateCheck
-      if (finalPackageUpdateStatus(state.packageUpdateCheck) && !runtime.packageUpdatesCheckedAt) {
+    const status = packageUpdateStatus(state.packageUpdateCheck)
+    if (status) {
+      runtime.packageUpdateCheck = status
+      if (finalPackageUpdateStatus(status) && !runtime.packageUpdatesCheckedAt) {
         runtime.packageUpdatesCheckedAt = new Date().toISOString()
       }
     }
-    if (state.packageUpdates) runtime.packageUpdates = [...state.packageUpdates]
-    if (!state.startupResources) return
-    runtime.startupResources = state.startupResources
-    this.updateStartupAuditCandidate(runtime, state.startupResources)
+    if (state.packageUpdates !== undefined) runtime.packageUpdates = packageUpdates(state.packageUpdates)
+    const resources = startupResources(state.startupResources)
+    if (!resources) return
+    runtime.startupResources = resources
+    this.updateStartupAuditCandidate(runtime, resources)
   }
 
   private persistStartupAuditBestEffort(runtime: OwnedRuntime, state: PiLiveRuntimeState): void {
