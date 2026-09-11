@@ -19,6 +19,12 @@ import {
   sep,
 } from 'node:path'
 import { gunzipSync, gzipSync } from 'node:zlib'
+import {
+  containsConfigSecretAssignment,
+  containsHighConfidenceSecret,
+  isPathInside,
+  isSensitiveFileName,
+} from '@agent-lens/source-support'
 import type {
   AgentInstallation,
   BackupAssetKind,
@@ -50,9 +56,6 @@ const INDEX_REFRESH_INTERVAL_MS = 5 * 60 * 1000
 const INDEX_STARTUP_STALE_MS = 60 * 1000
 const MAX_IMPORT_BYTES = 256 * 1024 * 1024
 const MAX_BUNDLE_JSON_BYTES = 768 * 1024 * 1024
-const SENSITIVE_FILE_NAME = /(?:^|[._-])(auth|credentials?|secrets?|tokens?)(?:[._-]|$)|\.(?:pem|key)$|^id_(?:rsa|ed25519)$/i
-const HIGH_CONFIDENCE_SECRET = /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\bBearer\s+[A-Za-z0-9._~+\/-]{24,}|\bsk-(?:ant-)?[A-Za-z0-9_-]{20,}|\bgh[pousr]_[A-Za-z0-9]{20,}/i
-const CONFIG_SECRET_ASSIGNMENT = /(?:api[_-]?key|access[_-]?token|refresh[_-]?token|secret|password|passwd|authorization|private[_-]?key)\s*["']?\s*[:=]\s*["']?(?!\$\{)[^"'\s,}\]]{6,}/i
 
 interface BackupTarget {
   source: SourceDefinition
@@ -161,11 +164,6 @@ function safeSegment(value: string): string {
   return value.replace(/[^A-Za-z0-9._-]+/g, '_') || 'unknown'
 }
 
-function isInside(root: string, path: string): boolean {
-  const rel = relative(resolve(root), resolve(path))
-  return rel === '' || (!isAbsolute(rel) && rel !== '..' && !rel.startsWith(`..${sep}`))
-}
-
 function safePortableRelative(value: string): string {
   if (!value || value.includes('\u0000')) throw new Error('Unsafe backup relative path')
   const normalized = posix.normalize(value.replaceAll('\\', '/'))
@@ -201,10 +199,10 @@ function sourceScope(
   detected: DetectedSource,
   path: string,
 ): { scope: BackupSourceScope; rootPath: string } | null {
-  if (detected.dataRoot && isInside(detected.dataRoot, path)) {
+  if (detected.dataRoot && isPathInside(detected.dataRoot, path)) {
     return { scope: 'data', rootPath: detected.dataRoot }
   }
-  if (detected.configRoot && isInside(detected.configRoot, path)) {
+  if (detected.configRoot && isPathInside(detected.configRoot, path)) {
     return { scope: 'config', rootPath: detected.configRoot }
   }
   return null
@@ -313,13 +311,10 @@ async function* walkFiles(root: string): AsyncIterable<{ path: string; symlink: 
 }
 
 function sensitiveReason(path: string, kinds: Set<BackupAssetKind>, bytes: Uint8Array): BackupExcludedEntry['reason'] | null {
-  if (SENSITIVE_FILE_NAME.test(basename(path))) return 'sensitive-file-name'
-  const sample = Buffer.from(bytes.buffer, bytes.byteOffset, Math.min(bytes.byteLength, 512 * 1024))
-  if (sample.includes(0)) return null
-  const text = sample.toString('utf8')
-  if (HIGH_CONFIDENCE_SECRET.test(text)) return 'sensitive-content'
+  if (isSensitiveFileName(path)) return 'sensitive-file-name'
+  if (containsHighConfidenceSecret(bytes)) return 'sensitive-content'
   if ([...kinds].some(kind => kind === 'config' || kind === 'mcp' || kind === 'hook')
-    && CONFIG_SECRET_ASSIGNMENT.test(text)) return 'sensitive-content'
+    && containsConfigSecretAssignment(bytes)) return 'sensitive-content'
   return null
 }
 
@@ -502,7 +497,7 @@ export class LocalBackupService implements BackupService {
       const scoped = preferredScope
         ? { scope: preferredScope, rootPath: preferredScope === 'data' ? target.detected.dataRoot : target.detected.configRoot }
         : sourceScope(target.detected, path)
-      if (!scoped?.rootPath || !isInside(scoped.rootPath, path)) {
+      if (!scoped?.rootPath || !isPathInside(scoped.rootPath, path)) {
         excluded.push(exclusion(target, path, kinds, 'outside-source-roots'))
         return
       }
@@ -1148,7 +1143,7 @@ export class LocalBackupService implements BackupService {
         continue
       }
       const targetPath = resolve(root, ...sourceRelativePath.split('/'))
-      if (!isInside(root, targetPath)) {
+      if (!isPathInside(root, targetPath)) {
         items.push({ sourceId: file.sourceId, archivePath: file.archivePath, kinds: file.kinds, status: 'blocked', reason: '恢复目标超出智能体数据目录' })
         continue
       }
