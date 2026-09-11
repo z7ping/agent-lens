@@ -95,13 +95,11 @@ function parsePackageUpdates(value: unknown): NonNullable<PiLiveStateDto['packag
   if (!Array.isArray(value)) return []
   return value.flatMap(item => {
     const row = record(item)
-    const source = stringValue(row.source).trim()
     const displayName = stringValue(row.displayName).trim()
-    if (!source || !displayName) return []
+    if (!displayName) return []
     if (row.type !== 'npm' && row.type !== 'git') return []
     if (row.scope !== 'user' && row.scope !== 'project') return []
     return [{
-      source,
       displayName,
       type: row.type,
       scope: row.scope,
