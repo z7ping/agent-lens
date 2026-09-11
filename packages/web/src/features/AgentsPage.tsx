@@ -339,15 +339,15 @@ function IntegrationControl({
             key={item.capability}
             tone={integrationAvailabilityTone(item.availability)}
             title={item.reason}
-          >{integrationCapabilityLabel[item.capability] ?? item.capability} · {item.authorization === 'required'
-              ? authorizationSaved && pendingAuthorization.includes(item.capability as IntegrationAuthorizationCapabilityDto)
-                ? '已授权 · 待重启'
-                : '待授权'
-              : integrationAvailabilityLabel[item.availability] ?? item.availability}</StatusBadge>)}
+          >{integrationCapabilityLabel[item.capability] ?? item.capability} · {item.reason === '授权已保存，等待重启加载'
+              ? '待重启'
+              : item.authorization === 'required'
+                ? '待授权'
+                : integrationAvailabilityLabel[item.availability] ?? item.availability}</StatusBadge>)}
         </span>
       </div>}
       {configured && pendingAuthorization.length > 0 && !authorizationSaved && <div className="integration-authorization-action">
-        <Button size="small" disabled={!editable || saving} onClick={() => setAuthorizationOpen(true)}>授权控制能力</Button>
+        <Button size="small" disabled={saving} onClick={() => setAuthorizationOpen(true)}>授权控制能力</Button>
         <span>Runtime / Live 等主动控制能力尚未授权，不会启动。</span>
       </div>}
       {authorizationSaved && <p className="source-capture-note">授权已保存；重启 AgentLens 后控制能力生效。</p>}
@@ -371,7 +371,7 @@ function IntegrationControl({
       closeDisabled={saving}
       footer={<>
         <Button disabled={saving} onClick={() => setAuthorizationOpen(false)}>取消</Button>
-        <Button variant="primary" loading={saving} onClick={() => void authorize()}>确认授权并启用</Button>
+        <Button variant="primary" loading={saving} onClick={() => void authorize()}>{configured ? '确认授权' : '确认授权并启用'}</Button>
       </>}
     >
       <div className="integration-authorization-list">
