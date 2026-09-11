@@ -55,7 +55,7 @@ function toolName(item: TimelineItemDto): string {
 export function eventCategory(kind: TimelineItemDto['kind']): ReviewEventCategory {
   if (kind.startsWith('permission.')) return 'permission'
   if (kind.startsWith('subagent.')) return 'subagent'
-  if (kind.startsWith('context.')) return 'context'
+  if (kind.startsWith('context.') || kind === 'runtime.resources') return 'context'
   if (kind.startsWith('model.') || kind.startsWith('reasoning.')) return 'model'
   if (kind === 'session.lifecycle') return 'lifecycle'
   if (kind === 'artifact.action') return 'artifact'
