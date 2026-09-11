@@ -12,12 +12,15 @@ type OfficialPiModule = typeof import('@earendil-works/pi-coding-agent')
 type OfficialPiModel = NonNullable<AgentSession['model']>
 type OfficialCreateAgentSessionOptions = NonNullable<Parameters<OfficialPiModule['createAgentSession']>[0]>
 type OfficialExtensionBindings = Parameters<AgentSession['bindExtensions']>[0]
+type OfficialDefaultPackageManager = InstanceType<OfficialPiModule['DefaultPackageManager']>
+type OfficialPackageUpdate = Awaited<ReturnType<OfficialDefaultPackageManager['checkForAvailableUpdates']>>[number]
 
 export type PiSdkModel = Pick<OfficialPiModel, 'provider' | 'id' | 'name' | 'reasoning'>
 export type PiSdkPromptOptions = Pick<PromptOptions, 'streamingBehavior' | 'source' | 'preflightResult'>
 export type PiSdkThinkingLevel = Parameters<AgentSession['setThinkingLevel']>[0]
 export type PiSdkExtensionBindings = OfficialExtensionBindings
 export type PiSdkExtensionUiContext = NonNullable<OfficialExtensionBindings['uiContext']>
+export type PiSdkPackageUpdate = Pick<OfficialPackageUpdate, 'source' | 'displayName' | 'type' | 'scope'>
 
 export interface PiSdkSessionManager {
   getSessionId(): ReturnType<SessionManager['getSessionId']>
@@ -53,6 +56,7 @@ export interface PiSdkSession {
   readonly isCompacting: AgentSession['isCompacting']
   readonly pendingMessageCount: AgentSession['pendingMessageCount']
   readonly modelRuntime: PiSdkModelRuntime
+  readonly settingsManager: AgentSession['settingsManager']
   readonly resourceLoader?: PiSdkRuntimeResourceLoader
   bindExtensions(bindings: PiSdkExtensionBindings): ReturnType<AgentSession['bindExtensions']>
   subscribe(listener: Parameters<AgentSession['subscribe']>[0]): ReturnType<AgentSession['subscribe']>
@@ -86,6 +90,11 @@ export interface PiSdkModule {
  * runtime because AgentLens may encounter an older compatible Pi SDK that still supports live
  * sessions but predates one of the resource APIs used by the Source adapter.
  */
+export interface PiSdkPackageUpdateApi {
+  getAgentDir: OfficialPiModule['getAgentDir']
+  DefaultPackageManager: OfficialPiModule['DefaultPackageManager']
+}
+
 export interface PiSdkResourceApi {
   SettingsManager: OfficialPiModule['SettingsManager']
   DefaultPackageManager: OfficialPiModule['DefaultPackageManager']
@@ -151,6 +160,14 @@ export function assertPiSdkModule(value: unknown, sdkEntry: string, version?: st
     )
   }
   return module as unknown as PiSdkModule
+}
+
+export function resolvePiSdkPackageUpdateApi(value: PiSdkModule): PiSdkPackageUpdateApi | null {
+  const module = capabilityTarget(value)
+  const required = ['getAgentDir', 'DefaultPackageManager'] as const
+  return missingCapabilities(module, required).length
+    ? null
+    : module as unknown as PiSdkPackageUpdateApi
 }
 
 export function resolvePiSdkResourceApi(value: PiSdkModule): PiSdkResourceApi | null {
