@@ -8,6 +8,7 @@ import type {
   CoverageService,
   EvidenceService,
   IdentityService,
+  LiveService,
   ObservationService,
   ProjectionService,
   SourceService,
@@ -23,6 +24,7 @@ declare module '@deepseek-ai/cordis' {
     storage: StorageService
     unifiedRead: UnifiedReadService
     sources: SourceService
+    lives: LiveService
     identity: IdentityService
     observations: ObservationService
     evidence: EvidenceService
