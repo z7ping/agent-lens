@@ -4,6 +4,7 @@ import type {
   SourceNormalizationContext,
   SourceRecord,
 } from '@agent-lens/core'
+import { asRecord } from '@agent-lens/source-support'
 import { messageText } from './format'
 import { normalizeCodexRecord } from './normalize'
 import {
@@ -12,11 +13,6 @@ import {
   userMessageProvenance,
 } from './provenance'
 
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {}
-}
 function stringField(record: Readonly<Record<string, unknown>>, ...keys: string[]): string | undefined {
   for (const key of keys) {
     const value = record[key]
