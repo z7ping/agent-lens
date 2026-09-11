@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -62,6 +62,34 @@ test('managed text preview returns safe UTF-8 text and blocks sensitive content'
     await assert.rejects(previewManagedTextFile(root, 'session.jsonl'), error => errorCode(error) === 'protected-data')
   } finally {
     await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('managed paths cannot escape the declared root through an intermediate symlink', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-managed-root-'))
+  const outside = await mkdtemp(join(tmpdir(), 'agent-lens-managed-outside-'))
+  try {
+    await writeFile(join(outside, 'secret.txt'), 'outside\n', 'utf8')
+    try {
+      await symlink(outside, join(root, 'linked'), 'dir')
+    } catch (error) {
+      const code = error && typeof error === 'object' && 'code' in error
+        ? String((error as { code?: unknown }).code ?? '')
+        : ''
+      if (code === 'EPERM' || code === 'EACCES' || code === 'ENOTSUP') {
+        t.skip('symlink creation is unavailable on this host')
+        return
+      }
+      throw error
+    }
+
+    await assert.rejects(
+      previewManagedTextFile(root, 'linked/secret.txt'),
+      error => errorCode(error) === 'outside-root',
+    )
+  } finally {
+    await rm(root, { recursive: true, force: true })
+    await rm(outside, { recursive: true, force: true })
   }
 })
 
