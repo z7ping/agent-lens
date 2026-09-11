@@ -38,13 +38,26 @@ function decodeId(raw: string | undefined, label: string): string {
   return value
 }
 
+function publicState(state: IntegrationPackageStateDto): IntegrationPackageStateDto {
+  return {
+    integrationId: state.integrationId,
+    installed: state.installed,
+    ...(state.installedVersion ? { installedVersion: state.installedVersion } : {}),
+    ...(state.availableVersion ? { availableVersion: state.availableVersion } : {}),
+    compatibility: state.compatibility,
+    integrity: state.integrity,
+    restartRequired: state.restartRequired,
+    ...(state.reason ? { reason: state.reason } : {}),
+  }
+}
+
 function operationResponse(
   controller: IntegrationPackageController,
   operation: IntegrationPackageOperationDto,
 ): IntegrationPackageOperationResponseDto {
   const state = controller.state(operation.integrationId)
   if (!state) throw new Error(`Integration package state disappeared: ${operation.integrationId}`)
-  return { operation, state, meta: meta() }
+  return { operation, state: publicState(state), meta: meta() }
 }
 
 export async function handleIntegrationPackageRequest(
@@ -81,7 +94,7 @@ export async function handleIntegrationPackageRequest(
     }
     const body: IntegrationPackageCatalogResponseDto = {
       catalog: controller.catalog(),
-      states: controller.states(),
+      states: controller.states().map(publicState),
       meta: meta(),
     }
     writeJson(response, 200, body)
@@ -120,7 +133,7 @@ export async function handleIntegrationPackageRequest(
       writeJson(response, 405, { error: 'method_not_allowed' })
       return true
     }
-    const body: IntegrationPackageStateResponseDto = { state, meta: meta() }
+    const body: IntegrationPackageStateResponseDto = { state: publicState(state), meta: meta() }
     writeJson(response, 200, body)
     return true
   }
