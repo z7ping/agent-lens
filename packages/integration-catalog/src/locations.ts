@@ -81,14 +81,9 @@ export function resolveHermesRoots(
 }
 
 export function resolveHermesConfigRoots(
-  env: SourceEnvironment = process.env,
   homeDir = homedir(),
-  platform: NodeJS.Platform = process.platform,
 ): string[] {
-  return [...new Set([
-    join(homeDir, '.hermes'),
-    ...resolveHermesRoots(env, homeDir, platform),
-  ])]
+  return [join(homeDir, '.hermes')]
 }
 
 export function resolveOpenCodeRoots(
