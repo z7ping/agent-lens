@@ -119,10 +119,10 @@ async function discoverEntry(
 ): Promise<OfficialToolDiscoveryItem> {
   try {
     const executableDescriptor = entry.discovery.executable
-    let executable: string | undefined
-    if (executableDescriptor) {
+    const executableProbe = (async () => {
+      if (!executableDescriptor) return undefined
       for (const command of executableDescriptor.commands) {
-        executable = await options.executableResolver(command, {
+        const executable = await options.executableResolver(command, {
           explicit: executableDescriptor.explicitEnvVar
             ? options.env[executableDescriptor.explicitEnvVar]
             : undefined,
@@ -130,16 +130,20 @@ async function discoverEntry(
           pathValue: options.env.PATH,
           shellPathResolver: options.shellPathResolver,
         })
-        if (executable) break
+        if (executable) return executable
       }
-    }
+      return undefined
+    })()
 
     const roots = resolveToolDiscoveryRoots(entry, {
       env: options.env,
       platform: options.platform,
       homeDir: options.homeDir,
     })
-    const probes = await Promise.all(roots.map(probeRoot))
+    const [executable, probes] = await Promise.all([
+      executableProbe,
+      Promise.all(roots.map(probeRoot)),
+    ])
     const configRoot = probes.find(item => item.role === 'config' && item.exists)?.path
     const dataRoot = probes.find(item => item.role === 'data' && item.exists)?.path
     const errors = probes.flatMap(item => item.error ? [item.error] : [])
