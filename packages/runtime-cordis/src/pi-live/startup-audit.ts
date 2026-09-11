@@ -49,6 +49,7 @@ function rememberBoundary(
 export interface PiLiveStartupAuditSnapshot {
   runtimeSessionId: string
   attemptStartedAt: string
+  attemptGeneration?: number | undefined
   capturedAt: string
   nativeSessionId: string
   workspacePath: string
@@ -106,7 +107,7 @@ async function resolvePiInstallation(
 }
 
 function auditEventId(snapshot: PiLiveStartupAuditSnapshot): string {
-  return `pi-live:${snapshot.runtimeSessionId}:startup-audit:${snapshot.attemptStartedAt}`
+  return `pi-live:${snapshot.runtimeSessionId}:startup-audit:${snapshot.attemptGeneration ?? 0}:${snapshot.attemptStartedAt}`
 }
 
 export function createPiLiveStartupAuditSink(ctx: AgentLensContext): PiLiveStartupAuditSink {
@@ -135,6 +136,7 @@ export function createPiLiveStartupAuditSink(ctx: AgentLensContext): PiLiveStart
             schemaVersion: 1,
             event: 'runtime.startup.audit',
             runtimeSessionId: snapshot.runtimeSessionId,
+            ...(snapshot.attemptGeneration === undefined ? {} : { attemptGeneration: snapshot.attemptGeneration }),
             ...(snapshot.sdkVersion ? { sdkVersion: snapshot.sdkVersion } : {}),
             resources: snapshot.startupResources,
             ...(snapshot.packageUpdateCheck ? { packageUpdateCheck: snapshot.packageUpdateCheck } : {}),
