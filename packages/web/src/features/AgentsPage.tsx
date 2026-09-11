@@ -885,7 +885,7 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
   const discoveryScanning = snapshot.integrationDiscoveryLoading
     || snapshot.integrationDiscoveryRescanning
     || discovery?.status === 'scanning'
-  const { canReorder, move, moveBy, reset } = usePinnedAgents()
+  const { ordered, canReorder, move, moveBy, reset } = usePinnedAgents()
   const [managingOrder, setManagingOrder] = useState(false)
   const [draggedId, setDraggedId] = useState('')
 
@@ -907,6 +907,13 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
       discovery: tool,
     }
   })
+  const orderIndex = new Map(ordered.map((id, index) => [id, index]))
+  managedRows.sort((left, right) =>
+    (orderIndex.get(left.id) ?? Number.MAX_SAFE_INTEGER)
+      - (orderIndex.get(right.id) ?? Number.MAX_SAFE_INTEGER)
+    || left.management.displayOrder - right.management.displayOrder
+    || left.id.localeCompare(right.id)
+  )
   const rows = [
     ...managedRows,
     ...overviewItems
