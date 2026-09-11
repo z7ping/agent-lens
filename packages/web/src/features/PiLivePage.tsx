@@ -75,6 +75,7 @@ function parseInitializationTimings(value: unknown): NonNullable<PiLiveStateDto[
 }
 
 function parseStartupResources(value: unknown): NonNullable<PiLiveStateDto['startupResources']> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
   const row = record(value)
   const list = (item: unknown, limit = 240) => Array.isArray(item)
     ? [...new Set(item.filter((entry): entry is string => typeof entry === 'string').map(entry => entry.trim()).filter(Boolean))].slice(0, limit)
@@ -87,7 +88,7 @@ function parseStartupResources(value: unknown): NonNullable<PiLiveStateDto['star
     themes: list(row.themes),
     diagnostics: list(row.diagnostics, 80),
   }
-  return Object.values(resources).some(items => items.length) ? resources : undefined
+  return resources
 }
 
 function parsePackageUpdates(value: unknown): NonNullable<PiLiveStateDto['packageUpdates']> {
