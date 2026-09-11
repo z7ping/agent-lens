@@ -313,6 +313,37 @@ export class IntegrationPackageService {
     this.initialized = true
   }
 
+  async ensureLegacyPhysicalization(
+    integrationIds: readonly string[],
+  ): Promise<{ migrated: boolean; operations: IntegrationPackageOperation[] }> {
+    this.assertInitialized()
+    const markerPath = join(this.options.installRoot, 'legacy-physicalization-v1.json')
+    if (existsSync(markerPath)) return { migrated: false, operations: [] }
+
+    const ids = [...new Set(integrationIds.map(id => assertOfficialIntegration(id).integrationId))]
+    const operations: IntegrationPackageOperation[] = []
+    for (const id of ids) {
+      const operation = await this.install(id)
+      operations.push(operation)
+      if (operation.status !== 'completed') {
+        throw new Error(
+          `Legacy Integration physicalization failed for ${id}: ${operation.message ?? operation.errorCode ?? 'unknown error'}`,
+        )
+      }
+    }
+
+    await writeJsonAtomic(markerPath, {
+      schemaVersion: INTEGRATION_PACKAGE_SCHEMA_VERSION,
+      completedAt: new Date().toISOString(),
+      integrationIds: ids,
+    })
+    // These installs happened before Runtime registration in the same process,
+    // so they are already eligible for this startup and do not require a
+    // second restart.
+    await this.reconcile()
+    return { migrated: true, operations }
+  }
+
   catalog(): IntegrationPackageCatalogItem[] {
     this.assertInitialized()
     return OFFICIAL_INTEGRATION_CATALOG.map(entry => {
