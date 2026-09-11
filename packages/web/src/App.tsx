@@ -56,7 +56,10 @@ function WorkspaceBreadcrumb({
     items = [{ label: t('insights') }, { label: t('usageOverview') }]
   } else if (pathname.startsWith('/agents')) {
     const selected = snapshot.agents?.items.find(item => item.sourceId === selectedAgentId)
-    items = [{ label: t('agents') }, { label: selected?.displayName || selected?.sourceId || t('overview') }]
+    const managed = snapshot.integrationManagement?.items.find(item =>
+      item.integrationId === selectedAgentId || item.productId === selectedAgentId
+    )
+    items = [{ label: t('agents') }, { label: selected?.displayName || managed?.displayName || selectedAgentId || t('overview') }]
   } else if (pathname.startsWith('/backup')) {
     items = [{ label: t('settings') }, { label: t('assetBackup') }]
   } else {
@@ -113,9 +116,19 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const needsFacets = (onReview && !onNewTask) || onTools || onInsights || onAgents || onBackup
   const hasSseBanner = Boolean(snapshot.health && !snapshot.liveConnected && !onPiLive)
   const agentOverviewItems = snapshot.agents?.items ?? []
-  const resolvedAgentOverviewSourceId = agentOverviewItems.some(item => item.sourceId === agentOverviewSourceId)
+  const managedIntegrationItems = snapshot.integrationManagement?.items ?? []
+  const selectedIntegrationExists = managedIntegrationItems.some(item =>
+    item.integrationId === agentOverviewSourceId || item.productId === agentOverviewSourceId
+  )
+  const resolvedAgentOverviewSourceId = agentOverviewItems.some(item => item.sourceId === agentOverviewSourceId) || selectedIntegrationExists
     ? agentOverviewSourceId
-    : agentOverviewItems.find(item => item.detected)?.sourceId ?? agentOverviewItems[0]?.sourceId ?? agents.find(agent => agent.detected)?.sourceId ?? agents[0]?.sourceId ?? ''
+    : managedIntegrationItems.find(item => item.tool?.presence === 'present' || item.tool?.presence === 'data-only')?.integrationId
+      ?? agentOverviewItems.find(item => item.detected)?.sourceId
+      ?? managedIntegrationItems[0]?.integrationId
+      ?? agentOverviewItems[0]?.sourceId
+      ?? agents.find(agent => agent.detected)?.sourceId
+      ?? agents[0]?.sourceId
+      ?? ''
 
   useEffect(() => {
     void model.ensureIntegrationManagement().catch(() => undefined)
