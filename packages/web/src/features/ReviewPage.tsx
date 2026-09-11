@@ -484,38 +484,39 @@ function RawInspectorContent({
   error: string
 }) {
   return <section className="inspector-section">
-    <h3 className="section-label">Raw Inspector</h3>
+    <h3 className="section-label">{agentLensI18n.t('review:local.event.rawInspector')}</h3>
     <div className="evidence-card">
-      <div className="evidence-meta"><b>Source</b><span>{node.sourceId}</span><span>{node.type}</span></div>
-      <div className="evidence-path">Observation {node.id}</div>
-      {node.nativeEventId && <div className="evidence-path">Native ID：{node.nativeEventId}</div>}
-      {node.nativeParentEventId && <div className="evidence-path">Native Parent Event ID：{node.nativeParentEventId}</div>}
-      {node.parentObservationId && <div className="evidence-path">Parent Observation：{node.parentObservationId}</div>}
+      <div className="evidence-meta"><b>{agentLensI18n.t('review:local.event.source')}</b><span>{node.sourceId}</span><span>{node.type}</span></div>
+      <div className="evidence-path">{agentLensI18n.t('review:local.event.observation')} {node.id}</div>
+      {node.nativeEventId && <div className="evidence-path">{agentLensI18n.t('review:local.event.nativeId')}：{node.nativeEventId}</div>}
+      {node.nativeParentEventId && <div className="evidence-path">{agentLensI18n.t('review:local.event.nativeParentEventId')}：{node.nativeParentEventId}</div>}
+      {node.parentObservationId && <div className="evidence-path">{agentLensI18n.t('review:local.event.parentObservation')}：{node.parentObservationId}</div>}
       {node.occurredAt && <div className="evidence-path">occurredAt：{node.occurredAt}</div>}
       <div className="evidence-path">capturedAt：{node.capturedAt}</div>
     </div>
-    {loading && <div className="muted-empty compact">正在读取来源原始记录…</div>}
+    {loading && <div className="muted-empty compact">{agentLensI18n.t('review:local.event.rawLoading')}</div>}
     {error && <div className="evidence-missing">{error}</div>}
     {!loading && !error && records.map(record => {
       const evidence = node.evidence.find(item => item.sourceRecordId === record.id)
       return <div key={record.id} className="evidence-card raw-source-record">
-        <div className="evidence-meta"><b>{record.nativeType}</b><span>Parser {record.parserVersion}</span>{evidence && <span>{evidence.captureMethod} · {evidence.confidence}</span>}</div>
-        <div className="evidence-path">SourceRecord {record.id}</div>
-        {record.nativeId && <div className="evidence-path">Native ID：{record.nativeId}</div>}
+        <div className="evidence-meta"><b>{record.nativeType}</b><span>{agentLensI18n.t('review:local.event.parser')} {record.parserVersion}</span>{evidence && <span>{evidence.captureMethod} · {evidence.confidence}</span>}</div>
+        <div className="evidence-path">{agentLensI18n.t('review:local.event.sourceRecord')} {record.id}</div>
+        {record.nativeId && <div className="evidence-path">{agentLensI18n.t('review:local.event.nativeId')}：{record.nativeId}</div>}
         {record.occurredAt && <div className="evidence-path">occurredAt：{record.occurredAt}</div>}
         <div className="evidence-path">capturedAt：{record.capturedAt}</div>
-        <div className="evidence-path">Locator：{JSON.stringify(record.locator)}</div>
+        <div className="evidence-path">{agentLensI18n.t('review:local.event.locator')}：{JSON.stringify(record.locator)}</div>
         <CopyableCodeBlock className="raw-json" copyValue={JSON.stringify(record.payload, null, 2)}>{JSON.stringify(record.payload, null, 2)}</CopyableCodeBlock>
       </div>
     })}
     {!loading && !error && records.length === 0 && <>
-      <div className="evidence-empty-detail">当前 Observation 没有关联可读取的 SourceRecord；以下为标准化 Payload。</div>
+      <div className="evidence-empty-detail">{agentLensI18n.t('review:local.event.rawMissing')}</div>
       <CopyableCodeBlock className="raw-json" copyValue={JSON.stringify(node.payload, null, 2)}>{JSON.stringify(node.payload, null, 2)}</CopyableCodeBlock>
     </>}
   </section>
 }
 
 function Inspector({ node, onClose, loadSourceRecord }: { node: ReviewNodeDto; onClose(): void; loadSourceRecord(id: string): Promise<SourceRecordResponseDto> }) {
+  const { t } = useTranslation('review')
   const [tab, setTab] = useState<InspectorTab>('detail')
   const sourceRecordIds = useMemo(() => [...new Set(node.evidence.map(item => item.sourceRecordId).filter((id): id is string => Boolean(id)))], [node.evidence])
   const [rawRecords, setRawRecords] = useState<SourceRecordResponseDto[]>([])
@@ -547,35 +548,36 @@ function Inspector({ node, onClose, loadSourceRecord }: { node: ReviewNodeDto; o
     open
     className="review-inspector-overlay"
     title={title}
-    description="事件详情"
+    description={t('local.event.detailDescription')}
     onClose={onClose}
   >
-    <div className="agent-scope" role="tablist" aria-label="事件详情分类">
-      <button className={`scope-chip ${tab === 'detail' ? 'scope-chip-active' : ''}`} role="tab" aria-selected={tab === 'detail'} onClick={() => setTab('detail')}>详情</button>
-      <button className={`scope-chip ${tab === 'evidence' ? 'scope-chip-active' : ''}`} role="tab" aria-selected={tab === 'evidence'} onClick={() => setTab('evidence')}>证据 · {node.evidence.length}</button>
-      <button className={`scope-chip ${tab === 'raw' ? 'scope-chip-active' : ''}`} role="tab" aria-selected={tab === 'raw'} onClick={() => setTab('raw')}>原始数据</button>
+    <div className="agent-scope" role="tablist" aria-label={t('local.event.categoriesAria')}>
+      <button className={`scope-chip ${tab === 'detail' ? 'scope-chip-active' : ''}`} role="tab" aria-selected={tab === 'detail'} onClick={() => setTab('detail')}>{t('local.event.detail')}</button>
+      <button className={`scope-chip ${tab === 'evidence' ? 'scope-chip-active' : ''}`} role="tab" aria-selected={tab === 'evidence'} onClick={() => setTab('evidence')}>{t('local.event.evidence', { count: node.evidence.length })}</button>
+      <button className={`scope-chip ${tab === 'raw' ? 'scope-chip-active' : ''}`} role="tab" aria-selected={tab === 'raw'} onClick={() => setTab('raw')}>{t('local.event.raw')}</button>
     </div>
     {tab === 'detail' && <>
       {node.type === 'tool' ? <StructuredToolDetail node={node}/> : <section className="inspector-section">
-        <h3 className="section-label">摘要</h3>
+        <h3 className="section-label">{t('local.event.summary')}</h3>
         {node.type === 'event' && node.kind === 'context.injected' && stringValue(payloadRecord(node.payload), 'text')
           ? <CopyableCodeBlock className="injected-context-content" copyValue={stringValue(payloadRecord(node.payload), 'text')}>{stringValue(payloadRecord(node.payload), 'text')}</CopyableCodeBlock>
-          : <div className="evidence-empty-detail">{detailSummary || '当前事件没有额外的结构化详情；可继续查看证据或来源原始记录。'}</div>}
+          : <div className="evidence-empty-detail">{detailSummary || t('local.event.noStructuredDetail')}</div>}
       </section>}
     </>}
     {tab === 'evidence' && <section className="inspector-section">
-      <h3 className="section-label">证据</h3>
+      <h3 className="section-label">{t('local.event.evidence', { count: node.evidence.length })}</h3>
       {node.evidence.length ? node.evidence.map(item => <div key={item.id} className="evidence-card">
-        <div className="evidence-meta"><b>{evidenceCaptureLabel[item.captureMethod]}</b><span>{evidenceDerivationLabel[item.derivation] ?? item.derivation}</span><span>可信度：{evidenceConfidenceLabel[item.confidence] ?? item.confidence}</span></div>
+        <div className="evidence-meta"><b>{evidenceLabel(evidenceCaptureKey, item.captureMethod)}</b><span>{evidenceLabel(evidenceDerivationKey, item.derivation)}</span><span>{t('local.evidence.confidenceLabel', { value: evidenceLabel(evidenceConfidenceKey, item.confidence) })}</span></div>
         <div className="evidence-path">{item.sourceLocator?.path ?? item.sourceRecordId ?? item.id}</div>
-        {item.missingReason && <div className="evidence-missing">证据信息不完整</div>}
-      </div>) : <div className="muted-empty">无证据</div>}
+        {item.missingReason && <div className="evidence-missing">{t('local.evidence.incomplete')}</div>}
+      </div>) : <div className="muted-empty">{t('local.evidence.noEvidence')}</div>}
     </section>}
     {tab === 'raw' && <RawInspectorContent node={node} records={rawRecords} loading={rawLoading} error={rawError}/>} 
   </Drawer>
 }
 
 function MarkdownSurface({ text }: { text: string }) {
+  const { t } = useTranslation('review')
   const [view, setView] = useState<'rendered' | 'source'>('rendered')
   const [expanded, setExpanded] = useState(false)
   const [collapsible, setCollapsible] = useState(false)
@@ -616,8 +618,8 @@ function MarkdownSurface({ text }: { text: string }) {
       {collapsible && !expanded && <span className="markdown-fade" aria-hidden="true"/>}
     </div>
     <div className="markdown-message-actions">
-      {collapsible && <button onClick={() => setExpanded(value => !value)}>{expanded ? '收起到 5 行' : '展开全文'}</button>}
-      <button title={view === 'rendered' ? '查看 Markdown 源码' : '返回渲染结果'} onClick={() => setView(value => value === 'rendered' ? 'source' : 'rendered')}>{view === 'rendered' ? '源码' : '渲染'}</button>
+      {collapsible && <button onClick={() => setExpanded(value => !value)}>{expanded ? t('local.markdown.collapseFiveLines') : t('local.markdown.expand')}</button>}
+      <button title={view === 'rendered' ? t('local.markdown.viewSource') : t('local.markdown.returnRendered')} onClick={() => setView(value => value === 'rendered' ? 'source' : 'rendered')}>{view === 'rendered' ? t('local.markdown.source') : t('local.markdown.rendered')}</button>
     </div>
   </div>
 }
@@ -631,8 +633,9 @@ function MessageBubble({
   inspect(node: ReviewNodeDto): void
   nestedTools?: ReviewToolNodeDto[]
 }) {
+  const { t } = useTranslation('review')
   if (node.role === 'reasoning' || node.role === 'commentary') {
-    const label = node.role === 'commentary' ? '执行过程' : '思考'
+    const label = node.role === 'commentary' ? t('local.process.execution') : t('local.process.thinking')
     const thinking: TaskThinkingModel = {
       id: node.id,
       label,
@@ -645,7 +648,7 @@ function MessageBubble({
       model={thinking}
       defaultExpanded={false}
       meta={<EvidenceBadges evidence={node.evidence} compact/>}
-      actions={node.evidence.length > 0 ? <button className="evidence-link" onClick={() => inspect(node)}>查看全部证据 · {node.evidence.length}</button> : undefined}
+      actions={node.evidence.length > 0 ? <button className="evidence-link" onClick={() => inspect(node)}>{t('local.evidence.allEvidence', { count: node.evidence.length })}</button> : undefined}
     >
       <MarkdownSurface text={node.text}/>
       {nestedTools.length > 0 && <ReviewToolGroupAdapter items={nestedTools} inspect={inspect}/>} 
@@ -655,10 +658,10 @@ function MessageBubble({
   return <TaskMessage
     role={node.role === 'user' ? 'user' : 'assistant'}
     text={node.text}
-    author={node.role === 'user' ? '你' : '智能体'}
+    author={node.role === 'user' ? t('local.role.you') : t('local.role.assistant')}
     time={formatClock(node.at)}
     meta={<EvidenceBadges evidence={node.evidence}/>}
-    actions={node.evidence.length > 0 ? <button onClick={() => inspect(node)}>证据详情 · {node.evidence.length}</button> : undefined}
+    actions={node.evidence.length > 0 ? <button onClick={() => inspect(node)}>{t('local.evidence.evidenceDetail', { count: node.evidence.length })}</button> : undefined}
   />
 }
 
@@ -686,7 +689,7 @@ function ReviewToolGroupAdapter({ items, inspect }: { items: ReviewToolNodeDto[]
     for (const tool of tools) counts.set(tool.kind, (counts.get(tool.kind) ?? 0) + 1)
     return {
       id: `tools:${items.map(item => item.id).join(':')}`,
-      label: '工具执行',
+      label: agentLensI18n.t('review:local.tool.execution'),
       itemCount: tools.length,
       errorCount,
       totalDurationLabel: totalDuration > 0 ? duration(totalDuration) : undefined,
@@ -722,9 +725,9 @@ function ReviewProcessGroup({
   const toolCount = items.reduce((count, item) => count + (item.type === 'tool-group' ? item.items.length : 0), 0)
   const model: TaskThinkingModel = {
     id,
-    label: '思考过程',
+    label: agentLensI18n.t('review:local.process.thinkingProcess'),
     text: first?.text ?? '',
-    preview: brief(first?.text ?? `${toolCount} 次工具调用`, 78),
+    preview: brief(first?.text ?? agentLensI18n.t('review:local.tool.calls', { count: toolCount }), 78),
     time: first ? formatClock(first.at) : undefined,
     state: 'settled',
   }
@@ -733,7 +736,7 @@ function ReviewProcessGroup({
       {items.map((item, index) => item.type === 'tool-group'
         ? <ReviewToolGroupAdapter key={`tools-${index}`} items={item.items} inspect={inspect}/>
         : <div className="task-process-message" data-message-role={item.node.role} key={item.node.id}>
-            {item.node.role === 'reasoning' && <div className="task-process-message-kind">思考</div>}
+            {item.node.role === 'reasoning' && <div className="task-process-message-kind">{agentLensI18n.t('review:local.process.thinking')}</div>}
             <MarkdownSurface text={item.node.text}/>
             <div className="task-process-message-meta"><EvidenceBadges evidence={item.node.evidence} compact/></div>
           </div>)}
@@ -759,13 +762,14 @@ function EventRow({ event, inspect }: { event: ReviewEventNodeDto; inspect(node:
 }
 
 function RawEventGroup({ items, inspect }: { items: ReviewEventNodeDto[]; inspect(node: ReviewNodeDto): void }) {
+  const { t } = useTranslation('review')
   const [expanded, setExpanded] = useState(false)
   return <details className="raw-event-group" open={expanded} onToggle={event => setExpanded(event.currentTarget.open)}>
     <summary>
       <UiIcon className="raw-event-group-chevron" name="chevron-right" size={14}/>
       <span className="raw-event-summary-copy">
-        <span className="raw-event-summary-title">其他运行记录 <span className="raw-event-summary-count">{items.length}</span></span>
-        <small>Agent 原始日志中的状态、用量等辅助记录，不属于对话正文</small>
+        <span className="raw-event-summary-title">{t('local.rawEvents.title')} <span className="raw-event-summary-count">{items.length}</span></span>
+        <small>{t('local.rawEvents.description')}</small>
       </span>
       <time>{formatClock(items[items.length - 1]?.at ?? '')}</time>
     </summary>
