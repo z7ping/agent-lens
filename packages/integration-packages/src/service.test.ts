@@ -90,9 +90,11 @@ async function fixture() {
 test('one broken bundled Integration does not block package lifecycle for other Integrations', async () => {
   const f = await fixture()
   try {
-    const piEntry = f.bundle.entryFiles.get('pi')
-    assert.ok(piEntry)
-    await writeFile(piEntry.path, 'corrupt bundled pi payload\n', 'utf8')
+    await writeFile(
+      join(f.bundleDir, 'pi', 'manifest.json'),
+      '{"corrupt":true}\n',
+      'utf8',
+    )
 
     const service = new IntegrationPackageService({
       bundleDir: f.bundleDir,
