@@ -100,11 +100,11 @@ export function authorizedIntegrationCapabilities(
 export function integrationAuthorizationBootstrap(
   configuration: IntegrationAuthorizationConfiguration | null,
   options: {
-    existingInstallation: boolean
+    legacyMigrationEligible: boolean
     selectedIntegrationIds: readonly string[]
   },
 ): Pick<IntegrationAuthorizationConfiguration, 'grants'> | null {
-  if (configuration || !options.existingInstallation) return null
+  if (configuration || !options.legacyMigrationEligible) return null
   const selected = new Set(options.selectedIntegrationIds.map(normalizeProductId))
   return {
     grants: {
