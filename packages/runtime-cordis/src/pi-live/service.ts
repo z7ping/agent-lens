@@ -30,7 +30,7 @@ interface OwnedRuntime {
   startupAuditResources?: PiLiveStartupResources | undefined
   startupOutput: string[]
   packageUpdates: PiLivePackageUpdate[]
-  packageUpdateCheck: PiLivePackageUpdateCheckStatus
+  packageUpdateCheck?: PiLivePackageUpdateCheckStatus | undefined
   capabilities?: PiLiveRuntimeCapabilities | undefined
   workspacePath: string
   projectName: string
@@ -286,7 +286,7 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.startupAuditProbeTask = undefined
     runtime.startupOutput = []
     runtime.packageUpdates = []
-    runtime.packageUpdateCheck = 'checking'
+    runtime.packageUpdateCheck = undefined
     runtime.capabilities = undefined
     this.publish(runtime, { type: 'runtime_status', status: runtime.status, stage: runtime.stage, message: runtime.message })
     const initialState = await this.runtimeState(runtime)
@@ -319,7 +319,6 @@ export class DefaultPiLiveService implements PiLiveService {
       initializationTimings: [],
       startupOutput: [],
       packageUpdates: [],
-      packageUpdateCheck: 'checking',
       workspacePath,
       projectName: basename(workspacePath) || workspacePath,
       ...(restored && normalizedInput.sessionPath ? { recoverySessionPath: normalizedInput.sessionPath } : {}),
@@ -668,7 +667,7 @@ export class DefaultPiLiveService implements PiLiveService {
       initializationElapsedMs: runtime.initializationElapsedMs,
       initializationTimings: runtime.initializationTimings,
       ...(runtime.startupResources ? { startupResources: runtime.startupResources } : {}),
-      packageUpdateCheck: runtime.packageUpdateCheck,
+      ...(runtime.packageUpdateCheck ? { packageUpdateCheck: runtime.packageUpdateCheck } : {}),
       ...(runtime.packageUpdates.length ? { packageUpdates: runtime.packageUpdates } : {}),
       ...(runtime.startupOutput.length ? { startupOutput: runtime.startupOutput } : {}),
       ...(runtime.capabilities ? { capabilities: runtime.capabilities } : {}),
@@ -696,7 +695,7 @@ export class DefaultPiLiveService implements PiLiveService {
       initializationElapsedMs: runtime.initializationElapsedMs,
       initializationTimings: runtime.initializationTimings,
       ...(runtime.startupResources ? { startupResources: runtime.startupResources } : {}),
-      packageUpdateCheck: runtime.packageUpdateCheck,
+      ...(runtime.packageUpdateCheck ? { packageUpdateCheck: runtime.packageUpdateCheck } : {}),
       ...(runtime.packageUpdates.length ? { packageUpdates: runtime.packageUpdates } : {}),
       ...(runtime.startupOutput.length ? { startupOutput: runtime.startupOutput } : {}),
       ...(runtime.capabilities ? { capabilities: runtime.capabilities } : {}),
