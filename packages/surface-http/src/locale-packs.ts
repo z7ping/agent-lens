@@ -1,5 +1,5 @@
 import { readdir, readFile, stat } from 'node:fs/promises'
-import { extname } from 'node:path'
+import { extname, join } from 'node:path'
 import {
   AGENT_LENS_LOCALE_API_VERSION,
   AGENT_LENS_PROTOCOL_VERSION,
@@ -37,7 +37,7 @@ export async function discoverLocalePacks(
     for (const entry of entries) {
       if (!entry.isFile() || extname(entry.name).toLowerCase() !== '.json') continue
       try {
-        const filePath = `${directory}/${entry.name}`
+        const filePath = join(directory, entry.name)
         const metadata = await stat(filePath)
         if (metadata.size > MAX_LOCALE_PACK_BYTES) {
           throw new Error(`Locale Pack exceeds ${MAX_LOCALE_PACK_BYTES} bytes`)
