@@ -6,7 +6,6 @@ import {
   resolveToolDiscoveryRoots,
   type OfficialIntegrationCatalogEntry,
 } from '@agent-lens/integration-catalog'
-import { formatLiveError } from '@agent-lens/live-support'
 import {
   resolveExecutable,
   resolveLoginShellPath,
@@ -57,7 +56,11 @@ interface RootProbe {
 const DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS = 2_500
 
 function errorMessage(error: unknown): string {
-  return formatLiveError(error, 800)
+  return (error instanceof Error ? `${error.name}: ${error.message}` : String(error))
+    .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
+    .replace(/(?:api[_-]?key|token|authorization|password)\s*[:=]\s*\S+/gi, '[redacted]')
+    .replace(/[\r\n]+/g, ' ')
+    .slice(0, 800)
 }
 
 async function pathExists(path: string): Promise<boolean> {
