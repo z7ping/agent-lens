@@ -1,5 +1,4 @@
 import type {
-  IntegrationEnabledUpdateResponseDto,
   IntegrationManagementItemDto,
   IntegrationManagementResponseDto,
   IntegrationPackageOperationResponseDto,
@@ -171,22 +170,6 @@ async function operation(
   )
 }
 
-async function setEnabled(
-  integrationId: string,
-  enabled: boolean,
-  options: PluginCommandOptions,
-): Promise<IntegrationEnabledUpdateResponseDto> {
-  return requestJson(
-    options.apiUrl(`/api/v1/integrations/${encodeURIComponent(integrationId)}/enabled`),
-    {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ enabled }),
-    },
-    options.fetchImpl ?? fetch,
-  )
-}
-
 function printOperation(
   result: IntegrationPackageOperationResponseDto,
   print: (line: string) => void,
@@ -249,32 +232,9 @@ export async function runPluginCommand(
     return result.operation.status === 'completed' ? 0 : 1
   }
 
-  if (action === 'enable' || action === 'disable') {
-    const integrationId = normalizePluginId(args[0])
-    if (args.length > 1) throw new Error(`用法：agent-lens plugin ${action} <id> [--json]`)
-    const result = await setEnabled(integrationId, action === 'enable', options)
-    if (json) {
-      print(JSON.stringify(result, null, 2))
-    } else {
-      print(`${integrationId}：${enabledLabel({
-        integrationId,
-        productId: integrationId,
-        displayName: integrationId,
-        packageState: null,
-        enabled: result.enabled,
-        availability: 'unavailable',
-        capabilities: [],
-        isNew: false,
-        displayOrder: 0,
-      })}`)
-      if (result.enabled.restartRequired) print('需要重启 AgentLens 后完全生效。')
-    }
-    return 0
-  }
-
   throw new Error(
     `Unknown plugin action: ${action}\n\n`
-      + '支持：list、status <id>、install <id>、update <id>、remove <id>、enable <id>、disable <id>',
+      + '支持：list、status <id>、install <id>、update <id>、remove <id>',
   )
 }
 
