@@ -131,6 +131,7 @@ function mergeCoalesced(previous: PiLiveEventDto, next: PiLiveEventDto): PiLiveE
 function isPriorityEvent(value: PiLiveEventDto): boolean {
   return [
     'extension_ui_request',
+    'package_updates',
     'queue_update',
     'agent_settled',
     'agent_end',
