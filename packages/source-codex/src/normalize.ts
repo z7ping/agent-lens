@@ -9,6 +9,7 @@ import {
   type SourceNormalizationContext,
   type SourceRecord,
 } from '@agent-lens/core'
+import { asRecord } from '@agent-lens/source-support'
 import {
   messageText,
   nativeIdForEntry,
@@ -45,12 +46,6 @@ export function splitCodexVisibleAssistantText(text: string, phase?: string): {
     text: withoutDirectives,
     sourceMetadata: metadata,
   }
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {}
 }
 
 function stringField(record: Record<string, unknown>, ...names: string[]): string | undefined {

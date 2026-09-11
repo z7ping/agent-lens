@@ -6,12 +6,7 @@ import type {
   SourceNormalizationContext,
   SourceRecord,
 } from '@agent-lens/core'
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {}
-}
+import { asRecord } from '@agent-lens/source-support'
 
 function stringField(record: Record<string, unknown>, ...keys: string[]): string | undefined {
   for (const key of keys) {
