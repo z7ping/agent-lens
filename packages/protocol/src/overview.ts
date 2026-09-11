@@ -55,6 +55,13 @@ export interface AgentIntegrationCapabilityStatusDto {
   capability: 'source' | 'hook' | 'runtime' | 'live'
   availability: 'available' | 'unavailable' | 'error'
   authorization?: 'required' | 'granted'
+  reasonCode?:
+    | 'authorization-required'
+    | 'authorization-restart-required'
+    | 'component-start-failed'
+    | 'dependency-start-failed'
+    | 'live-adapter-missing'
+    | 'live-availability-failed'
   reason?: string
 }
 
