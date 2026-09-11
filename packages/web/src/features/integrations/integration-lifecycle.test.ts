@@ -81,6 +81,52 @@ test('discovered Tool without physical Integration is presented as not added', (
   )
 })
 
+test('installed but incompatible Integration is presented as abnormal before Enabled state', () => {
+  const item = management({
+    tool: discovery('present'),
+    packageState: {
+      integrationId: 'pi',
+      installed: true,
+      installedVersion: '0.9.0',
+      availableVersion: '1.0.0-alpha.5',
+      compatibility: 'incompatible',
+      integrity: 'verified',
+      restartRequired: false,
+      reason: 'Plugin API incompatible',
+    },
+  })
+
+  assert.deepEqual(
+    integrationLifecycleState(detectedAgent, item, item.tool, false, t),
+    {
+      label: 'status.abnormal',
+      title: 'Plugin API incompatible',
+      className: 'is-error',
+    },
+  )
+})
+
+test('installed but invalid Integration is presented as abnormal before Enabled state', () => {
+  const item = management({
+    tool: discovery('present'),
+    packageState: {
+      integrationId: 'pi',
+      installed: true,
+      installedVersion: '1.0.0-alpha.5',
+      availableVersion: '1.0.0-alpha.5',
+      compatibility: 'unknown',
+      integrity: 'invalid',
+      restartRequired: false,
+      reason: 'manifest checksum mismatch',
+    },
+  })
+
+  assert.equal(
+    integrationLifecycleState(detectedAgent, item, item.tool, false, t).label,
+    'status.abnormal',
+  )
+})
+
 test('installed Integration that is explicitly disabled is presented as disabled', () => {
   const item = management({
     tool: discovery('present'),
