@@ -30,7 +30,8 @@ interface PluginRegistration {
 interface RegisteredIntegration {
   integration: AgentLensIntegration
   enabled: boolean
-  authorizedCapabilities: ReadonlySet<AgentIntegrationCapability>
+  authorizedCapabilities: Set<AgentIntegrationCapability>
+  authorizationRestartPending: Set<AgentIntegrationCapability>
 }
 
 export interface AgentLensIntegrationFailure {
@@ -87,18 +88,30 @@ export class AgentLensApplication {
   }
 
   listIntegrationStatuses(): AgentIntegrationRuntimeStatus[] {
-    return [...this.integrations.values()].map(({ integration, enabled, authorizedCapabilities }) => {
+    return [...this.integrations.values()].map(({
+      integration,
+      enabled,
+      authorizedCapabilities,
+      authorizationRestartPending,
+    }) => {
       const overrides = this.capabilityStatus.get(integration.manifest.integrationId)
       const authorization = new Map<AgentIntegrationCapability, AgentIntegrationCapabilityStatus>()
       for (const component of integration.components) {
         if (component.authorization !== 'explicit') continue
         const granted = component.capabilities.every(capability => authorizedCapabilities.has(capability))
+        const restartPending = component.capabilities.some(capability =>
+          authorizationRestartPending.has(capability)
+        )
         for (const capability of component.capabilities) {
           authorization.set(capability, {
             capability,
-            availability: enabled && !granted ? 'unavailable' : 'available',
+            availability: enabled && (!granted || restartPending) ? 'unavailable' : 'available',
             authorization: granted ? 'granted' : 'required',
-            ...(!granted && enabled ? { reason: '等待用户授权' } : {}),
+            ...(!granted && enabled
+              ? { reason: '等待用户授权' }
+              : restartPending
+                ? { reason: '授权已保存，等待重启加载' }
+                : {}),
           })
         }
       }
@@ -122,6 +135,28 @@ export class AgentLensApplication {
 
   integrationStatus(productId: string): AgentIntegrationRuntimeStatus | null {
     return this.listIntegrationStatuses().find(status => status.productId === productId) ?? null
+  }
+
+  recordIntegrationAuthorization(
+    productId: string,
+    capabilities: readonly AgentIntegrationCapability[],
+  ): void {
+    const registered = [...this.integrations.values()].find(
+      item => item.integration.manifest.productId === productId,
+    )
+    if (!registered) return
+    const allowed = new Set(
+      registered.integration.components
+        .filter(component => component.authorization === 'explicit')
+        .flatMap(component => component.capabilities),
+    )
+    for (const capability of capabilities) {
+      if (!allowed.has(capability)) continue
+      if (!registered.authorizedCapabilities.has(capability)) {
+        registered.authorizationRestartPending.add(capability)
+      }
+      registered.authorizedCapabilities.add(capability)
+    }
   }
 
   authorizableCapabilities(productId: string): AgentIntegrationCapability[] {
@@ -231,6 +266,7 @@ export class AgentLensApplication {
       integration,
       enabled,
       authorizedCapabilities,
+      authorizationRestartPending: new Set(),
     })
 
     for (const component of integration.components) {
