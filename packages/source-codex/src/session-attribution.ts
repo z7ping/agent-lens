@@ -1,4 +1,3 @@
-import { asRecord } from '@agent-lens/source-support'
 import type {
   NormalizedSourceOutput,
   SessionActivityKind,
@@ -7,7 +6,7 @@ import type {
   SourceNormalizationContext,
   SourceRecord,
 } from '@agent-lens/core'
-
+import { asRecord } from '@agent-lens/source-support'
 
 function stringField(record: Record<string, unknown>, ...keys: string[]): string | undefined {
   for (const key of keys) {
