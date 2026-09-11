@@ -18,7 +18,7 @@ export const hermesIntegrationManifest: AgentIntegrationManifest = {
 export const hermesIntegration = defineAgentLensIntegration(
   hermesIntegrationManifest,
   [
-    { lifecycle: 'plugin', plugin: hermesSourcePlugin },
-    { lifecycle: 'plugin', plugin: hermesLivePlugin },
+    { pluginId: '@agent-lens/source-hermes', lifecycle: 'plugin', plugin: hermesSourcePlugin },
+    { pluginId: '@agent-lens/live-hermes', lifecycle: 'plugin', plugin: hermesLivePlugin },
   ],
 )
