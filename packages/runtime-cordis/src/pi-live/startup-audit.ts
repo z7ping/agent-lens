@@ -62,7 +62,7 @@ async function resolvePiInstallation(
   snapshot: PiLiveStartupAuditSnapshot,
 ): Promise<AgentInstallation> {
   const source = ctx.sources.list().find(item => item.manifest.sourceId === PI_SOURCE_ID)
-  if (!source) throw new Error('Pi Source is not registered; startup resources cannot be audited')
+  if (!source) throw new Error('Pi Source is not registered; runtime startup cannot be audited')
 
   const detected = selectDetectedPi(
     await source.detect({
