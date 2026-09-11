@@ -5,6 +5,7 @@ import {
   HubUnifiedObservationReader,
   SqliteHubRemoteReadRepository,
   SqliteStorageService,
+  sqliteStorageProvider,
 } from '@agent-lens/storage-sqlite'
 import {
   DATA_RUNTIME_MAX_MESSAGE_BYTES,
@@ -77,8 +78,8 @@ let activeTransactionId: string | null = null
 let requestTail: Promise<void> = Promise.resolve()
 
 if (dbPath) {
-  storage = new SqliteStorageService({ path: dbPath, readonly: role === 'reader' })
-  if (role === 'writer') await storage.migrate()
+  storage = await sqliteStorageProvider.create({ path: dbPath, readonly: role === 'reader' })
+  await sqliteStorageProvider.initialize?.(storage, { path: dbPath, readonly: role === 'reader' })
   const remote = new SqliteHubRemoteReadRepository(storage.executor)
   const logicalSessions = new HubUnifiedLogicalSessionReader(
     nodeId,
@@ -358,7 +359,7 @@ async function handleRequest(value: unknown, queuedAt: number): Promise<void> {
           storage.executor.rollbackExternalTransaction()
           activeTransactionId = null
         }
-        await storage.close()
+        await sqliteStorageProvider.dispose(storage)
         storage = null
       }
       reply(value.requestId, { ok: true })
