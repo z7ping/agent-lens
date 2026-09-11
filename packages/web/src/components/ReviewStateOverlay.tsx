@@ -1,4 +1,5 @@
 import type { AgentLensClientModel, ClientSnapshot } from '../client/model'
+import { useTranslation } from 'react-i18next'
 import { EmptyStatePanel, ErrorStateBanner, FirstRunGuide, ReviewDetailSkeleton, SessionListSkeleton } from './StateViews'
 import { UiIcon } from './ui'
 
@@ -11,6 +12,7 @@ function broadReviewFilters(review: ClientSnapshot['review']): boolean {
 }
 
 export function ReviewStateOverlay({ model, snapshot }: { model: AgentLensClientModel; snapshot: ClientSnapshot }) {
+  const { t } = useTranslation('review')
   const review = snapshot.review
   const response = review.response
   const detectedCount = snapshot.agents?.items.filter(agent => agent.detected).length ?? 0
@@ -41,10 +43,10 @@ export function ReviewStateOverlay({ model, snapshot }: { model: AgentLensClient
         {broad ? <FirstRunGuide detectedCount={detectedCount} enabledCount={enabledCount} serviceReady={serviceReady} liveConnected={snapshot.liveConnected}/>
           : <EmptyStatePanel
             icon={<UiIcon name="search" size={20}/>}
-            title="没有匹配的会话"
-            description="当前筛选范围没有会话。可以先放宽时间、项目、智能体或状态筛选，再继续查找。"
+            title={t('overlay.noMatchTitle')}
+            description={t('overlay.noMatchDescription')}
             action={{
-              label: '放宽筛选条件',
+              label: t('overlay.relaxFilters'),
               onClick: () => model.setReviewFilters({ sourceIds: null, projectId: '', range: 'all', status: 'all', search: '' }),
             }}
           />}
@@ -62,7 +64,7 @@ export function ReviewStateOverlay({ model, snapshot }: { model: AgentLensClient
     return <div className={`review-state-floating-error ${hasSseBanner ? 'has-sse-banner' : ''}`}>
       <ErrorStateBanner
         message={review.error}
-        retryLabel={review.selectedId ? '重试当前会话' : '重试'}
+        retryLabel={review.selectedId ? t('overlay.retrySession') : t('overlay.retry')}
         onRetry={() => void (review.selectedId ? model.selectReviewSession(review.selectedId) : model.refreshReview())}
       />
     </div>
