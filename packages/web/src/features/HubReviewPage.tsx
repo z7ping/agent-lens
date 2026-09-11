@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import type { TFunction } from 'i18next'
+import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import type {
   HubReadAvailability,
@@ -17,11 +19,11 @@ import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { IconButton, UiIcon } from '../components/ui'
 import { TaskSurface } from './TaskSurface'
 
-const omittedReasonLabel: Record<Extract<HubReadAvailability, { state: 'omitted' }>['reason'], string> = {
-  policy: '复制策略未同步',
-  'not-captured': '来源未采集',
-  'history-boundary': '历史边界前未回填',
-  'dependency-minimized': '仅同步最小依赖',
+const omittedReasonKey: Record<Extract<HubReadAvailability, { state: 'omitted' }>['reason'], string> = {
+  policy: 'hub.omittedReason.policy',
+  'not-captured': 'hub.omittedReason.notCaptured',
+  'history-boundary': 'hub.omittedReason.historyBoundary',
+  'dependency-minimized': 'hub.omittedReason.dependencyMinimized',
 }
 
 function formatValue(value: JsonValue): string {
@@ -30,12 +32,12 @@ function formatValue(value: JsonValue): string {
   try { return JSON.stringify(value, null, 2) } catch { return String(value) }
 }
 
-function availabilityText(value: HubReadAvailability): string {
+function availabilityText(value: HubReadAvailability, t: TFunction): string {
   switch (value.state) {
     case 'value': return formatValue(value.value)
-    case 'null': return '空值（来源明确记录为 null）'
-    case 'redacted': return '内容已脱敏'
-    case 'omitted': return omittedReasonLabel[value.reason]
+    case 'null': return t('hub.availability.nullValue')
+    case 'redacted': return t('hub.availability.redactedContent')
+    case 'omitted': return t(omittedReasonKey[value.reason])
   }
 }
 
@@ -47,11 +49,11 @@ function valueString(value: HubReadAvailability): string | null {
   return value.state === 'value' && typeof value.value === 'string' ? value.value : null
 }
 
-function sessionAvailabilityLabel(value: HubReadAvailability, fallback: string): string {
+function sessionAvailabilityLabel(value: HubReadAvailability, fallback: string, t: TFunction): string {
   const text = valueString(value)?.trim()
   if (text) return text
-  if (value.state === 'redacted') return '已脱敏'
-  if (value.state === 'omitted') return value.reason === 'policy' ? '标题未同步' : omittedReasonLabel[value.reason]
+  if (value.state === 'redacted') return t('hub.availability.redacted')
+  if (value.state === 'omitted') return value.reason === 'policy' ? t('hub.availability.titleNotSynced') : t(omittedReasonKey[value.reason])
   return fallback
 }
 
@@ -64,26 +66,28 @@ function localDayStart(value: Date): number {
   return new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime()
 }
 
-function sessionDayLabel(value: string | null, now = new Date()): '今天' | '昨天' | '更早' {
-  if (!value) return '更早'
+type HubDayGroup = 'today' | 'yesterday' | 'earlier'
+
+function sessionDayLabel(value: string | null, now = new Date()): HubDayGroup {
+  if (!value) return 'earlier'
   const date = new Date(value)
-  if (!Number.isFinite(date.getTime())) return '更早'
+  if (!Number.isFinite(date.getTime())) return 'earlier'
   const day = localDayStart(date)
   const today = localDayStart(now)
-  if (day === today) return '今天'
-  if (day === today - 86_400_000) return '昨天'
-  return '更早'
+  if (day === today) return 'today'
+  if (day === today - 86_400_000) return 'yesterday'
+  return 'earlier'
 }
 
-function sessionRelativeTime(value: string | null, now = new Date()): string {
-  if (!value) return '时间未同步'
+function sessionRelativeTime(value: string | null, t: TFunction, locale: string, now = new Date()): string {
+  if (!value) return t('hub.time.notSynced')
   const date = new Date(value)
-  if (!Number.isFinite(date.getTime())) return '时间未同步'
+  if (!Number.isFinite(date.getTime())) return t('hub.time.notSynced')
   const diff = Math.max(0, now.getTime() - date.getTime())
-  if (diff < 60_000) return '刚刚'
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`
-  if (diff < 86_400_000 && sessionDayLabel(value, now) === '今天') return `${Math.floor(diff / 3_600_000)} 小时前`
-  return new Intl.DateTimeFormat('zh-CN', {
+  if (diff < 60_000) return t('hub.time.justNow')
+  if (diff < 3_600_000) return t('hub.time.minutesAgo', { count: Math.floor(diff / 60_000) })
+  if (diff < 86_400_000 && sessionDayLabel(value, now) === 'today') return t('hub.time.hoursAgo', { count: Math.floor(diff / 3_600_000) })
+  return new Intl.DateTimeFormat(locale, {
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
@@ -92,10 +96,10 @@ function sessionRelativeTime(value: string | null, now = new Date()): string {
   }).format(date)
 }
 
-function timeLabel(item: HubReviewTimelineItemDto): string {
+function timeLabel(item: HubReviewTimelineItemDto, t: TFunction, locale: string): string {
   const raw = valueString(item.occurredAt) ?? valueString(item.capturedAt)
-  if (!raw || !Number.isFinite(Date.parse(raw))) return availabilityText(item.occurredAt)
-  return new Intl.DateTimeFormat('zh-CN', {
+  if (!raw || !Number.isFinite(Date.parse(raw))) return availabilityText(item.occurredAt, t)
+  return new Intl.DateTimeFormat(locale, {
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
@@ -106,28 +110,31 @@ function timeLabel(item: HubReviewTimelineItemDto): string {
 }
 
 function AvailabilityBadge({ value }: { value: HubReadAvailability }) {
+  const { t } = useTranslation('review')
   if (value.state === 'value') return null
-  return <span className="hub-review-availability" data-state={availabilityTone(value)}>{availabilityText(value)}</span>
+  return <span className="hub-review-availability" data-state={availabilityTone(value)}>{availabilityText(value, t)}</span>
 }
 
 function TimelineItem({ item }: { item: HubReviewTimelineItemDto }) {
-  const kind = valueString(item.kind) ?? '类型未同步'
+  const { t, i18n } = useTranslation('review')
+  const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
+  const kind = valueString(item.kind) ?? t('hub.timeline.typeNotSynced')
   return <article className="hub-review-item" data-origin={item.origin.kind}>
     <header className="hub-review-item-head">
       <div>
-        <span className="hub-review-origin">{item.origin.kind === 'remote' ? '远程节点' : '本机'}</span>
+        <span className="hub-review-origin">{item.origin.kind === 'remote' ? t('hub.timeline.remoteNode') : t('hub.timeline.local')}</span>
         <strong>{kind}</strong>
-        <span>{timeLabel(item)}</span>
+        <span>{timeLabel(item, t, locale)}</span>
       </div>
       <code title={item.id}>{item.id}</code>
     </header>
     <div className="hub-review-payload" data-state={availabilityTone(item.payload)}>
       {item.payload.state === 'value'
         ? <CopyableCodeBlock copyValue={formatValue(item.payload.value)}>{formatValue(item.payload.value)}</CopyableCodeBlock>
-        : <div className="hub-review-unavailable"><AvailabilityBadge value={item.payload}/><small>AgentLens 不会用空字符串或空对象代替未同步内容。</small></div>}
+        : <div className="hub-review-unavailable"><AvailabilityBadge value={item.payload}/><small>{t('hub.timeline.unavailableNote')}</small></div>}
     </div>
     {Object.keys(item.references).length > 0 && <details className="hub-review-refs">
-      <summary><UiIcon className="hub-review-refs-chevron" name="chevron-right" size={14}/><span>引用 {Object.keys(item.references).length}</span></summary>
+      <summary><UiIcon className="hub-review-refs-chevron" name="chevron-right" size={14}/><span>{t('hub.timeline.references', { count: Object.keys(item.references).length })}</span></summary>
       <div>{Object.entries(item.references).map(([key, value]) => {
         const refs = Array.isArray(value) ? value : [value]
         return <div key={key}><b>{key}</b>{refs.map(ref => <code key={`${ref.entityType}:${ref.publicId}`}>{ref.entityType} · {ref.publicId}</code>)}</div>
