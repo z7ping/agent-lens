@@ -5,6 +5,7 @@ import { installLiveRecovery } from './client/live-recovery'
 import { clientModel } from './client/model'
 import { installPiLiveKeyboard } from './client/pi-live-keyboard'
 import { readTheme, writeTheme } from './client/preferences'
+import { initializeI18n } from './i18n/runtime'
 import './styles.css'
 import './tokens.css'
 import './theme.css'
@@ -56,6 +57,11 @@ window.addEventListener('pagehide', () => {
   clientModel.stop()
 }, { once: true })
 
-const root = document.getElementById('root')
-if (!root) throw new Error('AgentLens Web root is missing')
-createRoot(root).render(<StrictMode><App model={clientModel} /></StrictMode>)
+async function bootstrap() {
+  await initializeI18n()
+  const root = document.getElementById('root')
+  if (!root) throw new Error('AgentLens Web root is missing')
+  createRoot(root).render(<StrictMode><App model={clientModel} /></StrictMode>)
+}
+
+void bootstrap()
