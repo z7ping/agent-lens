@@ -161,7 +161,7 @@ if (capabilities.localCapture && existsSync(join(integrationBundleDir, 'catalog.
   })
   try {
     await candidate.initialize()
-    const legacySelected = legacyInstallation
+    const legacySelected = legacyInstallation || explicitSourceOverride
       ? candidate.catalog()
           .filter(item => enabledSourceIds.has(item.productId))
           .map(item => item.integrationId)
