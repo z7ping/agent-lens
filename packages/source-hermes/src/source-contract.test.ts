@@ -172,3 +172,20 @@ test('Hermes parser replay ignores legacy row fallback nativeId and recovers raw
   assert.equal(realNative.evidenceCandidates[0]?.nativeStableId, '123')
 })
 
+test('Hermes sessionless source record is preserved as evidence without synthetic observation session', async () => {
+  const normalized = await normalizeHermesRecord(record({
+    runtimeEvent: {
+      hook_event_name: 'pre_tool_call',
+      tool_name: 'terminal',
+      args: { command: 'pwd' },
+    },
+    session: {},
+    captureChannel: 'runtime-hook',
+  }, {
+    nativeType: 'hook/pre_tool_call',
+    locator: { kind: 'runtime-hook', path: '/tmp/hook.json', hookEventId: 'envelope' },
+  }), {} as never)
+
+  assert.deepEqual(normalized.observations, [])
+  assert.equal(normalized.evidenceCandidates.length, 1)
+})
