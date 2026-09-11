@@ -339,7 +339,11 @@ function IntegrationControl({
             key={item.capability}
             tone={integrationAvailabilityTone(item.availability)}
             title={item.reason}
-          >{integrationCapabilityLabel[item.capability] ?? item.capability} · {item.authorization === 'required' ? '待授权' : integrationAvailabilityLabel[item.availability] ?? item.availability}</StatusBadge>)}
+          >{integrationCapabilityLabel[item.capability] ?? item.capability} · {item.authorization === 'required'
+              ? authorizationSaved && pendingAuthorization.includes(item.capability as IntegrationAuthorizationCapabilityDto)
+                ? '已授权 · 待重启'
+                : '待授权'
+              : integrationAvailabilityLabel[item.availability] ?? item.availability}</StatusBadge>)}
         </span>
       </div>}
       {configured && pendingAuthorization.length > 0 && !authorizationSaved && <div className="integration-authorization-action">
