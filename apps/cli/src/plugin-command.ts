@@ -2,8 +2,8 @@ import {
   AGENT_LENS_PROTOCOL_VERSION,
   type AgentOverviewResponseDto,
   type IntegrationManagementItemDto,
-  IntegrationManagementResponseDto,
-  IntegrationPackageOperationResponseDto,
+  type IntegrationManagementResponseDto,
+  type IntegrationPackageOperationResponseDto,
 } from '@agent-lens/protocol'
 
 type FetchLike = typeof fetch
