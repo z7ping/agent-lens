@@ -3,17 +3,17 @@
   display: grid;
   place-items: center;
   padding: 32px;
-  background: var(--app-bg, var(--surface-canvas));
+  background: var(--al-canvas);
 }
 
 .integration-onboarding-panel {
   width: min(760px, 100%);
   max-height: min(820px, calc(100vh - 64px));
   overflow: auto;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--al-line);
   border-radius: 16px;
-  background: var(--surface-primary);
-  box-shadow: var(--shadow-lg);
+  background: var(--al-surface);
+  box-shadow: var(--al-shadow-lg);
 }
 
 .integration-onboarding-header,
@@ -26,7 +26,7 @@
 }
 
 .integration-onboarding-header {
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--al-line);
   align-items: flex-start;
 }
 
@@ -39,7 +39,7 @@
 .integration-onboarding-missing,
 .integration-onboarding-empty span {
   margin: 0;
-  color: var(--text-secondary);
+  color: var(--al-text-secondary);
   line-height: 1.6;
 }
 
@@ -56,13 +56,13 @@
   gap: 16px;
   min-height: 72px;
   padding: 12px 14px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--al-line);
   border-radius: 10px;
-  background: var(--surface-secondary);
+  background: var(--al-soft-2);
 }
 
 .integration-onboarding-item.is-selected {
-  border-color: var(--border-accent);
+  border-color: var(--al-accent);
 }
 
 .integration-onboarding-item > label {
@@ -84,14 +84,14 @@
 }
 
 .integration-onboarding-copy small {
-  color: var(--text-secondary);
+  color: var(--al-text-secondary);
 }
 
 .integration-onboarding-copy code {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--text-tertiary);
+  color: var(--al-text-muted);
   font-size: 12px;
 }
 
@@ -106,7 +106,7 @@
   gap: 6px;
   margin: 18px 20px 8px;
   padding: 18px;
-  border: 1px dashed var(--border-subtle);
+  border: 1px dashed var(--al-line);
   border-radius: 10px;
 }
 
@@ -116,19 +116,19 @@
 }
 
 .integration-onboarding-error {
-  color: var(--text-danger);
+  color: var(--al-danger);
 }
 
 .integration-onboarding-footer {
   position: sticky;
   bottom: 0;
   margin-top: 18px;
-  border-top: 1px solid var(--border-subtle);
-  background: var(--surface-primary);
+  border-top: 1px solid var(--al-line);
+  background: var(--al-surface);
 }
 
 .integration-onboarding-footer > span {
-  color: var(--text-secondary);
+  color: var(--al-text-secondary);
 }
 
 .integration-onboarding-footer > div {
