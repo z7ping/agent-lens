@@ -226,6 +226,8 @@ function evidenceLabel(map: Record<string, string>, value: string): string {
 }
 
 function EvidenceBadges({ evidence, compact = false }: { evidence: TimelineEvidenceDto[]; compact?: boolean }) {
+  const { i18n } = useTranslation('review')
+  const localeRevision = i18n.resolvedLanguage ?? i18n.language
   const visible = useMemo(() => {
     const seen = new Set<string>()
     const items: Array<{ key: string; label: string; confidence: string; title: string }> = []
@@ -248,7 +250,7 @@ function EvidenceBadges({ evidence, compact = false }: { evidence: TimelineEvide
       })
     }
     return items.slice(0, compact ? 1 : 2)
-  }, [evidence, compact])
+  }, [evidence, compact, localeRevision])
 
   if (!visible.length) return null
   return <span className="evidence-inline-list">
@@ -681,6 +683,8 @@ function reviewToolModel(node: ReviewToolNodeDto): TaskToolModel {
 }
 
 function ReviewToolGroupAdapter({ items, inspect }: { items: ReviewToolNodeDto[]; inspect(node: ReviewNodeDto): void }) {
+  const { i18n } = useTranslation('review')
+  const localeRevision = i18n.resolvedLanguage ?? i18n.language
   const model = useMemo<TaskToolGroupModel>(() => {
     const tools = items.map(reviewToolModel)
     const errorCount = tools.filter(tool => tool.status === 'error').length
@@ -696,7 +700,7 @@ function ReviewToolGroupAdapter({ items, inspect }: { items: ReviewToolNodeDto[]
       kindCounts: [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([kind, count]) => ({ kind, label: toolKindLabel(kind), count })),
       tools,
     }
-  }, [items])
+  }, [items, localeRevision])
   const nodes = useMemo(() => new Map(items.map(node => [node.id, node] as const)), [items])
   return <TaskToolGroup
     model={model}
