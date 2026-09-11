@@ -135,7 +135,13 @@ export class IntegrationManagementService {
     const orderById = new Map(order.map((id, index) => [id, index]))
 
     const items = await Promise.all(OFFICIAL_INTEGRATION_CATALOG.map(async entry => {
-      const runtimeStatus = await this.options.integrationStatus(entry.productId)
+      const runtimeStatusResult = await Promise.resolve(
+        this.options.integrationStatus(entry.productId),
+      ).then(
+        value => ({ value, failed: false as const }),
+        () => ({ value: null, failed: true as const }),
+      )
+      const runtimeStatus = runtimeStatusResult.value
       const tool = discoveryById.get(entry.integrationId)
       const isNew = preferences.onboarding.completed
         && (tool?.presence === 'present' || tool?.presence === 'data-only')
@@ -147,7 +153,9 @@ export class IntegrationManagementService {
         displayName: entry.displayName,
         ...(tool ? { tool: cloneTool(tool) } : {}),
         enabled: enabledState(entry.integrationId, configuration),
-        availability: runtimeStatus?.availability ?? 'unavailable',
+        availability: runtimeStatusResult.failed
+          ? 'error'
+          : runtimeStatus?.availability ?? 'unavailable',
         capabilities: cloneCapabilities(runtimeStatus?.capabilities ?? []),
         isNew,
         displayOrder: orderById.get(entry.integrationId) ?? Number.MAX_SAFE_INTEGER,
