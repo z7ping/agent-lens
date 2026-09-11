@@ -373,6 +373,52 @@ test('installed package with incompatible Plugin API stays installed but is not 
   }
 })
 
+test('install repairs an already-installed incompatible package before reporting success', async () => {
+  const f = await fixture()
+  try {
+    const service = new IntegrationPackageService({
+      bundleDir: f.bundleDir,
+      installRoot: f.installRoot,
+    })
+    await service.initialize()
+    assert.equal((await service.install('pi')).status, 'completed')
+
+    const integration = OFFICIAL_INTEGRATION_CATALOG.find(item => item.integrationId === 'pi')
+    assert.ok(integration)
+    const manifestPath = join(
+      f.installRoot,
+      'pi',
+      'versions',
+      integration.package.bundledVersion,
+      'manifest.json',
+    )
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as Record<string, unknown>
+    manifest.apiVersion = '999.0'
+    const incompatibleManifestText = `${JSON.stringify(manifest, null, 2)}\n`
+    await writeFile(manifestPath, incompatibleManifestText, 'utf8')
+
+    const pointerPath = join(f.installRoot, 'pi', 'current.json')
+    const pointer = JSON.parse(await readFile(pointerPath, 'utf8')) as Record<string, unknown>
+    pointer.manifestSha256 = sha256(incompatibleManifestText)
+    await writeFile(pointerPath, `${JSON.stringify(pointer, null, 2)}\n`, 'utf8')
+
+    const restarted = new IntegrationPackageService({
+      bundleDir: f.bundleDir,
+      installRoot: f.installRoot,
+    })
+    await restarted.initialize()
+    assert.equal(restarted.state('pi').compatibility, 'incompatible')
+
+    const install = await restarted.install('pi')
+    assert.equal(install.status, 'completed')
+    assert.equal(restarted.state('pi').compatibility, 'compatible')
+    assert.equal(restarted.state('pi').integrity, 'verified')
+    assert.ok(restarted.installedEntryPath('pi'))
+  } finally {
+    await f.cleanup()
+  }
+})
+
 test('removing Integration package leaves data outside package install root untouched', async () => {
   const f = await fixture()
   try {
