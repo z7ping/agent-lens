@@ -9,7 +9,9 @@ export interface HistoryFileWatchOptions {
   accept?: (filePath: string) => boolean
   debounceMs?: number
   fallbackPollMs?: number
+  fallbackReconcileLimit?: number
   reconcilePollMs?: number
+  reconcileLimit?: number
   initialReconcileLimit?: number
   onError?: (error: unknown) => void
 }
@@ -69,14 +71,14 @@ export async function startHistoryFileWatch(
   const startFallbackPolling = () => {
     if (fallbackTimer || !options.listFiles || !options.fallbackPollMs) return
     fallbackTimer = setInterval(() => {
-      void reconcile()
+      void reconcile(options.fallbackReconcileLimit)
     }, options.fallbackPollMs)
   }
 
   try {
     watcher = watch(options.root, { recursive: true }, (_event, fileName) => {
       if (!fileName) {
-        void reconcile()
+        void reconcile(options.reconcileLimit)
         return
       }
       schedule(join(options.root, fileName.toString()))
@@ -95,7 +97,7 @@ export async function startHistoryFileWatch(
 
   if (watcher && options.listFiles && options.reconcilePollMs) {
     reconcileTimer = setInterval(() => {
-      void reconcile()
+      void reconcile(options.reconcileLimit)
     }, options.reconcilePollMs)
   }
 
