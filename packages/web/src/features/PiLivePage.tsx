@@ -662,9 +662,9 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
           } else {
             const request = extensionRequest(event)
             if (request) setExtension(request)
-            if (type === 'extension_error') setError(stringValue(event.error) || t('warning.extensionFailed'))
+            if (type === 'extension_error') setError(stringValue(event.error) || agentLensI18n.t('piLive:warning.extensionFailed'))
             if (type === 'runtime_exit') {
-              setError(stringValue(event.errorMessage) || t('warning.runtimeExited'))
+              setError(stringValue(event.errorMessage) || agentLensI18n.t('piLive:warning.runtimeExited'))
               statePatch = { ...statePatch, isStreaming: false, isCompacting: false }
             }
           }
