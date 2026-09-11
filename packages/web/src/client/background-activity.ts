@@ -1,4 +1,5 @@
 import type { BackgroundActivityResponseDto } from '@agent-lens/protocol'
+import { translateProduct } from '../i18n/runtime'
 
 export async function fetchBackgroundActivity(signal?: AbortSignal): Promise<BackgroundActivityResponseDto> {
   let response: Response
@@ -9,8 +10,8 @@ export async function fetchBackgroundActivity(signal?: AbortSignal): Promise<Bac
     })
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') throw error
-    throw new Error('后台活动状态暂时不可用')
+    throw new Error(translateProduct('errors:backgroundActivityUnavailable'))
   }
-  if (!response.ok) throw new Error(`后台活动状态请求失败（${response.status}）`)
+  if (!response.ok) throw new Error(translateProduct('errors:backgroundActivityFailed', { status: response.status }))
   return response.json() as Promise<BackgroundActivityResponseDto>
 }
