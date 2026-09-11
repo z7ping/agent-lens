@@ -360,7 +360,9 @@ export class IntegrationPackageService {
     for (const entry of OFFICIAL_INTEGRATION_CATALOG) {
       this.states.set(entry.integrationId, await this.readInstalledState(entry.integrationId))
     }
-    return this.statesSnapshot()
+    return OFFICIAL_INTEGRATION_CATALOG.map(entry =>
+      cloneState(this.states.get(entry.integrationId) ?? this.emptyState(entry.integrationId))
+    )
   }
 
   install(integrationId: string): Promise<IntegrationPackageOperation> {
@@ -510,7 +512,9 @@ export class IntegrationPackageService {
         throw new Error(`Bundled Integration manifest identity mismatch: ${item.integrationId}`)
       }
       const packageDir = dirname(manifestPath)
-      await verifyManifestFiles(packageDir, manifest)
+      // The bundled catalog + manifest are the release trust root. Large bundle
+      // files are hashed only when that package is actually installed, keeping
+      // startup O(installed packages) rather than O(all available packages).
       next.set(item.integrationId, {
         catalog: item,
         manifest,
@@ -519,6 +523,11 @@ export class IntegrationPackageService {
       })
     }
 
+    for (const official of OFFICIAL_INTEGRATION_CATALOG) {
+      if (!next.has(official.integrationId)) {
+        throw new Error(`Trusted Integration bundle is missing: ${official.integrationId}`)
+      }
+    }
     this.bundled = next
   }
 
