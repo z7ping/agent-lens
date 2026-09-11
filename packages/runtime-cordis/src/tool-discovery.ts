@@ -1,4 +1,5 @@
 import { access } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import {
   OFFICIAL_INTEGRATION_CATALOG,
@@ -37,6 +38,7 @@ export interface OfficialToolDiscoveryOptions {
   platform?: NodeJS.Platform | undefined
   homeDir?: string | undefined
   timeoutMs?: number | undefined
+  shellPathResolver?: (() => Promise<string | undefined>) | undefined
 }
 
 interface RootProbe {
@@ -173,11 +175,12 @@ export async function discoverOfficialTools(
 ): Promise<OfficialToolDiscoveryItem[]> {
   const env = options.env ?? process.env
   const platform = options.platform ?? process.platform
-  const homeDir = options.homeDir ?? (await import('node:os')).homedir()
+  const homeDir = options.homeDir ?? homedir()
   const timeoutMs = options.timeoutMs ?? DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS
   let shellPathPromise: Promise<string | undefined> | undefined
+  const sourceShellPathResolver = options.shellPathResolver ?? (() => resolveLoginShellPath(platform))
   const shellPathResolver = () => {
-    shellPathPromise ??= resolveLoginShellPath(platform)
+    shellPathPromise ??= Promise.resolve(sourceShellPathResolver())
     return shellPathPromise
   }
 
