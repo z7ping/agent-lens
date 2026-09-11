@@ -3,6 +3,7 @@ import { chmod, cp, mkdir, rm } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
+import { buildIntegrationPackages } from './build-integration-packages.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const dist = resolve(root, 'dist')
@@ -79,6 +80,12 @@ await cp(
   resolve(root, 'scripts/windows-hook-dispatcher.ps1'),
   resolve(dist, 'hooks/windows-hook-dispatcher.ps1'),
 )
+await buildIntegrationPackages({
+  root,
+  outDir: resolve(dist, 'integration-packages'),
+  clean: true,
+})
+
 await cp(
   resolve(root, 'apps/hook-hermes/plugin/agent-lens-observer'),
   resolve(dist, 'integrations/hermes/agent-lens-observer'),
