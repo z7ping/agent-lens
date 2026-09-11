@@ -53,8 +53,8 @@ function integrationAvailability(
   const available = capabilities.filter(item => item.availability === 'available').length
   const unavailable = capabilities.filter(item => item.availability === 'unavailable').length
   const errors = capabilities.filter(item => item.availability === 'error').length
-  if (errors === capabilities.length) return 'error'
-  if (unavailable === capabilities.length) return 'unavailable'
+  if (available === 0 && errors > 0) return 'error'
+  if (available === 0 && unavailable > 0) return 'unavailable'
   if (errors > 0 || unavailable > 0) return 'partial'
   if (available === capabilities.length) return 'available'
   return 'partial'
