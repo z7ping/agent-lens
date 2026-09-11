@@ -322,6 +322,7 @@ async function* ingestCodexFileWithThreadNames(
   let offset = reset ? 0 : previous.offset
   let sequence = reset ? 0 : previous.sequence
   let pendingCheckpointLines = 0
+  let incompleteTail = false
 
   const persistCheckpoint = async () => {
     await ctx.checkpoint.set(key, {
@@ -338,7 +339,10 @@ async function* ingestCodexFileWithThreadNames(
 
   for await (const line of readJsonlLines(filePath, offset)) {
     if (ctx.abortSignal.aborted) return
-    if (!line.terminated && line.text.trim() && !isCompleteJson(line.text)) break
+    if (!line.terminated && line.text.trim() && !isCompleteJson(line.text)) {
+      incompleteTail = true
+      break
+    }
 
     sequence += 1
     offset = line.endOffset
@@ -355,6 +359,25 @@ async function* ingestCodexFileWithThreadNames(
   }
 
   if (pendingCheckpointLines > 0) await persistCheckpoint()
+
+  if (!ctx.abortSignal.aborted && !incompleteTail) {
+    try {
+      const finalStat = await stat(filePath)
+      if (sourceFileIdentity(finalStat) === initialFileId) {
+        await ctx.checkpoint.set(key, {
+          path: filePath,
+          offset,
+          sequence,
+          size: finalStat.size,
+          mtimeMs: finalStat.mtimeMs,
+          fileId: initialFileId,
+          parserVersion: CODEX_PARSER_VERSION,
+        })
+      }
+    } catch (error) {
+      if (!isMissingPathError(error)) throw error
+    }
+  }
 }
 
 export async function* ingestCodexFile(
