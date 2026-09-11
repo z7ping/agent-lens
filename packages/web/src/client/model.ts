@@ -89,21 +89,25 @@ function discoveryFromManagement(
   }
 }
 
-function reorderManagement(
+function applyManagementPreferences(
   management: IntegrationManagementResponseDto,
-  displayOrder: readonly string[],
+  preferences: IntegrationManagementResponseDto['preferences'],
 ): IntegrationManagementResponseDto {
-  const index = new Map(displayOrder.map((id, position) => [id, position]))
+  const index = new Map(preferences.displayOrder.map((id, position) => [id, position]))
+  const acknowledged = new Set(preferences.acknowledgedIntegrationIds)
   const items = management.items
     .map(item => ({
       ...item,
+      isNew: preferences.onboarding.completed
+        && (item.tool?.presence === 'present' || item.tool?.presence === 'data-only')
+        && !acknowledged.has(item.integrationId),
       displayOrder: index.get(item.integrationId) ?? Number.MAX_SAFE_INTEGER,
     }))
     .sort((left, right) =>
       left.displayOrder - right.displayOrder
       || left.integrationId.localeCompare(right.integrationId)
     )
-  return { ...management, items }
+  return { ...management, preferences, items }
 }
 
 function mergeReviewDetail(current: ReviewSessionDetailDto, next: ReviewSessionDetailDto): ReviewSessionDetailDto {
@@ -455,11 +459,10 @@ export class AgentLensClientModel {
     const result = await this.api.updateIntegrationPreferences(input)
     const current = this.snapshot.integrationManagement
     if (current) {
-      const management = reorderManagement({
+      const management = applyManagementPreferences({
         ...current,
-        preferences: result.preferences,
         meta: { ...current.meta, generatedAt: result.meta.generatedAt },
-      }, result.preferences.displayOrder)
+      }, result.preferences)
       this.patch({ integrationManagement: management })
     }
     return result
