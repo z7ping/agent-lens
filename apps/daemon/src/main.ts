@@ -19,6 +19,7 @@ import {
   authorizedIntegrationCapabilities,
   discoverRegisteredSourceAssets,
   grantIntegrationCapabilities,
+  integrationAuthorizationBootstrap,
   integrationAuthorizationPath,
   integrationPreferencesPath,
   integrationPreferenceBootstrapUpdate,
@@ -146,14 +147,18 @@ if (integrationPreferences && integrationPreferenceBootstrap) {
   await integrationPreferences.update(integrationPreferenceBootstrap)
 }
 let integrationAuthorization = readIntegrationAuthorizationSync(integrationAuthorizationFile)
-
-if (!integrationAuthorization && legacyInstallation) {
-  integrationAuthorization = await writeIntegrationAuthorization(integrationAuthorizationFile, {
-    grants: {
-      ...(enabledSourceIds.has('pi') ? { pi: ['runtime', 'live'] } : {}),
-      ...(enabledSourceIds.has('hermes') ? { hermes: ['live'] } : {}),
-    },
-  })
+const integrationAuthorizationBootstrapConfiguration = integrationAuthorizationBootstrap(
+  integrationAuthorization,
+  {
+    existingInstallation: legacyInstallation || explicitSourceOverride,
+    selectedIntegrationIds: [...enabledSourceIds],
+  },
+)
+if (integrationAuthorizationBootstrapConfiguration) {
+  integrationAuthorization = await writeIntegrationAuthorization(
+    integrationAuthorizationFile,
+    integrationAuthorizationBootstrapConfiguration,
+  )
 }
 
 function authorizedCapabilities(productId: string) {
