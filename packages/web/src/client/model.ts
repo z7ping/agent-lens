@@ -66,6 +66,8 @@ const REVIEW_PAGE_SIZE = 20
 const REVIEW_DETAIL_PAGE_SIZE = 10
 export const REVIEW_DETAIL_WINDOW_SIZE = 30
 const REVIEW_SEARCH_DEBOUNCE_MS = 250
+const INTEGRATION_DISCOVERY_POLL_MS = 500
+const INTEGRATION_DISCOVERY_MAX_POLLS = 20
 
 function mergeReviewDetail(current: ReviewSessionDetailDto, next: ReviewSessionDetailDto): ReviewSessionDetailDto {
   const interactions = new Map(current.interactions.map(item => [item.id, item]))
@@ -128,6 +130,7 @@ export class AgentLensClientModel {
   private refreshTimer: ReturnType<typeof setTimeout> | null = null
   private detailTimer: ReturnType<typeof setTimeout> | null = null
   private reviewSearchTimer: ReturnType<typeof setTimeout> | null = null
+  private integrationDiscoveryTimer: ReturnType<typeof setTimeout> | null = null
   private reviewInFlight: Promise<void> | null = null
   private reviewRequestDirty = false
   private reviewLiveDirty = false
@@ -136,6 +139,7 @@ export class AgentLensClientModel {
   private agentsInFlight: Promise<void> | null = null
   private agentsRescanInFlight: Promise<AgentRescanResponseDto> | null = null
   private integrationDiscoveryInFlight: Promise<IntegrationToolDiscoveryResponseDto> | null = null
+  private integrationDiscoveryPolls = 0
   private visibilityListener: (() => void) | null = null
   private unsubscribeLive: (() => void) | null = null
   private reviewGeneration = 0
@@ -194,10 +198,13 @@ export class AgentLensClientModel {
     if (this.refreshTimer) clearTimeout(this.refreshTimer)
     if (this.detailTimer) clearTimeout(this.detailTimer)
     if (this.reviewSearchTimer) clearTimeout(this.reviewSearchTimer)
+    if (this.integrationDiscoveryTimer) clearTimeout(this.integrationDiscoveryTimer)
     if (this.visibilityListener && typeof document !== 'undefined') document.removeEventListener('visibilitychange', this.visibilityListener)
     this.refreshTimer = null
     this.detailTimer = null
     this.reviewSearchTimer = null
+    this.integrationDiscoveryTimer = null
+    this.integrationDiscoveryPolls = 0
     this.visibilityListener = null
     this.reviewActive = false
   }
@@ -244,6 +251,11 @@ export class AgentLensClientModel {
         integrationDiscoveryLoading: false,
         integrationDiscoveryError: discovery.error,
       })
+      if (discovery.value?.status === 'idle' || discovery.value?.status === 'scanning') {
+        this.scheduleIntegrationDiscoveryRefresh()
+      } else if (discovery.value?.status === 'complete') {
+        this.integrationDiscoveryPolls = 0
+      }
     } catch {
       // Existing data remains visible on refresh failure.
       if (generation !== this.agentsGeneration) return
@@ -290,11 +302,46 @@ export class AgentLensClientModel {
     return pending
   }
 
+  private scheduleIntegrationDiscoveryRefresh(): void {
+    if (this.integrationDiscoveryTimer || this.integrationDiscoveryPolls >= INTEGRATION_DISCOVERY_MAX_POLLS) return
+    this.integrationDiscoveryTimer = setTimeout(() => {
+      this.integrationDiscoveryTimer = null
+      this.integrationDiscoveryPolls += 1
+      void this.refreshIntegrationDiscovery()
+    }, INTEGRATION_DISCOVERY_POLL_MS)
+  }
+
+  private async refreshIntegrationDiscovery(): Promise<void> {
+    try {
+      const result = await this.api.integrationDiscovery()
+      this.patch({
+        integrationDiscovery: result,
+        integrationDiscoveryLoading: false,
+        integrationDiscoveryError: '',
+      })
+      if (result.status === 'idle' || result.status === 'scanning') {
+        this.scheduleIntegrationDiscoveryRefresh()
+      } else {
+        this.integrationDiscoveryPolls = 0
+      }
+    } catch (error) {
+      this.patch({
+        integrationDiscoveryLoading: false,
+        integrationDiscoveryError: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
   rescanIntegrationDiscovery(): Promise<IntegrationToolDiscoveryResponseDto> {
     if (this.integrationDiscoveryInFlight) return this.integrationDiscoveryInFlight
     this.patch({ integrationDiscoveryRescanning: true, integrationDiscoveryError: '' })
     const pending = this.api.rescanIntegrationDiscovery().then(
       result => {
+        if (this.integrationDiscoveryTimer) {
+          clearTimeout(this.integrationDiscoveryTimer)
+          this.integrationDiscoveryTimer = null
+        }
+        this.integrationDiscoveryPolls = 0
         this.patch({
           integrationDiscovery: result,
           integrationDiscoveryLoading: false,
