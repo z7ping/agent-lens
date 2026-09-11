@@ -90,17 +90,16 @@ export class AgentLensApplication {
     return [...this.integrations.values()].map(({ integration, enabled, authorizedCapabilities }) => {
       const overrides = this.capabilityStatus.get(integration.manifest.integrationId)
       const authorization = new Map<AgentIntegrationCapability, AgentIntegrationCapabilityStatus>()
-      if (enabled) {
-        for (const component of integration.components) {
-          if (component.authorization !== 'explicit') continue
-          if (component.capabilities.every(capability => authorizedCapabilities.has(capability))) continue
-          for (const capability of component.capabilities) {
-            authorization.set(capability, {
-              capability,
-              availability: 'unavailable',
-              reason: '等待用户授权',
-            })
-          }
+      for (const component of integration.components) {
+        if (component.authorization !== 'explicit') continue
+        const granted = component.capabilities.every(capability => authorizedCapabilities.has(capability))
+        for (const capability of component.capabilities) {
+          authorization.set(capability, {
+            capability,
+            availability: enabled && !granted ? 'unavailable' : 'available',
+            authorization: granted ? 'granted' : 'required',
+            ...(!granted && enabled ? { reason: '等待用户授权' } : {}),
+          })
         }
       }
       const capabilities = integration.manifest.capabilities.map(capability =>
