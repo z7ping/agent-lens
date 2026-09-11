@@ -102,7 +102,7 @@ async function requestBlob(path: string): Promise<Blob> {
     if (!response.ok) throw new AgentLensRequestError(translateProduct('errors:apiRequestFailedStatus', { status: response.status, detail: '', path }), response.status)
     return response.blob()
   } catch (error) {
-    if (error instanceof Error && error.message.startsWith('AgentLens 接口请求失败')) throw error
+    if (error instanceof AgentLensRequestError) throw error
     throw new AgentLensRequestError(translateProduct('errors:backupExportFailed'))
   }
 }
