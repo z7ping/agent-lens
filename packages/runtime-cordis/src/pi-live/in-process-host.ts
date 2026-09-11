@@ -1,4 +1,5 @@
 import { homedir } from 'node:os'
+import { formatLiveError } from '@agent-lens/live-support'
 import { isAbsolute, resolve } from 'node:path'
 import { PiExtensionUiBridge } from './extension-ui-bridge'
 import {
@@ -52,9 +53,15 @@ function resourceLabel(value: unknown): string | undefined {
 function runtimeResourceSnapshot(session: PiSdkSession): PiLiveStartupResources | undefined {
   const loader = session.resourceLoader
   if (!loader) return undefined
+  const diagnostics: string[] = []
   const call = (method: keyof NonNullable<PiSdkSession['resourceLoader']>) => {
     const fn = loader[method]
-    try { return typeof fn === 'function' ? fn.call(loader) : undefined } catch { return undefined }
+    try {
+      return typeof fn === 'function' ? fn.call(loader) : undefined
+    } catch (error) {
+      diagnostics.push(`${String(method)}: ${formatLiveError(error, 1_000)}`)
+      return undefined
+    }
   }
   const extensions = resultItems(call('getExtensions'), 'extensions').map(resourceLabel).filter((value): value is string => Boolean(value))
   const skills = resultItems(call('getSkills'), 'skills').map(resourceLabel).filter((value): value is string => Boolean(value))
@@ -68,7 +75,7 @@ function runtimeResourceSnapshot(session: PiSdkSession): PiLiveStartupResources 
     prompts: unique(prompts),
     extensions: unique(extensions),
     themes: unique(themes),
-    diagnostics: [],
+    diagnostics: diagnostics.slice(0, 80),
   }
 }
 
