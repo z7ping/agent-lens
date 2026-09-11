@@ -1,3 +1,4 @@
+import { asRecord } from '@agent-lens/source-support'
 export interface CodexSessionMetadata {
   nativeSessionId: string
   cwd?: string
