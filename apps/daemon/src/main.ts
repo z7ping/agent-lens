@@ -21,6 +21,9 @@ import {
   discoverRegisteredSourceAssets,
   grantIntegrationCapabilities,
   integrationAuthorizationPath,
+  integrationPreferencesPath,
+  IntegrationManagementService,
+  IntegrationPreferenceService,
   nodeRuntimePlugin,
   OfficialToolDiscoveryService,
   prepareRegisteredSources,
@@ -98,6 +101,10 @@ const projectDirectoryPicker = createProjectDirectoryPicker()
 const capturePolicyStartup = resolveCapturePolicyPluginState()
 const enabledSourceIds = new Set(capturePolicyStartup.settings.enabledSources)
 const integrationAuthorizationFile = integrationAuthorizationPath()
+const integrationPreferencesFile = integrationPreferencesPath()
+const integrationPreferences = capabilities.localCapture
+  ? new IntegrationPreferenceService(integrationPreferencesFile)
+  : null
 let integrationAuthorization = readIntegrationAuthorizationSync(integrationAuthorizationFile)
 const persistedCapturePolicy = readCapturePolicyConfigurationSync(capturePolicyStartup.configurationPath)
 const legacyInstallation = existsSync(dbPath) || persistedCapturePolicy !== null
@@ -113,6 +120,21 @@ if (!integrationAuthorization && legacyInstallation) {
 
 function authorizedCapabilities(productId: string) {
   return authorizedIntegrationCapabilities(integrationAuthorization, productId)
+}
+
+let integrationManagement: IntegrationManagementService | null = null
+
+function currentIntegrationManagement(): IntegrationManagementService {
+  if (!officialToolDiscovery || !integrationPreferences) {
+    throw new Error('Integration management is unavailable for this runtime profile')
+  }
+  integrationManagement ??= new IntegrationManagementService({
+    discovery: officialToolDiscovery,
+    preferences: integrationPreferences,
+    capturePolicy: app.context.capturePolicy,
+    integrationStatus: productId => app.resolveIntegrationStatus(productId),
+  })
+  return integrationManagement
 }
 
 const app = new AgentLensApplication()
@@ -166,6 +188,17 @@ app.use(httpSurfacePlugin, {
         integrationDiscovery: {
           snapshot: () => officialToolDiscovery.snapshot(),
           rescan: () => officialToolDiscovery.rescan(),
+        },
+      }
+    : {}),
+  ...(officialToolDiscovery && integrationPreferences
+    ? {
+        integrationManagement: {
+          query: () => currentIntegrationManagement().query(),
+          preferences: () => currentIntegrationManagement().preferences(),
+          updatePreferences: request => currentIntegrationManagement().updatePreferences(request),
+          setEnabled: (integrationId, enabled) =>
+            currentIntegrationManagement().setEnabled(integrationId, enabled),
         },
       }
     : {}),
