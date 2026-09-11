@@ -383,7 +383,7 @@ export class AgentLensApplication {
       statuses.set(capability, {
         capability,
         availability: 'error',
-        reason: `组件启动失败：${registration.componentPluginId ?? 'unknown'}`,
+        reasonCode: 'component-start-failed',
       })
     }
     this.capabilityStatus.set(registration.integrationId, statuses)
