@@ -769,7 +769,8 @@ function candidate(
     offset?: number
   } = {},
 ): ObservationCandidate {
-  const nativeEventId = options.nativeEventId ?? envelopeNativeEventId(envelope)
+  const nativeEventId = options.nativeEventId
+    ?? (!options.nativeCallId && !options.sharedEventKey ? envelopeNativeEventId(envelope) : undefined)
   return observationFromSourceRecord(record, {
     kind,
     payload,
