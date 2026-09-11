@@ -419,14 +419,32 @@ function normalizedEventValue(value: unknown): string {
 function withNativeCallId(output: NormalizedSourceOutput, callId: string): NormalizedSourceOutput {
   return {
     ...output,
-    observations: output.observations.map(observation => ({
-      ...observation,
-      nativeCallId: callId,
-      dedupHints: {
-        ...observation.dedupHints,
+    observations: output.observations.map(observation => {
+      if (observation.nativeEventId !== callId) {
+        return {
+          ...observation,
+          nativeCallId: callId,
+          dedupHints: {
+            ...observation.dedupHints,
+            nativeCallId: callId,
+          },
+        }
+      }
+
+      const { nativeEventId: _nativeEventId, ...withoutEventIdentity } = observation
+      const {
+        nativeEventId: _dedupNativeEventId,
+        ...dedupWithoutEventIdentity
+      } = observation.dedupHints ?? {}
+      return {
+        ...withoutEventIdentity,
         nativeCallId: callId,
-      },
-    })),
+        dedupHints: {
+          ...dedupWithoutEventIdentity,
+          nativeCallId: callId,
+        },
+      }
+    }),
   }
 }
 
