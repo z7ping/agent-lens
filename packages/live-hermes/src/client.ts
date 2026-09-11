@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { parseEnv } from 'node:util'
+import { parse as parseYaml } from 'yaml'
 
 export interface HermesApiClientConfig {
   apiUrl?: string
@@ -40,45 +41,105 @@ function unique(values: Array<string | undefined>): string[] {
   return [...new Set(values.filter((value): value is string => Boolean(value?.trim())).map(value => value!.trim()))]
 }
 
-async function apiKeyFromEnvFiles(paths: readonly string[]): Promise<string | undefined> {
+interface HermesApiFileSettings {
+  apiKey?: string
+  host?: string
+  port?: string
+}
+
+async function envSettingsFromFiles(paths: readonly string[]): Promise<HermesApiFileSettings> {
   for (const path of paths) {
     try {
       const parsed = parseEnv(await readFile(path, 'utf8'))
-      const key = parsed.API_SERVER_KEY?.trim()
-      if (key) return key
+      const apiKey = parsed.API_SERVER_KEY?.trim()
+      const host = parsed.API_SERVER_HOST?.trim()
+      const port = parsed.API_SERVER_PORT?.trim()
+      if (apiKey || host || port) {
+        return {
+          ...(apiKey ? { apiKey } : {}),
+          ...(host ? { host } : {}),
+          ...(port ? { port } : {}),
+        }
+      }
     } catch {
-      // Credential discovery is best effort. Availability reports missing/unreachable API state.
+      // Hermes config discovery is best effort; availability reports the actionable failure.
     }
   }
-  return undefined
+  return {}
+}
+
+async function yamlSettingsFromFiles(paths: readonly string[]): Promise<HermesApiFileSettings> {
+  for (const path of paths) {
+    try {
+      const config = asRecord(parseYaml(await readFile(path, 'utf8')))
+      const gateway = asRecord(config.gateway)
+      const apiServer = asRecord(gateway.api_server)
+      const apiKey = textField(apiServer, 'key')
+      const host = textField(apiServer, 'host')
+      const rawPort = apiServer.port
+      const port = typeof rawPort === 'number' && Number.isFinite(rawPort)
+        ? String(rawPort)
+        : typeof rawPort === 'string' && rawPort.trim()
+          ? rawPort.trim()
+          : undefined
+      if (apiKey || host || port) {
+        return {
+          ...(apiKey ? { apiKey } : {}),
+          ...(host ? { host } : {}),
+          ...(port ? { port } : {}),
+        }
+      }
+    } catch {
+      // Use the next standard Hermes config location.
+    }
+  }
+  return {}
+}
+
+function clientHost(value: string | undefined): string {
+  const host = value?.trim() || '127.0.0.1'
+  if (host === '0.0.0.0' || host === '::' || host === '[::]') return '127.0.0.1'
+  return host.includes(':') && !host.startsWith('[') ? `[${host}]` : host
 }
 
 export async function resolveHermesApiClientConfig(
   config: HermesApiClientConfig = {},
 ): Promise<ResolvedHermesApiClientConfig> {
+  const roots = unique([
+    process.env.HERMES_HOME,
+    join(homedir(), '.hermes'),
+    process.platform === 'win32' && process.env.LOCALAPPDATA
+      ? join(process.env.LOCALAPPDATA, 'hermes')
+      : undefined,
+  ])
+  const envFiles = unique([
+    ...(config.envFiles ?? []),
+    ...roots.map(root => join(root, '.env')),
+  ])
+  const configFiles = roots.map(root => join(root, 'config.yaml'))
+  const [fileEnv, fileConfig] = await Promise.all([
+    envSettingsFromFiles(envFiles),
+    yamlSettingsFromFiles(configFiles),
+  ])
+
   const port = process.env.HERMES_API_PORT?.trim()
     || process.env.API_SERVER_PORT?.trim()
+    || fileEnv.port
+    || fileConfig.port
     || '8642'
+  const host = process.env.API_SERVER_HOST?.trim()
+    || fileEnv.host
+    || fileConfig.host
   const apiUrl = (config.apiUrl
     ?? process.env.HERMES_API_URL
-    ?? `http://127.0.0.1:${port}`)
+    ?? `http://${clientHost(host)}:${port}`)
     .replace(/\/+$/, '')
 
-  let apiKey = config.apiKey?.trim()
+  const apiKey = config.apiKey?.trim()
     || process.env.HERMES_API_KEY?.trim()
     || process.env.API_SERVER_KEY?.trim()
-
-  if (!apiKey) {
-    const envFiles = unique([
-      ...(config.envFiles ?? []),
-      process.env.HERMES_HOME ? join(process.env.HERMES_HOME, '.env') : undefined,
-      join(homedir(), '.hermes', '.env'),
-      process.platform === 'win32' && process.env.LOCALAPPDATA
-        ? join(process.env.LOCALAPPDATA, 'hermes', '.env')
-        : undefined,
-    ])
-    apiKey = await apiKeyFromEnvFiles(envFiles)
-  }
+    || fileEnv.apiKey
+    || fileConfig.apiKey
 
   return {
     apiUrl,
