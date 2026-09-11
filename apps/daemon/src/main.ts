@@ -69,6 +69,8 @@ const dbPath = process.env.AGENT_LENS_DB_PATH
   ?? join(dataRoot, 'agent-lens.db')
 const vaultPath = process.env.AGENT_LENS_VAULT_PATH
   ?? join(dataRoot, 'vault')
+const localePackDirectory = process.env.AGENT_LENS_LOCALE_PACK_DIR
+  ?? join(dataRoot, 'locales')
 const configuredPort = process.env.AGENT_LENS_PORT
   ? Number(process.env.AGENT_LENS_PORT)
   : DEFAULT_AGENT_LENS_HTTP_PORT
@@ -106,6 +108,7 @@ app.use(httpSurfacePlugin, {
   selectProjectDirectory: () => projectDirectoryPicker.select(),
   dataRuntimeHealth: () => app.context.dataRuntime.snapshot(),
   healthDetails: () => foregroundGate ? { maintenanceGate: foregroundGate.snapshot() } : {},
+  localePackDirectory,
 })
 app.use(webPlugin, { staticDir: webRoot })
 
