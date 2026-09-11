@@ -433,8 +433,7 @@ export class DefaultPiLiveService implements PiLiveService {
           const resources = startupResources(event.resources)
           if (resources) {
             runtime.startupResources = resources
-            runtime.startupAuditResources ??= copyStartupResources(resources)
-            runtime.startupResourcesCapturedAt ??= new Date().toISOString()
+            this.updateStartupAuditCandidate(runtime, resources)
           }
         } else if (event.type === 'package_updates') {
           runtime.packageUpdates = packageUpdates(event.updates)
@@ -707,15 +706,19 @@ export class DefaultPiLiveService implements PiLiveService {
     }
   }
 
+  private updateStartupAuditCandidate(runtime: OwnedRuntime, resources: PiLiveStartupResources): void {
+    const attempt = `${runtime.generation}:${runtime.initializationStartedAt}`
+    if (runtime.startupAuditCompleted === attempt || runtime.startupAuditPending === attempt) return
+    runtime.startupAuditResources = copyStartupResources(resources)
+    runtime.startupResourcesCapturedAt = new Date().toISOString()
+  }
+
   private updateRuntimeResources(runtime: OwnedRuntime, state: PiLiveRuntimeState): void {
     if (state.packageUpdateCheck) runtime.packageUpdateCheck = state.packageUpdateCheck
     if (state.packageUpdates) runtime.packageUpdates = [...state.packageUpdates]
     if (!state.startupResources) return
     runtime.startupResources = state.startupResources
-    if (!runtime.startupAuditResources) {
-      runtime.startupAuditResources = copyStartupResources(state.startupResources)
-      runtime.startupResourcesCapturedAt ??= new Date().toISOString()
-    }
+    this.updateStartupAuditCandidate(runtime, state.startupResources)
   }
 
   private persistStartupResourcesBestEffort(runtime: OwnedRuntime, state: PiLiveRuntimeState): void {
