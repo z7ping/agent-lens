@@ -113,3 +113,31 @@ test('OpenCode parser replay neutralizes legacy row fallback nativeId', async ()
   assert.equal(normalized.evidenceCandidates[0]?.nativeStableId, undefined)
 })
 
+test('OpenCode sessionless row stays evidence-only instead of creating an unknown native session', async () => {
+  const value = openCodeSourceInternals.recordFromRow({
+    row_id: 99,
+    id: 'part-99',
+    message_id: 'message-99',
+    session_id: null,
+    time_created: 1_787_000_000_000,
+    data: JSON.stringify({ type: 'text', text: 'orphan' }),
+    message_data: JSON.stringify({ role: 'user' }),
+    directory: null,
+    session_title: null,
+  }, {
+    installation: {
+      id: 'installation-opencode',
+      hostId: 'host',
+      productId: 'opencode',
+      dataRoot: '/tmp',
+      firstSeenAt: '2026-09-11T00:00:00.000Z',
+      lastSeenAt: '2026-09-11T00:00:00.000Z',
+    },
+    abortSignal: new AbortController().signal,
+  } as SourceExecutionContext, 'history')
+
+  assert.equal(value.sourceSessionNativeId, undefined)
+  const normalized = await normalizeOpenCodeRecord(value, {} as never)
+  assert.deepEqual(normalized.observations, [])
+  assert.equal(normalized.evidenceCandidates.length, 1)
+})
