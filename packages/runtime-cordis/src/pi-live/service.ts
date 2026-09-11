@@ -600,6 +600,15 @@ export class DefaultPiLiveService implements PiLiveService {
     const runtime = this.runtimes.get(id)
     if (runtime) {
       await runtime.startupAuditProbeTask?.catch(() => undefined)
+      if (runtime.status === 'ready' && runtime.handle) {
+        const state = await runtime.handle.state().catch(() => undefined)
+        if (state) {
+          this.persistSessionIfChanged(runtime, state)
+          this.updateRuntimeResources(runtime, state)
+          this.persistStartupResourcesBestEffort(runtime, state)
+          this.persistPackageUpdatesBestEffort(runtime, runtime.generation)
+        }
+      }
       await runtime.startupAuditTask?.catch(() => undefined)
       await runtime.startupPackageAuditTask?.catch(() => undefined)
       await this.terminateRuntime(runtime, true)
