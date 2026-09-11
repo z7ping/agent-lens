@@ -42,6 +42,11 @@ function parseStartInput(value: unknown): HermesLiveStartInput {
     throw new TypeError('Hermes Live start input must be an object')
   }
   const record = value as Record<string, unknown>
+  if (record.cwd !== undefined || record.workspacePath !== undefined) {
+    throw new TypeError(
+      'Hermes Live does not support per-session cwd through the official API; configure the Hermes gateway workspace instead',
+    )
+  }
   if (record.title !== undefined && typeof record.title !== 'string') {
     throw new TypeError('Hermes Live start input title must be a string')
   }
