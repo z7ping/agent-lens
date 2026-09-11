@@ -4,7 +4,7 @@ import type {
   LiveRuntimeState,
   LiveSnapshot,
 } from '@agent-lens/core'
-import { LiveEventChannel } from '@agent-lens/live-support'
+import { formatLiveError, LiveEventChannel } from '@agent-lens/live-support'
 import { HermesApiClient } from './client.js'
 
 export interface HermesLiveStartInput {
@@ -28,13 +28,6 @@ const TERMINAL_RUN_STATUSES = new Set([
   'cancelled',
   'interrupted',
 ])
-
-function safeError(error: unknown): string {
-  return (error instanceof Error ? error.message : String(error))
-    .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
-    .replace(/[\r\n]+/g, ' ')
-    .slice(0, 1_000)
-}
 
 function parseStartInput(value: unknown): HermesLiveStartInput {
   if (value === undefined || value === null) return {}
@@ -74,7 +67,7 @@ export class DefaultHermesLiveService {
     } catch (error) {
       return {
         available: false,
-        reason: safeError(error),
+        reason: formatLiveError(error, 1_000),
       }
     }
   }
@@ -107,7 +100,7 @@ export class DefaultHermesLiveService {
       runtime.events.publish({
         type: 'runtime_status',
         status: 'failed',
-        error: safeError(error),
+        error: formatLiveError(error, 1_000),
       })
       this.runtimes.delete(runtime.id)
       runtime.events.clear()
@@ -227,7 +220,7 @@ export class DefaultHermesLiveService {
         runtime.events.publish({
           event: 'transport.error',
           run_id: runId,
-          error: safeError(error),
+          error: formatLiveError(error, 1_000),
         })
       }
     } finally {
