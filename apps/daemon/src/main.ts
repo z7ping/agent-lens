@@ -143,6 +143,16 @@ app.use(httpSurfacePlugin, {
     })),
   }),
   integrationStatus: productId => app.resolveIntegrationStatus(productId),
+  integrationAuthorization: {
+    grant: async (productId, capabilities) => {
+      integrationAuthorization = await grantIntegrationCapabilities(
+        integrationAuthorizationFile,
+        productId,
+        capabilities,
+      )
+      return authorizedIntegrationCapabilities(integrationAuthorization, productId)
+    },
+  },
 })
 app.use(webPlugin, { staticDir: webRoot })
 
