@@ -180,7 +180,10 @@ export class IntegrationPreferenceService {
         : [...current.displayOrder]
       const acknowledgedIntegrationIds = request.acknowledgedIntegrationIds === undefined
         ? [...current.acknowledgedIntegrationIds]
-        : normalizedOfficialIds(request.acknowledgedIntegrationIds)
+        : normalizedOfficialIds([
+            ...current.acknowledgedIntegrationIds,
+            ...request.acknowledgedIntegrationIds,
+          ])
 
       const next: IntegrationPreferences = {
         version: INTEGRATION_PREFERENCES_VERSION,
