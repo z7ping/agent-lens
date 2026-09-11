@@ -30,6 +30,7 @@ interface PluginRegistration {
 interface RegisteredIntegration {
   integration: AgentLensIntegration
   enabled: boolean
+  authorizedCapabilities: ReadonlySet<AgentIntegrationCapability>
 }
 
 export interface AgentLensIntegrationFailure {
@@ -86,10 +87,26 @@ export class AgentLensApplication {
   }
 
   listIntegrationStatuses(): AgentIntegrationRuntimeStatus[] {
-    return [...this.integrations.values()].map(({ integration, enabled }) => {
+    return [...this.integrations.values()].map(({ integration, enabled, authorizedCapabilities }) => {
       const overrides = this.capabilityStatus.get(integration.manifest.integrationId)
+      const authorization = new Map<AgentIntegrationCapability, AgentIntegrationCapabilityStatus>()
+      if (enabled) {
+        for (const component of integration.components) {
+          if (component.authorization !== 'explicit') continue
+          if (component.capabilities.every(capability => authorizedCapabilities.has(capability))) continue
+          for (const capability of component.capabilities) {
+            authorization.set(capability, {
+              capability,
+              availability: 'unavailable',
+              reason: '等待用户授权',
+            })
+          }
+        }
+      }
       const capabilities = integration.manifest.capabilities.map(capability =>
-        overrides?.get(capability) ?? {
+        overrides?.get(capability)
+        ?? authorization.get(capability)
+        ?? {
           capability,
           availability: 'available' as const,
         }
@@ -185,17 +202,29 @@ export class AgentLensApplication {
    */
   useIntegration(
     integration: AgentLensIntegration,
-    options: { enabled?: boolean } = {},
+    options: {
+      enabled?: boolean
+      authorizedCapabilities?: readonly AgentIntegrationCapability[]
+    } = {},
   ): this {
     this.assertConfigurable()
     if (this.integrations.has(integration.manifest.integrationId)) {
       throw new Error(`Agent Integration already registered: ${integration.manifest.integrationId}`)
     }
     const enabled = options.enabled ?? true
-    this.integrations.set(integration.manifest.integrationId, { integration, enabled })
+    const authorizedCapabilities = new Set(options.authorizedCapabilities ?? [])
+    this.integrations.set(integration.manifest.integrationId, {
+      integration,
+      enabled,
+      authorizedCapabilities,
+    })
 
     for (const component of integration.components) {
       if (component.activation === 'enabled' && !enabled) continue
+      if (
+        component.authorization === 'explicit'
+        && !component.capabilities.every(capability => authorizedCapabilities.has(capability))
+      ) continue
       if (component.lifecycle === 'plugin') {
         assertAgentLensPluginCompatible(component.plugin.manifest)
       }
