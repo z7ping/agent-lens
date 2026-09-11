@@ -6,6 +6,7 @@ import {
   assertPiSdkModule,
   assertPiSdkSession,
   inspectPiSdkCompatibility,
+  resolvePiSdkPackageUpdateApi,
   resolvePiSdkResourceApi,
 } from './pi-sdk-adapter'
 
@@ -46,6 +47,15 @@ test('0.84.x 使用 0.84.4 官方类型基线标记为已验证版本', () => {
   })
   assert.equal(inspectPiSdkCompatibility('0.85.0').testedVersion, false)
   assert.equal(inspectPiSdkCompatibility(undefined).testedVersion, false)
+})
+
+test('0.84.4 官方 SDK 暴露结构化包更新检查能力', () => {
+  const live = assertPiSdkModule(officialPiSdk, '/pi/dist/index.js', PI_SDK_TYPE_BASELINE)
+  const updates = resolvePiSdkPackageUpdateApi(live)
+  assert.ok(updates)
+  assert.equal(typeof updates.getAgentDir, 'function')
+  assert.equal(typeof updates.DefaultPackageManager, 'function')
+  assert.equal(typeof updates.DefaultPackageManager.prototype.checkForAvailableUpdates, 'function')
 })
 
 test('0.84.4 官方 SDK 暴露 Pi Source P0/P1 所需纯资源解析能力', () => {
