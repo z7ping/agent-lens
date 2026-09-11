@@ -7,6 +7,7 @@ import type {
   CapturePolicyResponseDto,
   IntegrationAuthorizationCapabilityDto,
   IntegrationManagementItemDto,
+  IntegrationPackageOperationResponseDto,
   IntegrationToolDiscoveryItemDto,
 } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
@@ -382,7 +383,7 @@ function IntegrationControl({
   management: IntegrationManagementItemDto | undefined
   policy: CapturePolicyResponseDto | null
   onChange(sourceId: string, enabled: boolean): Promise<void>
-  onInstall(integrationId: string): Promise<unknown>
+  onInstall(integrationId: string): Promise<IntegrationPackageOperationResponseDto>
   onAuthorize(
     productId: string,
     capabilities: readonly IntegrationAuthorizationCapabilityDto[],
@@ -430,7 +431,10 @@ function IntegrationControl({
     setInstalling(true)
     setError('')
     try {
-      await onInstall(management.integrationId)
+      const result = await onInstall(management.integrationId)
+      if (result.operation.status !== 'completed' || !result.state.installed) {
+        throw new Error(result.operation.message || result.state.reason || t('integration.installFailed'))
+      }
       await onChange(management.integrationId, true)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
@@ -563,8 +567,8 @@ function AgentCard({ agent, management, discovery, discoveryScanning, discoveryE
   discoveryError: string
   policy: CapturePolicyResponseDto | null
   onCaptureChange(sourceId: string, enabled: boolean): Promise<void>
-  onInstall(integrationId: string): Promise<unknown>
-  onRemove(integrationId: string): Promise<unknown>
+  onInstall(integrationId: string): Promise<IntegrationPackageOperationResponseDto>
+  onRemove(integrationId: string): Promise<IntegrationPackageOperationResponseDto>
   onAuthorize(
     productId: string,
     capabilities: readonly IntegrationAuthorizationCapabilityDto[],
