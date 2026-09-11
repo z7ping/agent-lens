@@ -51,13 +51,13 @@ const INBOX_POLL_MS = 250
 
 interface HermesDbEnvelope {
   message: Record<string, unknown>
-  session: { nativeSessionId: string; cwd?: string; title?: string }
+  session: { nativeSessionId?: string; cwd?: string; title?: string }
   captureChannel?: 'history' | 'native-tail'
 }
 
 interface HermesHookEnvelope {
   runtimeEvent: Record<string, unknown>
-  session: { nativeSessionId: string; cwd?: string }
+  session: { nativeSessionId?: string; cwd?: string }
   captureChannel: 'runtime-hook'
 }
 
@@ -97,15 +97,16 @@ function stringField(record: Record<string, unknown>, ...names: string[]): strin
 function hermesEnvelope(value: unknown, record: SourceRecord): HermesEnvelope {
   const payload = asRecord(value)
   const session = asRecord(payload.session)
-  const nativeSessionId = stringField(session, 'nativeSessionId')
-    ?? record.sourceSessionNativeId
-    ?? 'unknown'
+  const storedSessionId = stringField(session, 'nativeSessionId') ?? record.sourceSessionNativeId
+  const nativeSessionId = storedSessionId === 'unknown' || storedSessionId === 'runtime-unknown'
+    ? undefined
+    : storedSessionId
   const cwd = stringField(session, 'cwd')
 
   if (payload.captureChannel === 'runtime-hook') {
     return {
       runtimeEvent: asRecord(payload.runtimeEvent),
-      session: { nativeSessionId, ...(cwd ? { cwd } : {}) },
+      session: { ...(nativeSessionId ? { nativeSessionId } : {}), ...(cwd ? { cwd } : {}) },
       captureChannel: 'runtime-hook',
     }
   }
@@ -117,7 +118,7 @@ function hermesEnvelope(value: unknown, record: SourceRecord): HermesEnvelope {
   return {
     message: asRecord(payload.message),
     session: {
-      nativeSessionId,
+      ...(nativeSessionId ? { nativeSessionId } : {}),
       ...(cwd ? { cwd } : {}),
       ...(title ? { title } : {}),
     },
@@ -309,7 +310,7 @@ function dbRecord(
   ctx: SourceExecutionContext,
   captureChannel: NonNullable<HermesDbEnvelope['captureChannel']>,
 ): SourceRecord {
-  const nativeSessionId = row.session_id ?? 'unknown'
+  const nativeSessionId = row.session_id ?? undefined
   const fingerprint = rowFingerprint(row)
   const nativeId = row.id == null ? undefined : String(row.id)
   const recordKey = nativeId ?? `row:${row.row_id}`
@@ -333,7 +334,7 @@ function dbRecord(
     id: `hermes-db-${sha256(`${recordKey}:${fingerprint}`).slice(0, 32)}`,
     sourceId: SOURCE_ID,
     installationId: ctx.installation.id,
-    sourceSessionNativeId: nativeSessionId,
+    ...(nativeSessionId ? { sourceSessionNativeId: nativeSessionId } : {}),
     nativeType: `message/${row.role ?? 'unknown'}`,
     ...(nativeId ? { nativeId } : {}),
     sourceSequence: row.row_id * 10,
@@ -344,7 +345,7 @@ function dbRecord(
     payload: {
       message,
       session: {
-        nativeSessionId,
+        ...(nativeSessionId ? { nativeSessionId } : {}),
         ...(row.cwd ? { cwd: row.cwd } : {}),
         ...(title ? { title } : {}),
       },
@@ -406,8 +407,8 @@ function parseInboxEnvelope(text: string, fileName: string): InboxEnvelope {
   }
 }
 
-function hookSessionId(event: Record<string, unknown>): string {
-  return stringField(event, 'session_id', 'task_id', 'session_key') ?? 'runtime-unknown'
+function hookSessionId(event: Record<string, unknown>): string | undefined {
+  return stringField(event, 'session_id', 'task_id', 'session_key')
 }
 
 function hookCallId(event: Record<string, unknown>): string | undefined {
@@ -433,7 +434,7 @@ function hookRecord(envelope: InboxEnvelope, filePath: string, ctx: SourceExecut
     id: `hermes-hook-${sha256(envelope.id).slice(0, 32)}`,
     sourceId: SOURCE_ID,
     installationId: ctx.installation.id,
-    sourceSessionNativeId: sessionId,
+    ...(sessionId ? { sourceSessionNativeId: sessionId } : {}),
     nativeType: `hook/${eventName}`,
     ...(nativeId ? { nativeId } : {}),
     occurredAt,
@@ -442,7 +443,7 @@ function hookRecord(envelope: InboxEnvelope, filePath: string, ctx: SourceExecut
     fingerprint: sha256(JSON.stringify(event)),
     payload: {
       runtimeEvent: event,
-      session: { nativeSessionId: sessionId, ...(cwd ? { cwd } : {}) },
+      session: { ...(sessionId ? { nativeSessionId: sessionId } : {}), ...(cwd ? { cwd } : {}) },
       captureChannel: 'runtime-hook',
     } satisfies HermesHookEnvelope,
     parserVersion: PARSER_VERSION,
@@ -744,6 +745,9 @@ function evidenceFor(record: SourceRecord, envelope: HermesEnvelope): EvidenceCa
 }
 
 function identity(_record: SourceRecord, envelope: HermesEnvelope): ObservationIdentityHints {
+  if (!envelope.session.nativeSessionId) {
+    throw new Error('Hermes observation requires a proven native session id')
+  }
   return {
     nativeSessionId: envelope.session.nativeSessionId,
     ...(envelope.session.cwd ? { workspacePath: envelope.session.cwd } : {}),
@@ -903,6 +907,9 @@ export async function normalizeHermesRecord(
   _ctx: SourceNormalizationContext,
 ): Promise<NormalizedSourceOutput> {
   const envelope = hermesEnvelope(record.payload, record)
+  if (!envelope.session.nativeSessionId) {
+    return { observations: [], evidenceCandidates: [evidenceFor(record, envelope)] }
+  }
   const observations = isHermesHookEnvelope(envelope)
     ? normalizeHookEnvelope(record, envelope)
     : normalizeDbEnvelope(record, envelope)
