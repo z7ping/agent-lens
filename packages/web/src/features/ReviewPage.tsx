@@ -896,6 +896,7 @@ export function ReviewPage({
   resumingPiSession?: boolean
   piResumeError?: string
 }) {
+  const { t } = useTranslation('review')
   const snapshot = useClientSnapshot(model)
   const { sessionId } = useParams()
   const navigate = useNavigate()
@@ -923,7 +924,7 @@ export function ReviewPage({
   const detail = review.detail
   const visibleHubSessions = useMemo(() => hubSessions.filter(item => hubSessionVisibility(item, review)), [hubSessions, review.filters])
   const sessionGroups = useMemo(() => {
-    const groups = new Map<'今天' | '昨天' | '更早', UnifiedReviewSessionListEntry[]>()
+    const groups = new Map<ReviewDayGroup, UnifiedReviewSessionListEntry[]>()
     const now = new Date()
     const combined: UnifiedReviewSessionListEntry[] = [
       ...(review.response?.items ?? []).map(item => ({ origin: 'local' as const, id: item.id, activityAt: item.endedAt || item.startedAt, local: item })),
@@ -942,8 +943,12 @@ export function ReviewPage({
       items.push(item)
       groups.set(label, items)
     }
-    return [...groups.entries()].map(([label, items]) => ({ label, items }))
-  }, [review.response?.items, visibleHubSessions])
+    return [...groups.entries()].map(([key, items]) => ({
+      key,
+      label: t(`local.day.${key}`),
+      items,
+    }))
+  }, [review.response?.items, visibleHubSessions, t])
 
   useEffect(() => {
     if (embedded) {
@@ -1207,7 +1212,9 @@ export function ReviewPage({
       return {
         id: interaction.id,
         ordinal: interaction.ordinal,
-        label: interaction.trigger === 'background' ? '后台活动' : `第 ${interaction.ordinal} 轮`,
+        label: interaction.trigger === 'background'
+          ? t('local.interaction.background')
+          : t('local.interaction.round', { count: interaction.ordinal }),
         state: 'settled',
         preview: stats.preview || undefined,
         toolCount: stats.toolCount,
@@ -1218,26 +1225,28 @@ export function ReviewPage({
     })
     const title = historyTaskPresentation(
       detail,
-      detail.projectName ? `${detail.projectName} 会话` : `${agentLabel(detail.sourceIds[0] ?? '')} 会话`,
+      detail.projectName
+        ? t('local.interaction.projectSession', { project: detail.projectName })
+        : t('local.interaction.agentSession', { agent: agentLabel(detail.sourceIds[0] ?? '') }),
     ).title
     return {
       id: detail.id,
       title,
       agentLabel: detail.sourceIds.map(id => agentLabel(id)).join(' / '),
       projectLabel: detail.projectName,
-      statusLabel: detail.errorCount > 0 ? '有错误' : undefined,
+      statusLabel: detail.errorCount > 0 ? t('local.interaction.errors') : undefined,
       startedAt: detail.startedAt,
       endedAt: detail.endedAt,
       workspacePath: detail.workspacePath,
       metrics: [
-        { value: detail.interactionCount, label: '轮次' },
-        { value: detail.toolCount, label: '调用' },
-        ...(detail.errorCount > 0 ? [{ value: detail.errorCount, label: '错误', tone: 'danger' as const }] : []),
-        { value: duration(detail.durationMs), label: '跨度' },
+        { value: detail.interactionCount, label: t('local.interaction.metricRounds') },
+        { value: detail.toolCount, label: t('local.interaction.metricCalls') },
+        ...(detail.errorCount > 0 ? [{ value: detail.errorCount, label: t('local.interaction.metricErrors'), tone: 'danger' as const }] : []),
+        { value: duration(detail.durationMs), label: t('local.interaction.metricSpan') },
       ],
       rounds,
     }
-  }, [detail, threshold])
+  }, [detail, threshold, t])
   const annotatedInteractions = useMemo(() => {
     if (!detail || !taskDetailModel) return []
     const byId = new Map(detail.interactions.map(interaction => [interaction.id, interaction] as const))
@@ -1266,10 +1275,10 @@ export function ReviewPage({
   }
 
   const emptyLabel = roundFilter === 'errors'
-    ? '完整会话没有错误轮次。'
+    ? t('local.interaction.noErrors')
     : roundFilter === 'latency'
-      ? '完整会话没有相对耗时较高的轮次。'
-      : '当前筛选条件没有匹配的轮次。'
+      ? t('local.interaction.noLatency')
+      : t('local.interaction.noMatches')
 
   const toggleRoundExpansion = () => {
     const pane = readerPaneRef.current
