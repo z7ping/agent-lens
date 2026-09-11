@@ -204,11 +204,11 @@ function runtimeResourcesValue(value: JsonValue): JsonValue | undefined {
   return payloadRecord(value).resources
 }
 
-function runtimeResourceSummary(value: JsonValue): string {
+function runtimeStartupSummary(value: JsonValue): string {
   const payload = payloadRecord(value)
   const resources = payload.resources
   if (!resources || typeof resources !== 'object' || Array.isArray(resources)) {
-    return agentLensI18n.t('review:local.event.runtimeResourcesNotCaptured')
+    return agentLensI18n.t('review:local.event.runtimeStartupNotCaptured')
   }
   const record = payloadRecord(resources)
   const parts = [agentLensI18n.t('review:local.event.runtimeResourceCounts', {
@@ -231,7 +231,7 @@ function runtimeResourceSummary(value: JsonValue): string {
   return parts.join(' · ')
 }
 
-function runtimeResourceJson(value: JsonValue): string {
+function runtimeStartupJson(value: JsonValue): string {
   const payload = payloadRecord(value)
   const resources = payload.resources
   if (resources === undefined) return ''
@@ -307,7 +307,7 @@ function EvidenceBadges({ evidence, compact = false }: { evidence: TimelineEvide
 }
 
 function sourceEventLabel(node: ReviewEventNodeDto): string {
-  if (node.kind === 'runtime.startup') return agentLensI18n.t('review:local.event.runtimeStartupResources')
+  if (node.kind === 'runtime.startup') return agentLensI18n.t('review:local.event.runtimeStartupInfo')
   const payload = payloadRecord(node.payload)
   const action = stringValue(payload, 'action', 'event', 'type', 'status').toLowerCase()
   if (node.sourceId === 'codex') {
@@ -340,7 +340,7 @@ function sourceEventLabel(node: ReviewEventNodeDto): string {
 function sourceEventSummary(node: ReviewEventNodeDto): string {
   const payload = payloadRecord(node.payload)
   const action = stringValue(payload, 'action', 'event', 'type', 'status')
-  if (node.kind === 'runtime.startup') return runtimeResourceSummary(node.payload)
+  if (node.kind === 'runtime.startup') return runtimeStartupSummary(node.payload)
   if (node.kind === 'model.changed' || node.kind === 'model.call') {
     const model = stringValue(payload, 'model', 'modelName', 'model_name')
     const provider = stringValue(payload, 'provider', 'modelProvider', 'model_provider')
@@ -595,7 +595,7 @@ function Inspector({ node, onClose, loadSourceRecord }: { node: ReviewNodeDto; o
       ? brief(node.text, 280)
       : ''
   const runtimeResources = node.type === 'event' && node.kind === 'runtime.startup'
-    ? runtimeResourceJson(node.payload)
+    ? runtimeStartupJson(node.payload)
     : ''
 
   return <Drawer
