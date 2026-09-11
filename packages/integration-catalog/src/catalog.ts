@@ -8,6 +8,9 @@ export type OfficialIntegrationId =
   | 'hermes'
   | 'opencode'
 
+export const HERMES_STATE_DB_NAME = 'state.db'
+export const OPENCODE_DB_NAME = 'opencode.db'
+
 export type ToolDiscoveryRootRole = 'config' | 'data'
 
 export interface ToolDiscoveryExecutableDescriptor {
@@ -182,7 +185,7 @@ export const OFFICIAL_INTEGRATION_CATALOG: readonly OfficialIntegrationCatalogEn
         {
           id: 'data',
           role: 'data',
-          marker: 'state.db',
+          marker: HERMES_STATE_DB_NAME,
           candidates: [
             { envVar: 'HERMES_HOME', expandHome: false, exclusiveWhenSet: true },
             { envVar: 'LOCALAPPDATA', append: ['hermes'], platforms: ['win32'], expandHome: false },
@@ -204,7 +207,7 @@ export const OFFICIAL_INTEGRATION_CATALOG: readonly OfficialIntegrationCatalogEn
         {
           id: 'data',
           role: 'data',
-          marker: 'opencode.db',
+          marker: OPENCODE_DB_NAME,
           candidates: [
             { envVar: 'OPENCODE_HOME', expandHome: false },
             { envVar: 'APPDATA', append: ['opencode'], platforms: ['win32'], expandHome: false },
