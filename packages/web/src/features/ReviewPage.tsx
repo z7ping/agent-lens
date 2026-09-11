@@ -207,13 +207,19 @@ function runtimeStartupSummary(value: JsonValue): string {
     return agentLensI18n.t('review:local.event.runtimeStartupNotCaptured')
   }
   const record = payloadRecord(resources)
-  const parts = [agentLensI18n.t('review:local.event.runtimeResourceCounts', {
+  const counts = {
     contexts: arrayCount(record.contexts),
     skills: arrayCount(record.skills),
     prompts: arrayCount(record.prompts),
     extensions: arrayCount(record.extensions),
     themes: arrayCount(record.themes),
-  })]
+  }
+  const hasKnownResources = Object.values(counts).some(count => count > 0)
+  const incomplete = arrayCount(record.diagnostics) > 0
+  const parts = [incomplete && !hasKnownResources
+    ? agentLensI18n.t('review:local.event.runtimeResourcesIncomplete')
+    : agentLensI18n.t('review:local.event.runtimeResourceCounts', counts)]
+  if (incomplete && hasKnownResources) parts.push(agentLensI18n.t('review:local.event.runtimeResourcesPartial'))
   const packageStatus = typeof payload.packageUpdateCheck === 'string' ? payload.packageUpdateCheck : ''
   if (packageStatus === 'complete') {
     parts.push(agentLensI18n.t('review:local.event.runtimePackageUpdatesCount', {
