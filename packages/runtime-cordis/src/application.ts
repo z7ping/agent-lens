@@ -1,4 +1,9 @@
 import { Context, type Fiber, type Plugin } from '@deepseek-ai/cordis'
+import type {
+  AgentIntegrationCapability,
+  AgentIntegrationCapabilityStatus,
+  AgentIntegrationRuntimeStatus,
+} from '@agent-lens/core'
 import './context'
 import {
   assertAgentLensPluginCompatible,
@@ -19,6 +24,12 @@ interface PluginRegistration {
   validateManifest: boolean
   integrationId?: string
   componentPluginId?: string
+  componentCapabilities?: readonly AgentIntegrationCapability[]
+}
+
+interface RegisteredIntegration {
+  integration: AgentLensIntegration
+  enabled: boolean
 }
 
 export interface AgentLensIntegrationFailure {
@@ -34,13 +45,29 @@ export interface AgentLensApplicationOptions {
   }>
 }
 
+function integrationAvailability(
+  capabilities: readonly AgentIntegrationCapabilityStatus[],
+): AgentIntegrationRuntimeStatus['availability'] {
+  if (!capabilities.length) return 'unavailable'
+  const available = capabilities.filter(item => item.availability === 'available').length
+  const unavailable = capabilities.filter(item => item.availability === 'unavailable').length
+  const errors = capabilities.filter(item => item.availability === 'error').length
+  if (errors === capabilities.length) return 'error'
+  if (unavailable === capabilities.length) return 'unavailable'
+  if (errors > 0 || unavailable > 0) return 'partial'
+  if (available === capabilities.length) return 'available'
+  return 'partial'
+}
+
 export class AgentLensApplication {
   readonly context: Context
 
   private readonly registrations: PluginRegistration[] = []
   private readonly fibers: Fiber[] = []
+  private readonly integrations = new Map<string, RegisteredIntegration>()
   private readonly failedIntegrations = new Set<string>()
   private readonly _integrationFailures: AgentLensIntegrationFailure[] = []
+  private readonly capabilityStatus = new Map<string, Map<AgentIntegrationCapability, AgentIntegrationCapabilityStatus>>()
   private _state: AgentLensApplicationState = 'idle'
 
   constructor(options: AgentLensApplicationOptions = {}) {
@@ -56,6 +83,29 @@ export class AgentLensApplication {
 
   get integrationFailures(): readonly AgentLensIntegrationFailure[] {
     return this._integrationFailures
+  }
+
+  listIntegrationStatuses(): AgentIntegrationRuntimeStatus[] {
+    return [...this.integrations.values()].map(({ integration, enabled }) => {
+      const overrides = this.capabilityStatus.get(integration.manifest.integrationId)
+      const capabilities = integration.manifest.capabilities.map(capability =>
+        overrides?.get(capability) ?? {
+          capability,
+          availability: 'available' as const,
+        }
+      )
+      return {
+        integrationId: integration.manifest.integrationId,
+        productId: integration.manifest.productId,
+        enabled,
+        availability: integrationAvailability(capabilities),
+        capabilities,
+      }
+    })
+  }
+
+  integrationStatus(productId: string): AgentIntegrationRuntimeStatus | null {
+    return this.listIntegrationStatuses().find(status => status.productId === productId) ?? null
   }
 
   /** Register an AgentLens extension plugin with Plugin API validation. */
@@ -82,7 +132,12 @@ export class AgentLensApplication {
     options: { enabled?: boolean } = {},
   ): this {
     this.assertConfigurable()
+    if (this.integrations.has(integration.manifest.integrationId)) {
+      throw new Error(`Agent Integration already registered: ${integration.manifest.integrationId}`)
+    }
     const enabled = options.enabled ?? true
+    this.integrations.set(integration.manifest.integrationId, { integration, enabled })
+
     for (const component of integration.components) {
       if (component.activation === 'enabled' && !enabled) continue
       if (component.lifecycle === 'plugin') {
@@ -94,6 +149,7 @@ export class AgentLensApplication {
         validateManifest: component.lifecycle === 'plugin',
         integrationId: integration.manifest.integrationId,
         componentPluginId: component.pluginId,
+        componentCapabilities: component.capabilities,
       })
     }
     return this
@@ -122,6 +178,7 @@ export class AgentLensApplication {
     this._state = 'starting'
     this.failedIntegrations.clear()
     this._integrationFailures.length = 0
+    this.capabilityStatus.clear()
     const load = this.context.plugin.bind(this.context) as (
       plugin: Plugin<unknown>,
       config?: unknown,
@@ -130,6 +187,7 @@ export class AgentLensApplication {
     try {
       for (const registration of this.registrations) {
         if (registration.integrationId && this.failedIntegrations.has(registration.integrationId)) {
+          this.markComponentUnavailable(registration, '同一智能体集成的前序组件启动失败')
           continue
         }
         try {
@@ -145,6 +203,7 @@ export class AgentLensApplication {
         } catch (error) {
           if (!registration.integrationId || !registration.componentPluginId) throw error
           this.failedIntegrations.add(registration.integrationId)
+          this.markComponentError(registration)
           this._integrationFailures.push({
             integrationId: registration.integrationId,
             componentPluginId: registration.componentPluginId,
@@ -180,6 +239,33 @@ export class AgentLensApplication {
     } finally {
       this._state = 'stopped'
     }
+  }
+
+  private markComponentError(registration: PluginRegistration): void {
+    if (!registration.integrationId) return
+    const statuses = this.capabilityStatus.get(registration.integrationId) ?? new Map()
+    for (const capability of registration.componentCapabilities ?? []) {
+      statuses.set(capability, {
+        capability,
+        availability: 'error',
+        reason: `组件启动失败：${registration.componentPluginId ?? 'unknown'}`,
+      })
+    }
+    this.capabilityStatus.set(registration.integrationId, statuses)
+  }
+
+  private markComponentUnavailable(registration: PluginRegistration, reason: string): void {
+    if (!registration.integrationId) return
+    const statuses = this.capabilityStatus.get(registration.integrationId) ?? new Map()
+    for (const capability of registration.componentCapabilities ?? []) {
+      if (statuses.has(capability)) continue
+      statuses.set(capability, {
+        capability,
+        availability: 'unavailable',
+        reason,
+      })
+    }
+    this.capabilityStatus.set(registration.integrationId, statuses)
   }
 
   private assertConfigurable(): void {
