@@ -52,6 +52,17 @@ test('declarative discovery roots respect environment precedence without resolvi
   assert.equal(roots.some(item => item.path === 'relative-sessions'), false)
 })
 
+test('Hermes and OpenCode keep their legacy non-expanding explicit home semantics', () => {
+  assert.deepEqual(
+    resolveHermesRoots({ HERMES_HOME: '~/custom-hermes' }, home, 'linux'),
+    ['~/custom-hermes'],
+  )
+  assert.equal(
+    resolveOpenCodeRoots({ OPENCODE_HOME: '~/custom-opencode' }, home, 'linux')[0],
+    '~/custom-opencode',
+  )
+})
+
 test('Hermes and OpenCode source roots remain centralized in the catalog package', () => {
   assert.deepEqual(
     resolveHermesRoots({ HERMES_HOME: '/srv/hermes' }, home, 'linux'),
