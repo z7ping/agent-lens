@@ -75,7 +75,7 @@ function WorkspaceBreadcrumb({
 }
 
 function Shell({ model }: { model: AgentLensClientModel }) {
-  const { t } = useTranslation(['shell', 'common'])
+  const { t } = useTranslation(['shell', 'common', 'navigation'])
   const snapshot = useClientSnapshot(model)
   const location = useLocation()
   const navigate = useNavigate()
@@ -162,7 +162,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
         mobileOpen={mobileNavigationOpen}
         onMobileClose={() => setMobileNavigationOpen(false)}
       />
-      {mobileNavigationOpen && <button type="button" className="workspace-mobile-backdrop" aria-label="关闭工作区导航" onClick={() => setMobileNavigationOpen(false)}/>} 
+      {mobileNavigationOpen && <button type="button" className="workspace-mobile-backdrop" aria-label={t('navigation:closeWorkspaceNavigation')} onClick={() => setMobileNavigationOpen(false)}/>} 
       <div ref={mainRef} className="app-main">
         <WorkspaceBreadcrumb
           pathname={location.pathname}
@@ -197,8 +197,8 @@ function Shell({ model }: { model: AgentLensClientModel }) {
         </Suspense>
         {onLocalReview && <ReviewStateOverlay model={model} snapshot={snapshot}/>} 
         {onAgents && <AgentsStateOverlay model={model} snapshot={snapshot}/>} 
-        {onTools && snapshot.usage.hasNewData && <BackgroundDataNotice label="工具分析" hasSseBanner={hasSseBanner} onRefresh={() => model.refreshUsage()}/>} 
-        {onAgents && snapshot.agentsHasNewData && <BackgroundDataNotice label="智能体概览" hasSseBanner={hasSseBanner} onRefresh={() => model.refreshFacetsAndAgents()}/>} 
+        {onTools && snapshot.usage.hasNewData && <BackgroundDataNotice label={t('navigation:tools')} hasSseBanner={hasSseBanner} onRefresh={() => model.refreshUsage()}/>} 
+        {onAgents && snapshot.agentsHasNewData && <BackgroundDataNotice label={t('navigation:agentOverview')} hasSseBanner={hasSseBanner} onRefresh={() => model.refreshFacetsAndAgents()}/>} 
       </div>
     </div>
   </PinnedAgentsProvider>
