@@ -87,6 +87,36 @@ async function fixture() {
   }
 }
 
+test('one broken bundled Integration does not block package lifecycle for other Integrations', async () => {
+  const f = await fixture()
+  try {
+    const piEntry = f.bundle.entryFiles.get('pi')
+    assert.ok(piEntry)
+    await writeFile(piEntry.path, 'corrupt bundled pi payload\n', 'utf8')
+
+    const service = new IntegrationPackageService({
+      bundleDir: f.bundleDir,
+      installRoot: f.installRoot,
+    })
+    await service.initialize()
+
+    const piState = service.state('pi')
+    assert.equal(piState.installed, false)
+    assert.match(piState.reason ?? '', /bundle source unavailable/i)
+
+    const codexInstall = await service.install('codex')
+    assert.equal(codexInstall.status, 'completed')
+    assert.equal(service.state('codex').installed, true)
+    assert.equal(service.state('codex').integrity, 'verified')
+
+    const piInstall = await service.install('pi')
+    assert.equal(piInstall.status, 'failed')
+    assert.equal(piInstall.errorCode, 'bundle-source-unavailable')
+  } finally {
+    await f.cleanup()
+  }
+})
+
 test('installed Integration remains verifiable and loadable when bundled catalog is unavailable', async () => {
   const f = await fixture()
   try {
