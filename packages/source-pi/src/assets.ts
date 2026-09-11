@@ -239,7 +239,7 @@ async function* discoverPiSkills(
     const observedAt = meta.mtime.toISOString()
     yield {
       definition: { type: 'skill', canonicalName: skill.name, displayName: skill.name },
-      binding: { path: dirname(skill.filePath), source: 'pi:skills' },
+      binding: { path: dirname(skill.filePath), source: 'pi:skills', scope: 'user' },
       states: installationOnlyStates(
         skill.filePath,
         observedAt,
@@ -316,7 +316,7 @@ async function* discoverPiExtensions(
       const observedAt = extensionMeta.mtime.toISOString()
       yield {
         definition: { type: 'extension', canonicalName: name, displayName: name },
-        binding: { path: extensionPath, source: 'pi:extensions' },
+        binding: { path: extensionPath, source: 'pi:extensions', scope: 'user' },
         states: installationOnlyStates(
           extensionPath,
           observedAt,
