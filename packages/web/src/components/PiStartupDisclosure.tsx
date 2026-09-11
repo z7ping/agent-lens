@@ -109,10 +109,10 @@ export function PiStartupDisclosure({
   const packageUpdateSummary = packageUpdates.length
     ? t('startup.packageUpdatesAvailable', { count: packageUpdates.length })
     : ''
-  const resourceSummary = [
-    ...resourceGroups.map(group => t('startup.resource.summary', { count: group.values.length, label: group.label })),
-    ...(packageUpdateSummary ? [packageUpdateSummary] : []),
-  ].join(' · ')
+  const resourceSummary = resourceGroups
+    .map(group => t('startup.resource.summary', { count: group.values.length, label: group.label }))
+    .join(' · ')
+  const readySummary = [resourceSummary, packageUpdateSummary].filter(Boolean).join(' · ')
   const startupOutput = state.startupOutput ?? []
 
   const body = <div className="pi-startup-body">
@@ -188,7 +188,7 @@ export function PiStartupDisclosure({
   >
     <summary>
       <span className="pi-startup-summary-state" aria-hidden="true"/>
-      <span className="pi-startup-summary-copy"><b>{t('startup.ready')}</b>{resourceSummary && <small>{resourceSummary}</small>}</span>
+      <span className="pi-startup-summary-copy"><b>{t('startup.ready')}</b>{readySummary && <small>{readySummary}</small>}</span>
       <span className="pi-startup-summary-time">{formatPiStartupDuration(elapsed)}</span>
       <UiIcon className="pi-startup-chevron" name="chevron-down" size={14}/>
     </summary>
