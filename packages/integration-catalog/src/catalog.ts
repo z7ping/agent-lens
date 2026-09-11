@@ -44,11 +44,19 @@ export interface ToolDiscoveryDescriptor {
   roots: readonly ToolDiscoveryRootDescriptor[]
 }
 
+export interface OfficialIntegrationPackageDescriptor {
+  packageName: string
+  bundledVersion: string
+  apiVersion: '1.0'
+  entryExport: 'default'
+}
+
 export interface OfficialIntegrationCatalogEntry {
   integrationId: OfficialIntegrationId
   productId: OfficialIntegrationId
   displayName: string
   defaultOrder: number
+  package: OfficialIntegrationPackageDescriptor
   discovery: ToolDiscoveryDescriptor
 }
 
@@ -110,6 +118,7 @@ export const OFFICIAL_INTEGRATION_CATALOG: readonly OfficialIntegrationCatalogEn
     productId: 'pi',
     displayName: 'Pi',
     defaultOrder: 10,
+    package: { packageName: '@agent-lens/integration-pi', bundledVersion: '1.0.0-alpha.5', apiVersion: '1.0', entryExport: 'default' },
     discovery: {
       executable: { commands: ['pi'], explicitEnvVar: 'PI_BIN' },
       roots: [
@@ -132,6 +141,7 @@ export const OFFICIAL_INTEGRATION_CATALOG: readonly OfficialIntegrationCatalogEn
     productId: 'codex',
     displayName: 'Codex',
     defaultOrder: 20,
+    package: { packageName: '@agent-lens/integration-codex', bundledVersion: '1.0.0-alpha.5', apiVersion: '1.0', entryExport: 'default' },
     discovery: {
       executable: { commands: ['codex'], explicitEnvVar: 'CODEX_BIN' },
       roots: [
@@ -151,6 +161,7 @@ export const OFFICIAL_INTEGRATION_CATALOG: readonly OfficialIntegrationCatalogEn
     productId: 'claude-code',
     displayName: 'Claude Code',
     defaultOrder: 30,
+    package: { packageName: '@agent-lens/integration-claude', bundledVersion: '1.0.0-alpha.5', apiVersion: '1.0', entryExport: 'default' },
     discovery: {
       executable: { commands: ['claude'], explicitEnvVar: 'CLAUDE_BIN' },
       roots: [
@@ -172,6 +183,7 @@ export const OFFICIAL_INTEGRATION_CATALOG: readonly OfficialIntegrationCatalogEn
     productId: 'hermes',
     displayName: 'Hermes',
     defaultOrder: 40,
+    package: { packageName: '@agent-lens/integration-hermes', bundledVersion: '1.0.0-alpha.5', apiVersion: '1.0', entryExport: 'default' },
     discovery: {
       executable: { commands: ['hermes'] },
       roots: [
@@ -201,6 +213,7 @@ export const OFFICIAL_INTEGRATION_CATALOG: readonly OfficialIntegrationCatalogEn
     productId: 'opencode',
     displayName: 'OpenCode',
     defaultOrder: 50,
+    package: { packageName: '@agent-lens/integration-opencode', bundledVersion: '1.0.0-alpha.5', apiVersion: '1.0', entryExport: 'default' },
     discovery: {
       executable: { commands: ['opencode', 'opencode2'] },
       roots: [
