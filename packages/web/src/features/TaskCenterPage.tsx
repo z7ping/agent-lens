@@ -1,4 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { TFunction } from 'i18next'
+import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
 import type { HubReadAvailability, HubReviewSessionSummaryDto, LaunchableProjectDto, LaunchableProjectsResponseDto, PiLiveStateDto, ReviewSessionSummaryDto } from '@agent-lens/protocol'
@@ -20,7 +22,7 @@ export type TaskCenterMode = 'history' | 'live' | 'new' | 'hub'
 const HubReviewPage = lazy(() => import('./HubReviewPage').then(module => ({ default: module.HubReviewPage })))
 const PiLivePage = lazy(() => import('./PiLivePage').then(module => ({ default: module.PiLivePage })))
 const ReviewPage = lazy(() => import('./ReviewPage').then(module => ({ default: module.ReviewPage })))
-type TaskDayGroup = '今天' | '昨天' | '更早'
+type TaskDayGroup = 'today' | 'yesterday' | 'earlier'
 type HistoryTaskEntry =
   | { kind: 'local'; id: string; at: string; local: ReviewSessionSummaryDto }
   | { kind: 'remote'; id: string; at: string; remote: HubReviewSessionSummaryDto }
@@ -41,31 +43,33 @@ function mergeLaunchableProjects(
   })
 }
 
-function formatTime(value: string): string {
+function formatTime(value: string, t: TFunction, locale: string): string {
   const date = new Date(value)
   if (!Number.isFinite(date.getTime())) return value
   const now = new Date()
   const diff = Math.max(0, now.getTime() - date.getTime())
   if (date.toDateString() === now.toDateString()) {
     const minutes = Math.floor(diff / 60_000)
-    if (minutes < 1) return '刚刚'
-    if (minutes < 60) return `${minutes} 分钟前`
-    return `${Math.floor(diff / 3_600_000)} 小时前`
+    if (minutes < 1) return t('center.time.justNow')
+    if (minutes < 60) return t('center.time.minutesAgo', { count: minutes })
+    return t('center.time.hoursAgo', { count: Math.floor(diff / 3_600_000) })
   }
   const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
   if (date.toDateString() === yesterday.toDateString()) {
-    return `昨天 ${new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(date)}`
+    return t('center.time.yesterdayAt', {
+      time: new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit', hour12: false }).format(date),
+    })
   }
-  return new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(date)
+  return new Intl.DateTimeFormat(locale, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(date)
 }
 
 function taskDayGroup(value: string, now = new Date()): TaskDayGroup {
   const date = new Date(value)
-  if (!Number.isFinite(date.getTime())) return '更早'
-  if (date.toDateString() === now.toDateString()) return '今天'
+  if (!Number.isFinite(date.getTime())) return 'earlier'
+  if (date.toDateString() === now.toDateString()) return 'today'
   const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
-  if (date.toDateString() === yesterday.toDateString()) return '昨天'
-  return '更早'
+  if (date.toDateString() === yesterday.toDateString()) return 'yesterday'
+  return 'earlier'
 }
 
 function cleanTitle(value: string | undefined, fallback: string): string {
@@ -88,18 +92,22 @@ function remoteTime(item: HubReviewSessionSummaryDto): string {
   return availabilityString(item.endedAt) ?? availabilityString(item.startedAt) ?? ''
 }
 
-function remoteTitle(item: HubReviewSessionSummaryDto): string {
+function remoteTitle(item: HubReviewSessionSummaryDto, t: TFunction): string {
   const title = availabilityString(item.title)
-  if (title) return cleanTitle(title, '远程任务')
-  if (item.title.state === 'redacted') return '标题已脱敏'
-  if (item.title.state === 'omitted') return item.title.reason === 'policy' ? '标题未同步' : '远程任务'
-  return '远程任务'
+  if (title) return cleanTitle(title, t('center.remote.task'))
+  if (item.title.state === 'redacted') return t('center.remote.titleRedacted')
+  if (item.title.state === 'omitted') return item.title.reason === 'policy' ? t('center.remote.titleNotSynced') : t('center.remote.task')
+  return t('center.remote.task')
 }
 
-function remoteVisible(item: HubReviewSessionSummaryDto, review: ReturnType<AgentLensClientModel['getSnapshot']>['review']): boolean {
+function remoteVisible(
+  item: HubReviewSessionSummaryDto,
+  review: ReturnType<AgentLensClientModel['getSnapshot']>['review'],
+  t: TFunction,
+): boolean {
   if (review.filters.sourceIds !== null || review.filters.projectId || review.filters.status !== 'all') return false
   const search = review.filters.search.trim().toLowerCase()
-  if (search && !remoteTitle(item).toLowerCase().includes(search) && !item.origin.nodeId.toLowerCase().includes(search)) return false
+  if (search && !remoteTitle(item, t).toLowerCase().includes(search) && !item.origin.nodeId.toLowerCase().includes(search)) return false
   const time = remoteTime(item)
   if (!time || review.filters.range === 'all') return true
   const at = Date.parse(time)
@@ -139,8 +147,9 @@ function NewTaskPanel({
   onProjectLoadMore(): void
   onStarted(runtimeSessionId: string): void | Promise<void>
 }) {
+  const { t } = useTranslation('task')
   const [selectedKey, setSelectedKey] = useState('')
-  const [availability, setAvailability] = useState<{ checked: boolean; available: boolean; label: string }>({ checked: false, available: false, label: '正在检测 Pi…' })
+  const [availability, setAvailability] = useState<{ checked: boolean; available: boolean; label: string }>({ checked: false, available: false, label: t('center.newTask.checkingPi') })
   const [starting, setStarting] = useState(false)
   const [selectingDirectory, setSelectingDirectory] = useState(false)
   const [manualDirectoryOpen, setManualDirectoryOpen] = useState(false)
@@ -160,7 +169,9 @@ function NewTaskPanel({
       setAvailability({
         checked: true,
         available: value.available,
-        label: value.available ? 'Pi 已就绪' : `Pi 不可用${value.reason ? ` · ${value.reason}` : ''}`,
+        label: value.available
+          ? t('center.newTask.piReady')
+          : t('center.newTask.piUnavailable', { reason: value.reason ? ` · ${value.reason}` : '' }),
       })
     }, reason => {
       if (!cancelled) setAvailability({ checked: true, available: false, label: reason instanceof Error ? reason.message : String(reason) })
@@ -170,18 +181,22 @@ function NewTaskPanel({
 
   const selected = options.find(option => option.key === selectedKey)
   const projectOptions = useMemo(() => options.map(option => ({ value: option.key, label: option.label, description: option.cwd, keywords: option.cwd })), [options])
-  const agentStateLabel = !availability.checked ? '检测中' : availability.available ? '已就绪' : '不可用'
+  const agentStateLabel = !availability.checked
+    ? t('center.newTask.checking')
+    : availability.available
+      ? t('center.newTask.ready')
+      : t('center.newTask.unavailable')
   const availabilityState = !availability.checked ? 'checking' : availability.available ? 'ready' : 'unavailable'
   const manualDirectoryVisible = !nativeDirectoryPicker || manualDirectoryOpen
   const composerStateLabel = selectingDirectory
-    ? '正在打开系统目录选择器…'
+    ? t('center.newTask.openingPicker')
     : !availability.checked
-    ? '正在检测 Pi…'
+    ? t('center.newTask.checkingPi')
     : !availability.available
       ? availability.label
       : selected
-        ? '打开后直接在 Pi 页面输入任务'
-        : '等待可启动项目'
+        ? t('center.newTask.directInput')
+        : t('center.newTask.waitingProject')
   const start = async (project: { cwd: string; label: string }) => {
     if (starting || !availability.available) return
     setStarting(true)
@@ -219,7 +234,7 @@ function NewTaskPanel({
   const startManualDirectory = async () => {
     const cwd = manualDirectory.trim()
     if (!cwd) {
-      setError('请输入要启动 Pi 任务的工作目录。')
+      setError(t('center.newTask.directoryRequired'))
       return
     }
     const parts = cwd.replace(/[\\/]+$/, '').split(/[\\/]/).filter(Boolean)
