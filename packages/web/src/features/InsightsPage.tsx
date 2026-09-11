@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react'
+import type { TFunction } from 'i18next'
+import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
 import type { InsightMetricDeltaDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
@@ -11,17 +13,17 @@ import { EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from '../compone
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
 import { IconButton, SelectMenu, UiIcon } from '../components/ui'
 
-function duration(ms: number): string {
-  if (ms < 1000) return `${ms} 毫秒`
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)} 秒`
-  if (ms < 3_600_000) return `${(ms / 60_000).toFixed(1)} 分钟`
-  return `${(ms / 3_600_000).toFixed(1)} 小时`
+function duration(ms: number, t: TFunction): string {
+  if (ms < 1000) return t('duration.milliseconds', { value: ms })
+  if (ms < 60_000) return t('duration.seconds', { value: (ms / 1000).toFixed(1) })
+  if (ms < 3_600_000) return t('duration.minutes', { value: (ms / 60_000).toFixed(1) })
+  return t('duration.hours', { value: (ms / 3_600_000).toFixed(1) })
 }
 
-function deltaLabel(value: number | null): string {
-  if (value === null) return '无可比基线'
-  if (value === 0) return '持平'
-  return `${value > 0 ? '增加' : '减少'} ${Math.abs(value)}%`
+function deltaLabel(value: number | null, t: TFunction): string {
+  if (value === null) return t('delta.noBaseline')
+  if (value === 0) return t('delta.flat')
+  return t(value > 0 ? 'delta.increase' : 'delta.decrease', { value: Math.abs(value) })
 }
 
 function deltaClass(value: number | null): string {
@@ -29,36 +31,51 @@ function deltaClass(value: number | null): string {
   return 'changed'
 }
 
-function formatDate(value: string | undefined): string {
+function formatDate(value: string | undefined, locale: string): string {
   if (!value) return ''
   const date = new Date(value)
-  return Number.isFinite(date.getTime()) ? date.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }) : value
+  return Number.isFinite(date.getTime()) ? date.toLocaleDateString(locale, { year: 'numeric', month: '2-digit', day: '2-digit' }) : value
 }
 
-function formatGeneratedAt(value: string): string {
+function formatGeneratedAt(value: string, locale: string): string {
   const date = new Date(value)
-  return Number.isFinite(date.getTime()) ? date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : value
+  return Number.isFinite(date.getTime()) ? date.toLocaleString(locale, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : value
 }
 
-function rangeLabel(range: 'today' | '7d' | '30d' | 'all', from?: string, to?: string): string {
-  const label = range === 'today' ? '今天' : range === '7d' ? '最近 7 天' : range === '30d' ? '最近 30 天' : '全部时间'
-  if (from && to) return `${label} · ${formatDate(from)} — ${formatDate(to)}`
-  if (from) return `${label} · ${formatDate(from)} 至今`
-  if (to) return `${label} · 截至 ${formatDate(to)}`
+function rangeLabel(
+  range: 'today' | '7d' | '30d' | 'all',
+  t: TFunction,
+  locale: string,
+  from?: string,
+  to?: string,
+): string {
+  const label = range === 'today'
+    ? t('range.today')
+    : range === '7d'
+      ? t('range.sevenDays')
+      : range === '30d'
+        ? t('range.thirtyDays')
+        : t('range.all')
+  if (from && to) return t('range.fromTo', { label, from: formatDate(from, locale), to: formatDate(to, locale) })
+  if (from) return t('range.fromNow', { label, from: formatDate(from, locale) })
+  if (to) return t('range.until', { label, to: formatDate(to, locale) })
   return label
 }
 
-function assetTypeLabel(type: string): string {
-  if (type === 'skill') return '技能'
-  if (type === 'mcp') return 'MCP（模型上下文协议）'
+function assetTypeLabel(type: string, t: TFunction): string {
+  if (type === 'skill') return t('assetType.skill')
+  if (type === 'mcp') return t('assetType.mcp')
   return type
 }
 
 function MetricDelta({ label, value }: { label: string; value: number | null }) {
-  return <div className="insight-comparison-item"><span>{label}</span><b className={deltaClass(value)}>{deltaLabel(value)}</b></div>
+  const { t } = useTranslation('insights')
+  return <div className="insight-comparison-item"><span>{label}</span><b className={deltaClass(value)}>{deltaLabel(value, t)}</b></div>
 }
 
 export function InsightsPage({ model, sidebarHost }: { model: AgentLensClientModel; sidebarHost?: HTMLDivElement | null }) {
+  const { t, i18n } = useTranslation('insights')
+  const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
   const appSnapshot = useClientSnapshot(model)
   const insightsModel = useMemo(() => new InsightsClientModel(), [])
   const insights = useSyncExternalStore(insightsModel.subscribe, insightsModel.getSnapshot, insightsModel.getSnapshot)
@@ -72,7 +89,11 @@ export function InsightsPage({ model, sidebarHost }: { model: AgentLensClientMod
   const agents = useOrderedAgents(appSnapshot.facets?.agents ?? [])
   const insightAgents = useOrderedAgents(data?.agents ?? [])
   const projects = appSnapshot.facets?.projects ?? []
-  const agentSelectionSummary = insights.filters.sourceIds === null ? '全部智能体' : insights.filters.sourceIds.length ? `已选 ${insights.filters.sourceIds.length} 个` : '未选择'
+  const agentSelectionSummary = insights.filters.sourceIds === null
+    ? t('filters.allAgents')
+    : insights.filters.sourceIds.length
+      ? t('filters.selectedAgents', { count: insights.filters.sourceIds.length })
+      : t('filters.none')
   const maxTrendSessions = Math.max(1, ...(data?.trend.map(item => item.sessionCount) ?? [1]))
   const canRelaxFilters = Boolean(insights.filters.sourceIds !== null || insights.filters.projectId || insights.filters.range !== 'all')
   const hasSseBanner = Boolean(appSnapshot.health && !appSnapshot.liveConnected)
@@ -82,19 +103,19 @@ export function InsightsPage({ model, sidebarHost }: { model: AgentLensClientMod
 
   const relaxFilters = () => insightsModel.setFilters({ sourceIds: null, projectId: '', range: 'all' })
   const projectFilterOptions = [
-    { value: '', label: '全部项目' },
+    { value: '', label: t('filters.allProjects') },
     ...projects.map(project => ({ value: project.id, label: project.name ?? project.repositoryIdentity ?? project.id, description: project.repositoryIdentity ?? undefined })),
   ]
-  const sidebarFilters = <div className="workspace-context-menu workspace-insight-context" aria-label="使用洞察筛选">
+  const sidebarFilters = <div className="workspace-context-menu workspace-insight-context" aria-label={t('filters.aria')}>
     <div className="workspace-context-utility">
       <span>{agentSelectionSummary}</span>
-      <IconButton size="small" onClick={() => void insightsModel.refresh()} title="刷新使用洞察" aria-label="刷新使用洞察"><UiIcon name="refresh" size={14}/></IconButton>
+      <IconButton size="small" onClick={() => void insightsModel.refresh()} title={t('filters.refresh')} aria-label={t('filters.refresh')}><UiIcon name="refresh" size={14}/></IconButton>
     </div>
     <SidebarFilterDisclosure className="workspace-insight-filter-disclosure" summaryMeta={agentSelectionSummary} agents={agents} agentSelection={{ mode: 'multiple', value: insights.filters.sourceIds, onChange: sourceIds => insightsModel.setFilters({ sourceIds }) }}>
       <div className="workspace-insight-filter-fields">
-        <label><span>项目</span><SelectMenu variant="field" value={insights.filters.projectId} onChange={projectId => insightsModel.setFilters({ projectId })} ariaLabel="筛选项目" placeholder="全部项目" menuWidth={280} searchable searchPlaceholder="搜索项目" options={projectFilterOptions}/></label>
-        <label><span>时间</span><SelectMenu variant="field" value={insights.filters.range} onChange={range => insightsModel.setFilters({ range: range as typeof insights.filters.range })} ariaLabel="筛选时间范围" menuWidth={156} options={[
-          { value: 'today', label: '今天' }, { value: '7d', label: '最近 7 天' }, { value: '30d', label: '最近 30 天' }, { value: 'all', label: '全部时间' },
+        <label><span>{t('filters.project')}</span><SelectMenu variant="field" value={insights.filters.projectId} onChange={projectId => insightsModel.setFilters({ projectId })} ariaLabel={t('filters.projectAria')} placeholder={t('filters.allProjects')} menuWidth={280} searchable searchPlaceholder={t('filters.searchProject')} options={projectFilterOptions}/></label>
+        <label><span>{t('filters.time')}</span><SelectMenu variant="field" value={insights.filters.range} onChange={range => insightsModel.setFilters({ range: range as typeof insights.filters.range })} ariaLabel={t('filters.timeAria')} menuWidth={156} options={[
+          { value: 'today', label: t('range.today') }, { value: '7d', label: t('range.sevenDays') }, { value: '30d', label: t('range.thirtyDays') }, { value: 'all', label: t('range.all') },
         ]}/></label>
       </div>
     </SidebarFilterDisclosure>
