@@ -9,6 +9,7 @@ import { codexIntegration } from '@agent-lens/integration-codex'
 import { hermesIntegration } from '@agent-lens/integration-hermes'
 import { openCodeIntegration } from '@agent-lens/integration-opencode'
 import { piIntegration } from '@agent-lens/integration-pi'
+import { IntegrationPackageService } from '@agent-lens/integration-packages'
 import {
   SESSION_SUMMARY_PROJECTION_ID,
   sessionSummaryProjectionPlugin,
@@ -83,6 +84,14 @@ const vaultPath = process.env.AGENT_LENS_VAULT_PATH
   ?? join(dataRoot, 'vault')
 const localePackDirectory = process.env.AGENT_LENS_LOCALE_PACK_DIR
   ?? join(dataRoot, 'locales')
+const bundledIntegrationPackageDir = fileURLToPath(new URL('./integration-packages/', import.meta.url))
+const workspaceIntegrationPackageDir = fileURLToPath(new URL('../../../dist/integration-packages/', import.meta.url))
+const integrationBundleDir = process.env.AGENT_LENS_INTEGRATION_BUNDLE_DIR
+  ?? (existsSync(join(bundledIntegrationPackageDir, 'catalog.json'))
+    ? bundledIntegrationPackageDir
+    : workspaceIntegrationPackageDir)
+const integrationInstallRoot = process.env.AGENT_LENS_INTEGRATIONS_DIR
+  ?? join(dataRoot, 'integrations')
 const configuredPort = process.env.AGENT_LENS_PORT
   ? Number(process.env.AGENT_LENS_PORT)
   : DEFAULT_AGENT_LENS_HTTP_PORT
@@ -123,6 +132,26 @@ function authorizedCapabilities(productId: string) {
 }
 
 const app = new AgentLensApplication()
+let integrationPackages: IntegrationPackageService | null = null
+if (capabilities.localCapture && existsSync(join(integrationBundleDir, 'catalog.json'))) {
+  const candidate = new IntegrationPackageService({
+    bundleDir: integrationBundleDir,
+    installRoot: integrationInstallRoot,
+    canRemove: integrationId => app.integrationStatus(integrationId)
+      ? {
+          allowed: false,
+          reason: 'Integration is loaded in the current AgentLens runtime; disable/restart before removal',
+        }
+      : { allowed: true },
+  })
+  try {
+    await candidate.initialize()
+    integrationPackages = candidate
+  } catch (error) {
+    console.warn('[AgentLens] Integration package lifecycle unavailable', error)
+  }
+}
+
 let integrationManagement: IntegrationManagementService | null = null
 
 function currentIntegrationManagement(): IntegrationManagementService {
@@ -200,6 +229,25 @@ app.use(httpSurfacePlugin, {
           enabled: integrationId => currentIntegrationManagement().enabled(integrationId),
           setEnabled: (integrationId, enabled) =>
             currentIntegrationManagement().setEnabled(integrationId, enabled),
+        },
+      }
+    : {}),
+  ...(integrationPackages
+    ? {
+        integrationPackages: {
+          catalog: () => integrationPackages!.catalog(),
+          states: () => integrationPackages!.statesSnapshot(),
+          state: integrationId => {
+            try {
+              return integrationPackages!.state(integrationId)
+            } catch {
+              return null
+            }
+          },
+          install: integrationId => integrationPackages!.install(integrationId),
+          remove: integrationId => integrationPackages!.remove(integrationId),
+          update: integrationId => integrationPackages!.update(integrationId),
+          operation: operationId => integrationPackages!.operation(operationId),
         },
       }
     : {}),
