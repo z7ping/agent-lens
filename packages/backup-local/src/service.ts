@@ -10,7 +10,6 @@ import {
 } from 'node:fs/promises'
 import { arch, hostname, platform } from 'node:os'
 import {
-  basename,
   isAbsolute,
   join,
   posix,
