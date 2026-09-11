@@ -17,7 +17,34 @@ import type {
 } from './types'
 
 const PI_SOURCE_ID = 'pi'
+const MAX_AUDIT_BOUNDARIES = 1_024
 export const PI_LIVE_STARTUP_AUDIT_PARSER_VERSION = 'pi-live-startup-audit-v1'
+
+type StartupAuditBoundaryMode = 'source-disabled' | 'off' | 'redacted' | 'full'
+
+interface StartupAuditBoundary {
+  mode: StartupAuditBoundaryMode
+  payload?: Record<string, unknown> | undefined
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+}
+
+function rememberBoundary(
+  boundaries: Map<string, StartupAuditBoundary>,
+  eventId: string,
+  boundary: StartupAuditBoundary,
+): void {
+  boundaries.set(eventId, boundary)
+  while (boundaries.size > MAX_AUDIT_BOUNDARIES) {
+    const oldest = boundaries.keys().next().value
+    if (typeof oldest !== 'string') break
+    boundaries.delete(oldest)
+  }
+}
 
 export interface PiLiveStartupAuditSnapshot {
   runtimeSessionId: string
@@ -83,12 +110,21 @@ function auditEventId(snapshot: PiLiveStartupAuditSnapshot): string {
 }
 
 export function createPiLiveStartupAuditSink(ctx: AgentLensContext): PiLiveStartupAuditSink {
+  const boundaries = new Map<string, StartupAuditBoundary>()
   return {
     async recordStartupAudit(snapshot) {
-      if (!ctx.capturePolicy.isSourceEnabled(PI_SOURCE_ID)) return
-      const host = await resolveRuntimeHost(ctx)
-      const installation = await resolvePiInstallation(ctx, host, snapshot)
       const eventId = auditEventId(snapshot)
+      const boundary = boundaries.get(eventId)
+      const sourceEnabled = ctx.capturePolicy.isSourceEnabled(PI_SOURCE_ID)
+      if (!boundary && !sourceEnabled) {
+        rememberBoundary(boundaries, eventId, { mode: 'source-disabled' })
+        return
+      }
+      if (boundary?.mode === 'source-disabled' || !sourceEnabled) return
+
+      const currentMode = ctx.capturePolicy.modeFor('config')
+      if (boundary && currentMode === 'off') return
+
       const normalized: NormalizedSourceOutput = {
         observations: [{
           kind: 'runtime.startup',
@@ -130,13 +166,34 @@ export function createPiLiveStartupAuditSink(ctx: AgentLensContext): PiLiveStart
       }
       const persisted = ctx.capturePolicy.sanitizeNormalizedOutput(normalized)
       const observation = persisted.observations[0]
-      if (!observation) return
+      if (!observation) {
+        if (!boundary) rememberBoundary(boundaries, eventId, { mode: currentMode })
+        return
+      }
 
+      let candidate = observation
+      if (!boundary) {
+        rememberBoundary(boundaries, eventId, {
+          mode: currentMode,
+          payload: { ...record(observation.payload) },
+        })
+      } else {
+        if (boundary.mode === 'off' || !boundary.payload) return
+        const currentPayload = record(observation.payload)
+        const mergedPayload: Record<string, unknown> = { ...boundary.payload }
+        for (const key of ['packageUpdateCheck', 'packageUpdates', 'packageUpdatesCheckedAt']) {
+          if (Object.prototype.hasOwnProperty.call(currentPayload, key)) mergedPayload[key] = currentPayload[key]
+        }
+        candidate = { ...observation, payload: mergedPayload }
+      }
+
+      const host = await resolveRuntimeHost(ctx)
+      const installation = await resolvePiInstallation(ctx, host, snapshot)
       await ctx.observations.commit({
         sourceId: PI_SOURCE_ID,
         host,
         installation,
-        candidate: observation,
+        candidate,
         evidenceCandidates: persisted.evidenceCandidates,
       })
     },
