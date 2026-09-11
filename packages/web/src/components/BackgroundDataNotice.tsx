@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 export function BackgroundDataNotice({
   label,
@@ -9,6 +10,7 @@ export function BackgroundDataNotice({
   hasSseBanner: boolean
   onRefresh(): Promise<void> | void
 }) {
+  const { t } = useTranslation('common')
   const [refreshing, setRefreshing] = useState(false)
   const refresh = async () => {
     if (refreshing) return
@@ -22,7 +24,7 @@ export function BackgroundDataNotice({
 
   return <div className={`background-data-notice ${hasSseBanner ? 'has-sse-banner' : ''}`} role="status">
     <span className="background-data-dot" aria-hidden="true"/>
-    <span>{label}有新数据</span>
-    <button disabled={refreshing} onClick={() => void refresh()}>{refreshing ? '刷新中…' : '刷新查看'}</button>
+    <span>{t('newDataFor', { label })}</span>
+    <button disabled={refreshing} onClick={() => void refresh()}>{refreshing ? t('refreshInProgress') : t('refreshToView')}</button>
   </div>
 }
