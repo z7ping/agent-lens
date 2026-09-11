@@ -3,13 +3,9 @@ import { mkdir, readFile, readdir, unlink } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type {
-  Disposable,
-  SourceExecutionContext,
-  SourceRecord,
-  SourceRecordEmitter,
-} from '@agent-lens/core'
+  Disposable, SourceExecutionContext, SourceRecord, SourceRecordEmitter, } from '@agent-lens/core'
 import { abortableDelay } from '@agent-lens/runtime-cordis'
-import { isMissingPathError } from '@agent-lens/source-support'
+import { isMissingPathError, asRecord } from '@agent-lens/source-support'
 import { CODEX_CURRENT_PARSER_VERSION } from './current-protocol'
 
 const POLL_INTERVAL_MS = 250
@@ -25,11 +21,6 @@ function sha256(value: string): string {
 }
 
 
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {}
-}
 
 function inboxDirectory(): string {
   return process.env.AGENT_LENS_CODEX_INBOX
