@@ -6,6 +6,10 @@ import type {
   HealthResponseDto,
   IntegrationAuthorizationCapabilityDto,
   IntegrationAuthorizationResponseDto,
+  IntegrationEnabledUpdateResponseDto,
+  IntegrationManagementResponseDto,
+  IntegrationPreferenceUpdateRequestDto,
+  IntegrationPreferencesResponseDto,
   IntegrationToolDiscoveryResponseDto,
   LiveUpdateArea,
   LiveUpdateEventDto,
@@ -31,6 +35,9 @@ export interface ClientSnapshot {
   agentsRescanResult: AgentRescanResponseDto | null
   agentsRescanError: string
   integrationDiscovery: IntegrationToolDiscoveryResponseDto | null
+  integrationManagement: IntegrationManagementResponseDto | null
+  integrationManagementLoading: boolean
+  integrationManagementError: string
   integrationDiscoveryLoading: boolean
   integrationDiscoveryRescanning: boolean
   integrationDiscoveryError: string
@@ -69,6 +76,36 @@ const REVIEW_SEARCH_DEBOUNCE_MS = 250
 const INTEGRATION_DISCOVERY_POLL_MS = 500
 const INTEGRATION_DISCOVERY_MAX_POLLS = 20
 
+function discoveryFromManagement(
+  management: IntegrationManagementResponseDto,
+): IntegrationToolDiscoveryResponseDto {
+  return {
+    status: management.discovery.status,
+    items: management.items.flatMap(item => item.tool ? [{ ...item.tool }] : []),
+    ...(management.discovery.startedAt ? { startedAt: management.discovery.startedAt } : {}),
+    ...(management.discovery.completedAt ? { completedAt: management.discovery.completedAt } : {}),
+    generatedAt: management.discovery.generatedAt,
+    meta: { protocolVersion: management.meta.protocolVersion },
+  }
+}
+
+function reorderManagement(
+  management: IntegrationManagementResponseDto,
+  displayOrder: readonly string[],
+): IntegrationManagementResponseDto {
+  const index = new Map(displayOrder.map((id, position) => [id, position]))
+  const items = management.items
+    .map(item => ({
+      ...item,
+      displayOrder: index.get(item.integrationId) ?? Number.MAX_SAFE_INTEGER,
+    }))
+    .sort((left, right) =>
+      left.displayOrder - right.displayOrder
+      || left.integrationId.localeCompare(right.integrationId)
+    )
+  return { ...management, items }
+}
+
 function mergeReviewDetail(current: ReviewSessionDetailDto, next: ReviewSessionDetailDto): ReviewSessionDetailDto {
   const interactions = new Map(current.interactions.map(item => [item.id, item]))
   for (const interaction of next.interactions) interactions.set(interaction.id, interaction)
@@ -98,6 +135,9 @@ export class AgentLensClientModel {
     agentsRescanResult: null,
     agentsRescanError: '',
     integrationDiscovery: null,
+    integrationManagement: null,
+    integrationManagementLoading: false,
+    integrationManagementError: '',
     integrationDiscoveryLoading: false,
     integrationDiscoveryRescanning: false,
     integrationDiscoveryError: '',
@@ -139,6 +179,7 @@ export class AgentLensClientModel {
   private agentsInFlight: Promise<void> | null = null
   private agentsRescanInFlight: Promise<AgentRescanResponseDto> | null = null
   private integrationDiscoveryInFlight: Promise<IntegrationToolDiscoveryResponseDto> | null = null
+  private integrationManagementInFlight: Promise<void> | null = null
   private integrationDiscoveryPolls = 0
   private visibilityListener: (() => void) | null = null
   private unsubscribeLive: (() => void) | null = null
@@ -231,29 +272,53 @@ export class AgentLensClientModel {
   async refreshAgents(): Promise<void> {
     const generation = ++this.agentsGeneration
     const invalidation = this.agentsInvalidation
-    this.patch({ agentsLoading: true, agentsError: '', integrationDiscoveryLoading: true })
+    this.patch({
+      agentsLoading: true,
+      agentsError: '',
+      integrationManagementLoading: true,
+      integrationManagementError: '',
+      integrationDiscoveryLoading: true,
+    })
     try {
-      const [agents, capturePolicy, discovery] = await Promise.all([
+      const [agents, capturePolicy, management] = await Promise.all([
         this.api.agents(),
         this.api.capturePolicy().catch(() => null),
-        this.api.integrationDiscovery().then(
+        this.api.integrations().then(
           value => ({ value, error: '' }),
           error => ({ value: null, error: error instanceof Error ? error.message : String(error) }),
         ),
       ])
       if (generation !== this.agentsGeneration) return
+
+      let discovery = this.snapshot.integrationDiscovery
+      let discoveryError = ''
+      if (management.value) {
+        discovery = discoveryFromManagement(management.value)
+      } else {
+        const fallback = await this.api.integrationDiscovery().then(
+          value => ({ value, error: '' }),
+          error => ({ value: null, error: error instanceof Error ? error.message : String(error) }),
+        )
+        discovery = fallback.value ?? discovery
+        discoveryError = fallback.error
+      }
+
       this.patch({
         agents,
         capturePolicy,
         agentsLoading: false,
         agentsHasNewData: this.agentsInvalidation !== invalidation,
-        integrationDiscovery: discovery.value ?? this.snapshot.integrationDiscovery,
+        integrationManagement: management.value ?? this.snapshot.integrationManagement,
+        integrationManagementLoading: false,
+        integrationManagementError: management.error,
+        integrationDiscovery: discovery,
         integrationDiscoveryLoading: false,
-        integrationDiscoveryError: discovery.error,
+        integrationDiscoveryError: discoveryError,
       })
-      if (discovery.value?.status === 'idle' || discovery.value?.status === 'scanning') {
+
+      if (discovery?.status === 'idle' || discovery?.status === 'scanning') {
         this.scheduleIntegrationDiscoveryRefresh()
-      } else if (discovery.value?.status === 'complete') {
+      } else if (discovery?.status === 'complete') {
         this.integrationDiscoveryPolls = 0
       }
     } catch {
@@ -262,6 +327,7 @@ export class AgentLensClientModel {
       this.patch({
         agentsLoading: false,
         agentsError: translateProduct('errors:agentsOverviewFailed'),
+        integrationManagementLoading: false,
         integrationDiscoveryLoading: false,
       })
     }
@@ -313,30 +379,117 @@ export class AgentLensClientModel {
 
   private async refreshIntegrationDiscovery(): Promise<void> {
     try {
-      const result = await this.api.integrationDiscovery()
+      const management = await this.api.integrations()
+      const discovery = discoveryFromManagement(management)
       this.patch({
-        integrationDiscovery: result,
+        integrationManagement: management,
+        integrationManagementLoading: false,
+        integrationManagementError: '',
+        integrationDiscovery: discovery,
         integrationDiscoveryLoading: false,
         integrationDiscoveryError: '',
       })
-      if (result.status === 'idle' || result.status === 'scanning') {
+      if (discovery.status === 'idle' || discovery.status === 'scanning') {
         this.scheduleIntegrationDiscoveryRefresh()
       } else {
         this.integrationDiscoveryPolls = 0
       }
-    } catch (error) {
+    } catch (managementError) {
+      try {
+        const result = await this.api.integrationDiscovery()
+        this.patch({
+          integrationManagementLoading: false,
+          integrationManagementError: managementError instanceof Error ? managementError.message : String(managementError),
+          integrationDiscovery: result,
+          integrationDiscoveryLoading: false,
+          integrationDiscoveryError: '',
+        })
+        if (result.status === 'idle' || result.status === 'scanning') {
+          this.scheduleIntegrationDiscoveryRefresh()
+        } else {
+          this.integrationDiscoveryPolls = 0
+        }
+      } catch (error) {
+        this.patch({
+          integrationManagementLoading: false,
+          integrationManagementError: managementError instanceof Error ? managementError.message : String(managementError),
+          integrationDiscoveryLoading: false,
+          integrationDiscoveryError: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
+  }
+
+  refreshIntegrationManagement(): Promise<void> {
+    if (this.integrationManagementInFlight) return this.integrationManagementInFlight
+    this.patch({ integrationManagementLoading: true, integrationManagementError: '' })
+    const pending = this.api.integrations().then(
+      management => {
+        const discovery = discoveryFromManagement(management)
+        this.patch({
+          integrationManagement: management,
+          integrationManagementLoading: false,
+          integrationManagementError: '',
+          integrationDiscovery: discovery,
+          integrationDiscoveryLoading: false,
+          integrationDiscoveryError: '',
+        })
+      },
+      error => {
+        this.patch({
+          integrationManagementLoading: false,
+          integrationManagementError: error instanceof Error ? error.message : String(error),
+        })
+        throw error
+      },
+    ).finally(() => {
+      if (this.integrationManagementInFlight === pending) this.integrationManagementInFlight = null
+    })
+    this.integrationManagementInFlight = pending
+    return pending
+  }
+
+  async updateIntegrationPreferences(
+    input: IntegrationPreferenceUpdateRequestDto,
+  ): Promise<IntegrationPreferencesResponseDto> {
+    const result = await this.api.updateIntegrationPreferences(input)
+    const current = this.snapshot.integrationManagement
+    if (current) {
+      const management = reorderManagement({
+        ...current,
+        preferences: result.preferences,
+        meta: { ...current.meta, generatedAt: result.meta.generatedAt },
+      }, result.preferences.displayOrder)
+      this.patch({ integrationManagement: management })
+    }
+    return result
+  }
+
+  async setIntegrationEnabled(
+    integrationId: string,
+    enabled: boolean,
+  ): Promise<IntegrationEnabledUpdateResponseDto> {
+    const result = await this.api.setIntegrationEnabled(integrationId, enabled)
+    const current = this.snapshot.integrationManagement
+    if (current) {
       this.patch({
-        integrationDiscoveryLoading: false,
-        integrationDiscoveryError: error instanceof Error ? error.message : String(error),
+        integrationManagement: {
+          ...current,
+          items: current.items.map(item => item.integrationId === integrationId
+            ? { ...item, enabled: result.enabled }
+            : item),
+          meta: { ...current.meta, generatedAt: result.meta.generatedAt },
+        },
       })
     }
+    return result
   }
 
   rescanIntegrationDiscovery(): Promise<IntegrationToolDiscoveryResponseDto> {
     if (this.integrationDiscoveryInFlight) return this.integrationDiscoveryInFlight
     this.patch({ integrationDiscoveryRescanning: true, integrationDiscoveryError: '' })
     const pending = this.api.rescanIntegrationDiscovery().then(
-      result => {
+      async result => {
         if (this.integrationDiscoveryTimer) {
           clearTimeout(this.integrationDiscoveryTimer)
           this.integrationDiscoveryTimer = null
@@ -348,6 +501,7 @@ export class AgentLensClientModel {
           integrationDiscoveryRescanning: false,
           integrationDiscoveryError: '',
         })
+        await this.refreshIntegrationManagement().catch(() => undefined)
         return result
       },
       error => {
