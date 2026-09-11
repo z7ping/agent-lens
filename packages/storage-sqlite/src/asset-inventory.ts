@@ -3,7 +3,6 @@ import type {
   AssetDefinition,
   AssetInventoryEntry,
   AssetInventoryReader,
-  AssetScope,
   AssetState,
   AssetStateObservation,
   AssetType,
@@ -88,7 +87,7 @@ function mapBinding(value: unknown): AssetBinding {
   const path = optionalString(row, 'path')
   const source = optionalString(row, 'source')
   const version = optionalString(row, 'version')
-  const scope = optionalEnumString(row, 'scope', ASSET_SCOPES) as AssetScope | undefined
+  const scope = optionalEnumString(row, 'scope', ASSET_SCOPES)
   const scopeRoot = optionalString(row, 'scope_root')
   return {
     id: requiredString(row, 'binding_id'),
