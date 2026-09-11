@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto'
-import { createReadStream } from 'node:fs'
 import {
   access,
   mkdir,
@@ -16,38 +15,41 @@ import {
   extname,
   join,
 } from 'node:path'
-import type {
-  DetectedSource,
-  DiscoveredAsset,
-  Disposable,
-  EvidenceCandidate,
-  NormalizedSourceOutput,
-  ObservationCapability,
-  ObservationCandidate,
-  ObservationIdentityHints,
-  SourceDefinition,
-  SourceDetectionContext,
-  SourceExecutionContext,
-  SourceHistoryExecutionContext,
-  SourceHistoryWindow,
-  SourceNormalizationContext,
-  SourcePluginManifest,
-  SourceRecord,
-  SourceRecordEmitter,
+import {
+  evidenceFromSourceRecord,
+  observationFromSourceRecord,
+  type DetectedSource,
+  type DiscoveredAsset,
+  type Disposable,
+  type EvidenceCandidate,
+  type NormalizedSourceOutput,
+  type ObservationCapability,
+  type ObservationCandidate,
+  type ObservationIdentityHints,
+  type SourceDefinition,
+  type SourceDetectionContext,
+  type SourceExecutionContext,
+  type SourceHistoryExecutionContext,
+  type SourceHistoryWindow,
+  type SourceNormalizationContext,
+  type SourcePluginManifest,
+  type SourceRecord,
+  type SourceRecordEmitter,
 } from '@agent-lens/core'
 import {
   abortableDelay,
   defineAgentLensPlugin,
+  isCompleteJson,
+  isMissingPathError,
+  readJsonlLines,
   resolveClaudeLocation,
   resolveExecutable,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
 
 const SOURCE_ID = 'claude-code'
-const PARSER_VERSION = '2'
-const MAX_STRING = 64 * 1024
+const PARSER_VERSION = '3'
 const RUNTIME_POLL_MS = 250
-const SENSITIVE_KEY = /(password|passwd|secret|token|api[_-]?key|authorization|cookie)/i
 
 interface ClaudeSessionMetadata {
   nativeSessionId: string
@@ -67,11 +69,6 @@ interface HistoryCheckpoint {
   mtimeMs: number
 }
 
-interface JsonlLine {
-  text: string
-  startOffset: number
-  endOffset: number
-}
 
 interface RuntimeInboxEnvelope {
   id: string
@@ -83,23 +80,6 @@ function sha256(value: string | Buffer): string {
   return createHash('sha256').update(value).digest('hex')
 }
 
-function truncate(value: string, limit = MAX_STRING): string {
-  return value.length <= limit ? value : `${value.slice(0, limit)}…[truncated]`
-}
-
-function sanitize(value: unknown, depth = 0): unknown {
-  if (depth > 8) return '[max-depth]'
-  if (typeof value === 'string') return truncate(value)
-  if (value == null || typeof value === 'number' || typeof value === 'boolean') return value
-  if (Array.isArray(value)) return value.slice(0, 200).map(item => sanitize(item, depth + 1))
-  if (typeof value !== 'object') return String(value)
-
-  const result: Record<string, unknown> = {}
-  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
-    result[key] = SENSITIVE_KEY.test(key) ? '[redacted]' : sanitize(item, depth + 1)
-  }
-  return result
-}
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -134,8 +114,9 @@ async function exists(path: string): Promise<boolean> {
   try {
     await access(path)
     return true
-  } catch {
-    return false
+  } catch (error) {
+    if (isMissingPathError(error)) return false
+    throw error
   }
 }
 
@@ -168,8 +149,9 @@ async function* walkJsonlFiles(root: string): AsyncIterable<string> {
   let directory
   try {
     directory = await opendir(root)
-  } catch {
-    return
+  } catch (error) {
+    if (isMissingPathError(error)) return
+    throw error
   }
 
   for await (const entry of directory) {
@@ -185,8 +167,9 @@ async function listJsonlFiles(root: string, historyWindow?: SourceHistoryWindow)
   const candidates = (await Promise.all(paths.map(async path => {
     try {
       return { path, mtimeMs: (await stat(path)).mtimeMs }
-    } catch {
-      return null
+    } catch (error) {
+      if (isMissingPathError(error)) return null
+      throw error
     }
   }))).filter((candidate): candidate is { path: string; mtimeMs: number } => candidate !== null)
 
@@ -200,48 +183,11 @@ async function listJsonlFiles(root: string, historyWindow?: SourceHistoryWindow)
     .map(candidate => candidate.path)
 }
 
-async function* readJsonlLines(filePath: string, startOffset: number): AsyncIterable<JsonlLine> {
-  const stream = createReadStream(filePath, { start: startOffset })
-  let carry = Buffer.alloc(0)
-  let carryOffset = startOffset
-
-  for await (const rawChunk of stream) {
-    const chunk = Buffer.isBuffer(rawChunk) ? rawChunk : Buffer.from(rawChunk)
-    const data = carry.length ? Buffer.concat([carry, chunk]) : chunk
-    const dataOffset = carryOffset
-    let cursor = 0
-
-    while (true) {
-      const newline = data.indexOf(0x0a, cursor)
-      if (newline < 0) break
-      let line = data.subarray(cursor, newline)
-      if (line.length && line[line.length - 1] === 0x0d) line = line.subarray(0, -1)
-      yield {
-        text: line.toString('utf8'),
-        startOffset: dataOffset + cursor,
-        endOffset: dataOffset + newline + 1,
-      }
-      cursor = newline + 1
-    }
-
-    carry = data.subarray(cursor)
-    carryOffset = dataOffset + cursor
-  }
-
-  if (carry.length) {
-    yield {
-      text: carry.toString('utf8'),
-      startOffset: carryOffset,
-      endOffset: carryOffset + carry.length,
-    }
-  }
-}
-
 function parseHistoryLine(text: string): Record<string, unknown> {
   try {
-    return asRecord(sanitize(JSON.parse(text)))
+    return asRecord(JSON.parse(text))
   } catch {
-    return { type: 'malformed-json', raw: truncate(text, 16 * 1024) }
+    return { type: 'malformed-json', raw: text }
   }
 }
 
@@ -284,6 +230,8 @@ export async function* ingestClaudeHistory(
 
     for await (const line of readJsonlLines(filePath, offset)) {
       if (ctx.abortSignal.aborted) return
+      if (!line.terminated && line.text.trim() && !isCompleteJson(line.text)) return
+
       sequence += 1
       offset = line.endOffset
       if (!line.text.trim()) {
@@ -349,11 +297,7 @@ function runtimeEventName(event: Record<string, unknown>): string {
 }
 
 function runtimeNativeId(event: Record<string, unknown>): string | undefined {
-  const name = runtimeEventName(event)
-  if (name === 'PreToolUse' || name === 'PostToolUse') {
-    return stringField(event, 'tool_use_id', 'call_id')
-  }
-  return stringField(event, 'source_event_id', 'hook_invocation_id', 'turn_id', 'agent_id')
+  return stringField(event, 'source_event_id', 'hook_invocation_id')
 }
 
 function parseRuntimeEnvelope(text: string, fileName: string): RuntimeInboxEnvelope {
@@ -362,13 +306,13 @@ function parseRuntimeEnvelope(text: string, fileName: string): RuntimeInboxEnvel
     return {
       id: stringField(parsed, 'id') ?? fileName,
       capturedAt: stringField(parsed, 'capturedAt') ?? new Date().toISOString(),
-      event: asRecord(sanitize(parsed.event)),
+      event: asRecord(parsed.event),
     }
   } catch {
     return {
       id: fileName,
       capturedAt: new Date().toISOString(),
-      event: { hook_event_name: 'MalformedInboxEvent', raw: truncate(text, 16 * 1024) },
+      event: { hook_event_name: 'MalformedInboxEvent', raw: text },
     }
   }
 }
