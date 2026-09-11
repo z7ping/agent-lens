@@ -88,6 +88,16 @@ function literalText(node) {
   return node && ts.isStringLiteralLike(node) ? node.text : null
 }
 
+function isFunctionScope(node) {
+  return ts.isFunctionDeclaration(node)
+    || ts.isFunctionExpression(node)
+    || ts.isArrowFunction(node)
+    || ts.isMethodDeclaration(node)
+    || ts.isGetAccessorDeclaration(node)
+    || ts.isSetAccessorDeclaration(node)
+    || ts.isConstructorDeclaration(node)
+}
+
 function translationNamespaceForFunction(node) {
   if (!node.body || !ts.isBlock(node.body)) return null
   for (const statement of node.body.statements) {
@@ -145,7 +155,7 @@ for (const path of await collect(ROOT)) {
 
   const visit = (node, namespace = null) => {
     let currentNamespace = namespace
-    if (ts.isFunctionLike(node)) {
+    if (isFunctionScope(node)) {
       currentNamespace = translationNamespaceForFunction(node) ?? namespace
     }
 
