@@ -904,6 +904,8 @@ export class SourceAssetRunner {
           ...(safeDiscovered.binding?.path ? { path: safeDiscovered.binding.path } : {}),
           ...(safeDiscovered.binding?.source ? { source: safeDiscovered.binding.source } : {}),
           ...(safeDiscovered.binding?.version ? { version: safeDiscovered.binding.version } : {}),
+          ...(safeDiscovered.binding?.scope ? { scope: safeDiscovered.binding.scope } : {}),
+          ...(safeDiscovered.binding?.scopeRoot ? { scopeRoot: safeDiscovered.binding.scopeRoot } : {}),
         })
         result.assetsDiscovered += 1
         const bindingStates = currentBindings.get(binding.id) ?? new Set<AssetState>()
