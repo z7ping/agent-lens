@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import type { TFunction } from 'i18next'
+import { useTranslation } from 'react-i18next'
 import packageMetadata from '../../package.json'
 import changelogMarkdown from '../../../../CHANGELOG.md?raw'
 import { checkWebUpdate, type WebUpdateInfo } from '../client/update'
@@ -8,14 +10,14 @@ import { Button, Dialog } from './ui'
 const REPOSITORY_URL = 'https://github.com/z7ping/agent-lens'
 const CHANGELOG_URL = `${REPOSITORY_URL}/blob/main/CHANGELOG.md`
 const RELEASES_URL = `${REPOSITORY_URL}/releases`
-const SECTION_LABELS: Record<string, string> = {
-  Added: '新增',
-  Changed: '调整',
-  Fixed: '修复',
-  Security: '安全',
-  Deprecated: '弃用',
-  Removed: '移除',
-  'Known limitations': '已知限制',
+const SECTION_KEYS: Record<string, string> = {
+  Added: 'section.Added',
+  Changed: 'section.Changed',
+  Fixed: 'section.Fixed',
+  Security: 'section.Security',
+  Deprecated: 'section.Deprecated',
+  Removed: 'section.Removed',
+  'Known limitations': 'section.knownLimitations',
 }
 
 interface ChangelogSection {
@@ -36,19 +38,20 @@ function stripInlineMarkdown(value: string): string {
     .trim()
 }
 
-function sectionLabel(value: string): string {
+function sectionLabel(value: string, t: TFunction): string {
   const title = stripInlineMarkdown(value)
-  return SECTION_LABELS[title] ?? title
+  const key = SECTION_KEYS[title]
+  return key ? t(key) : title
 }
 
-function publishedAtLabel(value: string | null): string | null {
+function publishedAtLabel(value: string | null, locale: string): string | null {
   if (!value) return null
   const date = new Date(value)
   if (!Number.isFinite(date.getTime())) return null
-  return date.toLocaleString('zh-CN', { hour12: false })
+  return date.toLocaleString(locale, { hour12: false })
 }
 
-function parseCurrentChangelog(markdown: string, version: string): CurrentChangelog {
+function parseCurrentChangelog(markdown: string, version: string, t: TFunction): CurrentChangelog {
   const lines = markdown.split(/\r?\n/)
   const start = lines.findIndex(line => line.startsWith(`## ${version}`))
   if (start < 0) return { heading: `v${version}`, sections: [] }
@@ -61,7 +64,7 @@ function parseCurrentChangelog(markdown: string, version: string): CurrentChange
     const line = lines[index]!
     if (/^##\s+/.test(line)) break
     if (/^###\s+/.test(line)) {
-      current = { title: sectionLabel(line.replace(/^###\s+/, '')), items: [] }
+      current = { title: sectionLabel(line.replace(/^###\s+/, ''), t), items: [] }
       sections.push(current)
       continue
     }
@@ -73,35 +76,38 @@ function parseCurrentChangelog(markdown: string, version: string): CurrentChange
 }
 
 export function BrandVersion() {
-  return <span className="brand-version" title={`当前版本 ${packageMetadata.version}`}>v{packageMetadata.version}</span>
+  const { t } = useTranslation('release')
+  return <span className="brand-version" title={t('currentVersion', { version: packageMetadata.version })}>v{packageMetadata.version}</span>
 }
 
 function UpdateDialog({ update, onClose }: { update: WebUpdateInfo; onClose(): void }) {
-  const publishedAt = publishedAtLabel(update.publishedAt)
+  const { t, i18n } = useTranslation('release')
+  const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
+  const publishedAt = publishedAtLabel(update.publishedAt, locale)
   return <Dialog
     open
     className="release-dialog-overlay"
-    title="发现新版本"
-    description={`当前 v${update.currentVersion} · 最新 v${update.latestVersion}${publishedAt ? ` · ${publishedAt}` : ''}`}
+    title={t('updateTitle')}
+    description={t('updateDescription', { current: update.currentVersion, latest: update.latestVersion, published: publishedAt ? t('publishedSuffix', { time: publishedAt }) : '' })}
     onClose={onClose}
     footer={<div className="release-dialog-footer">
-      <span>不会自动安装或强制重启</span>
+      <span>{t('noAutoInstall')}</span>
       <div>
-        <a href={update.releasePageUrl} target="_blank" rel="noreferrer">查看版本</a>
-        <Button size="small" onClick={onClose}>稍后</Button>
+        <a href={update.releasePageUrl} target="_blank" rel="noreferrer">{t('viewRelease')}</a>
+        <Button size="small" onClick={onClose}>{t('later')}</Button>
       </div>
     </div>}
   >
     <div className="release-dialog-content web-update-content">
       <section className="release-section">
-        <h3>npm / CLI 更新</h3>
-        <p>推荐使用 AgentLens 已有更新命令；它会按当前运行时归属处理 npm 后台服务，不接管 Windows Desktop。</p>
+        <h3>{t('npmCliTitle')}</h3>
+        <p>{t('npmCliDescription')}</p>
         <CopyableCodeBlock className="web-update-command" copyValue={update.installCommand}>{update.installCommand}</CopyableCodeBlock>
-        <p className="web-update-fallback">也可以直接执行：</p>
+        <p className="web-update-fallback">{t('fallbackCommand')}</p>
         <CopyableCodeBlock className="web-update-command" copyValue={update.fallbackInstallCommand}>{update.fallbackInstallCommand}</CopyableCodeBlock>
       </section>
       {update.releaseNotes && <section className="release-section">
-        <h3>版本说明</h3>
+        <h3>{t('releaseNotes')}</h3>
         <CopyableCodeBlock className="web-update-notes" copyValue={update.releaseNotes}>{update.releaseNotes}</CopyableCodeBlock>
       </section>}
     </div>
@@ -109,12 +115,13 @@ function UpdateDialog({ update, onClose }: { update: WebUpdateInfo; onClose(): v
 }
 
 export function ReleaseInfo({ runtimeOwner, runtimeReady }: { runtimeOwner: string | null; runtimeReady: boolean }) {
+  const { t } = useTranslation('release')
   const [open, setOpen] = useState(false)
   const [updateOpen, setUpdateOpen] = useState(false)
   const [update, setUpdate] = useState<WebUpdateInfo | null>(null)
   const changelog = useMemo(
-    () => parseCurrentChangelog(changelogMarkdown, packageMetadata.version),
-    [],
+    () => parseCurrentChangelog(changelogMarkdown, packageMetadata.version, t),
+    [t],
   )
 
   useEffect(() => {
@@ -130,12 +137,12 @@ export function ReleaseInfo({ runtimeOwner, runtimeReady }: { runtimeOwner: stri
     {update && <button
       className="header-link header-update-link"
       type="button"
-      title={`发现新版本 ${update.latestVersion}`}
+      title={t('newVersionTitle', { version: update.latestVersion })}
       onClick={() => {
         setOpen(false)
         setUpdateOpen(true)
       }}
-    >新版本 v{update.latestVersion}</button>}
+    >{t('newVersion', { version: update.latestVersion })}</button>}
     <a
       className="header-link header-link-github"
       href={REPOSITORY_URL}
@@ -145,21 +152,21 @@ export function ReleaseInfo({ runtimeOwner, runtimeReady }: { runtimeOwner: stri
     <button className="header-link" type="button" onClick={() => {
       setUpdateOpen(false)
       setOpen(true)
-    }}>更新日志</button>
+    }}>{t('changelog')}</button>
 
     {update && updateOpen && <UpdateDialog update={update} onClose={() => setUpdateOpen(false)} />}
 
     <Dialog
       open={open}
       className="release-dialog-overlay"
-      title="更新日志"
+      title={t('changelog')}
       description={changelog.heading || `v${packageMetadata.version}`}
       onClose={() => setOpen(false)}
       footer={<div className="release-dialog-footer">
         <span>AgentLens {packageMetadata.version}</span>
         <div>
-          <a href={RELEASES_URL} target="_blank" rel="noreferrer">发布记录</a>
-          <a href={CHANGELOG_URL} target="_blank" rel="noreferrer">完整更新日志</a>
+          <a href={RELEASES_URL} target="_blank" rel="noreferrer">{t('releases')}</a>
+          <a href={CHANGELOG_URL} target="_blank" rel="noreferrer">{t('fullChangelog')}</a>
         </div>
       </div>}
     >
@@ -167,7 +174,7 @@ export function ReleaseInfo({ runtimeOwner, runtimeReady }: { runtimeOwner: stri
         {changelog.sections.length ? changelog.sections.map(section => <section className="release-section" key={section.title}>
           <h3>{section.title}</h3>
           <ul>{section.items.map((item, index) => <li key={`${section.title}-${index}`}>{item}</li>)}</ul>
-        </section>) : <p className="release-empty">当前版本暂无更新日志摘要。</p>}
+        </section>) : <p className="release-empty">{t('empty')}</p>}
       </div>
     </Dialog>
   </>
