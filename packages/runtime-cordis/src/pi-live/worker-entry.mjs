@@ -7,6 +7,8 @@ import { serialize } from 'node:v8'
 
 const VERSION = 1
 const MAX_MESSAGE_BYTES = 1024 * 1024
+const SNAPSHOT_CHUNK_BYTES = 384 * 1024
+const MAX_SNAPSHOT_TRANSFERS = 4
 const MAX_OUTBOUND_MESSAGES = 256
 const MAX_SEEN_REQUEST_IDS = 512
 let runtimeSessionId = ''
@@ -26,6 +28,7 @@ let currentInitializationStage
 let currentStageStartedAt = 0
 let initializationTimings = []
 const seenRequestIds = new Set()
+const snapshotTransfers = new Map()
 const outboundQueue = []
 let outboundSending = false
 let exitAfterFlush = false
@@ -272,6 +275,38 @@ function samePath(left, right) {
   return normalized(left) === normalized(right)
 }
 
+function nextSnapshotChunk(transferId) {
+  const transfer = snapshotTransfers.get(transferId)
+  if (!transfer) throw new Error('Unknown or expired Pi Runtime snapshot transfer')
+  const start = transfer.offset
+  const end = Math.min(transfer.bytes.length, start + SNAPSHOT_CHUNK_BYTES)
+  const chunk = transfer.bytes.subarray(start, end)
+  const sequence = transfer.sequence
+  transfer.offset = end
+  transfer.sequence += 1
+  const done = end >= transfer.bytes.length
+  if (done) snapshotTransfers.delete(transferId)
+  return { transferId, sequence, chunk, done }
+}
+
+function beginSnapshotTransfer(since) {
+  const all = session.sessionManager.getEntries()
+  const index = since ? all.findIndex(entry => record(entry).id === since) : -1
+  const entries = since && index >= 0 ? all.slice(index + 1) : all
+  const snapshot = { state: state(), entries, leafId: session.sessionManager.getLeafId() }
+  const bytes = serialize(snapshot)
+
+  while (snapshotTransfers.size >= MAX_SNAPSHOT_TRANSFERS) {
+    const oldest = snapshotTransfers.keys().next().value
+    if (oldest === undefined) break
+    snapshotTransfers.delete(oldest)
+  }
+
+  const transferId = randomUUID()
+  snapshotTransfers.set(transferId, { bytes, offset: 0, sequence: 0 })
+  return nextSnapshotChunk(transferId)
+}
+
 function resolvedRuntimeSessionDir(cwd, value) {
   if (typeof value !== 'string' || !value.trim()) return undefined
   const raw = value.trim()
@@ -490,11 +525,10 @@ async function selectModel(provider, modelId) {
 async function command(name, value = {}) {
   if (!session && name !== 'terminate') throw new Error('Pi Runtime is not ready')
   if (name === 'state') return state()
-  if (name === 'snapshot') {
-    const all = session.sessionManager.getEntries()
-    const index = value.since ? all.findIndex(entry => record(entry).id === value.since) : -1
-    const entries = value.since && index >= 0 ? all.slice(index + 1) : all
-    return { state: state(), entries, leafId: session.sessionManager.getLeafId() }
+  if (name === 'snapshotBegin') return beginSnapshotTransfer(value.since)
+  if (name === 'snapshotChunk') {
+    if (typeof value.transferId !== 'string' || !value.transferId) throw new Error('Pi Runtime snapshot transfer id is required')
+    return nextSnapshotChunk(value.transferId)
   }
   if (name === 'controls') return { models: (await models()).map(({ provider, id, name, reasoning }) => ({ provider, id, ...(name ? { name } : {}), ...(typeof reasoning === 'boolean' ? { reasoning } : {}) })), thinkingLevels: session.getAvailableThinkingLevels() }
   if (name === 'setModel') { await selectModel(value.provider, value.modelId); return state() }
@@ -522,6 +556,7 @@ async function command(name, value = {}) {
 async function dispose() {
   if (terminating) return
   terminating = true
+  snapshotTransfers.clear()
   unsubscribe()
   extensionUi?.dispose()
   if (session?.isStreaming) { session.abortBash?.(); await session.abort().catch(() => undefined) }
