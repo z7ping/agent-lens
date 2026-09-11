@@ -8,6 +8,25 @@ import {
   OfficialToolDiscoveryService,
 } from './tool-discovery'
 
+test('tool discovery reports present from executable evidence without running the Agent CLI', async () => {
+  const calls: string[] = []
+  const items = await discoverOfficialTools({
+    env: { PATH: '' },
+    homeDir: join(tmpdir(), 'agent-lens-no-product-data'),
+    platform: process.platform,
+    timeoutMs: 1_000,
+    shellPathResolver: async () => undefined,
+    executableResolver: async name => {
+      calls.push(name)
+      return name === 'pi' ? '/opt/bin/pi' : undefined
+    },
+  })
+  const pi = items.find(item => item.integrationId === 'pi')
+  assert.equal(pi?.presence, 'present')
+  assert.equal(pi?.executable, '/opt/bin/pi')
+  assert.ok(calls.includes('pi'))
+})
+
 test('tool discovery reports data-only when persisted product data exists without an executable', async () => {
   const root = join(tmpdir(), `agent-lens-tool-discovery-${process.pid}-${Date.now()}`)
   const home = join(root, 'home')
