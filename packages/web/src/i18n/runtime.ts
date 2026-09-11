@@ -4,6 +4,7 @@ import {
   OFFICIAL_AGENT_LENS_LOCALE,
   type LocalePackListResponseDto,
 } from '@agent-lens/protocol'
+import { officialChineseLocalePack } from './official-zh-CN'
 import {
   listLocalePacks,
   registerLocalePack,
@@ -13,6 +14,24 @@ import {
 const LOCALE_PREFERENCE_KEY = 'agent-lens.locale.v1'
 
 export const agentLensI18n: i18n = createInstance()
+
+export function translateProduct(key: string, options: Record<string, unknown> = {}): string {
+  if (agentLensI18n.isInitialized) return String(agentLensI18n.t(key, options))
+
+  const separator = key.indexOf(':')
+  const namespace = separator >= 0 ? key.slice(0, separator) : 'common'
+  const path = (separator >= 0 ? key.slice(separator + 1) : key).split('.').filter(Boolean)
+  let value: unknown = (officialChineseLocalePack.messages as Record<string, unknown>)[namespace]
+  for (const part of path) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return key
+    value = (value as Record<string, unknown>)[part]
+  }
+  if (typeof value !== 'string') return key
+  return value.replace(/{{\s*([\w.-]+)\s*}}/g, (_match, token: string) => {
+    const replacement = options[token]
+    return replacement === undefined || replacement === null ? '' : String(replacement)
+  })
+}
 
 export function readLocalePreference(): string {
   try {
