@@ -124,6 +124,25 @@ export const officialChineseLocalePack: LocalePackDto = {
         unknownEvents: '待适配事件',
         coverageLabel: '覆盖范围',
       },
+      selectMenu: {
+        placeholder: '请选择',
+        search: '搜索…',
+        loadMore: '继续加载',
+        loading: '正在加载…',
+        noMatch: '没有匹配项',
+      },
+      codeBlock: {
+        copy: '复制',
+        copied: '已复制',
+        failed: '复制失败',
+        aria: '{{label}}代码块',
+      },
+      overlay: {
+        close: '关闭',
+      },
+      breadcrumb: {
+        aria: '面包屑',
+      },
       sidebarFilter: {
         summary: '筛选',
         all: '全部',
@@ -689,6 +708,13 @@ export const officialChineseLocalePack: LocalePackDto = {
       thinking: {
         thinkingProcess: '思考过程',
         executionProcess: '执行过程',
+      },
+      round: {
+        running: '进行中',
+        stopped: '已停止',
+        calls: '{{count}} 调用',
+        errors: '{{count}} 错误',
+        highLatency: '耗时较高',
       },
       duration: {
         milliseconds: '{{value}} 毫秒',
