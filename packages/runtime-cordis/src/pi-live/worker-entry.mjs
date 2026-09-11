@@ -123,10 +123,7 @@ function callResourceLoader(loader, method) {
 }
 
 function piOfflineModeEnabled() {
-  const value = process.env.PI_OFFLINE
-  if (!value) return false
-  const normalized = value.toLowerCase()
-  return value === '1' || normalized === 'true' || normalized === 'yes'
+  return Boolean(process.env.PI_OFFLINE)
 }
 
 function normalizePackageUpdates(value) {
