@@ -737,12 +737,10 @@ export class DefaultPiLiveService implements PiLiveService {
   }
 
   private decorateReadyState(runtime: OwnedRuntime, state: PiLiveRuntimeState): PiLiveRuntimeState {
-    const {
-      startupResources: _startupResources,
-      packageUpdates: _packageUpdates,
-      packageUpdateCheck: _packageUpdateCheck,
-      ...safeState
-    } = state
+    const safeState = { ...state }
+    delete safeState.startupResources
+    delete safeState.packageUpdates
+    delete safeState.packageUpdateCheck
     return {
       ...safeState,
       runtimeSessionId: runtime.id,
