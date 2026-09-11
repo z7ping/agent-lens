@@ -4,6 +4,8 @@ import type {
   CapturePolicyResponseDto,
   FacetResponseDto,
   HealthResponseDto,
+  IntegrationAuthorizationCapabilityDto,
+  IntegrationAuthorizationResponseDto,
   LiveUpdateArea,
   LiveUpdateEventDto,
   ReviewDetailFilter,
