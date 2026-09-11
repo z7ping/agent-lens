@@ -417,7 +417,11 @@ export class IntegrationPackageService {
   install(integrationId: string): Promise<IntegrationPackageOperation> {
     return this.enqueue(integrationId, 'install', async id => {
       const current = this.states.get(id) ?? await this.readInstalledState(id)
-      if (current.installed && current.integrity === 'verified') {
+      if (
+        current.installed
+        && current.integrity === 'verified'
+        && current.compatibility === 'compatible'
+      ) {
         return 'Integration is already installed'
       }
       await this.installAvailable(id)
