@@ -13,6 +13,7 @@ import {
   startHttpSurface,
   type RunningHttpSurface,
 } from './server'
+import type { IntegrationAuthorizationController } from './integration-http'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -33,6 +34,7 @@ export interface HttpSurfacePluginConfig {
   integrationStatus?: (
     productId: string,
   ) => AgentIntegrationRuntimeStatus | null | Promise<AgentIntegrationRuntimeStatus | null>
+  integrationAuthorization?: IntegrationAuthorizationController
 }
 
 const manifest = {
@@ -186,6 +188,7 @@ const applyHttpSurface = Object.assign(
       rescanAgents: () => sourceRescan.rescan(),
       sourceDetection: sourceId => sourceRescan.isSourceDetected(sourceId),
       ...(config.integrationStatus ? { integrationStatus: config.integrationStatus } : {}),
+      ...(config.integrationAuthorization ? { integrationAuthorization: config.integrationAuthorization } : {}),
       ...(config.selectProjectDirectory ? { selectProjectDirectory: config.selectProjectDirectory } : {}),
       hubReview,
     })
