@@ -137,15 +137,19 @@ function captureState(
   agent: Pick<AgentOverviewDto, 'supported' | 'enabled' | 'detected'>,
   discovery: IntegrationToolDiscoveryItemDto | undefined,
   discoveryScanning: boolean,
+  discoveryError: string,
   t: TFunction,
 ): { label: string; title: string; className: string } {
   if (!agent.supported) return { label: t('status.unsupported'), title: t('status.unsupportedTitle'), className: 'is-unsupported' }
-  if (discovery?.presence === 'error') {
-    return { label: t('status.scanFailed'), title: discovery.reason || t('status.scanFailedTitle'), className: 'is-error' }
-  }
   if (agent.detected) {
     if (!agent.enabled) return { label: t('status.disabled'), title: t('status.disabledTitle'), className: 'is-disabled' }
     return { label: t('status.enabled'), title: t('status.enabledTitle'), className: 'is-enabled is-detected' }
+  }
+  if (discoveryError) {
+    return { label: t('status.scanFailed'), title: discoveryError, className: 'is-error' }
+  }
+  if (discovery?.presence === 'error') {
+    return { label: t('status.scanFailed'), title: discovery.reason || t('status.scanFailedTitle'), className: 'is-error' }
   }
   if (discovery?.presence === 'present') {
     return { label: t('status.discovered'), title: t('status.discoveredTitle'), className: 'is-discovered' }
@@ -162,8 +166,10 @@ function captureState(
 function toolPresenceLabel(
   discovery: IntegrationToolDiscoveryItemDto | undefined,
   discoveryScanning: boolean,
+  discoveryError: string,
   t: TFunction,
 ): string {
+  if (discoveryError) return t('toolPresence.error')
   if (discovery?.presence === 'present') return t('toolPresence.present')
   if (discovery?.presence === 'data-only') return t('toolPresence.dataOnly')
   if (discovery?.presence === 'error') return t('toolPresence.error')
@@ -465,10 +471,11 @@ function IntegrationControl({
   </section>
 }
 
-function AgentCard({ agent, discovery, discoveryScanning, policy, onCaptureChange, onAuthorize }: {
+function AgentCard({ agent, discovery, discoveryScanning, discoveryError, policy, onCaptureChange, onAuthorize }: {
   agent: AgentOverviewDto
   discovery: IntegrationToolDiscoveryItemDto | undefined
   discoveryScanning: boolean
+  discoveryError: string
   policy: CapturePolicyResponseDto | null
   onCaptureChange(sourceId: string, enabled: boolean): Promise<void>
   onAuthorize(
@@ -503,7 +510,7 @@ function AgentCard({ agent, discovery, discoveryScanning, policy, onCaptureChang
   const visibleBindings = showAllBindings ? bindings : bindings.slice(0, ASSEMBLY_PATH_LIMIT)
   const userAssetCount = userGrouped.reduce((sum, [, assets]) => sum + assets.length, 0)
   const userUsageCount = agent.usedAssets.reduce((sum, item) => sum + item.callCount, 0)
-  const status = captureState(agent, discovery, discoveryScanning, t)
+  const status = captureState(agent, discovery, discoveryScanning, discoveryError, t)
   const presencePath = toolPresencePath(discovery)
   const configPath = installation?.configRoot ?? discovery?.configRoot ?? discovery?.dataRoot
 
@@ -517,13 +524,13 @@ function AgentCard({ agent, discovery, discoveryScanning, policy, onCaptureChang
     </header>
 
     <div className="agent-installation">
-      <span className="agent-tool-presence"><small>{t('toolPresence.label')}</small><b data-presence={discovery?.presence ?? (discoveryScanning ? 'scanning' : 'absent')}>{toolPresenceLabel(discovery, discoveryScanning, t)}</b></span>
+      <span className="agent-tool-presence"><small>{t('toolPresence.label')}</small><b data-presence={discoveryError ? 'error' : discovery?.presence ?? (discoveryScanning ? 'scanning' : 'absent')}>{toolPresenceLabel(discovery, discoveryScanning, discoveryError, t)}</b></span>
       <span><small>{t('installation.version')}</small><b>{installation?.version ?? (agent.detected ? t('installation.versionUnavailable') : t('installation.notDetected'))}</b></span>
       <span className="agent-config"><small>{t('installation.configDirectory')}</small><code title={configPath}>{configPath ? shortPath(configPath, 52) : agent.detected ? t('installation.pathUnavailable') : t('installation.notDetected')}</code></span>
       {presencePath && !configPath && <span className="agent-config"><small>{t('toolPresence.location')}</small><code title={presencePath}>{shortPath(presencePath, 52)}</code></span>}
     </div>
     {discovery?.presence === 'data-only' && <p className="agent-discovery-note">{t('toolPresence.dataOnlyHint')}</p>}
-    {discovery?.presence === 'error' && <p className="agent-discovery-note is-error" title={discovery.reason}>{t('toolPresence.errorHint')}</p>}
+    {(discoveryError || discovery?.presence === 'error') && <p className="agent-discovery-note is-error" title={discoveryError || discovery?.reason}>{t('toolPresence.errorHint')}</p>}
 
     <IntegrationControl agent={agent} policy={policy} onChange={onCaptureChange} onAuthorize={onAuthorize}/>
 
@@ -622,7 +629,7 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
           {items.map(agent => {
             const assetCount = agent.assetInventory.filter(asset => asset.type !== 'builtin').length
             const agentDiscovery = discoveryByProduct.get(agent.productId) ?? discoveryByProduct.get(agent.sourceId)
-            const status = captureState(agent, agentDiscovery, discoveryScanning, t)
+            const status = captureState(agent, agentDiscovery, discoveryScanning, snapshot.integrationDiscoveryError, t)
             return <button key={agent.sourceId} className={`agent-source-option ${agent.sourceId === selectedSourceId ? 'is-active' : ''}`} onClick={() => onSourceIdChange(agent.sourceId)} aria-current={agent.sourceId === selectedSourceId ? 'true' : undefined} title={status.title}>
               <span className={`source-dot large ${sourceDot(agent.sourceId)}`}/>
               <span className="agent-source-copy"><b>{agentLabel(agent.sourceId, agent.displayName)}</b><small>{t('page.userAssets', { count: assetCount })}</small></span>
@@ -635,6 +642,7 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
           agent={selectedAgent}
           discovery={selectedDiscovery}
           discoveryScanning={discoveryScanning}
+          discoveryError={snapshot.integrationDiscoveryError}
           policy={snapshot.capturePolicy}
           onCaptureChange={(id, enabled) => model.setSourceEnabled(id, enabled)}
           onAuthorize={(productId, capabilities) => model.authorizeIntegration(productId, capabilities)}
