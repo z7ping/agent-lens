@@ -1292,6 +1292,13 @@ export const officialChineseLocalePack: LocalePackDto = {
       },
     },
     review: {
+      overlay: {
+        noMatchTitle: '没有匹配的会话',
+        noMatchDescription: '当前筛选范围没有会话。可以先放宽时间、项目、智能体或状态筛选，再继续查找。',
+        relaxFilters: '放宽筛选条件',
+        retrySession: '重试当前会话',
+        retry: '重试',
+      },
       local: {
         day: {
           today: '今天',
@@ -1600,6 +1607,34 @@ export const officialChineseLocalePack: LocalePackDto = {
           empty: '当前会话没有可读取的远程记录。',
         },
       },
+    },
+    release: {
+      section: {
+        Added: '新增',
+        Changed: '调整',
+        Fixed: '修复',
+        Security: '安全',
+        Deprecated: '弃用',
+        Removed: '移除',
+        knownLimitations: '已知限制',
+      },
+      currentVersion: '当前版本 {{version}}',
+      updateTitle: '发现新版本',
+      updateDescription: '当前 v{{current}} · 最新 v{{latest}}{{published}}',
+      publishedSuffix: ' · {{time}}',
+      noAutoInstall: '不会自动安装或强制重启',
+      viewRelease: '查看版本',
+      later: '稍后',
+      npmCliTitle: 'npm / CLI 更新',
+      npmCliDescription: '推荐使用 AgentLens 已有更新命令；它会按当前运行时归属处理 npm 后台服务，不接管 Windows Desktop。',
+      fallbackCommand: '也可以直接执行：',
+      releaseNotes: '版本说明',
+      newVersionTitle: '发现新版本 {{version}}',
+      newVersion: '新版本 v{{version}}',
+      changelog: '更新日志',
+      releases: '发布记录',
+      fullChangelog: '完整更新日志',
+      empty: '当前版本暂无更新日志摘要。',
     },
     errors: {
       localeDiscoveryFailed: '社区语言包读取失败，已回退到简体中文。',
