@@ -163,6 +163,59 @@ test('legacy physicalization isolates one broken package and retries only until 
   }
 })
 
+test('failed update keeps the previously committed version current and loadable', async () => {
+  const f = await fixture()
+  try {
+    const initial = new IntegrationPackageService({
+      bundleDir: f.bundleDir,
+      installRoot: f.installRoot,
+    })
+    await initial.initialize()
+    assert.equal((await initial.install('pi')).status, 'completed')
+
+    const integration = OFFICIAL_INTEGRATION_CATALOG.find(item => item.integrationId === 'pi')
+    assert.ok(integration)
+    const versionsRoot = join(f.installRoot, 'pi', 'versions')
+    const oldVersion = '0.9.0-test'
+    const oldDir = join(versionsRoot, oldVersion)
+    await rename(join(versionsRoot, integration.package.bundledVersion), oldDir)
+
+    const manifestPath = join(oldDir, 'manifest.json')
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as Record<string, unknown>
+    manifest.version = oldVersion
+    const manifestText = `${JSON.stringify(manifest, null, 2)}\n`
+    await writeFile(manifestPath, manifestText, 'utf8')
+
+    const pointerPath = join(f.installRoot, 'pi', 'current.json')
+    const pointer = JSON.parse(await readFile(pointerPath, 'utf8')) as Record<string, unknown>
+    pointer.version = oldVersion
+    pointer.manifestSha256 = sha256(manifestText)
+    await writeFile(pointerPath, `${JSON.stringify(pointer, null, 2)}\n`, 'utf8')
+
+    const service = new IntegrationPackageService({
+      bundleDir: f.bundleDir,
+      installRoot: f.installRoot,
+    })
+    await service.initialize()
+    assert.equal(service.state('pi').installedVersion, oldVersion)
+    assert.equal(service.state('pi').availableVersion, integration.package.bundledVersion)
+
+    const bundledEntry = f.bundle.entryFiles.get('pi')
+    assert.ok(bundledEntry)
+    await writeFile(bundledEntry.path, 'broken update payload\n', 'utf8')
+
+    const update = await service.update('pi')
+    assert.equal(update.status, 'failed')
+    assert.equal(service.state('pi').installedVersion, oldVersion)
+    assert.ok(service.installedEntryPath('pi'))
+
+    const current = JSON.parse(await readFile(pointerPath, 'utf8')) as Record<string, unknown>
+    assert.equal(current.version, oldVersion)
+  } finally {
+    await f.cleanup()
+  }
+})
+
 test('startup cleans interrupted staging/trash work without disturbing the committed current pointer', async () => {
   const f = await fixture()
   try {
