@@ -559,6 +559,203 @@ function IntegrationControl({
   </section>
 }
 
+function IntegrationAdvancedActions({
+  management,
+  label,
+  onChange,
+  onRemove,
+}: {
+  management: IntegrationManagementItemDto | undefined
+  label: string
+  onChange(integrationId: string, enabled: boolean): Promise<void>
+  onRemove(integrationId: string): Promise<IntegrationPackageOperationResponseDto>
+}) {
+  const { t } = useTranslation('agents')
+  const [open, setOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+  if (!management?.packageState?.installed) return null
+
+  const remove = async () => {
+    if (saving) return
+    setSaving(true)
+    setMessage('')
+    setError('')
+    try {
+      if (management.enabled.configured) {
+        await onChange(management.integrationId, false)
+      }
+      if (management.enabled.effective) {
+        setMessage(t('integration.uninstallRestartRequired'))
+        return
+      }
+      const result = await onRemove(management.integrationId)
+      if (result.operation.status !== 'completed' || result.state.installed) {
+        throw new Error(result.operation.message || result.state.reason || t('integration.uninstallFailed'))
+      }
+      setOpen(false)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return <details className="disclosure-group integration-advanced">
+    <summary><DisclosureChevron/><span>{t('integration.advancedTitle')}</span></summary>
+    <div className="integration-advanced-body">
+      <div>
+        <b>{t('integration.uninstallTitle')}</b>
+        <span>{t('integration.uninstallDescription')}</span>
+        {management.packageState.installedVersion && <small>{t('integration.installedVersion', { version: management.packageState.installedVersion })}</small>}
+      </div>
+      <Button variant="danger" size="small" onClick={() => { setMessage(''); setError(''); setOpen(true) }}>
+        {t('integration.uninstall')}
+      </Button>
+    </div>
+    <Dialog
+      open={open}
+      title={t('integration.uninstallDialogTitle', { agent: label })}
+      description={t('integration.uninstallDialogDescription')}
+      onClose={() => { if (!saving) setOpen(false) }}
+      closeDisabled={saving}
+      footer={<>
+        <Button disabled={saving} onClick={() => setOpen(false)}>{t('integration.cancel')}</Button>
+        <Button variant="danger" loading={saving} onClick={() => void remove()}>
+          {management.enabled.effective ? t('integration.disableBeforeUninstall') : t('integration.confirmUninstall')}
+        </Button>
+      </>}
+    >
+      {message && <p className="integration-uninstall-note">{message}</p>}
+      {error && <p className="source-capture-error">{error}</p>}
+      <p className="integration-authorization-note">{t('integration.uninstallKeepsHistory')}</p>
+    </Dialog>
+  </details>
+}
+
+function IntegrationOnlyCard({
+  management,
+  discovery,
+  discoveryScanning,
+  discoveryError,
+  onChange,
+  onInstall,
+  onRemove,
+}: {
+  management: IntegrationManagementItemDto
+  discovery: IntegrationToolDiscoveryItemDto | undefined
+  discoveryScanning: boolean
+  discoveryError: string
+  onChange(integrationId: string, enabled: boolean): Promise<void>
+  onInstall(integrationId: string): Promise<IntegrationPackageOperationResponseDto>
+  onRemove(integrationId: string): Promise<IntegrationPackageOperationResponseDto>
+}) {
+  const { t } = useTranslation('agents')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const status = captureState(undefined, management, discovery, discoveryScanning, t)
+  const packageState = management.packageState
+  const presencePath = toolPresencePath(discovery)
+  const canInstall = discovery?.presence === 'present' || discovery?.presence === 'data-only'
+
+  const install = async () => {
+    if (!packageState || packageState.installed || saving) return
+    setSaving(true)
+    setError('')
+    try {
+      const result = await onInstall(management.integrationId)
+      if (result.operation.status !== 'completed' || !result.state.installed) {
+        throw new Error(result.operation.message || result.state.reason || t('integration.installFailed'))
+      }
+      await onChange(management.integrationId, true)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const toggle = async () => {
+    if (!packageState?.installed || !management.enabled.editable || saving) return
+    setSaving(true)
+    setError('')
+    try {
+      await onChange(management.integrationId, !management.enabled.configured)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return <article className="agent-card" data-source={management.integrationId}>
+    <header className="agent-card-head">
+      <div className="agent-identity">
+        <span className={`source-dot large ${sourceDot(management.integrationId)}`}/>
+        <div>
+          <h2>{management.displayName}</h2>
+          <p>{agentDescriptionKey[management.integrationId] ? t(agentDescriptionKey[management.integrationId]!) : t('description.fallback')}</p>
+        </div>
+      </div>
+      <span className={`agent-status ${status.className}`} title={status.title}>{status.label}</span>
+    </header>
+
+    <div className="agent-installation">
+      <span className="agent-tool-presence"><small>{t('toolPresence.label')}</small><b data-presence={discoveryError ? 'error' : discovery?.presence ?? (discoveryScanning ? 'scanning' : 'absent')}>{toolPresenceLabel(discovery, discoveryScanning, discoveryError, t)}</b></span>
+      <span><small>{t('installation.integrationVersion')}</small><b>{packageState?.installedVersion ?? packageState?.availableVersion ?? t('installation.notAdded')}</b></span>
+      {presencePath && <span className="agent-config"><small>{t('toolPresence.location')}</small><code title={presencePath}>{shortPath(presencePath, 52)}</code></span>}
+    </div>
+
+    {discovery?.presence === 'data-only' && <p className="agent-discovery-note">{t('toolPresence.dataOnlyHint')}</p>}
+    {(discoveryError || discovery?.presence === 'error') && <p className="agent-discovery-note is-error" title={discoveryError || discovery?.reason}>{t('toolPresence.errorHint')}</p>}
+
+    <section className="source-capture-control">
+      <div>
+        <h3>{packageState?.installed ? t('integration.title') : t('integration.notAddedTitle')}</h3>
+        <p>{!packageState
+          ? t('integration.packageLifecycleUnavailable')
+          : packageState.installed
+            ? packageState.restartRequired || management.enabled.restartRequired
+              ? t('integration.pendingRestartDescription')
+              : management.enabled.configured
+                ? t('integration.enabledDescription')
+                : t('integration.disabledDescription')
+            : canInstall
+              ? t('integration.notAddedDescription')
+              : t('integration.notDetectedDescription')}</p>
+        {error && <p className="source-capture-error">{error}</p>}
+      </div>
+      {!packageState
+        ? <StatusBadge tone="danger">{t('status.managementUnavailable')}</StatusBadge>
+        : packageState.installed
+          ? <button
+              type="button"
+              role="switch"
+              aria-checked={management.enabled.configured}
+              className="source-capture-switch"
+              data-enabled={management.enabled.configured || undefined}
+              disabled={!management.enabled.editable || saving}
+              onClick={() => void toggle()}
+            ><span aria-hidden="true"/><b>{saving ? t('integration.saving') : management.enabled.configured ? t('integration.enabled') : t('integration.disabled')}</b></button>
+          : <Button variant="primary" loading={saving} disabled={!canInstall} onClick={() => void install()}>{t('integration.addToAgentLens')}</Button>}
+    </section>
+
+    <section className="agent-primary-section integration-awaiting-detail">
+      <div className="section-heading-row"><div><h3>{t('integration.detailsPendingTitle')}</h3><p>{packageState?.installed ? t('integration.detailsPendingRestart') : t('integration.detailsPendingInstall')}</p></div></div>
+    </section>
+
+    <section className="agent-secondary">
+      <IntegrationAdvancedActions
+        management={management}
+        label={management.displayName}
+        onChange={onChange}
+        onRemove={onRemove}
+      />
+    </section>
+  </article>
+}
+
 function AgentCard({ agent, management, discovery, discoveryScanning, discoveryError, policy, onCaptureChange, onInstall, onRemove, onAuthorize }: {
   agent: AgentOverviewDto
   management: IntegrationManagementItemDto | undefined
