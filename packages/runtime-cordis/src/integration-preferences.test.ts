@@ -45,6 +45,25 @@ test('display order is normalized to official Integrations and marks global orde
   }
 })
 
+test('migrated display order remains authoritative across later non-order preference writes', async () => {
+  const path = join(tmpdir(), `agent-lens-integration-preferences-${process.pid}-migrated-order.json`)
+  const service = new IntegrationPreferenceService(path, null)
+  try {
+    const migrated = await service.update({ displayOrder: ['codex', 'pi'] })
+    assert.equal(migrated.displayOrderConfigured, true)
+    assert.deepEqual(migrated.displayOrder.slice(0, 2), ['codex', 'pi'])
+
+    const later = await service.update({
+      onboardingCompleted: true,
+      acknowledgedIntegrationIds: ['pi'],
+    })
+    assert.equal(later.displayOrderConfigured, true)
+    assert.deepEqual(later.displayOrder.slice(0, 2), ['codex', 'pi'])
+  } finally {
+    await rm(path, { force: true })
+  }
+})
+
 test('onboarding completion is monotonic and preserves its first completion timestamp', async () => {
   const path = join(tmpdir(), `agent-lens-integration-preferences-${process.pid}-onboarding.json`)
   const service = new IntegrationPreferenceService(path, null)
