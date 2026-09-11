@@ -132,25 +132,29 @@ function integrationAvailabilityTone(
   return 'neutral'
 }
 
-const agentDescription: Record<string, string> = {
-  codex: 'OpenAI Codex · 本机历史、运行时钩子与能力资产',
-  'claude-code': 'Anthropic Claude Code · 会话、钩子与能力资产',
-  pi: 'Pi · 原生会话、分支关系与能力资产',
-  hermes: 'Hermes · 本机会话、观察器与能力资产',
-  opencode: 'OpenCode · 本机会话、原生记录与能力资产',
+function captureState(
+  agent: Pick<AgentOverviewDto, 'supported' | 'enabled' | 'detected'>,
+  t: TFunction,
+): { label: string; title: string; className: string } {
+  if (!agent.supported) return { label: t('status.unsupported'), title: t('status.unsupportedTitle'), className: 'is-unsupported' }
+  if (!agent.detected) return {
+    label: agent.enabled ? t('status.notDetectedEnabled') : t('status.notDetectedDisabled'),
+    title: agent.enabled ? t('status.notDetectedEnabledTitle') : t('status.notDetectedDisabledTitle'),
+    className: agent.enabled ? 'is-enabled' : 'is-disabled',
+  }
+  if (!agent.enabled) return { label: t('status.detectedDisabled'), title: t('status.detectedDisabledTitle'), className: 'is-disabled' }
+  return { label: t('status.detectedEnabled'), title: t('status.detectedEnabledTitle'), className: 'is-enabled is-detected' }
 }
 
-function captureState(agent: Pick<AgentOverviewDto, 'supported' | 'enabled' | 'detected'>): { label: string; title: string; className: string } {
-  if (!agent.supported) return { label: '未支持', title: '当前版本未声明支持该智能体', className: 'is-unsupported' }
-  if (!agent.detected) return { label: agent.enabled ? '未检测 · 已启用' : '未检测 · 未启用', title: agent.enabled ? '该智能体集成已启用，但本机尚未检测到对应产品或数据' : '本机尚未检测到该智能体，集成当前也未启用', className: agent.enabled ? 'is-enabled' : 'is-disabled' }
-  if (!agent.enabled) return { label: '已检测 · 未启用', title: '本机已检测到该智能体，但当前没有启用此智能体集成', className: 'is-disabled' }
-  return { label: '已检测 · 已启用', title: '本机已检测到该智能体，且对应 AgentLens 集成已启用', className: 'is-enabled is-detected' }
-}
-
-function capabilityDetail(cap: AgentOverviewDto['capabilities'][number]): string {
-  const modes = cap.captureModes.map(mode => captureModeLabel[mode] ?? mode)
-  const parts = [modes.length ? `采集方式：${modes.join(' / ')}` : '采集方式：未声明']
-  if (cap.reason) parts.push(`说明：${cap.reason}`)
+function capabilityDetail(
+  cap: AgentOverviewDto['capabilities'][number],
+  t: TFunction,
+): string {
+  const modes = cap.captureModes.map(mode => translatedLabel(captureModeLabelKey, mode, t))
+  const parts = [modes.length
+    ? t('captureMode.label', { modes: modes.join(' / ') })
+    : t('captureMode.undeclared')]
+  if (cap.reason) parts.push(t('captureMode.reason', { reason: cap.reason }))
   return parts.join(' · ')
 }
 
@@ -184,12 +188,20 @@ function stateValue(asset: AgentAssetInventoryDto, state: string): boolean | 'un
 }
 
 function StateBadge({ state, value }: { state: string; value: boolean | 'unknown' }) {
-  const positive = stateLabel[state] ?? state
-  const label = value === 'unknown' ? `${positive}状态未知` : value ? positive : negativeStateLabel[state] ?? `非${positive}`
+  const { t } = useTranslation('agents')
+  const positive = translatedLabel(stateLabelKey, state, t)
+  const label = value === 'unknown'
+    ? `${positive}${t('state.unknownSuffix')}`
+    : value
+      ? positive
+      : negativeStateLabelKey[state]
+        ? t(negativeStateLabelKey[state]!)
+        : `${t('state.negativePrefix')}${positive}`
   return <span className="asset-state" data-value={String(value)}>{label}</span>
 }
 
 function CopyPath({ path }: { path: string }) {
+  const { t } = useTranslation('agents')
   const [copied, setCopied] = useState(false)
   const copy = async () => {
     try {
@@ -200,21 +212,22 @@ function CopyPath({ path }: { path: string }) {
       setCopied(false)
     }
   }
-  return <button className="copy-link" onClick={() => void copy()}>{copied ? '已复制' : '复制'}</button>
+  return <button className="copy-link" onClick={() => void copy()}>{copied ? t('copied') : t('copy')}</button>
 }
 
 function AssetCard({ agent, asset }: { agent: AgentOverviewDto; asset: AgentAssetInventoryDto }) {
+  const { t } = useTranslation('agents')
   const usage = assetUsageCount(agent, asset)
   const path = asset.bindings.find(item => item.path)?.path
   const states = summarizedStates(asset)
   return <div className="asset-item">
     <div className="asset-item-head">
-      <span className="asset-type">{assetTypeLabel[asset.type] ?? asset.type}</span>
-      {usage > 0 && <span className="asset-usage">{usage} 次真实调用</span>}
+      <span className="asset-type">{translatedLabel(assetTypeLabelKey, asset.type, t)}</span>
+      {usage > 0 && <span className="asset-usage">{t('realCalls', { count: usage })}</span>}
     </div>
     <div className="asset-name" title={asset.displayName ?? asset.canonicalName}>{asset.displayName ?? asset.canonicalName}</div>
     <div className="asset-states">
-      {states.length ? <>{states.slice(0, 3).map(item => <StateBadge key={item.state} state={item.state} value={item.value}/>)}{states.length > 3 && <span className="asset-more-state">+{states.length - 3}</span>}</> : <span className="asset-discovered">已发现</span>}
+      {states.length ? <>{states.slice(0, 3).map(item => <StateBadge key={item.state} state={item.state} value={item.value}/>)}{states.length > 3 && <span className="asset-more-state">+{states.length - 3}</span>}</> : <span className="asset-discovered">{t('discovered')}</span>}
     </div>
     {path && <div className="asset-path"><code title={path}>{shortPath(path)}</code><CopyPath path={path}/></div>}
   </div>
