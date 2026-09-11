@@ -134,11 +134,10 @@ function normalizePackageUpdates(value) {
   const result = []
   for (const item of value) {
     const row = record(item)
-    if (typeof row.source !== 'string' || typeof row.displayName !== 'string') continue
+    if (typeof row.displayName !== 'string') continue
     if (row.type !== 'npm' && row.type !== 'git') continue
     if (row.scope !== 'user' && row.scope !== 'project') continue
     result.push({
-      source: row.source,
       displayName: row.displayName,
       type: row.type,
       scope: row.scope,
