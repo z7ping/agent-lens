@@ -474,6 +474,8 @@ export const officialChineseLocalePack: LocalePackDto = {
       },
       surface: {
         turnRail: '轮次导轨',
+        backgroundActivity: '后台活动',
+        roundOrdinal: '第 {{count}} 轮',
         running: '进行中',
         hasError: '有错误',
         jumpTo: '跳到{{tip}}',
