@@ -800,6 +800,7 @@ export class DefaultPiLiveService implements PiLiveService {
     const snapshot = {
       runtimeSessionId: runtime.id,
       attemptStartedAt: new Date(runtime.initializationStartedAt).toISOString(),
+      attemptGeneration: runtime.generation,
       capturedAt,
       nativeSessionId,
       workspacePath: runtime.workspacePath,
@@ -856,6 +857,7 @@ export class DefaultPiLiveService implements PiLiveService {
       await this.startupAudit.recordStartupAudit({
         runtimeSessionId: runtime.id,
         attemptStartedAt: new Date(runtime.initializationStartedAt).toISOString(),
+        attemptGeneration: runtime.generation,
         capturedAt,
         nativeSessionId,
         workspacePath: runtime.workspacePath,
