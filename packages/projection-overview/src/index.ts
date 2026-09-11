@@ -148,7 +148,6 @@ export class FacetProjection {
     private readonly sources?: SourceService,
     private readonly capturePolicy?: CapturePolicyService,
     private readonly sourceDetection?: SourceDetectionResolver,
-    private readonly integrationStatus?: IntegrationStatusResolver,
   ) {}
 
   private async scope(): Promise<FastFacetScope> {
@@ -242,6 +241,7 @@ export class AgentOverviewProjection {
     private readonly capabilities?: CapabilityService,
     private readonly capturePolicy?: CapturePolicyService,
     private readonly sourceDetection?: SourceDetectionResolver,
+    private readonly integrationStatus?: IntegrationStatusResolver,
   ) {
     this.usage = new ToolAssetUsageProjection(storage)
   }
