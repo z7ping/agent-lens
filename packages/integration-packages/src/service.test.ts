@@ -193,6 +193,36 @@ test('startup cleans interrupted staging/trash work without disturbing the commi
   }
 })
 
+test('startup completes an interrupted remove whose Integration root was already moved to trash', async () => {
+  const f = await fixture()
+  try {
+    const service = new IntegrationPackageService({
+      bundleDir: f.bundleDir,
+      installRoot: f.installRoot,
+    })
+    await service.initialize()
+    assert.equal((await service.install('pi')).status, 'completed')
+
+    const trashRoot = join(f.installRoot, '.trash')
+    await mkdir(trashRoot, { recursive: true })
+    await rename(
+      join(f.installRoot, 'pi'),
+      join(trashRoot, 'pi-interrupted-remove'),
+    )
+
+    const recovered = new IntegrationPackageService({
+      bundleDir: f.bundleDir,
+      installRoot: f.installRoot,
+    })
+    await recovered.initialize()
+
+    assert.equal(recovered.state('pi').installed, false)
+    assert.deepEqual(await readdir(trashRoot), [])
+  } finally {
+    await f.cleanup()
+  }
+})
+
 test('installed package with incompatible Plugin API stays installed but is not loadable', async () => {
   const f = await fixture()
   try {
