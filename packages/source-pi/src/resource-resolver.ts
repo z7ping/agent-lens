@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { readFile, stat } from 'node:fs/promises'
 import { basename, dirname, extname, isAbsolute, relative, resolve, sep } from 'node:path'
+import { isMissingPathError } from '@agent-lens/source-support'
 import type {
   DiscoveredAsset,
   DiscoveredAssetStateHint,
@@ -8,7 +9,6 @@ import type {
   SourceExecutionContext,
 } from '@agent-lens/core'
 import {
-  isMissingPathError,
   loadInstalledPiSdk,
   resolvePiSdkResourceApi,
   type PiSdkResourceApi,
