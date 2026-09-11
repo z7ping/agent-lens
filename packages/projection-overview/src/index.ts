@@ -359,6 +359,7 @@ export class AgentOverviewProjection {
             capabilities: integration.capabilities.map(item => ({
               capability: item.capability,
               availability: item.availability,
+              ...(item.authorization ? { authorization: item.authorization } : {}),
               ...(item.reason ? { reason: item.reason } : {}),
             })),
           },
