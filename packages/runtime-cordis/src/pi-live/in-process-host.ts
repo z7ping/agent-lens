@@ -62,7 +62,7 @@ function runtimeResourceSnapshot(session: PiSdkSession): PiLiveStartupResources 
   const themes = resultItems(call('getThemes'), 'themes').map(resourceLabel).filter((value): value is string => Boolean(value))
   const contexts = resultItems(call('getAgentsFiles'), 'agentsFiles').map(resourceLabel).filter((value): value is string => Boolean(value))
   const unique = (values: string[]) => [...new Set(values)]
-  const result: PiLiveStartupResources = {
+  return {
     contexts: unique(contexts),
     skills: unique(skills),
     prompts: unique(prompts),
@@ -70,7 +70,6 @@ function runtimeResourceSnapshot(session: PiSdkSession): PiLiveStartupResources 
     themes: unique(themes),
     diagnostics: [],
   }
-  return Object.values(result).some(values => values.length) ? result : undefined
 }
 
 interface PackageUpdateState {
