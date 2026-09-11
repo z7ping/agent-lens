@@ -61,12 +61,20 @@ function expandHomePath(path: string, homeDir: string): string {
   return path
 }
 
-function resolvedCandidatePath(
+export interface ResolveToolDiscoveryCandidateOptions {
+  env?: Readonly<Record<string, string | undefined>> | undefined
+  platform?: NodeJS.Platform | undefined
+  homeDir?: string | undefined
+  absoluteOnly?: boolean | undefined
+}
+
+export function resolveToolDiscoveryCandidatePath(
   candidate: ToolDiscoveryPathCandidateDescriptor,
-  env: Readonly<Record<string, string | undefined>>,
-  platform: NodeJS.Platform,
-  homeDir: string,
+  options: ResolveToolDiscoveryCandidateOptions = {},
 ): string | undefined {
+  const env = options.env ?? process.env
+  const platform = options.platform ?? process.platform
+  const homeDir = options.homeDir ?? homedir()
   if (candidate.platforms && !candidate.platforms.includes(platform)) return undefined
   const raw = candidate.envVar
     ? env[candidate.envVar]?.trim()
@@ -74,7 +82,7 @@ function resolvedCandidatePath(
   if (!raw) return undefined
   const expanded = expandHomePath(raw, homeDir)
   const path = candidate.append?.length ? join(expanded, ...candidate.append) : expanded
-  return isAbsolute(path) ? path : undefined
+  return options.absoluteOnly === false || isAbsolute(path) ? path : undefined
 }
 
 function roots(
@@ -159,7 +167,6 @@ export const OFFICIAL_INTEGRATION_CATALOG: readonly OfficialIntegrationCatalogEn
           id: 'config',
           role: 'config',
           candidates: [
-            { envVar: 'HERMES_HOME' },
             { path: '~/.hermes' },
           ],
         },
@@ -194,7 +201,7 @@ export const OFFICIAL_INTEGRATION_CATALOG: readonly OfficialIntegrationCatalogEn
             { envVar: 'APPDATA', append: ['opencode'], platforms: ['win32'] },
             { path: '~/AppData/Roaming/opencode', platforms: ['win32'] },
             { envVar: 'XDG_DATA_HOME', append: ['opencode'], platforms: ['linux', 'darwin', 'freebsd', 'openbsd', 'aix', 'sunos'] },
-            { path: '~/.local/share/opencode', platforms: ['linux', 'darwin', 'freebsd', 'openbsd', 'aix', 'sunos'] },
+            { path: '~/.local/share/opencode' },
           ],
         },
       ],
@@ -229,7 +236,12 @@ export function resolveToolDiscoveryRoots(
 
   for (const root of entry.discovery.roots) {
     for (const candidate of root.candidates) {
-      const path = resolvedCandidatePath(candidate, env, platform, homeDir)
+      const path = resolveToolDiscoveryCandidatePath(candidate, {
+        env,
+        platform,
+        homeDir,
+        absoluteOnly: true,
+      })
       if (!path) continue
       const key = `${root.role}\u0000${path}`
       if (seen.has(key)) continue
