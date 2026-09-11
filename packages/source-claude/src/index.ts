@@ -43,12 +43,13 @@ import {
   isMissingPathError,
   readJsonlLines,
   resolveClaudeLocation,
+  sourceFileIdentity,
   resolveExecutable,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
 
 const SOURCE_ID = 'claude-code'
-const PARSER_VERSION = '3'
+const PARSER_VERSION = '4'
 const RUNTIME_POLL_MS = 250
 
 interface ClaudeSessionMetadata {
@@ -67,6 +68,7 @@ interface HistoryCheckpoint {
   sequence: number
   size: number
   mtimeMs: number
+  fileId?: string
 }
 
 
@@ -247,6 +249,7 @@ export async function* ingestClaudeHistory(
           sequence,
           size: fileStat.size,
           mtimeMs: fileStat.mtimeMs,
+          fileId: initialFileId,
         })
         continue
       }
@@ -288,7 +291,26 @@ export async function* ingestClaudeHistory(
         sequence,
         size: fileStat.size,
         mtimeMs: fileStat.mtimeMs,
+        fileId: initialFileId,
       })
+    }
+
+    if (!ctx.abortSignal.aborted && !incompleteTail) {
+      try {
+        const finalStat = await stat(filePath)
+        if (sourceFileIdentity(finalStat) === initialFileId) {
+          await ctx.checkpoint.set(key, {
+            path: filePath,
+            offset,
+            sequence,
+            size: finalStat.size,
+            mtimeMs: finalStat.mtimeMs,
+            fileId: initialFileId,
+          })
+        }
+      } catch (error) {
+        if (!isMissingPathError(error)) throw error
+      }
     }
   }
 }
@@ -652,7 +674,8 @@ function candidate(
     identity?: Partial<ObservationIdentityHints>
   } = {},
 ): ObservationCandidate {
-  const nativeEventId = options.nativeEventId ?? record.nativeId
+  const nativeEventId = options.nativeEventId
+    ?? (!options.nativeCallId && !options.sharedEventKey ? record.nativeId : undefined)
   return observationFromSourceRecord(record, {
     kind,
     payload,
@@ -866,7 +889,7 @@ export async function normalizeClaudeRecord(
       }))
       if (reasoningParts.length) observations.push(candidate(record, envelope, 'message.reasoning', {
         text: reasoningParts.join('\n\n'),
-      }))
+      }, { sharedEventKey: `claude-reasoning:${record.id}` }))
     } else {
       const text = textFromContent(content).trim()
       if (text) observations.push(candidate(record, envelope, 'message.assistant', { text: text }))
