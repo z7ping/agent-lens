@@ -181,7 +181,16 @@ if (capabilities.localCapture && existsSync(join(integrationBundleDir, 'catalog.
           .filter(item => enabledSourceIds.has(item.productId))
           .map(item => item.integrationId)
       : []
-    await candidate.ensureLegacyPhysicalization(legacySelected)
+    const legacyPhysicalization = await candidate.ensureLegacyPhysicalization(legacySelected)
+    for (const operation of legacyPhysicalization.operations) {
+      if (operation.status === 'completed') continue
+      integrationPackageLoadFailures.push({
+        integrationId: operation.integrationId,
+        error: operation.message
+          ?? operation.errorCode
+          ?? 'Legacy Integration physicalization failed',
+      })
+    }
     integrationPackages = candidate
   } catch (error) {
     console.warn('[AgentLens] Integration package lifecycle unavailable', error)
