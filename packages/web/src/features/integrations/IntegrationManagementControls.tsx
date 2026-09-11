@@ -70,12 +70,6 @@ function DisclosureChevron() {
   return <UiIcon className="disclosure-chevron" name="chevron-right" size={14}/>
 }
 
-export interface IntegrationPackageActions {
-  onChange(integrationId: string, enabled: boolean): Promise<void>
-  onInstall(integrationId: string): Promise<IntegrationPackageOperationResponseDto>
-  onRemove(integrationId: string): Promise<IntegrationPackageOperationResponseDto>
-}
-
 export function IntegrationControl({
   agent,
   management,
