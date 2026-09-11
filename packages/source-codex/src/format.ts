@@ -1,9 +1,3 @@
-const MAX_TEXT = 64 * 1024
-const MAX_TOOL_PAYLOAD = 32 * 1024
-const MAX_UNKNOWN_STRING = 16 * 1024
-
-const SENSITIVE_KEY = /(password|passwd|secret|token|api[_-]?key|authorization|cookie)/i
-
 export interface CodexSessionMetadata {
   nativeSessionId: string
   cwd?: string
@@ -15,30 +9,6 @@ export interface CodexSessionMetadata {
 export interface CodexStoredEnvelope {
   entry: Record<string, unknown>
   session: CodexSessionMetadata
-}
-
-export function truncate(value: string, limit: number): string {
-  return value.length <= limit ? value : `${value.slice(0, limit)}…[truncated]`
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {}
-}
-
-function sanitizeUnknown(value: unknown, depth = 0): unknown {
-  if (depth > 8) return '[max-depth]'
-  if (typeof value === 'string') return truncate(value, MAX_UNKNOWN_STRING)
-  if (value == null || typeof value === 'number' || typeof value === 'boolean') return value
-  if (Array.isArray(value)) return value.slice(0, 200).map(item => sanitizeUnknown(item, depth + 1))
-  if (typeof value !== 'object') return String(value)
-
-  const output: Record<string, unknown> = {}
-  for (const [key, item] of Object.entries(asRecord(value))) {
-    output[key] = SENSITIVE_KEY.test(key) ? '[redacted]' : sanitizeUnknown(item, depth + 1)
-  }
-  return output
 }
 
 export function messageText(blocks: unknown): string {
@@ -53,110 +23,6 @@ export function messageText(blocks: unknown): string {
     if (Array.isArray(value)) return messageText(value)
   }
   return ''
-}
-
-export function isInjectedContext(role: string, text: string): boolean {
-  return role === 'developer'
-    || text.startsWith('<environment_context')
-    || text.startsWith('<permissions instructions')
-}
-
-export function sanitizeCodexEntry(raw: unknown): Record<string, unknown> {
-  const entry = asRecord(raw)
-  if (!Object.keys(entry).length) {
-    return { type: 'malformed', payload: sanitizeUnknown(raw) }
-  }
-
-  const type = typeof entry.type === 'string' ? entry.type : 'unknown'
-  const timestamp = typeof entry.timestamp === 'string' ? entry.timestamp : undefined
-  const payload = asRecord(entry.payload)
-
-  let safePayload: Record<string, unknown>
-  if (type === 'session_meta') {
-    safePayload = {
-      id: payload.id,
-      session_id: payload.session_id,
-      timestamp: payload.timestamp,
-      cwd: payload.cwd,
-      originator: payload.originator,
-      cli_version: payload.cli_version,
-      parent_thread_id: payload.parent_thread_id,
-      forked_from_id: payload.forked_from_id,
-      source: sanitizeUnknown(payload.source),
-      thread_source: sanitizeUnknown(payload.thread_source),
-      agent_role: payload.agent_role,
-      agent_nickname: payload.agent_nickname,
-      agent_path: payload.agent_path,
-      model_provider: payload.model_provider,
-      history_mode: payload.history_mode,
-      subagent_history_start_ordinal: payload.subagent_history_start_ordinal,
-    }
-  } else if (type === 'response_item' && payload.type === 'message') {
-    const role = typeof payload.role === 'string' ? payload.role : 'unknown'
-    const text = truncate(messageText(payload.content), MAX_TEXT)
-    safePayload = {
-      type: 'message',
-      role,
-      id: payload.id,
-      text: isInjectedContext(role, text) ? '[redacted:injected-context]' : text,
-      injectedContext: isInjectedContext(role, text),
-    }
-  } else if (type === 'response_item' && payload.type === 'function_call') {
-    safePayload = {
-      type: 'function_call',
-      id: payload.id,
-      name: payload.name,
-      call_id: payload.call_id,
-      arguments: typeof payload.arguments === 'string'
-        ? truncate(payload.arguments, MAX_TOOL_PAYLOAD)
-        : sanitizeUnknown(payload.arguments),
-    }
-  } else if (type === 'response_item' && payload.type === 'custom_tool_call') {
-    safePayload = {
-      type: 'custom_tool_call',
-      id: payload.id,
-      name: payload.name,
-      call_id: payload.call_id,
-      status: payload.status,
-      input: typeof payload.input === 'string'
-        ? truncate(payload.input, MAX_TOOL_PAYLOAD)
-        : sanitizeUnknown(payload.input),
-    }
-  } else if (type === 'response_item' && payload.type === 'function_call_output') {
-    safePayload = {
-      type: 'function_call_output',
-      id: payload.id,
-      call_id: payload.call_id,
-      output: typeof payload.output === 'string'
-        ? truncate(payload.output, MAX_TOOL_PAYLOAD)
-        : sanitizeUnknown(payload.output),
-    }
-  } else if (type === 'response_item' && payload.type === 'custom_tool_call_output') {
-    safePayload = {
-      type: 'custom_tool_call_output',
-      id: payload.id,
-      call_id: payload.call_id,
-      output: typeof payload.output === 'string'
-        ? truncate(payload.output, MAX_TOOL_PAYLOAD)
-        : sanitizeUnknown(payload.output),
-    }
-  } else if (type === 'response_item' && payload.type === 'web_search_call') {
-    safePayload = asRecord(sanitizeUnknown(payload))
-  } else if (type === 'response_item' && payload.type === 'reasoning') {
-    safePayload = {
-      type: 'reasoning',
-      id: payload.id,
-      text: truncate(messageText(payload.summary ?? payload.content ?? payload.text), MAX_TEXT),
-    }
-  } else {
-    safePayload = asRecord(sanitizeUnknown(payload))
-  }
-
-  return {
-    ...(timestamp ? { timestamp } : {}),
-    type,
-    payload: safePayload,
-  }
 }
 
 function completedItem(payload: Record<string, unknown>): Record<string, unknown> {
