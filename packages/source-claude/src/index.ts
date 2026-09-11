@@ -39,14 +39,16 @@ import {
 import {
   abortableDelay,
   defineAgentLensPlugin,
-  isCompleteJson,
-  isMissingPathError,
-  readJsonlLines,
   resolveClaudeLocation,
-  sourceFileIdentity,
   resolveExecutable,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
+import {
+  isCompleteJson,
+  isMissingPathError,
+  readJsonlLines,
+  sourceFileIdentity,
+} from '@agent-lens/source-support'
 
 const SOURCE_ID = 'claude-code'
 const PARSER_VERSION = '4'
