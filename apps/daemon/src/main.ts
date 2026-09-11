@@ -3,7 +3,8 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { backupLocalPlugin } from '@agent-lens/backup-local'
 import { capturePolicyPlugin } from '@agent-lens/capture-policy'
-import { hermesLivePlugin } from '@agent-lens/live-hermes'
+import { hermesIntegration } from '@agent-lens/integration-hermes'
+import { piIntegration } from '@agent-lens/integration-pi'
 import {
   SESSION_SUMMARY_PROJECTION_ID,
   sessionSummaryProjectionPlugin,
@@ -14,7 +15,6 @@ import {
   coreServicesPlugin,
   discoverRegisteredSourceAssets,
   nodeRuntimePlugin,
-  piLiveRuntimePlugin,
   prepareRegisteredSources,
   replayRegisteredSourceHistory,
   resolveAgentLensNodeRuntime,
@@ -24,9 +24,7 @@ import {
 } from '@agent-lens/runtime-cordis'
 import { claudeSourcePlugin } from '@agent-lens/source-claude'
 import { codexSourcePlugin } from '@agent-lens/source-codex'
-import { hermesSourcePlugin } from '@agent-lens/source-hermes'
 import { openCodeSourcePlugin } from '@agent-lens/source-opencode'
-import { piSourcePlugin } from '@agent-lens/source-pi'
 import {
   DEFAULT_AGENT_LENS_HTTP_PORT,
   httpSurfacePlugin,
@@ -92,13 +90,11 @@ app.use(dataRuntimeStoragePlugin, { path: dbPath })
 app.useRuntime(coreServicesPlugin)
 app.useRuntime(sessionSummaryProjectionPlugin)
 app.useRuntime(capturePolicyPlugin)
-app.useRuntime(piLiveRuntimePlugin)
-app.use(hermesLivePlugin)
 if (capabilities.localCapture) {
+  app.useIntegration(piIntegration)
+  app.useIntegration(hermesIntegration)
   app.use(codexSourcePlugin)
   app.use(claudeSourcePlugin)
-  app.use(piSourcePlugin)
-  app.use(hermesSourcePlugin)
   app.use(openCodeSourcePlugin)
   app.use(profiledDshSourcePlugin)
 }
