@@ -197,7 +197,7 @@ async function agentOverview(
   try {
     return await requestJson(
       options.apiUrl('/api/v1/agents'),
-      { method: 'GET' },
+      { method: 'GET', signal: AbortSignal.timeout(2_000) },
       options.fetchImpl ?? fetch,
     )
   } catch {
