@@ -1,5 +1,6 @@
 import { createServer, type Server } from 'node:http'
 import type {
+  AgentIntegrationRuntimeStatus,
   BackupService,
   CapabilityService,
   CapturePolicyService,
@@ -63,6 +64,9 @@ export interface HttpSurfaceOptions {
   piLive?: PiLiveService
   rescanAgents?: () => Promise<AgentRescanSummaryDto>
   sourceDetection?: (sourceId: string) => boolean | undefined
+  integrationStatus?: (
+    productId: string,
+  ) => AgentIntegrationRuntimeStatus | null | Promise<AgentIntegrationRuntimeStatus | null>
   selectProjectDirectory?: () => Promise<string | undefined>
   hubReview?: Pick<HubReviewProjection, 'get' | 'query'>
 }
@@ -125,6 +129,7 @@ export async function startHttpSurface(
     options.capabilities,
     options.capturePolicy,
     options.sourceDetection,
+    options.integrationStatus,
   )
   const relationships = new SessionRelationshipProjection(storage)
   const staticMounts = new Map<string, HttpStaticMount>()
