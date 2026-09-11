@@ -10,6 +10,7 @@ export type AgentLensIntegrationComponent =
   | {
       pluginId: string
       capabilities: readonly AgentIntegrationCapability[]
+      authorization?: 'explicit'
       activation: 'catalog' | 'enabled'
       lifecycle: 'plugin'
       plugin: AgentLensCordisPlugin<unknown>
@@ -18,6 +19,7 @@ export type AgentLensIntegrationComponent =
   | {
       pluginId: string
       capabilities: readonly AgentIntegrationCapability[]
+      authorization?: 'explicit'
       activation: 'catalog' | 'enabled'
       lifecycle: 'runtime'
       plugin: Plugin<unknown>
