@@ -1071,13 +1071,13 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             pendingMessageCount={visiblePendingCount}
           />}
           {!history.length && !optimisticPrompt && !currentItems.length && runtimeReady && <div className="pi-live-empty">这个 Pi Runtime 还没有消息。可以直接在下方输入开始任务。</div>}
-          {syncWarning && <div className="pi-live-sync-warning" role="status">{syncWarning}</div>}
           {error && <div className="pi-live-error pi-live-reader-error" role="alert">{error}</div>}
         </div>
       </div>
 
       <div className="pi-live-compose-wrap">
         <div className="pi-live-float-stack">
+          {syncWarning && <div className="pi-live-sync-warning" role="status" aria-live="polite">{syncWarning}</div>}
           {newRecords && <Button size="small" className="pi-live-new-records" onClick={jumpLatest}>有新记录 <UiIcon name="arrow-down" size={14}/></Button>}
           {interruptNotice && <div className="pi-live-interrupt-notice" role="status" aria-live="polite"><UiIcon name="check" size={14}/><b>已停止当前生成</b><span>可以继续输入。</span></div>}
           {startupQueued && <div className="pi-live-startup-queue" role="status">
