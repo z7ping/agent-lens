@@ -383,44 +383,23 @@ export class AgentLensClientModel {
 
   private async refreshIntegrationDiscovery(): Promise<void> {
     try {
-      const management = await this.api.integrations()
-      const discovery = discoveryFromManagement(management)
+      const result = await this.api.integrationDiscovery()
       this.patch({
-        integrationManagement: management,
-        integrationManagementLoading: false,
-        integrationManagementError: '',
-        integrationDiscovery: discovery,
+        integrationDiscovery: result,
         integrationDiscoveryLoading: false,
         integrationDiscoveryError: '',
       })
-      if (discovery.status === 'idle' || discovery.status === 'scanning') {
+      if (result.status === 'idle' || result.status === 'scanning') {
         this.scheduleIntegrationDiscoveryRefresh()
       } else {
         this.integrationDiscoveryPolls = 0
+        await this.refreshIntegrationManagement().catch(() => undefined)
       }
-    } catch (managementError) {
-      try {
-        const result = await this.api.integrationDiscovery()
-        this.patch({
-          integrationManagementLoading: false,
-          integrationManagementError: managementError instanceof Error ? managementError.message : String(managementError),
-          integrationDiscovery: result,
-          integrationDiscoveryLoading: false,
-          integrationDiscoveryError: '',
-        })
-        if (result.status === 'idle' || result.status === 'scanning') {
-          this.scheduleIntegrationDiscoveryRefresh()
-        } else {
-          this.integrationDiscoveryPolls = 0
-        }
-      } catch (error) {
-        this.patch({
-          integrationManagementLoading: false,
-          integrationManagementError: managementError instanceof Error ? managementError.message : String(managementError),
-          integrationDiscoveryLoading: false,
-          integrationDiscoveryError: error instanceof Error ? error.message : String(error),
-        })
-      }
+    } catch (error) {
+      this.patch({
+        integrationDiscoveryLoading: false,
+        integrationDiscoveryError: error instanceof Error ? error.message : String(error),
+      })
     }
   }
 
