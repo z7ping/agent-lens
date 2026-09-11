@@ -298,7 +298,7 @@ export async function* ingestClaudeHistory(
         id: `claude-record-${sha256(`${filePath}|${line.startOffset}|${fingerprint}`).slice(0, 32)}`,
         sourceId: SOURCE_ID,
         installationId: ctx.installation.id,
-        sourceSessionNativeId: sessionId,
+        ...(sessionId ? { sourceSessionNativeId: sessionId } : {}),
         nativeType: `history/${stringField(entry, 'type') ?? 'unknown'}`,
         ...(nativeId ? { nativeId } : {}),
         sourceSequence: sequence,
@@ -363,7 +363,7 @@ function runtimeRecord(
   ctx: SourceExecutionContext,
 ): SourceRecord {
   const event = envelope.event
-  const sessionId = stringField(event, 'session_id', 'sessionId') ?? 'runtime-unknown'
+  const sessionId = stringField(event, 'session_id', 'sessionId')
   const hookName = runtimeEventName(event)
   const nativeId = runtimeNativeId(event)
   const cwd = stringField(event, 'cwd', 'working_directory')
@@ -382,7 +382,7 @@ function runtimeRecord(
     payload: {
       runtimeEvent: event,
       session: {
-        nativeSessionId: sessionId,
+        ...(sessionId ? { nativeSessionId: sessionId } : {}),
         ...(cwd ? { cwd } : {}),
       },
     },
@@ -715,29 +715,34 @@ function textFromContent(content: unknown): string {
 }
 
 function runtimeEnvelope(record: SourceRecord): {
-  envelope: ClaudeStoredEnvelope
+  envelope?: ClaudeStoredEnvelope
   event: Record<string, unknown>
 } {
   const payload = asRecord(record.payload)
   const event = asRecord(payload.runtimeEvent)
   const session = asRecord(payload.session)
   const cwd = stringField(session, 'cwd')
+  const storedSessionId = stringField(session, 'nativeSessionId') ?? record.sourceSessionNativeId
+  const nativeSessionId = storedSessionId === 'unknown' || storedSessionId === 'runtime-unknown'
+    ? undefined
+    : storedSessionId
   return {
-    envelope: {
-      entry: event,
-      session: {
-        nativeSessionId: stringField(session, 'nativeSessionId')
-          ?? record.sourceSessionNativeId
-          ?? 'runtime-unknown',
-        ...(cwd ? { cwd } : {}),
+    ...(nativeSessionId ? {
+      envelope: {
+        entry: event,
+        session: {
+          nativeSessionId,
+          ...(cwd ? { cwd } : {}),
+        },
       },
-    },
+    } : {}),
     event,
   }
 }
 
-function normalizeRuntime(record: SourceRecord): ObservationCandidate {
+function normalizeRuntime(record: SourceRecord): ObservationCandidate | null {
   const { envelope, event } = runtimeEnvelope(record)
+  if (!envelope) return null
   const hookName = runtimeEventName(event)
   const callId = stringField(event, 'tool_use_id', 'call_id')
   const toolName = stringField(event, 'tool_name', 'name') ?? 'unknown'
@@ -833,8 +838,9 @@ export async function normalizeClaudeRecord(
   _ctx: SourceNormalizationContext,
 ): Promise<NormalizedSourceOutput> {
   if (record.locator.kind === 'runtime-hook') {
+    const observation = normalizeRuntime(record)
     return {
-      observations: [normalizeRuntime(record)],
+      observations: observation ? [observation] : [],
       evidenceCandidates: [evidenceFor(record)],
     }
   }
