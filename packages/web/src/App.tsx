@@ -10,6 +10,7 @@ import { PinnedAgentsProvider } from './components/PinnedAgentsProvider'
 import { ReviewStateOverlay } from './components/ReviewStateOverlay'
 import { WorkspaceSidebar } from './components/WorkspaceSidebar'
 import { PageLoadingState } from './components/StateViews'
+import { IntegrationOnboarding } from './features/IntegrationOnboarding'
 import { Breadcrumb, IconButton, StatusBadge, UiIcon } from './components/ui'
 
 const AgentsResponsivePage = lazy(() => import('./features/AgentsResponsivePage').then(module => ({ default: module.AgentsResponsivePage })))
@@ -117,6 +118,10 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     : agentOverviewItems.find(item => item.detected)?.sourceId ?? agentOverviewItems[0]?.sourceId ?? agents.find(agent => agent.detected)?.sourceId ?? agents[0]?.sourceId ?? ''
 
   useEffect(() => {
+    void model.ensureIntegrationManagement().catch(() => undefined)
+  }, [model])
+
+  useEffect(() => {
     setMobileNavigationOpen(false)
   }, [location.pathname])
 
@@ -144,6 +149,16 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     filters: snapshot.review.filters,
     replace: replaceReviewUrl,
   })
+
+  if (!snapshot.integrationManagement && !snapshot.integrationManagementError) {
+    return <main className="integration-onboarding-shell">
+      <PageLoadingState title={t('shell:loadingIntegrations')} description={t('shell:loadingIntegrationsDescription')}/>
+    </main>
+  }
+
+  if (snapshot.integrationManagement && !snapshot.integrationManagement.preferences.onboarding.completed) {
+    return <IntegrationOnboarding model={model} snapshot={snapshot}/>
+  }
 
   return <PinnedAgentsProvider
     agents={agents}
