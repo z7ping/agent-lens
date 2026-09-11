@@ -35,6 +35,8 @@ export interface HttpSurfacePluginConfig {
     productId: string,
   ) => AgentIntegrationRuntimeStatus | null | Promise<AgentIntegrationRuntimeStatus | null>
   integrationAuthorization?: IntegrationAuthorizationController
+  /** Read-only directory containing declarative Locale Pack JSON files. */
+  localeDirectory?: string
 }
 
 const manifest = {
@@ -189,6 +191,7 @@ const applyHttpSurface = Object.assign(
       sourceDetection: sourceId => sourceRescan.isSourceDetected(sourceId),
       ...(config.integrationStatus ? { integrationStatus: config.integrationStatus } : {}),
       ...(config.integrationAuthorization ? { integrationAuthorization: config.integrationAuthorization } : {}),
+      ...(config.localeDirectory ? { localeDirectory: config.localeDirectory } : {}),
       ...(config.selectProjectDirectory ? { selectProjectDirectory: config.selectProjectDirectory } : {}),
       hubReview,
     })
