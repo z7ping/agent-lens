@@ -788,6 +788,7 @@ export class IntegrationPackageService {
         operation.message = errorMessage(error)
       } finally {
         operation.completedAt = new Date().toISOString()
+        this.pruneOperations()
       }
     })
     const queued = run.then(() => undefined, () => undefined)
@@ -800,13 +801,13 @@ export class IntegrationPackageService {
 
   private pruneOperations(): void {
     while (this.operationOrder.length > MAX_OPERATIONS) {
-      const id = this.operationOrder.shift()
-      if (!id) break
-      if (this.operations.get(id)?.status === 'running') {
-        this.operationOrder.push(id)
-        break
-      }
-      this.operations.delete(id)
+      const index = this.operationOrder.findIndex(id => {
+        const status = this.operations.get(id)?.status
+        return status === undefined || status === 'failed' || status === 'completed'
+      })
+      if (index < 0) break
+      const [id] = this.operationOrder.splice(index, 1)
+      if (id) this.operations.delete(id)
     }
   }
 
