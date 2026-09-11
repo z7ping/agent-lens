@@ -2,3 +2,4 @@ export * from './source-fs'
 export * from './source-jsonl'
 export * from './value'
 export * from './source-history-watch'
+export * from './managed-files'\n
