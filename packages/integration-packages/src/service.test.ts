@@ -15,7 +15,10 @@ import { join } from 'node:path'
 import test from 'node:test'
 import { OFFICIAL_INTEGRATION_CATALOG } from '@agent-lens/integration-catalog'
 import { IntegrationPackageService } from './service'
-import { INTEGRATION_PACKAGE_SCHEMA_VERSION } from './types'
+import {
+  INTEGRATION_PACKAGE_SCHEMA_VERSION,
+  type BundledIntegrationCatalogEntry,
+} from './types'
 
 function sha256(value: string | Uint8Array): string {
   return createHash('sha256').update(value).digest('hex')
@@ -23,7 +26,7 @@ function sha256(value: string | Uint8Array): string {
 
 async function writeTrustedBundle(bundleDir: string) {
   await mkdir(bundleDir, { recursive: true })
-  const entries = []
+  const entries: BundledIntegrationCatalogEntry[] = []
   const entryFiles = new Map<string, { path: string; content: string }>()
 
   for (const integration of OFFICIAL_INTEGRATION_CATALOG) {
@@ -234,7 +237,9 @@ test('removing Integration package leaves data outside package install root unto
   const f = await fixture()
   try {
     const historyPath = join(f.root, 'agent-lens-history.db')
+    const authorizationPath = join(f.root, 'integration-authorization.json')
     await writeFile(historyPath, 'history-fact', 'utf8')
+    await writeFile(authorizationPath, '{"grants":{"pi":["live"]}}\n', 'utf8')
 
     const service = new IntegrationPackageService({
       bundleDir: f.bundleDir,
@@ -246,6 +251,10 @@ test('removing Integration package leaves data outside package install root unto
 
     assert.equal(service.state('pi').installed, false)
     assert.equal(await readFile(historyPath, 'utf8'), 'history-fact')
+    assert.equal(
+      await readFile(authorizationPath, 'utf8'),
+      '{"grants":{"pi":["live"]}}\n',
+    )
   } finally {
     await f.cleanup()
   }
