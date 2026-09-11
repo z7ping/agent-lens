@@ -213,7 +213,13 @@ export async function* ingestClaudeHistory(
 
   for (const filePath of await listJsonlFiles(projectsDir, ctx.historyWindow)) {
     if (ctx.abortSignal.aborted) return
-    const fileStat = await stat(filePath)
+    let fileStat
+    try {
+      fileStat = await stat(filePath)
+    } catch (error) {
+      if (isMissingPathError(error)) continue
+      throw error
+    }
     const key = historyCheckpointKey(filePath)
     const previous = await ctx.checkpoint.get<HistoryCheckpoint>(key)
     const unchanged = previous
@@ -810,17 +816,22 @@ export async function normalizeClaudeRecord(
       if (content.trim()) observations.push(candidate(record, envelope, 'message.user', { text: content }))
     } else if (Array.isArray(content)) {
       const text = textFromContent(content).trim()
-      if (text) observations.push(candidate(record, envelope, 'message.user', { text: text }))
-      for (const rawBlock of content) {
+      if (text) observations.push(candidate(record, envelope, 'message.user', { text }))
+      for (const [blockIndex, rawBlock] of content.entries()) {
         const block = asRecord(rawBlock)
         if (block.type !== 'tool_result') continue
-        const callId = stringField(block, 'tool_use_id') ?? `claude-result-${record.id}`
+        const callId = stringField(block, 'tool_use_id')
         const output = textFromContent(block.content)
         observations.push(candidate(record, envelope, 'tool.result', {
-          callId,
+          ...(callId ? { callId } : {}),
           success: block.is_error !== true && block.is_error !== 'true',
-          ...(output ? { output: output } : {}),
-        }, { nativeCallId: callId }))
+          ...(output ? { output } : {}),
+        }, {
+          ...(callId
+            ? { nativeCallId: callId }
+            : { sharedEventKey: `claude-result:${record.id}:${blockIndex}` }),
+          sequenceOffset: blockIndex + 1,
+        }))
       }
     }
   } else if (type === 'assistant') {
