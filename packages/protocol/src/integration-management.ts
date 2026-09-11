@@ -1,4 +1,5 @@
 import type { CapturePolicyManagedByDto } from './capture-policy'
+import type { IntegrationPackageStateDto } from './integration-packages'
 import type {
   IntegrationDiscoveryScanStatusDto,
   IntegrationToolDiscoveryItemDto,
@@ -44,6 +45,7 @@ export interface IntegrationManagementItemDto {
   productId: string
   displayName: string
   tool?: IntegrationToolDiscoveryItemDto | undefined
+  packageState: IntegrationPackageStateDto | null
   enabled: IntegrationEnabledStateDto
   availability: 'available' | 'partial' | 'unavailable' | 'error'
   capabilities: AgentIntegrationCapabilityStatusDto[]
