@@ -197,6 +197,7 @@ app.use(httpSurfacePlugin, {
           query: () => currentIntegrationManagement().query(),
           preferences: () => currentIntegrationManagement().preferences(),
           updatePreferences: request => currentIntegrationManagement().updatePreferences(request),
+          enabled: integrationId => currentIntegrationManagement().enabled(integrationId),
           setEnabled: (integrationId, enabled) =>
             currentIntegrationManagement().setEnabled(integrationId, enabled),
         },
