@@ -43,6 +43,19 @@ function enumString<const T extends readonly string[]>(row: AssetRow, key: strin
   return value as T[number]
 }
 
+function optionalEnumString<const T extends readonly string[]>(
+  row: AssetRow,
+  key: string,
+  allowed: T,
+): T[number] | undefined {
+  const value = optionalString(row, key)
+  if (value === undefined) return undefined
+  if (!(allowed as readonly string[]).includes(value)) {
+    throw new TypeError(`SQLite asset inventory field ${key} has unsupported value: ${value}`)
+  }
+  return value as T[number]
+}
+
 function decodeEvidenceRefs(value: unknown): string[] {
   if (typeof value !== 'string' || value.length === 0) return []
   let parsed: unknown
@@ -75,12 +88,7 @@ function mapBinding(value: unknown): AssetBinding {
   const path = optionalString(row, 'path')
   const source = optionalString(row, 'source')
   const version = optionalString(row, 'version')
-  const rawScope = optionalString(row, 'scope')
-  const scope = rawScope === undefined
-    ? undefined
-    : (ASSET_SCOPES as readonly string[]).includes(rawScope)
-      ? rawScope as AssetScope
-      : (() => { throw new TypeError(`SQLite asset inventory field scope has unsupported value: ${rawScope}`) })()
+  const scope = optionalEnumString(row, 'scope', ASSET_SCOPES) as AssetScope | undefined
   const scopeRoot = optionalString(row, 'scope_root')
   return {
     id: requiredString(row, 'binding_id'),
