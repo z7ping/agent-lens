@@ -28,6 +28,10 @@ import type { PiLiveService } from '@agent-lens/runtime-cordis'
 import { readBackgroundActivity } from './background-activity'
 import { handleBackupRequest } from './backup-http'
 import { handleCapturePolicyRequest } from './capture-policy-http'
+import {
+  handleIntegrationAuthorizationRequest,
+  type IntegrationAuthorizationController,
+} from './integration-http'
 import { parseDataRuntimeHealth } from './data-runtime-health'
 import type { HttpEventHub } from './events'
 import { badRequest, statusCodeForError, writeJson } from './http-utils'
@@ -67,6 +71,7 @@ export interface HttpSurfaceOptions {
   integrationStatus?: (
     productId: string,
   ) => AgentIntegrationRuntimeStatus | null | Promise<AgentIntegrationRuntimeStatus | null>
+  integrationAuthorization?: IntegrationAuthorizationController
   selectProjectDirectory?: () => Promise<string | undefined>
   hubReview?: Pick<HubReviewProjection, 'get' | 'query'>
 }
@@ -207,6 +212,12 @@ export async function startHttpSurface(
       if (await handlePiLiveRequest(request, response, url, options.piLive, storage, options.selectProjectDirectory)) return
       if (await handleBackupRequest(request, response, url, options.backup)) return
       if (await handleCapturePolicyRequest(request, response, url, options.capturePolicy)) return
+      if (await handleIntegrationAuthorizationRequest(
+        request,
+        response,
+        url,
+        options.integrationAuthorization,
+      )) return
 
       if (url.pathname === '/api/v1/agents/rescan') {
         if (request.method !== 'POST') {
