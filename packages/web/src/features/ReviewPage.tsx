@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import type {
   HubReadAvailability,
   HubReviewSessionSummaryDto,
@@ -33,71 +34,80 @@ import { TaskRound } from './TaskRound'
 import { TaskSurface } from './TaskSurface'
 import { TaskThinking } from './TaskThinking'
 import { TaskToolGroup } from './TaskToolGroup'
+import { agentLensI18n } from '../i18n/runtime'
 import { workspaceDisplayName, type TaskDetailModel, type TaskRoundModel, type TaskThinkingModel, type TaskToolGroupModel, type TaskToolModel } from './task-detail-model'
 
+function currentLocale(): string {
+  return agentLensI18n.resolvedLanguage ?? agentLensI18n.language ?? 'zh-CN'
+}
+
 function formatTime(value: string): string {
-  return new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(value))
+  return new Intl.DateTimeFormat(currentLocale(), { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(value))
 }
 
 function formatClock(value: string): string {
   if (!value) return ''
-  return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date(value))
+  return new Intl.DateTimeFormat(currentLocale(), { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date(value))
 }
 
 function formatHourMinute(value: string): string {
   if (!value) return ''
-  return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value))
+  return new Intl.DateTimeFormat(currentLocale(), { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value))
 }
 
 function formatDateTime(value: string): string {
   const date = new Date(value)
   if (!Number.isFinite(date.getTime())) return value
-  return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(date)
+  return new Intl.DateTimeFormat(currentLocale(), { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(date)
 }
 
 function localDayStart(value: Date): number {
   return new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime()
 }
 
-function sessionDayLabel(value: string, now = new Date()): '今天' | '昨天' | '更早' {
+type ReviewDayGroup = 'today' | 'yesterday' | 'earlier'
+
+function sessionDayLabel(value: string, now = new Date()): ReviewDayGroup {
   const date = new Date(value)
-  if (!Number.isFinite(date.getTime())) return '更早'
+  if (!Number.isFinite(date.getTime())) return 'earlier'
   const day = localDayStart(date)
   const today = localDayStart(now)
-  if (day === today) return '今天'
-  if (day === today - 86_400_000) return '昨天'
-  return '更早'
+  if (day === today) return 'today'
+  if (day === today - 86_400_000) return 'yesterday'
+  return 'earlier'
 }
 
 function sessionRelativeTime(value: string, now = new Date()): string {
+  const t = agentLensI18n.t.bind(agentLensI18n)
   const date = new Date(value)
   if (!Number.isFinite(date.getTime())) return value
   const group = sessionDayLabel(value, now)
-  if (group === '今天') {
+  if (group === 'today') {
     const diff = Math.max(0, now.getTime() - date.getTime())
     const minutes = Math.floor(diff / 60_000)
-    if (minutes < 1) return '刚刚'
-    if (minutes < 60) return `${minutes} 分钟前`
+    if (minutes < 1) return t('review:local.time.justNow')
+    if (minutes < 60) return t('review:local.time.minutesAgo', { count: minutes })
     const hours = Math.floor(diff / 3_600_000)
-    if (hours <= 1) return '约 1 小时前'
-    return `${hours} 小时前`
+    if (hours <= 1) return t('review:local.time.aboutHourAgo')
+    return t('review:local.time.hoursAgo', { count: hours })
   }
-  if (group === '昨天') return `昨天 ${formatHourMinute(value)}`
-  if (date.getFullYear() === now.getFullYear()) return `${date.getMonth() + 1}月${date.getDate()}日 ${formatHourMinute(value)}`
-  return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(date)
+  if (group === 'yesterday') return t('review:local.time.yesterdayAt', { time: formatHourMinute(value) })
+  if (date.getFullYear() === now.getFullYear()) return t('review:local.time.monthDayAt', { month: date.getMonth() + 1, day: date.getDate(), time: formatHourMinute(value) })
+  return new Intl.DateTimeFormat(currentLocale(), { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(date)
 }
 
 function duration(ms: number): string {
+  const t = agentLensI18n.t.bind(agentLensI18n)
   const value = Math.max(0, ms)
-  if (value < 1000) return `${value} 毫秒`
-  if (value < 60_000) return `${(value / 1000).toFixed(value < 10_000 ? 1 : 0)} 秒`
-  if (value < 3_600_000) return `${Math.round(value / 60_000)} 分钟`
+  if (value < 1000) return t('review:local.duration.milliseconds', { value })
+  if (value < 60_000) return t('review:local.duration.seconds', { value: (value / 1000).toFixed(value < 10_000 ? 1 : 0) })
+  if (value < 3_600_000) return t('review:local.duration.minutes', { value: Math.round(value / 60_000) })
   if (value < 86_400_000) {
     const hours = value / 3_600_000
-    return `${hours < 10 ? hours.toFixed(1) : Math.round(hours)} 小时`
+    return t('review:local.duration.hours', { value: hours < 10 ? hours.toFixed(1) : Math.round(hours) })
   }
   const days = value / 86_400_000
-  return `${days < 10 ? days.toFixed(1) : Math.round(days)} 天`
+  return t('review:local.duration.days', { value: days < 10 ? days.toFixed(1) : Math.round(days) })
 }
 
 function elapsed(start: string, end: string): number {
@@ -109,7 +119,7 @@ function cleanSessionTitle(value: string | undefined): string {
   return value?.replace(/\s+/g, ' ').trim() ?? ''
 }
 
-function compactTitle(value: string | undefined, max = 92, fallback = '未命名会话'): string {
+function compactTitle(value: string | undefined, max = 92, fallback = agentLensI18n.t('review:local.session.unnamed')): string {
   const text = cleanSessionTitle(value)
   if (!text) return fallback
   return text.length > max ? `${text.slice(0, max)}…` : text
@@ -127,10 +137,12 @@ function hubSessionTime(item: HubReviewSessionSummaryDto): string {
 
 function hubSessionTitle(item: HubReviewSessionSummaryDto): string {
   const value = hubAvailabilityString(item.title)
-  if (value) return compactTitle(value, 74, '远程会话')
-  if (item.title.state === 'redacted') return '标题已脱敏'
-  if (item.title.state === 'omitted') return item.title.reason === 'policy' ? '标题未同步' : '远程会话'
-  return '远程会话'
+  if (value) return compactTitle(value, 74, agentLensI18n.t('review:local.session.remote'))
+  if (item.title.state === 'redacted') return agentLensI18n.t('review:local.session.titleRedacted')
+  if (item.title.state === 'omitted') return item.title.reason === 'policy'
+    ? agentLensI18n.t('review:local.session.titleNotSynced')
+    : agentLensI18n.t('review:local.session.remote')
+  return agentLensI18n.t('review:local.session.remote')
 }
 
 function hubSessionVisibility(item: HubReviewSessionSummaryDto, review: ReturnType<AgentLensClientModel['getSnapshot']>['review']): boolean {
@@ -184,28 +196,33 @@ function numberValue(record: Record<string, JsonValue>, ...keys: string[]): numb
   return undefined
 }
 
-const evidenceCaptureLabel: Record<TimelineEvidenceDto['captureMethod'], string> = {
-  'runtime-hook': '运行时捕获',
-  'native-log': '原生日志',
-  'native-db': '原生数据库',
-  'static-scan': '静态发现',
-  'external-import': '外部导入',
+const evidenceCaptureKey: Record<TimelineEvidenceDto['captureMethod'], string> = {
+  'runtime-hook': 'review:local.evidence.capture.runtimeHook',
+  'native-log': 'review:local.evidence.capture.nativeLog',
+  'native-db': 'review:local.evidence.capture.nativeDb',
+  'static-scan': 'review:local.evidence.capture.staticScan',
+  'external-import': 'review:local.evidence.capture.externalImport',
 }
 
-const evidenceDerivationLabel: Record<string, string> = {
-  observed: '已观测',
-  reported: '来源报告',
-  derived: '推导',
-  estimated: '估算',
-  inferred: '推断',
+const evidenceDerivationKey: Record<string, string> = {
+  observed: 'review:local.evidence.derivation.observed',
+  reported: 'review:local.evidence.derivation.reported',
+  derived: 'review:local.evidence.derivation.derived',
+  estimated: 'review:local.evidence.derivation.estimated',
+  inferred: 'review:local.evidence.derivation.inferred',
 }
 
-const evidenceConfidenceLabel: Record<string, string> = {
-  exact: '精确',
-  high: '高',
-  medium: '中',
-  low: '低',
-  unknown: '未知',
+const evidenceConfidenceKey: Record<string, string> = {
+  exact: 'review:local.evidence.confidence.exact',
+  high: 'review:local.evidence.confidence.high',
+  medium: 'review:local.evidence.confidence.medium',
+  low: 'review:local.evidence.confidence.low',
+  unknown: 'review:local.evidence.confidence.unknown',
+}
+
+function evidenceLabel(map: Record<string, string>, value: string): string {
+  const key = map[value]
+  return key ? agentLensI18n.t(key) : value
 }
 
 function EvidenceBadges({ evidence, compact = false }: { evidence: TimelineEvidenceDto[]; compact?: boolean }) {
@@ -216,17 +233,17 @@ function EvidenceBadges({ evidence, compact = false }: { evidence: TimelineEvide
       const key = `${item.captureMethod}:${item.derivation}:${item.confidence}`
       if (seen.has(key)) continue
       seen.add(key)
-      const derivation = item.derivation === 'inferred' ? '推断' : item.derivation === 'estimated' ? '估算' : ''
-      const label = derivation || evidenceCaptureLabel[item.captureMethod]
+      const derivation = item.derivation === 'inferred' || item.derivation === 'estimated' ? evidenceLabel(evidenceDerivationKey, item.derivation) : ''
+      const label = derivation || evidenceLabel(evidenceCaptureKey, item.captureMethod)
       items.push({
         key,
         label,
         confidence: item.confidence,
         title: [
-          evidenceCaptureLabel[item.captureMethod],
-          `来源：${evidenceDerivationLabel[item.derivation] ?? item.derivation}`,
-          `可信度：${evidenceConfidenceLabel[item.confidence] ?? item.confidence}`,
-          item.missingReason ? '证据信息不完整' : '',
+          evidenceLabel(evidenceCaptureKey, item.captureMethod),
+          agentLensI18n.t('review:local.evidence.source', { value: evidenceLabel(evidenceDerivationKey, item.derivation) }),
+          agentLensI18n.t('review:local.evidence.confidenceLabel', { value: evidenceLabel(evidenceConfidenceKey, item.confidence) }),
+          item.missingReason ? agentLensI18n.t('review:local.evidence.incomplete') : '',
         ].filter(Boolean).join(' · '),
       })
     }
