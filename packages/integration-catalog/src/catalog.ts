@@ -20,6 +20,7 @@ export interface ToolDiscoveryPathCandidateDescriptor {
   path?: string | undefined
   append?: readonly string[] | undefined
   platforms?: readonly NodeJS.Platform[] | undefined
+  expandHome?: boolean | undefined
 }
 
 export interface ToolDiscoveryRootDescriptor {
@@ -80,7 +81,9 @@ export function resolveToolDiscoveryCandidatePath(
     ? env[candidate.envVar]?.trim()
     : candidate.path?.trim()
   if (!raw) return undefined
-  const expanded = expandHomePath(raw, homeDir)
+  const expanded = candidate.path || candidate.expandHome !== false
+    ? expandHomePath(raw, homeDir)
+    : raw
   const path = candidate.append?.length ? join(expanded, ...candidate.append) : expanded
   return options.absoluteOnly === false || isAbsolute(path) ? path : undefined
 }
@@ -175,8 +178,8 @@ export const OFFICIAL_INTEGRATION_CATALOG: readonly OfficialIntegrationCatalogEn
           role: 'data',
           marker: 'state.db',
           candidates: [
-            { envVar: 'HERMES_HOME' },
-            { envVar: 'LOCALAPPDATA', append: ['hermes'], platforms: ['win32'] },
+            { envVar: 'HERMES_HOME', expandHome: false },
+            { envVar: 'LOCALAPPDATA', append: ['hermes'], platforms: ['win32'], expandHome: false },
             { path: '~/AppData/Local/hermes', platforms: ['win32'] },
             { path: '~/.hermes' },
           ],
@@ -197,10 +200,10 @@ export const OFFICIAL_INTEGRATION_CATALOG: readonly OfficialIntegrationCatalogEn
           role: 'data',
           marker: 'opencode.db',
           candidates: [
-            { envVar: 'OPENCODE_HOME' },
-            { envVar: 'APPDATA', append: ['opencode'], platforms: ['win32'] },
+            { envVar: 'OPENCODE_HOME', expandHome: false },
+            { envVar: 'APPDATA', append: ['opencode'], platforms: ['win32'], expandHome: false },
             { path: '~/AppData/Roaming/opencode', platforms: ['win32'] },
-            { envVar: 'XDG_DATA_HOME', append: ['opencode'], platforms: ['linux', 'darwin', 'freebsd', 'openbsd', 'aix', 'sunos'] },
+            { envVar: 'XDG_DATA_HOME', append: ['opencode'], platforms: ['linux', 'darwin', 'freebsd', 'openbsd', 'aix', 'sunos'], expandHome: false },
             { path: '~/.local/share/opencode' },
           ],
         },
