@@ -160,7 +160,7 @@ async function discoverEntry(
       ...(executable ? { executable } : {}),
       ...(configRoot ? { configRoot } : {}),
       ...(dataRoot ? { dataRoot } : {}),
-      ...(errors.length ? { reason: errors[0] } : {}),
+      ...(presence === 'error' && errors.length ? { reason: errors[0] } : {}),
     }
   } catch (error) {
     return {
