@@ -1,6 +1,7 @@
 export {
   resolveClaudeLocation,
   resolveCodexLocation,
+  resolveHermesConfigRoots,
   resolveHermesRoots,
   resolveOpenCodeRoots,
   resolvePiLocation,
