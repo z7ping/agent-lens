@@ -451,6 +451,39 @@ test('install repairs an already-installed incompatible package before reporting
   }
 })
 
+test('operation retention never drops queued work and prunes only terminal history', async () => {
+  const f = await fixture()
+  try {
+    const service = new IntegrationPackageService({
+      bundleDir: f.bundleDir,
+      installRoot: f.installRoot,
+    })
+    await service.initialize()
+
+    const pending = Array.from({ length: 129 }, () => service.install('pi'))
+    const internals = service as unknown as {
+      operationOrder: string[]
+      operations: Map<string, { status: string }>
+    }
+
+    assert.equal(internals.operationOrder.length, 129)
+    assert.equal(internals.operations.size, 129)
+    assert.equal(
+      [...internals.operations.values()].every(operation => operation.status === 'queued'),
+      true,
+    )
+
+    const completed = await Promise.all(pending)
+    assert.equal(completed.every(operation => operation.status === 'completed'), true)
+    assert.equal(internals.operationOrder.length, 128)
+    assert.equal(internals.operations.size, 128)
+    assert.equal(service.operation(completed[0]!.operationId), null)
+    assert.ok(service.operation(completed.at(-1)!.operationId))
+  } finally {
+    await f.cleanup()
+  }
+})
+
 test('removing Integration package leaves data outside package install root untouched', async () => {
   const f = await fixture()
   try {
