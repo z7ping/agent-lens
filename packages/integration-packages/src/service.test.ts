@@ -5,6 +5,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  readdir,
   rename,
   rm,
   writeFile,
@@ -13,10 +14,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import { OFFICIAL_INTEGRATION_CATALOG } from '@agent-lens/integration-catalog'
-import {
-  INTEGRATION_PACKAGE_SCHEMA_VERSION,
-  IntegrationPackageService,
-} from '.'
+import { IntegrationPackageService } from './service'
+import { INTEGRATION_PACKAGE_SCHEMA_VERSION } from './types'
 
 function sha256(value: string | Uint8Array): string {
   return createHash('sha256').update(value).digest('hex')
@@ -184,14 +183,8 @@ test('startup cleans interrupted staging/trash work without disturbing the commi
 
     assert.equal(recovered.state('pi').installed, true)
     assert.equal(recovered.state('pi').integrity, 'verified')
-    assert.deepEqual(
-      await import('node:fs/promises').then(fs => fs.readdir(join(f.installRoot, '.staging'))),
-      [],
-    )
-    assert.deepEqual(
-      await import('node:fs/promises').then(fs => fs.readdir(join(f.installRoot, '.trash'))),
-      [],
-    )
+    assert.deepEqual(await readdir(join(f.installRoot, '.staging')), [])
+    assert.deepEqual(await readdir(join(f.installRoot, '.trash')), [])
   } finally {
     await f.cleanup()
   }
