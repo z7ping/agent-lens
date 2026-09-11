@@ -269,3 +269,30 @@ test('Claude static assets remain partial and do not claim runtime discoverabili
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test('Claude sessionless runtime hook remains evidence-only', async () => {
+  const envelope = claudeInternals.parseRuntimeEnvelope(JSON.stringify({
+    id: 'agent-lens-sessionless-envelope',
+    capturedAt: '2026-09-11T00:00:00.000Z',
+    event: {
+      hook_event_name: 'PreToolUse',
+      tool_use_id: 'tool-sessionless',
+      tool_name: 'Bash',
+    },
+  }), 'sessionless.json')
+  const value = claudeInternals.runtimeRecord(envelope, '/tmp/sessionless.json', {
+    installation: {
+      id: 'installation-claude',
+      hostId: 'host',
+      productId: 'claude-code',
+      firstSeenAt: '2026-09-11T00:00:00.000Z',
+      lastSeenAt: '2026-09-11T00:00:00.000Z',
+    },
+    abortSignal: new AbortController().signal,
+  } as SourceExecutionContext)
+
+  assert.equal(value.sourceSessionNativeId, undefined)
+  const normalized = await normalizeClaudeRecord(value, {} as never)
+  assert.deepEqual(normalized.observations, [])
+  assert.equal(normalized.evidenceCandidates.length, 1)
+})
