@@ -30,6 +30,7 @@ import {
   isMissingPathError,
   readJsonlLines,
   resolveExecutable,
+  sourceFileIdentity,
   resolvePiLocation,
 } from '@agent-lens/runtime-cordis'
 import { PI_PARSER_VERSION, PI_SOURCE_ID } from './constants'
@@ -85,9 +86,6 @@ function normalizeTimestamp(value: unknown): string | undefined {
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : value
 }
 
-function fileIdentity(value: { dev: number; ino: number }): string {
-  return `${value.dev}:${value.ino}`
-}
 
 async function exists(path: string): Promise<boolean> {
   try {
@@ -304,7 +302,7 @@ export async function* ingestPiFile(
     if (isMissingPathError(error)) return
     throw error
   }
-  const initialFileId = fileIdentity(fileStat)
+  const initialFileId = sourceFileIdentity(fileStat)
   const key = historyCheckpointKey(filePath)
   const previous = await ctx.checkpoint.get<HistoryCheckpoint>(key)
   const unchanged = previous
@@ -386,7 +384,7 @@ export async function* ingestPiFile(
   if (!ctx.abortSignal.aborted && !incompleteTail) {
     try {
       const finalStat = await stat(filePath)
-      if (fileIdentity(finalStat) === initialFileId) {
+      if (sourceFileIdentity(finalStat) === initialFileId) {
         await ctx.checkpoint.set(key, {
           path: filePath,
           offset,
