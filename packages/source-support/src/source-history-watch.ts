@@ -23,8 +23,10 @@ export interface HistoryFileWatchHandle {
 export async function startHistoryFileWatch(
   options: HistoryFileWatchOptions,
 ): Promise<HistoryFileWatchHandle> {
+  if (options.signal.aborted) return { async dispose() {} }
+
   const debounceMs = options.debounceMs ?? 180
-  let stopped = options.signal.aborted
+  let stopped = false
   let watcher: FSWatcher | null = null
   let fallbackTimer: NodeJS.Timeout | null = null
   let reconcileTimer: NodeJS.Timeout | null = null
@@ -87,6 +89,8 @@ export async function startHistoryFileWatch(
       reportError(error)
       watcher?.close()
       watcher = null
+      if (reconcileTimer) clearInterval(reconcileTimer)
+      reconcileTimer = null
       startFallbackPolling()
     })
   } catch (error) {
