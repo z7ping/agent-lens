@@ -38,6 +38,7 @@ function sha256(value: string | Buffer): string {
   return createHash('sha256').update(value).digest('hex')
 }
 
+
 async function* walkJsonlFiles(root: string): AsyncIterable<string> {
   let directory
   try {
@@ -57,7 +58,7 @@ async function* walkJsonlFiles(root: string): AsyncIterable<string> {
   }
 }
 
-async function listJsonlFiles(root: string, historyWindow?: SourceHistoryWindow): Promise<string[]> {
+export async function listJsonlFiles(root: string, historyWindow?: SourceHistoryWindow): Promise<string[]> {
   const paths: string[] = []
   for await (const file of walkJsonlFiles(root)) paths.push(file)
 
@@ -248,6 +249,140 @@ function metadataRecord(
   }
 }
 
+async function* ingestCodexFileWithThreadNames(
+  ctx: SourceExecutionContext,
+  filePath: string,
+  threadNames: Map<string, CodexThreadName>,
+): AsyncIterable<SourceRecord> {
+  if (ctx.abortSignal.aborted) return
+
+  let fileStat
+  try {
+    fileStat = await stat(filePath)
+  } catch (error) {
+    if (isMissingPathError(error)) return
+    throw error
+  }
+  const initialFileId = sourceFileIdentity(fileStat)
+  const key = checkpointKey(filePath)
+  const metadataKey = metadataCheckpointKey(filePath)
+  const previous = await ctx.checkpoint.get<HistoryCheckpoint>(key)
+  const previousMetadata = await ctx.checkpoint.get<MetadataCheckpoint>(metadataKey) ?? {}
+  const fallbackId = sessionIdFromFilename(filePath)
+  const session = await readSessionMetadata(filePath, threadNames.get(fallbackId))
+  const indexedTitle = threadNames.get(session.nativeSessionId) ?? threadNames.get(fallbackId)
+  if (indexedTitle && session.title !== indexedTitle.title) session.title = indexedTitle.title
+
+  const startRecord = metadataRecord(ctx, filePath, session, 'session_start', indexedTitle)
+  const startFingerprint = startRecord?.fingerprint
+  if (startRecord && startFingerprint && previousMetadata.startFingerprint !== startFingerprint) {
+    yield startRecord
+    previousMetadata.startFingerprint = startFingerprint
+    await ctx.checkpoint.set(metadataKey, previousMetadata)
+  }
+  const titleRecord = metadataRecord(ctx, filePath, session, 'session_title', indexedTitle)
+  const titleFingerprint = titleRecord?.fingerprint
+  if (titleRecord && titleFingerprint && previousMetadata.titleFingerprint !== titleFingerprint) {
+    yield titleRecord
+    previousMetadata.titleFingerprint = titleFingerprint
+    await ctx.checkpoint.set(metadataKey, previousMetadata)
+  }
+
+  // Parser upgrades are handled by Parser Replay. The history checkpoint advances in place
+  // instead of forcing a full reread of an already-consumed rollout.
+  if (previous && (
+    previous.parserVersion !== CODEX_PARSER_VERSION
+    || previous.fileId === undefined
+  )) {
+    await ctx.checkpoint.set(key, {
+      ...previous,
+      fileId: previous.fileId ?? initialFileId,
+      parserVersion: CODEX_PARSER_VERSION,
+    })
+  }
+
+  const sameKnownFile = previous?.fileId === undefined || previous.fileId === initialFileId
+  const unchanged = previous
+    && previous.path === filePath
+    && sameKnownFile
+    && previous.offset === fileStat.size
+    && previous.size === fileStat.size
+    && previous.mtimeMs === fileStat.mtimeMs
+  if (unchanged) return
+
+  const reset = !previous
+    || previous.path !== filePath
+    || (previous.fileId !== undefined && previous.fileId !== initialFileId)
+    || fileStat.size < previous.offset
+  let offset = reset ? 0 : previous.offset
+  let sequence = reset ? 0 : previous.sequence
+  let pendingCheckpointLines = 0
+  let incompleteTail = false
+
+  const persistCheckpoint = async () => {
+    await ctx.checkpoint.set(key, {
+      path: filePath,
+      offset,
+      sequence,
+      size: fileStat.size,
+      mtimeMs: fileStat.mtimeMs,
+      fileId: initialFileId,
+      parserVersion: CODEX_PARSER_VERSION,
+    })
+    pendingCheckpointLines = 0
+  }
+
+  for await (const line of readJsonlLines(filePath, offset)) {
+    if (ctx.abortSignal.aborted) return
+    if (!line.terminated && line.text.trim() && !isCompleteJson(line.text)) {
+      incompleteTail = true
+      break
+    }
+
+    sequence += 1
+    offset = line.endOffset
+
+    if (!line.text.trim()) {
+      pendingCheckpointLines += 1
+      if (pendingCheckpointLines >= CHECKPOINT_BATCH_SIZE) await persistCheckpoint()
+      continue
+    }
+
+    yield sourceRecordForLine(ctx, filePath, session, line, sequence)
+    pendingCheckpointLines += 1
+    if (pendingCheckpointLines >= CHECKPOINT_BATCH_SIZE) await persistCheckpoint()
+  }
+
+  if (pendingCheckpointLines > 0) await persistCheckpoint()
+
+  if (!ctx.abortSignal.aborted && !incompleteTail) {
+    try {
+      const finalStat = await stat(filePath)
+      if (sourceFileIdentity(finalStat) === initialFileId) {
+        await ctx.checkpoint.set(key, {
+          path: filePath,
+          offset,
+          sequence,
+          size: finalStat.size,
+          mtimeMs: finalStat.mtimeMs,
+          fileId: initialFileId,
+          parserVersion: CODEX_PARSER_VERSION,
+        })
+      }
+    } catch (error) {
+      if (!isMissingPathError(error)) throw error
+    }
+  }
+}
+
+export async function* ingestCodexFile(
+  ctx: SourceExecutionContext,
+  filePath: string,
+): AsyncIterable<SourceRecord> {
+  const threadNames = await readThreadNames(ctx.installation.configRoot)
+  yield* ingestCodexFileWithThreadNames(ctx, filePath, threadNames)
+}
+
 export async function* ingestCodexHistory(ctx: SourceHistoryExecutionContext): AsyncIterable<SourceRecord> {
   const sessionsDir = ctx.installation.dataRoot
     ?? (ctx.installation.configRoot ? join(ctx.installation.configRoot, 'sessions') : undefined)
@@ -257,102 +392,7 @@ export async function* ingestCodexHistory(ctx: SourceHistoryExecutionContext): A
   const files = await listJsonlFiles(sessionsDir, ctx.historyWindow)
   for (const filePath of files) {
     if (ctx.abortSignal.aborted) return
-
-    let fileStat
-    try {
-      fileStat = await stat(filePath)
-    } catch (error) {
-      if (isMissingPathError(error)) continue
-      throw error
-    }
-    const initialFileId = sourceFileIdentity(fileStat)
-    const key = checkpointKey(filePath)
-    const metadataKey = metadataCheckpointKey(filePath)
-    const previous = await ctx.checkpoint.get<HistoryCheckpoint>(key)
-    const previousMetadata = await ctx.checkpoint.get<MetadataCheckpoint>(metadataKey) ?? {}
-    const fallbackId = sessionIdFromFilename(filePath)
-    const session = await readSessionMetadata(filePath, threadNames.get(fallbackId))
-    const indexedTitle = threadNames.get(session.nativeSessionId) ?? threadNames.get(fallbackId)
-    if (indexedTitle && session.title !== indexedTitle.title) session.title = indexedTitle.title
-
-    const startRecord = metadataRecord(ctx, filePath, session, 'session_start', indexedTitle)
-    const startFingerprint = startRecord?.fingerprint
-    if (startRecord && startFingerprint && previousMetadata.startFingerprint !== startFingerprint) {
-      yield startRecord
-      previousMetadata.startFingerprint = startFingerprint
-      await ctx.checkpoint.set(metadataKey, previousMetadata)
-    }
-    const titleRecord = metadataRecord(ctx, filePath, session, 'session_title', indexedTitle)
-    const titleFingerprint = titleRecord?.fingerprint
-    if (titleRecord && titleFingerprint && previousMetadata.titleFingerprint !== titleFingerprint) {
-      yield titleRecord
-      previousMetadata.titleFingerprint = titleFingerprint
-      await ctx.checkpoint.set(metadataKey, previousMetadata)
-    }
-
-    // Parser 升级由 SourceHistoryRunner 直接重规范化数据库中的 SourceRecord；
-    // 检查点只升级版本，不再重新读取已消费的完整 JSONL 前缀。
-    if (previous && (
-      previous.parserVersion !== CODEX_PARSER_VERSION
-      || previous.fileId === undefined
-    )) {
-      await ctx.checkpoint.set(key, {
-        ...previous,
-        fileId: previous.fileId ?? initialFileId,
-        parserVersion: CODEX_PARSER_VERSION,
-      })
-    }
-
-    const sameKnownFile = previous?.fileId === undefined || previous.fileId === initialFileId
-    const unchanged = previous
-      && previous.path === filePath
-      && sameKnownFile
-      && previous.offset === fileStat.size
-      && previous.size === fileStat.size
-      && previous.mtimeMs === fileStat.mtimeMs
-    if (unchanged) continue
-
-    const reset = !previous
-      || previous.path !== filePath
-      || (previous.fileId !== undefined && previous.fileId !== initialFileId)
-      || fileStat.size < previous.offset
-    let offset = reset ? 0 : previous.offset
-    let sequence = reset ? 0 : previous.sequence
-    let pendingCheckpointLines = 0
-
-    const persistCheckpoint = async () => {
-      await ctx.checkpoint.set(key, {
-        path: filePath,
-        offset,
-        sequence,
-        size: fileStat.size,
-        mtimeMs: fileStat.mtimeMs,
-        fileId: initialFileId,
-        parserVersion: CODEX_PARSER_VERSION,
-      })
-      pendingCheckpointLines = 0
-    }
-
-    for await (const line of readJsonlLines(filePath, offset)) {
-      if (ctx.abortSignal.aborted) break
-      if (!line.terminated && line.text.trim() && !isCompleteJson(line.text)) break
-
-      sequence += 1
-      offset = line.endOffset
-
-      if (!line.text.trim()) {
-        pendingCheckpointLines += 1
-        if (pendingCheckpointLines >= CHECKPOINT_BATCH_SIZE) await persistCheckpoint()
-        continue
-      }
-
-      yield sourceRecordForLine(ctx, filePath, session, line, sequence)
-      pendingCheckpointLines += 1
-      if (pendingCheckpointLines >= CHECKPOINT_BATCH_SIZE) await persistCheckpoint()
-    }
-
-    if (pendingCheckpointLines > 0) await persistCheckpoint()
-    if (ctx.abortSignal.aborted) return
+    yield* ingestCodexFileWithThreadNames(ctx, filePath, threadNames)
   }
 }
 
