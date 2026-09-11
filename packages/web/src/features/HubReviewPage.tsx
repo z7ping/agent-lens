@@ -152,6 +152,8 @@ function mixedSessionTime(item: MixedSession): number {
 }
 
 export function HubReviewPage({ embedded = false }: { embedded?: boolean }) {
+  const { t, i18n } = useTranslation('review')
+  const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
   const { sessionId = '' } = useParams()
   const navigate = useNavigate()
   const [detail, setDetail] = useState<HubReviewDetailDto | null>(null)
@@ -201,19 +203,19 @@ export function HubReviewPage({ embedded = false }: { embedded?: boolean }) {
       if (local.status === 'fulfilled') setLocalSessions(local.value.items)
       if (remote.status === 'fulfilled') setRemoteSessions(remote.value.items.filter(item => item.origin.kind === 'remote'))
       const failures = [local, remote].filter(result => result.status === 'rejected') as PromiseRejectedResult[]
-      if (failures.length === 2) setListError('会话列表读取失败')
-      else if (failures.length === 1) setListError('部分会话暂不可用')
+      if (failures.length === 2) setListError(t('hub.list.failed'))
+      else if (failures.length === 1) setListError(t('hub.list.partial'))
       setListLoading(false)
     })
     return () => { cancelled = true }
-  }, [embedded])
+  }, [embedded, t])
 
   const title = useMemo(() => {
-    if (!detail) return '远程会话'
+    if (!detail) return t('hub.list.remoteSession')
     return detail.title.state === 'value' && typeof detail.title.value === 'string' && detail.title.value.trim()
       ? detail.title.value.trim()
-      : sessionAvailabilityLabel(detail.title, '远程会话')
-  }, [detail])
+      : sessionAvailabilityLabel(detail.title, t('hub.list.remoteSession'), t)
+  }, [detail, t])
 
   const sessionGroups = useMemo(() => {
     const mixed: MixedSession[] = [
@@ -221,21 +223,21 @@ export function HubReviewPage({ embedded = false }: { embedded?: boolean }) {
         kind: 'local' as const,
         item,
         id: item.id,
-        title: item.title?.trim() || item.preview?.trim() || item.projectName?.trim() || '本机会话',
+        title: item.title?.trim() || item.preview?.trim() || item.projectName?.trim() || t('hub.list.localSession'),
         time: item.endedAt || item.startedAt || null,
       })),
       ...remoteSessions.map(item => ({
         kind: 'remote' as const,
         item,
         id: item.id,
-        title: sessionAvailabilityLabel(item.title, '远程会话'),
+        title: sessionAvailabilityLabel(item.title, t('hub.list.remoteSession'), t),
         time: sessionDate(item.endedAt) ?? sessionDate(item.startedAt),
       })),
     ].sort((left, right) => {
       const time = mixedSessionTime(right) - mixedSessionTime(left)
       return time || left.id.localeCompare(right.id)
     })
-    const groups = new Map<'今天' | '昨天' | '更早', MixedSession[]>()
+    const groups = new Map<HubDayGroup, MixedSession[]>()
     const now = new Date()
     for (const item of mixed) {
       const label = sessionDayLabel(item.time, now)
@@ -243,8 +245,12 @@ export function HubReviewPage({ embedded = false }: { embedded?: boolean }) {
       entries.push(item)
       groups.set(label, entries)
     }
-    return [...groups.entries()].map(([label, items]) => ({ label, items }))
-  }, [localSessions, remoteSessions])
+    return [...groups.entries()].map(([key, items]) => ({
+      key,
+      label: t(`hub.day.${key}`),
+      items,
+    }))
+  }, [localSessions, remoteSessions, t])
 
   const selectSession = (item: MixedSession) => {
     navigate(item.kind === 'remote'
@@ -254,19 +260,19 @@ export function HubReviewPage({ embedded = false }: { embedded?: boolean }) {
 
   return <main className={`review-page hub-review-page ${embedded ? 'hub-review-page-embedded' : ''}`}>
     {!embedded && <div className="workspace-toolbar hub-review-toolbar">
-      <IconButton className="icon-button hub-review-back" onClick={() => navigate('/review')} aria-label="返回任务复盘"><UiIcon name="arrow-left" size={16}/></IconButton>
+      <IconButton className="icon-button hub-review-back" onClick={() => navigate('/review')} aria-label={t('hub.list.back')}><UiIcon name="arrow-left" size={16}/></IconButton>
       <div>
-        <b>任务复盘</b>
-        <span>本机与 Hub 当前 active Generation 会话统一浏览。</span>
+        <b>{t('hub.list.title')}</b>
+        <span>{t('hub.list.description')}</span>
       </div>
     </div>}
     <div className="review-layout">
       {!embedded && <aside className="session-panel">
-        <div className="session-panel-head"><div><b>会话</b><span>本机 + 远程 · 按时间倒序</span></div><span className="count-badge">{localSessions.length + remoteSessions.length}</span></div>
+        <div className="session-panel-head"><div><b>{t('hub.list.sessions')}</b><span>{t('hub.list.ordering')}</span></div><span className="count-badge">{localSessions.length + remoteSessions.length}</span></div>
         <div className="session-scroll">
-          {listLoading && <div className="empty-state">加载会话…</div>}
+          {listLoading && <div className="empty-state">{t('hub.list.loading')}</div>}
           {listError && <div className="hub-session-list-warning">{listError}</div>}
-          {sessionGroups.map(group => <section className="session-group-block" key={group.label}>
+          {sessionGroups.map(group => <section className="session-group-block" key={group.key}>
             <div className="session-group">{group.label}</div>
             {group.items.map(entry => {
               const remote = entry.kind === 'remote'
@@ -278,30 +284,30 @@ export function HubReviewPage({ embedded = false }: { embedded?: boolean }) {
                 onClick={() => selectSession(entry)}
               >
                 <div className="session-item-meta">
-                  <span className={`hub-session-source ${remote ? 'remote' : 'local'}`}>{remote ? `远程 · ${nodeId}` : '本机'}</span>
-                  <time>{sessionRelativeTime(entry.time)}</time>
+                  <span className={`hub-session-source ${remote ? 'remote' : 'local'}`}>{remote ? t('hub.list.remote', { node: nodeId }) : t('hub.timeline.local')}</span>
+                  <time>{sessionRelativeTime(entry.time, t, locale)}</time>
                 </div>
                 <div className="session-item-title">{entry.title}</div>
                 <div className="session-item-foot">
                   {remote
-                    ? <><span>{entry.item.title.state === 'redacted' ? '标题已脱敏' : entry.item.title.state === 'omitted' ? '部分字段未同步' : 'Hub 会话'}</span><span>{nodeId}</span></>
-                    : <><span>{local?.projectName ?? local?.workspacePath?.split(/[\\/]/).pop() ?? '无项目'}</span><span>{local?.toolCount ?? 0} 调用{(local?.errorCount ?? 0) > 0 ? ` · ${local?.errorCount} 错误` : ''}</span></>}
+                    ? <><span>{entry.item.title.state === 'redacted' ? t('hub.availability.redacted') : entry.item.title.state === 'omitted' ? t('hub.list.partialFields') : t('hub.list.hubSession')}</span><span>{nodeId}</span></>
+                    : <><span>{local?.projectName ?? local?.workspacePath?.split(/[\\/]/).pop() ?? t('hub.list.noProject')}</span><span>{local?.toolCount ?? 0} 调用{(local?.errorCount ?? 0) > 0 ? ` · ${local?.errorCount} 错误` : ''}</span></>}
                 </div>
               </button>
             })}
           </section>)}
-          {!listLoading && !sessionGroups.length && <div className="empty-state">当前没有可读取的会话</div>}
+          {!listLoading && !sessionGroups.length && <div className="empty-state">{t('hub.list.empty')}</div>}
         </div>
       </aside>}
 
       <TaskSurface mode="hub" className="review-reader-pane hub-review-reader-pane">
-        {loading && <div className="empty-state fill">加载远程会话…</div>}
+        {loading && <div className="empty-state fill">{t('hub.detail.loading')}</div>}
         {error && <div className="page-error">{error}</div>}
         {!loading && !error && detail && <div className="review-reader hub-review-reader">
           <header className="review-session-head">
             <div className="review-session-copy">
               <div className="review-session-meta">
-                <span className="hub-review-origin">{detail.origin.kind === 'remote' ? '远程节点' : '本机'}</span>
+                <span className="hub-review-origin">{detail.origin.kind === 'remote' ? t('hub.timeline.remoteNode') : t('hub.timeline.local')}</span>
                 <b>{detail.origin.nodeId}</b>
                 {detail.origin.generationId && <span>Generation {detail.origin.generationId}</span>}
               </div>
@@ -312,18 +318,18 @@ export function HubReviewPage({ embedded = false }: { embedded?: boolean }) {
               </div>
             </div>
             <div className="review-metrics">
-              <div className="review-metric"><b>{detail.meta.count}</b><span>记录</span></div>
+              <div className="review-metric"><b>{detail.meta.count}</b><span>{t('hub.detail.records')}</span></div>
             </div>
           </header>
           <div className="hub-review-policy-note">
-            <b>内容可用性</b>
-            <span><i data-state="redacted"/>已脱敏</span>
-            <span><i data-state="omitted"/>未同步</span>
-            <small>未同步不等于空内容，也不会被当作本机完整 Observation。</small>
+            <b>{t('hub.detail.availability')}</b>
+            <span><i data-state="redacted"/>{t('hub.detail.redacted')}</span>
+            <span><i data-state="omitted"/>{t('hub.detail.omitted')}</span>
+            <small>{t('hub.detail.availabilityNote')}</small>
           </div>
           <div className="review-flow hub-review-flow">
             {detail.items.map(item => <TimelineItem key={item.id} item={item}/>)}
-            {!detail.items.length && <div className="empty-state">当前会话没有可读取的远程记录。</div>}
+            {!detail.items.length && <div className="empty-state">{t('hub.detail.empty')}</div>}
           </div>
         </div>}
       </TaskSurface>
