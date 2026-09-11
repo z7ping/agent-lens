@@ -98,6 +98,16 @@
 .pi-live-stage-dot { width: 8px; height: 8px; grid-column: 1; grid-row: 1 / 3; align-self: start; margin-top: 5px; border-radius: 50%; background: var(--al-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--al-accent) 12%, transparent); animation: pi-live-stage-pulse 1.1s steps(1) infinite; }
 @keyframes pi-live-stage-pulse { 50% { opacity: .22; } }
 .pi-live-reader-error { margin: 6px 0; }
+.pi-live-sync-warning {
+  margin: 6px 0;
+  padding: 7px 9px;
+  border: 1px solid color-mix(in srgb, var(--al-warning) 28%, var(--al-line));
+  border-radius: 8px;
+  background: var(--al-warning-soft);
+  color: var(--al-ink-2);
+  font-size: 12px;
+  line-height: 1.45;
+}
 
 /*
  * Composer 对齐 ChatGPT 类输入交互：大圆角容器、正文编辑区 + 底部工具条、右上角显式放大/缩小。
