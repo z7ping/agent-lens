@@ -432,7 +432,9 @@ export async function startPiRuntimeCapture(
     },
     debounceMs: 180,
     fallbackPollMs: 5_000,
+    fallbackReconcileLimit: 20,
     reconcilePollMs: 60_000,
+    reconcileLimit: 20,
     initialReconcileLimit: 1,
     onError: error => {
       console.error('[AgentLens] Pi history reconcile failed', error)
