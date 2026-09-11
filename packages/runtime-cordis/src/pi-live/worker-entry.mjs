@@ -122,6 +122,13 @@ function callResourceLoader(loader, method) {
   }
 }
 
+function piOfflineModeEnabled() {
+  const value = process.env.PI_OFFLINE
+  if (!value) return false
+  const normalized = value.toLowerCase()
+  return value === '1' || normalized === 'true' || normalized === 'yes'
+}
+
 function normalizePackageUpdates(value) {
   if (!Array.isArray(value)) return []
   const result = []
@@ -141,7 +148,7 @@ function normalizePackageUpdates(value) {
 }
 
 async function checkPackageUpdates(cwd) {
-  if (process.env.PI_OFFLINE) return { status: 'unavailable', updates: [] }
+  if (piOfflineModeEnabled()) return { status: 'unavailable', updates: [] }
   if (typeof sdk?.DefaultPackageManager !== 'function' || typeof sdk?.getAgentDir !== 'function') {
     return { status: 'unavailable', updates: [] }
   }
