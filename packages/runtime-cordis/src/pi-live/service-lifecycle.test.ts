@@ -126,6 +126,59 @@ test('启动资源审计使用 ready 前最后一份 Runtime 快照，而不是 
   await service.dispose()
 })
 
+test('包更新在 ready 后完成时合并进同一启动审计', async () => {
+  const audits: PiLiveStartupAuditSnapshot[] = []
+  let completePackageCheck: (() => void) | undefined
+  const host: PiRuntimeHost = {
+    start: async (id, _input, _signal, onEvent) => {
+      onEvent({
+        type: 'runtime_resources',
+        resources: {
+          contexts: ['/workspace/AGENTS.md'],
+          skills: ['repo-review'],
+          prompts: [],
+          extensions: [],
+          themes: [],
+          diagnostics: [],
+        },
+      })
+      completePackageCheck = () => onEvent({
+        type: 'package_updates',
+        status: 'complete',
+        updates: [{ displayName: '@example/pi-extension', type: 'npm', scope: 'user' }],
+      })
+      return handle(id, '/sessions/native.jsonl')
+    },
+  }
+  const service = new DefaultPiLiveService(
+    host,
+    undefined,
+    { recordStartupResources: async snapshot => { audits.push(snapshot) } },
+  )
+  const initial = await service.start({ cwd: '/workspace' })
+  await new Promise(resolve => setTimeout(resolve, 0))
+  await service.state(initial.runtimeSessionId)
+  for (let index = 0; index < 20 && audits.length === 0; index += 1) {
+    await new Promise(resolve => setTimeout(resolve, 0))
+  }
+  assert.equal(audits.length, 1)
+  assert.equal(audits[0]?.packageUpdateCheck, undefined)
+
+  completePackageCheck?.()
+  for (let index = 0; index < 20 && audits.length < 2; index += 1) {
+    await new Promise(resolve => setTimeout(resolve, 0))
+  }
+
+  assert.equal(audits.length, 2)
+  assert.equal(audits[1]?.attemptStartedAt, audits[0]?.attemptStartedAt)
+  assert.equal(audits[1]?.packageUpdateCheck, 'complete')
+  assert.deepEqual(audits[1]?.packageUpdates, [
+    { displayName: '@example/pi-extension', type: 'npm', scope: 'user' },
+  ])
+  assert.equal(typeof audits[1]?.packageUpdatesCheckedAt, 'string')
+  await service.dispose()
+})
+
 test('initializing 期间 Terminate 会发出取消信号且不留下 Runtime', async () => {
   let aborted = false
   const host: PiRuntimeHost = {
