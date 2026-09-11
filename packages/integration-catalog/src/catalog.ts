@@ -190,7 +190,7 @@ export const OFFICIAL_INTEGRATION_CATALOG: readonly OfficialIntegrationCatalogEn
     displayName: 'OpenCode',
     defaultOrder: 50,
     discovery: {
-      executable: { commands: ['opencode', 'opencode2'], explicitEnvVar: 'OPENCODE_BIN' },
+      executable: { commands: ['opencode', 'opencode2'] },
       roots: [
         {
           id: 'data',
