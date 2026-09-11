@@ -144,6 +144,8 @@ app.use(httpSurfacePlugin, {
   }),
   integrationStatus: productId => app.resolveIntegrationStatus(productId),
   integrationAuthorization: {
+    available: productId => app.authorizableCapabilities(productId)
+      .filter((capability): capability is 'hook' | 'runtime' | 'live' => capability !== 'source'),
     grant: async (productId, capabilities) => {
       integrationAuthorization = await grantIntegrationCapabilities(
         integrationAuthorizationFile,
