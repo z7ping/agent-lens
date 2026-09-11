@@ -132,11 +132,10 @@ function packageUpdates(value: unknown): PiLivePackageUpdate[] {
   const updates: PiLivePackageUpdate[] = []
   for (const item of value) {
     const row = record(item)
-    if (typeof row.source !== 'string' || typeof row.displayName !== 'string') continue
+    if (typeof row.displayName !== 'string') continue
     if (row.type !== 'npm' && row.type !== 'git') continue
     if (row.scope !== 'user' && row.scope !== 'project') continue
     updates.push({
-      source: row.source.slice(0, 500),
       displayName: row.displayName.slice(0, 240),
       type: row.type,
       scope: row.scope,
