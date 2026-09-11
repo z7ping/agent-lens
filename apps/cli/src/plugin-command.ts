@@ -44,14 +44,13 @@ async function requestJson<T>(
   init: RequestInit,
   fetchImpl: FetchLike,
 ): Promise<T> {
+  const headers = new Headers(init.headers)
+  headers.set('accept', 'application/json')
   let response: Response
   try {
     response = await fetchImpl(url, {
       ...init,
-      headers: {
-        accept: 'application/json',
-        ...(init.headers ?? {}),
-      },
+      headers,
       signal: init.signal ?? AbortSignal.timeout(10_000),
     })
   } catch (error) {
