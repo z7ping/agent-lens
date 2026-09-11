@@ -80,6 +80,9 @@ test('Pi startup audit reuses Source detection identity and commits runtime evid
       themes: ['dark'],
       diagnostics: [],
     },
+    packageUpdateCheck: 'complete',
+    packageUpdates: [{ displayName: '@example/pi-extension', type: 'npm', scope: 'user' }],
+    packageUpdatesCheckedAt: '2026-09-11T10:00:02.000Z',
   })
 
   assert.deepEqual(installationInputs, [{
@@ -120,6 +123,12 @@ test('Pi startup audit reuses Source detection identity and commits runtime evid
     themes: ['dark'],
     diagnostics: [],
   })
+  assert.equal(commit.candidate.payload.packageUpdateCheck, 'complete')
+  assert.deepEqual(commit.candidate.payload.packageUpdates, [
+    { displayName: '@example/pi-extension', type: 'npm', scope: 'user' },
+  ])
+  assert.equal(commit.candidate.payload.packageUpdatesCheckedAt, '2026-09-11T10:00:02.000Z')
+  assert.equal(JSON.stringify(commit.candidate.payload).includes('https://user:secret@'), false)
   assert.equal(commit.evidenceCandidates[0]?.captureMethod, 'runtime-hook')
   assert.equal(commit.evidenceCandidates[0]?.derivation, 'observed')
   assert.equal(commit.evidenceCandidates[0]?.nativeStableId, commit.candidate.nativeEventId)
