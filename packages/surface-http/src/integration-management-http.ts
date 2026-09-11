@@ -9,7 +9,7 @@ import {
   type IntegrationPreferencesDto,
   type IntegrationPreferencesResponseDto,
 } from '@agent-lens/protocol'
-import { badRequest, readJsonBody, writeJson } from './http-utils'
+import { badRequest, httpError, readJsonBody, writeJson } from './http-utils'
 
 const MAX_JSON_BODY_BYTES = 64 * 1024
 
@@ -22,6 +22,7 @@ export interface IntegrationManagementController {
   updatePreferences(
     request: IntegrationPreferenceUpdateRequestDto,
   ): Promise<IntegrationPreferencesState>
+  enabled(integrationId: string): IntegrationEnabledStateDto | null
   setEnabled(
     integrationId: string,
     enabled: boolean,
@@ -136,6 +137,9 @@ export async function handleIntegrationManagementRequest(
     return true
   }
   const integrationId = decodeIntegrationId(enabledMatch?.[1])
+  const current = controller.enabled(integrationId)
+  if (!current) throw httpError(404, 'Unknown official Agent Integration')
+  if (!current.editable) throw httpError(409, 'Integration Enabled state is managed by read-only runtime configuration')
   const payload = enabledPayload(await readJsonBody(request, { maxBytes: MAX_JSON_BODY_BYTES }))
   const enabled = await controller.setEnabled(integrationId, payload.enabled)
   const body: IntegrationEnabledUpdateResponseDto = {
