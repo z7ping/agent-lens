@@ -48,6 +48,7 @@ import {
   isMissingPathError,
   readJsonlLines,
   sourceFileIdentity,
+  startHistoryFileWatch,
 } from '@agent-lens/source-support'
 
 const SOURCE_ID = 'claude-code'
@@ -440,10 +441,36 @@ export async function startClaudeRuntimeCapture(
     }
   })()
 
+  const projectsDir = ctx.installation.dataRoot
+    ?? (ctx.installation.configRoot ? join(ctx.installation.configRoot, 'projects') : undefined)
+  const historyWatch = projectsDir
+    ? await startHistoryFileWatch({
+        root: projectsDir,
+        signal: ctx.abortSignal,
+        accept: filePath => extname(filePath).toLowerCase() === '.jsonl',
+        listFiles: limit => listJsonlFiles(
+          projectsDir,
+          limit === undefined ? undefined : { sessionLimit: limit },
+        ),
+        onFile: async filePath => {
+          for await (const record of ingestClaudeFile(ctx, filePath)) {
+            await emitter.emit(record)
+          }
+        },
+        debounceMs: 180,
+        fallbackPollMs: 60_000,
+        reconcilePollMs: 5 * 60_000,
+        onError: error => {
+          console.error('[AgentLens] Claude history reconcile failed', error)
+        },
+      })
+    : null
+
   return {
     async dispose(): Promise<void> {
       if (stopped) return
       stopped = true
+      await historyWatch?.dispose()
       await task
     },
   }
