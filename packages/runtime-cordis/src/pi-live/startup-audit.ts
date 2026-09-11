@@ -10,7 +10,11 @@ import {
   resolveDetectedSourceInstallation,
   resolveRuntimeHost,
 } from '../source-sync'
-import type { PiLiveStartupResources } from './types'
+import type {
+  PiLivePackageUpdate,
+  PiLivePackageUpdateCheckStatus,
+  PiLiveStartupResources,
+} from './types'
 
 const PI_SOURCE_ID = 'pi'
 export const PI_LIVE_STARTUP_AUDIT_PARSER_VERSION = 'pi-live-startup-audit-v1'
@@ -22,6 +26,9 @@ export interface PiLiveStartupAuditSnapshot {
   nativeSessionId: string
   workspacePath: string
   startupResources: PiLiveStartupResources
+  packageUpdateCheck?: Exclude<PiLivePackageUpdateCheckStatus, 'checking'> | undefined
+  packageUpdates?: PiLivePackageUpdate[] | undefined
+  packageUpdatesCheckedAt?: string | undefined
   executable?: string | undefined
   sdkVersion?: string | undefined
   sessionName?: string | undefined
@@ -94,6 +101,9 @@ export function createPiLiveStartupAuditSink(ctx: AgentLensContext): PiLiveStart
             runtimeSessionId: snapshot.runtimeSessionId,
             ...(snapshot.sdkVersion ? { sdkVersion: snapshot.sdkVersion } : {}),
             resources: snapshot.startupResources,
+            ...(snapshot.packageUpdateCheck ? { packageUpdateCheck: snapshot.packageUpdateCheck } : {}),
+            ...(snapshot.packageUpdates ? { packageUpdates: snapshot.packageUpdates } : {}),
+            ...(snapshot.packageUpdatesCheckedAt ? { packageUpdatesCheckedAt: snapshot.packageUpdatesCheckedAt } : {}),
           },
           identityHints: {
             nativeSessionId: snapshot.nativeSessionId,
