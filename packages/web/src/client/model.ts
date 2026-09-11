@@ -273,11 +273,13 @@ export class AgentLensClientModel {
     this.patch({ capturePolicy })
   }
 
-  authorizeIntegration(
+  async authorizeIntegration(
     productId: string,
     capabilities: readonly IntegrationAuthorizationCapabilityDto[],
   ): Promise<IntegrationAuthorizationResponseDto> {
-    return this.api.authorizeIntegration(productId, capabilities)
+    const result = await this.api.authorizeIntegration(productId, capabilities)
+    await this.refreshAgents()
+    return result
   }
 
   async refreshFacetsAndAgents(): Promise<void> {
