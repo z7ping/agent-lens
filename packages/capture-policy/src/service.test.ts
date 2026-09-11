@@ -154,7 +154,7 @@ test('config off prevents static assets from entering persistence', () => {
   }), null)
 })
 
-test('runtime resource snapshots follow config capture policy', () => {
+test('runtime startup audit follows config capture policy', () => {
   const policy = new DefaultCapturePolicyService(settings({ config: 'off' }))
   const output = normalized('runtime.startup', {
     event: 'runtime.startup.audit',
