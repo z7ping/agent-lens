@@ -11,10 +11,10 @@ const registry = new Map<string, LocalePackDto>()
 export function registerLocalePack(value: unknown): LocalePackDto {
   const pack = parseLocalePackDto(value)
   const existing = registry.get(pack.locale)
-  if (existing && pack.locale === OFFICIAL_AGENT_LENS_LOCALE && existing !== officialChineseLocalePack) {
+  if (pack.locale === OFFICIAL_AGENT_LENS_LOCALE) {
     throw new Error('official zh-CN Locale Pack cannot be replaced')
   }
-  if (existing && pack.locale !== OFFICIAL_AGENT_LENS_LOCALE) {
+  if (existing) {
     throw new Error(`Locale Pack already registered: ${pack.locale}`)
   }
   registry.set(pack.locale, pack)
