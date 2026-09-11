@@ -20,15 +20,25 @@ test('legacy authorization bootstrap preserves existing configuration and never 
 
   assert.equal(
     integrationAuthorizationBootstrap(existing, {
-      existingInstallation: true,
+      legacyMigrationEligible: true,
       selectedIntegrationIds: ['pi', 'hermes'],
     }),
     null,
   )
   assert.equal(
     integrationAuthorizationBootstrap(null, {
-      existingInstallation: false,
+      legacyMigrationEligible: false,
       selectedIntegrationIds: ['pi', 'hermes'],
+    }),
+    null,
+  )
+})
+
+test('a user already initialized under Integration preferences is not eligible for legacy grants on later restarts', () => {
+  assert.equal(
+    integrationAuthorizationBootstrap(null, {
+      legacyMigrationEligible: false,
+      selectedIntegrationIds: ['pi'],
     }),
     null,
   )
@@ -37,7 +47,7 @@ test('legacy authorization bootstrap preserves existing configuration and never 
 test('legacy authorization bootstrap only restores historically privileged Pi/Hermes capabilities', () => {
   assert.deepEqual(
     integrationAuthorizationBootstrap(null, {
-      existingInstallation: true,
+      legacyMigrationEligible: true,
       selectedIntegrationIds: ['pi', 'hermes', 'codex', 'claude-code'],
     }),
     {
