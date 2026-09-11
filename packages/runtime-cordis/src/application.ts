@@ -146,6 +146,7 @@ export class AgentLensApplication {
         const index = next.findIndex(item => item.capability === capability)
         if (index < 0 || next[index]!.availability !== 'available') continue
         next[index] = {
+          ...next[index]!,
           capability,
           availability: 'unavailable',
           reason: 'Live Adapter 未加载',
@@ -161,6 +162,7 @@ export class AgentLensApplication {
         const index = next.findIndex(item => item.capability === capability)
         if (index < 0 || next[index]!.availability !== 'available') continue
         next[index] = {
+          ...next[index]!,
           capability,
           availability: 'unavailable',
           ...(availability.reason ? { reason: availability.reason } : {}),
@@ -171,6 +173,7 @@ export class AgentLensApplication {
         const index = next.findIndex(item => item.capability === capability)
         if (index < 0 || next[index]!.availability !== 'available') continue
         next[index] = {
+          ...next[index]!,
           capability,
           availability: 'error',
           reason: 'Live 可用性检查失败',
