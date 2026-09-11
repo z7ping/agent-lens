@@ -152,6 +152,7 @@ app.use(httpSurfacePlugin, {
         productId,
         capabilities,
       )
+      app.recordIntegrationAuthorization(productId, capabilities)
       return authorizedIntegrationCapabilities(integrationAuthorization, productId)
     },
   },
