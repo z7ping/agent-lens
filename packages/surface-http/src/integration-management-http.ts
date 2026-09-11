@@ -79,7 +79,12 @@ function preferencePayload(value: unknown): IntegrationPreferenceUpdateRequestDt
 }
 
 function decodeIntegrationId(raw: string | undefined): string {
-  const value = decodeURIComponent(raw ?? '').trim().toLowerCase()
+  let value = ''
+  try {
+    value = decodeURIComponent(raw ?? '').trim().toLowerCase()
+  } catch {
+    throw badRequest('integrationId is not valid URL encoding')
+  }
   if (!value) throw badRequest('integrationId is required')
   return value
 }
