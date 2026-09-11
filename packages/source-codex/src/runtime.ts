@@ -179,7 +179,9 @@ export async function startCodexRuntimeCapture(
         },
         debounceMs: 180,
         fallbackPollMs: 60_000,
+        fallbackReconcileLimit: 20,
         reconcilePollMs: 5 * 60_000,
+        reconcileLimit: 20,
         onError: error => {
           console.error('[AgentLens] Codex history reconcile failed', error)
         },
