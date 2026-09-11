@@ -29,6 +29,8 @@ export interface HttpSurfacePluginConfig {
   dataRuntimeHealth?: () => DataRuntimeHealthDto
   /** Additional O(1) runtime diagnostics merged into storage health details. */
   healthDetails?: () => Readonly<Record<string, unknown>>
+  /** Read-only directory containing declarative community Locale Pack JSON files. */
+  localePackDirectory?: string
 }
 
 const manifest = {
@@ -181,6 +183,7 @@ const applyHttpSurface = Object.assign(
       piLive: ctx.piLive,
       rescanAgents: () => sourceRescan.rescan(),
       sourceDetection: sourceId => sourceRescan.isSourceDetected(sourceId),
+      ...(config.localePackDirectory ? { localePackDirectory: config.localePackDirectory } : {}),
       ...(config.selectProjectDirectory ? { selectProjectDirectory: config.selectProjectDirectory } : {}),
       hubReview,
     })
