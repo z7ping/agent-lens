@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { readFile, stat } from 'node:fs/promises'
 import { basename, dirname, extname, isAbsolute, relative, resolve, sep } from 'node:path'
-import { isMissingPathError } from '@agent-lens/source-support'
+import { isMissingPathError, readJsonlLines } from '@agent-lens/source-support'
 import type {
   DiscoveredAsset,
   DiscoveredAssetStateHint,
@@ -13,7 +13,7 @@ import {
   resolvePiSdkResourceApi,
   type PiSdkResourceApi,
 } from '@agent-lens/runtime-cordis'
-import { listJsonlFiles, readJsonlLines } from './session'
+import { listJsonlFiles } from './session'
 
 type PiResolvedPaths = Awaited<ReturnType<InstanceType<PiSdkResourceApi['DefaultPackageManager']>['resolve']>>
 type PiResolvedResource = PiResolvedPaths['skills'][number]
