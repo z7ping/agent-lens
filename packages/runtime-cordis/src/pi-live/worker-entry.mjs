@@ -523,8 +523,12 @@ function state() {
 }
 
 function modelSnapshot(provider) {
-  const snapshot = session.modelRuntime.getAvailableSnapshot()
-  return provider ? snapshot.filter(model => model.provider === provider) : snapshot
+  const snapshot = [...session.modelRuntime.getAvailableSnapshot()]
+  const selected = session.model
+  const catalog = selected && !snapshot.some(model => model.provider === selected.provider && model.id === selected.id)
+    ? [...snapshot, selected]
+    : snapshot
+  return provider ? catalog.filter(model => model.provider === provider) : catalog
 }
 
 async function modelsForSelection(provider) {
