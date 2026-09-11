@@ -38,7 +38,7 @@ test('catalog location resolvers preserve existing source defaults', () => {
   })
 })
 
-test('declarative discovery roots respect environment precedence without resolving relative daemon paths', () => {
+test('declarative discovery roots respect explicit precedence without resolving relative daemon paths', () => {
   const roots = resolveToolDiscoveryRoots('pi', {
     env: {
       PI_CODING_AGENT_DIR: '/custom/pi-agent',
@@ -48,8 +48,26 @@ test('declarative discovery roots respect environment precedence without resolvi
     platform: 'linux',
   })
   assert.equal(roots.find(item => item.role === 'config')?.path, '/custom/pi-agent')
-  assert.equal(roots.find(item => item.role === 'data')?.path, '/custom/pi-agent/sessions')
+  assert.equal(roots.some(item => item.role === 'data'), false)
   assert.equal(roots.some(item => item.path === 'relative-sessions'), false)
+})
+
+test('explicit relative product homes do not fall back to stale default discovery roots', () => {
+  const codex = resolveToolDiscoveryRoots('codex', {
+    env: { CODEX_HOME: 'relative-codex' },
+    homeDir: '/home/tester',
+    platform: 'linux',
+  })
+  assert.equal(codex.some(item => item.role === 'config'), false)
+  assert.equal(codex.some(item => item.role === 'data'), false)
+
+  const hermes = resolveToolDiscoveryRoots('hermes', {
+    env: { HERMES_HOME: 'relative-hermes' },
+    homeDir: '/home/tester',
+    platform: 'linux',
+  })
+  assert.equal(hermes.some(item => item.role === 'data'), false)
+  assert.equal(hermes.some(item => item.role === 'config' && item.path === '/home/tester/.hermes'), true)
 })
 
 test('Hermes and OpenCode keep their legacy non-expanding explicit home semantics', () => {
