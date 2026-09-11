@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react'
+import type { TFunction } from 'i18next'
+import { useTranslation } from 'react-i18next'
 import type {
   AgentAssetInventoryDto,
   AgentOverviewDto,
@@ -12,87 +14,113 @@ import { CompactPageHeading } from '../components/CompactPageHeading'
 import { Button, Dialog, StatusBadge, Toolbar, UiIcon } from '../components/ui'
 import { copyText } from '../client/clipboard'
 
-const capabilityLabel: Record<string, string> = {
-  session: '会话',
-  transcript: '对话记录',
-  'tool-call': '工具调用',
-  'tool-result': '工具结果',
-  permission: '权限',
-  subagent: '子智能体',
-  context: '上下文',
-  thinking: '可观察过程片段',
-  'asset-discovery': '资产发现',
-  'asset-invocation': '资产调用',
-  'artifact-action': '产物操作',
-  usage: '使用情况',
+const capabilityLabelKey: Record<string, string> = {
+  session: 'capability.session',
+  transcript: 'capability.transcript',
+  'tool-call': 'capability.toolCall',
+  'tool-result': 'capability.toolResult',
+  permission: 'capability.permission',
+  subagent: 'capability.subagent',
+  context: 'capability.context',
+  thinking: 'capability.thinking',
+  'asset-discovery': 'capability.assetDiscovery',
+  'asset-invocation': 'capability.assetInvocation',
+  'artifact-action': 'capability.artifactAction',
+  usage: 'capability.usage',
 }
 
-const capabilityStatusLabel: Record<string, string> = {
-  available: '支持',
-  partial: '部分支持',
-  experimental: '实验性',
-  unavailable: '暂不支持',
-  'not-applicable': '不适用',
+const capabilityStatusLabelKey: Record<string, string> = {
+  available: 'capabilityStatus.available',
+  partial: 'capabilityStatus.partial',
+  experimental: 'capabilityStatus.experimental',
+  unavailable: 'capabilityStatus.unavailable',
+  'not-applicable': 'capabilityStatus.notApplicable',
 }
 
-const captureModeLabel: Record<string, string> = {
-  history: '历史记录',
-  'runtime-hook': '运行时钩子',
-  'native-tail': '原生实时跟踪',
-  'static-scan': '静态扫描',
+const captureModeLabelKey: Record<string, string> = {
+  history: 'captureMode.history',
+  'runtime-hook': 'captureMode.runtimeHook',
+  'native-tail': 'captureMode.nativeTail',
+  'static-scan': 'captureMode.staticScan',
 }
 
-const stateLabel: Record<string, string> = {
-  installed: '已安装',
-  configured: '已配置',
-  enabled: '已启用',
-  discoverable: '可发现',
-  exposed: '已开放',
-  invoked: '已调用',
-  observed: '已观测',
+const stateLabelKey: Record<string, string> = {
+  installed: 'state.installed',
+  configured: 'state.configured',
+  enabled: 'state.enabled',
+  discoverable: 'state.discoverable',
+  exposed: 'state.exposed',
+  invoked: 'state.invoked',
+  observed: 'state.observed',
 }
 
-const negativeStateLabel: Record<string, string> = {
-  installed: '未安装',
-  configured: '未配置',
-  enabled: '未启用',
-  discoverable: '不可发现',
-  exposed: '未开放',
-  invoked: '未观察到使用',
-  observed: '未观察到',
+const negativeStateLabelKey: Record<string, string> = {
+  installed: 'negativeState.installed',
+  configured: 'negativeState.configured',
+  enabled: 'negativeState.enabled',
+  discoverable: 'negativeState.discoverable',
+  exposed: 'negativeState.exposed',
+  invoked: 'negativeState.invoked',
+  observed: 'negativeState.observed',
 }
 
-const assetTypeLabel: Record<string, string> = {
-  skill: '技能',
-  mcp: 'MCP（模型上下文协议）',
-  plugin: '插件',
-  extension: '扩展',
-  hook: '钩子',
-  memory: '记忆',
-  prompt: '提示词模板',
-  theme: '主题',
-  context: '上下文文件',
-  rule: '规则',
-  builtin: '内建能力',
-  unknown: '其他',
+const assetTypeLabelKey: Record<string, string> = {
+  skill: 'assetType.skill',
+  mcp: 'assetType.mcp',
+  plugin: 'assetType.plugin',
+  extension: 'assetType.extension',
+  hook: 'assetType.hook',
+  memory: 'assetType.memory',
+  prompt: 'assetType.prompt',
+  theme: 'assetType.theme',
+  context: 'assetType.context',
+  rule: 'assetType.rule',
+  builtin: 'assetType.builtin',
+  unknown: 'assetType.unknown',
 }
 
 const assetTypeOrder = ['skill', 'mcp', 'plugin', 'extension', 'prompt', 'context', 'theme', 'hook', 'memory', 'rule', 'builtin', 'unknown']
 const USER_ASSET_LIMIT = 24
 const ASSEMBLY_PATH_LIMIT = 18
 
-const integrationCapabilityLabel: Record<string, string> = {
-  source: 'Source',
-  hook: 'Hook',
-  runtime: 'Runtime',
-  live: 'Live',
+const integrationCapabilityLabelKey: Record<string, string> = {
+  source: 'integrationCapability.source',
+  hook: 'integrationCapability.hook',
+  runtime: 'integrationCapability.runtime',
+  live: 'integrationCapability.live',
 }
 
-const integrationAvailabilityLabel: Record<string, string> = {
-  available: '可用',
-  partial: '部分可用',
-  unavailable: '不可用',
-  error: '异常',
+const integrationAvailabilityLabelKey: Record<string, string> = {
+  available: 'availability.available',
+  partial: 'availability.partial',
+  unavailable: 'availability.unavailable',
+  error: 'availability.error',
+}
+
+const agentDescriptionKey: Record<string, string> = {
+  codex: 'description.codex',
+  'claude-code': 'description.claudeCode',
+  pi: 'description.pi',
+  hermes: 'description.hermes',
+  opencode: 'description.opencode',
+}
+
+const integrationReasonKey: Record<string, string> = {
+  'authorization-required': 'integration.reason.authorizationRequired',
+  'authorization-restart-required': 'integration.reason.authorizationRestartRequired',
+  'component-start-failed': 'integration.reason.componentStartFailed',
+  'dependency-start-failed': 'integration.reason.dependencyStartFailed',
+  'live-adapter-missing': 'integration.reason.liveAdapterMissing',
+  'live-availability-failed': 'integration.reason.liveAvailabilityFailed',
+}
+
+function translatedLabel(
+  map: Record<string, string>,
+  value: string,
+  t: TFunction,
+): string {
+  const key = map[value]
+  return key ? t(key) : value
 }
 
 function integrationAvailabilityTone(
