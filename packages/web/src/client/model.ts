@@ -6,6 +6,7 @@ import type {
   HealthResponseDto,
   IntegrationAuthorizationCapabilityDto,
   IntegrationAuthorizationResponseDto,
+  IntegrationToolDiscoveryResponseDto,
   LiveUpdateArea,
   LiveUpdateEventDto,
   ReviewDetailFilter,
@@ -29,6 +30,10 @@ export interface ClientSnapshot {
   agentsRescanning: boolean
   agentsRescanResult: AgentRescanResponseDto | null
   agentsRescanError: string
+  integrationDiscovery: IntegrationToolDiscoveryResponseDto | null
+  integrationDiscoveryLoading: boolean
+  integrationDiscoveryRescanning: boolean
+  integrationDiscoveryError: string
   liveConnected: boolean
   review: {
     filters: ReviewFilters
@@ -90,6 +95,10 @@ export class AgentLensClientModel {
     agentsRescanning: false,
     agentsRescanResult: null,
     agentsRescanError: '',
+    integrationDiscovery: null,
+    integrationDiscoveryLoading: false,
+    integrationDiscoveryRescanning: false,
+    integrationDiscoveryError: '',
     liveConnected: false,
     review: {
       filters: { sourceIds: null, projectId: '', range: '7d', status: 'all', search: '' },
@@ -126,6 +135,7 @@ export class AgentLensClientModel {
   private facetsInFlight: Promise<void> | null = null
   private agentsInFlight: Promise<void> | null = null
   private agentsRescanInFlight: Promise<AgentRescanResponseDto> | null = null
+  private integrationDiscoveryInFlight: Promise<IntegrationToolDiscoveryResponseDto> | null = null
   private visibilityListener: (() => void) | null = null
   private unsubscribeLive: (() => void) | null = null
   private reviewGeneration = 0
@@ -214,18 +224,34 @@ export class AgentLensClientModel {
   async refreshAgents(): Promise<void> {
     const generation = ++this.agentsGeneration
     const invalidation = this.agentsInvalidation
-    this.patch({ agentsLoading: true, agentsError: '' })
+    this.patch({ agentsLoading: true, agentsError: '', integrationDiscoveryLoading: true })
     try {
-      const [agents, capturePolicy] = await Promise.all([
+      const [agents, capturePolicy, discovery] = await Promise.all([
         this.api.agents(),
         this.api.capturePolicy().catch(() => null),
+        this.api.integrationDiscovery().then(
+          value => ({ value, error: '' }),
+          error => ({ value: null, error: error instanceof Error ? error.message : String(error) }),
+        ),
       ])
       if (generation !== this.agentsGeneration) return
-      this.patch({ agents, capturePolicy, agentsLoading: false, agentsHasNewData: this.agentsInvalidation !== invalidation })
+      this.patch({
+        agents,
+        capturePolicy,
+        agentsLoading: false,
+        agentsHasNewData: this.agentsInvalidation !== invalidation,
+        integrationDiscovery: discovery.value ?? this.snapshot.integrationDiscovery,
+        integrationDiscoveryLoading: false,
+        integrationDiscoveryError: discovery.error,
+      })
     } catch {
       // Existing data remains visible on refresh failure.
       if (generation !== this.agentsGeneration) return
-      this.patch({ agentsLoading: false, agentsError: translateProduct('errors:agentsOverviewFailed') })
+      this.patch({
+        agentsLoading: false,
+        agentsError: translateProduct('errors:agentsOverviewFailed'),
+        integrationDiscoveryLoading: false,
+      })
     }
   }
 
@@ -262,6 +288,44 @@ export class AgentLensClientModel {
     })
     this.agentsRescanInFlight = pending
     return pending
+  }
+
+  rescanIntegrationDiscovery(): Promise<IntegrationToolDiscoveryResponseDto> {
+    if (this.integrationDiscoveryInFlight) return this.integrationDiscoveryInFlight
+    this.patch({ integrationDiscoveryRescanning: true, integrationDiscoveryError: '' })
+    const pending = this.api.rescanIntegrationDiscovery().then(
+      result => {
+        this.patch({
+          integrationDiscovery: result,
+          integrationDiscoveryLoading: false,
+          integrationDiscoveryRescanning: false,
+          integrationDiscoveryError: '',
+        })
+        return result
+      },
+      error => {
+        this.patch({
+          integrationDiscoveryRescanning: false,
+          integrationDiscoveryError: error instanceof Error ? error.message : String(error),
+        })
+        throw error
+      },
+    ).finally(() => {
+      if (this.integrationDiscoveryInFlight === pending) this.integrationDiscoveryInFlight = null
+    })
+    this.integrationDiscoveryInFlight = pending
+    return pending
+  }
+
+  async rescanAgentEnvironment(): Promise<void> {
+    const results = await Promise.allSettled([
+      this.rescanIntegrationDiscovery(),
+      this.rescanAgents(),
+    ])
+    if (results.every(result => result.status === 'rejected')) {
+      const failure = results[0]
+      throw failure.status === 'rejected' ? failure.reason : new Error('Agent environment rescan failed')
+    }
   }
 
   async setSourceEnabled(sourceId: string, enabled: boolean): Promise<void> {
