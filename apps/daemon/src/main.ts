@@ -163,7 +163,7 @@ function authorizedCapabilities(productId: string) {
 const app = new AgentLensApplication()
 const integrationPackageLoadFailures: Array<{ integrationId: string; error: string }> = []
 let integrationPackages: IntegrationPackageService | null = null
-if (capabilities.localCapture && existsSync(join(integrationBundleDir, 'catalog.json'))) {
+if (capabilities.localCapture) {
   const candidate = new IntegrationPackageService({
     bundleDir: integrationBundleDir,
     installRoot: integrationInstallRoot,
