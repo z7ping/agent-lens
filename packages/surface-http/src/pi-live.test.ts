@@ -14,6 +14,7 @@ class FakePiLiveService implements PiLiveService {
   readonly runtimeSessionId = 'runtime-1'
   startInput: PiLiveStartInput | null = null
   snapshotSince: string | undefined
+  snapshotError: Error | null = null
   prompts: Array<{ message: string; behavior?: PiLiveStreamingBehavior }> = []
   steering: string[] = []
   followUps: string[] = []
@@ -65,6 +66,7 @@ class FakePiLiveService implements PiLiveService {
 
   async snapshot(runtimeSessionId: string, since?: string) {
     this.snapshotSince = since
+    if (this.snapshotError) throw this.snapshotError
     const state = await this.state(runtimeSessionId)
     return {
       state,
@@ -338,6 +340,28 @@ test('Pi Live HTTP control surface preserves runtime ownership and validates com
     const terminated = await fetch(`${base}/api/v1/pi-live/${piLive.runtimeSessionId}`, { method: 'DELETE' })
     assert.equal(terminated.status, 200)
     assert.equal(piLive.terminateCalls, 1)
+  } finally {
+    await surface.dispose()
+    storage.close()
+  }
+})
+
+
+test('Pi Live snapshot 内部失败返回明确错误而不是笼统 500', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  const piLive = new FakePiLiveService()
+  piLive.snapshotError = new Error('Pi Runtime Worker response exceeded size limit')
+  const surface = await startHttpSurface(storage, { port: 0, piLive })
+  const base = `http://${surface.host}:${surface.port}`
+
+  try {
+    const response = await fetch(`${base}/api/v1/pi-live/${piLive.runtimeSessionId}/snapshot`)
+    assert.equal(response.status, 502)
+    assert.deepEqual(await json(response), {
+      error: 'pi_snapshot_failed',
+      message: 'Pi Live 历史快照加载失败',
+    })
   } finally {
     await surface.dispose()
     storage.close()

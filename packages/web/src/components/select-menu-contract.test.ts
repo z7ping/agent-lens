@@ -25,8 +25,16 @@ test('SelectMenu 提供键盘、搜索、选中态与窗口安全定位', () => 
   assert.match(selectSource, /aria-activedescendant=/)
   assert.match(selectSource, /event\.key === 'Escape'/)
   assert.match(selectSource, /event\.key === 'Home' \|\| event\.key === 'End'/)
+  assert.match(selectSource, /event\.key === 'Enter' \|\| \(!searchable && event\.key === ' '\)/)
   assert.match(selectSource, /searchable && <div className="select-menu-search-wrap">/)
   assert.match(selectSource, /createPortal\(/)
+})
+
+test('SelectMenu 非搜索模式把真实 listbox 作为键盘焦点 Owner', () => {
+  assert.match(selectSource, /const listboxRef = useRef<HTMLDivElement>\(null\)/)
+  assert.match(selectSource, /\(searchable \? searchRef\.current : listboxRef\.current\)\?\.focus/)
+  assert.match(selectSource, /<div ref=\{listboxRef\} id=\{listboxId\}[\s\S]*?role="listbox"[\s\S]*?tabIndex=\{searchable \? undefined : -1\}/)
+  assert.doesNotMatch(selectSource, /\(searchable \? searchRef\.current : menuRef\.current\)\?\.focus/)
 })
 
 test('路径型项目选项第一行收敛为项目名，第二行保留路径并提供 tooltip', () => {
@@ -45,4 +53,14 @@ test('新建 Pi 任务使用聚焦启动卡片并提供已有项目与目录启�
   assert.match(taskCenterSource, /打开已有项目 <UiIcon name="arrow-right" size=\{14\}/)
   assert.match(taskCenterSource, /mode === 'new' \? 'is-new-task' : ''/)
   assert.doesNotMatch(taskCenterSource, /task-center-agent-fixed/)
+})
+
+
+test('已有项目下拉支持服务端搜索和继续加载，同时 SelectMenu 其他调用保持可选增强', () => {
+  assert.match(selectSource, /onSearchChange\?: \(value: string\) => void/)
+  assert.match(selectSource, /onLoadMore\?: \(\) => void/)
+  assert.match(selectSource, /className="select-menu-footer"/)
+  assert.match(taskCenterSource, /onSearchChange=\{onProjectSearch\}/)
+  assert.match(taskCenterSource, /onLoadMore=\{onProjectLoadMore\}/)
+  assert.match(taskCenterSource, /loadMoreLabel="加载更多项目"/)
 })

@@ -490,6 +490,47 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
       )
     : null
 
+  const activeRailIndex = Math.max(0, railItems.findIndex(item => item.id === activeRoundId))
+  const firstErrorItem = railItems.find(item => item.error)
+  const compactNav = railItems.length > 0 && resolvedBoundaryNavigation && railPosition && typeof document !== 'undefined'
+    ? createPortal(
+        <nav
+          className="task-compact-round-nav"
+          aria-label="窄窗长会话导航"
+          style={{ bottom: railPosition.boundaryBottom }}
+        >
+          <IconButton
+            title="跳到最早"
+            aria-label="跳到最早"
+            disabled={resolvedBoundaryNavigation.startDisabled}
+            onClick={() => void resolvedBoundaryNavigation.onStart()}
+          >
+            <UiIcon name="arrow-big-up" size={19} strokeWidth={2}/>
+          </IconButton>
+          <span aria-live="polite">{activeRailIndex + 1} / {railItems.length}</span>
+          {firstErrorItem && <IconButton
+            className="task-compact-round-error"
+            title={`跳到错误轮次：${firstErrorItem.label}`}
+            aria-label={`跳到错误轮次：${firstErrorItem.label}`}
+            onClick={() => jumpToRound(firstErrorItem)}
+          >
+            <UiIcon name="exclamation" size={16}/>
+          </IconButton>}
+          <IconButton
+            className="task-compact-round-latest"
+            variant="primary"
+            title="跳到最新"
+            aria-label="跳到最新"
+            disabled={resolvedBoundaryNavigation.endDisabled}
+            onClick={() => void resolvedBoundaryNavigation.onEnd()}
+          >
+            <UiIcon name="arrow-big-down" size={19} strokeWidth={2}/>
+          </IconButton>
+        </nav>,
+        document.body,
+      )
+    : null
+
   return <TaskSurfaceViewProvider>
     <section
       ref={setRoot}
@@ -500,5 +541,6 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
     >{sessionChildren}</section>
     {rail}
     {boundaryNav}
+    {compactNav}
   </TaskSurfaceViewProvider>
 })

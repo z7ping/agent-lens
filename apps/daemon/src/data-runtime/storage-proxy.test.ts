@@ -58,6 +58,7 @@ const host = (id: string) => ({
 test('Data Runtime routes analytics reads to foreground pool and maintenance scans separately', () => {
   assert.equal(dataRuntimeStorageInternals.READ_TIMEOUT_MS, 20_000)
   assert.equal(dataRuntimeStorageInternals.isReadPath(['toolUsageObservations', 'aggregate']), true)
+  assert.equal(dataRuntimeStorageInternals.isReadPath(['launchableProjects', 'query']), true)
   assert.equal(dataRuntimeStorageInternals.isReadPath(['projectionBackfill', 'toolUsageFactCoverage']), true)
   assert.equal(dataRuntimeStorageInternals.isMaintenanceReadPath(['projectionBackfill', 'toolUsageFactCoverage']), false)
   assert.equal(dataRuntimeStorageInternals.timeoutFor(['projectionBackfill', 'toolUsageFactCoverage'], true), 20_000)
@@ -122,6 +123,18 @@ test('foreground reader pool applies bounded backpressure at saturation without 
   } finally {
     await left.shutdown()
     await right.shutdown()
+  }
+})
+
+test('Data Runtime exposes launchable project discovery through the foreground reader namespace', async () => {
+  const runtime = await fixture()
+  try {
+    const result = await runtime.storage.launchableProjects.query({ limit: 20 })
+    assert.deepEqual(result, { items: [], hasMore: false })
+    assert.equal(runtime.writer.snapshot().role, 'writer')
+    assert.ok(runtime.dataRuntime.snapshot().readers.some(reader => reader.state === 'ready'))
+  } finally {
+    await runtime.dispose()
   }
 })
 

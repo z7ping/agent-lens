@@ -27,6 +27,7 @@ type SessionResolver = (input: PiLiveStartInput) => string
 
 class HistoryHost implements PiRuntimeHost {
   readonly starts: StartCall[] = []
+  entries: unknown[] = []
 
   constructor(private readonly resolveSession: SessionResolver = input => input.historyAction === 'fork'
     ? '/sessions/forked.jsonl'
@@ -45,7 +46,7 @@ class HistoryHost implements PiRuntimeHost {
     const state = () => readyState(runtimeSessionId, sessionFile)
     return {
       state: async () => state(),
-      snapshot: async () => ({ state: state(), entries: [], leafId: 'leaf-1' }),
+      snapshot: async () => ({ state: state(), entries: [...this.entries], leafId: 'leaf-1' }),
       controls: async () => ({ models: [], thinkingLevels: [] }),
       setModel: async () => state(),
       setThinkingLevel: async () => state(),
@@ -78,6 +79,25 @@ test('继续会话只有确认 Worker 仍持有目标 Session 后才 ready', asy
     const ready = await waitForStatus(service, continued.runtimeSessionId, 'ready')
     assert.equal(ready.sessionFile, originalPath)
     assert.equal(host.starts.length, 1)
+  } finally {
+    await service.dispose()
+  }
+})
+
+test('继续会话的 Snapshot 保留原 Session 历史供 Live 页面恢复', async () => {
+  const host = new HistoryHost()
+  host.entries = [
+    { type: 'message', id: 'history-user', message: { role: 'user', content: [{ type: 'text', text: '旧问题' }] } },
+    { type: 'message', id: 'history-assistant', message: { role: 'assistant', content: [{ type: 'text', text: '旧回答' }] } },
+  ]
+  const service = new DefaultPiLiveService(host)
+  try {
+    const continued = await service.start({ cwd: '/workspace', sessionPath: '/sessions/original.jsonl', historyAction: 'continue' })
+    await waitForStatus(service, continued.runtimeSessionId, 'ready')
+    const snapshot = await service.snapshot(continued.runtimeSessionId)
+
+    assert.deepEqual(snapshot.entries, host.entries)
+    assert.equal(snapshot.leafId, 'leaf-1')
   } finally {
     await service.dispose()
   }

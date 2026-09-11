@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { open, opendir, readFile, stat } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 import type { SourceExecutionContext, SourceHistoryExecutionContext, SourceHistoryWindow, SourceRecord } from '@agent-lens/core'
-import { isCompleteJson, isMissingPathError, readJsonlLines, sourceFileIdentity, type JsonlLine } from '@agent-lens/source-support'
+import { asRecord, isCompleteJson, isMissingPathError, readJsonlLines, sourceFileIdentity, type JsonlLine } from '@agent-lens/source-support'
 import {
   nativeIdForEntry,
   nativeTypeForEntry,
@@ -38,11 +38,6 @@ function sha256(value: string | Buffer): string {
   return createHash('sha256').update(value).digest('hex')
 }
 
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {}
-}
 
 async function* walkJsonlFiles(root: string): AsyncIterable<string> {
   let directory

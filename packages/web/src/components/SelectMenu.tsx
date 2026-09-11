@@ -65,6 +65,12 @@ export function SelectMenu({
   disabled = false,
   searchable = false,
   searchPlaceholder = '搜索…',
+  onSearchChange,
+  loading = false,
+  hasMore = false,
+  onLoadMore,
+  loadingMore = false,
+  loadMoreLabel = '继续加载',
   menuWidth = 220,
   title,
 }: {
@@ -78,12 +84,19 @@ export function SelectMenu({
   disabled?: boolean
   searchable?: boolean
   searchPlaceholder?: string
+  onSearchChange?: (value: string) => void
+  loading?: boolean
+  hasMore?: boolean
+  onLoadMore?: () => void
+  loadingMore?: boolean
+  loadMoreLabel?: string
   menuWidth?: number
   title?: string | undefined
 }) {
   const listboxId = useId()
   const triggerRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  const listboxRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -107,18 +120,20 @@ export function SelectMenu({
     const rect = trigger.getBoundingClientRect()
     const width = Math.min(Math.max(rect.width, menuWidth), Math.max(176, window.innerWidth - 16))
     const left = Math.min(Math.max(8, rect.left), Math.max(8, window.innerWidth - width - 8))
-    const estimatedHeight = Math.min(360, Math.max(64, options.length * 48 + (searchable ? 54 : 12)))
+    const footerHeight = onLoadMore && (hasMore || loadingMore) ? 38 : 0
+    const estimatedHeight = Math.min(360, Math.max(64, options.length * 48 + (searchable ? 54 : 12) + footerHeight))
     const openAbove = window.innerHeight - rect.bottom < Math.min(estimatedHeight, 220) && rect.top > window.innerHeight - rect.bottom
     setPosition(openAbove
       ? { left, bottom: window.innerHeight - rect.top + 8, width }
       : { left, top: rect.bottom + 8, width })
-  }, [menuWidth, options.length, searchable])
+  }, [hasMore, loadingMore, menuWidth, onLoadMore, options.length, searchable])
 
   const close = useCallback((restoreFocus = false) => {
     setOpen(false)
     setQuery('')
+    onSearchChange?.('')
     if (restoreFocus) requestAnimationFrame(() => triggerRef.current?.focus({ preventScroll: true }))
-  }, [])
+  }, [onSearchChange])
 
   const choose = useCallback((nextValue: string) => {
     if (nextValue !== value) onChange(nextValue)
@@ -129,7 +144,7 @@ export function SelectMenu({
     if (!open) return
     updatePosition()
     setActiveValue(selected && !selected.disabled ? selected.value : enabledOptions[0]?.value ?? '')
-    const focusFrame = requestAnimationFrame(() => (searchable ? searchRef.current : menuRef.current)?.focus({ preventScroll: true }))
+    const focusFrame = requestAnimationFrame(() => (searchable ? searchRef.current : listboxRef.current)?.focus({ preventScroll: true }))
     const dismiss = (event: PointerEvent) => {
       const target = event.target as Node | null
       if (!target || triggerRef.current?.contains(target) || menuRef.current?.contains(target)) return
@@ -174,7 +189,7 @@ export function SelectMenu({
     } else if (event.key === 'Home' || event.key === 'End') {
       event.preventDefault()
       setActiveValue((event.key === 'Home' ? enabledOptions[0] : enabledOptions.at(-1))?.value ?? '')
-    } else if (event.key === 'Enter' && activeValue) {
+    } else if ((event.key === 'Enter' || (!searchable && event.key === ' ')) && activeValue) {
       event.preventDefault()
       choose(activeValue)
     }
@@ -220,14 +235,18 @@ export function SelectMenu({
           <input
             ref={searchRef}
             value={query}
-            onChange={event => setQuery(event.target.value)}
+            onChange={event => {
+              const next = event.target.value
+              setQuery(next)
+              onSearchChange?.(next)
+            }}
             placeholder={searchPlaceholder}
             aria-label={searchPlaceholder}
             aria-controls={listboxId}
             aria-activedescendant={activeValue ? `${listboxId}-${activeValue}` : undefined}
           />
         </div>}
-        <div id={listboxId} className="select-menu-options" role="listbox" aria-label={ariaLabel} tabIndex={searchable ? undefined : -1} aria-activedescendant={activeValue ? `${listboxId}-${activeValue}` : undefined}>
+        <div ref={listboxRef} id={listboxId} className="select-menu-options" role="listbox" aria-label={ariaLabel} tabIndex={searchable ? undefined : -1} aria-activedescendant={activeValue ? `${listboxId}-${activeValue}` : undefined}>
           {filteredOptions.map(option => {
             const checked = option.value === value
             const active = option.value === activeValue
@@ -249,8 +268,11 @@ export function SelectMenu({
               <span className="select-menu-check" aria-hidden="true">{checked && <UiIcon name="check" size={16}/>}</span>
             </button>
           })}
-          {!filteredOptions.length && <div className="select-menu-empty">没有匹配项</div>}
+          {!filteredOptions.length && <div className="select-menu-empty">{loading ? '正在加载…' : '没有匹配项'}</div>}
         </div>
+        {onLoadMore && (hasMore || loadingMore) && <div className="select-menu-footer">
+          <button type="button" disabled={loadingMore} onClick={onLoadMore}>{loadingMore ? '正在加载…' : loadMoreLabel}</button>
+        </div>}
       </div>,
       document.body,
     )}

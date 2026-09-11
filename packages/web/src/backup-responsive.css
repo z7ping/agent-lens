@@ -1,6 +1,7 @@
 /*
- * AgentLens 1.0 资产备份响应式唯一所有者。
- * 负责保护范围、摘要区与工具栏在 xl/xxl/md/sm 的布局，不再依赖 desktop-responsive.css 二次覆盖。
+ * AgentLens 1.0 资产备份构图与响应式唯一所有者。
+ * 负责 P1-08 的摘要、保护范围、恢复流程、快照创建与原则列表构图，
+ * 同时持有 xl/xxl/lg/md/sm 的响应式布局；不再通过额外 polish/override 层修补。
  */
 
 .workspace-page > .workspace-toolbar:has(.backup-toolbar-note) .backup-toolbar-note ~ .btn,
@@ -19,8 +20,42 @@
 
 .backup-page .future-grid { grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; }
 .backup-page .future-grid > aside.future-stack { position: sticky; top: 16px; }
-.backup-page .future-kpi { padding: 14px 15px; }
+
+/* P1-08：四个 KPI 是一个摘要条，而不是四张悬浮卡。 */
+.backup-page .future-kpis {
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--al-line);
+  border-radius: 11px;
+  background: var(--al-surface);
+}
+.backup-page .future-kpi {
+  padding: 14px 15px;
+  border: 0;
+  border-right: 1px solid var(--al-line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.backup-page .future-kpi:last-child { border-right: 0; }
 .backup-page .future-kpi strong { font-size: 22px; }
+
+/* 主信息列按 section 展开，避免 outer card 再套内部数据边界。 */
+.backup-page .future-grid > .future-stack:first-child > .future-card {
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.backup-page .future-grid > .future-stack:first-child > .future-card > .future-card-head {
+  min-height: 0;
+  padding: 0 0 8px;
+  border-bottom: 0;
+}
+.backup-page .future-grid > .future-stack:first-child > .future-card > .future-card-body { padding: 0; }
+
+/* Protection 已经是连续列表；每个来源和内部指标保持 plain facts。 */
 .backup-page .protection-grid { display: grid; grid-template-columns: 1fr; gap: 0; overflow: hidden; border: 1px solid var(--al-line); border-radius: 10px; }
 .backup-page .protection-card {
   display: grid;
@@ -44,6 +79,110 @@
 .backup-page .protection-count span { margin-top: 3px; font-size: 12px; }
 .backup-page .protection-meta { min-width: 0; align-items: center; margin-top: 0; }
 .backup-page .protection-meta > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Snapshot 保持数据表，只给表本身边界，不再依赖 outer card。 */
+.backup-page .future-table-scroll {
+  border-top: 1px solid var(--al-line);
+  border-bottom: 1px solid var(--al-line);
+}
+
+/* Import / Restore 是同一 section 内的两条流程，不再各自成为卡片。 */
+.backup-page .restore-grid {
+  grid-template-columns: 1fr;
+  gap: 0;
+  border-top: 1px solid var(--al-line);
+}
+.backup-page .restore-card {
+  display: grid;
+  grid-template-columns: minmax(180px, .55fr) minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  column-gap: 18px;
+  row-gap: 2px;
+  align-items: center;
+  padding: 13px 2px;
+  border: 0;
+  border-bottom: 1px solid var(--al-line);
+  border-radius: 0;
+  background: transparent;
+}
+.backup-page .restore-card h3 { grid-column: 1; grid-row: 1; }
+.backup-page .restore-card p { grid-column: 1; grid-row: 2; margin: 3px 0 0; }
+.backup-page .restore-card .restore-flow { grid-column: 2; grid-row: 1 / 3; }
+.backup-page .restore-card .restore-action { grid-column: 3; grid-row: 1 / 3; margin-top: 0; }
+
+/* Create Snapshot 保留一个明确操作边界，内部使用分组和分隔线。 */
+.backup-page .future-grid > aside.future-stack > .future-card:first-child {
+  border-color: var(--al-line-strong);
+  border-radius: 11px;
+  box-shadow: none;
+}
+.backup-page .future-grid > aside.future-stack > .future-card:first-child > .future-card-head {
+  min-height: 0;
+  padding: 13px 14px 10px;
+}
+.backup-page .snapshot-builder {
+  gap: 0;
+  padding: 0 14px 14px;
+}
+.backup-page .builder-block {
+  padding: 12px 0;
+  border: 0;
+  border-bottom: 1px solid var(--al-line);
+  border-radius: 0;
+  background: transparent;
+}
+.backup-page .builder-checks {
+  grid-template-columns: 1fr;
+  gap: 0;
+}
+.backup-page .builder-check {
+  min-height: 31px;
+  padding: 5px 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.backup-page .builder-check + .builder-check {
+  border-top: 1px solid color-mix(in srgb, var(--al-line) 65%, transparent);
+}
+.backup-page .safety-note {
+  margin-top: 12px;
+  border: 0;
+  border-left: 3px solid var(--al-success);
+  border-radius: 0;
+}
+.backup-page .builder-summary {
+  display: grid;
+  gap: 2px;
+  margin: 11px 0;
+  padding-top: 0;
+}
+
+/* Principles 是普通事实列表，不再叠加第二张 Card + 三张 item Card。 */
+.backup-page .future-grid > aside.future-stack > .future-card:last-child {
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.backup-page .future-grid > aside.future-stack > .future-card:last-child > .future-card-head {
+  min-height: 0;
+  padding: 0 0 8px;
+  border-bottom: 0;
+}
+.backup-page .future-grid > aside.future-stack > .future-card:last-child > .future-card-body { padding: 0; }
+.backup-page .backup-principles {
+  gap: 0;
+  border-top: 1px solid var(--al-line);
+}
+.backup-page .backup-principles .insight-item {
+  padding: 10px 2px;
+  border: 0;
+  border-bottom: 1px solid var(--al-line);
+  border-radius: 0;
+  background: transparent;
+}
 
 @media (min-width: 1400px) {
   .backup-page .future-grid { grid-template-columns: minmax(0, 1fr) 390px; gap: 16px; }
@@ -79,6 +218,12 @@
   .backup-page .future-grid { grid-template-columns: 1fr; }
   .backup-page .future-grid > aside.future-stack { position: static; }
   .backup-page .future-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .backup-page .future-kpi {
+    border-right: 1px solid var(--al-line);
+    border-bottom: 1px solid var(--al-line);
+  }
+  .backup-page .future-kpi:nth-child(2n) { border-right: 0; }
+  .backup-page .future-kpi:nth-last-child(-n + 2) { border-bottom: 0; }
   .backup-page .protection-card { grid-template-columns: minmax(170px, 1.1fr) minmax(240px, 1fr) minmax(210px, 1fr); }
 }
 @media (max-width: 991.98px) {
@@ -92,6 +237,11 @@
 @media (max-width: 767.98px) {
   .backup-page { padding-inline: 14px; }
   .backup-page .future-kpis { grid-template-columns: 1fr; }
+  .backup-page .future-kpi:nth-child(n) {
+    border-right: 0;
+    border-bottom: 1px solid var(--al-line);
+  }
+  .backup-page .future-kpi:last-child { border-bottom: 0; }
   .backup-page .protection-card { grid-template-columns: 1fr; }
   .backup-page .protection-card-head,
   .backup-page .protection-counts,
@@ -102,4 +252,7 @@
   .backup-page .protection-count span { order: -1; margin-top: 0; }
   .backup-page .integrity-strip { flex-wrap: wrap; }
   .backup-page .integrity-strip code { width: 100%; order: 3; }
+  .backup-page .restore-card { display: block; }
+  .backup-page .restore-card p { margin: 6px 0 13px; }
+  .backup-page .restore-card .restore-action { margin-top: 13px; }
 }

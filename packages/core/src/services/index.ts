@@ -239,6 +239,36 @@ export interface SessionSummaryReader {
   query(input: SessionSummaryQuery): Promise<{ items: SessionSummaryRecord[]; hasMore: boolean }>
 }
 
+export interface LaunchableWorkspaceCandidate {
+  workspaceId: WorkspaceId
+  workspacePath: string
+  lastSeenAt: string
+}
+
+export interface LaunchableProjectCandidate {
+  key: string
+  projectId?: ProjectId
+  projectName?: string
+  repositoryIdentity?: string
+  lastSeenAt: string
+  workspaces: LaunchableWorkspaceCandidate[]
+}
+
+export interface LaunchableProjectCursor {
+  lastSeenAt: string
+  key: string
+}
+
+export interface LaunchableProjectQuery {
+  limit: number
+  search?: string
+  after?: LaunchableProjectCursor
+}
+
+export interface LaunchableProjectReader {
+  query(input: LaunchableProjectQuery): Promise<{ items: LaunchableProjectCandidate[]; hasMore: boolean }>
+}
+
 export interface SessionSummaryFacetScope {
   projects: Array<{ id: string; name?: string; repositoryIdentity?: string }>
   from?: string
@@ -513,6 +543,7 @@ export interface StorageService {
   readonly assetInventory?: AssetInventoryReader
   readonly sessionSummaries?: SessionSummaryReader
   readonly sessionSummaryProjection?: SessionSummaryProjectionStore
+  readonly launchableProjects?: LaunchableProjectReader
   readonly toolUsageObservations?: ToolUsageObservationReader
   readonly maintenance?: StorageMaintenance
   readonly maintenanceJobs?: MaintenanceJobStore

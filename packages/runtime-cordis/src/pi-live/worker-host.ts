@@ -1,6 +1,7 @@
 import { fork, type ChildProcess } from 'node:child_process'
 import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
+import { deserialize } from 'node:v8'
 import { discoverInstalledPiSdk } from './sdk-loader'
 import type {
   PiLiveControls,
@@ -18,8 +19,10 @@ const MAX_PENDING_REQUESTS = 128
 const MAX_STDERR_TAIL = 64 * 1024
 const MAX_STARTUP_OUTPUT_LINES = 80
 
+type SnapshotTransferCommand = 'snapshotBegin' | 'snapshotChunk'
+
 type WorkerCommand =
-  | 'state' | 'snapshot' | 'controls' | 'setModel' | 'setThinkingLevel'
+  | 'state' | SnapshotTransferCommand | 'controls' | 'setModel' | 'setThinkingLevel'
   | 'prompt' | 'steer' | 'followUp' | 'clearQueue' | 'abort'
   | 'extensionResponse' | 'terminate'
 
@@ -35,6 +38,15 @@ interface PendingRequest {
   resolve(value: unknown): void
   reject(error: Error): void
 }
+
+interface SnapshotTransferChunk {
+  transferId: string
+  sequence: number
+  chunk: Uint8Array
+  done: boolean
+}
+
+type SnapshotTransferRequest = (command: SnapshotTransferCommand, payload?: unknown) => Promise<unknown>
 
 export interface PiRuntimeHandle {
   readonly processId?: number | undefined
@@ -89,6 +101,59 @@ function sanitizeDiagnostic(value: string): string {
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function parseSnapshotTransferChunk(value: unknown): SnapshotTransferChunk {
+  const row = record(value)
+  const transferId = typeof row.transferId === 'string' ? row.transferId : ''
+  const sequence = typeof row.sequence === 'number' ? row.sequence : -1
+  const chunk = row.chunk
+  const done = row.done
+  if (!transferId || !Number.isSafeInteger(sequence) || sequence < 0 || typeof done !== 'boolean') {
+    throw new Error('Pi Runtime Worker returned an invalid snapshot transfer envelope')
+  }
+  if (!(Buffer.isBuffer(chunk) || chunk instanceof Uint8Array)) {
+    throw new Error('Pi Runtime Worker returned an invalid snapshot transfer chunk')
+  }
+  return { transferId, sequence, chunk, done }
+}
+
+function parseSnapshot(value: unknown): PiLiveSnapshot {
+  const row = record(value)
+  const leafId = row.leafId
+  if (!row.state || typeof row.state !== 'object' || Array.isArray(row.state) || !Array.isArray(row.entries)) {
+    throw new Error('Pi Runtime Worker returned an invalid snapshot payload')
+  }
+  if (leafId !== null && typeof leafId !== 'string') {
+    throw new Error('Pi Runtime Worker returned an invalid snapshot leaf id')
+  }
+  return value as PiLiveSnapshot
+}
+
+async function collectSnapshotTransfer(request: SnapshotTransferRequest, since?: string): Promise<PiLiveSnapshot> {
+  const chunks: Buffer[] = []
+  let page = parseSnapshotTransferChunk(await request('snapshotBegin', { since }))
+  const transferId = page.transferId
+  let expectedSequence = 0
+
+  while (true) {
+    if (page.transferId !== transferId) throw new Error('Pi Runtime Worker switched snapshot transfer ids')
+    if (page.sequence !== expectedSequence) throw new Error('Pi Runtime Worker returned snapshot chunks out of order')
+    expectedSequence += 1
+
+    const chunk = Buffer.from(page.chunk)
+    if (!chunk.length && !page.done) throw new Error('Pi Runtime Worker returned an empty non-terminal snapshot chunk')
+    chunks.push(chunk)
+    if (page.done) break
+    page = parseSnapshotTransferChunk(await request('snapshotChunk', { transferId }))
+  }
+
+  try {
+    return parseSnapshot(deserialize(Buffer.concat(chunks)))
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('Pi Runtime Worker returned an invalid snapshot')) throw error
+    throw new Error(`Pi Runtime Worker snapshot transfer could not be decoded: ${error instanceof Error ? error.message : String(error)}`)
+  }
 }
 
 class WorkerPiRuntimeHandle implements PiRuntimeHandle {
@@ -248,7 +313,9 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
   }
 
   state(): Promise<PiLiveRuntimeState> { return this.request('state') }
-  snapshot(since?: string): Promise<PiLiveSnapshot> { return this.request('snapshot', { since }) }
+  snapshot(since?: string): Promise<PiLiveSnapshot> {
+    return collectSnapshotTransfer((command, payload) => this.request(command, payload), since)
+  }
   controls(): Promise<PiLiveControls> { return this.request('controls') }
   setModel(provider: string, modelId: string): Promise<PiLiveRuntimeState> { return this.request('setModel', { provider, modelId }) }
   setThinkingLevel(level: string): Promise<PiLiveRuntimeState> { return this.request('setThinkingLevel', { level }) }
@@ -435,4 +502,8 @@ export class WorkerPiRuntimeHost implements PiRuntimeHost {
     signal.removeEventListener('abort', abort)
     return handle
   }
+}
+
+export const piLiveWorkerHostInternals = {
+  collectSnapshotTransfer,
 }

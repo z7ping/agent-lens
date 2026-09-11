@@ -9,7 +9,7 @@ import type {
   SourceRecordEmitter,
 } from '@agent-lens/core'
 import { abortableDelay } from '@agent-lens/runtime-cordis'
-import { isMissingPathError, startHistoryFileWatch } from '@agent-lens/source-support'
+import { asRecord, isMissingPathError, startHistoryFileWatch } from '@agent-lens/source-support'
 import { CODEX_CURRENT_PARSER_VERSION } from './current-protocol'
 import { ingestCodexFile, listJsonlFiles } from './history'
 
@@ -26,11 +26,6 @@ function sha256(value: string): string {
 }
 
 
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {}
-}
 
 function inboxDirectory(): string {
   return process.env.AGENT_LENS_CODEX_INBOX

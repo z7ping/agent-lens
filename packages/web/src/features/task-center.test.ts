@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { ProjectFacetDto, ReviewSessionSummaryDto } from '@agent-lens/protocol'
-import { deriveTaskProjectOptions, historyTaskPresentation, pickTaskProject } from './task-center'
+import type { LaunchableProjectDto, ReviewSessionSummaryDto } from '@agent-lens/protocol'
+import { historyTaskPresentation, launchableTaskProjectOptions, pickTaskProject } from './task-center'
 
 function session(overrides: Partial<ReviewSessionSummaryDto>): ReviewSessionSummaryDto {
   return {
@@ -20,46 +20,6 @@ function session(overrides: Partial<ReviewSessionSummaryDto>): ReviewSessionSumm
     ...overrides,
   }
 }
-
-test('任务中心只从真实历史会话提取工作目录，不根据 ProjectFacet 猜路径', () => {
-  const projects: ProjectFacetDto[] = [
-    { id: 'agent-lens', name: 'AgentLens', repositoryIdentity: 'z7ping/agent-lens' },
-    { id: 'narratica', name: 'Narratica', repositoryIdentity: 'z7ping/narratica' },
-  ]
-  const options = deriveTaskProjectOptions(projects, [
-    session({ projectId: 'agent-lens', projectName: '旧名称', workspacePath: 'F:\\workspace\\agent-lens' }),
-  ])
-  assert.deepEqual(options.map(option => ({ label: option.label, cwd: option.cwd })), [
-    { label: 'AgentLens', cwd: 'F:\\workspace\\agent-lens' },
-  ])
-})
-
-test('同一项目优先使用最近一次真实会话的 workspacePath', () => {
-  const options = deriveTaskProjectOptions([{ id: 'agent-lens', name: 'AgentLens' }], [
-    session({ id: 'old', projectId: 'agent-lens', workspacePath: 'F:\\old\\agent-lens', endedAt: '2026-08-29T09:00:00.000Z' }),
-    session({ id: 'new', projectId: 'agent-lens', workspacePath: 'F:\\workspace\\agent-lens', endedAt: '2026-08-30T09:00:00.000Z' }),
-  ])
-  assert.equal(options.length, 1)
-  assert.equal(options[0]?.cwd, 'F:\\workspace\\agent-lens')
-})
-
-test('没有 projectId 时仍可用已观测 workspacePath 建立项目选项', () => {
-  const options = deriveTaskProjectOptions([], [
-    session({ projectName: 'Slowlight', workspacePath: '/workspace/slowlight' }),
-  ])
-  assert.equal(options[0]?.label, 'Slowlight')
-  assert.equal(options[0]?.cwd, '/workspace/slowlight')
-})
-
-test('新建相关任务优先继承当前项目，其次继承工作目录', () => {
-  const options = deriveTaskProjectOptions([], [
-    session({ id: 'a', projectId: 'project-a', projectName: 'A', workspacePath: '/work/a', endedAt: '2026-08-29T09:00:00.000Z' }),
-    session({ id: 'b', projectId: 'project-b', projectName: 'B', workspacePath: '/work/b', endedAt: '2026-08-30T09:00:00.000Z' }),
-  ])
-  assert.equal(pickTaskProject(options, 'project-a')?.cwd, '/work/a')
-  assert.equal(pickTaskProject(options, undefined, '/work/a')?.label, 'A')
-  assert.equal(pickTaskProject(options)?.label, 'B')
-})
 
 test('会话列表只根据结构化活动类型区分系统活动，并用上下文避免同名', () => {
   assert.deepEqual(historyTaskPresentation(session({
@@ -140,4 +100,66 @@ test('会话列表优先使用来源提供的活动分类和名称', () => {
     title: '内部审查活动',
     activityLabel: 'Guardian 审查',
   })
+})
+
+
+test('服务端可启动项目结果直接映射为 Pi 启动选项，不再从会话窗口重建 cwd', () => {
+  const items: LaunchableProjectDto[] = [
+    {
+      key: 'project:agent-lens',
+      projectId: 'agent-lens',
+      projectName: 'AgentLens',
+      repositoryIdentity: 'z7ping/agent-lens',
+      workspaceId: 'workspace-agent-lens',
+      workspacePath: 'F:\\workspace\\agent-lens',
+      lastSeenAt: '2026-09-10T09:00:00.000Z',
+    },
+    {
+      key: 'workspace:slowlight',
+      workspaceId: 'workspace-slowlight',
+      workspacePath: '/workspace/slowlight',
+      lastSeenAt: '2026-09-09T09:00:00.000Z',
+    },
+  ]
+
+  assert.deepEqual(launchableTaskProjectOptions(items), [
+    {
+      key: 'project:agent-lens',
+      projectId: 'agent-lens',
+      label: 'AgentLens',
+      cwd: 'F:\\workspace\\agent-lens',
+      lastSeenAt: '2026-09-10T09:00:00.000Z',
+    },
+    {
+      key: 'workspace:slowlight',
+      label: 'slowlight',
+      cwd: '/workspace/slowlight',
+      lastSeenAt: '2026-09-09T09:00:00.000Z',
+    },
+  ])
+})
+
+
+test('新建相关任务在服务端项目结果中优先继承当前项目，其次继承工作目录', () => {
+  const options = launchableTaskProjectOptions([
+    {
+      key: 'project-b',
+      projectId: 'project-b',
+      projectName: 'B',
+      workspaceId: 'workspace-b',
+      workspacePath: '/work/b',
+      lastSeenAt: '2026-09-10T09:00:00.000Z',
+    },
+    {
+      key: 'project-a',
+      projectId: 'project-a',
+      projectName: 'A',
+      workspaceId: 'workspace-a',
+      workspacePath: '/work/a',
+      lastSeenAt: '2026-09-09T09:00:00.000Z',
+    },
+  ])
+  assert.equal(pickTaskProject(options, 'project-a')?.cwd, '/work/a')
+  assert.equal(pickTaskProject(options, undefined, '/work/a')?.label, 'A')
+  assert.equal(pickTaskProject(options)?.label, 'B')
 })

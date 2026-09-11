@@ -11,6 +11,7 @@ import { SqliteAssetInventoryReader } from './asset-inventory'
 import { SqliteCheckpointRepository } from './checkpoints'
 import { SqliteExecutor } from './executor'
 import { SqliteFacetScopeReader } from './facet-scope'
+import { SqliteLaunchableProjectReader } from './launchable-projects'
 import { SqliteStorageMaintenance } from './maintenance'
 import { SqliteMaintenanceJobStore } from './maintenance-jobs'
 import { migrateDatabase } from './migrations'
@@ -133,6 +134,7 @@ export class SqliteStorageService implements StorageService {
   readonly facetScope: SqliteFacetScopeReader
   readonly sessionSummaries: SqliteSessionSummaryReader
   readonly sessionSummaryProjection: SqliteSessionSummaryReader
+  readonly launchableProjects: SqliteLaunchableProjectReader
   readonly toolUsageObservations: SqliteToolUsageObservationReader
   readonly unknownObservationProjection: SqliteUnknownObservationProjection
   readonly maintenance: SqliteStorageMaintenance
@@ -179,6 +181,7 @@ export class SqliteStorageService implements StorageService {
     const sessionSummaries = new SqliteSessionSummaryReader(this.executor)
     this.sessionSummaries = sessionSummaries
     this.sessionSummaryProjection = sessionSummaries
+    this.launchableProjects = new SqliteLaunchableProjectReader(this.executor)
     this.toolUsageObservations = new SqliteToolUsageObservationReader(this.executor)
     this.unknownObservationProjection = new SqliteUnknownObservationProjection(this.executor)
     this.maintenance = new SqliteStorageMaintenance(this.executor)

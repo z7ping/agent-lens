@@ -267,6 +267,7 @@ export interface PiLiveConnectionHandlers {
 
 export class PiLiveApi {
   private readonly snapshots = new Map<string, PiLiveSnapshotDto>()
+  private readonly snapshotRequests = new Map<string, Promise<PiLiveSnapshotDto>>()
 
   availability(): Promise<PiLiveAvailabilityDto> {
     return requestJson('/api/v1/pi-live/availability')
@@ -303,18 +304,28 @@ export class PiLiveApi {
   }
 
   async retry(runtimeSessionId: string): Promise<PiLiveStateDto> {
+    await this.snapshotRequests.get(runtimeSessionId)?.catch(() => undefined)
     this.snapshots.delete(runtimeSessionId)
     return requestJson(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/retry`, { method: 'POST' })
   }
 
   async snapshot(runtimeSessionId: string, since?: string): Promise<PiLiveSnapshotDto> {
-    const previous = this.snapshots.get(runtimeSessionId)
-    const incrementalSince = since && previous ? since : undefined
-    const query = incrementalSince ? `?since=${encodeURIComponent(incrementalSince)}` : ''
-    const next = await requestJson<PiLiveSnapshotDto>(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/snapshot${query}`)
-    const snapshot = incrementalSince && previous ? mergeSnapshot(previous, next) : next
-    this.snapshots.set(runtimeSessionId, snapshot)
-    return snapshot
+    const previousRequest = this.snapshotRequests.get(runtimeSessionId)
+    const task = (previousRequest ? previousRequest.catch(() => undefined) : Promise.resolve()).then(async () => {
+      const previous = this.snapshots.get(runtimeSessionId)
+      const incrementalSince = since && previous ? since : undefined
+      const query = incrementalSince ? `?since=${encodeURIComponent(incrementalSince)}` : ''
+      const next = await requestJson<PiLiveSnapshotDto>(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/snapshot${query}`)
+      const snapshot = incrementalSince && previous ? mergeSnapshot(previous, next) : next
+      this.snapshots.set(runtimeSessionId, snapshot)
+      return snapshot
+    })
+    this.snapshotRequests.set(runtimeSessionId, task)
+    try {
+      return await task
+    } finally {
+      if (this.snapshotRequests.get(runtimeSessionId) === task) this.snapshotRequests.delete(runtimeSessionId)
+    }
   }
 
   controls(runtimeSessionId: string): Promise<PiLiveControlsDto> {
@@ -359,6 +370,7 @@ export class PiLiveApi {
   }
 
   async terminate(runtimeSessionId: string): Promise<void> {
+    await this.snapshotRequests.get(runtimeSessionId)?.catch(() => undefined)
     await requestJson(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}`, { method: 'DELETE' })
     this.snapshots.delete(runtimeSessionId)
   }

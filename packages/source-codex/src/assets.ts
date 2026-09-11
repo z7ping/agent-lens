@@ -5,13 +5,7 @@ import type {
   EvidenceCandidate,
   SourceExecutionContext,
 } from '@agent-lens/core'
-import { isMissingPathError } from '@agent-lens/source-support'
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {}
-}
+import { asRecord, isMissingPathError } from '@agent-lens/source-support'
 
 async function safeStat(path: string) {
   try {

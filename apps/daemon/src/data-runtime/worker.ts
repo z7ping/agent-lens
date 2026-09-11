@@ -153,6 +153,7 @@ function storageRootAllowed(path: readonly string[]): boolean {
     'repositories',
     'checkpoints',
     'assetInventory',
+    'launchableProjects',
     'sessionSummaries',
     'sessionSummaryProjection',
     'toolUsageObservations',
