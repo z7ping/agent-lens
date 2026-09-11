@@ -360,6 +360,7 @@ function IntegrationControl({
     ?? agent.enabled
   const pending = configured !== effective
   const editable = management?.enabled.editable ?? settings?.editable ?? false
+  const managedBy = management?.enabled.managedBy ?? settings?.managedBy
   const integrationAvailability = management?.availability ?? agent.integration?.availability
   const integrationCapabilities = management?.capabilities ?? agent.integration?.capabilities ?? []
   const pendingAuthorization = integrationCapabilities
@@ -396,7 +397,7 @@ function IntegrationControl({
     setError('')
     try {
       await onAuthorize(agent.productId, pendingAuthorization)
-      if (!configured) await onChange(agent.sourceId, true)
+      if (!configured) await onChange(management?.integrationId ?? agent.sourceId, true)
       setAuthorizationSaved(true)
       setAuthorizationOpen(false)
     } catch (cause) {
@@ -438,8 +439,8 @@ function IntegrationControl({
         <span>{t('integration.authorizeHint')}</span>
       </div>}
       {authorizationSaved && <p className="source-capture-note">{t('integration.authorizationSaved')}</p>}
-      {!editable && settings && <p className="source-capture-note">{t('integration.managedReadonly', {
-        manager: settings.managedBy === 'environment' ? t('integration.environmentManager') : t('integration.runtimeManager'),
+      {!editable && managedBy && <p className="source-capture-note">{t('integration.managedReadonly', {
+        manager: managedBy === 'environment' ? t('integration.environmentManager') : t('integration.runtimeManager'),
       })}</p>}
       {error && <p className="source-capture-error">{error}</p>}
     </div>
