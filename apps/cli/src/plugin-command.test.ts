@@ -155,6 +155,21 @@ test('plugin install/remove/update reuse Package Lifecycle HTTP methods and prop
   ])
 })
 
+test('plugin commands reject an incompatible daemon protocol', async () => {
+  const payload = managementPayload()
+  payload.meta.protocolVersion = '999.0'
+  const fetchImpl = (async () => jsonResponse(payload)) as typeof fetch
+
+  await assert.rejects(
+    () => runPluginCommand('list', [], false, {
+      apiUrl: path => `http://agent-lens.test${path}`,
+      fetchImpl,
+      print: () => undefined,
+    }),
+    /协议不兼容/,
+  )
+})
+
 test('Package Lifecycle unavailable returns a clear CLI error instead of falling back to direct disk writes', async () => {
   const fetchImpl = (async () => jsonResponse({
     error: 'integration_package_lifecycle_unavailable',
