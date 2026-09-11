@@ -105,7 +105,14 @@ export function PiStartupDisclosure({
     { label: t('startup.resource.extensions'), values: resources?.extensions ?? [] },
     { label: t('startup.resource.themes'), values: resources?.themes ?? [] },
   ].filter(group => group.values.length)
-  const resourceSummary = resourceGroups.map(group => t('startup.resource.summary', { count: group.values.length, label: group.label })).join(' · ')
+  const packageUpdates = state.packageUpdates ?? []
+  const packageUpdateSummary = packageUpdates.length
+    ? t('startup.packageUpdatesAvailable', { count: packageUpdates.length })
+    : ''
+  const resourceSummary = [
+    ...resourceGroups.map(group => t('startup.resource.summary', { count: group.values.length, label: group.label })),
+    ...(packageUpdateSummary ? [packageUpdateSummary] : []),
+  ].join(' · ')
   const startupOutput = state.startupOutput ?? []
 
   const body = <div className="pi-startup-body">
@@ -137,6 +144,24 @@ export function PiStartupDisclosure({
         </div>)}
       </div>
     </details>}
+    {packageUpdates.length > 0 && <details className="pi-startup-resource-details">
+      <summary>{packageUpdateSummary}<UiIcon className="pi-startup-resource-chevron" name="chevron-right" size={14}/></summary>
+      <div className="pi-startup-resources" aria-label={t('startup.packageUpdates')}>
+        {packageUpdates.map(update => <div className="pi-startup-resource-row" key={`${update.scope}:${update.type}:${update.source}`}>
+          <b>{update.displayName}</b>
+          <span>{t(update.scope === 'project' ? 'startup.packageScopeProject' : 'startup.packageScopeUser')} · {update.type} · {update.source}</span>
+        </div>)}
+      </div>
+    </details>}
+    {packageUpdates.length === 0 && state.packageUpdateCheck === 'checking' && <div className="pi-startup-diagnostics">
+      <b>{t('startup.packageUpdates')}</b><span>{t('startup.packageUpdateChecking')}</span>
+    </div>}
+    {state.packageUpdateCheck === 'unavailable' && <div className="pi-startup-diagnostics">
+      <b>{t('startup.packageUpdates')}</b><span>{t('startup.packageUpdateUnavailable')}</span>
+    </div>}
+    {state.packageUpdateCheck === 'failed' && <div className="pi-startup-diagnostics">
+      <b>{t('startup.packageUpdates')}</b><span>{t('startup.packageUpdateFailed')}</span>
+    </div>}
     {showAllEvents && startupOutput.length > 0 && <div className="pi-startup-output">
       <b>{t('startup.startupOutput')}</b><CopyableCodeBlock copyValue={startupOutput.join('\n')}>{startupOutput.join('\n')}</CopyableCodeBlock>
     </div>}
