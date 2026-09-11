@@ -138,3 +138,37 @@ test('Hermes config uses real YAML semantics and evidence-driven plugin/MCP stat
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test('Hermes parser replay ignores legacy row fallback nativeId and recovers raw message identity', async () => {
+  const legacySynthetic = await normalizeHermesRecord(record({
+    message: {
+      id: null,
+      role: 'user',
+      raw_content: 'legacy',
+    },
+    session: { nativeSessionId: 'session-hermes' },
+    captureChannel: 'history',
+  }, {
+    nativeId: 'row-42',
+    locator: { kind: 'database', path: '/tmp/state.db', table: 'messages', rowId: '42' },
+  }), {} as never)
+
+  assert.equal(legacySynthetic.observations[0]?.nativeEventId, undefined)
+  assert.equal(legacySynthetic.evidenceCandidates[0]?.nativeStableId, undefined)
+
+  const realNative = await normalizeHermesRecord(record({
+    message: {
+      id: 123,
+      role: 'user',
+      raw_content: 'real',
+    },
+    session: { nativeSessionId: 'session-hermes' },
+    captureChannel: 'history',
+  }, {
+    nativeId: 'legacy-value-that-must-not-win',
+  }), {} as never)
+
+  assert.equal(realNative.observations[0]?.nativeEventId, '123')
+  assert.equal(realNative.evidenceCandidates[0]?.nativeStableId, '123')
+})
+
