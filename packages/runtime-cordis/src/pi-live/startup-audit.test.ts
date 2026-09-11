@@ -51,6 +51,7 @@ test('Pi startup audit reuses Source detection identity and commits runtime evid
       },
     },
     capturePolicy: {
+      isSourceEnabled: () => true,
       sanitizeNormalizedOutput: (value: unknown) => value,
     },
     observations: {
@@ -150,4 +151,37 @@ test('Pi startup audit event identity separates retry generations', () => {
     attemptStartedAt: '2026-09-11T10:01:00.000Z',
   })
   assert.notEqual(first, retry)
+})
+
+
+test('Pi startup audit respects the Pi Source capture toggle', async () => {
+  let commits = 0
+  const ctx = {
+    capturePolicy: {
+      isSourceEnabled: () => false,
+      sanitizeNormalizedOutput: (value: unknown) => value,
+    },
+    observations: {
+      commit: async () => { commits += 1 },
+    },
+  } as unknown as AgentLensContext
+
+  const sink = createPiLiveStartupAuditSink(ctx)
+  await sink.recordStartupResources({
+    runtimeSessionId: 'runtime-disabled',
+    attemptStartedAt: '2026-09-11T10:00:00.000Z',
+    capturedAt: '2026-09-11T10:00:01.000Z',
+    nativeSessionId: 'native-disabled',
+    workspacePath: '/workspace',
+    startupResources: {
+      contexts: [],
+      skills: [],
+      prompts: [],
+      extensions: [],
+      themes: [],
+      diagnostics: [],
+    },
+  })
+
+  assert.equal(commits, 0)
 })
