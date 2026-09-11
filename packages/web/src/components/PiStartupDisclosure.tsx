@@ -118,7 +118,9 @@ export function PiStartupDisclosure({
         ...(resourceReadIncomplete ? [t('startup.resource.partialSummary')] : []),
       ].join(' · ')
     : resourcesKnown
-      ? t(resourceReadIncomplete ? 'startup.resource.partialSummary' : 'startup.resource.noneSummary')
+      ? resourceReadIncomplete
+        ? t('startup.resource.partialSummary')
+        : t('startup.resource.noneSummary')
       : ''
   const readySummary = [resourceSummary, packageUpdateSummary].filter(Boolean).join(' · ')
   const startupOutput = state.startupOutput ?? []
@@ -145,7 +147,7 @@ export function PiStartupDisclosure({
       {state.processId && <span>Worker PID {state.processId}</span>}
     </div>}
     {resourcesKnown && resourceGroups.length === 0 && <div className="pi-startup-diagnostics">
-      <b>{t('startup.resource.title')}</b><span>{t(resourceReadIncomplete ? 'startup.resource.incomplete' : 'startup.resource.noneLoaded')}</span>
+      <b>{t('startup.resource.title')}</b><span>{resourceReadIncomplete ? t('startup.resource.incomplete') : t('startup.resource.noneLoaded')}</span>
     </div>}
     {resourceGroups.length > 0 && <details className="pi-startup-resource-details">
       <summary>{resourceSummary}<UiIcon className="pi-startup-resource-chevron" name="chevron-right" size={14}/></summary>
