@@ -375,12 +375,14 @@ function IntegrationControl({
   management,
   policy,
   onChange,
+  onInstall,
   onAuthorize,
 }: {
   agent: AgentOverviewDto
   management: IntegrationManagementItemDto | undefined
   policy: CapturePolicyResponseDto | null
   onChange(sourceId: string, enabled: boolean): Promise<void>
+  onInstall(integrationId: string): Promise<unknown>
   onAuthorize(
     productId: string,
     capabilities: readonly IntegrationAuthorizationCapabilityDto[],
@@ -388,6 +390,7 @@ function IntegrationControl({
 }) {
   const { t } = useTranslation('agents')
   const [saving, setSaving] = useState(false)
+  const [installing, setInstalling] = useState(false)
   const [error, setError] = useState('')
   const [authorizationOpen, setAuthorizationOpen] = useState(false)
   const [authorizationSaved, setAuthorizationSaved] = useState(false)
@@ -422,12 +425,22 @@ function IntegrationControl({
     }
   }
 
+  const install = async () => {
+    if (!management || installing) return
+    setInstalling(true)
+    setError('')
+    try {
+      await onInstall(management.integrationId)
+      await onChange(management.integrationId, true)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setInstalling(false)
+    }
+  }
+
   const toggle = () => {
     if (!editable || saving) return
-    if (!configured && pendingAuthorization.length) {
-      setAuthorizationOpen(true)
-      return
-    }
     void persistEnabled(!configured)
   }
 
@@ -437,7 +450,6 @@ function IntegrationControl({
     setError('')
     try {
       await onAuthorize(agent.productId, pendingAuthorization)
-      if (!configured) await onChange(management?.integrationId ?? agent.sourceId, true)
       setAuthorizationSaved(true)
       setAuthorizationOpen(false)
     } catch (cause) {
@@ -445,6 +457,30 @@ function IntegrationControl({
     } finally {
       setSaving(false)
     }
+  }
+
+  if (management && !management.packageState) {
+    return <section className="source-capture-control">
+      <div>
+        <h3>{t('integration.title')}</h3>
+        <p>{t('integration.packageLifecycleUnavailable')}</p>
+      </div>
+      <StatusBadge tone="danger">{t('status.managementUnavailable')}</StatusBadge>
+    </section>
+  }
+
+  if (management?.packageState && !management.packageState.installed) {
+    const canInstall = management.tool?.presence === 'present' || management.tool?.presence === 'data-only'
+    return <section className="source-capture-control">
+      <div>
+        <h3>{t('integration.notAddedTitle')}</h3>
+        <p>{canInstall ? t('integration.notAddedDescription') : t('integration.notDetectedDescription')}</p>
+        {error && <p className="source-capture-error">{error}</p>}
+      </div>
+      <Button variant="primary" loading={installing} disabled={!canInstall} onClick={() => void install()}>
+        {t('integration.addToAgentLens')}
+      </Button>
+    </section>
   }
 
   return <section className="source-capture-control">
@@ -501,7 +537,7 @@ function IntegrationControl({
       closeDisabled={saving}
       footer={<>
         <Button disabled={saving} onClick={() => setAuthorizationOpen(false)}>{t('integration.cancel')}</Button>
-        <Button variant="primary" loading={saving} onClick={() => void authorize()}>{configured ? t('integration.confirm') : t('integration.confirmAndEnable')}</Button>
+        <Button variant="primary" loading={saving} onClick={() => void authorize()}>{t('integration.confirm')}</Button>
       </>}
     >
       <div className="integration-authorization-list">
@@ -519,7 +555,7 @@ function IntegrationControl({
   </section>
 }
 
-function AgentCard({ agent, management, discovery, discoveryScanning, discoveryError, policy, onCaptureChange, onAuthorize }: {
+function AgentCard({ agent, management, discovery, discoveryScanning, discoveryError, policy, onCaptureChange, onInstall, onRemove, onAuthorize }: {
   agent: AgentOverviewDto
   management: IntegrationManagementItemDto | undefined
   discovery: IntegrationToolDiscoveryItemDto | undefined
@@ -527,6 +563,8 @@ function AgentCard({ agent, management, discovery, discoveryScanning, discoveryE
   discoveryError: string
   policy: CapturePolicyResponseDto | null
   onCaptureChange(sourceId: string, enabled: boolean): Promise<void>
+  onInstall(integrationId: string): Promise<unknown>
+  onRemove(integrationId: string): Promise<unknown>
   onAuthorize(
     productId: string,
     capabilities: readonly IntegrationAuthorizationCapabilityDto[],
@@ -581,7 +619,7 @@ function AgentCard({ agent, management, discovery, discoveryScanning, discoveryE
     {discovery?.presence === 'data-only' && <p className="agent-discovery-note">{t('toolPresence.dataOnlyHint')}</p>}
     {(discoveryError || discovery?.presence === 'error') && <p className="agent-discovery-note is-error" title={discoveryError || discovery?.reason}>{t('toolPresence.errorHint')}</p>}
 
-    <IntegrationControl agent={agent} management={management} policy={policy} onChange={onCaptureChange} onAuthorize={onAuthorize}/>
+    <IntegrationControl agent={agent} management={management} policy={policy} onChange={onCaptureChange} onInstall={onInstall} onAuthorize={onAuthorize}/>
 
     <section className="agent-primary-section">
       <div className="section-heading-row"><div><h3>{t('sections.myAssets')}</h3><p>{t('sections.myAssetsDescription')}</p></div><span className="section-total">{userAssetCount}</span></div>
