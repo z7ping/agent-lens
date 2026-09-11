@@ -23,6 +23,7 @@ import {
   type SourceRecordResponseDto,
   type ToolAssetUsageResponseDto,
 } from '@agent-lens/protocol'
+import { translateProduct } from '../i18n/runtime'
 
 export const LIVE_RECONNECTED_EVENT = 'agent-lens:live-reconnected'
 
@@ -67,6 +68,13 @@ function responseErrorMessage(value: unknown): string | undefined {
   return typeof message === 'string' && message ? message : undefined
 }
 
+class AgentLensRequestError extends Error {
+  constructor(message: string, readonly status?: number) {
+    super(message)
+    this.name = 'AgentLensRequestError'
+  }
+}
+
 async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> {
   try {
     const response = await fetch(path, {
@@ -79,23 +87,23 @@ async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> 
         const message = responseErrorMessage(await response.json())
         if (message) detail = `：${message}`
       } catch { /* non-json error */ }
-      throw new Error(`AgentLens 接口请求失败（状态码 ${response.status}）${detail}：${path}`)
+      throw new AgentLensRequestError(translateProduct('errors:apiRequestFailedStatus', { status: response.status, detail, path }), response.status)
     }
     return response.json() as Promise<T>
   } catch (error) {
-    if (error instanceof Error && error.message.startsWith('AgentLens 接口请求失败')) throw error
-    throw new Error('AgentLens 接口请求失败，请检查运行状态和连接。')
+    if (error instanceof AgentLensRequestError) throw error
+    throw new AgentLensRequestError(translateProduct('errors:apiRequestFailed'))
   }
 }
 
 async function requestBlob(path: string): Promise<Blob> {
   try {
     const response = await fetch(path, { headers: { accept: 'application/vnd.agentlens.backup' } })
-    if (!response.ok) throw new Error(`AgentLens 接口请求失败（状态码 ${response.status}）：${path}`)
+    if (!response.ok) throw new AgentLensRequestError(translateProduct('errors:apiRequestFailedStatus', { status: response.status, detail: '', path }), response.status)
     return response.blob()
   } catch (error) {
     if (error instanceof Error && error.message.startsWith('AgentLens 接口请求失败')) throw error
-    throw new Error('备份包导出失败，请检查运行状态和连接。')
+    throw new AgentLensRequestError(translateProduct('errors:backupExportFailed'))
   }
 }
 
