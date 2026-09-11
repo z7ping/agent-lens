@@ -790,14 +790,18 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
     async putBinding(binding: AssetBinding) {
       await executor.run(() => {
         db.prepare(`
-          INSERT INTO asset_bindings(id, asset_id, installation_id, path, source, version)
-          VALUES (?, ?, ?, ?, ?, ?)
+          INSERT INTO asset_bindings(
+            id, asset_id, installation_id, path, source, version, scope, scope_root
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(id) DO UPDATE SET
             asset_id = excluded.asset_id,
             installation_id = excluded.installation_id,
             path = excluded.path,
             source = excluded.source,
-            version = excluded.version
+            version = excluded.version,
+            scope = excluded.scope,
+            scope_root = excluded.scope_root
         `).run(
           binding.id,
           binding.assetId,
@@ -805,6 +809,8 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
           binding.path ?? null,
           binding.source ?? null,
           binding.version ?? null,
+          binding.scope ?? null,
+          binding.scopeRoot ?? null,
         )
       })
     },
