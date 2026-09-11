@@ -3,9 +3,13 @@ import { mkdir, readFile, readdir, unlink } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type {
-  Disposable, SourceExecutionContext, SourceRecord, SourceRecordEmitter, } from '@agent-lens/core'
+  Disposable,
+  SourceExecutionContext,
+  SourceRecord,
+  SourceRecordEmitter,
+} from '@agent-lens/core'
 import { abortableDelay } from '@agent-lens/runtime-cordis'
-import { isMissingPathError, asRecord } from '@agent-lens/source-support'
+import { asRecord, isMissingPathError } from '@agent-lens/source-support'
 import { CODEX_CURRENT_PARSER_VERSION } from './current-protocol'
 
 const POLL_INTERVAL_MS = 250
@@ -19,7 +23,6 @@ interface CodexInboxEnvelope {
 function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex')
 }
-
 
 
 function inboxDirectory(): string {
