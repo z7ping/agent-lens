@@ -463,7 +463,8 @@ export class DefaultPiLiveService implements PiLiveService {
         this.updateRuntimeResources(runtime, readyState)
         this.persistStartupResourcesBestEffort(runtime, readyState)
       } else {
-        const probe = handle.state().then(state => {
+        let probe: Promise<void>
+        probe = handle.state().then(state => {
           if (runtime.generation !== generation || runtime.status !== 'ready' || runtime.handle !== handle) return
           this.persistSessionIfChanged(runtime, state)
           this.updateRuntimeResources(runtime, state)
@@ -705,7 +706,8 @@ export class DefaultPiLiveService implements PiLiveService {
     }
 
     runtime.startupAuditPending = attempt
-    const task = this.startupAudit.recordStartupResources(snapshot).then(() => {
+    let task: Promise<void>
+    task = this.startupAudit.recordStartupResources(snapshot).then(() => {
       if (runtime.startupAuditPending === attempt) runtime.startupAuditCompleted = attempt
     }).catch(error => {
       console.warn('[AgentLens] Pi Live startup resource audit failed', error)
