@@ -97,3 +97,19 @@ test('OpenCode asset discovery remains unavailable until native inventory semant
   const assets = capabilities.find(item => item.name === 'asset-discovery')
   assert.equal(assets?.status, 'unavailable')
 })
+
+test('OpenCode parser replay neutralizes legacy row fallback nativeId', async () => {
+  const legacy: SourceRecord = {
+    ...record(
+      { type: 'text', text: 'legacy' },
+      { role: 'user' },
+      'row-42',
+    ),
+    locator: { kind: 'database', path: '/tmp/opencode.db', table: 'part', rowId: '42' },
+  }
+
+  const normalized = await normalizeOpenCodeRecord(legacy, {} as never)
+  assert.equal(normalized.observations[0]?.nativeEventId, undefined)
+  assert.equal(normalized.evidenceCandidates[0]?.nativeStableId, undefined)
+})
+
