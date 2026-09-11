@@ -7,7 +7,6 @@ import { asRecord } from '@agent-lens/source-support'
 import { messageText } from './format'
 import { normalizeCodexRecord } from './normalize'
 
-
 function stringField(record: Readonly<Record<string, unknown>>, ...keys: string[]): string | undefined {
   for (const key of keys) {
     const value = record[key]
