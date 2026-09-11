@@ -5,7 +5,7 @@ import type {
   EvidenceCandidate,
   SourceExecutionContext,
 } from '@agent-lens/core'
-import { isMissingPathError } from '@agent-lens/runtime-cordis'
+import { isMissingPathError } from '@agent-lens/source-support'
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
