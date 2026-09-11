@@ -23,10 +23,6 @@ function acknowledgedAfterOnboarding(snapshot: ClientSnapshot): string[] {
   return [...new Set([...current, ...discovered])]
 }
 
-function operationError(item: IntegrationManagementItemDto, message?: string): string {
-  return message || item.packageState?.reason || 'Integration operation failed'
-}
-
 export function IntegrationOnboarding({
   model,
   snapshot,
@@ -71,7 +67,7 @@ export function IntegrationOnboarding({
         setProgress(current => ({ ...current, [id]: { step: 'installing' } }))
         const installed = await model.installIntegration(id)
         if (installed.operation.status !== 'completed' || !installed.state.installed) {
-          throw new Error(operationError(item, installed.operation.message))
+          throw new Error(installed.operation.message || installed.state.reason || t('onboarding.failedDetail'))
         }
       }
       setProgress(current => ({ ...current, [id]: { step: 'enabling' } }))
@@ -168,7 +164,6 @@ export function IntegrationOnboarding({
                   {item.tool?.presence === 'data-only'
                     ? t('onboarding.historyData')
                     : t('onboarding.discovered')}
-                  {item.tool?.version ? ` · ${item.tool.version}` : ''}
                 </small>
                 {(item.tool?.executable || item.tool?.configRoot || item.tool?.dataRoot) && <code>
                   {item.tool?.executable ?? item.tool?.configRoot ?? item.tool?.dataRoot}
