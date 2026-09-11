@@ -129,6 +129,16 @@ function isHermesHookEnvelope(envelope: HermesEnvelope): envelope is HermesHookE
   return envelope.captureChannel === 'runtime-hook'
 }
 
+function envelopeNativeEventId(envelope: HermesEnvelope): string | undefined {
+  if (isHermesHookEnvelope(envelope)) {
+    return stringField(envelope.runtimeEvent, 'source_event_id', 'hook_invocation_id')
+  }
+  const value = envelope.message.id
+  if (typeof value === 'string' && value) return value
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  return undefined
+}
+
 function normalizeTimestamp(value: unknown): string | undefined {
   if (typeof value === 'number' && Number.isFinite(value)) {
     const millis = value < 10_000_000_000 ? value * 1000 : value
@@ -720,10 +730,11 @@ export async function* discoverHermesAssets(ctx: SourceExecutionContext): AsyncI
 
 function evidenceFor(record: SourceRecord, envelope: HermesEnvelope): EvidenceCandidate {
   const runtime = isHermesHookEnvelope(envelope)
+  const nativeStableId = envelopeNativeEventId(envelope)
   return evidenceFromSourceRecord(record, {
     captureMethod: runtime ? 'runtime-hook' : 'native-db',
     derivation: runtime ? 'observed' : 'reported',
-    ...(record.nativeId ? { nativeStableId: record.nativeId } : {}),
+    ...(nativeStableId ? { nativeStableId } : {}),
     ...(runtime
       ? { confidenceHint: 'high' as const }
       : envelope.captureChannel
@@ -754,7 +765,7 @@ function candidate(
     offset?: number
   } = {},
 ): ObservationCandidate {
-  const nativeEventId = options.nativeEventId ?? record.nativeId
+  const nativeEventId = options.nativeEventId ?? envelopeNativeEventId(envelope)
   return observationFromSourceRecord(record, {
     kind,
     payload,
