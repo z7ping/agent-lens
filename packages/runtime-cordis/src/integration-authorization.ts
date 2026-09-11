@@ -97,6 +97,23 @@ export function authorizedIntegrationCapabilities(
   return configuration?.grants[normalizeProductId(productId)] ?? []
 }
 
+export function integrationAuthorizationBootstrap(
+  configuration: IntegrationAuthorizationConfiguration | null,
+  options: {
+    existingInstallation: boolean
+    selectedIntegrationIds: readonly string[]
+  },
+): Pick<IntegrationAuthorizationConfiguration, 'grants'> | null {
+  if (configuration || !options.existingInstallation) return null
+  const selected = new Set(options.selectedIntegrationIds.map(normalizeProductId))
+  return {
+    grants: {
+      ...(selected.has('pi') ? { pi: ['runtime', 'live'] as PrivilegedIntegrationCapability[] } : {}),
+      ...(selected.has('hermes') ? { hermes: ['live'] as PrivilegedIntegrationCapability[] } : {}),
+    },
+  }
+}
+
 export async function writeIntegrationAuthorization(
   path: string,
   configuration: Pick<IntegrationAuthorizationConfiguration, 'grants'>,
