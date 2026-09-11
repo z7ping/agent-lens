@@ -98,6 +98,7 @@ export function PiStartupDisclosure({
   const sdkVersion = state.sdkVersion || state.capabilities?.sdkVersion
   const mode = runtimeModeLabel(state)
   const resources = state.startupResources
+  const resourcesKnown = resources !== undefined
   const resourceGroups = [
     { label: t('startup.resource.context'), values: resources?.contexts ?? [] },
     { label: t('startup.resource.skills'), values: resources?.skills ?? [] },
@@ -109,9 +110,11 @@ export function PiStartupDisclosure({
   const packageUpdateSummary = packageUpdates.length
     ? t('startup.packageUpdatesAvailable', { count: packageUpdates.length })
     : ''
-  const resourceSummary = resourceGroups
-    .map(group => t('startup.resource.summary', { count: group.values.length, label: group.label }))
-    .join(' · ')
+  const resourceSummary = resourceGroups.length
+    ? resourceGroups.map(group => t('startup.resource.summary', { count: group.values.length, label: group.label })).join(' · ')
+    : resourcesKnown
+      ? t('startup.resource.noneSummary')
+      : ''
   const readySummary = [resourceSummary, packageUpdateSummary].filter(Boolean).join(' · ')
   const startupOutput = state.startupOutput ?? []
 
@@ -135,6 +138,9 @@ export function PiStartupDisclosure({
       {sdkVersion && <span>Pi v{sdkVersion}</span>}
       {mode && <span>{mode}</span>}
       {state.processId && <span>Worker PID {state.processId}</span>}
+    </div>}
+    {resourcesKnown && resourceGroups.length === 0 && <div className="pi-startup-diagnostics">
+      <b>{t('startup.resource.title')}</b><span>{t('startup.resource.noneLoaded')}</span>
     </div>}
     {resourceGroups.length > 0 && <details className="pi-startup-resource-details">
       <summary>{resourceSummary}<UiIcon className="pi-startup-resource-chevron" name="chevron-right" size={14}/></summary>
