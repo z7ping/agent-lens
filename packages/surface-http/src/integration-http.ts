@@ -11,6 +11,7 @@ const MAX_JSON_BODY_BYTES = 64 * 1024
 const PRIVILEGED = new Set<IntegrationAuthorizationCapabilityDto>(['hook', 'runtime', 'live'])
 
 export interface IntegrationAuthorizationController {
+  available(productId: string): readonly IntegrationAuthorizationCapabilityDto[]
   grant(
     productId: string,
     capabilities: readonly IntegrationAuthorizationCapabilityDto[],
@@ -53,6 +54,11 @@ export async function handleIntegrationAuthorizationRequest(
   const productId = decodeURIComponent(match[1] ?? '').trim().toLowerCase()
   if (!productId) throw badRequest('productId is required')
   const payload = requestPayload(await readJsonBody(request, { maxBytes: MAX_JSON_BODY_BYTES }))
+  const allowed = new Set(controller.available(productId))
+  if (!allowed.size) throw badRequest('Integration has no authorizable capabilities')
+  if (payload.capabilities.some(capability => !allowed.has(capability))) {
+    throw badRequest('Requested capability is not authorizable for this Integration')
+  }
   const authorizedCapabilities = await controller.grant(productId, payload.capabilities)
   const body: IntegrationAuthorizationResponseDto = {
     productId,
