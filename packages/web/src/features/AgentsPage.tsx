@@ -6,6 +6,7 @@ import type {
   AgentOverviewDto,
   CapturePolicyResponseDto,
   IntegrationAuthorizationCapabilityDto,
+  IntegrationManagementItemDto,
   IntegrationToolDiscoveryItemDto,
 } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
@@ -141,7 +142,8 @@ function captureState(
 ): { label: string; title: string; className: string } {
   if (!agent.supported) return { label: t('status.unsupported'), title: t('status.unsupportedTitle'), className: 'is-unsupported' }
   if (agent.detected) {
-    if (!agent.enabled) return { label: t('status.disabled'), title: t('status.disabledTitle'), className: 'is-disabled' }
+    const configured = management?.enabled.configured ?? agent.enabled
+    if (!configured) return { label: t('status.disabled'), title: t('status.disabledTitle'), className: 'is-disabled' }
     return { label: t('status.enabled'), title: t('status.enabledTitle'), className: 'is-enabled is-detected' }
   }
   if (discovery?.presence === 'error') {
@@ -161,6 +163,7 @@ function captureState(
 
 function toolPresenceLabel(
   discovery: IntegrationToolDiscoveryItemDto | undefined,
+  management: IntegrationManagementItemDto | undefined,
   discoveryScanning: boolean,
   discoveryError: string,
   t: TFunction,
@@ -329,11 +332,13 @@ function SkillLifecycle({ agent, skills }: { agent: AgentOverviewDto; skills: Ag
 
 function IntegrationControl({
   agent,
+  management,
   policy,
   onChange,
   onAuthorize,
 }: {
   agent: AgentOverviewDto
+  management: IntegrationManagementItemDto | undefined
   policy: CapturePolicyResponseDto | null
   onChange(sourceId: string, enabled: boolean): Promise<void>
   onAuthorize(
@@ -347,11 +352,17 @@ function IntegrationControl({
   const [authorizationOpen, setAuthorizationOpen] = useState(false)
   const [authorizationSaved, setAuthorizationSaved] = useState(false)
   const settings = policy?.settings
-  const configured = settings?.configuredEnabledSources.includes(agent.sourceId) ?? agent.enabled
-  const effective = settings?.effectiveEnabledSources.includes(agent.sourceId) ?? agent.enabled
+  const configured = management?.enabled.configured
+    ?? settings?.configuredEnabledSources.includes(agent.sourceId)
+    ?? agent.enabled
+  const effective = management?.enabled.effective
+    ?? settings?.effectiveEnabledSources.includes(agent.sourceId)
+    ?? agent.enabled
   const pending = configured !== effective
-  const editable = settings?.editable ?? false
-  const pendingAuthorization = (agent.integration?.capabilities ?? [])
+  const editable = management?.enabled.editable ?? settings?.editable ?? false
+  const integrationAvailability = management?.availability ?? agent.integration?.availability
+  const integrationCapabilities = management?.capabilities ?? agent.integration?.capabilities ?? []
+  const pendingAuthorization = integrationCapabilities
     .filter(item => item.authorization === 'required')
     .map(item => item.capability)
     .filter((capability): capability is IntegrationAuthorizationCapabilityDto =>
@@ -362,7 +373,7 @@ function IntegrationControl({
     setSaving(true)
     setError('')
     try {
-      await onChange(agent.sourceId, enabled)
+      await onChange(management?.integrationId ?? agent.sourceId, enabled)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
     } finally {
@@ -403,15 +414,15 @@ function IntegrationControl({
         : configured
           ? t('integration.enabledDescription')
           : t('integration.disabledDescription')}</p>
-      {agent.integration && <div className="integration-availability">
+      {integrationAvailability && <div className="integration-availability">
         <span className="integration-availability-overall">
           <small>{t('integration.currentAvailability')}</small>
-          <StatusBadge tone={integrationAvailabilityTone(agent.integration.availability)} dot>
-            {translatedLabel(integrationAvailabilityLabelKey, agent.integration.availability, t)}
+          <StatusBadge tone={integrationAvailabilityTone(integrationAvailability)} dot>
+            {translatedLabel(integrationAvailabilityLabelKey, integrationAvailability, t)}
           </StatusBadge>
         </span>
         <span className="integration-capability-badges">
-          {agent.integration.capabilities.map(item => <StatusBadge
+          {integrationCapabilities.map(item => <StatusBadge
             key={item.capability}
             tone={integrationAvailabilityTone(item.availability)}
             title={item.reasonCode ? translatedLabel(integrationReasonKey, item.reasonCode, t) : item.reason}
@@ -467,8 +478,9 @@ function IntegrationControl({
   </section>
 }
 
-function AgentCard({ agent, discovery, discoveryScanning, discoveryError, policy, onCaptureChange, onAuthorize }: {
+function AgentCard({ agent, management, discovery, discoveryScanning, discoveryError, policy, onCaptureChange, onAuthorize }: {
   agent: AgentOverviewDto
+  management: IntegrationManagementItemDto | undefined
   discovery: IntegrationToolDiscoveryItemDto | undefined
   discoveryScanning: boolean
   discoveryError: string
@@ -528,7 +540,7 @@ function AgentCard({ agent, discovery, discoveryScanning, discoveryError, policy
     {discovery?.presence === 'data-only' && <p className="agent-discovery-note">{t('toolPresence.dataOnlyHint')}</p>}
     {(discoveryError || discovery?.presence === 'error') && <p className="agent-discovery-note is-error" title={discoveryError || discovery?.reason}>{t('toolPresence.errorHint')}</p>}
 
-    <IntegrationControl agent={agent} policy={policy} onChange={onCaptureChange} onAuthorize={onAuthorize}/>
+    <IntegrationControl agent={agent} management={management} policy={policy} onChange={onCaptureChange} onAuthorize={onAuthorize}/>
 
     <section className="agent-primary-section">
       <div className="section-heading-row"><div><h3>{t('sections.myAssets')}</h3><p>{t('sections.myAssetsDescription')}</p></div><span className="section-total">{userAssetCount}</span></div>
@@ -585,11 +597,16 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
   const discoveryScanning = snapshot.integrationDiscoveryLoading
     || snapshot.integrationDiscoveryRescanning
     || discovery?.status === 'scanning'
+  const managementByProduct = new Map((snapshot.integrationManagement?.items ?? []).map(item => [item.productId, item]))
+  const managementById = new Map((snapshot.integrationManagement?.items ?? []).map(item => [item.integrationId, item]))
   const discoveryByProduct = new Map((discovery?.items ?? []).map(item => [item.productId, item]))
   const discoveryErrors = discovery?.items.filter(item => item.presence === 'error') ?? []
-  const selectedDiscovery = selectedAgent
-    ? discoveryByProduct.get(selectedAgent.productId) ?? discoveryByProduct.get(selectedAgent.sourceId)
+  const selectedManagement = selectedAgent
+    ? managementByProduct.get(selectedAgent.productId) ?? managementById.get(selectedAgent.sourceId)
     : undefined
+  const selectedDiscovery = selectedManagement?.tool ?? (selectedAgent
+    ? discoveryByProduct.get(selectedAgent.productId) ?? discoveryByProduct.get(selectedAgent.sourceId)
+    : undefined)
   const rescan = snapshot.agentsRescanResult
   const rescanning = snapshot.agentsRescanning || snapshot.integrationDiscoveryRescanning
   const scanBusy = rescanning || discoveryScanning
@@ -636,11 +653,14 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
         <div className="agent-detail-pane">{selectedAgent && <AgentCard
           key={selectedAgent.sourceId}
           agent={selectedAgent}
+          management={selectedManagement}
           discovery={selectedDiscovery}
           discoveryScanning={discoveryScanning}
           discoveryError={snapshot.integrationDiscoveryError}
           policy={snapshot.capturePolicy}
-          onCaptureChange={(id, enabled) => model.setSourceEnabled(id, enabled)}
+          onCaptureChange={(id, enabled) => selectedManagement
+            ? model.setIntegrationEnabled(id, enabled).then(() => undefined)
+            : model.setSourceEnabled(id, enabled)}
           onAuthorize={(productId, capabilities) => model.authorizeIntegration(productId, capabilities)}
         />}</div>
       </div> : <div className="empty-state roomy">{t('page.empty')}</div>}
