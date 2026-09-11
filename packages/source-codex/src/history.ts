@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { open, opendir, readFile, stat } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 import type { SourceExecutionContext, SourceHistoryExecutionContext, SourceHistoryWindow, SourceRecord } from '@agent-lens/core'
-import { isCompleteJson, isMissingPathError, readJsonlLines, sourceFileIdentity, type JsonlLine } from '@agent-lens/runtime-cordis'
+import { isCompleteJson, isMissingPathError, readJsonlLines, sourceFileIdentity, type JsonlLine } from '@agent-lens/source-support'
 import {
   nativeIdForEntry,
   nativeTypeForEntry,
