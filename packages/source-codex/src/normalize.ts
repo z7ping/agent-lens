@@ -1,3 +1,4 @@
+import { asRecord } from '@agent-lens/source-support'
 import {
   evidenceFromSourceRecord,
   observationFromSourceRecord,
@@ -47,11 +48,6 @@ export function splitCodexVisibleAssistantText(text: string, phase?: string): {
   }
 }
 
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {}
-}
 
 function stringField(record: Record<string, unknown>, ...names: string[]): string | undefined {
   for (const name of names) {
