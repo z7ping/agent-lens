@@ -53,7 +53,7 @@ interface OpenCodeEnvelope {
   part: Record<string, unknown>
   message: Record<string, unknown>
   session: {
-    nativeSessionId: string
+    nativeSessionId?: string
     cwd?: string
     title?: string
   }
@@ -126,7 +126,10 @@ function stringField(record: Record<string, unknown>, ...names: string[]): strin
 function openCodeEnvelope(value: unknown, record: SourceRecord): OpenCodeEnvelope {
   const root = asRecord(value)
   const session = asRecord(root.session)
-  const nativeSessionId = stringField(session, 'nativeSessionId') ?? record.sourceSessionNativeId ?? 'unknown'
+  const storedSessionId = stringField(session, 'nativeSessionId') ?? record.sourceSessionNativeId
+  const nativeSessionId = storedSessionId === 'unknown' || storedSessionId === 'runtime-unknown'
+    ? undefined
+    : storedSessionId
   const cwd = stringField(session, 'cwd')
   const title = stringField(session, 'title')
   const captureChannel = root.captureChannel === 'history' || root.captureChannel === 'native-tail'
@@ -136,7 +139,7 @@ function openCodeEnvelope(value: unknown, record: SourceRecord): OpenCodeEnvelop
     part: asRecord(root.part),
     message: asRecord(root.message),
     session: {
-      nativeSessionId,
+      ...(nativeSessionId ? { nativeSessionId } : {}),
       ...(cwd ? { cwd } : {}),
       ...(title ? { title } : {}),
     },
@@ -302,7 +305,7 @@ function recordFromRow(
 ): SourceRecord {
   const part = parseRecord(row.data)
   const message = parseRecord(row.message_data)
-  const nativeSessionId = row.session_id || stringField(message, 'sessionID', 'session_id') || 'unknown'
+  const nativeSessionId = row.session_id || stringField(message, 'sessionID', 'session_id') || undefined
   const nativeType = stringField(part, 'type') ?? 'unknown'
   const fingerprint = rowFingerprint(row)
   const capturedAt = new Date().toISOString()
@@ -316,7 +319,7 @@ function recordFromRow(
     id: `opencode-${sha256(`${recordKey}:${fingerprint}`).slice(0, 32)}`,
     sourceId: SOURCE_ID,
     installationId: ctx.installation.id,
-    sourceSessionNativeId: nativeSessionId,
+    ...(nativeSessionId ? { sourceSessionNativeId: nativeSessionId } : {}),
     nativeType: `part/${nativeType}`,
     ...(nativeId ? { nativeId } : {}),
     sourceSequence: row.row_id * 10,
@@ -333,7 +336,7 @@ function recordFromRow(
       part,
       message,
       session: {
-        nativeSessionId,
+        ...(nativeSessionId ? { nativeSessionId } : {}),
         ...(row.directory ? { cwd: row.directory } : {}),
         ...(title ? { title } : {}),
       },
@@ -464,6 +467,9 @@ function evidenceFor(record: SourceRecord, envelope: OpenCodeEnvelope): Evidence
 }
 
 function identity(_record: SourceRecord, envelope: OpenCodeEnvelope): ObservationIdentityHints {
+  if (!envelope.session.nativeSessionId) {
+    throw new Error('OpenCode observation requires a proven native session id')
+  }
   return {
     nativeSessionId: envelope.session.nativeSessionId,
     ...(envelope.session.cwd ? { workspacePath: envelope.session.cwd } : {}),
@@ -508,6 +514,9 @@ export async function normalizeOpenCodeRecord(
   _ctx: SourceNormalizationContext,
 ): Promise<NormalizedSourceOutput> {
   const envelope = openCodeEnvelope(record.payload, record)
+  if (!envelope.session.nativeSessionId) {
+    return { observations: [], evidenceCandidates: [evidenceFor(record, envelope)] }
+  }
   const part = envelope.part
   const message = envelope.message
   const type = stringField(part, 'type') ?? 'unknown'
