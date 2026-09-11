@@ -23,3 +23,5 @@ export const openCodeIntegration = defineAgentLensIntegration(
     },
   ],
 )
+
+export default openCodeIntegration
