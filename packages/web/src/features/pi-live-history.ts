@@ -1,4 +1,5 @@
 import { normalizePiSessionEntry, type PiLiveSnapshotDto, type PiNativeFact, type PiNativeUsage } from '@agent-lens/protocol'
+import { translateProduct } from '../i18n/runtime'
 
 export type PiLiveItemState = 'running' | 'settled'
 
@@ -39,7 +40,7 @@ function resultOutput(fact: Extract<PiNativeFact, { kind: 'tool-result' }>): str
 
 function messageText(fact: Extract<PiNativeFact, { kind: 'message' }>): string {
   if (fact.text.trim()) return fact.text
-  if (fact.nonTextContent.length) return `包含 ${fact.nonTextContent.length} 个非文本内容块`
+  if (fact.nonTextContent.length) return translateProduct('piLive:history.nonTextContent', { count: fact.nonTextContent.length })
   return ''
 }
 
@@ -64,7 +65,7 @@ export function projectPiLiveHistory(snapshot: PiLiveSnapshotDto | null): PiLive
           ...(fact.contentIndex === undefined ? {} : { contentIndex: fact.contentIndex }),
         })
       } else {
-        items.push({ id: fact.id, kind: 'lifecycle', event: 'pi.message.other', label: 'Pi 特殊消息', detail: compact(fact.raw), at: fact.at, nativeType: fact.nativeType, parentId: fact.parentId, raw: fact.raw })
+        items.push({ id: fact.id, kind: 'lifecycle', event: 'pi.message.other', label: translateProduct('piLive:history.specialMessage'), detail: compact(fact.raw), at: fact.at, nativeType: fact.nativeType, parentId: fact.parentId, raw: fact.raw })
       }
       continue
     }
@@ -102,7 +103,7 @@ export function projectPiLiveHistory(snapshot: PiLiveSnapshotDto | null): PiLive
         kind: 'tool',
         callId: fact.callId,
         name: fact.name,
-        summary: '未找到对应 Tool Call，保留原生 Tool Result 事实',
+        summary: translateProduct('piLive:history.unpairedToolResult'),
         output: resultOutput(fact),
         status: fact.success ? 'success' : 'error',
         at: fact.at,
@@ -117,7 +118,7 @@ export function projectPiLiveHistory(snapshot: PiLiveSnapshotDto | null): PiLive
       items.push({ id: fact.id, kind: 'lifecycle', event: fact.event, label: fact.label, detail: fact.detail, at: fact.at, nativeType: fact.nativeType, parentId: fact.parentId, raw: fact.raw })
       continue
     }
-    items.push({ id: fact.id, kind: 'lifecycle', event: 'native.unknown', label: 'Pi 原生事件', detail: fact.nativeType, at: fact.at, nativeType: fact.nativeType, parentId: fact.parentId, raw: fact.raw })
+    items.push({ id: fact.id, kind: 'lifecycle', event: 'native.unknown', label: translateProduct('piLive:history.nativeEvent'), detail: fact.nativeType, at: fact.at, nativeType: fact.nativeType, parentId: fact.parentId, raw: fact.raw })
   }
   return items
 }
