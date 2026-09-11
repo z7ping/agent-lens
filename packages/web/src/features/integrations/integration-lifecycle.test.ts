@@ -30,7 +30,7 @@ function management(
       configured: true,
       effective: true,
       editable: true,
-      managedBy: 'configuration',
+      managedBy: 'file',
       restartRequired: false,
     },
     availability: 'available',
@@ -88,7 +88,7 @@ test('installed Integration that is explicitly disabled is presented as disabled
       configured: false,
       effective: false,
       editable: true,
-      managedBy: 'configuration',
+      managedBy: 'file',
       restartRequired: false,
     },
   })
