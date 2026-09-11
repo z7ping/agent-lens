@@ -24,3 +24,5 @@ export const piIntegration = defineAgentLensIntegration(
     { pluginId: '@agent-lens/runtime-cordis/pi-live', capabilities: ['runtime', 'live'], authorization: 'explicit', activation: 'enabled', lifecycle: 'runtime', plugin: piLiveRuntimePlugin },
   ],
 )
+
+export default piIntegration
