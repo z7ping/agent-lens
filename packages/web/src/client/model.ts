@@ -461,6 +461,22 @@ export class AgentLensClientModel {
     return result
   }
 
+  async removeIntegration(
+    integrationId: string,
+  ): Promise<IntegrationPackageOperationResponseDto> {
+    const result = await this.api.removeIntegration(integrationId)
+    await this.refreshIntegrationManagement().catch(() => undefined)
+    return result
+  }
+
+  async acknowledgeIntegration(integrationId: string): Promise<void> {
+    const current = this.snapshot.integrationManagement?.preferences
+    if (!current || current.acknowledgedIntegrationIds.includes(integrationId)) return
+    await this.updateIntegrationPreferences({
+      acknowledgedIntegrationIds: [...current.acknowledgedIntegrationIds, integrationId],
+    })
+  }
+
   async setIntegrationEnabled(
     integrationId: string,
     enabled: boolean,
