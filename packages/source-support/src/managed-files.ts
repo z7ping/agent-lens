@@ -24,6 +24,7 @@ export type ManagedFileErrorCode =
   | 'not-directory'
   | 'not-file'
   | 'sensitive'
+  | 'protected-data'
   | 'too-large'
   | 'binary'
   | 'unreadable'
@@ -98,6 +99,16 @@ export function isSensitiveFileName(path: string): boolean {
 export function isEnvironmentSecretFileName(path: string): boolean {
   const name = basename(path).toLowerCase()
   return name === '.env' || name.startsWith('.env.') || name.endsWith('.env')
+}
+
+export function isProtectedRuntimeDataFile(path: string): boolean {
+  const name = basename(path).toLowerCase()
+  return name.endsWith('.jsonl')
+    || name.endsWith('.sqlite')
+    || name.endsWith('.sqlite3')
+    || name.endsWith('.db')
+    || name.endsWith('.db-wal')
+    || name.endsWith('.db-shm')
 }
 
 export function containsHighConfidenceSecret(bytes: Uint8Array): boolean {
@@ -256,6 +267,9 @@ export async function previewManagedTextFile(
   if (target.kind !== 'file') throw new ManagedFileError('not-file', 'Managed path is not a file')
   if (isSensitiveFileName(target.logicalPath) || isEnvironmentSecretFileName(target.logicalPath)) {
     throw new ManagedFileError('sensitive', 'Managed file is protected by its file name')
+  }
+  if (isProtectedRuntimeDataFile(target.logicalPath)) {
+    throw new ManagedFileError('protected-data', 'Runtime and session data files are not previewable')
   }
   if (target.size > maxBytes) {
     throw new ManagedFileError('too-large', `Managed file exceeds preview limit of ${maxBytes} bytes`)
