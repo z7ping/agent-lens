@@ -191,14 +191,10 @@ function openDatabase(root: string): Database.Database {
 }
 
 function tableColumns(db: Database.Database, table: string): Set<string> {
-  try {
-    const names = db.prepare(`PRAGMA table_info(${table})`).all()
-      .map(tableColumnName)
-      .filter((name): name is string => name !== undefined)
-    return new Set(names)
-  } catch {
-    return new Set()
-  }
+  const names = db.prepare(`PRAGMA table_info(${table})`).all()
+    .map(tableColumnName)
+    .filter((name): name is string => name !== undefined)
+  return new Set(names)
 }
 
 function columnExpr(columns: Set<string>, tableAlias: string, column: string, alias = column): string {
