@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type DragEvent } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import type {
@@ -13,6 +13,7 @@ import type {
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
 import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScope'
+import { usePinnedAgents } from '../components/PinnedAgentsProvider'
 import { CompactPageHeading } from '../components/CompactPageHeading'
 import { Button, Dialog, StatusBadge, Toolbar, UiIcon } from '../components/ui'
 import { copyText } from '../client/clipboard'
@@ -861,6 +862,12 @@ function AgentCard({ agent, management, discovery, discoveryScanning, discoveryE
           {agent.capabilities.map(cap => <div key={cap.name} className="capability-row" title={capabilityDetail(cap, t)}><span>{translatedLabel(capabilityLabelKey, cap.name, t)} · {capabilityDetail(cap, t)}</span><b data-status={cap.status}>{translatedLabel(capabilityStatusLabelKey, cap.status, t)}</b></div>)}
         </div>
       </details>
+      <IntegrationAdvancedActions
+        management={management}
+        label={agentLabel(agent.sourceId, agent.displayName)}
+        onChange={onCaptureChange}
+        onRemove={onRemove}
+      />
     </section>
   </article>
 }
