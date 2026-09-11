@@ -1,5 +1,6 @@
-import type {
-  IntegrationManagementItemDto,
+import {
+  AGENT_LENS_PROTOCOL_VERSION,
+  type IntegrationManagementItemDto,
   IntegrationManagementResponseDto,
   IntegrationPackageOperationResponseDto,
 } from '@agent-lens/protocol'
@@ -25,6 +26,17 @@ function normalizePluginId(value: string | undefined): string {
     throw new Error('Integration ID 只能包含字母、数字、点、下划线和连字符')
   }
   return id
+}
+
+function assertProtocol(payload: unknown): void {
+  const body = record(payload)
+  const meta = record(body?.meta)
+  const version = meta?.protocolVersion
+  if (version !== AGENT_LENS_PROTOCOL_VERSION) {
+    throw new Error(
+      `AgentLens 协议不兼容：期望 ${AGENT_LENS_PROTOCOL_VERSION}，实际 ${String(version ?? 'unknown')}`,
+    )
+  }
 }
 
 function apiErrorMessage(status: number, payload: unknown): string {
@@ -69,6 +81,7 @@ async function requestJson<T>(
   if (!response.ok) {
     throw new Error(`AgentLens API 请求失败（${response.status}）：${apiErrorMessage(response.status, payload)}`)
   }
+  assertProtocol(payload)
   return payload as T
 }
 
