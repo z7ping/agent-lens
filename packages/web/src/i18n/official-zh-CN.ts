@@ -1025,6 +1025,7 @@ export const officialChineseLocalePack: LocalePackDto = {
         resourceDiagnostics: '[资源诊断]',
         packageUpdates: '[包更新]',
         packageUpdatesAvailable: '{{count}} 个包可更新',
+        packageUpdatesCurrent: '未发现可用的包更新。',
         packageUpdateChecking: '正在使用 Pi 官方包管理器检查更新…',
         packageUpdateUnavailable: '包更新信息当前不可获取（离线模式或当前 Pi SDK 未提供结构化检查能力）。',
         packageUpdateFailed: '包更新检查失败，不影响当前 Runtime。',
