@@ -135,23 +135,63 @@ function integrationAvailabilityTone(
 }
 
 function captureState(
-  agent: Pick<AgentOverviewDto, 'supported' | 'enabled' | 'detected'>,
+  agent: Pick<AgentOverviewDto, 'supported' | 'enabled' | 'detected'> | undefined,
   management: IntegrationManagementItemDto | undefined,
   discovery: IntegrationToolDiscoveryItemDto | undefined,
   discoveryScanning: boolean,
   t: TFunction,
 ): { label: string; title: string; className: string } {
+  if (management) {
+    const packageState = management.packageState
+    if (!packageState) {
+      return { label: t('status.managementUnavailable'), title: t('status.managementUnavailableTitle'), className: 'is-error' }
+    }
+    if (!packageState.installed) {
+      if (discovery?.presence === 'error') {
+        return { label: t('status.scanFailed'), title: discovery.reason || t('status.scanFailedTitle'), className: 'is-error' }
+      }
+      if (discovery?.presence === 'present' || discovery?.presence === 'data-only') {
+        return { label: t('status.notAdded'), title: t('status.notAddedTitle'), className: 'is-not-added' }
+      }
+      if (discoveryScanning) {
+        return { label: t('status.scanning'), title: t('status.scanningTitle'), className: 'is-scanning' }
+      }
+      return { label: t('status.notFound'), title: t('status.notFoundTitle'), className: 'is-missing' }
+    }
+
+    if (!management.enabled.configured) {
+      if (management.enabled.restartRequired || packageState.restartRequired) {
+        return { label: t('status.pendingRestart'), title: t('status.pendingRestartTitle'), className: 'is-history' }
+      }
+      return { label: t('status.disabled'), title: t('status.disabledTitle'), className: 'is-disabled' }
+    }
+
+    if (management.enabled.restartRequired || packageState.restartRequired) {
+      return { label: t('status.pendingRestart'), title: t('status.pendingRestartTitle'), className: 'is-history' }
+    }
+    if (!agent?.detected && discovery?.presence !== 'present') {
+      return { label: t('status.notDetected'), title: t('status.notDetectedTitle'), className: 'is-missing' }
+    }
+    if (management.availability === 'error') {
+      return { label: t('status.abnormal'), title: t('status.abnormalTitle'), className: 'is-error' }
+    }
+    if (management.availability === 'unavailable') {
+      return { label: t('status.unavailable'), title: t('status.unavailableTitle'), className: 'is-history' }
+    }
+    return { label: t('status.enabled'), title: t('status.enabledTitle'), className: 'is-enabled is-detected' }
+  }
+
+  if (!agent) {
+    if (discoveryScanning) return { label: t('status.scanning'), title: t('status.scanningTitle'), className: 'is-scanning' }
+    return { label: t('status.notDetected'), title: t('status.notDetectedTitle'), className: 'is-missing' }
+  }
   if (!agent.supported) return { label: t('status.unsupported'), title: t('status.unsupportedTitle'), className: 'is-unsupported' }
   if (agent.detected) {
-    const configured = management?.enabled.configured ?? agent.enabled
-    if (!configured) return { label: t('status.disabled'), title: t('status.disabledTitle'), className: 'is-disabled' }
+    if (!agent.enabled) return { label: t('status.disabled'), title: t('status.disabledTitle'), className: 'is-disabled' }
     return { label: t('status.enabled'), title: t('status.enabledTitle'), className: 'is-enabled is-detected' }
   }
   if (discovery?.presence === 'error') {
     return { label: t('status.scanFailed'), title: discovery.reason || t('status.scanFailedTitle'), className: 'is-error' }
-  }
-  if (discovery?.presence === 'present') {
-    return { label: t('status.discovered'), title: t('status.discoveredTitle'), className: 'is-discovered' }
   }
   if (discovery?.presence === 'data-only') {
     return { label: t('status.historyData'), title: t('status.historyDataTitle'), className: 'is-history' }
