@@ -63,7 +63,7 @@ test('Pi startup audit reuses Source detection identity and commits runtime evid
   } as unknown as AgentLensContext
 
   const sink = createPiLiveStartupAuditSink(ctx)
-  await sink.recordStartupResources({
+  await sink.recordStartupAudit({
     runtimeSessionId: 'runtime-1',
     attemptStartedAt: '2026-09-11T10:00:00.000Z',
     capturedAt: '2026-09-11T10:00:01.000Z',
@@ -112,9 +112,9 @@ test('Pi startup audit reuses Source detection identity and commits runtime evid
   }
   assert.equal(commit.sourceId, 'pi')
   assert.equal(commit.installation.id, installation.id)
-  assert.equal(commit.candidate.kind, 'runtime.resources')
+  assert.equal(commit.candidate.kind, 'runtime.startup')
   assert.equal(commit.candidate.identityHints.nativeSessionId, 'native-session-1')
-  assert.match(commit.candidate.nativeEventId ?? '', /^pi-live:runtime-1:startup-resources:/)
+  assert.match(commit.candidate.nativeEventId ?? '', /^pi-live:runtime-1:startup-audit:/)
   assert.deepEqual(commit.candidate.payload.resources, {
     contexts: ['AGENTS.md'],
     skills: ['repo-review'],
@@ -176,7 +176,7 @@ test('Pi startup audit respects the Pi Source capture toggle', async () => {
   } as unknown as AgentLensContext
 
   const sink = createPiLiveStartupAuditSink(ctx)
-  await sink.recordStartupResources({
+  await sink.recordStartupAudit({
     runtimeSessionId: 'runtime-disabled',
     attemptStartedAt: '2026-09-11T10:00:00.000Z',
     capturedAt: '2026-09-11T10:00:01.000Z',
