@@ -1,4 +1,5 @@
 import type { LaunchableProjectDto, ReviewSessionSummaryDto } from '@agent-lens/protocol'
+import { translateProduct } from '../i18n/runtime'
 
 export interface HistoryTaskPresentation {
   title: string
@@ -20,7 +21,7 @@ export function launchableTaskProjectOptions(items: readonly LaunchableProjectDt
     label: item.projectName?.trim()
       || item.repositoryIdentity?.trim()
       || basename(item.workspacePath)
-      || '未命名项目',
+      || translateProduct('task:center.presentation.unnamedProject'),
     cwd: item.workspacePath,
     lastSeenAt: item.lastSeenAt,
   }))
@@ -79,7 +80,7 @@ function systemActivityTitle(item: ReviewSessionSummaryDto): string {
   const scope = item.projectName?.trim()
     || (item.workspacePath ? basename(item.workspacePath) : '')
     || item.sourceIds[0]?.trim()
-  return scope ? `${scope} · 系统活动` : '系统活动'
+  return scope ? translateProduct('task:center.presentation.systemActivityScoped', { scope }) : translateProduct('task:center.presentation.systemActivity')
 }
 
 /**
@@ -96,20 +97,20 @@ export function historyTaskPresentation(
   }
 
   if (activity === 'internal-review') {
-    return { title: '内部审查活动', activityLabel: item.activitySourceLabel || '内部审查' }
+    return { title: translateProduct('task:center.presentation.internalReviewTitle'), activityLabel: item.activitySourceLabel || translateProduct('task:center.presentation.internalReviewLabel') }
   }
   if (activity === 'system-activity') {
-    return { title: systemActivityTitle(item), activityLabel: '系统活动' }
+    return { title: systemActivityTitle(item), activityLabel: translateProduct('task:center.presentation.systemActivity') }
   }
   if (activity === 'subagent') {
     return {
-      title: cleanSessionTitle(item.activitySourceLabel || item.title || item.preview, '子智能体运行记录'),
-      activityLabel: '子智能体',
+      title: cleanSessionTitle(item.activitySourceLabel || item.title || item.preview, translateProduct('task:center.presentation.subagentRecord')),
+      activityLabel: translateProduct('task:center.presentation.subagentLabel'),
     }
   }
   return {
-    title: cleanSessionTitle(item.title || item.preview, '分支任务记录'),
-    activityLabel: item.activitySourceLabel || '分支任务',
+    title: cleanSessionTitle(item.title || item.preview, translateProduct('task:center.presentation.branchRecord')),
+    activityLabel: item.activitySourceLabel || translateProduct('task:center.presentation.branchLabel'),
   }
 }
 
