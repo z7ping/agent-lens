@@ -1,4 +1,3 @@
-import { asRecord } from '@agent-lens/source-support'
 import {
   evidenceFromSourceRecord,
   observationFromSourceRecord,
@@ -10,6 +9,7 @@ import {
   type SourceNormalizationContext,
   type SourceRecord,
 } from '@agent-lens/core'
+import { asRecord } from '@agent-lens/source-support'
 import {
   messageText,
   nativeIdForEntry,
@@ -47,7 +47,6 @@ export function splitCodexVisibleAssistantText(text: string, phase?: string): {
     sourceMetadata: metadata,
   }
 }
-
 
 function stringField(record: Record<string, unknown>, ...names: string[]): string | undefined {
   for (const name of names) {
