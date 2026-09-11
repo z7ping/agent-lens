@@ -17,6 +17,14 @@ interface PluginRegistration {
   plugin: Plugin<unknown>
   config?: unknown
   validateManifest: boolean
+  integrationId?: string
+  componentPluginId?: string
+}
+
+export interface AgentLensIntegrationFailure {
+  integrationId: string
+  componentPluginId: string
+  error: unknown
 }
 
 export interface AgentLensApplicationOptions {
@@ -31,6 +39,8 @@ export class AgentLensApplication {
 
   private readonly registrations: PluginRegistration[] = []
   private readonly fibers: Fiber[] = []
+  private readonly failedIntegrations = new Set<string>()
+  private readonly _integrationFailures: AgentLensIntegrationFailure[] = []
   private _state: AgentLensApplicationState = 'idle'
 
   constructor(options: AgentLensApplicationOptions = {}) {
@@ -42,6 +52,10 @@ export class AgentLensApplication {
 
   get state(): AgentLensApplicationState {
     return this._state
+  }
+
+  get integrationFailures(): readonly AgentLensIntegrationFailure[] {
+    return this._integrationFailures
   }
 
   /** Register an AgentLens extension plugin with Plugin API validation. */
@@ -60,7 +74,8 @@ export class AgentLensApplication {
    * Register one product-level Agent Integration.
    *
    * This is only composition metadata: each component is still loaded by the
-   * existing AgentLens/Cordis plugin lifecycle.
+   * existing AgentLens/Cordis plugin lifecycle. Integration-owned component
+   * failures are isolated from Core and other integrations.
    */
   useIntegration(
     integration: AgentLensIntegration,
@@ -71,10 +86,15 @@ export class AgentLensApplication {
     for (const component of integration.components) {
       if (component.activation === 'enabled' && !enabled) continue
       if (component.lifecycle === 'plugin') {
-        this.use(component.plugin, component.config)
-      } else {
-        this.useRuntime(component.plugin, component.config)
+        assertAgentLensPluginCompatible(component.plugin.manifest)
       }
+      this.registrations.push({
+        plugin: component.plugin,
+        ...(component.config === undefined ? {} : { config: component.config }),
+        validateManifest: component.lifecycle === 'plugin',
+        integrationId: integration.manifest.integrationId,
+        componentPluginId: component.pluginId,
+      })
     }
     return this
   }
@@ -100,6 +120,8 @@ export class AgentLensApplication {
     }
 
     this._state = 'starting'
+    this.failedIntegrations.clear()
+    this._integrationFailures.length = 0
     const load = this.context.plugin.bind(this.context) as (
       plugin: Plugin<unknown>,
       config?: unknown,
@@ -107,15 +129,32 @@ export class AgentLensApplication {
 
     try {
       for (const registration of this.registrations) {
-        if (registration.validateManifest) {
-          assertAgentLensPluginCompatible(
-            (registration.plugin as AgentLensCordisPlugin<unknown>).manifest,
+        if (registration.integrationId && this.failedIntegrations.has(registration.integrationId)) {
+          continue
+        }
+        try {
+          if (registration.validateManifest) {
+            assertAgentLensPluginCompatible(
+              (registration.plugin as AgentLensCordisPlugin<unknown>).manifest,
+            )
+          }
+          const fiber = registration.config === undefined
+            ? await load(registration.plugin)
+            : await load(registration.plugin, registration.config)
+          this.fibers.push(fiber)
+        } catch (error) {
+          if (!registration.integrationId || !registration.componentPluginId) throw error
+          this.failedIntegrations.add(registration.integrationId)
+          this._integrationFailures.push({
+            integrationId: registration.integrationId,
+            componentPluginId: registration.componentPluginId,
+            error,
+          })
+          console.error(
+            `[AgentLens] integration component failed: ${registration.integrationId} / ${registration.componentPluginId}`,
+            error,
           )
         }
-        const fiber = registration.config === undefined
-          ? await load(registration.plugin)
-          : await load(registration.plugin, registration.config)
-        this.fibers.push(fiber)
       }
       this._state = 'running'
     } catch (error) {
