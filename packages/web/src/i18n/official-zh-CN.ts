@@ -200,6 +200,14 @@ export const officialChineseLocalePack: LocalePackDto = {
         livePermission: '允许 AgentLens 建立实时消息、流式事件与中断控制。',
         hookPermission: '允许 AgentLens 写入或启用该智能体的观察 Hook。',
         persistedNote: '授权会持久化保存；以后关闭再开启不会重复询问。禁用集成不会删除历史数据。',
+        reason: {
+          authorizationRequired: '等待用户授权',
+          authorizationRestartRequired: '授权已保存，等待重启加载',
+          componentStartFailed: '组件启动失败',
+          dependencyStartFailed: '同一智能体集成的前序组件启动失败',
+          liveAdapterMissing: 'Live Adapter 未加载',
+          liveAvailabilityFailed: 'Live 可用性检查失败',
+        },
       },
       installation: {
         version: '版本',
