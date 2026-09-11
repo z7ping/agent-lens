@@ -24,6 +24,8 @@ let terminating = false
 let sdkVersion
 let runtimeMode = 'compatibility'
 let capabilities
+let packageUpdateCheck = 'checking'
+let packageUpdates = []
 let initializationStartedAt = 0
 let currentInitializationStage
 let currentStageStartedAt = 0
@@ -118,6 +120,64 @@ function callResourceLoader(loader, method) {
   } catch (error) {
     return { diagnostics: [error instanceof Error ? error.message : String(error)] }
   }
+}
+
+function normalizePackageUpdates(value) {
+  if (!Array.isArray(value)) return []
+  const result = []
+  for (const item of value) {
+    const row = record(item)
+    if (typeof row.source !== 'string' || typeof row.displayName !== 'string') continue
+    if (row.type !== 'npm' && row.type !== 'git') continue
+    if (row.scope !== 'user' && row.scope !== 'project') continue
+    result.push({
+      source: row.source,
+      displayName: row.displayName,
+      type: row.type,
+      scope: row.scope,
+    })
+  }
+  return result
+}
+
+async function checkPackageUpdates(cwd) {
+  if (process.env.PI_OFFLINE) return { status: 'unavailable', updates: [] }
+  if (typeof sdk?.DefaultPackageManager !== 'function' || typeof sdk?.getAgentDir !== 'function') {
+    return { status: 'unavailable', updates: [] }
+  }
+  const settingsManager = record(session).settingsManager
+  if (!settingsManager) return { status: 'unavailable', updates: [] }
+  try {
+    const manager = new sdk.DefaultPackageManager({
+      cwd,
+      agentDir: sdk.getAgentDir(),
+      settingsManager,
+    })
+    if (typeof manager.checkForAvailableUpdates !== 'function') {
+      return { status: 'unavailable', updates: [] }
+    }
+    return {
+      status: 'complete',
+      updates: normalizePackageUpdates(await manager.checkForAvailableUpdates()),
+    }
+  } catch {
+    return { status: 'failed', updates: [] }
+  }
+}
+
+function startPackageUpdateCheck(cwd) {
+  packageUpdateCheck = 'checking'
+  packageUpdates = []
+  void checkPackageUpdates(cwd).then(result => {
+    if (terminating) return
+    packageUpdateCheck = result.status
+    packageUpdates = result.updates
+    send('event', {
+      type: 'package_updates',
+      status: packageUpdateCheck,
+      updates: packageUpdates,
+    })
+  })
 }
 
 function startupResourceSnapshot(resourceLoader, cwd, extraDiagnostics, fallbackExtensions) {
@@ -457,6 +517,8 @@ async function initialize(input) {
   currentInitializationStage = undefined
   currentStageStartedAt = initializationStartedAt
   initializationTimings = []
+  packageUpdateCheck = 'checking'
+  packageUpdates = []
   progress('loading_sdk', '正在加载 Pi SDK')
   const loadedSdk = await loadSdk(record(input.sdk))
   const sessionManager = await createSessionManager(loadedSdk, input)
@@ -508,6 +570,7 @@ async function initialize(input) {
   if (input.name) session.setSessionName(input.name)
   if (input.provider || input.model) await selectModel(input.provider, input.model)
   progress('ready', 'Pi Runtime 已就绪')
+  startPackageUpdateCheck(input.cwd)
 }
 
 function state() {
@@ -519,6 +582,8 @@ function state() {
     thinkingLevel: session.thinkingLevel, isStreaming: session.isStreaming, isCompacting: session.isCompacting,
     pendingMessageCount: session.pendingMessageCount, leafId: session.sessionManager.getLeafId(), processId: process.pid,
     startupResources: startupResourceSnapshot(record(session).resourceLoader, runtimeCwd),
+    packageUpdateCheck,
+    ...(packageUpdates.length ? { packageUpdates } : {}),
   }
 }
 
