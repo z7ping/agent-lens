@@ -261,28 +261,28 @@ function sourceEventLabel(node: ReviewEventNodeDto): string {
   const payload = payloadRecord(node.payload)
   const action = stringValue(payload, 'action', 'event', 'type', 'status').toLowerCase()
   if (node.sourceId === 'codex') {
-    if (node.kind === 'session.lifecycle' && action === 'turn.context') return 'Codex 轮次上下文'
-    if (node.kind === 'session.lifecycle' && action === 'turn.started') return 'Codex 轮次开始'
-    if (node.kind === 'session.lifecycle' && action === 'turn.completed') return 'Codex 轮次完成'
-    if (node.kind === 'session.lifecycle' && action === 'turn.aborted') return 'Codex 轮次中止'
-    if (node.kind === 'session.lifecycle' && action === 'turn.error') return 'Codex 轮次错误'
-    if (node.kind === 'context.compaction') return '上下文压缩'
-    if (node.kind === 'context.injected') return '系统注入上下文'
-    if (node.kind === 'subagent.spawn') return '启动子智能体'
-    if (node.kind === 'subagent.end') return '子智能体完成'
-    if (node.kind === 'permission.request') return '权限请求'
-    if (node.kind === 'session.lifecycle' && action.includes('stop')) return '轮次停止'
+    if (node.kind === 'session.lifecycle' && action === 'turn.context') return agentLensI18n.t('review:local.event.codexTurnContext')
+    if (node.kind === 'session.lifecycle' && action === 'turn.started') return agentLensI18n.t('review:local.event.codexTurnStarted')
+    if (node.kind === 'session.lifecycle' && action === 'turn.completed') return agentLensI18n.t('review:local.event.codexTurnCompleted')
+    if (node.kind === 'session.lifecycle' && action === 'turn.aborted') return agentLensI18n.t('review:local.event.codexTurnAborted')
+    if (node.kind === 'session.lifecycle' && action === 'turn.error') return agentLensI18n.t('review:local.event.codexTurnError')
+    if (node.kind === 'context.compaction') return agentLensI18n.t('review:local.event.contextCompaction')
+    if (node.kind === 'context.injected') return agentLensI18n.t('review:local.event.injectedContext')
+    if (node.kind === 'subagent.spawn') return agentLensI18n.t('review:local.event.subagentSpawn')
+    if (node.kind === 'subagent.end') return agentLensI18n.t('review:local.event.subagentEnd')
+    if (node.kind === 'permission.request') return agentLensI18n.t('review:local.event.permissionRequest')
+    if (node.kind === 'session.lifecycle' && action.includes('stop')) return agentLensI18n.t('review:local.event.turnStop')
   }
   if (node.sourceId === 'claude-code') {
-    if (node.kind === 'permission.request') return '权限请求'
-    if (node.kind === 'subagent.spawn') return '启动子智能体'
-    if (node.kind === 'context.summary') return '上下文摘要'
-    if (node.kind === 'context.compaction') return '上下文压缩'
+    if (node.kind === 'permission.request') return agentLensI18n.t('review:local.event.permissionRequest')
+    if (node.kind === 'subagent.spawn') return agentLensI18n.t('review:local.event.subagentSpawn')
+    if (node.kind === 'context.summary') return agentLensI18n.t('review:local.event.contextSummary')
+    if (node.kind === 'context.compaction') return agentLensI18n.t('review:local.event.contextCompaction')
   }
   if (node.sourceId === 'pi') {
-    if (node.kind === 'model.changed') return '模型切换'
-    if (node.kind === 'context.compaction') return '上下文压缩'
-    if (node.kind === 'context.summary') return '分支摘要'
+    if (node.kind === 'model.changed') return agentLensI18n.t('review:local.event.modelChanged')
+    if (node.kind === 'context.compaction') return agentLensI18n.t('review:local.event.contextCompaction')
+    if (node.kind === 'context.summary') return agentLensI18n.t('review:local.event.branchSummary')
   }
   return node.label
 }
@@ -303,12 +303,12 @@ function sourceEventSummary(node: ReviewEventNodeDto): string {
   if (node.kind === 'subagent.spawn' || node.kind === 'subagent.end') {
     const type = stringValue(payload, 'agentType', 'agent_type', 'subagentType', 'subagent_type', 'name')
     const agentId = stringValue(payload, 'agentId', 'agent_id', 'subagentId', 'subagent_id')
-    return [type, agentId ? `子智能体 ${agentId}` : ''].filter(Boolean).join(' · ') || brief(payload, 140)
+    return [type, agentId ? agentLensI18n.t('review:local.event.subagent', { id: agentId }) : ''].filter(Boolean).join(' · ') || brief(payload, 140)
   }
   if (node.kind === 'context.compaction') {
     const trigger = stringValue(payload, 'trigger', 'compactTrigger', 'compact_trigger', 'reason', 'compactReason', 'compact_reason')
     const before = numberValue(payload, 'tokensBefore', 'tokens_before')
-    return [trigger ? `触发：${trigger}` : '', before !== undefined ? `压缩前 ${before.toLocaleString()} 个词元` : ''].filter(Boolean).join(' · ') || brief(payload, 100)
+    return [trigger ? agentLensI18n.t('review:local.event.trigger', { value: trigger }) : '', before !== undefined ? agentLensI18n.t('review:local.event.beforeCompaction', { count: before.toLocaleString(currentLocale()) }) : ''].filter(Boolean).join(' · ') || brief(payload, 100)
   }
   if (node.kind === 'context.summary') {
     return brief(payload.summary ?? payload.text ?? payload.content ?? payload, 120)
@@ -317,7 +317,7 @@ function sourceEventSummary(node: ReviewEventNodeDto): string {
     const role = stringValue(payload, 'role')
     const text = stringValue(payload, 'text')
     if (text) return [role, brief(text, 180)].filter(Boolean).join(' · ')
-    return role ? `${role} · 当前记录未包含正文` : '当前记录未包含正文'
+    return role ? agentLensI18n.t('review:local.event.roleMissingBody', { role }) : agentLensI18n.t('review:local.event.missingBody')
   }
   if (node.kind === 'session.lifecycle') {
     if (action === 'turn.context') {
@@ -327,19 +327,19 @@ function sourceEventSummary(node: ReviewEventNodeDto): string {
       const approval = brief(payload.approval_policy ?? payload.approvalPolicy, 80)
       const reasoning = brief(payload.reasoning_effort ?? payload.reasoningEffort, 80)
       const collaboration = brief(payload.collaboration_mode ?? payload.collaborationMode, 80)
-      return [model, cwd, sandbox ? `沙箱 ${sandbox}` : '', approval ? `审批 ${approval}` : '', reasoning ? `推理 ${reasoning}` : '', collaboration ? `协作 ${collaboration}` : ''].filter(Boolean).join(' · ') || brief(payload, 140)
+      return [model, cwd, sandbox ? agentLensI18n.t('review:local.event.sandbox', { value: sandbox }) : '', approval ? agentLensI18n.t('review:local.event.approval', { value: approval }) : '', reasoning ? agentLensI18n.t('review:local.event.reasoning', { value: reasoning }) : '', collaboration ? agentLensI18n.t('review:local.event.collaboration', { value: collaboration }) : ''].filter(Boolean).join(' · ') || brief(payload, 140)
     }
     if (action === 'session.discovered') {
       const parent = stringValue(payload, 'forked_from_id', 'parent_thread_id')
       const agent = stringValue(payload, 'agent_nickname', 'agent_path')
       const role = stringValue(payload, 'agent_role')
       const source = stringValue(payload, 'thread_source', 'source')
-      return [parent ? `父线程 ${parent}` : '', agent ? `Agent ${agent}` : '', role, source].filter(Boolean).join(' · ') || brief(payload, 140)
+      return [parent ? agentLensI18n.t('review:local.event.parentThread', { value: parent }) : '', agent ? `Agent ${agent}` : '', role, source].filter(Boolean).join(' · ') || brief(payload, 140)
     }
     const startSource = stringValue(payload, 'startSource', 'start_source', 'source')
     const reason = stringValue(payload, 'reason', 'lifecycleReason', 'lifecycle_reason', 'stopReason', 'stop_reason')
     const model = stringValue(payload, 'model')
-    return [action, startSource ? `来源 ${startSource}` : '', reason ? `原因 ${reason}` : '', model].filter(Boolean).join(' · ') || brief(payload, 100)
+    return [action, startSource ? agentLensI18n.t('review:local.event.sourceValue', { value: startSource }) : '', reason ? agentLensI18n.t('review:local.event.reason', { value: reason }) : '', model].filter(Boolean).join(' · ') || brief(payload, 100)
   }
   if (node.kind === 'usage') {
     const input = numberValue(payload, 'inputTokens', 'input_tokens')
@@ -347,7 +347,14 @@ function sourceEventSummary(node: ReviewEventNodeDto): string {
     const cacheRead = numberValue(payload, 'cacheReadTokens', 'cached_input_tokens', 'cache_read_tokens')
     const total = numberValue(payload, 'totalTokens', 'total_tokens')
     if (input !== undefined || output !== undefined || cacheRead !== undefined || total !== undefined) {
-      return [`输入 ${input ?? 0}`, `输出 ${output ?? 0}`, cacheRead ? `缓存读 ${cacheRead}` : '', total !== undefined ? `共 ${total}` : ''].filter(Boolean).join(' · ') + ' 个词元'
+      return agentLensI18n.t('review:local.event.tokens', {
+        value: [
+          agentLensI18n.t('review:local.event.usageInput', { count: input ?? 0 }),
+          agentLensI18n.t('review:local.event.usageOutput', { count: output ?? 0 }),
+          cacheRead ? agentLensI18n.t('review:local.event.usageCacheRead', { count: cacheRead }) : '',
+          total !== undefined ? agentLensI18n.t('review:local.event.usageTotal', { count: total }) : '',
+        ].filter(Boolean).join(' · '),
+      })
     }
   }
   if (node.kind === 'artifact.action') {
@@ -371,13 +378,13 @@ function detectToolKind(name: string): ToolKind {
 }
 
 function toolKindLabel(kind: ToolKind): string {
-  if (kind === 'shell') return '命令'
-  if (kind === 'read') return '读取'
-  if (kind === 'edit') return '修改'
-  if (kind === 'search') return '搜索'
-  if (kind === 'mcp') return 'MCP（模型上下文协议）'
-  if (kind === 'web') return '网络'
-  return '工具'
+  if (kind === 'shell') return agentLensI18n.t('review:local.tool.command')
+  if (kind === 'read') return agentLensI18n.t('review:local.tool.read')
+  if (kind === 'edit') return agentLensI18n.t('review:local.tool.edit')
+  if (kind === 'search') return agentLensI18n.t('review:local.tool.search')
+  if (kind === 'mcp') return agentLensI18n.t('review:local.tool.mcp')
+  if (kind === 'web') return agentLensI18n.t('review:local.tool.web')
+  return agentLensI18n.t('review:local.tool.generic')
 }
 
 function toolInputRecord(node: ReviewToolNodeDto): Record<string, JsonValue> {
@@ -390,35 +397,35 @@ function toolPresentation(node: ReviewToolNodeDto): { kind: ToolKind; label: str
   const output = brief(node.output, 110)
   if (kind === 'shell') {
     const command = stringValue(input, 'command', 'cmd', 'script', 'raw') || brief(node.input, 140)
-    return { kind, label: '命令', primary: command, secondary: output }
+    return { kind, label: toolKindLabel(kind), primary: command, secondary: output }
   }
   if (kind === 'read') {
     const path = stringValue(input, 'path', 'file_path', 'filePath', 'filename') || brief(node.input, 120)
-    return { kind, label: '读取', primary: path, secondary: output }
+    return { kind, label: toolKindLabel(kind), primary: path, secondary: output }
   }
   if (kind === 'edit') {
     const path = stringValue(input, 'path', 'file_path', 'filePath', 'filename', 'new_path', 'old_path') || brief(node.input, 120)
     const patch = stringValue(input, 'patch', 'diff', 'content')
-    return { kind, label: '修改', primary: path, secondary: patch ? brief(patch, 110) : output }
+    return { kind, label: toolKindLabel(kind), primary: path, secondary: patch ? brief(patch, 110) : output }
   }
   if (kind === 'search') {
     const query = stringValue(input, 'query', 'pattern', 'search', 'glob') || brief(node.input, 120)
     const path = stringValue(input, 'path', 'cwd', 'directory')
-    return { kind, label: '搜索', primary: query, secondary: path || output }
+    return { kind, label: toolKindLabel(kind), primary: query, secondary: path || output }
   }
   if (kind === 'mcp') {
     const target = stringValue(input, 'tool', 'server', 'mcp_server', 'name', 'method') || brief(node.input, 120)
-    return { kind, label: 'MCP（模型上下文协议）', primary: target, secondary: output }
+    return { kind, label: toolKindLabel(kind), primary: target, secondary: output }
   }
   if (kind === 'web') {
     const target = stringValue(input, 'url', 'query', 'href', 'path') || brief(node.input, 120)
-    return { kind, label: '网络', primary: target, secondary: output }
+    return { kind, label: toolKindLabel(kind), primary: target, secondary: output }
   }
-  return { kind, label: '工具', primary: brief(node.input, 130), secondary: output }
+  return { kind, label: toolKindLabel(kind), primary: brief(node.input, 130), secondary: output }
 }
 
 function PrettyJson({ value }: { value: unknown }) {
-  if (value === undefined) return <div className="muted-empty compact">无数据</div>
+  if (value === undefined) return <div className="muted-empty compact">{agentLensI18n.t('review:local.tool.noData')}</div>
   if (typeof value === 'string') return <CopyableCodeBlock className="tool-detail-code" copyValue={value}>{value}</CopyableCodeBlock>
   const text = JSON.stringify(value, null, 2)
   return <CopyableCodeBlock className="tool-detail-code" copyValue={text}>{text}</CopyableCodeBlock>
@@ -427,24 +434,40 @@ function PrettyJson({ value }: { value: unknown }) {
 function StructuredToolDetail({ node }: { node: ReviewToolNodeDto }) {
   const info = toolPresentation(node)
   const input = toolInputRecord(node)
-  const primaryLabel = info.kind === 'shell' ? '命令' : info.kind === 'read' || info.kind === 'edit' ? '路径' : info.kind === 'search' ? '查询' : info.kind === 'mcp' ? '目标' : info.kind === 'web' ? '地址 / 查询' : '输入摘要'
-  const status = node.status === 'error' ? '失败' : node.status === 'success' ? '完成' : node.status === 'running' ? '执行中' : '未知'
+  const primaryLabel = info.kind === 'shell'
+    ? agentLensI18n.t('review:local.tool.command')
+    : info.kind === 'read' || info.kind === 'edit'
+      ? agentLensI18n.t('review:local.tool.path')
+      : info.kind === 'search'
+        ? agentLensI18n.t('review:local.tool.query')
+        : info.kind === 'mcp'
+          ? agentLensI18n.t('review:local.tool.target')
+          : info.kind === 'web'
+            ? agentLensI18n.t('review:local.tool.addressQuery')
+            : agentLensI18n.t('review:local.tool.inputSummary')
+  const status = node.status === 'error'
+    ? agentLensI18n.t('review:local.tool.statusError')
+    : node.status === 'success'
+      ? agentLensI18n.t('review:local.tool.statusSuccess')
+      : node.status === 'running'
+        ? agentLensI18n.t('review:local.tool.statusRunning')
+        : agentLensI18n.t('review:local.tool.statusUnknown')
   return <section className="tool-detail">
     <div className="tool-detail-summary">
       <span className={`tool-detail-icon tool-kind-${info.kind}`}><ToolKindIcon kind={info.kind}/></span>
       <div><b>{node.name}</b><span>{info.label} · {status}{node.durationMs !== undefined && node.durationMs > 0 ? ` · ${duration(node.durationMs)}` : ''}</span></div>
     </div>
     {info.primary && <div className="tool-detail-section"><h4>{primaryLabel}</h4><CopyableCodeBlock className="tool-detail-code" copyValue={info.primary}>{info.primary}</CopyableCodeBlock></div>}
-    {Object.keys(input).length > 0 && <div className="tool-detail-section"><h4>结构化输入</h4><PrettyJson value={node.input}/></div>}
-    {node.output !== undefined && <div className={`tool-detail-section ${node.status === 'error' ? 'is-error' : ''}`}><h4>{node.status === 'error' ? '错误 / 输出' : '输出'}</h4><PrettyJson value={node.output}/></div>}
+    {Object.keys(input).length > 0 && <div className="tool-detail-section"><h4>{agentLensI18n.t('review:local.tool.structuredInput')}</h4><PrettyJson value={node.input}/></div>}
+    {node.output !== undefined && <div className={`tool-detail-section ${node.status === 'error' ? 'is-error' : ''}`}><h4>{node.status === 'error' ? agentLensI18n.t('review:local.tool.errorOutput') : agentLensI18n.t('review:local.tool.output')}</h4><PrettyJson value={node.output}/></div>}
   </section>
 }
 
 function roleLabel(role: ReviewMessageNodeDto['role']): string {
-  if (role === 'user') return '用户'
-  if (role === 'assistant') return '智能体'
-  if (role === 'commentary') return '执行过程'
-  return '思考'
+  if (role === 'user') return agentLensI18n.t('review:local.role.user')
+  if (role === 'assistant') return agentLensI18n.t('review:local.role.assistant')
+  if (role === 'commentary') return agentLensI18n.t('review:local.role.commentary')
+  return agentLensI18n.t('review:local.role.thinking')
 }
 
 type InspectorTab = 'detail' | 'evidence' | 'raw'
