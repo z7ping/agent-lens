@@ -4,7 +4,7 @@ import type { PiLiveInitializationStageDto, PiLiveStateDto } from '@agent-lens/p
 import { CopyableCodeBlock } from './CopyableCodeBlock'
 import { OperationProgress } from './StateViews'
 import { Button, UiIcon } from './ui'
-import { agentLensI18n } from '../i18n/runtime'
+import { translateProduct } from '../i18n/runtime'
 
 const STAGES: Array<{ stage: PiLiveInitializationStageDto; labelKey: string; detailKey: string }> = [
   { stage: 'starting_worker', labelKey: 'startup.stage.startingWorker', detailKey: 'startup.stage.startingWorkerDetail' },
@@ -27,17 +27,17 @@ export function piStartupSummary(state: PiLiveStateDto): { label: string; durati
   const elapsed = state.initializationElapsedMs ?? completedDuration
   return {
     label: state.status === 'failed'
-      ? agentLensI18n.t('piLive:startup.failed')
+      ? translateProduct('piLive:startup.failed')
       : state.status === 'ready'
-        ? agentLensI18n.t('piLive:startup.ready')
-        : agentLensI18n.t('piLive:startup.preparing'),
+        ? translateProduct('piLive:startup.ready')
+        : translateProduct('piLive:startup.preparing'),
     duration: formatPiStartupDuration(elapsed),
   }
 }
 
 function runtimeModeLabel(state: PiLiveStateDto): string {
   if (state.runtimeMode === 'session_runtime') return 'Session Runtime'
-  if (state.runtimeMode === 'compatibility') return agentLensI18n.t('piLive:startup.compatibility')
+  if (state.runtimeMode === 'compatibility') return translateProduct('piLive:startup.compatibility')
   return ''
 }
 
