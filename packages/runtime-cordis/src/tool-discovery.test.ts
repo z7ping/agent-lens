@@ -53,6 +53,47 @@ test('tool discovery reports data-only when persisted product data exists withou
   }
 })
 
+test('data evidence survives an executable probe failure', async () => {
+  const root = join(tmpdir(), `agent-lens-tool-probe-failure-${process.pid}-${Date.now()}`)
+  const codexHome = join(root, 'codex')
+  await mkdir(join(codexHome, 'sessions'), { recursive: true })
+  try {
+    const items = await discoverOfficialTools({
+      env: { CODEX_HOME: codexHome, PATH: '' },
+      homeDir: join(root, 'home'),
+      platform: process.platform,
+      timeoutMs: 1_000,
+      shellPathResolver: async () => undefined,
+      executableResolver: async name => {
+        if (name === 'codex') throw new Error('probe failed')
+        return undefined
+      },
+    })
+    const codex = items.find(item => item.integrationId === 'codex')
+    assert.equal(codex?.presence, 'data-only')
+    assert.equal(codex?.reason, undefined)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('probe failure is reported only when no product evidence can be confirmed', async () => {
+  const items = await discoverOfficialTools({
+    env: { PATH: '' },
+    homeDir: join(tmpdir(), 'agent-lens-no-evidence-home'),
+    platform: process.platform,
+    timeoutMs: 1_000,
+    shellPathResolver: async () => undefined,
+    executableResolver: async name => {
+      if (name === 'codex') throw new Error('codex resolver failed')
+      return undefined
+    },
+  })
+  const codex = items.find(item => item.integrationId === 'codex')
+  assert.equal(codex?.presence, 'error')
+  assert.match(codex?.reason ?? '', /resolver failed/)
+})
+
 test('OpenCode database marker is required before a data directory becomes product evidence', async () => {
   const root = join(tmpdir(), `agent-lens-opencode-discovery-${process.pid}-${Date.now()}`)
   const home = join(root, 'home')
