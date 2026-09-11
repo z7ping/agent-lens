@@ -64,6 +64,28 @@ function managementPayload() {
   }
 }
 
+function agentOverviewPayload(detected = true) {
+  return {
+    items: [{
+      sourceId: 'pi',
+      productId: 'pi',
+      displayName: 'Pi',
+      supported: true,
+      enabled: true,
+      detected,
+      installations: [],
+      capabilities: [],
+      assetInventory: [],
+      usedAssets: [],
+      assetInventoryStatus: 'available',
+    }],
+    meta: {
+      protocolVersion: '1.0',
+      generatedAt: '2026-09-12T00:00:00.000Z',
+    },
+  }
+}
+
 test('plugin list reads the unified Integration management projection', async () => {
   const requests: Array<{ url: string; method: string }> = []
   const output: string[] = []
@@ -72,7 +94,9 @@ test('plugin list reads the unified Integration management projection', async ()
       url: String(input),
       method: String(init?.method ?? 'GET'),
     })
-    return jsonResponse(managementPayload())
+    return jsonResponse(String(input).endsWith('/api/v1/agents')
+      ? agentOverviewPayload()
+      : managementPayload())
   }) as typeof fetch
 
   const code = await runPluginCommand('list', [], false, {
@@ -82,16 +106,26 @@ test('plugin list reads the unified Integration management projection', async ()
   })
 
   assert.equal(code, 0)
-  assert.deepEqual(requests, [{
-    url: 'http://127.0.0.1:56789/api/v1/integrations',
-    method: 'GET',
-  }])
-  assert.match(output[0] ?? '', /Pi \(pi\).*已安装 1\.0\.0-alpha\.5.*已开启.*可用.*已发现/)
+  assert.deepEqual(requests, [
+    {
+      url: 'http://127.0.0.1:56789/api/v1/integrations',
+      method: 'GET',
+    },
+    {
+      url: 'http://127.0.0.1:56789/api/v1/agents',
+      method: 'GET',
+    },
+  ])
+  assert.match(output[0] ?? '', /Pi \(pi\).*已安装 1\.0\.0-alpha\.5.*已开启.*可用.*Detected：已检测.*Tool：已发现/)
 })
 
 test('plugin status returns one unified Integration item in JSON mode', async () => {
   const output: string[] = []
-  const fetchImpl = (async () => jsonResponse(managementPayload())) as typeof fetch
+  const fetchImpl = (async (input: string | URL | Request) => jsonResponse(
+    String(input).endsWith('/api/v1/agents')
+      ? agentOverviewPayload()
+      : managementPayload(),
+  )) as typeof fetch
 
   const code = await runPluginCommand('status', ['PI'], true, {
     apiUrl: path => `http://agent-lens.test${path}`,
@@ -100,8 +134,11 @@ test('plugin status returns one unified Integration item in JSON mode', async ()
   })
 
   assert.equal(code, 0)
-  const result = JSON.parse(output.join('\n')) as { item: { integrationId: string } }
+  const result = JSON.parse(output.join('\n')) as {
+    item: { integrationId: string; detected: boolean | null }
+  }
   assert.equal(result.item.integrationId, 'pi')
+  assert.equal(result.item.detected, true)
 })
 
 test('plugin install/remove/update reuse Package Lifecycle HTTP methods and propagate operation failure as exit code', async () => {
@@ -153,6 +190,30 @@ test('plugin install/remove/update reuse Package Lifecycle HTTP methods and prop
     { url: 'http://agent-lens.test/api/v1/integrations/pi/update', method: 'POST' },
     { url: 'http://agent-lens.test/api/v1/integrations/pi', method: 'DELETE' },
   ])
+})
+
+test('plugin list keeps #70 Detected unknown when Agent overview is unavailable instead of inferring from Tool Presence', async () => {
+  const output: string[] = []
+  const fetchImpl = (async (input: string | URL | Request) => {
+    if (String(input).endsWith('/api/v1/agents')) {
+      return jsonResponse({ error: 'agents_unavailable' }, 503)
+    }
+    return jsonResponse(managementPayload())
+  }) as typeof fetch
+
+  const code = await runPluginCommand('list', [], true, {
+    apiUrl: path => `http://agent-lens.test${path}`,
+    fetchImpl,
+    print: line => output.push(line),
+  })
+
+  assert.equal(code, 0)
+  const result = JSON.parse(output.join('\n')) as {
+    items: Array<{ integrationId: string; detected: boolean | null; tool?: { presence?: string } }>
+  }
+  assert.equal(result.items[0]?.integrationId, 'pi')
+  assert.equal(result.items[0]?.tool?.presence, 'present')
+  assert.equal(result.items[0]?.detected, null)
 })
 
 test('plugin commands reject an incompatible daemon protocol', async () => {
