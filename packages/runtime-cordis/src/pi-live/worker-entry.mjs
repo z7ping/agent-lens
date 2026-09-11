@@ -188,6 +188,7 @@ function startPackageUpdateCheck(cwd) {
 
 function startupResourceSnapshot(resourceLoader, cwd, extraDiagnostics, fallbackExtensions) {
   const loader = resourceLoader && typeof resourceLoader === 'object' ? resourceLoader : undefined
+  if (!loader) return undefined
   const extensionsResult = callResourceLoader(loader, 'getExtensions') ?? fallbackExtensions
   const skillsResult = callResourceLoader(loader, 'getSkills')
   const promptsResult = callResourceLoader(loader, 'getPrompts')
@@ -535,7 +536,8 @@ async function initialize(input) {
     const createRuntime = async options => {
       progress('loading_resources', '正在加载配置、扩展与上下文')
       const services = await loadedSdk.createAgentSessionServices({ cwd: options.cwd, agentDir: options.agentDir, modelRuntimeSignal: AbortSignal.timeout(15_000) })
-      send('event', { type: 'runtime_resources', resources: startupResourceSnapshot(services.resourceLoader, input.cwd, services.diagnostics) })
+      const resources = startupResourceSnapshot(services.resourceLoader, input.cwd, services.diagnostics)
+      if (resources) send('event', { type: 'runtime_resources', resources })
       progress('creating_session', '正在创建 Pi Session')
       const created = await loadedSdk.createAgentSessionFromServices({ services, sessionManager: options.sessionManager, sessionStartEvent: options.sessionStartEvent })
       return { ...created, services, diagnostics: services.diagnostics }
@@ -548,9 +550,7 @@ async function initialize(input) {
     const created = await loadedSdk.createAgentSession({ cwd: input.cwd, sessionManager })
     const compatibilityLoader = record(created).resourceLoader ?? record(record(created).services).resourceLoader
     const compatibilityResources = startupResourceSnapshot(compatibilityLoader, input.cwd, record(created).diagnostics, record(created).extensionsResult)
-    if (Object.values(compatibilityResources).some(value => Array.isArray(value) && value.length)) {
-      send('event', { type: 'runtime_resources', resources: compatibilityResources })
-    }
+    if (compatibilityResources) send('event', { type: 'runtime_resources', resources: compatibilityResources })
     session = created.session
     runtime = { dispose: async () => session.dispose() }
   }
@@ -570,9 +570,7 @@ async function initialize(input) {
   // only the pre-session loader state.
   const finalResourceLoader = record(session).resourceLoader
   const finalResources = startupResourceSnapshot(finalResourceLoader, input.cwd)
-  if (Object.values(finalResources).some(value => Array.isArray(value) && value.length)) {
-    send('event', { type: 'runtime_resources', resources: finalResources })
-  }
+  if (finalResources) send('event', { type: 'runtime_resources', resources: finalResources })
   if (input.name) session.setSessionName(input.name)
   if (input.provider || input.model) await selectModel(input.provider, input.model)
   progress('ready', 'Pi Runtime 已就绪')
@@ -580,6 +578,7 @@ async function initialize(input) {
 }
 
 function state() {
+  const resources = startupResourceSnapshot(record(session).resourceLoader, runtimeCwd)
   return {
     runtimeSessionId, status: 'ready', initializationStage: 'ready', initializationMessage: `Pi Runtime 已就绪 · ${formatElapsed(handshakeDiagnostics().initializationElapsedMs)}`,
     ...handshakeDiagnostics(),
@@ -587,7 +586,7 @@ function state() {
     ...(session.sessionName ? { sessionName: session.sessionName } : {}), ...(session.model ? { model: session.model } : {}),
     thinkingLevel: session.thinkingLevel, isStreaming: session.isStreaming, isCompacting: session.isCompacting,
     pendingMessageCount: session.pendingMessageCount, leafId: session.sessionManager.getLeafId(), processId: process.pid,
-    startupResources: startupResourceSnapshot(record(session).resourceLoader, runtimeCwd),
+    ...(resources ? { startupResources: resources } : {}),
     packageUpdateCheck,
     ...(packageUpdates.length ? { packageUpdates } : {}),
   }
