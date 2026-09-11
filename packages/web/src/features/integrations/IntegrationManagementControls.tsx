@@ -14,6 +14,7 @@ import { Button, Dialog, StatusBadge, UiIcon } from '../../components/ui'
 import {
   integrationCanInstall,
   integrationLifecycleState,
+  integrationPackageReady,
   integrationToolPresenceLabel,
   integrationToolPresencePath,
 } from './integration-lifecycle'
@@ -131,7 +132,10 @@ export function IntegrationControl({
     setError('')
     try {
       const result = await onInstall(management.integrationId)
-      if (result.operation.status !== 'completed' || !result.state.installed) {
+      if (
+        result.operation.status !== 'completed'
+        || !integrationPackageReady(result.state)
+      ) {
         throw new Error(result.operation.message || result.state.reason || t('integration.installFailed'))
       }
       await onChange(management.integrationId, true)
@@ -172,16 +176,21 @@ export function IntegrationControl({
     </section>
   }
 
-  if (management?.packageState && !management.packageState.installed) {
-    const canInstall = integrationCanInstall(management.tool)
+  if (management?.packageState && !integrationPackageReady(management.packageState)) {
+    const repair = management.packageState.installed
+    const canInstall = repair || integrationCanInstall(management.tool)
     return <section className="source-capture-control">
       <div>
-        <h3>{t('integration.notAddedTitle')}</h3>
-        <p>{canInstall ? t('integration.notAddedDescription') : t('integration.notDetectedDescription')}</p>
+        <h3>{repair ? t('integration.repairTitle') : t('integration.notAddedTitle')}</h3>
+        <p>{repair
+          ? t('integration.repairDescription')
+          : canInstall
+            ? t('integration.notAddedDescription')
+            : t('integration.notDetectedDescription')}</p>
         {error && <p className="source-capture-error">{error}</p>}
       </div>
       <Button variant="primary" loading={installing} disabled={!canInstall} onClick={() => void install()}>
-        {t('integration.addToAgentLens')}
+        {repair ? t('integration.repair') : t('integration.addToAgentLens')}
       </Button>
     </section>
   }
@@ -357,16 +366,21 @@ export function IntegrationOnlyCard({
   const [error, setError] = useState('')
   const status = integrationLifecycleState(undefined, management, discovery, discoveryScanning, t)
   const packageState = management.packageState
+  const packageReady = integrationPackageReady(packageState)
+  const packageNeedsRepair = packageState?.installed === true && !packageReady
   const presencePath = integrationToolPresencePath(discovery)
   const canInstall = integrationCanInstall(discovery)
 
   const install = async () => {
-    if (!packageState || packageState.installed || saving) return
+    if (!packageState || packageReady || saving) return
     setSaving(true)
     setError('')
     try {
       const result = await onInstall(management.integrationId)
-      if (result.operation.status !== 'completed' || !result.state.installed) {
+      if (
+        result.operation.status !== 'completed'
+        || !integrationPackageReady(result.state)
+      ) {
         throw new Error(result.operation.message || result.state.reason || t('integration.installFailed'))
       }
       await onChange(management.integrationId, true)
@@ -378,7 +392,7 @@ export function IntegrationOnlyCard({
   }
 
   const toggle = async () => {
-    if (!packageState?.installed || !management.enabled.editable || saving) return
+    if (!packageReady || !management.enabled.editable || saving) return
     setSaving(true)
     setError('')
     try {
@@ -410,24 +424,32 @@ export function IntegrationOnlyCard({
 
     <section className="source-capture-control">
       <div>
-        <h3>{packageState?.installed ? t('integration.title') : t('integration.notAddedTitle')}</h3>
+        <h3>{packageNeedsRepair
+          ? t('integration.repairTitle')
+          : packageState?.installed
+            ? t('integration.title')
+            : t('integration.notAddedTitle')}</h3>
         <p>{!packageState
           ? t('integration.packageLifecycleUnavailable')
-          : packageState.installed
-            ? packageState.restartRequired || management.enabled.restartRequired
-              ? t('integration.pendingRestartDescription')
-              : management.enabled.configured
-                ? t('integration.enabledDescription')
-                : t('integration.disabledDescription')
-            : canInstall
-              ? t('integration.notAddedDescription')
-              : t('integration.notDetectedDescription')}</p>
+          : packageNeedsRepair
+            ? t('integration.repairDescription')
+            : packageState.installed
+              ? packageState.restartRequired || management.enabled.restartRequired
+                ? t('integration.pendingRestartDescription')
+                : management.enabled.configured
+                  ? t('integration.enabledDescription')
+                  : t('integration.disabledDescription')
+              : canInstall
+                ? t('integration.notAddedDescription')
+                : t('integration.notDetectedDescription')}</p>
         {error && <p className="source-capture-error">{error}</p>}
       </div>
       {!packageState
         ? <StatusBadge tone="danger">{t('status.managementUnavailable')}</StatusBadge>
-        : packageState.installed
-          ? <button
+        : packageNeedsRepair
+          ? <Button variant="primary" loading={saving} onClick={() => void install()}>{t('integration.repair')}</Button>
+          : packageReady
+            ? <button
               type="button"
               role="switch"
               aria-checked={management.enabled.configured}
@@ -436,11 +458,15 @@ export function IntegrationOnlyCard({
               disabled={!management.enabled.editable || saving}
               onClick={() => void toggle()}
             ><span aria-hidden="true"/><b>{saving ? t('integration.saving') : management.enabled.configured ? t('integration.enabled') : t('integration.disabled')}</b></button>
-          : <Button variant="primary" loading={saving} disabled={!canInstall} onClick={() => void install()}>{t('integration.addToAgentLens')}</Button>}
+            : <Button variant="primary" loading={saving} disabled={!canInstall} onClick={() => void install()}>{t('integration.addToAgentLens')}</Button>}
     </section>
 
     <section className="agent-primary-section integration-awaiting-detail">
-      <div className="section-heading-row"><div><h3>{t('integration.detailsPendingTitle')}</h3><p>{packageState?.installed ? t('integration.detailsPendingRestart') : t('integration.detailsPendingInstall')}</p></div></div>
+      <div className="section-heading-row"><div><h3>{t('integration.detailsPendingTitle')}</h3><p>{packageNeedsRepair
+        ? t('integration.detailsPendingRepair')
+        : packageState?.installed
+          ? t('integration.detailsPendingRestart')
+          : t('integration.detailsPendingInstall')}</p></div></div>
     </section>
 
     <section className="agent-secondary">
