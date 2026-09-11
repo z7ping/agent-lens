@@ -825,7 +825,7 @@ export class DefaultPiLiveService implements PiLiveService {
       if (runtime.startupAuditPending === attempt) runtime.startupAuditCompleted = attempt
       if (packageStatus) runtime.startupPackageAuditCompleted = attempt
     }).catch(error => {
-      console.warn('[AgentLens] Pi Live startup resource audit failed', error)
+      console.warn('[AgentLens] Pi Live startup audit failed', error)
     }).finally(() => {
       if (runtime.startupAuditPending === attempt) runtime.startupAuditPending = undefined
       if (runtime.startupAuditTask === task) runtime.startupAuditTask = undefined
