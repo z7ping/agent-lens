@@ -23,6 +23,7 @@ import {
   type SourceRecordEmitter,
 } from '@agent-lens/core'
 import {
+  OPENCODE_DB_NAME as DB_NAME,
   abortableDelay,
   defineAgentLensPlugin,
   resolveOpenCodeRoots,
@@ -32,7 +33,7 @@ import { isMissingPathError } from '@agent-lens/source-support'
 
 const SOURCE_ID = 'opencode'
 const PARSER_VERSION = '3'
-const DB_NAME = 'opencode.db'
+
 const HISTORY_BATCH = 1000
 const RUNTIME_RECENT_ROWS = 500
 const RUNTIME_POLL_MS = 2000
