@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { AgentLensContext } from '../context'
-import { createPiLiveStartupAuditSink } from './startup-audit'
+import { createPiLiveStartupAuditSink, piLiveStartupAuditInternals } from './startup-audit'
 
 test('Pi startup audit reuses Source detection identity and commits runtime evidence', async () => {
   const commits: unknown[] = []
@@ -123,4 +123,31 @@ test('Pi startup audit reuses Source detection identity and commits runtime evid
   assert.equal(commit.evidenceCandidates[0]?.derivation, 'observed')
   assert.equal(commit.evidenceCandidates[0]?.nativeStableId, commit.candidate.nativeEventId)
   assert.equal(commit.evidenceCandidates[0]?.sourceLocator?.kind, 'runtime-hook')
+})
+
+
+test('Pi startup audit event identity separates retry generations', () => {
+  const base = {
+    runtimeSessionId: 'runtime-1',
+    capturedAt: '2026-09-11T10:00:01.000Z',
+    nativeSessionId: 'native-session-1',
+    workspacePath: '/workspace',
+    startupResources: {
+      contexts: [],
+      skills: ['repo-review'],
+      prompts: [],
+      extensions: [],
+      themes: [],
+      diagnostics: [],
+    },
+  }
+  const first = piLiveStartupAuditInternals.auditEventId({
+    ...base,
+    attemptStartedAt: '2026-09-11T10:00:00.000Z',
+  })
+  const retry = piLiveStartupAuditInternals.auditEventId({
+    ...base,
+    attemptStartedAt: '2026-09-11T10:01:00.000Z',
+  })
+  assert.notEqual(first, retry)
 })
