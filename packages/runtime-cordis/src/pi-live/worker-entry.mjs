@@ -522,14 +522,18 @@ function state() {
   }
 }
 
-async function models(provider) {
+function modelSnapshot(provider) {
   const snapshot = session.modelRuntime.getAvailableSnapshot()
-  const filtered = provider ? snapshot.filter(model => model.provider === provider) : snapshot
-  return filtered.length ? filtered : await session.modelRuntime.getAvailable(provider)
+  return provider ? snapshot.filter(model => model.provider === provider) : snapshot
+}
+
+async function modelsForSelection(provider) {
+  const snapshot = modelSnapshot(provider)
+  return snapshot.length ? snapshot : await session.modelRuntime.getAvailable(provider)
 }
 
 async function selectModel(provider, modelId) {
-  const available = await models(provider)
+  const available = await modelsForSelection(provider)
   const model = available.find(item => (!provider || item.provider === provider) && (!modelId || item.id === modelId || item.name === modelId))
   if (!model) throw new Error(`Pi model is not available: ${[provider, modelId].filter(Boolean).join('/') || 'requested model'}`)
   await session.setModel(model)
@@ -543,7 +547,7 @@ async function command(name, value = {}) {
     if (typeof value.transferId !== 'string' || !value.transferId) throw new Error('Pi Runtime snapshot transfer id is required')
     return nextSnapshotChunk(value.transferId)
   }
-  if (name === 'controls') return { models: (await models()).map(({ provider, id, name, reasoning }) => ({ provider, id, ...(name ? { name } : {}), ...(typeof reasoning === 'boolean' ? { reasoning } : {}) })), thinkingLevels: session.getAvailableThinkingLevels() }
+  if (name === 'controls') return { models: modelSnapshot().map(({ provider, id, name, reasoning }) => ({ provider, id, ...(name ? { name } : {}), ...(typeof reasoning === 'boolean' ? { reasoning } : {}) })), thinkingLevels: session.getAvailableThinkingLevels() }
   if (name === 'setModel') { await selectModel(value.provider, value.modelId); return state() }
   if (name === 'setThinkingLevel') { session.setThinkingLevel(value.level); return state() }
   if (name === 'prompt') {
