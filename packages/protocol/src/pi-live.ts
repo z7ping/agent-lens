@@ -11,7 +11,6 @@ export interface PiLiveInitializationTimingDto {
 }
 
 export interface PiLivePackageUpdateDto {
-  source: string
   displayName: string
   type: 'npm' | 'git'
   scope: 'user' | 'project'
