@@ -7,11 +7,13 @@ import type { AgentLensCordisPlugin } from './plugin'
 
 export type AgentLensIntegrationComponent =
   | {
+      pluginId: string
       lifecycle: 'plugin'
       plugin: AgentLensCordisPlugin<unknown>
       config?: unknown
     }
   | {
+      pluginId: string
       lifecycle: 'runtime'
       plugin: Plugin<unknown>
       config?: unknown
@@ -40,6 +42,21 @@ export function defineAgentLensIntegration(
   const pluginIds = new Set(manifest.componentPluginIds)
   if (pluginIds.size !== manifest.componentPluginIds.length) {
     throw new Error(`Duplicate Agent Integration component plugin id: ${manifest.integrationId}`)
+  }
+
+  const actualPluginIds = components.map(component => component.pluginId)
+  if (
+    actualPluginIds.length !== manifest.componentPluginIds.length
+    || actualPluginIds.some((pluginId, index) => pluginId !== manifest.componentPluginIds[index])
+  ) {
+    throw new Error(`Agent Integration component manifest mismatch: ${manifest.integrationId}`)
+  }
+  for (const component of components) {
+    if (component.lifecycle === 'plugin' && component.plugin.manifest.pluginId !== component.pluginId) {
+      throw new Error(
+        `Agent Integration component plugin id mismatch: ${component.pluginId} != ${component.plugin.manifest.pluginId}`,
+      )
+    }
   }
 
   return Object.freeze({
