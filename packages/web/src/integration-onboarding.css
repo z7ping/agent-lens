@@ -43,6 +43,14 @@
   line-height: 1.6;
 }
 
+
+.integration-onboarding-scan-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
 .integration-onboarding-list {
   display: grid;
   gap: 8px;
