@@ -13,18 +13,32 @@ import { SqliteStorageService } from '@agent-lens/storage-sqlite'
 import { startHttpSurface } from './server'
 
 const sources = {
-  list: () => [{
-    manifest: {
-      pluginId: '@agent-lens/source-codex',
-      pluginVersion: '1.0.0-alpha.5',
-      apiVersion: '1.0',
-      pluginType: 'source',
-      displayName: 'Codex Source',
-      sourceId: 'codex',
-      productId: 'codex',
-      parserVersion: '1',
+  list: () => [
+    {
+      manifest: {
+        pluginId: '@agent-lens/source-codex',
+        pluginVersion: '1.0.0-alpha.5',
+        apiVersion: '1.0',
+        pluginType: 'source',
+        displayName: 'Codex Source',
+        sourceId: 'codex',
+        productId: 'codex',
+        parserVersion: '1',
+      },
     },
-  }],
+    {
+      manifest: {
+        pluginId: '@agent-lens/source-claude',
+        pluginVersion: '1.0.0-alpha.5',
+        apiVersion: '1.0',
+        pluginType: 'source',
+        displayName: 'Claude Code Source',
+        sourceId: 'claude-code',
+        productId: 'claude-code',
+        parserVersion: '1',
+      },
+    },
+  ],
 } as unknown as SourceService
 
 test('agent managed file HTTP surface only exposes declared config/data roots read-only', async () => {
