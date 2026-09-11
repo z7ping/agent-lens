@@ -47,7 +47,6 @@ function selectDetectedPi(
   const expectedExecutable = executableKey(executable)
   if (!expectedExecutable) return candidates[0]
   return candidates.find(item => executableKey(item.executable) === expectedExecutable)
-    ?? candidates[0]
 }
 
 async function resolvePiInstallation(
@@ -59,7 +58,12 @@ async function resolvePiInstallation(
   if (!source) throw new Error('Pi Source is not registered; startup resources cannot be audited')
 
   const detected = selectDetectedPi(
-    await source.detect({ host, env: process.env }),
+    await source.detect({
+      host,
+      env: snapshot.executable
+        ? { ...process.env, PI_BIN: snapshot.executable }
+        : process.env,
+    }),
     snapshot.executable,
   )
   if (!detected) throw new Error('Pi Source did not detect the active Pi installation')
