@@ -264,7 +264,13 @@ export async function* ingestCodexHistory(ctx: SourceHistoryExecutionContext): A
   for (const filePath of files) {
     if (ctx.abortSignal.aborted) return
 
-    const fileStat = await stat(filePath)
+    let fileStat
+    try {
+      fileStat = await stat(filePath)
+    } catch (error) {
+      if (isMissingPathError(error)) continue
+      throw error
+    }
     const initialFileId = sourceFileIdentity(fileStat)
     const key = checkpointKey(filePath)
     const metadataKey = metadataCheckpointKey(filePath)
