@@ -507,7 +507,8 @@ export async function startHermesRuntimeCapture(
       let files: string[] = []
       try {
         files = (await readdir(inbox)).filter(name => name.endsWith('.json')).sort((a, b) => a.localeCompare(b))
-      } catch {
+      } catch (error) {
+        if (!isMissingPathError(error)) throw error
         files = []
       }
       for (const fileName of files) {
