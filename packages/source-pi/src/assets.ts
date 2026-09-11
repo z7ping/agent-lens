@@ -5,7 +5,8 @@ import type {
   EvidenceCandidate,
   SourceExecutionContext,
 } from '@agent-lens/core'
-import { isMissingPathError, loadInstalledPiSdk } from '@agent-lens/runtime-cordis'
+import { loadInstalledPiSdk } from '@agent-lens/runtime-cordis'
+import { isMissingPathError } from '@agent-lens/source-support'
 import { resolvePiResourceAssets } from './resource-resolver'
 
 interface SkillMetadata {
