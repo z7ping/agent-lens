@@ -90,6 +90,30 @@ function parseStartupResources(value: unknown): NonNullable<PiLiveStateDto['star
   return Object.values(resources).some(items => items.length) ? resources : undefined
 }
 
+function parsePackageUpdates(value: unknown): NonNullable<PiLiveStateDto['packageUpdates']> {
+  if (!Array.isArray(value)) return []
+  return value.flatMap(item => {
+    const row = record(item)
+    const source = stringValue(row.source).trim()
+    const displayName = stringValue(row.displayName).trim()
+    if (!source || !displayName) return []
+    if (row.type !== 'npm' && row.type !== 'git') return []
+    if (row.scope !== 'user' && row.scope !== 'project') return []
+    return [{
+      source,
+      displayName,
+      type: row.type,
+      scope: row.scope,
+    }]
+  }).slice(0, 240)
+}
+
+function parsePackageUpdateCheck(value: unknown): PiLiveStateDto['packageUpdateCheck'] {
+  return value === 'checking' || value === 'complete' || value === 'unavailable' || value === 'failed'
+    ? value
+    : undefined
+}
+
 function mergeSnapshot(previous: PiLiveSnapshotDto | null, next: PiLiveSnapshotDto): PiLiveSnapshotDto {
   if (!previous) return next
   const entries = new Map<string, JsonValue>()
@@ -623,6 +647,13 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
           } else if (type === 'runtime_resources') {
             const startupResources = parseStartupResources(event.resources)
             if (startupResources) statePatch = { ...statePatch, startupResources }
+          } else if (type === 'package_updates') {
+            const packageUpdateCheck = parsePackageUpdateCheck(event.status)
+            statePatch = {
+              ...statePatch,
+              ...(packageUpdateCheck ? { packageUpdateCheck } : {}),
+              packageUpdates: parsePackageUpdates(event.updates),
+            }
           } else if (type === 'runtime_output') {
             const message = stringValue(event.message).trim()
             if (message) {
