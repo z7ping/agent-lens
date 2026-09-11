@@ -76,8 +76,11 @@ export async function prepareRegisteredSources(
   abortSignal: AbortSignal,
 ): Promise<RegisteredSourcePreparation> {
   const host = await runtimeHost(ctx)
-  const enabledSources = ctx.sources.list().filter(source => sourceEnabled(ctx, source))
-  const batches = await Promise.all(enabledSources.map(async source => {
+  // Detection is read-only capability discovery and must stay independent from
+  // the user's Enabled choice. History/assets/runtime capture remain gated by
+  // sourceEnabled() in their execution stages below.
+  const registeredSources = ctx.sources.list()
+  const batches = await Promise.all(registeredSources.map(async source => {
     if (abortSignal.aborted) {
       return { targets: [], failures: [] } satisfies RegisteredSourcePreparation
     }
