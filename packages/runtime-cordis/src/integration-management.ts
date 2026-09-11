@@ -57,7 +57,6 @@ export interface IntegrationManagementSnapshot {
     'status' | 'startedAt' | 'completedAt' | 'generatedAt'
   >
   preferences: IntegrationPreferences
-  generatedAt: string
 }
 
 export interface IntegrationManagementOptions {
@@ -205,7 +204,6 @@ export class IntegrationManagementService {
         generatedAt: discovery.generatedAt,
       },
       preferences,
-      generatedAt: new Date().toISOString(),
     }
   }
 }
