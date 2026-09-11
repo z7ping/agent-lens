@@ -27,6 +27,7 @@ interface OwnedRuntime {
   initializationElapsedMs: number
   initializationTimings: PiLiveInitializationTiming[]
   startupResources?: PiLiveStartupResources | undefined
+  startupAuditResources?: PiLiveStartupResources | undefined
   startupOutput: string[]
   capabilities?: PiLiveRuntimeCapabilities | undefined
   workspacePath: string
@@ -40,6 +41,7 @@ interface OwnedRuntime {
   startupAuditCompleted?: string | undefined
   startupAuditPending?: string | undefined
   startupAuditTask?: Promise<void> | undefined
+  startupAuditProbeTask?: Promise<void> | undefined
 }
 
 function taskSummary(message: string): string | undefined {
@@ -250,10 +252,12 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.initializationElapsedMs = 0
     runtime.initializationTimings = []
     runtime.startupResources = undefined
+    runtime.startupAuditResources = undefined
     runtime.startupResourcesCapturedAt = undefined
     runtime.startupAuditCompleted = undefined
     runtime.startupAuditPending = undefined
     runtime.startupAuditTask = undefined
+    runtime.startupAuditProbeTask = undefined
     runtime.startupOutput = []
     runtime.capabilities = undefined
     this.publish(runtime, { type: 'runtime_status', status: runtime.status, stage: runtime.stage, message: runtime.message })
@@ -400,6 +404,7 @@ export class DefaultPiLiveService implements PiLiveService {
           const resources = startupResources(event.resources)
           if (resources) {
             runtime.startupResources = resources
+            runtime.startupAuditResources ??= copyStartupResources(resources)
             runtime.startupResourcesCapturedAt ??= new Date().toISOString()
           }
         } else if (event.type === 'runtime_output') {
@@ -455,20 +460,21 @@ export class DefaultPiLiveService implements PiLiveService {
 
       if (readyState) {
         this.persistSessionIfChanged(runtime, readyState)
+        this.updateRuntimeResources(runtime, readyState)
         this.persistStartupResourcesBestEffort(runtime, readyState)
       } else {
-        void handle.state().then(state => {
+        const probe = handle.state().then(state => {
           if (runtime.generation !== generation || runtime.status !== 'ready' || runtime.handle !== handle) return
           this.persistSessionIfChanged(runtime, state)
-          if (state.startupResources) {
-            runtime.startupResources ??= state.startupResources
-            runtime.startupResourcesCapturedAt ??= new Date().toISOString()
-          }
+          this.updateRuntimeResources(runtime, state)
           this.persistStartupResourcesBestEffort(runtime, state)
         }).catch(error => {
           if (runtime.generation !== generation || runtime.status !== 'ready' || runtime.handle !== handle) return
           this.recoveryDiagnostic(runtime, 'Pi Live recovery state probe failed', error)
+        }).finally(() => {
+          if (runtime.startupAuditProbeTask === probe) runtime.startupAuditProbeTask = undefined
         })
+        runtime.startupAuditProbeTask = probe
       }
     } catch (error) {
       if (runtime.generation !== generation || runtime.status === 'terminating' || runtime.status === 'terminated') return
@@ -501,10 +507,7 @@ export class DefaultPiLiveService implements PiLiveService {
     if (!runtime.handle || runtime.status !== 'ready') return { state: await this.runtimeState(runtime), entries: [], leafId: null }
     const snapshot = await runtime.handle.snapshot(since)
     this.persistSessionIfChanged(runtime, snapshot.state)
-    if (snapshot.state.startupResources) {
-      runtime.startupResources ??= snapshot.state.startupResources
-      runtime.startupResourcesCapturedAt ??= new Date().toISOString()
-    }
+    this.updateRuntimeResources(runtime, snapshot.state)
     this.persistStartupResourcesBestEffort(runtime, snapshot.state)
     return { ...snapshot, state: this.decorateReadyState(runtime, snapshot.state) }
   }
@@ -544,6 +547,7 @@ export class DefaultPiLiveService implements PiLiveService {
     await this.ensureRecoveryLoaded()
     const runtime = this.runtimes.get(id)
     if (runtime) {
+      await runtime.startupAuditProbeTask?.catch(() => undefined)
       await runtime.startupAuditTask?.catch(() => undefined)
       await this.terminateRuntime(runtime, true)
       await runtime.recoveryCheckpointTask?.catch(() => undefined)
@@ -558,6 +562,7 @@ export class DefaultPiLiveService implements PiLiveService {
     const runtimes = [...this.runtimes.values()]
     await Promise.allSettled(runtimes.map(async runtime => {
       await runtime.recoveryCheckpointTask?.catch(() => undefined)
+      await runtime.startupAuditProbeTask?.catch(() => undefined)
       await runtime.startupAuditTask?.catch(() => undefined)
       if (runtime.status === 'ready' && runtime.handle) {
         const state = await runtime.handle.state().catch(() => undefined)
@@ -616,10 +621,7 @@ export class DefaultPiLiveService implements PiLiveService {
     if (runtime.status === 'ready' && runtime.handle) {
       const state = await runtime.handle.state()
       this.persistSessionIfChanged(runtime, state)
-      if (state.startupResources) {
-        runtime.startupResources ??= state.startupResources
-        runtime.startupResourcesCapturedAt ??= new Date().toISOString()
-      }
+      this.updateRuntimeResources(runtime, state)
       this.persistStartupResourcesBestEffort(runtime, state)
       return this.decorateReadyState(runtime, state)
     }
@@ -668,8 +670,17 @@ export class DefaultPiLiveService implements PiLiveService {
     }
   }
 
+  private updateRuntimeResources(runtime: OwnedRuntime, state: PiLiveRuntimeState): void {
+    if (!state.startupResources) return
+    runtime.startupResources = state.startupResources
+    if (!runtime.startupAuditResources) {
+      runtime.startupAuditResources = copyStartupResources(state.startupResources)
+      runtime.startupResourcesCapturedAt ??= new Date().toISOString()
+    }
+  }
+
   private persistStartupResourcesBestEffort(runtime: OwnedRuntime, state: PiLiveRuntimeState): void {
-    if (!this.startupAudit || !runtime.startupResources) return
+    if (!this.startupAudit || !runtime.startupAuditResources) return
     const nativeSessionId = state.nativeSessionId?.trim()
     if (!nativeSessionId) return
 
@@ -683,7 +694,7 @@ export class DefaultPiLiveService implements PiLiveService {
       capturedAt,
       nativeSessionId,
       workspacePath: runtime.workspacePath,
-      startupResources: copyStartupResources(runtime.startupResources),
+      startupResources: copyStartupResources(runtime.startupAuditResources),
       ...(runtime.input.executable ? { executable: runtime.input.executable } : {}),
       ...(state.sdkVersion ?? runtime.capabilities?.sdkVersion
         ? { sdkVersion: state.sdkVersion ?? runtime.capabilities?.sdkVersion }
