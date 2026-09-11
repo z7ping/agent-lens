@@ -2,6 +2,7 @@ import type { AgentInstallation, Host, RuntimeProfile } from '../domain/identity
 import type { AgentProductId, Confidence, Disposable } from '../domain/common'
 import type {
   AssetDefinitionHint,
+  AssetScope,
   AssetState,
 } from '../domain/assets'
 import type {
@@ -82,6 +83,8 @@ export interface DiscoveredAssetBindingHint {
   path?: string
   source?: string
   version?: string
+  scope?: AssetScope
+  scopeRoot?: string
 }
 
 export interface DiscoveredAssetStateHint {
