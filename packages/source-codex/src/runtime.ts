@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { mkdir, readFile, readdir, unlink } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { extname, join } from 'node:path'
 import type {
   Disposable,
   SourceExecutionContext,
@@ -9,8 +9,9 @@ import type {
   SourceRecordEmitter,
 } from '@agent-lens/core'
 import { abortableDelay } from '@agent-lens/runtime-cordis'
-import { isMissingPathError } from '@agent-lens/source-support'
+import { isMissingPathError, startHistoryFileWatch } from '@agent-lens/source-support'
 import { CODEX_CURRENT_PARSER_VERSION } from './current-protocol'
+import { ingestCodexFile, listJsonlFiles } from './history'
 
 const POLL_INTERVAL_MS = 250
 
@@ -158,10 +159,38 @@ export async function startCodexRuntimeCapture(
     }
   })()
 
+  const sessionsDir = ctx.installation.dataRoot
+    ?? (ctx.installation.configRoot ? join(ctx.installation.configRoot, 'sessions') : undefined)
+  const historyWatch = sessionsDir
+    ? await startHistoryFileWatch({
+        root: sessionsDir,
+        signal: ctx.abortSignal,
+        accept: filePath => extname(filePath).toLowerCase() === '.jsonl',
+        listFiles: limit => listJsonlFiles(
+          sessionsDir,
+          limit === undefined ? undefined : { sessionLimit: limit },
+        ),
+        onFile: async filePath => {
+          for await (const record of ingestCodexFile(ctx, filePath)) {
+            await emitter.emit(record.parserVersion === CODEX_CURRENT_PARSER_VERSION
+              ? record
+              : { ...record, parserVersion: CODEX_CURRENT_PARSER_VERSION })
+          }
+        },
+        debounceMs: 180,
+        fallbackPollMs: 60_000,
+        reconcilePollMs: 5 * 60_000,
+        onError: error => {
+          console.error('[AgentLens] Codex history reconcile failed', error)
+        },
+      })
+    : null
+
   return {
     async dispose(): Promise<void> {
       if (stopped) return
       stopped = true
+      await historyWatch?.dispose()
       await task
     },
   }
