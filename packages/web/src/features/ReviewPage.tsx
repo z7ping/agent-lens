@@ -200,10 +200,6 @@ function arrayCount(value: JsonValue | undefined): number {
   return Array.isArray(value) ? value.length : 0
 }
 
-function runtimeResourcesValue(value: JsonValue): JsonValue | undefined {
-  return payloadRecord(value).resources
-}
-
 function runtimeStartupSummary(value: JsonValue): string {
   const payload = payloadRecord(value)
   const resources = payload.resources
