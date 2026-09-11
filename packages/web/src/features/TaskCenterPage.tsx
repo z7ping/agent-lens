@@ -547,30 +547,30 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     ...projects.map(project => ({ value: project.id, label: project.name ?? project.repositoryIdentity ?? project.id, description: project.repositoryIdentity ?? undefined })),
   ]
 
-  const taskRail = <aside className="task-center-rail" aria-label="任务列表：进行中 + 历史">
+  const taskRail = <aside className="task-center-rail" aria-label={t('center.history.railAria')}>
     <div className="task-center-rail-head">
-      <Button size="small" variant="primary" className="task-center-new-task-button" onClick={newTask}><UiIcon name="plus" size={14}/> 新建任务</Button>
-      <Toolbar className="task-center-toolbar" aria-label="筛选历史任务">
+      <Button size="small" variant="primary" className="task-center-new-task-button" onClick={newTask}><UiIcon name="plus" size={14}/> {t('center.history.newTask')}</Button>
+      <Toolbar className="task-center-toolbar" aria-label={t('center.history.filterAria')}>
         <IconButton
           size="small"
           className={searchOpen || review.filters.search ? 'is-active' : ''}
           onClick={() => setSearchOpen(current => !current)}
-          title={searchOpen ? '收起搜索' : '搜索历史任务'}
-          aria-label={searchOpen ? '收起搜索' : '搜索历史任务'}
+          title={searchOpen ? t('center.history.collapseSearch') : t('center.history.searchTasks')}
+          aria-label={searchOpen ? t('center.history.collapseSearch') : t('center.history.searchTasks')}
           aria-pressed={searchOpen}
         ><UiIcon name="search" size={14}/></IconButton>
-        <IconButton size="small" onClick={() => void model.refreshReview()} title="刷新历史任务" aria-label="刷新历史任务"><UiIcon name="refresh" size={14}/></IconButton>
+        <IconButton size="small" onClick={() => void model.refreshReview()} title={t('center.history.refreshTasks')} aria-label={t('center.history.refreshTasks')}><UiIcon name="refresh" size={14}/></IconButton>
       </Toolbar>
     </div>
 
     <SidebarFilterDisclosure className="task-center-sidebar-filter" summaryMeta={agentSelectionSummary} agents={agents} agentSelection={{ mode: 'multiple', value: review.filters.sourceIds, onChange: sourceIds => model.setReviewFilters({ sourceIds }) }}>
-      <div className="workspace-insight-filter-fields" aria-label="筛选历史任务">
-        <label><span>项目</span><SelectMenu variant="field" value={review.filters.projectId} onChange={projectId => model.setReviewFilters({ projectId })} ariaLabel="筛选项目" placeholder="全部项目" menuWidth={280} searchable searchPlaceholder="搜索项目" options={projectFilterOptions}/></label>
-        <label><span>时间</span><SelectMenu variant="field" value={review.filters.range} onChange={range => model.setReviewFilters({ range: range as typeof review.filters.range })} ariaLabel="筛选时间范围" menuWidth={156} options={[
-          { value: 'today', label: '今天' }, { value: '7d', label: '最近 7 天' }, { value: '30d', label: '最近 30 天' }, { value: 'all', label: '全部时间' },
+      <div className="workspace-insight-filter-fields" aria-label={t('center.history.filterAria')}>
+        <label><span>{t('center.history.project')}</span><SelectMenu variant="field" value={review.filters.projectId} onChange={projectId => model.setReviewFilters({ projectId })} ariaLabel={t('center.history.filterProject')} placeholder={t('center.history.allProjects')} menuWidth={280} searchable searchPlaceholder={t('center.history.searchProject')} options={projectFilterOptions}/></label>
+        <label><span>{t('center.history.time')}</span><SelectMenu variant="field" value={review.filters.range} onChange={range => model.setReviewFilters({ range: range as typeof review.filters.range })} ariaLabel={t('center.history.filterTime')} menuWidth={156} options={[
+          { value: 'today', label: t('center.day.today') }, { value: '7d', label: t('center.history.sevenDays') }, { value: '30d', label: t('center.history.thirtyDays') }, { value: 'all', label: t('center.history.allTime') },
         ]}/></label>
-        <label><span>状态</span><SelectMenu variant="field" value={review.filters.status} onChange={status => model.setReviewFilters({ status: status as typeof review.filters.status })} ariaLabel="筛选状态" menuWidth={150} options={[
-          { value: 'all', label: '全部状态' }, { value: 'clean', label: '无错误' }, { value: 'with-errors', label: '有错误' },
+        <label><span>{t('center.history.status')}</span><SelectMenu variant="field" value={review.filters.status} onChange={status => model.setReviewFilters({ status: status as typeof review.filters.status })} ariaLabel={t('center.history.filterStatus')} menuWidth={150} options={[
+          { value: 'all', label: t('center.history.allStatus') }, { value: 'clean', label: t('center.history.clean') }, { value: 'with-errors', label: t('center.history.withErrors') },
         ]}/></label>
       </div>
     </SidebarFilterDisclosure>
@@ -581,40 +581,40 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
         <Input
           autoFocus
           className="task-center-search-input"
-          placeholder="搜索任务…"
+          placeholder={t('center.history.searchPlaceholder')}
           value={review.filters.search}
           onChange={event => model.setReviewFilters({ search: event.target.value })}
           onKeyDown={event => { if (event.key === 'Escape') setSearchOpen(false) }}
-          aria-label="搜索历史任务"
+          aria-label={t('center.history.searchTasks')}
         />
         {review.filters.search && <IconButton
           size="small"
           className="task-center-search-clear"
           onClick={() => model.setReviewFilters({ search: '' })}
-          title="清除搜索"
-          aria-label="清除搜索"
+          title={t('center.history.clearSearch')}
+          aria-label={t('center.history.clearSearch')}
         ><UiIcon name="close" size={14}/></IconButton>}
       </div>
     </div>}
 
     <div className="task-center-scroll">
       {runtimes.length > 0 && <section className="task-center-group task-center-live-group">
-        <div className="task-center-group-title"><span>进行中</span><span>{runtimes.length}</span></div>
+        <div className="task-center-group-title"><span>{t('center.history.running')}</span><span>{runtimes.length}</span></div>
         {runtimes.map(item => <button key={item.runtimeSessionId} className={`session-item task-live-item ${selectedRuntimeId === item.runtimeSessionId ? 'session-item-active' : ''}`} onClick={() => navigate(`/review/live/${encodeURIComponent(item.runtimeSessionId)}`)}>
-          <div className="session-item-title-row"><div className="session-item-title" title={piLiveSessionTitle(item)}>{sessionListTitle(piLiveSessionTitle(item), 'Pi 任务', ['pi'])}</div><PiLiveRuntimeStatusBadge state={item}/></div>
-          <div className="session-item-meta"><span className={item.isStreaming || item.status === 'initializing' ? 'pi-live-pulse' : 'pi-live-idle-dot'}/><span>Pi</span><span className="session-item-project">{item.projectName || workspaceDisplayName(item.workspacePath) || '未关联项目'}</span>{item.startedAt && <time>{formatTime(item.startedAt)}</time>}</div>
+          <div className="session-item-title-row"><div className="session-item-title" title={piLiveSessionTitle(item)}>{sessionListTitle(piLiveSessionTitle(item), t('center.history.piTask'), ['pi'])}</div><PiLiveRuntimeStatusBadge state={item}/></div>
+          <div className="session-item-meta"><span className={item.isStreaming || item.status === 'initializing' ? 'pi-live-pulse' : 'pi-live-idle-dot'}/><span>Pi</span><span className="session-item-project">{item.projectName || workspaceDisplayName(item.workspacePath) || t('center.history.unlinkedProject')}</span>{item.startedAt && <time>{formatTime(item.startedAt, t, locale)}</time>}</div>
         </button>)}
       </section>}
 
-      {historyGroups.map(group => <section className="task-center-group task-center-history-group" key={group.label}>
-        <div className="task-center-group-title"><span>{group.label}</span><span>{group.items.length}{group.label === '更早' && review.response?.meta.hasMore ? '+' : ''}</span></div>
+      {historyGroups.map(group => <section className="task-center-group task-center-history-group" key={group.key}>
+        <div className="task-center-group-title"><span>{group.label}</span><span>{group.items.length}{group.key === 'earlier' && review.response?.meta.hasMore ? '+' : ''}</span></div>
         {group.items.map(entry => entry.kind === 'local'
           ? <HistoryTaskItem key={`local:${entry.id}`} item={entry.local} active={mode === 'history' && review.selectedId === entry.id} onClick={() => openHistoryTask(entry.id)}/>
           : <RemoteTaskItem key={`remote:${entry.id}`} item={entry.remote} active={mode === 'hub' && location.pathname === `/review/hub/${encodeURIComponent(entry.id)}`} onClick={() => navigate(`/review/hub/${encodeURIComponent(entry.id)}`)}/>)}
       </section>)}
 
-      {!historyCount && !review.loading && <div className="task-center-empty">当前筛选范围没有历史任务。</div>}
-      {review.response?.meta.hasMore && <Button size="small" className="session-load-more" loading={review.loadingMore} onClick={() => void model.loadMoreReview()}>加载更多历史任务</Button>}
+      {!historyCount && !review.loading && <div className="task-center-empty">{t('center.history.empty')}</div>}
+      {review.response?.meta.hasMore && <Button size="small" className="session-load-more" loading={review.loadingMore} onClick={() => void model.loadMoreReview()}>{t('center.history.loadMore')}</Button>}
     </div>
   </aside>
 
@@ -622,7 +622,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     {sidebarHost ? createPortal(taskRail, sidebarHost) : null}
     <div className={`task-center-page ${mode === 'new' ? 'is-new-task' : ''}`}>
       <section className="task-center-main">
-        <Suspense fallback={<div className="workspace-skeleton" role="status" aria-label="正在加载任务详情"><span className="state-skeleton"/><span className="state-skeleton"/><span className="state-skeleton"/></div>}>
+        <Suspense fallback={<div className="workspace-skeleton" role="status" aria-label={t('center.history.loadingDetail')}><span className="state-skeleton"/><span className="state-skeleton"/><span className="state-skeleton"/></div>}>
           {mode === 'history' && <ReviewPage
             model={model}
             embedded
@@ -651,14 +651,18 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   </>
 }
 
-function runtimeStatusBadge(state: PiLiveStateDto): { label: string; tone: 'neutral' | 'accent' | 'warning' | 'danger'; dot?: boolean } {
-  if (state.status === 'failed') return { label: '需要处理', tone: 'danger' }
-  if (state.status === 'initializing') return { label: '启动中', tone: 'warning', dot: true }
-  if (state.isStreaming) return { label: '执行中', tone: 'accent', dot: true }
-  return { label: '等待输入', tone: 'warning' }
+function runtimeStatusBadge(
+  state: PiLiveStateDto,
+  t: TFunction,
+): { label: string; tone: 'neutral' | 'accent' | 'warning' | 'danger'; dot?: boolean } {
+  if (state.status === 'failed') return { label: t('center.runtimeStatus.failed'), tone: 'danger' }
+  if (state.status === 'initializing') return { label: t('center.runtimeStatus.initializing'), tone: 'warning', dot: true }
+  if (state.isStreaming) return { label: t('center.runtimeStatus.streaming'), tone: 'accent', dot: true }
+  return { label: t('center.runtimeStatus.idle'), tone: 'warning' }
 }
 
 function PiLiveRuntimeStatusBadge({ state }: { state: PiLiveStateDto }) {
-  const badge = runtimeStatusBadge(state)
+  const { t } = useTranslation('task')
+  const badge = runtimeStatusBadge(state, t)
   return <StatusBadge tone={badge.tone} dot={badge.dot}>{badge.label}</StatusBadge>
 }
