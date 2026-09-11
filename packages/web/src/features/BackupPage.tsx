@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import type { TFunction } from 'i18next'
+import { useTranslation } from 'react-i18next'
 import type {
   BackupAssetKindDto,
   BackupOverviewResponseDto,
@@ -23,23 +25,14 @@ type PendingConfirmation =
   | { type: 'create' }
   | { type: 'import'; file: File }
 
-function kindLabel(kind: BackupAssetKindDto): string {
-  if (kind === 'skill') return '技能'
-  if (kind === 'mcp') return 'MCP（模型上下文协议）'
-  if (kind === 'plugin') return '插件'
-  if (kind === 'extension') return '扩展'
-  if (kind === 'hook') return '钩子'
-  if (kind === 'memory') return '记忆'
-  if (kind === 'rule') return '规则'
-  if (kind === 'session') return '会话 / 历史'
-  if (kind === 'config') return '关键配置'
-  return '其他 / 未分类'
+function kindLabel(kind: BackupAssetKindDto, t: TFunction): string {
+  return t(`kind.${kind === 'other' ? 'other' : kind}`)
 }
 
-function kindRecommendation(kind: BackupAssetKindDto): '建议备份' | '按需备份' | '默认排除' {
-  if (RECOMMENDED_KINDS.includes(kind)) return '建议备份'
-  if (OPTIONAL_KINDS.includes(kind)) return '按需备份'
-  return '默认排除'
+function kindRecommendation(kind: BackupAssetKindDto, t: TFunction): string {
+  if (RECOMMENDED_KINDS.includes(kind)) return t('recommendation.recommended')
+  if (OPTIONAL_KINDS.includes(kind)) return t('recommendation.optional')
+  return t('recommendation.excluded')
 }
 
 function recommendationTone(kind: BackupAssetKindDto): string {
@@ -55,14 +48,14 @@ function formatBytes(bytes: number): string {
   return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`
 }
 
-function formatOptionalBytes(bytes: number | undefined): string {
-  return bytes === undefined ? '大小待扫描' : formatBytes(bytes)
+function formatOptionalBytes(bytes: number | undefined, t: TFunction): string {
+  return bytes === undefined ? t('sizePending') : formatBytes(bytes)
 }
 
-function formatTime(value: string): string {
+function formatTime(value: string, locale: string): string {
   const date = new Date(value)
   return Number.isFinite(date.getTime())
-    ? date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+    ? date.toLocaleString(locale, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
     : value
 }
 
@@ -84,11 +77,11 @@ function sourceLabel(sourceId: string, displayName?: string): string {
   return cleaned || agentLabel(sourceId)
 }
 
-function previewStatusLabel(status: string): string {
-  if (status === 'unchanged') return '一致'
-  if (status === 'missing') return '当前缺失'
-  if (status === 'modified') return '当前已修改'
-  return '阻止恢复'
+function previewStatusLabel(status: string, t: TFunction): string {
+  if (status === 'unchanged') return t('previewStatus.unchanged')
+  if (status === 'missing') return t('previewStatus.missing')
+  if (status === 'modified') return t('previewStatus.modified')
+  return t('previewStatus.blocked')
 }
 
 function kindFiles(source: BackupProtectionSourceDto, kind: BackupAssetKindDto): number {
@@ -103,10 +96,17 @@ function kindBytes(source: BackupProtectionSourceDto, kind: BackupAssetKindDto):
   return source.kindDetails?.[kind]?.totalBytes
 }
 
-function kindDetailText(source: BackupProtectionSourceDto, kind: BackupAssetKindDto): string {
+function kindDetailText(
+  source: BackupProtectionSourceDto,
+  kind: BackupAssetKindDto,
+  t: TFunction,
+  locale: string,
+): string {
   const files = kindFiles(source, kind)
   const logical = kindLogicalAssets(source, kind)
-  return logical === undefined ? `${files.toLocaleString()} 个文件` : `${logical.toLocaleString()} 项 · ${files.toLocaleString()} 个文件`
+  return logical === undefined
+    ? t('files', { count: files.toLocaleString(locale) })
+    : t('logicalFiles', { logical: logical.toLocaleString(locale), files: files.toLocaleString(locale) })
 }
 
 function sumKindFiles(sources: BackupProtectionSourceDto[], sourceIds: string[], kind: BackupAssetKindDto): number {
@@ -132,6 +132,8 @@ export function BackupPage({
   selectedSourceIds: string[] | null
   onSelectedSourceIdsChange(sourceIds: string[] | null): void
 }) {
+  const { t, i18n } = useTranslation('backup')
+  const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
   const api = useMemo(() => new AgentLensApi(), [])
   const [overview, setOverview] = useState<BackupOverviewResponseDto | null>(null)
   const [loading, setLoading] = useState(true)
