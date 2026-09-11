@@ -136,6 +136,7 @@ function integrationAvailabilityTone(
 
 function captureState(
   agent: Pick<AgentOverviewDto, 'supported' | 'enabled' | 'detected'>,
+  management: IntegrationManagementItemDto | undefined,
   discovery: IntegrationToolDiscoveryItemDto | undefined,
   discoveryScanning: boolean,
   t: TFunction,
@@ -163,7 +164,6 @@ function captureState(
 
 function toolPresenceLabel(
   discovery: IntegrationToolDiscoveryItemDto | undefined,
-  management: IntegrationManagementItemDto | undefined,
   discoveryScanning: boolean,
   discoveryError: string,
   t: TFunction,
@@ -519,7 +519,7 @@ function AgentCard({ agent, management, discovery, discoveryScanning, discoveryE
   const visibleBindings = showAllBindings ? bindings : bindings.slice(0, ASSEMBLY_PATH_LIMIT)
   const userAssetCount = userGrouped.reduce((sum, [, assets]) => sum + assets.length, 0)
   const userUsageCount = agent.usedAssets.reduce((sum, item) => sum + item.callCount, 0)
-  const status = captureState(agent, discovery, discoveryScanning, t)
+  const status = captureState(agent, management, discovery, discoveryScanning, t)
   const presencePath = toolPresencePath(discovery)
   const configPath = installation?.configRoot ?? discovery?.configRoot ?? discovery?.dataRoot
 
@@ -643,7 +643,8 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
           {items.map(agent => {
             const assetCount = agent.assetInventory.filter(asset => asset.type !== 'builtin').length
             const agentDiscovery = discoveryByProduct.get(agent.productId) ?? discoveryByProduct.get(agent.sourceId)
-            const status = captureState(agent, agentDiscovery, discoveryScanning, t)
+            const agentManagement = managementByProduct.get(agent.productId) ?? managementById.get(agent.sourceId)
+            const status = captureState(agent, agentManagement, agentDiscovery, discoveryScanning, t)
             return <button key={agent.sourceId} className={`agent-source-option ${agent.sourceId === selectedSourceId ? 'is-active' : ''}`} onClick={() => onSourceIdChange(agent.sourceId)} aria-current={agent.sourceId === selectedSourceId ? 'true' : undefined} title={status.title}>
               <span className={`source-dot large ${sourceDot(agent.sourceId)}`}/>
               <span className="agent-source-copy"><b>{agentLabel(agent.sourceId, agent.displayName)}</b><small>{t('page.userAssets', { count: assetCount })}</small></span>
