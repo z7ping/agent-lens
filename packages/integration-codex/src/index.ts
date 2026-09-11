@@ -23,3 +23,5 @@ export const codexIntegration = defineAgentLensIntegration(
     },
   ],
 )
+
+export default codexIntegration
