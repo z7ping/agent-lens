@@ -385,7 +385,7 @@ function IntegrationControl({
   </section>
 }
 
-function AgentCard({ agent, policy, onCaptureChange }: {
+function AgentCard({ agent, policy, onCaptureChange, onAuthorize }: {
   agent: AgentOverviewDto
   policy: CapturePolicyResponseDto | null
   onCaptureChange(sourceId: string, enabled: boolean): Promise<void>
