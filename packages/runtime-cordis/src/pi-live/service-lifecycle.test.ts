@@ -3,6 +3,7 @@ import test from 'node:test'
 import type { PiLiveRecoveryRecord, PiLiveRecoveryStore } from './recovery-store'
 import type { PiLiveRuntimeState, PiLiveStartInput } from './types'
 import { DefaultPiLiveService } from './service'
+import type { PiLiveStartupAuditSnapshot } from './startup-audit'
 import type { PiRuntimeHandle, PiRuntimeHost } from './worker-host'
 
 function deferred<T>() {
@@ -67,6 +68,61 @@ test('Start 立即返回 initializing，后台就绪后原位切换为 ready', a
   const ready = await service.state(initial.runtimeSessionId)
   assert.equal(ready.status, 'ready')
   assert.equal(ready.processId, 1234)
+  await service.dispose()
+})
+
+test('启动资源审计使用 ready 前最后一份 Runtime 快照，而不是 pre-bind 快照', async () => {
+  const audits: PiLiveStartupAuditSnapshot[] = []
+  const host: PiRuntimeHost = {
+    start: async (id, _input, _signal, onEvent) => {
+      onEvent({
+        type: 'runtime_resources',
+        resources: {
+          contexts: ['/workspace/AGENTS.md'],
+          skills: ['static-skill'],
+          prompts: [],
+          extensions: [],
+          themes: [],
+          diagnostics: [],
+        },
+      })
+      onEvent({
+        type: 'runtime_resources',
+        resources: {
+          contexts: ['/workspace/AGENTS.md'],
+          skills: ['static-skill', 'extension-skill'],
+          prompts: ['extension-prompt'],
+          extensions: ['extension.ts'],
+          themes: ['extension-theme'],
+          diagnostics: [],
+        },
+      })
+      return {
+        ...handle(id, '/sessions/native.jsonl'),
+        state: async () => ({
+          ...readyState(id, '/sessions/native.jsonl'),
+          nativeSessionId: 'native-session',
+        }),
+      }
+    },
+  }
+  const service = new DefaultPiLiveService(
+    host,
+    undefined,
+    { recordStartupResources: async snapshot => { audits.push(snapshot) } },
+  )
+  const initial = await service.start({ cwd: '/workspace' })
+  await new Promise(resolve => setTimeout(resolve, 0))
+  await service.state(initial.runtimeSessionId)
+  for (let index = 0; index < 20 && audits.length === 0; index += 1) {
+    await new Promise(resolve => setTimeout(resolve, 0))
+  }
+
+  assert.equal(audits.length, 1)
+  assert.deepEqual(audits[0]?.startupResources.skills, ['static-skill', 'extension-skill'])
+  assert.deepEqual(audits[0]?.startupResources.prompts, ['extension-prompt'])
+  assert.deepEqual(audits[0]?.startupResources.extensions, ['extension.ts'])
+  assert.deepEqual(audits[0]?.startupResources.themes, ['extension-theme'])
   await service.dispose()
 })
 
