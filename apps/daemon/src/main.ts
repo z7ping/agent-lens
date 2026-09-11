@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { backupLocalPlugin } from '@agent-lens/backup-local'
 import { capturePolicyPlugin, resolveCapturePolicyPluginState } from '@agent-lens/capture-policy'
+import { readCapturePolicyConfigurationSync } from '@agent-lens/capture-policy/configuration'
 import { claudeIntegration } from '@agent-lens/integration-claude'
 import { codexIntegration } from '@agent-lens/integration-codex'
 import { hermesIntegration } from '@agent-lens/integration-hermes'
@@ -16,13 +17,18 @@ import {
   abortableDelay,
   AgentLensApplication,
   coreServicesPlugin,
+  authorizedIntegrationCapabilities,
   discoverRegisteredSourceAssets,
+  grantIntegrationCapabilities,
+  integrationAuthorizationPath,
   nodeRuntimePlugin,
   prepareRegisteredSources,
+  readIntegrationAuthorizationSync,
   replayRegisteredSourceHistory,
   resolveAgentLensNodeRuntime,
   startRegisteredSourceCapture,
   syncRegisteredSourceHistory,
+  writeIntegrationAuthorization,
   type RegisteredSourceFailure,
 } from '@agent-lens/runtime-cordis'
 import {
@@ -85,6 +91,23 @@ let foregroundGate: ForegroundActivityGate | null = null
 const projectDirectoryPicker = createProjectDirectoryPicker()
 const capturePolicyStartup = resolveCapturePolicyPluginState()
 const enabledSourceIds = new Set(capturePolicyStartup.settings.enabledSources)
+const integrationAuthorizationFile = integrationAuthorizationPath()
+let integrationAuthorization = readIntegrationAuthorizationSync(integrationAuthorizationFile)
+const persistedCapturePolicy = readCapturePolicyConfigurationSync(capturePolicyStartup.configurationPath)
+const legacyInstallation = existsSync(dbPath) || persistedCapturePolicy !== null
+
+if (!integrationAuthorization && legacyInstallation) {
+  integrationAuthorization = await writeIntegrationAuthorization(integrationAuthorizationFile, {
+    grants: {
+      ...(enabledSourceIds.has('pi') ? { pi: ['runtime', 'live'] } : {}),
+      ...(enabledSourceIds.has('hermes') ? { hermes: ['live'] } : {}),
+    },
+  })
+}
+
+function authorizedCapabilities(productId: string) {
+  return authorizedIntegrationCapabilities(integrationAuthorization, productId)
+}
 
 const app = new AgentLensApplication()
 app.useRuntime(nodeRuntimePlugin, nodeRuntime)
@@ -93,8 +116,14 @@ app.useRuntime(coreServicesPlugin)
 app.useRuntime(sessionSummaryProjectionPlugin)
 app.useRuntime(capturePolicyPlugin)
 if (capabilities.localCapture) {
-  app.useIntegration(piIntegration, { enabled: enabledSourceIds.has(piIntegration.manifest.productId) })
-  app.useIntegration(hermesIntegration, { enabled: enabledSourceIds.has(hermesIntegration.manifest.productId) })
+  app.useIntegration(piIntegration, {
+    enabled: enabledSourceIds.has(piIntegration.manifest.productId),
+    authorizedCapabilities: authorizedCapabilities(piIntegration.manifest.productId),
+  })
+  app.useIntegration(hermesIntegration, {
+    enabled: enabledSourceIds.has(hermesIntegration.manifest.productId),
+    authorizedCapabilities: authorizedCapabilities(hermesIntegration.manifest.productId),
+  })
   app.useIntegration(codexIntegration, { enabled: enabledSourceIds.has(codexIntegration.manifest.productId) })
   app.useIntegration(claudeIntegration, { enabled: enabledSourceIds.has(claudeIntegration.manifest.productId) })
   app.useIntegration(openCodeIntegration, { enabled: enabledSourceIds.has(openCodeIntegration.manifest.productId) })
