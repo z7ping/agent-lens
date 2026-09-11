@@ -1,3 +1,4 @@
+import { translateProduct } from '../i18n/runtime'
 const NPM_REGISTRY_URL = 'https://registry.npmjs.org/@z7ping%2Fagent-lens'
 const GITHUB_RELEASES_API = 'https://api.github.com/repos/z7ping/agent-lens/releases?per_page=20'
 const GITHUB_RELEASES_URL = 'https://github.com/z7ping/agent-lens/releases'
@@ -74,7 +75,7 @@ function comparePrereleaseIdentifier(left: string, right: string): number {
 export function compareSemver(leftValue: string | ParsedSemver, rightValue: string | ParsedSemver): number {
   const left = typeof leftValue === 'string' ? parseSemver(leftValue) : leftValue
   const right = typeof rightValue === 'string' ? parseSemver(rightValue) : rightValue
-  if (!left || !right) throw new Error('无法比较无效的语义化版本')
+  if (!left || !right) throw new Error(translateProduct('errors:invalidSemver'))
 
   for (const key of ['major', 'minor', 'patch'] as const) {
     if (left[key] !== right[key]) return left[key] - right[key]
