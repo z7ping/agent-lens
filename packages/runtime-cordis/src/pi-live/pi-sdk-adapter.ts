@@ -12,15 +12,12 @@ type OfficialPiModule = typeof import('@earendil-works/pi-coding-agent')
 type OfficialPiModel = NonNullable<AgentSession['model']>
 type OfficialCreateAgentSessionOptions = NonNullable<Parameters<OfficialPiModule['createAgentSession']>[0]>
 type OfficialExtensionBindings = Parameters<AgentSession['bindExtensions']>[0]
-type OfficialDefaultPackageManager = InstanceType<OfficialPiModule['DefaultPackageManager']>
-type OfficialPackageUpdate = Awaited<ReturnType<OfficialDefaultPackageManager['checkForAvailableUpdates']>>[number]
 
 export type PiSdkModel = Pick<OfficialPiModel, 'provider' | 'id' | 'name' | 'reasoning'>
 export type PiSdkPromptOptions = Pick<PromptOptions, 'streamingBehavior' | 'source' | 'preflightResult'>
 export type PiSdkThinkingLevel = Parameters<AgentSession['setThinkingLevel']>[0]
 export type PiSdkExtensionBindings = OfficialExtensionBindings
 export type PiSdkExtensionUiContext = NonNullable<OfficialExtensionBindings['uiContext']>
-export type PiSdkPackageUpdate = Pick<OfficialPackageUpdate, 'displayName' | 'type' | 'scope'>
 
 export interface PiSdkSessionManager {
   getSessionId(): ReturnType<SessionManager['getSessionId']>
