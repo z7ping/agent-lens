@@ -22,6 +22,7 @@ test('tool discovery reports data-only when persisted product data exists withou
       homeDir: home,
       platform: process.platform,
       timeoutMs: 1_000,
+      shellPathResolver: async () => undefined,
     })
     const codex = items.find(item => item.integrationId === 'codex')
     assert.equal(codex?.presence, 'data-only')
@@ -43,6 +44,7 @@ test('OpenCode database marker is required before a data directory becomes produ
       homeDir: home,
       platform: process.platform,
       timeoutMs: 1_000,
+      shellPathResolver: async () => undefined,
     })
     assert.equal(items.find(item => item.integrationId === 'opencode')?.presence, 'absent')
 
@@ -52,6 +54,7 @@ test('OpenCode database marker is required before a data directory becomes produ
       homeDir: home,
       platform: process.platform,
       timeoutMs: 1_000,
+      shellPathResolver: async () => undefined,
     })
     assert.equal(items.find(item => item.integrationId === 'opencode')?.presence, 'data-only')
   } finally {
@@ -65,6 +68,7 @@ test('discovery service exposes scanning state and coalesces concurrent rescans'
     homeDir: join(tmpdir(), 'agent-lens-empty-home'),
     platform: process.platform,
     timeoutMs: 1_000,
+    shellPathResolver: async () => undefined,
   })
   assert.equal(service.snapshot().status, 'idle')
   const first = service.rescan()
