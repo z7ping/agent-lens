@@ -78,6 +78,13 @@ interface PackageUpdateState {
   updates: PiLivePackageUpdate[]
 }
 
+function piOfflineModeEnabled(): boolean {
+  const value = process.env.PI_OFFLINE
+  if (!value) return false
+  const normalized = value.toLowerCase()
+  return value === '1' || normalized === 'true' || normalized === 'yes'
+}
+
 function normalizePackageUpdates(value: unknown): PiLivePackageUpdate[] {
   if (!Array.isArray(value)) return []
   const result: PiLivePackageUpdate[] = []
@@ -101,7 +108,7 @@ async function checkPackageUpdates(
   session: PiSdkSession,
   cwd: string,
 ): Promise<PackageUpdateState> {
-  if (process.env.PI_OFFLINE) return { status: 'unavailable', updates: [] }
+  if (piOfflineModeEnabled()) return { status: 'unavailable', updates: [] }
   const api = resolvePiSdkPackageUpdateApi(module)
   const settingsManager = session.settingsManager
   if (!api || !settingsManager) return { status: 'unavailable', updates: [] }
