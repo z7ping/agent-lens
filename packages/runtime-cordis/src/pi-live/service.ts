@@ -791,9 +791,7 @@ export class DefaultPiLiveService implements PiLiveService {
     let task: Promise<void>
     task = this.startupAudit.recordStartupResources(snapshot).then(() => {
       if (runtime.startupAuditPending === attempt) runtime.startupAuditCompleted = attempt
-      if (packageStatus && runtime.startupPackageAuditPending !== attempt) {
-        runtime.startupPackageAuditCompleted = attempt
-      }
+      if (packageStatus) runtime.startupPackageAuditCompleted = attempt
     }).catch(error => {
       console.warn('[AgentLens] Pi Live startup resource audit failed', error)
     }).finally(() => {
@@ -816,6 +814,7 @@ export class DefaultPiLiveService implements PiLiveService {
     let task: Promise<void>
     task = (async () => {
       await runtime.startupAuditTask?.catch(() => undefined)
+      if (runtime.startupPackageAuditCompleted === attempt) return
       if (runtime.generation !== generation || runtime.status !== 'ready' || runtime.handle !== handle) return
       const state = await handle.state()
       if (runtime.generation !== generation || runtime.status !== 'ready' || runtime.handle !== handle) return
